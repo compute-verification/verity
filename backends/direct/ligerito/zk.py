@@ -91,18 +91,24 @@ def ext_mul(a, b) -> np.ndarray:
     """(..., 6) x (..., 6) -> (..., 6); every coordinate product reduced before summing (products < 2^62)."""
     a = np.asarray(a, dtype=np.int64)
     b = np.asarray(b, dtype=np.int64)
-    shape = np.broadcast_shapes(a.shape[:-1], b.shape[:-1])
-    out = np.zeros(shape + (D,), dtype=np.int64)
+    prod = (a[..., :, None] * b[..., None, :]) % P                     # (..., 6, 6), each < 2^31
+    shape = prod.shape[:-2]
+    return (prod.reshape(shape + (D * D,)) @ _EXT_MUL_TABLE) % P       # 36 -> 6 fold: sums < 36 * 31 * 2^31
+
+
+def _ext_mul_table() -> np.ndarray:
+    t = np.zeros((D * D, D), dtype=np.int64)
     for i in range(D):
-        ai = a[..., i]
         for j in range(D):
-            prod = (ai * b[..., j]) % P
             k = i + j
             if k >= D:
-                out[..., k - D] += prod * BETA
+                t[i * D + j, k - D] = BETA
             else:
-                out[..., k] += prod
-    return out % P
+                t[i * D + j, k] = 1
+    return t
+
+
+_EXT_MUL_TABLE = _ext_mul_table()
 
 
 def ext_mul_base(a, s) -> np.ndarray:
@@ -387,17 +393,24 @@ def padding_combination(mu: np.ndarray, rbar: np.ndarray) -> np.ndarray:
     (C, 6).  Sent in the clear with the next commitment."""
     rbar = np.asarray(rbar, dtype=np.int64) % P
     if mu.ndim == 2:                                                   # base padding x extension weights
-        tp, C = mu.shape
-        out = np.zeros((tp, D), dtype=np.int64)
-        for c in range(C):
-            out = (out + (mu[:, c, None] * rbar[c][None, :]) % P) % P
-        return out
-    _, tp, C = mu.shape
-    mu_ext = np.transpose(mu, (1, 2, 0))                               # (tp, C, 6)
-    acc = ext_zero((tp,))
-    for c in range(C):
-        acc = (acc + ext_mul(mu_ext[:, c], rbar[c])) % P
-    return acc
+        return _limb_matmul(np.asarray(mu, dtype=np.int64) % P, rbar)
+    mu = np.asarray(mu, dtype=np.int64) % P                            # (6, tp, C) planes
+    out = np.zeros((mu.shape[1], D), dtype=np.int64)
+    for i in range(D):                                                 # plane i of mu times rbar: shift by x^i, fold x^6 = beta
+        pi = _limb_matmul(mu[i], rbar)                                 # (tp, 6): coefficient j of sum_c mu_i[:, c] rbar[c]
+        out[:, i:] += pi[:, :D - i]
+        if i:
+            out[:, :i] += pi[:, D - i:] * BETA
+    return out % P
+
+
+def _limb_matmul(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """``(a @ b) mod p`` exactly for base matrices ``a`` (m, C), ``b`` (C, k) in [0, p): 16-bit limbs of ``b`` keep the
+    int64 partial sums below ``C 2^47`` (C <= 2^16)."""
+    if a.shape[1] > (1 << 16):
+        raise ValueError("limb matmul: C <= 2^16")
+    lo, hi = b & 0xFFFF, b >> 16
+    return ((a @ lo) % P + ((a @ hi) % P) * 65536) % P
 
 
 def row_check_rhs(zp: ZkParams, k: int, eta_s: int, ybar: np.ndarray) -> np.ndarray:
@@ -466,11 +479,26 @@ class SumcheckMask:
     # -- the polynomial -------------------------------------------------------------------------------------------
     def g_i(self, i: int, x) -> np.ndarray:
         """``g_i(x)`` for an extension point ``x`` (6,) or a base scalar."""
-        x = ext_from_base(x) if np.ndim(x) == 0 else np.asarray(x, dtype=np.int64) % P
-        acc, xp = ext_zero(), x.copy()
+        if np.ndim(x) == 0:
+            return self.g_base(int(x) % P)[i]
+        return self.g_all(np.asarray(x, dtype=np.int64)[None, :].repeat(self.n, 0))[i]
+
+    def g_all(self, r) -> np.ndarray:
+        """(n, 6): ``g_i(r_i)`` for extension points ``r`` (n, 6) -- ``d`` batched extension products."""
+        r = np.asarray(r, dtype=np.int64).reshape(self.n, D) % P
+        acc, rp = ext_zero((self.n,)), r.copy()
         for e in range(self.d):
-            acc = (acc + ext_mul(self.a[i, e], xp)) % P
-            xp = ext_mul(xp, x)
+            acc = (acc + ext_mul(self.a[:, e], rp)) % P
+            if e + 1 < self.d:
+                rp = ext_mul(rp, r)
+        return acc
+
+    def g_base(self, X: int) -> np.ndarray:
+        """(n, 6): ``g_i(X)`` at a base point -- base-scalar products only."""
+        acc, xp = ext_zero((self.n,)), X % P
+        for e in range(self.d):
+            acc = (acc + self.a[:, e] * xp) % P
+            xp = (xp * X) % P
         return acc
 
     def g_i_ones(self) -> np.ndarray:
@@ -492,25 +520,22 @@ class SumcheckMask:
             raise ValueError("r_prefix must hold the challenges of the rounds before j")
         n = self.n
         const = self.a0.copy()
-        for i in range(j):
-            const = (const + self.g_i(i, r_prefix[i])) % P
+        if j:
+            pre = np.concatenate([r_prefix, np.zeros((n - j, D), dtype=np.int64)], axis=0)
+            const = (const + ext_sum(self.g_all(pre)[:j], axis=0)) % P
         ones = self.g_i_ones()
         tail = ext_sum(ones[j + 1:], axis=0) if j + 1 < n else ext_zero()
         f1 = pow(2, n - 1 - j, P)
         f2 = pow(2, n - 2 - j, P) if n - 2 - j >= 0 else 0
         out = ext_zero((len(xs),))
         for t, X in enumerate(xs):
-            v = (const + self.g_i(j, int(X) % P)) % P
+            v = (const + self.g_base(int(X) % P)[j]) % P
             out[t] = (ext_mul_base(v, f1) + ext_mul_base(tail, f2)) % P
         return out
 
     def final_value(self, r) -> np.ndarray:
         """``g(r) = a_0 + sum_i g_i(r_i)`` (6,)."""
-        r = np.asarray(r, dtype=np.int64).reshape(self.n, D) % P
-        acc = self.a0.copy()
-        for i in range(self.n):
-            acc = (acc + self.g_i(i, r[i])) % P
-        return acc
+        return (self.a0 + ext_sum(self.g_all(r), axis=0)) % P
 
     # -- the commitment side ------------------------------------------------------------------------------------------
     def cells(self) -> np.ndarray:
