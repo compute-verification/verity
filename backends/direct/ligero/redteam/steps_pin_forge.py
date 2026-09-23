@@ -2,7 +2,8 @@
 columns instead of the relation's canonical ``K_VU / k``.  The compiled system is column-uniform (the bare unit and the
 hashed gadget template are both per column), so the system -- and its pinned ``sys_id`` -- is the canonical one; only
 the statement's ``steps`` (and a v5 header's K = steps x k) differ.  The prover is the honest one with ``relations.K_VU``
-bumped to ``steps * k``; nothing else is patched.  Before the steps-pin fix both verifiers accepted such a proof pinned.
+bumped to ``steps * k`` (and relchain's copy); nothing else is patched.  Before the steps-pin fix both verifiers accepted
+such a proof pinned.
 
     python -m backends.direct.ligero.redteam.steps_pin_forge --relation fp8-ada --leaf poseidon2 --steps 32 --out DIR
     python -m backends.direct.ligero.redteam.steps_pin_forge --relation fp8-ada --steps 32 --out DIR      # bare (v4)
@@ -29,6 +30,7 @@ def main() -> int:
 
     from .. import protocol
     from .. import relations as RM
+    from .. import relchain as RC
     from ..relchain import HashedRelationRunner, RelationChainRunner, instances
     from ..serialize import _statement_of, proof_bytes, statement_bytes, system_bytes
 
@@ -41,7 +43,7 @@ def main() -> int:
         return HashedRelationRunner(rel, args.device, -128.0, zk=False, mode="fiat-shamir", leaf=args.leaf)
 
     sys_canonical = protocol.system_id(runner().sys).hex()
-    RM.K_VU = args.steps * rel.k
+    RM.K_VU = RC.K_VU = args.steps * rel.k          # relchain holds its own K_VU (instances, the committer's row width)
     assert rel.steps == args.steps, (rel.steps, args.steps)
     R = runner()
     sys_forged = protocol.system_id(R.sys).hex()
