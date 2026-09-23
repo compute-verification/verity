@@ -296,6 +296,88 @@ pub mod pubsel {
     pub static FP8_ADA: PubSel = PubSel { op: Operand::E4m3, floor: -139, pb: 15, ps: 7, groups: &[16, 16], wide: false };
 }
 
+/// The v3 units of lane relmin-private (`backends/direct/ligero/privsel/relation.py`, `public_vectors_v3`): the operand
+/// words are committed witness wires; the verifier pins the words THEMSELVES -- `a[i]` / `b[i]` one word per pin, or
+/// `a[lo:hi]` / `b[lo:hi]` the run of `words_per_pin` words packed `sum_j w_j 2^(word_bits (j - lo))` (3 E4M3 bytes per
+/// pin, 1 BF16 word) -- after the same finiteness check as the v1 decode (a non-finite word is refused; the relation
+/// itself excludes every other off-domain encoding).
+pub mod privsel {
+    use super::Operand;
+
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub struct PrivSel {
+        pub op: Operand,
+        /// Operands per unit (the sum of the relation's product groups).
+        pub k: usize,
+        /// Words packed into one pin row (`ShiftPlan.words_per_pin` = 30 / word bits).
+        pub words_per_pin: usize,
+    }
+
+    impl PrivSel {
+        pub const fn word_bits(&self) -> u32 {
+            match self.op {
+                Operand::Bf16 => 16,
+                Operand::E4m3 => 8,
+            }
+        }
+
+        /// Pins per unit: the packed runs of both operands.
+        pub const fn pins(&self) -> usize {
+            2 * self.k.div_ceil(self.words_per_pin)
+        }
+
+        /// The pinned values of one unit from its two operand rows: per operand, the packed runs in order
+        /// (`a` runs then `b` runs); the caller picks them by pin name (`pin_index`).
+        pub fn unit_pins(&self, a: &[u32], b: &[u32]) -> Result<Vec<i64>, String> {
+            if a.len() != self.k || b.len() != self.k {
+                return Err(format!("unit has {} + {} operand words, the relation takes {} + {}", a.len(), b.len(), self.k, self.k));
+            }
+            let mut out = Vec::with_capacity(self.pins());
+            for words in [a, b] {
+                for lo in (0..self.k).step_by(self.words_per_pin) {
+                    let hi = (lo + self.words_per_pin).min(self.k);
+                    let mut packed: i64 = 0;
+                    for j in lo..hi {
+                        self.op.decode(words[j])?;
+                        packed += (words[j] as i64) << (self.word_bits() * (j - lo) as u32);
+                    }
+                    out.push(packed);
+                }
+            }
+            Ok(out)
+        }
+
+        /// The position of a pin name in `unit_pins`' output: `a[i]` / `b[i]` (one word per pin) or `a[lo:hi]` /
+        /// `b[lo:hi]` (exactly the run starting at a multiple of `words_per_pin`).
+        pub fn pin_index(&self, name: &str) -> Result<usize, String> {
+            let bad = || format!("pin {name}: not an operand-word pin of this relation");
+            let (arr, rest) = name.split_at(1);
+            let base = match arr {
+                "a" => 0,
+                "b" => self.k.div_ceil(self.words_per_pin),
+                _ => return Err(bad()),
+            };
+            let inner = rest.strip_prefix('[').and_then(|r| r.strip_suffix(']')).ok_or_else(bad)?;
+            let (lo, hi) = match inner.find(':') {
+                None => {
+                    let i: usize = inner.parse().map_err(|_| bad())?;
+                    (i, i + 1)
+                }
+                Some(c) => (inner[..c].parse().map_err(|_| bad())?, inner[c + 1..].parse().map_err(|_| bad())?),
+            };
+            if lo % self.words_per_pin != 0 || lo >= self.k || hi != (lo + self.words_per_pin).min(self.k) {
+                return Err(bad());
+            }
+            Ok(base + lo / self.words_per_pin)
+        }
+    }
+
+    pub static BF16_HOPPER: PrivSel = PrivSel { op: Operand::Bf16, k: 16, words_per_pin: 1 };
+    pub static BF16_AMPERE: PrivSel = PrivSel { op: Operand::Bf16, k: 16, words_per_pin: 1 };
+    pub static FP8_HOPPER: PrivSel = PrivSel { op: Operand::E4m3, k: 32, words_per_pin: 3 };
+    pub static FP8_ADA: PrivSel = PrivSel { op: Operand::E4m3, k: 32, words_per_pin: 3 };
+}
+
 /// How a relation's public pins are computed from the statement's operand words.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Decode {
@@ -306,6 +388,8 @@ pub enum Decode {
     Nvf4,
     /// A v2 public-selection unit: K = the sum of the groups, pins per `pubsel::PubSel::unit_pins`.
     PubSel(&'static pubsel::PubSel),
+    /// A v3 private-operand unit: the (packed) words themselves, pins per `privsel::PrivSel::unit_pins`.
+    PrivSel(&'static privsel::PrivSel),
 }
 
 #[derive(Debug)]
@@ -459,8 +543,66 @@ pub static FP8_ADA_V2: Relation = Relation {
     table_digest: "a2015d492c6bfe29af219e760893e11e543e1a62402256810a9de1ec82e3a6cb",
 };
 
-pub static RELATIONS: [&Relation; 9] = [
+/// The v3 private-operand relations (lane relmin-private, 2026-09-23): v1's statement on committed operand words, the
+/// public words pinned as themselves (`privsel::PrivSel`), compiled by `privsel.relation.compile_v3_unit` --
+/// `relations.relation(name).compile(params, True)` from the lane relmin-private tree, laptop, torch-free, two runs each,
+/// byte-identical (`ligero-system/v1`; 1535 / 1645 / 1705 / 1838 rows per unit; 32 / 32 / 22 / 22 pins), the `sys_id`s
+/// equal to `protocol.system_id`.
+pub static BF16_HOPPER_V3: Relation = Relation {
+    name: "bf16-hopper-v3",
+    aliases: &[],
+    tag: b"|rel=bf16-hopper-v3|v1",
+    word_bytes: 2,
+    y_bytes: 2,
+    y_bits: 16,
+    decode: Decode::PrivSel(&privsel::BF16_HOPPER),
+    end_components: None,
+    sys_id: "9cd29503d985f81c48ebd70cb9486159dee199d9277b43f781511e2920155020",
+    table_digest: "075d9005d9a403328ab6bb21a6043bb776166edeb535da80c40f860896f76e6e",
+};
+
+pub static BF16_AMPERE_V3: Relation = Relation {
+    name: "bf16-ampere-v3",
+    aliases: &[],
+    tag: b"|rel=bf16-ampere-v3|v1",
+    word_bytes: 2,
+    y_bytes: 2,
+    y_bits: 16,
+    decode: Decode::PrivSel(&privsel::BF16_AMPERE),
+    end_components: None,
+    sys_id: "797fdc81e94b09f01366c6456b35885992cb394a778b799db4c6653a1089628a",
+    table_digest: "3697dfb9b32a0bf5711fb47c483d9da3a5cd1f747661622de96df230938781f3",
+};
+
+pub static FP8_HOPPER_V3: Relation = Relation {
+    name: "fp8-hopper-v3",
+    aliases: &[],
+    tag: b"|rel=fp8-hopper-v3|v1",
+    word_bytes: 1,
+    y_bytes: 4,
+    y_bits: 22,
+    decode: Decode::PrivSel(&privsel::FP8_HOPPER),
+    end_components: None,
+    sys_id: "9c35883eb2bdfd4ba7c5af6cfa43c899a134e978905e13a6c61f6d64456ece9c",
+    table_digest: "b616f73f754160210f8af8adfa4ef8057eefd1485247e947ea258fc9bb95a877",
+};
+
+pub static FP8_ADA_V3: Relation = Relation {
+    name: "fp8-ada-v3",
+    aliases: &[],
+    tag: b"|rel=fp8-ada-v3|v1",
+    word_bytes: 1,
+    y_bytes: 4,
+    y_bits: 22,
+    decode: Decode::PrivSel(&privsel::FP8_ADA),
+    end_components: None,
+    sys_id: "8bfada8cfb87f4f6c8d6cb251efe085bc45479f9fb1cbb9ed98b21639529bc19",
+    table_digest: "fc280948e99cb4964eda0dd742e6ff55929f27f1be552bc4fb9259f6124b6d13",
+};
+
+pub static RELATIONS: [&Relation; 13] = [
     &BF16_AMPERE, &FP8_ADA, &BF16_HOPPER, &FP8_HOPPER, &FP4_NVF4, &BF16_HOPPER_V2, &BF16_AMPERE_V2, &FP8_HOPPER_V2, &FP8_ADA_V2,
+    &BF16_HOPPER_V3, &BF16_AMPERE_V3, &FP8_HOPPER_V3, &FP8_ADA_V3,
 ];
 
 /// The relation a statement names: `None` (a v2 / v3 file) is the Ampere BF16 unit; an unknown name is refused (its
@@ -726,5 +868,69 @@ mod tests {
         }
         assert_eq!(covered, u32::MAX);
         assert_eq!(FP4_NVF4.y_bits, 32);
+    }
+
+    #[test]
+    fn privsel_unit_pins_match_public_vectors_v3() {
+        // reference values: privsel.relation.public_vectors_v3 on the same words (lane relmin-private).  The pins are
+        // the operand words themselves: one word per pin for BF16, 3 FP8 words per pin (little-endian 8-bit fields).
+        use privsel::{BF16_AMPERE, BF16_HOPPER, FP8_ADA, FP8_HOPPER};
+        assert_eq!((BF16_HOPPER.k, BF16_AMPERE.k, FP8_HOPPER.k, FP8_ADA.k), (16, 16, 32, 32));
+        assert_eq!((BF16_HOPPER.pins(), BF16_AMPERE.pins(), FP8_HOPPER.pins(), FP8_ADA.pins()), (32, 32, 22, 22));
+        // bf16: a[i] -> pin i, b[i] -> pin 16 + i, any finite word (including -0, subnormals, the largest finite)
+        let a: Vec<u32> = (0..16).map(|i| [0x3F80u32, 0xC000, 0x0000, 0x8000, 0x0001, 0x7F7F][i % 6]).collect();
+        let b: Vec<u32> = (0..16).map(|i| 0x3F80 + i as u32).collect();
+        let v = BF16_HOPPER.unit_pins(&a, &b).unwrap();
+        assert_eq!(v.len(), 32);
+        assert_eq!(v[..16], a.iter().map(|&x| x as i64).collect::<Vec<_>>()[..]);
+        assert_eq!(v[16..], b.iter().map(|&x| x as i64).collect::<Vec<_>>()[..]);
+        assert_eq!(BF16_HOPPER.pin_index("a[0]").unwrap(), 0);
+        assert_eq!(BF16_HOPPER.pin_index("a[15]").unwrap(), 15);
+        assert_eq!(BF16_HOPPER.pin_index("b[0]").unwrap(), 16);
+        assert_eq!(BF16_HOPPER.pin_index("b[15]").unwrap(), 31);
+        for bad in ["a[16]", "b[0:3]", "c[0]", "a[-1]", "a_words[0]", "a[0"] {
+            assert!(BF16_HOPPER.pin_index(bad).is_err(), "{bad}");
+        }
+        // non-finite words are refused (inf, nan, either sign), and words outside 16 bits
+        for bad in [0x7F80u32, 0xFF80, 0x7FC0, 0xFFFF, 0x7F81, 0x10000] {
+            let mut a2 = a.clone();
+            a2[5] = bad;
+            assert!(BF16_HOPPER.unit_pins(&a2, &b).is_err(), "{bad:#x}");
+            let mut b2 = b.clone();
+            b2[0] = bad;
+            assert!(BF16_HOPPER.unit_pins(&a, &b2).is_err(), "{bad:#x}");
+        }
+        assert!(BF16_HOPPER.unit_pins(&a[..15], &b).is_err(), "short unit");
+        // fp8 e4m3: 32 words -> 11 pins per operand, runs [0:3], [3:6], ..., [30:32]; word i sits in byte (i % 3)
+        let a: Vec<u32> = (0..32).map(|i| (i as u32 * 7 + 1) & 0x7E).collect(); // finite (exponent < 15 or mantissa != 7)
+        let b: Vec<u32> = (0..32).map(|i| 0x80 | ((i as u32 * 5) & 0x7E)).collect();
+        let v = FP8_ADA.unit_pins(&a, &b).unwrap();
+        assert_eq!(v.len(), 22);
+        for r in 0..11 {
+            let lo = 3 * r;
+            let hi = (lo + 3).min(32);
+            let pack = |w: &[u32]| (lo..hi).fold(0i64, |acc, i| acc + ((w[i] as i64) << (8 * (i - lo))));
+            assert_eq!(v[r], pack(&a), "a run {r}");
+            assert_eq!(v[11 + r], pack(&b), "b run {r}");
+            assert_eq!(FP8_ADA.pin_index(&format!("a[{lo}:{hi}]")).unwrap(), r);
+            assert_eq!(FP8_ADA.pin_index(&format!("b[{lo}:{hi}]")).unwrap(), 11 + r);
+        }
+        assert_eq!(v[10], (a[30] as i64) + ((a[31] as i64) << 8), "last run holds 2 words");
+        for bad in ["a[0]", "a[1:4]", "a[30:33]", "a[33:36]", "b[0:2]"] {
+            assert!(FP8_ADA.pin_index(bad).is_err(), "{bad}");
+        }
+        // e4m3 NaN (0x7F / 0xFF) and 9-bit words refused; e4m3 0x7E (448.0) and 0xFE accepted (no infinities)
+        for bad in [0x7Fu32, 0xFF, 0x100] {
+            let mut a2 = a.clone();
+            a2[31] = bad;
+            assert!(FP8_ADA.unit_pins(&a2, &b).is_err(), "{bad:#x}");
+        }
+        let mut a2 = a.clone();
+        a2[0] = 0x7E;
+        a2[1] = 0xFE;
+        assert!(FP8_ADA.unit_pins(&a2, &b).is_ok());
+        assert_eq!(FP8_ADA.unit_pins(&a2, &b).unwrap()[0], 0x7E + (0xFE << 8) + ((a[2] as i64) << 16));
+        // e4m3 is the same format on hopper
+        assert_eq!(FP8_HOPPER.unit_pins(&a, &b).unwrap(), v);
     }
 }
