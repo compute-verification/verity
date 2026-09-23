@@ -466,10 +466,55 @@ def available() -> bool:
         return False
 
 
+# NVRTC 12.8's compute_120 front end (cicc) needs ~7 min for the hashed relations' kernel (fp4-nvf4+poseidon2: 3967 terms) on an
+# RTX 5090 host, compute_89 ~11 s; the driver JITs compute_89 PTX to sm_120 in ~8 s.  LIGERO_WITNESS_PTX_ARCH=native keeps
+# CuPy's own sm_<cc> build on every device; =<NN> forces compute_NN PTX on every device.
+PTX_ARCH_CC12 = "89"
+
+
+def ptx_arch(device_index: int = 0) -> str | None:
+    """The compute_NN the kernel is built as PTX for (then JIT-compiled by the driver), or None for CuPy's native build."""
+    import os
+
+    import cupy as cp
+    env = os.environ.get("LIGERO_WITNESS_PTX_ARCH", "")
+    if env:
+        return None if env == "native" else env
+    return PTX_ARCH_CC12 if int(cp.cuda.Device(device_index).compute_capability) >= 120 else None
+
+
+def _module(src: str, digest: str, arch: str | None):
+    """``cp.RawModule`` of ``src``: CuPy's cached native build, or compute_``arch`` PTX from NVRTC (cached next to CuPy's
+    kernel cache, keyed by the source digest, the NVRTC version and the arch) loaded by path, i.e. JIT-compiled by the driver."""
+    import os
+    from pathlib import Path
+
+    import cupy as cp
+    if arch is None:
+        return cp.RawModule(code=src, options=("-std=c++17",))
+    from cupy_backends.cuda.libs import nvrtc
+    major, minor = nvrtc.getVersion()
+    cache = Path(os.environ.get("CUPY_CACHE_DIR") or Path.home() / ".cupy" / "kernel_cache")
+    path = cache / f"ligero-witness-{digest[:40]}-nvrtc{major}.{minor}-compute_{arch}.ptx"
+    if not path.exists():
+        prog = nvrtc.createProgram(src, "witness_program.cu", (), ())
+        try:
+            nvrtc.compileProgram(prog, ("-std=c++17", f"-arch=compute_{arch}"))
+            ptx = nvrtc.getPTX(prog)
+        finally:
+            nvrtc.destroyProgram(prog)
+        cache.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+        tmp.write_bytes(ptx if isinstance(ptx, bytes) else ptx.encode())
+        tmp.replace(path)
+    return cp.RawModule(path=str(path))
+
+
 class FusedWitness:
     """``run(pub_rows (n_pins, l) int64, hints (n_hints, l) int64) -> W (m, l) int32`` on the device."""
 
-    def __init__(self, sys: System, device):
+    def __init__(self, sys: System, device, arch: str | None | bool = False):
+        """``arch``: the PTX arch (``ptx_arch``) by default; None = CuPy's native build, "NN" = compute_NN PTX."""
         import cupy as cp
         self.cp, self.sys, self.device = cp, sys, torch.device(device)
         self.hooks = list(getattr(sys, "witness_hooks", None) or ())
@@ -499,7 +544,8 @@ class FusedWitness:
         tab: list | None = [] if _n_terms(program) > TAB_THRESHOLD else None
         self.src = generate(sys, tab, program)
         self.digest = hashlib.sha256(self.src.encode()).hexdigest()
-        self.mod = cp.RawModule(code=self.src, options=("-std=c++17",))
+        self.arch = ptx_arch(self.device.index or 0) if arch is False else arch
+        self.mod = _module(self.src, self.digest, self.arch)
         self.kernel = self.mod.get_function("witness_program")
         self.tables = None
         if tab is not None:

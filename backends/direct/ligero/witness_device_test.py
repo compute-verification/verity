@@ -120,6 +120,34 @@ def test_fused_witness_equals_torch_program_fp4():
     assert torch.equal(W_dev.to(torch.int64), W_ref)
 
 
+@pytest.mark.parametrize("which", ["fp4-nvf4", "fp4-nvf4+poseidon2"])
+def test_ptx_route_equals_native_build(which):
+    """The compute_89 PTX route (``witness_device.ptx_arch``: the default on compute capability >= 12.0) computes the native
+    build's W bit for bit.  W is a function of (pins, hints) alone, so arbitrary residues exercise every op."""
+    import os
+
+    import cupy as cp
+
+    from . import witness_device
+    if which == "fp4-nvf4":
+        from .fp4.relation import NVFP4, compile_fp4_unit
+        s = compile_fp4_unit(NVFP4, chain=True)
+    else:
+        if int(cp.cuda.Device().compute_capability) >= 120 and not os.environ.get("LIGERO_TEST_NATIVE_CC12"):
+            pytest.skip("the native sm_120 build of the hashed kernel takes ~7 min cold (LIGERO_TEST_NATIVE_CC12=1 runs it)")
+        from . import hashchain
+        from .fp4.hashed import FP4_HASHED
+        s = hashchain.compose(FP4_HASHED).sys
+    g = torch.Generator(device="cuda").manual_seed(5)
+    l = 512
+    pub_rows = torch.randint(0, witness_device.P, (len(s.pins), l), generator=g, device="cuda", dtype=torch.int64)
+    hints = torch.randint(0, witness_device.P, (len(s.hints), l), generator=g, device="cuda", dtype=torch.int64)
+    native = witness_device.FusedWitness(s, "cuda", arch=None)
+    ptx = witness_device.FusedWitness(s, "cuda", arch=witness_device.PTX_ARCH_CC12)
+    W_native, W_ptx = native.run(pub_rows, hints), ptx.run(pub_rows, hints)
+    assert W_native.shape == (s.m, l) and torch.equal(W_native, W_ptx)
+
+
 def test_hints_graph_captures():
     from . import hints_torch
     if not hints_torch.USE_CUDA_GRAPH:
