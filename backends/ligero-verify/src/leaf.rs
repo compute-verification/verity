@@ -391,6 +391,13 @@ pub fn pins(rel: &crate::relation::Relation, leaf: &LeafScheme) -> Option<(&'sta
     PINS.iter().find(|(r, l, _, _)| *r == rel.name && *l == leaf.name).map(|(_, _, s, t)| (*s, *t))
 }
 
+/// The most columns one VU row may span under `leaf`, whatever the system pin says (`--allow-any-system` too): an
+/// `ajtai-n<N>` digest `sum_j X^(steps-1-j) B s_j` over `F_p[X]/(X^N + 1)` wraps column `j` onto `j + N` with the
+/// opposite sign once `steps > N`, so two different rows share a digest (red-team-leaf-3 H1).  `None`: no bound.
+pub fn max_steps(leaf: &LeafScheme) -> Option<usize> {
+    ajtai::degree(leaf.name)
+}
+
 /// The `(relation, leaf)` whose non-Poseidon2 pins a system file's digests match, if any.
 pub fn by_digests(sys_id_hex: &str, table_digest_hex: &str) -> Option<(&'static crate::relation::Relation, &'static LeafScheme)> {
     PINS.iter().find(|(_, _, s, t)| *s == sys_id_hex && *t == table_digest_hex).and_then(|(r, l, _, _)| {

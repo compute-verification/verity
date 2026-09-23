@@ -419,6 +419,12 @@ pub struct Relation {
     /// `RelationHooks.y16_bits`: the chain-end public word is in `[0, 2^y_bits)`.
     pub y_bits: u32,
     pub decode: Decode,
+    /// The VU shape (`relations.Relation.steps` = `K_VU // k`, `fp4.relation.STEPS`): `steps` chained units (columns) per
+    /// VU and `k_ops` words per operand per unit.  The compiled system is column-uniform, so its digests do NOT fix the
+    /// shape: a pinned verify refuses a statement whose `steps` / K differ (red-team-leaf-3 H1 / H2; the chain test, the
+    /// public table and the authentication ranks are all laid out from `st.steps`).
+    pub steps: usize,
+    pub k_ops: usize,
     /// The chain end of the relation's compiled system: `None` = one public word compared as a residue (a
     /// `ligero-system/v1` chain, `y16 < 2^y_bits`); `Some` = the `(lo, bits)` bit fields of the public word a
     /// `ligero-system/v2` chain ends on (`compile_fp4_unit`: sign 31/1, exponent field 23/8, fraction 0/23).  A
@@ -444,6 +450,8 @@ pub static BF16_AMPERE: Relation = Relation {
     y_bytes: 2,
     y_bits: 16,
     decode: Decode::Word(Operand::Bf16),
+    steps: 96,
+    k_ops: 16,
     end_components: None,
     sys_id: "44cb05b9e6988219beba2d66582124e67a1893aac39d0b66126ce0b9d4db89cb",
     table_digest: "c147cc4cece7d61cd3046828410d18f487dcde82f709044f4b4f97e282a73a95",
@@ -464,6 +472,8 @@ pub static FP8_ADA: Relation = Relation {
     y_bytes: 4,
     y_bits: 22,
     decode: Decode::Word(Operand::E4m3),
+    steps: 48,
+    k_ops: 32,
     end_components: None,
     sys_id: "6b570eef0c7faa07ccd1dddb2508e2699bd5367b108b15920469d46d16073d37",
     table_digest: "443e4fc74c0ac0cc864e50f7125d9585d71986c0b95ff5336d93a6939f3cb952",
@@ -479,6 +489,8 @@ pub static BF16_HOPPER: Relation = Relation {
     y_bytes: 2,
     y_bits: 16,
     decode: Decode::Word(Operand::Bf16),
+    steps: 96,
+    k_ops: 16,
     end_components: None,
     sys_id: "9dcc7cdc1377a00d877440cc01a0dcdb73b3e989d86df8244eccb35a81be0df4",
     table_digest: "74ce68a2801e14fbeaab2b241886bbe3fa9146234289e52c774fd4160a6c469c",
@@ -494,6 +506,8 @@ pub static FP8_HOPPER: Relation = Relation {
     y_bytes: 4,
     y_bits: 22,
     decode: Decode::Word(Operand::E4m3),
+    steps: 48,
+    k_ops: 32,
     end_components: None,
     sys_id: "c7cbebe365cb5f773a679bc13b5382fb45714511b1912e4e4ab7fb48accd4bc3",
     table_digest: "d5b77463fee9b3d777174755144edaa84461b3eec6ac6a1750c887dc861d58e7",
@@ -511,6 +525,8 @@ pub static FP4_NVF4: Relation = Relation {
     y_bytes: 4,
     y_bits: 32,
     decode: Decode::Nvf4,
+    steps: 24,
+    k_ops: 68,
     end_components: Some(&[(31, 1), (23, 8), (0, 23)]),
     sys_id: "a825ba0b826a15366bfb8cdd720a5e9978603cbe589491abcbba7346ad35bf3c",
     table_digest: "b597b003e55b8cf1025b517a04d442d9c6d8704f38fd06df13a21b3273b2d2f6",
@@ -533,6 +549,8 @@ pub static BF16_HOPPER_V2: Relation = Relation {
     y_bytes: 2,
     y_bits: 16,
     decode: Decode::PubSel(&pubsel::BF16_HOPPER),
+    steps: 96,
+    k_ops: 16,
     end_components: None,
     sys_id: "cf99d1ce739e621fca7ef52d86cdec3c43aae58464e370da745901316a70b831",
     table_digest: "bc4b95ec3576a22bf16a28ae5d0e83bdbc8fe4f7806dc28b1f6b304c6602bf7f",
@@ -548,6 +566,8 @@ pub static BF16_AMPERE_V2: Relation = Relation {
     y_bytes: 2,
     y_bits: 16,
     decode: Decode::PubSel(&pubsel::BF16_AMPERE),
+    steps: 96,
+    k_ops: 16,
     end_components: None,
     sys_id: "15d793e74cc2b380555920c740c135bbd9e936fe925b2c4ca84f1da2943e7128",
     table_digest: "e70b77d58569b1de95d1304d71f5a4aac6df2ac88581054058a36d7fe03c1c66",
@@ -563,6 +583,8 @@ pub static FP8_HOPPER_V2: Relation = Relation {
     y_bytes: 4,
     y_bits: 22,
     decode: Decode::PubSel(&pubsel::FP8_HOPPER),
+    steps: 48,
+    k_ops: 32,
     end_components: None,
     sys_id: "e2a1573bc37cbd86af3184181da7ca404e60dfab6e82f93ff6fff2177fdaf493",
     table_digest: "a473c735fa661e1f8752679b51b15d935c2a0857ec7f60055b07d7b140169123",
@@ -578,6 +600,8 @@ pub static FP8_ADA_V2: Relation = Relation {
     y_bytes: 4,
     y_bits: 22,
     decode: Decode::PubSel(&pubsel::FP8_ADA),
+    steps: 48,
+    k_ops: 32,
     end_components: None,
     sys_id: "f23461f82dec60ba24ce05000cc91b72dabcce3c87c249d0cee61a6cdba9eb36",
     table_digest: "82b3041e8cbcf0fc7db77fa1b8693c4517b6d8e62d28e4f1f87ea8e8c5782b67",
@@ -598,6 +622,8 @@ pub static BF16_HOPPER_V3: Relation = Relation {
     y_bytes: 2,
     y_bits: 16,
     decode: Decode::PrivSel(&privsel::BF16_HOPPER),
+    steps: 96,
+    k_ops: 16,
     end_components: None,
     sys_id: "e3ff1f9f0545827545e634268f88775190efd56a4f95887cd69d2a9d488e36b6",
     table_digest: "87ec0bfd9677ee1afe70e389e24aaab0d91c65f75783db4b6ffe26a344a1be5e",
@@ -613,6 +639,8 @@ pub static BF16_AMPERE_V3: Relation = Relation {
     y_bytes: 2,
     y_bits: 16,
     decode: Decode::PrivSel(&privsel::BF16_AMPERE),
+    steps: 96,
+    k_ops: 16,
     end_components: None,
     sys_id: "c961ba703f904355cf7f483b84ba225957ea1a2e54cf0bd6d0f6003286f69189",
     table_digest: "72cc7c90f2fcbb3099fb13f3919967009774e07c3e39845ce86cd12bacdfe1ea",
@@ -628,6 +656,8 @@ pub static FP8_HOPPER_V3: Relation = Relation {
     y_bytes: 4,
     y_bits: 22,
     decode: Decode::PrivSel(&privsel::FP8_HOPPER),
+    steps: 48,
+    k_ops: 32,
     end_components: None,
     sys_id: "c5668bcf1f91a3fd6f64a849f9cdd28551ca3b83ec32dd19ba99606c64391a39",
     table_digest: "36680ea293347b90235d1299e6d96b27fd261ebee52ff95cd0b4f82f47fcc5f2",
@@ -643,6 +673,8 @@ pub static FP8_ADA_V3: Relation = Relation {
     y_bytes: 4,
     y_bits: 22,
     decode: Decode::PrivSel(&privsel::FP8_ADA),
+    steps: 48,
+    k_ops: 32,
     end_components: None,
     sys_id: "1bf8ce3edcabf155616fa6dbc505ad77281ae8d5fb20503739db448eb0e620ef",
     table_digest: "2f74b24d8a77208f96a0d3552ffa5c2f4d3c31a11b03e041e02608ef26f65417",
@@ -660,6 +692,8 @@ pub static BF16_HOPPER_V2X4: Relation = Relation {
     y_bytes: 2,
     y_bits: 16,
     decode: Decode::PubSel(&pubsel::BF16_HOPPER_X4),
+    steps: 24,
+    k_ops: 64,
     end_components: None,
     sys_id: "f1211dba4dab2014eb446a41b15ac0196e700ba0aee97644746a17a75371d17d",
     table_digest: "dbb924084b89e760324c9e63b1ab6716aa8c17a8874e8db8e0d8d1aab4c9ad16",
@@ -675,6 +709,8 @@ pub static BF16_AMPERE_V2X4: Relation = Relation {
     y_bytes: 2,
     y_bits: 16,
     decode: Decode::PubSel(&pubsel::BF16_AMPERE_X4),
+    steps: 24,
+    k_ops: 64,
     end_components: None,
     sys_id: "8ce6ca344ecb6c2e03b4798e0a009f38d92a6100a9947ca4d72ed0f88c2f7684",
     table_digest: "c9611303089dc521262d8401d182760ea6995e4b977e5f4d51acc5cdefa9d645",
@@ -690,6 +726,8 @@ pub static FP8_HOPPER_V2X4: Relation = Relation {
     y_bytes: 4,
     y_bits: 22,
     decode: Decode::PubSel(&pubsel::FP8_HOPPER_X4),
+    steps: 12,
+    k_ops: 128,
     end_components: None,
     sys_id: "3463ce9f5391ac211c5ef58b88b634c70cbdd72db8c1635d138f72659e792c28",
     table_digest: "8d6795475a40a6a0b1c115318ee9629cbdd1183658b38b2e3d20dc8ef0c2d3e1",
@@ -705,6 +743,8 @@ pub static FP8_ADA_V2X4: Relation = Relation {
     y_bytes: 4,
     y_bits: 22,
     decode: Decode::PubSel(&pubsel::FP8_ADA_X4),
+    steps: 12,
+    k_ops: 128,
     end_components: None,
     sys_id: "d2272d3fee342813f40e56db6da9bfb7261bdd311fb34cd6cae02bf6b946612a",
     table_digest: "87be1aead4ba410e81ab387510c721e3eac7dd6c760137564a22c7d5a038d3a2",
@@ -726,6 +766,8 @@ pub static BF16_HOPPER_V3X4: Relation = Relation {
     y_bytes: 2,
     y_bits: 16,
     decode: Decode::PrivSel(&privsel::BF16_HOPPER_X4),
+    steps: 24,
+    k_ops: 64,
     end_components: None,
     sys_id: "7a61e78e0cc2e86592aaae9d7d55cc6877cf50582f5569f646708fdf5717b38b",
     table_digest: "3c25420ef94ddbfc9cbf73f837237f5a157cccfbece3e4057f682f232357e877",
@@ -741,6 +783,8 @@ pub static BF16_AMPERE_V3X4: Relation = Relation {
     y_bytes: 2,
     y_bits: 16,
     decode: Decode::PrivSel(&privsel::BF16_AMPERE_X4),
+    steps: 24,
+    k_ops: 64,
     end_components: None,
     sys_id: "ae66575fa98270d7db32380dd0815ab95e35524a464f5393d1f20b63aa89f1e1",
     table_digest: "c464e86b2031128caba3b69f17b9d7951a8b2872640b9d380e91712bf8d948ea",
@@ -756,6 +800,8 @@ pub static FP8_HOPPER_V3X4: Relation = Relation {
     y_bytes: 4,
     y_bits: 22,
     decode: Decode::PrivSel(&privsel::FP8_HOPPER_X4),
+    steps: 12,
+    k_ops: 128,
     end_components: None,
     sys_id: "023c022373f4ea45efc141aadf2a4540474f6da50e91ec41746fbee82a9e6f63",
     table_digest: "5fb0491ce4cb1241559a9e70baaf90d103bb911c253cf25b294f3797d25bff77",
@@ -771,6 +817,8 @@ pub static FP8_ADA_V3X4: Relation = Relation {
     y_bytes: 4,
     y_bits: 22,
     decode: Decode::PrivSel(&privsel::FP8_ADA_X4),
+    steps: 12,
+    k_ops: 128,
     end_components: None,
     sys_id: "727b2076042cc6ef300f0daeb4989004caf5d3950ab36ba7639fa2a564e8a8d9",
     table_digest: "a03283b894b958b5e7b084c8d235a8c6d13d147da15bc185ca347190797dcde2",
@@ -786,6 +834,8 @@ pub static BF16_HOPPER_X4: Relation = Relation {
     y_bytes: 2,
     y_bits: 16,
     decode: Decode::Word(Operand::Bf16),
+    steps: 24,
+    k_ops: 64,
     end_components: None,
     sys_id: "6f17f7080dbbfa5c37beb801b9bbe10c0633642442d02715d2a95bfb6696cef8",
     table_digest: "650f3ede18f377054e0139873188ca74d531a817700d676e648e37bac8f16d54",
@@ -802,6 +852,8 @@ pub static BF16_AMPERE_X4: Relation = Relation {
     y_bytes: 2,
     y_bits: 16,
     decode: Decode::Word(Operand::Bf16),
+    steps: 24,
+    k_ops: 64,
     end_components: None,
     sys_id: "9bb37c89238c524f99d143efb6d7a727a95c534c2d063d03bcf28bd81b2ccd93",
     table_digest: "ca8407d1273880fbea221f3bed92f05312e83d2a880567c4e46a8d24fb1d3385",
@@ -817,6 +869,8 @@ pub static FP8_HOPPER_X4: Relation = Relation {
     y_bytes: 4,
     y_bits: 22,
     decode: Decode::Word(Operand::E4m3),
+    steps: 12,
+    k_ops: 128,
     end_components: None,
     sys_id: "32704bc7283c4d667f4c1ef9e0531eceff19268344232e66d0dad234caadf41f",
     table_digest: "76e131cc48c44ed7e3e91f16177f6cc9ba3504364a1769e6cec7777b0ec5a175",
@@ -832,6 +886,8 @@ pub static FP8_ADA_X4: Relation = Relation {
     y_bytes: 4,
     y_bits: 22,
     decode: Decode::Word(Operand::E4m3),
+    steps: 12,
+    k_ops: 128,
     end_components: None,
     sys_id: "d521baca9371467ea9cf8a4d09f9534db3232220eaedf050466745ecb9d48357",
     table_digest: "fcad97cc1a75e452f314ef8e9795fbe1532dc7731b0725570225338239731aa3",
@@ -1125,6 +1181,41 @@ mod tests {
         assert_eq!(super::FP8_ADA_X4.decode, super::FP8_ADA.decode);
         assert_eq!(super::BF16_HOPPER_X4.decode, super::BF16_HOPPER.decode);
         assert_ne!(super::FP8_ADA_X4.sys_id, super::FP8_ADA.sys_id);
+    }
+
+    #[test]
+    fn vu_shapes_are_the_python_registry_and_match_the_decodes() {
+        // relations.Relation.steps = K_VU // k (every registered relation), fp4.relation.STEPS = 1536 // 64 (68 words per
+        // unit: 64 codes + 4 scale bytes)
+        const K_VU: usize = 1536;
+        for r in RELATIONS.iter() {
+            let products = match r.decode {
+                Decode::Nvf4 => {
+                    assert_eq!(r.k_ops, nvf4::WORDS, "{}", r.name);
+                    nvf4::K
+                }
+                Decode::PubSel(ps) => {
+                    assert_eq!(r.k_ops, ps.k(), "{}", r.name);
+                    r.k_ops
+                }
+                Decode::PrivSel(ps) => {
+                    assert_eq!(r.k_ops, ps.k, "{}", r.name);
+                    r.k_ops
+                }
+                Decode::Word(_) => r.k_ops,
+            };
+            assert_eq!(r.steps * products, K_VU, "{}: {} x {}", r.name, r.steps, products);
+        }
+        let shape = |n: &str| for_statement(Some(n)).map(|r| (r.steps, r.k_ops)).unwrap();
+        assert_eq!((shape("bf16-ampere"), shape("fp8-ada"), shape("fp4-nvf4")), ((96, 16), (48, 32), (24, 68)));
+        assert_eq!((shape("bf16-hopper-v3x4"), shape("fp8-ada-v2x4"), shape("fp8-hopper-x4")), ((24, 64), (12, 128), (12, 128)));
+        // every Ajtai pin's canonical VU fits its ring degree (the leaf's structural bound)
+        for (r, l, _, _) in crate::leaf::PINS {
+            let (rel, leaf) = (for_statement(Some(r)).unwrap(), crate::leaf::by_name(l).unwrap());
+            if let Some(n) = crate::leaf::max_steps(leaf) {
+                assert!(rel.steps <= n, "{r}+{l}: {} columns > n = {n}", rel.steps);
+            }
+        }
     }
 
     #[test]

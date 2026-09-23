@@ -503,7 +503,7 @@ fn fp4_nvf4_statement_negatives_are_rejected() {
     assert_eq!((u32_at(&k32, 24), u32_at(&k32, 42), u32_at(&k32, 54)), (198, 49, 32));
     k32[24..28].copy_from_slice(&196u32.to_le_bytes());
     k32[42..46].copy_from_slice(&25u32.to_le_bytes());
-    rejected("k32.stmt", &k32, "public inputs: statement has K = 32 words per operand per unit, the fp4-nvf4 unit takes 68");
+    rejected("k32.stmt", &k32, "statement: K = 32 words per operand per unit, the fp4-nvf4 relation's unit takes 68");
 }
 
 #[test]
@@ -1217,4 +1217,110 @@ fn ajtai_g1_decoy_fixture_is_refused() {
     let (code, js) = run(&["batch", "--dir", d, "--system", &sys, "--allow-any-system", "--threads", "2"]);
     assert_ne!(code, 0, "{js}");
     assert!(js.contains("\"accepted\":0,\"rejected\":1"), "{js}");
+}
+
+// red-team-leaf-3 H1 (must reject): `fixtures/steps-pin/`, made by the honest Ajtai prover with only `K_VU` bumped and the
+// prover-side `steps <= n` assert bypassed (lane/red-team-leaf-3 89cd6cf7, `leaf3_ajtai_{collide,steps}_e2e.py`); the
+// systems are the pinned ones (byte-identical to `fixtures/<rel>-ajtai-n<N>/system.bin`, so only the statement and proof
+// are kept).  Each collide pair P / Q commits two DIFFERENT x rows (columns 0 and N hold content P vs Q) under the SAME a
+// and b roots (`collide.json`) with two different y: the negacyclic wrap at steps > N makes the digest non-injective.
+// The 47d191e binary accepted all five with `system_pinned = true`.
+const STEPS_PIN_FX: &[(&str, usize, usize)] = &[
+    ("fp8-ada-ajtai-n64-collide-P", 0, 96),
+    ("fp8-ada-ajtai-n64-collide-Q", 0, 96),
+    ("bf16-hopper-ajtai-n128-collide-P", 1, 192),
+    ("bf16-hopper-ajtai-n128-collide-Q", 1, 192),
+    ("fp8-ada-ajtai-n64-steps32", 0, 32),
+];
+
+#[test]
+fn steps_pin_red_team_fixtures_are_refused() {
+    for &(name, fx, steps) in STEPS_PIN_FX {
+        let f = &AJTAI_FX[fx];
+        let d = format!("fixtures/steps-pin/{name}");
+        let (stmt, proof) = (format!("{d}/sub_00.stmt"), format!("{d}/sub_00.proof"));
+        let k = 1536 / f.steps;
+        let bound = format!("statement: steps = {steps} columns per VU exceeds the {} leaf's bound {}", f.leaf, f.n);
+        let shape = format!("statement: steps = {steps} columns per VU, the {} relation's VU is {} columns of K = {k}", f.rel, f.steps);
+        let (code, js) = verify(&f.sys(), &stmt, &proof, &[]);
+        assert_eq!(code, 1, "{name}: {js}");
+        assert!(js.contains(&format!("\"n_vus\":2,\"steps\":{steps},\"K\":{k},")), "{name}: {js}");
+        assert!(js.contains(if steps > f.n { &bound } else { &shape }), "{name}: {js}");
+        let (code, js) = run(&["batch", "--dir", &d, "--system", &f.sys(), "--threads", "2"]);
+        assert_ne!(code, 0, "{name}: {js}");
+        assert!(js.contains("\"accepted\":0,\"rejected\":1"), "{name}: {js}");
+        // unpinned: the leaf's structural bound still holds; below it (steps = 32 <= 64) the digest is binding and an
+        // unpinned verdict says nothing about which relation (hence which VU shape) was proved
+        let (code, js) = verify(&f.sys(), &stmt, &proof, &["--allow-any-system"]);
+        if steps > f.n {
+            assert_eq!(code, 1, "{name}: {js}");
+            assert!(js.contains(&bound), "{name}: {js}");
+        } else {
+            assert_eq!(code, 0, "{name}: {js}");
+            assert!(js.contains("\"system_pinned\":false") && js.contains("[system NOT pinned"), "{name}: {js}");
+        }
+    }
+    // the pairs really collide: P and Q are different statements with byte-identical a / b tree references
+    for (p, q) in [(0, 1), (2, 3)] {
+        let rd = |i: usize| std::fs::read(format!("fixtures/steps-pin/{}/sub_00.stmt", STEPS_PIN_FX[i].0)).unwrap();
+        let (sp, sq) = (rd(p), rd(q));
+        assert_eq!(sp.len(), sq.len());
+        assert_ne!(sp, sq, "{}", STEPS_PIN_FX[p].0);
+        let roots = std::fs::read_to_string(format!("fixtures/steps-pin/{}/collide.json", STEPS_PIN_FX[p].0)).unwrap();
+        for tree in ["\"a\": \"", "\"b\": \""] {
+            let prefix = |js: &str, nth: usize| {
+                let i = js.match_indices(tree).nth(nth).unwrap().0 + tree.len();
+                js[i..i + 32].to_string()
+            };
+            let (rp, rq) = (prefix(&roots, 0), prefix(&roots, 2));
+            assert_eq!(rp, rq, "{tree} root");
+            let bytes: Vec<u8> = (0..16).map(|i| u8::from_str_radix(&rp[2 * i..2 * i + 2], 16).unwrap()).collect();
+            let at = |st: &[u8]| st.windows(16).position(|w| w == &bytes[..]).expect("root in the statement");
+            assert_eq!(at(&sp), at(&sq), "{tree} root at the same offset in P and Q");
+        }
+    }
+}
+
+// H2: the relation name did not fix the VU shape.  Honest fixtures with only the header's `steps` (and, for a v5 file whose
+// K is words per row, K = steps x words per operand) rewritten: pinned, the shape check refuses them before the proof is
+// read; unpinned, steps is not checked and the changed statement digest refuses them.  A v5 file's K is NOT in the
+// statement digest (the old binary accepted `hash_k16` pinned, reporting K = 16): refused in both modes.
+#[test]
+fn a_statement_whose_vu_shape_is_not_the_relations_is_refused_pinned() {
+    let set = |st: &[u8], edits: &[(usize, u32)]| {
+        let mut m = st.to_vec();
+        for &(at, v) in edits {
+            m[at..at + 4].copy_from_slice(&v.to_le_bytes());
+        }
+        m
+    };
+    let steps = |s: usize, rel: &str, c: usize, k: usize| format!("statement: steps = {s} columns per VU, the {rel} relation's VU is {c} columns of K = {k}");
+    let cases: Vec<(&str, &str, &str, &str, &[(usize, u32)], String, bool)> = vec![
+        ("fp8_steps32", FP8_SYS, FP8_STMT, FP8_PROOF, &[(50, 32)], steps(32, "fp8-ada", 48, 32), false),
+        ("fp8_steps96", FP8_SYS, FP8_STMT, FP8_PROOF, &[(50, 96)], "layout does not fit".into(), true),
+        ("b1_steps32", BF16_SYS, "fixtures/b1.stmt", "fixtures/b1.proof", &[(50, 32)], steps(32, "bf16-ampere", 96, 16), false),
+        ("fp4_steps12", FP4_SYS, FP4_STMT, FP4_PROOF, &[(50, 12)], steps(12, "fp4-nvf4", 24, 68), false),
+        ("hash_steps32", HASH_SYS, HASH_STMT, HASH_PROOF, &[(50, 32), (54, 32 * 32)], steps(32, "fp8-ada", 48, 32), false),
+        ("hash_k16", HASH_SYS, HASH_STMT, HASH_PROOF, &[(54, 48 * 16)], "statement: K = 16 words per operand per unit, the fp8-ada relation's unit takes 32".into(), true),
+        ("ah_steps32", AH_SYS, AH_STMT, AH_PROOF, &[(50, 32), (54, 32 * 16)], steps(32, "bf16-ampere", 96, 16), false),
+    ];
+    for (name, sys, stmt, proof, edits, why, both_modes) in cases {
+        let m = write_tmp(&format!("shape_{name}.stmt"), &set(&std::fs::read(stmt).unwrap(), edits));
+        let (code, js) = verify(sys, &m, proof, &[]);
+        assert_eq!(code, 1, "{name}: {js}");
+        assert!(js.contains(&why), "{name}: expected {why:?} in {js}");
+        let (code, js) = verify(sys, &m, proof, &["--allow-any-system"]);
+        assert_eq!(code, 1, "{name}: {js}");
+        assert_eq!(js.contains(&why), both_modes, "{name}: {js}");
+        if !both_modes {
+            assert!(js.contains("column challenge mismatch"), "{name}: {js}");
+        }
+    }
+    // the honest shapes are accepted as before (every relation this build pins: relation.rs's unit test ties each
+    // relation's (steps, K) to Python's registry and to its decode)
+    for (sys, stmt, proof) in [(FP8_SYS, FP8_STMT, FP8_PROOF), (HASH_SYS, HASH_STMT, HASH_PROOF), (AH_SYS, AH_STMT, AH_PROOF), (FP4_SYS, FP4_STMT, FP4_PROOF)] {
+        let (code, js) = verify(sys, stmt, proof, &[]);
+        assert_eq!(code, 0, "{stmt}: {js}");
+        assert!(js.contains("\"system_pinned\":true"), "{js}");
+    }
 }

@@ -396,6 +396,34 @@ fn public_pins_nvf4(st: &Statement, sys: &System) -> Result<Vec<Vec<u32>>, Strin
     Ok(out)
 }
 
+/// The statement's VU shape against the relation's (red-team-leaf-3 H1 / H2).  The chain test, a hashed statement's
+/// public table and every authentication rank are laid out from `st.steps`, and no system digest fixes it (the compiled
+/// system is column-uniform).  Always: K (words per operand per unit) is the relation's -- a v4 file's decode needs it
+/// anyway, and a v5 file's K (words per row = steps x K) is not in the statement digest -- and a leaf's structural bound
+/// holds (`leaf::max_steps`: Ajtai `steps <= N`).  Pinned: `steps` is the relation's.
+fn check_vu_shape(st: &Statement, rel: &Relation, leaf: Option<&LeafScheme>, pinned: bool) -> Result<(), String> {
+    if st.k_ops != rel.k_ops {
+        return Err(format!(
+            "statement: K = {} words per operand per unit, the {} relation's unit takes {}", st.k_ops, rel.name, rel.k_ops
+        ));
+    }
+    if let Some(bound) = leaf.and_then(crate::leaf::max_steps) {
+        if st.steps > bound {
+            return Err(format!(
+                "statement: steps = {} columns per VU exceeds the {} leaf's bound {bound} (ring degree: the digest is not binding beyond it)",
+                st.steps, leaf.map_or("", |l| l.name)
+            ));
+        }
+    }
+    if pinned && st.steps != rel.steps {
+        return Err(format!(
+            "statement: steps = {} columns per VU, the {} relation's VU is {} columns of K = {}",
+            st.steps, rel.name, rel.steps, rel.k_ops
+        ));
+    }
+    Ok(())
+}
+
 /// The system file's chain end against the relation's: a v1 single word for a `None` relation, exactly the pinned
 /// `(lo, bits)` components for a `Some` relation.  Checked whatever the pin says (`--allow-any-system` too): the
 /// public values the chain test compares against are computed from these fields.
@@ -758,6 +786,9 @@ fn verify_inner(shared: &Shared, st_bytes: &[u8], pf_bytes: &[u8], opt: &Options
         if let Err(gate) = shared.gate(rel, leaf) {
             return reject(&gate, tm, None, Some(info));
         }
+    }
+    if let Err(e) = check_vu_shape(&st, rel, leaf, !opt.allow_any_system) {
+        return reject(&e, tm, None, Some(info));
     }
     // a keyed leaf (Ajtai): the system's gadget rows must carry the key the verifier re-derives from the public tag,
     // pinned or not (red-team-leaf F6: `--allow-any-system` must not accept a system whose key is 0)
