@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
-from verity_capture.commit.required_manifest import collector_path, split_name
+from verity_capture.commit.manifest_format import collector_path, split_name
 from verity_vllm.acquire.runtime_tree import RUNNER_PATH, RUNTIME_TREE_SCHEMA, RuntimeTree, mro_names, runtime_tree_from_paths, runtime_tree_of
 from verity_vllm.runtime_correspondence import NAMESPACE, SCHEMA, RuntimeCorrespondence, read_program_dir
 

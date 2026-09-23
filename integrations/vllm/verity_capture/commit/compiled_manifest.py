@@ -19,7 +19,7 @@ import os
 import re
 from typing import Any
 
-from verity_capture.commit.required_manifest import SCHEMA, manifest_digest as _manifest_digest
+from verity_capture.commit.manifest_format import SCHEMA, manifest_digest as _manifest_digest
 from verity_capture.experimental.commit_integ.compiled_relations import OUTPUT_ROLES, kernel_key, pointer_arity, roles_of
 
 # the consumer (binding.load_required_manifest, R15 manbind / rev-cb M-0108) admits ONE manifest schema and recomputes `manifest_digest`

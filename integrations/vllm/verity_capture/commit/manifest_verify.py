@@ -22,7 +22,7 @@ import os
 import sys
 from typing import Any
 
-from verity_capture.commit.required_manifest import manifest_digest
+from verity_capture.commit.manifest_format import manifest_digest
 
 SCHEMA = "verity-sweep/manifest-verify/v1"
 ENGINE = "v2-query"

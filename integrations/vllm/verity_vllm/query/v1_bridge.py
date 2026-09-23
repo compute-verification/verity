@@ -30,7 +30,8 @@ What this module cannot derive and therefore RECORDS (`NAMED_RESIDUALS`, emitted
   the attention hidden stream under `fa2.m1/L<k>`, the weights as `<field>/weight`.
 
 Kernel geometry (the FA hidden stream, the MoE block planes) and the identity encoding constants (`SCHEMA`, `IDENTITY_KEY`, the row
-order, the digest) are imported from v1 -- they are what the bridge is a bridge TO, not membership decisions.
+order, the digest) are the manifest format's (`verity_capture.commit.manifest_format`) -- they are what the bridge is a bridge TO, not
+membership decisions.
 """
 
 from __future__ import annotations
@@ -43,7 +44,7 @@ from dataclasses import dataclass, field
 from typing import Any, Iterable, Mapping
 
 from verity.verification.query import Policy, RequiredValues, ValueRef, boundary, required_values
-from verity_capture.commit import required_manifest as v1
+from verity_capture.commit import manifest_format as fmt
 from verity_vllm.ir.sampling_event import SAMPLING_EVENT_FAMILIES
 
 from .correspondence import CallName, Correspondence
@@ -242,8 +243,8 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
     sweep = (workload or {}).get("sweep") or {}
     wr = (workload or {}).get("requests") or []
     workload_request_id = wr[0].get("request_id") if wr and isinstance(wr[0], dict) else None
-    request_id = v1.request_label(request_id, workload)
-    k_req = int(v1._REQ_RE.match(request_id).group(1))
+    request_id = fmt.request_label(request_id, workload)
+    k_req = int(fmt.REQ_RE.match(request_id).group(1))
     if wr and k_req < len(wr) and isinstance(wr[k_req], dict) and str(wr[k_req].get("request_id")) != str(workload_request_id):
         workload_request_id = wr[k_req].get("request_id")
     arr = sweep.get("arrive_steps") or []
@@ -396,13 +397,13 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
     for (step, mod), a in sorted(attn.items(), key=lambda kv: (kv[0][0], attn_bodies.index(kv[0][1]))):
         layer = attn_bodies.index(mod)
         if hidden_family[:3] == "fa3":
-            geo = v1._fa3_geometry(a["T_max"], a["rows"], a["NH"], a["KVH"], a["D"], n_seq)
+            geo = fmt.fa3_geometry(a["T_max"], a["rows"], a["NH"], a["KVH"], a["D"], n_seq)
         else:
             win = (attn_obs.get(impl(mod)) or attn_obs.get(mod) or {}).get("sliding_window")
             w0 = win[0] if isinstance(win, (list, tuple)) and win else (win if isinstance(win, int) else -1)
-            geo = v1._fa2_geometry(a["T_max"], a["rows"], a["NH"], a["KVH"], a["D"], n_seq, windowed=(w0 is not None and int(w0) >= 0))
+            geo = fmt.fa2_geometry(a["T_max"], a["rows"], a["NH"], a["KVH"], a["D"], n_seq, windowed=(w0 is not None and int(w0) >= 0))
         HB, M, NB, BN, gname = geo
-        add(hidden_family, step, 0, f"{tap}/L{layer}", gname, 0, v1.mat_total_words(HB, M, NB, BN, a["D"]), dtype="u32",
+        add(hidden_family, step, 0, f"{tap}/L{layer}", gname, 0, fmt.mat_total_words(HB, M, NB, BN, a["D"]), dtype="u32",
             geometry={"HB": HB, "M": M, "NB": NB, "BN": BN, "D": a["D"], "seqlen_k": a["T_max"], "rows": a["rows"]}, attention_module=impl(mod))
         residual_counts["encoding:hidden"] += 1
 
@@ -412,17 +413,17 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
     for step, ev in enumerate(events):                     # the step's Calls are the body slice up to and including its sampling event
         seg = P.calls[lo: ev + 1]
         lo = ev + 1
-        for mod, g in v1.moe_geometry({"spec": c.definition, "name": c.name} for c in seg).items():
-            layer = v1._layer_of(mod)
+        for mod, g in fmt.moe_geometry({"spec": c.definition, "name": c.name} for c in seg).items():
+            layer = fmt.layer_of(mod)
             if g["M"] <= 0 or g["TOPK"] <= 0:
                 continue
             moe_layers.add(layer)
-            for plane, nw, dtype in v1.moe_identities(g):
+            for plane, nw, dtype in fmt.moe_identities(g):
                 add("moe_block_stream", step, 0, f"moe/L{layer}", plane, 0, nw, dtype=dtype, rows=g["M"], topk=g["TOPK"], moe_module=impl(mod))
 
     for f in alias_faults:
         unmodelled[f] += 1
-    identities.sort(key=v1._row_key)
+    identities.sort(key=fmt.row_key)
     q = query_header(profile, hidden_family, return_slots=return_slots)
     if moe_layers:
         q["required_families"].append("moe_block_stream")
@@ -431,7 +432,7 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
         q["required_families"] += sorted(f for f in fam_counts if f[:8] == "sampler_")
     q["residuals_applied"] = dict(sorted(residual_counts.items()))
     alias_out = {impl(m): [impl(canon), k] for m, (canon, k) in aliases.items() if m != canon}
-    man = {"schema": v1.SCHEMA, "identity_key": list(v1.IDENTITY_KEY), "program_digest": pdig,
+    man = {"schema": fmt.SCHEMA, "identity_key": list(fmt.IDENTITY_KEY), "program_digest": pdig,
            "program": {"dir": program_dir, "function": res["program"].get("function"), "wrapper": res.get("wrapper"), "LP": res.get("LP"), "T": res.get("T"),
                        "model_pin": res.get("model_pin"), "artifact_identity": (artifact or {}).get("identity"), "instances": len(P.calls),
                        "instances_digest": P.digest, "source": P.source},
@@ -445,7 +446,7 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
                            "attention_layers": len(attn_bodies), "units": len(B.units), "boundary_values": len(B.values),
                            "required_values": len(req.values)},
            "complete": not unmodelled, "unmodelled": dict(unmodelled),
-           "manifest_digest": v1.manifest_digest(identities), "identities": identities}
+           "manifest_digest": fmt.manifest_digest(identities), "identities": identities}
     return BridgeResult(man, req, residual_counts)
 
 
@@ -457,7 +458,7 @@ def compose_global(fixture: Mapping[str, Any], parts: Mapping[str, dict[str, Any
                    rank: int = 0, ranks: int = 1) -> dict[str, Any]:
     """`parts` = {request label: component manifest}; `reqs` = the declared requests in (arrive_step, index) order with `request_id` = label."""
     component_digests = sorted({p["program_digest"] for p in parts.values()})
-    pdig = str(workload_digest) if workload_digest else v1.components_fold_digest(component_digests)
+    pdig = str(workload_digest) if workload_digest else fmt.components_fold_digest(component_digests)
     pdig_kind = "workload" if workload_digest else "components-fold"
     by_engine: dict[int, list[tuple[str, int]]] = {}
     for r in reqs:
@@ -499,15 +500,15 @@ def compose_global(fixture: Mapping[str, Any], parts: Mapping[str, dict[str, Any
             D = int(pre["geometry"]["D"])
             NH = int(pre["geometry"]["HB"])
             KVH = int(dec["geometry"]["HB"]) if dec is not None and int(dec["geometry"]["M"]) > 1 else NH
-            fn = v1._fa3_geometry if hidden_family[:3] == "fa3" else v1._fa2_geometry
+            fn = fmt.fa3_geometry if hidden_family[:3] == "fa3" else fmt.fa2_geometry
             HB, M, NB, BN, gname = fn(a["T_max"], a["max_rows"] * a["n_seq"], NH, KVH, D, a["n_seq"])
             ids.append({"family": hidden_family, "program_digest": pdig, "request_id": "*", "requests": a["requests"], "step": "*", "engine_step": e, "invocation": 0,
-                        "op_path": op, "output_member": gname, "element_range": [0, v1.mat_total_words(HB, M, NB, BN, D)], "rank": rank, "dtype": "u32",
+                        "op_path": op, "output_member": gname, "element_range": [0, fmt.mat_total_words(HB, M, NB, BN, D)], "rank": rank, "dtype": "u32",
                         "geometry": {"HB": HB, "M": M, "NB": NB, "BN": BN, "D": D, "seqlen_k": a["T_max"], "rows": a["max_rows"] * a["n_seq"], "n_seq": a["n_seq"]},
                         "attention_module": a["module"]})
         engine_steps_out.append({"engine_step": e, "members": [{"request_id": rid, "step": s, "rows": rows_of[rid]} for rid, s in members],
                                  "rows": sum(rows_of.values()), "n_seq": len(members)})
-    ids.sort(key=v1._row_key)
+    ids.sort(key=fmt.row_key)
     fam: Counter = Counter(r["family"] for r in ids)
     ref: dict[str, Any] = {}
     for r in ids:
@@ -517,7 +518,7 @@ def compose_global(fixture: Mapping[str, Any], parts: Mapping[str, dict[str, Any
     applied: Counter = Counter()
     for p in parts.values():
         applied.update(p["query"].get("residuals_applied") or {})
-    return {"schema": v1.SCHEMA, "identity_key": list(v1.IDENTITY_KEY), "program_digest": pdig, "program_digest_kind": pdig_kind, "component_digests": component_digests,
+    return {"schema": fmt.SCHEMA, "identity_key": list(fmt.IDENTITY_KEY), "program_digest": pdig, "program_digest_kind": pdig_kind, "component_digests": component_digests,
             "global": True, "addressing": "request-local", "composition_reference": ref,
             "fixture": {k: v for k, v in fixture.items() if k in ("schema", "fixture", "model", "revision", "sampling", "expected_engine_steps", "case")}
                        | ({"row_id": fixture["sweep"].get("row_id"), "seed": fixture["sweep"].get("seed")} if isinstance(fixture.get("sweep"), dict) else {}),
@@ -534,4 +535,4 @@ def compose_global(fixture: Mapping[str, Any], parts: Mapping[str, dict[str, Any
             "ranks": ranks, "rank": rank,
             "engine_steps": engine_steps_out, "steps": sorted(by_engine), "requests": [r["request_id"] for r in reqs],
             "populations": {"identities": len(ids), "by_family": dict(fam), "engine_steps": len(by_engine), "requests": len(reqs)},
-            "manifest_digest": v1.manifest_digest(ids), "identities": ids}
+            "manifest_digest": fmt.manifest_digest(ids), "identities": ids}

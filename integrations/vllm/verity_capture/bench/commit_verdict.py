@@ -164,7 +164,7 @@ def _not_yet_texts() -> set[str]:
 
 def _is_token_select(fam: str) -> bool:
     try:
-        from verity_capture.commit.required_manifest import is_token_select
+        from verity_capture.commit.manifest_format import is_token_select
         return bool(is_token_select(fam))
     except Exception:  # noqa: BLE001
         return str(fam).split("_v", 1)[0].endswith("TokenSelect")

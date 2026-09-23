@@ -651,6 +651,7 @@ def test_registry_unavailable_is_a_named_fault_not_a_manifest_result(monkeypatch
     repaired environment in the same process recovers."""
     import sys
 
+    from verity_capture.commit import manifest_format as MF
     from verity_capture.commit import required_manifest as RM
 
     monkeypatch.setattr(RM, "_registry_cache", {})
@@ -658,7 +659,7 @@ def test_registry_unavailable_is_a_named_fault_not_a_manifest_result(monkeypatch
     with pytest.raises(RM.RegistryUnavailable) as ei:
         RM.promoted_signature("Bf16MulScalarTensor_v1{N=8}")
     e = ei.value
-    assert isinstance(e, ImportError) and e.fail_class == RM.REGISTRY_UNAVAILABLE_FAIL_CLASS == "PRECHECK_FAIL_REGISTRY_UNAVAILABLE"
+    assert isinstance(e, ImportError) and e.fail_class == MF.REGISTRY_UNAVAILABLE_FAIL_CLASS == "PRECHECK_FAIL_REGISTRY_UNAVAILABLE"
     assert e.kind == "infra/precondition" and "verity.ir.defs" in str(e) and str(e).startswith("PRECHECK_FAIL_REGISTRY_UNAVAILABLE")
     assert "registry" not in RM._registry_cache                                  # not cached as None
     # the v2 query engine names the same fault

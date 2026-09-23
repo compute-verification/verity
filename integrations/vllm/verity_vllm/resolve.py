@@ -107,7 +107,7 @@ def _norm_module(mod: str, prefix: str) -> str:
     is `wrapper_prefix_of(rows, attention_paths)` -- the attention module paths the record names (result.json `attention_impls_observed`)
     matched against the Program's attention rows -- so a TP stub's `inner.model.` falls out of the same match; no wrapper spelling is
     assumed here (by-name lint, Draft 3.1 §12.4)."""
-    from verity_capture.commit.required_manifest import collector_path
+    from verity_capture.commit.manifest_format import collector_path
     return collector_path(mod, prefix)
 
 
@@ -122,7 +122,7 @@ class DescriptorCorrespondence:
                         path by `query.correspondence.implementation_prefix` over the record's module set x `attention_paths` ("" when
                         nothing is observed: the record's own path stands).
       v1_annotations    `source = "v1_annotations"`: no record -> the rows' names (`<module path>/<fx node>/<member hint>[row]`,
-                        `required_manifest.split_name`) under the DETERMINED wrapper prefix (`wrapper_prefix_of(rows, attention_paths)`,
+                        `manifest_format.split_name`) under the DETERMINED wrapper prefix (`wrapper_prefix_of(rows, attention_paths)`,
                         `_norm_module`).  Taken only when the record is absent (or does not describe this Program: `problem`), and recorded.
 
     `provenance()` states which reader served (`source`, `digest`, `problem`).  `view_of(call)` is the row's declared output view when the
@@ -130,12 +130,12 @@ class DescriptorCorrespondence:
 
     def __init__(self, inst: dict[str, Any], *, prefix: str | None = None, attention_paths: Iterable[str] = (), table: Any = None,
                  digest: str | None = None, problem: str | None = None):
-        from verity_capture.commit import required_manifest as RM
+        from verity_capture.commit import manifest_format as MF
         from verity_vllm import runtime_correspondence as RC
         self.rows: list[dict] = list(inst.get("rows") or [])
         self.by_i: dict[int, dict] = {int(r["i"]): r for r in self.rows}
-        self._split = RM.split_name
-        self.segs = RM.segment_steps(self.rows)
+        self._split = MF.split_name
+        self.segs = MF.segment_steps(self.rows)
         self._attention_paths = tuple(attention_paths)
         if table is None and RC._document_of(inst) is not None:                    # the record travels on the doc itself
             table = RC.load_correspondence(inst)
@@ -153,7 +153,7 @@ class DescriptorCorrespondence:
         else:
             self.source = "v1_annotations"
             self.digest = None
-            self.prefix = RM.wrapper_prefix_of(self.rows, list(self._attention_paths)) if prefix is None else prefix
+            self.prefix = MF.wrapper_prefix_of(self.rows, list(self._attention_paths)) if prefix is None else prefix
 
     def provenance(self) -> dict[str, Any]:
         """What served `owning_module`: `source` (correspondence | v1_annotations), the record's `digest`, the determined `prefix`, any `problem`."""

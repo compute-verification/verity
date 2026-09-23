@@ -537,8 +537,8 @@ def weights_of_record(program: dict[str, Any], ck: CheckpointIndex, *, prefix: s
     world, rank = int(tp.get("world") or 1), int(tp.get("rank") or 0)
     fields = program_weight_fields(inst)
     if prefix is None:
-        from verity_capture.commit import required_manifest as RM
-        prefix = RM.wrapper_prefix_of(inst.get("rows", []), res.get("attention_impls_observed") or [])
+        from verity_capture.commit import manifest_format as MF
+        prefix = MF.wrapper_prefix_of(inst.get("rows", []), res.get("attention_impls_observed") or [])
         if not prefix:
             # no attention row to determine the wrapper from (e.g. a weights-only check): the prefix under which the most fields are
             # checkpoint tensors 1:1 -- determined from the checkpoint, not assumed
@@ -804,8 +804,8 @@ def _default_manifest() -> str | None:
 
 def build_record(program_dir: str, checkpoint_dir: str, *, checkpoints_manifest: str | None = None, model: str | None = None,
                  revision: str | None = None, verify_shards: bool = True, kv_cache_dtype: str = "auto") -> dict[str, Any]:
-    from verity_capture.commit import required_manifest as RM
-    prog = RM.load_program(program_dir)
+    from verity_capture.commit import manifest_format as MF
+    prog = MF.load_program(program_dir)
     ck = CheckpointIndex(checkpoint_dir, checkpoints_manifest=checkpoints_manifest or _default_manifest(), model=model, revision=revision,
                          verify_shards=verify_shards)
     return weights_of_record(prog, ck, kv_cache_dtype=kv_cache_dtype)
@@ -832,7 +832,7 @@ def stamp_of_record_set(record: dict[str, Any], programs_root: str, *, manifest:
     workload_program.json) + the manifest's program / component digests.  Each component's weights struct must EQUAL the record's
     (field list, shapes, bits): a component whose struct differs is named and the record is not of record (a record derived from one
     shape never silently stands for a Program of another struct).  `check()` then requires the run's of-record set to equal the stamp."""
-    from verity_capture.commit import required_manifest as RM
+    from verity_capture.commit import manifest_format as MF
     my_struct = [[f["field"], list(f["shape"]), int(f["bits"])] for f in record.get("fields", [])]
     # the manifest's digests first: they define which Program dirs under the root are OF RECORD (a default-shape build_request that is
     # not a workload component is struct-checked but its digest does not join the set -- the run's set never carries it)
@@ -852,7 +852,7 @@ def stamp_of_record_set(record: dict[str, Any], programs_root: str, *, manifest:
     shaped = [d for d in dirs if os.path.basename(d) != "build_request"]
     for d in dirs:
         try:
-            prog = RM.load_program(d)
+            prog = MF.load_program(d)
         except Exception as e:  # noqa: BLE001
             why.append(f"{os.path.basename(d)}: not loadable ({type(e).__name__}: {str(e)[:80]})")
             continue

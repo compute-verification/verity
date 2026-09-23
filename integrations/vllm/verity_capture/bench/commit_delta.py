@@ -1201,7 +1201,7 @@ def main(argv: list[str] | None = None) -> None:
     if args.required_manifest:
         from verity_capture.commit.binding import require_build_program_digest
         require_build_program_digest(args.required_manifest, args.program_digest)          # [COORD M-0205 (C1)] named refusal, before any engine
-        from verity_capture.commit.required_manifest import coverage_check as manifest_coverage_check
+        from verity_capture.commit.manifest_format import coverage_check as manifest_coverage_check
         required_manifest = json.load(open(args.required_manifest))
         print(f"[delta] required-value manifest {args.required_manifest}: {required_manifest['populations']['identities']} identities "
               f"{required_manifest['populations']['by_family']} digest {required_manifest['manifest_digest'][:16]} (Program {str(required_manifest['program_digest'])[:16]})", flush=True)
@@ -2363,7 +2363,7 @@ def main(argv: list[str] | None = None) -> None:
                     try:
                         from verity_capture.commit import executed_prefix as EPX
                         from verity_capture.commit import oracle_compare as OC
-                        from verity_capture.commit import required_manifest as RM
+                        from verity_capture.commit import manifest_format as MF
                         from verity_capture.commit import sampled_replay as SR
                         if _cached is not None:
                             raise _ReplayReused()
@@ -2382,9 +2382,9 @@ def main(argv: list[str] | None = None) -> None:
                         if getattr(args, "programs_root", None):
                             _fx = {"requests": [{"request_id": _rl[str(r.get("request_id"))], "prompt_len": len(r["prompt_token_ids"]),
                                                  "max_tokens": int(r.get("max_tokens") or sampling.get("max_tokens") or 1)} for r in reqs]}
-                            _loaded = RM._programs_for(_fx, args.programs_root)
+                            _loaded = MF.programs_for(_fx, args.programs_root)
                         else:
-                            _l1 = RM.load_program(args.program_dir)
+                            _l1 = MF.load_program(args.program_dir)
                             _loaded = {_rl[str(r.get("request_id"))]: _l1 for r in reqs}
                         _digs = {k: str((v.get("result") or {}).get("program_digest") or (v.get("instances") or {}).get("digest") or "") for k, v in _loaded.items()}
                         if not _of_record:

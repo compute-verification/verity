@@ -31,9 +31,9 @@ import json
 from collections import Counter
 from typing import Any, Iterable, Iterator
 
-from verity_capture.commit.required_manifest import PROMOTED_DTYPE_BYTES  # noqa: F401  -- re-exported (R19 int-20)
-from verity_capture.commit.required_manifest import PROMOTED_OBSERVATION_RULE as PROMOTED_INPUT_RULE  # noqa: F401  -- re-exported
-from verity_capture.commit.required_manifest import promoted_observation as promoted_input_acquisition  # noqa: F401  -- re-exported
+from verity_capture.commit.manifest_format import PROMOTED_DTYPE_BYTES  # noqa: F401  -- re-exported (R19 int-20)
+from verity_capture.commit.manifest_format import PROMOTED_OBSERVATION_RULE as PROMOTED_INPUT_RULE  # noqa: F401  -- re-exported
+from verity_capture.commit.manifest_format import promoted_observation as promoted_input_acquisition  # noqa: F401  -- re-exported
 
 IDENTITY_KEY = ("program_digest", "request_id", "step", "invocation", "op_path", "output_member", "element_range", "rank")
 RULES_VERSION = "r14-v1"
@@ -53,8 +53,8 @@ MEMBER_RULES: dict[str, tuple[str, ...]] = {
 FIRST_NORM_SUFFIX = ".layers.0.input_layernorm"
 
 #: [R19 int-20, F-r19-int-20] a promoted member's observation point (`PROMOTED_INPUT_RULE`, `promoted_input_acquisition`): the manifest
-#: module owns the rule (required_manifest.PROMOTED_OBSERVATION_RULE / promoted_observation, shared by the collector's arming, this map and
-#: the layout-level required_manifest.coverage_check); imported above under the binding's names for its callers (bench.commit_delta, tests).
+#: module owns the rule (manifest_format.PROMOTED_OBSERVATION_RULE / promoted_observation, shared by the collector's arming, this map and
+#: the layout-level manifest_format.coverage_check); imported above under the binding's names for its callers (bench.commit_delta, tests).
 
 
 # ---------------------------------------------------------------------- names -> identity parts
@@ -314,13 +314,13 @@ def load_required_manifest(path: str, program_digest: str, *, requests: list[str
     # [R15 manbind, rev-cb M-0108] the manifest is an INPUT the consumer must not trust blindly: (F-cb-07) its `manifest_digest` is recomputed
     # over the rows it carries (a manifest edited after digesting is refused); (F-cb-10/09) a zero-width identity is refused, never
     # "vacuously covered"; (F-cb-13) a request id that is not `r<k>` / `*` (nor resolvable through requests_declared) is refused.
-    from verity_capture.commit import required_manifest as RM
+    from verity_capture.commit import manifest_format as MF
 
-    if doc.get("schema") != RM.SCHEMA:
-        raise ValueError(f"required manifest {path}: schema {doc.get('schema')!r} is not {RM.SCHEMA!r}: refused")
+    if doc.get("schema") != MF.SCHEMA:
+        raise ValueError(f"required manifest {path}: schema {doc.get('schema')!r} is not {MF.SCHEMA!r}: refused")
     if not isinstance(doc.get("program_digest"), str) or not doc.get("program_digest"):
         raise ValueError(f"required manifest {path}: program_digest must be one string (got {type(doc.get('program_digest')).__name__}): refused")
-    recomputed = RM.manifest_digest(rows)
+    recomputed = MF.manifest_digest(rows)
     if recomputed != doc.get("manifest_digest"):
         raise ValueError(f"required manifest {path}: manifest_digest {str(doc.get('manifest_digest'))[:16]} != digest of its rows {recomputed[:16]}: edited after digesting, refused")
     hdr["manifest_digest_verified"] = True
@@ -413,7 +413,7 @@ def load_required_manifest(path: str, program_digest: str, *, requests: list[str
             engine_step = None
         for rid in (req_field if isinstance(req_field, list) and not (len(req_field) == 2 and all(isinstance(x, int) for x in req_field)) else expand(req_field, all_req, "r0")):
             rid = declared.get(str(rid), f"r{rid}" if str(rid).isdigit() else str(rid))   # workload id | index -> r<i>
-            if not RM._REQ_RE.match(rid):                                   # (F-cb-13) a request the workload does not declare (e.g. a bare UUID)
+            if not MF.REQ_RE.match(rid):                                   # (F-cb-13) a request the workload does not declare (e.g. a bare UUID)
                 raise ValueError(f"required manifest {path}: request id {rid!r} is not r<k> and not declared in requests_declared: refused (COORD R15 ruling 2)")
             arrive = int((arrivals or {}).get(rid, 0))                     # gprog reading: manifest step is request-relative; map step = engine step
             for st in ([int(engine_step)] if engine_step is not None else expand(ident.get("step"), all_steps, 0)):

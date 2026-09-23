@@ -55,7 +55,8 @@ from typing import Any, Callable, Iterable, Sequence
 
 import numpy as np
 
-from verity_capture.commit import required_manifest as RM
+from verity_capture.commit import manifest_format as RM
+from verity_capture.commit import required_manifest as V1
 from verity_capture.commit.oracle_compare import entry_read_name as _entry_read_name, same_name_invocations as _same_name_invocations
 
 SCHEMA = "verity-sweep/sampled-replay/v1"
@@ -360,7 +361,7 @@ class ProgramIndex:
         # order -- the manifest's `rows` count (build_manifest) is this ordinal's population; the `[k]` name suffix agrees where present but
         # attention rows are named `[t=<position>]` (the visible-keys count), not `[k]`
         # [MAN-07] modules whose step carries an epilogue row (BiasAdd): their Gemm rows are interior, the epilogue produces member 0
-        self._epi: list[set[str]] = [RM.epilogue_modules(self.rows[lo: hi + 1]) for lo, hi in self.segs]
+        self._epi: list[set[str]] = [V1.epilogue_modules(self.rows[lo: hi + 1]) for lo, hi in self.segs]
         # [TP-08d] per step: module -> the collective it issues (mirror of build_manifest's `coll_of`), only for a rank Program
         self._coll: list[dict[str, str]] = []
         for lo, hi in self.segs:
@@ -414,7 +415,7 @@ class ProgramIndex:
             mod, _node, hint, _row = RM.split_name(r.get("name") or "")
             s = self.step_of(i)
             fam0 = RM.spec_family(r["spec"])
-            if RM.is_epilogue_interior(fam0, mod, self._epi[s]):
+            if V1.is_epilogue_interior(fam0, mod, self._epi[s]):
                 promote(i, s, mod, fam0)
                 continue                                                     # interior rows claim no member: not in the manifest's row count
             # [R16 fp8] a row whose family claims NO member (Fp8GroupQuant / Fp8GroupScale: the activation quant interior to the FP8
@@ -427,8 +428,8 @@ class ProgramIndex:
             if empty is None:
                 try:
                     tpc0 = None if not self.tp else dict(self.tp, collective=ck[3])
-                    empty = not RM.members_for(fam0, RM.spec_statics(r["spec"]), mod, hint, tp=tpc0, padded_slots=self.padded_slots)
-                except RM.UnmodelledFamily:
+                    empty = not V1.members_for(fam0, RM.spec_statics(r["spec"]), mod, hint, tp=tpc0, padded_slots=self.padded_slots)
+                except V1.UnmodelledFamily:
                     empty = False
                 memberless[ck] = empty
             if empty:
@@ -439,9 +440,9 @@ class ProgramIndex:
             counts[key] = self._ordinal[i] + 1
             if hint:
                 try:
-                    if any(m[0] == hint for m in RM.members_for(RM.spec_family(r["spec"]), RM.spec_statics(r["spec"]), mod, hint)):
+                    if any(m[0] == hint for m in V1.members_for(RM.spec_family(r["spec"]), RM.spec_statics(r["spec"]), mod, hint)):
                         self._hinted.add((mod, hint, self.step_of(i)))
-                except RM.UnmodelledFamily:
+                except V1.UnmodelledFamily:
                     pass
 
     @property
@@ -491,10 +492,10 @@ class ProgramIndex:
         else:
             try:
                 tpc = None if not self.tp else dict(self.tp, collective=self._coll[self.step_of(i)].get(mod))
-                mem = [tuple(m[:3]) for m in RM.members_for(fam, st, mod, hint, tp=tpc, padded_slots=self.padded_slots)]
-                if RM.is_epilogue_interior(fam, mod, self._epi[self.step_of(i)]):
+                mem = [tuple(m[:3]) for m in V1.members_for(fam, st, mod, hint, tp=tpc, padded_slots=self.padded_slots)]
+                if V1.is_epilogue_interior(fam, mod, self._epi[self.step_of(i)]):
                     mem = []                                                     # the pre-bias Gemm output: interior (composed by the replay)
-            except RM.UnmodelledFamily:
+            except V1.UnmodelledFamily:
                 mem = None
             if mem is not None and not hint:
                 # a DEFAULT claim on a member another row of this module names explicitly is interior (build_manifest's rule; see __init__)
@@ -533,7 +534,7 @@ class ProgramIndex:
         (population), never a silent read of another pair's words."""
         s = self.step_of(i)
         g = self._moe_geo[s].get(mod) or {}
-        layer = RM._layer_of(mod)
+        layer = RM.layer_of(mod)
         M, TOPK = int(g.get("M", 0) or 0), int(g.get("TOPK", 0) or 0)
         ord_ = int(self._moe_ord.get(i, -1))
         err: str | None = None

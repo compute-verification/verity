@@ -138,7 +138,7 @@ def member_plane_identity(shared: dict[str, Any], rid: str, engine_step: int, ar
          of the launch: the union's T_max, a DECLARED quantity of the manifest at full cap, so Q(P) stays fixed across stopping points)
       else the row's own `element_range` width (a fixture without geometry) -> `geometry_source: row-width`
     Named `<op_path>/<rid>/<g...>/bot` so `split_name` gives (op_path, member) and the op-level requirement binds it."""
-    from verity_capture.commit.required_manifest import mat_total_words
+    from verity_capture.commit.manifest_format import mat_total_words
     geo = (shared.get("members_geometry") or {}).get(rid)
     src = "declared"
     if geo is None and isinstance(shared.get("geometry"), dict) and all(k in shared["geometry"] for k in ("HB", "M", "NB", "BN", "D")):
