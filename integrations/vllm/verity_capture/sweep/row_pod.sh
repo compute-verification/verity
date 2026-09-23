@@ -905,7 +905,10 @@ print(wd or (hashlib.sha256(("workload-components/" + ",".join(comps)).encode())
   fi
   # --- row_pod.commit-record-precheck end
   if [ -d "$D/match" ] && [ -f "$D/match/instances.jsonl" ] && has_flag --match-dir $PY -m verity_capture.bench.commit_delta; then
-    CMD_K+=(--match-dir "$D/match"); log "C2 live oracle-compare armed: --match-dir $D/match (Match record of this attempt; snapshot steps ${MATCH_SNAP_STEPS:-$SNAP_DEF})"
+    # the step set OF THE RECORD (run.json snapshot_steps, the plan's expansion of --snapshot-steps: "all" -> 0..n-1), not this shell's
+    # MATCH_SNAP_STEPS (unset on a --from commit re-run, "all" unexpanded): the line used to say "0,1" over an all-steps record
+    SNAP_REC=$("$PY" -c 'import json,sys; s=json.load(open(sys.argv[1])).get("snapshot_steps") or []; print(",".join(map(str,s)) if s else "")' "$D/match/run.json" 2>/dev/null || true)
+    CMD_K+=(--match-dir "$D/match"); log "C2 live oracle-compare armed: --match-dir $D/match (Match record of this attempt; snapshot steps ${SNAP_REC:-${MATCH_SNAP_STEPS:-$SNAP_DEF} (env; run.json unreadable)})"
   elif [ "$B" -gt 1 ]; then
     log "WARNING B=$B: commit_delta on this tree has no --match-dir (or no $D/match/instances.jsonl): live C2 oracle-compare NOT armed -- request attribution of decode-step identities unverified (rev-cb F-cb-23, M-0216)"
   fi
