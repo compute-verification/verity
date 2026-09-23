@@ -505,20 +505,30 @@ def bench_vu_fp4(args) -> int:
         dump_manifest["set"] = {"total_vus": total_vus, "batch": args.batch, "per_proof": per_proof, "n_proofs": n_proofs,
                                 "zk": args.zk, "mode": args.mode, "reps": args.reps, "relation": R.relation,
                                 "instances": _instances(total_vus)}
+    dump_reps = getattr(args, "dump_reps", None)
+    dump_reps = args.reps if dump_reps is None or dump_reps < 0 else dump_reps
     for rep in range(args.reps + 1):
         agg: dict[str, float] = {}
         vsum = 0.0
         t_pass = time.perf_counter()
+        # Prove every sub-batch of the rep first, then verify (and dump) them: the verifier's host work and the file
+        # round trips must not sit between two timed prover sub-batches (vu.bench_vu / fp8.chain discipline).
+        proved = []
         for si, (lo, hi) in enumerate(subs):
             V = protocol_mod.Coins.sample() if interactive else None
             proof, pubs, lay_i = R.prove_vus(data[lo:hi], check=(rep == 0 and lo == 0), min_l=l, coins=V)
+            for k_, v_ in proof.timings.items():
+                agg[k_] = agg.get(k_, 0.0) + v_
+            proved.append((si, lo, hi, V, proof, pubs, lay_i))
+            if rep == 0:
+                break                                        # warm-up: one sub-batch (compile, graph capture, self-check)
+        wall_prove = time.perf_counter() - t_pass
+        for si, lo, hi, V, proof, pubs, lay_i in proved:
             t1 = time.perf_counter()
             ok, why = R.verify_vus(proof, pubs, lay_i, coins=V)
             vsum += time.perf_counter() - t1
             assert ok, f"sub-batch [{lo}, {hi}): {why}"
-            for k_, v_ in proof.timings.items():
-                agg[k_] = agg.get(k_, 0.0) + v_
-            if dump_dir is not None and rep > 0:
+            if dump_dir is not None and 0 < rep <= dump_reps:
                 rd = dump_dir / f"rep{rep}"
                 rd.mkdir(exist_ok=True)
                 stem = f"sub_{si:02d}"
@@ -538,16 +548,14 @@ def bench_vu_fp4(args) -> int:
                     (rd / f"{stem}.coins").write_bytes(V.r1 + V.s1 + V.r2 + V.s2)
                     entry["coins"] = f"rep{rep}/{stem}.coins"
                 dump_manifest["files"].append(entry)
-            if rep == 0:
-                break
-        wall = time.perf_counter() - t_pass
+        del proved
         if rep == 0:
             print("warm-up (one sub-batch, with the prover's self-check):", {k_: round(v_, 3) for k_, v_ in agg.items()})
             continue
         keys = agg.keys()
         runs.append((agg, vsum))
         print(f"rep {rep}: prover {agg['total']:.3f}s (+hints {agg['hints_host']:.3f}s) over {n_proofs} proofs; "
-              f"verifier {vsum:.3f}s; pass wall {wall:.3f}s ({(agg['total'] + agg['hints_host']) / total_vus * 1e3:.3f} ms/VU)")
+              f"verifier {vsum:.3f}s; prove wall {wall_prove:.3f}s ({(agg['total'] + agg['hints_host']) / total_vus * 1e3:.3f} ms/VU)", flush=True)
     if dump_dir is not None:
         (dump_dir / "manifest.json").write_text(json.dumps(dump_manifest, indent=1, default=str))
         print(f"dumped {len(dump_manifest['files'])} proofs to {dump_dir}", flush=True)

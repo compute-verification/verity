@@ -36,6 +36,7 @@ def parse(argv: list[str]) -> dict:
     ap.add_argument("--row-negatives", type=int, default=60)
     ap.add_argument("--unit-negatives", type=int, default=48)
     ap.add_argument("--dump-dir", default=None)
+    ap.add_argument("--dump-reps", type=int, default=None)      # how many reps' proofs are written, never what is measured
     ns, unknown = ap.parse_known_args(argv[idx + 1:])
     out = vars(ns)
     out["cmd"] = argv[idx]

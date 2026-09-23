@@ -229,7 +229,33 @@ def test_chain_two_vus_cpu():
             W[c_rows[1], STEPS] = 1
         proof2, pubs2, lay2 = R.prove_vus(vus, check=False, mutate=nonzero_c0)
         assert not R.verify_vus(proof2, pubs2, lay2)[0]
-        # a wrong-rule witness with the honest claim and links
-        proof3, pubs3, lay3 = R.prove_vus(vus, check=False, variant="negzero")
-        assert not R.verify_vus(proof3, pubs3, lay3)[0]
+        # wrong-rule witnesses with the honest claim and links, on a VU where the wrong rule changes a word (where it does not,
+        # its witness is the honest one -- the gate skips those variants at chain level and reports them)
+        from .chain import _variant_base
+        exercised = 0
+        for v in ("acc-exp+1", "wrong-sign-acc", "drop-group3", "scale-exp+1", "negzero", "floor-align"):
+            vb = _variant_base(vus, v)
+            if vb is None:
+                continue
+            try:
+                proof3, pubs3, lay3 = R.prove_vus(vus, check=False, variant=v)
+            except (AssertionError, ValueError):
+                exercised += 1                                  # no witness of the relation's shape at all
+                continue
+            assert not R.verify_vus(proof3, pubs3, lay3)[0], v
+            exercised += 1
+        assert exercised >= 2
         del torch
+
+
+def test_contract_family_composition_matches_the_chain_recipe():
+    """``contract.NVFP4_INSTANCES_FAMILIES`` (what trust's Tc reads as the set's corner families) is ``instances_fp4``'s recipe
+    at the frozen tier size: VU ``i`` of ``VU_FAMILIES[i % 14]`` for i < 4096."""
+    pytest.importorskip("torch")
+    from verity_numerical.bench import contract
+
+    from .chain import VU_FAMILIES
+    counts = {f: 0 for f in VU_FAMILIES}
+    for i in range(4096):
+        counts[VU_FAMILIES[i % len(VU_FAMILIES)]] += 1
+    assert contract.NVFP4_INSTANCES_FAMILIES == counts and sum(counts.values()) == 4096

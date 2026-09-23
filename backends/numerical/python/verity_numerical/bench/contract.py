@@ -99,6 +99,7 @@ __all__ = [
     "INSTANCES_TIERS",
     "NVFP4_INSTANCES_DATASET",
     "NVFP4_INSTANCES_DIGEST",
+    "NVFP4_INSTANCES_FAMILIES",
     "NVFP4_INSTANCES_SEED",
     "NVFP4_INSTANCES_TIER",
     "MISSING",
@@ -190,6 +191,14 @@ NVFP4_INSTANCES_DATASET = "bench-instances-nvfp4-sm120/v1"
 NVFP4_INSTANCES_TIER = "vu-k1536-nvfp4-sm120"
 NVFP4_INSTANCES_SEED = 20260922
 NVFP4_INSTANCES_DIGEST = "d2d65f6523b49e673847746d725fbce3282f2734b0b424637c01e88f188a240a"
+#: The recipe's family composition at the frozen tier size (4096 VUs; VU ``i`` is of family ``i % 14``): the corner families
+#: ``verity.verification.trust`` criterion Tc asks the honest set to include (a contract-pinned set has no fixture manifest to
+#: carry them).  Every family but ``random`` is an edge family of ``BlockScaledAlignAdd``.
+NVFP4_INSTANCES_FAMILIES = {
+    "random": 293, "zero-scales": 293, "subnormal-scales": 293, "top-scales": 293, "top-scales-zero-acc": 293, "span-scales": 293,
+    "sparse": 293, "sparse-subnormal-acc": 293, "all-zero-codes": 292, "half-codes": 292, "max-codes": 292, "cancel": 292,
+    "cancel-acc": 292, "mixed": 292,
+}
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 BUCKETS = ("witness", "encoding_commitment", "arithmetic", "lookup", "zk_additional", "serialization")

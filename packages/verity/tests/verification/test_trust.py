@@ -446,6 +446,15 @@ def test_td_accepts_a_contract_pinned_recipe_digest(store, repo, monkeypatch):
     assert trust._contract_instance_sets(trust.subjects("FP8_HOPPER_WGMMA"), contract=fake) == []
     real = trust._contract_instance_sets(trust.subjects("FP8_ADA_MMA"))
     assert real == [] or (real[0].contract and real[0].name == "bench-instances-fp8-ada/v1" and len(real[0].sha256) == 64)
+    # a recipe may declare its family composition (<PREFIX>_INSTANCES_FAMILIES): the corner families Tc's edge predicate reads,
+    # `random` excluded (lane fp4-proof: the NVFP4 set's 14 VU families)
+    fake4 = types.SimpleNamespace(NVFP4_INSTANCES_DATASET="bench-instances-nvfp4-sm120/v1", NVFP4_INSTANCES_TIER="vu-k1536-nvfp4-sm120",
+                                  NVFP4_INSTANCES_DIGEST="d2" * 32, NVFP4_INSTANCES_FAMILIES={"random": 293, "zero-scales": 293, "cancel": 292})
+    ds4 = trust._contract_instance_sets(trust.subjects("NVFP4_SM120"), contract=fake4)
+    assert len(ds4) == 1 and ds4[0].contract and ds4[0].honest_tiers == ["vu-k1536-nvfp4-sm120"]
+    assert ds4[0].corner_families("vu-k1536-nvfp4-sm120") == {"zero-scales": 293, "cancel": 292}
+    real4 = trust._contract_instance_sets(trust.subjects("NVFP4_SM120"))
+    assert real4 == [] or (real4[0].name == "bench-instances-nvfp4-sm120/v1" and "cancel-acc" in real4[0].corner_families("vu-k1536-nvfp4-sm120"))
 
 
 # --- constants, dossier, publish -------------------------------------------------------------------------------------------------
