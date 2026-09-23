@@ -347,22 +347,11 @@ class FusedWitness:
         args = (cp.asarray(pub_rows), cp.asarray(hints), W_u32, np.int32(l))
         if self.tables is not None:
             args = args + self.tables
-        block = block_size()
         with stream:
-            self.kernel((-(-l // block),), (block,), args)
+            self.kernel((-(-l // THREADS),), (THREADS,), args)
             for h in self.hooks:
                 h.launch(cp, W_u32, l)
         return W
-
-
-def block_size() -> int:
-    """Threads per block of the launch (``LIGERO_WITNESS_BLOCK``, default ``THREADS``; at most ``THREADS``, the kernel's launch
-    bound).  One thread per column either way, so W does not depend on it; a small l fills more SMs with smaller blocks."""
-    import os
-    b = int(os.environ.get("LIGERO_WITNESS_BLOCK", THREADS))
-    if not 32 <= b <= THREADS or b % 32:
-        raise ValueError(f"LIGERO_WITNESS_BLOCK={b}: a multiple of 32 in [32, {THREADS}]")
-    return b
 
 
 _FW: dict = {}
