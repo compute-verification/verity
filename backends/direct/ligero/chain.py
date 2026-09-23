@@ -20,6 +20,18 @@ coefficients: component 0 uses the end family (6) and components 1, 2 the link f
 end columns (an end column has no successor in its VU: the link mask is 0 there), so every constraint still has its
 own uniform coefficient and nothing is sampled beyond the seven families.  Single-``y16`` systems (BF16, FP8) keep
 their transcripts byte for byte.
+
+More than three linked rows (``sys.chain["c"]`` / ``["y"]`` of length > 3: the hashed relations of ``hashchain.py`` carry
+the two Poseidon2 sponges' 16 capacity lanes along the chain).  The verifier samples exactly ``N_FAMILIES = 7`` uniform
+coefficients per column (``protocol._challenge1``); the extra constraints take *monomials* in them instead: extra
+constraint ``e`` at column ``j`` (link extras first, then start extras, then end extras beyond the seven base families)
+has coefficient ``u_{e mod 6} * u_6^(e div 6 + 1)`` where ``u_f = rc[f][j]``.  Every constraint at a column then has its
+own monomial (the base ones are the degree-1 ``u_0 .. u_6``, the extras have ``u_6``-degree >= 1), so the combination
+``r^T (A w - b)`` is a nonzero polynomial of degree <= 1 + ceil(E / 6) in the column's coefficients whenever ``A w != b``
+(``E`` extras at that column) and vanishes with probability <= (1 + ceil(E / 6)) / p per challenge coordinate
+(Schwartz-Zippel) instead of 1 / p -- for the 32 extras of a hashed chain start column: 7 / p, i.e. (7 / p)^D = 2^-169
+at D = 6, below the field term ``(n + 3) / p^D`` the accounting already books.  Systems with three linked rows are
+unchanged (no extras; byte-identical transcripts).
 """
 from __future__ import annotations
 
@@ -29,10 +41,29 @@ import torch
 
 from .compile import P, System
 
-__all__ = ["N_FAMILIES", "END_FAMILIES", "ChainCoefs", "Layout", "chain_coefs", "end_terms"]
+__all__ = ["N_FAMILIES", "END_FAMILIES", "N_BASE_LINKS", "ChainCoefs", "Layout", "chain_coefs", "end_terms", "extra_coef",
+           "n_links"]
 
 N_FAMILIES = 7        # link x3, start x3, end
 END_FAMILIES = (6, 0, 1)   # coefficient family of end component x (see the module comment)
+N_BASE_LINKS = 3      # linked rows with their own uniform link / start families; more take monomials (module comment)
+
+
+def n_links(ch: dict) -> int:
+    c, y = ch["c"], ch["y"]
+    if len(c) != len(y) or len(c) < N_BASE_LINKS:
+        raise ValueError(f"a chain links {N_BASE_LINKS} or more rows ({len(c)} c rows, {len(y)} y expressions)")
+    return len(c)
+
+
+def extra_coef(rc: torch.Tensor, e: int) -> torch.Tensor:
+    """The (D, l) coefficient of extra constraint ``e``: ``rc[e mod 6] * rc[6]^(e div 6 + 1)`` (module comment)."""
+    f, k = e % 6, e // 6 + 1
+    u6 = rc[:, 6, :]
+    pw = u6
+    for _ in range(k - 1):
+        pw = (pw * u6) % P
+    return (rc[:, f, :] * pw) % P
 
 
 def end_terms(ch: dict) -> list[tuple[object, int, int, int]]:
@@ -92,22 +123,29 @@ def chain_coefs(sys: System, layout: Layout, rc: torch.Tensor, y16_pub: torch.Te
     D, _, l = rc.shape
     tabs = _chain_tables(sys, layout, device)
     rows, T = tabs["rows"], tabs["terms"]
+    nl = n_links(ch)
     # rm[:, v, :] = the coefficients of virtual family v masked to their constraint positions: v = 0..6 are the seven
     # families (link x3, start x3, end component 0), v = 6 + x (x >= 1) the end component x, which draws its
-    # coefficients from END_FAMILIES[x] (a link family, unused at end columns) under the END mask.
-    rm = (rc.index_select(1, tabs["famsel"]) * tabs["maskmat"][None, :, :]) % P    # (D, V, l)
+    # coefficients from END_FAMILIES[x] (a link family, unused at end columns) under the END mask; then, for chains with
+    # more than three linked rows, the link extras and the start extras (monomials of the seven families, module comment).
+    base = rc.index_select(1, tabs["famsel"])                                     # (D, V_base, l)
+    if tabs["n_extra"]:
+        extras = torch.stack([extra_coef(rc, e) for e in range(tabs["n_extra"])], 1)   # (D, n_extra, l)
+        base = torch.cat([base, extras], 1)
+    rm = (base * tabs["maskmat"][None, :, :]) % P                                # (D, V, l)
     # every (row, family, kappa) term of r^T A at once: coef[:, row, j] += kappa rc[f][j] (masked); the link terms'
     # W[c][j + 1] coefficient is the same sum shifted one column right.  Exact integer sums of < 2^31 residues (a few
     # hundred terms per entry: no overflow), reduced once -- the same residues as the per-term reduction, in ~10 kernels
     # instead of one per term (lane hostphase).
     coef = torch.zeros((D, len(rows), l), dtype=torch.int64, device=device)
     coef.index_add_(1, T["row"], (rm.index_select(1, T["fam"]) * T["kappa"][None, :, None]) % P)
-    coef[:, :, 1:].index_add_(1, T["shift_row"], rm[:, 0:3, :-1])
+    coef[:, :, 1:].index_add_(1, T["shift_row"], rm.index_select(1, tabs["link_fams"])[:, :, :-1])
     coef %= P
     rhs = torch.zeros((D,), dtype=torch.int64, device=device)
-    for x in range(3):
+    link_fams = tabs["link_fams"].tolist()
+    for x in range(nl):
         Y = ch["y"][x]
-        r_link = rm[:, x, :]                                                       # zero off the linked positions
+        r_link = rm[:, link_fams[x], :]                                            # zero off the linked positions
         rhs = (rhs + (r_link.sum(1) % P) * (Y.c % P)) % P                          # b = +Y.c
     # end_j: sum_i kappa_i W[i][j] + Y.c = y_pub[j] (one constraint per end component)
     y_vals = end_values(ch, y16_pub.to(device))
@@ -129,28 +167,36 @@ def _chain_tables(sys: System, layout: Layout, device) -> dict:
         return hit[1]
     ch = sys.chain
     ends = end_terms(ch)
+    nl = n_links(ch)
+    n_extra_links = nl - N_BASE_LINKS
     involved: dict[int, int] = {}
     for idx in ch["c"]:
         involved.setdefault(idx, len(involved))
     for e in ch["y"] + [Y for Y, _, _, _ in ends]:
         for idx in e.lin:
             involved.setdefault(idx, len(involved))
+    # virtual families: 0..6 base, 7 .. 6 + n_end the end components 1.., then the link extras, then the start extras
+    V_base = N_FAMILIES + len(ends) - 1
+    link_fams = list(range(N_BASE_LINKS)) + [V_base + e for e in range(n_extra_links)]
+    start_fams = list(range(3, 6)) + [V_base + n_extra_links + e for e in range(n_extra_links)]
     row, fam, kappa, shift_row = [], [], [], []
-    for x in range(3):
+    for x in range(nl):
         c_idx, Y = ch["c"][x], ch["y"][x]
         ci = involved[c_idx]
         shift_row.append(ci)                                   # link_j: + W[c][j+1]  (family x, shifted)
         for idx, kap in Y.lin.items():                         #         - sum_i kappa_i W[i][j]
-            row.append(involved[idx]); fam.append(x); kappa.append((-kap) % P)
-        row.append(ci); fam.append(3 + x); kappa.append(1)     # start_j: W[c][j] = 0
+            row.append(involved[idx]); fam.append(link_fams[x]); kappa.append((-kap) % P)
+        row.append(ci); fam.append(start_fams[x]); kappa.append(1)     # start_j: W[c][j] = 0
     for x, (Y, _, _, _) in enumerate(ends):                    # end_j: sum_i kappa_i W[i][j] + Y.c = y_pub[j]
         for idx, kap in Y.lin.items():
             row.append(involved[idx]); fam.append(6 + x); kappa.append(kap % P)
     start, link, end = layout.masks(device)
     famsel = list(range(N_FAMILIES)) + [f for _, f, _, _ in ends[1:]]
-    maskmat = torch.stack([link, link, link, start, start, start] + [end] * len(ends))   # (V, l) 0/1
+    maskmat = torch.stack([link, link, link, start, start, start] + [end] * len(ends)
+                          + [link] * n_extra_links + [start] * n_extra_links)   # (V, l) 0/1
     t = lambda v: torch.tensor(v, dtype=torch.int64, device=device)  # noqa: E731
-    tabs = {"rows": t(list(involved.keys())), "famsel": t(famsel), "maskmat": maskmat,
+    tabs = {"rows": t(list(involved.keys())), "famsel": t(famsel), "maskmat": maskmat, "n_extra": 2 * n_extra_links,
+            "link_fams": t(link_fams),
             "terms": {"row": t(row), "fam": t(fam), "kappa": t(kappa), "shift_row": t(shift_row)}}
     _TABLES[key] = (sys, tabs)
     return tabs
