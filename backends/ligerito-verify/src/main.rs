@@ -80,11 +80,12 @@ struct Verdict {
 }
 
 impl Verdict {
-    /// the proof's own soundness figure, if it has one: LGTO0001 proofs under local coins have none (the seed is public)
+    /// the proof's own soundness figure: the interactive union its parameters give (the parameter target applies to it,
+    /// whatever the coins; what the run establishes is `lgto.claimed_log2`)
     fn soundness_log2(&self) -> Option<f64> {
         match (&self.report, &self.lgto) {
             (Some(r), _) => Some(r.soundness_log2),
-            (None, Some(r)) if r.coins_kind != "local" => Some(r.soundness_log2),
+            (None, Some(r)) => Some(r.soundness_log2),
             _ => None,
         }
     }
@@ -107,11 +108,13 @@ fn verdict_json(v: &Verdict) -> String {
     };
     let lg = match &v.lgto {
         Some(r) => format!(
-            "{{\"relation\":{},\"coins\":{},\"coin_rounds\":{},\"soundness_log2\":{:.3},\"sumcheck\":\"{}\",\"zk\":{},\"vus\":{},\"sub_batches\":{},\"n\":{},\"n_claims\":{},\"zero_blocks\":{},\"opened_rows\":{},\"legacy_no_zero_claims\":{},\"key_pinned\":{},\"key_sha256\":\"{}\",\"stmt_sha256\":\"{}\"}}",
+            "{{\"relation\":{},\"coins\":{},\"coin_rounds\":{},\"soundness_log2\":{:.3},\"claimed_log2\":{},\"claim_basis\":{},\"sumcheck\":\"{}\",\"zk\":{},\"vus\":{},\"sub_batches\":{},\"n\":{},\"n_claims\":{},\"zero_blocks\":{},\"opened_rows\":{},\"legacy_no_zero_claims\":{},\"key_pinned\":{},\"key_sha256\":\"{}\",\"stmt_sha256\":\"{}\"}}",
             json_str(&r.relation),
             json_str(&r.coins_kind),
             r.coins,
             r.soundness_log2,
+            r.claimed_log2.map(|c| format!("{c:.3}")).unwrap_or_else(|| "null".into()),
+            json_str(&r.claim_basis),
             r.sumcheck,
             r.zk,
             r.vus,
@@ -586,8 +589,8 @@ fn main() {
                     }
                 }
             }
-            // union bound over the accepted proofs' own soundness figures; LGTO0001 proofs of the same statement (one batch
-            // proved under several coin kinds) count once, at their worst; local-coin proofs carry no soundness figure
+            // union bound over the accepted proofs' own (interactive) soundness figures; LGTO0001 proofs of the same statement
+            // (one batch proved under several coin kinds) count once, at their worst
             let union_log2 = {
                 let mut by_stmt: Vec<(String, f64)> = Vec::new();
                 let mut s = 0.0f64;
@@ -605,6 +608,23 @@ fn main() {
                 if s > 0.0 { s.log2() } else { f64::NEG_INFINITY }
             };
             let n_local = verdicts.iter().filter(|v| v.accepted && v.lgto.as_ref().is_some_and(|r| r.coins_kind == "local")).count();
+            // what the accepted LGTO0001 proofs establish (red-team F12), union over distinct statements; null if any has no claim
+            let claimed_union: Option<f64> = {
+                let acc: Vec<&lgto::Report> = verdicts.iter().filter(|v| v.accepted).filter_map(|v| v.lgto.as_ref()).collect();
+                if acc.is_empty() || acc.iter().any(|r| r.claimed_log2.is_none()) {
+                    None
+                } else {
+                    let mut by_stmt: Vec<(&str, f64)> = Vec::new();
+                    for r in &acc {
+                        let c = r.claimed_log2.unwrap();
+                        match by_stmt.iter_mut().find(|(d, _)| *d == r.stmt_sha256) {
+                            Some(slot) => slot.1 = slot.1.max(c),
+                            None => by_stmt.push((&r.stmt_sha256, c)),
+                        }
+                    }
+                    Some(by_stmt.iter().map(|(_, c)| c.exp2()).sum::<f64>().log2())
+                }
+            };
             let n_unpinned = verdicts.iter().filter(|v| v.accepted && v.lgto.as_ref().is_some_and(|r| !r.key_pinned)).count();
             if target_bits > 0.0 && union_log2 > -target_bits {
                 problems.push(format!("union soundness 2^{union_log2:.2} misses the target 2^-{target_bits} (--target-bits 0 to waive)"));
@@ -619,7 +639,7 @@ fn main() {
             }
             let all = problems.is_empty();
             let js = format!(
-                "{{\"dir\":{},\"accepted\":{},\"target_bits\":{target_bits},\"n_proofs_expected\":{},\"n_proofs\":{},\"n_negatives\":{},\"n_ref_fixtures\":{},\"n_accepted\":{},\"manifest_checked\":{},\"union_soundness_log2\":{},\"accepted_local_coins\":{n_local},\"accepted_unpinned_key\":{n_unpinned},\"problems\":[{}],\"wall_seconds\":{:.6},\"proofs\":[{}]}}",
+                "{{\"dir\":{},\"accepted\":{},\"target_bits\":{target_bits},\"n_proofs_expected\":{},\"n_proofs\":{},\"n_negatives\":{},\"n_ref_fixtures\":{},\"n_accepted\":{},\"manifest_checked\":{},\"union_soundness_log2\":{},\"accepted_local_coins\":{n_local},\"claimed_union_log2\":{},\"accepted_unpinned_key\":{n_unpinned},\"problems\":[{}],\"wall_seconds\":{:.6},\"proofs\":[{}]}}",
                 json_str(&dir.display().to_string()),
                 all,
                 n_expected.map(|n| n.to_string()).unwrap_or_else(|| "null".into()),
@@ -629,6 +649,7 @@ fn main() {
                 verdicts.iter().filter(|v| v.accepted).count(),
                 manifest_checked,
                 if union_log2.is_finite() { format!("{union_log2:.3}") } else { "null".into() },
+                claimed_union.map(|c| format!("{c:.3}")).unwrap_or_else(|| "null".into()),
                 problems.iter().map(|p| json_str(p)).collect::<Vec<_>>().join(","),
                 t0.elapsed().as_secs_f64(),
                 verdicts.iter().map(verdict_json).collect::<Vec<_>>().join(",")

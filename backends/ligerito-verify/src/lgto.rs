@@ -632,10 +632,13 @@ impl PublicRows for StmtRows<'_> {
 
 // ----------------------------------------------------------------------------------------------------- soundness ----
 
+/// `proof.FS_QUERIES_LOG2`: the hash queries a Fiat-Shamir prover is granted (red-team F12's honest label).
+pub const FS_QUERIES_LOG2: f64 = 64.0;
+
 /// `prove.Prover.soundness`: `LigeritoParams.soundness` (paper (17) per level, the rate `(2^{k_i} + t_pad) / n_i`, and
-/// the relation's zero-check / (i, i') / batching terms) + the claim batching over J + the zero claims.  Terms summed
-/// in the same order as Python's dict (`_log2_sum`).
-pub fn soundness_log2(p: &Params, t_pad: usize, spec: &RelSpec, n_i: usize, n_links: usize, blocks: &[(usize, usize)]) -> Result<f64, String> {
+/// the relation's zero-check / (i, i') / batching terms) + the claim batching over J + the zero claims.  Returns the
+/// interactive union (terms summed as Python's `_log2_sum`) and the largest single term.
+pub fn soundness_log2(p: &Params, t_pad: usize, spec: &RelSpec, n_i: usize, n_links: usize, blocks: &[(usize, usize)]) -> Result<(f64, f64), String> {
     let f = ext_log2();
     let mut terms: Vec<f64> = Vec::new();
     for i in 1..=p.rounds() {
@@ -665,7 +668,23 @@ pub fn soundness_log2(p: &Params, t_pad: usize, spec: &RelSpec, n_i: usize, n_li
         terms.push((s as f64).log2() - f);
     }
     let m = terms.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
-    Ok(m + terms.iter().map(|x| (x - m).exp2()).sum::<f64>().log2())
+    Ok((m + terms.iter().map(|x| (x - m).exp2()).sum::<f64>().log2(), m))
+}
+
+/// `proof.soundness_claim` (red-team F12): what an accepted proof establishes, by coin provenance.  Fiat-Shamir: `Q` times
+/// the largest round-by-round term (every coin, the query sets included, is a hash output).  Local seeds are known to the
+/// prover; live coins read from a file are not authenticated by the issuing verifier (this verifier does not re-derive
+/// them from the stream's commitments), so neither establishes anything.
+pub fn soundness_claim(coins: &str, max_term_log2: f64) -> (Option<f64>, String) {
+    match coins {
+        "fiat-shamir" => (
+            Some(FS_QUERIES_LOG2 + max_term_log2),
+            format!("Fiat-Shamir: Q x the largest round-by-round term, Q = 2^{FS_QUERIES_LOG2}"),
+        ),
+        "local" => (None, "none: local-seed coins are known to the prover before it commits (diagnostic)".into()),
+        "live" => (None, "none: live coin slots replayed from a file, not authenticated by the issuing verifier".into()),
+        _ => (None, format!("none: coins {coins:?}")),
+    }
 }
 
 // ------------------------------------------------------------------------------------------------------------ PCS ----
@@ -802,7 +821,11 @@ pub struct Report {
     pub relation: String,
     pub coins_kind: String,
     pub coins: usize,
+    /// the interactive union of the proof's parameters (the parameter target applies to it)
     pub soundness_log2: f64,
+    /// what the run establishes given its coins (`soundness_claim`); `None`: nothing
+    pub claimed_log2: Option<f64>,
+    pub claim_basis: String,
     pub sumcheck: String,
     pub zk: bool,
     pub vus: usize,
@@ -933,12 +956,13 @@ pub fn verify(
     if zk != (prm.t_pad > 0) || (prm.t_pad > 0 && prm.t_pad != T_PAD) {
         return Err("ZK padding does not match the parameters".into());
     }
-    let snd = soundness_log2(p, prm.t_pad, spec, key.n_i, key.c_rows.len(), &blocks)?;
+    let (snd, max_term) = soundness_log2(p, prm.t_pad, spec, key.n_i, key.c_rows.len(), &blocks)?;
     if let Some(t) = opt.target_log2 {
         if snd > t + 1e-9 {
-            return Err(format!("parameters give 2^{snd:.2} > 2^{t}"));
+            return Err(format!("parameters give an interactive union of 2^{snd:.2} > 2^{t}"));
         }
     }
+    let (claimed_log2, claim_basis) = soundness_claim(&prm.coins, max_term);
     let rows = StmtRows::new(spec, &stmt, stmt.n_vus.len());
     rows.validate()?;
     let mut coins = coins_for(&prm.coins)?;
@@ -983,6 +1007,8 @@ pub fn verify(
         coins_kind: prm.coins.clone(),
         coins: coins.rounds(),
         soundness_log2: snd,
+        claimed_log2,
+        claim_basis,
         sumcheck: sc_name.into(),
         zk,
         vus: stmt.n_vus.iter().sum(),
@@ -1045,7 +1071,12 @@ mod tests {
         let rep = verify(STMT, KEY, PROOF, &mut fs, &legacy()).unwrap();
         assert_eq!((rep.relation.as_str(), rep.sumcheck.as_str(), rep.vus, rep.zero_blocks), ("fp8-ada", "LGSC0002", 12, 0));
         assert!(rep.legacy && rep.key_pinned && !rep.zk);
-        assert!(rep.soundness_log2 <= -128.0 && rep.soundness_log2 > -128.1, "{}", rep.soundness_log2);
+        // Python (params.LigeritoParams.soundness + proof.soundness_claim on these parameters): union -128.0169, worst term
+        // L1 proximity -128.6616, Fiat-Shamir claim 64 - 128.6616
+        assert!((rep.soundness_log2 + 128.0169).abs() < 1e-3, "{}", rep.soundness_log2);
+        assert!((rep.claimed_log2.unwrap() + 64.6616).abs() < 1e-3, "{:?}", rep.claimed_log2);
+        assert_eq!(soundness_claim("live", -128.0).0, None);
+        assert_eq!(soundness_claim("local", -128.0).0, None);
         let e = verify(STMT, KEY, PROOF, &mut fs, &Options { target_log2: Some(-128.0), ..Default::default() }).unwrap_err();
         assert!(e.contains("pre-V1"), "{e}");
         // F5: as one of two proofs of a job, 2^-128.02 misses 2^-129
