@@ -339,7 +339,7 @@ class LigeritoParams:
         depth = math.ceil((wait + prover_s) / prover_s)
         fits = math.floor(gpu_bytes / inflight_bytes) if inflight_bytes > 0 else float("inf")
         eff_depth = max(1, min(depth, fits))
-        throughput_s = (wait + prover_s) / eff_depth
+        throughput_s = max(prover_s, (wait + prover_s) / eff_depth)          # never faster than the compute-bound prover
         return {"coins": c, "wait_s": wait, "depth_needed": depth, "depth_fits": fits, "effective_depth": eff_depth,
                 "seconds_per_batch": throughput_s, "slowdown_vs_prover": throughput_s / prover_s,
                 "formula": "wait = coins x RTT; depth = ceil((wait + T_p) / T_p); s/batch = (wait + T_p) / min(depth, floor(mem / inflight))"}
