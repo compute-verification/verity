@@ -604,6 +604,10 @@ def bench_vu_fp4(args) -> int:
                                 "instances": _instances(total_vus)}
     dump_reps = getattr(args, "dump_reps", None)
     dump_reps = args.reps if dump_reps is None or dump_reps < 0 else dump_reps
+    # rep 0 is the warm-up (untimed): 1 sub-batch by default (main's harness); --warmup-subs N proves N (a full rep at N =
+    # n_proofs) so that the caching allocator / kernel caches are warm before the timed reps -- at l = 16384 a rep is only 7
+    # sub-batches and rep 1 still runs ~15 % slower than rep 3 after a one-sub-batch warm-up.  Recorded in the result's note.
+    warmup_subs = max(1, min(int(getattr(args, "warmup_subs", 1) or 1), n_proofs))
     for rep in range(args.reps + 1):
         agg: dict[str, float] = {}
         vsum = 0.0
@@ -617,8 +621,8 @@ def bench_vu_fp4(args) -> int:
             for k_, v_ in proof.timings.items():
                 agg[k_] = agg.get(k_, 0.0) + v_
             proved.append((si, lo, hi, V, proof, pubs, lay_i))
-            if rep == 0:
-                break                                        # warm-up: one sub-batch (compile, graph capture, self-check)
+            if rep == 0 and si + 1 >= warmup_subs:
+                break                                        # warm-up: --warmup-subs sub-batches (compile, graph capture, self-check on the first)
         wall_prove = time.perf_counter() - t_pass
         for si, lo, hi, V, proof, pubs, lay_i in proved:
             t1 = time.perf_counter()
@@ -649,7 +653,7 @@ def bench_vu_fp4(args) -> int:
                 dump_manifest["files"].append(entry)
         del proved
         if rep == 0:
-            print("warm-up (one sub-batch, with the prover's self-check):", {k_: round(v_, 3) for k_, v_ in agg.items()})
+            print(f"warm-up ({warmup_subs} sub-batch(es), the prover's self-check on the first):", {k_: round(v_, 3) for k_, v_ in agg.items()})
             continue
         keys = agg.keys()
         runs.append((agg, vsum))
@@ -688,6 +692,7 @@ def bench_vu_fp4(args) -> int:
                                                    "formats": dump_manifest["format"], "system_sha256": dump_manifest["system_file"]["sha256"]},
         note=f"{total_vus} VUs as {n_proofs} independently committed proofs of <= {per_proof} VUs each (l = {l} columns, "
              f"{l - per_proof * STEPS} pad columns per proof); prover time = sum over the proofs; soundness = union bound; "
+             f"warm-up rep 0 = {warmup_subs} untimed sub-batch(es); "
              f"public claim per VU = the final FP32 word, compared as three bit-field components (sign, exponent, fraction)",
     )
     meas = [
