@@ -545,7 +545,8 @@ pub fn read_proof(buf: &[u8]) -> Result<Proof, String> {
     }
     let params_raw = read_blob(&mut r, "params", 1 << 16)?.to_vec();
     let params = parse_params(&params_raw)?;
-    let framing = json::parse(std::str::from_utf8(read_blob(&mut r, "framing", 1 << 16)?).map_err(|_| "framing: not utf-8")?)?;
+    let framing_raw = std::str::from_utf8(read_blob(&mut r, "framing", 1 << 16)?).map_err(|_| "framing: not utf-8")?;
+    let framing = json::parse(framing_raw)?;
     let sumcheck = read_blob(&mut r, "sumcheck", 1 << 28)?.to_vec();
     let l = params.kprime.len();
     let sib_len = framing.get("sib_len").and_then(|v| v.usize_list()).ok_or("framing: sib_len")?;
@@ -554,6 +555,12 @@ pub fn read_proof(buf: &[u8]) -> Result<Proof, String> {
         Some(v) => v.as_usize().ok_or("framing: t_pad")?,
         None => 0,
     };
+    // the framing is not absorbed: only the writer's bytes (`t_pad` iff the proof has ZK padding) are one proof
+    let sibs = sib_len.iter().map(|n| n.to_string()).collect::<Vec<_>>().join(",");
+    let t_pad_key = if fr_t_pad > 0 { format!(",\"t_pad\":{fr_t_pad}") } else { String::new() };
+    if framing_raw != format!("{{\"sib_len\":[{sibs}],\"final_len\":{final_len}{t_pad_key}}}") {
+        return Err("proof: non-canonical framing".into());
+    }
     if l == 0 || l > 16 || params.queries.len() != l || params.rate_log2.len() != l || params.splits.len() != l || sib_len.len() != l {
         return Err("proof: inconsistent round counts".into());
     }
@@ -636,11 +643,16 @@ impl<'a> StmtRows<'a> {
         StmtRows { spec, stmt, s, cache: RefCell::new(None) }
     }
 
-    /// Every word decodes (NVFP4: by its position in the unit), every claimed word fits `y_bits` and is 0 off the chain ends
-    /// (`prove._stmt_subs`, ligerito-relation-2 0db857a).
+    /// Operand words are 0 in pad units, every word decodes (NVFP4: by its position in the unit), every claimed word fits
+    /// `y_bits` and is 0 off the chain ends (`prove._stmt_subs`, ligerito-relation-2 0db857a / 32e9bd5).
     pub fn validate(&self) -> Result<(), String> {
         let k = self.stmt.k;
         for (s, (a, b)) in self.stmt.a.iter().zip(&self.stmt.b).enumerate() {
+            // a pad unit feeds no output (its link and end rows are 0), so any words there would prove the same outputs
+            let pad = self.stmt.n_vus[s] * self.stmt.steps * k;
+            if a[pad.min(a.len())..].iter().chain(&b[pad.min(b.len())..]).any(|&w| w != 0) {
+                return Err(format!("statement sub-batch {s}: operand word in a pad unit (non-canonical)"));
+            }
             let mut bad: Vec<String> = Vec::new();
             for (side, words) in [("a", a), ("b", b)] {
                 for (n, &w) in words.iter().enumerate() {
@@ -1473,8 +1485,9 @@ mod tests {
     const V1_NEGS: [(&str, &[u8], &[u8], &str); 5] = [
         ("end word +1 ulp", include_bytes!("../fixtures/lgto/fp8ada_l256_v1/v1_06.stmt"), include_bytes!("../fixtures/lgto/fp8ada_l256_v1/v1_06.lgto.neg"), "PCS sumcheck round 1"),
         ("operand bit flip", include_bytes!("../fixtures/lgto/fp8ada_l256_v1/v1_07.stmt"), include_bytes!("../fixtures/lgto/fp8ada_l256_v1/v1_07.lgto.neg"), "PCS sumcheck round 1"),
-        // the dropped VU's end word is left at a non-end column: non-canonical since 0db857a (Python rejects it there too)
-        ("n_vus - 1", include_bytes!("../fixtures/lgto/fp8ada_l256_v1/v1_08.stmt"), include_bytes!("../fixtures/lgto/fp8ada_l256_v1/v1_08.lgto.neg"), "claimed word off a chain end (non-canonical)"),
+        // the dropped VU's words are left in what is now a pad unit: non-canonical since 0db857a / 32e9bd5 (Python rejects it
+        // there too, operand words first)
+        ("n_vus - 1", include_bytes!("../fixtures/lgto/fp8ada_l256_v1/v1_08.stmt"), include_bytes!("../fixtures/lgto/fp8ada_l256_v1/v1_08.lgto.neg"), "operand word in a pad unit (non-canonical)"),
         ("zeroed VU, y +1", include_bytes!("../fixtures/lgto/fp8ada_l256_v1/v1_09.stmt"), include_bytes!("../fixtures/lgto/fp8ada_l256_v1/v1_09.lgto.neg"), "PCS sumcheck round 1"),
         ("next:0 row edit", include_bytes!("../fixtures/lgto/fp8ada_l256_v1/v1_10.stmt"), include_bytes!("../fixtures/lgto/fp8ada_l256_v1/v1_10.lgto.neg"), "combined final"),
     ];
@@ -1521,6 +1534,58 @@ mod tests {
         let mut ok = st.clone();
         ok.y[0][steps - 1] ^= 1;
         v(&ok).unwrap();
+    }
+
+    /// red-team-ligerito-3 R3-3: operand words past the sub-batch's chains are unconstrained, so a canonical statement
+    /// has 0 there (ligerito-relation-2 32e9bd5); the check runs before the words are decoded.
+    #[test]
+    fn pad_unit_operand_is_non_canonical() {
+        for stmt in [STMT, FP4_STMT] {
+            let st = read_statement(stmt).unwrap();
+            let spec = relation_spec(&st.relation).unwrap();
+            let v = |st: &Statement| StmtRows::new(spec, st, st.n_vus.len()).validate();
+            v(&st).unwrap();
+            let pad = st.n_vus[0] * st.steps * st.k;
+            assert!(pad < st.a[0].len(), "{}: no pad unit", st.relation);
+            for (side, n) in [(0, pad), (1, pad + st.k - 1), (0, st.a[0].len() - 1)] {
+                let mut bad = st.clone();
+                if side == 0 { bad.a[0][n] = 1 } else { bad.b[0][n] = 1 }
+                assert!(v(&bad).unwrap_err().ends_with("operand word in a pad unit (non-canonical)"), "{} word {n}", st.relation);
+            }
+        }
+    }
+
+    /// red-team-ligerito-3 R3-2: the framing JSON is not absorbed, so every re-encoding of it was another valid proof.
+    #[test]
+    fn framing_re_encodings_rejected() {
+        fn with_framing(proof: &[u8], f: &str) -> Vec<u8> {
+            let p = 8 + 4 + u32::from_le_bytes(proof[8..12].try_into().unwrap()) as usize;
+            let n = u32::from_le_bytes(proof[p..p + 4].try_into().unwrap()) as usize;
+            [&proof[..p], &(f.len() as u32).to_le_bytes()[..], f.as_bytes(), &proof[p + 4 + n..]].concat()
+        }
+        for proof in [PROOF, V1_ZK_PROOF] {
+            let p = 8 + 4 + u32::from_le_bytes(proof[8..12].try_into().unwrap()) as usize;
+            let n = u32::from_le_bytes(proof[p..p + 4].try_into().unwrap()) as usize;
+            let canon = std::str::from_utf8(&proof[p + 4..p + 4 + n]).unwrap().to_string();
+            assert_eq!(with_framing(proof, &canon), proof);
+            read_proof(proof).unwrap();
+            let body = &canon[1..canon.len() - 1];
+            let (sib, rest) = body.split_once("],").unwrap();
+            let mut variants = vec![
+                canon.replacen(':', ": ", 1),
+                format!("{{{body},\"zz\":1}}"),
+                format!("{{{rest},{sib}]}}"),
+                canon.replace(',', ", "),
+                format!("{canon}\n"),
+            ];
+            if !canon.contains("t_pad") {
+                variants.push(format!("{{{body},\"t_pad\":0}}"));
+            }
+            for f in variants {
+                let e = read_proof(&with_framing(proof, &f)).unwrap_err();
+                assert!(e.contains("non-canonical framing"), "{f}: {e}");
+            }
+        }
     }
 
     #[test]
