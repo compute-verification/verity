@@ -67,8 +67,8 @@ class WithPeers(nn.Module):
     def forward(self, prompt: torch.Tensor, *peers: torch.Tensor):
         self.bus.reset("trace", list(peers))
         out = self.inner(prompt)
-        if self.bus.cursor != len(peers):
-            raise RuntimeError(f"rank {self.bus.rank}: {self.bus.cursor} collectives consumed, {len(peers)} peer inputs given")
+        if self.bus.cursor * (self.bus.world - 1) != len(peers):    # [lane vllm-tp-n] world-1 peer inputs per collective
+            raise RuntimeError(f"rank {self.bus.rank}: {self.bus.cursor} collectives consumed x {self.bus.world - 1} peers, {len(peers)} peer inputs given")
         return out
 
 
@@ -85,6 +85,9 @@ def probe_collectives(inner: nn.Module, inputs: tuple, vllm_config, num_tokens: 
 
 
 _DIST_READY = False
+#: `_free_port` closes its socket before the store binds the port, so concurrent derives (a Build runs world x shapes of them) can be
+#: handed the same port: the loser's bind fails EADDRINUSE before any process group exists, and a fresh port is a clean retry.
+_PORT_TRIES = 8
 
 
 def ensure_distributed(vllm_config, backend: str = "gloo") -> str:
@@ -95,7 +98,13 @@ def ensure_distributed(vllm_config, backend: str = "gloo") -> str:
     from vllm.config import set_current_vllm_config
     from vllm.distributed import ensure_model_parallel_initialized, init_distributed_environment
     with set_current_vllm_config(vllm_config):
-        init_distributed_environment(world_size=1, rank=0, distributed_init_method=f"tcp://127.0.0.1:{_free_port()}", local_rank=0, backend=backend)
+        for attempt in range(_PORT_TRIES):
+            try:
+                init_distributed_environment(world_size=1, rank=0, distributed_init_method=f"tcp://127.0.0.1:{_free_port()}", local_rank=0, backend=backend)
+                break
+            except Exception as e:  # noqa: BLE001 -- torch's DistNetworkError; only the port race is retried
+                if "EADDRINUSE" not in str(e) or attempt == _PORT_TRIES - 1:
+                    raise
         ensure_model_parallel_initialized(1, 1)
     _DIST_READY = True
     return backend

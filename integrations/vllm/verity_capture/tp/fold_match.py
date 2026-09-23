@@ -5,7 +5,7 @@ CROSS-RANK leg (`tp.rank_match`) over both folds + the collective recorder rows 
 + tp2_match's stored-step provenance.  CPU only.  The rank-local legs of the ranks run CONCURRENTLY (one subprocess chain per rank,
 --rank-workers, default all): they are independent until the cross-rank leg; the record is assembled in rank order.
 
-    python -m verity_capture.bench.tp2_fold_match --capture <tp2_capture --record-collectives out> --profile derived_LLAMA32_1B_tp2 \\
+    python -m verity_capture.tp.fold_match --capture <tp2_capture --record-collectives out> --profile derived_LLAMA32_1B_tp2 \\
         --build-rank0 <build_request_r0> --build-rank1 <build_request_r1> [--gprog-rank0 <build_workload_r0/workload_program.json> --gprog-rank1 ...] \\
         [--derived-rank0 DIR ... --derived-rank1 DIR ...] --workload WL [--tp2-match <run>/tp2_match.json] --out <D/fold_match> [--python PY]
 
@@ -47,6 +47,16 @@ def _run(cmd: list[str], log: Path, timeout: int | None = None) -> int:
 def _load(p: Path) -> dict | None:
     try:
         return json.loads(p.read_text())
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _load_links(p: Path) -> dict | None:
+    """[lane vllm-tp-n] a rank's tp_links.json through `read_tp_links` (v1 -> v2 in memory; every link carries `peers` and `module`, the
+    recorder-vocabulary module path from the derive's recorded model root)."""
+    try:
+        from verity_capture.experimental.cb_a.derive_step import read_tp_links
+        return read_tp_links(str(p))
     except Exception:  # noqa: BLE001
         return None
 
@@ -120,14 +130,14 @@ def links_for_rank(rank: int, build: Path, compare: dict, derived: list[str]) ->
     """B1: the rank Program's tp_links.json `links`.  B>1: {request_id: links of the request's Program} from the batch decomposition's
     per-request derived dir (each derived dir of a rank carries its own tp_links.json)."""
     if not derived:
-        doc = _load(build / "tp_links.json")
+        doc = _load_links(build / "tp_links.json")
         return list(doc["links"]) if doc and isinstance(doc.get("links"), list) else None
     out: dict[str, list[dict]] = {}
     for r in compare.get("per_request") or []:
         d = r.get("derived")
         if not d:
             return None
-        doc = _load(Path(d) / "tp_links.json")
+        doc = _load_links(Path(d) / "tp_links.json")
         if not doc:
             return None
         out[str(r["request_id"])] = list(doc["links"])
@@ -137,13 +147,17 @@ def links_for_rank(rank: int, build: Path, compare: dict, derived: list[str]) ->
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--capture", required=True, help="tp2_capture --record-collectives run dir: log.rank<r>.jsonl.gz, tokens.json, coll.rank<r>.jsonl")
-    ap.add_argument("--profile", required=True, help="rank profile module (verity_capture.profiles.<name>), e.g. derived_LLAMA32_1B_tp2 (profiles.generic, world = 2)")
-    ap.add_argument("--build-rank0", required=True)
-    ap.add_argument("--build-rank1", required=True)
+    ap.add_argument("--profile", required=True, help="rank profile module (verity_capture.profiles.<name>), e.g. derived_LLAMA32_1B_tp2 (profiles.generic, world = W)")
+    ap.add_argument("--build-rank0", default=None)
+    ap.add_argument("--build-rank1", default=None)
     ap.add_argument("--derived-rank0", action="append", default=[], help="B>1: further request Programs of rank 0 (per served (LP, T))")
     ap.add_argument("--derived-rank1", action="append", default=[])
     ap.add_argument("--gprog-rank0", default=None, help="rank 0's GP-01 workload_program.json (GM-01 leg)")
     ap.add_argument("--gprog-rank1", default=None)
+    # [lane vllm-tp-n] the world-generic spelling: --build-rank DIR repeated in rank order (world = count), --derived-rank R=DIR, --gprog-rank R=PATH
+    ap.add_argument("--build-rank", action="append", default=[], help="rank r's Build dir (first request Program), repeated in rank order; world = count")
+    ap.add_argument("--derived-rank", action="append", default=[], help="R=DIR: a further request Program of rank R (B>1)")
+    ap.add_argument("--gprog-rank", action="append", default=[], help="R=PATH: rank R's GP-01 workload_program.json")
     ap.add_argument("--workload", default=None)
     ap.add_argument("--tp2-match", default=None, help="tp2_match.json of the same run (its `provenance` = the stored-step value leg); REQUIRED for PASS")
     ap.add_argument("--coll-dir", default=None, help="dir of coll.rank<r>.jsonl (default: --capture)")
@@ -158,9 +172,27 @@ def main(argv: list[str] | None = None) -> int:
     cap, out = Path(a.capture), Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     coll_dir = Path(a.coll_dir) if a.coll_dir else cap
-    builds = {0: Path(a.build_rank0), 1: Path(a.build_rank1)}
-    derived = {0: a.derived_rank0, 1: a.derived_rank1}
-    gprog = {0: a.gprog_rank0, 1: a.gprog_rank1}
+    if a.build_rank:
+        if a.build_rank0 or a.build_rank1:
+            ap.error("give either --build-rank DIR (repeated, rank order) or --build-rank0/--build-rank1, not both")
+        a.world = len(a.build_rank)
+        builds = {r: Path(d) for r, d in enumerate(a.build_rank)}
+        derived = {r: [] for r in builds}
+        gprog: dict[int, str | None] = {r: None for r in builds}
+        for spec in a.derived_rank:
+            r, _, d = spec.partition("=")
+            derived[int(r)].append(d)
+        for spec in a.gprog_rank:
+            r, _, g = spec.partition("=")
+            gprog[int(r)] = g
+    else:
+        if not (a.build_rank0 and a.build_rank1):
+            ap.error("--build-rank DIR (repeated, rank order) or --build-rank0 and --build-rank1 required")
+        builds = {0: Path(a.build_rank0), 1: Path(a.build_rank1)}
+        derived = {0: a.derived_rank0, 1: a.derived_rank1}
+        gprog = {0: a.gprog_rank0, 1: a.gprog_rank1}
+    if a.world < 2 or a.world != len(builds):
+        ap.error(f"world {a.world} vs {len(builds)} rank Builds")
     t_start = time.time()
     res: dict[str, Any] = {"schema": SCHEMA, "capture": str(cap), "profile": a.profile, "world": a.world, "per_rank": {}, "problems": []}
 
@@ -256,7 +288,7 @@ def main(argv: list[str] | None = None) -> int:
             if prov is None:
                 res["problems"].append(f"{a.tp2_match}: no provenance record")
         else:
-            res["problems"].append("no --tp2-match: the stored-step provenance leg (received == Def(part_rank0, part_rank1)) is REQUIRED")
+            res["problems"].append("no --tp2-match: the stored-step provenance leg (received == Def(part_rank0 .. part_rank{world-1})) is REQUIRED")
         xr = RM.cross_rank_check(colls, producers=producers, fold_errors=ferr, recorder=rec if len(rec) == len(ranks) else None,
                                  links=links if len(links) == len(ranks) else None, provenance=prov,
                                  recorder_sha256=rec_sha if len(rec_sha) == len(ranks) else None, require_all=True)

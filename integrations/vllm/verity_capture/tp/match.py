@@ -29,6 +29,8 @@ import sys
 import time
 from pathlib import Path
 
+from verity_capture.experimental.cb_a.derive_step import read_tp_links, same_module_path
+
 
 def _engine_main(args) -> None:
     from verity_vllm_adapter import profile as prof
@@ -37,8 +39,8 @@ def _engine_main(args) -> None:
     from vllm import LLM
 
     from verity_capture import vllm_adapter as va
-    from verity_capture.bench.tp2_capture import parse_engine_args
-    from verity_capture.bench.tp2_worker import EXTENSION
+    from verity_capture.tp.capture import parse_engine_args
+    from verity_capture.tp.worker import EXTENSION
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -93,8 +95,13 @@ def _check_main(args) -> int:
     res: dict = {"schema": "tp2-match/v1", "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "run": str(run),
                  "campaign": os.environ.get("VERITY_CAMPAIGN", "r15"),       # [R15] was the hard-coded 'r13' label (R14 row note)
                  "what": "collective-level TP-aware Match (structure + cross-rank provenance + tokens); NOT the instance-sequence Match"}
+    # [lane vllm-tp-n] the world is the number of rank Builds given (--build-rank in rank order; --build-rank0/1 are the two-rank spelling)
+    builds = _build_dirs(args)
+    world = len(builds)
+    ranks = list(range(world))
+    res["world"] = world
     recs = {}
-    for r in (0, 1):
+    for r in ranks:
         p = cap / f"coll.rank{r}.jsonl"
         if not p.exists():
             res["fail"] = f"missing {p}"
@@ -103,22 +110,26 @@ def _check_main(args) -> int:
         recs[r] = [json.loads(l) for l in p.open() if l.strip()]
     # [R17 tp D90, rev F-r17-03] the recorder files this check read, by digest: the provenance record below is bound to THESE rows (and
     # rank_match refuses a provenance record whose recorder digests are not those of the rows it loads itself)
-    recorder_sha = {str(r): hashlib.sha256((cap / f"coll.rank{r}.jsonl").read_bytes()).hexdigest() for r in (0, 1)}
-    steps = sorted({x["step"] for x in recs[0]} | {x["step"] for x in recs[1]})
+    recorder_sha = {str(r): hashlib.sha256((cap / f"coll.rank{r}.jsonl").read_bytes()).hexdigest() for r in ranks}
+    steps = sorted({x["step"] for r in ranks for x in recs[r]})
     tok = json.load(open(cap / "tokens.json"))
     n_tok_step = {}   # tokens per step: prefill = sum of prompt lens (one request at a time is the only admitted shape here), decode = #live requests
     prompts = [len(q["prompt_token_ids"]) for q in tok["requests"]]
     gens = [len(q["generated_token_ids"]) for q in tok["requests"]]
     # ---- 1. structure vs each rank's Build peer-input signature
     struct = {"pass": True, "per_rank": {}}
-    for r, bdir in ((0, args.build_rank0), (1, args.build_rank1)):
-        links = json.load(open(Path(bdir) / "tp_links.json"))
+    for r, bdir in enumerate(builds):
+        links = read_tp_links(str(Path(bdir) / "tp_links.json"))
         sig = [(l["kind"], int(l["shape"][-1])) for l in links["links"]]
         # [R15 rev-pm M-0398] site identity per k: the link's module_path ('inner.model.<path> (<Class>)') must equal the record's
         # hooked module ('<path>'), so 96 width-H all-reduces are checked as the Program's SITES in the Program's ORDER, not as a
         # (kind, width) sequence that any interleaving / doubled hook / order swap would also produce.
-        sig_sites = [_link_site(l) for l in links["links"]]
-        assert links["rank"] == r and links["world"] == 2, links
+        sig_sites = [l.get("module") for l in links["links"]]     # [lane vllm-tp-n] recorder vocabulary, from the recorded model_root (read_tp_links)
+        sites_exact = bool(links.get("model_root"))              # a v1 file has no recorded root: dotted-suffix identity (same_module_path)
+        if int(links["rank"]) != r or int(links["world"]) != world:
+            raise SystemExit(f"tp_links of build {bdir}: rank {links['rank']} world {links['world']} != rank {r} of world {world}")
+        if any(len(l["peers"]) != world - 1 for l in links["links"]):
+            raise SystemExit(f"tp_links of rank {r}: a link does not name exactly world-1 = {world - 1} peers")
         per_step = {}
         bad = []
         bad_sites = []
@@ -132,7 +143,7 @@ def _check_main(args) -> int:
             got_sites = [x.get("module") for x in xs]
             # [rev-pm M-0470] fail CLOSED by absence: a link without module_path or a record without a module is a site mismatch at that
             # k (None == None never counts as equal), and the step passes only when every k is a NAMED equal pair.
-            named_equal = sum(1 for g, e in zip(got_sites, sig_sites) if g is not None and e is not None and g == e)
+            named_equal = sum(1 for g, e in zip(got_sites, sig_sites) if g is not None and e is not None and (g == e if sites_exact else same_module_path(g, e)))
             ok_sites = (len(got_sites) == len(sig_sites)) and named_equal == len(sig_sites)
             per_step[s] = {"n": len(xs), "rows_all_reduce": rows_ar, "rows_all_gather": rows_ag, "equal_signature": ok, "equal_sites": ok_sites,
                            "sites_named_equal": named_equal}
@@ -140,13 +151,17 @@ def _check_main(args) -> int:
                 bad.append(s)
             if not ok_sites:
                 bad_sites.append({"step": s, "sites_named_equal": named_equal, "first_mismatch": next(
-                    ({"k": k, "record": g, "link": e} for k, (g, e) in enumerate(zip(got_sites, sig_sites)) if g is None or e is None or g != e),
+                    ({"k": k, "record": g, "link": e} for k, (g, e) in enumerate(zip(got_sites, sig_sites))
+                     if g is None or e is None or not (g == e if sites_exact else same_module_path(g, e))),
                     {"k": min(len(got_sites), len(sig_sites)), "record": None, "link": None, "note": "length mismatch"})})
         struct["per_rank"][r] = {"build_signature_len": len(sig), "build_digest": links["program_digest"], "n_steps": len(steps),
                                  "n_collectives": len(recs[r]), "steps_mismatching": bad,
                                  "sites_checked_per_step": len(sig_sites), "steps_site_mismatching": bad_sites[:5], "n_steps_site_mismatching": len(bad_sites),
-                                 "site_rule": "record.module == link.module_path minus 'inner.model.' prefix and ' (Class)' suffix, per k; "
-                                              "a None on either side is a mismatch (fail closed by absence, rev-pm M-0470)",
+                                 "site_rule": ("record.module == link.module (link.module_path minus the derive's RECORDED model_root, ' (Class)' dropped), per k; "
+                                               if sites_exact else
+                                               "record.module is a dotted suffix of link.module_path (v1 tp_links: no recorded model_root), per k; ")
+                                              + "a None on either side is a mismatch (fail closed by absence, rev-pm M-0470)",
+                                 "model_root": links.get("model_root"),
                                  "links_without_module_path": sum(1 for e in sig_sites if e is None),
                                  "prefill": per_step[steps[0]] if steps else None,
                                  "decode_rows_all_reduce": sorted({tuple(per_step[s]["rows_all_reduce"]) for s in steps[1:]}) if len(steps) > 1 else None,
@@ -186,25 +201,36 @@ def _check_main(args) -> int:
         if len(prov["digest_mismatches"]) < 20:
             prov["digest_mismatches"].append({"rank": rank, "step": s, "k": k, "tensor": what, "why": why})
 
+    # [lane vllm-tp-n] world > 2: the Definition's chain of one-rounding bf16 adds in `allreduce_order(world)` (AllReduce_v2{WORLD,N});
+    # a mismatch is a named finding.  Diagnostics travel with it: how many received values equal the f32-accumulate-then-round-once
+    # alternative (`alt_f32_once_equal`) and the ascending rank-order chain (`alt_ascending_equal`) -- never a relabel, facts for the finding.
+    from verity_vllm.registry.b1_tp2 import allreduce_order
+    order = allreduce_order(world)
+    prov["definition_order"] = ("world 2: bf16(f32(part0) + f32(part1)); world > 2: acc = part[order[0]]; acc = bf16(f32(acc) + f32(part[r])) "
+                                f"for r in order[1:], order = {list(order)} (b1_tp2.allreduce_order)")
+    prov["alt_f32_once_equal"] = 0
+    prov["alt_ascending_equal"] = 0
     for s in steps:
-        p0, p1 = cap / f"coll.rank0.step{s}.pt", cap / f"coll.rank1.step{s}.pt"
-        if not (p0.exists() and p1.exists()):
+        pts = [cap / f"coll.rank{r}.step{s}.pt" for r in ranks]
+        if not all(p.exists() for p in pts):
             continue
         if torch is None:
             raise RuntimeError("stored provenance steps present but torch is not importable")
-        v0, v1 = torch.load(p0), torch.load(p1)
-        x0 = [x for x in recs[0] if x["step"] == s]
-        x1 = [x for x in recs[1] if x["step"] == s]
-        n = min(len(v0["part"]), len(v1["part"]))
-        if len(v0["part"]) != len(x0) or len(v1["part"]) != len(x1) or len(v0["out"]) != len(x0) or len(v1["out"]) != len(x1):
-            _digest_fail(-1, s, -1, "count", f"stored tensors rank0 {len(v0['part'])}/{len(v0['out'])} rank1 {len(v1['part'])}/{len(v1['out'])} vs recorder rows {len(x0)} / {len(x1)}")
+        vs = [torch.load(p) for p in pts]
+        xs_r = [[x for x in recs[r] if x["step"] == s] for r in ranks]
+        n = min(len(v["part"]) for v in vs)
+        if any(len(vs[r]["part"]) != len(xs_r[r]) or len(vs[r]["out"]) != len(xs_r[r]) for r in ranks):
+            _digest_fail(-1, s, -1, "count", "stored tensors " + " ".join(f"rank{r} {len(vs[r]['part'])}/{len(vs[r]['out'])}" for r in ranks)
+                         + " vs recorder rows " + " / ".join(str(len(xs_r[r])) for r in ranks))
         for k in range(n):
-            a, b = v0["part"][k], v1["part"][k]
-            o0, o1 = v0["out"][k], v1["out"][k]
-            if k >= len(x0) or k >= len(x1):
+            parts = [vs[r]["part"][k] for r in ranks]
+            outs = [vs[r]["out"][k] for r in ranks]
+            if any(k >= len(xs_r[r]) for r in ranks):
                 _digest_fail(-1, s, k, "row", "no recorder row for the stored tensor")
                 continue
-            for rank, (xr, part, out) in ((0, (x0[k], a, o0)), (1, (x1[k], b, o1))):
+            x0 = xs_r[0]
+            for rank in ranks:
+                xr, part, out = xs_r[rank][k], parts[rank], outs[rank]
                 for what, t, key in (("part", part, "part_sha256"), ("out", out, "out_sha256")):
                     want = xr.get(key)
                     got = _sha(t)
@@ -215,25 +241,36 @@ def _check_main(args) -> int:
                     _digest_fail(rank, s, k, "key", f"recorder row keyed (step {xr.get('step')}, k {xr.get('k')}) at position {k} of step {s}")
             kind = x0[k]["kind"]
             if kind == "all_reduce":
-                exp = (a.float() + b.float()).to(torch.bfloat16)
+                exp = parts[order[0]]
+                for r_ in order[1:]:
+                    exp = (exp.float() + parts[r_].float()).to(torch.bfloat16)      # world 2: exactly the R13 rule bf16(f32(a) + f32(b))
                 prov["all_reduce_checked"] += 1
+                if world > 2:
+                    alt = sum(pr.float() for pr in parts).to(torch.bfloat16)
+                    prov["alt_f32_once_equal"] += int(all(torch.equal(o, alt) for o in outs))
+                    asc = parts[0]
+                    for pr in parts[1:]:
+                        asc = (asc.float() + pr.float()).to(torch.bfloat16)
+                    prov["alt_ascending_equal"] += int(all(torch.equal(o, asc) for o in outs))
             elif kind == "all_gather":
-                exp = torch.cat([a, b], dim=-1)
+                exp = torch.cat(parts, dim=-1)
                 prov["all_gather_checked"] += 1
             else:
                 prov["mismatches"].append({"step": s, "k": k, "kind": kind, "why": "unbound collective kind"})
                 prov["pass"] = False
                 continue
-            same01 = bool(torch.equal(o0, o1))
-            eq0 = bool(torch.equal(o0, exp))
-            eq1 = bool(torch.equal(o1, exp))
-            prov["received_equal_both_ranks"] += int(same01)
+            same_all = all(torch.equal(outs[0], o) for o in outs[1:])
+            eqs = [bool(torch.equal(o, exp)) for o in outs]
+            prov["received_equal_both_ranks"] += int(same_all)
             prov["collectives_checked"] += 1
             prov["elements_checked"] += int(exp.numel())
-            if not (same01 and eq0 and eq1):
-                d0 = int((o0.view(torch.int16) != exp.view(torch.int16)).sum()) if o0.shape == exp.shape else -1
-                prov["mismatches"].append({"step": s, "k": k, "kind": kind, "module": x0[k]["module"], "received_equal_both_ranks": same01,
-                                           "rank0_received_equals_definition": eq0, "rank1_received_equals_definition": eq1, "n_diff_rank0": d0})
+            if not (same_all and all(eqs)):
+                d0 = int((outs[0].view(torch.int16) != exp.view(torch.int16)).sum()) if outs[0].shape == exp.shape else -1
+                mm = {"step": s, "k": k, "kind": kind, "module": x0[k]["module"], "received_equal_both_ranks": same_all,
+                      "rank0_received_equals_definition": eqs[0], "rank1_received_equals_definition": eqs[1], "n_diff_rank0": d0}
+                if world > 2:
+                    mm["received_equals_definition_per_rank"] = eqs
+                prov["mismatches"].append(mm)
                 prov["pass"] = False
         prov["steps_checked"] += 1
     prov["n_mismatches"] = len(prov["mismatches"])
@@ -257,13 +294,18 @@ def _check_main(args) -> int:
     return 0 if res["pass"] else 1
 
 
-def _link_site(link: dict) -> str | None:
-    """Module path a tp_links link names, in the recorder's spelling: 'inner.model.model.layers.0.mlp (X)' -> 'model.layers.0.mlp'."""
-    mp = link.get("module_path")
-    if not isinstance(mp, str):
-        return None
-    mp = mp.split(" (", 1)[0]
-    return mp[len("inner.model."):] if mp.startswith("inner.model.") else mp
+def _build_dirs(args) -> list[str]:
+    """The rank Build dirs in rank order: `--build-rank DIR` repeated (world = count), or the two-rank `--build-rank0/--build-rank1`."""
+    if getattr(args, "build_rank", None):
+        if args.build_rank0 or args.build_rank1:
+            raise SystemExit("give either --build-rank DIR (repeated, rank order) or --build-rank0/--build-rank1, not both")
+        if len(args.build_rank) < 2:
+            raise SystemExit(f"--build-rank: {len(args.build_rank)} rank Build(s); a tensor-parallel world needs at least 2")
+        return list(args.build_rank)
+    if not (args.build_rank0 and args.build_rank1):
+        raise SystemExit("check arm: --build-rank DIR (repeated, rank order) or --build-rank0 and --build-rank1 required")
+    return [args.build_rank0, args.build_rank1]
+
 
 
 def _count(xs) -> dict:
@@ -292,6 +334,7 @@ def main() -> int:
     ap.add_argument("--rpc-timeout", type=float, default=1800.0)
     ap.add_argument("--build-rank0", default=None)
     ap.add_argument("--build-rank1", default=None)
+    ap.add_argument("--build-rank", action="append", default=[], help="[lane vllm-tp-n] rank r's Build dir, repeated in rank order (world = count)")
     args = ap.parse_args()
     if args.arm == "check":
         return _check_main(args)

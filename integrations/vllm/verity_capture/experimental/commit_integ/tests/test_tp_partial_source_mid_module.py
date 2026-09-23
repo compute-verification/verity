@@ -96,6 +96,40 @@ def test_source_binds_shard_and_received_output_per_call_and_declares_two_per_st
     assert b["tensors_per_step"] == 5 and b["per_token_bytes"] == 2 * 2 * 2048 * 2 + 2048 * 2
 
 
+def test_occurrence_counter_restarts_every_run(monkeypatch):
+    """Steps restart at 0 every run of the process (warm-up, timed pairs, then the value-check run): the value-check run's first commit
+    of a member at step 0 is occurrence 0, whatever the earlier runs bound -- else every reference tap misses its committed meta."""
+    monkeypatch.setattr(CS, "MODEL_MODULE_PREFIX", THIS)
+    monkeypatch.setattr(tps, "_bytes", lambda t: b"\0" * (t.numel() * t.element_size()))
+    c = _Committer()
+    attn, o_proj = OlmoeAttentionLike(), _make("RowParallelLinear")
+    src = tps.TPPartialSource(c, _model({"model.layers.0.self_attn": attn, "model.layers.0.self_attn.o_proj": o_proj}), rank=0, world=2)
+
+    def one_step():
+        attn._pre[-1](attn, (_T(8),))
+        gather = src._wrap("all_gather", lambda t, *a, **kw: _T(16))
+        gather(_T(8))
+        gather(_T(8))
+        o_proj._pre[-1](o_proj, (_T(8),))
+        src._wrap("all_reduce", lambda t, *a, **kw: _T(16))(_T(16))
+        o_proj._post[-1](o_proj, (_T(8),), None)
+        attn._post[-1](attn, (_T(8),), None)
+
+    for _run in range(3):                                          # warm-up + timed pairs, no reference tap
+        src.install()
+        one_step()
+        src.uninstall()
+    fn = getattr(src, "begin_run", None)                           # native_collect.reset(): begin_run() on every source that has one
+    if fn is not None:
+        fn()
+    src.install()
+    src.reference, src.ref_reexec_steps = True, 0
+    one_step()
+    src.uninstall()
+    assert sorted(src.ref[0]) == ["model.layers.0.self_attn.o_proj/part_rank0", "model.layers.0.self_attn/out", "model.layers.0.self_attn/out#1",
+                                  "model.layers.0.self_attn/shard_rank0", "model.layers.0.self_attn/shard_rank0#1"]
+
+
 def test_reference_keys_and_nth_meta_pair_the_second_call_with_the_second_commit():
     assert tps._ref_key("m/shard_rank0", 0) == "m/shard_rank0" and tps._ref_key("m/shard_rank0", 1) == "m/shard_rank0#1"
     assert tps._split_ref_key("m/shard_rank0#1") == ("m/shard_rank0", 1) and tps._split_ref_key("m/out") == ("m/out", 0)

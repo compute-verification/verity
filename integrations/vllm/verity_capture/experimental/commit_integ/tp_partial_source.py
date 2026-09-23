@@ -214,7 +214,13 @@ class TPPartialSource:
         return {"per_token_bytes": per_token, "per_seq_bytes": per_seq, "tensors_per_step": len(self.sites) + n_moe_out}
 
     # -- install / uninstall -------------------------------------------------------------------------------------------------
+    def begin_run(self) -> None:
+        """Per-run state: the occurrence counter is keyed by (step, member) and steps restart at 0 every run, so a counter carried over
+        from an earlier run would key this run's first commit as occurrence N (every reference tap then misses its committed meta)."""
+        self._occ = {}
+
     def install(self) -> None:
+        self.begin_run()
         me = self
 
         def pre(name: str, cls: str):
@@ -561,7 +567,7 @@ class TPPartialSource:
                               f"(rank {self.rank}'s partial GEMM / masked embedding / logits shard / mid-module operand) is snapshotted into the packed step "
                               "stream before the collective, attributed to the issuing module by a forward pre-hook; identity_check requires "
                               f"exactly the declared count of partials per site per step ({len(self.sites)} sites; 1 each, a mid-module site its "
-                              "static call count); value correspondence: tp2_match.py cross-rank "
+                              "static call count); value correspondence: tp/match.py cross-rank "
                               "provenance (received == AllReduce2/AllGather2(part_rank0, part_rank1) bit-exact; part_rank_r == Gemm_v1{K/W} "
                               f"on the shard, R13 tp2_semantics); kinds seen {self.stats['kinds']}; shapes seen {self.stats['shapes']}")}]
 

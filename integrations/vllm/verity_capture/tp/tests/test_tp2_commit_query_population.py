@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from verity_capture.bench.tp2_commit import query_population_gate
+from verity_capture.tp.commit import query_population_gate
 
 
 def _first(rank: int, k: int = 1):

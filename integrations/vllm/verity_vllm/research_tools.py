@@ -39,7 +39,7 @@ DEFAULT_QUERY = "Q_module_body_v1"
 DEFAULT_PY = "/workspace/venv312/bin/python"
 
 WRAPPER = "integrations/vllm/verity_capture/sweep/run_row_v2.sh"
-_SCRIPTS = ("run_row_v2.sh", "row_pod.sh")
+_SCRIPTS = ("run_row_v2.sh", "row_pod.sh", "tp_stage.sh")   # tp_stage.sh: the WORLD=N tensor-parallel row runner, row_pod.sh's grammar
 
 CLOSURE = [
     "integrations/vllm/**",
@@ -170,6 +170,7 @@ def parse(argv: list[str], *, stage: str) -> dict[str, Any]:
 
         bash .../run_row_v2.sh stage <stage> <row> <ROLE> <hf-repo> <rev> [--flag v ...]
         bash .../row_pod.sh <row> <ROLE> <hf-repo> <rev> [stages] [--flag v ...]
+        WORLD=N bash .../tp_stage.sh <row> <ROLE> <hf-repo> <rev> [stages]     (tensor-parallel rows; tp from the row id)
     """
     found = _find_script(argv)
     if found is None:
@@ -192,7 +193,7 @@ def parse(argv: list[str], *, stage: str) -> dict[str, Any]:
     role = positional[1] if len(positional) > 1 else None
     model = positional[2] if len(positional) > 2 else None
     revision = positional[3] if len(positional) > 3 else None
-    if argv_stage is None and found is not None and found[1] == "row_pod.sh" and len(positional) > 4:
+    if argv_stage is None and found is not None and found[1] in ("row_pod.sh", "tp_stage.sh") and len(positional) > 4:
         argv_stage = positional[4]
 
     out: dict[str, Any] = {

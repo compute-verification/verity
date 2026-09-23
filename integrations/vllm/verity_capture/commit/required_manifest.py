@@ -288,9 +288,9 @@ def members_for(family: str, statics: dict[str, Any], module: str, hint: str, tp
         # (Lift(Q_fine_v1), or a declared padded-boundary Q with its own digest) -- the query decides the boundaries, never the collector.
         out = [("out", int(statics.get("H", 0)), "bf16")]
         return out + (padded_slot_members(statics) if padded_slots else [])
-    if family.startswith(("AllReduce2", "AllGather2")):
+    if collective_kind(family) is not None:       # [lane vllm-tp-n] AllReduce2/AllGather2 (world 2) or AllReduce/AllGather{WORLD,N}, from the registry
         n = int(statics.get("N", 0))
-        gather = family.startswith("AllGather2")
+        gather = collective_kind(family) == "all_gather"
         # the all-reduced module output (received by every rank) / the gathered row (rank shards side by side)
         out = [("out", n * world, "bf16")] if gather else [("0" if (leaf in _LINEAR_LEAVES or "proj" in leaf) else "out", n, "bf16")]
         if tp is not None and collective_site(module) is not None:
@@ -455,6 +455,13 @@ def is_aggregate_family(family: str, module: str) -> bool:
 def is_structure_family(family: str) -> bool:
     return family.startswith(_STRUCTURE_PREFIXES)
 
+
+
+def collective_kind(family_or_id: str) -> str | None:
+    """[lane vllm-tp-n] "all_reduce" / "all_gather" / None for a Definition family or id, of any world (`b1_tp2.collective_kind`: the
+    registry's composites decide, never a spelled prefix).  Registry unavailable -> RegistryUnavailable (fail closed, as `_registry`)."""
+    from verity_vllm.registry import b1_tp2 as _TP2
+    return _TP2.collective_kind(family_or_id)
 
 def _registry() -> tuple[Any, list[str]]:
     """(verity.ir REGISTRY with the integration's composite modules imported, [import errors of the integration's OWN registry modules])
@@ -1246,10 +1253,9 @@ def build_manifest(program: dict[str, Any], workload: dict[str, Any] | None = No
         if prog_world > 1:
             for r in seg:
                 f0 = spec_family(r["spec"])
-                if f0.startswith("AllReduce2"):
-                    coll_of[split_name(r.get("name") or "")[0]] = "all_reduce"
-                elif f0.startswith("AllGather2"):
-                    coll_of[split_name(r.get("name") or "")[0]] = "all_gather"
+                ck = collective_kind(f0)
+                if ck is not None:
+                    coll_of[split_name(r.get("name") or "")[0]] = ck
         epi_mods = epilogue_modules(seg)                                          # [MAN-07] biased linears: BiasAdd produces member 0
         for k_row, r in enumerate(seg):
             i_row = lo_i + k_row                                                 # the row's Program index (the operand runs' `["n", i, ..]`)
@@ -1661,9 +1667,9 @@ def tp_peer_binding(parts: list[dict[str, Any]]) -> dict[str, Any]:
         for r in p["identities"]:
             if r["family"] == "tp_rank_partials":
                 partials[(str(r["request_id"]), int(r["step"]), int(r.get("invocation", 0)), r["op_path"], r["output_member"], int(r["rank"]))] = _width(r)
-            elif r["family"] == "instance_outputs" and str(r.get("spec") or "").startswith(("AllReduce2", "AllGather2")):
+            elif r["family"] == "instance_outputs" and collective_kind(str(r.get("spec") or "")) is not None:
                 outputs.append((str(r["request_id"]), int(r["step"]), int(r.get("invocation", 0)), r["op_path"], int(r["rank"]),
-                                "all_gather" if str(r["spec"]).startswith("AllGather2") else "all_reduce", _width(r)))
+                                collective_kind(str(r["spec"])), _width(r)))
     unbound: list[str] = []
     bound = 0
     width_checked = 0

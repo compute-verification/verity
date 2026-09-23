@@ -446,9 +446,11 @@ class _Fold:
             if tp.get("rank") is None:
                 raise FoldError("RunHeader.notes.tp2 has world_size > 1 but no rank")
             self.tp = {"rank": int(tp["rank"]), "world": int(tp["world_size"])}
-            if self.tp["world"] != 2 or not 0 <= self.tp["rank"] < 2:
-                raise FoldError(f"tensor-parallel world {self.tp['world']} rank {self.tp['rank']}: only the two-rank collectives "
-                                f"(AllReduce2_v1 / AllGather2_v1) are registered; refused")
+            # [lane vllm-tp-n] any world >= 2: world 2 binds AllReduce2_v1 / AllGather2_v1 (the recorded identities), world > 2 the
+            # world-parametric AllReduce_v2{WORLD,N} / AllGather_v1{WORLD,N} (b1_tp2.all_reduce / all_gather); a rank outside the world is refused
+            if self.tp["world"] < 2 or not 0 <= self.tp["rank"] < self.tp["world"]:
+                raise FoldError(f"tensor-parallel world {self.tp['world']} rank {self.tp['rank']}: rank must be in [0, world) with world >= 2; refused")
+            self.tp_peer_ranks = [r for r in range(self.tp["world"]) if r != self.tp["rank"]]
             for i, _r in enumerate(reqs):
                 self.peers_param[i] = len(params)
                 self.peers_fields[i] = []
@@ -847,17 +849,25 @@ class _Fold:
             if ri is None:
                 raise FoldError(f"{what}: collective row {i} attributed to request {rp[0]!r}, not in the run header")
             by_req.setdefault(ri, []).append(i)
-        row_map: dict[int, tuple[int, int, int, str]] = {}   # row -> (peers param index, field offset, row within the request, field name)
+        # [lane vllm-tp-n] one field per (request, PEER rank) in rank order: `s<step>_k<k>` at world 2 (the recorded field names), else
+        # `s<step>_k<k>_r<peer>`; the request's field ordinal is k*(world-1)+j = the rank Program's `peers_<ordinal>` input (cb_a.compare)
+        peer_ranks = self.tp_peer_ranks
+        row_map: dict[int, tuple[int, int, dict[int, int], int, str]] = {}   # row -> (peers param index, {peer rank: field offset}, row within the request, field name)
         fields = []
         for ri, rws in by_req.items():
-            pidx, base, name = self.peers_param[ri], self.peers_leaves[ri], f"s{step}_k{k}"
-            fld = {"name": name, "step": step, "k": k, "kind": op.kind, "site": op.site, "rows": len(rws), "N": N, "offset": base,
-                   "type": Array(len(rws), Array(N, Value(16))), "request": self.requests[ri]["request_id"], "ordinal": len(self.peers_fields[ri])}
-            self.peers_fields[ri].append(fld)
-            self.peers_leaves[ri] += len(rws) * N
+            pidx = self.peers_param[ri]
+            base_of: dict[int, int] = {}
+            for pr in peer_ranks:
+                base = self.peers_leaves[ri]
+                name = f"s{step}_k{k}" if world == 2 else f"s{step}_k{k}_r{pr}"
+                fld = {"name": name, "step": step, "k": k, "kind": op.kind, "site": op.site, "rows": len(rws), "N": N, "offset": base, "peer_rank": pr,
+                       "type": Array(len(rws), Array(N, Value(16))), "request": self.requests[ri]["request_id"], "ordinal": len(self.peers_fields[ri])}
+                self.peers_fields[ri].append(fld)
+                self.peers_leaves[ri] += len(rws) * N
+                base_of[pr] = base
+                fields.append({"request": fld["request"], "param": pidx, "field": name, "ordinal": fld["ordinal"], "rows": len(rws), "offset": base, "peer_rank": pr})
             for j, row in enumerate(rws):
-                row_map[row] = (pidx, base, j, name)
-            fields.append({"request": fld["request"], "param": pidx, "field": name, "ordinal": fld["ordinal"], "rows": len(rws), "offset": base})
+                row_map[row] = (pidx, base_of, j, f"s{step}_k{k}")
         event = min(c.consumed) if c.consumed else self.cur_event
         self.collectives.append({"step": step, "k": k, "kind": op.kind, "site": op.site, "rows": c.rows, "N": N, "rank": rank, "world": world,
                                  "event": event, "own_view": own, "fields": fields})
@@ -870,10 +880,10 @@ class _Fold:
         v = row_view(op.own, i)
         own = self._mem("read", self.mem.read, v)
         self._journal("read", v, own, what=f"collective {op.kind} (step {prep['step']}, k {prep['k']}) own row {i}")
-        pidx, base, j, _name = prep["row_map"][i]
+        pidx, base_of, j, _name = prep["row_map"][i]
         N = prep["N"]
-        peer = Affine("p", pidx, base + j * N, N)
-        parts = [own, peer] if prep["rank"] == 0 else [peer, own]
+        # [lane vllm-tp-n] `parts` in RANK order over the whole world: this rank's own row at index `rank`, every peer's row at its rank
+        parts = [own if r == prep["rank"] else Affine("p", pidx, base_of[r] + j * N, N) for r in range(prep["world"])]
         refs = concat(parts)
         if refs.count != ptype.leaves:
             raise FoldError(f"{spec_label(c.spec)}.{pname}[row {i}]: {refs.count} refs for {ptype!r} ({ptype.leaves} leaves)")

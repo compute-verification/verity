@@ -664,7 +664,7 @@ def test_swapped_rank_header_fails_the_compare(tmp_path):
 
 
 # ----------------------------------------------------------------------------------------------------------------------------------
-# the row's per-rank fold Match entry point (bench/tp2_fold_match.py) over the fixture: the fold runs in-process (the CLI's fold_rank is
+# the row's per-rank fold Match entry point (bench/tp/fold_match.py) over the fixture: the fold runs in-process (the CLI's fold_rank is
 # a subprocess over a profile MODULE; the fixture's profile is an object), everything after it -- persisted record, cb_a.compare per
 # rank, recorder / links / provenance ingestion, the cross-rank leg, the verdict -- is the CLI's own code
 # ----------------------------------------------------------------------------------------------------------------------------------
@@ -672,7 +672,7 @@ def test_swapped_rank_header_fails_the_compare(tmp_path):
 def _e2e(tmp_path, monkeypatch, *, drop_rank1_log=False, rank1_mut=None, provenance=True, links_mut=None, recorder_mut=None, gprog=True,
          provenance_of_other_run=False, provenance_digest_mismatch=False, rank_workers=0):
     import hashlib
-    from verity_capture.bench import tp2_fold_match as FM
+    from verity_capture.tp import fold_match as FM
     from verity_capture.compare import summarize
     tmp_path = tmp_path / f"case{len(list(tmp_path.iterdir()))}"
     tmp_path.mkdir()

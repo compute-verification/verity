@@ -216,7 +216,10 @@ def _definition_for(kind: str, count: int | None, world: int | None, rows: dict[
         return {"id": sp.id if sp else None, "module": "verity_vllm.registry.quarantine.collective.allreduce", "conformance": sp.defn.conformance if sp else None,
                 "operands": [f"x{r} = rank {r}'s operand view" for r in range(R)], "output": "every rank's result view (journaled write on each rank)"}
     if kind == "all_gather":
-        return {"id": f"AllGather2_v1{{N={count}}}" if count else None, "module": "verity_vllm.registry.b1_tp2",
+        from verity_vllm.registry import b1_tp2 as TP2
+        R = int(world) if world else len(rows)
+        sp = TP2.all_gather(R, int(count)) if count and R >= 2 else None       # [lane vllm-tp-n] AllGather2_v1{N} at world 2, AllGather_v1{WORLD,N} above
+        return {"id": sp.id if sp else None, "module": "verity_vllm.registry.b1_tp2",
                 "conformance": "reference rearrangement (reshape of the per-rank parts; no gates)",
                 "operands": [f"x{r} = rank {r}'s operand view" for r in sorted(rows)], "output": "the concatenation, on every rank"}
     if kind == "vocab_shard_lookup":
