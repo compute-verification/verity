@@ -1,8 +1,8 @@
 """`RMSNormFusedCuda_v2` (generic `fused_add_rms_norm_kernel` under `VLLM_BATCH_INVARIANT=1`): the IR body equals its
 numpy twin gate for gate, and the twin reproduces every fused-norm row of the B0 commit store (v1 does not).
 
-Needs the numerics lane's MUFU.RSQ model (`verity_vllm_numerics`, prebuilt `librms_triton_model.so`);
-skipped when it is not available (no build is attempted here)."""
+Needs the numerics lane's MUFU.RSQ model (`verity_vllm_numerics`: `librms_triton_model.so`, built on demand into the
+gitignored `cpp/build/`); skipped when it cannot be built here (no C++ compiler) or its tables are unavailable."""
 
 from __future__ import annotations
 
@@ -22,8 +22,10 @@ def _numerics():
         from verity_vllm_numerics import rms_relation, rms_triton_model as RM
     except Exception as e:  # pragma: no cover
         pytest.skip(f"verity_vllm_numerics not importable: {e}")
-    if not RM.LIB.exists() or RM.LIB.stat().st_mtime < RM.CPP_SRC.stat().st_mtime:
-        pytest.skip("librms_triton_model.so not prebuilt (tests do not build)")
+    try:
+        RM.build()                                     # into cpp/build/ (gitignored); a no-op when fresh
+    except Exception as e:  # noqa: BLE001  -- no compiler / compile failure: skip, do not fail
+        pytest.skip(f"librms_triton_model.so not buildable here: {type(e).__name__}: {e}")
     try:
         rms_relation.tables("cuda")
     except Exception as e:  # pragma: no cover

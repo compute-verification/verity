@@ -28,9 +28,11 @@ from pathlib import Path
 
 import numpy as np
 
+from . import _jit
+
 HERE = Path(__file__).resolve().parent
 CPP_SRC = HERE / "cpp" / "rms_triton_model.cpp"
-LIB = HERE / "cpp" / "librms_triton_model.so"
+LIB = _jit.lib_path("librms_triton_model.so")          # build product (cpp/build/, gitignored), compiled on first use
 
 TABLE_N = 1 << 23
 SQRT_T0 = 0x3F800000  # sqrt(1.0) = 1.0
@@ -81,7 +83,6 @@ _lib = None
 
 def build(force: bool = False) -> Path:
     """Compile cpp/rms_triton_model.cpp; atomic publish + builder lock (``_jit``): concurrent first users never dlopen a partial file."""
-    from . import _jit
     return _jit.atomic_build(LIB, [CPP_SRC], lambda out: _jit.cxx_compile(out, CPP_SRC, cwd=CPP_SRC.parent), force=force)
 
 

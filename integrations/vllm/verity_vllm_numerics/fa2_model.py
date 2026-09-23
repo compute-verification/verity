@@ -27,10 +27,12 @@ from pathlib import Path
 
 import numpy as np
 
+from . import _jit
+
 HERE = Path(__file__).resolve().parent
 CPP_SRC = HERE / "cpp" / "fa2_model.cpp"
 CPP_DEP = HERE / "cpp" / "tc_model.cpp"
-LIB = HERE / "cpp" / "libfa2_model.so"
+LIB = _jit.lib_path("libfa2_model.so")                 # build product (cpp/build/, gitignored), compiled on first use
 
 M_LOG2E = 1.4426950408889634  # <math.h> M_LOG2E as a double
 KBLOCK_M = 64
@@ -51,8 +53,8 @@ _lib = None
 
 def build(force: bool = False) -> Path:
     """Compile cpp/fa2_model.cpp (g++ or $CXX; OpenMP when available, serial otherwise).  ``-ffp-contract=off``
-    is essential: the model spells out which multiply-adds the GPU fused; the host compiler must not fuse others."""
-    from . import _jit                                 # atomic publish + builder lock: no half-written .so for a concurrent dlopen
+    is essential: the model spells out which multiply-adds the GPU fused; the host compiler must not fuse others.
+    ``_jit``: atomic publish + builder lock, so a concurrent first user never dlopens a half-written .so."""
     return _jit.atomic_build(LIB, [CPP_SRC, CPP_DEP], lambda out: _jit.cxx_compile(out, CPP_SRC, cwd=CPP_SRC.parent), force=force)
 
 

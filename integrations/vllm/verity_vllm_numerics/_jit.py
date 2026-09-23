@@ -7,6 +7,10 @@ goes to a private temp path and is published by ``os.replace`` (atomic: a reader
 never a partial), and builders serialise on an ``fcntl`` lock beside the library, re-checking staleness once they hold it (the second
 builder finds the first's output fresh and returns).  Processes that already mapped an older file keep their mapping (POSIX unlink
 semantics), so a rebuild never disturbs a running evaluator either.
+
+The libraries are build products, not sources: they land in :func:`build_dir` (``cpp/build/`` beside the sources, gitignored; override
+with ``VERITY_NUMERICS_BUILD_DIR``) and are compiled on first use by whoever needs them.  Until 2026-09-23 ``libfa2_model.so`` and
+``librms_triton_model.so`` were tracked beside their ``.cpp`` and rewritten by every test run, dirtying every worktree.
 """
 from __future__ import annotations
 
@@ -16,6 +20,19 @@ import subprocess
 import tempfile
 from collections.abc import Callable, Sequence
 from pathlib import Path
+
+CPP_DIR = Path(__file__).resolve().parent / "cpp"
+
+
+def build_dir() -> Path:
+    """Where the JIT-built ``lib*.so`` live: ``$VERITY_NUMERICS_BUILD_DIR`` or ``cpp/build/`` (gitignored).  Not created here."""
+    env = os.environ.get("VERITY_NUMERICS_BUILD_DIR")
+    return Path(env).expanduser().resolve() if env else CPP_DIR / "build"
+
+
+def lib_path(name: str) -> Path:
+    """``build_dir() / name`` -- the publish path of one twin library (``libfa2_model.so``, ...)."""
+    return build_dir() / name
 
 
 def stale(lib: Path, *sources: Path) -> bool:
