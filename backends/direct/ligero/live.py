@@ -87,8 +87,12 @@ assert pm is None or pm.COIN_BYTES == COIN_BYTES
 K_HELLO, K_WELCOME, K_COMMIT, K_ROOT, K_OPEN1, K_TESTS, K_OPEN2, K_PROOF, K_END, K_VERDICT, K_ERROR = (
     b"H", b"W", b"C", b"R", b"1", b"T", b"2", b"P", b"E", b"V", b"X")
 K_STMT, K_NOP = b"S", b"N"     # STMT i: the statement ahead of ROOT i (sent at step 0, off the critical path); NOP: ignored
+# the many-round challenge stream (lane live-2, for Ligerito; ``ChallengeSession`` below): CCOM i = the verifier's commitments
+# to ALL R coins of batch i; MSG i k = the prover's round-k message; CHAL i k = the verifier's opening of coin k
+K_CCOM, K_MSG, K_CHAL = b"K", b"M", b"Q"
 _KIND_NAME = {K_HELLO: "HELLO", K_WELCOME: "WELCOME", K_COMMIT: "COMMIT", K_ROOT: "ROOT", K_OPEN1: "OPEN1", K_TESTS: "TESTS",
-              K_OPEN2: "OPEN2", K_PROOF: "PROOF", K_END: "END", K_VERDICT: "VERDICT", K_ERROR: "ERROR", K_STMT: "STMT", K_NOP: "NOP"}
+              K_OPEN2: "OPEN2", K_PROOF: "PROOF", K_END: "END", K_VERDICT: "VERDICT", K_ERROR: "ERROR", K_STMT: "STMT", K_NOP: "NOP",
+              K_CCOM: "CCOM", K_MSG: "MSG", K_CHAL: "CHAL"}
 _HDR = struct.Struct("<IB")
 _MAX_FRAME = 1 << 31
 _BUF = 8 << 20
@@ -126,6 +130,13 @@ def _setup_socket(s: socket.socket) -> None:
             s.setsockopt(socket.IPPROTO_TCP, socket.TCP_CONGESTION, _TCP_CC.encode())
         except OSError:
             pass
+
+
+def _sockopt(s: socket.socket, opt: int) -> int | None:
+    try:
+        return int(s.getsockopt(socket.SOL_SOCKET, opt))
+    except OSError:
+        return None
 
 
 def _connect(host: str, port: int, timeout: float) -> socket.socket:
@@ -375,6 +386,10 @@ class ProverSession:
         self._sender = threading.Thread(target=self._send_loop, name="live-proof-sender", daemon=True)
         self._sender.start()
         self.proof_send_seconds = 0.0
+        self.proof_serialize_seconds = 0.0           # proof_bytes() on the data-sender thread (off the prover's thread)
+        self.ctrl_send_seconds = 0.0                 # the ctrl sender's sendall time (pipelined sessions)
+        self.ctrl_queue_seconds = 0.0                # frames' wait in the ctrl queue before their sendall started
+        self.sndbuf = _sockopt(self.ctrl, socket.SO_SNDBUF)    # the EFFECTIVE send buffer (the kernel caps _BUF at wmem_max)
         self.verdict: dict | None = None
         self.pipelined = False               # set by start_pipeline (--pipeline N --verifier): a network thread owns ctrl
 
@@ -390,15 +405,22 @@ class ProverSession:
         return kind, payload
 
     def _send_loop(self) -> None:
+        """The data-channel sender: serialises each queued proof (``proof_bytes``) and sends it -- both off the prover's
+        thread, so neither the 3.7-7.8 MB serialisation nor the transfer sits on the compute path."""
         try:
             while True:
                 item = self._q.get()
                 if item is None:
                     return
-                kind, payload = item
+                sub, meta, proof = item
                 t0 = time.perf_counter()
-                self._send(self.data, kind, payload)
-                self.proof_send_seconds += time.perf_counter() - t0
+                pb = proof if isinstance(proof, (bytes, bytearray)) else proof_bytes(proof)
+                mj = json.dumps(meta or {}).encode()
+                payload = struct.pack("<II", sub, len(mj)) + mj + pb
+                t1 = time.perf_counter()
+                self.proof_serialize_seconds += t1 - t0
+                self._send(self.data, K_PROOF, payload)
+                self.proof_send_seconds += time.perf_counter() - t1
         except BaseException as e:  # noqa: BLE001 -- reported at end()
             self._sender_error = e
 
@@ -450,17 +472,54 @@ class ProverSession:
     def start_pipeline(self, n: int) -> None:
         self.pipelined = True
         self.pn = n
-        self._cv = threading.Condition()                 # guards the boxes and the futures
-        self._send_lock = threading.Lock()               # one control frame at a time (driver thread and reader thread send)
-        self._stmt_box: dict[int, bytes] = {}            # STMT j not yet sent (goes right before ROOT j)
-        self._root_box: dict[int, bytes] = {}            # ROOT j ready before COMMIT j arrived (sent by the reader on COMMIT j)
+        self._cv = threading.Condition()                 # guards the boxes, the commit set and the futures
+        self._stmt_box: dict[int, object] = {}           # STMT j (bytes or a Future of bytes) not yet queued (goes right before ROOT j)
+        self._root_box: dict[int, bytes] = {}            # ROOT j ready before COMMIT j arrived (queued by the reader on COMMIT j)
         self._have_commit: set[int] = set(self._commits)
         self._t_sent: dict[tuple[bytes, int], float] = {}
         self._reply: dict[tuple[bytes, int], Future] = {}
         self._net_err: BaseException | None = None
         self._net_stop = threading.Event()
+        # the ctrl SENDER (lane live-2): the only thread that writes the control connection while the pipeline runs.  The
+        # driver (prover stages) and the reader only enqueue; a frame's ``sendall`` -- which blocks for the transfer when the
+        # message exceeds the socket's send buffer (a 1-2 MB TESTS / STMT at l=16384 vs a ~200 KB effective SO_SNDBUF) --
+        # therefore never sits on the compute path and never stalls the reader.  FIFO = 8c's per-sub-batch order is kept
+        # (STMT j, ROOT j are queued together after COMMIT j; TESTS j only after OPEN1 j).
+        self._ctrl_q: queue.Queue = queue.Queue()
+        self._ctrl_sender = threading.Thread(target=self._ctrl_send_loop, name="live-ctrl-sender", daemon=True)
+        self._ctrl_sender.start()
         self._net = threading.Thread(target=self._pipeline_reader, name="live-coins-net", daemon=True)
         self._net.start()
+
+    def _ctrl_send_loop(self) -> None:
+        try:
+            while True:
+                item = self._ctrl_q.get()
+                if item is None:
+                    return
+                kind, sub, payload, t_q = item
+                t0 = time.perf_counter()
+                self.ctrl_queue_seconds += t0 - t_q
+                if isinstance(payload, Future):                       # a statement still being built (pipeline.POOL)
+                    payload = payload.result()
+                if kind in (K_ROOT, K_TESTS):
+                    with self._cv:
+                        self._t_sent[(kind, sub)] = time.perf_counter()   # the opening's round trip starts at the wire
+                self._send(self.ctrl, kind, struct.pack("<I", sub) + payload)
+                self.ctrl_send_seconds += time.perf_counter() - t0
+        except BaseException as e:  # noqa: BLE001 -- reported to the driver via the futures and end()
+            self._net_fail(e)
+
+    def _net_fail(self, e: BaseException) -> None:
+        self._net_err = e
+        self._net_stop.set()
+        with self._cv:
+            for f in self._reply.values():
+                if not f.done():
+                    f.set_exception(e)
+
+    def _enqueue(self, kind: bytes, sub: int, payload) -> None:
+        self._ctrl_q.put((kind, sub, payload, time.perf_counter()))
 
     def _reply_future(self, kind: bytes, sub: int) -> Future:
         with self._cv:
@@ -485,42 +544,38 @@ class ProverSession:
         if self._net_err is not None:
             raise LiveError(f"pipeline network thread failed: {self._net_err!r}")
 
-    def provide_stmt(self, sub: int, stmt: bytes) -> None:
-        """The statement of sub-batch ``sub`` (the runner sets it before proving): sent as soon as COMMIT ``sub`` is in
-        (its transfer overlaps the prover's work up to the root, as on the sequential path), else with ROOT ``sub``."""
+    def provide_stmt(self, sub: int, stmt) -> None:
+        """The statement of sub-batch ``sub`` (bytes, or a Future of bytes the sender resolves -- the runner builds it off
+        the prover's thread): queued as soon as COMMIT ``sub`` is in (its transfer overlaps the prover's work up to the
+        root, as on the sequential path), else boxed and queued by the reader with ROOT ``sub``."""
         self._check_net()
-        with self._cv:
+        with self._cv:                                    # box-or-queue atomically against the reader's COMMIT handling
             if sub not in self._have_commit:
                 self._stmt_box[sub] = stmt
                 return
-        with self._send_lock:
-            self.send_stmt(sub, stmt)
+            self._enqueue(K_STMT, sub, stmt)
 
     def provide_root(self, sub: int, root: bytes) -> None:
-        """ROOT ``sub`` (with its STMT ahead if still unsent): sent now when COMMIT ``sub`` is in, else by the reader when
-        it arrives."""
+        """ROOT ``sub`` (with its STMT ahead if still unqueued): queued now when COMMIT ``sub`` is in, else by the reader
+        when it arrives.  Nothing is sent on the calling thread."""
         self._check_net()
         with self._cv:
             if sub not in self._have_commit:
                 self._root_box[sub] = root
                 return
-        self._send_root(sub, root)
+            self._queue_root(sub, root)
 
-    def _send_root(self, sub: int, root: bytes) -> None:
-        with self._send_lock:
-            with self._cv:
-                stmt = self._stmt_box.pop(sub, None)
-            if stmt is not None:
-                self.send_stmt(sub, stmt)                                 # STMT j ahead of ROOT j
-            self._t_sent[(K_ROOT, sub)] = time.perf_counter()
-            self._send(self.ctrl, K_ROOT, struct.pack("<I", sub) + root)
+    def _queue_root(self, sub: int, root: bytes) -> None:
+        """Caller holds ``_cv``: STMT j (if boxed) then ROOT j onto the ctrl queue."""
+        stmt = self._stmt_box.pop(sub, None)
+        if stmt is not None:
+            self._enqueue(K_STMT, sub, stmt)                              # STMT j ahead of ROOT j
+        self._enqueue(K_ROOT, sub, root)
 
     def provide_tests(self, sub: int, packed: bytes) -> None:
-        """TESTS ``sub`` (the stage has OPEN1 ``sub`` by construction): sent now."""
+        """TESTS ``sub`` (the stage has OPEN1 ``sub`` by construction): queued now."""
         self._check_net()
-        with self._send_lock:
-            self._t_sent[(K_TESTS, sub)] = time.perf_counter()
-            self._send(self.ctrl, K_TESTS, struct.pack("<I", sub) + packed)
+        self._enqueue(K_TESTS, sub, packed)
 
     def _fulfil(self, kind: bytes, sub: int, val: tuple[bytes, bytes]) -> None:
         f = self._reply_future(kind, sub)
@@ -547,16 +602,17 @@ class ProverSession:
                     with self._cv:
                         self._have_commit.add(i)
                         root = self._root_box.pop(i, None)
-                        stmt = self._stmt_box.pop(i, None) if root is None else None
+                        if root is not None:
+                            self._queue_root(i, root)                     # ROOT i (+ STMT i) was ready before its commitment
+                        else:
+                            stmt = self._stmt_box.pop(i, None)
+                            if stmt is not None:
+                                self._enqueue(K_STMT, i, stmt)            # STMT i now; ROOT i follows when the stage has it
                     self._fulfil(K_COMMIT, i, val)
-                    if root is not None:
-                        self._send_root(i, root)                          # ROOT i (+ STMT i) was ready before its commitment
-                    elif stmt is not None:
-                        with self._send_lock:
-                            self.send_stmt(i, stmt)                       # STMT i now; ROOT i follows when the stage has it
                     continue
                 want = K_ROOT if k == K_OPEN1 else K_TESTS
-                t0 = self._t_sent.pop((want, i), None)
+                with self._cv:
+                    t0 = self._t_sent.pop((want, i), None)
                 if t0 is None:
                     raise LiveError(f"{_KIND_NAME[k]} {i} without a {_KIND_NAME[want]} {i} sent")
                 self.rtts.append(time.perf_counter() - t0)                # the opening's round trip
@@ -564,25 +620,19 @@ class ProverSession:
                 if k == K_OPEN2:
                     opened += 1
         except BaseException as e:  # noqa: BLE001 -- reported to the driver via the futures and end()
-            self._net_err = e
-            self._net_stop.set()
-            with self._cv:
-                for f in self._reply.values():
-                    if not f.done():
-                        f.set_exception(e)
+            self._net_fail(e)
 
-    def submit(self, sub: int, proof, meta: dict | None = None) -> int:
-        """Queue PROOF sub (the ligero-proof/v1 bytes + a small JSON) on the data connection; returns the byte count."""
-        mj = json.dumps(meta or {}).encode()
-        pb = proof if isinstance(proof, (bytes, bytearray)) else proof_bytes(proof)
-        payload = struct.pack("<II", sub, len(mj)) + mj + pb
-        self._q.put((K_PROOF, payload))
-        return len(payload)
+    def submit(self, sub: int, proof, meta: dict | None = None) -> None:
+        """Queue PROOF sub for the data connection: the ``Proof`` (or its ligero-proof/v1 bytes) + a small JSON; the sender
+        thread serialises and sends it, nothing runs on the caller's thread."""
+        self._q.put((sub, meta, proof))
 
     def end(self, summary: dict | None = None) -> dict:
         """Drain the proofs, send END, wait for the verifier's VERDICT (which waits for its own verification)."""
         if self.pipelined and getattr(self, "_net", None) is not None:
             self._net.join(timeout=600.0)                    # the network thread owns ctrl until it has read the last OPEN2
+            self._ctrl_q.put(None)
+            self._ctrl_sender.join(timeout=600.0)            # every queued control frame is out before END
             if self._net_err is not None:
                 raise LiveError(f"pipeline network thread failed: {self._net_err!r}")
         self._q.put(None)
@@ -627,7 +677,17 @@ def set_statement(coins, R, pubs, lay, cfg, n_proofs: int, auth=None) -> None:
     public claim travels with the root, before the verifier opens its first coin).  A local ``Coins`` is left alone."""
     if hasattr(coins, "set_statement"):
         from .serialize import _statement_of, statement_bytes
-        coins.set_statement(statement_bytes(_statement_of(R, pubs, lay, cfg, n_proofs, auth=auth)))
+
+        def build():
+            return statement_bytes(_statement_of(R, pubs, lay, cfg, n_proofs, auth=auth))
+
+        if getattr(getattr(coins, "session", None), "pipelined", False):
+            # the pipelined runner calls this on the DRIVER thread inside the pass: build the bytes (host-only, ~1 MB at
+            # l=16384) on the pool and hand the Future to the session; its ctrl sender resolves it before STMT i goes out
+            from . import pipeline
+            coins.set_statement(pipeline.POOL.submit(build))
+        else:
+            coins.set_statement(build())
 
 
 class BenchLive:
@@ -757,6 +817,10 @@ def net_measurements(sessions: list[ProverSession], proofs_per_session: int) -> 
            "rtt_ms_min": (min(rtts) * 1e3) if rtts else None, "round_trips": len(rtts),
            "wait_seconds": [s.wait for s in sessions],
            "proof_send_seconds": [s.proof_send_seconds for s in sessions],
+           "proof_serialize_seconds": [s.proof_serialize_seconds for s in sessions],
+           "ctrl_send_seconds": [s.ctrl_send_seconds for s in sessions],
+           "ctrl_queue_seconds": [s.ctrl_queue_seconds for s in sessions],
+           "sndbuf": [s.sndbuf for s in sessions],
            "session_wall_seconds": [getattr(s, "wall", None) for s in sessions],
            "verify_wall_s": statistics.median(v["verify"]["wall_s"] for v in verdicts) if verdicts else None,
            "verify_cpu_s": statistics.median(v["verify"]["cpu_s"] for v in verdicts) if verdicts else None,
@@ -941,6 +1005,17 @@ class Server:
                 return
             if hello.get("channel") == "probe":       # path diagnostics (`live probe`): echo NOPs' sizes, no session, nothing stored
                 self._probe(conn, addr, hello)
+                return
+            if hello.get("proto") == "challenge-stream":     # the many-round challenge stream (lane live-2 / Ligerito)
+                with self.lock:
+                    live = sum(1 for s in self.sessions.values() if not s.done.is_set())
+                    if live >= self.max_sessions:
+                        send_frame(conn, K_ERROR, json.dumps({"error": "too many sessions"}).encode())
+                        conn.close()
+                        return
+                    cs = ChallengeServerSession(self, conn, addr, hello)
+                    self.sessions[cs.id] = cs  # type: ignore[assignment]
+                cs.start()
                 return
             with self.lock:
                 live = sum(1 for s in self.sessions.values() if not s.done.is_set())
@@ -1339,6 +1414,594 @@ def cmd_serve(args) -> int:
 
 
 # ---------------------------------------------------------------------------------------------------------------------
+# The many-round challenge stream (lane live-2; the coin protocol Ligerito's ``transcript.LiveCoins`` will call)
+# ---------------------------------------------------------------------------------------------------------------------
+#
+# 8c generalised from two rounds to R rounds per batch, one batch = one proof.  Wire, per batch i (control connection):
+#
+#     V -> P   CCOM i    R commitments c_k = coin_commit(r_k, s_k) of FRESH coins, k < R -- BEFORE any prover message of i
+#     P -> V   STMT i    the statement bytes (the claim, fixed before the first coin is opened)
+#     P -> V   MSG i k   label_k, the prover's round-k message (k = 0 .. R-1, strictly in order)
+#     V -> P   CHAL i k  r_k, s_k  (the opening; the prover checks it against c_k and derives the round's challenge bytes)
+#     ...                (the batch's proof travels on the data connection as today; the bench below has none)
+#
+# Commit per BATCH, not per round.  The commitment's job (ZK_CONSTRUCTION.md 3; PROTOCOL.md 8c) is to make the verifier's
+# coins independent of the prover's messages -- a public-coin verifier the prover can hold to its randomness.  With one
+# commitment per batch every coin of the batch is fixed before the prover's FIRST message, so the verifier provably cannot
+# adapt coin k to messages 0..k-1 (the simulator learns the whole coin tape at once and the openings can never be adaptive);
+# a per-round commitment (COMMIT k+1 riding on CHAL k, the literal 8c shape) fixes coin k+1 only after the verifier has
+# read messages 0..k -- still "committed before the message it answers" (sound), but a strictly weaker independence, and it
+# couples consecutive rounds on the wire (CHAL k must carry COMMIT k+1, so round k+1 cannot start until CHAL k is parsed),
+# which is exactly the ordering windowed pipelining across batches wants to relax.  Cost of per-batch: R x 32 B up front
+# (1.6 KB at R = 50) and R fresh coins sampled at once -- nothing on the critical path.  Per-round buys nothing back: the
+# round trip per round is one RTT either way (MSG k -> CHAL k).
+#
+# Windowing across batches (HELLO ``window`` = W, as for 8c): the verifier sends CCOM 0..W-1 at once and CCOM i+W right
+# behind CHAL i (R-1), so W batches are in flight; rounds WITHIN a batch are inherently sequential (message k+1 depends on
+# challenge k), so a batch costs >= R x RTT of latency whatever the window, and the window buys THROUGHPUT: ~W / (R x RTT)
+# batches/s when the path, not the prover, is the bottleneck.  One sender thread and one reader thread per session (the
+# 8c pipelined path's design): a round's ``sendall`` never runs on the prover's thread.
+#
+# Challenge bytes of round k (what the prover and the verifier both derive; ``expand_challenge``):
+#     SHAKE-256(b"ligero-chal|v1|" || H(stmt || c_0 .. c_{R-1}) || k || len(label) || label || r_k)[:n]
+# -- the coin, the label and the batch context (statement + every commitment), none of the prover's messages: the
+# verifier has SEEN message k before opening r_k, that is what binds it (8c's seed1/seed2 rule).
+
+CHAL_TAG = b"ligero-chal|v1|"
+
+
+def batch_context(stmt: bytes, commitments: list[bytes]) -> bytes:
+    return hashlib.blake2b(b"ligero-chal-ctx|" + struct.pack("<I", len(stmt)) + stmt + b"".join(commitments), digest_size=32).digest()
+
+
+def expand_challenge(ctx: bytes, k: int, label: bytes, r: bytes, n: int) -> bytes:
+    """The ``n`` challenge bytes of round ``k`` from the opened coin ``r`` (both parties compute this)."""
+    return hashlib.shake_256(CHAL_TAG + ctx + struct.pack("<I", k) + struct.pack("<I", len(label)) + label + r).digest(n)
+
+
+class ChallengeStream:
+    """The per-batch coin source Ligerito's transcript layer calls (one per batch ``i`` of a ``ChallengeSession``, or a
+    ``LocalChallenges`` with the same methods when there is no live verifier):
+
+        begin(statement: bytes) -> None                   STMT i; the claim is fixed before any coin is opened
+        challenge(label, message, n) -> bytes             round k (k counts the calls): MSG i k out, CHAL i k in,
+                                                          n challenge bytes derived from the opened coin (blocking)
+        challenge_future(label, message, n) -> Future     the same, non-blocking (yield it to pipeline.prove_many; ``.net``
+                                                          marks it as a network wait); None when the source cannot
+        commitments() -> list[bytes]                      the R commitments (CCOM i), for the transcript
+        openings() -> list[tuple[bytes, bytes]]           (r_k, s_k) of every opened round, for the transcript
+
+    Raises ``LiveError`` when an opening does not match its commitment (verifier equivocation) or the verifier refuses."""
+
+    def __init__(self, session: "ChallengeSession", batch: int):
+        self.session, self.batch = session, batch
+        self.R = session.rounds
+        self.k = 0
+        self.stmt: bytes | None = None
+        self._ccom: list[bytes] | None = None
+        self._ctx: bytes | None = None
+        self._open: list[tuple[bytes, bytes]] = []
+        self.rtts: list[float] = []
+        self.wait = 0.0
+        self.t_begin = self.t_done = None
+
+    def begin(self, statement: bytes) -> None:
+        self.stmt = statement
+        self.t_begin = time.perf_counter()
+        self.session.provide_stmt(self.batch, statement)
+
+    def commitments(self) -> list[bytes]:
+        if self._ccom is None:
+            t0 = time.perf_counter()
+            self._ccom = self.session.ccom_future(self.batch).result()
+            self.wait += time.perf_counter() - t0
+        return self._ccom
+
+    def _context(self) -> bytes:
+        if self._ctx is None:
+            if self.stmt is None:
+                raise LiveError("ChallengeStream: begin(statement) before the first challenge")
+            self._ctx = batch_context(self.stmt, self.commitments())
+        return self._ctx
+
+    def challenge_future(self, label: bytes, message: bytes, n: int) -> Future:
+        if self.k >= self.R:
+            raise LiveError(f"ChallengeStream: batch {self.batch} has {self.R} rounds; round {self.k} asked")
+        k = self.k
+        self.k += 1
+        ctx = self._context()                                  # blocks on CCOM i only for the very first batch of a window
+        reply = self.session.round_future(self.batch, k)
+        self.session.provide_msg(self.batch, k, label, message)
+        out: Future = Future()
+        out.net = True  # type: ignore[attr-defined]
+        c_k = self._ccom[k]
+
+        def done(f):
+            try:
+                r, s = f.result()
+                if pm.coin_commit(r, s) != c_k:
+                    raise LiveError(f"batch {self.batch} round {k}: opening does not match the commitment (verifier equivocation)")
+                self._open.append((r, s))
+                if k == self.R - 1:
+                    self.t_done = time.perf_counter()
+                out.set_result(expand_challenge(ctx, k, label, r, n))
+            except BaseException as e:  # noqa: BLE001
+                out.set_exception(e)
+
+        reply.add_done_callback(done)
+        return out
+
+    def challenge(self, label: bytes, message: bytes, n: int) -> bytes:
+        t0 = time.perf_counter()
+        f = self.challenge_future(label, message, n)
+        try:
+            return f.result()
+        finally:
+            dt = time.perf_counter() - t0
+            self.wait += dt
+            self.rtts.append(dt)
+
+    def openings(self) -> list[tuple[bytes, bytes]]:
+        return list(self._open)
+
+    @property
+    def latency(self) -> float | None:
+        """begin() -> the last round's challenge in hand (seconds)."""
+        return None if self.t_begin is None or self.t_done is None else self.t_done - self.t_begin
+
+
+class LocalChallenges:
+    """The honest verifier played locally (no network): the same interface as ``ChallengeStream`` -- the runner's own
+    coins, committed at construction, opened as asked.  ``challenge_future`` returns None (nothing to wait on)."""
+
+    def __init__(self, rounds: int, batch: int = 0):
+        self.batch, self.R, self.k = batch, rounds, 0
+        self._coins = [(os.urandom(COIN_BYTES), os.urandom(COIN_BYTES)) for _ in range(rounds)]
+        self._ccom = [pm.coin_commit(r, s) for r, s in self._coins]
+        self.stmt: bytes | None = None
+        self._ctx: bytes | None = None
+        self._open: list[tuple[bytes, bytes]] = []
+        self.rtts: list[float] = []
+        self.wait = 0.0
+        self.t_begin = self.t_done = None
+
+    def begin(self, statement: bytes) -> None:
+        self.stmt = statement
+        self.t_begin = time.perf_counter()
+        self._ctx = batch_context(statement, self._ccom)
+
+    def commitments(self) -> list[bytes]:
+        return list(self._ccom)
+
+    def challenge_future(self, label: bytes, message: bytes, n: int):
+        return None
+
+    def challenge(self, label: bytes, message: bytes, n: int) -> bytes:
+        if self._ctx is None:
+            raise LiveError("LocalChallenges: begin(statement) before the first challenge")
+        if self.k >= self.R:
+            raise LiveError(f"batch {self.batch} has {self.R} rounds; round {self.k} asked")
+        k, (r, s) = self.k, self._coins[self.k]
+        self.k += 1
+        self._open.append((r, s))
+        if k == self.R - 1:
+            self.t_done = time.perf_counter()
+        return expand_challenge(self._ctx, k, label, r, n)
+
+    def openings(self) -> list[tuple[bytes, bytes]]:
+        return list(self._open)
+
+    @property
+    def latency(self) -> float | None:
+        return None if self.t_begin is None or self.t_done is None else self.t_done - self.t_begin
+
+
+class ChallengeSession:
+    """One live many-round session: ``n_batches`` batches of ``rounds`` rounds against a verifier that commits ``window``
+    batches ahead.  A sender thread owns the control socket's writes and a reader thread its reads (the prover's threads
+    only enqueue and wait on futures); ``stream(i)`` is batch i's ``ChallengeStream``; ``end()`` -> the verdict."""
+
+    def __init__(self, host: str, port: int, hello: dict, n_batches: int, rounds: int, window: int = 1, timeout: float = 600.0):
+        self.n_batches, self.rounds, self.window = int(n_batches), int(rounds), max(1, int(window))
+        self.bytes_out = self.bytes_in = 0
+        self.messages = 0
+        self.ctrl = _connect(host, port, timeout)
+        hj = json.dumps({**hello, "wire": WIRE_VERSION, "proto": "challenge-stream", "n_batches": self.n_batches,
+                         "rounds": self.rounds, "window": self.window}).encode()
+        self._send(K_HELLO, struct.pack("<I", len(hj)) + hj)
+        kind, payload = self._recv()
+        if kind != K_WELCOME:
+            raise LiveError(f"verifier refused the session: {_json(payload).get('error') if kind == K_ERROR else kind}")
+        self.welcome = _json(payload)
+        self.id = self.welcome.get("session_id")
+        self.sndbuf = _sockopt(self.ctrl, socket.SO_SNDBUF)
+        self._cv = threading.Condition()
+        self._reply: dict[tuple, Future] = {}
+        self._t_sent: dict[tuple, float] = {}
+        self._have_ccom: set[int] = set()
+        self._stmt_box: dict[int, bytes] = {}
+        self._msg_box: dict[int, list] = {}
+        self.rtts: list[float] = []                       # per round: MSG on the wire -> CHAL read
+        self.ctrl_send_seconds = self.ctrl_queue_seconds = 0.0
+        self._q: queue.Queue = queue.Queue()
+        self._err: BaseException | None = None
+        self.verdict: dict | None = None
+        self.t0 = time.perf_counter()
+        self._sender = threading.Thread(target=self._send_loop, name="chal-sender", daemon=True)
+        self._reader = threading.Thread(target=self._read_loop, name="chal-reader", daemon=True)
+        self._sender.start()
+        self._reader.start()
+
+    # -- io (the sender thread writes, the reader thread reads; HELLO/WELCOME and END/VERDICT on the caller's thread
+    #    before the threads start / after they stop)
+    def _send(self, kind: bytes, payload: bytes) -> None:
+        self.bytes_out += send_frame(self.ctrl, kind, payload)
+        self.messages += 1
+
+    def _recv(self) -> tuple[bytes, bytes]:
+        kind, payload = recv_frame(self.ctrl)
+        self.bytes_in += _HDR.size + len(payload)
+        self.messages += 1
+        return kind, payload
+
+    def _fail(self, e: BaseException) -> None:
+        self._err = e
+        with self._cv:
+            for f in self._reply.values():
+                if not f.done():
+                    f.set_exception(e)
+
+    def _future(self, key: tuple) -> Future:
+        f = self._reply.get(key)
+        if f is None:
+            f = self._reply[key] = Future()
+            f.net = True  # type: ignore[attr-defined]
+        return f
+
+    def ccom_future(self, i: int) -> Future:
+        with self._cv:
+            return self._future((K_CCOM, i))
+
+    def round_future(self, i: int, k: int) -> Future:
+        with self._cv:
+            return self._future((K_CHAL, i, k))
+
+    def _check(self) -> None:
+        if self._err is not None:
+            raise LiveError(f"challenge session failed: {self._err!r}")
+
+    def provide_stmt(self, i: int, stmt: bytes) -> None:
+        """STMT i: queued once CCOM i is in (the verifier only accepts messages of committed batches), else boxed."""
+        self._check()
+        with self._cv:
+            if i in self._have_ccom:
+                self._q.put((K_STMT, struct.pack("<I", i) + stmt, None, time.perf_counter()))
+            else:
+                self._stmt_box[i] = stmt
+
+    def provide_msg(self, i: int, k: int, label: bytes, message: bytes) -> None:
+        self._check()
+        payload = struct.pack("<II", i, k) + struct.pack("<I", len(label)) + label + message
+        with self._cv:
+            if i in self._have_ccom:
+                self._q.put((K_MSG, payload, (i, k), time.perf_counter()))
+            else:
+                self._msg_box.setdefault(i, []).append((K_MSG, payload, (i, k)))
+
+    def _release(self, i: int) -> None:
+        """Caller holds ``_cv``: CCOM i arrived -- the boxed STMT i and MSG i * go out, in order."""
+        now = time.perf_counter()
+        stmt = self._stmt_box.pop(i, None)
+        if stmt is not None:
+            self._q.put((K_STMT, struct.pack("<I", i) + stmt, None, now))
+        for kind, payload, key in self._msg_box.pop(i, []):
+            self._q.put((kind, payload, key, now))
+
+    def _send_loop(self) -> None:
+        try:
+            while True:
+                item = self._q.get()
+                if item is None:
+                    return
+                kind, payload, key, t_q = item
+                t0 = time.perf_counter()
+                self.ctrl_queue_seconds += t0 - t_q
+                if key is not None:
+                    with self._cv:
+                        self._t_sent[key] = t0                       # the round trip starts at the wire
+                self._send(kind, payload)
+                self.ctrl_send_seconds += time.perf_counter() - t0
+        except BaseException as e:  # noqa: BLE001
+            self._fail(e)
+
+    def _read_loop(self) -> None:
+        try:
+            opened = 0
+            total = self.n_batches * self.rounds
+            while opened < total:
+                k, payload = self._recv()
+                if k == K_ERROR:
+                    raise LiveError(f"verifier: {_json(payload).get('error')}")
+                if k == K_NOP:
+                    continue
+                if k == K_CCOM:
+                    (i, R) = struct.unpack_from("<II", payload)
+                    if R != self.rounds or len(payload) != 8 + R * COIN_BYTES:
+                        raise LiveError(f"CCOM {i}: {R} commitments / {len(payload)} B, expected {self.rounds}")
+                    cs = [payload[8 + j * COIN_BYTES: 8 + (j + 1) * COIN_BYTES] for j in range(R)]
+                    with self._cv:
+                        self._have_ccom.add(i)
+                        self._release(i)
+                        f = self._future((K_CCOM, i))
+                    f.set_result(cs)
+                    continue
+                if k != K_CHAL or len(payload) != 8 + 2 * COIN_BYTES:
+                    raise LiveError(f"expected CCOM/CHAL, got {_KIND_NAME.get(k, k)} ({len(payload)} B)")
+                (i, kk) = struct.unpack_from("<II", payload)
+                with self._cv:
+                    t0 = self._t_sent.pop((i, kk), None)
+                    f = self._future((K_CHAL, i, kk))
+                if t0 is None:
+                    raise LiveError(f"CHAL {i} {kk} without a MSG {i} {kk} sent")
+                self.rtts.append(time.perf_counter() - t0)
+                f.set_result((payload[8:8 + COIN_BYTES], payload[8 + COIN_BYTES:]))
+                opened += 1
+        except BaseException as e:  # noqa: BLE001
+            self._fail(e)
+
+    def stream(self, i: int) -> ChallengeStream:
+        return ChallengeStream(self, i)
+
+    def end(self, summary: dict | None = None) -> dict:
+        self._reader.join(timeout=600.0)
+        self._q.put(None)
+        self._sender.join(timeout=600.0)
+        self._check()
+        self._send(K_END, json.dumps(summary or {}).encode())
+        kind, payload = self._recv()
+        self.wall = time.perf_counter() - self.t0
+        if kind != K_VERDICT:
+            raise LiveError(f"expected VERDICT, got {_KIND_NAME.get(kind, kind)}: {payload[:200]!r}")
+        self.verdict = _json(payload)
+        self.ctrl.close()
+        return self.verdict
+
+
+class ChallengeServerSession(threading.Thread):
+    """The verifier's side of a challenge-stream session (HELLO ``proto = "challenge-stream"``): commits ``window`` batches
+    ahead, opens coin k of batch i only after MSG i k, enforces the order (a committed batch, its statement before its
+    first message, rounds 0..R-1 each once, in order), records every round's timestamps and message digest, and writes the
+    session record (``hello.json``, ``session.json``, ``verdict.json``) under the server's out dir.  The synthetic bench
+    has no proof to verify; a real Ligerito session would attach the data connection as 8c does."""
+
+    def __init__(self, server: Server, conn: socket.socket, addr, hello: dict):
+        super().__init__(name="chal-session", daemon=True)
+        self.server, self.conn, self.addr, self.hello = server, conn, addr, hello
+        self.n_batches = int(hello.get("n_batches") or 0)
+        self.rounds = int(hello.get("rounds") or 0)
+        self.window = max(1, min(int(hello.get("window") or 1), max(1, self.n_batches)))
+        ts = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+        self.id = f"c{ts}-{os.urandom(2).hex()}"
+        self.dir = server.out / self.id
+        self.dir.mkdir(parents=True, exist_ok=False)
+        self.coins: dict[int, list[tuple[bytes, bytes]]] = {}
+        self.batches: dict[int, dict] = {}
+        self.bytes_in = self.bytes_out = 0
+        self.errors: list[str] = []
+        self.done = threading.Event()
+        self.t_start = time.time()
+
+    def log(self, msg: str) -> None:
+        self.server.log(f"{self.id} {msg}")
+
+    def _send(self, kind: bytes, payload: bytes) -> None:
+        self.bytes_out += send_frame(self.conn, kind, payload)
+
+    def _recv(self) -> tuple[bytes, bytes]:
+        while True:
+            kind, payload = recv_frame(self.conn)
+            self.bytes_in += _HDR.size + len(payload)
+            if kind != K_NOP:
+                return kind, payload
+
+    def _commit(self, i: int) -> None:
+        cs = [(os.urandom(COIN_BYTES), os.urandom(COIN_BYTES)) for _ in range(self.rounds)]
+        self.coins[i] = cs
+        self.batches[i] = {"batch": i, "t_ccom_sent": time.time(), "rounds": []}
+        self._send(K_CCOM, struct.pack("<II", i, self.rounds) + b"".join(pm.coin_commit(r, s) for r, s in cs))
+
+    def run(self) -> None:
+        try:
+            self._run()
+        except (ConnectionError, OSError, LiveError, ValueError, struct.error) as e:
+            self._fail(f"session aborted: {type(e).__name__}: {e}")
+        except Exception as e:  # noqa: BLE001
+            self._fail(f"session crashed: {type(e).__name__}: {e}")
+        finally:
+            try:
+                self._finish()
+            except Exception as e:  # noqa: BLE001
+                self.log(f"finish failed: {type(e).__name__}: {e}")
+            self.done.set()
+            try:
+                self.conn.close()
+            except OSError:
+                pass
+
+    def _fail(self, msg: str) -> None:
+        self.errors.append(msg)
+        self.log(f"REFUSED: {msg}")
+        try:
+            self._send(K_ERROR, json.dumps({"error": msg}).encode())
+        except OSError:
+            pass
+
+    def _run(self) -> None:
+        h = self.hello
+        self.log(f"challenge-stream session from {self.addr[0]}:{self.addr[1]}: {self.n_batches} batches x {self.rounds} rounds, "
+                 f"window {self.window}; run {h.get('run_id')} lane {h.get('lane')} note {h.get('note')}")
+        if self.n_batches <= 0 or self.rounds <= 0:
+            raise LiveError("HELLO needs n_batches >= 1 and rounds >= 1")
+        (self.dir / "hello.json").write_text(json.dumps({**h, "peer": list(self.addr), "session_id": self.id}, indent=1))
+        self._send(K_WELCOME, json.dumps({"session_id": self.id, "verifier": self.server.identity,
+                                          "verifier_host": socket.gethostname(), "proto": "challenge-stream"}).encode())
+        committed = 0
+        while committed < self.window:
+            self._commit(committed)
+            committed += 1
+        finished = 0
+        while finished < self.n_batches:
+            kind, payload = self._recv()
+            if kind not in (K_STMT, K_MSG) or len(payload) < 4:
+                raise LiveError(f"expected STMT/MSG of a committed batch, got {_KIND_NAME.get(kind, kind)}")
+            (i,) = struct.unpack_from("<I", payload)
+            if i >= committed:
+                raise LiveError(f"{_KIND_NAME[kind]} {i} before its coin commitments (committed: batches < {committed})")
+            rec = self.batches[i]
+            if kind == K_STMT:
+                if rec["rounds"] or "stmt_sha256" in rec:
+                    raise LiveError(f"STMT {i} {'after MSG' if rec['rounds'] else 'twice'}")
+                rec["t_stmt_recv"] = time.time()
+                rec["stmt_sha256"] = hashlib.sha256(payload[4:]).hexdigest()
+                rec["bytes_stmt"] = len(payload)
+                continue
+            if len(payload) < 12:
+                raise LiveError(f"MSG {i}: short frame")
+            (_, k, nl) = struct.unpack_from("<III", payload)
+            if "stmt_sha256" not in rec:
+                raise LiveError(f"MSG {i} {k} before STMT {i}")
+            if k != len(rec["rounds"]) or k >= self.rounds:
+                raise LiveError(f"MSG {i} {k}: expected round {len(rec['rounds'])} of {self.rounds}")
+            label, body = payload[12:12 + nl], payload[12 + nl:]
+            r, s = self.coins[i][k]
+            self._send(K_CHAL, struct.pack("<II", i, k) + r + s)
+            rec["rounds"].append({"k": k, "label": label.decode("utf-8", "replace"), "bytes": len(payload),
+                                  "msg_sha256": hashlib.sha256(body).hexdigest(), "t_msg_recv": time.time()})
+            if k == self.rounds - 1:
+                finished += 1
+                rec["t_done"] = time.time()
+                if committed < self.n_batches:
+                    self._commit(committed)               # CCOM i+W right behind the batch's last CHAL
+                    committed += 1
+        kind, payload = self._recv()
+        if kind != K_END:
+            raise LiveError(f"expected END, got {_KIND_NAME.get(kind, kind)}")
+        self.end_summary = _json(payload) if payload else {}
+
+    def _finish(self) -> None:
+        complete = sum(1 for b in self.batches.values() if len(b["rounds"]) == self.rounds)
+        accepted = not self.errors and complete == self.n_batches
+        lat = [b["t_done"] - b["t_ccom_sent"] for b in self.batches.values() if "t_done" in b]
+        verdict = {"session_id": self.id, "accepted": accepted, "complete_batches": complete, "n_batches": self.n_batches,
+                   "rounds": self.rounds, "window": self.window, "errors": self.errors, "wall_s": time.time() - self.t_start,
+                   "bytes_in": self.bytes_in, "bytes_out": self.bytes_out,
+                   "batch_latency_from_ccom_s": {"median": (sorted(lat)[len(lat) // 2] if lat else None), "n": len(lat)},
+                   "verifier": self.server.identity, "verifier_host": socket.gethostname()}
+        for i, b in self.batches.items():
+            b["coins"] = [{"r": r.hex(), "s": s.hex()} for r, s in self.coins.get(i, [])]
+        (self.dir / "session.json").write_text(json.dumps({"hello": self.hello, "batches": [self.batches[i] for i in sorted(self.batches)],
+                                                            "end": getattr(self, "end_summary", None)}, indent=1))
+        (self.dir / "verdict.json").write_text(json.dumps(verdict, indent=1))
+        with self.server.lock:
+            with (self.server.out / "index.jsonl").open("a") as f:
+                f.write(json.dumps({"session": self.id, "proto": "challenge-stream", "accepted": accepted, "run_id": self.hello.get("run_id"),
+                                    "n_batches": self.n_batches, "rounds": self.rounds, "window": self.window, "wall_s": verdict["wall_s"]}) + "\n")
+        self.log(f"challenge-stream {'ACCEPTED' if accepted else 'REJECTED'} {complete}/{self.n_batches} batches, wall {verdict['wall_s']:.2f}s")
+        try:
+            self._send(K_VERDICT, json.dumps(verdict).encode())
+        except OSError:
+            pass
+
+
+def run_challenge_bench(url: str | None, n_batches: int, rounds: int, window: int, msg_bytes: int, compute_ms: float,
+                        n_bytes: int = 32, note: str | None = None, stmt_bytes: int = 1024) -> dict:
+    """The synthetic many-round protocol: ``n_batches`` batches of ``rounds`` rounds, ``window`` batches in flight (that many
+    prover threads, each batch's rounds strictly sequential: message k+1 = H(challenge k || k), ``msg_bytes`` long, after
+    ``compute_ms`` of simulated prover work per round) against the live verifier at ``url`` (a ``ChallengeSession``) or the
+    local honest verifier (``url None``: ``LocalChallenges``).  Returns per-batch latency (begin -> last challenge; median /
+    p90 / max), the round trips (median / p90), batches/s and the session's verdict."""
+    import statistics
+    sess = None
+    if url is not None:
+        host, port = parse_url(url)
+        sess = ChallengeSession(host, port, {"run_id": os.environ.get("RESEARCH_RUN_ID"), "lane": os.environ.get("RESEARCH_LANE"),
+                                             "prover_host": socket.gethostname(), "prover_commit": source_commit(), "note": note},
+                                n_batches, rounds, window)
+    streams: list = [None] * n_batches
+    nxt = [0]
+    lock = threading.Lock()
+    errors: list[BaseException] = []
+
+    def worker():
+        try:
+            while True:
+                with lock:
+                    i = nxt[0]
+                    if i >= n_batches:
+                        return
+                    nxt[0] += 1
+                st = sess.stream(i) if sess is not None else LocalChallenges(rounds, i)
+                streams[i] = st
+                st.begin(hashlib.blake2b(b"stmt" + struct.pack("<I", i), digest_size=32).digest() * (stmt_bytes // 32 or 1))
+                msg = hashlib.blake2b(b"msg0" + struct.pack("<I", i), digest_size=32).digest()
+                msg = (msg * (msg_bytes // 32 + 1))[:msg_bytes]
+                for k in range(rounds):
+                    if compute_ms > 0:
+                        time.sleep(compute_ms / 1e3)
+                    ch = st.challenge(f"round-{k}".encode(), msg, n_bytes)
+                    msg = (hashlib.blake2b(ch + struct.pack("<I", k), digest_size=32).digest() * (msg_bytes // 32 + 1))[:msg_bytes]
+        except BaseException as e:  # noqa: BLE001
+            errors.append(e)
+
+    t0 = time.perf_counter()
+    threads = [threading.Thread(target=worker, name=f"chal-prover-{w}", daemon=True) for w in range(window)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    wall = time.perf_counter() - t0
+    verdict = None
+    if sess is not None:
+        if errors:
+            raise errors[0]
+        verdict = sess.end({"wall_s": wall})
+    elif errors:
+        raise errors[0]
+    lats = sorted(st.latency for st in streams if st is not None and st.latency is not None)
+    rtts = sorted(sess.rtts if sess is not None else [r for st in streams for r in st.rtts])
+    p = lambda xs, q: (xs[min(len(xs) - 1, int(q * (len(xs) - 1)))] if xs else None)  # noqa: E731
+    return {"url": url, "n_batches": n_batches, "rounds": rounds, "window": window, "msg_bytes": msg_bytes, "compute_ms": compute_ms,
+            "wall_s": wall, "batches_per_s": n_batches / wall,
+            "batch_latency_s": {"median": statistics.median(lats) if lats else None, "p90": p(lats, 0.9), "max": lats[-1] if lats else None,
+                                "min": lats[0] if lats else None},
+            "round_ms": {"median": (statistics.median(rtts) * 1e3) if rtts else None, "p90": (p(rtts, 0.9) * 1e3) if rtts else None,
+                         "max": (rtts[-1] * 1e3) if rtts else None, "n": len(rtts)},
+            "ctrl_send_s": sess.ctrl_send_seconds if sess else 0.0, "ctrl_queue_s": sess.ctrl_queue_seconds if sess else 0.0,
+            "sndbuf": sess.sndbuf if sess else None, "bytes_out": sess.bytes_out if sess else 0, "bytes_in": sess.bytes_in if sess else 0,
+            "session_id": sess.id if sess else None, "verdict": verdict, "tcp_cc": _TCP_CC or "kernel default"}
+
+
+def cmd_chalbench(args) -> int:
+    """`live chalbench --verifier tcp://host:port --rounds 50 --batches 32 --window 1,4,8`: the numbers for ligerito-design."""
+    out = []
+    windows = [int(w) for w in str(args.window).split(",") if w]
+    for w in windows:
+        for url in ([None, args.verifier] if args.local_control else [args.verifier]):
+            res = run_challenge_bench(url, args.batches, args.rounds, w, args.msg_bytes, args.compute_ms, note=args.note)
+            out.append(res)
+            bl = res["batch_latency_s"]
+            print(f"{'local ' if url is None else 'live  '} window {w:2d}: {res['n_batches']} x {res['rounds']} rounds, {res['msg_bytes']} B/msg, "
+                  f"compute {res['compute_ms']} ms/round: batch latency median {bl['median'] * 1e3 if bl['median'] is not None else float('nan'):.0f} ms "
+                  f"p90 {bl['p90'] * 1e3 if bl['p90'] is not None else float('nan'):.0f} ms; round median "
+                  f"{res['round_ms']['median'] or 0:.1f} ms p90 {res['round_ms']['p90'] or 0:.1f} ms; {res['batches_per_s']:.2f} batches/s; "
+                  f"wall {res['wall_s']:.2f}s" + (f"; verifier {'ACCEPTED' if res['verdict']['accepted'] else 'REJECTED'}" if res['verdict'] else ""),
+                  flush=True)
+    if args.out:
+        Path(args.out).write_text(json.dumps(out, indent=1))
+    return 0
+
+
+# ---------------------------------------------------------------------------------------------------------------------
 # Negatives: malicious provers the live verifier must refuse (and one honest control)
 # ---------------------------------------------------------------------------------------------------------------------
 
@@ -1557,6 +2220,17 @@ def main(argv=None) -> int:
     p.add_argument("--repeat", type=int, default=4)
     p.add_argument("--note", default=None, help="shows in the verifier's log line")
     p.set_defaults(fn=cmd_probe)
+    c = sub.add_parser("chalbench", help="the synthetic many-round challenge stream against a live verifier (lane live-2, for Ligerito)")
+    c.add_argument("--verifier", required=True)
+    c.add_argument("--rounds", type=int, default=50)
+    c.add_argument("--batches", type=int, default=32)
+    c.add_argument("--window", default="1,4,8", help="comma-separated windows (batches in flight)")
+    c.add_argument("--msg-bytes", type=int, default=4096, help="bytes per prover round message")
+    c.add_argument("--compute-ms", type=float, default=0.0, help="simulated prover work per round (sleep)")
+    c.add_argument("--local-control", action="store_true", help="also run each window with the local honest verifier (no network)")
+    c.add_argument("--note", default=None)
+    c.add_argument("--out", default=None, help="write the results JSON here")
+    c.set_defaults(fn=cmd_chalbench)
     args = ap.parse_args(argv)
     return args.fn(args)
 
