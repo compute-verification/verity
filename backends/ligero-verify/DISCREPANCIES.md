@@ -500,14 +500,24 @@ that are committed witness wires.  What a verifier sees:
   different word than the pinned one, or an encoding off the domain, fails the linear test
   (`test_committed_words_are_bound_and_canonical`).
 * **Tags and pins.**  All four absorb `|rel=<name>|v1` (BF16 included: the pins differ from every other BF16 relation's
-  and nothing shares a transcript with them).  Pinned digests (`sys_id` / table digest): `2279f2ac... / 0caba95a...`,
-  `f962956b... / 35fe22ff...`, `bc6f8780... / a21f5b46...`, `adaea5d9... / c62f82e0...` -- laptop compilations from the
+  and nothing shares a transcript with them).  Pinned digests (`sys_id` / table digest): `e3ff1f9f... / 87ec0bfd...`,
+  `c961ba70... / 72cc7c90...`, `c5668bcf... / 36680ea2...`, `1bf8ce3e... / 2f74b24d...` -- laptop compilations from the
   lane tree, torch-free, twice each, byte-identical, the `sys_id`s equal to `protocol.system_id`; fixtures under
-  `fixtures/systems/`.  The dumps of the CPU bench (`bench-vu --dump-dir`, 8 VUs, ZK, Fiat-Shamir and interactive) of
+  `fixtures/systems/`.  (The previous pins `2279f2ac / f962956b / bc6f8780 / adaea5d9` are the systems before the
+  exact-zero-sum fix below; dumps made from them verify as unpinned systems.)  The dumps of the CPU bench (`bench-vu --dump-dir`, 8 VUs, ZK, Fiat-Shamir and interactive) of
   every relation verify under the pin (`ligero-verify batch`: ACCEPT, python agreement 1/1); a statement with one operand
   bit flipped, a sign flipped, a claimed word bit flipped, two words swapped, `a` and `b` swapped, or a pad column's word
   changed is rejected (the transcript binds the statement digest: "column challenge mismatch"), a NaN word with the
   decode's reason.
+* **The exact-zero sum.**  v2's normalisation rule (D12; `pubsel/relation.py`: `hid = 0 -> t = tc(E)`, the subnormal
+  grid) has no satisfying shift when the exact sum is zero and `E - width > acc_e_min` (`tc < t_lo = -nb`): the honest
+  unit is rejected -- a completeness gap, found by the lane's 1e5-unit differential (fp8-hopper-v3 unit 92536 of the
+  seeded set: `c = 0`, two live products cancel, the rest dead; the model's word is `+0`, v1 accepts, **`fp8-hopper-v2`
+  rejects the same unit at `g0.norm.clamp`** -- the v2 relations in `main` carry the gap; relmin-lookup's to fix).  v3's
+  rule is `(1 - hid - nsel[t_lo]) (t - tc) = 0`: at `t = t_lo` the window is `2^nb x popcount(v)` and `Mn < 2^nb` forces
+  `v = 0`, hence `Mn = 0`, `hid = 0`, `z = 1` and the zero output whatever `t`; `hid = 1` at `t_lo` is unsatisfiable, so the
+  factor is never -1; the honest prover picks `t = max(t_lo, tc)` (it already did).  No row, no new pin; the systems'
+  bytes (one quadratic) and hence the digests changed.
 * **Hint rows may be negative.**  The signed aligned product `(1 - 2 (s_a xor s_b)) X` is a hint row `Xs` (`XsL` /
   `XsH` for the wide BF16 Hopper sum) under two row-free quadratics `(Xs - X)(1 - s_a - s_b) = 0` and
   `(Xs + X)(s_a - s_b) = 0`; the prover writes it as a signed int64 and the witness program reduces it mod p
