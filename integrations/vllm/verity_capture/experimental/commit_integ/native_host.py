@@ -813,6 +813,10 @@ class NativeHostCommitter:
         self.spans = Spans()
         self.x03_expected = 0
         self.x03_committed = 0
+        # [X-03 F-r19-int-22] the Program's per-layer attention Call statics (fa2_plane_classes.AttnLayerDecl, set by the driver from the
+        # Build record): with them `identity_check` DERIVES each layer's hidden-plane class per step; without them the R13 uniformity rule runs
+        self.attention_layer_decls: list | None = None
+        self.plane_policy = None                          # fa2_plane_classes.LayoutPolicy override (default: read from the hidden source)
         self.pool = _PinnedPool()
         self._handles: list = []
         self._orig: dict[str, Any] = {}
@@ -2065,11 +2069,16 @@ class NativeHostCommitter:
 
     def identity_check(self, manifest: dict[str, Any] | None = None) -> dict[str, Any]:
         """X-03 on IDENTITIES.  For every committed step: (1) every module of the expected manifest produced >= 1 committed tensor and no
-        tensor came from a module outside it; (2) the FA2 hidden source produced exactly one row per attention layer; (3) exactly one
-        sampled-ids tensor; (4) the multiset of module-tensor NAMES (with multiplicity: a shared RotaryEmbedding is legitimately called once
-        per layer) is the same in every step of the run -- the per-step call structure of the model does not depend on the token count.
-        A step that drops one tensor and duplicates another keeps its count and FAILS (1) or (4).  -> `RunCommitment.extra['identity_check']`."""
+        tensor came from a module outside it; (2) the FA2/FA3 hidden source produced, per attention layer, exactly the plane inventory the
+        layer's class implies -- DERIVED per layer from the Program's attention Call statics x the step's active sequences when the driver
+        handed `attention_layer_decls` (fa2_plane_classes; F-r19-int-22: a windowed layer and a global GQA layer of one step legitimately
+        differ), else the R13 rule "every layer the same positive count"; (3) exactly one sampled-ids tensor; (4) the multiset of
+        module-tensor NAMES (with multiplicity: a shared RotaryEmbedding is legitimately called once per layer) is the same in every step of
+        the run -- the per-step call structure of the model does not depend on the token count.  A step that drops one tensor and
+        duplicates another keeps its count and FAILS (1) or (4).  -> `RunCommitment.extra['identity_check']`."""
         from collections import Counter
+
+        from verity_capture.experimental.commit_integ import fa2_plane_classes as FP
 
         man = manifest or self.expected_manifest()
         expected_modules = set(man["modules"])
@@ -2077,6 +2086,7 @@ class NativeHostCommitter:
             return {"ok": None, "skipped": "no install-time module set (offline core)", "steps_checked": len(self._layouts)}
         violations: list[dict[str, Any]] = []
         ref_names: Counter | None = None
+        fa2_rules_used: Counter = Counter()                          # per step: "per-layer" (declarations + active set) or "uniform" (R13)
         # [B9.1 / R17-42; pad fix (e), the second #3 pod run on b542ef5fc] a PADDED run's layouts carry the padding tensors (host-only metas,
         # `dev_off -1`, named `<executed name>/<rid>/bot`, fix (c)) beside or instead of the executed ones.  A padding tensor materializes an
         # identity the executed prefix left INACTIVE: it is not a module call, so it is not one of the "tensors a module produced" (1), (4) count;
@@ -2129,16 +2139,27 @@ class NativeHostCommitter:
                 by_module[self._module_of(n)] += c
             missing = sorted(expected_modules - set(by_module))
             unknown = sorted(set(by_module) - expected_modules)
-            fa2_layers = Counter(int(n.split("/L", 1)[1].split("/", 1)[0]) for n in names_all.elements() if n.startswith(("fa2.m1/L", "fa3.m1/L")))
+            fa2_layers = FP.counts_by_layer(names_all.elements())
             fa2_bad: dict[int, int] = {}
+            fa2_detail: dict[str, Any] = {}
             if man["fa2_hidden_per_layer"]:
-                # one whole-buffer row per layer, or (per-sequence compaction) 6 planes x sequences per layer: every attention layer of the
-                # step must carry the SAME positive count (the launch geometry is identical across layers within a step)
-                counts = {k: fa2_layers.get(k, 0) for k in man["attention_layers"]}
-                mode = Counter(counts.values()).most_common()
-                ref_c = min(c for c, n in mode if n == mode[0][1]) if mode else 0            # modal count (ties -> smallest)
-                fa2_bad = {k: c for k, c in counts.items() if c <= 0 or c != ref_c}
-                fa2_bad.update({k: c for k, c in fa2_layers.items() if k not in man["attention_layers"]})
+                seqs = (FP.StepSequences(()) if padding_only else self._step_sequences(step, metas)) if self.attention_layer_decls else None
+                if seqs is not None:
+                    # [F-r19-int-22] each layer's class is DERIVED from the Program's attention Call statics x the step's active-sequence set
+                    # (fa2_plane_classes.plane_class): a windowed layer's decode launch is un-swapped (6 planes x sequences) while a global GQA
+                    # layer's is swapped (one whole row) -- uniformity across layers is a consequence for one-class Programs, not a rule
+                    v = FP.check_step(self.attention_layer_decls, seqs, names_all.elements(), self._plane_policy())
+                    fa2_bad = v["fa2_layers_bad"]
+                    fa2_rules_used["per-layer"] += 1
+                    if fa2_bad:
+                        fa2_detail = {"rule": v["rule"], "n_seq": v["n_seq"], "max_seqlen_q": v["max_seqlen_q"], "exact_seqlens": v["exact_seqlens"],
+                                      "classes": v["classes"], "layers_bad": {k: d[:3] for k, d in list(v["layers_bad"].items())[:4]},
+                                      "undeclared_layers": dict(list(v["undeclared_layers"].items())[:4])}
+                else:
+                    # R13 rule (no declarations, or no record of the step's active sequences): one whole-buffer row per layer, or (per-sequence
+                    # compaction) 6 planes x sequences per layer -- every attention layer of the step must carry the SAME positive count
+                    fa2_bad = FP.uniform_rule(fa2_layers, man["attention_layers"])
+                    fa2_rules_used["uniform"] += 1
             moe_bad: dict[int, int] = {}
             # a padding-only step's MoE planes: one identity per (layer, member) -- SET semantics, as for mod_names (revb F-r17b-72: Counter(pad_ident)
             # counted one per padding META = per inactive request, so >= 2 inactive requests read n_inactive x moe_tensors_per_layer -> false refusal)
@@ -2162,6 +2183,7 @@ class NativeHostCommitter:
                 violations.append({"step": step, "missing_modules": missing[:8], "unknown_modules": unknown[:8], "fa2_layers_bad": fa2_bad,
                                    "moe_layers_bad": moe_bad, "tp_sites_bad": dict(list(tp_bad.items())[:8]), "tp_sites_bad_n": len(tp_bad),
                                    "sampler_ids": n_ids, "multiplicity_vs_step0": dict(sorted(diff.items())[:8]),
+                                   **({"fa2_detail": fa2_detail} if fa2_detail else {}),
                                    **({"padding_only": padding_only, "padding_tensors": len(pad_metas)} if pad_metas else {})})
         return {"ok": not violations, "steps_checked": len(self._layouts),
                 **({"padding": {"steps_with_padding": len(self._padding), "padding_only_steps": padding_only_steps, "padding_tensors": padding_tensors_n,
@@ -2171,7 +2193,51 @@ class NativeHostCommitter:
                 "manifest": {"modules": len(expected_modules), "attention_layers": len(man["attention_layers"]), "fa2_hidden_per_layer": man["fa2_hidden_per_layer"],
                              "sampler_ids": man["sampler_ids"], "moe_layers": len(man.get("moe_layers") or []), "moe_tensors_per_layer": man.get("moe_tensors_per_layer", 0),
                              "tp_sites": len(man.get("tp_sites") or []), "tp_rank": man.get("tp_rank")},
+                # [F-r19-int-22] which attention-plane rule each step ran and what it was derived from
+                "fa2_rule": {"steps": dict(fa2_rules_used), "attention_decls": len(self.attention_layer_decls or []),
+                             "policy": self._plane_policy().__dict__ if self.attention_layer_decls else None,
+                             "classes_declared": (sorted(Counter(("windowed" if d.window is not None else "global") + ("-gqa" if d.NH > d.KVH else "-mha")
+                                                                 for d in self.attention_layer_decls).items()) if self.attention_layer_decls else None)},
                 "violations": violations[:5], "violations_n": len(violations)}
+
+    def _plane_policy(self):
+        """[F-r19-int-22] the collector's hidden-plane staging rule (`fa2_plane_classes.LayoutPolicy`): the explicit override, else read from
+        the installed hidden source -- the native FA2 source's `Fa2Wrap.compact` (per-sequence compaction), the Python source stages whole
+        buffers, the FA3 sources stage whole PackGQA launches."""
+        from verity_capture.experimental.commit_integ import fa2_plane_classes as FP
+
+        if self.plane_policy is not None:
+            return self.plane_policy
+        for s in self.sources:
+            sn = getattr(s, "short_name", "")
+            tn = type(s).__name__
+            if sn == "hidden_m1_fa3" or tn.endswith("FA3"):
+                return FP.LayoutPolicy(backend="fa3", compact=False)
+            if sn == "hidden_m1" or tn.endswith("HiddenM1Source"):
+                w = getattr(s, "_w", None)
+                return FP.LayoutPolicy(backend="fa2", compact=bool(getattr(w, "compact", False)) if w is not None else False)
+        return FP.LayoutPolicy()
+
+    def _step_sequences(self, step: int, metas: list) -> Any:
+        """[F-r19-int-22] the step's active-sequence set (`fa2_plane_classes.StepSequences`): the collector's row record `step_rows[step]`
+        (BIND-01: [(request, row_lo, row_hi)] in launch order) when present; else (n_seq, tokens) read from the executed layout -- the
+        sampled-ids member has one slot per co-scheduled sequence, the integer ids input one row per token; None when neither is known
+        (the caller then runs the R13 uniform rule for the step).  Never read from the hidden planes themselves."""
+        from verity_capture.experimental.commit_integ import fa2_plane_classes as FP
+
+        rows = (getattr(self, "step_rows", None) or {}).get(int(step))
+        if rows:
+            return FP.StepSequences.from_rows(rows)
+        n_seq = tokens = None
+        for m in metas:
+            numel = int(math.prod(m.shape)) if m.shape else 0
+            if m.name == "runner.sampler/sampled_token_ids":
+                n_seq = numel
+            elif m.name.endswith("/in") and tokens is None and str(m.dtype).lstrip("torch.") in ("int32", "int64", "i32", "i64", "long", "int"):
+                tokens = numel
+        if n_seq is None or tokens is None:
+            return None
+        return FP.StepSequences.from_counts(n_seq, tokens)
 
     def layouts_dump(self) -> dict[int, list[dict[str, Any]]]:
         """[R14 MAN-01] the committed identities per step, in layout order -- the input of `required_manifest.coverage_check`
