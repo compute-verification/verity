@@ -1184,7 +1184,10 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
                   check=False, mutate=None, chain=None, words=None, coins=None, rel: RelationHooks = BF16_HOOKS,
                   auth=None, auth_open=None, hints_fn=None, slot=None):
     from . import pipeline
+    _t_enter = time.perf_counter()
     clk = _Clock(device)
+    if HOST_TRACE:
+        clk.marks["host_clock_init"] = time.perf_counter() - _t_enter
     m, l, n, D = sys.m, cfg.l, cfg.n, cfg.D
     assert (chain is not None) == (sys.chain is not None), "chain mode needs a chain-compiled system"
     if words is None:
@@ -1211,9 +1214,11 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
     else:
         stmt_fut = pipeline.POOL.submit(statement_digest, sys, cfg, words["a"], words["b"], c=words["c"], y=words["y"], rel=rel)
     clk.lap("statement")
+    clk.host("stmt_submit")
     if hints is None:
         hints = hints_fn()
         clk.lap("hints_host")
+    clk.host("hints")
     assert hints.shape[1] == l
     k = cfg.k
     mr = mask_rows(cfg, m, chain is not None)
@@ -1259,7 +1264,9 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
                 enc.encode(Wg, out=st.U)
                 st.W.copy_(Wg)
 
+        clk.host("commit_prep")
         _graph_run(st, "commit_graph", commit_body, device)
+        clk.host("commit_replay")
         W, coefs, U = st.W, st.coefs, st.U
     else:
         W = build_witness(sys, pub, hints, device)
