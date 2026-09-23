@@ -1117,6 +1117,8 @@ def _tests_compute(sys: System, tb: Tables, cfg: Config, x: torch.Tensor, coefs,
 
 
 TESTS_GRAPH = True     # the whole tests chain (challenge block -> w, h, q, v in pinned memory) as ONE CUDA graph (lane hp2-host)
+TESTS_STATIC_KEEP = 2  # static sets kept per (stream, system), most recent first: a run whose last sub-batch is ragged
+#                        (relchain's hash side at l_H = 8192 then 4096) alternates two configurations on one stream
 _TESTS_STATIC: dict = {}
 
 
@@ -1227,19 +1229,23 @@ def _fused_witness(sys: System, device):
 
 
 def _tests_static(cfg: Config, sys: System, tb: Tables, m: int, Mrows: int, width: int, chain: bool, device, steps: int = 0):
-    """The static set of the current stream and system (one per (stream, system): the paired prover of
-    relchain.SharedHashedRunner alternates two systems on one stream, and each keeps its buffers and captured graphs;
-    replaced when the configuration changes)."""
+    """The static set of the current stream, system and configuration (up to ``TESTS_STATIC_KEEP`` per (stream,
+    system): the paired prover of relchain.SharedHashedRunner alternates two systems on one stream, and each keeps its
+    buffers and captured graphs; the least recently used configuration is dropped beyond that)."""
     skey = (str(device), torch.cuda.current_stream(device).cuda_stream, id(sys))
     key = (cfg.l, cfg.n, cfg.k, cfg.D, cfg.zk, cfg.t_pad, cfg.h_len, cfg.q_len, m, Mrows, width, chain, steps)
-    st = _TESTS_STATIC.get(skey)
-    if st is None or st.key != key or st.sys is not sys or st.tb is not tb:
-        if st is not None:
-            for g in [g_ for g_, _ in st.graphs.values()] + [st.commit_graph]:
+    sets = _TESTS_STATIC.setdefault(skey, [])
+    st = next((s for s in sets if s.key == key and s.sys is sys and s.tb is tb), None)
+    if st is not None:
+        sets.remove(st)
+    else:
+        st = _TestsStatic(key, cfg, sys, tb, m, Mrows, width, chain, device, steps)
+        while len(sets) >= TESTS_STATIC_KEEP:
+            old = sets.pop()
+            for g in [g_ for g_, _ in old.graphs.values()] + [old.commit_graph]:
                 if g:
                     g.reset()
-        st = _TestsStatic(key, cfg, sys, tb, m, Mrows, width, chain, device, steps)
-        _TESTS_STATIC[skey] = st
+    sets.insert(0, st)
     return st
 
 
