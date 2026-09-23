@@ -208,6 +208,10 @@ def test_contract_eq_multi():
     for Pn, k, m in ((96, 12, 1), (40, 11, 3), (128, 9, 5), (16, 13, 9)):
         A = torch.randint(0, P, (Pn, 1 << k), dtype=torch.int64, device=DEV).to(torch.int32)
         zs = RNG.integers(0, P, size=(m, k, D), dtype=np.int64)
+        for j in range(1, m):                                                # Boolean row tails (the relation's chain claims)
+            tail = (1, 3, k, 5)[(j - 1) % 4]
+            zs[j, k - tail:] = 0
+            zs[j, k - tail:, 0] = RNG.integers(0, 2, size=tail)
         got = (dv.contract_eq(A, zs) % P).cpu().numpy()
         An = A.to(torch.int64).cpu().numpy()
         for j in range(m):
