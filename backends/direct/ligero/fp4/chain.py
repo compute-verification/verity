@@ -214,8 +214,17 @@ class FP4ChainRunner:
 
 
 def _git_commit():
+    """The tree's commit: git when there is a .git, else the launcher's VERITY_COMMIT, else the sha `research run --source`
+    names the shipped tree with (/workspace/research/src/<sha>/ on a pod)."""
     from ..run import _git_commit as _git_commit_repo
-    return _git_commit_repo() or os.environ.get("VERITY_COMMIT")
+    c = _git_commit_repo() or os.environ.get("VERITY_COMMIT")
+    if c:
+        return c
+    here = Path.cwd().resolve()
+    for p in (here, *here.parents):
+        if p.parent.name == "src" and len(p.name) == 40 and all(ch in "0123456789abcdef" for ch in p.name):
+            return p.name
+    return None
 
 
 def _proof_class(cfg, interactive: bool):
@@ -535,6 +544,7 @@ def bench_vu_fp4(args) -> int:
         from ..serialize import _manifest, _statement_of, _write_system, proof_bytes, sha256_file, statement_bytes, verify_files
         dump_dir.mkdir(parents=True, exist_ok=True)
         dump_manifest = _manifest(dump_dir, args, R)
+        dump_manifest["commit"] = dump_manifest["commit"] or _git_commit()
         _write_system(dump_dir, R, dump_manifest)
         dump_manifest["set"] = {"total_vus": total_vus, "batch": args.batch, "per_proof": per_proof, "n_proofs": n_proofs,
                                 "zk": args.zk, "mode": args.mode, "reps": args.reps, "relation": R.relation,
@@ -590,9 +600,11 @@ def bench_vu_fp4(args) -> int:
         runs.append((agg, vsum))
         print(f"rep {rep}: prover {agg['total']:.3f}s (+hints {agg['hints_host']:.3f}s) over {n_proofs} proofs; "
               f"verifier {vsum:.3f}s; prove wall {wall_prove:.3f}s ({(agg['total'] + agg['hints_host']) / total_vus * 1e3:.3f} ms/VU)", flush=True)
+    dumps = None
     if dump_dir is not None:
         (dump_dir / "manifest.json").write_text(json.dumps(dump_manifest, indent=1, default=str))
         print(f"dumped {len(dump_manifest['files'])} proofs to {dump_dir}", flush=True)
+        dumps = _verify_dumps(dump_dir, dump_manifest, R, args.device)
     med = {k_: statistics.median(r[0][k_] for r in runs) for k_ in keys}
     vmed = statistics.median(r[1] for r in runs)
     peak_dev = torch.cuda.max_memory_allocated() if args.device.startswith("cuda") else 0
@@ -666,19 +678,57 @@ def bench_vu_fp4(args) -> int:
     for k_, v_ in cen.items():
         if isinstance(v_, int) and not isinstance(v_, bool):
             meas.append(contract.measurement(f"relation.census.{k_}", v_, "count"))
+    status, evidence = "passed", {"soundness": snd}
+    checker = "backends.direct.ligero.fp4.chain bench_vu_fp4 (verifier accepted every rep; prover self-check on the warm-up sub-batch"
+    if dumps is not None:
+        checker += "; every dumped proof re-verified cold from its files by the Python file verifier"
+        evidence["dumps"] = dumps
+        if dumps["accepted"] != dumps["total"]:
+            status = "failed"
+    checker += ")"
+    # the dump tree (relative to the run dir) travels with the result as its run-files/v1 artifact (store README §10)
+    artifacts = []
+    run_dir = os.environ.get("RESEARCH_RUN_DIR")
+    if dump_dir is not None and run_dir and Path(run_dir).resolve() in dump_dir.resolve().parents:
+        artifacts.append(os.path.relpath(dump_dir.resolve(), Path(run_dir).resolve()))
     result = {"schema": contract.RESULT_SCHEMA, "run_id": args.run_id or os.environ.get("RESEARCH_RUN_ID") or f"b-ligero-fp4-vu-{int(time.time())}",
               "workload_fingerprint": fp,
-              "validation": {"status": "passed", "checker": "backends.direct.ligero.fp4.chain bench_vu_fp4 (verifier accepted every rep; "
-                                                            "prover self-check on the warm-up sub-batch)",
-                             "detail": f"{args.reps} reps, {total_vus} VUs as {n_proofs} proofs at l={l}", "evidence": {"soundness": snd}},
-              "measurements": meas, "measurement_files": [], "artifacts": []}
+              "validation": {"status": status, "checker": checker,
+                             "detail": f"{args.reps} reps, {total_vus} VUs as {n_proofs} proofs at l={l}"
+                                       + (f"; dumps: {dumps['accepted']}/{dumps['total']} accepted cold from bytes" if dumps else ""),
+                             "evidence": evidence},
+              "measurements": meas, "measurement_files": [], "artifacts": artifacts}
     problems = contract.validate(result)
     if problems:
         print("contract problems:", problems)
     print(json.dumps({"seconds_per_vu": per_vu, "prover_total": total, "verifier": vmed, "bytes": nbytes, "n_proofs": n_proofs,
                       "per_proof_vus": per_proof, "t": cfg.t, "zk": cfg.zk, "k": cfg.k, "peak_device_bytes": peak_dev,
                       "soundness_log2": snd["total_log2"], "per_proof_log2": snd["per_proof_total_log2"], "rows": R.sys.m,
-                      "medians": med}, indent=1))
+                      "medians": med, "dumps": dumps, "validation": status}, indent=1))
     if args.out:
         Path(os.path.expandvars(args.out)).write_text(json.dumps(result, indent=1, default=str))   # $RESEARCH_RUN_DIR/result.json
-    return 0
+    return 0 if status == "passed" else 1
+
+
+def _verify_dumps(dump_dir: Path, manifest: dict, R: FP4ChainRunner, device: str) -> dict:
+    """``serialize.verify_files`` on every dumped (statement, proof[, coins]) of ``manifest`` with the prover's own runner:
+    the files parse and verify cold from bytes (interactive mode: against the coins in the transcript -- a self-check, D7).
+    The verdicts go to ``<dump_dir>/verify_python.json``; returns the summary that enters ``validation.evidence.dumps``."""
+    from ..serialize import verify_files
+    items, t0 = [], time.perf_counter()
+    for e in manifest["files"]:
+        ok, why, secs = verify_files(dump_dir / e["stmt"], dump_dir / e["proof"], device, runner=R)
+        items.append({"rep": e["rep"], "sub": e["sub"], "proof": e["proof"], "accepted": ok, "reason": why, "seconds": secs})
+        if not ok:
+            print(f"!! dumped proof {e['proof']} REJECTED cold from bytes: {why}", flush=True)
+    n_ok = sum(1 for it in items if it["accepted"])
+    summary = {"verifier": "python (backends.direct.ligero.serialize.verify_files; shares code with the prover: a self-check)",
+               "independent": False, "statement_format": manifest["format"]["statement"], "system_format": manifest["format"].get("system"),
+               "accepted": n_ok, "total": len(items), "seconds": sum(it["seconds"] for it in items), "wall": time.perf_counter() - t0,
+               "coins": "the transcript's own coins replayed (file verifier)" if R.interactive else "n/a (Fiat-Shamir)",
+               "rust_ligero_verify": "cannot verify this relation: pins bf16-ampere / fp8-ada / bf16-hopper / fp8-hopper only, parses "
+                                     "ligero-system/v1 only (this system is /v2: component chain ends for the FP32 word), has no E2M1 / "
+                                     "UE4M3 public decode (backends/ligero-verify/src/relation.rs, format.rs)"}
+    (dump_dir / "verify_python.json").write_text(json.dumps({**summary, "items": items}, indent=1))
+    print(f"dumps: {n_ok}/{len(items)} accepted cold from bytes by the Python file verifier in {summary['wall']:.2f}s", flush=True)
+    return summary
