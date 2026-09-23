@@ -25,7 +25,8 @@
 #   Inputs: <row-id> <ROLE> <hf-repo> <revision> [stages]; workloads/<row>.json; manifests/checkpoints.json; the env knobs above.
 #   Outputs: $D/stages.txt row.log timeline.jsonl source_identity*.json target_family*.json admission.json release.json tree.json;
 #     build_step/ build_request*/ build_workload/ build_summary.json; match/ match_decomp.json|match_compare.json global_match.json
-#     match_summary.json; manifest.json commit/ commit_summary.json weights_of_record.log; $RESEARCH_RUN_DIR/result.json on EXIT.
+#     match_summary.json; manifest.json commit/ commit_summary.json (deprecated, F-r19-int-21) verdict.json (vllm-verdict/v1, the
+#     Commit's verdict of record as typed checks) weights_of_record.log; $RESEARCH_RUN_DIR/result.json on EXIT.
 #   Invariants: the source-identity and target-family prechecks run before any engine and fail by name PRECHECK_FAIL_* (exit 3);
 #     the Program digest handed to the Commit is read from build_summary.json, never from the manifest; a Match verdict over a record
 #     this attempt did not produce is FAIL (freshness rule) unless MATCH_PHASE=cpu resumes it by name; a Commit never starts over a
@@ -1051,6 +1052,17 @@ EOF
       tl validate.manifest_verify end rc=1
       ok=FAIL; log "manifest of record VERIFY FAILED: $(tail -1 "$D/manifest_verify.log" | cut -c1-200)"
     fi
+  fi
+  # [v2 5b] THE VERDICT OF RECORD as a typed document: $D/verdict.json (vllm-verdict/v1) -- the SAME decisions commit_delta
+  # (commit/verdict.json + runs.jsonl), commit_summary and manifest_verify just made, as named checks (runtime_match, local_replay,
+  # boundary_linkage, checkpoint_binding, execution_extent, required_value_coverage, program_source_identity + their R*/X* rules) with a
+  # claim, the inputs read (digests), the scope established and machine-readable differences.  commit_summary.json keeps being written
+  # (marked deprecated: F-r19-int-21 -- its `pass` is rc==0 ∧ tokens_equal).  Feature-detected; never changes $ok, never fails the row.
+  if $PY -m verity_capture.commit.verdict from-record --help >/dev/null 2>&1; then
+    tl closure.verdict start
+    v2=$($PY -m verity_capture.commit.verdict from-record "$D" --rc "$rck" --stage-ok "$ok" 2>>"$D/row.log" | cut -d' ' -f1); [ -n "$v2" ] || v2=ERROR
+    tl closure.verdict end outcome="$v2"
+    log "verdict.json (vllm-verdict/v1): $v2 (Commit stage $ok)"
   fi
   verdict commit "$ok" "rc=$rck wall=${wall}s $(python3 -c "import json;s=json.load(open('$D/commit_summary.json'));print('runs',s['n_runs'],'delta',s['delta_wall_mean'],'openings',s['openings'],'tokens',s['tokens_equal'])" 2>/dev/null) manifest_verify=$([ -f "$D/commit/manifest_verify.json" ] && python3 -c "import json;print(json.load(open('$D/commit/manifest_verify.json')).get('ok'))" 2>/dev/null || echo not-run)"
   tl stage.commit end ok="$ok" wall_s="$wall"

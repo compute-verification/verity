@@ -2,6 +2,11 @@
 
     python -m verity_capture.sweep.commit_summary <row-dir> <commit_delta-rc> [--out PATH]
 
+DEPRECATED as a verdict (F-r19-int-21): `openings` / `coverage` are always None on runs.jsonl, so `pass` degenerates to
+rc == 0 ∧ tokens_equal.  The verdict of record is `<row>/verdict.json` (vllm-verdict/v1, verity_capture.commit.verdict, built from
+commit/verdict.json + runs.jsonl + sampled_replay_p*.json + manifest_verify.json).  This file keeps being written -- the finalizer and
+the harness still read its execution-configuration fields -- and carries `"deprecated": "F-r19-int-21; see verdict.json"`.
+
 Same fields as the R13/R14 inline block (rc, runs, openings, tokens, control/treatment walls, coverage, pass) PLUS the execution
 configuration the finalizer/renderer label the overhead with (TABLE-RULES `Commitment overhead`: "variant + retention labelled";
 brief §11: collector, retention, chunked-prefill and memory settings recorded per attempt):
@@ -96,6 +101,7 @@ def summarize(d: str, rc: int) -> dict:
     out["generated_tokens"] = [r.get("generated_tokens") for r in runs]
     ok = rc == 0 and len(trt) >= 1 and all((o is None) or (o == 64) for o in out["openings"]) and all(t is not False for t in out["tokens_equal"])
     out["pass"] = bool(ok)
+    out["deprecated"] = "F-r19-int-21; see verdict.json"
     return out
 
 

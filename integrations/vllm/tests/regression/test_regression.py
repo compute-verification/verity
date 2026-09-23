@@ -23,6 +23,9 @@ with the current code, and the two are diffed as canonical JSON on every field t
                           G6 lengths, eos_stop_requests                                                                               weak*   T0
     coverage              coverage_check(manifest of record, instrumented layouts) == the Commit's recorded coverage                    STRONG   T0(+manifest)
     commit_summary        commit_summary.summarize re-derivation == recorded (stable fields) + commit/verdict.json lifted as the verdict   STRONG   T0
+                          (commit_summary.json is deprecated as a verdict, F-r19-int-21; its execution-configuration fields stay the contract)
+    verdict               verdict.json (vllm-verdict/v1; read, or rebuilt in memory from the Commit evidence): outcome == the fixture
+                          class, compat.commit_pass == v1, every check group == the v1 facts of runs.jsonl, #57 names fa2_layers_bad     STRONG   T0
     decomp_hashes         [STUB] per-request canonical_sha256{a,b}, attribution / XREQ counts over the 0.6-5.8 GB fold record          STRONG   T1
     replay_partition      [STUB] sampled-replay population / strata / seed / facts_of_record over the binding map                      STRONG   T1
 
