@@ -98,13 +98,15 @@ def main() -> int:
               f"sys_id {res[-1]['sys_id']}\n   roots {roots}\n   digests {dig}")
 
     p, q = res
-    same_ab = p["digests"] == q["digests"] and p["roots"] == q["roots"]
-    # the y tree commits the outputs, so it differs; a/b must not -- print which trees differ
+    # the y tree commits the outputs, so it differs; a/b must not
+    same_ab = p["digests"] == q["digests"] and all(p["roots"][nm] == q["roots"][nm] for nm in ("a", "b"))
     diff = [nm for nm in p["roots"] if p["roots"][nm] != q["roots"][nm]]
-    print(f"\ntrees whose roots differ between the sets: {diff or 'none'}; x rows differ: True; y differs: {p['y'] != q['y']}")
+    print(f"\ntrees whose roots differ between the sets: {diff or 'none'}; a/b identical: {same_ab}; x rows differ: True; "
+          f"y differs: {p['y'] != q['y']}")
     (out / "collide.json").write_text(json.dumps(res, indent=1, default=str))
-    broke = p["rust"] and q["rust"] and p["pinned"] and q["pinned"] and p["y"] != q["y"]
-    return 0 if broke and not same_ab else (0 if broke else 1)
+    broke = same_ab and p["rust"] and q["rust"] and p["pinned"] and q["pinned"] and p["y"] != q["y"]
+    print("\n*** H1 BINDING BREAK: same a/b roots, two outputs, both accepted pinned ***" if broke else "\n(not reproduced)")
+    return 0 if broke else 1
 
 
 if __name__ == "__main__":
