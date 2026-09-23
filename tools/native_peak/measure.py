@@ -393,10 +393,15 @@ def measure_nvfp4_mma(device: str, warmup: int, reps: int, sustain_s: float, out
     finite = bool(np.isfinite(first).all())
     same = bool(np.array_equal(first.view(np.uint32), sink.view(np.uint32)))
     sass = nvfp4_sass(so)
-    ok = finite and same and sass["mma_count"] == mmas_per_iter and all("E2M1" in op for op in sass["opcodes"])
-    check = {"ok": ok, "finite": finite, "deterministic": same, "sass_mma_count": sass["mma_count"], "expected_mma_count": mmas_per_iter,
-             "opcodes": sass["opcodes"], "tolerance": 0.0, "max_rel_err": 0.0,
-             "what": "outputs finite and bit-identical across two launches; cuobjdump counts exactly NSETS x NACC E2M1 MMAs in the kernel"}
+    # the iteration loop is `#pragma unroll 1` in the kernel, so the SASS carries the body once: exactly NSETS x NACC MMAs.
+    # (Should a toolchain unroll it anyway, whole copies of the body -- a multiple -- still mean one body per iteration.)
+    n_sass = sass["mma_count"]
+    copies = n_sass // mmas_per_iter if mmas_per_iter and n_sass % mmas_per_iter == 0 else 0
+    ok = finite and same and copies >= 1 and all("E2M1" in op for op in sass["opcodes"])
+    check = {"ok": ok, "finite": finite, "deterministic": same, "sass_mma_count": n_sass, "expected_mma_count": mmas_per_iter,
+             "sass_body_copies": copies, "opcodes": sass["opcodes"], "tolerance": 0.0, "max_rel_err": 0.0,
+             "what": "outputs finite and bit-identical across two launches; cuobjdump counts NSETS x NACC E2M1 MMAs in the kernel "
+                     "(the body once: #pragma unroll 1; whole unrolled copies would be a multiple)"}
     lib.nvfp4_peak_teardown()
     label = f"mma_m16n8k64_x{iters}"
     return {"n": None, "m": 16, "k": 64, "label": label, "instruction": "mma.sync.aligned.kind::mxf4nvf4.block_scale.scale_vec::4X.m16n8k64.row.col.f32.e2m1.e2m1.f32.ue4m3",
@@ -572,9 +577,10 @@ def build_result(run_id: str, dtype: str, envd: dict, sizes: list[dict], sass: d
     elif dtype == "nvfp4":
         c = best["check"]
         validation = {"status": "passed" if checks_ok else "failed",
-                      "checker": "outputs finite and bit-identical across two launches; cuobjdump -sass counts exactly the unrolled body's E2M1 MMAs",
-                      "detail": f"finite={c['finite']} deterministic={c['deterministic']} sass {c['sass_mma_count']}/{c['expected_mma_count']} {c['opcodes']} "
-                                f"{'ok' if c['ok'] else 'FAIL'}", "evidence": measurement_files[:1]}
+                      "checker": "outputs finite and bit-identical across two launches; cuobjdump -sass counts the loop body's E2M1 MMAs "
+                                 "(NSETS x NACC, or whole unrolled copies of it)",
+                      "detail": f"finite={c['finite']} deterministic={c['deterministic']} sass {c['sass_mma_count']}/{c['expected_mma_count']} "
+                                f"(x{c.get('sass_body_copies', 0)}) {c['opcodes']} {'ok' if c['ok'] else 'FAIL'}", "evidence": measurement_files[:1]}
     else:
         validation = {"status": "passed" if checks_ok else "failed", "checker": "fp32 reference on a 256x256 sub-block of every timed product",
                       "detail": "; ".join(f"{s['n']}^3 max_rel_err {s['check']['max_rel_err']:.2e} (tol {s['check']['tolerance']:.0e}) {'ok' if s['check']['ok'] else 'FAIL'}" for s in sizes),

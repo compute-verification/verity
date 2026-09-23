@@ -45,6 +45,9 @@ __global__ void nvfp4_peak_kernel(const uint32_t* __restrict__ frags, long long 
     float d[NACC][4];
 #pragma unroll
     for (int c = 0; c < NACC; c++) { d[c][0] = 0.f; d[c][1] = 0.f; d[c][2] = 0.f; d[c][3] = 0.f; }
+    // the iteration loop is NOT unrolled: the SASS then carries exactly NSETS x NACC MMAs, so cuobjdump's count is the
+    // executed count per iteration (nvcc otherwise emits 16x/8x/4x/1x unrolled copies of the body: 29 x 32 = 928 MMAs)
+#pragma unroll 1
     for (long long i = 0; i < iters; i++) {
 #pragma unroll
         for (int j = 0; j < NSETS; j++) {

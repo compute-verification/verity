@@ -102,7 +102,7 @@ def test_nvfp4_instruction_result_document(tmp_path):
            "cc": "12.0", "nvcc": "12.8", "so": "x.so", "flop": flop, "warmup": 3, "reps": 5, "seconds_all": [1.0] * 5, "seconds_median": 1.0,
            "seconds_min": 1.0, "seconds_max": 1.0, "flop_per_second": flop, "sustain": {"seconds": 2.0, "iterations": 2, "flop_per_second": flop},
            "smi_window": {"t0": 0, "t1": 1},
-           "check": {"ok": True, "finite": True, "deterministic": True, "sass_mma_count": 32, "expected_mma_count": 32, "opcodes": sass["opcodes"],
+           "check": {"ok": True, "finite": True, "deterministic": True, "sass_mma_count": 32, "expected_mma_count": 32, "sass_body_copies": 1, "opcodes": sass["opcodes"],
                      "tolerance": 0.0, "max_rel_err": 0.0}, "kernels": ["nvfp4_peak_kernel"], "sass": sass, "peak_device_bytes": 1 << 20,
            "smi": {"n_samples": 20, "clocks_sm_mhz": {"median": 2400.0, "min": 2300.0, "max": 2400.0, "n": 20}, "clocks_mem_mhz": None,
                    "power_w": {"median": 500.0, "min": 400.0, "max": 575.0, "n": 20}, "temperature_c": None, "throttle_reasons": []}}
