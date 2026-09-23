@@ -151,6 +151,13 @@ def test_contract_geom_and_planes():
             assert np.array_equal(got, ref), (Pn, R, W)
 
 
+@pytest.mark.parametrize("k", [3, 6, 7, 11, 13, 16])
+def test_eq_table_matches_host(k):
+    from . import device as dv
+    z = RNG.integers(0, P, size=(k, D), dtype=np.int64)
+    assert np.array_equal(dv.eq_table(z, DEV).cpu().numpy().astype(np.int64), cl.eq_vector(z).T)
+
+
 def test_contract_eq_multi():
     from . import device as dv
     from .linalg import matmul_mod_p_np

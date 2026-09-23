@@ -257,6 +257,32 @@ eq_table(const u32* __restrict__ lo, int logL, const u32* __restrict__ hi, long 
     for (int d = 0; d < 6; ++d) out[(long long)d * n + x] = c[d];
 }
 
+/* ------------------------------------------------------------------ eq tensor directly (small k): out[x] = prod_j (x_j ? z_j : 1 - z_j),
+   bit j of x <-> z_j; rowmajor: out[x * 6 + d], else planes out[d * 2^k + x] */
+extern "C" __global__ void __launch_bounds__(256)
+eq_direct(const u32* __restrict__ z, int k, int rowmajor, u32* __restrict__ out)
+{
+    const int n = 1 << k;
+    const int x = blockIdx.x * blockDim.x + threadIdx.x;
+    if (x >= n) return;
+    u32 acc[6] = {1u, 0u, 0u, 0u, 0u, 0u}, f[6], t[6];
+    for (int j = 0; j < k; ++j) {
+        if ((x >> j) & 1) {
+            #pragma unroll
+            for (int d = 0; d < 6; ++d) f[d] = z[j * 6 + d];
+        } else {
+            f[0] = subm(1u, z[j * 6]);
+            #pragma unroll
+            for (int d = 1; d < 6; ++d) f[d] = subm(0u, z[j * 6 + d]);
+        }
+        ext_mul(acc, f, t);
+        #pragma unroll
+        for (int d = 0; d < 6; ++d) acc[d] = t[d];
+    }
+    #pragma unroll
+    for (int d = 0; d < 6; ++d) out[rowmajor ? (long long)x * 6 + d : (long long)d * n + x] = acc[d];
+}
+
 /* ------------------------------------------------------------------ sumcheck tables (T, Cs, 6): terms 0..Te-1 = eq, Te.. = geom
    A[t][c] = coef[t] u_t[c];  u_eq(t)[c]_k = sum_{a+b=k} ue[t][aC+c][b] + 31 sum_{a+b=k+6} ...;  u_geom(t)[c]_a = ug[aC+c][t-Te];
    B[t < Te][c] = cole[t][c], B[t][c] = (colg[t-Te][c], 0, ..) */
@@ -519,21 +545,27 @@ def fold_ext(M: torch.Tensor, rbar: np.ndarray) -> torch.Tensor:
     return y
 
 
+def _eq_direct(z: np.ndarray, device, rowmajor: bool, out: torch.Tensor | None = None) -> torch.Tensor:
+    k = z.shape[0]
+    n = 1 << k
+    zt = torch.as_tensor(np.ascontiguousarray(z).astype(np.int32).reshape(-1), device=device)
+    if out is None:
+        out = torch.empty((n, D) if rowmajor else (D, n), dtype=torch.int32, device=device)
+    assert out.is_contiguous() and out.numel() == D * n
+    _launch("eq_direct", ((n + 255) // 256,), (256,), (_ptr(zt), np.int32(k), np.int32(int(rowmajor)), _ptr(out)))
+    return out
+
+
 def eq_table(z: np.ndarray, device, out: torch.Tensor | None = None) -> torch.Tensor:
     """z (k, 6) -> (6, 2^k) int32 planes of eq(x, z), bit j of x <-> z_j (same values as ``linalg.eq_planes``); ``out``: a
     contiguous (6, 2^k) int32 destination."""
-    from .claims import eq_vector
     z = np.asarray(z, dtype=np.int64) % P
     k = z.shape[0]
-    if k <= 10:
-        vec = torch.as_tensor(np.ascontiguousarray(eq_vector(z).T).astype(np.int32), device=device)
-        if out is None:
-            return vec
-        out.copy_(vec)
-        return out
+    if k <= 12:
+        return _eq_direct(z, device, False, out)
     h = (k + 1) // 2
-    lo = torch.as_tensor(eq_vector(z[:h]).astype(np.int32), device=device)          # (2^h, 6)
-    hi = torch.as_tensor(eq_vector(z[h:]).astype(np.int32), device=device)          # (2^{k-h}, 6)
+    lo = _eq_direct(z[:h], device, True) if h <= 12 else eq_table(z[:h], device).t().contiguous()        # (2^h, 6)
+    hi = _eq_direct(z[h:], device, True) if k - h <= 12 else eq_table(z[h:], device).t().contiguous()    # (2^{k-h}, 6)
     n = 1 << k
     if out is None:
         out = torch.empty((D, n), dtype=torch.int32, device=device)

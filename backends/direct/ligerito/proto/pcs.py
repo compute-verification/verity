@@ -528,14 +528,35 @@ def _points(dims: Dims, points: np.ndarray) -> np.ndarray:
     return zs
 
 
+def _eq_colparts(z: np.ndarray, k: int, kp: int) -> np.ndarray:
+    """(m, nvars, 6) eq points -> (m, 2^kp, 6): each term's ``claims.Term.colpart(k, kp)`` (bit j of the column <-> variable k + j)."""
+    m = z.shape[0]
+    pr = ext.eq_pairs(z[:, k:k + kp].reshape(-1, D)).reshape(m, kp, 2, D)
+    vec = ext.zero((m, 1))
+    vec[:, 0, 0] = 1
+    for j in range(kp):
+        vec = np.concatenate((ext.mul(vec, pr[:, j, 0][:, None]), ext.mul(vec, pr[:, j, 1][:, None])), axis=1)
+    return vec
+
+
+def _eq_colpart_at(z: np.ndarray, k: int, r: np.ndarray) -> np.ndarray:
+    """(m, nvars, 6) eq points, challenges r (kp, 6) (r_j <-> variable k + j) -> (m, 6): each ``Term.colpart_at(k, r)``."""
+    m, kp = z.shape[0], r.shape[0]
+    pr = ext.eq_pairs(z[:, k:k + kp].reshape(-1, D)).reshape(m, kp, 2, D)
+    f = ext.add(ext.mul(pr[:, :, 0], (ext.one() - r) % P), ext.mul(pr[:, :, 1], r))   # (m, kp, 6)
+    acc = ext.one((m,))
+    for j in range(kp):
+        acc = ext.mul(acc, f[:, j])
+    return acc
+
+
 def _claims_r1(M1: torch.Tensor, zs: np.ndarray, dims: Dims, tm):
     """Round 1's contractions u_j = M1 . eq(z_j[:k_1]) ((C_1, 6) each) and the values v_j = f~(z_j)."""
     tm.start("sumcheck_r1_contract")
     us = list((dev.contract_eq(M1, zs[:, :dims.k[0]]) % P).cpu().numpy())
     tm.stop()
     tm.start("sumcheck_host")
-    vs = np.stack([cl.ColumnSumcheckProver([cl.Term(ext.one(), "eq", z=zj, nvars=dims.n)], [uj], dims.k[0], dims.kprime[0]).claim()
-                   for zj, uj in zip(zs, us)], axis=0)                     # (m, 6)
+    vs = ext.sum_ext(ext.mul(np.stack(us, axis=0), _eq_colparts(zs, dims.k[0], dims.kprime[0])), axis=1)   # (m, 6)
     tm.stop()
     return us, vs
 
@@ -631,9 +652,8 @@ def _prove_rounds(M1, enc1, U1, tree1, root1, dims: Dims, zs: np.ndarray, tr: Co
     r1 = sc.challenges()
     rbar = cl.rbar(r1)
     running = sc.claim()
-    rest = [t.restrict(ks[0], r1) for t in terms0]
-    coef_eq = np.stack([t.coef for t in rest], axis=0)                   # (m, 6)
-    z_eq = np.stack([t.z for t in rest], axis=0)                         # (m, k_1, 6)
+    coef_eq = ext.mul(beta, _eq_colpart_at(zs, ks[0], r1))               # (m, 6): the eq terms restricted to the rows
+    z_eq = zs[:, :ks[0]]                                                  # (m, k_1, 6)
     etas_g = np.zeros(0, dtype=np.int64)                                  # geom terms: eta (Tg,), coef (Tg, 6)
     coef_g = ext.zero((0,))
     tm.stop()
@@ -688,8 +708,7 @@ def _prove_rounds(M1, enc1, U1, tree1, root1, dims: Dims, zs: np.ndarray, tr: Co
         etas_g = np.concatenate((etas_g, np.asarray(etas, dtype=np.int64)))
         running = ext.add(ext.mul(alpha[0], running), ext.sum_ext(ext.mul(alpha[1:], rhs), axis=0))
         colg = cl.geom_colparts(etas_g, ks[i], kps[i])[:, :, 0]           # (Tg, C) base
-        eqt = [cl.Term(ext.one(), "eq", z=zj, nvars=zj.shape[0]) for zj in z_eq]
-        cole = np.stack([t.colpart(ks[i], kps[i]) for t in eqt], axis=0)  # (m, C, 6)
+        cole = _eq_colparts(z_eq, ks[i], kps[i])                          # (m, C, 6)
         coef = np.concatenate((coef_eq, coef_g), axis=0)                  # (m + Tg, 6): eq terms first, then geom (the proto's order)
         tm.stop()
         tm.start("recursion_contract")
@@ -715,7 +734,7 @@ def _prove_rounds(M1, enc1, U1, tree1, root1, dims: Dims, zs: np.ndarray, tr: Co
         rbar = cl.rbar(ri)
         tm.stop()
         tm.start("sumcheck_host")
-        coef_eq = np.stack([ext.mul(coef_eq[j], eqt[j].colpart_at(ks[i], ri)) for j in range(m)], axis=0)
+        coef_eq = ext.mul(coef_eq, _eq_colpart_at(z_eq, ks[i], ri))
         z_eq = z_eq[:, :ks[i]]
         coef_g = ext.mul(coef_g, cl.geom_colpart_at(etas_g, ks[i], ri))
         rbars.append(rbar)
