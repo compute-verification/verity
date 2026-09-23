@@ -31,6 +31,7 @@ from verity.ir.defs import Body, CompositeDefinition, Node, SpecializedDefinitio
 from verity.ir.program import Program
 from verity.ir.refs import Affine, Coll, Concat, Explicit, Refs, Strided, coll_concat, concat
 from verity.ir.types import Tuple as TupleT, Type
+from verity_vllm.ir.sampling_event import is_sampling_event
 
 SCHEMA = "verity/workload-program/v1"
 
@@ -271,10 +272,11 @@ def request_component(desc: dict, registry, wrapper_params: list[tuple[str, str]
         if sp.body.gates != offsets[-1] or len(sp.body.nodes) != len(nodes):
             raise ValueError(f"E_IDENTITY: two different bodies for {sp.id}")
     input_gates = body.offsets[K]
-    # request-relative steps = segments ending at a TokenSelect_v1 instance (inclusive) — X-09's segmentation, on the Program side
+    # request-relative steps = segments ending at a sampling-event instance (inclusive) — X-09's segmentation, on the Program side;
+    # the sampling-event vocabulary is `verity_vllm.ir.sampling_event`'s (greedy and seeded Gumbel selects alike), read nowhere else
     bounds, lo = [], 0
     for i, n in enumerate(nodes):
-        if _spec_id(n.fn).startswith("TokenSelect_v1"):
+        if is_sampling_event(_spec_id(n.fn)):
             bounds.append((lo, i + 1))
             lo = i + 1
     if lo != len(nodes):
