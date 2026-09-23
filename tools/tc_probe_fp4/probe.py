@@ -919,7 +919,8 @@ def replay_autoproof(probe: Probe, path: Path) -> dict:
         steps = k_total // k_mma
         A = np.zeros((n, 16, k_total), np.uint8)
         Bt = np.zeros((n, 8, k_total), np.uint8)
-        nblk_total = k_total // 16 if instr == "nvf4" else 0
+        scaled = SCALE_KIND.get(instr) == "ue4m3"  # nvf4 on either backend; probe2's f8f6f4 is unscaled
+        nblk_total = k_total // 16 if scaled else 0
         SFA = np.zeros((n, 16, max(nblk_total, 1)), np.uint8)
         SFB = np.zeros((n, 8, max(nblk_total, 1)), np.uint8)
         pos = [(r % 16, (r // 16) % 8) for r in rows]
@@ -927,13 +928,13 @@ def replay_autoproof(probe: Probe, path: Path) -> dict:
             i, j = pos[t]
             A[t, i] = cases[r]["a_codes"]
             Bt[t, j] = cases[r]["b_codes"]
-            if instr == "nvf4":
+            if scaled:
                 SFA[t, i] = cases[r]["a_scales"]
                 SFB[t, j] = cases[r]["b_scales"]
         C = np.zeros((n, 16, 8), np.uint32)
         for s in range(steps):
             ks = slice(s * k_mma, (s + 1) * k_mma)
-            if instr == "nvf4":
+            if scaled:
                 bs = slice(s * 4, (s + 1) * 4)
                 D = probe.tiles(instr, A[:, :, ks], Bt[:, :, ks], C, SFA[:, :, bs], SFB[:, :, bs])
             else:
