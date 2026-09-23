@@ -91,18 +91,24 @@ def ext_mul(a, b) -> np.ndarray:
     """(..., 6) x (..., 6) -> (..., 6); every coordinate product reduced before summing (products < 2^62)."""
     a = np.asarray(a, dtype=np.int64)
     b = np.asarray(b, dtype=np.int64)
-    shape = np.broadcast_shapes(a.shape[:-1], b.shape[:-1])
-    out = np.zeros(shape + (D,), dtype=np.int64)
+    prod = (a[..., :, None] * b[..., None, :]) % P                     # (..., 6, 6), each < 2^31
+    shape = prod.shape[:-2]
+    return (prod.reshape(shape + (D * D,)) @ _EXT_MUL_TABLE) % P       # 36 -> 6 fold: sums < 36 * 31 * 2^31
+
+
+def _ext_mul_table() -> np.ndarray:
+    t = np.zeros((D * D, D), dtype=np.int64)
     for i in range(D):
-        ai = a[..., i]
         for j in range(D):
-            prod = (ai * b[..., j]) % P
             k = i + j
             if k >= D:
-                out[..., k - D] += prod * BETA
+                t[i * D + j, k - D] = BETA
             else:
-                out[..., k] += prod
-    return out % P
+                t[i * D + j, k] = 1
+    return t
+
+
+_EXT_MUL_TABLE = _ext_mul_table()
 
 
 def ext_mul_base(a, s) -> np.ndarray:
