@@ -1488,6 +1488,27 @@ def main(argv: list[str] | None = None) -> None:
                       f"{', '.join(f'{op}: {p['spec']} width {p['width']} {p['dtype']} at {p['consumer']}' for op, p in sorted(_pia['producers'].items()))})", flush=True)
                 if _absent:
                     print(f"[delta] NOTE: {len(_absent)} promoted-member consumer(s) are not modules of the built model ({_absent[:3]}): their identities stay unbound (coverage names them)", flush=True)
+        # [X-03 F-r19-int-22] the per-layer attention plane class is DERIVED from the Program's attention Call statics (NH, KVH, D, window per
+        # layer -- the Build record's `attention_impls_observed`, the facts each Call's Definition and `inert_window` were selected from) x
+        # the step's active sequences (fa2_plane_classes): a windowed layer's decode launch stages 6 per-sequence planes while a global GQA
+        # layer's stages one swapped row, so "every layer the same count" is a consequence for one-class Programs, not a rule.  Without the
+        # record the committer keeps the R13 uniformity rule (fails closed on a two-class Program, as before) and says so here.
+        if required_manifest is not None and hasattr(com, "identity_check"):
+            from collections import Counter as _Cnt
+
+            from verity_capture.experimental.commit_integ import fa2_plane_classes as FP
+
+            _impls, _impls_path = FP.attention_impls_of_record(program_dir=getattr(args, "program_dir", None), programs_root=getattr(args, "programs_root", None))
+            _decls = FP.declarations_from_attention_impls(_impls) if _impls else []
+            if _decls:
+                com.attention_layer_decls = _decls
+                _cls = sorted(_Cnt(("windowed" if d.window is not None else "global") + ("-gqa" if d.NH > d.KVH else "-mha") for d in _decls).items())
+                print(f"[delta] X-03 attention plane classes: {len(_decls)} layer declaration(s) from {_impls_path} -> classes {_cls}; "
+                      f"per-layer expectation derived per step (fa2_plane_classes), uniformity not assumed", flush=True)
+            else:
+                print(f"[delta] NOTE: X-03 attention plane classes: no Build record with attention_impls_observed under "
+                      f"--program-dir/--programs-root ({getattr(args, 'program_dir', None)!r}, {getattr(args, 'programs_root', None)!r}); "
+                      f"the R13 uniformity rule runs (a Program with two attention classes fails X-03 closed)", flush=True)
         if hasattr(com, "size_arena") and getattr(com, "arena", None) is not None and not (args.arena_unchecked and args.arena_mb):
             # X-02: size the device staging block from the workload envelope (refuses here, with needed vs available bytes, if it cannot fit)
             envelope = {"batch": args.max_num_seqs, "max_prompt": max(len(r["prompt_token_ids"]) for r in reqs),
