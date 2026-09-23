@@ -484,7 +484,8 @@ def cmd_inspect(argv: list[str]) -> int:
     print(f"command   {' '.join(s['command']) if s['command'] else '?'}")
     if s["remote"]:
         r = s["remote"]
-        print(f"remote    {r.get('machine')} ({r.get('pod_id')}) {r.get('root')}  tool={str(r.get('tool')).rsplit('/', 1)[-1]}  source={r.get('source_sha')}")
+        print(f"remote    {r.get('machine')} ({r.get('pod_id')}) {r.get('root')}  tool={str(r.get('tool')).rsplit('/', 1)[-1]}  source={r.get('source_sha')}"
+              + (f"  archive={str(r.get('source_archive_sha256'))[:16]} ({r.get('source_verified')})" if r.get("source_archive_sha256") else ""))
     if s.get("remote_rec"):
         rr = s["remote_rec"]
         lo = rr.get("last_observed") or {}

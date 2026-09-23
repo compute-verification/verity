@@ -180,6 +180,9 @@ def test_source_sha_reaches_the_workload_as_research_source_sha(tmp_path):
     d = json.loads(req.read_text())
     d["remote"]["source_sha"] = "a" * 40
     req.write_text(json.dumps(d))
+    src = runs_root.parent / "src" / ("a" * 40)                  # the shipped tree must be verified READY (test_remote_ship_source.py) to execute
+    src.mkdir(parents=True)
+    (src / remote.READY_FILE).write_text(json.dumps({"schema": remote.READY_SCHEMA, "identity": "a" * 40, "archive_sha256": "0" * 64}))
     assert remote.launch_request(req)["started"]
     s = _wait_terminal(runs_root / "s1")
     assert s["state"] == "done" and (runs_root / "s1" / "stdout.log").read_text().strip() == "a" * 40
