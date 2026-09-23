@@ -98,15 +98,8 @@ class ChainRunner:
         parties, as in every gate).  Fiat-Shamir mode: no coins.
         ``auth = (trees, vu_index)`` (authentication = included): the committed word trees (``auth.WordTree`` by
         name) and the index of every VU of ``vus`` in them; the statement then carries the roots and indices and the
-        transcript the three multiproofs (``auth.py``)."""
-        if coins is None and self.interactive:
-            coins = protocol_mod.Coins.sample()
+        transcript the three multiproofs (``auth.py``); returns ``(proof, pubs, lay, auth_stmt)`` then."""
         lay = self.layout(len(vus), min_l)
-        auth_stmt = auth_open = None
-        if auth is not None:
-            trees, vu_index = auth
-            auth_stmt = auth_mod.AuthStatement.for_vus(trees, vu_index)
-            auth_open = lambda: auth_mod.open_trees(trees, auth_stmt, K=STEP * STEPS, steps=STEPS)
         units, y16 = [], torch.zeros(lay.l, dtype=torch.int64)
         for v, (x, w, accs, y) in enumerate(vus):
             units += vu_units(x, w, accs)
@@ -116,14 +109,33 @@ class ChainRunner:
         # operands as arrays (the loader's marshaling of Python lists is not prover work; everything after t0 is)
         a = np.asarray([u[1] for u in units], dtype=np.int64)
         b = np.asarray([u[2] for u in units], dtype=np.int64)
+        c_in, y_out = np.asarray([u[0] for u in units], dtype=np.int64), np.asarray([u[3] for u in units], dtype=np.int64)
+        return self.prove_arrays(a, b, c_in, y_out, y16, lay, check=check, mutate=mutate, coins=coins, units=units, auth=auth)
+
+    def prove_arrays(self, a, b, c_in, y_out, y16, lay: Layout, check=True, mutate=None, coins=None, units=None,
+                     auth: tuple | None = None):
+        """The timed part of ``prove_vus`` on already-marshaled arrays: ``a``/``b`` (l, STEP) int64 operands, ``c_in``/
+        ``y_out`` (l,) int64 accumulator words in and out of every unit, ``y16`` (l,) int64 tensor with the claimed BF16
+        word at each VU's last unit (0 elsewhere), ``lay`` the layout they were padded to.  ``units`` (the tuple form)
+        is needed only for ``check=True`` / the Python hint generator.  ``auth`` as in ``prove_vus`` (the authentication
+        statement -- the verifier's public input -- is built before the timer; the openings are prover work inside it).
+        Everything after ``t0`` is prover work."""
+        if coins is None and self.interactive:
+            coins = protocol_mod.Coins.sample()
+        auth_stmt = auth_open = None
+        if auth is not None:
+            trees, vu_index = auth
+            auth_stmt = auth_mod.AuthStatement.for_vus(trees, vu_index)
+            auth_open = lambda: auth_mod.open_trees(trees, auth_stmt, K=STEP * STEPS, steps=STEPS)
         t0 = time.perf_counter()
         pub = public_vectors(self.p, None, a, b, None, device=self.device)
-        c_in, y_out = np.asarray([u[0] for u in units], dtype=np.int64), np.asarray([u[3] for u in units], dtype=np.int64)
         if self.hints_mode == "torch":
             hints = hints_torch(self.p, self.sys, c_in, a, b, y_out, self.device)
         else:
+            assert units is not None, "the python hint generator needs the unit tuples"
             hints = hints_tensor(self.p, self.sys, units, self.device)
         if check:      # the gate: the torch hint generator must reproduce the checker's gen_step exactly
+            assert units is not None, "check=True needs the unit tuples"
             ref = hints_tensor(self.p, self.sys, units, self.device)
             alt = hints_torch(self.p, self.sys, c_in, a, b, y_out, self.device)
             assert torch.equal(ref, alt), "hints_torch != gen_step"
@@ -178,6 +190,34 @@ class ChainRunner:
                         "target_bits": float(target_bits), "batch_log2": protocol_mod.log2_sum(per), "per_proof_log2": per,
                         "n_proofs_claimed": claimed, "items": verdicts}
         return {**self.batch_bound(cfgs, claimed, target_bits, names), "items": verdicts}
+
+
+def marshal_ids(vu: instances.VuTier, ids: list[int], lay: Layout):
+    """Vectorised loader for ``bench_vu``: the arrays ``prove_vus`` builds from ``[_vu_data(vu, i) for i in ids]`` --
+    ``a``, ``b`` (l, STEP) int64, ``c_in``, ``y_out`` (l,) int64, ``y16`` (l,) int64 tensor -- straight from the tier's
+    flat operand arrays, padded to ``lay.l`` units with the trivial unit.  Identical to the tuple path (``bench_vu_test.py``
+    checks it); it exists because a million VUs as Python lists cost more than the proof does."""
+    n_vus, l = len(ids), lay.l
+    if n_vus != lay.n_vus or n_vus * STEPS > l:
+        raise ValueError(f"{n_vus} VUs do not match layout {lay}")
+    idx = np.asarray(ids, dtype=np.int64)
+    x = np.frombuffer(vu.x, dtype=np.uint16).reshape(vu.n, STEPS, STEP)[idx]
+    w = np.frombuffer(vu.w, dtype=np.uint16).reshape(vu.n, STEPS, STEP)[idx]
+    acc = np.frombuffer(vu.acc, dtype=np.uint32).reshape(vu.n, STEPS)[idx]
+    a = np.zeros((l, STEP), dtype=np.int64)
+    b = np.zeros((l, STEP), dtype=np.int64)
+    c_in = np.zeros(l, dtype=np.int64)
+    y_out = np.zeros(l, dtype=np.int64)
+    a[:n_vus * STEPS] = x.reshape(-1, STEP)
+    b[:n_vus * STEPS] = w.reshape(-1, STEP)
+    y_out[:n_vus * STEPS] = acc.reshape(-1)
+    c = np.zeros_like(acc)
+    c[:, 1:] = acc[:, :-1]                      # unit s starts from the recorded accumulator of unit s - 1; c_0 = +0
+    c_in[:n_vus * STEPS] = c.reshape(-1)
+    y16 = torch.zeros(l, dtype=torch.int64)
+    y16[STEPS * torch.arange(n_vus) + STEPS - 1] = torch.from_numpy(
+        np.frombuffer(vu.y, dtype=np.uint16)[idx].astype(np.int64))
+    return a, b, c_in, y_out, y16
 
 
 def _vu_data(vu: instances.VuTier, i: int):
@@ -456,19 +496,25 @@ def bench_vu(args) -> int:
     depth = 3 if interactive else 1                 # interactive: c, r1, r2 on the critical path; Fiat-Shamir: one message
     R = ChainRunner(args.device, args.target, args.rate_log2, args.hints, n_proofs=n_proofs, zk=args.zk, mode=args.mode)
     subs = [(lo, min(lo + per_proof, total_vus)) for lo in range(0, total_vus, per_proof)]
-    data = {i: _vu_data(vu, i % vu.n) for i in range(total_vus)}
+    # VU i of the batch is tier instance i % vu.n: beyond the tier's 4096 ids the frozen instances are recycled (the
+    # fingerprint says so: B_real = vu.n, instances.range = [0, vu.n)).  The bench has no synthetic VU generator.
+    recycled = total_vus > vu.n
     lay = R.layout(per_proof)
     l = lay.l
     cfg = R.cfg(l)
-    print(f"config {cfg}; layout {lay}; zk {cfg.zk}, mode {cfg.mode}; system {R.sys.summary()}; {total_vus} VUs as {n_proofs} sub-batches of <= {per_proof}")
+    print(f"config {cfg}; layout {lay}; zk {cfg.zk}, mode {cfg.mode}; system {R.sys.summary()}; {total_vus} VUs as {n_proofs} sub-batches of <= {per_proof}"
+          + (f"; tier ids recycled mod {vu.n}" if recycled else ""))
     runs = []
     if args.device.startswith("cuda"):
         torch.cuda.reset_peak_memory_stats()
     keys = None
-    # --dump-dir: every RECORDED rep's sub-batch proofs as ligero-statement/v2 + ligero-proof/v1 files (+ the runner's
-    # step-0 coins, 128 raw bytes, interactive mode) for the independent verifier (backends/ligero-verify); written after
-    # the verifier timer, outside every measured interval.  system.bin + manifest.json once.
+    # --dump-dir: every RECORDED rep's sub-batch proofs (the first --dump-reps of them, default all) as
+    # ligero-statement/v2 + ligero-proof/v1 files (+ the runner's step-0 coins, 128 raw bytes, interactive mode) for the
+    # independent verifier (backends/ligero-verify); written after the verifier timer, outside every measured interval.
+    # system.bin + manifest.json once.
     dump_dir = Path(args.dump_dir) if getattr(args, "dump_dir", None) else None
+    dump_reps = getattr(args, "dump_reps", None)
+    dump_reps = args.reps if dump_reps is None else min(dump_reps, args.reps)
     dump_manifest = None
     with_auth = bool(getattr(args, "auth", False))
     if dump_dir is not None:
@@ -484,7 +530,9 @@ def bench_vu(args) -> int:
         dump_manifest = _manifest(dump_dir, args, R, auth=with_auth)
         _write_system(dump_dir, R, dump_manifest)
         dump_manifest["set"] = {"total_vus": total_vus, "batch": args.batch, "per_proof": per_proof, "n_proofs": n_proofs,
-                                "zk": args.zk, "mode": args.mode, "reps": args.reps, "authentication": "included" if with_auth else "excluded"}
+                                "zk": args.zk, "mode": args.mode, "reps": args.reps, "dump_reps": dump_reps,
+                                "tier_n": vu.n, "ids_recycled_mod_tier_n": recycled,
+                                "authentication": "included" if with_auth else "excluded"}
     target_bits = float(getattr(args, "target_bits", 128.0) or 128.0)   # the VERIFIER's parameter (PROTOCOL.md 8c)
     batch = None
     # authentication = included: the frozen set's words [0, total_vus) as three committed word trees (auth.py); the
@@ -555,13 +603,14 @@ def bench_vu(args) -> int:
         proved = []
         cfgs_seen: list[Config] = []
         for si, (lo, hi) in enumerate(subs):
-            vus = [data[i] for i in range(lo, hi)]
+            lay_s = Layout(l, hi - lo, STEPS)
+            arrays = marshal_ids(vu, [i % vu.n for i in range(lo, hi)], lay_s)     # loader work, outside the prover timer
             V = protocol_mod.Coins.sample() if interactive else None      # the verifier's step 0 (interactive only)
             st_auth = None
             if with_auth:
-                proof, pubs, lay_i, st_auth = R.prove_vus(vus, check=False, min_l=l, coins=V, auth=(trees, list(range(lo, hi))))
+                proof, pubs, lay_i, st_auth = R.prove_arrays(*arrays, lay_s, check=False, coins=V, auth=(trees, list(range(lo, hi))))
             else:
-                proof, pubs, lay_i = R.prove_vus(vus, check=False, min_l=l, coins=V)
+                proof, pubs, lay_i = R.prove_arrays(*arrays, lay_s, check=False, coins=V)
             for k, v in proof.timings.items():
                 agg[k] = agg.get(k, 0.0) + v
             proved.append((si, lo, hi, V, proof, pubs, lay_i, st_auth))
@@ -576,7 +625,7 @@ def bench_vu(args) -> int:
             vsum += time.perf_counter() - t0
             vauth += tm_auth.get("seconds", 0.0)
             assert ok, f"sub-batch [{lo}, {hi}): {why}"
-            if dump_dir is not None and rep > 0:
+            if dump_dir is not None and 0 < rep <= dump_reps:
                 rd = dump_dir / f"rep{rep}"
                 rd.mkdir(exist_ok=True)
                 stem = f"sub_{si:02d}"
@@ -670,13 +719,16 @@ def bench_vu(args) -> int:
         hardware=hw, software=sw,
         preprocessing=preprocessing,
         retention="retained",
-        instances=contract.instances_ref("vu-k1536", 0, n_vus, instances.manifest_sha256(root)),
+        instances=contract.instances_ref("vu-k1536", 0, min(n_vus, vu.n), instances.manifest_sha256(root)),
+        **({"B_real": vu.n} if recycled else {}),
         scope="vu", omitted=omitted,
         rows=R.sys.m, committed_rows=n_rows(cfg, R.sys.m, True), linear_constraints=R.tb.L, quadratic_constraints=R.tb.Q,
         witness_generation=f"{R.hints_mode} hint generator (gen_step semantics) + torch program (derived rows)",
         B_proof=per_proof,
         note=f"{total_vus} VUs as {n_proofs} independently committed proofs of <= {per_proof} VUs each (l = {l} columns, "
-             f"{l - per_proof * STEPS} pad columns per proof); prover time = sum over the proofs; soundness = union bound",
+             f"{l - per_proof * STEPS} pad columns per proof); prover time = sum over the proofs; soundness = union bound"
+             + (f"; VU i of the batch is tier instance i mod {vu.n} (the frozen set has {vu.n} ids, so B_real = {vu.n} distinct "
+                f"instances are proved {total_vus / vu.n:.1f}x over -- the bench has no synthetic VU generator)" if recycled else ""),
     )
     meas = [
         contract.measurement("t.witness", med["witness"] + med["hints_host"]),

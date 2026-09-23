@@ -1,8 +1,11 @@
-"""Store declaration for the FP8 (Ada E4M3) Ligero VU benchmark (research.store README §6.1).
+"""Store declaration for the registered-relation Ligero VU benchmarks (research.store README §6.1): ``--relation fp8-ada``
+(the FP8 Ada E4M3 unit it was written for) and, since lane b-hopper, ``bf16-hopper`` / ``fp8-hopper`` on the same generic
+runner (``relchain.py``) -- ``relation`` is a key param, so the three never share a derivation.
 
     research run --tool bench_vu_fp8 --project verity --scratch triton -- python -m backends.direct.ligero.run --relation fp8-ada bench-vu ...
+    research run --tool bench_vu_fp8 --project verity --scratch triton -- python -m backends.direct.ligero.run --relation bf16-hopper bench-vu ...
 
-The key params are ``tool.py``'s (the same argparse) plus ``relation``; the instances are synthetic (a seed in the module),
+The key params are ``tool.py``'s (the same argparse) plus ``relation``; the instances are synthetic (a seed in relations.py),
 so ``--root`` is not a key param here.  Nothing here imports torch or the backend.
 """
 from __future__ import annotations
@@ -35,6 +38,9 @@ def parse(argv: list[str]) -> dict:
     ap.add_argument("--total-vus", type=int, default=None)
     ap.add_argument("--row-negatives", type=int, default=60)
     ap.add_argument("--dump-dir", default=None)          # where the proof files go (bench-vu); not a key param
+    ap.add_argument("--dump-reps", type=int, default=None)       # how many recorded reps are written out, not what is computed
+    ap.add_argument("--instance-procs", type=int, default=None)  # processes recording the synthetic set: how, not what
+    ap.add_argument("--instances-cache", default=None)           # where the synthetic set is kept between runs (deterministic in the seed)
     ns, unknown = ap.parse_known_args(argv[idx + 1:])
     out = vars(ns)
     out["cmd"] = argv[idx]

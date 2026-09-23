@@ -59,6 +59,26 @@ class FP8Params(Params):
     groups: tuple[int, ...] = (16, 16)
     op_exp: int = 4
 
+    @classmethod
+    def from_model(cls, model) -> FP8Params:
+        """The adder-side widths of an E4M3 :class:`verity.ml.tc.models.GroupSum`: ``groups`` and the adder ``width`` /
+        ``zero_exponent`` are the model's, the operand format is the model's dtype.  ``FP8Params.from_model(ADA_E4M3_M16N8K32)
+        == ADA``; ``HOPPER_E4M3_K32`` gives one group of 32 on the same 14-bit adder (``--relation fp8-hopper``).  The
+        22-bit public packing (``pack_public``) assumes the 14-bit adder (``rescale == 10``), so other widths are refused."""
+        from verity.ml.tc.models import GroupSum
+        from verity.ml.tc.term import FORMATS
+
+        if not isinstance(model, GroupSum):
+            raise ValueError(f"{getattr(model, 'name', model)!r} is not a GroupSum")
+        fmt = FORMATS[model.dtype]
+        if fmt.nan_rule != "e4m3":
+            raise ValueError(f"{model.name}: the FP8 relation decodes E4M3 operands, not {fmt.name}")
+        p = cls(sig=fmt.sig_bits, op_exp=fmt.exp_bits, acc_sig=model.width, width=model.width, floor=model.zero_exponent,
+                groups=tuple(model.groups))
+        if p.rescale != ACC_FRAC + 1 - 14:
+            raise ValueError(f"{model.name}: pack_public drops 10 bits, which is the 14-bit adder's rescale; got width {model.width}")
+        return p
+
     @property
     def op_bias(self) -> int:
         return 2 ** (self.op_exp - 1) - 1                      # 7

@@ -44,7 +44,10 @@ def test_spec_table_and_size_parsing():
     assert m.spec_peak("NVIDIA A100-SXM4-80GB", "bf16")[0] == 312.0e12
     assert m.spec_peak("NVIDIA A100-SXM4-80GB", "e4m3") == (None, m.SPEC_PEAKS[1][2])
     assert m.spec_peak("NVIDIA A100 80GB PCIe", "bf16")[0] == 312.0e12
-    assert m.spec_peak("NVIDIA H100 80GB HBM3", "bf16") == (None, None)
+    assert m.spec_peak("NVIDIA H100 80GB HBM3", "bf16")[0] == 989.4e12                # the campaign's H100_BF16_PEAK
+    assert m.spec_peak("NVIDIA H100 80GB HBM3", "e4m3")[0] == 1978.9e12               # H100_FP8_PEAK
+    assert m.spec_peak("NVIDIA H100 PCIe", "bf16")[0] == 756.0e12
+    assert m.spec_peak("NVIDIA L40S", "bf16") == (None, None)
     assert m.parse_sizes("8192, 16384") == [8192, 16384]
     with pytest.raises(ValueError):
         m.parse_sizes("100")

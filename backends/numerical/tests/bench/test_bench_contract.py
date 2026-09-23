@@ -12,7 +12,7 @@ from types import SimpleNamespace
 import pytest
 from conftest import REPO, VECTOR_RUN, conforming_result
 
-from verity.verification.target import FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, K16_VECTOR, NativePeak
+from verity.verification.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, K16_VECTOR, NativePeak
 from verity_numerical.bench import contract
 
 FIXTURES = REPO / "fixtures" / "typed-obligation-v0"
@@ -281,7 +281,7 @@ def test_native_reference_is_the_targets_anchor_peak_and_the_bf16_default_is_unc
     assert contract.NATIVE_REFERENCE["flop_per_second"] == ref.flop_per_second == 312e12
     assert contract.NATIVE_REFERENCE["device"] == ref.device and contract.NATIVE_REFERENCE["profile"] == contract.PROFILE
     json.dumps(contract.NATIVE_REFERENCE)
-    assert contract.PROFILES == (FIRST.name, FP8_HOPPER_WGMMA.name, FP8_ADA_MMA.name) and contract.PROFILE == FIRST.name
+    assert contract.PROFILES == (FIRST.name, BF16_HOPPER.name, FP8_HOPPER_WGMMA.name, FP8_ADA_MMA.name) and contract.PROFILE == FIRST.name
     with pytest.raises(ValueError, match="profile must be one of"):
         contract.native_reference("another-target")
     with pytest.raises(ValueError, match="profile must be one of"):

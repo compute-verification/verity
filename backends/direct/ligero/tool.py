@@ -46,15 +46,18 @@ def parse(argv: list[str]) -> dict:
     ap.add_argument("--auth", action="store_true")       # authentication = included (what is proved changes: roots + multiproofs)
     ap.add_argument("--auth-cache", default=None)        # where the trees are cached: not what is computed (the bindings pin the object)
     ap.add_argument("--auth-procs", type=int, default=None)
+    ap.add_argument("--dump-reps", type=int, default=None)   # how many recorded reps are written out for the verifier, not what is computed
     # bench_result.py (the wrapper that adds the independent Rust verifier and writes result.json) accepts the same argv plus:
     ap.add_argument("--verifier", default=None)         # path of the ligero-verify binary: where the check runs, not what is computed
     ap.add_argument("--threads", type=int, default=None)
+    ap.add_argument("--keep-proofs", type=int, default=None)   # how many verified sub-batch proofs per rep stay on disk afterwards
     ns, unknown = ap.parse_known_args(argv[idx + 1:])
     out = vars(ns)
     cmd = out["cmd"] = argv[idx]
     for flag, subs in (("vus", ("gate", "gate-vu")), ("dump_proof", ("gate-vu",)), ("dump_statement", ("gate-vu",)), ("reps", ("bench", "bench-vu")),
                        ("run_id", ("bench", "bench-vu")), ("total_vus", ("bench-vu",)), ("hvzk_label", ("bench-vu",)), ("dump_dir", ("bench-vu",)),
-                       ("auth", ("bench-vu",)), ("auth_cache", ("bench-vu",)), ("auth_procs", ("bench-vu",))):
+                       ("auth", ("bench-vu",)), ("auth_cache", ("bench-vu",)), ("auth_procs", ("bench-vu",)),
+                       ("dump_reps", ("bench-vu",))):
         if cmd not in subs:
             out.pop(flag)                       # run.py does not define it for this subcommand; a default would only be noise in the derivation
     if unknown:

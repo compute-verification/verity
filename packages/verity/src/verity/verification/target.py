@@ -119,6 +119,13 @@ much hardware stands behind the model the target computes with.
   (``tc_dot32`` / ``tc_dot32_0`` with 8-bit operand arguments); their digests are recorded here but **no guest is
   bound to them** and no ``typed-obligation/v0`` lowering has been produced -- the reference vectors are model
   replays (``fixtures/tc/vectors/``, schema ``verity/tc-reference-vector/v0``), not authenticated obligations.
+* :data:`BF16_HOPPER` (lane b-hopper, 2026-09-22) -- ``sm90.mma.m16n8k16.bf16`` (pinned: Hawkeye H100, re-measured
+  25.7M elements / 0 mismatches; the ``wgmma`` BF16 path runs the same pipeline), model
+  :data:`verity.ml.tc.models.HOPPER_BF16_M16N8K16` (one group of 16, the 26-bit adder, floor -133; exact BF16
+  products).  FIRST's program and epilogue -- ``GemmCoordinate<K>`` with ``f32_to_bf16`` -- so the Hopper row of the
+  table is the same function as the Ampere row up to the step; the family is
+  ``veritor.tc-bf16.hopper_bf16_m16n8k16@1`` (:func:`verity.verification.families.make_tc_bf16_gate_set`), FIRST's
+  vocabulary with the steps on the Hopper pipeline.  Native peak: the H100 SXM5 dense BF16 rate (989.4 TFLOPS).
 * Not covered by any draft: ``sm90.mma.m16n8k32.e4m3`` (the Hopper legacy path -- unprobed; whether it is Hopper's
   one group of 32 or Ada's two of 16 is the probe lane's first question), E5M2 (hypotheses only), and the
   Blackwell block-scaled FP4 path (a model exists, :class:`verity.ml.tc.models.BlockScaledAlignAdd`, no target).
@@ -144,12 +151,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from verity.ml.tc.models import ADA_E4M3_M16N8K32, HOPPER_E4M3_K32
+from verity.ml.tc.models import ADA_E4M3_M16N8K32, HOPPER_BF16_M16N8K16, HOPPER_E4M3_K32
 from verity.ml.tc.silicon import AMPERE_BF16_M16N8K16, Pipeline
 
-from .families import TC_AMPERE_BF16_NAME, TC_AMPERE_BF16_VERSION
+from .families import TC_AMPERE_BF16_NAME, TC_AMPERE_BF16_VERSION, TC_BF16_NAME_PREFIX, TC_BF16_VERSION
 
 __all__ = [
+    "BF16_HOPPER",
     "DISCREPANCY_LOG",
     "FAMILY",
     "FAMILY_DIGEST",
@@ -184,6 +192,10 @@ FP8_HOPPER_FAMILY = "veritor.tensor-core.hopper_e4m3_wgmma_k32@2"
 FP8_HOPPER_FAMILY_DIGEST = "6d90478ba12f63f1171355f343f65bce6665541f1f7d4cca711ed9ea2ae9f777"
 FP8_ADA_FAMILY = "veritor.tensor-core.ada_e4m3_m16n8k32@2"
 FP8_ADA_FAMILY_DIGEST = "2bcdad67108dd15195372308784247d6792a3335f1dc19345d91d8ad68a17d16"
+#: ``veritor.tc-bf16.hopper_bf16_m16n8k16@1`` (``make_tc_bf16_gate_set(HOPPER_BF16_M16N8K16)``): FIRST's vocabulary
+#: with the steps on the Hopper BF16 pipeline; the family of the Hopper BF16 draft target.
+BF16_HOPPER_FAMILY = f"{TC_BF16_NAME_PREFIX}{HOPPER_BF16_M16N8K16.name}@{TC_BF16_VERSION}"
+BF16_HOPPER_FAMILY_DIGEST = "1dba640b0e83ba6dc0d8f692ac0089032cc98bfd39b1a210dbaf14b76a4d5a46"
 
 Status = Literal["frozen", "draft"]
 
@@ -245,6 +257,15 @@ A100_BF16_PEAK = NativePeak(
     source="NVIDIA A100 datasheet / Ampere whitepaper",
     memory_bytes=80 * 2**30,
 )
+#: H100 SXM5 dense BF16 tensor-core peak (989.4 TFLOPS; 1978.9 with sparsity, not used).  Accumulation is FP32.
+H100_BF16_PEAK = NativePeak(
+    device="NVIDIA H100 SXM5 80GB",
+    rate="bf16 dense tensor-core peak, fp32 accumulate",
+    flop_per_second=989.4e12,
+    accumulate="fp32",
+    source="NVIDIA Hopper whitepaper (BF16 1978.9 TFLOPS with sparsity)",
+    memory_bytes=80 * 2**30,
+)
 #: H100 SXM5 dense FP8 tensor-core peak; Hopper runs FP8 with FP32 accumulate at full rate.
 H100_FP8_PEAK = NativePeak(
     device="NVIDIA H100 SXM5 80GB",
@@ -283,6 +304,29 @@ FIRST = Target(
     status="frozen",
     instruction="sm80.mma.m16n8k16.bf16",
     dossier="art:997eefe82d733c30d689801236cd682a47844b52dfcfe1d4ea61d44d99c837cc",
+)
+
+BF16_HOPPER = Target(
+    name="bf16-hopper-mma-draft/2026-09-22",
+    family=BF16_HOPPER_FAMILY,
+    family_digest=BF16_HOPPER_FAMILY_DIGEST,
+    pipeline=HOPPER_BF16_M16N8K16,
+    program="GemmCoordinate<K>: tc_dot16_0, then (K/16 - 1) x tc_dot16 chained in ascending k, then f32_to_bf16",
+    transition_unit=(
+        "tc_dot16(c, a[0:16], b[0:16]) with any finite FP32 c: one group of 16 (c joins it), the 26-bit adder, "
+        "floor -133; exact BF16 products"
+    ),
+    statement_format=2,
+    domain="finite BF16 operands and finite FP32 accumulators at every step; anything else is rejected, not computed",
+    epilogue=(
+        "f32_to_bf16: RN-even, overflow -> +-inf, NaN -> 0x7FC0 -- FIRST's cast.  On the finite domain it equals the "
+        "hardware cvt.rn.bf16.f32 word bit for bit (the versions differ only on NaN, which the domain excludes); the "
+        "Hopper BF16 store is the same cvt as Ampere's, so nothing pipeline-specific is pinned for the epilogue"
+    ),
+    reference_vectors=("bf16-hopper-mma-k16", "bf16-hopper-mma-k1536"),
+    native_peak=H100_BF16_PEAK,
+    status="draft",
+    instruction="sm90.mma.m16n8k16.bf16",
 )
 
 _FP8_DOMAIN = (
@@ -336,4 +380,4 @@ FP8_ADA_MMA = Target(
 )
 
 #: Every target by name; ``fixtures/discrepancy_log.json`` entries name one of these (or an instruction id).
-TARGETS: dict[str, Target] = {t.name: t for t in (FIRST, FP8_HOPPER_WGMMA, FP8_ADA_MMA)}
+TARGETS: dict[str, Target] = {t.name: t for t in (FIRST, BF16_HOPPER, FP8_HOPPER_WGMMA, FP8_ADA_MMA)}

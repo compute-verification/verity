@@ -30,7 +30,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from verity.ml.tc.instructions import INSTRUCTIONS
-from verity.verification.target import FIRST, FP8_ADA_MMA, TARGETS, Target
+from verity.verification.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, TARGETS, Target
 from verity_numerical.bench import contract
 
 try:  # the label keys are pinned with the store (`research.store.vocab`, tools/research); verity-numerical does not depend on that package
@@ -115,11 +115,16 @@ NATIVE_PEAK_METHOD = "cublas dense gemm 8192^3, median of 5"
 #: The BF16 frozen set: sha256 of ``fixtures/bench-instances/v1/manifest.json`` (``verity_numerical.bench.instances.manifest_sha256``).
 BF16_INSTANCES_MANIFEST_SHA256 = "059103cf9bd55ee83cbd4bb14ae6db2f60db2cb4ddf85cdc22b1cecee6e4eeea"
 #: The frozen instance ref a valid result of each target must carry, ``instances`` field for field.  A target absent here
-#: (``fp8-hopper-wgmma-draft``) has no frozen set yet: every result of it is rejected with that reason.
+#: has no frozen set yet: every result of it is rejected with that reason.  The synthetic sets (FP8 Ada, the two Hopper
+#: relations) are pinned by their recipe digest (``contract.*_INSTANCES_DIGEST``), the BF16 Ampere set by its fixture manifest.
 FROZEN_INSTANCES: dict[str, dict[str, Any]] = {
     FIRST.name: contract.instances_ref("vu-k1536", 0, B, BF16_INSTANCES_MANIFEST_SHA256),
     FP8_ADA_MMA.name: contract.instances_ref(contract.FP8_ADA_INSTANCES_TIER, 0, B, contract.FP8_ADA_INSTANCES_DIGEST,
                                              dataset=contract.FP8_ADA_INSTANCES_DATASET),
+    BF16_HOPPER.name: contract.instances_ref(contract.BF16_HOPPER_INSTANCES_TIER, 0, B, contract.BF16_HOPPER_INSTANCES_DIGEST,
+                                             dataset=contract.BF16_HOPPER_INSTANCES_DATASET),
+    FP8_HOPPER_WGMMA.name: contract.instances_ref(contract.FP8_HOPPER_INSTANCES_TIER, 0, B, contract.FP8_HOPPER_INSTANCES_DIGEST,
+                                                  dataset=contract.FP8_HOPPER_INSTANCES_DATASET),
 }
 
 #: Label keys whose asserter is the *producer* of a result (the lane's own row labels, ``ledger_to_store``); a verification
