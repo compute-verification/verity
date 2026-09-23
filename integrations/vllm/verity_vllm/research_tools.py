@@ -1,0 +1,281 @@
+"""`research` Tool declarations for the vLLM integration sweep stages.
+
+Three Tools — ``vllm.build``, ``vllm.match``, ``vllm.commit`` — one per stage
+of ``verity_capture/sweep/row_pod.sh``.  Each stage runs as one ``research
+run --tool vllm.<stage>`` Attempt and publishes typed Artifacts (see
+``verity_capture/sweep/run_row_v2.sh`` for the wrapper that writes the
+``outputs.json`` the publisher consumes).
+
+Rules encoded here (Phase 5a of the v2 plan):
+
+* ``key_params`` is the row configuration — model id, dtype, hw family, tp,
+  batch, input/output lengths, arrival mix, sampling, execution mode, the
+  verification query id (default ``Q_module_body_v1``) — plus the
+  stage-specific flags that change the stage's *outputs*.  RETAIN mode,
+  window sizing, GPU utilisation, hot-engine toggles etc. are footprint /
+  schedule knobs: recorded as params, **not** key params.
+* ``key_conditions`` is ``hw.family`` plus the torch and vllm pins of the
+  workload interpreter (``$PY``, default ``/workspace/venv312/bin/python``),
+  probed via ``importlib.metadata`` so nothing heavy is imported.
+* ``closure`` is ``integrations/vllm/**`` plus the ``verity`` IR / ML /
+  verification packages.
+
+This module imports nothing beyond the standard library and
+``research.store.tool`` so it is loadable from any interpreter that can see
+``tools/research/src`` (``research`` loads it by dotted path or, failing
+that, by file — see ``research.store.tools_registry``).
+"""
+
+from __future__ import annotations
+
+import os
+import subprocess
+from pathlib import PurePosixPath
+from typing import Any
+
+from research.store.tool import Tool
+
+DEFAULT_QUERY = "Q_module_body_v1"
+DEFAULT_PY = "/workspace/venv312/bin/python"
+
+WRAPPER = "integrations/vllm/verity_capture/sweep/run_row_v2.sh"
+_SCRIPTS = ("run_row_v2.sh", "row_pod.sh")
+
+CLOSURE = [
+    "integrations/vllm/**",
+    "packages/verity/src/verity/ir/**",
+    "packages/verity/src/verity/ml/**",
+    "packages/verity/src/verity/verification/**",
+]
+
+# Row id grammar (see verity_capture/sweep/README):
+#   <model>__<dtype>__<hw>__tp<N>__b<N>__i<N>__o<N>__<arrivals>__<sampling>__<exec>
+_ROW_FIELDS = ("model_tag", "dtype", "hw", "tp", "batch", "input", "output", "arrivals", "sampling", "exec")
+_ROW_INT_PREFIX = {"tp": "tp", "batch": "b", "input": "i", "output": "o"}
+
+# Row configuration shared by all three stages.
+ROW_KEY_PARAMS = [
+    "stage",
+    "row",
+    "role",
+    "model",
+    "revision",
+    *_ROW_FIELDS,
+    "query",
+    "lp",
+    "t",
+]
+
+# Stage-specific flags that change the stage's outputs (and their defaults,
+# so an absent flag hashes identically to its explicit default).
+STAGE_KEY_FLAGS: dict[str, dict[str, Any]] = {
+    "build": {},
+    "match": {
+        "snapshot_steps": "row-default",  # row_pod.sh: "0,1" greedy / "all" stochastic
+        "snapshot_max_bytes": None,
+        "within_step": "dag",
+    },
+    "commit": {
+        "pairs": "3",
+        "required_classes": None,
+        "replay_args": None,
+        "extra_engine_args": None,
+        "commit_args": None,
+    },
+}
+
+# Recorded but NOT key: footprint / schedule / implementation knobs.
+NON_KEY_FLAGS = (
+    "retain",
+    "sweep_dir",
+    "build_jobs",
+    "match_impl",
+    "match_phase",
+    "gpu_util",
+    "window_mb",
+    "window_slots",
+    "tap_cap_mb",
+    "open_after_release",
+    "replay_cache",
+    "hot_engine",
+    "py",
+)
+
+PRODUCES: dict[str, list[str]] = {
+    "build": ["vllm-build/v1", "execution-evidence/v1", "run-files/v1"],
+    "match": ["vllm-match-record/v1", "execution-evidence/v1", "run-files/v1"],
+    "commit": ["vllm-verdict/v1", "execution-evidence/v1", "run-files/v1"],
+}
+
+
+def row_config(row: str) -> dict[str, Any]:
+    """Parse a sweep row id into its configuration fields.
+
+    Tolerant: unknown / missing fields are ``None`` so a malformed id still
+    yields a (distinct) derivation instead of aborting store preparation.
+    """
+    parts = row.split("__")
+    out: dict[str, Any] = {k: None for k in _ROW_FIELDS}
+    if len(parts) != len(_ROW_FIELDS):
+        out["model_tag"] = parts[0] if parts else None
+        return out
+    for k, v in zip(_ROW_FIELDS, parts):
+        pfx = _ROW_INT_PREFIX.get(k)
+        if pfx is not None:
+            if v.startswith(pfx) and v[len(pfx):].isdigit():
+                out[k] = int(v[len(pfx):])
+            else:
+                out[k] = v
+        else:
+            out[k] = v
+    return out
+
+
+def _find_script(argv: list[str]) -> tuple[int, str] | None:
+    for i, tok in enumerate(argv):
+        name = PurePosixPath(tok.replace("\\", "/")).name
+        if name in _SCRIPTS:
+            return i, name
+    return None
+
+
+def _parse_flags(toks: list[str]) -> dict[str, Any]:
+    """`--k v` / `--k=v` / `--flag` -> {k: v|True}; dashes become underscores."""
+    out: dict[str, Any] = {}
+    i = 0
+    while i < len(toks):
+        t = toks[i]
+        if not t.startswith("--"):
+            out.setdefault("_positional", []).append(t)
+            i += 1
+            continue
+        key, sep, val = t[2:].partition("=")
+        key = key.replace("-", "_")
+        if sep:
+            out[key] = val
+        elif i + 1 < len(toks) and not toks[i + 1].startswith("--"):
+            out[key] = toks[i + 1]
+            i += 1
+        else:
+            out[key] = True
+        i += 1
+    return out
+
+
+def parse(argv: list[str], *, stage: str) -> dict[str, Any]:
+    """Extract params from a wrapper / row_pod.sh argv.
+
+    Accepts either::
+
+        bash .../run_row_v2.sh stage <stage> <row> <ROLE> <hf-repo> <rev> [--flag v ...]
+        bash .../row_pod.sh <row> <ROLE> <hf-repo> <rev> [stages] [--flag v ...]
+    """
+    found = _find_script(argv)
+    if found is None:
+        rest = list(argv)
+        argv_stage = None
+    else:
+        i, name = found
+        rest = list(argv[i + 1 :])
+        argv_stage = None
+        if name == "run_row_v2.sh":
+            if rest[:1] == ["stage"] and len(rest) >= 2:
+                argv_stage = rest[1]
+                rest = rest[2:]
+    positional: list[str] = []
+    while rest and not rest[0].startswith("--"):
+        positional.append(rest.pop(0))
+    flags = _parse_flags(rest)
+
+    row = positional[0] if len(positional) > 0 else None
+    role = positional[1] if len(positional) > 1 else None
+    model = positional[2] if len(positional) > 2 else None
+    revision = positional[3] if len(positional) > 3 else None
+    if argv_stage is None and found is not None and found[1] == "row_pod.sh" and len(positional) > 4:
+        argv_stage = positional[4]
+
+    out: dict[str, Any] = {
+        "stage": argv_stage or stage,
+        "row": row,
+        "role": role,
+        "model": model,
+        "revision": revision,
+    }
+    out.update(row_config(row) if row else {k: None for k in _ROW_FIELDS})
+    out["query"] = flags.pop("query", DEFAULT_QUERY)
+    out["lp"] = flags.pop("lp", None)
+    out["t"] = flags.pop("t", None)
+    for k, default in STAGE_KEY_FLAGS.get(stage, {}).items():
+        out[k] = flags.pop(k, default)
+    for k in NON_KEY_FLAGS:
+        if k in flags:
+            out[k] = flags.pop(k)
+    # Anything else the wrapper accepted is recorded verbatim (non-key).
+    for k, v in flags.items():
+        out.setdefault(k, v)
+    return out
+
+
+def _probe_pins(env: dict[str, Any] | None = None) -> dict[str, Any]:
+    """torch / vllm versions as seen by the workload interpreter.
+
+    Uses ``importlib.metadata`` so vLLM is never imported.  ``None`` when the
+    interpreter is absent (e.g. on the control laptop) — such a derivation
+    legitimately differs from one probed on a pod.
+    """
+    py = os.environ.get("PY") or DEFAULT_PY
+    out: dict[str, Any] = {"torch": None, "vllm": None, "py": py}
+    if not os.path.exists(py):
+        return out
+    code = (
+        "import importlib.metadata as m\n"
+        "for d in ('torch','vllm'):\n"
+        "    try: print(d, m.version(d))\n"
+        "    except Exception: print(d, '')\n"
+    )
+    try:
+        r = subprocess.run([py, "-c", code], capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.TimeoutExpired):
+        return out
+    for line in r.stdout.splitlines():
+        parts = line.split(None, 1)
+        if len(parts) == 2 and parts[0] in ("torch", "vllm") and parts[1].strip():
+            out[parts[0]] = parts[1].strip()
+    return out
+
+
+def _tool(stage: str) -> Tool:
+    name = f"vllm.{stage}"
+    return Tool(
+        name=name,
+        version="1",
+        command=["bash", WRAPPER, "stage", stage],
+        closure=CLOSURE,
+        key_params=[*ROW_KEY_PARAMS, *STAGE_KEY_FLAGS[stage].keys()],
+        key_conditions=["hw.family", f"tool.{name}.torch", f"tool.{name}.vllm"],
+        param_artifacts=[],
+        produces=PRODUCES[stage],
+        parse=lambda argv, _s=stage: parse(argv, stage=_s),
+        conditions=_probe_pins,
+    )
+
+
+VLLM_BUILD = _tool("build")
+VLLM_MATCH = _tool("match")
+VLLM_COMMIT = _tool("commit")
+
+TOOLS = {t.name: t for t in (VLLM_BUILD, VLLM_MATCH, VLLM_COMMIT)}
+
+__all__ = [
+    "DEFAULT_QUERY",
+    "ROW_KEY_PARAMS",
+    "STAGE_KEY_FLAGS",
+    "NON_KEY_FLAGS",
+    "PRODUCES",
+    "VLLM_BUILD",
+    "VLLM_MATCH",
+    "VLLM_COMMIT",
+    "TOOLS",
+    "parse",
+    "row_config",
+]

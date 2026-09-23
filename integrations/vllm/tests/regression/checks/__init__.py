@@ -17,7 +17,7 @@ from importlib import import_module
 from types import ModuleType
 
 ORDER = ("manifest_digest", "program_digest", "global_match_checks", "executed_prefix", "coverage", "commit_summary", "verdict",
-         "decomp_hashes", "replay_partition")
+         "decomp_hashes", "replay_partition", "attempt_provenance")
 
 
 def load(name: str) -> ModuleType:

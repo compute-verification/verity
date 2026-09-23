@@ -8,7 +8,8 @@
                               Never raises into the runner.  Idempotent: an attempt already in the store is a no-op.
 
 Steps: result.json (valid) -> artifact of kind `result.kind` (default bench-result/v1), meta = the document minus its path lists,
-refs.run_files -> the ONE `run-files/v1` tree made of every path in `artifacts` + `measurement_files`; events.jsonl /
+refs.run_files -> the ONE `run-files/v1` tree made of every path in `artifacts` + `measurement_files`; `outputs.json`
+(schema research/outputs/v0.1, see `typed_outputs`) -> one named, typed artifact per entry; events.jsonl /
 resources.jsonl -> `telemetry/v1`; then `put_attempt` (write-once).  The local store is opened lazily (`research.store.local`,
 lane store-core); `store=` accepts any object with put_artifact / put_attempt / get_attempt.
 """
@@ -31,6 +32,7 @@ from .tool import Tool
 
 ATTEMPT_SCHEMA = "research/attempt/v0.1"
 PUBLISH_ERROR_SCHEMA = "research/store-publish-error/v0.1"
+OUTPUTS_SCHEMA = "research/outputs/v0.1"
 TERMINAL = ("done", "failed", "cancelled")
 DEFAULT_RESULT_KIND = "bench-result/v1"
 
@@ -172,6 +174,93 @@ def _stage_run_files(run_dir: Path, rels: list[str], into: Path) -> tuple[int, l
     return n, missing
 
 
+def _rel_under(run_dir: Path, rel: Any) -> Path:
+    """A payload path from outputs.json: relative to the run dir, never absolute, never escaping it."""
+    if not isinstance(rel, str) or not rel:
+        raise ValueError(f"outputs.json: payload path must be a non-empty string, got {rel!r}")
+    p = Path(rel)
+    if p.is_absolute() or ".." in p.parts:
+        raise ValueError(f"outputs.json: payload path {rel!r} must be relative to the run dir and not escape it")
+    return run_dir / p
+
+
+def typed_outputs(run_dir: Path, st: Any, run_id: str) -> dict[str, str]:
+    """Publish the typed outputs a workload declared in `<run_dir>/outputs.json` (schema `research/outputs/v0.1`):
+
+        {"schema": "research/outputs/v0.1",
+         "outputs": [{"name": "build", "kind": "vllm-build/v1", "meta": {...}, "refs": {"build": "art:...", "evidence": "@evidence"},
+                      "tree": "outputs/build" | "file": "outputs/x.json" | "files": ["a", "dir/"], "optional": false}, ...]}
+
+    One artifact per entry, in order; `refs` values are `art:` ids or `@<name>` of an earlier entry.  `files` stages the listed
+    paths (relative to the run dir) into one tree.  A missing payload is an error unless `optional` is set (then the entry is
+    skipped).  Returns {name: art id}.  The manifest's `outputs` map gets these under their names (beside `result` / `run_files`)."""
+    from .kinds import is_kind
+
+    doc = _read(run_dir / "outputs.json")
+    if doc is None:
+        return {}
+    if doc.get("schema") != OUTPUTS_SCHEMA:
+        raise ValueError(f"outputs.json: schema {doc.get('schema')!r} != {OUTPUTS_SCHEMA!r}")
+    entries = doc.get("outputs")
+    if not isinstance(entries, list):
+        raise ValueError("outputs.json: `outputs` must be a list")
+    out: dict[str, str] = {}
+    for i, ent in enumerate(entries):
+        if not isinstance(ent, dict):
+            raise ValueError(f"outputs.json: entry {i} is not an object")
+        name, kind = ent.get("name"), ent.get("kind")
+        if not isinstance(name, str) or not name or name == "argv":
+            raise ValueError(f"outputs.json: entry {i} needs a name")
+        if not is_kind(kind):
+            raise ValueError(f"outputs.json: {name}: kind {kind!r} is not `<name>/v<int>`")
+        if name in out:
+            raise ValueError(f"outputs.json: duplicate output name {name!r}")
+        meta = dict(ent.get("meta") or {})
+        meta.setdefault("run_id", run_id)
+        refs: dict[str, str] = {}
+        for k, v in (ent.get("refs") or {}).items():
+            if isinstance(v, str) and v.startswith("@"):
+                if v[1:] not in out:
+                    raise ValueError(f"outputs.json: {name}: ref {k}={v} names no earlier output")
+                refs[k] = out[v[1:]]
+            elif isinstance(v, str) and v.startswith("art:"):
+                refs[k] = v
+            elif v is None:
+                continue
+            else:
+                raise ValueError(f"outputs.json: {name}: ref {k}={v!r} is neither an art: id nor @<earlier output>")
+        optional = bool(ent.get("optional"))
+        if "file" in ent:
+            p = _rel_under(run_dir, ent["file"])
+            if not p.is_file():
+                if optional:
+                    continue
+                raise FileNotFoundError(f"outputs.json: {name}: file {ent['file']!r} is absent")
+            out[name] = st.put_artifact(kind, meta, refs or None, file=p)
+        elif "tree" in ent:
+            p = _rel_under(run_dir, ent["tree"])
+            if not p.is_dir() or not any(x.is_file() for x in p.rglob("*")):
+                if optional:
+                    continue
+                raise FileNotFoundError(f"outputs.json: {name}: tree {ent['tree']!r} is absent or empty")
+            out[name] = st.put_artifact(kind, meta, refs or None, tree=p)
+        elif "files" in ent:
+            rels = _dedupe(list(ent.get("files") or []))
+            with tempfile.TemporaryDirectory(prefix=f"research-out-{name}-") as tmp:
+                n, missing = _stage_run_files(run_dir, rels, Path(tmp))
+                if n == 0:
+                    if optional:
+                        continue
+                    raise FileNotFoundError(f"outputs.json: {name}: none of {rels} exists under the run dir")
+                meta.setdefault("files", n)
+                if missing:
+                    meta.setdefault("missing", missing)
+                out[name] = st.put_artifact(kind, meta, refs or None, tree=Path(tmp))
+        else:
+            out[name] = st.put_artifact(kind, meta, refs or None)
+    return out
+
+
 def _dedupe(items: list[Any]) -> list[str]:
     seen: list[str] = []
     for x in items:
@@ -240,6 +329,7 @@ def _publish(run_dir: Path, *, tool: Any, store: Any, remote_push: bool | None, 
         kind = doc.get("kind") if isinstance(doc.get("kind"), str) else DEFAULT_RESULT_KIND
         refs = {"run_files": outputs["run_files"]} if outputs["run_files"] else None
         outputs["result"] = st.put_artifact(kind, meta, refs)
+    outputs.update(typed_outputs(run_dir, st, run_id))               # outputs.json: named, typed artifacts the workload declared
     telemetry: dict[str, str | None] = {"events": None, "resources": None}
     for name in ("events", "resources"):
         p = run_dir / f"{name}.jsonl"

@@ -176,7 +176,10 @@ def input_ref(spec: str) -> dict[str, Any]:
     """`name=path` or `path`; hashes files <= 256 MiB, else null + reason."""
     name, _, path = spec.partition("=") if "=" in spec else (Path(spec).name, "=", spec)
     ref: dict[str, Any] = {"name": name, "path": path}
-    if Path(path).is_file():
+    if path.startswith("art:"):
+        ref["artifact"] = path
+        ref["sha256"], ref["sha256_reason"] = None, "artifact reference (a store id, not a file)"
+    elif Path(path).is_file():
         st = Path(path).stat()
         ref["sha256"], ref["sha256_reason"] = sha256_file(path)
         ref["bytes"] = st.st_size

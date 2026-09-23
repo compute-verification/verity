@@ -24,6 +24,16 @@ KINDS: dict[str, str] = {
     "native-peak/v1": "one measured dense tensor-core peak of a device (the canonical tables' 'native dense peak, measured' column): meta "
                       "{device, dtype, accumulate: 'fp32', method: 'cublas dense gemm 8192^3, median of 5', flop_per_second, "
                       "spec_flop_per_second, fraction_of_spec, sass, driver, cuda, clocks_mhz?, power_w?}; payload null",
+    # vLLM integration (integrations/vllm/verity_vllm/research_tools.py; one Attempt per sweep stage).
+    "vllm-build/v1": "one Build of a row's Program: payload tree = build_summary.json + required-value manifest + descriptor "
+                     "files (never the instance set); meta {row, program_digest, correspondence_digest?, stage_status}",
+    "vllm-match-record/v1": "one Match account: payload tree = instances.jsonl, control/tokens.json, capture/tokens.json, "
+                            "global_match.json, versions.json (never the raw capture planes); meta {row, program_digest, "
+                            "match_ok?}; refs.build = the vllm-build/v1 consumed",
+    "vllm-verdict/v1": "one Commit verdict (a Verity check/verdict, represented durably): payload tree = commit_verdict.json + "
+                       "sampled_replay_p*.json + commit_summary.json (compat); meta {row, verdict, ...}; refs.build, refs.match",
+    "execution-evidence/v1": "application evidence of one stage's execution (timeline.jsonl, schedule / arrival facts) — not "
+                             "telemetry; meta {row, stage}",
 }
 
 
