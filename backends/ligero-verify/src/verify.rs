@@ -54,7 +54,10 @@ pub struct Timing {
 #[derive(Clone)]
 pub struct Options {
     pub threads: usize,
-    pub soundness_bits: f64,
+    /// `verify` (one proof on its own): reject unless the proof's parameters give at most `2^-bits` union-bounded over
+    /// its OWN `n_proofs`.  `None` in `batch`: there the gate is `batch_bound` -- the union over the sub-batches actually
+    /// presented, at `--target-bits` (PROTOCOL.md 8c, "Batch verification").
+    pub soundness_bits: Option<f64>,
     pub allow_any_system: bool,
     /// Interactive mode only: the verifier's OWN step-0 randomness `r1 || s1 || r2 || s2` (128 bytes).  Without it a
     /// file verifier can only REPLAY the transcript's openings, and an interactive-mode accept is conditional on those
@@ -110,6 +113,56 @@ pub fn soundness(st: &Statement) -> Result<Soundness, String> {
     }
     let per = log2_sum(&terms.iter().map(|x| x.1).collect::<Vec<_>>());
     Ok(Soundness { per_proof_log2: per, union_log2: per + (st.n_proofs as f64).log2(), terms })
+}
+
+/// The batch verifier's accounting verdict (PROTOCOL.md 8c, "Batch verification").
+pub struct BatchBound {
+    pub accepted: bool,
+    pub reason: String,
+    /// `log2 sum_i 2^b_i` over the sub-batches presented; the batch's bits are its negative.
+    pub batch_log2: f64,
+}
+
+/// `128` for an integral target, else two decimals -- `protocol._bits_str`, so the reason strings match byte for byte.
+fn bits_str(bits: f64) -> String {
+    if bits.fract() == 0.0 {
+        format!("{}", bits as i64)
+    } else {
+        format!("{bits:.2}")
+    }
+}
+
+/// The batch rule on `N = per_proof_log2.len()` sub-batch proofs that each verified on their own (`protocol.batch_bound`,
+/// same reason strings, same precedence): `per_proof_log2[i]` is THIS verifier's bound of proof `i` (`soundness()` from
+/// the proof's own statement, never a prover-supplied number) and `n_proofs_claimed[i]` the count its `t` was sized for.
+/// Accept iff every claimed count equals `N` and `sum_i 2^b_i <= 2^-target_bits`.  Each per-proof bound is a statement
+/// about ONE commitment; the union bound is what makes "the batch is sound to 2^-target" true, and `n_proofs = N` is
+/// what makes a sub-batch's `t` a commitment to this batch rather than a coincidence.
+pub fn batch_bound(per_proof_log2: &[f64], n_proofs_claimed: &[usize], target_bits: f64, names: &[String]) -> BatchBound {
+    let n = per_proof_log2.len();
+    assert!(n > 0 && n_proofs_claimed.len() == n && names.len() == n, "batch_bound: one bound, one n_proofs, one name per sub-batch");
+    let total = log2_sum(per_proof_log2);
+    for (name, &k) in names.iter().zip(n_proofs_claimed) {
+        if k != n {
+            return BatchBound {
+                accepted: false,
+                reason: format!("batch: n_proofs mismatch ({name}: n_proofs = {k}, {n} sub-batches presented)"),
+                batch_log2: total,
+            };
+        }
+    }
+    if total > -target_bits {
+        return BatchBound {
+            accepted: false,
+            reason: format!("batch: union bound 2^{total:.2} over {n} sub-batches exceeds the target 2^-{}", bits_str(target_bits)),
+            batch_log2: total,
+        };
+    }
+    BatchBound {
+        accepted: true,
+        reason: format!("accept: all {n} sub-batches accepted; union bound 2^{total:.2} <= 2^-{}", bits_str(target_bits)),
+        batch_log2: total,
+    }
 }
 
 // ------------------------------------------------------------------------------------------- public statement ----
@@ -495,12 +548,16 @@ fn verify_inner(shared: &Shared, st_bytes: &[u8], pf_bytes: &[u8], opt: &Options
         Ok(s) => s,
         Err(e) => return reject(&e, tm, None, Some(info)),
     };
-    if snd.union_log2 > -opt.soundness_bits {
-        let r = format!(
-            "parameters give 2^{:.2} over {} sub-batches (per proof 2^{:.2}); requested 2^-{}",
-            snd.union_log2, st.n_proofs, snd.per_proof_log2, opt.soundness_bits
-        );
-        return reject(&r, tm, Some(snd), Some(info));
+    // `verify`: the proof's own accounting, union-bounded over the n_proofs IT claims.  `batch` (soundness_bits = None)
+    // gates on the union over the sub-batches actually presented instead (batch_bound, in main.rs after every verdict).
+    if let Some(bits) = opt.soundness_bits {
+        if snd.union_log2 > -bits {
+            let r = format!(
+                "parameters give 2^{:.2} over {} sub-batches (per proof 2^{:.2}); requested 2^-{}",
+                snd.union_log2, st.n_proofs, snd.per_proof_log2, bits
+            );
+            return reject(&r, tm, Some(snd), Some(info));
+        }
     }
     tm.soundness = lap(&mut clk);
 

@@ -418,6 +418,31 @@ the torch paths (`tests_fused_test.py`). The protocol is unchanged: the same pol
 **Measured (README, third pass).** 4096 VUs on the L40S, 25 x 170: non-ZK 1.37 s (0.334 ms/VU), HVZK 1.43 s,
 **ZK 1.41 s (0.345 ms/VU)**; verifier 0.96 s; 122.3 MB; depth 3; union 2^-128.05; ZK cost +3%.
 
+### Batch verification: the union bound is a verifier check (lane b-batch-bound)
+
+A batch of `B` VUs is proved as `N` **independently committed** sub-batch proofs (`bench-vu`: `N = ceil(B / B_proof)`,
+25 x 170 at the decision workload).  Each sub-batch statement binds its own words and parameters (section 3/4: the
+digest is computed by the verifier from its own configuration; nothing here weakens that) plus the count `n_proofs`
+the prover sized `t` for.  Every per-proof bound `2^-b_i` (section 6, `soundness()`) is a statement about ONE
+commitment; the only thing that makes "the batch is sound to `2^-t`" true is the union bound over the `N` proofs.
+**A batch verifier with target `t` bits accepts iff**
+
+1. every sub-batch proof verifies against its own statement, with the shared system (sections 3-8c as before);
+2. `sum_i 2^-b_i <= 2^-t`, where `b_i` is the verifier's OWN recomputation of proof `i`'s bound from that proof's
+   parameters `(n, k, l, t, D, mode, zk)` -- never a prover-supplied field -- and `t` is the verifier's parameter
+   (`--target-bits`, default 128); the batch bits reported are `-log2 sum_i 2^-b_i`;
+3. every proof's `n_proofs` equals `N`, the number of sub-batches presented (a proof sized for a smaller batch is
+   rejected, reason `batch: n_proofs mismatch`; so is one sized for a larger batch -- it belongs to another batch).
+
+Rule 2 is the accounting; rule 3 is what makes a sub-batch proof's `t` a commitment to its batch rather than a
+coincidence.  Before this lane neither verifier enforced either: `N` proofs each claiming `n_proofs = 1` at
+`2^-132.9` were accepted while the batch was only `2^-128.3`, and `N` proofs of a 25-batch presented as a 26-batch
+would have passed with `2^-128.2` claimed as `2^-128`.  A single proof verified alone (`ligero-verify verify`,
+`protocol.verify`) is not a batch verdict: it checks its transcript and its per-proof accounting union-bounded over
+its OWN `n_proofs` (D1 caveat: the Python `verify()` checks the transcript only).  The reason strings are the same
+in both verifiers (`batch: n_proofs mismatch (...)`, `batch: union bound 2^-x over N sub-batches exceeds the target
+2^-t`); the accept reason carries the batch bits.  Soundness is a parameter, not a constant.
+
 ## 9. Not done / labelled
 
 * Merkle: `backends/shared/hash_gpu` Blake3 on the device (merged from main during the night; bit-exact with the

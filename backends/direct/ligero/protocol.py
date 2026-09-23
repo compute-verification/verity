@@ -26,6 +26,7 @@ Fiat-Shamir with SHAKE-256 as the challenge expander (placeholder hash, named in
 from __future__ import annotations
 
 import hashlib
+import math
 import time
 from dataclasses import dataclass, field
 from fractions import Fraction
@@ -53,7 +54,7 @@ from .unit import public_vectors
 from .witness import Tables, build_witness, quad_p0
 
 __all__ = ["BF16_HOOKS", "MODES", "MODE_FIAT_SHAMIR", "MODE_INTERACTIVE", "CoinOpeningError", "Coins", "Config", "Proof",
-           "RelationHooks", "coin_commit", "config_for", "prove", "soundness", "verify"]
+           "RelationHooks", "batch_bound", "coin_commit", "config_for", "log2_sum", "prove", "soundness", "verify"]
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -209,6 +210,56 @@ def soundness(cfg: Config, n_linear: int, n_quadratic: int, n_proofs: int = 1) -
 
 
 COIN_HIDING_TERM = 2 * Fraction(2**64, 2**256)      # 2 slots x q / 2^|r|, q = 2^64
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Batch verification: the union bound over the sub-batches presented (PROTOCOL.md 8c, "Batch verification")
+# ---------------------------------------------------------------------------------------------------------------------
+#
+# A batch is N independently committed sub-batch proofs.  Each proof's bound 2^b_i (b_i = per_proof_total_log2 of
+# ``soundness()``, recomputed by the verifier from THAT proof's parameters) is a statement about one commitment; the
+# batch claim "sound to 2^-target" is true only through the union bound sum_i 2^b_i <= 2^-target, and a proof's
+# n_proofs is a commitment to its batch only if it equals the number of proofs actually presented.  Neither was a
+# verifier check before lane b-batch-bound: N proofs each claiming n_proofs = 1 passed on their own 2^-132.9 while the
+# batch was 2^-128.3.  The same rule, the same reason strings, in backends/ligero-verify (batch_bound in verify.rs).
+
+def _bits_str(bits: float) -> str:
+    """The target in a reason string: ``128`` for an integer, else two decimals (identical in the Rust verifier)."""
+    return f"{int(bits)}" if float(bits).is_integer() else f"{bits:.2f}"
+
+
+def log2_sum(xs: list[float]) -> float:
+    """log2(sum_i 2^x_i) without leaving the log domain (the x_i are ~ -130)."""
+    if not xs:
+        return float("-inf")
+    m = max(xs)
+    if m == float("-inf"):
+        return m
+    return m + math.log2(sum(2.0 ** (x - m) for x in xs))
+
+
+def batch_bound(per_proof_log2: list[float], n_proofs_claimed: list[int], target_bits: float = 128.0,
+                names: list[str] | None = None) -> dict:
+    """The batch verifier's accounting gate on N = len(per_proof_log2) sub-batch proofs that each verified on their own.
+    ``per_proof_log2[i]`` is the verifier's recomputation of proof i's bound (``soundness(cfg_i, ...)["per_proof_total_log2"]``,
+    never a prover-supplied number); ``n_proofs_claimed[i]`` is the count proof i's statement was sized for.  Accepts iff
+    every claimed count equals N and ``sum_i 2^b_i <= 2^-target_bits``.  ``batch_log2`` = log2 of the sum (the batch's
+    bits are its negative); reason strings are shared with the Rust verifier."""
+    N = len(per_proof_log2)
+    if N == 0 or len(n_proofs_claimed) != N:
+        raise ValueError("batch_bound needs one bound and one claimed n_proofs per sub-batch")
+    names = names or [f"sub_{i:02d}" for i in range(N)]
+    total = log2_sum([float(b) for b in per_proof_log2])
+    out = {"n_subbatches": N, "target_bits": float(target_bits), "batch_log2": total,
+           "per_proof_log2": [float(b) for b in per_proof_log2], "n_proofs_claimed": [int(k) for k in n_proofs_claimed]}
+    for name, k in zip(names, n_proofs_claimed):
+        if int(k) != N:
+            return {**out, "accepted": False, "reason": f"batch: n_proofs mismatch ({name}: n_proofs = {int(k)}, {N} sub-batches presented)"}
+    if total > -float(target_bits):
+        return {**out, "accepted": False,
+                "reason": f"batch: union bound 2^{total:.2f} over {N} sub-batches exceeds the target 2^-{_bits_str(target_bits)}"}
+    return {**out, "accepted": True,
+            "reason": f"accept: all {N} sub-batches accepted; union bound 2^{total:.2f} <= 2^-{_bits_str(target_bits)}"}
 
 
 # ---------------------------------------------------------------------------------------------------------------------
