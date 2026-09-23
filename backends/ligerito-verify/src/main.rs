@@ -2,19 +2,20 @@
 //!
 //! ~~~text
 //! ligerito-verify verify --proof X.proof [--coins X.coins] [--label L] [--json out.json] [--reps R]
-//!     # one LGRTOPV0 PCS proof (statement embedded); --coins = the verifier's recorded coin slots (interactive
-//!     # replay; default: Fiat-Shamir diagnostic with transcript label L, default "ligerito-proto/v1")
+//!     # one PCS proof: LGRTOPV0 (statement embedded) or proto/pcs.py bytes (point in X.z); --coins = the
+//!     # verifier's coins of a live session (u32 LE length + bytes each; interactive replay; default: Fiat-Shamir
+//!     # diagnostic with transcript label L, default "ligerito-proto/v1")
 //! ligerito-verify batch --dir DIR [--jobs N] [--json out.json] [--label L]
 //!     # every DIR/*.proof (with DIR/<name>.coins when present); accepted iff every proof is
 //! ligerito-verify selftest [--n N] [--kprime a,b,c] [--queries s,s,s] [--rate-log2 R] [--emit DIR]
 //!     # reference prover -> verifier round trip (+ negatives); --emit writes the proof / coins / negatives to DIR
 //! ~~~
 
-use ligerito_verify::format::{read_pcs_v0, write_pcs_v0};
+use ligerito_verify::format::{looks_like_proto, read_pcs_v0, read_point, read_proto, write_pcs_v0};
 use ligerito_verify::params::Params;
 use ligerito_verify::pcs::{verify, Report};
 use ligerito_verify::refprover::{prove, random_point, random_vector, tamper};
-use ligerito_verify::transcript::{FiatShamir, Recording, Replay};
+use ligerito_verify::transcript::{FiatShamir, Live};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
@@ -101,14 +102,20 @@ fn verify_file(proof_path: &Path, coins_path: Option<&Path>, label: &[u8], reps:
     let mut params = None;
     for _ in 0..reps.max(1) {
         result = (|| {
-            let (stmt, proof) = read_pcs_v0(&bytes)?;
+            let (stmt, proof) = if looks_like_proto(&bytes) {
+                let zp = proof_path.with_extension("z");
+                let zraw = std::fs::read(&zp).map_err(|e| format!("proto proof needs its point {}: {e}", zp.display()))?;
+                read_proto(&bytes, read_point(&zraw)?)?
+            } else {
+                read_pcs_v0(&bytes)?
+            };
             params = Some(proof.params.clone());
             let rep = match &coins_raw {
                 Some(raw) => {
-                    let mut rp = Replay::parse(raw)?;
-                    let rep = verify(&stmt, &proof, &mut rp)?;
-                    if !rp.exhausted() {
-                        return Err("coins: unused slots after the protocol ended".into());
+                    let mut lv = Live::parse(raw)?;
+                    let rep = verify(&stmt, &proof, &mut lv)?;
+                    if !lv.exhausted() {
+                        return Err("coins: unused verifier coins after the protocol ended".into());
                     }
                     rep
                 }
@@ -203,9 +210,12 @@ fn main() {
             let f = random_vector(n, 1);
             let z = random_point(n, 2);
             let t0 = Instant::now();
-            let mut rec = Recording::new(FiatShamir::new(label.as_bytes()));
-            let (stmt, proof) = prove(&p, &f, &z, &mut rec);
+            let (stmt, proof) = prove(&p, &f, &z, &mut FiatShamir::new(label.as_bytes()));
             let t_prove = t0.elapsed().as_secs_f64();
+            let n_coins = p.kprime.iter().sum::<usize>() + 2 * p.rounds() - 1;
+            let coins = Live::random_coins(n_coins, 12345);
+            let (stmt_live, proof_live) = prove(&p, &f, &z, &mut Live::new(coins.clone()));
+            verify(&stmt_live, &proof_live, &mut Live::new(coins.clone())).unwrap_or_else(|e| panic!("selftest live: {e}"));
             let bytes = write_pcs_v0(&stmt, &proof);
             let t1 = Instant::now();
             let rep = verify(&stmt, &proof, &mut FiatShamir::new(label.as_bytes())).unwrap_or_else(|e| panic!("selftest: {e}"));
@@ -221,36 +231,29 @@ fn main() {
             let (snd, terms) = p.soundness_log2();
             println!(
                 "{{\"params\":{{\"n\":{},\"kprime\":{:?},\"queries\":{:?},\"rate_log2\":{}}},\"proof_bytes\":{},\"coins\":{},\"t_prove\":{:.4},\"t_verify\":{:.6},\"negatives\":{},\"rejected\":{},\"soundness_log2\":{:.2},\"terms\":{{{}}}}}",
-                p.n, p.kprime, p.queries, p.rate_log2, bytes.len(), rec.slots.len(), t_prove, t_verify, negs.len(), rejected, snd,
+                p.n, p.kprime, p.queries, p.rate_log2, bytes.len(), rep.coins, t_prove, t_verify, negs.len(), rejected, snd,
                 terms.iter().map(|(k, v)| format!("\"{k}\":{v:.2}")).collect::<Vec<_>>().join(",")
             );
             if let Some(dir) = arg(&args, "--emit") {
                 let dir = PathBuf::from(dir);
                 std::fs::create_dir_all(&dir).expect("--emit dir");
                 std::fs::write(dir.join("honest.proof"), &bytes).unwrap();
-                std::fs::write(dir.join("honest.coins"), Replay::serialize(&rec.slots)).unwrap();
+                std::fs::write(dir.join("live.proof"), write_pcs_v0(&stmt_live, &proof_live)).unwrap();
+                std::fs::write(dir.join("live.coins"), Live::serialize(&coins)).unwrap();
+                std::fs::write(dir.join("proto.proof"), ligerito_verify::format::write_proto(&stmt, &proof, rep.coins)).unwrap();
+                std::fs::write(dir.join("proto.z"), ligerito_verify::transcript::ext_bytes(&stmt.z)).unwrap();
                 for (j, (what, s, pf)) in negs.iter().enumerate() {
                     let b = write_pcs_v0(s, pf);
                     std::fs::write(dir.join(format!("neg{j:02}.proof.neg")), &b).unwrap();
                     std::fs::write(dir.join(format!("neg{j:02}.what")), what).unwrap();
                 }
-                eprintln!("wrote {} (honest.proof/.coins + {} negatives as *.proof.neg)", dir.display(), negs.len());
+                eprintln!("wrote {} (honest.proof, live.proof/.coins, proto.proof/.z + {} negatives as *.proof.neg)", dir.display(), negs.len());
             }
-            let _ = rep.coins();
             std::process::exit(if rejected == negs.len() { 0 } else { 1 });
         }
         _ => {
             eprintln!("usage: ligerito-verify verify --proof X.proof [--coins X.coins] | batch --dir DIR [--jobs N] | selftest [--n N --kprime a,b --queries s,s --rate-log2 R --emit DIR]");
             std::process::exit(2);
         }
-    }
-}
-
-trait ReportExt {
-    fn coins(&self) -> usize;
-}
-impl ReportExt for Report {
-    fn coins(&self) -> usize {
-        self.coins
     }
 }

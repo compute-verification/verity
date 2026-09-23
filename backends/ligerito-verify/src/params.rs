@@ -14,11 +14,42 @@ pub struct Params {
     pub rate_log2: usize,
     /// Multiplicative shift of the evaluation domain: 1 = the subgroup <w_m> (proto), 31 = the Ligero coset g<w_m>.
     pub domain_shift: u32,
+    /// Per round, the (n1, n2) factorisation of the codeword length used by the prover's 4-step NTT: codeword
+    /// position s holds the evaluation at w_m^e with e = s / n1 + n2 (s mod n1) (`proto/ntt_gpu.Encoder.eta_index`;
+    /// n2 = 1 is natural order).  Any such factorisation is a bijection of the domain, so it is a layout choice,
+    /// not a soundness parameter; `canonical_split` is what the GPU encoder picks.
+    pub splits: Vec<(usize, usize)>,
+}
+
+/// `proto/ntt_gpu.split`: (n1, n2) with n1 n2 = m, both <= 4096, n1 >= n2; m <= 4096 -> (m, 1).
+pub fn canonical_split(m: usize) -> (usize, usize) {
+    if m <= 4096 {
+        return (m, 1);
+    }
+    let logm = m.trailing_zeros() as usize;
+    let log1 = (logm + 1) / 2;
+    (1 << log1, 1 << (logm - log1))
 }
 
 impl Params {
     pub fn new(n: usize, kprime: Vec<usize>, queries: Vec<usize>, rate_log2: usize) -> Params {
-        Params { n, kprime, queries, rate_log2, domain_shift: 1 }
+        let mut p = Params { n, kprime, queries, rate_log2, domain_shift: 1, splits: Vec::new() };
+        if p.validate_shape().is_ok() {
+            p.splits = (1..=p.rounds()).map(|i| canonical_split(p.m(i))).collect();
+        }
+        p
+    }
+
+    /// The header the Fiat-Shamir transcript absorbs first (`json.dumps` with default separators).
+    pub fn header_json(&self) -> String {
+        let list = |v: &[usize]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(", ");
+        format!(
+            "{{\"n\": {}, \"kprime\": [{}], \"queries\": [{}], \"rate\": {}}}",
+            self.n,
+            list(&self.kprime),
+            list(&self.queries),
+            self.rate_log2
+        )
     }
 
     /// Number of committed rounds (the paper's l - 1).
@@ -53,6 +84,24 @@ impl Params {
     }
 
     pub fn validate(&self) -> Result<(), String> {
+        self.validate_shape()?;
+        let l = self.rounds();
+        if self.splits.len() != l {
+            return Err(format!("params: {} NTT splits for {l} rounds", self.splits.len()));
+        }
+        for i in 1..=l {
+            let (n1, n2) = self.splits[i - 1];
+            if n1 == 0 || n2 == 0 || !n1.is_power_of_two() || !n2.is_power_of_two() || n1 * n2 != self.m(i) {
+                return Err(format!("params: round {i} split {n1} x {n2} is not a factorisation of m = {}", self.m(i)));
+            }
+        }
+        if self.domain_shift == 0 || self.domain_shift >= P {
+            return Err("params: domain shift".into());
+        }
+        Ok(())
+    }
+
+    fn validate_shape(&self) -> Result<(), String> {
         let l = self.rounds();
         if l == 0 {
             return Err("params: no committed rounds".into());
@@ -79,16 +128,19 @@ impl Params {
         if self.rate_log2 == 0 {
             return Err("params: rate 1 has no distance".into());
         }
-        if self.domain_shift == 0 || self.domain_shift >= P {
-            return Err("params: domain shift".into());
-        }
         Ok(())
     }
 
-    /// The evaluation point eta_s of codeword position s in round i: shift . w_{m_i}^s.
+    /// The exponent e of codeword position s in round i (eta_s = shift . w_m^e).
+    pub fn eta_index(&self, i: usize, s: usize) -> usize {
+        let (n1, n2) = self.splits[i - 1];
+        s / n1 + n2 * (s % n1)
+    }
+
+    /// The evaluation point eta_s of codeword position s in round i.
     pub fn domain_point(&self, i: usize, s: usize) -> u32 {
         let w = root_of_unity(self.m(i));
-        crate::field::mul(self.domain_shift, pow(w, s as u64))
+        crate::field::mul(self.domain_shift, pow(w, self.eta_index(i, s) as u64))
     }
 
     /// log2 of the soundness error, eq. (17) with the Reed-Solomon unique-decoding term written as
@@ -152,12 +204,32 @@ mod tests {
 
     #[test]
     fn domain_points_are_distinct_roots() {
-        let p = Params::new(8, vec![3], vec![4], 2);
-        let m = p.m(1);
-        let pts: std::collections::HashSet<u32> = (0..m).map(|s| p.domain_point(1, s)).collect();
-        assert_eq!(pts.len(), m);
-        for s in 0..m {
-            assert_eq!(pow(p.domain_point(1, s), m as u64), 1);
+        for split in [(128, 1), (16, 8), (8, 16)] {
+            let mut p = Params::new(8, vec![3], vec![4], 2);
+            p.splits = vec![split];
+            p.validate().unwrap();
+            let m = p.m(1);
+            let pts: std::collections::HashSet<u32> = (0..m).map(|s| p.domain_point(1, s)).collect();
+            assert_eq!(pts.len(), m);
+            for s in 0..m {
+                assert_eq!(pow(p.domain_point(1, s), m as u64), 1);
+            }
         }
+        let mut p = Params::new(8, vec![3], vec![4], 2);
+        p.splits = vec![(64, 1)];
+        assert!(p.validate().is_err());
+        assert_eq!(canonical_split(1 << 12), (1 << 12, 1));
+        assert_eq!(canonical_split(1 << 13), (1 << 7, 1 << 6));
+        assert_eq!(canonical_split(1 << 24), (1 << 12, 1 << 12));
+        // eta_index with (n1, n2) = (4, 2), m = 8: s = 5 -> 5/4 + 2 (5 mod 4) = 1 + 2 = 3
+        let mut p = Params::new(3, vec![2], vec![2], 2); // k = 1, m = 8
+        p.splits = vec![(4, 2)];
+        assert_eq!(p.eta_index(1, 5), 3);
+    }
+
+    #[test]
+    fn header_json_matches_json_dumps() {
+        let p = Params::new(12, vec![4, 3, 2], vec![16, 16, 16], 2);
+        assert_eq!(p.header_json(), "{\"n\": 12, \"kprime\": [4, 3, 2], \"queries\": [16, 16, 16], \"rate\": 2}");
     }
 }

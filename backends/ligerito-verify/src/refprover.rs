@@ -1,6 +1,6 @@
-//! A small reference PROVER for the PCS, written straight from the paper (section 6.2, prover algorithm) so the
-//! verifier has an oracle before the Python spec (`ref.py`) lands.  Toy sizes only (dense O(N) work, host NTTs);
-//! it also generates the negatives (`tamper`) the tests reject.  Not part of the verifier's trust base.
+//! A small reference PROVER for the PCS, written from the paper (section 6.2, prover algorithm) in the concrete
+//! protocol of `proto/pcs.py`, so the verifier has an oracle before the Python fixtures land and for the negatives
+//! (`tamper`).  Toy sizes only (dense O(N) host work).  Not part of the verifier's trust base.
 
 use crate::claims::{eq_vector, Term};
 use crate::field::{add, mul, Ext, Ntt};
@@ -9,20 +9,27 @@ use crate::params::Params;
 use crate::pcs::{row_words, Opening, Proof, Statement};
 use crate::transcript::{ext_bytes, Coins};
 
-/// Codeword of one column (coefficient basis): evaluations of sum_x c[x] X^x on shift . <w_m>.
-fn encode_column(coefs: &[Ext], m: usize, shift: u32, ntt: &Ntt) -> Vec<Ext> {
+/// Codeword of one column (coefficient basis): evaluations of sum_x c[x] X^x at eta_s for every position s,
+/// laid out in the encoder's position order (`Params::eta_index`).
+fn encode_column(p: &Params, i: usize, coefs: &[Ext], ntt: &Ntt) -> Vec<Ext> {
+    let m = p.m(i);
     let mut planes = vec![vec![0u32; m]; 6];
     let mut sc = 1u32;
     for (x, c) in coefs.iter().enumerate() {
         for d in 0..6 {
             planes[d][x] = mul(c.0[d], sc);
         }
-        sc = mul(sc, shift);
+        sc = mul(sc, p.domain_shift);
     }
     for pl in planes.iter_mut() {
-        ntt.transform(pl, false);
+        ntt.transform(pl, false); // natural order: index e holds the evaluation at w^e
     }
-    (0..m).map(|s| Ext([planes[0][s], planes[1][s], planes[2][s], planes[3][s], planes[4][s], planes[5][s]])).collect()
+    (0..m)
+        .map(|s| {
+            let e = p.eta_index(i, s);
+            Ext([planes[0][e], planes[1][e], planes[2][e], planes[3][e], planes[4][e], planes[5][e]])
+        })
+        .collect()
 }
 
 struct Committed {
@@ -37,7 +44,7 @@ fn commit(p: &Params, i: usize, mat: &[Ext]) -> Committed {
     let ntt = Ntt::new(m);
     let mut u = vec![vec![Ext::ZERO; cols]; m];
     for c in 0..cols {
-        let cw = encode_column(&mat[c * rows..(c + 1) * rows], m, p.domain_shift, &ntt);
+        let cw = encode_column(p, i, &mat[c * rows..(c + 1) * rows], &ntt);
         for s in 0..m {
             u[s][c] = cw[s];
         }
@@ -102,15 +109,35 @@ pub fn evaluate(f: &[u32], z: &[Ext]) -> Ext {
     crate::field::dot_ext_base(&eq_vector(z), f)
 }
 
-/// Prove  sum_x f[x] eq(x, z) = alpha  (alpha computed here and returned in the statement).
+fn open(p: &Params, i: usize, com: &Committed, s_set: &[usize]) -> Opening {
+    let _ = (p, i);
+    Opening { rows: s_set.iter().map(|&s| com.u[s].clone()).collect(), siblings: com.tree.open_multi(s_set) }
+}
+
+fn absorb_opening(coins: &mut dyn Coins, op: &Opening, base: bool) {
+    let mut words = Vec::new();
+    for row in &op.rows {
+        for w in row_words(row, base) {
+            words.extend_from_slice(&w.to_le_bytes());
+        }
+    }
+    coins.absorb(b"rows", &words);
+    let mut sib = Vec::with_capacity(32 * op.siblings.len());
+    for d in &op.siblings {
+        sib.extend_from_slice(d);
+    }
+    coins.absorb(b"sib", &sib);
+}
+
+/// Prove  sum_x f[x] eq(x, z) = v  (v computed here and returned in the statement).
 pub fn prove(p: &Params, f: &[u32], z: &[Ext], coins: &mut dyn Coins) -> (Statement, Proof) {
     p.validate().unwrap();
     assert_eq!(f.len(), 1 << p.n);
     assert_eq!(z.len(), p.n);
-    let alpha = evaluate(f, z);
-    let stmt = Statement { z: z.to_vec(), alpha };
+    let v = evaluate(f, z);
+    let stmt = Statement { z: z.to_vec(), v };
+    coins.absorb(b"header", p.header_json().as_bytes());
     coins.absorb(b"z", &ext_bytes(z));
-    coins.absorb(b"alpha", &alpha.to_bytes());
 
     let l = p.rounds();
     let mut mat: Vec<Ext> = f.iter().map(|&x| Ext::from_base(x)).collect();
@@ -125,21 +152,24 @@ pub fn prove(p: &Params, f: &[u32], z: &[Ext], coins: &mut dyn Coins) -> (Statem
         let com = commit(p, i, &mat);
         roots.push(com.tree.root());
         coins.absorb(b"root", &com.tree.root());
-        if i >= 2 {
+        if i == 1 {
+            coins.absorb(b"v", &v.to_bytes());
+        } else {
             let pc = prev.take().unwrap();
-            let s_set = coins.squeeze_indices(p.m(i - 1), p.queries[i - 2]).unwrap();
+            let s_set = coins.indices(b"S", p.m(i - 1), p.queries[i - 2]).unwrap();
+            let op = open(p, i - 1, &pc, &s_set);
+            absorb_opening(coins, &op, i - 1 == 1);
             let rbar = eq_vector(&r_prev);
-            let v: Vec<Ext> = s_set.iter().map(|&s| crate::field::dot_ext(&pc.u[s], &rbar)).collect();
-            let rows: Vec<Vec<Ext>> = s_set.iter().map(|&s| pc.u[s].clone()).collect();
-            let siblings = pc.tree.open_multi(&s_set);
-            coins.absorb(b"v", &ext_bytes(&v));
-            openings.push(Opening { v, rows, siblings });
-            let alpha_i = coins.squeeze_ext(1).unwrap()[0];
-            let mut w = alpha_i;
-            for &s in &s_set {
-                terms.push(Term::geom(w, p.domain_point(i - 1, s), p.k(i - 1)));
-                w = w.mul(&alpha_i);
+            let symbols: Vec<Ext> = op.rows.iter().map(|row| crate::field::dot_ext(row, &rbar)).collect();
+            openings.push(op);
+            let alpha = coins.challenge(b"alpha", 1 + s_set.len()).unwrap();
+            for t in terms.iter_mut() {
+                t.coef = t.coef.mul(&alpha[0]);
             }
+            for (j, &s) in s_set.iter().enumerate() {
+                terms.push(Term::geom(alpha[1 + j], p.domain_point(i - 1, s), p.k(i - 1)));
+            }
+            let _ = symbols; // the prover's running claim is recomputed from the tables below
         }
         let (rows, cols, k, kp) = (p.rows(i), p.cols(i), p.k(i), p.kprime[i - 1]);
         let mut tabs = tables(&terms, &mat, rows, cols, k, kp);
@@ -147,12 +177,8 @@ pub fn prove(p: &Params, f: &[u32], z: &[Ext], coins: &mut dyn Coins) -> (Statem
         let mut draws = Vec::with_capacity(kp);
         for _ in 0..kp {
             let g = round_message(&tabs);
-            let mut gb = Vec::with_capacity(72);
-            for e in &g {
-                gb.extend_from_slice(&e.to_bytes());
-            }
-            coins.absorb(b"g", &gb);
-            let r = coins.squeeze_ext(1).unwrap()[0];
+            coins.absorb(b"g", &ext_bytes(&g));
+            let r = coins.challenge(b"r", 1).unwrap()[0];
             fold(&mut tabs, &r);
             msgs.push(g);
             draws.push(r);
@@ -176,17 +202,9 @@ pub fn prove(p: &Params, f: &[u32], z: &[Ext], coins: &mut dyn Coins) -> (Statem
     }
     let pc = prev.take().unwrap();
     coins.absorb(b"y", &ext_bytes(&mat));
-    let s_set = coins.squeeze_indices(p.m(l), p.queries[l - 1]).unwrap();
-    let rows: Vec<Vec<Ext>> = s_set.iter().map(|&s| pc.u[s].clone()).collect();
-    let siblings = pc.tree.open_multi(&s_set);
-    let proof = Proof {
-        params: p.clone(),
-        roots,
-        openings,
-        sumcheck,
-        y_final: mat,
-        final_opening: Opening { v: Vec::new(), rows, siblings },
-    };
+    let s_set = coins.indices(b"S", p.m(l), p.queries[l - 1]).unwrap();
+    openings.push(open(p, l, &pc, &s_set));
+    let proof = Proof { params: p.clone(), roots, sumcheck, openings, y_final: mat };
     (stmt, proof)
 }
 
@@ -223,71 +241,60 @@ pub fn random_point(n: usize, seed: u64) -> Vec<Ext> {
 pub fn tamper(stmt: &Statement, proof: &Proof) -> Vec<(&'static str, Statement, Proof)> {
     let mut out = Vec::new();
     let bump = |e: &Ext| -> Ext { Ext([add(e.0[0], 1), e.0[1], e.0[2], e.0[3], e.0[4], e.0[5]]) };
-    // wrong evaluation
+    let last = proof.openings.len() - 1;
     let mut s = stmt.clone();
-    s.alpha = bump(&s.alpha);
-    out.push(("wrong evaluation alpha", s, proof.clone()));
-    // tampered opened row entry (final round)
+    s.v = bump(&s.v);
+    out.push(("wrong evaluation v", s, proof.clone()));
+    let mut s = stmt.clone();
+    s.z[0] = bump(&s.z[0]);
+    out.push(("wrong evaluation point z", s, proof.clone()));
     let mut pf = proof.clone();
-    pf.final_opening.rows[0][0] = bump(&pf.final_opening.rows[0][0]);
+    pf.openings[last].rows[0][0] = bump(&pf.openings[last].rows[0][0]);
     out.push(("tampered opened row (final)", stmt.clone(), pf));
-    // tampered final vector
     let mut pf = proof.clone();
     pf.y_final[1] = bump(&pf.y_final[1]);
     out.push(("tampered final vector y", stmt.clone(), pf));
-    // tampered sumcheck message (keeps g0 + g1, breaks g2)
     let mut pf = proof.clone();
     pf.sumcheck[0][0][2] = bump(&pf.sumcheck[0][0][2]);
     out.push(("tampered sumcheck g(2)", stmt.clone(), pf));
-    // tampered sumcheck message breaking the sum
     let mut pf = proof.clone();
     pf.sumcheck[0][0][0] = bump(&pf.sumcheck[0][0][0]);
     out.push(("tampered sumcheck g(0)", stmt.clone(), pf));
-    // tampered root
     let mut pf = proof.clone();
     pf.roots[0][3] ^= 0x80;
     out.push(("tampered root", stmt.clone(), pf));
-    if !proof.openings.is_empty() {
-        // wrong claimed symbol
-        let mut pf = proof.clone();
-        pf.openings[0].v[0] = bump(&pf.openings[0].v[0]);
-        out.push(("wrong claimed symbol v", stmt.clone(), pf));
-        // tampered opened row in round 1 (base) -- row . r-bar changes
+    if proof.openings.len() >= 2 {
         let mut pf = proof.clone();
         pf.openings[0].rows[0][0] = bump(&pf.openings[0].rows[0][0]);
         out.push(("tampered opened row (round 1)", stmt.clone(), pf));
-        // a row with an extension entry in the base round
         let mut pf = proof.clone();
         pf.openings[0].rows[0][0].0[1] = 1;
         out.push(("extension entry in a base-field row", stmt.clone(), pf));
-        // a sibling digest flipped
         let mut pf = proof.clone();
         if !pf.openings[0].siblings.is_empty() {
             pf.openings[0].siblings[0][0] ^= 1;
             out.push(("tampered merkle sibling", stmt.clone(), pf));
         }
-        // consistent row + symbol tamper: the row's dot product and v agree, but the Merkle leaf changes
         let mut pf = proof.clone();
-        let cols = pf.openings[0].rows[0].len();
-        // adding delta to row entry c changes row . r-bar by delta * rbar[c]; we cannot know rbar here, so pick a
-        // whole-row swap between two opened rows instead (leaf mismatch at both indices)
-        if pf.openings[0].rows.len() >= 2 && cols > 0 {
+        if pf.openings[0].rows.len() >= 2 {
             pf.openings[0].rows.swap(0, 1);
-            pf.openings[0].v.swap(0, 1);
-            out.push(("swapped two opened rows with their symbols", stmt.clone(), pf));
+            out.push(("swapped two opened rows", stmt.clone(), pf));
         }
+        let mut pf = proof.clone();
+        pf.openings[0].rows.pop();
+        out.push(("missing opened row", stmt.clone(), pf));
+        let mut pf = proof.clone();
+        pf.openings[0].siblings.pop();
+        out.push(("missing merkle sibling", stmt.clone(), pf));
     }
-    // wrong evaluation point
-    let mut s = stmt.clone();
-    s.z[0] = bump(&s.z[0]);
-    out.push(("wrong evaluation point z", s, proof.clone()));
-    // truncated final vector
     let mut pf = proof.clone();
     pf.y_final.pop();
     out.push(("truncated final vector", stmt.clone(), pf));
-    // missing a sumcheck message
     let mut pf = proof.clone();
     pf.sumcheck[0].pop();
     out.push(("missing sumcheck message", stmt.clone(), pf));
+    let mut pf = proof.clone();
+    pf.params.queries[0] = pf.params.queries[0].saturating_sub(1).max(1);
+    out.push(("fewer queries than declared", stmt.clone(), pf));
     out
 }
