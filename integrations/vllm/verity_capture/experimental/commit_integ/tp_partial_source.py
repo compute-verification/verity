@@ -214,7 +214,13 @@ class TPPartialSource:
         return {"per_token_bytes": per_token, "per_seq_bytes": per_seq, "tensors_per_step": len(self.sites) + n_moe_out}
 
     # -- install / uninstall -------------------------------------------------------------------------------------------------
+    def begin_run(self) -> None:
+        """Per-run state: the occurrence counter is keyed by (step, member) and steps restart at 0 every run, so a counter carried over
+        from an earlier run would key this run's first commit as occurrence N (every reference tap then misses its committed meta)."""
+        self._occ = {}
+
     def install(self) -> None:
+        self.begin_run()
         me = self
 
         def pre(name: str, cls: str):
