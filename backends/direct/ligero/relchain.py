@@ -1007,11 +1007,6 @@ def bench_vu_rel(args, rel: Relation) -> int:
     the run directory is listed in ``artifacts`` so it travels with the Attempt as run-files (``vu.dump_artifacts``)."""
     from .run import _git_commit as _git_commit_repo
     from .vu import ZK_MODE, ZK_MODE_FS, ZK_MODE_HM96, ZK_VACUOUS_NOTE, dump_artifacts
-    # red-team-leaf F5: the hiding caveat is the SCHEME's (`LeafScheme.privacy_note`), not Poseidon2's for everyone -- a linear
-    # leaf (Ajtai) is binding-only and says so in the fingerprint
-    ZK_HASHED_NOTE = ("; NOTE: authentication = included-hash: the operand rows x, W are NOT in this statement (private witness, "
-                      f"hashed in-circuit); the statement publishes their {R.leaf.hash_name} row digests ({leaf_privacy_note(R.leaf)}), "
-                      "the Merkle roots + (vu, x_index, w_index), and the words y16")
 
     def _git_commit():
         return os.environ.get("RESEARCH_GIT_COMMIT") or _git_commit_repo()
@@ -1024,6 +1019,11 @@ def bench_vu_rel(args, rel: Relation) -> int:
     depth = 3 if interactive else 1
     R = make_runner(args, rel, n_proofs=n_proofs)
     hashed = isinstance(R, HashedRelationRunner)
+    # red-team-leaf F5: the hiding caveat is the SCHEME's (`LeafScheme.privacy_note`), not Poseidon2's for everyone -- a linear
+    # leaf (Ajtai) is binding-only and says so in the fingerprint
+    ZK_HASHED_NOTE = ("; NOTE: authentication = included-hash: the operand rows x, W are NOT in this statement (private witness, "
+                      f"hashed in-circuit); the statement publishes their {R.leaf.hash_name} row digests ({leaf_privacy_note(R.leaf)}), "
+                      "the Merkle roots + (vu, x_index, w_index), and the words y16") if hashed else ""
     # --pipeline N (lane hp2-host): the staged prover; the hashed runner (lane hash-relation) has no stage generator yet
     pipeline_depth = int(getattr(args, "pipeline", 0) or 0) if not hashed else 0
     tile = parse_tile(getattr(args, "tile", None)) if hashed else None
