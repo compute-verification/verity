@@ -124,14 +124,20 @@ def _decode(pl: Plan, w):
 
 
 def hints_v2(p: Params, sys: System, c, a, b, y=None, device="cpu"):
-    """``c`` (l,), ``a``/``b`` (l, k), ``y`` (l,) or None -> (n_hints, l) int64 in ``sys.hints`` order.  On CUDA the kernels
-    are captured once per (system, l, stream) as a CUDA graph and replayed."""
+    """``c`` (l,), ``a``/``b`` (l, k), ``y`` (l,) or None -> (n_hints, l) int64 in ``sys.hints`` order.  On CUDA: the fused
+    kernel (``hints_fused.py``, one launch); without it the kernels below are captured once per (system, l, stream) as a
+    CUDA graph and replayed."""
     import torch
 
     c = torch.as_tensor(c, dtype=torch.int64).to(device, non_blocking=True)
     a = torch.as_tensor(a, dtype=torch.int64).to(device, non_blocking=True)
     b = torch.as_tensor(b, dtype=torch.int64).to(device, non_blocking=True)
     y = None if y is None else torch.as_tensor(y, dtype=torch.int64).to(device, non_blocking=True)
+    if str(device).startswith("cuda"):
+        from ..hints_fused import fused_hints_for
+        fh = fused_hints_for("v2", p, sys, device)
+        if fh is not None:
+            return fh.run(c, a, b)
     if USE_CUDA_GRAPH and str(device).startswith("cuda"):
         # one graph (with its static buffers) per stream: sub-batches pipelined on different streams must not share them
         key = (id(sys), c.shape[0], a.shape[1], y is not None, str(device), torch.cuda.current_stream(device).cuda_stream)
