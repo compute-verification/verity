@@ -1,5 +1,18 @@
 """X-03 (R12): fail-closed Commit verdict for the sweep harness (`commit_delta`).  Dependency-free so tests and report tooling can import it.
 
+The decision (`commit_verdict()` -> (pass, first failing reason)) is unchanged since R12; its rules are NAMED as checks by
+`verity_capture.commit.verdict` (vllm-verdict/v1, `<row>/verdict.json`), which re-reads the same record fields rule by rule:
+  runtime_match             tokens_equal / reference_integrity / fa2_zero_rows / collector_errors / bounded_staging / openings /
+                            openings_after_release / oracle_compare / compiled_check / binding_context / openings_population
+  local_replay              (`c2_sampled_replay`) sampled_replay / seed_of_record / population_gaps / population_scope / attribution
+  boundary_linkage          (was "linkage" / `boundary_linkage`)  C2 boundary linkage
+  checkpoint_binding        (was "weights pin" / `weights_pin`)  weights_of_record
+  execution_extent          (was "executed prefix" / `executed_prefix_facts`)  executed_prefix_of_record / match_account_link / rows_past_the_stop
+  required_value_coverage   (was "coverage")  identity_coverage / manifest_coverage / required_classes / manifest_of_record_verified
+  program_source_identity   (was "identity" / `identity_check`)  identity_layout (X-03 fa2_layers_bad ...)
+The on-disk field names below (`weights_pin`, `coverage`, `identity_check`, `executed_prefix_facts`, `account_missing`, ...) are the
+compat identifiers the record and other lanes depend on and are NOT renamed here.
+
 REL-02 (R13 rel, interim for reviewer finding R-14): `expected_tensors` counts acquisitions the collector ATTEMPTED, so a required producer
 that never fires (Hopper FA3 with the FA2 tap loaded, a tap left off the command line, a dropped value family) contributed 0 to both sides
 and passed.  Until the expected manifest comes from the Program/query (lane p0b), the verdict also takes the committer's coverage
