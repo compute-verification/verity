@@ -9,19 +9,19 @@ from dataclasses import asdict, dataclass, field
 
 import numpy as np
 
+from . import _jit
 from .mma import TCModel
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CPP_SRC = os.path.join(HERE, "cpp", "tc_model.cpp")
-LIB = os.path.join(HERE, "cpp", "libtc_model.so")
+LIB = str(_jit.lib_path("libtc_model.so"))             # build product (cpp/build/, gitignored), compiled on first use
 
 _lib = None
 
 
 def build() -> str:
+    """Compile cpp/tc_model.cpp; atomic publish + builder lock (``_jit``): no half-written .so for a concurrent dlopen."""
     from pathlib import Path
-
-    from . import _jit                                 # atomic publish + builder lock: no half-written .so for a concurrent dlopen
 
     def _compile(out: Path) -> None:
         subprocess.run(["g++", "-O2", "-std=c++17", "-fopenmp", "-fPIC", "-shared", "-o", str(out), CPP_SRC], check=True)

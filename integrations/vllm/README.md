@@ -99,4 +99,5 @@ uv run pytest tests/ir verity_capture        # the CPU oracle; tests that need C
 Tests and tools read fixtures relative to this directory: run them from here.
 
 The pod runtime (Python 3.12, torch cu129, vLLM `d9105ea80`, native taps, `hidden_gpu`) is built by `pod_bootstrap.sh`
-and exercised through `research run --source <sha> --on <machine>`.
+and exercised through `research run --source <sha> --on <machine>`.  On a pod without a GPU (`nvidia-smi` absent, or `--cpu`)
+it skips the native taps and writes the same `readiness.json` with `"mode": "cpu"`; `--dry-run` prints the resolved mode.
