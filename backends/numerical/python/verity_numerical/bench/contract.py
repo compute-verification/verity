@@ -97,6 +97,10 @@ __all__ = [
     "INSTANCES_DATASET",
     "INSTANCES_FIELD",
     "INSTANCES_TIERS",
+    "NVFP4_INSTANCES_DATASET",
+    "NVFP4_INSTANCES_DIGEST",
+    "NVFP4_INSTANCES_SEED",
+    "NVFP4_INSTANCES_TIER",
     "MISSING",
     "OVERHEAD",
     "PROFILE",
@@ -176,6 +180,16 @@ FP8_ADA_INSTANCES_DATASET = "bench-instances-fp8-ada/v1"
 FP8_ADA_INSTANCES_TIER = "vu-k1536-fp8-ada"
 FP8_ADA_INSTANCES_SEED = 20260922
 FP8_ADA_INSTANCES_DIGEST = "e66ff0f21c8e67d13b4b2d4cee2afa35b8345656b314da80e6b342ba051f078d"
+#: The frozen NVFP4 sm_120 instance set (``nvfp4-sm120-mma-draft/2026-09-22``): the synthetic VUs
+#: ``backends/direct/ligero/fp4/chain.py`` draws (``instances_fp4``: VU ``i`` from edge family ``VU_FAMILIES[i % 14]`` --
+#: uniform / zero / subnormal / top / spanning scales, sparse / saturated codes, exact cancellation, per-step mixtures --
+#: from seed :data:`NVFP4_INSTANCES_SEED`, model-recorded accumulators).  :data:`NVFP4_INSTANCES_DIGEST` is
+#: ``chain.instances_digest(4096)`` = sha256 of ``"fp4-nvf4 synthetic|seed=20260922|n=4096|K=1536|families=<the 14>"``,
+#: pinned here (frozen 2026-09-22); a change to the recipe or the family list is a new tier.
+NVFP4_INSTANCES_DATASET = "bench-instances-nvfp4-sm120/v1"
+NVFP4_INSTANCES_TIER = "vu-k1536-nvfp4-sm120"
+NVFP4_INSTANCES_SEED = 20260922
+NVFP4_INSTANCES_DIGEST = "d2d65f6523b49e673847746d725fbce3282f2734b0b424637c01e88f188a240a"
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 BUCKETS = ("witness", "encoding_commitment", "arithmetic", "lookup", "zk_additional", "serialization")

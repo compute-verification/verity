@@ -30,7 +30,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from verity.ml.tc.instructions import INSTRUCTIONS
-from verity.verification.target import FIRST, FP8_ADA_MMA, TARGETS, Target
+from verity.verification.target import FIRST, FP8_ADA_MMA, NVFP4_SM120, TARGETS, Target
 from verity_numerical.bench import contract
 
 try:  # the label keys are pinned with the store (`research.store.vocab`, tools/research); verity-numerical does not depend on that package
@@ -118,6 +118,8 @@ FROZEN_INSTANCES: dict[str, dict[str, Any]] = {
     FIRST.name: contract.instances_ref("vu-k1536", 0, B, BF16_INSTANCES_MANIFEST_SHA256),
     FP8_ADA_MMA.name: contract.instances_ref(contract.FP8_ADA_INSTANCES_TIER, 0, B, contract.FP8_ADA_INSTANCES_DIGEST,
                                              dataset=contract.FP8_ADA_INSTANCES_DATASET),
+    NVFP4_SM120.name: contract.instances_ref(contract.NVFP4_INSTANCES_TIER, 0, B, contract.NVFP4_INSTANCES_DIGEST,
+                                             dataset=contract.NVFP4_INSTANCES_DATASET),
 }
 
 #: Label keys whose asserter is the *producer* of a result (the lane's own row labels, ``ledger_to_store``); a verification

@@ -21,6 +21,10 @@ ligero-statement/v2  magic "LIGSTM02" | u32 layout (1 = chain) | u32 l | u32 n |
                      1 = fiat-shamir: no coins, challenges from the transcript; PROTOCOL.md 8c after b-zk-fix)
                      | u32 n_proofs | u32 n_vus | u32 steps | u32 K
                      | l x K u16 a | l x K u16 b | l x u16 y16
+ligero-statement/v3  magic "LIGSTM03" | as v2 through ``u32 steps``, then str relation ("fp4-nvf4") | u8 word_bytes
+                     | u8 y_bytes | u32 K | l x K a | l x K b | l x y  (little-endian unsigned of the stated widths: the
+                     operand words are bytes and the claimed word a full FP32 for the FP4 relation).  BF16 statements
+                     stay v2 byte for byte; the Rust verifier reads v2 only.
 ligero-proof/v1      magic "LIGPRF01" | u8 hash (1 = blake3, 2 = sha256) | u8 has_coins | u8 zk | u8 has_chain
                      | u32 D | u32 w_len | u32 h_len | u32 q_len | u32 v_len | u32 M | u32 t | u32 depth
                      | [c1 c2 r1 s1 r2 s2, 32 B each] | 32 B root | D x w_len u32 w | D x h_len u32 h
@@ -44,6 +48,11 @@ from .compile import P, System
 
 SYS_MAGIC, STMT_MAGIC, PROOF_MAGIC = b"LIGSYS01", b"LIGSTM02", b"LIGPRF01"
 SYS_MAGIC_V2 = b"LIGSYS02"     # a chain system whose end is in components (chain.py): v1 with the y16 expr replaced
+STMT_MAGIC_V3 = b"LIGSTM03"    # a statement of a non-BF16 relation: named, with its own word / claim widths
+BF16_RELATION = "bf16"
+#: The relations a statement file may name and their (operand word, claimed word) byte widths; ``_runner`` builds the
+#: matching chain runner for the file-level verifier.
+RELATION_WIDTHS = {BF16_RELATION: (2, 2), "fp8-ada": (1, 4), "fp4-nvf4": (1, 4)}
 MODE_CODES = {"interactive": 0, "fiat-shamir": 1}
 MODE_NAMES = {v: k for k, v in MODE_CODES.items()}
 HASH_IDS = {"blake3": 1, "sha256": 2}
@@ -209,9 +218,16 @@ class Statement:
     n_proofs: int
     n_vus: int
     steps: int
-    a: np.ndarray      # (l, K) uint16
-    b: np.ndarray      # (l, K) uint16
-    y16: np.ndarray    # (l,) uint16
+    a: np.ndarray      # (l, K) uint16 (BF16) / uint8 words (FP8, FP4)
+    b: np.ndarray      # (l, K)
+    y16: np.ndarray    # (l,) the claimed words at the end columns: uint16 (BF16) / a full FP32 word (FP4)
+    relation: str = BF16_RELATION      # v2 files are BF16; a v3 file names its relation (RELATION_WIDTHS)
+
+    @property
+    def widths(self) -> tuple[int, int]:
+        if self.relation not in RELATION_WIDTHS:
+            raise ValueError(f"unknown relation {self.relation!r} (known: {sorted(RELATION_WIDTHS)})")
+        return RELATION_WIDTHS[self.relation]
 
     def config(self):
         from .protocol import Config
@@ -226,9 +242,22 @@ class Statement:
         return Layout(self.l, self.n_vus, self.steps)
 
 
+def _u_dtype(nbytes: int) -> str:
+    if nbytes not in (1, 2, 4):
+        raise ValueError(f"word width {nbytes} bytes (1, 2 or 4)")
+    return f"<u{nbytes}"
+
+
 def statement_bytes(st: Statement) -> bytes:
+    """A BF16 statement as ``ligero-statement/v2`` (byte for byte the pre-FP4 file), any other relation's as v3."""
+    v3 = st.relation != BF16_RELATION
+    wb, yb = st.widths
+    for name, arr, nb in (("a", st.a, wb), ("b", st.b, wb), ("y", st.y16, yb)):
+        x = np.asarray(arr)
+        if (x < 0).any() or (x >= 2 ** (8 * nb)).any():
+            raise ValueError(f"statement {name}: a word does not fit {nb} byte(s)")
     w = _W()
-    w.raw(STMT_MAGIC)
+    w.raw(STMT_MAGIC_V3 if v3 else STMT_MAGIC)
     w.u32(1)
     for x in (st.l, st.n, st.D, st.t):
         w.u32(x)
@@ -239,18 +268,24 @@ def statement_bytes(st: Statement) -> bytes:
     w.u32(st.n_proofs)
     w.u32(st.n_vus)
     w.u32(st.steps)
+    if v3:
+        w.s(st.relation)
+        w.u8(wb)
+        w.u8(yb)
     K = int(np.asarray(st.a).shape[1])
     w.u32(K)
-    w.arr(st.a, "<u2")
-    w.arr(st.b, "<u2")
-    w.arr(st.y16, "<u2")
+    w.arr(st.a, _u_dtype(wb))
+    w.arr(st.b, _u_dtype(wb))
+    w.arr(st.y16, _u_dtype(yb))
     return w.bytes()
 
 
 def read_statement(data: bytes) -> Statement:
     r = _R(data)
-    if r.take(8) != STMT_MAGIC:
-        raise ValueError("not a ligero-statement/v2 file")
+    magic = r.take(8)
+    if magic not in (STMT_MAGIC, STMT_MAGIC_V3):
+        raise ValueError("not a ligero-statement/v2 or /v3 file")
+    v3 = magic == STMT_MAGIC_V3
     if r.u32() != 1:
         raise ValueError("only chain mode (1) is defined")
     l, n, D, t = r.u32(), r.u32(), r.u32(), r.u32()
@@ -260,12 +295,20 @@ def read_statement(data: bytes) -> Statement:
     mode_code = r.u8()
     if mode_code not in MODE_NAMES:
         raise ValueError(f"unknown mode code {mode_code}")
-    n_proofs, n_vus, steps, K = r.u32(), r.u32(), r.u32(), r.u32()
-    a = r.arr((l, K), "<u2")
-    b = r.arr((l, K), "<u2")
-    y16 = r.arr((l,), "<u2")
+    n_proofs, n_vus, steps = r.u32(), r.u32(), r.u32()
+    relation, wb, yb = BF16_RELATION, 2, 2
+    if v3:
+        relation, wb, yb = r.s(), r.u8(), r.u8()
+        if relation == BF16_RELATION:
+            raise ValueError("a BF16 statement is a v2 file")
+        if RELATION_WIDTHS.get(relation, (wb, yb)) != (wb, yb):
+            raise ValueError(f"relation {relation!r} stated with widths {(wb, yb)}, expected {RELATION_WIDTHS[relation]}")
+    K = r.u32()
+    a = r.arr((l, K), _u_dtype(wb))
+    b = r.arr((l, K), _u_dtype(wb))
+    y16 = r.arr((l,), _u_dtype(yb))
     r.done()
-    return Statement(l, n, D, t, target, zk, t_pad, MODE_NAMES[mode_code], n_proofs, n_vus, steps, a, b, y16)
+    return Statement(l, n, D, t, target, zk, t_pad, MODE_NAMES[mode_code], n_proofs, n_vus, steps, a, b, y16, relation)
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -354,22 +397,33 @@ def verify_files(stmt_path: Path, proof_path: Path, device: str = "cpu", runner=
     coins = pf.coins if (st.interactive and pf.coins is not None) else None
     if st.interactive and coins is None:
         return False, "interactive transcript carries no coins", 0.0
+    if getattr(R, "relation", BF16_RELATION) != st.relation:
+        return False, f"statement names relation {st.relation!r}, the verifier checks {getattr(R, 'relation', BF16_RELATION)!r}", 0.0
+    rel = getattr(R, "hooks", pm.BF16_HOOKS)          # the relation's public decode and statement widths (BF16 by default)
     t0 = time.perf_counter()
     try:
         ok, why = pm.verify(R.p, R.sys, R.tb, st.config(), None, st.a.astype(np.int64), st.b.astype(np.int64), None,
-                            pf, device, chain=(st.layout(), st.y16.astype(np.int64)), coins=coins)
+                            pf, device, chain=(st.layout(), st.y16.astype(np.int64)), coins=coins, rel=rel)
     except Exception as e:  # noqa: BLE001 -- the Python verifier is not reject-first on malformed input
         ok, why = False, f"python verifier raised {type(e).__name__}: {e}"
     return ok, why, time.perf_counter() - t0
 
 
 def _runner(device: str, st: Statement | None = None):
-    from .vu import ChainRunner
+    """The chain runner of the statement's relation (BF16 without a statement): ``vu.ChainRunner`` for BF16,
+    ``fp4.chain.FP4ChainRunner`` for ``fp4-nvf4``.  (``fp8-ada`` never wrote statement files; add its runner here when it does.)"""
     zk = st.zk if st is not None else False
     n_proofs = st.n_proofs if st is not None else 1
     target = st.target_log2 if st is not None else -128.0
     mode = st.mode if st is not None else "interactive"
-    return ChainRunner(device, target, 2, "torch", n_proofs=n_proofs, zk=zk, mode=mode)
+    relation = st.relation if st is not None else BF16_RELATION
+    if relation == BF16_RELATION:
+        from .vu import ChainRunner
+        return ChainRunner(device, target, 2, "torch", n_proofs=n_proofs, zk=zk, mode=mode)
+    if relation == "fp4-nvf4":
+        from .fp4.chain import FP4ChainRunner
+        return FP4ChainRunner(device, target, 2, n_proofs=n_proofs, zk=zk, mode=mode)
+    raise ValueError(f"no file-level verifier runner for relation {relation!r}")
 
 
 def sha256_file(path: Path) -> str:
@@ -384,7 +438,7 @@ def _statement_of(R, pubs, lay, cfg, n_proofs: int, mode: str | None = None) -> 
     a, b, y16 = pubs
     return Statement(cfg.l, cfg.n, cfg.D, cfg.t, cfg.target_log2, cfg.zk, cfg.t_pad, mode or cfg.mode, n_proofs,
                      lay.n_vus, lay.steps, np.asarray(a, dtype=np.int64), np.asarray(b, dtype=np.int64),
-                     np.asarray(y16, dtype=np.int64))
+                     np.asarray(y16, dtype=np.int64), getattr(R, "relation", BF16_RELATION))
 
 
 def _write(out: Path, stem: str, st: Statement, pf, manifest: dict, kind: str, R, device: str, extra: dict | None = None):
@@ -410,7 +464,10 @@ def _write(out: Path, stem: str, st: Statement, pf, manifest: dict, kind: str, R
 
 def _manifest(out: Path, args, R) -> dict:
     from .run import _git_commit
-    return {"format": {"system": "ligero-system/v1", "statement": "ligero-statement/v2", "proof": "ligero-proof/v1"},
+    relation = getattr(R, "relation", BF16_RELATION)
+    sys_fmt = "ligero-system/v1" if R.sys.chain is None or R.sys.chain.get("y16") is not None else "ligero-system/v2"
+    return {"format": {"system": sys_fmt, "statement": "ligero-statement/v2" if relation == BF16_RELATION else "ligero-statement/v3",
+                       "proof": "ligero-proof/v1"}, "relation": relation,
             "commit": _git_commit(), "device": args.device, "system": R.sys.summary(), "zk": R.zk, "mode": R.mode, "files": []}
 
 

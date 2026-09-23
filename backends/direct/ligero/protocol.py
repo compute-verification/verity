@@ -925,7 +925,7 @@ def verify(p: Params, sys: System, tb: Tables, cfg: Config, c, a, b, y, proof: P
         pub = rel.public_vectors(p, c, a, b, y, device=device)
     except ValueError as e:
         return False, f"public inputs: {e}"
-    if len(pub["a[0].s"]) != l:
+    if sys.pins and len(pub[sys.pins[0][1]]) != l:          # the first pinned vector (a[0].s for BF16/FP8, a[0].n for FP4)
         return False, "wrong number of units"
     # shapes and ranges of the transcript
     w_shape = (D, k) if cfg.zk else (D, l)
