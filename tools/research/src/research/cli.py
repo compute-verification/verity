@@ -282,6 +282,13 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
         harness_args.append("--require-result")
     # the store flags travel as `research run` flags: the machine-side runner computes derivation/reuse_key in the shipped source tree
     if ns.tool:
+        # the machine runs the shipped tree's research package when --source carries one, else THIS launcher's: that one must know the tool
+        from .store import tools_registry
+        if remote.source_tool_package(Path(ns.source).expanduser() if ns.source else None) is None and ":" not in ns.tool \
+                and ns.tool not in tools_registry.REGISTRY:
+            print(f"research run --on {ns.on}: launcher research package does not know tool {ns.tool!r}; pass --source with tools/research "
+                  f"(registered here: {', '.join(sorted(tools_registry.REGISTRY))})", file=sys.stderr)
+            return 3
         harness_args += ["--tool", ns.tool]
     for s in ns.scratch:
         harness_args += ["--scratch", s]
