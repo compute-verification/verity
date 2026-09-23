@@ -503,7 +503,11 @@ editing their compilers; bf16-ampere and fp4-nvf4 are not composed):
 **Census** (rows per unit, bare -> hashed; per VU x 96 / 48 units): bf16-hopper 3292 -> 5637 (+608 private-operand
 rows, +1720 hash rows, +17 pins; +71 %), fp8-hopper 3396 -> 5837 (+72 %), fp8-ada 3769 -> 6210 (+704 / +1720 / +17;
 +65 %).  The measured cost (one RTX 4090, fp8-ada, 4096 VUs, l = 16384, 3 reps, bare vs committed on the same pod)
-is in the lane note `hash-relation` and in the store (`authentication=included-hash` labels).
+is in the lane note `hash-relation` and in the store (`authentication=included-hash` labels).  Prover implementation
+note (no protocol content): the sponges' 1704 S-box rows per unit are written by a dedicated device kernel
+(`hashchain.Poseidon2Witness`, a `witness_device` hook: the permutation as straight-line code with the 24-lane state
+in registers) rather than by the fused witness program evaluating the linear layers as ~74k-term affine forms; the
+witness is identical, so the proofs are.
 
 **Committer** (`verity.commitments.rowleaf`, `leaf/v2h`; `hashauth.py`): tree `a` = one leaf per x row (the row's
 Poseidon2 digest as 32 big-endian bytes, schema `poseidon2-babybear-w24/row/v2h`), tree `b` = one leaf per W column,
