@@ -145,6 +145,8 @@ def test_reproduces(row_key: str, check_name: str, store_state: dict, record_pro
         record_property("decision_status", act.get("decision_status") or "accepted")
     record_property("matched", resolver.matched(act, problems))                     # which side reproduced: v1 | decision <finding> (<status>)
     record_property("engine", resolver.engine())
+    for rel, by in sorted(row.pinned_by.items()):                                     # an INPUT resolved by a decision's pin, not v1's
+        record_property("pinned_by", f"{rel}: {by}")
     strength = "WEAK (PASS-side / unexercised rule)" if chk.STRENGTH == "weak" else "strong"
     what = "the v1 reference" + (" nor any labelled decision on the fixture" if row.decisions(check_name) else "")
     assert not problems, (f"#{row.number} {row.key}: {check_name} [{chk.TIER}, {strength}] does not reproduce {what} "
@@ -179,3 +181,18 @@ def test_negative_57_refusal_reproduces(record_property) -> None:
     record_property("decision_status", act.get("decision_status") or "accepted")
     record_property("matched", resolver.matched(act, problems))
     record_property("engine", resolver.engine())
+
+
+def test_decisions_are_listed_and_well_formed(record_property) -> None:
+    """Every labelled decision of fixtures.toml on one screen (`pytest tests/regression -k decisions -s`, or
+    `python -m tests.regression.decisions`; no store, no VERITY_REGRESSION needed): row, check, finding, status, since, what it
+    sanctions (`expected`) and pins (`pins`), the reason.  Fails on a malformed decision (missing DECISION_FIELDS, unknown status)
+    -- `sanction` would ignore it silently otherwise -- so the pending ones (`status = "pending_review"`) are always reviewable."""
+    from . import decisions as D
+    rows_ = D.listing()
+    text = D.render(rows_)
+    print("\n" + text)
+    record_property("decisions_n", str(len(rows_)))
+    record_property("pending_n", str(sum(1 for d in rows_ if d["status"] == "pending_review")))
+    bad = [f"#{d['row']} {d['check']} {d['finding']}: {d['problem']}" for d in rows_ if d["problem"]]
+    assert not bad, "malformed labelled decision(s) in fixtures.toml:\n  " + "\n  ".join(bad)

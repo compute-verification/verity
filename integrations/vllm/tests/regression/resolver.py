@@ -80,6 +80,8 @@ class Row:
         self.files: dict[str, dict[str, Any]] = spec.get("files") or {}
         self._fixtures = fixtures
         self._fetched: dict[str, Path] = {}
+        #: `<rel>` -> "<finding> (<status>)" for every input this row resolved by a DECISION's pin instead of the frozen v1 pin
+        self.pinned_by: dict[str, str] = {}
 
     # ---- locating -------------------------------------------------------------------------------------------------------------
     def _roots(self) -> list[Path]:
@@ -145,14 +147,44 @@ class Row:
         rec = self.files.get(rel)
         if not rec:
             return p                                       # not frozen in the index: used as found (the check records that it did)
+        problem = self._pin_problem(rel, p, rec)
+        if problem is None:
+            self.pinned_by.pop(rel, None)
+            return p
+        # the frozen v1 pin failed: a labelled decision may own a sanctioned pin for this input (`pins."<rel>" = { bytes, sha256 }`:
+        # the manifest a decision's promotion produces, read downstream as an INPUT by coverage / replay_partition) -- the decision,
+        # not the check, owns it; `pending_review` pins are consulted for non-baseline engines only (as `sanction`)
+        tried: list[str] = []
+        for d in self.spec.get("decisions") or []:
+            pin = ((d.get("pins") or {}).get(rel)) if isinstance(d, dict) else None
+            if not pin or not d.get("finding"):
+                continue
+            status = decision_status(d)
+            label = f"decision {d['finding']} ({status})"
+            if status not in DECISION_STATUSES:
+                tried.append(f"{label}: unknown status")
+                continue
+            if status == "pending_review" and engine() == BASELINE_ENGINE:
+                tried.append(f"{label}: not consulted under the {BASELINE_ENGINE} engine")
+                continue
+            dp = self._pin_problem(rel, p, pin)
+            if dp is None:
+                self.pinned_by[rel] = f"{d['finding']} ({status})"
+                return p
+            tried.append(f"{label}: {dp}")
+        raise InputMismatch(f"{self.key}/{rel}: v1 pin: {problem}" + ("".join(f"; {t}" for t in tried)))
+
+    @staticmethod
+    def _pin_problem(rel: str, p: Path, pin: dict[str, Any]) -> str | None:
+        """None when `p` has the `bytes` / `sha256` of `pin` (sha only under VERIFY_LIMIT or VERIFY_ALL), else what differs."""
         size = p.stat().st_size
-        if rec.get("bytes") is not None and int(rec["bytes"]) != size:
-            raise InputMismatch(f"{self.key}/{rel}: {size} bytes on disk, fixtures.toml froze {rec['bytes']}")
-        if rec.get("sha256") and (size <= VERIFY_LIMIT or os.environ.get("VERITY_REGRESSION_VERIFY_ALL") == "1"):
+        if pin.get("bytes") is not None and int(pin["bytes"]) != size:
+            return f"{size} bytes on disk, pinned {pin['bytes']}"
+        if pin.get("sha256") and (size <= VERIFY_LIMIT or os.environ.get("VERITY_REGRESSION_VERIFY_ALL") == "1"):
             got = sha256_file(p)
-            if got != rec["sha256"]:
-                raise InputMismatch(f"{self.key}/{rel}: sha256 {got[:16]} on disk != frozen {rec['sha256'][:16]}")
-        return p
+            if got != pin["sha256"]:
+                return f"sha256 {got[:16]} on disk != pinned {str(pin['sha256'])[:16]}"
+        return None
 
     def has(self, rel: str) -> bool:
         try:
