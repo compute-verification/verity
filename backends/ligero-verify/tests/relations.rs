@@ -846,3 +846,122 @@ fn fp8_ada_hashed_system_and_version_mismatches_are_rejected() {
     assert_eq!(code, 0, "{js}");
     assert!(js.contains("coins replayed from the transcript"), "{js}");
 }
+
+// ------------------------------------------------------------ lane hash-compose: the hashed bf16-ampere relation (v5) ----
+//
+// `fixtures/bf16-ampere-hash/`: a pod CPU dump (vy-hash-compose, RTX 4090 host, `--device cpu`) of the HASHED Ampere BF16
+// relation -- `hashchain.compose(relations.relation("bf16-ampere"))`: vu.py's own `compile_unit(REAL)` unit with private
+// operands and the two Poseidon2 sponges, 5861 rows, 19 linked rows -- on the FROZEN `bench-instances/v1` `vu-k1536` set
+// (VUs 0..10): interactive non-ZK, 10 VUs x 96 steps at l = 1024, one sub-batch, statement `ligero-statement/v5` (3413
+// bytes: 16-bit y words), system `ligero-system/v3`.  Python's verifier accepted it (`verify_python.json`, 1/1).
+
+const AH_SYS: &str = "fixtures/bf16-ampere-hash/system.bin";
+const AH_STMT: &str = "fixtures/bf16-ampere-hash/sub_00.stmt";
+const AH_PROOF: &str = "fixtures/bf16-ampere-hash/sub_00.proof";
+const AH_COINS: &str = "fixtures/bf16-ampere-hash/sub_00.coins";
+const AH_SYS_ID: &str = "673461ab446d96869a0ab32d1291667f4af4ba86cdf5fb6479fefaa50dbb8ed4";
+const AH_TABLE_DIGEST: &str = "3ba12207d9f221dcb2a471044cabb314cc3e05e4512a27559080f431aa7210c9";
+
+/// The v5 fixture's field offsets for the BF16 widths (y_bytes = 2; `v5_offsets` above asserts the FP8 fixture's shape).
+fn ah_offsets(st: &[u8]) -> V5 {
+    assert_eq!(&st[..8], b"LIGSTM05");
+    let (l, n_vus, steps, k) = (u32_at(st, 12), u32_at(st, 46), u32_at(st, 50), u32_at(st, 54));
+    assert_eq!((l, n_vus, steps, k), (1024, 10, 96, 1536));
+    let yb = st[58] as usize;
+    assert_eq!(yb, 2);
+    let mut o = 59;
+    let s = |o: &mut usize| { let n = u32_at(st, *o); let v = st[*o + 4..*o + 4 + n].to_vec(); *o += 4 + n; v };
+    assert_eq!(s(&mut o), b"bf16-ampere");
+    assert_eq!(s(&mut o), b"included-hash");
+    let digests = o;
+    o += 4 * 16 * n_vus;
+    let y16 = o;
+    o += l * yb;
+    assert_eq!(s(&mut o), b"ligero-b/auth/v2h");
+    assert_eq!(s(&mut o), b"poseidon2-babybear-w24/row/v2h");
+    o += 32;
+    assert_eq!(u32_at(st, o), n_vus);
+    o += 4;
+    let indices = o;
+    o += 12 * n_vus;
+    let trees = o;
+    o += 3 * 73;
+    V5 { digests, y16, indices, trees, multiproofs: o }
+}
+
+#[test]
+fn bf16_ampere_hashed_v5_proof_is_accepted_and_the_hashed_system_is_pinned() {
+    let (code, js) = verify(AH_SYS, AH_STMT, AH_PROOF, &["--coins", AH_COINS]);
+    assert_eq!(code, 0, "{js}");
+    assert_eq!(field(&js, "\"accepted\":"), "true");
+    assert_eq!(field(&js, "\"system_pinned\":"), "true");
+    assert!(js.contains("\"format\":\"ligero-statement/v5\",\"relation\":\"bf16-ampere\""), "{js}");
+    assert!(js.contains("\"n_vus\":10,\"steps\":96,\"K\":16"), "{js}");
+    assert!(js.contains("authentication: included-hash, 10 VUs, 10 x rows + 10 W columns + 10 y words under the a/b/y roots"), "{js}");
+    let (_, sd) = run(&["system-digest", "--system", AH_SYS]);
+    assert!(sd.contains(&format!("\"sys_id\":\"{AH_SYS_ID}\"")), "{sd}");
+    assert!(sd.contains(&format!("\"table_digest\":\"{AH_TABLE_DIGEST}\"")), "{sd}");
+    assert!(sd.contains("\"pinned_relation\":\"bf16-ampere+hash\"") && sd.contains("\"format\":\"ligero-system/v3\"") && sd.contains("\"m\":5861"), "{sd}");
+    let (code, js) = run(&["batch", "--dir", "fixtures/bf16-ampere-hash", "--system", AH_SYS, "--threads", "2"]);
+    assert_eq!(code, 0, "{js}");
+    assert!(js.contains("\"pinned_relation\":\"bf16-ampere+hash\"") && js.contains("\"accepted\":1,\"rejected\":0"), "{js}");
+    // without --coins: replayed from the transcript (the conditional accept)
+    let (code, js) = verify(AH_SYS, AH_STMT, AH_PROOF, &[]);
+    assert_eq!(code, 0, "{js}");
+    assert!(js.contains("coins replayed from the transcript"), "{js}");
+}
+
+#[test]
+fn bf16_ampere_hashed_negatives_and_system_mismatches_are_rejected() {
+    let st = std::fs::read(AH_STMT).unwrap();
+    let f = ah_offsets(&st);
+    let rej = |name: &str, m: &[u8], expect: &str| {
+        let (code, js) = verify(AH_SYS, &write_tmp(name, m), AH_PROOF, &["--coins", AH_COINS]);
+        assert_eq!(code, 1, "{name}: {js}");
+        assert!(js.contains(expect), "{name}: expected {expect:?} in {js}");
+    };
+    let bound = "column challenge mismatch";
+    let mut m = st.clone();
+    m[f.digests] ^= 1;                                       // VU 0's x digest, lane 0
+    rej("ah_digest.stmt", &m, bound);
+    let mut m = st.clone();
+    m[f.digests + 4 * (16 * 7 + 8)] ^= 1;                     // VU 7's W digest, lane 0
+    rej("ah_wdigest.stmt", &m, bound);
+    let mut m = st.clone();
+    m[f.y16 + 2 * 95] ^= 1;                                  // VU 0's chain-end BF16 word
+    rej("ah_y.stmt", &m, bound);
+    let mut m = st.clone();
+    m[f.indices + 8..f.indices + 12].copy_from_slice(&1u32.to_le_bytes());   // VU 0 claims W column 1
+    rej("ah_wswap.stmt", &m, bound);
+    let mut m = st.clone();
+    m[f.trees + 41] ^= 1;                                    // the x root
+    rej("ah_root.stmt", &m, bound);
+    let mut m = st.clone();
+    m[f.indices + 4..f.indices + 8].copy_from_slice(&10u32.to_le_bytes());
+    rej("ah_xrange.stmt", &m, "claims leaves beyond the committed count");
+    // the multiproofs of a 10-leaf tree opened at all 10 leaves are empty: truncating the block is a parse error
+    let (code, js) = verify(AH_SYS, &write_tmp("ah_trunc.stmt", &st[..f.multiproofs]), AH_PROOF, &["--coins", AH_COINS]);
+    assert_eq!(code, 1, "{js}");
+    // the hashed statement against the BARE Ampere system (the bf16 / bf16-ampere pin): refused by the pin, and unpinned
+    // by the row count (5861 vs the bare 3516)
+    let (code, js) = verify(BF16_SYS, AH_STMT, AH_PROOF, &["--coins", AH_COINS]);
+    assert_eq!(code, 1, "{js}");
+    assert!(js.contains("system file is the pinned bf16-ampere system, the statement is a hashed bf16-ampere statement"), "{js}");
+    let (code, js) = verify(BF16_SYS, AH_STMT, AH_PROOF, &["--coins", AH_COINS, "--allow-any-system"]);
+    assert_eq!(code, 1, "{js}");
+    assert!(js.contains("malformed proof: header M = 5861, the statement fixes 3516"), "{js}");
+    // the bare v2 Ampere statement against the hashed system
+    let (code, js) = verify(AH_SYS, "fixtures/b1.stmt", "fixtures/b1.proof", &[]);
+    assert_eq!(code, 1, "{js}");
+    assert!(js.contains("system file is the pinned hashed bf16-ampere system, the statement is a bf16-ampere statement"), "{js}");
+    // the hashed bf16-hopper pin is another system: the same-width statement is refused by the pin
+    let (_, bare) = run(&["system-digest", "--system", BF16_SYS]);
+    assert!(bare.contains("\"pinned_relation\":\"bf16-ampere\"") && !bare.contains(AH_SYS_ID), "{bare}");
+    // a proof byte flipped
+    let pf = std::fs::read(AH_PROOF).unwrap();
+    let mut m = pf.clone();
+    let mid = m.len() / 2;
+    m[mid] ^= 1;
+    let (code, js) = verify(AH_SYS, AH_STMT, &write_tmp("ah_proof.proof", &m), &["--coins", AH_COINS]);
+    assert_eq!(code, 1, "{js}");
+}
