@@ -1,0 +1,454 @@
+"""The ACQUISITION PLAN: for every required Value, the legal sites where the runtime can observe it, one chosen by a documented policy.
+
+    acquisition_plan(required_value_manifest, correspondence) -> AcquisitionPlan       serialised as `acquisition-plan/v1`, digested
+
+Inputs are STRUCTURE only: the required-value manifest (`verity_capture.commit.required_manifest`: one identity per required Value,
+`op_path` / `output_member` / `family` / `promoted` / `consumers`) and the runtime correspondence (`correspondence.AnnotationCorrespondence`:
+`owning_module`, `return_slot`, `arg_slot` + the runtime module tree).  Nothing here reads a module CLASS table to decide a site; the v1
+tables are consulted only to name RESIDUALS (`plan.residuals`): v1 hooks the plan cannot derive from structure yet, each with its table.
+
+Sites (`SITE_KINDS`):
+  producer_output   forward hook on the owning module, return slot = the Value's port (`out` = the whole return, `k` = tuple slot k)
+  consumer_input    forward PRE-hook on a consumer module, arg slot i; legal only while the Value is unmutated between its producer and the
+                    consumer's read -- alias / in-place facts decide when the annotations carry them, else `lifetime: unknown`
+  native_tap        an existing kernel-level source (the attention hidden-stream tap, the fused-MoE block source, the TP partial source)
+  runner_return     the runner's `sample()` return (`runner.sampler/sampled_token_ids`); runner_state = a buffer the runner consumed
+                    (`seed`); launch_proxy = a host constant read from a kernel launch (`splits`)
+  registered_input  a weight of record: hashed once at registration (`register_weights`); analytic_table = a derived table the Match stage
+                    dumps and checks analytically (`root_policy.ANALYTIC_TABLES`)
+  prescribed        no runtime producer: the Value is materialised by rule (a padding step's identities, `padding_steps`)
+
+Policy (`POLICY`): a Value with one legal site takes it; with several, producer output first; consumer input when the producer is a
+PROMOTED interior Call (its output is no module's return: `required_manifest.PROMOTED_OBSERVATION_RULE`); a Value with no legal site is
+UNSUPPORTED and the plan fails closed (`plan.unsupported`, listed by Value; `install` refuses such a plan).
+"""
+from __future__ import annotations
+
+import hashlib
+import json
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
+from typing import Any, Iterable, Mapping
+
+from verity_vllm.acquire.correspondence import RUNNER_PATH, AnnotationCorrespondence, ReturnSlot, RuntimeTree
+
+SCHEMA = "acquisition-plan/v1"
+SITE_KINDS = ("producer_output", "consumer_input", "native_tap", "runner_return", "runner_state", "launch_proxy", "registered_input", "analytic_table", "prescribed")
+HOOK_KINDS = ("producer_output", "consumer_input", "runner_return")      # the kinds `install_from_plan` installs as hooks / wraps
+POLICY = ("one legal site: chosen. several: producer output first (the owning module's forward hook, return slot = the Value's port); consumer input "
+          "when the producer is a promoted interior Call (the Value is no module's return, so the first consumer's pre-hook is the only module "
+          "boundary that carries it); a native tap / runner return / registered input / prescribed materialisation when the Value's family names "
+          "one. none: UNSUPPORTED -- the plan fails closed by Value, nothing is guessed from a module class.")
+HIDDEN_FAMILIES = {"fa2_hidden_m1_stream": "fa2.m1", "fa3_hidden_m1_stream": "fa3.m1"}
+MOE_FAMILY = "moe_block_stream"
+TP_FAMILY = "tp_rank_partials"
+WEIGHTS_FAMILY = "weights"
+SAMPLER_FAMILIES = {"sampled_token_ids": "runner_return", "sampler_seed": "runner_state", "sampler_splits": "launch_proxy"}
+MODULE_OUTPUT_FAMILIES = ("instance_outputs",)
+INPUT_FAMILIES = ("input_token_ids",)
+#: derived tables the Match stage dumps and checks analytically (root_policy.ANALYTIC_TABLES): by BUFFER leaf name, not by model
+ANALYTIC_BUFFER_LEAVES = {"cos_sin_cache": "cos_sin", "normalizer": "normalizer"}
+PADDING_CLASSES = ("padding", "inactive")
+
+
+@dataclass(frozen=True)
+class Site:
+    kind: str
+    module: str                  # module path / tap path / runner path / weight name
+    slot: str                    # `out` | `0` | `1` | `in[0]` | `.sampled_token_ids` | plane | `weight` | `*`
+    lifetime: str = "n/a"        # unmutated | unknown | mutated-after-hook (<table>) | n/a
+    derived_from: str = ""       # the structural fact that made the site legal
+
+    def key(self) -> tuple[str, str, str]:
+        return (self.module, self.kind, self.slot)
+
+    def to_json(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class ValuePlan:
+    op_path: str
+    output_member: str
+    family: str
+    identities: int
+    promoted: bool = False
+    consumers: list[str] = field(default_factory=list)
+    spec: list[str] = field(default_factory=list)
+    anchor: str | None = None                                # the runtime module a tap Value is anchored on (`attention_module` / `moe_module`)
+    prescribed_identities: int = 0                           # identities materialised by rule (padding steps: no runtime producer)
+    sites: list[Site] = field(default_factory=list)          # the LEGAL sites
+    rejected: list[dict[str, str]] = field(default_factory=list)   # candidates the structure refuses, with the reason
+    chosen: Site | None = None
+    status: str = "unsupported"                              # chosen | unsupported
+    why: str = ""
+
+    @property
+    def value_id(self) -> str:
+        return f"{self.op_path}/{self.output_member}"
+
+    @property
+    def prescribed(self) -> bool:
+        """Every identity of the Value is a padding-step materialisation: no runtime site is needed."""
+        return self.identities > 0 and self.prescribed_identities == self.identities
+
+    def to_json(self) -> dict[str, Any]:
+        return {"value": self.value_id, "op_path": self.op_path, "output_member": self.output_member, "family": self.family, "identities": self.identities,
+                "promoted": self.promoted, "consumers": list(self.consumers), "spec": list(self.spec), "anchor": self.anchor, "prescribed": self.prescribed,
+                "prescribed_identities": self.prescribed_identities, "sites": [s.to_json() for s in self.sites],
+                "rejected": list(self.rejected), "chosen": self.chosen.to_json() if self.chosen else None, "status": self.status, "why": self.why}
+
+
+@dataclass
+class Residual:
+    table: str
+    module: str
+    cls: str
+    reason: str
+    values: list[str] = field(default_factory=list)
+
+    def to_json(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class AcquisitionPlan:
+    program_digest: str
+    manifest_digest: str
+    runtime_source: str
+    values: list[ValuePlan]
+    residuals: list[Residual] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)
+
+    @property
+    def unsupported(self) -> list[ValuePlan]:
+        return [v for v in self.values if v.status != "chosen"]
+
+    @property
+    def complete(self) -> bool:
+        return not self.unsupported
+
+    def chosen_sites(self) -> list[Site]:
+        seen: dict[tuple, Site] = {}
+        for v in self.values:
+            if v.chosen is not None:
+                seen.setdefault(v.chosen.key(), v.chosen)
+        return [seen[k] for k in sorted(seen)]
+
+    def hooks(self) -> list[Site]:
+        """The sites `install_from_plan` installs: (module path -> hook kind -> slot), sorted, unique."""
+        return [s for s in self.chosen_sites() if s.kind in HOOK_KINDS]
+
+    def sites_by_kind(self) -> dict[str, list[tuple[str, str, str]]]:
+        out: dict[str, list[tuple[str, str, str]]] = {}
+        for s in self.chosen_sites():
+            out.setdefault(s.kind, []).append(s.key())
+        return out
+
+    def values_at(self, site: Site) -> list[str]:
+        return [v.value_id for v in self.values if v.chosen is not None and v.chosen.key() == site.key()]
+
+    def body(self) -> dict[str, Any]:
+        by_kind = self.sites_by_kind()
+        return {"schema": SCHEMA, "program_digest": self.program_digest, "manifest_digest": self.manifest_digest, "runtime_source": self.runtime_source,
+                "policy": POLICY, "site_kinds": list(SITE_KINDS), "hook_kinds": list(HOOK_KINDS), "complete": self.complete,
+                "counts": {"values": len(self.values), "identities": sum(v.identities for v in self.values), "chosen": len(self.values) - len(self.unsupported),
+                           "unsupported": len(self.unsupported), "sites": len(self.chosen_sites()), "hooks": len(self.hooks()), "residuals": len(self.residuals),
+                           "sites_by_kind": {k: len(v) for k, v in sorted(by_kind.items())}},
+                "hooks": [{"module": s.module, "kind": s.kind, "slot": s.slot, "lifetime": s.lifetime, "values": self.values_at(s)} for s in self.hooks()],
+                "sites": [{"module": s.module, "kind": s.kind, "slot": s.slot, "lifetime": s.lifetime, "values": self.values_at(s)} for s in self.chosen_sites()],
+                "values": [v.to_json() for v in self.values],
+                "unsupported": [{"value": v.value_id, "family": v.family, "identities": v.identities, "why": v.why, "rejected": v.rejected} for v in self.unsupported],
+                "residuals": [r.to_json() for r in self.residuals], "notes": list(self.notes)}
+
+    def to_json(self) -> dict[str, Any]:
+        b = self.body()
+        b["plan_digest"] = plan_digest(b)
+        return b
+
+    @property
+    def digest(self) -> str:
+        return plan_digest(self.body())
+
+    def save(self, path: str | Path) -> str:
+        d = self.to_json()
+        Path(path).write_text(json.dumps(d, indent=1, sort_keys=False) + "\n")
+        return d["plan_digest"]
+
+
+PROVENANCE_KEYS = ("plan_digest", "runtime_source")   # not content: where the runtime tree came from (meta instantiation vs a live engine)
+
+
+def plan_digest(body: Mapping[str, Any]) -> str:
+    """sha256 over the canonical JSON of the plan body (sorted keys, compact separators), the provenance keys excluded: the same Program,
+    manifest and runtime module tree give the same digest whether the tree was read off the meta-instantiated model or a live engine
+    (the two agreed Value for Value on the reference row; only `runtime_source` differed)."""
+    doc = {k: v for k, v in body.items() if k not in PROVENANCE_KEYS}
+    return hashlib.sha256(json.dumps(doc, sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# the manifest's Values (one class per (op_path, output_member, family); hidden-stream geometries fold to `*`)
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+def _identity_key(r: Mapping[str, Any]) -> tuple:
+    return (str(r.get("request_id")), str(r.get("step")), int(r.get("invocation") or 0), str(r.get("op_path")), str(r.get("output_member", "out")), int(r.get("rank") or 0))
+
+
+def value_classes(manifest: Mapping[str, Any], padding_identities: Iterable[Mapping[str, Any]] = ()) -> list[ValuePlan]:
+    """One Value class per (op_path, output_member, family).  `padding_identities`: the manifest identities OUTSIDE their request's executed
+    prefix of record (`padding_steps.padding_steps_of_record`, a runtime fact known at finalize): those are PRESCRIBED -- materialised by
+    enablement, no runtime producer.  A row may also declare it (`boundary_class: padding`)."""
+    rows = manifest.get("identities") or manifest.get("entries") or manifest.get("rows") or []
+    padded = {_identity_key(p) for p in padding_identities}
+    out: dict[tuple[str, str, str], ValuePlan] = {}
+    for r in rows:
+        fam = str(r.get("family") or "")
+        op = str(r.get("op_path"))
+        member = str(r.get("output_member", "out"))
+        if fam in HIDDEN_FAMILIES:
+            member = "*"                                          # the geometry name is per (layer, step); one Value class per tap site
+        key = (op, member, fam)
+        v = out.get(key)
+        if v is None:
+            v = out[key] = ValuePlan(op_path=op, output_member=member, family=fam, identities=0, promoted=bool(r.get("promoted")))
+        v.identities += 1
+        if r.get("promoted"):
+            v.promoted = True
+        for c in (r.get("consumers") or []):
+            if str(c) not in v.consumers:
+                v.consumers.append(str(c))
+        sp = r.get("spec")
+        if sp and str(sp) not in v.spec:
+            v.spec.append(str(sp))
+        for extra in ("attention_module", "moe_module"):
+            if r.get(extra) and v.anchor is None:
+                v.anchor = str(r[extra])
+        bc = str(r.get("boundary_class") or "")
+        if bc in PADDING_CLASSES or str(r.get("enablement") or "") in PADDING_CLASSES or _identity_key(r) in padded:
+            v.prescribed_identities += 1
+    return [out[k] for k in sorted(out)]
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# sites
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+def _slot_label(rs: ReturnSlot | None) -> str:
+    return "in" if rs is None else rs.label()
+
+
+def sites_of(v: ValuePlan, corr: AnnotationCorrespondence) -> tuple[list[Site], list[dict[str, str]]]:
+    """The legal sites of one Value class and the refused candidates (each with its reason).  Structure only."""
+    rt: RuntimeTree = corr.runtime
+    call = {"op_path": v.op_path, "output_member": v.output_member}
+    module = corr.owning_module(call)
+    legal: list[Site] = []
+    refused: list[dict[str, str]] = []
+    fam = v.family
+
+    def refuse(kind: str, mod: str, slot: str, why: str) -> None:
+        refused.append({"kind": kind, "module": mod, "slot": slot, "why": why})
+
+    if v.prescribed_identities:
+        n = v.prescribed_identities
+        legal.append(Site("prescribed", module, v.output_member, "n/a", f"{n} of {v.identities} identities are padding-step materialisations (enablement, no runtime producer)"))
+        if v.prescribed:
+            return legal, refused                                # every identity is prescribed: no runtime site needed; else the executed steps' site follows
+
+    if fam in MODULE_OUTPUT_FAMILIES or fam in INPUT_FAMILIES or (fam == "" and module != RUNNER_PATH):
+        rs = corr.return_slot(call)
+        if rs is not None and not v.promoted:
+            if rt.has_module(module):
+                legal.append(Site("producer_output", module, rs.label(), corr.output_lifetime(module),
+                                  f"the Value is return slot `{rs.label()}` of the owning module's forward (manifest op_path, member)"))
+            else:
+                refuse("producer_output", module, rs.label(), "the owning module is not a module of the runtime tree")
+        elif rs is not None and v.promoted:
+            refuse("producer_output", module, rs.label(), "promoted interior Call: the Value is no return of the owning module (PROMOTED_OBSERVATION_RULE)")
+        if rs is None:
+            # the Value is an INPUT of the module (`<module>/in`: the ids the embedding reads): the module's own pre-hook, arg 0
+            a = corr.arg_slot(call, 0)
+            if rt.has_module(module):
+                legal.append(Site("consumer_input", module, a.label(), corr.input_lifetime(module), "the Value is positional argument 0 of the module's forward (manifest member `in`)"))
+            else:
+                refuse("consumer_input", module, a.label(), "the consuming module is not a module of the runtime tree")
+        for i, c in enumerate(v.consumers):
+            a = corr.arg_slot(call, 0)
+            if not rt.has_module(c):
+                refuse("consumer_input", c, a.label(), f"consumer {i} is not a module of the runtime tree")
+                continue
+            legal.append(Site("consumer_input", c, a.label(), corr.input_lifetime(c),
+                              f"the Program's dataflow reads the Value as positional argument 0 of consumer {i} (manifest `consumers`)"))
+        return legal, refused
+
+    if fam in HIDDEN_FAMILIES:
+        anchor = v.anchor
+        if anchor and rt.has_module(anchor):
+            legal.append(Site("native_tap", module, "*", "n/a", f"the attention hidden stream of module {anchor}: the {HIDDEN_FAMILIES[fam]} kernel tap (manifest `attention_module`)"))
+        elif anchor:
+            refuse("native_tap", module, "*", f"attention module {anchor} is not a module of the runtime tree")
+        else:
+            refuse("native_tap", module, "*", "the manifest row names no `attention_module` to anchor the tap on")
+        return legal, refused
+
+    if fam == MOE_FAMILY:
+        anchor = v.anchor
+        if anchor and rt.has_module(anchor):
+            legal.append(Site("native_tap", module, v.output_member, "n/a", f"a fused-MoE block-stream plane of module {anchor} (manifest `moe_module`)"))
+        elif anchor:
+            refuse("native_tap", module, v.output_member, f"MoE module {anchor} is not a module of the runtime tree")
+        else:
+            refuse("native_tap", module, v.output_member, "the manifest row names no `moe_module` to anchor the block source on")
+        return legal, refused
+
+    if fam == TP_FAMILY:
+        if rt.has_module(module):
+            legal.append(Site("native_tap", module, v.output_member, "n/a", "a rank-local collective operand: the TP partial source at the module's collective"))
+        else:
+            refuse("native_tap", module, v.output_member, "the owning module is not a module of the runtime tree")
+        return legal, refused
+
+    if fam in SAMPLER_FAMILIES:
+        kind = SAMPLER_FAMILIES[fam]
+        rs = corr.return_slot(call)
+        if rt.runner.get("sample"):
+            legal.append(Site(kind, module, _slot_label(rs), "n/a", f"the runner's sample() ({fam})"))
+        else:
+            refuse(kind, module, _slot_label(rs), "the runtime has no runner with sample()")
+        return legal, refused
+
+    if fam == WEIGHTS_FAMILY:
+        owner = module.rsplit(".", 1)[0] if "." in module else module
+        leaf = module.rsplit(".", 1)[-1]
+        if rt.has_module(owner) or module in rt.buffers:
+            legal.append(Site("registered_input", module, "weight", "n/a", "a weight of record: hashed once at registration"))
+        else:
+            refuse("registered_input", module, "weight", f"neither the weight's owning module {owner!r} nor a buffer of that name is in the runtime tree")
+        for suffix, table in ANALYTIC_BUFFER_LEAVES.items():
+            if leaf.endswith(suffix):
+                legal.append(Site("analytic_table", module, table, "n/a", f"a derived table the Match stage dumps and checks analytically ({table})"))
+        return legal, refused
+
+    refuse("?", module, v.output_member, f"family {fam!r} has no site rule")
+    return legal, refused
+
+
+def choose(sites: list[Site], v: ValuePlan) -> tuple[Site | None, str]:
+    """POLICY.  Returns (chosen, why)."""
+    if not sites:
+        return None, "no legal site"
+    if len(sites) == 1:
+        return sites[0], "one legal site"
+    order = ["producer_output", "consumer_input", "native_tap", "runner_return", "runner_state", "launch_proxy", "registered_input", "prescribed", "analytic_table"]
+    if v.promoted:
+        order.remove("consumer_input"); order.insert(0, "consumer_input")
+    ranked = sorted(sites, key=lambda s: (order.index(s.kind) if s.kind in order else len(order), s.module, s.slot))
+    return ranked[0], f"several legal sites ({', '.join(s.kind for s in ranked)}): policy chose {ranked[0].kind}"
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# residuals: v1 hooks the structure cannot derive yet, by table
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+def _v1_tables() -> dict[str, Any]:
+    from verity_capture.experimental.commit_integ.native_host import ACQUIRE_CLASSES, ACQUIRE_INPUT_CLASSES, SKIP_CLASSES, NativeHostCommitter
+    try:
+        from verity_capture.commit.native_collect import GATHER_FLUSH_LEAVES, PRE_FLUSH_LEAVES
+    except Exception:  # noqa: BLE001  -- native_collect imports torch at module level; the plan must stay importable without it
+        GATHER_FLUSH_LEAVES, PRE_FLUSH_LEAVES = frozenset(), frozenset()
+    return {"ACQUIRE_CLASSES": set(ACQUIRE_CLASSES), "ACQUIRE_INPUT_CLASSES": set(ACQUIRE_INPUT_CLASSES), "SKIP_CLASSES": set(SKIP_CLASSES),
+            "HAZARD_LEAVES": set(NativeHostCommitter.HAZARD_LEAVES), "GATHER_FLUSH_LEAVES": set(GATHER_FLUSH_LEAVES), "PRE_FLUSH_LEAVES": set(PRE_FLUSH_LEAVES)}
+
+
+def hazard_by_table(module: str, slot: str, hazard_leaves: set[str]) -> bool:
+    """v1's `_hazard` decision for a module-output site (the in-place facts the table encodes)."""
+    leaf = module.rsplit(".", 1)[-1]
+    if leaf in hazard_leaves or "embed" in leaf:
+        return True
+    return slot == "1" and "norm" in leaf.lower()
+
+
+def residuals_of(values: list[ValuePlan], rt: RuntimeTree, tables: Mapping[str, Any] | None = None) -> list[Residual]:
+    t = dict(tables or _v1_tables())
+    out: list[Residual] = []
+    planned_out = {v.chosen.module for v in values if v.chosen is not None and v.chosen.kind == "producer_output"}
+    planned_in = {v.chosen.module for v in values if v.chosen is not None and v.chosen.kind == "consumer_input"}
+    weights = {v.op_path for v in values if v.family == WEIGHTS_FAMILY}
+    for path in sorted(rt.modules):
+        classes = rt.classes(path)
+        if classes & t["SKIP_CLASSES"]:
+            continue
+        if classes & t["ACQUIRE_CLASSES"] and path not in planned_out:
+            out.append(Residual("ACQUIRE_CLASSES", path, rt.class_name(path) or "?", "v1 hooks this module's forward output by class; no required Value is a return of it "
+                                "(structure names no Value here -- an extra v1 observation, not a required one)"))
+        if classes & t["ACQUIRE_INPUT_CLASSES"] and path not in planned_in:
+            out.append(Residual("ACQUIRE_INPUT_CLASSES", path, rt.class_name(path) or "?", "v1 acquires this module's first input by class; no required Value names it"))
+    if rt.runner.get("sampler_module"):
+        if RUNNER_PATH not in planned_out:
+            out.append(Residual("ACQUIRE_CLASSES", RUNNER_PATH, (rt.runner.get("sampler_class") or ["Sampler"])[0],
+                                "v1 registers a forward hook on the runner's sampler module; the hook never fires (the runner does not call the module) -- "
+                                "the sampler's Values are acquired from sample()'s return (runner_return), which the plan derives",
+                                values=[v.value_id for v in values if v.chosen is not None and v.chosen.kind in ("runner_return", "runner_state", "launch_proxy")]))
+    # lifetime tables: the plan has no alias / in-place facts from the annotations; v1 encodes them by leaf name
+    haz = [v for v in values if v.chosen is not None and v.chosen.kind == "producer_output" and hazard_by_table(v.chosen.module, v.chosen.slot, t["HAZARD_LEAVES"])]
+    if haz:
+        out.append(Residual("HAZARD_LEAVES", "*", "*", "v1 snapshots these module outputs AT the hook (overwritten in place afterwards: RoPE in the qkv buffer, fused add-norm "
+                            "into its inputs, the residual slot); the plan marks the site's lifetime from the table because the annotations carry no in-place fact",
+                            values=[v.value_id for v in haz]))
+    for table in ("GATHER_FLUSH_LEAVES", "PRE_FLUSH_LEAVES"):
+        hits = [v for v in values if v.chosen is not None and v.chosen.kind == "producer_output" and v.chosen.module.rsplit(".", 1)[-1] in t[table]]
+        if hits and t[table]:
+            out.append(Residual(table, "*", "*", f"v1's gather collector flushes staged bytes at these module boundaries ({table}); the flush points are lifetime facts "
+                                "the structure does not carry yet", values=[v.value_id for v in hits]))
+    for b in sorted(rt.buffers):
+        leaf = b.rsplit(".", 1)[-1]
+        for suffix, table in ANALYTIC_BUFFER_LEAVES.items():
+            if leaf.endswith(suffix) and b not in weights:
+                out.append(Residual("ANALYTIC_TABLES", b, table, "v1's Match stage dumps this buffer by name and checks it analytically (root_policy.ANALYTIC_TABLES); "
+                                    "the manifest names no weight Value for it"))
+    return out
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# the plan
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+def acquisition_plan(manifest: Mapping[str, Any], correspondence: AnnotationCorrespondence, *, tables: Mapping[str, Any] | None = None,
+                     with_residuals: bool = True, padding_identities: Iterable[Mapping[str, Any]] = ()) -> AcquisitionPlan:
+    values = value_classes(manifest, padding_identities)
+    for v in values:
+        legal, refused = sites_of(v, correspondence)
+        v.sites, v.rejected = legal, refused
+        chosen, why = choose(legal, v)
+        v.chosen = chosen
+        v.status = "chosen" if chosen is not None else "unsupported"
+        v.why = why if chosen is not None else ("no legal site: " + "; ".join(f"{r['kind']} at {r['module']}/{r['slot']}: {r['why']}" for r in refused))
+    rt = correspondence.runtime
+    if with_residuals:
+        tabs = tables if tables is not None else _v1_tables()
+        for v in values:                                     # lifetime of a module-output site from the table when the annotations carry none
+            if v.chosen is not None and v.chosen.kind == "producer_output" and v.chosen.lifetime == "unknown" and hazard_by_table(v.chosen.module, v.chosen.slot, tabs["HAZARD_LEAVES"]):
+                v.chosen = Site(v.chosen.kind, v.chosen.module, v.chosen.slot, "mutated-after-hook (HAZARD_LEAVES)", v.chosen.derived_from)
+                v.sites = [v.chosen if s.key() == v.chosen.key() else s for s in v.sites]
+        residuals = residuals_of(values, rt, tabs)
+    else:
+        residuals = []
+    notes = ["every identity of a Value at a step >= its request's executed prefix is a PRESCRIBED materialisation (padding_steps: enablement, no runtime producer); "
+             "the plan's runtime sites are for the executed steps"]
+    pdig = str(manifest.get("program_digest") or "")
+    mdig = str(manifest.get("manifest_digest") or "")
+    return AcquisitionPlan(program_digest=pdig, manifest_digest=mdig, runtime_source=rt.source, values=values, residuals=residuals, notes=notes)
+
+
+def load_plan(path: str | Path) -> dict[str, Any]:
+    d = json.loads(Path(path).read_text())
+    if d.get("schema") != SCHEMA:
+        raise ValueError(f"{path}: schema {d.get('schema')!r} != {SCHEMA}")
+    if plan_digest(d) != d.get("plan_digest"):
+        raise ValueError(f"{path}: plan_digest does not match the body")
+    return d
+
+
+def hooks_of_doc(doc: Mapping[str, Any]) -> list[tuple[str, str, str]]:
+    return [(h["module"], h["kind"], h["slot"]) for h in doc.get("hooks") or []]
