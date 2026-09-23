@@ -1,5 +1,5 @@
 """red-team-ligerito-3: LGSC0004's Libra masks (ligerito-sumcheck-3 c675bd5 ``ZkMask``) re-implemented over BabyBear in pure
-Python and checked for arities 1..4, both kinds:
+Python and checked for arities 1..6 (ef49a7de's coin-lean default uses 6), both kinds:
 
   1. sum-zero: the round check of a mask message returns the running constant ``K`` (``eq``: ``sum_b eq(tau, b) M(b) = K``;
      ``avg``: ``sum_b M(b) = 2^(n_rest + v) K``) for every coefficient vector, so the masked claim equals the unmasked one;
@@ -11,7 +11,7 @@ Python and checked for arities 1..4, both kinds:
   5. whole-mask brute force: ``sum_x eq(tau, x) ghat(x) = 0`` and ``ghat(r) = K_final`` on a toy hypercube with round groups.
 
 Challenges are base-field elements (a special case of F_{p^6}; the rank statements are polynomial identities in tau).
-Run: ``python -m backends.direct.ligerito.redteam_lgsc4_mask`` (< 5 s, no numpy/torch)."""
+Run: ``python -m backends.direct.ligerito.redteam_lgsc4_mask`` (~7 s; numpy only for the arity-5/6 ranks)."""
 from __future__ import annotations
 
 import itertools
@@ -96,6 +96,8 @@ def bind(c: dict, v: int, kind: str, taus, r, K: int) -> int:
 
 
 def rank_mod_p(rows: list) -> int:
+    if len(rows) > 100:
+        return _rank_np(rows)
     A = [list(r) for r in rows]
     rk, ncol = 0, len(A[0]) if A else 0
     for col in range(ncol):
@@ -110,6 +112,27 @@ def rank_mod_p(rows: list) -> int:
                 f = A[i][col]
                 A[i] = [(x - f * y) % P for x, y in zip(A[i], A[rk])]
         rk += 1
+    return rk
+
+
+def _rank_np(rows: list) -> int:
+    """Gaussian elimination mod p on int64 (products < p^2 < 2^62); for the arity-5/6 maps (242 / 728 columns)."""
+    import numpy as np
+    A = np.array(rows, dtype=np.int64) % P
+    rk = 0
+    for col in range(A.shape[1]):
+        nz = np.nonzero(A[rk:, col])[0]
+        if nz.size == 0:
+            continue
+        piv = rk + int(nz[0])
+        A[[rk, piv]] = A[[piv, rk]]
+        A[rk] = A[rk] * inv(int(A[rk, col])) % P
+        f = A[:, col].copy()
+        f[rk] = 0
+        A = (A - (f[:, None] * A[rk][None, :]) % P) % P
+        rk += 1
+        if rk == A.shape[0]:
+            break
     return rk
 
 
@@ -220,7 +243,7 @@ def main() -> int:
     rng = random.Random(20260923)
     bad = 0
     print("arity kind sum_zero bind rank/full image=ker(check) per-variable-Libra-rank")
-    for v in (1, 2, 3, 4):
+    for v in (1, 2, 3, 4, 5, 6):
         for kind in ("eq", "avg"):
             o = check_round(rng, v, kind)
             ok = o["sum_zero"] and o["bind"] and o["image_is_kernel"]
