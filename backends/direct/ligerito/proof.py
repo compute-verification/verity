@@ -37,8 +37,9 @@ ligerito-zk's mask rows, ``prove.zk_layout``), and the index map is ligerito-zk'
 
 Claims (``J = 1 + n_links + |zero_blocks|``, in this order; points in the sumcheck's order ``(p_i || p_c)`` before the rotation
 above): ``w~(r_i, r_c) = values[0]``; ``w~(bits(c_x), rho_c) = values[1 + x]`` for each chain row ``c_x``; then per zero block
-``(b, pfx)``: ``w~(r_i[:b] || bits(pfx, n_i - b) || r_c) = 0`` (the first claim's ``r_i`` / ``r_c``; ``bits`` LSB first).  The
-blocks are the aligned cover (greedy from the low end, largest aligned block that fits) of every run of consecutive virtual rows
+``(b, pfx)``: ``w~(r_i[:b] || bits(pfx, n_i - b) || r_c) = 0`` (the first claim's ``r_i`` and the ZERO-CHECK's ``r_c``, not
+the combined sumcheck's ``rho_c``: row bit t and column bit t would share a coordinate and a swapped pair cancels; ``bits`` LSB
+first).  The blocks are the aligned cover (greedy from the low end, largest aligned block that fits) of every run of consecutive virtual rows
 (``prove.zero_blocks``; ligerito-verify ``relation::virtual_zero_claims``): the verifier adds the public rows to ``w`` itself,
 which is sound only if ``w`` is zero there.
 

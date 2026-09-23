@@ -53,6 +53,21 @@ from .transcript import FiatShamirCoins, LiveCoins, LocalCoins, _distinct_indice
 D = 6
 #: parameter set B (ligerito-design FINAL) at the pow2 shape: level-1 rate 1/2, later levels 1/4, 2^-128 union bound
 SET_B_RATES = (1, 2, 2, 2, 2)
+#: the zero-check's device working set per committed cell beyond z (ligerito-sumcheck-2: 14.6 GB peak at N = 2^30 with z's
+#: 4 B/cell)
+ZC_BYTES_PER_CELL = 10
+
+
+def _stream_for_zero_check(f: torch.Tensor, dims: Dims, dev) -> bool | None:
+    """True = stream the round-1 commit (no resident codeword; the opening recomputes the |S_1| rows, same bytes) when the
+    codeword + its tree would not leave the zero-check's working set free on the card; None = pcs-fast's own rule
+    (``LIGERITO_STREAM``, which only budgets the PCS rounds).  Dropping a materialised codeword afterwards costs more:
+    4090, fp8-ada 4096 VUs: streamed 0.56 s, drop + empty_cache 0.79 s, drop alone 0.86 s (the allocator's retry)."""
+    if dev.type != "cuda" or os.environ.get("LIGERITO_STREAM"):
+        return None
+    n1 = 1 << (dims.k[0] + dims.rates[0])
+    need = torch.cuda.memory_allocated(dev) + (4 << dims.kprime[0]) * n1 + 64 * n1 + ZC_BYTES_PER_CELL * f.numel()
+    return True if need > torch.cuda.get_device_properties(dev).total_memory - (5 << 29) else None
 
 __all__ = ["FS_QUERIES_LOG2", "Committed", "Prover", "Reject", "StreamCoins", "coins_kind", "dims_for", "make_coins", "pcs_commit",
            "pcs_open", "pcs_verify", "soundness_claim", "statement_for_stream"]
@@ -604,6 +619,15 @@ class _Map:
         return Encoder.eta_index(self, s)
 
 
+def _canonical(x, what: str) -> np.ndarray:
+    """A proof word must be canonical in [0, p): a lifted x + p would be absorbed as other bytes than Rust's reader
+    accepts (red-team F11)."""
+    x = np.asarray(x)
+    if x.dtype.kind not in "iu" or (x < 0).any() or (x >= P).any():
+        raise Reject(f"{what} word out of range")
+    return x.astype(np.int64)
+
+
 def pcs_verify(pf: PcsProof, dims: Dims, splits: list, points: np.ndarray, values: np.ndarray, coins) -> None:
     """proto's ``_verify`` from round 1 on, with J eq terms batched by ``beta``; raises ``Reject``.  The caller has
     absorbed root_1 (before the sumcheck)."""
@@ -625,6 +649,7 @@ def pcs_verify(pf: PcsProof, dims: Dims, splits: list, points: np.ndarray, value
     for g in pf.sumcheck[0]:
         if g.shape != (3, D):
             raise Reject("bad sumcheck message")
+        _canonical(g, "PCS sumcheck message")
         tr.absorb(b"g", _ext_bytes(g))
         rs.append(tr.challenge(b"r", 1)[0])
     ok, running = cl.verify_column_rounds(running, pf.sumcheck[0], rs)
@@ -662,6 +687,7 @@ def pcs_verify(pf: PcsProof, dims: Dims, splits: list, points: np.ndarray, value
         for g in pf.sumcheck[i]:
             if g.shape != (3, D):
                 raise Reject("bad sumcheck message")
+            _canonical(g, "PCS sumcheck message")
             tr.absorb(b"g", _ext_bytes(g))
             rs.append(tr.challenge(b"r", 1)[0])
         ok, running = cl.verify_column_rounds(running, pf.sumcheck[i], rs)
@@ -670,7 +696,7 @@ def pcs_verify(pf: PcsProof, dims: Dims, splits: list, points: np.ndarray, value
         ri = np.stack(rs[::-1], axis=0)
         rbars.append(cl.rbar(ri))
         terms = cl.restrict_terms(terms, ks[i], ri)
-    y = pf.final_y % P
+    y = _canonical(pf.final_y, "final vector")
     RL = 1 << ks[-1]
     if y.shape != (RL, D):
         raise Reject("bad final vector shape")
@@ -966,7 +992,7 @@ class Prover:
             raise ValueError("ZK column padding needs ligerito-pcs-fast's device PCS (pcs.commit / pcs.open)")
         if owner:
             from .proto import pcs as ppcs
-            com = ppcs.commit(f, bt.dims, tm, t_pad=t_pad)
+            com = ppcs.commit(f, bt.dims, tm, stream=_stream_for_zero_check(f, bt.dims, dev), t_pad=t_pad)
             coins.absorb(b"root", com.root)
         else:
             com = pcs_commit(f, bt.dims, tm, fast=self.pcs_fast)

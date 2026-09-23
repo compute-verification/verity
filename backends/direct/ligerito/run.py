@@ -428,8 +428,10 @@ def _buckets(t: dict) -> dict:
     """proto / prove.py timer buckets -> the contract's t.* buckets (seconds)."""
     g = lambda *ks: sum(t.get(k, 0.0) for k in ks)  # noqa: E731
     return {"witness": g("witness"),
-            "encoding_commitment": g("commit_r1_alloc", "commit_r1_encode", "commit_r1_merkle", "recursion_encode", "recursion_merkle"),
-            "arithmetic": g("zero_check", "sumcheck_r1_contract", "sumcheck_host", "sumcheck_r1_fold", "recursion_contract", "recursion_fold"),
+            "encoding_commitment": g("commit_r1_alloc", "commit_r1_encode", "commit_r1_merkle", "commit_r1_stream", "commit_r1_recompute",
+                                     "recursion_encode", "recursion_merkle"),
+            "arithmetic": g("zero_check", "sumcheck_r1_contract", "sumcheck_host", "sumcheck_r1_fold", "sumcheck_device", "recursion_contract",
+                            "recursion_fold"),
             "lookup": 0.0, "zk_additional": g("zk_masks"),
             "serialization": g("serialize_openings", "serialize_final", "serialize_proof", "transcript")}
 
