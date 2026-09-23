@@ -48,14 +48,45 @@ VERIFY_LIMIT = 64 * 1024 * 1024
 ROWS_ROOT_ENV = "VERITY_REGRESSION_ROWS_ROOT"
 CANDIDATE_ENV = "VERITY_REGRESSION_CANDIDATE"             # a directory of row dirs, or attempt ids (`r2026…`, comma-separated)
 CANDIDATE_CACHE_ENV = "VERITY_REGRESSION_CANDIDATE_CACHE"  # where the attempts' output trees are unioned (default: the temp dir)
-ENGINE_ENV = "VERITY_REGRESSION_ENGINE"        # which builder recomputes `actual` (checks/manifest_digest.py ENGINES); default = the v1 baseline
-BASELINE_ENGINE = "v1"
+ENGINE_ENV = "VERITY_REGRESSION_ENGINE"        # which builder recomputes `actual` (checks/manifest_digest.py ENGINES); default = the integration (v2)
+BASELINE_ENGINE = "v1"                         # the engine the frozen reference rows' Commits ran: regression oracle only (removed one release after the flip)
+DEFAULT_ENGINE = "v2"                          # Q_module_body_v1 via verity_vllm.query -- THE integration since the v2 flip
+ORACLE_ENV = "VERITY_REGRESSION_ORACLE"        # `expected` (default: expected/<row>.json, re-baselined on v2) | `frozen` (lift from the R2 frozen v1 records)
+ORACLES = ("expected", "frozen")
+RECORD_ACTUAL_ENV = "VERITY_REGRESSION_RECORD_ACTUAL"   # a directory: test_reproduces writes every `actual` to <dir>/<row>/<check>.json (rebaseline.py input)
 
 
 def engine() -> str:
-    """`VERITY_REGRESSION_ENGINE` as set (default `v1`, the baseline the reference rows' Commits ran).  The value is validated by
-    the check that uses it (`manifest_digest.engine()`); here it only decides whether a `pending_review` decision may be consulted."""
-    return os.environ.get(ENGINE_ENV, BASELINE_ENGINE)
+    """`VERITY_REGRESSION_ENGINE` as set (default `v2`, the integration; `v1` = the frozen reference's engine, kept one release as the
+    regression oracle's rebuild).  The value is validated by the check that uses it (`manifest_digest.engine()`); here it only decides
+    whether a `pending_review` decision may be consulted (never for a v1 baseline actual)."""
+    return os.environ.get(ENGINE_ENV, DEFAULT_ENGINE)
+
+
+def oracle() -> str:
+    """Which contract `expected` is: `expected` (default) = expected/<row>.json, the harness's frozen contract (re-baselined on v2's
+    outputs after the flip; the labelled decisions of fixtures.toml are the recorded reasons it differs from the R2 records);
+    `frozen` = lift from the R2 frozen v1 records themselves (`check.expected(row)`) -- the historical comparison, where the same
+    decisions sanction the differences."""
+    o = os.environ.get(ORACLE_ENV, ORACLES[0])
+    if o not in ORACLES:
+        raise ValueError(f"{ORACLE_ENV}={o!r}: one of {ORACLES}")
+    return o
+
+
+def record_actual(row_key: str, check: str, act: Any) -> Path | None:
+    """When `$VERITY_REGRESSION_RECORD_ACTUAL` names a directory, write `act` (canonical JSON) to `<dir>/<row>/<check>.json` and return
+    the path -- the input `rebaseline.py` merges into expected/.  Never raises."""
+    d = os.environ.get(RECORD_ACTUAL_ENV)
+    if not d:
+        return None
+    try:
+        p = Path(d) / row_key / f"{check}.json"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(canonical(act) + "\n")
+        return p
+    except Exception:
+        return None
 
 
 class InputMismatch(AssertionError):
@@ -483,9 +514,10 @@ def sanction(row: Row, check: str, act: dict[str, Any], problems: list[str]) -> 
 
 
 def matched(act: dict[str, Any], problems: list[str]) -> str:
-    """Which side a passing check reproduced: `v1` or `decision <finding> (<status>)`; `neither` when problems remain."""
+    """Which side a passing check reproduced: the oracle (`expected` = expected/<row>.json, `frozen` = the R2 v1 records) or
+    `decision <finding> (<status>)`; `neither` when problems remain."""
     if problems:
         return "neither"
     if act.get("sanctioned_by"):
         return f"decision {act['sanctioned_by']} ({act.get('decision_status') or 'accepted'})"
-    return "v1"
+    return oracle()

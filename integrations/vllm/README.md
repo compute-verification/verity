@@ -72,21 +72,32 @@ linkage (`linkage`), checkpoint binding (`weights_pin`), execution extent (`exec
 Program/source identity (`identity`).  Build / Match / Commit are development tool names (the stages of `row_pod.sh`), not layers.
 Research terms (Tool, Derivation, Attempt, Artifact, Snapshot, Replica, Label) belong to `tools/research` and never name Verity semantics.
 
-Layers and where they live today (Draft 3 §12.1; the v2 phases move the by-name parts into `verity_vllm`):
+**v2 is the integration** (since the flip on `lane/vllm-v2-default`, Draft 3.1 §12.3): the required-value manifest of record is
+`Q_module_body_v1` over the Program + runtime correspondence (`verity_vllm.query`: `python -m verity_vllm.query.cli build | build-global`,
+built at the end of a PASS Build by `row_pod.sh`); value acquisition follows the acquisition plan derived from it
+(`verity_vllm.acquire`, `ACQUIRE_ENGINE=v2`, the default); the verdict of record is `<row>/verdict.json` (`vllm-verdict/v1`,
+`verity_capture.commit.verdict`).  `commit_summary.json` and the `finalize.py` board are no longer written (P5).  The v1 engine
+(`ACQUIRE_ENGINE=v1`; `verity_capture.commit.required_manifest` by-name tables) is selectable for one more release as the
+**regression oracle only** -- the oracle proper is the frozen R19 reference records on R2 that `tests/regression` compares against
+(`VERITY_REGRESSION_ORACLE=frozen`), not the v1 code.
+
+Layers and where they live (Draft 3 §12.1):
 
 | layer | responsibility | today |
 | --- | --- | --- |
 | Program | Definitions, Calls, dataflow, `program_digest` | `verity_vllm/registry`, `verity_vllm/frontend` (lowering rules) |
-| query | Q(P), VUs, boundary and required values | `verity_capture/vu_canonical.py`, `commit/required_values.py`, `commit/required_manifest.py` (`members_for`) |
-| runtime correspondence | Call ↔ module path / fx node / slot | `verity_vllm/correspondence`, `verity_vllm/lifting`, hand tables in `commit/required_manifest.py` |
-| acquisition | acquisition plan, taps, hooks, collector | `commit/native_collect.py`, `experimental/commit_integ/native_host.py`, `sweep/hidden_gpu_src/` |
+| query | Q(P), VUs, boundary and required values | `verity_vllm/query` (`module_body`, `cli`: the manifest of record), `verity_vllm/required.py`; `verity_capture/vu_canonical.py` |
+| runtime correspondence | Call ↔ module path / fx node / slot | `verity_vllm/correspondence`, `verity_vllm/lifting`, `verity_vllm/query/correspondence.py`, `verity_vllm/runtime_correspondence.py` |
+| acquisition | acquisition plan, taps, hooks, collector | `verity_vllm/acquire` (`plan.py` ROUTE_OF_FAMILY, `install.py`, `stage.py`); hazard / analytic owners in `commit/native_collect.py`, `experimental/commit_integ/native_host.py`, `sweep/hidden_gpu_src/` |
 | observation + resolution | capture log, fold, occurrence resolution | `bench/m1_capture.py`, `fold.py`, `experimental/cb_a/batch_decomp.py` |
 | input provenance | weights of record, prompt ids, checkpoint pin | `commit/weights_of_record.py`, `root_policy.py`, `manifests/checkpoints.json` |
 | commitment | position-identified roots, openings, binding map | `commit/binding.py`, `commit/leafhash.py`, `experimental/fa2_commit/engine.py` |
-| checks → verdicts | the seven checks above, one verdict per stage | `experimental/cb_a/global_match.py`, `commit/sampled_replay.py`, `commit/executed_prefix.py`, `bench/commit_verdict.py` |
+| checks → verdicts | the seven checks above, one verdict of record per row | `experimental/cb_a/global_match.py`, `commit/sampled_replay.py`, `commit/executed_prefix.py`, `commit/manifest_verify.py`, `commit/verdict.py` (`verdict.json`) |
 
-`tests/test_no_by_name_rules.py` pins every current by-name rule (model names, module-path predicates, family tables) in
-`tests/by_name_allowlist.json` with the phase that retires it; the list only shrinks.
+`tests/test_no_by_name_rules.py` pins every remaining by-name rule (model names, module-path predicates, family tables) in
+`tests/by_name_allowlist.json` with the phase that retires it; the list only shrinks.  `tests/regression/` is the R19 reference
+regression: the current tree's checks against the frozen v1 records (`expected/<row>.json` re-baselined on v2; labelled decisions in
+`fixtures.toml` are the recorded reasons the two differ).
 
 ## Running
 

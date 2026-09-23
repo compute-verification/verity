@@ -15,9 +15,10 @@ from the evidence dir into `$RESEARCH_RUN_DIR/outputs/<name>/` and declared in `
                                       match/capture/tokens.json, global_match.json, match_summary.json, match_compare.json, match_decomp.json,
                                       match_shape.json, match/fold_summary.json -- NOT the capture planes (match/capture/log.jsonl.gz);
                                       meta {row, stage, program_digest, stage_status, global_match_ok}; refs.build = the consumed Build
-    commit  -> vllm-verdict/v1        commit/ (verdict.json, sampled_replay_p*.json, versions.json, manifest_verify.json, ...; small files),
-                                      commit_summary.json, weights_of_record.log, manifest.log; meta {row, stage, program_digest, verdict,
-                                      stage_status}; refs.build, refs.match
+    commit  -> vllm-verdict/v1        verdict.json (the verdict of record, vllm-verdict/v1), commit/ (commit_delta's verdict.json,
+                                      sampled_replay_p*.json, versions.json, manifest_verify.json, ...; small files), weights_of_record.log,
+                                      manifest.log, manifest_verify.log; meta {row, stage, program_digest, verdict, outcome, stage_status};
+                                      refs.build, refs.match  (commit_summary.json is no longer written: F-r19-int-21 / P5)
     (all)   -> execution-evidence/v1  timeline.jsonl, stages.txt, admission.json, timeline_report.json; meta {row, stage}
     (all)   -> run-files/v1 `logs`    row.log and every top-level *.log of the evidence dir
 
@@ -47,7 +48,7 @@ BUILD_FILES = ["build_summary.json", "build_workload/workload_program.json", "ma
 MATCH_FILES = ["match/instances.jsonl", "match/program.json", "match/run.json", "match/versions.json", "match/control/tokens.json",
                "match/capture/tokens.json", "global_match.json", "match_summary.json", "match_compare.json", "match_decomp.json",
                "match_shape.json", "match/fold_summary.json", "match_stoch.json"]
-COMMIT_FILES = ["commit_summary.json", "weights_of_record.log", "manifest.log", "manifest_verify.log"]
+COMMIT_FILES = ["verdict.json", "weights_of_record.log", "manifest.log", "manifest_verify.log"]
 EVIDENCE_FILES = ["timeline.jsonl", "stages.txt", "admission.json", "timeline_report.json"]
 
 
@@ -169,11 +170,13 @@ def build_outputs(d: Path, row: str, stage: str, run_dir: Path, inputs: dict[str
         e = _entry("match", KINDS[stage], meta, run_dir, d, present, skipped, refs={k: refs[k] for k in ("build",) if k in refs}, optional=not passed)
     elif stage == "commit":
         present, skipped = _collect(d, COMMIT_FILES, ["commit"])
-        cs = _read_json(d / "commit_summary.json") or {}
-        vd = _read_json(d / "commit" / "verdict.json") or {}
+        vr = _read_json(d / "verdict.json") or {}                    # the verdict of record (vllm-verdict/v1)
+        vd = _read_json(d / "commit" / "verdict.json") or {}          # commit_delta's own decision document
+        runs_ = (vr.get("runs") or {}) if isinstance(vr, dict) else {}
         meta = {**base_meta, "verdict": (vd.get("verdict") if isinstance(vd, dict) else None) or status,
-                "tokens_equal": cs.get("tokens_equal") if isinstance(cs, dict) else None,
-                "n_runs": cs.get("n_runs") if isinstance(cs, dict) else None}
+                "outcome": vr.get("outcome") if isinstance(vr, dict) else None,
+                "n_runs": (int(runs_.get("instrumented") or 0) + int(runs_.get("control") or 0)) if runs_ else None,
+                "runs_failed": runs_.get("failed") if runs_ else None}
         e = _entry("verdict", KINDS[stage], meta, run_dir, d, present, skipped, refs=refs, optional=not passed)
     else:
         raise ValueError(f"unknown stage {stage!r}")

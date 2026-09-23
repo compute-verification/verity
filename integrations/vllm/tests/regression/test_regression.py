@@ -130,8 +130,8 @@ def test_reproduces(row_key: str, check_name: str, store_state: dict, record_pro
     why = chk.applies(row)
     if why:
         pytest.skip(f"{check_name} does not apply to #{row.number}: {why}")
-    exp = row.expected().get(check_name)
-    if exp is None:
+    exp = row.expected().get(check_name) if resolver.oracle() == "expected" else None
+    if exp is None:                                          # `--oracle frozen`, or a check expected/ never froze: lift from the R2 record
         try:
             exp = chk.expected(row)
         except resolver.NotResolvable as e:
@@ -142,7 +142,9 @@ def test_reproduces(row_key: str, check_name: str, store_state: dict, record_pro
         pytest.skip(f"stubbed: {e}")
     except resolver.NotResolvable as e:
         pytest.skip(str(e))
+    resolver.record_actual(row.key, check_name, act)                                  # $VERITY_REGRESSION_RECORD_ACTUAL: rebaseline.py's input
     problems = resolver.sanction(row, check_name, act, resolver.diff(exp, act))     # a labelled decision may sanction a difference from v1
+    record_property("oracle", resolver.oracle())
     if act.get("sanctioned_by"):
         record_property("sanctioned_by", act["sanctioned_by"])
         record_property("decision_status", act.get("decision_status") or "accepted")
@@ -154,7 +156,8 @@ def test_reproduces(row_key: str, check_name: str, store_state: dict, record_pro
     if na:
         record_property("not_applicable", "; ".join(na))                                 # leaves the candidate declared inapplicable, by key and reason
     strength = "WEAK (PASS-side / unexercised rule)" if chk.STRENGTH == "weak" else "strong"
-    what = "the v1 reference" + (" nor any labelled decision on the fixture" if row.decisions(check_name) else "")
+    what = ("the expected contract (expected/<row>.json)" if resolver.oracle() == "expected" else "the frozen v1 reference") + \
+        (" nor any labelled decision on the fixture" if row.decisions(check_name) else "")
     assert not problems, (f"#{row.number} {row.key}: {check_name} [{chk.TIER}, {strength}] does not reproduce {what} "
                           f"(source={act.get('source')}):\n  " + "\n  ".join(problems[:40]) + f"\n  actual: {resolver.canonical(act)[:1500]}")
 

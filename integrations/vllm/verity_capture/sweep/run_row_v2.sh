@@ -146,19 +146,8 @@ cmd_stage() {
   fi
   local rc
   bash "${ROW_POD:-verity_capture/sweep/row_pod.sh}" "$row" "$role" "$repo" "$rev" "$stage"; rc=$?     # ROW_POD: a stand-in stage for dry runs / tests
-  # the Build artifact carries the required-value manifest: build it here (CPU; the same commands row_pod.sh's Commit uses) when the Build passed
-  if [ "$stage" = build ] && [ "$rc" -eq 0 ] && [ ! -f "$d/manifest.json" ]; then
-    local py=${PY:-/workspace/venv312/bin/python} b wl="workloads/$row.json" wd
-    b=$(row_batch "$row")
-    if [ "$b" -gt 1 ] && ls -d "$d"/build_request_LP*_T* >/dev/null 2>&1; then
-      wd=$("$py" -c 'import json,sys;d=json.load(open(sys.argv[1]));print(d.get("workload_digest") or d.get("program_digest") or d.get("digest") or "")' "$d/build_workload/workload_program.json" 2>/dev/null || true)
-      "$py" -m verity_capture.commit.required_manifest build-global --fixture "$wl" --programs-root "$d" ${wd:+--workload-digest "$wd"} --out "$d/manifest.json" > "$d/manifest.log" 2>&1 \
-        || echo "$(date -u +%FT%TZ) [row $row] v2 build: required-value manifest build-global FAILED (manifest.log); the Build artifact has none" | tee -a "$d/row.log"
-    elif [ -f "$d/build_request/instances.json.gz" ]; then
-      "$py" -m verity_capture.commit.required_manifest build --program "$d/build_request" --workload "$wl" --out "$d/manifest.json" > "$d/manifest.log" 2>&1 \
-        || echo "$(date -u +%FT%TZ) [row $row] v2 build: required-value manifest build FAILED (manifest.log); the Build artifact has none" | tee -a "$d/row.log"
-    fi
-  fi
+  # the Build artifact carries the required-value manifest of record: row_pod.sh builds it at the end of a PASS Build
+  # (`required_manifest_build`: verity_vllm.query.cli, Q_module_body_v1), so there is nothing to add here
   exit "$rc"
 }
 

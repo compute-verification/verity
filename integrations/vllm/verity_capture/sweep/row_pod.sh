@@ -3,7 +3,7 @@
 # cb_a.compare, control tokens) -> Commit + overhead (commit_delta --pairs 3, native_collect_v2b, FA2 matReq tap, 64 openings).
 # Early stop at the first failing stage.  Evidence under /workspace/cp/sweep/<row-id>/; a one-line verdict per stage in stages.txt.
 # Glossary (Draft 3 §12): a sweep 'row' here is one workload of the qualification table (not a Program Call); timeline.jsonl is the
-# execution evidence; manifest.json is the required-value manifest; the checks' verdicts are in commit_summary.json.
+# execution evidence; manifest.json is the required-value manifest (Q_module_body_v1, verity_vllm.query); the checks' verdicts are in verdict.json.
 #
 #   bash verity_capture/sweep/row_pod.sh <row-id> <ROLE> <hf-repo> <revision> [stages=build,match,commit]
 #
@@ -27,15 +27,17 @@
 #   Inputs: <row-id> <ROLE> <hf-repo> <revision> [stages]; workloads/<row>.json; manifests/checkpoints.json; the env knobs above.
 #   Outputs: $D/stages.txt row.log timeline.jsonl source_identity*.json target_family*.json admission.json release.json tree.json;
 #     build_step/ build_request*/ build_workload/ build_summary.json; match/ match_decomp.json|match_compare.json global_match.json
-#     match_summary.json; manifest.json commit/ commit_summary.json (deprecated, F-r19-int-21) verdict.json (vllm-verdict/v1, the
-#     Commit's verdict of record as typed checks) weights_of_record.log; $RESEARCH_RUN_DIR/result.json on EXIT.
+#     match_summary.json; manifest.json manifest.log (the required-value manifest of record, built at the Build stage by
+#     verity_vllm.query.cli) commit/ verdict.json (vllm-verdict/v1, the Commit's verdict of record as typed checks; its outcome IS the
+#     stage decision -- commit_summary.json is no longer written, F-r19-int-21 / P5) weights_of_record.log; $RESEARCH_RUN_DIR/result.json on EXIT.
 #   Invariants: the source-identity and target-family prechecks run before any engine and fail by name PRECHECK_FAIL_* (exit 3);
 #     the Program digest handed to the Commit is read from build_summary.json, never from the required-value manifest; a Match verdict over a record
 #     this attempt did not produce is FAIL (freshness rule) unless MATCH_PHASE=cpu resumes it by name; a Commit never starts over a
-#     Match record missing its account files (PRECHECK_FAIL_MATCH_RECORD_INCOMPLETE, exit 14); `required_manifest verify` FAIL = Commit FAIL.
-#     The required-value manifest is never built without the core registry: `required_manifest` exit 3 = PRECHECK_FAIL_REGISTRY_UNAVAILABLE
-#     (an environment fault, not a complete:false manifest) stops the row by name (exit 3).
-#   Exit: 0 every requested stage PASS; 10 Build FAIL; 11 Match FAIL; 12 Commit FAIL; 13 B>=2 global manifest not built; 3 precheck FAIL;
+#     Match record missing its account files (PRECHECK_FAIL_MATCH_RECORD_INCOMPLETE, exit 14); a `manifest_verify` FAIL = Commit FAIL.
+#     The required-value manifest is never built without the core registry: exit 3 = PRECHECK_FAIL_REGISTRY_UNAVAILABLE (an environment
+#     fault, not a complete:false manifest) stops the row by name (exit 3).  The value-acquisition engine is v2 (ACQUIRE_ENGINE, read by
+#     the python stages; `v1` = the regression oracle only, one more release) -- this shell has no engine branch, only the passthrough.
+#   Exit: 0 every requested stage PASS; 10 Build FAIL; 11 Match FAIL; 12 Commit FAIL; 13 required-value manifest not built; 3 precheck FAIL;
 #     2 bad argv / MATCH_PHASE; 128+signal when cancelled (TERM/INT/HUP is forwarded to the running stage's process group, see run_to).
 #   Protocol spec: Notion -> "vLLM integration — protocol spec (Build · Match · Commit)".
 set -uo pipefail
@@ -301,6 +303,39 @@ gpu_exclusive() {  # <why>
   tl hot.gpu_exclusive mark why="$1" s="$s" out="$out"
 }
 
+# ---------------------------------------------------------------- the required-value manifest of record (one wiring, every stage)
+# [R14 MAN-01; v2 flip] $D/manifest.json = RequiredValues(P, Q_module_body_v1) over THIS row's Build (the request Programs + their runtime
+# correspondence), by `verity_vllm.query.cli` -- never from the collector, never from an observed step.  B=1: `build --program build_request
+# --workload WL` (the CAP-shape Program of record, R17-26/27); B>=2: `build-global --fixture WL --programs-root $D [--workload-digest <GP-01's
+# FULL workload digest>]` (one component Program per declared shape, request ids r<index>).  Built at the end of a PASS Build (the Build
+# artifact carries it; the Match stage's acquisition plan and the Commit read it), rebuilt at Commit only when absent.  Exit 3 =
+# PRECHECK_FAIL_REGISTRY_UNAVAILABLE (RegistryUnavailable: the core verity package is not importable -- an environment fault, never a
+# manifest that says complete:false); any other failure = "not built" (manifest.log).  `required_manifest_build <stage>` -> 0 | 3 | 1.
+required_manifest_build() {
+  local stage=$1 wd="" rc
+  tl "$stage.required_manifest" start engine=v2-query
+  if [ "${B:-1}" -gt 1 ] && ls -d "$D"/build_request_LP*_T* >/dev/null 2>&1; then
+    wd=$($PY -c "import json,sys;d=json.load(open(sys.argv[1]));print(d.get('workload_digest') or d.get('program_digest') or d.get('digest') or '')" "$D/build_workload/workload_program.json" 2>/dev/null || true)   # [rel] GP-01 writes workload_digest
+    $PY -m verity_vllm.query.cli build-global --fixture "$WL" --programs-root "$D" ${wd:+--workload-digest "$wd"} --out "$D/manifest.json" > "$D/manifest.log" 2>&1; rc=$?
+  else
+    $PY -m verity_vllm.query.cli build --program "$D/build_request" --workload "$WL" --out "$D/manifest.json" > "$D/manifest.log" 2>&1; rc=$?
+  fi
+  if [ "$rc" = 0 ]; then
+    tl "$stage.required_manifest" end rc=0
+    log "required-value manifest of record (Q_module_body_v1, B=$B${wd:+, workload digest ${wd:0:16}}): $(tail -n 1 "$D/manifest.log" | cut -c1-300)"
+    return 0
+  fi
+  rm -f "$D/manifest.json"
+  if grep -q "PRECHECK_FAIL_REGISTRY_UNAVAILABLE" "$D/manifest.log" 2>/dev/null; then
+    log "PRECHECK_FAIL_REGISTRY_UNAVAILABLE: $(grep -m1 PRECHECK_FAIL_REGISTRY_UNAVAILABLE "$D/manifest.log")"
+    tl "$stage.required_manifest" end rc=3 fail_class=PRECHECK_FAIL_REGISTRY_UNAVAILABLE
+    return 3
+  fi
+  tl "$stage.required_manifest" end rc=1
+  log "required-value manifest NOT built (rc=$rc; see manifest.log): $(tail -n 1 "$D/manifest.log" | cut -c1-300)"
+  return 1
+}
+
 # ---------------------------------------------------------------- Build (Bet A)
 if [[ ",$STAGES," == *,build,* ]]; then
   # [REL-08] the request-wrapper derive is O(LP x T) instances (and grows with the model): 900 s fit 1B at 256/31 but Mistral-7B at
@@ -474,9 +509,17 @@ EOF
     echo "$TFB_LINE" >> "$D/row.log"
     if [ $TFB_RC -ne 0 ]; then ok=FAIL; verdict build-target FAIL "$TFB_LINE"; else case "$TFB_LINE" in TARGET-FAMILY-WAIVED*) verdict build-target WAIVED "$TFB_LINE" >/dev/null ;; esac; fi
   fi
-  verdict build "$ok" "rc=$rc1/$rc2 wall=${wall}s digest=$(python3 -c "import json;print((json.load(open('$D/build_summary.json'))['step'].get('program_digest') or '')[:16])") workload_digest=${WL_DIGEST:0:16}"
+  # [v2 flip] the Build artifact carries the required-value manifest of record (CPU, minutes): a Build whose manifest does not build is a
+  # Build FAIL by name -- the Match stage's acquisition plan and the Commit have nothing to acquire against (exit 13; exit 3 = environment).
+  MRC=0
+  if [ "$ok" = PASS ] && [ -f "$D/build_request/instances.json.gz" ]; then
+    required_manifest_build build; MRC=$?
+    if [ "$MRC" = 3 ]; then verdict build FAIL "PRECHECK_FAIL_REGISTRY_UNAVAILABLE (environment: core verity package not importable; see $D/manifest.log)"; tl stage.build end ok=false; tl row end ok=false stopped_at=build; exit 3; fi
+    [ "$MRC" = 0 ] || { ok=FAIL; verdict build-manifest FAIL "required-value manifest not built (manifest.log)"; }
+  fi
+  verdict build "$ok" "rc=$rc1/$rc2 wall=${wall}s digest=$(python3 -c "import json;print((json.load(open('$D/build_summary.json'))['step'].get('program_digest') or '')[:16])") workload_digest=${WL_DIGEST:0:16} manifest=$([ -f "$D/manifest.json" ] && python3 -c "import json;m=json.load(open('$D/manifest.json'));print(str(m.get('manifest_digest'))[:16], m.get('populations',{}).get('identities'))" 2>/dev/null || echo none)"
   tl stage.build end ok="$ok" wall_s="$wall"
-  [ "$ok" = PASS ] || { log "BUILD FAIL -> stop"; tl row end ok=false stopped_at=build; exit 10; }
+  [ "$ok" = PASS ] || { log "BUILD FAIL -> stop"; tl row end ok=false stopped_at=build; exit $([ "$MRC" = 0 ] && echo 10 || echo 13); }
 fi
 
 # ---------------------------------------------------------------- Match (eager capture + fold -> comparator; control tokens)
@@ -502,6 +545,10 @@ if [[ ",$STAGES," == *,match,* ]]; then
   # program.json write 2 h 39 min in, with the 74 GB / 188k-file capture complete on disk.  Default all = capture + CPU, unchanged.
   export MATCH_PHASE=${MATCH_PHASE:-all}; case "$MATCH_PHASE" in all|cpu) ;; *) log "MATCH_PHASE=$MATCH_PHASE is not all|cpu"; exit 2;; esac   # exported: the summary's record-freshness rule reads it (r19-int-18)
   [ "$MATCH_PHASE" = cpu ] && { [ -d "$D/match/capture" ] || { verdict match FAIL "MATCH_PHASE=cpu without $D/match/capture"; exit 12; }; log "match: MATCH_PHASE=cpu over the existing capture (no GPU stage)"; }
+  # [v2 flip] the GPU capture's acquisition plan (m1_capture -> verity_vllm.acquire.stage.plan_at_stage) reads the row's required-value
+  # manifest through $ACQUIRE_MANIFEST: the manifest of record beside the Build when it is there (a Match over a Build without one records
+  # the runtime tree only, by name in match/capture).  Passthrough only -- the python stages decide what the engine does with it.
+  if [ -z "${ACQUIRE_MANIFEST:-}" ] && [ -f "$D/manifest.json" ]; then export ACQUIRE_MANIFEST="$D/manifest.json"; log "acquisition manifest for the capture: $ACQUIRE_MANIFEST (ACQUIRE_ENGINE=${ACQUIRE_ENGINE:-v2})"; fi
   CMD_M=($PY312 -m verity_capture.bench.run_config --case "$ROLE" --workload "$WL" --out "$D/match" --checkpoint-dir "$CK" --phase "$MATCH_PHASE"
          --python-gpu "$PY" --python-cpu "$PY312" --max-num-seqs "$B" --snapshot-steps "${MATCH_SNAP_STEPS:-$SNAP_DEF}"
          ${MATCH_SNAP_MAX_BYTES:+--snapshot-max-bytes "$MATCH_SNAP_MAX_BYTES"} --skip "$SKIP"
@@ -791,9 +838,9 @@ if [[ ",$STAGES," == *,commit,* ]]; then
   # REPLAY_CACHE=0 opts out (every pair replays).
   [ "${REPLAY_CACHE:-1}" = "1" ] && CMD_K+=(--replay-cache)
   [ -n "${REQUIRED_CLASSES:-}" ] && CMD_K+=(--required-classes "$REQUIRED_CLASSES")     # REL-02 override (documented reason required)
-  # [R14 MAN-01] the expected required-value population comes from THIS row's Build (the request Program) x the canonical VU query, not from
-  # the collector: build `manifest.json` from build_request and hand it to commit_delta (--required-manifest); the REL-02 counts+classes
-  # source stays only as the labelled fallback when the row has no request Program (verdict.json `required_classes_source` says which).
+  # [R14 MAN-01] the expected required-value population comes from THIS row's Build (the request Programs) x the verification query
+  # Q_module_body_v1, not from the collector: `manifest.json` is handed to commit_delta (--required-manifest), which derives the acquisition
+  # plan from it.  REQUIRED_MANIFEST names one explicitly (a re-run over a given manifest); else the row's own (below).
   REQUIRED_MANIFEST=${REQUIRED_MANIFEST:-}
   # [R17 F-r17b-42 (exec M-0846 / reqval M-0849 / rev M-0850 / revb M-0865), resolution (a); R17-26 / R17-27] B=1 PROGRAM OF RECORD AT
   # COMMIT = the CAP-shape build_request, exactly as at B>=2: "population stays fixed (cap-length manifest, same digest); the R17-1 rule
@@ -823,40 +870,33 @@ if t > 0 and t != cap:
       log "B=1 EOS-stopped request ($SERVED_SHAPE, match_shape.json): Program of record at Commit = the CAP-shape build_request (R17-26/27, F-r17b-42 (a)); the positions past the executed prefix are classified not-executed by rule, not cut from the population (the R16 M-0402 served-shape rule is retired here; the Match-side served-shape comparison stands)"
     fi
   fi
-  if [ -z "$REQUIRED_MANIFEST" ] && [ "${B:-1}" -gt 1 ] && ls -d "$D"/build_request_LP*_T* >/dev/null 2>&1; then
-    # [R15 manbind B8] B>=2: the manifest of record is the GLOBAL manifest over the declared requests (one request Program per declared
-    # shape, build_request_LP<prompt_len>_T<max_tokens-1>; request ids r<index>, the workload UUID beside); program_digest = GP-01's
-    # workload Program digest when the Build produced it (build_workload/workload_program.json), else the labelled components fold.
-    # The one-request manifest of build_request is NOT a population at B>=2 (rc3 F-global: coverage fails on it) -> no fallback: fail closed.
-    # `required_manifest` exit 3 = PRECHECK_FAIL_REGISTRY_UNAVAILABLE (required_manifest.RegistryUnavailable: the core verity package is not
-    # importable under $PY -- an ENVIRONMENT fault, never a manifest that says complete:false).  The row stops here by name, no fallback.
-    manifest_precheck_fail() { # <rc> <manifest.log>
-      if [ "$1" = 3 ] && grep -q "PRECHECK_FAIL_REGISTRY_UNAVAILABLE" "$2" 2>/dev/null; then
-        log "PRECHECK_FAIL_REGISTRY_UNAVAILABLE: $(grep -m1 PRECHECK_FAIL_REGISTRY_UNAVAILABLE "$2")"
-        tl commit.required_manifest end rc=3 fail_class=PRECHECK_FAIL_REGISTRY_UNAVAILABLE
-        verdict commit FAIL "PRECHECK_FAIL_REGISTRY_UNAVAILABLE (environment: core verity package not importable; see $2)"; tl stage.commit end ok=false; tl row end ok=false stopped_at=commit; exit 3
-      fi
-    }
-    WD=$($PY -c "import json,sys;d=json.load(open(sys.argv[1]));print(d.get('workload_digest') or d.get('program_digest') or d.get('digest') or '')" "$D/build_workload/workload_program.json" 2>/dev/null || true)   # [rel] GP-01 writes workload_digest
-    tl commit.required_manifest start mode=build-global
-    if $PY -m verity_capture.commit.required_manifest build-global --fixture "$WL" --programs-root "$D" ${WD:+--workload-digest "$WD"} --out "$D/manifest.json" > "$D/manifest.log" 2>&1; then
-      tl commit.required_manifest end rc=0
-      REQUIRED_MANIFEST="$D/manifest.json"; log "required-value manifest (GLOBAL, B=$B${WD:+, workload digest ${WD:0:16}}): $(tail -n 1 "$D/manifest.log")"
+  # [v2 flip] THE MANIFEST OF RECORD = Q_module_body_v1 over the Build's request Programs + runtime correspondence (`verity_vllm.query.cli`
+  # build | build-global, `required_manifest_build` above): built once at the end of the Build stage (the Build artifact carries it, the
+  # Match stage's acquisition plan reads it), rebuilt here only when a Commit-only attempt finds none beside the Programs.  B=1: the CAP-shape
+  # build_request x the workload; B>=2: the GLOBAL manifest over the declared request shapes (build_request_LP<prompt_len>_T<max_tokens-1>;
+  # request ids r<index>; program_digest = GP-01's workload digest when the Build produced it, else the labelled components fold).  A manifest
+  # that does not build is a Commit FAIL BY NAME for every B (the REL-02 counts+classes fallback is gone with v1: commit_delta's plan-derived
+  # hooks need the manifest; `PRECHECK_FAIL_REGISTRY_UNAVAILABLE` stays an environment fault, exit 3).  Never an engine branch in this shell.
+  if [ -z "$REQUIRED_MANIFEST" ] && [ -f "$D/manifest.json" ]; then
+    # a manifest beside the Build is of record only when the query path built it (header query.engine = v2-query); a pre-flip
+    # (`required_manifest`, v1 by-name tables) manifest left by an older Build is moved aside, never used, and the row rebuilds
+    MAN_ENGINE=$(python3 -c "import json,sys;m=json.load(open(sys.argv[1]));q=m.get('query') or {};print(q.get('engine') if isinstance(q,dict) else '')" "$D/manifest.json" 2>/dev/null || true)
+    if [ "$MAN_ENGINE" = v2-query ]; then
+      REQUIRED_MANIFEST="$D/manifest.json"; log "required-value manifest of record: $D/manifest.json (built at the Build stage: $(tail -n 1 "$D/manifest.log" 2>/dev/null | cut -c1-200))"
     else
-      MRC=$?; manifest_precheck_fail $MRC "$D/manifest.log"
-      tl commit.required_manifest end rc=1
-      log "required-value manifest build-global FAILED (see manifest.log)"; verdict commit FAIL "B>=2 global required manifest not built (manifest.log)"; tl stage.commit end ok=false; tl row end ok=false stopped_at=commit; exit 13
+      MAN_PREV="$D/manifest.pre-v2-$(date -u +%Y%m%dT%H%M%SZ).json"; mv "$D/manifest.json" "$MAN_PREV"
+      log "manifest.json beside the Build is not the query path's (query.engine=${MAN_ENGINE:-none}): moved aside ($(basename "$MAN_PREV")), rebuilding the manifest of record"
     fi
   fi
-  if [ -z "$REQUIRED_MANIFEST" ] && [ -f "$PD_REQ/instances.json.gz" ]; then
-    tl commit.required_manifest start mode=build
-    if $PY -m verity_capture.commit.required_manifest build --program "$PD_REQ" --workload "$WL" --out "$D/manifest.json" > "$D/manifest.log" 2>&1; then
-      tl commit.required_manifest end rc=0
-      REQUIRED_MANIFEST="$D/manifest.json"; log "required-value manifest: $(tail -n 1 "$D/manifest.log")"
+  if [ -z "$REQUIRED_MANIFEST" ] && { [ -f "$PD_REQ/instances.json.gz" ] || ls -d "$D"/build_request_LP*_T* >/dev/null 2>&1; }; then
+    if required_manifest_build commit; then
+      REQUIRED_MANIFEST="$D/manifest.json"
     else
-      MRC=$?; manifest_precheck_fail $MRC "$D/manifest.log"
-      tl commit.required_manifest end rc=1
-      log "required-value manifest build FAILED (see manifest.log): falling back to REL-02 counts+classes (labelled in verdict.json)"
+      MRC=$?
+      if [ "$MRC" = 3 ]; then
+        verdict commit FAIL "PRECHECK_FAIL_REGISTRY_UNAVAILABLE (environment: core verity package not importable; see $D/manifest.log)"; tl stage.commit end ok=false; tl row end ok=false stopped_at=commit; exit 3
+      fi
+      verdict commit FAIL "required-value manifest not built (B=$B; manifest.log)"; tl stage.commit end ok=false; tl row end ok=false stopped_at=commit; exit 13
     fi
   fi
   [ -n "$REQUIRED_MANIFEST" ] && CMD_K+=(--required-manifest "$REQUIRED_MANIFEST")
@@ -1043,21 +1083,15 @@ EOF
     run_tl commit.commit_delta "$TO" "$D/commit.log" "${CMD_K[@]}"; rck=$?
   fi
   wall=$(( $(date +%s) - t0 ))
-  # [R15 exec] the summary (same fields as before) also records the execution configuration the overhead is labelled with -- the run's
-  # own collector record (variant/retention/window), the commit_delta command line, --engine-arg settings -- so the finalizer never has
-  # to guess "whole-block/device" for a windowed/host run (verity_capture/sweep/commit_summary.py; re-runnable offline on the evidence)
-  tl closure.commit_summary start
-  ok=$($PY -m verity_capture.sweep.commit_summary "$D" "$rck")
-  tl closure.commit_summary end ok="$ok"
-  # [R15 EXEC-05, manbind MAN-05 M-0340 (3) / rev-cb F-cb-11] MANIFEST OF RECORD: after the Commit, rebuild the required-value manifest
-  # from THIS attempt's Program x workload with `required_manifest verify` (CPU) and record it at $D/commit/manifest_verify.json -- the
-  # finalizer grades Commit ◐ without it ("pinned by digest recompute only").  B=1: --program build_request --workload WL; B>=2:
-  # --fixture WL --programs-root $D --workload-digest <GP-01's FULL workload digest from build_workload/workload_program.json> (the
-  # 16-hex prefix in stages.txt is NOT accepted: the rebuilt rows embed the digest, so a prefix fails the rows compare).  A verify FAIL
-  # means the Commit did not use the manifest of record -> the Commit verdict is FAIL (fail-closed), never a footnote.  Feature-detected:
-  # a tree without the verify sub-command runs unchanged.
-  if [ "$ok" = PASS ] && $PY -m verity_capture.commit.required_manifest verify --help >/dev/null 2>&1; then
-    MV=("$PY" -m verity_capture.commit.required_manifest verify --manifest "$D/manifest.json" --out "$D/commit/manifest_verify.json")
+  # [R15 EXEC-05, manbind MAN-05 M-0340 (3) / rev-cb F-cb-11; v2 flip] MANIFEST OF RECORD: after the Commit, rebuild the required-value
+  # manifest from THIS attempt's Program x workload by the query path (`verity_capture.commit.manifest_verify` -> `verity_vllm.query.cli`,
+  # CPU) and record it at $D/commit/manifest_verify.json (verity-sweep/manifest-verify/v1: used_digest / used_program_digest /
+  # used_identities / rebuilt_* / ok).  B=1: --program build_request --workload WL; B>=2: --fixture WL --programs-root $D --workload-digest
+  # <GP-01's FULL workload digest from build_workload/workload_program.json> (a 16-hex prefix is NOT accepted: the rebuilt rows embed the
+  # digest).  A verify FAIL means the Commit did not use the manifest of record -> `required_value_coverage/manifest_of_record_verified`
+  # FAILS in the verdict below (fail-closed), never a footnote.  Only a Commit that closed (rc 0) is verified; a crashed one is graded as such.
+  if [ "$rck" = 0 ] && [ -n "$REQUIRED_MANIFEST" ]; then
+    MV=("$PY" -m verity_capture.commit.manifest_verify --manifest "$REQUIRED_MANIFEST" --out "$D/commit/manifest_verify.json")
     if [ "$B" -gt 1 ]; then
       WDF=$($PY -c "import json,sys;d=json.load(open(sys.argv[1]));print(d.get('workload_digest') or d.get('program_digest') or d.get('digest') or '')" "$D/build_workload/workload_program.json" 2>/dev/null || true)
       MV+=(--fixture "$WL" --programs-root "$D"); [ -n "$WDF" ] && MV+=(--workload-digest "$WDF")
@@ -1067,24 +1101,31 @@ EOF
     tl validate.manifest_verify start
     if "${MV[@]}" > "$D/manifest_verify.log" 2>&1; then
       tl validate.manifest_verify end rc=0
-      log "manifest of record VERIFIED (required_manifest verify: rebuilt from this attempt's Program x workload == used; commit/manifest_verify.json)"
+      log "manifest of record VERIFIED (manifest_verify: rebuilt by the query path from this attempt's Program x workload == used; commit/manifest_verify.json)"
     else
       tl validate.manifest_verify end rc=1
-      ok=FAIL; log "manifest of record VERIFY FAILED: $(tail -1 "$D/manifest_verify.log" | cut -c1-200)"
+      log "manifest of record VERIFY FAILED: $(tail -1 "$D/manifest_verify.log" | cut -c1-200)"
     fi
   fi
-  # [v2 5b] THE VERDICT OF RECORD as a typed document: $D/verdict.json (vllm-verdict/v1) -- the SAME decisions commit_delta
-  # (commit/verdict.json + runs.jsonl), commit_summary and manifest_verify just made, as named checks (runtime_match, local_replay,
+  # [v2 5b, P5] THE VERDICT OF RECORD = $D/verdict.json (vllm-verdict/v1, verity_capture.commit.verdict from-record): the decisions
+  # commit_delta made (commit/verdict.json + runs.jsonl) and the manifest verification above, as named checks (runtime_match, local_replay,
   # boundary_linkage, checkpoint_binding, execution_extent, required_value_coverage, program_source_identity + their R*/X* rules) with a
-  # claim, the inputs read (digests), the scope established and machine-readable differences.  commit_summary.json keeps being written
-  # (marked deprecated: F-r19-int-21 -- its `pass` is rc==0 ∧ tokens_equal).  Feature-detected; never changes $ok, never fails the row.
-  if $PY -m verity_capture.commit.verdict from-record --help >/dev/null 2>&1; then
-    tl closure.verdict start
-    v2=$($PY -m verity_capture.commit.verdict from-record "$D" --rc "$rck" --stage-ok "$ok" 2>>"$D/row.log" | cut -d' ' -f1); [ -n "$v2" ] || v2=ERROR
-    tl closure.verdict end outcome="$v2"
-    log "verdict.json (vllm-verdict/v1): $v2 (Commit stage $ok)"
-  fi
-  verdict commit "$ok" "rc=$rck wall=${wall}s $(python3 -c "import json;s=json.load(open('$D/commit_summary.json'));print('runs',s['n_runs'],'delta',s['delta_wall_mean'],'openings',s['openings'],'tokens',s['tokens_equal'])" 2>/dev/null) manifest_verify=$([ -f "$D/commit/manifest_verify.json" ] && python3 -c "import json;print(json.load(open('$D/commit/manifest_verify.json')).get('ok'))" 2>/dev/null || echo not-run)"
+  # claim, the inputs read (digests), the scope established, machine-readable differences and the execution configuration read off
+  # commit.log / commit/summary.json / runs.jsonl.  Its `outcome` IS the Commit stage's decision: PASS iff every graded rule passed and
+  # commit_delta closed (rc 0).  commit_summary.json is no longer written (F-r19-int-21 / P5; the regression harness keeps a reader for
+  # the pre-P5 records).  A verdict that cannot be built is a FAIL by name (never a silent PASS).
+  tl closure.verdict start
+  VOUT=$($PY -m verity_capture.commit.verdict from-record "$D" --rc "$rck" 2>>"$D/row.log" | cut -d' ' -f1); [ -n "$VOUT" ] || VOUT=ERROR
+  tl closure.verdict end outcome="$VOUT"
+  ok=$([ "$VOUT" = PASS ] && echo PASS || echo FAIL)
+  log "verdict.json (vllm-verdict/v1): $VOUT -> Commit stage $ok"
+  VSUM=$(python3 - "$D/verdict.json" <<'PYEOF' 2>/dev/null || true
+import json, sys
+v = json.load(open(sys.argv[1])); r = v.get("runs") or {}
+print("runs", r.get("instrumented"), "failed", r.get("failed"), "checks", " ".join("%s=%s" % (c["name"], c["outcome"]) for c in v.get("checks") or [] if c.get("rule") is None))
+PYEOF
+)
+  verdict commit "$ok" "rc=$rck wall=${wall}s outcome=$VOUT ${VSUM:-} manifest_verify=$([ -f "$D/commit/manifest_verify.json" ] && python3 -c "import json;print(json.load(open('$D/commit/manifest_verify.json')).get('ok'))" 2>/dev/null || echo not-run)"
   tl stage.commit end ok="$ok" wall_s="$wall"
   [ "$ok" = PASS ] || { log "COMMIT FAIL -> stop"; tl row end ok=false stopped_at=commit; exit 12; }
 fi
