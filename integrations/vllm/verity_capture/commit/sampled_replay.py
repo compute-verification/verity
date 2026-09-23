@@ -57,7 +57,7 @@ from typing import Any, Callable, Iterable, Sequence
 import numpy as np
 
 from verity_capture.commit import manifest_format as RM
-from verity_capture.commit import required_manifest as V1
+from verity_capture.commit import required_manifest as V1   # the v1 address rule stays for v1-built manifests: TP rank Programs (until TP=N), pre-flip records
 from verity_capture.commit.oracle_compare import entry_read_name as _entry_read_name, same_name_invocations as _same_name_invocations
 
 SCHEMA = "verity-sweep/sampled-replay/v1"

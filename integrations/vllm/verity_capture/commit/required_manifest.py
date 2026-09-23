@@ -803,6 +803,7 @@ def _inventory_guard() -> dict[str, Any]:
     return guard_summary(None, engine="inventory")
 
 
+# stays for TP rank manifests (row_pod_tp2.sh, until TP=N), Lifted[X] Programs (lifting.correspondence) and the harness's BASELINE_ENGINE=v1
 def build_manifest(program: dict[str, Any], workload: dict[str, Any] | None = None, *, request_id: str | int | None = None,
                    rank: int = 0, ranks: int = 1, profile: str | None = None, shared_rope: bool = True, engine: str | None = None) -> dict[str, Any]:
     """The manifest of one request Program (B=1, `--wrapper request`).  `workload` (sweep manifest) supplies request id / arrival step."""
