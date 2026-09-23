@@ -265,6 +265,7 @@ class CompiledGraphSource:
     def wrap_model(self, model: torch.nn.Module, runner: Any) -> None:
         """Wrap `forward` of every acquired module with the record op (same selection rules as the committer: ACQUIRE_CLASSES minus
         SKIP_CLASSES; the sampler is acquired by the committer's runner.sample wrapper, outside the compiled region)."""
+        # P4 remains: compiled rows select by the class tables; the acquisition plan is not threaded into CompiledSource yet
         from verity_capture.experimental.commit_integ.native_host import ACQUIRE_CLASSES, ACQUIRE_INPUT_CLASSES, SKIP_CLASSES, _mro_names
 
         self.model, self.runner = model, runner

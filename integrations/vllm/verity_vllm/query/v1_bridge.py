@@ -30,7 +30,8 @@ What this module cannot derive and therefore RECORDS (`NAMED_RESIDUALS`, emitted
   the attention hidden stream under `fa2.m1/L<k>`, the weights as `<field>/weight`.
 
 Kernel geometry (the FA hidden stream, the MoE block planes) and the identity encoding constants (`SCHEMA`, `IDENTITY_KEY`, the row
-order, the digest) are imported from v1 -- they are what the bridge is a bridge TO, not membership decisions.
+order, the digest) are the manifest format's (`verity_capture.commit.manifest_format`) -- they are what the bridge is a bridge TO, not
+membership decisions.
 """
 
 from __future__ import annotations
@@ -43,7 +44,7 @@ from dataclasses import dataclass, field
 from typing import Any, Iterable, Mapping
 
 from verity.verification.query import Policy, RequiredValues, ValueRef, boundary, required_values
-from verity_capture.commit import required_manifest as v1
+from verity_capture.commit import manifest_format as fmt
 from verity_vllm.ir.sampling_event import SAMPLING_EVENT_FAMILIES
 
 from .correspondence import CallName, Correspondence
@@ -51,7 +52,8 @@ from .module_body import Q_MODULE_BODY_ID, Q_MODULE_BODY_TEXT, Q_module_body_v1
 from .program_view import CallView, InputView, Port, ProgramView, param_reads, reads_any_of
 
 __all__ = ["Residual", "NAMED_RESIDUALS", "SAMPLING_EVENTS", "STOCHASTIC_SAMPLING_EVENTS", "FLASH_ATTENTION_LAUNCHES", "COLLECTIVES",
-           "member_name", "shared_instances", "request_manifest", "compose_global", "BridgeResult", "under"]
+           "member_name", "shared_instances", "request_manifest", "compose_global", "BridgeResult", "under", "CallMember", "Population",
+           "population"]
 
 # ---------------------------------------------------------------------------------------------------------------------------------
 # protocol declarations: exact Definition ids (what a Definition IS for the protocol; never a pattern over names)
@@ -202,6 +204,115 @@ class BridgeResult:
     residual_counts: Counter = field(default_factory=Counter)
 
 
+# ---------------------------------------------------------------------------------------------------------------------------------
+# the population: RequiredValues(P, Q_module_body_v1, policy) per Call -- what the manifest counts and what the Commit addresses
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class CallMember:
+    """One required Value a Call produces, spelt as the manifest names it: `member` (the v1 spelling), `width` (elements per row),
+    `dtype`, `structural` (the member the structure gives) and the named residual applied (None when the structure gave the name)."""
+
+    port: str
+    member: str
+    width: int
+    dtype: str
+    structural: str
+    residual: Residual | None
+
+
+class Population:
+    """The required values of one request Program under `Q_module_body_v1` and the policy (module docstring), with the facts every reader
+    of them needs: the step of a Call (sampling events end steps), the record-typed parameters, the boundary, and -- per Call -- the
+    required Values it produces under their manifest member names (`members_of`).  `request_manifest` groups these into identity rows;
+    the Commit's replay (`sampled_replay.ProgramIndex`) addresses a Call's committed output by the same members, so the rows a manifest
+    counts and the rows the replay reads are one computation."""
+
+    def __init__(self, P: ProgramView, corr: Correspondence, *, return_slots: bool = True) -> None:
+        self.P, self.corr, self.return_slots = P, corr, return_slots
+        self.events = [c.id for c in P.calls if c.family in SAMPLING_EVENTS]
+        if not self.events:
+            raise ValueError("Program has no sampling event: no step boundary")
+        self.record_fields: dict[ValueRef, str] = {}
+        self.record_params: list[InputView] = []
+        for p in P.params:
+            if len(p.port_table) > 1 or p.type_repr[:1] == "{":
+                self.record_params.append(p)
+                for port in p.port_table:
+                    self.record_fields[ValueRef(p.id, port.name)] = port.name
+        prescribed = frozenset(self.record_fields)
+        self.Q = Q_module_body_v1(P, corr)
+        self.B = B = boundary(P, self.Q)
+        step_of = self.step_of
+        protocol: set[ValueRef] = set()
+        if return_slots:
+            # TENSOR-RETURN: the acquisition binds the TENSORS a module returns, and a tensor is one fx node's output -- every row the
+            # Program unrolled it into, every port of its tuple.  When any Value of a node's output leaves its body (a boundary Value), the
+            # module returned that tensor, so every Value of the node's output at that step is required (the final norm's rows the logits
+            # never read, the residual slot of a fused norm nobody consumes).
+            returned_nodes: set[tuple[int, str, str]] = set()
+            for v in B.values:
+                if v.call >= 0:
+                    n = corr.name(v.call)
+                    returned_nodes.add((step_of(v.call), n.module, n.node))
+        for c in P.calls:
+            if c.family in SAMPLING_EVENTS:
+                protocol.update(ValueRef(c.id, p.name) for p in c.port_table)
+            elif return_slots:
+                n = corr.name(c.id)
+                if n.hint or (step_of(c.id), n.module, n.node) in returned_nodes:      # RETURN-SLOT (recorded) / TENSOR-RETURN (structural)
+                    protocol.update(ValueRef(c.id, p.name) for p in c.port_table)
+        self.policy = Policy(prescribed_inputs=prescribed, protocol_required=frozenset(protocol))
+        self.required = RequiredValues(B.values, self.policy.prescribed_inputs, self.policy.protocol_required)
+        # (required_values() would recompute the boundary; the policy is validated the same way here)
+        known_inputs = frozenset(P.inputs)
+        for v in self.policy.prescribed_inputs:
+            if v not in known_inputs:
+                raise ValueError(f"policy prescribes {v}, which is not an input")
+        self.own_param: dict[int, bool] = {}
+        for c in P.calls:
+            m = corr.module_of(c.id)
+            self.own_param[c.id] = any(under(self.record_fields[v], m) for v in param_reads(c) if v in self.record_fields)
+        self._ports_of: dict[int, list[str]] | None = None
+
+    def step_of(self, cid: int) -> int:
+        """The step of a Call: the number of sampling events before it (the event itself belongs to the step it ends)."""
+        return bisect.bisect_left(self.events, cid)
+
+    def member(self, v: ValueRef) -> CallMember:
+        """The manifest member of the required Value `v` of a (non-sampling) Call."""
+        c = self.P.call(v.call)
+        port = c.port(v.port)
+        member, structural, resid = member_name(c, port, self.corr.name(c.id), own_parameter=self.own_param[c.id])
+        return CallMember(port.name, member, port.elems, _dtype(port.width), structural, resid)
+
+    def _ports(self) -> dict[int, list[str]]:
+        if self._ports_of is None:
+            ports: dict[int, list[str]] = defaultdict(list)
+            for v in sorted(self.required.values):
+                if v.call >= 0:
+                    ports[v.call].append(v.port)
+            self._ports_of = ports
+        return self._ports_of
+
+    def producers(self) -> list[int]:
+        """The Calls that produce at least one required Value, in body order (sampling events included)."""
+        return sorted(self._ports())
+
+    def members_of(self, cid: int) -> list[CallMember]:
+        """The required Values Call `cid` produces, in port order ([] = its outputs are interior to its module body).  A sampling
+        event's output is the protocol's `sampled_token_ids` (not a module member): [] here."""
+        if self.P.call(cid).family in SAMPLING_EVENTS:
+            return []
+        return [self.member(ValueRef(cid, p)) for p in self._ports().get(cid, ())]
+
+
+def population(P: ProgramView, corr: Correspondence, *, return_slots: bool = True) -> Population:
+    """`Population(P, corr)`: the required values of one request Program under `Q_module_body_v1` + the policy."""
+    return Population(P, corr, return_slots=return_slots)
+
+
 def _profile(res: Mapping[str, Any], profile: str | None) -> tuple[str, int | None, dict]:
     attn_obs = res.get("attention_impls_observed") or {}
     fa = None
@@ -239,11 +350,16 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
     prog_world, prog_rank = int(tpinfo.get("world") or 1), int(tpinfo.get("rank") or 0)
     if (prog_world > 1 or ranks > 1) and (int(ranks) != prog_world or int(rank) != prog_rank):
         raise ValueError(f"rank Program mismatch: Program is rank {prog_rank} of world {prog_world}, manifest requested rank {rank} of {ranks}")
+    # TP HOOK: delete this refusal when Q_module_body_v1's policy names the rank-local partials and compose_global merges ranks
+    if prog_world > 1:
+        raise ValueError(f"TP rank Program (rank {prog_rank} of {prog_world}): the v2 query requires no rank-local partials (a row-parallel Gemm's "
+                         "part_rank<r> / lm_head's shard_rank<r> is interior to its module body) and compose_global has no rank merge / "
+                         "tp_peer_binding (TP-04); build TP manifests with required_manifest build-global --programs-root <rank dir> --rank r ... --ranks W")
     sweep = (workload or {}).get("sweep") or {}
     wr = (workload or {}).get("requests") or []
     workload_request_id = wr[0].get("request_id") if wr and isinstance(wr[0], dict) else None
-    request_id = v1.request_label(request_id, workload)
-    k_req = int(v1._REQ_RE.match(request_id).group(1))
+    request_id = fmt.request_label(request_id, workload)
+    k_req = int(fmt.REQ_RE.match(request_id).group(1))
     if wr and k_req < len(wr) and isinstance(wr[k_req], dict) and str(wr[k_req].get("request_id")) != str(workload_request_id):
         workload_request_id = wr[k_req].get("request_id")
     arr = sweep.get("arrive_steps") or []
@@ -251,46 +367,9 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
     n_seq = 1
 
     # --- the query and the policy ---------------------------------------------------------------------------------------------------
-    events = [c.id for c in P.calls if c.family in SAMPLING_EVENTS]
-    if not events:
-        raise ValueError("Program has no sampling event: no step boundary")
-    step_of = lambda cid: bisect.bisect_left(events, cid)   # noqa: E731  -- the event itself belongs to the step it ends
-
-    record_fields: dict[ValueRef, str] = {}
-    record_params: list[InputView] = []
-    for p in P.params:
-        if len(p.port_table) > 1 or p.type_repr[:1] == "{":
-            record_params.append(p)
-            for port in p.port_table:
-                record_fields[ValueRef(p.id, port.name)] = port.name
-    prescribed = frozenset(record_fields)
-    Q = Q_module_body_v1(P, corr)
-    B = boundary(P, Q)
-    protocol: set[ValueRef] = set()
-    if return_slots:
-        # TENSOR-RETURN: the acquisition binds the TENSORS a module returns, and a tensor is one fx node's output -- every row the
-        # Program unrolled it into, every port of its tuple.  When any Value of a node's output leaves its body (a boundary Value), the
-        # module returned that tensor, so every Value of the node's output at that step is required (the final norm's rows the logits
-        # never read, the residual slot of a fused norm nobody consumes).
-        returned_nodes: set[tuple[int, str, str]] = set()
-        for v in B.values:
-            if v.call >= 0:
-                n = corr.name(v.call)
-                returned_nodes.add((step_of(v.call), n.module, n.node))
-    for c in P.calls:
-        if c.family in SAMPLING_EVENTS:
-            protocol.update(ValueRef(c.id, p.name) for p in c.port_table)
-        elif return_slots:
-            n = corr.name(c.id)
-            if n.hint or (step_of(c.id), n.module, n.node) in returned_nodes:      # RETURN-SLOT (recorded) / TENSOR-RETURN (structural)
-                protocol.update(ValueRef(c.id, p.name) for p in c.port_table)
-    policy = Policy(prescribed_inputs=prescribed, protocol_required=frozenset(protocol))
-    req = RequiredValues(B.values, policy.prescribed_inputs, policy.protocol_required)
-    # (required_values() would recompute the boundary; the policy is validated the same way here)
-    known_inputs = frozenset(P.inputs)
-    for v in policy.prescribed_inputs:
-        if v not in known_inputs:
-            raise ValueError(f"policy prescribes {v}, which is not an input")
+    pop = population(P, corr, return_slots=return_slots)
+    events, step_of, record_fields, record_params = pop.events, pop.step_of, pop.record_fields, pop.record_params
+    B, policy, req = pop.B, pop.policy, pop.required
 
     aliases, alias_faults = shared_instances(P, corr, record_fields)
     impl = corr.implementation_path
@@ -315,11 +394,6 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
             add("weights", "*", 0, impl(port.name), "weight", 0, None, dtype=_dtype(port.width, weight=True))
 
     # --- the Call-produced required Values, grouped per (step, module, member) -----------------------------------------------------
-    own_param: dict[int, bool] = {}
-    for c in P.calls:
-        m = corr.module_of(c.id)
-        own_param[c.id] = any(under(record_fields[v], m) for v in param_reads(c) if v in record_fields)
-
     groups: dict[tuple[int, str, str], dict[str, Any]] = {}
     for v in sorted(req.values):
         if v.call < 0:
@@ -335,17 +409,17 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
                     pin = P.input(r.call)
                     add(f"sampler_{pin.name}", step, 0, "runner.sampler", pin.name, 0, n_seq, dtype=_dtype(pin.port_table[0].width), spec=c.family)
             continue
-        port = c.port(v.port)
-        member, structural, resid = member_name(c, port, n, own_parameter=own_param[c.id])
+        cm = pop.member(v)
+        member, structural, resid = cm.member, cm.structural, cm.residual
         if resid is not None:
             residual_counts[f"{resid.family}:{resid.structural}->{resid.v1_member}"] += 1
         g = groups.get((step, n.module, member))
         if g is None:
-            g = groups[(step, n.module, member)] = {"rows": 0, "width": port.elems, "dtype": _dtype(port.width), "family": c.family, "spec": c.definition,
+            g = groups[(step, n.module, member)] = {"rows": 0, "width": cm.width, "dtype": cm.dtype, "family": c.family, "spec": c.definition,
                                                     "nodes": set(), "hinted": bool(n.hint), "structural": structural,
                                                     "crossing": 0, "returned": 0}
-        elif g["family"] != c.family or g["width"] != port.elems:
-            unmodelled[f"{c.family} under {impl(n.module)} ({member}: two producers {g['family']} {g['width']} / {c.family} {port.elems})"] += 1
+        elif g["family"] != c.family or g["width"] != cm.width:
+            unmodelled[f"{c.family} under {impl(n.module)} ({member}: two producers {g['family']} {g['width']} / {c.family} {cm.width})"] += 1
             continue
         g["rows"] += 1
         g["nodes"].add(n.node)
@@ -396,13 +470,13 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
     for (step, mod), a in sorted(attn.items(), key=lambda kv: (kv[0][0], attn_bodies.index(kv[0][1]))):
         layer = attn_bodies.index(mod)
         if hidden_family[:3] == "fa3":
-            geo = v1._fa3_geometry(a["T_max"], a["rows"], a["NH"], a["KVH"], a["D"], n_seq)
+            geo = fmt.fa3_geometry(a["T_max"], a["rows"], a["NH"], a["KVH"], a["D"], n_seq)
         else:
             win = (attn_obs.get(impl(mod)) or attn_obs.get(mod) or {}).get("sliding_window")
             w0 = win[0] if isinstance(win, (list, tuple)) and win else (win if isinstance(win, int) else -1)
-            geo = v1._fa2_geometry(a["T_max"], a["rows"], a["NH"], a["KVH"], a["D"], n_seq, windowed=(w0 is not None and int(w0) >= 0))
+            geo = fmt.fa2_geometry(a["T_max"], a["rows"], a["NH"], a["KVH"], a["D"], n_seq, windowed=(w0 is not None and int(w0) >= 0))
         HB, M, NB, BN, gname = geo
-        add(hidden_family, step, 0, f"{tap}/L{layer}", gname, 0, v1.mat_total_words(HB, M, NB, BN, a["D"]), dtype="u32",
+        add(hidden_family, step, 0, f"{tap}/L{layer}", gname, 0, fmt.mat_total_words(HB, M, NB, BN, a["D"]), dtype="u32",
             geometry={"HB": HB, "M": M, "NB": NB, "BN": BN, "D": a["D"], "seqlen_k": a["T_max"], "rows": a["rows"]}, attention_module=impl(mod))
         residual_counts["encoding:hidden"] += 1
 
@@ -412,17 +486,17 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
     for step, ev in enumerate(events):                     # the step's Calls are the body slice up to and including its sampling event
         seg = P.calls[lo: ev + 1]
         lo = ev + 1
-        for mod, g in v1.moe_geometry({"spec": c.definition, "name": c.name} for c in seg).items():
-            layer = v1._layer_of(mod)
+        for mod, g in fmt.moe_geometry({"spec": c.definition, "name": c.name} for c in seg).items():
+            layer = fmt.layer_of(mod)
             if g["M"] <= 0 or g["TOPK"] <= 0:
                 continue
             moe_layers.add(layer)
-            for plane, nw, dtype in v1.moe_identities(g):
+            for plane, nw, dtype in fmt.moe_identities(g):
                 add("moe_block_stream", step, 0, f"moe/L{layer}", plane, 0, nw, dtype=dtype, rows=g["M"], topk=g["TOPK"], moe_module=impl(mod))
 
     for f in alias_faults:
         unmodelled[f] += 1
-    identities.sort(key=v1._row_key)
+    identities.sort(key=fmt.row_key)
     q = query_header(profile, hidden_family, return_slots=return_slots)
     if moe_layers:
         q["required_families"].append("moe_block_stream")
@@ -431,7 +505,7 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
         q["required_families"] += sorted(f for f in fam_counts if f[:8] == "sampler_")
     q["residuals_applied"] = dict(sorted(residual_counts.items()))
     alias_out = {impl(m): [impl(canon), k] for m, (canon, k) in aliases.items() if m != canon}
-    man = {"schema": v1.SCHEMA, "identity_key": list(v1.IDENTITY_KEY), "program_digest": pdig,
+    man = {"schema": fmt.SCHEMA, "identity_key": list(fmt.IDENTITY_KEY), "program_digest": pdig,
            "program": {"dir": program_dir, "function": res["program"].get("function"), "wrapper": res.get("wrapper"), "LP": res.get("LP"), "T": res.get("T"),
                        "model_pin": res.get("model_pin"), "artifact_identity": (artifact or {}).get("identity"), "instances": len(P.calls),
                        "instances_digest": P.digest, "source": P.source},
@@ -445,7 +519,7 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
                            "attention_layers": len(attn_bodies), "units": len(B.units), "boundary_values": len(B.values),
                            "required_values": len(req.values)},
            "complete": not unmodelled, "unmodelled": dict(unmodelled),
-           "manifest_digest": v1.manifest_digest(identities), "identities": identities}
+           "manifest_digest": fmt.manifest_digest(identities), "identities": identities}
     return BridgeResult(man, req, residual_counts)
 
 
@@ -457,7 +531,7 @@ def compose_global(fixture: Mapping[str, Any], parts: Mapping[str, dict[str, Any
                    rank: int = 0, ranks: int = 1) -> dict[str, Any]:
     """`parts` = {request label: component manifest}; `reqs` = the declared requests in (arrive_step, index) order with `request_id` = label."""
     component_digests = sorted({p["program_digest"] for p in parts.values()})
-    pdig = str(workload_digest) if workload_digest else v1.components_fold_digest(component_digests)
+    pdig = str(workload_digest) if workload_digest else fmt.components_fold_digest(component_digests)
     pdig_kind = "workload" if workload_digest else "components-fold"
     by_engine: dict[int, list[tuple[str, int]]] = {}
     for r in reqs:
@@ -499,15 +573,15 @@ def compose_global(fixture: Mapping[str, Any], parts: Mapping[str, dict[str, Any
             D = int(pre["geometry"]["D"])
             NH = int(pre["geometry"]["HB"])
             KVH = int(dec["geometry"]["HB"]) if dec is not None and int(dec["geometry"]["M"]) > 1 else NH
-            fn = v1._fa3_geometry if hidden_family[:3] == "fa3" else v1._fa2_geometry
+            fn = fmt.fa3_geometry if hidden_family[:3] == "fa3" else fmt.fa2_geometry
             HB, M, NB, BN, gname = fn(a["T_max"], a["max_rows"] * a["n_seq"], NH, KVH, D, a["n_seq"])
             ids.append({"family": hidden_family, "program_digest": pdig, "request_id": "*", "requests": a["requests"], "step": "*", "engine_step": e, "invocation": 0,
-                        "op_path": op, "output_member": gname, "element_range": [0, v1.mat_total_words(HB, M, NB, BN, D)], "rank": rank, "dtype": "u32",
+                        "op_path": op, "output_member": gname, "element_range": [0, fmt.mat_total_words(HB, M, NB, BN, D)], "rank": rank, "dtype": "u32",
                         "geometry": {"HB": HB, "M": M, "NB": NB, "BN": BN, "D": D, "seqlen_k": a["T_max"], "rows": a["max_rows"] * a["n_seq"], "n_seq": a["n_seq"]},
                         "attention_module": a["module"]})
         engine_steps_out.append({"engine_step": e, "members": [{"request_id": rid, "step": s, "rows": rows_of[rid]} for rid, s in members],
                                  "rows": sum(rows_of.values()), "n_seq": len(members)})
-    ids.sort(key=v1._row_key)
+    ids.sort(key=fmt.row_key)
     fam: Counter = Counter(r["family"] for r in ids)
     ref: dict[str, Any] = {}
     for r in ids:
@@ -517,7 +591,7 @@ def compose_global(fixture: Mapping[str, Any], parts: Mapping[str, dict[str, Any
     applied: Counter = Counter()
     for p in parts.values():
         applied.update(p["query"].get("residuals_applied") or {})
-    return {"schema": v1.SCHEMA, "identity_key": list(v1.IDENTITY_KEY), "program_digest": pdig, "program_digest_kind": pdig_kind, "component_digests": component_digests,
+    return {"schema": fmt.SCHEMA, "identity_key": list(fmt.IDENTITY_KEY), "program_digest": pdig, "program_digest_kind": pdig_kind, "component_digests": component_digests,
             "global": True, "addressing": "request-local", "composition_reference": ref,
             "fixture": {k: v for k, v in fixture.items() if k in ("schema", "fixture", "model", "revision", "sampling", "expected_engine_steps", "case")}
                        | ({"row_id": fixture["sweep"].get("row_id"), "seed": fixture["sweep"].get("seed")} if isinstance(fixture.get("sweep"), dict) else {}),
@@ -534,4 +608,4 @@ def compose_global(fixture: Mapping[str, Any], parts: Mapping[str, dict[str, Any
             "ranks": ranks, "rank": rank,
             "engine_steps": engine_steps_out, "steps": sorted(by_engine), "requests": [r["request_id"] for r in reqs],
             "populations": {"identities": len(ids), "by_family": dict(fam), "engine_steps": len(by_engine), "requests": len(reqs)},
-            "manifest_digest": v1.manifest_digest(ids), "identities": ids}
+            "manifest_digest": fmt.manifest_digest(ids), "identities": ids}

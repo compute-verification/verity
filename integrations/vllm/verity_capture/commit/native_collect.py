@@ -195,6 +195,7 @@ def ext(build_dir: str | None = None, verbose: bool = False):
 # down row for row; act/down/sum/router planes correct, they are overwritten only by the next layer, after the pre-flush).  Fix: the MoE
 # source asks the committer to flush right after staging `up` (`flush_after_plane`); one more gather launch per MoE layer per step, nothing
 # for dense rows.  Negative `VERITY_FAULT=late_flush_moe_up` drops that flush (the pre-FLUSH-03 behaviour).
+# declared lifetime facts (with PRE_FLUSH_LEAVES): the correspondence annotations carry no alias / in-place facts to derive them from
 GATHER_FLUSH_LEAVES = frozenset({"qkv_proj", "o_proj", "down_proj", "q_norm", "k_norm"})
 #: pre-forward flush points: the in-place consumers of the previous block's staged outputs (fused add-RMSNorm of residual + block output)
 PRE_FLUSH_LEAVES = frozenset({"input_layernorm", "norm"})

@@ -12,6 +12,7 @@ import json
 
 import pytest
 
+from verity_capture.commit import manifest_format as MF
 from verity_capture.commit import required_manifest as RM
 from verity_capture.commit import required_values as RV
 from verity_capture.commit.tests.test_required_manifest import EPS, _layouts_from, _program
@@ -1637,7 +1638,7 @@ def test_q_module_pad_names_the_slot_units_as_a_different_query_and_leaves_q_mod
         for e in range(E):
             assert ex[(step, f"slot{e}/up")] == ((0, rows * 2 * I), "l17") and ex[(step, f"slot{e}/act")] == ((0, rows * I), "l17")
             assert ex[(step, f"slot{e}/down")] == ((0, rows * H), "l17") and ex[(step, f"slot{e}/g")] == ((0, rows), "l33")
-    assert RM.lifted_bot("l17") == 1 << 16 and RM.lifted_bot("l33") == 1 << 32 and "enc(bot) = 1 << w" in RM.q_module_pad_text("ampere", "fa2_hidden_m1_stream", "d")
+    assert MF.lifted_bot("l17") == 1 << 16 and MF.lifted_bot("l33") == 1 << 32 and "enc(bot) = 1 << w" in RM.q_module_pad_text("ampere", "fa2_hidden_m1_stream", "d")
     assert "a_e = 0" in qi["why"]["padded_slots"] and "1 << w" in qi["why"]["padded_slots"]
     # words per token row of the block = moe's basis (5,121 at OLMoE E=64/H=2048/I=1024: (2I + I + H + 1) per slot) x E + 2 TOPK
     words_row = sum(w for (st, m), ((lo, w), _d) in ex.items() if st == 1 and m != "out")

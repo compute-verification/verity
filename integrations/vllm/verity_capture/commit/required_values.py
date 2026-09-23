@@ -63,6 +63,7 @@ from dataclasses import dataclass, field
 from typing import Any, Iterable, Iterator, NamedTuple
 
 from . import required_manifest as RM
+# members_for stays while this traversal builds v1 manifests: TP rank Programs (until TP=N) and the harness's BASELINE_ENGINE=v1 oracle
 from .required_manifest import (EPILOGUE_FAMILIES, IDENTITY_KEY, INTERIOR_CROSSING, MOE_LEAF, PROMOTED_MEMBER, UnmodelledFamily, _AGGREGATE_PREFIXES,
                                 _STRUCTURE_PREFIXES, _fa2_geometry, _fa3_geometry, _layer_of, _REQ_RE, collector_path, is_aggregate_family,
                                 is_stochastic_select, is_structure_family, is_token_select, mat_total_words, members_for, moe_identities,
