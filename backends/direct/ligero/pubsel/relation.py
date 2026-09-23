@@ -24,6 +24,9 @@ only what depends on the private accumulator:
   ``E + t + nb - width`` in both cases.  The window carries the bits above the ``nb`` selected ones at weight ``2^nb``, so a
   selected window with a stray high bit cannot equal a value below ``2^nb``: truncation is exact and the sum stays in the
   field;
+* the last group's normalised significand is picked from the sum's bit rows without committing its fraction (the bits
+  above the selected window are forced to zero, the hidden bit is picked from the window's top bit), and so are the
+  BF16 epilogue's fields; only an intermediate group (two-group units) commits its fraction, for the next alignment;
 * every one-hot selection is *picked*, not summed (``_pick``): the selected value is a hint row ``X`` (or the value the
   relation already commits, ``M``) and each candidate costs one row-free quadratic ``sel_i (X - value_i) = 0`` instead of a
   product row; the two shift hints ``delta`` / ``dacc`` are ranged by their lookups' one-hot + key-difference constraints
