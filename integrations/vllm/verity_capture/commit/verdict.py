@@ -1235,6 +1235,10 @@ def build(rows: list[dict], verdict_doc: dict | None, *, summary: dict | None = 
     vd = _d(verdict_doc)
     if execution is None:
         execution = {k: v for k, v in _d(summary).items() if k in EXECUTION_KEYS}
+    elif summary:
+        # a pre-P5 row whose evidence is partial here (e.g. commit.log not beside the record): its recorded summary fills what the
+        # evidence did not state -- the record's own statement, never a stand-in
+        execution = {**{k: v for k, v in _d(summary).items() if k in EXECUTION_KEYS}, **{k: v for k, v in execution.items() if v is not None}}
     rm = _d(vd.get("required_manifest"))
     program_digest = rm.get("program_digest")
     manifest_digest = rm.get("manifest_digest")

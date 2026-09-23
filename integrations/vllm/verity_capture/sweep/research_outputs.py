@@ -18,7 +18,7 @@ from the evidence dir into `$RESEARCH_RUN_DIR/outputs/<name>/` and declared in `
     commit  -> vllm-verdict/v1        verdict.json (the verdict of record, vllm-verdict/v1), commit/ (commit_delta's verdict.json,
                                       sampled_replay_p*.json, versions.json, manifest_verify.json, ...; small files), weights_of_record.log,
                                       manifest.log, manifest_verify.log; meta {row, stage, program_digest, verdict, outcome, stage_status};
-                                      refs.build, refs.match  (commit_summary.json is no longer written: F-r19-int-21 / P5)
+                                      refs.build, refs.match  (commit_summary.json and the finalize board are retired: F-r19-int-21 / P5)
     (all)   -> execution-evidence/v1  timeline.jsonl, stages.txt, admission.json, timeline_report.json; meta {row, stage}
     (all)   -> run-files/v1 `logs`    row.log and every top-level *.log of the evidence dir
 
