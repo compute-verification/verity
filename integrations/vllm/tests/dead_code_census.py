@@ -390,9 +390,11 @@ def artifact_refs() -> dict[str, dict]:
     files = [f for f in files if f and not f.endswith(".py")]
     out: dict[str, dict] = {}
 
+    self_files = {"integrations/vllm/tests/dead_code_census.json", "integrations/vllm/tests/dead_code_census.py"}
+
     def grep(needle: str) -> list[str]:
         r = subprocess.run(["git", "grep", "-l", "-I", "-F", "--", needle], cwd=REPO, capture_output=True, text=True, check=False)
-        return [x for x in r.stdout.split("\n") if x]
+        return [x for x in r.stdout.split("\n") if x and x not in self_files]   # this tool and its census name what they judge
 
     dir_cache: dict[str, list[str]] = {}
     for f in files:
@@ -411,8 +413,6 @@ def artifact_refs() -> dict[str, dict]:
                 dir_cache[d] = [x for x in grep(d + "/") if not x.startswith(f"integrations/vllm/{d}/")]
             if dir_cache[d]:
                 dir_refs[d] = dir_cache[d]
-        refs.discard("integrations/vllm/tests/dead_code_census.json")
-        refs.discard("integrations/vllm/tests/dead_code_census.py")
         out[f] = {"bytes": os.path.getsize(ROOT / f), "referenced_by": sorted(refs), "directory_referenced_by": dir_refs}
     return out
 
