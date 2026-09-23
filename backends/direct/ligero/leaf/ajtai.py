@@ -46,7 +46,7 @@ import numpy as np
 from ..compile import P, Expr, Linear
 from . import registry
 
-__all__ = ["AjtaiLeaf", "B_DIGEST_SHA256", "B_TAG", "DEFAULT_N", "M_COL", "ROLE_W", "SUPPORTED_N", "derive_B", "derive_matrix",
+__all__ = ["AjtaiLeaf", "B_DIGEST_SHA256", "B_TAG", "DEFAULT_N", "M_COL", "ROLE_W", "SUPPORTED_N", "chain_key", "derive_B", "derive_matrix",
            "derive_ring_element", "digest_rows", "key_offset", "matrix_sha256", "resolve", "shift_x"]
 
 DEFAULT_N = 64
@@ -190,6 +190,136 @@ def digest_rows(rows, word_bits: int, B: np.ndarray, m_col: int = M_COL, role: i
     return acc_in, acc_out
 
 
+def chain_key(sys, n: int) -> tuple[list[int], list[int]]:
+    """Red-team-leaf-2 G1, the Python twin of the Rust ``leaf.rs::chain_key``: follow the public digest lanes
+    ``hash.d[x]`` of a compiled hashed system to the key rows the chain ACTUALLY uses and check every coefficient against
+    ``B`` re-derived from :data:`B_TAG` (never the scheme object's key).  Per lane: the one linear row ``W[pin] = pub``,
+    the one quadratic on that row (``is_end * (out - d) = 0``), the one linear row on ``out``, which must be
+    ``out - (X acc_in)[x mod n] - sum_i B[x mod n][o + i] bit_i`` over the chain row the neighbour lane's ``out`` is linked
+    into; the bit rows one per position, the same in all n key rows of a role, increasing, boolean, disjoint across roles
+    and from the chain / pin rows.  Returns the (x, W) bit rows; raises ``ValueError`` naming the first violation."""
+    B = derive_matrix(n)
+    if matrix_sha256(B) != B_DIGEST_SHA256.get(n):
+        raise ValueError(f"ajtai-n{n}: the re-derived key does not match the pinned digest")
+    nd = 2 * n
+    single = lambda e: next(iter(e.lin)) if (e.c % P == 0 and len(e.lin) == 1 and next(iter(e.lin.values())) % P == 1) else None  # noqa: E731
+    lin_of = lambda e: {r: v % P for r, v in e.lin.items() if v % P}  # noqa: E731
+    end_row, d_row = None, [None] * nd
+    pin_row = {name: idx for idx, name in sys.pins}
+    carried: dict[str, list] = {}
+    for c in sys.linear:
+        if c.pub is not None:
+            lin = {r: v % P for r, v in c.lin.items() if v % P}
+            carried.setdefault(c.pub, []).append(next(iter(lin)) if (c.c % P == 0 and len(lin) == 1 and next(iter(lin.values())) == 1
+                                                                      and next(iter(lin)) == pin_row.get(c.pub)) else None)
+
+    def carried_row(name: str) -> int:
+        rows = carried.get(name, [])
+        if name not in pin_row or len(rows) != 1 or rows[0] is None:
+            raise ValueError(f"{name} is not pinned through exactly one constraint W[pin row] = pub")
+        return rows[0]
+
+    end_row = carried_row("hash.is_end")
+    d_row = [carried_row(f"hash.d[{x}]") for x in range(nd)]
+    extra = [nm for _, nm in sys.pins if nm.startswith("hash.d[") and nm not in {f"hash.d[{x}]" for x in range(nd)}]
+    if extra:
+        raise ValueError(f"pin {extra[0]}: not one of the {nd} digest lanes")
+    lane_of = {r: x for x, r in enumerate(d_row)}
+    if len(lane_of) != nd or end_row in lane_of:
+        raise ValueError("two public lanes share a pin row")
+    out: list = [None] * nd
+    for q in sys.quadratic:
+        a, b, cc = lin_of(q.a), lin_of(q.b), lin_of(q.c)
+        lanes = [lane_of[r] for e in (a, b, cc) for r in e if r in lane_of]
+        if not lanes:
+            continue
+        if len(lanes) != 1:
+            raise ValueError("a quadratic constraint touches two digest lanes")
+        x = lanes[0]
+        o = [r for r, v in b.items() if r != d_row[x] and v == 1]
+        tie = (single(q.a) == end_row and q.c.c % P == 0 and not cc and q.b.c % P == 0 and len(b) == 2 and b.get(d_row[x]) == P - 1
+               and len(o) == 1)
+        if not tie or out[x] is not None:
+            raise ValueError(f"hash.d[{x}]: not tied by exactly one is_end * (out - d) = 0")
+        out[x] = o[0]
+    if any(o is None for o in out):
+        raise ValueError(f"hash.d[{out.index(None)}] is tied to no chain row")
+    out_set = set(out)
+    if len(out_set) != nd or end_row in out_set or out_set & set(lane_of):
+        raise ValueError("two digest lanes are tied to one row, or to a pin row")
+    acc_of: dict[int, int] = {}
+    for c, y in zip(sys.chain["c"], sys.chain["y"]):
+        o = single(y)
+        if o in out_set:
+            if o in acc_of:
+                raise ValueError(f"chain row {o} is linked twice")
+            acc_of[o] = c
+    if any(o not in acc_of for o in out):
+        raise ValueError("a chain row tied to a digest lane is never linked")
+    acc = [acc_of[o] for o in out]
+    acc_set = set(acc)
+    if len(acc_set) != nd or acc_set & (out_set | set(lane_of) | {end_row}):
+        raise ValueError("the carried rows of two lanes coincide, or a carried row is a digest / pin row")
+    defs: dict[int, list[int]] = {}
+    for qi, c in enumerate(sys.linear):
+        for r in c.lin:
+            if r in out_set and c.lin[r] % P:
+                defs.setdefault(r, []).append(qi)
+    boolean = set()
+    for q in sys.quadratic:
+        r = single(q.a)
+        if r is not None and single(q.b) == r and single(q.c) == r:
+            boolean.add(r)
+    roles, all_bits = [], set()
+    for k in range(2):
+        bit_row: list = [None] * M_COL
+        for xx in range(n):
+            x = k * n + xx
+            o = out[x]
+            prev, prev_coef = (acc[k * n + n - 1], 1) if xx == 0 else (acc[x - 1], P - 1)
+            qs = defs.get(o, [])
+            if len(qs) != 1:
+                raise ValueError(f"hash.d[{x}]: its chain row is not defined by exactly one linear constraint")
+            c = sys.linear[qs[0]]
+            if c.pub is not None or c.c % P:
+                raise ValueError(f"hash.d[{x}]: the key row has a constant or a public right-hand side")
+            blk = B[xx, k * M_COL:(k + 1) * M_COL]
+            pos = {(P - int(v)) % P: i for i, v in enumerate(blk) if int(v)}
+            if len(pos) != int((blk != 0).sum()):
+                raise ValueError(f"row {xx} of the derived B repeats a coefficient")
+            seen_o = seen_prev = False
+            nbits = 0
+            for r, v in lin_of(c).items():
+                if r == o and v == 1:
+                    seen_o = True
+                elif r == prev and v == prev_coef:
+                    seen_prev = True
+                else:
+                    i = pos.get(v)
+                    if i is None:
+                        raise ValueError(f"hash.d[{x}]: row {r} has coefficient {v}, not an entry of the derived key row")
+                    if bit_row[i] is None:
+                        bit_row[i] = r
+                    elif bit_row[i] != r:
+                        raise ValueError(f"key role {k}: bit position {i} is row {bit_row[i]} in one key row and {r} in another")
+                    nbits += 1
+            if not (seen_o and seen_prev and nbits == len(pos)):
+                raise ValueError(f"hash.d[{x}]: the key row is not out - (X acc_in)[{xx}] - B[{xx}] bits over the linked neighbour")
+        if any(r is None for r in bit_row):
+            raise ValueError(f"key role {k}: bit position {bit_row.index(None)} is never keyed")
+        if any(bit_row[i] >= bit_row[i + 1] for i in range(M_COL - 1)):
+            raise ValueError(f"key role {k}: the bit rows are not in bit-position order")
+        chain_rows = set(sys.chain["c"])
+        for r in bit_row:
+            if r not in boolean:
+                raise ValueError(f"key role {k}: bit row {r} is not boolean-constrained")
+            if r in all_bits or r in out_set or r in acc_set or r in lane_of or r == end_row or r in chain_rows:
+                raise ValueError(f"key role {k}: bit row {r} is shared with the other role or is a chain / pin row")
+            all_bits.add(r)
+        roles.append(bit_row)
+    return roles[0], roles[1]
+
+
 def _single_row(e: Expr, what: str) -> int:
     if e.c != 0 or len(e.lin) != 1 or next(iter(e.lin.values())) != 1:
         raise ValueError(f"ajtai: {what} must be a single committed row, got {e!r}")
@@ -318,6 +448,10 @@ class AjtaiLeaf:
 
     def witness(self):
         return None
+
+    def check_system(self, sys) -> None:
+        """The verifier's key check on a compiled hashed system (:func:`chain_key`; raises ``ValueError``)."""
+        chain_key(sys, self.n)
 
     # --- chain witness --------------------------------------------------------------------------------------------------
     def chain_witness(self, words, *, word_bits: int, role: int, row_words: int, n_vus: int, steps: int, l: int):

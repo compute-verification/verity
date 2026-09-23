@@ -604,6 +604,21 @@ class HashedRelationRunner(RelationChainRunner):
             out.append((coins_of[i], pf, (bd["table"], bd["idx"], bd["ypub"], bd["auth"], sibs_of[i]), bd["lay"]))
         return out, wall
 
+    def _system_key_error(self) -> str | None:
+        """A keyed leaf's check of the compiled system (Ajtai: the chain the digests come from uses the key re-derived
+        from the public tag; red-team-leaf-2 G1), once per system."""
+        check = getattr(self.leaf, "check_system", None)
+        if check is None:
+            return None
+        if getattr(self, "_key_checked", None) is not self.sys:
+            try:
+                check(self.sys)
+                self._key_error = None
+            except ValueError as e:
+                self._key_error = f"system: the {self.leaf.name} chain does not use the derived key: {e}"
+            self._key_checked = self.sys
+        return self._key_error
+
     def verify_vus(self, proof, pubs, lay: Layout, coins=None, auth_timing: dict | None = None):
         from . import hashauth, hashchain
         table, idx, ypub, auth, sibs = pubs
@@ -611,6 +626,9 @@ class HashedRelationRunner(RelationChainRunner):
             coins = proof.coins
         if not np.array_equal(np.asarray(idx, dtype=np.int64), auth.indices()) or auth.n_vus != lay.n_vus:
             return False, "authentication block does not match the statement's indices / layout"
+        key_err = self._system_key_error()
+        if key_err:
+            return False, key_err
         ok, why = verify(self.p, self.sys, self.tb, self.cfg(lay.l), None, table, idx, None, proof, self.device,
                          chain=(lay, ypub), coins=coins, rel=self.hooks_for(auth))
         if not ok:

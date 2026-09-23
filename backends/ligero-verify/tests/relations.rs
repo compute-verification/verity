@@ -1198,3 +1198,23 @@ fn ajtai_system_mismatches_and_the_key_check_are_enforced() {
         assert!(js.contains("coins replayed from the transcript"), "{js}");
     }
 }
+
+// red-team-leaf-2 G1 (must reject): `fixtures/fp8-ada-ajtai-n64-g1-decoy/` (`leaf/ajtai_g1_fixture.py`, CPU): the chain the
+// digests come from is keyed by B = 0 (every published digest is 0) and 2n decoy linear rows carry the derived key over
+// zero hint rows; the proof satisfies that system.  The pattern-scan key check (1cf9178) ACCEPTED it under
+// --allow-any-system; following the digest lanes refuses it before a proof byte is read.  Pinned: not the pinned system.
+#[test]
+fn ajtai_g1_decoy_fixture_is_refused() {
+    let d = "fixtures/fp8-ada-ajtai-n64-g1-decoy";
+    let (sys, stmt, proof) = (format!("{d}/system.bin"), format!("{d}/sub_00.stmt"), format!("{d}/sub_00.proof"));
+    let (code, js) = verify(&sys, &stmt, &proof, &["--allow-any-system"]);
+    assert_eq!(code, 1, "{js}");
+    assert_eq!(field(&js, "\"accepted\":"), "false");
+    assert!(js.contains("does not use the derived key B") && js.contains("hash.d[0]: the key row is not out - (X acc_in)[0]"), "{js}");
+    let (code, js) = verify(&sys, &stmt, &proof, &[]);
+    assert_eq!(code, 1, "{js}");
+    assert!(js.contains("system file is not the pinned hashed (ajtai-n64 leaves) fp8-ada system"), "{js}");
+    let (code, js) = run(&["batch", "--dir", d, "--system", &sys, "--allow-any-system", "--threads", "2"]);
+    assert_ne!(code, 0, "{js}");
+    assert!(js.contains("\"accepted\":0,\"rejected\":1"), "{js}");
+}
