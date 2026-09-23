@@ -86,7 +86,7 @@ VERIFIED_VALUES = (VERIFIED_ACCEPTED, VERIFIED_REJECTED, VERIFIED_NOT_TRANSFERAB
 #: imports neither package (the `research` rule), so the spelling is pinned here; the ledger's tests cross-check it.
 PROOF_CLASSES = ("NO_PROOF", "ARITHMETIC_DIAGNOSTIC", "NON_ZK_PROOF_DIAGNOSTIC", "NON_ZK_PROOF", "COMPLETE_HVZK_BACKEND", "COMPLETE_ZK_BACKEND",
                  "COMPONENT")
-AUTHENTICATION_VALUES = ("included", "excluded")
+AUTHENTICATION_VALUES = ("included", "included-hash", "excluded")
 MODES = ("interactive", "fiat-shamir")
 SCOPES = ("unit", "vu", "component")
 TRACKS = ("A", "B", "C", "shared", "scout", "baseline")
