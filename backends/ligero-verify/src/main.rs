@@ -9,14 +9,20 @@
 //!                      # every DIR/*.proof with its DIR/*.stmt (and DIR/*.coins when present: that proof's own step-0
 //!                      # coins, as `verify --coins`); the sub-batches are verified concurrently on N jobs (default: the
 //!                      # available parallelism), each exactly as `verify` does; the batch is accepted iff every
-//!                      # sub-batch is.  Agreement with DIR/manifest.json's python_verdict when present.
-//! ligero-verify system-digest --system system.bin           # the two digests to pin in verify.rs
+//!                      # sub-batch is.  Agreement with the python_verdict of DIR/manifest.json, or of
+//!                      # DIR/../manifest.json naming the proofs as `<DIR name>/<file>` (a bench-vu dump's rep dirs).
+//! ligero-verify system-digest --system system.bin           # the two digests (and the relation they are pinned for)
 //! ~~~
+//!
+//! The statement names the relation (`ligero-statement/v4`; v2 / v3 = bf16-ampere) and the system file must carry
+//! that relation's pinned digests (relation.rs) -- `--allow-any-system` lifts the pin and every verdict then reports
+//! `system_pinned = false`.
 
 mod auth;
 mod field;
 mod format;
 mod hash;
+mod relation;
 mod verify;
 
 use std::path::{Path, PathBuf};
@@ -90,7 +96,7 @@ fn statement_json(s: &Option<verify::StatementInfo>) -> String {
     match s {
         None => "null".into(),
         Some(s) => format!(
-            "{{\"l\":{},\"n\":{},\"D\":{},\"t\":{},\"zk\":{},\"mode\":\"{}\",\"n_proofs\":{},\"n_vus\":{},\"steps\":{},\"digest\":{}}}",
+            "{{\"l\":{},\"n\":{},\"D\":{},\"t\":{},\"zk\":{},\"mode\":\"{}\",\"n_proofs\":{},\"n_vus\":{},\"steps\":{},\"K\":{},\"format\":\"ligero-statement/v{}\",\"relation\":{},\"digest\":{}}}",
             s.l,
             s.n,
             s.d,
@@ -100,6 +106,9 @@ fn statement_json(s: &Option<verify::StatementInfo>) -> String {
             s.n_proofs,
             s.n_vus,
             s.steps,
+            s.k_ops,
+            s.format_version,
+            json_str(&s.relation),
             s.digest.as_ref().map_or("null".to_string(), |d| format!("\"{d}\""))
         ),
     }
@@ -124,9 +133,10 @@ fn verdict_json(v: &verify::Verdict, name: &str, python: Option<(bool, &str)>, r
         None => String::new(),
     };
     format!(
-        "{{\"name\":{},\"accepted\":{},\"reason\":{},\"statement\":{},\"timing\":{},\"reps\":{},\"soundness\":{}{}}}",
+        "{{\"name\":{},\"accepted\":{},\"system_pinned\":{},\"reason\":{},\"statement\":{},\"timing\":{},\"reps\":{},\"soundness\":{}{}}}",
         json_str(name),
         v.accepted,
+        v.system_pinned,
         json_str(&v.reason),
         statement_json(&v.statement),
         timing_json(&v.timing),
@@ -136,9 +146,42 @@ fn verdict_json(v: &verify::Verdict, name: &str, python: Option<(bool, &str)>, r
     )
 }
 
+/// The system file's digests and the relation they are pinned for (`null`: none), as a JSON object.
+fn system_json(shared: &verify::Shared) -> String {
+    format!(
+        "{{\"sys_id\":{},\"table_digest\":{},\"pinned_relation\":{}}}",
+        json_str(&shared.sys_id_hex),
+        json_str(&shared.table_digest_hex),
+        shared.pinned_relation.map_or("null".to_string(), |r| json_str(r.name))
+    )
+}
+
 /// Minimal extraction of `"python_verdict": {"accepted": ..., "reason": "..."}` per `"proof": "<name>"` entry from
-/// manifest.json (no JSON dependency; the manifest is written by serialize.py with indent=1).
-fn manifest_verdicts(path: &Path) -> Vec<(String, bool, String)> {
+/// manifest.json (no JSON dependency; the manifest is written by serialize.py with indent=1).  `DIR/manifest.json`
+/// names the proofs by file; a bench-vu dump's `proofs/manifest.json` names them `rep1/sub_00.proof` -- when DIR has
+/// no manifest of its own, the parent's is read and the entries are matched as `<DIR name>/<file>`.
+fn manifest_verdicts(dir: &Path) -> Vec<(String, bool, String)> {
+    let own = dir.join("manifest.json");
+    let (path, prefix) = if own.is_file() {
+        (own, String::new())
+    } else {
+        let parent = dir.parent().map(|p| p.join("manifest.json"));
+        match (parent, dir.file_name()) {
+            (Some(p), Some(name)) if p.is_file() => (p, format!("{}/", name.to_string_lossy())),
+            _ => return Vec::new(),
+        }
+    };
+    let mut out = manifest_entries(&path);
+    if !prefix.is_empty() {
+        out = out
+            .into_iter()
+            .filter_map(|(n, a, w)| n.strip_prefix(prefix.as_str()).map(|s| (s.to_string(), a, w)))
+            .collect();
+    }
+    out
+}
+
+fn manifest_entries(path: &Path) -> Vec<(String, bool, String)> {
     let text = match std::fs::read_to_string(path) {
         Ok(t) => t,
         Err(_) => return Vec::new(),
@@ -286,16 +329,20 @@ fn main() {
         "system-digest" => {
             let sys = std::fs::read(arg(&args, "--system").expect("--system")).expect("read system");
             match format::System::parse(&sys) {
-                Ok(s) => println!(
-                    "{{\"sys_id\":\"{}\",\"table_digest\":\"{}\",\"m\":{},\"L\":{},\"Q\":{},\"pins\":{},\"chain\":{}}}",
-                    hash::hex(&s.sys_id),
-                    hash::hex(&format::System::table_digest(&sys)),
-                    s.m,
-                    s.linear.len(),
-                    s.quadratic.len(),
-                    s.pins.len(),
-                    s.chain.is_some()
-                ),
+                Ok(s) => {
+                    let (sid, td) = (hash::hex(&s.sys_id), hash::hex(&format::System::table_digest(&sys)));
+                    println!(
+                        "{{\"sys_id\":\"{}\",\"table_digest\":\"{}\",\"pinned_relation\":{},\"m\":{},\"L\":{},\"Q\":{},\"pins\":{},\"chain\":{}}}",
+                        sid,
+                        td,
+                        relation::by_digests(&sid, &td).map_or("null".to_string(), |r| json_str(r.name)),
+                        s.m,
+                        s.linear.len(),
+                        s.quadratic.len(),
+                        s.pins.len(),
+                        s.chain.is_some()
+                    )
+                }
                 Err(e) => {
                     eprintln!("system file: {e}");
                     std::process::exit(2);
@@ -317,7 +364,7 @@ fn main() {
         "batch" => {
             let sys = std::fs::read(arg(&args, "--system").expect("--system")).expect("read system");
             let dir = PathBuf::from(arg(&args, "--dir").expect("--dir"));
-            let py = manifest_verdicts(&dir.join("manifest.json"));
+            let py = manifest_verdicts(&dir);
             let entries = match std::fs::read_dir(&dir) {
                 Ok(e) => e,
                 Err(e) => {
@@ -398,19 +445,23 @@ fn main() {
                 (None, _) => format!("accept: all {} sub-batches accepted", proofs.len()),
             };
             let summary = format!(
-                "{{\"dir\":{},\"jobs\":{jobs},\"available_parallelism\":{available},\"threads\":{},\"reps\":{},\"soundness_bits\":{},\"n\":{},\"accepted\":{n_acc},\"rejected\":{n_rej},\"own_coins\":{n_coins},\"batch_accepted\":{batch_accepted},\"batch_reason\":{},\"python_agree\":{agree},\"python_disagree\":{disagree},\"verify_seconds_sum\":{total_secs:.4},\"shared_seconds\":{shared_secs:.4},\"wall_seconds\":{wall:.4},\"items\":[{}]}}",
+                "{{\"dir\":{},\"jobs\":{jobs},\"available_parallelism\":{available},\"threads\":{},\"reps\":{},\"soundness_bits\":{},\"system_pinned\":{},\"system\":{},\"n\":{},\"accepted\":{n_acc},\"rejected\":{n_rej},\"own_coins\":{n_coins},\"batch_accepted\":{batch_accepted},\"batch_reason\":{},\"python_agree\":{agree},\"python_disagree\":{disagree},\"verify_seconds_sum\":{total_secs:.4},\"shared_seconds\":{shared_secs:.4},\"wall_seconds\":{wall:.4},\"items\":[{}]}}",
                 json_str(&dir.to_string_lossy()),
                 opt.threads,
                 reps,
                 opt.soundness_bits,
+                !opt.allow_any_system,
+                system_json(&shared),
                 proofs.len(),
                 json_str(&batch_reason),
                 items.join(",")
             );
             eprintln!(
-                "{} proofs: {n_acc} accepted, {n_rej} rejected ({n_coins} against their own coins); batch {}; python agreement {agree}/{} ({disagree} disagree); verify sum {total_secs:.3}s, wall {wall:.3}s at {jobs} jobs x {} threads",
+                "{} proofs: {n_acc} accepted, {n_rej} rejected ({n_coins} against their own coins); batch {}; system {} ({}); python agreement {agree}/{} ({disagree} disagree); verify sum {total_secs:.3}s, wall {wall:.3}s at {jobs} jobs x {} threads",
                 proofs.len(),
                 if batch_accepted { "ACCEPT" } else { "reject" },
+                if opt.allow_any_system { "NOT PINNED (--allow-any-system)" } else { "pinned" },
+                shared.pinned_relation.map_or("digests match no pinned relation", |r| r.name),
                 agree + disagree,
                 opt.threads
             );
