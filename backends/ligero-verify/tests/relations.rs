@@ -741,6 +741,35 @@ fn fp8_ada_hashed_v5_proof_is_accepted_and_the_hashed_system_is_pinned() {
 }
 
 #[test]
+fn fp8_ada_hashed_proof_mutations_are_rejected_by_the_chain_and_quadratic_tests() {
+    // The hashed system's chain test has 19 links (accumulator 3 + 16 sponge capacity lanes); a flipped byte in the
+    // q rows must still fail it, and one in h the quadratic test (layout as in the fp4 proof test: l = 1024, D = 6,
+    // t = 189, M = 6210, depth 12, non-ZK interactive).
+    let pf = std::fs::read(HASH_PROOF).unwrap();
+    let (d, l, t, m_rows, depth) = (6usize, 1024usize, 189usize, 6210usize, 12usize);
+    let w_at = 8 + 4 + 32 + 6 * 32 + 32;
+    let h_at = w_at + 4 * d * l;
+    let q_at = h_at + 4 * d * (l - 1);
+    let cols_at = q_at + 4 * d * (2 * l - 1);
+    let opened_at = cols_at + 4 * t;
+    let paths_at = opened_at + 4 * m_rows * t;
+    assert_eq!(paths_at + 32 * t * depth, pf.len());
+    for (name, at, reason) in [
+        ("w", w_at, "proximity test failed"),
+        ("h", h_at + 4, "quadratic constraints failed"),
+        ("q", q_at + 8, "chain constraints failed (opened columns)"),
+        ("q_last", q_at + 4 * d * (2 * l - 1) - 4, "chain constraints failed (opened columns)"),
+        ("opened_cap", opened_at + 4 * t * 6000, "merkle path 0 invalid"),
+    ] {
+        let mut m = pf.clone();
+        m[at] ^= 1;
+        let (code, js) = verify(HASH_SYS, HASH_STMT, &write_tmp(&format!("hash_{name}.proof"), &m), &["--coins", HASH_COINS]);
+        assert_eq!(code, 1, "{name}: {js}");
+        assert!(js.contains(reason), "{name}: {js}");
+    }
+}
+
+#[test]
 fn fp8_ada_hashed_statement_negatives_are_rejected() {
     // Every field of the v5 statement is bound by the statement digest (the relation tag absorbs the authentication
     // block, the body the digests and the y words), so a statement FILE mutated after the fact fails on the transcript's
