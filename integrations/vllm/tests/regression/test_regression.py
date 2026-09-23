@@ -23,8 +23,13 @@ with the current code, and the two are diffed as canonical JSON on every field t
                           G6 lengths, eos_stop_requests                                                                               weak*   T0
     coverage              coverage_check(manifest of record, instrumented layouts) == the Commit's recorded coverage                    STRONG   T0(+manifest)
     commit_summary        commit_summary.summarize re-derivation == recorded (stable fields) + commit/verdict.json lifted as the verdict   STRONG   T0
-    decomp_hashes         [STUB] per-request canonical_sha256{a,b}, attribution / XREQ counts over the 0.6-5.8 GB fold record          STRONG   T1
-    replay_partition      [STUB] sampled-replay population / strata / seed / facts_of_record over the binding map                      STRONG   T1
+    decomp_hashes         per-request canonical_sha256{a,b}, derived_digest, n_instances, LP / T / steps / prefill chunks, XREQ counts
+                          and the attribution table of match_decomp.json recomputed over the 0.6-5.8 GB fold record by the v2 path
+                          (observe.iter_observations -> resolve -> resolve_decomp; batch_decomp.Projection / compare_steps wrapped)     STRONG   T1
+    replay_partition      the sampled-replay PARTITION of sampled_replay_p0.json (population by family / not-evaluable by name / strata
+                          sizes / lifetime split / R17-1 not-executed split / the seeded draw's per-stratum counts and picks per
+                          (request, step) / phase anchors) recomputed over the Programs + manifest of record; the evaluations
+                          themselves (binding map, vault only) are carried as facts, not recomputed                                   STRONG   T1
 
     * weak = PASS-side only (no reference row fails a G-check) or a rule no reference row exercises (no EOS stop anywhere: lag.exercised
       is false on every row) -- the check catches a v2 that changes a verdict or a count, not one that changes the unexercised branch.
