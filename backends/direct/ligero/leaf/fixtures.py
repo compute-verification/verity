@@ -81,7 +81,8 @@ def write_fixture(out: Path, relation: str = "fp8-ada", leaf: str | None = None,
         if r.returncode == 0:
             d = json.loads(r.stdout)
             man["rust"] = {"sys_id": d["sys_id"], "table_digest": d["table_digest"], "pinned_relation": d.get("pinned_relation")}
-            man["pins_row"] = f'("{rel.name}", "{R.leaf.name}", "{d["sys_id"]}", "{d["table_digest"]}"),'
+            # the Rust `PINS` key is the relation SUFFIX (a family member is "ajtai-n64", not "ajtai")
+            man["pins_row"] = f'("{rel.name}", "{registry.suffix_of(R.leaf)}", "{d["sys_id"]}", "{d["table_digest"]}"),'
             if d["sys_id"] != man["system"]["sys_id"]:
                 raise RuntimeError("Rust and Python disagree on sys_id")
     (out / "manifest.json").write_text(json.dumps(man, indent=1))
@@ -91,12 +92,16 @@ def write_fixture(out: Path, relation: str = "fp8-ada", leaf: str | None = None,
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--relation", default="fp8-ada")
-    ap.add_argument("--leaf", default=None, help=f"registry name (default {registry.DEFAULT}); known: {registry.names()}")
+    ap.add_argument("--leaf", default=None, help=f"registry name (default {registry.DEFAULT}); known: {registry.names()} + "
+                                                 f"family members {[f'{p}-<params>' for p in registry.families()]}")
+    ap.add_argument("--vus", default="1,3", help="comma-separated ids (of --n-vus) of the VUs the fixture proves (default 1,3)")
+    ap.add_argument("--device", default="cpu")
     ap.add_argument("--out", required=True)
     ap.add_argument("--n-vus", type=int, default=4)
     ap.add_argument("--mode", default="interactive", choices=("interactive", "fiat-shamir"))
     args = ap.parse_args(argv)
-    man = write_fixture(Path(args.out), args.relation, args.leaf, n_vus=args.n_vus, mode=args.mode)
+    man = write_fixture(Path(args.out), args.relation, args.leaf, n_vus=args.n_vus, vus=tuple(int(v) for v in args.vus.split(",")),
+                        mode=args.mode, device=args.device)
     print(json.dumps({k: man[k] for k in ("relation", "system", "rust", "pins_row") if k in man}, indent=1))
     if "pins_row" in man:
         print(f"\nleaf.rs PINS row for {man['relation']['statement_relation']}:\n    {man['pins_row']}")

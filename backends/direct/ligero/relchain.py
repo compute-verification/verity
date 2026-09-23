@@ -852,6 +852,8 @@ def gate_hashed(args, rel: Relation) -> int:
     except Exception as e:                                  # the hint generator itself refuses the word: also a rejection
         negs.append((f"off-domain operand 0x{rel.off_domain[0]:x} computed on", (False, f"prover: {type(e).__name__}: {e}")))
     negs += hashed_negatives(R, data, getattr(args, "row_negatives", 40))
+    if hasattr(R.leaf, "step"):
+        negs += leaf_negatives(R, data)                      # the linear leaf's own battery (brief §3.4)
     for name, (ok, why) in negs:
         log(f"  negative {name}: {'REJECTED' if not ok else 'ACCEPTED (BUG)'} {why}")
         report["negatives"].append({"name": name, "accepted": ok, "why": why})
@@ -861,6 +863,88 @@ def gate_hashed(args, rel: Relation) -> int:
     if args.out:
         Path(os.path.expandvars(args.out)).write_text(json.dumps(report, indent=1, default=str))
     return 2 if failures else 0
+
+
+#: what a scheme without a `privacy_note` (the contract's optional attribute; red-team-leaf F5) is assumed to be: a
+#: deterministic unsalted compressing hash (Poseidon2, BLAKE3)
+DEFAULT_PRIVACY_NOTE = "deterministic, unsalted: hides only up to preimage search on a row"
+
+
+def leaf_privacy_note(leaf) -> str:
+    """``LeafScheme.privacy_note`` of the scheme, or :data:`DEFAULT_PRIVACY_NOTE`."""
+    return getattr(leaf, "privacy_note", None) or DEFAULT_PRIVACY_NOTE
+
+
+def leaf_negatives(R: HashedRelationRunner, data: list) -> list[tuple[str, tuple[bool, str]]]:
+    """The brief's three negatives of a LINEAR ``leaf/`` digest (§3.4, lane ajtai-leaf; a scheme exposing ``step(acc, bits)``),
+    each a self-consistent proof of the wrong thing: the digest of ANOTHER committed row published (the tree opens it, the
+    relation's digest of the row computed on does not match); one operand bit of the hashed row flipped in the witness
+    (every bit row is a committed wire; the accumulator rows are recomputed so the digest changes and no longer opens
+    under the root); a non-binary ``s``: a bit row set to 2 with the accumulator recomputed consistently (the booleanity
+    constraint, not the digest, must reject)."""
+    from . import hashchain
+    leaf, steps, k, nb = R.leaf, R.steps, R.hr.k, R.hr.word_bits
+    j = next((i for i in range(1, len(data)) if list(data[i][0]) != list(data[0][0]) and list(data[i][1]) != list(data[0][1])), 1)
+    base, ids = [data[0], data[j]], [0, j]
+    negs = []
+    n = leaf.digest_elems
+    proof, (table, idx, ypub, auth, sibs), lay = R.prove_vus(base, check=False, vu_ids=ids)
+    # 1. the digest of a different row: VU 0 publishes VU j's x digest (the tree opens VU j's leaf only under VU j's rank)
+    t = table.copy()
+    t[steps - 1, 1:1 + n] = table[2 * steps - 1, 1:1 + n]
+    negs.append(("digest of a different row published for VU 0's x row", R.verify_vus(proof, (t, idx, ypub, auth, sibs), lay)))
+    # ... and claiming VU j's rank for it too (then the multiproof opens, but the relation's digest is of VU 0's bits)
+    idx2 = idx.copy(); idx2[0, 1] = auth.x_index[1]
+    other = dataclasses.replace(auth, x_index=(auth.x_index[1], auth.x_index[1]))
+    negs.append(("digest of a different row, its rank claimed (relation digest != published)",
+                 R.verify_vus(proof, (t, idx2, ypub, other, sibs), lay)))
+    rows = {r.name: r.idx for r in R.sys.rows}
+    acc_rows = {nm: [rows[f"hash.{nm}.cap[{x}]"] for x in range(n)] for _, nm, _ in hashchain.ROLES}
+    out_rows = {nm: [rows[f"hash.{leaf._out_name(role, x)}"] for x in range(n)] for _, nm, role in hashchain.ROLES}
+    bit_rows = {nm: [rows[f"hash.{nm}[{i}].b{j_}"] for i in range(k) for j_ in range(nb)] for _, nm, _ in hashchain.ROLES}
+
+    def recompute(W, nm: str, col0: int):
+        """Recompute the accumulator rows of the VU holding column ``col0`` from its (mutated) bit rows: a prover that keeps
+        its own state consistent, so only the digest pin / booleanity can catch it."""
+        v0 = (col0 // steps) * steps
+        bits = W[bit_rows[nm]][:, v0:v0 + steps].T.to(torch.int64)             # (steps, m)
+        acc = torch.zeros(n, dtype=torch.int64, device=W.device)
+        for s in range(steps):
+            W[acc_rows[nm], v0 + s] = acc.to(W.dtype)                          # W is int32 on the device, int64 on the CPU
+            acc = leaf.step(acc, bits[s])
+            W[out_rows[nm], v0 + s] = acc.to(W.dtype)
+
+    # 2. one bit flipped in the hashed x row of VU 0 (column 2, word 3, bit 1), state recomputed
+    def flip_bit(W):
+        r = bit_rows["a"][3 * nb + 1]
+        W[r, 2] = 1 - W[r, 2]
+        recompute(W, "a", 2)
+    pf, pb, ly = R.prove_vus(base, check=False, mutate=flip_bit, vu_ids=ids)
+    negs.append(("one bit of the hashed x row flipped (digest recomputed consistently)", R.verify_vus(pf, pb, ly)))
+    # 3. non-binary s: a bit row of the W column of VU j set to 2, state recomputed (booleanity must reject)
+    def non_binary(W):
+        r = bit_rows["b"][5 * nb]
+        W[r, steps + 1] = 2
+        recompute(W, "b", steps + 1)
+    pf, pb, ly = R.prove_vus(base, check=False, mutate=non_binary, vu_ids=ids)
+    negs.append(("non-binary operand bit s = 2 (digest recomputed consistently)", R.verify_vus(pf, pb, ly)))
+    # 3b. non-binary s AND the digest pin honoured: bit 0 of one word set to 2 while bit 1 is cleared (same word value,
+    # different bit vector -> a different digest unless caught): the decode constraint word = sum b_j 2^j still holds
+    def non_binary_same_word(W):
+        r0, r1 = bit_rows["b"][7 * nb], bit_rows["b"][7 * nb + 1]
+        if W[r1, steps + 2] == 1 and W[r0, steps + 2] == 0:
+            W[r0, steps + 2], W[r1, steps + 2] = 2, 0
+        else:
+            W[r0, steps + 2], W[r1, steps + 2] = (W[r0, steps + 2] + 2) % P, (W[r1, steps + 2] + P - 1) % P
+        recompute(W, "b", steps + 2)
+    pf, pb, ly = R.prove_vus(base, check=False, mutate=non_binary_same_word, vu_ids=ids)
+    negs.append(("non-binary bit vector of the same word value (2*1 + 0*2 for 0*1 + 1*2)", R.verify_vus(pf, pb, ly)))
+    # 4. the carried state tampered without recomputation: acc_out[3] + 1 at one column (the linear row must reject)
+    def tamper_out(W):
+        W[out_rows["a"][3], 1] = (W[out_rows["a"][3], 1] + 1) % P
+    pf, pb, ly = R.prove_vus(base, check=False, mutate=tamper_out, vu_ids=ids)
+    negs.append(("leaf accumulator output row tampered", R.verify_vus(pf, pb, ly)))
+    return negs
 
 
 def make_runner(args, rel: Relation, **kw):
@@ -922,9 +1006,11 @@ def bench_vu_rel(args, rel: Relation) -> int:
     the run directory is listed in ``artifacts`` so it travels with the Attempt as run-files (``vu.dump_artifacts``)."""
     from .run import _git_commit as _git_commit_repo
     from .vu import ZK_MODE, ZK_MODE_FS, ZK_MODE_HM96, ZK_VACUOUS_NOTE, dump_artifacts
+    # red-team-leaf F5: the hiding caveat is the SCHEME's (`LeafScheme.privacy_note`), not Poseidon2's for everyone -- a linear
+    # leaf (Ajtai) is binding-only and says so in the fingerprint
     ZK_HASHED_NOTE = ("; NOTE: authentication = included-hash: the operand rows x, W are NOT in this statement (private witness, "
-                      "hashed in-circuit); the statement publishes their Poseidon2-BabyBear row digests (deterministic, unsalted: "
-                      "hiding only up to preimage search on a row), the Merkle roots + (vu, x_index, w_index), and the words y16")
+                      f"hashed in-circuit); the statement publishes their {R.leaf.hash_name} row digests ({leaf_privacy_note(R.leaf)}), "
+                      "the Merkle roots + (vu, x_index, w_index), and the words y16")
 
     def _git_commit():
         return os.environ.get("RESEARCH_GIT_COMMIT") or _git_commit_repo()
@@ -1176,8 +1262,9 @@ def bench_vu_rel(args, rel: Relation) -> int:
     )
     if hashed:
         fp["hash"] = R.leaf.hash_name
-        fp["leaf"] = {"scheme": R.leaf.name, "schema": R.leaf.schema, "params_sha256": R.leaf.params_sha256,
-                      "digest_elems": R.leaf.digest_elems, "assumption": R.leaf.assumption}
+        fp["leaf"] = {"scheme": R.leaf.name, "suffix": R.leaf_name, "schema": R.leaf.schema, "params_sha256": R.leaf.params_sha256,
+                      "digest_elems": R.leaf.digest_elems, "digest_bytes_per_row": len(R.leaf.leaf_bytes(np.asarray(R.digests["a"])[0])),
+                      "assumption": R.leaf.assumption, "privacy_note": leaf_privacy_note(R.leaf)}
         fp["sharing"] = "none" if tile is None else f"tile{tile[0]}x{tile[1]}"
         fp["committed_rows"] = {"x": R.trees["a"].count, "w": R.trees["b"].count, "y": R.trees["y"].count}
     meas = [

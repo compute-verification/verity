@@ -759,6 +759,13 @@ fn verify_inner(shared: &Shared, st_bytes: &[u8], pf_bytes: &[u8], opt: &Options
             return reject(&gate, tm, None, Some(info));
         }
     }
+    // a keyed leaf (Ajtai): the system's gadget rows must carry the key the verifier re-derives from the public tag,
+    // pinned or not (red-team-leaf F6: `--allow-any-system` must not accept a system whose key is 0)
+    if let Some(lf) = leaf {
+        if let Err(e) = crate::leaf::check_system_key(sys, lf) {
+            return reject(&e, tm, None, Some(info));
+        }
+    }
     // the chain end the system file declares must be the relation's (a v2 file's components are read from the file,
     // so they are checked against the pin even when the digest pin is lifted)
     if let Err(e) = check_end_components(chain, rel) {

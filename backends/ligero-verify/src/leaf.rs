@@ -9,6 +9,8 @@
 //! Adding a scheme (another lane): one `LeafScheme` static, one entry in `SCHEMES`, and its `(relation, leaf,
 //! sys_id, table_digest)` pins in `PINS` once the Python side has gated it.
 
+use crate::field::P;
+
 /// One leaf scheme as the verifier needs it (the Python `LeafScheme` protocol's verifier-visible half).
 #[derive(Debug)]
 pub struct LeafScheme {
@@ -48,8 +50,157 @@ pub static POSEIDON2: LeafScheme = LeafScheme {
     leaf_bytes: poseidon2_leaf_bytes,
 };
 
+/// `leaf.ajtai.AjtaiLeaf.leaf_bytes`: the n lanes as little-endian u32s (ajtai-design's framing).
+fn ajtai_leaf_bytes(lanes: &[u32]) -> Vec<u8> {
+    let mut v = Vec::with_capacity(4 * lanes.len());
+    for x in lanes {
+        v.extend_from_slice(&x.to_le_bytes());
+    }
+    v
+}
+
+/// Lane ajtai-leaf: the linear Ring-SIS leaf `ajtai-n<N>` (`leaf/ajtai.py`) -- per chain column `acc' = X acc + B s` in
+/// `F_p[X]/(X^N + 1)`, `s` the column's 256 committed operand bits, `B` the 256 seeded ring elements of
+/// [`ajtai::matrix`]; the digest is the state after the VU's last column, N BabyBear elements, N linked carry rows.
+/// N = 64 serves the 48-step relations (fp8-ada, fp4), N = 128 the 96-step bf16-hopper (`N >= steps`: injectivity).
+/// `params_sha256` = SHA-256 of `leaf.ajtai.params_descriptor` (which absorbs the SHA-256 of the derived `B`:
+/// [`ajtai::B_SHA256`]); the derivation is checked against it in the tests, and every hashed system a `+ajtai-n<N>`
+/// statement verifies against must carry the derived key in its Ajtai rows ([`check_system_key`]; red-team-leaf F6).
+/// Binding only: the digest is linear in the bits (see the Python module docstring).
+pub static AJTAI_N64: LeafScheme = LeafScheme {
+    name: "ajtai-n64",
+    display: "ajtai-babybear-n64-b1-r0/row/v1",
+    schema: "ajtai-babybear-n64-b1-r0/row/v1",
+    params_sha256: "3a74b373c6567481b93285248707bb2d73ff01691bb19f777a3cfd4d7277f8f6",
+    digest_elems: 64,
+    leaf_bytes: ajtai_leaf_bytes,
+};
+
+pub static AJTAI_N128: LeafScheme = LeafScheme {
+    name: "ajtai-n128",
+    display: "ajtai-babybear-n128-b1-r0/row/v1",
+    schema: "ajtai-babybear-n128-b1-r0/row/v1",
+    params_sha256: "feb0a56c02c1a6d2b15d64c846ac6edc3d5be77daec63bd67382fdb9d68cc266",
+    digest_elems: 128,
+    leaf_bytes: ajtai_leaf_bytes,
+};
+
 /// Every scheme this build knows.
-pub static SCHEMES: &[&LeafScheme] = &[&POSEIDON2];
+pub static SCHEMES: &[&LeafScheme] = &[&POSEIDON2, &AJTAI_N64, &AJTAI_N128];
+
+/// The Ajtai key: `B` re-derived from the public tag (the verifier never takes it from a statement or a system file).
+pub mod ajtai {
+    use crate::field::P;
+
+    pub const B_TAG: &[u8] = b"verity/ajtai-babybear/B/v1";
+    /// Operand bits per chain column (k words x word_bits = 256 for every registered relation).
+    pub const M_COL: usize = 256;
+    /// SHA-256 of `matrix(n)` as n x 256 row-major LE u32 (`leaf.ajtai.B_DIGEST_SHA256`): what `params_sha256` absorbs.
+    pub const B_SHA256: &[(usize, &str)] = &[
+        (64, "84e23b67ccfc096448286b7841e17ae30c7cd8c4633947932dc24bf27c5e9093"),
+        (128, "aac7d4b0acc669c7c914870999e780a9a31b10e72cd1f1d9d27625ea55f78264"),
+    ];
+
+    /// `leaf.ajtai.derive_ring_element(i, n)`: the SHAKE-256 XOF of `B_TAG || LE32(i)` read as LE u32 words `u`,
+    /// `v = u & 0x7fff_ffff`, accepted iff `v < p`; coefficient k = the k-th accepted value.
+    pub fn ring_element(i: u32, n: usize) -> Vec<u32> {
+        let mut seed = Vec::with_capacity(B_TAG.len() + 4);
+        seed.extend_from_slice(B_TAG);
+        seed.extend_from_slice(&i.to_le_bytes());
+        let mut len = 4 * (n + n / 5 + 64);
+        loop {
+            let stream = crate::hash::shake256(&seed, len);
+            let out: Vec<u32> = stream.chunks_exact(4).map(|w| u32::from_le_bytes(w.try_into().unwrap()) & 0x7fff_ffff)
+                .filter(|&v| v < P).take(n).collect();
+            if out.len() == n {
+                return out;
+            }
+            len *= 2;
+        }
+    }
+
+    /// `leaf.ajtai.derive_matrix(n, 256)`: `B[x][i]` = coefficient x of `b_i`, as `n` rows of 256.
+    pub fn matrix(n: usize) -> Vec<Vec<u32>> {
+        let cols: Vec<Vec<u32>> = (0..M_COL as u32).map(|i| ring_element(i, n)).collect();
+        (0..n).map(|x| cols.iter().map(|c| c[x]).collect()).collect()
+    }
+
+    /// SHA-256 (hex) of `matrix(n)` as row-major LE u32.
+    pub fn matrix_sha256(b: &[Vec<u32>]) -> String {
+        let mut bytes = Vec::with_capacity(4 * b.len() * M_COL);
+        for row in b {
+            for v in row {
+                bytes.extend_from_slice(&v.to_le_bytes());
+            }
+        }
+        crate::hash::hex(&crate::hash::sha256(&bytes))
+    }
+
+    /// `leaf.ajtai.params_descriptor(n, 256, 0, b_sha256)`: the bytes `params_sha256` is the SHA-256 of.
+    pub fn params_descriptor(n: usize, b_sha256: &str) -> String {
+        format!("ajtai-babybear/v1|p={P}|n={n}|m_col={M_COL}|beta=1|salt_bits=0|ring=F_p[X]/(X^n+1)|M=X|B=verity/ajtai-babybear/B/v1\
+|b_i=SHAKE-256(tag||LE32(i)) LE u32 &0x7fffffff reject>=p|leaf=LE u32 x n|B_sha256={b_sha256}")
+    }
+
+    /// The ring degree of an `ajtai-n<N>` scheme name.
+    pub fn degree(name: &str) -> Option<usize> {
+        name.strip_prefix("ajtai-n").and_then(|s| s.parse().ok())
+    }
+}
+
+/// Red-team-leaf F6: a hashed system a `+ajtai-n<N>` statement verifies against must carry the DERIVED key.  The gadget
+/// appends, per operand role, N linear rows `out[x] - (X acc_in)[x] - sum_i B[x][i] bit_i = 0` whose terms (rows strictly
+/// increasing: the 256 bit rows, then the carried row, then the out row) are `[(bit_i, p - B[x][i]) for B[x][i] != 0] ++
+/// [(acc_in, 1 or p - 1), (out, 1)]`; this finds, for every x, exactly two such rows (one per role) with the coefficient
+/// vector of `B[x]`.  A system built with another key (`B = 0`: trivial digests) is refused even under
+/// `--allow-any-system`.  Other schemes: nothing to check (their gadgets have no key; the system pin covers them).
+pub fn check_system_key(sys: &crate::format::System, leaf: &LeafScheme) -> Result<(), String> {
+    let n = match ajtai::degree(leaf.name) {
+        Some(n) => n,
+        None => return Ok(()),
+    };
+    let b = ajtai::matrix(n);
+    // the derivation itself, against the digests both verifiers pin (and the scheme's params digest absorbs)
+    let b_sha = ajtai::matrix_sha256(&b);
+    match ajtai::B_SHA256.iter().find(|(m, _)| *m == n) {
+        Some((_, want)) if *want == b_sha => {}
+        Some(_) => return Err(format!("{}: the re-derived key B does not match the pinned digest (verifier build error)", leaf.display)),
+        None => return Err(format!("{}: no pinned key digest for n = {n}", leaf.display)),
+    }
+    if crate::hash::hex(&crate::hash::sha256(ajtai::params_descriptor(n, &b_sha).as_bytes())) != leaf.params_sha256 {
+        return Err(format!("{}: params_sha256 is not the digest of the parameter descriptor (verifier build error)", leaf.display));
+    }
+    let mut want: std::collections::HashMap<Vec<u32>, usize> = std::collections::HashMap::with_capacity(n);
+    for (x, row) in b.iter().enumerate() {
+        let coefs: Vec<u32> = row.iter().filter(|&&v| v != 0).map(|&v| P - v).collect();
+        if want.insert(coefs, x).is_some() {
+            return Err(format!("{}: two rows of the derived B coincide", leaf.display));
+        }
+    }
+    let mut seen = vec![0usize; n];
+    for c in &sys.linear {
+        if c.pub_pin.is_some() || c.e.c != 0 || c.e.lin.len() < 3 {
+            continue;
+        }
+        let t = &c.e.lin;
+        let (acc, out) = (t[t.len() - 2].1, t[t.len() - 1].1);
+        if out != 1 || (acc != 1 && acc != P - 1) {
+            continue;
+        }
+        let coefs: Vec<u32> = t[..t.len() - 2].iter().map(|&(_, v)| v).collect();
+        if let Some(&x) = want.get(&coefs) {
+            seen[x] += 1;
+        }
+    }
+    if seen.iter().any(|&k| k != 2) {
+        let missing = seen.iter().filter(|&&k| k != 2).count();
+        return Err(format!(
+            "system file: {} of the {n} Ajtai state rows do not carry the derived key B (SHAKE-256 of {:?}) for both operand roles",
+            missing, String::from_utf8_lossy(ajtai::B_TAG)
+        ));
+    }
+    Ok(())
+}
 
 /// `leaf.registry.DEFAULT` / `ALIASES`: a relation string without a suffix, or with `+hash`, names Poseidon2.
 pub const DEFAULT: &str = "poseidon2";
@@ -124,6 +275,29 @@ mod tests {
     }
 
     #[test]
+    fn ajtai_key_derivation_matches_the_python_digests_and_the_params_digest() {
+        // leaf/ajtai.py: derive_ring_element(0, 64)[..4] and B_DIGEST_SHA256 / params_sha256 (regression across the two verifiers)
+        let b0 = ajtai::ring_element(0, 64);
+        assert_eq!(b0.len(), 64);
+        assert!(b0.iter().all(|&v| v < P));
+        assert_eq!(&ajtai::ring_element(0, 128)[..64], &b0[..]);       // prefix-consistent: one family
+        for &(n, want) in ajtai::B_SHA256 {
+            let b = ajtai::matrix(n);
+            assert_eq!(b.len(), n);
+            assert_eq!(ajtai::matrix_sha256(&b), want, "B digest, n = {n}");
+            let scheme = by_name(&format!("ajtai-n{n}")).unwrap();
+            let d = crate::hash::hex(&crate::hash::sha256(ajtai::params_descriptor(n, want).as_bytes()));
+            assert_eq!(d, scheme.params_sha256, "params digest, n = {n}");
+            assert_eq!(scheme.digest_elems, n);
+        }
+        let v = (AJTAI_N64.leaf_bytes)(&[1, 0x0102_0304]);
+        assert_eq!(v, vec![1, 0, 0, 0, 4, 3, 2, 1]);
+        assert_eq!(split_relation("fp8-ada+ajtai-n64").unwrap().1.name, "ajtai-n64");
+        assert_eq!(relation_name("bf16-hopper", &AJTAI_N128), "bf16-hopper+ajtai-n128");
+        assert!(split_relation("fp8-ada+ajtai-n96").is_err());
+    }
+
+    #[test]
     fn poseidon2_leaf_bytes_are_big_endian_lanes() {
         let v = (POSEIDON2.leaf_bytes)(&[1, 2, 3, 4, 5, 6, 7, 0x0102_0304]);
         assert_eq!(v.len(), 32);
@@ -137,7 +311,7 @@ mod tests {
         for s in SCHEMES {
             assert_eq!(s.params_sha256.len(), 64, "{}", s.name);
             assert!(s.params_sha256.chars().all(|c| c.is_ascii_hexdigit()), "{}", s.name);
-            assert!(s.digest_elems >= 1 && s.digest_elems <= 64, "{}", s.name);
+            assert!(s.digest_elems >= 1 && s.digest_elems <= 128, "{}", s.name);
             assert!(!s.schema.is_empty() && !s.name.contains('+'), "{}", s.name);
             assert!(seen.insert(s.name), "duplicate leaf scheme {}", s.name);
         }
