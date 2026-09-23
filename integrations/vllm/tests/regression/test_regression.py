@@ -55,10 +55,13 @@ output read by layer 0; promotion adds exactly its 432 identities -> 163484, com
 A decision's `status` is `accepted` (absent = accepted: Daniel confirmed it, sanctions under every engine) or `pending_review`
 (labelled by a lane, awaiting Daniel: consulted ONLY when the actual is not the v1 baseline -- `VERITY_REGRESSION_ENGINE=v2` or a
 candidate document -- so the v2 engine may reproduce v1 OR the decision, and which one is recorded as junit property `matched`; under the
-v1 engine the decision is listed as "not consulted" and the baseline must still reproduce v1).  Today two pending: #67 / #68
+v1 engine the decision is listed as "not consulted" and the baseline must still reproduce v1).  Today three pending: #67 / #68
 `manifest_digest` (F-r19-int-24: `MoeSum_v1`, FusedMoE.forward's returned tensor, read by the next layer's fused add+norm -> boundary
-under Q_module_body_v1; v1 classed it interior by name).  Decisions are hand-written and carried over when lift_expected.py
-regenerates fixtures.toml.
+under Q_module_body_v1; v1 classed it interior by name) and #57 `coverage` (MAN-02: the incomplete v1 manifest is refused, every
+identity counted missing where v1 recorded missing_n = 0).  A decision may also own an INPUT pin (`pins."manifest.json" = { bytes,
+sha256 }`: F-r19-int-20's r19-int-22 manifest) -- `resolver.Row._checked` accepts it where the frozen v1 pin fails, junit property
+`pinned_by`.  `python -m tests.regression.decisions` (or `-k decisions -s`) lists them all with their status.  Decisions are
+hand-written and carried over when lift_expected.py regenerates fixtures.toml.
 
 HOW TO RUN.  Skipped unless `VERITY_REGRESSION=1`.  Inputs resolve per `resolver.py`: a directory of row dirs (`VERITY_REGRESSION_ROWS_ROOT`),
 the recorded live paths (tp2), or the data store (`store_io.fetch` of the `fixture/v1` trees named in fixtures.toml; snapshot

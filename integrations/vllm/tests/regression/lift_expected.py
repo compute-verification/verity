@@ -51,7 +51,7 @@ def _toml_val(v) -> str:
     raise TypeError(type(v))
 
 
-DECISION_KEYS = ("check", "since", "since_commit", "finding", "status", "reason", "expected")
+DECISION_KEYS = ("check", "since", "since_commit", "finding", "status", "reason", "expected", "pins")
 
 
 def existing_decisions() -> dict[str, list[dict]]:
