@@ -80,11 +80,12 @@ def test_git_visible_files_are_tracked_existing_plus_unignored_untracked(repo):
     assert C.git_visible_files(repo, excludes=["docs", "*.gitignore"]) == ["a.py", "new.py", "pkg/b.py"]
 
 
-def test_sync_ships_prunes_only_its_own_files_and_stamps_the_source(repo, tmp_path):
+@pytest.mark.parametrize("rsync", [True, False], ids=["rsync", "tar-stream"])
+def test_sync_ships_prunes_only_its_own_files_and_stamps_the_source(repo, tmp_path, rsync):
     dest = tmp_path / "pod" / "src"
-    t = C.LocalTransport()
+    t = C.LocalTransport(rsync=rsync)
     rep = C.sync(repo, str(dest), t)
-    assert rep["files"] == 5 and rep["pruned"] == []
+    assert rep["files"] == 5 and rep["pruned"] == [] and rep["via"] == ("rsync" if rsync else "tar")
     assert (dest / "pkg/b.py").read_text() == "B = 2\n" and not (dest / "build").exists() and not (dest / "run.log").exists() and not (dest / ".venv").exists()
     stamp = json.loads((dest / C.STAMP).read_text())
     assert stamp["schema"] == C.STAMP_SCHEMA and stamp["commit"] == _git(repo, "rev-parse", "HEAD") and stamp["dirty"] is False and stamp["files"] == 5
@@ -95,6 +96,7 @@ def test_sync_ships_prunes_only_its_own_files_and_stamps_the_source(repo, tmp_pa
     _git(repo, "rm", "-q", "gone.py")
     _git(repo, "commit", "-q", "-m", "drop gone.py")
     (repo / "new.py").write_text("N = 3\n")
+    (repo / "link.py").symlink_to("a.py")
 
     dry = C.sync(repo, str(dest), t, dry_run=True)
     assert dry["pruned"] == ["gone.py"] and (dest / "gone.py").exists() and not (dest / "new.py").exists()
@@ -104,7 +106,8 @@ def test_sync_ships_prunes_only_its_own_files_and_stamps_the_source(repo, tmp_pa
     assert (dest / ".venv/lib.so").exists() and (dest / "results.json").exists() and not (dest / ".research-sync-prune").exists()
     stamp2 = json.loads((dest / C.STAMP).read_text())
     assert stamp2["commit"] == _git(repo, "rev-parse", "HEAD") != stamp["commit"] and stamp2["dirty"] is True and stamp2["dirty_digest"]
-    assert (dest / C.SHIPPED).read_text().split() == [".gitignore", "a.py", "docs/big.bin", "new.py", "pkg/b.py"]
+    assert (dest / "link.py").is_symlink() and (dest / "link.py").read_text() == "A = 1\n"
+    assert (dest / C.SHIPPED).read_text().split() == [".gitignore", "a.py", "docs/big.bin", "link.py", "new.py", "pkg/b.py"]
 
 
 def test_sync_refuses_a_relative_destination(repo):

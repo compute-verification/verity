@@ -8,8 +8,8 @@ TARGET is a `machines.toml` name, a RunPod pod id, or a pod name (`vy-ligerito-s
 mappings are retried), so nothing hard-codes an ip/port that changes when a pod restarts.
 
 `sync` ships exactly the files git would show for SRC (default: the repository containing cwd): tracked files that still exist
-plus untracked files that are not ignored -- no `.git`, no `.venv`, no build products, nothing gitignored.  It rsyncs them to DEST
-(default /workspace/src), removes the files a previous sync shipped that are gone from SRC now (only those: pod-side venvs,
+plus untracked files that are not ignored -- no `.git`, no `.venv`, no build products, nothing gitignored.  It ships them to DEST
+(default /workspace/src; rsync, or one tar stream when the machine has no rsync yet), removes the files a previous sync shipped that are gone from SRC now (only those: pod-side venvs,
 caches and results are never touched), and writes `DEST/.research-source.json` with the commit / tree / dirty facts of SRC as
 `research run` would record them (`env.source_conditions`), which `backends/direct/ligero/live.py` reads for its session record.
 """
@@ -90,24 +90,40 @@ def ssh_for(host: str, port: int) -> list[str]:
 
 # ---- transports -----------------------------------------------------------------------------------------------------------------------------
 
+class _Transport:
+    rsync_probe = "command -v rsync >/dev/null 2>&1"
+
+    def argv(self, script: str) -> list[str]:
+        raise NotImplementedError
+
+    def sh(self, script: str, stdin: bytes | None = None, timeout: float = 300) -> subprocess.CompletedProcess:
+        return subprocess.run(self.argv(script), input=stdin, capture_output=True, timeout=timeout)
+
+
 @dataclass
-class SshTransport:
+class SshTransport(_Transport):
     """The pod side of a sync: shell commands over ssh, and the rsync `-e` / destination spelling."""
     ssh: list[str]
 
-    def sh(self, script: str, stdin: bytes | None = None, timeout: float = 300) -> subprocess.CompletedProcess:
-        return subprocess.run([*self.ssh, script], input=stdin, capture_output=True, timeout=timeout)
+    def argv(self, script: str) -> list[str]:
+        return [*self.ssh, script]
 
     def rsync_args(self, dest: str) -> list[str]:
         return ["-e", shlex.join(self.ssh[:-1]), f"{self.ssh[-1]}:{dest}/"]
 
 
 @dataclass
-class LocalTransport:
-    """The same protocol against a local directory (tests; a pod-side worktree refresh)."""
+class LocalTransport(_Transport):
+    """The same protocol against a local directory (tests; a pod-side worktree refresh).  `rsync=False` plays a machine without
+    rsync, so the tar stream is what ships."""
+    rsync: bool = True
 
-    def sh(self, script: str, stdin: bytes | None = None, timeout: float = 300) -> subprocess.CompletedProcess:
-        return subprocess.run(["sh", "-c", script], input=stdin, capture_output=True, timeout=timeout)
+    def __post_init__(self) -> None:
+        if not self.rsync:
+            self.rsync_probe = "false"
+
+    def argv(self, script: str) -> list[str]:
+        return ["sh", "-c", script]
 
     def rsync_args(self, dest: str) -> list[str]:
         return [f"{dest}/"]
@@ -160,26 +176,8 @@ def _tar(files: dict[str, bytes]) -> bytes:
     return buf.getvalue()
 
 
-def sync(src: Path, dest: str, transport: SshTransport | LocalTransport, *, excludes: list[str] | None = None, dry_run: bool = False,
-         dest_label: str | None = None) -> dict[str, Any]:
-    """Ship git-visible files of `src` to `dest` through `transport`; prune what the previous sync shipped and SRC no longer has;
-    write the source stamp and the shipped list.  Returns the report (files, pruned, stamp, seconds)."""
-    if not dest.startswith("/"):
-        raise remote.Refused(f"--dest must be an absolute path on the machine, got {dest!r}")
-    t0 = time.monotonic()
-    files = git_visible_files(src, excludes)
-    q = shlex.quote(dest)
-    prev = transport.sh(f"cat {q}/{SHIPPED} 2>/dev/null || true")
-    if prev.returncode != 0:
-        raise remote.Refused(f"cannot read {dest}/{SHIPPED}: {prev.stderr.decode(errors='replace').strip()[-300:]}")
-    before = {p for p in prev.stdout.decode("utf-8", errors="surrogateescape").split("\n") if p}
-    stale = sorted(before - set(files))
-    stamp = source_stamp(src, len(files), dest_label or dest)
-    rep: dict[str, Any] = {"src": str(src), "dest": dest_label or dest, "files": len(files), "pruned": stale, "stamp": stamp, "dry_run": dry_run}
-    if dry_run:
-        rep["seconds"] = round(time.monotonic() - t0, 2)
-        return rep
-    mk = transport.sh(f"mkdir -p {q}")
+def _ship_rsync(src: Path, files: list[str], dest: str, transport: SshTransport | LocalTransport) -> None:
+    mk = transport.sh(f"mkdir -p {shlex.quote(dest)}")
     if mk.returncode != 0:
         raise remote.Refused(f"mkdir -p {dest} failed: {mk.stderr.decode(errors='replace').strip()[-300:]}")
     *opts, dest_spec = transport.rsync_args(dest)
@@ -190,9 +188,51 @@ def sync(src: Path, dest: str, transport: SshTransport | LocalTransport, *, excl
     finally:
         os.unlink(fl.name)
     if r.returncode != 0:
-        hint = (" -- the machine has no rsync: `research pods ssh TARGET -- apt-get install -y rsync`" if "rsync: command not found" in r.stderr
-                or "rsync: not found" in r.stderr else "")
-        raise remote.Refused(f"rsync failed (rc {r.returncode}): {r.stderr.strip()[-400:]}{hint}")
+        raise remote.Refused(f"rsync failed (rc {r.returncode}): {r.stderr.strip()[-400:]}")
+
+
+def _ship_tar(src: Path, files: list[str], dest: str, transport: SshTransport | LocalTransport, timeout: float = 1800) -> None:
+    """A machine without rsync (a fresh image): every file, streamed as one tar written by Python (no platform tar quirks: no
+    AppleDouble `._*` members, no xattr headers), unpacked by the machine's `tar`."""
+    q = shlex.quote(dest)
+    p = subprocess.Popen(transport.argv(f"mkdir -p {q} && tar -xf - -C {q}"), stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
+                         stderr=subprocess.PIPE)
+    assert p.stdin is not None and p.stderr is not None
+    try:
+        with tarfile.open(fileobj=p.stdin, mode="w|", format=tarfile.PAX_FORMAT) as tf:
+            for rel in files:
+                tf.add(src / rel, arcname=rel, recursive=False)
+    except BrokenPipeError:
+        pass # the far side died; its stderr says why
+    finally:
+        p.stdin.close()
+    err = p.stderr.read().decode(errors="replace")
+    if p.wait(timeout=timeout) != 0:
+        raise remote.Refused(f"tar stream to {dest} failed (rc {p.returncode}): {err.strip()[-400:]}")
+
+
+def sync(src: Path, dest: str, transport: SshTransport | LocalTransport, *, excludes: list[str] | None = None, dry_run: bool = False,
+         dest_label: str | None = None) -> dict[str, Any]:
+    """Ship git-visible files of `src` to `dest` through `transport` (rsync when the machine has it, else a tar stream); prune what
+    the previous sync shipped and SRC no longer has; write the source stamp and the shipped list.  Returns the report."""
+    if not dest.startswith("/"):
+        raise remote.Refused(f"--dest must be an absolute path on the machine, got {dest!r}")
+    t0 = time.monotonic()
+    files = git_visible_files(src, excludes)
+    q = shlex.quote(dest)
+    prev = transport.sh(f"({transport.rsync_probe} && echo rsync || echo tar); cat {q}/{SHIPPED} 2>/dev/null || true")
+    if prev.returncode != 0:
+        raise remote.Refused(f"cannot read {dest}/{SHIPPED}: {prev.stderr.decode(errors='replace').strip()[-300:]}")
+    method, *listed = prev.stdout.decode("utf-8", errors="surrogateescape").split("\n")
+    before = {p for p in listed if p}
+    stale = sorted(before - set(files))
+    stamp = source_stamp(src, len(files), dest_label or dest)
+    rep: dict[str, Any] = {"src": str(src), "dest": dest_label or dest, "files": len(files), "pruned": stale, "stamp": stamp, "dry_run": dry_run,
+                           "via": method}
+    if dry_run:
+        rep["seconds"] = round(time.monotonic() - t0, 2)
+        return rep
+    (_ship_rsync if method == "rsync" else _ship_tar)(src, files, dest, transport)
     payload = _tar({STAMP: (json.dumps(stamp, indent=2, sort_keys=True) + "\n").encode(),
                     SHIPPED: "".join(p + "\n" for p in files).encode("utf-8", errors="surrogateescape"),
                     ".research-sync-prune": "".join(p + "\0" for p in stale).encode("utf-8", errors="surrogateescape")})
@@ -208,7 +248,7 @@ def render(rep: dict[str, Any]) -> str:
     what = f"{(s['commit'] or '?')[:12]}{'+dirty' if s['dirty'] else ''}" + (f" ({s['branch']})" if s.get("branch") else "")
     verb = "would ship" if rep["dry_run"] else "synced"
     pruned = f"; {'would prune' if rep['dry_run'] else 'pruned'} {len(rep['pruned'])} stale file(s)" if rep["pruned"] else ""
-    return f"{verb} {rep['files']} files of {rep['src']} @ {what} -> {rep['dest']}{pruned} in {rep['seconds']:.1f}s"
+    return f"{verb} {rep['files']} files of {rep['src']} @ {what} -> {rep['dest']} (via {rep['via']}){pruned} in {rep['seconds']:.1f}s"
 
 
 # ---- CLI --------------------------------------------------------------------------------------------------------------------------------------
