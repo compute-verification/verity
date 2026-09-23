@@ -2087,6 +2087,7 @@ class NativeHostCommitter:
         violations: list[dict[str, Any]] = []
         ref_names: Counter | None = None
         fa2_rules_used: Counter = Counter()                          # per step: "per-layer" (declarations + active set) or "uniform" (R13)
+        decls = getattr(self, "attention_layer_decls", None) or []   # the Program's per-layer attention Call statics (driver-supplied)
         # [B9.1 / R17-42; pad fix (e), the second #3 pod run on b542ef5fc] a PADDED run's layouts carry the padding tensors (host-only metas,
         # `dev_off -1`, named `<executed name>/<rid>/bot`, fix (c)) beside or instead of the executed ones.  A padding tensor materializes an
         # identity the executed prefix left INACTIVE: it is not a module call, so it is not one of the "tensors a module produced" (1), (4) count;
@@ -2143,12 +2144,12 @@ class NativeHostCommitter:
             fa2_bad: dict[int, int] = {}
             fa2_detail: dict[str, Any] = {}
             if man["fa2_hidden_per_layer"]:
-                seqs = (FP.StepSequences(()) if padding_only else self._step_sequences(step, metas)) if self.attention_layer_decls else None
+                seqs = (FP.StepSequences(()) if padding_only else self._step_sequences(step, metas)) if decls else None
                 if seqs is not None:
                     # [F-r19-int-22] each layer's class is DERIVED from the Program's attention Call statics x the step's active-sequence set
                     # (fa2_plane_classes.plane_class): a windowed layer's decode launch is un-swapped (6 planes x sequences) while a global GQA
                     # layer's is swapped (one whole row) -- uniformity across layers is a consequence for one-class Programs, not a rule
-                    v = FP.check_step(self.attention_layer_decls, seqs, names_all.elements(), self._plane_policy())
+                    v = FP.check_step(decls, seqs, names_all.elements(), self._plane_policy())
                     fa2_bad = v["fa2_layers_bad"]
                     fa2_rules_used["per-layer"] += 1
                     if fa2_bad:
@@ -2194,10 +2195,10 @@ class NativeHostCommitter:
                              "sampler_ids": man["sampler_ids"], "moe_layers": len(man.get("moe_layers") or []), "moe_tensors_per_layer": man.get("moe_tensors_per_layer", 0),
                              "tp_sites": len(man.get("tp_sites") or []), "tp_rank": man.get("tp_rank")},
                 # [F-r19-int-22] which attention-plane rule each step ran and what it was derived from
-                "fa2_rule": {"steps": dict(fa2_rules_used), "attention_decls": len(self.attention_layer_decls or []),
-                             "policy": self._plane_policy().__dict__ if self.attention_layer_decls else None,
+                "fa2_rule": {"steps": dict(fa2_rules_used), "attention_decls": len(decls),
+                             "policy": dict(self._plane_policy().__dict__) if decls else None,
                              "classes_declared": (sorted(Counter(("windowed" if d.window is not None else "global") + ("-gqa" if d.NH > d.KVH else "-mha")
-                                                                 for d in self.attention_layer_decls).items()) if self.attention_layer_decls else None)},
+                                                                 for d in decls).items()) if decls else None)},
                 "violations": violations[:5], "violations_n": len(violations)}
 
     def _plane_policy(self):
@@ -2206,9 +2207,9 @@ class NativeHostCommitter:
         buffers, the FA3 sources stage whole PackGQA launches."""
         from verity_capture.experimental.commit_integ import fa2_plane_classes as FP
 
-        if self.plane_policy is not None:
+        if getattr(self, "plane_policy", None) is not None:
             return self.plane_policy
-        for s in self.sources:
+        for s in getattr(self, "sources", None) or []:
             sn = getattr(s, "short_name", "")
             tn = type(s).__name__
             if sn == "hidden_m1_fa3" or tn.endswith("FA3"):
