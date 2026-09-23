@@ -17,7 +17,7 @@ import time
 import numpy as np
 import pytest
 
-torch = pytest.importorskip("torch")
+torch = pytest.importorskip("torch", exc_type=ImportError)     # the laptop stub raises ImportError
 if not torch.cuda.is_available():
     pytest.skip("CUDA device required", allow_module_level=True)
 
