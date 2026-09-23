@@ -1,0 +1,390 @@
+{
+ "schema": "vllm-dead-code-census/imported/v1",
+ "note": "pod vyv-v2cpu3 (harness on main at /workspace/census/rows over the 11 staged rows + query.cli build/build-global/check-correspondence on #60 #73 #74, aggregated at 18:10Z, the pod was terminated before the run completed) + laptop (tests/regression with VERITY_REGRESSION=1 and no rows: every check SKIPs after import; --help of the CLIs; research Tools load/parse/conditions)",
+ "processes": {
+  "pod:harness_main": 165,
+  "pod:main": 6,
+  "laptop:local": 292
+ },
+ "n_modules": 111,
+ "modules": {
+  "tests": [
+   "laptop:local",
+   "pod:harness_main"
+  ],
+  "tests.regression": [
+   "laptop:local",
+   "pod:harness_main"
+  ],
+  "tests.regression.checks": [
+   "laptop:local",
+   "pod:harness_main"
+  ],
+  "tests.regression.checks.attempt_provenance": [
+   "laptop:local",
+   "pod:harness_main"
+  ],
+  "tests.regression.checks.commit_summary": [
+   "laptop:local",
+   "pod:harness_main"
+  ],
+  "tests.regression.checks.coverage": [
+   "laptop:local",
+   "pod:harness_main"
+  ],
+  "tests.regression.checks.decomp_hashes": [
+   "laptop:local",
+   "pod:harness_main"
+  ],
+  "tests.regression.checks.executed_prefix": [
+   "laptop:local",
+   "pod:harness_main"
+  ],
+  "tests.regression.checks.global_match_checks": [
+   "laptop:local",
+   "pod:harness_main"
+  ],
+  "tests.regression.checks.manifest_digest": [
+   "laptop:local",
+   "pod:harness_main"
+  ],
+  "tests.regression.checks.program_digest": [
+   "laptop:local",
+   "pod:harness_main"
+  ],
+  "tests.regression.checks.replay_partition": [
+   "laptop:local",
+   "pod:harness_main"
+  ],
+  "tests.regression.checks.verdict": [
+   "laptop:local",
+   "pod:harness_main"
+  ],
+  "tests.regression.decisions": [
+   "laptop:local"
+  ],
+  "tests.regression.resolver": [
+   "laptop:local",
+   "pod:harness_main"
+  ],
+  "tests.regression.store_io": [
+   "laptop:local",
+   "pod:harness_main"
+  ],
+  "tests.regression.test_attempt_resolution": [
+   "laptop:local",
+   "pod:harness_main"
+  ],
+  "tests.regression.test_check_lifts": [
+   "laptop:local",
+   "pod:harness_main"
+  ],
+  "tests.regression.test_regression": [
+   "laptop:local",
+   "pod:harness_main"
+  ],
+  "verity_capture": [
+   "laptop:local",
+   "pod:harness_main",
+   "pod:main"
+  ],
+  "verity_capture.analytic": [
+   "laptop:local"
+  ],
+  "verity_capture.arrivals": [
+   "laptop:local"
+  ],
+  "verity_capture.bench": [
+   "laptop:local"
+  ],
+  "verity_capture.bench.commit_verdict": [
+   "laptop:local"
+  ],
+  "verity_capture.chunk_attribution": [
+   "laptop:local"
+  ],
+  "verity_capture.commit": [
+   "laptop:local",
+   "pod:harness_main",
+   "pod:main"
+  ],
+  "verity_capture.commit.oracle_compare": [
+   "laptop:local",
+   "pod:harness_main"
+  ],
+  "verity_capture.commit.required_manifest": [
+   "laptop:local",
+   "pod:harness_main",
+   "pod:main"
+  ],
+  "verity_capture.commit.required_values": [
+   "laptop:local",
+   "pod:harness_main"
+  ],
+  "verity_capture.commit.sampled_replay": [
+   "laptop:local",
+   "pod:harness_main"
+  ],
+  "verity_capture.commit.tests": [
+   "laptop:local",
+   "pod:harness_main"
+  ],
+  "verity_capture.commit.tests.test_sampled_replay": [
+   "laptop:local",
+   "pod:harness_main"
+  ],
+  "verity_capture.events": [
+   "laptop:local"
+  ],
+  "verity_capture.experiment": [
+   "laptop:local"
+  ],
+  "verity_capture.experimental": [
+   "laptop:local"
+  ],
+  "verity_capture.experimental.cb_a": [
+   "laptop:local"
+  ],
+  "verity_capture.experimental.cb_a.batch_decomp": [
+   "laptop:local"
+  ],
+  "verity_capture.experimental.cb_a.compact": [
+   "laptop:local"
+  ],
+  "verity_capture.experimental.cb_a.compare": [
+   "laptop:local"
+  ],
+  "verity_capture.experimental.cb_a.global_match_fast": [
+   "laptop:local"
+  ],
+  "verity_capture.experimental.cb_a.inputs_trace": [
+   "laptop:local"
+  ],
+  "verity_capture.gates": [
+   "laptop:local"
+  ],
+  "verity_capture.gc_tuning": [
+   "laptop:local"
+  ],
+  "verity_capture.log": [
+   "laptop:local"
+  ],
+  "verity_capture.memory": [
+   "laptop:local"
+  ],
+  "verity_capture.observer": [
+   "laptop:local"
+  ],
+  "verity_capture.patterns": [
+   "laptop:local"
+  ],
+  "verity_capture.resolver": [
+   "laptop:local"
+  ],
+  "verity_capture.storage": [
+   "laptop:local"
+  ],
+  "verity_capture.sweep": [
+   "laptop:local"
+  ],
+  "verity_capture.sweep.timeline": [
+   "laptop:local"
+  ],
+  "verity_capture.tree": [
+   "laptop:local"
+  ],
+  "verity_capture.triton_adapter": [
+   "laptop:local"
+  ],
+  "verity_capture.views": [
+   "laptop:local"
+  ],
+  "verity_capture.vllm_adapter": [
+   "laptop:local"
+  ],
+  "verity_capture.vu_canonical": [
+   "laptop:local",
+   "pod:harness_main"
+  ],
+  "verity_vllm": [
+   "laptop:local",
+   "pod:main"
+  ],
+  "verity_vllm.acquire": [
+   "laptop:local"
+  ],
+  "verity_vllm.acquire.correspondence": [
+   "laptop:local"
+  ],
+  "verity_vllm.acquire.plan": [
+   "laptop:local"
+  ],
+  "verity_vllm.acquire.runtime_tree": [
+   "laptop:local"
+  ],
+  "verity_vllm.acquire.v1_decision": [
+   "laptop:local"
+  ],
+  "verity_vllm.capture": [
+   "laptop:local"
+  ],
+  "verity_vllm.commit": [
+   "laptop:local"
+  ],
+  "verity_vllm.description": [
+   "laptop:local"
+  ],
+  "verity_vllm.dtypes": [
+   "laptop:local"
+  ],
+  "verity_vllm.frontend": [
+   "laptop:local"
+  ],
+  "verity_vllm.frontend.correspond": [
+   "laptop:local"
+  ],
+  "verity_vllm.frontend.liveness": [
+   "laptop:local"
+  ],
+  "verity_vllm.frontend.provenance": [
+   "laptop:local"
+  ],
+  "verity_vllm.frontend.target_profile": [
+   "laptop:local"
+  ],
+  "verity_vllm.frontend.torch_frontend": [
+   "laptop:local"
+  ],
+  "verity_vllm.hashing": [
+   "laptop:local"
+  ],
+  "verity_vllm.identity": [
+   "laptop:local"
+  ],
+  "verity_vllm.ir": [
+   "laptop:local",
+   "pod:main"
+  ],
+  "verity_vllm.ir.sampling_event": [
+   "laptop:local",
+   "pod:main"
+  ],
+  "verity_vllm.query": [
+   "laptop:local",
+   "pod:main"
+  ],
+  "verity_vllm.query.compare": [
+   "laptop:local",
+   "pod:main"
+  ],
+  "verity_vllm.query.correspondence": [
+   "laptop:local",
+   "pod:main"
+  ],
+  "verity_vllm.query.module_body": [
+   "laptop:local",
+   "pod:main"
+  ],
+  "verity_vllm.query.program_view": [
+   "laptop:local",
+   "pod:main"
+  ],
+  "verity_vllm.query.v1_bridge": [
+   "laptop:local",
+   "pod:main"
+  ],
+  "verity_vllm.registry": [
+   "laptop:local",
+   "pod:main"
+  ],
+  "verity_vllm.registry.b1": [
+   "laptop:local",
+   "pod:main"
+  ],
+  "verity_vllm.registry.b1_tp2": [
+   "pod:main"
+  ],
+  "verity_vllm.registry.dense": [
+   "pod:main"
+  ],
+  "verity_vllm.registry.derived_rows": [
+   "laptop:local"
+  ],
+  "verity_vllm.registry.fp8": [
+   "pod:main"
+  ],
+  "verity_vllm.registry.hopper": [
+   "pod:main"
+  ],
+  "verity_vllm.registry.lifted": [
+   "pod:main"
+  ],
+  "verity_vllm.registry.moe": [
+   "laptop:local",
+   "pod:main"
+  ],
+  "verity_vllm.registry.moe_pad": [
+   "pod:main"
+  ],
+  "verity_vllm.registry.pad_prims": [
+   "pod:main"
+  ],
+  "verity_vllm.registry.prims": [
+   "laptop:local",
+   "pod:main"
+  ],
+  "verity_vllm.registry.ref_prims": [
+   "laptop:local",
+   "pod:main"
+  ],
+  "verity_vllm.registry.rmsnorm_fused_sweep": [
+   "laptop:local"
+  ],
+  "verity_vllm.registry.sampling": [
+   "pod:main"
+  ],
+  "verity_vllm.relations": [
+   "laptop:local"
+  ],
+  "verity_vllm.runtime_correspondence": [
+   "laptop:local",
+   "pod:main"
+  ],
+  "verity_vllm_adapter": [
+   "laptop:local"
+  ],
+  "verity_vllm_adapter.profile": [
+   "laptop:local"
+  ],
+  "verity_vllm_numerics": [
+   "laptop:local"
+  ],
+  "verity_vllm_numerics._jit": [
+   "laptop:local"
+  ],
+  "verity_vllm_numerics.cpu_model": [
+   "laptop:local"
+  ],
+  "verity_vllm_numerics.fa2_model": [
+   "laptop:local"
+  ],
+  "verity_vllm_numerics.fa2_relation": [
+   "laptop:local"
+  ],
+  "verity_vllm_numerics.kernel_zoo": [
+   "laptop:local"
+  ],
+  "verity_vllm_numerics.mma": [
+   "laptop:local"
+  ],
+  "verity_vllm_numerics.relations": [
+   "laptop:local"
+  ],
+  "verity_vllm_numerics.rms_relation": [
+   "laptop:local"
+  ],
+  "verity_vllm_numerics.rms_triton_model": [
+   "laptop:local"
+  ]
+ }
+}

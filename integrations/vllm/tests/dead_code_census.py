@@ -1,8 +1,10 @@
 """Dead-code census of `integrations/vllm` (static import reachability from the live entrypoints, optionally merged with a
-dynamic `sys.modules` record from the pod).  Machine-readable output beside this file: `dead_code_census.json`.
+dynamic `sys.modules` record from the pod).  Machine-readable output beside this file: `dead_code_census.json`; the dynamic record
+(`{module: [where it was seen imported]}`, sitecustomize/atexit dumps of the harness + the CPU entrypoints) is `dead_code_imported.json`.
+The census of main 22e10e0 that produced the 2026-09-23 deletions (plan, dedicated tests, artifacts) is this file's first commit.
 
     cd integrations/vllm
-    python tests/dead_code_census.py [--imported /path/to/imported.json] [--out tests/dead_code_census.json] [--git-dates]
+    python tests/dead_code_census.py [--imported tests/dead_code_imported.json] [--out tests/dead_code_census.json] [--git-dates]
 
 LIVE ENTRYPOINTS (roots; `ENTRYPOINT_SHELLS` are parsed for `-m module`, `python <path>.py`, `<name>.py` tokens and heredoc
 `from X import` / `import X` lines; `ENTRYPOINT_MODULES` are the Python entrypoints named directly):

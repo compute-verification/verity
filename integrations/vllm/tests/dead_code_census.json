@@ -91,42 +91,42 @@
   "n_roots": 59
  },
  "dynamic_record": {
-  "present": false,
-  "n_modules": 0,
+  "present": true,
+  "n_modules": 111,
   "dynamic_not_static": []
  },
  "totals": {
   "all::DEAD": {
-   "files": 4,
-   "loc": 825
+   "files": 3,
+   "loc": 596
   },
   "all::LIVE": {
    "files": 292,
    "loc": 116360
   },
   "all::TEST-ONLY": {
-   "files": 46,
-   "loc": 21070
+   "files": 33,
+   "loc": 14556
   },
   "all::TOTAL": {
-   "files": 342,
-   "loc": 138255
+   "files": 328,
+   "loc": 131512
   },
   "verity_capture::DEAD": {
-   "files": 3,
-   "loc": 571
+   "files": 2,
+   "loc": 342
   },
   "verity_capture::LIVE": {
    "files": 150,
    "loc": 70187
   },
   "verity_capture::TEST-ONLY": {
-   "files": 28,
-   "loc": 13414
+   "files": 18,
+   "loc": 10293
   },
   "verity_capture::TOTAL": {
-   "files": 181,
-   "loc": 84172
+   "files": 170,
+   "loc": 80822
   },
   "verity_vllm::DEAD": {
    "files": 1,
@@ -137,12 +137,12 @@
    "loc": 41881
   },
   "verity_vllm::TEST-ONLY": {
-   "files": 16,
-   "loc": 7283
+   "files": 13,
+   "loc": 3890
   },
   "verity_vllm::TOTAL": {
-   "files": 141,
-   "loc": 49418
+   "files": 138,
+   "loc": 46025
   },
   "verity_vllm_adapter::LIVE": {
    "files": 7,
@@ -165,42 +165,25 @@
    "loc": 2961
   }
  },
- "plan_totals": {
-  "all": {
-   "files": 15,
-   "loc": 6972
-  },
-  "tests": {
-   "files": 24,
-   "loc": 5002
-  },
-  "verity_capture": {
-   "files": 12,
-   "loc": 3579
-  },
-  "verity_vllm": {
-   "files": 3,
-   "loc": 3393
-  }
- },
+ "plan_totals": {},
  "modules": {
   "verity_capture/__init__.py": {
    "module": "verity_capture",
    "package": "verity_capture",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
-   "n_imported_by_tests": 204,
+   "n_imported_by_tests": 197,
    "imported_by_tests": [
     "tests/acquire/test_gate.py",
     "tests/acquire/test_install.py",
     "tests/acquire/test_plan.py",
     "tests/acquire/test_stage.py",
-    "tests/ir/reqval_rows_lift_vs_unlifted.py",
     "tests/ir/test_artifact_applicability_independent.py",
     "tests/ir/test_fa3_launch_context.py",
-    "tests/ir/test_harden_guards.py"
+    "tests/ir/test_harden_guards.py",
+    "tests/ir/test_lift_q_fine_reqval.py"
    ],
    "loc": 17,
    "last_commit_date": "2026-09-21",
@@ -209,7 +192,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_vllm.acquire.runtime_tree",
+    "tests.regression.checks.replay_partition",
     "verity_capture"
    ]
   },
@@ -230,7 +213,7 @@
    "live_only_via_profiles": false,
    "why": [
     "verity_capture.bench.run_config",
-    "verity_capture.census",
+    "verity_capture.profiles.vllm_d9105ea80_sm89_eager",
     "verity_capture.allowlist"
    ]
   },
@@ -239,18 +222,18 @@
    "package": "verity_capture",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
-   "n_imported_by_tests": 12,
+   "n_imported_by_tests": 11,
    "imported_by_tests": [
     "verity_capture/commit/tests/test_weights_of_record.py",
     "verity_capture/commit/tests/test_weights_of_record_root_host_independent.py",
     "verity_capture/experimental/cb_a/tests/test_global_match_multi_weight_nodes.py",
     "verity_capture/tests/test_analytic.py",
-    "verity_capture/tests/test_experimental_fp16_rules.py",
     "verity_capture/tests/test_fp8_profile.py",
     "verity_capture/tests/test_gen_dense2.py",
-    "verity_capture/tests/test_gen_llama.py"
+    "verity_capture/tests/test_gen_llama.py",
+    "verity_capture/tests/test_gen_ln.py"
    ],
    "loc": 474,
    "last_commit_date": "2026-09-21",
@@ -259,7 +242,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.run_config",
+    "verity_capture.commit.weights_of_record",
     "verity_capture.analytic"
    ]
   },
@@ -268,7 +251,7 @@
    "package": "verity_capture",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 2,
    "imported_by_tests": [
@@ -282,7 +265,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.tp2_capture",
+    "verity_capture.bench.tp2_match",
     "verity_capture.vllm_adapter",
     "verity_capture.arrivals"
    ]
@@ -292,18 +275,18 @@
    "package": "verity_capture",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
-   "n_imported_by_tests": 58,
+   "n_imported_by_tests": 60,
    "imported_by_tests": [
     "tests/ir/test_topp_split_geometry.py",
+    "verity_capture/bench/tests/test_commit_delta_cli.py",
+    "verity_capture/bench/tests/test_commit_delta_placement_b1.py",
     "verity_capture/bench/tests/test_commit_verdict_b2_attribution_note.py",
     "verity_capture/bench/tests/test_commit_verdict_hopper_no_evaluator_gap.py",
     "verity_capture/bench/tests/test_commit_verdict_replay_seed_of_record.py",
     "verity_capture/bench/tests/test_commit_verdict_selector_no_evaluator_gap.py",
-    "verity_capture/bench/tests/test_compiled_merge_identity.py",
-    "verity_capture/bench/tests/test_execution_label.py",
-    "verity_capture/bench/tests/test_flip_weight_negative.py"
+    "verity_capture/bench/tests/test_compiled_merge_identity.py"
    ],
    "loc": 0,
    "last_commit_date": "2026-09-21",
@@ -312,7 +295,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.stoch_recompute",
+    "verity_capture.bench.tp2_match",
     "verity_capture.bench"
    ]
   },
@@ -323,19 +306,22 @@
    "static_reachable": true,
    "dynamically_imported": false,
    "imported_by_tests_only": false,
-   "n_imported_by_tests": 4,
+   "n_imported_by_tests": 10,
    "imported_by_tests": [
+    "verity_capture/bench/tests/test_commit_delta_cli.py",
+    "verity_capture/bench/tests/test_commit_delta_placement_b1.py",
+    "verity_capture/bench/tests/test_compiled_replay_seed_source.py",
+    "verity_capture/bench/tests/test_engine_schedule.py",
+    "verity_capture/bench/tests/test_flip_weight_negative.py",
+    "verity_capture/commit/tests/test_prescribed_input_linkage.py",
     "verity_capture/tests/test_bound_phases.py",
-    "verity_capture/tests/test_commit_fail_closed.py",
-    "verity_capture/tests/test_hot_commit.py",
-    "verity_capture/tests/test_p0_footprint.py"
+    "verity_capture/tests/test_commit_fail_closed.py"
    ],
    "loc": 2994,
    "last_commit_date": "2026-09-23",
    "referenced_by_shell": [
     "verity_capture/sweep/canary.sh",
     "verity_capture/sweep/compiled_commit.sh",
-    "verity_capture/sweep/fa3_row_negatives.sh",
     "verity_capture/sweep/row_pod.sh"
    ],
    "root_via": [
@@ -353,7 +339,7 @@
    "package": "verity_capture",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 17,
    "imported_by_tests": [
@@ -373,7 +359,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.commit.verdict",
+    "verity_capture.bench.commit_delta",
     "verity_capture.bench.commit_verdict"
    ]
   },
@@ -399,49 +385,6 @@
    "why": null,
    "plan": "keep-shell-only"
   },
-  "verity_capture/bench/gen_adversarial.py": {
-   "module": "verity_capture.bench.gen_adversarial",
-   "package": "verity_capture",
-   "class": "TEST-ONLY",
-   "static_reachable": false,
-   "dynamically_imported": false,
-   "imported_by_tests_only": true,
-   "n_imported_by_tests": 1,
-   "imported_by_tests": [
-    "verity_capture/tests/test_gen_adversarial.py"
-   ],
-   "loc": 699,
-   "last_commit_date": "2026-09-21",
-   "referenced_by_shell": [],
-   "root_via": [],
-   "protected": null,
-   "live_only_via_profiles": false,
-   "why": null,
-   "plan": "delete"
-  },
-  "verity_capture/bench/gen_batch_attribution.py": {
-   "module": "verity_capture.bench.gen_batch_attribution",
-   "package": "verity_capture",
-   "class": "TEST-ONLY",
-   "static_reachable": false,
-   "dynamically_imported": false,
-   "imported_by_tests_only": true,
-   "n_imported_by_tests": 1,
-   "imported_by_tests": [
-    "verity_capture/tests/test_gen_batch.py"
-   ],
-   "loc": 288,
-   "last_commit_date": "2026-09-21",
-   "referenced_by_shell": [
-    "verity_capture/bench/gen_batch_pod.sh",
-    "verity_capture/bench/gen_ovbatch_pod.sh"
-   ],
-   "root_via": [],
-   "protected": null,
-   "live_only_via_profiles": false,
-   "why": null,
-   "plan": "delete"
-  },
   "verity_capture/bench/gen_batch_candidate.py": {
    "module": "verity_capture.bench.gen_batch_candidate",
    "package": "verity_capture",
@@ -463,26 +406,6 @@
    "why": null,
    "plan": "keep",
    "kept_because": "fixture generator: cb_a/tests/test_compact.py (LIVE compact / global_match_fast / rank_match), tests/test_gen_ovbatch.py (LIVE fold)"
-  },
-  "verity_capture/bench/gen_batch_provenance.py": {
-   "module": "verity_capture.bench.gen_batch_provenance",
-   "package": "verity_capture",
-   "class": "TEST-ONLY",
-   "static_reachable": false,
-   "dynamically_imported": false,
-   "imported_by_tests_only": true,
-   "n_imported_by_tests": 1,
-   "imported_by_tests": [
-    "verity_capture/tests/test_gen_batch.py"
-   ],
-   "loc": 204,
-   "last_commit_date": "2026-09-21",
-   "referenced_by_shell": [],
-   "root_via": [],
-   "protected": null,
-   "live_only_via_profiles": false,
-   "why": null,
-   "plan": "delete"
   },
   "verity_capture/bench/gen_coverage_workloads.py": {
    "module": "verity_capture.bench.gen_coverage_workloads",
@@ -562,9 +485,7 @@
    ],
    "loc": 324,
    "last_commit_date": "2026-09-23",
-   "referenced_by_shell": [
-    "verity_capture/sweep/stoch_negatives.sh"
-   ],
+   "referenced_by_shell": [],
    "root_via": [],
    "protected": null,
    "live_only_via_profiles": false,
@@ -620,12 +541,8 @@
    "last_commit_date": "2026-09-22",
    "referenced_by_shell": [
     "verity_capture/bench/cov_pod.sh",
-    "verity_capture/bench/gen_batch_pod.sh",
-    "verity_capture/bench/gen_ov_sampling_pod.sh",
-    "verity_capture/bench/gen_ovbatch_pod.sh",
     "verity_capture/bench/verify_lane.sh",
-    "verity_capture/sweep/row_pod.sh",
-    "verity_capture/sweep/stoch_negatives.sh"
+    "verity_capture/sweep/row_pod.sh"
    ],
    "root_via": [
     "verity_capture/sweep/row_pod.sh"
@@ -650,8 +567,7 @@
    "loc": 748,
    "last_commit_date": "2026-09-21",
    "referenced_by_shell": [
-    "verity_capture/sweep/row_pod.sh",
-    "verity_capture/sweep/stoch_negatives.sh"
+    "verity_capture/sweep/row_pod.sh"
    ],
    "root_via": [
     "verity_capture/sweep/row_pod.sh"
@@ -829,7 +745,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.tp2_capture",
+    "verity_capture.bench.tp2_match",
     "verity_capture.bench.tp2_worker"
    ]
   },
@@ -840,10 +756,9 @@
    "static_reachable": true,
    "dynamically_imported": false,
    "imported_by_tests_only": false,
-   "n_imported_by_tests": 4,
+   "n_imported_by_tests": 3,
    "imported_by_tests": [
     "verity_capture/tests/test_gates_fixtures.py",
-    "verity_capture/tests/test_gen_batch.py",
     "verity_capture/tests/test_gen_llama.py",
     "verity_capture/tests/test_gen_ov_easy.py"
    ],
@@ -865,9 +780,8 @@
    "static_reachable": true,
    "dynamically_imported": false,
    "imported_by_tests_only": false,
-   "n_imported_by_tests": 3,
+   "n_imported_by_tests": 2,
    "imported_by_tests": [
-    "verity_capture/tests/test_gen_adversarial.py",
     "verity_capture/tests/test_gen_ov_moe.py",
     "verity_capture/tests/test_run_config_dry_run.py"
    ],
@@ -887,7 +801,7 @@
    "package": "verity_capture",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 1,
    "imported_by_tests": [
@@ -900,7 +814,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.tp2_capture",
+    "verity_capture.bench.tp2_match",
     "verity_capture.vllm_adapter",
     "verity_capture.chunk_attribution"
    ]
@@ -910,18 +824,18 @@
    "package": "verity_capture",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
-   "n_imported_by_tests": 72,
+   "n_imported_by_tests": 70,
    "imported_by_tests": [
     "tests/acquire/test_gate.py",
     "tests/acquire/test_install.py",
     "tests/acquire/test_plan.py",
     "tests/acquire/test_stage.py",
-    "tests/ir/reqval_rows_lift_vs_unlifted.py",
-    "tests/ir/test_lifted_correspondence.py",
     "tests/ir/test_norm_chain.py",
-    "tests/ir/test_observe_resolve.py"
+    "tests/ir/test_observe_resolve.py",
+    "tests/ir/test_tp_collective_site.py",
+    "tests/regression/checks/coverage.py"
    ],
    "loc": 6,
    "last_commit_date": "2026-09-21",
@@ -930,7 +844,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "tests.regression.checks.manifest_digest",
+    "tests.regression.checks.replay_partition",
     "verity_capture.commit"
    ]
   },
@@ -1036,9 +950,8 @@
    "static_reachable": true,
    "dynamically_imported": false,
    "imported_by_tests_only": false,
-   "n_imported_by_tests": 6,
+   "n_imported_by_tests": 5,
    "imported_by_tests": [
-    "tests/ir/test_lifted_correspondence.py",
     "tests/regression/checks/executed_prefix.py",
     "verity_capture/commit/tests/test_executed_prefix.py",
     "verity_capture/commit/tests/test_padding_pod_consumer.py",
@@ -1085,13 +998,14 @@
    "static_reachable": true,
    "dynamically_imported": false,
    "imported_by_tests_only": false,
-   "n_imported_by_tests": 7,
+   "n_imported_by_tests": 8,
    "imported_by_tests": [
     "verity_capture/commit/tests/test_admit_r19_host_working_set.py",
     "verity_capture/commit/tests/test_native_collect.py",
     "verity_capture/commit/tests/test_native_collect_flush.py",
     "verity_capture/commit/tests/test_native_collect_splits.py",
     "verity_capture/commit/tests/test_plan_key.py",
+    "verity_capture/tests/test_native_jit_keying.py",
     "verity_capture/tests/test_openings_after_release.py",
     "verity_capture/tests/test_p0_footprint.py"
    ],
@@ -1125,7 +1039,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.commit.native_collect",
+    "verity_capture.sweep.hot_commit",
     "verity_capture.commit.native_jit"
    ]
   },
@@ -1134,7 +1048,7 @@
    "package": "verity_capture",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 10,
    "imported_by_tests": [
@@ -1178,7 +1092,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.commit_delta",
+    "verity_capture.experimental.commit_integ.native_host",
     "verity_capture.commit.padding_steps"
    ]
   },
@@ -1187,18 +1101,18 @@
    "package": "verity_capture",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
-   "n_imported_by_tests": 28,
+   "n_imported_by_tests": 26,
    "imported_by_tests": [
     "tests/acquire/test_gate.py",
     "tests/acquire/test_install.py",
     "tests/acquire/test_plan.py",
     "tests/acquire/test_stage.py",
-    "tests/ir/reqval_rows_lift_vs_unlifted.py",
-    "tests/ir/test_lifted_correspondence.py",
     "tests/ir/test_norm_chain.py",
-    "tests/ir/test_observe_resolve.py"
+    "tests/ir/test_observe_resolve.py",
+    "tests/ir/test_tp_collective_site.py",
+    "tests/regression/checks/coverage.py"
    ],
    "loc": 2203,
    "last_commit_date": "2026-09-23",
@@ -1226,7 +1140,7 @@
    "package": "verity_capture",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 4,
    "imported_by_tests": [
@@ -1251,7 +1165,7 @@
    "package": "verity_capture",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 23,
    "imported_by_tests": [
@@ -1271,7 +1185,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.commit_delta",
+    "tests.regression.checks.replay_partition",
     "verity_capture.commit.sampled_replay"
    ]
   },
@@ -1361,7 +1275,7 @@
    "static_reachable": true,
    "dynamically_imported": false,
    "imported_by_tests_only": false,
-   "n_imported_by_tests": 15,
+   "n_imported_by_tests": 14,
    "imported_by_tests": [
     "verity_capture/tests/test_analytic.py",
     "verity_capture/tests/test_compare_skipped_entries.py",
@@ -1370,7 +1284,7 @@
     "verity_capture/tests/test_gen_dense2.py",
     "verity_capture/tests/test_gen_ln.py",
     "verity_capture/tests/test_provenance.py",
-    "verity_capture/tests/test_replay_budgeted.py"
+    "verity_capture/tests/test_replay_m1.py"
    ],
    "loc": 923,
    "last_commit_date": "2026-09-21",
@@ -1415,9 +1329,9 @@
    "package": "verity_capture",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
-   "n_imported_by_tests": 34,
+   "n_imported_by_tests": 33,
    "imported_by_tests": [
     "verity_capture/experimental/cb_a/tests/test_batch_decomp_e2e.py",
     "verity_capture/experimental/cb_a/tests/test_global_match.py",
@@ -1444,7 +1358,7 @@
    "package": "verity_capture",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 2,
    "imported_by_tests": [
@@ -1458,7 +1372,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.run_config",
+    "verity_capture.commit.weights_of_record",
     "verity_capture.experiment"
    ]
   },
@@ -1467,9 +1381,9 @@
    "package": "verity_capture",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
-   "n_imported_by_tests": 62,
+   "n_imported_by_tests": 58,
    "imported_by_tests": [
     "tests/acquire/test_gate.py",
     "tests/ir/test_artifact_applicability_independent.py",
@@ -1487,7 +1401,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_vllm.acquire.runtime_tree",
+    "verity_capture.bench.tp2_fold_match",
     "verity_capture.experimental"
    ]
   },
@@ -1496,7 +1410,7 @@
    "package": "verity_capture",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 20,
    "imported_by_tests": [
@@ -1516,7 +1430,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_vllm.acquire.runtime_tree",
+    "verity_capture.bench.tp2_fold_match",
     "verity_capture.experimental.cb_a"
    ]
   },
@@ -1525,7 +1439,7 @@
    "package": "verity_capture",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 8,
    "imported_by_tests": [
@@ -1541,8 +1455,7 @@
    "loc": 916,
    "last_commit_date": "2026-09-23",
    "referenced_by_shell": [
-    "verity_capture/sweep/row_pod.sh",
-    "verity_capture/sweep/stoch_negative_n3.sh"
+    "verity_capture/sweep/row_pod.sh"
    ],
    "root_via": [
     "verity_capture/sweep/row_pod.sh"
@@ -1558,7 +1471,7 @@
    "package": "verity_capture",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 1,
    "imported_by_tests": [
@@ -1571,7 +1484,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.experimental.cb_a.global_match",
+    "verity_capture.experimental.cb_a.batch_decomp",
     "verity_capture.experimental.cb_a.compact"
    ]
   },
@@ -1580,7 +1493,7 @@
    "package": "verity_capture",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 8,
    "imported_by_tests": [
@@ -1596,8 +1509,7 @@
    "loc": 906,
    "last_commit_date": "2026-09-21",
    "referenced_by_shell": [
-    "verity_capture/sweep/row_pod.sh",
-    "verity_capture/sweep/stoch_negatives.sh"
+    "verity_capture/sweep/row_pod.sh"
    ],
    "root_via": [
     "verity_capture/sweep/row_pod.sh"
@@ -1626,8 +1538,7 @@
    "last_commit_date": "2026-09-23",
    "referenced_by_shell": [
     "verity_capture/sweep/row_pod.sh",
-    "verity_capture/sweep/row_pod_tp2.sh",
-    "verity_capture/sweep/stoch_negative_n3.sh"
+    "verity_capture/sweep/row_pod_tp2.sh"
    ],
    "root_via": [
     "verity_capture/sweep/row_pod.sh",
@@ -1700,7 +1611,7 @@
    "package": "verity_capture",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 2,
    "imported_by_tests": [
@@ -1714,7 +1625,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.experimental.cb_a.global_match",
+    "verity_capture.experimental.cb_a.batch_decomp",
     "verity_capture.experimental.cb_a.global_match_fast"
    ]
   },
@@ -1755,7 +1666,7 @@
    "package": "verity_capture",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 0,
    "imported_by_tests": [],
@@ -1855,7 +1766,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_vllm.acquire.runtime_tree",
+    "verity_capture.experimental.cb_a.derive_step",
     "verity_capture.experimental.cb_a.vllm_meta"
    ]
   },
@@ -1996,11 +1907,11 @@
     "tests/acquire/test_gate.py",
     "verity_capture/bench/tests/test_binding_moe_b2.py",
     "verity_capture/bench/tests/test_binding_negatives.py",
+    "verity_capture/bench/tests/test_compiled_replay_seed_source.py",
     "verity_capture/bench/tests/test_tp2_xrank_collectives.py",
     "verity_capture/commit/tests/test_admit_r19_host_working_set.py",
     "verity_capture/commit/tests/test_compiled_manifest.py",
-    "verity_capture/commit/tests/test_fa2_tap_bounded.py",
-    "verity_capture/commit/tests/test_native_collect_flush.py"
+    "verity_capture/commit/tests/test_fa2_tap_bounded.py"
    ],
    "loc": 18,
    "last_commit_date": "2026-09-21",
@@ -2009,7 +1920,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.commit_delta",
+    "verity_capture.commit.native_collect",
     "verity_capture.experimental.commit_integ"
    ]
   },
@@ -2020,10 +1931,9 @@
    "static_reachable": true,
    "dynamically_imported": false,
    "imported_by_tests_only": false,
-   "n_imported_by_tests": 4,
+   "n_imported_by_tests": 3,
    "imported_by_tests": [
     "verity_capture/experimental/commit_integ/tests/test_native_host_security.py",
-    "verity_capture/experimental/commit_integ/tests/test_row4_derived.py",
     "verity_capture/experimental/commit_integ/tests/test_security.py",
     "verity_capture/tests/test_openings_after_release.py"
    ],
@@ -2034,7 +1944,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.commit_delta",
+    "verity_capture.commit.native_collect",
     "verity_capture.experimental.commit_integ.api"
    ]
   },
@@ -2088,8 +1998,9 @@
    "static_reachable": true,
    "dynamically_imported": false,
    "imported_by_tests_only": false,
-   "n_imported_by_tests": 1,
+   "n_imported_by_tests": 2,
    "imported_by_tests": [
+    "verity_capture/bench/tests/test_compiled_replay_seed_source.py",
     "verity_capture/experimental/commit_integ/tests/test_compiled_linkage_attribution.py"
    ],
    "loc": 574,
@@ -2144,7 +2055,7 @@
    "live_only_via_profiles": false,
    "why": [
     "verity_capture.bench.commit_delta",
-    "verity_capture.experimental.commit_integ.compiled_kernel_check",
+    "verity_capture.experimental.commit_integ.compiled_kernel_source",
     "verity_capture.experimental.commit_integ.compiled_relations",
     "verity_capture.experimental.commit_integ.compiled_norm_literal"
    ]
@@ -2169,7 +2080,7 @@
    "live_only_via_profiles": false,
    "why": [
     "verity_capture.bench.commit_delta",
-    "verity_capture.experimental.commit_integ.compiled_kernel_check",
+    "verity_capture.experimental.commit_integ.compiled_kernel_source",
     "verity_capture.experimental.commit_integ.compiled_relations"
    ]
   },
@@ -2233,7 +2144,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.commit_delta",
+    "verity_capture.experimental.commit_integ.native_host",
     "verity_capture.experimental.commit_integ.fa2_plane_classes"
    ]
   },
@@ -2256,7 +2167,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.commit_delta",
+    "verity_capture.commit.native_collect",
     "verity_capture.experimental.commit_integ.hidden_source"
    ]
   },
@@ -2289,7 +2200,7 @@
    "static_reachable": true,
    "dynamically_imported": false,
    "imported_by_tests_only": false,
-   "n_imported_by_tests": 17,
+   "n_imported_by_tests": 16,
    "imported_by_tests": [
     "tests/acquire/test_gate.py",
     "verity_capture/bench/tests/test_binding_moe_b2.py",
@@ -2311,26 +2222,6 @@
    "why": [
     "verity_capture.experimental.commit_integ.native_host"
    ]
-  },
-  "verity_capture/experimental/commit_integ/row4_derived.py": {
-   "module": "verity_capture.experimental.commit_integ.row4_derived",
-   "package": "verity_capture",
-   "class": "TEST-ONLY",
-   "static_reachable": false,
-   "dynamically_imported": false,
-   "imported_by_tests_only": true,
-   "n_imported_by_tests": 1,
-   "imported_by_tests": [
-    "verity_capture/experimental/commit_integ/tests/test_row4_derived.py"
-   ],
-   "loc": 114,
-   "last_commit_date": "2026-09-21",
-   "referenced_by_shell": [],
-   "root_via": [],
-   "protected": null,
-   "live_only_via_profiles": false,
-   "why": null,
-   "plan": "delete"
   },
   "verity_capture/experimental/commit_integ/spans.py": {
    "module": "verity_capture.experimental.commit_integ.spans",
@@ -2373,7 +2264,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.tp2_capture",
+    "verity_capture.bench.tp2_match",
     "verity_capture.bench.tp2_worker",
     "verity_capture.experimental.commit_integ.tp_partial_source"
    ]
@@ -2405,7 +2296,7 @@
    "static_reachable": true,
    "dynamically_imported": false,
    "imported_by_tests_only": false,
-   "n_imported_by_tests": 11,
+   "n_imported_by_tests": 9,
    "imported_by_tests": [
     "verity_capture/commit/tests/test_padding_pod_consumer.py",
     "verity_capture/commit/tests/test_padding_steps.py",
@@ -2413,8 +2304,8 @@
     "verity_capture/experimental/fa2_commit/test_derived_rule.py",
     "verity_capture/experimental/fa2_commit/test_encoding.py",
     "verity_capture/experimental/fa2_commit/test_hidden_stream.py",
-    "verity_capture/experimental/fa2_commit/test_kernel_dump.py",
-    "verity_capture/experimental/fa2_commit/test_negatives.py"
+    "verity_capture/experimental/fa2_commit/test_negatives.py",
+    "verity_capture/experimental/fa2_commit/test_roundtrip.py"
    ],
    "loc": 6,
    "last_commit_date": "2026-09-21",
@@ -2423,7 +2314,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.experimental.commit_integ.native_host",
+    "verity_capture.commit.native_collect",
     "verity_capture.experimental.fa2_commit"
    ]
   },
@@ -2434,12 +2325,10 @@
    "static_reachable": false,
    "dynamically_imported": false,
    "imported_by_tests_only": true,
-   "n_imported_by_tests": 5,
+   "n_imported_by_tests": 3,
    "imported_by_tests": [
     "verity_capture/experimental/fa2_commit/test_derived_rule.py",
-    "verity_capture/experimental/fa2_commit/test_kernel_dump.py",
     "verity_capture/experimental/fa2_commit/test_negatives.py",
-    "verity_capture/experimental/fa2_commit/test_oracle.py",
     "verity_capture/experimental/fa2_commit/test_roundtrip.py"
    ],
    "loc": 75,
@@ -2459,12 +2348,10 @@
    "static_reachable": false,
    "dynamically_imported": false,
    "imported_by_tests_only": true,
-   "n_imported_by_tests": 5,
+   "n_imported_by_tests": 3,
    "imported_by_tests": [
     "verity_capture/experimental/fa2_commit/test_encoding.py",
-    "verity_capture/experimental/fa2_commit/test_kernel_dump.py",
     "verity_capture/experimental/fa2_commit/test_negatives.py",
-    "verity_capture/experimental/fa2_commit/test_oracle.py",
     "verity_capture/experimental/fa2_commit/test_roundtrip.py"
    ],
    "loc": 246,
@@ -2499,7 +2386,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.experimental.commit_integ.native_host",
+    "verity_capture.commit.native_collect",
     "verity_capture.experimental.fa2_commit.engine"
    ]
   },
@@ -2510,10 +2397,9 @@
    "static_reachable": false,
    "dynamically_imported": false,
    "imported_by_tests_only": true,
-   "n_imported_by_tests": 3,
+   "n_imported_by_tests": 2,
    "imported_by_tests": [
     "verity_capture/experimental/fa2_commit/test_negatives.py",
-    "verity_capture/experimental/fa2_commit/test_oracle.py",
     "verity_capture/experimental/fa2_commit/test_roundtrip.py"
    ],
    "loc": 173,
@@ -2549,26 +2435,6 @@
     "verity_capture.experimental.fa2_commit.hidden_stream"
    ]
   },
-  "verity_capture/experimental/fa2_commit/kernel_dump.py": {
-   "module": "verity_capture.experimental.fa2_commit.kernel_dump",
-   "package": "verity_capture",
-   "class": "TEST-ONLY",
-   "static_reachable": false,
-   "dynamically_imported": false,
-   "imported_by_tests_only": true,
-   "n_imported_by_tests": 1,
-   "imported_by_tests": [
-    "verity_capture/experimental/fa2_commit/test_kernel_dump.py"
-   ],
-   "loc": 181,
-   "last_commit_date": "2026-09-21",
-   "referenced_by_shell": [],
-   "root_via": [],
-   "protected": null,
-   "live_only_via_profiles": false,
-   "why": null,
-   "plan": "delete"
-  },
   "verity_capture/experimental/fa2_commit/layouts.py": {
    "module": "verity_capture.experimental.fa2_commit.layouts",
    "package": "verity_capture",
@@ -2576,11 +2442,9 @@
    "static_reachable": false,
    "dynamically_imported": false,
    "imported_by_tests_only": true,
-   "n_imported_by_tests": 4,
+   "n_imported_by_tests": 2,
    "imported_by_tests": [
-    "verity_capture/experimental/fa2_commit/test_kernel_dump.py",
     "verity_capture/experimental/fa2_commit/test_negatives.py",
-    "verity_capture/experimental/fa2_commit/test_oracle.py",
     "verity_capture/experimental/fa2_commit/test_roundtrip.py"
    ],
    "loc": 495,
@@ -2593,27 +2457,6 @@
    "plan": "keep",
    "kept_because": "fa2_commit fixtures (see derived)"
   },
-  "verity_capture/experimental/fa2_commit/oracle.py": {
-   "module": "verity_capture.experimental.fa2_commit.oracle",
-   "package": "verity_capture",
-   "class": "TEST-ONLY",
-   "static_reachable": false,
-   "dynamically_imported": false,
-   "imported_by_tests_only": true,
-   "n_imported_by_tests": 2,
-   "imported_by_tests": [
-    "verity_capture/experimental/fa2_commit/test_kernel_dump.py",
-    "verity_capture/experimental/fa2_commit/test_oracle.py"
-   ],
-   "loc": 163,
-   "last_commit_date": "2026-09-21",
-   "referenced_by_shell": [],
-   "root_via": [],
-   "protected": null,
-   "live_only_via_profiles": false,
-   "why": null,
-   "plan": "delete"
-  },
   "verity_capture/experimental/fa2_commit/reference.py": {
    "module": "verity_capture.experimental.fa2_commit.reference",
    "package": "verity_capture",
@@ -2621,11 +2464,9 @@
    "static_reachable": false,
    "dynamically_imported": false,
    "imported_by_tests_only": true,
-   "n_imported_by_tests": 4,
+   "n_imported_by_tests": 2,
    "imported_by_tests": [
-    "verity_capture/experimental/fa2_commit/test_kernel_dump.py",
     "verity_capture/experimental/fa2_commit/test_negatives.py",
-    "verity_capture/experimental/fa2_commit/test_oracle.py",
     "verity_capture/experimental/fa2_commit/test_roundtrip.py"
    ],
    "loc": 126,
@@ -2638,46 +2479,6 @@
    "plan": "keep",
    "kept_because": "fa2_commit fixtures (see derived)"
   },
-  "verity_capture/experimental/fp16_rules.py": {
-   "module": "verity_capture.experimental.fp16_rules",
-   "package": "verity_capture",
-   "class": "TEST-ONLY",
-   "static_reachable": false,
-   "dynamically_imported": false,
-   "imported_by_tests_only": true,
-   "n_imported_by_tests": 1,
-   "imported_by_tests": [
-    "verity_capture/tests/test_experimental_fp16_rules.py"
-   ],
-   "loc": 239,
-   "last_commit_date": "2026-09-21",
-   "referenced_by_shell": [],
-   "root_via": [],
-   "protected": null,
-   "live_only_via_profiles": false,
-   "why": null,
-   "plan": "delete"
-  },
-  "verity_capture/experimental/prefix_g3_rules.py": {
-   "module": "verity_capture.experimental.prefix_g3_rules",
-   "package": "verity_capture",
-   "class": "TEST-ONLY",
-   "static_reachable": false,
-   "dynamically_imported": false,
-   "imported_by_tests_only": true,
-   "n_imported_by_tests": 1,
-   "imported_by_tests": [
-    "verity_capture/tests/test_experimental_prefix_g3_rules.py"
-   ],
-   "loc": 165,
-   "last_commit_date": "2026-09-21",
-   "referenced_by_shell": [],
-   "root_via": [],
-   "protected": null,
-   "live_only_via_profiles": false,
-   "why": null,
-   "plan": "delete"
-  },
   "verity_capture/fold.py": {
    "module": "verity_capture.fold",
    "package": "verity_capture",
@@ -2685,7 +2486,7 @@
    "static_reachable": true,
    "dynamically_imported": false,
    "imported_by_tests_only": false,
-   "n_imported_by_tests": 17,
+   "n_imported_by_tests": 16,
    "imported_by_tests": [
     "verity_capture/experimental/cb_a/tests/test_batch_decomp_e2e.py",
     "verity_capture/experimental/cb_a/tests/test_compact.py",
@@ -2712,14 +2513,13 @@
    "package": "verity_capture",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
-   "n_imported_by_tests": 7,
+   "n_imported_by_tests": 6,
    "imported_by_tests": [
     "tests/ir/test_lifted_r17.py",
     "verity_capture/tests/test_coverage_workloads.py",
     "verity_capture/tests/test_gates_fixtures.py",
-    "verity_capture/tests/test_gen_adversarial.py",
     "verity_capture/tests/test_ref_integrity.py",
     "verity_capture/tests/test_run_config_dry_run.py",
     "verity_capture/tests/test_run_config_load_stages.py"
@@ -2740,7 +2540,7 @@
    "package": "verity_capture",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 1,
    "imported_by_tests": [
@@ -2753,7 +2553,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.experimental.cb_a.global_match",
+    "verity_capture.experimental.cb_a.batch_decomp",
     "verity_capture.gc_tuning"
    ]
   },
@@ -2806,16 +2606,15 @@
    "package": "verity_capture",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
-   "n_imported_by_tests": 8,
+   "n_imported_by_tests": 7,
    "imported_by_tests": [
     "verity_capture/experimental/cb_a/tests/test_batch_decomp_e2e.py",
     "verity_capture/experimental/cb_a/tests/test_global_match.py",
     "verity_capture/tests/test_events_log_tree.py",
     "verity_capture/tests/test_fold_group_part_event.py",
     "verity_capture/tests/test_m1_log.py",
-    "verity_capture/tests/test_prefix_cache.py",
     "verity_capture/tests/test_root_policy.py",
     "verity_capture/tests/test_tp2_d90_fixture.py"
    ],
@@ -2835,7 +2634,7 @@
    "package": "verity_capture",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 5,
    "imported_by_tests": [
@@ -2884,7 +2683,7 @@
    "package": "verity_capture",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 1,
    "imported_by_tests": [
@@ -2897,7 +2696,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.tp2_capture",
+    "verity_capture.bench.tp2_match",
     "verity_capture.vllm_adapter",
     "verity_capture.observer"
    ]
@@ -2907,7 +2706,7 @@
    "package": "verity_capture",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 12,
    "imported_by_tests": [
@@ -2928,7 +2727,7 @@
    "live_only_via_profiles": false,
    "why": [
     "verity_capture.bench.run_config",
-    "verity_capture.profiles.gen_dense_gemma2_patterns",
+    "verity_capture.profiles.vllm_d9105ea80_sm89_eager",
     "verity_capture.patterns"
    ]
   },
@@ -2954,47 +2753,6 @@
     "verity_capture.profiles.vllm_d9105ea80_sm89_eager",
     "verity_capture.patterns_fp8"
    ]
-  },
-  "verity_capture/patterns_prefix.py": {
-   "module": "verity_capture.patterns_prefix",
-   "package": "verity_capture",
-   "class": "TEST-ONLY",
-   "static_reachable": false,
-   "dynamically_imported": false,
-   "imported_by_tests_only": true,
-   "n_imported_by_tests": 2,
-   "imported_by_tests": [
-    "verity_capture/tests/test_experimental_prefix_g3_rules.py",
-    "verity_capture/tests/test_prefix_cache.py"
-   ],
-   "loc": 170,
-   "last_commit_date": "2026-09-21",
-   "referenced_by_shell": [],
-   "root_via": [],
-   "protected": null,
-   "live_only_via_profiles": false,
-   "why": null,
-   "plan": "delete"
-  },
-  "verity_capture/prefix_cache.py": {
-   "module": "verity_capture.prefix_cache",
-   "package": "verity_capture",
-   "class": "TEST-ONLY",
-   "static_reachable": false,
-   "dynamically_imported": false,
-   "imported_by_tests_only": true,
-   "n_imported_by_tests": 1,
-   "imported_by_tests": [
-    "verity_capture/tests/test_prefix_cache.py"
-   ],
-   "loc": 554,
-   "last_commit_date": "2026-09-21",
-   "referenced_by_shell": [],
-   "root_via": [],
-   "protected": null,
-   "live_only_via_profiles": false,
-   "why": null,
-   "plan": "delete"
   },
   "verity_capture/profiles/__init__.py": {
    "module": "verity_capture.profiles",
@@ -3696,9 +3454,8 @@
    "static_reachable": true,
    "dynamically_imported": false,
    "imported_by_tests_only": false,
-   "n_imported_by_tests": 3,
+   "n_imported_by_tests": 2,
    "imported_by_tests": [
-    "verity_capture/tests/test_gen_adversarial.py",
     "verity_capture/tests/test_provenance.py",
     "verity_capture/tests/test_run_config_dry_run.py"
    ],
@@ -3744,10 +3501,8 @@
    "static_reachable": true,
    "dynamically_imported": false,
    "imported_by_tests_only": false,
-   "n_imported_by_tests": 7,
+   "n_imported_by_tests": 5,
    "imported_by_tests": [
-    "verity_capture/tests/test_gen_adversarial.py",
-    "verity_capture/tests/test_replay_budgeted.py",
     "verity_capture/tests/test_replay_m1.py",
     "verity_capture/tests/test_replay_synthetic.py",
     "verity_capture/tests/test_run_config_dry_run.py",
@@ -3756,9 +3511,7 @@
    ],
    "loc": 1179,
    "last_commit_date": "2026-09-21",
-   "referenced_by_shell": [
-    "verity_capture/bench/gen_batch_pod.sh"
-   ],
+   "referenced_by_shell": [],
    "root_via": [],
    "protected": null,
    "live_only_via_profiles": false,
@@ -3767,43 +3520,23 @@
     "verity_capture.replay"
    ]
   },
-  "verity_capture/replay_budgeted.py": {
-   "module": "verity_capture.replay_budgeted",
-   "package": "verity_capture",
-   "class": "TEST-ONLY",
-   "static_reachable": false,
-   "dynamically_imported": false,
-   "imported_by_tests_only": true,
-   "n_imported_by_tests": 1,
-   "imported_by_tests": [
-    "verity_capture/tests/test_replay_budgeted.py"
-   ],
-   "loc": 573,
-   "last_commit_date": "2026-09-21",
-   "referenced_by_shell": [],
-   "root_via": [],
-   "protected": null,
-   "live_only_via_profiles": false,
-   "why": null,
-   "plan": "delete"
-  },
   "verity_capture/resolver.py": {
    "module": "verity_capture.resolver",
    "package": "verity_capture",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
-   "n_imported_by_tests": 19,
+   "n_imported_by_tests": 18,
    "imported_by_tests": [
     "verity_capture/experimental/cb_a/tests/test_batch_decomp_e2e.py",
     "verity_capture/experimental/cb_a/tests/test_global_match.py",
     "verity_capture/tests/test_fold_group_part_event.py",
     "verity_capture/tests/test_fold_synthetic.py",
     "verity_capture/tests/test_fp8_profile.py",
-    "verity_capture/tests/test_gen_adversarial.py",
     "verity_capture/tests/test_gen_dense2.py",
-    "verity_capture/tests/test_gen_dense_gemma2_patterns.py"
+    "verity_capture/tests/test_gen_dense_gemma2_patterns.py",
+    "verity_capture/tests/test_gen_dense_softcap.py"
    ],
    "loc": 359,
    "last_commit_date": "2026-09-21",
@@ -3847,7 +3580,7 @@
    "package": "verity_capture",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 1,
    "imported_by_tests": [
@@ -3860,7 +3593,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.tp2_capture",
+    "verity_capture.bench.tp2_match",
     "verity_capture.vllm_adapter",
     "verity_capture.storage"
    ]
@@ -3870,18 +3603,18 @@
    "package": "verity_capture",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
-   "n_imported_by_tests": 9,
+   "n_imported_by_tests": 10,
    "imported_by_tests": [
     "tests/ir/test_fa3_launch_context.py",
     "tests/regression/checks/commit_summary.py",
     "verity_capture/commit/tests/test_verdict.py",
     "verity_capture/experimental/cb_a/tests/test_sampling_policy.py",
+    "verity_capture/tests/test_fa2_tap_geometry.py",
     "verity_capture/tests/test_hot_commit.py",
     "verity_capture/tests/test_native_jit_keying.py",
-    "verity_capture/tests/test_release_json.py",
-    "verity_capture/tests/test_source_identity.py"
+    "verity_capture/tests/test_release_json.py"
    ],
    "loc": 7,
    "last_commit_date": "2026-09-21",
@@ -3890,7 +3623,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "tests.regression.checks.commit_summary",
+    "verity_capture.sweep.hot_commit",
     "verity_capture.sweep"
    ]
   },
@@ -3923,20 +3656,23 @@
   "verity_capture/sweep/fa2_attn_oracle.py": {
    "module": "verity_capture.sweep.fa2_attn_oracle",
    "package": "verity_capture",
-   "class": "DEAD",
+   "class": "TEST-ONLY",
    "static_reachable": false,
    "dynamically_imported": false,
-   "imported_by_tests_only": false,
-   "n_imported_by_tests": 0,
-   "imported_by_tests": [],
+   "imported_by_tests_only": true,
+   "n_imported_by_tests": 1,
+   "imported_by_tests": [
+    "verity_capture/tests/test_fa2_tap_geometry.py"
+   ],
    "loc": 229,
-   "last_commit_date": "2026-09-21",
+   "last_commit_date": "2026-09-23",
    "referenced_by_shell": [],
    "root_via": [],
    "protected": null,
    "live_only_via_profiles": false,
    "why": null,
-   "plan": "delete"
+   "plan": "keep",
+   "kept_because": "the P0 FA2 tap oracle (R8): verity_capture/tests/test_fa2_tap_geometry.py loads it by file name beside the LIVE commit_integ.hidden_source checks (softcap params vs flash_api, MUFU.TANH rules)"
   },
   "verity_capture/sweep/fa2_tap_src/apply_v8.py": {
    "module": "verity_capture.sweep.fa2_tap_src.apply_v8",
@@ -4049,8 +3785,10 @@
    "static_reachable": true,
    "dynamically_imported": false,
    "imported_by_tests_only": false,
-   "n_imported_by_tests": 0,
-   "imported_by_tests": [],
+   "n_imported_by_tests": 1,
+   "imported_by_tests": [
+    "verity_capture/tests/test_source_identity.py"
+   ],
    "loc": 226,
    "last_commit_date": "2026-09-21",
    "referenced_by_shell": [],
@@ -4269,7 +4007,7 @@
    "package": "verity_capture",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 1,
    "imported_by_tests": [
@@ -4382,7 +4120,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.tp2_commit",
+    "verity_capture.bench.tp2_fold_match",
     "verity_capture.tp"
    ]
   },
@@ -4427,7 +4165,7 @@
    "live_only_via_profiles": true,
    "why": [
     "verity_capture.bench.run_config",
-    "verity_capture.profiles.gen_ov_moe_qwen3",
+    "verity_capture.profiles.vllm_d9105ea80_sm89_eager_qwen15_tp2rank",
     "verity_capture.tp.collective_pattern"
    ]
   },
@@ -4470,7 +4208,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.tp2_capture",
+    "verity_capture.bench.tp2_match",
     "verity_capture.bench.tp2_worker",
     "verity_capture.tp.collective_sites"
    ]
@@ -4494,7 +4232,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.tp2_commit",
+    "verity_capture.bench.tp2_fold_match",
     "verity_capture.tp.rank_match"
    ]
   },
@@ -4503,7 +4241,7 @@
    "package": "verity_capture",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 15,
    "imported_by_tests": [
@@ -4524,7 +4262,7 @@
    "live_only_via_profiles": false,
    "why": [
     "verity_capture.bench.run_config",
-    "verity_capture.profiles.gen_dense_gemma2_patterns",
+    "verity_capture.profiles.gen_dense_softcap_patterns",
     "verity_capture.tree"
    ]
   },
@@ -4533,7 +4271,7 @@
    "package": "verity_capture",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 0,
    "imported_by_tests": [],
@@ -4544,7 +4282,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.tp2_capture",
+    "verity_capture.bench.tp2_match",
     "verity_capture.vllm_adapter",
     "verity_capture.triton_adapter"
    ]
@@ -4577,7 +4315,7 @@
    "package": "verity_capture",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 4,
    "imported_by_tests": [
@@ -4603,13 +4341,15 @@
    "package": "verity_capture",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
-   "n_imported_by_tests": 3,
+   "n_imported_by_tests": 5,
    "imported_by_tests": [
     "verity_capture/bench/tests/test_execution_label.py",
     "verity_capture/tests/test_chunked_attribution.py",
-    "verity_capture/tests/test_compiled_execution_header.py"
+    "verity_capture/tests/test_compiled_execution_header.py",
+    "verity_capture/tests/test_gen_ov_sampling.py",
+    "verity_capture/tests/test_gen_sampling.py"
    ],
    "loc": 1949,
    "last_commit_date": "2026-09-21",
@@ -4618,7 +4358,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.tp2_capture",
+    "verity_capture.bench.tp2_match",
     "verity_capture.vllm_adapter"
    ]
   },
@@ -4627,7 +4367,7 @@
    "package": "verity_capture",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 3,
    "imported_by_tests": [
@@ -4653,9 +4393,8 @@
    "static_reachable": true,
    "dynamically_imported": false,
    "imported_by_tests_only": false,
-   "n_imported_by_tests": 4,
+   "n_imported_by_tests": 3,
    "imported_by_tests": [
-    "verity_capture/tests/test_gen_adversarial.py",
     "verity_capture/tests/test_gen_ov_moe.py",
     "verity_capture/tests/test_gen_ov_moe_vu_shapes.py",
     "verity_capture/tests/test_vu_conformance.py"
@@ -4677,9 +4416,9 @@
    "package": "verity_vllm",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
-   "n_imported_by_tests": 149,
+   "n_imported_by_tests": 135,
    "imported_by_tests": [
     "tests/acquire/test_correspondence_source.py",
     "tests/acquire/test_gate.py",
@@ -4688,7 +4427,7 @@
     "tests/acquire/test_stage.py",
     "tests/ir/_wout_prototype_20260917.py",
     "tests/ir/fixtures_query.py",
-    "tests/ir/lifted_instances_emit.py"
+    "tests/ir/padded_commit_tiny.py"
    ],
    "loc": 29,
    "last_commit_date": "2026-09-21",
@@ -4706,15 +4445,16 @@
    "package": "verity_vllm",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
-   "n_imported_by_tests": 5,
+   "n_imported_by_tests": 6,
    "imported_by_tests": [
     "tests/acquire/test_correspondence_source.py",
     "tests/acquire/test_gate.py",
     "tests/acquire/test_install.py",
     "tests/acquire/test_plan.py",
-    "tests/acquire/test_stage.py"
+    "tests/acquire/test_stage.py",
+    "verity_capture/tests/test_row_pod_cancel_forwarding.py"
    ],
    "loc": 16,
    "last_commit_date": "2026-09-23",
@@ -4723,7 +4463,7 @@
    "protected": "verity_vllm/acquire/",
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.commit_delta",
+    "verity_vllm.acquire.gate",
     "verity_vllm.acquire"
    ]
   },
@@ -4732,7 +4472,7 @@
    "package": "verity_vllm",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 5,
    "imported_by_tests": [
@@ -4832,7 +4572,7 @@
    "package": "verity_vllm",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 5,
    "imported_by_tests": [
@@ -4858,7 +4598,7 @@
    "package": "verity_vllm",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 0,
    "imported_by_tests": [],
@@ -4883,9 +4623,10 @@
    "static_reachable": true,
    "dynamically_imported": false,
    "imported_by_tests_only": false,
-   "n_imported_by_tests": 1,
+   "n_imported_by_tests": 2,
    "imported_by_tests": [
-    "tests/acquire/test_stage.py"
+    "tests/acquire/test_stage.py",
+    "verity_capture/tests/test_row_pod_cancel_forwarding.py"
    ],
    "loc": 66,
    "last_commit_date": "2026-09-23",
@@ -4925,7 +4666,7 @@
    "package": "verity_vllm",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 1,
    "imported_by_tests": [
@@ -4947,7 +4688,7 @@
    "package": "verity_vllm",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 3,
    "imported_by_tests": [
@@ -4962,8 +4703,8 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.commit_delta",
-    "verity_capture.commit.padding_steps",
+    "verity_capture.commit.native_collect",
+    "verity_capture.experimental.fa2_commit.engine",
     "verity_vllm.commit",
     "verity_vllm.capture"
    ]
@@ -4973,7 +4714,7 @@
    "package": "verity_vllm",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 5,
    "imported_by_tests": [
@@ -4990,8 +4731,8 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.commit_delta",
-    "verity_capture.commit.padding_steps",
+    "verity_capture.commit.native_collect",
+    "verity_capture.experimental.fa2_commit.engine",
     "verity_vllm.commit"
    ]
   },
@@ -5018,8 +4759,8 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.commit_delta",
-    "verity_capture.commit.padding_steps",
+    "verity_capture.commit.native_collect",
+    "verity_capture.experimental.fa2_commit.engine",
     "verity_vllm.commit_bench"
    ]
   },
@@ -5046,8 +4787,8 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.commit_delta",
-    "verity_capture.commit.padding_steps",
+    "verity_capture.commit.native_collect",
+    "verity_capture.experimental.fa2_commit.engine",
     "verity_vllm.commit_bench.fasttree"
    ]
   },
@@ -5073,8 +4814,8 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.commit_delta",
-    "verity_capture.commit.padding_steps",
+    "verity_capture.commit.native_collect",
+    "verity_capture.experimental.fa2_commit.engine",
     "verity_vllm.commit_bench.semantic"
    ]
   },
@@ -5097,7 +4838,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.experimental.commit_integ.native_host",
+    "verity_capture.commit.native_collect",
     "verity_capture.experimental.fa2_commit.engine",
     "verity_vllm.commit_bench.stream"
    ]
@@ -5178,7 +4919,7 @@
    "package": "verity_vllm",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 0,
    "imported_by_tests": [],
@@ -5189,9 +4930,9 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.stoch_recompute",
+    "verity_capture.experimental.cb_a.global_program",
     "verity_vllm.registry.topp_split",
-    "verity_vllm_numerics.rms_relation",
+    "verity_vllm_numerics.fa2_relation",
     "verity_vllm.relations",
     "verity_vllm.description"
    ]
@@ -5201,7 +4942,7 @@
    "package": "verity_vllm",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 0,
    "imported_by_tests": [],
@@ -5212,8 +4953,8 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.commit_delta",
-    "verity_capture.commit.padding_steps",
+    "verity_capture.commit.native_collect",
+    "verity_capture.experimental.fa2_commit.engine",
     "verity_vllm.commit_bench.semantic",
     "verity_vllm.dtypes"
    ]
@@ -5223,7 +4964,7 @@
    "package": "verity_vllm",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 39,
    "imported_by_tests": [
@@ -5243,7 +4984,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.run_config",
+    "verity_capture.experimental.cb_a.global_program",
     "verity_vllm.frontend"
    ]
   },
@@ -5275,7 +5016,7 @@
    "package": "verity_vllm",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 6,
    "imported_by_tests": [
@@ -5293,7 +5034,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.run_config",
+    "verity_capture.experimental.cb_a.global_program",
     "verity_vllm.frontend",
     "verity_vllm.frontend.correspond"
    ]
@@ -5405,7 +5146,7 @@
    "package": "verity_vllm",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 2,
    "imported_by_tests": [
@@ -5419,7 +5160,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.run_config",
+    "verity_capture.experimental.cb_a.global_program",
     "verity_vllm.frontend",
     "verity_vllm.frontend.liveness"
    ]
@@ -5429,7 +5170,7 @@
    "package": "verity_vllm",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 3,
    "imported_by_tests": [
@@ -5444,7 +5185,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.run_config",
+    "verity_capture.experimental.cb_a.global_program",
     "verity_vllm.frontend",
     "verity_vllm.frontend.provenance"
    ]
@@ -5497,7 +5238,7 @@
    "live_only_via_profiles": false,
    "why": [
     "verity_capture.experimental.cb_a.derive_step",
-    "verity_vllm.frontend.rules.vllm_sampling",
+    "verity_vllm.frontend.rules.vllm_bindings",
     "verity_vllm.frontend.rules.base"
    ]
   },
@@ -5518,7 +5259,7 @@
    "live_only_via_profiles": false,
    "why": [
     "verity_capture.experimental.cb_a.derive_step",
-    "verity_vllm.frontend.rules.vllm_sampling",
+    "verity_vllm.frontend.rules.vllm_bindings",
     "verity_vllm.frontend.rules.common"
    ]
   },
@@ -5842,7 +5583,7 @@
    "package": "verity_vllm",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 10,
    "imported_by_tests": [
@@ -5874,7 +5615,7 @@
    "package": "verity_vllm",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 2,
    "imported_by_tests": [
@@ -5888,7 +5629,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.run_config",
+    "verity_capture.experimental.cb_a.global_program",
     "verity_vllm.frontend",
     "verity_vllm.frontend.torch_frontend"
    ]
@@ -5898,7 +5639,7 @@
    "package": "verity_vllm",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 1,
    "imported_by_tests": [
@@ -5911,8 +5652,8 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.commit_delta",
-    "verity_capture.commit.padding_steps",
+    "verity_capture.commit.native_collect",
+    "verity_capture.experimental.fa2_commit.engine",
     "verity_vllm.commit_bench.fasttree",
     "verity_vllm.hashing"
    ]
@@ -5922,7 +5663,7 @@
    "package": "verity_vllm",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 3,
    "imported_by_tests": [
@@ -5937,8 +5678,8 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.commit_delta",
-    "verity_capture.commit.padding_steps",
+    "verity_capture.commit.native_collect",
+    "verity_capture.experimental.fa2_commit.engine",
     "verity_vllm.commit_bench.semantic",
     "verity_vllm.identity"
    ]
@@ -5948,18 +5689,18 @@
    "package": "verity_vllm",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
-   "n_imported_by_tests": 27,
+   "n_imported_by_tests": 22,
    "imported_by_tests": [
-    "tests/ir/lifted_instances_emit.py",
-    "tests/ir/lifted_use_document.py",
-    "tests/ir/moe_closure_probe.py",
     "tests/ir/padded_commit_tiny.py",
     "tests/ir/test_boundary_oracle.py",
     "tests/ir/test_codec.py",
     "tests/ir/test_descriptor_equivalence.py",
-    "tests/ir/test_heldout_codec_compose.py"
+    "tests/ir/test_heldout_codec_compose.py",
+    "tests/ir/test_lifted_mixed.py",
+    "tests/ir/test_lifted_r17.py",
+    "tests/ir/test_lifted_request.py"
    ],
    "loc": 1,
    "last_commit_date": "2026-09-21",
@@ -5968,7 +5709,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.experimental.cb_a.global_match",
+    "verity_capture.experimental.cb_a.batch_decomp",
     "verity_vllm.ir"
    ]
   },
@@ -5994,8 +5735,8 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.stoch_recompute",
-    "verity_vllm.lifting.continuation",
+    "verity_capture.experimental.cb_a.global_program",
+    "verity_vllm.registry",
     "verity_vllm.registry.lifted",
     "verity_vllm.ir.boundary"
    ]
@@ -6030,16 +5771,16 @@
    "static_reachable": true,
    "dynamically_imported": false,
    "imported_by_tests_only": false,
-   "n_imported_by_tests": 10,
+   "n_imported_by_tests": 9,
    "imported_by_tests": [
-    "tests/ir/lifted_use_document.py",
     "tests/ir/padded_commit_tiny.py",
     "tests/ir/test_lifted_r17.py",
     "tests/ir/test_lifted_tiny.py",
     "tests/ir/test_partition_real.py",
     "tests/ir/test_partition_structural.py",
     "tests/ir/test_partition_sweep.py",
-    "tests/ir/test_query_artifact.py"
+    "tests/ir/test_query_artifact.py",
+    "tests/ir/test_query_counterexamples.py"
    ],
    "loc": 964,
    "last_commit_date": "2026-09-21",
@@ -6048,8 +5789,8 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.stoch_recompute",
-    "verity_vllm.lifting.continuation",
+    "verity_capture.experimental.cb_a.global_program",
+    "verity_vllm.registry",
     "verity_vllm.registry.lifted",
     "verity_vllm.ir.partition"
    ]
@@ -6097,8 +5838,8 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.stoch_recompute",
-    "verity_vllm.lifting.continuation",
+    "verity_capture.experimental.cb_a.global_program",
+    "verity_vllm.registry",
     "verity_vllm.registry.lifted",
     "verity_vllm.ir.query_artifact"
    ]
@@ -6108,7 +5849,7 @@
    "package": "verity_vllm",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 0,
    "imported_by_tests": [],
@@ -6119,7 +5860,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.experimental.cb_a.global_match",
+    "verity_capture.experimental.cb_a.batch_decomp",
     "verity_vllm.ir.sampling_event"
    ]
   },
@@ -6130,16 +5871,16 @@
    "static_reachable": true,
    "dynamically_imported": false,
    "imported_by_tests_only": false,
-   "n_imported_by_tests": 14,
+   "n_imported_by_tests": 9,
    "imported_by_tests": [
-    "tests/ir/lifted_instances_emit.py",
-    "tests/ir/lifted_use_document.py",
-    "tests/ir/moe_closure_probe.py",
     "tests/ir/test_lifted_mixed.py",
     "tests/ir/test_lifted_r17.py",
-    "tests/ir/test_lifted_record.py",
-    "tests/ir/test_lifted_record_attested_padrev.py",
-    "tests/ir/test_lifted_request.py"
+    "tests/ir/test_lifted_request.py",
+    "tests/ir/test_lifted_request_padrev.py",
+    "tests/ir/test_lifted_workload_padrev.py",
+    "tests/ir/test_workload_compose_padrev.py",
+    "tests/ir/test_workload_program.py",
+    "verity_capture/experimental/cb_a/tests/test_global_match.py"
    ],
    "loc": 608,
    "last_commit_date": "2026-09-21",
@@ -6159,16 +5900,12 @@
    "static_reachable": true,
    "dynamically_imported": false,
    "imported_by_tests_only": false,
-   "n_imported_by_tests": 18,
+   "n_imported_by_tests": 4,
    "imported_by_tests": [
-    "tests/ir/lifted_instances_emit.py",
-    "tests/ir/lifted_use_document.py",
-    "tests/ir/moe_closure_probe.py",
-    "tests/ir/reqval_rows_lift_vs_unlifted.py",
     "tests/ir/test_continuation.py",
-    "tests/ir/test_lifted_correspondence.py",
-    "tests/ir/test_lifted_r17.py",
-    "tests/ir/test_lifted_record.py"
+    "tests/ir/test_lifted_request.py",
+    "tests/ir/test_lifted_tiny.py",
+    "verity_capture/tests/test_stoch_draw_ledger.py"
    ],
    "loc": 1,
    "last_commit_date": "2026-09-21",
@@ -6188,12 +5925,10 @@
    "static_reachable": true,
    "dynamically_imported": false,
    "imported_by_tests_only": false,
-   "n_imported_by_tests": 5,
+   "n_imported_by_tests": 3,
    "imported_by_tests": [
     "tests/ir/test_continuation.py",
-    "tests/ir/test_lifted_record.py",
     "tests/ir/test_lifted_request.py",
-    "tests/ir/test_r17_42_missing_never_inactive_reqval.py",
     "verity_capture/tests/test_stoch_draw_ledger.py"
    ],
    "loc": 481,
@@ -6206,27 +5941,6 @@
     "verity_capture.bench.stoch_recompute",
     "verity_vllm.lifting.continuation"
    ]
-  },
-  "verity_vllm/lifting/correspondence.py": {
-   "module": "verity_vllm.lifting.correspondence",
-   "package": "verity_vllm",
-   "class": "TEST-ONLY",
-   "static_reachable": false,
-   "dynamically_imported": false,
-   "imported_by_tests_only": true,
-   "n_imported_by_tests": 2,
-   "imported_by_tests": [
-    "tests/ir/reqval_rows_lift_vs_unlifted.py",
-    "tests/ir/test_lifted_correspondence.py"
-   ],
-   "loc": 914,
-   "last_commit_date": "2026-09-21",
-   "referenced_by_shell": [],
-   "root_via": [],
-   "protected": null,
-   "live_only_via_profiles": false,
-   "why": null,
-   "plan": "delete"
   },
   "verity_vllm/lifting/dump.py": {
    "module": "verity_vllm.lifting.dump",
@@ -6248,33 +5962,6 @@
    "why": null,
    "plan": "keep",
    "kept_because": "complete-assignment dump used by tests/ir/test_lifted_tiny.py (LIVE registry.lifted / pad_prims)"
-  },
-  "verity_vllm/lifting/record.py": {
-   "module": "verity_vllm.lifting.record",
-   "package": "verity_vllm",
-   "class": "TEST-ONLY",
-   "static_reachable": false,
-   "dynamically_imported": false,
-   "imported_by_tests_only": true,
-   "n_imported_by_tests": 13,
-   "imported_by_tests": [
-    "tests/ir/lifted_instances_emit.py",
-    "tests/ir/lifted_use_document.py",
-    "tests/ir/moe_closure_probe.py",
-    "tests/ir/test_lifted_correspondence.py",
-    "tests/ir/test_lifted_r17.py",
-    "tests/ir/test_lifted_record.py",
-    "tests/ir/test_lifted_record_attested_padrev.py",
-    "tests/ir/test_lifted_record_int3_padrev.py"
-   ],
-   "loc": 1964,
-   "last_commit_date": "2026-09-21",
-   "referenced_by_shell": [],
-   "root_via": [],
-   "protected": null,
-   "live_only_via_profiles": false,
-   "why": null,
-   "plan": "delete"
   },
   "verity_vllm/observe.py": {
    "module": "verity_vllm.observe",
@@ -6304,12 +5991,13 @@
    "package": "verity_vllm",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
-   "n_imported_by_tests": 5,
+   "n_imported_by_tests": 6,
    "imported_by_tests": [
     "tests/query/test_compare.py",
     "tests/query/test_correspondence_source.py",
+    "tests/query/test_lint.py",
     "tests/query/test_module_body.py",
     "tests/regression/checks/manifest_digest.py",
     "verity_capture/commit/tests/test_required_manifest.py"
@@ -6332,8 +6020,9 @@
    "static_reachable": true,
    "dynamically_imported": false,
    "imported_by_tests_only": false,
-   "n_imported_by_tests": 1,
+   "n_imported_by_tests": 2,
    "imported_by_tests": [
+    "tests/query/test_lint.py",
     "tests/regression/checks/manifest_digest.py"
    ],
    "loc": 225,
@@ -6353,7 +6042,7 @@
    "package": "verity_vllm",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 1,
    "imported_by_tests": [
@@ -6375,7 +6064,7 @@
    "package": "verity_vllm",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 2,
    "imported_by_tests": [
@@ -6398,11 +6087,12 @@
    "package": "verity_vllm",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
-   "n_imported_by_tests": 2,
+   "n_imported_by_tests": 3,
    "imported_by_tests": [
     "tests/query/test_correspondence_source.py",
+    "tests/query/test_lint.py",
     "tests/query/test_module_body.py"
    ],
    "loc": 33,
@@ -6421,10 +6111,11 @@
    "package": "verity_vllm",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
-   "n_imported_by_tests": 2,
+   "n_imported_by_tests": 3,
    "imported_by_tests": [
+    "tests/query/test_lint.py",
     "tests/query/test_module_body.py",
     "verity_capture/commit/tests/test_required_manifest.py"
    ],
@@ -6444,11 +6135,12 @@
    "package": "verity_vllm",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
-   "n_imported_by_tests": 2,
+   "n_imported_by_tests": 3,
    "imported_by_tests": [
     "tests/query/test_correspondence_source.py",
+    "tests/query/test_lint.py",
     "tests/query/test_module_body.py"
    ],
    "loc": 537,
@@ -6467,18 +6159,18 @@
    "package": "verity_vllm",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
-   "n_imported_by_tests": 111,
+   "n_imported_by_tests": 95,
    "imported_by_tests": [
     "tests/ir/_wout_prototype_20260917.py",
     "tests/ir/fixtures_query.py",
-    "tests/ir/lifted_instances_emit.py",
-    "tests/ir/lifted_use_document.py",
-    "tests/ir/moe_closure_probe.py",
     "tests/ir/padded_commit_tiny.py",
-    "tests/ir/reqval_rows_lift_vs_unlifted.py",
-    "tests/ir/test_b1_authored.py"
+    "tests/ir/test_b1_authored.py",
+    "tests/ir/test_boundary_oracle.py",
+    "tests/ir/test_broadcast_bias_add.py",
+    "tests/ir/test_codec.py",
+    "tests/ir/test_composition.py"
    ],
    "loc": 88,
    "last_commit_date": "2026-09-23",
@@ -6487,7 +6179,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.stoch_recompute",
+    "verity_capture.experimental.cb_a.global_program",
     "verity_vllm.registry"
    ]
   },
@@ -6496,9 +6188,9 @@
    "package": "verity_vllm",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
-   "n_imported_by_tests": 64,
+   "n_imported_by_tests": 61,
    "imported_by_tests": [
     "tests/ir/_wout_prototype_20260917.py",
     "tests/ir/fixtures_query.py",
@@ -6516,7 +6208,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.experimental.cb_a.compare",
+    "verity_capture.experimental.cb_a.global_program",
     "verity_vllm.registry.b1"
    ]
   },
@@ -6525,7 +6217,7 @@
    "package": "verity_vllm",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 3,
    "imported_by_tests": [
@@ -6598,7 +6290,7 @@
    "package": "verity_vllm",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 2,
    "imported_by_tests": [
@@ -6612,7 +6304,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.experimental.cb_a.compare",
+    "verity_capture.experimental.cb_a.global_program",
     "verity_vllm.registry.dense"
    ]
   },
@@ -6621,13 +6313,12 @@
    "package": "verity_vllm",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
-   "n_imported_by_tests": 5,
+   "n_imported_by_tests": 4,
    "imported_by_tests": [
     "tests/ir/test_derived_rows.py",
     "tests/ir/test_derived_rows_fp8.py",
-    "tests/ir/test_derived_rows_torch.py",
     "verity_capture/commit/tests/test_sampled_replay.py",
     "verity_capture/commit/tests/test_sampled_replay_promoted.py"
    ],
@@ -6638,37 +6329,17 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.stoch_recompute",
-    "verity_vllm.registry.sampling_rows",
+    "tests.regression.checks.replay_partition",
+    "verity_capture.commit.sampled_replay",
     "verity_vllm.registry.derived_rows"
    ]
-  },
-  "verity_vllm/registry/derived_rows_torch.py": {
-   "module": "verity_vllm.registry.derived_rows_torch",
-   "package": "verity_vllm",
-   "class": "TEST-ONLY",
-   "static_reachable": false,
-   "dynamically_imported": false,
-   "imported_by_tests_only": true,
-   "n_imported_by_tests": 1,
-   "imported_by_tests": [
-    "tests/ir/test_derived_rows_torch.py"
-   ],
-   "loc": 515,
-   "last_commit_date": "2026-09-21",
-   "referenced_by_shell": [],
-   "root_via": [],
-   "protected": null,
-   "live_only_via_profiles": false,
-   "why": null,
-   "plan": "delete"
   },
   "verity_vllm/registry/fp8.py": {
    "module": "verity_vllm.registry.fp8",
    "package": "verity_vllm",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 2,
    "imported_by_tests": [
@@ -6682,7 +6353,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.experimental.cb_a.compare",
+    "verity_capture.experimental.cb_a.global_program",
     "verity_vllm.registry.fp8"
    ]
   },
@@ -6706,7 +6377,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_vllm.frontend.target_profile",
+    "verity_capture.experimental.cb_a.derive_step",
     "verity_vllm.registry.gemm_targets"
    ]
   },
@@ -6715,7 +6386,7 @@
    "package": "verity_vllm",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 4,
    "imported_by_tests": [
@@ -6731,7 +6402,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.experimental.cb_a.compare",
+    "verity_capture.experimental.cb_a.global_program",
     "verity_vllm.registry.hopper"
    ]
   },
@@ -6740,18 +6411,18 @@
    "package": "verity_vllm",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
-   "n_imported_by_tests": 33,
+   "n_imported_by_tests": 19,
    "imported_by_tests": [
-    "tests/ir/lifted_instances_emit.py",
-    "tests/ir/lifted_use_document.py",
-    "tests/ir/moe_closure_probe.py",
     "tests/ir/padded_commit_tiny.py",
-    "tests/ir/reqval_rows_lift_vs_unlifted.py",
     "tests/ir/test_continuation.py",
     "tests/ir/test_lift_q_fine_reqval.py",
-    "tests/ir/test_lifted_correspondence.py"
+    "tests/ir/test_lifted_dense_b1.py",
+    "tests/ir/test_lifted_dense_b1_padrev.py",
+    "tests/ir/test_lifted_mixed.py",
+    "tests/ir/test_lifted_mixed_padrev.py",
+    "tests/ir/test_lifted_moe.py"
    ],
    "loc": 2368,
    "last_commit_date": "2026-09-21",
@@ -6760,8 +6431,8 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.stoch_recompute",
-    "verity_vllm.lifting.continuation",
+    "verity_capture.experimental.cb_a.global_program",
+    "verity_vllm.registry",
     "verity_vllm.registry.lifted"
    ]
   },
@@ -6770,7 +6441,7 @@
    "package": "verity_vllm",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 5,
    "imported_by_tests": [
@@ -6787,7 +6458,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.experimental.cb_a.compare",
+    "verity_capture.experimental.cb_a.global_program",
     "verity_vllm.registry.moe"
    ]
   },
@@ -6796,7 +6467,7 @@
    "package": "verity_vllm",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 3,
    "imported_by_tests": [
@@ -6811,7 +6482,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.experimental.cb_a.compare",
+    "verity_capture.experimental.cb_a.global_program",
     "verity_vllm.registry.moe_pad"
    ]
   },
@@ -6820,7 +6491,7 @@
    "package": "verity_vllm",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 4,
    "imported_by_tests": [
@@ -6836,7 +6507,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.experimental.cb_a.compare",
+    "verity_capture.experimental.cb_a.global_program",
     "verity_vllm.registry.pad_prims"
    ]
   },
@@ -6845,7 +6516,7 @@
    "package": "verity_vllm",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 29,
    "imported_by_tests": [
@@ -6865,8 +6536,8 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.stoch_recompute",
-    "verity_vllm.registry.sampling_topp_difftest",
+    "tests.regression.checks.replay_partition",
+    "verity_capture.commit.sampled_replay",
     "verity_vllm.registry.prims"
    ]
   },
@@ -6896,7 +6567,7 @@
    "live_only_via_profiles": true,
    "why": [
     "verity_capture.bench.run_config",
-    "verity_capture.profiles.gen_dense_gemma2_patterns",
+    "verity_capture.profiles.gen_dense_softcap_patterns",
     "verity_vllm.registry.quarantine"
    ]
   },
@@ -6985,7 +6656,7 @@
    "live_only_via_profiles": true,
    "why": [
     "verity_capture.bench.run_config",
-    "verity_capture.profiles.gen_dense_gemma2_patterns",
+    "verity_capture.profiles.gen_dense_softcap_patterns",
     "verity_vllm.registry.quarantine.dense"
    ]
   },
@@ -7176,7 +6847,7 @@
    "live_only_via_profiles": true,
    "why": [
     "verity_capture.bench.run_config",
-    "verity_capture.profiles.gen_dense_gemma2_patterns",
+    "verity_capture.profiles.gen_dense_softcap_patterns",
     "verity_vllm.registry.quarantine.dense",
     "verity_vllm.registry.quarantine.dense.gelu_tanh_mul_bf16"
    ]
@@ -7391,7 +7062,7 @@
    "live_only_via_profiles": true,
    "why": [
     "verity_capture.bench.run_config",
-    "verity_capture.profiles.gen_dense_gemma2_patterns",
+    "verity_capture.profiles.gen_dense_softcap_patterns",
     "verity_vllm.registry.quarantine.dense",
     "verity_vllm.registry.quarantine.dense.tanh_f32"
    ]
@@ -7438,7 +7109,7 @@
    "why": [
     "verity_capture.bench.run_config",
     "verity_capture.profiles.gen_ln_patterns",
-    "verity_vllm.registry.quarantine.ln.gelu_erf",
+    "verity_vllm.registry.quarantine.ln.layer_norm_aten",
     "verity_vllm.registry.quarantine.ln._common"
    ]
   },
@@ -7653,7 +7324,7 @@
    "package": "verity_vllm",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 3,
    "imported_by_tests": [
@@ -7668,7 +7339,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.commit_delta",
+    "tests.regression.checks.replay_partition",
     "verity_capture.commit.sampled_replay",
     "verity_vllm.registry.ref_prims"
    ]
@@ -7678,7 +7349,7 @@
    "package": "verity_vllm",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 1,
    "imported_by_tests": [
@@ -7691,8 +7362,8 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.stoch_recompute",
-    "verity_vllm.registry.sampling_rows",
+    "tests.regression.checks.replay_partition",
+    "verity_capture.commit.sampled_replay",
     "verity_vllm.registry.derived_rows",
     "verity_vllm.registry.rmsnorm_fused_sweep"
    ]
@@ -7702,7 +7373,7 @@
    "package": "verity_vllm",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 3,
    "imported_by_tests": [
@@ -7717,7 +7388,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.experimental.cb_a.compare",
+    "verity_capture.experimental.cb_a.global_program",
     "verity_vllm.registry.sampling"
    ]
   },
@@ -7788,7 +7459,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.experimental.cb_a.compare",
+    "verity_capture.experimental.cb_a.global_program",
     "verity_vllm.registry.serve3"
    ]
   },
@@ -7887,14 +7558,12 @@
    ],
    "loc": 601,
    "last_commit_date": "2026-09-21",
-   "referenced_by_shell": [
-    "verity_capture/sweep/stoch_negative_n3.sh"
-   ],
+   "referenced_by_shell": [],
    "root_via": [],
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.stoch_recompute",
+    "verity_capture.experimental.cb_a.global_program",
     "verity_vllm.registry.topp_split"
    ]
   },
@@ -7903,7 +7572,7 @@
    "package": "verity_vllm",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 0,
    "imported_by_tests": [],
@@ -7914,9 +7583,9 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.stoch_recompute",
+    "verity_capture.experimental.cb_a.global_program",
     "verity_vllm.registry.topp_split",
-    "verity_vllm_numerics.rms_relation",
+    "verity_vllm_numerics.fa2_relation",
     "verity_vllm.relations"
    ]
   },
@@ -8022,7 +7691,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.tp2_capture",
+    "verity_capture.bench.tp2_match",
     "verity_vllm_adapter.profile",
     "verity_vllm_adapter.verify_bindings",
     "verity_vllm.rows"
@@ -8033,7 +7702,7 @@
    "package": "verity_vllm",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 4,
    "imported_by_tests": [
@@ -8080,10 +7749,11 @@
    "package": "verity_vllm_adapter",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
-   "n_imported_by_tests": 2,
+   "n_imported_by_tests": 3,
    "imported_by_tests": [
+    "tests/ir/test_artifact_applicability_independent.py",
     "verity_capture/bench/tests/test_execution_label.py",
     "verity_capture/tests/test_gen_ov_easy.py"
    ],
@@ -8094,7 +7764,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.tp2_capture",
+    "verity_capture.bench.tp2_match",
     "verity_vllm_adapter"
    ]
   },
@@ -8114,7 +7784,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.tp2_capture",
+    "verity_capture.bench.tp2_match",
     "verity_vllm_adapter.profile",
     "verity_vllm_adapter.verify_bindings",
     "verity_vllm_adapter.compiled_fx"
@@ -8136,7 +7806,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.tp2_capture",
+    "verity_capture.bench.tp2_match",
     "verity_vllm_adapter.profile",
     "verity_vllm_adapter.verify_bindings",
     "verity_vllm_adapter.compiled_fx.kernels"
@@ -8149,8 +7819,10 @@
    "static_reachable": true,
    "dynamically_imported": false,
    "imported_by_tests_only": false,
-   "n_imported_by_tests": 0,
-   "imported_by_tests": [],
+   "n_imported_by_tests": 1,
+   "imported_by_tests": [
+    "tests/ir/test_artifact_applicability_independent.py"
+   ],
    "loc": 69,
    "last_commit_date": "2026-09-21",
    "referenced_by_shell": [],
@@ -8178,7 +7850,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.tp2_capture",
+    "verity_capture.bench.tp2_match",
     "verity_capture.vllm_adapter",
     "verity_vllm_adapter.kernel_identity"
    ]
@@ -8188,7 +7860,7 @@
    "package": "verity_vllm_adapter",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 2,
    "imported_by_tests": [
@@ -8202,7 +7874,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.tp2_capture",
+    "verity_capture.bench.tp2_match",
     "verity_vllm_adapter.profile"
    ]
   },
@@ -8222,7 +7894,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.tp2_capture",
+    "verity_capture.bench.tp2_match",
     "verity_vllm_adapter.profile",
     "verity_vllm_adapter.verify_bindings"
    ]
@@ -8232,7 +7904,7 @@
    "package": "verity_vllm_numerics",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 4,
    "imported_by_tests": [
@@ -8248,7 +7920,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.stoch_recompute",
+    "verity_capture.experimental.cb_a.global_program",
     "verity_vllm.registry.topp_split",
     "verity_vllm_numerics"
    ]
@@ -8258,7 +7930,7 @@
    "package": "verity_vllm_numerics",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 1,
    "imported_by_tests": [
@@ -8304,7 +7976,7 @@
    "package": "verity_vllm_numerics",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 0,
    "imported_by_tests": [],
@@ -8326,7 +7998,7 @@
    "package": "verity_vllm_numerics",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 1,
    "imported_by_tests": [
@@ -8339,7 +8011,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.stoch_recompute",
+    "verity_capture.experimental.cb_a.global_program",
     "verity_vllm.registry.topp_split",
     "verity_vllm_numerics.fa2_model"
    ]
@@ -8349,7 +8021,7 @@
    "package": "verity_vllm_numerics",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 1,
    "imported_by_tests": [
@@ -8362,7 +8034,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.stoch_recompute",
+    "verity_capture.experimental.cb_a.global_program",
     "verity_vllm.registry.topp_split",
     "verity_vllm_numerics.fa2_relation"
    ]
@@ -8415,7 +8087,7 @@
    "package": "verity_vllm_numerics",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 0,
    "imported_by_tests": [],
@@ -8426,7 +8098,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.stoch_recompute",
+    "verity_capture.experimental.cb_a.global_program",
     "verity_vllm.registry.topp_split",
     "verity_vllm_numerics.fa2_relation",
     "verity_vllm_numerics.relations",
@@ -8438,7 +8110,7 @@
    "package": "verity_vllm_numerics",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 1,
    "imported_by_tests": [
@@ -8451,8 +8123,8 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.stoch_recompute",
-    "verity_vllm.registry.sampling_topp_difftest",
+    "tests.regression.checks.replay_partition",
+    "verity_capture.commit.sampled_replay",
     "verity_vllm.registry.prims",
     "verity_vllm_numerics.mma"
    ]
@@ -8462,7 +8134,7 @@
    "package": "verity_vllm_numerics",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 0,
    "imported_by_tests": [],
@@ -8473,7 +8145,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.stoch_recompute",
+    "verity_capture.experimental.cb_a.global_program",
     "verity_vllm.registry.topp_split",
     "verity_vllm_numerics.fa2_relation",
     "verity_vllm_numerics.relations"
@@ -8484,7 +8156,7 @@
    "package": "verity_vllm_numerics",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 1,
    "imported_by_tests": [
@@ -8497,7 +8169,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.stoch_recompute",
+    "verity_capture.experimental.cb_a.global_program",
     "verity_vllm.registry.topp_split",
     "verity_vllm_numerics.rms_relation"
    ]
@@ -8507,7 +8179,7 @@
    "package": "verity_vllm_numerics",
    "class": "LIVE",
    "static_reachable": true,
-   "dynamically_imported": false,
+   "dynamically_imported": true,
    "imported_by_tests_only": false,
    "n_imported_by_tests": 1,
    "imported_by_tests": [
@@ -8520,7 +8192,7 @@
    "protected": null,
    "live_only_via_profiles": false,
    "why": [
-    "verity_capture.bench.stoch_recompute",
+    "verity_capture.experimental.cb_a.global_program",
     "verity_vllm.registry.topp_split",
     "verity_vllm_numerics.rms_triton_model"
    ]
@@ -8830,32 +8502,7 @@
    "verity_vllm/commit_bench/test_semantic.py",
    "verity_vllm/commit_bench/test_stream.py"
   ],
-  "deleted": {
-   "tests/ir/lifted_instances_emit.py": "imports deleted verity_vllm.lifting.record",
-   "tests/ir/lifted_use_document.py": "imports deleted verity_vllm.lifting.record",
-   "tests/ir/moe_closure_probe.py": "imports deleted verity_vllm.lifting.record",
-   "tests/ir/reqval_rows_lift_vs_unlifted.py": "imports deleted verity_vllm.lifting.correspondence",
-   "tests/ir/test_derived_rows_torch.py": "imports deleted verity_vllm.registry.derived_rows_torch",
-   "tests/ir/test_lifted_correspondence.py": "imports deleted verity_vllm.lifting.correspondence, verity_vllm.lifting.record",
-   "tests/ir/test_lifted_record.py": "imports deleted verity_vllm.lifting.record",
-   "tests/ir/test_lifted_record_attested_padrev.py": "imports deleted verity_vllm.lifting.record",
-   "tests/ir/test_lifted_record_int3_padrev.py": "imports deleted verity_vllm.lifting.record",
-   "tests/ir/test_lifted_record_padrev.py": "imports deleted verity_vllm.lifting.record",
-   "tests/ir/test_lifted_record_real_padrev.py": "imports deleted verity_vllm.lifting.record",
-   "tests/ir/test_lifted_use_document.py": "imports deleted tests/ir/lifted_instances_emit.py, tests/ir/lifted_use_document.py, tests/ir/reqval_rows_lift_vs_unlifted.py",
-   "tests/ir/test_lifted_workload_record_padrev.py": "imports deleted verity_vllm.lifting.record, tests/ir/test_lifted_record.py",
-   "tests/ir/test_lifted_workload_record_real_padrev.py": "imports deleted verity_vllm.lifting.record",
-   "tests/ir/test_r17_42_missing_never_inactive_reqval.py": "imports deleted verity_vllm.lifting.record",
-   "verity_capture/experimental/commit_integ/tests/test_row4_derived.py": "imports deleted verity_capture.experimental.commit_integ.row4_derived",
-   "verity_capture/experimental/fa2_commit/test_kernel_dump.py": "imports deleted verity_capture.experimental.fa2_commit.kernel_dump, verity_capture.experimental.fa2_commit.oracle",
-   "verity_capture/experimental/fa2_commit/test_oracle.py": "imports deleted verity_capture.experimental.fa2_commit.oracle",
-   "verity_capture/tests/test_experimental_fp16_rules.py": "imports deleted verity_capture.experimental.fp16_rules",
-   "verity_capture/tests/test_experimental_prefix_g3_rules.py": "imports deleted verity_capture.experimental.prefix_g3_rules, verity_capture.patterns_prefix",
-   "verity_capture/tests/test_gen_adversarial.py": "imports deleted verity_capture.bench.gen_adversarial",
-   "verity_capture/tests/test_gen_batch.py": "imports deleted verity_capture.bench.gen_batch_attribution, verity_capture.bench.gen_batch_provenance",
-   "verity_capture/tests/test_prefix_cache.py": "imports deleted verity_capture.patterns_prefix, verity_capture.prefix_cache",
-   "verity_capture/tests/test_replay_budgeted.py": "imports deleted verity_capture.replay_budgeted"
-  },
+  "deleted": {},
   "kept_helpers": [
    "tests/ir/_wout_prototype_20260917.py",
    "tests/ir/fixtures_query.py",
@@ -8878,50 +8525,7 @@
    "verity_capture/experimental/commit_integ/tests/conftest.py",
    "verity_capture/experimental/commit_integ/tests/schemes.py"
   ],
-  "dedicated_pairs": [
-   {
-    "test": "tests/ir/test_derived_rows_torch.py",
-    "modules": [
-     "verity_vllm.registry.derived_rows_torch"
-    ]
-   },
-   {
-    "test": "verity_capture/experimental/commit_integ/tests/test_row4_derived.py",
-    "modules": [
-     "verity_capture.experimental.commit_integ.row4_derived"
-    ]
-   },
-   {
-    "test": "verity_capture/experimental/fa2_commit/test_kernel_dump.py",
-    "modules": [
-     "verity_capture.experimental.fa2_commit.kernel_dump"
-    ]
-   },
-   {
-    "test": "verity_capture/experimental/fa2_commit/test_oracle.py",
-    "modules": [
-     "verity_capture.experimental.fa2_commit.oracle"
-    ]
-   },
-   {
-    "test": "verity_capture/tests/test_gen_adversarial.py",
-    "modules": [
-     "verity_capture.bench.gen_adversarial"
-    ]
-   },
-   {
-    "test": "verity_capture/tests/test_prefix_cache.py",
-    "modules": [
-     "verity_capture.prefix_cache"
-    ]
-   },
-   {
-    "test": "verity_capture/tests/test_replay_budgeted.py",
-    "modules": [
-     "verity_capture.replay_budgeted"
-    ]
-   }
-  ]
+  "dedicated_pairs": []
  },
  "fixtures_kept": {
   "verity_capture.bench.gen_batch_candidate": "fixture generator: cb_a/tests/test_compact.py (LIVE compact / global_match_fast / rank_match), tests/test_gen_ovbatch.py (LIVE fold)",
@@ -8936,6 +8540,7 @@
   "verity_capture.experimental.fa2_commit.layouts": "fa2_commit fixtures (see derived)",
   "verity_capture.experimental.fa2_commit.reference": "fa2_commit fixtures (see derived)",
   "verity_capture.quarantine_lint": "imported by test_tp_collective.py (TP2 path test); lints verity_vllm/registry/quarantine",
+  "verity_capture.sweep.fa2_attn_oracle": "the P0 FA2 tap oracle (R8): verity_capture/tests/test_fa2_tap_geometry.py loads it by file name beside the LIVE commit_integ.hidden_source checks (softcap params vs flash_api, MUFU.TANH rules)",
   "verity_capture.tp.collective_link": "TP2 path kept by the brief (`tp/`); statically unreachable from row_pod_tp2.sh -- verity_capture/tests/test_tp_collective.py",
   "verity_capture.tp.collective_record": "TP2 path kept by the brief (`tp/`); statically unreachable from row_pod_tp2.sh -- test_tp_collective.py",
   "verity_vllm.correspondence.program": "used by tests/ir/test_derive_negative.py (LIVE frontend.derive negatives)",
@@ -8971,16 +8576,7 @@
   ]
  },
  "keep_entries_unused": [],
- "plan_consistency_broken_imports": [
-  [
-   "tests/ir/test_lifted_r17.py",
-   "tests.ir.lifted_instances_emit"
-  ],
-  [
-   "tests/ir/test_lifted_r17.py",
-   "verity_vllm.lifting.record"
-  ]
- ],
+ "plan_consistency_broken_imports": [],
  "trimmed_tests": {
   "tests/ir/test_lifted_r17.py": "test_a2_lifted_instances_emit_reads_the_declared_lag_and_reports_true_widths removed (it imported verity_vllm.lifting.record + tests/ir/lifted_instances_emit.py); the other 14 tests exercise LIVE registry.lifted"
  },
@@ -9028,93 +8624,8 @@
   "verity_vllm/registry/quarantine/ov_sampling/gumbel.py"
  ],
  "artifacts": {
-  "deleted": {
-   "verity_capture/bench/gen_ov_sampling_fetch.sh": "referenced by nothing",
-   "verity_capture/bench/gen_ov_sampling_pod.sh": "referenced by nothing",
-   "verity_capture/bench/gen_ov_sampling_verify.sh": "referenced by nothing",
-   "verity_capture/bench/gen_ovbatch_pod.sh": "referenced by nothing",
-   "verity_capture/profiles/workload_b0_chunked_200p.json": "referenced only by deleted files: integrations/vllm/verity_capture/tests/test_gen_batch.py",
-   "verity_capture/profiles/workload_b0_conc2_small.json": "referenced only by deleted files: integrations/vllm/verity_capture/tests/test_gen_batch.py",
-   "verity_capture/profiles/workload_b0_conc4_mixed.json": "referenced only by deleted files: integrations/vllm/verity_capture/tests/test_gen_batch.py",
-   "verity_capture/profiles/workload_b0_conc8_mixed.json": "referenced only by deleted files: integrations/vllm/verity_capture/tests/test_gen_batch.py",
-   "verity_capture/profiles/workload_b0_long512_1req.json": "referenced only by deleted files: integrations/vllm/verity_capture/tests/test_gen_batch.py",
-   "verity_capture/profiles/workload_cov_b0_b1_c256_f16.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_b0_b1_c256_r1.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_b0_b1_c256_r2.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_b0_b8-mixed_c256_r1.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_b0_b8-mixed_c256_r2.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_b0_b8-static_c256_r1.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_b0_b8-static_c256_r2.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_b0_prefix_c256.json": "referenced only by deleted files: integrations/vllm/verity_capture/tests/test_prefix_cache.py",
-   "verity_capture/profiles/workload_cov_b0_prefix_c256_cold.json": "referenced only by deleted files: integrations/vllm/verity_capture/tests/test_prefix_cache.py",
-   "verity_capture/profiles/workload_cov_b1_b1_c1024.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_b1_b1_c256.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_b1_b1_c256_ck64.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_b1_b1_c256_r1.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_b1_b1_c256_r2.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_b1_b8-mixed_c1024.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_b1_b8-mixed_c256.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_b1_b8-static_c1024.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_b1_b8-static_c256.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_b1_b8-static_c256_r1.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_b1_b8-static_c256_r2.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_gemma2_2b_b1_c1024.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_gemma2_2b_b1_c256.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_gemma2_2b_b1_c256_r1.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_gemma2_2b_b8-mixed_c1024.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_gemma2_2b_b8-mixed_c256.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_gemma2_2b_b8-static_c1024.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_gemma2_2b_b8-static_c256.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_llama32_1b_b1_c1024.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_llama32_1b_b1_c256.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_llama32_1b_b1_c256_r1.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_llama32_1b_b1_c256_r2.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_llama32_1b_b8-mixed_c1024.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_llama32_1b_b8-mixed_c256.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_llama32_1b_b8-static_c1024.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_llama32_1b_b8-static_c256.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_olmoe_b1_c1024.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_olmoe_b1_c256.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_olmoe_b8-mixed_c1024.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_olmoe_b8-mixed_c256.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_olmoe_b8-static_c1024.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_olmoe_b8-static_c256.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_phi3_mini_b1_c1024.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_phi3_mini_b1_c256.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_phi3_mini_b8-mixed_c1024.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_phi3_mini_b8-mixed_c256.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_phi3_mini_b8-static_c1024.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_phi3_mini_b8-static_c256.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_phi3_mini_b8-static_c256_r1.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_phi3_mini_b8-static_c256_r2.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_pythia160m_b1_c1024.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_pythia160m_b1_c256.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_pythia160m_b1_c256_r1.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_pythia160m_b1_c256_r2.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_pythia160m_b8-mixed_c1024.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_pythia160m_b8-mixed_c256.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_pythia160m_b8-mixed_c256_r1.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_pythia160m_b8-mixed_c256_r2.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_pythia160m_b8-static_c1024.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_pythia160m_b8-static_c256.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_pythia160m_b8-static_c256_r1.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_pythia160m_b8-static_c256_r2.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_qwen05_b1_c1024.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_qwen05_b1_c256.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_qwen05_b8-mixed_c1024.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_qwen05_b8-mixed_c256.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_qwen05_b8-static_c1024.json": "referenced by nothing",
-   "verity_capture/profiles/workload_cov_qwen05_b8-static_c256.json": "referenced by nothing",
-   "verity_capture/profiles/workload_olmoe_1x1_1req.json": "referenced by nothing",
-   "verity_capture/profiles/workload_olmoe_32x16_1req.json": "referenced by nothing",
-   "verity_capture/profiles/workload_olmoe_3x1_1req.json": "referenced by nothing",
-   "verity_capture/profiles/workload_qwen15_conc4_mixed.json": "referenced only by deleted files: integrations/vllm/verity_capture/tests/test_gen_batch.py",
-   "verity_capture/sweep/fa3_row_negatives.sh": "referenced by nothing",
-   "verity_capture/sweep/stoch_negative_n3.sh": "referenced by nothing",
-   "verity_capture/sweep/stoch_negatives.sh": "referenced by nothing",
-   "verity_capture/bench/gen_batch_pod.sh": "referenced only by deleted files: integrations/vllm/verity_capture/bench/gen_ovbatch_pod.sh"
-  },
-  "deleted_bytes": 1807259,
+  "deleted": {},
+  "deleted_bytes": 0,
   "kept_by_pattern": {
    "verity_capture/profiles/workload_cov_b0_b1_c256.json": "verity_capture/tests/test_coverage_workloads.py builds the name from gw.PROFILES x gw.CTX",
    "verity_capture/profiles/workload_cov_b0_b1_c1024.json": "verity_capture/tests/test_coverage_workloads.py builds the name from gw.PROFILES x gw.CTX",
@@ -9137,231 +8648,138 @@
    "verity_capture/experimental/fa2_commit/fixtures/p0/p0_summary.json": "record of the P0 kernel dumps beside them (kernel_dump.py reads the .npz)"
   },
   "unreferenced_out_of_scope": {
-   "tests/dead_code_census.json": 444483
+   "verity_vllm_numerics/cuda/fa2_softmax_probe.cu": 4409,
+   "verity_vllm_numerics/cuda/mma_tiles_sm80.cu": 5523
   },
   "unreferenced_by_name_directory_referenced": {
    "data/census/256x64/partial.json": [
-    "data",
-    "data/census",
-    "data/census/256x64"
+    "data"
    ],
    "data/census/census_frontier.json": [
-    "data",
-    "data/census"
+    "data"
    ],
    "data/census/census_small_6500x1600.json": [
-    "data",
-    "data/census"
+    "data"
    ],
    "data/census/scaling/lp100_s5.json": [
-    "data",
-    "data/census",
-    "data/census/scaling"
+    "data"
    ],
    "data/census/scaling/lp128_s3.json": [
-    "data",
-    "data/census",
-    "data/census/scaling"
+    "data"
    ],
    "data/census/scaling/lp129_s1.json": [
-    "data",
-    "data/census",
-    "data/census/scaling"
+    "data"
    ],
    "data/census/scaling/lp12_s12.json": [
-    "data",
-    "data/census",
-    "data/census/scaling"
+    "data"
    ],
    "data/census/scaling/lp130_s2.json": [
-    "data",
-    "data/census",
-    "data/census/scaling"
+    "data"
    ],
    "data/census/scaling/lp160_s8.json": [
-    "data",
-    "data/census",
-    "data/census/scaling"
+    "data"
    ],
    "data/census/scaling/lp16_s15.json": [
-    "data",
-    "data/census",
-    "data/census/scaling"
+    "data"
    ],
    "data/census/scaling/lp16_s2.json": [
-    "data",
-    "data/census",
-    "data/census/scaling"
+    "data"
    ],
    "data/census/scaling/lp16_s8.json": [
-    "data",
-    "data/census",
-    "data/census/scaling"
+    "data"
    ],
    "data/census/scaling/lp192_s4.json": [
-    "data",
-    "data/census",
-    "data/census/scaling"
+    "data"
    ],
    "data/census/scaling/lp200_s1.json": [
-    "data",
-    "data/census",
-    "data/census/scaling"
+    "data"
    ],
    "data/census/scaling/lp2_s1.json": [
-    "data",
-    "data/census",
-    "data/census/scaling"
+    "data"
    ],
    "data/census/scaling/lp2_s2.json": [
-    "data",
-    "data/census",
-    "data/census/scaling"
+    "data"
    ],
    "data/census/scaling/lp32_s4.json": [
-    "data",
-    "data/census",
-    "data/census/scaling"
+    "data"
    ],
    "data/census/scaling/lp32_s8.json": [
-    "data",
-    "data/census",
-    "data/census/scaling"
+    "data"
    ],
    "data/census/scaling/lp4_s1.json": [
-    "data",
-    "data/census",
-    "data/census/scaling"
+    "data"
    ],
    "data/census/scaling/lp4_s2.json": [
-    "data",
-    "data/census",
-    "data/census/scaling"
+    "data"
    ],
    "data/census/scaling/lp4_s8.json": [
-    "data",
-    "data/census",
-    "data/census/scaling"
+    "data"
    ],
    "data/census/scaling/lp63_s3.json": [
-    "data",
-    "data/census",
-    "data/census/scaling"
+    "data"
    ],
    "data/census/scaling/lp64_s1.json": [
-    "data",
-    "data/census",
-    "data/census/scaling"
+    "data"
    ],
    "data/census/scaling/lp65_s1.json": [
-    "data",
-    "data/census",
-    "data/census/scaling"
+    "data"
    ],
    "data/census/scaling/lp72_s9.json": [
-    "data",
-    "data/census",
-    "data/census/scaling"
+    "data"
    ],
    "data/census/scaling/lp8_s1.json": [
-    "data",
-    "data/census",
-    "data/census/scaling"
+    "data"
    ],
    "data/census/scaling/lp8_s15.json": [
-    "data",
-    "data/census",
-    "data/census/scaling"
+    "data"
    ],
    "data/census/scaling/lp8_s4.json": [
-    "data",
-    "data/census",
-    "data/census/scaling"
+    "data"
    ],
    "data/census/scaling/lp96_s2.json": [
-    "data",
-    "data/census",
-    "data/census/scaling"
+    "data"
    ],
    "data/contract/a56-coverage/for-a7-populations.json": [
-    "data",
-    "data/contract",
-    "data/contract/a56-coverage"
+    "data"
    ],
    "data/contract/a56-coverage/gpu/final-pull-0606Z.txt": [
-    "data",
-    "data/contract",
-    "data/contract/a56-coverage",
-    "data/contract/a56-coverage/gpu"
+    "data"
    ],
    "data/contract/a56-coverage/head_vu_consequence.json": [
-    "data",
-    "data/contract",
-    "data/contract/a56-coverage"
+    "data"
    ],
    "data/contract/a56-coverage/o2_commit_cost.json": [
-    "data",
-    "data/contract",
-    "data/contract/a56-coverage"
+    "data"
    ],
    "data/contract/a56-coverage/patches/a3-expected-attention.diff": [
-    "data",
-    "data/contract",
-    "data/contract/a56-coverage",
-    "data/contract/a56-coverage/patches"
+    "data"
    ],
    "data/contract/a56-coverage/patches/a3-locator-attention.diff": [
-    "data",
-    "data/contract",
-    "data/contract/a56-coverage",
-    "data/contract/a56-coverage/patches"
+    "data"
    ],
    "data/contract/a56-coverage/patches/prover-rec_p1_obligations-dispatch.diff": [
-    "data",
-    "data/contract",
-    "data/contract/a56-coverage",
-    "data/contract/a56-coverage/patches"
+    "data"
    ],
    "data/contract/a56-coverage/pod/stages-and-info.txt": [
-    "data",
-    "data/contract",
-    "data/contract/a56-coverage",
-    "data/contract/a56-coverage/pod"
+    "data"
    ],
    "data/contract/a56-coverage/records/forced_head_run-TINY-t2-L1-h2-after-F2.json": [
-    "data",
-    "data/contract",
-    "data/contract/a56-coverage",
-    "data/contract/a56-coverage/records"
+    "data"
    ],
    "data/contract/a56-coverage/records/forced_head_run-TINY-t3-L0-h0.json": [
-    "data",
-    "data/contract",
-    "data/contract/a56-coverage",
-    "data/contract/a56-coverage/records"
+    "data"
    ],
    "data/contract/a56-coverage/records/forced_head_run-TINY-t5-L0-h0.json": [
-    "data",
-    "data/contract",
-    "data/contract/a56-coverage",
-    "data/contract/a56-coverage/records"
+    "data"
    ],
    "data/contract/a56-coverage/records/unsupported-census-32x15.json": [
-    "data",
-    "data/contract",
-    "data/contract/a56-coverage",
-    "data/contract/a56-coverage/records"
+    "data"
    ],
    "data/contract/a56-coverage/records/unsupported-census-TINY.json": [
-    "data",
-    "data/contract",
-    "data/contract/a56-coverage",
-    "data/contract/a56-coverage/records"
+    "data"
    ],
    "data/contract/ck-elem/argmax_rule/rec-p1-b0.json": [
-    "data",
-    "data/contract",
-    "data/contract/ck-elem"
+    "data"
    ],
    "data/hf_configs/QWEN15_AWQ.config.json": [
     "data",
@@ -9637,17 +9055,8 @@
    "tests/query/gate/row74_qwen3-4b-fp8_h100_b8.json": [
     "tests/query/gate"
    ],
-   "verity_capture/bench/fixtures/llama32-1b__bf16__l40s__tp2__b2__i64__o8__equal__greedy__bi-eager.json": [
-    "verity_capture/bench/fixtures"
-   ],
    "verity_capture/profiles/quarantine/PYTHIA160M.json": [
     "verity_capture/profiles/quarantine"
-   ],
-   "verity_vllm_numerics/cuda/fa2_softmax_probe.cu": [
-    "verity_vllm_numerics/cuda"
-   ],
-   "verity_vllm_numerics/cuda/mma_tiles_sm80.cu": [
-    "verity_vllm_numerics/cuda"
    ],
    "workloads/gemma2-2b__bf16__l40s__tp1__b1__i256__o15__mixed__greedy__bi-eager.json": [
     "workloads"
@@ -9937,8 +9346,7 @@
      "integrations/vllm/verity_capture/experimental/commit/engine.py"
     ],
     "directory_referenced": [
-     "data",
-     "data/census"
+     "data"
     ]
    },
    "data/census/256x64/partial.json": {
@@ -9946,9 +9354,7 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data",
-     "data/census",
-     "data/census/256x64"
+     "data"
     ]
    },
    "data/census/census_frontier.json": {
@@ -9956,8 +9362,7 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data",
-     "data/census"
+     "data"
     ]
    },
    "data/census/census_frontier_a.json": {
@@ -9967,8 +9372,7 @@
      "integrations/vllm/data/census/census_frontier.json"
     ],
     "directory_referenced": [
-     "data",
-     "data/census"
+     "data"
     ]
    },
    "data/census/census_frontier_a_prime.json": {
@@ -9978,8 +9382,7 @@
      "integrations/vllm/data/census/census_frontier.json"
     ],
     "directory_referenced": [
-     "data",
-     "data/census"
+     "data"
     ]
    },
    "data/census/census_small.json": {
@@ -9991,8 +9394,7 @@
      "integrations/vllm/data/contract/a56-coverage/head_vu_consequence.json"
     ],
     "directory_referenced": [
-     "data",
-     "data/census"
+     "data"
     ]
    },
    "data/census/census_small_6500x1600.json": {
@@ -10000,8 +9402,7 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data",
-     "data/census"
+     "data"
     ]
    },
    "data/census/scaling/lp100_s5.json": {
@@ -10009,9 +9410,7 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data",
-     "data/census",
-     "data/census/scaling"
+     "data"
     ]
    },
    "data/census/scaling/lp128_s3.json": {
@@ -10019,9 +9418,7 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data",
-     "data/census",
-     "data/census/scaling"
+     "data"
     ]
    },
    "data/census/scaling/lp129_s1.json": {
@@ -10029,9 +9426,7 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data",
-     "data/census",
-     "data/census/scaling"
+     "data"
     ]
    },
    "data/census/scaling/lp12_s12.json": {
@@ -10039,9 +9434,7 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data",
-     "data/census",
-     "data/census/scaling"
+     "data"
     ]
    },
    "data/census/scaling/lp130_s2.json": {
@@ -10049,9 +9442,7 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data",
-     "data/census",
-     "data/census/scaling"
+     "data"
     ]
    },
    "data/census/scaling/lp160_s8.json": {
@@ -10059,9 +9450,7 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data",
-     "data/census",
-     "data/census/scaling"
+     "data"
     ]
    },
    "data/census/scaling/lp16_s15.json": {
@@ -10069,9 +9458,7 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data",
-     "data/census",
-     "data/census/scaling"
+     "data"
     ]
    },
    "data/census/scaling/lp16_s2.json": {
@@ -10079,9 +9466,7 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data",
-     "data/census",
-     "data/census/scaling"
+     "data"
     ]
    },
    "data/census/scaling/lp16_s8.json": {
@@ -10089,9 +9474,7 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data",
-     "data/census",
-     "data/census/scaling"
+     "data"
     ]
    },
    "data/census/scaling/lp192_s4.json": {
@@ -10099,9 +9482,7 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data",
-     "data/census",
-     "data/census/scaling"
+     "data"
     ]
    },
    "data/census/scaling/lp200_s1.json": {
@@ -10109,9 +9490,7 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data",
-     "data/census",
-     "data/census/scaling"
+     "data"
     ]
    },
    "data/census/scaling/lp2_s1.json": {
@@ -10119,9 +9498,7 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data",
-     "data/census",
-     "data/census/scaling"
+     "data"
     ]
    },
    "data/census/scaling/lp2_s2.json": {
@@ -10129,9 +9506,7 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data",
-     "data/census",
-     "data/census/scaling"
+     "data"
     ]
    },
    "data/census/scaling/lp32_s4.json": {
@@ -10139,9 +9514,7 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data",
-     "data/census",
-     "data/census/scaling"
+     "data"
     ]
    },
    "data/census/scaling/lp32_s8.json": {
@@ -10149,9 +9522,7 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data",
-     "data/census",
-     "data/census/scaling"
+     "data"
     ]
    },
    "data/census/scaling/lp4_s1.json": {
@@ -10159,9 +9530,7 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data",
-     "data/census",
-     "data/census/scaling"
+     "data"
     ]
    },
    "data/census/scaling/lp4_s2.json": {
@@ -10169,9 +9538,7 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data",
-     "data/census",
-     "data/census/scaling"
+     "data"
     ]
    },
    "data/census/scaling/lp4_s8.json": {
@@ -10179,9 +9546,7 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data",
-     "data/census",
-     "data/census/scaling"
+     "data"
     ]
    },
    "data/census/scaling/lp63_s3.json": {
@@ -10189,9 +9554,7 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data",
-     "data/census",
-     "data/census/scaling"
+     "data"
     ]
    },
    "data/census/scaling/lp64_s1.json": {
@@ -10199,9 +9562,7 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data",
-     "data/census",
-     "data/census/scaling"
+     "data"
     ]
    },
    "data/census/scaling/lp65_s1.json": {
@@ -10209,9 +9570,7 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data",
-     "data/census",
-     "data/census/scaling"
+     "data"
     ]
    },
    "data/census/scaling/lp72_s9.json": {
@@ -10219,9 +9578,7 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data",
-     "data/census",
-     "data/census/scaling"
+     "data"
     ]
    },
    "data/census/scaling/lp8_s1.json": {
@@ -10229,9 +9586,7 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data",
-     "data/census",
-     "data/census/scaling"
+     "data"
     ]
    },
    "data/census/scaling/lp8_s15.json": {
@@ -10239,9 +9594,7 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data",
-     "data/census",
-     "data/census/scaling"
+     "data"
     ]
    },
    "data/census/scaling/lp8_s4.json": {
@@ -10249,9 +9602,7 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data",
-     "data/census",
-     "data/census/scaling"
+     "data"
     ]
    },
    "data/census/scaling/lp96_s2.json": {
@@ -10259,26 +9610,22 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data",
-     "data/census",
-     "data/census/scaling"
+     "data"
     ]
    },
    "data/contract/a56-coverage/coverage.json": {
     "bytes": 120220,
-    "n_referenced_by": 175,
+    "n_referenced_by": 107,
     "referenced_by": [
      "integrations/vllm/data/workloads_r12/qwen25-15b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager.json",
      "integrations/vllm/tests/regression/fixtures.toml",
-     "integrations/vllm/verity_capture/bench/fixtures/llama32-1b__bf16__l40s__tp2__b2__i64__o8__equal__greedy__bi-eager.json",
      "integrations/vllm/verity_capture/bench/gen_coverage_workloads.py",
      "integrations/vllm/verity_capture/bench/tp2_commit.py",
-     "integrations/vllm/verity_capture/profiles/workload_cov_b0_b1_c1024.json"
+     "integrations/vllm/verity_capture/profiles/workload_cov_b0_b1_c1024.json",
+     "integrations/vllm/verity_capture/profiles/workload_cov_b0_b1_c256.json"
     ],
     "directory_referenced": [
-     "data",
-     "data/contract",
-     "data/contract/a56-coverage"
+     "data"
     ]
    },
    "data/contract/a56-coverage/for-a7-populations.json": {
@@ -10286,14 +9633,12 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data",
-     "data/contract",
-     "data/contract/a56-coverage"
+     "data"
     ]
    },
    "data/contract/a56-coverage/gpu/approved/manifest.json": {
     "bytes": 7936,
-    "n_referenced_by": 132,
+    "n_referenced_by": 131,
     "referenced_by": [
      "backends/direct/ligero/bench_result.py",
      "backends/direct/ligero/fp4/chain.py",
@@ -10303,11 +9648,7 @@
      "backends/direct/ligero/vu.py"
     ],
     "directory_referenced": [
-     "data",
-     "data/contract",
-     "data/contract/a56-coverage",
-     "data/contract/a56-coverage/gpu",
-     "data/contract/a56-coverage/gpu/approved"
+     "data"
     ]
    },
    "data/contract/a56-coverage/gpu/final-pull-0606Z.txt": {
@@ -10315,15 +9656,12 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data",
-     "data/contract",
-     "data/contract/a56-coverage",
-     "data/contract/a56-coverage/gpu"
+     "data"
     ]
    },
    "data/contract/a56-coverage/gpu/head/manifest.json": {
     "bytes": 1693,
-    "n_referenced_by": 132,
+    "n_referenced_by": 131,
     "referenced_by": [
      "backends/direct/ligero/bench_result.py",
      "backends/direct/ligero/fp4/chain.py",
@@ -10333,16 +9671,12 @@
      "backends/direct/ligero/vu.py"
     ],
     "directory_referenced": [
-     "data",
-     "data/contract",
-     "data/contract/a56-coverage",
-     "data/contract/a56-coverage/gpu",
-     "data/contract/a56-coverage/gpu/head"
+     "data"
     ]
    },
    "data/contract/a56-coverage/gpu/head64/manifest.json": {
     "bytes": 11428,
-    "n_referenced_by": 132,
+    "n_referenced_by": 131,
     "referenced_by": [
      "backends/direct/ligero/bench_result.py",
      "backends/direct/ligero/fp4/chain.py",
@@ -10352,11 +9686,7 @@
      "backends/direct/ligero/vu.py"
     ],
     "directory_referenced": [
-     "data",
-     "data/contract",
-     "data/contract/a56-coverage",
-     "data/contract/a56-coverage/gpu",
-     "data/contract/a56-coverage/gpu/head64"
+     "data"
     ]
    },
    "data/contract/a56-coverage/head_vu_consequence.json": {
@@ -10364,9 +9694,7 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data",
-     "data/contract",
-     "data/contract/a56-coverage"
+     "data"
     ]
    },
    "data/contract/a56-coverage/o2_commit_cost.json": {
@@ -10374,9 +9702,7 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data",
-     "data/contract",
-     "data/contract/a56-coverage"
+     "data"
     ]
    },
    "data/contract/a56-coverage/patches/a3-expected-attention.diff": {
@@ -10384,10 +9710,7 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data",
-     "data/contract",
-     "data/contract/a56-coverage",
-     "data/contract/a56-coverage/patches"
+     "data"
     ]
    },
    "data/contract/a56-coverage/patches/a3-locator-attention.diff": {
@@ -10395,10 +9718,7 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data",
-     "data/contract",
-     "data/contract/a56-coverage",
-     "data/contract/a56-coverage/patches"
+     "data"
     ]
    },
    "data/contract/a56-coverage/patches/prover-rec_p1_obligations-dispatch.diff": {
@@ -10406,10 +9726,7 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data",
-     "data/contract",
-     "data/contract/a56-coverage",
-     "data/contract/a56-coverage/patches"
+     "data"
     ]
    },
    "data/contract/a56-coverage/pod/stages-and-info.txt": {
@@ -10417,10 +9734,7 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data",
-     "data/contract",
-     "data/contract/a56-coverage",
-     "data/contract/a56-coverage/pod"
+     "data"
     ]
    },
    "data/contract/a56-coverage/records/forced_head_run-TINY-t2-L1-h2-after-F2.json": {
@@ -10428,10 +9742,7 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data",
-     "data/contract",
-     "data/contract/a56-coverage",
-     "data/contract/a56-coverage/records"
+     "data"
     ]
    },
    "data/contract/a56-coverage/records/forced_head_run-TINY-t3-L0-h0.json": {
@@ -10439,10 +9750,7 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data",
-     "data/contract",
-     "data/contract/a56-coverage",
-     "data/contract/a56-coverage/records"
+     "data"
     ]
    },
    "data/contract/a56-coverage/records/forced_head_run-TINY-t5-L0-h0.json": {
@@ -10450,10 +9758,7 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data",
-     "data/contract",
-     "data/contract/a56-coverage",
-     "data/contract/a56-coverage/records"
+     "data"
     ]
    },
    "data/contract/a56-coverage/records/unsupported-census-32x15.json": {
@@ -10461,10 +9766,7 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data",
-     "data/contract",
-     "data/contract/a56-coverage",
-     "data/contract/a56-coverage/records"
+     "data"
     ]
    },
    "data/contract/a56-coverage/records/unsupported-census-TINY.json": {
@@ -10472,10 +9774,7 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data",
-     "data/contract",
-     "data/contract/a56-coverage",
-     "data/contract/a56-coverage/records"
+     "data"
     ]
    },
    "data/contract/ck-elem/argmax_rule/rec-p1-b0.json": {
@@ -10483,9 +9782,7 @@
     "n_referenced_by": 0,
     "referenced_by": [],
     "directory_referenced": [
-     "data",
-     "data/contract",
-     "data/contract/ck-elem"
+     "data"
     ]
    },
    "data/hf_configs/B7.config.json": {
@@ -10641,14 +9938,14 @@
    },
    "data/logs/m1.jsonl.gz": {
     "bytes": 542133,
-    "n_referenced_by": 17,
+    "n_referenced_by": 15,
     "referenced_by": [
-     "integrations/vllm/verity_capture/bench/gen_adversarial.py",
      "integrations/vllm/verity_capture/bench/resolve_log.py",
      "integrations/vllm/verity_capture/census.py",
      "integrations/vllm/verity_capture/compare.py",
      "integrations/vllm/verity_capture/golden/corpus.json",
-     "integrations/vllm/verity_capture/provenance.py"
+     "integrations/vllm/verity_capture/provenance.py",
+     "integrations/vllm/verity_capture/replay.py"
     ],
     "directory_referenced": [
      "data",
@@ -10657,14 +9954,14 @@
    },
    "data/logs/m6/log.jsonl.gz": {
     "bytes": 536651,
-    "n_referenced_by": 52,
+    "n_referenced_by": 38,
     "referenced_by": [
      "integrations/vllm/tests/ir/data/topp_split_fixture/b8_s_schedule_r15_attempt2.json",
-     "integrations/vllm/tests/ir/test_lifted_record.py",
-     "integrations/vllm/tests/ir/test_lifted_record_real_padrev.py",
      "integrations/vllm/tests/ir/test_observe_resolve.py",
      "integrations/vllm/tests/regression/checks/decomp_hashes.py",
-     "integrations/vllm/verity_capture/bench/commit_delta.py"
+     "integrations/vllm/verity_capture/bench/commit_delta.py",
+     "integrations/vllm/verity_capture/bench/gen_sampling_rng.py",
+     "integrations/vllm/verity_capture/bench/m1_capture.py"
     ],
     "directory_referenced": [
      "data",
@@ -11046,8 +10343,7 @@
      "integrations/vllm/tests/regression/fixtures.toml"
     ],
     "directory_referenced": [
-     "data",
-     "data/workloads_r12"
+     "data"
     ]
    },
    "docs/data/ref-prims/EagerAttentionHeadRef_v1[SCALE_OP=div]-bf16.json": {
@@ -11369,9 +10665,7 @@
      "integrations/vllm/fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/fixture.json"
     ],
     "directory_referenced": [
-     "fixtures",
-     "fixtures/B0-divergence-20260907T1604Z",
-     "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb"
+     "fixtures"
     ]
    },
    "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/compiled/in_qkv.npy": {
@@ -11381,9 +10675,7 @@
      "integrations/vllm/fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/fixture.json"
     ],
     "directory_referenced": [
-     "fixtures",
-     "fixtures/B0-divergence-20260907T1604Z",
-     "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb"
+     "fixtures"
     ]
    },
    "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/compiled/out_k.npy": {
@@ -11393,9 +10685,7 @@
      "integrations/vllm/fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/fixture.json"
     ],
     "directory_referenced": [
-     "fixtures",
-     "fixtures/B0-divergence-20260907T1604Z",
-     "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb"
+     "fixtures"
     ]
    },
    "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/compiled/out_q.npy": {
@@ -11405,14 +10695,12 @@
      "integrations/vllm/fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/fixture.json"
     ],
     "directory_referenced": [
-     "fixtures",
-     "fixtures/B0-divergence-20260907T1604Z",
-     "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb"
+     "fixtures"
     ]
    },
    "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/cos_sin_cache.npy": {
     "bytes": 1048704,
-    "n_referenced_by": 20,
+    "n_referenced_by": 18,
     "referenced_by": [
      "integrations/vllm/fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/fixture.json",
      "integrations/vllm/tests/regression/fixtures.toml",
@@ -11422,9 +10710,7 @@
      "integrations/vllm/verity_capture/bench/tp2_capture.py"
     ],
     "directory_referenced": [
-     "fixtures",
-     "fixtures/B0-divergence-20260907T1604Z",
-     "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb"
+     "fixtures"
     ]
    },
    "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/eager/in_k.npy": {
@@ -11434,10 +10720,7 @@
      "integrations/vllm/fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/fixture.json"
     ],
     "directory_referenced": [
-     "fixtures",
-     "fixtures/B0-divergence-20260907T1604Z",
-     "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb",
-     "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/eager"
+     "fixtures"
     ]
    },
    "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/eager/in_positions.npy": {
@@ -11447,10 +10730,7 @@
      "integrations/vllm/fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/fixture.json"
     ],
     "directory_referenced": [
-     "fixtures",
-     "fixtures/B0-divergence-20260907T1604Z",
-     "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb",
-     "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/eager"
+     "fixtures"
     ]
    },
    "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/eager/in_q.npy": {
@@ -11460,10 +10740,7 @@
      "integrations/vllm/fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/fixture.json"
     ],
     "directory_referenced": [
-     "fixtures",
-     "fixtures/B0-divergence-20260907T1604Z",
-     "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb",
-     "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/eager"
+     "fixtures"
     ]
    },
    "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/eager/out_k.npy": {
@@ -11473,10 +10750,7 @@
      "integrations/vllm/fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/fixture.json"
     ],
     "directory_referenced": [
-     "fixtures",
-     "fixtures/B0-divergence-20260907T1604Z",
-     "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb",
-     "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/eager"
+     "fixtures"
     ]
    },
    "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/eager/out_q.npy": {
@@ -11486,10 +10760,7 @@
      "integrations/vllm/fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/fixture.json"
     ],
     "directory_referenced": [
-     "fixtures",
-     "fixtures/B0-divergence-20260907T1604Z",
-     "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb",
-     "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/eager"
+     "fixtures"
     ]
    },
    "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb/fixture.json": {
@@ -11504,9 +10775,7 @@
      "fixtures/bench-instances/v1/seeds/seeds.json"
     ],
     "directory_referenced": [
-     "fixtures",
-     "fixtures/B0-divergence-20260907T1604Z",
-     "fixtures/B0-divergence-20260907T1604Z/layers.0.self_attn.rotary_emb"
+     "fixtures"
     ]
    },
    "fixtures/W11-40f0cebeb670-20260907T1800Z/mufu/mufu_ex2_delta_int8.xz": {
@@ -11517,8 +10786,7 @@
     ],
     "directory_referenced": [
      "fixtures",
-     "fixtures/W11-40f0cebeb670-20260907T1800Z",
-     "fixtures/W11-40f0cebeb670-20260907T1800Z/mufu"
+     "fixtures/W11-40f0cebeb670-20260907T1800Z"
     ]
    },
    "fixtures/W11-40f0cebeb670-20260907T1800Z/mufu/mufu_rcp_delta_int8.xz": {
@@ -11530,8 +10798,7 @@
     ],
     "directory_referenced": [
      "fixtures",
-     "fixtures/W11-40f0cebeb670-20260907T1800Z",
-     "fixtures/W11-40f0cebeb670-20260907T1800Z/mufu"
+     "fixtures/W11-40f0cebeb670-20260907T1800Z"
     ]
    },
    "fixtures/W11C-40f0cebeb670-20260907T1900Z/tables/mufu_rcp_delta_int8.xz": {
@@ -11542,9 +10809,7 @@
      "integrations/vllm/verity_vllm_numerics/rms_triton_model.py"
     ],
     "directory_referenced": [
-     "fixtures",
-     "fixtures/W11C-40f0cebeb670-20260907T1900Z",
-     "fixtures/W11C-40f0cebeb670-20260907T1900Z/tables"
+     "fixtures"
     ]
    },
    "fixtures/W11C-40f0cebeb670-20260907T1900Z/tables/mufu_rsq_delta_int8.xz": {
@@ -11555,9 +10820,7 @@
      "integrations/vllm/verity_vllm_numerics/rms_triton_model.py"
     ],
     "directory_referenced": [
-     "fixtures",
-     "fixtures/W11C-40f0cebeb670-20260907T1900Z",
-     "fixtures/W11C-40f0cebeb670-20260907T1900Z/tables"
+     "fixtures"
     ]
    },
    "fixtures/W11C-40f0cebeb670-20260907T1900Z/tables/mufu_sqrt_delta_int8.xz": {
@@ -11567,9 +10830,7 @@
      "integrations/vllm/verity_vllm_numerics/rms_triton_model.py"
     ],
     "directory_referenced": [
-     "fixtures",
-     "fixtures/W11C-40f0cebeb670-20260907T1900Z",
-     "fixtures/W11C-40f0cebeb670-20260907T1900Z/tables"
+     "fixtures"
     ]
    },
    "fixtures/W11R-40f0cebeb670-20260907T1802Z/tables/mufu_rcp_delta_int8.xz": {
@@ -11580,9 +10841,7 @@
      "integrations/vllm/verity_vllm_numerics/rms_triton_model.py"
     ],
     "directory_referenced": [
-     "fixtures",
-     "fixtures/W11R-40f0cebeb670-20260907T1802Z",
-     "fixtures/W11R-40f0cebeb670-20260907T1802Z/tables"
+     "fixtures"
     ]
    },
    "fixtures/W11R-40f0cebeb670-20260907T1802Z/tables/mufu_sqrt_delta_int8.xz": {
@@ -11592,14 +10851,12 @@
      "integrations/vllm/verity_vllm_numerics/rms_triton_model.py"
     ],
     "directory_referenced": [
-     "fixtures",
-     "fixtures/W11R-40f0cebeb670-20260907T1802Z",
-     "fixtures/W11R-40f0cebeb670-20260907T1802Z/tables"
+     "fixtures"
     ]
    },
    "manifests/checkpoints.json": {
     "bytes": 64102,
-    "n_referenced_by": 40,
+    "n_referenced_by": 39,
     "referenced_by": [
      "integrations/vllm/README.md",
      "integrations/vllm/pod_bootstrap.sh",
@@ -11696,18 +10953,12 @@
     "directory_referenced": []
    },
    "tests/by_name_allowlist.json": {
-    "bytes": 104299,
+    "bytes": 100689,
     "n_referenced_by": 2,
     "referenced_by": [
      "integrations/vllm/README.md",
      "integrations/vllm/tests/test_no_by_name_rules.py"
     ],
-    "directory_referenced": []
-   },
-   "tests/dead_code_census.json": {
-    "bytes": 444483,
-    "n_referenced_by": 0,
-    "referenced_by": [],
     "directory_referenced": []
    },
    "tests/ir/data/fp8_block_operands.npz": {
@@ -11806,7 +11057,7 @@
    },
    "tests/ir/data/topp_split_fixture/manifest.json": {
     "bytes": 57906,
-    "n_referenced_by": 132,
+    "n_referenced_by": 131,
     "referenced_by": [
      "backends/direct/ligero/bench_result.py",
      "backends/direct/ligero/fp4/chain.py",
@@ -11878,9 +11129,7 @@
     "referenced_by": [
      "integrations/vllm/tests/regression/fixtures.toml"
     ],
-    "directory_referenced": [
-     "tests/regression/expected"
-    ]
+    "directory_referenced": []
    },
    "tests/regression/expected/llama32-1b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager.json": {
     "bytes": 290050,
@@ -11888,9 +11137,7 @@
     "referenced_by": [
      "integrations/vllm/tests/regression/fixtures.toml"
     ],
-    "directory_referenced": [
-     "tests/regression/expected"
-    ]
+    "directory_referenced": []
    },
    "tests/regression/expected/llama32-1b__bf16__l40s__tp1__b64__i1024__o128__mixed__greedy__bi-eager.json": {
     "bytes": 77914,
@@ -11898,9 +11145,7 @@
     "referenced_by": [
      "integrations/vllm/tests/regression/fixtures.toml"
     ],
-    "directory_referenced": [
-     "tests/regression/expected"
-    ]
+    "directory_referenced": []
    },
    "tests/regression/expected/mistral-7b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json": {
     "bytes": 2064999,
@@ -11909,9 +11154,7 @@
      "integrations/vllm/tests/regression/fixtures.toml",
      "integrations/vllm/verity_capture/telemetry/tests/test_admission.py"
     ],
-    "directory_referenced": [
-     "tests/regression/expected"
-    ]
+    "directory_referenced": []
    },
    "tests/regression/expected/olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed-arrivals__greedy__bi-eager.json": {
     "bytes": 4435191,
@@ -11919,9 +11162,7 @@
     "referenced_by": [
      "integrations/vllm/tests/regression/fixtures.toml"
     ],
-    "directory_referenced": [
-     "tests/regression/expected"
-    ]
+    "directory_referenced": []
    },
    "tests/regression/expected/olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed__greedy__bi-eager.json": {
     "bytes": 5053240,
@@ -11929,17 +11170,13 @@
     "referenced_by": [
      "integrations/vllm/tests/regression/fixtures.toml"
     ],
-    "directory_referenced": [
-     "tests/regression/expected"
-    ]
+    "directory_referenced": []
    },
    "tests/regression/expected/olmoe-1b-7b__bf16__l40s__tp2__b8__i1024__o128__mixed__greedy__bi-eager.json": {
     "bytes": 1210,
     "n_referenced_by": 0,
     "referenced_by": [],
-    "directory_referenced": [
-     "tests/regression/expected"
-    ]
+    "directory_referenced": []
    },
    "tests/regression/expected/qwen25-15b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager.json": {
     "bytes": 788434,
@@ -11947,17 +11184,13 @@
     "referenced_by": [
      "integrations/vllm/tests/regression/fixtures.toml"
     ],
-    "directory_referenced": [
-     "tests/regression/expected"
-    ]
+    "directory_referenced": []
    },
    "tests/regression/expected/qwen3-30b-a3b__bf16__l40s__tp2__b2__i1024__o128__mixed__greedy__bi-eager.json": {
     "bytes": 1210,
     "n_referenced_by": 0,
     "referenced_by": [],
-    "directory_referenced": [
-     "tests/regression/expected"
-    ]
+    "directory_referenced": []
    },
    "tests/regression/expected/qwen3-4b-fp8__fp8__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json": {
     "bytes": 2615092,
@@ -11965,9 +11198,7 @@
     "referenced_by": [
      "integrations/vllm/tests/regression/fixtures.toml"
     ],
-    "directory_referenced": [
-     "tests/regression/expected"
-    ]
+    "directory_referenced": []
    },
    "tests/regression/expected/qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json": {
     "bytes": 2867623,
@@ -11975,17 +11206,13 @@
     "referenced_by": [
      "integrations/vllm/tests/regression/fixtures.toml"
     ],
-    "directory_referenced": [
-     "tests/regression/expected"
-    ]
+    "directory_referenced": []
    },
    "tests/regression/expected/smollm2-135m__bf16__l40s__tp1__b16__i1024__o128__mixed__greedy__bi-eager.json": {
     "bytes": 966,
     "n_referenced_by": 0,
     "referenced_by": [],
-    "directory_referenced": [
-     "tests/regression/expected"
-    ]
+    "directory_referenced": []
    },
    "tests/regression/fixtures.toml": {
     "bytes": 617105,
@@ -12013,46 +11240,6 @@
     ],
     "directory_referenced": []
    },
-   "verity_capture/bench/fixtures/llama32-1b__bf16__l40s__tp2__b2__i64__o8__equal__greedy__bi-eager.json": {
-    "bytes": 4445,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": [
-     "verity_capture/bench/fixtures"
-    ]
-   },
-   "verity_capture/bench/gen_batch_pod.sh": {
-    "bytes": 7315,
-    "n_referenced_by": 1,
-    "referenced_by": [
-     "integrations/vllm/verity_capture/bench/gen_ovbatch_pod.sh"
-    ],
-    "directory_referenced": []
-   },
-   "verity_capture/bench/gen_ov_sampling_fetch.sh": {
-    "bytes": 1209,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/bench/gen_ov_sampling_pod.sh": {
-    "bytes": 3660,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/bench/gen_ov_sampling_verify.sh": {
-    "bytes": 2684,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/bench/gen_ovbatch_pod.sh": {
-    "bytes": 5194,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
    "verity_capture/bench/pod_env_extra.sh": {
     "bytes": 5248,
     "n_referenced_by": 1,
@@ -12063,14 +11250,13 @@
    },
    "verity_capture/bench/verify_lane.sh": {
     "bytes": 11065,
-    "n_referenced_by": 7,
+    "n_referenced_by": 5,
     "referenced_by": [
-     "integrations/vllm/verity_capture/bench/gen_ov_sampling_verify.sh",
-     "integrations/vllm/verity_capture/bench/gen_ovbatch_pod.sh",
      "integrations/vllm/verity_capture/bench/run_config.py",
      "integrations/vllm/verity_capture/card.py",
      "integrations/vllm/verity_capture/gates.py",
-     "integrations/vllm/verity_capture/profiles/quarantine/PYTHIA160M.json"
+     "integrations/vllm/verity_capture/profiles/quarantine/PYTHIA160M.json",
+     "integrations/vllm/verity_capture/protected.py"
     ],
     "directory_referenced": []
    },
@@ -12126,19 +11312,13 @@
     "referenced_by": [
      "integrations/vllm/verity_capture/commit/tests/fixtures/admission/planner_calibration.jsonl"
     ],
-    "directory_referenced": [
-     "verity_capture/commit/tests/fixtures",
-     "verity_capture/commit/tests/fixtures/admission"
-    ]
+    "directory_referenced": []
    },
    "verity_capture/commit/tests/fixtures/admission/b4.json": {
     "bytes": 3237,
     "n_referenced_by": 0,
     "referenced_by": [],
-    "directory_referenced": [
-     "verity_capture/commit/tests/fixtures",
-     "verity_capture/commit/tests/fixtures/admission"
-    ]
+    "directory_referenced": []
    },
    "verity_capture/commit/tests/fixtures/admission/b8greedy_exec.json": {
     "bytes": 4015,
@@ -12147,19 +11327,13 @@
      "integrations/vllm/verity_capture/commit/tests/fixtures/admission/planner_calibration.jsonl",
      "integrations/vllm/verity_capture/commit/tests/test_admission_planner.py"
     ],
-    "directory_referenced": [
-     "verity_capture/commit/tests/fixtures",
-     "verity_capture/commit/tests/fixtures/admission"
-    ]
+    "directory_referenced": []
    },
    "verity_capture/commit/tests/fixtures/admission/b8stoch.json": {
     "bytes": 4044,
     "n_referenced_by": 0,
     "referenced_by": [],
-    "directory_referenced": [
-     "verity_capture/commit/tests/fixtures",
-     "verity_capture/commit/tests/fixtures/admission"
-    ]
+    "directory_referenced": []
    },
    "verity_capture/commit/tests/fixtures/admission/fp8_b1_sizing.json": {
     "bytes": 1187,
@@ -12167,10 +11341,7 @@
     "referenced_by": [
      "integrations/vllm/verity_capture/commit/tests/test_admission_planner.py"
     ],
-    "directory_referenced": [
-     "verity_capture/commit/tests/fixtures",
-     "verity_capture/commit/tests/fixtures/admission"
-    ]
+    "directory_referenced": []
    },
    "verity_capture/commit/tests/fixtures/admission/fp8_b1_try5_bounded_none/steps.jsonl": {
     "bytes": 68027,
@@ -12183,37 +11354,26 @@
      "integrations/vllm/verity_capture/commit/tests/test_admission.py",
      "integrations/vllm/verity_capture/commit/tests/test_admission_planner.py"
     ],
-    "directory_referenced": [
-     "verity_capture/commit/tests/fixtures",
-     "verity_capture/commit/tests/fixtures/admission",
-     "verity_capture/commit/tests/fixtures/admission/fp8_b1_try5_bounded_none"
-    ]
+    "directory_referenced": []
    },
    "verity_capture/commit/tests/fixtures/admission/fp8_b1_try5_bounded_none/verdict.json": {
     "bytes": 911,
-    "n_referenced_by": 34,
+    "n_referenced_by": 26,
     "referenced_by": [
      "backends/direct/ligero/live.py",
      "backends/direct/ligero/live_test.py",
-     "integrations/vllm/tests/ir/reqval_rows_lift_vs_unlifted.py",
-     "integrations/vllm/tests/ir/test_lifted_correspondence.py",
-     "integrations/vllm/tests/ir/test_lifted_record.py",
-     "integrations/vllm/tests/ir/test_lifted_use_document.py"
+     "integrations/vllm/tests/regression/checks/commit_summary.py",
+     "integrations/vllm/tests/regression/checks/verdict.py",
+     "integrations/vllm/tests/regression/fixtures.toml",
+     "integrations/vllm/tests/regression/test_attempt_resolution.py"
     ],
-    "directory_referenced": [
-     "verity_capture/commit/tests/fixtures",
-     "verity_capture/commit/tests/fixtures/admission",
-     "verity_capture/commit/tests/fixtures/admission/fp8_b1_try5_bounded_none"
-    ]
+    "directory_referenced": []
    },
    "verity_capture/commit/tests/fixtures/admission/phi3b1.json": {
     "bytes": 3251,
     "n_referenced_by": 0,
     "referenced_by": [],
-    "directory_referenced": [
-     "verity_capture/commit/tests/fixtures",
-     "verity_capture/commit/tests/fixtures/admission"
-    ]
+    "directory_referenced": []
    },
    "verity_capture/commit/tests/fixtures/admission/planner_calibration.jsonl": {
     "bytes": 2623,
@@ -12222,10 +11382,7 @@
      "integrations/vllm/verity_capture/bench/commit_delta.py",
      "integrations/vllm/verity_capture/commit/tests/test_admission_planner.py"
     ],
-    "directory_referenced": [
-     "verity_capture/commit/tests/fixtures",
-     "verity_capture/commit/tests/fixtures/admission"
-    ]
+    "directory_referenced": []
    },
    "verity_capture/experimental/fa2_commit/fixtures/b0_c256_attention_geometry.json": {
     "bytes": 36098,
@@ -12233,9 +11390,7 @@
     "referenced_by": [
      "integrations/vllm/verity_capture/experimental/fa2_commit/fixture.py"
     ],
-    "directory_referenced": [
-     "verity_capture/experimental/fa2_commit/fixtures"
-    ]
+    "directory_referenced": []
    },
    "verity_capture/experimental/fa2_commit/fixtures/p0/SHA256SUMS": {
     "bytes": 598,
@@ -12243,58 +11398,39 @@
     "referenced_by": [
      "integrations/vllm/tests/regression/fixtures.toml"
     ],
-    "directory_referenced": [
-     "verity_capture/experimental/fa2_commit/fixtures",
-     "verity_capture/experimental/fa2_commit/fixtures/p0"
-    ]
+    "directory_referenced": []
    },
    "verity_capture/experimental/fa2_commit/fixtures/p0/p0_16x32_h1kv1.npz": {
     "bytes": 129491,
-    "n_referenced_by": 2,
+    "n_referenced_by": 1,
     "referenced_by": [
-     "integrations/vllm/verity_capture/experimental/fa2_commit/fixtures/p0/SHA256SUMS",
-     "integrations/vllm/verity_capture/experimental/fa2_commit/test_kernel_dump.py"
+     "integrations/vllm/verity_capture/experimental/fa2_commit/fixtures/p0/SHA256SUMS"
     ],
-    "directory_referenced": [
-     "verity_capture/experimental/fa2_commit/fixtures",
-     "verity_capture/experimental/fa2_commit/fixtures/p0"
-    ]
+    "directory_referenced": []
    },
    "verity_capture/experimental/fa2_commit/fixtures/p0/p0_1x160_h1kv1.npz": {
     "bytes": 175551,
-    "n_referenced_by": 2,
+    "n_referenced_by": 1,
     "referenced_by": [
-     "integrations/vllm/verity_capture/experimental/fa2_commit/fixtures/p0/SHA256SUMS",
-     "integrations/vllm/verity_capture/experimental/fa2_commit/test_kernel_dump.py"
+     "integrations/vllm/verity_capture/experimental/fa2_commit/fixtures/p0/SHA256SUMS"
     ],
-    "directory_referenced": [
-     "verity_capture/experimental/fa2_commit/fixtures",
-     "verity_capture/experimental/fa2_commit/fixtures/p0"
-    ]
+    "directory_referenced": []
    },
    "verity_capture/experimental/fa2_commit/fixtures/p0/p0_1x160_h3kv1.npz": {
     "bytes": 183127,
-    "n_referenced_by": 2,
+    "n_referenced_by": 1,
     "referenced_by": [
-     "integrations/vllm/verity_capture/experimental/fa2_commit/fixtures/p0/SHA256SUMS",
-     "integrations/vllm/verity_capture/experimental/fa2_commit/test_kernel_dump.py"
+     "integrations/vllm/verity_capture/experimental/fa2_commit/fixtures/p0/SHA256SUMS"
     ],
-    "directory_referenced": [
-     "verity_capture/experimental/fa2_commit/fixtures",
-     "verity_capture/experimental/fa2_commit/fixtures/p0"
-    ]
+    "directory_referenced": []
    },
    "verity_capture/experimental/fa2_commit/fixtures/p0/p0_1x169_h3kv1.npz": {
     "bytes": 191755,
-    "n_referenced_by": 2,
+    "n_referenced_by": 1,
     "referenced_by": [
-     "integrations/vllm/verity_capture/experimental/fa2_commit/fixtures/p0/SHA256SUMS",
-     "integrations/vllm/verity_capture/experimental/fa2_commit/test_kernel_dump.py"
+     "integrations/vllm/verity_capture/experimental/fa2_commit/fixtures/p0/SHA256SUMS"
     ],
-    "directory_referenced": [
-     "verity_capture/experimental/fa2_commit/fixtures",
-     "verity_capture/experimental/fa2_commit/fixtures/p0"
-    ]
+    "directory_referenced": []
    },
    "verity_capture/experimental/fa2_commit/fixtures/p0/p0_40x200_h1kv1.npz": {
     "bytes": 373471,
@@ -12302,10 +11438,7 @@
     "referenced_by": [
      "integrations/vllm/verity_capture/experimental/fa2_commit/fixtures/p0/SHA256SUMS"
     ],
-    "directory_referenced": [
-     "verity_capture/experimental/fa2_commit/fixtures",
-     "verity_capture/experimental/fa2_commit/fixtures/p0"
-    ]
+    "directory_referenced": []
    },
    "verity_capture/experimental/fa2_commit/fixtures/p0/p0_64x128_h1kv1.npz": {
     "bytes": 346859,
@@ -12313,31 +11446,21 @@
     "referenced_by": [
      "integrations/vllm/verity_capture/experimental/fa2_commit/fixtures/p0/SHA256SUMS"
     ],
-    "directory_referenced": [
-     "verity_capture/experimental/fa2_commit/fixtures",
-     "verity_capture/experimental/fa2_commit/fixtures/p0"
-    ]
+    "directory_referenced": []
    },
    "verity_capture/experimental/fa2_commit/fixtures/p0/p0_64x300_h1kv1.npz": {
     "bytes": 649495,
-    "n_referenced_by": 2,
+    "n_referenced_by": 1,
     "referenced_by": [
-     "integrations/vllm/verity_capture/experimental/fa2_commit/fixtures/p0/SHA256SUMS",
-     "integrations/vllm/verity_capture/experimental/fa2_commit/test_kernel_dump.py"
+     "integrations/vllm/verity_capture/experimental/fa2_commit/fixtures/p0/SHA256SUMS"
     ],
-    "directory_referenced": [
-     "verity_capture/experimental/fa2_commit/fixtures",
-     "verity_capture/experimental/fa2_commit/fixtures/p0"
-    ]
+    "directory_referenced": []
    },
    "verity_capture/experimental/fa2_commit/fixtures/p0/p0_summary.json": {
     "bytes": 388,
     "n_referenced_by": 0,
     "referenced_by": [],
-    "directory_referenced": [
-     "verity_capture/experimental/fa2_commit/fixtures",
-     "verity_capture/experimental/fa2_commit/fixtures/p0"
-    ]
+    "directory_referenced": []
    },
    "verity_capture/golden/corpus.json": {
     "bytes": 1439,
@@ -12352,14 +11475,14 @@
    },
    "verity_capture/profiles/corpus_coverage.json": {
     "bytes": 176507,
-    "n_referenced_by": 172,
+    "n_referenced_by": 104,
     "referenced_by": [
      "integrations/vllm/data/workloads_r12/qwen25-15b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager.json",
-     "integrations/vllm/verity_capture/bench/fixtures/llama32-1b__bf16__l40s__tp2__b2__i64__o8__equal__greedy__bi-eager.json",
      "integrations/vllm/verity_capture/bench/gen_coverage_workloads.py",
      "integrations/vllm/verity_capture/profiles/workload_cov_b0_b1_c1024.json",
      "integrations/vllm/verity_capture/profiles/workload_cov_b0_b1_c256.json",
-     "integrations/vllm/verity_capture/profiles/workload_cov_b0_b1_c256_ck64.json"
+     "integrations/vllm/verity_capture/profiles/workload_cov_b0_b1_c256_ck64.json",
+     "integrations/vllm/verity_capture/profiles/workload_cov_b0_b1_c256_t1.json"
     ],
     "directory_referenced": []
    },
@@ -12393,9 +11516,7 @@
     "referenced_by": [
      "integrations/vllm/verity_capture/tests/test_dense_generic.py"
     ],
-    "directory_referenced": [
-     "verity_capture/profiles/hf_configs"
-    ]
+    "directory_referenced": []
    },
    "verity_capture/profiles/hf_configs/QWEN3_4B.config.json": {
     "bytes": 727,
@@ -12403,17 +11524,13 @@
     "referenced_by": [
      "integrations/vllm/verity_capture/tests/test_dense_generic.py"
     ],
-    "directory_referenced": [
-     "verity_capture/profiles/hf_configs"
-    ]
+    "directory_referenced": []
    },
    "verity_capture/profiles/hf_configs/QWEN3_4B_FP8.config.json": {
     "bytes": 4210,
     "n_referenced_by": 0,
     "referenced_by": [],
-    "directory_referenced": [
-     "verity_capture/profiles/hf_configs"
-    ]
+    "directory_referenced": []
    },
    "verity_capture/profiles/quarantine/GEMMA2_2B.json": {
     "bytes": 159534,
@@ -12435,7 +11552,7 @@
    },
    "verity_capture/profiles/workload_32x16_1req.json": {
     "bytes": 1741,
-    "n_referenced_by": 11,
+    "n_referenced_by": 10,
     "referenced_by": [
      "integrations/vllm/verity_capture/bench/m1_capture.py",
      "integrations/vllm/verity_capture/census.py",
@@ -12446,52 +11563,11 @@
     ],
     "directory_referenced": []
    },
-   "verity_capture/profiles/workload_b0_chunked_200p.json": {
-    "bytes": 4622,
-    "n_referenced_by": 1,
-    "referenced_by": [
-     "integrations/vllm/verity_capture/tests/test_gen_batch.py"
-    ],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_b0_conc2_small.json": {
-    "bytes": 1774,
-    "n_referenced_by": 1,
-    "referenced_by": [
-     "integrations/vllm/verity_capture/tests/test_gen_batch.py"
-    ],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_b0_conc4_mixed.json": {
-    "bytes": 5206,
-    "n_referenced_by": 1,
-    "referenced_by": [
-     "integrations/vllm/verity_capture/tests/test_gen_batch.py"
-    ],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_b0_conc8_mixed.json": {
-    "bytes": 8871,
-    "n_referenced_by": 1,
-    "referenced_by": [
-     "integrations/vllm/verity_capture/tests/test_gen_batch.py"
-    ],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_b0_long512_1req.json": {
-    "bytes": 8448,
-    "n_referenced_by": 1,
-    "referenced_by": [
-     "integrations/vllm/verity_capture/tests/test_gen_batch.py"
-    ],
-    "directory_referenced": []
-   },
    "verity_capture/profiles/workload_b0_prefix64_2req.json": {
     "bytes": 4192,
-    "n_referenced_by": 2,
+    "n_referenced_by": 1,
     "referenced_by": [
-     "integrations/vllm/verity_capture/bench/gen_batch_candidate.py",
-     "integrations/vllm/verity_capture/tests/test_gen_batch.py"
+     "integrations/vllm/verity_capture/bench/gen_batch_candidate.py"
     ],
     "directory_referenced": []
    },
@@ -12629,24 +11705,6 @@
     ],
     "directory_referenced": []
    },
-   "verity_capture/profiles/workload_cov_b0_b1_c256_f16.json": {
-    "bytes": 4245,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_b0_b1_c256_r1.json": {
-    "bytes": 4225,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_b0_b1_c256_r2.json": {
-    "bytes": 4174,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
    "verity_capture/profiles/workload_cov_b0_b1_c256_t1.json": {
     "bytes": 4232,
     "n_referenced_by": 0,
@@ -12667,18 +11725,6 @@
     ],
     "directory_referenced": []
    },
-   "verity_capture/profiles/workload_cov_b0_b8-mixed_c256_r1.json": {
-    "bytes": 22771,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_b0_b8-mixed_c256_r2.json": {
-    "bytes": 23369,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
    "verity_capture/profiles/workload_cov_b0_b8-mixed_c256_t1.json": {
     "bytes": 23680,
     "n_referenced_by": 0,
@@ -12697,382 +11743,6 @@
     "referenced_by": [],
     "directory_referenced": []
    },
-   "verity_capture/profiles/workload_cov_b0_b8-static_c256_r1.json": {
-    "bytes": 22902,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_b0_b8-static_c256_r2.json": {
-    "bytes": 22573,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_b0_prefix_c256.json": {
-    "bytes": 7682,
-    "n_referenced_by": 1,
-    "referenced_by": [
-     "integrations/vllm/verity_capture/tests/test_prefix_cache.py"
-    ],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_b0_prefix_c256_cold.json": {
-    "bytes": 7626,
-    "n_referenced_by": 1,
-    "referenced_by": [
-     "integrations/vllm/verity_capture/tests/test_prefix_cache.py"
-    ],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_b1_b1_c1024.json": {
-    "bytes": 10102,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_b1_b1_c256.json": {
-    "bytes": 4079,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_b1_b1_c256_ck64.json": {
-    "bytes": 4949,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_b1_b1_c256_r1.json": {
-    "bytes": 4237,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_b1_b1_c256_r2.json": {
-    "bytes": 4182,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_b1_b8-mixed_c1024.json": {
-    "bytes": 63727,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_b1_b8-mixed_c256.json": {
-    "bytes": 23663,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_b1_b8-static_c1024.json": {
-    "bytes": 74154,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_b1_b8-static_c256.json": {
-    "bytes": 23071,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_b1_b8-static_c256_r1.json": {
-    "bytes": 23258,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_b1_b8-static_c256_r2.json": {
-    "bytes": 22839,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_gemma2_2b_b1_c1024.json": {
-    "bytes": 10650,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_gemma2_2b_b1_c256.json": {
-    "bytes": 4249,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_gemma2_2b_b1_c256_r1.json": {
-    "bytes": 4309,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_gemma2_2b_b8-mixed_c1024.json": {
-    "bytes": 66476,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_gemma2_2b_b8-mixed_c256.json": {
-    "bytes": 24550,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_gemma2_2b_b8-static_c1024.json": {
-    "bytes": 77322,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_gemma2_2b_b8-static_c256.json": {
-    "bytes": 23893,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_llama32_1b_b1_c1024.json": {
-    "bytes": 10114,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_llama32_1b_b1_c256.json": {
-    "bytes": 4090,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_llama32_1b_b1_c256_r1.json": {
-    "bytes": 4249,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_llama32_1b_b1_c256_r2.json": {
-    "bytes": 4195,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_llama32_1b_b8-mixed_c1024.json": {
-    "bytes": 63750,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_llama32_1b_b8-mixed_c256.json": {
-    "bytes": 23679,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_llama32_1b_b8-static_c1024.json": {
-    "bytes": 74183,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_llama32_1b_b8-static_c256.json": {
-    "bytes": 23084,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_olmoe_b1_c1024.json": {
-    "bytes": 10005,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_olmoe_b1_c256.json": {
-    "bytes": 4067,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_olmoe_b8-mixed_c1024.json": {
-    "bytes": 62932,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_olmoe_b8-mixed_c256.json": {
-    "bytes": 23442,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_olmoe_b8-static_c1024.json": {
-    "bytes": 73067,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_olmoe_b8-static_c256.json": {
-    "bytes": 22791,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_phi3_mini_b1_c1024.json": {
-    "bytes": 9993,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_phi3_mini_b1_c256.json": {
-    "bytes": 4082,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_phi3_mini_b8-mixed_c1024.json": {
-    "bytes": 62641,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_phi3_mini_b8-mixed_c256.json": {
-    "bytes": 23327,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_phi3_mini_b8-static_c1024.json": {
-    "bytes": 72892,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_phi3_mini_b8-static_c256.json": {
-    "bytes": 22845,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_phi3_mini_b8-static_c256_r1.json": {
-    "bytes": 22848,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_phi3_mini_b8-static_c256_r2.json": {
-    "bytes": 22765,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_pythia160m_b1_c1024.json": {
-    "bytes": 10008,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_pythia160m_b1_c256.json": {
-    "bytes": 4070,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_pythia160m_b1_c256_r1.json": {
-    "bytes": 4231,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_pythia160m_b1_c256_r2.json": {
-    "bytes": 4170,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_pythia160m_b8-mixed_c1024.json": {
-    "bytes": 62935,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_pythia160m_b8-mixed_c256.json": {
-    "bytes": 23445,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_pythia160m_b8-mixed_c256_r1.json": {
-    "bytes": 22754,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_pythia160m_b8-mixed_c256_r2.json": {
-    "bytes": 23337,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_pythia160m_b8-static_c1024.json": {
-    "bytes": 73070,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_pythia160m_b8-static_c256.json": {
-    "bytes": 22794,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_pythia160m_b8-static_c256_r1.json": {
-    "bytes": 22979,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_pythia160m_b8-static_c256_r2.json": {
-    "bytes": 22564,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_qwen05_b1_c1024.json": {
-    "bytes": 10106,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_qwen05_b1_c256.json": {
-    "bytes": 4083,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_qwen05_b8-mixed_c1024.json": {
-    "bytes": 63731,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_qwen05_b8-mixed_c256.json": {
-    "bytes": 23667,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_qwen05_b8-static_c1024.json": {
-    "bytes": 74158,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_cov_qwen05_b8-static_c256.json": {
-    "bytes": 23075,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
    "verity_capture/profiles/workload_gemma2_2b_32x16_1req.json": {
     "bytes": 1612,
     "n_referenced_by": 1,
@@ -13087,24 +11757,6 @@
     "referenced_by": [
      "integrations/vllm/verity_capture/tests/test_gen_llama.py"
     ],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_olmoe_1x1_1req.json": {
-    "bytes": 890,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_olmoe_32x16_1req.json": {
-    "bytes": 1448,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/profiles/workload_olmoe_3x1_1req.json": {
-    "bytes": 1119,
-    "n_referenced_by": 0,
-    "referenced_by": [],
     "directory_referenced": []
    },
    "verity_capture/profiles/workload_phi3_mini_32x16_1req.json": {
@@ -13137,20 +11789,11 @@
     ],
     "directory_referenced": []
    },
-   "verity_capture/profiles/workload_qwen15_conc4_mixed.json": {
-    "bytes": 5246,
-    "n_referenced_by": 1,
-    "referenced_by": [
-     "integrations/vllm/verity_capture/tests/test_gen_batch.py"
-    ],
-    "directory_referenced": []
-   },
    "verity_capture/sweep/canary.sh": {
     "bytes": 31479,
-    "n_referenced_by": 6,
+    "n_referenced_by": 5,
     "referenced_by": [
      "integrations/vllm/verity_capture/bench/tests/test_flip_weight_negative.py",
-     "integrations/vllm/verity_capture/sweep/fa3_row_negatives.sh",
      "integrations/vllm/verity_capture/sweep/pod_hidden_gpu.sh",
      "integrations/vllm/verity_capture/sweep/row_pod.sh",
      "integrations/vllm/verity_capture/tests/test_source_identity.py",
@@ -13206,12 +11849,6 @@
      "integrations/vllm/verity_capture/sweep/fa2_tap_src/apply_v8.py",
      "integrations/vllm/verity_capture/sweep/pod_fa2_tap.sh"
     ],
-    "directory_referenced": []
-   },
-   "verity_capture/sweep/fa3_row_negatives.sh": {
-    "bytes": 6111,
-    "n_referenced_by": 0,
-    "referenced_by": [],
     "directory_referenced": []
    },
    "verity_capture/sweep/fa3_tap_src/fa3_stubs.cu": {
@@ -13301,7 +11938,7 @@
    },
    "verity_capture/sweep/row_pod.sh": {
     "bytes": 98594,
-    "n_referenced_by": 53,
+    "n_referenced_by": 50,
     "referenced_by": [
      "integrations/vllm/README.md",
      "integrations/vllm/pod_bootstrap.sh",
@@ -13334,18 +11971,6 @@
     ],
     "directory_referenced": []
    },
-   "verity_capture/sweep/stoch_negative_n3.sh": {
-    "bytes": 7808,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
-   "verity_capture/sweep/stoch_negatives.sh": {
-    "bytes": 6159,
-    "n_referenced_by": 0,
-    "referenced_by": [],
-    "directory_referenced": []
-   },
    "verity_capture/tests/fixtures/tp2/README.md": {
     "bytes": 1619,
     "n_referenced_by": 36,
@@ -13357,10 +11982,7 @@
      "backends/gkr/README.md",
      "backends/gkr/bench_result.py"
     ],
-    "directory_referenced": [
-     "verity_capture/tests/fixtures",
-     "verity_capture/tests/fixtures/tp2"
-    ]
+    "directory_referenced": []
    },
    "verity_capture/tests/fixtures/tp2/collective_shard.steps03.rank0.json.gz": {
     "bytes": 11901,
@@ -13368,10 +11990,7 @@
     "referenced_by": [
      "integrations/vllm/verity_capture/tests/test_tp_collective.py"
     ],
-    "directory_referenced": [
-     "verity_capture/tests/fixtures",
-     "verity_capture/tests/fixtures/tp2"
-    ]
+    "directory_referenced": []
    },
    "verity_capture/tests/fixtures/tp2/collective_shard.steps03.rank1.json.gz": {
     "bytes": 11903,
@@ -13379,28 +11998,19 @@
     "referenced_by": [
      "integrations/vllm/verity_capture/tests/test_tp_collective.py"
     ],
-    "directory_referenced": [
-     "verity_capture/tests/fixtures",
-     "verity_capture/tests/fixtures/tp2"
-    ]
+    "directory_referenced": []
    },
    "verity_capture/tests/fixtures/tp2/fold_gap.shard.rank0.json": {
     "bytes": 9467,
     "n_referenced_by": 0,
     "referenced_by": [],
-    "directory_referenced": [
-     "verity_capture/tests/fixtures",
-     "verity_capture/tests/fixtures/tp2"
-    ]
+    "directory_referenced": []
    },
    "verity_capture/tests/fixtures/tp2/fold_gap.shard.rank1.json": {
     "bytes": 9467,
     "n_referenced_by": 0,
     "referenced_by": [],
-    "directory_referenced": [
-     "verity_capture/tests/fixtures",
-     "verity_capture/tests/fixtures/tp2"
-    ]
+    "directory_referenced": []
    },
    "verity_capture/tests/fixtures/tp2/instances.shard.rank0.jsonl": {
     "bytes": 250,
@@ -13409,10 +12019,7 @@
      "integrations/vllm/verity_capture/tests/fixtures/tp2/README.md",
      "integrations/vllm/verity_capture/tests/test_tp_collective.py"
     ],
-    "directory_referenced": [
-     "verity_capture/tests/fixtures",
-     "verity_capture/tests/fixtures/tp2"
-    ]
+    "directory_referenced": []
    },
    "verity_capture/tests/fixtures/tp2/tp2_body.summary.json": {
     "bytes": 4032,
@@ -13423,10 +12030,7 @@
      "integrations/vllm/verity_capture/tp/collective_record.py",
      "integrations/vllm/verity_vllm/registry/quarantine/collective/allreduce.py"
     ],
-    "directory_referenced": [
-     "verity_capture/tests/fixtures",
-     "verity_capture/tests/fixtures/tp2"
-    ]
+    "directory_referenced": []
    },
    "verity_vllm/acquire/pod_gate.sh": {
     "bytes": 5578,
@@ -13453,9 +12057,7 @@
      "tools/research/src/research/store/tool.py",
      "tools/research/tests/test_store_prov.py"
     ],
-    "directory_referenced": [
-     "verity_vllm/commit_engine"
-    ]
+    "directory_referenced": []
    },
    "verity_vllm/commit_engine/Cargo.lock": {
     "bytes": 4217,
@@ -13468,9 +12070,7 @@
      "tools/research/src/research/env.py",
      "tools/research/src/research/store/README.md"
     ],
-    "directory_referenced": [
-     "verity_vllm/commit_engine"
-    ]
+    "directory_referenced": []
    },
    "verity_vllm/commit_engine/Cargo.toml": {
     "bytes": 369,
@@ -13483,9 +12083,7 @@
      "backends/redteam/vu-battery-b/Cargo.toml",
      "backends/sp1/host/src/main.rs"
     ],
-    "directory_referenced": [
-     "verity_vllm/commit_engine"
-    ]
+    "directory_referenced": []
    },
    "verity_vllm/commit_engine/src/main.rs": {
     "bytes": 6476,
@@ -13498,10 +12096,7 @@
      "backends/gkr/gpu/DESIGN.md",
      "backends/gkr/gpu/prover.py"
     ],
-    "directory_referenced": [
-     "verity_vllm/commit_engine",
-     "verity_vllm/commit_engine/src"
-    ]
+    "directory_referenced": []
    },
    "verity_vllm/registry/quarantine/dense/tables/mufu_tanh_sm89.json": {
     "bytes": 37370,
@@ -13509,9 +12104,7 @@
     "referenced_by": [
      "integrations/vllm/verity_vllm/registry/prims.py"
     ],
-    "directory_referenced": [
-     "verity_vllm/registry/quarantine/dense/tables"
-    ]
+    "directory_referenced": []
    },
    "verity_vllm/registry/quarantine/dense/tables/mufu_tanh_sm89.xzblocks": {
     "bytes": 449932,
@@ -13520,9 +12113,7 @@
      "integrations/vllm/verity_vllm/registry/prims.py",
      "integrations/vllm/verity_vllm/registry/quarantine/dense/tables/mufu_tanh_sm89.json"
     ],
-    "directory_referenced": [
-     "verity_vllm/registry/quarantine/dense/tables"
-    ]
+    "directory_referenced": []
    },
    "verity_vllm_numerics/cpp/fa2_model.cpp": {
     "bytes": 18160,
@@ -13597,17 +12188,13 @@
     "bytes": 4409,
     "n_referenced_by": 0,
     "referenced_by": [],
-    "directory_referenced": [
-     "verity_vllm_numerics/cuda"
-    ]
+    "directory_referenced": []
    },
    "verity_vllm_numerics/cuda/mma_tiles_sm80.cu": {
     "bytes": 5523,
     "n_referenced_by": 0,
     "referenced_by": [],
-    "directory_referenced": [
-     "verity_vllm_numerics/cuda"
-    ]
+    "directory_referenced": []
    },
    "verity_vllm_numerics/cuda/mufu_probe.cu": {
     "bytes": 15233,
@@ -13618,9 +12205,7 @@
      "integrations/vllm/verity_vllm_numerics/cuda/rms_probe.cu",
      "integrations/vllm/verity_vllm_numerics/rms_triton_model.py"
     ],
-    "directory_referenced": [
-     "verity_vllm_numerics/cuda"
-    ]
+    "directory_referenced": []
    },
    "verity_vllm_numerics/cuda/rms_probe.cu": {
     "bytes": 15295,
@@ -13629,9 +12214,7 @@
      "integrations/vllm/verity_vllm_numerics/cpp/rms_triton_model.cpp",
      "integrations/vllm/verity_vllm_numerics/rms_triton_model.py"
     ],
-    "directory_referenced": [
-     "verity_vllm_numerics/cuda"
-    ]
+    "directory_referenced": []
    },
    "workloads/gemma2-2b__bf16__l40s__tp1__b1__i256__o15__mixed__greedy__bi-eager.json": {
     "bytes": 7124,
