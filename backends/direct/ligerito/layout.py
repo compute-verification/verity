@@ -43,7 +43,7 @@ from backends.direct.ligero.compile import P, Expr, System
 __all__ = ["Constraints", "Layout", "SubBatch", "ZkRows", "build_z", "constraints", "fill_zk", "layout_for", "public_rows"]
 
 ZK_B = 3                        # uniform rows = 2^ZK_B (the PCS's final-vector row bits; ligerito-zk's b)
-ZK_CELLS_PER_VAR = 6 * 20       # Libra coefficient cells per sumcheck variable, worst case (arity 4: (3^4 - 1) / 4 = 20 ext)
+ZK_CELLS_PER_VAR = 6 * 122      # Libra coefficient cells per sumcheck variable, worst case (arity 6: (3^6 - 1) / 6 < 122 ext)
 
 
 @dataclass(frozen=True)

@@ -57,7 +57,8 @@ def test_zk_witness_satisfies_constraints(zk_toy):
     assert torch.equal(z[lay.zk.mask_next].reshape(NSUB, L), torch.roll(z[lay.zk.mask].reshape(NSUB, L), -1, dims=1))
 
 
-ZK_SCHEDULES = {"default": None, "mixed": "3,2,1,3,3,3/4/1,2,3,3,3", "arity4": "3,4,4,4/4/4,4,4",
+ZK_SCHEDULES = {"zk": "zk", "zk-small": "zk-small", "default": None, "mixed": "3,2,1,3,3,3/4/1,2,3,3,3",
+                "arity4": "3,4,4,4/4/4,4,4", "tail": "3,3,3,6/4/3,3,6/6,6", "wide": "3,6,5/5/5,6,1/1,5,6",
                 "univariate": "3," + ",".join(["1"] * 15) + "/1/" + ",".join(["1"] * 12)}
 
 
@@ -95,10 +96,15 @@ def test_zk_roundtrip(zk_toy, name):
 
 
 def test_zk_default_coins_real_n():
-    b = sc.default_schedule(30, 18)
-    s = sc.Schedule(b.zc, b.vf, b.cmb, sc.balanced_arities(12, 4))
-    assert s.rb == (4, 4, 4) and s.coins() == 21
-    assert 6 * s.zk_coeffs() <= 1 << 18                          # one g row at C = 2^18
+    from types import SimpleNamespace
+    from .layout import ZK_CELLS_PER_VAR
+    lay = SimpleNamespace(n_k=12, n_c=18, n_i=12)                 # fp8-ada / bf16-hopper, one N = 2^30 batch
+    s = sc.zk_default_schedule(lay)
+    assert (s.zc, s.vf, s.cmb, s.rb) == ((3, 2, 2, 2, 2, 3, 6), 10, (3, 3, 6, 6), (6, 6)) and s.coins() == 15
+    small = sc.zk_schedule(lay, sc.default_schedule(30, 18), rb_arity=4)
+    assert small.rb == (4, 4, 4) and small.coins() == 21
+    for t in (s, small):                                          # one g row at C = 2^18, inside the layout's reservation
+        assert 6 * t.zk_coeffs() <= min(ZK_CELLS_PER_VAR * (12 + 18 + 18 + 12), 1 << 18)
 
 
 def test_zk_format_mismatch_rejects(zk_toy):
@@ -219,7 +225,7 @@ def test_zk_transcript_depends_on_masks(zk_toy):
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="cuda")
-@pytest.mark.parametrize("name", ["default", "mixed"])
+@pytest.mark.parametrize("name", ["zk", "default", "mixed", "tail", "wide"])
 def test_zk_cuda_matches_reference(zk_toy, name):
     sys, lay, cons, z, pubs, lay0 = zk_toy
     s = _zk_sched(lay, name)

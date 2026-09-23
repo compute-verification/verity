@@ -51,6 +51,8 @@ __all__ = ["EvalClaim", "LocalCoins", "Schedule", "SumcheckProof", "default_sche
 MAGIC = b"LGSC0003"
 MAGIC_ZK = b"LGSC0004"
 MAX_ARITY = 4
+ZK_MAX_ARITY = 6                 # LGSC0004 message rounds (3^6 = 729 ext); the engines run them on small tables only
+ZK_MAX_VF = 12                   # LGSC0004 final table round (3 x 2^vf ext)
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -340,11 +342,40 @@ def balanced_arities(n: int, max_arity: int) -> tuple:
     return tuple(n // g + (1 if t < n % g else 0) for t in range(g))
 
 
-def zk_schedule(lay: Layout, base: Schedule | None = None, rb_arity: int = MAX_ARITY) -> Schedule:
-    """LGSC0004's schedule: ``base`` (default: ``default_schedule``) plus the row-reduction rounds (``n_i`` variables,
-    ``rb_arity`` per coin: tables of ``2^n_i`` cells, so arity 4 costs nothing and saves coins)."""
-    b = base or default_schedule(lay.n_k + lay.n_c, n_cmb_of(lay))
-    return Schedule(b.zc, b.vf, b.cmb, balanced_arities(lay.n_i, rb_arity))
+def _tail_arities(log_table: int, n_vars: int, small_log2: int, max_arity: int = ZK_MAX_ARITY) -> list:
+    """Bind ``n_vars`` variables of a table of ``2^log_table`` cells: arity 3 (the CUDA kernels) while the table has more than
+    ``2^small_log2`` cells, then balanced rounds of at most ``max_arity`` (the engines' flat path)."""
+    out = []
+    while n_vars > 0 and log_table > small_log2:
+        a = min(3, n_vars)
+        out.append(a)
+        n_vars, log_table = n_vars - a, log_table - a
+    return out + list(balanced_arities(n_vars, max_arity) if n_vars else ())
+
+
+def zk_default_schedule(lay: Layout, vf: int = 10) -> Schedule:
+    """LGSC0004's default (coins first: one round trip ~ 0.1 s live, bytes are cheap): the LGSC0003 opening and bivariate
+    rounds over the big tables, then arity 3 down to 2^16 cells and arity <= 6 after; a final table round of ``vf``
+    variables (``<= n_c - 4``: every final-table entry keeps >= 16 product-row cells); combined: arity 3 down to 2^12, then
+    <= 6; row reduction <= 6.  fp8-ada: zc 3,2,2,2,2,3,6 / vf 10 / cmb 3,3,6,6 / rb 6,6 = 15 coins."""
+    n, n_cmb = lay.n_k + lay.n_c, n_cmb_of(lay)
+    zc, rem = [3], n - 3
+    while rem > 20 and rem - 2 > vf:
+        zc.append(2)
+        rem -= 2
+    vf = max(1, min(vf, lay.n_c - 4, rem - 1, ZK_MAX_VF))
+    zc += _tail_arities(rem, rem - vf, 16)
+    return Schedule(tuple(zc), vf, tuple(_tail_arities(n_cmb, n_cmb, 12)), balanced_arities(lay.n_i, ZK_MAX_ARITY))
+
+
+def zk_schedule(lay: Layout, base: Schedule | None = None, rb_arity: int = ZK_MAX_ARITY) -> Schedule:
+    """LGSC0004's schedule: ``zk_default_schedule`` if ``base`` is None, else ``base`` (an LGSC0003 schedule) plus the
+    row-reduction rounds (``n_i`` variables, balanced, ``rb_arity`` per coin: tables of ``2^n_i`` cells)."""
+    if base is None:
+        return zk_default_schedule(lay)
+    if base.rb:
+        return base
+    return Schedule(base.zc, base.vf, base.cmb, balanced_arities(lay.n_i, rb_arity))
 
 
 @dataclass
@@ -470,9 +501,8 @@ class SumcheckProof:
         vf, nl = u8(), u8()
         cmb = tuple(u8() for _ in range(u8()))
         rb = tuple(u8() for _ in range(u8()))
-        for a in zc + cmb + rb + (vf,):
-            if not 1 <= a <= MAX_ARITY:
-                raise ValueError(f"arity {a} out of range")
+        if any(not 1 <= a <= ZK_MAX_ARITY for a in zc + cmb + rb) or not 1 <= vf <= ZK_MAX_VF:
+            raise ValueError("arity out of range")
 
         def take(shape):
             nonlocal pos
@@ -1244,7 +1274,8 @@ def _verify_zk(lay: Layout, cons: Constraints, pub_rows: dict[str, torch.Tensor]
     sch = proof.schedule
     vf = sch.vf
     if sum(sch.zc) + vf != n or sum(sch.cmb) != n_cmb or sum(sch.rb) != n_i or vf > n_c or not sch.zc or not sch.rb \
-            or any(not 1 <= a <= MAX_ARITY for a in sch.zc + sch.cmb + sch.rb + (vf,)) or proof.zk_links != lay.n_links:
+            or any(not 1 <= a <= ZK_MAX_ARITY for a in sch.zc + sch.cmb + sch.rb) or not 1 <= vf <= ZK_MAX_VF \
+            or proof.zk_links != lay.n_links:
         return False, "schedule does not fit the layout", []
     if D * sch.zk_coeffs() > min(lay.zk.g_cells, len(lay.zk.g_rows) * lay.C):
         return False, "schedule needs more Libra coefficients than the layout reserves", []
@@ -2000,10 +2031,22 @@ class CudaZC:
         self.C, self.K = z.shape[1], cons.K_pad
         self.n_c, self.n_k = lay.n_c, lay.n_k
         self.csr = _csr(cons, self.dev)
-        self.tau_r, self.tau_c = tau[self.n_c:], tau[:self.n_c]
+        self.tau, self.tau_r, self.tau_c = tau, tau[self.n_c:], tau[:self.n_c]
         self._planes: dict = {}
         self.T = None
+        self.F = None                    # flat (n, 6) ext tables once a round of arity > 3 (a small table) has run
         self.logn = self.n_k + self.n_c
+
+    def _to_flat(self) -> None:
+        n = 1 << self.logn
+        self.F = [from_mont(self.T[s, :, :n].t()) for s in range(3)]
+        self.T = None
+
+    def _flat_round(self, v: int) -> torch.Tensor:
+        Ah, Bh, Ch = (mixed_rep(to_corners(T, v), v) for T in self.F)
+        q = (fc_mul(Ah, Bh) - Ch * noinf_mask(v, self.dev)[(...,) + (None, None)]) % P
+        w = eq_table_cuda(self.tau[:self.logn - v]) if self.logn > v else fc_one((1,), self.dev)
+        return fc_mul(q, w).sum(-2) % P
 
     def _plane(self, which: str, t: int) -> torch.Tensor:
         """``eq_table(tau_part[:t])`` as Montgomery planes ``(6, 2^t)`` (built on first use)."""
@@ -2024,6 +2067,10 @@ class CudaZC:
 
     def round(self, v: int) -> torch.Tensor:
         import cupy as cp
+        if self.F is None and self.T is not None and v > 3:
+            self._to_flat()
+        if self.F is not None:
+            return self._flat_round(v)
         if self.T is None:
             if v != 3:
                 raise ValueError("CudaZC: the opening round binds 3 variables")
@@ -2059,6 +2106,10 @@ class CudaZC:
     def fold(self, r: torch.Tensor) -> None:
         import cupy as cp
         v = r.shape[0]
+        if self.F is not None:
+            self.F = [fold_top(T, r) for T in self.F]
+            self.logn -= v
+            return
         if self.T is None:
             K8 = self.K // 8
             n0 = K8 * self.C
@@ -2077,6 +2128,8 @@ class CudaZC:
         self.logn -= v
 
     def final_tables(self) -> torch.Tensor:
+        if self.F is not None:
+            return torch.stack(self.F)
         n = 1 << self.logn
         return from_mont(self.T[:, :, :n].permute(0, 2, 1))               # (3, n, 6)
 
@@ -2088,11 +2141,16 @@ class CudaPP:
         self.dev = tabs[0].device
         self.T = torch.stack([mont_planes(t) for t in tabs]).contiguous()
         self.logn = tabs[0].shape[0].bit_length() - 1
+        self.F = None                    # a _RefPP on the flat tables once a round of arity > 3 (a small table) has run
 
     def round(self, v: int) -> torch.Tensor:
         import cupy as cp
-        if v > 3:
-            raise ValueError("CudaPP: arity <= 3")
+        if self.F is None and v > 3:
+            n = 1 << self.logn
+            self.F = _RefPP([from_mont(self.T[k, :, :n].t()) for k in range(4)])
+            self.T = None
+        if self.F is not None:
+            return self.F.round(v)
         nq = 1 << (self.logn - v)
         ne = 3 ** v
         acc = torch.zeros((ne * D,), dtype=torch.int64, device=self.dev)
@@ -2103,6 +2161,10 @@ class CudaPP:
     def fold(self, r: torch.Tensor) -> None:
         import cupy as cp
         v = r.shape[0]
+        if self.F is not None:
+            self.F.fold(r)
+            self.logn -= v
+            return
         nq = 1 << (self.logn - v)
         ps = self.T.shape[2]
         eqr = to_mont(_corner_eq(r)).to(torch.int32).contiguous()
@@ -2163,7 +2225,9 @@ def matvec_base_ext_cuda(M: torch.Tensor, e: torch.Tensor) -> torch.Tensor:
 # ---------------------------------------------------------------------------------------------------------------------
 
 def _schedule_arg(s: str | None, lay: Layout) -> Schedule | None:
-    """``--schedule "3,2,2,2,2,3,3,3,3,3/4/3,3,3,3,3,3"`` (zc rounds / final / combined rounds) or a preset name."""
+    """``--schedule "3,2,2,2,2,3,3,3,3,3/4/3,3,3,3,3,3"`` (zc rounds / final / combined rounds [/ row-reduction rounds]) or a
+    preset: ``default`` | ``c2`` | ``c3`` (LGSC0003), ``zk`` (LGSC0004's default), ``zk-small`` (the LGSC0003 default + rb
+    4,4,4: 21 coins, fewest bytes)."""
     n, n_cmb = lay.n_k + lay.n_c, n_cmb_of(lay)
     if s is None or s == "default":
         return default_schedule(n, n_cmb)
@@ -2171,8 +2235,13 @@ def _schedule_arg(s: str | None, lay: Layout) -> Schedule | None:
         return default_schedule(n, n_cmb, small_arity=2, max_final=3)
     if s == "c3":
         return default_schedule(n, n_cmb, big_log2=0, big_arity=3)
-    zc, vf, cmb = s.split("/")
-    return Schedule(tuple(int(a) for a in zc.split(",")), int(vf), tuple(int(a) for a in cmb.split(",")))
+    if s == "zk":
+        return zk_default_schedule(lay)
+    if s == "zk-small":
+        return zk_schedule(lay, default_schedule(n, n_cmb), rb_arity=4)
+    parts = s.split("/")
+    rb = tuple(int(a) for a in parts[3].split(",")) if len(parts) > 3 else ()
+    return Schedule(tuple(int(a) for a in parts[0].split(",")), int(parts[1]), tuple(int(a) for a in parts[2].split(",")), rb)
 
 
 def bench(relation_name: str, n_vus: int, l: int, S: int, device: str, engine: str | None, negatives: bool,
@@ -2210,7 +2279,7 @@ def bench(relation_name: str, n_vus: int, l: int, S: int, device: str, engine: s
         fill_zk(lay, z)
         _sync(dev)
         out["t_fill_zk"] = time.perf_counter() - t1
-    sched = _schedule_arg(schedule, lay)
+    sched = _schedule_arg(schedule, lay) if schedule is not None or not zk else None
     if zk:
         sched = zk_schedule(lay, sched)
     out.update(m=lay.m, R=lay.R, C=lay.C, K=lay.K, K_pad=cons.K_pad, n_k=lay.n_k, n_c=lay.n_c, n_i=lay.n_i,
@@ -2397,7 +2466,8 @@ def _main():
     ap.add_argument("--S", type=int, default=16)
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     ap.add_argument("--engine", default=None)
-    ap.add_argument("--schedule", default=None, help="default | c2 | c3 | 'zc,arities/vf/cmb,arities'")
+    ap.add_argument("--schedule", default=None,
+                    help="default | c2 | c3 | zk | zk-small | 'zc,arities/vf/cmb,arities[/rb,arities]' (LGSC0004 default: zk)")
     ap.add_argument("--reps", type=int, default=3)
     ap.add_argument("--negatives", action="store_true")
     ap.add_argument("--json", default=None)
