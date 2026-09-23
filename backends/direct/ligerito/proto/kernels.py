@@ -20,7 +20,10 @@ except Exception:  # noqa: BLE001
 
 _SRC = r"""
 #define P 2013265921ull
+#define R32 268435454ull        /* 2^32 mod P */
 typedef unsigned long long u64;
+/* cheap partial reduction: acc < 2^64 -> acc' == acc (mod P), acc' < 2^60 + 2^32 (4 products < P^2 may follow) */
+__device__ __forceinline__ u64 fold(u64 a) { return (a & 0xFFFFFFFFull) + (a >> 32) * R32; }
 
 /* grid (nchunk, C), block 256: partial (C, nchunk, 6) u32 */
 extern "C" __global__ void col_contract(const unsigned* __restrict__ f, const unsigned* __restrict__ z,
@@ -37,7 +40,7 @@ extern "C" __global__ void col_contract(const unsigned* __restrict__ f, const un
         for (int d = 0; d < 6; ++d) acc[d] += v * z[(size_t)d * R + r];
         if (++cnt == 4) { cnt = 0;
             #pragma unroll
-            for (int d = 0; d < 6; ++d) acc[d] %= P; }
+            for (int d = 0; d < 6; ++d) acc[d] = fold(acc[d]); }
     }
     __shared__ u64 red[6][256];
     #pragma unroll
@@ -74,7 +77,7 @@ extern "C" __global__ void row_contract(const unsigned* __restrict__ f, const un
         for (int d = 0; d < 6; ++d) acc[d] += v * rbs[c * 6 + d];
         if (++cnt == 4) { cnt = 0;
             #pragma unroll
-            for (int d = 0; d < 6; ++d) acc[d] %= P; }
+            for (int d = 0; d < 6; ++d) acc[d] = fold(acc[d]); }
     }
     #pragma unroll
     for (int d = 0; d < 6; ++d) y[(size_t)d * R + r] = (unsigned)(acc[d] % P);

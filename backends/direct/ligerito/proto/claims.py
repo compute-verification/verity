@@ -83,6 +83,80 @@ class Term:
         return eq_vector(self.z[:k])
 
 
+def _split(terms: list[Term]):
+    """(eq indices, geom indices, geom etas (Tg,))."""
+    eqi = [i for i, t in enumerate(terms) if t.kind == "eq"]
+    gi = [i for i, t in enumerate(terms) if t.kind == "geom"]
+    etas = np.array([terms[i].eta for i in gi], dtype=np.int64)
+    return eqi, gi, etas
+
+
+def _pow_vec(etas: np.ndarray, e: int) -> np.ndarray:
+    """etas^e elementwise (e a power of two typically; square-and-multiply on the vector)."""
+    out = np.ones_like(etas)
+    base = etas % P
+    while e:
+        if e & 1:
+            out = out * base % P
+        base = base * base % P
+        e >>= 1
+    return out
+
+
+def geom_colparts(etas: np.ndarray, k: int, kp: int) -> np.ndarray:
+    """(Tg, 2^kp, 6): (eta^{2^k})^c for c < 2^kp, vectorised over the terms (base elements in coordinate 0)."""
+    Tg = len(etas)
+    C = 1 << kp
+    out = np.zeros((Tg, C, D), dtype=np.int64)
+    out[:, 0, 0] = 1
+    cur = _pow_vec(etas, 1 << k)
+    step = 1
+    while step < C:
+        m = min(step, C - step)
+        out[:, step:step + m, 0] = out[:, :m, 0] * cur[:, None] % P
+        step *= 2
+        cur = cur * cur % P
+    return out
+
+
+def geom_colpart_at(etas: np.ndarray, k: int, r: np.ndarray) -> np.ndarray:
+    """(Tg, 6): prod_j ((1 - r_j) + eta^{2^{k+j}} r_j), vectorised over the terms."""
+    Tg = len(etas)
+    acc = ext.one((Tg,))
+    e = _pow_vec(etas, 1 << k)
+    for j in range(r.shape[0]):
+        one_minus = (ext.one() - r[j]) % P                              # (6,)
+        fac = (one_minus[None, :] + r[j][None, :] * e[:, None]) % P     # (Tg, 6)
+        acc = ext.mul(acc, fac)
+        e = e * e % P
+    return acc
+
+
+def colparts(terms: list[Term], k: int, kp: int) -> np.ndarray:
+    """(T, 2^kp, 6): every term's column tensor, in the terms' order."""
+    eqi, gi, etas = _split(terms)
+    out = np.zeros((len(terms), 1 << kp, D), dtype=np.int64)
+    for i in eqi:
+        out[i] = terms[i].colpart(k, kp)
+    if gi:
+        out[gi] = geom_colparts(etas, k, kp)
+    return out
+
+
+def restrict_terms(terms: list[Term], k: int, r: np.ndarray) -> list[Term]:
+    """Vectorised ``Term.restrict`` over a list (the geom terms are the many)."""
+    eqi, gi, etas = _split(terms)
+    out: list[Term | None] = [None] * len(terms)
+    for i in eqi:
+        out[i] = terms[i].restrict(k, r)
+    if gi:
+        coefs = np.stack([terms[i].coef for i in gi], axis=0)
+        newc = ext.mul(coefs, geom_colpart_at(etas, k, r))
+        for j, i in enumerate(gi):
+            out[i] = Term(newc[j], "geom", eta=terms[i].eta, nvars=k)
+    return out  # type: ignore[return-value]
+
+
 def powers(eta: int, count: int) -> np.ndarray:
     out = np.empty(count, dtype=np.int64)
     out[0] = 1
@@ -118,7 +192,7 @@ class ColumnSumcheckProver:
         assert len(terms) == len(us)
         self.terms, self.k, self.kp = terms, k, kp
         self.A = np.stack(us, axis=0) % P                                      # (T, C, 6)
-        self.B = np.stack([t.colpart(k, kp) for t in terms], axis=0)           # (T, C, 6)
+        self.B = colparts(terms, k, kp)                                        # (T, C, 6)
         self.coef = np.stack([t.coef for t in terms], axis=0)                  # (T, 6)
         self.rs: list[np.ndarray] = []
 

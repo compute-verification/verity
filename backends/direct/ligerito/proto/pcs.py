@@ -1,7 +1,7 @@
 """Ligerito polynomial commitment: prove / verify a multilinear evaluation f(z) = v of an N = 2^n coefficient vector
 over BabyBear at z in F_{p^6}^n (paper section 6, with the tensor-claim bookkeeping of ``claims.py``).
 
-Transcript (Fiat-Shamir here; every ``squeeze`` is one verifier coin in the interactive reading):
+Coins protocol (``transcript.py``; Fiat-Shamir by default; every ``challenge``/``indices`` is one verifier coin):
     header, z | root_1 | v | sumcheck round 1 (k'_1 x [g_j -> r_j]) |
     for i = 2..L:  root_i | S_{i-1} <- coin | opened rows of U_{i-1} at S_{i-1} (+ multi-path) | alpha <- coin |
                    sumcheck round i (k'_i x [g_j -> r_j]) |
@@ -31,9 +31,10 @@ from . import merkle_multi
 from .dims import Dims
 from .ext import D, P
 from .kernels import col_contract, row_contract
+from .linalg import _powers_rows as _powers_rows_np
 from .linalg import contract_columns_ext, contract_rows_ext, eq_planes, matmul_mod_p_np, powers_matrix
 from .ntt_gpu import Encoder
-from .transcript import Transcript
+from .transcript import Coins, FiatShamirCoins
 
 HASH = "blake3"
 
@@ -187,8 +188,9 @@ class _HostTree:
         return b"".join(self.levels_b[lv][i] for lv, i in merkle_multi.plan(S, depth))
 
 
-def prove(f: torch.Tensor, z: np.ndarray, dims: Dims, timer: Timer | None = None) -> Proof:
-    """f: (N,) int32 device tensor (coefficients, [0, p)); z: (n, 6) numpy point; dims: the round structure."""
+def prove(f: torch.Tensor, z: np.ndarray, dims: Dims, timer: Timer | None = None, coins: Coins | None = None) -> Proof:
+    """f: (N,) int32 device tensor (coefficients, [0, p)); z: (n, 6) numpy point; dims: the round structure;
+    coins: the Coins protocol instance (default Fiat-Shamir)."""
     device = f.device
     n = dims.n
     N = 1 << n
@@ -197,7 +199,7 @@ def prove(f: torch.Tensor, z: np.ndarray, dims: Dims, timer: Timer | None = None
     L = dims.rounds
     tm = timer or Timer(device)
     gpu = device.type == "cuda" and ligero_merkle._gpu_merkle is not None
-    tr = Transcript()
+    tr = coins if coins is not None else FiatShamirCoins()
     tr.absorb(b"header", json.dumps({"n": n, "kprime": kps, "queries": qs, "rate": dims.rate_log2}).encode())
     tr.absorb(b"z", _z_bytes(z))
 
@@ -210,11 +212,14 @@ def prove(f: torch.Tensor, z: np.ndarray, dims: Dims, timer: Timer | None = None
     encs = []
 
     # ---------------- round 1: commit f
-    tm.start("commit_r1_encode")
     R1, C1 = 1 << ks[0], 1 << kps[0]
     M1 = f.view(C1, R1)
     enc1 = Encoder(R1, device, dims.rate_log2)
-    U1 = enc1.encode(M1)
+    tm.start("commit_r1_alloc")                                           # the codeword buffer (a persistent buffer in a real prover)
+    U1 = torch.empty((C1, enc1.n), dtype=torch.int32, device=device)
+    tm.stop()
+    tm.start("commit_r1_encode")
+    enc1.encode(M1, out=U1)
     tm.stop()
     tm.start("commit_r1_merkle")
     if gpu:
@@ -244,7 +249,7 @@ def prove(f: torch.Tensor, z: np.ndarray, dims: Dims, timer: Timer | None = None
     for _ in range(kps[0]):
         g = sc.round_message()
         tr.absorb(b"g", _ext_bytes(g))
-        r = tr.squeeze_ext(1)[0]
+        r = tr.challenge(b"r", 1)[0]
         sc.fold(r)
         msgs.append(g)
     sumcheck.append(msgs)
@@ -283,7 +288,7 @@ def prove(f: torch.Tensor, z: np.ndarray, dims: Dims, timer: Timer | None = None
         tm.start("serialize_openings")
         prev = i - 1
         n_prev = encs[prev].n
-        S = tr.squeeze_indices(n_prev, qs[prev])
+        S = tr.indices(b"S", n_prev, qs[prev])
         depth = n_prev.bit_length() - 1
         if gpu:
             op = _open_rows(Us[prev], trees[prev], S, depth)
@@ -298,7 +303,7 @@ def prove(f: torch.Tensor, z: np.ndarray, dims: Dims, timer: Timer | None = None
         etas = encs[prev].etas(S)
         rhs = _row_claims(op.rows, rbars[prev], base=(prev == 0))        # (|S|, 6)
         new_terms = [cl.Term(ext.one(), "geom", eta=int(e), nvars=ks[prev]) for e in etas]
-        alpha = tr.squeeze_ext(1 + len(new_terms))                        # (1 + |S|, 6)
+        alpha = tr.challenge(b"alpha", 1 + len(new_terms))                        # (1 + |S|, 6)
         for t in terms:
             t.coef = ext.mul(t.coef, alpha[0])
         for j, t in enumerate(new_terms):
@@ -330,13 +335,13 @@ def prove(f: torch.Tensor, z: np.ndarray, dims: Dims, timer: Timer | None = None
         for _ in range(kps[i]):
             g = sc.round_message()
             tr.absorb(b"g", _ext_bytes(g))
-            r = tr.squeeze_ext(1)[0]
+            r = tr.challenge(b"r", 1)[0]
             sc.fold(r)
             msgs.append(g)
         sumcheck.append(msgs)
         ri = sc.challenges()
         rbar = cl.rbar(ri)
-        terms = [t.restrict(ks[i], ri) for t in terms]
+        terms = cl.restrict_terms(terms, ks[i], ri)
         running = sc.claim()
         rbars.append(rbar)
         tm.stop()
@@ -349,7 +354,7 @@ def prove(f: torch.Tensor, z: np.ndarray, dims: Dims, timer: Timer | None = None
     final_y = y.to(torch.int64).t().contiguous().cpu().numpy() % P        # (R_L, 6)
     tr.absorb(b"y", _ext_bytes(final_y))
     n_last = encs[-1].n
-    S = tr.squeeze_indices(n_last, qs[-1])
+    S = tr.indices(b"S", n_last, qs[-1])
     depth = n_last.bit_length() - 1
     if gpu:
         op = _open_rows(Us[-1], trees[-1], S, depth)
@@ -358,7 +363,7 @@ def prove(f: torch.Tensor, z: np.ndarray, dims: Dims, timer: Timer | None = None
         op = RoundOpen(Us[-1][:, idx].t().contiguous().to(torch.int64).numpy(), trees[-1].gather(S, depth))
     opens.append(op)
     tm.stop()
-    return Proof(n, list(kps), list(qs), dims.rate_log2, splits, v, roots, sumcheck, opens, final_y, tr.coins)
+    return Proof(n, list(kps), list(qs), dims.rate_log2, splits, v, roots, sumcheck, opens, final_y, tr.rounds)
 
 
 def _row_claims(rows: np.ndarray, rbar: np.ndarray, base: bool) -> np.ndarray:
@@ -386,16 +391,17 @@ class Reject(Exception):
     pass
 
 
-def verify(proof: Proof, z: np.ndarray, v: np.ndarray | None = None) -> tuple[bool, str]:
-    """Returns (accepted, reason).  ``v``: the claimed evaluation (defaults to the proof's)."""
+def verify(proof: Proof, z: np.ndarray, v: np.ndarray | None = None, coins: Coins | None = None) -> tuple[bool, str]:
+    """Returns (accepted, reason).  ``v``: the claimed evaluation (defaults to the proof's); ``coins``: must replay the
+    prover's (default Fiat-Shamir)."""
     try:
-        _verify(proof, np.asarray(z, dtype=np.int64) % P, proof.v if v is None else np.asarray(v, dtype=np.int64) % P)
+        _verify(proof, np.asarray(z, dtype=np.int64) % P, proof.v if v is None else np.asarray(v, dtype=np.int64) % P, coins)
     except Reject as e:
         return False, str(e)
     return True, "accept"
 
 
-def _verify(pf: Proof, z: np.ndarray, v: np.ndarray) -> None:
+def _verify(pf: Proof, z: np.ndarray, v: np.ndarray, coins: Coins | None = None) -> None:
     dims = pf.dims
     n, ks, kps, qs, L = dims.n, dims.k, dims.kprime, dims.queries, dims.rounds
     if z.shape != (n, D):
@@ -418,7 +424,7 @@ def _verify(pf: Proof, z: np.ndarray, v: np.ndarray) -> None:
             return _Enc.eta_index(self, s)
 
     maps = [_Map(1 << ks[i], pf.splits[i], pf.rate_log2) for i in range(L)]
-    tr = Transcript()
+    tr = coins if coins is not None else FiatShamirCoins()
     tr.absorb(b"header", json.dumps({"n": n, "kprime": kps, "queries": qs, "rate": pf.rate_log2}).encode())
     tr.absorb(b"z", _z_bytes(z))
     # round 1
@@ -432,7 +438,7 @@ def _verify(pf: Proof, z: np.ndarray, v: np.ndarray) -> None:
         if g.shape != (3, D):
             raise Reject("bad sumcheck message")
         tr.absorb(b"g", _ext_bytes(g))
-        rs.append(tr.squeeze_ext(1)[0])
+        rs.append(tr.challenge(b"r", 1)[0])
     ok, running = cl.verify_column_rounds(v, pf.sumcheck[0], rs)
     if not ok:
         raise Reject("sumcheck round 1 failed")
@@ -442,7 +448,7 @@ def _verify(pf: Proof, z: np.ndarray, v: np.ndarray) -> None:
     for i in range(1, L):
         tr.absorb(b"root", pf.roots[i])
         prev = i - 1
-        S = tr.squeeze_indices(maps[prev].n, qs[prev])
+        S = tr.indices(b"S", maps[prev].n, qs[prev])
         op = pf.opens[prev]
         W = (1 << kps[prev]) * (1 if prev == 0 else D)
         if op.rows.shape != (qs[prev], W):
@@ -458,7 +464,7 @@ def _verify(pf: Proof, z: np.ndarray, v: np.ndarray) -> None:
         etas = maps[prev].etas(S)
         rhs = _row_claims(op.rows, rbars[prev], base=(prev == 0))
         new_terms = [cl.Term(ext.one(), "geom", eta=int(e), nvars=ks[prev]) for e in etas]
-        alpha = tr.squeeze_ext(1 + len(new_terms))
+        alpha = tr.challenge(b"alpha", 1 + len(new_terms))
         for t in terms:
             t.coef = ext.mul(t.coef, alpha[0])
         for j, t in enumerate(new_terms):
@@ -470,20 +476,20 @@ def _verify(pf: Proof, z: np.ndarray, v: np.ndarray) -> None:
             if g.shape != (3, D):
                 raise Reject("bad sumcheck message")
             tr.absorb(b"g", _ext_bytes(g))
-            rs.append(tr.squeeze_ext(1)[0])
+            rs.append(tr.challenge(b"r", 1)[0])
         ok, running = cl.verify_column_rounds(running, pf.sumcheck[i], rs)
         if not ok:
             raise Reject(f"sumcheck round {i + 1} failed")
         ri = np.stack(rs[::-1], axis=0) if rs else np.zeros((0, D), dtype=np.int64)
         rbars.append(cl.rbar(ri))
-        terms = [t.restrict(ks[i], ri) for t in terms]
+        terms = cl.restrict_terms(terms, ks[i], ri)
     # final vector
     y = pf.final_y % P
     RL = 1 << ks[-1]
     if y.shape != (RL, D):
         raise Reject("bad final vector shape")
     tr.absorb(b"y", _ext_bytes(y))
-    S = tr.squeeze_indices(maps[-1].n, qs[-1])
+    S = tr.indices(b"S", maps[-1].n, qs[-1])
     op = pf.opens[-1]
     W = (1 << kps[-1]) * (1 if L == 1 else D)
     if op.rows.shape != (qs[-1], W):
@@ -496,7 +502,7 @@ def _verify(pf: Proof, z: np.ndarray, v: np.ndarray) -> None:
         raise Reject("Merkle multi-path of the last round failed")
     # (a) P_y(eta_s) = < U_L[s, :], rbar_L >
     etas = maps[-1].etas(S)
-    pw = np.stack([cl.powers(int(e), RL) for e in etas], axis=0)          # (|S|, R_L)
+    pw = _powers_rows_np(np.asarray(etas, dtype=np.int64), RL)         # (|S|, R_L)
     lhs = matmul_mod_p_np(pw, y)                                          # (|S|, 6)
     rhs = _row_claims(op.rows, rbars[-1], base=(L == 1))
     if not np.array_equal(lhs, rhs):
@@ -506,7 +512,7 @@ def _verify(pf: Proof, z: np.ndarray, v: np.ndarray) -> None:
     eqs = [t for t in terms if t.kind == "eq"]
     total = ext.zero()
     if geom:
-        pw = np.stack([cl.powers(t.eta, RL) for t in geom], axis=0)       # (Tg, R_L)
+        pw = _powers_rows_np(np.array([t.eta for t in geom], dtype=np.int64), RL)   # (Tg, R_L)
         ip = matmul_mod_p_np(pw, y)                                       # (Tg, 6)
         coefs = np.stack([t.coef for t in geom], axis=0)
         total = ext.add(total, ext.sum_ext(ext.mul(coefs, ip), axis=0))

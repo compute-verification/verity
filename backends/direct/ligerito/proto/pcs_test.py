@@ -203,3 +203,17 @@ def test_contractions_against_torch():
     rbt = torch.as_tensor(rb, device=DEV)
     ref = torch.stack([((f64 * rbt[:, d:d + 1]) % P).sum(0) % P for d in range(D)], dim=0).cpu().numpy()
     assert np.array_equal(y, ref)
+
+
+def test_vectorised_terms_match_scalar():
+    k, kp = 5, 3
+    terms = [cl.Term(rand_ext(), "eq", z=rand_ext((k + kp,)), nvars=k + kp)] + \
+            [cl.Term(rand_ext(), "geom", eta=int(e), nvars=k + kp) for e in RNG.integers(1, P, size=7)]
+    B = cl.colparts(terms, k, kp)
+    for i, t in enumerate(terms):
+        assert np.array_equal(B[i], t.colpart(k, kp))
+    r = rand_ext((kp,))
+    got = cl.restrict_terms(terms, k, r)
+    for t, g in zip(terms, got):
+        s = t.restrict(k, r)
+        assert np.array_equal(g.coef, s.coef) and g.kind == s.kind and g.eta == s.eta and g.nvars == s.nvars

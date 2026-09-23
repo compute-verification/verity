@@ -71,41 +71,51 @@ def ext_mul_planes(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     return out % P
 
 
+def _eq_planes_doubling(z: np.ndarray, device) -> torch.Tensor:
+    """Small tables on the host (numpy doubling, 3 numpy ops per step) then one upload as (6, 2^k) planes."""
+    from .claims import eq_vector
+    vec = eq_vector(np.asarray(z, dtype=np.int64) % P)                # (2^k, 6)
+    return torch.as_tensor(np.ascontiguousarray(vec.T), device=device)
+
+
 def eq_planes(z: np.ndarray, device) -> torch.Tensor:
-    """z (k, 6) numpy -> (6, 2^k) int64: eq(x, z) with bit j of x <-> z_j (doubling on the device)."""
-    vec = torch.zeros((D, 1), dtype=torch.int64, device=device)
-    vec[0, 0] = 1
-    for j in range(z.shape[0]):
-        zj = torch.as_tensor(np.asarray(z[j], dtype=np.int64) % P, device=device).view(D, 1)
-        one_minus = (-zj) % P
-        one_minus[0] = (one_minus[0] + 1) % P
-        lo = ext_mul_planes(vec, one_minus)
-        hi = ext_mul_planes(vec, zj)
-        vec = torch.cat((lo, hi), dim=1)
-    return vec
+    """z (k, 6) numpy -> (6, 2^k) int64: eq(x, z) with bit j of x <-> z_j.  Two half tables (doubling, <= 2^12 each)
+    and ONE broadcast extension product on the device: eq(x) = eq_lo(x_lo) eq_hi(x_hi), x = x_lo + 2^h x_hi."""
+    k = z.shape[0]
+    if k <= 12:
+        return _eq_planes_doubling(z, device)
+    h = k // 2
+    lo = eq_planes(z[:h], device)                    # (6, 2^h)
+    hi = eq_planes(z[h:], device)                    # (6, 2^{k-h})
+    out = ext_mul_planes(hi[:, :, None], lo[:, None, :])          # (6, 2^{k-h}, 2^h)
+    return out.reshape(D, 1 << k)
+
+
+def _powers_rows(e: np.ndarray, count: int) -> np.ndarray:
+    """(T, count): e[t]^i, doubling (log2 count numpy ops)."""
+    T = len(e)
+    out = np.empty((T, count), dtype=np.int64)
+    out[:, 0] = 1
+    step, cur = 1, e % P
+    while step < count:
+        m = min(step, count - step)
+        out[:, step:step + m] = out[:, :m] * cur[:, None] % P
+        step *= 2
+        cur = cur * cur % P
+    return out
 
 
 def powers_matrix(etas: np.ndarray, R: int, device) -> torch.Tensor:
-    """(R, T) int64: etas[t]^row, from two 2^11-entry tables per eta (row = lo + 2^11 hi)."""
-    T = len(etas)
+    """(R, T) int64: etas[t]^row, from two tables per eta (row = lo + 2^11 hi) and one broadcast product."""
+    e = np.asarray(etas, dtype=np.int64) % P
     lo_bits = min(11, R.bit_length() - 1)
     lo_n = 1 << lo_bits
     hi_n = R // lo_n
-    e = np.asarray(etas, dtype=np.int64) % P
-    lo_tab = np.empty((T, lo_n), dtype=np.int64)
-    hi_tab = np.empty((T, hi_n), dtype=np.int64)
-    lo_tab[:, 0] = 1
-    for i in range(1, lo_n):
-        lo_tab[:, i] = (lo_tab[:, i - 1] * e) % P
+    lo_t = torch.as_tensor(_powers_rows(e, lo_n), device=device)                         # (T, lo_n)
     e_hi = np.array([pow(int(x), lo_n, P) for x in e], dtype=np.int64)
-    hi_tab[:, 0] = 1
-    for i in range(1, hi_n):
-        hi_tab[:, i] = (hi_tab[:, i - 1] * e_hi) % P
-    lo_t = torch.as_tensor(lo_tab, device=device)          # (T, lo_n)
-    hi_t = torch.as_tensor(hi_tab, device=device)          # (T, hi_n)
-    # row = lo + lo_n * hi  ->  (hi_n, lo_n, T) then reshape (R, T)
-    prod = (hi_t.t()[:, None, :] * lo_t.t()[None, :, :]) % P
-    return prod.reshape(R, T)
+    hi_t = torch.as_tensor(_powers_rows(e_hi, hi_n), device=device)                      # (T, hi_n)
+    prod = (hi_t.t()[:, None, :] * lo_t.t()[None, :, :]) % P                             # (hi_n, lo_n, T)
+    return prod.reshape(R, -1)
 
 
 def contract_columns_ext(M: torch.Tensor, geom_rowparts: torch.Tensor | None, eq_rowpart: torch.Tensor | None):
@@ -118,7 +128,7 @@ def contract_columns_ext(M: torch.Tensor, geom_rowparts: torch.Tensor | None, eq
     if eq_rowpart is not None:
         cols.append(eq_rowpart.t())
     Bmat = torch.cat(cols, dim=1) if len(cols) > 1 else cols[0]           # (R, Tg [+ 6])
-    res = [matmul_mod_p(M[a], Bmat) for a in range(D)]                     # each (C, Tg + 6)
+    res = matmul_mod_p(M.reshape(D * C, R), Bmat).view(D, C, -1)          # one GEMM for the 6 planes: (6, C, Tg + 6)
     Tg = geom_rowparts.shape[1] if geom_rowparts is not None else 0
     u_geom = u_eq = None
     if Tg:

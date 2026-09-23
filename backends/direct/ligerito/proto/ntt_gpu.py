@@ -62,8 +62,8 @@ ntt_axis(const unsigned* __restrict__ in, unsigned* __restrict__ out, const unsi
 {
     extern __shared__ unsigned sh[];
     const int t = threadIdx.x;
-    const int cg = blockIdx.x * G;
-    const long long b = blockIdx.y;
+    const int cg = blockIdx.y * G;          /* batch on grid.x (2^31 limit), column groups on grid.y */
+    const long long b = blockIdx.x;
     const unsigned* src = in + b * (long long)n_in * inner;
     unsigned* dst = out + b * (long long)N * inner;
     for (int e = t; e < N * G; e += T) {
@@ -166,7 +166,7 @@ def ntt_axis(x: torch.Tensor, n: int, out: torch.Tensor | None = None, post_tw: 
         warnings.simplefilter("ignore", DeprecationWarning)
         cs = cp.cuda.ExternalStream(ts.cuda_stream)
     with cs:
-        k((inner // g, B), (256,),
+        k((B, inner // g), (256,),
           (np.uint64(x.data_ptr()), np.uint64(out.data_ptr()), np.uint64(tw.data_ptr()),
            np.uint64(post_tw.data_ptr() if post_tw is not None else 0), np.int32(n_in), np.int32(inner)),
           shared_mem=4 * n * g)

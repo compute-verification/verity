@@ -51,22 +51,22 @@ def neg(a):
     return (-np.asarray(a, dtype=np.int64)) % P
 
 
+_STRUCT = np.zeros((D, D, D), dtype=np.int64)          # _STRUCT[i, j, k]: x^i x^j -> coefficient of x^k (mod x^6 - beta)
+for _i in range(D):
+    for _j in range(D):
+        _k = _i + _j
+        if _k >= D:
+            _STRUCT[_i, _j, _k - D] = BETA
+        else:
+            _STRUCT[_i, _j, _k] = 1
+
+
 def mul(a, b) -> np.ndarray:
-    """(..., 6) x (..., 6) -> (..., 6), numpy broadcasting on the leading axes."""
+    """(..., 6) x (..., 6) -> (..., 6), numpy broadcasting on the leading axes (3 numpy ops: outer, mod, tensordot)."""
     a = np.asarray(a, dtype=np.int64)
     b = np.asarray(b, dtype=np.int64)
-    shape = np.broadcast_shapes(a.shape[:-1], b.shape[:-1])
-    out = np.zeros(shape + (D,), dtype=np.int64)
-    for i in range(D):
-        ai = a[..., i]
-        for j in range(D):
-            prod = (ai * b[..., j]) % P
-            k = i + j
-            if k >= D:
-                out[..., k - D] += prod * BETA
-            else:
-                out[..., k] += prod
-    return out % P
+    prod = (a[..., :, None] * b[..., None, :]) % P                 # (..., 6, 6) each < 2^31
+    return np.tensordot(prod, _STRUCT, axes=([-2, -1], [0, 1])) % P   # sum of 36 terms x 31 < 2^42
 
 
 def mul_base(a, s) -> np.ndarray:
