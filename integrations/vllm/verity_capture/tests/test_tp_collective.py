@@ -164,9 +164,9 @@ def test_r3_per_hop_rounding_and_order_dependence_exist():
 
 
 def test_r2_equals_the_wave1_body_checker_formula():
-    """The 116/116 `body_ok` evidence (`tp2_body.summary.json`) was produced by `bench.tp2_analyze`'s numpy body
+    """The 116/116 `body_ok` evidence (`tp2_body.summary.json`) was produced by `tp.analyze`'s numpy body
     `f32_to_bf16_rne(f32(x_0) + f32(x_1))`; the Definition computes the same words, so that evidence is evidence FOR this definition."""
-    from verity_capture.bench import tp2_analyze as ta
+    from verity_capture.tp import analyze as ta
     rng = np.random.default_rng(7)
     N = 2048
     a = ta.f32_to_bf16_rne((rng.standard_normal(N) * rng.choice([0.01, 1.0, 300.0], N)).astype(np.float32))

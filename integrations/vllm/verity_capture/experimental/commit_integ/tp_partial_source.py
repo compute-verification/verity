@@ -561,7 +561,7 @@ class TPPartialSource:
                               f"(rank {self.rank}'s partial GEMM / masked embedding / logits shard / mid-module operand) is snapshotted into the packed step "
                               "stream before the collective, attributed to the issuing module by a forward pre-hook; identity_check requires "
                               f"exactly the declared count of partials per site per step ({len(self.sites)} sites; 1 each, a mid-module site its "
-                              "static call count); value correspondence: tp2_match.py cross-rank "
+                              "static call count); value correspondence: tp/match.py cross-rank "
                               "provenance (received == AllReduce2/AllGather2(part_rank0, part_rank1) bit-exact; part_rank_r == Gemm_v1{K/W} "
                               f"on the shard, R13 tp2_semantics); kinds seen {self.stats['kinds']}; shapes seen {self.stats['shapes']}")}]
 

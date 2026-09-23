@@ -1,6 +1,6 @@
 """Lane tp2 (mechanism prototype): the M1 capture driven through vLLM's multiprocess executor at `tensor_parallel_size > 1`.
 
-    HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 PYTHONPATH=. /workspace/venv-cu129/bin/python -m verity_capture.bench.tp2_capture \
+    HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 PYTHONPATH=. /workspace/venv-cu129/bin/python -m verity_capture.tp.capture \
         --workload verity_capture/profiles/workload_qwen15_32x16_1req.json --case B1 --tp 2 --out /vol/cp/tp2/runs/<name>/capture \
         [--snapshot-steps all|0,1,2,3] [--no-observer] [--census] [--verify-weights] [--engine-arg key=value ...]
 
@@ -38,7 +38,7 @@ from verity_vllm_adapter import (
 prof.apply_env()
 
 from verity_capture import vllm_adapter as va
-from verity_capture.bench.tp2_worker import EXTENSION
+from verity_capture.tp.worker import EXTENSION
 
 
 def parse_engine_args(items: list[str]) -> dict[str, Any]:

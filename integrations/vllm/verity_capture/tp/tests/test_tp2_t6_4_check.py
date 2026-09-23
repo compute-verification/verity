@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
 
 def _worker():
-    from verity_capture.bench import tp2_worker as W
+    from verity_capture.tp import worker as W
 
     cls = W.__dict__.get("TP2Worker") or next(v for v in W.__dict__.values() if isinstance(v, type) and hasattr(v, "_t6_4_check"))
 

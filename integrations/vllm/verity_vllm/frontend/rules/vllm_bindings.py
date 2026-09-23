@@ -1707,7 +1707,7 @@ class AllReduce2Rule(OpRule):
         hint = _collective_hint(node, ctx)                                   # [R19 moe F-r19-moe-1] site-named when mid-module
         outs = [ctx.call(fn, array_of([x, y]), node=node, rule=self, name=f"{hint}[{i}]/all_reduce") for i, (x, y) in enumerate(zip(ra, rb))]
         ctx.define(node, from_rows(outs, lead))
-        ctx.record(self, node, {"N": N, "rows": len(ra), "world": 2}, emitted=f"{fn.id} x{len(ra)}")
+        ctx.record(self, node, {"N": N, "rows": len(ra), "world": 2}, emitted=f"{fn.id} x{len(ra)}", collective="all_reduce")
 
 
 class AllGather2Rule(OpRule):
@@ -1739,7 +1739,7 @@ class AllGather2Rule(OpRule):
         hint = _collective_hint(node, ctx)                                   # [R19 moe F-r19-moe-1] site-named when mid-module
         outs = [ctx.call(fn, array_of([x, y]), node=node, rule=self, name=f"{hint}[{i}]/all_gather") for i, (x, y) in enumerate(zip(ra, rb))]
         ctx.define(node, from_rows(outs, lead))
-        ctx.record(self, node, {"N": N, "rows": len(ra), "world": 2}, emitted=f"{fn.id} x{len(ra)}")
+        ctx.record(self, node, {"N": N, "rows": len(ra), "world": 2}, emitted=f"{fn.id} x{len(ra)}", collective="all_gather")
 
 
 def _tp_parts(node) -> list:
@@ -1785,7 +1785,7 @@ class AllReduceRule(OpRule):
         hint = _collective_hint(node, ctx)
         outs = [ctx.call(fn, array_of(list(xs)), node=node, rule=self, name=f"{hint}[{i}]/all_reduce") for i, xs in enumerate(zip(*rows))]
         ctx.define(node, from_rows(outs, lead[0]))
-        ctx.record(self, node, {"N": N, "rows": len(rows[0]), "world": W}, emitted=f"{fn.id} x{len(rows[0])}")
+        ctx.record(self, node, {"N": N, "rows": len(rows[0]), "world": W}, emitted=f"{fn.id} x{len(rows[0])}", collective="all_reduce")
 
 
 class AllGatherRule(OpRule):
@@ -1823,7 +1823,7 @@ class AllGatherRule(OpRule):
         hint = _collective_hint(node, ctx)
         outs = [ctx.call(fn, array_of(list(xs)), node=node, rule=self, name=f"{hint}[{i}]/all_gather") for i, xs in enumerate(zip(*rows))]
         ctx.define(node, from_rows(outs, lead[0]))
-        ctx.record(self, node, {"N": N, "rows": len(rows[0]), "world": W}, emitted=f"{fn.id} x{len(rows[0])}")
+        ctx.record(self, node, {"N": N, "rows": len(rows[0]), "world": W}, emitted=f"{fn.id} x{len(rows[0])}", collective="all_gather")
 
 
 class EmbeddingShardRule(OpRule):

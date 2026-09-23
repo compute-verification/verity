@@ -541,7 +541,7 @@ def _write_tp_links(out: str, res: dict, program, rep, tp: int, rank: int) -> di
     peer_ranks = [r for r in range(tp) if r != rank]                       # [lane vllm-tp-n] world-1 peers per collective, in rank order
     n_peer = len(probe) * len(peer_ranks)
     peer_names = user[len(user) - n_peer:]
-    apps = [a for a in rep.provenance["applications"] if a["rule"].startswith(("AllReduce", "AllGather"))]
+    apps = [a for a in rep.provenance["applications"] if a.get("collective")]      # the collective rules tag their applications (kind), in call order
     if len(apps) != len(probe):
         raise RuntimeError(f"tp_links: {len(apps)} collective rule applications vs {len(probe)} probed collectives")
     links = []

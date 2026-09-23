@@ -318,8 +318,8 @@ def main() -> int:
     from verity_capture import vllm_adapter as va
     from verity_capture.bench.commit_delta import git_head, run_workload
     from verity_capture.bench.commit_verdict import REQUIRED_CLASSES_DEFAULT, commit_verdict
-    from verity_capture.bench.tp2_capture import parse_engine_args
-    from verity_capture.bench.tp2_worker import EXTENSION
+    from verity_capture.tp.capture import parse_engine_args
+    from verity_capture.tp.worker import EXTENSION
     from verity_capture.experimental.commit_integ.api import challenge_positions
 
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
@@ -1109,7 +1109,7 @@ def main() -> int:
     # process's (after finalize: replay, linkage, pin, partial source all imported) + the collector's JIT C++/CUDA sources -- what ran, not a
     # static closure; the tag-candidate equivalence rule (COORD ruling 24) reads this file when it exists.
     try:
-        from verity_capture.bench.tp2_worker import repo_modules_loaded
+        from verity_capture.tp.worker import repo_modules_loaded
         drv = repo_modules_loaded()
         ranks_mods = llm.collective_rpc("tp2_repo_modules", timeout=args.rpc_timeout)
         union = set(drv["files"])

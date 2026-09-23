@@ -1,16 +1,16 @@
-"""Lane tp2: torch-free evidence over the per-rank raw logs of `bench.tp2_capture` (numpy only; runs on the pod or on small logs).
+"""Lane tp2: torch-free evidence over the per-rank raw logs of `tp.capture` (numpy only; runs on the pod or on small logs).
 
-    python -m verity_capture.bench.tp2_analyze inventory RUN_DIR [--out PATH]        collectives per rank: op, step, phase, module,
+    python -m verity_capture.tp.analyze inventory RUN_DIR [--out PATH]        collectives per rank: op, step, phase, module,
                                                                                     operand/result views, ordinal, position in the layer
-    python -m verity_capture.bench.tp2_analyze roots RUN_DIR --tp1-log LOG [--out]   Root events per rank vs the TP=1 log: replicated /
+    python -m verity_capture.tp.analyze roots RUN_DIR --tp1-log LOG [--out]   Root events per rank vs the TP=1 log: replicated /
                                                                                     dim0 / dim1 sharded, fused (qkv, gate_up) shards
-    python -m verity_capture.bench.tp2_analyze body RUN_DIR [--out]                  numerical body of every snapshotted collective:
+    python -m verity_capture.tp.analyze body RUN_DIR [--out]                  numerical body of every snapshotted collective:
                                                                                     all_reduce == bf16(f32(a)+f32(b)) RNE, both ranks equal;
                                                                                     all_gather == concat(shards, dim)
-    python -m verity_capture.bench.tp2_analyze determinism RUN_A RUN_B [--out]       run-to-run: snapshot sha256 of every collective's
+    python -m verity_capture.tp.analyze determinism RUN_A RUN_B [--out]       run-to-run: snapshot sha256 of every collective's
                                                                                     operands/results aligned by (rank, step, op, ordinal),
                                                                                     plus every snapshot entry of every step
-    python -m verity_capture.bench.tp2_analyze unsupported RES.json [RES.json ...]   the exact Unsupported list of `resolve_log` outputs
+    python -m verity_capture.tp.analyze unsupported RES.json [RES.json ...]   the exact Unsupported list of `resolve_log` outputs
 
 `RUN_DIR` is a `tp2_capture` output: `log.rank<r>.jsonl.gz`, `rank<r>/snapshots.json`, `rank<r>/values/<step>/<sha>.bin`.
 """

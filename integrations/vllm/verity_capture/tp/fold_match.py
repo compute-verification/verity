@@ -5,7 +5,7 @@ CROSS-RANK leg (`tp.rank_match`) over both folds + the collective recorder rows 
 + tp2_match's stored-step provenance.  CPU only.  The rank-local legs of the ranks run CONCURRENTLY (one subprocess chain per rank,
 --rank-workers, default all): they are independent until the cross-rank leg; the record is assembled in rank order.
 
-    python -m verity_capture.bench.tp2_fold_match --capture <tp2_capture --record-collectives out> --profile gen_llama_llama32_1b_tp2rank \\
+    python -m verity_capture.tp.fold_match --capture <tp2_capture --record-collectives out> --profile gen_llama_llama32_1b_tp2rank \\
         --build-rank0 <build_request_r0> --build-rank1 <build_request_r1> [--gprog-rank0 <build_workload_r0/workload_program.json> --gprog-rank1 ...] \\
         [--derived-rank0 DIR ... --derived-rank1 DIR ...] --workload WL [--tp2-match <run>/tp2_match.json] --out <D/fold_match> [--python PY]
 

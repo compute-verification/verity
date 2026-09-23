@@ -10,7 +10,7 @@ import hashlib
 import numpy as np
 import pytest
 
-from verity_capture.bench.tp2_commit import parse_serve_shard_from
+from verity_capture.tp.commit import parse_serve_shard_from
 from verity_capture.commit import weights_of_record as WR
 from verity_capture.commit.tests.test_weights_of_record import PREFIX, _program, _served, checkpoint, live_digests  # noqa: F401  (fixture)
 
@@ -80,11 +80,11 @@ def test_a_replicated_parameter_has_no_other_ranks_shard(checkpoint):
 
 def test_repo_modules_loaded_names_this_process_imports_relative_to_the_repo():
     """[TP-11, rev F-r16-19] the import path of record is written from the RUNNING process (sys.modules), not a static closure."""
-    from verity_capture.bench.tp2_worker import repo_modules_loaded
+    from verity_capture.tp.worker import repo_modules_loaded
     from verity_capture.commit import weights_of_record  # noqa: F401  -- imported here == must be listed
     r = repo_modules_loaded()
     assert r["method"].startswith("runtime:") and r["n"] == len(r["files"]) == len(set(r["files"]))
-    assert "verity_capture/bench/tp2_worker.py" in r["files"] and "verity_capture/commit/weights_of_record.py" in r["files"]
+    assert "verity_capture/tp/worker.py" in r["files"] and "verity_capture/commit/weights_of_record.py" in r["files"]
     assert all(not f.startswith("/") and not f.endswith(".pyc") for f in r["files"])
     assert r["native_collect_jit_sources"] == [] or all(f.endswith((".cpp", ".cu")) for f in r["native_collect_jit_sources"])
 
@@ -92,7 +92,7 @@ def test_repo_modules_loaded_names_this_process_imports_relative_to_the_repo():
 # ---- [rev M-0460] the decode-only (step-ranged) request-label swap negative ------------------------------------------------------------
 
 def test_swap_spec_all_steps_and_ranged():
-    from verity_capture.bench.tp2_worker import parse_swap_spec, swap_label
+    from verity_capture.tp.worker import parse_swap_spec, swap_label
     assert parse_swap_spec(None) is None
     a = parse_swap_spec(["r3", "r4"])
     assert a == {"a": "r3", "b": "r4", "lo": None, "hi": None, "mode": "all"}
@@ -115,7 +115,7 @@ def test_ranged_swap_keeps_the_prefill_rows_and_exchanges_only_decode_labels():
     """The map the binding/attribution consumers see under the ranged swap: prefill rows (step 0) carry their true labels; on the shared
     decode steps r3 and r4 exchange labels; per-step row COUNTS per label are unchanged (each row one token) -- what coverage sees is
     identical to the honest map, which is why only the attribution can catch it."""
-    from verity_capture.bench.tp2_worker import parse_swap_spec, swap_label
+    from verity_capture.tp.worker import parse_swap_spec, swap_label
     r = parse_swap_spec(["r3", "r4", 1, 37])
     step_rows = {0: [("r3", 0, 305), ("r4", 305, 313)], 1: [("r3", 0, 1), ("r4", 1, 2)], 40: [("r3", 0, 1)]}
     seen = {s: [(swap_label(l, r, s), lo, hi) for l, lo, hi in rows] for s, rows in step_rows.items()}
@@ -132,7 +132,7 @@ def test_ranged_swap_keeps_the_prefill_rows_and_exchanges_only_decode_labels():
 # ---- a negative that did not inject is an ERROR, never a PASS (measured b1_r16_tp12b 08:34Z: ':ulp' on a tree without parse_flip -> flipped 0 -> PASS)
 
 def test_negative_not_applied_is_named_not_passed():
-    from verity_capture.bench.tp2_commit import negatives_applied
+    from verity_capture.tp.commit import negatives_applied
     made = [{"rank": 0, "swap_requests_applied": None, "tp_partial_source": {"omit_site": None}},
             {"rank": 1, "swap_requests_applied": None, "tp_partial_source": {"omit_site": None}}]
     xr = [{"dumps": [{"rank": 0, "flipped_collective_inputs": 0}, {"rank": 1, "flipped_collective_inputs": 0}]}]
@@ -149,7 +149,7 @@ def test_negative_not_applied_is_named_not_passed():
 
 
 def test_negative_applied_is_recognised():
-    from verity_capture.bench.tp2_commit import negatives_applied
+    from verity_capture.tp.commit import negatives_applied
     made = [{"rank": 0, "swap_requests_applied": None, "tp_partial_source": {"omit_site": None}},
             {"rank": 1, "swap_requests_applied": ["r3", "r4", 1, 37], "tp_partial_source": {"omit_site": "layers.3.mlp.down_proj"}}]
     xr = [{"dumps": [{"rank": 0, "flipped_collective_inputs": 0}, {"rank": 1, "flipped_collective_inputs": 64}]}]

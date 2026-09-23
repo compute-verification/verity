@@ -13,7 +13,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
-from verity_capture.bench.tp2_commit import _sampled_replay_components  # noqa: E402
+from verity_capture.tp.commit import _sampled_replay_components  # noqa: E402
 
 
 def _sr(result, grade, vus=10, evaluated=4, why=None, unrep=None):
@@ -68,7 +68,7 @@ def test_not_run_shape_when_replay_disabled():
 # ------------------------------------------------------------------------------------------------------------ worker fail-closed paths
 
 def _worker(cfg, bmap, rc=None, model=None):
-    from verity_capture.bench import tp2_worker as W
+    from verity_capture.tp import worker as W
 
     class Stub:
         _tp2_sampled_replay = W.TP2CaptureWorkerExtension._tp2_sampled_replay
@@ -162,7 +162,7 @@ if __name__ == "__main__":
 # ---- [MAN-09 per rank] the weights-pin fold ------------------------------------------------------------------------------------------
 
 def _rows_with_pins(p0, p1):
-    from verity_capture.bench.tp2_commit import _weights_pin_component
+    from verity_capture.tp.commit import _weights_pin_component
     rows = [{"arm": "control"}, {"arm": "instrumented", "commit": {"per_rank": {"0": {"weights_pin": p0}, "1": {"weights_pin": p1}}}}]
     return _weights_pin_component(rows, {"weights_pin": {"checkpoint_dir": "/ck"}})
 
