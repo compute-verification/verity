@@ -111,6 +111,9 @@ _BUF = 8 << 20
 #: opening round trips at the path's RTT (44 ms median), t.total_live 1.0 s for the same session.  bbr's pacing costs the
 #: small-message path some latency; cubic's bursts cost the large-message path the whole session.  Default bbr; `live probe`
 #: + `net.rtt_ms` vs the probe's RTT tell whether a pair of machines is in the small-message regime (then LIVE_TCP_CC=cubic).
+#: Lane live-2b (same pods, depth 4, --batch 16384): all-bbr 12/12 bf16-hopper + 6/6 fp8-ada sessions <= 1.5 s at 30-45 ms,
+#: bbr riding out sessions that retransmitted 12k segments; ctrl=cubic was as good on bf16-hopper but had 2/5 slow fp8-ada
+#: sessions (68-105 ms median openings) and RTO back-offs; same-DC (0.9 ms) the choice does not matter.  bbr stays.
 _TCP_CC = os.environ.get("LIVE_TCP_CC", "bbr")
 #: ``LIVE_TCP_CC_DATA`` (default ``bbr``): the congestion control of the prover's DATA connection (the 120-200 MB proof
 #: stream of a session).  Lane live-2 (4090 EU-RO-1 -> cpu3m EU-CZ-1, 45 ms, ~530 Mbps path, `ss -tin` on both ends): under
@@ -806,7 +809,8 @@ class BenchLive:
               f"({v['reason'][:160]}); net wait {s.wait:.3f}s over {len(s.rtts)} round trips (median rtt "
               f"{statistics.median(s.rtts) * 1e3 if s.rtts else float('nan'):.1f} ms, p90 "
               f"{self.per_rep[-1]['rtt_ms_p90'] or float('nan'):.1f} ms); verifier wall {v['verify']['wall_s']:.2f}s "
-              f"cpu {v['verify']['cpu_s']:.2f}s; t.total_live {self.per_rep[-1]['t_total_live']:.3f}s", flush=True)
+              f"cpu {v['verify']['cpu_s']:.2f}s; t.total_live {self.per_rep[-1]['t_total_live']:.3f}s; "
+              f"dc {pod_dc()} -> {s.welcome.get('verifier_dc')}", flush=True)
         return v
 
     def fields(self, contract, total: float, med: dict) -> tuple[list, dict, str, bool]:
@@ -1152,9 +1156,11 @@ def cmd_probe(args) -> int:
     if flows:
         out["mbps_median"] = sorted(f["mbps_to_ack"] for f in flows)[len(flows) // 2]
     print(json.dumps(out, indent=1))
-    print(f"RTT {out['rtt_ms']:.1f} ms; one-flow throughput {out.get('mbps_median', 0):.0f} Mbps (median of {len(flows)} x {args.mb} MB; "
-          f"first {flows[0]['mbps_to_ack']:.0f} Mbps incl. slow start); a 4096-VU fp8-ada session sends ~221 MB -> "
-          f">= {221 * 8 / max(out.get('mbps_median', 1), 1):.1f} s of transfer at that rate", file=sys.stderr)
+    mbps = max(out.get("mbps_median", 1), 1)
+    print(f"RTT {out['rtt_ms']:.1f} ms ({out['prover_dc']} -> {out['verifier_dc']}); one-flow throughput {mbps:.0f} Mbps "
+          f"(median of {len(flows)} x {args.mb} MB; first {flows[0]['mbps_to_ack']:.0f} Mbps incl. slow start); a 4096-VU session "
+          f"at --batch 16384 sends ~107 MB (fp8-ada) / ~195 MB (bf16-hopper) -> >= {107 * 8 / mbps:.1f} / {195 * 8 / mbps:.1f} s of "
+          f"transfer at that rate", file=sys.stderr)
     return 0
 
 
