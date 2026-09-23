@@ -889,10 +889,25 @@ fn pad_correction(eta: u32, r: usize, ybar: &[Ext]) -> Ext {
 /// `prove.pcs_verify` (t_pad = 0) / `proto/pcs.verify_open` commit-first with the column padding: the J claims
 /// `w~(points[j]) = values[j]` (PCS variable order) against root_1, which the caller has absorbed.  Returns the number of
 /// opened rows.
-pub fn pcs_verify(p: &Params, pf: &PcsProof, points: &[Vec<Ext>], values: &[Ext], t_pad: usize, coins: &mut dyn Coins) -> Result<usize, String> {
+/// A sparse PCS claim `sum_t weights[t] f[cells[t]] = value` on distinct flat PCS indices (ligerito-proto
+/// `open(..., sparse=)`; LGSC0004's Libra mask claims).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SparseTerm {
+    pub cells: Vec<usize>,
+    pub weights: Vec<Ext>,
+    pub value: Ext,
+}
+
+pub fn pcs_verify(p: &Params, pf: &PcsProof, points: &[Vec<Ext>], values: &[Ext], sparse: &[SparseTerm], t_pad: usize, coins: &mut dyn Coins) -> Result<usize, String> {
     let l = p.rounds();
     if points.is_empty() || points.len() != values.len() || points.iter().any(|z| z.len() != p.n) {
         return Err("PCS: bad claim shape".into());
+    }
+    for s in sparse {
+        let mut seen = std::collections::HashSet::new();
+        if s.cells.is_empty() || s.cells.len() != s.weights.len() || s.cells.iter().any(|&c| c >> p.n != 0 || !seen.insert(c)) {
+            return Err("PCS: sparse term: cells must be distinct indices in [0, N), one weight each".into());
+        }
     }
     if pf.roots.len() != l || pf.openings.len() != l || pf.sumcheck.len() != l || pf.final_y.len() != p.final_len() {
         return Err("PCS: bad proof shape".into());
@@ -910,12 +925,26 @@ pub fn pcs_verify(p: &Params, pf: &PcsProof, points: &[Vec<Ext>], values: &[Ext]
         zb.extend(ext_bytes(z));
     }
     coins.absorb(b"z", &zb);
-    let beta = coins.challenge(b"beta", points.len())?;
+    for s in sparse {
+        let mut b: Vec<u8> = s.cells.iter().flat_map(|&c| (c as u32).to_le_bytes()).collect();
+        b.extend(ext_bytes(&s.weights));
+        coins.absorb(b"sparse", &b);
+    }
+    let m = points.len();
+    let beta = coins.challenge(b"beta", m + sparse.len())?;
     let mut claim = Ext::ZERO;
-    let mut terms: Vec<Term> = Vec::with_capacity(points.len());
+    let mut terms: Vec<Term> = Vec::with_capacity(m);
     for (j, z) in points.iter().enumerate() {
         claim = claim.add(&beta[j].mul(&values[j]));
         terms.push(Term::eq(beta[j], z.clone()));
+    }
+    // the sparse terms, recursed as ligerito-proto's `_Sparse`: after a round's column challenges r,
+    // w_t *= eq(bits(cell_t >> k), r) and cell_t keeps its row
+    let (mut sp_idx, mut sp_w): (Vec<usize>, Vec<Ext>) = (Vec::new(), Vec::new());
+    for (k, s) in sparse.iter().enumerate() {
+        claim = claim.add(&beta[m + k].mul(&s.value));
+        sp_idx.extend_from_slice(&s.cells);
+        sp_w.extend(s.weights.iter().map(|w| w.mul(&beta[m + k])));
     }
     let mut r_prev: Vec<Ext> = Vec::new();
     let mut opened = 0usize;
@@ -937,6 +966,9 @@ pub fn pcs_verify(p: &Params, pf: &PcsProof, points: &[Vec<Ext>], values: &[Ext]
             let alpha = coins.challenge(b"alpha", 1 + s_set.len())?;
             for t in terms.iter_mut() {
                 t.coef = t.coef.mul(&alpha[0]);
+            }
+            for w in sp_w.iter_mut() {
+                *w = w.mul(&alpha[0]);
             }
             claim = claim.mul(&alpha[0]);
             for (j, &s) in s_set.iter().enumerate() {
@@ -963,6 +995,13 @@ pub fn pcs_verify(p: &Params, pf: &PcsProof, points: &[Vec<Ext>], values: &[Ext]
         for t in terms.iter_mut() {
             *t = t.restrict(k, &draws);
         }
+        if !sp_idx.is_empty() {
+            let rbar = crate::claims::eq_vector(&draws);
+            for (x, w) in sp_idx.iter_mut().zip(sp_w.iter_mut()) {
+                *w = w.mul(&rbar[*x >> k]);
+                *x &= (1 << k) - 1;
+            }
+        }
         r_prev = draws;
     }
     coins.absorb(b"y", &ext_bytes(&pf.final_y));
@@ -983,6 +1022,7 @@ pub fn pcs_verify(p: &Params, pf: &PcsProof, points: &[Vec<Ext>], values: &[Ext]
         }
     }
     let total = terms.iter().fold(Ext::ZERO, |acc, t| acc.add(&t.dot(&pf.final_y)));
+    let total = sp_idx.iter().zip(&sp_w).fold(total, |acc, (&x, w)| acc.add(&w.mul(&pf.final_y[x])));
     if total != claim {
         return Err("PCS: final claim failed".into());
     }
@@ -1187,7 +1227,7 @@ pub fn verify(
         })
         .collect();
     let values: Vec<Ext> = all.iter().map(|c| c.value).collect();
-    let opened = pcs_verify(p, &proof.pcs, &points, &values, prm.t_pad, coins)?;
+    let opened = pcs_verify(p, &proof.pcs, &points, &values, &[], prm.t_pad, coins)?;
     if coins.unused() != 0 {
         return Err(format!("coins: {} unused verifier coins after the protocol ended", coins.unused()));
     }
@@ -1253,6 +1293,59 @@ mod tests {
 
     fn legacy() -> Options {
         Options { allow_legacy: true, target_log2: Some(-128.0), ..Default::default() }
+    }
+
+    /// Sparse PCS claims (LGSC0004's Libra mask claims) through `pcs_verify`, against `refprover::prove_commit_first`
+    /// (ligerito-proto's `open` / `_Sparse` in Rust; the shape of its `test_zk_padding_and_sparse_claims`, no padding): three
+    /// evaluation points plus a sparse term inside one round-1 column (the Libra block shape) and one spread over columns.
+    /// Rejected: that test's negatives (a wrong value / weight, the cells reordered, a term dropped), malformed terms.
+    #[test]
+    fn pcs_sparse_claims() {
+        use crate::refprover::{prove_commit_first, random_vector};
+        fn bind(c: &mut dyn Coins, root: &Digest) {
+            c.absorb(b"statement", b"relation statement");
+            c.absorb(b"root", root);
+        }
+        let p = Params::with_rates(12, vec![4, 3, 3], vec![12, 12, 12], vec![2, 2, 2]);
+        let f = random_vector(12, 5);
+        let points: Vec<Vec<Ext>> = (0..3).map(|j| random_point(12, 10 + j)).collect();
+        let r1 = 1usize << p.k(1);
+        let col3: Vec<usize> = (0..40).map(|t| 3 * r1 + (t * 37 + 11) % r1).collect();
+        let spread: Vec<usize> = (0..25).map(|t| (t * 2731 + 5) % (1 << 12)).collect();
+        let sparse = vec![(col3, random_point(40, 1)), (spread, random_point(25, 2))];
+        let (values, svals, pf) = prove_commit_first(&p, &f, &points, &sparse, &mut FiatShamir::new(b"sparse-test"), &mut bind);
+        let good: Vec<SparseTerm> = sparse.iter().zip(&svals).map(|((c, w), v)| SparseTerm { cells: c.clone(), weights: w.clone(), value: *v }).collect();
+        let run = |sp: &[SparseTerm], vals: &[Ext]| {
+            let mut c = FiatShamir::new(b"sparse-test");
+            bind(&mut c, &pf.roots[0]);
+            pcs_verify(&p, &pf, &points, vals, sp, 0, &mut c)
+        };
+        run(&good, &values).unwrap();
+        let mut bad = good.clone();
+        bad[0].value = bad[0].value.add(&Ext::ONE);
+        assert!(run(&bad, &values).is_err());
+        let mut bad = good.clone();
+        bad[0].weights[5] = bad[0].weights[5].add(&Ext::ONE);
+        assert!(run(&bad, &values).is_err());
+        let mut bad = good.clone();
+        bad[1].cells.reverse();
+        assert!(run(&bad, &values).is_err());
+        assert!(run(&good[..1], &values).is_err());
+        assert!(run(&[], &values).is_err());
+        let mut v2 = values.clone();
+        v2[1] = v2[1].add(&Ext::ONE);
+        assert!(run(&good, &v2).is_err());
+        for f in [|s: &mut SparseTerm| s.cells[1] = s.cells[0], |s: &mut SparseTerm| s.cells[0] = 1 << 12, |s: &mut SparseTerm| { s.weights.pop(); }] {
+            let mut bad = good.clone();
+            f(&mut bad[1]);
+            assert!(run(&bad, &values).unwrap_err().starts_with("PCS: sparse term"));
+        }
+        // no sparse terms: the same prover and verifier as the relation's eval-only openings
+        let (v0, s0, pf0) = prove_commit_first(&p, &f, &points, &[], &mut FiatShamir::new(b"sparse-test"), &mut bind);
+        assert!(s0.is_empty() && v0 == values);
+        let mut c = FiatShamir::new(b"sparse-test");
+        bind(&mut c, &pf0.roots[0]);
+        pcs_verify(&p, &pf0, &points, &v0, &[], 0, &mut c).unwrap();
     }
 
     #[test]
