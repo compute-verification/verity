@@ -36,10 +36,10 @@ not built; :func:`census` measures both.
 
 Per column and operand role the gadget also selects the chunk-start CV (``cs ? KEY : carried``: 16 products), re-derives
 the bits of ``cv[4..7]`` (the ``b`` words of round 1 enter an XOR: 128 bit rows), copies the output CV into 16 carried
-rows, and holds the finished chunk CVs in ``16 (n_chunks - 1)`` carried rows (16 products each) until the chain end,
-where the compose layer pins ``[CV_0 | CV_1 | ...]`` against the public digest.  Public layout pins (functions of the
-column index, the verifier computes them): ``blake3.cs`` (chunk start), ``blake3.ce`` (chunk end), ``blake3.cnt<i>``
-(chunk counter bits), ``blake3.hold<c>`` (this column ends chunk ``c < n_chunks - 1``).
+rows, and holds the finished chunk CVs in ``16 (N_CHUNKS_MAX - 1)`` carried rows (16 products each) until the chain
+end, where the compose layer pins ``[n_chunks | CV_0 | CV_1 | ...]`` against the public digest.  The layout (chunk start
+/ end, chunk counter, hold flags) is derived from one more carried row, the column position ``pos`` (0 at the chain
+start, +1 per column: sound by the chain constraints), through its bit decomposition -- no public layout pins.
 
 Soundness of the arithmetic: every linear constraint here is a bit decomposition ``e = sum 2^i b_i`` of an affine ``e``
 whose integer value (the addends are affine in booleans) lies in ``[0, 2^nbits)``; ``|e - sum| < 2^19 << p``, so the field
@@ -51,14 +51,13 @@ from __future__ import annotations
 
 import math
 from collections.abc import Sequence
-from dataclasses import dataclass
-
 import numpy as np
 
 from ..compile import Expr, LigeroCtx, Linear, P, Quadratic
 
-__all__ = ["BLOCK_LEN", "CHUNK_LEN", "IV", "KEY_LEN", "K_VU", "Blake3Leaf", "census", "chunk_cvs_np", "compress_np",
-           "digest_elems_for", "key_for", "leaf_bytes", "n_chunks", "root_from_cvs", "row_bytes"]
+__all__ = ["BLOCK_LEN", "CARRY_ELEMS", "CHUNK_LEN", "DIGEST_ELEMS", "IV", "KEY", "KEY_LEN", "K_VU", "N_CHUNKS_MAX", "Blake3Leaf",
+           "census", "chunk_cvs_np", "compress_np", "digest_elems_for", "key_for", "leaf_bytes", "n_chunks", "root_from_cvs",
+           "row_bytes"]
 
 NAME = "blake3"
 ASSUMPTION = "BLAKE3 collision resistance (keyed mode; standard ARX hash, chunk CVs published, parent fold by the verifier)"
@@ -77,21 +76,32 @@ MASK32 = 0xFFFFFFFF
 # Framing
 # ---------------------------------------------------------------------------------------------------------------------
 
-def key_for(word_bits: int) -> bytes:
-    """The 32-byte BLAKE3 key of a row format: domain separation of the leaf from any other BLAKE3 use and of the row
-    formats (a 1536-byte E4M3 row and a 768-word BF16 row are the same bytes), at zero circuit cost (the key words replace
-    IV as the first chaining value of every chunk AND of every parent node; ``KEYED_HASH`` is a constant flag bit).  The
-    operand role (x row / W column) is NOT in the key: the two roles live in different trees with different bindings, and
-    ``leaf_bytes`` (the verifier's parent fold) must not need the role."""
-    tag = f"verity/blake3-leaf/v1/w{word_bits}".encode()
-    if len(tag) > KEY_LEN:
-        raise ValueError("key tag too long")
-    return tag.ljust(KEY_LEN, b"\0")
+KEY = b"verity/blake3-leaf/v1".ljust(KEY_LEN, b"\0")
+N_CHUNKS_MAX = 3                        # E4M3 rows: 2 chunks, BF16 rows: 3 (one registry instance serves both widths)
+DIGEST_ELEMS = 1 + 16 * N_CHUNKS_MAX    # [n_chunks | CV_0 limbs | CV_1 | CV_2]  (unused slots 0)
+CARRY_ELEMS = 16 * N_CHUNKS_MAX + 1     # [running cv (16) | hold_0 (16) | hold_1 (16) | pos]
+SCHEMA = "blake3-keyed/row/v1"
+HASH_NAME = "blake3-keyed"
 
 
-def key_words(word_bits: int) -> tuple[int, ...]:
-    k = key_for(word_bits)
-    return tuple(int.from_bytes(k[4 * i:4 * i + 4], "little") for i in range(8))
+def key_for(word_bits: int | None = None) -> bytes:
+    """The 32-byte BLAKE3 key of the leaf: domain separation from any other BLAKE3 use at zero circuit cost (the key words
+    replace IV as the first chaining value of every chunk AND of every parent node; ``KEYED_HASH`` is a constant flag
+    bit).  Neither the word width nor the operand role is in the key: the row formats have different byte lengths (1536
+    vs 3072 -- different BLAKE3 messages), the two roles live in different trees with different bindings, and
+    ``leaf_bytes`` (the verifier's parent fold) receives only the digest."""
+    return KEY
+
+
+def key_words(word_bits: int | None = None) -> tuple[int, ...]:
+    return tuple(int.from_bytes(KEY[4 * i:4 * i + 4], "little") for i in range(8))
+
+
+def params_sha256() -> str:
+    """The 32-byte parameters field of the v5 hash-auth block: the key and the framing constants."""
+    import hashlib
+    return hashlib.sha256(b"blake3-leaf|key=" + KEY + b"|framing=chunk-cvs-le16-limbs|max_chunks=" +
+                          str(N_CHUNKS_MAX).encode() + b"|schema=" + SCHEMA.encode()).hexdigest()
 
 
 def row_bytes(rows: np.ndarray, word_bits: int) -> np.ndarray:
@@ -109,8 +119,9 @@ def n_chunks(word_bits: int, n_words: int = K_VU) -> int:
 
 
 def digest_elems_for(word_bits: int, n_words: int = K_VU) -> int:
-    """Chunk CVs as 16-bit limbs: 16 elements per chunk (2 chunks for E4M3 rows, 3 for BF16)."""
-    return 16 * n_chunks(word_bits, n_words)
+    """Meaningful digest elements of a row format: the count + 16 limbs per chunk (33 for E4M3 rows, 49 for BF16); the
+    scheme publishes :data:`DIGEST_ELEMS` with the unused slots 0."""
+    return 1 + 16 * n_chunks(word_bits, n_words)
 
 
 def _rotr(x: np.ndarray, n: int) -> np.ndarray:
@@ -230,21 +241,34 @@ def root_from_cvs(cvs: np.ndarray, word_bits: int) -> np.ndarray:
 
 
 def cvs_to_elems(cvs: np.ndarray) -> np.ndarray:
-    """(R, n_chunks, 8) u32 -> (R, 16 n_chunks) int64 limbs: chunk-major, word-major, low limb first."""
+    """(R, n_chunks, 8) u32 -> (R, DIGEST_ELEMS) int64: ``[n_chunks | limbs chunk-major, word-major, low limb first | 0..]``."""
     c = np.asarray(cvs, dtype=np.int64)
+    R, nch, _ = c.shape
+    if nch > N_CHUNKS_MAX:
+        raise ValueError(f"{nch} chunks exceed the scheme's {N_CHUNKS_MAX}")
     lo, hi = c & 0xFFFF, c >> 16
-    return np.stack([lo, hi], -1).reshape(c.shape[0], -1)
+    out = np.zeros((R, DIGEST_ELEMS), dtype=np.int64)
+    out[:, 0] = nch
+    out[:, 1:1 + 16 * nch] = np.stack([lo, hi], -1).reshape(R, -1)
+    return out
 
 
 def elems_to_cvs(elems) -> np.ndarray:
+    """One digest row -> (1, n_chunks, 8) uint32 chunk CVs; rejects malformed digests (the verifier calls this)."""
     e = np.asarray(elems, dtype=np.int64).reshape(-1)
-    if e.shape[0] % 16 or ((e < 0) | (e >= 1 << 16)).any():
-        raise ValueError("a BLAKE3 leaf digest is 16 limbs < 2^16 per chunk")
-    lh = e.reshape(-1, 8, 2)
+    if e.shape[0] != DIGEST_ELEMS:
+        raise ValueError(f"a BLAKE3 leaf digest is {DIGEST_ELEMS} elements")
+    nch = int(e[0])
+    if not 2 <= nch <= N_CHUNKS_MAX:
+        raise ValueError(f"a BLAKE3 leaf digest names 2..{N_CHUNKS_MAX} chunks, not {nch}")
+    body, tail = e[1:1 + 16 * nch], e[1 + 16 * nch:]
+    if ((body < 0) | (body >= 1 << 16)).any() or tail.any():
+        raise ValueError("a BLAKE3 leaf digest is 16 limbs < 2^16 per chunk, unused slots 0")
+    lh = body.reshape(-1, 8, 2)
     return (lh[..., 0] | (lh[..., 1] << 16)).astype(np.uint32)[None]
 
 
-def leaf_bytes(digest_row, word_bits: int) -> bytes:
+def leaf_bytes(digest_row, word_bits: int | None = None) -> bytes:
     """The leaf value of one row: the BLAKE3 root (32 bytes) folded natively from the published chunk CVs."""
     return root_from_cvs(elems_to_cvs(digest_row), word_bits)[0].tobytes()
 
@@ -380,102 +404,99 @@ def _message_words(ctx: LigeroCtx, words: Sequence[Expr], word_bits: int) -> lis
     return [_W32(limbs=(limbs[2 * w], limbs[2 * w + 1])) for w in range(16)]
 
 
-@dataclass
+def _indicator(ctx: LigeroCtx, bits: Sequence[Expr], value: int, memo: dict, scope: str) -> Expr:
+    """``[bits == value]`` as a product of the bit literals, sharing prefixes through ``memo`` (keyed by the literal
+    prefix); ``bits`` are booleans, so the result is boolean."""
+    key = ()
+    acc = None
+    for i, b in enumerate(bits):
+        lit = b if (value >> i) & 1 else 1 - b
+        key = key + (((value >> i) & 1),)
+        if acc is None:
+            acc = lit
+        else:
+            hit = memo.get(key)
+            if hit is None:
+                hit = _prod(ctx, acc, lit, scope + ".ind")
+                memo[key] = hit
+            acc = hit
+    return acc
+
+
 class Blake3Leaf:
-    """The ``LeafScheme`` (brief §2) for BLAKE3.  ``word_bits`` / ``n_words`` fix the row format (digest size)."""
+    """The ``LeafScheme`` (``leaf/base.py``) for BLAKE3.  One instance serves both row formats: the digest and carry
+    layouts are fixed at :data:`N_CHUNKS_MAX` chunks, the width enters through ``word_bits`` / ``row_words`` per call.
 
-    word_bits: int
-    n_words: int = K_VU
-    name: str = NAME
-    assumption: str = ASSUMPTION
+    Carried state per operand (``CARRY_ELEMS`` rows, 0 at a chain start): ``[cv (16 limbs) | hold_0 (16) | hold_1 (16) |
+    pos]``.  ``pos`` is the column's position in the VU (the chain forces ``pos_in = 0`` at the start and ``pos_out =
+    pos_in + 1`` links the columns, so it is a sound private counter); its bits give the layout the Poseidon2 leaf did not
+    need: chunk start ``cs = [pos mod 16 == 0]``, chunk end ``ce``, the chunk counter ``pos >> 4`` and the ``hold_c`` flags
+    ``[pos == end of chunk c]`` -- no public layout pins, nothing for the verifier to compute per column.
 
-    # --- framing -----------------------------------------------------------------------------------------------------
-    @property
-    def n_chunks(self) -> int:
-        return n_chunks(self.word_bits, self.n_words)
+    Digest (``DIGEST_ELEMS`` public pins per operand at the chain end): ``[n_chunks | CV_0 | ... | 0..]``; the verifier's
+    :meth:`leaf_bytes` reads the count, folds the CVs to the BLAKE3 root and that root is the SHA-256 tree leaf."""
 
-    @property
-    def digest_elems(self) -> int:
-        return digest_elems_for(self.word_bits, self.n_words)
+    name = NAME
+    assumption = ASSUMPTION
+    digest_elems = DIGEST_ELEMS
+    carry_elems = CARRY_ELEMS
+    schema = SCHEMA
+    hash_name = HASH_NAME
+    params_sha256 = params_sha256()
+    test_only = False
 
-    @property
-    def n_carry(self) -> int:
-        """Carried rows per operand role: the running CV (16 limbs) + one held CV per finished chunk but the last."""
-        return 16 * self.n_chunks
-
-    @property
-    def blocks_per_column(self) -> int:
-        return 1
-
+    # --- committer / verifier side -----------------------------------------------------------------------------------
     def native(self, rows: np.ndarray, *, word_bits: int, role: int) -> np.ndarray:
-        """(R, digest_elems) int64: the chunk CVs of every row as 16-bit limbs (what the gadget pins at the chain end)."""
-        if word_bits != self.word_bits:
-            raise ValueError("word width differs from the scheme's")
-        _, cvs = chunk_cvs_np(np.asarray(rows, dtype=np.int64), word_bits, role)
+        """(R, DIGEST_ELEMS) int64: the chunk count and the chunk CVs of every row as 16-bit limbs (what the gadget pins
+        at the chain end).  ``role`` is not used (the roles are separated by their trees)."""
+        rows = np.asarray(rows, dtype=np.int64)
+        if n_chunks(word_bits, rows.shape[1]) < 2:
+            raise ValueError("rows of one chunk are not framed by this scheme (the chunk's last block would carry ROOT)")
+        _, cvs = chunk_cvs_np(rows, word_bits, role)
         return cvs_to_elems(cvs)
 
     def leaf_bytes(self, digest_row) -> bytes:
-        return leaf_bytes(digest_row, self.word_bits)
+        return leaf_bytes(digest_row)
 
     def reference_digest(self, rows: np.ndarray, *, word_bits: int, role: int) -> list[bytes]:
-        """``blake3.blake3(row_bytes, key=key_for(word_bits)).digest()`` per row -- the independent reference the
-        conformance test compares :meth:`leaf_bytes` of :meth:`native` against."""
+        """``blake3.blake3(row_bytes, key=KEY).digest()`` per row -- the independent reference the conformance test
+        compares :meth:`leaf_bytes` of :meth:`native` against."""
         import blake3
-        rb = row_bytes(rows, word_bits)
-        key = key_for(word_bits)
-        return [blake3.blake3(bytes(r), key=key).digest() for r in rb]
-
-    # --- layout pins -------------------------------------------------------------------------------------------------
-    def layout_pin_names(self) -> list[str]:
-        names = ["blake3.cs", "blake3.ce"]
-        names += [f"blake3.cnt{i}" for i in range(max(1, (self.n_chunks - 1).bit_length()))]
-        names += [f"blake3.hold{c}" for c in range(self.n_chunks - 1)]
-        return names
-
-    def layout_pin_values(self, steps: int) -> dict[str, np.ndarray]:
-        """The public per-column pins of one VU of ``steps`` columns (one block per column): a function of the layout."""
-        fl = block_flags(self.word_bits, self.n_words)
-        if len(fl) != steps * self.blocks_per_column:
-            raise ValueError(f"{steps} columns do not carry the row's {len(fl)} blocks")
-        vals = {n: np.zeros(steps, dtype=np.int64) for n in self.layout_pin_names()}
-        ends = 0
-        for j, (c, f) in enumerate(fl):
-            vals["blake3.cs"][j] = 1 if f & CHUNK_START else 0
-            vals["blake3.ce"][j] = 1 if f & CHUNK_END else 0
-            for i in range(max(1, (self.n_chunks - 1).bit_length())):
-                vals[f"blake3.cnt{i}"][j] = (c >> i) & 1
-            if f & CHUNK_END and c < self.n_chunks - 1:
-                vals[f"blake3.hold{c}"][j] = 1
-                ends += 1
-        return vals
-
-    def layout_pins(self, ctx: LigeroCtx) -> dict[str, Expr]:
-        """The pins in ``ctx`` (created once per compile; memoised on the context)."""
-        memo = getattr(ctx, "_blake3_pins", None)
-        if memo is None:
-            scope = ctx.scope
-            ctx.scope = ""                     # public names carry their own prefix
-            memo = {n: ctx.pin(n, 0, 2) for n in self.layout_pin_names()}
-            ctx.scope = scope
-            ctx._blake3_pins = memo
-        return memo
+        return [blake3.blake3(bytes(r), key=KEY).digest() for r in row_bytes(rows, word_bits)]
 
     # --- the in-circuit hash -----------------------------------------------------------------------------------------
-    def gadget(self, ctx: LigeroCtx, words: Sequence[Expr], *, word_bits: int, role: int, carry_in: Sequence[Expr],
-               first: bool = False, last: bool = False) -> tuple[list[Expr], list[Expr]]:
-        """One column, one operand role: compress this column's block into the carried chaining value.  ``carry_in``:
-        ``n_carry`` rows (the previous column's ``carry_out``; 0 at a chain start), laid out ``[cv (16 limbs) | hold_0 (16)
-        | ...]``.  Returns ``(digest_exprs, carry_out)``: ``digest_exprs`` = ``[CV_0 | ... | CV_last]`` limbs (meaningful at
-        the last column; the caller pins them under ``is_end``), ``carry_out`` = ``n_carry`` single-row expressions.
-        ``first`` / ``last`` are ignored: the circuit is column-uniform, the layout enters through the public pins."""
-        if word_bits != self.word_bits or len(carry_in) != self.n_carry:
-            raise ValueError("gadget: word width / carry shape differ from the scheme's")
-        pins = self.layout_pins(ctx)
+    def gadget(self, ctx: LigeroCtx, words: Sequence[Expr], *, word_bits: int, role: int, row_words: int = K_VU,
+               carry_in: Sequence[Expr], first: bool = False, last: bool = True) -> tuple[list[Expr], list[Expr]]:
+        """One column, one operand role: compress this column's block (``words``: k affine words = 64 bytes) into the
+        carried chaining value.  Returns ``(digest_exprs, carry_out)`` (see the class doc); ``first`` / ``last`` are
+        ignored (column-uniform circuit)."""
+        if len(carry_in) != CARRY_ELEMS:
+            raise ValueError(f"gadget: {len(carry_in)} carried rows, the scheme carries {CARRY_ELEMS}")
+        k = len(words)
+        if row_words % k or (row_words * word_bits // 8) % BLOCK_LEN:
+            raise ValueError(f"gadget: {row_words} words of {word_bits} bits are not whole columns of {k}")
+        steps = row_words // k
+        nch = n_chunks(word_bits, row_words)
+        if not 2 <= nch <= N_CHUNKS_MAX:
+            raise ValueError(f"gadget: rows of {nch} chunks are outside 2..{N_CHUNKS_MAX}")
+        fl = block_flags(word_bits, row_words)
+        if len(fl) != steps:
+            raise ValueError("gadget: one block per column")
         scope = f"blake3.{ROLE_NAMES[role]}"
-        one = _const(ctx, 1)
-        cs, ce = pins["blake3.cs"], pins["blake3.ce"]
-        key = key_words(word_bits)
-        # chaining value in: cs ? key : carried (limbs); words 4..7 need bits (they enter round 1's b ^= c)
+        one, zero = _const(ctx, 1), _const(ctx, 0)
+        # --- layout from the carried position -----------------------------------------------------------------------
+        pos = carry_in[CARRY_ELEMS - 1]
+        npb = max(5, (steps - 1).bit_length())              # 24 columns: 5 bits; 48: 6
+        pbits = _bits_raw(ctx, pos, npb, f"{scope}.pos")
+        memo: dict = {}
+        ind = lambda value: _indicator(ctx, pbits, value, memo, scope)  # noqa: E731
+        starts = [j for j, (_, f) in enumerate(fl) if f & CHUNK_START]
+        ends = [j for j, (_, f) in enumerate(fl) if f & CHUNK_END]
+        cs = sum((ind(j) for j in starts), zero)              # disjoint indicators: the sum is boolean
+        ce = sum((ind(j) for j in ends), zero)
+        counter = _W32(list(pbits[4:]) + [zero] * (32 - (npb - 4)))     # chunk index = pos >> 4
+        # --- chaining value in: cs ? KEY : carried (limbs); words 4..7 need bits (round 1's b ^= c) -------------------
+        key = key_words()
         cv_in = []
         for w in range(8):
             lo_c, hi_c = key[w] & 0xFFFF, key[w] >> 16
@@ -486,49 +507,87 @@ class Blake3Leaf:
             else:
                 bits = _bits_raw(ctx, lo, 16, f"{scope}.cv{w}.lo") + _bits_raw(ctx, hi, 16, f"{scope}.cv{w}.hi")
                 cv_in.append(_W32(bits))
-        ncnt = max(1, (self.n_chunks - 1).bit_length())
-        counter = _W32([pins[f"blake3.cnt{i}"] for i in range(ncnt)] + [_const(ctx, 0)] * (32 - ncnt))
-        flags = _W32([cs, ce] + [_const(ctx, 0)] * 2 + [one] + [_const(ctx, 0)] * 27)      # CHUNK_START | CHUNK_END | KEYED
+        flags = _W32([cs, ce, zero, zero, one] + [zero] * 27)          # CHUNK_START | CHUNK_END | KEYED_HASH
         msg = _message_words(ctx, words, word_bits)
         v = compress_gadget(ctx, cv_in, msg, counter, _W32.const(ctx, BLOCK_LEN), flags, scope)
         # output chaining value h_i = v_i ^ v_{i+8}, copied into single rows (the links and the digest read one row each)
         h_out = []
         for w in range(8):
-            x = _xor(ctx, v[w], v[w + 8], scope + ".fin")
-            lo, hi = x.limbs
+            lo, hi = _xor(ctx, v[w], v[w + 8], scope + ".fin").limbs
             h_out.append(_prod(ctx, lo, one, scope + ".hout"))
             h_out.append(_prod(ctx, hi, one, scope + ".hout"))
         carry_out = list(h_out)
-        digest = []
-        for c in range(self.n_chunks - 1):
-            e_c = pins[f"blake3.hold{c}"]
-            held = carry_in[16 * (c + 1):16 * (c + 2)]
-            hold_out = [h + _prod(ctx, e_c, h_out[i] - h, scope + f".hold{c}") for i, h in enumerate(held)]
+        digest = [_const(ctx, nch)]
+        slots = []
+        for c in range(N_CHUNKS_MAX - 1):
+            held = list(carry_in[16 * (c + 1):16 * (c + 2)])
+            if c < nch - 1:
+                e_c = ind(ends[c])
+                hold_out = [h + _prod(ctx, e_c, h_out[i] - h, scope + f".hold{c}") for i, h in enumerate(held)]
+            else:
+                hold_out = held                              # an unused slot: carried unchanged (0 from the chain start)
             carry_out += hold_out
-            digest += hold_out
-        digest += h_out
+            slots.append(hold_out)
+        carry_out.append(pos + 1)
+        for c in range(N_CHUNKS_MAX):
+            if c < nch - 1:
+                digest += slots[c]
+            elif c == nch - 1:
+                digest += h_out
+            else:
+                digest += [zero] * 16
         return digest, carry_out
 
     def carry_values(self, rows: np.ndarray, *, word_bits: int, role: int, steps: int) -> np.ndarray:
-        """The honest carried rows of every column: (R, steps, n_carry) int64 -- ``carry_in`` of column ``j`` = the
-        gadget's ``carry_out`` of column ``j - 1`` (0 at ``j = 0``)."""
-        out_blocks, cvs = chunk_cvs_np(np.asarray(rows, dtype=np.int64), word_bits, role)
+        """The honest carried rows of every column of every row: (R, steps, CARRY_ELEMS) int64 -- ``carry_in`` of column
+        ``j`` = the gadget's ``carry_out`` of column ``j - 1`` (0 at ``j = 0``)."""
+        rows = np.asarray(rows, dtype=np.int64)
+        row_words = rows.shape[1]
+        out_blocks, cvs = chunk_cvs_np(rows, word_bits, role)
         R, nb = out_blocks.shape[:2]
         if nb != steps:
             raise ValueError("one block per column")
-        car = np.zeros((R, steps, self.n_carry), dtype=np.int64)
+        car = np.zeros((R, steps, CARRY_ELEMS), dtype=np.int64)
         prev = out_blocks[:, :-1, :].astype(np.int64)                    # (R, steps-1, 8)
         car[:, 1:, 0:16] = np.stack([prev & 0xFFFF, prev >> 16], -1).reshape(R, steps - 1, 16)
-        fl = block_flags(word_bits, self.n_words)
-        for c in range(self.n_chunks - 1):
+        fl = block_flags(word_bits, row_words)
+        for c in range(n_chunks(word_bits, row_words) - 1):
             end = max(j for j, (cc, f) in enumerate(fl) if cc == c)
             cv = cvs[:, c, :].astype(np.int64)
             limbs = np.stack([cv & 0xFFFF, cv >> 16], -1).reshape(R, 16)
             car[:, end + 1:, 16 * (c + 1):16 * (c + 2)] = limbs[:, None, :]
+        car[:, :, CARRY_ELEMS - 1] = np.arange(steps)[None, :]
         return car
+
+    def chain_witness(self, words, *, word_bits: int, role: int, row_words: int, n_vus: int, steps: int, l: int):
+        """``words`` (l, k) int64 torch (VU v in columns [v steps, (v + 1) steps), pad columns 0) -> (carry (CARRY_ELEMS,
+        l) torch: the carried rows entering every column, digests (n_vus, DIGEST_ELEMS) torch)."""
+        import torch
+        w = words.detach().cpu().numpy().astype(np.int64)
+        k = w.shape[1]
+        if steps * k != row_words:
+            raise ValueError("chain_witness: steps x k != row_words")
+        rows = w[:n_vus * steps].reshape(n_vus, row_words)
+        car = self.carry_values(rows, word_bits=word_bits, role=role, steps=steps)     # (n_vus, steps, ce)
+        carry = np.zeros((CARRY_ELEMS, l), dtype=np.int64)
+        carry[:, :n_vus * steps] = car.reshape(n_vus * steps, CARRY_ELEMS).T
+        dg = self.native(rows, word_bits=word_bits, role=role)
+        dev = words.device
+        return torch.as_tensor(carry, device=dev), torch.as_tensor(dg, device=dev)
 
     def witness(self):
         return None
+
+    def census(self) -> dict:
+        return {"blake3_compression_rows_per_block": 14880, "blake3_finalize_xor_rows": 256,
+                "blake3_key": KEY.rstrip(b"\0").decode(), "blake3_framing": "chunk CVs in-circuit, parent fold by the verifier"}
+
+
+try:                                                          # the leaf registry (lane leaf-iface); absent on plain main
+    from . import registry as _registry
+    _registry.register(Blake3Leaf)
+except ImportError:                                           # pragma: no cover
+    pass
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -568,17 +627,19 @@ def census(word_bits: int = 8) -> dict:
     out["finalize_xor_rows"] = ctx.sys.m - m1
     out["per_block_bit_design"] = ctx.sys.m - m0
     out["per_block_detail"] = _count(ctx.sys)
-    # (b) one full column gadget for one role (selection, cv bit re-derivation, copies, holds, layout pins)
-    leaf = Blake3Leaf(word_bits)
+    # (b) one full column gadget for one role (position bits + layout indicators, cv selection, cv bit re-derivation,
+    #     copies, holds)
+    leaf = Blake3Leaf()
     ctx = _fresh_ctx()
     k = 8 * BLOCK_LEN // word_bits
     words = [ctx.hint(f"w{i}") for i in range(k)]
-    carry = [ctx.hint(f"carry{i}") for i in range(leaf.n_carry)]
+    carry = [ctx.hint(f"carry{i}") for i in range(CARRY_ELEMS)]
     m0 = ctx.sys.m
-    leaf.gadget(ctx, words, word_bits=word_bits, role=1, carry_in=carry)
-    out["per_column_role_rows"] = ctx.sys.m - m0                        # includes the layout pins (shared by both roles)
-    out["layout_pins"] = len(leaf.layout_pin_names())
-    out["carry_rows_per_role"] = leaf.n_carry
+    leaf.gadget(ctx, words, word_bits=word_bits, role=1, row_words=K_VU, carry_in=carry)
+    out["per_column_role_rows"] = ctx.sys.m - m0
+    out["layout_pins"] = 0
+    out["carry_rows_per_role"] = CARRY_ELEMS
+    out["digest_pins_per_role"] = DIGEST_ELEMS
     out["column_detail"] = _count(ctx.sys)
     # (c) the one-hot lookup alternative: a 4-bit XOR table through ctx.lookup, rows per nibble
     ctx = _fresh_ctx()

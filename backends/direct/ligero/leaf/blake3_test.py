@@ -59,9 +59,11 @@ def test_native_is_blake3_of_the_row_bytes(word_bits, role):
     rng = np.random.default_rng(7 + word_bits + role)
     rows = rng.integers(0, 1 << word_bits, size=(6, L.K_VU), dtype=np.int64)
     rows[0] = 0                                       # the all-zero row too
-    leaf = L.Blake3Leaf(word_bits)
+    leaf = L.Blake3Leaf()
     d = leaf.native(rows, word_bits=word_bits, role=role)
-    assert d.shape == (6, leaf.digest_elems) and d.min() >= 0 and d.max() < 1 << 16
+    nch = L.n_chunks(word_bits)
+    assert d.shape == (6, L.DIGEST_ELEMS) and (d[:, 0] == nch).all() and d[:, 1:].min() >= 0 and d[:, 1:].max() < 1 << 16
+    assert not d[:, 1 + 16 * nch:].any()
     ref = leaf.reference_digest(rows, word_bits=word_bits, role=role)
     for r in range(6):
         assert leaf.leaf_bytes(d[r]) == ref[r] and len(ref[r]) == 32
@@ -69,19 +71,24 @@ def test_native_is_blake3_of_the_row_bytes(word_bits, role):
 
 def test_leaf_bytes_rejects_out_of_range_limbs():
     with pytest.raises(ValueError):
-        L.leaf_bytes([1 << 16] + [0] * 31, 8)
+        L.leaf_bytes([2, 1 << 16] + [0] * (L.DIGEST_ELEMS - 2))       # limb out of range
     with pytest.raises(ValueError):
-        L.leaf_bytes([0] * 17, 8)
+        L.leaf_bytes([0] * L.DIGEST_ELEMS)                             # no chunks
+    with pytest.raises(ValueError):
+        L.leaf_bytes([2] + [1] * (L.DIGEST_ELEMS - 1))                 # unused slot not 0
+    with pytest.raises(ValueError):
+        L.leaf_bytes([2] + [0] * 32)                                   # wrong length
 
 
 def _column_system(word_bits: int, role: int):
-    leaf = L.Blake3Leaf(word_bits)
+    leaf = L.Blake3Leaf()
     ctx = LigeroCtx(FP8_ADA_RELATION.params)
     ctx.scope = "t"
     k = 8 * L.BLOCK_LEN // word_bits
     words = [ctx.hint(f"w[{i}]") for i in range(k)]
-    carry = [ctx.hint(f"carry[{i}]") for i in range(leaf.n_carry)]
-    digest, carry_out = leaf.gadget(ctx, words, word_bits=word_bits, role=role, carry_in=carry)
+    carry = [ctx.hint(f"carry[{i}]") for i in range(L.CARRY_ELEMS)]
+    digest, carry_out = leaf.gadget(ctx, words, word_bits=word_bits, role=role, row_words=L.K_VU, carry_in=carry)
+    assert len(digest) == leaf.digest_elems and len(carry_out) == leaf.carry_elems
     return leaf, ctx.sys, words, carry, digest, carry_out
 
 
@@ -90,12 +97,12 @@ def _one_row_inputs(leaf, sys, word_bits: int, role: int, seed: int):
     k = 8 * L.BLOCK_LEN // word_bits
     rng = np.random.default_rng(seed)
     rows = rng.integers(0, 1 << word_bits, size=(1, L.K_VU), dtype=np.int64)
-    car = leaf.carry_values(rows, word_bits=word_bits, role=role, steps=steps)          # (1, steps, n_carry)
-    pub = {n: v for n, v in leaf.layout_pin_values(steps).items()}
+    car = leaf.carry_values(rows, word_bits=word_bits, role=role, steps=steps)          # (1, steps, CARRY_ELEMS)
+    pub: dict = {}
     hints = {}
     for i in range(k):
         hints[f"w[{i}]"] = rows[0].reshape(steps, k)[:, i]
-    for i in range(leaf.n_carry):
+    for i in range(L.CARRY_ELEMS):
         hints[f"carry[{i}]"] = car[0, :, i]
     return rows, steps, car, pub, hints
 
@@ -109,7 +116,7 @@ def test_gadget_equals_native_along_one_row(word_bits):
     rows, steps, car, pub, hints = _one_row_inputs(leaf, sys, word_bits, role, 11 + word_bits)
     W = run_program_np(sys, pub, hints)
     assert failing_constraints(sys, W, pub) == []
-    outs = np.stack([_eval(e, W) for e in carry_out])                                    # (n_carry, steps)
+    outs = np.stack([_eval(e, W) for e in carry_out])                                    # (CARRY_ELEMS, steps)
     assert np.array_equal(outs[:, :-1], car[0, 1:, :].T), "carry_out[j] must be the next column's carry_in"
     dg = np.array([int(_eval(e, W)[steps - 1]) for e in digest])
     assert np.array_equal(dg, leaf.native(rows, word_bits=word_bits, role=role)[0])
@@ -145,8 +152,8 @@ def test_census_numbers_are_the_documented_ones():
     c = L.census(8)
     assert c["per_block_bit_design"] == 15136 and c["compression_rows"] == 14880
     assert c["lookup_xor_rows_per_u32"] == 2112 and c["bit_xor_rows_per_u32"] == 32
-    assert c["per_column_role_rows"] == 15319
-    assert L.Blake3Leaf(8).digest_elems == 32 and L.Blake3Leaf(16).digest_elems == 48
+    assert c["per_column_role_rows"] == 15331
+    assert L.DIGEST_ELEMS == 49 and L.CARRY_ELEMS == 49 and L.n_chunks(8) == 2 and L.n_chunks(16) == 3
 
 
 def test_gadget_torch_witness_path():
@@ -161,3 +168,14 @@ def test_gadget_torch_witness_path():
     assert check_constraints(sys, tables(sys, "cpu"), W, pub_t) == []
     dg = np.array([int(eval_expr(e, W)[steps - 1]) for e in digest])
     assert np.array_equal(dg, leaf.native(rows, word_bits=word_bits, role=role)[0])
+    # chain_witness (the compose layer's entry point): two VUs + 3 pad columns, columns laid out VU-major
+    k = 8 * L.BLOCK_LEN // word_bits
+    rows2 = np.random.default_rng(9).integers(0, 1 << word_bits, size=(2, L.K_VU), dtype=np.int64)
+    l = 2 * steps + 3
+    wt = torch.zeros((l, k), dtype=torch.int64)
+    wt[:2 * steps] = torch.as_tensor(rows2.reshape(2 * steps, k))
+    carry_t, dg_t = leaf.chain_witness(wt, word_bits=word_bits, role=role, row_words=L.K_VU, n_vus=2, steps=steps, l=l)
+    assert carry_t.shape == (L.CARRY_ELEMS, l) and dg_t.shape == (2, L.DIGEST_ELEMS)
+    car2 = leaf.carry_values(rows2, word_bits=word_bits, role=role, steps=steps)
+    assert np.array_equal(carry_t.numpy()[:, :2 * steps], car2.reshape(2 * steps, -1).T) and not carry_t[:, 2 * steps:].any()
+    assert np.array_equal(dg_t.numpy(), leaf.native(rows2, word_bits=word_bits, role=role))
