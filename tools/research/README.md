@@ -80,7 +80,16 @@ An unlisted or foreign machine is refused before anything is contacted. The
 tool ships as a content-addressed source snapshot under `<root>/tool/` and
 runs via `PYTHONPATH`; no pip, no credentials on the machine. `--source` ships
 `git archive HEAD` of a clean checkout to `<root>/src/<sha>/` (a dirty tree is
-refused, not mislabeled). The machine claims the run directory by run id and
+refused, not mislabeled). The ship is verified before anything may run from
+it: the archive lands in `<sha>.partial-<nonce>/`, its sha256 is compared on
+both ends and the extracted file set against the archive's manifest, then the
+directory is renamed into place carrying `READY.json` (identity, archive
+sha256, file count, launcher). A failed or truncated transfer removes its
+partial directory and the run is refused (`SourceNotReady`); the machine
+refuses to execute from a source directory without a `READY.json` naming the
+requested identity (the legacy `.complete` marker is verified per file once,
+then adopted or quarantined). The attempt records `execution.remote.source_sha`
+and `source_archive_sha256`. The machine claims the run directory by run id and
 starts the runner detached; re-delivering a launch after an ssh drop finds
 the claim and reports state. `--exclusive` refuses if any run is live, and
 any launch refuses if an exclusive holder is live.

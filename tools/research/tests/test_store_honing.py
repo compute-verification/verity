@@ -466,7 +466,8 @@ def test_pull_streams_ten_thousand_small_files_in_a_few_tars_with_identical_layo
     assert rc == 0, out
     tars = [a for a, _ in log if a[0] == "tar"]
     p = out["pulled"][0]
-    assert p["id"] == art and p["blobs"] == N + 1 and p["batches"] == len(tars) == 4 and p["fetched"] == N + 1 and p["reused"] == 0, p   # 10001 distinct blobs / 3000 per tar
+    assert p["id"] == art and p["blobs"] == N + 1 and p["batches"] == len(tars) - 1 == 4 and p["fetched"] == N + 1 and p["reused"] == 0, p   # 10001 distinct blobs / 3000 per tar, + one tar for the labels
+    assert out["labels"] == {"seen": 0, "added": 0, "already": 0, "bad": 0}, "no assertions on the machine: nothing pulled, nothing invented"
     assert dt < 180, f"{N} files took {dt:.1f}s over a local shell"   # ~15 s on a laptop (4-5 s of it is bsdtar); a hang guard, not a benchmark
     local = LocalStore(tmp_path / "local")
     got = local.fetch(art)

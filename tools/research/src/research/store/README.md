@@ -356,12 +356,20 @@ copies an attempt manifest plus its outputs' manifests and blobs from a machine'
 
 ## 8. Labels
 
-`labels/<target>/<ts>-<by>.json`:
+`labels/<target>/<ts>-<by>.json` locally; on the remote `labels/<target>/<sha256 of the canonical assertion>.json` (content key,
+immutable, append-only; a target's assertion set is the listing of its prefix):
 
 ~~~json
 {"schema": "research/label/v0.1", "target": "art:...", "key": "proof_class", "value": "COMPLETE_ZK_BACKEND",
  "by": "red-team-zk-2", "ts": "2026-09-22T11:20:29Z", "ref": "art:<findings>|r<run id>|<url>"}
 ~~~
+
+Assertions are durable with what they describe (`labels_sync.py`): `push RUN` / `attempt publish` / `push ART` push the assertions
+about the attempt, its derivation and its named artifacts (`attempt_targets`); `push --pending` and `labels-sync` push every local
+one; `reindex --remote`, `labels-sync` and `pull --from MACHINE` bring remote / machine assertions into the local layout and index.
+`preserved` is a three-leg gate — attempt manifest, artifacts, labels — and names the leg that fails; a preserved Attempt is not
+preserved until its assertions are on the remote. `labels TARGET --remote` shows each assertion as both / LOCAL ONLY / REMOTE ONLY.
+Conflicting assertions coexist on both sides.
 
 Append-only, one file per assertion (`O_EXCL`, mode 0444), never read-modify-write. The file name uses the compact ts
 (`20260922T112029Z`), `by` restricted to `[A-Za-z0-9._-]`, and a `~N` suffix when the same asserter labels twice in one
@@ -416,8 +424,11 @@ research data lookup --tool NAME [--param k=v]... [--input name=art:...]... [--c
                                                  come from this machine's conditions(); --source-tree hashes that tree's lockfiles
 research data select [--kind K] [--where meta.key=value]... [--tool T] [--derivation D] [--attempt R] [--label k=v] [--json|--ids]
 research data snapshot --name NAME (--members art:... | --select <select flags>) [--note TEXT]  -> art id (dataset-snapshot/v1)
-research data labels TARGET [--history] [--key K] [--by PAT] [--json]
+research data labels TARGET [--history] [--key K] [--by PAT] [--remote] [--json]
+                                              --remote: both / LOCAL ONLY (not durable) / REMOTE ONLY per assertion; exit 1 if any is local only
 research data label  TARGET KEY VALUE --by WHO [--ref REF] [--value-json]      warns (stderr) outside the vocabulary (§8.1); writes anyway
+research data preserved (RUN|ART)... [--mode head|readback|recorded] [--json]
+                                              the durability gate: attempt manifest + artifacts + labels all on the remote, else the failing legs
 research data vocab [--json]                  the label vocabulary (§8.1): key, asserter group, value form, enum values, status
 research data refresh-fixtures [--preserve] [--dry-run] [--repo DIR] [--json]
                                               re-register every fixtures/artifacts.json entry whose bytes changed (§7): put as a bare
