@@ -55,6 +55,17 @@ def actual(row: resolver.Row) -> dict:
     row_dir = row.path("commit_summary.json").parent
     if not (row_dir / "commit" / "summary.json").is_file():
         raise resolver.NotResolvable(f"{row.key}: commit/summary.json not beside commit_summary.json at {row_dir}")
+    if not (row_dir / "commit.log").is_file() and row.has("commit.log"):
+        # the store's per-row `records` tree omitted commit.log (engine_settings' source); it lives in the shared `commit_logs` tree
+        # (fixtures.toml [artifacts], resolved + sha-checked by row.path) -- summarize() reads one directory, so re-join the two here
+        view = resolver.scratch(row) / "commit_view"
+        view.mkdir(parents=True, exist_ok=True)
+        for name, src in (("commit", row_dir / "commit"), ("commit_summary.json", row_dir / "commit_summary.json"), ("commit.log", row.path("commit.log"))):
+            dst = view / name
+            if dst.is_symlink() or dst.exists():
+                dst.unlink()
+            dst.symlink_to(src)
+        row_dir = view
     cs = summarize(str(row_dir), rc)
     v = row.json("commit/verdict.json") if row.has("commit/verdict.json") else None
     return dict(_lift(cs, v), source="recomputed")
