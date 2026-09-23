@@ -25,7 +25,13 @@ with the current code, and the two are diffed as canonical JSON on every field t
                           element_range, rank): manifest_digest, identity count, identity_rows_sha256      STRONG   T0 (rebuild: CPU minutes)
     program_digest        the digest chain of the record is one digest (build_summary == artifact.json == workload_program ==
                           the Commit's key); the T2 rebuild (derive_step on the meta device, 1-4 h, 18-181 GB) is documented, not run   STRONG   T2
+    step_segmentation     per request: `request_component`'s steps / n_nodes / step_nodes (sha256) over the component descriptors ==
+                          build_workload/workload_program.json, the Build's own sampling-event count (result.json spec_histogram),
+                          chronology.json's component_steps_equal_cap + members with no segment                             STRONG   T0
     global_match_checks   GM-01 verdict, G1..G8 status + problem counts, X-09 verdict / XREQ total, alternate criterion, lag account   weak*   T0
+    stoch_value           stochastic rows: stoch_recompute re-run over the capture's sampler-chain snapshots (GumbelTopPTokenSelect_v1
+                          lane walk under the declared seed / T / top-p) == match_stoch.json verdict, summary, per-row tokens and
+                          statuses (sha256), declared facts, Program S; the snapshot steps (every engine step)             STRONG   T0
     executed_prefix       executed_prefix_of_record re-run over the record's served tokens / caps / declared EOS + LAG == tokens.json,
                           G6 lengths, eos_stop_requests                                                                               weak*   T0
     coverage              coverage_check(manifest of record, instrumented layouts) == the Commit's recorded coverage                    STRONG   T0(+manifest)
@@ -111,7 +117,7 @@ def _params():
     for row in resolver.rows():
         for chk in checks.all_checks():
             marks = [pytest.mark.regression]
-            if chk.TIER != "T0" or chk.NAME in ("coverage", "manifest_digest"):
+            if chk.TIER != "T0" or chk.NAME in ("coverage", "manifest_digest", "step_segmentation", "stoch_value"):
                 marks.append(pytest.mark.pod)
             if chk.STRENGTH == "weak":
                 marks.append(pytest.mark.weak)
