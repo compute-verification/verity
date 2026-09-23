@@ -359,6 +359,26 @@ RETAIN_MODES = ("device", "host", "none", "sample")
 # family for the X-03 identity check, the step trace and the footprint families
 HIDDEN_M1_PREFIXES = ("fa2.m1/", "fa3.m1/")
 TP_PARTIAL_RE = re.compile(r"/(part|shard)_rank\d+$")   # [R14 TP-03] <module path>/part_rank<r>: the rank-local input of that module's collective
+
+
+def hazard_of_record(name: str, HAZARD_LEAVES: "tuple[str, ...] | frozenset[str] | set[str]") -> bool:
+    """v1's in-place HAZARD decision for one acquired tensor name (`<module path>/<slot>`, a tap plane or a TP partial): snapshot at the hook
+    (True) or batch at step end (False).  Encodes vLLM's aliasing by leaf name (`NativeHostCommitter.HAZARD_LEAVES` + the two name rules) --
+    a by-name lifetime table (F-r19-int-20, Draft 3 §11.3.1), owned HERE; `verity_vllm.acquire.plan` names it as a RESIDUAL through this one
+    function rather than restating it."""
+    if TP_PARTIAL_RE.search(name):
+        return True          # [R14 TP-03] a collective's input partial: snapshot now, before the NCCL call consumes it
+    if name.startswith("moe/") and name.endswith("/up"):
+        return True          # [R16 moe FLUSH-03] the fused-MoE up plane: its workspace is the block's own w2 output (cache1/cache3 alias)
+    base, _, idx = name.partition("/")
+    leaf = base.rsplit(".", 1)[-1]
+    if leaf in HAZARD_LEAVES or "embed" in leaf:                 # the caller's table (NativeHostCommitter.HAZARD_LEAVES of record); named so the by-name lint sees the rule
+        return True
+    if idx == "1" and "norm" in leaf.lower():
+        return True
+    return False
+
+
 FAMILY_RULES = (   # (substring of the tensor name -> value family) for the footprint profile; first match wins
     ("fa2.m1/", "fa2_hidden_m1"), ("fa3.m1/", "fa3_hidden_m1"), ("sampled_token_ids", "sampled_ids"), ("logits", "logits"), ("embed_tokens/in", "input_ids"),
     ("embed_tokens", "embedding"), ("qkv_proj", "gemm_qkv"), ("o_proj", "gemm_o"), ("gate_up_proj", "gemm_gate_up"), ("down_proj", "gemm_down"),
@@ -1544,17 +1564,7 @@ class NativeHostCommitter:
     HAZARD_LEAVES = ("qkv_proj", "o_proj", "down_proj", "embed_tokens", "sampler")
 
     def _hazard(self, name: str) -> bool:
-        if TP_PARTIAL_RE.search(name):
-            return True          # [R14 TP-03] a collective's input partial: snapshot now, before the NCCL call consumes it
-        if name.startswith("moe/") and name.endswith("/up"):
-            return True          # [R16 moe FLUSH-03] the fused-MoE up plane: its workspace is the block's own w2 output (cache1/cache3 alias)
-        base, _, idx = name.partition("/")
-        leaf = base.rsplit(".", 1)[-1]
-        if leaf in self.HAZARD_LEAVES or "embed" in leaf:
-            return True
-        if idx == "1" and "norm" in leaf.lower():
-            return True
-        return False
+        return hazard_of_record(name, self.HAZARD_LEAVES)
 
     def _acquire(self, name: str, t: Any, job: _StepJob) -> None:
         if t.device.type != "cuda":

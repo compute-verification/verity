@@ -52,6 +52,18 @@ IGNORED_ROOT_CONSUMERS = frozenset({"_C_cache_ops.reshape_and_cache_flash.defaul
 #: `model.normalizer` buffer (`torch.tensor(hidden_size ** 0.5)` at model dtype, no checkpoint tensor) is one bf16 word that is
 #: a function of `C["H"]` alone — the same class as the rotary table, validated exactly against the captured snapshot word.
 ANALYTIC_TABLES = {"cos_sin": "analytic.check_cos_sin", "normalizer": "analytic.check_normalizer"}
+
+
+def analytic_table_of_buffer(name: str) -> str | None:
+    """The ANALYTIC_TABLES field a runtime BUFFER (`named_buffers()` path) is the observation of, or None: the one place the two derived
+    tables are recognised by name (`m1_capture.dump_cos_sin` / `dump_normalizer` dump them; `verity_vllm.acquire.plan` names them as a
+    residual).  vLLM naming facts: the rotary table lives on every layer's `rotary_emb.cos_sin_cache` (one shared table), Gemma-2's
+    normalizer on `model.normalizer`."""
+    if name.endswith("rotary_emb.cos_sin_cache"):
+        return "cos_sin"
+    if name == "model.normalizer" or name.endswith(".normalizer"):
+        return "normalizer"
+    return None
 #: Frozen.  Name patterns of the two non-weight root classes (the policy classifies; a profile's own `root_class` is advisory).
 #: [SHARED-CODE lane cov-ln] the module prefix (`model` for Llama/Qwen/Gemma/Phi, `gpt_neox` for GPT-NeoX/Pythia) and the attention
 #: submodule name (`self_attn` / `attention`) are vLLM naming facts of the family, not of the root class: the two classes below are

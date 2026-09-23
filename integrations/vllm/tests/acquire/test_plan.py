@@ -24,7 +24,7 @@ def tree(**extra):
              "body.blocks.0.proj_a": ["Lin", "Base", "Module"], "body.blocks.0.act": ["Act", "Module"], "body.blocks.0.norm_out": ["Norm", "Module"],
              "body.norm": ["Norm", "Module"], "head": ["Head", "Module"], "logits": ["Logits", "Module"], "body.blocks.0.attn": ["Attn", "Module"]}
     paths.update(extra)
-    return runtime_tree_from_paths(paths, buffers=["body.blocks.0.attn.rope.cos_sin_cache", "body.scale"], runner={"sample": True, "sampler_module": True, "sampler_class": ["Sampler"]},
+    return runtime_tree_from_paths(paths, buffers=["body.blocks.0.attn.rotary_emb.cos_sin_cache", "body.scale"], runner={"sample": True, "sampler_module": True, "sampler_class": ["Sampler"]},
                                    source="synthetic")
 
 
@@ -59,7 +59,7 @@ def base_rows():
         if step == 1:
             rows.append(row("instance_outputs", "body.blocks.0.norm_in", "1", step=step, spec="Norm_v1"))
     rows += [row("weights", "body.blocks.0.proj_a.weight", "weight", step="*", dtype="bf16"),
-             row("weights", "body.blocks.0.attn.rope.cos_sin_cache", "weight", step="*", dtype="bf16")]
+             row("weights", "body.blocks.0.attn.rotary_emb.cos_sin_cache", "weight", step="*", dtype="bf16")]
     return rows
 
 
@@ -122,7 +122,7 @@ def test_many_sites_policy_producer_output_first_and_analytic_beside():
     assert sorted(s.kind for s in v.sites) == ["consumer_input", "producer_output"]
     assert v.chosen.kind == "producer_output" and v.why.startswith("several legal sites")
     # the analytic-table weight: registered input first, the analytic check beside it
-    w = by["body.blocks.0.attn.rope.cos_sin_cache/weight"]
+    w = by["body.blocks.0.attn.rotary_emb.cos_sin_cache/weight"]
     assert sorted(s.kind for s in w.sites) == ["analytic_table", "registered_input"] and w.chosen.kind == "registered_input"
 
 
@@ -202,10 +202,10 @@ def test_residuals_name_the_table():
     assert res[("GATHER_FLUSH_LEAVES", "*")].values == ["body.blocks.0.proj_a/0"]
     assert set(res[("PRE_FLUSH_LEAVES", "*")].values) == {"body.blocks.0.norm_in/0", "body.blocks.0.norm_in/1", "body.blocks.0.norm_in/out"}
     # the analytic buffer that IS a weights Value is not a residual; a buffer of that leaf without one is not either (only cos_sin / normalizer leaves)
-    assert ("ANALYTIC_TABLES", "body.blocks.0.attn.rope.cos_sin_cache") not in res
-    rows = [r for r in base_rows() if r["op_path"] != "body.blocks.0.attn.rope.cos_sin_cache"]
+    assert ("ANALYTIC_TABLES", "body.blocks.0.attn.rotary_emb.cos_sin_cache") not in res
+    rows = [r for r in base_rows() if r["op_path"] != "body.blocks.0.attn.rotary_emb.cos_sin_cache"]
     plan2, _, _ = make_plan(rows)
-    assert any(r.table == "ANALYTIC_TABLES" and r.module == "body.blocks.0.attn.rope.cos_sin_cache" for r in plan2.residuals)
+    assert any(r.table == "ANALYTIC_TABLES" and r.module == "body.blocks.0.attn.rotary_emb.cos_sin_cache" for r in plan2.residuals)
     doc = plan.to_json()
     assert all(set(r) == {"table", "module", "cls", "reason", "values"} for r in doc["residuals"])
 

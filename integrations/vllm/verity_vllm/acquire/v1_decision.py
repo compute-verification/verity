@@ -23,7 +23,7 @@ from typing import Any, Mapping
 
 from verity_capture.commit.required_manifest import promoted_observation
 from verity_vllm.acquire.runtime_tree import RUNNER_PATH, RuntimeTree
-from verity_vllm.acquire.plan import HIDDEN_FAMILIES, MOE_FAMILY, TP_FAMILY, _v1_tables
+from verity_vllm.acquire.plan import HIDDEN_TAP_OF_FAMILY, MOE_FAMILY, TP_FAMILY, _v1_tables
 
 
 @dataclass
@@ -112,7 +112,7 @@ def v1_decision(rt: RuntimeTree, manifest: Mapping[str, Any] | None, *, tables: 
             d.runner.append("splits")
             d.causes[f"{RUNNER_PATH}|launch_proxy"] = "install(): split-kernel launch proxies (derived-S manifest)"
     # sources by manifest family
-    for fam, tap in HIDDEN_FAMILIES.items():
+    for fam, tap in HIDDEN_TAP_OF_FAMILY.items():
         if fam in fams:
             for p in sorted({str(r.get("op_path")) for r in rows if r.get("family") == fam}):
                 d.taps.append((p, "*"))

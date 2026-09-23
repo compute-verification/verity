@@ -43,16 +43,21 @@ POLICY = ("one legal site: chosen. several: producer output first (the owning mo
           "when the producer is a promoted interior Call (the Value is no module's return, so the first consumer's pre-hook is the only module "
           "boundary that carries it); a native tap / runner return / registered input / prescribed materialisation when the Value's family names "
           "one. none: UNSUPPORTED -- the plan fails closed by Value, nothing is guessed from a module class.")
-HIDDEN_FAMILIES = {"fa2_hidden_m1_stream": "fa2.m1", "fa3_hidden_m1_stream": "fa3.m1"}
+#: The required-value manifest's `family` vocabulary (`required_manifest.FAMILIES`, one entry each) -> the ROUTE the plan derives a site by.
+#: This is the manifest's own schema read from the row's `family` field -- not a module class, a module path or a Definition family -- so
+#: the dispatch below is a schema lookup (`ROUTE_OF_FAMILY.get(fam)`), never a name predicate (by-name lint, Draft 3.1 §12.4).
+ROUTE_OF_FAMILY = {"instance_outputs": "module_output", "input_token_ids": "module_input",
+                   "fa2_hidden_m1_stream": "hidden_tap", "fa3_hidden_m1_stream": "hidden_tap",
+                   "moe_block_stream": "moe_tap", "tp_rank_partials": "tp_tap",
+                   "sampled_token_ids": "runner_return", "sampler_seed": "runner_state", "sampler_splits": "launch_proxy",
+                   "weights": "registered_input"}
+MODULE_ROUTES = ("module_output", "module_input")                        # the routes whose sites are module boundaries (confirm_modules)
+HIDDEN_TAP_OF_FAMILY = {"fa2_hidden_m1_stream": "fa2.m1", "fa3_hidden_m1_stream": "fa3.m1"}   # hidden_tap route -> the kernel tap
 MOE_FAMILY = "moe_block_stream"
 TP_FAMILY = "tp_rank_partials"
 WEIGHTS_FAMILY = "weights"
-SAMPLER_FAMILIES = {"sampled_token_ids": "runner_return", "sampler_seed": "runner_state", "sampler_splits": "launch_proxy"}
-MODULE_OUTPUT_FAMILIES = ("instance_outputs",)
-INPUT_FAMILIES = ("input_token_ids",)
-#: derived tables the Match stage dumps and checks analytically (root_policy.ANALYTIC_TABLES): by BUFFER leaf name, not by model
-ANALYTIC_BUFFER_LEAVES = {"cos_sin_cache": "cos_sin", "normalizer": "normalizer"}
-PADDING_CLASSES = ("padding", "inactive")
+#: manifest `boundary_class` / `enablement` values that mean "materialised by enablement, no runtime producer" (padding_steps)
+PRESCRIBED_ENABLEMENT = frozenset({"padding", "inactive"})
 
 
 @dataclass(frozen=True)
@@ -215,7 +220,7 @@ def value_classes(manifest: Mapping[str, Any], padding_identities: Iterable[Mapp
         fam = str(r.get("family") or "")
         op = str(r.get("op_path"))
         member = str(r.get("output_member", "out"))
-        if fam in HIDDEN_FAMILIES:
+        if ROUTE_OF_FAMILY.get(fam) == "hidden_tap":
             member = "*"                                          # the geometry name is per (layer, step); one Value class per tap site
         key = (op, member, fam)
         v = out.get(key)
@@ -234,7 +239,7 @@ def value_classes(manifest: Mapping[str, Any], padding_identities: Iterable[Mapp
             if r.get(extra) and v.anchor is None:
                 v.anchor = str(r[extra])
         bc = str(r.get("boundary_class") or "")
-        if bc in PADDING_CLASSES or str(r.get("enablement") or "") in PADDING_CLASSES or _identity_key(r) in padded:
+        if bc in PRESCRIBED_ENABLEMENT or str(r.get("enablement") or "") in PRESCRIBED_ENABLEMENT or _identity_key(r) in padded:
             v.prescribed_identities += 1
     return [out[k] for k in sorted(out)]
 
@@ -265,7 +270,8 @@ def sites_of(v: ValuePlan, corr: AcquireCorrespondence) -> tuple[list[Site], lis
         if v.prescribed:
             return legal, refused                                # every identity is prescribed: no runtime site needed; else the executed steps' site follows
 
-    if fam in MODULE_OUTPUT_FAMILIES or fam in INPUT_FAMILIES or (fam == "" and module != RUNNER_PATH):
+    route = ROUTE_OF_FAMILY.get(fam)
+    if route in MODULE_ROUTES or (fam == "" and module != RUNNER_PATH):
         rs = corr.return_slot(call)
         if rs is not None and not v.promoted:
             if rt.has_module(module):
@@ -291,10 +297,10 @@ def sites_of(v: ValuePlan, corr: AcquireCorrespondence) -> tuple[list[Site], lis
                               f"the Program's dataflow reads the Value as positional argument 0 of consumer {i} (manifest `consumers`)"))
         return legal, refused
 
-    if fam in HIDDEN_FAMILIES:
+    if route == "hidden_tap":
         anchor = v.anchor
         if anchor and rt.has_module(anchor):
-            legal.append(Site("native_tap", module, "*", "n/a", f"the attention hidden stream of module {anchor}: the {HIDDEN_FAMILIES[fam]} kernel tap (manifest `attention_module`)"))
+            legal.append(Site("native_tap", module, "*", "n/a", f"the attention hidden stream of module {anchor}: the {HIDDEN_TAP_OF_FAMILY[fam]} kernel tap (manifest `attention_module`)"))
         elif anchor:
             refuse("native_tap", module, "*", f"attention module {anchor} is not a module of the runtime tree")
         else:
@@ -318,8 +324,8 @@ def sites_of(v: ValuePlan, corr: AcquireCorrespondence) -> tuple[list[Site], lis
             refuse("native_tap", module, v.output_member, "the owning module is not a module of the runtime tree")
         return legal, refused
 
-    if fam in SAMPLER_FAMILIES:
-        kind = SAMPLER_FAMILIES[fam]
+    if route in ("runner_return", "runner_state", "launch_proxy"):
+        kind = route
         rs = corr.return_slot(call)
         if rt.runner.get("sample"):
             legal.append(Site(kind, module, _slot_label(rs), "n/a", f"the runner's sample() ({fam})"))
@@ -334,9 +340,11 @@ def sites_of(v: ValuePlan, corr: AcquireCorrespondence) -> tuple[list[Site], lis
             legal.append(Site("registered_input", module, "weight", "n/a", "a weight of record: hashed once at registration"))
         else:
             refuse("registered_input", module, "weight", f"neither the weight's owning module {owner!r} nor a buffer of that name is in the runtime tree")
-        for suffix, table in ANALYTIC_BUFFER_LEAVES.items():
-            if leaf.endswith(suffix):
-                legal.append(Site("analytic_table", module, table, "n/a", f"a derived table the Match stage dumps and checks analytically ({table})"))
+        from verity_capture.root_policy import analytic_table_of_buffer
+
+        table = analytic_table_of_buffer(module)
+        if table is not None:
+            legal.append(Site("analytic_table", module, table, "n/a", f"a derived table the Match stage dumps and checks analytically ({table})"))
         return legal, refused
 
     refuse("?", module, v.output_member, f"family {fam!r} has no site rule")
@@ -371,11 +379,10 @@ def _v1_tables() -> dict[str, Any]:
 
 
 def hazard_by_table(module: str, slot: str, hazard_leaves: set[str]) -> bool:
-    """v1's `_hazard` decision for a module-output site (the in-place facts the table encodes)."""
-    leaf = module.rsplit(".", 1)[-1]
-    if leaf in hazard_leaves or "embed" in leaf:
-        return True
-    return slot == "1" and "norm" in leaf.lower()
+    """v1's `_hazard` decision for a module-output site (the in-place facts the table encodes) -- v1's own function, not a restatement."""
+    from verity_capture.experimental.commit_integ.native_host import hazard_of_record
+
+    return hazard_of_record(f"{module}/{slot}", hazard_leaves)
 
 
 def residuals_of(values: list[ValuePlan], rt: RuntimeTree, tables: Mapping[str, Any] | None = None) -> list[Residual]:
@@ -410,12 +417,13 @@ def residuals_of(values: list[ValuePlan], rt: RuntimeTree, tables: Mapping[str, 
         if hits and t[table]:
             out.append(Residual(table, "*", "*", f"v1's gather collector flushes staged bytes at these module boundaries ({table}); the flush points are lifetime facts "
                                 "the structure does not carry yet", values=[v.value_id for v in hits]))
+    from verity_capture.root_policy import analytic_table_of_buffer
+
     for b in sorted(rt.buffers):
-        leaf = b.rsplit(".", 1)[-1]
-        for suffix, table in ANALYTIC_BUFFER_LEAVES.items():
-            if leaf.endswith(suffix) and b not in weights:
-                out.append(Residual("ANALYTIC_TABLES", b, table, "v1's Match stage dumps this buffer by name and checks it analytically (root_policy.ANALYTIC_TABLES); "
-                                    "the manifest names no weight Value for it"))
+        table = analytic_table_of_buffer(b)
+        if table is not None and b not in weights:
+            out.append(Residual("ANALYTIC_TABLES", b, table, "v1's Match stage dumps this buffer by name and checks it analytically (root_policy.ANALYTIC_TABLES); "
+                                "the manifest names no weight Value for it"))
     return out
 
 
@@ -432,7 +440,7 @@ def confirm_modules(values: Iterable[ValuePlan], corr: AcquireCorrespondence) ->
     confirmed = 0
     unconfirmed: list[dict[str, str]] = []
     for v in values:
-        if v.family not in MODULE_OUTPUT_FAMILIES and v.family not in INPUT_FAMILIES:
+        if ROUTE_OF_FAMILY.get(v.family) not in MODULE_ROUTES:
             continue
         module = corr.owning_module({"op_path": v.op_path, "output_member": v.output_member})
         for m, role in [(module, "owning module")] + [(c, f"consumer {i}") for i, c in enumerate(v.consumers)]:

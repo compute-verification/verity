@@ -56,7 +56,7 @@ def test_same_plan_under_both_sources_and_the_source_is_recorded():
     assert a.correspondence["source"] == "v1_annotations" and "fallback" in a.correspondence and a.correspondence["modules"] == {"applicable": False, "confirmed": 0, "unconfirmed": []}
     assert b.correspondence["source"] == "correspondence" and b.correspondence["schema"] == RC.SCHEMA and b.correspondence["programs"] == {"build_request": "d" * 64}
     assert b.correspondence["modules"]["applicable"] and b.correspondence["modules"]["unconfirmed"] == []
-    assert b.correspondence["modules"]["confirmed"] == sum(1 for v in b.values if v.family in P.MODULE_OUTPUT_FAMILIES + P.INPUT_FAMILIES) + sum(len(v.consumers) for v in b.values)
+    assert b.correspondence["modules"]["confirmed"] == sum(1 for v in b.values if P.ROUTE_OF_FAMILY.get(v.family) in P.MODULE_ROUTES) + sum(len(v.consumers) for v in b.values)
     da, db = a.to_json(), b.to_json()
     assert da["correspondence"] != db["correspondence"] and da["plan_digest"] == db["plan_digest"]
     assert P.load_plan.__name__ and P.plan_digest(db) == db["plan_digest"]

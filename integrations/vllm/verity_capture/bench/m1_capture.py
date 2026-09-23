@@ -58,9 +58,11 @@ def dump_cos_sin(engine: "va.Engine", out: Path) -> Path | None:
     import numpy as np
     import torch
 
+    from verity_capture.root_policy import analytic_table_of_buffer   # the one by-name recognition of the two analytic-table buffers
+
     buf = None
     for name, b in engine.model.named_buffers():
-        if name.endswith("rotary_emb.cos_sin_cache"):
+        if analytic_table_of_buffer(name) == "cos_sin":
             buf = b
             break
     if buf is None:
@@ -96,8 +98,10 @@ def dump_normalizer(engine: "va.Engine", out: Path) -> Path | None:
     import numpy as np
     import torch
 
+    from verity_capture.root_policy import analytic_table_of_buffer
+
     for name, b in engine.model.named_buffers():
-        if name == "model.normalizer" or name.endswith(".normalizer"):
+        if analytic_table_of_buffer(name) == "normalizer":
             if b.dtype != torch.bfloat16 or b.dim() != 0:
                 return None
             words = b.detach().reshape(1).contiguous().view(torch.int16).cpu().numpy().view(np.uint16).reshape(())
