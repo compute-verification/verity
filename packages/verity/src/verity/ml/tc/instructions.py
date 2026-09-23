@@ -314,9 +314,11 @@ INSTRUCTIONS: dict[str, Instruction] = {
             model=BLACKWELL_SM120_NVF4,
             # Model BlockScaledAlignAdd (lane fp4-re) reproduces every word of 8.34M sweeps; lane fp4-proof's fresh-seed sweep
             # (_PIN_FP4) supplied P2's missing 3.4M elements and verity.verification.trust computed PINNED (P1-P5) on 2026-09-23
-            # before this flip (registry <= computed level, lane pin-bf16).
+            # before this flip (registry <= computed level, lane pin-bf16).  Re-published once lane fp4-proof's B-Ligero
+            # relation supplied Tc (2,048 honest VUs / 3,131 negatives, art:098c184a...): still PINNED, Ta and Tc now PASS,
+            # Td (hardware-in-the-loop replay of the frozen instance set) open.  Previous: art:de42d6cad7c63a387d64535efc...
             status="pinned",
-            dossier="art:de42d6cad7c63a387d64535efc151310fd9632dd9c2dcd4502d35c3f5dcd6422",
+            dossier="art:3e02931df28cccd398de4219f9d977371a58cdc6e8addfb7ff0a6269e5481b0e",
             evidence=(_RTX5090_FP4_RE, _AUTOPROOF, _AUTOPROOF_UNSCALED, _RTX5090_NVF4, _PIN_FP4,
                       "model agrees for arbitrary finite FP32 accumulators (D12's zero-init limitation lifted; D16 and D17 resolved by "
                       "lane fp4-re); NaN/inf accumulators and sums leaving binary32 are outside the model's domain (recorded)"),
