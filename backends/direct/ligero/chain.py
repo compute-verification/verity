@@ -86,11 +86,48 @@ class ChainCoefs:
 
 def chain_coefs(sys: System, layout: Layout, rc: torch.Tensor, y16_pub: torch.Tensor) -> ChainCoefs:
     """``rc``: (D, N_FAMILIES, l) uniform challenge coefficients (one per constraint; entries at masked-out
-    positions are ignored); ``y16_pub``: (l,) the claimed BF16 words at the chain ends (0 elsewhere)."""
+    positions are ignored); ``y16_pub``: (l,) the claimed public words at the chain ends (0 elsewhere)."""
     ch = sys.chain
     device = rc.device
     D, _, l = rc.shape
-    start, link, end = layout.masks(device)
+    tabs = _chain_tables(sys, layout, device)
+    rows, T = tabs["rows"], tabs["terms"]
+    # rm[:, v, :] = the coefficients of virtual family v masked to their constraint positions: v = 0..6 are the seven
+    # families (link x3, start x3, end component 0), v = 6 + x (x >= 1) the end component x, which draws its
+    # coefficients from END_FAMILIES[x] (a link family, unused at end columns) under the END mask.
+    rm = (rc.index_select(1, tabs["famsel"]) * tabs["maskmat"][None, :, :]) % P    # (D, V, l)
+    # every (row, family, kappa) term of r^T A at once: coef[:, row, j] += kappa rc[f][j] (masked); the link terms'
+    # W[c][j + 1] coefficient is the same sum shifted one column right.  Exact integer sums of < 2^31 residues (a few
+    # hundred terms per entry: no overflow), reduced once -- the same residues as the per-term reduction, in ~10 kernels
+    # instead of one per term (lane hostphase).
+    coef = torch.zeros((D, len(rows), l), dtype=torch.int64, device=device)
+    coef.index_add_(1, T["row"], (rm.index_select(1, T["fam"]) * T["kappa"][None, :, None]) % P)
+    coef[:, :, 1:].index_add_(1, T["shift_row"], rm[:, 0:3, :-1])
+    coef %= P
+    rhs = torch.zeros((D,), dtype=torch.int64, device=device)
+    for x in range(3):
+        Y = ch["y"][x]
+        r_link = rm[:, x, :]                                                       # zero off the linked positions
+        rhs = (rhs + (r_link.sum(1) % P) * (Y.c % P)) % P                          # b = +Y.c
+    # end_j: sum_i kappa_i W[i][j] + Y.c = y_pub[j] (one constraint per end component)
+    y_vals = end_values(ch, y16_pub.to(device))
+    for x, ((Y, _, _, _), yv) in enumerate(zip(end_terms(ch), y_vals)):
+        r_end = rm[:, 6 + x, :]
+        rhs = (rhs + ((r_end * ((yv - Y.c) % P)[None, :]) % P).sum(1)) % P
+    return ChainCoefs(rows, coef, rhs)
+
+
+_TABLES: dict = {}
+
+
+def _chain_tables(sys: System, layout: Layout, device) -> dict:
+    """The constant part of ``chain_coefs`` for (system, layout, device): the involved rows, the (row, virtual family,
+    kappa) term table, the shifted link rows, the virtual-family -> rc-family selector and the (V, l) mask matrix."""
+    key = (id(sys), layout.l, layout.n_vus, layout.steps, str(device))
+    hit = _TABLES.get(key)
+    if hit is not None and hit[0] is sys:
+        return hit[1]
+    ch = sys.chain
     ends = end_terms(ch)
     involved: dict[int, int] = {}
     for idx in ch["c"]:
@@ -98,26 +135,22 @@ def chain_coefs(sys: System, layout: Layout, rc: torch.Tensor, y16_pub: torch.Te
     for e in ch["y"] + [Y for Y, _, _, _ in ends]:
         for idx in e.lin:
             involved.setdefault(idx, len(involved))
-    rows = torch.tensor(list(involved.keys()), dtype=torch.int64, device=device)
-    coef = torch.zeros((D, len(involved), l), dtype=torch.int64, device=device)
-    rhs = torch.zeros((D,), dtype=torch.int64, device=device)
-    y_vals = end_values(ch, y16_pub.to(device))
+    row, fam, kappa, shift_row = [], [], [], []
     for x in range(3):
         c_idx, Y = ch["c"][x], ch["y"][x]
-        r_link = (rc[:, x, :] * link[None, :]) % P            # (D, l), zero off the linked positions
-        r_start = (rc[:, 3 + x, :] * start[None, :]) % P
-        # link_j: + W[c][j+1] - sum_i kappa_i W[i][j] - Y.c = 0
         ci = involved[c_idx]
-        coef[:, ci, 1:] = (coef[:, ci, 1:] + r_link[:, :-1]) % P
-        for idx, kappa in Y.lin.items():
-            coef[:, involved[idx], :] = (coef[:, involved[idx], :] + r_link * ((-kappa) % P)) % P
-        rhs = (rhs + (r_link.sum(1) % P) * (Y.c % P)) % P                    # b = +Y.c
-        # start_j: W[c][j] = 0
-        coef[:, ci, :] = (coef[:, ci, :] + r_start) % P
-    # end_j: sum_i kappa_i W[i][j] + Y.c = y_pub[j] (one constraint per end component)
-    for (Y, fam, _, _), yv in zip(ends, y_vals):
-        r_end = (rc[:, fam, :] * end[None, :]) % P
-        for idx, kappa in Y.lin.items():
-            coef[:, involved[idx], :] = (coef[:, involved[idx], :] + r_end * (kappa % P)) % P
-        rhs = (rhs + ((r_end * ((yv - Y.c) % P)[None, :]) % P).sum(1)) % P
-    return ChainCoefs(rows, coef, rhs)
+        shift_row.append(ci)                                   # link_j: + W[c][j+1]  (family x, shifted)
+        for idx, kap in Y.lin.items():                         #         - sum_i kappa_i W[i][j]
+            row.append(involved[idx]); fam.append(x); kappa.append((-kap) % P)
+        row.append(ci); fam.append(3 + x); kappa.append(1)     # start_j: W[c][j] = 0
+    for x, (Y, _, _, _) in enumerate(ends):                    # end_j: sum_i kappa_i W[i][j] + Y.c = y_pub[j]
+        for idx, kap in Y.lin.items():
+            row.append(involved[idx]); fam.append(6 + x); kappa.append(kap % P)
+    start, link, end = layout.masks(device)
+    famsel = list(range(N_FAMILIES)) + [f for _, f, _, _ in ends[1:]]
+    maskmat = torch.stack([link, link, link, start, start, start] + [end] * len(ends))   # (V, l) 0/1
+    t = lambda v: torch.tensor(v, dtype=torch.int64, device=device)  # noqa: E731
+    tabs = {"rows": t(list(involved.keys())), "famsel": t(famsel), "maskmat": maskmat,
+            "terms": {"row": t(row), "fam": t(fam), "kappa": t(kappa), "shift_row": t(shift_row)}}
+    _TABLES[key] = (sys, tabs)
+    return tabs

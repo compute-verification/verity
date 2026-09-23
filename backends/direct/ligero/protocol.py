@@ -455,6 +455,11 @@ def _coin_open(r: bytes | None) -> bytes:
 def _expand(seed: bytes, count: int, device) -> torch.Tensor:
     """count uniform-ish BabyBear elements from SHAKE-256(seed) (uint32 reduced mod p; bias 2^-31 relative, noted)."""
     raw = hashlib.shake_256(seed).digest(4 * count)
+    if str(device).startswith("cuda"):
+        # the same uint32 -> int64 -> mod p reduction, on the device: one 4-byte-per-element copy instead of the host
+        # astype + mod + 8-byte copy (lane hostphase; identical values)
+        u = torch.from_numpy(np.frombuffer(raw, dtype="<u4").view(np.int32).copy()).to(device)
+        return (u.to(torch.int64) & 0xFFFFFFFF) % P
     arr = np.frombuffer(raw, dtype="<u4").astype(np.int64) % P
     return torch.from_numpy(arr).to(device)
 
@@ -665,6 +670,18 @@ def _xk_on_coset(n: int, k: int, device) -> torch.Tensor:
     return hit
 
 
+def _zh_inv_on_coset(n: int, l: int, device) -> torch.Tensor:
+    """1 / Z_H(eta_c) for every column c: ``batch_modinv(zh_on_coset(...))``, cached per (n, l, device) -- the Fermat
+    ladder is ~60 kernels per proof otherwise (lane hostphase)."""
+    from .field import Domain
+    key = ("zh_inv", n, l, str(device))
+    hit = Domain._cache.get(key)
+    if hit is None:
+        hit = batch_modinv(zh_on_coset(n, l, device))
+        Domain._cache[key] = hit
+    return hit
+
+
 def _fold_to_H(coefs: torch.Tensor, l: int) -> torch.Tensor:
     """Evaluations on H of polynomials given by (R, K >= l) coefficient rows: reduce mod x^l - 1, then NTT_l."""
     from .field import ntt
@@ -692,12 +709,25 @@ def _alpha_beta(tb: Tables, rho_lin: torch.Tensor, pub: dict, m: int, l: int, de
     beta = torch.zeros((D, l), dtype=torch.int64, device=device)
     const = ((rho_lin * ((-tb.lin_c) % P)[None, :]) % P).sum(1) % P           # (D,)
     beta += const[:, None]
-    pub_q = [q for q, name in enumerate(tb.lin_pub) if name is not None]
+    pub_q, qidx = _lin_pub_index(tb, device)
     if pub_q:
-        pubmat = torch.stack([pub[tb.lin_pub[q]].to(device) % P for q in pub_q])      # (Lp, l)
-        qidx = torch.tensor(pub_q, dtype=torch.int64, device=device)
-        beta = (beta + _combine(rho_lin[:, qidx], pubmat)) % P
+        # one stack + one reduction (was one ``% P`` kernel per public column; the index tensor is cached) -- hostphase
+        pubmat = torch.stack([pub[tb.lin_pub[q]].to(device) for q in pub_q]) % P      # (Lp, l)
+        beta = (beta + _combine(rho_lin.index_select(1, qidx), pubmat)) % P
     return alpha, beta
+
+
+_LIN_PUB: dict = {}
+
+
+def _lin_pub_index(tb: Tables, device):
+    key = (id(tb), str(device))
+    hit = _LIN_PUB.get(key)
+    if hit is None or hit[0] is not tb:
+        pub_q = [q for q, name in enumerate(tb.lin_pub) if name is not None]
+        hit = (tb, pub_q, torch.tensor(pub_q, dtype=torch.int64, device=device))
+        _LIN_PUB[key] = hit
+    return hit[1], hit[2]
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -896,7 +926,7 @@ def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.
     clk.lap("tests_w")
     # quadratic: batched A*B - C on the codeword domain (+ the mask), divided by Z_H
     P0 = quad_p0(tb, rho_quad, U[:m])                             # (D, n): split form (witness.quad_p0)
-    zinv = batch_modinv(zh_on_coset(n, l, device))
+    zinv = _zh_inv_on_coset(n, l, device)
     hev = (P0 * zinv) % P
     if cfg.zk:                                                    # + s_qa + x^k s_qb  (the mask / Z_H)
         hev = (hev + U[mr["qa"]] + (_xk_on_coset(n, k, device)[None, :] * U[mr["qb"]]) % P) % P

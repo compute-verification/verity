@@ -347,6 +347,14 @@ def bench(args) -> int:
     return 0
 
 
+def set_impl(impl: str) -> None:
+    """``--impl``: which witness program runs (witness.IMPL); the transcripts are identical either way."""
+    from . import witness as witness_mod
+    if impl not in ("device", "legacy"):
+        raise ValueError(impl)
+    witness_mod.IMPL = impl
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -371,6 +379,9 @@ def main(argv=None) -> int:
                        help="interactive: verifier-supplied step-0 coins, challenges from the coins alone, statistical bound "
                             "(PROTOCOL.md 8c); fiat-shamir: no step 0, challenges = H(transcript), q x eps accounting (t ~ 288, D = 7)")
         s.add_argument("--hints", default="torch", choices=("torch", "python"), help="hint generator: torch (vectorised) or the checker's Python gen_step")
+        s.add_argument("--impl", default="device", choices=("device", "legacy"),
+                       help="prover implementation (lane hostphase; bit-identical transcripts): device = the witness program as one "
+                            "fused CUDA kernel; legacy = the torch program (CUDA graph / eager). Recorded in the dump manifest")
         s.set_defaults(fn=fn)
     for name in ("gate", "gate-vu"):
         sub.choices[name].add_argument("--vus", type=int, default=64)
@@ -406,6 +417,7 @@ def main(argv=None) -> int:
     sub.choices["gate-vu"].add_argument("--unit-negatives", type=int, default=48,
                                         help="fp4-nvf4 gate: units per edge family for the wrong-rule witness battery (tu-k64-neg)")
     args = ap.parse_args(argv)
+    set_impl(getattr(args, "impl", "device"))
     if args.relation != "bf16":
         from .relations import relation
         from .relchain import bench_vu_rel, gate_vu_rel

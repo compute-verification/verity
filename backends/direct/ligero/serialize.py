@@ -607,8 +607,9 @@ def _manifest(out: Path, args, R, auth: bool = False) -> dict:
     fmt = {"system": "ligero-system/v2" if sys_v2 else "ligero-system/v1",
            "statement": "ligero-statement/v4" if v4 else "ligero-statement/v3" if auth else "ligero-statement/v2",
            "proof": "ligero-proof/v2" if auth else "ligero-proof/v1"}
+    from . import witness as witness_mod
     return {"format": fmt, "relation": _relation_of(R), "commit": _git_commit(), "device": args.device, "system": R.sys.summary(),
-            "zk": R.zk, "mode": R.mode, "files": []}
+            "zk": R.zk, "mode": R.mode, "impl": getattr(args, "impl", witness_mod.IMPL), "files": []}
 
 
 def _save_manifest(out: Path, man: dict):

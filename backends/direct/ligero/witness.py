@@ -128,10 +128,20 @@ class _Graph:
 _GRAPHS: dict = {}
 USE_CUDA_GRAPH = True
 
+#: ``"device"``: the program as one fused CUDA kernel (witness_device.py; W int32, bit-identical values), the
+#: default on CUDA; ``"legacy"``: the torch program (CUDA graph when capturable, else ~4000 eager kernels).
+IMPL = "device"
+
 
 def build_witness(sys: System, pub: dict[str, torch.Tensor], hints: torch.Tensor, device) -> torch.Tensor:
-    """W (m, l) int64 in [0, p)."""
+    """W (m, l) in [0, p): int32 from the fused kernel (``IMPL == "device"`` on CUDA), int64 from the torch program."""
     l = hints.shape[1]
+    if IMPL == "device" and str(device).startswith("cuda") and sys.pins:
+        from .witness_device import fused_for
+        f = fused_for(sys, device)
+        if f is not None:
+            pub_rows = torch.stack([pub[name].to(device) for _, name in sys.pins]) % P   # one gather + one reduction
+            return f.run(pub_rows, hints)
     pub_rows = torch.stack([pub[name].to(device) % P for _, name in sys.pins]) if sys.pins else \
         torch.zeros((0, l), dtype=torch.int64, device=device)
     if USE_CUDA_GRAPH and str(device).startswith("cuda"):
@@ -233,7 +243,9 @@ def quad_p0(tb: Tables, rho: torch.Tensor, M: torch.Tensor) -> torch.Tensor:
         from . import tests_fused
         f = tests_fused.fused_for(D, M.device)
         if f is not None:                                         # one pass over the rows for all D combinations
-            out = f.lincomb(rb, M.index_select(0, sp["bool_j"]), square_minus=True)
+            if "bool_j32" not in sp:
+                sp["bool_j32"] = sp["bool_j"].to(torch.int32).contiguous()
+            out = f.lincomb(rb, M, square_minus=True, rows=sp["bool_j32"])    # the rows read in place (no copy)
             if sp["Q_gen"]:
                 if "csr" not in sp:
                     sp["csr"] = tests_fused.csr_tables(sp["gen"], sp["Q_gen"], M.device)
