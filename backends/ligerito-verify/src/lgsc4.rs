@@ -16,12 +16,20 @@
 use crate::claims::eq_vector;
 use crate::field::{inv, pow, Ext, EXT_DEG};
 use crate::format::Reader;
-use crate::lgsc3::{bool_sum_mixed, eq_sum_mixed, eval_mixed, mle_ext, pow3, MAX_ARITY};
+use crate::lgsc3::{bool_sum_mixed, eq_sum_mixed, eval_mixed, mle_ext, pow3};
 use crate::relation::{succ_mle, Constraints, EvalClaim, Layout, PublicRows};
 use crate::sumcheck::eq1;
 use crate::transcript::{ext_bytes, Coins};
 
 pub const MAGIC: &[u8; 8] = b"LGSC0004";
+/// message rounds (sumcheck-3 ef49a7d's coin-lean default: `3^6` ext per message)
+pub const MAX_ARITY: usize = 6;
+/// the zero-check's final table round (`3 x 2^vf` ext)
+pub const MAX_VF: usize = 12;
+/// `layout.ZK_B`: `2^ZK_B` uniform rows
+pub const ZK_B: usize = 3;
+/// `layout.ZK_CELLS_PER_VAR`: Libra cells reserved per sumcheck variable (arity 6: `(3^6 - 1) / 6 < 122` ext)
+pub const ZK_CELLS_PER_VAR: usize = 6 * 122;
 
 /// `layout.ZkRows`: the ZK layout's committed rows above the virtual block.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -96,7 +104,7 @@ impl Proof {
     }
 }
 
-/// `SumcheckProof._from_bytes_zk`: arities in `1..=4`, every coordinate `< p`, no trailing bytes.
+/// `SumcheckProof._from_bytes_zk`: message arities in `1..=6`, `vf` in `1..=12`, every coordinate `< p`, no trailing bytes.
 pub fn parse(buf: &[u8]) -> Result<Proof, String> {
     let mut r = Reader::new(buf);
     if r.bytes(8)? != MAGIC {
@@ -111,7 +119,7 @@ pub fn parse(buf: &[u8]) -> Result<Proof, String> {
     let cmb = u8s(q)?;
     let b = u8s(1)?[0];
     let rb = u8s(b)?;
-    if zc.iter().chain(&cmb).chain(&rb).chain(std::iter::once(&vf)).any(|&a| !(1..=MAX_ARITY).contains(&a)) {
+    if zc.iter().chain(&cmb).chain(&rb).any(|&a| !(1..=MAX_ARITY).contains(&a)) || !(1..=MAX_VF).contains(&vf) {
         return Err("LGSC0004: arity out of range".into());
     }
     let zc_rounds = zc.iter().map(|&v| r.exts(pow3(v))).collect::<Result<Vec<_>, _>>()?;
@@ -142,6 +150,31 @@ pub fn write(p: &Proof) -> Vec<u8> {
     }
     out.extend(ext_bytes(&p.values_b));
     out
+}
+
+/// `layout.layout_for(..., zk=True)`'s ZK rows from the rest of the layout, top down: `2^ZK_B` uniform rows, the Libra g rows
+/// (`ZK_CELLS_PER_VAR` cells per variable of the three sumchecks), the product triple, the mask link, the committed next
+/// rows; `n_i` must leave room for them above the virtual block (`layout_for` grows it; the verifier only checks).  `k`: the
+/// number of constraints, the last one the product check.
+pub fn zk_rows_for(lay: &Layout, k: usize) -> Result<ZkRows, String> {
+    let (n_c, n_links) = (lay.n_c(), lay.n_links());
+    let n_vars = lay.n_k + n_c + lay.n_i.max(n_c) + lay.n_i;
+    let g_cells = ZK_CELLS_PER_VAR * n_vars;
+    let n_g = g_cells.div_ceil(lay.cols()).max(1);
+    let free_from = lay.m + lay.virt.len();
+    if k == 0 || free_from + n_links + 2 + 3 + (1 << ZK_B) + n_g > lay.rows() {
+        return Err("ZK layout: no room for the ZK rows above the virtual block".into());
+    }
+    let mut top = lay.rows();
+    let uniform: Vec<usize> = (top - (1 << ZK_B)..top).collect();
+    top -= 1 << ZK_B;
+    let g_rows: Vec<usize> = (top - n_g..top).collect();
+    top -= n_g;
+    let product = [top - 3, top - 2, top - 1];
+    top -= 3;
+    let (mask, mask_next) = (top - 2, top - 1);
+    top -= 2;
+    Ok(ZkRows { next: (top - n_links..top).collect(), mask, mask_next, product, k_product: k - 1, uniform, g_rows, g_cells })
 }
 
 /// The layout checks LGSC0004 relies on: [`Layout::validate_rows`], no `next:x` virtual rows, every ZK row committed
@@ -406,19 +439,25 @@ mod tests {
     use crate::relation::{ext_of_json, load_fixture};
     use crate::transcript::{Scripted, SumcheckLocal};
 
-    const FIXTURE: &str = include_str!("../fixtures/sumcheck/lgsc0004_fp8ada_l64_S2.json");
+    /// ligerito-sumcheck-3 ef49a7d: the coin-lean default schedule, and the `zk-small` preset (21 coins at full size).
+    const DEFAULT: &str = include_str!("../fixtures/sumcheck/lgsc0004_fp8ada_l64_S2.json");
+    const SMALL: &str = include_str!("../fixtures/sumcheck/lgsc0004_fp8ada_l64_S2_zksmall.json");
 
     struct Fx {
+        text: &'static str,
         base: crate::relation::Fixture,
         zk: ZkRows,
+        k: usize,
         sparse: Vec<SparseClaim>,
         g_cells: Vec<u32>,
     }
 
-    fn load() -> Fx {
-        let base = load_fixture(FIXTURE).unwrap();
-        let d = crate::json::parse(FIXTURE).unwrap();
-        let zk = zk_rows_of_json(d.get("layout").unwrap().get("zk").unwrap()).unwrap();
+    fn load(text: &'static str) -> Fx {
+        let base = load_fixture(text).unwrap();
+        let d = crate::json::parse(text).unwrap();
+        let lay = d.get("layout").unwrap();
+        let zk = zk_rows_of_json(lay.get("zk").unwrap()).unwrap();
+        let k = lay.get("K").unwrap().as_usize().unwrap();
         let sparse = d
             .get("claims")
             .unwrap()
@@ -435,24 +474,22 @@ mod tests {
             })
             .collect();
         let g_cells = d.get("zk_g_cells").unwrap().usize_list().unwrap().into_iter().map(|x| (x % P as usize) as u32).collect();
-        Fx { base, zk, sparse, g_cells }
+        Fx { text, base, zk, k, sparse, g_cells }
     }
 
     fn run(fx: &Fx, pf: &Proof, seed: &[u8]) -> Result<Claims, String> {
         verify(&fx.base.layout, &fx.zk, &fx.base.constraints, &fx.base.pub_rows, pf, &mut SumcheckLocal::new(seed))
     }
 
-    /// ligerito-sumcheck-3's fixture (fp8-ada, l = 64, S = 2, `--zk` layout, schedule zc 3,3,3,3,3 / vf 4 / cmb 3,3,3,3 /
-    /// rb 4,4,4, 14 coins, `LocalCoins(b"fixture")`): accepted with the recorded transcript (every absorb byte-checked)
-    /// and with the local coins; the two evaluation claims and the three sparse mask claims (rows, cols, weights, value)
-    /// equal the Python verifier's, and every sparse claim holds on the fixture's g cells; the 8 recorded negatives
-    /// rejected in the same stage as Python.
-    #[test]
-    fn lgsc0004_fixture_fp8ada_toy() {
-        let fx = load();
+    /// Each fixture (fp8-ada, l = 64, S = 2, `--zk` layout, `LocalCoins(b"fixture")`): the ZK rows are the ones
+    /// `zk_rows_for` derives; accepted with the recorded transcript (every absorb byte-checked) and with the local coins; the
+    /// two evaluation claims and the three sparse mask claims (rows, cols, weights, value) equal the Python verifier's, and
+    /// every sparse claim holds on the fixture's g cells; the 8 recorded negatives rejected in the same stage as Python.
+    fn check_fixture(fx: &Fx, schedule: (Vec<usize>, usize, Vec<usize>, Vec<usize>), coins: usize) {
+        assert_eq!(zk_rows_for(&fx.base.layout, fx.k).unwrap(), fx.zk);
         let proof = parse(&fx.base.proof).unwrap();
         assert_eq!(write(&proof), fx.base.proof);
-        assert_eq!((proof.zc.clone(), proof.vf, proof.cmb.clone(), proof.rb.clone()), (vec![3; 5], 4, vec![3; 4], vec![4; 3]));
+        assert_eq!((proof.zc.clone(), proof.vf, proof.cmb.clone(), proof.rb.clone()), schedule);
         assert_eq!(EXT_DEG * proof.coeffs(), fx.g_cells.len());
         let mut sc = Scripted::new(fx.base.transcript.clone());
         let claims = verify(&fx.base.layout, &fx.zk, &fx.base.constraints, &fx.base.pub_rows, &proof, &mut sc).unwrap();
@@ -462,7 +499,7 @@ mod tests {
         let mut lc = SumcheckLocal::new(b"fixture");
         let again = verify(&fx.base.layout, &fx.zk, &fx.base.constraints, &fx.base.pub_rows, &proof, &mut lc).unwrap();
         assert_eq!(again, claims);
-        assert_eq!(lc.rounds(), 14);
+        assert_eq!(lc.rounds(), coins);
         let c = fx.base.layout.cols();
         for s in &claims.sparse {
             let lhs = (0..s.rows.len()).fold(Ext::ZERO, |acc, t| {
@@ -471,21 +508,31 @@ mod tests {
             });
             assert_eq!(lhs, s.value, "{} does not hold on the committed g cells", s.name);
         }
-        let negs = fixture_negatives(FIXTURE).unwrap();
+        let negs = fixture_negatives(fx.text).unwrap();
         assert_eq!(negs.len(), 8);
         for (bytes, why) in &negs {
-            let got = parse(bytes).and_then(|pf| run(&fx, &pf, b"fixture"));
+            let got = parse(bytes).and_then(|pf| run(fx, &pf, b"fixture"));
             let stage = why.split(':').next().unwrap();
             assert!(got.as_ref().is_err_and(|e| e.starts_with(stage)), "{got:?} vs python {why}");
         }
-        assert!(run(&fx, &proof, b"other").is_err());
+        assert!(run(fx, &proof, b"other").is_err());
+    }
+
+    #[test]
+    fn lgsc0004_fixture_default_schedule() {
+        check_fixture(&load(DEFAULT), (vec![3, 5, 4, 4], 3, vec![6, 6], vec![6, 6]), 10);
+    }
+
+    #[test]
+    fn lgsc0004_fixture_zk_small() {
+        check_fixture(&load(SMALL), (vec![3; 5], 4, vec![3; 4], vec![4; 3]), 14);
     }
 
     /// Byte flips anywhere in the proof, a corrupted public row / constraint coefficient, a moved ZK row, a product
     /// constraint that is not `i1 * i2 = i3`, and schedule / parser limits: all rejected.
     #[test]
     fn lgsc0004_tampering() {
-        let fx = load();
+        let fx = load(SMALL);
         let proof = parse(&fx.base.proof).unwrap();
         for pos in (0..24).chain((24..fx.base.proof.len()).step_by(13)) {
             let mut b = fx.base.proof.clone();
@@ -534,9 +581,15 @@ mod tests {
         assert!(parse(&b).is_err());
         assert!(parse(&fx.base.proof[..fx.base.proof.len() - 1]).is_err());
         let rb_arity_at = 8 + 1 + proof.zc.len() + 2 + 1 + proof.cmb.len() + 1;
-        for bad in [0u8, 5] {
+        for bad in [0u8, 7] {
             let mut b = fx.base.proof.clone();
             b[rb_arity_at] = bad;
+            assert!(parse(&b).is_err());
+        }
+        let vf_at = 8 + 1 + proof.zc.len();
+        for bad in [0u8, 13] {
+            let mut b = fx.base.proof.clone();
+            b[vf_at] = bad;
             assert!(parse(&b).is_err());
         }
         let hdr = proof.header().len();
@@ -545,5 +598,9 @@ mod tests {
         assert!(parse(&b).is_err());
         // the LGSC0003 parser does not take it, and vice versa
         assert!(crate::lgsc3::parse(&fx.base.proof).is_err());
+        // zk_rows_for: a layout without room above the virtual block
+        let mut tight = lay.clone();
+        tight.m = lay.rows() - lay.virt.len() - 10;
+        assert!(zk_rows_for(&tight, fx.k).is_err());
     }
 }
