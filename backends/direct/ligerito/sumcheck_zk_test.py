@@ -110,7 +110,7 @@ def test_zk_default_coins_real_n():
     from .layout import ZK_CELLS_PER_VAR
     lay = SimpleNamespace(n_k=12, n_c=18, n_i=12)                 # fp8-ada / bf16-hopper, one N = 2^30 batch
     s = sc.zk_default_schedule(lay)
-    assert (s.zc, s.vf, s.cmb, s.rb) == ((3, 3, 3, 3, 3, 5), 10, (6, 6, 6), (6, 6)) and s.coins() == 13
+    assert (s.zc, s.vf, s.cmb, s.rb) == ((3, 3, 3, 6, 5), 10, (6, 6, 6), (6, 6)) and s.coins() == 12
     small = sc.zk_schedule(lay, sc.default_schedule(30, 18), rb_arity=4)
     assert small.rb == (4, 4, 4) and small.coins() == 21
     for t in (s, small):                                          # one g row at C = 2^18, inside the layout's reservation
