@@ -74,16 +74,19 @@ def oracle() -> str:
     return o
 
 
-def record_actual(row_key: str, check: str, act: Any) -> Path | None:
-    """When `$VERITY_REGRESSION_RECORD_ACTUAL` names a directory, write `act` (canonical JSON) to `<dir>/<row>/<check>.json` and return
-    the path -- the input `rebaseline.py` merges into expected/.  Never raises."""
+def record_result(row_key: str, check: str, exp: Any, act: Any, problems: list[str]) -> Path | None:
+    """When `$VERITY_REGRESSION_RECORD_ACTUAL` names a directory, write the check's result document to `<dir>/<row>/<check>.json`:
+    `{expected, actual, problems, matched, engine, oracle}` (canonical JSON) -- the input `rebaseline.py` merges into expected/.
+    Never raises (a recording failure is not a test failure)."""
     d = os.environ.get(RECORD_ACTUAL_ENV)
     if not d:
         return None
     try:
         p = Path(d) / row_key / f"{check}.json"
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(canonical(act) + "\n")
+        doc = {"schema": "verity-vllm/regression-result/v1", "row": row_key, "check": check, "expected": exp, "actual": act,
+               "problems": list(problems), "matched": matched(act, problems), "engine": engine(), "oracle": oracle()}
+        p.write_text(canonical(doc) + "\n")
         return p
     except Exception:
         return None

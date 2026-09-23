@@ -142,8 +142,8 @@ def test_reproduces(row_key: str, check_name: str, store_state: dict, record_pro
         pytest.skip(f"stubbed: {e}")
     except resolver.NotResolvable as e:
         pytest.skip(str(e))
-    resolver.record_actual(row.key, check_name, act)                                  # $VERITY_REGRESSION_RECORD_ACTUAL: rebaseline.py's input
     problems = resolver.sanction(row, check_name, act, resolver.diff(exp, act))     # a labelled decision may sanction a difference from v1
+    resolver.record_result(row.key, check_name, exp, act, problems)                  # $VERITY_REGRESSION_RECORD_ACTUAL: rebaseline.py's input
     record_property("oracle", resolver.oracle())
     if act.get("sanctioned_by"):
         record_property("sanctioned_by", act["sanctioned_by"])
