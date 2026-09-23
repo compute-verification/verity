@@ -153,6 +153,7 @@ def build(run_dir: Path | str, *, tool: Tool | dict[str, Any] | str | None = Non
                       "project": own.get("project") or conds.get("exec.project"), "campaign": conds.get("exec.campaign"),
                       "run_dir": executed_dir, "stage": (job.get("computation") or {}).get("stage"),
                       "cwd": run_sec.get("cwd"), "cwd_basis": run_sec.get("cwd_basis"),
+                      "mem_gb_reserved": ((run_sec.get("remote") or {}).get("mem") or {}).get("gb"),
                       # source_sha is the verified source identity the machine executed from; source_archive_sha256 the digest of the archive
                       # that landed there (remote.py ship_source / READY.json); both None for a run that shipped no tree
                       "remote": {k: (run_sec.get("remote") or {}).get(k) for k in ("machine", "pod_id", "root", "source_sha", "source_dir",

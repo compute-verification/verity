@@ -2,7 +2,7 @@
 
   research run [--project P] [--stage S] [--timeout T] [--expect K=V ...] [--require-result] [--runs-dir D] [harness flags] -- CMD...
   research run [--tool NAME|module:NAME] [--scratch NAME ...] [--campaign C] [...] -- CMD...   # evidence store: derivation before, attempt after
-  research run --on MACHINE --project P [--source GITDIR] [--send FILE ...] [--env K=V ...] [--exclusive] [...] -- CMD...
+  research run --on MACHINE --project P [--source GITDIR] [--send FILE ...] [--env K=V ...] [--exclusive] [--mem-gb N [--mem-wait S]] [...] -- CMD...
   research fetch <run-id> [--all]                # copy the machine's records (or every file, verified) into the local run dir
   research status [--runs-dir D] [--refresh] [--balance] [--all] [--json]
   research inspect <run-id|prefix|path> [--runs-dir D] [--json]
@@ -15,6 +15,7 @@
   research pods drain <machine|pod-id> [--force --reason TEXT]      # the report, then terminate ONLY when nothing is unpreserved (override logged)
   research env --source TREE [--rev REV] [--json]  # `export PYTHONPATH=...` from TREE's [tool.uv.workspace] members (research.pythonpath)
   research launch-request <request.json>         # machine side: claim the run dir, start the detached runner (idempotent per id)
+  research mem [--ramlock DIR] [--json]           # machine side: cgroup limit, in use, live reservations, available (research.mem)
 
 `run` allocates a run id, writes the v0.2 job record, gives the workload RESEARCH_RUN_ID / RESEARCH_RUN_DIR, and hands execution
 to the telemetry harness (timeout, sampler, cancel evidence, classifier, tee'd logs).  The workload's cwd is its run dir, locally and
@@ -105,6 +106,10 @@ def cmd_run(argv: list[str]) -> int:
     ap.add_argument("--env", action="append", default=[], metavar="K=V", help="environment for the workload (local or, with --on, on the machine), recorded as "
                                                                                  "the attempt's params.env (values of secret-named keys redacted)")
     ap.add_argument("--exclusive", action="store_true", help="with --on: refuse if another research run is live on the machine")
+    ap.add_argument("--mem-gb", type=float, default=None, metavar="N",
+                    help="with --on: admit only if the machine's memory cgroup has N GB free after live reservations (/workspace/ramlock), "
+                         "and reserve them for the run; else MemoryNotAvailable (research.mem)")
+    ap.add_argument("--mem-wait", type=float, default=0.0, metavar="S", help="with --mem-gb: wait up to S seconds for the memory instead of refusing")
     ap.add_argument("--id", default=None, help="use this run id instead of allocating one")
     ap.add_argument("--claimed", action="store_true", help=argparse.SUPPRESS)          # machine side: the dir was created by launch-request
     ap.add_argument("--cost-json", default=None, help=argparse.SUPPRESS)
@@ -122,6 +127,10 @@ def cmd_run(argv: list[str]) -> int:
     ap.add_argument("--campaign", default=os.environ.get("RESEARCH_CAMPAIGN"), help="campaign recorded in the attempt's conditions (default $RESEARCH_CAMPAIGN)")
     ap.add_argument("--source-identity", default=None, help=argparse.SUPPRESS)   # machine side: JSON {commit, tree, dirty} of the shipped source
     ns, harness_opts = ap.parse_known_args(opts)
+    mem_reservation = os.environ.pop("RESEARCH_MEM_RESERVATION", None) if ns.claimed else None    # research.mem: this runner's, not the workload's
+    if ns.mem_gb is not None and not ns.on:
+        print("research run: --mem-gb admits a run on a shared machine (--on MACHINE); a local run has no reservation to take", file=sys.stderr)
+        return 2
     if ns.project:
         harness_opts = ["--project", ns.project, *harness_opts]
     root = R.runs_root(ns.runs_dir)
@@ -181,6 +190,10 @@ def cmd_run(argv: list[str]) -> int:
                 os.environ[k] = v
         if ns.exclusive_lock:
             remote.release_exclusive(Path(ns.exclusive_lock).parent, run_id)
+        if mem_reservation:
+            from .mem import release
+
+            release(mem_reservation, run_id)
     _publish_attempt(run_dir, prep)
     s = R.summarize(run_dir)
     line = f"research: run {run_id} {s['state']} rc={s['rc']} class={s['class'] or '-'} result={s['result']}"
@@ -386,13 +399,13 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
     try:
         rec = remote.launch(run_id=run_id, local_dir=run_dir, machine_name=ns.on, project=ns.project, command=command, harness_args=harness_args,
                             source=Path(ns.source).expanduser() if ns.source else None, sends=[Path(s).expanduser() for s in ns.send],
-                            cwd=None, env=env, exclusive=ns.exclusive)
+                            cwd=None, env=env, exclusive=ns.exclusive, mem_gb=ns.mem_gb, mem_wait_s=ns.mem_wait)
     except remote.Refused as e:
         print(f"research run --on {ns.on}: refused: {e}", file=sys.stderr)
         return 3
     launch = rec.get("launch") or {}
     if rec["phase"] == "refused":
-        print(f"research: run {run_id} refused on {ns.on}: {launch.get('refused')}  (recorded in {run_dir})", file=sys.stderr)
+        print(f"research: run {run_id} refused on {ns.on} ({launch.get('fault') or 'Refused'}): {launch.get('refused')}  (recorded in {run_dir})", file=sys.stderr)
         return 3
     print(f"research: run {run_id} launched on {ns.on} ({rec['pod_id']}) pid={launch.get('runner_pid')} -> {rec['remote_run_dir']}", file=sys.stderr)
     print(f"research: observe with `research fetch {run_id}`; the workload does not depend on this session staying alive", file=sys.stderr)
@@ -634,6 +647,10 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_launch_request(rest)
     if cmd == "env":
         return cmd_env(rest)
+    if cmd == "mem":
+        from .mem import main as mem_main
+
+        return mem_main(rest)
     if cmd == "tele":
         from .telemetry.cli import main as tele_main
 

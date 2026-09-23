@@ -32,6 +32,10 @@
                     runner.  Re-delivering the same request finds the directory and reports its state; it never starts a second workload.
     exclusive       --exclusive takes <root>/runs/.exclusive.lock (O_EXCL) naming the run; a live holder refuses the launch with the reason.
                     A dead holder (terminal status or vanished pid) is reclaimed.  The runner releases its own lock at exit.
+    memory          --mem-gb N: the machine side admits the run only if its memory cgroup's limit - in use - live reservations
+                    (the fleet's /workspace/ramlock/*.json, machines.toml `ramlock`) >= N, and writes the run's reservation there;
+                    else MemoryNotAvailable (refused.json).  --mem-wait S polls up to S seconds instead.  The runner removes the
+                    reservation at exit; job.json run.remote.mem records the reading it was admitted on (research.mem).
     observe/fetch   `research fetch <id>` copies the small records (or --all files) into the local run dir over one ssh+tar; remote.json
                     keeps observed_utc.  Unreachable means "last observed at T; current status unknown", never "failed".
     preservation    --all verifies every file's sha256 against the machine and writes preserved.json LAST.  Until then the only copy
@@ -77,6 +81,10 @@ class Refused(Exception):
 class SourceNotReady(Refused):
     """A shipped source tree that is not verified READY (truncated transfer, digest mismatch, missing or foreign READY.json).
     Nothing executes from it."""
+
+
+class MemoryNotAvailable(Refused):
+    """`--mem-gb N` did not fit: limit - in use - live reservations < N on the machine (research.mem).  Nothing started."""
 
 
 # ---- machines ---------------------------------------------------------------------------------------------------------------------------
@@ -515,6 +523,7 @@ def launch_request(request_path: Path) -> dict[str, Any]:
                 "runner_pid": launch.get("runner_pid"), "refused": (refused or {}).get("reason")}
     concurrent = active_runs(runs_root, exclude=run_id)
     src_dir = None
+    mem_rec: dict[str, Any] | None = None
     try:
         remote_sec = req.get("remote") or {}
         if remote_sec.get("source_sha"):          # a shipped tree executes only from a directory verified READY for the requested identity
@@ -523,12 +532,19 @@ def launch_request(request_path: Path) -> dict[str, Any]:
         holder = exclusive_holder(runs_root)
         if holder and holder != run_id:
             raise Refused(f"machine is exclusively held by run {holder} (still live); not starting {run_id}")
+        if req.get("mem_gb"):
+            from . import mem as M
+
+            mem_rec = M.admit(float(req["mem_gb"]), ramlock_dir=Path(req.get("ramlock_dir") or M.RAMLOCK_DIR), run_id=run_id, run_dir=run_dir,
+                              wait_s=float(req.get("mem_wait_s") or 0), note=f"research run {run_id}: {shlex.join(req['command'])}")
         if req.get("exclusive"):
             take_exclusive(runs_root, run_id)
             if concurrent:
                 release_exclusive(runs_root, run_id)
                 raise Refused(f"--exclusive: other run(s) are live on this machine: {', '.join(concurrent)}; not starting {run_id}")
     except Refused as e:
+        if mem_rec:
+            M.release(mem_rec["reservation"], run_id)
         write_json_atomic(run_dir / "refused.json", {"run_id": run_id, "reason": str(e), "fault": type(e).__name__, "at_utc": utc_now_ms()})
         return {"claimed": True, "run_id": run_id, "run_dir": str(run_dir), "started": False, "refused": str(e), "fault": type(e).__name__}
     staged_inputs = request_path.parent / "inputs"
@@ -541,6 +557,9 @@ def launch_request(request_path: Path) -> dict[str, Any]:
     remote["request"] = str(request_path)
     env = dict(os.environ)
     env.update({k: str(v) for k, v in (req.get("env") or {}).items()})
+    if mem_rec:
+        remote["mem"] = mem_rec
+        env["RESEARCH_MEM_RESERVATION"] = mem_rec["reservation"]      # the runner removes it at exit and does not pass it on
     if remote.get("source_sha"):
         # [R19 tele] the shipped tree (<root>/src/<sha>/, a git archive) has no .git: the workload's source-identity precheck reads the
         # tree's sha from here (research.result.ENV_SOURCE_SHA) when neither --sha nor EXPORT.json names it
@@ -561,7 +580,14 @@ def launch_request(request_path: Path) -> dict[str, Any]:
         argv += ["--exclusive-lock", str(runs_root / ".exclusive.lock")]
     argv += [*(req.get("harness_args") or []), "--", *req["command"]]
     log = open(run_dir / "launcher.log", "ab")
-    proc = subprocess.Popen(argv, cwd=req.get("cwd") or None, env=env, stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, start_new_session=True)
+    try:
+        proc = subprocess.Popen(argv, cwd=req.get("cwd") or None, env=env, stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, start_new_session=True)
+    except OSError:
+        if mem_rec:
+            M.release(mem_rec["reservation"], run_id)
+        raise
+    if mem_rec:
+        M.set_pid(mem_rec["reservation"], proc.pid)
     write_json_atomic(run_dir / "launch.json", {"run_id": run_id, "claimed_utc": utc_now_ms(), "runner_pid": proc.pid, "argv": argv,
                                                 "cwd": req.get("cwd"), "request": str(request_path), "hostname": os.uname().nodename})
     return {"claimed": True, "run_id": run_id, "run_dir": str(run_dir), "started": True, "runner_pid": proc.pid}
@@ -596,7 +622,8 @@ def workload_cwd(harness_args: list[str], tool_pkg: Path | None) -> str:
     return WORKLOAD_CWD_DEFAULT
 
 def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, command: list[str], harness_args: list[str],
-           source: Path | None, sends: list[Path], cwd: str | None, env: dict[str, str], exclusive: bool) -> dict[str, Any]:
+           source: Path | None, sends: list[Path], cwd: str | None, env: dict[str, str], exclusive: bool,
+           mem_gb: float | None = None, mem_wait_s: float = 0.0) -> dict[str, Any]:
     local_dir.mkdir(parents=True, exist_ok=False)
     rec: dict[str, Any] = {"schema": "research/remote/v0.1", "run_id": run_id, "machine": machine_name, "project": project, "phase": "resolving",
                            "created_utc": utc_now_ms(), "observed_utc": None, "last_observed": None, "command": command, "launch_args": harness_args}
@@ -608,6 +635,9 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         rec.update(pod_id=m["pod_id"], host=tgt["host"], port=tgt["port"], root=m["root"], phase="shipping")
         write_json_atomic(local_dir / "remote.json", rec)
         tool_pkg = source_tool_package(source)      # --source <tree> with tools/research: the tree's own package runs the run
+        if mem_gb and tool_pkg is not None and not (tool_pkg / "mem.py").exists():
+            raise Refused(f"--mem-gb: the research package in {source} predates memory admission (no research/mem.py); the machine would "
+                          f"ignore the reservation.  Commit a tree that has it, or drop --mem-gb")
         tool_dir = ship_tool(ssh, m["root"], tool_pkg)
         rec["tool_from"] = str(tool_pkg) if tool_pkg else "launcher"
         rec["workload_cwd"] = workload_cwd(harness_args, tool_pkg)
@@ -624,6 +654,7 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
                 harness_args = [*harness_args, "--tree-sha", tree_sha]
         request = {"schema": REQUEST_SCHEMA, "run_id": run_id, "runs_root": f"{m['root']}/runs", "tool": tool_dir, "python": m["python"],
                    "cwd": remote_cwd, "env": env, "harness_args": harness_args, "command": command, "exclusive": exclusive,
+                   "mem_gb": mem_gb, "mem_wait_s": mem_wait_s, "ramlock_dir": m.get("ramlock"),
                    "cost": {"provider": "runpod", "pod_id": m["pod_id"], "machine": machine_name, "currency": "USD",
                             "rate_usd_per_hour": tgt["cost_per_hr"], "rate_observed_utc": tgt["rate_observed_utc"], "reason": None},
                    "remote": {"machine": machine_name, "pod_id": m["pod_id"], "pod_name": tgt["pod_name"], "host": tgt["host"], "port": tgt["port"],
@@ -636,7 +667,7 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         write_json_atomic(local_dir / "remote.json", rec)
         last_err = None
         for attempt in range(3):
-            r = ssh_run(ssh, ["env", f"PYTHONPATH={tool_dir}", m["python"], "-m", "research", "launch-request", req_path], timeout=120)
+            r = ssh_run(ssh, ["env", f"PYTHONPATH={tool_dir}", m["python"], "-m", "research", "launch-request", req_path], timeout=120 + (mem_wait_s or 0))
             if r.returncode == 0:
                 out = json.loads(r.stdout.decode().strip().splitlines()[-1])
                 break

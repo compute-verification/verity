@@ -19,6 +19,7 @@ src/research/
 ├── record.py       job.json v0.2 = the harness's v0.1 + tool, run, workload_fingerprint.expected, cost; v0.1 stays readable
 ├── result.py       the result.json contract (schema, run_id, fingerprint, validation, measurements, artifacts)
 ├── remote.py       --on: machines file, tool/source snapshots, request, claim-by-run-id, exclusive lock, fetch, preservation manifest
+├── mem.py          --mem-gb admission: cgroup limit - in use - live /workspace/ramlock reservations; MemoryNotAvailable
 ├── env.py          conditions(): the one baseline of an attempt's conditions (source, runtime, hardware, execution); ONE SKU->family map
 ├── store/          the evidence store (README.md there is the contract): tool, tools_registry, derivation, attempt, cli_prov (provenance)
 │                   + canon, local, index, remote, kinds, cli (storage)
@@ -47,7 +48,7 @@ uv run pytest                            # all tests
 
 research run [--project P] [--stage S] [--timeout T] [--expect K=V] [--require-result] [--env K=V] [--cwd DIR] [harness flags] -- CMD...
 research run [--tool NAME|module:NAME] [--scratch NAME]... [--campaign C] [...] -- CMD...      # evidence store, below
-research run --on MACHINE --project P [--source GITDIR] [--send FILE] [--env K=V] [--exclusive] [...] -- CMD...
+research run --on MACHINE --project P [--source GITDIR] [--send FILE] [--env K=V] [--exclusive] [--mem-gb N [--mem-wait S]] [...] -- CMD...
 research fetch RUN [--all]               # records only, or every file sha256-verified with preserved.json written last
 research status [--refresh] [--all] [--json]
 research inspect RUN [--json]
@@ -106,6 +107,19 @@ same line for a local checkout. The machine claims the run directory by run id a
 starts the runner detached; re-delivering a launch after an ssh drop finds
 the claim and reports state. `--exclusive` refuses if any run is live, and
 any launch refuses if an exclusive holder is live.
+
+`--mem-gb N` is memory admission on the machine (`mem.py`). A pod's processes
+share one memory cgroup, and `free` describes the host (vyv-v2cpu3: 946 GB
+host, 256 GB cgroup). The machine admits the run only if the cgroup limit, minus
+what is in use (page cache excluded), minus the not-yet-used part of every live
+reservation in the fleet's `/workspace/ramlock/*.json` (machines.toml
+`ramlock = DIR` overrides it), is at least N. A reservation is live unless its
+pid is gone or its run is terminal. The run then writes
+`research-<run id>.json` there, and the runner removes it at exit. Otherwise the
+run is refused with `MemoryNotAvailable`, and `refused.json` gives every number.
+`--mem-wait S` polls for up to S seconds instead. job.json records the
+admission (`run.remote.mem`) and the attempt records
+`execution.mem_gb_reserved`. `research mem` prints the reading on the machine.
 
 Limitations, stated: until `fetch --all` completes, the only copy of the
 evidence is on the machine. Budget enforcement is the project's deadman
