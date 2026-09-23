@@ -80,7 +80,6 @@ def required_identities(build_request_dir: str | Path, *, request_id: str = "r0"
     from verity_capture.commit import required_manifest as RM
     prog = load_program_tolerant(build_request_dir)
     wl = {"sweep": {"arrive_steps": [int(arrive)], "batch": int(batch)}} if (arrive or batch > 1) else None
-    # the v1 builder: only required_values.Traversal unlifts Lifted[X] rows (the v2 query has no lift rule), so a v2 Commit's digest differs
     m = RM.build_manifest(prog, wl, request_id=request_id, profile=profile, engine=engine)
     m["result_json"] = prog.get("result_json")
     return m
