@@ -83,7 +83,8 @@ class Fault:
 
 
 class Correspondence(Protocol):
-    """The three functions the correspondence lane owns (today: `DescriptorCorrespondence` over descriptor annotations)."""
+    """The three functions the correspondence lane owns (`DescriptorCorrespondence`: the runtime-correspondence record first, the descriptor
+    annotations as the recorded fallback)."""
 
     def owning_module(self, call: Any) -> str | None: ...
     def return_slot(self, call: Any, port: int | str = 0) -> str | None: ...
@@ -111,22 +112,66 @@ def _norm_module(mod: str, prefix: str) -> str:
 
 
 class DescriptorCorrespondence:
-    """`owning_module` / `return_slot` / `arg_slot` from a derived component's descriptor annotations (`instances.json.gz` rows:
-    `name` = `<module path>/<fx node>/<member hint>[row]`, `required_manifest.split_name`).  Calls are the rows' indices `i`.
-    `view_of(call)` is the row's declared output view when the row carries one (`out` type string / `view`), for `validate`."""
+    """`owning_module` / `return_slot` / `arg_slot` of a derived component Program.  Calls are the rows' indices `i` of `instances.json.gz`.
 
-    def __init__(self, inst: dict[str, Any], *, prefix: str | None = None, attention_paths: Iterable[str] = ()):
+    Two readers, the canonical one first (the same shim shape as `verity_vllm.acquire.correspondence` / `verity_vllm.query.correspondence`):
+
+      correspondence    `source = "correspondence"`: the Build's `runtime-correspondence/v1` record (`runtime_correspondence.read_program_dir`
+                        in `ComponentProgram.load`, or the record on the descriptor / instances doc's `annotations["correspondence"]`, or a
+                        `table=` handed in).  `owning_module(call)` is the record's `owning_module(call_id)` mapped to the implementation's
+                        path by `query.correspondence.implementation_prefix` over the record's module set x `attention_paths` ("" when
+                        nothing is observed: the record's own path stands).
+      v1_annotations    `source = "v1_annotations"`: no record -> the rows' names (`<module path>/<fx node>/<member hint>[row]`,
+                        `required_manifest.split_name`) under the DETERMINED wrapper prefix (`wrapper_prefix_of(rows, attention_paths)`,
+                        `_norm_module`).  Taken only when the record is absent (or does not describe this Program: `problem`), and recorded.
+
+    `provenance()` states which reader served (`source`, `digest`, `problem`).  `view_of(call)` is the row's declared output view when the
+    row carries one (`out` type string / `view`), for `validate`."""
+
+    def __init__(self, inst: dict[str, Any], *, prefix: str | None = None, attention_paths: Iterable[str] = (), table: Any = None,
+                 digest: str | None = None, problem: str | None = None):
         from verity_capture.commit import required_manifest as RM
+        from verity_vllm import runtime_correspondence as RC
         self.rows: list[dict] = list(inst.get("rows") or [])
         self.by_i: dict[int, dict] = {int(r["i"]): r for r in self.rows}
-        self.prefix = RM.wrapper_prefix_of(self.rows, list(attention_paths)) if prefix is None else prefix
         self._split = RM.split_name
         self.segs = RM.segment_steps(self.rows)
+        self._attention_paths = tuple(attention_paths)
+        if table is None and RC._document_of(inst) is not None:                    # the record travels on the doc itself
+            table = RC.load_correspondence(inst)
+        if table is not None and len(table) != len(self.rows):
+            problem = (problem or "") + (f"; " if problem else "") + f"correspondence record has {len(table)} Calls, the Program {len(self.rows)}: the record is of another Program"
+            table = None
+        self.table = table
+        self.problem = problem
+        if table is not None:
+            from verity_vllm.query.correspondence import implementation_prefix
+            self.source = "correspondence"
+            self.digest: str | None = digest or RC.correspondence_digest(table.doc)
+            # the implementation (collector) path prefix, determined over the RECORD's module paths x the observed attention paths
+            self.prefix = implementation_prefix({rec.module for rec in table}, self._attention_paths) if prefix is None else prefix
+        else:
+            self.source = "v1_annotations"
+            self.digest = None
+            self.prefix = RM.wrapper_prefix_of(self.rows, list(self._attention_paths)) if prefix is None else prefix
+
+    def provenance(self) -> dict[str, Any]:
+        """What served `owning_module`: `source` (correspondence | v1_annotations), the record's `digest`, the determined `prefix`, any `problem`."""
+        from verity_vllm import runtime_correspondence as RC
+        out: dict[str, Any] = {"source": self.source, "schema": RC.SCHEMA if self.table is not None else None, "digest": self.digest, "prefix": self.prefix}
+        if self.table is None:
+            out["fallback"] = "instances.json.gz row names parsed as <module>/<fx>[/<member>][row] under wrapper_prefix_of(rows, attention_paths)"
+        if self.problem:
+            out["problem"] = self.problem
+        return out
 
     def owning_module(self, call: Any) -> str | None:
         r = self.by_i.get(int(call))
         if r is None:
             return None
+        if self.table is not None:                                                  # canonical: the record's owning module
+            mod = self.table.owning_module(int(call))
+            return _norm_module(mod, self.prefix) if mod else None
         mod, _node, _hint, _row = self._split(r.get("name") or "")
         return _norm_module(mod, self.prefix) if mod else None
 
@@ -196,9 +241,14 @@ class ComponentProgram:
         return idx.get((site, slot), [])
 
     @classmethod
-    def load(cls, derived_dir: str) -> "ComponentProgram":
+    def load(cls, derived_dir: str, *, attention_paths: Iterable[str] = ()) -> "ComponentProgram":
+        """The component at `derived_dir`: its `instances.json.gz`, with the Build's correspondence record when the dir carries one
+        (`runtime_correspondence.read_program_dir`: result.json `correspondence_digest` + descriptor annotation), else the v1 reading."""
+        from verity_vllm.runtime_correspondence import read_program_dir
         with gzip.open(os.path.join(derived_dir, "instances.json.gz"), "rt") as f:
-            return cls(json.load(f))
+            inst = json.load(f)
+        table, digest, problem = read_program_dir(derived_dir)
+        return cls(inst, DescriptorCorrespondence(inst, attention_paths=attention_paths, table=table, digest=digest, problem=problem))
 
 
 # ------------------------------------------------------------------------------------------------------------------ live state

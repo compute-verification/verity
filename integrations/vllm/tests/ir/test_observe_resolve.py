@@ -251,6 +251,62 @@ def test_descriptor_correspondence_exposes_the_three_functions():
     assert prog.at(0, "model.layers.0.self_attn.qkv_proj", "0") == [1] and prog.at(1, "model.layers.0.post_norm", "in") == [9]
 
 
+def _record_for(prog: RS.ComponentProgram, module_prefix: str = "") -> dict:
+    """A minimal `runtime-correspondence/v1` document for the component: one occurrence per row, the owning module = the row's module
+    under `module_prefix` (the export wrapper's spelling in the RECORD, e.g. a TP stub's `inner.model.`)."""
+    from verity_capture.commit.required_manifest import split_name
+    occs, calls = [], []
+    for r in prog.rows:
+        mod, node, hint, _row = split_name(r.get("name") or "")
+        occs.append({"node": node or r["name"], "module": (module_prefix + mod) if mod else "", "op": "aten.op", "outputs": [], "inputs": []})
+        calls.append({"occ": len(occs) - 1, "member": hint or None, "returns": [{"port": 0}], "args": []})
+    from verity_vllm.runtime_correspondence import SCHEMA
+    return {"schema": SCHEMA, "body": "program_fn", "inputs": ["prompt"], "occurrences": occs, "calls": calls}
+
+
+def test_descriptor_correspondence_prefers_the_runtime_correspondence_record_and_records_the_fallback():
+    from verity_vllm import runtime_correspondence as RC
+    # (1) v1 route, no record: recorded as the fallback
+    prog = _component()
+    assert prog.corr.source == "v1_annotations" and prog.corr.table is None and prog.corr.provenance()["fallback"]
+    # (2) the record travels on the doc (`annotations["correspondence"]`): the canonical reader serves, digest recorded; same answers
+    rows = prog.rows
+    inst = {"rows": rows, "params": [["prompt", "Array<2,Value<16>>"], ["weights", "{w: Array<8,Value<16>>}"]],
+            "annotations": {RC.NAMESPACE: _record_for(prog, module_prefix="")}}      # record spells modules as `model.layers...` (no wrapper)
+    ATTN = ["model.layers.0.self_attn.qkv_proj"]                                      # result.json `attention_impls_observed`: the implementation's path
+    c = RS.DescriptorCorrespondence(inst, attention_paths=ATTN)
+    assert c.source == "correspondence" and c.digest == RC.correspondence_digest(inst["annotations"][RC.NAMESPACE]) and c.problem is None
+    assert c.prefix == "model." and c.owning_module(1) == "model.layers.0.self_attn.qkv_proj" and c.owning_module(2) == "model.layers.0.mlp" and c.owning_module(5) is None
+    assert c.arg_slot(3, 0) == "model.layers.0.post_norm/in" and c.return_slot(1) == "0"
+    assert c.provenance()["source"] == "correspondence" and c.provenance()["schema"] == RC.SCHEMA
+    # (3) with NO observed attention path the prefix is undetermined ("") and the record's own path stands -- no wrapper spelling is
+    #     guessed (v1's route would read `model.` off `model.model.`); a TP stub's record (`inner.model.model.layers...`) likewise, and with
+    #     the observed path its prefix is determined from the record, never ""
+    c0 = RS.DescriptorCorrespondence(inst)
+    assert c0.source == "correspondence" and c0.prefix == "" and c0.owning_module(1) == "model.model.layers.0.self_attn.qkv_proj"
+    inst_tp = dict(inst, annotations={RC.NAMESPACE: _record_for(prog, module_prefix="inner.")})
+    c_tp = RS.DescriptorCorrespondence(inst_tp)
+    assert c_tp.prefix == "" and c_tp.owning_module(1) == "inner.model.model.layers.0.self_attn.qkv_proj"
+    c_tp2 = RS.DescriptorCorrespondence(inst_tp, attention_paths=ATTN)
+    assert c_tp2.prefix == "inner.model." and c_tp2.owning_module(1) == "model.layers.0.self_attn.qkv_proj" and c_tp2.arg_slot(3, 0) == "model.layers.0.post_norm/in"
+    # (4) a record of another Program (Call count differs) is refused with the problem recorded and the v1 route taken
+    bad = _record_for(prog); bad["calls"] = bad["calls"][:-1]; bad["occurrences"] = bad["occurrences"][:-1]
+    c_bad = RS.DescriptorCorrespondence(dict(inst, annotations={RC.NAMESPACE: bad}))
+    assert c_bad.source == "v1_annotations" and "of another Program" in c_bad.problem and c_bad.owning_module(1) == "model.layers.0.self_attn.qkv_proj"
+    # (5) ComponentProgram.load reads the Build dir's record through the ONE loader (read_program_dir)
+    import gzip, json, tempfile, os
+    with tempfile.TemporaryDirectory() as d:
+        with gzip.open(os.path.join(d, "instances.json.gz"), "wt") as f:
+            json.dump({"rows": rows, "params": inst["params"]}, f)
+        with gzip.open(os.path.join(d, "descriptor.json.gz"), "wt") as f:
+            json.dump({"annotations": {RC.NAMESPACE: _record_for(prog)}}, f)
+        json.dump({"program": {"correspondence_digest": RC.correspondence_digest(_record_for(prog))}}, open(os.path.join(d, "result.json"), "w"))
+        loaded = RS.ComponentProgram.load(d, attention_paths=ATTN)
+        assert loaded.corr.source == "correspondence" and loaded.corr.problem is None and loaded.corr.owning_module(2) == "model.layers.0.mlp"
+        json.dump({"program": {}}, open(os.path.join(d, "result.json"), "w"))                      # a v1-frontend Build: no digest -> fallback
+        assert RS.ComponentProgram.load(d).corr.source == "v1_annotations"
+
+
 def test_resolve_promoted_interior_value_at_the_consumers_input_slot():
     prog = _component()
     live = _live_one_request()
