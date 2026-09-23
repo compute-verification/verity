@@ -459,8 +459,24 @@ class LigeroEncoderSIMT:
             self.coset = cp.asarray(tabs["coset"])
             self.mask_tw = cp.asarray(tabs["mask"])
             self.mask_tw1 = cp.asarray(tabs["mask1"])
-            self.cf_scratch = cp.empty(self.blocks * l if self.cf_global else 1, dtype=cp.uint32)
-            self.stg = cp.empty(self.blocks * 3 * l if self.stage else 1, dtype=cp.uint32)
+        # the per-CTA global scratch (CF_GLOBAL: gridDim.x x l words; STAGE: gridDim.x x 3 l words) is NOT a member:
+        # one encoder object is shared by every stream (``encoder_for`` caches it per (l, n, t_pad, device)) and the
+        # pipelined prover (pipeline.prove_many) runs several sub-batches' encodes concurrently on their own streams --
+        # two kernels of the same object in flight wrote the same ``cf_scratch + blockIdx.x * K`` / ``stg + blockIdx.x
+        # * 3 K`` words and corrupted each other's codewords (lane pipe-race: depth-4 proofs rejected by the verifier,
+        # ``proximity test failed`` / ``chain constraints failed``; depth <= 2 rarely overlapped two encodes).
+        # ``_scratch`` hands out a torch allocation per launch on the launch stream instead: torch's caching allocator
+        # is stream-ordered (a block freed on stream A is only reused by later work on A), and under CUDA-graph capture
+        # each graph gets its own block from its private pool -- so no two in-flight kernels share scratch.
+        self.cf_words = self.blocks * l if self.cf_global else 1
+        self.stg_words = self.blocks * 3 * l if self.stage else 1
+
+    def _scratch(self, stream: torch.cuda.Stream):
+        """(cf_scratch, stg) device pointers for ONE launch on ``stream`` (see ``__init__``)."""
+        with torch.cuda.stream(stream):
+            cf = torch.empty(self.cf_words, dtype=torch.int32, device=self.device)
+            stg = torch.empty(self.stg_words, dtype=torch.int32, device=self.device)
+        return cf, stg
 
     def _compile(self, coef_in: int):
         k = self.cp.RawKernel(_SRC % {**self._params, "coef_in": coef_in}, "rs_encode_ligero", options=("-std=c++17",))
@@ -475,11 +491,14 @@ class LigeroEncoderSIMT:
         # torch's current stream vs cupy's: launch on torch's stream (or the given one -- hp2-host's pipelining)
         import warnings
         ts = stream if stream is not None else torch.cuda.current_stream(self.device)
+        cf, stg = self._scratch(ts)                    # per-launch, stream-ordered scratch (never shared across streams)
+        args = tuple(args) + (np.uint64(cf.data_ptr()), np.uint64(stg.data_ptr()))
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", DeprecationWarning)
             cstream = self.cp.cuda.ExternalStream(ts.cuda_stream)
         with cstream:
             kernel((min(self.blocks, R),), (self.threads,), args, shared_mem=self.smem)
+        del cf, stg                                    # back to the caching allocator's pool for THIS stream only
 
     def _check_out(self, out: torch.Tensor | None, R: int) -> torch.Tensor:
         if out is None:
@@ -525,7 +544,7 @@ class LigeroEncoderSIMT:
         self._launch(self.kernel, R, (np.uint64(rows.data_ptr()), self._u32(out), coef_arg, mask_arg, self.tw_inv,
                                       self.tw_fwd, self.coset, self.mask_tw, np.int32(R),
                                       np.int32(self.l * (2 if in_wide else 1)), np.int32(int(in_wide)),
-                                      np.int32(coef_stride), np.int32(int(wide)), self.cf_scratch, self.stg), stream)
+                                      np.int32(coef_stride), np.int32(int(wide))), stream)
         return out, coefs
 
     def encode_coefs(self, coefs: torch.Tensor, out: torch.Tensor | None = None,
@@ -544,8 +563,8 @@ class LigeroEncoderSIMT:
             self._kernel_coef = self._compile(1)
         self._launch(self._kernel_coef, R, (np.uint64(coefs.data_ptr()), self._u32(out), np.uint64(0), self.tw_fwd,
                                             self.tw_inv, self.tw_fwd, self.coset, self.mask_tw1, np.int32(R),
-                                            np.int32(coefs.stride(0) * 2), np.int32(1), np.int32(self.l), np.int32(0),
-                                            self.cf_scratch, self.stg), stream)
+                                            np.int32(coefs.stride(0) * 2), np.int32(1), np.int32(self.l), np.int32(0)),
+                     stream)
         return out
 
 
