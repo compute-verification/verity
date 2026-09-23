@@ -200,7 +200,7 @@ def test_fused_equals_torch_and_reference_in_domain(name):
 
 
 @pytest.mark.skipif(not _cuda_ok(), reason="the fused kernel is CUDA (cupy / NVRTC)")
-@pytest.mark.parametrize("name", ["fp8-ada-v3", "fp8-ada-v3x4", "fp8-ada-v2x4", "bf16-hopper-v3x4", "fp8-hopper-v3", "bf16-ampere-v3x4"])
+@pytest.mark.parametrize("name", V2 + V3)
 def test_fused_equals_torch_real_subbatch(name):
     """The instance set marshalled by the chain runner (chain mode, pad units included), as the prover calls it."""
     from . import protocol as protocol_mod
