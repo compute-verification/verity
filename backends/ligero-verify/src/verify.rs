@@ -263,7 +263,29 @@ fn public_pins(st: &Statement, sys: &System, rel: &Relation) -> Result<Vec<Vec<u
         relation::Decode::Word(op) => public_pins_words(st, sys, op),
         relation::Decode::Nvf4 => public_pins_nvf4(st, sys),
         relation::Decode::PubSel(ps) => public_pins_pubsel(st, sys, ps),
+        relation::Decode::PrivSel(ps) => public_pins_privsel(st, sys, ps),
     }
+}
+
+/// `privsel.relation.public_vectors_v3`: the unit's operand words themselves (`a[i]` / `b[i]`, or the packed runs
+/// `a[lo:hi]` / `b[lo:hi]`) from its K + K words (`relation::privsel::PrivSel::unit_pins`), the (l,) vectors picked per
+/// system pin name.  Every word of every column is decoded, pad columns included, so a non-finite word anywhere in the
+/// statement is refused.
+fn public_pins_privsel(st: &Statement, sys: &System, ps: &relation::privsel::PrivSel) -> Result<Vec<Vec<u32>>, String> {
+    let l = st.l;
+    let k = ps.k;
+    if st.k_ops != k {
+        return Err(format!("statement has K = {} operands per unit, the relation's step takes {k}", st.k_ops));
+    }
+    let idx: Vec<usize> = sys.pins.iter().map(|(name, _)| ps.pin_index(name)).collect::<Result<_, _>>()?;
+    let mut out: Vec<Vec<u32>> = (0..sys.pins.len()).map(|_| Vec::with_capacity(l)).collect();
+    for j in 0..l {
+        let vals = ps.unit_pins(&st.a[j * k..(j + 1) * k], &st.b[j * k..(j + 1) * k]).map_err(|e| format!("{e} (unit {j})"))?;
+        for (p, &i) in idx.iter().enumerate() {
+            out[p].push(vals[i].rem_euclid(P as i64) as u32);
+        }
+    }
+    Ok(out)
 }
 
 /// `pubsel.relation.public_vectors_v2`: the unit's group pins (`g{g}.G`, `g{g}.Q[j]`, limbs when wide) from its K + K

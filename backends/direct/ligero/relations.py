@@ -303,6 +303,56 @@ BF16_AMPERE_V2_RELATION = _register(_v2_of(
     relation_name="GemmCoordinate<1536> over sm80.mma.m16n8k16.bf16", model_name="AMPERE_BF16_M16N8K16"))
 
 
+# --- v3: lane relmin-private -- private operand words (committed hint bits pinned to the public words), everything else
+# proven in the relation with row-free selection (backends/direct/ligero/privsel/) -----------------------------------------
+
+def _v3_compile(p, chain):
+    from .privsel.relation import compile_v3_unit
+    return compile_v3_unit(p, chain=chain)
+
+
+def _v3_hints(p, sys, c_in, a, b, y_out, device):
+    from .privsel.hints import hints_v3
+    return hints_v3(p, sys, c_in, a, b, y_out, device)
+
+
+def _v3_reference_hints(p, sys, units, device):
+    from .privsel.hints import reference_hints_v3
+    return reference_hints_v3(p, sys, units, device)
+
+
+def _v3_public_vectors(p, c, a, b, y, device="cpu"):
+    from .privsel.relation import public_vectors_v3
+    return public_vectors_v3(p, c, a, b, y, device=device)
+
+
+_V3_WITNESS = ("torch hint generator (privsel/hints.py: operand word bits, product bits, the two-stage shifter's one-hots, "
+               "digits, aligned and signed aligned limbs, the group maximum's certificate, |sum| in bits, the normalisation "
+               "shift one-hot and the normalised significand) + torch program (windows, lookups, products, inverses)")
+_V3_BACKEND = "b-ligero chain, {name} relation (backends/direct/ligero/privsel/relation.py at {params})"
+
+
+def _v3_of(v2: Relation, name: str, params_note: str) -> Relation:
+    fields = dict(
+        name=name, target=v2.target, model=v2.model, params=v2.params, compile=_v3_compile, hints=_v3_hints,
+        public_vectors=_v3_public_vectors, y_public=v2.y_public, y_bits=v2.y_bits, word_dtype=v2.word_dtype, y_dtype=v2.y_dtype,
+        tag=f"|rel={name}|v1".encode(), operands=v2.operands, off_domain=v2.off_domain,
+        instances_dataset=v2.instances_dataset, instances_tier=v2.instances_tier, instance_seed=v2.instance_seed,
+        instances_recipe=v2.instances_recipe, relation_name=v2.relation_name, model_name=v2.model_name,
+        backend_name=_V3_BACKEND.format(name=name, params=params_note), witness_generation=_V3_WITNESS,
+        claim_note=v2.claim_note, reference_hints=_v3_reference_hints,
+        # backends/ligero-verify pins the four v3 systems (relation.rs privsel; Decode::PrivSel reads the operand words off
+        # the v4 statement and refuses a non-finite one) and verifies their dumps end to end
+        rust_verifiable=True)
+    return Relation(**fields)
+
+
+BF16_HOPPER_V3_RELATION = _register(_v3_of(BF16_HOPPER_V2_RELATION, "bf16-hopper-v3", "Params.from_model(HOPPER_BF16_M16N8K16)"))
+BF16_AMPERE_V3_RELATION = _register(_v3_of(BF16_AMPERE_V2_RELATION, "bf16-ampere-v3", "Params.from_model(AMPERE_BF16_M16N8K16)"))
+FP8_HOPPER_V3_RELATION = _register(_v3_of(FP8_HOPPER_V2_RELATION, "fp8-hopper-v3", "FP8Params.from_model(HOPPER_E4M3_K32)"))
+FP8_ADA_V3_RELATION = _register(_v3_of(FP8_ADA_V2_RELATION, "fp8-ada-v3", "FP8Params.from_model(ADA_E4M3_M16N8K32)"))
+
+
 def relation(name: str) -> Relation:
     try:
         return RELATIONS[name]

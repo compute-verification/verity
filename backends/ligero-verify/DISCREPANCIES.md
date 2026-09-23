@@ -151,44 +151,11 @@ but an implementer working from PROTOCOL.md alone cannot produce interoperable c
 
 ## D6. A transcript mutation never reaches the tests
 
-Every mutation of a *message* (`w`, `h`, `q`, `v`), the root, the statement, or the column set is rejected at
-"column challenge mismatch" -- the Fiat-Shamir binding catches it before the proximity / linear / quadratic / chain
-tests run; the opened values fail at the Merkle path.  That is the correct behaviour, but it means a mutation battery
-alone exercises the tests only through the honest proofs' acceptance and the 52 negatives' `chain constraints failed
-(sum over H)`.  This lane therefore added `serialize.py gen-witness-mutations` (the prover's `mutate=` hook, before
-commitment: one row per row class, a broken chain link, a nonzero `c_0`, a flipped bit column) so that both verifiers
-are seen rejecting *inside* the tests: 8/8 `linear constraints failed` / `quadratic constraints failed` in both
-modes, same reason in both verifiers (`fixtures/rust_verdicts/wmut_*.json`).  Not a discrepancy; recorded so the
-next reader does not mistake the mutation table for test coverage.
-
-**Post b-zk-fix.**  Still true in both modes, with a twist in interactive mode: `root` no longer enters any
-challenge, so `root_flipped` now reaches the Merkle check ("merkle path 0 invalid") instead of "column challenge
-mismatch", and a mutated message (`w`, `h`, `q`, `v`) reaches ITS test (`proximity test failed`, `quadratic
-constraints failed`, `chain constraints failed`, `linear constraints failed`) -- the interactive transcript is not
-hash-bound, only coin-bound (D7).  A consistent re-opening of one coin slot (`challenge{1,2}_coin_reopened_consistently`:
-fresh `r_i, s_i`, `c_i := H(r_i || s_i)`) changes `c1 c2`, which sits in BOTH seeds, so it is caught at the column
-challenge in every case; no mutation can change challenge 1 alone.  The mask rows are covered by
-`opened_mask_row_{prox,chain_a,chain_b}_plus1` (Merkle) and by the witness mutations (tests).
-
-~~~json
-{"id": "BV-D6", "issue": "transcript mutations are caught by the FS binding, not the tests; test coverage needs witness mutations",
- "document": "n/a", "code": "n/a", "verifier": "gen-witness-mutations added; 16/16 rejected inside the tests by both",
- "status": "resolved", "owner": "b-verifier", "resolution": "witness-mutation set is part of the gate", "evidence": ["fixtures/rust_verdicts/wmut_zk.json", "fixtures/rust_verdicts/wmut_plain.json", "run r20260922-101053-0dc9"]}
-~~~
-
-## Not findings (checked and consistent)
-
-* `note:r20-proof/red-team-3/20260922T0921Z-report-redteam-3` O1 (`gpu/ligero.py::row_coeffs` geometric powers): the transcript path this lane verifies
-  (`protocol.py`, torch prover) draws every combination coefficient independently from SHAKE, as section 4 says
-  ("`D` *independent* BabyBear combinations"); the Rust verifier would reject a prover that used geometric powers
-  (the coefficient rows it recomputes would differ).  If the GPU kernel path ever produces transcripts, this verifier
-  is the check.
-* `note:r20-proof/red-team-vu/20260922T1042Z-report-redteam-vu` F1-F3: every size (`M, l, n, t, D, k, depth, n_vus, steps`) comes from the verifier's statement;
-  the proof header's copies are compared and a disagreement is a named rejection; the statement digest covers
-  `a, b, y16`, the configuration and the `system_id` -- confirmed by the statement mutations (`statement_*`: 7/7
-  rejected in every mode).
-* `note:r20-proof/red-team-3/20260922T0921Z-report-redteam-3` O5 (`N_subbatches` not in the ledger schema): the statement file carries `n_proofs` and the
-  verifier's bound is the union over it; the ledger rows below spell out `25 sub-batches` in `note`.
+Resolved (b-verifier): transcript mutations are caught by the transcript binding, not by the tests, so the witness-mutation set
+(`gen-witness-mutations`, 16/16 rejected inside the tests by both verifiers) is part of the gate (`fixtures/rust_verdicts/wmut_*.json`).
+Post b-zk-fix, in interactive mode `root` enters no challenge: a mutated message reaches ITS test and `root_flipped` the Merkle
+check; a consistent coin re-opening changes `c1 c2` in both seeds (caught at the column challenge).  Full text:
+`note:r20-proof/coordinator/20260923T0929Z-finding-ligero-verify-resolved-discrepancies` (appendix 2).
 
 ## D7. An interactive-mode transcript is not transferable evidence (post b-zk-fix; the file verifier's verdict is conditional)
 
@@ -386,58 +353,19 @@ verifier needs (the code is the reference; PROTOCOL.md still describes the BF16 
 
 ## D12. The v2 public-selection relations (lane `relmin-lookup`): the verifier computes part of the step, and the pins are no longer the operand words
 
-`bf16-hopper-v2`, `bf16-ampere-v2`, `fp8-hopper-v2`, `fp8-ada-v2` (`backends/direct/ligero/pubsel/relation.py`,
-registered in `relations.py` beside the v1 names, v1 untouched) claim exactly what their v1 counterparts claim -- the
-same pinned instruction semantics (`verity.ml.tc.models`), the same statement widths, the same chain-end word
-(`y16`, one public word per VU; `ligero-system/v1` files) -- with a different compiled unit: 292 / 469 / 195 / 357 rows
-against 3292 / 3516 / 3396 / 3769.  What changes for a verifier:
-
-* **The pins are derived values, not word components.**  A v1 system pins `a[i].s|m|e` / `b[i].s|m|e` and the
-  witness re-does the whole step; a v2 system pins, per product group `g` of the step, the group maximum `g{g}.G` of
-  the products' exponents (a zero product counts as `Params.floor`; `G >= floor`) and, for every extra alignment
-  shift `j in [0, prod_bits)`, the signed sum `g{g}.Q[j]` of the products each aligned to `G + j` -- `AlignProduct`'s
-  truncation term by term, then summed (`public_pins_int`; `PubSel::unit_pins`).  The BF16 Hopper sum exceeds p and
-  is pinned as two limbs `g0.Q[j].lo` (the low 16 bits) and `g0.Q[j].hi` (the arithmetic shift; negative for a
-  negative sum), reduced mod p like every pin.  The verifier therefore performs the public half of the tensor-core
-  step itself (products, alignment, group maximum) -- O(K prod_bits) integer operations per unit -- and the prover's
-  witness selects `Q[E - G]` with a lookup one-hot.  A wrong pin value anywhere fails the linear test with
-  overwhelming probability, as before; a wrong *rule* in the verifier's public computation is a soundness bug of the
-  verifier, not of the proof -- the Rust decode is pinned against `public_pins_int` by hand-computed vectors
-  (`pubsel_unit_pins_match_public_pins_int`) and, on the Python side, by the v1-v2 differential
-  (`pubsel/relation_test.py`: both units accept exactly the model's word on random units and reject every negative
-  family).
-* **K comes from the relation, not from the pins.**  There are no `a[i]` pins to read `K` off; `K` is the sum of
-  `Params.groups` (16 / 8+8 / 32 / 16+16), fixed per relation in `relation.rs` (`PubSel::k`), and a statement whose
-  `K` differs is refused ("statement has K = 32 operands per unit, the relation's step takes 16").  Every word of every
-  column is decoded, pad columns included (all-zero operands are on the domain), so an off-domain word anywhere is
-  refused with the decode's reason (Python: `public inputs rejected: ...`; Rust: `public inputs: ... (unit j)`).
-* **Tags and pins.**  `bf16-hopper-v2` and `bf16-ampere-v2` absorb the empty tag like the other BF16 relations (the
-  statement's name and the `sys_id` in the digest distinguish them, D11); the FP8 pair absorb `|rel=fp8-hopper-v2|v1`
-  / `|rel=fp8-ada-v2|v1`.  Pinned digests (`sys_id` / table digest): `066c6696... / e9b1b7b4...`,
-  `2a5f4378... / 2ce5db09...`, `2cb40f21... / c214a87c...`, `11a7194b... / 215e1beb...` -- laptop compilations
-  from the lane tree, torch-free, twice each, byte-identical, the `sys_id`s equal to `protocol.system_id` under
-  torch; fixtures under `fixtures/systems/`.  The units select the pinned sum, the accumulator's aligned term and the
-  normalised significand without product rows (a hint row and one row-free quadratic `sel_i (X - value_i) = 0` per
-  candidate), and the two shift hints are ranged by their lookups' one-hots alone (`LigeroCtx.lookup(range_key=False)`).
-  The last group of a unit commits no fraction bits: its normalised significand, hidden bit and the BF16 epilogue's
-  fields are picked from the sum's bit rows by the normalisation one-hot, with the bits above the window forced to zero.
-  A zero sum (the terms cancel, or every term is zero: `z = 1`) is the zero word whatever normalisation shift the one-hot
-  picked, so the subnormal-clamp and overflow proofs read the exponent masked by `z` (`e1m = acc_e_min` when `z = 1`) --
-  the first cut of the unit demanded `t = tc(E)` for `z = 1` too and had no witness for a cancelling sum whose `E` put
-  `tc(E)` outside the shift range (found by the 1e5 differential on fp8-ada-v2; `test_zero_sums_accepted_in_unit_and_chain_mode`).
-* **`bf16-ampere-v2` is a new claim on the generic runner**, not a re-encoding of `vu.py`'s `--relation bf16` run:
-  it proves the Ampere BF16 step over synthetic instances drawn like the Hopper BF16 set (`instances_dataset`
-  `bench-instances-bf16-ampere/v1`), where `bf16-ampere` proves the frozen `bench-instances/v1` set through `vu.py`.
-  The unit compiled is `compile_unit(Params.from_model(AMPERE_BF16_M16N8K16))`'s claim; the statement digest and
-  the auth block differ from `vu.py`'s files.
+`bf16-hopper-v2`, `bf16-ampere-v2`, `fp8-hopper-v2`, `fp8-ada-v2` (`backends/direct/ligero/pubsel/relation.py`) claim what
+their v1 counterparts claim with 292 / 469 / 195 / 357 rows per unit (v1: 3292 / 3516 / 3396 / 3769) by moving the public
+half of the tensor-core step to the verifier: the pins are per-group maxima `g{g}.G` and truncated product sums `g{g}.Q[j]`
+that the verifier computes from the operand words (`public_pins_int`; Rust `relation::pubsel::PubSel::unit_pins`), so the
+verifier does O(K prod_bits) integer work per unit and the relations are unusable with private operands (not a Table 2
+headline; a finding).  Full text (K, decode, tags, digests, the zero-sum fix, `bf16-ampere-v2` as a new claim):
+`note:r20-proof/coordinator/20260923T0929Z-finding-ligero-verify-resolved-discrepancies` (appendix) and the relmin-lookup lane note.
 
 ~~~json
-{"id": "BV-D12", "issue": "the v2 relations pin values the verifier computes from the operand words (group maximum, truncated product sums per shift); K is fixed by the relation; the verifier's public computation is part of the soundness surface",
- "document": "PROTOCOL.md describes the BF16 unit only; pubsel/relation.py's module comment is the reference",
- "code": "backends/direct/ligero/pubsel/relation.py (compile_v2_unit, public_pins_int, public_vectors_v2), relations.py (the four names)",
- "verifier": "src/relation.rs pubsel::PubSel (unit_pins, pin_index, the four parameter sets), Decode::PubSel; verify.rs public_pins_pubsel",
- "status": "open", "owner": "relmin-lookup (pin the digests against a pod system.bin when the fp8-ada-v2 dumps land; PROTOCOL.md section for the public-selection unit)",
- "evidence": ["src/relation.rs tests", "tests/relations.rs system_digest_names_every_pinned_relation", "backends/direct/ligero/pubsel/relation_test.py", "lane note relmin-lookup"]}
+{"id": "BV-D12", "issue": "v2 pins are verifier-computed group maxima / truncated sums; K fixed by the relation; unusable with private operands",
+ "code": "pubsel/relation.py, relations.py", "verifier": "src/relation.rs pubsel::PubSel; verify.rs public_pins_pubsel",
+ "status": "open (finding)", "owner": "relmin-lookup", "evidence": ["tests/relations.rs", "pubsel/relation_test.py", "lane note relmin-lookup"]}
+~~~
 
 ## D13. `authentication = included-hash` (lane `hash-relation`): the operands leave the statement, Poseidon2 enters the relation
 
@@ -487,4 +415,57 @@ verifiers' behaviour differs from the `included` mode of D9.
  "verifier": "src/format.rs v5 / v3 parsers; src/relation.rs hashed pins; src/verify.rs hashed digest, pins, n-link chain test; src/auth.rs check_hashed",
  "status": "open", "owner": "hash-relation (materialise cap_out rows; store n_vus y words in the statement; compose bf16-ampere / fp4-nvf4)",
  "evidence": ["tests/relations.rs fp8_ada_hashed_*", "src/auth.rs tests::hashed_fixture_block_folds_and_every_mutation_is_refused", "fixtures/fp8-ada-hash", "lane note hash-relation (13 pod dumps, Rust batch on each)"]}
+~~~
+
+## D14. The v3 private-operand relations (lane `relmin-private`): the pins are the operand words again, packed for FP8, and the verifier computes nothing
+
+`bf16-hopper-v3`, `bf16-ampere-v3`, `fp8-hopper-v3`, `fp8-ada-v3` (`backends/direct/ligero/privsel/relation.py`, registered
+in `relations.py` beside the v1 and v2 names, both untouched) claim what their v1 counterparts claim -- the same pinned
+instruction semantics, statement widths and chain-end word -- with a third compiled unit: 1519 / 1629 / 1673 / 1806
+rows against v1's 3292 / 3516 / 3396 / 3769 (2.17x / 2.16x / 2.03x / 2.09x fewer), every function of the operands proven
+inside the relation as in v1 (products, alignment, group maximum, exact sum, normalisation, epilogue), on operand words
+that are committed witness wires.  What a verifier sees:
+
+* **The pins are the words themselves, and nothing is computed from them.**  A v3 system pins `a[i]` / `b[i]`, the
+  16-bit BF16 word as written in the statement (one word per pin), or `a[lo:hi]` / `b[lo:hi]`, the run of three E4M3
+  words `lo <= j < hi` packed little-endian `sum_j w_j 2^(8 (j - lo))` (`ShiftPlan.words_per_pin` = 3: 32 words -> 11
+  pins per operand, the last run holding two words); the linear constraint `sum_j a_words[j] 2^(8 (j - lo)) = a[lo:hi]`
+  binds the pin to the witness's word wires `a_words[j]` (the weighted sums of their hint bits).  The verifier's public
+  work is the v1 word check (a non-finite word is refused: BF16 `t = 255`, E4M3 `0x7F` / `0xFF`; `Operand::decode`) and
+  the packing; there is no group maximum, no aligned sum, no shift -- the soundness surface of D12's public computation
+  is gone, and the unit's row count is the only thing a private-operand relation (lane hash-relation: the pin rows
+  replaced by a Poseidon2 sponge over the same `a_words` / `b_words` wires) inherits.  `PrivSel::unit_pins` /
+  `pin_index` (`relation.rs`) compute the pinned vectors and place them by system pin name; `public_pins_privsel`
+  (`verify.rs`) does it for every column, pad columns included (all-zero words are on the domain).  Pinned against
+  `privsel.relation.public_vectors_v3` by hand-computed words (`privsel_unit_pins_match_public_vectors_v3`).
+* **K comes from the relation** (`PrivSel::k` = 16 / 16 / 32 / 32, the sum of `Params.groups`), as for v2; a statement
+  whose `K` differs is refused before any pin is computed.
+* **Off-domain encodings the relation excludes itself**: `x = t - nz` and `nz` are hint bits, `nz = 0 -> x = 0` by a
+  zero-product and `x` off the top by one inverse (`floor(x/2) != 127` for BF16, excluding `t = 255` and the `t = 256`
+  collision of `(x, nz)` with the sign bit; `x != 15` for E4M3), so the only word a witness can encode that the model
+  refuses is the E4M3 NaN (`t = 15, f = 7`), which the verifier's word check refuses in the pin variant (the sponge
+  variant must exclude it in the relation or refuse it at the hash's input).  A witness whose word wires encode a
+  different word than the pinned one, or an encoding off the domain, fails the linear test
+  (`test_committed_words_are_bound_and_canonical`).
+* **Tags and pins.**  All four absorb `|rel=<name>|v1` (BF16 included: the pins differ from every other BF16 relation's
+  and nothing shares a transcript with them).  Pinned digests (`sys_id` / table digest): `2279f2ac... / 0caba95a...`,
+  `f962956b... / 35fe22ff...`, `bc6f8780... / a21f5b46...`, `adaea5d9... / c62f82e0...` -- laptop compilations from the
+  lane tree, torch-free, twice each, byte-identical, the `sys_id`s equal to `protocol.system_id`; fixtures under
+  `fixtures/systems/`.  The dumps of the CPU bench (`bench-vu --dump-dir`, 8 VUs, ZK, Fiat-Shamir and interactive) of
+  every relation verify under the pin (`ligero-verify batch`: ACCEPT, python agreement 1/1); a statement with one operand
+  bit flipped, a sign flipped, a claimed word bit flipped, two words swapped, `a` and `b` swapped, or a pad column's word
+  changed is rejected (the transcript binds the statement digest: "column challenge mismatch"), a NaN word with the
+  decode's reason.
+* **Hint rows may be negative.**  The signed aligned product `(1 - 2 (s_a xor s_b)) X` is a hint row `Xs` (`XsL` /
+  `XsH` for the wide BF16 Hopper sum) under two row-free quadratics `(Xs - X)(1 - s_a - s_b) = 0` and
+  `(Xs + X)(s_a - s_b) = 0`; the prover writes it as a signed int64 and the witness program reduces it mod p
+  (`modp_signed`), like v2's `g0.Q[j].hi` pin.  A verifier needs nothing new: the row is a witness column.
+
+~~~json
+{"id": "BV-D14", "issue": "the v3 relations pin the operand words themselves (packed three per pin for E4M3); the verifier computes nothing from them beyond the word check; K is fixed by the relation",
+ "document": "PROTOCOL.md describes the BF16 unit only; privsel/relation.py's module comment is the reference",
+ "code": "backends/direct/ligero/privsel/relation.py (compile_v3_unit, public_vectors_v3, pin_name), relations.py (the four names)",
+ "verifier": "src/relation.rs privsel::PrivSel (unit_pins, pin_index, pins; the four parameter sets), Decode::PrivSel; verify.rs public_pins_privsel",
+ "status": "open", "owner": "relmin-private (PROTOCOL.md section for the private-operand unit; the sponge variant's NaN exclusion is lane hash-relation's)",
+ "evidence": ["src/relation.rs tests (privsel_unit_pins_match_public_vectors_v3)", "tests/relations.rs system_digest_names_every_pinned_relation", "backends/direct/ligero/privsel/relation_test.py", "lane note relmin-private"]}
 ~~~
