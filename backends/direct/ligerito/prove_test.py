@@ -43,6 +43,12 @@ def test_fast_open_matches_reference(fp8, monkeypatch):
     ref = _prove_bytes(pv, bt, False)
     fast = _prove_bytes(pv, bt, True)
     assert fast.to_bytes() == ref.to_bytes()
+    pv.pcs_impl = "own"
+    try:
+        own = _prove_bytes(pv, bt, True)
+    finally:
+        pv.pcs_impl = "pcs-fast"
+    assert own.to_bytes() == ref.to_bytes()
     monkeypatch.setenv("LIGERITO_STREAM", "1")
     streamed = _prove_bytes(pv, bt, True)
     assert streamed.to_bytes() == ref.to_bytes()

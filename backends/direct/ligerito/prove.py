@@ -14,6 +14,7 @@ proto's single eq term with coefficient 1.
 from __future__ import annotations
 
 import math
+import os
 import time
 from dataclasses import dataclass, field
 
@@ -618,6 +619,8 @@ class Prover:
         self.l = l
         self.engine = ("cuda" if str(device).startswith("cuda") else None) if engine == "auto" else engine
         self.pcs_fast: bool | None = None           # None: pcs-fast's device path whenever it is available
+        #: "pcs-fast": lane ligerito-pcs-fast's ``proto/pcs.commit`` / ``open`` (same transcript); "own": prove.py's adapter
+        self.pcs_impl = os.environ.get("LIGERITO_RELATION_PCS", "pcs-fast")
         t0 = time.perf_counter()
         self.runner = RelationChainRunner(self.rel, device, 128.0)
         self.sys = self.runner.sys
@@ -715,8 +718,14 @@ class Prover:
         virt = z[lay.m:].clone()
         z[lay.m:] = 0
         tm.stop()
-        com = pcs_commit(z.view(-1), bt.dims, tm, fast=self.pcs_fast)
-        coins.absorb(b"root", com.root1)
+        owner = self.pcs_impl == "pcs-fast" and self.pcs_fast is not False and _fast(z)
+        if owner:
+            from .proto import pcs as ppcs
+            com = ppcs.commit(z.view(-1), bt.dims, tm)
+            coins.absorb(b"root", com.root)
+        else:
+            com = pcs_commit(z.view(-1), bt.dims, tm, fast=self.pcs_fast)
+            coins.absorb(b"root", com.root1)
         tm.start("zero_check")
         z[lay.m:] = virt
         scp = sc_mod.prove(lay, self.cons, z, coins, cheat=cheat, engine=self.engine)
@@ -724,7 +733,12 @@ class Prover:
         del virt
         tm.stop()
         points, values = pcs_points(lay, scp.claims)
-        pcs = pcs_open(com, points, values, coins, tm, n_c=lay.C.bit_length() - 1)
+        if owner:
+            pp = ppcs.open(com, points, None, coins, tm)
+            pcs = PcsProof(list(pp.roots), [list(m_) for m_ in pp.sumcheck], [o.rows for o in pp.opens],
+                           [o.siblings for o in pp.opens], pp.final_y)
+        else:
+            pcs = pcs_open(com, points, values, coins, tm, n_c=lay.C.bit_length() - 1)
         tm.start("serialize_proof")
         proof = Proof(bt.params, scp.to_bytes(), pcs)
         tm.stop()
