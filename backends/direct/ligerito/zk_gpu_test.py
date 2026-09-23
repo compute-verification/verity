@@ -182,3 +182,24 @@ def test_cost_at_real_n(kp1):
     if kp1 >= 8:
         assert out["mask_cells_frac"] <= 0.05
     assert out["frac_of_ligerito_prover_2p30"] < 0.10
+
+
+def test_row_mask_cost_at_real_shape():
+    """The real layout at fp8-ada: z (4096, 2^18) int32 on the device; fill the 12 mask rows, build f = z_to_f(z)."""
+    lay = zk.default_row_mask_layout(n_i=12, n_c=18, k_L=10, m=3777, free_from=3977)
+    z = torch.zeros((1 << 12, 1 << 18), dtype=torch.int32, device=DEV)
+    torch.cuda.synchronize()
+    zk.fill_mask_rows(z, lay, DEV)
+    t_fill = _sync_time(lambda: zk.fill_mask_rows(z, lay, DEV), iters=5)
+    t_perm = _sync_time(lambda: zk.z_to_f(z, lay), iters=3)
+    rm = zk.fill_mask_rows(z, lay, DEV)
+    i1, i2, i3 = lay.product_rows[0]
+    assert torch.equal(z[i3].to(torch.int64), (z[i1].to(torch.int64) * z[i2].to(torch.int64)) % zk.P)
+    assert int(z[lay.uniform_rows[0]].to(torch.int64).max()) < zk.P and int(z[3000].abs().max()) == 0
+    out = {"cells": rm.cells, "cells_frac": rm.cells / 2 ** 30, "rows": len(lay.all_rows), "t_fill_s": t_fill,
+           "t_z_to_f_s": t_perm, "frac_fill_of_ligero_prover": t_fill / 0.17,
+           "frac_fill_of_ligerito_prover_2p30": t_fill / 0.525}
+    with open("/tmp/ligerito_zk_rowmask_cost.json", "w") as fh:
+        json.dump(out, fh, indent=1)
+    print("\n" + json.dumps(out, indent=1))
+    assert out["cells_frac"] < 0.005 and out["frac_fill_of_ligero_prover"] < 0.05

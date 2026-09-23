@@ -63,7 +63,9 @@ __all__ = ["BETA", "COIN_BYTES", "D", "MASK_COLS_HIGH_LOG2", "MASK_COLS_LOW_LOG2
            "CommittedCoins", "EquivocatingCoins", "MaskCells", "Masks", "SumcheckMask", "ZkParams", "apply_masks",
            "challenge_from", "check_layout", "coin_commit", "coin_schedule", "mask_cells", "omitted", "pad_columns",
            "padding_combination", "queries_for", "rate", "row_check_rhs", "sample_masks", "set_g_coeffs", "uniform_symbols",
-           "verify_opening", "zk_statement"]
+           "verify_opening", "zk_statement",
+           "EqSumcheckMask", "RowMaskLayout", "RowMasks", "zk_mode_rows", "default_row_mask_layout", "f_index", "fill_mask_rows", "libra_block_claim",
+           "permute_point", "z_to_f"]
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -170,13 +172,14 @@ class ZkParams:
     mask_cols_low_log2: int = MASK_COLS_LOW_LOG2
     n_c: int | None = None             # layout column bits (a layout ROW = 2^{n_c} cells; rows are the high bits)
     product_rows: tuple = ()           # (i1, i2, i3) triples of layout rows: i1, i2 uniform masks, i3 := i1 * i2 pointwise
+    row_layout: bool = False           # True: masks are relation ROWS (RowMaskLayout); no column blocks in f
 
     def __post_init__(self):
         if self.k1 + self.kp1 != self.n:
             raise ValueError(f"round-1 shape 2^{self.k1} x 2^{self.kp1} does not cover 2^{self.n} cells")
-        if self.enabled and (1 << self.k1) < self.g_block_cells + 2:
+        if self.enabled and not self.row_layout and (1 << self.k1) < self.g_block_cells + 2:
             raise ValueError("the mask columns are too short for the G-blocks")
-        if self.enabled and (1 << self.kp1) <= self.mask_cols_high + self.mask_cols_low:
+        if self.enabled and not self.row_layout and (1 << self.kp1) <= self.mask_cols_high + self.mask_cols_low:
             raise ValueError("round 1 needs more columns than the mask blocks")
         names = [nm for nm, _, _ in self.sumchecks]
         if len(set(names)) != len(names):
@@ -228,11 +231,11 @@ class ZkParams:
 
     @property
     def mask_cols_high(self) -> int:
-        return 1 << self.mask_cols_high_log2
+        return 0 if self.row_layout else 1 << self.mask_cols_high_log2
 
     @property
     def mask_cols_low(self) -> int:
-        return 1 << self.mask_cols_low_log2
+        return 0 if self.row_layout else 1 << self.mask_cols_low_log2
 
     @property
     def mask_cell_count(self) -> int:
@@ -257,7 +260,7 @@ class MaskCells:
 def mask_cells(zp: ZkParams) -> MaskCells:
     """The reserved cells: the bottom block ``[0, 2^low . 2^{k1})``, the top block ``[N - 2^high . 2^{k1}, N)``; the
     G-blocks are consecutive at the START of the last column (rows ``0 ..`` of column ``C_1 - 1``)."""
-    if not zp.enabled:
+    if not zp.enabled or zp.row_layout:
         return MaskCells(range(0, 0), range(0, 0), ())
     low = range(0, zp.mask_cols_low * zp.rows1)
     high = range(zp.N - zp.mask_cols_high * zp.rows1, zp.N)
@@ -265,6 +268,168 @@ def mask_cells(zp: ZkParams) -> MaskCells:
     gb = tuple(np.arange(g0 + zp.g_block_offset(i), g0 + zp.g_block_offset(i) + D * zp.g_coeffs(i), dtype=np.int64)
                for i in range(len(zp.sumchecks)))
     return MaskCells(low, high, gb)
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# 1b. Mask ROWS in the relation's table (the real layout; ligerito-sumcheck's z (R, C), f = z with the bits interleaved)
+# ---------------------------------------------------------------------------------------------------------------------
+# ligerito-sumcheck commits ``f[i + R c] = z[i, c]`` (row bits LOW), every column ``c`` is a constrained unit column (pad
+# sub-batches hold valid pad witnesses), and rows ``[m + 200, R)`` are free.  So a round-1 PCS "column" (the top k'_1 bits
+# of x = a slice of 2^{n_c - k'_1} relation columns, ALL rows) cannot be uniform -- only its free rows can; the primitive
+# is a MASK ROW: a free relation row filled with 2^{n_c} uniform base cells.  What mask rows reach (weights = tensor
+# products of the challenges, generic on every cell):
+#   * every round-i column contraction ``u_i[c]`` and both halves of every column-sumcheck split (a relation row meets
+#     every PCS column of every round) -- covers the round messages of the PCS recursion;
+#   * the eval claims at fully-extension points (``w~(r_i, r_c)`` of the rows sumcheck), the block claims;
+#   * the FINAL VECTOR ``y_L[rho]``, indexed by the LOW k_L bits of x: with row bits low, ``rho`` is a function of the row
+#     index ``i mod 2^{k_L}`` -- 2^{k_L} mask rows would be needed (k_L = 10..13: impossible in 319 free rows).  Fix (a
+#     relabelling of the PCS variables, done by the relation lane when it builds f and permutes the claim points):
+#     interleave ``a = k_L - b`` column bits BELOW the row bits, ``x = (c mod 2^a) + 2^a i + 2^{a + n_i} (c >> a)``; then
+#     ``rho = (c mod 2^a, i mod 2^b)`` and 2^b mask rows with distinct residues mod 2^b cover every final entry with
+#     ``2^{n_c - a}`` uniform cells each.  ``b = 3`` -> 8 mask rows.  PCS round-1 columns are still the top k'_1 bits of
+#     ``c`` (unchanged), the sumcheck lane's row-bits-first points are permuted by ``permute_point``.
+#   * the zero-check's final ``Az(r), Bz(r), Cz(r)``: bare witness functionals (A, B, C vanish on free rows) -> the
+#     trivial constraint ``w(i1) w(i2) = w(i3)`` on three COMMITTED mask rows (``product_rows``; the relation adds the row).
+#   * the shift sumcheck's claims ``w~(bits(c_x) || rho)`` have BOOLEAN row coordinates -> bare functionals of row c_x;
+#     they must be reduced by a rows-type sumcheck to an extension row point first (``## For ligerito-relation``).
+# Cost at fp8-ada (R = 4096, C = 2^18): (8 + 3 + 1) rows = 12 . 2^18 = 3.1 M cells = 0.29 % of N; the sampler does that
+# in < 1 ms; the 8 uniform rows live in the free region (0 extra rows), the 3 product rows + 1 Libra row are committed
+# rows (4 of the 296 spare committed rows).
+
+@dataclass(frozen=True)
+class RowMaskLayout:
+    """Which relation rows are masks.  ``uniform_rows``: free rows, uniform cells (>= 2^b of them, all residues mod 2^b
+    present); ``product_rows``: (i1, i2, i3) committed rows with the trivial quadratic constraint ``i1 . i2 = i3``;
+    ``g_row``: the committed row whose first ``6 . sum(dn + 1)`` cells hold the Libra coefficients of ``sumchecks``
+    (rest uniform); ``a``: column bits interleaved below the row bits in f (``k_L - b``)."""
+    n_i: int
+    n_c: int
+    k_L: int
+    uniform_rows: tuple
+    product_rows: tuple
+    g_row: int
+    sumchecks: tuple = (("zc", 30, 2, True), ("rows", 12, 2), ("shift", 18, 2))
+    b: int = 3
+
+    def __post_init__(self):
+        rows = list(self.uniform_rows) + [i for t in self.product_rows for i in t] + [self.g_row]
+        if len(set(rows)) != len(rows):
+            raise ValueError("mask rows must be distinct")
+        if any(not (0 <= i < (1 << self.n_i)) for i in rows):
+            raise ValueError("mask row out of range")
+        if self.a < 0 or self.a > self.n_c:
+            raise ValueError(f"k_L - b = {self.a} column bits cannot be interleaved (n_c = {self.n_c})")
+        residues = {i % (1 << self.b) for i in self.uniform_rows}
+        if len(residues) != (1 << self.b):
+            raise ValueError(f"uniform_rows must cover every residue mod 2^{self.b} (the final vector's row bits); "
+                             f"got {sorted(residues)}")
+        if (1 << self.n_c) < self.g_cells:
+            raise ValueError("a row is too short for the Libra coefficients")
+
+    @property
+    def a(self) -> int:
+        return self.k_L - self.b
+
+    @staticmethod
+    def n_coeffs(sc) -> int:
+        """``(name, n, d[, cross])`` -> 1 + dn [+ d^2] (the cross block of the bivariate opening round, F3)."""
+        _, n, d = sc[:3]
+        return 1 + d * n + (d * d if len(sc) > 3 and sc[3] else 0)
+
+    @property
+    def g_cells(self) -> int:
+        return D * sum(self.n_coeffs(sc) for sc in self.sumchecks)
+
+    def g_offset(self, idx: int) -> int:
+        return D * sum(self.n_coeffs(sc) for sc in self.sumchecks[:idx])
+
+    @property
+    def all_rows(self) -> tuple:
+        return tuple(self.uniform_rows) + tuple(i for t in self.product_rows for i in t) + (self.g_row,)
+
+    @property
+    def cells(self) -> int:
+        return len(self.all_rows) << self.n_c
+
+    def zk_params(self, n: int, k1: int, kp1: int, t_pad: int = T_PAD) -> ZkParams:
+        """The ``ZkParams`` the padding / Libra / coin helpers take (no column blocks: those are the toy's layout)."""
+        return ZkParams(n, k1, kp1, sumchecks=tuple(sc[:3] for sc in self.sumchecks), t_pad=t_pad, row_layout=True)
+
+
+def default_row_mask_layout(n_i: int, n_c: int, k_L: int, m: int, free_from: int, b: int = 3,
+                            sumchecks=(("zc", 30, 2, True), ("rows", 12, 2), ("shift", 18, 2))) -> RowMaskLayout:
+    """fp8-ada: ``m`` committed rows, free rows ``[free_from, 2^n_i)``: the 2^b uniform rows are the top free rows, the
+    product rows and the Libra row the last four committed rows ``[m - 4, m)`` (the relation must leave them
+    unconstrained except for the trivial constraint)."""
+    R = 1 << n_i
+    if R - free_from < (1 << b):
+        raise ValueError("not enough free rows")
+    return RowMaskLayout(n_i, n_c, k_L, tuple(range(R - (1 << b), R)), ((m - 4, m - 3, m - 2),), m - 1, sumchecks, b)
+
+
+def f_index(i, c, lay: RowMaskLayout):
+    """The PCS cell of relation cell ``(i, c)``: ``x = (c mod 2^a) + 2^a i + 2^{a + n_i} (c >> a)`` (numpy-broadcastable)."""
+    a = lay.a
+    return (c & ((1 << a) - 1)) + (i << a) + ((c >> a) << (a + lay.n_i))
+
+
+def z_to_f(z, lay: RowMaskLayout):
+    """``f`` (R C,) from ``z`` (R, C) (numpy or torch, any dtype): one transpose of the (2^{n_c - a}, R, 2^a) view."""
+    R, C = z.shape
+    a = lay.a
+    v = z.reshape(R, C >> a, 1 << a)
+    v = v.transpose(1, 0, 2) if isinstance(v, np.ndarray) else v.permute(1, 0, 2)
+    return v.reshape(-1)
+
+
+def permute_point(point, lay: RowMaskLayout):
+    """A claim point in ligerito-sumcheck's order (row bits ``0..n_i-1`` then column bits) -> PCS variable order for
+    ``f = z_to_f(z)`` (column bits ``0..a-1``, row bits, column bits ``a..``).  ``point`` (n_i + n_c, 6); numpy or torch."""
+    n_i, a = lay.n_i, lay.a
+    parts = [point[n_i:n_i + a], point[:n_i], point[n_i + a:]]
+    return np.concatenate(parts, axis=0) if isinstance(point, np.ndarray) else __import__("torch").cat(parts, dim=0)
+
+
+@dataclass
+class RowMasks:
+    g_coeffs: list                # per sumcheck: (dn + 1, 6) Libra coefficients (numpy)
+    cells: int
+
+
+def fill_mask_rows(z, lay: RowMaskLayout, device=None) -> RowMasks:
+    """Write the masks into ``z`` (R, C) in place (numpy int64 or torch int32/int64 on ``device``): uniform rows, the
+    Libra row (coefficients first, uniform after), ``i3 := i1 . i2`` for every product triple.  Returns the Libra
+    coefficients (the prover's ``SumcheckMask`` inputs).  ``2^{n_c}`` symbols per row from one sampler call."""
+    C = 1 << lay.n_c
+    rows = list(lay.uniform_rows) + [i for (i1, i2, _) in lay.product_rows for i in (i1, i2)] + [lay.g_row]
+    if isinstance(z, np.ndarray):
+        u = uniform_symbols(len(rows) * C, None).reshape(len(rows), C)
+        z[rows, :] = u
+        for i1, i2, i3 in lay.product_rows:
+            z[i3, :] = (z[i1, :].astype(np.int64) * z[i2, :].astype(np.int64)) % P
+        grow = z[lay.g_row, :lay.g_cells].astype(np.int64)
+    else:
+        import torch
+        u = uniform_symbols_device(len(rows) * C, device).reshape(len(rows), C).to(z.dtype)
+        z[torch.as_tensor(rows, device=z.device), :] = u
+        for i1, i2, i3 in lay.product_rows:
+            z[i3, :] = ((z[i1, :].to(torch.int64) * z[i2, :].to(torch.int64)) % P).to(z.dtype)
+        grow = z[lay.g_row, :lay.g_cells].to(torch.int64).cpu().numpy()
+    gs = [grow[lay.g_offset(k): lay.g_offset(k) + D * lay.n_coeffs(sc)].reshape(lay.n_coeffs(sc), D).copy()
+          for k, sc in enumerate(lay.sumchecks)]
+    return RowMasks(gs, len(lay.all_rows) * C)
+
+
+def libra_block_claim(lay: RowMaskLayout, idx: int, gm, r) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """The block claim ``<W, f> = g(r)`` on the real layout: ``(cells (6(dn+1),) PCS indices, weights (6(dn+1), 6), value)``
+    -- a SPARSE round-1 term for the PCS (one relation row, 6(dn + 1) consecutive relation columns)."""
+    if hasattr(gm, "claim_weights"):                                     # EqSumcheckMask
+        w, v = gm.claim_weights(r).reshape(-1, D), gm.final_value(r)
+    else:
+        bc = gm.claim(r)
+        w, v = bc.weights, bc.value
+    cols = np.arange(lay.g_offset(idx), lay.g_offset(idx) + len(w), dtype=np.int64)
+    return f_index(lay.g_row, cols, lay), w, v
 
 
 def check_layout(zp: ZkParams, referenced) -> None:
@@ -435,9 +600,13 @@ def rate(zp: ZkParams, k: int, n_i: int) -> float:
     return msg / n_i
 
 
-def queries_for(zp: ZkParams, k: int, n_i: int, target_log2: float = -130.0) -> int:
-    """``|S_i|`` for the per-round proximity term of the paper's (4) in the unique-decoding regime,
-    ``((1 + rate) / 2)^{|S|} <= 2^{target_log2}`` (proto: rate 1/4 -> (5/8)^192 = 2^-130.2)."""
+def queries_for(zp: ZkParams, k: int, n_i: int, target_log2: float | None = None, levels: int = 4,
+                total_log2: float = -128.0) -> int:
+    """``|S_i|`` for the per-level proximity term of the paper's (4) in the unique-decoding regime with the PADDED rate
+    ``(2^k + t_pad) / n_i`` (red team F1): ``((1 + rate) / 2)^{|S|} <= 2^{target_log2}``.  The default target is the union
+    rule ``total_log2 - log2(levels)`` (F7: -130 per level is not a union rule at L = 5), e.g. L = 4 -> -130, L = 5 -> -130.32."""
+    if target_log2 is None:
+        target_log2 = total_log2 - math.log2(levels)
     rho = rate(zp, k, n_i)
     return math.ceil(target_log2 / math.log2((1 + rho) / 2))
 
@@ -557,7 +726,146 @@ class SumcheckMask:
                 w[t] = ext_mul(basis, rp[None, :])
                 rp = ext_mul(rp, r[i])
                 t += 1
-        return BlockClaim(mc.g_blocks[self.idx].copy(), w.reshape(-1, D), self.final_value(r))
+        cells = mc.g_blocks[self.idx].copy() if mc.g_blocks else np.arange(D * self.zp.g_coeffs(self.idx), dtype=np.int64)
+        return BlockClaim(cells, w.reshape(-1, D), self.final_value(r))
+
+
+class EqSumcheckMask:
+    """Libra mask for ligerito-sumcheck's zero-check wire form (red team F3): the summand is ``eq(tau, x) (q(x) + rho g(x))``
+    -- the mask is multiplied by the SAME public ``eq`` factor as the witness part, so every round keeps Gruen's
+    ``(q(0), q(1), q(inf))`` form with per-variable degree ``d = 2`` and the verifier's checks are unchanged except that
+    the zero-check's initial claim is ``rho . G`` with ``G = sum_x eq(tau, x) g(x)`` (sent by the prover).
+    ``g(x) = a_0 + sum_i sum_{e<=d} a_{i,e} x_i^e + [cross] sum_{a,b<=d} c_{ab} x_0^a x_1^b`` -- the cross block blinds the
+    ``X1^a X2^b`` coefficients of the bivariate OPENING round (variables 0 and 1 in round order), which ``g_0 + g_1`` alone
+    leaves in the clear; with it the 9 coefficients of the 3 x 3 opening message are spanned (1 + 2 + 2 + 4 = 9).
+    ``coeffs`` (1 + dn [+ d^2], 6): ``a_0``, ``a_{i,e}`` row-major, then ``c_{ab}`` row-major.  ``tau`` (n, 6) in round order
+    (``tau[t]`` multiplies the variable eliminated at round ``t``)."""
+
+    def __init__(self, n: int, d: int, coeffs: np.ndarray, tau, cross: bool = True):
+        self.n, self.d, self.cross = n, d, cross
+        coeffs = np.asarray(coeffs, dtype=np.int64) % P
+        if coeffs.shape != (self.n_coeffs(n, d, cross), D):
+            raise ValueError(f"expected {self.n_coeffs(n, d, cross)} coefficients, got {coeffs.shape}")
+        self.a0 = coeffs[0]
+        self.a = coeffs[1:1 + d * n].reshape(n, d, D)
+        self.c = coeffs[1 + d * n:].reshape(d, d, D) if cross else None
+        self.tau = np.asarray(tau, dtype=np.int64).reshape(n, D) % P
+        self.g_ones = ext_sum(self.a, axis=1)                            # (n, 6): g_i(1)
+        self.bar = ext_mul(self.tau, self.g_ones)                        # (n, 6): sum_{x_i} eq(tau_i, x_i) g_i(x_i) = tau_i g_i(1)
+
+    @staticmethod
+    def n_coeffs(n: int, d: int, cross: bool) -> int:
+        return 1 + d * n + (d * d if cross else 0)
+
+    # -- pieces
+    def _g_at(self, i: int, x) -> np.ndarray:
+        """g_i(x), x an extension (6,)."""
+        x = np.asarray(x, dtype=np.int64) % P
+        acc, xp = ext_zero(), x.copy()
+        for e in range(self.d):
+            acc = (acc + ext_mul(self.a[i, e], xp)) % P
+            xp = ext_mul(xp, x)
+        return acc
+
+    def _pows(self, x) -> np.ndarray:
+        """(d, 6): x^1 .. x^d."""
+        x = np.asarray(x, dtype=np.int64) % P
+        out, xp = ext_zero((self.d,)), x.copy()
+        for e in range(self.d):
+            out[e] = xp
+            xp = ext_mul(xp, x)
+        return out
+
+    def _cross(self, x0, x1) -> np.ndarray:
+        """sum_{a,b} c_ab x0^a x1^b (6,)."""
+        if not self.cross:
+            return ext_zero()
+        p0, p1 = self._pows(x0), self._pows(x1)
+        return ext_sum(ext_sum(ext_mul(ext_mul(self.c, p0[:, None, :]), p1[None, :, :]), axis=1), axis=0)
+
+    # -- what the prover sends / adds
+    def zk_sum(self) -> np.ndarray:
+        """``G = sum_x eq(tau, x) g(x) = a_0 + sum_i tau_i g_i(1) + tau_0 tau_1 sum_ab c_ab`` (6,)."""
+        G = (self.a0 + ext_sum(self.bar, axis=0)) % P
+        if self.cross:
+            G = (G + ext_mul(ext_mul(self.tau[0], self.tau[1]), ext_sum(ext_sum(self.c, axis=0), axis=0))) % P
+        return G
+
+    def _tail(self, t: int) -> np.ndarray:
+        return ext_sum(self.bar[t + 1:], axis=0) if t + 1 < self.n else ext_zero()
+
+    def message(self, t: int, r_prefix, xs=None) -> np.ndarray:
+        """(len(xs), 6): the mask's part of round ``t``'s message ``q_t(X)`` (the prover adds ``rho`` times it):
+        ``sum_{x>t} prod_{i>t} eq(tau_i, x_i) g(r_<t, X, x_>t)``.  Univariate rounds only (``t >= 2`` when the opening is
+        bivariate; ``t >= 0`` otherwise)."""
+        xs = tuple(range(self.d + 1)) if xs is None else xs
+        r_prefix = np.asarray(r_prefix, dtype=np.int64).reshape(-1, D) % P
+        if r_prefix.shape[0] != t:
+            raise ValueError("r_prefix must hold the challenges of the rounds before t")
+        const = self.a0.copy()
+        for i in range(t):
+            const = (const + self._g_at(i, r_prefix[i])) % P
+        const = (const + self._tail(t)) % P
+        if self.cross:
+            if t >= 2:
+                const = (const + self._cross(r_prefix[0], r_prefix[1])) % P
+            elif t == 1:
+                pass                                                     # handled per X below
+            else:
+                pass
+        out = ext_zero((len(xs),))
+        for k, X in enumerate(xs):
+            Xe = ext_from_base(X) if np.ndim(X) == 0 else np.asarray(X, dtype=np.int64)
+            v = (const + self._g_at(t, Xe)) % P
+            if self.cross and t == 0:                                    # sum_{x1} eq(tau_1, x1) x1^b = tau_1
+                v = (v + ext_mul(self._cross(Xe, ext_one()), self.tau[1])) % P
+            elif self.cross and t == 1:
+                v = (v + self._cross(r_prefix[0], Xe)) % P
+            out[k] = v
+        return out
+
+    def message_pair(self, xs=None) -> np.ndarray:
+        """(len(xs), len(xs), 6): the mask's part of the bivariate OPENING message on the grid ``(X1, X2) in xs x xs``
+        (variables 0 and 1): ``a_0 + g_0(X1) + g_1(X2) + sum c_ab X1^a X2^b + sum_{i>1} tau_i g_i(1)``."""
+        xs = tuple(range(self.d + 1)) if xs is None else xs
+        const = (self.a0 + self._tail(1)) % P
+        out = ext_zero((len(xs), len(xs)))
+        for i, X1 in enumerate(xs):
+            X1e = ext_from_base(X1) if np.ndim(X1) == 0 else np.asarray(X1, dtype=np.int64)
+            g0 = self._g_at(0, X1e)
+            for j, X2 in enumerate(xs):
+                X2e = ext_from_base(X2) if np.ndim(X2) == 0 else np.asarray(X2, dtype=np.int64)
+                out[i, j] = (const + g0 + self._g_at(1, X2e) + self._cross(X1e, X2e)) % P
+        return out
+
+    def final_value(self, r) -> np.ndarray:
+        """``g(r)`` (6,) -- the block claim's value on the committed coefficients."""
+        r = np.asarray(r, dtype=np.int64).reshape(self.n, D) % P
+        acc = self.a0.copy()
+        for i in range(self.n):
+            acc = (acc + self._g_at(i, r[i])) % P
+        return (acc + self._cross(r[0], r[1])) % P
+
+    def claim_weights(self, r) -> np.ndarray:
+        """(n_coeffs, 6, 6): weight of coefficient ``t``'s base cell ``d`` in ``<W, f> = g(r)`` (``x^d`` times the monomial)."""
+        r = np.asarray(r, dtype=np.int64).reshape(self.n, D) % P
+        mons = [ext_one()]
+        for i in range(self.n):
+            mons.extend(self._pows(r[i]))
+        if self.cross:
+            p0, p1 = self._pows(r[0]), self._pows(r[1])
+            mons.extend(ext_mul(p0[a], p1[b]) for a in range(self.d) for b in range(self.d))
+        mons = np.stack(mons)                                            # (n_coeffs, 6)
+        basis = np.eye(D, dtype=np.int64)
+        return ext_mul(basis[None, :, :], mons[:, None, :])             # (t, d, 6)
+
+    def eval_brute(self, x_bits) -> np.ndarray:
+        """g at a boolean point (test helper)."""
+        x = [ext_from_base(b) for b in x_bits]
+        acc = self.a0.copy()
+        for i in range(self.n):
+            acc = (acc + self._g_at(i, x[i])) % P
+        return (acc + self._cross(x[0], x[1])) % P
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -750,6 +1058,25 @@ ZK_MODE = ("Ligerito ZK: mask rows in the committed polynomial (round-1 columns 
            "{g} F_p^6 coefficients committed in the G-blocks) each with a post-G coin; malicious-verifier: every verifier "
            "message is a step-0 committed slot (K = {K}), challenges are functions of the coins alone, prover aborts publicly "
            "on a mismatched opening; simulator by rewinding V* after step 0 (CRH only)")
+
+ZK_MODE_ROWS = ("Ligerito ZK (relation layout, f = z with {a} column bits interleaved below the {n_i} row bits): {u} uniform "
+                "mask rows in the free region covering every residue mod 2^{b} (so every fold entry, round contraction, final-"
+                "vector entry and fully-extension eval claim is a functional of >= 6 uniform base cells with F_p-spanning "
+                "tensor weights), 3 committed mask rows under the trivial constraint m1 . m2 = m3 (masks the zero-check's "
+                "Az, Bz, Cz claims), one committed Libra row ({g} F_p^6 coefficients: eq-weighted masks g with a 2 x 2 cross "
+                "block for the bivariate opening round, one per sumcheck over witness tables: {scs}), t_pad = {t_pad} uniform RS "
+                "padding coefficients per committed column with ybar_i in the clear (opened rows uniform for |S_i| <= t_pad); "
+                "malicious-verifier: every verifier message is a step-0 committed slot (K = {K}), challenges are functions of "
+                "the coins alone, prover aborts publicly on a mismatched opening; simulator by rewinding V* after step 0 (CRH only)")
+
+
+def zk_mode_rows(lay: "RowMaskLayout", t_pad: int = T_PAD, K: int | None = None) -> str:
+    """The ``relchain.zk_mode`` text for the real layout."""
+    return ZK_MODE_ROWS.format(a=lay.a, n_i=lay.n_i, u=len(lay.uniform_rows), b=lay.b, g=lay.g_cells // D,
+                               scs=", ".join(f"{sc[0]}({sc[1]} vars, d={sc[2]}{', cross' if len(sc) > 3 and sc[3] else ''})"
+                                             for sc in lay.sumchecks),
+                               t_pad=t_pad, K=K if K is not None else "per coin_schedule")
+
 
 OMITTED_ZK = ("unopened Merkle leaves hidden by Blake3 of a (marginally) uniform row -- random-oracle-flavoured, "
               "salted leaves not implemented; GK rewinding capped in the demonstrated simulator")
