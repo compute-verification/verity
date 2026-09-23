@@ -62,29 +62,50 @@ def test_native_is_blake3_of_the_row_bytes(word_bits, role):
     leaf = L.Blake3Leaf()
     d = leaf.native(rows, word_bits=word_bits, role=role)
     nch = L.n_chunks(word_bits)
-    assert d.shape == (6, L.DIGEST_ELEMS) and (d[:, 0] == nch).all() and d[:, 1:].min() >= 0 and d[:, 1:].max() < 1 << 16
+    assert d.shape == (6, L.DIGEST_ELEMS) and (d[:, 0] == nch + 4 * role).all() and d[:, 1:].min() >= 0 and d[:, 1:].max() < 1 << 16
     assert not d[:, 1 + 16 * nch:].any()
     ref = leaf.reference_digest(rows, word_bits=word_bits, role=role)
     for r in range(6):
         assert leaf.leaf_bytes(d[r]) == ref[r] and len(ref[r]) == 32
+    # the role is in the key (red-team-leaf NIT): the other role's digest and leaf differ
+    other = 3 - role
+    d2 = leaf.native(rows, word_bits=word_bits, role=other)
+    assert not np.array_equal(d[:, 1:], d2[:, 1:]) and leaf.leaf_bytes(d2[1]) != ref[1]
+    assert leaf.leaf_bytes(d2[1]) == leaf.reference_digest(rows, word_bits=word_bits, role=other)[1]
+    assert L.key_for(1) != L.key_for(2) and L.key_for(role).startswith(b"verity/blake3-leaf/v1/")
 
 
-def test_leaf_bytes_rejects_out_of_range_limbs():
+def test_leaf_bytes_is_total_on_field_rows_and_tags_malformed_frames():
+    """The contract's conformance suite feeds random field rows: a malformed frame maps to the tagged SHA-256 domain
+    (never a BLAKE3 root), the frame parser itself rejects it, and only a wrong length / non-field element raises."""
+    import hashlib
+    malformed = [[6, 1 << 16] + [0] * (L.DIGEST_ELEMS - 2),        # limb out of range
+                 [0] * L.DIGEST_ELEMS,                              # no chunks / no role
+                 [6] + [1] * (L.DIGEST_ELEMS - 1),                  # unused slot not 0
+                 [2] + [0] * (L.DIGEST_ELEMS - 1),                  # role 0
+                 [3 + 12] + [0] * (L.DIGEST_ELEMS - 1)]             # role 3
+    seen = set()
+    for m in malformed:
+        with pytest.raises(ValueError):
+            L.elems_to_cvs(m)
+        b = L.leaf_bytes(m)
+        assert b == hashlib.sha256(L.MALFORMED_TAG + np.asarray(m, dtype="<u4").tobytes()).digest() and len(b) == 32
+        seen.add(b)
+    assert len(seen) == len(malformed)
+    good = L.Blake3Leaf().native(np.zeros((1, L.K_VU), dtype=np.int64), word_bits=8, role=1)[0]
+    assert L.leaf_bytes(good) not in seen and L.elems_to_cvs(good)[1] == 1
     with pytest.raises(ValueError):
-        L.leaf_bytes([2, 1 << 16] + [0] * (L.DIGEST_ELEMS - 2))       # limb out of range
+        L.leaf_bytes([6] + [0] * 32)                                   # wrong length
     with pytest.raises(ValueError):
-        L.leaf_bytes([0] * L.DIGEST_ELEMS)                             # no chunks
-    with pytest.raises(ValueError):
-        L.leaf_bytes([2] + [1] * (L.DIGEST_ELEMS - 1))                 # unused slot not 0
-    with pytest.raises(ValueError):
-        L.leaf_bytes([2] + [0] * 32)                                   # wrong length
+        L.leaf_bytes([P] + [0] * (L.DIGEST_ELEMS - 1))                 # not a field element
 
 
-def _column_system(word_bits: int, role: int, nblk: int = 1):
+def _column_system(word_bits: int, role: int, nblk: float = 1):
+    """One column system with ``nblk`` blocks per column: 0.5 (the unfolded relations), 1 (x2), 2 (x4)."""
     leaf = L.Blake3Leaf()
     ctx = LigeroCtx(FP8_ADA_RELATION.params)
     ctx.scope = "t"
-    k = nblk * 8 * L.BLOCK_LEN // word_bits
+    k = int(nblk * 8 * L.BLOCK_LEN) // word_bits
     words = [ctx.hint(f"w[{i}]") for i in range(k)]
     carry = [ctx.hint(f"carry[{i}]") for i in range(L.CARRY_ELEMS)]
     digest, carry_out = leaf.gadget(ctx, words, word_bits=word_bits, role=role, row_words=L.K_VU, carry_in=carry)
@@ -92,9 +113,9 @@ def _column_system(word_bits: int, role: int, nblk: int = 1):
     return leaf, ctx.sys, words, carry, digest, carry_out
 
 
-def _one_row_inputs(leaf, sys, word_bits: int, role: int, seed: int, nblk: int = 1):
-    steps = L.K_VU * word_bits // 8 // L.BLOCK_LEN // nblk
-    k = nblk * 8 * L.BLOCK_LEN // word_bits
+def _one_row_inputs(leaf, sys, word_bits: int, role: int, seed: int, nblk: float = 1):
+    k = int(nblk * 8 * L.BLOCK_LEN) // word_bits
+    steps = L.K_VU // k
     rng = np.random.default_rng(seed)
     rows = rng.integers(0, 1 << word_bits, size=(1, L.K_VU), dtype=np.int64)
     car = leaf.carry_values(rows, word_bits=word_bits, role=role, steps=steps)          # (1, steps, CARRY_ELEMS)
@@ -107,14 +128,14 @@ def _one_row_inputs(leaf, sys, word_bits: int, role: int, seed: int, nblk: int =
     return rows, steps, car, pub, hints
 
 
-@pytest.mark.parametrize("nblk", [1, 2])
+@pytest.mark.parametrize("nblk", [0.5, 1, 2])
 @pytest.mark.parametrize("word_bits", [8, 16])
 def test_gadget_equals_native_along_one_row(word_bits, nblk):
     """One VU row over its `steps` columns (l = steps): the program's rows satisfy every constraint, the carried rows
     chain (carry_out[j] == carry_in[j + 1]), and the digest expressions at the last column are the native chunk CVs."""
     role = 1
     leaf, sys, words, carry, digest, carry_out = _column_system(word_bits, role, nblk)
-    rows, steps, car, pub, hints = _one_row_inputs(leaf, sys, word_bits, role, 11 + word_bits + nblk, nblk)
+    rows, steps, car, pub, hints = _one_row_inputs(leaf, sys, word_bits, role, 11 + word_bits + int(2 * nblk), nblk)
     W = run_program_np(sys, pub, hints)
     assert failing_constraints(sys, W, pub) == []
     outs = np.stack([_eval(e, W) for e in carry_out])                                    # (CARRY_ELEMS, steps)
@@ -149,16 +170,19 @@ def test_tampered_rows_are_rejected():
     assert not np.array_equal(outs[:, :-1], car[0, 1:, :].T)         # ... and the chain constraint is what catches it
 
 
+PER_COLUMN_ROLE_ROWS = 15331      # one 64-byte column, one role: compression + layout + selects + holds + copies
+
+
 def test_census_numbers_are_the_documented_ones():
     c = L.census(8)
     assert c["per_block_bit_design"] == 15136 and c["compression_rows"] == 14880
     assert c["lookup_xor_rows_per_u32"] == 2112 and c["bit_xor_rows_per_u32"] == 32
-    assert c["per_column_role_rows"] == 15331
-    assert L.DIGEST_ELEMS == 49 and L.CARRY_ELEMS == 49 and L.n_chunks(8) == 2 and L.n_chunks(16) == 3
+    assert c["per_column_role_rows"] == PER_COLUMN_ROLE_ROWS
+    assert L.DIGEST_ELEMS == 49 and L.CARRY_ELEMS == 65 and L.n_chunks(8) == 2 and L.n_chunks(16) == 3
 
 
 def test_gadget_torch_witness_path():
-    torch = pytest.importorskip("torch")
+    torch = pytest.importorskip("torch", exc_type=ImportError)   # the laptop carries a raising torch stub
     from ..witness import build_witness, check_constraints, eval_expr, tables
     word_bits, role = 8, 2
     leaf, sys, words, carry, digest, carry_out = _column_system(word_bits, role)

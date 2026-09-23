@@ -49,14 +49,19 @@ pub static POSEIDON2: LeafScheme = LeafScheme {
 };
 
 // ---------------------------------------------------------------------------------------------------------------------
-// BLAKE3 (`leaf/blake3.py`, lane blake3-leaf): the relation proves the chunk chaining values of the row (keyed mode, key
-// `KEY`), the digest row is `[n_chunks | CV_0 as 16 little-endian 16-bit limbs | CV_1 | CV_2]` (unused slots 0) and the
-// leaf is the standard BLAKE3 root: the left-heavy parent fold of the CVs (`PARENT`, `ROOT` on top) -- i.e. exactly
-// `blake3::Hasher::new_keyed(KEY).update(row_bytes).finalize()`.  The compression function is written out here (no
-// crates on the pods); it only runs 1-2 times per committed row.
+// BLAKE3 (`leaf/blake3.py`, lane blake3-leaf): the relation proves the chunk chaining values of the row (keyed mode, one
+// key per operand role: `verity/blake3-leaf/v1/x` for x rows, `.../w` for W columns), the digest row is
+// `[n_chunks + 4 role | CV_0 as 16 little-endian 16-bit limbs | CV_1 | CV_2]` (unused slots 0) and the leaf is the
+// standard BLAKE3 root: the left-heavy parent fold of the CVs with the role's key (`PARENT`, `ROOT` on top) -- i.e.
+// exactly `blake3::Hasher::new_keyed(key(role)).update(row_bytes).finalize()`.  The compression function is written out
+// here (no crates on the pods); it only runs 1-2 times per committed row.  `leaf_bytes` is total on field rows of the
+// right length (the Python contract's conformance suite feeds random rows): a row that is not a well-formed frame maps
+// to the tagged SHA-256 of its elements, a domain no BLAKE3 root of a row lands in except by collision.
 // ---------------------------------------------------------------------------------------------------------------------
 
-const BLAKE3_KEY: [u8; 32] = *b"verity/blake3-leaf/v1\0\0\0\0\0\0\0\0\0\0\0";
+const BLAKE3_KEY_X: [u8; 32] = *b"verity/blake3-leaf/v1/x\0\0\0\0\0\0\0\0\0";
+const BLAKE3_KEY_W: [u8; 32] = *b"verity/blake3-leaf/v1/w\0\0\0\0\0\0\0\0\0";
+const BLAKE3_MALFORMED_TAG: &[u8] = b"verity/blake3-leaf/malformed-digest/v1\0";
 const BLAKE3_MAX_CHUNKS: usize = 3;
 const BLAKE3_DIGEST_ELEMS: usize = 1 + 16 * BLAKE3_MAX_CHUNKS;
 const BLAKE3_MSG_PERMUTATION: [usize; 16] = [2, 6, 3, 10, 7, 0, 4, 13, 1, 11, 12, 5, 9, 14, 15, 8];
@@ -64,11 +69,14 @@ const BLAKE3_IV: [u32; 8] = [0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A, 0x5
 const BLAKE3_PARENT: u32 = 4;
 const BLAKE3_ROOT: u32 = 8;
 const BLAKE3_KEYED_HASH: u32 = 16;
+const BABYBEAR_P: u32 = 0x7800_0001;
 
-fn blake3_key_words() -> [u32; 8] {
+/// `leaf.blake3.key_words(role)`: role 1 = x rows, 2 = W columns.
+fn blake3_key_words(role: u32) -> [u32; 8] {
+    let key = if role == 1 { &BLAKE3_KEY_X } else { &BLAKE3_KEY_W };
     let mut k = [0u32; 8];
     for (i, w) in k.iter_mut().enumerate() {
-        *w = u32::from_le_bytes([BLAKE3_KEY[4 * i], BLAKE3_KEY[4 * i + 1], BLAKE3_KEY[4 * i + 2], BLAKE3_KEY[4 * i + 3]]);
+        *w = u32::from_le_bytes([key[4 * i], key[4 * i + 1], key[4 * i + 2], key[4 * i + 3]]);
     }
     k
 }
@@ -119,29 +127,35 @@ fn blake3_compress_cv(cv: &[u32; 8], block: &[u32; 16], counter: u64, block_len:
 }
 
 /// The left-heavy parent fold of `nodes` (the left subtree holds the largest power of two strictly below the count).
-fn blake3_fold(nodes: &[[u32; 8]], top: bool) -> [u32; 8] {
+fn blake3_fold(nodes: &[[u32; 8]], role: u32, top: bool) -> [u32; 8] {
     if nodes.len() == 1 {
         return nodes[0];
     }
     let k = 1usize << (usize::BITS - 1 - (nodes.len() - 1).leading_zeros());
-    let (l, r) = (blake3_fold(&nodes[..k], false), blake3_fold(&nodes[k..], false));
+    let (l, r) = (blake3_fold(&nodes[..k], role, false), blake3_fold(&nodes[k..], role, false));
     let mut block = [0u32; 16];
     block[..8].copy_from_slice(&l);
     block[8..].copy_from_slice(&r);
     let flags = BLAKE3_KEYED_HASH | BLAKE3_PARENT | if top { BLAKE3_ROOT } else { 0 };
-    blake3_compress_cv(&blake3_key_words(), &block, 0, 64, flags)
+    blake3_compress_cv(&blake3_key_words(role), &block, 0, 64, flags)
 }
 
-/// `leaf.blake3.leaf_bytes`: the 32-byte BLAKE3 root of the published chunk CVs.  A malformed digest row (wrong length,
-/// chunk count outside 2..=3, a limb >= 2^16, a non-zero unused slot) yields NO bytes, so its leaf cannot open.
+/// `leaf.blake3.leaf_bytes`: the 32-byte BLAKE3 root of the published chunk CVs, folded with the header's role key.  A
+/// wrong length or a non-field element yields NO bytes (the leaf cannot open); a malformed frame (header not `n_chunks
+/// (2..=3) + 4 role (1, 2)`, a limb >= 2^16, a non-zero unused slot) yields the tagged SHA-256 of the elements.
 fn blake3_leaf_bytes(elems: &[u32]) -> Vec<u8> {
-    if elems.len() != BLAKE3_DIGEST_ELEMS {
+    if elems.len() != BLAKE3_DIGEST_ELEMS || elems.iter().any(|&x| x >= BABYBEAR_P) {
         return Vec::new();
     }
-    let nch = elems[0] as usize;
-    if !(2..=BLAKE3_MAX_CHUNKS).contains(&nch) || elems[1 + 16 * nch..].iter().any(|&x| x != 0)
+    let (nch, role) = ((elems[0] & 3) as usize, elems[0] >> 2);
+    if !(2..=BLAKE3_MAX_CHUNKS).contains(&nch) || !(1..=2).contains(&role) || elems[1 + 16 * nch..].iter().any(|&x| x != 0)
         || elems[1..1 + 16 * nch].iter().any(|&x| x >= 1 << 16) {
-        return Vec::new();
+        let mut h = crate::hash::Sha256::new();
+        h.update(BLAKE3_MALFORMED_TAG);
+        for &x in elems {
+            h.update(&x.to_le_bytes());
+        }
+        return h.finalize().to_vec();
     }
     let mut cvs = vec![[0u32; 8]; nch];
     for c in 0..nch {
@@ -149,7 +163,7 @@ fn blake3_leaf_bytes(elems: &[u32]) -> Vec<u8> {
             cvs[c][w] = elems[1 + 16 * c + 2 * w] | (elems[1 + 16 * c + 2 * w + 1] << 16);
         }
     }
-    let root = blake3_fold(&cvs, true);
+    let root = blake3_fold(&cvs, role, true);
     let mut out = Vec::with_capacity(32);
     for w in root {
         out.extend_from_slice(&w.to_le_bytes());
@@ -158,12 +172,12 @@ fn blake3_leaf_bytes(elems: &[u32]) -> Vec<u8> {
 }
 
 /// `leaf.blake3.Blake3Leaf` (lane blake3-leaf): `schema` / `params_sha256` are the module's `SCHEMA` and
-/// `params_sha256()` (SHA-256 of the key and the framing constants).
+/// `params_sha256()` (SHA-256 of the two keys and the framing constants).
 pub static BLAKE3: LeafScheme = LeafScheme {
     name: "blake3",
     display: "BLAKE3",
-    schema: "blake3-keyed/row/v1",
-    params_sha256: "efdd4cc088435c1448069150fe83720be0cd9fb01806d42758baeadf5b75d0be",
+    schema: "blake3-keyed/row/v2",
+    params_sha256: "6654cdb9680d9f9c782092d0cb7cf0820bcba2612b28742c2b48cdd8957785a6",
     digest_elems: BLAKE3_DIGEST_ELEMS,
     leaf_bytes: blake3_leaf_bytes,
 };
@@ -258,27 +272,42 @@ mod tests {
 
     #[test]
     fn blake3_leaf_bytes_match_the_python_scheme() {
-        // leaf/blake3.py: Blake3Leaf().native(rows, word_bits=8) of a 1536-byte row (rng seed 1), then leaf_bytes == the
-        // `blake3` package's keyed digest of the row bytes
-        let elems: [u32; 49] = [2, 3942, 14602, 14967, 42815, 46209, 38595, 24013, 42132, 19390, 21419, 23957, 22199, 727,
-            33069, 31576, 34733, 33805, 42348, 65370, 50179, 22824, 2776, 36519, 63709, 51390, 50095, 55197, 56994, 5257,
-            23910, 47444, 37844, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-        let v = (BLAKE3.leaf_bytes)(&elems);
-        let hex: String = v.iter().map(|b| format!("{b:02x}")).collect();
-        assert_eq!(hex, "9ffeec58aeb637a783f6f16660336b3d16a84b8c5a3e937dfa9b2238e79207fa");
+        // leaf/blake3.py: Blake3Leaf().native(rows, word_bits=8, role=) of a 1536-byte row (rng seed 1) for both roles,
+        // then leaf_bytes == the `blake3` package's keyed digest of the row bytes under the role's key
+        let x: [u32; 49] = [6, 12484, 29774, 53750, 51075, 3602, 4076, 31413, 33829, 7246, 42179, 39884, 50426, 27583, 3456,
+            1716, 49874, 18585, 43980, 14096, 36809, 18054, 53302, 5941, 5726, 58036, 37223, 9265, 1409, 39823, 19488, 16867,
+            60764, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let w: [u32; 49] = [10, 17377, 12951, 31928, 29282, 34781, 23233, 39917, 6581, 31152, 11858, 37240, 57198, 20263,
+            51057, 44814, 8727, 40228, 10503, 35577, 34859, 14385, 31516, 1712, 60419, 59968, 5091, 43407, 44310, 18091, 619,
+            51485, 1671, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let hex = |v: Vec<u8>| -> String { v.iter().map(|b| format!("{b:02x}")).collect() };
+        assert_eq!(hex((BLAKE3.leaf_bytes)(&x)), "fde8e56e3e91fb7a44c37124392abe618bd56f83a3eb49f0bca88353b7429fbd");
+        assert_eq!(hex((BLAKE3.leaf_bytes)(&w)), "e17631f2bf9ba60e615f9b0d9ce20213763fc181a6b663bb18fb14c1b2ba8cdc");
         let (b, s) = split_relation("fp8-ada-x4+blake3").unwrap();
         assert_eq!((b, s.name), ("fp8-ada-x4", "blake3"));
-        // malformed digests give no leaf
-        assert!((BLAKE3.leaf_bytes)(&elems[..48]).is_empty());
-        let mut bad = elems;
-        bad[0] = 1;
+        // wrong length / non-field element: no leaf
+        assert!((BLAKE3.leaf_bytes)(&x[..48]).is_empty());
+        let mut bad = x;
+        bad[3] = BABYBEAR_P;
         assert!((BLAKE3.leaf_bytes)(&bad).is_empty());
-        let mut bad = elems;
-        bad[40] = 1;
-        assert!((BLAKE3.leaf_bytes)(&bad).is_empty());
-        let mut bad = elems;
-        bad[1] = 1 << 16;
-        assert!((BLAKE3.leaf_bytes)(&bad).is_empty());
+        // malformed frames: the tagged SHA-256 domain (Python `leaf_bytes([6] + [1] * 48)`), never a root
+        let mut m = [1u32; 49];
+        m[0] = 6;
+        assert_eq!(hex((BLAKE3.leaf_bytes)(&m)), "7c1d4e79525b029c7a23cc1e86d8d6bd5fb1dbf72bee0aba300c921ffdaba271");
+        for (i, v) in [(0usize, 2u32), (0, 15), (40, 1), (1, 1 << 16)] {
+            let mut bad = x;
+            bad[i] = v;
+            let out = (BLAKE3.leaf_bytes)(&bad);
+            assert_eq!(out.len(), 32);
+            assert_ne!(hex(out.clone()), hex((BLAKE3.leaf_bytes)(&x)));
+            // the same row through the tag directly
+            let mut h = crate::hash::Sha256::new();
+            h.update(BLAKE3_MALFORMED_TAG);
+            for &e in &bad {
+                h.update(&e.to_le_bytes());
+            }
+            assert_eq!(out, h.finalize().to_vec());
+        }
     }
 
     #[test]

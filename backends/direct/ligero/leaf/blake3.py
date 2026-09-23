@@ -1,8 +1,8 @@
 """``leaf = blake3``: the operand rows hashed **in-circuit with BLAKE3's compression function** (lane blake3-leaf).
 
 The conservative control of the leaf campaign: the same ``included-hash`` column as the Poseidon2 leaf (``hashchain.py``)
-under a standard hash.  What the verifier ends up checking is the ordinary ``blake3.blake3(row_bytes, key=KEY).digest()``
-of every committed row (keyed mode, one 32-byte key per word width; see :func:`key_for`) as the leaf value
+under a standard hash.  What the verifier ends up checking is the ordinary ``blake3.blake3(row_bytes, key=key_for(role)).digest()``
+of every committed row (keyed mode, one 32-byte key per operand role; see :func:`key_for`) as the leaf value
 under the SHA-256 indexed trees -- anyone with the ``blake3`` package recomputes it.
 
 **Framing (decided; the rest of the module follows from it).**  A row is 1536 words: 1536 bytes (E4M3) or 3072 bytes
@@ -55,7 +55,7 @@ import numpy as np
 
 from ..compile import Expr, LigeroCtx, Linear, P, Quadratic
 
-__all__ = ["BLOCK_LEN", "CARRY_ELEMS", "CHUNK_LEN", "DIGEST_ELEMS", "IV", "KEY", "KEY_LEN", "K_VU", "N_CHUNKS_MAX", "Blake3Leaf",
+__all__ = ["BLOCK_LEN", "CARRY_ELEMS", "CHUNK_LEN", "DIGEST_ELEMS", "IV", "KEYS", "KEY_LEN", "K_VU", "N_CHUNKS_MAX", "Blake3Leaf",
            "census", "chunk_cvs_np", "compress_np", "digest_elems_for", "key_for", "leaf_bytes", "n_chunks", "root_from_cvs",
            "row_bytes"]
 
@@ -76,32 +76,48 @@ MASK32 = 0xFFFFFFFF
 # Framing
 # ---------------------------------------------------------------------------------------------------------------------
 
-KEY = b"verity/blake3-leaf/v1".ljust(KEY_LEN, b"\0")
+KEY_PREFIX = b"verity/blake3-leaf/v1/"
+KEYS = {role: (KEY_PREFIX + nm.split("-")[0].encode()).ljust(KEY_LEN, b"\0") for role, nm in ROLE_NAMES.items()}
 N_CHUNKS_MAX = 3                        # E4M3 rows: 2 chunks, BF16 rows: 3 (one registry instance serves both widths)
-DIGEST_ELEMS = 1 + 16 * N_CHUNKS_MAX    # [n_chunks | CV_0 limbs | CV_1 | CV_2]  (unused slots 0)
-CARRY_ELEMS = 16 * N_CHUNKS_MAX + 1     # [running cv (16) | hold_0 (16) | hold_1 (16) | pos]
-SCHEMA = "blake3-keyed/row/v1"
+DIGEST_ELEMS = 1 + 16 * N_CHUNKS_MAX    # [header | CV_0 limbs | CV_1 | CV_2]  (unused slots 0); header = n_chunks + 4 role
+HOLD_MSG = 16 * N_CHUNKS_MAX            # carry offset of the half-block message hold (32-byte columns: x1 relations)
+CARRY_ELEMS = HOLD_MSG + 16 + 1         # [running cv (16) | hold_0 (16) | hold_1 (16) | msg hold (16) | pos]
+SCHEMA = "blake3-keyed/row/v2"
 HASH_NAME = "blake3-keyed"
+MALFORMED_TAG = b"verity/blake3-leaf/malformed-digest/v1\0"
 
 
-def key_for(word_bits: int | None = None) -> bytes:
-    """The 32-byte BLAKE3 key of the leaf: domain separation from any other BLAKE3 use at zero circuit cost (the key words
-    replace IV as the first chaining value of every chunk AND of every parent node; ``KEYED_HASH`` is a constant flag
-    bit).  Neither the word width nor the operand role is in the key: the row formats have different byte lengths (1536
-    vs 3072 -- different BLAKE3 messages), the two roles live in different trees with different bindings, and
-    ``leaf_bytes`` (the verifier's parent fold) receives only the digest."""
-    return KEY
+def key_for(role: int) -> bytes:
+    """The 32-byte BLAKE3 key of one operand role: ``"verity/blake3-leaf/v1/x"`` (x rows) / ``".../w"`` (W columns), zero
+    padded.  Domain separation at zero circuit cost (the key words replace IV as the first chaining value of every chunk
+    AND of every parent node; ``KEYED_HASH`` is a constant flag bit).  The role is in the key (red-team-leaf NIT: an x row
+    and a W column with the same bytes must not share a digest) and, so that :func:`leaf_bytes` can fold with the right
+    key, in the digest header; the word width is not (1536- vs 3072-byte messages differ anyway)."""
+    return KEYS[role]
 
 
-def key_words(word_bits: int | None = None) -> tuple[int, ...]:
-    return tuple(int.from_bytes(KEY[4 * i:4 * i + 4], "little") for i in range(8))
+def key_words(role: int) -> tuple[int, ...]:
+    k = key_for(role)
+    return tuple(int.from_bytes(k[4 * i:4 * i + 4], "little") for i in range(8))
+
+
+def header(nch: int, role: int) -> int:
+    """Digest element 0: ``n_chunks + 4 * role`` (6 / 10 for E4M3 rows, 7 / 11 for BF16)."""
+    return nch + 4 * role
+
+
+def parse_header(h: int) -> tuple[int, int]:
+    nch, role = h & 3, h >> 2
+    if role not in ROLE_NAMES or not 2 <= nch <= N_CHUNKS_MAX:
+        raise ValueError(f"a BLAKE3 leaf digest header is n_chunks (2..{N_CHUNKS_MAX}) + 4 x role (1, 2), not {h}")
+    return nch, role
 
 
 def params_sha256() -> str:
-    """The 32-byte parameters field of the v5 hash-auth block: the key and the framing constants."""
+    """The 32-byte parameters field of the v5 hash-auth block: the keys and the framing constants."""
     import hashlib
-    return hashlib.sha256(b"blake3-leaf|key=" + KEY + b"|framing=chunk-cvs-le16-limbs|max_chunks=" +
-                          str(N_CHUNKS_MAX).encode() + b"|schema=" + SCHEMA.encode()).hexdigest()
+    return hashlib.sha256(b"blake3-leaf|keys=" + KEYS[1] + KEYS[2] + b"|framing=header+chunk-cvs-le16-limbs|max_chunks=" +
+                          str(N_CHUNKS_MAX).encode() + b"|malformed=" + MALFORMED_TAG + b"|schema=" + SCHEMA.encode()).hexdigest()
 
 
 def row_bytes(rows: np.ndarray, word_bits: int) -> np.ndarray:
@@ -201,7 +217,7 @@ def chunk_cvs_np(rows: np.ndarray, word_bits: int, role: int) -> tuple[np.ndarra
     blocks = _blocks_of(rb)                                   # (R, nb, 16)
     nb = blocks.shape[1]
     flags = block_flags(word_bits, n_words)
-    key = np.asarray(key_words(word_bits), dtype=np.uint32)[:, None]
+    key = np.asarray(key_words(role), dtype=np.uint32)[:, None]
     h = np.broadcast_to(key, (8, R)).copy()
     out = np.empty((R, nb, 8), dtype=np.uint32)
     cvs = []
@@ -216,16 +232,16 @@ def chunk_cvs_np(rows: np.ndarray, word_bits: int, role: int) -> tuple[np.ndarra
     return out, np.stack(cvs, 1)
 
 
-def root_from_cvs(cvs: np.ndarray, word_bits: int) -> np.ndarray:
-    """(R, n_chunks, 8) chunk CVs -> (R, 32) uint8: the standard BLAKE3 tree root (left-heavy parent fold with the key as
-    the parents' chaining value, ``ROOT`` on the top node; a single chunk would be the root itself with ``ROOT`` set on its
-    last block -- not this row size)."""
+def root_from_cvs(cvs: np.ndarray, role: int) -> np.ndarray:
+    """(R, n_chunks, 8) chunk CVs -> (R, 32) uint8: the standard BLAKE3 tree root (left-heavy parent fold with the role's
+    key as the parents' chaining value, ``ROOT`` on the top node; a single chunk would be the root itself with ``ROOT``
+    set on its last block -- not this row size)."""
     cvs = np.asarray(cvs, dtype=np.uint32)
     R, nch, _ = cvs.shape
     if nch < 2:
         raise ValueError("rows of one chunk are not framed here (the chunk's last block would carry ROOT)")
     nodes = [cvs[:, c, :].T for c in range(nch)]              # (8, R) each
-    iv = np.asarray(key_words(word_bits), dtype=np.uint32)[:, None].repeat(R, 1)
+    iv = np.asarray(key_words(role), dtype=np.uint32)[:, None].repeat(R, 1)
 
     def fold(ns: list, top: bool) -> np.ndarray:
         """BLAKE3's tree: the left subtree holds the largest power of two of leaves strictly below the count."""
@@ -240,37 +256,49 @@ def root_from_cvs(cvs: np.ndarray, word_bits: int) -> np.ndarray:
     return np.ascontiguousarray(root.T.astype("<u4")).view(np.uint8).reshape(R, 32)
 
 
-def cvs_to_elems(cvs: np.ndarray) -> np.ndarray:
-    """(R, n_chunks, 8) u32 -> (R, DIGEST_ELEMS) int64: ``[n_chunks | limbs chunk-major, word-major, low limb first | 0..]``."""
+def cvs_to_elems(cvs: np.ndarray, role: int) -> np.ndarray:
+    """(R, n_chunks, 8) u32 -> (R, DIGEST_ELEMS) int64: ``[header | limbs chunk-major, word-major, low limb first | 0..]``."""
     c = np.asarray(cvs, dtype=np.int64)
     R, nch, _ = c.shape
     if nch > N_CHUNKS_MAX:
         raise ValueError(f"{nch} chunks exceed the scheme's {N_CHUNKS_MAX}")
     lo, hi = c & 0xFFFF, c >> 16
     out = np.zeros((R, DIGEST_ELEMS), dtype=np.int64)
-    out[:, 0] = nch
+    out[:, 0] = header(nch, role)
     out[:, 1:1 + 16 * nch] = np.stack([lo, hi], -1).reshape(R, -1)
     return out
 
 
-def elems_to_cvs(elems) -> np.ndarray:
-    """One digest row -> (1, n_chunks, 8) uint32 chunk CVs; rejects malformed digests (the verifier calls this)."""
+def elems_to_cvs(elems) -> tuple[np.ndarray, int]:
+    """One digest row -> ((1, n_chunks, 8) uint32 chunk CVs, role); ``ValueError`` on a malformed frame."""
     e = np.asarray(elems, dtype=np.int64).reshape(-1)
     if e.shape[0] != DIGEST_ELEMS:
         raise ValueError(f"a BLAKE3 leaf digest is {DIGEST_ELEMS} elements")
-    nch = int(e[0])
-    if not 2 <= nch <= N_CHUNKS_MAX:
-        raise ValueError(f"a BLAKE3 leaf digest names 2..{N_CHUNKS_MAX} chunks, not {nch}")
+    nch, role = parse_header(int(e[0]))
     body, tail = e[1:1 + 16 * nch], e[1 + 16 * nch:]
     if ((body < 0) | (body >= 1 << 16)).any() or tail.any():
         raise ValueError("a BLAKE3 leaf digest is 16 limbs < 2^16 per chunk, unused slots 0")
     lh = body.reshape(-1, 8, 2)
-    return (lh[..., 0] | (lh[..., 1] << 16)).astype(np.uint32)[None]
+    return (lh[..., 0] | (lh[..., 1] << 16)).astype(np.uint32)[None], role
 
 
-def leaf_bytes(digest_row, word_bits: int | None = None) -> bytes:
-    """The leaf value of one row: the BLAKE3 root (32 bytes) folded natively from the published chunk CVs."""
-    return root_from_cvs(elems_to_cvs(digest_row), word_bits)[0].tobytes()
+def leaf_bytes(digest_row) -> bytes:
+    """The leaf value of one row: the 32-byte BLAKE3 root folded natively (with the header's role key) from the published
+    chunk CVs.  Total on field-element rows of the right length, as the contract's conformance suite requires: a row that
+    is not a well-formed frame (the gadget never pins one -- its digest limbs are bit decompositions and its header a
+    constant) maps to the tagged SHA-256 of its elements, a distinct 32-byte domain that no BLAKE3 root of a row lands in
+    except by collision.  Elements outside the field or a wrong length raise ``ValueError``."""
+    e = np.asarray(digest_row, dtype=np.int64).reshape(-1)
+    if e.shape[0] != DIGEST_ELEMS:
+        raise ValueError(f"a BLAKE3 leaf digest is {DIGEST_ELEMS} elements")
+    if ((e < 0) | (e >= P)).any():
+        raise ValueError("digest elements are BabyBear field elements")
+    try:
+        cvs, role = elems_to_cvs(e)
+    except ValueError:
+        import hashlib
+        return hashlib.sha256(MALFORMED_TAG + e.astype("<u4").tobytes()).digest()
+    return root_from_cvs(cvs, role)[0].tobytes()
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -393,14 +421,17 @@ def compress_gadget(ctx: LigeroCtx, cv: list[_W32], msg: list[_W32], counter: _W
     return v
 
 
-def _message_words(ctx: LigeroCtx, words: Sequence[Expr], word_bits: int) -> list[_W32]:
-    """This column's operand words (little-endian bytes of the row) as 16 limb-only u32 message words."""
-    if len(words) * word_bits != 8 * BLOCK_LEN:
-        raise ValueError(f"a column must carry exactly one 64-byte block per operand: {len(words)} x {word_bits} bits")
+def _limbs_of(ctx: LigeroCtx, words: Sequence[Expr], word_bits: int) -> list[Expr]:
+    """Operand words (little-endian bytes of the row) as 16-bit limbs (2 bytes or 1 u16 each), low first."""
     per = 16 // word_bits                      # words per limb: 2 bytes or 1 u16
-    limbs = []
-    for i in range(0, len(words), per):
-        limbs.append(sum((words[i + q] * (1 << (word_bits * q)) for q in range(per)), _const(ctx, 0)))
+    return [sum((words[i + q] * (1 << (word_bits * q)) for q in range(per)), _const(ctx, 0))
+            for i in range(0, len(words), per)]
+
+
+def _message_words(limbs: Sequence[Expr]) -> list[_W32]:
+    """32 limbs (one 64-byte block) -> 16 limb-only u32 message words."""
+    if len(limbs) != 32:
+        raise ValueError(f"a block is 32 limbs, not {len(limbs)}")
     return [_W32(limbs=(limbs[2 * w], limbs[2 * w + 1])) for w in range(16)]
 
 
@@ -428,13 +459,19 @@ class Blake3Leaf:
     layouts are fixed at :data:`N_CHUNKS_MAX` chunks, the width enters through ``word_bits`` / ``row_words`` per call.
 
     Carried state per operand (``CARRY_ELEMS`` rows, 0 at a chain start): ``[cv (16 limbs) | hold_0 (16) | hold_1 (16) |
-    pos]``.  ``pos`` is the column's position in the VU (the chain forces ``pos_in = 0`` at the start and ``pos_out =
-    pos_in + 1`` links the columns, so it is a sound private counter); its bits give the layout the Poseidon2 leaf did not
-    need: chunk start ``cs = [pos mod 16 == 0]``, chunk end ``ce``, the chunk counter ``pos >> 4`` and the ``hold_c`` flags
-    ``[pos == end of chunk c]`` -- no public layout pins, nothing for the verifier to compute per column.
+    msg hold (16) | pos]``.  ``pos`` is the column's position in the VU (the chain forces ``pos_in = 0`` at the start and
+    ``pos_out = pos_in + 1`` links the columns, so it is a sound private counter); its bits give the layout the Poseidon2
+    leaf did not need: chunk start ``cs = [block mod 16 == 0]``, chunk end ``ce``, the chunk counter ``block >> 4`` and the
+    ``hold_c`` flags ``[block == end of chunk c]`` -- no public layout pins, nothing for the verifier to compute per column.
 
-    Digest (``DIGEST_ELEMS`` public pins per operand at the chain end): ``[n_chunks | CV_0 | ... | 0..]``; the verifier's
-    :meth:`leaf_bytes` reads the count, folds the CVs to the BLAKE3 root and that root is the SHA-256 tree leaf."""
+    Columns carry 64 or 128 bytes per operand (x2 / x4 folds: 1 or 2 compressions per column) or 32 bytes (the unfolded
+    relations: HALF a block).  Half-block columns pair up: the even column parks its 16 limbs in the msg hold, the odd
+    column compresses ``[hold | its own limbs]`` -- but the circuit is column-uniform, so the even column runs a
+    compression too and discards it (``cv_out = odd ? new : cv_in``): the x1 relations pay 2x the rows of the folds.
+
+    Digest (``DIGEST_ELEMS`` public pins per operand at the chain end): ``[n_chunks + 4 role | CV_0 | ... | 0..]``; the
+    verifier's :meth:`leaf_bytes` reads the header, folds the CVs with the role's key to the BLAKE3 root and that root is
+    the SHA-256 tree leaf."""
 
     name = NAME
     assumption = ASSUMPTION
@@ -444,25 +481,26 @@ class Blake3Leaf:
     hash_name = HASH_NAME
     params_sha256 = params_sha256()
     test_only = False
+    privacy_note = "deterministic, unsalted: hides only up to preimage search on a row"   # red-team-leaf F5
 
     # --- committer / verifier side -----------------------------------------------------------------------------------
     def native(self, rows: np.ndarray, *, word_bits: int, role: int) -> np.ndarray:
-        """(R, DIGEST_ELEMS) int64: the chunk count and the chunk CVs of every row as 16-bit limbs (what the gadget pins
-        at the chain end).  ``role`` is not used (the roles are separated by their trees)."""
+        """(R, DIGEST_ELEMS) int64: the header and the chunk CVs of every row as 16-bit limbs (what the gadget pins at
+        the chain end), keyed by ``role``."""
         rows = np.asarray(rows, dtype=np.int64)
         if n_chunks(word_bits, rows.shape[1]) < 2:
             raise ValueError("rows of one chunk are not framed by this scheme (the chunk's last block would carry ROOT)")
         _, cvs = chunk_cvs_np(rows, word_bits, role)
-        return cvs_to_elems(cvs)
+        return cvs_to_elems(cvs, role)
 
     def leaf_bytes(self, digest_row) -> bytes:
         return leaf_bytes(digest_row)
 
     def reference_digest(self, rows: np.ndarray, *, word_bits: int, role: int) -> list[bytes]:
-        """``blake3.blake3(row_bytes, key=KEY).digest()`` per row -- the independent reference the conformance test
-        compares :meth:`leaf_bytes` of :meth:`native` against."""
+        """``blake3.blake3(row_bytes, key=key_for(role)).digest()`` per row -- the independent reference the conformance
+        test compares :meth:`leaf_bytes` of :meth:`native` against."""
         import blake3
-        return [blake3.blake3(bytes(r), key=KEY).digest() for r in row_bytes(rows, word_bits)]
+        return [blake3.blake3(bytes(r), key=key_for(role)).digest() for r in row_bytes(rows, word_bits)]
 
     # --- the in-circuit hash -----------------------------------------------------------------------------------------
     def gadget(self, ctx: LigeroCtx, words: Sequence[Expr], *, word_bits: int, role: int, row_words: int = K_VU,
@@ -474,9 +512,11 @@ class Blake3Leaf:
             raise ValueError(f"gadget: {len(carry_in)} carried rows, the scheme carries {CARRY_ELEMS}")
         k = len(words)
         col_bytes = k * word_bits // 8
-        if row_words % k or col_bytes % BLOCK_LEN or (col_bytes // BLOCK_LEN) & (col_bytes // BLOCK_LEN - 1):
-            raise ValueError(f"gadget: a column must carry a power of two of 64-byte blocks per operand, not {col_bytes} bytes")
-        nblk = col_bytes // BLOCK_LEN                         # blocks per column: 1 (x2 fold), 2 (x4 fold)
+        half = col_bytes * 2 == BLOCK_LEN                     # 32-byte columns: two columns per block
+        if row_words % k or (not half and (col_bytes % BLOCK_LEN or (col_bytes // BLOCK_LEN) & (col_bytes // BLOCK_LEN - 1))):
+            raise ValueError(f"gadget: a column must carry half or a power of two of 64-byte blocks per operand, not {col_bytes} bytes")
+        nblk = 1 if half else col_bytes // BLOCK_LEN          # compressions per column: 1 (x1 / x2), 2 (x4 fold)
+        cpb = 2 if half else 1                                # columns per block
         if nblk > 16:
             raise ValueError("gadget: at most one chunk per column")
         steps = row_words // k
@@ -484,28 +524,32 @@ class Blake3Leaf:
         if not 2 <= nch <= N_CHUNKS_MAX:
             raise ValueError(f"gadget: rows of {nch} chunks are outside 2..{N_CHUNKS_MAX}")
         fl = block_flags(word_bits, row_words)
-        if len(fl) != steps * nblk:
+        if len(fl) * cpb != steps * nblk:
             raise ValueError("gadget: the row's blocks do not tile the columns")
         scope = f"blake3.{ROLE_NAMES[role]}"
         one, zero = _const(ctx, 1), _const(ctx, 0)
-        key = key_words()
-        # --- layout from the carried column position: block j = pos * nblk + t -----------------------------------------
+        key = key_words(role)
+        # --- layout from the carried column position: block j sits at column j // nblk, sub-position j % nblk (half:
+        # block j completes at the odd column 2 j + 1) ----------------------------------------------------------------
+        col_of = (lambda j: 2 * j + 1) if half else (lambda j: j // nblk)
+        sub_of = (lambda j: 0) if half else (lambda j: j % nblk)
         pos = carry_in[CARRY_ELEMS - 1]
-        npb = max(5, (steps - 1).bit_length())              # 24 columns: 5 bits; 48: 6
+        npb = max(6 if half else 5, (steps - 1).bit_length())  # 24 columns: 5 bits; 48: 6; 96: 7
         pbits = _bits_raw(ctx, pos, npb, f"{scope}.pos")
         memo: dict = {}
         ind = lambda value: _indicator(ctx, pbits, value, memo, scope)  # noqa: E731
-        lg = nblk.bit_length() - 1
-        cnt_bits = list(pbits[4 - lg:]) + [zero] * (32 - (npb - (4 - lg)))     # chunk index = j >> 4 = pos >> (4 - lg)
-        counter = _W32(cnt_bits)
+        shift = 5 if half else 4 - (nblk.bit_length() - 1)   # chunk index = j >> 4 = pos >> shift
+        counter = _W32(list(pbits[shift:]) + [zero] * (32 - (npb - shift)))
         h_in = [_W32(limbs=(carry_in[2 * w], carry_in[2 * w + 1])) for w in range(8)]   # the carried CV (limbs)
         h_out: list[Expr] = []
-        digest = [_const(ctx, nch)]
+        digest = [_const(ctx, header(nch, role))]
         hold_out = [list(carry_in[16 * (c + 1):16 * (c + 2)]) for c in range(N_CHUNKS_MAX - 1)]
+        limbs = _limbs_of(ctx, words, word_bits)              # this column's operand bytes as 16-bit limbs
+        msg_hold_in = list(carry_in[HOLD_MSG:HOLD_MSG + 16])
         for t in range(nblk):
-            blocks_t = range(t, steps * nblk, nblk)          # the blocks this sub-column position processes
-            cs = sum((ind(j // nblk) for j in blocks_t if fl[j][1] & CHUNK_START), zero)   # disjoint: boolean
-            ce = sum((ind(j // nblk) for j in blocks_t if fl[j][1] & CHUNK_END), zero)
+            blocks_t = [j for j in range(len(fl)) if sub_of(j) == t]   # the blocks this sub-column position processes
+            cs = sum((ind(col_of(j)) for j in blocks_t if fl[j][1] & CHUNK_START), zero)   # disjoint: boolean
+            ce = sum((ind(col_of(j)) for j in blocks_t if fl[j][1] & CHUNK_END), zero)
             sc = f"{scope}.blk{t}"
             # chaining value in: cs ? KEY : previous (limbs); words 4..7 need bits (round 1's b ^= c)
             cv_in = []
@@ -519,25 +563,30 @@ class Blake3Leaf:
                 else:
                     cv_in.append(_W32(_bits_raw(ctx, lo, 16, f"{sc}.cv{w}.lo") + _bits_raw(ctx, hi, 16, f"{sc}.cv{w}.hi")))
             flags = _W32([cs, ce, zero, zero, one] + [zero] * 27)      # CHUNK_START | CHUNK_END | KEYED_HASH
-            msg = _message_words(ctx, words[t * k // nblk:(t + 1) * k // nblk], word_bits)
+            msg = _message_words((msg_hold_in + limbs) if half else limbs[32 * t:32 * (t + 1)])
             v = compress_gadget(ctx, cv_in, msg, counter, _W32.const(ctx, BLOCK_LEN), flags, sc)
-            # output chaining value h_i = v_i ^ v_{i+8}, copied into single rows (the links / digest read one row each)
+            # output chaining value h_i = v_i ^ v_{i+8}, copied into single rows (the links / digest read one row each);
+            # a half-block column keeps the carried CV unless it is the odd (completing) column
             h_out = []
             for w in range(8):
-                lo, hi = _xor(ctx, v[w], v[w + 8], sc + ".fin").limbs
-                h_out.append(_prod(ctx, lo, one, sc + ".hout"))
-                h_out.append(_prod(ctx, hi, one, sc + ".hout"))
+                for i, e in enumerate(_xor(ctx, v[w], v[w + 8], sc + ".fin").limbs):
+                    if half:
+                        prev = h_in[w].limbs[i]
+                        h_out.append(prev + _prod(ctx, pbits[0], e - prev, sc + ".hout"))
+                    else:
+                        h_out.append(_prod(ctx, e, one, sc + ".hout"))
             h_in = [_W32(limbs=(h_out[2 * w], h_out[2 * w + 1])) for w in range(8)]
             # a chunk (but the last) ending at this block parks its CV in its hold slot
             for c in range(nch - 1):
                 end_c = max(j for j, (cc, _) in enumerate(fl) if cc == c)
-                if end_c % nblk == t:
-                    e_c = ind(end_c // nblk)
+                if sub_of(end_c) == t:
+                    e_c = ind(col_of(end_c))
                     hold_out[c] = [h + _prod(ctx, e_c, h_out[i] - h, sc + f".hold{c}") for i, h in enumerate(hold_out[c])]
         carry_out = list(h_out)
         slots = hold_out                                     # unused slots: carried unchanged (0 from the chain start)
         for c in range(N_CHUNKS_MAX - 1):
             carry_out += hold_out[c]
+        carry_out += limbs if half else msg_hold_in          # the msg hold: this column's limbs (half) / unchanged
         carry_out.append(pos + 1)
         for c in range(N_CHUNKS_MAX):
             if c < nch - 1:
@@ -555,18 +604,24 @@ class Blake3Leaf:
         row_words = rows.shape[1]
         out_blocks, cvs = chunk_cvs_np(rows, word_bits, role)
         R, nb = out_blocks.shape[:2]
-        if nb % steps:
-            raise ValueError("whole blocks per column")
-        nblk = nb // steps
+        half = steps == 2 * nb
+        if not half and nb % steps:
+            raise ValueError("whole (or half) blocks per column")
+        nblk = 1 if half else nb // steps
         car = np.zeros((R, steps, CARRY_ELEMS), dtype=np.int64)
-        prev = out_blocks[:, nblk - 1:-1:nblk, :].astype(np.int64)      # (R, steps-1, 8): the CV after each column's last block
-        car[:, 1:, 0:16] = np.stack([prev & 0xFFFF, prev >> 16], -1).reshape(R, steps - 1, 16)
         fl = block_flags(word_bits, row_words)
+        col_of = (lambda j: 2 * j + 1) if half else (lambda j: j // nblk)   # the column at which block j completes
+        for j in range(nblk - 1, nb, nblk):                   # each column's last block
+            cv = out_blocks[:, j, :].astype(np.int64)        # the CV after it: carried in from the next column on
+            car[:, col_of(j) + 1:, 0:16] = np.stack([cv & 0xFFFF, cv >> 16], -1).reshape(R, 16)[:, None, :]
         for c in range(n_chunks(word_bits, row_words) - 1):
-            end = max(j for j, (cc, f) in enumerate(fl) if cc == c) // nblk        # the column that ends chunk c
+            end = col_of(max(j for j, (cc, f) in enumerate(fl) if cc == c))      # the column that ends chunk c
             cv = cvs[:, c, :].astype(np.int64)
             limbs = np.stack([cv & 0xFFFF, cv >> 16], -1).reshape(R, 16)
             car[:, end + 1:, 16 * (c + 1):16 * (c + 2)] = limbs[:, None, :]
+        if half:                                              # the msg hold: the previous column's 16 limbs
+            rb = row_bytes(rows, word_bits).reshape(R, steps, 32)
+            car[:, 1:, HOLD_MSG:HOLD_MSG + 16] = np.ascontiguousarray(rb[:, :-1, :]).view("<u2").astype(np.int64)
         car[:, :, CARRY_ELEMS - 1] = np.arange(steps)[None, :]
         return car
 
@@ -591,7 +646,7 @@ class Blake3Leaf:
 
     def census(self) -> dict:
         return {"blake3_compression_rows_per_block": 14880, "blake3_finalize_xor_rows": 256,
-                "blake3_key": KEY.rstrip(b"\0").decode(), "blake3_framing": "chunk CVs in-circuit, parent fold by the verifier"}
+                "blake3_keys": {ROLE_NAMES[r]: k.rstrip(b"\0").decode() for r, k in KEYS.items()}, "blake3_framing": "chunk CVs in-circuit, parent fold by the verifier"}
 
 
 try:                                                          # the leaf registry (lane leaf-iface); absent on plain main
