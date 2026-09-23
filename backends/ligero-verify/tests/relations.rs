@@ -195,6 +195,11 @@ fn system_digest_names_every_pinned_relation() {
         ("fixtures/systems/bf16-hopper.system.bin", "bf16-hopper", "3292", "96"),
         ("fixtures/systems/fp8-hopper.system.bin", "fp8-hopper", "3396", "192"),
         (FP4_SYS, "fp4-nvf4", "1583", "141"),
+        // the v2 public-selection systems (lane relmin-lookup): recompiled torch-free, sys_id == protocol.system_id
+        ("fixtures/systems/bf16-hopper-v2.system.bin", "bf16-hopper-v2", "466", "55"),
+        ("fixtures/systems/bf16-ampere-v2.system.bin", "bf16-ampere-v2", "703", "54"),
+        ("fixtures/systems/fp8-hopper-v2.system.bin", "fp8-hopper-v2", "281", "16"),
+        ("fixtures/systems/fp8-ada-v2.system.bin", "fp8-ada-v2", "516", "32"),
     ] {
         let (code, js) = run(&["system-digest", "--system", path]);
         assert_eq!(code, 0, "{js}");
@@ -202,8 +207,8 @@ fn system_digest_names_every_pinned_relation() {
         assert_eq!(field(&js, "\"m\":"), m, "{js}");
         assert_eq!(field(&js, "\"pins\":"), pins, "{js}");
         assert_eq!(field(&js, "\"chain\":"), "true", "{js}");
-        // the file format and the chain end: the four v1 systems end on one public word, the fp4 v2 system on the
-        // three components of the FP32 accumulator word
+        // the file format and the chain end: the four v1 systems and the four public-selection systems end on one
+        // public word, the fp4 v2 system on the three components of the FP32 accumulator word
         if rel == "fp4-nvf4" {
             assert!(js.contains("\"format\":\"ligero-system/v2\""), "{js}");
             assert!(js.contains("\"chain_end\":[{\"lo\":31,\"bits\":1},{\"lo\":23,\"bits\":8},{\"lo\":0,\"bits\":23}]"), "{js}");
@@ -343,7 +348,7 @@ fn fp8_ada_negatives_are_rejected() {
     // (5) an unknown relation name, and a known one whose widths are not the file's
     let (code, js) = verify(FP8_SYS, &write_tmp("adb.stmt", &encode(&s, 4, "fp8-adb", 1, 4, None)), FP8_PROOF, &[]);
     assert_eq!(code, 1, "{js}");
-    assert!(js.contains("statement names relation \\\"fp8-adb\\\"; this build pins bf16-ampere, fp8-ada, bf16-hopper, fp8-hopper"), "{js}");
+    assert!(js.contains("statement names relation \\\"fp8-adb\\\"; this build pins bf16-ampere, fp8-ada, bf16-hopper, fp8-hopper, fp4-nvf4, bf16-hopper-v2"), "{js}");
     assert_eq!(field(&js, "\"statement\":"), "null", "no relation, nothing to report: {js}");
     let (code, js) = verify(FP8_SYS, &write_tmp("wide.stmt", &encode(&s, 4, "fp8-ada", 2, 4, None)), FP8_PROOF, &[]);
     assert_eq!(code, 1, "{js}");
@@ -470,7 +475,7 @@ fn fp4_nvf4_statement_negatives_are_rejected() {
     rejected("y2.stmt", &encode(&s, 4, "fp4-nvf4", 1, 2, None), "word widths 1/2 bytes are not the fp4-nvf4 relation's 1/4");
     let (code, js) = verify(FP4_SYS, &write_tmp("blackwell.stmt", &encode(&s, 4, "fp4-blackwell", 1, 4, None)), FP4_PROOF, &[]);
     assert_eq!(code, 1, "{js}");
-    assert!(js.contains("statement names relation \\\"fp4-blackwell\\\"; this build pins bf16-ampere, fp8-ada, bf16-hopper, fp8-hopper, fp4-nvf4"), "{js}");
+    assert!(js.contains("statement names relation \\\"fp4-blackwell\\\"; this build pins bf16-ampere, fp8-ada, bf16-hopper, fp8-hopper, fp4-nvf4, bf16-hopper-v2, bf16-ampere-v2, fp8-hopper-v2, fp8-ada-v2"), "{js}");
     // the FP8 Ada words (K = 32, 1-byte words) named fp4-nvf4 with t and n_proofs patched to the fp4 fixture's, so the
     // proof header and the soundness gate pass: refused at the public decode for the K
     let fp8 = std::fs::read(FP8_STMT).unwrap();
