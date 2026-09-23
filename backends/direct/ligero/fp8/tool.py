@@ -41,8 +41,18 @@ def parse(argv: list[str]) -> dict:
     ap.add_argument("--dump-reps", type=int, default=None)       # how many recorded reps are written out, not what is computed
     ap.add_argument("--instance-procs", type=int, default=None)  # processes recording the synthetic set: how, not what
     ap.add_argument("--instances-cache", default=None)           # where the synthetic set is kept between runs (deterministic in the seed)
+    # lane hash-relation: the committed column.  Key params only when given, so the bare runs' derivation is unchanged.
+    ap.add_argument("--auth", nargs="?", const="included", default=None)   # included | included-hash (authentication=)
+    ap.add_argument("--tile", default=None)                                # NXxNW: the shared-row GEMM tile workload (sharing=)
+    ap.add_argument("--auth-cache", default=None)                          # where the trees are kept: how, not what
+    ap.add_argument("--auth-procs", type=int, default=None)
     ns, unknown = ap.parse_known_args(argv[idx + 1:])
     out = vars(ns)
+    for k in ("auth", "tile"):
+        if out.get(k) is None:
+            out.pop(k, None)
+    out.pop("auth_cache", None)
+    out.pop("auth_procs", None)
     out["cmd"] = argv[idx]
     out["relation"] = ns_pre.relation
     if unknown:
@@ -54,7 +64,8 @@ BENCH_VU_FP8 = Tool(
     name="bench_vu_fp8", version="1",
     command=["python", "-m", "backends.direct.ligero.run"],
     closure=["backends/direct/ligero/**", "backends/numerical/**", "packages/verity/src/verity/**"],
-    key_params=["cmd", "relation", "mode", "zk", "batch", "total_vus", "vus", "reps", "rate_log2", "target", "row_negatives"],
+    key_params=["cmd", "relation", "mode", "zk", "batch", "total_vus", "vus", "reps", "rate_log2", "target", "row_negatives",
+                "auth", "tile"],
     key_conditions=["hw.family"],
     caches=["triton"],
     produces=["bench-result/v1", "run-files/v1"],

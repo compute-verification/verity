@@ -148,13 +148,18 @@ fn verdict_json(v: &verify::Verdict, name: &str, python: Option<(bool, &str)>, r
     )
 }
 
+/// `<relation>` for the relation's v1 system, `<relation>+hash` for its hashed system (authentication = included-hash).
+fn pinned_name(name: &str, hashed: bool) -> String {
+    if hashed { format!("{name}+hash") } else { name.to_string() }
+}
+
 /// The system file's digests and the relation they are pinned for (`null`: none), as a JSON object.
 fn system_json(shared: &verify::Shared) -> String {
     format!(
         "{{\"sys_id\":{},\"table_digest\":{},\"pinned_relation\":{}}}",
         json_str(&shared.sys_id_hex),
         json_str(&shared.table_digest_hex),
-        shared.pinned_relation.map_or("null".to_string(), |r| json_str(r.name))
+        shared.pinned_relation.map_or("null".to_string(), |(r, h)| json_str(&pinned_name(r.name, h)))
     )
 }
 
@@ -346,7 +351,7 @@ fn main() {
                         "{{\"sys_id\":\"{}\",\"table_digest\":\"{}\",\"pinned_relation\":{},\"format\":\"ligero-system/v{}\",\"m\":{},\"L\":{},\"Q\":{},\"pins\":{},\"chain\":{},\"chain_end\":{}}}",
                         sid,
                         td,
-                        relation::by_digests(&sid, &td).map_or("null".to_string(), |r| json_str(r.name)),
+                        relation::by_digests(&sid, &td).map_or("null".to_string(), |(r, h)| json_str(&pinned_name(r.name, h))),
                         s.version,
                         s.m,
                         s.linear.len(),
@@ -509,7 +514,7 @@ fn main() {
                 if batch_accepted { "ACCEPT" } else { "reject" },
                 -batch_log2,
                 if opt.allow_any_system { "NOT PINNED (--allow-any-system)" } else { "pinned" },
-                shared.pinned_relation.map_or("digests match no pinned relation", |r| r.name),
+                shared.pinned_relation.map_or("digests match no pinned relation".to_string(), |(r, h)| pinned_name(r.name, h)),
                 agree + disagree,
                 opt.threads
             );

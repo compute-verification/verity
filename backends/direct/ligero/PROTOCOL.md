@@ -456,7 +456,74 @@ its OWN `n_proofs` (D1 caveat: the Python `verify()` checks the transcript only)
 in both verifiers (`batch: n_proofs mismatch (...)`, `batch: union bound 2^-x over N sub-batches exceeds the target
 2^-t`); the accept reason carries the batch bits.  Soundness is a parameter, not a constant.
 
-## 9. Not done / labelled
+## 8d. `authentication = included-hash`: the operand rows hashed inside the relation (lane hash-relation)
+
+`authentication = included` (D9) bound the published operand words to `verity.commitments` roots by having the
+*verifier* re-hash every word as a SHA-256 leaf: the words are public and the verifier pays 3.6 s per 4096 VUs.
+`included-hash` keeps the words **private** (witness rows under the ZK masking of 8b) and moves the hashing into the
+relation: every VU's x row and W column are hashed with **Poseidon2 over BabyBear** by constraints, the two digests
+are public words at the chain end, and the verifier checks them against the roots with ordinary SHA-256 Merkle
+paths.  Binding = Poseidon2 collision resistance (8 lanes = 248 bits of digest, 2^-124 birthday) + the SHA-256 ids
+tree; privacy = the Ligero ZK rows + the one-wayness of the digest of a 1536-word row (a low-entropy row would need
+a salt; not done).  Nothing in sections 1-8c changes: the composed relation is another `System` (`hashchain.compose`)
+proved and verified by the same `protocol.prove / verify`; the bare relation and its files are byte-identical.
+
+**The relation** (`hashchain.py`, composed over the chain-compiled bf16-hopper, fp8-hopper and fp8-ada units without
+editing their compilers; bf16-ampere and fp4-nvf4 are not composed):
+
+1. *Private operands.*  Every operand pin `a[i].s / .m / .e` (and `b[i].*`) of the unit becomes a hint row; the word
+   behind it is `word_bits` boolean hint rows `hash.a[i].b<j>` and the decode is re-established by constraints on
+   them (`s = b_msb`, `m = f + nz 2^frac`, `e = t - nz - (bias - 1)` with `nz = [t != 0]` as `t * inv = nz`,
+   `(1 - nz) t = 0`, `nz` boolean, and the finiteness the verifier used to check on the public word as one
+   `inverse_nonzero`).  The intervals the pins declared are theorems of these rows, so the unit compiler's audit
+   stands.  18 rows per BF16 word, 13 per E4M3 byte.
+2. *Two sponges along the chain.*  Poseidon2-BabyBear width 24, rate 16, capacity 8, S-box x^7, R_F = 8, R_P = 21,
+   Plonky3's constants and permutation order (`verity.commitments.poseidon2_babybear`; the constants, the internal
+   diagonal and M4 are pinned by `CONSTANTS_SHA256 = 0b81af1c...`, known-answer vector `KAT_24` from Plonky3's
+   `test_default_babybear_poseidon2_width_24`).  Padding-free overwrite-mode sponge: capacity initialised to
+   `IV(role, word_bits, n_words) = (role, word_bits, K, 0, ...)` with `role = 1` for x rows and `2` for W columns
+   (domain separation of the two tensors and of the row format), every block of 16 elements overwrites the rate
+   part, one permutation per block, digest = the first 8 rate lanes of the final state.  An element carries 16 bits
+   of consecutive words (`pack_words`: one BF16 word, two E4M3 bytes little-endian), so unit `i` absorbs exactly its
+   16 lanes of `a` into sponge X and of `b` into sponge W: **two permutations per unit**, 213 S-boxes each as 4
+   product rows (`x^2, x^3, x^4, x^7`) = 852 rows per permutation, the linear layers as affine expressions (no rows).
+   The 8 capacity lanes of each sponge are *linked* rows across the chain (`sys.chain["c"] / ["y"]`: rows hold
+   `cap - IV`, so a chain start is 0 and `cap_in[j + 1] = cap_out[j]`): 16 linked rows beyond the accumulator's
+   three.  `chain.py` gives the extra links coefficients `u_(e mod 6) * u_6^(e div 6 + 1)` (monomials in the seven
+   coefficient families instead of new families: `N_FAMILIES` is fixed by `protocol.py`); the chain identity is then
+   a polynomial of degree <= 4 in the families instead of 1, so the field term of the chain test gains a factor <= 4
+   on a 2^-17x-class term -- immaterial, and not in `soundness()`'s formula.  The three-link tables are unchanged, so
+   every bare relation's proof is byte-identical.  System file `ligero-system/v3` (`LIGSYS03`) carries the variable
+   link count.
+3. *The digests at the chain end.*  Public pin `hash.is_end` (1 at a VU's last unit, 0 elsewhere; a function of
+   the layout) and 16 public pins `hash.d[0..15]` (x digest lanes, then W digest lanes; 0 off the ends) tied by
+   `is_end * (state_out[x] - d[x]) = 0`; the relation's own public word `y16` stays the chain end it was.  The
+   public table is `(l, 17)` instead of `(l, 192 + 1)`: a v5 statement is ~6 kB where v4 carried 27 MB of words.
+
+**Census** (rows per unit, bare -> hashed; per VU x 96 / 48 units): bf16-hopper 3292 -> 5637 (+608 private-operand
+rows, +1720 hash rows, +17 pins; +71 %), fp8-hopper 3396 -> 5837 (+72 %), fp8-ada 3769 -> 6210 (+704 / +1720 / +17;
++65 %).  The measured cost (one RTX 4090, fp8-ada, 4096 VUs, l = 16384, 3 reps, bare vs committed on the same pod)
+is in the lane note `hash-relation` and in the store (`authentication=included-hash` labels).
+
+**Committer** (`verity.commitments.rowleaf`, `leaf/v2h`; `hashauth.py`): tree `a` = one leaf per x row (the row's
+Poseidon2 digest as 32 big-endian bytes, schema `poseidon2-babybear-w24/row/v2h`), tree `b` = one leaf per W column,
+tree `y` = the output words as in D9; the SHA-256 ids tree, framing, domains and multiproofs of `verity.commitments`
+are unchanged.  Gadget digest == committer digest on the same words (tested on random rows for all three relations).
+
+**Statement v5** (`LIGSTM05`, `serialize.py`): the v4 header (K = words per committed row = steps x operands per
+unit), `u8 y_bytes | str relation | str "included-hash" | n_vus x 16 digest lanes (<u4, canonical) | l y words |` the
+block `str "ligero-b/auth/v2h" | str schema | 32 B CONSTANTS_SHA256 | u32 n_vus | n_vus x (u32 vu_index, u32 x_index,
+u32 w_index) | 3 tree refs (D9 layout) | 3 x (u32 n_siblings | 32 B each)`.  The statement digest absorbs the block
+(version, schema, parameters digest, index rows, tree refs) through the relation tag and the digests and y words in
+the body, so a proof for other rows / roots / ranks is a different statement; the siblings are auxiliary (a wrong
+path fails the path check, D9 order: Ligero tests first).  Rust `ligero-verify` parses v3 systems and v5 statements,
+pins the three hashed systems apart from the bare ones (`relation.rs hashed_sys_id / hashed_table_digest`), and runs
+the path check natively (`auth.rs check_hashed`; fixture `fixtures/fp8-ada-hash`).
+
+**Sharing** (`--tile NXxNW`): a 64 x 64 GEMM tile is 4096 VUs over 64 x rows and 64 W columns; the trees have 64 + 64
+leaves and the multiproofs open every leaf (~depth siblings per distinct row, 288-480 B per sub-batch), but every VU
+still hashes its own two rows (`sharing = none` in the prover's rows; the lookup-bound "hash each distinct row once"
+version is not built).
 
 * Merkle: `backends/shared/hash_gpu` Blake3 on the device (merged from main during the night; bit-exact with the
   host `blake3`, so `verify_path` is unchanged and the host path remains the CPU fallback). Before it, the transfer

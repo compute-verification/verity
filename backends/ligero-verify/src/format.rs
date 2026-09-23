@@ -13,6 +13,17 @@
 //!                      not a BabyBear element
 //! ligero-statement/v4  magic "LIGSTM04" | the v2 header through u32 K | u8 word_bytes | u8 y_bytes | str relation
 //!                      | l x K a | l x K b | l x y16 (u8 / u16 / u32 per the byte widths) | u8 has_auth | [v3 block]
+//! ligero-system/v3     magic "LIGSYS03" | as v2, but the chain block is u32 n_links | n_links x u32 c | n_links x expr y
+//!                      | u8 has_y16 | [expr y16] or [u32 n_end | n_end x (expr Y, u32 lo, u32 bits)]: more than the
+//!                      accumulator's three linked rows (the hashed relations carry 16 Poseidon2 capacity lanes along
+//!                      the chain; chain.py gives the extra links monomial coefficients, see verify.rs)
+//! ligero-statement/v5  magic "LIGSTM05" | the v2 header through u32 K (= 1536, the words per committed ROW) | u8 y_bytes
+//!                      | str relation | str authentication ("included-hash") | n_vus x 16 u32 digests (per VU the x
+//!                      row's 8 Poseidon2 lanes then the W column's) | l x y16 | the hash-auth block: str version
+//!                      ("ligero-b/auth/v2h") | str schema ("poseidon2-babybear-w24/row/v2h") | 32 B Poseidon2
+//!                      constants digest | u32 n_vus | n_vus x (u32 vu_index, u32 x_index, u32 w_index) | 3 x tree (a,
+//!                      b, y) as in v3 | 3 x (u32 n_sib | n_sib x 32 B) SHA-256 multiproofs.  No operand words: the
+//!                      proof's public rows are the digest table (is_end, 16 lanes at every VU's last column).
 //! ~~~
 //! The words are kept as `u32` whatever their width; the relation the file names decides (relation.rs) which widths
 //! are legal, how the words enter the statement digest and how the operands decode.  The authentication block's leaf
@@ -20,7 +31,8 @@
 //! is kept as the one end term `(y16, family 6, lo 0, bits 0)` -- `bits = 0` meaning "the whole word as a residue"
 //! (`chain.end_terms`), so the two formats run through one chain test.
 
-use crate::auth::{AuthBlock, TreeRef, MAX_OPENINGS, MAX_POSITIONS, MAX_PROOF_BYTES, SCHEMA, VERSION as AUTH_VERSION};
+use crate::auth::{AuthBlock, HashAuthBlock, TreeRef, HASH_VERSION, MAX_OPENINGS, MAX_POSITIONS, MAX_PROOF_BYTES, N_DIGEST,
+                  POSEIDON2_CONSTANTS_SHA256, SCHEMA, SCHEMA_ROW, VERSION as AUTH_VERSION};
 use crate::field::P;
 
 pub type Result<T> = std::result::Result<T, String>;
@@ -150,10 +162,14 @@ impl EndTerm {
 /// `chain.END_FAMILIES`: the coefficient family of end component x.
 pub const END_FAMILIES: [usize; 3] = [6, 0, 1];
 
+/// The most linked rows a chain may carry (3 accumulator rows + the hashed relations' 16 sponge lanes = 19).
+pub const MAX_LINKS: usize = 64;
+
 #[derive(Clone, Debug)]
 pub struct Chain {
-    pub c_rows: [u32; 3],
-    pub y: [Expr; 3],
+    /// The linked rows: 3 (v1 / v2 systems) or more (v3: `c_rows.len() == y.len() >= 3`).
+    pub c_rows: Vec<u32>,
+    pub y: Vec<Expr>,
     /// One term for a v1 system (`bits = 0`), one per component (1..=3) for a v2 system.
     pub ends: Vec<EndTerm>,
 }
@@ -177,7 +193,8 @@ pub struct System {
     pub quadratic: Vec<[Expr; 3]>,
     pub chain: Option<Chain>,
     pub sys_id: [u8; 32],
-    /// The file format: 1 (`LIGSYS01`) or 2 (`LIGSYS02`, the chain end in components).
+    /// The file format: 1 (`LIGSYS01`), 2 (`LIGSYS02`, the chain end in components) or 3 (`LIGSYS03`, more than
+    /// three linked rows).
     pub version: u8,
 }
 
@@ -207,7 +224,8 @@ impl System {
         let version: u8 = match r.take(8)? {
             b"LIGSYS01" => 1,
             b"LIGSYS02" => 2,
-            _ => return Err("not a ligero-system/v1 or /v2 file".into()),
+            b"LIGSYS03" => 3,
+            _ => return Err("not a ligero-system/v1, /v2 or /v3 file".into()),
         };
         let m = r.usize_bounded(1 << 20, "m")?;
         let n_pins = r.usize_bounded(m, "n_pins")?;
@@ -244,19 +262,39 @@ impl System {
             1 => true,
             _ => return Err("has_chain flag not 0/1".into()),
         };
-        if version == 2 && !has_chain {
-            return Err("a ligero-system/v2 file carries no chain (the format exists for the chain end in components)".into());
+        if version >= 2 && !has_chain {
+            return Err("a ligero-system/v2 or /v3 file carries no chain (the formats exist for the chain block)".into());
         }
         let chain = if has_chain {
-            let mut c_rows = [0u32; 3];
+            let n_links = if version == 3 { r.usize_bounded(MAX_LINKS, "chain links")? } else { 3 };
+            if n_links < 3 {
+                return Err(format!("chain links {n_links} rows; a chain links at least the three accumulator rows"));
+            }
+            if version == 3 && n_links == 3 {
+                return Err("a ligero-system/v3 file with three linked rows (Python writes those as v1 / v2)".into());
+            }
+            let mut c_rows = vec![0u32; n_links];
             for c in c_rows.iter_mut() {
                 *c = r.u32()?;
                 if *c as usize >= m {
                     return Err("chain row >= m".into());
                 }
             }
-            let y = [read_expr(&mut r, m)?, read_expr(&mut r, m)?, read_expr(&mut r, m)?];
-            let ends = if version == 1 {
+            let mut y = Vec::with_capacity(n_links);
+            for _ in 0..n_links {
+                y.push(read_expr(&mut r, m)?);
+            }
+            // v3: u8 has_y16 selects the single-word end (as v1) or the component end (as v2)
+            let single_word_end = match version {
+                1 => true,
+                2 => false,
+                _ => match r.u8()? {
+                    0 => false,
+                    1 => true,
+                    _ => return Err("has_y16 flag not 0/1".into()),
+                },
+            };
+            let ends = if single_word_end {
                 vec![EndTerm { y: read_expr(&mut r, m)?, family: END_FAMILIES[0], lo: 0, bits: 0 }]
             } else {
                 // chain.end_terms: 1..=3 components, each a bit field of the public word that fits a field element
@@ -326,7 +364,15 @@ pub struct Statement {
     /// `authentication = included` (v3, or v4 with `has_auth`): the committed trees and the VU indices the words are
     /// claimed under.
     pub auth: Option<AuthBlock>,
+    /// `authentication = included-hash` (v5): the digests, the claimed leaf ranks, the roots and the multiproofs.  `a`
+    /// is then the (l x 17) public table `[is_end | 16 lanes]` (zeros off the chain ends) and `b` the (n_vus x 3)
+    /// index rows `(vu, x, w)` -- what the Python prover hashes into the statement digest as `<u4` words.
+    pub hash_auth: Option<HashAuthBlock>,
 }
+
+/// The public table of a hashed statement: 1 + 16 columns per Ligero column.
+pub const HASH_TABLE_COLS: usize = 1 + N_DIGEST;
+pub const AUTH_HASH: &str = "included-hash";
 
 /// The longest relation string a v4 file may carry (the names are short identifiers: `fp8-ada`, `bf16-hopper`).
 pub const MAX_RELATION_LEN: usize = 64;
@@ -377,6 +423,73 @@ fn read_auth_block(r: &mut Rd, n_vus: usize, steps: usize, k_ops: usize) -> Resu
     Ok(AuthBlock { vu_index, trees: [trees[0].clone(), trees[1].clone(), trees[2].clone()] })
 }
 
+fn read_tree_refs(r: &mut Rd) -> Result<[TreeRef; 3]> {
+    let mut trees = Vec::with_capacity(3);
+    for name in ["a", "b", "y"] {
+        let binding = r.b32()?;
+        let owner_plus_two = r.u8()?;
+        if owner_plus_two > 1 {
+            return Err(format!("authentication tree {name}: owner code {owner_plus_two} (only -2 / -1 are defined)"));
+        }
+        let count = r.u64()?;
+        let root = r.b32()?;
+        if count == 0 || count > MAX_POSITIONS {
+            return Err(format!("authentication tree {name}: count {count} outside (0, {MAX_POSITIONS}]"));
+        }
+        trees.push(TreeRef { binding, owner_plus_two, count, root });
+    }
+    Ok([trees[0].clone(), trees[1].clone(), trees[2].clone()])
+}
+
+/// The v5 block after the digests and the y words (`serialize._hash_auth_block_r`).
+fn read_hash_auth_block(r: &mut Rd, n_vus: usize, digests: Vec<u32>) -> Result<HashAuthBlock> {
+    if r.str()? != HASH_VERSION {
+        return Err("unknown hash-authentication block version".into());
+    }
+    if r.str()? != SCHEMA_ROW {
+        return Err("unknown hash-authentication leaf schema".into());
+    }
+    if r.b32()? != crate::hash::unhex32(POSEIDON2_CONSTANTS_SHA256) {
+        return Err("Poseidon2 parameters differ from the verifier's".into());
+    }
+    let n = r.usize_bounded(1 << 22, "hash-auth n_vus")?;
+    if n != n_vus {
+        return Err(format!("hash-authentication block names {n} VUs, the layout has {n_vus}"));
+    }
+    let raw = r.take(12 * n)?;
+    let (mut vu_index, mut x_index, mut w_index) = (Vec::with_capacity(n), Vec::with_capacity(n), Vec::with_capacity(n));
+    for i in 0..n {
+        let at = |k: usize| u32::from_le_bytes(raw[12 * i + 4 * k..12 * i + 4 * k + 4].try_into().unwrap());
+        let v = at(0);
+        if i > 0 && v <= vu_index[i - 1] {
+            return Err("hash-authentication vu_index not strictly increasing".into());
+        }
+        vu_index.push(v);
+        x_index.push(at(1));
+        w_index.push(at(2));
+    }
+    let trees = read_tree_refs(r)?;
+    if x_index.iter().any(|&x| x as u64 >= trees[0].count) || w_index.iter().any(|&w| w as u64 >= trees[1].count)
+        || vu_index.iter().any(|&v| v as u64 >= trees[2].count)
+    {
+        return Err("hash-authentication block claims leaves beyond the committed count".into());
+    }
+    let mut multiproofs = Vec::with_capacity(3);
+    for (ti, tree) in trees.iter().enumerate() {
+        // a canonical multiproof of `o` leaves in a tree of depth `dep` has at most min(o, 2^dep) * dep siblings
+        let dep = crate::auth::merkle_depth(tree.count) as u64;
+        let opened = if ti < 2 { n as u64 } else { n as u64 };
+        let bound = opened.min(1u64 << dep.min(63)).saturating_mul(dep).min(MAX_PROOF_BYTES / 32).max(0);
+        let n_sib = r.usize_bounded(bound as usize, "multiproof siblings")?;
+        let mut sibs = Vec::with_capacity(n_sib);
+        for _ in 0..n_sib {
+            sibs.push(r.b32()?);
+        }
+        multiproofs.push(sibs);
+    }
+    Ok(HashAuthBlock { vu_index, x_index, w_index, trees, digests, multiproofs })
+}
+
 impl Statement {
     pub fn parse(d: &[u8]) -> Result<Statement> {
         let mut r = Rd::new(d);
@@ -385,7 +498,8 @@ impl Statement {
             b"LIGSTM02" => 2,
             b"LIGSTM03" => 3,
             b"LIGSTM04" => 4,
-            _ => return Err("not a ligero-statement/v2, /v3 or /v4 file".into()),
+            b"LIGSTM05" => 5,
+            _ => return Err("not a ligero-statement/v2, /v3, /v4 or /v5 file".into()),
         };
         if r.u32()? != 1 {
             return Err("statement mode is not chain (1)".into());
@@ -409,7 +523,16 @@ impl Statement {
         let n_proofs = r.usize_bounded(1 << 20, "n_proofs")?;
         let n_vus = r.usize_bounded(1 << 22, "n_vus")?;
         let steps = r.usize_bounded(1 << 16, "steps")?;
-        let k_ops = r.usize_bounded(1 << 8, "K")?;
+        // v2..v4: K = operands per unit; v5: K = words per committed row (steps * operands per unit)
+        let k_hdr = r.usize_bounded(if version == 5 { 1 << 16 } else { 1 << 8 }, "K")?;
+        let k_ops = if version == 5 {
+            if steps == 0 || k_hdr % steps != 0 || k_hdr / steps == 0 || k_hdr / steps > 256 {
+                return Err(format!("v5 statement: K = {k_hdr} words per row is not steps ({steps}) x operands per unit"));
+            }
+            k_hdr / steps
+        } else {
+            k_hdr
+        };
         if l == 0 || !l.is_power_of_two() || !n.is_power_of_two() || n <= l {
             return Err("l, n must be powers of two with n > l".into());
         }
@@ -424,6 +547,9 @@ impl Statement {
         }
         if !target_log2.is_finite() || target_log2 >= 0.0 {
             return Err("target_log2 must be a finite negative number".into());
+        }
+        if version == 5 {
+            return Self::parse_v5(r, l, n, dd, t, target_log2, zk, t_pad, interactive, n_proofs, n_vus, steps, k_ops);
         }
         // v4: the widths and the relation name come before the words; v2 / v3 are 16-bit BF16 words, unnamed
         let (word_bytes, y_bytes, relation) = if version == 4 {
@@ -462,7 +588,44 @@ impl Statement {
         r.done()?;
         Ok(Statement {
             l, n, d: dd, t, target_log2, zk, t_pad, interactive, n_proofs, n_vus, steps, k_ops,
-            version, relation, word_bytes, y_bytes, a, b, y16, auth,
+            version, relation, word_bytes, y_bytes, a, b, y16, auth, hash_auth: None,
+        })
+    }
+
+    /// The v5 body after the header (`serialize._read_v5`): `a` becomes the derived public table, `b` the index rows.
+    #[allow(clippy::too_many_arguments)]
+    fn parse_v5(mut r: Rd, l: usize, n: usize, dd: usize, t: usize, target_log2: f64, zk: bool, t_pad: usize, interactive: bool,
+                n_proofs: usize, n_vus: usize, steps: usize, k_ops: usize) -> Result<Statement> {
+        let yb = r.u8()?;
+        if !matches!(yb, 1 | 2 | 4) {
+            return Err(format!("statement word width {yb} bytes is not 1, 2 or 4"));
+        }
+        let n_rel = r.usize_bounded(MAX_RELATION_LEN, "relation name length")?;
+        let rel = String::from_utf8(r.take(n_rel)?.to_vec()).map_err(|_| "relation name: bad utf-8".to_string())?;
+        if rel.is_empty() {
+            return Err("v5 statement names no relation".into());
+        }
+        if r.str()? != AUTH_HASH {
+            return Err("v5 statement names an authentication other than included-hash".into());
+        }
+        let digests = r.fe_vec(n_vus * N_DIGEST)?;
+        let y16 = r.words(l, yb)?;
+        let hash_auth = read_hash_auth_block(&mut r, n_vus, digests)?;
+        r.done()?;
+        // the public table: is_end = 1 and the 16 lanes at every VU's last column, 0 elsewhere (hashchain.public_table)
+        let mut a = vec![0u32; l * HASH_TABLE_COLS];
+        for v in 0..n_vus {
+            let j = v * steps + steps - 1;
+            a[j * HASH_TABLE_COLS] = 1;
+            a[j * HASH_TABLE_COLS + 1..(j + 1) * HASH_TABLE_COLS].copy_from_slice(&hash_auth.digests[v * N_DIGEST..(v + 1) * N_DIGEST]);
+        }
+        let mut b = Vec::with_capacity(3 * n_vus);
+        for v in 0..n_vus {
+            b.extend_from_slice(&[hash_auth.vu_index[v], hash_auth.x_index[v], hash_auth.w_index[v]]);
+        }
+        Ok(Statement {
+            l, n, d: dd, t, target_log2, zk, t_pad, interactive, n_proofs, n_vus, steps, k_ops,
+            version: 5, relation: Some(rel), word_bytes: 4, y_bytes: yb, a, b, y16, auth: None, hash_auth: Some(hash_auth),
         })
     }
 

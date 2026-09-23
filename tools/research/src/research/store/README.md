@@ -381,7 +381,7 @@ prints the table; the groups are:
 
 - **result** — the producing lane about its own result (`ledger_to_store`, or `label` by hand): `candidate` (enum: A, B-AIR,
   B-Ligero, C, SP1, shared), `proof_class` (enum: the contract's classes + COMPONENT), `soundness`, `K`, `B`, `hardware`,
-  `authentication` (enum: included | excluded), `campaign`, `relation`, `mode` (enum: interactive | fiat-shamir), `zk` (bool),
+  `authentication` (enum: included | included-hash | excluded), `campaign`, `relation`, `mode` (enum: interactive | fiat-shamir), `zk` (bool),
   `overhead`, `seconds_per_vu`, `track` (enum), `scope` (enum: unit | vu | component), `label`, `note`, `assumptions` (list),
   `omitted` (list), `breakthrough` (bool).
 - **verification** — an independent verifier, never the producer: `verified` (enum: accepted | rejected | not-transferable |

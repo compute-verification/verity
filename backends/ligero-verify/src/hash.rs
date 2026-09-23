@@ -287,6 +287,16 @@ pub fn hex(b: &[u8]) -> String {
     b.iter().map(|x| format!("{:02x}", x)).collect()
 }
 
+/// 64 hex digits -> 32 bytes (compile-time constants only: panics on anything else).
+pub fn unhex32(s: &str) -> [u8; 32] {
+    assert_eq!(s.len(), 64, "unhex32: {s}");
+    let mut o = [0u8; 32];
+    for i in 0..32 {
+        o[i] = u8::from_str_radix(&s[2 * i..2 * i + 2], 16).expect("hex digit");
+    }
+    o
+}
+
 // ---------------------------------------------------------------------------------------------------- SHA-256 ----
 // FIPS 180-4, written from the standard.  The commitments layer (`verity.commitments.merkle`, `identity.py`) hashes
 // every leaf, node and domain identity with SHA-256 under the `veritor/protocol/merkle/frame/v3` framing (auth.rs);

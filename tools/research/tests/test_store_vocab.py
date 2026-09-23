@@ -59,7 +59,7 @@ def test_vocabulary_pins_every_key_by_asserter_and_form():
     assert vocab.key("independently_verified").form == vocab.BOOL and vocab.key("independently_verified").status == vocab.DEPRECATED
     assert vocab.key("verified_by").status == vocab.IGNORED
     assert vocab.key("proof_class").values == vocab.PROOF_CLASSES and "NON_ZK_PROOF" in vocab.PROOF_CLASSES
-    assert vocab.key("authentication").values == ("included", "excluded")
+    assert vocab.key("authentication").values == ("included", "included-hash", "excluded")
     assert vocab.key("mode").values == ("interactive", "fiat-shamir")
     for k in vocab.VOCAB.values():
         assert k.form in (vocab.ENUM, vocab.BOOL, vocab.INT, vocab.NUMBER, vocab.TEXT, vocab.LIST) and k.doc

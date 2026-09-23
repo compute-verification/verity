@@ -331,6 +331,11 @@ pub struct Relation {
     /// The pinned `protocol.system_id` (the last 32 bytes of `system.bin`) and this verifier's own table digest.
     pub sys_id: &'static str,
     pub table_digest: &'static str,
+    /// The same two digests of the HASHED system (`hashchain.compose`: operands private, two Poseidon2 sponges along
+    /// the chain, the digests pinned at the chain end) a v5 statement (`authentication = included-hash`) is checked
+    /// against; empty when the relation is not composed (bf16-ampere, fp4-nvf4).
+    pub hashed_sys_id: &'static str,
+    pub hashed_table_digest: &'static str,
 }
 
 pub static BF16_AMPERE: Relation = Relation {
@@ -344,6 +349,8 @@ pub static BF16_AMPERE: Relation = Relation {
     end_components: None,
     sys_id: "44cb05b9e6988219beba2d66582124e67a1893aac39d0b66126ce0b9d4db89cb",
     table_digest: "c147cc4cece7d61cd3046828410d18f487dcde82f709044f4b4f97e282a73a95",
+    hashed_sys_id: "",
+    hashed_table_digest: "",
 };
 
 pub static FP8_ADA: Relation = Relation {
@@ -357,6 +364,8 @@ pub static FP8_ADA: Relation = Relation {
     end_components: None,
     sys_id: "6b570eef0c7faa07ccd1dddb2508e2699bd5367b108b15920469d46d16073d37",
     table_digest: "443e4fc74c0ac0cc864e50f7125d9585d71986c0b95ff5336d93a6939f3cb952",
+    hashed_sys_id: "c4c4b403e07da47f7747b947ad76899ef231112bcc6d62dc0448a83ef8696618",
+    hashed_table_digest: "c0e2f48119e2c83ca81cbc8eb1cbba51a676b67a600b8125d75bf438b770e05d",
 };
 
 pub static BF16_HOPPER: Relation = Relation {
@@ -370,6 +379,8 @@ pub static BF16_HOPPER: Relation = Relation {
     end_components: None,
     sys_id: "9dcc7cdc1377a00d877440cc01a0dcdb73b3e989d86df8244eccb35a81be0df4",
     table_digest: "74ce68a2801e14fbeaab2b241886bbe3fa9146234289e52c774fd4160a6c469c",
+    hashed_sys_id: "3c7570fa029de39af30363599480c7a7bdbb51ba8e5fbe552a852b2ffb0ba1e1",
+    hashed_table_digest: "def0ccdae79f092f41bc35ecd054ad64e54e2cfe9769c8cec41737c1ebab6617",
 };
 
 pub static FP8_HOPPER: Relation = Relation {
@@ -383,6 +394,8 @@ pub static FP8_HOPPER: Relation = Relation {
     end_components: None,
     sys_id: "c7cbebe365cb5f773a679bc13b5382fb45714511b1912e4e4ab7fb48accd4bc3",
     table_digest: "d5b77463fee9b3d777174755144edaa84461b3eec6ac6a1750c887dc861d58e7",
+    hashed_sys_id: "141a5fdd5ea2314ba7070f35d8eae1cb649c554589b1065033e5382580587c97",
+    hashed_table_digest: "801ca79f0f8c5c77e6b90758614acadfc4e20688442e616e756dbd14a464144d",
 };
 
 /// `GemmAccumulator<1536>` over `sm120.mma.m16n8k64.e2m1.nvf4` (24 chained K = 64 steps; `fp4/chain.py FP4_HOOKS`:
@@ -398,6 +411,8 @@ pub static FP4_NVF4: Relation = Relation {
     end_components: Some(&[(31, 1), (23, 8), (0, 23)]),
     sys_id: "a825ba0b826a15366bfb8cdd720a5e9978603cbe589491abcbba7346ad35bf3c",
     table_digest: "b597b003e55b8cf1025b517a04d442d9c6d8704f38fd06df13a21b3273b2d2f6",
+    hashed_sys_id: "",
+    hashed_table_digest: "",
 };
 
 /// The v2 public-selection relations (lane relmin-lookup, 2026-09-23): the same claims as their v1 counterparts (pinned
@@ -476,9 +491,17 @@ pub fn for_statement(name: Option<&str>) -> Result<&'static Relation, String> {
     }
 }
 
-/// The relation whose pinned digests a system file carries, if any.
-pub fn by_digests(sys_id_hex: &str, table_digest_hex: &str) -> Option<&'static Relation> {
-    RELATIONS.iter().copied().find(|r| r.sys_id == sys_id_hex && r.table_digest == table_digest_hex)
+/// The relation whose pinned digests a system file carries, if any, and whether it is the hashed system.
+pub fn by_digests(sys_id_hex: &str, table_digest_hex: &str) -> Option<(&'static Relation, bool)> {
+    RELATIONS.iter().copied().find_map(|r| {
+        if r.sys_id == sys_id_hex && r.table_digest == table_digest_hex {
+            Some((r, false))
+        } else if !r.hashed_sys_id.is_empty() && r.hashed_sys_id == sys_id_hex && r.hashed_table_digest == table_digest_hex {
+            Some((r, true))
+        } else {
+            None
+        }
+    })
 }
 
 pub fn names() -> Vec<&'static str> {
@@ -709,8 +732,18 @@ mod tests {
             assert_eq!(a.sys_id.len(), 64);
             assert_eq!(a.table_digest.len(), 64);
             assert_eq!(for_statement(Some(a.name)).unwrap().name, a.name);
-            assert_eq!(by_digests(a.sys_id, a.table_digest).unwrap().name, a.name);
+            let (r0, h0) = by_digests(a.sys_id, a.table_digest).unwrap();
+            assert!(r0.name == a.name && !h0);
+            if !a.hashed_sys_id.is_empty() {
+                assert_eq!(a.hashed_sys_id.len(), 64);
+                assert_eq!(a.hashed_table_digest.len(), 64);
+                assert_ne!(a.hashed_sys_id, a.sys_id);
+                let (r1, h1) = by_digests(a.hashed_sys_id, a.hashed_table_digest).unwrap();
+                assert!(r1.name == a.name && h1);
+            }
         }
+        assert!(FP8_ADA.hashed_sys_id.len() == 64 && BF16_HOPPER.hashed_sys_id.len() == 64 && FP8_HOPPER.hashed_sys_id.len() == 64);
+        assert!(BF16_AMPERE.hashed_sys_id.is_empty() && FP4_NVF4.hashed_sys_id.is_empty());
         assert_eq!(for_statement(None).unwrap().name, "bf16-ampere");
         assert_eq!(for_statement(Some("bf16")).unwrap().name, "bf16-ampere");
         assert_eq!(for_statement(Some("fp4-nvf4")).unwrap().name, "fp4-nvf4");

@@ -169,12 +169,25 @@ fn absorb_words(h: &mut Vec<u8>, words: &[u32], width: u8) {
     }
 }
 
+/// `HashedRelationRunner.base_tag`: the hashed relation's tag prefix; the hash-auth block's digest bytes follow it
+/// (`hooks_for(auth)`), so the challenges are bound to "digests at these leaf ranks under these roots".
+pub const HASHED_TAG_PREFIX: &[u8] = b"hash/v2h|";
+
 fn statement_digest(st: &Statement, rel: &Relation, sys_id: &[u8; 32]) -> Result<Vec<u8>, String> {
     let k = st.k();
     let mut h = Vec::new();
     h.extend_from_slice(STATEMENT_TAG);
-    // protocol.statement_digest: the relation tag right after the statement tag (b"" for the BF16 relations)
-    h.extend_from_slice(rel.tag);
+    // protocol.statement_digest: the relation tag right after the statement tag (b"" for the BF16 relations); a hashed
+    // statement's tag is "hash/v2h|" + the relation tag + hashauth.digest_bytes(auth)
+    if let Some(ha) = &st.hash_auth {
+        h.extend_from_slice(HASHED_TAG_PREFIX);
+        h.extend_from_slice(rel.tag);
+        h.extend_from_slice(&crate::auth::hash_digest_bytes(ha));
+    } else {
+        h.extend_from_slice(rel.tag);
+    }
+    // the operand slots' width: the relation's for its words, 4 bytes (`<u4`) for the hashed statement's table / indices
+    let word_bytes = if st.hash_auth.is_some() { 4 } else { rel.word_bytes };
     // Python: f"|p={P}|hash=blake3|l={l}|n={n}|D={D}|t={t}|target={target!r}" -- repr of a float
     h.extend_from_slice(
         format!("|p={}|hash=blake3|l={}|n={}|D={}|t={}|target={}", P, st.l, st.n, st.d, st.t, py_float_repr(st.target_log2)?)
@@ -185,9 +198,9 @@ fn statement_digest(st: &Statement, rel: &Relation, sys_id: &[u8; 32]) -> Result
     h.extend_from_slice(sys_id);
     h.extend_from_slice(format!("|mode=chain|l={}|n_vus={}|steps={}", st.l, st.n_vus, st.steps).as_bytes());
     h.extend_from_slice(b"|a=");
-    absorb_words(&mut h, &st.a, rel.word_bytes);
+    absorb_words(&mut h, &st.a, word_bytes);
     h.extend_from_slice(b"|b=");
-    absorb_words(&mut h, &st.b, rel.word_bytes);
+    absorb_words(&mut h, &st.b, word_bytes);
     h.extend_from_slice(b"|y16=");
     absorb_words(&mut h, &st.y16, rel.y_bytes);
     // authentication = included: `auth.digest_bytes` (version, schema, VU indices, the three tree references) --
@@ -243,6 +256,9 @@ fn system_k(sys: &System) -> Result<usize, String> {
 /// statement's words per the relation's `Decode`; rejects a word off the finite domain, a statement whose K is not
 /// the system's, and a pin name the relation does not define.
 fn public_pins(st: &Statement, sys: &System, rel: &Relation) -> Result<Vec<Vec<u32>>, String> {
+    if st.hash_auth.is_some() {
+        return public_pins_hashed(st, sys);
+    }
     match rel.decode {
         relation::Decode::Word(op) => public_pins_words(st, sys, op),
         relation::Decode::Nvf4 => public_pins_nvf4(st, sys),
@@ -266,6 +282,39 @@ fn public_pins_pubsel(st: &Statement, sys: &System, ps: &relation::pubsel::PubSe
         for (p, &i) in idx.iter().enumerate() {
             out[p].push(vals[i].rem_euclid(P as i64) as u32);
         }
+    }
+    Ok(out)
+}
+
+/// `hashchain.hash_public_vectors`: the hashed system's 17 pins `hash.is_end`, `hash.d[0..16]` are the columns of the
+/// statement's public table (`Statement::parse_v5` derived it from the digests).  A hashed system against a v4
+/// statement, or a v1 system against a v5 statement, fails here: the pin names are the other family's.
+fn public_pins_hashed(st: &Statement, sys: &System) -> Result<Vec<Vec<u32>>, String> {
+    use crate::format::HASH_TABLE_COLS;
+    let l = st.l;
+    if st.a.len() != l * HASH_TABLE_COLS {
+        return Err("hashed statement: public table is not (l, 17)".into());
+    }
+    let mut out = Vec::with_capacity(sys.pins.len());
+    let mut seen_end = false;
+    for (name, _row) in &sys.pins {
+        let col = if name == "hash.is_end" {
+            seen_end = true;
+            0
+        } else if let Some(rest) = name.strip_prefix("hash.d[") {
+            let x: usize = rest.strip_suffix(']').ok_or_else(|| format!("pin {name}: bad name"))?
+                .parse().map_err(|_| format!("pin {name}: bad index"))?;
+            if x >= HASH_TABLE_COLS - 1 {
+                return Err(format!("pin {name}: digest lane >= 16"));
+            }
+            1 + x
+        } else {
+            return Err(format!("pin {name}: not a pin of the hashed relation (the statement is authentication = included-hash)"));
+        };
+        out.push((0..l).map(|j| st.a[j * HASH_TABLE_COLS + col]).collect());
+    }
+    if !seen_end || sys.pins.len() != HASH_TABLE_COLS {
+        return Err(format!("hashed system pins {} public rows, the hashed relation has 17", sys.pins.len()));
     }
     Ok(out)
 }
@@ -460,8 +509,8 @@ pub struct Shared {
     /// The system file's digests: the Python `sys_id` (trailing 32 bytes) and this verifier's table digest, hex.
     pub sys_id_hex: String,
     pub table_digest_hex: String,
-    /// The relation whose pinned pair the system file carries, if any.
-    pub pinned_relation: Option<&'static Relation>,
+    /// The relation whose pinned pair the system file carries, if any, and whether it is the relation's HASHED system.
+    pub pinned_relation: Option<(&'static Relation, bool)>,
     tables: Mutex<HashMap<(usize, usize), Arc<Tables>>>,
 }
 
@@ -478,18 +527,23 @@ impl Shared {
 
     /// The pinned-system gate for a statement of relation `rel`: `Err` unless the system file carries the relation's
     /// pinned digests (skipped under `--allow-any-system`, which the verdict then reports as `system_pinned = false`).
-    fn gate(&self, rel: &Relation) -> Result<(), String> {
-        if self.sys_id_hex == rel.sys_id && self.table_digest_hex == rel.table_digest {
+    fn gate(&self, rel: &Relation, hashed: bool) -> Result<(), String> {
+        let (want_s, want_t) = if hashed { (rel.hashed_sys_id, rel.hashed_table_digest) } else { (rel.sys_id, rel.table_digest) };
+        if hashed && want_s.is_empty() {
+            return Err(format!("the {} relation has no pinned hashed system (authentication = included-hash is not composed for it)", rel.name));
+        }
+        if self.sys_id_hex == want_s && self.table_digest_hex == want_t {
             return Ok(());
         }
+        let kind = |h: bool| if h { "hashed " } else { "" };
         Err(match self.pinned_relation {
-            Some(other) => format!(
-                "system file is the pinned {} system, the statement is a {} statement (sys_id {}..., table digest {}...)",
-                other.name, rel.name, &self.sys_id_hex[..16], &self.table_digest_hex[..16]
+            Some((other, oh)) => format!(
+                "system file is the pinned {}{} system, the statement is a {}{} statement (sys_id {}..., table digest {}...)",
+                kind(oh), other.name, kind(hashed), rel.name, &self.sys_id_hex[..16], &self.table_digest_hex[..16]
             ),
             None => format!(
-                "system file is not the pinned {} system (sys_id {}..., table digest {}...; pinned {}... / {}...); pass --allow-any-system to verify against it unpinned",
-                rel.name, &self.sys_id_hex[..16], &self.table_digest_hex[..16], &rel.sys_id[..16], &rel.table_digest[..16]
+                "system file is not the pinned {}{} system (sys_id {}..., table digest {}...; pinned {}... / {}...); pass --allow-any-system to verify against it unpinned",
+                kind(hashed), rel.name, &self.sys_id_hex[..16], &self.table_digest_hex[..16], &want_s[..16.min(want_s.len())], &want_t[..16.min(want_t.len())]
             ),
         })
     }
@@ -655,7 +709,10 @@ fn verify_inner(shared: &Shared, st_bytes: &[u8], pf_bytes: &[u8], opt: &Options
         Err(e) => return reject(&format!("statement file: {e}"), tm, None, None),
     };
     let mut info = StatementInfo::of(&st, rel);
-    if (st.word_bytes, st.y_bytes) != (rel.word_bytes, rel.y_bytes) {
+    let hashed = st.hash_auth.is_some();
+    // a hashed statement carries no operand words (its `a` slot is the u32 digest table); its y width is the relation's
+    let widths_ok = if hashed { st.y_bytes == rel.y_bytes } else { (st.word_bytes, st.y_bytes) == (rel.word_bytes, rel.y_bytes) };
+    if !widths_ok {
         let r = format!(
             "statement file: word widths {}/{} bytes are not the {} relation's {}/{}",
             st.word_bytes, st.y_bytes, rel.name, rel.word_bytes, rel.y_bytes
@@ -663,7 +720,7 @@ fn verify_inner(shared: &Shared, st_bytes: &[u8], pf_bytes: &[u8], opt: &Options
         return reject(&r, tm, None, Some(info));
     }
     if !opt.allow_any_system {
-        if let Err(gate) = shared.gate(rel) {
+        if let Err(gate) = shared.gate(rel, hashed) {
             return reject(&gate, tm, None, Some(info));
         }
     }
@@ -990,6 +1047,8 @@ fn verify_inner(shared: &Shared, st_bytes: &[u8], pf_bytes: &[u8], opt: &Options
             }
         }
     };
+    let n_links = chain.c_rows.len();
+    let n_extra = n_links.saturating_sub(3); // linked rows beyond the accumulator's three: monomial coefficients (chain.py)
     for &cr in &chain.c_rows {
         pos(cr, &mut involved);
     }
@@ -1003,24 +1062,37 @@ fn verify_inner(shared: &Shared, st_bytes: &[u8], pf_bytes: &[u8], opt: &Options
     let mut rhs = vec![0u32; d];
     for dd in 0..d {
         let rc = |fam: usize, j: usize| x[dd * per_d + m_rows + nl + nq + fam * l + j];
+        // extra constraint e at column j: u_{e mod 6} * u_6^(e div 6 + 1) (chain.extra_coef); link extras are
+        // e = 0..n_extra, start extras e = n_extra..2 n_extra
+        let extra = |e: usize, j: usize| -> u32 {
+            let u6 = rc(6, j);
+            let mut pw = u6;
+            for _ in 0..e / 6 {
+                pw = mul(pw, u6);
+            }
+            mul(rc(e % 6, j), pw)
+        };
         let cf = |r: usize| dd * nr * l + r * l;
-        for xx in 0..3 {
+        for xx in 0..n_links {
             let ci = involved.iter().position(|r| *r == chain.c_rows[xx]).unwrap();
             let yx = &chain.y[xx];
+            // the terms of Y_x resolved to involved-row positions once (a hashed system's capacity links are 24-term
+            // affine forms over ~200 involved rows: resolving per column cost 1 s per proof)
+            let terms: Vec<(usize, u32)> = yx.lin.iter()
+                .map(|(row, kappa)| (involved.iter().position(|r| r == row).unwrap(), neg(*kappa))).collect();
             let mut sum_link = 0u32;
             for j in 0..l {
-                let rl = if is_link(j) { rc(xx, j) } else { 0 };
-                let rs = if is_start(j) { rc(3 + xx, j) } else { 0 };
+                let rl = if !is_link(j) { 0 } else if xx < 3 { rc(xx, j) } else { extra(xx - 3, j) };
+                let rs = if !is_start(j) { 0 } else if xx < 3 { rc(3 + xx, j) } else { extra(n_extra + xx - 3, j) };
                 if rl != 0 {
                     // link_j: + W[c][j+1] - sum kappa_i W[i][j] = Y.c
                     if j + 1 < l {
                         let a = &mut coef[cf(ci) + j + 1];
                         *a = add(*a, rl);
                     }
-                    for (row, kappa) in &yx.lin {
-                        let ri = involved.iter().position(|r| r == row).unwrap();
+                    for &(ri, nk) in &terms {
                         let a = &mut coef[cf(ri) + j];
-                        *a = add(*a, mul(rl, neg(*kappa)));
+                        *a = add(*a, mul(rl, nk));
                     }
                     sum_link = add(sum_link, rl);
                 }
@@ -1033,16 +1105,18 @@ fn verify_inner(shared: &Shared, st_bytes: &[u8], pf_bytes: &[u8], opt: &Options
         }
         // end_j, one constraint per end term (chain.py): Y_x(W)[j] = the public word (v1, family 6) or its bit field
         // (v2 components: families 6, 0, 1 -- the link families are unused at an end column)
+        let end_terms: Vec<Vec<(usize, u32)>> = chain.ends.iter()
+            .map(|term| term.y.lin.iter().map(|(row, kappa)| (involved.iter().position(|r| r == row).unwrap(), *kappa)).collect())
+            .collect();
         for j in 0..l {
             if !is_end(j) {
                 continue;
             }
-            for term in &chain.ends {
+            for (term, terms) in chain.ends.iter().zip(&end_terms) {
                 let re = rc(term.family, j);
-                for (row, kappa) in &term.y.lin {
-                    let ri = involved.iter().position(|r| r == row).unwrap();
+                for &(ri, kappa) in terms {
                     let a = &mut coef[cf(ri) + j];
-                    *a = add(*a, mul(re, *kappa));
+                    *a = add(*a, mul(re, kappa));
                 }
                 rhs[dd] = add(rhs[dd], mul(re, sub(term.value(st.y16[j]), term.y.c)));
             }
@@ -1093,6 +1167,19 @@ fn verify_inner(shared: &Shared, st_bytes: &[u8], pf_bytes: &[u8], opt: &Options
     // authentication = included: every published word is a leaf at its claimed index under the statement's roots
     // (auth.rs).  Runs after the Ligero tests so a rejection here means "valid proof, unauthenticated words".
     let mut auth_note = String::new();
+    if let Some(ha) = &st.hash_auth {
+        // authentication = included-hash: the digests the proof pinned at the chain ends are leaf/v2h leaves at the
+        // claimed ranks under the a / b roots, the output words under the y root (auth.rs check_hashed)
+        let y_words: Vec<u32> = (0..st.n_vus).map(|v| st.y16[v * st.steps + st.steps - 1]).collect();
+        if let Err(e) = crate::auth::check_hashed(ha, &y_words, rel.y_bits, opt.threads) {
+            tm.auth += lap(&mut clk);
+            return reject(&e, tm, Some(snd), Some(info));
+        }
+        tm.auth += lap(&mut clk);
+        let distinct = |v: &Vec<u32>| { let mut u = v.clone(); u.sort_unstable(); u.dedup(); u.len() };
+        auth_note = format!(" (authentication: included-hash, {} VUs, {} x rows + {} W columns + {} y words under the a/b/y roots)",
+                            ha.vu_index.len(), distinct(&ha.x_index), distinct(&ha.w_index), ha.vu_index.len());
+    }
     if let Some(ab) = &st.auth {
         let mps = match &pf.auth {
             Some(m) => m,
