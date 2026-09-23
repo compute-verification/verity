@@ -17,7 +17,8 @@ multi-GB fold records, 100+ MB manifests) are checked by size only unless VERITY
 
 `Row` is the handle the checks receive: `row.path(rel)`, `row.json(rel)`, `row.workload()` (the in-repo `workloads/<row>.json`),
 `row.programs_root()` (a dir holding `build_request*/instances.json.gz`, or None), `row.candidate(rel)` (the v2 output under
-$VERITY_REGRESSION_CANDIDATE/<row>/<rel>, or None: self-check mode).
+$VERITY_REGRESSION_CANDIDATE/<row>/<rel>, or None: self-check mode), `row.decisions(check)` (the labelled decisions of
+`[[rows.<row>.decisions]]` naming that check; `sanction()` consults them when a result differs from v1).
 """
 from __future__ import annotations
 
@@ -181,6 +182,11 @@ class Row:
         with open(p) as f:
             return json.load(f)
 
+    def decisions(self, check: str) -> list[dict[str, Any]]:
+        """The labelled decisions on this row for `check` (`[[rows.<row>.decisions]]` in fixtures.toml, design rule Draft 3 §7: a
+        difference from the v1 reference is sanctioned only by a recorded decision naming the finding or the changed policy)."""
+        return [d for d in (self.spec.get("decisions") or []) if isinstance(d, dict) and d.get("check") == check]
+
 
 def rows(selection: str | None = None) -> list[Row]:
     """The reference rows of fixtures.toml, by row number; `selection` = 'green' | 'by-name' | None (all)."""
@@ -211,4 +217,31 @@ def diff(expected: Any, actual: Any, path: str = "$") -> list[str]:
         return out
     if canonical(expected) != canonical(actual):
         out.append(f"{path}: expected {canonical(expected)[:160]} != actual {canonical(actual)[:160]}")
+    return out
+
+
+DECISION_FIELDS = ("check", "since", "finding", "reason", "expected")
+
+
+def sanction(row: Row, check: str, act: dict[str, Any], problems: list[str]) -> list[str]:
+    """Consult the row's labelled decisions for `check` once `act` differs from the v1 contract (`problems` = `diff(v1, act)`).
+    A decision whose `expected` values `act` ALL reproduces sanctions the difference: returns [] and records
+    `act["sanctioned_by"] = finding`.  Otherwise the problems name both sides -- v1's and every decision's own differences -- and a
+    decision missing any of DECISION_FIELDS (or with an empty `expected`) never sanctions anything (fail closed).  Rows without a
+    decision for `check` get `problems` back unchanged."""
+    decisions = row.decisions(check)
+    if not problems or not decisions:
+        return problems
+    out = [f"v1: {p}" for p in problems]
+    for d in decisions:
+        label = f"decision {d.get('finding') or '?'} (since {d.get('since') or '?'})"
+        missing = [k for k in DECISION_FIELDS if not d.get(k)]
+        if missing:
+            out.append(f"{label}: malformed in fixtures.toml (missing {missing}); a decision without them sanctions nothing")
+            continue
+        dp = diff(d["expected"], act)
+        if not dp:
+            act["sanctioned_by"] = d["finding"]
+            return []
+        out.extend(f"{label}: {p}" for p in dp)
     return out

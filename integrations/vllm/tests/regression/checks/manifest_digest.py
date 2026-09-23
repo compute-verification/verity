@@ -12,6 +12,15 @@ Expected is lifted from `commit/manifest_verify.json` (used_digest / used_progra
 rebuild said `ok`) and, when the recorded manifest.json is reachable, from the file itself.  STRONG: a single identity row moved,
 dropped or renamed changes the digest.  TP rows (#70, #75: rank Programs under build/rank*/) are not built by this path -> not applicable.
 The engine is the code's default (traversal, inventory cross-check on) exactly as the row's Commit ran it.
+
+`actual` also states what the built manifest PROMOTED ([R19 int-20, F-r19-int-20]: interior rows whose output crosses a module
+boundary, flagged `promoted: true`) -- the facts a labelled decision on the fixture may name (`resolver.sanction`; #57's decision):
+
+    promoted            the count of promoted identity rows (0 on a v1-shaped manifest)
+    promoted_member     the one `op_path/output_member` those rows are named as (a sorted list if several, None if none)
+    only_new            how many identities the manifest has BEYOND the v1 manifest of record with none of v1's removed -- the
+                        IDENTITY_KEY set difference against the row's `manifest.json` when it resolves here (None when a v1 identity is
+                        missing: not an additive difference), else the manifest's own account (= promoted); `only_new_basis` says which
 """
 from __future__ import annotations
 
@@ -39,10 +48,13 @@ def applies(row: resolver.Row) -> str | None:
     return None
 
 
-def identity_rows_sha256(identities: list[dict]) -> str:
+def _identity_key(r: dict) -> str:
     from verity_capture.commit.required_manifest import IDENTITY_KEY
-    rows = sorted(json.dumps([r[k] if k != "element_range" else list(r[k]) for k in IDENTITY_KEY], separators=(",", ":"), sort_keys=True).encode()
-                  for r in identities)
+    return json.dumps([r[k] if k != "element_range" else list(r[k]) for k in IDENTITY_KEY], separators=(",", ":"), sort_keys=True)
+
+
+def identity_rows_sha256(identities: list[dict]) -> str:
+    rows = sorted(_identity_key(r).encode() for r in identities)
     h = hashlib.sha256()
     for b in rows:
         h.update(b)
@@ -56,6 +68,24 @@ def _summary(man: dict, *, with_rows: bool) -> dict:
            "complete": man.get("complete"), "schema": man.get("schema"), "unmodelled": man.get("unmodelled") or {}}
     if with_rows:
         out["identity_rows_sha256"] = identity_rows_sha256(man.get("identities") or [])
+    return out
+
+
+def _promotion(row: resolver.Row, man: dict) -> dict:
+    """[F-r19-int-20] The promotion facts of a built manifest (see the module docstring): `promoted`, `promoted_member`, `only_new`
+    (+ `only_new_basis`, and the set arithmetic against v1 when its manifest.json resolves)."""
+    rows = man.get("identities") or []
+    promoted = [r for r in rows if r.get("promoted")]
+    members = sorted({f"{r.get('op_path')}/{r.get('output_member')}" for r in promoted})
+    out: dict = {"promoted": len(promoted), "promoted_member": members[0] if len(members) == 1 else (members or None)}
+    if row.has("manifest.json"):                            # the v1 manifest of record (never the candidate's: `row.path` is the reference)
+        old = {_identity_key(r) for r in row.json("manifest.json").get("identities") or []}
+        new = {_identity_key(r) for r in rows}
+        added, removed = len(new - old), len(old - new)
+        out.update(only_new=added if not removed else None, only_new_basis="IDENTITY_KEY set difference vs the v1 manifest.json",
+                   v1_identities=len(old), added_n=added, removed_n=removed)
+    else:
+        out.update(only_new=len(promoted), only_new_basis="promoted rows (v1 manifest.json not resolvable here)")
     return out
 
 
@@ -90,7 +120,9 @@ def _rebuild_argv(row: resolver.Row, programs_root: Path, out: Path) -> list[str
 def actual(row: resolver.Row) -> dict:
     cand = row.candidate("manifest.json")
     if cand is not None:                                   # candidate mode: the v2 implementation's manifest.json IS the thing under test
-        return dict(_summary(json.load(open(cand)), with_rows=True), source="candidate")
+        with open(cand) as f:
+            man = json.load(f)
+        return dict(_summary(man, with_rows=True), **_promotion(row, man), source="candidate")
     root = row.programs_root()
     if root is None:
         raise resolver.NotResolvable(f"{row.key}: no request Programs (build_request*/instances.json.gz) reachable here")
@@ -103,5 +135,6 @@ def actual(row: resolver.Row) -> dict:
     if p.returncode != 0 or not out.is_file():
         return {"rebuild_rc": p.returncode, "rebuild_argv": argv, "rebuild_tail": (p.stdout + p.stderr).strip()[-1500:], "source": "rebuild"}
     man = json.load(open(out))
-    res = dict(_summary(man, with_rows=True), source="rebuild", rebuild_rc=0, rebuild_engine=(man.get("engine") or man.get("populations", {}).get("engine")))
+    res = dict(_summary(man, with_rows=True), **_promotion(row, man), source="rebuild", rebuild_rc=0,
+               rebuild_engine=(man.get("engine") or man.get("populations", {}).get("engine")))
     return res

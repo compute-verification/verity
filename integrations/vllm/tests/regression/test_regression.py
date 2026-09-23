@@ -7,8 +7,8 @@ THE REFERENCE.  v1 = `lane/vllm-integration` at release tag `r19-int-21` (commit
     GREEN   #11 llama32-1b B1 i4096/o512 (l40s)   #23 llama32-1b B64 (l40s)   #39 qwen25-15b B1 i4096/o512 (l40s)   #60 mistral-7b B8 (l40s)
             #67 olmoe-1b-7b B32 (l40s)            #68 olmoe-1b-7b B32 mixed-arrivals (l40s)   #73 qwen3-4b B8 (h100)   #74 qwen3-4b-fp8 B8 (h100)
     BY NAME #4 smollm2-135m (R17 row; only the CPU record audit exists)   #57 gemma2-2b B8 -- the NEGATIVE: Commit REFUSED at manifest build
-            (unmodelled Bf16MulScalarTensor_v1 unnamed crossing) and that refusal must reproduce   #70 olmoe TP2 B8 (no fold Match, Commit rc=1)
-            #75 qwen3-30b-a3b TP2 B2 (rank Programs only, no manifest)
+            (unmodelled Bf16MulScalarTensor_v1 unnamed crossing) and that refusal must reproduce -- or the F-r19-int-20 decision below
+            #70 olmoe TP2 B8 (no fold Match, Commit rc=1)   #75 qwen3-30b-a3b TP2 B2 (rank Programs only, no manifest)
 
 WHAT "REPRODUCES" MEANS (one check module per oracle under `checks/`; each lifts `expected` from the record and recomputes `actual`
 with the current code, and the two are diffed as canonical JSON on every field the expected document names):
@@ -36,6 +36,15 @@ needs the multi-GB fold records / binding maps; T2 the Build rebuild.  NONE of i
 NOT PINNED BY ANY RECORD (gaps -- do not read a green run as covering these): committed bytes / the arena, opening proofs (counts only),
 challenge derivation, C2 replay inputs, the weights root beyond `weights_pin`, Match per-instance attribution tables, fast-vs-record
 implementation equivalence, the fail-closed paths (one negative: #57), EOS / lag rows, the TP2 fold Match.
+
+LABELLED DECISIONS (design rule, Draft 3 §7: a difference from a reference manifest is sanctioned only by a recorded decision naming
+the finding or the changed policy).  `[[rows.<row>.decisions]]` in fixtures.toml: `check`, `since` (release / commit), `finding`,
+`reason`, `expected` (values the check's `actual` must state).  A check whose result differs from v1 consults them (`resolver.sanction`):
+ALL of one decision's `expected` reproduced -> PASS with `sanctioned_by=<finding>` in the check's canonical JSON (junit property too);
+neither v1 nor a decision reproduced -> FAIL naming both.  Malformed / `expected`-less decisions sanction nothing.  Today one decision:
+#57 `manifest_digest` since r19-int-22 (F-r19-int-20: `Bf16MulScalarTensor_v1`, classified interior BY NAME by v1, is a module-body
+output read by layer 0; promotion adds exactly its 432 identities -> 163484, complete) -- `test_negative_57` accepts the refusal OR it.
+Decisions are hand-written and carried over when lift_expected.py regenerates fixtures.toml.
 
 HOW TO RUN.  Skipped unless `VERITY_REGRESSION=1`.  Inputs resolve per `resolver.py`: a directory of row dirs (`VERITY_REGRESSION_ROWS_ROOT`),
 the recorded live paths (tp2), or the data store (`store_io.fetch` of the `fixture/v1` trees named in fixtures.toml; snapshot
@@ -92,7 +101,7 @@ def store_state() -> dict:
 
 
 @pytest.mark.parametrize("row_key,check_name", _params())
-def test_reproduces(row_key: str, check_name: str, store_state: dict) -> None:
+def test_reproduces(row_key: str, check_name: str, store_state: dict, record_property) -> None:
     if not ENABLED:
         pytest.skip("set VERITY_REGRESSION=1 to run the R19 reference regression")
     chk = checks.load(check_name)
@@ -116,15 +125,20 @@ def test_reproduces(row_key: str, check_name: str, store_state: dict) -> None:
         pytest.skip(f"stubbed: {e}")
     except resolver.NotResolvable as e:
         pytest.skip(str(e))
-    problems = resolver.diff(exp, act)
+    problems = resolver.sanction(row, check_name, act, resolver.diff(exp, act))     # a labelled decision may sanction a difference from v1
+    if act.get("sanctioned_by"):
+        record_property("sanctioned_by", act["sanctioned_by"])
     strength = "WEAK (PASS-side / unexercised rule)" if chk.STRENGTH == "weak" else "strong"
-    assert not problems, (f"#{row.number} {row.key}: {check_name} [{chk.TIER}, {strength}] does not reproduce the v1 reference "
+    what = "the v1 reference" + (" nor any labelled decision on the fixture" if row.decisions(check_name) else "")
+    assert not problems, (f"#{row.number} {row.key}: {check_name} [{chk.TIER}, {strength}] does not reproduce {what} "
                           f"(source={act.get('source')}):\n  " + "\n  ".join(problems[:40]) + f"\n  actual: {resolver.canonical(act)[:1500]}")
 
 
-def test_negative_57_refusal_reproduces() -> None:
+def test_negative_57_refusal_reproduces(record_property) -> None:
     """#57 gemma2-2b: the v1 Commit REFUSED to build the manifest (unmodelled `Bf16MulScalarTensor_v1` unnamed crossing) -- the negative
-    case.  The current code, rebuilding from #57's Programs, must refuse the same way (no complete manifest; the unmodelled family named)."""
+    case.  The current code, rebuilding from #57's Programs, must refuse the same way (no complete manifest; the unmodelled family named)
+    OR state exactly what a labelled decision on the fixture sanctions (`[[rows.<row>.decisions]]`, check `manifest_digest`; today
+    F-r19-int-20: the promoted, complete manifest) -- anything else fails naming both."""
     if not ENABLED:
         pytest.skip("set VERITY_REGRESSION=1 to run the R19 reference regression")
     row = next((r for r in resolver.rows() if r.number == 57), None)
@@ -135,6 +149,13 @@ def test_negative_57_refusal_reproduces() -> None:
     from .checks import manifest_digest
     act = manifest_digest.actual(row)
     refused = act.get("rebuild_rc", 0) != 0 or act.get("complete") is False
-    assert refused, f"#57 must REFUSE (v1 did: unmodelled Bf16MulScalarTensor_v1); the current code produced a manifest: {resolver.canonical(act)[:800]}"
-    tail = (act.get("rebuild_tail") or "") + resolver.canonical(act)
-    assert "Bf16MulScalarTensor" in tail or "unmodelled" in tail, f"#57 refused, but not by the recorded name: {tail[-600:]}"
+    if refused:
+        tail = (act.get("rebuild_tail") or "") + resolver.canonical(act)
+        assert "Bf16MulScalarTensor" in tail or "unmodelled" in tail, f"#57 refused, but not by the recorded name: {tail[-600:]}"
+        return
+    v1 = [(f"expected the v1 REFUSAL (complete: false, unmodelled Bf16MulScalarTensor_v1 unnamed crossing); got complete={act.get('complete')!r}, "
+           f"identities={act.get('identities')!r}, manifest_digest={act.get('manifest_digest')!r}")]
+    problems = resolver.sanction(row, manifest_digest.NAME, act, v1)
+    what = "nor any labelled decision on the fixture" if row.decisions(manifest_digest.NAME) else "(fixtures.toml records no decision for #57/manifest_digest)"
+    assert not problems, f"#57: the current code does not reproduce the v1 refusal {what}:\n  " + "\n  ".join(problems) + f"\n  actual: {resolver.canonical(act)[:1500]}"
+    record_property("sanctioned_by", act["sanctioned_by"])
