@@ -636,7 +636,8 @@ impl<'a> StmtRows<'a> {
         StmtRows { spec, stmt, s, cache: RefCell::new(None) }
     }
 
-    /// Every word decodes (NVFP4: by its position in the unit) and every claimed word fits `y_bits` (`prove._stmt_subs`).
+    /// Every word decodes (NVFP4: by its position in the unit), every claimed word fits `y_bits` and is 0 off the chain ends
+    /// (`prove._stmt_subs`, ligerito-relation-2 0db857a).
     pub fn validate(&self) -> Result<(), String> {
         let k = self.stmt.k;
         for (s, (a, b)) in self.stmt.a.iter().zip(&self.stmt.b).enumerate() {
@@ -661,6 +662,11 @@ impl<'a> StmtRows<'a> {
             }
             if self.stmt.y[s].iter().any(|&y| y as u64 >= 1u64 << self.spec.y_bits) {
                 return Err(format!("statement sub-batch {s}: claimed word out of range"));
+            }
+            // the end constraint is masked off the chain ends, so a word there binds nothing: canonical statements carry 0
+            let (steps, nv) = (self.stmt.steps, self.stmt.n_vus[s]);
+            if self.stmt.y[s].iter().enumerate().any(|(j, &y)| y != 0 && !(j < steps * nv && j % steps == steps - 1)) {
+                return Err(format!("statement sub-batch {s}: claimed word off a chain end (non-canonical)"));
             }
         }
         Ok(())
@@ -1101,8 +1107,23 @@ pub fn layout(key: &Key, stmt: &Statement) -> Result<Layout, String> {
         return Err("key: K exceeds 2^n_k".into());
     }
     let lay = Layout { n_i: key.n_i, n_k: key.n_k, n_s, n_j, m: key.m, virt: key.virt.clone(), c_rows: key.c_rows.clone() };
-    lay.validate()?;
+    if is_zk_layout(&lay) {
+        lay.validate_rows()?;
+    } else {
+        lay.validate()?;
+    }
     Ok(lay)
+}
+
+/// An LGSC0004 layout (`layout_for(zk=True)`): the linked rows' shifts are committed (`lgsc4::ZkRows`), so the key names
+/// no `next:<x>` virtual row.
+pub fn is_zk_layout(lay: &Layout) -> bool {
+    lay.n_links() > 0 && lay.virt.iter().all(|(n, _)| !n.starts_with("next:"))
+}
+
+/// `zk.f_index`: the PCS cell of relation cell `(i, c)` under the ZK interleaving (`permute_point`'s variable order).
+pub fn f_index(i: usize, c: usize, n_i: usize, a: usize) -> usize {
+    (c & ((1 << a) - 1)) + (i << a) + ((c >> a) << (a + n_i))
 }
 
 /// Verify one LGTO0001 proof.  `coins_for(kind)`: the verifier's coins for the proof's declared `"coins"`
@@ -1150,6 +1171,11 @@ pub fn verify(
     let p = &proof.pcs_params;
     let zk = prm.zk;
     let n_virt = lay.virt.len();
+    // LGSC0004 (ligerito-sumcheck-3's ZK sumcheck): the verifier derives the ZK rows itself; ZK padding is mandatory
+    let zk_rows = if is_zk_layout(&lay) { Some(crate::lgsc4::zk_rows_for(&lay, key.k)?) } else { None };
+    if zk_rows.is_some() && !zk {
+        return Err("a ZK layout (committed next rows, LGSC0004) needs the ZK PCS".into());
+    }
     if zk {
         // prove.zk_layout: the mask rows sit in [m + n_virt, R); RowMaskLayout: 0 <= a = k_L - b <= n_c
         if lay.rows() < lay.m + n_virt + (1 << ZK_MASK_B) + 4 {
@@ -1175,7 +1201,7 @@ pub fn verify(
     debug_assert!(blocks.is_empty() || rows_of_zero == n_virt);
     if p.n != lay.n_i + lay.n_c()
         || prm.order != if zk { "zk-interleaved" } else { "row-major" }
-        || prm.n_claims != 1 + lay.n_links() + blocks.len()
+        || prm.n_claims != if zk_rows.is_some() { 2 } else { 1 + lay.n_links() } + blocks.len()
     {
         return Err("proof parameters do not match the layout".into());
     }
@@ -1198,7 +1224,23 @@ pub fn verify(
     coins.absorb(b"lgto/vk", &key_sha);
     coins.absorb(b"root", &proof.pcs.roots[0]);
     let magic = proof.sumcheck.get(..8).ok_or("sumcheck bytes: truncated")?;
-    let (sc_name, claims): (&str, Vec<EvalClaim>) = if magic == crate::lgsc3::MAGIC {
+    let a = p.k(p.rounds()).saturating_sub(ZK_MASK_B);
+    let mut sparse: Vec<SparseTerm> = Vec::new();
+    let (sc_name, claims): (&str, Vec<EvalClaim>) = if let Some(zkr) = &zk_rows {
+        // provisional until ligerito-relation-2 emits LGSC0004: eval claims w(r_i, r_c), w(rho_i, rho_c), then the zero
+        // claims; the three Libra claims as sparse PCS terms on f_index(row, col), in sumcheck order
+        if magic != crate::lgsc4::MAGIC {
+            return Err("sumcheck bytes: a ZK layout (committed next rows) needs LGSC0004".into());
+        }
+        let sp = crate::lgsc4::parse(&proof.sumcheck).map_err(|e| format!("sumcheck bytes: {e}"))?;
+        let c4 = crate::lgsc4::verify(&lay, zkr, &cons, &rows, &sp, coins)?;
+        sparse = c4
+            .sparse
+            .iter()
+            .map(|s| SparseTerm { cells: s.rows.iter().zip(&s.cols).map(|(&i, &c)| f_index(i, c, lay.n_i, a)).collect(), weights: s.weights.clone(), value: s.value })
+            .collect();
+        ("LGSC0004", c4.eval)
+    } else if magic == crate::lgsc3::MAGIC {
         let sp = crate::lgsc3::parse(&proof.sumcheck).map_err(|e| format!("sumcheck bytes: {e}"))?;
         ("LGSC0003", crate::lgsc3::verify(&lay, &cons, &rows, &sp, coins)?)
     } else if magic == relation::MAGIC_LGSC {
@@ -1206,14 +1248,13 @@ pub fn verify(
         ("LGSC0002", relation::verify(&lay, &cons, &rows, &sp, coins)?)
     } else {
         if magic == crate::lgsc4::MAGIC {
-            return Err("sumcheck bytes: LGSC0004 (ZK sumcheck, lgsc4.rs) needs the key's layout.zk rows and sparse PCS claims; LGTO0001 carries neither yet".into());
+            return Err("sumcheck bytes: LGSC0004 needs a ZK layout (a key without next:* virtual rows)".into());
         }
         return Err(format!("sumcheck bytes: magic {:?} not implemented (LGSC0002 / LGSC0003)", String::from_utf8_lossy(magic)));
     };
     let mut all = claims.clone();
     all.extend(zero_claims(&lay, &claims[0], &blocks));
     let n_i = lay.n_i;
-    let a = p.k(p.rounds()).saturating_sub(ZK_MASK_B);
     let points: Vec<Vec<Ext>> = all
         .iter()
         .map(|c| {
@@ -1227,7 +1268,7 @@ pub fn verify(
         })
         .collect();
     let values: Vec<Ext> = all.iter().map(|c| c.value).collect();
-    let opened = pcs_verify(p, &proof.pcs, &points, &values, &[], prm.t_pad, coins)?;
+    let opened = pcs_verify(p, &proof.pcs, &points, &values, &sparse, prm.t_pad, coins)?;
     if coins.unused() != 0 {
         return Err(format!("coins: {} unused verifier coins after the protocol ended", coins.unused()));
     }
@@ -1293,6 +1334,31 @@ mod tests {
 
     fn legacy() -> Options {
         Options { allow_legacy: true, target_log2: Some(-128.0), ..Default::default() }
+    }
+
+    /// `f_index` and the ZK point permutation describe the same interleaving: `f~(permute(p)) = z~(p)` for `f[f_index(i, c)] =
+    /// z[i][c]` (sumcheck order: row bits, then column bits), and a sparse claim on `(i, c)` cells equals it on `f_index` cells.
+    #[test]
+    fn f_index_matches_permute_point() {
+        use crate::refprover::random_vector;
+        let (n_i, n_c, a) = (3usize, 4usize, 2usize);
+        let z = random_vector(n_i + n_c, 3);
+        let zi = |i: usize, c: usize| z[i + (c << n_i)];
+        let mut f = vec![0u32; z.len()];
+        for i in 0..1 << n_i {
+            for c in 0..1 << n_c {
+                f[f_index(i, c, n_i, a)] = zi(i, c);
+            }
+        }
+        let pt = random_point(n_i + n_c, 9);
+        let (pi, pc) = pt.split_at(n_i);
+        let perm = [&pc[..a], pi, &pc[a..]].concat();
+        assert_eq!(dot_ext_base(&eq_vector(&perm), &f), dot_ext_base(&eq_vector(&pt), &z));
+        let cells: Vec<(usize, usize)> = vec![(1, 5), (7, 0), (2, 15), (0, 9)];
+        let w = random_point(cells.len(), 4);
+        let on_z = cells.iter().zip(&w).fold(Ext::ZERO, |acc, (&(i, c), w)| acc.add(&w.mul_base(zi(i, c))));
+        let on_f = cells.iter().zip(&w).fold(Ext::ZERO, |acc, (&(i, c), w)| acc.add(&w.mul_base(f[f_index(i, c, n_i, a)])));
+        assert_eq!(on_z, on_f);
     }
 
     /// Sparse PCS claims (LGSC0004's Libra mask claims) through `pcs_verify`, against `refprover::prove_commit_first`
@@ -1407,7 +1473,8 @@ mod tests {
     const V1_NEGS: [(&str, &[u8], &[u8], &str); 5] = [
         ("end word +1 ulp", include_bytes!("../fixtures/lgto/fp8ada_l256_v1/v1_06.stmt"), include_bytes!("../fixtures/lgto/fp8ada_l256_v1/v1_06.lgto.neg"), "PCS sumcheck round 1"),
         ("operand bit flip", include_bytes!("../fixtures/lgto/fp8ada_l256_v1/v1_07.stmt"), include_bytes!("../fixtures/lgto/fp8ada_l256_v1/v1_07.lgto.neg"), "PCS sumcheck round 1"),
-        ("n_vus - 1", include_bytes!("../fixtures/lgto/fp8ada_l256_v1/v1_08.stmt"), include_bytes!("../fixtures/lgto/fp8ada_l256_v1/v1_08.lgto.neg"), "PCS sumcheck round 1"),
+        // the dropped VU's end word is left at a non-end column: non-canonical since 0db857a (Python rejects it there too)
+        ("n_vus - 1", include_bytes!("../fixtures/lgto/fp8ada_l256_v1/v1_08.stmt"), include_bytes!("../fixtures/lgto/fp8ada_l256_v1/v1_08.lgto.neg"), "claimed word off a chain end (non-canonical)"),
         ("zeroed VU, y +1", include_bytes!("../fixtures/lgto/fp8ada_l256_v1/v1_09.stmt"), include_bytes!("../fixtures/lgto/fp8ada_l256_v1/v1_09.lgto.neg"), "PCS sumcheck round 1"),
         ("next:0 row edit", include_bytes!("../fixtures/lgto/fp8ada_l256_v1/v1_10.stmt"), include_bytes!("../fixtures/lgto/fp8ada_l256_v1/v1_10.lgto.neg"), "combined final"),
     ];
@@ -1434,6 +1501,26 @@ mod tests {
         let rep = verify(STMT, KEY, V1_ZK_PROOF, &mut fs, &strict()).unwrap();
         assert_eq!((rep.zero_blocks, rep.legacy, rep.zk), (6, false, true));
         assert!(rep.soundness_log2 <= -128.0);
+    }
+
+    /// ligerito-relation-2 0db857a (verify-rs-3's canonicality ask): a claimed word off the chain ends (a non-end column of
+    /// a VU, or a column past the sub-batch's VUs) makes the statement non-canonical; an end column may carry any word.
+    #[test]
+    fn y_off_a_chain_end_is_non_canonical() {
+        let st = read_statement(STMT).unwrap();
+        let spec = relation_spec(&st.relation).unwrap();
+        let v = |st: &Statement| StmtRows::new(spec, st, st.n_vus.len()).validate();
+        v(&st).unwrap();
+        let steps = st.steps;
+        assert!(steps > 1 && st.n_vus[0] * steps < st.l);
+        for j in [0, steps - 2, steps * st.n_vus[0], st.l - 1] {
+            let mut bad = st.clone();
+            bad.y[0][j] = 1;
+            assert!(v(&bad).unwrap_err().ends_with("claimed word off a chain end (non-canonical)"), "column {j}");
+        }
+        let mut ok = st.clone();
+        ok.y[0][steps - 1] ^= 1;
+        v(&ok).unwrap();
     }
 
     #[test]
