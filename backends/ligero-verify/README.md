@@ -59,8 +59,8 @@ sys_id ...]`): such an accept says the proof is valid for the system file, not t
 |---|---|---|---|---|---|---|
 | `bf16-ampere` | v2 / v3 (or v4 named `bf16` / `bf16-ampere`) | u16 / u16, `y16 < 2^16` | BF16, K = 16 | `44cb05b9e698…` | `c147cc4cece7…` | `compile_unit(REAL, chain=True)`, main aecc298 = `fixtures/system.bin` = every A100 / 4090 dump |
 | `fp8-ada` | v4 (tag `\|rel=fp8-ada\|v1`) | u8 / u32, `y16 < 2^22` | E4M3, K = 32 | `6b570eef0c7f…` | `443e4fc74c0a…` | `compile_fp8_unit(ADA, chain=True)`, main aecc298 and lane b-hopper a39de82 (byte-identical) = `proofs/system.bin` of the ada-fp8-dumps pod runs (sha256 `cba9a09f…`) |
-| `bf16-hopper` | v4 (tag empty) | u16 / u16, `y16 < 2^16` | BF16, K = 16 | `9dcc7cdc1377…` | `74ce68a2801e…` | `relations.relation("bf16-hopper").compile(params, True)`, lane b-hopper a39de82 (`wide.py` adder; 3292 rows); no pod `system.bin` in the store yet |
-| `fp8-hopper` | v4 (tag `\|rel=fp8-hopper\|v1`) | u8 / u32, `y16 < 2^22` | E4M3, K = 32 | `c7cbebe365cb…` | `d5b77463fee9…` | `relations.relation("fp8-hopper").compile(params, True)`, lane b-hopper a39de82 (3396 rows); no pod `system.bin` in the store yet |
+| `bf16-hopper` | v4 (tag empty) | u16 / u16, `y16 < 2^16` | BF16, K = 16 | `9dcc7cdc1377…` | `74ce68a2801e…` | `relations.relation("bf16-hopper").compile(params, True)`, lane b-hopper a39de82 and lane b-merge-h100 01fc64f, byte-identical (`wide.py` adder; 3292 rows); no pod `system.bin` in the store yet |
+| `fp8-hopper` | v4 (tag `\|rel=fp8-hopper\|v1`) | u8 / u32, `y16 < 2^22` | E4M3, K = 32 | `c7cbebe365cb…` | `d5b77463fee9…` | `relations.relation("fp8-hopper").compile(params, True)`, lane b-hopper a39de82 and lane b-merge-h100 01fc64f, byte-identical (3396 rows); no pod `system.bin` in the store yet |
 
 The compilations are torch-free and were run twice each on the laptop (byte-identical files); `system-digest` prints
 both digests of any `system.bin` and names the relation they are pinned for.  The full values are in `src/relation.rs`.
