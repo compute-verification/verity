@@ -601,3 +601,148 @@ def test_set_timeout_cli_writes_the_control_file():
         assert doc["timeout_s"] == 14400.0 and doc["actor"] == "manual" and doc["reason"] == "x" and doc["set_utc"]
         assert main(["set-timeout", "--attempt-dir", td, "--timeout-s", "none", "--reason", "clear"]) == 0
         assert json.loads((Path(td) / "control" / "timeout_s").read_text())["timeout_s"] is None
+
+
+# ---- (g) 0.1.3 rule 7b: cgroup-v1 OOM kill of a descendant behind a wrapper's rc != 0 (r20 issue 3) ------------------------------------------------
+
+def _fake_v1_tree(root: Path, *, oom_kill: int | None, failcnt: int, under_oom: int = 0, usage: int = 4 << 30) -> None:
+    """oom_kill=None writes a pre-4.13 memory.oom_control (no oom_kill line)."""
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "memory.limit_in_bytes").write_text(str(8 << 30))
+    (root / "memory.usage_in_bytes").write_text(str(usage))
+    (root / "memory.max_usage_in_bytes").write_text(str(8 << 30))
+    (root / "memory.failcnt").write_text(str(failcnt))
+    (root / "memory.oom_control").write_text(f"oom_kill_disable 0\nunder_oom {under_oom}\n" + (f"oom_kill {oom_kill}\n" if oom_kill is not None else ""))
+    (root / "memory.stat").write_text("total_rss 100\ntotal_cache 10\ntotal_dirty 0\ntotal_writeback 0\ntotal_shmem 0\n")
+
+
+def _v1_samples(tmp_path, monkeypatch, *, scope="shared_pod_cgroup", oom_kill=(0, 1), failcnt=(3, 7), under_oom=(0, 0)):
+    """Two sampler rounds read through research.telemetry.cgroup off a fake cgroup-v1 memory hierarchy (default: oom_kill 0 -> 1, failcnt 3 -> 7)."""
+    from research.telemetry import cgroup as cgm
+
+    sysfs = tmp_path / "sysfs" / "memory"
+    monkeypatch.setattr(cgm, "mounts", lambda: {"v2": None, "v1_memory": str(sysfs), "v2_ro": None})
+    monkeypatch.setattr(cgm, "self_cgroup_path", lambda pid="self": (None, "/kubepods/pod-abc", None))
+    leaf = sysfs / "kubepods" / "pod-abc"
+    _fake_v1_tree(leaf, oom_kill=oom_kill[0], failcnt=failcnt[0], under_oom=under_oom[0])
+    cg = cgm.Cgroup("self")
+    assert cg.version == 1 and cg.dir == leaf
+    s0 = cg.sample()
+    assert s0["memory_events"] == {"oom_kill": oom_kill[0], "under_oom": under_oom[0]} and s0["memory_failcnt"] == failcnt[0]
+    _fake_v1_tree(leaf, oom_kill=oom_kill[1], failcnt=failcnt[1], under_oom=under_oom[1], usage=1 << 30)
+    s1 = cg.sample()
+    assert s1["memory_events"]["oom_kill"] == oom_kill[1]
+    return [{"kind": "cgroup", "scope": scope, "t_mono": 100.0, "t_utc": "T100", "cgroup": s0},
+            {"kind": "cgroup", "scope": scope, "t_mono": 104.0, "t_utc": "T104", "cgroup": s1}]
+
+
+KILLED_LINE = "bash: line 1:  4242 Killed                  python -m verity_capture.experimental.cb_a.derive_step --row 3\n"
+
+
+def test_v1_oom_control_increment_with_a_killed_line_behind_rc_1_is_cgroup_oom(tmp_path, monkeypatch):
+    samples = _v1_samples(tmp_path, monkeypatch)
+    samples.insert(1, _pr(100.01, [(100, 100), (4242, 4000)], scores={100: 50, 4242: 950}))
+    samples.append(_pr(104.01, [(100, 100)], gone=[4242], scores={100: 50, 4242: 950}))
+    d = _attempt(tmp_path, rc=1, sig=None, samples=samples, end=105.0)
+    (d / "stdout.log").write_text("step 2 done\n" + KILLED_LINE + "wrapper: derive_step failed rc=137\n")
+    doc = classify(d)
+    assert doc["class"] == "CGROUP_OOM" and doc["certainty"] == "inferred", (doc["class"], doc["certainty"], doc["why"])
+    assert doc["termination"]["rc"] == 1 and doc["termination"]["signal"] is None
+    assert "4242" in doc["why"]
+    kinds = [e["kind"] for e in doc["evidence"]]
+    assert "log.killed" in kinds and "oom.attribution" in kinds and "cgroup.memory.events" in kinds
+    att = next(e for e in doc["evidence"] if e["kind"] == "oom.attribution")
+    assert att["tree_gone"] == [4242] and att["outsiders_gone"] == [] and att["v1_failcnt_delta"] == 4
+    assert att["windows"][0]["window"]["counter"] == "memory_events.oom_kill"
+    inc = doc["incidents"][0]
+    assert inc["kind"] == "cgroup_oom" and inc["counters_delta"] == {"memory_events.oom_kill": 1} and inc["v1_failcnt_delta"] == 4
+    assert any("wrapper" in l for l in doc["limitations"])
+
+
+def test_rule_7b_is_established_in_the_jobs_own_cgroup_and_ambiguous_when_an_outsider_vanished_too(tmp_path, monkeypatch):
+    own = tmp_path / "own"
+    own.mkdir()
+    d = _attempt(own, rc=2, sig=None, samples=_v1_samples(own, monkeypatch, scope="job_cgroup"), end=105.0)
+    (d / "stderr.log").write_text(KILLED_LINE)
+    doc = classify(d)
+    assert doc["class"] == "CGROUP_OOM" and doc["certainty"] == "established"
+    shared = tmp_path / "shared"
+    shared.mkdir()
+    samples = _v1_samples(shared, monkeypatch)
+    samples.insert(1, _pr(100.01, [(100, 100), (4242, 4000)], outsiders=[(900, "hog", 9000)]))
+    samples.append(_pr(104.01, [(100, 100)], gone=[4242], out_gone=[900]))
+    d = _attempt(shared, rc=1, sig=None, samples=samples, end=105.0)
+    (d / "stdout.log").write_text(KILLED_LINE)
+    doc = classify(d)
+    assert doc["class"] == "CGROUP_OOM" and doc["certainty"] == "ambiguous"
+    assert any("outsider" in l for l in doc["limitations"])
+
+
+def test_rule_7b_needs_both_the_counter_and_the_killed_line(tmp_path, monkeypatch):
+    # counter without the line: UNKNOWN_EXIT with the incident (rev d4) and a limitation naming it
+    a = tmp_path / "counter_only"
+    a.mkdir()
+    doc = classify(_attempt(a, rc=1, sig=None, samples=_v1_samples(a, monkeypatch), end=105.0))
+    assert doc["class"] == "UNKNOWN_EXIT" and doc["incidents"][0]["kind"] == "cgroup_oom"
+    assert any("without a Killed line" in l for l in doc["limitations"])
+    # the line beside a kill counter that did not move: a string is evidence, not a class
+    b = tmp_path / "line_only"
+    b.mkdir()
+    d = _attempt(b, rc=1, sig=None, samples=[_cg(100, 0), _cg(104, 0)], end=105.0)
+    (d / "stdout.log").write_text("Killed by a colleague's typo, not the kernel\n" + KILLED_LINE)
+    doc = classify(d)
+    assert doc["class"] == "UNKNOWN_EXIT" and doc["incidents"] == []
+    killed = [e for e in doc["evidence"] if e["kind"] == "log.killed"]
+    assert len(killed) == 1 and killed[0]["match"] == KILLED_LINE.rstrip("\n")      # the prose line is not the match
+    # rc 137 (shell status for SIGKILL) keeps its own path: rule 6 attribution, never 7b
+    c = tmp_path / "rc137"
+    c.mkdir()
+    d = _attempt(c, rc=137, sig=None, samples=_v1_samples(c, monkeypatch, scope="job_cgroup"), end=105.0)
+    (d / "stdout.log").write_text(KILLED_LINE)
+    assert classify(d)["class"] == "CGROUP_OOM_ATTRIBUTED"
+
+
+def test_killed_re_matches_shell_kernel_and_subprocess_reports_not_prose():
+    from research.telemetry.classify import KILLED_RE
+
+    for line in (KILLED_LINE, "./run.sh: line 12: 777 Killed python x.py", "Killed", "sh: 1: python: Killed", "[ 12.3] Memory cgroup out of memory: Killed process 9",
+                 "subprocess.CalledProcessError: Command '['python']' died with <Signals.SIGKILL: 9>.", "Command 'x' returned non-zero exit status -9."):
+        assert KILLED_RE.search(line), line
+    for line in ("Killed by a colleague's typo", "processes Killed: none", "skilled worker", "KilledProcessCount=0"):
+        assert not KILLED_RE.search(line), line
+
+
+def test_v1_without_an_oom_kill_counter_falls_back_to_failcnt_or_under_oom(tmp_path, monkeypatch):
+    # pre-4.13 memory.oom_control: the sampler records oom_kill=None (no counter) and says why, never 0 (no kill)
+    own = tmp_path / "own"
+    own.mkdir()
+    samples = _v1_samples(own, monkeypatch, scope="job_cgroup", oom_kill=(None, None), failcnt=(3, 9))
+    assert samples[0]["cgroup"]["memory_events"]["oom_kill"] is None and "4.13" in samples[0]["cgroup"]["memory_events_reason"]
+    d = _attempt(own, rc=1, sig=None, samples=samples, end=105.0)
+    (d / "stderr.log").write_text(KILLED_LINE)
+    doc = classify(d)
+    assert doc["class"] == "CGROUP_OOM" and doc["certainty"] == "inferred", (doc["class"], doc["certainty"], doc["why"])
+    assert "failcnt grew by 6" in doc["why"] and doc["incidents"] == []
+    att = next(e for e in doc["evidence"] if e["kind"] == "oom.attribution")
+    assert att["kill_counter"] is False and att["v1_failcnt_delta"] == 6 and att["windows"] == []
+    assert any("kernel < 4.13" in l for l in doc["limitations"])
+    # shared scope, under_oom raised without failcnt growth: one step lower again
+    shared = tmp_path / "shared"
+    shared.mkdir()
+    d = _attempt(shared, rc=1, sig=None, samples=_v1_samples(shared, monkeypatch, oom_kill=(None, None), failcnt=(5, 5), under_oom=(0, 1)), end=105.0)
+    (d / "stdout.log").write_text(KILLED_LINE)
+    doc = classify(d)
+    assert doc["class"] == "CGROUP_OOM" and doc["certainty"] == "ambiguous" and "under_oom was raised" in doc["why"]
+    # no Killed line: the limit was hit but nothing says a process died of it
+    quiet = tmp_path / "quiet"
+    quiet.mkdir()
+    doc = classify(_attempt(quiet, rc=1, sig=None, samples=_v1_samples(quiet, monkeypatch, oom_kill=(None, None), failcnt=(3, 9)), end=105.0))
+    assert doc["class"] == "UNKNOWN_EXIT"
+
+
+def test_v1_kill_counter_that_did_not_move_vetoes_the_failcnt_fallback(tmp_path, monkeypatch):
+    d = _attempt(tmp_path, rc=1, sig=None, samples=_v1_samples(tmp_path, monkeypatch, oom_kill=(2, 2), failcnt=(3, 90)), end=105.0)
+    (d / "stdout.log").write_text(KILLED_LINE)
+    doc = classify(d)
+    assert doc["class"] == "UNKNOWN_EXIT" and doc["incidents"] == []
+    assert "log.killed" in [e["kind"] for e in doc["evidence"]]

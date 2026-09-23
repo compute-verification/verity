@@ -19,6 +19,7 @@ src/research/
 ├── record.py       job.json v0.2 = the harness's v0.1 + tool, run, workload_fingerprint.expected, cost; v0.1 stays readable
 ├── result.py       the result.json contract (schema, run_id, fingerprint, validation, measurements, artifacts)
 ├── remote.py       --on: machines file, tool/source snapshots, request, claim-by-run-id, exclusive lock, fetch, preservation manifest
+├── mem.py          --mem-gb admission: cgroup limit - in use - live /workspace/ramlock reservations; MemoryNotAvailable
 ├── env.py          conditions(): the one baseline of an attempt's conditions (source, runtime, hardware, execution); ONE SKU->family map
 ├── store/          the evidence store (README.md there is the contract): tool, tools_registry, derivation, attempt, cli_prov (provenance)
 │                   + canon, local, index, remote, kinds, cli (storage)
@@ -45,9 +46,9 @@ calls the harness's `run()` directly: one execution engine, one record.
 uv sync                                  # from the verity root
 uv run pytest                            # all tests
 
-research run [--project P] [--stage S] [--timeout T] [--expect K=V] [--require-result] [harness flags] -- CMD...
+research run [--project P] [--stage S] [--timeout T] [--expect K=V] [--require-result] [--env K=V] [--cwd DIR] [harness flags] -- CMD...
 research run [--tool NAME|module:NAME] [--scratch NAME]... [--campaign C] [...] -- CMD...      # evidence store, below
-research run --on MACHINE --project P [--source GITDIR] [--send FILE] [--env K=V] [--exclusive] [...] -- CMD...
+research run --on MACHINE --project P [--source GITDIR] [--send FILE] [--env K=V] [--exclusive] [--mem-gb N [--mem-wait S]] [...] -- CMD...
 research fetch RUN [--all]               # records only, or every file sha256-verified with preserved.json written last
 research status [--refresh] [--all] [--json]
 research inspect RUN [--json]
@@ -57,7 +58,11 @@ research data SUBCOMMAND ...             # the evidence store (below)
 ~~~
 
 The workload receives `RESEARCH_RUN_ID` and `RESEARCH_RUN_DIR` and may write
-`$RESEARCH_RUN_DIR/result.json` (see `result.py` for the envelope). Four facts
+`$RESEARCH_RUN_DIR/result.json` (see `result.py` for the envelope). A local
+workload runs in its run directory unless `--cwd` says otherwise (`--cwd source` = the invoking directory), so a relative
+`result.json` lands there and never in the checkout; `--env K=V` is set for the
+workload only and recorded as the attempt's `params.env` (values of
+secret-named keys redacted). Four facts
 stay separate in `inspect`: exited, result well-formed, validation reported
 passed, preserved. `--require-result` makes exit 0 without a valid result
 exit 65.
@@ -78,7 +83,14 @@ python = "python3"
 
 An unlisted or foreign machine is refused before anything is contacted. The
 tool ships as a content-addressed source snapshot under `<root>/tool/` and
-runs via `PYTHONPATH`; no pip, no credentials on the machine. `--source` ships
+runs via `PYTHONPATH`; no pip, no credentials on the machine. The machine
+checks that the `research` package that answers is the one shipped (its content
+identity): `launch-request` checks before it claims the run, and the runner
+checks again before the workload starts. On a mismatch the run is refused
+with `ResearchVersionMismatch`, naming the running package's path. A package
+too old to know the check fails closed. The one exception: a `--source`
+tree's own older package runs unverified, and the launcher says so. job.json
+records `run.remote.tool_running`. `--source` ships
 `git archive HEAD` of a clean checkout to `<root>/src/<sha>/` (a dirty tree is
 refused, not mislabeled). The ship is verified before anything may run from
 it: the archive lands in `<sha>.partial-<nonce>/`, its sha256 is compared on
@@ -89,14 +101,41 @@ partial directory and the run is refused (`SourceNotReady`); the machine
 refuses to execute from a source directory without a `READY.json` naming the
 requested identity (the legacy `.complete` marker is verified per file once,
 then adopted or quarantined). The attempt records `execution.remote.source_sha`
-and `source_archive_sha256`. The machine claims the run directory by run id and
+and `source_archive_sha256`. The shipped tree is the runner's source root, not
+the workload's cwd: the workload runs in its own run directory, as locally,
+because every run of one commit shares `<root>/src/<sha>/` and relative outputs
+used to race there. `--cwd source` (or `source/SUB`) is the explicit opt-in to
+run inside the tree; job.json records `run.cwd` and `run.cwd_basis`. The
+runner and the workload get the tree's `PYTHONPATH` derived from its root
+`pyproject.toml` workspace members and each member's build config
+(`src/`, `python/`, flat), with a user `--env PYTHONPATH` appended; job.json
+records it (`run.remote.pythonpath`). `research env --source TREE` prints the
+same line for a local checkout. The machine claims the run directory by run id and
 starts the runner detached; re-delivering a launch after an ssh drop finds
 the claim and reports state. `--exclusive` refuses if any run is live, and
 any launch refuses if an exclusive holder is live.
 
+`--mem-gb N` is memory admission on the machine (`mem.py`). A pod's processes
+share one memory cgroup, and `free` describes the host (vyv-v2cpu3: 946 GB
+host, 256 GB cgroup). The machine admits the run only if the cgroup limit, minus
+what is in use (page cache excluded), minus the not-yet-used part of every live
+reservation in the fleet's `/workspace/ramlock/*.json` (machines.toml
+`ramlock = DIR` overrides it), is at least N. A reservation is live unless its
+pid is gone or its run is terminal. The run then writes
+`research-<run id>.json` there, and the runner removes it at exit. Otherwise the
+run is refused with `MemoryNotAvailable`, and `refused.json` gives every number.
+`--mem-wait S` polls for up to S seconds instead. job.json records the
+admission (`run.remote.mem`) and the attempt records
+`execution.mem_gb_reserved`. `research mem` prints the reading on the machine.
+
 Limitations, stated: until `fetch --all` completes, the only copy of the
-evidence is on the machine. Budget enforcement is the project's deadman
-(`pods/budget_cap.py`), not this command. Provisioning is a separate,
+evidence is on the machine. Budget enforcement is `research pods guard`
+(`pods/guard.py`; its docstring is the contract), not this command: scoped to
+a pod-name prefix, sticky trips on deadline / cap / balance floor that
+terminate every scoped pod (the guard's host last), and `--rate-max` shedding
+that terminates the newest scoped pods first and never the guard's host. It
+replaces the loops of `pods/budget_cap.py` and `pods/sh/deadline.sh`, which
+stay verbatim until the fleet switches over. Provisioning is a separate,
 explicit act; `--on` never creates a pod.
 
 ### research data
@@ -135,11 +174,13 @@ called PRESERVED without a remote; nothing in the store is ever overwritten.
   loads the `Tool` declaration, parses the workload argv into params, replaces
   path-valued key params by the content they point at, hashes the declared
   closure, and computes the derivation id and the `reuse_key` (`None` on a
-  dirty tree). All of it goes into `job.json` as the optional `store` section.
+  dirty tree). Without `--tool` the derivation is the whole redacted argv and
+  the `reuse_key` is `None`. All of it goes into `job.json` as the optional
+  `store` section.
   An unknown tool exits 2 before anything runs; any other failure in this step
   is recorded in `store.error` and the workload still runs.
 - `--scratch NAME` (repeatable) creates `<store>/scratch/<reuse_key>/NAME/`
-  (`dirty-<run id>` on a dirty tree) and exports `TRITON_CACHE_DIR` for
+  (`run-<run id>` without a reuse key) and exports `TRITON_CACHE_DIR` for
   `triton`, `RESEARCH_SCRATCH_<NAME>` otherwise. Cold per commit, on purpose.
 - `--campaign C` (default `$RESEARCH_CAMPAIGN`) is recorded in the conditions
   and exported to the workload.
