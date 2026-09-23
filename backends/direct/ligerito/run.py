@@ -37,6 +37,9 @@ from .transcript import LiveCoins
 
 BACKEND = "ligerito"
 STUBBED = "zk.py not wired (no masks, no salted leaves, no Libra sumcheck masks, no per-column RS padding)"
+ZK_PARTIAL = "ligerito-zk row masks (8 uniform + product triple + Libra row, in free rows) under the bit-interleaved index map z_to_f"
+ZK_MISSING = ("Libra masks in the three sumchecks, the shift-claim reduction and the product-row constraint (ligerito-sumcheck-2), "
+              "per-column RS padding + sparse round-1 terms (ligerito-pcs-fast)")
 
 
 def _git_commit() -> str:
@@ -167,7 +170,7 @@ def gate(args) -> int:
     report = {"relation": rel.name, "l": args.l, "vus": args.vus, "positives": [], "negatives": [], "system": sys_.summary()}
     failures = 0
     for kind in args.coins:
-        bt = pv.batch(data, kind)
+        bt = pv.batch(data, kind, zk=args.zk)
         lay = bt.lay
         log(f"[{kind}] layout {lay.summary()}; dims {bt.dims.describe()}")
         pc, vc = _coins_pair(kind, 1)
@@ -353,7 +356,7 @@ def _buckets(t: dict) -> dict:
     return {"witness": g("witness"),
             "encoding_commitment": g("commit_r1_alloc", "commit_r1_encode", "commit_r1_merkle", "recursion_encode", "recursion_merkle"),
             "arithmetic": g("zero_check", "sumcheck_r1_contract", "sumcheck_host", "sumcheck_r1_fold", "recursion_contract", "recursion_fold"),
-            "lookup": 0.0, "zk_additional": 0.0,
+            "lookup": 0.0, "zk_additional": g("zk_masks"),
             "serialization": g("serialize_openings", "serialize_final", "serialize_proof", "transcript")}
 
 
@@ -369,7 +372,7 @@ def bench(args) -> int:
     bv = args.batch_vus or total_vus
     if total_vus % bv:
         raise SystemExit(f"--batch-vus {bv} must divide --total-vus {total_vus}")
-    bts = [pv.batch(data[i:i + bv], args.coins) for i in range(0, total_vus, bv)]
+    bts = [pv.batch(data[i:i + bv], args.coins, zk=args.zk) for i in range(0, total_vus, bv)]
     nb_ = len(bts)
     bt = bts[0]
     lay = bt.lay
@@ -467,13 +470,14 @@ def bench(args) -> int:
     peak = max(r.peak_device_bytes for _, it in runs for r, _, _ in it)
     rust_ok = bool(rust and rust["exit"] == 0)
     live_verified = bool(live and args.verifier and (stream_info.get("verdict") or {}).get("accepted"))
-    zk_on = False
+    zk_on = False                                   # complete ZK: needs the sumcheck masks and the PCS column padding
     if zk_on and live_verified and rust_ok:
         proof_class, zk_mode = "COMPLETE_ZK_BACKEND", "ligerito-zk (masks + per-column RS padding + Libra sumcheck masks), live coins"
         omitted = "external authentication"
     else:
-        proof_class, zk_mode = "NON_ZK_PROOF_DIAGNOSTIC", "none"
-        omitted = "external authentication; ZK masking (" + STUBBED + ")"
+        proof_class = "NON_ZK_PROOF_DIAGNOSTIC"
+        zk_mode = (f"partial: {ZK_PARTIAL}; missing: {ZK_MISSING}" if args.zk else "none")
+        omitted = "external authentication; ZK masking (" + (ZK_MISSING if args.zk else STUBBED) + ")"
         if live and not live_verified:
             omitted += "; coins from live.LocalChallenges (no network verifier)" if not args.verifier else "; live session not accepted"
     hw = contract.probe_hardware()
@@ -585,6 +589,7 @@ def main(argv=None) -> int:
         s.add_argument("--dump-dir")
         s.add_argument("--out")
         s.add_argument("--rust-verifier")
+        s.add_argument("--zk", action="store_true", help="ligerito-zk's row masks + index map (partial ZK, see the fingerprint)")
         if name == "gate":
             s.add_argument("--vus", type=int, default=12)
             s.add_argument("--coins", nargs="+", default=["local", "fiat-shamir"])

@@ -31,6 +31,7 @@ from backends.direct.ligero.witness import build_witness
 
 from . import params as params_mod
 from . import sumcheck as sc_mod
+from . import zk as zk_mod
 from .layout import Constraints, Layout, SubBatch, build_z, constraints, layout_for, public_rows
 from .proof import Key, PcsProof, Proof, Statement, params_bytes
 from .proto import claims as cl
@@ -634,11 +635,29 @@ def pcs_verify(pf: PcsProof, dims: Dims, splits: list, points: np.ndarray, value
 # The batch prover / verifier
 # ---------------------------------------------------------------------------------------------------------------------
 
-def pcs_points(lay: Layout, claims: list) -> tuple[np.ndarray, np.ndarray]:
-    """The sumcheck's claims ``(p_i || p_c)`` -> PCS order ``(p_c || p_i)`` (row-major commitment), numpy."""
-    pts = [torch.cat((c.point[lay.n_i:], c.point[:lay.n_i])).cpu().numpy() for c in claims]
+def pcs_points(lay: Layout, claims: list, zl=None) -> tuple[np.ndarray, np.ndarray]:
+    """The sumcheck's claims ``(p_i || p_c)`` -> PCS order: ``(p_c || p_i)`` for the row-major commitment, or
+    ``zk.permute_point`` for the ZK index map ``zk.z_to_f`` (``zl``: the ``RowMaskLayout``); numpy."""
+    if zl is None:
+        pts = [torch.cat((c.point[lay.n_i:], c.point[:lay.n_i])).cpu().numpy() for c in claims]
+    else:
+        pts = [zk_mod.permute_point(c.point.cpu().numpy(), zl) for c in claims]
     vals = [c.value.cpu().numpy() for c in claims]
     return np.stack(pts).astype(np.int64) % P, np.stack(vals).astype(np.int64) % P
+
+
+def zk_layout(lay: Layout, dims: Dims):
+    """The ZK mask rows of a batch (lane ligerito-zk's ``RowMaskLayout``), all in the free region ``[m + n_virt, R)``:
+    the ``2^b`` uniform rows on top, below them the product triple and the Libra row.  (ligerito-zk puts the product and
+    Libra rows among the committed rows with the trivial constraint ``i1 i2 = i3``; until layout.py reserves them they
+    sit in the free region and the product constraint is not enforced.)"""
+    R, nv = lay.R, len(lay.virt)
+    free_from, b = lay.m + nv, 3
+    if R - free_from < (1 << b) + 4:
+        raise ValueError(f"{R - free_from} free rows: not enough for the ZK mask rows")
+    top = R - (1 << b)
+    return zk_mod.RowMaskLayout(lay.n_i, lay.C.bit_length() - 1, dims.k[-1], tuple(range(top, R)),
+                                ((top - 4, top - 3, top - 2),), top - 1, b=b)
 
 
 @dataclass
@@ -709,7 +728,7 @@ class Prover:
         dims, lp = dims_for(lay.n_vars, self.rel.name)
         splits = [list(split((1 << k) << r)) for k, r in zip(dims.k, dims.rates)]
         params = {"relation": self.rel.name, "l": l, "n": dims.n, "kprime": dims.kprime, "queries": dims.queries,
-                  "rate_log2": dims.rates, "splits": splits, "order": "row-major", "coins": coins_kind, "zk": zk,
+                  "rate_log2": dims.rates, "splits": splits, "order": "zk-interleaved" if zk else "row-major", "coins": coins_kind, "zk": zk,
                   "n_claims": 1 + lay.n_links}
         return Batch(groups, lay, stmt, dims, lp, params, stmt.digest())
 
@@ -769,30 +788,42 @@ class Prover:
         coins.absorb(b"lgto/params", params_bytes(bt.params))
         coins.absorb(b"lgto/stmt", bt.stmt_digest or stmt.digest())
         coins.absorb(b"lgto/vk", self.key_sha256)
-        virt = z[lay.m:].clone()
-        z[lay.m:] = 0
+        zk_on = bool(bt.params.get("zk"))
+        vr = slice(lay.m, lay.m + len(lay.virt)) if zk_on else slice(lay.m, None)
+        virt = z[vr].clone()
+        z[vr] = 0
         tm.stop()
+        zl = None
+        if zk_on:
+            tm.start("zk_masks")
+            zl = zk_layout(lay, bt.dims)
+            zk_mod.fill_mask_rows(z, zl, dev)
+            f = zk_mod.z_to_f(z, zl).contiguous()
+            tm.stop()
+        else:
+            f = z.view(-1)
         owner = self.pcs_impl == "pcs-fast" and self.pcs_fast is not False and _fast(z)
         if owner:
             from .proto import pcs as ppcs
-            com = ppcs.commit(z.view(-1), bt.dims, tm)
+            com = ppcs.commit(f, bt.dims, tm)
             coins.absorb(b"root", com.root)
         else:
-            com = pcs_commit(z.view(-1), bt.dims, tm, fast=self.pcs_fast)
+            com = pcs_commit(f, bt.dims, tm, fast=self.pcs_fast)
             coins.absorb(b"root", com.root1)
+        del f
         tm.start("zero_check")
-        z[lay.m:] = virt
+        z[vr] = virt
         scp = sc_mod.prove(lay, self.cons, z, coins, cheat=cheat, engine=self.engine)
-        z[lay.m:] = 0
+        z[vr] = 0
         del virt
         tm.stop()
-        points, values = pcs_points(lay, scp.claims)
+        points, values = pcs_points(lay, scp.claims, zl)
         if owner:
             pp = ppcs.open(com, points, None, coins, tm)
             pcs = PcsProof(list(pp.roots), [list(m_) for m_ in pp.sumcheck], [o.rows for o in pp.opens],
                            [o.siblings for o in pp.opens], pp.final_y)
         else:
-            pcs = pcs_open(com, points, values, coins, tm, n_c=lay.C.bit_length() - 1)
+            pcs = pcs_open(com, points, values, coins, tm, n_c=0 if zk_on else lay.C.bit_length() - 1)
         tm.start("serialize_proof")
         proof = Proof(bt.params, scp.to_bytes(), pcs)
         tm.stop()
@@ -828,7 +859,9 @@ class Prover:
             if lay.S != stmt.S:
                 raise Reject("statement S does not match its sub-batches")
             dims = Dims(prm["n"], list(prm["kprime"]), list(prm["queries"]), list(prm["rate_log2"]))
-            if dims.n != lay.n_vars or prm.get("order") != "row-major" or prm.get("n_claims") != 1 + lay.n_links:
+            zk_on = bool(prm.get("zk"))
+            if dims.n != lay.n_vars or prm.get("order") != ("zk-interleaved" if zk_on else "row-major") \
+                    or prm.get("n_claims") != 1 + lay.n_links:
                 raise Reject("proof parameters do not match the layout")
             if dims.k[-1] < 0 or min(dims.kprime) < 1:
                 raise Reject("bad round structure")
@@ -867,7 +900,7 @@ class Prover:
             info["t_sumcheck"] = time.perf_counter() - t1
             if not ok:
                 raise Reject(why)
-            points, values = pcs_points(lay, claims)
+            points, values = pcs_points(lay, claims, zk_layout(lay, dims) if zk_on else None)
             t2 = time.perf_counter()
             pcs_verify(proof.pcs, dims, prm["splits"], points, values, coins)
             info["t_pcs"] = time.perf_counter() - t2
