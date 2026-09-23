@@ -14,7 +14,9 @@ moves from the runner's ``os.urandom`` to this process):
     P -> V   HELLO      relation, mode, zk, n_proofs, target_bits, run id, system.bin      (metadata + the public system)
     V -> P   WELCOME    session id, verifier identity
     V -> P   COMMIT i   c1, c2 = coin_commit(r_j, s_j) of FRESH coins for sub-batch i   -- BEFORE any prover message of i
-    P -> V   ROOT i     root, statement bytes (the public claim, fixed before the coin is opened)
+    P -> V   STMT i     the statement bytes (the public claim: instance, not a protocol message; sent at step 0 so its
+                        transfer overlaps the prover's work up to the root; fixed before the coin is opened either way)
+    P -> V   ROOT i     root (32 bytes; an older prover appends the statement here instead of STMT)
     V -> P   OPEN1 i    r1, s1
     P -> V   TESTS i    w, h [, q] [, v]
     V -> P   OPEN2 i    r2, s2          (+ COMMIT i+1 right behind it: the next sub-batch's step 0 is pipelined)
@@ -33,8 +35,9 @@ batch --target-bits`` on the whole session directory (the union bound, PROTOCOL.
 Prover-side accounting: the coin source records how long ``prove`` was blocked on the network (commit / open1 / open2) --
 ``adjust_timings`` subtracts it from the prover's phase clocks (``t.total`` stays comparable to the local-coins numbers) and
 the runner reports ``t.total_live`` = ``t.total`` + the network wait.  Pipelining: COMMIT i+1 travels with OPEN2 i (no round
-trip for step 0 after the first sub-batch); PROOF i is sent on a second connection by a sender thread while sub-batch i+1 is
-being proved; the two openings are the only round trips on the critical path (2 x RTT per sub-batch).
+trip for step 0 after the first sub-batch); STMT i goes out before the prover's work on i starts; PROOF i is sent on a second
+connection by a sender thread while sub-batch i+1 is being proved; the two openings are the only round trips on the critical
+path (2 x RTT per sub-batch, plus the test message's transfer).
 """
 from __future__ import annotations
 
@@ -63,11 +66,15 @@ COIN_BYTES = pm.COIN_BYTES
 # frame kinds (one byte each)
 K_HELLO, K_WELCOME, K_COMMIT, K_ROOT, K_OPEN1, K_TESTS, K_OPEN2, K_PROOF, K_END, K_VERDICT, K_ERROR = (
     b"H", b"W", b"C", b"R", b"1", b"T", b"2", b"P", b"E", b"V", b"X")
+K_STMT, K_NOP = b"S", b"N"     # STMT i: the statement ahead of ROOT i (sent at step 0, off the critical path); NOP: ignored
 _KIND_NAME = {K_HELLO: "HELLO", K_WELCOME: "WELCOME", K_COMMIT: "COMMIT", K_ROOT: "ROOT", K_OPEN1: "OPEN1", K_TESTS: "TESTS",
-              K_OPEN2: "OPEN2", K_PROOF: "PROOF", K_END: "END", K_VERDICT: "VERDICT", K_ERROR: "ERROR"}
+              K_OPEN2: "OPEN2", K_PROOF: "PROOF", K_END: "END", K_VERDICT: "VERDICT", K_ERROR: "ERROR", K_STMT: "STMT", K_NOP: "NOP"}
 _HDR = struct.Struct("<IB")
 _MAX_FRAME = 1 << 31
 _BUF = 8 << 20
+#: ``LIVE_TCP_CC=cubic|bbr|...``: the congestion control of the prover's and the server's sockets (an experiment knob: the
+#: control channel carries one ~0.3-0.5 MB message per round trip after an idle gap, where the CC's restart behaviour shows).
+_TCP_CC = os.environ.get("LIVE_TCP_CC")
 
 
 class LiveError(RuntimeError):
@@ -83,6 +90,11 @@ def _setup_socket(s: socket.socket) -> None:
     for opt in (socket.SO_SNDBUF, socket.SO_RCVBUF):
         try:
             s.setsockopt(socket.SOL_SOCKET, opt, _BUF)
+        except OSError:
+            pass
+    if _TCP_CC and hasattr(socket, "TCP_CONGESTION"):
+        try:
+            s.setsockopt(socket.IPPROTO_TCP, socket.TCP_CONGESTION, _TCP_CC.encode())
         except OSError:
             pass
 
@@ -197,16 +209,20 @@ class LiveCoins:
         self.stmt = stmt
 
     def commitments(self) -> tuple[bytes, bytes]:
+        """Step 0.  The statement (the public claim; known before proving starts) goes out first as STMT i -- no reply, so
+        its transfer overlaps the prover's work up to the root and ROOT i is 32 bytes on the critical path -- then the
+        verifier's COMMIT i is awaited (already here from OPEN2 i-1's pipelining except for the first sub-batch)."""
+        if self.stmt is None:
+            raise LiveError("LiveCoins: the runner did not set the statement (set_statement) before prove")
         t0 = time.perf_counter()
+        self.session.send_stmt(self.sub, self.stmt)
         self._cc = self.session.recv_commit(self.sub)
         self.wait_commit += time.perf_counter() - t0
         return self._cc
 
     def open1(self, root: bytes) -> tuple[bytes, bytes]:
-        if self.stmt is None:
-            raise LiveError("LiveCoins.open1: the runner did not set the statement (set_statement) before prove")
         t0 = time.perf_counter()
-        r1, s1 = self.session.exchange(K_ROOT, self.sub, root + self.stmt, K_OPEN1)
+        r1, s1 = self.session.exchange(K_ROOT, self.sub, root, K_OPEN1)
         dt = time.perf_counter() - t0
         self.wait_open1 += dt
         self.rtt.append(dt)
@@ -299,6 +315,9 @@ class ProverSession:
         if kind == K_ERROR:
             raise LiveError(f"verifier: {_json(payload).get('error')}")
         return kind, payload
+
+    def send_stmt(self, sub: int, stmt: bytes) -> None:
+        self._send(self.ctrl, K_STMT, struct.pack("<I", sub) + stmt)
 
     def recv_commit(self, sub: int) -> tuple[bytes, bytes]:
         while sub not in self._commits:
@@ -728,6 +747,13 @@ class Session(threading.Thread):
         self.bytes_in += _HDR.size + len(payload)
         return kind, payload
 
+    def _recv_ctrl(self) -> tuple[bytes, bytes]:
+        """The next control frame that is not a NOP (a prover may send NOPs to keep the connection's congestion state warm)."""
+        while True:
+            kind, payload = self._recv(self.conn)
+            if kind != K_NOP:
+                return kind, payload
+
     def log(self, msg: str) -> None:
         self.server.log(f"{self.id} {msg}")
 
@@ -794,18 +820,30 @@ class Session(threading.Thread):
         self._commit(0)
         for i in range(self.n_proofs):
             rec = self.sub[i]
-            kind, payload = self._recv(self.conn)
+            # STMT i (the statement ahead of the root; optional -- an older prover sends it inline with ROOT), then ROOT i
+            kind, payload = self._recv_ctrl()
             (j,) = struct.unpack_from("<I", payload)
+            if kind == K_STMT:
+                if j != i:
+                    raise LiveError(f"expected STMT/ROOT {i}, got STMT {j}")
+                rec["t_stmt_recv"] = time.time()
+                rec["stmt"] = payload[4:]
+                rec["bytes_stmt"] = len(payload)
+                kind, payload = self._recv_ctrl()
+                (j,) = struct.unpack_from("<I", payload)
             if kind != K_ROOT or j != i:
                 raise LiveError(f"expected ROOT {i}, got {_KIND_NAME.get(kind, kind)} {j}")
             rec["t_root_recv"] = time.time()
             rec["root"] = payload[4:36]
-            rec["stmt"] = payload[36:]
+            if len(payload) > 36:
+                rec["stmt"] = payload[36:]
+            if not rec.get("stmt"):
+                raise LiveError(f"ROOT {i} without a statement (no STMT {i} before it, nothing inline)")
             rec["bytes_root"] = len(payload)
             c = self.coins[i]
             self._send(self.conn, K_OPEN1, struct.pack("<I", i) + c.r1 + c.s1)
             rec["t_open1_sent"] = time.time()
-            kind, payload = self._recv(self.conn)
+            kind, payload = self._recv_ctrl()
             (j,) = struct.unpack_from("<I", payload)
             if kind != K_TESTS or j != i:
                 raise LiveError(f"expected TESTS {i}, got {_KIND_NAME.get(kind, kind)} {j}")
@@ -816,7 +854,7 @@ class Session(threading.Thread):
             rec["t_open2_sent"] = time.time()
             if i + 1 < self.n_proofs:
                 self._commit(i + 1)                       # pipelined: step 0 of the next sub-batch rides behind OPEN2
-        kind, payload = self._recv(self.conn)
+        kind, payload = self._recv_ctrl()
         if kind != K_END:
             raise LiveError(f"expected END, got {_KIND_NAME.get(kind, kind)}")
         self.end_summary = _json(payload) if payload else {}
