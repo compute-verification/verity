@@ -599,6 +599,7 @@ def _statement_bytes_v6(st: Statement) -> bytes:
 
 def _read_v6(r: _R, l, n, D, t, target, zk, t_pad, mode_code, n_proofs, n_vus, steps, K) -> Statement:
     from . import hashchain
+    from .leaf import registry as leaf_registry
     yb = r.u8()
     if yb not in _DTYPES:
         raise ValueError(f"statement word width {yb} bytes is not 1, 2 or 4")
@@ -607,12 +608,17 @@ def _read_v6(r: _R, l, n, D, t, target, zk, t_pad, mode_code, n_proofs, n_vus, s
         raise ValueError("v6 statement names an authentication other than included-hash-shared")
     if n_vus * steps > l:
         raise ValueError("layout does not fit the columns")
+    try:
+        _, leaf_name = leaf_registry.split_relation_name(relation)
+        scheme = leaf_registry.get(leaf_name)
+    except (ValueError, KeyError) as e:
+        raise ValueError(f"v6 statement: {e}") from None
     y16 = r.arr((l,), _DTYPES[yb])
     l_h, n_h, D_h, t_h, t_pad_h, n_units, coords = (r.u32() for _ in range(7))
     if n_units == 0 or n_units * steps > l_h or not 1 <= coords <= 32:
         raise ValueError("hash side: units do not fit its columns, or bad fingerprint coordinates")
     rows = r.arr((n_units, 1 + hashchain.N_ROW_DIGEST), "<u4").astype(np.int64)
-    auth, sibs = _hash_auth_block_r(r, n_vus)
+    auth, sibs = _hash_auth_block_r(r, n_vus, scheme)
     r.done()
     # the units are DERIVED from the block (hashchain.shared_units); the file's roles must agree
     units, _, _ = hashchain.shared_units(auth)
