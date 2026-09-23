@@ -5,6 +5,13 @@
 //! l = 4096, K = 32) with the runner's step-0 coins and the pod's `system.bin` (sha256 cba9a09f..., byte-identical
 //! to the laptop compilation of `compile_fp8_unit(ADA, chain=True)`).  `fixtures/systems/`: the bf16-hopper and
 //! fp8-hopper systems compiled from lane b-hopper a39de82 (no proofs of theirs are in the store yet).
+//!
+//! `fixtures/fp4-nvf4/`: sub-batch 0 of rep 1 of the NVFP4 non-ZK interactive dump (run r20260923-024035-f3cf, lane
+//! fp4-proof, code 3b03017, RTX 5090; B = 4096, 170 VUs x 24 steps at l = 4096, K = 68 = 64 E2M1 codes + 4 UE4M3
+//! scale bytes per operand per step, 25 sub-batches) with the runner's step-0 coins (sha256 7cead39c...) and the
+//! pod's `ligero-system/v2` file `system.bin` (sha256 6bb9d77f..., byte-identical to the laptop recompilation of
+//! `compile_fp4_unit()`; the chain ends on the FP32 accumulator's sign 31/1, exponent 23/8 and fraction 0/23).  The
+//! statement and proof sha256s (8625d1bf..., f57e90de...) are the dump manifest's.
 use std::process::Command;
 
 fn bin() -> String {
@@ -21,6 +28,12 @@ const FP8_SYS: &str = "fixtures/fp8-ada/system.bin";
 const FP8_STMT: &str = "fixtures/fp8-ada/sub_00.stmt";
 const FP8_PROOF: &str = "fixtures/fp8-ada/sub_00.proof";
 const FP8_COINS: &str = "fixtures/fp8-ada/sub_00.coins";
+const FP4_SYS: &str = "fixtures/fp4-nvf4/system.bin";
+const FP4_STMT: &str = "fixtures/fp4-nvf4/sub_00.stmt";
+const FP4_PROOF: &str = "fixtures/fp4-nvf4/sub_00.proof";
+const FP4_COINS: &str = "fixtures/fp4-nvf4/sub_00.coins";
+const FP4_SYS_ID: &str = "a825ba0b826a15366bfb8cdd720a5e9978603cbe589491abcbba7346ad35bf3c";
+const FP4_TABLE_DIGEST: &str = "b597b003e55b8cf1025b517a04d442d9c6d8704f38fd06df13a21b3273b2d2f6";
 
 fn verify(sys: &str, stmt: &str, proof: &str, extra: &[&str]) -> (i32, String) {
     let mut args = vec!["verify", "--system", sys, "--statement", stmt, "--proof", proof, "--threads", "2"];
@@ -181,6 +194,7 @@ fn system_digest_names_every_pinned_relation() {
         (FP8_SYS, "fp8-ada", "3769", "192"),
         ("fixtures/systems/bf16-hopper.system.bin", "bf16-hopper", "3292", "96"),
         ("fixtures/systems/fp8-hopper.system.bin", "fp8-hopper", "3396", "192"),
+        (FP4_SYS, "fp4-nvf4", "1583", "141"),
     ] {
         let (code, js) = run(&["system-digest", "--system", path]);
         assert_eq!(code, 0, "{js}");
@@ -188,6 +202,18 @@ fn system_digest_names_every_pinned_relation() {
         assert_eq!(field(&js, "\"m\":"), m, "{js}");
         assert_eq!(field(&js, "\"pins\":"), pins, "{js}");
         assert_eq!(field(&js, "\"chain\":"), "true", "{js}");
+        // the file format and the chain end: the four v1 systems end on one public word, the fp4 v2 system on the
+        // three components of the FP32 accumulator word
+        if rel == "fp4-nvf4" {
+            assert!(js.contains("\"format\":\"ligero-system/v2\""), "{js}");
+            assert!(js.contains("\"chain_end\":[{\"lo\":31,\"bits\":1},{\"lo\":23,\"bits\":8},{\"lo\":0,\"bits\":23}]"), "{js}");
+            assert!(js.contains(&format!("\"sys_id\":\"{FP4_SYS_ID}\",\"table_digest\":\"{FP4_TABLE_DIGEST}\"")), "{js}");
+            assert_eq!(field(&js, "\"L\":"), "306", "{js}");
+            assert_eq!(field(&js, "\"Q\":"), "1389", "{js}");
+        } else {
+            assert!(js.contains("\"format\":\"ligero-system/v1\""), "{js}");
+            assert!(js.contains("\"chain_end\":\"word\""), "{js}");
+        }
     }
     // a system file with other tables is pinned for no relation
     let mut sys = std::fs::read(FP8_SYS).unwrap();
@@ -348,6 +374,238 @@ fn fp8_ada_negatives_are_rejected() {
     let (code, js) = verify(FP8_SYS, FP8_STMT, FP8_PROOF, &["--coins", &write_tmp("theirs.coins", &coins)]);
     assert_eq!(code, 1, "{js}");
     assert!(js.contains("coins are not this verifier's step-0 coins"), "{js}");
+}
+
+// ------------------------------------------------------------------------------------------------------ fp4-nvf4 ----
+
+/// The byte offset of `a[0][0]` in the fp4 statement: the 58-byte header, the two widths, the relation name.
+const FP4_WORDS_AT: usize = 58 + 2 + 4 + "fp4-nvf4".len();
+
+#[test]
+fn fp4_nvf4_v4_honest_proof_is_accepted_against_its_pinned_system() {
+    let (code, js) = verify(FP4_SYS, FP4_STMT, FP4_PROOF, &["--coins", FP4_COINS]);
+    assert_eq!(code, 0, "{js}");
+    assert_eq!(field(&js, "\"accepted\":"), "true");
+    assert_eq!(field(&js, "\"system_pinned\":"), "true");
+    assert!(js.contains("\"format\":\"ligero-statement/v4\",\"relation\":\"fp4-nvf4\""), "{js}");
+    assert!(js.contains("\"l\":4096,\"n\":16384,\"D\":6,\"t\":196,\"zk\":false,\"mode\":\"interactive\",\"n_proofs\":25,\"n_vus\":170,\"steps\":24,\"K\":68"), "{js}");
+    assert!(js.contains("coins are this verifier's step-0 coins"), "{js}");
+    assert!(!js.contains("NOT pinned"), "{js}");
+    // the statement digest (tag `|rel=fp4-nvf4|v1`, 1-byte operand words, 4-byte accumulator words, the sys_id) and
+    // the union bound the statement's parameters give over its 25 sub-batches: below 2^-128
+    assert!(js.contains("\"digest\":\"500bfdb2b69bce82e730a2387188a120c08ce4217ada8c7522180b810a998fad\""), "{js}");
+    assert!(js.contains("\"per_proof_log2\":-132.874,\"union_log2\":-128.231"), "{js}");
+    // the same proof without --coins: the conditional accept, as for the BF16 and FP8 fixtures
+    let (code, js) = verify(FP4_SYS, FP4_STMT, FP4_PROOF, &[]);
+    assert_eq!(code, 0, "{js}");
+    assert!(js.contains("coins replayed from the transcript"), "{js}");
+    // unpinned it verifies too, flagged
+    let (code, js) = verify(FP4_SYS, FP4_STMT, FP4_PROOF, &["--allow-any-system"]);
+    assert_eq!(code, 0, "{js}");
+    assert_eq!(field(&js, "\"accepted\":"), "true", "{js}");
+    assert_eq!(field(&js, "\"system_pinned\":"), "false", "{js}");
+}
+
+#[test]
+fn fp4_nvf4_statement_negatives_are_rejected() {
+    let st = std::fs::read(FP4_STMT).unwrap();
+    let s = parse(&st);
+    assert_eq!((s.l, s.k), (4096, 68));
+    assert_eq!((st[58], st[59]), (1, 4), "1-byte operand words, 4-byte accumulator words");
+    assert_eq!(&st[60..64], &8u32.to_le_bytes());
+    let (code, honest) = verify(FP4_SYS, FP4_STMT, FP4_PROOF, &[]);
+    assert_eq!(code, 0, "{honest}");
+    let digest = field(&honest, "\"digest\":").to_string();
+    let rejected = |name: &str, bytes: &[u8], reason: &str| -> String {
+        let (code, js) = verify(FP4_SYS, &write_tmp(name, bytes), FP4_PROOF, &[]);
+        assert_eq!(code, 1, "{name}: {js}");
+        assert!(js.contains(reason), "{name}: {js}");
+        js
+    };
+    // (1) a public E2M1 nibble flipped to another code (unit 0, a[0]: 0x0b -> 0x0a): every operand byte is absorbed
+    // by the statement digest, so the transcript's column challenge no longer derives
+    assert_eq!(st[FP4_WORDS_AT], 0x0b);
+    let mut m = st.clone();
+    m[FP4_WORDS_AT] ^= 1;
+    let js = rejected("nibble.stmt", &m, "column challenge mismatch");
+    assert_ne!(field(&js, "\"digest\":"), digest, "the flipped nibble changed the statement digest");
+    // a code byte with its high nibble set is not an E2M1 code: off the domain at the public decode, before hashing
+    let mut m = st.clone();
+    m[FP4_WORDS_AT] |= 0x10;
+    rejected("nibble_hi.stmt", &m, "public inputs: E2M1 code outside 4 bits (unit 0)");
+    // (2) the UE4M3 scale bytes (a[0]'s group-0 scale is 0x31): another finite scale (digest), the NaN code 0x7F, the
+    // padding bit (bit 7) -- the last two off the domain at the public decode, in either operand
+    let sc_at = FP4_WORDS_AT + 64;
+    assert_eq!(st[sc_at], 0x31);
+    let mut m = st.clone();
+    m[sc_at] ^= 0x08;
+    let js = rejected("scale.stmt", &m, "column challenge mismatch");
+    assert_ne!(field(&js, "\"digest\":"), digest);
+    let mut m = st.clone();
+    m[sc_at] = 0x7F;
+    rejected("scale_nan.stmt", &m, "public inputs: UE4M3 NaN scale (unit 0)");
+    let mut m = st.clone();
+    m[sc_at] |= 0x80;
+    rejected("scale_pad.stmt", &m, "public inputs: UE4M3 scale byte with the padding bit set (unit 0)");
+    let b_sc_at = FP4_WORDS_AT + s.l * s.k + s.k + 64 + 3; // b[1]'s group-3 scale
+    let mut m = st.clone();
+    m[b_sc_at] = 0xFF;
+    rejected("scale_pad_b.stmt", &m, "public inputs: UE4M3 scale byte with the padding bit set (unit 1)");
+    let mut m = st.clone();
+    m[b_sc_at] = 0x7F;
+    rejected("scale_nan_b.stmt", &m, "public inputs: UE4M3 NaN scale (unit 1)");
+    // (3) the FP32 accumulator word (unit 0's is +0.0): its sign, exponent-field and fraction components are each
+    // absorbed by the digest -- every 32-bit pattern is a word, so this is the only line (`y_bits` = 32)
+    let y_at = FP4_WORDS_AT + 2 * s.l * s.k;
+    assert_eq!(&st[y_at..y_at + 4], &[0, 0, 0, 0]);
+    for (name, byte, mask) in [("y_sign", 3, 0x80u8), ("y_exp", 3, 0x01), ("y_exp_lo", 2, 0x80), ("y_frac", 0, 0x01)] {
+        let mut m = st.clone();
+        m[y_at + byte] ^= mask;
+        let js = rejected(&format!("{name}.stmt"), &m, "column challenge mismatch");
+        assert_ne!(field(&js, "\"digest\":"), digest, "{name}");
+    }
+    // (4) a truncated statement, the widths of another relation under this name, a K that is not the unit's
+    rejected("trunc.stmt", &st[..st.len() - 1], "statement file: truncated file");
+    rejected("wide.stmt", &encode(&s, 4, "fp4-nvf4", 2, 4, None), "word widths 2/4 bytes are not the fp4-nvf4 relation's 1/4");
+    rejected("y2.stmt", &encode(&s, 4, "fp4-nvf4", 1, 2, None), "word widths 1/2 bytes are not the fp4-nvf4 relation's 1/4");
+    let (code, js) = verify(FP4_SYS, &write_tmp("blackwell.stmt", &encode(&s, 4, "fp4-blackwell", 1, 4, None)), FP4_PROOF, &[]);
+    assert_eq!(code, 1, "{js}");
+    assert!(js.contains("statement names relation \\\"fp4-blackwell\\\"; this build pins bf16-ampere, fp8-ada, bf16-hopper, fp8-hopper, fp4-nvf4"), "{js}");
+    // the FP8 Ada words (K = 32, 1-byte words) named fp4-nvf4 with t and n_proofs patched to the fp4 fixture's, so the
+    // proof header and the soundness gate pass: refused at the public decode for the K
+    let fp8 = std::fs::read(FP8_STMT).unwrap();
+    let s8 = parse(&fp8);
+    let mut k32 = encode(&s8, 4, "fp4-nvf4", 1, 4, None);
+    assert_eq!((u32_at(&k32, 24), u32_at(&k32, 42), u32_at(&k32, 54)), (198, 49, 32));
+    k32[24..28].copy_from_slice(&196u32.to_le_bytes());
+    k32[42..46].copy_from_slice(&25u32.to_le_bytes());
+    rejected("k32.stmt", &k32, "public inputs: statement has K = 32 words per operand per unit, the fp4-nvf4 unit takes 68");
+}
+
+#[test]
+fn fp4_nvf4_proof_and_coins_negatives_are_rejected() {
+    let pf = std::fs::read(FP4_PROOF).unwrap();
+    // the v1 transcript: 8 magic + 4 flag bytes + 8 u32 header, the six 32-byte coin slots, the root; then w (D x l),
+    // h (D x (l - 1)), q (D x (2l - 1)), the t column indices, the opened columns (M x t, row-major), the t x depth
+    // Merkle path nodes -- every size fixed by the statement (l = 4096, D = 6, t = 196, depth 14) and the system (M = 1583)
+    let (d, l, t, m_rows, depth) = (6usize, 4096usize, 196usize, 1583usize, 14usize);
+    let w_at = 8 + 4 + 32 + 6 * 32 + 32;
+    let h_at = w_at + 4 * d * l;
+    let q_at = h_at + 4 * d * (l - 1);
+    let cols_at = q_at + 4 * d * (2 * l - 1);
+    let opened_at = cols_at + 4 * t;
+    let paths_at = opened_at + 4 * m_rows * t;
+    assert_eq!(paths_at + 32 * t * depth, pf.len());
+    let rejected = |name: &str, bytes: &[u8], extra: &[&str], reason: &str| {
+        let (code, js) = verify(FP4_SYS, FP4_STMT, &write_tmp(name, bytes), extra);
+        assert_eq!(code, 1, "{name}: {js}");
+        assert!(js.contains(reason), "{name}: {js}");
+    };
+    // a flipped byte per region, each caught by its own test
+    for (name, at, reason) in [
+        ("w", w_at, "proximity test failed"),
+        ("h", h_at + 4, "quadratic constraints failed"),
+        ("q", q_at + 8, "chain constraints failed (opened columns)"),
+        ("cols", cols_at, "column challenge mismatch"),
+        ("opened", opened_at + 4 * t * 5, "merkle path 0 invalid"),
+        ("root", w_at - 1, "merkle path 0 invalid"),
+        ("path", pf.len() - 1, "merkle path 195 invalid"),
+        ("coin_c1", 8 + 4 + 32, "coin slot 1: opening does not match its commitment"),
+    ] {
+        let mut m = pf.clone();
+        m[at] ^= 1;
+        rejected(&format!("{name}.proof"), &m, &[], reason);
+    }
+    // a truncated transcript; a transcript whose header is another statement's
+    rejected("short.proof", &pf[..pf.len() - 1], &[], "proof file: truncated file");
+    let (code, js) = verify(FP4_SYS, FP4_STMT, FP8_PROOF, &[]);
+    assert_eq!(code, 1, "{js}");
+    assert!(js.contains("malformed proof: header M = 3769, the statement fixes 1583"), "{js}");
+    // the interactive gate: coins that are not this verifier's
+    let mut coins = std::fs::read(FP4_COINS).unwrap();
+    coins[3] ^= 1;
+    rejected("own.proof", &pf, &["--coins", &write_tmp("theirs.coins", &coins)], "coins are not this verifier's step-0 coins");
+}
+
+#[test]
+fn fp4_nvf4_system_negatives_are_rejected() {
+    // (1) the wrong pinned system, both ways round: refused by the pin, before any parsing of the proof
+    for (sys, stmt, proof, reason) in [
+        (BF16_SYS, FP4_STMT, FP4_PROOF, "system file is the pinned bf16-ampere system, the statement is a fp4-nvf4 statement"),
+        (FP8_SYS, FP4_STMT, FP4_PROOF, "system file is the pinned fp8-ada system, the statement is a fp4-nvf4 statement"),
+        (FP4_SYS, "fixtures/b1.stmt", "fixtures/b1.proof", "system file is the pinned fp4-nvf4 system, the statement is a bf16-ampere statement"),
+        (FP4_SYS, FP8_STMT, FP8_PROOF, "system file is the pinned fp4-nvf4 system, the statement is a fp8-ada statement"),
+    ] {
+        let (code, js) = verify(sys, stmt, proof, &[]);
+        assert_eq!(code, 1, "{js}");
+        assert!(js.contains(reason), "{js}");
+        assert_eq!(field(&js, "\"system_pinned\":"), "true", "{js}");
+    }
+    // under --allow-any-system the digest pin is lifted but the chain end of the FILE must still be the relation's:
+    // a v1 word end cannot stand in for the fp4 components, nor the components for a word
+    let (code, js) = verify(BF16_SYS, FP4_STMT, FP4_PROOF, &["--allow-any-system"]);
+    assert_eq!(code, 1, "{js}");
+    assert!(js.contains("system file: system chain ends on one public word (ligero-system/v1); the fp4-nvf4 relation ends on 3 components (lo/bits 31/1, 23/8, 0/23)"), "{js}");
+    assert_eq!(field(&js, "\"system_pinned\":"), "false", "{js}");
+    let (code, js) = verify(FP4_SYS, "fixtures/b1.stmt", "fixtures/b1.proof", &["--allow-any-system"]);
+    assert_eq!(code, 1, "{js}");
+    assert!(js.contains("system file: system chain ends on 3 components (lo/bits 31/1, 23/8, 0/23; ligero-system/v2); the bf16-ampere relation ends on one 16-bit public word"), "{js}");
+    // (2) a v2 system with a wrong component width: the fraction component's `bits` (the last u32 before the sys_id)
+    // 23 -> 22.  The tables' digest changes, so pinned it is refused; unpinned, the components are checked
+    let sys = std::fs::read(FP4_SYS).unwrap();
+    let n = sys.len();
+    assert_eq!(&sys[..8], b"LIGSYS02");
+    assert_eq!((u32_at(&sys, n - 40), u32_at(&sys, n - 36)), (0, 23), "the last component is the 23-bit fraction at bit 0");
+    let mut m = sys.clone();
+    m[n - 36..n - 32].copy_from_slice(&22u32.to_le_bytes());
+    let p = write_tmp("bits22.system.bin", &m);
+    let (code, js) = run(&["system-digest", "--system", &p]);
+    assert_eq!(code, 0, "{js}");
+    assert_eq!(field(&js, "\"pinned_relation\":"), "null", "{js}");
+    assert!(js.contains("{\"lo\":0,\"bits\":22}"), "{js}");
+    let (code, js) = verify(&p, FP4_STMT, FP4_PROOF, &[]);
+    assert_eq!(code, 1, "{js}");
+    assert!(js.contains("system file is not the pinned fp4-nvf4 system"), "{js}");
+    let (code, js) = verify(&p, FP4_STMT, FP4_PROOF, &["--allow-any-system"]);
+    assert_eq!(code, 1, "{js}");
+    assert!(js.contains("system file: system chain end components (lo/bits 31/1, 23/8, 0/22) are not the fp4-nvf4 relation's (31/1, 23/8, 0/23)"), "{js}");
+    // a wrong `lo` likewise
+    let mut m = sys.clone();
+    m[n - 40..n - 36].copy_from_slice(&1u32.to_le_bytes());
+    let (code, js) = verify(&write_tmp("lo1.system.bin", &m), FP4_STMT, FP4_PROOF, &["--allow-any-system"]);
+    assert_eq!(code, 1, "{js}");
+    assert!(js.contains("system file: system chain end components (lo/bits 31/1, 23/8, 1/23) are not the fp4-nvf4 relation's (31/1, 23/8, 0/23)"), "{js}");
+    // (3) component fields that are not bit fields of a 32-bit word below p: refused at parse, pinned or not
+    for (name, at, val, reason) in [
+        ("bits31", n - 36, 31u32, "chain end component 2: bit field lo = 0, bits = 31 is not a field of a 32-bit word below p"),
+        ("bits0", n - 36, 0, "chain end component 2: bit field lo = 0, bits = 0 is not a field of a 32-bit word below p"),
+        ("lo10", n - 40, 10, "chain end component 2: bit field lo = 10, bits = 23 is not a field of a 32-bit word below p"),
+    ] {
+        let mut m = sys.clone();
+        m[at..at + 4].copy_from_slice(&val.to_le_bytes());
+        let p = write_tmp(&format!("{name}.system.bin"), &m);
+        let (code, js) = run(&["system-digest", "--system", &p]);
+        assert_eq!(code, 2, "{name}: {js}");
+        for extra in [&[][..], &["--allow-any-system"][..]] {
+            let (code, js) = verify(&p, FP4_STMT, FP4_PROOF, extra);
+            assert_eq!(code, 1, "{name}: {js}");
+            assert!(js.contains(&format!("system file: {reason}")), "{name}: {js}");
+        }
+    }
+    // (4) a truncated system file, a v1 body under the v2 magic and a v2 body under the v1 magic
+    let (code, js) = verify(&write_tmp("short.system.bin", &sys[..n - 40]), FP4_STMT, FP4_PROOF, &[]);
+    assert_eq!(code, 1, "{js}");
+    assert!(js.contains("system file: truncated file"), "{js}");
+    let mut v1 = std::fs::read(BF16_SYS).unwrap();
+    v1[..8].copy_from_slice(b"LIGSYS02");
+    let (code, js) = verify(&write_tmp("v1_as_v2.system.bin", &v1), "fixtures/b1.stmt", "fixtures/b1.proof", &["--allow-any-system"]);
+    assert_eq!(code, 1, "{js}");
+    assert!(js.starts_with("{\"name\":\"fixtures/b1.proof\",\"accepted\":false") && js.contains("\"reason\":\"system file: "), "{js}");
+    let mut v2 = sys.clone();
+    v2[..8].copy_from_slice(b"LIGSYS01");
+    let (code, js) = verify(&write_tmp("v2_as_v1.system.bin", &v2), FP4_STMT, FP4_PROOF, &["--allow-any-system"]);
+    assert_eq!(code, 1, "{js}");
+    assert!(js.contains("\"reason\":\"system file: "), "{js}");
 }
 
 #[test]
