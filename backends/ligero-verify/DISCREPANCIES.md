@@ -467,6 +467,19 @@ against 3292 / 3516 / 3396 / 3769.  What changes for a verifier:
   `bench-instances-bf16-ampere/v1`), where `bf16-ampere` proves the frozen `bench-instances/v1` set through `vu.py`.
   The unit compiled is `compile_unit(Params.from_model(AMPERE_BF16_M16N8K16))`'s claim; the statement digest and
   the auth block differ from `vu.py`'s files.
+* **The folded `-v2x4` relations (experimental) put four instruction steps in one column.**  `bf16-hopper-v2x4`,
+  `bf16-ampere-v2x4`, `fp8-hopper-v2x4`, `fp8-ada-v2x4` compile the same unit over `GroupSum(groups x 4)` (K = 64 / 64
+  / 128 / 128 per column, 24 / 24 / 12 / 12 columns per VU).  The claim is the base relation's VU (same operands, same
+  final word): `GroupSum(groups x 4).step` equals four chained steps of the model because the FP32 pack / decode between
+  steps is the identity on the adder-side state and a group that leaves the FP32 range saturates in both
+  (`test_folded_model_equals_four_chained_steps`; 1e5 random chains per relation offline).  The three intermediate
+  accumulators are private (the intermediate-group path of the unit, fraction bits committed); the statement carries
+  one word per column as before, so the Rust decode is the same `PubSel` with the groups repeated (`BF16_HOPPER_X4` ...)
+  and `K` again comes from the relation.  Pinned: `f1211dba... / dbb92408...`, `8ce6ca34... / c9611303...`,
+  `3463ce9f... / 8d679547...`, `d2272d3f... / 87be1aea...` (1045 / 1717 / 647 / 1255 rows: fewer than four base units,
+  the accumulator decode being shared).  The key-difference range check widens to 10 bits for the BF16 folded units
+  (their conservative shift range passes 512); the four base v2 systems are byte-identical to before.  Status: census,
+  Python unit / chain tests on CPU, Rust pins; **the GPU gate has not run** -- not to be switched to before it has.
 
 ~~~json
 {"id": "BV-D12", "issue": "the v2 relations pin values the verifier computes from the operand words (group maximum, truncated product sums per shift); K is fixed by the relation; the verifier's public computation is part of the soundness surface",
