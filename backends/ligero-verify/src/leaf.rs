@@ -217,7 +217,10 @@ const ALIASES: &[(&str, &str)] = &[("hash", "poseidon2")];
 
 /// The `(sys_id, table_digest)` pins of hashed systems composed with a scheme OTHER than Poseidon2 (whose pins live on
 /// the `Relation` itself: `hashed_sys_id` / `hashed_table_digest`): `(relation name, leaf name, sys_id, table_digest)`.
-pub static PINS: &[(&str, &str, &str, &str)] = &[];
+pub static PINS: &[(&str, &str, &str, &str)] = &[
+    ("fp8-ada", "ajtai-n64", "18d915323c056495f667a6c4286eece77e25e348aed03b335b583e2db1e346c4", "a1f2cb20cb549af68f005bf3efef6112f08bb7a9537dbd876811e46769c5ee50"),
+    ("bf16-hopper", "ajtai-n128", "29f18689c05de6f355c97aac1e711f9dad7f7f35eda85026482258c85d6a27e5", "e4dceccece10d7f55f5aed8cb7e444d6f0a736012b6323ee6fd2cdfe520f6438"),
+];
 
 pub fn names() -> Vec<&'static str> {
     SCHEMES.iter().map(|s| s.name).collect()

@@ -1036,10 +1036,10 @@ struct AjtaiFx {
 const AJTAI_FX: &[AjtaiFx] = &[
     AjtaiFx { dir: "fixtures/fp8-ada-ajtai-n64", rel: "fp8-ada", leaf: "ajtai-n64", schema: "ajtai-babybear-n64-b1-r0/row/v1", n: 64,
               steps: 48, k_words: 1536, y_bytes: 4, rows: 4858,
-              sys_id: "AJTAI64_SYS_ID", table_digest: "AJTAI64_TABLE_DIGEST" },
+              sys_id: "18d915323c056495f667a6c4286eece77e25e348aed03b335b583e2db1e346c4", table_digest: "a1f2cb20cb549af68f005bf3efef6112f08bb7a9537dbd876811e46769c5ee50" },
     AjtaiFx { dir: "fixtures/bf16-hopper-ajtai-n128", rel: "bf16-hopper", leaf: "ajtai-n128", schema: "ajtai-babybear-n128-b1-r0/row/v1", n: 128,
               steps: 96, k_words: 1536, y_bytes: 2, rows: 4669,
-              sys_id: "AJTAI128_SYS_ID", table_digest: "AJTAI128_TABLE_DIGEST" },
+              sys_id: "29f18689c05de6f355c97aac1e711f9dad7f7f35eda85026482258c85d6a27e5", table_digest: "e4dceccece10d7f55f5aed8cb7e444d6f0a736012b6323ee6fd2cdfe520f6438" },
 ];
 
 impl AjtaiFx {
@@ -1121,7 +1121,7 @@ fn ajtai_statement_negatives_are_rejected() {
         // a digest lane >= p is not a canonical field element
         let mut m = st.clone();
         m[o.digests..o.digests + 4].copy_from_slice(&0x7800_0001u32.to_le_bytes());
-        rej("digest_noncanonical", &m, "not a canonical field element");
+        rej("digest_noncanonical", &m, "non-canonical field element");
         // the scheme's params digest tampered: "<schema> parameters differ from the verifier's"
         let at = o.indices - 4 - 32;
         let mut m = st.clone();
@@ -1178,15 +1178,16 @@ fn ajtai_system_mismatches_and_the_key_check_are_enforced() {
     let (code, js) = verify(&f.sys(), HASH_STMT, HASH_PROOF, &["--coins", HASH_COINS]);
     assert_eq!(code, 1, "{js}");
     assert!(js.contains("system file is the pinned hashed (ajtai-n64 leaves) fp8-ada system, the statement is a hashed fp8-ada statement"), "{js}");
-    // the n64 statement against the n128 system (another relation's): the pin refuses it, unpinned the key check
-    // passes on neither (n128's rows carry the n128 key), the row count differs anyway
+    // the n64 statement against the n128 system (another relation's): the pin refuses it.  Unpinned, the n64 key check
+    // PASSES there -- b_i's first 64 coefficients are the same SHAKE prefix for n = 64 and 128, so rows x < 64 of the
+    // n128 system do carry B_64 -- and the structure refuses it (the proof's row count is not the system's)
     let g = &AJTAI_FX[1];
     let (code, js) = verify(&g.sys(), &f.stmt(), &f.proof(), &["--coins", &f.coins()]);
     assert_eq!(code, 1, "{js}");
     assert!(js.contains("system file is the pinned hashed (ajtai-n128 leaves) bf16-hopper system"), "{js}");
     let (code, js) = verify(&g.sys(), &f.stmt(), &f.proof(), &["--coins", &f.coins(), "--allow-any-system"]);
     assert_eq!(code, 1, "{js}");
-    assert!(js.contains("do not carry the derived key B"), "{js}");
+    assert!(!js.contains("derived key B") && js.contains(&format!("malformed proof: header M = {}, the statement fixes {}", f.rows, g.rows)), "{js}");
     // the two Ajtai systems are pinned apart from each other and from the Poseidon2 ones
     let (_, sd) = run(&["system-digest", "--system", &g.sys()]);
     assert!(sd.contains("\"pinned_relation\":\"bf16-hopper+ajtai-n128\"") && !sd.contains(f.sys_id), "{sd}");
