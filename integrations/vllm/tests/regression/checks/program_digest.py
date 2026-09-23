@@ -56,7 +56,15 @@ def actual(row: resolver.Row) -> dict:
         bs = json.load(open(cand))
         d = _digests_of(bs)
         b = len(json.load(open(row.workload())).get("requests") or [])
-        return {"build_summary": d, "program_digest_of_record": d["workload"] if b > 1 else d["request"], "batch": b, "source": "candidate"}
+        out = {"build_summary": d, "program_digest_of_record": d["workload"] if b > 1 else d["request"], "batch": b, "source": "candidate"}
+        # the same two record files the expected side reads, when the candidate carries them (a Build-only candidate carries neither
+        # Commit file: `commit_keyed_by` then stays missing and the check says so)
+        mv, wp = row.candidate("commit/manifest_verify.json"), row.candidate("build_workload/workload_program.json")
+        if mv is not None:
+            out["commit_keyed_by"] = json.load(open(mv)).get("used_program_digest")
+        if wp is not None:
+            out["workload_program_digest"] = json.load(open(wp)).get("workload_digest")
+        return out
     # self-check: the chain read from the Build's own per-shape artifacts, independent of build_summary.json's copy
     exp = expected(row)
     arts: dict[str, str | None] = {}
