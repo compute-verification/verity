@@ -333,16 +333,27 @@ fn main() {
             match format::System::parse(&sys) {
                 Ok(s) => {
                     let (sid, td) = (hash::hex(&s.sys_id), hash::hex(&format::System::table_digest(&sys)));
+                    // the chain end: null (no chain), "word" (v1: one public word as a residue) or the v2 components
+                    let ends = match s.chain.as_ref().map(|c| c.components()) {
+                        None => "null".to_string(),
+                        Some(None) => "\"word\"".to_string(),
+                        Some(Some(c)) => format!(
+                            "[{}]",
+                            c.iter().map(|(lo, bits)| format!("{{\"lo\":{lo},\"bits\":{bits}}}")).collect::<Vec<_>>().join(",")
+                        ),
+                    };
                     println!(
-                        "{{\"sys_id\":\"{}\",\"table_digest\":\"{}\",\"pinned_relation\":{},\"m\":{},\"L\":{},\"Q\":{},\"pins\":{},\"chain\":{}}}",
+                        "{{\"sys_id\":\"{}\",\"table_digest\":\"{}\",\"pinned_relation\":{},\"format\":\"ligero-system/v{}\",\"m\":{},\"L\":{},\"Q\":{},\"pins\":{},\"chain\":{},\"chain_end\":{}}}",
                         sid,
                         td,
                         relation::by_digests(&sid, &td).map_or("null".to_string(), |r| json_str(r.name)),
+                        s.version,
                         s.m,
                         s.linear.len(),
                         s.quadratic.len(),
                         s.pins.len(),
-                        s.chain.is_some()
+                        s.chain.is_some(),
+                        ends
                     )
                 }
                 Err(e) => {
