@@ -60,20 +60,23 @@ def step_int(p: Params, pl: Plan, c: int, a: list[int], b: list[int], y: int | N
             H[f"{tag}.q"], H[f"{tag}.Q"] = q_acc, Q
         l = v.bit_length()
         e1 = max(E + l - p.width, p.acc_e_min)
-        tt = e1 - E + p.width - pl.nb
+        tt = e1 - E + p.width - pl.nb if v else pl.t_lo      # a zero sum: any shift in range (the relation masks e1 by z)
         Mn = (v >> tt) if tt >= 0 else (v << -tt)
         for i in range(pl.n_t):
             H[f"{tag}.nsel[{i}]"] = int(tt == pl.t_lo + i)
         hid, fo = Mn >> (pl.nb - 1), Mn & (2 ** (pl.nb - 1) - 1)
-        H[f"{tag}.hid"], H[f"{tag}.fo"] = hid, fo
+        H[f"{tag}.hid"], H[f"{tag}.fo"], H[f"{tag}.M"] = hid, fo, Mn
         zo = int(Mn == 0)
-        H[f"{tag}.z"], H[f"{tag}.ovf"] = zo, int(e1 > p.acc_e_max)
+        H[f"{tag}.z"], H[f"{tag}.ovf"] = zo, int(e1 > p.acc_e_max and not zo)
         s_st = sgn * (1 - zo)
         e_st = e1 + zo * (p.floor - e1)
         Mt = Mn
     if chain and not pl.fp8:
         L = ACC_FRAC - p.frac
-        H["epi.zl"] = int((fo & (2 ** (L - 1) - 1)) + ((fo >> L) & 1) == 0)   # the last group's (unmasked) output fraction
+        # the last group's (unmasked) output fraction: the kept high part, the half bit, the sticky sum and its zero flag
+        H["epi.fhi"], H["epi.half"] = fo >> L, (fo >> (L - 1)) & 1
+        H["epi.sticky"] = (fo & (2 ** (L - 1) - 1)) + ((fo >> L) & 1)
+        H["epi.zl"] = int(H["epi.sticky"] == 0)
     return H
 
 
@@ -90,7 +93,8 @@ def reference_hints_v2(p: Params, sys: System, units: list[tuple], device):
         c, a, b = u[:3]
         y = u[3] if len(u) > 3 else None
         for n, val in step_int(p, pl, int(c), list(a), list(b), None if y is None else int(y), chain).items():
-            out[pos[n], col] = val
+            if n in pos:                                      # step_int also reports values the unit does not commit
+                out[pos[n], col] = val
     return out.to(device)
 
 
@@ -222,19 +226,21 @@ def _hints_eager(p: Params, sys: System, c, a, b, y, device):
             H[f"{tag}.q"], H[f"{tag}.Q"] = q_acc, Q
         l = _bit_length(v, pl.SB)
         e1 = torch.clamp(E + l - p.width, min=p.acc_e_min)
-        tt = e1 - E + p.width - pl.nb
+        tt = torch.where(v != 0, e1 - E + p.width - pl.nb, torch.full_like(v, pl.t_lo))
         Mn = torch.where(tt >= 0, v >> torch.clamp(tt, min=0), v << torch.clamp(-tt, min=0))
         for i in range(pl.n_t):
             H[f"{tag}.nsel[{i}]"] = (tt == pl.t_lo + i).to(torch.int64)
         hid, fo = Mn >> (pl.nb - 1), Mn & (2 ** (pl.nb - 1) - 1)
-        H[f"{tag}.hid"], H[f"{tag}.fo"] = hid, fo
+        H[f"{tag}.hid"], H[f"{tag}.fo"], H[f"{tag}.M"] = hid, fo, Mn
         zo = (Mn == 0).to(torch.int64)
-        H[f"{tag}.z"], H[f"{tag}.ovf"] = zo, (e1 > p.acc_e_max).to(torch.int64)
+        H[f"{tag}.z"], H[f"{tag}.ovf"] = zo, ((e1 > p.acc_e_max) & (zo == 0)).to(torch.int64)
         s_st = sgn * (1 - zo)
         e_st = e1 + zo * (p.floor - e1)
         Mt = Mn
     if chain and not pl.fp8:
         L = ACC_FRAC - p.frac
-        H["epi.zl"] = ((fo & (2 ** (L - 1) - 1)) + ((fo >> L) & 1) == 0).to(torch.int64)
+        H["epi.fhi"], H["epi.half"] = fo >> L, (fo >> (L - 1)) & 1
+        H["epi.sticky"] = (fo & (2 ** (L - 1) - 1)) + ((fo >> L) & 1)
+        H["epi.zl"] = (H["epi.sticky"] == 0).to(torch.int64)
     names = [n for _, n in sys.hints]
     return torch.stack([H[n] for n in names])
