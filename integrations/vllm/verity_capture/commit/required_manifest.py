@@ -426,6 +426,27 @@ PROMOTION_RULE = ("an INTERIOR-classified row (the vocabulary `members_for` name
 _REGISTRY_MODULES = ("b1", "dense", "fp8", "moe", "sampling", "b1_tp2", "moe_pad")
 _registry_cache: dict[str, Any] = {}
 
+#: the fail class `row_pod.sh` / the harness classify a RegistryUnavailable under (precheck vocabulary: an environment fault, not a Commit verdict)
+REGISTRY_UNAVAILABLE_FAIL_CLASS = "PRECHECK_FAIL_REGISTRY_UNAVAILABLE"
+REGISTRY_UNAVAILABLE_EXIT = 3                                                    # row_pod.sh's PRECHECK_FAIL_* exit status
+
+
+class RegistryUnavailable(ImportError):
+    """The core `verity` package (verity.ir.defs REGISTRY) is not importable where the manifest is being built.  An ENVIRONMENT fault
+    (infra / precondition: PYTHONPATH, the shipped tree's packages/verity/src, an incomplete venv), never a semantic result: without the
+    registry no Definition's signature can be derived, so a manifest built here would misreport every promoted family as `unmodelled`
+    (complete: false) -- the wire lane saw exactly that on #57 (163052 rows complete:false vs 163484 complete:true).  Raised instead of
+    building; the CLI exits REGISTRY_UNAVAILABLE_EXIT naming REGISTRY_UNAVAILABLE_FAIL_CLASS."""
+
+    fail_class = REGISTRY_UNAVAILABLE_FAIL_CLASS
+    kind = "infra/precondition"
+
+    def __init__(self, cause: BaseException):
+        super().__init__(f"{REGISTRY_UNAVAILABLE_FAIL_CLASS}: the core verity package is not importable here (verity.ir.defs: "
+                         f"{type(cause).__name__}: {cause}); the required-value manifest cannot be built without the registry "
+                         f"(sys.path lacks packages/verity/src? an incomplete venv?) -- an environment fault, not a manifest result")
+        self.cause = cause
+
 
 def is_aggregate_family(family: str, module: str) -> bool:
     return family.startswith(_AGGREGATE_PREFIXES) or (family.startswith("SiluMul") and module.rsplit(".", 1)[-1] == MOE_LEAF)
@@ -436,22 +457,23 @@ def is_structure_family(family: str) -> bool:
 
 
 def _registry() -> tuple[Any, list[str]]:
-    """(verity.ir REGISTRY with the integration's composite modules imported, [import errors]) -- once per process."""
+    """(verity.ir REGISTRY with the integration's composite modules imported, [import errors of the integration's OWN registry modules])
+    -- once per process.  The core package not importable is RegistryUnavailable (raised, not cached as None: an environment fault
+    must stop the build, never land in the manifest as an `unmodelled` row)."""
     if "registry" not in _registry_cache:
-        errors: list[str] = []
         try:
-            import importlib
-
             from verity.ir.defs import REGISTRY
-            for m in _REGISTRY_MODULES:
-                try:
-                    importlib.import_module(f"verity_vllm.registry.{m}")
-                except Exception as e:  # noqa: BLE001  (named beside the fault; a missing optional module is not a guess about the family)
-                    errors.append(f"verity_vllm.registry.{m}: {type(e).__name__}: {e}")
-            _registry_cache["registry"] = REGISTRY
         except Exception as e:  # noqa: BLE001
-            _registry_cache["registry"] = None
-            errors.append(f"verity.ir.defs: {type(e).__name__}: {e}")
+            raise RegistryUnavailable(e) from e
+        import importlib
+
+        errors: list[str] = []
+        for m in _REGISTRY_MODULES:
+            try:
+                importlib.import_module(f"verity_vllm.registry.{m}")
+            except Exception as e:  # noqa: BLE001  (named beside the fault; a missing optional module is not a guess about the family)
+                errors.append(f"verity_vllm.registry.{m}: {type(e).__name__}: {e}")
+        _registry_cache["registry"] = REGISTRY
         _registry_cache["errors"] = errors
     return _registry_cache["registry"], _registry_cache["errors"]
 
@@ -463,9 +485,7 @@ def promoted_signature(spec: str) -> tuple[int | None, str | None, str | None]:
     Never a guess: the caller fails closed on `why` (`UNDERIVABLE`)."""
     base = spec_family(spec)
     statics = spec_statics(spec)
-    reg, errors = _registry()
-    if reg is None:
-        return None, None, f"{base}: the registry is not importable ({'; '.join(errors)})"
+    reg, errors = _registry()                                                    # RegistryUnavailable propagates: not a `why`, a fault
     d = reg.defs.get(base)
     if d is None:
         try:
@@ -2168,5 +2188,16 @@ def _main() -> int:
     return 0 if res["ok"] else 1
 
 
+def main() -> int:
+    """`_main` with the one environment fault named: RegistryUnavailable -> its message on stderr, exit REGISTRY_UNAVAILABLE_EXIT (3),
+    the PRECHECK_FAIL_* vocabulary row_pod.sh classifies (no manifest.json is written)."""
+    try:
+        return _main()
+    except RegistryUnavailable as e:
+        import sys
+        print(str(e), file=sys.stderr, flush=True)
+        return REGISTRY_UNAVAILABLE_EXIT
+
+
 if __name__ == "__main__":
-    raise SystemExit(_main())
+    raise SystemExit(main())

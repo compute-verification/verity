@@ -638,3 +638,40 @@ def test_man08_unrooted_module_path_is_incomplete_named_not_one_folded_identity(
     assert any(r["op_path"] == "runner.sampler" for r in man["identities"])       # the bare-named sampler rows are still the sampler identity
     ok = build_manifest(_program())
     assert ok["complete"] is True                                                 # every module of the dense Program is rooted
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# the registry not importable is an ENVIRONMENT fault (RegistryUnavailable), never a manifest with `unmodelled ... registry is not importable`
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+def test_registry_unavailable_is_a_named_fault_not_a_manifest_result(monkeypatch, capsys):
+    """Simulate the core `verity` package missing (sys.modules["verity.ir.defs"] = None makes its import raise): the builder must raise
+    RegistryUnavailable (infra/precondition, PRECHECK_FAIL_REGISTRY_UNAVAILABLE) instead of deriving `(None, None, 'registry is not
+    importable')` and emitting complete:false; the CLI maps it to exit 3 with the fail class on stderr; nothing is cached as None so a
+    repaired environment in the same process recovers."""
+    import sys
+
+    from verity_capture.commit import required_manifest as RM
+
+    monkeypatch.setattr(RM, "_registry_cache", {})
+    monkeypatch.setitem(sys.modules, "verity.ir.defs", None)
+    with pytest.raises(RM.RegistryUnavailable) as ei:
+        RM.promoted_signature("Bf16MulScalarTensor_v1{N=8}")
+    e = ei.value
+    assert isinstance(e, ImportError) and e.fail_class == RM.REGISTRY_UNAVAILABLE_FAIL_CLASS == "PRECHECK_FAIL_REGISTRY_UNAVAILABLE"
+    assert e.kind == "infra/precondition" and "verity.ir.defs" in str(e) and str(e).startswith("PRECHECK_FAIL_REGISTRY_UNAVAILABLE")
+    assert "registry" not in RM._registry_cache                                  # not cached as None
+    # the v2 query engine names the same fault
+    from verity_vllm.query import program_view as PV
+    monkeypatch.setattr(PV, "_REGISTRY", {})
+    with pytest.raises(RM.RegistryUnavailable):
+        PV._registry()
+    # the CLI: exit REGISTRY_UNAVAILABLE_EXIT (row_pod.sh's PRECHECK_FAIL_* status), the class named on stderr, no manifest
+    monkeypatch.setattr(RM, "_main", lambda: RM._registry() and 0)
+    assert RM.main() == RM.REGISTRY_UNAVAILABLE_EXIT == 3
+    assert "PRECHECK_FAIL_REGISTRY_UNAVAILABLE" in capsys.readouterr().err
+    # repaired environment (the real module back): the registry loads and the signature derives
+    monkeypatch.delitem(sys.modules, "verity.ir.defs", raising=False)
+    monkeypatch.setattr(RM, "_registry_cache", {})
+    reg, _errors = RM._registry()
+    assert reg is not None

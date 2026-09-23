@@ -33,6 +33,8 @@
 #     the Program digest handed to the Commit is read from build_summary.json, never from the required-value manifest; a Match verdict over a record
 #     this attempt did not produce is FAIL (freshness rule) unless MATCH_PHASE=cpu resumes it by name; a Commit never starts over a
 #     Match record missing its account files (PRECHECK_FAIL_MATCH_RECORD_INCOMPLETE, exit 14); `required_manifest verify` FAIL = Commit FAIL.
+#     The required-value manifest is never built without the core registry: `required_manifest` exit 3 = PRECHECK_FAIL_REGISTRY_UNAVAILABLE
+#     (an environment fault, not a complete:false manifest) stops the row by name (exit 3).
 #   Exit: 0 every requested stage PASS; 10 Build FAIL; 11 Match FAIL; 12 Commit FAIL; 13 B>=2 global manifest not built; 3 precheck FAIL;
 #     2 bad argv / MATCH_PHASE; 128+signal when cancelled (TERM/INT/HUP is forwarded to the running stage's process group, see run_to).
 #   Protocol spec: Notion -> "vLLM integration — protocol spec (Build · Match · Commit)".
@@ -826,12 +828,22 @@ if t > 0 and t != cap:
     # shape, build_request_LP<prompt_len>_T<max_tokens-1>; request ids r<index>, the workload UUID beside); program_digest = GP-01's
     # workload Program digest when the Build produced it (build_workload/workload_program.json), else the labelled components fold.
     # The one-request manifest of build_request is NOT a population at B>=2 (rc3 F-global: coverage fails on it) -> no fallback: fail closed.
+    # `required_manifest` exit 3 = PRECHECK_FAIL_REGISTRY_UNAVAILABLE (required_manifest.RegistryUnavailable: the core verity package is not
+    # importable under $PY -- an ENVIRONMENT fault, never a manifest that says complete:false).  The row stops here by name, no fallback.
+    manifest_precheck_fail() { # <rc> <manifest.log>
+      if [ "$1" = 3 ] && grep -q "PRECHECK_FAIL_REGISTRY_UNAVAILABLE" "$2" 2>/dev/null; then
+        log "PRECHECK_FAIL_REGISTRY_UNAVAILABLE: $(grep -m1 PRECHECK_FAIL_REGISTRY_UNAVAILABLE "$2")"
+        tl commit.required_manifest end rc=3 fail_class=PRECHECK_FAIL_REGISTRY_UNAVAILABLE
+        verdict commit FAIL "PRECHECK_FAIL_REGISTRY_UNAVAILABLE (environment: core verity package not importable; see $2)"; tl stage.commit end ok=false; tl row end ok=false stopped_at=commit; exit 3
+      fi
+    }
     WD=$($PY -c "import json,sys;d=json.load(open(sys.argv[1]));print(d.get('workload_digest') or d.get('program_digest') or d.get('digest') or '')" "$D/build_workload/workload_program.json" 2>/dev/null || true)   # [rel] GP-01 writes workload_digest
     tl commit.required_manifest start mode=build-global
     if $PY -m verity_capture.commit.required_manifest build-global --fixture "$WL" --programs-root "$D" ${WD:+--workload-digest "$WD"} --out "$D/manifest.json" > "$D/manifest.log" 2>&1; then
       tl commit.required_manifest end rc=0
       REQUIRED_MANIFEST="$D/manifest.json"; log "required-value manifest (GLOBAL, B=$B${WD:+, workload digest ${WD:0:16}}): $(tail -n 1 "$D/manifest.log")"
     else
+      MRC=$?; manifest_precheck_fail $MRC "$D/manifest.log"
       tl commit.required_manifest end rc=1
       log "required-value manifest build-global FAILED (see manifest.log)"; verdict commit FAIL "B>=2 global required manifest not built (manifest.log)"; tl stage.commit end ok=false; tl row end ok=false stopped_at=commit; exit 13
     fi
@@ -842,6 +854,7 @@ if t > 0 and t != cap:
       tl commit.required_manifest end rc=0
       REQUIRED_MANIFEST="$D/manifest.json"; log "required-value manifest: $(tail -n 1 "$D/manifest.log")"
     else
+      MRC=$?; manifest_precheck_fail $MRC "$D/manifest.log"
       tl commit.required_manifest end rc=1
       log "required-value manifest build FAILED (see manifest.log): falling back to REL-02 counts+classes (labelled in verdict.json)"
     fi
