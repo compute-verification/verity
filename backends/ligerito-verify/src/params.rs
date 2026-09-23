@@ -1,0 +1,163 @@
+//! Round dimensions and the soundness bound (paper section 6.3, eq. (17)) -- the Rust mirror of
+//! `backends/direct/ligerito/params.py` (lane ligerito-design).  Until params.py lands the shapes follow
+//! `proto/dims.py`: `n = log2 N`; L committed rounds with k'_i column bits each; k_i = k_{i-1} - k'_i (k_0 = n);
+//! round i commits R_i = 2^{k_i} rows x C_i = 2^{k'_i} columns, codeword length m_i = 2^{k_i + rate_log2} along the
+//! tall axis; the final vector y has 2^{k_L} entries.  Field terms are over |F| = p^6 ~ 2^186.
+
+use crate::field::{pow, root_of_unity, P};
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Params {
+    pub n: usize,
+    pub kprime: Vec<usize>,
+    pub queries: Vec<usize>,
+    pub rate_log2: usize,
+    /// Multiplicative shift of the evaluation domain: 1 = the subgroup <w_m> (proto), 31 = the Ligero coset g<w_m>.
+    pub domain_shift: u32,
+}
+
+impl Params {
+    pub fn new(n: usize, kprime: Vec<usize>, queries: Vec<usize>, rate_log2: usize) -> Params {
+        Params { n, kprime, queries, rate_log2, domain_shift: 1 }
+    }
+
+    /// Number of committed rounds (the paper's l - 1).
+    pub fn rounds(&self) -> usize {
+        self.kprime.len()
+    }
+
+    /// k_i for committed round i (1-based): the row bits; k(0) = n.
+    pub fn k(&self, i: usize) -> usize {
+        self.n - self.kprime[..i].iter().sum::<usize>()
+    }
+
+    pub fn rows(&self, i: usize) -> usize {
+        1 << self.k(i)
+    }
+
+    pub fn cols(&self, i: usize) -> usize {
+        1 << self.kprime[i - 1]
+    }
+
+    /// Codeword length (Merkle leaves) of round i.
+    pub fn m(&self, i: usize) -> usize {
+        1 << (self.k(i) + self.rate_log2)
+    }
+
+    pub fn depth(&self, i: usize) -> usize {
+        self.k(i) + self.rate_log2
+    }
+
+    pub fn final_len(&self) -> usize {
+        1 << self.k(self.rounds())
+    }
+
+    pub fn validate(&self) -> Result<(), String> {
+        let l = self.rounds();
+        if l == 0 {
+            return Err("params: no committed rounds".into());
+        }
+        if self.queries.len() != l {
+            return Err(format!("params: {} query counts for {l} rounds", self.queries.len()));
+        }
+        if self.n == 0 || self.n > 40 {
+            return Err(format!("params: n = {} out of range", self.n));
+        }
+        let mut k = self.n;
+        for (i, &kp) in self.kprime.iter().enumerate() {
+            if kp == 0 || kp > k {
+                return Err(format!("params: k'_{} = {kp} with k_{} = {k}", i + 1, i));
+            }
+            k -= kp;
+            if k + self.rate_log2 > crate::field::TWO_ADICITY as usize {
+                return Err(format!("params: codeword 2^{} exceeds the 2-adicity", k + self.rate_log2));
+            }
+            if self.queries[i] == 0 || self.queries[i] > (1usize << (k + self.rate_log2)) {
+                return Err(format!("params: |S_{}| = {} for m = 2^{}", i + 1, self.queries[i], k + self.rate_log2));
+            }
+        }
+        if self.rate_log2 == 0 {
+            return Err("params: rate 1 has no distance".into());
+        }
+        if self.domain_shift == 0 || self.domain_shift >= P {
+            return Err("params: domain shift".into());
+        }
+        Ok(())
+    }
+
+    /// The evaluation point eta_s of codeword position s in round i: shift . w_{m_i}^s.
+    pub fn domain_point(&self, i: usize, s: usize) -> u32 {
+        let w = root_of_unity(self.m(i));
+        crate::field::mul(self.domain_shift, pow(w, s as u64))
+    }
+
+    /// log2 of the soundness error, eq. (17) with the Reed-Solomon unique-decoding term written as
+    /// ((1 + rho)/2)^|S| where rho = 2^k / m -- (17) prints (m - 2^k - 1)/(2m) = (1 - rho)/2 for that base, which
+    /// contradicts the paper's own numerics (|S| = 148 <-> 2^-100 needs (5/8)^148) and the asymptotics section's
+    /// log((1 + rho)/2); the row-sampling argument gives (1 - d/(2m))^|S| = ((1 + rho)/2)^|S| up to the +1/m.
+    /// Field terms: (2 k'_i + |S_{i-1}| + 1 + m_i k'_i) / |F| per round, |F| = p^6.  Returns (total, per-term list).
+    pub fn soundness_log2(&self) -> (f64, Vec<(String, f64)>) {
+        let log2_f = 6.0 * (P as f64).log2();
+        let mut terms = Vec::new();
+        let mut total = 0f64;
+        let l = self.rounds();
+        for i in 1..=l {
+            let m = self.m(i) as f64;
+            let rows = self.rows(i) as f64;
+            let s = self.queries[i - 1] as f64;
+            let kp = self.kprime[i - 1] as f64;
+            // rows agreeing with the (unique) close codeword when the matrix is >= d/2-far
+            let p_rs = ((m + rows + 1.0) / (2.0 * m)).log2() * s;
+            let prev_s = if i >= 2 { self.queries[i - 2] as f64 } else { 0.0 };
+            let field = (2.0 * kp + prev_s + 1.0 + m * kp).log2() - log2_f;
+            terms.push((format!("round{i}_rs"), p_rs));
+            terms.push((format!("round{i}_field"), field));
+            total += p_rs.exp2() + field.exp2();
+        }
+        (total.log2(), terms)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dims_chain() {
+        let p = Params::new(20, vec![6, 5, 4], vec![192, 192, 64], 2);
+        p.validate().unwrap();
+        assert_eq!(p.k(0), 20);
+        assert_eq!(p.k(1), 14);
+        assert_eq!(p.k(3), 5);
+        assert_eq!(p.rows(1), 1 << 14);
+        assert_eq!(p.cols(1), 64);
+        assert_eq!(p.m(1), 1 << 16);
+        assert_eq!(p.final_len(), 32);
+        assert!(Params::new(20, vec![6, 15], vec![1, 1], 2).validate().is_err());
+        assert!(Params::new(20, vec![6], vec![1, 1], 2).validate().is_err());
+    }
+
+    #[test]
+    fn soundness_reproduces_the_paper_query_count() {
+        // rate 1/4, |S| = 148 -> ~ 2^-100 per round (paper section 7, lambda = 100)
+        let p = Params::new(24, vec![8, 8], vec![148, 148], 2);
+        let (_, terms) = p.soundness_log2();
+        let rs1 = terms.iter().find(|(k, _)| k == "round1_rs").unwrap().1;
+        assert!((rs1 - -100.3).abs() < 0.5, "{rs1}");
+        // |S| = 192 -> ~ 2^-130 per round; three rounds ~ 2^-128.6
+        let p = Params::new(29, vec![9, 8, 6], vec![192, 192, 192], 2);
+        let (tot, _) = p.soundness_log2();
+        assert!(tot < -128.0 && tot > -131.0, "{tot}");
+    }
+
+    #[test]
+    fn domain_points_are_distinct_roots() {
+        let p = Params::new(8, vec![3], vec![4], 2);
+        let m = p.m(1);
+        let pts: std::collections::HashSet<u32> = (0..m).map(|s| p.domain_point(1, s)).collect();
+        assert_eq!(pts.len(), m);
+        for s in 0..m {
+            assert_eq!(pow(p.domain_point(1, s), m as u64), 1);
+        }
+    }
+}
