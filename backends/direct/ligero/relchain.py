@@ -814,9 +814,9 @@ def leaf_negatives(R: HashedRelationRunner, data: list) -> list[tuple[str, tuple
         bits = W[bit_rows[nm]][:, v0:v0 + steps].T.to(torch.int64)             # (steps, m)
         acc = torch.zeros(n, dtype=torch.int64, device=W.device)
         for s in range(steps):
-            W[acc_rows[nm], v0 + s] = acc
+            W[acc_rows[nm], v0 + s] = acc.to(W.dtype)                          # W is int32 on the device, int64 on the CPU
             acc = leaf.step(acc, bits[s])
-            W[out_rows[nm], v0 + s] = acc
+            W[out_rows[nm], v0 + s] = acc.to(W.dtype)
 
     # 2. one bit flipped in the hashed x row of VU 0 (column 2, word 3, bit 1), state recomputed
     def flip_bit(W):
