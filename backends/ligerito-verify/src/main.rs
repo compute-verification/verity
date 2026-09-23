@@ -8,7 +8,7 @@
 //!     # (17) recomputed from its parameters) must be <= 2^-(B + log2 N), default B = 128, N = 1 (N = the number of
 //!     # proofs the job was split into: the batch union bound); --target-bits 0 waives it (toys)
 //! ligerito-verify batch --dir DIR [--jobs N] [--json out.json] [--label L] [--target-bits B] [--n-proofs N]
-//!     # --n-proofs (else DIR/manifest.json "n_proofs"): the job's proof count; exactly N proofs must be accepted
+//!     # --n-proofs (else DIR/manifest.json "n_proofs"): the job's proof count; exactly N distinct statements accepted
 //!     # every DIR/*.proof (with DIR/<name>.z / <name>.coins when present) must verify and every DIR/*.proof.neg must
 //!     # be rejected -- a JSON *.proof / *.proof.neg is a ref.py (ligerito-ref/v2) fixture list and the rule applies
 //!     # to every entry; every entry of DIR/*.ref.json (ref.py fixtures; tampers in DIR/<name>.ref.neg.json) must get
@@ -444,7 +444,7 @@ fn main() {
     // soundness target enforced by `verify` (per proof) and `batch` (union bound); 0 waives it (toy fixtures, conformance runs)
     let target_bits: f64 = arg(&args, "--target-bits").map(|s| s.parse().expect("--target-bits")).unwrap_or(128.0);
     // red-team F5: a job split into N proofs (Ligerito proofs carry no n_proofs) -- `verify` then needs 2^-(B + log2 N)
-    // per proof, `batch` needs exactly N accepted proofs and their union <= 2^-B
+    // per proof, `batch` needs exactly N distinct accepted statements and their union <= 2^-B
     let n_proofs_arg: Option<usize> = arg(&args, "--n-proofs").map(|s| s.parse().expect("--n-proofs"));
     assert!(n_proofs_arg != Some(0), "--n-proofs must be positive");
     let flag = |f: &str| args.iter().any(|a| a == f);
@@ -629,12 +629,24 @@ fn main() {
             if target_bits > 0.0 && union_log2 > -target_bits {
                 problems.push(format!("union soundness 2^{union_log2:.2} misses the target 2^-{target_bits} (--target-bits 0 to waive)"));
             }
-            // the job's proof count (--n-proofs, else DIR/manifest.json "n_proofs"): exactly that many proofs accepted
+            // the job's proof count (--n-proofs, else DIR/manifest.json "n_proofs"): exactly that many distinct statements
+            // accepted (LGTO0001 proofs of one statement under several coin kinds are one proof of the job)
             let n_expected = n_proofs_arg.or_else(|| manifest_n_proofs(&dir));
-            let n_acc = verdicts.iter().filter(|v| v.accepted).count();
+            let n_acc = {
+                let mut stmts: Vec<&str> = Vec::new();
+                let mut other = 0usize;
+                for v in verdicts.iter().filter(|v| v.accepted) {
+                    match v.lgto.as_ref() {
+                        Some(r) if !stmts.contains(&r.stmt_sha256.as_str()) => stmts.push(&r.stmt_sha256),
+                        Some(_) => {}
+                        None => other += 1,
+                    }
+                }
+                stmts.len() + other
+            };
             if let Some(n) = n_expected {
                 if n_acc != n {
-                    problems.push(format!("batch: n_proofs mismatch ({n_acc} proofs accepted, the job has n_proofs = {n})"));
+                    problems.push(format!("batch: n_proofs mismatch ({n_acc} distinct statements accepted, the job has n_proofs = {n})"));
                 }
             }
             let all = problems.is_empty();

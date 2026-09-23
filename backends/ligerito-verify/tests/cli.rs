@@ -140,6 +140,9 @@ fn batch_over_the_v1_fixture() {
     for want in ["\"accepted\":true", "\"n_proofs\":2", "\"n_negatives\":5", "\"n_accepted\":2", "\"problems\":[]", "\"accepted_unpinned_key\":0", "\"sumcheck\":\"LGSC0003\"", "\"zero_blocks\":6", "\"zk\":true"] {
         assert!(s.contains(want), "{want} not in {s}");
     }
+    // relation-2's manifests (e3ad950) count distinct statements: the two honest proofs share one
+    let o = run(&["batch", "--dir", d.to_str().unwrap(), "--target-bits", "128", "--n-proofs", "1"]);
+    assert!(o.status.success(), "{}", stdout(&o));
     let o = run(&["batch", "--dir", d.to_str().unwrap(), "--target-bits", "128", "--n-proofs", "2"]);
     // F5: as two proofs of one job each must reach 2^-129; 2^-128.02 does not
     assert!(!o.status.success() && stdout(&o).contains("2^-128.02 > 2^-129"), "{}", stdout(&o));
