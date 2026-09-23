@@ -1285,6 +1285,30 @@ fn steps_pin_red_team_fixtures_are_refused() {
 // K is words per row, K = steps x words per operand) rewritten: pinned, the shape check refuses them before the proof is
 // read; unpinned, steps is not checked and the changed statement digest refuses them.  A v5 file's K is NOT in the
 // statement digest (the old binary accepted `hash_k16` pinned, reporting K = 16): refused in both modes.
+/// Real steps = 32 proofs of the fp8-ada relation (`redteam/steps_pin_forge.py`: the honest prover at K_VU = 32 x 32).
+/// The bare unit is column-uniform: its system is byte-identical to the pinned one, and 47d191e accepted the proof
+/// PINNED.  The Poseidon2 gadget is not step-agnostic (sys_id 2e3c6c39 != c4c4b403), so 47d191e already refused it
+/// against the pinned hashed system (column challenge mismatch); the shape check now names the reason.
+#[test]
+fn steps_pin_forged_steps32_proofs_are_refused_pinned() {
+    let d = "fixtures/steps-pin";
+    let why = "statement: steps = 32 columns per VU, the fp8-ada relation's VU is 48 columns of K = 32";
+    let bare = (format!("{d}/fp8-ada-bare-steps32/sub_00.stmt"), format!("{d}/fp8-ada-bare-steps32/sub_00.proof"));
+    let (code, js) = verify(FP8_SYS, &bare.0, &bare.1, &[]);
+    assert_eq!(code, 1, "{js}");
+    assert!(js.contains(why) && js.contains("\"system_pinned\":true"), "{js}");
+    // unpinned, a bare relation has no structural bound on steps: the proof is internally consistent
+    let (code, js) = verify(FP8_SYS, &bare.0, &bare.1, &["--allow-any-system"]);
+    assert_eq!(code, 0, "{js}");
+    let hashed = (format!("{d}/fp8-ada-poseidon2-steps32/sub_00.stmt"), format!("{d}/fp8-ada-poseidon2-steps32/sub_00.proof"));
+    let (code, js) = verify(HASH_SYS, &hashed.0, &hashed.1, &[]);
+    assert_eq!(code, 1, "{js}");
+    assert!(js.contains(why), "{js}");
+    let (code, js) = verify(HASH_SYS, &hashed.0, &hashed.1, &["--allow-any-system"]);
+    assert_eq!(code, 1, "{js}");
+    assert!(js.contains("column challenge mismatch"), "{js}");
+}
+
 #[test]
 fn a_statement_whose_vu_shape_is_not_the_relations_is_refused_pinned() {
     let set = |st: &[u8], edits: &[(usize, u32)]| {
