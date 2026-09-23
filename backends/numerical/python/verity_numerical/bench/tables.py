@@ -111,7 +111,11 @@ CAPTION: dict[str, Any] = {
 
 RESULT_KIND = "bench-result/v1"
 NATIVE_PEAK_KIND = "native-peak/v1"
-NATIVE_PEAK_METHOD = "cublas dense gemm 8192^3, median of 5"
+#: ``tools/native_peak`` 's canonical GEMM method string (the shape every GEMM measurement's ``method`` starts with).
+NATIVE_PEAK_METHOD_CUBLAS = "cublas dense gemm 8192^3, median of 5"
+#: What the measured column is, for the caption (selection rule in :func:`_native_measured`).
+NATIVE_PEAK_METHOD = ("the best dense GEMM through the vendor library on the row's device x dtype, median of 5, the call and size in the "
+                      "footnote; an instruction-level microbenchmark only when no GEMM measurement exists, and then said so")
 #: The BF16 frozen set: sha256 of ``fixtures/bench-instances/v1/manifest.json`` (``verity_numerical.bench.instances.manifest_sha256``).
 BF16_INSTANCES_MANIFEST_SHA256 = "059103cf9bd55ee83cbd4bb14ae6db2f60db2cb4ddf85cdc22b1cecee6e4eeea"
 #: The frozen instance ref a valid result of each target must carry, ``instances`` field for field.  A target absent here
@@ -574,8 +578,37 @@ def _artifacts(store: Any, kind: str) -> list[tuple[str, dict[str, Any]]]:
     return out
 
 
+def gemm_method(meta: Mapping[str, Any]) -> bool:
+    """Whether a measurement's *primary* method (the clause before the first ``:`` / ``;`` of ``method``) is a dense GEMM through
+    the vendor library (``cublas`` / ``cuBLASLt`` / ``gemm``), as opposed to an instruction-level microbenchmark (register-
+    resident MMAs issued back to back, which can exceed the datasheet at sustained clocks above the rated boost -- lane
+    fp4-proof's 1880 T on the RTX 5090 against 1676 T; its method text mentions GEMMs only to say it bounds them).  Both are
+    kept in the store; the column prefers the GEMM so the rows share one methodology."""
+    m = str(meta.get("method") or "").lower()
+    head = m.replace(";", ":").split(":", 1)[0]
+    return "gemm" in head or "cublas" in head
+
+
+def _native_candidates(art_id: str, meta: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """The measurements one ``native-peak/v1`` artifact contributes: its primary ``flop_per_second`` / ``method``, plus its
+    ``gemm_attempt`` when the microbenchmark tool also ran the library GEMM beside the instruction (``supported`` with a
+    positive ``flop_per_second``) -- that GEMM is the column's methodology and is cited under the same artifact id."""
+    out = []
+    flop = meta.get("flop_per_second")
+    if _num(flop) and flop > 0:
+        out.append({"artifact": art_id, "flop_per_second": flop, "method": meta.get("method"), "gemm": gemm_method(meta)})
+    g = meta.get("gemm_attempt")
+    if isinstance(g, Mapping) and g.get("supported") and _num(g.get("flop_per_second")) and g["flop_per_second"] > 0:
+        how = ", ".join(str(x) for x in (g.get("variant"), f"n={g['n']}" if g.get("n") else None, g.get("note")) if x)
+        out.append({"artifact": art_id, "flop_per_second": g["flop_per_second"], "gemm": True,
+                    "method": f"library dense gemm recorded beside the instruction microbenchmark ({how}), median of {len(g.get('seconds_all') or []) or '?'}"})
+    return out
+
+
 def _native_measured(store: Any, target: Target) -> dict[str, Any] | None:
-    """The best ``native-peak/v1`` measurement of the target's device and dtype (max ``flop_per_second``), or ``None``."""
+    """The best ``native-peak/v1`` measurement of the target's device and dtype, or ``None``: the max ``flop_per_second`` among
+    the dense-GEMM measurements (:func:`gemm_method`, including a microbenchmark artifact's ``gemm_attempt``), falling back
+    to the max of any method only when no GEMM was recorded (the footnote prints the method either way)."""
 
     best = None
     for art_id, meta in _artifacts(store, NATIVE_PEAK_KIND):
@@ -584,13 +617,10 @@ def _native_measured(store: Any, target: Target) -> dict[str, Any] | None:
         acc = meta.get("accumulate")
         if acc is not None and acc != target.native_peak.accumulate:
             continue
-        flop = meta.get("flop_per_second")
-        if not _num(flop) or flop <= 0:
-            continue
-        if best is None or flop > best["flop_per_second"]:
-            frac = meta.get("fraction_of_spec") if _num(meta.get("fraction_of_spec")) else flop / target.native_peak.flop_per_second
-            best = {"artifact": art_id, "flop_per_second": flop, "fraction_of_spec": frac, "method": meta.get("method"), "device": meta.get("device"),
-                    "dtype": meta.get("dtype"), "driver": meta.get("driver"), "cuda": meta.get("cuda"), "sass": meta.get("sass")}
+        for c in _native_candidates(art_id, meta):
+            if best is None or (c["gemm"], c["flop_per_second"]) > (best["gemm"], best["flop_per_second"]):
+                best = {**c, "fraction_of_spec": c["flop_per_second"] / target.native_peak.flop_per_second, "device": meta.get("device"),
+                        "dtype": meta.get("dtype"), "driver": meta.get("driver"), "cuda": meta.get("cuda"), "sass": meta.get("sass")}
     return best
 
 
@@ -779,8 +809,11 @@ def render_markdown(T: Tables) -> str:
         nm = r["native_measured"]
         measured = UNMEASURED
         if nm:
+            how = nm.get("method") or "method not recorded"
+            if not nm.get("gemm"):
+                how = f"INSTRUCTION-LEVEL MICROBENCHMARK, not a GEMM (no GEMM measurement of this device x dtype in the store): {how}"
             measured = f"{_fmt_tflops(nm['flop_per_second'])} ({nm['fraction_of_spec']:.2f}) " + note(
-                f"{nm['artifact']} — native peak of {nm['device']} {nm['dtype']}: {nm['flop_per_second']:.4g} FLOP/s, {nm.get('method') or NATIVE_PEAK_METHOD}")
+                f"{nm['artifact']} — native peak of {nm['device']} {nm['dtype']}: {nm['flop_per_second']:.4g} FLOP/s, {how}")
         line = [r["device"], f"{(r['dtype'] or '?').upper()} {r['instruction'] or ''} · {r['target']}".strip(),
                 _fmt_tflops(r["native_spec_flop_per_second"]), measured]
         for cand in CANDIDATES:

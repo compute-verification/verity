@@ -88,7 +88,7 @@ def put(store: LocalStore, res: dict, *, campaign: str | None = LANE, verified_b
 
 
 def native_peak(store: LocalStore, device: str, dtype: str, flop: float, spec: float) -> str:
-    return store.put_artifact(T.NATIVE_PEAK_KIND, {"device": device, "dtype": dtype, "accumulate": "fp32", "method": T.NATIVE_PEAK_METHOD,
+    return store.put_artifact(T.NATIVE_PEAK_KIND, {"device": device, "dtype": dtype, "accumulate": "fp32", "method": T.NATIVE_PEAK_METHOD_CUBLAS,
                                                    "flop_per_second": flop, "spec_flop_per_second": spec, "fraction_of_spec": flop / spec,
                                                    "sass": "sm_80", "driver": "570.211.01", "cuda": "12.8"})
 
@@ -377,7 +377,8 @@ def test_native_measured_column(store: LocalStore) -> None:
     slow = native_peak(store, "NVIDIA A100-SXM4-80GB", "bf16", 0.90 * spec, spec)
     best = native_peak(store, "NVIDIA A100 SXM4 80GB", "bf16", 0.94 * spec, spec)
     native_peak(store, "NVIDIA A100-SXM4-80GB", "e4m3", 0.99 * spec, spec)     # another dtype: not this row
-    h100 = native_peak(store, "NVIDIA H100 80GB HBM3", "bf16", 0.95 * spec, spec)   # another device: the Hopper BF16 row's, not FIRST's
+    hspec = BF16_HOPPER.native_peak.flop_per_second
+    h100 = native_peak(store, "NVIDIA H100 80GB HBM3", "bf16", 0.95 * hspec, hspec)   # another device: the Hopper BF16 row's, not FIRST's
     tab = T.build(store)
     row = next(r for r in tab.rows if r["target"] == FIRST.name)
     assert row["native_measured"]["artifact"] == best and row["native_measured"]["fraction_of_spec"] == pytest.approx(0.94)
@@ -403,6 +404,43 @@ def test_native_measured_block_scaled_format_names_its_operand_dtype(store: Loca
     row = next(r for r in tab.rows if r["target"] == NVFP4_SM120.name)
     assert row["native_measured"]["artifact"] == art and row["native_measured"]["fraction_of_spec"] == pytest.approx(1.12)
     assert all(r["native_measured"] is None for r in tab.rows if r["target"] != NVFP4_SM120.name)
+
+
+def test_native_measured_prefers_the_gemm_over_an_instruction_microbenchmark(store: LocalStore) -> None:
+    """Lane fp4-proof recorded two RTX 5090 FP4 peaks: the instruction issued back to back (1880 T = 1.12x the sheet, the
+    sustained clock above the rated boost) and cuBLASLt's block-scaled GEMM (1283 T).  The column is one methodology across
+    rows -- the vendor-library GEMM -- so it takes the GEMM even though the microbenchmark is faster; the microbenchmark is
+    the cell only when no GEMM exists, and its footnote says so."""
+    from verity.verification.target import NVFP4_SM120
+
+    spec = NVFP4_SM120.native_peak.flop_per_second
+    method = ("instruction microbenchmark: mma.sync.aligned.kind::mxf4nvf4 issued back to back from 2720 warps; "
+              "no memory traffic -- an upper bound on any GEMM built from it")     # mentions GEMMs without being one
+    mma = store.put_artifact(T.NATIVE_PEAK_KIND, {"device": "NVIDIA GeForce RTX 5090", "dtype": "nvfp4", "accumulate": "fp32",
+                                                  "flop_per_second": 1.12 * spec, "method": method})
+    assert not T.gemm_method({"method": method}) and T.gemm_method({"method": T.NATIVE_PEAK_METHOD_CUBLAS})
+    tab = T.build(store)
+    row = next(r for r in tab.rows if r["target"] == NVFP4_SM120.name)
+    assert row["native_measured"]["artifact"] == mma and not row["native_measured"]["gemm"]
+    line = next(l for l in T.render_markdown(tab).splitlines() if l.startswith("[") and mma in l)
+    assert "INSTRUCTION-LEVEL MICROBENCHMARK" in line
+    # the same tool also ran the library GEMM beside the instruction (fp4-proof's native_peak.json shape): the column takes it
+    both = store.put_artifact(T.NATIVE_PEAK_KIND, {"device": "NVIDIA GeForce RTX 5090", "dtype": "nvfp4", "accumulate": "fp32",
+                                                   "flop_per_second": 1.12 * spec, "method": method,
+                                                   "gemm_attempt": {"attempted": True, "supported": True, "flop_per_second": 0.77 * spec, "n": 8192,
+                                                                    "variant": "_scaled_mm blockwise scales", "seconds_all": [1e-3] * 5,
+                                                                    "note": "unit scales, random nibbles; throughput only"}})
+    tab = T.build(store)
+    row = next(r for r in tab.rows if r["target"] == NVFP4_SM120.name)
+    assert row["native_measured"]["artifact"] == both and row["native_measured"]["fraction_of_spec"] == pytest.approx(0.77)
+    assert row["native_measured"]["gemm"] and "n=8192" in row["native_measured"]["method"]
+    md = T.render_markdown(tab)
+    assert "INSTRUCTION-LEVEL" not in md and f"| {0.77 * spec / 1e12:.0f} T (0.77) " in md
+    # a stand-alone cuBLAS measurement beats the beside-the-instruction one only on FLOP/s, never a microbenchmark on method
+    gemm = store.put_artifact(T.NATIVE_PEAK_KIND, {"device": "NVIDIA GeForce RTX 5090", "dtype": "nvfp4", "accumulate": "fp32",
+                                                   "flop_per_second": 0.80 * spec, "method": T.NATIVE_PEAK_METHOD_CUBLAS})
+    tab = T.build(store)
+    assert next(r for r in tab.rows if r["target"] == NVFP4_SM120.name)["native_measured"]["artifact"] == gemm
 
 
 # --- Table 3 -------------------------------------------------------------------------------------------------------------------------
