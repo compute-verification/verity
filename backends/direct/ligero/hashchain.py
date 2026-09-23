@@ -31,6 +31,7 @@ low-entropy row would need a salt: not done, see the lane note).
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 
 import numpy as np
 
@@ -83,13 +84,150 @@ def _prod(ctx: LigeroCtx, a: Expr, b: Expr) -> Expr:
     return z
 
 
-def _sbox_gadget(ctx: LigeroCtx):
+def _sbox_gadget(ctx: LigeroCtx, rows: list | None = None):
+    """``x -> x^7`` as four product rows; ``rows`` (if given) collects their indices as (x2, x3, x4, x7) per S-box, in
+    permutation order -- the order the device kernel (:class:`Poseidon2Witness`) stores them in."""
     def sbox(x: Expr) -> Expr:
         x2 = _prod(ctx, x, x)
         x3 = _prod(ctx, x2, x)
         x4 = _prod(ctx, x2, x2)
-        return _prod(ctx, x4, x3)
+        x7 = _prod(ctx, x4, x3)
+        if rows is not None:
+            rows.append(tuple(next(iter(e.lin)) for e in (x2, x3, x4, x7)))
+        return x7
     return sbox
+
+
+#: The sponges' 1704 S-box rows per unit are written by a dedicated CUDA kernel (:class:`Poseidon2Witness`, a witness
+#: hook of witness_device.py) with the 24-lane state in registers, instead of the fused program evaluating the linear
+#: layers as ~74k-term affine forms over W (the table-driven kernel, ~0.11 s per 4096 fp8-ada VUs).  Same rows, same
+#: values; ``LIGERO_DEVICE_SPONGE=0`` keeps the program path.  CPU / torch witnesses never use hooks.
+DEVICE_SPONGE = os.environ.get("LIGERO_DEVICE_SPONGE", "1") != "0"
+
+
+class _Sym:
+    """A u64 CUDA expression with an upper bound on its value, for emitting the permutation as straight-line code
+    through :func:`poseidon2_babybear.permute_ring` (the same traversal that compiled the rows, so the S-boxes come in
+    the same order)."""
+    __slots__ = ("em", "var", "bound")
+
+    def __init__(self, em, var: str, bound: int):
+        self.em, self.var, self.bound = em, var, bound
+
+    def _new(self, expr: str, bound: int) -> "_Sym":
+        if bound >= 2**64:
+            raise OverflowError("u64 sponge emitter: bound exceeded")
+        v = f"t{len(self.em)}"
+        self.em.append(f"    u64 {v} = {expr};")
+        return _Sym(self.em, v, bound)
+
+    def __add__(self, o):
+        if isinstance(o, _Sym):
+            return self._new(f"{self.var} + {o.var}", self.bound + o.bound)
+        o = int(o)
+        return self._new(f"{self.var} + {o}ULL", self.bound + o)
+
+    __radd__ = __add__
+
+    def __mul__(self, c):
+        c = int(c)
+        return self._new(f"{self.var} * {c}ULL", self.bound * c)
+
+    __rmul__ = __mul__
+
+
+def sponge_kernel_source(nb: int, per: int, n_sbox: int) -> str:
+    """CUDA source of ``poseidon2_rows``: one thread per column; for each sponge, the 16 rate lanes packed from the
+    word bit rows (``per`` words of ``nb`` bits per lane, little-endian), the capacity from the cap rows plus the IV,
+    then the permutation with every S-box's x^2, x^3, x^4, x^7 stored to its row."""
+    em: list[str] = []
+    state = [_Sym(em, f"s[{i}]", P - 1) for i in range(h2.WIDTH)]
+    count = [0]
+
+    def reduce(x):
+        if isinstance(x, _Sym):
+            return x if x.bound < P else x._new(f"{x.var} % P", P - 1)
+        return int(x) % P
+
+    def sbox(x: _Sym) -> _Sym:
+        i = count[0]
+        count[0] += 1
+        x2 = x._new(f"({x.var} * {x.var}) % P", P - 1)
+        x3 = x._new(f"({x2.var} * {x.var}) % P", P - 1)
+        x4 = x._new(f"({x2.var} * {x2.var}) % P", P - 1)
+        x7 = x._new(f"({x4.var} * {x3.var}) % P", P - 1)
+        for q, v in enumerate((x2, x3, x4, x7)):
+            em.append(f"    W[(size_t)rows[{4 * i + q}] * l + col] = (unsigned){v.var};")
+        return x7
+
+    h2.permute_ring(state, sbox, reduce)
+    if count[0] != n_sbox:
+        raise ValueError(f"emitted {count[0]} S-boxes, the system has {n_sbox}")
+    body = "\n".join(em)
+    return f"""
+#define P {P}ULL
+typedef unsigned long long u64;
+
+__device__ __forceinline__ void permute_store(u64* s, unsigned* __restrict__ W, int l, int col, const int* __restrict__ rows)
+{{
+{body}
+}}
+
+extern "C" __global__ void __launch_bounds__(256)
+poseidon2_rows(unsigned* __restrict__ W, int l, int n_sponges, const int* __restrict__ bitrows,
+               const int* __restrict__ caprows, const unsigned* __restrict__ iv, const int* __restrict__ sboxrows)
+{{
+    const int col = blockIdx.x * blockDim.x + threadIdx.x;
+    if (col >= l) return;
+    for (int sp = 0; sp < n_sponges; ++sp) {{
+        u64 s[{h2.WIDTH}];
+        const int* br = bitrows + (size_t)sp * {h2.RATE * per * nb};
+        for (int j = 0; j < {h2.RATE}; ++j) {{
+            u64 v = 0;
+            for (int q = 0; q < {per}; ++q)
+                for (int b = 0; b < {nb}; ++b)
+                    v |= (u64)W[(size_t)br[(j * {per} + q) * {nb} + b] * l + col] << ({nb} * q + b);
+            s[j] = v;
+        }}
+        for (int x = 0; x < {h2.CAPACITY}; ++x)
+            s[{h2.RATE} + x] = ((u64)W[(size_t)caprows[sp * {h2.CAPACITY} + x] * l + col] + iv[sp * {h2.CAPACITY} + x]) % P;
+        permute_store(s, W, l, col, sboxrows + (size_t)sp * {4 * n_sbox});
+    }}
+}}
+"""
+
+
+class Poseidon2Witness:
+    """The witness hook (witness_device.py ``sys.witness_hooks``) writing the sponges' S-box rows on the device.
+    ``sponges``: per sponge ``(bit_rows word-major, cap_rows, iv_capacity, sbox_rows [(x2, x3, x4, x7), ...])``."""
+
+    def __init__(self, nb: int, per: int, sponges: list):
+        self.nb, self.per, self.sponges = nb, per, sponges
+        self.n_sbox = len(sponges[0][3])
+        if any(len(s[3]) != self.n_sbox for s in sponges):
+            raise ValueError("sponges with different S-box counts")
+        self.rows = frozenset(r for s in sponges for quad in s[3] for r in quad)
+        self._dev: dict = {}
+
+    def _arrays(self, cp):
+        import numpy as np
+        dev = cp.cuda.Device().id
+        hit = self._dev.get(dev)
+        if hit is None:
+            src = sponge_kernel_source(self.nb, self.per, self.n_sbox)
+            mod = cp.RawModule(code=src, options=("-std=c++17",))
+            hit = (mod.get_function("poseidon2_rows"),
+                   cp.asarray(np.array([r for s in self.sponges for r in s[0]], dtype=np.int32)),
+                   cp.asarray(np.array([r for s in self.sponges for r in s[1]], dtype=np.int32)),
+                   cp.asarray(np.array([v for s in self.sponges for v in s[2]], dtype=np.uint32)),
+                   cp.asarray(np.array([r for s in self.sponges for quad in s[3] for r in quad], dtype=np.int32)))
+            self._dev[dev] = hit
+        return hit
+
+    def launch(self, cp, W_u32, l: int) -> None:
+        import numpy as np
+        kernel, bitrows, caprows, iv, sboxrows = self._arrays(cp)
+        kernel((-(-l // 256),), (256,), (W_u32, np.int32(l), np.int32(len(self.sponges)), bitrows, caprows, iv, sboxrows))
 
 
 def _format(rel: Relation) -> dict:
@@ -131,10 +269,12 @@ def compose(rel: Relation) -> HashedRelation:
     E = lambda idx: Expr(ctx, {idx: 1}, 0)  # noqa: E731
     rows_private = 0
     words = {"a": [], "b": []}
+    bit_rows = {"a": [], "b": []}       # row index of every word bit, word-major (the device kernel packs lanes from them)
     for nm in ("a", "b"):
         for i in range(k):
             tag = f"{nm}[{i}]"
             bits = [ctx.hint(f"{tag}.b{j}") for j in range(nb)]
+            bit_rows[nm] += [next(iter(b.lin)) for b in bits]
             for j, b in enumerate(bits):
                 ctx.boolean(f"{tag}.bool{j}", b)
             w = _reduce(sum((b * 2**j for j, b in enumerate(bits)), Expr(ctx)))
@@ -159,11 +299,13 @@ def compose(rel: Relation) -> HashedRelation:
             rows_private += nb + 3
     m1 = sys.m
     # --- 2. the sponges ------------------------------------------------------------------------------------------------
-    sbox = _sbox_gadget(ctx)
+    sbox_rows: list[tuple] = []
+    sbox = _sbox_gadget(ctx, sbox_rows)
     per = h2.LANE_BITS // nb
     if k != h2.RATE * per:
         raise ValueError(f"{rel.name}: k = {k} words of {nb} bits are not one rate block of 16 lanes")
     ends: list[Expr] = []
+    sponges = []
     for _, nm, role in ROLES:
         iv = h2.IV(role, nb, rel.steps * k)
         lanes = []
@@ -174,11 +316,15 @@ def compose(rel: Relation) -> HashedRelation:
             lanes.append(_reduce(e))
         caps = [ctx.hint(f"{nm}.cap[{x}]") for x in range(h2.CAPACITY)]
         state = lanes + [_reduce(c + iv[h2.RATE + x]) for x, c in enumerate(caps)]
+        n0 = len(sbox_rows)
         out = h2.permute_ring(state, sbox, _reduce)
+        sponges.append((bit_rows[nm], [next(iter(c.lin)) for c in caps], list(iv[h2.RATE:]), sbox_rows[n0:]))
         sys.chain["c"] += [next(iter(c.lin)) for c in caps]
         sys.chain["y"] += [_reduce(out[h2.RATE + x] - iv[h2.RATE + x]) for x in range(h2.CAPACITY)]
         ends += out[:h2.OUT]
     m2 = sys.m
+    if DEVICE_SPONGE:
+        sys.witness_hooks = [Poseidon2Witness(nb, per, sponges)]
     # --- 3. the digests at the chain end ---------------------------------------------------------------------------
     ctx.scope = ""                      # the public names carry their own prefix
     is_end = ctx.pin(HASH_PIN_END, 0, 2)
