@@ -1,0 +1,12 @@
+# The research store's remote, for a POD running `research run --tool ...` from a shipped source tree (store README §7).
+# No secrets here: the credential comes from the environment (`research data mint-credential --ttl 6h --env` on the control
+# machine -> `--env AWS_ACCESS_KEY_ID=... --env AWS_SECRET_ACCESS_KEY=...`).  Point the pod at it with
+#     research run --on <pod> --source <tree> --env RESEARCH_STORE_CONFIG=tools/research/store.pod.toml ...
+# (relative to the shipped tree, the runner's cwd; run_row_v2.sh absolutises it before nested runs).  Same bucket as ~/.research/store.toml.
+[remote]
+type = "s3"
+bucket = "verity-dev"
+endpoint = "https://1d4dfa0a7dc0639e19f5d0125f14a634.r2.cloudflarestorage.com"
+region = "auto"
+access_key_id_env = "AWS_ACCESS_KEY_ID"
+secret_access_key_env = "AWS_SECRET_ACCESS_KEY"
