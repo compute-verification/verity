@@ -23,6 +23,7 @@
   research notes bind LANE --branch B --worktree DIR --pod NAME   # where the lane works (successors naming a predecessor's)
   research notes status [--pods] [--stale-min 30] [--json]  # per lane: freshest of report/checkpoint/commit/uncommitted edit/pod; STALE (exit 1)
   research notes watch [--every 10] [--pods]     # a line each time a lane goes STALE or comes back
+  research chats ingest MIRROR | search QUERY [--project P] [--since D] [--limit N] | pull | stats   # chat archive + FTS index (research.chats)
   research launch-request <request.json>         # machine side: claim the run dir, start the detached runner (idempotent per id)
   research mem [--ramlock DIR] [--json]           # machine side: cgroup limit, in use, live reservations, available (research.mem)
 
@@ -717,6 +718,10 @@ def main(argv: list[str] | None = None) -> int:
         from .notes import main as notes_main
 
         return notes_main(rest)
+    if cmd == "chats":
+        from .chats import main as chats_main
+
+        return chats_main(rest)
     print(f"research: unknown command {cmd!r}\n\n{__doc__.strip()}", file=sys.stderr)
     return 2
 
