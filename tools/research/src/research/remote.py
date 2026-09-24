@@ -47,10 +47,19 @@
                     (the fleet's /workspace/ramlock/*.json, machines.toml `ramlock`) >= N, and writes the run's reservation there;
                     else MemoryNotAvailable (refused.json).  --mem-wait S polls up to S seconds instead.  The runner removes the
                     reservation at exit; job.json run.remote.mem records the reading it was admitted on (research.mem).
-    observe/fetch   `research fetch <id>` copies the small records (or --all files) into the local run dir over one ssh+tar; remote.json
-                    keeps observed_utc.  Unreachable means "last observed at T; current status unknown", never "failed".
+    observe/fetch   `research fetch <id>` copies the small records (or --all files) into the local run dir over one ssh+tar, extracted
+                    member by member off the pipe (a big run is never in the launcher's memory); remote.json keeps observed_utc.
+                    Unreachable means "last observed at T; current status unknown", never "failed".
     preservation    --all verifies every file's sha256 against the machine and writes preserved.json LAST.  Until then the only copy
-                    is on the machine; this is stated, not hidden.
+                    is on the machine; this is stated, not hidden.  Then it writes <run>/.fetched ON THE MACHINE (research/fetched/v0.1:
+                    verified_from = the machine's clock before hashing, file count, bytes, manifest sha256), which the guard requires.
+    guard           machines.toml `guard = N` (idle minutes; `true` = 90) opts a pod in; a machine without it (a control pod, a live
+                    verifier) never gets one.  launch-request then makes sure ONE guard daemon runs on the pod (ensure_guard ->
+                    pods/sh/pod_guard.sh `daemon`, flock/pidfile <root>/guard/guard.pid): no live runner, no work process, no live verifier,
+                    no GPU use (research.pods.workproc, the watcher's definition) for N minutes -> the pod terminates itself, except while
+                    any <root>/runs/* lacks a valid .fetched (refused, run ids logged, re-checked every minute).  It terminates with the
+                    pod's OWN key (RUNPOD_API_KEY in /proc/1/environ); without one it is not installed and the launch says so.  The account
+                    key is never sent.  <root>/guard/state.json: verdict, last activity, idle minutes, refusal reasons.
 """
 from __future__ import annotations
 
@@ -86,6 +95,11 @@ _RC_DIGEST = 75                               # the ship script's exit when the 
 WORKLOAD_CWD_DEFAULT = "run_dir"              # the machine-side runner's default workload cwd; a shipped package without this line predates it
 SMALL_FILES = ("job.json", "status.json", "failure.json", "result.json", "launch.json", "refused.json", "events.jsonl")
 TERMINAL = ("done", "failed", "cancelled")
+FETCHED_FILE = ".fetched"                     # <run>/.fetched on the machine: written by `fetch --all` once every file verified
+FETCHED_SCHEMA = "research/fetched/v0.1"
+GUARD_IDLE_MIN_DEFAULT = 90
+GUARD_ENVIRON = "/proc/1/environ"             # RunPod injects RUNPOD_POD_ID and the pod-scoped RUNPOD_API_KEY into the container's first process
+GUARD_SCRIPT = Path(__file__).resolve().parent / "pods" / "sh" / "pod_guard.sh"
 POD_TARGET_RETRIES = 6           # extra GET /pods/{id} reads when a RUNNING pod answers without an ssh mapping
 POD_TARGET_RETRY_S = 2.0
 
@@ -136,6 +150,18 @@ def resolve_machine(name: str, project: str | None, machines: dict[str, dict[str
     out.setdefault("python", "python3")
     out["name"] = name
     return out
+
+
+def guard_idle_min(machine: dict[str, Any]) -> float | None:
+    """machines.toml `guard = true` (GUARD_IDLE_MIN_DEFAULT minutes) or `guard = N` minutes; absent or false -> no guard."""
+    g = machine.get("guard")
+    if g is None or g is False:
+        return None
+    if g is True:
+        return float(GUARD_IDLE_MIN_DEFAULT)
+    if isinstance(g, (int, float)) and g > 0:
+        return float(g)
+    raise Refused(f"machine {machine.get('name')!r}: guard = {g!r} is neither true/false nor a positive number of idle minutes")
 
 
 # ---- transport --------------------------------------------------------------------------------------------------------------------------
@@ -225,6 +251,30 @@ def ssh_stream(ssh: list[str], remote_argv: list[str], feed: Callable[[IO[bytes]
     if failed:
         raise failed[0]
     return subprocess.CompletedProcess(cmd, proc.returncode, b"".join(out), b"".join(err))
+
+
+def ssh_read(ssh: list[str], remote_argv: list[str], consume: Callable[[IO[bytes]], None], *, timeout: float) -> subprocess.CompletedProcess:
+    """`ssh_run` whose stdout goes to `consume(pipe)` as it arrives (never held whole).  The timeout kills ssh, which ends the stream;
+    whatever `consume` raises is re-raised after ssh exited.  The CompletedProcess carries stderr only."""
+    cmd = [*ssh, " ".join(shlex.quote(a) for a in remote_argv)]
+    with tempfile.TemporaryFile() as err:
+        proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=err)
+        timer = threading.Timer(timeout, proc.kill)
+        timer.start()
+        try:
+            consume(proc.stdout)
+            while proc.stdout.read(SHIP_CHUNK):       # the tar record padding after the end-of-archive blocks
+                pass
+        except BaseException:
+            proc.kill()
+            raise
+        finally:
+            timer.cancel()
+            proc.stdout.close()
+            rc = proc.wait()
+            err.seek(0)
+            stderr = err.read()[-8000:]
+    return subprocess.CompletedProcess(cmd, rc, b"", stderr)
 
 
 # ---- snapshots --------------------------------------------------------------------------------------------------------------------------
@@ -706,8 +756,91 @@ def active_runs(runs_root: Path, exclude: str | None = None) -> list[str]:
     return out
 
 
+def _environ_of(path: str) -> dict[str, str]:
+    try:
+        raw = Path(path).read_bytes()
+    except OSError:
+        return {}
+    out = {}
+    for item in raw.split(b"\0"):
+        k, sep, v = item.partition(b"=")
+        if sep:
+            out[k.decode(errors="replace")] = v.decode(errors="replace")
+    return out
+
+
+def _guard_pid(gdir: Path) -> int | None:
+    """The pid in <root>/guard/guard.pid when it is a live guard daemon (not a recycled pid), else None."""
+    try:
+        pid = int((gdir / "guard.pid").read_text().strip())
+    except (OSError, ValueError):
+        return None
+    if not _pid_alive(pid):
+        return None
+    try:
+        cmd = Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace")
+    except OSError:
+        cmd = subprocess.run(["ps", "-o", "args=", "-p", str(pid)], capture_output=True, text=True).stdout
+    return pid if "pod_guard.sh daemon" in cmd else None
+
+
+def ensure_guard(root: Path, idle_min: float, *, pod_id: str | None = None, environ: str | None = None) -> dict[str, Any]:
+    """One guard daemon per pod (pods/sh/pod_guard.sh `daemon`: terminates the pod after idle_min idle minutes once every run dir is
+    fetched).  Installed only with a pod-scoped key, RunPod's RUNPOD_API_KEY in the container's first process; nothing is copied to the
+    pod for it.  Without that key, or when this machine is not the pod the launcher resolved, nothing is started and `reason` says why."""
+    environ = environ or GUARD_ENVIRON
+    penv = _environ_of(environ)
+    me = penv.get("RUNPOD_POD_ID")
+    if not me:
+        return {"installed": False, "reason": f"not a RunPod pod (no RUNPOD_POD_ID in {environ}): no guard"}
+    if pod_id and me != pod_id:
+        return {"installed": False, "reason": f"this machine is pod {me}, the request names pod {pod_id}: no guard"}
+    if not penv.get("RUNPOD_API_KEY"):
+        return {"installed": False, "reason": f"pod {me} has no pod-scoped RUNPOD_API_KEY in {environ}: guard NOT installed, the pod will "
+                                              "not terminate itself (the account key is never copied to a pod)"}
+    gdir = root / "guard"
+    gdir.mkdir(parents=True, exist_ok=True)
+    base = {"pod_id": me, "idle_min": idle_min, "state": str(gdir / "state.json"), "log": str(gdir / "guard.log")}
+    pid = _guard_pid(gdir)
+    if pid:
+        return {"installed": True, "started": False, "pid": pid, **base}
+    from .pods import workproc
+
+    env = {k: v for k, v in os.environ.items() if k != "RUNPOD_API_KEY"}     # the daemon reads the key from `environ` when it terminates
+    env.update(workproc.guard_env(), GUARD_TERMINAL=" ".join(TERMINAL), GUARD_ENVIRON=environ)
+    with open(gdir / "daemon.log", "ab") as log:
+        proc = subprocess.Popen(["bash", str(GUARD_SCRIPT), "daemon", str(root), f"{idle_min:g}"], cwd=str(gdir), env=env,
+                                stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+    for _ in range(100):                       # the daemon claims the pidfile within a moment, or exits because another guard holds it
+        pid = _guard_pid(gdir)
+        if pid or proc.poll() is not None:
+            break
+        time.sleep(0.05)
+    pid = pid or _guard_pid(gdir)
+    if not pid:
+        return {"installed": False, "reason": f"the guard daemon did not start (exit {proc.poll()}; see {gdir / 'daemon.log'})", **base}
+    return {"installed": True, "started": pid == proc.pid, "pid": pid, **base}
+
+
 def launch_request(request_path: Path) -> dict[str, Any]:
-    """Claim the run directory and start the detached runner.  Idempotent per run id."""
+    """Claim the run directory and start the detached runner (idempotent per run id); with the request's `guard`, make sure the pod's
+    guard daemon runs (ensure_guard; its answer is the result's `guard`, and a guard that cannot start never fails the launch)."""
+    out = _launch_request(request_path)
+    try:
+        req = json.loads(request_path.read_text())
+        g = req.get("guard")
+    except (OSError, ValueError):
+        g = None
+    if g:
+        try:
+            out["guard"] = ensure_guard(Path(req["runs_root"]).parent, float(g.get("idle_min") or GUARD_IDLE_MIN_DEFAULT),
+                                        pod_id=(req.get("remote") or {}).get("pod_id"))
+        except Exception as e:  # noqa: BLE001
+            out["guard"] = {"installed": False, "reason": f"guard failed to start: {type(e).__name__}: {e}"}
+    return out
+
+
+def _launch_request(request_path: Path) -> dict[str, Any]:
     req = json.loads(request_path.read_text())
     if req.get("schema") != REQUEST_SCHEMA:
         raise Refused(f"unknown request schema {req.get('schema')!r}")
@@ -832,6 +965,7 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
     write_json_atomic(local_dir / "remote.json", rec)
     try:
         m = resolve_machine(machine_name, project)
+        guard_min = guard_idle_min(m)
         tgt = pod_target(m)
         ssh = ssh_argv(tgt["host"], tgt["port"])
         rec.update(pod_id=m["pod_id"], host=tgt["host"], port=tgt["port"], root=m["root"], phase="shipping")
@@ -862,6 +996,7 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         request = {"schema": REQUEST_SCHEMA, "run_id": run_id, "runs_root": f"{m['root']}/runs", "tool": tool_dir, "python": m["python"],
                    "cwd": remote_cwd, "env": env, "harness_args": harness_args, "command": command, "exclusive": exclusive,
                    "mem_gb": mem_gb, "mem_wait_s": mem_wait_s, "ramlock_dir": m.get("ramlock"),
+                   "guard": {"idle_min": guard_min} if guard_min else None,
                    "cost": {"provider": "runpod", "pod_id": m["pod_id"], "machine": machine_name, "currency": "USD",
                             "rate_usd_per_hour": tgt["cost_per_hr"], "rate_observed_utc": tgt["rate_observed_utc"], "reason": None},
                    "remote": {"machine": machine_name, "pod_id": m["pod_id"], "pod_name": tgt["pod_name"], "host": tgt["host"], "port": tgt["port"],
@@ -890,6 +1025,15 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
             write_json_atomic(local_dir / "remote.json", rec)
             raise Refused(rec["note"])
         rec.update(phase="refused" if out.get("refused") else "launched", launch=out, observed_utc=utc_now_ms())
+        if guard_min:
+            g = out.get("guard") or {"installed": False, "reason": "the machine's research package predates the guard (no `guard` in its answer)"}
+            rec["guard"] = g
+            if g.get("installed"):
+                print(f"research: guard on pod {g.get('pod_id')}: pid {g.get('pid')} ({'started' if g.get('started') else 'already running'}), "
+                      f"terminates the pod after {g.get('idle_min'):g} idle min once every run is fetched (`research fetch --all`); "
+                      f"state {g.get('state')}", file=sys.stderr)
+            else:
+                print(f"research: NO guard on {machine_name}: {g.get('reason')}", file=sys.stderr)
         write_json_atomic(local_dir / "remote.json", rec)
         return rec
     except Refused as e:
@@ -910,14 +1054,23 @@ def fetch(local_dir: Path, *, everything: bool = False) -> dict[str, Any]:
     else:
         names = " ".join(shlex.quote(n) for n in SMALL_FILES)
         remote_cmd = ["sh", "-c", f"cd {shlex.quote(rd)} && ls {names} 2>/dev/null | tar -cf - -T -"]
-    r = ssh_run(ssh, remote_cmd, timeout=900)
+
+    def extract(stream: IO[bytes]) -> None:           # member by member off the ssh pipe: a big run is never in the launcher's memory
+        with tarfile.open(fileobj=stream, mode="r|") as tf:
+            for m in tf:
+                name = m.name.removeprefix("./")
+                if m.name.startswith("/") or ".." in Path(m.name).parts or name in ("", ".", "remote.json", FETCHED_FILE, FETCHED_FILE + ".tmp"):
+                    continue
+                tf.extract(m, local_dir, **({"filter": "data"} if hasattr(tarfile, "data_filter") else {}))
+
+    try:
+        r = ssh_read(ssh, remote_cmd, extract, timeout=900)
+    except (tarfile.TarError, OSError) as e:
+        r = subprocess.CompletedProcess(remote_cmd, -1, b"", f"reading the run's tar stream: {type(e).__name__}: {e}".encode())
     if r.returncode != 0:
         rec["last_fetch_error"] = {"at_utc": utc_now_ms(), "rc": r.returncode, "stderr": r.stderr.decode(errors="replace")[-300:]}
         write_json_atomic(local_dir / "remote.json", rec)
         return rec
-    with tarfile.open(fileobj=io.BytesIO(r.stdout), mode="r:") as tf:
-        members = [m for m in tf.getmembers() if not m.name.startswith("/") and ".." not in Path(m.name).parts and m.name not in (".", "./remote.json")]
-        tf.extractall(local_dir, members=members)
     rec["observed_utc"] = utc_now_ms()
     st = _read_json(local_dir / "status.json") or {}
     rec["last_observed"] = {"state": st.get("state"), "rc": st.get("rc"), "at_utc": rec["observed_utc"]}
@@ -925,16 +1078,30 @@ def fetch(local_dir: Path, *, everything: bool = False) -> dict[str, Any]:
     if everything:
         manifest = _verify_and_manifest(ssh, rd, local_dir, rec)
         rec["preserved"] = manifest is not None
+        if manifest is not None:
+            rec["fetched_marker"] = _mark_fetched(ssh, rd, local_dir, manifest)
     write_json_atomic(local_dir / "remote.json", rec)
     return rec
 
 
+def _file_sha256(p: Path) -> str:
+    with open(p, "rb") as f:
+        return hashlib.file_digest(f, "sha256").hexdigest()
+
+
 def _verify_and_manifest(ssh: list[str], remote_dir: str, local_dir: Path, rec: dict[str, Any]) -> dict[str, Any] | None:
-    r = ssh_run(ssh, ["sh", "-c", f"cd {shlex.quote(remote_dir)} && find . -type f ! -name preserved.json -print0 | xargs -0 sha256sum"], timeout=900)
+    # T0 = the machine's clock before hashing: a file changed after it is newer than the verification, which the guard reads as unfetched
+    r = ssh_run(ssh, ["sh", "-c", f"cd {shlex.quote(remote_dir)} && t=$(date +%s.%N 2>/dev/null); case $t in *N*|'') "
+                                  f"t=$(python3 -c 'import time; print(time.time())' 2>/dev/null || date +%s);; esac; "
+                                  f"echo \"T0 $t\" && find . -type f ! -name preserved.json ! -name {FETCHED_FILE} ! -name {FETCHED_FILE}.tmp "
+                                  f"-print0 | xargs -0 sha256sum"], timeout=900)
     if r.returncode != 0:
         return None
-    remote_sums = {}
+    remote_sums, t0 = {}, None
     for line in r.stdout.decode().splitlines():
+        if line.startswith("T0 "):
+            t0 = float(line[3:])
+            continue
         h, _, name = line.partition("  ")
         remote_sums[name.removeprefix("./")] = h
     files, mismatched = [], []
@@ -943,12 +1110,31 @@ def _verify_and_manifest(ssh: list[str], remote_dir: str, local_dir: Path, rec: 
         if not p.is_file():
             mismatched.append(name)
             continue
-        lh = hashlib.sha256(p.read_bytes()).hexdigest()
+        lh = _file_sha256(p)
         (files if lh == h else mismatched).append({"path": name, "bytes": p.stat().st_size, "sha256": lh} if lh == h else name)
     if mismatched:
         rec["preserve_error"] = {"at_utc": utc_now_ms(), "mismatched_or_missing": mismatched}
         return None
     manifest = {"schema": PRESERVED_SCHEMA, "run_id": rec["run_id"], "source": f"{rec['host']}:{remote_dir}", "destination": str(local_dir),
-                "files": files, "completed_utc": utc_now_ms(), "note": "copy on the control machine; the machine's copy is the other one"}
+                "files": files, "completed_utc": utc_now_ms(), "verified_from_machine_epoch": t0,
+                "note": "copy on the control machine; the machine's copy is the other one"}
     write_json_atomic(local_dir / "preserved.json", manifest)   # written last
     return manifest
+
+
+def _mark_fetched(ssh: list[str], remote_dir: str, local_dir: Path, manifest: dict[str, Any]) -> dict[str, Any]:
+    """<run>/.fetched on the machine (atomic): this run dir, as of `verified_from` on the machine's clock, has a verified copy here.
+    The pod's guard refuses to terminate while any run dir lacks one or has a file newer than `verified_from`."""
+    files = manifest["files"]
+    doc = {"schema": FETCHED_SCHEMA, "run_id": manifest["run_id"], "verified_from": manifest["verified_from_machine_epoch"],
+           "files": len(files), "bytes": sum(f["bytes"] for f in files),
+           "manifest_sha256": hashlib.sha256("".join(f"{f['sha256']}  {f['path']}\n" for f in files).encode()).hexdigest(),
+           "fetched_utc": utc_now_ms(), "destination": f"{os.uname().nodename}:{local_dir}"}
+    if doc["verified_from"] is None:
+        return {"written": False, "reason": "the machine did not report its clock before hashing (no T0)"}
+    q = shlex.quote(remote_dir)
+    r = ssh_run(ssh, ["sh", "-c", f"cd {q} && cat > {FETCHED_FILE}.tmp && mv -f {FETCHED_FILE}.tmp {FETCHED_FILE}"],
+                stdin=json.dumps(doc).encode(), timeout=120)
+    if r.returncode != 0:
+        return {"written": False, "reason": f"rc {r.returncode}: {r.stderr.decode(errors='replace')[-200:]}"}
+    return {"written": True, "verified_from": doc["verified_from"], "files": doc["files"], "bytes": doc["bytes"]}
