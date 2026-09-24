@@ -281,6 +281,26 @@ def test_finish_checks_custody_pod_worktree_and_handoffs_never_named(tmp_path, r
     assert notes.finish(root, "fin", repo, keep_pod="x", custody=lambda arts: (True, "ok"))[1] == 0
 
 
+def test_snapshot_commits_the_notes_repo_except_files_over_the_cap(tmp_path):
+    root = tmp_path / "notes"
+    _touch(root / "lanes" / "a" / "20260923T1700Z-report-a.md", 5, "# a\n")
+    _touch(root / "lanes" / "a" / "evidence" / "odd [name]*.md", 5, "glob characters are literal\n")
+    assert notes.snapshot(root) is None                                   # not a repo: nothing happens
+    _git(tmp_path, "init", "-q", "-b", "main", str(root))
+    _git(root, "config", "user.email", "t@t")
+    _git(root, "config", "user.name", "t")
+    (root / "lanes" / "a" / "evidence" / "big.log").write_bytes(b"x" * 2000)
+    snap = notes.snapshot(root, max_bytes=1000, now=NOW)
+    assert (snap["paths"], snap["skipped"]) == (2, ["lanes/a/evidence/big.log"])
+    assert _git(root, "log", "--format=%s") == "snapshot 2026-09-23T21:00Z: 2 paths; 1 too big, not committed\n"
+    assert sorted(_git(root, "ls-files").splitlines()) == ["lanes/a/20260923T1700Z-report-a.md", "lanes/a/evidence/odd [name]*.md"]
+    assert notes.snapshot(root, max_bytes=1000) == {"commit": None, "paths": 0, "skipped": ["lanes/a/evidence/big.log"]}
+    (root / "lanes" / "a" / "20260923T1700Z-report-a.md").unlink()
+    (root / "lanes" / "a" / "evidence" / "big.log").unlink()
+    assert notes.snapshot(root)["paths"] == 1 and _git(root, "ls-files").splitlines() == ["lanes/a/evidence/odd [name]*.md"]
+    assert notes.snapshot(root) is None
+
+
 def test_a_pod_belongs_to_the_longest_lane_name_it_starts_with():
     lanes = {"fp4-decode", "fp4-decode-2", "live-2", "live-2c"}
     assert notes.pod_owner("vy-fp4-decode-2-5090b-veritor-campaign", lanes) == "fp4-decode-2"

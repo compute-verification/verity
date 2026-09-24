@@ -539,6 +539,43 @@ def finish(root: Path, lane: str, repo: Path | None, keep_pod: str | None = None
     return "\n".join([head_] + [f"  {k:<9} {msg}" for k, _, msg in checks]), 3 if bad else 0
 
 
+# ---- history: the notes tree is its own git repo, committed by one writer ------------------------------------------------------------------
+
+SNAPSHOT_MAX_BYTES = 1 << 20
+
+
+def snapshot(root: Path, max_bytes: int = SNAPSHOT_MAX_BYTES, now: dt.datetime | None = None) -> dict | None:
+    """Commit every change in the notes repo except files over `max_bytes` (dumps belong in the store; .gitignore drops the known
+    kinds).  Only the coordinator's watcher calls this, so lanes never contend for the index lock.  None: not a repo, or clean."""
+    if not (root / ".git").exists():
+        return None
+    st = _git(root, "status", "--porcelain=v1", "-z", "--untracked-files=all")
+    if st is None:
+        return None
+    entries, paths, big = st.split("\0"), [], []
+    i = 0
+    while i < len(entries):
+        e = entries[i]
+        i += 1
+        if not e:
+            continue
+        code, path = e[:2], e[3:]
+        if code[0] in "RC":                                   # a rename is followed by its source path
+            paths.append(entries[i])
+            i += 1
+        p = root / path
+        (big if p.is_file() and p.stat().st_size > max_bytes else paths).append(path)
+    if not paths:
+        return {"commit": None, "paths": 0, "skipped": big} if big else None
+    subprocess.run(["git", "--literal-pathspecs", "-C", str(root), "add", "-A", "--pathspec-from-file=-", "--pathspec-file-nul"],
+                   input="\0".join(paths), text=True, check=True, capture_output=True, timeout=120)
+    now = now or _utcnow()
+    msg = f"snapshot {now:%Y-%m-%dT%H:%MZ}: {len(paths)} paths" + (f"; {len(big)} too big, not committed" if big else "")
+    if subprocess.run(["git", "-C", str(root), "commit", "-q", "--no-verify", "-m", msg], capture_output=True, timeout=60).returncode:
+        return {"commit": None, "paths": 0, "skipped": big}
+    return {"commit": (_git(root, "rev-parse", "--short", "HEAD") or "").strip(), "paths": len(paths), "skipped": big}
+
+
 # ---- rendering and the watch loop ----------------------------------------------------------------------------------------------------------
 
 def _m(v: float | None) -> str:
@@ -594,6 +631,13 @@ def transitions(prev: set[str], rows: list[dict], now: dt.datetime) -> tuple[lis
     return lines, stale
 
 
+def _snapshot_line(snap: dict) -> str:
+    skipped = snap["skipped"]
+    tail = f"; skipped {len(skipped)} over 1 MB (put them in the store): {', '.join(skipped[:3])}{' ...' if len(skipped) > 3 else ''}" \
+        if skipped else ""
+    return f"notes snapshot {snap['commit'] or '(none)'}: {snap['paths']} paths{tail}"
+
+
 def mail_lines(prev: dict[str, set[str]], rows: list[dict], now: dt.datetime) -> tuple[list[str], dict[str, set[str]]]:
     """A line per finished lane that received handoffs nobody will read (no successor), once per new file."""
     cur = {r["lane"]: set(r["mail"]) for r in rows if r.get("mail")}
@@ -642,6 +686,9 @@ def main(argv: list[str]) -> int:
     _add_status_args(wa)
     wa.add_argument("--every", type=float, default=10)
     wa.add_argument("--passes", type=int, default=0, help="stop after N passes (0 = forever)")
+    wa.add_argument("--snapshot", action="store_true", help="each pass, commit the notes repo (research notes snapshot)")
+    sn = sub.add_parser("snapshot", help="commit the notes tree to its own git repo (files over 1 MB are skipped and listed)")
+    sn.add_argument("--root", type=Path, default=None)
     ns = ap.parse_args(argv)
     root = ns.root or default_root()
     if ns.cmd in ("checkpoint", "inbox"):
@@ -661,6 +708,10 @@ def main(argv: list[str]) -> int:
     if ns.cmd == "bind":
         print(bind(root, ns.lane, ns.branch, ns.worktree, ns.pod, ns.succeeds))
         return 0
+    if ns.cmd == "snapshot":
+        snap = snapshot(root)
+        print(_snapshot_line(snap) if snap else f"{root}: nothing to commit (or not a git repo)")
+        return 0
     repo = ns.repo or repo_default()
 
     def run() -> list[dict]:
@@ -679,6 +730,8 @@ def main(argv: list[str]) -> int:
         now = _utcnow()
         lines, prev = transitions(prev, rows, now)
         more, prev_mail = mail_lines(prev_mail, rows, now)
+        if ns.snapshot and (snap := snapshot(root, now=now)) and snap["commit"]:
+            more.append(f"{now:%H:%MZ} {_snapshot_line(snap)}")
         open_ = sum(r["state"] not in DONE for r in rows)
         for line in lines + more:
             print(line, flush=True)
