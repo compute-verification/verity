@@ -132,6 +132,22 @@ def to_bytes(x: Ext) -> bytes:
     return b"".join(int(c).to_bytes(4, "little") for c in x)
 
 
+def exts_to_bytes(xs) -> bytes:
+    """``b"".join(to_bytes(x) for x in xs)`` in one numpy pass; anything not a clean (n, DEG) u32 array takes the slow path."""
+    xs = list(xs)
+    if len(xs) < 8:
+        return b"".join(to_bytes(x) for x in xs)
+    import numpy as np
+
+    try:
+        a = np.asarray(xs, dtype=np.int64)
+    except (TypeError, ValueError, OverflowError):
+        return b"".join(to_bytes(x) for x in xs)
+    if a.shape != (len(xs), DEG) or a.min() < 0 or a.max() >= 1 << 32:
+        return b"".join(to_bytes(x) for x in xs)
+    return a.astype("<u4").tobytes()
+
+
 def from_bytes(b: bytes) -> Ext:
     return tuple(int.from_bytes(b[4 * i:4 * i + 4], "little") for i in range(DEG))
 
@@ -399,9 +415,20 @@ def eq_table(point: list[Ext], device, out_dtype=torch.int64) -> torch.Tensor:
     tables (``n > 16``, CUDA) are the tensor product of the two halves' tables, written once in ``out_dtype`` by a fused
     kernel (the doubling loop would materialise ~4x the table in int64 temporaries: 26 GB at ``n = 28``)."""
     n = len(point)
-    if _fast_eq_outer is not None and n > 16 and torch.device(device).type == "cuda":
+    cuda = torch.device(device).type == "cuda"
+    if _fast_eq_outer is not None and n > 16 and cuda:
         n_hi = n // 2
         return _fast_eq_outer(eq_table(point[:n_hi], device), eq_table(point[n_hi:], device), out_dtype)
+    eq_vars = _eq_vars_kernel() if n and cuda and _fast_eq_outer is not None else None
+    if eq_vars is not None:
+        # one launch; the kernel's variable j is bit j (low bit first), so the point goes in reversed
+        pt = torch.tensor([[int(c) % P for c in r] for r in reversed(point)], dtype=torch.int32, device=device)
+        t = eq_vars(pt, 0, n)
+        return t if out_dtype == torch.int32 else t.to(out_dtype)
+    return _eq_table_doubling(point, device, out_dtype)
+
+
+def _eq_table_doubling(point: list[Ext], device, out_dtype=torch.int64) -> torch.Tensor:
     t = torch.zeros((1, DEG), dtype=torch.int64, device=device)
     t[0, 0] = 1
     for r in reversed(point):
@@ -479,3 +506,21 @@ try:
 except Exception:  # noqa: BLE001 -- no Triton / no CUDA: the torch path is used
     _fast_ext_mul = _fast_fold = _fast_logup_round = _fast_phase1 = _fast_scatter = _fast_gate_eval = _fast_combine_level = None
     _fast_split_limbs = _fast_eq_outer = _fast_rank1_add = _fast_eq_rows_dot = None
+
+#: ``packed.kernels_graph.eq_table_vars`` (one-launch eq table, n <= 16), resolved on first use: ``packed`` imports this module
+_fast_eq_vars = None
+_eq_vars_resolved = False
+
+
+def _eq_vars_kernel():
+    global _fast_eq_vars, _eq_vars_resolved
+    if not _eq_vars_resolved:
+        _eq_vars_resolved = True
+        if _fast_eq_outer is not None:
+            try:
+                from . import logup_packed
+                if logup_packed.GRAPHS:
+                    _fast_eq_vars = logup_packed._kg.eq_table_vars
+            except Exception:  # noqa: BLE001 -- the doubling loop is used
+                _fast_eq_vars = None
+    return _fast_eq_vars
