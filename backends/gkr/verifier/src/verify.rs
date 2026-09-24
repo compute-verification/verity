@@ -1,7 +1,7 @@
 //! The verifier for the GPU prover's proofs (`gpu/prover.py::verify` re-derived from the protocol, not ported):
 //! transcript replay, LogUp fractional-sum GKR per table, the data-parallel GKR per segment, the batched linear
 //! functional `<a, X> = b` over the committed vector, and the Ligero opening (proximity + linear tests on `t`
-//! SHA-256-authenticated columns).  Every size (units, columns, table shapes, `k, n, t`, message counts) comes from
+//! SHA-512-authenticated columns).  Every size (units, columns, table shapes, `k, n, t`, message counts) comes from
 //! the statement; the proof is rejected if its counts disagree.
 //!
 //! The expensive part is the linear test, which needs `a_i(eta_j)` for every committed row `i` and opened column
@@ -16,8 +16,8 @@ use crate::field::{add, eq_point, eq_table, interpolate, mat_apply, mont_mul, mu
 /// Montgomery form of `-1`.
 const NEG_R_MOD_P: u32 = P - R_MOD_P;
 use crate::ntt::{encode, RowEval};
-use crate::proof::{Column, Proof};
-use crate::sha256::Sha256;
+use crate::proof::{Column, Digest, Proof};
+use crate::sha512::Sha512;
 use crate::transcript::Transcript;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Instant;
@@ -130,7 +130,7 @@ pub fn expected_msgs(stmt: &Statement) -> usize {
 
 struct TableCh { z: Ext, beta: Ext }
 
-fn start_transcript(stmt: &Statement, root: &[u8; 32]) -> (Transcript, Vec<TableCh>, Vec<(Vec<Ext>, Vec<Ext>)>) {
+fn start_transcript(stmt: &Statement, root: &Digest) -> (Transcript, Vec<TableCh>, Vec<(Vec<Ext>, Vec<Ext>)>) {
     let mut tr = Transcript::new(DOMAIN);
     for s in &stmt.segs {
         tr.absorb(&s.circ.hash);
@@ -588,10 +588,10 @@ fn betas(t: &Table, ch: &TableCh) -> Vec<Ext> {
 // Ligero
 // ---------------------------------------------------------------------------------------------------------------------
 
-fn hash_pair(a: &[u8; 32], b: &[u8; 32]) -> [u8; 32] { let mut s = Sha256::new(); s.update(a); s.update(b); s.finalize() }
+fn hash_pair(a: &Digest, b: &Digest) -> Digest { let mut s = Sha512::new(); s.update(a); s.update(b); s.finalize() }
 
-fn verify_path(root: &[u8; 32], j: usize, col: &Column) -> bool {
-    let mut h = Sha256::new();
+fn verify_path(root: &Digest, j: usize, col: &Column) -> bool {
+    let mut h = Sha512::new();
     let mut buf = Vec::with_capacity(4 * col.values.len());
     for v in &col.values { buf.extend_from_slice(&v.to_le_bytes()); }
     h.update(&buf);

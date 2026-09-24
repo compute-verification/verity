@@ -161,17 +161,21 @@ class Proof:
     opening: ligero.Opening | None
 
     def nbytes(self) -> int:
-        return (32 if any(self.root) else 0) + 24 * len(self.msgs) + (self.opening.nbytes() if self.opening else 0)
+        return (len(self.root) if any(self.root) else 0) + 24 * len(self.msgs) + (self.opening.nbytes() if self.opening else 0)
 
     # ``proof.bin`` (README "Proof file"): every count is written so the file is self-delimiting, but a verifier
     # takes every size from the circuit/config and rejects a file whose counts disagree (statement binding).
+    # Version 2: SHA-512 Merkle, the u32 after the version is the digest size (64); version 1 was SHA-256 (32).
     MAGIC = b"VGKRBB6\0"
+    VERSION = 2
 
     def to_bytes(self) -> bytes:
         import struct
 
+        if len(self.root) != ligero.DIGEST_BYTES:
+            raise ValueError("root is not a SHA-512 digest")
         out = bytearray(self.MAGIC)
-        out += struct.pack("<I", 1)
+        out += struct.pack("<II", self.VERSION, ligero.DIGEST_BYTES)
         out += self.root
         out += struct.pack("<Q", len(self.msgs))
         for m in self.msgs:
@@ -211,12 +215,13 @@ class Proof:
 
         if data[:8] != cls.MAGIC:
             raise ValueError("not a proof.bin")
-        (ver,) = struct.unpack_from("<I", data, 8)
-        if ver != 1:
-            raise ValueError(f"proof.bin version {ver}")
-        pos = 12
-        root = data[pos:pos + 32]
-        pos += 32
+        ver, dlen = struct.unpack_from("<II", data, 8)
+        if ver != cls.VERSION or dlen != ligero.DIGEST_BYTES:
+            raise ValueError(f"proof.bin version {ver} / digest {dlen} B (this verifier takes version {cls.VERSION}, SHA-512)")
+        D = ligero.DIGEST_BYTES
+        pos = 16
+        root = data[pos:pos + D]
+        pos += D
         (n,) = struct.unpack_from("<Q", data, pos)
         pos += 8
         msgs = [_field.from_bytes(data[pos + 24 * i:pos + 24 * i + 24]) for i in range(n)]
@@ -244,8 +249,8 @@ class Proof:
         for oi in range(t):
             columns[oi] = np.frombuffer(data, dtype="<u4", count=rows, offset=pos)
             pos += 4 * rows
-            paths.append([data[pos + 32 * i:pos + 32 * i + 32] for i in range(depth)])
-            pos += 32 * depth
+            paths.append([data[pos + D * i:pos + D * i + D] for i in range(depth)])
+            pos += D * depth
         if pos != len(data):
             raise ValueError("trailing bytes")
         return cls(root, msgs, ligero.Opening(w, qc, columns, paths))
@@ -253,11 +258,15 @@ class Proof:
 
 @dataclass
 class Stats:
-    t_commit: float = 0.0
-    t_lookup: float = 0.0
+    t_mults: float = 0.0            # LogUp multiplicities (before the commitment: they are committed)
+    t_commit: float = 0.0           # x assembly + RS encode + Merkle
+    t_lookup: float = 0.0           # transcript start + every table's LogUp GKR
     t_witness_wires: float = 0.0
-    t_arith: float = 0.0
-    t_open: float = 0.0
+    t_arith: float = 0.0            # the circuit GKR layers (wire evaluation excluded)
+    t_open: float = 0.0             # = t_open_acc + t_open_wq + t_open_cols
+    t_open_acc: float = 0.0         # the linear functional a (input / lookup / chain claims)
+    t_open_wq: float = 0.0          # Ligero w = Σ r_i X_i and q = Σ a_i U_i (the proximity / linear tests)
+    t_open_cols: float = 0.0        # the opened columns + their Merkle paths
     proof_elems: int = 0
     slots: int = 0
     depth_circuit: int = 0
@@ -624,12 +633,15 @@ def prove(inst: Instance, pcs: bool = True, params: ligero.LigeroParams = ligero
     seg_offs, offs, l = x_layout(inst)
     if dev.type == "cuda":
         torch.cuda.reset_peak_memory_stats(dev)
-    tc = time.perf_counter()
+    tm = time.perf_counter()
     committed = None
     mults = []
     for t in inst.tables:
         vals = [v for v in seg_query_values(inst, t.name) if v is not None]
         mults.append(logup.multiplicities(t, logup.table_rows(t, dev), vals))
+    _sync(dev)
+    st.t_mults = time.perf_counter() - tm
+    tc = time.perf_counter()
     if pcs:
         x = torch.empty((l,), dtype=torch.int64, device=dev)
         for s, off in zip(inst.segs, seg_offs):
@@ -638,11 +650,11 @@ def prove(inst: Instance, pcs: bool = True, params: ligero.LigeroParams = ligero
             x[off: off + t.nrows] = m % P
         committed = ligero.commit(x, params)
         del x
-    root = committed.root if committed else bytes(32)
+    root = committed.root if committed else bytes(ligero.DIGEST_BYTES)
     _sync(dev)
     st.t_commit = time.perf_counter() - tc
-    tr, chs, pts = start_transcript(inst, pcs, root)
     t0 = time.perf_counter()
+    tr, chs, pts = start_transcript(inst, pcs, root)
     lookup_claims = []
     packed = use_packed_logup(dev)
     graphs = packed and logup_packed.use_graphs(dev)
@@ -698,9 +710,14 @@ def prove(inst: Instance, pcs: bool = True, params: ligero.LigeroParams = ligero
             ri += 1
         if inst.chain:
             st.linkage_constraints = add_chain(acc, rhos[ri], geo, inst, seg_offs)
-        opening = ligero.prove_open(committed, acc.a, tr)
+        _sync(dev)
+        st.t_open_acc = time.perf_counter() - t3
+        timers: dict = {}
+        opening = ligero.prove_open(committed, acc.a, tr, timers)
         _sync(dev)
         st.t_open = time.perf_counter() - t3
+        st.t_open_wq = timers["wq"]
+        st.t_open_cols = st.t_open - st.t_open_acc - st.t_open_wq
         st.ligero_rows = committed.rows
     st.proof_elems = len(out)
     st.slots = tr.slots

@@ -1,9 +1,11 @@
-"""Ligero commitment over BabyBear (``backends/gkr/src/ligero.rs`` in torch; SHA-256 Merkle via ``hash_gpu``).
+"""Ligero commitment over BabyBear (``backends/gkr/src/ligero.rs`` in torch; SHA-512 Merkle via ``sha512_cuda``).
 
 The committed vector ``x`` (length ``l``) is laid out as ``rows`` rows of ``k`` base elements; row ``i`` is the message
 ``X_i`` with ``X_i[m] = codeword_i[m · n/k]`` (the ``k``-th roots are a subgroup of the ``n``-th roots): the row is the
 low-degree extension of its values at the ``k``-th roots evaluated at all ``n``-th roots (INTT_k, zero-pad, NTT_n).
-The ``n`` columns are Merkle-committed with SHA-256 (leaf = the column's ``rows`` u32 LE, node = SHA-256(left||right)).
+The ``n`` columns are Merkle-committed with SHA-512 (leaf = the column's ``rows`` u32 LE, node = SHA-512(left||right),
+64-byte digests; proof.bin version 2).  SHA-256's generic collision term is 2^-128 by itself at q = 2^64 hash
+evaluations, which left the protocol total at 2^-127.7 (README "Soundness").
 
 Opening ``⟨a, X⟩ = b`` for a public extension vector ``a`` (``rows × k``, zero padded):
   * ``r <- tr``; prover sends ``w = Σ_i r^i X_i`` (``k``) and the coefficients of ``q(Z) = Σ_i a_i(Z) U_i(Z)`` (``2k-1``),
@@ -136,8 +138,12 @@ def encode_ext(u: torch.Tensor, n: int) -> torch.Tensor:
 
 
 # ---------------------------------------------------------------------------------------------------------------------
-# Merkle (hash_gpu on CUDA, hashlib on CPU)
+# Merkle (sha512_cuda on CUDA, hashlib on CPU)
 # ---------------------------------------------------------------------------------------------------------------------
+
+MERKLE_HASH = "SHA-512"
+DIGEST_BYTES = 64
+
 
 class Merkle:
     def __init__(self, code: torch.Tensor) -> None:
@@ -145,31 +151,30 @@ class Merkle:
         self.rows, self.n = rows, n
         if code.is_cuda:
             import cupy as cp
-            from hash_gpu.merkle import commit as gpu_commit
-            from hash_gpu.merkle import digest_bytes
+
+            from . import sha512_cuda
 
             m = cp.asarray(code.to(torch.int32).contiguous()).view(cp.uint32)
-            self.tree = gpu_commit(m, "sha256")
-            self.root = digest_bytes(self.tree.root, "sha256")
+            self.tree_levels = sha512_cuda.commit(m)
+            self.root = sha512_cuda.digest_bytes(self.tree_levels[-1][0])
             self._gpu = True
         else:
             a = code.cpu().numpy().astype("<u4")
-            level = [hashlib.sha256(np.ascontiguousarray(a[:, j]).tobytes()).digest() for j in range(n)]
+            level = [hashlib.sha512(np.ascontiguousarray(a[:, j]).tobytes()).digest() for j in range(n)]
             self.levels = [level]
             while len(level) > 1:
-                level = [hashlib.sha256(level[i] + level[i + 1]).digest() for i in range(0, len(level), 2)]
+                level = [hashlib.sha512(level[i] + level[i + 1]).digest() for i in range(0, len(level), 2)]
                 self.levels.append(level)
             self.root = level[0]
             self._gpu = False
 
     def path(self, j: int) -> list[bytes]:
         if self._gpu:
-
-            lv = [l.get() for l in self.tree.levels[:-1]] if not hasattr(self, "_host") else self._host
+            lv = [l.get() for l in self.tree_levels[:-1]] if not hasattr(self, "_host") else self._host
             self._host = lv
             out, idx = [], j
             for level in lv:
-                out.append(np.asarray(level[idx ^ 1]).astype(">u4").tobytes())
+                out.append(np.asarray(level[idx ^ 1], dtype=np.uint64).astype(">u8").tobytes())
                 idx >>= 1
             return out
         out, idx = [], j
@@ -180,10 +185,12 @@ class Merkle:
 
 
 def merkle_verify(root: bytes, j: int, leaf: bytes, path: list[bytes]) -> bool:
-    h = hashlib.sha256(leaf).digest()
+    h = hashlib.sha512(leaf).digest()
     idx = j
     for sib in path:
-        h = hashlib.sha256((sib + h) if idx & 1 else (h + sib)).digest()
+        if len(sib) != DIGEST_BYTES:
+            return False
+        h = hashlib.sha512((sib + h) if idx & 1 else (h + sib)).digest()
         idx >>= 1
     return h == root
 
@@ -281,7 +288,7 @@ class Opening:
         b = (len(self.w) + len(self.qc)) * 4 * DEG
         b += 4 * self.columns.size
         for path in self.paths:
-            b += 32 * len(path)
+            b += DIGEST_BYTES * len(path)
         return b
 
 
@@ -451,8 +458,12 @@ def open_w_qc_reference(cm: Committed, a: torch.Tensor, r: torch.Tensor) -> tupl
     return w, q[: 2 * k - 1]
 
 
-def prove_open(cm: Committed, a: torch.Tensor, tr: Transcript) -> Opening:
-    """``a`` ``(l, 6)`` int64 (the linear functional); ``w`` and ``qc`` travel in the Opening."""
+def prove_open(cm: Committed, a: torch.Tensor, tr: Transcript, timers: dict | None = None) -> Opening:
+    """``a`` ``(l, 6)`` int64 (the linear functional); ``w`` and ``qc`` travel in the Opening.  ``timers["wq"]``: the
+    seconds up to ``w`` / ``qc`` on the host (the rest is the column opening)."""
+    import time
+
+    t0 = time.perf_counter()
     p = cm.params
     dev = a.device
     rows, n = cm.rows, p.n
@@ -460,6 +471,8 @@ def prove_open(cm: Committed, a: torch.Tensor, tr: Transcript) -> Opening:
     code = cm.code
     w, qc = open_w_qc(cm, a, r)
     w_py, qc_py = py_exts(w), py_exts(qc)
+    if timers is not None:
+        timers["wq"] = time.perf_counter() - t0
     tr.absorb_exts(w_py)
     tr.absorb_exts(qc_py)
     js = open_set(tr, n, p.t)

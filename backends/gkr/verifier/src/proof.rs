@@ -2,14 +2,22 @@
 //! count is compared against the statement-derived expectation by the verifier before use.
 
 use crate::field::{Ext, P};
+use crate::sha512::DIGEST_BYTES;
 
-pub struct Column { pub values: Vec<u32>, pub path: Vec<[u8; 32]> }
+pub type Digest = [u8; DIGEST_BYTES];
+
+pub struct Column { pub values: Vec<u32>, pub path: Vec<Digest> }
 
 pub struct Opening { pub w: Vec<Ext>, pub qc: Vec<Ext>, pub columns: Vec<Column> }
 
-pub struct Proof { pub root: [u8; 32], pub msgs: Vec<Ext>, pub opening: Option<Opening>, pub bytes_read: usize }
+pub struct Proof { pub root: Digest, pub msgs: Vec<Ext>, pub opening: Option<Opening>, pub bytes_read: usize }
 
 pub const MAGIC: &[u8; 8] = b"VGKRBB6\0";
+/// Version 2 = SHA-512 Merkle (the u32 after the version is the digest size, 64).  Version 1 (SHA-256, 32-byte
+/// digests) is refused: its binding term alone is 2^-128, so a proof in it does not carry the claimed soundness.
+pub const VERSION: u32 = 2;
+/// Byte offset of the root in proof.bin (magic, version, digest size).
+pub const ROOT_AT: usize = 16;
 
 struct Rd<'a> { b: &'a [u8], pos: usize }
 impl<'a> Rd<'a> {
@@ -35,8 +43,10 @@ impl Proof {
         let mut r = Rd { b, pos: 0 };
         if r.take(8)? != MAGIC { return Err("proof.bin: bad magic".into()); }
         let ver = r.u32()?;
-        if ver != 1 { return Err(format!("proof.bin: version {ver}")); }
-        let root: [u8; 32] = r.take(32)?.try_into().unwrap();
+        if ver != VERSION { return Err(format!("proof.bin: version {ver} (this verifier takes version {VERSION}, SHA-512 Merkle)")); }
+        let dlen = r.u32()? as usize;
+        if dlen != DIGEST_BYTES { return Err(format!("proof.bin: digest size {dlen}, SHA-512 needs {DIGEST_BYTES}")); }
+        let root: Digest = r.take(DIGEST_BYTES)?.try_into().unwrap();
         let n = r.u64()?;
         let msgs = r.exts(n, max_msgs, "message")?;
         let has = r.u64()?;
@@ -58,7 +68,7 @@ impl Proof {
                         values.push(v);
                     }
                     let mut path = Vec::with_capacity(depth);
-                    for _ in 0..depth { path.push(r.take(32)?.try_into().unwrap()); }
+                    for _ in 0..depth { path.push(r.take(DIGEST_BYTES)?.try_into().unwrap()); }
                     columns.push(Column { values, path });
                 }
                 Some(Opening { w, qc, columns })
