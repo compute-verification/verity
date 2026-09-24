@@ -1,5 +1,5 @@
 """FA-tap exactness without a GPU: the sealed record's digest and verdict, the words a launch must write, and that the cases reach
-every geometry the hidden sources declare (the GPU run is `python -m verity_vllm.check.fa_tap_exactness --so ... --out ...` on a pod)."""
+every geometry the hidden sources declare (the GPU run is `tests/check/fa_tap_exactness_gpu.py --so ... --out ...` on a pod)."""
 from __future__ import annotations
 
 import copy
@@ -10,13 +10,14 @@ import pytest
 from verity_vllm.acquire.hidden_source import fa3_tile
 from verity_vllm.check import fa_tap_exactness as X
 from verity_vllm.commit.hidden_stream import SRC_BITS, StreamLayout
+from tests.check import fa_tap_exactness_gpu as G
 
 
 def _record(**fields):
     case = {"case": "prefill_short", "D": 64, "skipped": 0, "out_lse_eq_installed": True, "out_lse_eq_untapped": True,
             "spill_outside_layout": 0, "expected_but_unwritten": 0}
     neg = {"case": "prefill_short", "D": 64, "why": "wrong kBlockN", "skipped": 1, "buffer_untouched": True, "out_eq_installed": True}
-    case["ok"], neg["ok"] = X._case_ok(case), X._negative_ok(neg)
+    case["ok"], neg["ok"] = X.case_ok(case), X.negative_ok(neg)
     return X.seal({"schema": X.SCHEMA, "backend": "fa2", "cases": [case], "negatives": [neg], **fields})
 
 
@@ -41,11 +42,11 @@ def test_no_negatives_no_cases_or_an_error_is_not_ok(entries):
 def test_verify_cli(tmp_path, capsys):
     path = tmp_path / X.RECORD
     path.write_text(json.dumps(_record()))
-    assert X.main(["--verify", str(path)]) == 0
+    assert G.main(["--verify", str(path)]) == 0
     doc = _record()
     doc["cases"][0]["skipped"] = 1
     path.write_text(json.dumps(doc))
-    assert X.main(["--verify", str(path)]) == 1 and "digest does not match" in capsys.readouterr().out
+    assert G.main(["--verify", str(path)]) == 1 and "digest does not match" in capsys.readouterr().out
 
 
 def test_fa2_causal_rows_visit_their_m_tiles_key_blocks():
