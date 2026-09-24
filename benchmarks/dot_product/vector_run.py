@@ -113,6 +113,12 @@ def source_sha() -> str | None:
     try:
         return subprocess.run(["git", "rev-parse", "HEAD"], cwd=REPO, capture_output=True, text=True, check=True, timeout=10).stdout.strip()
     except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        pass
+    # a `research run --source` checkout has no .git: the run's job.json names the commit it shipped
+    try:
+        job = json.loads((Path(os.environ["RESEARCH_RUN_DIR"]) / "job.json").read_text())
+        return job["computation"]["tree_sha"] or None
+    except (KeyError, OSError, ValueError, TypeError):
         return None
 
 
@@ -516,8 +522,10 @@ def run_sp1_bare(a) -> int:
     out.mkdir(parents=True, exist_ok=True)
     proofs_dir, log, prove_log = out / "proofs", out / "host.log", out / "prover.log"
     host = Path(a.host)
+    variant = json.loads(Path(a.variant).read_text()) if a.variant else {}
+    prover_env = dict(kv.split("=", 1) for kv in a.prover_env)
     cpu_env = {**os.environ, "SP1_PROVER": "cpu", "RUST_LOG": "error"}
-    gpu_env = {**os.environ, "SP1_PROVER": "cuda", "RUST_LOG": "debug"}
+    gpu_env = {**os.environ, **prover_env, "SP1_PROVER": "cuda", "RUST_LOG": "debug"}
 
     # the set: the frozen BF16 fixture or a format-instances file
     if a.batch:
@@ -614,7 +622,8 @@ def run_sp1_bare(a) -> int:
         verdicts.append({"rep": r["rep"], "proof": os.path.relpath(r["proof_path"], out), "accepted": ok, "rc": rc,
                          "verify_seconds": doc.get("verify_seconds"), "process_wall": wall, "vk_hash": doc.get("vk_hash")})
         print(f"sp1-bare: verify rep{r['rep']}: {'accept' if ok else 'REJECT'} in {doc.get('verify_seconds')} s (process {wall:.1f} s)", flush=True)
-    (out / "verify.json").write_text(json.dumps({"verifier": f"{host} verify, SP1_PROVER=cpu (the producer's binary: not independent)",
+    verifier_name = variant.get("verifier_name") or f"{host} verify"
+    (out / "verify.json").write_text(json.dumps({"verifier": f"{verifier_name}, SP1_PROVER=cpu (the producer's binary: not independent)",
                                                  "items": verdicts}, indent=1))
 
     totals = [r["prove_seconds"] + r["save_seconds"] for r in reps]
@@ -622,19 +631,25 @@ def run_sp1_bare(a) -> int:
     rep, t_total = reps[med], totals[med]
     shards = int(rep["shards"])
     sha = source_sha() or os.environ.get("RESEARCH_SOURCE_COMMIT")
-    security = {"target": -SP1_SECURITY_BITS, "achieved_log2": round(-SP1_SECURITY_BITS + __import__("math").log2(shards), 3),
-                "source": "SP1's own accounting: sp1-primitives 6.6.0 src/fri_params.rs SP1_TARGET_BITS_OF_SECURITY = 100 per STARK proof "
+    bits = int(variant.get("security_bits", SP1_SECURITY_BITS))
+    security = {"target": -bits, "achieved_log2": round(-bits + __import__("math").log2(shards), 3),
+                "source": variant.get("security_source") or
+                          "SP1's own accounting: sp1-primitives 6.6.0 src/fri_params.rs SP1_TARGET_BITS_OF_SECURITY = 100 per STARK proof "
                           "(CORE_LOG_BLOWUP 2, unique_decoding_queries = ceil((100 - 16) / -log2(5/8)) = 124 at SP1_PROOF_OF_WORK_BITS 16; "
                           "KoalaBear^4), compile-time constants of the pinned SP1",
-                "union_bound": f"{shards} shard proofs in the core proof: -100 + log2({shards})"}
+                "union_bound": f"{shards} shard proofs in the core proof: -{bits} + log2({shards})"}
+    software = {"backend": {"name": variant.get("backend_name") or a.backend_name, "version": SP1_VERSION, "commit": sha},
+                "toolchain": {"sp1-sdk": SP1_VERSION, "sp1-zkvm": SP1_VERSION, "sp1-primitives": "6.6.0", "sp1-gpu-server": "6.6.0 (release binary)",
+                              "guest toolchain": "succinct sp1up v6.4.0", "python": sys.version.split()[0], **variant.get("toolchain", {})},
+                "guest": {"elf_sha256": setup["elf_sha256"], "vk_hash": setup["vk_hash"], "features": setup["guest_features"]},
+                "host_binary_sha256": _sha256_file(host), "prover": "cuda", "prover_options": prover_env or "SP1 defaults",
+                "verifier": verifier_name}
+    for key in ("fork", "label"):
+        if variant.get(key):
+            software[key] = variant[key]
     fp = contract.fingerprint(
         profile=target_name, domain=contract.DOMAIN, K=1536, B=B, proof_class="NON_ZK_PROOF", authentication="excluded", zk_mode=contract.ZK_NONE,
-        security=security, hardware=contract.probe_hardware(),
-        software={"backend": {"name": a.backend_name, "version": SP1_VERSION, "commit": sha},
-                  "toolchain": {"sp1-sdk": SP1_VERSION, "sp1-zkvm": SP1_VERSION, "sp1-primitives": "6.6.0", "sp1-gpu-server": "6.6.0 (release binary)",
-                                "guest toolchain": "succinct sp1up v6.4.0", "python": sys.version.split()[0]},
-                  "guest": {"elf_sha256": setup["elf_sha256"], "vk_hash": setup["vk_hash"], "features": setup["guest_features"]},
-                  "host_binary_sha256": _sha256_file(host), "prover": "cuda"},
+        security=security, hardware=contract.probe_hardware(), software=software,
         preprocessing={"setup": "SP1 setup of the relation-bare ELF (proving and verifying keys), once per ELF, outside t.total",
                        "setup_seconds": setup["setup_seconds"], "per_instance": "none"},
         retention="retained", instances=instances,
@@ -659,7 +674,7 @@ def run_sp1_bare(a) -> int:
         measurement("shards", shards, "count"), measurement("proof_bytes", rep["proof_bytes"], "B"),
         measurement("verify_process_wall", sorted(v["process_wall"] for v in verdicts)[len(verdicts) // 2], "s"),
         measurement("host_verify_seconds", sorted(r["verify_seconds"] for r in reps)[len(reps) // 2], "s"),
-        measurement("soundness_bits", SP1_SECURITY_BITS - __import__("math").log2(shards), "bits"),
+        measurement("soundness_bits", bits - __import__("math").log2(shards), "bits"),
         measurement("proofs_verified_producer", sum(v["accepted"] for v in verdicts), "count"),
     ]
     if execute:
@@ -719,6 +734,10 @@ def main(argv: list[str] | None = None) -> int:
     bare = ap.add_argument_group("sp1-bare (the Table 2 bare statement over a frozen batch)")
     bare.add_argument("--host", default=os.environ.get("VERITY_SP1_HOST", SP1_BARE_HOST), help="a relation-bare host binary")
     bare.add_argument("--backend-name", default=SP1_BARE_BACKEND_NAME, help="software.backend.name (Candidate SP1 recognises 'sp1...')")
+    bare.add_argument("--variant", default=None,
+                      help="JSON file naming a modified SP1 variant: {backend_name, label, toolchain, fork, verifier_name} (all optional)")
+    bare.add_argument("--prover-env", action="append", default=[], metavar="KEY=VALUE",
+                      help="an SP1 prover option for the GPU server's environment (e.g. SP1_WORKER_NUM_CORE_WORKERS=4); recorded")
     src = bare.add_mutually_exclusive_group()
     src.add_argument("--instances", help="directory of the frozen BF16 set (fixtures/bench-instances/v1 with the built arrays)")
     src.add_argument("--batch", help="a verity_sp1.format_instances file (sp1-format-instances/v1)")
