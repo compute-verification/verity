@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Mapping
+from importlib import resources
 from typing import Any
 
 import numpy as np
@@ -55,11 +56,7 @@ def tables_dir(kernel: str = "triton") -> str:
     env = os.environ.get(TABLES_ENV)
     if env:
         return env
-    here = os.path.dirname(os.path.abspath(__file__))
-    fixtures = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(here))), "fixtures")
-    if kernel == "cuda":
-        return os.path.join(fixtures, CUDA_FIXTURE_ID, "tables")
-    return os.path.join(fixtures, FIXTURE_ID, "tables")
+    return str(resources.files(__package__) / "tables" / (CUDA_FIXTURE_ID if kernel == "cuda" else FIXTURE_ID))
 
 
 def tables(kernel: str = "triton") -> RM.RmsTables:

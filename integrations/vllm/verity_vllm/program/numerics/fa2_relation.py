@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Mapping
+from importlib import resources
 from typing import Any
 
 import numpy as np
@@ -108,13 +109,12 @@ _TABLES: dict[str, FA.MufuTables] = {}
 
 
 def tables_dir() -> str:
-    """Where the MUFU.EX2 / MUFU.RCP delta tables live: ``$VERITY_MUFU_TABLES`` or the fixture shipped
-    with this lane (``fixtures/W11-40f0cebeb670-20260907T1800Z/mufu``)."""
+    """Where the MUFU.EX2 / MUFU.RCP delta tables live: ``$VERITY_MUFU_TABLES`` or the package data
+    ``tables/W11-40f0cebeb670-20260907T1800Z``."""
     env = os.environ.get(TABLES_ENV)
     if env:
         return env
-    here = os.path.dirname(os.path.abspath(__file__))
-    return os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(here))), "fixtures", "W11-40f0cebeb670-20260907T1800Z", "mufu")
+    return str(resources.files(__package__) / "tables" / "W11-40f0cebeb670-20260907T1800Z")
 
 
 def tables() -> FA.MufuTables:

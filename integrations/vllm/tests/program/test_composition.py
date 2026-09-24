@@ -42,8 +42,6 @@ GEMM_FIX = FIX / "B1-b3eba618b1b5-20260907T1731Z"
 M1 = FIX / "M1-0c9af072e5a9-20260907T2128Z"
 B0_DIV = FIX / "B0-divergence-20260907T1604Z"
 TC_HOPPER = Path(os.environ.get("VERITY_HP_ARCHIVE", Path.home() / "veritor-artifacts" / "hp")) / "tc-hopper" / "r1"
-if (W11 / "mufu").exists():
-    os.environ.setdefault("VERITY_MUFU_TABLES", str(W11 / "mufu"))
 
 from verity.ir import Program, bind  # noqa: E402
 from verity.ir.evaluate import evaluate_call  # noqa: E402

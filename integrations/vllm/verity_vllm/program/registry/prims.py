@@ -22,6 +22,7 @@ import os
 import sys
 from fractions import Fraction
 from functools import lru_cache
+from importlib import resources
 
 import numpy as np
 
@@ -504,7 +505,7 @@ def RsqrtApprox(x: int) -> int:
 MUFU_TANH_TABLES_ENV = "VERITY_MUFU_TANH_TABLES"
 MUFU_TANH_SHARD_FORMAT = "verity/mufu-tanh-shard/xz-blocks/v1"
 MUFU_TANH_TABLE_FORMAT = "verity/mufu-tanh-table/v1"
-MUFU_TANH_TABLE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "quarantine", "dense", "tables")
+MUFU_TANH_TABLE_DIR = str(resources.files(__package__) / "quarantine" / "dense" / "tables")
 MUFU_TANH_TABLE_MANIFEST = os.path.join(MUFU_TANH_TABLE_DIR, "mufu_tanh_sm89.json")
 _F32_SIGN = 0x80000000
 
