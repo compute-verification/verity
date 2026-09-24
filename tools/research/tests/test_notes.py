@@ -533,3 +533,295 @@ def test_gc_worktrees_removes_only_clean_pushed_worktrees_of_done_lanes(tmp_path
     assert _git(repo, "branch", "--list", "lane/done").strip() == "lane/done"          # the branch stays
     text = notes.render_gc(list(rows.values()), True)
     assert "\nremoved  " in "\n" + text and "keep     " in text and text.endswith("1 removed; kept 5: 2 in use by an open lane, 1 with no lane")
+
+
+# ---- the steward rules: stale-lane pods, OVERDUE, OVER-BUDGET, scheduled renders, guardian kills ------------------------------------------
+
+def _set_mtime(p: Path, when: dt.datetime) -> None:
+    os.utime(p, (when.timestamp(), when.timestamp()))
+
+
+def test_the_steward_reaps_an_idle_pod_of_a_stale_lane_only_with_reap_and_after_custody(tmp_path):
+    _report(tmp_path, "dead", "CHECKPOINT 1111111 (19:00Z) [open] bench running\n", 120)
+    fleet = notes.load_fleet(tmp_path, pods=lambda: [_pod("p1", "vy-dead")],
+                             prober=lambda ps: {"p1": {"busy": 0, "gpu_util": 0, "gpu_apps": 0, "serve": 0, "file_age_s": 3000}})
+    rows = notes.status(tmp_path, 30, None, now=NOW, fleet=fleet)
+    assert (rows[0]["stale"], rows[0]["pods"][0]["idle"], rows[0]["pods"][0]["idle_min"]) == (True, True, 50.0)
+    pod = {"id": "p2", "name": "vy-x", "usd_h": 0.74, "idle": True, "idle_min": 45.0}
+    rows += [{"lane": "short", "state": "open", "stale": True, "age_min": 90, "pods": [{**pod, "id": "p2", "idle_min": 20.0}]},
+             {"lane": "busy", "state": "open", "stale": True, "age_min": 90, "pods": [{**pod, "id": "p3", "idle": False, "busy": 1}]},
+             {"lane": "kept", "state": "open", "stale": True, "keep_pod": "verifier", "age_min": 90, "pods": [{**pod, "id": "p4"}]},
+             {"lane": "alive", "state": "open", "stale": False, "age_min": 5, "pods": [{**pod, "id": "p5"}]},
+             {"lane": "done", "state": "final", "stale": False, "age_min": 5, "pods": [{**pod, "id": "p6"}]},
+             {"lane": "unreached", "state": "open", "stale": True, "age_min": 90, "pods": [{**pod, "id": "p7", "idle": None, "error": "ssh rc 255"}]}]
+    state, killed, asked = {}, [], []
+
+    def blocked(lane, p):
+        asked.append((lane, p["id"]))
+        return False, "art:feedbeef00 not preserved: absent"
+
+    assert notes.stale_reap_lines(tmp_path, rows, NOW, 30, state, custody=blocked, terminate=killed.append) == []   # no --reap
+    lines = notes.stale_reap_lines(tmp_path, rows, NOW, 30, state, reap=True, custody=blocked, terminate=killed.append)
+    assert (asked, killed, lines) == ([("dead", "p1")], [], ["21:00Z REAP-BLOCKED dead vy-dead: art:feedbeef00 not preserved: absent"])
+    assert notes.stale_reap_lines(tmp_path, rows, NOW + dt.timedelta(minutes=29), 30, state, reap=True, custody=blocked,
+                                  terminate=killed.append) == [] and len(asked) == 1           # once per pod per 30 min, custody too
+    later = NOW + dt.timedelta(minutes=30)
+    lines = notes.stale_reap_lines(tmp_path, rows, later, 30, state, reap=True, custody=lambda lane, p: (True, "1 cited art(s) preserved"),
+                                   terminate=killed.append)
+    assert killed == ["p1"] and lines == ["21:30Z REAPED dead vy-dead p1 $0.74/h (STALE 50m, idle 50m); custody: 1 cited art(s) preserved"]
+    assert (tmp_path / "reaper.log").read_text().splitlines() == ["21:00Z REAP-BLOCKED dead vy-dead: art:feedbeef00 not preserved: absent", lines[0]]
+
+    def boom(lane, p):
+        raise RuntimeError("catalog locked")
+
+    def refuse(pod_id):
+        raise RuntimeError("HTTP 500")
+
+    state = {}
+    assert notes.stale_reap_lines(tmp_path, rows[:1], NOW, 30, state, reap=True, custody=boom, terminate=killed.append) == [
+        "21:00Z REAP-BLOCKED dead vy-dead: custody not checked (RuntimeError: catalog locked)"]
+    assert notes.stale_reap_lines(tmp_path, rows[:1], later, 30, state, reap=True, custody=lambda lane, p: (True, "ok"), terminate=refuse) == [
+        "21:30Z REAP-FAILED dead vy-dead p1 $0.74/h (STALE 50m, idle 50m): HTTP 500"]
+
+
+def test_reap_custody_wants_the_cited_arts_preserved_and_every_run_on_the_pod_fetched_or_registered(tmp_path):
+    root, runs = tmp_path / "notes", tmp_path / "runs"
+    _report(root, "dead", "CHECKPOINT 1111111 (20:00Z) [open] x\nresults art:1234abcd and art:feedbeef00, again art:1234abcd\n", 60)
+
+    def run(rid, pod_id, phase="launched", files=()):
+        (runs / rid).mkdir(parents=True)
+        (runs / rid / "remote.json").write_text(json.dumps({"run_id": rid, "machine": "vy-dead", "pod_id": pod_id, "phase": phase}))
+        for f in files:
+            (runs / rid / f).write_text("{}\n")
+
+    run("r20260923-190000-aaaa", "p1", files=["job.json", "preserved.json"])     # fetched with --all
+    run("r20260923-191000-bbbb", "p1", files=["job.json"])                       # registered in the store
+    run("r20260923-192000-cccc", "p1", phase="refused")                          # these three never ran on the pod
+    run("r20260923-192500-dddd", "p1", phase="shipping")
+    run("r20260923-192600-eeee", "p1", files=["refused.json"])
+    run("r20260923-193000-ffff", "p2")                                           # another pod's
+    cited = []
+
+    def arts(a):
+        cited.append(a)
+        return True, f"{len(a)} cited art(s) preserved"
+
+    runs_ok = lambda pod_id: notes.run_custody(pod_id, runs, registered={"r20260923-191000-bbbb"}.__contains__)  # noqa: E731
+    assert notes.reap_custody(root, "dead", "p1", arts=arts, runs=runs_ok) == (
+        True, "2 cited art(s) preserved; 2 run(s) on it fetched or registered")
+    assert cited == [["1234abcd", "feedbeef00"]]
+    assert notes.reap_custody(root, "dead", "p1", arts=lambda a: (False, "art:feedbeef00 not preserved: absent"), runs=runs_ok) == (
+        False, "art:feedbeef00 not preserved: absent")
+    run("r20260923-194000-abcd", "p1", phase="launching")                         # may have started: it must be fetched
+    assert notes.reap_custody(root, "dead", "p1", arts=arts, runs=runs_ok) == (
+        False, "run r20260923-194000-abcd on it is neither fetched nor in the store -> research fetch --all r20260923-194000-abcd")
+    _report(root, "empty", "CHECKPOINT 1111111 (20:00Z) [open] died before any result\n", 60)
+    assert notes.reap_custody(root, "empty", "p9", arts=arts, runs=runs_ok) == (True, "no art: cited; 0 run(s) on it fetched or registered")
+
+
+def test_art_custody_is_the_preserved_check_and_caps_what_it_would_read_back(tmp_path, monkeypatch):
+    from research.store.local import LocalStore
+
+    (tmp_path / "store.toml").write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "vault"}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(tmp_path / "store.toml"))
+    st = LocalStore()
+    arts = []
+    for name in ("pushed", "local-only", "unrecorded"):
+        (tmp_path / f"{name}.txt").write_text(f"result {name}\n")
+        arts.append(st.put_artifact("fixture/v1", {}, file=tmp_path / f"{name}.txt"))
+    st.push(arts[0])
+    st.push(arts[2], preserve=False)                            # on the remote, but no verified replica recorded
+    for h, _ in st.get_manifest(arts[2]).blobs():
+        st.object_path(h).unlink()                              # and not held locally: the head check would read it back
+    pushed, local, unrecorded = (a.split(":")[1][:12] for a in arts)
+    assert notes.art_custody([pushed]) == (True, "1 cited art(s) preserved")
+    ok, why = notes.art_custody([pushed, local])
+    assert not ok and why.startswith(f"art:{local} not preserved: ")
+    assert notes.art_custody(["0000000000"]) == (False, "art:0000000000 is unknown in the local catalog")
+    assert notes.art_custody([unrecorded], max_readback_mb=0) == (
+        False, f"art:{unrecorded}: no verified remote replica recorded, 0 MB to read back -> research data preserved art:{unrecorded}")
+    assert notes.art_custody([unrecorded]) == (True, "1 cited art(s) preserved")          # small: read back, verified, recorded
+    assert notes.art_custody([unrecorded], max_readback_mb=0) == (True, "1 cited art(s) preserved")
+
+
+def test_r2_env_fills_only_unset_variables(tmp_path):
+    p = tmp_path / "r2.env"
+    p.write_text("# R2\nAWS_ACCESS_KEY_ID=abc\nexport R2_BUCKET='verity-dev'\nR2_ENDPOINT=\"https://x\"\nAWS_SECRET_ACCESS_KEY=theirs\n"
+                 "R2_ACCOUNT_ID=acct\n\nnot a pair\n")
+    env = {"AWS_SECRET_ACCESS_KEY": "mine", "R2_ACCOUNT_ID": ""}
+    assert notes.load_env_file(p, env) == ["AWS_ACCESS_KEY_ID", "R2_BUCKET", "R2_ENDPOINT", "R2_ACCOUNT_ID"]
+    assert env == {"AWS_SECRET_ACCESS_KEY": "mine", "R2_ACCOUNT_ID": "acct", "AWS_ACCESS_KEY_ID": "abc", "R2_BUCKET": "verity-dev",
+                   "R2_ENDPOINT": "https://x"}
+    assert notes.load_env_file(tmp_path / "absent.env", env) == []
+
+
+def test_overdue_fires_once_thirty_minutes_after_the_bindings_final_unless_the_lane_is_done(tmp_path):
+    for lane, final in (("late", "20:00Z"), ("done", "20:00Z"), ("early", "21:20Z"), ("overnight", "06:30Z"), ("nofinal", None)):
+        notes.bind(tmp_path, lane, final=final, branch=f"lane/{lane}")
+        _set_mtime(tmp_path / "lanes" / lane / "binding.json", NOW - dt.timedelta(hours=4))       # bound at 17:00Z
+    rows = [{"lane": "late", "state": "open", "stale": True, "age_min": 50, "life_min": 50.0, "life_via": "edit"},
+            {"lane": "done", "state": "final", "stale": False, "age_min": 5},
+            {"lane": "early", "state": "open", "stale": False, "age_min": 5, "life_min": 2.0, "life_via": "commit"},
+            {"lane": "overnight", "state": "open", "stale": False, "age_min": 5},
+            {"lane": "nofinal", "state": "open", "stale": False, "age_min": 5}]
+    state = {}
+    assert notes.overdue_lines(tmp_path, rows, NOW - dt.timedelta(minutes=31), state) == []                  # 20:29Z: in the grace
+    assert notes.overdue_lines(tmp_path, rows, NOW, state) == ["21:00Z OVERDUE late FINAL 20:00Z passed 60m ago: STALE, life 50m via edit"]
+    assert notes.overdue_lines(tmp_path, rows, NOW + dt.timedelta(minutes=5), state) == []                   # once
+    notes.bind(tmp_path, "early", pod="vy-early")                           # rebound after its deadline, same final: the deadline stays
+    _set_mtime(tmp_path / "lanes" / "early" / "binding.json", NOW + dt.timedelta(minutes=30))
+    assert notes.overdue_lines(tmp_path, rows, NOW + dt.timedelta(minutes=51), state) == [
+        "21:51Z OVERDUE early FINAL 21:20Z passed 31m ago: open, life 2m via commit"]
+    notes.bind(tmp_path, "late", final="22:00Z")                            # the coordinator extends it: a new deadline, a new alert
+    _set_mtime(tmp_path / "lanes" / "late" / "binding.json", NOW + dt.timedelta(minutes=10))
+    assert notes.overdue_lines(tmp_path, rows, NOW + dt.timedelta(minutes=89), state) == []
+    assert notes.overdue_lines(tmp_path, rows, NOW + dt.timedelta(minutes=91), state)[0].startswith("22:31Z OVERDUE late FINAL 22:00Z passed 31m")
+    assert notes.final_deadline(tmp_path, "overnight", "06:30Z") == dt.datetime(2026, 9, 24, 6, 30, tzinfo=dt.timezone.utc)
+
+
+def test_budget_accumulates_each_lanes_pod_dollars_per_pass_and_alerts_once_over_the_binding(tmp_path):
+    notes.bind(tmp_path, "w", budget="$2: 1x 4090 + a verifier")
+    notes.bind(tmp_path, "free", budget="$0, laptop only")
+    listing = [_pod("a", "vy-w", 0.60, started_min_ago=120), _pod("b", "vy-w-verifier", 0.20, started_min_ago=60), _pod("c", "vy-nob", 1.0, 30)]
+    fleet = notes.Fleet(listing, {"a": "w", "b": "w", "c": "nob"}, {})
+    state = {}
+    at = lambda m: NOW + dt.timedelta(minutes=m)  # noqa: E731
+    assert notes.budget_lines(tmp_path, fleet, NOW, state) == []            # first sight: each pod counted since it started
+    assert state["spend"] == {"w": 1.4, "nob": 0.5}
+    assert notes.budget_lines(tmp_path, fleet, at(45), state) == [] and state["spend"]["w"] == 2.0         # at the budget, not over
+    assert notes.budget_lines(tmp_path, fleet, at(60), state) == ["22:00Z OVER-BUDGET w $2.20 on pods > $2 (budget: $2: 1x 4090 + a verifier); now $0.80/h"]
+    assert notes.budget_lines(tmp_path, fleet, at(62), state) == []         # once
+    spent = state["spend"]["w"]
+    assert notes.budget_lines(tmp_path, notes.Fleet([], {}, {}, error="pod listing failed"), at(70), state) == [] and state["spend"]["w"] == spent
+    notes.budget_lines(tmp_path, notes.Fleet(listing[1:], fleet.owner, {}), at(72), state)                 # pod a missing from one listing
+    notes.budget_lines(tmp_path, fleet, at(74), state)                                                    # ... is not recounted from its start
+    assert state["spend"]["w"] == pytest.approx(spent + 0.2 * 12 / 60 + 0.6 * 12 / 60, abs=1e-3)
+    notes.bind(tmp_path, "w", budget="$5")                                  # a raised budget re-arms the alert
+    assert notes.budget_lines(tmp_path, notes.Fleet([_pod("a", "vy-w", 30.0)], {"a": "w"}, {}), at(80), state)[0].startswith(
+        "22:20Z OVER-BUDGET w $5.")
+    assert (notes.budget_usd("$22: 1x A100"), notes.budget_usd("$1.5"), notes.budget_usd("1x 4090 <= 30 min")) == (22.0, 1.5, None)
+
+
+def test_scheduled_renders_run_once_per_utc_day_at_or_after_their_time(tmp_path):
+    (tmp_path / "steward.toml").write_text('[[render]]\nat = "20:30Z"\nsource = "~/src"\nout = "campaigns/t/render"\nstore = "/tmp/store"\n\n'
+                                           '[[render]]\nat = "22:00Z"\nsource = "/src"\nout = "later"\n\n[[render]]\nat = "9am"\nout = "bad"\n')
+    calls = []
+
+    def run(cmd, env, cwd, timeout):
+        calls.append((cmd[1:], env["PYTHONPATH"], cwd, timeout))
+        if cmd[2].endswith("tables"):
+            return 0, "# tables\n", ""
+        return 1, "", "Traceback (most recent call last):\n  ...\nModuleNotFoundError: No module named 'verity_numerical.bench.drilldown'\n"
+
+    state, home = {}, Path.home()
+    lines = notes.render_lines(tmp_path, NOW, state, run=run)
+    out = tmp_path / "campaigns" / "t" / "render" / "20260923T2100Z-tables.md"
+    assert lines == [f"21:00Z RENDERED {out}",
+                     "21:00Z RENDER-FAILED campaigns/t/render@20:30Z (drilldown): Traceback (most recent call last): ... "
+                     "ModuleNotFoundError: No module named 'verity_numerical.bench.drilldown'",
+                     '21:00Z RENDER-FAILED bad@9am: an entry needs at = "HH:MMZ", source and out']
+    assert out.read_text() == "# tables\n" and not out.with_name("20260923T2100Z-drilldowns.md").exists()
+    assert [c[0] for c in calls] == [["-m", "verity_numerical.bench.tables", "--root", "/tmp/store", "--format", "md"],
+                                     ["-m", "verity_numerical.bench.drilldown", "--root", "/tmp/store", "--format", "md"]]
+    assert calls[0][1:3] == (f"{home}/src/backends/numerical/python:{home}/src/tools/research/src:{home}/src", home / "src")
+    assert all(0 < c[3] <= notes.RENDER_TIMEOUT_S for c in calls)
+    assert notes.render_lines(tmp_path, NOW + dt.timedelta(minutes=50), state, run=run) == [] and len(calls) == 2   # once a day
+    lines = notes.render_lines(tmp_path, NOW + dt.timedelta(minutes=60), state, run=lambda *a: (None, "", "timeout after 600s"))
+    assert lines == ["22:00Z RENDER-FAILED later@22:00Z (tables): timeout after 600s", "22:00Z RENDER-FAILED later@22:00Z (drilldown): timeout after 600s"]
+    assert len(notes.render_lines(tmp_path, NOW + dt.timedelta(hours=24), state, run=run)) == 2                    # the next day
+    (tmp_path / "steward.toml").write_text("[[render]\n")
+    assert notes.render_lines(tmp_path, NOW, state, run=run)[0].startswith("21:00Z RENDER-FAILED steward.toml: ")
+    assert notes.render_lines(tmp_path, NOW, state, run=run) == []          # a broken file is said once
+    assert notes.render_lines(tmp_path / "nowhere", NOW, {}, run=run) == []
+
+
+def test_guardian_kills_go_to_the_owning_lanes_inbox_by_machine_pod_hint_or_cwd(tmp_path):
+    root, log, wt = tmp_path / "notes", tmp_path / "mem_guardian.log", tmp_path / "wt" / "tables-fix"
+    for lane in ("sp1-formats", "agkr-table", "tables-fix", "tables-fix-2"):
+        _report(root, lane, "CHECKPOINT 1111111 (20:50Z) [open] x\n", 10)
+    notes.bind(root, "agkr-table", pod="vy-agkr-a100,vy-agkr-h100")
+    notes.bind(root, "tables-fix", worktree=str(wt))
+    notes.bind(root, "tables-fix-2", worktree=str(wt), succeeds="tables-fix")
+    (wt / "sub").mkdir(parents=True)
+    _touch(log, 0, "2026-09-23T20:00:00+00:00 heartbeat loops=30\n2026-09-23T20:01:00+00:00 KILLED pid=1 mem=0.58GB reason=swap cmd=python -m "
+                   "research run --on box-a\n")
+    fleet = notes.Fleet([_pod("p4090", "vy-sp1f-4090")], {"p4090": "sp1-formats"}, {})
+    machines = lambda: {"box-a": {"pod_id": "p4090"}}  # noqa: E731
+    state = {}
+    assert notes.guardian_lines(root, [], fleet, NOW, state, log, machines) == []             # the first look only marks the end
+    py = "/Users/u/projects/verity-main-wt/main/.venv/bin/python -m research"
+    kills = [f"2026-09-23T20:55:00+00:00 KILLED pid=12046 mem=0.58GB reason=swap 8.6GB used (95%) > 95% cmd={py} run --on box-a --source .",
+             f"2026-09-23T20:55:10+00:00 KILLED pid=12047 mem=0.58GB reason=disk floor 3.4GB free cwd=/ cmd={py} run --on vy-agkr-h100 --source .",
+             f"2026-09-23T20:56:00+00:00 KILLED pid=12048 mem=1.20GB reason=per-proc cap 1.0GB cwd={wt}/sub cmd={py} data reindex",
+             f"2026-09-23T20:57:00+00:00 KILLED pid=12049 mem=0.69GB reason=disk floor 3.5GB free cwd=/Users/u cmd={py} data reindex --remote",
+             f"2026-09-23T20:57:30+00:00 KILLED pid=12050 mem=0.60GB reason=total cap 3GB (sum 3.2GB) cmd={py} run --on box-a --stage b"]
+    with log.open("a") as f:
+        f.write("\n".join(kills) + "\n2026-09-23T20:58:00+00:00 heartbeat loops=60\n2026-09-23T20:58:01+00:00 KILLED pid=9 mem=0.6GB reason=swap")
+    name = "20260923T2100Z-handoff-steward-guardian.md"
+    assert notes.guardian_lines(root, [], fleet, NOW, state, log, machines) == [
+        f"21:00Z KILLED-UNOWNED {kills[3]}", f"21:00Z ROUTED agkr-table 1: {name}", f"21:00Z ROUTED sp1-formats 2: {name}",
+        f"21:00Z ROUTED tables-fix-2 1: {name}"]
+    text = (root / "lanes" / "sp1-formats" / name).read_text()
+    title = "the laptop guardian killed 2 process(es) of sp1-formats (swap 8.6GB used (95%) > 95%): rerun"
+    assert text.startswith(f"---\nlane: sp1-formats\nkind: handoff\nfrom: steward\ncreated: 2026-09-23T21:00Z\n---\n\n# {title}\n")
+    assert f"~~~text\n{kills[0]}\n{kills[4]}\n~~~\n" in text and "killed on the laptop by the guardian, not on the pod: rerun it" in text
+    assert [x["title"] for x in notes.inbox(root, "sp1-formats")] == [title]
+    assert notes.guardian_lines(root, [], fleet, NOW, state, log, machines) == []             # each kill once; the partial line waits
+    with log.open("a") as f:
+        f.write(" cmd=python -m research run --on box-a\n")
+    assert notes.guardian_lines(root, [], None, NOW, state, log, machines) == [                 # no fleet: the machine name as a pod name
+        "21:00Z KILLED-UNOWNED 2026-09-23T20:58:01+00:00 KILLED pid=9 mem=0.6GB reason=swap cmd=python -m research run --on box-a"]
+    log.write_text(kills[2] + "\n")                                          # truncated (rotated): read from the start again
+    assert notes.guardian_lines(root, [], fleet, NOW, state, log, machines) == [f"21:00Z ROUTED tables-fix-2 1: {name[:-3]}-2.md"]
+    with log.open("a") as f:                                                  # the owner is final: the coordinator's inbox (contract §5)
+        f.write(kills[2].replace("pid=12048", "pid=12051") + "\n")
+    rows = [{"lane": "tables-fix-2", "state": "final"}]
+    assert notes.guardian_lines(root, rows, fleet, NOW, state, log, machines) == [f"21:00Z ROUTED coordinator 1: {name} (tables-fix-2 is final)"]
+    text = (root / "lanes" / "coordinator" / name).read_text()
+    assert text.startswith("---\nlane: coordinator\nkind: handoff\nfrom: steward\ncreated: 2026-09-23T21:00Z\n---\n\n"
+                           "# the laptop guardian killed 1 process(es) of tables-fix-2 (final) (per-proc cap 1.0GB): rerun\n")
+
+
+def test_snapshot_leaves_the_steward_state_out(tmp_path):
+    root = tmp_path / "notes"
+    _touch(root / "lanes" / "a" / "20260923T1700Z-report-a.md", 5, "# a\n")
+    _git(tmp_path, "init", "-q", "-b", "main", str(root))
+    _git(root, "config", "user.email", "t@t")
+    _git(root, "config", "user.name", "t")
+    notes.save_state(root, {"spend": {"a": 1.0}})
+    assert notes.snapshot(root, now=NOW)["paths"] == 1 and _git(root, "ls-files").splitlines() == ["lanes/a/20260923T1700Z-report-a.md"]
+    notes.save_state(root, {"spend": {"a": 2.0}})
+    assert notes.snapshot(root) is None and notes.load_state(root) == {"spend": {"a": 2.0}}
+
+
+def test_a_failing_steward_rule_is_a_line_not_a_dead_watcher():
+    assert notes.steward_rule("ok", lambda a, b=0: [f"{a}{b}"], "x", b=1) == ["x1"]
+    [line] = notes.steward_rule("render", lambda: 1 / 0)
+    assert line.endswith(" STEWARD-ERROR render: ZeroDivisionError: division by zero")
+
+
+def test_cli_watch_pass_runs_the_steward_rules_on_a_temp_root(tmp_path, capsys):
+    root, log, src = tmp_path / "notes", tmp_path / "guardian.log", tmp_path / "src"
+    _report(root, "late", "CHECKPOINT 1111111 (12:00Z) [open] x\n", 60 * 48)
+    wt = tmp_path / "wt" / "late"
+    wt.mkdir(parents=True)
+    notes.bind(root, "late", final="12:00Z", worktree=str(wt))
+    _set_mtime(root / "lanes" / "late" / "binding.json", dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=48))
+    bench = src / "backends" / "numerical" / "python" / "verity_numerical" / "bench"
+    bench.mkdir(parents=True)
+    for f in (bench.parent / "__init__.py", bench / "__init__.py"):
+        f.write_text("")
+    (bench / "tables.py").write_text("import sys\nprint('# tables', *sys.argv[1:])\n")
+    (root / "steward.toml").write_text(f'[[render]]\nat = "00:00Z"\nsource = "{src}"\nout = "render"\nstore = "{tmp_path / "store"}"\n')
+    log.write_text(f"2026-09-24T10:00:00+00:00 KILLED pid=7 mem=1.1GB reason=per-proc cap 1.0GB cwd={wt} cmd=python -m pytest\n")
+    notes.save_state(root, {"guardian": {"path": str(log), "offset": 0, "ino": log.stat().st_ino}})
+    assert notes.main(["watch", "--root", str(root), "--all", "--passes", "1", "--guardian-log", str(log)]) == 1    # late is STALE
+    out = capsys.readouterr().out
+    assert " OVERDUE late FINAL 12:00Z passed " in out and " ROUTED late 1: " in out and "pass 1: 1 open, 1 stale" in out
+    rendered = sorted((root / "render").iterdir())
+    assert [p.name[-10:] for p in rendered] == ["-tables.md"] and rendered[0].read_text() == f"# tables --root {tmp_path / 'store'} --format md\n"
+    assert f" RENDERED {rendered[0]}" in out and " RENDER-FAILED render@00:00Z (drilldown): " in out and "No module named" in out
+    state = notes.load_state(root)
+    assert state["overdue"]["late"]["alerted"] and state["render"] == {"render@00:00Z": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d")}
+    assert notes.main(["watch", "--root", str(root), "--all", "--passes", "1", "--guardian-log", "none"]) == 1
+    assert "OVERDUE" not in capsys.readouterr().out                             # said once, across watcher restarts too
