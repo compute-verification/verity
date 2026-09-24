@@ -244,7 +244,7 @@ CANDIDATES: tuple[Candidate, ...] = (
         soundness="2^-128",
         setup="none (no trusted setup)",
         interaction="interactive; Fiat–Shamir variant non-interactive",
-        assumptions="collision-resistant hash (BLAKE3 Merkle); Fiat–Shamir in the random-oracle model for the non-interactive variant; "
+        assumptions="collision-resistant hash (SHA-512 Merkle); Fiat–Shamir in the random-oracle model for the non-interactive variant; "
                     "LogUp fractional-sum soundness over BabyBear^6",
         # The user's label for a complete, non-ZK proof is NON_ZK_PROOF_DIAGNOSTIC ("diagnostic" relative to the ZK requirement, not
         # an incomplete proof): every A-GKR emitter writes it.  NON_ZK_PROOF is the ledger's spelling (SP1 sound core).  Both are A's class;
