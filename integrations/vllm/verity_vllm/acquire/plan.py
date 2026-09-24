@@ -370,10 +370,7 @@ def choose(sites: list[Site], v: ValuePlan) -> tuple[Site | None, str]:
 
 def _lifetime_tables() -> dict[str, Any]:
     from verity_vllm.acquire.native_host import NativeHostCommitter
-    try:
-        from verity_vllm.acquire.native_collect import GATHER_FLUSH_LEAVES, PRE_FLUSH_LEAVES
-    except Exception:  # noqa: BLE001  -- native_collect imports torch at module level; the plan must stay importable without it
-        GATHER_FLUSH_LEAVES, PRE_FLUSH_LEAVES = frozenset(), frozenset()
+    from verity_vllm.acquire.flush_points import GATHER_FLUSH_LEAVES, PRE_FLUSH_LEAVES
     return {"HAZARD_LEAVES": set(NativeHostCommitter.HAZARD_LEAVES), "GATHER_FLUSH_LEAVES": set(GATHER_FLUSH_LEAVES), "PRE_FLUSH_LEAVES": set(PRE_FLUSH_LEAVES)}
 
 

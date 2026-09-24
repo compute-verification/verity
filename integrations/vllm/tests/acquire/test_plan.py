@@ -5,6 +5,9 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import os
+import subprocess
+import sys
 
 import pytest
 
@@ -203,6 +206,41 @@ def test_residuals_name_the_table():
     assert any(r.table == "ANALYTIC_TABLES" and r.module == "body.blocks.0.attn.rotary_emb.cos_sin_cache" for r in plan2.residuals)
     doc = plan.to_json()
     assert all(set(r) == {"table", "module", "cls", "reason", "values"} for r in doc["residuals"])
+
+
+_PLAN_OF_FILES = """
+import json, sys
+if sys.argv[3] == "blocked":
+    sys.modules["torch"] = None
+from verity_vllm.acquire import plan as P
+from verity_vllm.correspondence.reader_for_acquire import AnnotationCorrespondence, RuntimeTree
+plan = P.acquisition_plan(json.load(open(sys.argv[1])), AnnotationCorrespondence(RuntimeTree.load(sys.argv[2])))
+print(json.dumps({"digest": plan.digest, "residuals": {r.table: r.values for r in plan.residuals},
+                  "tables": {k: sorted(v) for k, v in P._lifetime_tables().items()}, "torch": sys.modules.get("torch") is not None}))
+"""
+
+
+def _plan_in_a_fresh_process(tmp_path, mode: str) -> dict:
+    out = subprocess.run([sys.executable, "-c", _PLAN_OF_FILES, str(tmp_path / "manifest.json"), str(tmp_path / "runtime_tree.json"), mode],
+                         env={**os.environ, "PYTHONPATH": os.pathsep.join(p for p in sys.path if p)}, capture_output=True, text=True, timeout=300)
+    assert out.returncode == 0, out.stderr[-3000:]
+    return json.loads(out.stdout.strip().splitlines()[-1])
+
+
+def test_default_tables_do_not_depend_on_torch(tmp_path):
+    """The plan with its default lifetime tables (no `tables=`) where torch imports and where it does not: the same tables, residuals
+    and digest, so a CPU gate without torch and the GPU stage evaluate one plan."""
+    from verity_vllm.acquire import flush_points
+
+    rows = base_rows() + [row("instance_outputs", "body.blocks.0.qkv_proj", "0", spec="Gemm_v1"), row("instance_outputs", "body.norm", "out", spec="Norm_v1")]
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest(rows)))
+    tree(**{"body.blocks.0.qkv_proj": ["Lin", "Base", "Module"]}).save(tmp_path / "runtime_tree.json")
+    free, blocked = _plan_in_a_fresh_process(tmp_path, "free"), _plan_in_a_fresh_process(tmp_path, "blocked")
+    assert not blocked["torch"]
+    assert blocked["tables"]["GATHER_FLUSH_LEAVES"] == sorted(flush_points.GATHER_FLUSH_LEAVES)
+    assert blocked["tables"]["PRE_FLUSH_LEAVES"] == sorted(flush_points.PRE_FLUSH_LEAVES)
+    assert blocked["residuals"]["GATHER_FLUSH_LEAVES"] == ["body.blocks.0.qkv_proj/0"] and blocked["residuals"]["PRE_FLUSH_LEAVES"] == ["body.norm/out"]
+    assert (blocked["tables"], blocked["residuals"], blocked["digest"]) == (free["tables"], free["residuals"], free["digest"])
 
 
 # ------------------------------------------------------------------------------------------------------------------ serialisation

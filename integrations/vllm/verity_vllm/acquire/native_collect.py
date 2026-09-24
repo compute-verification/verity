@@ -56,6 +56,7 @@ from typing import Any
 
 import torch
 
+from verity_vllm.acquire.flush_points import GATHER_FLUSH_LEAVES, PRE_FLUSH_LEAVES
 from verity_vllm.acquire.hidden_source import (
     HiddenM1Source,
     HiddenM1SourceFA3,
@@ -175,17 +176,7 @@ def ext(build_dir: str | None = None, verbose: bool = False):
     return _EXT
 
 
-# SECONDARY bet (owner 2's lifetime table, `out/gen/r10/acq-live/lifetimes.md` §"Batching groups"): with a reference held from the hook to
-# the flush, only in-place overwrites bound the windows, and the three zero-window overwriters are RoPE after qkv_proj, the post-attention
-# fused norm after o_proj and the next layer's input fused norm after down_proj -> flush (one gather launch) at exactly those hooks + step end.
-# [R15 moe FLUSH-02, ALERT M-0479] that table is Llama's.  Two more zero-window overwriters exist on the panel's other architectures and the
-# live C2 oracle (r15-int-3, OLMoE B1) caught both as committed bytes != the Program's value (1536 identities): (1) QK-norm models (OLMoE,
-# Qwen3-*): `ops.rotary_embedding` rotates q/k IN PLACE right after `q_norm`/`k_norm`, whose staged outputs were only flushed at o_proj ->
-# post-hook flush at the two norms; (2) fused-MoE blocks have NO down_proj hook, so the residual `post_attention_layernorm/1` (and, at TP,
-# the block's received all-reduce output `<L>.mlp.experts/out`, rev-cb T6-4) stayed staged until the next layer's qkv_proj flush -- after
-# `ops.fused_add_rms_norm(x, residual)` overwrote BOTH in place at that layer's `input_layernorm` -> flush BEFORE the fused-add consumer runs
-# (pre-forward flush at `input_layernorm` and the final `norm`).  Flushing with nothing staged is a no-op (native flush returns early), so
-# dense rows pay nothing; QK-norm rows pay two more gather launches per layer.
+# the first two zero-window overwriters and their flush leaves (GATHER_FLUSH_LEAVES, PRE_FLUSH_LEAVES): `flush_points`
 # [R16 moe FLUSH-03] a third zero-window overwriter, INSIDE the fused-MoE block and invisible to every module hook: vLLM's TritonExperts
 # carves `intermediate_cache1` (the w13 GEMM output = the `moe/L<k>/up` plane) and `intermediate_cache3` (the w2 GEMM output = `down`) out
 # of the SAME workspace (`_resize_cache(workspace2, ...)` twice, offset 0 -> the two views alias byte for byte when 2I == H, OLMoE), so the
@@ -195,10 +186,6 @@ def ext(build_dir: str | None = None, verbose: bool = False):
 # down row for row; act/down/sum/router planes correct, they are overwritten only by the next layer, after the pre-flush).  Fix: the MoE
 # source asks the committer to flush right after staging `up` (`flush_after_plane`); one more gather launch per MoE layer per step, nothing
 # for dense rows.  Negative `VERITY_FAULT=late_flush_moe_up` drops that flush (the pre-FLUSH-03 behaviour).
-# declared lifetime facts (with PRE_FLUSH_LEAVES): the correspondence annotations carry no alias / in-place facts to derive them from
-GATHER_FLUSH_LEAVES = frozenset({"qkv_proj", "o_proj", "down_proj", "q_norm", "k_norm"})
-#: pre-forward flush points: the in-place consumers of the previous block's staged outputs (fused add-RMSNorm of residual + block output)
-PRE_FLUSH_LEAVES = frozenset({"input_layernorm", "norm"})
 #: [FLUSH-03] fused-MoE planes whose workspace the block itself overwrites before its next module hook: flush right after staging them
 MOE_FLUSH_PLANES = frozenset({"up"})
 
