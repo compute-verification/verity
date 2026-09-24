@@ -16,8 +16,10 @@
 #   * durability     — (F7) termination is refused while any attempt registered with `guard_require_preserved` is not PRESERVED on the
 #                      remote (`research data preserved`); one `research data push` repair is tried first; GUARD_FORCE_TERMINATE=1 overrides.
 #   * credential     — (2026-09-24) the pod terminates itself with its OWN key: RUNPOD_API_KEY, which RunPod injects into the container's
-#                      first process (/proc/1/environ), scoped to this pod.  The account key's /root/dm/runpod.py path is only a fallback
-#                      for pods an old launcher copied it to; `research run --on` never does.
+#                      first process (/proc/1/environ; not the account key).  Measured on a cpu3c pod: it can read nothing (REST GET
+#                      /pods and /pods/{self} 403, GraphQL myself Unauthorized) and REST DELETE /pods/{self} is 403, but GraphQL
+#                      podTerminate of its own pod succeeds (guard_terminate_pod tries REST, then GraphQL, then runpodctl).  The account
+#                      key's /root/dm/runpod.py path is only a fallback for pods an old launcher copied it to; `research run --on` never does.
 # The daemon-side per-pod age ceiling (budget_cap.py --pod-max-hours) and the cap/rate/deadline on the controller pod remain the outer layers.
 #
 # `research run --on` (the machine side, research.remote.ensure_guard) runs this file as ONE daemon per pod: `guard_daemon`, at the end.
