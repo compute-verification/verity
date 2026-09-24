@@ -302,7 +302,7 @@ def test_rmsnorm_compiled_profile_is_not_a_rebinding():
     on both sides) eager and compiled words differ on 1 word. Compiled RMSNorm is a different function, not a binding
     of `NORM` (compose vs extend: composition.md §1 row 2, §4)."""
     _need(B0_DIV / "index.json", "B0 divergence fixture")
-    from verity_vllm.program.numerics import inductor_models as IM
+    from tests.program import inductor_models as IM
     fused = B0_DIV / "layers.0.post_attention_layernorm_fused_add_rms_norm"
     w = np.load(fused / "weight.npy")
     cx, cr, cn = (np.load(fused / "compiled" / f) for f in ("in_x.npy", "in_residual.npy", "out_normed.npy"))
@@ -436,7 +436,8 @@ def test_authored_v2_corresponds_to_registry_v2(label, name, statics):
     """`b1_authored` v2 functions take the same statics and elaborate to the registry's v2 bodies (digest-equal or
     same-references across the broadcast encodings, as FE2's v1 test). Needs torch (pod)."""
     pytest.importorskip("torch")
-    from verity_vllm.program.frontend import b1_authored as A, export_report
+    from tests.program import b1_authored as A
+    from verity_vllm.program.frontend import export_report
     rep = export_report(getattr(A, name), static=statics, dead_gates="ignore")
     P_t = Program(bind(getattr(b1, name), **statics))
     r = correspond(rep.program, P_t)

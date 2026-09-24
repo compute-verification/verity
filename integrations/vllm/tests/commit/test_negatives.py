@@ -9,10 +9,10 @@ import numpy as np
 import pytest
 
 from verity_vllm.commit import hidden_engine as E
-from verity_vllm.commit.fa2_prototype.derived import DerivedOpening, open_derived, verify_derived
-from verity_vllm.commit.fa2_prototype.encoding import Geometry, ValueId
-from verity_vllm.commit.fa2_prototype.fixture import AttentionFixture, Context, synthetic_fixture
-from verity_vllm.commit.fa2_prototype.layouts import (
+from tests.commit.fa2_prototype.derived import DerivedOpening, open_derived, verify_derived
+from tests.commit.fa2_prototype.encoding import Geometry, ValueId
+from tests.commit.fa2_prototype.fixture import AttentionFixture, Context, synthetic_fixture
+from tests.commit.fa2_prototype.layouts import (
     HierCommitment,
     HierLayout,
     PackedCommitment,
@@ -20,7 +20,7 @@ from verity_vllm.commit.fa2_prototype.layouts import (
     Stage,
     verify_value_opening,
 )
-from verity_vllm.commit.fa2_prototype.reference import replay_row
+from tests.commit.fa2_prototype.reference import replay_row
 
 GEO = Geometry()
 

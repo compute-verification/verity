@@ -23,7 +23,7 @@ from verity_vllm.commit import identity
 from verity_vllm.commit.merkle import MerkleTree, Opening, verify_opening
 
 from verity_vllm.commit import fasttree as ft
-from verity_vllm.commit.stream_merkle import StreamingMerkle, replay_to_open, stream_in_tree_order, stream_root
+from tests.commit.stream_merkle import StreamingMerkle, replay_to_open, stream_in_tree_order, stream_root
 
 PROFILE = "ec44fc6dd686"
 
@@ -104,7 +104,7 @@ def test_resident_state_is_logarithmic() -> None:
 def test_stored_ru_streamed_in_tree_order_matches_commitments(tmp_path) -> None:
     from verity_vllm.observe.capture_v1 import CaptureReader
     from verity_vllm.commit.merkle import build_commitments
-    from verity_vllm.harness.synthetic import build_toy_run
+    from tests.commit.synthetic import build_toy_run
 
     run = tmp_path / "toy"
     build_toy_run(run, requests=2, prompt_len=4, gen=3)

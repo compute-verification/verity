@@ -8,12 +8,12 @@ import dataclasses
 import numpy as np
 import pytest
 
-from verity_vllm.commit.fa2_prototype.derived import conv_f2fp_bf16, open_derived, verify_derived
-from verity_vllm.commit.fa2_prototype.encoding import Geometry, RowLayout, ValueId
-from verity_vllm.commit.fa2_prototype.fixture import synthetic_fixture
-from verity_vllm.commit.fa2_prototype.layouts import (HierCommitment, HierLayout, PackedCommitment, PackedLayout,
+from tests.commit.fa2_prototype.derived import conv_f2fp_bf16, open_derived, verify_derived
+from tests.commit.fa2_prototype.encoding import Geometry, RowLayout, ValueId
+from tests.commit.fa2_prototype.fixture import synthetic_fixture
+from tests.commit.fa2_prototype.layouts import (HierCommitment, HierLayout, PackedCommitment, PackedLayout,
                                                             verify_value_opening)
-from verity_vllm.commit.fa2_prototype.oracle import compare_reference, oracle_row, oracle_row_full
+from tests.commit.fa2_prototype.oracle import compare_reference, oracle_row, oracle_row_full
 
 GEO = Geometry()
 
@@ -29,7 +29,7 @@ def test_low_peak_tables_match_the_original_loader() -> None:
     import subprocess
     import sys
 
-    from verity_vllm.commit.fa2_prototype.oracle import MUFU_TABLE_SHA256
+    from tests.commit.fa2_prototype.oracle import MUFU_TABLE_SHA256
 
     code = ("import hashlib; from verity_vllm.program.numerics import fa2_relation, fa2_model as FA;"
             "T = FA.MufuTables.load(fa2_relation.tables_dir());"
@@ -104,7 +104,7 @@ def test_wrong_semantics_replay_cannot_open_an_oracle_commitment() -> None:
     does not reproduce the retained subtree root / chunk digest and the opener refuses — the transcript cannot be
     re-derived from a root by a 'close enough' recomputation."""
     fx_o = synthetic_fixture(seed=9, geo=GEO, layer=0, step=5, prompt_len=155).with_replay(oracle_row)
-    from verity_vllm.commit.fa2_prototype.reference import replay_row
+    from tests.commit.fa2_prototype.reference import replay_row
 
     fx_np = fx_o.with_replay(replay_row)  # same inputs, numpy replay
     HL, PL = HierLayout(fx_o.ctx, GEO, 4), PackedLayout(fx_o.ctx, GEO, 256)

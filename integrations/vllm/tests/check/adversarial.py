@@ -1,4 +1,4 @@
-"""verity_vllm/check/adversarial.py — lane ov-adversarial (Agent 10, swarm 2026-09-17): the mutation harness.
+"""tests/check/adversarial.py — lane ov-adversarial (Agent 10, swarm 2026-09-17): the mutation harness.
 
 NOT a checker and NOT a fix.  This module plays the *untrusted adapter author*: it takes a genuine profile, wraps its
 patterns so that the Resolutions they return are rewritten (wrong producer, wrong-but-written slice, swallowed Compute,
@@ -19,8 +19,8 @@ Program's reference evaluation) and the real B0 capture `data/logs/m1.jsonl.gz` 
 (snapshots of steps 0, 1, 8; HF safetensors; the B0 cos_sin fixture).  Every mutation is a function
 `(parts, node, ctx) -> parts | None` installed on ONE genuine pattern; `MutatingPattern` records how often it fired.
 
-    uv run python -m verity_vllm.check.adversarial --harness toy --mutation all --out /tmp/adv/toy.json
-    uv run python -m verity_vllm.check.adversarial --harness m1 --mutation M01 --k 2 --out /tmp/adv/m1_M01.json
+    uv run python -m tests.check.adversarial --harness toy --mutation all --out /tmp/adv/toy.json
+    uv run python -m tests.check.adversarial --harness m1 --mutation M01 --k 2 --out /tmp/adv/m1_M01.json
 """
 from __future__ import annotations
 

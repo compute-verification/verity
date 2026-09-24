@@ -5,7 +5,7 @@ record (the synthetic `consistent_toy`: log + snapshots derived from the GENUINE
 
 Every hole test is `xfail(strict=True)`: it fails today (that is the hole) and XPASSes — the suite reports it — when the
 integrator closes it.  The premises (what the harness relies on) and the deterministic / probabilistic rejections in
-the report table are asserted positively so the report stays true.  Harness: `verity_vllm/check/adversarial.py`;
+the report table are asserted positively so the report stays true.  Harness: `tests/check/adversarial.py`;
 report: `out/gen/lanes/ov-adversarial/REPORT.md`.
 """
 from __future__ import annotations
@@ -14,7 +14,7 @@ import pytest
 
 from verity_vllm.check import census, gates, operand_provenance as provenance, replay
 from verity_vllm.query import vu_query as vq
-from verity_vllm.check import adversarial as G
+from tests.check import adversarial as G
 from verity_vllm.observe.resolver import Compute, Transparent, spec_module
 
 K_ALL = 8   # >= every toy stratum: tier a evaluates EVERY instance (no sampling luck in the assertions)

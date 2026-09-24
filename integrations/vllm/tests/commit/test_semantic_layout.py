@@ -14,11 +14,11 @@ import pytest
 from verity_vllm.commit import identity
 from verity_vllm.observe.capture_v1 import CaptureReader
 from verity_vllm.commit.merkle import MerkleTree, Value, build_commitments, verify_opening
-from verity_vllm.harness.synthetic import build_toy_run
+from tests.commit.synthetic import build_toy_run
 
 from verity_vllm.commit import fasttree as ft
 from verity_vllm.commit.semantic_layout import POS_LEAF_TAG, Layout, RowSpec, RUContext, StaticContext, Template, pos_leaf, verify_position_opening
-from verity_vllm.commit.stream_merkle import StreamingMerkle
+from tests.commit.stream_merkle import StreamingMerkle
 
 
 @pytest.fixture(scope="module")

@@ -13,10 +13,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity_vllm.commit.fa2_prototype.derived import open_derived, verify_derived
-from verity_vllm.commit.fa2_prototype.encoding import Geometry, ValueId
-from verity_vllm.commit.fa2_prototype.fixture import GEOMETRY_JSON, archived_geometry_fixture, synthetic_fixture
-from verity_vllm.commit.fa2_prototype.layouts import (
+from tests.commit.fa2_prototype.derived import open_derived, verify_derived
+from tests.commit.fa2_prototype.encoding import Geometry, ValueId
+from tests.commit.fa2_prototype.fixture import GEOMETRY_JSON, archived_geometry_fixture, synthetic_fixture
+from tests.commit.fa2_prototype.layouts import (
     HierCommitment,
     HierLayout,
     PackedCommitment,
@@ -168,7 +168,7 @@ def test_production_verifier_authenticates_the_same_bytes() -> None:
     c = HierCommitment(L)
     R = c.commit(fx)
     rl = L.row_layout(0, 32)
-    from verity_vllm.commit.fa2_prototype.reference import replay_row
+    from tests.commit.fa2_prototype.reference import replay_row
 
     words, _ = replay_row(rl, *fx.row_inputs(0, 32))
     values = [Value(v.canonical_id("a594a58ec69b", "req", "decode"), "float32", (), words[i:i + 1].tobytes()) for i, v in enumerate(rl.ids())]

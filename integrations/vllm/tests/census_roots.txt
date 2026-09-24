@@ -30,7 +30,6 @@ verity_vllm/ops/pod_bootstrap.sh
 verity_vllm/ops/pod_gate.sh
 
 # --- Python entry points
-verity_vllm.check.adversarial        # the ov-adversarial mutation harness: hostile-adapter negatives the sealed checkers must reject
 verity_vllm.harness.research_tools
 verity_vllm.query.cli
 tests/regression/

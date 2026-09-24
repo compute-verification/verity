@@ -29,6 +29,7 @@ One logical value, many physical computations
 from __future__ import annotations
 
 import hashlib
+import json
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from typing import Any
@@ -36,10 +37,15 @@ from typing import Any
 import numpy as np
 
 from verity_vllm.commit import hidden_engine as E
+from tests.commit.stream_merkle import StreamingMerkle
 from .encoding import STAGE_WIDTH, Geometry, RowLayout, ValueId
 from .fixture import AttentionFixture, Context
 
 WORD = 4  # every committed stage is fp32
+
+
+def layout_digest(kind: str, params: dict[str, Any]) -> bytes:
+    return hashlib.sha256(json.dumps({"kind": kind, **params}, sort_keys=True, separators=(",", ":")).encode()).digest()
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,7 +89,7 @@ class _LeafPacker:
 
     def __init__(self, leaf_words: int, new: Callable[..., Any], track: int | None = None) -> None:
         self.leaf_words = leaf_words
-        self.sm = E.StreamingMerkle(new, track=track)
+        self.sm = StreamingMerkle(new, track=track)
         self.pending: list[np.ndarray] = []
         self.n_words = 0
         self.new = new
@@ -149,7 +155,7 @@ class HierLayout:
                 nb_max = max(self.row_layout(h, r).nb for r in trows)
                 self.tiles[(h, qb)] = _TileGeom(h, qb, trows, nb_max)
         self.n_words = sum(self.row_layout(h, r).count for h in range(geo.NH) for r in rows)
-        self.digest = E.layout_digest(self.KIND, {"leaf_words": leaf_words, "QB": geo.QB})
+        self.digest = layout_digest(self.KIND, {"leaf_words": leaf_words, "QB": geo.QB})
 
     def row_layout(self, head: int, qrow: int) -> RowLayout:
         return RowLayout(self.geo, self.ctx.layer, head, qrow)   # static context: recomputed, never cached (O(nb))
@@ -311,7 +317,7 @@ class PackedLayout:
                 off += self.row_layout(h, r).count
         self.n_words = off
         self.n_chunks = -(-off // chunk_words)
-        self.digest = E.layout_digest(self.KIND, {"chunk_words": chunk_words})
+        self.digest = layout_digest(self.KIND, {"chunk_words": chunk_words})
 
     def row_layout(self, head: int, qrow: int) -> RowLayout:
         return RowLayout(self.geo, self.ctx.layer, head, qrow)
@@ -358,7 +364,7 @@ class PackedCommitment:
         L = self.layout
         if fx.ctx != L.ctx or fx.geo != L.geo:
             raise ValueError("fixture context/geometry differ from the layout's")
-        sm = E.StreamingMerkle(self.new)
+        sm = StreamingMerkle(self.new)
         pending: list[np.ndarray] = []
         have = 0
         digests: list[bytes] = []
@@ -422,7 +428,7 @@ class PackedCommitment:
             path = E.path_in_levels(levels, j)
             n_leaves = len(self.chunk_digests)
         else:  # roots-only: replay the whole stream with a tracked path
-            sm = E.StreamingMerkle(self.new, track=j)
+            sm = StreamingMerkle(self.new, track=j)
             replayed = 0
             buf = None
             rest = np.zeros(0, dtype=np.uint32)
