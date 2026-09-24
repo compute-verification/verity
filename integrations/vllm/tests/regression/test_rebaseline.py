@@ -33,8 +33,7 @@ def test_oracle_default_and_values(monkeypatch):
     monkeypatch.setenv(resolver.ORACLE_ENV, "v1")
     with pytest.raises(ValueError):
         resolver.oracle()
-    monkeypatch.delenv(resolver.ENGINE_ENV, raising=False)
-    assert resolver.engine() == resolver.DEFAULT_ENGINE == "v2" and resolver.BASELINE_ENGINE == "v1"
+    assert resolver.ENGINE == "v2"
 
 
 def test_record_result_writes_the_document_write_reads(monkeypatch, tmp_path):

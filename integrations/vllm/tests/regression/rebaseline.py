@@ -47,8 +47,6 @@ def run(a, extra: list[str]) -> int:
     env[resolver.ORACLE_ENV] = a.oracle
     if a.tier:
         env["VERITY_REGRESSION_TIERS"] = a.tier
-    if a.engine:
-        env[resolver.ENGINE_ENV] = a.engine
     Path(a.record).mkdir(parents=True, exist_ok=True)
     argv = [sys.executable, "-m", "pytest", str(resolver.HERE), "-m", "regression", "-q", "-p", "no:cacheprovider",
             "--junit-xml", str(Path(a.record) / "junit.xml"), *extra]
@@ -194,7 +192,6 @@ def main(argv=None) -> int:
     r.add_argument("--record", required=True)
     r.add_argument("--oracle", choices=resolver.ORACLES, default="expected")
     r.add_argument("--tier", default=None, help="VERITY_REGRESSION_TIERS, e.g. T0,T1,T2")
-    r.add_argument("--engine", default=None, help=f"{resolver.ENGINE_ENV} (default: the integration, {resolver.DEFAULT_ENGINE})")
     t = sub.add_parser("table")
     t.add_argument("--record", required=True)
     w = sub.add_parser("write")
