@@ -1,4 +1,4 @@
-"""D1: every value a verdict-bearing check compares is opened from the committer and verified against the run root (`oracle_compare.
+"""Every value a verdict-bearing check compares is opened from the committer and verified against the run root (`oracle_compare.
 OpenedReader`), never read from the committer's retained memory.
 
 The attack: after the commit (before the openings and the compare) the committer's retained copy of a member is changed so that it agrees
@@ -132,7 +132,7 @@ def test_the_oracle_compare_passes_on_opened_values_of_an_honest_commit(tmp_path
 
 
 @pytest.mark.parametrize("layout", ["block", "host"])
-def test_d1_a_retained_copy_changed_after_the_commit_to_agree_with_the_oracle_fails_the_opened_compare_by_name(tmp_path, layout):
+def test_a_retained_copy_changed_after_the_commit_to_agree_with_the_oracle_fails_the_opened_compare_by_name(tmp_path, layout):
     """The committer committed qkv_proj bytes the Match oracle does not hold; after the commit its retained copy is overwritten with the
     oracle's bytes.  The memory compare says PASS; the opened compare says FAIL, every entry of the changed leaves 'opened value not
     verified' -- qkv_proj's two entries among them (on the per-tensor path, exactly those two)."""

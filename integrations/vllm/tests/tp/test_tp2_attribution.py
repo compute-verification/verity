@@ -7,7 +7,7 @@ the run root).
   * NEGATIVE (equal-count request-label swap): two requests of equal (prompt, max_tokens) relabelled a<->b on one rank keep every per-request
     identity COUNT (what coverage / composition see) -- the attribution FAILS naming the rank, the step, the row and both ids
   * a step without committed sampled ids -> not ok (fail closed; attribution cannot be established)
-  * NEGATIVE (D1): a retained id changed after the commit to agree with the Match record -> not verified, not ok, named
+  * NEGATIVE: a retained id changed after the commit to agree with the Match record -> not verified, not ok, named
 """
 from __future__ import annotations
 
@@ -98,7 +98,7 @@ def test_match_record_shorter_than_the_run_is_a_mismatch_and_no_record_means_not
 
 
 def test_a_sampled_id_changed_after_the_commit_to_agree_with_the_match_record_is_not_verified_and_not_ok():
-    """D1: the Match record says r0's 3rd token is 99; the rank committed 13.  After the commit the retained id is changed to 99 -- a compare
+    """The Match record says r0's 3rd token is 99; the rank committed 13.  After the commit the retained id is changed to 99 -- a compare
     of the committer's memory would attribute every row.  The opening of step 2 does not verify against the run root: not ok, named."""
     s = _make({"r0": [11, 12, 99], "r1": [21, 22, 23]})
     s.ids[2][:8] = np.int64(99).tobytes()

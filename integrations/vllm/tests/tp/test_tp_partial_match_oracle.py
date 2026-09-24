@@ -158,7 +158,7 @@ def test_tip3_module_recorded_twice_in_a_step_is_refused(tmp_path):
 
 
 def test_a_member_changed_in_the_retained_copy_after_the_commit_is_not_verified_and_fails_named(tmp_path):
-    """D1 on the TP path: after the commit the rank's retained copy of the MoE received output is overwritten with another tensor's bytes,
+    """On the TP path: after the commit the rank's retained copy of the MoE received output is overwritten with another tensor's bytes,
     and the oracle agrees with the overwrite -- a compare of the committer's memory would PASS 3/3.  The opening of that member does not
     verify against the rank's run root: not_verified, FAIL by name; the members in other leaves still compare equal."""
     p0, p1, o0, o1 = _tensors(rows=16)                                         # 256 B each: one leaf per member

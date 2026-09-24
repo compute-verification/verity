@@ -72,7 +72,7 @@ def test_dense_tp_row_is_not_applicable_not_false():
 
 
 def test_a_retained_copy_changed_after_the_commit_is_not_verified_never_compared():
-    """D1: after the commit the /out's retained bytes are overwritten with the next norm's -- a compare of the committer's memory would call
+    """After the commit the /out's retained bytes are overwritten with the next norm's -- a compare of the committer's memory would call
     it a late read (an equal pair).  Its opening does not verify against the run root: the pair is not_verified (result False, named) and
     none of its bytes are compared."""
     out = bytearray(b"a" * 16)                                                 # the per-tensor path retains this buffer itself
