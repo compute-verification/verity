@@ -18,7 +18,7 @@ from verity_numerical.bench import tables as T
 
 pytest.importorskip("research.store.local", reason="research.store (tools/research) is not importable")
 from research.store.local import LocalStore  # noqa: E402
-from test_tables import RTX4090, cell, hashed, put, put_registered, result, store  # noqa: E402, F401  (store: the fixture)
+from test_tables import RTX4090, VERIFIER, cell, hashed, put, put_registered, result, store  # noqa: E402, F401  (store: the fixture)
 
 SEEDS = ("B-Ligero v1", "B-Ligero v3 (private selection)", "B-Ligero v3 fused hints", "B-Ligero v3x4 fused (l=4096)", "B-Ligero v1x4 (fold)",
          "B-Ligero v3x4 (fold)", "B-Ligero v2 (public selection)", "B-Ligero v2x4 (public selection)", "B-Ligero Fiat–Shamir (HVZK)",
@@ -146,14 +146,16 @@ def test_d2_marks_the_fastest_result_with_the_predicates_first_reason(store: Loc
     md = D.render_markdown(dd)
     tab = T.build(store)
     assert cell(tab, FP8_ADA_MMA, "B-Ligero").artifact == valid
-    c = d2_cell(md, "B-Ligero v1", "4090 FP8")
-    assert c.startswith("0.2 s · ") and " U [" in c, c
+    c = d2_cell(md, "B-Ligero v1", "4090 FP8")                  # the self-verified 0.2 s run is faster: D2 shows the verified one
+    assert c.startswith("0.3 s · ") and f" {D.PASS} {D.VERIFIED_MARK} [" in c, c
     note = footnote(md, c)
-    assert selfie in note and "not independently verified" in note and "producers: wave-4090-2" in note and f"fastest valid: {valid}" in note
+    assert valid in note and f"independently verified by {VERIFIER}" in note and f"faster, unverified: {selfie} 0.2 s" in note, note
     for variant, art, mark in (("B-Ligero Fiat–Shamir (HVZK)", hvzk, "Z"), ("B-Ligero + Ajtai n=64", ajtai, "X"),
                                ("B-Ligero + Poseidon2 shared 64x64 tile", shared, "S"), ("B-Ligero + Poseidon2 per row", p2, D.PASS)):
         c = d2_cell(md, variant, "4090 FP8")
-        assert f" {mark} [" in c and art in footnote(md, c), (variant, c)
+        assert f" {mark} {D.VERIFIED_MARK} [" in c and art in footnote(md, c), (variant, c)
+    selfie_only = D.fastest(dd, "B-Ligero v1", FP8_ADA_MMA.name)[0]
+    assert selfie_only.artifact == valid and D.fastest_unverified(dd, "B-Ligero v1", FP8_ADA_MMA.name).artifact == selfie
     assert d2_cell(md, "B-Ligero v1", "A100 BF16") == T.EMPTY
     # the marks are tables.py's predicate: ✓ exactly where its build accepts, and the reasons it rejects with, in its order
     rej = {r["artifact"]: r["reasons"] for r in tab.rejected}
@@ -178,6 +180,16 @@ def test_d2_counts_a_payload_envelope_but_never_as_valid(store: LocalStore, tmp_
     md = D.render_markdown(dd)
     c = d2_cell(md, "B-Ligero v1", "4090 FP8")
     assert " X [" in c and "(payload envelope)" in footnote(md, c) and "register the result.json as --meta" in footnote(md, c)
+
+
+def test_d2_shows_the_fastest_unverified_result_only_when_nothing_is_verified(store: LocalStore) -> None:
+    a = put(store, result(**LIGERO_4090, t_total=0.25), verified_by=None)
+    b = put(store, result(**LIGERO_4090, t_total=0.2), verified_by=None)
+    dd = D.build(store)
+    shown, ok = D.fastest(dd, "B-Ligero v1", FP8_ADA_MMA.name)
+    assert shown.artifact == b and shown.verified_by is None and ok is None and D.fastest_unverified(dd, "B-Ligero v1", FP8_ADA_MMA.name) is None
+    c = d2_cell(D.render_markdown(dd), "B-Ligero v1", "4090 FP8")
+    assert c.startswith("0.2 s · ") and f" U {D.UNVERIFIED_MARK} [" in c and a not in c, c
 
 
 def test_d2_ranks_by_overhead_so_a_small_batch_does_not_win(store: LocalStore) -> None:
@@ -229,6 +241,69 @@ def test_d3_falls_back_to_the_emitters_verifier_seconds_and_says_so(store: Local
     assert r["verifier_cpu_s"] == 3.6 and r["verifier_cpu_from"] == "verifier.seconds"
     line = next(x for x in D.render_markdown(dd).splitlines() if x.startswith("| 4090 FP8 · B-Ligero |"))
     assert "3.6 s†" in line and "12†" in line, line
+
+
+def live(doc: dict[str, Any], *, cpu: float, t_live: float, prover_dc: str = "EU-RO-1", verifier_dc: str = "EU-RO-1",
+         url: str = "tcp://213.173.105.95:48843", sessions: int = 5) -> dict[str, Any]:
+    """``doc`` as a live run: the live verifier's clock, both prover clocks, and its evidence (DCs, sessions, bytes each way)."""
+
+    doc["measurements"] += [contract.measurement("verify.cpu_s", cpu), contract.measurement("t.total_live", t_live),
+                            contract.measurement("net.bytes_in", sessions * 5860), contract.measurement("rounds.protocol", 3)]
+    doc["validation"]["evidence"] = {"live_verifier": {"accepted": True, "prover_dc": prover_dc, "verifier_dc": verifier_dc, "url": url,
+                                                       "sessions": sessions, "bytes_in": sessions * 5860, "bytes_out": sessions * 1.03e8,
+                                                       "rtt_ms_median": 0.96}}
+    return doc
+
+
+def test_d3_takes_the_median_same_config_same_dc_live_run(store: LocalStore) -> None:
+    """The cell (a local run) has no live clock: D3 takes the median-verifier-CPU live run of the same config in one DC, never a
+    run of another l, another DC pair or below 2^-128, and reads the tax from that run's own two clocks."""
+
+    cell_art = put(store, with_d3(result(**LIGERO_4090, t_total=0.3), cpu="verifier.seconds"))
+    arts = {c: put(store, live(result(**LIGERO_4090, t_total=0.32), cpu=c, t_live=0.33)) for c in (2.6, 2.2, 2.4)}
+    put(store, live(result(**LIGERO_4090, t_total=0.34, security={"target": -128, "achieved_log2": -128.3, "rs_l": 4096}), cpu=1.0, t_live=0.35))
+    put(store, live(result(**LIGERO_4090, t_total=0.34), cpu=1.1, t_live=0.35, verifier_dc="EU-CZ-1"))
+    put(store, live(result(**LIGERO_4090, t_total=0.34, security={"target": -100, "achieved_log2": -100.2}), cpu=1.2, t_live=0.35))
+    dd = D.build(store)
+    (r,) = dd.d3
+    assert r["artifact"] == cell_art and r["live_from"] == "companion" and r["live_artifact"] == arts[2.4]
+    assert sorted(r["live_pool"]) == sorted(arts.values()) and r["live_pool_cpu_s"] == [2.2, 2.4, 2.6]
+    assert r["verifier_cpu_s"] == 2.4 and r["verifier_cpu_from"] == "verify.cpu_s" and r["verifier_cores"] == pytest.approx(2.4 / 0.3)
+    assert r["proof_bytes"] == 66e6 and r["coins_bytes"] == pytest.approx(5860) and r["wire_bytes_up"] == pytest.approx(1.03e8)
+    assert r["live_tax"] == pytest.approx(0.33 / 0.32) and r["live_tax_s"] == pytest.approx(0.01) and r["loopback"] is False
+    md = D.render_markdown(dd)
+    line = next(x for x in md.splitlines() if x.startswith("| 4090 FP8 · B-Ligero |"))
+    assert "2.4 s |" in line and "†" not in line and "(+10 ms)" in line and "°" not in line, line
+    assert f"- 4090 FP8 · B-Ligero: companion {arts[2.4]} (EU-RO-1, verifier tcp://213.173.105.95:48843" in md
+    assert "3 same-config live run(s), verifier CPU 2.2–2.6 s" in md
+
+
+def test_d3_prefers_the_cells_own_live_run_and_marks_a_loopback_verifier(store: LocalStore) -> None:
+    cell_art = put(store, live(result(**LIGERO_4090, t_total=0.3), cpu=7.0, t_live=0.301, url="tcp://127.0.0.1:7000"))
+    put(store, live(result(**LIGERO_4090, t_total=0.31), cpu=6.0, t_live=0.32))
+    dd = D.build(store)
+    (r,) = dd.d3
+    assert r["live_from"] == "cell" and r["live_artifact"] == cell_art and r["verifier_cpu_s"] == 7.0 and r["loopback"] is True
+    line = next(x for x in D.render_markdown(dd).splitlines() if x.startswith("| 4090 FP8 · B-Ligero |"))
+    assert "1×° (+1 ms)" in line, line
+
+
+def test_d3_without_a_live_run_takes_a_reverification_verdict_of_the_cells_proof(store: LocalStore) -> None:
+    agkr = put(store, result(t_total=1.35))
+    other = put(store, result(t_total=9.0, gpu="NVIDIA H100 80GB HBM3"))
+    ms = [contract.measurement("verify.cpu_s", 15.2), contract.measurement("verify.wall_s", 2.1)]
+    store.put_artifact(D.VERDICT_KIND, {"result": "FAIL", "verifier": "x", "detail": "", "measurements": ms}, refs={"result": agkr})
+    ok = store.put_artifact(D.VERDICT_KIND, {"result": "PASS", "verifier": "verity-gkr-verify", "detail": "", "measurements": ms},
+                            refs={"result": agkr})
+    dd = D.build(store)
+    rows = {r["artifact"]: r for r in dd.d3}
+    r = rows[agkr]
+    assert other not in rows and r["verifier_cpu_s"] == 15.2 and r["verifier_cpu_from"] == "verdict" and r["verdict_artifact"] == ok
+    assert r["verifier_cores"] == pytest.approx(15.2 / 1.35) and r["live_tax"] is None and r["live_artifact"] is None
+    md = D.render_markdown(dd)
+    line = next(x for x in md.splitlines() if x.startswith("| A100 BF16 · A-GKR |"))
+    assert "15.2 s‡" in line and line.endswith("| … |"), line
+    assert f"- A100 BF16 · A-GKR: no live record; verifier CPU from {ok}" in md
 
 
 # --- the CLI --------------------------------------------------------------------------------------------------------------------------

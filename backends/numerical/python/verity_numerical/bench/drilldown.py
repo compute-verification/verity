@@ -10,14 +10,20 @@ Read-only over the evidence store :mod:`verity_numerical.bench.tables` renders f
   the result envelopes' own ``security`` statements, the lane reports and the backend READMEs each entry cites; "unknown" where
   none states the fact.  The last column also names the Table 2 cells the variant holds in this store.
 * **D2 fastest measured t.total per variant x target** (A100 BF16, H100 BF16, H100 FP8, 4090 FP8, 5090 NVFP4): cell
-  ``seconds · overhead×`` of the variant's fastest result on that target, then ``✓`` when it is Table-2-valid, else the letter
-  of its first reason (:data:`tables.REASON_LETTERS`); a footnote names the artifact and the reason.  Fastest = lowest
+  ``seconds · overhead×`` of the variant's fastest independently verified result on that target (its fastest result when none
+  is), then ``✓`` when it is Table-2-valid, else the letter of its first reason (:data:`tables.REASON_LETTERS`), then ``iv`` /
+  ``nv`` (independently verified or not); a footnote names the artifact, the reason, the verifier and any faster unverified
+  result.  Fastest = lowest
   ``R_native_spec / R_proved`` with ``R_proved = 2KB / t.total`` from the result's own B and K: the minimum ``t.total`` over the
   Table 2 workload (B = 4096, K = 1536), and a smaller off-workload run cannot hide it.
 * **D3 communication and verifier cost, one row per Table 2 cell**: proof bytes per batch | prover -> verifier Gbit/s to keep
   pace (bytes x 8 / t.total) | verifier -> prover bytes (coins) | rounds | verifier CPU s per batch | verifier cores to keep pace
-  | same-datacenter live tax (t.total_live / t.total), from the cell's result envelope only (:data:`D3_FIELDS`); ``…`` where the
-  envelope lacks the field, and each row lists the fields it read.
+  (verifier CPU s / t.total) | same-datacenter live tax (t.total_live / t.total, and t.total_live - t.total).  Proof bytes and the
+  cell's t.total come from the cell's envelope; coins, rounds, verifier CPU and the live tax from the cell's **live record**
+  (:func:`live_records`): the cell itself when it ran against a live verifier, else the median-verifier-CPU one of the same-config
+  (:data:`LIVE_MATCH`) same-datacenter live runs.  Without one, a ``verification-verdict/v1`` re-verification of the cell's own
+  proof on a CPU host (``refs.result`` = the cell) gives the verifier CPU (‡, no live tax); else the emitter's
+  ``verifier.seconds`` (†).  ``…`` where nothing states the field; each row lists what it read.
 
 A ``bench-result/v1`` artifact whose meta is a lane's summary but whose JSON payload is the result envelope counts in D2 with
 that envelope and the letter of its own first reason, else ``X``: tables.py reads the meta only, so as registered it can never
@@ -54,7 +60,14 @@ D3_COLUMNS = ("Table 2 cell", "Proof bytes per batch", "Prover → verifier Gbit
 #: count), in the order a row lists them.
 D3_FIELDS = ("proof_bytes", "transcript.bytes", "net.bytes_in", "validation.evidence.live_verifier.sessions", "rounds.protocol",
              "rounds.sequential_depth", "verify.cpu_s", "verifier.seconds", contract.T_TOTAL_LIVE)
+#: Fingerprint paths a live record must share with its cell: the same statement shape (relation, columns per proof, B, K, instance
+#: set, authentication) and the same prover run shape (SKU, pipeline depth), so its verifier clock and live tax stand for the cell.
+LIVE_MATCH = (("profile",), ("authentication",), ("software", "backend", "name"), ("security", "rs_l"), ("software", "backend", "pipeline"),
+              ("B",), ("K",), ("instances", "manifest_sha256"), ("hardware", "gpu", "name"))
+VERDICT_KIND = "verification-verdict/v1"
+LOOPBACK = re.compile(r"^tcp://(127\.|localhost[:/])")
 PASS = "✓"
+VERIFIED_MARK, UNVERIFIED_MARK = "iv", "nv"
 PAYLOAD_ONLY = ("envelope only in the artifact's JSON payload (its meta is a lane summary): tables.py reads the meta, so as "
                 "registered this result cannot be a Table 2 cell (register the result.json as --meta)")
 
@@ -264,19 +277,23 @@ VARIANTS: tuple[Variant, ...] = (
     Variant("A-GKR CPU (Rust)", "A-GKR", "software.backend.name 'verity-gkr…' without a GPU marker (rustc toolchain)",
             lambda f: f["candidate"] == "A-GKR" and f["device"] == "cpu",
             "No (no ZK masking anywhere yet)", "No: committed without masking (only the output words are public endpoints)",
-            "SHA-256 Merkle over the RS columns; Fiat–Shamir with SHA-256 (random oracle; the interactive object is not implemented); "
-            "LogUp fractional-sum GKR (Table 1's text says BLAKE3 Merkle)",
+            "SHA-256 Merkle over the RS columns and SHA-256 Fiat–Shamir (backends/gkr/src/transcript.rs; random oracle; the "
+            "interactive object is not implemented); LogUp fractional-sum GKR. Table 1 names the GPU prover's SHA-512 Merkle",
             "2^-127.7 over Goldilocks^3 (IRS query term 2^-130.2; 0.3 bits short, the LogUp identity term); --features babybear: "
             "2^-130.2 by the accountant, label 2^-128", "Yes: A-GKR column (NON_ZK_PROOF_DIAGNOSTIC | NON_ZK_PROOF)",
-            "backends/gkr/README.md; Table 1 (A-GKR)"),
+            "backends/gkr/README.md; backends/gkr/src/transcript.rs; Table 1 (A-GKR)"),
     Variant("A-GKR GPU (torch/Triton)", "A-GKR", "software.backend.name 'verity-gkr…' with gpu / triton / torch / cuda in the name, "
             "fingerprint backend or toolchain",
             lambda f: f["candidate"] == "A-GKR" and f["device"] == "gpu",
             "No (no ZK masking)", "No: committed without masking",
-            "SHA-256 Merkle (hash_gpu 'sha256' on CUDA) and SHA-256 Fiat–Shamir; LogUp over BabyBear^6 (Table 1's text says BLAKE3 "
-            "Merkle)", "2^-127.7 (account_candidate_a, BabyBear^6, k = 4096, n = 16384, t = 192; dominated by the generic SHA-256 "
-            "collision term)", "Yes: A-GKR column (NON_ZK_PROOF_DIAGNOSTIC | NON_ZK_PROOF); its verifier is Python (transcript replay), "
-            "the Rust verifier is Goldilocks-only", "backends/gkr/gpu/README.md; backends/gkr/gpu/ligero.py; Table 1 (A-GKR)"),
+            "collision resistance of SHA-512 (Merkle, gpu/sha512_cuda.py; generic q^2/2^512 at q = 2^64) and SHA-256 Fiat–Shamir "
+            "coins (offline re-checking; the interactive object is not implemented); LogUp over BabyBear^6; as Table 1",
+            "2^-130.2 (account_candidate_a, BabyBear^6, k = 4096, n = 16384, t = 192; dominated by the Ligero IRS query term; "
+            "SHA-512 commitment 2^-384; envelope security.achieved_log2)",
+            "Yes: A-GKR column (NON_ZK_PROOF_DIAGNOSTIC | NON_ZK_PROOF); verified by the independent Rust verity-gkr-verify "
+            "(backends/gkr/verifier, BabyBear^6, SHA-512 Merkle) and the in-process Python replay",
+            "backends/gkr/gpu/README.md; backends/gkr/gpu/ligero.py; backends/gkr/gpu/sha512_cuda.py; backends/gkr/verifier; "
+            "result envelopes' security (art:300a526a); Table 1 (A-GKR)"),
     Variant("SP1 unmodified (relation-only / bare guest)", "SP1", "software.backend.name 'sp1…' without tc-dot",
             lambda f: f["candidate"] == "SP1" and not f["tcdot"],
             "unknown (SP1 6.4.0 core / compressed proofs; the README states no ZK property; Table 1: as configured)",
@@ -315,6 +332,7 @@ class Measured:
     overhead: float
     codes: list[tuple[str, str]]
     payload: bool = False
+    verified_by: str | None = None     #: who asserted the accepting verification label (a non-producer), else ``None``
 
     @property
     def mark(self) -> str:
@@ -348,16 +366,23 @@ def _overhead(fp: Mapping[str, Any], target: Target, t_total: float) -> float:
     return target.native_peak.flop_per_second / contract.proved_flop_per_second(t_total, b, k)
 
 
+def _doc(store: Any, row: Mapping[str, Any]) -> Mapping[str, Any]:
+    return row.get("manifest") if isinstance(row.get("manifest"), Mapping) else store.get_manifest(row["id"]).to_doc()
+
+
 def build(store: Any) -> Drilldowns:
     D = Drilldowns(tables=T.build(store))
     equivs = T.instance_equivs(store)
     cell_variant: dict[str, str] = {}
+    lives: dict[str, Mapping[str, Any]] = {}
     for row in store.index.select_artifacts(kind=T.RESULT_KIND):
         art_id = row["id"]
-        doc = row.get("manifest") if isinstance(row.get("manifest"), Mapping) else store.get_manifest(art_id).to_doc()
+        doc = _doc(store, row)
         env, meta, payload = _envelope(store, art_id, doc)
         if env is None:
             continue
+        if not payload and is_live(env):
+            lives[art_id] = env
         fp = env["workload_fingerprint"]
         f = features(env, meta)
         v = classify(f)
@@ -372,29 +397,42 @@ def build(store: Any) -> Drilldowns:
             D.unplaced[v.id] = D.unplaced.get(v.id, 0) + 1
             continue
         cand = T.candidate_for(f["backend"])
+        labels = store.labels(art_id)
+        _, attempt = T._attempt_of(store, art_id)
         if cand is None:
             codes = [("X", f"software.backend.name {f['backend']!r} is no Table 1 candidate's: no Table 2 column")]
         else:
-            _, attempt = T._attempt_of(store, art_id)
-            codes = T.reject_codes(env, store.labels(art_id), attempt, target, cand, authentication=T.column_authentication(fp),
-                                   equivs=equivs)
+            codes = T.reject_codes(env, labels, attempt, target, cand, authentication=T.column_authentication(fp), equivs=equivs)
         if payload:
             codes = [*codes, ("X", PAYLOAD_ONLY)]
-        D.measured.append(Measured(art_id, v.id, target.name, float(t_total), _overhead(fp, target, float(t_total)), codes, payload))
+        iv = T.independent_verification(env, labels, attempt)
+        D.measured.append(Measured(art_id, v.id, target.name, float(t_total), _overhead(fp, target, float(t_total)), codes, payload,
+                                   iv.by if iv else None))
+    verdicts = cell_verdicts(store)
     for c in D.tables.cells:
         vid = cell_variant.get(c.artifact)
         label = f"{_TARGET_LABEL.get(c.target, c.target)} · {c.candidate}{T.AUTH_COLUMN_SUFFIX.get(c.authentication, '')}"
         if vid:
             D.holds.setdefault(vid, []).append(label)
-        D.d3.append(d3_row(store.get_manifest(c.artifact).to_doc().get("meta") or {}, c, label, vid))
+        meta = store.get_manifest(c.artifact).to_doc().get("meta") or {}
+        D.d3.append(d3_row(meta, c, label, vid, live=live_records(c.artifact, meta, lives), verdict=verdicts.get(c.artifact)))
     return D
 
 
 def fastest(D: Drilldowns, variant: str, target: str) -> tuple[Measured | None, Measured | None]:
-    """(the variant's fastest result on the target, its fastest Table-2-valid one) by overhead, ties by artifact id."""
+    """(the result D2 shows for the variant on the target, its fastest Table-2-valid one) by overhead, ties by artifact id.  D2
+    shows the fastest independently verified result (:attr:`Measured.verified_by`), and the fastest result only when none is."""
     pool = sorted((m for m in D.measured if m.variant == variant and m.target == target), key=lambda m: (m.overhead, m.artifact))
     ok = [m for m in pool if not m.codes]
-    return (pool[0] if pool else None), (ok[0] if ok else None)
+    shown = next((m for m in pool if m.verified_by), pool[0] if pool else None)
+    return shown, (ok[0] if ok else None)
+
+
+def fastest_unverified(D: Drilldowns, variant: str, target: str) -> Measured | None:
+    """The variant's fastest result on the target when it is faster than the one D2 shows (so not independently verified)."""
+    pool = sorted((m for m in D.measured if m.variant == variant and m.target == target), key=lambda m: (m.overhead, m.artifact))
+    shown, _ = fastest(D, variant, target)
+    return pool[0] if pool and shown is not None and pool[0] is not shown else None
 
 
 # --- D3 ------------------------------------------------------------------------------------------------------------------------------
@@ -408,24 +446,96 @@ def _field(meta: Mapping[str, Any], name: str) -> Any:
     return v if T._num(v) else None
 
 
-def d3_row(meta: Mapping[str, Any], cell: T.Cell, label: str, variant: str | None = None) -> dict[str, Any]:
-    """One D3 row from the cell's result envelope ``meta``; ``None`` where a field is absent.  Proof bytes = ``proof_bytes``, else
-    ``transcript.bytes``; coins = ``net.bytes_in`` / the live evidence's session count (one session proves the batch); verifier
-    CPU s = ``verify.cpu_s`` (the live verifier's own clock), else ``verifier.seconds`` marked ``verifier_cpu_from`` (the
-    emitter's verifier time per batch, CPU vs wall not stated)."""
+def is_live(env: Mapping[str, Any]) -> bool:
+    """A result that ran against a live verifier in its own datacenter and meets 2^-128: the live evidence accepted, its prover and
+    verifier DCs are stated and equal, ``verify.cpu_s``, ``t.total`` and ``t.total_live`` are measured, and ``security.target``
+    and ``security.achieved_log2`` are both <= -128."""
 
-    got = {k: _field(meta, k) for k in D3_FIELDS}
+    lv = _get(env, "validation", "evidence", "live_verifier")
+    sec = _get(env, "workload_fingerprint", "security")
+    m = T._measurements(env)
+    return (isinstance(lv, Mapping) and lv.get("accepted") is True and bool(lv.get("prover_dc")) and lv.get("prover_dc") == lv.get("verifier_dc")
+            and all(T._num(m.get(k)) and m[k] > 0 for k in ("verify.cpu_s", contract.T_TOTAL, contract.T_TOTAL_LIVE))
+            and isinstance(sec, Mapping) and all(T._num(sec.get(k)) and sec[k] <= -128 for k in ("target", "achieved_log2")))
+
+
+def live_records(cell_art: str, cell_env: Mapping[str, Any], lives: Mapping[str, Mapping[str, Any]]) -> dict[str, Any] | None:
+    """The cell's live record: ``{"artifact", "env", "from": "cell" | "companion", "pool": [art...]}`` -- the cell itself when it is
+    live (:func:`is_live`), else the median-``verify.cpu_s`` member (lower median, ties by id) of the live results that agree with
+    the cell on every :data:`LIVE_MATCH` path; ``None`` when there is none."""
+
+    fp = cell_env.get("workload_fingerprint") if isinstance(cell_env.get("workload_fingerprint"), Mapping) else {}
+    key = [_get(fp, *p) for p in LIVE_MATCH]
+    if key[2] is None:
+        return None
+    pool = sorted((a for a, e in lives.items() if [_get(e["workload_fingerprint"], *p) for p in LIVE_MATCH] == key),
+                  key=lambda a: (T._measurements(lives[a])["verify.cpu_s"], a))
+    cpu = [T._measurements(lives[a])["verify.cpu_s"] for a in pool]
+    if cell_art in lives:
+        return {"artifact": cell_art, "env": lives[cell_art], "from": "cell", "pool": pool, "pool_cpu_s": cpu}
+    if not pool:
+        return None
+    pick = pool[(len(pool) - 1) // 2]
+    return {"artifact": pick, "env": lives[pick], "from": "companion", "pool": pool, "pool_cpu_s": cpu}
+
+
+def cell_verdicts(store: Any) -> dict[str, dict[str, Any]]:
+    """{cell art: ``{"artifact", "meta"}``} from ``verification-verdict/v1`` artifacts with ``refs.result`` = the cell, ``result`` PASS
+    and a measured ``verify.cpu_s`` (a re-verification of the cell's own proof on a CPU host); the lowest id wins a tie."""
+
+    out: dict[str, dict[str, Any]] = {}
+    for row in sorted(store.index.select_artifacts(kind=VERDICT_KIND), key=lambda r: r["id"]):
+        doc = _doc(store, row)
+        meta, ref = doc.get("meta") or {}, (doc.get("refs") or {}).get("result")
+        if isinstance(ref, str) and meta.get("result") == "PASS" and T._num(T._measurements(meta).get("verify.cpu_s")):
+            out.setdefault(ref, {"artifact": row["id"], "meta": meta})
+    return out
+
+
+def d3_row(meta: Mapping[str, Any], cell: T.Cell, label: str, variant: str | None = None, *, live: Mapping[str, Any] | None = None,
+           verdict: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    """One D3 row; ``None`` where nothing states a field.  From the cell's envelope ``meta``: proof bytes (``proof_bytes``, else
+    ``transcript.bytes``) and ``t.total``.  From the live record ``live`` (:func:`live_records`; else the cell's envelope): coins =
+    ``net.bytes_in`` / the live evidence's session count (one session proves the batch), rounds, verifier CPU s = ``verify.cpu_s``
+    (the live verifier's own clock) and the live tax.  Without a live record the verifier CPU is the ``verdict``'s ``verify.cpu_s``
+    (``verifier_cpu_from`` = ``verdict``), else the emitter's ``verifier.seconds`` (CPU vs wall not stated)."""
+
+    src = live["env"] if live else meta
+    got = {k: _field(meta if k in ("proof_bytes", "transcript.bytes") else src, k) for k in D3_FIELDS}
     t = cell.t_total
     nbytes = got["proof_bytes"] if got["proof_bytes"] is not None else got["transcript.bytes"]
+    if got["rounds.protocol"] is None:
+        got["rounds.protocol"], got["rounds.sequential_depth"] = _field(meta, "rounds.protocol"), _field(meta, "rounds.sequential_depth")
     sessions = got["validation.evidence.live_verifier.sessions"]
     coins = got["net.bytes_in"] / sessions if got["net.bytes_in"] is not None and sessions else None
-    cpu, cpu_from = (got["verify.cpu_s"], "verify.cpu_s") if got["verify.cpu_s"] is not None else (got["verifier.seconds"], "verifier.seconds")
-    live = got[contract.T_TOTAL_LIVE]
+    vcpu = _field(verdict["meta"], "verify.cpu_s") if verdict else None
+    if got["verify.cpu_s"] is not None:
+        cpu, cpu_from = got["verify.cpu_s"], "verify.cpu_s"
+    elif vcpu is not None:
+        cpu, cpu_from = vcpu, "verdict"
+    else:
+        cpu, cpu_from = got["verifier.seconds"], "verifier.seconds"
+    live_s, live_t = got[contract.T_TOTAL_LIVE], _field(src, contract.T_TOTAL)
+    lv = _get(src, "validation", "evidence", "live_verifier") if live else None
+    lv = lv if isinstance(lv, Mapping) else {}
+    vmeta = verdict["meta"] if verdict and cpu_from == "verdict" else {}
     return {"cell": label, "artifact": cell.artifact, "variant": variant, "t_total": t, "proof_bytes": nbytes,
             "proof_bytes_from": ("proof_bytes" if got["proof_bytes"] is not None else "transcript.bytes") if nbytes is not None else None,
             "gbit_per_s": nbytes * 8 / t / 1e9 if nbytes is not None else None, "coins_bytes": coins, "rounds": got["rounds.protocol"],
             "sequential_depth": got["rounds.sequential_depth"], "verifier_cpu_s": cpu, "verifier_cpu_from": cpu_from if cpu is not None else None,
-            "verifier_cores": cpu / t if cpu is not None else None, "live_tax": live / t if live is not None else None,
+            "verifier_cores": cpu / t if cpu is not None else None,
+            "live_tax": live_s / live_t if live_s is not None and live_t else None,
+            "live_tax_s": live_s - live_t if live_s is not None and live_t else None,
+            "live_artifact": live["artifact"] if live else None, "live_from": live["from"] if live else None,
+            "live_pool": list(live["pool"]) if live else [], "live_pool_cpu_s": list(live["pool_cpu_s"]) if live else [],
+            "verdict_artifact": verdict["artifact"] if vmeta else None,
+            "verdict_wall_s": _field(vmeta, "verify.wall_s") if vmeta else None,
+            "verdict_cpu_s_threads1": _field(vmeta, "verify.cpu_s_threads1") if vmeta else None,
+            "verdict_host": " · ".join(str(vmeta[k]) for k in ("host_cpu", "nproc") if vmeta.get(k)) or None if vmeta else None,
+            "wire_bytes_up": lv["bytes_out"] / sessions if T._num(lv.get("bytes_out")) and sessions else None,
+            "prover_dc": lv.get("prover_dc"), "verifier_dc": lv.get("verifier_dc"),
+            "verifier_url": lv.get("url"), "loopback": bool(LOOPBACK.match(str(lv.get("url") or ""))) if live else None,
+            "rtt_ms_median": lv.get("rtt_ms_median") if T._num(lv.get("rtt_ms_median")) else None,
             "fields_present": [k for k in D3_FIELDS if got[k] is not None], "fields_absent": [k for k in D3_FIELDS if got[k] is None]}
 
 
@@ -457,9 +567,12 @@ def render_markdown(D: Drilldowns) -> str:
     out += [f"- {v.id}: {v.recognise} ({v.sources})" for v in VARIANTS]
 
     out += ["", "## D2 — Fastest measured t.total per variant × target", "",
-            f"Cell `seconds · overhead×` of the variant's fastest result on the target (lowest R_native_spec / R_proved, R_proved = "
-            f"2KB / t.total at the result's own B and K), then `{PASS}` = Table-2-valid (tables.py's predicate) or the first reason: "
-            + ", ".join(f"{k} {v}" for k, v in T.REASON_LETTERS.items()) + f". `{T.EMPTY}` = no result. Footnotes: artifact, reason.", ""]
+            f"Cell `seconds · overhead×` of the variant's fastest independently verified result on the target (its fastest result "
+            f"when none is verified; lowest R_native_spec / R_proved, R_proved = 2KB / t.total at the result's own B and K), then "
+            f"`{PASS}` = Table-2-valid (tables.py's predicate) or the first reason: "
+            + ", ".join(f"{k} {v}" for k, v in T.REASON_LETTERS.items())
+            + f", then `{VERIFIED_MARK}` = independently verified (an accepting verification label by a non-producer) or "
+              f"`{UNVERIFIED_MARK}` = not. `{T.EMPTY}` = no result. Footnotes: artifact, reason, verifier, a faster unverified result.", ""]
     notes: list[str] = []
     rows2 = []
     for v in VARIANTS:
@@ -470,9 +583,13 @@ def render_markdown(D: Drilldowns) -> str:
                 line.append(T.EMPTY)
                 continue
             why = "" if not best.codes else f" — {best.codes[0][1]}"
+            by = f"; independently verified by {best.verified_by}" if best.verified_by else "; not independently verified"
+            quick = fastest_unverified(D, v.id, target.name)
+            faster = f"; faster, unverified: {quick.artifact} {T.fmt_seconds(quick.t_total)} · {T.fmt_overhead(quick.overhead)}" if quick else ""
             also = f"; fastest valid: {ok.artifact} {T.fmt_seconds(ok.t_total)} · {T.fmt_overhead(ok.overhead)}" if ok and ok is not best else ""
-            notes.append(f"{best.artifact}{' (payload envelope)' if best.payload else ''}{why}{also}")
-            line.append(f"{T.fmt_seconds(best.t_total)} · {T.fmt_overhead(best.overhead)} {best.mark} [{len(notes)}]")
+            notes.append(f"{best.artifact}{' (payload envelope)' if best.payload else ''}{why}{by}{faster}{also}")
+            ver = VERIFIED_MARK if best.verified_by else UNVERIFIED_MARK
+            line.append(f"{T.fmt_seconds(best.t_total)} · {T.fmt_overhead(best.overhead)} {best.mark} {ver} [{len(notes)}]")
         rows2.append(line)
     out += [T._md_table(D2_COLUMNS, rows2), ""]
     if notes:
@@ -486,19 +603,45 @@ def render_markdown(D: Drilldowns) -> str:
                 *[f"- {name} ×{len(arts)}" for name, arts in sorted(D.unrecognised.items(), key=lambda kv: (-len(kv[1]), kv[0]))], ""]
 
     out += ["## D3 — Communication and verifier cost, one row per Table 2 cell", "",
-            "From the cell's result envelope only; `…` = the envelope has no such field. Proof bytes = `proof_bytes` (else "
-            "`transcript.bytes`); coins = `net.bytes_in` per live session; rounds = `rounds.protocol`; verifier CPU s = "
-            "`verify.cpu_s` (the live verifier's clock), † = `verifier.seconds` instead (the emitter's verifier time, CPU vs wall not "
-            "stated); live tax = `t.total_live / t.total`.", ""]
+            "Proof bytes (`proof_bytes`, else `transcript.bytes`) and t.total from the cell's envelope; coins (`net.bytes_in` per live "
+            "session), rounds (`rounds.protocol`), verifier CPU s (`verify.cpu_s`, the live verifier's own clock) and the live tax "
+            "(`t.total_live / t.total`, and `t.total_live − t.total`) from the cell's live record: the cell itself when it ran against a "
+            "same-datacenter live verifier at 2^-128, else the median-verifier-CPU run of the same config (relation, l, B, K, instances, "
+            "authentication, SKU, pipeline depth). Cores to keep pace = verifier CPU s / the cell's t.total. ‡ = no live record: "
+            "`verify.cpu_s` of a re-verification of the cell's own proof on a CPU host (verification-verdict/v1). † = neither: the "
+            "emitter's `verifier.seconds` (CPU vs wall not stated). ° = the live verifier ran on the prover's pod (loopback). "
+            "`…` = nothing states the field.", ""]
     rows3 = []
     for r in D.d3:
-        dag = "†" if r["verifier_cpu_from"] == "verifier.seconds" else ""
+        dag = {"verifier.seconds": "†", "verdict": "‡"}.get(r["verifier_cpu_from"], "")
+        loop = "°" if r["loopback"] else ""
+        tax = (lambda x: f"{x:.3g}×{loop} (+{r['live_tax_s'] * 1e3:.3g} ms)") if r["live_tax_s"] is not None else (lambda x: f"{x:.3g}×{loop}")
         rows3.append([r["cell"], _num_or(r["proof_bytes"], _bytes), _num_or(r["gbit_per_s"], lambda x: f"{x:.3g}"),
                       _num_or(r["coins_bytes"], _bytes), _num_or(r["rounds"], lambda x: f"{x:.0f}"),
                       _num_or(r["verifier_cpu_s"], lambda x: f"{T.fmt_seconds(x)}{dag}"),
-                      _num_or(r["verifier_cores"], lambda x: f"{x:.3g}{dag}"), _num_or(r["live_tax"], lambda x: f"{x:.3g}×")])
+                      _num_or(r["verifier_cores"], lambda x: f"{x:.3g}{dag}"), _num_or(r["live_tax"], tax)])
     out += [T._md_table(D3_COLUMNS, rows3) if rows3 else f"(no populated Table 2 cell {T.EMPTY} no row)", ""]
     if D.d3:
+        out.append("Live record per row (artifact; sessions' DCs and verifier; wire bytes prover → verifier per session; same-config "
+                   "live runs and their verifier CPU s):")
+        for r in D.d3:
+            if r["live_artifact"]:
+                pool = r["live_pool_cpu_s"]
+                rng = f"{len(pool)} same-config live run(s), verifier CPU {min(pool):.3g}–{max(pool):.3g} s" if pool else "no other same-config live run"
+                where = f"{r['prover_dc']}, verifier {'on the prover pod' if r['loopback'] else r['verifier_url']}"
+                rtt = f", rtt median {r['rtt_ms_median']:.2g} ms" if r["rtt_ms_median"] is not None else ""
+                wire = f"; {_bytes(r['wire_bytes_up'])} up per session" if r["wire_bytes_up"] is not None else ""
+                out.append(f"- {r['cell']}: {r['live_from']} {r['live_artifact']} ({where}{rtt}){wire}; {rng}")
+            elif r["verdict_artifact"]:
+                extra = [f"{T.fmt_seconds(r['verdict_wall_s'])} wall" if r["verdict_wall_s"] is not None else None,
+                         f"{T.fmt_seconds(r['verdict_cpu_s_threads1'])} CPU at 1 thread" if r["verdict_cpu_s_threads1"] is not None else None,
+                         f"host {r['verdict_host']} vCPU" if r["verdict_host"] else None]
+                extra_s = "; ".join(x for x in extra if x)
+                out.append(f"- {r['cell']}: no live record; verifier CPU from {r['verdict_artifact']} (re-verification of the cell's "
+                           f"proof{': ' + extra_s if extra_s else ''})")
+            else:
+                out.append(f"- {r['cell']}: no live record, no re-verification verdict")
+        out.append("")
         out.append("Fields read per row (present; absent):")
         out += [f"- {r['cell']} ({r['artifact']}): {', '.join(r['fields_present']) or 'none'}; absent: {', '.join(r['fields_absent']) or 'none'}"
                 for r in D.d3]
