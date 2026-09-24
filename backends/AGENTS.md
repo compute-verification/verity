@@ -111,6 +111,15 @@ Other = t.total − Σ buckets − Σ joints (≥ −1 %·t.total); a fused stag
 `t.joint.a+b` prints once as `a+b: 0.41 s (37%)` in the first bucket column it
 covers and `↞` in the others.
 
+Drill-downs D1-D3 (`python -m verity_numerical.bench.drilldown --root <store>
+[--format md|json]`, `verity_numerical/bench/drilldown.py`): D1 variants and
+security properties, one row per `drilldown.VARIANTS` entry (its recogniser and
+its ZK / operands hidden / binding / soundness / Table 2 column, with sources);
+D2 fastest measured `t.total` per variant × target, marked ✓ or with the first
+reason letter of `tables.reject_codes`; D3 communication and verifier cost per
+Table 2 cell, read only from the cell's result envelope (`…` where absent).
+Non-canonical; layout fixed 2026-09-24 (campaign morning-tables BRIEF §1).
+
 ## Proof model: interactive is fine, transferability is not required
 
 Decided 2026-09-21 (user). The Verity verification is an interactive session
