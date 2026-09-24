@@ -438,6 +438,22 @@ def add_input_claim(acc: Acc, rho: Ext, seg_off: int, seg: Segment, x_pt: list[E
     acc.b = e_add(acc.b, e_mul(rho, value))
 
 
+def add_input_claims(acc: Acc, rhos: tuple[Ext, Ext], seg_off: int, seg: Segment, x_pts: tuple[list[Ext], list[Ext]],
+                     c_pt: list[Ext], values: tuple[Ext, Ext]) -> None:
+    """Both of a segment's input claims (same copy point ``c_pt``) as one rank-1 pass:
+    ``eq(c)·(ρ_l eq(l, x) + ρ_r eq(r, x))``, the same ``a`` as two ``add_input_claim`` calls."""
+    dev = acc.device
+    if _field._fast_rank1_add is None or dev.type != "cuda":
+        for rho, x_pt, value in zip(rhos, x_pts, values):
+            add_input_claim(acc, rho, seg_off, seg, x_pt, c_pt, value)
+        return
+    ec = eq_table(c_pt, dev)[: seg.units]
+    ex = [ext_mul(eq_table(x_pt, dev)[: seg.ncols], t_ext(rho, dev)) for rho, x_pt in zip(rhos, x_pts)]
+    _field._fast_rank1_add(acc.seg_view(seg_off, seg.units, seg.ncols), ec, (ex[0] + ex[1]) % P)
+    for rho, value in zip(rhos, values):
+        acc.b = e_add(acc.b, e_mul(rho, value))
+
+
 def add_lookup_claim(acc: Acc, rho: Ext, inst: Instance, seg_offs: list[int], table_off: int, table: Table, ch, n: int, c: LeafClaim) -> None:
     dev = acc.device
     z, beta = ch
@@ -744,8 +760,7 @@ def prove(inst: Instance, pcs: bool = True, params: ligero.LigeroParams = ligero
         ri = 0
         for si, s in enumerate(inst.segs):
             (l_star, vl, r_star, vr), c_star = finals[si]
-            add_input_claim(acc, rhos[ri], seg_offs[si], s, l_star, c_star, vl)
-            add_input_claim(acc, rhos[ri + 1], seg_offs[si], s, r_star, c_star, vr)
+            add_input_claims(acc, (rhos[ri], rhos[ri + 1]), seg_offs[si], s, (l_star, r_star), c_star, (vl, vr))
             ri += 2
         for ti, t in enumerate(inst.tables):
             n, lc = lookup_claims[ti]
