@@ -5,7 +5,7 @@
   research notes bind LANE [--branch B] [--worktree DIR] [--pod NAME] [--succeeds LANE] [--brief PATH] [--final HH:MMZ] [--budget TEXT]
   research notes relaunch LANE [--as SUCCESSOR] [--why TEXT] [--brief PATH] [--final HH:MMZ] [--budget TEXT]   # contract §C in one command
   research notes status [--root DIR] [--repo DIR] [--pods] [--stale-min 30] [--since-hours 24] [--all] [--lane GLOB] [--exclude GLOB] [--json]
-  research notes watch [--every 10] [--idle-min 5] [--runway-h 3] [--reap] [status options]   # alert lines, below
+  research notes watch [--every 10] [--idle-min 5] [--runway-h 3] [--reap] [--reap-stale-min 30] [--guardian-log PATH] [status options]   # alert lines, below
   research notes gc-worktrees [--apply] [--wt-root DIR]     # clean worktrees of finished lanes whose branch tip is on origin
 
 A lane's report is `<root>/lanes/<lane>/<stamp>-report-<lane>.md` (the newest one if several).  `checkpoint` writes
@@ -46,6 +46,17 @@ lane's pod idle >= `--idle-min`: the earliest sign the lane died), one `ACCOUNT`
 vs other pods), `RUNWAY` (under `--runway-h` hours), `FINAL-POD` (a finished lane with no open successor still has a pod after
 the grace) or, with `--reap`, `REAPED` (that pod terminated, logged in `<root>/reaper.log`; `checkpoint ... --keep-pod WHY` keeps it).
 
+The steward rules act without an agent; their memory is `<root>/steward-state.json` (the snapshot leaves it out).  With `--pods
+--reap`, a STALE lane's pod idle (the probe) for `--reap-stale-min` is terminated once custody passes -- every `art:` id its newest
+report cites is preserved on the remote (`preserved.check`; R2 credentials from ~/.config/verity/r2.env when unset) and every local
+run launched on the pod has preserved.json (`research fetch --all`) or is in the store: `REAPED`, else `REAP-BLOCKED <lane> <pod>:
+<first reason>` at most every 30 min, both in reaper.log.  `OVERDUE <lane>`, once: not done 30 min after its binding's `final` (the
+first such HH:MMZ after the binding was written).  With `--pods`, `OVER-BUDGET <lane>`, once: its pods' $/h x time, accumulated per
+pass, passed the binding's budget (its first `$<number>`).  `RENDERED <path>` / `RENDER-FAILED <entry>: <why>`: the `[[render]]`
+entries of `<root>/steward.toml` (daily at `at`, `render_lines`).  `ROUTED <lane> <n>`: new KILLED lines of the laptop guardian's log
+(`--guardian-log`) went to the lane that owns them (`--on <machine>`, or the killed process's cwd under a bound worktree) as one
+handoff per lane per pass; `KILLED-UNOWNED <line>` when no lane does.
+
 `relaunch` is contract §C in one command: save the lane's uncommitted work to `lanes/<lane>/evidence/uncommitted-<HHMMZ>*`,
 checkpoint it superseded, bind the successor (`<topic>-<N+1>` unless `--as`) to its branch, worktree and pods, print the
 successor's launch message.  `gc-worktrees` lists (`--apply`: removes) clean worktrees under the coordinator's worktree root
@@ -62,6 +73,7 @@ import subprocess
 import sys
 import tarfile
 import time
+import tomllib
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
@@ -678,6 +690,8 @@ def snapshot(root: Path, max_bytes: int = SNAPSHOT_MAX_BYTES, now: dt.datetime |
         if code[0] in "RC":                                   # a rename is followed by its source path
             paths.append(entries[i])
             i += 1
+        if path in (STATE_FILE, f".{STATE_FILE}.tmp"):        # the watcher's own memory, rewritten every pass: not history
+            continue
         p = root / path
         (big if p.is_file() and p.stat().st_size > max_bytes else paths).append(path)
     if not paths:
@@ -858,6 +872,382 @@ def reap_lines(root: Path, rows: list[dict], now: dt.datetime, grace_min: float,
             if line.split()[1] == "REAPED" or p["id"] not in noted:
                 lines.append(line)
             noted.add(p["id"])
+    return lines
+
+
+# ---- the steward: duties the watcher carries out itself (stale-lane pods, deadlines, budgets, renders, guardian kills) ---------------------
+
+STATE_FILE = "steward-state.json"
+STEWARD_TOML = "steward.toml"
+R2_ENV = Path.home() / ".config" / "verity" / "r2.env"
+GUARDIAN_LOG = Path.home() / ".veritor" / "mem_guardian.log"
+REAP_RETRY_S = 30 * 60
+OVERDUE_GRACE_MIN = 30
+RENDER_TIMEOUT_S = 600
+NEVER_RAN = ("refused", "resolving", "shipping")        # remote.json phases of a launch that never reached the machine's runner
+BUDGET_RE = re.compile(r"\$\s*(\d+(?:\.\d+)?)")
+HHMMZ_RE = re.compile(r"(\d{1,2}):(\d{2})Z")
+KILLED_RE = re.compile(r"^(?P<ts>\S+) KILLED pid=(?P<pid>\d+) .*?reason=(?P<reason>.*?)(?: cwd=(?P<cwd>.*?))? cmd=(?P<cmd>.*)$")
+ON_RE = re.compile(r"--on[= ](\S+)")
+
+
+def load_state(root: Path) -> dict:
+    try:
+        doc = json.loads((root / STATE_FILE).read_text())
+    except (OSError, ValueError):
+        return {}
+    return doc if isinstance(doc, dict) else {}
+
+
+def save_state(root: Path, state: dict) -> None:
+    tmp = root / f".{STATE_FILE}.tmp"
+    tmp.write_text(json.dumps(state, indent=1, sort_keys=True) + "\n")
+    os.replace(tmp, root / STATE_FILE)
+
+
+def load_env_file(path: Path, environ: dict | None = None) -> list[str]:
+    """KEY=VALUE lines (`export`, quotes, # comments allowed) into the environment where the key is unset or empty: the watcher runs
+    under launchd, without the R2 credentials.  -> the keys it set."""
+    env = os.environ if environ is None else environ
+    try:
+        text = path.read_text()
+    except OSError:
+        return []
+    done = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, v = (x.strip() for x in line.removeprefix("export ").split("=", 1))
+        if len(v) >= 2 and v[0] == v[-1] and v[0] in "'\"":
+            v = v[1:-1]
+        if re.fullmatch(r"[A-Za-z_]\w*", k) and not env.get(k):
+            env[k] = v
+            done.append(k)
+    return done
+
+
+def art_custody(arts: list[str], max_readback_mb: float = 64) -> tuple[bool, str]:
+    """Custody (a): every cited art is PRESERVED on the remote -- `preserved.check`, the predicate of `research data preserved`.  A
+    verified remote replica the catalog already records counts (`recorded`); else the `head` check runs, but only when the blobs it
+    would read back (those not held locally) come to at most max_readback_mb: the laptop's disk is nearly full."""
+    from .store import preserved  # noqa: PLC0415
+    from .store.local import LocalStore  # noqa: PLC0415
+
+    st = LocalStore(None)
+    for a in arts:
+        hits = st.index.resolve_art_prefix(f"art:{a}")
+        if len(hits) != 1:
+            return False, f"art:{a} is {'ambiguous' if hits else 'unknown'} in the local catalog"
+        if preserved.check(st, [hits[0]], mode="recorded")["preserved"]:
+            continue
+        try:
+            m = st.get_manifest(hits[0])
+            mb = sum(n for h, n in m.blobs() if not st.object_path(h).is_file()) / 2**20
+        except Exception as e:  # noqa: BLE001
+            return False, f"art:{a}: {type(e).__name__}: {str(e)[:80]}"
+        if mb > max_readback_mb:
+            return False, f"art:{a}: no verified remote replica recorded, {mb:.0f} MB to read back -> research data preserved art:{a}"
+        rep = preserved.check(st, [hits[0]], mode="head")
+        if not rep["preserved"]:
+            why = [e for x in rep["not_preserved"] for e in x.get("errors") or []] or [rep.get("reason") or "?"]
+            return False, f"art:{a} not preserved: {why[0][:100]}"
+    return True, f"{len(arts)} cited art(s) preserved"
+
+
+def _store_attempt() -> Callable[[str], bool]:
+    st = None
+
+    def has(run_id: str) -> bool:
+        nonlocal st
+        from .store.local import LocalStore  # noqa: PLC0415
+
+        try:
+            st = st or LocalStore(None)
+            return st.get_attempt(run_id) is not None
+        except Exception:  # noqa: BLE001
+            return False
+    return has
+
+
+def run_custody(pod_id: str, runs_dir: Path | None = None, registered: Callable[[str], bool] | None = None) -> tuple[bool, str]:
+    """Custody (b): every local run launched on the pod (remote.json `pod_id`) that reached its runner has preserved.json (`research
+    fetch --all` verified every file) or is registered in the store (an attempt)."""
+    from .runs import runs_root  # noqa: PLC0415
+
+    registered = registered or _store_attempt()
+    n = 0
+    for rj in sorted((runs_dir or runs_root()).glob("*/remote.json")):
+        try:
+            rec = json.loads(rj.read_text())
+        except (OSError, ValueError):
+            continue
+        if not isinstance(rec, dict) or rec.get("pod_id") != pod_id or rec.get("phase") in NEVER_RAN or (rj.parent / "refused.json").exists():
+            continue
+        n += 1
+        if not (rj.parent / "preserved.json").exists() and not registered(rj.parent.name):
+            return False, f"run {rj.parent.name} on it is neither fetched nor in the store -> research fetch --all {rj.parent.name}"
+    return True, f"{n} run(s) on it fetched or registered"
+
+
+def reap_custody(root: Path, lane: str, pod_id: str, arts: Callable[[list[str]], tuple[bool, str]] = art_custody,
+                 runs: Callable[[str], tuple[bool, str]] = run_custody) -> tuple[bool, str]:
+    """Both custody legs for terminating a stale lane's pod: (a) the art: ids the lane's newest report cites, (b) the runs on the pod."""
+    rep = report_for(root, lane)
+    cited = sorted(set(ART_RE.findall(rep.read_text(errors="replace")))) if rep else []
+    ok, why = arts(cited) if cited else (True, "no art: cited")
+    if not ok:
+        return ok, why
+    ok2, why2 = runs(pod_id)
+    return ok2, f"{why}; {why2}" if ok2 else why2
+
+
+def stale_reap_lines(root: Path, rows: list[dict], now: dt.datetime, idle_min: float, state: dict, reap: bool = False,
+                     custody: Callable[[str, dict], tuple[bool, str]] | None = None,
+                     terminate: Callable[[str], None] = terminate_pod) -> list[str]:
+    """With `reap`: a pod of a STALE lane (not done, no --keep-pod) that the probe finds idle (no work process, no verifier, 0 % GPU)
+    for >= idle_min is terminated once custody passes (`reap_custody`): REAPED, else `REAP-BLOCKED <lane> <pod>: <first reason>`.
+    A pod acted on is left alone for 30 min (custody re-checked then); every line goes to <root>/reaper.log."""
+    if not reap:
+        return []
+    custody = custody or (lambda lane, pod: reap_custody(root, lane, pod["id"]))
+    tried = state.setdefault("reap_stale", {})
+    t, lines = now.timestamp(), []
+    for r in rows:
+        if not r.get("stale") or r["state"] in DONE or r.get("keep_pod"):
+            continue
+        for p in r.get("pods", []):
+            if not p.get("idle") or (p.get("idle_min") or 0.0) < idle_min or t - tried.get(p["id"], 0.0) < REAP_RETRY_S:
+                continue
+            tried[p["id"]] = t
+            try:
+                ok, why = custody(r["lane"], p)
+            except Exception as e:  # noqa: BLE001
+                ok, why = False, f"custody not checked ({type(e).__name__}: {str(e)[:80]})"
+            what = f"{r['lane']} {p['name']} {p['id']} ${p['usd_h']:.2f}/h (STALE {_m(r.get('life_min', r['age_min']))}, idle {_m(p['idle_min'])})"
+            if not ok:
+                line = f"{now:%H:%MZ} REAP-BLOCKED {r['lane']} {p['name']}: {why}"
+            else:
+                try:
+                    terminate(p["id"])
+                    line = f"{now:%H:%MZ} REAPED {what}; custody: {why}"
+                except Exception as e:  # noqa: BLE001
+                    line = f"{now:%H:%MZ} REAP-FAILED {what}: {str(e)[:100]}"
+            with (root / "reaper.log").open("a") as f:
+                f.write(line + "\n")
+            lines.append(line)
+    for k in [k for k, v in tried.items() if t - v > 86400]:
+        del tried[k]
+    return lines
+
+
+def final_deadline(root: Path, lane: str, final: str) -> dt.datetime | None:
+    """A binding's `final` (HH:MMZ) as an instant: the first such time after the binding was last written (`bind --final` at launch)."""
+    m = HHMMZ_RE.fullmatch(final or "")
+    p = root / "lanes" / lane / BINDING
+    if not m or not p.exists():
+        return None
+    anchor = _ts(p.stat().st_mtime)
+    t = anchor.replace(hour=int(m[1]) % 24, minute=int(m[2]), second=0, microsecond=0)
+    return t if t > anchor else t + dt.timedelta(days=1)
+
+
+def overdue_lines(root: Path, rows: list[dict], now: dt.datetime, state: dict, grace_min: float = OVERDUE_GRACE_MIN) -> list[str]:
+    """`OVERDUE <lane>` once per deadline: not done grace_min after its binding's `final`.  The deadline is fixed in the state when
+    first seen, so a later bind that keeps `final` does not move it; a new `final` sets a new one."""
+    seen = state.setdefault("overdue", {})
+    lines = []
+    for r in rows:
+        final = _binding_json(root, r["lane"]).get("final")
+        if not final:
+            continue
+        cur = seen.get(r["lane"])
+        if not cur or cur.get("final") != final:
+            if (at := final_deadline(root, r["lane"], final)) is None:
+                continue
+            cur = seen[r["lane"]] = {"final": final, "at": at.timestamp()}
+        if r["state"] in DONE or cur.get("alerted") or now.timestamp() < cur["at"] + grace_min * 60:
+            continue
+        cur["alerted"] = True
+        lines.append(f"{now:%H:%MZ} OVERDUE {r['lane']} FINAL {final} passed {(now.timestamp() - cur['at']) / 60:.0f}m ago: "
+                     f"{'STALE' if r.get('stale') else r['state']}, life {_m(r.get('life_min', r['age_min']))} via {r.get('life_via', 'report')}")
+    return lines
+
+
+def budget_usd(text: str | None) -> float | None:
+    """A binding's budget in dollars: its first `$<number>` ('$22: 1x A100 + ...' -> 22.0)."""
+    m = BUDGET_RE.search(text or "")
+    return float(m[1]) if m else None
+
+
+def budget_lines(root: Path, fleet: Fleet, now: dt.datetime, state: dict) -> list[str]:
+    """Each lane's pod spend, accumulated in the state each pass: every owned pod's $/h x the time since it was last counted (since
+    it started, the first time it is seen or after a restart).  `OVER-BUDGET <lane>` once when it passes the binding's budget."""
+    if fleet.error:                                     # an empty listing is not "every pod stopped"
+        return []
+    counted, spend, alerted = (state.setdefault(k, {}) for k in ("pod_counted", "spend", "over_budget"))
+    t, rate = now.timestamp(), {}
+    for p in fleet.pods:
+        if not (lane := fleet.owner.get(p.get("id"))):
+            continue
+        started = _started(p)
+        since = max([x for x in (counted.get(p["id"]), started.timestamp() if started else None) if x is not None], default=t)
+        usd_h = float(p.get("costPerHr") or 0.0)
+        spend[lane] = round(spend.get(lane, 0.0) + usd_h * max(0.0, t - since) / 3600, 4)
+        rate[lane] = rate.get(lane, 0.0) + usd_h
+        counted[p["id"]] = t
+    for k in [k for k, v in counted.items() if t - v > 2 * 86400]:
+        del counted[k]
+    lines = []
+    for lane, usd in sorted(spend.items()):
+        text = _binding_json(root, lane).get("budget")
+        cap = budget_usd(text)
+        if cap is not None and usd > cap and alerted.get(lane) != cap:
+            alerted[lane] = cap
+            lines.append(f"{now:%H:%MZ} OVER-BUDGET {lane} ${usd:.2f} on pods > ${cap:g} (budget: {text[:60]}); "
+                         f"now ${rate.get(lane, 0.0):.2f}/h")
+    return lines
+
+
+def _render_run(cmd: list[str], env: dict, cwd: Path, timeout: float) -> tuple[int | None, str, str]:
+    try:
+        r = subprocess.run(cmd, env=env, cwd=cwd, capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return None, "", f"timeout after {timeout:.0f}s"
+    except OSError as e:
+        return None, "", f"{type(e).__name__}: {e}"
+    return r.returncode, r.stdout, r.stderr
+
+
+def render_lines(root: Path, now: dt.datetime, state: dict, config: Path | None = None,
+                 run: Callable[[list[str], dict, Path, float], tuple[int | None, str, str]] = _render_run,
+                 timeout_s: float = RENDER_TIMEOUT_S) -> list[str]:
+    """Scheduled renders, from `[[render]]` entries of <root>/steward.toml (re-read every pass): `at` (HH:MMZ, daily), `source` (a tree
+    with backends/numerical and tools/research), `out` (under the notes root), `store` (default ~/.research/store).  Once per UTC day
+    at or after `at`, `python -m verity_numerical.bench.tables` and `.drilldown --root STORE --format md` run with the source on
+    PYTHONPATH into <out>/<stamp>-tables.md / -drilldowns.md: `RENDERED <path>`, or `RENDER-FAILED <entry>: <stderr tail>` (both
+    within 10 min).  The snapshot commits them."""
+    path = config or root / STEWARD_TOML
+    if not path.exists():
+        return []
+    done = state.setdefault("render", {})
+    try:
+        entries = tomllib.loads(path.read_text()).get("render") or []
+        state.pop("render_config_error", None)
+    except (OSError, tomllib.TOMLDecodeError) as e:
+        if state.get("render_config_error") == str(e):
+            return []
+        state["render_config_error"] = str(e)
+        return [f"{now:%H:%MZ} RENDER-FAILED {path.name}: {e}"]
+    lines, today = [], f"{now:%Y-%m-%d}"
+    for e in entries if isinstance(entries, list) else []:
+        at, out = str(e.get("at", "")), str(e.get("out", ""))
+        key, m = f"{out}@{at}", HHMMZ_RE.fullmatch(at)
+        if not (m and out and e.get("source")):
+            if done.get(key) != "invalid":
+                done[key] = "invalid"
+                lines.append(f"{now:%H:%MZ} RENDER-FAILED {key}: an entry needs at = \"HH:MMZ\", source and out")
+            continue
+        if now < now.replace(hour=int(m[1]) % 24, minute=int(m[2]), second=0, microsecond=0) or done.get(key) == today:
+            continue
+        done[key] = today
+        src = Path(str(e["source"])).expanduser()
+        store = Path(str(e.get("store") or "~/.research/store")).expanduser()
+        env = {**os.environ, "PYTHONPATH": os.pathsep.join(str(src / s) for s in ("backends/numerical/python", "tools/research/src", "."))}
+        deadline = time.monotonic() + timeout_s
+        for mod, suffix in (("tables", "tables"), ("drilldown", "drilldowns")):
+            left = deadline - time.monotonic()
+            cmd = [sys.executable, "-m", f"verity_numerical.bench.{mod}", "--root", str(store), "--format", "md"]
+            rc, stdout, stderr = run(cmd, env, src, left) if left > 0 else (None, "", f"timeout after {timeout_s:.0f}s")
+            if rc == 0:
+                f = root / out / f"{now:%Y%m%dT%H%MZ}-{suffix}.md"
+                f.parent.mkdir(parents=True, exist_ok=True)
+                f.write_text(stdout)
+                lines.append(f"{now:%H:%MZ} RENDERED {_tilde(f)}")
+            else:
+                lines.append(f"{now:%H:%MZ} RENDER-FAILED {key} ({mod}): {' '.join(stderr.split())[-200:] or f'rc {rc}'}")
+    return lines
+
+
+def guardian_kills(path: Path, state: dict, max_bytes: int = 8 << 20) -> list[str]:
+    """The guardian log's KILLED lines since the offset saved in the state.  The first look only records where the log ends; a
+    rotated or truncated log starts over from its beginning."""
+    try:
+        st = path.stat()
+    except OSError:
+        return []
+    g = state.get("guardian") or {}
+    if g.get("path") != str(path):
+        state["guardian"] = {"path": str(path), "offset": st.st_size, "ino": st.st_ino}
+        return []
+    off = g.get("offset", 0) if g.get("ino") == st.st_ino and st.st_size >= g.get("offset", 0) else 0
+    off = max(off, st.st_size - max_bytes)
+    with path.open("rb") as f:
+        f.seek(off)
+        data = f.read(st.st_size - off)
+    end = data.rfind(b"\n") + 1
+    state["guardian"] = {"path": str(path), "offset": off + end, "ino": st.st_ino}
+    return [x for x in data[:end].decode(errors="replace").splitlines() if " KILLED pid=" in x]
+
+
+def kill_owner(line: str, lanes: set[str], succ: dict[str, str], machines: dict[str, dict], pod_lane: dict[str, str],
+               wts: dict[str, str]) -> str | None:
+    """The lane a guardian KILLED line belongs to: `--on <machine>` in its cmd (machines.toml -> pod id -> the lane owning that pod;
+    else the machine name as a pod name, `pod_owner`), else its cwd under a bound worktree (the deepest; the latest attempt)."""
+    m = KILLED_RE.match(line)
+    if not m:
+        return None
+    if on := ON_RE.search(m["cmd"]):
+        pid_ = (machines.get(on[1]) or {}).get("pod_id")
+        if owner := pod_lane.get(pid_) or pod_owner(on[1], lanes, succ):
+            return owner
+    cwd = (m["cwd"] or "").strip()
+    if not cwd or cwd == "?":
+        return None
+    c = Path(os.path.realpath(cwd))
+    hits = [(len(w.parts), lane) for lane, w in ((lane, Path(os.path.realpath(w))) for lane, w in wts.items()) if c == w or w in c.parents]
+    return latest(max(hits)[1], succ, lanes) if hits else None
+
+
+def guardian_handoff(root: Path, lane: str, kills: list[str], now: dt.datetime) -> Path:
+    d = root / "lanes" / lane
+    d.mkdir(parents=True, exist_ok=True)
+    p, n = d / f"{now:%Y%m%dT%H%MZ}-handoff-steward-guardian.md", 2
+    while p.exists():
+        p, n = d / f"{now:%Y%m%dT%H%MZ}-handoff-steward-guardian-{n}.md", n + 1
+    m = KILLED_RE.match(kills[0])
+    why = m["reason"] if m else "?"
+    p.write_text(f"---\nlane: {lane}\nkind: handoff\nfrom: steward\ncreated: {now:%Y-%m-%dT%H:%MZ}\n---\n\n"
+                 f"# the laptop guardian killed {len(kills)} process(es) of {lane} ({why}): rerun\n\n~~~text\n" + "\n".join(kills) +
+                 "\n~~~\n\nkilled on the laptop by the guardian, not on the pod: rerun it (LANE-CONTRACT §7: heavy work runs on the pod).\n")
+    return p
+
+
+def guardian_lines(root: Path, rows: list[dict], fleet: Fleet | None, now: dt.datetime, state: dict, log: Path | None = GUARDIAN_LOG,
+                   machines: Callable[[], dict] | None = None) -> list[str]:
+    """New guardian kills to the owning lane's inbox (`kill_owner`): one handoff per lane per pass, `ROUTED <lane> <n>`; a kill no
+    lane owns: `KILLED-UNOWNED <line>`."""
+    kills = guardian_kills(log, state) if log else []
+    if not kills:
+        return []
+    from .remote import load_machines  # noqa: PLC0415
+
+    try:
+        ms = (machines or load_machines)()
+    except Exception:  # noqa: BLE001  (a broken machines.toml: the cwd still maps)
+        ms = {}
+    lanes, succ = {d.name for d in (root / "lanes").glob("*/")}, successors(root)
+    wts = {lane: w for lane in sorted(lanes) if (w := _binding_json(root, lane).get("worktree"))}
+    wts.update({r["lane"]: r["worktree"] for r in rows if r.get("worktree") and r["lane"] not in wts})
+    by: dict[str, list[str]] = {}
+    lines = []
+    for k in kills:
+        if lane := kill_owner(k, lanes, succ, ms, fleet.owner if fleet else {}, wts):
+            by.setdefault(lane, []).append(k)
+        else:
+            lines.append(f"{now:%H:%MZ} KILLED-UNOWNED {k[:300]}")
+    for lane, ks in sorted(by.items()):
+        lines.append(f"{now:%H:%MZ} ROUTED {lane} {len(ks)}: {guardian_handoff(root, lane, ks, now).name}")
     return lines
 
 
@@ -1072,8 +1462,12 @@ def main(argv: list[str]) -> int:
     wa.add_argument("--snapshot", action="store_true", help="each pass, commit the notes repo (research notes snapshot)")
     wa.add_argument("--idle-min", type=float, default=5, help="--pods: IDLE-POD when an open lane's pod is idle this long")
     wa.add_argument("--runway-h", type=float, default=3, help="--pods: RUNWAY when balance / spend rate drops under this")
-    wa.add_argument("--reap", action="store_true", help="--pods: terminate the pods of FINAL lanes (no open successor, not kept) after the grace")
+    wa.add_argument("--reap", action="store_true", help="--pods: terminate the pods of FINAL lanes (no open successor, not kept) after the grace, "
+                                                        "and idle pods of STALE lanes once custody passes")
     wa.add_argument("--reap-grace-min", type=float, default=10)
+    wa.add_argument("--reap-stale-min", type=float, default=30, help="--reap: a STALE lane's pod idle this long is terminated (custody permitting)")
+    wa.add_argument("--guardian-log", default=str(GUARDIAN_LOG), help="the laptop guardian's log, whose KILLED lines go to the owning "
+                                                                        "lane's inbox ('none': off)")
     gc = sub.add_parser("gc-worktrees", help="clean worktrees of finished lanes whose branch tip is on origin: list, or --apply to remove")
     gc.add_argument("--apply", action="store_true", help="git worktree remove them (never --force; branches stay)")
     gc.add_argument("--wt-root", type=Path, default=None, help="default: the parent of --repo's worktree")
@@ -1137,6 +1531,10 @@ def main(argv: list[str]) -> int:
     idle_alerted: set[str] = set()
     pods_noted: set[str] = set()
     runway_last: float | None = None
+    state = load_state(root)
+    if ns.reap:
+        load_env_file(R2_ENV)                               # custody asks the remote; launchd gives the watcher no credentials
+    guardian = None if ns.guardian_log in ("", "none") else Path(ns.guardian_log).expanduser()
     n = 0
     while True:
         fleet = load_fleet(root) if ns.pods else None
@@ -1155,7 +1553,12 @@ def main(argv: list[str]) -> int:
                 acct = None
             line, runway = account_line(fleet, acct, now)
             alert, runway_last = runway_alert(runway, ns.runway_h, runway_last, now)
-            more += [line, *alert, *reap_lines(root, rows, now, ns.reap_grace_min, pods_noted, reap=ns.reap)]
+            more += [line, *alert, *reap_lines(root, rows, now, ns.reap_grace_min, pods_noted, reap=ns.reap),
+                     *stale_reap_lines(root, rows, now, ns.reap_stale_min, state, reap=ns.reap), *budget_lines(root, fleet, now, state)]
+        more += overdue_lines(root, rows, now, state)
+        more += guardian_lines(root, rows, fleet, now, state, guardian)
+        more += render_lines(root, now, state)
+        save_state(root, state)
         if ns.snapshot and (snap := snapshot(root, now=now)) and snap["commit"]:
             more.append(f"{now:%H:%MZ} {_snapshot_line(snap)}")
         open_ = sum(r["state"] not in DONE for r in rows)
