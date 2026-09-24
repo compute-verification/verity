@@ -32,6 +32,7 @@ selects the kernel path by the prover's own environment switches: graphed (defau
 from __future__ import annotations
 
 import argparse
+import gc
 import hashlib
 import json
 import os
@@ -221,6 +222,10 @@ def main(argv: list[str] | None = None) -> int:
         warm.append(time.perf_counter() - tw)
         print(json.dumps({"warmup": True, "seconds": warm[-1], "total": tm["total"], "verified": err is None, "error": err}), flush=True)
         del inst, proof, _st, _data
+    # The preprocessing state (parsed circuits, tables, captured graphs: ~3.4e5 objects) leaves the collector's
+    # generations, so a full collection cannot land inside a timed rep (one did: +0.10 s in the opening).
+    gc.collect()
+    gc.freeze()
     rows = []
     budget = None
     for rep in range(args.reps):
@@ -300,7 +305,7 @@ def main(argv: list[str] | None = None) -> int:
     except ImportError:
         cupy_v = None
     sw = {"backend": {"name": BACKEND, "commit": source_commit(), "version": "checker v2 (limb epilogue), proof.bin v2",
-                      "path": args.path, "encoder": encoder, "opening": "INT8 tensor-core limb GEMMs" if ligero.use_int8(dev) else "fp64 limbs",
+                      "path": args.path, "encoder": encoder, "opening": ligero.opening_path(dev),
                       "witness": "gpu/v2/witness.py (device generator; byte-exact with the CPU export)"},
           "toolchain": {"python": platform.python_version(), "torch": torch.__version__, "cuda_runtime": torch.version.cuda,
                         "triton": triton.__version__, "cupy": cupy_v, "numpy": np.__version__}}
@@ -319,7 +324,8 @@ def main(argv: list[str] | None = None) -> int:
         preprocessing=(f"circuit compilation (unit + limb-epilogue circuits, GKR layers, chain spec: functions of Params only), "
                        f"the witness generator's dense tables on the device, loading the frozen operands from disk "
                        f"({t_load:.2f}s incl. the sha256 check of every tier file); {t_prep:.2f}s in all.  Triton / CUDA-graph / "
-                       f"NVRTC compilation happens in {args.warmup} untimed warm-up rep(s) ({', '.join('%.1fs' % v for v in warm)})"),
+                       f"NVRTC compilation happens in {args.warmup} untimed warm-up rep(s) ({', '.join('%.1fs' % v for v in warm)}), "
+                       f"then gc.freeze() of the preprocessing objects"),
         retention="retained",
         instances=contract.instances_ref(args.tier, args.lo, args.lo + Bn, _sha256(frozen)),
         scope="vu", candidate="A-GKR", checker="v2", field=FIELD,

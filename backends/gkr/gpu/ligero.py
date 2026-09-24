@@ -438,6 +438,56 @@ def open_w_qc(cm: Committed, a: torch.Tensor, r: torch.Tensor) -> tuple[torch.Te
     return w, qc % P
 
 
+def opening_path(dev, params: LigeroParams = DEFAULT) -> str:
+    """How ``prove_open`` computes ``w`` / ``qc`` on ``dev`` (for result records)."""
+    from . import kernels
+
+    mm = "INT8 tensor-core limb GEMM" if use_int8(dev) else "fp64-limb GEMM"
+    if (dev.type == "cuda" and simt_encoder(params.k, params.n) is not None and kernels.AVAILABLE
+            and not os.environ.get("VERITY_GPU_QC_GEMM")):
+        return f"q by evaluation (SIMT encode of a's rows, split-row reduction, INTT_n); w by {mm}"
+    return f"w and q by {mm}s"
+
+
+def open_w_qc_eval(cm: Committed, a: torch.Tensor, r: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    """``open_w_qc`` by evaluation: ``deg q <= 2k - 2 < n``, so ``q`` is fixed by ``q(ω^m) = Σ_i a_i(ω^m) U_i(ω^m)``
+    over the ``n``-domain, where ``U_i(ω^m)`` is the committed codeword and ``a_i(ω^m)`` is row ``i`` of ``a``
+    itself on coset 0 and the SIMT encoder's cosets 1..3 (every row and coordinate encoded once, as the commitment
+    encodes ``X``); one split-row reduction (``kernels.row_code_dot``) and one ``INTT_n`` give the coefficients.  The
+    ~2.7T-multiply-add ``aᵀ X`` GEMM of ``open_w_qc`` becomes ``6 rows`` encodings + ``6 rows n`` multiply-adds.  Falls
+    back to ``open_w_qc`` without the SIMT encoder / Triton; ``VERITY_GPU_QC_GEMM`` forces the GEMM route."""
+    from . import kernels
+
+    p = cm.params
+    dev = a.device
+    rows, k, n = cm.rows, p.k, p.n
+    enc = simt_encoder(k, n) if a.is_cuda else None
+    if enc is None or not kernels.AVAILABLE or os.environ.get("VERITY_GPU_QC_GEMM"):
+        return open_w_qc(cm, a, r)
+    import cupy as cp
+
+    int8 = use_int8(dev)
+    xr = Limbs8(cm.x_rows, "b") if int8 else cm.x_rows
+    w = _mm(r.T.contiguous(), xr).T.contiguous()                      # (k, 6)
+    del xr
+    l = a.shape[0]
+    full = l // k
+    at = torch.zeros((rows, DEG, k), dtype=torch.int32, device=dev)   # at[i, d, j] = a[i k + j, d]
+    if full:
+        at[:full] = a[: full * k].reshape(full, k, DEG).permute(0, 2, 1)
+    if l - full * k:
+        at[full, :, : l - full * k] = a[full * k:].T
+    at = at.view(rows * DEG, k)
+    ev = cp.empty((rows * DEG, 3 * k), dtype=cp.int32)
+    enc[0](cp.asarray(at).view(cp.uint32), ev.view(cp.uint32), write_systematic=False)
+    q_eval = kernels.row_code_dot(at, torch.as_tensor(ev, device=dev), cm.code)
+    del at, ev
+    q = ntt(q_eval, inverse=True)                                     # (6, n) coefficients
+    if bool(q[:, 2 * k - 1:].any()):
+        raise RuntimeError("open_w_qc_eval: q has coefficients past 2k - 2 (encoder / reduction mismatch)")
+    return w, q[:, : 2 * k - 1].T.contiguous()
+
+
 def open_w_qc_reference(cm: Committed, a: torch.Tensor, r: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     """The v1 path: encode ``a`` rows on the ``n``-domain, multiply by the codewords, INTT (NTT butterflies in torch)."""
     p = cm.params
@@ -469,7 +519,7 @@ def prove_open(cm: Committed, a: torch.Tensor, tr: Transcript, timers: dict | No
     rows, n = cm.rows, p.n
     r = row_coeffs(tr, rows, dev)                                     # (rows, 6)
     code = cm.code
-    w, qc = open_w_qc(cm, a, r)
+    w, qc = open_w_qc_eval(cm, a, r)
     w_py, qc_py = py_exts(w), py_exts(qc)
     if timers is not None:
         timers["wq"] = time.perf_counter() - t0
