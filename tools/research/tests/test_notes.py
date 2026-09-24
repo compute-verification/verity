@@ -787,6 +787,12 @@ def test_snapshot_leaves_the_steward_state_out(tmp_path):
     assert notes.snapshot(root) is None and notes.load_state(root) == {"spend": {"a": 2.0}}
 
 
+def test_a_failing_steward_rule_is_a_line_not_a_dead_watcher():
+    assert notes.steward_rule("ok", lambda a, b=0: [f"{a}{b}"], "x", b=1) == ["x1"]
+    [line] = notes.steward_rule("render", lambda: 1 / 0)
+    assert line.endswith(" STEWARD-ERROR render: ZeroDivisionError: division by zero")
+
+
 def test_cli_watch_pass_runs_the_steward_rules_on_a_temp_root(tmp_path, capsys):
     root, log, src = tmp_path / "notes", tmp_path / "guardian.log", tmp_path / "src"
     _report(root, "late", "CHECKPOINT 1111111 (12:00Z) [open] x\n", 60 * 48)

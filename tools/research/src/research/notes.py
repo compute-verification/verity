@@ -55,7 +55,8 @@ first such HH:MMZ after the binding was written).  With `--pods`, `OVER-BUDGET <
 pass, passed the binding's budget (its first `$<number>`).  `RENDERED <path>` / `RENDER-FAILED <entry>: <why>`: the `[[render]]`
 entries of `<root>/steward.toml` (daily at `at`, `render_lines`).  `ROUTED <lane> <n>`: new KILLED lines of the laptop guardian's log
 (`--guardian-log`) went to the lane that owns them (`--on <machine>`, or the killed process's cwd under a bound worktree) as one
-handoff per lane per pass; `KILLED-UNOWNED <line>` when no lane does.
+handoff per lane per pass; `KILLED-UNOWNED <line>` when no lane does.  A rule that fails prints `STEWARD-ERROR <rule>: <error>`
+and the watch goes on.
 
 `relaunch` is contract §C in one command: save the lane's uncommitted work to `lanes/<lane>/evidence/uncommitted-<HHMMZ>*`,
 checkpoint it superseded, bind the successor (`<topic>-<N+1>` unless `--as`) to its branch, worktree and pods, print the
@@ -1169,6 +1170,14 @@ def render_lines(root: Path, now: dt.datetime, state: dict, config: Path | None 
     return lines
 
 
+def steward_rule(name: str, fn: Callable[..., list[str]], *args, **kw) -> list[str]:
+    """One rule's lines; an exception becomes a `STEWARD-ERROR <rule>` line instead of stopping the watcher (a launchd service)."""
+    try:
+        return fn(*args, **kw)
+    except Exception as e:  # noqa: BLE001
+        return [f"{_utcnow():%H:%MZ} STEWARD-ERROR {name}: {type(e).__name__}: {str(e)[:150]}"]
+
+
 def guardian_kills(path: Path, state: dict, max_bytes: int = 8 << 20) -> list[str]:
     """The guardian log's KILLED lines since the offset saved in the state.  The first look only records where the log ends; a
     rotated or truncated log starts over from its beginning."""
@@ -1558,11 +1567,12 @@ def main(argv: list[str]) -> int:
             line, runway = account_line(fleet, acct, now)
             alert, runway_last = runway_alert(runway, ns.runway_h, runway_last, now)
             more += [line, *alert, *reap_lines(root, rows, now, ns.reap_grace_min, pods_noted, reap=ns.reap),
-                     *stale_reap_lines(root, rows, now, ns.reap_stale_min, state, reap=ns.reap), *budget_lines(root, fleet, now, state)]
-        more += overdue_lines(root, rows, now, state)
-        more += guardian_lines(root, rows, fleet, now, state, guardian)
-        more += render_lines(root, now, state)
-        save_state(root, state)
+                     *steward_rule("reap-stale", stale_reap_lines, root, rows, now, ns.reap_stale_min, state, reap=ns.reap),
+                     *steward_rule("budget", budget_lines, root, fleet, now, state)]
+        more += steward_rule("overdue", overdue_lines, root, rows, now, state)
+        more += steward_rule("guardian", guardian_lines, root, rows, fleet, now, state, guardian)
+        more += steward_rule("render", render_lines, root, now, state)
+        more += steward_rule("state", lambda: save_state(root, state) or [])
         if ns.snapshot and (snap := snapshot(root, now=now)) and snap["commit"]:
             more.append(f"{now:%H:%MZ} {_snapshot_line(snap)}")
         open_ = sum(r["state"] not in DONE for r in rows)
