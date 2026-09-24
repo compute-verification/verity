@@ -22,12 +22,20 @@ from .gkr import VerifyError
 
 
 def read_chain(path: Path, ucirc, ecirc, steps: int, public: list[int]) -> prover.Chain:
-    """``chain.txt`` (``main.rs::read_chain``, PROTOCOL.md 14.3): ``link <in|-> <out> <epi> <init> <zero_nonlast>``."""
+    """``chain.txt`` (``main.rs::read_chain``, PROTOCOL.md 14.3): ``link <in|-> <out> <epi> <init> <zero_nonlast>``, and
+    optionally one ``public <epi col> ...`` line naming the epilogue columns bound to ``public.bin``'s columns (default
+    ``public y16``)."""
     text = path.read_text()
     links = []
+    epi_pub = None
     for line in text.splitlines():
         t = line.split()
         if not t:
+            continue
+        if t[0] == "public":
+            if epi_pub is not None or len(t) < 2:
+                raise ValueError("chain.txt: one public line with at least one column")
+            epi_pub = [ecirc.col_index(n) for n in t[1:]]
             continue
         if t[0] != "link":
             raise ValueError(f"chain.txt: unknown line {t[0]}")
@@ -35,8 +43,11 @@ def read_chain(path: Path, ucirc, ecirc, steps: int, public: list[int]) -> prove
         if init >= P:
             raise ValueError("chain.txt: init is not a canonical BabyBear element (a Goldilocks chain file?)")
         links.append(prover.Link(None if t[1] == "-" else ucirc.col_index(t[1]), ucirc.col_index(t[2]), ecirc.col_index(t[3]), init, t[5] == "1"))
-    return prover.Chain(steps, [], [], [], ecirc.col_index("y16"), public, links=links,
-                        spec_hash=hashlib.sha256(text.encode()).digest())
+    if epi_pub is None:
+        return prover.Chain(steps, [], [], [], ecirc.col_index("y16"), public, links=links,
+                            spec_hash=hashlib.sha256(text.encode()).digest())
+    return prover.Chain(steps, [], [], [], epi_pub[0], public, links=links,
+                        spec_hash=hashlib.sha256(text.encode()).digest(), epi_pub=epi_pub)
 
 
 def load_instance(d: Path, device, vus: int | None = None, tile: bool = False) -> prover.Instance:
@@ -47,7 +58,7 @@ def load_instance(d: Path, device, vus: int | None = None, tile: bool = False) -
     steps = man["steps"]
     units = read_rows(d / "units.bin").astype("int64")
     epi = read_rows(d / "epilogue.bin").astype("int64")
-    pub = read_rows(d / "public.bin").astype("int64")[:, 0]
+    pub = read_rows(d / "public.bin").astype("int64")
     have = epi.shape[0]
     if vus is None:
         vus = have
@@ -57,8 +68,8 @@ def load_instance(d: Path, device, vus: int | None = None, tile: bool = False) -
         reps = -(-vus // have)
         units = torch.from_numpy(units).repeat(reps, 1).numpy()
         epi = torch.from_numpy(epi).repeat(reps, 1).numpy()
-        pub = torch.from_numpy(pub).repeat(reps).numpy()
-    units, epi, pub = units[: vus * steps], epi[:vus], pub[:vus]
+        pub = torch.from_numpy(pub).repeat(reps, 1).numpy()
+    units, epi, pub = units[: vus * steps], epi[:vus], pub[:vus].reshape(-1)
     if man.get("variant") == "v2":
         chain = read_chain(root / man.get("chain_file", "chain.txt"), ucirc, ecirc, steps, [int(v) for v in pub])
     else:

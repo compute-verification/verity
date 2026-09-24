@@ -110,15 +110,22 @@ class Chain:
     public_y16: list[int]
     links: list[Link] | None = None
     spec_hash: bytes | None = None      # v2: sha256 of chain.txt, absorbed in the preamble (the links are public data)
+    # v2 with a `public` line in chain.txt: the epilogue columns bound to the public words, `public_y16` then holds
+    # len(epi_pub) words per VU, VU-major (fp4-nvf4: the FP32 word's sign, exponent field and fraction)
+    epi_pub: list[int] | None = None
 
     @property
     def limbs(self) -> int:
         return len(self.col_c)
 
+    @property
+    def pub_cols(self) -> list[int]:
+        return self.epi_pub if self.epi_pub is not None else [self.epi_y16]
+
     def constraints_per_vu(self) -> int:
         if self.links is None:
             return (self.steps + 1) * self.limbs + 1
-        return 1 + sum(lk.constraints_per_vu(self.steps) for lk in self.links)
+        return len(self.pub_cols) + sum(lk.constraints_per_vu(self.steps) for lk in self.links)
 
 
 def union_tables(segs: list[Segment]) -> list[Table]:
@@ -541,12 +548,14 @@ def add_chain_links(acc: Acc, rho: Ext, geo: Ext, inst: Instance, seg_offs: list
         ve[:, lk.epi] = (ve[:, lk.epi] + pw[:, o]) % P
         vu[:, -1, lk.col_y] = (vu[:, -1, lk.col_y] - pw[:, o]) % P
         o += 1
-    last = pw[:, o]
-    ve[:, ch.epi_y16] = (ve[:, ch.epi_y16] + last) % P
-    y16 = torch.tensor([int(y) % P for y in ch.public_y16], dtype=torch.int64, device=dev)
-    b_acc = (b_acc + ext_scale(last, y16).sum(dim=0)) % P
+    npub = len(ch.pub_cols)
+    ys = torch.tensor([int(y) % P for y in ch.public_y16], dtype=torch.int64, device=dev).view(vus, npub)
+    for j, col in enumerate(ch.pub_cols):
+        last = pw[:, o + j]
+        ve[:, col] = (ve[:, col] + last) % P
+        b_acc = (b_acc + ext_scale(last, ys[:, j]).sum(dim=0)) % P
     acc.b = e_add(acc.b, py_ext(b_acc))
-    assert o + 1 == per_vu
+    assert o + npub == per_vu
     return vus * per_vu
 
 
@@ -587,8 +596,8 @@ def check_chain_links_clear(inst: Instance) -> None:
             raise VerifyError(f"chain: column {lk.col_y} must be 0 before the last unit")
         if bool((ec[:, lk.epi] != uc[:, -1, lk.col_y]).any()):
             raise VerifyError(f"chain: epilogue input (column {lk.epi}) differs from the last unit's value")
-    y16 = torch.tensor([int(y) % P for y in ch.public_y16], dtype=torch.int64, device=ec.device)
-    if bool((ec[:, ch.epi_y16] != y16).any()):
+    ys = torch.tensor([int(y) % P for y in ch.public_y16], dtype=torch.int64, device=ec.device).view(vus, len(ch.pub_cols))
+    if bool((ec[:, ch.pub_cols] != ys).any()):
         raise VerifyError("chain: output word differs from the public word")
 
 

@@ -46,13 +46,16 @@ impl Link {
 pub struct Chain {
     pub steps: usize, pub col_c: Vec<usize>, pub col_y: Vec<usize>, pub epi_y32: Vec<usize>, pub epi_y16: usize, pub public_y16: Vec<u32>,
     pub links: Option<Vec<Link>>, pub spec_hash: Option<[u8; 32]>,
+    /// the epilogue columns bound to the public words (`chain.txt` `public` line; `[epi_y16]` otherwise):
+    /// `public_y16` holds `epi_pub.len()` words per VU, VU-major
+    pub epi_pub: Vec<usize>,
 }
 impl Chain {
     pub fn limbs(&self) -> usize { self.col_c.len() }
     pub fn constraints_per_vu(&self) -> usize {
         match &self.links {
             None => (self.steps + 1) * self.limbs() + 1,
-            Some(ls) => 1 + ls.iter().map(|l| l.constraints_per_vu(self.steps)).sum::<usize>(),
+            Some(ls) => self.epi_pub.len() + ls.iter().map(|l| l.constraints_per_vu(self.steps)).sum::<usize>(),
         }
     }
 }
@@ -68,7 +71,7 @@ impl<'a> Statement<'a> {
         }
         out
     }
-    pub fn vus(&self) -> usize { self.chain.public_y16.len() }
+    pub fn vus(&self) -> usize { self.chain.public_y16.len() / self.chain.epi_pub.len() }
 }
 
 #[derive(Default, Debug, Clone)]
@@ -448,7 +451,7 @@ impl<'a> Functional<'a> {
                     if i + 1 == steps { out[lk.col_y] -= gv * self.chain_k[o]; }
                     o += 1;
                 }
-                debug_assert_eq!(o + 1, self.per_vu);
+                debug_assert_eq!(o + ch.epi_pub.len(), self.per_vu);
             } else if si == 1 {
                 let gv = self.chain_v[u];
                 let mut o = 0;
@@ -457,7 +460,8 @@ impl<'a> Functional<'a> {
                     out[lk.epi] += gv * self.chain_k[o];
                     o += 1;
                 }
-                out[ch.epi_y16] += gv * self.chain_k[self.per_vu - 1];
+                let npub = ch.epi_pub.len();
+                for (j, &c) in ch.epi_pub.iter().enumerate() { out[c] += gv * self.chain_k[self.per_vu - npub + j]; }
             }
             lap(prof, 3);
             return;
@@ -630,7 +634,8 @@ fn verify_inner(stmt: &Statement, proof_bytes: &[u8], p: &Params, threads: usize
     // ---- statement shapes
     if stmt.segs.len() != 2 { return Err("statement: two segments (units, epilogue) expected".into()); }
     let ch = &stmt.chain;
-    if stmt.segs[0].units != ch.steps * ch.public_y16.len() || stmt.segs[1].units != ch.public_y16.len() { return Err("statement: unit/epilogue/public counts disagree".into()); }
+    if ch.epi_pub.is_empty() || ch.public_y16.len() != stmt.vus() * ch.epi_pub.len()
+        || stmt.segs[0].units != ch.steps * stmt.vus() || stmt.segs[1].units != stmt.vus() { return Err("statement: unit/epilogue/public counts disagree".into()); }
     let (seg_offs, table_offs, l) = x_layout(stmt);
     let rows = l.div_ceil(p.k);
     let depth = p.n.trailing_zeros() as usize;
@@ -745,7 +750,8 @@ fn verify_inner(stmt: &Statement, proof_bytes: &[u8], p: &Params, threads: usize
     let mut chain_v = Vec::with_capacity(stmt.vus());
     let mut cur = rho_chain;
     for _ in 0..stmt.vus() { chain_v.push(cur); cur = cur * g_vu; }
-    for (v, y) in ch.public_y16.iter().enumerate() { b += (chain_v[v] * chain_k[per_vu - 1]).scale(*y); }
+    let npub = ch.epi_pub.len();
+    for (i, y) in ch.public_y16.iter().enumerate() { b += (chain_v[i / npub] * chain_k[per_vu - npub + i % npub]).scale(*y); }
     if let Some(links) = &ch.links {
         // the init constants of the incoming links: b += sum_v rho geo^(v per_vu + o) * init
         let mut o = 0;
