@@ -240,9 +240,6 @@ class FP4HashedRelation:
     off_domain_index = K
     unchecked = False               # True: the prover's decode does NOT refuse an off-domain word (the negatives prove it)
     _bare_sys = None                # memo: the bare unit the device hint generator is keyed on (``hints``)
-    #: ``relchain.HashedRelationRunner`` may drive this relation through ``pipeline.prove_many`` (``--pipeline N``): the
-    #: device hint generator takes the pipeline slot (one graph + static buffers per stream)
-    pipeline_hashed = True
 
     @staticmethod
     def y_public(y: int) -> int:

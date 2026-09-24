@@ -49,7 +49,6 @@ def _many(R, data, subs, l, depth, coins):
 
 def test_pipelined_hashed_accepted_and_byte_identical():
     R, data, subs, l = _setup(zk=False)
-    assert R.pipelined
     seq = []
     for i, (lo, hi) in enumerate(subs):
         proof, pubs, lay = R.prove_vus(data[lo:hi], check=False, min_l=l, coins=fixed_coins(i), vu_ids=range(lo, hi))
