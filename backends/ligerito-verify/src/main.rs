@@ -22,10 +22,12 @@
 //!     # the statement names, flagged); proofs without the red-team-2 V1 zero claims are rejected (--allow-legacy reads
 //!     # them, UNSOUND: no soundness figure, and batch lists them as a problem); local-coin proofs are verdicts only (no soundness figure; --no-local rejects them); proofs of
 //!     # one statement count once in the union.  `verify --proof X.lgto [--stmt S] [--key K] [--coins C]` likewise.
-//!     # --session PATH (repeatable; a live.ChallengeServerSession record dir or a dir of them): live proofs are
-//!     # authenticated against the issuing verifier's record instead (`session`: slots from the record's coins, labels
-//!     # and statement, never the dump's .coins; every round's MSG = the record's; session accepted) and claim the
-//!     # interactive union x the recorded batches on the statement (red-team-3 R3-7 / R3-10); unauthenticated: rejected.
+//!     # --session PATH (repeatable; the verifier's session store, a dir of live.ChallengeServerSession record dirs, or
+//!     # one record dir): live proofs are authenticated against the issuing verifier's record instead (`session`: slots
+//!     # from the record's coins, labels and statement, never the dump's .coins; every round's MSG = the record's;
+//!     # session accepted; one recorded batch per proof); unauthenticated: rejected.  Claim = the interactive union x the
+//!     # recorded batches on the statement (red-team-3 R3-7 / R3-10), only over whole stores whose every session has
+//!     # its record (a single record dir, or an open session in the store: no claim).
 //! ligerito-verify ref-fixtures --file F.json [--neg N.json] [--json out.json] [--reps R]
 //!     # ligerito-design's ref.py fixtures (`python -m backends.direct.ligerito.ref`, format ligerito-ref/v2): every
 //!     # statement + proof must get ref.py's verdict; --neg = declarative tampers (fixtures/ref/negatives.json) replayed
@@ -170,29 +172,37 @@ struct LgtoOpts {
     /// `--session`: the issuing verifiers' records; live proofs are then authenticated against them (slots derived from
     /// the record, never from `.coins`) and rejected when no recorded batch authenticates them
     sessions: Option<Vec<session::Batch>>,
+    /// why an authenticated live proof still claims nothing (the records given are not a complete store)
+    session_claim_block: Option<String>,
     /// recorded batches (session id, batch) that already authenticate another proof of the run
     used: Vec<(String, usize)>,
 }
 
-/// `--session PATH` (repeatable): a `live.ChallengeServerSession` record dir (`session.json` + `verdict.json`) or a dir
-/// of them.
-fn load_sessions(paths: &[PathBuf]) -> Result<Vec<session::Batch>, String> {
+/// `--session PATH` (repeatable): the verifier's session store (a dir of `live.ChallengeServerSession` record dirs) or
+/// one record dir (`session.json` + `verdict.json`).  Also returns why no claim can be made (R3-10: the attempts on a
+/// statement are countable only over a whole store whose every session has its record).
+fn load_sessions(paths: &[PathBuf]) -> Result<(Vec<session::Batch>, Option<String>), String> {
     let mut dirs = Vec::new();
+    let mut single = Vec::new();
+    let mut unrecorded = Vec::new();
     for p in paths {
         if p.join("session.json").exists() {
             dirs.push(p.clone());
-        } else {
-            let mut sub: Vec<PathBuf> = std::fs::read_dir(p)
-                .map_err(|e| format!("--session {}: {e}", p.display()))?
-                .filter_map(|e| e.ok().map(|e| e.path()))
-                .filter(|d| d.join("session.json").exists())
-                .collect();
-            if sub.is_empty() {
-                return Err(format!("--session {}: no session.json in it or its subdirectories", p.display()));
-            }
-            sub.sort();
-            dirs.extend(sub);
+            single.push(p.display().to_string());
+            continue;
         }
+        let mut sub: Vec<PathBuf> = std::fs::read_dir(p).map_err(|e| format!("--session {}: {e}", p.display()))?.filter_map(|e| e.ok().map(|e| e.path())).filter(|d| d.is_dir()).collect();
+        sub.sort();
+        for d in sub {
+            if d.join("session.json").exists() && d.join("verdict.json").exists() {
+                dirs.push(d);
+            } else if d.join("hello.json").exists() || d.join("session.json").exists() {
+                unrecorded.push(d.file_name().unwrap().to_string_lossy().to_string());
+            }
+        }
+    }
+    if dirs.is_empty() {
+        return Err(format!("--session: no session records under {paths:?}"));
     }
     let mut out = Vec::new();
     for d in dirs {
@@ -200,7 +210,14 @@ fn load_sessions(paths: &[PathBuf]) -> Result<Vec<session::Batch>, String> {
         let name = d.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
         out.extend(session::read_record(&read("session.json")?, &read("verdict.json")?, &name)?);
     }
-    Ok(out)
+    let block = if !unrecorded.is_empty() {
+        Some(format!("none: sessions {unrecorded:?} in the verifier's store have no record (abort-and-retry attempts uncountable, R3-10)"))
+    } else if !single.is_empty() {
+        Some(format!("none: single session record(s) {single:?}, not the verifier's store: abort-and-retry attempts are not counted (R3-10)"))
+    } else {
+        None
+    };
+    Ok((out, block))
 }
 
 /// run.py's manifest entry for one LGTO0001 file (`{"files": [{"proof", "stmt", "coins", "coins_seed", "coins_file"}]}`).
@@ -261,6 +278,10 @@ fn verify_lgto_file(proof_path: &Path, entry: Option<&LgtoEntry>, lo: &LgtoOpts,
                 res = session::authenticate_unused(&stmt, &key, &proof, recs, &lo.used, &lo.opt);
             }
             let seconds = t0.elapsed().as_secs_f64() / reps.max(1) as f64;
+            if let (Ok(a), Some(why)) = (&mut res, &lo.session_claim_block) {
+                a.report.claimed_log2 = None;
+                a.report.claim_basis = why.clone();
+            }
             return match res {
                 Ok(a) => Verdict {
                     name,
@@ -525,7 +546,12 @@ fn main() {
     assert!(n_proofs_arg != Some(0), "--n-proofs must be positive");
     let flag = |f: &str| args.iter().any(|a| a == f);
     let session_paths: Vec<PathBuf> = args.windows(2).filter(|w| w[0] == "--session").map(|w| PathBuf::from(&w[1])).collect();
-    let sessions = if session_paths.is_empty() { None } else { Some(load_sessions(&session_paths).unwrap_or_else(|e| panic!("{e}"))) };
+    let (sessions, session_claim_block) = if session_paths.is_empty() {
+        (None, None)
+    } else {
+        let (b, why) = load_sessions(&session_paths).unwrap_or_else(|e| panic!("{e}"));
+        (Some(b), why)
+    };
     let lgto_opts = |n_proofs: usize| LgtoOpts {
         opt: lgto::Options {
             allow_any_key: flag("--allow-any-key"),
@@ -537,6 +563,7 @@ fn main() {
         key: arg(&args, "--key").map(PathBuf::from),
         coins: arg(&args, "--coins").map(PathBuf::from),
         sessions: sessions.clone(),
+        session_claim_block: session_claim_block.clone(),
         used: Vec::new(),
     };
     match cmd {

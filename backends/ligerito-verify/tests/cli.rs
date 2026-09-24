@@ -214,6 +214,25 @@ fn batch_with_verifier_sessions() {
     for want in ["\"claimed_union_log2\":-126.030", "\"live_session\":{\"session\":\"c20260924T002130Z-1324\",\"batch\":0}", "\"mode\":\"lgto live-session\""] {
         assert!(out.contains(want), "{want} not in {out}");
     }
+    // R3-10: attempts are countable only over the whole store: one record dir, or a store with an open session, claims nothing
+    let one = sess.join("c20260924T002130Z-1324");
+    let o = run(&["batch", "--dir", d.to_str().unwrap(), "--session", one.to_str().unwrap()]);
+    let out = stdout(&o);
+    assert!(o.status.success() && out.contains("\"claimed_union_log2\":null") && out.contains("single session record"), "{out}");
+    let store = scratch("store");
+    for e in std::fs::read_dir(&sess).unwrap().flatten() {
+        let to = store.join(e.file_name());
+        std::fs::create_dir_all(&to).unwrap();
+        for f in ["session.json", "verdict.json", "hello.json"] {
+            std::fs::copy(e.path().join(f), to.join(f)).unwrap();
+        }
+    }
+    std::fs::create_dir_all(store.join("c-open")).unwrap();
+    std::fs::copy(one.join("hello.json"), store.join("c-open/hello.json")).unwrap();
+    let o = run(&["batch", "--dir", d.to_str().unwrap(), "--session", store.to_str().unwrap()]);
+    let out = stdout(&o);
+    assert!(o.status.success() && out.contains("\"claimed_union_log2\":null") && out.contains("[\\\"c-open\\\"] in the verifier's store have no record"), "{out}");
+    let _ = std::fs::remove_dir_all(&store);
     std::fs::remove_file(d.join("a.lgto")).unwrap();
     std::fs::copy(s.join("label_grinding.lgto"), d.join("a.lgto")).unwrap();
     std::fs::copy(s.join("label_grinding.coins"), d.join("a.coins")).unwrap();
