@@ -345,8 +345,8 @@ def balanced_arities(n: int, max_arity: int) -> tuple:
 
 def _tail_arities(log_table: int, n_vars: int, small_log2: int, max_arity: int = ZK_MAX_ARITY) -> list:
     """Bind ``n_vars`` variables of a table of ``2^log_table`` cells: arity 3 (``zc_msg3``) while the table has more than
-    ``2^small_log2`` cells, then balanced rounds of at most ``max_arity`` (``zc_red`` / ``pp_red``: they re-read the corners
-    per entry, 4^v loads per group, so only on tables that are small by then)."""
+    ``2^small_log2`` cells, then balanced rounds of at most ``max_arity`` (``zc_msgv`` / ``zc_red`` / ``pp_red``: 3^v entries
+    per group, so only on tables that are small by then)."""
     out = []
     while n_vars > 0 and log_table > small_log2:
         a = min(3, n_vars)
@@ -364,15 +364,15 @@ def lean_schedule(n_zc: int, n_cmb: int) -> Schedule:
     return Schedule(tuple(zc), vf, tuple(_tail_arities(n_cmb, n_cmb, 12, MAX_ARITY)))
 
 
-def zk_default_schedule(lay: Layout, vf: int = 10) -> Schedule:
-    """LGSC0004's default (coins first: one round trip ~ 0.1 s live; a coin is worth ~30 ms of prover time and ~20 KB): the
-    opening round, arity 3 (``zc_msg3``) down to 2^21 cells, then arity <= 6; a final table round of ``vf`` variables
-    (``<= n_c - 4``: every final-table entry keeps >= 16 product-row cells); combined: arity 3 down to 2^18 cells, then
-    <= 6; row reduction <= 6.  fp8-ada: zc 3,3,3,6,5 / vf 10 / cmb 6,6,6 / rb 6,6 = 12 coins."""
+def zk_default_schedule(lay: Layout, vf: int = 12) -> Schedule:
+    """LGSC0004's default (coins first: one round trip ~ 0.1 s live, against ~10 ms of prover time and ~230 KB for the
+    11th coin at 4096 VUs): the opening round, arity 3 (``zc_msg3``) down to 2^24 cells, then arity <= 6 (``zc_msgv``); a
+    final table round of ``vf`` variables (``<= n_c - 4``: every final-table entry keeps >= 16 product-row cells); combined:
+    arity 3 down to 2^18 cells, then <= 6; row reduction <= 6.  fp8-ada: zc 3,3,6,6 / vf 12 / cmb 6,6,6 / rb 6,6 = 11 coins."""
     n, n_cmb = lay.n_k + lay.n_c, n_cmb_of(lay)
     zc, rem = [3], n - 3
     vf = max(1, min(vf, zk_vf_max(lay), rem - 1, ZK_MAX_VF))
-    zc += _tail_arities(rem, rem - vf, 21)
+    zc += _tail_arities(rem, rem - vf, 24)
     return Schedule(tuple(zc), vf, tuple(_tail_arities(n_cmb, n_cmb, 18)), balanced_arities(lay.n_i, ZK_MAX_ARITY))
 
 
@@ -656,15 +656,27 @@ def _fm(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     a, b = torch.broadcast_tensors(a, b)
     if a.numel() > D << 15:
         return _fm_big(a, b)
-    W = _FOLD.get(a.device)
+    pr = (a[..., :, None] * b[..., None, :]) % P
+    return (pr.reshape(pr.shape[:-2] + (1, D * D)) * _fold_w(a.device)).sum(-1) % P
+
+
+def _fold_w(dev) -> torch.Tensor:
+    """``(6, 36)``: coordinate product ``a_i b_j`` -> ext coordinate ``(i + j) % 6``, times 31 if wrapped (``X^6 = 31``)."""
+    W = _FOLD.get(dev)
     if W is None:
         W = torch.zeros((D, D * D), dtype=torch.int64)
         for i in range(D):
             for j in range(D):
                 W[(i + j) % D, D * i + j] = 1 if i + j < D else 31
-        W = _FOLD[a.device] = W.to(a.device)
-    pr = (a[..., :, None] * b[..., None, :]) % P
-    return (pr.reshape(pr.shape[:-2] + (1, D * D)) * W).sum(-1) % P
+        W = _FOLD[dev] = W.to(dev)
+    return W
+
+
+def _fdot(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+    """``sum_e a[e] b[e]`` over the leading axis of two ``(n, 6)`` ext tensors (= ``_fm(a, b).sum(0) % P``): the reduced
+    coordinate products summed first (n < 2^32), then one fold."""
+    pr = (a[:, :, None] * b[:, None, :] % P).sum(0) % P
+    return (pr.reshape(1, D * D) * _fold_w(a.device)).sum(-1) % P
 
 
 def _fm_big(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
@@ -711,6 +723,7 @@ class ZkMask:
         self.coeffs = None if coeffs is None else coeffs.to("cpu")
         self._K = torch.zeros((D,), dtype=torch.int64)
         self._base: dict = {}                                     # t -> (base_t, outer base weights (3^v, 6))
+        self._msg: dict = {}                                      # t -> (g_t in the mixed representation, its ones)
         self.claim_w: list = []                                   # per bound group: (3^v - 1, 6) weights of K
 
     @property
@@ -727,21 +740,34 @@ class ZkMask:
             v = self.arities[t]
             pts = torch.stack(list(taus)) if self.kind == "eq" else None
             Wb = _outer(list(_mono_weights(self.kind, pts, v))).reshape(3 ** v, D)
-            base = (_fm(self._c(t), Wb).sum(0) % P) if self.coeffs is not None else None
+            base = _fdot(self._c(t), Wb) if self.coeffs is not None else None
             self._base[t] = (base, Wb)
         return self._base[t]
 
+    def _msg_part(self, t: int, taus: list | None) -> tuple:
+        if t not in self._msg:
+            v = self.arities[t]
+            M = self._c(t).reshape((3,) * v + (D,))
+            ones = torch.ones((1,) * v, dtype=torch.int64)
+            for a in range(v):              # X^0, X^1, X^2 -> (1, 1, 0), (0, 1, 0), (0, 1, 1) in (q(0), q(1), q_inf) per axis
+                c0, c1, c2 = M.select(a, 0), M.select(a, 1), M.select(a, 2)
+                M = torch.stack((c0, (c0 + c1 + c2) % P, c2), dim=a)
+                ones = torch.cat((ones, ones, torch.zeros_like(ones)), dim=a)
+            self._base_w(t, taus)
+            self._msg[t] = (M, ones[..., None])
+        return self._msg[t]
+
+    def prepare(self, taus: list | None = None) -> None:
+        """Every round's challenge-independent message part (``eq``: ``taus[t]`` = round ``t``'s tau entries, on the CPU so
+        that nothing waits for the device): the prover runs this while the device computes the opening round."""
+        for t in range(len(self.arities)):
+            self._msg_part(t, None if taus is None else taus[t])
+
     def message(self, t: int, taus: list | None = None, n_rest: int = 0) -> torch.Tensor:
         """Round ``t``'s mask part in the mixed representation: ``K + g_t(X) - base_t`` (``eq``), times ``2^n_rest`` (``avg``)."""
-        v = self.arities[t]
+        M, ones = self._msg_part(t, taus)
         base, _ = self._base_w(t, taus)
-        M = self._c(t).reshape((3,) * v + (D,))
-        ones = torch.ones((1,) * v, dtype=torch.int64)
-        for a in range(v):                  # X^0, X^1, X^2 -> (1, 1, 0), (0, 1, 0), (0, 1, 1) in (q(0), q(1), q_inf) per axis
-            c0, c1, c2 = M.select(a, 0), M.select(a, 1), M.select(a, 2)
-            M = torch.stack((c0, (c0 + c1 + c2) % P, c2), dim=a)
-            ones = torch.cat((ones, ones, torch.zeros_like(ones)), dim=a)
-        M = (M + ones[..., None] * ((self._K - base) % P)) % P
+        M = (M + ones * ((self._K - base) % P)) % P
         if self.kind == "avg" and n_rest:
             M = (M * pow(2, n_rest, P)) % P
         return M.to(self.device)
@@ -753,7 +779,7 @@ class ZkMask:
         W = (_outer(list(_mono_weights("eval", r, v))).reshape(3 ** v, D) - Wb) % P
         self.claim_w.append(W[1:])
         if self.coeffs is not None:
-            self._K = (self._K + _fm(self._c(t), W).sum(0)) % P
+            self._K = (self._K + _fdot(self._c(t), W)) % P
 
     def claim(self, lay: Layout, value: torch.Tensor, name: str) -> SparseClaim:
         """``K = value`` as a sparse claim on the committed cells: coefficient ``u`` (global index ``offset + u``) has its
@@ -1056,14 +1082,21 @@ def _prove_zk(lay: Layout, cons: Constraints, z: torch.Tensor, coins, cheat: str
     E, claim = one.clone(), zero.clone()
     rs: list = []
     zc_msgs, per_round, msg_t = [], [], []
+    tau_h, zc_taus, nrem = tau.cpu(), [], n
+    for v in sched.zc:
+        zc_taus.append([tau_h[nrem - 1 - j] for j in range(v)])
+        nrem -= v
     nrem = n
     for t, v in enumerate(sched.zc):
         tr_ = time.perf_counter()
         M = st.round(v)
+        if t == 0:
+            for mk, tk in ((mz, zc_taus), (mc, None), (mr, None)):
+                mk.prepare(tk)
         _sync(dev)
         msg_t.append(time.perf_counter() - tr_)
         taus = [tau[nrem - 1 - j] for j in range(v)]
-        M = (M + mz.message(t, taus)) % P
+        M = (M + mz.message(t, zc_taus[t])) % P
         if cheat in ("zc", "all") or (cheat == "round1" and t == 0):
             M = _fix_zc_round(M, taus, claim, E)
         zc_msgs.append(M)
@@ -1832,6 +1865,86 @@ extern "C" __global__ void zc_msg3(
     block_reduce_add<54>(s, acc + 54 * a1);
 }
 
+// ---- arity-V round (V = 4..6) on big ext tables: blockIdx.x = the entry et of the top V-2 axes (the 3^(V-2) slices of an
+// x-chunk run side by side and share its corners in L2), blockIdx.y strides the groups.  A thread forms the et-slice of its
+// group's 4 low (X_{V-1}, X_V) corners (an inf axis contributes T(1) - T(0)) and the 9 low entries as zc_msg2 does:
+// 4^(V-1) loads per group per table (zc_red: 4^V) and one weight per slice (zc_red: per entry).  Output (3^V, 6)
+// Montgomery, entry et * 9 + 3 a_{V-1} + a_V.
+template <int V>
+__device__ void zc_msgv_body(const int* __restrict__ A, const int* __restrict__ B, const int* __restrict__ Cm,
+                             const u32* __restrict__ wr, const u32* __restrict__ wc, u64* acc,
+                             long long nq, int cb, long long nwr, long long nwc, long long ps)
+{
+    constexpr int TA = V - 2;
+    const int et = blockIdx.x;
+    int base = 0, ninf = 0, infbit[TA];
+    {
+        int ee = et;
+        #pragma unroll
+        for (int j = TA - 1; j >= 0; j--) {
+            const int aj = ee % 3;
+            ee /= 3;
+            if (aj == 2) infbit[ninf++] = 1 << (TA - 1 - j); else base |= aj << (TA - 1 - j);
+        }
+    }
+    u32 s[54];
+    #pragma unroll
+    for (int q = 0; q < 54; q++) s[q] = 0;
+    const long long cmask = (1LL << cb) - 1;
+    for (long long x = (long long)blockIdx.y * blockDim.x + threadIdx.x; x < nq; x += (long long)gridDim.y * blockDim.x) {
+        const long long k2 = x >> cb, c2 = x & cmask;
+        u32 wa[6], wb[6], w[6];
+        #pragma unroll
+        for (int p = 0; p < 6; p++) { wa[p] = __ldg(wr + p * nwr + k2); wb[p] = __ldg(wc + p * nwc + c2); }
+        ext_mul(wa, wb, w);
+        u32 a[4][6], b[4][6], c[4][6];
+        #pragma unroll
+        for (int q = 0; q < 4; q++) {
+            #pragma unroll
+            for (int p = 0; p < 6; p++) { a[q][p] = 0; b[q][p] = 0; c[q][p] = 0; }
+        }
+        for (int m = 0; m < (1 << ninf); m++) {
+            int bt = base, neg = 0;
+            for (int u = 0; u < ninf; u++) { if ((m >> u) & 1) bt |= infbit[u]; else neg ^= 1; }
+            #pragma unroll
+            for (int q = 0; q < 4; q++) {
+                #pragma unroll
+                for (int p = 0; p < 6; p++) {
+                    const long long o = p * ps + x + (long long)(bt * 4 + q) * nq;
+                    const u32 va = (u32)A[o], vb = (u32)B[o];
+                    a[q][p] = neg ? submod(a[q][p], va) : addmod(a[q][p], va);
+                    b[q][p] = neg ? submod(b[q][p], vb) : addmod(b[q][p], vb);
+                    if (ninf == 0) c[q][p] = (u32)Cm[o];
+                }
+            }
+        }
+        #pragma unroll
+        for (int a1 = 0; a1 < 3; a1++) {
+            #pragma unroll
+            for (int a2 = 0; a2 < 3; a2++) {
+                u32 ah[6], bh[6], f[6], t[6];
+                #pragma unroll
+                for (int p = 0; p < 6; p++) {
+                    ah[p] = mix1(mix1(a[0][p], a[1][p], a2), mix1(a[2][p], a[3][p], a2), a1);
+                    bh[p] = mix1(mix1(b[0][p], b[1][p], a2), mix1(b[2][p], b[3][p], a2), a1);
+                }
+                ext_mul(ah, bh, f);
+                if (ninf == 0 && a1 < 2 && a2 < 2) {
+                    #pragma unroll
+                    for (int p = 0; p < 6; p++) f[p] = submod(f[p], mix1(mix1(c[0][p], c[1][p], a2), mix1(c[2][p], c[3][p], a2), a1));
+                }
+                ext_mul(w, f, t);
+                #pragma unroll
+                for (int p = 0; p < 6; p++) s[(a1 * 3 + a2) * 6 + p] = addmod(s[(a1 * 3 + a2) * 6 + p], t[p]);
+            }
+        }
+    }
+    block_reduce_add<54>(s, acc + 54 * et);
+}
+extern "C" __global__ void zc_msgv4(const int* A, const int* B, const int* Cm, const u32* wr, const u32* wc, u64* acc, long long nq, int cb, long long nwr, long long nwc, long long ps) { zc_msgv_body<4>(A, B, Cm, wr, wc, acc, nq, cb, nwr, nwc, ps); }
+extern "C" __global__ void zc_msgv5(const int* A, const int* B, const int* Cm, const u32* wr, const u32* wc, u64* acc, long long nq, int cb, long long nwr, long long nwc, long long ps) { zc_msgv_body<5>(A, B, Cm, wr, wc, acc, nq, cb, nwr, nwc, ps); }
+extern "C" __global__ void zc_msgv6(const int* A, const int* B, const int* Cm, const u32* wr, const u32* wc, u64* acc, long long nq, int cb, long long nwr, long long nwc, long long ps) { zc_msgv_body<6>(A, B, Cm, wr, wc, acc, nq, cb, nwr, nwc, ps); }
+
 // mixed-representation entry e (sum_j a_j 3^(v-1-j)) of a table's 2^v corners at group x (ext, Montgomery)
 template <int V>
 __device__ __forceinline__ void mixed_at(const int* __restrict__ T, long long ps, long long x, long long nq, int e, u32* out) {
@@ -1923,7 +2036,7 @@ __device__ void zc_red_body(const int* __restrict__ A, const int* __restrict__ B
 extern "C" __global__ void zc_red1(const int* A, const int* B, const int* Cm, const u32* wr, const u32* wc, u64* acc, long long nq, int cb, long long nwr, long long nwc, long long ps) { zc_red_body<1>(A, B, Cm, wr, wc, acc, nq, cb, nwr, nwc, ps); }
 extern "C" __global__ void zc_red2(const int* A, const int* B, const int* Cm, const u32* wr, const u32* wc, u64* acc, long long nq, int cb, long long nwr, long long nwc, long long ps) { zc_red_body<2>(A, B, Cm, wr, wc, acc, nq, cb, nwr, nwc, ps); }
 extern "C" __global__ void zc_red3(const int* A, const int* B, const int* Cm, const u32* wr, const u32* wc, u64* acc, long long nq, int cb, long long nwr, long long nwc, long long ps) { zc_red_body<3>(A, B, Cm, wr, wc, acc, nq, cb, nwr, nwc, ps); }
-// arity 4..6 (LGSC0004's tail rounds): tables of <= 2^18 cells, so the per-entry corner re-reads hit L2
+// arity 4..6 below 2^12 groups (zc_msgv above): the per-entry corner re-reads hit L2
 extern "C" __global__ void zc_red4(const int* A, const int* B, const int* Cm, const u32* wr, const u32* wc, u64* acc, long long nq, int cb, long long nwr, long long nwc, long long ps) { zc_red_body<4>(A, B, Cm, wr, wc, acc, nq, cb, nwr, nwc, ps); }
 extern "C" __global__ void zc_red5(const int* A, const int* B, const int* Cm, const u32* wr, const u32* wc, u64* acc, long long nq, int cb, long long nwr, long long nwc, long long ps) { zc_red_body<5>(A, B, Cm, wr, wc, acc, nq, cb, nwr, nwc, ps); }
 extern "C" __global__ void zc_red6(const int* A, const int* B, const int* Cm, const u32* wr, const u32* wc, u64* acc, long long nq, int cb, long long nwr, long long nwc, long long ps) { zc_red_body<6>(A, B, Cm, wr, wc, acc, nq, cb, nwr, nwc, ps); }
@@ -2229,6 +2342,12 @@ class CudaZC:
             raise ValueError(f"CudaZC: arity {v} > {ZK_MAX_ARITY}")
         ne = 3 ** v
         acc = torch.zeros((ne * D,), dtype=torch.int64, device=self.dev)
+        if v >= 4 and nq >= (1 << 12):
+            nt = 3 ** (v - 2)
+            gy = int(min(-(-nq // self.THREADS), max(1, 8192 // nt)))
+            _kernel(f"zc_msgv{v}")((nt, gy), (self.THREADS,), (_cp(A), _cp(B), _cp(Cm), _cp(wr), _cp(wc), _cp(acc), cp.int64(nq),
+                                                                cp.int32(cb), cp.int64(wr.shape[1]), cp.int64(wc.shape[1]), cp.int64(ps)))
+            return from_mont(acc % P).reshape((3,) * v + (D,))
         (gx,), block = _launch(nq, 256, max(1, 2048 // ne))
         _kernel(f"zc_red{v}")((gx, ne), block, (_cp(A), _cp(B), _cp(Cm), _cp(wr), _cp(wc), _cp(acc), cp.int64(nq), cp.int32(cb),
                                                cp.int64(wr.shape[1]), cp.int64(wc.shape[1]), cp.int64(ps)))

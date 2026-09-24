@@ -205,6 +205,23 @@ def test_cuda_engine_matches_reference(toy, name):
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="cuda")
+@pytest.mark.parametrize("v", [3, 4, 5, 6])
+def test_cuda_zc_big_round_matches_reference(v):
+    """The big-table zero-check rounds (``zc_msg3``, ``zc_msgv4..6``: >= 2^12 groups, which the toy never reaches)."""
+    torch.manual_seed(v)
+    n_c, logn = 8, v + 12
+    tabs = [torch.randint(0, P, (1 << logn, 6), dtype=torch.int64, device="cuda") for _ in range(3)]
+    tau = torch.randint(0, P, (logn, 6), dtype=torch.int64, device="cuda")
+    ref = object.__new__(sc._RefZC)
+    ref.T, ref.tau, ref.nrem = tabs, tau, logn
+    cu = object.__new__(sc.CudaZC)
+    cu.dev, cu.n_c, cu.n_k, cu.logn, cu._planes = tau.device, n_c, logn - n_c, logn, {}
+    cu.tau, cu.tau_r, cu.tau_c = tau, tau[n_c:], tau[:n_c]
+    cu.T = torch.stack([sc.mont_planes(t) for t in tabs]).contiguous()
+    assert torch.equal(ref.round(v), cu.round(v))
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="cuda")
 def test_cuda_helpers_match(toy):
     sys, lay, cons, z, pubs = toy
     torch.manual_seed(3)
