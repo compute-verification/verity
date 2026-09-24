@@ -634,12 +634,17 @@ def run_sp1_bare(a) -> int:
     shards = int(rep["shards"])
     sha = source_sha() or os.environ.get("RESEARCH_SOURCE_COMMIT")
     bits = int(variant.get("security_bits", SP1_SECURITY_BITS))
-    security = {"target": -bits, "achieved_log2": round(-bits + __import__("math").log2(shards), 3),
+    # A variant whose SP1_TARGET_BITS_OF_SECURITY no longer bounds the whole shard proof (it sets only the FRI query
+    # count) gives the per-shard figure of the full accounting instead, with its terms.
+    per_shard = float(variant.get("security_per_shard_log2", -bits))
+    security = {"target": -bits, "achieved_log2": round(per_shard + __import__("math").log2(shards), 3),
                 "source": variant.get("security_source") or
                           "SP1's own accounting: sp1-primitives 6.6.0 src/fri_params.rs SP1_TARGET_BITS_OF_SECURITY = 100 per STARK proof "
                           "(CORE_LOG_BLOWUP 2, unique_decoding_queries = ceil((100 - 16) / -log2(5/8)) = 124 at SP1_PROOF_OF_WORK_BITS 16; "
                           "KoalaBear^4), compile-time constants of the pinned SP1",
-                "union_bound": f"{shards} shard proofs in the core proof: -{bits} + log2({shards})"}
+                "union_bound": f"{shards} shard proofs in the core proof: {per_shard:g} + log2({shards})"}
+    if variant.get("security_parameters"):
+        security["parameters"] = variant["security_parameters"]
     software = {"backend": {"name": variant.get("backend_name") or a.backend_name, "version": SP1_VERSION, "commit": sha},
                 "toolchain": {"sp1-sdk": SP1_VERSION, "sp1-zkvm": SP1_VERSION, "sp1-primitives": "6.6.0", "sp1-gpu-server": "6.6.0 (release binary)",
                               "guest toolchain": "succinct sp1up v6.4.0", "python": sys.version.split()[0], **variant.get("toolchain", {})},

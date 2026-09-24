@@ -24,7 +24,7 @@ SEEDS = ("B-Ligero v1", "B-Ligero v3 (private selection)", "B-Ligero v3 fused hi
          "B-Ligero v3x4 (fold)", "B-Ligero v2 (public selection)", "B-Ligero v2x4 (public selection)", "B-Ligero Fiat–Shamir (HVZK)",
          "B-Ligero + Poseidon2 per row", "B-Ligero + Poseidon2 shared 64x64 tile", "B-Ligero + BLAKE3 in circuit", "B-Ligero + Ajtai n=64",
          "B-Ligero + Ajtai n=128", "B-Ligero native external authentication", "Ligerito", "A-GKR CPU (Rust)", "A-GKR GPU (torch/Triton)",
-         "SP1 unmodified (relation-only / bare guest)", "SP1 + TC_DOT chip (modified SP1)")
+         "SP1 stock (relation-only / bare guest)", "SP1 stock, FRI query count raised (otherwise unmodified)", "SP1 precompile (TC_DOT chip)")
 FOLDED = "b-ligero chain, fp8-ada relation (backends/direct/ligero/fp8); folded: 4 instruction steps per column at FP8Params.from_model(ada_e4m3_m16n8k32x4)"
 V3 = "b-ligero chain, bf16-ampere-v3 relation (backends/direct/ligero/privsel/relation.py at params.from_model(ampere_bf16_m16n8k16))"
 V3X4 = "b-ligero chain, fp8-ada-v3x4 relation (backends/direct/ligero/privsel/relation.py at fp8params.from_model(ada_e4m3_m16n8k32x4))"
@@ -74,9 +74,11 @@ CASES = [
     (env("verity-gkr-gpu (backends/gkr/gpu, torch + triton)", proof_class="NON_ZK_PROOF_DIAGNOSTIC"), {}, "A-GKR GPU (torch/Triton)"),
     (env("verity-gkr", proof_class="NON_ZK_PROOF_DIAGNOSTIC",
          software={"backend": {"name": "verity-gkr"}, "toolchain": {"python": "3.12", "torch": "2.5", "triton": "3.1"}}), {}, "A-GKR GPU (torch/Triton)"),
-    (env("sp1", proof_class="NON_ZK_PROOF"), {}, "SP1 unmodified (relation-only / bare guest)"),
-    (env("sp1 tc-dot (sp1 6.4.0 + TC_DOT chip)", proof_class="NON_ZK_PROOF"), {}, "SP1 + TC_DOT chip (modified SP1)"),
-    (env("sp1-tcdot", proof_class="NON_ZK_PROOF"), {}, "SP1 + TC_DOT chip (modified SP1)"),
+    (env("sp1", proof_class="NON_ZK_PROOF"), {}, "SP1 stock (relation-only / bare guest)"),
+    (env("sp1 tc-dot (sp1 6.4.0 + TC_DOT chip)", proof_class="NON_ZK_PROOF"), {}, "SP1 precompile (TC_DOT chip)"),
+    (env("sp1-tcdot", proof_class="NON_ZK_PROOF"), {}, "SP1 precompile (TC_DOT chip)"),
+    (env("sp1 relation-bare/v2 (SP1, FRI query count raised to a 134-bit target (otherwise unmodified); core STARK, CUDA prover)",
+         proof_class="NON_ZK_PROOF"), {}, "SP1 stock, FRI query count raised (otherwise unmodified)"),
 ]
 
 
@@ -106,9 +108,10 @@ def test_variant_recognisers_are_mutually_exclusive() -> None:
                           ("COMPLETE_ZK_BACKEND", "COMPLETE_HVZK_BACKEND"), (None, "excluded", "included", "included-hash", "included-hash-shared"),
                           (None, "poseidon2", "blake3", "ajtai-n64", "ajtai-n128"), (None, "none", "tile64x64"))
     grid = [{"candidate": "B-Ligero", "device": None, "tcdot": False, **dict(zip(keys, c))} for c in b]
-    grid += [{**dict.fromkeys(keys), "fold": 1, "fused": False, "candidate": cand, "device": dev, "tcdot": tc, "authentication": auth}
-             for cand, dev, tc, auth in itertools.product(("A-GKR", "SP1", "Ligerito", None), ("cpu", "gpu", None), (False, True),
-                                                          (None, "excluded", "included"))]
+    grid += [{**dict.fromkeys(keys), "fold": 1, "fused": False, "candidate": cand, "device": dev, "tcdot": tc, "authentication": auth,
+              "sec_raised": sr}
+             for cand, dev, tc, auth, sr in itertools.product(("A-GKR", "SP1", "Ligerito", None), ("cpu", "gpu", None), (False, True),
+                                                              (None, "excluded", "included"), (False, True))]
     for f in grid:
         hits = [v.id for v in D.VARIANTS if v.match(f)]
         assert len(hits) <= 1, (f, hits)
@@ -323,3 +326,12 @@ def test_cli_renders_all_three_drilldowns(store: LocalStore, capsys: pytest.Capt
     assert js["d2"]["rows"][SEEDS.index("B-Ligero + BLAKE3 in circuit")]["cells"]["4090 FP8"]["mark"] == "X"
     assert len(js["d3"]["rows"]) == 1 and js["d3"]["rows"][0]["cell"] == "4090 FP8 · B-Ligero"
     assert js["d1"]["variants"][0]["holds"] == ["4090 FP8 · B-Ligero"]
+
+
+def test_sp1_soundness_leads_with_the_whole_proof_figure() -> None:
+    for vid, whole in (("SP1 stock (relation-only / bare guest)", "about 2^-94.5 per proof"),
+                       ("SP1 stock, FRI query count raised (otherwise unmodified)", "2^-95.46 per proof"),
+                       ("SP1 precompile (TC_DOT chip)", "about 2^-96.0 per proof")):
+        text = D._BY_ID[vid].soundness
+        assert text.startswith(whole) and text.index("per proof") < text.index("Per shard proof"), vid
+    assert "SP1_TARGET_BITS_OF_SECURITY stays 100" in D._BY_ID["SP1 stock, FRI query count raised (otherwise unmodified)"].binding
