@@ -116,6 +116,16 @@ def test_failures_write_nothing(env, monkeypatch, capsys, case, expect):
     assert LocalStore().labels(res) == [] and not LocalStore().index.select_artifacts(kind="verification-verdict/v1")
 
 
+def test_a_result_put_by_hand_with_the_benchs_own_run_id_is_reverified(env, capsys):
+    from research.store.local import LocalStore
+
+    st = LocalStore()
+    rf = st.put_artifact("run-files/v1", {}, {}, tree=_dump(env / "by-hand"))
+    res = st.put_artifact("bench-result/v1", {"run_id": "b-ligero-fp8-ada-vu-1790219342"}, {"run_files": rf})
+    assert _run(env, res, "--by", "tester") == 0
+    assert "2/2, 2^-128.30 PASS -> verdict art:" in capsys.readouterr().out
+
+
 def test_a_dump_that_never_left_the_pod_is_an_error_not_a_rejection(env, capsys):
     from research.store.local import LocalStore
 
