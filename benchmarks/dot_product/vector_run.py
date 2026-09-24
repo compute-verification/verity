@@ -402,7 +402,8 @@ def run_sp1(rec: dict, out: Path, *, prove: bool, mode: str, want_info: bool, di
 # excluded).  Steps: the arrays against their digests; negatives through the executor (the 52 committed ``vu-k1536-neg``
 # instances, or ``--flip-y`` on a batch); ``bare-prove`` (an executor pass for exact cycles, setup, a warm-up proof,
 # ``--reps`` proofs, each dumped under ``proofs/`` and verified in process); ``verify --proof --statement`` per proof in
-# a fresh CPU process (the producer's check; independent verification is not the producer's).
+# a fresh CPU process (the producer's check; independent verification is not the producer's).  ``--layout indexed``
+# hands the guest each distinct row once plus a row pair per VU instead of every VU's rows (the statement is the same).
 #
 # Phases: SP1 6's prover pipelines execution, CPU event generation, GPU trace generation, commitment and proving across
 # shards and exposes no split, so the prove call is ``SP1_PROVE_STAGE`` and ``t.serialization`` is the proof's bincode
@@ -545,7 +546,8 @@ def run_sp1_bare(a) -> int:
     B = hi - lo
     base = ref["range"][0]
     instances = contract.instances_ref(ref["tier"], base + lo, base + hi, ref["manifest_sha256"], dataset=ref["dataset"])
-    rng = ["--lo", str(lo), "--hi", str(hi), "--vus-per-read", str(a.vus_per_read)]
+    layout = ["--layout", a.layout]
+    rng = ["--lo", str(lo), "--hi", str(hi), "--vus-per-read", str(a.vus_per_read), *layout]
     print(f"sp1-bare: {fmt} {instances} on {host}", flush=True)
 
     rc, text, _ = _run_logged([str(host), "info"], cpu_env, log, 900)
@@ -558,13 +560,13 @@ def run_sp1_bare(a) -> int:
         if a.batch:
             for j in sorted({0, B // 2, B - 1}):
                 rc, text, wall = _run_logged([str(host), "bare-execute", *source, "--lo", str(lo + j), "--hi", str(lo + j + 1), "--vus-per-read", "1",
-                                              "--flip-y", "0"], cpu_env, log, 900)
+                                              *layout, "--flip-y", "0"], cpu_env, log, 900)
                 doc = (_json_lines(text) or [{}])[-1]
                 negatives.append({"kind": "flip-y", "vu": lo + j, "rc": rc, "verdict": doc.get("verdict"), "matches_native": doc.get("matches_expected")})
             summary = {"negatives": len(negatives), "claimed_rejected": sum(1 for x in negatives if x["rc"] == 0 and x["verdict"] is False),
                        "in_domain": 0, "correct_accepted": 0}
         else:
-            rc, text, _ = _run_logged([str(host), "bare-negatives", "--instances", source[1], "--manifest-sha256", source[3]], cpu_env, log, 1800)
+            rc, text, _ = _run_logged([str(host), "bare-negatives", "--instances", source[1], "--manifest-sha256", source[3], *layout], cpu_env, log, 1800)
             lines = _json_lines(text)
             negatives = [d for d in lines if d.get("event") == "negative"]
             summary = next((d for d in lines if d.get("event") == "summary"), {"negatives": 0, "claimed_rejected": 0, "in_domain": 0, "correct_accepted": 0})
@@ -654,7 +656,8 @@ def run_sp1_bare(a) -> int:
                        "setup_seconds": setup["setup_seconds"], "per_instance": "none"},
         retention="retained", instances=instances,
         workload="sp1-relation-bare", statement="relation-bare/v2", format=fmt, statement_sha256=setup["statement_sha256"],
-        identity=setup["identity"], mode=a.mode, reps=len(reps), vus_per_read=a.vus_per_read, input_bytes=setup["input_bytes"],
+        identity=setup["identity"], mode=a.mode, reps=len(reps), input_layout=a.layout,
+        **({"vus_per_read": a.vus_per_read} if a.layout == "chunks" else {"table_rows": setup.get("rows")}), input_bytes=setup["input_bytes"],
         warmup={"vus": warmup["vus"], "prove_seconds": warmup["prove_seconds"]} if warmup else None, fixtures=fixture_digests,
         phases="the prove call is one joint stage (SP1 6 pipelines execution, event generation, trace generation, commitment and proving "
                "across shards); t.serialization is the proof's bincode write",
@@ -746,6 +749,8 @@ def main(argv: list[str] | None = None) -> int:
     bare.add_argument("--reps", type=int, default=3)
     bare.add_argument("--warmup-vus", type=int, default=64)
     bare.add_argument("--vus-per-read", type=int, default=64)
+    bare.add_argument("--layout", default="chunks", choices=("chunks", "indexed"),
+                      help="guest input layout: every VU's rows in order, or a table of distinct rows and a row pair per VU (same statement)")
     bare.add_argument("--skip-negatives", action="store_true")
     bare.add_argument("--timeout", type=float, default=7200.0)
     bare.add_argument("--note", default="", help="what this run varies (recorded in the fingerprint)")

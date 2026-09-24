@@ -207,6 +207,9 @@ enum Command {
         dataset: String,
         #[arg(long)]
         index: Option<PathBuf>,
+        /// The guest input layout each negative is run in.
+        #[arg(long, value_enum, default_value_t = bare_cmd::Layout::Chunks)]
+        layout: bare_cmd::Layout,
     },
 }
 
@@ -899,8 +902,8 @@ async fn main() -> Result<()> {
         #[cfg(feature = "relation-bare")]
         Command::BareStatement { set, out } => bare_cmd::cmd_statement(set, out).await,
         #[cfg(feature = "relation-bare")]
-        Command::BareNegatives { instances, manifest_sha256, dataset, index } => {
-            bare_cmd::cmd_negatives(instances, manifest_sha256, dataset, index).await
+        Command::BareNegatives { instances, manifest_sha256, dataset, index, layout } => {
+            bare_cmd::cmd_negatives(instances, manifest_sha256, dataset, index, layout).await
         }
     }
 }

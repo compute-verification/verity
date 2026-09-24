@@ -49,9 +49,28 @@ pub(crate) struct BareSet {
     /// End of the range (default: every VU of the set).
     #[arg(long)]
     hi: Option<usize>,
-    /// VUs per `read_vec` chunk.
+    /// VUs per `read_vec` chunk (chunked layout).
     #[arg(long, default_value_t = 64)]
     vus_per_read: usize,
+    /// The guest input layout: `chunks` (version 2: every VU's rows in order) or `indexed` (version 3: a table of
+    /// distinct rows, read once, and a row pair per VU).  The statement is the same.
+    #[arg(long, value_enum, default_value_t = Layout::Chunks)]
+    layout: Layout,
+}
+
+#[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Layout {
+    Chunks,
+    Indexed,
+}
+
+impl Layout {
+    fn name(self) -> &'static str {
+        match self {
+            Layout::Chunks => "chunks",
+            Layout::Indexed => "indexed",
+        }
+    }
 }
 
 /// A loaded set: VU-major operand blocks, the committed words, the identity's parts.
@@ -152,7 +171,10 @@ pub(crate) struct Prepared {
     /// `bare::decide` on the same buffers: the kernel run natively.
     pub expected: [u8; bare::PUBLIC_VALUES_LEN],
     pub input_bytes: usize,
+    /// `read_vec` buffers after the header.
     pub chunks: usize,
+    /// Distinct rows in the table (indexed layout).
+    pub rows: Option<u32>,
 }
 
 impl BareSet {
@@ -196,21 +218,30 @@ impl BareSet {
         let identity = self.identity(set)?;
         let id = bare::identity_digest(&identity);
         let y_le = bare::encode_y(set.format, &claimed).ok_or_else(|| anyhow!("a claimed word does not fit {}", set.format.name()))?;
-        let header = bare::encode_header(set.format, bare::K as u32, self.vus_per_read as u32, &id, &y_le);
-        let chunks: Vec<Vec<u8>> = (lo..hi)
-            .step_by(self.vus_per_read)
-            .map(|at| bare::encode_chunk(set.format, &set.x, &set.w, at, (at + self.vus_per_read).min(hi)))
-            .collect();
-        let expected = bare::decide(&header, &chunks);
+        let (header, buffers, rows) = match self.layout {
+            Layout::Chunks => {
+                let header = bare::encode_header(set.format, bare::K as u32, self.vus_per_read as u32, &id, &y_le);
+                let chunks: Vec<Vec<u8>> = (lo..hi)
+                    .step_by(self.vus_per_read)
+                    .map(|at| bare::encode_chunk(set.format, &set.x, &set.w, at, (at + self.vus_per_read).min(hi)))
+                    .collect();
+                (header, chunks, None)
+            }
+            Layout::Indexed => {
+                let (index, table, rows) = bare::index_rows(set.format, &set.x, &set.w, lo, hi);
+                (bare::encode_header_indexed(set.format, bare::K as u32, rows, &id, &y_le), vec![index, table], Some(rows))
+            }
+        };
+        let expected = bare::decide(&header, &buffers);
         let mut stdin = SP1Stdin::new();
-        let input_bytes = header.len() + chunks.iter().map(Vec::len).sum::<usize>();
-        let n_chunks = chunks.len();
+        let input_bytes = header.len() + buffers.iter().map(Vec::len).sum::<usize>();
+        let n_chunks = buffers.len();
         stdin.write_vec(header);
-        for chunk in chunks {
-            stdin.write_vec(chunk);
+        for buffer in buffers {
+            stdin.write_vec(buffer);
         }
         let statement = bare::statement_bytes(set.format, &id, bare::K as u32, &y_le);
-        Ok(Prepared { stdin, format: set.format, statement, identity, expected, input_bytes, chunks: n_chunks })
+        Ok(Prepared { stdin, format: set.format, statement, identity, expected, input_bytes, chunks: n_chunks, rows })
     }
 }
 
@@ -222,8 +253,10 @@ struct BareExecuteOutput {
     identity: String,
     lo: usize,
     hi: usize,
+    layout: &'static str,
     vus_per_read: usize,
     chunks: usize,
+    rows: Option<u32>,
     input_bytes: usize,
     expected_public_values: String,
     matches_expected: bool,
@@ -244,8 +277,10 @@ async fn execute_set<P: Prover>(client: &P, bare_set: &BareSet, set: &Loaded, cl
             identity: prepared.identity.clone(),
             lo,
             hi,
+            layout: bare_set.layout.name(),
             vus_per_read: bare_set.vus_per_read,
             chunks: prepared.chunks,
+            rows: prepared.rows,
             input_bytes: prepared.input_bytes,
             expected_public_values: hex::encode(prepared.expected),
             matches_expected,
@@ -333,7 +368,7 @@ pub(crate) async fn cmd_prove(bare_set: BareSet, out_dir: PathBuf, mode: Mode, r
         "elf_sha256": hex::encode(sha256(&ELF)), "vk_hash": pk.verifying_key().bytes32(),
         "guest_features": GUEST_FEATURES, "client_seconds": client_seconds, "setup_seconds": setup_seconds,
         "format": prepared.format.name(), "identity": prepared.identity, "statement_sha256": hex::encode(sha256(&prepared.statement)),
-        "input_bytes": prepared.input_bytes, "chunks": prepared.chunks}))?;
+        "layout": bare_set.layout.name(), "input_bytes": prepared.input_bytes, "chunks": prepared.chunks, "rows": prepared.rows}))?;
     fs::create_dir_all(&out_dir)?;
     fs::write(out_dir.join("statement.bin"), &prepared.statement)?;
 
@@ -402,7 +437,7 @@ pub(crate) async fn cmd_prove(bare_set: BareSet, out_dir: PathBuf, mode: Mode, r
     Ok(())
 }
 
-pub(crate) async fn cmd_negatives(instances: PathBuf, manifest_sha256: String, dataset: String, index: Option<PathBuf>) -> Result<()> {
+pub(crate) async fn cmd_negatives(instances: PathBuf, manifest_sha256: String, dataset: String, index: Option<PathBuf>, layout: Layout) -> Result<()> {
     let tier = "vu-k1536-neg";
     let index = index.unwrap_or_else(|| instances.join(format!("{tier}.index.json")));
     let doc: serde_json::Value = serde_json::from_str(&fs::read_to_string(&index).with_context(|| format!("reading {}", index.display()))?)?;
@@ -421,6 +456,7 @@ pub(crate) async fn cmd_negatives(instances: PathBuf, manifest_sha256: String, d
             lo: i,
             hi: Some(i + 1),
             vus_per_read: 1,
+            layout,
         };
         let (claimed, _) = execute_set(&client, &bare_set, &set, None).await?;
         let claimed_verdict = claimed.execute.outcome.verdict;
