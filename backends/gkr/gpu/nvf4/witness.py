@@ -101,8 +101,10 @@ class NVF4Generator:
             R.RADIX * torch.arange(R.POSITIONS, dtype=torch.int64, device=dev))
 
     # --- the chain (B-Ligero's hints) + the decode hints ------------------------------------------------------------------
-    def _chain(self, A: torch.Tensor, B: torch.Tensor, Y: torch.Tensor):
-        """``A``/``B`` (N, 24, 68) int64, ``Y`` (N,) -> hint values {name: (N * 24,)}, bad (N,), final words (N,)."""
+    def _chain(self, A: torch.Tensor, B: torch.Tensor, Y: torch.Tensor, variant: str | None = None):
+        """``A``/``B`` (N, 24, 68) int64, ``Y`` (N,) -> hint values {name: (N * 24,)}, bad (N,), final words (N,).
+        ``variant``: the hints of a prover following the WRONG rule ``fp4/witness.VARIANTS[..]`` (numpy, host; negatives),
+        its accumulator fed forward; the operand decode stays honest."""
         N = A.shape[0]
         c = torch.zeros(N, dtype=torch.int64, device=self.dev)
         bad = torch.zeros(N, dtype=torch.bool, device=self.dev)
@@ -110,10 +112,16 @@ class NVF4Generator:
         for s in range(STEPS):
             a, b = A[:, s], B[:, s]
             pub = HD.public_rows_torch(a, b, self.num)
-            h, bd, c = HD.unit_hints_torch(self.bl_sys, c, a, b, pub, self.num, self.pos_w)
+            if variant is None:
+                h, bd, c = HD.unit_hints_torch(self.bl_sys, c, a, b, pub, self.num, self.pos_w)
+                bad |= bd
+            else:
+                from backends.direct.ligero.fp4.witness import unit_hints
+                H, yv = unit_hints(c.cpu().numpy(), a.cpu().numpy(), b.cpu().numpy(), variant=variant)
+                h = torch.as_tensor(np.stack([H[n] for n in self.bl_names]), dtype=torch.int64, device=self.dev)
+                c = torch.as_tensor(yv, dtype=torch.int64, device=self.dev)
             hs.append(h)
             pubs.append(pub)
-            bad |= bd
         bad |= c != Y
         H = torch.stack(hs, dim=2).reshape(len(self.bl_names), N * STEPS)        # (n, N, 24) -> VU-major lanes
         pub = torch.stack(pubs, dim=2).reshape(HD.N_PINS, N * STEPS)
@@ -176,10 +184,10 @@ class NVF4Generator:
             else:
                 raise ValueError(f"program op {kind} not supported")
 
-    def run(self, A: torch.Tensor, B: torch.Tensor, Y: torch.Tensor, sync: bool = False) -> Rows:
+    def run(self, A: torch.Tensor, B: torch.Tensor, Y: torch.Tensor, sync: bool = False, variant: str | None = None) -> Rows:
         t0 = time.perf_counter()
         N = A.shape[0]
-        vals, bad, y = self._chain(A, B, Y)
+        vals, bad, y = self._chain(A, B, Y, variant)
         if sync:
             torch.cuda.synchronize(self.dev)
         t1 = time.perf_counter()
