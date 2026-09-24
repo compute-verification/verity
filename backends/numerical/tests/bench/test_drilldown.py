@@ -24,7 +24,7 @@ SEEDS = ("B-Ligero v1", "B-Ligero v3 (private selection)", "B-Ligero v3 fused hi
          "B-Ligero v3x4 (fold)", "B-Ligero v2 (public selection)", "B-Ligero v2x4 (public selection)", "B-Ligero Fiat–Shamir (HVZK)",
          "B-Ligero + Poseidon2 per row", "B-Ligero + Poseidon2 shared 64x64 tile", "B-Ligero + BLAKE3 in circuit", "B-Ligero + Ajtai n=64",
          "B-Ligero + Ajtai n=128", "B-Ligero native external authentication", "Ligerito", "A-GKR CPU (Rust)", "A-GKR GPU (torch/Triton)",
-         "SP1 unmodified (relation-only / bare guest)", "SP1 + TC_DOT chip (modified SP1)")
+         "SP1 unmodified (relation-only / bare guest)", "SP1, FRI query count raised (otherwise unmodified)", "SP1 + TC_DOT chip (modified SP1)")
 FOLDED = "b-ligero chain, fp8-ada relation (backends/direct/ligero/fp8); folded: 4 instruction steps per column at FP8Params.from_model(ada_e4m3_m16n8k32x4)"
 V3 = "b-ligero chain, bf16-ampere-v3 relation (backends/direct/ligero/privsel/relation.py at params.from_model(ampere_bf16_m16n8k16))"
 V3X4 = "b-ligero chain, fp8-ada-v3x4 relation (backends/direct/ligero/privsel/relation.py at fp8params.from_model(ada_e4m3_m16n8k32x4))"
@@ -77,6 +77,8 @@ CASES = [
     (env("sp1", proof_class="NON_ZK_PROOF"), {}, "SP1 unmodified (relation-only / bare guest)"),
     (env("sp1 tc-dot (sp1 6.4.0 + TC_DOT chip)", proof_class="NON_ZK_PROOF"), {}, "SP1 + TC_DOT chip (modified SP1)"),
     (env("sp1-tcdot", proof_class="NON_ZK_PROOF"), {}, "SP1 + TC_DOT chip (modified SP1)"),
+    (env("sp1 relation-bare/v2 (SP1, FRI query count raised to a 134-bit target (otherwise unmodified); core STARK, CUDA prover)",
+         proof_class="NON_ZK_PROOF"), {}, "SP1, FRI query count raised (otherwise unmodified)"),
 ]
 
 
@@ -106,9 +108,10 @@ def test_variant_recognisers_are_mutually_exclusive() -> None:
                           ("COMPLETE_ZK_BACKEND", "COMPLETE_HVZK_BACKEND"), (None, "excluded", "included", "included-hash", "included-hash-shared"),
                           (None, "poseidon2", "blake3", "ajtai-n64", "ajtai-n128"), (None, "none", "tile64x64"))
     grid = [{"candidate": "B-Ligero", "device": None, "tcdot": False, **dict(zip(keys, c))} for c in b]
-    grid += [{**dict.fromkeys(keys), "fold": 1, "fused": False, "candidate": cand, "device": dev, "tcdot": tc, "authentication": auth}
-             for cand, dev, tc, auth in itertools.product(("A-GKR", "SP1", "Ligerito", None), ("cpu", "gpu", None), (False, True),
-                                                          (None, "excluded", "included"))]
+    grid += [{**dict.fromkeys(keys), "fold": 1, "fused": False, "candidate": cand, "device": dev, "tcdot": tc, "authentication": auth,
+              "sec_raised": sr}
+             for cand, dev, tc, auth, sr in itertools.product(("A-GKR", "SP1", "Ligerito", None), ("cpu", "gpu", None), (False, True),
+                                                              (None, "excluded", "included"), (False, True))]
     for f in grid:
         hits = [v.id for v in D.VARIANTS if v.match(f)]
         assert len(hits) <= 1, (f, hits)

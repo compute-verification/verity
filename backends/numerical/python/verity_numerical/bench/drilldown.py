@@ -104,7 +104,8 @@ def features(env: Mapping[str, Any], meta: Mapping[str, Any] | None = None) -> d
     ``proof_class``; ``authentication``; ``leaf`` (``poseidon2`` | ``blake3`` | ``ajtai-n<n>`` from ``hash`` / ``leaf.scheme`` /
     ``leaf.schema``); ``sharing`` (``sharing``, or ``row_sharing`` present); ``device`` (A-GKR's prover: ``gpu`` when the name,
     ``backend`` or toolchain says gpu / triton / torch / cuda, else ``cpu``); ``tcdot`` (the TC_DOT chip: ``tc-dot`` / ``tc_dot``
-    / ``tcdot`` / ``modified sp1`` in the name)."""
+    / ``tcdot`` / ``modified sp1`` in the name); ``sec_raised`` (SP1 with its FRI query count raised: ``fri query count raised``
+    in the name)."""
 
     fp = env.get("workload_fingerprint") if isinstance(env.get("workload_fingerprint"), Mapping) else {}
     meta = meta or {}
@@ -114,7 +115,8 @@ def features(env: Mapping[str, Any], meta: Mapping[str, Any] | None = None) -> d
                          "family": None, "fold": 1, "fused": False, "l": _get(fp, "security", "rs_l"), "mode": T._mode_of(fp),
                          "proof_class": fp.get("proof_class"), "authentication": fp.get("authentication"), "leaf": None,
                          "sharing": fp.get("sharing") if isinstance(fp.get("sharing"), str) else ("row" if fp.get("row_sharing") else None),
-                         "device": None, "tcdot": bool(re.search(r"tc[-_ ]?dot|modified sp1", name))}
+                         "device": None, "tcdot": bool(re.search(r"tc[-_ ]?dot|modified sp1", name)),
+                         "sec_raised": "fri query count raised" in name}
     if f["candidate"] == "B-Ligero":
         m = _RELATION.match(name)
         fam = _FAMILY.search(m.group(1)) if m else None
@@ -183,6 +185,12 @@ _B_SRC = "Table 1 (B-Ligero); result envelopes' security.{zk_statement, hash_ass
 _H_ZK = "as the B-Ligero mode it runs in (Ligero masking): malicious-verifier ZK interactive, HVZK under Fiat–Shamir"
 _H_SOUND = "2^-128 (Ligero union bound) plus the leaf's binding"
 _KEEP_FROZEN = "column B-Ligero + in-proof hash is Poseidon2-BabyBear per row, no sharing (user decision keep_frozen, 2026-09-24)"
+_SP1_SOUND = ("2^-99.0 per shard proof, additive (FRI queries 2^-100.1, LogUp-GKR 2^-100.3, FRI commit rounds 2^-102.4, batching "
+              "2^-104.4, zerocheck 2^-112.2, jagged reduction 2^-116.4; KoalaBear^4 challenges, |F| = 2^123.95), union-bounded over "
+              "shard proofs (envelopes book SP1's constant, -100 per shard: ~1 bit optimistic). Cannot reach 2^-128 without protocol "
+              "changes (grinding in every FRI commit round, zerocheck and jagged reduction, or a larger extension field): "
+              "SP1_TARGET_BITS_OF_SECURITY moves only the query term")
+_SP1_SOUND_SRC = "kb/sp1-prover.md (soundness); soundcalc @2af5e7d on SP1's gen_soundcalc_toml config (lane sp1-128)"
 
 VARIANTS: tuple[Variant, ...] = (
     Variant("B-Ligero v1", "B-Ligero", "b-ligero chain, relation without -v2/-v3, one instruction step per column; bare, interactive",
@@ -295,19 +303,31 @@ VARIANTS: tuple[Variant, ...] = (
             "backends/gkr/gpu/README.md; backends/gkr/gpu/ligero.py; backends/gkr/gpu/sha512_cuda.py; backends/gkr/verifier; "
             "result envelopes' security (art:300a526a); Table 1 (A-GKR)"),
     Variant("SP1 unmodified (relation-only / bare guest)", "SP1", "software.backend.name 'sp1…' without tc-dot",
-            lambda f: f["candidate"] == "SP1" and not f["tcdot"],
+            lambda f: f["candidate"] == "SP1" and not f["tcdot"] and not f.get("sec_raised"),
             "unknown (SP1 6.4.0 core / compressed proofs; the README states no ZK property; Table 1: as configured)",
             "x, W are guest input; the 33 public bytes are h_O || h_L || 1 (sound guest) or sha256(K || x || W) || sha256(output "
             "word) || 0xEE (relation-only); hiding would need ZK: unknown",
             "SP1 / STARK hash assumptions (Table 1), sp1-sdk =6.4.0 unmodified; the sound guest authenticates Merkle openings of "
-            "the boundary values, the relation-only guest verifies no statement", "unknown (Table 1: as configured)",
-            "Yes: SP1 column in a sound class; the relation-only and skip-authentication guests commit 0xEE (DIAGNOSTIC, never "
-            "accepted as sound)", "backends/sp1/README.md; Table 1 (SP1)"),
+            "the boundary values, the relation-only guest verifies no statement", _SP1_SOUND,
+            "Yes: SP1 column in a sound class, but no SP1 configuration reaches 2^-128 (soundness), so none renders; the "
+            "relation-only and skip-authentication guests commit 0xEE (DIAGNOSTIC, never accepted as sound)",
+            "backends/sp1/README.md; Table 1 (SP1); " + _SP1_SOUND_SRC),
+    Variant("SP1, FRI query count raised (otherwise unmodified)", "SP1",
+            "software.backend.name 'sp1…' with 'FRI query count raised' in the name (backends/sp1/sec128)",
+            lambda f: f["candidate"] == "SP1" and not f["tcdot"] and bool(f.get("sec_raised")),
+            "unknown (as SP1)", "as SP1 unmodified (same relation-bare guest)",
+            "as SP1 unmodified, with SP1_TARGET_BITS_OF_SECURITY = 134 compiled into prover (source-built sp1-gpu-server 6.6.0) and "
+            "verifier (sp1-primitives 6.6.0 patched): 175 FRI queries instead of 124, nothing else changed",
+            "2^-99.9 per shard proof: the FRI query term becomes 2^-134.7 (proven, unique decoding) but the field-bound terms "
+            "stay (LogUp-GKR 2^-100.3, commit rounds 2^-102.4, batching 2^-104.4, zerocheck 2^-112.2, jagged reduction "
+            "2^-116.4); union-bounded over shard proofs (envelope security.achieved_log2, terms in security.parameters)",
+            "No: security.achieved_log2 ~ -95.5 > -128; measures what the query phase alone costs", _SP1_SOUND_SRC),
     Variant("SP1 + TC_DOT chip (modified SP1)", "SP1", "software.backend.name 'sp1 tc-dot…' (tc-dot / tc_dot / modified sp1 in the name)",
             lambda f: f["candidate"] == "SP1" and f["tcdot"],
-            "unknown (as SP1)", "unknown", "SP1 / STARK hash assumptions plus the TC_DOT chip's constraints (a modified prover)", "unknown",
+            "unknown (as SP1)", "unknown", "SP1 / STARK hash assumptions plus the TC_DOT chip's constraints (a modified prover)",
+            "at most SP1's (the chip adds constraints and lookups to the same field-bound terms): " + _SP1_SOUND,
             "Yes: SP1 column = best valid SP1 variant (user decision 2026-09-24), footnoted 'modified SP1 (TC_DOT chip)'; the name must "
-            "start with 'sp1' for the column to see it", "BRIEF §2; lane sp1-tcdot"),
+            "start with 'sp1' for the column to see it; no SP1 configuration reaches 2^-128", "BRIEF §2; lane sp1-tcdot; " + _SP1_SOUND_SRC),
 )
 _BY_ID = {v.id: v for v in VARIANTS}
 

@@ -643,8 +643,8 @@ def run_sp1_bare(a) -> int:
                           "(CORE_LOG_BLOWUP 2, unique_decoding_queries = ceil((100 - 16) / -log2(5/8)) = 124 at SP1_PROOF_OF_WORK_BITS 16; "
                           "KoalaBear^4), compile-time constants of the pinned SP1",
                 "union_bound": f"{shards} shard proofs in the core proof: {per_shard:g} + log2({shards})"}
-    if variant.get("security_terms_log2"):
-        security["per_shard_terms_log2"] = variant["security_terms_log2"]
+    if variant.get("security_parameters"):
+        security["parameters"] = variant["security_parameters"]
     software = {"backend": {"name": variant.get("backend_name") or a.backend_name, "version": SP1_VERSION, "commit": sha},
                 "toolchain": {"sp1-sdk": SP1_VERSION, "sp1-zkvm": SP1_VERSION, "sp1-primitives": "6.6.0", "sp1-gpu-server": "6.6.0 (release binary)",
                               "guest toolchain": "succinct sp1up v6.4.0", "python": sys.version.split()[0], **variant.get("toolchain", {})},
