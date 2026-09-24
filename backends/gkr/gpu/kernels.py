@@ -687,6 +687,42 @@ if triton is not None:
         tl.store(v_ptr + vb + 5, madd(v5, p5), mask=m)
 
     @triton.jit
+    def row_code_dot_kernel(at_ptr, ev_ptr, code_ptr, lo_ptr, hi_ptr, rows, rows_per, K: tl.constexpr, BLOCK: tl.constexpr):
+        """Split-row partial sums of ``Σ_i a_i^(d)(ω^m) code[i, m]`` over rows ``[s rows_per, (s+1) rows_per)`` for a
+        block of natural columns ``m`` and every coordinate ``d``.  ``a_i^(d)(ω^m)`` is the row's own value
+        ``at[6i + d, m/4]`` on coset 0 (``m ≡ 0 mod 4``, the ``k``-domain) and the SIMT encoder's cosets-only output
+        ``ev[6i + d, (m mod 4 - 1) k + m/4]`` otherwise.  Products are ``< 2^62``; their 32-bit halves are summed in
+        int64 (``< rows · 2^32``), so the loop is loads + one multiply + adds."""
+        N: tl.constexpr = 4 * K
+        pm = tl.program_id(0)
+        ps = tl.program_id(1)
+        m = pm * BLOCK + tl.arange(0, BLOCK)
+        c = m & 3
+        j = m >> 2
+        evcol = tl.where(c == 0, 0, (c - 1) * K + j)
+        d = tl.arange(0, 8)
+        dm = d < 6
+        m0 = dm[:, None] & (c == 0)[None, :]
+        m1 = dm[:, None] & (c != 0)[None, :]
+        r0 = ps * rows_per
+        r1 = tl.minimum(r0 + rows_per, rows)
+        lo = tl.zeros((8, BLOCK), dtype=tl.int64)
+        hi = tl.zeros((8, BLOCK), dtype=tl.int64)
+        for i in range(r0, r1):
+            i64 = i.to(tl.int64)
+            cv = tl.load(code_ptr + i64 * N + m).to(tl.int64)
+            rowd = i64 * 6 + d
+            e0 = tl.load(at_ptr + rowd[:, None] * K + j[None, :], mask=m0, other=0)
+            e1 = tl.load(ev_ptr + rowd[:, None] * (3 * K) + evcol[None, :], mask=m1, other=0)
+            prod = (e0 + e1).to(tl.int64) * cv[None, :]
+            h = prod >> 32
+            lo += prod - (h << 32)
+            hi += h
+        out = (ps * 8 + d[:, None]).to(tl.int64) * N + m[None, :]
+        tl.store(lo_ptr + out, lo)
+        tl.store(hi_ptr + out, hi)
+
+    @triton.jit
     def split_limbs_kernel(v_ptr, out_ptr, n, BLOCK: tl.constexpr):
         """``out[i, idx] = l_i`` for ``v[idx] = Σ_i 2^(8i) l_i``, ``l_i ∈ [-128, 128)`` (canonical int32 in, 4 x int8 out)."""
         idx = (tl.program_id(0).to(tl.int64) * BLOCK + tl.arange(0, BLOCK)).to(tl.int64)
@@ -731,6 +767,25 @@ def rank1_add(v: torch.Tensor, e: torch.Tensor, x: torch.Tensor) -> None:
     BLOCK = 128
     grid = ((units + BLOCK - 1) // BLOCK, ncols)
     rank1_add_kernel[grid](v.view(-1), e.contiguous().view(-1), _mont(x).view(-1), units, ncols, BLOCK=BLOCK, num_warps=4, FK=FIELD_KEY)
+
+
+def row_code_dot(at: torch.Tensor, ev: torch.Tensor, code: torch.Tensor, split: int = 16) -> torch.Tensor:
+    """``(6, n)`` int64 canonical: ``out[d, m] = Σ_i a_i^(d)(ω^m) code[i, m]`` with ``at`` ``(rows·6, k)`` int32 (row
+    ``6i + d`` = coordinate ``d`` of row ``i``'s values on the ``k``-domain), ``ev`` ``(rows·6, 3k)`` int32 (the same
+    rows' cosets 1..3, ``RSEncoderSIMT`` cosets-only layout) and ``code`` ``(rows, n = 4k)`` int32 in natural order."""
+    rows, n = code.shape
+    k = n // 4
+    assert at.shape == (rows * DEG, k) and ev.shape == (rows * DEG, 3 * k) and rows < 2**31
+    assert at.is_contiguous() and ev.is_contiguous() and code.is_contiguous()
+    BLOCK = 128
+    split = max(1, min(split, rows))
+    rows_per = (rows + split - 1) // split
+    lo = torch.empty((split, 8, n), dtype=torch.int64, device=code.device)
+    hi = torch.empty_like(lo)
+    row_code_dot_kernel[(n // BLOCK, split)](at, ev, code, lo, hi, rows, rows_per, K=k, BLOCK=BLOCK, num_warps=4)
+    lo = lo[:, :DEG].sum(0) % P
+    hi = hi[:, :DEG].sum(0) % P
+    return (hi * (R % P) + lo) % P
 
 
 def split_limbs(v: torch.Tensor) -> torch.Tensor:

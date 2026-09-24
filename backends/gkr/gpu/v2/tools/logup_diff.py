@@ -226,7 +226,7 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
     dev = _dev(args.device)
     inst = load_instance(Path(args.dir), dev, args.vus)
-    tr0, chs, _pts = prover.start_transcript(inst, False, bytes(32))
+    tr0, chs, _pts = prover.start_transcript(inst, False, bytes(prover.ligero.DIGEST_BYTES))
     report = {"dir": args.dir, "vus": args.vus, "device": str(dev), "torch": torch.__version__,
               "gpu": torch.cuda.get_device_name(dev) if dev.type == "cuda" else None,
               "cc": list(torch.cuda.get_device_capability(dev)) if dev.type == "cuda" else None,

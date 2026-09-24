@@ -631,28 +631,32 @@ def _ext_mul_helper_source() -> str:
 
 def _finish_round_source() -> str:
     """``S(x) = prefix . eq_x[x] . Q(x)``, ``x = 0..3``, from ``T (3, R, 6)`` and ``coeff (R, 6)`` (``Q(x) = sum_r coeff[r] T[x, r]``;
-    ``R = 1`` with ``coeff = 1`` for the extension rounds), ``Q(3) = 3 Q(2) - 3 Q(1) + Q(0)``.  One program."""
-    L = ["@triton.jit", "def finish_round(t_ptr, c_ptr, pre_ptr, eqx_ptr, s_ptr, R, BLOCK_R: tl.constexpr):",
+    ``R = 1`` with ``coeff = 1`` for the extension rounds), ``Q(3) = 3 Q(2) - 3 Q(1) + Q(0)``.  One program, int32
+    Montgomery products (the right operand lifted to ``b R`` by ``mmul(b, R^2)``, so ``_ext_mmul6`` returns the plain
+    product); every output is canonical, as with plain arithmetic."""
+    L = [f"R2F: tl.constexpr = {R2_MOD_P}", "", "@triton.jit",
+         "def finish_round(t_ptr, c_ptr, pre_ptr, eqx_ptr, s_ptr, R, BLOCK_R: tl.constexpr):",
          "    r = tl.arange(0, BLOCK_R)", "    m = r < R"]
     for d in range(6):
-        L.append(f"    c{d} = tl.load(c_ptr + r * 6 + {d}, mask=m, other=0).to(tl.int64)")
-        L.append(f"    pre{d} = tl.load(pre_ptr + {d}).to(tl.int64)")
+        L.append(f"    c{d} = mmul(tl.load(c_ptr + r * 6 + {d}, mask=m, other=0), R2F)")
+        L.append(f"    pre{d} = tl.load(pre_ptr + {d})")
     for x in range(3):
         for d in range(6):
-            L.append(f"    t{d} = tl.load(t_ptr + ({x} * R + r) * 6 + {d}, mask=m, other=0).to(tl.int64)")
-        L.append("    " + ", ".join(f"u{d}" for d in range(6)) + " = _ext_mul6(" + ", ".join(f"t{d}" for d in range(6)) + ", " + ", ".join(f"c{d}" for d in range(6)) + ")")
+            L.append(f"    t{d} = tl.load(t_ptr + ({x} * R + r) * 6 + {d}, mask=m, other=0)")
+        L.append("    " + ", ".join(f"u{d}" for d in range(6)) + " = _ext_mmul6(" + ", ".join(f"t{d}" for d in range(6)) + ", " + ", ".join(f"c{d}" for d in range(6)) + ")")
         for d in range(6):
-            L.append(f"    q{x}_{d} = tl.sum(u{d}, axis=0) % P")
+            L.append(f"    q{x}_{d} = tl.sum(u{d}.to(tl.int64), axis=0) % P")
     for d in range(6):
         L.append(f"    q3_{d} = (3 * q2_{d} - 3 * q1_{d} + q0_{d}) % P")
         L.append(f"    q3_{d} = tl.where(q3_{d} < 0, q3_{d} + P, q3_{d})")
     for x in range(4):
         for d in range(6):
-            L.append(f"    e{d} = tl.load(eqx_ptr + {x * 6 + d}).to(tl.int64)")
-        L.append("    " + ", ".join(f"v{d}" for d in range(6)) + " = _ext_mul6(" + ", ".join(f"pre{d}" for d in range(6)) + ", " + ", ".join(f"e{d}" for d in range(6)) + ")")
-        L.append("    " + ", ".join(f"w{d}" for d in range(6)) + " = _ext_mul6(" + ", ".join(f"v{d}" for d in range(6)) + ", " + ", ".join(f"q{x}_{d}" for d in range(6)) + ")")
+            L.append(f"    e{d} = mmul(tl.load(eqx_ptr + {x * 6 + d}), R2F)")
+            L.append(f"    g{d} = mmul(q{x}_{d}.to(tl.int32), R2F)")
+        L.append("    " + ", ".join(f"v{d}" for d in range(6)) + " = _ext_mmul6(" + ", ".join(f"pre{d}" for d in range(6)) + ", " + ", ".join(f"e{d}" for d in range(6)) + ")")
+        L.append("    " + ", ".join(f"w{d}" for d in range(6)) + " = _ext_mmul6(" + ", ".join(f"v{d}" for d in range(6)) + ", " + ", ".join(f"g{d}" for d in range(6)) + ")")
         for d in range(6):
-            L.append(f"    tl.store(s_ptr + {x * 6 + d}, w{d}.to(tl.int32))")
+            L.append(f"    tl.store(s_ptr + {x * 6 + d}, w{d})")
     return "\n".join(L) + "\n"
 
 

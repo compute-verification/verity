@@ -88,7 +88,8 @@ class GraphLogUp:
         self.zc = torch.zeros((3, 6), dtype=i32, device=dev)         # z, z R, z^2 (plain / pre-scaled / plain)
         self.rho = torch.zeros((n + 1, 6), dtype=i32, device=dev)
         self.coins = torch.zeros((n + 1, 6), dtype=i32, device=dev)
-        self.lam6 = torch.zeros((1, 6), dtype=i32, device=dev)
+        self.coeff2 = torch.cat([self.one6, torch.zeros((1, 6), dtype=i32, device=dev)], 0)   # [1 | lambda]
+        self.lam6 = self.coeff2[1:2]
         self.consts = torch.zeros((n + 1, 36), dtype=i32, device=dev)
         self.S = torch.zeros((n, n, 4, 6), dtype=i32, device=dev)   # S[lv, i - 1]
         self.vals = torch.zeros((n, 4, 6), dtype=i32, device=dev)
@@ -180,18 +181,20 @@ class GraphLogUp:
         Z = Zs.to(torch.int64).sum(0) if split > 1 else Zs[0]
         return self.tk.reduce_contract(Z, e_hi.contiguous(), self.pw16, K2, 6, 6).view(3, 2, 6)
 
+    def _round_consts(self, i: int, c: torch.Tensor) -> None:
+        kg.round_consts(self.rho, self.coins, i, c)
+
     def _generic_round(self, T4: torch.Tensor, lv: int, i: int) -> None:
         """Round ``i`` of level ``lv`` on ``T4 (4, 2^(lv-i+1), 6)``: ``S[lv, i-1]``."""
         c = self.consts[i]
-        kg.round_consts(self.rho, self.coins, i, c)
+        self._round_consts(i, c)
         prefix, eq_x = c[0:6], c[6:30].view(4, 6)
         m = 1 << (lv - i)
         K1, K2 = self.kernel.split(m)
         if K1 % 128 == 0:
             e_lo32, e_hi = self._eq_inputs(i, lv, K1)
             Q = self._ext_ip(T4, e_lo32, e_hi, K1, K2)
-            coeff = torch.cat([self.one6, self.lam6], 0)
-            self.tk.finish_round(Q, coeff, prefix, eq_x, out=self.S[lv, i - 1])
+            self.tk.finish_round(Q, self.coeff2, prefix, eq_x, out=self.S[lv, i - 1])
         else:
             e = kg.eq_table_vars(self.rho, i, lv - i)
             lam_R = kg.scale_R(self.lam6)[0]
@@ -202,7 +205,7 @@ class GraphLogUp:
         """Big level, round ``i <= k``: the witness region packed on ``w_e, w_o``, the table region generic, the pad analytic."""
         Nw, Nt = self.Nw, self.Nt
         c = self.consts[i]
-        kg.round_consts(self.rho, self.coins, i, c)
+        self._round_consts(i, c)
         prefix, eq_x = c[0:6], c[6:30].view(4, 6)
         half = 1 << (i - 1)
         hh = half * half

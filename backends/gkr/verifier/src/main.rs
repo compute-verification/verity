@@ -15,6 +15,7 @@ mod lanes;
 mod ntt;
 mod proof;
 mod sha256;
+mod sha512;
 mod transcript;
 mod verify;
 
@@ -202,9 +203,11 @@ fn cmd_mutate(args: &[String]) -> i32 {
     let parallel: usize = arg(args, "--parallel").map(|s| s.parse().unwrap()).unwrap_or(1);
     let (res, _) = verify::verify(&stmt, &bytes, &LIGERO, th);
     assert!(res.is_ok(), "the unmutated proof must verify: {res:?}");
-    // layout of proof.bin (gpu/README.md "Proof file")
-    let n_msgs = u64::from_le_bytes(bytes[44..52].try_into().unwrap()) as usize;
-    let msgs_at = 52;
+    // layout of proof.bin (gpu/README.md "Proof file"): magic, version, digest size, root, message count
+    const D: usize = sha512::DIGEST_BYTES;
+    let count_at = proof::ROOT_AT + D;
+    let n_msgs = u64::from_le_bytes(bytes[count_at..count_at + 8].try_into().unwrap()) as usize;
+    let msgs_at = count_at + 8;
     let after_msgs = msgs_at + 24 * n_msgs;
     let k = u64::from_le_bytes(bytes[after_msgs + 8..after_msgs + 16].try_into().unwrap()) as usize;
     let w_at = after_msgs + 16;
@@ -215,7 +218,7 @@ fn cmd_mutate(args: &[String]) -> i32 {
     let rows = u64::from_le_bytes(bytes[shape_at + 8..shape_at + 16].try_into().unwrap()) as usize;
     let depth = u64::from_le_bytes(bytes[shape_at + 16..shape_at + 24].try_into().unwrap()) as usize;
     let cols_at = shape_at + 24;
-    let per_col = 4 * rows + 32 * depth;
+    let per_col = 4 * rows + D * depth;
     let mut rng = Rng(0x9e3779b97f4a7c15);
     // (group, byte offset, bit) -- flipping a bit of a canonical field element may leave it canonical or not;
     // both are mutations the verifier must reject (non-canonical: at parse; canonical: by the checks)
@@ -223,7 +226,7 @@ fn cmd_mutate(args: &[String]) -> i32 {
     let pick = |rng: &mut Rng, total: usize, sample: usize| -> Vec<usize> {
         if sample == 0 || sample >= total { (0..total).collect() } else { (0..sample).map(|_| rng.below(total)).collect() }
     };
-    for bit in pick(&mut rng, 256, if sample == 0 { 0 } else { sample.min(32) }) { muts.push(("merkle_root", 12 + bit / 8, (bit % 8) as u8)); }
+    for bit in pick(&mut rng, 8 * D, if sample == 0 { 0 } else { sample.min(32) }) { muts.push(("merkle_root", proof::ROOT_AT + bit / 8, (bit % 8) as u8)); }
     for i in pick(&mut rng, n_msgs, sample) { let bit = rng.below(31); muts.push(("message", msgs_at + 24 * i + 4 * rng.below(6) + bit / 8, (bit % 8) as u8)); }
     for i in pick(&mut rng, k, sample) { let bit = rng.below(31); muts.push(("ligero_w", w_at + 24 * i + 4 * rng.below(6) + bit / 8, (bit % 8) as u8)); }
     for i in pick(&mut rng, nq, sample) { let bit = rng.below(31); muts.push(("ligero_qc", qc_at + 24 * i + 4 * rng.below(6) + bit / 8, (bit % 8) as u8)); }
@@ -232,8 +235,8 @@ fn cmd_mutate(args: &[String]) -> i32 {
         let ri = rng.below(rows);
         muts.push(("column_value", cols_at + oi * per_col + 4 * ri + bit / 8, (bit % 8) as u8));
         let di = rng.below(depth);
-        let b = rng.below(256);
-        muts.push(("merkle_sibling", cols_at + oi * per_col + 4 * rows + 32 * di + b / 8, (b % 8) as u8));
+        let b = rng.below(8 * D);
+        muts.push(("merkle_sibling", cols_at + oi * per_col + 4 * rows + D * di + b / 8, (b % 8) as u8));
     }
     let n_total = muts.len() + 2 + 2;
     println!("mutations: {} bit flips + 2 count mutations + 2 statement mutations = {n_total}", muts.len());
@@ -275,7 +278,7 @@ fn cmd_mutate(args: &[String]) -> i32 {
     let mut count_ok = 0;
     for delta in [-1i64, 1] {
         let mut m = Vec::with_capacity(bytes.len() + 24);
-        m.extend_from_slice(&bytes[..44]);
+        m.extend_from_slice(&bytes[..count_at]);
         m.extend_from_slice(&((n_msgs as i64 + delta) as u64).to_le_bytes());
         let keep = if delta < 0 { n_msgs - 1 } else { n_msgs };
         m.extend_from_slice(&bytes[msgs_at..msgs_at + 24 * keep]);

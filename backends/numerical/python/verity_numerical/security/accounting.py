@@ -766,6 +766,14 @@ class CandidateA:
     # element, checks deferred to Ligero; no soundness term) or ``libra`` (committed masking polynomial per sumcheck
     # instance and a random rho: ``zk_sumcheck_masking_error``; the final evaluations are still padded).
     sumcheck_masking: str = "padded_transcript"
+    #: The Ligero proximity (IRS) test's row-combination vector: ``uniform`` (independent coefficients, the paper) or
+    #: ``powers`` (``1, r, ..., r^(m-1)`` of one challenge ``r``: the GPU prover, ``gpu/ligero.row_coeffs``).  Powers:
+    #: the combined row is a point on a degree-``(m-1)`` curve through the ``m`` committed rows, and the proximity gap
+    #: for curves in the unique-decoding regime (BCIKS20, correlated agreement for low-degree parametrised curves)
+    #: raises the IRS field term from ``(n+1)/|F|`` to ``((m-1)n + 1)/|F|``.
+    irs_row_combination: str = "uniform"
+    #: The committed row count ``m`` when the prover reports it (overrides the census estimate in the powers term).
+    ligero_rows: int | None = None
 
     @property
     def units(self) -> int:
@@ -942,13 +950,18 @@ def account_candidate_a(p: CandidateA) -> Budget:
     # ---- encoding / opening: Ligero over the committed inputs, multiplicities and pads --------------------------------
     per_unit = p.inputs_per_unit + (p.query_wires_per_unit if p.depth.commit_query_wires else 0)
     committed = units * per_unit + sum(t.rows for t in p.tables) + extra_mult + pads * per_pad
+    rows = p.ligero_rows if p.ligero_rows is not None else math.ceil(committed / p.ligero.l) + 3
     lig = ligero_error(p.ligero, Ft, Fc)
+    if p.irs_row_combination == "powers":
+        lig["irs_field"] = Fraction((rows - 1) * p.ligero.n + 1) / Fraction(Fc.size) ** p.ligero.sigma
+    elif p.irs_row_combination != "uniform":
+        raise AccountingError(f"unknown irs_row_combination {p.irs_row_combination!r} (uniform | powers)")
     for name, val in lig.items():
-        B.add("encoding_opening", f"Ligero {name} (n={p.ligero.n}, k={p.ligero.k}, l={p.ligero.l}, t={p.ligero.t}, e={p.ligero.proximity})", val)
+        tag = f", rows combined by powers of r, m={rows}" if name == "irs_field" and p.irs_row_combination == "powers" else ""
+        B.add("encoding_opening", f"Ligero {name} (n={p.ligero.n}, k={p.ligero.k}, l={p.ligero.l}, t={p.ligero.t}, e={p.ligero.proximity}{tag})", val)
     depth = rounds_and_depth_a(p)
     _commitment_terms(B, p, depth["coins"])
 
-    rows = math.ceil(committed / p.ligero.l) + 3
     B.parameters.update({
         "K": p.K, "B": p.B, "units": units, "copy_bits_b": b,
         "trace_field": Ft.name, "challenge_field": Fc.name, "extension_degree": ext,

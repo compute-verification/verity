@@ -293,7 +293,8 @@ if GRAPHS:
             self.levels = {lv: torch.zeros((2, 1 << lv, 6), dtype=i32, device=dev) for lv in range(n)}
             self.rho = torch.zeros((n + 1, 6), dtype=i32, device=dev)
             self.coins = torch.zeros((n + 1, 6), dtype=i32, device=dev)
-            self.lam6 = torch.zeros((1, 6), dtype=i32, device=dev)
+            self.coeff2 = torch.cat([self.one6, torch.zeros((1, 6), dtype=i32, device=dev)], 0)   # [1 | lambda]
+            self.lam6 = self.coeff2[1:2]
             self.consts = torch.zeros((n + 1, 36), dtype=i32, device=dev)
             self.S = torch.zeros((n, n, 4, 6), dtype=i32, device=dev)
             self.vals = torch.zeros((n, 4, 6), dtype=i32, device=dev)
@@ -345,18 +346,125 @@ if GRAPHS:
             self.g_tree.replay()
             return self._walk_fs(tr, out)
 
+    class _DeviceFS:
+        """Mixin: the sponge runs on the device inside the graphs (``fs_cuda``), one graph per level.  After every round
+        the graph absorbs ``S[lv, i-1]`` and writes ``r_i`` to ``coins[i-1]``; after the tree it absorbs ``q_root`` and
+        writes ``lam``; at a level's tail it absorbs the four values and writes ``mu`` / ``lam`` and the next level's
+        ``rho = [mu] + r``.  The messages and the challenge order are ``_walk_fs``'s, so the transcript is unchanged;
+        the host reads everything back once per table (``_finish_fs``)."""
+
+        def _fs_setup(self) -> None:
+            from .fs_cuda import DeviceTranscript
+            self.fs = DeviceTranscript(self.device)
+            # prod_{j < i-1} eq(rho_j, r_{j+1}) for the current round, kept by the sponge steps (round_consts_pfx)
+            self.pfx = torch.zeros(6, dtype=torch.int32, device=self.fs.device)
+
+        def _round_consts(self, i: int, c: torch.Tensor) -> None:
+            _kg.round_consts_pfx(self.rho, self.pfx, self.coins, i, c)
+
+        def _generic_round(self, T4, lv: int, i: int) -> None:
+            super()._generic_round(T4, lv, i)
+            self.fs.step(self.S[lv, i - 1], self.coins[i - 1], rho=self.rho[i - 1], pfx=self.pfx)
+
+        def _packed_round(self, lv: int, i: int, T4_tab):
+            out = super()._packed_round(lv, i, T4_tab)
+            self.fs.step(self.S[lv, i - 1], self.coins[i - 1], rho=self.rho[i - 1], pfx=self.pfx)
+            return out
+
+        def _level_ops(self, lv: int, i0: int, i1: int, tail: bool) -> None:
+            super()._level_ops(lv, i0, i1, tail)
+            if tail:
+                self.fs.step(self.vals[lv], self.rho[0], self.lam6[0], pfx=self.pfx, reset=True)
+                if lv:
+                    self.rho[1:lv + 1] = self.coins[0:lv]
+
+        def _tree_ops(self) -> None:
+            super()._tree_ops()
+            self.fs.step(self.levels[0][1, 0], self.lam6[0], pfx=self.pfx, reset=True)
+
+        def _replay_fs(self, tr: Transcript, out: list[Ext]) -> LeafClaim:
+            self.fs.load(tr)
+            self.g_tree.replay()
+            for lv in range(self.n):
+                for (_, _, g) in self.g_levels[lv]:
+                    g.replay()
+            return self._finish_fs(tr, out)
+
+        def _finish_fs(self, tr: Transcript, out: list[Ext]) -> LeafClaim:
+            n = self.n
+            parts = [self.levels[0][:, 0], self.S, self.vals, self.rho[:n], self.lam6, self.fs.buf]
+            h = torch.cat([t.reshape(-1) for t in parts]).cpu().numpy().astype("int64")   # the one sync of the table
+            sizes = [t.numel() for t in parts]
+            root, S, vals, rho, lam6, fsw = (h[a:a + s] for a, s in zip([sum(sizes[:j]) for j in range(len(sizes))], sizes))
+            root = root.reshape(2, DEG)
+            S = S.reshape(n, n, 4, DEG)
+            vals = vals.reshape(n, 4, DEG)
+            if bool((root[0] % P).any()):
+                raise ValueError("LogUp: fractional sum is not zero (a query is not in its table)")
+            root_q = tuple(int(v) for v in root[1])
+            if not any(root_q):
+                raise ValueError("LogUp: q_root is zero")
+            out.append(root_q)
+            for lv in range(n):
+                for i in range(lv):
+                    out.extend(tuple(int(v) for v in row) for row in S[lv, i])
+                out.extend(tuple(int(v) for v in row) for row in vals[lv])
+            self.fs.store(tr, fsw.astype("int32"), 1 + sum(lv + 2 for lv in range(n)))
+            tr.logup_syncs = getattr(tr, "logup_syncs", 0) + 1
+            rho = [tuple(int(v) for v in r) for r in rho.reshape(n, DEG)]
+            lam = tuple(int(v) for v in lam6)
+            mu = rho[0]
+            v = [tuple(int(x) for x in row) for row in vals[n - 1]]
+            p_next = logup.e_add(v[0], logup.e_mul(mu, logup.e_sub(v[1], v[0])))
+            q_next = logup.e_add(v[2], logup.e_mul(mu, logup.e_sub(v[3], v[2])))
+            return logup.leaf_claim_top(rho, lam, logup.e_add(p_next, logup.e_mul(lam, q_next)))
+
+    class _FSGraphDev(_DeviceFS, _FSGraph):
+        def __init__(self, device, k: int) -> None:
+            _lgr.GraphLogUp.__init__(self, str(device), k=k, rounds_per_graph=None)
+            self._fs_setup()
+
+        def prove_fs(self, w: torch.Tensor, table: torch.Tensor, z: Ext, tr: Transcript, out: list[Ext]) -> LeafClaim:
+            if not self.built or w.numel() != self.Nw or table.numel() != self.Nt:
+                self.build(w.numel(), table.numel())
+            self.w.copy_(w)
+            self.w_e.copy_(w.view(-1, 2)[:, 0])
+            self.w_o.copy_(w.view(-1, 2)[:, 1])
+            self.table.copy_(table)
+            self._h2d(self.zc, [z, tuple(x * _sp.R_MOD_P % P for x in z), _lg.ref.mul(z, z)])
+            return self._replay_fs(tr, out)
+
+    class _FSGraphExtDev(_DeviceFS, _FSGraphExt):
+        def __init__(self, device) -> None:
+            _lgr.GraphLogUp.__init__(self, str(device), k=0, rounds_per_graph=None)
+            self._fs_setup()
+
+        def prove_fs_ext(self, p_leaf: torch.Tensor, q_leaf: torch.Tensor, n: int, tr: Transcript, out: list[Ext]) -> LeafClaim:
+            if not self.built or self.n != n:
+                self.build_ext(n)
+            self.p_leaf.copy_(p_leaf)
+            self.q_leaf.copy_(q_leaf)
+            return self._replay_fs(tr, out)
+
     _GRAPHS: dict = {}
 
+    def device_fs() -> bool:
+        import os
+        from . import fs_cuda
+        return fs_cuda.available() and not os.environ.get("VERITY_GPU_HOST_FS")
+
     def graph_range(device, k: int, Nw: int, Nt: int) -> "_FSGraph":
-        key = ("range", k, Nw, Nt)
+        dev_fs = device_fs()
+        key = ("range", k, Nw, Nt, dev_fs)
         if key not in _GRAPHS:
-            _GRAPHS[key] = _FSGraph(device, k)
+            _GRAPHS[key] = _FSGraphDev(device, k) if dev_fs else _FSGraph(device, k)
         return _GRAPHS[key]
 
     def graph_ext(device, n: int) -> "_FSGraphExt":
-        key = ("ext", n)
+        dev_fs = device_fs()
+        key = ("ext", n, dev_fs)
         if key not in _GRAPHS:
-            _GRAPHS[key] = _FSGraphExt(device)
+            _GRAPHS[key] = _FSGraphExtDev(device) if dev_fs else _FSGraphExt(device)
         return _GRAPHS[key]
 
 
