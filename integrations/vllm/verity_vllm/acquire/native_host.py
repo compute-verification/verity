@@ -2531,22 +2531,20 @@ class NativeHostCommitter:
             blk, pos = self._gpu_blocks[step][0], m.stream_off
             if blk is None or not self._block_holds(blk, pos, pos + 1):
                 raise RuntimeError(f"{spec}: step {step} does not retain byte {pos} of its stream (retain={self.retain})")
-            if getattr(blk, "holds", None) is None:
-                old = int(blk[pos])
-                blk[pos] = old ^ 1
-            else:
-                cell = blk[pos:pos + 1]              # windowed / ranged host copy: a one-byte slice is a view into the window or range holding it
-                old = int(cell[0])
-                cell[0] = old ^ 1
+            # windowed / ranged host copy: a one-byte slice is a view into the window or range holding the byte
+            cell, i = (blk, pos) if getattr(blk, "holds", None) is None else (blk[pos:pos + 1], 0)
         elif step in self._streams:
-            buf, pos = self._streams[step], m.stream_off
-            old = int(buf[pos])
-            buf[pos] = old ^ 1
+            cell, i = self._streams[step], m.stream_off
         else:
             if m.host is None:
                 raise RuntimeError(f"{spec}: {m.name} at step {step} has no retained host copy (retain={self.retain})")
-            old = int(m.host[0])
-            m.host[0] = old ^ 1
+            cell, i = m.host, 0
+        old = int(cell[i])
+        if torch is not None and isinstance(cell, torch.Tensor):
+            with torch.inference_mode():             # copies retained under inference mode are inference tensors: writable only inside it
+                cell[i] = old ^ 1
+        else:
+            cell[i] = old ^ 1
         return {"fault": spec, "step": step, "name": m.name, "ordinal": m.ordinal, "byte": 0, "leaf": a, "old": old, "new": old ^ 1}
 
     def _tensor_of_leaves(self, step: int, lo: int, hi: int) -> TensorMeta | None:
