@@ -2521,7 +2521,7 @@ class NativeHostCommitter:
         """NEGATIVE TEST ONLY: `VERITY_FAULT=retained_flip[:<name substring>]` (default `qkv_proj`).  After the commit and before the openings
         and value checks, flip the low bit of byte 0 of the earliest committed member whose name contains the substring, in THIS committer's
         retained copy (the copy every opening and value check reads).  The run root binds the unflipped bytes, so the opened value check must
-        FAIL naming the member.  Raises when no member matches or its retained copy is not a writable contiguous one."""
+        FAIL naming the member.  Raises when no member matches or its retained copy does not hold that byte."""
         sub = spec.partition(":")[2] or "qkv_proj"
         step, m = next(((s, m) for s in sorted(self._layouts) for m in self._layouts[s] if sub in m.name), (None, None))
         if m is None:
@@ -2529,10 +2529,15 @@ class NativeHostCommitter:
         a, _b, _o = self.leaf_span(step, m, 0, 1)
         if step in self._gpu_blocks:
             blk, pos = self._gpu_blocks[step][0], m.stream_off
-            if blk is None or getattr(blk, "holds", None) is not None:
-                raise RuntimeError(f"{spec}: step {step} has no contiguous retained block (retain={self.retain})")
-            old = int(blk[pos])
-            blk[pos] = old ^ 1
+            if blk is None or not self._block_holds(blk, pos, pos + 1):
+                raise RuntimeError(f"{spec}: step {step} does not retain byte {pos} of its stream (retain={self.retain})")
+            if getattr(blk, "holds", None) is None:
+                old = int(blk[pos])
+                blk[pos] = old ^ 1
+            else:
+                cell = blk[pos:pos + 1]              # windowed / ranged host copy: a one-byte slice is a view into the window or range holding it
+                old = int(cell[0])
+                cell[0] = old ^ 1
         elif step in self._streams:
             buf, pos = self._streams[step], m.stream_off
             old = int(buf[pos])

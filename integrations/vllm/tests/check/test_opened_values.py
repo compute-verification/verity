@@ -104,12 +104,28 @@ def test_host_layout_a_retained_buffer_changed_after_the_commit_fails_its_reads_
     assert rd(0, "a/0", 0, 128) == b"\x11" * 128 and rd(0, "b/0", 0, 100) == b"\x22" * 100
 
 
-@pytest.mark.parametrize("layout", ["block", "host"])
+def _held_on_host(com, kind: str, W: int = 512) -> None:
+    """Each step block held the way the windowed collector retains it on host: pinned windows (`_HostWindows`) or byte ranges
+    (`_HostRanges`) over the same bytes."""
+    from verity_vllm.acquire import native_collect as NC
+
+    for s, (blk, used) in list(com._gpu_blocks.items()):
+        n = blk.numel()
+        parts = [(a, min(a + W, n), blk[a:min(a + W, n)].clone()) for a in range(0, n, W)]
+        held = NC._HostWindows([(a // W, hv, b - a) for a, b, hv in parts], used, W) if kind == "windows" else NC._HostRanges(parts, used)
+        com._gpu_blocks[s] = (held, used)
+
+
+@pytest.mark.parametrize("layout", ["block", "host", "windows", "ranges"])
 def test_the_pod_fault_retained_flip_fails_every_opened_read_of_the_flipped_leaf_by_name(layout):
     """`VERITY_FAULT=retained_flip:<name>` (the real-row negative; `commit_delta` calls `com.fault_retained_flip` after the commit): one bit
-    of the member's retained copy flipped.  Reads of the flipped leaf fail by name; t0.3's first leaves (not shared with t0.4) still verify."""
+    of the member's retained copy flipped, in place also in the windowed collector's host windows and ranges.  Reads of the flipped leaf
+    fail by name; t0.3's first leaves (not shared with t0.4) still verify."""
     steps = {s: [(n, bytearray(b)) for n, b in ts] for s, ts in _world().items()}      # writable: the per-tensor path retains these buffers
-    com, run = _commit(layout, steps)
+    com, run = _commit("block" if layout in ("windows", "ranges") else layout, steps)
+    if layout in ("windows", "ranges"):
+        _held_on_host(com, layout)
+        assert OC.OpenedReader(com, run)(0, "t0.4", 0, 3000) == bytes(steps[0][4][1])
     f = com.fault_retained_flip("retained_flip:t0.4")
     assert (f["fault"], f["step"], f["name"], f["byte"], f["new"]) == ("retained_flip:t0.4", 0, "t0.4", 0, f["old"] ^ 1)
     rd = OC.OpenedReader(com, run)
