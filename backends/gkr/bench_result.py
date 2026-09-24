@@ -107,23 +107,27 @@ def load_frozen(root: Path, manifest: Path, tier: str, lo: int, n: int):
 
 def load_relation(name: str, src_root: Path, lo: int, n: int, procs: int):
     """``(x, w, y, rel)`` for a relation whose frozen set is a recipe (``backends/direct/ligero/relations.py``, e.g.
-    ``bf16-hopper``): VUs ``[lo, lo + n)`` of ``relchain.instances`` (the relation's finite operand words from
-    ``(seed, index)``, the accumulators recorded by its model), ``y`` the chain-end public word (the model's final FP32
-    accumulator cast by the relation's epilogue)."""
+    ``bf16-hopper``, ``fp8-ada``, ``fp8-hopper``): VUs ``[lo, lo + n)`` of ``relchain.instances`` (the relation's finite
+    operand words from ``(seed, index)``, the accumulators recorded by its model), ``y`` the chain-end public word (the
+    model's final FP32 accumulator cast by the relation's epilogue: BF16 uint16, or the FP8 relations' 22-bit packing
+    as uint32)."""
     import numpy as np
 
     if str(src_root) not in sys.path:
         sys.path.insert(0, str(src_root))
     from backends.direct.ligero import relchain
     from backends.direct.ligero.relations import relation
+    from gpu.v2.fp8 import relation_params
 
     rel = relation(name)
-    if rel.frozen_tier or rel.y_bits != 16 or rel.k != 16 or rel.steps * rel.k != K_VU:
-        raise SystemExit(f"bench_result.py: {name} is not a recipe BF16-output relation with 16-product units over K = {K_VU}")
+    p, epilogue = relation_params(rel)
+    y_bits = 22 if epilogue == "fp8" else 16
+    if rel.frozen_tier or rel.y_bits != y_bits or rel.k != sum(p.groups) or rel.steps * rel.k != K_VU:
+        raise SystemExit(f"bench_result.py: {name} is not a recipe BF16- or FP8-output relation over K = {K_VU}")
     inst = relchain.instances(rel, lo + n, procs=procs)[lo:]
     x = np.array([v[0] for v in inst], dtype=np.uint16)
     w = np.array([v[1] for v in inst], dtype=np.uint16)
-    y = np.array([rel.y_public(int(v[3])) for v in inst], dtype=np.uint16)
+    y = np.array([rel.y_public(int(v[3])) for v in inst], dtype=np.uint16 if y_bits == 16 else np.uint32)
     return x, w, y, rel
 
 
@@ -142,7 +146,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("dir", help="a checker-v2 export directory (only its Params-only statement files are read)")
     ap.add_argument("--instances", default=None, help="bench-instances/v1 data directory (the tier's files)")
     ap.add_argument("--relation", default=None,
-                    help="a recipe relation of backends/direct/ligero/relations.py (bf16-hopper) instead of the frozen --tier")
+                    help="a recipe relation of backends/direct/ligero/relations.py (bf16-hopper, fp8-ada, fp8-hopper) instead "
+                         "of the frozen --tier")
     ap.add_argument("--manifest", default=None, help="the frozen manifest.json (default: <source>/fixtures/bench-instances/v1)")
     ap.add_argument("--tier", default=TIER)
     ap.add_argument("--lo", type=int, default=0)
@@ -185,6 +190,7 @@ def main(argv: list[str] | None = None) -> int:
     from gpu import ligero, prover
     from gpu.circuit import layers, load_circuit
     from gpu.run import _dev, read_chain
+    from gpu.v2.fp8 import relation_params
     from gpu.v2.witness import Generator, GraphedGenerator, Ops
     import soundness
 
@@ -197,7 +203,7 @@ def main(argv: list[str] | None = None) -> int:
         digest = relchain.instances_digest(rel, args.lo + args.vus)
         if man.get("model") != rel.model.name:
             raise SystemExit(f"bench_result.py: {d} holds the circuits of {man.get('model')}, {rel.name} needs {rel.model.name}")
-        params, profile, model_name = rel.params, rel.target.name, rel.model.name
+        params, profile, model_name = relation_params(rel)[0], rel.target.name, rel.model.name
         inst_ref = contract.instances_ref(rel.instances_tier, args.lo, args.lo + args.vus, digest, dataset=rel.instances_dataset)
         inst_check = {"recipe": rel.instances_recipe, "generator": "backends/direct/ligero/relchain.py instances()",
                       "seed": rel.instance_seed, "digest": digest}
@@ -215,14 +221,17 @@ def main(argv: list[str] | None = None) -> int:
     ucirc, ecirc = load_circuit(d / "circuit.txt"), load_circuit(d / "epilogue.txt")
     ulayers, elayers = layers(ucirc), layers(ecirc)
     steps = man["steps"]
-    if steps * 16 != x.shape[1]:
-        raise SystemExit(f"bench_result.py: DIR has {steps} steps, the tier has K = {x.shape[1]}")
+    unit_k = sum(params.groups)
+    if steps * unit_k != x.shape[1]:
+        raise SystemExit(f"bench_result.py: DIR has {steps} steps of {unit_k}, the tier has K = {x.shape[1]}")
     public = [int(v) for v in y]
     ops = Ops(str(dev))
     gen = Generator(ops, params)
     graphed = dev.type == "cuda" and not os.environ.get("VERITY_GPU_EAGER_WITNESS")
-    # the operands as host int16 arrays of their uint16 bits (the device copy happens inside every timed rep)
-    x16, w16, y16 = (np.ascontiguousarray(a).view(np.int16).copy() for a in (x, w, y))
+    # the operands as host int16 arrays of their uint16 bits, the FP8 packed words as int32 (the device copy happens inside
+    # every timed rep)
+    x16, w16 = (np.ascontiguousarray(a).view(np.int16).copy() for a in (x, w))
+    y16 = np.ascontiguousarray(y).view(np.int32 if y.dtype == np.uint32 else np.int16).copy()
     ggen: list = []
     torch.cuda.synchronize(dev)
     t_prep = time.perf_counter() - tp0

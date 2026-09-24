@@ -16,6 +16,7 @@ Files (``bb_export`` formats, ``<QQ`` header then u32 LE): ``units.bin`` (264 co
     python -m gpu.v2.export synth --out DIR --vus 2 --steps 3                      # + DIR/negatives (4 chain cases)
     python -m gpu.v2.export negatives --out DIR                                    # a-v2's 30 unit + 4 chain cases
     python -m gpu.v2.export circuits --model hopper_bf16_m16n8k16 --out DIR        # statement files only, at that model
+    python -m gpu.v2.export circuits --model ada_e4m3_m16n8k32 --out DIR           # E4M3: adder-side view, fp8 epilogue
 """
 from __future__ import annotations
 
@@ -32,6 +33,7 @@ from verity_numerical.checker import REAL, Params, Reject
 from verity_numerical.gkr_export import v2 as V2
 
 from . import epilogue_limbs as EL
+from . import fp8 as FP8
 
 P = 2**31 - 2**27 + 1
 STEP = 16
@@ -49,8 +51,10 @@ class BabyBearV2Api:
     modulus = P
 
     def __init__(self, epilogue: str = "limbs", p: Params = REAL) -> None:
-        if epilogue not in ("limbs", "word"):
+        if epilogue not in ("limbs", "word", "fp8"):
             raise ValueError(epilogue)
+        if (epilogue == "fp8") != FP8.is_fp8(p):
+            raise ValueError(f"epilogue {epilogue!r} does not match the operand format of {p}")
         self.epilogue = epilogue
         self.p = p
         self._word_epi = None
@@ -61,6 +65,8 @@ class BabyBearV2Api:
     def build_epilogue(self):
         if self.epilogue == "limbs":
             return EL.build_epilogue_circuit_limbs(self.p)
+        if self.epilogue == "fp8":
+            return FP8.build_epilogue_circuit_fp8(self.p)
         return V2.build_epilogue_circuit_v2(self.p)
 
     def export_circuit(self, ctx, path: Path) -> None:
@@ -71,6 +77,8 @@ class BabyBearV2Api:
 
     def vu_rows(self, unit, epi, a, b, y16, accs=None, p: Params | None = None, cross_check: bool = True):
         p = self.p if p is None else p
+        if self.epilogue == "fp8":
+            return FP8.vu_rows_fp8(unit, epi, a, b, y16, accs, p, cross_check)
         if self.epilogue == "word":
             return V2.vu_rows_v2(unit, epi, a, b, y16, accs, p, cross_check, P)
         # unit rows + the a-v2 (word-form) epilogue row, with its cross-checks; then the limb-form epilogue row from
@@ -203,22 +211,30 @@ def export(root: Path, tier: str, lo: int, hi: int | None, out: Path, procs: int
 def circuits(out: Path, model: str, K: int = 1536) -> dict:
     """The statement's Params-only files (``circuit.txt``, ``epilogue.txt``, ``chain.txt``, ``manifest.json``) at
     ``Params.from_model`` of the ``verity.ml.tc.models.MODELS`` entry ``model``: what ``bench_result.py`` reads for a
-    relation whose instances are a recipe, not an exported tier."""
+    relation whose instances are a recipe, not an exported tier.  An E4M3 model gets the adder-side view and the
+    packed-word epilogue of ``gpu/v2/fp8.py`` (units of ``sum(groups) = 32`` products)."""
     import dataclasses
 
     from verity.ml.tc.models import MODELS
+    from verity.ml.tc.term import FORMATS
 
-    p = Params.from_model(MODELS[model])
-    if sum(p.groups) != STEP or K % STEP:
-        raise SystemExit(f"{model}: {sum(p.groups)} products per unit; the v2 export chains units of {STEP}")
-    api = BabyBearV2Api("limbs", p)
+    m = MODELS[model]
+    if FORMATS[m.dtype].nan_rule == "e4m3":
+        p, epilogue, step = FP8.adder_params(m), "fp8", sum(m.groups)
+    else:
+        p, epilogue, step = Params.from_model(m), "limbs", STEP
+        if sum(p.groups) != STEP:
+            raise SystemExit(f"{model}: {sum(p.groups)} products per unit; the BF16 v2 export chains units of {STEP}")
+    if K % step:
+        raise SystemExit(f"{model}: K = {K} is not a multiple of {step}")
+    api = BabyBearV2Api(epilogue, p)
     uctx, _ = api.build_unit()
     ectx, _ = api.build_epilogue()
     out.mkdir(parents=True, exist_ok=True)
     api.export_circuit(uctx, out / "circuit.txt")
     api.export_circuit(ectx, out / "epilogue.txt")
     api.export_extra(uctx, ectx, out)
-    return manifest_for(uctx, ectx, out, model=model, params=dataclasses.asdict(p), steps=K // STEP, epilogue=api.epilogue)
+    return manifest_for(uctx, ectx, out, model=model, params=dataclasses.asdict(p), steps=K // step, epilogue=api.epilogue)
 
 
 # ---------------------------------------------------------------------------------------------------------------------

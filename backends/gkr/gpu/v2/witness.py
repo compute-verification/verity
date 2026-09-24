@@ -43,6 +43,7 @@ from verity_numerical.gkr_export import v2 as GV2
 from verity_numerical.gkr_export.circuit import CHUNK
 
 from . import epilogue_limbs as EL
+from . import fp8 as FP8
 
 P = 2**31 - 2**27 + 1
 STEP = 16
@@ -289,8 +290,12 @@ class Generator:
 
     def __init__(self, ops: Ops, p: Params = REAL, host_tables: dict | None = None) -> None:
         self.ops, self.p = ops, p
+        self.fp8 = FP8.is_fp8(p)
+        self.k = sum(p.groups)
+        if not self.fp8 and self.k != STEP:
+            raise Reject(f"the BF16 v2 unit has {STEP} products, got {self.k}")
         self.unit = GV2.build_unit_circuit_v2(p)
-        self.epi = EL.build_epilogue_circuit_limbs(p)
+        self.epi = FP8.build_epilogue_circuit_fp8(p) if self.fp8 else EL.build_epilogue_circuit_limbs(p)
         host = host_tables if host_tables is not None else dense_tables(p)
         self.tables = {name: Dense(name, lo, ops.asarray(outs), None if valid is None else self._bool(valid))
                        for name, (outs, valid, lo) in host.items()}
@@ -321,9 +326,9 @@ class Generator:
         ``(ovf, sgn)`` per group, the final state, and ``bad``."""
         ops, p, T = self.ops, self.p, self.tables
         N, K = int(A.shape[0]), int(A.shape[1])
-        if K % STEP:
-            raise Reject("operand count must be a multiple of 16")
-        steps = K // STEP
+        if K % self.k:
+            raise Reject(f"operand count must be a multiple of {self.k}")
+        steps = K // self.k
         R = 2 * V2.dt_rows(p)
         mb, vb, L = V2.mb(p), V2.vb(p), p.l_hi + 1
         ra, oka = T["T_OP"].gather(ops, A)
@@ -338,7 +343,7 @@ class Generator:
         flags = []
         for i in range(steps):
             xs.append(ops.stack([s_c, e_c, M_c, z_c], 1))
-            start = i * STEP
+            start = i * self.k
             flags = []
             hint = []
             for size in p.groups:
@@ -384,7 +389,7 @@ class Generator:
         ops, p = self.ops, self.p
         t0 = time.perf_counter()
         N, K = int(A.shape[0]), int(A.shape[1])
-        steps, k = K // STEP, sum(p.groups)
+        steps, k = K // self.k, self.k
         xs, ys, hs, flags, state, bad = self.chain(A, B)
         if sync:
             sync()
@@ -409,17 +414,20 @@ class Generator:
         if sync:
             sync()
         t2 = time.perf_counter()
-        # the limb epilogue (``epilogue_limbs.epilogue_witness_limbs``) on the last state and flags
+        # the limb epilogue (``epilogue_limbs.epilogue_witness_limbs``) on the last state and flags; the FP8 epilogue
+        # (``fp8.epilogue_witness_fp8``) has no hints: the packed word is an expression of the linked columns
         ectx, _ = self.epi
-        ctx = ArrayCtx(ops, bad)
-        s, e_hat, M, z = state
-        h = {"M_hi8": M >> 16, "M_lo16": M & 0xFFFF}
-        y_hi, y_lo = EL.pack_limbs(ctx, p, state, flags, h)
-        lsb = y_hi & 1
-        t = y_lo + lsb + (2**15 - 1)
-        h.update({"hi2": y_hi >> 1, "lsb": lsb, "carry": t >> 16, "rem": t & 0xFFFF})
-        EL.epilogue_limbs(ctx, p, y_hi, y_lo, h)
-        bad = ctx.bad
+        h = {}
+        if not self.fp8:
+            ctx = ArrayCtx(ops, bad)
+            s, e_hat, M, z = state
+            h = {"M_hi8": M >> 16, "M_lo16": M & 0xFFFF}
+            y_hi, y_lo = EL.pack_limbs(ctx, p, state, flags, h)
+            lsb = y_hi & 1
+            t = y_lo + lsb + (2**15 - 1)
+            h.update({"hi2": y_hi >> 1, "lsb": lsb, "carry": t >> 16, "rem": t & 0xFFFF})
+            EL.epilogue_limbs(ctx, p, y_hi, y_lo, h)
+            bad = ctx.bad
         evals: list = [None] * len(ectx.cols)
         evals[0] = ops.full(N, 1)
         for j, v in enumerate(state):
@@ -443,8 +451,9 @@ class GraphedGenerator:
     """``Generator.run`` on CUDA captured once as a graph on static operand buffers and replayed per call.  The chain is
     ~2e4 small elementwise / gather launches (96 steps x 2 groups x ~90 ops over ``N`` lanes) and eager torch is
     launch-bound on them; every op has fixed shapes and no host round trip, so the replay issues the same kernels back to
-    back.  The operands enter as their 16-bit patterns (int16) and are widened inside the graph.  ``run`` returns the
-    graph's ``Rows``, which the next ``run`` overwrites; ``seconds`` is empty."""
+    back.  The operands enter as their 16-bit patterns (int16) and are widened inside the graph; the claimed words too,
+    except for the FP8 relations, whose 22-bit packed words enter as int32.  ``run`` returns the graph's ``Rows``, which
+    the next ``run`` overwrites; ``seconds`` is empty."""
 
     def __init__(self, gen: Generator, N: int, K: int) -> None:
         torch = gen.ops.torch
@@ -452,7 +461,7 @@ class GraphedGenerator:
         self.gen, self.torch, self.dev = gen, torch, dev
         self.a16 = torch.zeros((N, K), dtype=torch.int16, device=dev)
         self.b16 = torch.zeros((N, K), dtype=torch.int16, device=dev)
-        self.y16 = torch.zeros((N,), dtype=torch.int16, device=dev)
+        self.y16 = torch.zeros((N,), dtype=torch.int32 if gen.fp8 else torch.int16, device=dev)
         side = torch.cuda.Stream(dev)
         side.wait_stream(torch.cuda.current_stream(dev))
         with torch.cuda.stream(side):
@@ -469,10 +478,12 @@ class GraphedGenerator:
         def u16(t):
             return t.to(self.torch.int64) & 0xFFFF
 
-        return self.gen.run(u16(self.a16), u16(self.b16), u16(self.y16))
+        y = self.y16.to(self.torch.int64) if self.gen.fp8 else u16(self.y16)
+        return self.gen.run(u16(self.a16), u16(self.b16), y)
 
     def run(self, x16: np.ndarray, w16: np.ndarray, y16: np.ndarray) -> Rows:
-        """``x16`` / ``w16`` ``(N, K)`` and ``y16`` ``(N,)``: host int16 arrays holding the uint16 operands' bits."""
+        """``x16`` / ``w16`` ``(N, K)`` and ``y16`` ``(N,)``: host int16 arrays holding the uint16 operands' bits
+        (``y16`` int32 for the FP8 relations)."""
         torch = self.torch
         self.a16.copy_(torch.from_numpy(x16))
         self.b16.copy_(torch.from_numpy(w16))
@@ -615,8 +626,8 @@ def compare(export_dir: str, root: str, tier: str, lo: int, hi: int | None, devi
 
 def recipe(relation: str, vus: int, device: str, procs: int) -> dict:
     """The device generator at a relation's Params (``backends/direct/ligero/relations.py``) vs the export's rows
-    (``BabyBearV2Api("limbs", p).vu_rows``, the model-recorded accumulator cross-checked at every unit and the cast
-    against the chain-end word) on the relation's first ``vus`` recipe instances (``relchain.instances``)."""
+    (``BabyBearV2Api(epilogue, p).vu_rows``, the model-recorded accumulator cross-checked at every unit and the cast /
+    packed word against the chain-end word; ``fp8.relation_params``) on the relation's first ``vus`` recipe instances (``relchain.instances``)."""
     import torch
     from backends.direct.ligero import relchain
     from backends.direct.ligero.relations import relation as get_relation
@@ -624,14 +635,14 @@ def recipe(relation: str, vus: int, device: str, procs: int) -> dict:
     from .export import BabyBearV2Api
 
     rel = get_relation(relation)
-    p = rel.params
+    p, epilogue = FP8.relation_params(rel)
     t = time.perf_counter()
     inst = relchain.instances(rel, vus, procs=procs)
     t_inst = time.perf_counter() - t
     x = np.array([v[0] for v in inst], dtype=np.int64)
     w = np.array([v[1] for v in inst], dtype=np.int64)
     y = np.array([rel.y_public(int(v[3])) for v in inst], dtype=np.int64)
-    api = BabyBearV2Api("limbs", p)
+    api = BabyBearV2Api(epilogue, p)
     unit, epi = api.build_unit(), api.build_epilogue()
     want_u, want_e, rejected = [], [], {}
     for v, (a, b, accs, _) in enumerate(inst):
@@ -644,7 +655,7 @@ def recipe(relation: str, vus: int, device: str, procs: int) -> dict:
         want_e.append(np.array([c % P for c in erow], dtype=np.int64))
     ops = Ops(device)
     got = Generator(ops, p).run(ops.asarray(x), ops.asarray(w), ops.asarray(y))
-    steps = x.shape[1] // STEP
+    steps = x.shape[1] // sum(p.groups)
     gu = _to_np(got.units).reshape(vus, steps, -1)
     ge = _to_np(got.epilogue)
     bad = _to_np(got.bad)
