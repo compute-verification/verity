@@ -274,6 +274,62 @@ def test_unverified_or_self_verified_is_rejected(store: LocalStore) -> None:
     assert cell(T.build(store)) is not None and cell(T.build(store)).artifact == art
 
 
+def put_registered(store: LocalStore, res: dict, meta: dict | None = None, labels: list[tuple] = ()) -> str:
+    """Store ``res`` as ``research data put --kind bench-result/v1 --meta @result.json`` does for a pod run: no attempt, only the
+    meta the registering lane wrote (``lane``, ``by``, ...) and the labels it (or anyone) asserts."""
+
+    art = store.put_artifact(T.RESULT_KIND, {**res, **(meta or {})})
+    for key, value, by, ts in labels:
+        store.add_label(art, key, value, by, ts=ts)
+    return art
+
+
+def test_hand_registered_result_is_attributed_to_the_lane_its_meta_names(store: LocalStore) -> None:
+    """A result registered with ``research data put`` has no attempt: its producer is the lane its meta names (``meta.lane``, the
+    registrar's ``meta.by``) or a ``lane`` label names.  That lane's own ``verified=accepted`` is a self-assertion (05:00Z render:
+    the 4090 / 5090 B-Ligero cells); a non-producer's acceptance makes the cell."""
+
+    kw = dict(candidate="B-Ligero", target=FP8_ADA_MMA, gpu=RTX4090, proof_class="COMPLETE_ZK_BACKEND", t_total=0.17)
+    art = put_registered(store, result(**kw), {"lane": "wave-4090-2"},
+                         labels=[("verified", "accepted", "wave-4090-2", "2026-09-24T04:12:37Z"),
+                                 ("verifier", "ligero-verify@e918ac8", "wave-4090-2", "2026-09-24T04:12:37Z")])
+    assert store.index.attempts_by_output(art) == []
+    tab = T.build(store)
+    assert cell(tab, FP8_ADA_MMA, "B-Ligero") is None
+    (reason,) = rejected(tab, art)
+    assert reason.startswith("not independently verified") and "producers: wave-4090-2" in reason, reason
+    store.add_label(art, "verified", "accepted", "verify-night", ts="2026-09-24T11:00:00Z")      # a non-producer re-verifies
+    c = cell(T.build(store), FP8_ADA_MMA, "B-Ligero")
+    assert c is not None and c.artifact == art and c.verified_by == "verify-night" and c.attempt is None
+
+    # the registrar (meta.by) and the lane (meta.lane) are both producers; so is the lane of a prose `constructed_by`
+    art2 = put_registered(store, result(**{**kw, "t_total": 0.16}), {"lane": "v3-scout", "by": "v3-scout-2"},
+                          labels=[("verified", "accepted", "v3-scout-2", "2026-09-24T04:00:00Z")])
+    assert "producers: v3-scout, v3-scout-2" in rejected(T.build(store), art2)[0]
+    art3 = put_registered(store, result(**{**kw, "t_total": 0.15}), {"constructed_by": "fill-a100 (2026-09-22) from the attempt's records"},
+                          labels=[("verified", "accepted", "fill-a100", "2026-09-24T04:00:00Z")])
+    assert "producers: fill-a100" in rejected(T.build(store), art3)[0]
+
+    # attribution by a `lane` label (meta carries none): the named lane is a producer, the label's asserter (a back-fill) is not
+    art4 = put_registered(store, result(**{**kw, "t_total": 0.14}),
+                          labels=[("lane", "wave-4090-3", "coordinator", "2026-09-24T05:00:00Z"),
+                                  ("verified", "accepted", "wave-4090-3", "2026-09-24T05:01:00Z")])
+    assert "producers: wave-4090-3" in rejected(T.build(store), art4)[0]
+    store.add_label(art4, "verified", "accepted", "coordinator", ts="2026-09-24T05:02:00Z")
+    c4 = cell(T.build(store), FP8_ADA_MMA, "B-Ligero")
+    assert c4.artifact == art4 and c4.verified_by == "coordinator"
+
+
+def test_hand_registered_result_naming_no_producer_is_not_independently_verified(store: LocalStore) -> None:
+    """No attempt and no named producer: nobody can be shown independent of it, whoever accepted it."""
+
+    art = put_registered(store, result(), labels=[("verified", "accepted", "verify-night", "2026-09-24T11:00:00Z")])
+    (reason,) = rejected(T.build(store), art)
+    assert reason.startswith("not independently verified: no attempt and no named producer"), reason
+    store.add_label(art, "lane", "lane-a-gkr", "coordinator", ts="2026-09-24T11:05:00Z")          # attribution back-filled
+    assert cell(T.build(store)).artifact == art and cell(T.build(store)).verified_by == "verify-night"
+
+
 def test_every_frozen_constant_is_checked(store: LocalStore) -> None:
     bad_inst = {**T.FROZEN_INSTANCES[FIRST.name], "manifest_sha256": "a" * 64}
     cases = {
@@ -568,6 +624,7 @@ def test_label_keys_are_the_store_vocabulary() -> None:
     from verity_numerical.bench import ledger, ledger_to_store
 
     assert T.PRODUCER_LABEL_KEYS == (vocab.CANDIDATE, vocab.LABEL) == ("candidate", "label")
+    assert T.PRODUCER_NAME_LABEL_KEYS == (vocab.LANE,) == ("lane",)
     assert T.VERIFIED_LABELS == ((vocab.INDEPENDENTLY_VERIFIED, (True, "true")), (vocab.VERIFIED, (vocab.VERIFIED_ACCEPTED,)))
     assert (vocab.INDEPENDENTLY_VERIFIED, vocab.VERIFIED, vocab.VERIFIED_ACCEPTED) == ("independently_verified", "verified", "accepted")
     assert vocab.key(vocab.INDEPENDENTLY_VERIFIED).status == vocab.DEPRECATED and vocab.key(vocab.VERIFIED_BY).status == vocab.IGNORED

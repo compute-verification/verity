@@ -36,12 +36,14 @@ from verity_numerical.bench import contract
 try:  # the label keys are pinned with the store (`research.store.vocab`, tools/research); verity-numerical does not depend on that package
     from research.store import vocab as _vocab
 
-    _CANDIDATE, _LABEL, _PROOF_CLASS = _vocab.CANDIDATE, _vocab.LABEL, _vocab.PROOF_CLASS
+    _CANDIDATE, _LABEL, _PROOF_CLASS, _LANE = _vocab.CANDIDATE, _vocab.LABEL, _vocab.PROOF_CLASS, _vocab.LANE
     _INDEPENDENTLY_VERIFIED, _VERIFIED, _VERIFIED_ACCEPTED = _vocab.INDEPENDENTLY_VERIFIED, _vocab.VERIFIED, _vocab.VERIFIED_ACCEPTED
+    _VERIFIED_REJECTED = _vocab.VERIFIED_REJECTED
     _KEY_ALIASES, _VALUE_ALIASES = dict(_vocab.KEY_ALIASES), dict(_vocab.VALUE_ALIASES)
 except ImportError:  # pragma: no cover  -- the same spellings, so the predicate still imports where the store package is absent (tested equal)
-    _CANDIDATE, _LABEL, _PROOF_CLASS = "candidate", "label", "proof_class"
+    _CANDIDATE, _LABEL, _PROOF_CLASS, _LANE = "candidate", "label", "proof_class", "lane"
     _INDEPENDENTLY_VERIFIED, _VERIFIED, _VERIFIED_ACCEPTED = "independently_verified", "verified", "accepted"
+    _VERIFIED_REJECTED = "rejected"
     _KEY_ALIASES, _VALUE_ALIASES = {"notes": "note", "verify_note": "note", "batch": "B", "checker": "verifier"}, {("candidate", "A"): "A-GKR"}
 
 
@@ -75,6 +77,8 @@ __all__ = [
     "NATIVE_PEAK_KIND",
     "NATIVE_PEAK_METHOD",
     "PRODUCER_LABEL_KEYS",
+    "PRODUCER_META_KEYS",
+    "PRODUCER_NAME_LABEL_KEYS",
     "RANK",
     "REDTEAM_GLOB",
     "RESULT_KIND",
@@ -93,6 +97,7 @@ __all__ = [
     "fmt_overhead",
     "fmt_seconds",
     "frozen_instances",
+    "independent_verification",
     "main",
     "normalise_sku",
     "phases",
@@ -161,6 +166,14 @@ FROZEN_INSTANCES: dict[str, dict[str, Any]] = {
 #: Label keys whose asserter is the *producer* of a result (the lane's own row labels, ``ledger_to_store``); a verification
 #: label by any of them, or by the producing attempt's ``execution.campaign``, is a self-assertion and does not count.
 PRODUCER_LABEL_KEYS = (_CANDIDATE, _LABEL)
+#: Label keys whose *value* names the producing lane (``lane=<lane>``, for a result whose meta does not carry it); the asserter
+#: of such a label is not thereby a producer (the coordinator back-fills attribution).
+PRODUCER_NAME_LABEL_KEYS = (_LANE,)
+#: Meta keys of a result that name who produced or registered it.  ``research data put`` records no registrar (the manifest is
+#: kind, meta, refs, payload; the catalog has no such column), so a hand-registered result -- no attempt -- is attributed only by
+#: its own meta: ``lane`` (the producing lane), ``by`` / ``registered_by`` (the lane that ran ``put``), ``constructed_by`` (prose
+#: that starts with the lane's name).  Each value's leading lane-name token is a producer.
+PRODUCER_META_KEYS = ("lane", "by", "registered_by", "constructed_by")
 #: The labels that mean "an independent verifier accepted this result": ``(key, accepted values)``.  The store's back-fill of
 #: Rust-verifier acceptance used ``independently_verified=true`` (by ``h100-bestvsbest``, ``coordinator``); ``verified=accepted``
 #: is the name the freeze spec gives it.  Either counts when the asserter is not a producer.
@@ -384,9 +397,19 @@ def _labels(labels: Iterable[Any]) -> list[_Label]:
     return sorted(out, key=lambda l: l.ts)
 
 
-def producers(attempt: Mapping[str, Any] | None, labels: Iterable[Any]) -> set[str]:
-    """The asserters that are the result's own producer: the producing attempt's ``execution.campaign`` and whoever asserted
-    a :data:`PRODUCER_LABEL_KEYS` label on it (the lane's row labels).  A verification by one of these is a self-assertion."""
+_LANE_TOKEN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
+
+
+def _lane_name(v: Any) -> str | None:
+    m = _LANE_TOKEN.match(v.strip()) if isinstance(v, str) else None
+    return m.group(0) if m else None
+
+
+def producers(attempt: Mapping[str, Any] | None, labels: Iterable[Any], meta: Mapping[str, Any] | None = None) -> set[str]:
+    """The asserters that are the result's own producer: the producing attempt's ``execution.campaign``, whoever asserted a
+    :data:`PRODUCER_LABEL_KEYS` label on it (the lane's row labels), the lane a :data:`PRODUCER_NAME_LABEL_KEYS` label names, and
+    the lanes its ``meta`` names under :data:`PRODUCER_META_KEYS` (the registrar of a hand-registered result).  A verification by
+    one of these is a self-assertion."""
 
     out: set[str] = set()
     if isinstance(attempt, Mapping):
@@ -396,6 +419,10 @@ def producers(attempt: Mapping[str, Any] | None, labels: Iterable[Any]) -> set[s
     for lab in _labels(labels):
         if lab.key in PRODUCER_LABEL_KEYS:
             out.add(lab.by)
+        if lab.key in PRODUCER_NAME_LABEL_KEYS and _lane_name(lab.value):
+            out.add(_lane_name(lab.value))
+    if isinstance(meta, Mapping):
+        out |= {n for n in (_lane_name(meta.get(k)) for k in PRODUCER_META_KEYS) if n}
     return out
 
 
@@ -407,6 +434,17 @@ def _verified_by(labels: Sequence[_Label], self_: set[str]) -> _Label | None:
             if lab.key == key and lab.value in accepted:
                 return lab
     return None
+
+
+def independent_verification(result: Mapping[str, Any], labels: Iterable[Any], attempt: Mapping[str, Any] | None) -> _Label | None:
+    """The accepting :data:`VERIFIED_LABELS` label by a non-producer (:func:`producers`), or ``None``.  A result with no attempt
+    and no named producer has none: nobody can be shown independent of an unknown producer."""
+
+    labs = _labels(labels)
+    self_ = producers(attempt, labs, result)
+    if attempt is None and not self_:
+        return None
+    return _verified_by(labs, self_)
 
 
 def _redteam_ceiling(labels: Sequence[_Label], self_: set[str], by_glob: str = REDTEAM_GLOB) -> tuple[str | None, _Label | None]:
@@ -496,8 +534,11 @@ def reject_reasons(result: Mapping[str, Any], labels: Iterable[Any], attempt: Ma
     if variant:
         p.append(variant)
     labs = _labels(labels)
-    self_ = producers(attempt, labs)
-    if _verified_by(labs, self_) is None:
+    self_ = producers(attempt, labs, result)
+    if attempt is None and not self_:
+        p.append("not independently verified: no attempt and no named producer (meta lane / by, a lane label, a candidate / label "
+                 "asserter), so no verification can be shown independent")
+    elif _verified_by(labs, self_) is None:
         keys = " or ".join(f"{k}={'|'.join(map(str, v))}" for k, v in VERIFIED_LABELS)
         p.append(f"not independently verified: no label {keys} by a non-producer (producers: {', '.join(sorted(self_)) or 'unknown'})")
     ceiling, verdict = _redteam_ceiling(labs, self_)
@@ -689,8 +730,7 @@ def build(store: Any) -> Tables:
         labels = store.labels(art_id)
         auth = fp.get("authentication") if fp.get("authentication") in AUTH_MODES else AUTHENTICATION
         reasons = reject_reasons(meta, labels, attempt, target, cand, authentication=auth)
-        labs = _labels(labels)
-        vb = _verified_by(labs, producers(attempt, labs))
+        vb = independent_verification(meta, labels, attempt)
         verified_by = vb.by if vb is not None else None
         if reasons:
             T.rejected.append({**entry, "reasons": reasons})
