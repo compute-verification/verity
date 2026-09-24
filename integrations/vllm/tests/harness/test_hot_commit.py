@@ -12,15 +12,26 @@ from pathlib import Path
 import pytest
 
 from verity_vllm.harness import hot_commit as hc
+from verity_vllm.harness import research_tools
 from verity_vllm.harness import timeline as tlm
+
+CORE = Path("packages") / "verity" / "src" / "verity"
 
 
 def _tree(tmp_path: Path) -> Path:
-    t = tmp_path / "tree"
+    """A repository shaped like the tree of record; returns its integration root (the job's cwd)."""
+    repo = tmp_path / "repo"
+    (repo / CORE / "ir").mkdir(parents=True)
+    (repo / "pyproject.toml").write_text("[project]\nname = 'verity'\n")
+    (repo / ".gitignore").write_text("__pycache__/\n*.pyc\nout/\n")
+    (repo / CORE / "__init__.py").write_text("")
+    (repo / CORE / "ir" / "codec.py").write_text("def _spec_id(fn): return fn\n")
+    (repo / "tools" / "research").mkdir(parents=True)
+    (repo / "tools" / "research" / "cli.py").write_text("print('r')\n")
+    t = repo / "integrations" / "vllm"
     (t / "verity_vllm" / "harness").mkdir(parents=True)
+    (t / "verity_vllm" / "__init__.py").write_text("")
     (t / "verity_vllm" / "harness" / "commit_delta.py").write_text("print('x')\n")
-    (t / "verity_vllm" / "harness" / "tests").mkdir()
-    (t / "verity_vllm" / "harness" / "tests" / "test_a.py").write_text("def test(): pass\n")
     (t / "verity_vllm" / "harness" / "__pycache__").mkdir()
     (t / "verity_vllm" / "harness" / "__pycache__" / "a.pyc").write_bytes(b"\0")
     (t / "manifests").mkdir(parents=True)
@@ -32,21 +43,42 @@ def _tree(tmp_path: Path) -> Path:
     return t
 
 
-def test_code_identity_hashes_code_not_tests_or_caches(tmp_path):
+def test_code_identity_is_the_closure_identity_of_the_repository(tmp_path):
     t = _tree(tmp_path)
     a = hc.code_identity(t)
-    assert a["files"] == 2 and a["commit"] == "abc" and a["release"] == "r16-int-9"
-    (t / "verity_vllm" / "harness" / "tests" / "test_a.py").write_text("def test(): assert 1\n")
+    assert a["sha256"] == research_tools.code_identity(t.parents[1])["sha256"] == hc.code_identity(t.parents[1])["sha256"]
+    assert a["commit"] == "abc" and a["release"] == "r16-int-9"
     (t / "verity_vllm" / "harness" / "__pycache__" / "a.pyc").write_bytes(b"\1\2")
-    assert hc.code_identity(t)["sha256"] == a["sha256"], "tests and caches are not executed code"
+    (t.parents[1] / "tools" / "research" / "cli.py").write_text("print('s')\n")
+    assert hc.code_identity(t)["sha256"] == a["sha256"], "caches and files outside the import closure are not executed code"
     (t / "verity_vllm" / "harness" / "commit_delta.py").write_text("print('y')\n")
     assert hc.code_identity(t)["sha256"] != a["sha256"], "an edited executing tree is a different key -- hot never runs stale code"
+
+
+def test_editing_a_core_file_changes_the_key(tmp_path, monkeypatch):
+    t = _tree(tmp_path)
+    monkeypatch.chdir(t)
+    argv = ["--case", "LLAMA32_1B", "--workload", "wl.json", "--out", "o"]
+    k0, c0 = hc.job_key(argv)["key"], hc.code_identity(t)["sha256"]
+    (t.parents[1] / CORE / "ir" / "codec.py").write_text("def _spec_id(fn): return (fn,)\n")
+    k1, c1 = hc.job_key(argv)["key"], hc.code_identity(t)["sha256"]
+    assert c1 != c0 and k1 != k0, "a live worker must not serve Commits with stale core code"
+    (t.parents[1] / CORE / "commitments").mkdir()
+    (t.parents[1] / CORE / "commitments" / "merkle.py").write_text("ROOT = 0\n")
+    assert hc.job_key(argv)["key"] != k1, "core/commitments is part of the import closure"
+
+
+def test_code_identity_refuses_a_tree_outside_a_repository(tmp_path):
+    (tmp_path / "verity_vllm").mkdir()
+    (tmp_path / "verity_vllm" / "x.py").write_text("")
+    with pytest.raises(FileNotFoundError, match="not a repository root"):
+        hc.code_identity(tmp_path)
 
 
 def test_job_key_changes_with_engine_args_extension_and_env_but_not_per_job_fields(tmp_path, monkeypatch):
     t = _tree(tmp_path)
     monkeypatch.chdir(t)
-    so = t / "tap.so"
+    so = tmp_path / "tap.so"
     so.write_bytes(b"ELF0")
     for k in list(os.environ):
         if k.startswith(hc.ENV_PREFIXES):
