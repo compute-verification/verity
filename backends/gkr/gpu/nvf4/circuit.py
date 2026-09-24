@@ -672,9 +672,10 @@ def export_circuit(ctx: GkrCtx, merge: bool = True) -> Exported:
     return Exported("\n".join(lines) + "\n", col_rows, names, tables, stats)
 
 
-#: the one table every lookup and range query except ``SEPARATE``'s goes to (``export_circuit(merge=True)``)
+#: the one table every lookup and range query except ``SEPARATE``'s goes to (``export_circuit(merge=True)``).  E2M1X2 in
+#: LK too: one 2^25-leaf tree beats 2^24 + 2^23 (fp4-nvf4 t_lookup 57 -> 51 ms on the 5090; the rounds, not the leaves, cost)
 MERGED = "LK"
-SEPARATE = ("E2M1X2",)
+SEPARATE: tuple[str, ...] = ()
 TAG_SHIFT = 2**20
 
 
