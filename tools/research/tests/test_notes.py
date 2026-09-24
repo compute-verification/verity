@@ -325,6 +325,7 @@ def test_a_pod_belongs_to_the_longest_lane_name_it_starts_with():
     assert notes.pod_owner("vy-fp4-decode-2-5090b-veritor-campaign", lanes) == "fp4-decode-2"
     assert notes.pod_owner("vy-fp4-decode-veritor-campaign", lanes) == "fp4-decode"
     assert notes.pod_owner("vy-live-2c-veritor-campaign", lanes) == "live-2c"
+    assert notes.pod_owner("vy-live-2c-verity", lanes) == "live-2c"
     assert notes.pod_owner("vy-live-2-verifier", lanes) == "live-2"
     assert notes.pod_owner("vy-control", lanes) is None
 
@@ -342,6 +343,7 @@ def test_pods_belong_to_the_latest_attempt_of_the_topic_their_name_carries():
     assert own("vy-live-2b-verifier") == "live-2b" and own("vy-live-2c") == "live-2"
     assert own("vyv-sw-73b-veritor-campaign") is None and own("vy-control-verity") is None
     assert own("vy-live2b-verifier-ro-veritor-campaign", {"vy-live2b-verifier-ro": "fold"}) == "fold"   # the binding hint
+    assert own("vy-live2b-verifier-ro-verity", {"vy-live2b-verifier-ro": "fold"}) == "fold"
     assert own("vy-wave-4090", {"vy-wave-4090": "fold"}) == "wave-4090"    # a name that carries a lane beats a hint
 
 

@@ -80,6 +80,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable
 
+from .pods import POD_SUFFIXES, strip_pod_suffix
 from .pods.workproc import FIND_PRUNE, NOT_WORK_RE, WORK_RE
 
 STATES = ("open", "blocked", "final", "superseded")
@@ -88,7 +89,7 @@ CHECKPOINT_RE = re.compile(r"CHECKPOINT\s+(?P<sha>[0-9a-fA-F]{4,40}|none)?\)?[:\
                            r"(?:(?P<hh>\d{1,2}):(?P<mm>\d{2})Z)?[);]?\s*(?:\[(?P<state>open|blocked|final|superseded)\])?\s*[-—:]*\s*(?P<text>.*)")
 FINAL_RE = re.compile(r"^##\s+FINAL\b.*$", re.M)
 DONE_STATUSES = ("done", "final", "closed", "complete", "completed")
-POD_PREFIX, POD_SUFFIX = "vy-", "-veritor-campaign"
+POD_PREFIX = "vy-"
 NO_POD = ("none", "-")
 BINDING = "binding.json"
 MAIL_GLOBS = ("*handoff*.md", "*asks*.md", "*reply*.md")
@@ -451,7 +452,7 @@ def pod_topic(name: str, lanes: Iterable[str]) -> str | None:
     `-`, or is it minus one letter (+ digits) -- a sibling pod such as vy-wave-h100b."""
     if not name.startswith(POD_PREFIX):
         return None
-    n = name.removesuffix(POD_SUFFIX)[len(POD_PREFIX):]
+    n = strip_pod_suffix(name)[len(POD_PREFIX):]
     hits = [t for t in lanes if n == t or n.startswith(t + "-") or re.fullmatch(re.escape(t) + r"[a-z]\d*(?:-.+)?", n)]
     return max(hits, key=len) if hits else None
 
@@ -459,7 +460,7 @@ def pod_topic(name: str, lanes: Iterable[str]) -> str | None:
 def pod_owner(name: str, lanes: set[str], succ: dict[str, str] | None = None, bound: dict[str, str] | None = None) -> str | None:
     """The lane that owns a pod: the latest attempt of the lane its name carries (`pod_topic`), else of the lane whose binding
     names it (`bound`: pod name without the campaign suffix -> lane; for names that carry no lane)."""
-    t = pod_topic(name, lanes) or (bound or {}).get(name.removesuffix(POD_SUFFIX))
+    t = pod_topic(name, lanes) or (bound or {}).get(strip_pod_suffix(name))
     return latest(t, succ or {}, lanes) if t else None
 
 
@@ -488,7 +489,7 @@ def load_fleet(root: Path, probe: bool = True, pods: Callable[[], list[dict]] = 
     bound = {}
     for lane in sorted(lanes):
         if (pod := _binding_json(root, lane).get("pod")) and pod not in NO_POD:
-            bound[pod.removesuffix(POD_SUFFIX)] = lane
+            bound[strip_pod_suffix(pod)] = lane
     succ = successors(root)
     owner = {p["id"]: o for p in listing if p.get("id") and (o := pod_owner(p.get("name") or "", lanes, succ, bound))}
     mine = [p for p in listing if p.get("id") in owner]
@@ -505,7 +506,7 @@ def _started(p: dict) -> dt.datetime | None:
 def pod_view(p: dict, probe: dict | None, now: dt.datetime) -> dict:
     """A lane's pod as status shows it: name (no campaign suffix), id, $/h, its probe, and `idle` when the probe saw no work
     process, no live verifier, no GPU compute app and 0 % GPU; `idle_min` is since its newest /workspace file, capped at uptime."""
-    v = {"name": (p.get("name") or "").removesuffix(POD_SUFFIX), "id": p.get("id"), "usd_h": float(p.get("costPerHr") or 0.0),
+    v = {"name": strip_pod_suffix(p.get("name") or ""), "id": p.get("id"), "usd_h": float(p.get("costPerHr") or 0.0),
          **(probe or {})}
     if probe and not probe.get("error"):
         v["idle"] = not (probe.get("busy") or probe.get("serve") or probe.get("gpu_apps") or probe.get("gpu_util"))
@@ -619,7 +620,7 @@ def _pods(lane: str, bound: str | None, lanes: set[str], succ: dict[str, str] | 
     except Exception as e:  # noqa: BLE001
         return None, f"unknown (pod listing failed: {str(e)[:80]})"
     mine = [p for p in listing if p.get("name")
-            and (p["name"] in (bound, f"{bound}{POD_SUFFIX}") or pod_owner(p["name"], lanes | {lane}, succ) == lane)]
+            and (p["name"] in {bound, *(f"{bound}{s}" for s in POD_SUFFIXES)} or pod_owner(p["name"], lanes | {lane}, succ) == lane)]
     if not mine:
         return True, "no running pod"
     return False, "; ".join(f"{p['name']} RUNNING ({p.get('costPerHr', '?')}/h) -> research pods terminate {p['id']}" for p in mine) + \
@@ -1254,7 +1255,7 @@ def guardian_lines(root: Path, rows: list[dict], fleet: Fleet | None, now: dt.da
     bindings = {lane: _binding_json(root, lane) for lane in sorted(lanes)}
     wts = {lane: b["worktree"] for lane, b in bindings.items() if b.get("worktree")}
     wts.update({r["lane"]: r["worktree"] for r in rows if r.get("worktree") and r["lane"] not in wts})
-    bound = {x.removesuffix(POD_SUFFIX): lane for lane, b in bindings.items()
+    bound = {strip_pod_suffix(x): lane for lane, b in bindings.items()
              for x in (s.strip() for s in str(b.get("pod") or "").split(",")) if x and x not in NO_POD}
     by: dict[str, list[str]] = {}
     lines = []

@@ -15,7 +15,8 @@ from research.pods import connect as C
 PODS = [{"id": "abc123def45678", "name": "vy-lane-a-veritor-campaign"},
         {"id": "zzz999yyy88877", "name": "vy-twin-veritor-campaign"},
         {"id": "qqq111www22233", "name": "vy-twin-veritor-campaign"},
-        {"id": "mmm000nnn11122", "name": "plain-name"}]
+        {"id": "mmm000nnn11122", "name": "plain-name"},
+        {"id": "vvv222uuu33344", "name": "vy-lane-b-verity"}]
 
 
 def test_resolve_pod_by_machine_name_id_and_pod_name():
@@ -26,9 +27,11 @@ def test_resolve_pod_by_machine_name_id_and_pod_name():
     assert C.resolve_pod("vy-lane-a", machines=machines, pods=listing)[0] == "abc123def45678"
     assert C.resolve_pod("vy-lane-a-veritor-campaign", machines=machines, pods=listing)[0] == "abc123def45678"
     assert C.resolve_pod("plain-name", machines=machines, pods=listing)[0] == "mmm000nnn11122"
+    assert C.resolve_pod("vy-lane-b", machines=machines, pods=listing)[0] == "vvv222uuu33344"
+    assert C.resolve_pod("vy-lane-b-verity", machines=machines, pods=listing)[0] == "vvv222uuu33344"
     with pytest.raises(remote.Refused, match="names 2 pods"):
         C.resolve_pod("vy-twin", machines=machines, pods=listing)
-    with pytest.raises(remote.Refused, match="no machine or pod named 'vy-nope'.*vy-control.*vy-lane-a"):
+    with pytest.raises(remote.Refused, match="no machine or pod named 'vy-nope'.*vy-control.*vy-lane-a.*vy-lane-b,"):
         C.resolve_pod("vy-nope", machines=machines, pods=listing)
     assert C.resolve_pod("ffffeeeedddd11", machines=machines, pods=lambda: []) == ("ffffeeeedddd11", "ffffeeeedddd11")
 

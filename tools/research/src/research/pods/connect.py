@@ -3,8 +3,8 @@
     research pods ssh TARGET [--print] [-- CMD ...]
     research pods sync TARGET [SRC] [--dest DIR] [--exclude GLOB]... [--dry-run]
 
-TARGET is a `machines.toml` name, a RunPod pod id, or a pod name (`vy-ligerito-sumcheck-2`; the `-veritor-campaign` suffix that
-`pods create` appends is optional).  The ssh port is looked up at call time (`remote.pod_target`: the REST API's flaky empty
+TARGET is a `machines.toml` name, a RunPod pod id, or a pod name (`vy-ligerito-sumcheck-2`; a project suffix such as the
+`-veritor-campaign` that `pods create` appends is optional, `pods.POD_SUFFIXES`).  The ssh port is looked up at call time (`remote.pod_target`: the REST API's flaky empty
 mappings are retried), so nothing hard-codes an ip/port that changes when a pod restarts.
 
 `sync` ships exactly the files git would show for SRC (default: the repository containing cwd): tracked files that still exist
@@ -32,8 +32,8 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .. import remote
+from . import POD_SUFFIXES, strip_pod_suffix
 
-POD_SUFFIX = "-veritor-campaign"
 POD_ID_RE = re.compile(r"^[a-z0-9]{12,16}$")
 DEFAULT_DEST = "/workspace/src"
 STAMP = ".research-source.json"
@@ -53,7 +53,7 @@ def resolve_pod(target: str, *, machines: dict[str, dict[str, Any]] | None = Non
     by_id = [p for p in listing if p.get("id") == target]
     if by_id:
         return target, by_id[0].get("name") or target
-    names = {target, target + POD_SUFFIX}
+    names = {target, *(target + s for s in POD_SUFFIXES)}
     hits = [p for p in listing if p.get("name") in names]
     if len(hits) == 1:
         return hits[0]["id"], target
@@ -61,7 +61,7 @@ def resolve_pod(target: str, *, machines: dict[str, dict[str, Any]] | None = Non
         raise remote.Refused(f"{target!r} names {len(hits)} pods ({', '.join(p['id'] for p in hits)}); give the pod id")
     if POD_ID_RE.match(target):                  # an id the listing did not show (another account view, a just-created pod)
         return target, target
-    known = sorted({(p.get("name") or "").removesuffix(POD_SUFFIX) for p in listing} | set(ms))
+    known = sorted({strip_pod_suffix(p.get("name") or "") for p in listing} | set(ms))
     raise remote.Refused(f"no machine or pod named {target!r} (machines.toml names and running pods: {', '.join(known) or 'none'})")
 
 
