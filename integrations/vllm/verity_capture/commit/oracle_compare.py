@@ -568,9 +568,7 @@ def producers_of_programs(programs: dict[str, dict[str, Any]], aliases: dict[str
     `programs`: request label -> `manifest_format.load_program(dir)`; `aliases`: the manifest's `op_path_aliases` (alias -> [canon, k])."""
     from verity_vllm.query.correspondence import Correspondence
     from verity_vllm.query.program_view import from_instances
-    from verity_vllm.query.v1_bridge import population
 
-    canon = {str(k): str(v[0]) for k, v in (aliases or {}).items() if isinstance(v, (list, tuple)) and v}
     out: dict[tuple[str, str], dict[str, Any]] = {}
     seen: set[int] = set()
     for prog in programs.values():
@@ -583,45 +581,56 @@ def producers_of_programs(programs: dict[str, dict[str, Any]], aliases: dict[str
         corr = Correspondence.of(P, prog.get("dir"), implementation_paths=Correspondence.implementation_paths_of(res))
         tpinfo = res.get("tp") if isinstance(res.get("tp"), dict) else {}
         world = int(tpinfo.get("world") or 1)
-        pop = population(P, corr, tp=({"world": world, "rank": int(tpinfo.get("rank") or 0)} if world > 1 else None))
-        members = {cid: [cm.member for cm in pop.members_of(cid) if cm.family == "instance_outputs"] for cid in pop.producers()}
-        members = {cid: ms for cid, ms in members.items() if ms}
-        readers: dict[int, list[int]] = defaultdict(list)
-        for c in P.calls:
-            for r in c.reads:
-                if r.call >= 0 and r.call in members and (not readers[r.call] or readers[r.call][-1] != c.id):
-                    readers[r.call].append(c.id)
-        for cid, ms in members.items():
-            c = P.call(cid)
-            own = corr.module_of(cid)
-            path = corr.implementation_path(pop.program_path(cid))
-            path = canon.get(path, path)
-            first = next(iter(c.reads), None)
-            operand = P.call(first.call).family if first is not None and first.call >= 0 else None
-            cons: list[str] = []
-            for rc in readers.get(cid, ()):
-                m = corr.module_of(rc)
-                if m != own:
-                    m = corr.implementation_path(m)
-                    if m not in cons:
-                        cons.append(m)
-            for mem in ms:
-                key = (path, mem)
-                cur = out.get(key)
-                if cur is None:
-                    out[key] = {"spec": c.family, "operand": operand, "consumers": list(cons)}
-                    continue
-                if cur.get("conflict"):
-                    continue
-                if cur["spec"] != c.family:
-                    out[key] = {"spec": None, "operand": None, "consumers": [], "conflict": True}
-                    continue
-                if cur["operand"] != operand:
-                    cur["operand"] = None
-                for m in cons:
-                    if m not in cur["consumers"]:
-                        cur["consumers"].append(m)
-        del P, corr, pop, readers
+        program_producer_facts(P, corr, tp=({"world": world, "rank": int(tpinfo.get("rank") or 0)} if world > 1 else None), aliases=aliases, into=out)
+        del P, corr
+    return out
+
+
+def program_producer_facts(P: Any, corr: Any, *, tp: dict[str, Any] | None = None, aliases: dict[str, Any] | None = None,
+                           into: dict[tuple[str, str], dict[str, Any]] | None = None) -> dict[tuple[str, str], dict[str, Any]]:
+    """`producers_of_programs` for one ProgramView + Correspondence, accumulated into `into` (the member's facts over every Program)."""
+    from verity_vllm.query.v1_bridge import population
+
+    canon = {str(k): str(v[0]) for k, v in (aliases or {}).items() if isinstance(v, (list, tuple)) and v}
+    out = {} if into is None else into
+    pop = population(P, corr, tp=tp)
+    members = {cid: [cm.member for cm in pop.members_of(cid) if cm.family == "instance_outputs"] for cid in pop.producers()}
+    members = {cid: ms for cid, ms in members.items() if ms}
+    readers: dict[int, list[int]] = defaultdict(list)
+    for c in P.calls:
+        for r in c.reads:
+            if r.call >= 0 and r.call in members and (not readers[r.call] or readers[r.call][-1] != c.id):
+                readers[r.call].append(c.id)
+    for cid, ms in members.items():
+        c = P.call(cid)
+        own = corr.module_of(cid)
+        path = corr.implementation_path(pop.program_path(cid))
+        path = canon.get(path, path)
+        first = next(iter(c.reads), None)
+        operand = P.call(first.call).family if first is not None and first.call >= 0 else None
+        cons: list[str] = []
+        for rc in readers.get(cid, ()):
+            m = corr.module_of(rc)
+            if m != own:
+                m = corr.implementation_path(m)
+                if m not in cons:
+                    cons.append(m)
+        for mem in ms:
+            key = (path, mem)
+            cur = out.get(key)
+            if cur is None:
+                out[key] = {"spec": c.family, "operand": operand, "consumers": list(cons)}
+                continue
+            if cur.get("conflict"):
+                continue
+            if cur["spec"] != c.family:
+                out[key] = {"spec": None, "operand": None, "consumers": [], "conflict": True}
+                continue
+            if cur["operand"] != operand:
+                cur["operand"] = None
+            for m in cons:
+                if m not in cur["consumers"]:
+                    cur["consumers"].append(m)
     return out
 
 

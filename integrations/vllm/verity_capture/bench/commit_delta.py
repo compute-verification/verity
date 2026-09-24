@@ -996,7 +996,8 @@ def oracle_producers_of_record(args: argparse.Namespace, required_manifest: dict
     from verity_capture.commit import manifest_format as MF
     from verity_capture.commit import oracle_compare as OC
     from verity_capture.commit import sampled_replay as SR
-    if SR.address_rule_of(required_manifest) != SR.V2_QUERY:
+    q = required_manifest.get("query") if isinstance(required_manifest, dict) else None
+    if not (isinstance(q, dict) and q.get("engine") == SR.V2_QUERY):
         return None, {"used": False, "why": "manifest is not v2-query: its rows carry the producer annotations"}
     t0 = time.monotonic()
     labels = {str(r.get("request_id")): f"r{int(r.get('index', i))}" for i, r in enumerate(reqs)}
