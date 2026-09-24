@@ -115,6 +115,8 @@ HEADER = [
     ("bf16-ampere-hash", [(STEPS_AT, 32), (K_AT, 32 * 16)], _shape(32, 96)),
     ("fp8-ada-hash", [(STEPS_AT, 32)], _shape(32, 48)),
     ("fp8-ada-hash", [(K_AT, 48 * 16)], "statement: K = 768 words per row, a hashed statement's row is K = 1536"),
+    ("fp4-nvf4-hash", [(STEPS_AT, 12), (K_AT, 12 * 64)], _shape(12, 24)),
+    ("fp4-nvf4-hash", [(K_AT, 24 * 68)], "statement: K = 1632 words per row, a hashed statement's row is K = 1536"),
     ("fp8-ada-ajtai-n64", [(STEPS_AT, 96), (K_AT, 96 * 32)], _bound(96, 64)),
 ]
 
@@ -126,7 +128,7 @@ def test_a_header_with_another_vu_shape_is_refused_by_the_shape_check(tmp_path, 
     assert not ok and got.startswith(why), got
 
 
-HONEST = ["b1", "fp8-ada", "fp4-nvf4", "fp8-ada-hash", "bf16-ampere-hash", "fp8-ada-ajtai-n64", "bf16-hopper-ajtai-n128"]
+HONEST = ["b1", "fp8-ada", "fp4-nvf4", "fp4-nvf4-hash", "fp8-ada-hash", "bf16-ampere-hash", "fp8-ada-ajtai-n64", "bf16-hopper-ajtai-n128"]
 
 
 @pytest.mark.parametrize("d", HONEST)

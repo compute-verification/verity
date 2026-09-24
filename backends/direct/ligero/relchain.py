@@ -93,6 +93,8 @@ def instances(rel: Relation, n: int, seed: int | None = None, procs: int = 1, ca
     A relation with a ``frozen_tier`` reads its frozen set from ``root`` instead (:func:`frozen_instances`)."""
     if rel.frozen_tier:
         return frozen_instances(rel, n, root)
+    if getattr(rel, "instances_fn", None) is not None:       # a relation with its own instance families (fp4/hashed.py)
+        return rel.instances_fn(n, seed=seed, procs=procs, cache=cache, root=root)
     seed = rel.instance_seed if seed is None else seed
     path = Path(cache) / f"{rel.name}-{seed}-{n}.npz" if cache else None
     if path is not None and path.exists():
@@ -124,6 +126,8 @@ def instances_digest(rel: Relation, n: int, seed: int | None = None, root=None) 
     if rel.frozen_tier:
         from verity_numerical.bench import instances as frozen
         return frozen.manifest_sha256(_frozen_root(root))
+    if getattr(rel, "instances_digest_fn", None) is not None:
+        return rel.instances_digest_fn(n, seed=seed, root=root)
     seed = rel.instance_seed if seed is None else seed
     return hashlib.sha256(f"{rel.name} synthetic|seed={seed}|n={n}|K={K_VU}".encode()).hexdigest()
 
@@ -500,9 +504,10 @@ class HashedRelationRunner(RelationChainRunner):
         lay, dev, n_vus = bd["lay"], self.device, bd["lay"].n_vus
 
         def hints_fn():
-            base = self.rel.hints(self.p, self._base_sys, bd["c_d"], bd["a_d"], bd["b_d"], bd["y_d"], dev)
+            base = hashchain.call_with_slot(self.rel.hints, slot, self.p, self._base_sys, bd["c_d"], bd["a_d"], bd["b_d"],
+                                            bd["y_d"], dev)
             extra, _ = hashchain.hash_hints(self.hr, bd["a_d"], bd["b_d"], n_vus, lay.l, dev,
-                                            sponges=self._gather_sponges(bd["gather"]))
+                                            sponges=self._gather_sponges(bd["gather"]), slot=slot)
             return torch.cat([base, extra], 0)
 
         proof = yield from protocol_mod.prove_stages(
@@ -572,7 +577,8 @@ class HashedRelationRunner(RelationChainRunner):
             w_cols = [v[1] for v in data]
         ysch, _ = hashauth.word_schema(self.rel.y_bits)
         bindings = {n: hashauth.binding_digest(dataset=dataset, tier=tier, manifest_sha256=manifest_sha256, lo=0, hi=len(data),
-                                               K=K_VU, tree=n, schema=(self.leaf.schema if n != "y" else ysch)) for n in ("a", "b", "y")}
+                                               K=getattr(self.rel, "vu_words", K_VU), tree=n,
+                                               schema=(self.leaf.schema if n != "y" else ysch)) for n in ("a", "b", "y")}
         return self.commit(x_rows=x_rows, w_cols=w_cols, y_words=y, bindings=bindings, cache=cache, tile=tile)
 
     def auth_for(self, vu_ids: list[int]):
@@ -1691,7 +1697,7 @@ def gate_hashed(args, rel: Relation) -> int:
         W[c_rows[2], 30] = (W[c_rows[2], 30] ^ (1 << 12)) % P
     pf, pb, ly = R.prove_vus(base, check=False, mutate=acc_bit, vu_ids=[0, 1])
     negs.append(("accumulator fraction bit 12 flipped in a linked unit", R.verify_vus(pf, pb, ly)))
-    off = list(base[0][0]); off[4] = rel.off_domain[0]
+    off = list(base[0][0]); off[getattr(rel, "off_domain_index", 4)] = rel.off_domain[0]
     k, accs, c = rel.k, [], 0
     for s in range(rel.steps):     # the model on an off-domain word: whatever it records, the private decode must reject the word
         try:
@@ -1704,6 +1710,8 @@ def gate_hashed(args, rel: Relation) -> int:
         negs.append((f"off-domain operand 0x{rel.off_domain[0]:x} computed on", R.verify_vus(pf, pb, ly)))
     except Exception as e:                                  # the hint generator itself refuses the word: also a rejection
         negs.append((f"off-domain operand 0x{rel.off_domain[0]:x} computed on", (False, f"prover: {type(e).__name__}: {e}")))
+    if getattr(rel, "extra_negatives", None) is not None:     # the relation's own family (fp4/hashed.py: malformed encodings, a wrong scale)
+        negs += rel.extra_negatives(R, base)
     negs += (shared_negatives if shared else hashed_negatives)(R, data, getattr(args, "row_negatives", 40))
     if hasattr(R.leaf, "step"):
         negs += leaf_negatives(R, data)                      # the linear leaf's own battery (brief §3.4)

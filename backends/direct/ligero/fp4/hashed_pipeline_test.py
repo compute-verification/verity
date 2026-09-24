@@ -44,7 +44,7 @@ def _setup(zk: bool):
 
 def _many(R, data, subs, l, depth, coins):
     return R.prove_vus_many([data[lo:hi] for lo, hi in subs], coins, depth=depth, min_l=l,
-                            vu_ids=[range(lo, hi) for lo, hi in subs])[0]
+                            vu_ids_list=[range(lo, hi) for lo, hi in subs])[0]
 
 
 def test_pipelined_hashed_accepted_and_byte_identical():

@@ -579,8 +579,16 @@ pub static FP4_NVF4: Relation = Relation {
     end_components: Some(&[(31, 1), (23, 8), (0, 23)]),
     sys_id: "a825ba0b826a15366bfb8cdd720a5e9978603cbe589491abcbba7346ad35bf3c",
     table_digest: "b597b003e55b8cf1025b517a04d442d9c6d8704f38fd06df13a21b3273b2d2f6",
-    hashed_sys_id: "",
-    hashed_table_digest: "",
+    // lane fp4-decode (2026-09-23), ported onto the leaf interface by fp4-port: `hashchain.compose(fp4.hashed.fp4_hashed_relation())`
+    // -- the same `compile_fp4_unit(chain=True)` unit (1583 rows) + 1122 private-operand decode rows (68 words x 4 / 8 bit rows,
+    // the 141 former pins as hint rows, the E2M1 / UE4M3 decode + group / anchor gadgets of fp4/hashed.py) + 1720 sponge rows
+    // (`Poseidon2Leaf.with_lanes(FP4Format)`: 72 nibbles on 24-bit lanes -> 12 of the 16 rate lanes, 2 permutations per unit)
+    // + 17 digest pins = 4442 rows, 19 linked rows, `ligero-system/v3`, the chain end the bare relation's three components.
+    // `sys_id` = the laptop's torch-free `fp4.hashed.system_id_np` of the composed system, byte-identical to the pod's
+    // `system.bin` behind `fixtures/fp4-nvf4-hash/`.  The v5 header's K is 1536 (24 steps x 64 E2M1 codes: `check_vu_shape`
+    // reads K = 64 operands per unit); the committed row itself is 24 x 68 words.
+    hashed_sys_id: "8c6d260c675cad40ae7263db08974f1842d04997f344cb4f9e52821e70bb25f5",
+    hashed_table_digest: "8dad2d286e92d9927464afb81846fcbdb16f09b2c01910e36fcf8aaac432fc3a",
     shared_systems: &[],
 };
 
@@ -1312,7 +1320,7 @@ mod tests {
             }
         }
         assert!(FP8_ADA.hashed_sys_id.len() == 64 && BF16_HOPPER.hashed_sys_id.len() == 64 && FP8_HOPPER.hashed_sys_id.len() == 64);
-        assert!(BF16_AMPERE.hashed_sys_id.len() == 64 && FP4_NVF4.hashed_sys_id.is_empty());
+        assert!(BF16_AMPERE.hashed_sys_id.len() == 64 && FP4_NVF4.hashed_sys_id.len() == 64);
         assert_eq!(for_statement(None).unwrap().name, "bf16-ampere");
         assert_eq!(for_statement(Some("bf16")).unwrap().name, "bf16-ampere");
         assert_eq!(for_statement(Some("fp4-nvf4")).unwrap().name, "fp4-nvf4");
