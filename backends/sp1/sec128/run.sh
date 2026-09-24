@@ -21,7 +21,7 @@ SERVER_SHA="$(cut -d' ' -f1 "$ROOT/server.sha256")"
 
 "$PY" - "$SEC" "$OUT/variant.json" "$SEC_BITS" "$SERVER_SHA" "$(sha256sum "$HOST" | cut -d' ' -f1)" \
   "$ROOT/prover-source.diff" "$ROOT/verifier-source.diff" "$HOST" "${CUDA_ARCHS:-80}" <<'EOF'
-import json, sys
+import json, os, sys
 sec, out, bits, server_sha, host_sha, pdiff, vdiff, host, archs = sys.argv[1:]
 v = json.load(open(sec))
 assert v["security_bits"] == int(bits)
@@ -36,6 +36,8 @@ v.update({
                   "sp1-gpu-server": f"6.6.0 source-built: succinctlabs/sp1 v6.6.0 f5a5bbf6 + the same line, CUDA_ARCHS {archs}"},
     "fork": {"base": "succinctlabs/sp1 v6.6.0 f5a5bbf6a1cf6007315b410d88678d96fb399fb5", "changed": [f"crates/primitives/src/fri_params.rs: {line}"],
              "prover_source_diff": open(pdiff).read(), "verifier_source_diff": open(vdiff).read(),
+             "harness_changed": ["sp1-cuda 6.4.0 src/client.rs (host-side client, not the proof system): socket connect retries 0..10 -> 0..300 (100 ms apart)"],
+             "harness_source_diff": open(os.path.join(os.path.dirname(pdiff), "harness-source.diff")).read(),
              "gpu_server_sha256": server_sha, "host_sha256": host_sha},
     "verifier_name": f"{host} verify (sp1-primitives patched to the same constant)",
 })

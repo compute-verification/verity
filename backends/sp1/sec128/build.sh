@@ -99,6 +99,14 @@ patch_line "$CH/$REG_REL/src/fri_params.rs"
 cmp "$CH/$REG_REL/src/fri_params.rs" "$FORK/crates/primitives/src/fri_params.rs" \
   || { echo "patched registry fri_params.rs differs from the prover's"; exit 2; }
 diff -r "$HOME/.cargo/$REG_REL" "$CH/$REG_REL" | tee "$ROOT/verifier-source.diff" || true
+# Harness only (not the proof system): sp1-cuda 6.4.0's client tries the server socket 10 times 100 ms apart after
+# spawning it; the source-built server needs ~1.03-1.6 s to listen on the A100 pod, so the host panics "Could not
+# connect to `sp1-gpu-server` socket".  Allow 30 s.
+CUDA_REL="registry/src/index.crates.io-1949cf8c6b5b557f/sp1-cuda-6.4.0/src/client.rs"
+[ "$(grep -cxF '        for _ in 0..10 {' "$CH/$CUDA_REL")" = 1 ] || { echo "sp1-cuda retry loop not found once"; exit 2; }
+sed -i 's/^        for _ in 0\.\.10 {$/        for _ in 0..300 { \/\/ verity sec128: stock 0..10 (1 s); the source-built server needs ~1.5 s to listen/' "$CH/$CUDA_REL"
+diff "$HOME/.cargo/$CUDA_REL" "$CH/$CUDA_REL" | tee "$ROOT/harness-source.diff" && { echo "sp1-cuda patch did not apply"; exit 2; }
+[ "$(grep -c '^[<>]' "$ROOT/harness-source.diff")" = 2 ] || { echo "unexpected sp1-cuda diff"; exit 2; }
 HOST="$ROOT/host-src"
 rm -rf "$HOST"; mkdir -p "$HOST"
 tar -C "$SP1_SRC" --exclude=./target --exclude=./tcdot --exclude=./sec128 --exclude=./sp1 -cf - . | tar -C "$HOST" -xf -
