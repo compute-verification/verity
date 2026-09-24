@@ -73,8 +73,10 @@ def f64_to_f32_to_bf16(x: np.ndarray) -> np.ndarray:
 def load_norm_weights() -> dict[str, np.ndarray]:
     from safetensors import safe_open
 
+    from verity_vllm.config import checkpoints_hf_home
+
     snap = None
-    root = os.path.join(os.environ.get("HF_HOME", "/workspace/hf"), "hub", "models--Qwen--Qwen2.5-1.5B", "snapshots")
+    root = os.path.join(os.environ.get("HF_HOME") or checkpoints_hf_home() or "", "hub", "models--Qwen--Qwen2.5-1.5B", "snapshots")
     for d in sorted(os.listdir(root)):
         if os.path.exists(os.path.join(root, d, "model.safetensors")):
             snap = os.path.join(root, d, "model.safetensors")

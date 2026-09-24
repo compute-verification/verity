@@ -79,9 +79,13 @@ def max_model_len_for(cp: dict[str, Any]) -> int:
 
 
 def apply_env() -> dict[str, str]:
+    from verity_vllm.config import checkpoints_hf_home
+
     for k, v in DECLARED_ENV.items():
         os.environ.setdefault(k, v)
-    os.environ.setdefault("HF_HOME", "/workspace/hf")
+    hf_home = checkpoints_hf_home()
+    if hf_home:
+        os.environ.setdefault("HF_HOME", hf_home)
     os.environ.setdefault("HF_HUB_OFFLINE", "1")
     return {k: os.environ[k] for k in DECLARED_ENV}
 
