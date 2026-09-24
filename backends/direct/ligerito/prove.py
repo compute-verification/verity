@@ -1105,6 +1105,12 @@ class Prover:
             com = pcs_commit(f, bt.dims, tm, fast=self.pcs_fast)
             coins.absorb(b"root", com.root1)
         del f
+        # ZK on a card that streams its round-1 codeword: f = z_to_f(z) is a second copy of z (4 GiB at 2^30 cells) that the
+        # zero-check never reads; it is rebuilt from the committed z for the opening (4090, fp8-ada 4096 VUs: OOM otherwise).
+        # LIGERITO_ZK_REBUILD_F=1 forces it (gate sizes never stream)
+        rebuild_f = zk_on and owner and (com.U1 is None or os.environ.get("LIGERITO_ZK_REBUILD_F") == "1")
+        if rebuild_f:
+            m1_shape, com.M1 = com.M1.shape, None
         tm.start("zero_check")
         z[vr] = virt
         if forge:
@@ -1115,6 +1121,11 @@ class Prover:
         committed_rows()                    # the row-major commitment's M1 is a view of z: the openings read it
         del virt
         tm.stop()
+        if rebuild_f:
+            tm.start("zk_masks")
+            com.M1 = zk_mod.z_to_f(z, zl).contiguous().view(m1_shape)
+            z = None
+            tm.stop()
         evals, sparse = split_claims(scp.claims)
         points, values = pcs_points(lay, evals, zl, zero_blocks(lay.virt))
         if owner:
