@@ -17,7 +17,8 @@ Per target (the r20 lesson: labels asserted on pods lived only in the pod's stor
 nothing under `labels/`, and teardown had to tar `labels/` by hand): a preserved Attempt is not preserved until its assertions are
 durable too.  `attempt_targets(doc)` is the closure an attempt's durability covers -- the attempt itself, its Derivation and every
 artifact it names -- and `push_targets()` pushes exactly those targets' assertions (called by `research data push RUN|ART`,
-`attempt publish`, and `LocalStore.push_labels`); `verify_targets()` is the labels leg of the durability gate
+`attempt publish`, and `LocalStore.push_labels`); `push_closure()` pushes and verifies one run's / artifact's closure and nothing
+else (`research data push --labels-only`, `research pods drain`); `verify_targets()` is the labels leg of the durability gate
 (`preserved.check`): every local assertion of every target must be listed on the remote with its canonical size; `compare()` is
 the local-vs-remote view behind `research data labels --remote`.  Conflicting assertions coexist on both sides (they are
 assertions, not fields); the catalog shows the latest per (key, by) and `--history` everything.
@@ -113,6 +114,39 @@ def attempt_targets(doc: dict) -> list[str]:
         for v in (doc.get(sec) or {}).values():
             if ids.is_art(v) and v not in out:
                 out.append(v)
+    return out
+
+
+def closure_targets(store: LocalStore, target: str) -> list[str]:
+    """The label targets `target`'s durability covers: a run id -> `attempt_targets` of its attempt manifest; an art: / drv: id -> itself."""
+    if ids.is_run_id(target):
+        doc = store.get_attempt(target)
+        if doc is None:
+            raise ValueError(f"attempt {target} is not in the store")
+        return attempt_targets(doc)
+    if ids.is_art(target) or ids.is_drv(target):
+        return [target]
+    raise ValueError(f"not a run, art: or drv: id: {target!r}")
+
+
+def push_closure(store: LocalStore, targets: list[str], *, jobs: int = SYNC_JOBS, log: Callable[[str], None] | None = None) -> dict:
+    """Push ONLY the assertions `targets` (run / art / drv ids) need to be durable -- per target its `closure_targets` -- then verify them
+    (`verify_targets`): no blob, manifest or other target is touched.  The scoped repair for the labels leg of the gate (`research
+    data push --labels-only`, `research pods drain`).
+        {"targets": {t: {"label_targets", "local", "pushed", "already", "failed", "missing", "errors", "durable"}}, "durable": bool}"""
+    closures = {t: closure_targets(store, t) for t in dict.fromkeys(targets)}
+    flat = list(dict.fromkeys(x for c in closures.values() for x in c))
+    prep = push_targets(store, flat, jobs=jobs, log=log)
+    vrep = verify_targets(store, flat)
+    out: dict = {"targets": {}, "durable": True}
+    for t, c in closures.items():
+        p = [prep["targets"][x] for x in c]
+        v = [vrep["targets"][x] for x in c]
+        tr = {"label_targets": c, "local": sum(x["local"] for x in p), "pushed": sum(len(x["pushed"]) for x in p), "already": sum(x["already"] for x in p),
+              "failed": [e for x in p for e in x["failed"]], "missing": [k for x in v for k in x["missing"]], "errors": [e for x in v for e in x["errors"]]}
+        tr["durable"] = not (tr["failed"] or tr["missing"] or tr["errors"])
+        out["targets"][t] = tr
+        out["durable"] = out["durable"] and tr["durable"]
     return out
 
 

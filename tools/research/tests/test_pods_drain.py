@@ -126,6 +126,58 @@ def test_report_names_the_failing_leg_and_what_it_concerns_not_a_blanket_manifes
     assert P.failures(P.check(st, [aid])["targets"][0]) == a["failures"]
 
 
+def test_drain_pushes_this_stores_labels_for_a_labels_only_failure_then_terminates(fs_store, machines, tmp_path, monkeypatch):
+    """r21 close-out: pod-side PRESERVED, laptop drain refused -- the laptop's own assertions were never pushed.  Drain pushes exactly
+    those (the attempt's closure), re-verifies them, and only then counts the attempt preserved."""
+    st = fs_store
+    killed: list[str] = []
+    art = st.put_artifact("run-files/v1", {}, tree=_tree(tmp_path / "t1"))
+    st.push(art)
+    aid = _on(st, "r20260923-100000-0001", art, machine="vy-tp2")
+    st.push_attempt(aid)
+    st.add_label(aid, "note", "laptop-only", by="laptop")
+    st.add_label(art, "verified", "accepted", by="red-team-1")
+    st.add_label("art:" + "9" * 64, "unrelated", "x", by="someone")
+    # --no-push-labels: report only, refused on the labels leg, with the scoped repair named
+    rc, rep = D.drain(st, "vy-tp2", probe=False, terminate=killed.append, repair_labels=False)
+    assert rc == 1 and killed == [] and "(failing: labels x1)" in rep["decision"]["why"]
+    assert any(f"`research data push --labels-only {aid}`" in l for l in D.format_report(rep))
+    assert json.loads((tmp_path / "drain.log").read_text().splitlines()[-1])["failing"] == {aid: ["labels"]}
+    # default: pushed, verified, terminated; nothing outside the closure moved
+    rc, rep = D.drain(st, "vy-tp2", probe=False, terminate=killed.append)
+    assert rc == 0 and killed == ["pod-tp2"] and rep["unpreserved"] == [] and rep["preserved"] == [aid]
+    assert rep["labels_push"] == {"attempts": [aid], "pushed": 2, "durable": [aid]} and rep["attempts"][aid]["legs"]["labels"] is True
+    assert "labels: pushed 2 assertion(s) from this store for 1 attempt(s); 1 now durable" in "\n".join(D.format_report(rep))
+    assert not (st.remote.root / "labels" / ("art_" + "9" * 64)).exists()
+    assert P.check(st, [aid])["preserved"] is True
+    # labels pushed but another leg still fails: still refused, the remaining leg named
+    local_only = st.put_artifact("run-files/v1", {"never": "pushed"}, tree=_tree(tmp_path / "t2"))
+    bad = _on(st, "r20260923-100000-0002", local_only, machine="vy-tp2")
+    st.add_label(bad, "note", "laptop-only", by="laptop")
+    rc, rep = D.drain(st, "vy-tp2", probe=False, terminate=killed.append)
+    assert rc == 1 and killed == ["pod-tp2"] and rep["unpreserved"] == [bad] and rep["labels_push"]["durable"] == [bad]
+    assert [f["leg"] for f in rep["attempts"][bad]["failures"]] == ["manifest", "artifacts"]
+
+
+def test_drain_labels_push_that_fails_keeps_the_gate_closed(fs_store, machines, tmp_path, monkeypatch):
+    from research.store import local as L
+    from research.store.remote import FsRemote
+    from test_store_labels_durability import LabelsFail
+
+    st = fs_store
+    art = st.put_artifact("run-files/v1", {}, tree=_tree(tmp_path / "t1"))
+    st.push(art)
+    aid = _on(st, "r20260923-100000-0001", art, machine="vy-tp2")
+    st.push_attempt(aid)
+    st.add_label(aid, "note", "laptop-only", by="laptop")
+    monkeypatch.setattr(L, "load_remote", lambda path=None: LabelsFail(FsRemote(tmp_path / "vault")))
+    st = LocalStore()
+    killed: list[str] = []
+    rc, rep = D.drain(st, "vy-tp2", probe=False, terminate=killed.append)
+    assert rc == 1 and killed == [] and rep["labels_push"]["durable"] == []
+    assert rep["attempts"][aid]["failures"][0]["why"].startswith("pushed 0 of 1; still NOT durable: labels/")
+
+
 def test_drain_refuses_while_anything_is_unpreserved_and_logs_a_forced_override(fs_store, machines, tmp_path):
     st = fs_store
     killed: list[str] = []

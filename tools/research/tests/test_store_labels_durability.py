@@ -246,3 +246,56 @@ def test_pull_from_a_machine_brings_the_labels_of_the_attempt_its_derivation_and
     assert cli_prov.main(["pull", "--from", "m", RUN, "--project", "verity", "--json"]) == 0
     assert json.loads(capsys.readouterr().out)["labels"] == {"seen": 3, "added": 0, "already": 3, "bad": 0}, "idempotent"
     assert sum(1 for a in log if a[0] == "tar") == 3, "first pull: one tar of blobs + one of labels; second: the blob is already here, one tar of labels"
+
+
+def test_labels_only_push_moves_just_the_targets_closure_and_rechecks_no_blob(env, tmp_path, monkeypatch, capsys):
+    """r21 close-out: a pod-side PRESERVED left the laptop's assertions behind, and the only repairs were `data push art:` (every blob
+    re-verified, 259k of them) or `labels-sync --push-only` (the whole store).  `push --labels-only` is the scoped one."""
+    st = LocalStore()
+    art = _art(st, tmp_path, "p.bin", b"proof")
+    doc = _attempt(outputs={"result": art})
+    st.put_attempt(doc)
+    assert main(["push", RUN, "--no-labels"]) == 0
+    capsys.readouterr()
+    st.add_label(RUN, "class", "GREEN", "laptop")
+    st.add_label(doc["derivation"], "decision", "accept", "daniel")
+    st.add_label(art, "verified", "accepted", "red-team-1")
+    other = _art(st, tmp_path, "q.bin", b"other")
+    st.add_label(other, "note", "x", "laptop")
+    st.add_label("art:" + "9" * 64, "unrelated", "x", "someone")
+    assert P.check(st, [RUN])["targets"][0]["legs"] == {"manifest": True, "artifacts": True, "labels": False}
+    vault = env / "vault"
+    touched: list[str] = []
+    real = st.remote.__class__.head
+
+    def spy_head(self, key):
+        touched.append(key)
+        return real(self, key)
+
+    monkeypatch.setattr(st.remote.__class__, "head", spy_head)
+    assert main(["push", RUN, "--labels-only"]) == 0
+    out = capsys.readouterr().out
+    assert f"{RUN}  labels  DURABLE: 3 local assertion(s) over 3 target(s), 3 pushed, 0 already there" in out and "1/1 with durable labels" in out
+    assert touched and all(k.startswith("labels/") for k in touched), "only assertions are HEADed: no blob, manifest or attempt re-check"
+    assert [len(_remote_keys(vault, t)) for t in (RUN, doc["derivation"], art, other, "art:" + "9" * 64)] == [1, 1, 1, 0, 0]
+    assert P.check(st, [RUN])["preserved"] is True, "the gate now passes: labels durable"
+    # an artifact's own assertions only; idempotent; JSON
+    assert main(["push", other, "--labels-only", "--json"]) == 0
+    rep = json.loads(capsys.readouterr().out)
+    assert rep["durable"] and rep["targets"][other] == {"label_targets": [other], "local": 1, "pushed": 1, "already": 0, "failed": [], "missing": [],
+                                                        "errors": [], "durable": True}
+    assert main(["push", RUN, other, "--labels-only"]) == 0 and "0 pushed, 3 already there" in capsys.readouterr().out
+    # misuse is refused by name; an unknown attempt is named
+    assert main(["push", "--pending", "--labels-only"]) == 1 and "--labels-only takes run / art: ids" in capsys.readouterr().err
+    assert main(["push", "r20260101-000000-dead", "--labels-only"]) == 1 and "not in the store" in capsys.readouterr().err
+
+
+def test_labels_only_push_that_fails_is_not_durable(env, tmp_path, monkeypatch, capsys):
+    failing = LabelsFail(FsRemote(env / "vault"))
+    monkeypatch.setattr(L, "load_remote", lambda path=None: failing)
+    st = LocalStore()
+    art = _art(st, tmp_path, "p.bin", b"proof")
+    st.add_label(art, "verified", "accepted", "red-team-1")
+    rep = LS.push_closure(st, [art])
+    assert rep["durable"] is False and rep["targets"][art]["failed"] and rep["targets"][art]["missing"]
+    assert main(["push", art, "--labels-only"]) == 1 and "NOT durable" in capsys.readouterr().out

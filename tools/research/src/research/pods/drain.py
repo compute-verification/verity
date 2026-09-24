@@ -7,6 +7,10 @@
         the same report, then terminates the pod ONLY when nothing on it is unpreserved.  `--force` terminates anyway; the reason is
         required and is logged (`~/.research/pods/drain.log` and the report) -- an operator's decision, on the record.  Exit 0 =
         terminated, 1 = refused (unpreserved Attempts listed, pod left running), 2 = usage / machine unknown / API error.
+        Each unpreserved Attempt names its failing checks (`preserved.failures`: manifest key, output name + art id + object, label
+        target + missing assertion).  Labels asserted in THIS store are the one leg drain repairs itself: it pushes and re-verifies the
+        assertions of every Attempt whose labels leg failed (`labels_sync.push_closure`, the same as `research data push --labels-only
+        RUN`; nothing else is uploaded, no blob re-checked) before deciding; `--no-push-labels` only reports.
     research pods terminate <pod-id> --require-preserved [--force --reason TEXT]
         `drain` by pod id (part.main routes it here).
 
@@ -30,6 +34,7 @@ from pathlib import Path
 from typing import Any
 
 from .. import remote
+from ..store import labels_sync as LS
 from ..store import preserved as P
 from ..store.local import LocalStore
 
@@ -137,11 +142,52 @@ def format_report(rep: dict[str, Any]) -> list[str]:
         legs = list(dict.fromkeys(f["leg"] for f in fails))
         lines.append(f"  NOT preserved  {aid}  ({', '.join(a['matched_by'])})  failing: {', '.join(legs)}")
         lines += [f"      {f['leg']:<9} {f['what']}: {f['why']}" for f in fails]
+    lp = rep.get("labels_push")
+    if lp:
+        lines.append(f"  labels: pushing this store's assertions for {len(lp['attempts'])} attempt(s) failed: {lp['error']}" if lp.get("error") else
+                     f"  labels: pushed {lp['pushed']} assertion(s) from this store for {len(lp['attempts'])} attempt(s); "
+                     f"{len(lp['durable'])} now durable (`research data push --labels-only RUN`)")
+    else:
+        need = [aid for aid in rep["unpreserved"] if any(f["leg"] == "labels" for f in rep["attempts"][aid].get("failures") or [])]
+        if need:
+            lines.append(f"  labels: `research data push --labels-only {' '.join(need)}` pushes this store's assertions about them "
+                         f"(`research pods drain` does it first)")
     for aid in rep["preserved"]:
         lines.append(f"  preserved      {aid}  ({', '.join(rep['attempts'][aid]['matched_by'])})")
     if not rep["n_attempts"]:
         lines.append(f"  {rep['note']}")
     return lines
+
+
+def push_labels(st: LocalStore, rep: dict[str, Any], jobs: int = LS.SYNC_JOBS) -> None:
+    """The one repair drain makes itself: for every unpreserved attempt whose labels leg failed, push this store's assertions about its
+    closure (`labels_sync.push_closure`: attempt, derivation, named artifacts; nothing else, no blob re-checked) and verify them.  An
+    attempt whose other legs passed is preserved once its labels verify durable.  Updates `rep` in place (`labels_push`, per-attempt
+    `legs` / `failures` / `labels_pushed`)."""
+    todo = [aid for aid in rep["unpreserved"] if (rep["attempts"][aid].get("legs") or {}).get("labels") is False]
+    if not todo:
+        return
+    try:
+        lrep = LS.push_closure(st, todo, jobs=jobs)
+    except Exception as e:  # noqa: BLE001  the gate stays closed; the report says why the repair did not run
+        rep["labels_push"] = {"attempts": todo, "error": f"{type(e).__name__}: {e}"}
+        return
+    rep["labels_push"] = {"attempts": todo, "pushed": sum(lrep["targets"][aid]["pushed"] for aid in todo),
+                          "durable": [aid for aid in todo if lrep["targets"][aid]["durable"]]}
+    for aid in todo:
+        x, a = lrep["targets"][aid], rep["attempts"][aid]
+        a["labels_pushed"] = x["pushed"]
+        a["legs"]["labels"] = x["durable"]
+        a["failures"] = [f for f in a["failures"] if f["leg"] != "labels"]
+        if not x["durable"]:
+            first = [*x["failed"], *(f"{k}: absent on the remote after the push" for k in x["missing"]), *x["errors"]][0]
+            a["failures"].append({"leg": "labels", "what": aid, "why": f"pushed {x['pushed']} of {x['local']}; still NOT durable: {first}"})
+        elif not a["failures"]:
+            a["preserved"] = True
+            rep["unpreserved"].remove(aid)
+            rep["preserved"].append(aid)
+    if rep.get("check"):
+        rep["check"]["preserved"] = not rep["unpreserved"]
 
 
 def _leg_counts(rep: dict[str, Any]) -> str:
@@ -161,20 +207,23 @@ def log_drain(entry: dict[str, Any], path: Path | None = None) -> None:
 
 
 def drain(st: LocalStore, target: str, *, mode: str = "head", force: bool = False, reason: str | None = None, hostname: str | None = None,
-          probe: bool = True, terminate=None, log_path: Path | None = None) -> tuple[int, dict[str, Any]]:
-    """Report, then terminate unless something is unpreserved (module docstring).  `terminate(pod_id)` defaults to runpod's; the
-    decision and its reason are appended to `log_path`.  Returns (exit code, report)."""
+          probe: bool = True, terminate=None, log_path: Path | None = None, repair_labels: bool = True) -> tuple[int, dict[str, Any]]:
+    """Report, push the labels a labels-only failure needs (`push_labels`, unless `repair_labels` is False), then terminate unless
+    something is unpreserved (module docstring).  `terminate(pod_id)` defaults to runpod's; the decision and its reason are appended
+    to `log_path`.  Returns (exit code, report)."""
     log_path = log_path or drain_log_path()
     rep = report(st, target, mode=mode, hostname=hostname, probe=probe)
     if not rep["pod_id"]:
         rep["decision"] = {"action": "refused", "why": f"{target!r} is neither a machines.toml entry nor a pod id"}
         return 2, rep
+    if repair_labels:
+        push_labels(st, rep)
     blocked = bool(rep["unpreserved"])
     if blocked and not force:
         rep["decision"] = {"action": "refused", "why": f"{len(rep['unpreserved'])} attempt(s) on the machine are not preserved (failing: {_leg_counts(rep)}); "
                                                        f"`research data push` them (or --force --reason TEXT to terminate anyway, logged)", "forced": False}
         log_drain({"utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "target": target, "machine": rep["machine"], "pod_id": rep["pod_id"],
-                   "action": "refused", "unpreserved": rep["unpreserved"], "mode": mode,
+                   "action": "refused", "unpreserved": rep["unpreserved"], "mode": mode, "labels_push": rep.get("labels_push"),
                    "failing": {aid: sorted({f["leg"] for f in rep["attempts"][aid].get("failures") or []}) for aid in rep["unpreserved"]}}, log_path)
         return 1, rep
     if blocked and force and not reason:
@@ -196,7 +245,7 @@ def drain(st: LocalStore, target: str, *, mode: str = "head", force: bool = Fals
                                ("nothing recorded on the machine" if not rep["n_attempts"] else f"all {rep['n_attempts']} attempt(s) preserved"))}
     log_drain({"utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "target": target, "machine": rep["machine"], "pod_id": rep["pod_id"],
                "action": "terminated", "forced": blocked and force, "reason": reason if blocked else None, "unpreserved": rep["unpreserved"],
-               "n_attempts": rep["n_attempts"], "mode": mode}, log_path)
+               "n_attempts": rep["n_attempts"], "mode": mode, "labels_push": rep.get("labels_push")}, log_path)
     return 0, rep
 
 
@@ -213,6 +262,8 @@ def _parser(prog: str, drain_flags: bool):
     if drain_flags:
         ap.add_argument("--force", action="store_true", help="terminate although attempts are unpreserved (needs --reason; logged)")
         ap.add_argument("--reason", default=None, help="why the override is acceptable (goes to the drain log and the report)")
+        ap.add_argument("--no-push-labels", action="store_true",
+                        help="do not push this store's assertions for attempts whose only failing leg is labels (default: push + verify them)")
     return ap
 
 
@@ -236,7 +287,8 @@ def main(argv: list[str]) -> int:
             return 2
         print(json.dumps(rep, indent=2, sort_keys=True) if ns.json else "\n".join(format_report(rep)))
         return 1 if rep["unpreserved"] else 0
-    rc, rep = drain(st, ns.target, mode=ns.mode, force=ns.force, reason=ns.reason, hostname=ns.hostname, probe=not ns.no_probe)
+    rc, rep = drain(st, ns.target, mode=ns.mode, force=ns.force, reason=ns.reason, hostname=ns.hostname, probe=not ns.no_probe,
+                    repair_labels=not ns.no_push_labels)
     if ns.json:
         print(json.dumps(rep, indent=2, sort_keys=True))
     else:

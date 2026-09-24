@@ -3,10 +3,11 @@
   research data put  --kind K [--meta JSON|@file] [--ref name=art:...]... [--file PATH | --tree DIR] [--preserve]   -> art id
   research data show ART|ATTEMPT|DRV [--json]      manifest / attempt / attempts with that derivation
   research data where ART [--json]                 replicas: local / repo / remote (+ verified_utc)
-  research data push [ART|RUN ...] [--pending] [--no-labels] [--jobs N] [--verify head|readback]
+  research data push [ART|RUN ...] [--pending] [--no-labels | --labels-only] [--jobs N] [--verify head|readback]
                                                    preserve on the remote: blobs uploaded concurrently and verified, then the manifest (PRESERVED);
                                                    a run pushes its attempt + outputs + the assertions about them (attempt, derivation, outputs);
-                                                   --pending pushes everything local the remote lacks, assertions included
+                                                   --pending pushes everything local the remote lacks, assertions included;
+                                                   --labels-only pushes + verifies just those assertions (no blob re-checked)
   research data labels-sync [--push-only|--pull-only|--from-backup ART|--from-dir DIR] [--jobs N] [--json]
                                                    union labels/ with the remote's labels/<target>/<content sha256>.json (nothing overwritten, ever);
                                                    --from-backup unions a labels-backup/v1 tarball, --from-dir another store's labels/
@@ -601,6 +602,23 @@ def _push_line(x: dict) -> str:
             f"{x.get('bytes', 0) / 1e6:.1f} MB in {s:.1f}s  {rate}  verified {x.get('verified') or '-'}")
 
 
+def _push_labels_only(st: LocalStore, r, ns: argparse.Namespace) -> int:
+    from . import labels_sync as LS  # noqa: PLC0415
+
+    if ns.pending or ns.no_labels or not ns.targets:
+        raise ValueError("--labels-only takes run / art: ids (not --pending or --no-labels); `labels-sync --push-only` is the whole store")
+    rep = LS.push_closure(st, ns.targets, jobs=ns.jobs)
+    if ns.json:
+        _dump({"remote": r.describe(), **rep})
+    else:
+        for t, x in rep["targets"].items():
+            why = "; ".join([*x["failed"][:1], *(f"{k}: absent on the remote" for k in x["missing"][:1]), *x["errors"][:1]])
+            print(f"{t}  labels  {'DURABLE' if x['durable'] else 'NOT durable'}: {x['local']} local assertion(s) over {len(x['label_targets'])} "
+                  f"target(s), {x['pushed']} pushed, {x['already']} already there" + (f"; {why}" if why else ""))
+        print(f"{sum(x['durable'] for x in rep['targets'].values())}/{len(rep['targets'])} with durable labels on {r.describe()}")
+    return 0 if rep["durable"] else 1
+
+
 def cmd_push(argv: list[str]) -> int:
     """Preserve on the remote (README §7): an artifact's blobs go up concurrently (`--jobs`), each verified (`--verify head`: size +
     MD5 ETag, the default; `--verify readback`: download + sha256), then its manifest; a run id pushes the attempt manifest, every
@@ -615,6 +633,9 @@ def cmd_push(argv: list[str]) -> int:
     ap.add_argument("--verify", choices=["head", "readback"], default="head",
                     help="per-object check: head = Content-Length + single-part ETag == MD5 (default); readback = download + sha256")
     ap.add_argument("--no-labels", action="store_true", help="do not push assertions (a run's: about it, its derivation and its outputs; --pending: all local ones)")
+    ap.add_argument("--labels-only", action="store_true",
+                    help="push (and verify) only the assertions the targets need to be durable -- a run's: about it, its derivation and its "
+                         "outputs; an art:'s: its own -- no blob or manifest is re-checked (the labels leg of `data preserved` / `pods drain`)")
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
     if ns.jobs < 1:
@@ -623,6 +644,8 @@ def cmd_push(argv: list[str]) -> int:
     from .local import attempt_key  # noqa: PLC0415
 
     r = st._require_remote()  # noqa: SLF001  (names the missing credentials when the remote is configured but unusable here)
+    if ns.labels_only:
+        return _push_labels_only(st, r, ns)
     arts: list[str] = []
     runs: list[str] = []
     for t in ns.targets:
