@@ -473,6 +473,37 @@ extern "C" __global__ void quad_v4_u32_D@D@(const unsigned* rho, const unsigned*
     const int* pc, const int* jc, const unsigned* ccn, const unsigned* kc, unsigned* out, int Q, int cols, int chunk, int qfast)
 { quad_v4_body<unsigned, @D@>(rho, X, pa, ja, ca, ka, pb, jb, cb, kb, pc, jc, ccn, kc, out, Q, cols, chunk, qfast); }
 
+/* out[r][i] = post[i] * INTT(X[r])[i] mod p (field.intt: natural order in and out, post includes n^-1), one block per
+   row held in shared memory: iterative DIT over the bit-reversed row as field.ntt does it -- stage half = L/2 pairs
+   (g L + j, g L + j + half) with twiddle tw[half - 1 + j] (the stages_inv tables concatenated).  X canonical int64;
+   tw and post scaled by 2^32. */
+extern "C" __global__ void intt_rows(const long long* __restrict__ X, long long* __restrict__ out,
+                                     const unsigned* __restrict__ tw, const unsigned* __restrict__ post,
+                                     const int* __restrict__ rev, int n)
+{
+    extern __shared__ unsigned sx[];
+    const long long* x = X + (size_t)blockIdx.x * n;
+    for (int i = threadIdx.x; i < n; i += blockDim.x) sx[i] = (unsigned)x[rev[i]];
+    __syncthreads();
+    for (int half = 1; half < n; half <<= 1) {
+        for (int b = threadIdx.x; b < (n >> 1); b += blockDim.x) {
+            const int j = b & (half - 1), i0 = ((b - j) << 1) + j, i1 = i0 + half;
+            const unsigned a = sx[i0];
+            const u64 t = mont_reduce((u64)sx[i1] * (u64)tw[half - 1 + j]);      /* < 2p */
+            const unsigned bt = (unsigned)(t >= (u64)P ? t - (u64)P : t);
+            const unsigned s = a + bt, d = a + (P - bt);
+            sx[i0] = s >= P ? s - P : s;
+            sx[i1] = d >= P ? d - P : d;
+        }
+        __syncthreads();
+    }
+    long long* o = out + (size_t)blockIdx.x * n;
+    for (int i = threadIdx.x; i < n; i += blockDim.x) {
+        const u64 t = mont_reduce((u64)sx[i] * (u64)post[i]);
+        o[i] = (long long)(t >= (u64)P ? t - (u64)P : t);
+    }
+}
+
 /* out[i] = sum_s partial[s][i] mod p as int64 (S <= 2^9 terms < 2^31): the (S, D, cols) partial sums in one pass */
 extern "C" __global__ void reduce_partial(const unsigned* __restrict__ partial, u64* __restrict__ out, int S, long long n)
 {
@@ -511,6 +542,8 @@ REDUCE_KERNEL = True                # the (S, D, cols) partial sums reduced by o
 LINCOMB2 = True                     # the ZK linear tests w and v in one pass over the coefficient rows (False: two lincomb calls)
 LINCOMB2_THREADS = 128
 LINCOMB2_SPLITS = 0                 # row chunks (0: _grid_v4's choice)
+INTT_KERNEL = True                  # the tests' quotient INTTs (+ the g^-i scale) as one kernel per call (False: field.intt, A/B)
+INTT_THREADS = 1024
 
 
 def available() -> bool:
@@ -535,6 +568,9 @@ class FusedTests:
                                "boolcomb_rows_v4_u32", "boolcomb_rows_v4_u64", "chainq_u32", "chainq_u64", "fplane",
                                "quad_v4_u32", "lincomb2_v4_u32")}
         self.k["reduce_partial"] = self.mod.get_function("reduce_partial")
+        self.k["intt_rows"] = self.mod.get_function("intt_rows")
+        self._smem_optin = cp.cuda.Device(self.device.index or 0).attributes["MaxSharedMemoryPerBlockOptin"]
+        self._intt_tabs: dict = {}
 
     def _cp(self, t: torch.Tensor):
         return self.cp.asarray(t)
@@ -635,6 +671,36 @@ class FusedTests:
                                        np.int32(chunk)), shared_mem=2 * D * chunk * 4)
         out = self._reduce(partial)
         return out[:D], out[D:]
+
+    def intt_ok(self, x: torch.Tensor) -> bool:
+        n = x.shape[-1]
+        return (INTT_KERNEL and x.dtype == torch.int64 and x.dim() == 2 and n >= 2 and n & (n - 1) == 0
+                and 4 * n <= self._smem_optin)
+
+    def intt_scaled(self, x: torch.Tensor, post: torch.Tensor) -> torch.Tensor:
+        """``(field.intt(x) * post) % P`` for canonical int64 ``x`` (R, n) and a canonical (n,) int64 ``post`` (a cached
+        table: keyed by its storage), in one kernel per call."""
+        from .field import Domain
+        R, n = x.shape
+        key = (n, post.data_ptr())
+        tabs = self._intt_tabs.get(key)
+        if tabs is None:
+            dom = Domain.get(n, self.device)
+            tw = torch.cat(dom.stages_inv) if n > 1 else torch.zeros(1, dtype=torch.int64, device=self.device)
+            pt = (post.to(torch.int64) % P) * dom.n_inv % P
+            tabs = ((tw * _R32 % P).to(torch.int32).contiguous(), (pt * _R32 % P).to(torch.int32).contiguous(),
+                    dom.bitrev.to(torch.int32).contiguous(), post)       # post kept: its storage is the key
+            self._intt_tabs[key] = tabs
+            k = self.k["intt_rows"]
+            if 4 * n > 48 * 1024:
+                k.max_dynamic_shared_size_bytes = max(k.max_dynamic_shared_size_bytes, 4 * n)
+        x = x.contiguous()
+        out = torch.empty((R, n), dtype=torch.int64, device=self.device)
+        with self._stream():
+            self.k["intt_rows"]((R,), (min(INTT_THREADS, max(n // 2, 32)),),
+                                (self._cp(x), self._cp(out), self._cp(tabs[0]), self._cp(tabs[1]), self._cp(tabs[2]),
+                                 np.int32(n)), shared_mem=4 * n)
+        return out
 
     def chain_quotient(self, Renc: torch.Tensor, U: torch.Tensor, rows: torch.Tensor) -> torch.Tensor:
         """(D, n) int64 = sum_r Renc[:, r] * U[rows[r]] mod p in one pass (``Renc`` (D, R, n) int32 codewords or int64

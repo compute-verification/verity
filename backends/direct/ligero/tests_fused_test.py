@@ -161,6 +161,16 @@ def main():
             ok3 &= torch.equal(w2, ref_w) and torch.equal(v2, ref_v)
     tests_fused.LINCOMB2_SPLITS, tests_fused.LINCOMB2_THREADS = saved3
     rep["exact"]["lincomb2_vs_lincomb_1037x2176"] = bool(ok3)
+    # intt_scaled against field.intt * post, residues up to p - 1
+    from .field import intt as field_intt
+    ok4 = True
+    for nn in (2, 8, 1024, 16384):
+        xi = torch.randint(0, P, (D, nn), generator=g, dtype=torch.int64)
+        xi[:, :2] = P - 1
+        xi = xi.to(dev)
+        post = torch.randint(0, P, (nn,), generator=g, dtype=torch.int64).to(dev)
+        ok4 &= f.intt_ok(xi) and torch.equal(f.intt_scaled(xi, post), (field_intt(xi) * post) % P)
+    rep["exact"]["intt_scaled_vs_field_intt"] = bool(ok4)
     ok = all(rep["exact"].values())
     print("exact:", rep["exact"])
     print("bit-exact:", "PASS" if ok else "FAIL")

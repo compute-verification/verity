@@ -857,6 +857,17 @@ def _combine_row(c: torch.Tensor, M: torch.Tensor) -> torch.Tensor:
     return ((c[:, None] * M) % P).sum(0) % P
 
 
+def _intt_ginv(g, x: torch.Tensor, n: int, device) -> torch.Tensor:
+    """``intt(x) * g^-i mod p`` (x canonical (D, n) int64): one fused kernel when available, else ``g("intt", ...)``."""
+    gi = _ginv_powers(n, device)
+    if witness.USE_FUSED:
+        from . import tests_fused
+        f = tests_fused.fused_for(x.shape[0], x.device)
+        if f is not None and f.intt_ok(x):
+            return f.intt_scaled(x, gi)
+    return (g("intt", intt, x) * gi) % P
+
+
 def _fused_lincomb2(C1: torch.Tensor, C2: torch.Tensor, M: torch.Tensor):
     """The fused kernels when they take (C1 @ M, C2 @ M[:R2]) in one pass here, else None."""
     if not witness.USE_FUSED:
@@ -1123,8 +1134,7 @@ def _tests_compute(sys: System, tb: Tables, cfg: Config, x: torch.Tensor, coefs,
     hev = (P0 * zinv) % P
     if cfg.zk:                                                    # + s_qa + x^k s_qb  (the mask / Z_H)
         hev = (hev + U[mr["qa"]] + (_xk_on_coset(n, k, device)[None, :] * U[mr["qb"]]) % P) % P
-    hcoef = g("intt", intt, hev)                                  # coefficients of h(g x): c_k g^k
-    hcoef = (hcoef * _ginv_powers(n, device)) % P
+    hcoef = _intt_ginv(g, hev, n, device)                         # coefficients of h(g x): c_k g^k, times g^-k
     if check:
         assert (hcoef[:, cfg.h_len:] == 0).all(), "quotient degree too high: constraints violated"
     h = hcoef[:, :cfg.h_len]
@@ -1150,7 +1160,7 @@ def _tests_compute(sys: System, tb: Tables, cfg: Config, x: torch.Tensor, coefs,
             Qev = part if Qev is None else (Qev + part) % P
         if cfg.zk:                                                # + u_ca + x^k u_cb (uniform, zero sum over H)
             Qev = (Qev + U[mr["chain_a"]] + (_xk_on_coset(n, k, device)[None, :] * U[mr["chain_b"]]) % P) % P
-        qcoef = (g("intt", intt, Qev) * _ginv_powers(n, device)) % P
+        qcoef = _intt_ginv(g, Qev, n, device)
         if check:
             assert (qcoef[:, cfg.q_len:] == 0).all(), "chain polynomial degree too high"
             assert torch.equal(_sum_over_H(qcoef[:, :cfg.q_len], l), cc.rhs), "chain constraints violated"
