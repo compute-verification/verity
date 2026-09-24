@@ -277,6 +277,141 @@ __device__ __forceinline__ void quad_body(const unsigned* __restrict__ rho, cons
     for (int d = 0; d < D; ++d) partial[((size_t)s * D + d) * cols + col] = (unsigned)(acc[d] % P);
 }
 
+/* The general constraints, VEC = 4 adjacent columns per thread (16-byte row loads; one table read per 4 columns) in
+   Montgomery arithmetic, every intermediate canonical (< p) and 32-bit: a side's terms are summed lazily 4 products at
+   a time (4 (p-1)^2 < 2^64) and each such sum is Montgomery-reduced (< 2^31.9 + p < 3p) and brought below p by two
+   conditional subtractions.  The side-a coefficients and constant come scaled by 2^64 / 2^32 (A arrives as A 2^32), so
+   mont(A 2^32 * B) = A B (< 2p: one subtraction); rho comes scaled by 2^32 (see lincomb_v4_body).  X canonical.
+   The same residues as quad_body. */
+__device__ __forceinline__ unsigned canon3p(u64 r)            /* r < 3p -> r mod p */
+{
+    unsigned v = (unsigned)(r >= 2ull * P ? r - 2ull * P : r);    /* < 2p < 2^32 */
+    return v >= P ? v - P : v;
+}
+
+template <typename T>
+__device__ __forceinline__ void side_eval4(const T* __restrict__ X, int cols, int col0, const int* __restrict__ ptr,
+                                           const int* __restrict__ jj, const unsigned* __restrict__ cc, unsigned cst,
+                                           int q, unsigned* out)
+{
+    unsigned acc[4] = {cst, cst, cst, cst};
+    const int e0 = __ldg(ptr + q), e1 = __ldg(ptr + q + 1);
+    for (int e = e0; e < e1; e += 4) {
+        u64 lazy[4] = {0, 0, 0, 0};
+        const int ne = e1 - e;                  /* the same for the whole warp: the guards below do not diverge */
+        uint4 xr[4];
+        unsigned cr[4];
+        #pragma unroll
+        for (int u = 0; u < 4; ++u) {          /* up to 4 independent row loads in flight before the products */
+            if (u < ne) {
+                cr[u] = __ldg(cc + e + u);
+                xr[u] = *reinterpret_cast<const uint4*>(X + (size_t)__ldg(jj + e + u) * cols + col0);
+            }
+        }
+        #pragma unroll
+        for (int u = 0; u < 4; ++u) {
+            if (u < ne) {
+                const u64 c = cr[u];
+                lazy[0] += c * xr[u].x; lazy[1] += c * xr[u].y; lazy[2] += c * xr[u].z; lazy[3] += c * xr[u].w;
+            }
+        }
+        #pragma unroll
+        for (int v = 0; v < 4; ++v) {
+            const unsigned s = acc[v] + canon3p(mont_reduce(lazy[v]));   /* < 2p < 2^32 */
+            acc[v] = s >= P ? s - P : s;
+        }
+    }
+    #pragma unroll
+    for (int v = 0; v < 4; ++v) out[v] = acc[v];
+}
+
+template <typename T, int D>
+__device__ __forceinline__ void quad_v4_body(const unsigned* __restrict__ rho, const T* __restrict__ X,
+                                             const int* pa, const int* ja, const unsigned* ca, const unsigned* ka,
+                                             const int* pb, const int* jb, const unsigned* cb, const unsigned* kb,
+                                             const int* pc, const int* jc, const unsigned* ccn, const unsigned* kc,
+                                             unsigned* __restrict__ partial, int Q, int cols, int chunk, int qfast)
+{
+    extern __shared__ unsigned Rs[];                                   /* [D][chunk] rho 2^32 */
+    /* qfast: the q-chunks of one column slice are consecutive blocks (co-resident: their row reads meet in L2) */
+    const int s = qfast ? blockIdx.x : blockIdx.y, cblk = qfast ? blockIdx.y : blockIdx.x;
+    const int q0 = s * chunk, q1 = min(Q, q0 + chunk), nq = q1 - q0;
+    for (int i = threadIdx.x; i < D * nq; i += blockDim.x) {
+        const int d = i / nq, qq = i - d * nq;
+        Rs[d * chunk + qq] = rho[(size_t)d * Q + q0 + qq];
+    }
+    __syncthreads();
+    const int col0 = (cblk * blockDim.x + threadIdx.x) * 4;
+    if (col0 >= cols) return;
+    u64 lazy[D][4];
+    unsigned red[D][4];     /* canonical running sums */
+    #pragma unroll
+    for (int d = 0; d < D; ++d) {
+        #pragma unroll
+        for (int v = 0; v < 4; ++v) { lazy[d][v] = 0; red[d][v] = 0; }
+    }
+    int cnt = 0;
+    for (int qq = 0; qq < nq; ++qq) {
+        const int q = q0 + qq;
+        unsigned a[4], b[4], c[4];
+        side_eval4<T>(X, cols, col0, pa, ja, ca, __ldg(ka + q), q, a);
+        side_eval4<T>(X, cols, col0, pb, jb, cb, __ldg(kb + q), q, b);
+        side_eval4<T>(X, cols, col0, pc, jc, ccn, __ldg(kc + q), q, c);
+        u64 t[4];
+        #pragma unroll
+        for (int v = 0; v < 4; ++v) {
+            u64 ab = mont_reduce((u64)a[v] * (u64)b[v]);                  /* < 2p */
+            unsigned abu = (unsigned)(ab >= (u64)P ? ab - (u64)P : ab);
+            unsigned tv = abu + (P - c[v]);                               /* < 2p */
+            t[v] = (u64)(tv >= P ? tv - P : tv);
+        }
+        #pragma unroll
+        for (int d = 0; d < D; ++d) {
+            const u64 r = Rs[d * chunk + qq];
+            #pragma unroll
+            for (int v = 0; v < 4; ++v) lazy[d][v] += r * t[v];
+        }
+        if (++cnt == 4) {
+            cnt = 0;
+            #pragma unroll
+            for (int d = 0; d < D; ++d) {
+                #pragma unroll
+                for (int v = 0; v < 4; ++v) {
+                    const unsigned sm = red[d][v] + canon3p(mont_reduce(lazy[d][v]));
+                    red[d][v] = sm >= P ? sm - P : sm;
+                    lazy[d][v] = 0;
+                }
+            }
+        }
+    }
+    #pragma unroll
+    for (int d = 0; d < D; ++d) {
+        unsigned o4[4];
+        #pragma unroll
+        for (int v = 0; v < 4; ++v) {
+            const unsigned sm = red[d][v] + canon3p(mont_reduce(lazy[d][v]));
+            o4[v] = sm >= P ? sm - P : sm;
+        }
+        *reinterpret_cast<uint4*>(partial + ((size_t)s * D + d) * cols + col0) = make_uint4(o4[0], o4[1], o4[2], o4[3]);
+    }
+}
+
+extern "C" __global__ void quad_v4_u32_D@D@(const unsigned* rho, const unsigned* X,
+    const int* pa, const int* ja, const unsigned* ca, const unsigned* ka,
+    const int* pb, const int* jb, const unsigned* cb, const unsigned* kb,
+    const int* pc, const int* jc, const unsigned* ccn, const unsigned* kc, unsigned* out, int Q, int cols, int chunk, int qfast)
+{ quad_v4_body<unsigned, @D@>(rho, X, pa, ja, ca, ka, pb, jb, cb, kb, pc, jc, ccn, kc, out, Q, cols, chunk, qfast); }
+
+/* out[i] = sum_s partial[s][i] mod p as int64 (S <= 2^9 terms < 2^31): the (S, D, cols) partial sums in one pass */
+extern "C" __global__ void reduce_partial(const unsigned* __restrict__ partial, u64* __restrict__ out, int S, long long n)
+{
+    const long long i = (long long)blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n) return;
+    u64 acc = 0;
+    for (int s = 0; s < S; ++s) acc += partial[(size_t)s * n + i];
+    out[i] = acc % P;
+}
+
 extern "C" __global__ void quad_u32_D@D@(const unsigned* rho, const unsigned* X,
     const int* pa, const int* ja, const unsigned* ca, const unsigned* ka,
     const int* pb, const int* jb, const unsigned* cb, const unsigned* kb,
@@ -297,6 +432,11 @@ _R64 = _R32 * _R32 % P              # 2^64 mod p
 assert (P * 0x77FFFFFF) % (1 << 32) == (1 << 32) - 1, "PPRIME = -p^-1 mod 2^32"
 MIN_THREADS_V4 = 1 << 17            # the v4 kernels: 4x the work per thread, so a quarter of the threads in flight
 MAX_CHUNK_V4 = 1024                 # rows per block slice (shared C: D x chunk x 4 bytes <= 24 KB)
+QUAD_V4 = True                      # the general quadratic constraints through quad_v4 (int32 X; False: the scalar quad kernel, A/B)
+QUAD_SPLITS = 128                   # quad_v4: constraint chunks (grid dimension) -- the partial sums are (QUAD_SPLITS, D, cols)
+QUAD_QFAST = True                   # quad_v4: the chunks of one column slice as consecutive blocks (L2 reuse of their rows)
+QUAD_THREADS = 128                  # 4090, fp8-ada-v3x4 l=4096: 0.785 ms vs 0.87 at (32 chunks, column-major, 256 threads)
+REDUCE_KERNEL = True                # the (S, D, cols) partial sums reduced by one kernel (False: torch int64 upcast + sum + mod)
 
 
 def available() -> bool:
@@ -318,7 +458,9 @@ class FusedTests:
                   for name in ("lincomb_u32", "lincomb_u64", "boolcomb_u32", "boolcomb_u64", "quad_u32", "quad_u64",
                                "boolcomb_rows_u32", "boolcomb_rows_u64",
                                "lincomb_v4_u32", "lincomb_v4_u64", "boolcomb_v4_u32", "boolcomb_v4_u64",
-                               "boolcomb_rows_v4_u32", "boolcomb_rows_v4_u64", "chainq_u32", "chainq_u64", "fplane")}
+                               "boolcomb_rows_v4_u32", "boolcomb_rows_v4_u64", "chainq_u32", "chainq_u64", "fplane",
+                               "quad_v4_u32")}
+        self.k["reduce_partial"] = self.mod.get_function("reduce_partial")
 
     def _cp(self, t: torch.Tensor):
         return self.cp.asarray(t)
@@ -352,7 +494,15 @@ class FusedTests:
 
     def _reduce(self, partial: torch.Tensor) -> torch.Tensor:
         # (S, D, cols) uint32 partial sums -> (D, cols) int64 mod p; S <= 512 terms < 2^31 fit in int64
-        return partial.to(torch.int64).sum(0) % P
+        if not REDUCE_KERNEL:
+            return partial.to(torch.int64).sum(0) % P
+        S = partial.shape[0]
+        out = torch.empty(partial.shape[1:], dtype=torch.int64, device=self.device)
+        nel = out.numel()
+        with self._stream():
+            self.k["reduce_partial"]((-(-nel // THREADS),), (THREADS,),
+                                     (self._cp(partial), self._cp(out), np.int32(S), np.int64(nel)))
+        return out
 
     def lincomb(self, C: torch.Tensor, X: torch.Tensor, square_minus: bool = False,
                 rows: torch.Tensor | None = None) -> torch.Tensor:
@@ -420,6 +570,8 @@ class FusedTests:
         assert D == self.D and Q == csr["Q"]
         cols = X.shape[1]
         X = X.contiguous()
+        if QUAD_V4 and X.dtype == torch.int32 and self._v4_ok(X):
+            return self._quad_v4(rho, X, csr)
         rho32 = (rho % P).to(torch.int32).contiguous()
         (gx, S), chunk = self._grid(cols, Q)
         partial = torch.empty((S, D, cols), dtype=torch.int32, device=self.device)
@@ -430,6 +582,35 @@ class FusedTests:
         args += [self._cp(partial), np.int32(Q), np.int32(cols), np.int32(chunk)]
         with self._stream():
             self.k[name]((gx, S), (THREADS,), tuple(args))
+        return self._reduce(partial)
+
+    def _quad_v4(self, rho: torch.Tensor, X: torch.Tensor, csr: dict) -> torch.Tensor:
+        """``quad_general`` through quad_v4 (int32 canonical X, 4 columns per thread): the tables Montgomery-scaled once
+        per csr (side a by 2^64 / 2^32, sides b and c by 2^32 / 1), rho by 2^32."""
+        D, Q = rho.shape
+        cols = X.shape[1]
+        mt = csr.get("v4")
+        if mt is None:
+            mt = {}
+            for side in ("a", "b", "c"):
+                cs, ks = (_R64, _R32) if side == "a" else (_R32, 1)
+                t = csr[side]
+                mt[side] = (t["ptr"], t["j"],
+                            (t["coef"].to(torch.int64) % P * cs % P).to(torch.int32).contiguous(),
+                            (t["const"].to(torch.int64) % P * ks % P).to(torch.int32).contiguous())
+            csr["v4"] = mt
+        rho32 = ((rho % P) * _R32 % P).to(torch.int32).contiguous()
+        gx = -(-(cols // 4) // QUAD_THREADS)
+        chunk = -(-Q // max(1, min(Q, QUAD_SPLITS)))
+        S = -(-Q // chunk)
+        partial = torch.empty((S, D, cols), dtype=torch.int32, device=self.device)
+        args = [self._cp(rho32), self._cp(X)]
+        for side in ("a", "b", "c"):
+            args += [self._cp(x) for x in mt[side]]
+        args += [self._cp(partial), np.int32(Q), np.int32(cols), np.int32(chunk), np.int32(1 if QUAD_QFAST else 0)]
+        grid = (S, gx) if QUAD_QFAST else (gx, S)
+        with self._stream():
+            self.k["quad_v4_u32"](grid, (QUAD_THREADS,), tuple(args), shared_mem=D * chunk * 4)
         return self._reduce(partial)
 
 

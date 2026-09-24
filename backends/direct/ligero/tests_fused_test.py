@@ -106,6 +106,41 @@ def main():
     t_new = _bench(lambda: f.quad_general(rho, X, csr), a.reps)
     rep["timing"]["quad_general_853x65536"] = {"torch_ms": t_ref, "fused_ms": t_new}
     print(f"quad_general 853x65536: torch {t_ref:.2f} ms | fused {t_new:.2f} ms")
+    # quad_v4 (Montgomery, 4 columns per thread) against the scalar kernel: sides of 0..44 terms (fp8-ada-v3x4 has up to
+    # 44 / 30 / 8), residues up to p - 1, every grid layout; and the partial-sum reduction kernel against torch's
+    Q2, cols2, R2 = 301, 4096, 700
+    X2 = torch.randint(0, P, (R2, cols2), generator=g).to(torch.int32)
+    X2[:, :64] = P - 1
+    X2 = X2.to(dev)
+    gen2 = {}
+    for side, hi in (("a", 45), ("b", 31), ("c", 9)):
+        nnz = torch.randint(0, hi, (Q2,), generator=g)
+        qq = torch.repeat_interleave(torch.arange(Q2), nnz)
+        jj = torch.randint(0, R2, (qq.numel(),), generator=g)
+        cc = torch.randint(0, P, (qq.numel(),), generator=g)
+        cc[:16] = P - 1
+        consts = torch.randint(0, P, (Q2,), generator=g)
+        gen2[side] = tuple(t.to(dev) for t in (qq, jj, cc, consts))
+    rho2 = torch.randint(0, P, (D, Q2), generator=g).to(dev)
+    csr2 = tests_fused.csr_tables(gen2, Q2, dev)
+    saved = (tests_fused.QUAD_V4, tests_fused.REDUCE_KERNEL, tests_fused.QUAD_SPLITS, tests_fused.QUAD_QFAST,
+             tests_fused.QUAD_THREADS)
+    tests_fused.QUAD_V4, tests_fused.REDUCE_KERNEL = False, False
+    ref2 = f.quad_general(rho2, X2, csr2)
+    tests_fused.QUAD_V4, tests_fused.REDUCE_KERNEL = True, True
+    ok2 = True
+    for thr in (128, 256):
+        for qf in (False, True):
+            for S in (1, 7, 128):
+                tests_fused.QUAD_THREADS, tests_fused.QUAD_QFAST, tests_fused.QUAD_SPLITS = thr, qf, S
+                ok2 &= torch.equal(f.quad_general(rho2, X2, csr2), ref2)
+    (tests_fused.QUAD_V4, tests_fused.REDUCE_KERNEL, tests_fused.QUAD_SPLITS, tests_fused.QUAD_QFAST,
+     tests_fused.QUAD_THREADS) = saved
+    rep["exact"]["quad_v4_vs_scalar_301x4096"] = bool(ok2)
+    part = torch.randint(0, P, (37, D, 1000), generator=g).to(torch.int32).to(dev)
+    tests_fused.REDUCE_KERNEL = True
+    rep["exact"]["reduce_partial"] = torch.equal(f._reduce(part), part.to(torch.int64).sum(0) % P)
+    tests_fused.REDUCE_KERNEL = saved[1]
     ok = all(rep["exact"].values())
     print("exact:", rep["exact"])
     print("bit-exact:", "PASS" if ok else "FAIL")
