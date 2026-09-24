@@ -135,6 +135,14 @@ def test_fts_round_trip_titles_filters_and_incremental_refresh(mirror, tmp_path)
     third = C.refresh(conn, mirror / "transcripts", mirror / "notes", C.load_meta(mirror / "meta" / "composer_meta.jsonl"))
     assert (third["transcripts"]["parsed"], third["transcripts"]["unchanged"]) == (1, 1)
     assert len(C.search(conn, "zebrafish")["messages"]) == 1 and C.stats(conn)["rows"]["messages"] == 9
+    first, last = conn.execute("SELECT first_id, last_id FROM files WHERE chat_id=?", (SUB,)).fetchone()
+    assert [r[0] for r in conn.execute("SELECT line FROM messages WHERE id BETWEEN ? AND ?", (first, last))] == [1, 2, 3]
+
+    conn.execute("UPDATE meta SET value='0' WHERE key='schema_version'")
+    conn.commit()
+    conn.close()
+    conn = C.open_index(tmp_path / "index.sqlite")                       # written by another schema version: starts from empty
+    assert C.stats(conn)["rows"]["messages"] == 0
 
 
 def test_ingest_preserves_sources_and_search_pulls_the_index_through_the_anchor(mirror, tmp_path, monkeypatch, capsys):

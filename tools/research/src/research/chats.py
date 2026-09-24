@@ -13,9 +13,13 @@ MIRROR is an rsynced copy of the laptop's sources (`~/.research/bin/chats-sync.s
 
 `ingest` pushes the transcripts and the notes as trees and the metadata as a file, each PRESERVED (read back from the remote), with
 meta {kind, host, date}; refreshes the index incrementally (a transcript is re-parsed only when its size or mtime changed; notes,
-chats and metadata are rebuilt, they are small); pushes a compacted copy of the index (chat-index/v1, refs to the three sources);
-then labels the fixed, payload-free anchor artifact (ANCHOR_META) `superseded_by` the new index.  The anchor's id is a function of
-its content, so `search`/`pull` on a machine without an index list that one label prefix on the remote to find the newest.
+chats and metadata are rebuilt, they are small); pushes a compacted, gzipped copy of the index (chat-index/v1, refs to the three
+sources); then labels the fixed, payload-free anchor artifact (ANCHOR_META) `superseded_by` the new index.  The anchor's id is a
+function of its content, so `search`/`pull` on a machine without an index list that one label prefix on the remote to find the newest.
+An index written by another SCHEMA_VERSION is rebuilt from empty: bump it whenever parsing or redaction changes.
+
+A transcript's rows are one contiguous `messages.id` range in line order, so a hit's context is `WHERE id BETWEEN id-5 AND id+5`
+(`search --json` gives the id; `files.first_id`/`last_id` bound the file).
 
 The archive is verbatim.  The index is redacted (REDACTIONS: `[REDACTED:<pattern>]`) and keeps the count per source and pattern in
 `redactions`; nothing prints a value.  The index also drops the boilerplate blocks Cursor attaches to user messages (NOISE_TAGS)
@@ -50,7 +54,7 @@ KIND_INDEX = "chat-index/v1"
 KIND_ANCHOR = "chat-index-anchor/v1"
 ANCHOR_META = {"name": "research chats index", "doc": "the newest superseded_by label names the current chat-index/v1 (research.chats)"}
 LABEL_BY = "research-chats"
-INDEX_PAYLOAD_NAME = "chats-index.sqlite"
+INDEX_PAYLOAD_NAME = "chats-index.sqlite.gz"
 TOOL_VALUE_MAX = 400
 TOOL_TEXT_MAX = 1500
 NOTE_MAX_BYTES = 1 << 20
@@ -230,12 +234,9 @@ def parse_transcript(path: Path, info: dict, created: str | None = None, counts:
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE IF NOT EXISTS files(path TEXT PRIMARY KEY, chat_id TEXT, parent_chat_id TEXT, project TEXT, size INTEGER, mtime_ns INTEGER,
-                                 rows INTEGER, bad_lines INTEGER, indexed_utc TEXT);
+                                 rows INTEGER, bad_lines INTEGER, indexed_utc TEXT, first_id INTEGER, last_id INTEGER);
 CREATE TABLE IF NOT EXISTS messages(id INTEGER PRIMARY KEY, chat_id TEXT NOT NULL, parent_chat_id TEXT, project TEXT, file TEXT NOT NULL,
                                     line INTEGER, seq INTEGER, ts TEXT, ts_source TEXT, role TEXT, kind TEXT, tool_name TEXT, text TEXT);
-CREATE INDEX IF NOT EXISTS messages_file ON messages(file);
-CREATE INDEX IF NOT EXISTS messages_chat ON messages(chat_id, ts);
-CREATE INDEX IF NOT EXISTS messages_ts ON messages(ts);
 CREATE TABLE IF NOT EXISTS chats(id TEXT PRIMARY KEY, project TEXT, title TEXT, subtitle TEXT, created_at TEXT, updated_at TEXT, model TEXT,
                                  parent TEXT, root_parent TEXT, subagent_type TEXT, workspace TEXT, message_count INTEGER, transcript_rows INTEGER,
                                  first_ts TEXT, last_ts TEXT, in_meta INTEGER, archived INTEGER);
@@ -262,8 +263,19 @@ def index_path(explicit: str | os.PathLike[str] | None = None) -> Path:
     return Path(explicit or os.environ.get(INDEX_ENV) or DEFAULT_INDEX).expanduser()
 
 
-def open_index(path: Path) -> sqlite3.Connection:
+def open_index(path: Path, rebuild: bool = False) -> sqlite3.Connection:
+    """Open (or create) the index; one written by another SCHEMA_VERSION, or `rebuild`, starts from empty."""
     path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists() and not rebuild:
+        old = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        try:
+            rebuild = old.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone() != (str(SCHEMA_VERSION),)
+        except sqlite3.Error:
+            rebuild = True
+        finally:
+            old.close()
+    if rebuild:
+        path.unlink(missing_ok=True)
     conn = sqlite3.connect(str(path))
     conn.executescript(SCHEMA)
     conn.execute("INSERT OR REPLACE INTO meta VALUES ('schema_version', ?)", (str(SCHEMA_VERSION),))
@@ -290,32 +302,42 @@ def _set_redactions(conn: sqlite3.Connection, source: str, counts: dict[str, int
     conn.executemany("INSERT INTO redactions VALUES (?,?,?)", [(source, k, v) for k, v in sorted(counts.items()) if v])
 
 
+def _drop_file_rows(conn: sqlite3.Connection, rel: str, span: tuple[int | None, int | None]) -> None:
+    """A file's rows are one contiguous id range (inserted together), so no index on `messages.file` is needed to delete them."""
+    if span[0] is not None:
+        conn.execute("DELETE FROM messages WHERE id BETWEEN ? AND ? AND file=?", (span[0], span[1], rel))
+
+
 def refresh_transcripts(conn: sqlite3.Connection, root: Path, meta: dict[str, dict], log=None) -> dict:
     """Re-parse every transcript whose (size, mtime) differs from the last pass, drop the rows of files that are gone."""
     seen, parsed, skipped, rows_in, bad = set(), 0, 0, 0, 0
-    have = {r[0]: (r[1], r[2]) for r in conn.execute("SELECT path, size, mtime_ns FROM files")}
+    have = {r[0]: (r[1], r[2], r[3], r[4]) for r in conn.execute("SELECT path, size, mtime_ns, first_id, last_id FROM files")}
     now = utc_iso(dt.datetime.now(dt.timezone.utc))
     for p, info in transcript_files(root):
-        st = p.stat()
-        seen.add(info["rel"])
-        if have.get(info["rel"]) == (st.st_size, st.st_mtime_ns):
+        st, rel = p.stat(), info["rel"]
+        seen.add(rel)
+        old = have.get(rel)
+        if old and old[:2] == (st.st_size, st.st_mtime_ns):
             skipped += 1
             continue
         counts: dict[str, int] = {}
         rows, nbad = parse_transcript(p, info, ms_iso((meta.get(info["chat_id"]) or {}).get("created_at")), counts)
-        conn.execute("DELETE FROM messages WHERE file=?", (info["rel"],))
-        conn.executemany(f"INSERT INTO messages({','.join(_MSG_COLS)}) VALUES ({','.join('?' * len(_MSG_COLS))})",
-                         [tuple(r[c] for c in _MSG_COLS) for r in rows])
-        _set_redactions(conn, info["rel"], counts)
-        conn.execute("INSERT OR REPLACE INTO files VALUES (?,?,?,?,?,?,?,?,?)",
-                     (info["rel"], info["chat_id"], info["parent"], info["project"], st.st_size, st.st_mtime_ns, len(rows), nbad, now))
+        if old:
+            _drop_file_rows(conn, rel, old[2:])
+        first = (conn.execute("SELECT max(id) FROM messages").fetchone()[0] or 0) + 1
+        conn.executemany(f"INSERT INTO messages(id,{','.join(_MSG_COLS)}) VALUES (?,{','.join('?' * len(_MSG_COLS))})",
+                         [(first + i, *(r[c] for c in _MSG_COLS)) for i, r in enumerate(rows)])
+        _set_redactions(conn, rel, counts)
+        conn.execute("INSERT OR REPLACE INTO files VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                     (rel, info["chat_id"], info["parent"], info["project"], st.st_size, st.st_mtime_ns, len(rows), nbad, now,
+                      first if rows else None, first + len(rows) - 1 if rows else None))
         parsed, rows_in, bad = parsed + 1, rows_in + len(rows), bad + nbad
         if log and parsed % 200 == 0:
             log(f"research chats: parsed {parsed} transcripts ({rows_in} rows)")
             conn.commit()
     gone = [p for p in have if p not in seen]
     for p in gone:
-        conn.execute("DELETE FROM messages WHERE file=?", (p,))
+        _drop_file_rows(conn, p, have[p][2:])
         conn.execute("DELETE FROM files WHERE path=?", (p,))
         conn.execute("DELETE FROM redactions WHERE source=?", (p,))
     conn.commit()
@@ -426,7 +448,7 @@ def search(conn: sqlite3.Connection, query: str, *, project: str | None = None, 
     """Message hits (deduplicated: a subagent's transcript is often stored twice) and note hits; `project` searches messages only."""
     out: dict[str, list[dict]] = {"messages": [], "notes": []}
     if where in ("all", "messages"):
-        sql = ("SELECT m.ts, m.project, m.role, m.kind, m.tool_name, m.chat_id, m.parent_chat_id, m.file, m.line, "
+        sql = ("SELECT m.id, m.ts, m.project, m.role, m.kind, m.tool_name, m.chat_id, m.parent_chat_id, m.file, m.line, "
                "snippet(messages_fts, 0, '«', '»', '…', 16), c.title, pc.title "
                "FROM messages_fts JOIN messages m ON m.id = messages_fts.rowid LEFT JOIN chats c ON c.id = m.chat_id "
                "LEFT JOIN chats pc ON pc.id = m.parent_chat_id WHERE messages_fts MATCH ?")
@@ -440,12 +462,12 @@ def search(conn: sqlite3.Connection, query: str, *, project: str | None = None, 
         sql += (" ORDER BY m.ts DESC" if sort == "date" else " ORDER BY rank") + " LIMIT ?"
         seen = set()
         for r in _match(conn, sql, [*args, limit * 4], query):
-            key = (r[5], r[2], r[9])
-            if key in seen:
+            h = dict(zip(("id", "ts", "project", "role", "kind", "tool_name", "chat_id", "parent_chat_id", "file", "line", "snippet", "title",
+                          "parent_title"), r))
+            if (h["chat_id"], h["role"], h["snippet"]) in seen:
                 continue
-            seen.add(key)
-            out["messages"].append(dict(zip(("ts", "project", "role", "kind", "tool_name", "chat_id", "parent_chat_id", "file", "line",
-                                              "snippet", "title", "parent_title"), r)))
+            seen.add((h["chat_id"], h["role"], h["snippet"]))
+            out["messages"].append(h)
             if len(out["messages"]) >= limit:
                 break
     if where in ("all", "notes") and not project:
@@ -542,7 +564,7 @@ def pull_index(dest: Path, art: str | None = None, store_root: str | None = None
 
 def ingest(mirror: Path, *, transcripts: Path | None = None, notes: Path | None = None, meta: Path | None = None, index: Path | None = None,
            host: str = "laptop", date: str | None = None, push: bool = True, store_root: str | None = None, evict_free_gb: float | None = 3.0,
-           log=None) -> dict:
+           rebuild: bool = False, log=None) -> dict:
     say = log or (lambda s: print(s, file=sys.stderr))
     transcripts = transcripts or mirror / "transcripts"
     notes = notes if notes is not None else mirror / "notes"
@@ -573,7 +595,7 @@ def ingest(mirror: Path, *, transcripts: Path | None = None, notes: Path | None 
         if meta.is_file():
             md = st.put_artifact(KIND_META, {"kind": "chat-metadata", **src, "chats": len(load_meta(meta))}, file=meta)
             rep["artifacts"]["metadata"] = _preserve(st, md, "metadata", say)
-    conn = open_index(index)
+    conn = open_index(index, rebuild)
     meta_map = load_meta(meta)
     rep["refresh"] = refresh(conn, transcripts, notes if notes.is_dir() else None, meta_map, say)
     for k in ("transcripts", "notes", "metadata"):
@@ -585,16 +607,19 @@ def ingest(mirror: Path, *, transcripts: Path | None = None, notes: Path | None 
     if st is not None:
         snap_dir = index.parent / f".push-{os.getpid()}"
         snap_dir.mkdir(parents=True, exist_ok=True)
-        snap = snap_dir / INDEX_PAYLOAD_NAME
+        snap, packed = snap_dir / INDEX_PAYLOAD_NAME[: -len(".gz")], snap_dir / INDEX_PAYLOAD_NAME
         try:
             conn.execute("VACUUM INTO ?", (str(snap),))
             conn.close()
+            with open(snap, "rb") as src, gzip.GzipFile(packed, "wb", compresslevel=6, mtime=0) as out:
+                shutil.copyfileobj(src, out, 1 << 20)
             s = rep["stats"]
             idx_meta = {"kind": "chat-index", "host": socket.gethostname(), "source_host": host, "date": date, "built_utc": utc_iso(now),
                         "schema": SCHEMA_VERSION, "rows": s["rows"], "coverage": s["coverage"], "redactions": s["redactions"],
-                        "bytes": snap.stat().st_size}
+                        "sqlite_bytes": snap.stat().st_size}
+            snap.unlink()
             refs = {k: v["id"] for k, v in rep["artifacts"].items()}
-            idx = st.put_artifact(KIND_INDEX, idx_meta, refs, file=snap)
+            idx = st.put_artifact(KIND_INDEX, idx_meta, refs, file=packed)
             rep["artifacts"]["index"] = _preserve(st, idx, "index", say)
         finally:
             shutil.rmtree(snap_dir, ignore_errors=True)
@@ -643,6 +668,7 @@ def main(argv: list[str] | None = None) -> int:
     ig.add_argument("--date", default=None, help="meta.date (default: today, UTC)")
     ig.add_argument("--no-push", action="store_true", help="refresh the local index only; nothing goes to the store")
     ig.add_argument("--evict-free-gb", type=float, default=3.0, help="afterwards evict PRESERVED blobs until this much disk is free (0: never)")
+    ig.add_argument("--rebuild", action="store_true", help="start the index from empty (also automatic when SCHEMA_VERSION changed)")
     se = sub.add_parser("search", help="FTS5 query over message text and notes")
     se.add_argument("query")
     se.add_argument("--project", default=None, help="substring of the project (veritor, os, ...); messages only")
@@ -662,7 +688,7 @@ def main(argv: list[str] | None = None) -> int:
     say = lambda s: print(s, file=sys.stderr)  # noqa: E731
     if ns.cmd == "ingest":
         rep = ingest(ns.mirror, transcripts=ns.transcripts, notes=ns.notes, meta=ns.meta, index=ns.index, host=ns.host, date=ns.date,
-                     push=not ns.no_push, store_root=ns.store, evict_free_gb=ns.evict_free_gb or None, log=say)
+                     push=not ns.no_push, store_root=ns.store, evict_free_gb=ns.evict_free_gb or None, rebuild=ns.rebuild, log=say)
         print(json.dumps(rep, indent=2, sort_keys=True, default=str) if ns.json else "\n".join(_ingest_lines(rep)))
         return 0 if rep["preserved"] in (True, None) else 1
     path = index_path(ns.index)
