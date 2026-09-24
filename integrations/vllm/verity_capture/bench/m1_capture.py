@@ -73,7 +73,7 @@ def dump_cos_sin(engine: "va.Engine", out: Path) -> Path | None:
         # (root_policy then fails "no captured cos_sin_cache.npy", which reads as a capture defect).  Observe it in its own dtype
         # under a dtype-qualified name -- never as `cos_sin_cache.npy`, whose readers (compare / replay / root_policy's bf16
         # analytic check) take bf16 words -- and label it; the bf16 path below is unchanged.  The frozen validator still has no
-        # fp16 analytic table (candidate: verity_capture.experimental.fp16_rules.check_cos_sin_words).
+        # fp16 analytic table.
         if buf.dtype != torch.float16:
             return None
         words = buf.detach().contiguous().view(torch.int16).cpu().numpy().view(np.uint16)

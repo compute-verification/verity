@@ -1,0 +1,34 @@
+# Declared entry points of integrations/vllm: the roots of tests/dead_code_census.py and tests/test_no_dead_modules.py.
+#
+# One entry per line (paths relative to integrations/vllm; `#` starts a comment):
+#   <path>.sh or a glob of shells   a shell entry point: every module it runs (`-m mod`, `python path.py`, `<name>.py`, `from mod import`
+#                                   / `import mod` in heredocs and `-c` strings) is live, and so is every shell it names (transitively)
+#   <dir>/                          every module under the directory is a root
+#   <dotted.module>                 a Python entry point
+#
+# A shell entry point is live because it is declared here, not because something imports it.  Add new runners here (or match the rules
+# below); never let the census decide that a runner is dead.  Shells matched by no entry are still never deleted by the census -- a
+# module only such a shell runs stays non-live and must be named in dead_code_keep.json.
+
+# --- rules: every sweep runner and every negatives runner (the adversarial inputs the verifier must reject)
+verity_capture/sweep/*.sh
+**/*_negatives.sh
+**/*_negative_*.sh
+
+# --- pod runtime and acquisition gates
+pod_bootstrap.sh
+verity_vllm/acquire/pod_gate.sh
+verity_vllm/acquire/pod_match_v2.sh
+
+# --- GEN-lane pod runners (their workloads/workload_*.json inputs are kept by name)
+verity_capture/bench/gen_batch_pod.sh
+verity_capture/bench/gen_ovbatch_pod.sh
+verity_capture/bench/gen_ov_sampling_pod.sh
+verity_capture/bench/pod_env_extra.sh
+
+# --- Python entry points
+verity_capture.bench.gen_adversarial        # the ov-adversarial mutation harness: hostile-adapter negatives the sealed checkers must reject
+verity_vllm.research_tools
+verity_capture.sweep.rebuild_digest_gate
+verity_vllm.query.cli
+tests/regression/
