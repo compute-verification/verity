@@ -374,7 +374,7 @@ def _decode(ctx: GkrCtx):
     return prods, sm, X, part, G
 
 
-def build_unit(p=R.NVFP4) -> GkrCtx:
+def build_unit(p=R.NVFP4, max_depth: int | None = None) -> GkrCtx:
     """The chained unit on :class:`GkrCtx`: ``relation.compile_fp4_unit(chain=True)`` line for line, the pins replaced by
     :func:`_decode`, then the committed outputs ``out.ys`` / ``out.yf`` for the chain links."""
     _hint = R._hint
@@ -480,7 +480,64 @@ def build_unit(p=R.NVFP4) -> GkrCtx:
     ctx.sys.outputs = {"y.s": ys, "y.t": t_o, "y.f": yf}
     name = lambda e: ctx.sys.rows[next(iter(e.lin))].name                  # noqa: E731
     ctx.sys.chain = {"c": ["acc.s", "acc.t", "acc.f"], "y": [name(ys), name(t_o), name(yf)]}
+    _flatten(ctx, MAX_DEPTH if max_depth is None else max_depth)
     return ctx
+
+
+#: the unit circuit's product depth bound (``_flatten``).  Every GKR layer costs about the same (all wires pass through it):
+#: depth 1 (67 operand columns, 485 < 512 columns) leaves 2 layers of 4 (4096 VUs, RTX 5090: t.total 0.347 -> 0.274 s;
+#: depth 2, 6 columns: 0.298 s)
+MAX_DEPTH = 1
+
+
+def _flatten(ctx: GkrCtx, max_depth: int) -> int:
+    """Bound the layered circuit's depth by ``max_depth``: an operand of a product (a ``prod`` row or an exported quadratic)
+    that would put it deeper is committed as an ``aux`` column (``ctx.col``: the column and one assertion binding it to the
+    operand).  The witness program keeps computing every product from its original operands (the same values).  A quadratic
+    that restates a ``prod`` row (``export_circuit`` skips it) gets the row's new operands, so it stays a restatement."""
+    rows = ctx.sys.rows
+    depth: dict[int, int] = {}
+    scope, ctx.scope = ctx.scope, "flat"
+    made = 0
+
+    def dep(e: Expr) -> int:
+        return max((depth.get(j, 0) for j in e.lin), default=0)
+
+    def fix(name: str, a: Expr, b: Expr) -> tuple[Expr, Expr]:
+        nonlocal made
+        if 1 + max(dep(a), dep(b)) <= max_depth:
+            return a, b
+        if dep(a) >= max_depth:
+            a = ctx.col(f"{name}.a", a)
+            made += 1
+        if dep(b) >= max_depth:
+            b = ctx.col(f"{name}.b", b)
+            made += 1
+        return a, b
+
+    mirrors: dict[int, list[Quadratic]] = {}
+    for q in ctx.sys.quadratic:
+        c = q.c
+        if len(c.lin) == 1 and c.c == 0 and next(iter(c.lin.values())) == 1:
+            j = next(iter(c.lin))
+            if rows[j].kind == "prod" and rows[j].spec == (q.a, q.b):
+                mirrors.setdefault(j, []).append(q)
+    mirrored = {id(q) for qs in mirrors.values() for q in qs}
+    for r in rows[:len(rows)]:
+        if r.kind != "prod":
+            continue
+        a, b = r.spec
+        na, nb = fix(r.name, a, b)
+        if na is not a or nb is not b:
+            r.spec = (na, nb)
+            for q in mirrors.get(r.idx, []):
+                q.a, q.b = na, nb
+        depth[r.idx] = 1 + max(dep(na), dep(nb))
+    for q in ctx.sys.quadratic:
+        if id(q) not in mirrored:
+            q.a, q.b = fix(q.name, q.a, q.b)
+    ctx.scope = scope
+    return made
 
 
 def build_epilogue(p=R.NVFP4) -> GkrCtx:
