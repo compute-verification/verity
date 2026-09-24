@@ -79,6 +79,9 @@ struct BareSet {
     /// (97 = never, unless no step is inside).
     #[arg(long, env = "VERITY_TCDOT_VU_SOFTWARE_THRESHOLD", default_value_t = 8)]
     vu_software_threshold: u32,
+    /// vector_run's input layout; this guest reads VU chunks only (`bare-execute --layout indexed` is the stock host's).
+    #[arg(long = "layout", default_value = "chunks", value_parser = ["chunks"])]
+    _layout: String,
 }
 
 #[derive(Subcommand)]
@@ -140,6 +143,9 @@ enum Command {
         /// As `bare-prove`'s (0 = every VU through `bare::check_one`, 97 = per-step routing wherever a step is inside).
         #[arg(long, env = "VERITY_TCDOT_VU_SOFTWARE_THRESHOLD", default_value_t = 8)]
         vu_software_threshold: u32,
+        /// As `BareSet`'s: VU chunks only.
+        #[arg(long = "layout", default_value = "chunks", value_parser = ["chunks"])]
+        _layout: String,
     },
 }
 
@@ -564,6 +570,7 @@ async fn cmd_negatives(instances: PathBuf, manifest_sha256: String, dataset: Str
             hi: i + 1,
             vus_per_read: 1,
             vu_software_threshold,
+            _layout: "chunks".to_string(),
         };
         let (claimed, _) = execute_set(&client, &set, None).await?;
         let claimed_verdict = claimed.outcome.verdict;
@@ -637,7 +644,7 @@ async fn main() -> Result<()> {
             cmd_prove(set, out_dir, reps, warmup_vus, skip_execute).await
         }
         Command::Verify { proof, statement } => cmd_verify(proof, statement).await,
-        Command::BareNegatives { instances, manifest_sha256, dataset, vu_software_threshold } => {
+        Command::BareNegatives { instances, manifest_sha256, dataset, vu_software_threshold, .. } => {
             cmd_negatives(instances, manifest_sha256, dataset, vu_software_threshold).await
         }
     }
