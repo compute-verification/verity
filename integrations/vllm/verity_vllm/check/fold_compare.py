@@ -55,7 +55,6 @@ from verity_vllm.observe.log import read_log
 from verity_vllm.observe.resolver import Profile
 
 REPO = Path(__file__).resolve().parents[2]
-DEFAULT_RECORD = Path("/Users/danielreuter/projects/veritor/out/scale/e8/live/V5-N32x16-1req-bex0-inc-sc1")   # B0 only
 DEFAULT_COS_SIN = REPO / "fixtures" / "B0-divergence-20260907T1604Z" / "layers.0.self_attn.rotary_emb" / "cos_sin_cache.npy"
 HF_GLOB = str(Path.home() / ".cache" / "huggingface" / "hub" / "models--HuggingFaceTB--SmolLM2-135M" / "snapshots" / "*" / "model.safetensors")
 
@@ -873,7 +872,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--log", required=True)
     ap.add_argument("--snapshots", default=None, help="directory with snapshots.json, values/, tokens.json")
     ap.add_argument("--profile", required=True)
-    ap.add_argument("--record", default=None, help="accepted record dir with adapter/*/ru/*/boundary.json (default: the B0 record for the B0 profile)")
+    ap.add_argument("--record", default=None, help="accepted record dir with adapter/*/ru/*/boundary.json (default: none, the record comparison is skipped)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--strict", action="store_true")
     ap.add_argument("--no-program", action="store_true", help="skip Program() (comparison 3 is then skipped)")
@@ -888,7 +887,7 @@ def main(argv: list[str] | None = None) -> int:
     profile = load_profile(a.profile)
     case = (profile.notes or {}).get("case", "B0")
     repo = (profile.config or {}).get("model")
-    record = Path(a.record) if a.record else (DEFAULT_RECORD if case == "B0" and DEFAULT_RECORD.exists() else None)
+    record = Path(a.record) if a.record else None
     result = fold_log(a.log, profile, strict=True if a.strict else None, with_program=not a.no_program)
     report: dict[str, Any] = {"log": a.log, "profile": a.profile, "case": case, "model": repo, "fold": summarize(result),
                               "digest": result.digest, "fold_seconds": round(time.time() - t0, 3)}

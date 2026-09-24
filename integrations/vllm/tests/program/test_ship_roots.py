@@ -9,7 +9,6 @@ Torch-free: text checks on the two files + one `ship.sh --pack` into a temp dir,
 from __future__ import annotations
 
 import json
-import os
 import re
 import shlex
 import shutil
@@ -62,10 +61,9 @@ def test_tracked_hf_configs_are_the_roles_the_profiles_read():
 @pytest.mark.skipif(shutil.which("git") is None or shutil.which("tar") is None, reason="needs git + tar")
 def test_ship_pack_carries_out_gen_hf_configs(tmp_path):
     """`ship.sh --pack <dir>` (the runner's snapshot form; the same ROOTS as the in-place ship) must put every tracked hf config into
-    src.tgz -- from this worktree when it has the directory, else from SHIP_FALLBACK_REPO, recorded in EXPORT.json."""
-    fallback = os.environ.get("SHIP_FALLBACK_REPO", "/Users/danielreuter/projects/veritor")
-    if not HF_DIR.is_dir() and not (Path(fallback) / "data" / "hf_configs").is_dir():
-        pytest.skip("neither this checkout nor the fallback repo has data/hf_configs")
+    src.tgz, from this worktree."""
+    if not SHIP.is_file() or not HF_DIR.is_dir():
+        pytest.skip("this checkout has no record_v5/ship.sh or data/hf_configs")
     if subprocess.run(["git", "-C", str(REPO), "rev-parse", "HEAD"], capture_output=True).returncode != 0:
         pytest.skip("not a git checkout (pod tree)")
     out = tmp_path / "pack"
@@ -75,9 +73,5 @@ def test_ship_pack_carries_out_gen_hf_configs(tmp_path):
         names = set(tf.getnames())
     for role in ROLES:
         assert f"data/hf_configs/{role}.config.json" in names, f"{role} not in the shipped package"
-    export = json.loads((out / "EXPORT.json").read_text())
-    fb = export.get("fallback_roots")
-    if HF_DIR.is_dir():
-        assert fb is None or "data/hf_configs" not in fb["roots"], "the worktree has the directory: it must ship from HERE, not the fallback"
-    else:
-        assert fb is not None and "data/hf_configs" in fb["roots"], "shipped from the fallback repo: EXPORT.json must record it"
+    fb = json.loads((out / "EXPORT.json").read_text()).get("fallback_roots")
+    assert fb is None or "data/hf_configs" not in fb["roots"], "the worktree has the directory: it must ship from HERE, not a fallback repo"
