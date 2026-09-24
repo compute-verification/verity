@@ -516,16 +516,17 @@ def add_input_claim(acc: Acc, rho: Ext, seg_off: int, seg: Segment, x_pt: list[E
 
 def add_input_claims(acc: Acc, rhos: tuple[Ext, Ext], seg_off: int, seg: Segment, x_pts: tuple[list[Ext], list[Ext]],
                      c_pt: list[Ext], values: tuple[Ext, Ext]) -> None:
-    """Both of a segment's input claims (same copy point ``c_pt``) as one rank-1 pass:
-    ``eq(c)·(ρ_l eq(l, x) + ρ_r eq(r, x))``, the same ``a`` as two ``add_input_claim`` calls."""
+    """Both phase-2 claims of a segment (one copy point): ``eq(c) ⊗ (ρ_l eq(x_l) + ρ_r eq(x_r))`` is one rank-1 update,
+    so the segment is read and written once."""
     dev = acc.device
     if _field._fast_rank1_add is None or dev.type != "cuda":
         for rho, x_pt, value in zip(rhos, x_pts, values):
             add_input_claim(acc, rho, seg_off, seg, x_pt, c_pt, value)
         return
     ec = eq_table(c_pt, dev)[: seg.units]
-    ex = [ext_mul(eq_table(x_pt, dev)[: seg.ncols], t_ext(rho, dev)) for rho, x_pt in zip(rhos, x_pts)]
-    _field._fast_rank1_add(acc.seg_view(seg_off, seg.units, seg.ncols), ec, (ex[0] + ex[1]) % P)
+    ex = (ext_mul(eq_table(x_pts[0], dev)[: seg.ncols], t_ext(rhos[0], dev))
+          + ext_mul(eq_table(x_pts[1], dev)[: seg.ncols], t_ext(rhos[1], dev))) % P
+    _field._fast_rank1_add(acc.seg_view(seg_off, seg.units, seg.ncols), ec, ex)
     for rho, value in zip(rhos, values):
         acc.b = e_add(acc.b, e_mul(rho, value))
 
