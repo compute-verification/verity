@@ -487,6 +487,8 @@ struct ExecuteOutput {
     cycle_tracker: BTreeMap<String, u64>,
     gas: Option<u64>,
     syscalls: BTreeMap<String, u64>,
+    /// Executed RISC-V instructions by opcode (non-zero only): with SP1's per-chip trace widths, the proving cost.
+    opcodes: BTreeMap<String, u64>,
     execute_seconds: f64,
     statement_bytes: usize,
     witness_bytes: usize,
@@ -621,6 +623,12 @@ async fn execute<P: Prover>(
         .filter(|(_, count)| **count > 0)
         .map(|(code, count)| (format!("{code:?}"), *count))
         .collect();
+    let opcodes = report
+        .opcode_counts
+        .iter()
+        .filter(|(_, count)| **count > 0)
+        .map(|(op, count)| (format!("{op:?}"), *count))
+        .collect();
     Ok(ExecuteOutput {
         backend: BACKEND,
         outcome,
@@ -628,6 +636,7 @@ async fn execute<P: Prover>(
         cycle_tracker,
         gas: report.gas(),
         syscalls,
+        opcodes,
         execute_seconds,
         statement_bytes: sizes.0,
         witness_bytes: sizes.1,
