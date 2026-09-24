@@ -161,9 +161,14 @@ def main(argv=None) -> int:
     st2 = s2.stream(0)
     st2.begin(stmt)
     st2.challenge(b"zc/r", os.urandom(32), 32)
+    # while the dropped session is open (hello.json, no session.json) its statement is unknown: no claim at all
+    vs_open = run_mod.verify_session(d_h, [store / sid], args.device, store)
+    check("E_open_session_blocks_claim", vs_open["unrecorded_sessions"] == [s2.id] and vs_open["job_claimed_log2"] is None,
+          {"unrecorded": vs_open["unrecorded_sessions"], "basis": vs_open["items"][0].get("claim", {}).get("basis")})
+    s2.ctrl.shutdown(socket.SHUT_RDWR)
     s2.ctrl.close()
     for _ in range(100):
-        if (store / s2.id / "session.json").exists():
+        if (store / s2.id / "verdict.json").exists():          # written after session.json
             break
         time.sleep(0.1)
     vs = run_mod.verify_session(d_h, [store / sid], args.device, store)
