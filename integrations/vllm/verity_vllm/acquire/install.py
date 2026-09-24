@@ -9,6 +9,8 @@
     apply_plan_to_committer(committer, plan)                    v1's `NativeHostCommitter` (and its native_collect subclass) takes its
                                                                module set and consumer-input set from the plan instead of the class tables;
                                                                the rest of the committer (arena, hashing, roots, sources) is untouched
+    plan_selection(plan, model)                                 that module set and consumer-input set, shared with the compiled rows'
+                                                               record ops (`CompiledGraphSource.wrap_model`)
 
 A plan with an UNSUPPORTED Value is refused by name (`IncompletePlan`) unless the caller says `refuse_incomplete=False` -- fail closed.
 `sink(site_key, tensor)` receives the observed tensor at each site; `OccurrenceSink` counts occurrences and records shapes only (no
@@ -182,30 +184,55 @@ def install_from_plan(plan: AcquisitionPlan | Mapping[str, Any], model: Any, run
 # the collector adapter (ACQUIRE_ENGINE=v2): v1's committer takes its hook sets from the plan
 # ---------------------------------------------------------------------------------------------------------------------------------
 
-def apply_plan_to_committer(committer: Any, plan: AcquisitionPlan | Mapping[str, Any]) -> dict[str, Any]:
-    """Replace the committer's class-table decisions with the plan's: `_modules` = the producer_output sites' modules (runtime order),
-    `plan_inputs` = the consumer_input sites' modules.  The promoted-member arming (`acquire_inputs` bytes per token, `promoted_input_bindings`)
-    stays the manifest's (commit_delta sets it); the plan must name every armed consumer, else the plan is refused.  Returns a record."""
-    hooks, deferred, unsupported = _sites_of(plan)
+def plan_selection(plan: AcquisitionPlan | Mapping[str, Any], model: Any) -> tuple[list[str], list[str]]:
+    """The module boundaries the plan hooks on `model`: (producer_output modules in runtime order, consumer_input modules sorted) -- the
+    ONE selection both the committer (`apply_plan_to_committer`) and the compiled rows' record ops (`CompiledGraphSource.wrap_model`)
+    take.  Refuses (`IncompletePlan`) a plan with UNSUPPORTED Values or with hook sites that are not modules of `model`."""
+    hooks, _deferred, unsupported = _sites_of(plan)
     if unsupported:
         raise IncompletePlan(f"{len(unsupported)} unsupported Value(s): " + "; ".join(f"{u.get('value')}: {u.get('why')}" for u in unsupported[:6]))
+    if model is None:
+        raise IncompletePlan("no model to install on")
+    order = {name: i for i, (name, _m) in enumerate(model.named_modules())}
+    out_mods = {s.module for s in hooks if s.kind == "producer_output"}
+    in_mods = {s.module for s in hooks if s.kind == "consumer_input"}
+    absent = sorted(m for m in out_mods if m not in order) + sorted(m for m in in_mods if m not in order)
+    if absent:
+        raise IncompletePlan(f"plan hook sites not in the built model: {absent[:8]}")
+    return sorted(out_mods, key=lambda n: order[n]), sorted(in_mods)
+
+
+def _values_at(plan: AcquisitionPlan | Mapping[str, Any], site: Site) -> list[str]:
+    if isinstance(plan, AcquisitionPlan):
+        return plan.values_at(site)
+    return next((list(h.get("values") or []) for h in (plan.get("hooks") or []) if (h["module"], h["kind"], h["slot"]) == site.key()), [])
+
+
+def apply_plan_to_committer(committer: Any, plan: AcquisitionPlan | Mapping[str, Any]) -> dict[str, Any]:
+    """Replace the committer's class-table decisions with the plan's (`plan_selection`): `_modules` = the producer_output sites' modules
+    (runtime order), `plan_inputs` = the consumer_input sites' modules.  The promoted-member arming (`acquire_inputs` bytes per token,
+    `promoted_input_bindings`) stays the manifest's (commit_delta sets it); the plan must name every armed consumer, else the plan is refused.
+    A VERITY_SKIP ablation (`committer.skip_classes`) is applied to THIS selection (`apply_skip`, refused by name when it cannot be); the
+    record names the dropped modules and the Values left unacquired.  Returns a record."""
+    hooks, deferred, _unsupported = _sites_of(plan)
     model = getattr(committer, "model", None)
     if model is None:
         raise IncompletePlan("the committer has no model to install on")
-    mods = dict(model.named_modules())
-    out_mods = [s.module for s in hooks if s.kind == "producer_output"]
-    in_mods = {s.module for s in hooks if s.kind == "consumer_input"}
-    absent = sorted(m for m in out_mods if m not in mods) + sorted(m for m in in_mods if m not in mods)
-    if absent:
-        raise IncompletePlan(f"plan hook sites not in the built model: {absent[:8]}")
+    out_mods, in_mods = plan_selection(plan, model)
     armed = set(getattr(committer, "acquire_inputs", {}) or {})
-    if not armed <= in_mods:
-        raise IncompletePlan(f"the manifest arms consumer inputs the plan does not name: {sorted(armed - in_mods)[:8]}")
-    order = {name: i for i, (name, _m) in enumerate(model.named_modules())}
-    selected = [(m, mods[m]) for m in sorted(set(out_mods), key=lambda n: order[n])]
+    if not armed <= set(in_mods):
+        raise IncompletePlan(f"the manifest arms consumer inputs the plan does not name: {sorted(armed - set(in_mods))[:8]}")
+    mods = dict(model.named_modules())
     before = [n for n, _m in committer._modules]
-    committer._modules = selected
+    committer._modules = [(m, mods[m]) for m in out_mods]
     committer.plan_inputs = set(in_mods)
     committer.name = f"{committer.name}+plan"
-    return {"engine": "v2", "modules_before": before, "modules_after": [n for n, _m in selected], "plan_inputs": sorted(in_mods),
-            "deferred_sites": [s.key() for s in deferred], "runner_return_sites": [s.key() for s in hooks if s.kind == "runner_return"]}
+    rec = {"engine": "v2", "modules_before": before, "modules_after": list(out_mods), "plan_inputs": list(in_mods),
+           "deferred_sites": [s.key() for s in deferred], "runner_return_sites": [s.key() for s in hooks if s.kind == "runner_return"]}
+    if getattr(committer, "skip_classes", None):
+        dropped = committer.apply_skip()
+        gone = {n for names in dropped.values() for n in names}
+        rec["modules_after"] = [n for n, _m in committer._modules]
+        rec["skip"] = {"classes": sorted(dropped), "modules": dropped,
+                       "values_unacquired": sorted(v for s in hooks if s.kind == "producer_output" and s.module in gone for v in _values_at(plan, s))}
+    return rec

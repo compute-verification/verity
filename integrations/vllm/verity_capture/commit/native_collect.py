@@ -802,6 +802,7 @@ class NativeCollectCommitter(NativeHostCommitter):
     def install(self) -> None:
         if self.installed:
             return
+        self._check_skip()
         self._start_worker()
         for src in self.sources:
             src.install()

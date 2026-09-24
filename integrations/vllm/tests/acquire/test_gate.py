@@ -2,6 +2,8 @@
 tree, no engine), and `compare_sites` names every difference between v1's hook set and the plan's site set with its table."""
 from __future__ import annotations
 
+import types
+
 import pytest
 
 torch = pytest.importorskip("torch")
@@ -9,7 +11,7 @@ nn = torch.nn
 
 from verity_capture.commit import manifest_format as MF  # noqa: E402
 from verity_capture.commit import required_manifest as RM  # noqa: E402
-from verity_capture.experimental.commit_integ.native_host import ACQUIRE_CLASSES, ACQUIRE_INPUT_CLASSES, SKIP_CLASSES, NativeHostCommitter  # noqa: E402
+from verity_capture.experimental.commit_integ.native_host import ACQUIRE_CLASSES, ACQUIRE_INPUT_CLASSES, SKIP_CLASSES, NativeHostCommitter, SkipRefused  # noqa: E402
 from verity_vllm.acquire import gate as G  # noqa: E402
 from verity_vllm.acquire.correspondence import RUNNER_PATH, AnnotationCorrespondence, runtime_tree_of  # noqa: E402
 from verity_vllm.acquire.install import apply_plan_to_committer  # noqa: E402
@@ -169,3 +171,126 @@ def test_apply_plan_to_committer_replaces_the_class_tables():
     c2 = offline_committer(model, runner, acquire_inputs={"layers.0.post": 8})
     with pytest.raises(Exception, match="arms consumer inputs the plan does not name"):
         apply_plan_to_committer(c2, plan)
+
+
+def promoted_plan(model, runner):
+    """v1's Values minus `norm`, plus a promoted member of `layers.1.mixer` observed at the input of `layers.1.post` (an RMSNorm)."""
+    rows = [r for r in rows_matching_v1() if r["op_path"] != "norm"]
+    rows.append(row("instance_outputs", "layers.1.mixer", RM.PROMOTED_MEMBER, **RM.promoted_annotations({"rows": 1, "width": 4, "dtype": "bf16", "spec": "Add_v1", "consumers": ["layers.1.post"]})))
+    man = manifest(rows)
+    plan = acquisition_plan(man, AnnotationCorrespondence(runtime_tree_of(model, runner, source="test")))
+    assert plan.complete
+    return man, plan
+
+
+def engine_committer():
+    """The committer's construction path (an engine: model + runner), without CUDA: no explicit arena, a given geometry digest."""
+    return NativeHostCommitter(types.SimpleNamespace(model=Model(), runner=Runner()), run_id="skip-test", arena_bytes=None, geo_digest=b"g" * 32)
+
+
+NORMS = ["layers.0.input_layernorm", "layers.0.post", "layers.1.input_layernorm", "layers.1.post"]
+
+
+def test_verity_skip_is_applied_to_the_plan_selection(monkeypatch):
+    """Under v2 the plan replaces the module list, so the skip is applied to the PLAN's selection: the class's producer_output hooks go,
+    a consumer-input site on a dropped module stays (the promoted member there is `layers.1.mixer`'s output), the record names the Values
+    left unacquired, and the name says what was dropped."""
+    monkeypatch.setenv("VERITY_SKIP", "RMSNorm")
+    model, runner = Model(), Runner()
+    man, plan = promoted_plan(model, runner)
+    c = offline_committer(model, runner, acquire_inputs=MF.promoted_observation(man)["consumers"])
+    rec = apply_plan_to_committer(c, plan)
+    after = [n for n, _m in c._modules]
+    assert rec["skip"]["modules"] == {"RMSNorm": NORMS} and c.skipped == {"RMSNorm": NORMS}
+    assert after == rec["modules_after"] == ["embed_tokens", "layers.0.qkv_proj", "layers.0.o_proj", "layers.1.qkv_proj", "layers.1.o_proj", "logits_processor"]
+    assert [n for n, _m in c._input_only_modules()] == ["layers.1.post"]
+    assert rec["skip"]["values_unacquired"] == sorted(f"layers.{i}.{v}" for i in range(2) for v in ("input_layernorm/out", "post/0", "post/1"))
+    assert c.name.endswith("+plan-skip_RMSNorm")
+    c._check_skip()
+
+
+@pytest.mark.parametrize("skip, why", [("Residualizer", "match none of the"), ("RMSNorm,Typo", r"\['Typo'\] match none of the"),
+                                       ("Sampler", "is the runner's sampler")])
+def test_verity_skip_that_cannot_happen_is_refused(monkeypatch, skip, why):
+    """A class the plan selects no module of (the mixer carries no Value; a typo) or the runner's sampler (its ids come from the sample()
+    wrap, which closes every step) is refused by name -- never a run whose name claims a skip that did not happen."""
+    monkeypatch.setenv("VERITY_SKIP", skip)
+    model, runner = Model(), Runner()
+    man, plan = promoted_plan(model, runner)
+    c = offline_committer(model, runner, acquire_inputs=MF.promoted_observation(man)["consumers"])
+    with pytest.raises(SkipRefused, match=why):
+        apply_plan_to_committer(c, plan)
+    assert "-skip_" not in c.name and c.skipped is None
+
+
+def test_verity_skip_follows_the_engine_and_install_refuses_an_unapplied_or_undone_skip(monkeypatch):
+    monkeypatch.setenv("VERITY_SKIP", "RMSNorm")
+    monkeypatch.setenv("ACQUIRE_ENGINE", "v1")                  # the oracle: the class tables are the selection of record
+    c1 = engine_committer()
+    assert c1.skipped == {"RMSNorm": NORMS + ["norm"]} and c1.name.endswith("-skip_RMSNorm")
+    monkeypatch.setenv("ACQUIRE_ENGINE", "v2")                  # the plan replaces the selection: nothing is applied at construction
+    c2 = engine_committer()
+    assert c2.skipped is None and "-skip_" not in c2.name
+    with pytest.raises(SkipRefused, match="never applied"):
+        c2.install()
+    man, plan = promoted_plan(c2.model, c2.runner)
+    c2.acquire_inputs = dict(MF.promoted_observation(man)["consumers"])
+    apply_plan_to_committer(c2, plan)
+    c2._modules.append(("layers.0.post", dict(c2.model.named_modules())["layers.0.post"]))   # re-added after the skip (manifest extension)
+    with pytest.raises(SkipRefused, match="selected again at install"):
+        c2.install()
+    assert not c2.installed
+
+
+def recorded(monkeypatch, cs, src):
+    """The names the compiled record op sees (the op body dispatches to the live source's `_record`)."""
+    seen: list[str] = []
+    monkeypatch.setattr(cs, "_SRC", src)
+    monkeypatch.setattr(src, "_record", lambda x, nid: seen.append(src.names[nid & cs.BASE_MASK]))
+    return seen
+
+
+@pytest.mark.parametrize("skip", ["", "RMSNorm"])
+def test_compiled_source_wraps_the_committers_plan_selection(monkeypatch, tmp_path, skip):
+    """Compiled rows' record ops (wrapped before vLLM compiles) are the committer's plan selection under v2 -- not the class tables (which
+    would record `norm`, a module the plan does not select) -- with or without a skip; the plan derived from the manifest at wrap time
+    is the committer's plan (same digest)."""
+    from verity_capture.experimental.commit_integ import compiled_source as cs
+
+    cs._register_op()
+    monkeypatch.setenv("ACQUIRE_ENGINE", "v2")
+    monkeypatch.setenv("VERITY_SKIP", skip)
+    model, runner = Model(), Runner()
+    man, plan = promoted_plan(model, runner)
+    c = offline_committer(model, runner, acquire_inputs=MF.promoted_observation(man)["consumers"])
+    apply_plan_to_committer(c, plan)
+    src = cs.CompiledGraphSource(rows=4)
+    src.use_plan(man, tmp_path)
+    src.wrap_model(model, runner)
+    assert src.plan.digest == plan.digest and (tmp_path / "acquisition_plan.json").is_file()
+    assert src.selection["outputs"] == [n for n, _m in c._modules] and "norm" not in src.wrapped
+    assert src.selection["inputs"] == ["embed_tokens", "layers.1.post"]
+    assert set(src.selection["outputs"]).isdisjoint(NORMS) == bool(skip)
+    src.check_selection(c)
+    seen = recorded(monkeypatch, cs, src)
+    x = torch.randn(2, 4)
+    model.layers[1].post(x, x)
+    model.layers[0].qkv_proj(x)
+    assert seen == (["layers.1.post/in"] if skip else ["layers.1.post/in", "layers.1.post/0", "layers.1.post/1"]) + ["layers.0.qkv_proj"]
+
+
+def test_compiled_source_refuses_without_a_plan_or_off_the_committers_selection(monkeypatch):
+    from verity_capture.experimental.commit_integ import compiled_source as cs
+
+    cs._register_op()
+    monkeypatch.setenv("ACQUIRE_ENGINE", "v2")
+    model, runner = Model(), Runner()
+    with pytest.raises(RuntimeError, match="no plan or required-value manifest was passed in"):
+        cs.CompiledGraphSource(rows=4).wrap_model(model, runner)
+    assert not any("forward" in m.__dict__ for _n, m in model.named_modules())
+    man, plan = promoted_plan(model, runner)
+    src = cs.CompiledGraphSource(rows=4)
+    src.wrap_model(model, runner, plan=plan)
+    c = offline_committer(model, runner)                        # the class tables' selection: not the plan's
+    with pytest.raises(RuntimeError, match="not the committer's plan selection"):
+        src.check_selection(c)
