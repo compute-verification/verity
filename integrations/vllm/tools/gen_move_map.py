@@ -543,6 +543,10 @@ REWRITE pod_bootstrap.sh :: verity_vllm_from_tree, verity_capture_from_tree, => 
 REWRITE tests/test_pod_bootstrap.py :: "verity_capture_from_tree", "research_telemetry_from_tree", "numpy_import", "no_old_tree_on_path"): => "research_telemetry_from_tree", "numpy_import", "no_old_tree_on_path"):
 REWRITE tests/test_pod_bootstrap.py :: "verity_vllm_from_tree", "verity_capture_from_tree", "research_telemetry_from_tree", "numpy_import"): => "verity_vllm_from_tree", "research_telemetry_from_tree", "numpy_import"):
 REWRITE verity_capture/tests/test_source_identity.py :: def test_hidden_gpu_refuses_a_verity_capture_already_imported_from_another_tree( => def test_hidden_gpu_refuses_a_verity_vllm_already_imported_from_another_tree(
+# the numerics climb to the integration root through a local `here` (dirname of the file's dir) inline in a join, which the anchored
+# pass does not follow: verity_vllm_numerics/ -> verity_vllm/program/numerics/ is two levels deeper
+REWRITE verity_vllm_numerics/fa2_relation.py :: return os.path.join(os.path.dirname(here), "fixtures", => return os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(here))), "fixtures",
+REWRITE verity_vllm_numerics/rms_relation.py :: fixtures = os.path.join(os.path.dirname(here), "fixtures") => fixtures = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(here))), "fixtures")
 # query/correspondence.py becomes correspondence/reader_for_query.py: the query lint's inventory of query/*.py loses it
 REWRITE tests/query/test_lint.py :: {"program_view.py", "correspondence.py", "module_body.py", => {"program_view.py", "module_body.py",
 """)
