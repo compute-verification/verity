@@ -44,7 +44,6 @@ from .field import (
     W,
     e_add,
     e_mul,
-    e_scale,
     e_sub,
     eq_table,
     ext_mul,
@@ -52,7 +51,6 @@ from .field import (
     mm_mod,
     py_ext,
     t_ext,
-    t_exts,
 )
 from .gkr import LayerClaim, Reader, VerifyError
 from .logup import LeafClaim
@@ -397,34 +395,80 @@ def add_input_claim(acc: Acc, rho: Ext, seg_off: int, seg: Segment, x_pt: list[E
     acc.b = e_add(acc.b, e_mul(rho, value))
 
 
+@dataclass
+class _LookupPlan:
+    """The challenge-independent part of one segment's queries into one table, in the CSR order of the scatter:
+    per query ``j`` and table column ``k`` the constant ``konst[j, k]``, and per (query, input column) term ``t``
+    (sorted by (idx, j)) its coefficients ``coef[t, k]``, so that ``z - Σ_k β^k konst[j, k]`` and
+    ``-Σ_k β^k coef[t, k]`` are two small device reductions against the β powers."""
+    q_t: int
+    konst: torch.Tensor     # (q_t, K) int64 mod p
+    coef: torch.Tensor      # (T, K) int64 mod p
+    tj: torch.Tensor        # (T,) int32: the term's query
+    tidx: torch.Tensor      # (T,) int64: the term's input column
+    ptr: torch.Tensor       # (ncols + 1,) int32: CSR row pointer over input columns
+
+
+_LOOKUP_PLANS: dict = {}
+
+
+def _lookup_plan(circ: Circuit, table: Table, dev) -> _LookupPlan | None:
+    key = (circ.hash, table.name, table.cols, dev.type, dev.index)
+    if key in _LOOKUP_PLANS:
+        return _LOOKUP_PLANS[key]
+    qs = table_queries(circ, table.name)
+    plan = None
+    if qs:
+        K = max(len(qu.cols) for qu in qs)
+        konst = torch.zeros((len(qs), K), dtype=torch.int64)
+        terms: dict[tuple[int, int], list[int]] = {}
+        for j, qu in enumerate(qs):
+            for kk, lin in enumerate(qu.cols):
+                konst[j, kk] = lin.konst % P
+                for idx, coef in lin.terms:
+                    row = terms.setdefault((j, idx), [0] * K)
+                    row[kk] = (row[kk] + coef) % P
+        keys = sorted(terms, key=lambda k: (k[1], k[0]))
+        counts = torch.zeros((circ.ncols + 1,), dtype=torch.int64)
+        for (_j, idx) in keys:
+            counts[idx + 1] += 1
+        plan = _LookupPlan(len(qs), konst.to(dev),
+                           torch.tensor([terms[k] for k in keys], dtype=torch.int64).reshape(len(keys), K).to(dev),
+                           torch.tensor([j for j, _ in keys], dtype=torch.int32, device=dev),
+                           torch.tensor([i for _, i in keys], dtype=torch.int64, device=dev),
+                           torch.cumsum(counts, dim=0).to(torch.int32).to(dev))
+    _LOOKUP_PLANS[key] = plan
+    return plan
+
+
+def _beta_combine(m: torch.Tensor, bs: torch.Tensor) -> torch.Tensor:
+    """``Σ_k m[:, k] · β^k`` mod p, (R, 6), for base coefficients ``m`` (R, K) in [0, p)."""
+    out = torch.zeros((m.shape[0], DEG), dtype=torch.int64, device=m.device)
+    for kk in range(m.shape[1]):
+        out = (out + m[:, kk: kk + 1] * bs[kk]) % P
+    return out
+
+
 def add_lookup_claim(acc: Acc, rho: Ext, inst: Instance, seg_offs: list[int], table_off: int, table: Table, ch, n: int, c: LeafClaim) -> None:
     dev = acc.device
     z, beta = ch
     eqt = eq_table(c.rho, dev, out_dtype=torch.int32)                 # (2^n, 6), written once in int32
     bs = logup.beta_powers(beta, table.cols, dev)                     # (cols, 6)
-    bs_py = [py_ext(b) for b in bs]
     lam_t = t_ext(c.lam, dev)
     rho_t = t_ext(rho, dev)
     rl_t = t_ext(e_mul(rho, c.lam), dev)
+    zt = t_ext(z, dev)
     konst = torch.zeros((DEG,), dtype=torch.int64, device=dev)
     base = 0
     for si, s in enumerate(inst.segs):
-        qs = table_queries(s.circ, table.name)
-        q_t = len(qs)
-        if q_t == 0:
+        plan = _lookup_plan(s.circ, table, dev)
+        if plan is None:
             continue
+        q_t = plan.q_t
         v = acc.seg_view(seg_offs[si], s.units, s.ncols)
         # per query the constant part of  z - Σ_k β^k lin_k  and the per-column coefficients -Σ_k β^k coef_{k,idx}
-        csts = []
-        terms: dict[tuple[int, int], Ext] = {}                        # (j, idx) -> -Σ_k β^k coef_{k, idx}
-        for j, qu in enumerate(qs):
-            cst = z
-            for kk, lin in enumerate(qu.cols):
-                cst = e_sub(cst, e_scale(bs_py[kk], lin.konst))
-                for idx, coef in lin.terms:
-                    terms[(j, idx)] = e_sub(terms.get((j, idx), ZERO), e_scale(bs_py[kk], coef))
-            csts.append(cst)
-        cst_t = t_exts(csts, dev)                                      # (q_t, 6)
+        cst_t = (zt - _beta_combine(plan.konst, bs)) % P                # (q_t, 6)
+        tvals = (-_beta_combine(plan.coef, bs)) % P                     # (T, 6), the terms in CSR order
         e_all = eqt[base: base + s.units * q_t].view(s.units, q_t, DEG)
         if _field._fast_scatter is not None and dev.type == "cuda":
             # konst += Σ_u Σ_j e[u, j] (1 + λ cst_j)   (p = 1 for every query leaf)
@@ -433,18 +477,10 @@ def add_lookup_claim(acc: Acc, rho: Ext, inst: Instance, seg_offs: list[int], ta
             K[:, 0] = (K[:, 0] + 1) % P
             konst = (konst + ext_mul(S, K).sum(dim=0)) % P
             # v[u, idx] += Σ_j e[u, j] · (ρ λ C[j, idx])   as a CSR scatter over the (query, column) terms
-            keys = sorted(terms, key=lambda k: (k[1], k[0]))
-            counts = torch.zeros((s.ncols + 1,), dtype=torch.int64)
-            for (_j, idx) in keys:
-                counts[idx + 1] += 1
-            ptr = torch.cumsum(counts, dim=0).to(torch.int32).to(dev)
-            tj = torch.tensor([j for j, _ in keys], dtype=torch.int32, device=dev)
-            tc = ext_mul(t_exts([terms[k] for k in keys], dev), rl_t)  # (T, 6)
-            _field._fast_scatter(e_all, v, ptr, tj, tc)
+            _field._fast_scatter(e_all, v, plan.ptr, plan.tj, ext_mul(tvals, rl_t))
         else:
             C = torch.zeros((q_t, s.ncols, DEG), dtype=torch.int64)   # C[j, idx] = -Σ_k β^k coef_{k, idx}
-            for (j, idx), val in terms.items():
-                C[j, idx] = torch.tensor(val, dtype=torch.int64)
+            C[plan.tj.long().cpu(), plan.tidx.cpu()] = tvals.cpu()
             # Cmat[(j, i), (idx, d)]: coefficient of rle[j]_i in coordinate d of rle[j] · C[j, idx]
             Cmat = torch.zeros((q_t, DEG, s.ncols, DEG), dtype=torch.int64)
             for i in range(DEG):
@@ -472,7 +508,6 @@ def add_lookup_claim(acc: Acc, rho: Ext, inst: Instance, seg_offs: list[int], ta
     acc.a[table_off: table_off + rows] = (acc.a[table_off: table_off + rows] - ext_mul(e_tab, rho_t)) % P
     trows = logup.table_rows(table, dev)
     comb = logup.combine(trows, bs)                                    # (rows, 6)
-    zt = t_ext(z, dev)
     konst = (konst + ext_mul(ext_mul(e_tab, lam_t), (zt - comb) % P).sum(dim=0)) % P
     pad = eqt[base + rows:]
     if pad.shape[0]:
