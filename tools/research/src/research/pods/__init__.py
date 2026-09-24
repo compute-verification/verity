@@ -5,7 +5,7 @@ budget_cap.py and mem_guard.py import runpod.py as a sibling via sys.path so the
 """
 
 # Name suffixes of this project's pods.  runpod.py `create` (standalone, spells its own) still appends the first; parsers accept all.
-POD_SUFFIXES = ("-veritor-campaign", "-verity")
+POD_SUFFIXES = ("-veritor-campaign", "-verity-campaign")
 
 
 def strip_pod_suffix(name: str) -> str:
