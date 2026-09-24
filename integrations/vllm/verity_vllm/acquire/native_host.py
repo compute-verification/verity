@@ -1372,6 +1372,7 @@ class NativeHostCommitter:
 
     ALIGN = 4
     GPU_TREE_SRC = 0                       # CMT-2 header field `src_mask` (0: not an FA2 tap stream); the tag field carries the step index
+    layout = "chunk-leaf-v1"               # the GPU tree's leaf rule, which padding leaves follow; `native_collect` also implements chunk-leaf-v2
 
     def _gpu_ext_load(self):
         if self._gpu_ext is None:

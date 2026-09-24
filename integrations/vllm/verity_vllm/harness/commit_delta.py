@@ -407,6 +407,9 @@ def cuda_residue(base: dict[int, tuple[int, str]], now: dict[int, tuple[int, str
 
 
 def make_committer(kind: str, engine: va.Engine, args: argparse.Namespace, run_id: str):
+    layout = getattr(args, "layout", "chunk-leaf-v1")
+    if layout != "chunk-leaf-v1" and not kind.startswith("native_collect"):
+        raise ValueError(f"leaf layout {layout} is implemented by the native_collect committers only, not {kind}")
     if kind in ("native_host", "native_host_direct"):
         from verity_vllm.acquire.native_host import NativeHostCommitter
 
@@ -429,7 +432,7 @@ def make_committer(kind: str, engine: va.Engine, args: argparse.Namespace, run_i
         return NativeCollectCommitter(engine, run_id=run_id, arena_bytes=((args.arena_mb << 20) if args.arena_mb else None), wrap=(kind != "native_collect_hook"),
                                       gather=(kind in ("native_collect_gather", "native_collect_v2", "native_collect_v2_auto", "native_collect_v2b")),
                                       native_hooks=v2, auto_blocks=(kind in ("native_collect_v2_auto", "native_collect_v2b")),
-                                      native_worker=(kind == "native_collect_v2b"),
+                                      native_worker=(kind == "native_collect_v2b"), layout=layout,
                                       profile=bool(getattr(args, "profile_hooks", False)) and not v2)
     if kind == "hooks_only":
         from verity_vllm.acquire.native_host import NativeHostCommitter
@@ -573,7 +576,7 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
     derived_splits = stochastic and ("sampler_splits" in _man_fams or sampling.get("splits") == "derived")
     structure = B.structure_of(com, stochastic=stochastic, derived_splits=derived_splits)
     collector = {"variant": com.name, "retention": getattr(com, "retain", None), "window_mb": args.window_mb, "window_slots": getattr(args, "window_slots", None),
-                 "arena_mb": args.arena_mb, "layout": os.environ.get("VERITY_LEAF_LAYOUT", "chunk-leaf-v1"), "gpu_tree": bool(args.gpu_tree)}
+                 "arena_mb": args.arena_mb, "layout": args.layout, "gpu_tree": bool(args.gpu_tree)}
     # [R18 tap, F-r17-23] the FA2 tap's bounded-residency record (cap, the one allocation, peaks, split counts) beside the collector variant
     for _s in getattr(com, "sources", []) or []:
         if hasattr(_s, "tap_cap_bytes"):
@@ -1077,8 +1080,8 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--window-mb", type=int, default=None, help="P0 (R13): windowed staging -- lay the packed step stream over a ring of device windows of this size "
                     "(MiB, multiple of 1) and absorb/release each window as soon as it is filled (sets VERITY_WINDOW_MB); 0/omitted = per-step blocks")
     ap.add_argument("--window-slots", type=int, default=None, help="P0: number of ring slots (default 8; raised automatically so the largest tensor fits)")
-    ap.add_argument("--layout", default=None, choices=["chunk-leaf-v1", "chunk-leaf-v2"], help="L1 leaf-header layout (sets VERITY_LAYOUT); v2 = header M := 0 "
-                    "(coordinator decision; roots differ from v1)")
+    ap.add_argument("--layout", default="chunk-leaf-v1", choices=["chunk-leaf-v1", "chunk-leaf-v2"], help="L1 leaf-header layout of the executed and padding "
+                    "leaves, recorded in the binding map; v2 = header M := 0 (coordinator decision; roots differ from v1; windowed native_collect_v2b only)")
     ap.add_argument("--retain", default=None, choices=["device", "host", "none"],
                     help="R13 P0 retention policy for absorbed raw staging (sets VERITY_RETAIN): device = R9..R12 compact device copy per step "
                          "(the collector footprint that OOMs Llama 1024/128 at B=2); host = copy to host memory, arena block recycled; none = keep "
@@ -1247,8 +1250,6 @@ def main(argv: list[str] | None = None) -> None:
         os.environ["VERITY_WINDOW_MB"] = str(args.window_mb)
     if args.window_slots is not None:
         os.environ["VERITY_WINDOW_SLOTS"] = str(args.window_slots)
-    if args.layout:
-        os.environ["VERITY_LAYOUT"] = args.layout
     if args.bounded_staging:
         os.environ["VERITY_STAGING_BOUNDED"] = "1"
         os.environ["VERITY_LEARN_HOST_BUDGET_MB"] = str(int(args.learn_budget_mb))

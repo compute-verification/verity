@@ -681,7 +681,8 @@ class NativeCollectCommitter(NativeHostCommitter):
     M1 glue is `Fa2Wrap` -- no Python frame per producer; gather windows (P0/P1/P2 + step end) with 32 blocks per descriptor by default."""
 
     def __init__(self, engine: Any, *, wrap: bool = True, profile: bool = False, build_dir: str | None = None, check_sizes: bool = True,
-                 gather: bool = False, native_hooks: bool = False, auto_blocks: bool = False, native_worker: bool = False, **kw: Any) -> None:
+                 gather: bool = False, native_hooks: bool = False, auto_blocks: bool = False, native_worker: bool = False,
+                 layout: str = "chunk-leaf-v1", **kw: Any) -> None:
         kw.setdefault("fast_copy", True)
         kw.setdefault("gpu_tree", True)
         super().__init__(engine, **kw)
@@ -705,7 +706,10 @@ class NativeCollectCommitter(NativeHostCommitter):
             raise ValueError("windowed staging needs native_collect_v2b (native worker + gather)")
         self.win_tensors: list[Any] = []
         self.win_scratch: Any | None = None
-        self.layout_v2 = os.environ.get("VERITY_LAYOUT", "chunk-leaf-v1").strip() == "chunk-leaf-v2"
+        if layout not in ("chunk-leaf-v1", "chunk-leaf-v2"):
+            raise ValueError(f"unknown leaf layout {layout!r} (chunk-leaf-v1 | chunk-leaf-v2)")
+        self.layout = layout
+        self.layout_v2 = layout == "chunk-leaf-v2"
         if self.layout_v2 and not self.windowed:
             raise ValueError("chunk-leaf-v2 is implemented on the windowed path only (--window-mb > 0)")   # header M := 0 (coordinator decision)
         # [R17 fp8, F-fp8-B8MEM] BOUNDED staging (VERITY_STAGING_BOUNDED=1; flag until root parity is on record): under chunk-leaf-v1 the
