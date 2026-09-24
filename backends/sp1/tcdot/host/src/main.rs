@@ -38,7 +38,9 @@ const GUEST_FEATURES: [&str; 1] = ["relation-bare"];
 const FORMAT: Format = Format::Bf16Ampere;
 const K: usize = bare::K;
 const STEPS: usize = K / 16;
-const ROUTE_BYTES: usize = STEPS / 8;
+/// One VU's routing mask: two u64le words, so the guest reads it with two aligned loads (bits 96.. stay clear unless
+/// the whole VU runs in software).
+const ROUTE_BYTES: usize = 16;
 
 #[derive(Parser)]
 #[command(name = "verity-tcdot-host")]

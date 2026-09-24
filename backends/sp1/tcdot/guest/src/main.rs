@@ -4,7 +4,8 @@
 //!
 //! Input (`SP1Stdin` buffers, in order):
 //! 1. the `bare` header, unchanged (`bare::encode_header`: format, id, K, B, `vus_per_read`, the claimed words y);
-//! 2. the routing hint: `B * 12` bytes, VU i's 96-bit little-endian mask with bit t set when step t runs in software;
+//! 2. the routing hint: `B * 16` bytes, VU i's mask as two little-endian u64 words with bit t set when step t runs in
+//!    software (bits 96..128 are set only together with all the others: the whole VU runs in software);
 //! 3. `ceil(B / vus_per_read)` chunks of VUs.  For `bf16-ampere`, a VU whose mask is all ones is in the stock layout
 //!    (`bare::encode_chunk`: x row then W row) and runs `bare::check_one`; any other VU is 96 step blocks, block t =
 //!    `x[16t..16t+16] || W[16t..16t+16]` (u16le words, 64 bytes), so the precompile reads its operands in place.
@@ -27,8 +28,8 @@ use veritor_zk_common::tc;
 const STEPS: usize = bare::K / 16;
 /// Bytes per step block: 16 x words, then 16 W words.
 const BLOCK_BYTES: usize = 64;
-/// Bytes of one VU's routing mask.
-const ROUTE_BYTES: usize = STEPS / 8;
+/// u64 words of one VU's routing mask.
+const ROUTE_WORDS: usize = 2;
 
 fn main() {
     let header = sp1_zkvm::io::read_vec();
@@ -40,8 +41,12 @@ fn main() {
             println!("cycle-tracker-report-end: bare.digest");
             let (b, per, yb) = (h.b as usize, h.vus_per_read as usize, h.format.y_bytes());
             let routes = sp1_zkvm::io::read_vec();
+            // SAFETY: as for the chunks below
+            let (route_head, masks, route_tail) = unsafe { routes.align_to::<u64>() };
             let chip = h.format == Format::Bf16Ampere;
-            let mut ok = h.k as usize == bare::K && per > 0 && (!chip || routes.len() == b * ROUTE_BYTES);
+            let mut ok = h.k as usize == bare::K
+                && per > 0
+                && (!chip || (route_head.is_empty() && route_tail.is_empty() && masks.len() == b * ROUTE_WORDS));
             let mut i = 0;
             println!("cycle-tracker-report-start: bare.check");
             while ok && i < b {
@@ -57,8 +62,8 @@ fn main() {
                         let j = i + v;
                         let claimed = u32::from(u16::from_le_bytes([h.y_le[2 * j], h.y_le[2 * j + 1]]));
                         let (lo, hi) = (v * bare::VU_WORDS, (v + 1) * bare::VU_WORDS);
-                        let route = &routes[j * ROUTE_BYTES..(j + 1) * ROUTE_BYTES];
-                        ok = check_vu(&chunk[8 * lo..8 * hi], &words[lo..hi], route, claimed);
+                        let mask = [masks[ROUTE_WORDS * j], masks[ROUTE_WORDS * j + 1]];
+                        ok = check_vu(&chunk[8 * lo..8 * hi], &words[lo..hi], mask, claimed);
                         v += 1;
                     }
                 } else if ok {
@@ -76,21 +81,17 @@ fn main() {
 
 /// One `bf16-ampere` VU (8-byte aligned, as bytes and as the same bytes read as u64 words): whether the 96-step chain
 /// from `+0` and the BF16 epilogue give the claimed word.
-fn check_vu(vu_bytes: &[u8], vu_words: &[u64], route: &[u8], claimed: u32) -> bool {
-    if route.iter().all(|&byte| byte == 0xFF) {
+fn check_vu(vu_bytes: &[u8], vu_words: &[u64], mask: [u64; ROUTE_WORDS], claimed: u32) -> bool {
+    if mask == [u64::MAX; ROUTE_WORDS] {
         return bare::check_one(Format::Bf16Ampere, vu_bytes, vu_words, claimed);
     }
     let mut acc: u64 = 0;
-    if route.iter().all(|&byte| byte == 0) {
-        let mut ab = vu_bytes.as_ptr() as *const u16;
-        for _ in 0..STEPS {
-            sp1_zkvm::syscalls::syscall_tc_dot_bf16(ab, &mut acc);
-            ab = ab.wrapping_add(BLOCK_BYTES / 2);
-        }
+    if mask == [0; ROUTE_WORDS] {
+        chip_chain(vu_bytes, &mut acc);
     } else {
         for t in 0..STEPS {
             let block = &vu_bytes[BLOCK_BYTES * t..BLOCK_BYTES * (t + 1)];
-            if (route[t / 8] >> (t % 8)) & 1 == 0 {
+            if (mask[t / 64] >> (t % 64)) & 1 == 0 {
                 sp1_zkvm::syscalls::syscall_tc_dot_bf16(block.as_ptr() as *const u16, &mut acc);
             } else {
                 match software_step(acc, block) {
@@ -101,6 +102,31 @@ fn check_vu(vu_bytes: &[u8], vu_words: &[u64], route: &[u8], claimed: u32) -> bo
         }
     }
     u32::from(tc::f32_to_bf16(acc) as u16) == claimed
+}
+
+/// All 96 steps of one VU through `TC_DOT_BF16`: one `ecall` per 64-byte step block, unrolled.
+#[allow(unused_variables)]
+fn chip_chain(vu_bytes: &[u8], acc: &mut u64) {
+    assert!(vu_bytes.len() == STEPS * BLOCK_BYTES);
+    #[cfg(target_os = "zkvm")]
+    // SAFETY: the blocks are 8-byte aligned (the caller's chunk passed `align_to`) and in bounds. TC_DOT_BF16 returns
+    // no value, so every ecall writes its own code back to t0 and leaves a0 and a1 alone.
+    unsafe {
+        core::arch::asm!(
+            ".rept {steps}",
+            "ecall",
+            "addi a0, a0, {block}",
+            ".endr",
+            steps = const STEPS,
+            block = const BLOCK_BYTES,
+            inout("t0") sp1_zkvm::syscalls::TC_DOT_BF16 => _,
+            inout("a0") vu_bytes.as_ptr() => _,
+            in("a1") acc as *mut u64,
+            options(nostack),
+        );
+    }
+    #[cfg(not(target_os = "zkvm"))]
+    unreachable!()
 }
 
 /// One step through the relation's own step function, `tc::tc_dot`.
