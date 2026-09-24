@@ -98,6 +98,7 @@ __all__ = [
     "candidate_for",
     "canonical_label",
     "cell_artifacts",
+    "column_authentication",
     "dtype_of",
     "fmt_overhead",
     "fmt_seconds",
@@ -936,7 +937,7 @@ def build(store: Any) -> Tables:
                                + ([_contract_reason(problems)] if problems else [])})
             continue
         labels = store.labels(art_id)
-        auth = fp.get("authentication") if fp.get("authentication") in AUTH_MODES else AUTHENTICATION
+        auth = column_authentication(fp)
         reasons = reject_reasons(meta, labels, attempt, target, cand, authentication=auth, equivs=equivs)
         vb = independent_verification(meta, labels, attempt)
         verified_by = vb.by if vb is not None else None
@@ -973,6 +974,13 @@ def build(store: Any) -> Tables:
     return T
 
 
+def column_authentication(fp: Mapping[str, Any]) -> str:
+    """The authentication mode of the Table 2 column that judges a result: its fingerprint's when that names a column
+    (:data:`AUTH_MODES`), else the bare column's (where ``included`` / ``included-hash-shared`` are then rejected)."""
+    a = fp.get("authentication")
+    return a if a in AUTH_MODES else AUTHENTICATION
+
+
 def _mode_of(fp: Mapping[str, Any]) -> str | None:
     """``interactive`` | ``fiat-shamir`` from the fingerprint: an explicit ``mode`` when the emitter states one, else the
     ``security.bound_model`` prefix B-Ligero's emitters write (``interactive: ...`` / ``non-interactive: ...``)."""
@@ -1000,7 +1008,7 @@ def _cell(meta: Mapping[str, Any], art_id: str, rid: str | None, target: Target,
     host = None
     if isinstance(cpu, Mapping) and isinstance(cpu.get("model"), str):
         host = cpu["model"] + (f" x{cpu['count']}" if _num(cpu.get("count")) else "")
-    auth = fp.get("authentication") if fp.get("authentication") in AUTH_MODES else AUTHENTICATION
+    auth = column_authentication(fp)
     return Cell(target=target.name, candidate=cand.id, artifact=art_id, attempt=rid, proof_class=fp["proof_class"], t_total=t_total, r_proved=r,
                 overhead=target.native_peak.flop_per_second / r, hardware=gpu.get("name"), phases=phases(meta), mode=mode, verified_by=verified_by,
                 host=host, authentication=auth, hash_name=fp.get("hash") if isinstance(fp.get("hash"), str) else None,
