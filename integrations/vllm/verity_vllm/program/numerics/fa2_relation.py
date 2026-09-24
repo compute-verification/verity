@@ -94,7 +94,10 @@ except Exception:  # noqa: BLE001  -- e.g. the pod's Python 3.11: the same helpe
 
 
 MODEL_VERSION = "fa2-sm8x-hdim128-bf16.v1"
-TABLES_ENV = "VERITY_MUFU_TABLES"
+TABLE_SHA256 = {  # what the MUFU Definitions evaluate through: another table is another Definition version, not a new pin
+    "ex2": "7b3249116f9ca84455389f3a9b116da2be327646fb4b544369314ee168b79d88",
+    "rcp": "291d1c9cc1beed5152e3805c279aa0b34d9d15cbe7ece084c6237ca5d44e7ebc",
+}
 
 
 class AttentionRelationError(GemmRelationError):
@@ -109,11 +112,8 @@ _TABLES: dict[str, FA.MufuTables] = {}
 
 
 def tables_dir() -> str:
-    """Where the MUFU.EX2 / MUFU.RCP delta tables live: ``$VERITY_MUFU_TABLES`` or the package data
-    ``tables/W11-40f0cebeb670-20260907T1800Z``."""
-    env = os.environ.get(TABLES_ENV)
-    if env:
-        return env
+    """Where the MUFU.EX2 / MUFU.RCP delta tables live: the package data ``tables/W11-40f0cebeb670-20260907T1800Z``,
+    pinned by :data:`TABLE_SHA256`."""
     return str(resources.files(__package__) / "tables" / "W11-40f0cebeb670-20260907T1800Z")
 
 
@@ -121,9 +121,13 @@ def tables() -> FA.MufuTables:
     d = tables_dir()
     if d not in _TABLES:
         if not os.path.isdir(d):
-            raise AttentionUnresolved(f"unresolved: MUFU tables not found at {d} (set {TABLES_ENV})")
+            raise AttentionUnresolved(f"unresolved: MUFU tables not found at {d}")
         _TABLES[d] = FA.MufuTables.load(d)
-    return _TABLES[d]
+    t = _TABLES[d]
+    got = {name: t.source.get(name, {}).get("sha256") for name in TABLE_SHA256}
+    if got != TABLE_SHA256:
+        raise ValueError(f"MUFU tables at {d}: sha256 {got} != pinned {TABLE_SHA256}")
+    return t
 
 
 # --- input adaptation --------------------------------------------------------------------------------

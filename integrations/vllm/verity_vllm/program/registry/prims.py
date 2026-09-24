@@ -484,23 +484,22 @@ def RsqrtApprox(x: int) -> int:
 # (`verity_vllm/ops/measure_tanh.py`, format `verity/mufu-tanh-shard/xz-blocks/v1`: xz blocks of int8 first differences of
 # an injective ordered image of the output words, ~0.005 B/word).  The evaluator answers
 #   (a) NaN inputs and the closed regions in `MUFU_TANH_RULES` (each established by an EXHAUSTIVE scan of the whole region),
-#   (b) every other word from the table: the in-tree default `quarantine/dense/tables/mufu_tanh_sm89.{json,xzblocks}` (manifest with
+#   (b) every other word from the table: the in-tree `quarantine/dense/tables/mufu_tanh_sm89.{json,xzblocks}` (manifest with
 #       sha256, hardware/software, rules, evidence job ids, a 512-word raw sample; table [0x31000000, 0x41000000) = [2^-29, 8), which
-#       covers the table-only region [2^-8, 8) with margin), or — env override `$VERITY_MUFU_TANH_TABLES=DIR` — measure_tanh.py shards
-#       (`*.diff.xz` + `.diff.xz.json` header + `.npy.json` summary) from that directory; negative words via the table's odd
-#       symmetry, which is used only where the summary shows 0 violations over the shard's whole range (`--neg check`).
-# `MufuTanhUnmeasured` is raised only when no loaded table covers the word: default table missing / corrupt (file sha256 != manifest),
-# a shard directory that does not cover the word, or `mufu_tanh_use_tables(None)` (tests).  Never an approximation.
+#       covers the table-only region [2^-8, 8) with margin; the manifest is pinned by `MUFU_TANH_TABLE_MANIFEST_SHA256`); negative
+#       words via the table's odd symmetry, which is used only where the measurement shows 0 violations over the table's whole range.
+# `MufuTanhUnmeasured` is raised only when the table does not cover the word or does not load: manifest missing or not the pinned
+# one, table file sha256 != manifest.  Never an approximation.
 # Hardware/software of the table: RTX 4090 (sm_89), driver 580.178.04, torch 2.13.0+cu129 / triton 3.7.1
 # (`inline_asm_elementwise("tanh.approx.f32 $0, $1;")`); the sub-ranges re-measured on driver 580.126.20 (cp-cov-a) hashed identical.
 # The table is conformance evidence for that stack only.
 # ---------------------------------------------------------------------------------------------------------
 
-MUFU_TANH_TABLES_ENV = "VERITY_MUFU_TANH_TABLES"
 MUFU_TANH_SHARD_FORMAT = "verity/mufu-tanh-shard/xz-blocks/v1"
 MUFU_TANH_TABLE_FORMAT = "verity/mufu-tanh-table/v1"
 MUFU_TANH_TABLE_DIR = str(resources.files(__package__) / "quarantine" / "dense" / "tables")
 MUFU_TANH_TABLE_MANIFEST = os.path.join(MUFU_TANH_TABLE_DIR, "mufu_tanh_sm89.json")
+MUFU_TANH_TABLE_MANIFEST_SHA256 = "674b3663b5737e9d6b87a1a6a249e5a2a17cea279f89bae5d42fe8d0b123bb60"  # another table is another MufuTanh version
 _F32_SIGN = 0x80000000
 
 # Closed regions of the domain, each established ONLY by an exhaustive measurement of the whole region; None = not established, the
@@ -580,16 +579,6 @@ class _TanhShard:
         return int(self.block(i // self.block_words)[i % self.block_words])
 
 
-_TANH_TABLES_OVERRIDE: list = []  # [directory | None] set by `mufu_tanh_use_tables`; empty = env override or the in-tree default
-
-
-def mufu_tanh_use_tables(directory: str | None) -> None:
-    """Point the evaluator at a measure_tanh.py shard directory (tests, tools); `None` = NO table at all (not even the in-tree
-    default), so the evaluator answers only NaN and the `MUFU_TANH_RULES` regions and raises elsewhere."""
-    _TANH_TABLES_OVERRIDE[:] = [directory]
-    _tanh_shards.cache_clear()
-
-
 def mufu_tanh_table_manifest(path: str = MUFU_TANH_TABLE_MANIFEST) -> dict:
     """The in-tree table's manifest (format `verity/mufu-tanh-table/v1`): sha256s, hardware/software, rules, evidence job ids, the
     512-word raw sample (`sample.pairs` = [[x_hex, hw_hex], ...]) and the xz-block index (`table`)."""
@@ -601,49 +590,25 @@ def mufu_tanh_table_manifest(path: str = MUFU_TANH_TABLE_MANIFEST) -> dict:
     return m
 
 
-def _tanh_shards_from_dir(d: str) -> tuple:
-    import json as _json
-    out = []
-    for name in sorted(os.listdir(d)):
-        if not name.endswith(".diff.xz.json"):
-            continue
-        with open(os.path.join(d, name)) as f:
-            hdr = _json.load(f)
-        if hdr.get("format") != MUFU_TANH_SHARD_FORMAT:
-            continue
-        stem = name[: -len(".diff.xz.json")]
-        summ: dict = {}
-        sp = os.path.join(d, stem + ".npy.json")
-        if os.path.exists(sp):
-            with open(sp) as f:
-                summ = _json.load(f)
-        m = summ.get("measured") or {}
-        out.append(_TanhShard(os.path.join(d, stem + ".diff.xz"), hdr, m.get("odd_symmetry"), m.get("sha256_words_le_u32"), summ.get("job")))
-    return tuple(out)
-
-
 @lru_cache(maxsize=None)
 def _tanh_shards() -> tuple:
-    """The loaded table(s): `mufu_tanh_use_tables(DIR|None)` > `$VERITY_MUFU_TANH_TABLES` (a measure_tanh.py shard directory) >
-    the in-tree default manifest.  Raises `MufuTanhUnmeasured` when the default is missing / corrupt or does not cover the
-    table-only region [identity_below, saturate_from) (a configuration error, not a measurement gap)."""
-    if _TANH_TABLES_OVERRIDE:
-        d = _TANH_TABLES_OVERRIDE[0]
-        return _tanh_shards_from_dir(d) if d else ()
-    d = os.environ.get(MUFU_TANH_TABLES_ENV)
-    if d:
-        if not os.path.isdir(d):
-            raise MufuTanhUnmeasured(f"${MUFU_TANH_TABLES_ENV}={d!r} is not a directory")
-        return _tanh_shards_from_dir(d)
+    """The loaded table: the in-tree manifest, which must be the pinned one (`MUFU_TANH_TABLE_MANIFEST_SHA256`).  Raises
+    `MufuTanhUnmeasured` when it is missing / not the pinned one / corrupt or does not cover the table-only region
+    [identity_below, saturate_from) (a configuration error, not a measurement gap)."""
+    import hashlib as _hl
     if not os.path.exists(MUFU_TANH_TABLE_MANIFEST):
-        raise MufuTanhUnmeasured(f"MufuTanh default table manifest missing: {MUFU_TANH_TABLE_MANIFEST}")
+        raise MufuTanhUnmeasured(f"MufuTanh table manifest missing: {MUFU_TANH_TABLE_MANIFEST}")
+    with open(MUFU_TANH_TABLE_MANIFEST, "rb") as f:
+        digest = _hl.sha256(f.read()).hexdigest()
+    if digest != MUFU_TANH_TABLE_MANIFEST_SHA256:
+        raise MufuTanhUnmeasured(f"MufuTanh table manifest {MUFU_TANH_TABLE_MANIFEST}: sha256 {digest} != pinned {MUFU_TANH_TABLE_MANIFEST_SHA256}")
     man = mufu_tanh_table_manifest()
     t = man["table"]
     s = _TanhShard(os.path.join(MUFU_TANH_TABLE_DIR, t["file"]), t, t.get("odd_symmetry"), t.get("sha256_words_le_u32"),
                    (man.get("evidence") or {}).get("table_job", {}).get("id"))
     lo_rule, hi_rule = MUFU_TANH_RULES["identity_below"], MUFU_TANH_RULES["saturate_from"]
     if lo_rule is not None and hi_rule is not None and not (s.lo <= lo_rule and s.hi >= hi_rule and s.sym_ok):
-        raise MufuTanhUnmeasured(f"MufuTanh default table [0x{s.lo:08X}, 0x{s.hi:08X}) sym_ok={s.sym_ok} does not close the table-only "
+        raise MufuTanhUnmeasured(f"MufuTanh table [0x{s.lo:08X}, 0x{s.hi:08X}) sym_ok={s.sym_ok} does not close the table-only "
                                  f"region [0x{lo_rule:08X}, 0x{hi_rule:08X}) for both signs")
     return (s,)
 
@@ -667,7 +632,7 @@ def mufu_tanh_coverage() -> dict:
 def MufuTanh(x: int) -> int:
     """`tanh.approx.f32` (MUFU.TANH) as FA2 `apply_softcap` executes it on sm_89: NaN and the exhaustively scanned regions from
     `MUFU_TANH_RULES`, every other word from the measured table (see the section comment).  Raises `MufuTanhUnmeasured` only when
-    no loaded table covers the word (default table missing / corrupt, or tables disabled)."""
+    the table does not cover the word or does not load (missing, not the pinned one, corrupt)."""
     u = x & 0xFFFFFFFF
     sign, a = u & _F32_SIGN, u & 0x7FFFFFFF
     if a > 0x7F800000:  # NaN input
@@ -681,7 +646,7 @@ def MufuTanh(x: int) -> int:
     w = MUFU_TANH_RULES["identity_below"]
     if w is not None and a < w:
         return u
-    shards = _tanh_shards()  # raises MufuTanhUnmeasured itself when the default table is missing / corrupt
+    shards = _tanh_shards()  # raises MufuTanhUnmeasured itself when the table does not load
     for s in shards:
         y = s.lookup(u)
         if y is not None:

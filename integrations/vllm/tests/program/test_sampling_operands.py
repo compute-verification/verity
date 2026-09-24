@@ -26,7 +26,7 @@ def _tables_ok() -> bool:
         return False
 
 
-needs_tables = pytest.mark.skipif(not _tables_ok(), reason="MUFU tables (VERITY_RMS_TABLES) unavailable: div.full model needs them")
+needs_tables = pytest.mark.skipif(not _tables_ok(), reason="MUFU tables (rms_relation.tables) unavailable: div.full model needs them")
 
 
 def _bf16_row(V: int, seed: int = 0, scale: float = 2.0) -> np.ndarray:
