@@ -19,6 +19,8 @@ pub const HOPPER_BF16_M16N8K16: GroupSum = GroupSum { groups: &[16], width: 26, 
 
 /// Elements per VU row (`relations.K_VU`).
 pub const K_VU: usize = 1536;
+/// Bytes of one VU row of little-endian BF16 words.
+pub const ROW_BYTES: usize = 2 * K_VU;
 
 /// `term.bf16_product`: the exact product of two BF16 words as a 25-bit-scaled
 /// term; `None` for a non-finite operand (exponent field `0xFF`).
@@ -59,6 +61,25 @@ pub fn accumulator(x: &[u16], w: &[u16]) -> Option<u32> {
 /// The public word of one VU: `f32_to_bf16(accumulator)` ([`crate::tc::f32_to_bf16`], the software cast).
 pub fn vu(x: &[u16], w: &[u16]) -> Option<u16> {
     accumulator(x, w).map(|acc| crate::tc::f32_to_bf16(acc as u64) as u16)
+}
+
+/// [`vu`] on rows of little-endian BF16 words ([`ROW_BYTES`] each), decoded one step at a time on the stack.
+pub fn vu_bytes(x: &[u8], w: &[u8]) -> Option<u16> {
+    if x.len() != ROW_BYTES || w.len() != ROW_BYTES {
+        return None;
+    }
+    let k = HOPPER_BF16_M16N8K16.k();
+    let (mut a, mut b) = ([0u16; 16], [0u16; 16]);
+    let mut acc = 0u32;
+    for s in 0..K_VU / k {
+        let (xs, ws) = (&x[2 * k * s..2 * k * (s + 1)], &w[2 * k * s..2 * k * (s + 1)]);
+        for i in 0..k {
+            a[i] = u16::from_le_bytes([xs[2 * i], xs[2 * i + 1]]);
+            b[i] = u16::from_le_bytes([ws[2 * i], ws[2 * i + 1]]);
+        }
+        acc = step(acc, &a, &b)?;
+    }
+    Some(crate::tc::f32_to_bf16(acc as u64) as u16)
 }
 
 #[cfg(test)]
@@ -108,5 +129,8 @@ mod tests {
         assert_eq!(accumulator(&x, &x), Some(0x44C0_0000)); // 1536.0
         assert_eq!(vu(&x, &x), Some(0x44C0));
         assert_eq!(vu(&x[..16], &x[..16]), None);
+        let bytes: Vec<u8> = x.iter().flat_map(|w| w.to_le_bytes()).collect();
+        assert_eq!(vu_bytes(&bytes, &bytes), Some(0x44C0));
+        assert_eq!(vu_bytes(&bytes[..32], &bytes[..32]), None);
     }
 }

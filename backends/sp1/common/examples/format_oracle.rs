@@ -58,7 +58,11 @@ fn vu(format: &str, x: &[u8], w: &[u8]) -> Option<u32> {
     match format {
         "fp8-ada" => tc_fp8::vu_ada(x, w),
         "fp8-hopper" => tc_fp8::vu_hopper(x, w),
-        "bf16-hopper" => tc_hopper_bf16::vu(&words16(x), &words16(w)).map(u32::from),
+        "bf16-hopper" => {
+            let y = tc_hopper_bf16::vu_bytes(x, w);
+            assert_eq!(y, tc_hopper_bf16::vu(&words16(x), &words16(w)), "the byte-row and word-row entry points agree");
+            y.map(u32::from)
+        }
         "fp4-nvf4" => nvfp4::vu(x, w),
         other => panic!("unknown format {other}"),
     }
