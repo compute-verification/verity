@@ -101,15 +101,15 @@ def test_allgather_world_n_is_the_rank_order_concatenation(W, N):
 
 
 def test_registry_derived_family_selectors():
-    """Consumers (required_manifest, required_values, sampled_replay, tp/worker, tp/commit) ask the registry, never a spelled prefix."""
+    """Consumers (the v2 query, sampled_replay, tp/worker, tp/commit) ask the registry, never a spelled prefix."""
     assert TP2.collective_kind("AllReduce2_v1{N=8}") == "all_reduce" == TP2.collective_kind("AllReduce_v2{WORLD=3,N=8}")
     assert TP2.collective_kind("AllGather2_v1") == "all_gather" == TP2.collective_kind("AllGather_v1{WORLD=4,N=8}")
     assert TP2.collective_kind("Gemm_v1{K=1,N=2}") is None and TP2.collective_kind("") is None
     assert TP2.cross_rank_families(2) == {"AllReduce2_v1", "AllGather2_v1", "EmbeddingShard_v1"}
     assert TP2.cross_rank_families(3) == {"AllReduce_v2", "AllGather_v1", "EmbeddingShard_v1"}
-    from verity_capture.commit import required_manifest as RM
     from verity_capture.commit import xrank_collectives as XC
-    assert RM.collective_kind("AllGather_v1{WORLD=3,N=8}") == "all_gather"
+    from verity_vllm.query import v1_bridge
+    assert v1_bridge.collective_kind("AllGather_v1{WORLD=3,N=8}") == "all_gather"
     assert XC.collective_family("all_reduce", 2) == "AllReduce2_v1" and XC.collective_family("all_reduce", 3) == "AllReduce_v2"
     assert XC.collective_family("all_gather", 4) == "AllGather_v1"
 

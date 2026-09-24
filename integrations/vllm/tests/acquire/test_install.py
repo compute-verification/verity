@@ -6,14 +6,13 @@ import pytest
 torch = pytest.importorskip("torch")
 nn = torch.nn
 
-from verity_capture.commit import required_manifest as RM  # noqa: E402
+from verity_capture.commit import manifest_format as RM  # noqa: E402
 from verity_vllm.acquire import plan as P  # noqa: E402
 from verity_vllm.acquire.correspondence import AnnotationCorrespondence, runtime_tree_of  # noqa: E402
 from verity_vllm.acquire.install import IncompletePlan, OccurrenceSink, install_from_plan  # noqa: E402
 
 PD = "0" * 64
-TABLES = {"ACQUIRE_CLASSES": {"Linear", "Embedding", "TwoOut"}, "ACQUIRE_INPUT_CLASSES": {"Embedding"}, "SKIP_CLASSES": set(),
-          "HAZARD_LEAVES": set(), "GATHER_FLUSH_LEAVES": set(), "PRE_FLUSH_LEAVES": set()}
+TABLES = {"HAZARD_LEAVES": set(), "GATHER_FLUSH_LEAVES": set(), "PRE_FLUSH_LEAVES": set()}
 
 
 class TwoOut(nn.Module):
@@ -95,9 +94,8 @@ def test_installs_exactly_the_sites_and_observes_them():
               ("runner.sampler", "runner_return", ".sampled_token_ids")]
     assert inst.keys() == expect and inst.keys() == [h.key() for h in plan.hooks()]
     assert [s.key() for s in inst.deferred] == [("logits.weight", "registered_input", "weight")]
-    # the class table would also hook `blocks.0.extra` (a Linear): the plan does not -- it is a residual, by name
+    # the class table would also hook `blocks.0.extra` (a Linear): the plan does not
     assert not any(s.module == "blocks.0.extra" for s in inst.installed)
-    assert ("ACQUIRE_CLASSES", "blocks.0.extra") in {(r.table, r.module) for r in plan.residuals}
     assert len(model.blocks[0].extra._forward_hooks) == 0 and len(model.blocks[0].proj._forward_hooks) == 1 and len(model.embed._forward_pre_hooks) == 1
     ids = torch.tensor([[1, 2, 3]])
     for _ in range(2):

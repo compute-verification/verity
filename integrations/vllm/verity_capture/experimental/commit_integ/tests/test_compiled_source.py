@@ -179,8 +179,7 @@ def test_eager_ids_outside_a_step_allocate_nothing():
     assert src.slots == {} and src.stats["direct_calls_outside_step"] == 1
 
 
-def test_omit_fault_leaves_module_unwrapped(monkeypatch):
-    monkeypatch.setenv("ACQUIRE_ENGINE", "v1")          # the class-table selection (v2: tests/acquire/test_gate.py, the plan's)
+def test_omit_fault_leaves_module_unwrapped():
     cs._register_op()
     src = cs.CompiledGraphSource(rows=4, fault="compiled_omit:down_proj")
 
@@ -196,13 +195,7 @@ def test_omit_fault_leaves_module_unwrapped(monkeypatch):
             self.layers = torch.nn.ModuleList([Layer()])
 
     m = Model()
-    from verity_capture.experimental.commit_integ import native_host as nh
-
-    saved = nh.ACQUIRE_CLASSES
-    nh.ACQUIRE_CLASSES = {"_Lin"}
-    try:
-        src.wrap_model(m, runner=None)
-    finally:
-        nh.ACQUIRE_CLASSES = saved
+    hooks = [{"module": f"layers.0.{leaf}", "kind": "producer_output", "slot": "out"} for leaf in ("down_proj", "up_proj")]
+    src.wrap_model(m, runner=None, plan={"sites": hooks, "hooks": hooks, "unsupported": []})
     assert src.omitted == ["layers.0.down_proj"] and src.wrapped == ["layers.0.up_proj"]
     assert "forward" in m.layers[0].up_proj.__dict__ and "forward" not in m.layers[0].down_proj.__dict__

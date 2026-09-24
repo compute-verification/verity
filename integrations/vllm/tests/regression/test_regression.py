@@ -65,10 +65,8 @@ ALL of one decision's `expected` reproduced -> PASS with `sanctioned_by=<finding
 neither v1 nor a decision reproduced -> FAIL naming both.  Malformed / `expected`-less decisions sanction nothing.  Today one decision:
 #57 `manifest_digest` since r19-int-22 (F-r19-int-20: `Bf16MulScalarTensor_v1`, classified interior BY NAME by v1, is a module-body
 output read by layer 0; promotion adds exactly its 432 identities -> 163484, complete) -- `test_negative_57` accepts the refusal OR it.
-A decision's `status` is `accepted` (absent = accepted: Daniel confirmed it, sanctions under every engine) or `pending_review`
-(labelled by a lane, awaiting Daniel: consulted ONLY when the actual is not the v1 baseline -- `VERITY_REGRESSION_ENGINE=v2` or a
-candidate document -- so the v2 engine may reproduce v1 OR the decision, and which one is recorded as junit property `matched`; under the
-v1 engine the decision is listed as "not consulted" and the baseline must still reproduce v1).  Today three pending: #67 / #68
+A decision's `status` is `accepted` (absent = accepted: Daniel confirmed it) or `pending_review` (labelled by a lane, awaiting Daniel);
+both sanction, and which side reproduced is recorded as junit property `matched`.  Today three pending: #67 / #68
 `manifest_digest` (F-r19-int-24: `MoeSum_v1`, FusedMoE.forward's returned tensor, read by the next layer's fused add+norm -> boundary
 under Q_module_body_v1; v1 classed it interior by name) and #57 `coverage` (MAN-02: the incomplete v1 manifest is refused, every
 identity counted missing where v1 recorded missing_n = 0).  A decision may also own an INPUT pin (`pins."manifest.json" = { bytes,
@@ -162,7 +160,7 @@ def test_reproduces(row_key: str, check_name: str, store_state: dict, record_pro
         record_property("sanctioned_by", act["sanctioned_by"])
         record_property("decision_status", act.get("decision_status") or "accepted")
     record_property("matched", resolver.matched(act, problems))                     # which side reproduced: v1 | decision <finding> (<status>)
-    record_property("engine", resolver.engine())
+    record_property("engine", resolver.ENGINE)
     for rel, by in sorted(row.pinned_by.items()):                                     # an INPUT resolved by a decision's pin, not v1's
         record_property("pinned_by", f"{rel}: {by}")
     na = resolver.not_applicable_keys(act)
@@ -202,7 +200,7 @@ def test_negative_57_refusal_reproduces(record_property) -> None:
     record_property("sanctioned_by", act["sanctioned_by"])
     record_property("decision_status", act.get("decision_status") or "accepted")
     record_property("matched", resolver.matched(act, problems))
-    record_property("engine", resolver.engine())
+    record_property("engine", resolver.ENGINE)
 
 
 def test_decisions_are_listed_and_well_formed(record_property) -> None:

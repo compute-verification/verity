@@ -37,7 +37,6 @@
   "verity_capture.holdout": "next candidate, sealed-verifier cluster: verify_lane.sh / cov_pod.sh (bench/, not roots) run it",
   "verity_capture.experimental.fa2_commit.kernel_dump": "GPU-truth reader: test_kernel_dump.py checks the LIVE registry.b1 AttentionHead_v3 replay against the P0 register dumps under fa2_commit/fixtures/p0/",
   "verity_capture.experimental.fa2_commit.oracle": "the Definition's gate-by-gate replay (LIVE registry.b1 through verity.ir.evaluate) that test_oracle.py / test_kernel_dump.py compare with the P0 dumps",
-  "verity_capture.bench.gen_batch_provenance": "GEN batch lane: test_gen_batch.py tests it beside the LIVE gen_batch_attribution (run by bench/gen_batch_pod.sh, gen_ovbatch_pod.sh)",
   "verity_capture.prefix_cache": "generator of workloads/workload_cov_b0_prefix_c256{,_cold}.json (`depends_on: constants of verity_capture.prefix_cache`; coverage row M1), read by test_prefix_cache.py",
   "verity_capture.patterns_prefix": "the Program-level reading of prefix_cache's linkage record; test_prefix_cache.py"
  }

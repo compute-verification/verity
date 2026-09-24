@@ -1116,7 +1116,7 @@ def main(argv: list[str] | None = None) -> None:
                     help="[R15 COORD 5] the Build's Program digest of record (B=1: build_request's program_digest; B>=2: gprog's workload digest): the "
                          "required manifest's program_digest must equal it or the Commit fails closed as wrong-Program; also the binding map's key digest")
     ap.add_argument("--required-manifest", default=None,
-                    help="[R14 MAN-01] the Program/query-derived required-value manifest (verity_capture.commit.required_manifest build ...): every "
+                    help="[R14 MAN-01] the Program/query-derived required-value manifest (verity_vllm.query.cli build ...): every "
                          "identity it lists (step, invocation, op_path, output_member, element range, request, rank) must be covered by a committed "
                          "tensor of every instrumented run (coverage_check); replaces the REL-02 counts+classes source, which stays as the labelled fallback")
     ap.add_argument("--tensor-digests", action="store_true", help="diagnostic: per-tensor digests of the retained host bytes per instrumented run, diffed across pairs")
@@ -1438,36 +1438,6 @@ def main(argv: list[str] | None = None) -> None:
             elif args.moe_source == "on":
                 print("[delta] REFUSE: --moe-source on but the model has no MoE-runner modules", flush=True)
                 sys.exit(3)
-        # [R17-42 route A, moe: found on the first padded Commit that ran (cp-moe 05:0xZ: coverage FAIL missing 336 = 16 MoE layers x 21 steps)]
-        # the committer acquires the forward output of every module of ACQUIRE_CLASSES; a padded-construction Program's MoE row
-        # (MoeFfnFixedL_v1, leg (a)) has the fused-MoE MODULE's output as its identity (`model.layers.<L>.mlp.experts/out`), a module of no
-        # acquire class (MOE-01 never needed it: its values came from the MoE block source).  The MANIFEST decides here too: a module the
-        # manifest names as an instance_outputs op_path and the committer does not select is added to the committer's module set BEFORE the
-        # arena is sized and the hooks are installed -- unless a source already binds that site (the TP source binds the received all-reduce
-        # output of the same module on TP>1 rows: never two binders).  A manifest that names no such module (every MOE-01 row) changes nothing.
-        if required_manifest is not None and hasattr(com, "_modules") and getattr(com, "model", None) is not None:
-            # [R19 int-20] a PROMOTED row's op_path is the producer module of a value that is NOT that module's forward output (the promoted
-            # member is observed at its consumer's input, below): it never extends the OUTPUT acquisition -- hooking the producer's output
-            # would commit a second, wrong tensor under the promoted identity (found on the first int-22 Commit: `model` (the model root)
-            # hooked as an instance_outputs module beside `model.layers.0.input_layernorm/in`)
-            _named = {str(i.get("op_path")) for i in (required_manifest.get("identities") or [])
-                      if i.get("family") == "instance_outputs" and i.get("op_path") and not i.get("promoted")}
-            _selected = {n for n, _m in com._modules}
-            _bound_by_source = set()
-            for _s in getattr(com, "sources", []) or []:
-                if hasattr(_s, "received_site_names"):
-                    _bound_by_source |= set(_s.received_site_names())
-            _mods = dict(com.model.named_modules())
-            _add = [(n, _mods[n]) for n in sorted(_named) if n in _mods and n not in _selected and n not in _bound_by_source]
-            if _add:
-                com._modules = list(com._modules) + _add
-                _classes = sorted({type(m).__name__ for _n, m in _add})
-                print(f"[delta] acquisition extended by the manifest: {len(_add)} module(s) of class {_classes} the committer did not select "
-                      f"(e.g. {_add[0][0]}) -- their forward output is an instance_outputs identity of the Program (a padded-construction MoE row's "
-                      f"identity is the module output); hooked like every acquire-class module, sized into the arena", flush=True)
-            _unresolved = sorted(n for n in _named if n not in _mods and not n.startswith(("fa2.", "runner.")))
-            if _unresolved:
-                print(f"[delta] NOTE: {len(_unresolved)} manifest op_path(s) are not modules of the built model (e.g. {_unresolved[:3]}); bound by a source or unbound by name", flush=True)
         # [R19 int-20, F-r19-int-20] MANIFEST-DRIVEN INPUT ACQUISITION: a promoted manifest row (an interior Program row whose output another
         # module reads -- e.g. a value produced in a parent module's forward body and consumed by a child leaf, which no module OUTPUT
         # carries) is observed at its first consumer's input: the committer acquires `<consumer>/in` (the embedding-ids mechanism, by the
@@ -1512,30 +1482,25 @@ def main(argv: list[str] | None = None) -> None:
                 print(f"[delta] NOTE: X-03 attention plane classes: no Build record with attention_impls_observed under "
                       f"--program-dir/--programs-root ({getattr(args, 'program_dir', None)!r}, {getattr(args, 'programs_root', None)!r}); "
                       f"the R13 uniformity rule runs (a Program with two attention classes fails X-03 closed)", flush=True)
-        # [v2 acquire, Phase 4a] ACQUIRE_ENGINE=v2: the committer's hook sets come from the ACQUISITION PLAN (required-value manifest x the
-        # built engine's runtime tree), not from the class tables above -- the plan, v1's decision and their comparison are written into the
-        # attempt dir first; an UNSUPPORTED Value refuses by name.  Unset / v1 (the default): nothing here runs.
-        from verity_vllm.acquire import switch as _acq_switch
+        # [v2 acquire, Phase 4a] the committer's hook sets come from the ACQUISITION PLAN (required-value manifest x the built engine's
+        # runtime tree): the plan is written into the attempt dir first; an UNSUPPORTED Value refuses by name.
+        if required_manifest is None or not hasattr(com, "_modules") or getattr(com, "model", None) is None:
+            print(f"[delta] REFUSE: the acquisition plan needs --required-manifest and a hooking committer (got {kind})", flush=True)
+            sys.exit(3)
+        from verity_vllm.acquire.install import IncompletePlan as _IncompletePlan, apply_plan_to_committer as _apply_plan
+        from verity_vllm.acquire.stage import plan_at_stage as _plan_at_stage
 
-        if _acq_switch.v2():
-            if required_manifest is None or not hasattr(com, "_modules") or getattr(com, "model", None) is None:
-                print(f"[delta] REFUSE: {_acq_switch.ENV}=v2 needs --required-manifest and a hooking committer (got {kind})", flush=True)
-                sys.exit(3)
-            from verity_vllm.acquire.install import IncompletePlan as _IncompletePlan, apply_plan_to_committer as _apply_plan
-            from verity_vllm.acquire.stage import plan_at_stage as _plan_at_stage
-
-            try:
-                _docs = _plan_at_stage(com.model, getattr(eng, "runner", None), required_manifest, out, source=f"commit_delta {kind}",
-                                       row_id=(required_manifest.get("workload") or {}).get("row_id") if isinstance(required_manifest.get("workload"), dict) else None)
-                for _ln in _docs.log_lines("delta"):
-                    print(_ln, flush=True)
-                _rec = _apply_plan(com, _docs.plan)
-            except _IncompletePlan as e:
-                print(f"[delta] REFUSE: acquisition plan: {e}", flush=True)
-                sys.exit(3)
-            (out / "acquisition_engine.json").write_text(json.dumps({"engine": "v2", "plan_digest": _docs.plan.digest, **_rec}, indent=1) + "\n")
-            print(f"[delta] committer {com.name}: {len(_rec['modules_after'])} module output hooks from the plan (v1 tables would hook {len(_rec['modules_before'])}), "
-                  f"consumer inputs {_rec['plan_inputs']}, deferred sites {len(_rec['deferred_sites'])}", flush=True)
+        try:
+            _docs = _plan_at_stage(com.model, getattr(eng, "runner", None), required_manifest, out, source=f"commit_delta {kind}")
+            for _ln in _docs.log_lines("delta"):
+                print(_ln, flush=True)
+            _rec = _apply_plan(com, _docs.plan)
+        except _IncompletePlan as e:
+            print(f"[delta] REFUSE: acquisition plan: {e}", flush=True)
+            sys.exit(3)
+        (out / "acquisition_engine.json").write_text(json.dumps({"engine": "v2", "plan_digest": _docs.plan.digest, **_rec}, indent=1) + "\n")
+        print(f"[delta] committer {com.name}: {len(_rec['modules_after'])} module output hooks from the plan, "
+              f"consumer inputs {_rec['plan_inputs']}, deferred sites {len(_rec['deferred_sites'])}", flush=True)
         if hasattr(com, "size_arena") and getattr(com, "arena", None) is not None and not (args.arena_unchecked and args.arena_mb):
             # X-02: size the device staging block from the workload envelope (refuses here, with needed vs available bytes, if it cannot fit)
             envelope = {"batch": args.max_num_seqs, "max_prompt": max(len(r["prompt_token_ids"]) for r in reqs),
@@ -2404,7 +2369,8 @@ def main(argv: list[str] | None = None) -> None:
                         _arr, _moved = SR.arrivals_of_record(_arr, _sched_r)
                         if _moved:
                             print(f"[delta] replay/linkage arrivals follow the engine schedule of record: {_arr} (declared {_sched_r.get('declared_arrive_steps')})", flush=True)
-                        _pi0 = SR.ProgramIndex(next(iter(_progs.values())))
+                        _k0 = next(iter(_progs))
+                        _pi0 = SR.ProgramIndex(_progs[_k0], program_dir=_loaded[_k0].get("dir"))
                         _wp = SR.model_weights_provider(eng.model, _pi0.prefix)
                         _rd = OC.committed_reader(com)
                         # [O5] the weight slices the relations consume must be the COMMITTED weights: re-register the live parameters now and
@@ -2460,7 +2426,7 @@ def main(argv: list[str] | None = None) -> None:
                         _pi_steps: dict[str, int] = {}
                         for _k, _v in _loaded.items():
                             _t = (_v.get("result") or {}).get("T")
-                            _pi_steps[_k] = (int(_t) + 1) if _t is not None else (SR.ProgramIndex(_progs[_k]).n_steps if _k in _progs else None)
+                            _pi_steps[_k] = (int(_t) + 1) if _t is not None else (len(MF.segment_steps(_progs[_k]["rows"])) if _k in _progs else None)
                         _wreq = [{"request_id": _rl[str(r.get("request_id"))], "arrive_step": _arr[_rl[str(r.get("request_id"))]],
                                   "prompt_token_ids": list(r["prompt_token_ids"]),
                                   "seed": (int(r["seed"]) if r.get("seed") is not None else (int(sampling["seed"]) if sampling.get("seed") is not None else None)),

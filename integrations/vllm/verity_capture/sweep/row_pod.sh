@@ -35,8 +35,8 @@
 #     this attempt did not produce is FAIL (freshness rule) unless MATCH_PHASE=cpu resumes it by name; a Commit never starts over a
 #     Match record missing its account files (PRECHECK_FAIL_MATCH_RECORD_INCOMPLETE, exit 14); a `manifest_verify` FAIL = Commit FAIL.
 #     The required-value manifest is never built without the core registry: exit 3 = PRECHECK_FAIL_REGISTRY_UNAVAILABLE (an environment
-#     fault, not a complete:false manifest) stops the row by name (exit 3).  The value-acquisition engine is v2 (ACQUIRE_ENGINE, read by
-#     the python stages; `v1` = the regression oracle only, one more release) -- this shell has no engine branch, only the passthrough.
+#     fault, not a complete:false manifest) stops the row by name (exit 3).  Value acquisition follows the acquisition plan (the python
+#     stages derive it from ACQUIRE_MANIFEST / --required-manifest).
 #   Exit: 0 every requested stage PASS; 10 Build FAIL; 11 Match FAIL; 12 Commit FAIL; 13 required-value manifest not built; 3 precheck FAIL;
 #     2 bad argv / MATCH_PHASE; 128+signal when cancelled (TERM/INT/HUP is forwarded to the running stage's process group, see run_to).
 #   Protocol spec: Notion -> "vLLM integration — protocol spec (Build · Match · Commit)".

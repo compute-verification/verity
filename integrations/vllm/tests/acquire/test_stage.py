@@ -1,37 +1,21 @@
-"""The switch and the stage entry: ACQUIRE_ENGINE defaults to v2 (v1 = the regression oracle only); `plan_at_stage` writes the plan documents beside a stage's outputs."""
+"""The stage entry: `plan_at_stage` writes the plan documents beside a stage's outputs."""
 from __future__ import annotations
 
 import json
 
 import pytest
 
-from verity_vllm.acquire import switch
-
 torch = pytest.importorskip("torch")
 
 from tests.acquire.test_install import Runner, Tiny, base_rows, row  # noqa: E402
-from verity_capture.commit import required_manifest as RM  # noqa: E402
+from verity_capture.commit import manifest_format as RM  # noqa: E402
 from verity_vllm.acquire.correspondence import RuntimeTree  # noqa: E402
 from verity_vllm.acquire.install import IncompletePlan  # noqa: E402
 from verity_vllm.acquire.plan import load_plan  # noqa: E402
 from verity_vllm.acquire.stage import plan_at_stage  # noqa: E402
 
 
-def test_switch_defaults_to_v2(monkeypatch):
-    monkeypatch.delenv(switch.ENV, raising=False)
-    assert switch.engine() == "v2" and switch.v2()
-    monkeypatch.setenv(switch.ENV, "v1")                      # the regression oracle, selectable for one more release
-    assert not switch.v2() and switch.engine() == switch.ORACLE
-    monkeypatch.setenv(switch.ENV, " V2 ")
-    assert switch.v2()
-    monkeypatch.setenv(switch.ENV, "")
-    assert switch.engine() == "v2"
-    with pytest.raises(ValueError, match="ACQUIRE_ENGINE"):
-        switch.engine("v3")
-
-
-def test_plan_at_stage_writes_the_documents(tmp_path, monkeypatch):
-    monkeypatch.setenv(switch.ENV, "v2")
+def test_plan_at_stage_writes_the_documents(tmp_path):
     model, runner = Tiny(), Runner()
     rows = base_rows()
     man = {"schema": RM.SCHEMA, "program_digest": "0" * 64, "identities": rows, "manifest_digest": RM.manifest_digest(rows), "wrapper_prefix": "",
@@ -39,15 +23,13 @@ def test_plan_at_stage_writes_the_documents(tmp_path, monkeypatch):
     mp = tmp_path / "manifest.json"
     mp.write_text(json.dumps(man))
     docs = plan_at_stage(model, runner, mp, tmp_path / "out", source="test-stage")
-    assert docs.engine == "v2" and docs.plan is not None and docs.plan.complete
-    assert set(docs.paths) == {"runtime_tree", "acquisition_plan", "v1_decision", "site_compare"}
+    assert docs.plan is not None and docs.plan.complete
+    assert set(docs.paths) == {"runtime_tree", "acquisition_plan"}
     rt = RuntimeTree.load(docs.paths["runtime_tree"])
     assert rt.source == "test-stage" and "blocks.0.norm" in rt.modules and rt.runner["sample"] is True
     doc = load_plan(docs.paths["acquisition_plan"])
     assert doc["plan_digest"] == docs.plan.digest
-    cmp = json.loads((tmp_path / "out" / "site_compare.json").read_text())
-    assert cmp["row_id"] == "synthetic-row" and cmp["plan_digest"] == docs.plan.digest
-    assert any("site compare vs v1" in ln for ln in docs.log_lines("t"))
+    assert any(docs.plan.digest[:16] in ln for ln in docs.log_lines("t"))
     # without a manifest only the runtime tree is written (the CPU gate's off-pod input)
     d2 = plan_at_stage(model, runner, None, tmp_path / "out2", source="test-stage")
     assert d2.plan is None and set(d2.paths) == {"runtime_tree"}
@@ -56,4 +38,4 @@ def test_plan_at_stage_writes_the_documents(tmp_path, monkeypatch):
     man2 = dict(man, identities=rows2, manifest_digest=RM.manifest_digest(rows2))
     with pytest.raises(IncompletePlan, match="blocks.0.gone/out"):
         plan_at_stage(model, runner, man2, tmp_path / "out3", source="test-stage")
-    assert (tmp_path / "out3" / "site_compare.json").exists()
+    assert (tmp_path / "out3" / "acquisition_plan.json").exists()

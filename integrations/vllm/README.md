@@ -75,11 +75,10 @@ Research terms (Tool, Derivation, Attempt, Artifact, Snapshot, Replica, Label) b
 **v2 is the integration** (since the flip on `lane/vllm-v2-default`, Draft 3.1 §12.3): the required-value manifest of record is
 `Q_module_body_v1` over the Program + runtime correspondence (`verity_vllm.query`: `python -m verity_vllm.query.cli build | build-global`,
 built at the end of a PASS Build by `row_pod.sh`); value acquisition follows the acquisition plan derived from it
-(`verity_vllm.acquire`, `ACQUIRE_ENGINE=v2`, the default); the verdict of record is `<row>/verdict.json` (`vllm-verdict/v1`,
-`verity_capture.commit.verdict`).  `commit_summary.json` and the `finalize.py` board are no longer written (P5).  The v1 engine
-(`ACQUIRE_ENGINE=v1`; `verity_capture.commit.required_manifest` by-name tables) is selectable for one more release as the
-**regression oracle only** -- the oracle proper is the frozen R19 reference records on R2 that `tests/regression` compares against
-(`VERITY_REGRESSION_ORACLE=frozen`), not the v1 code.
+(`verity_vllm.acquire`; TP rank committers still select by `native_host`'s class tables); the verdict of record is `<row>/verdict.json`
+(`vllm-verdict/v1`, `verity_capture.commit.verdict`).  `commit_summary.json` and the `finalize.py` board are no longer written (P5).  The
+v1 engine is deleted (recoverable at git tag `v1-reference`); the frozen R19 reference records on R2 that `tests/regression` compares
+against (`VERITY_REGRESSION_ORACLE=frozen`) are records, not code.
 
 Layers and where they live (Draft 3 §12.1):
 

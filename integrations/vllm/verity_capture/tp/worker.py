@@ -181,12 +181,12 @@ def _tp2_request_program_dirs(root: str, reqs: list[dict], rank: int) -> dict[st
     `*LP_T` dir and a bare glob refused it ("no request Program for r0 at <root>/*LP1024_T127": the Qwen3-30B-A3B TP2 B2 and OLMoE TP2 B8
     rows on r16-int-4 537a9362d, sampled replay not run on both ranks and TP-12's unreplayable_sites never set).  Never a near shape;
     the caller still refuses any loaded Program whose digest is not of record."""
-    from verity_capture.commit import required_manifest as RM
+    from verity_capture.commit import manifest_format as RM
 
     if os.path.exists(os.path.join(str(root), "instances.json.gz")):
         return {str(r["request_id"]): str(root) for r in reqs}
     try:
-        return {str(k): str(v) for k, v in RM._program_dirs_for({"requests": list(reqs)}, str(root)).items()}
+        return {str(k): str(v) for k, v in RM.program_dirs_for({"requests": list(reqs)}, str(root)).items()}
     except SystemExit as e:  # the manifest lookup names the missing (LP, T) and exits; inside a worker that is an error, not an exit
         raise RuntimeError(f"rank {rank}: {e}") from None
 
@@ -1136,7 +1136,7 @@ class TP2CaptureWorkerExtension:
                            "boundary_linkage": {"result": None, "why": "no binding map on this rank"}}
         try:
             from verity_capture.commit import oracle_compare as OC
-            from verity_capture.commit import required_manifest as RM
+            from verity_capture.commit import manifest_format as RM
             from verity_capture.commit import sampled_replay as SR
             from verity_vllm.registry import b1_tp2 as _TP2
 
@@ -1172,7 +1172,8 @@ class TP2CaptureWorkerExtension:
             if bad_tp:
                 raise RuntimeError(f"rank {rank}: REFUSED (not this rank's Program): " + ", ".join(f"{k}: tp={t}" for k, t in bad_tp.items()))
             tp_ctx = {"rank": rank, "world": int(st["world"])}
-            pi0 = SR.ProgramIndex(next(iter(progs.values())), attention_paths=attn_paths, tp=tp_ctx)
+            rid0 = next(iter(progs))
+            pi0 = SR.ProgramIndex(progs[rid0], attention_paths=attn_paths, tp=tp_ctx, program_dir=dirs.get(rid0))
             wp = SR.model_weights_provider(st["eng"].model, pi0.prefix)
             # [TP-12 / rev M-0418] the SITES of the collective-output families this replay cannot evaluate (AllReduce2 / AllGather2 /
             # EmbeddingShard rows with a committed member), from the Program itself -- the cross-rank pass records its strata against them

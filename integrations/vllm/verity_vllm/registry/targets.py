@@ -18,8 +18,8 @@ split along them:
 
 The Definition ids: on an Ampere-family step under FA2 the kinds are the accepted records' (`Gemm_v1{K,N}`, `Attention_v3{T,NH,KVH,D,BN}`:
 their Program digests do not move).  Every other combination binds the statics-lifted chains `Gemm_v2{K,N,DOT}` /
-`Attention_v2{T,NH,KVH,D,BN,DOT,INV}` (`b1.GemmV2`, `b1.AttentionV2`: the same bodies with the step and the epilogue as declared statics;
-`verity_capture.vu_canonical` already partitions both versions).  Three consumers read this module for "which registered function does
+`Attention_v2{T,NH,KVH,D,BN,DOT,INV}` (`b1.GemmV2`, `b1.AttentionV2`: the same bodies with the step and the epilogue as declared
+statics).  Three consumers read this module for "which registered function does
 this launch compute on the declared target": the Bet A builder (`verity_vllm.frontend.rules.vllm_bindings`), the eager Match resolver
 (`verity_capture.patterns`) and, through the run header's recorded target, the collector.  The per-target correspondence (the row's Match
 replay on the captured operands; lane ampere's `gemm_target_correspondence` driver) is checked bit for bit, never a tolerance.

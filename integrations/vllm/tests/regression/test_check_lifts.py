@@ -11,7 +11,6 @@ import copy
 
 import pytest
 
-from verity_capture.commit import required_manifest as RM
 from verity_capture.commit import sampled_replay as SR
 from verity_capture.commit.tests import test_sampled_replay as T
 from verity_capture.commit.tests.test_sampled_replay import moe_world, world  # noqa: F401  -- fixtures
@@ -19,12 +18,6 @@ from verity_capture.commit.tests.test_sampled_replay import moe_world, world  # 
 from tests.regression import resolver
 from tests.regression.checks import decomp_hashes as DH
 from tests.regression.checks import replay_partition as RP
-
-
-def _program_doc(inst: dict) -> dict:
-    return {"instances": inst, "result": {"program": {"digest": "t" * 64, "function": "Derived[vLLMRequest[Test]]"}, "wrapper": "request", "LP": T.LP, "T": T.T,
-                                          "target": {"declared": {"compute_capability": [8, 9]}}, "attention_impls_observed": {}},
-            "artifact": {"program_digest": "t" * 64}, "dir": "<synthetic>"}
 
 
 def _programs(w):
@@ -39,8 +32,7 @@ def _weights(w):
 
 
 def _manifest_for(w) -> dict:
-    parts = [RM.build_manifest(_program_doc(w.inst), request_id=rid, engine="inventory") for rid in sorted(w.prompts)]
-    return parts[0] if len(parts) == 1 else RM.merge_manifests(parts)
+    return T.v2_manifest(w.inst, tuple(sorted(w.prompts)))
 
 
 def _record(w, **kw) -> tuple[dict, dict]:
@@ -54,11 +46,11 @@ def _record(w, **kw) -> tuple[dict, dict]:
 def test_the_partition_recomputed_from_the_record_lifts_to_the_record(world, seed, per_stratum, ring_slots):  # noqa: F811
     rep, man = _record(world, per_stratum=per_stratum, seed=seed, ring_slots=ring_slots)
     assert rep["population"]["vus"] > 0 and rep["population"]["strata_n"] > 1
-    doc = RP.recompute(rep, _programs(world), man)
+    doc = RP.recompute(rep, _programs(world))
     exp, act = RP.lift(rep), RP.lift(doc)
     assert resolver.diff(exp, act) == []
     # the draw is the seed's: another seed moves the per-(request, step) picks (the strata sizes stay)
-    other = RP.recompute(dict(rep, sample=dict(rep["sample"], seed=seed + 1)), _programs(world), man)
+    other = RP.recompute(dict(rep, sample=dict(rep["sample"], seed=seed + 1)), _programs(world))
     d = resolver.diff(exp, RP.lift(other))
     assert d and all(".sample." in x or ".lifetime.sampled" in x for x in d), d
     assert all(".strata." not in x or x.endswith("sampled") or "population" not in x for x in d)
@@ -67,7 +59,7 @@ def test_the_partition_recomputed_from_the_record_lifts_to_the_record(world, see
 def test_the_partition_over_the_moe_world_lifts_to_the_record(moe_world):  # noqa: F811
     rep, man = _record(moe_world, per_stratum=2, seed=5)
     assert rep["population"]["strata_n"] > 1 and rep["population"]["by_family"]
-    assert resolver.diff(RP.lift(rep), RP.lift(RP.recompute(rep, _programs(moe_world), man))) == []
+    assert resolver.diff(RP.lift(rep), RP.lift(RP.recompute(rep, _programs(moe_world)))) == []
 
 
 def test_a_changed_program_row_moves_a_count_by_name(world):  # noqa: F811
@@ -77,7 +69,7 @@ def test_a_changed_program_row_moves_a_count_by_name(world):  # noqa: F811
     inst["rows"] = inst["rows"][:-1]                                        # one Program row fewer
     for v in progs.values():
         v["rows"] = inst["rows"]
-    d = resolver.diff(RP.lift(rep), RP.lift(RP.recompute(rep, progs, man)))
+    d = resolver.diff(RP.lift(rep), RP.lift(RP.recompute(rep, progs)))
     assert any(x.startswith("$.population.vus") for x in d), d
 
 

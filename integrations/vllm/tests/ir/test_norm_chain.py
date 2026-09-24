@@ -185,7 +185,7 @@ def test_residual_form_binds_the_fused_chain_with_members():
     narrow = [a for a in rep.provenance["applications"] if a["rule"] == "NarrowF32ToBf16[aten]_v1"]
     assert [_det(a)["member"] for a in narrow] == ["1", "0"], narrow
     # the Program's row names carry the member hint the required-value manifest reads (`<module>/<node>/<member>[row]`)
-    from verity_capture.commit.required_manifest import split_name
+    from verity_capture.commit.manifest_format import split_name
     hints = [h for h in rep.program.annotations["node_hints"].values() if "/1[" in h or "/0[" in h]
     assert len(hints) == 4, rep.program.annotations["node_hints"]
     parsed = [split_name(h) for h in hints]

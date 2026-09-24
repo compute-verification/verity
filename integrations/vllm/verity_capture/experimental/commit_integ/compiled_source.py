@@ -281,12 +281,11 @@ class CompiledGraphSource:
 
     def _plan_selection(self, model: torch.nn.Module, runner: Any, plan: Any) -> tuple[list[str], list[str]]:
         from verity_vllm.acquire.install import plan_selection
-        from verity_vllm.acquire.switch import ENV
 
         if plan is None:
             if self.plan_manifest is None:
-                raise RuntimeError(f"{ENV}=v2: compiled rows wrap the acquisition plan's module boundaries and no plan or required-value "
-                                   f"manifest was passed in (commit_delta --required-manifest -> CompiledGraphSource.use_plan, before the engine build)")
+                raise RuntimeError("compiled rows wrap the acquisition plan's module boundaries and no plan or required-value manifest was "
+                                   "passed in (commit_delta --required-manifest -> CompiledGraphSource.use_plan, before the engine build)")
             from verity_vllm.acquire.stage import plan_at_stage
 
             plan = plan_at_stage(model, runner, self.plan_manifest, self.plan_dir or ".", source="compiled_source wrap_model").plan
@@ -294,13 +293,11 @@ class CompiledGraphSource:
         return plan_selection(plan, model)
 
     def wrap_model(self, model: torch.nn.Module, runner: Any, plan: Any = None) -> None:
-        """Wrap `forward` of every acquired module with the record op, with the committer's selection: under ACQUIRE_ENGINE=v2 the
-        acquisition plan's (`install.plan_selection`: producer_output modules record their outputs, consumer_input modules their first
-        argument; `plan`, else derived from the `use_plan` manifest, else refused by name), under v1 the class tables (ACQUIRE_CLASSES minus
-        SKIP_CLASSES).  A VERITY_SKIP class's outputs are not recorded (the committer's `apply_skip`); the sampler is acquired by the
-        committer's runner.sample wrapper, outside the compiled region."""
-        from verity_capture.experimental.commit_integ.native_host import ACQUIRE_CLASSES, ACQUIRE_INPUT_CLASSES, SKIP_CLASSES, _mro_names, skip_classes_of_env
-        from verity_vllm.acquire.switch import v2
+        """Wrap `forward` of every acquired module with the record op, with the committer's selection: the acquisition plan's
+        (`install.plan_selection`: producer_output modules record their outputs, consumer_input modules their first argument; `plan`,
+        else derived from the `use_plan` manifest, else refused by name).  A VERITY_SKIP class's outputs are not recorded (the
+        committer's `apply_skip`); the sampler is acquired by the committer's runner.sample wrapper, outside the compiled region."""
+        from verity_capture.experimental.commit_integ.native_host import _mro_names, skip_classes_of_env
 
         self.model, self.runner = model, runner
         if self.rows <= 0:
@@ -314,20 +311,13 @@ class CompiledGraphSource:
         omit_leaf = self.fault.split(":", 1)[1] if self.fault.startswith("compiled_omit:") else None
         skip = skip_classes_of_env()
         targets: list[tuple[str, Any, bool, bool]] = []          # (name, module, record outputs, record first argument)
-        if v2():
-            outs, ins = self._plan_selection(model, runner, plan)
-            outs_set, ins_set = set(outs), set(ins)
-            for name, m in model.named_modules():
-                out = name in outs_set and not (_mro_names(m) & skip)
-                if out or name in ins_set:
-                    targets.append((name, m, out, name in ins_set))
-        else:
-            for name, m in model.named_modules():
-                names = _mro_names(m)
-                if names & (SKIP_CLASSES | skip) or not (names & ACQUIRE_CLASSES) or "Sampler" in names:
-                    continue
-                targets.append((name, m, True, bool(names & ACQUIRE_INPUT_CLASSES)))
-        self.selection = {"engine": "v2" if v2() else "v1", "plan_digest": getattr(self.plan, "digest", None),
+        outs, ins = self._plan_selection(model, runner, plan)
+        outs_set, ins_set = set(outs), set(ins)
+        for name, m in model.named_modules():
+            out = name in outs_set and not (_mro_names(m) & skip)
+            if out or name in ins_set:
+                targets.append((name, m, out, name in ins_set))
+        self.selection = {"engine": "v2", "plan_digest": getattr(self.plan, "digest", None),
                           "outputs": [n for n, _m, out, _pre in targets if out], "inputs": [n for n, _m, _out, pre in targets if pre]}
         for name, m, out, pre in targets:
             leaf = name.rsplit(".", 1)[-1]
@@ -378,7 +368,7 @@ class CompiledGraphSource:
         inputs, after its plan (`apply_plan_to_committer`) and skip: a compiled row never acquires a set other than the committer's plan.
         Refused by name on a difference."""
         c = committer if committer is not None else self.c
-        if c is None or not hasattr(c, "_modules") or self.selection is None or self.selection["engine"] != "v2" or self.model is None:
+        if c is None or not hasattr(c, "_modules") or self.selection is None or self.model is None:
             return
         mods = dict(self.model.named_modules())
         outs = {n for n, _m in c._modules if n in mods}

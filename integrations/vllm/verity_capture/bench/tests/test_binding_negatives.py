@@ -213,7 +213,7 @@ def test_global_manifest_addresses_must_follow_engine_row_order(tmp_path):
     assert per_tok["r1"]["element_offset"] == 0 and per_tok["r0"]["element_offset"] == 40 * (lens[1] // n_tok)
 
     def manifest(r1_lo: int, r1_hi: int) -> str:
-        from verity_capture.commit.required_manifest import manifest_digest as _mdig
+        from verity_capture.commit.manifest_format import manifest_digest as _mdig
 
         ids = [{"family": "instance_outputs", "program_digest": "other-program", "request_id": WID[1], "step": 1, "invocation": 0, "op_path": "model.embed_tokens",
                 "output_member": "out", "element_range": [r1_lo, r1_hi], "rank": 0},
@@ -364,7 +364,7 @@ def b8_manifest(tmp_path, declared: dict[int, list[tuple[str, int]]]) -> str:
                 hi = 1 if fam == "sampled_token_ids" else n
                 ids.append({"family": fam, "program_digest": PD, "request_id": rid, "step": e, "engine_step": e, "invocation": 0, "op_path": op,
                             "output_member": mem, "element_range": [0, hi], "rows": n, "width": 1, "rank": 0})
-    from verity_capture.commit.required_manifest import manifest_digest as _mdig
+    from verity_capture.commit.manifest_format import manifest_digest as _mdig
 
     doc = {"schema": "verity-sweep/required-manifest/v1", "global": True, "addressing": "request-local", "program_digest": PD, "program_digest_kind": "workload",
            "manifest_digest": _mdig(ids), "complete": True, "unmodelled": {},
@@ -489,7 +489,7 @@ def test_manifest_edited_after_digesting_is_refused(tmp_path):
 
 
 def test_manifest_zero_width_identity_is_refused_not_vacuously_covered(tmp_path):
-    from verity_capture.commit.required_manifest import manifest_digest as _mdig
+    from verity_capture.commit.manifest_format import manifest_digest as _mdig
 
     p, doc = _b8_doc(tmp_path)
     doc["identities"][3]["element_range"] = [0, 0]                        # F-cb-10: an EXISTING identity made zero-width
@@ -504,7 +504,7 @@ def test_manifest_zero_width_identity_is_refused_not_vacuously_covered(tmp_path)
 
 
 def test_manifest_request_id_not_r_k_is_refused(tmp_path):
-    from verity_capture.commit.required_manifest import manifest_digest as _mdig
+    from verity_capture.commit.manifest_format import manifest_digest as _mdig
 
     p, doc = _b8_doc(tmp_path)
     doc["identities"][0]["request_id"] = "5b7fee10-6a81-52b7-b730-133d6cc768da"   # F-cb-13: a bare workload UUID no declaration resolves
@@ -521,7 +521,7 @@ def test_manifest_request_id_not_r_k_is_refused(tmp_path):
 
 
 def test_manifest_program_digest_must_be_a_string(tmp_path):
-    from verity_capture.commit.required_manifest import manifest_digest as _mdig
+    from verity_capture.commit.manifest_format import manifest_digest as _mdig
 
     p, doc = _b8_doc(tmp_path)
     doc["program_digest"] = [PD, "another"]                               # the rc3 merge_manifests shape: a list is not a Program of record

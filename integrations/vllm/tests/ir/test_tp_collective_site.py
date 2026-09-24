@@ -4,7 +4,7 @@ A collective whose rank-local operand is produced UNDER its own module (vLLM `Ro
 forward) keeps the module vocabulary `<module>/<node>[i]/all_reduce` -- the Gemm under the module is the rank's partial (TP-04).  A
 collective issued MID-module, whose rank-local operand is another module's output (OLMoE `OlmoeAttention._apply_qk_norm`: q and k
 all-gathered inside `self_attn`, each a slice of the `qkv_proj` Gemm's output), is named at its call SITE `<module>.<fx node>/<node>`,
-which `required_manifest.collective_site` turns into the module's k-th collective identity with its own `shard_rank<r>` member.
+which the v2 query (`v1_bridge.collective_sites`) turns into the module's k-th collective identity with its own `shard_rank<r>` member.
 Without the site the manifest folded both gathers into one `self_attn/out` of twice the width with no partial to bind (row #70:
 6,944 unbound identities per rank).  CPU, meta tensors; no vLLM.
 
@@ -16,7 +16,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from verity_capture.commit.required_manifest import collective_site, split_name
+from verity_capture.commit.manifest_format import split_name
 from verity_capture.experimental.cb_a.tp_ops import ensure_ops
 from verity_vllm.frontend.derive import derive_report
 from verity_vllm.frontend.rules.vllm_bindings import vllm_ruleset
@@ -104,21 +104,13 @@ def test_mid_module_collective_is_named_at_its_site_and_the_module_collective_st
     reduces = sorted({split_name(n)[0] for f, n in rows if f == "AllReduce2_v1"})
     gemms = sorted({split_name(n)[0] for f, n in rows if f == "Gemm_v1"})
     # the two mid-module gathers: two SITES under self_attn, each named by its own fx node -- never both under the bare module
-    assert len(gathers) == 2 and all(collective_site(m) == ("layers.0.self_attn", m.rsplit(".", 1)[1]) for m in gathers), gathers
+    assert len(gathers) == 2 and all(m.rsplit(".", 1)[0] == "layers.0.self_attn" for m in gathers), gathers
     assert all(m.rsplit(".", 1)[1].startswith("all_gather2") for m in gathers)
     assert "layers.0.self_attn" not in gathers
     assert sum(1 for f, n in rows if f == "AllGather2_v1") == 2 * T                # one row per token per call
     # the row-parallel all-reduce stays the module's own (its Gemm is under the same module) -- the dense TP2 vocabulary is unchanged
-    assert reduces == ["layers.0.o_proj"] and collective_site(reduces[0]) is None
+    assert reduces == ["layers.0.o_proj"]
     assert gemms == ["layers.0.o_proj", "layers.0.self_attn.qkv_proj"]
     # provenance: the collective applications still carry the MODULE path (tp_links.json binds peer inputs by it, not by the row name)
     apps = [a for a in rep.provenance["applications"] if a["rule"].startswith("AllGather2")]
     assert len(apps) == 2 and all("layers.0.self_attn (" in a["module_path"] for a in apps), apps
-
-
-def test_collective_site_parser():
-    assert collective_site("model.layers.3.self_attn.all_gather2_7") == ("model.layers.3.self_attn", "all_gather2_7")
-    assert collective_site("model.layers.3.self_attn.all_reduce2") == ("model.layers.3.self_attn", "all_reduce2")
-    assert collective_site("model.layers.3.self_attn.o_proj") is None
-    assert collective_site("logits_processor") is None
-    assert collective_site("all_gather2_7") is None                                # unrooted: not a site

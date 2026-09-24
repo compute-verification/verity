@@ -141,9 +141,9 @@ def main() -> None:
     ap.add_argument("--verify-weights", action="store_true", help="sha256-verify the local checkpoint files against the manifest before loading (root policy: weight identity)")
     ap.add_argument("--engine-arg", action="append", default=[], help="LLM(**kw) override key=value (JSON value), repeatable; e.g. max_num_batched_tokens=64")
     ap.add_argument("--target", default=None, help="[R13 hopper] TargetProfile JSON overrides / path the engine is built for (default: the workload's `target` block over this device)")
-    ap.add_argument("--acquisition-manifest", default=None, help="[v2 acquire, Phase 4a] the row's required-value manifest: under ACQUIRE_ENGINE=v2 the plan's "
-                    "hooks are installed beside the observer (occurrence counts only: DIR/acquisition_observed.json) and DIR/runtime_tree.json, "
-                    "acquisition_plan.json, v1_decision.json, site_compare.json are written (default: $ACQUIRE_MANIFEST)")
+    ap.add_argument("--acquisition-manifest", default=None, help="[v2 acquire, Phase 4a] the row's required-value manifest: the plan's hooks are installed beside "
+                    "the observer (occurrence counts only: DIR/acquisition_observed.json) and DIR/runtime_tree.json, acquisition_plan.json are "
+                    "written (default: $ACQUIRE_MANIFEST)")
     args = ap.parse_args()
 
     out = Path(args.out)
@@ -186,25 +186,21 @@ def main() -> None:
     nz = dump_normalizer(eng, out)
     if nz is not None:
         print(f"[m1] normalizer -> {nz}", flush=True)
-    # [v2 acquire, Phase 4a] ACQUIRE_ENGINE=v2: the built engine's runtime tree (always) and, with a required-value manifest, the acquisition plan
-    # + v1's decision + their comparison, written before any run; the plan's hooks go in beside the observer below (counts / shapes only).
-    from verity_vllm.acquire import switch as acq_switch
+    # [v2 acquire, Phase 4a] the built engine's runtime tree (always) and, with a required-value manifest, the acquisition plan, written
+    # before any run; the plan's hooks go in beside the observer below (counts / shapes only).
+    import os
 
-    acq_docs = None
-    if acq_switch.v2():
-        import os
+    from verity_vllm.acquire.install import IncompletePlan
+    from verity_vllm.acquire.stage import MANIFEST_ENV, plan_at_stage
 
-        from verity_vllm.acquire.install import IncompletePlan
-        from verity_vllm.acquire.stage import MANIFEST_ENV, plan_at_stage
-
-        man_path = args.acquisition_manifest or os.environ.get(MANIFEST_ENV) or None
-        try:
-            acq_docs = plan_at_stage(eng.model, getattr(eng, "runner", None), man_path, out, source="m1_capture", row_id=wl.get("row_id"))
-        except IncompletePlan as e:
-            print(f"[m1] REFUSE: acquisition plan: {e}", flush=True)
-            sys.exit(3)
-        for ln in acq_docs.log_lines("m1"):
-            print(ln, flush=True)
+    man_path = args.acquisition_manifest or os.environ.get(MANIFEST_ENV) or None
+    try:
+        acq_docs = plan_at_stage(eng.model, getattr(eng, "runner", None), man_path, out, source="m1_capture")
+    except IncompletePlan as e:
+        print(f"[m1] REFUSE: acquisition plan: {e}", flush=True)
+        sys.exit(3)
+    for ln in acq_docs.log_lines("m1"):
+        print(ln, flush=True)
 
     if not args.no_warmup:
         warm = va.throwaway_requests(eng, wl["requests"])
@@ -234,7 +230,7 @@ def main() -> None:
         print(f"[m1] observer installed: {len(cap.roots)} roots, profile_id={header.profile_id}, "
               f"reenter impls={header.notes.get('reenter_impls')}", flush=True)
         acq_inst, acq_sink = None, None
-        if acq_docs is not None and acq_docs.plan is not None:
+        if acq_docs.plan is not None:
             from verity_vllm.acquire.install import OccurrenceSink, install_from_plan
 
             acq_sink = OccurrenceSink()
