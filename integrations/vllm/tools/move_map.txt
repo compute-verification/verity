@@ -1199,3 +1199,8 @@ REWRITE verity_capture/bench/tests/test_commit_verdict_replay_seed_of_record.py 
 # the dead-code census walks the integration's packages by name; after the move there is one
 REWRITE tests/dead_code_census.py :: PACKAGES = ("verity_vllm", "verity_capture", "verity_vllm_numerics", "verity_vllm_adapter") => PACKAGES = ("verity_vllm",)
 REWRITE tests/dead_code_census.py :: # os.path.join(REPO, "verity_capture", "sweep", "<name>.py") => # os.path.join(REPO, "verity_vllm", "harness", "<name>.py")
+# the bootstrap's verity_capture_from_tree check goes with the package (REWRITE pod_bootstrap.sh above); its test and comment follow
+REWRITE pod_bootstrap.sh :: verity_vllm_from_tree, verity_capture_from_tree, => verity_vllm_from_tree,
+REWRITE tests/test_pod_bootstrap.py :: "verity_capture_from_tree", "research_telemetry_from_tree", "numpy_import", "no_old_tree_on_path"): => "research_telemetry_from_tree", "numpy_import", "no_old_tree_on_path"):
+REWRITE tests/test_pod_bootstrap.py :: "verity_vllm_from_tree", "verity_capture_from_tree", "research_telemetry_from_tree", "numpy_import"): => "verity_vllm_from_tree", "research_telemetry_from_tree", "numpy_import"):
+REWRITE verity_capture/tests/test_source_identity.py :: def test_hidden_gpu_refuses_a_verity_capture_already_imported_from_another_tree( => def test_hidden_gpu_refuses_a_verity_vllm_already_imported_from_another_tree(
