@@ -24,7 +24,7 @@ the sibling digest or ``None`` where the node was lifted; the sibling/lift patte
 *Shape text* is ``"[" + ",".join(str(d)) + "]"`` with no spaces (a scalar is ``"[]"``); *dtype* is a dtype name
 such as ``"bfloat16"``; *value* is the exact little-endian bytes in C order, hashed without conversion.
 
-Provenance: the generic core of veritor ``vllm-poc/verity_vllm/hashing.py`` and ``commit.py`` (eb865ce2), which
+Provenance: the generic core of veritor ``vllm-poc/verity_vllm/commit/hashing.py`` and ``commit.py`` (eb865ce2), which
 ``veritor.protocol.proofs.packed`` mirrored.  Two things were left behind on purpose.  The tag strings say
 ``verity-vllm`` because the scheme was born in the serving integration; the *scheme* is not vLLM-specific (any
 id, dtype, shape, bytes) and the tag bytes are pinned by the guest, every conformance vector and every recorded

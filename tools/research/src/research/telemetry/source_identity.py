@@ -1,7 +1,7 @@
 """Source identity of the packages a job imports -- the generic half (stdlib only; project-independent).
 
 [R18 infra, F-r17-tp-06 / COORD M-1848 (2)] A Commit under --gpu-tree without VERITOR_REPO imported `verity_ir` from the pod's DEFAULT tree
-while `verity_capture` ran the release and versions.json named the release commit (tp M-1830).  The fix by construction has three parts and
+while `verity_vllm` ran the release and versions.json named the release commit (tp M-1830).  The fix by construction has three parts and
 this module is the evidence half: for every important imported package record
 
     resolved_path   the file/directory Python actually resolves the name to (importlib.util.find_spec, NOT an import -- nothing runs)
@@ -13,7 +13,7 @@ this module is the evidence half: for every important imported package record
 plus `sys_path0` = sys.path[0] of the resolving interpreter, and `check(...)` compares every repo_root with the REQUESTED tree: a
 mismatch is `PRECHECK_FAIL_SOURCE_IDENTITY` (the failure class the classifier reads from the precheck record), raised BEFORE any inference.
 
-The project half (which names, which root markers, the CLI) lives with the project (Verity: verity_capture/sweep/source_identity.py).
+The project half (which names, which root markers, the CLI) lives with the project (Verity: verity_vllm/harness/source_identity.py).
 """
 from __future__ import annotations
 
@@ -50,7 +50,7 @@ def _realpath(p: str | os.PathLike[str]) -> str:
 
 def repo_root_of(path: str | os.PathLike[str], root_markers: Iterable[str] = ()) -> str | None:
     """Nearest ancestor of `path` that is a source tree: holds EXPORT.json (a shipped tree) or .git (a checkout/worktree); failing both,
-    the nearest ancestor holding every entry of `root_markers` (relative paths such as 'verity_capture/__init__.py')."""
+    the nearest ancestor holding every entry of `root_markers` (relative paths such as 'verity_vllm/observe/__init__.py')."""
     p = Path(_realpath(path))
     if p.is_file():
         p = p.parent

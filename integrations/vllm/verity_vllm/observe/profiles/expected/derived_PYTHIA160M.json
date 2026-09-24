@@ -1,0 +1,1169 @@
+{
+ "accepted": false,
+ "case": "PYTHIA160M",
+ "check_header": {
+  "perturb:hidden_act": [
+   "hidden_act='gelu_x' != C[hidden_act]='gelu'"
+  ],
+  "perturb:hidden_size": [
+   "hidden_size=769 != C[H]=768"
+  ],
+  "perturb:intermediate_size": [
+   "intermediate_size=3073 != C[I]=3072"
+  ],
+  "perturb:layer_norm_eps": [
+   "layer_norm_eps=1.00001 != C[EPS]=1e-05"
+  ],
+  "perturb:max_position_embeddings": [
+   "max_position_embeddings=2049 != C[MAX_POS]=2048"
+  ],
+  "perturb:num_attention_heads": [
+   "num_attention_heads=13 != C[NH]=12"
+  ],
+  "perturb:num_hidden_layers": [
+   "num_hidden_layers=13 != C[NL]=12"
+  ],
+  "perturb:rotary_emb_base": [
+   "rotary_emb_base=10001 != C[ROPE_THETA]=10000.0"
+  ],
+  "perturb:rotary_pct": [
+   "rotary_pct=1.25: ROT 80 != C[ROT]=16"
+  ],
+  "perturb:tie_word_embeddings": [
+   "tie_word_embeddings=True != C[tie_word_embeddings]=False"
+  ],
+  "perturb:use_parallel_residual": [
+   "use_parallel_residual=False != C[use_parallel_residual]=True"
+  ],
+  "perturb:vocab_size": [
+   "vocab_size=50305 != C[V]=50304"
+  ],
+  "self": []
+ },
+ "config": {
+  "BIAS": true,
+  "BN": 128,
+  "D": 64,
+  "EPS": 1e-05,
+  "GU": 6144,
+  "H": 768,
+  "I": 3072,
+  "KVH": 12,
+  "MAX_POS": 2048,
+  "NH": 12,
+  "NL": 12,
+  "NORM": "layernorm",
+  "QKV": 2304,
+  "ROPE_THETA": 10000.0,
+  "ROT": 16,
+  "V": 50304,
+  "dense_bias": true,
+  "family": "gpt_neox",
+  "hidden_act": "gelu",
+  "layer_norms": 2,
+  "model": "EleutherAI/pythia-160m",
+  "revision": "50f5173d932e8e61f858120bcb800b97af589f46",
+  "rope_scaling": null,
+  "tie_word_embeddings": false,
+  "use_parallel_residual": true
+ },
+ "id": "vllm-d9105ea80-sm89-eager-bf16-pythia160m",
+ "kernel_allowlist": {
+  "n": 32,
+  "sha256": "65df505a21c05004"
+ },
+ "patterns": [
+  {
+   "__type__": "GemmLaunchTuned",
+   "kernel": "matmul_kernel_persistent",
+   "name": "gemm.matmul_kernel_persistent.tuned",
+   "num_sms": 128,
+   "table": null
+  },
+  {
+   "__type__": "GemmLaunch",
+   "constexprs": {
+    "A_LARGE": false,
+    "BLOCK_SIZE_K": 64,
+    "BLOCK_SIZE_M": 128,
+    "BLOCK_SIZE_N": 128,
+    "B_LARGE": false,
+    "C_LARGE": false,
+    "GROUP_SIZE_M": 8,
+    "HAS_BIAS": false
+   },
+   "kernel": "matmul_kernel_persistent",
+   "name": "gemm.matmul_kernel_persistent",
+   "num_sms": 128,
+   "num_stages": 3,
+   "num_warps": 8,
+   "wrapper_ops": [
+    "aten.addmm",
+    "aten.bmm",
+    "aten.linear",
+    "aten.matmul",
+    "aten.mm"
+   ]
+  },
+  {
+   "__type__": "RMSNormTritonLaunch",
+   "constexprs": {
+    "BLOCK_SIZE": 1024,
+    "HAS_WEIGHT": true
+   },
+   "eps": 1e-05,
+   "kernel": "_rms_norm_kernel",
+   "name": "rmsnorm.triton_rms_norm_kernel",
+   "num_warps": 4
+  },
+  {
+   "__type__": "FusedAddRMSNorm",
+   "eps": 1e-05,
+   "name": "rmsnorm.fused_add_rms_norm"
+  },
+  {
+   "__type__": "RotaryEmbeddingPartial",
+   "name": "rope.rotary_embedding_partial",
+   "rot": 16
+  },
+  {
+   "__type__": "RotaryEmbedding",
+   "name": "rope.rotary_embedding"
+  },
+  {
+   "__type__": "KVCacheUpdate",
+   "name": "kv.reshape_and_cache_flash"
+  },
+  {
+   "__type__": "AttentionScope",
+   "bn": 128,
+   "name": "attention.fa2_varlen_fwd",
+   "num_splits": 1
+  },
+  {
+   "__type__": "SiluAndMul",
+   "name": "act.silu_and_mul"
+  },
+  {
+   "__type__": "Embedding",
+   "name": "embedding.aten_embedding"
+  },
+  {
+   "__type__": "TokenSelectGumbelTopP",
+   "block_size": 1024,
+   "name": "sample.gumbel_topp_select",
+   "vocab": 50304
+  },
+  {
+   "__type__": "TokenSelectGumbelTwoStage",
+   "block_size": 1024,
+   "name": "sample.gumbel_two_stage",
+   "vocab": 50304
+  },
+  {
+   "__type__": "TokenSelectArgmax",
+   "name": "sample.argmax_token_select",
+   "vocab": 50304
+  },
+  {
+   "__type__": "LogitsGather",
+   "name": "sample.logits_gather"
+  },
+  {
+   "__type__": "LayerNormAtenPattern",
+   "eps": 1e-05,
+   "name": "layernorm.aten_layer_norm"
+  },
+  {
+   "__type__": "GeluErfPattern",
+   "name": "act.aten_gelu_erf"
+  },
+  {
+   "__type__": "ResidualAddPattern",
+   "name": "residual_add.aten_add"
+  },
+  {
+   "__type__": "BiasAdd",
+   "name": "bias_add.aten_add"
+  },
+  {
+   "__type__": "TransparentAten",
+   "name": "transparent.aten"
+  },
+  {
+   "__type__": "TransparentTritonMetadata",
+   "name": "transparent.triton_metadata"
+  }
+ ],
+ "pins": {
+  "attention": {
+   "kBlockM": 64,
+   "kBlockN": 128,
+   "kernel": "flash_fwd_splitkv_kernel",
+   "num_splits": 1
+  },
+  "gemm": {
+   "A_LARGE": false,
+   "BLOCK_SIZE_K": 64,
+   "BLOCK_SIZE_M": 128,
+   "BLOCK_SIZE_N": 128,
+   "B_LARGE": false,
+   "C_LARGE": false,
+   "GROUP_SIZE_M": 8,
+   "HAS_BIAS": false,
+   "NUM_SMS": 128,
+   "num_stages": 3,
+   "num_warps": 8
+  },
+  "gemm_tuned_ada": {
+   "N=12288,K=2048": {
+    "BLOCK_SIZE_K": 64,
+    "m_buckets": [
+     [
+      1,
+      [
+       16,
+       128,
+       8,
+       2
+      ]
+     ],
+     [
+      4,
+      [
+       16,
+       64,
+       8,
+       5
+      ]
+     ],
+     [
+      8,
+      [
+       16,
+       128,
+       8,
+       4
+      ]
+     ],
+     [
+      16,
+      [
+       16,
+       128,
+       4,
+       5
+      ]
+     ],
+     [
+      32,
+      [
+       32,
+       128,
+       4,
+       5
+      ]
+     ],
+     [
+      64,
+      [
+       32,
+       256,
+       4,
+       3
+      ]
+     ],
+     [
+      256,
+      [
+       128,
+       128,
+       8,
+       3
+      ]
+     ],
+     [
+      512,
+      [
+       128,
+       64,
+       4,
+       4
+      ]
+     ],
+     [
+      1024,
+      [
+       128,
+       128,
+       8,
+       3
+      ]
+     ],
+     [
+      2048,
+      [
+       128,
+       128,
+       4,
+       3
+      ]
+     ]
+    ]
+   },
+   "N=151936,K=2048": {
+    "BLOCK_SIZE_K": 64,
+    "m_buckets": [
+     [
+      1,
+      [
+       16,
+       32,
+       8,
+       5
+      ]
+     ],
+     [
+      4,
+      [
+       16,
+       32,
+       8,
+       5
+      ]
+     ],
+     [
+      8,
+      [
+       16,
+       32,
+       8,
+       5
+      ]
+     ],
+     [
+      16,
+      [
+       16,
+       32,
+       4,
+       4
+      ]
+     ],
+     [
+      32,
+      [
+       16,
+       64,
+       4,
+       4
+      ]
+     ],
+     [
+      64,
+      [
+       32,
+       64,
+       4,
+       4
+      ]
+     ],
+     [
+      256,
+      [
+       128,
+       128,
+       4,
+       3
+      ]
+     ],
+     [
+      512,
+      [
+       128,
+       128,
+       4,
+       3
+      ]
+     ],
+     [
+      1024,
+      [
+       128,
+       128,
+       4,
+       3
+      ]
+     ],
+     [
+      2048,
+      [
+       128,
+       128,
+       4,
+       3
+      ]
+     ]
+    ]
+   },
+   "N=2048,K=2048": {
+    "BLOCK_SIZE_K": 64,
+    "m_buckets": [
+     [
+      1,
+      [
+       32,
+       128,
+       8,
+       5
+      ]
+     ],
+     [
+      4,
+      [
+       16,
+       256,
+       8,
+       3
+      ]
+     ],
+     [
+      8,
+      [
+       32,
+       128,
+       8,
+       3
+      ]
+     ],
+     [
+      16,
+      [
+       32,
+       128,
+       8,
+       3
+      ]
+     ],
+     [
+      32,
+      [
+       16,
+       128,
+       8,
+       5
+      ]
+     ],
+     [
+      64,
+      [
+       16,
+       256,
+       4,
+       3
+      ]
+     ],
+     [
+      256,
+      [
+       64,
+       128,
+       8,
+       4
+      ]
+     ],
+     [
+      512,
+      [
+       64,
+       64,
+       4,
+       5
+      ]
+     ],
+     [
+      1024,
+      [
+       64,
+       64,
+       4,
+       5
+      ]
+     ],
+     [
+      2048,
+      [
+       64,
+       64,
+       4,
+       5
+      ]
+     ]
+    ]
+   },
+   "N=2048,K=6144": {
+    "BLOCK_SIZE_K": 128,
+    "m_buckets": [
+     [
+      1,
+      [
+       16,
+       64,
+       4,
+       4
+      ]
+     ],
+     [
+      4,
+      [
+       16,
+       64,
+       8,
+       4
+      ]
+     ],
+     [
+      8,
+      [
+       16,
+       32,
+       8,
+       4
+      ]
+     ],
+     [
+      16,
+      [
+       16,
+       32,
+       8,
+       4
+      ]
+     ],
+     [
+      32,
+      [
+       16,
+       64,
+       8,
+       3
+      ]
+     ],
+     [
+      64,
+      [
+       32,
+       64,
+       4,
+       4
+      ]
+     ],
+     [
+      256,
+      [
+       32,
+       64,
+       4,
+       4
+      ]
+     ],
+     [
+      512,
+      [
+       64,
+       64,
+       4,
+       3
+      ]
+     ],
+     [
+      1024,
+      [
+       64,
+       64,
+       4,
+       3
+      ]
+     ],
+     [
+      2048,
+      [
+       64,
+       64,
+       4,
+       3
+      ]
+     ]
+    ]
+   },
+   "N=4096,K=2048": {
+    "BLOCK_SIZE_K": 64,
+    "m_buckets": [
+     [
+      1,
+      [
+       16,
+       256,
+       8,
+       3
+      ]
+     ],
+     [
+      4,
+      [
+       16,
+       64,
+       4,
+       3
+      ]
+     ],
+     [
+      8,
+      [
+       16,
+       128,
+       8,
+       2
+      ]
+     ],
+     [
+      16,
+      [
+       16,
+       32,
+       4,
+       5
+      ]
+     ],
+     [
+      32,
+      [
+       16,
+       64,
+       4,
+       4
+      ]
+     ],
+     [
+      64,
+      [
+       64,
+       64,
+       8,
+       3
+      ]
+     ],
+     [
+      256,
+      [
+       64,
+       64,
+       4,
+       5
+      ]
+     ],
+     [
+      512,
+      [
+       64,
+       64,
+       4,
+       5
+      ]
+     ],
+     [
+      1024,
+      [
+       128,
+       64,
+       4,
+       4
+      ]
+     ],
+     [
+      2048,
+      [
+       128,
+       64,
+       8,
+       4
+      ]
+     ]
+    ]
+   }
+  },
+  "kv_cache": {
+   "block_size": 16,
+   "dtype": "auto"
+  },
+  "rms_norm": {
+   "BLOCK_SIZE": 1024,
+   "HAS_WEIGHT": true,
+   "num_warps": 4
+  }
+ },
+ "probe": {
+  "n": 286
+ },
+ "root_class": {
+  "embed_out.weight": "weight",
+  "gpt_neox.embed_in.weight": "weight",
+  "gpt_neox.final_layer_norm.bias": "weight",
+  "gpt_neox.final_layer_norm.weight": "weight",
+  "gpt_neox.layers.0.attention.attn._prob_scale": "ignored",
+  "gpt_neox.layers.0.attention.attn._v_scale": "ignored",
+  "gpt_neox.layers.0.attention.attn.k_scale": "ignored",
+  "gpt_neox.layers.0.attention.attn.prob_scale": "ignored",
+  "gpt_neox.layers.0.attention.attn.q_scale": "ignored",
+  "gpt_neox.layers.0.attention.dense.bias": "weight",
+  "gpt_neox.layers.0.attention.dense.weight": "weight",
+  "gpt_neox.layers.0.attention.query_key_value.bias": "weight",
+  "gpt_neox.layers.0.attention.query_key_value.weight": "weight",
+  "gpt_neox.layers.0.attention.rotary_emb.cos_sin_cache": "weight",
+  "gpt_neox.layers.0.input_layernorm.bias": "weight",
+  "gpt_neox.layers.0.input_layernorm.weight": "weight",
+  "gpt_neox.layers.0.mlp.dense_4h_to_h.bias": "weight",
+  "gpt_neox.layers.0.mlp.dense_4h_to_h.weight": "weight",
+  "gpt_neox.layers.0.mlp.dense_h_to_4h.bias": "weight",
+  "gpt_neox.layers.0.mlp.dense_h_to_4h.weight": "weight",
+  "gpt_neox.layers.0.post_attention_layernorm.bias": "weight",
+  "gpt_neox.layers.0.post_attention_layernorm.weight": "weight",
+  "gpt_neox.layers.1.attention.attn._prob_scale": "ignored",
+  "gpt_neox.layers.1.attention.attn._v_scale": "ignored",
+  "gpt_neox.layers.1.attention.attn.k_scale": "ignored",
+  "gpt_neox.layers.1.attention.attn.prob_scale": "ignored",
+  "gpt_neox.layers.1.attention.attn.q_scale": "ignored",
+  "gpt_neox.layers.1.attention.dense.bias": "weight",
+  "gpt_neox.layers.1.attention.dense.weight": "weight",
+  "gpt_neox.layers.1.attention.query_key_value.bias": "weight",
+  "gpt_neox.layers.1.attention.query_key_value.weight": "weight",
+  "gpt_neox.layers.1.attention.rotary_emb.cos_sin_cache": "alias-of-cos_sin",
+  "gpt_neox.layers.1.input_layernorm.bias": "weight",
+  "gpt_neox.layers.1.input_layernorm.weight": "weight",
+  "gpt_neox.layers.1.mlp.dense_4h_to_h.bias": "weight",
+  "gpt_neox.layers.1.mlp.dense_4h_to_h.weight": "weight",
+  "gpt_neox.layers.1.mlp.dense_h_to_4h.bias": "weight",
+  "gpt_neox.layers.1.mlp.dense_h_to_4h.weight": "weight",
+  "gpt_neox.layers.1.post_attention_layernorm.bias": "weight",
+  "gpt_neox.layers.1.post_attention_layernorm.weight": "weight",
+  "gpt_neox.layers.11.attention.attn._prob_scale": "ignored",
+  "gpt_neox.layers.11.attention.attn._v_scale": "ignored",
+  "gpt_neox.layers.11.attention.attn.k_scale": "ignored",
+  "gpt_neox.layers.11.attention.attn.prob_scale": "ignored",
+  "gpt_neox.layers.11.attention.attn.q_scale": "ignored",
+  "gpt_neox.layers.11.attention.dense.bias": "weight",
+  "gpt_neox.layers.11.attention.dense.weight": "weight",
+  "gpt_neox.layers.11.attention.query_key_value.bias": "weight",
+  "gpt_neox.layers.11.attention.query_key_value.weight": "weight",
+  "gpt_neox.layers.11.attention.rotary_emb.cos_sin_cache": "alias-of-cos_sin",
+  "gpt_neox.layers.11.input_layernorm.bias": "weight",
+  "gpt_neox.layers.11.input_layernorm.weight": "weight",
+  "gpt_neox.layers.11.mlp.dense_4h_to_h.bias": "weight",
+  "gpt_neox.layers.11.mlp.dense_4h_to_h.weight": "weight",
+  "gpt_neox.layers.11.mlp.dense_h_to_4h.bias": "weight",
+  "gpt_neox.layers.11.mlp.dense_h_to_4h.weight": "weight",
+  "gpt_neox.layers.11.post_attention_layernorm.bias": "weight",
+  "gpt_neox.layers.11.post_attention_layernorm.weight": "weight"
+ },
+ "weight_field": {
+  "embed_out.weight": [
+   "lm_head"
+  ],
+  "gpt_neox.embed_in.weight": [
+   "embed"
+  ],
+  "gpt_neox.final_layer_norm.bias": [
+   "norm_b"
+  ],
+  "gpt_neox.final_layer_norm.weight": [
+   "norm"
+  ],
+  "gpt_neox.layers.0.attention.dense.bias": [
+   "layers",
+   0,
+   "o_b"
+  ],
+  "gpt_neox.layers.0.attention.dense.weight": [
+   "layers",
+   0,
+   "o_w"
+  ],
+  "gpt_neox.layers.0.attention.query_key_value.bias": [
+   "layers",
+   0,
+   "qkv_b"
+  ],
+  "gpt_neox.layers.0.attention.query_key_value.weight": [
+   "layers",
+   0,
+   "qkv_w"
+  ],
+  "gpt_neox.layers.0.attention.rotary_emb.cos_sin_cache": [
+   "cos_sin"
+  ],
+  "gpt_neox.layers.0.input_layernorm.bias": [
+   "layers",
+   0,
+   "ln1_b"
+  ],
+  "gpt_neox.layers.0.input_layernorm.weight": [
+   "layers",
+   0,
+   "ln1"
+  ],
+  "gpt_neox.layers.0.mlp.dense_4h_to_h.bias": [
+   "layers",
+   0,
+   "down_b"
+  ],
+  "gpt_neox.layers.0.mlp.dense_4h_to_h.weight": [
+   "layers",
+   0,
+   "down_w"
+  ],
+  "gpt_neox.layers.0.mlp.dense_h_to_4h.bias": [
+   "layers",
+   0,
+   "up_b"
+  ],
+  "gpt_neox.layers.0.mlp.dense_h_to_4h.weight": [
+   "layers",
+   0,
+   "up_w"
+  ],
+  "gpt_neox.layers.0.post_attention_layernorm.bias": [
+   "layers",
+   0,
+   "ln2_b"
+  ],
+  "gpt_neox.layers.0.post_attention_layernorm.weight": [
+   "layers",
+   0,
+   "ln2"
+  ],
+  "gpt_neox.layers.1.attention.dense.bias": [
+   "layers",
+   1,
+   "o_b"
+  ],
+  "gpt_neox.layers.1.attention.dense.weight": [
+   "layers",
+   1,
+   "o_w"
+  ],
+  "gpt_neox.layers.1.attention.query_key_value.bias": [
+   "layers",
+   1,
+   "qkv_b"
+  ],
+  "gpt_neox.layers.1.attention.query_key_value.weight": [
+   "layers",
+   1,
+   "qkv_w"
+  ],
+  "gpt_neox.layers.1.input_layernorm.bias": [
+   "layers",
+   1,
+   "ln1_b"
+  ],
+  "gpt_neox.layers.1.input_layernorm.weight": [
+   "layers",
+   1,
+   "ln1"
+  ],
+  "gpt_neox.layers.1.mlp.dense_4h_to_h.bias": [
+   "layers",
+   1,
+   "down_b"
+  ],
+  "gpt_neox.layers.1.mlp.dense_4h_to_h.weight": [
+   "layers",
+   1,
+   "down_w"
+  ],
+  "gpt_neox.layers.1.mlp.dense_h_to_4h.bias": [
+   "layers",
+   1,
+   "up_b"
+  ],
+  "gpt_neox.layers.1.mlp.dense_h_to_4h.weight": [
+   "layers",
+   1,
+   "up_w"
+  ],
+  "gpt_neox.layers.1.post_attention_layernorm.bias": [
+   "layers",
+   1,
+   "ln2_b"
+  ],
+  "gpt_neox.layers.1.post_attention_layernorm.weight": [
+   "layers",
+   1,
+   "ln2"
+  ],
+  "gpt_neox.layers.11.attention.dense.bias": [
+   "layers",
+   11,
+   "o_b"
+  ],
+  "gpt_neox.layers.11.attention.dense.weight": [
+   "layers",
+   11,
+   "o_w"
+  ],
+  "gpt_neox.layers.11.attention.query_key_value.bias": [
+   "layers",
+   11,
+   "qkv_b"
+  ],
+  "gpt_neox.layers.11.attention.query_key_value.weight": [
+   "layers",
+   11,
+   "qkv_w"
+  ],
+  "gpt_neox.layers.11.input_layernorm.bias": [
+   "layers",
+   11,
+   "ln1_b"
+  ],
+  "gpt_neox.layers.11.input_layernorm.weight": [
+   "layers",
+   11,
+   "ln1"
+  ],
+  "gpt_neox.layers.11.mlp.dense_4h_to_h.bias": [
+   "layers",
+   11,
+   "down_b"
+  ],
+  "gpt_neox.layers.11.mlp.dense_4h_to_h.weight": [
+   "layers",
+   11,
+   "down_w"
+  ],
+  "gpt_neox.layers.11.mlp.dense_h_to_4h.bias": [
+   "layers",
+   11,
+   "up_b"
+  ],
+  "gpt_neox.layers.11.mlp.dense_h_to_4h.weight": [
+   "layers",
+   11,
+   "up_w"
+  ],
+  "gpt_neox.layers.11.post_attention_layernorm.bias": [
+   "layers",
+   11,
+   "ln2_b"
+  ],
+  "gpt_neox.layers.11.post_attention_layernorm.weight": [
+   "layers",
+   11,
+   "ln2"
+  ]
+ },
+ "weights_type": {
+  "Record": [
+   [
+    "embed",
+    {
+     "Array": [
+      50304,
+      {
+       "Array": [
+        768,
+        "Value<16>"
+       ]
+      }
+     ]
+    }
+   ],
+   [
+    "layers",
+    {
+     "Array": [
+      12,
+      {
+       "Record": [
+        [
+         "ln1",
+         {
+          "Array": [
+           768,
+           "Value<16>"
+          ]
+         }
+        ],
+        [
+         "ln1_b",
+         {
+          "Array": [
+           768,
+           "Value<16>"
+          ]
+         }
+        ],
+        [
+         "qkv_w",
+         {
+          "Array": [
+           2304,
+           {
+            "Array": [
+             768,
+             "Value<16>"
+            ]
+           }
+          ]
+         }
+        ],
+        [
+         "qkv_b",
+         {
+          "Array": [
+           2304,
+           "Value<16>"
+          ]
+         }
+        ],
+        [
+         "o_w",
+         {
+          "Array": [
+           768,
+           {
+            "Array": [
+             768,
+             "Value<16>"
+            ]
+           }
+          ]
+         }
+        ],
+        [
+         "o_b",
+         {
+          "Array": [
+           768,
+           "Value<16>"
+          ]
+         }
+        ],
+        [
+         "ln2",
+         {
+          "Array": [
+           768,
+           "Value<16>"
+          ]
+         }
+        ],
+        [
+         "ln2_b",
+         {
+          "Array": [
+           768,
+           "Value<16>"
+          ]
+         }
+        ],
+        [
+         "up_w",
+         {
+          "Array": [
+           3072,
+           {
+            "Array": [
+             768,
+             "Value<16>"
+            ]
+           }
+          ]
+         }
+        ],
+        [
+         "up_b",
+         {
+          "Array": [
+           3072,
+           "Value<16>"
+          ]
+         }
+        ],
+        [
+         "down_w",
+         {
+          "Array": [
+           768,
+           {
+            "Array": [
+             3072,
+             "Value<16>"
+            ]
+           }
+          ]
+         }
+        ],
+        [
+         "down_b",
+         {
+          "Array": [
+           768,
+           "Value<16>"
+          ]
+         }
+        ]
+       ]
+      }
+     ]
+    }
+   ],
+   [
+    "norm",
+    {
+     "Array": [
+      768,
+      "Value<16>"
+     ]
+    }
+   ],
+   [
+    "norm_b",
+    {
+     "Array": [
+      768,
+      "Value<16>"
+     ]
+    }
+   ],
+   [
+    "cos_sin",
+    {
+     "Array": [
+      2048,
+      {
+       "Array": [
+        16,
+        "Value<16>"
+       ]
+      }
+     ]
+    }
+   ],
+   [
+    "lm_head",
+    {
+     "Array": [
+      50304,
+      {
+       "Array": [
+        768,
+        "Value<16>"
+       ]
+      }
+     ]
+    }
+   ]
+  ]
+ }
+}

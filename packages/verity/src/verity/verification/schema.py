@@ -34,7 +34,7 @@ __all__ = [
 ]
 
 PACKED_SCHEMA_PREFIX = "packed/v1:"
-#: The serving side's leaf framing (``verity_vllm.hashing.LEAF_TAG``); the tree
+#: The serving side's leaf framing (``verity_vllm.commit.hashing.LEAF_TAG``); the tree
 #: id in the interface's ``roots[].framing``.
 VLLM_LEAF_FRAMING = "verity-vllm/leaf/v1"
 

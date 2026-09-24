@@ -151,7 +151,7 @@ SUBCIRCUIT_TAG = "veritor/typed-obligation/v0/subcircuit"
 #: The guest's Merkle framing (``veritor/protocol/merkle.py``): the only one
 #: under which a lowered statement's openings authenticate.
 MERKLE_FRAMING = "veritor/protocol/merkle/frame/v3"
-#: The serving adapter's tree framing (``vllm-poc/verity_vllm/hashing.py``).
+#: The serving adapter's tree framing (``vllm-poc/verity_vllm/commit/hashing.py``).
 VLLM_FRAMING = "verity-vllm/leaf/v1"
 FRAMINGS = (MERKLE_FRAMING, VLLM_FRAMING)
 
