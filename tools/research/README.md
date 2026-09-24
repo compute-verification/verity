@@ -21,6 +21,7 @@ src/research/
 ├── remote.py       --on: machines file, tool/source snapshots, request, claim-by-run-id, exclusive lock, fetch, preservation manifest
 ├── mem.py          --mem-gb admission: cgroup limit - in use - live /workspace/ramlock reservations; MemoryNotAvailable
 ├── env.py          conditions(): the one baseline of an attempt's conditions (source, runtime, hardware, execution); ONE SKU->family map
+├── chats.py        research chats: Cursor transcripts + lane notes -> preserved trees in the store + a redacted SQLite/FTS5 index
 ├── store/          the evidence store (README.md there is the contract): tool, tools_registry, derivation, attempt, cli_prov (provenance)
 │                   + canon, local, index, remote, kinds, cli (storage)
 ├── telemetry/      the recorded-attempt harness: job.json, status.json, events.jsonl, resources.jsonl, failure.json  (unmodified upstream)
@@ -217,6 +218,36 @@ called PRESERVED without a remote; nothing in the store is ever overwritten.
   copies the attempt and its outputs (sha256-verified) into the local store.
 - `research data lookup --tool T [--param k=v]... [--condition k=v]...
   [--source-tree SHA | --any-source] [-- ARGV...]` answers "have we done this?"
+
+### research chats
+
+A durable archive and a query index of the Cursor chat history, so "when did we decide X and why" or "which lane touched
+module_body.py" is one query, without the laptop. `chats.py`'s docstring is the contract.
+
+~~~text
+research chats search "global_match" [--project veritor] [--since 2026-09-20] [--limit 20] [--in messages|notes] [--sort date] [--json]
+research chats pull [--art ART]          # the newest chat-index/v1 -> $RESEARCH_CHATS_INDEX (default ~/.research/chats/index.sqlite)
+research chats stats                     # rows, metadata coverage, redactions by pattern, source artifact ids
+research chats ingest MIRROR             # on the control pod, nightly
+~~~
+
+- Nightly, the laptop's launchd job `com.research.chats-sync` (03:17 local) runs `~/.research/bin/chats-sync.sh`, which is
+  shell, rsync and `sqlite3` only. It reads chat titles, dates, models and subagent parents from Cursor's `state.vscdb` (read-only,
+  index-range scans, never a message value). It rsyncs `~/.cursor/projects/*/agent-transcripts`, `~/.research/notes` (text only:
+  the notes repo's `.gitignore` and a 1 MB cap) and that metadata file to `vy-control:/workspace/chats/mirror`. Then it mints a 3 h
+  R2 credential into a mode-600 file there (the one `research` call on the laptop) and starts `research chats ingest` detached.
+  Log: `~/.research/log/chats-sync.log`; pod log: `/workspace/chats/log/ingest-last.log`.
+- `ingest` pushes `chat-transcripts/v1` and `lane-notes/v1` trees and a `chat-metadata/v1` file, each PRESERVED, with meta
+  `{kind, host, date}`. Then it refreshes the index incrementally and pushes it gzipped as `chat-index/v1` (refs to the three
+  sources). Finally it labels a fixed anchor artifact `superseded_by` that index, which is how `search` finds the newest index on
+  a machine that has none. Transcripts accumulate in the mirror: a chat deleted in Cursor stays in the archive and the index.
+- Tables: `messages` (one row per text or tool call; `ts` from the `<timestamp>` tag, carried forward, else the chat's
+  createdAt), `chats` (metadata joined by id), `notes`, `files`, `redactions`, with `messages_fts`/`notes_fts` over them. The
+  index is redacted (`[REDACTED:<pattern>]`: Cloudflare, `sk-`, RunPod, AWS key ids, GitHub, JWT, bearer, `SECRET=`-style
+  assignments) and keeps counts, never values. The archive is verbatim.
+- The index is about 0.8 GB unpacked. Search it on the pod, where the sync keeps a wrapper that points at the live index:
+  `research pods ssh vy-control -- /workspace/chats/bin/research chats search "..."`. Or search on any machine with the space,
+  not on a full laptop.
 
 ## Not yet built, in order
 
