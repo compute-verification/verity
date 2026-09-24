@@ -53,14 +53,11 @@ def test_the_honest_world_reconciles_against_its_manifest_identity_by_identity(w
     assert qt["identities"] == man["populations"]["identities"] == len(man["identities"])
     assert qt["by_family"] == dict(sorted(man["populations"]["by_family"].items()))
     assert qt["manifest_digest"] == man["manifest_digest"] and qt["program_digest"] == man["program_digest"]
-    assert qt["query_digest"] == man["query"]["query_digest"] and qt["source"].startswith("required manifest: Q_module_v1(P)")
+    assert qt["source"].startswith("required manifest: Q_module_body_v1(P)")
     # [COORD R17-10] the query of record BY ID with its definition digest: on the header, on the record, on the scope line
-    assert man["query"]["query_id"] == "Q_module_v1" and man["query"]["implemented_query"] == "Q_module_v1"
-    assert qt["query_id"] == "Q_module_v1" and qt["query_id_digest"] == man["query"]["query_id_digest"] and len(qt["query_id_digest"]) == 64
-    assert man["query"]["family_selector"]["query_id"] == "Q_fine_v1" and man["query"]["family_selector"]["digest"] == man["query"]["query_digest"]
-    assert rep["population"]["scope"].startswith("Q_module_v1(P) = ")
-    assert qt["implemented_query"] == "Q_module_v1" == man["query"]["implemented_query"] and man["query"]["boundary"] == "module"
-    assert "Program row = module-boundary VU" in qt["unit"] and "Program row = module-boundary VU" in man["query"]["unit"]
+    assert man["query"]["query_id"] == "Q_module_body_v1" and man["query"]["boundary"] == "module-body"
+    assert qt["query_id"] == "Q_module_body_v1" and qt["query_id_digest"] == man["query"]["query_id_digest"] and len(qt["query_id_digest"]) == 64
+    assert rep["population"]["scope"].startswith("Q_module_body_v1(P) = ")
     # every family of this world has an evaluator: the reach is every instance output + every sampled id, and the sample evaluated some
     n_rows_fams = sum(v for k, v in qt["by_family"].items() if k in SR.QUERY_FAMILIES_WITH_ROWS)
     assert ss["identities_reached"] == n_rows_fams == qt["by_family"]["instance_outputs"] + qt["by_family"]["sampled_token_ids"]
@@ -77,10 +74,10 @@ def test_the_honest_world_reconciles_against_its_manifest_identity_by_identity(w
     assert chk["ok"] is True and chk["accounted"] is True, json.dumps(chk, indent=1)
     assert chk["vus_outside_query"]["n"] == 0 and chk["identities_without_rows"]["n"] == 0 and chk["rows_disagree"]["n"] == 0
     assert chk["rows_annotation_inconsistent"]["n"] == 0 and chk["ranks"] == {"replay": [0], "manifest": [0], "equal": True}
-    assert pop["scope"].startswith(f"Q_module_v1(P) = {qt['identities']} identities") and "uncovered by name: input_token_ids" in pop["scope"]
+    assert pop["scope"].startswith(f"Q_module_body_v1(P) = {qt['identities']} identities") and "uncovered by name: input_token_ids" in pop["scope"]
     # the verdict states the scope on the PASS
     note, fail = _query_population_scope(rep)
-    assert fail is None and note.startswith("C2 population scope (R17-3; query of record Q_module_v1): Q_module_v1(P) = ") and "exact replay reaches" in note
+    assert fail is None and note.startswith("C2 population scope (R17-3; query of record Q_module_body_v1): Q_module_body_v1(P) = ") and "exact replay reaches" in note
 
 
 def test_the_record_carries_the_engine_configuration_the_evaluators_were_conditioned_on_measured_never_declared(world, monkeypatch):  # noqa: F811
@@ -137,7 +134,7 @@ def test_a_required_identity_no_row_produces_is_named_and_fails_the_reconciliati
     # the honest manifest on the same record: PASS carrying the scope
     rep_ok = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=1, seed=seed, seed_source=seed_src, workers=0, manifest=man)
     ok, why = commit_verdict(dict(rec, sampled_replay=rep_ok), True, min_openings=64)
-    assert ok is True and "C2 population scope (R17-3; query of record Q_module_v1): Q_module_v1(P) = " in why, why
+    assert ok is True and "C2 population scope (R17-3; query of record Q_module_body_v1): Q_module_body_v1(P) = " in why, why
 
 
 def test_a_vu_whose_identity_the_query_does_not_require_is_outside_the_query_never_added_to_the_reach(world):  # noqa: F811

@@ -2281,6 +2281,8 @@ def replay_vu(pi: ProgramIndex, store: CommittedStore, weights: Callable[[str, i
             # [MOE-TP-01 / moe] the MoeSum relation names its one output `sum`: on a TP rank that sum of the rank's committed `down`
             # words (the rank's K-sharded expert partials, routed weight applied) IS the MoE block's part_rank<r>, the all-reduce input
             alias = _tp_member_alias(got, member)
+            if alias is None and d.get("copies") and len(got) == 1:
+                alias = next(iter(got.values()))                                 # [F-r19-int-24] `<experts>/out` = the MoeSum relation's one output
             if alias is not None:
                 got[member] = alias
         if member not in got:

@@ -6,12 +6,13 @@ from __future__ import annotations
 import pytest
 
 from verity_capture.commit import sampled_replay as SR
-from verity_capture.commit.tests.test_sampled_replay import EPS, _program
+from verity_capture.commit.tests.test_sampled_replay import _program
 from verity_vllm.query.correspondence import Correspondence
 from verity_vllm.query.program_view import from_instances
 from verity_vllm.query.v1_bridge import request_manifest
 
 IMPL = ("model.layers.0.mlp.down_proj",)          # an observed implementation path: the Program's wrapper prefix is `model.`
+EPS = 'EPS={"f64":"0x1.4f8b588e368f1p-17"}'
 
 
 def _v2_manifest(inst: dict, res: dict | None = None, **kw) -> dict:

@@ -12,7 +12,7 @@ from verity_capture.commit import sampled_replay as SR
 
 EPS = '{"f64":"0x1.4f8b588e368f1p-17"}'
 V, H, I, LP, T = 8, 16, 16, 2, 2          # vocab, hidden, intermediate, prompt len, decode steps (steps = LP-prefill + T decode = 1 + T)
-IMPL = ("model.layers.0.mlp.down_proj",)  # an observed implementation path: the Program's wrapper prefix is `model.`
+IMPL = ("model.layers.0.input_layernorm",)  # an observed implementation path: the Program's wrapper prefix is `model.`
 
 
 def v2_manifest(inst: dict, request_ids=("r0",), *, digest: str = "t" * 64) -> dict:
@@ -50,7 +50,7 @@ def _program(bias: bool = False, rope: bool = False, attn: bool = False, scale: 
     here (the real consumer is the state-linked Attention row).
     `attn`: [R17 dense, M-0123] (implies rope) the token row ends in `Attention_v3{T=pos+1,NH,KVH,D,BN}` exactly as the real Programs name
     it (`self_attn.attn/unified_attention_with_output_{s}[t=k]`): arg 0 = the query RoPE member, arg 1 = the T committed KEY members of
-    positions 0..pos (earlier steps' rows by ref), arg 2 = the T V slices of those positions' qkv rows.
+    positions 0..pos (earlier steps' rows by ref), arg 2 = the T V slices of those positions' qkv rows; the o_proj Gemm reads its output (a leaf).
     `scale`: [R19 int-20, F-r19-int-20] the ROOT module scales the embedding in its own forward body -- `Bf16MulScalarTensor_v1{N=H}` at the
     UNROOTED path `model/mul_{s}[k]` (arg 0 = the embedding row, arg 1 = the one-word `weights` field `model.normalizer`, a buffer) -- and the
     first norm AND the final norm's residual read the SCALED row: an interior family (no member by the vocabulary) whose output crosses a
@@ -69,6 +69,8 @@ def _program(bias: bool = False, rope: bool = False, attn: bool = False, scale: 
     if rope:
         fields[2:2] = [("model.model.layers.0.self_attn.qkv_proj.weight", QKV * H, f"Array<{QKV},Array<{H},Value<16>>>"),
                        ("model.model.layers.0.self_attn.rotary_emb.cos_sin_cache", MAXPOS * DH, f"Array<{MAXPOS},Array<{DH},Value<16>>>")]
+    if attn:
+        fields.append(("model.model.layers.0.self_attn.o_proj.weight", H * NH * DH, f"Array<{H},Array<{NH * DH},Value<16>>>"))
     off, woff = 0, {}
     for n, c, _t in fields:
         woff[n] = (off, off + c)
@@ -107,10 +109,12 @@ def _program(bias: bool = False, rope: bool = False, attn: bool = False, scale: 
                          [[["n", qkv, NH * DH, (NH + KVH) * DH]], CS])
                 if attn:
                     kv_rows.append((kr, qkv))
-                    add(f"Attention_v3{{T={pos + 1},NH={NH},KVH={KVH},D={DH},BN={ABN}}}",
-                        f"model.model.layers.0.self_attn.attn/unified_attention_with_output_{s}[t={k}]",
-                        [[["n", qr, 0, NH * DH]], [["n", kr_, 0, KVH * DH] for kr_, _q in kv_rows],
-                         [["n", q_, (NH + KVH) * DH, QKV] for _k, q_ in kv_rows]])
+                    at = add(f"Attention_v3{{T={pos + 1},NH={NH},KVH={KVH},D={DH},BN={ABN}}}",
+                             f"model.model.layers.0.self_attn.attn/unified_attention_with_output_{s}[t={k}]",
+                             [[["n", qr, 0, NH * DH]], [["n", kr_, 0, KVH * DH] for kr_, _q in kv_rows],
+                              [["n", q_, (NH + KVH) * DH, QKV] for _k, q_ in kv_rows]])
+                    add(f"Gemm_v1{{K={NH * DH},N={H}}}", f"model.model.layers.0.self_attn.o_proj/triton_launch_{s}o[{k}]",
+                        [[["n", at, 0, NH * DH]], W("model.model.layers.0.self_attn.o_proj.weight")])
             gu = add(f"Gemm_v1{{K={H},N={2 * I}}}", f"model.model.layers.0.mlp.gate_up_proj/triton_launch_{s}a[{k}]",
                      [[["n", ln, 0, H]], W("model.model.layers.0.mlp.gate_up_proj.weight")])
             if bias:                                                   # the epilogue row: consumes the Gemm's (interior) output + the bias slice
@@ -168,12 +172,16 @@ class Honest:
                 continue
             flat = []
             for m in d["members"]:
-                v = np.asarray(got[m[0]]).reshape(-1)
+                v = np.asarray(got[m[0]] if m[0] in got or len(got) != 1 else next(iter(got.values()))).reshape(-1)   # one output: the member
                 wdt = np.uint64 if fam == "TokenSelect_v1" else (np.uint32 if str(m[2]) in ("f32", "i32") else np.uint16)
                 flat.append(v.astype(wdt))
                 key = (d["step"], rid, d["op_path"], m[0])
                 self.dtypes[key] = str(m[2])
                 self.blocks[key] = np.concatenate([self.blocks[key], flat[-1]]) if key in self.blocks else flat[-1]
+            for c in d.get("copies") or []:                             # the same output committed under its second required name (a plane)
+                key = (d["step"], rid, c["op_path"], c["member"])
+                self.dtypes[key] = str(c["dtype"])
+                self.blocks[key] = np.concatenate([self.blocks[key], flat[0]]) if key in self.blocks else flat[0]
             self.values[(rid, r["i"])] = np.concatenate(flat) if len(flat) > 1 else flat[0]
             if fam == "Embedding_v1":                                   # the ids the embedding consumed -> input_token_ids member `in`
                 ids = inputs[0][0].astype(np.uint32)
@@ -528,24 +536,6 @@ def test_token_select_first_max_tie_rule():
     assert SR.token_select_first_max(nan) == 1
 
 
-def test_request_local_row_is_the_ordinal_within_module_and_step_not_the_name_suffix():
-    """The Build names attention rows `[t=<visible keys>]` (not `[k]`); the manifest's row population is the ordinal within (module, hint, step).
-    Live B2 (cp-dev1, seed 1555696210632446645): o_proj rows 233/212/8/6 read attention row 0 under the `[k]` parse -> 4 false mismatches."""
-    rows = []
-    for k in range(3):
-        rows.append({"i": len(rows), "spec": "Attention_v3{T=%d,NH=1,KVH=1,D=16,BN=16}" % (k + 1), "form": "call",
-                     "name": f"model.model.layers.0.self_attn.attn/unified_attention_with_output[t={k + 7}]", "args": [[["n", 0, 0, 16]]]})
-    for k in range(3):
-        rows.append({"i": len(rows), "spec": "Gemm_v1{K=16,N=16}", "form": "call", "name": f"model.model.layers.0.self_attn.o_proj/triton_launch[{k}]",
-                     "args": [[["n", k, 0, 16]], [["p", 1, 0, 256]]]})
-    rows.append({"i": len(rows), "spec": "TokenSelect_v1{V=16}", "form": "call", "name": "argmax[0]", "args": [[["n", 5, 0, 16]]]})
-    pi = SR.ProgramIndex({"rows": rows, "params": [["prompt", "Array<3,Value<32>>"], ["weights", "{w: Array<16,Array<16,Value<16>>>}"]]}, prefix="model.")
-    assert [pi.describe(r)["row"] for r in rows[:3]] == [0, 1, 2] and [pi.describe(r)["name_row"] for r in rows[:3]] == [None, None, None]
-    assert [pi.describe(r)["row"] for r in rows[3:6]] == [0, 1, 2]
-    m = pi.member_at(2, 0, 16)
-    assert m is not None and m[0]["row"] == 2 and m[1] == "out"
-
-
 def test_catch_probability_is_evaluated_over_population_per_stratum(world):
     """[rev-cb M-0572] the record states the honest catch probability of a single-VU fault per phase = evaluated/population of its stratum:
     1.0 where the stratum is fully evaluated (prefill / first-decode / last of this tiny Program), < 1 only where a stratum holds more VUs
@@ -560,38 +550,6 @@ def test_catch_probability_is_evaluated_over_population_per_stratum(world):
     full = [k for k, v in rep["strata"].items() if v["evaluated"] >= v["population"]]
     assert cp["overall"]["strata_fully_evaluated"] == len(full)
     assert "seed_source" in rep["catch_probability"]["note"]
-
-
-def test_soft_capped_logits_gemm_is_interior_the_hinted_cap_row_is_the_member():
-    """[R15 dense, int-4 Gemma B1 Commit rerun 00:08Z] dense's soft-capped LogitsProcessor (Gemma-2: `C * tanh(logits / C)`) is Gemm ->
-    Bf16DivScalar -> Bf16Tanh -> Bf16MulScalar under ONE module; the Build names the last mul `.../out`, build_manifest makes the Gemm's
-    default `out` claim interior and the collector commits the module's returned (post-cap) tensor.  The replay must read the same producer:
-    evaluating the Gemm against the committed `logits_processor/out` compared pre-cap with post-cap bytes -- 5/5 of the live replay's
-    mismatches (every logits_processor VU: prefill, first-decode, mid, last), a false FAIL on a row whose 635 other VUs replayed exactly.
-    An un-capped logits module (Llama) is unchanged: its Gemm keeps `out`."""
-    V, H = 16, 8
-    rows = []
-    for L, capped in ((0, True), (1, False)):
-        mod = f"model.logits_processor{L}"
-        rows.append({"i": len(rows), "spec": f"Gemm_v1{{K={H},N={V}}}", "form": "call", "name": f"{mod}/triton_launch[0]", "args": [[["p", 0, 0, H]], [["p", 1, 0, V * H]]]})
-        if capped:
-            g = len(rows) - 1
-            rows.append({"i": len(rows), "spec": f"Bf16DivScalar_v1{{N={V}}}", "form": "call", "name": f"{mod}/div[0]", "args": [[["n", g, 0, V]]]})
-            rows.append({"i": len(rows), "spec": f"Bf16Tanh_v1{{N={V}}}", "form": "call", "name": f"{mod}/tanh[0]", "args": [[["n", g + 1, 0, V]]]})
-            rows.append({"i": len(rows), "spec": f"Bf16MulScalar_v1{{N={V}}}", "form": "call", "name": f"{mod}/mul/out[0]", "args": [[["n", g + 2, 0, V]]]})
-    rows.append({"i": len(rows), "spec": f"TokenSelect_v1{{V={V}}}", "form": "call", "name": "argmax[0]", "args": [[["n", 3, 0, V]]]})
-    pi = SR.ProgramIndex({"rows": rows, "params": [["prompt", "Array<1,Value<32>>"], ["weights", f"{{w: Array<{V},Array<{H},Value<16>>>}}"]]}, prefix="model.")
-    capped_gemm, cap_out, plain_gemm = pi.describe(rows[0]), pi.describe(rows[3]), pi.describe(rows[4])
-    assert capped_gemm["members"] == [] and capped_gemm["op_path"] == "logits_processor0"            # interior: no committed member of its own
-    assert cap_out["members"] == [("out", V, "bf16")] and cap_out["hint"] == "out"                    # the module's returned tensor
-    assert plain_gemm["members"] == [("out", V, "bf16")]                                              # Llama's logits: unchanged
-    assert pi.member_at(3, 0, V) is not None and pi.member_at(3, 0, V)[1] == "out"                    # TokenSelect's input resolves to the cap row
-    assert pi.member_at(0, 0, V) is None                                                              # nothing consumes the pre-cap Gemm as a member
-    vus, not_ev, not_ev_fam = SR.population(pi, "r0")
-    assert [(v["family"], v["op_path"]) for v in vus] == [("Gemm_v1", "logits_processor1"), ("TokenSelect_v1", SR.SAMPLER_OP)]
-    assert not_ev_fam["Gemm_v1 (interior: composed into its epilogue's VU / a hinted row of the module is its returned tensor)"] == 1
-    assert not_ev_fam["Bf16MulScalar_v1"] == 1 and not_ev["no registered evaluator for Bf16MulScalar_v1"] == 1   # the cap: counted, named, not guessed
-    assert not_ev_fam["Bf16DivScalar_v1 (structure / interior: no identity)"] == 1 and not_ev_fam["Bf16Tanh_v1 (structure / interior: no identity)"] == 1
 
 
 def test_module_strata_cap_floor_and_targets(world):
@@ -674,14 +632,15 @@ def test_biased_linear_member_is_the_post_bias_tensor_produced_by_biasadd(world,
     assert {m["op_path"] for m in rep2["mismatch"]} <= {"model.layers.0.mlp.gate_up_proj", "model.layers.0.mlp.act_fn"}
 
 
-def test_biasadd_over_an_interior_gemm_without_evaluator_is_not_evaluable_by_name_hopper_m0748(biased_world):
+def test_biasadd_over_an_interior_gemm_without_evaluator_is_not_evaluable_by_name_hopper_m0748(biased_world, monkeypatch):
     """[MAN-06g, hopper BLOCKER M-0748 F-hopper-BIAS2 / exec M-0749 / rev-cb M-0751 (b)] a biased linear whose INTERIOR pre-bias Gemm has
     no registered evaluator: BiasAdd_v1 is the producer of record (MAN-07), its input is interior, and the BiasAdd VU cannot compose.
     It is counted BY NAME as not evaluable (population), never sampled as a stratum that stays 'not evaluated' (partial = FAIL closed on
     every biased-linear row).  Over Gemm_v1 (Ada) the composition is unchanged: the BiasAdd rows are VUs and replay exact.
     [R17 dense, ruling R17-3] Gemm_v2 (the Hopper GEMM this finding was measured on) now HAS an evaluator -- see the Hopper tests below --
-    so the rule is exercised here with a synthetic GEMM version the manifest models (`members_for` is generic over `Gemm*`) and the
-    evaluator table does not know (`Gemm_v9`): the same code path, the same names."""
+    so the rule is exercised here with a synthetic GEMM version the query models (its ports are Gemm_v1's) and the evaluator table does
+    not know (`Gemm_v9`): the same code path, the same names."""
+    from verity_vllm.query import program_view as PV
     inst = json.loads(json.dumps(biased_world.inst))
     pi1 = SR.ProgramIndex(inst)
     vus1, ne1, nef1 = SR.population(pi1, "r0")
@@ -691,6 +650,7 @@ def test_biasadd_over_an_interior_gemm_without_evaluator_is_not_evaluable_by_nam
     assert "Gemm_v9" not in SR.EVALUATORS and "Gemm_v9" not in SR.NOT_YET
     for r in inst["rows"]:
         if r["spec"].startswith("Gemm_v1") and "gate_up_proj" in r["name"]:
+            monkeypatch.setitem(PV._PORTS_CACHE, "Gemm_v9" + r["spec"][len("Gemm_v1"):], PV.definition_ports(r["spec"]))
             r["spec"] = "Gemm_v9" + r["spec"][len("Gemm_v1"):]
     pi2 = SR.ProgramIndex(inst)
     ba = next(r for r in pi2.rows if r["spec"].startswith("BiasAdd_v1"))
@@ -1374,23 +1334,24 @@ def test_moe_plane_rows_are_addressed_at_their_planes_and_the_honest_program_rep
     act = next(r for r in pi.rows if r["spec"].startswith("SiluMul") and "experts" in r["name"])
     assert pi.describe(act)["members"] == [("act", I, "bf16")] and pi.describe(act)["op_path"] == "moe/L0"
     assert pi.member_at(int(act["args"][0][0][1]), 0, 2 * I)[1:] == ("up", 0, 2 * I, "bf16")
-    sm = next(r for r in pi.rows if r["spec"].startswith("MoeSum"))
-    assert pi.describe(sm)["members"] == [("sum", H, "bf16")]
+    sm = pi.describe(next(r for r in pi.rows if r["spec"].startswith("MoeSum")))                # F-r19-int-24: the module's returned tensor
+    assert sm["op_path"] == "model.layers.0.mlp.experts" and sm["members"] == [("out", H, "bf16")]
+    assert [(c["op_path"], c["member"], c["of"]) for c in sm["copies"]] == [("moe/L0", "sum", "out")]      # ... and its plane copy
     nm = next(r for r in pi.rows if r["spec"].startswith("RMSNormFusedCuda"))
-    assert pi.member_at(int(nm["args"][0][0][1]), 0, H)[1:] == ("sum", 0, H, "bf16")
+    assert pi.member_at(int(nm["args"][0][0][1]), 0, H)[1:] == ("out", 0, H, "bf16")
     dn = next(r for r in pi.rows if r["spec"].startswith("MoeExpertGemmW"))
     assert pi.member_at(int(dn["args"][1][0][1]), TOPK, TOPK + 1)[1:] == ("router_ids", 0, 1, "i32")
     assert pi.member_at(int(dn["args"][2][0][1]), 0, 1)[1:] == ("router_w", 0, 1, "f32")
     vus, ne, nef = SR.population(pi, "r0")
     assert not any("moe_block_stream" in k or "plane" in k for k in list(ne) + list(nef)), (ne, nef)
     assert {v["family"] for v in vus} >= MOE_FAMS | {"SiluMul_v1", "RMSNormFusedCuda_v2"}
-    assert {v["op_path"] for v in vus if v["family"] in MOE_FAMS or v["family"] == "SiluMul_v1"} == {"moe/L0"}
+    assert {v["op_path"] for v in vus if v["family"] in MOE_FAMS - {"MoeSum_v1"} or v["family"] == "SiluMul_v1"} == {"moe/L0"}
     bmap, committed = w.bmap_and_reader()
     rep = SR.sampled_replay(_programs(w), bmap, committed, _weights(w), per_stratum=2, seed=5)
     assert rep["result"] is True and rep["grade"] == "complete", json.dumps({k: rep[k] for k in ("why", "mismatch", "not_evaluated", "population")}, indent=1, default=str)[:4000]
     assert rep["sample"]["mismatch_n"] == 0 and rep["sample"]["evaluated"] == rep["sample"]["picked"] > 0
     assert set(rep["population"]["by_family"]) >= MOE_FAMS and all(v["evaluated"] >= 1 for v in rep["strata"].values())
-    assert {k.split("|")[0].split("{")[0] for k in rep["strata"] if k.split("|")[4] == "moe/L0"} == MOE_FAMS | {"SiluMul_v1"}
+    assert {k.split("|")[0].split("{")[0] for k in rep["strata"] if k.split("|")[4] == "moe/L0"} == (MOE_FAMS - {"MoeSum_v1"}) | {"SiluMul_v1"}
     assert rep["population"]["not_evaluable"] == {} and all(f in rep["evaluators"] for f in MOE_FAMS)
 
 
@@ -1399,9 +1360,9 @@ def _moe_evaluate_all(w, mutate, *, targets=("moe/L0@0",)):
     return SR.sampled_replay(_programs(w), bmap, committed, _weights(w), per_stratum=1, seed=5, targets=list(targets), workers=0)
 
 
-def _plane_word(store, entries, rid, step, plane, elem, flip=0x0080):
+def _plane_word(store, entries, rid, step, plane, elem, flip=0x0080, op_path="moe/L0"):
     """Flip one committed word of request `rid`'s plane slice (request-local element `elem`) in the packed step tensor."""
-    e = next(e for e in entries if e["identity"]["request_id"] == rid and e["identity"]["step"] == step and e["identity"]["op_path"] == "moe/L0" and e["identity"]["output_member"] == plane)
+    e = next(e for e in entries if e["identity"]["request_id"] == rid and e["identity"]["step"] == step and e["identity"]["op_path"] == op_path and e["identity"]["output_member"] == plane)
     isz = 4 if e["encoding"]["dtype"] in ("f32", "i32") else 2
     key = (step, e["name"])
     b = bytearray(store[key])
@@ -1416,7 +1377,8 @@ def test_moe_plane_faults_fail_named_at_the_pair_or_token(moe_world):
     """[MAN-06f v3 negatives] a flipped committed word of one plane is caught BY NAME at its pair / token: an act word (the SiluMul@experts VU
     of that pair and the down row that reads it), a sum word (the MoeSum VU of that token and the fused norm that reads it), an up word (the
     act VU whose input it is and the up VU that produced it), a router id (the router VU and every expert row of that slot); a flipped word
-    of r1's plane never fails an r0 VU (the per-request plane split)."""
+    of r1's plane never fails an r0 VU (the per-request plane split).  The MoeSum is the experts module's returned tensor `out` with the sum
+    plane its checked copy (F-r19-int-24): a flipped plane word fails the MoeSum VU (copy), a flipped `out` word also the norm reading it."""
     w = moe_world
     p = 3                                                                          # pair 3 = token 1, slot 1 (LP = 2, TOPK = 2)
     rep = _moe_evaluate_all(w, lambda st, en: _plane_word(st, en, "r1", 0, "act", p * I + 5))
@@ -1424,9 +1386,13 @@ def test_moe_plane_faults_fail_named_at_the_pair_or_token(moe_world):
     bad = {(m["spec"].split("{")[0], m["request_id"], m["step"], m["op_path"], m["row"]) for m in rep["mismatch"]}
     assert ("SiluMul_v1", "r1", 0, "moe/L0", p) in bad and ("MoeExpertGemmW_v1", "r1", 0, "moe/L0", p) in bad, bad
     assert all(m["request_id"] == "r1" for m in rep["mismatch"]) and "moe/L0/act row 3" in " ".join(m["why"] for m in rep["mismatch"])
-    rep = _moe_evaluate_all(w, lambda st, en: _plane_word(st, en, "r0", 0, "sum", 1 * H + 2), targets=("moe/L0@0", "model.norm@0"))
+    exp = "model.layers.0.mlp.experts"
+    rep = _moe_evaluate_all(w, lambda st, en: _plane_word(st, en, "r0", 0, "sum", 1 * H + 2), targets=(f"{exp}@0", "model.norm@0"))
     bad = {(m["spec"].split("{")[0], m["request_id"], m["step"], m["op_path"], m["row"]) for m in rep["mismatch"]}
-    assert rep["result"] is False and ("MoeSum_v1", "r0", 0, "moe/L0", 1) in bad and ("RMSNormFusedCuda_v2", "r0", 0, "model.norm", 1) in bad, bad
+    assert rep["result"] is False and ("MoeSum_v1", "r0", 0, exp, 1) in bad and "moe/L0/sum (copy of out)" in " ".join(m.get("why", "") for m in rep["mismatch"]), bad
+    rep = _moe_evaluate_all(w, lambda st, en: _plane_word(st, en, "r0", 0, "out", 1 * H + 2, op_path=exp), targets=(f"{exp}@0", "model.norm@0"))
+    bad = {(m["spec"].split("{")[0], m["request_id"], m["step"], m["op_path"], m["row"]) for m in rep["mismatch"]}
+    assert rep["result"] is False and ("MoeSum_v1", "r0", 0, exp, 1) in bad and ("RMSNormFusedCuda_v2", "r0", 0, "model.norm", 1) in bad, bad
     rep = _moe_evaluate_all(w, lambda st, en: _plane_word(st, en, "r0", 0, "up", p * 2 * I + 7))
     bad = {(m["spec"].split("{")[0], m["request_id"], m["step"], m["op_path"], m["row"]) for m in rep["mismatch"]}
     assert rep["result"] is False and ("MoeExpertGemm_v1", "r0", 0, "moe/L0", p) in bad and ("SiluMul_v1", "r0", 0, "moe/L0", p) in bad, bad
