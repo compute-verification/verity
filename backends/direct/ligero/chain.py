@@ -38,6 +38,7 @@ unchanged (no extras; byte-identical transcripts).
 """
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 
 import torch
@@ -45,13 +46,14 @@ import torch
 from .compile import P, System
 
 __all__ = ["N_FAMILIES", "END_FAMILIES", "MAX_COMPONENT_BITS", "N_BASE_LINKS", "WORD_BITS", "ChainCoefs", "Layout",
-           "chain_coefs", "check_component", "end_terms", "extra_coef", "n_links"]
+           "chain_coefs", "check_component", "end_terms", "extra_coef", "extra_coefs", "n_links"]
 
 N_FAMILIES = 7        # link x3, start x3, end
 END_FAMILIES = (6, 0, 1)   # coefficient family of end component x (see the module comment)
 N_BASE_LINKS = 3      # linked rows with their own uniform link / start families; more take monomials (module comment)
 WORD_BITS = 32             # the public word a component end is a bit field of
 MAX_COMPONENT_BITS = 30    # 2^30 < p < 2^31: the widest bit field that is an integer below p (the Rust parser's cap)
+CHAIN_TERM_CHUNK = int(os.environ.get("LIGERO_CHAIN_TERM_CHUNK", "64"))   # chain_coefs terms per index_add (memory bound)
 
 
 def check_component(x: int, lo: int, bits: int) -> tuple[int, int]:
@@ -79,6 +81,24 @@ def extra_coef(rc: torch.Tensor, e: int) -> torch.Tensor:
     for _ in range(k - 1):
         pw = (pw * u6) % P
     return (rc[:, f, :] * pw) % P
+
+
+def extra_coefs(rc: torch.Tensor, n_extra: int) -> torch.Tensor:
+    """``torch.stack([extra_coef(rc, e) for e in range(n_extra)], 1)`` -- the same (D, n_extra, l) residues -- with the
+    powers ``rc[6]^k`` formed once each (K = ceil(n_extra / 6) multiplies) and one batched product, instead of the
+    e div 6 multiplies per extra of the per-``e`` form: quadratic in ``n_extra`` inside the tests graph (2 x 5.5k / 22k
+    kernels for the 256 / 512 extras of ajtai-n64 / n128; lane ajtai-leaf)."""
+    D, _, l = rc.shape
+    if n_extra <= 0:
+        return rc.new_zeros((D, 0, l))
+    K = (n_extra + 5) // 6
+    u6 = rc[:, 6, :]
+    pws = [u6]
+    for _ in range(K - 1):
+        pws.append((pws[-1] * u6) % P)
+    pw = torch.stack(pws, 1)                                             # (D, K, l): u6^(k + 1)
+    ext = (rc[:, None, :6, :] * pw[:, :, None, :]) % P                   # (D, K, 6, l): [k, f] = extra e = 6 k + f
+    return ext.reshape(D, 6 * K, l)[:, :n_extra]
 
 
 def end_terms(ch: dict) -> list[tuple[object, int, int, int]]:
@@ -146,15 +166,18 @@ def chain_coefs(sys: System, layout: Layout, rc: torch.Tensor, y16_pub: torch.Te
     # more than three linked rows, the link extras and the start extras (monomials of the seven families, module comment).
     base = rc.index_select(1, tabs["famsel"])                                     # (D, V_base, l)
     if tabs["n_extra"]:
-        extras = torch.stack([extra_coef(rc, e) for e in range(tabs["n_extra"])], 1)   # (D, n_extra, l)
-        base = torch.cat([base, extras], 1)
-    rm = (base * tabs["maskmat"][None, :, :]) % P                                # (D, V, l)
-    # every (row, family, kappa) term of r^T A at once: coef[:, row, j] += kappa rc[f][j] (masked); the link terms'
+        base = torch.cat([base, extra_coefs(rc, tabs["n_extra"])], 1)
+    rm = base.mul_(tabs["maskmat"][None, :, :]).remainder_(P)                    # (D, V, l), in place
+    # every (row, family, kappa) term of r^T A: coef[:, row, j] += kappa rc[f][j] (masked); the link terms'
     # W[c][j + 1] coefficient is the same sum shifted one column right.  Exact integer sums of < 2^31 residues (a few
     # hundred terms per entry: no overflow), reduced once -- the same residues as the per-term reduction, in ~10 kernels
-    # instead of one per term (lane hostphase).
+    # instead of one per term (lane hostphase); the terms in chunks of CHAIN_TERM_CHUNK so a wide chain's (D, T, l)
+    # temporaries stay bounded per pipelined stream (ajtai-n64 / n128 link 131 / 259 rows).
     coef = torch.zeros((D, len(rows), l), dtype=torch.int64, device=device)
-    coef.index_add_(1, T["row"], (rm.index_select(1, T["fam"]) * T["kappa"][None, :, None]) % P)
+    nt = T["row"].shape[0]
+    for t0 in range(0, nt, CHAIN_TERM_CHUNK):
+        t1 = min(nt, t0 + CHAIN_TERM_CHUNK)
+        coef.index_add_(1, T["row"][t0:t1], (rm.index_select(1, T["fam"][t0:t1]) * T["kappa"][None, t0:t1, None]) % P)
     coef[:, :, 1:].index_add_(1, T["shift_row"], rm.index_select(1, tabs["link_fams"])[:, :, :-1])
     coef %= P
     rhs = torch.zeros((D,), dtype=torch.int64, device=device)

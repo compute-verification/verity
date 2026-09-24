@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import hashlib
 import math
+import os
 import time
 from dataclasses import dataclass, field
 from fractions import Fraction
@@ -286,9 +287,25 @@ class RelationHooks:
     y16_dtype: str = "<u2"         # the chain-end public words
     y16_bits: int | None = None    # range of the chain-end words (None: 2^p.word_bits)
     tag: bytes = b""               # domain separation of a non-default relation (b"" for BF16)
+    # The VU shape (red-team-leaf-3 H1 / H2; verifier-only, never absorbed): the compiled system is column-uniform, so it
+    # does not fix how many columns a VU spans.  ``steps``: the relation's columns per VU (``Relation.steps``); a chain
+    # statement with another layout is refused.  ``max_steps``: the leaf's structural bound (``AjtaiLeaf.max_steps`` = n:
+    # past it the negacyclic digest is not injective).  None: unchecked (the unit-mode / test systems).
+    steps: int | None = None
+    max_steps: int | None = None
 
 
 BF16_HOOKS = RelationHooks(public_vectors)
+
+
+def layout_error(layout, rel: RelationHooks) -> str | None:
+    """The chain statement's layout against the relation's VU shape (the Rust verifier's ``check_vu_shape``)."""
+    if rel.max_steps is not None and layout.steps > rel.max_steps:
+        return (f"statement: steps = {layout.steps} columns per VU exceeds the leaf's bound {rel.max_steps} "
+                "(ring degree: the digest is not binding beyond it)")
+    if rel.steps is not None and layout.steps != rel.steps:
+        return f"statement: steps = {layout.steps} columns per VU, the relation's VU is {rel.steps} columns"
+    return None
 
 # Red-team hook ONLY: when False the challenges are derived from the transcript alone (the pre-fix protocol).  The
 # binding fixture (``redteam_binding.py``) uses it to show the adaptive-statement forgery the fix closes.  An honest
@@ -1016,9 +1033,15 @@ def _tests_compute(sys: System, tb: Tables, cfg: Config, x: torch.Tensor, coefs,
         cc = chain_coefs(sys, layout, rc, y16_pub)
         R = cc.coef.shape[1]
         penc = _simt_encoder(cfg, device, plain=True)
-        Renc = (penc.encode(cc.coef.reshape(D * R, l))[0].to(torch.int64) if penc is not None
-                else encode(cc.coef.reshape(D * R, l), n)).reshape(D, R, n)     # R_i on the codeword domain
-        Qev = ((Renc * U.index_select(0, cc.rows)[None, :, :]) % P).sum(1) % P   # (D, n)
+        # R_i on the codeword domain, in chunks of CHAIN_ENC_CHUNK coefficient rows: a leaf/ composition links 2n + 3
+        # rows (131 / 259 for ajtai-n64 / n128) and one (D, R, n) int64 tensor plus its product would be 1.6 GB each at
+        # l = 16384 (the n128 bench OOMed at 24 GB); the partial sums are reduced mod P, so the result is bit-identical.
+        Qev = torch.zeros((D, n), dtype=torch.int64, device=device)
+        for r0 in range(0, R, CHAIN_ENC_CHUNK):
+            r1 = min(R, r0 + CHAIN_ENC_CHUNK)
+            cf = cc.coef[:, r0:r1].reshape(D * (r1 - r0), l)
+            Renc = (penc.encode(cf)[0].to(torch.int64) if penc is not None else encode(cf, n)).reshape(D, r1 - r0, n)
+            Qev = (Qev + ((Renc * U.index_select(0, cc.rows[r0:r1])[None, :, :]) % P).sum(1)) % P   # (D, n)
         if cfg.zk:                                                # + u_ca + x^k u_cb (uniform, zero sum over H)
             Qev = (Qev + U[mr["chain_a"]] + (_xk_on_coset(n, k, device)[None, :] * U[mr["chain_b"]]) % P) % P
         qcoef = (g("intt", intt, Qev) * _ginv_powers(n, device)) % P
@@ -1029,6 +1052,7 @@ def _tests_compute(sys: System, tb: Tables, cfg: Config, x: torch.Tensor, coefs,
     return w, h, q, v
 
 
+CHAIN_ENC_CHUNK = int(os.environ.get("LIGERO_CHAIN_ENC_CHUNK", "64"))   # chain-test coefficient rows encoded per chunk (bounded memory for wide chains)
 TESTS_GRAPH = True     # the whole tests chain (challenge block -> w, h, q, v in pinned memory) as ONE CUDA graph (lane hp2-host)
 _TESTS_STATIC: dict = {}
 
@@ -1550,6 +1574,10 @@ def verify(p: Params, sys: System, tb: Tables, cfg: Config, c, a, b, y, proof: P
     m, l, n, D, t, k = sys.m, cfg.l, cfg.n, cfg.D, cfg.t, cfg.k     # every size from the VERIFIER's configuration
     if (chain is not None) != (sys.chain is not None):
         return False, "chain mode mismatch"
+    if chain is not None:
+        why = layout_error(chain[0], rel)
+        if why is not None:
+            return False, why
     if auth is not None and chain is None:
         return False, "authentication is defined for the chain statement only"
     if (auth is not None) != (proof.auth is not None):
@@ -1654,7 +1682,8 @@ def verify(p: Params, sys: System, tb: Tables, cfg: Config, c, a, b, y, proof: P
         if not torch.equal(_sum_over_H(q, l), cc.rhs):
             return False, "chain constraints failed (sum over H)"
         R = cc.coef.shape[1]
-        Rc = encode(cc.coef.reshape(D * R, l), n).reshape(D, R, n)[:, :, cols]          # (D, R, t)
+        Rc = torch.cat([encode(cc.coef[:, r0:r0 + CHAIN_ENC_CHUNK].reshape(-1, l), n).reshape(D, -1, n)[:, :, cols]
+                        for r0 in range(0, R, CHAIN_ENC_CHUNK)], 1)                     # (D, R, t), bounded memory
         expect = ((Rc * Uo.index_select(0, cc.rows)[None, :, :]) % P).sum(1) % P
         if cfg.zk:                                                            # + u_ca(eta_c) + eta_c^k u_cb(eta_c)
             xk = _xk_on_coset(n, k, device)[cols]

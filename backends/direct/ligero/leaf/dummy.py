@@ -65,6 +65,7 @@ class DummyLeaf:
     schema = SCHEMA
     params_sha256 = PARAMS_SHA256
     hash_name = "dummy-linear4"
+    privacy_note = "linear, unsalted, test-only: binding-only and not even that (collisions by a linear solve)"
 
     # --- committer -----------------------------------------------------------------------------------------------------
     def native(self, rows: np.ndarray, *, word_bits: int, role: int) -> np.ndarray:

@@ -9,6 +9,7 @@ chain test), c_0 = 0.
 """
 from __future__ import annotations
 
+import dataclasses
 import json
 import os
 import platform
@@ -76,6 +77,7 @@ class ChainRunner:
         self.tb = tables(self.sys, self.device)
         self.compile_seconds = time.perf_counter() - t0
         self._cfg: dict[int, Config] = {}
+        self.hooks = dataclasses.replace(protocol_mod.BF16_HOOKS, steps=STEPS)   # the verifier's VU shape (96 columns)
 
     def cfg(self, l: int) -> Config:
         if l not in self._cfg:
@@ -163,7 +165,7 @@ class ChainRunner:
         if coins is None and self.interactive:
             coins = proof.coins
         return verify(self.p, self.sys, self.tb, self.cfg(lay.l), None, a, b, None, proof, self.device, chain=(lay, y16),
-                      coins=coins, auth=auth, auth_procs=auth_procs, auth_timing=auth_timing)
+                      coins=coins, rel=self.hooks, auth=auth, auth_procs=auth_procs, auth_timing=auth_timing)
 
     def batch_bound(self, cfgs: list[Config], n_proofs_claimed: list[int], target_bits: float = 128.0,
                     names: list[str] | None = None) -> dict:

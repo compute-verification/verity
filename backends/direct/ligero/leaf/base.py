@@ -35,7 +35,10 @@ files and pins are byte-identical), and the hash-auth block carries :attr:`schem
 reader checks against the named scheme.  Fingerprint: ``authentication=included-hash``, ``hash=<hash_name>``.
 
 Hiding: every scheme here is deterministic and unsalted in v1 -- the digest of a low-entropy row is preimage-searchable;
-the ZK rows hide the states inside the proof, not the digest itself.  Say so in the lane note (the brief does).
+the ZK rows hide the states inside the proof, not the digest itself.  Each scheme states its own caveat in
+:attr:`LeafScheme.privacy_note` (red-team-leaf F5; ``relchain`` puts it in the fingerprint and the ZK note): a compressing
+hash (Poseidon2, BLAKE3) hides up to preimage search on a row; a LINEAR digest (Ajtai) is binding-only and leaks equality
+and linear relations between rows.
 """
 from __future__ import annotations
 
@@ -73,6 +76,10 @@ class LeafScheme(Protocol):
     params_sha256: str
     #: the fingerprint's ``hash`` value, e.g. "poseidon2-babybear-w24"
     hash_name: str
+    #: one line on what the published digest hides (red-team-leaf F5), e.g. "deterministic, unsalted: hides only up to preimage
+    #: search on a row" (a compressing hash) or "linear, unsalted: binding-only, leaks equality and linear relations between
+    #: rows" (Ajtai).  Optional in the static check: a scheme without it is reported with the compressing-hash line.
+    privacy_note: str
 
     def native(self, rows: np.ndarray, *, word_bits: int, role: int) -> np.ndarray:
         """(R, row_words) int64 words -> (R, digest_elems) int64 < p.  Deterministic, unsalted in v1.  Pure numpy: this is
@@ -117,6 +124,8 @@ def check_scheme(s) -> None:
         v = getattr(s, attr, None)
         if not isinstance(v, str) or not v:
             raise TypeError(f"leaf scheme {s!r}: {attr} must be a non-empty str")
+    if hasattr(s, "privacy_note") and (not isinstance(s.privacy_note, str) or not s.privacy_note):
+        raise TypeError(f"leaf scheme {s.name}: privacy_note must be a non-empty str when present")
     for attr in ("digest_elems", "carry_elems"):
         v = getattr(s, attr, None)
         if not isinstance(v, int) or v <= 0:

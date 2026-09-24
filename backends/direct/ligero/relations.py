@@ -85,7 +85,8 @@ class Relation:
         from .protocol import RelationHooks
         # protocol.verify calls hooks.public_vectors(p, c, a, b, y, device=...) with the system's params: the same ``p``
         return RelationHooks(lambda p, c, a, b, y, device="cpu": self.public_vectors(p, c, a, b, y, device=device),
-                             word_dtype=self.word_dtype, y16_dtype=self.y_dtype, y16_bits=self.y_bits, tag=self.tag)
+                             word_dtype=self.word_dtype, y16_dtype=self.y_dtype, y16_bits=self.y_bits, tag=self.tag,
+                             steps=self.steps)
 
 
 def _bf16_hints(p, sys, c_in, a, b, y_out, device):

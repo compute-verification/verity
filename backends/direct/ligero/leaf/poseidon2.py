@@ -296,6 +296,7 @@ class Poseidon2Leaf:
     schema = SCHEMA_ROW
     params_sha256 = h2.CONSTANTS_SHA256
     hash_name = "poseidon2-babybear-w24"
+    privacy_note = "deterministic, unsalted: hides only up to preimage search on a row"
 
     def __init__(self):
         self._sponges: list = []       # per gadget call: (bit_rows word-major, cap rows, iv capacity, sbox rows)

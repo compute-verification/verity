@@ -23,7 +23,9 @@ from . import base, registry  # noqa: E402
 from . import dummy  # noqa: E402, F401  (test-only scheme: registers itself)
 from .fixtures import ligero_verify_binary, write_fixture  # noqa: E402
 
-REL = "fp8-ada"                    # k = 32 words of 8 bits, 48 columns per VU: the relation every scheme is exercised on
+#: k = 32 words of 8 bits, 48 columns per VU: the relation every scheme is exercised on (VERITY_LEAF_CONFORMANCE_REL=bf16-hopper
+#: for the 96-column relation)
+REL = os.environ.get("VERITY_LEAF_CONFORMANCE_REL", "fp8-ada")
 #: every registered scheme, plus family members named in VERITY_LEAF_CONFORMANCE (comma-separated, e.g. "ajtai-n64,ajtai-n128")
 SCHEMES = registry.names() + [n for n in os.environ.get("VERITY_LEAF_CONFORMANCE", "").split(",") if n]
 
@@ -176,6 +178,21 @@ def test_compose_prove_verify_publishes_the_native_digests(name: str, runners) -
     bad[1, s.digest_elems] ^= 1
     ok, why = hashauth.verify_hash_auth(auth, pubs[4], digests=bad, y_words=np.asarray(pubs[2])[ends], y_bits=R.rel.y_bits, leaf=s)
     assert not ok and why.startswith("auth: b:")
+
+
+@pytest.mark.parametrize("name", SCHEMES)
+def test_pipelined_prover_publishes_the_sequential_statement(name: str, runners) -> None:
+    """``prove_vus_many`` (bench-vu-rel --pipeline N): the statement is fixed from the committer's digests before each
+    prover starts; it must be the one ``prove_vus`` publishes, and every sub-batch must verify."""
+    R, data = runners[name]
+    ids = [[0, 2], [1, 3]]
+    many, wall = R.prove_vus_many([[data[i] for i in g] for g in ids], lambda i: None, depth=2, vu_ids=ids)
+    assert len(many) == 2 and wall > 0
+    for (V, proof, pubs, lay), g in zip(many, ids):
+        assert R.verify_vus(proof, pubs, lay, coins=V) == (True, "")
+        _, ref, _ = R.prove_vus([data[i] for i in g], vu_ids=g)
+        assert np.array_equal(pubs[0], ref[0]) and np.array_equal(pubs[1], ref[1]) and pubs[3] == ref[3] and pubs[4] == ref[4]
+        assert proof.timings["auth_openings"] >= 0 and proof.timings["total"] + proof.timings.get("hints_host", 0.0) > 0
 
 
 @pytest.mark.parametrize("name", SCHEMES)
