@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from verity_vllm.commit.fa2_prototype.encoding import COMMITTED_STAGES, Geometry, RowLayout, ValueId, row_count
+from tests.commit.fa2_prototype.encoding import COMMITTED_STAGES, Geometry, RowLayout, ValueId, row_count
 
 
 @pytest.mark.parametrize("T", [1, 2, 7, 8, 63, 64, 65, 127, 128, 129, 155, 160, 255, 256, 257, 383, 384, 385])

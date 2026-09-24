@@ -13,13 +13,13 @@ import dataclasses
 import numpy as np
 import pytest
 
-from verity_vllm.commit.fa2_prototype.derived import open_derived, verify_derived
-from verity_vllm.commit.fa2_prototype.encoding import RowLayout, ValueId
-from verity_vllm.commit.fa2_prototype.kernel_dump import P0_DIR, load_dump, n_block_max
-from verity_vllm.commit.fa2_prototype.layouts import (HierCommitment, HierLayout, PackedCommitment, PackedLayout,
+from tests.commit.fa2_prototype.derived import open_derived, verify_derived
+from tests.commit.fa2_prototype.encoding import RowLayout, ValueId
+from tests.commit.fa2_prototype.kernel_dump import P0_DIR, load_dump, n_block_max
+from tests.commit.fa2_prototype.layouts import (HierCommitment, HierLayout, PackedCommitment, PackedLayout,
                                                             verify_value_opening)
-from verity_vllm.commit.fa2_prototype.oracle import oracle_row, oracle_row_full
-from verity_vllm.commit.fa2_prototype.reference import replay_row
+from tests.commit.fa2_prototype.oracle import oracle_row, oracle_row_full
+from tests.commit.fa2_prototype.reference import replay_row
 
 pytestmark = pytest.mark.skipif(not P0_DIR.is_dir(), reason=f"B-kernel P0 dumps not present at {P0_DIR}")
 

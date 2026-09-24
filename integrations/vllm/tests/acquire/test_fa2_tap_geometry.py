@@ -24,7 +24,7 @@ from verity_vllm.acquire.hidden_source import fa2_kblock_n, fa2_swapped  # noqa:
 
 
 def _oracle():
-    spec = importlib.util.spec_from_file_location("fa2_attn_oracle", os.path.join(REPO, "verity_vllm", "check", "fa2_attn_oracle.py"))
+    spec = importlib.util.spec_from_file_location("fa2_attn_oracle", os.path.join(os.path.dirname(__file__), "fa2_attn_oracle.py"))
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
