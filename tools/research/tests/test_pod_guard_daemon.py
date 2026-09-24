@@ -241,6 +241,97 @@ def test_the_daemon_never_uses_the_account_key_path(tmp_path):
     assert "rc=3" in r.stdout and "no pod-scoped RUNPOD_API_KEY" in (tmp_path / "g.log").read_text()
 
 
+# ---- the real terminate path, against a fake RunPod API ----------------------------------------------------------------------------------
+
+class FakeRunPod:
+    """REST DELETE /pods/{id} answers `rest_status`; POST /graphql answers 200 with `gql_body`.  Records (method, path, auth, body)."""
+
+    def __init__(self, rest_status: int = 200, gql_body: str = '{"data": {"podTerminate": null}}'):
+        import http.server
+        import threading
+
+        self.calls: list[tuple[str, str, str, str]] = []
+        outer = self
+
+        class H(http.server.BaseHTTPRequestHandler):
+            def _answer(self, status: int, body: str) -> None:
+                n = int(self.headers.get("Content-Length") or 0)
+                outer.calls.append((self.command, self.path, self.headers.get("Authorization", ""), self.rfile.read(n).decode()))
+                self.send_response(status)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(body.encode())
+
+            def do_DELETE(self):  # noqa: N802
+                self._answer(rest_status, "{}" if rest_status == 200 else '{"error": "forbidden"}')
+
+            def do_POST(self):  # noqa: N802
+                self._answer(200, gql_body)
+
+            def log_message(self, *a):
+                pass
+
+        self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
+        self.url = f"http://127.0.0.1:{self.server.server_address[1]}"
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+
+    def env(self) -> dict[str, str]:
+        return {"GUARD_API_REST": f"{self.url}/v1", "GUARD_API_GQL": f"{self.url}/graphql", "PATH": "/usr/bin:/bin"}   # no runpodctl
+
+
+def _terminate(tmp_path: Path, api: FakeRunPod, key: bool = True) -> subprocess.CompletedProcess:
+    env = {**_env(tmp_path, QUIET, key=key), **api.env()}
+    env.pop("GUARD_TERMINATE_CMD")
+    import sys
+
+    env["GUARD_PY"] = sys.executable
+    return subprocess.run(["bash", "-c", f'. "{GUARD}"; guard_terminate_pod {POD}; echo rc=$?'], env=env, capture_output=True, text=True, timeout=60)
+
+
+def test_terminate_uses_the_pod_key_from_the_environ_file_over_rest(tmp_path):
+    api = FakeRunPod()
+    r = _terminate(tmp_path, api)
+    assert "rc=0" in r.stdout and f"TERMINATED {POD} (REST DELETE" in r.stdout, r.stdout + r.stderr
+    assert api.calls == [("DELETE", f"/v1/pods/{POD}", "Bearer pod-scoped-secret", "")]
+
+
+def test_terminate_falls_back_to_graphql_when_rest_refuses(tmp_path):
+    api = FakeRunPod(rest_status=403)
+    r = _terminate(tmp_path, api)
+    assert "rc=0" in r.stdout and "GraphQL podTerminate" in r.stdout and "REST DELETE HTTP 403" in r.stdout, r.stdout + r.stderr
+    assert [c[0] for c in api.calls] == ["DELETE", "POST"] and f'podTerminate(input: {{podId: \\"{POD}\\"}})' in api.calls[1][3]
+    assert all(c[2] == "Bearer pod-scoped-secret" for c in api.calls)
+
+
+def test_terminate_fails_when_both_apis_refuse_and_without_a_key_calls_nothing(tmp_path):
+    api = FakeRunPod(rest_status=403, gql_body='{"errors": [{"message": "Unauthorized"}]}')
+    r = _terminate(tmp_path, api)
+    assert "rc=1" in r.stdout and "Unauthorized" in r.stdout
+    api2 = FakeRunPod()
+    r = _terminate(tmp_path, api2, key=False)
+    assert "rc=3" in r.stdout and api2.calls == []
+
+
+def test_daemon_terminates_through_the_real_path_with_the_pod_key(tmp_path):
+    """The 2026-09-24 pod run: with GUARD_TERMINATE_CMD unset the daemon must reach the API with the key from the environ file."""
+    import sys
+
+    api = FakeRunPod()
+    root = tmp_path / "root"
+    mark_fetched(run_dir(root, "r-done"))
+    env = {**_env(tmp_path, QUIET, GUARD_TICK_S="0.2", GUARD_RETRY_S="0.2"), **api.env(), "GUARD_PY": sys.executable}
+    env.pop("GUARD_TERMINATE_CMD")
+    proc = _daemon(root, env, 0.01)
+    try:
+        assert proc.wait(timeout=30) == 0
+        assert api.calls[:1] == [("DELETE", f"/v1/pods/{POD}", "Bearer pod-scoped-secret", "")]
+        st = _state(root)
+        assert st["verdict"] == "terminated" and st["terminate"]["ok"] and "REST DELETE" in st["terminate"]["output"]
+    finally:
+        if proc.poll() is None:
+            os.killpg(proc.pid, signal.SIGKILL)
+
+
 # ---- ensure_guard (the machine side of `research run --on`) ------------------------------------------------------------------------------
 
 def test_no_pod_scoped_key_means_no_guard_and_says_so(tmp_path, monkeypatch):

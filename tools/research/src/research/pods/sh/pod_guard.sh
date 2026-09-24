@@ -39,28 +39,36 @@ guard_pod_key() {
 
 guard_terminate_pod() {
   # terminate pod $1 with the pod-scoped key: REST DELETE /pods/{id}, else GraphQL podTerminate, else runpodctl.  0 = accepted.
-  # GUARD_TERMINATE_CMD replaces all of it (tests): it is run with the pod id as $1.
+  # The key is read from $GUARD_ENVIRON by the python below itself (python's stdin is its script; the key is in no argv or env).
+  # GUARD_TERMINATE_CMD replaces all of it: it is run with the pod id as $1.  GUARD_API_REST / GUARD_API_GQL point at a fake API (tests).
   local me=${1:?pod id} rc
   if [ -n "${GUARD_TERMINATE_CMD:-}" ]; then $GUARD_TERMINATE_CMD "$me"; return $?; fi
-  guard_pod_key | GUARD_POD="$me" "${GUARD_PY:-python3}" - research-pod-guard <<'PY'
+  GUARD_POD="$me" GUARD_ENVIRON="$GUARD_ENVIRON" "${GUARD_PY:-python3}" - research-pod-guard <<'PY'
 import json, os, sys, urllib.error, urllib.request
-key, me = sys.stdin.read().strip(), os.environ["GUARD_POD"]
+me = os.environ["GUARD_POD"]
+try:
+    env = open(os.environ["GUARD_ENVIRON"], "rb").read().split(b"\0")
+except OSError:
+    env = []
+key = next((kv.split(b"=", 1)[1].decode() for kv in env if kv.startswith(b"RUNPOD_API_KEY=")), "").strip()
 if not key:
     print("no pod-scoped RUNPOD_API_KEY in the pod's environment"); sys.exit(3)
+rest = os.environ.get("GUARD_API_REST", "https://rest.runpod.io/v1")
+gql = os.environ.get("GUARD_API_GQL", "https://api.runpod.io/graphql")
 def call(method, url, body=None):
     req = urllib.request.Request(url, data=None if body is None else json.dumps(body).encode(), method=method,
                                  headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json", "User-Agent": "research-pod-guard"})
     with urllib.request.urlopen(req, timeout=60) as r:
         return r.status, r.read()[:300].decode(errors="replace")
 try:
-    st, _ = call("DELETE", f"https://rest.runpod.io/v1/pods/{me}")
+    st, _ = call("DELETE", f"{rest}/pods/{me}")
     print(f"TERMINATED {me} (REST DELETE, HTTP {st})"); sys.exit(0)
 except urllib.error.HTTPError as e:
     print(f"REST DELETE HTTP {e.code}: {e.read()[:200].decode(errors='replace')}")
 except Exception as e:  # noqa: BLE001
     print(f"REST DELETE {type(e).__name__}: {e}")
 try:
-    st, body = call("POST", "https://api.runpod.io/graphql", {"query": 'mutation { podTerminate(input: {podId: "%s"}) }' % me})
+    st, body = call("POST", gql, {"query": 'mutation { podTerminate(input: {podId: "%s"}) }' % me})
     if '"errors"' not in body:
         print(f"TERMINATED {me} (GraphQL podTerminate, HTTP {st})"); sys.exit(0)
     print(f"GraphQL podTerminate HTTP {st}: {body[:200]}")
