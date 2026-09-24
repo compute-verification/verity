@@ -160,7 +160,7 @@ def build(run_dir: Path | str, *, tool: Tool | dict[str, Any] | str | None = Non
                                                                                    "source_archive_sha256", "source_verified")} if run_sec.get("remote") else None},
         "cost": {"provider": cost_sec.get("provider"), "pod_id": cost_sec.get("pod_id"), "rate_usd_per_hour": cost_sec.get("rate_usd_per_hour"),
                  "usd": est.get("usd"), "shared": cost_sec.get("shared")},
-        "status": {"state": status.get("state"), "rc": status.get("rc"), "class": failure.get("class"), "failure": failure.get("why"),
+        "status": {"state": status.get("state"), "outcome": status.get("outcome"), "rc": status.get("rc"), "class": failure.get("class"), "failure": failure.get("why"),
                    "validation": res.validation_status, "result": res.summary(), "timed_out": status.get("timed_out")},
         "outputs": dict(outputs) if outputs is not None else {"result": None, "run_files": None},
         "telemetry": dict(telemetry) if telemetry is not None else {"events": None, "resources": None},

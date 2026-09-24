@@ -5,7 +5,10 @@ UNKNOWN_SIGNAL(9) with the incident list, never OOM; incidents are recorded sepa
 
 Rules (first match by priority; every rule's evidence refs recorded; ambiguity lowers certainty, never raises it):
   1 structured checker record with verdict != PASS                -> WORKLOAD_CHECK_FAILED   (BEFORE the rc==0 rule: a checker that writes
-                                                                     FAIL and exits 0 is a failed workload -- rev d1)
+                                                                     FAIL and exits 0 is a failed workload -- rev d1; `read_check_record`:
+                                                                     a `verdict` document, or outputs.json's published `meta.outcome`;
+                                                                     NOT_RUN is no verdict.  `tele run` then records state `done` +
+                                                                     `outcome`: the check completed, it is not a crash)
   2 rc==0 and checker record absent or PASS                       -> SUCCESS (+ incidents; an open root span is a limitation, not a failure)
   3 CUDA allocation failure string in the job's own log           -> CUDA_ALLOC_FAIL
   4 ENOSPC/EDQUOT in the log, or a declared mount sampled at 0    -> STORAGE_EXHAUSTED
@@ -96,6 +99,35 @@ def _tail(path: Path, n: int = 256 << 10) -> str:
 
 def _events_of(kind: str, recs: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [r for r in recs if r.get("kind") == kind]
+
+
+OUTPUTS_SCHEMA = "research/outputs/v0.1"
+NO_VERDICT = (None, "NOT_RUN")          # a check that never ran published no verdict: the exit is judged on its own evidence
+
+
+def read_check_record(path: str | Path | None) -> dict[str, Any] | None:
+    """The structured checker record at `path`: {"path", "verdict", "comparator"}, or None when there is none (absent, unreadable,
+    or carrying no verdict).  Two shapes: a checker document with a top-level `verdict` (e.g. global_match_fast.json), or the
+    workload's typed-output declaration (`outputs.json`, schema research/outputs/v0.1) whose entries publish `meta.outcome` -- the
+    verdict of record (a vllm Commit's vllm-verdict/v1).  Several outcomes: the first that is not PASS.  NOT_RUN is no verdict."""
+    if not path or not Path(path).is_file():
+        return None
+    try:
+        doc = json.loads(Path(path).read_text())
+    except (OSError, ValueError):
+        return None
+    if not isinstance(doc, dict):
+        return None
+    if doc.get("schema") == OUTPUTS_SCHEMA:
+        found = [(str(e.get("meta", {}).get("outcome")), f"{e.get('kind')} ({e.get('name')})") for e in doc.get("outputs") or []
+                 if isinstance(e, dict) and isinstance(e.get("meta"), dict) and e["meta"].get("outcome") not in NO_VERDICT]
+        if not found:
+            return None
+        verdict, comparator = next((f for f in found if f[0] != "PASS"), found[0])
+        return {"path": str(path), "verdict": verdict, "comparator": comparator}
+    if doc.get("verdict") in NO_VERDICT:
+        return None
+    return {"path": str(path), "verdict": doc.get("verdict"), "comparator": doc.get("comparator") or doc.get("schema")}
 
 
 def _oom_count(cg: dict[str, Any]) -> dict[str, int]:
@@ -362,13 +394,13 @@ def classify(attempt_dir: str | Path, rc: int | None = None, sig: int | None = N
                               "note": "intent recorded but neither delivery nor a matching exit signal was observed"})
 
     # ---- checker record -------------------------------------------------------------------------------------------------------------------
-    check = None
-    if check_record and Path(check_record).exists():
+    check = read_check_record(check_record)
+    if check is not None:
+        inputs[Path(check_record).name] = {"sha256": _sha(Path(check_record))[0], "bytes": _sha(Path(check_record))[1]}
+    elif check_record and Path(check_record).is_file():
         try:
-            doc = json.loads(Path(check_record).read_text())
-            check = {"path": check_record, "verdict": doc.get("verdict"), "comparator": doc.get("comparator") or doc.get("schema")}
-            inputs[Path(check_record).name] = {"sha256": _sha(Path(check_record))[0], "bytes": _sha(Path(check_record))[1]}
-        except ValueError:
+            json.loads(Path(check_record).read_text())
+        except (OSError, ValueError):
             limitations.append(f"check record {check_record} is not JSON")
 
     # ---- OOM attribution (rule 6 body; also consulted by rule 5 when a marker and an increment compete) --------------------------------------

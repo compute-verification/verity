@@ -378,6 +378,32 @@ def test_d1_checker_fail_with_rc_0_is_workload_check_failed_not_success(tmp_path
     assert classify(d, rc=0, check_record=str(d / "gm.json"))["class"] == "WORKLOAD_CHECK_FAILED"
 
 
+def test_outputs_json_meta_outcome_is_the_checker_record(tmp_path):
+    from research.telemetry.classify import read_check_record
+
+    d = _attempt(tmp_path, rc=12, sig=None, samples=[])
+    out = d / "outputs.json"
+
+    def publish(*outcomes):
+        ents = [{"name": f"o{i}", "kind": "vllm-verdict/v1", "tree": "outputs/x", "meta": {"outcome": o} if o else {}} for i, o in enumerate(outcomes)]
+        out.write_text(json.dumps({"schema": "research/outputs/v0.1", "outputs": ents}))
+
+    publish(None, "FAIL")
+    doc = classify(d, rc=12, check_record=str(out))
+    assert doc["class"] == "WORKLOAD_CHECK_FAILED" and doc["evidence"][-1]["verdict"] == "FAIL" and "outputs.json" in doc["inputs"]
+    assert "no structured checker record" not in doc["why"]
+    publish("PASS", "INSUFFICIENT_EVIDENCE")
+    assert read_check_record(out)["verdict"] == "INSUFFICIENT_EVIDENCE", "several outcomes: the first that is not PASS"
+    publish("PASS")
+    assert classify(d, rc=0, check_record=str(out))["class"] == "SUCCESS"
+    for none in (("NOT_RUN",), (None,), ()):
+        publish(*none)
+        assert read_check_record(out) is None and classify(d, rc=12, check_record=str(out))["class"] == "UNKNOWN_EXIT", none
+    out.write_text("{not json")
+    assert read_check_record(out) is None and any("not JSON" in l for l in classify(d, rc=12, check_record=str(out))["limitations"])
+    assert read_check_record(d / "absent.json") is None and read_check_record(None) is None
+
+
 def test_c2_primary_evidence_is_disappearance_and_ranking_is_corroboration_never_a_veto(tmp_path):
     # rev P3 / d2 discriminator: small job process at oom_score_adj 1000 killed; a LARGER bystander at adj 0 survives
     scores = {100: 1005, 900: 310}

@@ -87,6 +87,7 @@ def summarize(run_dir: Path) -> dict[str, Any]:
         "tree_sha": comp.get("tree_sha"),
         "workload_digest": comp.get("workload_digest"),
         "state": state,
+        "outcome": status.get("outcome"),
         "rc": status.get("rc"),
         "signal": status.get("signal"),
         "wall_s": status.get("wall_s"),

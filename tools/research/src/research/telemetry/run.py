@@ -21,7 +21,7 @@ from typing import Any
 
 from . import CANCEL_ACTORS
 from .cancel import add_args as cancel_args, cancel as cancel_run
-from .classify import classify, write as write_failure
+from .classify import classify, read_check_record, write as write_failure
 from .events import Emitter, append, events_path, utc_now_ms
 from .job import build_job, input_ref, set_status, sha256_file, write_json_atomic
 from .procs import stat_fields
@@ -204,8 +204,15 @@ def run(a: argparse.Namespace, cmd: list[str]) -> int:
     status_rc = 128 + sig if sig else rc
     outcome = "ok" if rc == 0 else "fail"
     em.span_end(a.stage, sid, outcome=outcome, rc=status_rc, signal=sig, timed_out=timed_out, refs=list(a.declared_output))
-    set_status(d, "cancelled" if timed_out else ("done" if rc == 0 else "failed"), rc=status_rc, signal=sig, timed_out=timed_out, ended_mono=t_end,
-               ended_utc=utc_now_ms(), wall_s=t_end - t_start, rc_is_shell_status=True)
+    # a published verdict (FAIL, INSUFFICIENT_EVIDENCE, ...) means the workload's check COMPLETED: the attempt is `done` with that
+    # outcome whatever its exit status (row_pod.sh exits 12 after a Commit FAIL), never `failed` beside the crashes.  A signal death
+    # stays `failed`: the process did not finish, whatever an earlier step left in the record
+    check = read_check_record(a.check_record)
+    verdict = {"outcome": check["verdict"]} if check else {}
+    checked = check is not None and check["verdict"] != "PASS" and sig is None
+    state = "cancelled" if timed_out else ("done" if rc == 0 or checked else "failed")
+    set_status(d, state, rc=status_rc, signal=sig, timed_out=timed_out, ended_mono=t_end, ended_utc=utc_now_ms(), wall_s=t_end - t_start,
+               rc_is_shell_status=True, **verdict)
     # ---- stop the sampler (it lingers by itself once the root pid is gone; SIGTERM makes it take final readings now)
     if sampler is not None:
         try:
@@ -246,7 +253,8 @@ def add_args(ap: argparse.ArgumentParser) -> None:
     ap.add_argument("--inherit-io", action="store_true", help="do not tee stdout/stderr into the attempt dir")
     ap.add_argument("--cwd", default=None)
     ap.add_argument("--log", action="append", default=[], help="additional log files for the classifier")
-    ap.add_argument("--check-record", default=None)
+    ap.add_argument("--check-record", default=None, help="the workload's structured verdict (a `verdict` document or outputs.json; "
+                                                         "`research run` defaults it to <run dir>/outputs.json)")
     ap.add_argument("--hide-argv", action="store_true")
     # job identity
     ap.add_argument("--project", default=os.environ.get("TELEMETRY_PROJECT", "unspecified"))

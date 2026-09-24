@@ -35,6 +35,36 @@ def test_run_records_and_inspects(tmp_path, capsys):
     assert data["runs"][0]["id"] == s["id"]
 
 
+def _publishes(outcome: str | None, rc: int) -> str:
+    """A workload that declares one typed output carrying `meta.outcome` (a vllm Commit's vllm-verdict/v1) and exits `rc`."""
+    outs = [] if outcome is None else [{"name": "verdict", "kind": "vllm-verdict/v1", "file": "verdict.json", "meta": {"outcome": outcome}}]
+    return (f"import json, sys; open('verdict.json', 'w').write('{{}}'); "
+            f"json.dump({{'schema': 'research/outputs/v0.1', 'outputs': {outs!r}}}, open('outputs.json', 'w')); sys.exit({rc})")
+
+
+def test_a_published_fail_verdict_is_a_terminal_done_attempt_not_a_crash(tmp_path, capsys):
+    runs = tmp_path / "runs"
+    assert main(["run", "--runs-dir", str(runs), "--project", "t", "--no-sampler", "--id", "r-fail", "--", sys.executable, "-c", _publishes("FAIL", 12)]) == 12
+    s = R.summarize(runs / "r-fail")
+    assert (s["state"], s["outcome"], s["class"], s["rc"]) == ("done", "FAIL", "WORKLOAD_CHECK_FAILED", 12), "the check completed: terminal, outcome FAIL"
+    assert "r-fail done rc=12 class=WORKLOAD_CHECK_FAILED outcome=FAIL" in capsys.readouterr().err
+    from research.store import attempt as A
+
+    assert A.build(runs / "r-fail")["status"]["outcome"] == "FAIL", "the attempt manifest carries the outcome"
+    assert main(["inspect", "r-fail", "--runs-dir", str(runs)]) == 0 and "outcome=FAIL (published verdict)" in capsys.readouterr().out
+    # the same exit with no published verdict is still a crash (`failed`, UNKNOWN_EXIT), and NOT_RUN is no verdict
+    for rid, outcome in (("r-crash", None), ("r-notrun", "NOT_RUN")):
+        assert main(["run", "--runs-dir", str(runs), "--project", "t", "--no-sampler", "--id", rid, "--", sys.executable, "-c", _publishes(outcome, 12)]) == 12
+        s = R.summarize(runs / rid)
+        assert (s["state"], s["outcome"], s["class"]) == ("failed", None, "UNKNOWN_EXIT"), rid
+    # a PASS verdict with a zero exit is a plain success; INSUFFICIENT_EVIDENCE is a completed check that did not pass
+    assert main(["run", "--runs-dir", str(runs), "--no-sampler", "--id", "r-pass", "--", sys.executable, "-c", _publishes("PASS", 0)]) == 0
+    assert (R.summarize(runs / "r-pass")["state"], R.summarize(runs / "r-pass")["class"]) == ("done", "SUCCESS")
+    assert main(["run", "--runs-dir", str(runs), "--no-sampler", "--id", "r-ins", "--", sys.executable, "-c", _publishes("INSUFFICIENT_EVIDENCE", 3)]) == 3
+    s = R.summarize(runs / "r-ins")
+    assert (s["state"], s["outcome"], s["class"]) == ("done", "INSUFFICIENT_EVIDENCE", "WORKLOAD_CHECK_FAILED")
+
+
 RESULT_OF_ENV = ("import os, json; json.dump({'foo': os.environ.get('RSEC_FOO'), 'tok': os.environ.get('RSEC_API_TOKEN'), 'cwd': os.getcwd()}, "
                  "open('result.json', 'w'))")
 

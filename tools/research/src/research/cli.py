@@ -162,6 +162,8 @@ def cmd_run(argv: list[str]) -> int:
         return 2
     if ns.claimed and not os.environ.get("RESEARCH_STORE"):
         os.environ["RESEARCH_STORE"] = str(root.parent / "store")     # machine side: the store lives beside the runs, <root>/store (what `data pull` reads)
+    if a.check_record is None:
+        a.check_record = str(run_dir / "outputs.json")               # a verdict the workload publishes there makes the attempt `done` with that outcome
     cwd_basis = _resolve_cwd(a)
     try:
         prep = _prepare_store(ns, a, command, run_id, run_dir, env_map)
@@ -221,7 +223,7 @@ def cmd_run(argv: list[str]) -> int:
             release(mem_reservation, run_id)
     _publish_attempt(run_dir, prep)
     s = R.summarize(run_dir)
-    line = f"research: run {run_id} {s['state']} rc={s['rc']} class={s['class'] or '-'} result={s['result']}"
+    line = f"research: run {run_id} {s['state']} rc={s['rc']} class={s['class'] or '-'}" + (f" outcome={s['outcome']}" if s["outcome"] else "") + f" result={s['result']}"
     if s["result"] == "absent":
         line += f" (looked for {run_dir / 'result.json'}: write $RESEARCH_RUN_DIR/result.json)"
     if s["validation"]:
@@ -634,7 +636,7 @@ def cmd_inspect(argv: list[str]) -> int:
     print(f"dir       {s['dir']}")
     if not s["readable"]:
         print(f"WARNING   job.json schema {s['schema']!r} is not one this research can read; fields below are best effort")
-    print(f"exited    {s['state']}  rc={s['rc']} signal={s['signal']} wall_s={s['wall_s']}")
+    print(f"exited    {s['state']}  rc={s['rc']} signal={s['signal']} wall_s={s['wall_s']}" + (f"  outcome={s['outcome']} (published verdict)" if s["outcome"] else ""))
     if s["class"]:
         print(f"class     {s['class']} ({s['certainty']})" + (f": {s['why']}" if s["why"] else ""))
     print(f"result    {s['result']}")
