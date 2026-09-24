@@ -1,5 +1,5 @@
 """(T0) Attempt provenance: a re-run of a reference row, published as `research` Attempts (Phase 5a), cites the SAME row configuration
-the fixture row has -- the key params of `vllm.build` / `vllm.match` / `vllm.commit` (integrations/vllm/verity_vllm/research_tools.py):
+the fixture row has -- the key params of `vllm.build` / `vllm.match` / `vllm.commit` (integrations/vllm/verity_vllm/harness/research_tools.py):
 model id + revision, dtype, hw family, tp, batch, input / output lengths, arrival mix, sampling, execution mode, the verification query
 id -- and the stages chain: the Match Attempt names the Build artifact it consumed, the Commit names both, and those are the artifacts
 the earlier Attempts published.

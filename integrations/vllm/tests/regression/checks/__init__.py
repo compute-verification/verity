@@ -16,8 +16,8 @@ from __future__ import annotations
 from importlib import import_module
 from types import ModuleType
 
-ORDER = ("manifest_digest", "program_digest", "global_match_checks", "executed_prefix", "coverage", "commit_summary", "verdict",
-         "decomp_hashes", "replay_partition", "attempt_provenance")
+ORDER = ("manifest_digest", "program_digest", "step_segmentation", "global_match_checks", "stoch_value", "executed_prefix", "coverage",
+         "commit_summary", "verdict", "decomp_hashes", "replay_partition", "attempt_provenance")
 
 
 def load(name: str) -> ModuleType:

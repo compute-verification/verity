@@ -40,7 +40,7 @@ from pathlib import Path
 from typing import Any
 
 HERE = Path(__file__).resolve().parent
-VLLM_ROOT = HERE.parents[1]                     # integrations/vllm
+VLLM_ROOT = HERE.parents[1]  # integrations/vllm
 FIXTURES = HERE / "fixtures.toml"
 EXPECTED_DIR = HERE / "expected"
 VERIFY_LIMIT = 64 * 1024 * 1024
@@ -48,14 +48,39 @@ VERIFY_LIMIT = 64 * 1024 * 1024
 ROWS_ROOT_ENV = "VERITY_REGRESSION_ROWS_ROOT"
 CANDIDATE_ENV = "VERITY_REGRESSION_CANDIDATE"             # a directory of row dirs, or attempt ids (`r2026…`, comma-separated)
 CANDIDATE_CACHE_ENV = "VERITY_REGRESSION_CANDIDATE_CACHE"  # where the attempts' output trees are unioned (default: the temp dir)
-ENGINE_ENV = "VERITY_REGRESSION_ENGINE"        # which builder recomputes `actual` (checks/manifest_digest.py ENGINES); default = the v1 baseline
-BASELINE_ENGINE = "v1"
+ENGINE = "v2"                                  # the builder that recomputes `actual`: Q_module_body_v1 via verity_vllm.query (recorded in every result)
+ORACLE_ENV = "VERITY_REGRESSION_ORACLE"        # `expected` (default: expected/<row>.json, re-baselined on v2) | `frozen` (lift from the R2 frozen v1 records)
+ORACLES = ("expected", "frozen")
+RECORD_ACTUAL_ENV = "VERITY_REGRESSION_RECORD_ACTUAL"   # a directory: test_reproduces writes every `actual` to <dir>/<row>/<check>.json (rebaseline.py input)
 
 
-def engine() -> str:
-    """`VERITY_REGRESSION_ENGINE` as set (default `v1`, the baseline the reference rows' Commits ran).  The value is validated by
-    the check that uses it (`manifest_digest.engine()`); here it only decides whether a `pending_review` decision may be consulted."""
-    return os.environ.get(ENGINE_ENV, BASELINE_ENGINE)
+def oracle() -> str:
+    """Which contract `expected` is: `expected` (default) = expected/<row>.json, the harness's frozen contract (re-baselined on v2's
+    outputs after the flip; the labelled decisions of fixtures.toml are the recorded reasons it differs from the R2 records);
+    `frozen` = lift from the R2 frozen v1 records themselves (`check.expected(row)`) -- the historical comparison, where the same
+    decisions sanction the differences."""
+    o = os.environ.get(ORACLE_ENV, ORACLES[0])
+    if o not in ORACLES:
+        raise ValueError(f"{ORACLE_ENV}={o!r}: one of {ORACLES}")
+    return o
+
+
+def record_result(row_key: str, check: str, exp: Any, act: Any, problems: list[str]) -> Path | None:
+    """When `$VERITY_REGRESSION_RECORD_ACTUAL` names a directory, write the check's result document to `<dir>/<row>/<check>.json`:
+    `{expected, actual, problems, matched, engine, oracle}` (canonical JSON) -- the input `rebaseline.py` merges into expected/.
+    Never raises (a recording failure is not a test failure)."""
+    d = os.environ.get(RECORD_ACTUAL_ENV)
+    if not d:
+        return None
+    try:
+        p = Path(d) / row_key / f"{check}.json"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        doc = {"schema": "verity-vllm/regression-result/v1", "row": row_key, "check": check, "expected": exp, "actual": act,
+               "problems": list(problems), "matched": matched(act, problems), "engine": ENGINE, "oracle": oracle()}
+        p.write_text(canonical(doc) + "\n")
+        return p
+    except Exception:
+        return None
 
 
 class InputMismatch(AssertionError):
@@ -161,7 +186,7 @@ class Row:
             return p
         # the frozen v1 pin failed: a labelled decision may own a sanctioned pin for this input (`pins."<rel>" = { bytes, sha256 }`:
         # the manifest a decision's promotion produces, read downstream as an INPUT by coverage / replay_partition) -- the decision,
-        # not the check, owns it; `pending_review` pins are consulted for non-baseline engines only (as `sanction`)
+        # not the check, owns it
         tried: list[str] = []
         for d in self.spec.get("decisions") or []:
             pin = ((d.get("pins") or {}).get(rel)) if isinstance(d, dict) else None
@@ -171,9 +196,6 @@ class Row:
             label = f"decision {d['finding']} ({status})"
             if status not in DECISION_STATUSES:
                 tried.append(f"{label}: unknown status")
-                continue
-            if status == "pending_review" and engine() == BASELINE_ENGINE:
-                tried.append(f"{label}: not consulted under the {BASELINE_ENGINE} engine")
                 continue
             dp = self._pin_problem(rel, p, pin)
             if dp is None:
@@ -433,9 +455,8 @@ def diff(expected: Any, actual: Any, path: str = "$") -> list[str]:
 
 
 DECISION_FIELDS = ("check", "since", "finding", "reason", "expected")
-#: `status` of a decision: `accepted` (the default when absent: Daniel confirmed it; sanctions under every engine) or
-#: `pending_review` (labelled by a lane, not yet confirmed: sanctions ONLY a non-baseline actual -- the v2 engine or a candidate --
-#: so the v1 baseline stays untouched; the v1 engine reproducing it would be a change to the reference, FAIL).
+#: `status` of a decision: `accepted` (the default when absent: Daniel confirmed it) or `pending_review` (labelled by a lane, not yet
+#: confirmed); both sanction.
 DECISION_STATUSES = ("accepted", "pending_review")
 
 
@@ -443,23 +464,16 @@ def decision_status(d: dict[str, Any]) -> str:
     return str(d.get("status") or "accepted")
 
 
-def is_baseline(act: dict[str, Any]) -> bool:
-    """True when `act` was recomputed by the v1 baseline (engine `v1`, not a candidate's document)."""
-    return engine() == BASELINE_ENGINE and act.get("source") != "candidate"
-
-
 def sanction(row: Row, check: str, act: dict[str, Any], problems: list[str]) -> list[str]:
     """Consult the row's labelled decisions for `check` once `act` differs from the v1 contract (`problems` = `diff(v1, act)`).
     A decision whose `expected` values `act` ALL reproduces sanctions the difference: returns [] and records
     `act["sanctioned_by"] = finding` (+ `act["decision_status"]`).  Otherwise the problems name both sides -- v1's and every
     decision's own differences -- and a decision missing any of DECISION_FIELDS (or with an empty `expected`), or with an unknown
-    `status`, never sanctions anything (fail closed).  A `pending_review` decision is not consulted for a baseline actual
-    (`is_baseline`): the v1 engine must still reproduce v1.  Rows without a decision for `check` get `problems` back unchanged."""
+    `status`, never sanctions anything (fail closed).  Rows without a decision for `check` get `problems` back unchanged."""
     decisions = row.decisions(check)
     if not problems or not decisions:
         return problems
     out = [f"v1: {p}" for p in problems]
-    baseline = is_baseline(act)
     for d in decisions:
         status = decision_status(d)
         label = f"decision {d.get('finding') or '?'} (since {d.get('since') or '?'}, {status})"
@@ -469,9 +483,6 @@ def sanction(row: Row, check: str, act: dict[str, Any], problems: list[str]) -> 
             continue
         if status not in DECISION_STATUSES:
             out.append(f"{label}: unknown status {status!r} (one of {DECISION_STATUSES}); sanctions nothing")
-            continue
-        if status == "pending_review" and baseline:
-            out.append(f"{label}: not consulted -- the {BASELINE_ENGINE} engine must reproduce the v1 reference; a pending decision sanctions v2 / candidate results only")
             continue
         dp = diff(d["expected"], act)
         if not dp:
@@ -483,9 +494,10 @@ def sanction(row: Row, check: str, act: dict[str, Any], problems: list[str]) -> 
 
 
 def matched(act: dict[str, Any], problems: list[str]) -> str:
-    """Which side a passing check reproduced: `v1` or `decision <finding> (<status>)`; `neither` when problems remain."""
+    """Which side a passing check reproduced: the oracle (`expected` = expected/<row>.json, `frozen` = the R2 v1 records) or
+    `decision <finding> (<status>)`; `neither` when problems remain."""
     if problems:
         return "neither"
     if act.get("sanctioned_by"):
         return f"decision {act['sanctioned_by']} ({act.get('decision_status') or 'accepted'})"
-    return "v1"
+    return oracle()

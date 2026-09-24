@@ -25,6 +25,18 @@ def applies(row: resolver.Row) -> str | None:
     return None if row.has("global_match.json") else "no global_match.json on this row (Match never reached GM-01)"
 
 
+def fold_pins(gm: dict) -> dict | list | None:
+    """The sha256 pins of the fold record GM-01 read.  `impl.fold_load` is keyed by the fold DIRECTORY, an absolute path on the machine
+    that ran it ({"/workspace/.../match": {"source", "operand_refs_form", "program_sha256", "instances_sha256"}}), so the pins are one level
+    down and the path does not enter: a candidate that read the same record elsewhere pins the same bytes.  One fold dir (what GM-01
+    writes) -> its pins; several -> the sorted list of them.  (Until 2026-09-23 the lift filtered the TOP level for `*sha256` keys; those
+    keys are paths, so it was None on every row and the candidate-mode comparison of pins was vacuous.)"""
+    fl = (gm.get("impl") or {}).get("fold_load") or {}
+    pins = [p for p in ({k: v for k, v in n.items() if k.endswith("sha256")} for n in fl.values() if isinstance(n, dict)) if p]
+    pins.sort(key=lambda p: json.dumps(p, sort_keys=True))
+    return (pins[0] if len(pins) == 1 else pins) if pins else None
+
+
 def lift(gm: dict) -> dict:
     out = {k: gm.get(k) for k in VERDICT_FIELDS}
     out["checks"] = {c["id"]: {"status": c.get("status"), "n_problems": c.get("n_problems", len(c.get("problems") or []))}
@@ -39,7 +51,7 @@ def lift(gm: dict) -> dict:
     ac = gm.get("achieved_concurrency") or {}
     out["achieved_concurrency"] = {k: ac.get(k) for k in ("programmed_max", "observed_max", "declared_requests")}
     out["requests_n"] = len(gm.get("requests") or [])
-    out["fold_record_pins"] = {k: v for k, v in ((gm.get("impl") or {}).get("fold_load") or {}).items() if k.endswith("sha256")} or None
+    out["fold_record_pins"] = fold_pins(gm)
     return out
 
 

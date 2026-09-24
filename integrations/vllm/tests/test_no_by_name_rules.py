@@ -1,4 +1,4 @@
-"""By-name lint (Draft 3.1 §12.3 phase 6 gate): no new by-name rules in `verity_vllm` / `verity_capture`.
+"""By-name lint (Draft 3.1 §12.3 phase 6 gate): no new by-name rules in `verity_vllm`.
 
 A *by-name rule* answers a verification question ("is this Value a boundary value?", "which module do we hook?", "which
 family is a collective?", "does this model have a qkv bias?") from a model name, a module-path fragment or a Definition
@@ -7,7 +7,7 @@ form "because the name is in this list" is a structural leak).  The inventory (A
 found 98 such decision points, ~68 structural; v2 retires them phase by phase.  This test pins the current set so that it
 can only shrink.
 
-What is scanned: every ``*.py`` under ``integrations/vllm/{verity_vllm,verity_capture}`` except ``tests/`` directories and
+What is scanned: every ``*.py`` under ``integrations/vllm/verity_vllm`` except ``tests/`` directories and
 ``test_*.py`` files (test fixtures may name models).  Docstrings, comments, f-strings, ``raise``/``assert`` messages and
 message-like keyword/dict positions (``hint=``, ``why=``, ``help=``, …) are not rule positions and are ignored.
 
@@ -44,9 +44,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parent                                   # integrations/vllm
-SCAN = ("verity_vllm", "verity_capture")
-SKIP_DIRS = frozenset({"tests", "__pycache__"})
+ROOT = HERE.parents[0]  # integrations/vllm
+SCAN = ("verity_vllm",)
+SKIP_DIRS = frozenset({"tests", "__pycache__", "numerics"}); SKIP_FILES = frozenset({"engine_profile.py"})   # relayout: program/numerics/ and observe/engine_profile.py come from the two packages SCAN never covered; 13 by-name rules -- decide (Draft 3.1 §12.4), do not just allowlist
 ALLOWLIST = HERE / "by_name_allowlist.json"
 KINDS = ("model-name", "path-predicate", "table")
 
@@ -260,7 +260,7 @@ def iter_files() -> list[Path]:
     for top in SCAN:
         for dirpath, dirnames, filenames in os.walk(ROOT / top):
             dirnames[:] = sorted(d for d in dirnames if d not in SKIP_DIRS)
-            out.extend(Path(dirpath) / fn for fn in sorted(filenames) if fn.endswith(".py") and not fn.startswith("test_"))
+            out.extend(Path(dirpath) / fn for fn in sorted(filenames) if fn.endswith(".py") and not fn.startswith("test_") and fn not in SKIP_FILES)
     return out
 
 

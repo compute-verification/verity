@@ -481,6 +481,10 @@ def cmd_fetch(argv: list[str]) -> int:
     s = R.summarize(run_dir)
     print(f"research: {s['run_id']} observed {rec['observed_utc']}: {s['state']} rc={s['rc']} class={s['class'] or '-'} result={s['result']}"
           + (f"  preserved={'yes' if rec.get('preserved') else 'NO: ' + json.dumps(rec.get('preserve_error'))}" if ns.all else ""))
+    marker = rec.get("fetched_marker") if ns.all else None
+    if marker and not marker.get("written"):
+        print(f"research: {s['run_id']}: .fetched NOT written on the machine ({marker.get('reason')}); a pod guard keeps refusing to terminate",
+              file=sys.stderr)
     return 0
 
 

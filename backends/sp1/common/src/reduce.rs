@@ -27,12 +27,12 @@
 //! The MUFU gates take the hardware table word as an *argument*: a 64-bit
 //! `(index << 32) | word` leaf opened from a committed table tree
 //! (`zk/bench/reduce_tables.py` builds the trees over the measured tables of
-//! `verity_vllm_numerics`; the statement pins the roots).  Each gate
+//! `verity_vllm.program.numerics`; the statement pins the roots).  Each gate
 //! recomputes the index the hardware would use from its FP32 operand and
 //! returns `None` -- a rejection -- when the opened leaf is for any other
 //! index, so a proof can only use the one true table row.  The evaluation
 //! around the lookup (special cases, exponent reconstruction, `div.full.f32`
-//! range scaling) is `vllm-poc/verity_vllm_numerics/cpp/rms_triton_model.cpp`
+//! range scaling) is `vllm-poc/verity_vllm/program/numerics/cpp/rms_triton_model.cpp`
 //! (`mufu_rcp`, `mufu_sqrt`, `mufu_rsq`, `div_full_parts`, `rsqrt_nonftz`),
 //! measured exhaustively on sm_89 and confirmed on the A100 for every
 //! captured word (docs/vllm-poc/rmsnorm-model.md).
