@@ -208,12 +208,17 @@ def test_fused_equals_torch_and_reference_in_domain(name):
 @pytest.mark.parametrize("name", V2 + V3)
 def test_fused_equals_torch_real_subbatch(name):
     """The instance set marshalled by the chain runner (chain mode, pad units included), as the prover calls it."""
+    from dataclasses import replace
     from . import protocol as protocol_mod
     from .relchain import RelationChainRunner, instances
     rel = RELATIONS[name]
     R = RelationChainRunner(rel, "cuda", -128.0, 2, zk=False, mode=protocol_mod.MODE_INTERACTIVE)
     per = 4096 // rel.steps
-    bd = R.marshal(instances(rel, per, procs=4, cache=CACHE))
+    try:
+        data = instances(rel, per, procs=4, cache=CACHE)
+    except FileNotFoundError:   # the bf16-ampere family reads the frozen vu-k1536 set, built only with BENCH_INSTANCES=1
+        data = instances(replace(rel, frozen_tier=None), per, procs=4, cache=CACHE)
+    bd = R.marshal(data)
     fused, eager, graph, torch = _paths(name, R.sys)
     args = (bd["c_d"], bd["a_d"], bd["b_d"])
     hf, he, hg = fused(*args), eager(*args), graph(*args)

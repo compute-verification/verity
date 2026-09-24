@@ -333,14 +333,16 @@ BF16_AMPERE_RELATION = _register(Relation(
     frozen_tier="vu-k1536",
 ))
 
-# The Ampere BF16 pipeline on the generic chain runner (the v1 Ampere relation is ``vu.py``'s ``--relation bf16`` on the frozen
-# instance set; this one runs on synthetic instances drawn like the Hopper BF16 set, so the two are not the same claim).
+# The Ampere BF16 pipeline on the generic chain runner, on the A100 row's frozen instance set like ``bf16-ampere`` (``frozen_tier``:
+# ``bench-instances/v1`` ``vu-k1536``, read from ``--root``; the v3 / v2x4 / v3x4 relations below inherit it).  Until lane
+# fused-phases these drew a synthetic set (``bench-instances-bf16-ampere/v1``), which Table 2 rejects as not the frozen set.
 BF16_AMPERE_V2_RELATION = _register(_v2_of(
     BF16_HOPPER_RELATION, "bf16-ampere-v2", "Params.from_model(AMPERE_BF16_M16N8K16)",
     target=FIRST, model=AMPERE_BF16_M16N8K16, params=Params.from_model(AMPERE_BF16_M16N8K16),
-    instances_dataset="bench-instances-bf16-ampere/v1", instances_tier="vu-k1536-bf16-ampere", instance_seed=20260922,
-    instances_recipe="bf16-ampere synthetic (random_finite_bf16: finite BF16 words incl. subnormals and exact zeros, model-recorded accumulators)",
-    relation_name="GemmCoordinate<1536> over sm80.mma.m16n8k16.bf16", model_name="AMPERE_BF16_M16N8K16"))
+    instances_dataset=contract.INSTANCES_DATASET, instances_tier="vu-k1536", instance_seed=0, instances_recipe=None,
+    frozen_tier="vu-k1536",
+    relation_name="GemmCoordinate<1536> over sm80.mma.m16n8k16.bf16", model_name="AMPERE_BF16_M16N8K16",
+    claim_note=BF16_AMPERE_RELATION.claim_note))
 
 
 # --- v3: lane relmin-private -- private operand words (committed hint bits pinned to the public words), everything else
@@ -380,7 +382,7 @@ def _v3_of(v2: Relation, name: str, params_note: str) -> Relation:
         instances_dataset=v2.instances_dataset, instances_tier=v2.instances_tier, instance_seed=v2.instance_seed,
         instances_recipe=v2.instances_recipe, relation_name=v2.relation_name, model_name=v2.model_name,
         backend_name=_V3_BACKEND.format(name=name, params=params_note), witness_generation=_V3_WITNESS,
-        claim_note=v2.claim_note, reference_hints=_v3_reference_hints,
+        claim_note=v2.claim_note, reference_hints=_v3_reference_hints, frozen_tier=v2.frozen_tier,
         # backends/ligero-verify pins the four v3 systems (relation.rs privsel; Decode::PrivSel reads the operand words off
         # the v4 statement and refuses a non-finite one) and verifies their dumps end to end
         rust_verifiable=True)

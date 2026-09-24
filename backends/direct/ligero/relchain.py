@@ -39,7 +39,7 @@ from .relations import K_VU, Relation, relation
 from .serialize import hashed_statement_format
 from .witness import tables
 
-__all__ = ["RelationChainRunner", "bench_vu_rel", "gate_vu_rel", "instances", "instances_digest", "vu_units"]
+__all__ = ["RelationChainRunner", "bench_vu_rel", "gate_vu_rel", "instances", "instances_digest", "instances_ref", "vu_units"]
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -130,6 +130,26 @@ def instances_digest(rel: Relation, n: int, seed: int | None = None, root=None) 
         return rel.instances_digest_fn(n, seed=seed, root=root)
     seed = rel.instance_seed if seed is None else seed
     return hashlib.sha256(f"{rel.name} synthetic|seed={seed}|n={n}|K={K_VU}".encode()).hexdigest()
+
+
+def instances_ref(rel: Relation, total_vus: int, tile: tuple[int, int] | None = None, root=None) -> dict:
+    """The fingerprint's ``instances`` block of a :func:`bench_vu_rel` result over ``total_vus`` VUs (``tile``: the
+    ``--tile`` workload) -- field for field what the result carries (``verity_numerical.bench.instance_equiv`` reads it)."""
+    if rel.frozen_tier and tile is None:
+        # the frozen set: the same ``instances`` block as vu.bench_vu (no seed, no recipe), so the committed column of the
+        # A100 cell names exactly the bare cell's instances
+        return contract.instances_ref(rel.instances_tier, 0, total_vus, instances_digest(rel, total_vus, root=root),
+                                      dataset=rel.instances_dataset)
+    if rel.frozen_tier:
+        return {"dataset": "synthetic", "tier": f"tile{tile[0]}x{tile[1]}", "range": [0, total_vus],
+                "manifest_sha256": tile_digest(rel, *tile), "seed": rel.instance_seed,
+                "recipe": f"{rel.name} synthetic GEMM tile (relchain.tile_instances: {rel.operands.__name__} rows / columns, "
+                          f"model-recorded accumulators); NOT the frozen {rel.frozen_tier} set"}
+    inst = {"dataset": rel.instances_dataset, "tier": rel.instances_tier, "range": [0, total_vus],
+            "manifest_sha256": instances_digest(rel, total_vus, root=root), "seed": rel.instance_seed}
+    if rel.instances_recipe:
+        inst["recipe"] = rel.instances_recipe
+    return inst
 
 
 def vu_units(rel: Relation, a: list[int], b: list[int], accs: list[int]) -> list[tuple]:
@@ -1915,7 +1935,6 @@ def bench_vu_rel(args, rel: Relation) -> int:
     else:
         # a frozen-tier relation (bf16-ampere): its frozen set has no tile layout, the tile is the synthetic draw
         data, x_rows, w_cols = tile_instances(rel, *tile, procs=getattr(args, "instance_procs", 1), cache=getattr(args, "instances_cache", None))
-    frozen = bool(rel.frozen_tier) and tile is None
     inst_digest = tile_digest(rel, *tile) if (tile is not None and rel.frozen_tier) else instances_digest(rel, total_vus, root=root)
     print(f"{total_vus} {'frozen ' + rel.frozen_tier if rel.frozen_tier else 'synthetic'} VUs (recorded accumulators) in {time.perf_counter() - t0:.1f}s")
     commit_seconds = 0.0
@@ -2118,19 +2137,7 @@ def bench_vu_rel(args, rel: Relation) -> int:
     zk_statement = snd["zk_statement"]
     if hashed and cfg.zk:
         zk_statement = zk_statement.split("; operands a, b")[0] + privacy_note.replace("; NOTE: ", "; ", 1)
-    if frozen:
-        # the frozen set: the same ``instances`` block as vu.bench_vu (no seed, no recipe), so the committed column of the
-        # A100 cell names exactly the bare cell's instances
-        inst = contract.instances_ref(rel.instances_tier, 0, total_vus, inst_digest, dataset=rel.instances_dataset)
-    elif rel.frozen_tier:
-        inst = {"dataset": "synthetic", "tier": f"tile{tile[0]}x{tile[1]}", "range": [0, total_vus], "manifest_sha256": inst_digest,
-                "seed": rel.instance_seed, "recipe": f"{rel.name} synthetic GEMM tile (relchain.tile_instances: {rel.operands.__name__} "
-                                                     f"rows / columns, model-recorded accumulators); NOT the frozen {rel.frozen_tier} set"}
-    else:
-        inst = {"dataset": rel.instances_dataset, "tier": rel.instances_tier, "range": [0, total_vus],
-                "manifest_sha256": inst_digest, "seed": rel.instance_seed}
-        if rel.instances_recipe:
-            inst["recipe"] = rel.instances_recipe
+    inst = instances_ref(rel, total_vus, tile=tile, root=root)
     fp = contract.fingerprint(
         profile=rel.target.name, domain=contract.DOMAIN, K=K_VU, B=total_vus, N_subbatches=n_proofs,
         proof_class=proof_class, authentication=(R.AUTH if hashed else "excluded"), zk_mode=zk_mode,
