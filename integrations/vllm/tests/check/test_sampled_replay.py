@@ -1761,3 +1761,32 @@ def test_lifted_slot_compare_bot_under_active_and_value_under_disabled_both_fail
     a, why = SR.padded_slot_enable("slot3/up", {}, _Store([1 << 32, 1]), "r0", 5, "model.layers.1.mlp.experts", 0, 2)
     assert a is None and "is bot" in why
     assert SR._ITEMSIZE["l17"] == 4 and SR._ITEMSIZE["l33"] == 8
+
+
+def test_population_stamps_on_every_reason_the_code_its_text_decodes_to(moe_world, biased_world, monkeypatch):
+    """Every not-evaluable reason population() counts carries its structured code (`population.not_evaluable_codes`, what the verdict
+    reads), and on every site that code is the one a record written before the codes decodes its text to (`replay_codes`): a new record
+    and a record of record grade alike."""
+    from collections import Counter
+
+    from verity_vllm.check import replay_codes as RC
+
+    monkeypatch.delitem(SR.EVALUATORS, "RMSNormFusedCuda_v2")                  # direct no-evaluator gaps
+    monkeypatch.delitem(SR.EVALUATORS, "MoeRouterTopK_v1")                     # a plane producer without an evaluator (MAN-06f)
+    monkeypatch.delitem(SR.EVALUATORS, "Gemm_v1")                              # BiasAdd over an interior Gemm (MAN-06g) + direct Gemm gaps
+    monkeypatch.setitem(SR.NOT_YET, "TokenSelect_v1", "not replayed by this version (test label)")     # the stated domain
+    rows = [dict(r) for r in moe_world.inst["rows"]]
+    ups = [k for k, r in enumerate(rows) if r["spec"].startswith("MoeExpertGemm_v1")][:2]
+    rows[ups[0]]["name"], rows[ups[1]]["name"] = rows[ups[1]]["name"], rows[ups[0]]["name"]            # a plane mapping failure
+    ne, codes = Counter(), {}
+    for inst in (dict(moe_world.inst, rows=rows), biased_world.inst):
+        ne.update(SR.population(SR.ProgramIndex(inst), "r0", codes=codes)[1])
+    assert set(codes) == set(ne)
+    assert {"no-evaluator", "plane-fed", "interior-composed-v2", "mapping"} <= {c["class"] for c in codes.values()}
+    assert [k for k, c in codes.items() if c["domain"]] == ["not replayed by this version (test label)"]
+    decoded = RC.not_evaluable_codes({"not_evaluable": dict(ne)})
+    for k, got in codes.items():
+        want = decoded[k]
+        assert (got["class"], got["domain"], got["tags"]) == (want["class"], want["domain"], want["tags"]), k
+        if got["class"] == "no-evaluator":
+            assert got["family"] == want["family"], k

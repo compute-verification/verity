@@ -17,8 +17,13 @@ REL-02 (R13 rel, interim for reviewer finding R-14): `expected_tensors` counts a
 that never fires (Hopper FA3 with the FA2 tap loaded, a tap left off the command line, a dropped value family) contributed 0 to both sides
 and passed.  Until the expected manifest comes from the Program/query (lane p0b), the verdict also takes the committer's coverage
 declaration and a set of REQUIRED class ids: every required class must be declared, and every declared class that binds leaves
-(`bound-as-leaf` / `registered-input`) must have `tensors > 0`."""
+(`bound-as-leaf` / `registered-input`) must have `tensors > 0`.
+
+The C2 rules decide from the structured codes the sampled replay stamps on its record (`replay_codes`: the class / family / domain of
+every not-evaluable reason, the classes of every unevaluated stratum, the seed form), never from its message texts."""
 from __future__ import annotations
+
+from verity_vllm.check import replay_codes as RC
 
 # The interim required-value manifest for the native committer + FA2 hidden tap on an FA2 dense model (the R12 canary rows' `required_classes`
 # minus the two derived-from-bound norm classes, which are protocol clauses with no leaves and are checked for presence only when declared).
@@ -104,17 +109,6 @@ def binding_check(bnd: dict, *, min_openings: int = 64) -> tuple[bool, str]:
     return True, "PASS"
 
 
-_WHY_BY_NAME = ("no-evaluator", "state-linked", "plane-fed", "interior-composed-v2")     # == sampled_replay.WHY_CLASSES_BY_NAME
-
-
-def _why_class_of(why: str | None) -> str:
-    try:
-        from verity_vllm.check.sampled_replay import why_class
-        return why_class(why)
-    except Exception:  # noqa: BLE001
-        return "other"
-
-
 _POPULATION_GAP_CLASSES = ("plane-fed", "interior-composed-v2")     # the MAN-06f / MAN-06g population moves (rev-cb M-0751 (b))
 # [R16 rev F-r16-07 / M-0068; report M-0059 (2)] which by-name classes form (B) CAN cover: form (B) compares the Match record's dispatcher-level
 # module outputs (`instance_outputs`), so an interior-composed VU (MAN-06g: its module's returned tensor IS an instance output) is covered by a
@@ -149,19 +143,6 @@ def _form_b_complete_over_values(oc: dict | None) -> str | None:
     return None
 
 
-_NO_EVALUATOR_PREFIX = "no registered evaluator for "      # == the text sampled_replay.population() counts a non-NOT_YET family under
-
-
-def _not_yet_texts() -> set[str]:
-    """The replay's stated applicability domain as the exact texts `population.not_evaluable` carries for it (sampled_replay.NOT_YET values:
-    RoPE_v1 no evaluator yet; Attention_v3 / AttentionHead_v1 state-linked) -- read from the module, never re-typed here."""
-    try:
-        from verity_vllm.check.sampled_replay import NOT_YET
-        return {str(v) for v in NOT_YET.values()}
-    except Exception:  # noqa: BLE001
-        return set()
-
-
 def _is_token_select(fam: str) -> bool:
     try:
         from verity_vllm.query.manifest.format import is_token_select
@@ -170,24 +151,29 @@ def _is_token_select(fam: str) -> bool:
         return str(fam).split("_v", 1)[0].endswith("TokenSelect")
 
 
-def _no_evaluator_gaps(not_ev: dict) -> tuple[dict[str, int], dict[str, int]]:
-    """[R16 rev F-r16-20 / M-0400; pin F-r16-20b / M-0431] ({selector family: n}, {other family: n}) among the population's `no registered
-    evaluator for <fam>` exclusions whose family is NOT in NOT_YET.  Selectors (TokenSelect families, e.g. GumbelTopPTokenSelect_v1 on a
-    stochastic row): the sampled id is THE value a stochastic row adds and is reproducible from the committed logits only with the seed AND
-    the top-p split count S (reqval M-0305 / REQ-03).  Others (Hopper: Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1} = every linear, Attention_v2
-    = every attention row -- targets.gemm_spec / attention_spec bind them on a cc 9.0 step; neither is in EVALUATORS nor NOT_YET): their
-    module outputs ARE the oracle's `instance_outputs`, so a complete form (B) covers them exactly as it covers the interior-composed class.
-    Both carry the SAME class label ('no-evaluator') as the RoPE_v1 applicability domain and must not hide behind it."""
+def _no_evaluator_reasons(not_ev: dict, codes: dict[str, dict]) -> list[tuple[str, str, int]]:
+    """(reason, family, n) for every counted `no-evaluator` reason whose family is outside the replay's stated domain (NOT_YET)."""
+    out = []
+    for k, v in not_ev.items():
+        c, n = codes.get(str(k)) or {}, int(v or 0)
+        if n > 0 and c.get("class") == "no-evaluator" and not c.get("domain") and c.get("family"):
+            out.append((str(k), str(c["family"]), n))
+    return out
+
+
+def _no_evaluator_gaps(not_ev: dict, codes: dict[str, dict] | None = None) -> tuple[dict[str, int], dict[str, int]]:
+    """[R16 rev F-r16-20 / M-0400; pin F-r16-20b / M-0431] ({selector family: n}, {other family: n}) among the population's no-evaluator
+    exclusions whose family is NOT in NOT_YET (`codes`: the reasons' structured codes, default decoded from `not_ev`).  Selectors
+    (TokenSelect families, e.g. GumbelTopPTokenSelect_v1 on a stochastic row): the sampled id is THE value a stochastic row adds and is
+    reproducible from the committed logits only with the seed AND the top-p split count S (reqval M-0305 / REQ-03).  Others (Hopper:
+    Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1} = every linear, Attention_v2 = every attention row -- targets.gemm_spec / attention_spec bind
+    them on a cc 9.0 step; neither is in EVALUATORS nor NOT_YET): their module outputs ARE the oracle's `instance_outputs`, so a complete
+    form (B) covers them exactly as it covers the interior-composed class.  Both carry the SAME class ('no-evaluator') as the RoPE_v1
+    applicability domain and must not hide behind it."""
+    codes = RC.not_evaluable_codes({"not_evaluable": not_ev}) if codes is None else codes
     sel: dict[str, int] = {}
     other: dict[str, int] = {}
-    domain = _not_yet_texts()
-    for k, v in not_ev.items():
-        k, n = str(k), int(v or 0)
-        if n <= 0 or k in domain or not k.startswith(_NO_EVALUATOR_PREFIX) or _why_class_of(k) != "no-evaluator":
-            continue
-        fam = k[len(_NO_EVALUATOR_PREFIX):].strip()
-        if not fam:
-            continue
+    for _k, fam, n in _no_evaluator_reasons(not_ev, codes):
         d = sel if _is_token_select(fam) else other
         d[fam] = d.get(fam, 0) + n
     return sel, other
@@ -300,31 +286,38 @@ def _complete_replay_population_gap(sr: dict | None, oc: dict | None) -> tuple[s
     (no --match-dir) PASSes with the sampled ids value-checked by NEITHER form (C1 / C3 bind them; nothing computes them)."""
     if not (isinstance(sr, dict) and sr.get("result") is True):
         return None, None
-    not_ev = (sr.get("population") or {}).get("not_evaluable") or {}
+    pop = sr.get("population") or {}
+    not_ev = pop.get("not_evaluable") or {}
     if not isinstance(not_ev, dict):
         return None, None
-    gaps = {str(k): int(v) for k, v in not_ev.items() if int(v or 0) > 0 and _why_class_of(str(k)) in _POPULATION_GAP_CLASSES}
-    sel, other = _no_evaluator_gaps(not_ev)
+    codes = RC.not_evaluable_codes(pop)
+
+    def cls_of(k: str) -> str | None:
+        return (codes.get(k) or {}).get("class")
+
+    gaps = {str(k): int(v) for k, v in not_ev.items() if int(v or 0) > 0 and cls_of(str(k)) in _POPULATION_GAP_CLASSES}
+    sel = _no_evaluator_gaps(not_ev, codes)[0]
     # [pin F-r16-20b / M-0431] a non-selector family with no registered evaluator outside NOT_YET (Hopper Gemm_v2 / Attention_v2) joins the
     # gaps form (B) must cover over instance_outputs -- the direct output gap gets the SAME rule as the composed one (BiasAdd over Gemm_v2)
-    for fam, cnt in other.items():
-        gaps[f"{_NO_EVALUATOR_PREFIX}{fam}"] = cnt
+    for k, fam, cnt in _no_evaluator_reasons(not_ev, codes):
+        if not _is_token_select(fam):
+            gaps[k] = cnt
     if not gaps and not sel:
         return None, None
     n = sum(gaps.values())
-    cls = sorted({_why_class_of(k) for k in gaps})
-    tags = sorted({t for k in gaps for t in ("MAN-06f", "MAN-06g") if t in k})
+    cls = sorted({cls_of(k) for k in gaps})
+    tags = sorted({t for k in gaps for t in (codes.get(k) or {}).get("tags") or ()})
     reasons = " | ".join(f"{v} x {k.split(' [', 1)[0][:110]}" for k, v in sorted(gaps.items(), key=lambda kv: -kv[1]))
     missing = _form_b_complete_over_values(oc)
     # [R16 rev F-r16-07 / M-0068] plane-fed VUs are covered by neither form: FAIL by name, whatever form (B) says
-    plane = {k: v for k, v in gaps.items() if _why_class_of(k) == "plane-fed"}
+    plane = {k: v for k, v in gaps.items() if cls_of(k) == "plane-fed"}
     if plane:
         n_p = sum(plane.values())
         rest = {k: v for k, v in gaps.items() if k not in plane}
         reasons_p = " | ".join(f"{v} x {k.split(' [', 1)[0][:110]}" for k, v in sorted(plane.items(), key=lambda kv: -kv[1]))
         tail = ""
         if rest:
-            tail = (f"; the other {sum(rest.values())} VUs not evaluable by name ({', '.join(sorted({_why_class_of(k) for k in rest}))}) "
+            tail = (f"; the other {sum(rest.values())} VUs not evaluable by name ({', '.join(sorted({cls_of(k) for k in rest}))}) "
                     + ("are covered by the complete form (B)" if missing is None else f"are not covered either: {missing}"))
         return None, (f"C2 of record not established: {n_p} plane-fed VUs (MAN-06f) {_PLANE_FED_NEITHER_FORM} -- {reasons_p}{tail}; "
                       "C1 + C3 hold on those planes, C2 needs form (A) over the planes (MAN-06f v3 row->plane mapping) or a bit-exact plane xcheck on record")
@@ -350,25 +343,21 @@ def _complete_replay_population_gap(sr: dict | None, oc: dict | None) -> tuple[s
             f"({', '.join(cls)}{'; ' + ', '.join(tags) if tags else ''}): {reasons}" + (f"; {sel_note}" if sel_note else "")), None
 
 
-_REPLAY_SEED_ROOT_FORM = "run root (first 8 bytes, after commitment)"       # == commit_delta's [O6] default seed_source
-_REPLAY_SEED_CHALLENGE_PREFIX = "verifier challenge "                        # == sampled_replay.challenge_seed's source text
-
-
 def _replay_seed_of_record(sr: dict, run_root_hex: str | None) -> tuple[bool | None, str]:
     """[R16 rev F-r16-23 / M-0579] Is the sampled replay's SEED post-commitment?  The replay's adversarial meaning (C3: the picks are unknown
-    before the bytes are committed) rests on the seed's source, which the record carries as a LABEL (`sample.seed_source`).  This reads it as
-    a FACT: the root form is recomputed from the record's run root (sample.seed == int.from_bytes(run_root[:8])); the verifier-challenge form is
-    post-commitment by construction (sha256(challenge|root)); `--replay-seed (targeted)` is PROVER-CHOSEN before the run -> a MECHANISM run,
+    before the bytes are committed) rests on the seed's form (`sample.seed_form`, `replay_codes.seed_form`).  This reads it as a FACT: the
+    root form is recomputed from the record's run root (sample.seed == int.from_bytes(run_root[:8])); the verifier-challenge form is
+    post-commitment by construction (sha256(challenge|root)); a `--replay-seed` seed is PROVER-CHOSEN before the run -> a MECHANISM run,
     not a C2 of record.  Returns (True, how) / (False, why) / (None, why) when the record carries no seed source (legacy: not graded here)."""
     smp = sr.get("sample") if isinstance(sr.get("sample"), dict) else {}
-    src = sr.get("seed_source") if sr.get("seed_source") is not None else smp.get("seed_source")
+    src = str(sr.get("seed_source") if sr.get("seed_source") is not None else smp.get("seed_source"))
     seed = sr.get("seed") if sr.get("seed") is not None else smp.get("seed")
-    if src is None:
+    form = RC.seed_form(sr)
+    if form is None:
         return None, "sampled replay seed source absent from the record"
-    src = str(src)
-    if src.startswith("--replay-seed"):
+    if form == "prover-chosen":
         return False, "sampled replay seed prover-chosen (--replay-seed): the picks were knowable before commitment -- a mechanism run, not a C2 of record"
-    if src == _REPLAY_SEED_ROOT_FORM:
+    if form == "run-root":
         if not run_root_hex or seed is None:
             return False, f"sampled replay seed source says '{src}' but the record carries no run root / seed to recompute it from"
         try:
@@ -378,7 +367,7 @@ def _replay_seed_of_record(sr: dict, run_root_hex: str | None) -> tuple[bool | N
         if int(seed) != expect:
             return False, f"sampled replay seed {seed} != the run root's first 8 bytes {expect} although seed_source says post-commitment root form"
         return True, "seed == run_root[:8] (recomputed)"
-    if src.startswith(_REPLAY_SEED_CHALLENGE_PREFIX):
+    if form == "challenge":
         # [rev M-0600] the challenge form is a FACT only with the challenge on the record: recompute sha256(challenge|run_root)[:8] and the
         # source text (sampled_replay.challenge_seed); a label without its challenge / another seed is the prover-chosen class (unverifiable)
         chal = smp.get("challenge")
@@ -393,10 +382,9 @@ def _replay_seed_of_record(sr: dict, run_root_hex: str | None) -> tuple[bool | N
             return False, f"sampled replay seed: run root {str(run_root_hex)[:16]}... is not hex"
         h = hashlib.sha256(str(chal).encode("utf-8") + b"|" + root).digest()
         expect = int.from_bytes(h[:8], "big")
-        want_src = f"{_REPLAY_SEED_CHALLENGE_PREFIX}{str(chal)[:16]!r} bound to the run root (sha256(challenge|root)[:8], post-commitment)"
         if int(seed) != expect:
             return False, f"sampled replay seed {seed} != sha256(challenge|run_root)[:8] = {expect} recomputed from the recorded challenge"
-        if src != want_src:
+        if src != RC.challenge_seed_source(str(chal)):
             return False, f"sampled replay seed source text does not name the recorded challenge ({str(chal)[:16]!r})"
         return True, "seed == sha256(challenge|run_root)[:8] (recomputed from the recorded challenge)"
     return False, f"sampled replay seed source {src!r} is not a post-commitment form (run root / verifier challenge)"
@@ -424,9 +412,9 @@ def _partial_replay_named_gap(sr: dict | None, oc: dict | None) -> tuple[str | N
         return None, None
     # [rev-cb M-0740 G2] only BY-NAME classes qualify (no evaluator for the family / state-linked / plane-fed / interior-composed v2); an
     # evaluator fault, a row->member mapping fault, a missing committed input, a device fault never do: a fault is a run that did not
-    # evaluate, not a gap on the record.  The class is read from the record when stamped, else derived from the reason text.
-    classes = {k: sorted(set(by[k].get("classes") or [by[k].get("why_class") or _why_class_of(by[k].get("why"))])) for k in unev}
-    bad = {k: c for k, c in classes.items() if any(x not in _WHY_BY_NAME for x in c)}
+    # evaluate, not a gap on the record.
+    classes = {k: RC.stratum_classes(by[k]) for k in unev}
+    bad = {k: c for k, c in classes.items() if any(x not in RC.WHY_CLASSES_BY_NAME for x in c)}
     if bad:
         return None, None
     # [R16 rev F-r16-07 / M-0068] a plane-fed stratum is covered by neither form -> FAIL by name (form (B) cannot lift it)

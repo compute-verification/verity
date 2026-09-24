@@ -2390,6 +2390,7 @@ def main(argv: list[str] | None = None) -> None:
                         from verity_vllm.check import executed_prefix as EPX
                         from verity_vllm.check import oracle_compare as OC
                         from verity_vllm.query.manifest import format as MF
+                        from verity_vllm.check import replay_codes as RC
                         from verity_vllm.check import sampled_replay as SR
                         if _cached is not None:
                             raise _ReplayReused()
@@ -2450,12 +2451,12 @@ def main(argv: list[str] | None = None) -> None:
                         # [O6] the seed is not prover-choosable in advance: derived from the run root AFTER commitment unless a targeted seed is given
                         _seed_chal = None
                         if getattr(args, "replay_seed", None) is not None:
-                            _seed, _seed_src = int(args.replay_seed), "--replay-seed (targeted)"
+                            _seed, _seed_src, _seed_form = int(args.replay_seed), RC.PROVER_SEED_SOURCE, "prover-chosen"
                         elif getattr(args, "replay_challenge", None):
-                            _seed, _seed_src = SR.challenge_seed(str(args.replay_challenge), rc.run_root)
+                            (_seed, _seed_src), _seed_form = SR.challenge_seed(str(args.replay_challenge), rc.run_root), "challenge"
                             _seed_chal = str(args.replay_challenge)            # [rev M-0600] the full challenge goes on the record (sample.challenge)
                         else:
-                            _seed, _seed_src = int.from_bytes(rc.run_root[:8], "big"), "run root (first 8 bytes, after commitment)"
+                            _seed, _seed_src, _seed_form = int.from_bytes(rc.run_root[:8], "big"), RC.ROOT_SEED_SOURCE, "run-root"
                         # [rev-cb F-cb-44] the committed store's retention decides the evaluator: DEVICE-retained blocks cannot be read by
                         # forked children (CUDA after fork) -> sampled_replay runs serial in this process; named in the replay record
                         _blocks = getattr(com, "_gpu_blocks", None) or {}
@@ -2532,7 +2533,7 @@ def main(argv: list[str] | None = None) -> None:
                             print("[delta] WARNING: this tree's sampled_replay has no executed_prefix= (reqval R17-26/R17-27 not in the tree): the EOS-stopped "
                                   "request's rows past the stop are sampled as ordinary strata and grade 'not evaluated' -> C2 partial, never PASS", flush=True)
                         sr = SR.sampled_replay(_progs, _bm, _rd, _wp, arrivals=_arr, per_stratum=int(args.replay_per_stratum), seed=_seed, seed_source=_seed_src,
-                                               seed_challenge=_seed_chal,
+                                               seed_challenge=_seed_chal, seed_form=_seed_form,
                                                max_evaluate=int(args.replay_max), weights_check=_wc, targets=list(getattr(args, "replay_target", None) or []),
                                                workers=getattr(args, "replay_workers", None), retention=_retention,
                                                ring_slots=(int(args.window_slots) if getattr(args, "window_slots", None) and getattr(args, "window_mb", None) else None),

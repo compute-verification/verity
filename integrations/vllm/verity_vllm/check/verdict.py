@@ -299,6 +299,16 @@ def _replay_of(commit: dict) -> dict | None:
     return None
 
 
+def _faulted_prefix_facts(sr: dict) -> list[dict]:
+    """The executed-prefix facts of record (`executed_prefix_of_record.facts_of_record`, what
+    `sampled_replay.executed_prefix_of_record` was called with) of each request the replay's executed-prefix rule faulted, in the rule's
+    order (`population.query_checks.executed_prefix_rule.faults`).  A verdict reads a fault's cause from these fields -- `account_missing`
+    (a Match account leg not beside the Commit, the fault named first), `linked` -- never from the fault's text."""
+    facts = _d(_d(sr.get("executed_prefix_of_record")).get("facts_of_record"))
+    rule = _d(_d(_d(sr.get("population")).get("query_checks")).get("executed_prefix_rule"))
+    return [_d(facts.get(str(f.get("request_id")))) for f in rule.get("faults") or [] if isinstance(f, dict)]
+
+
 def _linkage_of(commit: dict) -> dict | None:
     lk = commit.get("boundary_linkage")
     if isinstance(lk, dict):
@@ -858,9 +868,8 @@ def c2_rules(commit: dict, ctx: dict) -> list[CheckVerdict]:
     # --- the unconditional FAILs (any record) -------------------------------------------------------------------------------------------
     if isinstance(sr, dict) and sr.get("result") is False:
         why = sr.get("why") or "a sampled VU does not replay from its committed inputs"
-        acct = "Match account leg(s) missing" in str(why)
-        put(C_SR, INSUFFICIENT if acct else FAIL, reason=f"C2 sampled replay: {why}", scope=sr_scope, inputs=sr_inputs, notes=sr_notes,
-            differences=[{"name": "account_missing" if acct else "replay_mismatch", "mismatch_n": _d(sr.get("sample")).get("mismatch_n", sr.get("mismatch_n")),
+        put(C_SR, FAIL, reason=f"C2 sampled replay: {why}", scope=sr_scope, inputs=sr_inputs, notes=sr_notes,
+            differences=[{"name": "replay_mismatch", "mismatch_n": _d(sr.get("sample")).get("mismatch_n", sr.get("mismatch_n")),
                           "first": _first(sr.get("mismatch")), "why": str(why)[:300]}])
     if isinstance(lk, dict) and lk.get("result") is False:
         put(C_LK, FAIL, reason=f"C2 boundary linkage: {lk.get('why') or 'an (engine step, request) boundary is not linked'} ({lk.get('unlinked_n')} unlinked)", scope=lk_scope,
@@ -943,7 +952,12 @@ def c2_rules(commit: dict, ctx: dict) -> list[CheckVerdict]:
             put(C_ATT, NOT_RUN, scope={"requests": n_req})
         scope_note, scope_fail = CV._query_population_scope(sr)
         if scope_fail is not None:
-            acct = "Match account leg(s) missing" in scope_fail
+            # a missing input when the FAIL is the reconciliation's (not the engine cross-check's) and its first executed-prefix fault is
+            # a request missing a Match account leg
+            pop = _d(sr.get("population"))
+            pf = _faulted_prefix_facts(sr)
+            acct = (_d(pop.get("query_checks")).get("ok") is False and _d(_d(pop.get("query_total")).get("cross_check")).get("agree") is not False
+                    and bool(pf) and bool(pf[0].get("account_missing")))
             put(C_SCOPE, INSUFFICIENT if acct else FAIL, reason=scope_fail, scope={k: sr_scope.get(k) for k in ("query_total", "query_id", "query_checks_ok")},
                 differences=[{"name": "account_missing" if acct else "population_not_reconciled", "why": scope_fail[:400]}])
         elif scope_note is not None:
@@ -1010,8 +1024,7 @@ def execution_extent_rules(commit: dict, ctx: dict) -> list[CheckVerdict]:
         account_missing = [leg for leg, present in (("tokens.json", bool(tj)), ("global_match.json", bool(g6))) if not present]
     # v1 gated the link THROUGH the replay's not-executed class: it faults (-> population_scope FAIL) only when applied, i.e. when a request's
     # prefix is reduced from its cap (`link.required`) or the class names the fault.  Outside that the link is recorded, not gating.
-    ep_faults = [str(x) for x in (_d(_d(_d(sr.get("population")).get("query_checks")).get("executed_prefix_rule")).get("faults") or [])]
-    gating = bool(_d(link).get("required")) or any("Match account" in f or "linked" in f for f in ep_faults) or "Match account leg(s) missing" in str(sr.get("why") or "")
+    gating = bool(_d(link).get("required")) or any(f.get("account_missing") or f.get("linked") is not True for f in _faulted_prefix_facts(sr))
     if not isinstance(link, dict):
         out.append(_mk(*C_LINK, commit, ctx, outcome=NOT_RUN))
     else:
