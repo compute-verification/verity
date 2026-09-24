@@ -113,8 +113,8 @@ class _EqSlices:
 
 
 def _inputs(kern, gammas: list[Ext], rs: list[Ext], i: int, k: int, kappa: int, wgt: torch.Tensor, t: int,
-            eqs: _EqSlices):
-    """``Kernel.inputs`` with ``e_hi = w(g) ⊗ eq(γ[i+κ:], c_rest)``."""
+            eqs: _EqSlices, pfx: Ext | None = None):
+    """``Kernel.inputs`` with ``e_hi = w(g) ⊗ eq(γ[i+κ:], c_rest)``; ``pfx``: ``eq(γ[:i-1], rs)`` if the caller keeps it."""
     b = len(gammas)
     dev = kern.device
     m = t >> i
@@ -125,7 +125,7 @@ def _inputs(kern, gammas: list[Ext], rs: list[Ext], i: int, k: int, kappa: int, 
     e_hi = ext_mul(wgt[:, None, :], eq_c[None, :, :]).reshape(K2, DEG).to(torch.int32)
     gm = gammas[i - 1]
     eq_x = _sp.to_dev([_ref.eval_at(_ref.sub(_ref.ONE, gm), gm, x) for x in range(4)], dev)
-    prefix = _sp.to_dev(_ref.eq_points(gammas[:i - 1], rs), dev)
+    prefix = _sp.to_dev(_ref.eq_points(gammas[:i - 1], rs) if pfx is None else pfx, dev)
     coeff = None
     if i <= k:
         eq_r = _ref.eq_table(rs)
@@ -152,12 +152,13 @@ def phase1(kern, a: torch.Tensor, bb: torch.Tensor, wg: torch.Tensor, gammas: li
     wgt = (wg[:g_n].to(torch.int64) % P).contiguous()
     saved = kern.k1_log2
     rs: list[Ext] = []
+    pfx = _ref.ONE
     gE = hE = None
     try:
         for i in range(1, b + 1):
             kappa = min(saved, b - i)          # b1 = the next κ copy bits; the gate index lives in b2
             kern.k1_log2 = kappa
-            inp = _inputs(kern, gammas, rs, i, k, kappa, wgt, t, eqs)
+            inp = _inputs(kern, gammas, rs, i, k, kappa, wgt, t, eqs, pfx)
             if i <= k:
                 S = kern.packed_round(g, h, i, inp)
             else:
@@ -167,6 +168,7 @@ def phase1(kern, a: torch.Tensor, bb: torch.Tensor, wg: torch.Tensor, gammas: li
             tr.absorb_exts(s_py)
             r = tr.challenge()
             rs.append(r)
+            pfx = _ref.mul(pfx, _ref.eq1(gammas[i - 1], r))
             if i == k:
                 kern.set_fold(inp, rs[:-1], k, k, r)
                 gE, hE = kern.fold_k(g, k, inp), kern.fold_k(h, k, inp)
