@@ -125,7 +125,7 @@ def _decode(pl: Plan, w):
 
 def hints_v2(p: Params, sys: System, c, a, b, y=None, device="cpu"):
     """``c`` (l,), ``a``/``b`` (l, k), ``y`` (l,) or None -> (n_hints, l) int64 in ``sys.hints`` order.  On CUDA the kernels
-    are captured once per (system, l) as a CUDA graph and replayed."""
+    are captured once per (system, l, stream) as a CUDA graph and replayed."""
     import torch
 
     c = torch.as_tensor(c, dtype=torch.int64).to(device, non_blocking=True)
@@ -133,12 +133,15 @@ def hints_v2(p: Params, sys: System, c, a, b, y=None, device="cpu"):
     b = torch.as_tensor(b, dtype=torch.int64).to(device, non_blocking=True)
     y = None if y is None else torch.as_tensor(y, dtype=torch.int64).to(device, non_blocking=True)
     if USE_CUDA_GRAPH and str(device).startswith("cuda"):
-        key = (id(sys), c.shape[0], a.shape[1], y is not None, str(device))
+        # one graph (with its static buffers) per stream: sub-batches pipelined on different streams must not share them
+        key = (id(sys), c.shape[0], a.shape[1], y is not None, str(device), torch.cuda.current_stream(device).cuda_stream)
         g = _GRAPHS.get(key)
         if g is None:
             try:
                 g = _Graph(p, sys, c, a, b, y, device)
-            except Exception:  # noqa: BLE001 -- capture unsupported here: eager
+            except Exception as e:  # noqa: BLE001 -- capture unsupported here: eager (LIGERO_GRAPH_STRICT=1 re-raises)
+                from ..protocol import _capture_failed
+                _capture_failed(e)
                 g = False
             _GRAPHS[key] = g
         if g:
