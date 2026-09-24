@@ -179,7 +179,7 @@ def test_d2_counts_a_payload_envelope_but_never_as_valid(store: LocalStore, tmp_
     assert m.artifact == art and m.payload and m.codes == [("X", D.PAYLOAD_ONLY)] and m.variant == "B-Ligero v1"
     md = D.render_markdown(dd)
     c = d2_cell(md, "B-Ligero v1", "4090 FP8")
-    assert " X [" in c and "(payload envelope)" in footnote(md, c) and "register the result.json as --meta" in footnote(md, c)
+    assert " X iv [" in c and "(payload envelope)" in footnote(md, c) and "register the result.json as --meta" in footnote(md, c)
 
 
 def test_d2_shows_the_fastest_unverified_result_only_when_nothing_is_verified(store: LocalStore) -> None:
