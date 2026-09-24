@@ -78,6 +78,12 @@ class HashedRelation:
     leaf: leaf_base.LeafScheme  # the scheme (one instance per compose; its witness hook is on ``sys``)
     block_layout: bool | None = None    # memo of _block_layout (hash_hints)
     dec_index: dict | None = None       # memo of private_decode's row gather per name list
+    fmt: object = None          # the relation's ``hash_format`` (``fp4/hashed.py`` FP4Format), None for the BF16 / E4M3 words
+
+    @property
+    def bit_layout(self) -> list[int]:
+        """Bit rows per operand word (``<nm>[i].b<j>``), word-major."""
+        return list(self.fmt.bit_layout) if self.fmt is not None else [self.word_bits] * self.k
 
     @property
     def steps(self) -> int:
@@ -101,6 +107,9 @@ def _reduce(e):
 
 
 def _format(rel: Relation) -> dict:
+    if getattr(rel, "hash_format", None) is not None:
+        raise ValueError(f"{rel.name}: its operand format ({type(rel.hash_format).__name__}) composes through compose() only "
+                         f"(no row sharing, no word-level private decode)")
     p = rel.params
     if rel.word_dtype == "<u2":            # BF16: s | t(8) | f(7)
         return {"bits": 16, "frac": p.frac, "exp": p.exp, "bias": p.bias, "kind": "bf16", "sig": p.sig}
@@ -168,6 +177,38 @@ def _private_operands(rel: Relation, sys: System, fmt: dict):
     return ctx, words, bit_rows
 
 
+def _formatted_operands(rel: Relation, sys: System, fmt) -> tuple[LigeroCtx, dict]:
+    """``compose`` step 1 for a relation with its own operand format (``rel.hash_format``: ``fp4/hashed.py`` FP4Format):
+    the format's pins become hint rows in its order, ``fmt.decode`` re-derives each operand's from its committed bit rows,
+    ``fmt.finish`` the pins joining both operands.  Returns ``(ctx, elements)``: the lane element expressions per operand
+    (what the leaf's :class:`~backends.direct.ligero.leaf.poseidon2.LaneFormat` packs)."""
+    want = fmt.pin_names()
+    pins = {name: idx for idx, name in sys.pins}
+    if set(pins) != want:
+        raise ValueError(f"{rel.name}: operand pins {sorted(set(pins) ^ want)} differ from the expected decode pins")
+    sys.pins = []
+    sys.linear = [c for c in sys.linear if c.pub is None]
+    for i, op in enumerate(sys.program):
+        if op[0] == "pin":
+            sys.program[i] = ("hint", op[1], op[2])
+    for name in fmt.pin_order(want):
+        idx = pins[name]
+        sys.rows[idx].kind = "hint"
+        sys.rows[idx].spec = (name,)
+        sys.hints.append((idx, name))
+    ctx = LigeroCtx(rel.params)
+    ctx.sys = sys
+    ctx.scope = "hash"
+    elems, aux = {}, {}
+    for nm in ("a", "b"):
+        elems[nm], bit_rows, _, aux[nm] = fmt.decode(ctx, sys, pins, nm)
+        if len(elems[nm]) != fmt.n_elems or len(bit_rows) != sum(fmt.bit_layout):
+            raise ValueError(f"{rel.name}: operand {nm} decodes to {len(elems[nm])} elements / {len(bit_rows)} bits, "
+                             f"not {fmt.n_elems} / {sum(fmt.bit_layout)}")
+    fmt.finish(ctx, sys, pins, aux["a"], aux["b"])
+    return ctx, elems
+
+
 def _lanes_of(ctx: LigeroCtx, words: list, nb: int) -> list[Expr]:
     """The 16 rate lanes of a column as affine expressions of its word expressions (``per`` words of ``nb`` bits each,
     little-endian: ``poseidon2.pack_words_np``)."""
@@ -198,20 +239,32 @@ def _lane_rows(ctx: LigeroCtx, nm: str, lanes: list[Expr]) -> list[int]:
 
 def compose(rel: Relation, leaf: str | leaf_base.LeafScheme | None = None) -> HashedRelation:
     """The hashed, private relation of ``rel`` under the leaf scheme ``leaf`` (a registry name -- ``"poseidon2"`` /
-    ``"hash"`` / ``None`` are the default -- or a scheme instance).  Compiles ``rel`` afresh."""
+    ``"hash"`` / ``None`` are the default -- or a scheme instance).  Compiles ``rel`` afresh.  A relation with a
+    ``hash_format`` (``fp4/hashed.py``) decodes its operands through it and hands the leaf the format's lane elements
+    (the scheme's ``with_lanes``; Poseidon2 only)."""
     scheme = leaf_registry.get(leaf) if leaf is None or isinstance(leaf, str) else leaf
     leaf_base.check_scheme(scheme)
     p = rel.params
     sys = rel.compile(p, True)
-    fmt = _format(rel)
-    k, nb = rel.k, fmt["bits"]
+    hfmt = getattr(rel, "hash_format", None)
+    k = rel.k
     m0, l0, q0, h0 = sys.m, len(sys.linear), len(sys.quadratic), len(sys.hints)
     # --- 1. operand pins -> hint rows ------------------------------------------------------------------------------
-    ctx, words, _ = _private_operands(rel, sys, fmt)
+    if hfmt is None:
+        nb = _format(rel)["bits"]
+        ctx, words, _ = _private_operands(rel, sys, _format(rel))
+        row_words = rel.steps * k
+    else:
+        if getattr(scheme, "with_lanes", None) is None:
+            raise ValueError(f"{rel.name}: leaf {scheme.name} does not take a lane format (its operands are {hfmt.n_elems} "
+                             f"{hfmt.elem_bits}-bit elements on {hfmt.lane_bits}-bit lanes)")
+        scheme = scheme.with_lanes(hfmt)
+        nb = hfmt.elem_bits
+        ctx, words = _formatted_operands(rel, sys, hfmt)
+        row_words = rel.steps * hfmt.n_elems
     m1 = sys.m
     # --- 2. the leaf chains: the scheme's gadget per operand, its carried state as linked hint rows -------------------
     ends: list[Expr] = []
-    row_words = rel.steps * k
     for _, nm, role in ROLES:
         carry = [ctx.hint(f"{nm}.cap[{x}]") for x in range(scheme.carry_elems)]
         digest, carry_out = scheme.gadget(ctx, words[nm], word_bits=nb, role=role, row_words=row_words, carry_in=carry,
@@ -239,7 +292,7 @@ def compose(rel: Relation, leaf: str | leaf_base.LeafScheme | None = None) -> Ha
               "linked_rows": len(sys.chain["c"]), "word_bits": nb, "k": k, "leaf": scheme.name,
               "digest_elems": scheme.digest_elems, "carry_elems": scheme.carry_elems}
     extra = [n for _, n in sys.hints[h0:]]
-    return HashedRelation(rel, sys, nb, k, h0, extra, census, scheme)
+    return HashedRelation(rel, sys, nb, k, h0, extra, census, scheme, fmt=hfmt)
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -537,21 +590,35 @@ def row_chain(hr: HashedRelation, rows, role: int, device) -> tuple:
 row_sponges = row_chain     # the pre-registry name (Poseidon2's carried state is the sponge capacity)
 
 
-def hash_hints(hr: HashedRelation, a, b, n_vus: int, l: int, device, sponges: dict | None = None) -> tuple:
+def call_with_slot(fn, slot, *args, **kw):
+    """``fn(*args, **kw)``, plus ``slot=slot.index`` when a pipeline slot is given and ``fn`` takes one (a relation whose
+    device hint generator keeps per-stream static buffers: ``fp4/hashed.py``)."""
+    import inspect
+    if slot is not None and "slot" in inspect.signature(fn).parameters:
+        kw["slot"] = slot.index
+    return fn(*args, **kw)
+
+
+def hash_hints(hr: HashedRelation, a, b, n_vus: int, l: int, device, sponges: dict | None = None, slot=None) -> tuple:
     """The appended hint rows (len(extra_hint_names), l) for operand words ``a``, ``b`` (l, k) int64 (pad columns 0), and
     the digests (n_vus, 2 x digest_elems) the statement publishes.  ``sponges``: ``{"a": (carry (n_vus, steps, ce),
     digests (n_vus, de)[, extras {name: (n_vus, steps)}]), "b": ...}`` precomputed by :func:`row_chain` and gathered for
-    exactly these VUs' rows (the caller checked the words match)."""
+    exactly these VUs' rows (the caller checked the words match).  ``slot``: the pipeline slot of this sub-batch,
+    forwarded to the relation's decode (``call_with_slot``)."""
     import torch
     a = torch.as_tensor(a, dtype=torch.int64, device=device)
     b = torch.as_tensor(b, dtype=torch.int64, device=device)
     nb, k, ce = hr.word_bits, hr.k, hr.leaf.carry_elems
+    layout = hr.bit_layout
     shifts = torch.arange(nb, dtype=torch.int64, device=device)
     digests, bit_blocks, cap_blocks, extras = [], [], [], {}
     for _, nm, role in ROLES:
         w = a if nm == "a" else b
-        bits = (w[:, :, None] >> shifts) & 1                      # (l, k, nb)
-        bit_blocks.append(bits.permute(1, 2, 0).reshape(k * nb, l))   # rows nm[i].b{j}, i major
+        if hr.fmt is not None:
+            bit_blocks.append(hr.fmt.bit_rows_torch(w))
+        else:
+            bits = (w[:, :, None] >> shifts) & 1                      # (l, k, nb)
+            bit_blocks.append(bits.permute(1, 2, 0).reshape(k * nb, l))   # rows nm[i].b{j}, i major
         if sponges is not None and nm in sponges:
             cap_v, dg = sponges[nm][0], sponges[nm][1]
             cap = torch.zeros((ce, l), dtype=torch.int64, device=device)
@@ -569,18 +636,24 @@ def hash_hints(hr: HashedRelation, a, b, n_vus: int, l: int, device, sponges: di
                 extras.update({n: torch.as_tensor(v, dtype=torch.int64, device=device) for n, v in out[2].items()})
         cap_blocks.append(cap)
         digests.append(dg)
-    n_dec = len(hr.extra_hint_names) - len(ROLES) * (k * nb + ce)
+    n_dec = len(hr.extra_hint_names) - len(ROLES) * (sum(layout) + ce)
     if not extras and _block_layout(hr, n_dec):
         # compose() appends the rows as [converted decode pins | a bits | b bits | a.cap | b.cap]: a handful of copies
         # instead of one per row (720 rows x 13 sub-batches was ~0.1 s per 4096 VUs)
-        dec = private_decode(hr, a, b, hr.extra_hint_names[:n_dec])
+        if hr.fmt is None:
+            dec = private_decode(hr, a, b, hr.extra_hint_names[:n_dec])
+        else:
+            vals = call_with_slot(hr.rel.public_vectors, slot, hr.rel.params, None, a, b, None, device=device)
+            dec = torch.stack([vals[n].to(device) for n in hr.extra_hint_names[:n_dec]])
         out = torch.cat([dec] + bit_blocks + cap_blocks)
     else:
-        vals = hr.rel.public_vectors(hr.rel.params, None, a, b, None, device=device)
+        vals = call_with_slot(hr.rel.public_vectors, slot, hr.rel.params, None, a, b, None, device=device)
         for (_, nm, _), bits, cap in zip(ROLES, bit_blocks, cap_blocks):
+            r = 0
             for i in range(k):
-                for j in range(nb):
-                    vals[f"{nm}[{i}].b{j}"] = bits[i * nb + j]
+                for j in range(layout[i]):
+                    vals[f"{nm}[{i}].b{j}"] = bits[r]
+                    r += 1
             for x in range(ce):
                 vals[f"{nm}.cap[{x}]"] = cap[x]
         vals.update(extras)
@@ -595,7 +668,8 @@ def _block_layout(hr: HashedRelation, n_dec: int) -> bool:
     """Whether ``hr.extra_hint_names`` is ``[decode rows | a bits | b bits | a.cap | b.cap]`` (memoised on ``hr``)."""
     if hr.block_layout is None:
         names = hr.extra_hint_names
-        tail = [f"{nm}[{i}].b{j}" for _, nm, _ in ROLES for i in range(hr.k) for j in range(hr.word_bits)]
+        layout = hr.bit_layout
+        tail = [f"{nm}[{i}].b{j}" for _, nm, _ in ROLES for i in range(hr.k) for j in range(layout[i])]
         tail += [f"{nm}.cap[{x}]" for _, nm, _ in ROLES for x in range(hr.leaf.carry_elems)]
         hr.block_layout = n_dec >= 0 and names[n_dec:] == tail and all("].b" not in n for n in names[:n_dec])
     return hr.block_layout
