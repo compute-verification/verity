@@ -256,8 +256,9 @@ class Dump:
         if self.root is None:
             return
         (self.root / "manifest.json").write_text(json.dumps({"format": {"proof": "LGTO0001", "statement": "LGTS0001",
-                                                                        "key": "LGVK0001"}, **meta, "files": self.files},
-                                                            indent=1, default=str))
+                                                                        "key": "LGVK0001"}, **meta,
+                                                             "key_sha256": sha256(self.key).hex() if self.key else None,
+                                                             "files": self.files}, indent=1, default=str))
 
 
 def rust_batch(verifier: str | None, d: Path) -> dict | None:
@@ -297,7 +298,7 @@ def gate(args) -> int:
         bt = pv.batch(data, kind, zk=args.zk)
         dump.set_key(bt.key_bytes)
         lay = bt.lay
-        log(f"[{kind}] layout {lay.summary()}; dims {bt.dims.describe()}")
+        log(f"[{kind}] layout {lay.summary()}; dims {bt.dims.describe()}; key sha256 {bt.key_sha256.hex()}")
         pc, vc = _coins_pair(kind, 1)
         res = pv.prove(bt, pc)
         ok, why, info = pv.verify(bt.stmt, res.proof, vc)
@@ -694,7 +695,8 @@ def bench(args) -> int:
     nb_ = len(bts)
     bt = bts[0]
     lay = bt.lay
-    print(f"{nb_} batch(es) of {bv} VUs; layout {lay.summary()}; dims {bt.dims.describe()}", flush=True)
+    print(f"{nb_} batch(es) of {bv} VUs; layout {lay.summary()}; dims {bt.dims.describe()}; key sha256 {bt.key_sha256.hex()}",
+          flush=True)
     dump = Dump(Path(args.dump_dir) if args.dump_dir else None)
     dump.set_key(bt.key_bytes)
     live = args.coins == "live"
