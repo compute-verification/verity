@@ -149,6 +149,51 @@ pub fn step(c: u32, a: &[u8], b: &[u8]) -> Option<u32> {
         let (mb, eb) = ue4m3(b[K + g])?;
         *term = (gd as i64 * ma * mb, -2 + ea + eb, any_product && ma != 0 && mb != 0);
     }
+    align_add(c, &terms)
+}
+
+/// `na * nb` for every pair of E2M1 codes (index `a << 4 | b`), a signed number of quarters.
+static E2M1_PRODUCTS: [i32; 256] = {
+    let mut t = [0i32; 256];
+    let mut i = 0;
+    while i < 256 {
+        let (a, b) = (i >> 4, i & 15);
+        let na = E2M1_NUMERATOR[a & 7] * if a & 8 != 0 { -1 } else { 1 };
+        let nb = E2M1_NUMERATOR[b & 7] * if b & 8 != 0 { -1 } else { 1 };
+        t[i] = na * nb;
+        i += 1;
+    }
+    t
+};
+
+/// [`step`] with each group dot read from [`E2M1_PRODUCTS`] (a product is nonzero exactly when both numerators are).
+#[inline(always)]
+fn step_kernel(c: u32, a: &[u8; WORDS], b: &[u8; WORDS]) -> Option<u32> {
+    let mut terms = [(0i64, 0i32, false); SCALES];
+    let mut bad = 0u8;
+    for (g, term) in terms.iter_mut().enumerate() {
+        let (mut gd, mut any) = (0i32, 0i32);
+        for i in g * GROUP..(g + 1) * GROUP {
+            let (ca, cb) = (a[i], b[i]);
+            bad |= ca | cb;
+            let p = E2M1_PRODUCTS[((ca as usize & 15) << 4) | (cb as usize & 15)];
+            gd += p;
+            any |= p;
+        }
+        let (ma, ea) = ue4m3(a[K + g])?;
+        let (mb, eb) = ue4m3(b[K + g])?;
+        *term = (gd as i64 * ma * mb, -2 + ea + eb, any != 0 && ma != 0 && mb != 0);
+    }
+    if bad >= 16 {
+        return None;
+    }
+    align_add(c, &terms)
+}
+
+/// The five-way align-add of the scaled group dots `(mant, unit weight exponent, participates)` and the carried
+/// accumulator `c`, normalised toward zero to binary32.
+#[inline(always)]
+fn align_add(c: u32, terms: &[(i64, i32, bool); SCALES]) -> Option<u32> {
     // the carried accumulator as an exact dyadic (both zeros are zero)
     let field = (c >> 23) & 0xFF;
     if field == 0xFF {
@@ -159,7 +204,7 @@ pub fn step(c: u32, a: &[u8], b: &[u8]) -> Option<u32> {
     let acc_m = if c >> 31 == 1 { -acc_m } else { acc_m };
 
     let mut lsb: Option<i32> = None;
-    for &(_, unit, participates) in &terms {
+    for &(_, unit, participates) in terms {
         if participates {
             let anchor = unit - FRAC_BITS;
             lsb = Some(lsb.map_or(anchor, |l| l.max(anchor)));
@@ -174,7 +219,7 @@ pub fn step(c: u32, a: &[u8], b: &[u8]) -> Option<u32> {
         Some(l) => l.max(GRID_FLOOR),
     };
     let mut total: i64 = 0;
-    for &(mant, unit, _) in &terms {
+    for &(mant, unit, _) in terms {
         if mant != 0 {
             total += trunc_rz_to_grid(mant, unit, lsb);
         }
@@ -190,14 +235,27 @@ pub fn step(c: u32, a: &[u8], b: &[u8]) -> Option<u32> {
 
 /// The public word of one NVFP4 VU: the final FP32 accumulator of the 24
 /// firings from `+0`.  `None` for rows that are not [`ROW_BYTES`] each or any
-/// firing outside the model.
-pub fn vu(x: &[u8], w: &[u8]) -> Option<u32> {
+/// firing outside the model.  The reference [`vu`] is held to.
+pub fn vu_reference(x: &[u8], w: &[u8]) -> Option<u32> {
     if x.len() != ROW_BYTES || w.len() != ROW_BYTES {
         return None;
     }
     let mut c = 0u32;
     for s in 0..STEPS {
         c = step(c, &x[s * WORDS..(s + 1) * WORDS], &w[s * WORDS..(s + 1) * WORDS])?;
+    }
+    Some(c)
+}
+
+/// [`vu_reference`] by the kernel.
+pub fn vu(x: &[u8], w: &[u8]) -> Option<u32> {
+    if x.len() != ROW_BYTES || w.len() != ROW_BYTES {
+        return None;
+    }
+    let mut c = 0u32;
+    for s in 0..STEPS {
+        let at = s * WORDS;
+        c = step_kernel(c, x[at..at + WORDS].try_into().unwrap(), w[at..at + WORDS].try_into().unwrap())?;
     }
     Some(c)
 }
@@ -269,6 +327,85 @@ mod tests {
         let row: Vec<u8> = (0..STEPS).flat_map(|_| firing([C1; K], [S1; SCALES])).collect();
         assert_eq!(row.len(), ROW_BYTES);
         assert_eq!(vu(&row, &row), Some(0x44C0_0000)); // 1536.0
+        assert_eq!(vu_reference(&row, &row), Some(0x44C0_0000));
         assert_eq!(vu(&row[..WORDS], &row[..WORDS]), None);
+    }
+
+    /// splitmix64.
+    struct Rng(u64);
+    impl Rng {
+        fn next(&mut self) -> u64 {
+            self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
+            let mut z = self.0;
+            z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+            z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+            z ^ (z >> 31)
+        }
+        fn below(&mut self, n: u64) -> u64 {
+            self.next() % n
+        }
+    }
+
+    /// The kernel equals `vu_reference` on rows from several regimes: any codes and scales (zero scales, tiny and
+    /// huge ones, so groups drop out, the accumulator window truncates and sums leave binary32), mostly zero codes,
+    /// exact cancellation, and a sparse off-domain code or scale byte.
+    #[test]
+    fn kernel_matches_the_reference() {
+        let mut r = Rng(0xF4_2026_0924);
+        let cases = if cfg!(debug_assertions) { 2000 } else { 40000 };
+        let mut counts = [0usize; 3]; // [nonzero, +0, rejected]
+        for case in 0..cases {
+            let regime = case % 6;
+            let (mut x, mut w) = (vec![0u8; ROW_BYTES], vec![0u8; ROW_BYTES]);
+            for s in 0..STEPS {
+                for i in 0..WORDS {
+                    let at = s * WORDS + i;
+                    (x[at], w[at]) = if i < K {
+                        match regime {
+                            2 => ((r.below(16) * (r.below(8) == 0) as u64) as u8, (r.below(16) * (r.below(3) == 0) as u64) as u8),
+                            _ => (r.below(16) as u8, r.below(16) as u8),
+                        }
+                    } else {
+                        let scale = |r: &mut Rng| -> u8 {
+                            match regime {
+                                0 => (r.below(0x7F)) as u8,
+                                1 => [0x00, 0x01, 0x07, 0x08, 0x38, 0x3F, 0x70, 0x7E][r.below(8) as usize],
+                                _ => (0x30 + r.below(0x10)) as u8,
+                            }
+                        };
+                        (scale(&mut r), scale(&mut r))
+                    };
+                }
+            }
+            match regime {
+                3 => {
+                    for s in 0..STEPS {
+                        for i in (0..K).step_by(2) {
+                            let at = s * WORDS + i;
+                            x[at + 1] = x[at] ^ 8;
+                            w[at + 1] = w[at];
+                        }
+                    }
+                }
+                4 => {
+                    let s = r.below(STEPS as u64) as usize;
+                    match r.below(3) {
+                        0 => x[s * WORDS + r.below(K as u64) as usize] = 16 + r.below(240) as u8,
+                        1 => w[s * WORDS + K + r.below(SCALES as u64) as usize] = 0x7F,
+                        _ => x[s * WORDS + K + r.below(SCALES as u64) as usize] = 0x80 | r.below(0x80) as u8,
+                    }
+                }
+                _ => {}
+            }
+            let want = vu_reference(&x, &w);
+            assert_eq!(vu(&x, &w), want, "case {case} (regime {regime})");
+            counts[match want {
+                None => 2,
+                Some(0) => 1,
+                Some(_) => 0,
+            }] += 1;
+        }
+        eprintln!("nvfp4 kernel: {} nonzero, {} +0, {} rejected", counts[0], counts[1], counts[2]);
+        assert!(counts.iter().all(|&c| c > 0), "every outcome exercised: {counts:?}");
     }
 }

@@ -53,19 +53,21 @@ fn words16(row: &[u8]) -> Vec<u16> {
     row.chunks_exact(2).map(|p| u16::from_le_bytes([p[0], p[1]])).collect()
 }
 
-/// The format's public word of one VU (`None` outside the model).
+/// The format's public word of one VU (`None` outside the model), by the guest's kernel; the reference port
+/// must agree on every call.
 fn vu(format: &str, x: &[u8], w: &[u8]) -> Option<u32> {
-    match format {
-        "fp8-ada" => tc_fp8::vu_ada(x, w),
-        "fp8-hopper" => tc_fp8::vu_hopper(x, w),
-        "bf16-hopper" => {
-            let y = tc_hopper_bf16::vu_bytes(x, w);
-            assert_eq!(y, tc_hopper_bf16::vu(&words16(x), &words16(w)), "the byte-row and word-row entry points agree");
-            y.map(u32::from)
-        }
-        "fp4-nvf4" => nvfp4::vu(x, w),
+    let (kernel, reference) = match format {
+        "fp8-ada" => (tc_fp8::vu_ada(x, w), tc_fp8::vu(&tc_fp8::ADA_E4M3_M16N8K32, x, w)),
+        "fp8-hopper" => (tc_fp8::vu_hopper(x, w), tc_fp8::vu(&tc_fp8::HOPPER_E4M3_K32, x, w)),
+        "bf16-hopper" => (
+            tc_hopper_bf16::vu_bytes(x, w).map(u32::from),
+            tc_hopper_bf16::vu(&words16(x), &words16(w)).map(u32::from),
+        ),
+        "fp4-nvf4" => (nvfp4::vu(x, w), nvfp4::vu_reference(x, w)),
         other => panic!("unknown format {other}"),
-    }
+    };
+    assert_eq!(kernel, reference, "{format}: the kernel and the reference port disagree");
+    kernel
 }
 
 /// The first operand element of a row replaced by an off-domain word: a NaN for BF16 / E4M3, a scale byte with

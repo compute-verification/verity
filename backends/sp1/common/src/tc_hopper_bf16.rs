@@ -63,23 +63,119 @@ pub fn vu(x: &[u16], w: &[u16]) -> Option<u16> {
     accumulator(x, w).map(|acc| crate::tc::f32_to_bf16(acc as u64) as u16)
 }
 
-/// [`vu`] on rows of little-endian BF16 words ([`ROW_BYTES`] each), decoded one step at a time on the stack.
+/// [`vu`] on rows of little-endian BF16 words ([`ROW_BYTES`] each), by the kernel.
 pub fn vu_bytes(x: &[u8], w: &[u8]) -> Option<u16> {
     if x.len() != ROW_BYTES || w.len() != ROW_BYTES {
         return None;
     }
-    let k = HOPPER_BF16_M16N8K16.k();
-    let (mut a, mut b) = ([0u16; 16], [0u16; 16]);
-    let mut acc = 0u32;
-    for s in 0..K_VU / k {
-        let (xs, ws) = (&x[2 * k * s..2 * k * (s + 1)], &w[2 * k * s..2 * k * (s + 1)]);
-        for i in 0..k {
-            a[i] = u16::from_le_bytes([xs[2 * i], xs[2 * i + 1]]);
-            b[i] = u16::from_le_bytes([ws[2 * i], ws[2 * i + 1]]);
+    const G: usize = 16;
+    const STEPS: usize = K_VU / G;
+    let mut acc = ZERO;
+    for s in 0..STEPS {
+        let mut bad = false;
+        let at = 2 * G * s;
+        acc = group(acc, &x[at..at + 2 * G], &w[at..at + 2 * G], &mut bad);
+        if bad {
+            return None;
         }
-        acc = step(acc, &a, &b)?;
+        if acc.magnitude != 0 && acc.exponent > 127 {
+            if s != STEPS - 1 {
+                return None;
+            }
+            break;
+        }
     }
-    Some(crate::tc::f32_to_bf16(acc as u64) as u16)
+    Some(crate::tc::f32_to_bf16(groupsum::pack_fp32(acc) as u64) as u16)
+}
+
+// --- the kernel ------------------------------------------------------------------------------------------------------
+//
+// `groupsum::step` specialised to one group of 16 BF16 products, a 26-bit adder and floor -133: a group's nonzero
+// products kept as packed words and summed in a second pass once the group maximum is known, the accumulator
+// carried as a `Term` between steps (exact: see `tc_fp8`'s kernel).
+
+const FLOOR: i32 = -133;
+const ADDER_WIDTH: i32 = 26;
+/// `ADDER_WIDTH - FP32_SIGNIFICAND_WIDTH`: every term is scaled up by this many bits before the aligned sum.
+const RESCALE: u32 = 2;
+/// A product's `E = max(ea, 1) + max(eb, 1)` is its `Term` exponent + 254.
+const E_BIAS: i32 = 254;
+
+/// `group_sum(acc, products of 16 BF16 word pairs)` on little-endian row bytes (32 each); `bad` is set when an
+/// operand is non-finite.  A product `p = sa * sb < 2^16` is `p << 9` on the 25-bit grid, `p << 11` in the adder.
+#[inline(always)]
+fn group(acc: Term, a: &[u8], b: &[u8], bad: &mut bool) -> Term {
+    let (a, b): (&[u8; 32], &[u8; 32]) = (a.try_into().unwrap(), b.try_into().unwrap());
+    let mut kept = [0u32; 16];
+    let mut n = 0;
+    let mut max_e = 0u32;
+    for i in 0..16 {
+        let ua = a[2 * i] as u32 | (a[2 * i + 1] as u32) << 8;
+        let ub = b[2 * i] as u32 | (b[2 * i + 1] as u32) << 8;
+        let ea = (ua >> 7) & 0xFF;
+        let eb = (ub >> 7) & 0xFF;
+        if ea == 0xFF || eb == 0xFF {
+            *bad = true;
+        }
+        let sa = (ua & 0x7F) | ((ea != 0) as u32) << 7;
+        let sb = (ub & 0x7F) | ((eb != 0) as u32) << 7;
+        let p = sa * sb;
+        if p != 0 {
+            // p | E << 16 | sign << 31; E <= 508
+            let e = ea + (ea == 0) as u32 + eb + (eb == 0) as u32;
+            if e > max_e {
+                max_e = e;
+            }
+            kept[n] = p | e << 16 | ((ua ^ ub) & 0x8000) << 16;
+            n += 1;
+        }
+    }
+    let mut max_exp = if n > 0 { max_e as i32 - E_BIAS } else { FLOOR };
+    if acc.magnitude != 0 && acc.exponent > max_exp {
+        max_exp = acc.exponent;
+    }
+    let mut total: i64 = 0;
+    if acc.magnitude != 0 {
+        // acc.magnitude << 2 < 2^26 vanishes from 26
+        let d = (max_exp - acc.exponent) as u32;
+        let v = if d < 26 { ((acc.magnitude << RESCALE) >> d) as i64 } else { 0 };
+        total = if acc.negative { -v } else { v };
+    }
+    // p << 11 < 2^27 vanishes from 27
+    let top = max_exp + E_BIAS;
+    for &t in &kept[..n] {
+        let d = (top - ((t >> 16) & 0x7FFF) as i32) as u32;
+        if d < 27 {
+            let v = (((t & 0xFFFF) << 11) >> d) as i64;
+            if t >> 31 != 0 {
+                total -= v;
+            } else {
+                total += v;
+            }
+        }
+    }
+    if total == 0 {
+        return ZERO;
+    }
+    let negative = total < 0;
+    let mut m = total.unsigned_abs();
+    let bits = 64 - m.leading_zeros() as i32;
+    let mut exponent = max_exp + bits - ADDER_WIDTH;
+    if bits > ADDER_WIDTH {
+        m >>= bits - ADDER_WIDTH;
+    } else {
+        m <<= ADDER_WIDTH - bits;
+    }
+    if exponent < -126 {
+        let s = -126 - exponent;
+        m = if s >= 64 { 0 } else { m >> s };
+        exponent = -126;
+    }
+    let m = m >> RESCALE;
+    if m == 0 {
+        return ZERO;
+    }
+    Term { negative, exponent, magnitude: m as u32 }
 }
 
 #[cfg(test)]
@@ -132,5 +228,97 @@ mod tests {
         let bytes: Vec<u8> = x.iter().flat_map(|w| w.to_le_bytes()).collect();
         assert_eq!(vu_bytes(&bytes, &bytes), Some(0x44C0));
         assert_eq!(vu_bytes(&bytes[..32], &bytes[..32]), None);
+    }
+
+    /// splitmix64.
+    struct Rng(u64);
+    impl Rng {
+        fn next(&mut self) -> u64 {
+            self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
+            let mut z = self.0;
+            z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+            z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+            z ^ (z >> 31)
+        }
+        fn below(&mut self, n: u64) -> u64 {
+            self.next() % n
+        }
+    }
+
+    /// A BF16 word with a random sign and mantissa, an exponent field from `lo..=hi`; zero / subnormal /
+    /// non-finite at the given per-mille rates.
+    fn word(r: &mut Rng, lo: u64, hi: u64, zero_pm: u64, sub_pm: u64, nonfinite_pm: u64) -> u16 {
+        let sign = (r.next() & 1) << 15;
+        let roll = r.below(1000);
+        let mant = r.next() & 0x7F;
+        let v = if roll < zero_pm {
+            0
+        } else if roll < zero_pm + sub_pm {
+            mant.max(1)
+        } else if roll < zero_pm + sub_pm + nonfinite_pm {
+            (0xFF << 7) | if r.next() & 1 == 0 { 0 } else { mant.max(1) }
+        } else {
+            ((lo + r.below(hi - lo + 1)) << 7) | mant
+        };
+        (sign | v) as u16
+    }
+
+    /// The kernel equals `vu` on rows from several regimes: the frozen set's exponents, tiny magnitudes (subnormal
+    /// results, the floor), wide exponents (saturation), values near the top, sparse non-finite words, mostly
+    /// zeros, exact cancellation, and saturation or a non-finite word inside the last step.
+    #[test]
+    fn kernel_matches_the_reference() {
+        let mut r = Rng(0xB16_2026_0924);
+        let cases = if cfg!(debug_assertions) { 300 } else { 6000 };
+        let mut counts = [0usize; 3]; // [finite, +-inf, rejected]
+        for case in 0..cases {
+            let regime = case % 9;
+            let (mut x, mut w) = (vec![0u16; K_VU], vec![0u16; K_VU]);
+            for k in 0..K_VU {
+                (x[k], w[k]) = match regime {
+                    0 => (word(&mut r, 110, 135, 5, 0, 0), word(&mut r, 110, 135, 5, 0, 0)),
+                    1 => (word(&mut r, 0, 20, 50, 200, 0), word(&mut r, 0, 20, 50, 200, 0)),
+                    2 => (word(&mut r, 0, 254, 20, 20, 0), word(&mut r, 60, 190, 20, 20, 0)),
+                    3 => (word(&mut r, 180, 254, 0, 0, 0), word(&mut r, 120, 140, 0, 0, 0)),
+                    4 => (word(&mut r, 100, 150, 10, 10, 1), word(&mut r, 100, 150, 10, 10, 1)),
+                    5 => (word(&mut r, 100, 150, 900, 30, 0), word(&mut r, 100, 150, 500, 30, 0)),
+                    6 => (word(&mut r, 0, 70, 10, 100, 0), word(&mut r, 55, 70, 10, 100, 0)),
+                    _ => (word(&mut r, 115, 140, 5, 5, 0), word(&mut r, 115, 140, 5, 5, 0)),
+                };
+            }
+            match regime {
+                7 => {
+                    for k in (0..K_VU).step_by(2) {
+                        if r.next() & 3 != 0 {
+                            x[k + 1] = x[k] ^ 0x8000;
+                            w[k + 1] = w[k];
+                        }
+                    }
+                }
+                8 => {
+                    let k = K_VU - 16 + r.below(16) as usize;
+                    match (case / 9) % 3 {
+                        0 => (x[k], w[k]) = (0x7F7F, 0x7F7F),
+                        1 => x[k] = 0x7FC0,
+                        _ => {
+                            x[k - 16] = 0x7F7F;
+                            w[k - 16] = 0x7F7F;
+                        }
+                    }
+                }
+                _ => {}
+            }
+            let want = vu(&x, &w);
+            let (xb, wb): (Vec<u8>, Vec<u8>) =
+                (x.iter().flat_map(|v| v.to_le_bytes()).collect(), w.iter().flat_map(|v| v.to_le_bytes()).collect());
+            assert_eq!(vu_bytes(&xb, &wb), want, "case {case} (regime {regime})");
+            counts[match want {
+                None => 2,
+                Some(v) if v & 0x7FFF == 0x7F80 => 1,
+                Some(_) => 0,
+            }] += 1;
+        }
+        eprintln!("hopper bf16 kernel: {} finite, {} +-inf, {} rejected", counts[0], counts[1], counts[2]);
+        assert!(counts.iter().all(|&c| c > cases / 50), "every outcome exercised: {counts:?}");
     }
 }
