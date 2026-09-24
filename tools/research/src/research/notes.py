@@ -1050,6 +1050,7 @@ def main(argv: list[str]) -> int:
     bd.add_argument("--worktree")
     bd.add_argument("--pod")
     bd.add_argument("--succeeds", metavar="LANE", help="the lane this one took over (its unread handoffs become this lane's)")
+    bd.add_argument("--keep-pod", metavar="WHY", help="the reaper leaves this lane's pods alone ('' clears it)")
     for p in (bd, rl := sub.add_parser("relaunch", help="contract §C in one command: save the lane's uncommitted work, supersede it, "
                                                          "bind its successor to the same branch/worktree/pods, print the launch message")):
         p.add_argument("--brief", "--campaign", dest="brief", metavar="PATH", help="the campaign brief (named in a successor's launch message)")
@@ -1101,7 +1102,7 @@ def main(argv: list[str]) -> int:
     if ns.cmd in ("bind", "relaunch"):
         try:
             if ns.cmd == "bind":
-                print(bind(root, ns.lane, ns.branch, ns.worktree, ns.pod, ns.succeeds, ns.brief, ns.final, ns.budget))
+                print(bind(root, ns.lane, ns.branch, ns.worktree, ns.pod, ns.succeeds, ns.brief, ns.final, ns.budget, ns.keep_pod))
                 return 0
             s, done, msg = relaunch(root, ns.lane, ns.successor, ns.why, ns.repo or repo_default(), brief=ns.brief, final=ns.final,
                                     budget=ns.budget, fleet=None if ns.no_pods else (lambda: load_fleet(root, probe=False)))

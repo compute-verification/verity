@@ -426,6 +426,7 @@ def test_cli_keep_pod_is_recorded_for_the_reaper_and_the_finish_check(tmp_path, 
     assert notes.binding(tmp_path, "lv")["keep_pod"] == "shared live verifier"
     row = notes.status(tmp_path, 30, None, now=NOW)[0]
     assert row["keep_pod"] == "shared live verifier"
+    assert notes.main(["bind", "lv", "--keep-pod", "", "--root", str(tmp_path)]) == 0 and "keep_pod" not in notes.binding(tmp_path, "lv")
 
 
 def test_watch_prints_no_mail_on_its_first_pass_and_never_for_a_superseded_lane(tmp_path, capsys):
