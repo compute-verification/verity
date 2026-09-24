@@ -485,13 +485,14 @@ def build_unit(p=R.NVFP4) -> GkrCtx:
 
 def build_epilogue(p=R.NVFP4) -> GkrCtx:
     """One row per VU: the last unit's ``s, t, f`` (chain links) = the three public words.  ``s`` boolean (a product wire, so the
-    circuit has a layer) and ``t`` in ``R8`` restate facts the unit already proves."""
+    circuit has a layer) restates a fact the unit already proves, as do ``t < 2^8`` (``out.t.hid1/0``) and ``f < 2^23``
+    (``out.fh/fl``), which therefore need no lookup here (the epilogue queries no table; the unit's merged ``LK`` is its own)."""
     ctx = GkrCtx(p)
     ctx.scope = "e"
     s, t, f = (R._hint(ctx, n) for n in ("s", "t", "f"))
     ctx.sys.quadratic.append(Quadratic("e.s.bool", s, s, s))
     ctx._learn(s, 0, 2)
-    ctx.rng("t", t, 0, 256)
+    ctx._learn(t, 0, 256)
     ctx._learn(f, 0, 2**23)
     return ctx
 
@@ -513,7 +514,7 @@ def _tok(name: str) -> str:
     return name.replace(" ", "_")
 
 
-def export_circuit(ctx: GkrCtx) -> Exported:
+def export_circuit(ctx: GkrCtx, merge: bool = True) -> Exported:
     sys_: System = ctx.sys
     rows = sys_.rows
     col_of: dict[int, int] = {}
@@ -581,7 +582,7 @@ def export_circuit(ctx: GkrCtx) -> Exported:
     # tables: identical contents share one table; distinct contents under one base name get a suffix
     tables: dict[str, NatLookup] = {}
     by_content: dict[tuple, str] = {}
-    queries: list[str] = []
+    qs: list[tuple[str, list[Expr]]] = []
     for rec in ctx.nat:
         ck = rec.content()
         tname = by_content.get(ck)
@@ -591,26 +592,65 @@ def export_circuit(ctx: GkrCtx) -> Exported:
                 tname = "T" + tname
             by_content[ck] = tname
             tables[tname] = rec
-        outs = [Expr(ctx, {idx: 1}, 0) for _, idx in rec.cols]
-        queries.append(f"query {tname} {1 + len(outs)} " + " ".join(lin_txt(e, True) for e in (rec.key, *outs)))
+        qs.append((tname, [rec.key] + [Expr(ctx, {idx: 1}, 0) for _, idx in rec.cols]))
     for b, e in ctx.ranges:
-        queries.append(f"query R{b} 1 {lin_txt(e, True)}")
+        qs.append((f"R{b}", [e]))
+    listed: dict[str, list[tuple[int, ...]]] = {
+        t: [(k, *(vals[i] for vals, _ in rec.cols)) for i, k in enumerate(rec.keys)] for t, rec in tables.items()}
+    if merge:
+        qs, listed = _merge_tables(ctx, qs, listed)
     lines = [f"ncols {ncols}", f"nwires {nw}", "one 0"] + [f"col {i} {n}" for i, n in enumerate(names)]
     lines += [f"prod {w} {d} {a} {b}" for w, d, a, b in prods]
     lines += asserts
-    for tname, rec in tables.items():
-        lines.append(f"table {tname} {1 + len(rec.cols)} {len(rec.keys)}")
-        for i, k in enumerate(rec.keys):
-            lines.append("row " + " ".join(str(v % P) for v in (k, *(vals[i] for vals, _ in rec.cols))))
-    lines += queries
+    for tname, rows_ in listed.items():
+        lines.append(f"table {tname} {len(rows_[0])} {len(rows_)}")
+        lines += ["row " + " ".join(str(v % P) for v in r) for r in rows_]
+    lines += [f"query {t} {len(es)} " + " ".join(lin_txt(e, True) for e in es) for t, es in qs]
     nq: dict[str, int] = {}
-    for q in queries:
-        t = q.split()[1]
+    for t, _ in qs:
         nq[t] = nq.get(t, 0) + 1
     stats = {"columns": ncols, "wires": nw, "products": len(prods), "asserts": len(asserts),
-             "max_depth": max((d for _, d, _, _ in prods), default=0), "queries": nq, "tables": {t: len(r.keys) for t, r in tables.items()},
-             "kinds": sys_.summary()["by_kind"]}
+             "max_depth": max((d for _, d, _, _ in prods), default=0), "queries": nq,
+             "tables": {t: len(r) for t, r in listed.items()}, "kinds": sys_.summary()["by_kind"]}
     return Exported("\n".join(lines) + "\n", col_rows, names, tables, stats)
+
+
+#: the one table every lookup and range query except ``SEPARATE``'s goes to (``export_circuit(merge=True)``)
+MERGED = "LK"
+SEPARATE = ("E2M1X2",)
+TAG_SHIFT = 2**20
+
+
+def _merge_tables(ctx: GkrCtx, qs: list[tuple[str, list[Expr]]], listed: dict[str, list[tuple[int, ...]]]):
+    """Every table but ``SEPARATE`` (row-listed and ``R<b>``) as one row-listed table ``LK``: source table ``T`` (tag ``i >= 1``)
+    contributes the rows ``(i 2^20 + k, i, v_1(k), ..., 0...)``, a query ``(key, out...)`` into ``T`` becomes
+    ``(key + i 2^20, i, out..., 0...)``.  The tag column pins a match to ``T``'s rows, so the key and outputs equal one of ``T``'s
+    rows exactly as before (``key < 2^20`` for every source table keeps the first column unique, which ``logup.multiplicities``
+    needs).  The GKR prover's LogUp cost is mostly a per-table round latency; 15 tables of 2^19..2^23 leaves cost ~6x one of 2^24."""
+    names = sorted({t for t, _ in qs if t not in SEPARATE})
+    for t in names:
+        if t not in listed:
+            b = int(t[1:])
+            listed[t] = [(v,) for v in range(2**b)]
+    width = 1 + max(len(listed[t][0]) for t in names)
+    rows: list[tuple[int, ...]] = []
+    tag = {}
+    for i, t in enumerate(names, 1):
+        tag[t] = i
+        for r in listed[t]:
+            if not 0 <= r[0] < TAG_SHIFT:
+                raise CompileError(f"{t}: key {r[0]} outside [0, 2^20) cannot be merged")
+            rows.append((i * TAG_SHIFT + r[0], i, *r[1:]) + (0,) * (width - 1 - len(r)))
+    out_qs = []
+    for t, es in qs:
+        if t in tag:
+            k = Expr(ctx, {}, tag[t])
+            es = [es[0] + tag[t] * TAG_SHIFT, k, *es[1:]] + [Expr(ctx, {}, 0)] * (width - 1 - len(es))
+            t = MERGED
+        out_qs.append((t, es))
+    out = {t: r for t, r in listed.items() if t not in tag}
+    out[MERGED] = rows
+    return out_qs, out
 
 
 @dataclass
@@ -623,7 +663,7 @@ class NVF4Statement:
 
 def statement() -> NVF4Statement:
     u, e = build_unit(), build_epilogue()
-    return NVF4Statement(u, e, export_circuit(u), export_circuit(e))
+    return NVF4Statement(u, e, export_circuit(u), export_circuit(e, merge=False))
 
 
 def export(out: Path) -> dict:
