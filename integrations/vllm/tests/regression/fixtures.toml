@@ -4677,6 +4677,18 @@ finding = "F-r19-int-20"
 reason = "r19-int-22 names Bf16MulScalarTensor_v1 (F-r19-int-20: hinted rows, an evaluator, dataflow promotion). Over the v1 manifest of record (incomplete, nothing promoted) its 4150 rows stay NOT evaluable -- they are not identities -- but the partition now states why by the composition rule ('interior: composed into its epilogue's VU / a hinted row of the module is its returned tensor') where v1 said 'structure / interior: no identity'. One bucket relabelled, same 4150 rows: by_family, vus 651982, strata_n 5846, the 18 not-evaluable buckets (sum 3748888), strata, sample, lifetime, executed_prefix and phase_anchor are equal to the record. Nothing moved to the evaluable population on this manifest (run r20260923-084413-3dd4, both engines)."
 expected = { population = { vus = 651982, strata_n = 5846, by_family = { Embedding_v1 = 4150, Gemm_v1 = 431600, RoPE_v1 = 215800, TokenSelect_v1 = 432 }, not_evaluable_by_family = { "Bf16MulScalarTensor_v1 (interior: composed into its epilogue's VU / a hinted row of the module is its returned tensor)" = 4150 } } }
 
+# labelled decision (Draft 3 §7): the v1 address rule is retired; the pre-flip record's partition is recomputed under the v2 query's rule.
+# Solely the rule: staging 815b837c's own replay_partition with this record's `addresses.rule` set to "v2-query" reproduces the result exactly.
+[[rows."gemma2-2b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager".decisions]]
+check = "replay_partition"
+since = "lane/vllm-retire-v1"
+since_commit = "53d20e6ce63f3e63a580eb6ad49fdddcbea520a2"
+finding = "retire-v1"
+status = "accepted"
+accepted_by = "Daniel Reuter (delegated to the vLLM coordinator: 'clear all the old stuff', 23 Sep)"
+reason = "record predates the v2 rule; v1 code removed; recomputed under v2 rule. The v2 query addresses the 4150 Bf16MulScalarTensor_v1 rows (F-r19-int-20's non-leaf module-body output, read across the boundary by layer 0) as VUs where the v1 rule over the unpromoted v1 manifest of record left them not evaluable: vus 651982 -> 656132, strata_n 5846 -> 5883, and the seeded draw and the window-lifetime split follow from the added strata."
+expected = { population = { vus = 656132, strata_n = 5883, by_family = { Bf16MulScalarTensor_v1 = 4150, Embedding_v1 = 4150, Gemm_v1 = 431600, RoPE_v1 = 215800, TokenSelect_v1 = 432 } }, lifetime = { sampled = { fresh-window = 3657, recycled-window = 2226 }, values = { fresh-window = 596666, recycled-window = 59466 } }, sample = { picked = 5883, cap_effective = 5883, stratified_picked = 5883 } }
+
 # labelled decision (Draft 3 §7): a sanctioned difference from v1, consulted by the named check when its result differs from v1 (test_regression.py, LABELLED DECISIONS)
 [[rows."gemma2-2b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager".decisions]]
 check = "coverage"
@@ -6349,6 +6361,18 @@ accepted_at = "2026-09-23T16:26Z"
 ruling = "Under Q_module_body_v1, a MoeSum_v1 Value consumed by the next layer's normalization body is a boundary Value by construction; the old manifest missing it is the by-name structural bug v2 removes."
 reason = "MoeSum_v1 (FusedMoE.forward's returned tensor) is read by the next layer's fused add+norm → boundary Value under Q_module_body_v1; v1 classed it interior by name and covered the block only via kernel planes. Increases required-value rows by ~5%; same intended query, v1 omission — accepted by Daniel 2026-09-23T16:26Z (ruling above)."
 expected = { identities = 406432, only_new = 20928, promoted_member_class = "model.layers.<k>.mlp.experts/out", complete = true }
+
+# labelled decision (Draft 3 §7): the v1 address rule is retired; the pre-flip record's partition is recomputed under the v2 query's rule.
+# Solely the rule: staging 815b837c's own replay_partition with this record's `addresses.rule` set to "v2-query" reproduces the result exactly.
+[[rows."olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed__greedy__bi-eager".decisions]]
+check = "replay_partition"
+since = "lane/vllm-retire-v1"
+since_commit = "53d20e6ce63f3e63a580eb6ad49fdddcbea520a2"
+finding = "retire-v1"
+status = "accepted"
+accepted_by = "Daniel Reuter (delegated to the vLLM coordinator: 'clear all the old stuff', 23 Sep)"
+reason = "record predates the v2 rule; v1 code removed; recomputed under v2 rule. The v2 query addresses the MoeSum_v1 rows at the experts module (model.layers.<k>.mlp.experts, FusedMoE.forward's returned tensor: F-r19-int-24) where the v1 rule used the synthetic moe/L<k> path: 2416 stratum keys renamed; every count (population, strata sizes, the draw, lifetime, phase anchors) is unchanged."
+expected = { population = { vus = 5745046, strata_n = 38748 }, strata = { "MoeSum_v1{TOPK=8,H=2048}|r0|rank0|first-decode|model.layers.0.mlp.experts|fresh-window" = { population = 1, sampled = 1 } } }
 
 [rows."olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed__greedy__bi-eager".local]
 
@@ -8172,6 +8196,18 @@ accepted_at = "2026-09-23T16:26Z"
 ruling = "Under Q_module_body_v1, a MoeSum_v1 Value consumed by the next layer's normalization body is a boundary Value by construction; the old manifest missing it is the by-name structural bug v2 removes."
 reason = "MoeSum_v1 (FusedMoE.forward's returned tensor) is read by the next layer's fused add+norm → boundary Value under Q_module_body_v1; v1 classed it interior by name and covered the block only via kernel planes. Increases required-value rows by ~5%; same intended query, v1 omission — accepted by Daniel 2026-09-23T16:26Z (ruling above)."
 expected = { identities = 402938, only_new = 20704, promoted_member_class = "model.layers.<k>.mlp.experts/out", complete = true }
+
+# labelled decision (Draft 3 §7): the v1 address rule is retired; the pre-flip record's partition is recomputed under the v2 query's rule.
+# Solely the rule: staging 815b837c's own replay_partition with this record's `addresses.rule` set to "v2-query" reproduces the result exactly.
+[[rows."olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed-arrivals__greedy__bi-eager".decisions]]
+check = "replay_partition"
+since = "lane/vllm-retire-v1"
+since_commit = "53d20e6ce63f3e63a580eb6ad49fdddcbea520a2"
+finding = "retire-v1"
+status = "accepted"
+accepted_by = "Daniel Reuter (delegated to the vLLM coordinator: 'clear all the old stuff', 23 Sep)"
+reason = "record predates the v2 rule; v1 code removed; recomputed under v2 rule. The v2 query addresses the MoeSum_v1 rows at the experts module (model.layers.<k>.mlp.experts, FusedMoE.forward's returned tensor: F-r19-int-24) where the v1 rule used the synthetic moe/L<k> path: 2016 stratum keys renamed; every count (population, strata sizes, the draw, lifetime, phase anchors) is unchanged."
+expected = { population = { vus = 5830562, strata_n = 33192 }, strata = { "MoeSum_v1{TOPK=8,H=2048}|r0|rank0|first-decode|model.layers.0.mlp.experts|fresh-window" = { population = 1, sampled = 1 } } }
 
 [rows."olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed-arrivals__greedy__bi-eager".local]
 tp2 = "/workspace/cp/sweep/r19-int-10/olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed-arrivals__greedy__bi-eager"
