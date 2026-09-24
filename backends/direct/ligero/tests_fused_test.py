@@ -141,6 +141,26 @@ def main():
     tests_fused.REDUCE_KERNEL = True
     rep["exact"]["reduce_partial"] = torch.equal(f._reduce(part), part.to(torch.int64).sum(0) % P)
     tests_fused.REDUCE_KERNEL = saved[1]
+    # lincomb2 (w and v in one pass) against two lincomb calls: C1 a row-strided view with negative and >= p entries,
+    # C2 over a row prefix, residues up to p - 1, several split counts
+    Rl, Rv, colsl = 1037, 1001, 2176
+    Xl = torch.randint(0, P, (Rl, colsl), generator=g).to(torch.int32)
+    Xl[:, :32] = P - 1
+    Xl = Xl.to(dev)
+    big = torch.randint(-3 * P, 3 * P, (D, Rl + 40), generator=g, dtype=torch.int64)
+    big[:, :8] = P - 1
+    C1 = big.to(dev)[:, :Rl]
+    C2 = torch.randint(0, P, (D, Rv), generator=g, dtype=torch.int64).to(dev)
+    ref_w, ref_v = f.lincomb(C1 % P, Xl), f.lincomb(C2, Xl[:Rv])
+    ok3 = f.lincomb2_ok(C1, C2, Xl)
+    saved3 = (tests_fused.LINCOMB2_SPLITS, tests_fused.LINCOMB2_THREADS)
+    for thr in (64, 128, 256):
+        for S in (0, 1, 9, 200):
+            tests_fused.LINCOMB2_THREADS, tests_fused.LINCOMB2_SPLITS = thr, S
+            w2, v2 = f.lincomb2(C1, C2, Xl)
+            ok3 &= torch.equal(w2, ref_w) and torch.equal(v2, ref_v)
+    tests_fused.LINCOMB2_SPLITS, tests_fused.LINCOMB2_THREADS = saved3
+    rep["exact"]["lincomb2_vs_lincomb_1037x2176"] = bool(ok3)
     ok = all(rep["exact"].values())
     print("exact:", rep["exact"])
     print("bit-exact:", "PASS" if ok else "FAIL")

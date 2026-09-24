@@ -147,6 +147,13 @@ __device__ __forceinline__ u64 mont_reduce(u64 t)
     return (t >> 32) + (mp >> 32) + (u64)(t_lo != 0u);
 }
 
+#define R64M @R64@ull                                                 /* 2^64 mod p */
+__device__ __forceinline__ unsigned canon3p(u64 r)            /* r < 3p -> r mod p */
+{
+    unsigned v = (unsigned)(r >= 2ull * P ? r - 2ull * P : r);    /* < 2p < 2^32 */
+    return v >= P ? v - P : v;
+}
+
 template <typename T, int D, int SQ>
 __device__ __forceinline__ void lincomb_v4_body(const unsigned* __restrict__ C, const T* __restrict__ X,
                                                 unsigned* __restrict__ partial, int R, int cols, int chunk,
@@ -230,6 +237,75 @@ extern "C" __global__ void boolcomb_rows_v4_u32_D@D@(const unsigned* C, const un
 extern "C" __global__ void boolcomb_rows_v4_u64_D@D@(const unsigned* C, const u64* X, unsigned* out, int R, int cols, int chunk, const int* rows)
 { lincomb_v4_body<u64, @D@, 1>(C, X, out, R, cols, chunk, rows); }
 
+/* Two combinations of the same rows in one pass (the ZK linear tests w = r X and v = alpha X[:R2]): out rows 0..D-1 from
+   C1 (D, R1 >= R, row stride ld1), rows D..2D-1 from C2 (D, R2 <= R, zero past R2), both int64 residues of any sign,
+   reduced and Montgomery-scaled (by 2^32, as lincomb_v4_body's C) while staged.  Running sums canonical 32-bit (a lazy
+   sum of 4 products < 4p^2 reduces below 3p). */
+template <int D>
+__device__ __forceinline__ void lincomb2_v4_body(const long long* __restrict__ C1, long long ld1,
+                                                 const long long* __restrict__ C2, long long ld2, int R2,
+                                                 const unsigned* __restrict__ X, unsigned* __restrict__ partial,
+                                                 int R, int cols, int chunk)
+{
+    extern __shared__ unsigned Cs[];                                   /* [2D][chunk] */
+    const int s = blockIdx.y;
+    const int j0 = s * chunk, j1 = min(R, j0 + chunk), nj = j1 - j0;
+    for (int i = threadIdx.x; i < 2 * D * nj; i += blockDim.x) {
+        const int d = i / nj, jj = i - d * nj, j = j0 + jj;
+        long long c = d < D ? C1[(size_t)d * ld1 + j] : (j < R2 ? C2[(size_t)(d - D) * ld2 + j] : 0);
+        c %= (long long)P;
+        if (c < 0) c += P;
+        const u64 m = mont_reduce((u64)c * (u64)R64M);                 /* c 2^32 mod p, < 2p */
+        Cs[d * chunk + jj] = (unsigned)(m >= (u64)P ? m - (u64)P : m);
+    }
+    __syncthreads();
+    const int col0 = (blockIdx.x * blockDim.x + threadIdx.x) * 4;
+    if (col0 >= cols) return;
+    u64 lazy[2 * D][4];
+    unsigned red[2 * D][4];
+    #pragma unroll
+    for (int d = 0; d < 2 * D; ++d) {
+        #pragma unroll
+        for (int v = 0; v < 4; ++v) { lazy[d][v] = 0; red[d][v] = 0; }
+    }
+    int cnt = 0;
+    #pragma unroll 2
+    for (int jj = 0; jj < nj; ++jj) {
+        const uint4 xr = *reinterpret_cast<const uint4*>(X + (size_t)(j0 + jj) * cols + col0);
+        #pragma unroll
+        for (int d = 0; d < 2 * D; ++d) {
+            const u64 c = Cs[d * chunk + jj];
+            lazy[d][0] += c * xr.x; lazy[d][1] += c * xr.y; lazy[d][2] += c * xr.z; lazy[d][3] += c * xr.w;
+        }
+        if (++cnt == 4) {
+            cnt = 0;
+            #pragma unroll
+            for (int d = 0; d < 2 * D; ++d) {
+                #pragma unroll
+                for (int v = 0; v < 4; ++v) {
+                    const unsigned sm = red[d][v] + canon3p(mont_reduce(lazy[d][v]));
+                    red[d][v] = sm >= P ? sm - P : sm;
+                    lazy[d][v] = 0;
+                }
+            }
+        }
+    }
+    #pragma unroll
+    for (int d = 0; d < 2 * D; ++d) {
+        unsigned o4[4];
+        #pragma unroll
+        for (int v = 0; v < 4; ++v) {
+            const unsigned sm = red[d][v] + canon3p(mont_reduce(lazy[d][v]));
+            o4[v] = sm >= P ? sm - P : sm;
+        }
+        *reinterpret_cast<uint4*>(partial + ((size_t)s * 2 * D + d) * cols + col0) = make_uint4(o4[0], o4[1], o4[2], o4[3]);
+    }
+}
+
+extern "C" __global__ void lincomb2_v4_u32_D@D@(const long long* C1, long long ld1, const long long* C2, long long ld2,
+                                              int R2, const unsigned* X, unsigned* out, int R, int cols, int chunk)
+{ lincomb2_v4_body<@D@>(C1, ld1, C2, ld2, R2, X, out, R, cols, chunk); }
+
 /* general quadratic constraints from CSR tables: for side s in {a,b,c}: ptr_s[q]..ptr_s[q+1] -> (j, coef), const_s[q] */
 template <typename T>
 __device__ __forceinline__ unsigned sparse_eval(const T* __restrict__ X, int cols, int col,
@@ -283,11 +359,6 @@ __device__ __forceinline__ void quad_body(const unsigned* __restrict__ rho, cons
    conditional subtractions.  The side-a coefficients and constant come scaled by 2^64 / 2^32 (A arrives as A 2^32), so
    mont(A 2^32 * B) = A B (< 2p: one subtraction); rho comes scaled by 2^32 (see lincomb_v4_body).  X canonical.
    The same residues as quad_body. */
-__device__ __forceinline__ unsigned canon3p(u64 r)            /* r < 3p -> r mod p */
-{
-    unsigned v = (unsigned)(r >= 2ull * P ? r - 2ull * P : r);    /* < 2p < 2^32 */
-    return v >= P ? v - P : v;
-}
 
 template <typename T>
 __device__ __forceinline__ void side_eval4(const T* __restrict__ X, int cols, int col0, const int* __restrict__ ptr,
@@ -437,6 +508,9 @@ QUAD_SPLITS = 128                   # quad_v4: constraint chunks (grid dimension
 QUAD_QFAST = True                   # quad_v4: the chunks of one column slice as consecutive blocks (L2 reuse of their rows)
 QUAD_THREADS = 128                  # 4090, fp8-ada-v3x4 l=4096: 0.785 ms vs 0.87 at (32 chunks, column-major, 256 threads)
 REDUCE_KERNEL = True                # the (S, D, cols) partial sums reduced by one kernel (False: torch int64 upcast + sum + mod)
+LINCOMB2 = True                     # the ZK linear tests w and v in one pass over the coefficient rows (False: two lincomb calls)
+LINCOMB2_THREADS = 128
+LINCOMB2_SPLITS = 0                 # row chunks (0: _grid_v4's choice)
 
 
 def available() -> bool:
@@ -453,13 +527,13 @@ class FusedTests:
         self.cp = cp
         self.D = D
         self.device = torch.device(device)
-        self.mod = cp.RawModule(code=_SRC.replace("@D@", str(D)), options=("-std=c++17",))
+        self.mod = cp.RawModule(code=_SRC.replace("@D@", str(D)).replace("@R64@", str(_R64)), options=("-std=c++17",))
         self.k = {name: self.mod.get_function(f"{name}_D{D}")
                   for name in ("lincomb_u32", "lincomb_u64", "boolcomb_u32", "boolcomb_u64", "quad_u32", "quad_u64",
                                "boolcomb_rows_u32", "boolcomb_rows_u64",
                                "lincomb_v4_u32", "lincomb_v4_u64", "boolcomb_v4_u32", "boolcomb_v4_u64",
                                "boolcomb_rows_v4_u32", "boolcomb_rows_v4_u64", "chainq_u32", "chainq_u64", "fplane",
-                               "quad_v4_u32")}
+                               "quad_v4_u32", "lincomb2_v4_u32")}
         self.k["reduce_partial"] = self.mod.get_function("reduce_partial")
 
     def _cp(self, t: torch.Tensor):
@@ -535,6 +609,32 @@ class FusedTests:
         with self._stream():
             self.k[name]((gx, S), (THREADS,), tuple(args), shared_mem=smem)
         return self._reduce(partial)
+
+    def lincomb2_ok(self, C1: torch.Tensor, C2: torch.Tensor, X: torch.Tensor) -> bool:
+        return (LINCOMB2 and X.dtype == torch.int32 and self._v4_ok(X) and C1.dtype == C2.dtype == torch.int64
+                and C1.shape[0] == C2.shape[0] == self.D and C1.shape[1] >= X.shape[0] >= C2.shape[1]
+                and C1.stride(1) == 1 and C2.stride(1) == 1)
+
+    def lincomb2(self, C1: torch.Tensor, C2: torch.Tensor, X: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """(C1[:, :R] @ X, C2 @ X[:R2]) mod p, each (D, cols) int64, in one pass over X (R, cols) int32 canonical; C1 and C2
+        int64 of any sign with unit column stride (C1 may be a row-strided view)."""
+        D = self.D
+        R, cols = X.shape
+        R2 = C2.shape[1]
+        X = X.contiguous()
+        (gx, S), chunk = self._grid_v4(cols, R)
+        if LINCOMB2_SPLITS:
+            chunk = min(MAX_CHUNK_V4, -(-R // min(R, LINCOMB2_SPLITS)))
+            S = -(-R // chunk)
+        gx = -(-(cols // 4) // LINCOMB2_THREADS)
+        partial = torch.empty((S, 2 * D, cols), dtype=torch.int32, device=self.device)
+        with self._stream():
+            self.k["lincomb2_v4_u32"]((gx, S), (LINCOMB2_THREADS,),
+                                      (self._cp(C1), np.int64(C1.stride(0)), self._cp(C2), np.int64(C2.stride(0)),
+                                       np.int32(R2), self._cp(X), self._cp(partial), np.int32(R), np.int32(cols),
+                                       np.int32(chunk)), shared_mem=2 * D * chunk * 4)
+        out = self._reduce(partial)
+        return out[:D], out[D:]
 
     def chain_quotient(self, Renc: torch.Tensor, U: torch.Tensor, rows: torch.Tensor) -> torch.Tensor:
         """(D, n) int64 = sum_r Renc[:, r] * U[rows[r]] mod p in one pass (``Renc`` (D, R, n) int32 codewords or int64
