@@ -18,6 +18,7 @@ A VU off the domain, whose hints do not close, or whose chain does not reach its
 """
 from __future__ import annotations
 
+import os
 import time
 from dataclasses import dataclass
 from types import SimpleNamespace
@@ -99,6 +100,11 @@ class NVF4Generator:
         self.num = torch.tensor(R.NUMERATOR, dtype=torch.int64, device=dev)
         self.pos_w = torch.ones(R.POSITIONS, dtype=torch.int64, device=dev) << (
             R.RADIX * torch.arange(R.POSITIONS, dtype=torch.int64, device=dev))
+        # one step of the chain is ~400 elementwise ops on N lanes, 24 times in sequence: launch-bound unless fused
+        # (graphed witness 28.7 -> 12.1 ms at 4096 VUs on the 5090, same rows; VERITY_NVF4_COMPILE=0: eager)
+        self._step = HD.unit_hints_torch
+        if dev.type == "cuda" and os.environ.get("VERITY_NVF4_COMPILE", "1") == "1":
+            self._step = torch.compile(HD.unit_hints_torch, dynamic=False)
 
     # --- the chain (B-Ligero's hints) + the decode hints ------------------------------------------------------------------
     def _chain(self, A: torch.Tensor, B: torch.Tensor, Y: torch.Tensor, variant: str | None = None):
@@ -108,12 +114,15 @@ class NVF4Generator:
         N = A.shape[0]
         c = torch.zeros(N, dtype=torch.int64, device=self.dev)
         bad = torch.zeros(N, dtype=torch.bool, device=self.dev)
-        hs, pubs = [], []
+        # the decode does not read the accumulator: every step's in one call (step-major lanes)
+        pub_all = HD.public_rows_torch(A.transpose(0, 1).reshape(STEPS * N, WORDS), B.transpose(0, 1).reshape(STEPS * N, WORDS),
+                                       self.num).view(HD.N_PINS, STEPS, N)
+        hs = []
         for s in range(STEPS):
             a, b = A[:, s], B[:, s]
-            pub = HD.public_rows_torch(a, b, self.num)
+            pub = pub_all[:, s]
             if variant is None:
-                h, bd, c = HD.unit_hints_torch(self.bl_sys, c, a, b, pub, self.num, self.pos_w)
+                h, bd, c = self._step(self.bl_sys, c, a, b, pub, self.num, self.pos_w)
                 bad |= bd
             else:
                 from backends.direct.ligero.fp4.witness import unit_hints
@@ -121,10 +130,9 @@ class NVF4Generator:
                 h = torch.as_tensor(np.stack([H[n] for n in self.bl_names]), dtype=torch.int64, device=self.dev)
                 c = torch.as_tensor(yv, dtype=torch.int64, device=self.dev)
             hs.append(h)
-            pubs.append(pub)
         bad |= c != Y
         H = torch.stack(hs, dim=2).reshape(len(self.bl_names), N * STEPS)        # (n, N, 24) -> VU-major lanes
-        pub = torch.stack(pubs, dim=2).reshape(HD.N_PINS, N * STEPS)
+        pub = pub_all.transpose(1, 2).reshape(HD.N_PINS, N * STEPS)
         vals = {self.hint_rows[n]: H[i] for i, n in enumerate(self.bl_names)}
         a, b = A.reshape(N * STEPS, WORDS), B.reshape(N * STEPS, WORDS)
         hr = self.hint_rows
