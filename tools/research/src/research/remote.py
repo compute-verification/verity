@@ -53,6 +53,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import secrets
 import shlex
 import subprocess
@@ -109,6 +110,47 @@ def load_machines(path: Path | None = None) -> dict[str, dict[str, Any]]:
     if not p.exists():
         return {}
     return tomllib.loads(p.read_text()).get("machines", {})
+
+
+_MACHINE_TABLE_RE = re.compile(r'^\[\s*machines\s*\.\s*(?:"([^"]+)"|([A-Za-z0-9_-]+))\s*(?:\.[^\]]*)?\]\s*(?:#.*)?$')
+
+
+def retire_machines(names: list[str], note: str, path: Path | None = None) -> list[str]:
+    """Comment out the `[machines.<name>]` tables of `names` in the (hand-written) machines file under a `# retired: <note>` line, every
+    other byte kept, so `research run --on` refuses them from then on and the file still says what they were.  Returns the names
+    retired (those present).  The edit is re-parsed and written only if exactly those entries left and nothing else changed
+    (ValueError otherwise, file untouched); written temp + rename."""
+    p = path or machines_path()
+    if not p.exists():
+        return []
+    text = p.read_text()
+    doc = tomllib.loads(text)
+    before = doc.get("machines", {})
+    want = [n for n in dict.fromkeys(names) if n in before]
+    if not want:
+        return []
+    out: list[str] = []
+    inside = False
+    for ln in text.splitlines(keepends=True):
+        s = ln.strip()
+        if s.startswith("["):
+            m = _MACHINE_TABLE_RE.match(s)
+            name = (m.group(1) or m.group(2)) if m else None
+            if name in want and not (inside and name == inside):
+                out.append(f"# retired: {note}\n")
+            inside = name if name in want else False
+        out.append(f"# {ln}" if inside and s and not s.startswith("#") else ln)
+    new = "".join(out)
+    after_doc = tomllib.loads(new)
+    after = after_doc.get("machines", {})
+    if set(before) - set(after) != set(want) or any(after.get(k) != v for k, v in before.items() if k not in want) or \
+            {k: v for k, v in after_doc.items() if k != "machines"} != {k: v for k, v in doc.items() if k != "machines"}:
+        raise ValueError(f"{p}: retiring {want} would change more than those entries; left untouched")
+    tmp = p.with_name(f".{p.name}.{os.getpid()}.tmp")
+    tmp.write_text(new)
+    os.chmod(tmp, p.stat().st_mode & 0o7777)
+    os.replace(tmp, p)
+    return want
 
 
 def resolve_machine(name: str, project: str | None, machines: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:

@@ -10,7 +10,9 @@
         Each unpreserved Attempt names its failing checks (`preserved.failures`: manifest key, output name + art id + object, label
         target + missing assertion).  Labels asserted in THIS store are the one leg drain repairs itself: it pushes and re-verifies the
         assertions of every Attempt whose labels leg failed (`labels_sync.push_closure`, the same as `research data push --labels-only
-        RUN`; nothing else is uploaded, no blob re-checked) before deciding; `--no-push-labels` only reports.
+        RUN`; nothing else is uploaded, no blob re-checked) before deciding; `--no-push-labels` only reports.  Once RunPod confirms
+        the pod gone (GET 404 / desiredStatus TERMINATED, or 404 on the terminate itself), every machines.toml entry bound to it is
+        commented out under a `# retired: ...` line (`remote.retire_machines`); an unconfirmed termination keeps the entry.
     research pods terminate <pod-id> --require-preserved [--force --reason TEXT]
         `drain` by pod id (part.main routes it here).
 
@@ -190,6 +192,35 @@ def push_labels(st: LocalStore, rep: dict[str, Any], jobs: int = LS.SYNC_JOBS) -
         rep["check"]["preserved"] = not rep["unpreserved"]
 
 
+def confirm_terminated(pod_id: str, tries: int = 6, wait_s: float = 5.0) -> tuple[bool, str]:
+    """(gone, evidence) from RunPod after a terminate: HTTP 404 or desiredStatus TERMINATED is gone; a pod still listed is polled up to
+    `tries` times; an API that cannot answer (no config, network) is not a confirmation."""
+    from . import runpod
+
+    status = None
+    for i in range(tries):
+        try:
+            pod = runpod.get(pod_id)
+        except runpod.PodError as e:
+            return (True, "HTTP 404") if e.code == 404 else (False, f"cannot confirm: {e}")
+        status = (pod or {}).get("desiredStatus")
+        if not pod or str(status).upper() == "TERMINATED":
+            return True, f"desiredStatus {status}"
+        if i + 1 < tries:
+            time.sleep(wait_s)
+    return False, f"still listed (desiredStatus {status}) after {tries} checks"
+
+
+def retire_entries(rep: dict[str, Any], evidence: str) -> dict[str, Any]:
+    """After a CONFIRMED termination: comment out every machines.toml entry bound to the pod (`remote.retire_machines`)."""
+    names = [n for n in dict.fromkeys([rep["machine"], *(k for k, v in remote.load_machines().items() if v.get("pod_id") == rep["pod_id"])]) if n]
+    note = f"pod {rep['pod_id']} terminated ({evidence}), `research pods drain` {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}"
+    try:
+        return {"retired": remote.retire_machines(names, note), "file": str(remote.machines_path())}
+    except (OSError, ValueError) as e:
+        return {"retired": [], "kept": names, "why": f"{type(e).__name__}: {e}", "file": str(remote.machines_path())}
+
+
 def _leg_counts(rep: dict[str, Any]) -> str:
     """`labels x2, manifest x1`: how many unpreserved attempts fail each check."""
     n: dict[str, int] = {}
@@ -207,10 +238,11 @@ def log_drain(entry: dict[str, Any], path: Path | None = None) -> None:
 
 
 def drain(st: LocalStore, target: str, *, mode: str = "head", force: bool = False, reason: str | None = None, hostname: str | None = None,
-          probe: bool = True, terminate=None, log_path: Path | None = None, repair_labels: bool = True) -> tuple[int, dict[str, Any]]:
+          probe: bool = True, terminate=None, log_path: Path | None = None, repair_labels: bool = True, confirm=None) -> tuple[int, dict[str, Any]]:
     """Report, push the labels a labels-only failure needs (`push_labels`, unless `repair_labels` is False), then terminate unless
-    something is unpreserved (module docstring).  `terminate(pod_id)` defaults to runpod's; the decision and its reason are appended
-    to `log_path`.  Returns (exit code, report)."""
+    something is unpreserved (module docstring).  `terminate(pod_id)` defaults to runpod's, and then `confirm(pod_id) -> (gone,
+    evidence)` to `confirm_terminated`; the machines.toml entries of the pod are retired only when it is confirmed gone (`machines_entry`
+    in the report).  The decision and its reason are appended to `log_path`.  Returns (exit code, report)."""
     log_path = log_path or drain_log_path()
     rep = report(st, target, mode=mode, hostname=hostname, probe=probe)
     if not rep["pod_id"]:
@@ -229,23 +261,36 @@ def drain(st: LocalStore, target: str, *, mode: str = "head", force: bool = Fals
     if blocked and force and not reason:
         rep["decision"] = {"action": "refused", "why": "--force needs --reason TEXT (the override is logged with it)", "forced": False}
         return 2, rep
-    if terminate is None:
-        from . import runpod
+    from . import runpod
 
+    if terminate is None:
         terminate = runpod.terminate
+        confirm = confirm if confirm is not None else confirm_terminated
+    err: Exception | None = None
+    gone_before = False
     try:
         terminate(rep["pod_id"])
+    except runpod.PodError as e:
+        gone_before, err = (True, None) if e.code == 404 else (False, e)    # DELETE -> 404: already terminated (e.g. by a previous owner)
     except Exception as e:  # noqa: BLE001
-        rep["decision"] = {"action": "error", "why": f"terminate {rep['pod_id']}: {type(e).__name__}: {e}", "forced": bool(blocked and force)}
+        err = e
+    if err is not None:
+        rep["decision"] = {"action": "error", "why": f"terminate {rep['pod_id']}: {type(err).__name__}: {err}", "forced": bool(blocked and force)}
         log_drain({"utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "target": target, "machine": rep["machine"], "pod_id": rep["pod_id"],
                    "action": "error", "error": rep["decision"]["why"], "unpreserved": rep["unpreserved"], "forced": blocked and force, "reason": reason}, log_path)
         return 2, rep
     rep["decision"] = {"action": "terminated", "forced": bool(blocked and force), "reason": reason if blocked else None,
                        "why": (f"FORCED over {len(rep['unpreserved'])} unpreserved attempt(s): {reason}" if blocked else
-                               ("nothing recorded on the machine" if not rep["n_attempts"] else f"all {rep['n_attempts']} attempt(s) preserved"))}
+                               ("nothing recorded on the machine" if not rep["n_attempts"] else f"all {rep['n_attempts']} attempt(s) preserved"))
+                               + ("; the pod was already gone (HTTP 404)" if gone_before else "")}
+    # the machines.toml entry goes only once the provider confirms the pod is gone (a failed or pending terminate keeps it listed)
+    gone, evidence = (True, "HTTP 404 on terminate: already gone") if gone_before else (confirm(rep["pod_id"]) if confirm else (False, "not checked"))
+    rep["machines_entry"] = retire_entries(rep, evidence) if gone else {"retired": [], "why": f"termination not confirmed ({evidence}); entry kept",
+                                                                         "file": str(remote.machines_path())}
     log_drain({"utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "target": target, "machine": rep["machine"], "pod_id": rep["pod_id"],
                "action": "terminated", "forced": blocked and force, "reason": reason if blocked else None, "unpreserved": rep["unpreserved"],
-               "n_attempts": rep["n_attempts"], "mode": mode, "labels_push": rep.get("labels_push")}, log_path)
+               "n_attempts": rep["n_attempts"], "mode": mode, "labels_push": rep.get("labels_push"), "confirmed": evidence if gone else None,
+               "machines_entry": rep["machines_entry"]}, log_path)
     return 0, rep
 
 
@@ -296,4 +341,8 @@ def main(argv: list[str]) -> int:
             print(line)
         d = rep.get("decision") or {}
         print(f"{d.get('action', '?').upper()}: {d.get('why')}")
+        me = rep.get("machines_entry")
+        if me:
+            print(f"machines.toml: retired {', '.join(me['retired'])} (commented out in {me['file']})" if me["retired"] else
+                  f"machines.toml: {me.get('why') or 'no entry for the pod'}")
     return rc

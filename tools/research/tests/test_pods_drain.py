@@ -218,6 +218,104 @@ def test_drain_refuses_while_anything_is_unpreserved_and_logs_a_forced_override(
     assert rc == 2 and rep["decision"]["action"] == "error" and "HTTP 500" in rep["decision"]["why"]
 
 
+MACHINES_DOC = """# Machines `research run --on` may use.
+[families.h100]
+vram_mb = 81559
+
+# the tp2 pod (lane x)
+[machines.vy-tp2]
+provider = "runpod"
+pod_id = "pod-tp2"
+project = "verity"   # trailing comment
+tags = [
+  "a",
+]
+[machines.vy-tp2.env]
+X = "1"
+
+[machines."vy-tp2-alias"]
+pod_id = "pod-tp2"
+project = "verity"
+
+[machines.vy-other]
+provider = "runpod"
+pod_id = "pod-other"
+project = "verity"
+"""
+
+
+def test_retire_machines_comments_out_exactly_those_entries_and_keeps_every_other_byte(tmp_path):
+    import tomllib
+
+    from research import remote
+
+    p = tmp_path / "machines.toml"
+    p.write_text(MACHINES_DOC)
+    assert remote.retire_machines(["vy-tp2", "vy-tp2-alias", "absent"], "pod pod-tp2 terminated", p) == ["vy-tp2", "vy-tp2-alias"]
+    doc = tomllib.loads(p.read_text())
+    assert set(doc["machines"]) == {"vy-other"} and doc["families"] == {"h100": {"vram_mb": 81559}}
+    lines = p.read_text().splitlines()
+    assert lines.count("# retired: pod pod-tp2 terminated") == 2 and "# [machines.vy-tp2]" in lines and '# project = "verity"   # trailing comment' in lines
+    assert "# the tp2 pod (lane x)" in lines and "# [machines.vy-tp2.env]" in lines and '# [machines."vy-tp2-alias"]' in lines
+    assert p.read_text().split("[machines.vy-other]")[1] == MACHINES_DOC.split("[machines.vy-other]")[1], "the rest is byte-identical"
+    assert remote.retire_machines(["vy-tp2"], "again", p) == [], "idempotent"
+    # an edit that would change anything else is refused and the file left alone
+    tricky = '[machines.a]\npod_id = "p"\n[machines.b]\nnote = """\n[machines.a]\n"""\n'
+    p.write_text(tricky)
+    with pytest.raises(ValueError):
+        remote.retire_machines(["a"], "x", p)
+    assert p.read_text() == tricky
+
+
+def test_drain_retires_the_machines_entry_only_once_termination_is_confirmed(fs_store, machines, tmp_path):
+    from research import remote
+    from research.pods import runpod
+
+    st = fs_store
+    machines.write_text(MACHINES_DOC)
+    killed: list[str] = []
+    # not confirmed: terminated, entry kept, and the report says why
+    rc, rep = D.drain(st, "vy-tp2", probe=False, terminate=killed.append, confirm=lambda pid: (False, "still listed (desiredStatus RUNNING)"))
+    assert rc == 0 and killed == ["pod-tp2"] and rep["machines_entry"]["retired"] == [] and "not confirmed" in rep["machines_entry"]["why"]
+    assert "vy-tp2" in remote.load_machines()
+    # confirmed: every entry bound to the pod is retired, the rest stays
+    rc, rep = D.drain(st, "vy-tp2", probe=False, terminate=killed.append, confirm=lambda pid: (True, "HTTP 404"))
+    assert rc == 0 and rep["machines_entry"]["retired"] == ["vy-tp2", "vy-tp2-alias"] and set(remote.load_machines()) == {"vy-other"}
+    log = [json.loads(l) for l in (tmp_path / "drain.log").read_text().splitlines()]
+    assert log[-1]["confirmed"] == "HTTP 404" and log[-1]["machines_entry"]["retired"] == ["vy-tp2", "vy-tp2-alias"]
+    # a pod already gone (DELETE -> 404, e.g. terminated by its previous owner): nothing to kill, the stale entry goes
+
+    def gone(pod_id):
+        raise runpod.PodError("DELETE /pods/pod-other -> HTTP 404: not found", code=404, pod_id=pod_id)
+
+    rc, rep = D.drain(st, "vy-other", probe=False, terminate=gone)
+    assert rc == 0 and rep["decision"]["why"].endswith("already gone (HTTP 404)") and rep["machines_entry"]["retired"] == ["vy-other"]
+    assert remote.load_machines() == {}
+
+    def refused(pod_id):
+        raise runpod.PodError("DELETE -> HTTP 500", code=500, pod_id=pod_id)
+
+    machines.write_text(MACHINES_DOC)
+    rc, rep = D.drain(st, "vy-other", probe=False, terminate=refused)
+    assert rc == 2 and rep["decision"]["action"] == "error" and "machines_entry" not in rep and "vy-other" in remote.load_machines()
+
+
+def test_confirm_terminated_reads_the_provider(monkeypatch):
+    from research.pods import runpod
+
+    answers = iter([{"desiredStatus": "RUNNING"}, {"desiredStatus": "TERMINATED"}])
+    monkeypatch.setattr(runpod, "get", lambda pid: next(answers))
+    assert D.confirm_terminated("p", wait_s=0) == (True, "desiredStatus TERMINATED")
+    monkeypatch.setattr(runpod, "get", lambda pid: {"desiredStatus": "RUNNING"})
+    assert D.confirm_terminated("p", tries=2, wait_s=0) == (False, "still listed (desiredStatus RUNNING) after 2 checks")
+
+    def no_api(pid):
+        raise runpod.PodError("no RunPod API config at x")
+
+    monkeypatch.setattr(runpod, "get", no_api)
+    assert D.confirm_terminated("p", wait_s=0) == (False, "cannot confirm: no RunPod API config at x")
+
+
 def test_pods_cli_routes_unpreserved_and_drain_and_require_preserved(fs_store, machines, tmp_path, capsys, monkeypatch):
     st = fs_store
     local_only = st.put_artifact("run-files/v1", {"never": "pushed"}, tree=_tree(tmp_path / "t2"))
@@ -231,9 +329,18 @@ def test_pods_cli_routes_unpreserved_and_drain_and_require_preserved(fs_store, m
     assert part.main(["unpreserved", "abcdefghijkl", "--no-probe"]) == 0, "a raw pod id nothing was recorded on"
     killed: list[str] = []
     monkeypatch.setattr("research.pods.runpod.terminate", killed.append)
+
+    def gone(pod_id):
+        from research.pods.runpod import PodError
+
+        raise PodError(f"GET /pods/{pod_id} -> HTTP 404", code=404, pod_id=pod_id)
+
+    monkeypatch.setattr("research.pods.runpod.get", gone)
     assert part.main(["drain", "vy-tp2", "--no-probe"]) == 1 and killed == []
     assert "REFUSED" in capsys.readouterr().out
     assert part.main(["terminate", "pod-tp2", "--require-preserved", "--no-probe"]) == 1 and killed == []
     assert part.main(["drain", "vy-tp2", "--no-probe", "--force", "--reason", "copied by hand"]) == 0 and killed == ["pod-tp2"]
-    assert "TERMINATED: FORCED" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "TERMINATED: FORCED" in out and "machines.toml: retired vy-tp2 (commented out in" in out
+    assert "[machines.vy-tp2]" not in machines.read_text().splitlines() and "# [machines.vy-tp2]" in machines.read_text().splitlines()
     assert Path(tmp_path / "drain.log").exists()
