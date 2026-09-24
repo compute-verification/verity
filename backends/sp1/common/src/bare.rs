@@ -449,14 +449,6 @@ static SHIFT: [u8; 128] = {
     t
 };
 
-/// Whether all sixteen words of a group are finite: bit 15 of `field << 7 + 0x80` is set iff the field is `0xFF`.
-/// Checked before the group's arithmetic, so the test is a branch there rather than an accumulator the compiler
-/// carries (and spills) to the end of the loop.
-#[inline(always)]
-fn finite(x0: u64, x1: u64, w0: u64, w1: u64) -> bool {
-    (((x0 & L7F80) + L80) | ((x1 & L7F80) + L80) | ((w0 & L7F80) + L80) | ((w1 & L7F80) + L80)) & L8000 == 0
-}
-
 /// Four products of a lane quadruple: significand products `<< 10`, the SWAR word of their biased exponents `<< 7`
 /// (lane `j`, bits `7 ..= 15`, is product `j`'s), and the word whose bit `15 + 16 j` is product `j`'s sign.
 #[inline(always)]
@@ -476,6 +468,16 @@ fn quad(x: u64, w: u64) -> ([u64; 4], u64, u64) {
     ([t02 as u64 & M26, t13 as u64 & M26, (t02 >> 64) as u64, (t13 >> 64) as u64], g, x ^ w)
 }
 
+/// [`quad`] when every word of the quadruple is normal (exponent field `1 ..= 254`): each significand has its
+/// implicit bit, so it is the word with bit 7 set, and the exponent word is `(ea + eb) << 7`, i.e. [`quad`]'s plus 2.
+#[inline(always)]
+fn quad_normal(x: u64, w: u64, ex: u64, ew: u64) -> ([u64; 4], u64, u64) {
+    let (sx, sw) = (x | L80, w | L80);
+    let t02 = (sx & M02) as u128 * ((sw << 10) & M02S) as u128;
+    let t13 = ((sx >> 16) & M02) as u128 * ((sw >> 6) & M02S) as u128;
+    ([t02 as u64 & M26, t13 as u64 & M26, (t02 >> 64) as u64, (t13 >> 64) as u64], ex + ew, x ^ w)
+}
+
 /// The four lanes of a [`quad`] exponent word (each below 2^9).
 #[inline(always)]
 fn lanes(g: u64) -> [u64; 4] {
@@ -488,12 +490,13 @@ fn negative(s: u64, j: usize) -> bool {
     ((s << (48 - 16 * j)) as i64) < 0
 }
 
-/// The running maximum over a product: raised only by a non-zero product.  The update is rare once the accumulator
-/// dominates, and `black_box` keeps it a branch (a select costs two branches and moves on every product).
+/// The running maximum over a product: raised only by a non-zero product.  `e > mx` is rare once the accumulator
+/// dominates, so it is the one branch on the common path: the zero test sits behind it, and `black_box` stops the
+/// compiler from hoisting that test in front (two branches per product) or turning the update into a select.
 #[inline(always)]
 fn raise(mx: u64, e: u64, p: u64) -> u64 {
-    if e > mx && p != 0 {
-        core::hint::black_box(e)
+    if e > mx && core::hint::black_box(p) != 0 {
+        e
     } else {
         mx
     }
@@ -547,6 +550,60 @@ fn group(acc: Acc, x0: u64, x1: u64, w0: u64, w1: u64) -> Acc {
         total = add_term(total, pb[j], eb[j], negative(sb, j), mx);
     }
     normalize(total, mx)
+}
+
+/// [`group`] on sixteen normal words (94.6% of the frozen set's groups): no product is zero, so the maximum is one
+/// rare branch per product (`black_box` keeps it a branch: the select the compiler would make costs two moves more
+/// per product), and the decode is [`quad_normal`]'s.  Exponents are carried plus 2 up to the normalisation; the
+/// shifts `mx - e` are the same.
+#[inline(always)]
+fn group_normal(acc: Acc, x0: u64, x1: u64, w0: u64, w1: u64, e: [u64; 4]) -> Acc {
+    let (pa, ga, sa) = quad_normal(x0, w0, e[0], e[2]);
+    let (pb, gb, sb) = quad_normal(x1, w1, e[1], e[3]);
+    let (ea, eb) = (lanes(ga), lanes(gb));
+    let mut mx = (if acc.mag != 0 { acc.e } else { FLOOR }) + 2;
+    for j in 0..4 {
+        if ea[j] > mx {
+            mx = core::hint::black_box(ea[j]);
+        }
+    }
+    for j in 0..4 {
+        if eb[j] > mx {
+            mx = core::hint::black_box(eb[j]);
+        }
+    }
+    let mut total: i64 = 0;
+    if acc.mag != 0 {
+        let d = mx - acc.e - 2;
+        if d < 26 {
+            let v = ((acc.mag + acc.mag) >> d) as i64;
+            total = if acc.neg != 0 { -v } else { v };
+        }
+    }
+    for j in 0..4 {
+        total = add_term(total, pa[j], ea[j], negative(sa, j), mx);
+    }
+    for j in 0..4 {
+        total = add_term(total, pb[j], eb[j], negative(sb, j), mx);
+    }
+    normalize(total, mx - 2)
+}
+
+/// One group of the chain, or `None` where one of its sixteen words is non-finite.  Bit 15 of a lane of
+/// `field << 7 + 0x7F80` is set iff the field is non-zero, of `field << 7 + 0x80` iff it is `0xFF`: all-normal groups
+/// take [`group_normal`], the rest (zeros, subnormals) [`group`].
+#[inline(always)]
+fn group_checked(acc: Acc, x0: u64, x1: u64, w0: u64, w1: u64) -> Option<Acc> {
+    let e = [x0 & L7F80, x1 & L7F80, w0 & L7F80, w1 & L7F80];
+    let nonzero = (e[0] + L7F80) & (e[1] + L7F80) & (e[2] + L7F80) & (e[3] + L7F80);
+    let infinite = (e[0] + L80) | (e[1] + L80) | (e[2] + L80) | (e[3] + L80);
+    if (!nonzero | infinite) & L8000 == 0 {
+        Some(group_normal(acc, x0, x1, w0, w1, e))
+    } else if infinite & L8000 == 0 {
+        Some(group(acc, x0, x1, w0, w1))
+    } else {
+        None
+    }
 }
 
 /// `group_sum`'s tail on the biased maximum exponent `mx`: `|total| < 9 * 2^26`, so the bit length is at most 30.  The
@@ -628,33 +685,21 @@ pub fn check_vu(x: &[u64], w: &[u64]) -> Option<u16> {
     // after the first did not saturate
     for step in 0..K / 16 - 1 {
         let i = 4 * step;
-        if !finite(x[i], x[i + 1], w[i], w[i + 1]) {
-            return None;
-        }
-        acc = group(acc, x[i], x[i + 1], w[i], w[i + 1]);
+        acc = group_checked(acc, x[i], x[i + 1], w[i], w[i + 1])?;
         if acc.e > SATURATED {
             return None;
         }
-        if !finite(x[i + 2], x[i + 3], w[i + 2], w[i + 3]) {
-            return None;
-        }
-        acc = group(acc, x[i + 2], x[i + 3], w[i + 2], w[i + 3]);
+        acc = group_checked(acc, x[i + 2], x[i + 3], w[i + 2], w[i + 3])?;
         if acc.e > SATURATED {
             return None;
         }
     }
     let i = ROW_WORDS - 4;
-    if !finite(x[i], x[i + 1], w[i], w[i + 1]) {
-        return None;
-    }
-    acc = group(acc, x[i], x[i + 1], w[i], w[i + 1]);
+    acc = group_checked(acc, x[i], x[i + 1], w[i], w[i + 1])?;
     if acc.e > SATURATED {
         return Some(infinity(acc.neg));
     }
-    if !finite(x[i + 2], x[i + 3], w[i + 2], w[i + 3]) {
-        return None;
-    }
-    acc = group(acc, x[i + 2], x[i + 3], w[i + 2], w[i + 3]);
+    acc = group_checked(acc, x[i + 2], x[i + 3], w[i + 2], w[i + 3])?;
     if acc.e > SATURATED {
         return Some(infinity(acc.neg));
     }
@@ -905,9 +950,9 @@ mod tests {
     fn adversarial_rows_match_the_reference() {
         let mut r = Rng(0x5eed_2026_0924);
         let mut counts = [0usize; 3]; // [accepted finite, accepted inf, rejected]
-        let cases = if cfg!(debug_assertions) { 300 } else { 6000 };
+        let cases = if cfg!(debug_assertions) { 330 } else { 6600 };
         for case in 0..cases {
-            let regime = case % 10;
+            let regime = case % 11;
             let mut x = vec![0u16; K];
             let mut w = vec![0u16; K];
             for k in 0..K {
@@ -926,6 +971,9 @@ mod tests {
                     5 => (word(&mut r, 100, 150, 900, 30, 0), word(&mut r, 100, 150, 500, 30, 0)),
                     // around the subnormal / normal boundary of the products (sum of exponents near 127 + 1)
                     6 => (word(&mut r, 0, 70, 10, 100, 0), word(&mut r, 55, 70, 10, 100, 0)),
+                    // every word normal, products from 2^-252 to 2^6: the all-normal groups' path down through the
+                    // floor and the subnormal range (regime 3 is its saturation)
+                    10 => (word(&mut r, 1, 200, 0, 0, 0), word(&mut r, 1, 60, 0, 0, 0)),
                     _ => (word(&mut r, 115, 140, 5, 5, 0), word(&mut r, 115, 140, 5, 5, 0)),
                 };
                 x[k] = a;
