@@ -357,7 +357,7 @@ def main() -> int:
     ap.add_argument("--world", type=int, default=None, help="alias of --tp (the communicator size)")
     ap.add_argument("--no-tp-partials", action="store_true", help="NEGATIVE (R14 TP-03): collect collective outputs only (the R13 state); the required class tp_rank_partials must fail the verdict")
     ap.add_argument("--omit-rank", type=int, default=None, help="NEGATIVE (brief §4 'omit one TP rank'): drop this rank's entry from the commitment vector before the verdict; must fail closed")
-    ap.add_argument("--required-manifest", default=None, help="[R15 TP-04] manbind's merged TP manifest (required_manifest build --program r0 --rank 0 --program r1 --rank 1 --ranks 2): the population of record per rank (rows with rank=r)")
+    ap.add_argument("--required-manifest", default=None, help="[R15 TP-04] the merged TP manifest (verity_vllm.query.cli build-global --programs-root <rank r dir> --rank r ... --ranks W): the population of record per rank (rows with rank=r)")
     ap.add_argument("--relabel-rank", default=None, help="NEGATIVE (R15 TP-04 'relabel rank 0 as rank 1'): `<from>:<to>` -- rank <from> tags its partials part_rank<to>; coverage must FAIL naming rank <from>")
     ap.add_argument("--wrong-root-rank", type=int, default=None, help="NEGATIVE (R15 TP-04 'wrong root on one rank'): the commitment vector carries a wrong run root for this rank; its openings/context must FAIL")
     ap.add_argument("--xrank-per-stratum", type=int, default=2,
@@ -483,7 +483,7 @@ def main() -> int:
                     return str(w["workload_digest"])
             comps = sorted(P.glob("build_request_LP*_T*/result.json"))
             if comps:
-                from verity_capture.commit.required_manifest import components_fold_digest
+                from verity_capture.commit.manifest_format import components_fold_digest
                 pd_kind[rank_] = f"components-fold of {len(comps)} request Programs"
                 return components_fold_digest(json.loads(c.read_text())["program"]["digest"] for c in comps)
             pd_kind[rank_] = "request Program"

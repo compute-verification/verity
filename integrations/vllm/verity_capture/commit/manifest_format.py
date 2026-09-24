@@ -13,8 +13,9 @@ A manifest (`verity-sweep/required-manifest/v1`) is one identity row per require
 * Build inputs       -- `load_program`, `program_dirs_for` / `programs_for` (one request Program per declared (prompt_len, cap-1) shape),
                         `RegistryUnavailable` (the environment fault a manifest build refuses under)
 
-Which Values are required is the query's: `verity_vllm.query` (Q_module_body_v1, the manifest of record since the flip) or, for a TP rank
-Program until v2 names the TP-04 partials, the v1 builder `verity_capture.commit.required_manifest`.  Dependency-free (json/gzip/hashlib).
+Which Values are required is the query's: `verity_vllm.query` (Q_module_body_v1, the manifest of record since the flip; TP rank Programs
+too, with its TP-04 policy) -- the v1 builder `verity_capture.commit.required_manifest` re-derives v1 records only.  Dependency-free
+(json/gzip/hashlib).
 """
 from __future__ import annotations
 

@@ -35,7 +35,6 @@ Stdlib only; never raises out of `main` (an outputs.json that could not be writt
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 import re
@@ -43,6 +42,8 @@ import shutil
 import sys
 from pathlib import Path
 from typing import Any
+
+from verity_capture.commit.manifest_format import tp_ranks_fold_digest
 
 SCHEMA = "research/outputs/v0.1"
 MAX_FILE = 512 << 20                      # per file; the required-value manifest of a long row is ~100+ MB
@@ -104,8 +105,8 @@ def program_digest(d: Path, row: str = "") -> dict[str, Any]:
         ranks = s.get("ranks") if isinstance(s.get("ranks"), dict) else {}
         wds = [((ranks.get(f"rank{r}") or {}).get("workload") or {}).get("workload_digest") for r in range(world)]
         step = (ranks.get("rank0") or {}).get("build_step") or {}
-        # must equal required_manifest's rank merge (`tp-ranks-fold`): the digest the TP manifest's identities are keyed by
-        of_record = hashlib.sha256(("tp-ranks/" + ",".join(sorted(wds))).encode()).hexdigest() if all(wds) else None
+        # the TP manifest's header digest (`tp-ranks-fold`, v1_bridge.merge_ranks): the fold of the rank digests its identities are keyed by
+        of_record = tp_ranks_fold_digest(wds) if all(wds) else None
         return {"program_digest": of_record, "request_digest": None, "step_digest": step.get("program_digest"), "workload_digest": None,
                 "rank_workload_digests": wds, "tp": world}
     req = s.get("request") if isinstance(s.get("request"), dict) else {}
