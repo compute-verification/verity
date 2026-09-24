@@ -596,12 +596,15 @@ def ship_source(ssh: list[str], root: str, git_dir: Path) -> tuple[str, str, dic
     # the archive is staged as a file and hashed AS RECEIVED; a digest that is not the launcher's exits 75 before anything is extracted
     # (GNU tar unpacks a truncated stream with a warning and rc 0 -- that is how the r20 half-tree came to be).  Until the file list is
     # printed the machine removes its own partial on any exit (a launcher killed mid-ship cannot); dead ships' partials go first.
+    # `tar -m`: files get the extraction time, not the commit time `git archive` stamps.  Builds that share a target dir across
+    # commits (Cargo's `/workspace/sp1-target`) judge freshness by mtime; with commit times an older commit shipped after a newer
+    # build looks built, and runs the newer commit's binary.
     script = (f"for d in {shlex.quote(root)}/src/*.partial-*; do [ -d \"$d\" ] && [ -z \"$(find \"$d\" -mmin -{STALE_PARTIAL_MIN} -print 2>/dev/null | head -1)\" ] "
               f"&& rm -rf \"$d\"; done; "
               f"trap 'rm -rf {q}' EXIT; trap 'exit 1' HUP INT TERM PIPE; set -e; mkdir -p {q}; cat > {q}/.archive.tar; "
               f"got=$({{ sha256sum {q}/.archive.tar 2>/dev/null || shasum -a 256 {q}/.archive.tar; }} | cut -d' ' -f1); echo \"$got\"; "
               f"[ \"$got\" = \"$1\" ] || exit {_RC_DIGEST}; "
-              f"tar -xf {q}/.archive.tar -C {q}; rm -f {q}/.archive.tar; trap - EXIT HUP INT TERM PIPE; cd {q} && find . -type f | LC_ALL=C sort")
+              f"tar -xmf {q}/.archive.tar -C {q}; rm -f {q}/.archive.tar; trap - EXIT HUP INT TERM PIPE; cd {q} && find . -type f | LC_ALL=C sort")
     sent: dict[str, Any] = {}
     timeout = ship_timeout(man["size"])
     try:

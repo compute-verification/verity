@@ -7,6 +7,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import os
 import subprocess
 import sys
 import tarfile
@@ -69,6 +70,27 @@ def test_complete_ship_lands_ready_with_identity_and_is_idempotent(repo, tmp_pat
     assert remote.ship_source(LOCAL, str(root), repo) == (sha, dest, doc)
     assert len(calls) == 1 and not any("tar" in a for a in calls[0])
     assert remote.require_ready_source(dest, sha) == doc
+
+
+def test_an_older_commit_shipped_after_a_newer_build_is_not_mistaken_for_built(repo, tmp_path):
+    """A shared build dir (Cargo's `/workspace/sp1-target`) calls an output fresh when it is newer than every source.  `git archive`
+    stamps files with the commit time, so extracting with those times made an older commit's tree look already built and it ran
+    the newer commit's binary.  The shipped tree must carry extraction times."""
+    root = tmp_path / "root"
+    remote.ship_source(LOCAL, str(root), repo)
+    output = tmp_path / "shared-target" / "binary"                  # the last build, just finished, from the first commit
+    output.parent.mkdir()
+    output.write_text("built from commit one\n")
+    built_at = time.time() - 5
+    os.utime(output, (built_at, built_at))
+    (repo / "pkg" / "b.py").write_text("B = 3\n")                 # a commit whose date is before that build (a baseline re-run)
+    subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qam", "older"], cwd=repo, check=True,
+                   env={**os.environ, "GIT_COMMITTER_DATE": "2020-01-01T00:00:00Z"})   # `git archive` stamps the committer date
+    sha, dest, _ = remote.ship_source(LOCAL, str(root), repo)
+    sources = [p for p in Path(dest).rglob("*") if p.is_file() and p.name != remote.READY_FILE]
+    newest = max(p.stat().st_mtime for p in sources)
+    assert newest > output.stat().st_mtime, "the build output looks newer than every shipped source: the stale binary would run"
+    assert min(p.stat().st_mtime for p in sources) >= built_at
 
 
 class _Cut:
