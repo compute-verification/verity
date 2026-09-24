@@ -24,6 +24,10 @@ pub trait Coins {
     fn stream(&mut self, nbytes: usize) -> Vec<u8>;
     /// Sequential verifier messages so far.
     fn rounds(&self) -> usize;
+    /// Replayed coins left over (a live replay must use every coin it was given).
+    fn unused(&self) -> usize {
+        0
+    }
 
     /// `n` extension elements; one coin.
     fn challenge(&mut self, label: &[u8], n: usize) -> Result<Vec<Ext>, String> {
@@ -193,6 +197,10 @@ impl Coins for Live {
     fn rounds(&self) -> usize {
         self.next
     }
+
+    fn unused(&self) -> usize {
+        self.coins.len() - self.next
+    }
 }
 
 /// `LocalCoins(seed)`: stream = shake256(b"local-coins" || seed_le64 || counter_le64), one counter per squeeze.
@@ -279,6 +287,7 @@ impl Coins for SumcheckLocal {
 /// A recorded transcript (ligerito-sumcheck's `RecordingCoins` log): every `absorb` must match the recorded label and
 /// bytes, every `challenge` returns the recorded values.  The first mismatch is reported by the next coin draw (and by
 /// `finish`), so a verifier that absorbs the wrong bytes is caught even though `absorb` cannot fail.
+#[derive(Clone, Debug)]
 pub enum Recorded {
     Absorb { label: Vec<u8>, data: Vec<u8> },
     Challenge { label: Vec<u8>, values: Vec<Ext> },

@@ -208,7 +208,150 @@ pub fn prove(p: &Params, f: &[u32], z: &[Ext], coins: &mut dyn Coins) -> (Statem
     (stmt, proof)
 }
 
+/// ligerito-proto's commit-first `commit` + `open(com, zs, values, coins, sparse=)` without ZK padding (the transcript
+/// `lgto::pcs_verify` replays): `bind_root` gets root_1 first (the caller's relation transcript), then the opening absorbs
+/// the points and the sparse terms and draws `m + K` batching coefficients.  A sparse term `sum_t w_t f[x_t]` enters each
+/// round's sumcheck as `_Sparse.contract` does: one product per column `g`, rows weighted by the group's `w_t`, column
+/// part one-hot at `g`.  Returns the values `f~(z_j)`, the sparse values and the proof.
+pub fn prove_commit_first(
+    p: &Params,
+    f: &[u32],
+    points: &[Vec<Ext>],
+    sparse: &[(Vec<usize>, Vec<Ext>)],
+    coins: &mut dyn Coins,
+    bind_root: &mut dyn FnMut(&mut dyn Coins, &crate::merkle::Digest),
+) -> (Vec<Ext>, Vec<Ext>, crate::lgto::PcsProof) {
+    p.validate().unwrap();
+    assert_eq!(f.len(), 1 << p.n);
+    let l = p.rounds();
+    let m = points.len();
+    let values: Vec<Ext> = points.iter().map(|z| evaluate(f, z)).collect();
+    let svals: Vec<Ext> = sparse.iter().map(|(c, w)| c.iter().zip(w).fold(Ext::ZERO, |a, (&x, w)| a.add(&w.mul_base(f[x])))).collect();
+    let mut mat: Vec<Ext> = f.iter().map(|&x| Ext::from_base(x)).collect();
+    let (mut roots, mut openings, mut sumcheck) = (Vec::new(), Vec::new(), Vec::new());
+    let mut terms: Vec<Term> = Vec::new();
+    let (mut sp_idx, mut sp_w): (Vec<usize>, Vec<Ext>) = (Vec::new(), Vec::new());
+    let mut prev: Option<Committed> = None;
+    for i in 1..=l {
+        let com = commit(p, i, &mat);
+        let root = com.tree.root();
+        roots.push(root);
+        if i == 1 {
+            bind_root(coins, &root);
+            let zb: Vec<u8> = points.iter().flat_map(|z| ext_bytes(z)).collect();
+            coins.absorb(b"z", &zb);
+            for (c, w) in sparse {
+                let mut b: Vec<u8> = c.iter().flat_map(|&x| (x as u32).to_le_bytes()).collect();
+                b.extend(ext_bytes(w));
+                coins.absorb(b"sparse", &b);
+            }
+            let beta = coins.challenge(b"beta", m + sparse.len()).unwrap();
+            terms = points.iter().enumerate().map(|(j, z)| Term::eq(beta[j], z.clone())).collect();
+            for (k, (c, w)) in sparse.iter().enumerate() {
+                sp_idx.extend_from_slice(c);
+                sp_w.extend(w.iter().map(|x| x.mul(&beta[m + k])));
+            }
+        } else {
+            coins.absorb(b"root", &root);
+            let pc = prev.take().unwrap();
+            let s_set = coins.indices(b"S", p.m(i - 1), p.queries[i - 2]).unwrap();
+            let op = open(p, i - 1, &pc, &s_set);
+            absorb_opening(coins, &op, i - 1 == 1);
+            openings.push(op);
+            let alpha = coins.challenge(b"alpha", 1 + s_set.len()).unwrap();
+            for t in terms.iter_mut() {
+                t.coef = t.coef.mul(&alpha[0]);
+            }
+            for w in sp_w.iter_mut() {
+                *w = w.mul(&alpha[0]);
+            }
+            for (j, &s) in s_set.iter().enumerate() {
+                terms.push(Term::geom(alpha[1 + j], p.domain_point(i - 1, s), p.k(i - 1)));
+            }
+        }
+        let (rows, cols, k, kp) = (p.rows(i), p.cols(i), p.k(i), p.kprime[i - 1]);
+        let mut tabs = tables(&terms, &mat, rows, cols, k, kp);
+        let mut groups: std::collections::BTreeMap<usize, Vec<usize>> = Default::default();
+        for (t, &x) in sp_idx.iter().enumerate() {
+            groups.entry(x >> k).or_default().push(t);
+        }
+        for (g, ts) in groups {
+            let a = (0..cols).map(|c| ts.iter().fold(Ext::ZERO, |acc, &t| acc.add(&sp_w[t].mul(&mat[c * rows + (sp_idx[t] & (rows - 1))])))).collect();
+            let mut b = vec![Ext::ZERO; cols];
+            b[g] = Ext::ONE;
+            tabs.push(Table { coef: Ext::ONE, a, b });
+        }
+        let mut msgs = Vec::with_capacity(kp);
+        let mut draws = Vec::with_capacity(kp);
+        for _ in 0..kp {
+            let g = round_message(&tabs);
+            coins.absorb(b"g", &ext_bytes(&g));
+            let r = coins.challenge(b"r", 1).unwrap()[0];
+            fold(&mut tabs, &r);
+            msgs.push(g);
+            draws.push(r);
+        }
+        sumcheck.push(msgs);
+        draws.reverse();
+        for t in terms.iter_mut() {
+            *t = t.restrict(k, &draws);
+        }
+        let rbar = eq_vector(&draws);
+        for (x, w) in sp_idx.iter_mut().zip(sp_w.iter_mut()) {
+            *w = w.mul(&rbar[*x >> k]);
+            *x &= rows - 1;
+        }
+        let mut y = vec![Ext::ZERO; rows];
+        for c in 0..cols {
+            for row in 0..rows {
+                y[row] = y[row].add(&mat[c * rows + row].mul(&rbar[c]));
+            }
+        }
+        mat = y;
+        prev = Some(com);
+    }
+    let pc = prev.take().unwrap();
+    coins.absorb(b"y", &ext_bytes(&mat));
+    let s_set = coins.indices(b"S", p.m(l), p.queries[l - 1]).unwrap();
+    openings.push(open(p, l, &pc, &s_set));
+    (values, svals, crate::lgto::PcsProof { roots, sumcheck, openings, final_y: mat, ybar: Vec::new() })
+}
+
 /// A deterministic pseudo-random base vector.
+/// ligerito-proto's `Proof.to_bytes` for a commit-first opening (`lgto::read_proto_commit_first` reads it back).
+pub fn proto_commit_first_bytes(p: &Params, values: &[Ext], pf: &crate::lgto::PcsProof) -> Vec<u8> {
+    let list = |v: Vec<String>| format!("[{}]", v.join(","));
+    let ints = |v: &[usize]| list(v.iter().map(|x| x.to_string()).collect());
+    let l = p.rounds();
+    let t_pad = pf.ybar.first().map(|y| format!(",\"t_pad\":{}", y.len())).unwrap_or_default();
+    let head = format!(
+        "{{\"n\":{},\"kprime\":{},\"queries\":{},\"rate_log2\":{},\"splits\":{},\"coins\":0,\"hash\":\"blake3\",\"beta\":31,\"ext_degree\":6,\"rows_shape\":{},\"sib_len\":{},\"final_len\":{},\"order\":\"commit-first\",\"claims\":{}{t_pad}}}",
+        p.n,
+        ints(&p.kprime),
+        ints(&p.queries),
+        ints(&p.rate_log2),
+        list(p.splits.iter().map(|(a, b)| format!("[{a},{b}]")).collect()),
+        list((1..=l).map(|i| format!("[{},{}]", p.queries[i - 1], p.cols(i) * if i == 1 { 1 } else { crate::field::EXT_DEG })).collect()),
+        ints(&pf.openings.iter().map(|o| 32 * o.siblings.len()).collect::<Vec<_>>()),
+        pf.final_y.len(),
+        values.len()
+    );
+    let mut b = (head.len() as u32).to_le_bytes().to_vec();
+    b.extend_from_slice(head.as_bytes());
+    b.extend(ext_bytes(values));
+    for i in 0..l {
+        b.extend_from_slice(&pf.roots[i]);
+        pf.sumcheck[i].iter().for_each(|g| b.extend(ext_bytes(g)));
+    }
+    for (i, o) in pf.openings.iter().enumerate() {
+        o.rows.iter().flat_map(|row| row_words(row, i == 0)).for_each(|w| b.extend_from_slice(&w.to_le_bytes()));
+        o.siblings.iter().for_each(|s| b.extend_from_slice(s));
+    }
+    b.extend(ext_bytes(&pf.final_y));
+    pf.ybar.iter().for_each(|y| b.extend(ext_bytes(y)));
+    b
+}
+
 pub fn random_vector(n: usize, seed: u64) -> Vec<u32> {
     let mut x = seed ^ 0x9E37_79B9_7F4A_7C15;
     (0..1usize << n)
