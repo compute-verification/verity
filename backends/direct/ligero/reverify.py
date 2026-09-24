@@ -158,8 +158,11 @@ def custody(pdir: Path, man: dict) -> tuple[int, list[str], list[str]]:
 
 def expected_relations(man: dict, params: dict, asserted: str | None) -> dict[str, str]:
     out = {}
-    if (man.get("relation") or {}).get("name"):
-        out["manifest"] = man["relation"]["name"]
+    mrel = man.get("relation")
+    if isinstance(mrel, str) and mrel:
+        out["manifest"] = mrel                        # fp4/chain.py writes the relation's name, relchain.py a {name, ...} block
+    elif isinstance(mrel, dict) and mrel.get("name"):
+        out["manifest"] = mrel["name"]
     if isinstance(params.get("relation"), str) and params["relation"] != "<redacted>":
         out["attempt"] = params["relation"]
     if asserted:

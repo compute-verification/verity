@@ -139,6 +139,12 @@ def test_a_dump_that_never_left_the_pod_is_an_error_not_a_rejection(env, capsys)
     assert "ERROR: incomplete dump: 6 of 7 files" in capsys.readouterr().out
 
 
+def test_manifest_relation_as_name_or_block():
+    assert R.expected_relations({"relation": {"name": "fp8-ada"}}, {}, None) == {"manifest": "fp8-ada"}
+    assert R.expected_relations({"relation": "fp4-nvf4"}, {}, None) == {"manifest": "fp4-nvf4"}    # fp4/chain.py's manifest
+    assert R.expected_relations({}, {"relation": "fp4-nvf4"}, "fp4-nvf4") == {"attempt": "fp4-nvf4", "--relation": "fp4-nvf4"}
+
+
 def test_verifier_tag_comes_from_the_crate_it_was_built_in(tmp_path):
     crate = tmp_path / "repo" / "backends" / "ligero-verify"
     (crate / "src").mkdir(parents=True)
