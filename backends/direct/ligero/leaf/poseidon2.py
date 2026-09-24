@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Sequence
+from typing import Protocol
 
 import numpy as np
 from verity.commitments.rowleaf import SCHEMA_ROW, row_leaf_value
@@ -27,7 +28,8 @@ from .. import poseidon2 as h2
 from ..compile import Expr, LigeroCtx, P, Quadratic
 from . import registry
 
-__all__ = ["DEVICE_SPONGE", "Poseidon2Leaf", "Poseidon2Witness", "permute_torch", "sponge_kernel_source", "sponge_states"]
+__all__ = ["DEVICE_SPONGE", "LaneFormat", "Poseidon2Leaf", "Poseidon2Witness", "lane_geometry", "permute_torch",
+           "sponge_kernel_source", "sponge_lanes", "sponge_states"]
 
 #: The sponges' 1704 S-box rows per unit are written by a dedicated CUDA kernel (:class:`Poseidon2Witness`, a witness
 #: hook of witness_device.py) with the 24-lane state in registers, instead of the fused program evaluating the linear
@@ -99,10 +101,10 @@ class _Sym:
     __rmul__ = __mul__
 
 
-def sponge_kernel_source(nb: int, per: int, n_sbox: int) -> str:
-    """CUDA source of ``poseidon2_rows``: one thread per column; for each sponge, the 16 rate lanes packed from the
-    word bit rows (``per`` words of ``nb`` bits per lane, little-endian), the capacity from the cap rows plus the IV,
-    then the permutation with every S-box's x^2, x^3, x^4, x^7 stored to its row."""
+def sponge_kernel_source(nb: int, per: int, n_sbox: int, n_lanes: int = h2.RATE) -> str:
+    """CUDA source of ``poseidon2_rows``: one thread per column; for each sponge, the ``n_lanes`` used rate lanes packed
+    from the word bit rows (``per`` elements of ``nb`` bits per lane, little-endian; lanes ``n_lanes..15`` are 0), the
+    capacity from the cap rows plus the IV, then the permutation with every S-box's x^2, x^3, x^4, x^7 stored to its row."""
     em: list[str] = []
     state = [_Sym(em, f"s[{i}]", P - 1) for i in range(h2.WIDTH)]
     count = [0]
@@ -127,6 +129,7 @@ def sponge_kernel_source(nb: int, per: int, n_sbox: int) -> str:
     if count[0] != n_sbox:
         raise ValueError(f"emitted {count[0]} S-boxes, the system has {n_sbox}")
     body = "\n".join(em)
+    zero_lanes = f"\n        for (int j = {n_lanes}; j < {h2.RATE}; ++j) s[j] = 0;" if n_lanes < h2.RATE else ""
     return f"""
 #define P {P}ULL
 typedef unsigned long long u64;
@@ -147,14 +150,14 @@ poseidon2_rows(unsigned* __restrict__ W, int l, int n_sponges, const int* __rest
     const u64 role = rolerow >= 0 ? (u64)W[(size_t)rolerow * l + col] : 0ULL;
     for (int sp = 0; sp < n_sponges; ++sp) {{
         u64 s[{h2.WIDTH}];
-        const int* br = bitrows + (size_t)sp * {h2.RATE * per * nb};
-        for (int j = 0; j < {h2.RATE}; ++j) {{
+        const int* br = bitrows + (size_t)sp * {n_lanes * per * nb};
+        for (int j = 0; j < {n_lanes}; ++j) {{
             u64 v = 0;
             for (int q = 0; q < {per}; ++q)
                 for (int b = 0; b < {nb}; ++b)
                     v |= (u64)W[(size_t)br[(j * {per} + q) * {nb} + b] * l + col] << ({nb} * q + b);
             s[j] = v;
-        }}
+        }}{zero_lanes}
         for (int x = 0; x < {h2.CAPACITY}; ++x)
             s[{h2.RATE} + x] = ((u64)W[(size_t)caprows[sp * {h2.CAPACITY} + x] * l + col] + iv[sp * {h2.CAPACITY} + x]
                                 + (role * ivd[sp * {h2.CAPACITY} + x]) % P) % P;
@@ -168,13 +171,16 @@ class Poseidon2Witness:
     """The witness hook (witness_device.py ``sys.witness_hooks``) writing the sponges' S-box rows on the device.
     ``sponges``: per sponge ``(bit_rows word-major, cap_rows, iv_capacity, sbox_rows [(x2, x3, x4, x7), ...])``.
     ``role_row`` / ``ivd`` (the hash side of row sharing, ``hashchain.row_hash_system``): the capacity IV is
-    ``iv + role * ivd`` with ``role`` the value of that row in the column."""
+    ``iv + role * ivd`` with ``role`` the value of that row in the column.  ``n_lanes``: the rate lanes the bit rows fill
+    (a :class:`LaneFormat` with fewer elements than a rate block leaves the rest 0)."""
 
-    def __init__(self, nb: int, per: int, sponges: list, role_row: int = -1, ivd: list | None = None):
-        self.nb, self.per, self.sponges = nb, per, sponges
+    def __init__(self, nb: int, per: int, sponges: list, role_row: int = -1, ivd: list | None = None, n_lanes: int = h2.RATE):
+        self.nb, self.per, self.sponges, self.n_lanes = nb, per, sponges, n_lanes
         self.role_row = role_row
         self.ivd = list(ivd) if ivd is not None else [0] * h2.CAPACITY
         self.n_sbox = len(sponges[0][3])
+        if any(len(s[0]) != n_lanes * per * nb for s in sponges):
+            raise ValueError(f"sponge bit rows are not {n_lanes} lanes x {per} x {nb} bits")
         if any(len(s[3]) != self.n_sbox for s in sponges):
             raise ValueError("sponges with different S-box counts")
         self.rows = frozenset(r for s in sponges for quad in s[3] for r in quad)
@@ -184,7 +190,7 @@ class Poseidon2Witness:
         dev = cp.cuda.Device().id
         hit = self._dev.get(dev)
         if hit is None:
-            src = sponge_kernel_source(self.nb, self.per, self.n_sbox)
+            src = sponge_kernel_source(self.nb, self.per, self.n_sbox, self.n_lanes)
             mod = cp.RawModule(code=src, options=("-std=c++17",))
             hit = (mod.get_function("poseidon2_rows"),
                    cp.asarray(np.array([r for s in self.sponges for r in s[0]], dtype=np.int32)),
@@ -269,9 +275,14 @@ def sponge_states(words, word_bits: int, role: int, n_words: int, n_vus: int, st
     """``words`` (l, k) int64 torch tensor (pad columns 0) -> (cap_in (8, l): the linked rows ``cap - IV`` per column,
     digests (n_vus, 8)) by running the sponge of every VU along its ``steps`` columns, all VUs in lockstep."""
     import torch
-    dev = words.device
-    el = torch.as_tensor(h2.pack_words_np(words.cpu().numpy(), word_bits), dtype=torch.int64, device=dev)   # (l, 16)
-    iv = h2.IV(role, word_bits, n_words)
+    el = torch.as_tensor(h2.pack_words_np(words.cpu().numpy(), word_bits), dtype=torch.int64, device=words.device)   # (l, 16)
+    return sponge_lanes(el, h2.IV(role, word_bits, n_words), n_vus, steps, l)
+
+
+def sponge_lanes(el, iv: list[int], n_vus: int, steps: int, l: int):
+    """:func:`sponge_states` on the rate lanes ``el`` (l, 16) int64 torch (pad columns 0) from the capacity ``iv``."""
+    import torch
+    dev = el.device
     cap_in = torch.zeros((h2.CAPACITY, l), dtype=torch.int64, device=dev)
     st = torch.zeros((h2.WIDTH, n_vus), dtype=torch.int64, device=dev)
     for x in range(h2.CAPACITY):
@@ -298,7 +309,63 @@ def _bit_rows(word: Expr, nb: int) -> list[int]:
     return [r for r, _ in rows]
 
 
+class LaneFormat(Protocol):
+    """An operand row format whose committed words are NOT the sponge's lane elements (``fp4/hashed.py`` ``FP4Format``:
+    64 E2M1 codes + 4 UE4M3 scale bytes per column -> 72 nibbles).  Per column, the ``k`` words map to ``n_elems``
+    elements of ``elem_bits`` bits, packed ``lane_bits // elem_bits`` per rate lane (little-endian); the lanes past
+    ``n_elems / per`` are 0.  The IV is ``IV(role, elem_bits, steps * n_elems)``: a domain of its own."""
+
+    k: int
+    n_elems: int
+    elem_bits: int
+    lane_bits: int
+
+    def elements_np(self, words) -> np.ndarray:
+        """(N, k) words -> (N, n_elems) elements (numpy, int64)."""
+        ...
+
+    def elements_torch(self, words):
+        """(l, k) int64 torch -> (l, n_elems) int64 torch on the same device."""
+        ...
+
+
+def lane_geometry(lanes: LaneFormat) -> tuple[int, int]:
+    """``(per, n_lanes)`` of a lane format: elements per lane and rate lanes used (checked: whole lanes, at most one rate
+    block, a lane below 2^30 < p so the packing is injective)."""
+    per = lanes.lane_bits // lanes.elem_bits
+    n_lanes = lanes.n_elems // per if per else 0
+    if lanes.lane_bits % lanes.elem_bits or lanes.n_elems % per or not 0 < n_lanes <= h2.RATE or lanes.lane_bits > 30:
+        raise ValueError(f"lane format: {lanes.n_elems} elements of {lanes.elem_bits} bits on {lanes.lane_bits}-bit lanes "
+                         f"are not whole lanes of one rate block")
+    return per, n_lanes
+
+
+def _pack_elements_np(el: np.ndarray, lanes: LaneFormat) -> np.ndarray:
+    """(N, n_elems) elements -> (N, 16) rate lanes (``per`` little-endian elements each, unused lanes 0)."""
+    per, n_lanes = lane_geometry(lanes)
+    el = np.asarray(el, dtype=np.int64)
+    if ((el < 0) | (el >= 2**lanes.elem_bits)).any():
+        raise ValueError("lane element out of range")
+    g = el.reshape(el.shape[0], n_lanes, per)
+    out = np.zeros((el.shape[0], h2.RATE), dtype=np.int64)
+    out[:, :n_lanes] = (g * 2 ** (lanes.elem_bits * np.arange(per, dtype=np.int64))).sum(-1)
+    return out
+
+
+def _pack_elements_torch(el, lanes: LaneFormat):
+    import torch
+    per, n_lanes = lane_geometry(lanes)
+    g = el.to(torch.int64).reshape(el.shape[0], n_lanes, per)
+    out = torch.zeros((el.shape[0], h2.RATE), dtype=torch.int64, device=el.device)
+    out[:, :n_lanes] = (g * 2 ** (lanes.elem_bits * torch.arange(per, dtype=torch.int64, device=el.device))).sum(-1)
+    return out
+
+
 class Poseidon2Leaf:
+    """``lanes``: ``None`` (the operand words ARE the lane elements, ``LANE_BITS / word_bits`` per 16-bit lane, one rate
+    block per column) or a :class:`LaneFormat` (:meth:`with_lanes`).  Under a format, :meth:`gadget` takes the column's
+    ``n_elems`` element expressions and ``row_words`` counts elements; :meth:`native` / :meth:`chain_witness` take the
+    committed words and map them through the format."""
     name = "poseidon2"
     assumption = "Poseidon2-BabyBear (width 24, rate 16, Plonky3 constants) collision resistance: algebraic hash, 2^-124 birthday on the 8-lane digest"
     digest_elems = h2.OUT
@@ -308,14 +375,46 @@ class Poseidon2Leaf:
     hash_name = "poseidon2-babybear-w24"
     privacy_note = "deterministic, unsalted: hides only up to preimage search on a row"
 
-    def __init__(self):
+    def __init__(self, lanes: LaneFormat | None = None):
         self._sponges: list = []       # per gadget call: (bit_rows word-major, cap rows, iv capacity, sbox rows)
         self._nb: int | None = None
         self._per: int | None = None
+        self._n_lanes = h2.RATE
+        self.lanes = lanes
+        if lanes is not None:
+            lane_geometry(lanes)
+
+    def with_lanes(self, lanes: LaneFormat) -> "Poseidon2Leaf":
+        """A fresh instance of this scheme over the operand format ``lanes``."""
+        s = type(self)(lanes)
+        s.test_only = getattr(self, "test_only", False)   # type: ignore[attr-defined]
+        return s
+
+    def _row_elems(self, row_words: int) -> int:
+        """Elements of a row of ``row_words`` committed words under the lane format."""
+        k = self.lanes.k
+        if row_words % k:
+            raise ValueError(f"poseidon2 lanes: a row of {row_words} words is not whole columns of {k}")
+        return row_words // k * self.lanes.n_elems
 
     # --- native ------------------------------------------------------------------------------------------------------
     def native(self, rows: np.ndarray, *, word_bits: int, role: int) -> np.ndarray:
-        return h2.hash_rows_np(np.asarray(rows, dtype=np.int64), word_bits, role)
+        if self.lanes is None:
+            return h2.hash_rows_np(np.asarray(rows, dtype=np.int64), word_bits, role)
+        rows = np.asarray(rows, dtype=np.int64)
+        if rows.ndim != 2:
+            raise ValueError("rows must be (N, n_words)")
+        n, k = rows.shape[0], self.lanes.k
+        steps = self._row_elems(rows.shape[1]) // self.lanes.n_elems
+        el = _pack_elements_np(self.lanes.elements_np(rows.reshape(n * steps, k)), self.lanes).reshape(n, steps, h2.RATE)
+        iv = h2.IV(role, self.lanes.elem_bits, steps * self.lanes.n_elems)
+        st = np.zeros((h2.WIDTH, n), dtype=np.int64)
+        for x in range(h2.CAPACITY):
+            st[h2.RATE + x] = iv[h2.RATE + x]
+        for s in range(steps):
+            st[:h2.RATE] = el[:, s, :].T
+            st = h2.permute_np(st)
+        return st[:h2.OUT].T.copy()
 
     def leaf_bytes(self, digest_row) -> bytes:
         return row_leaf_value(digest_row)
@@ -324,21 +423,28 @@ class Poseidon2Leaf:
     def gadget(self, ctx: LigeroCtx, words: Sequence[Expr], *, word_bits: int, role: int, row_words: int,
                carry_in: Sequence[Expr], first: bool = False, last: bool = True) -> tuple[list[Expr], list[Expr]]:
         nb = word_bits
-        per = h2.LANE_BITS // nb
-        if h2.LANE_BITS % nb or len(words) != h2.RATE * per:
-            raise ValueError(f"poseidon2: k = {len(words)} words of {nb} bits are not one rate block of {h2.RATE} lanes")
+        if self.lanes is None:
+            per, n_lanes = h2.LANE_BITS // nb, h2.RATE
+            if h2.LANE_BITS % nb or len(words) != h2.RATE * per:
+                raise ValueError(f"poseidon2: k = {len(words)} words of {nb} bits are not one rate block of {h2.RATE} lanes")
+        else:
+            per, n_lanes = lane_geometry(self.lanes)
+            if nb != self.lanes.elem_bits or len(words) != self.lanes.n_elems:
+                raise ValueError(f"poseidon2 lanes: the gadget takes {self.lanes.n_elems} elements of {self.lanes.elem_bits} bits "
+                                 f"per column, got {len(words)} of {nb}")
         if len(carry_in) != h2.CAPACITY:
             raise ValueError("poseidon2: the carried state is the 8 capacity lanes")
         if self._nb not in (None, nb):
             raise ValueError("poseidon2: one word width per compose")
-        self._nb, self._per = nb, per
+        self._nb, self._per, self._n_lanes = nb, per, n_lanes
         iv = h2.IV(role, nb, row_words)
         lanes = []
-        for j in range(h2.RATE):
+        for j in range(n_lanes):
             e = Expr(ctx)
             for q in range(per):
                 e = e + words[per * j + q] * 2 ** (nb * q)
             lanes.append(_reduce(e))
+        lanes += [Expr(ctx) for _ in range(h2.RATE - n_lanes)]
         state = lanes + [_reduce(c + iv[h2.RATE + x]) for x, c in enumerate(carry_in)]
         sbox_rows: list[tuple] = []
         out = h2.permute_ring(state, _sbox_gadget(ctx, sbox_rows), _reduce)
@@ -350,15 +456,22 @@ class Poseidon2Leaf:
     def witness(self):
         if not DEVICE_SPONGE or not self._sponges:
             return None
-        return Poseidon2Witness(self._nb, self._per, self._sponges)
+        return Poseidon2Witness(self._nb, self._per, self._sponges, n_lanes=self._n_lanes)
 
     # --- chain witness -------------------------------------------------------------------------------------------------
     def chain_witness(self, words, *, word_bits: int, role: int, row_words: int, n_vus: int, steps: int, l: int):
-        return sponge_states(words, word_bits, role, row_words, n_vus, steps, l)
+        if self.lanes is None:
+            return sponge_states(words, word_bits, role, row_words, n_vus, steps, l)
+        el = _pack_elements_torch(self.lanes.elements_torch(words), self.lanes)
+        return sponge_lanes(el, h2.IV(role, self.lanes.elem_bits, self._row_elems(row_words)), n_vus, steps, l)
 
     def census(self) -> dict:
-        return {"permutations_per_unit": 2,
-                "sbox_rows_per_permutation": 4 * (h2.WIDTH * 2 * h2.HALF_FULL_ROUNDS + h2.PARTIAL_ROUNDS)}
+        out = {"permutations_per_unit": 2,
+               "sbox_rows_per_permutation": 4 * (h2.WIDTH * 2 * h2.HALF_FULL_ROUNDS + h2.PARTIAL_ROUNDS)}
+        if self.lanes is not None:
+            out.update({"lane_bits": self.lanes.lane_bits, "rate_lanes_used": lane_geometry(self.lanes)[1],
+                        "elements_per_unit": self.lanes.n_elems})
+        return out
 
 
 registry.register(Poseidon2Leaf)

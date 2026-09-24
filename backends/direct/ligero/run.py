@@ -493,8 +493,15 @@ def main(argv=None) -> int:
             ap.error(f"--relation {args.relation} supports gate-vu and bench-vu")
         if getattr(args, "auth", None) == "included":
             ap.error(f"--auth included (verifier-side word openings) is implemented for the bf16 relation only, not --relation {args.relation}")
-        if getattr(args, "auth", None) in ("included-hash", "included-hash-shared") and args.relation == "fp4-nvf4":
-            ap.error("--auth included-hash: the fp4-nvf4 relation's packed-nibble operands are not composed yet (see hashchain.py)")
+        if args.relation == "fp4-nvf4" and getattr(args, "auth", None) == "included-hash-shared":
+            ap.error("--auth included-hash-shared: the fp4-nvf4 relation composes through hashchain.compose only (no row sharing)")
+        if args.relation == "fp4-nvf4" and getattr(args, "auth", None) == "included-hash":
+            # fp4-nvf4+poseidon2 (fp4/hashed.py): the NVFP4 unit with its operands decoded and hashed in-circuit (the
+            # Poseidon2 leaf over the format's 24-bit lanes) on the generic hashed runner
+            if getattr(args, "leaf", None) not in (None, "poseidon2"):
+                ap.error(f"--auth included-hash: the fp4-nvf4 operand format composes with the poseidon2 leaf only, not {args.leaf!r}")
+            from .fp4.hashed import fp4_hashed_relation
+            return (gate_vu_rel if args.cmd == "gate-vu" else bench_vu_rel)(args, fp4_hashed_relation())
         if args.relation == "fp4-nvf4":
             from .fp4.chain import bench_vu_fp4, gate_vu_fp4
             return (gate_vu_fp4 if args.cmd == "gate-vu" else bench_vu_fp4)(args)

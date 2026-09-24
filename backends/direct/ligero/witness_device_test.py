@@ -124,7 +124,6 @@ def test_fused_witness_equals_torch_program_fp4():
 def test_ptx_route_equals_native_build(which):
     """The compute_89 PTX route (``witness_device.ptx_arch``: the default on compute capability >= 12.0) computes the native
     build's W bit for bit.  W is a function of (pins, hints) alone, so arbitrary residues exercise every op."""
-    import importlib.util
     import os
 
     import cupy as cp
@@ -134,8 +133,6 @@ def test_ptx_route_equals_native_build(which):
         from .fp4.relation import NVFP4, compile_fp4_unit
         s = compile_fp4_unit(NVFP4, chain=True)
     else:
-        if importlib.util.find_spec(f"{__package__}.fp4.hashed") is None:
-            pytest.skip("fp4-nvf4+poseidon2 (fp4/hashed.py) is not in this tree")
         if int(cp.cuda.Device().compute_capability) >= 120 and not os.environ.get("LIGERO_TEST_NATIVE_CC12"):
             pytest.skip("the native sm_120 build of the hashed kernel takes ~7 min cold (LIGERO_TEST_NATIVE_CC12=1 runs it)")
         from . import hashchain
