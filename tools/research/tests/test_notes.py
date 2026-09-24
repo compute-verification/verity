@@ -639,7 +639,7 @@ def test_art_custody_is_the_preserved_check_and_caps_what_it_would_read_back(tmp
     assert notes.art_custody([pushed]) == (True, "1 cited art(s) preserved")
     ok, why = notes.art_custody([pushed, local])
     assert not ok and why.startswith(f"art:{local} not preserved: ")
-    assert notes.art_custody(["0000000000"]) == (False, "art:0000000000 is unknown in the local catalog")
+    assert notes.art_custody(["0000000000"]) == (False, "art:0000000000 is unknown in the local catalog and on the remote")
     assert notes.art_custody([unrecorded], max_readback_mb=0) == (
         False, f"art:{unrecorded}: no verified remote replica recorded, 0 MB to read back -> research data preserved art:{unrecorded}")
     assert notes.art_custody([unrecorded]) == (True, "1 cited art(s) preserved")          # small: read back, verified, recorded

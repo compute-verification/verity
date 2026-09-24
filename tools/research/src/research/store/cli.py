@@ -34,7 +34,11 @@
   research data refresh-fixtures [--preserve] [--dry-run] [--repo DIR]
                                                    re-register every fixtures/artifacts.json entry whose bytes changed; old id kept under `previous`
   research data doctor [--clean] [--runs-dir D]    stale store_publish_error.json files (run is an attempt here) vs real failures; --clean deletes the stale
-  research data reindex [--remote]                 rebuild the catalog; --remote first pulls the manifests/attempts/labels the remote has and we lack
+  research data reindex [--remote]                 rebuild the catalog (built aside, swapped in complete); --remote first pulls what the remote has
+  research data refresh [--jobs N] [--json]        incremental: fetch and index only the manifests/attempts/labels the remote has and we lack
+  research data pending [--json]                   the write-through queue: what this store holds that the remote lacks (exit 1 if any)
+  research data parity --fresh DIR [--render] [--json-out FILE]
+                                                   content parity against a store built from the remote alone (parity.py); exit 0 iff explained
   research data catalog [--json]                   catalog schema version vs the code's (older catalogs migrate forward on open; a newer one is
                                                    refused, exit 3, unless RESEARCH_CATALOG_IGNORE_VERSION=1), row counts per table
   research data sql "SELECT ..." [--json]          read-only connection
@@ -43,7 +47,8 @@
   (lookup / pull / attempt are provided by cli_prov when present)
 
 Every command takes `--store ROOT` (default `$RESEARCH_STORE` or `~/.research/store`) and accepts abbreviated artifact ids
-(`art:cc59294a`, >= 8 hex digits, unique in the local catalog) wherever it takes an id.  `COMMANDS` maps a name to
+(`art:cc59294a`, >= 8 hex digits, unique in the local catalog, else on the remote) wherever it takes an id.  With write-through
+on (README §7.2) `label` and `put` upload in the same command; a write that stays local says `local only` / `NOT preserved`.  `COMMANDS` maps a name to
 `fn(argv) -> int`; `main(argv)` dispatches.  Structured output has `--json` everywhere.
 """
 from __future__ import annotations
@@ -58,7 +63,7 @@ from typing import Callable
 
 from . import ids, vocab
 from .index import IGNORE_VERSION_ENV, CatalogVersionError
-from .local import LocalStore, StoreError
+from .local import LocalStore, StoreError, store_root
 from .remote import ConfigError, RemoteConflict
 
 
@@ -153,14 +158,27 @@ def cmd_put(argv: list[str]) -> int:
     ns = ap.parse_args(argv)
     st = LocalStore(ns.store)
     art = st.put_artifact(ns.kind, _meta(ns.meta), _refs(ns.ref), file=Path(ns.file) if ns.file else None, tree=Path(ns.tree) if ns.tree else None)
-    rep = st.push(art, preserve=True) if ns.preserve else None
+    rep, why = None, None
+    if ns.preserve:
+        rep = st.push(art, preserve=True)
+    elif st.write_through:                                          # write-through (README §7.2): the local write stands whatever the upload does
+        try:
+            rep = st.push(art, preserve=True)
+        except Exception as e:  # noqa: BLE001
+            why = str(e)
+    else:
+        why = "write-through off"
     if ns.json:
-        _dump({"id": art, "preserve": rep})
+        _dump({"id": art, "preserve": rep, **({"pending": why} if why or (rep and not rep["preserved"]) else {})})
     else:
         print(art)
-        if rep is not None:
-            print(f"research data put: {'PRESERVED' if rep['preserved'] else 'NOT preserved: ' + '; '.join(rep['errors'])} on {rep['remote']}", file=sys.stderr)
-    return 0 if rep is None or rep["preserved"] else 1
+        if rep is not None and rep["preserved"]:
+            print(f"research data put: PRESERVED on {rep['remote']}", file=sys.stderr)
+        else:
+            why = why or "; ".join(rep["errors"])
+            print(f"research data put: {'local only' if why == 'write-through off' else 'NOT preserved'} ({why}); pending: "
+                  "`research data push --pending` uploads it", file=sys.stderr)
+    return 1 if ns.preserve and not rep["preserved"] else 0
 
 
 def cmd_show(argv: list[str]) -> int:
@@ -455,8 +473,27 @@ def cmd_label(argv: list[str]) -> int:
             print(f"research data label: {note}", file=sys.stderr)
     if why:
         print(f"research data label: warning: {why}; stored anyway (--off-vocab)", file=sys.stderr)
-    print(LocalStore(ns.store).add_label(ns.target, key, value, ns.by, ref=ns.ref))
+    st = LocalStore(ns.store)
+    print(st.add_label(ns.target, key, value, ns.by, ref=ns.ref))
+    print(f"research data label: {_label_write_through(st, ns.target)}", file=sys.stderr)
     return 0
+
+
+def _label_write_through(st: LocalStore, target: str) -> str:
+    """Upload the target's assertions the remote lacks, in the command that wrote one (README §7.2); the local write stands either way,
+    and a write that stays local says so."""
+    from . import labels_sync as LS  # noqa: PLC0415
+
+    pending = "pending: `research data push --pending` uploads it"
+    if not st.write_through:
+        return f"local only (write-through off); {pending}"
+    if st.remote is None:
+        return f"NOT preserved ({getattr(st, 'remote_error', None) or 'no remote configured'}); {pending}"
+    try:
+        failed = LS.push_targets(st, [target])["failed"]
+    except Exception as e:  # noqa: BLE001
+        failed = [f"{type(e).__name__}: {e}"]
+    return f"NOT preserved ({failed[0]}); {pending}" if failed else f"on {st.remote.describe()}"
 
 
 def cmd_vocab_check(argv: list[str]) -> int:
@@ -533,6 +570,71 @@ def cmd_reindex(argv: list[str]) -> int:
     _dump(n) if ns.json else print(f"reindexed {st.root}: {n['artifacts']} artifacts, {n['attempts']} attempts, {n['labels']} labels"
                                    + (f" ({pulled} pulled from the remote)" if pulled is not None else ""))
     return 0
+
+
+def cmd_pending(argv: list[str]) -> int:
+    """The write-through queue (README §7.2): artifacts, attempts and assertions this store holds that the remote does not
+    (`LocalStore.pending`).  `research data push --pending` drains it.  Exit 1 when anything is pending."""
+    ap = _ap("pending")
+    ap.add_argument("--json", action="store_true")
+    ns = ap.parse_args(argv)
+    rep = LocalStore(ns.store).pending()
+    if ns.json:
+        _dump(rep)
+    else:
+        for a in rep["artifacts"]:
+            print(f"artifact  {a}")
+        for rid in rep["attempts"]:
+            print(f"attempt   {rid}")
+        for lab in rep["labels"]:
+            print(f"label     {lab['target']}  {lab['key']}  by {lab['by']}  ({lab['hash'][:12]})")
+        n = len(rep["artifacts"]) + len(rep["attempts"]) + len(rep["labels"])
+        print(f"{len(rep['artifacts'])} artifacts, {len(rep['attempts'])} attempts, {len(rep['labels'])} labels pending for {rep['remote']}"
+              + ("; `research data push --pending` uploads them" if n else ""), file=sys.stderr)
+    return 1 if rep["artifacts"] or rep["attempts"] or rep["labels"] else 0
+
+
+def cmd_refresh(argv: list[str]) -> int:
+    """Incremental catch-up from the remote (`LocalStore.refresh`): fetch the manifests, attempts and assertions this store lacks and
+    index only those; nothing is wiped.  On a fresh machine this builds the catalog from the remote alone.  Exit 1 on any bad key."""
+    ap = _ap("refresh")
+    ap.add_argument("--jobs", type=int, default=32, metavar="N")
+    ap.add_argument("--json", action="store_true")
+    ns = ap.parse_args(argv)
+    st = LocalStore(ns.store)
+    rep = st.refresh(jobs=max(1, ns.jobs), log=None if ns.json else (lambda m: print(m, file=sys.stderr)))
+    if ns.json:
+        _dump(rep)
+    else:
+        for e in rep["errors"][:20]:
+            print(f"research data refresh: {e}", file=sys.stderr)
+        print(f"refreshed {st.root} from {rep['remote']}: +{rep['manifests']} manifests, +{rep['attempts']} attempts, +{rep['labels']} labels "
+              f"in {rep['seconds']}s" + (f"; {len(rep['errors'])} error(s)" if rep["errors"] else ""))
+    return 1 if rep["errors"] else 0
+
+
+def cmd_parity(argv: list[str]) -> int:
+    """Content parity of this store against a store built from the remote alone (`parity.py`): artifacts, attempts, labels, replica
+    rows, and with `--render` the canonical tables.  Read-only for the store under test.  Exit 0 iff every difference is explained."""
+    from . import parity as PA  # noqa: PLC0415
+
+    ap = _ap("parity")
+    ap.add_argument("--fresh", required=True, metavar="DIR", help="where to build the store from the remote alone (a new directory)")
+    ap.add_argument("--render", action="store_true", help="also compare `verity_numerical.bench.tables --format md` on both stores")
+    ap.add_argument("--jobs", type=int, default=32, metavar="N")
+    ap.add_argument("--json-out", metavar="FILE", help="write the full report (every difference and its cause) here")
+    ap.add_argument("--json", action="store_true")
+    ns = ap.parse_args(argv)
+    rep = PA.run(store_root(ns.store), Path(ns.fresh), jobs=max(1, ns.jobs), render=ns.render,
+                 log=None if ns.json else (lambda m: print(m, file=sys.stderr)))
+    if ns.json_out:
+        Path(ns.json_out).write_text(json.dumps(rep, indent=1, sort_keys=True, default=str))
+    if ns.json:
+        _dump(rep)
+    else:
+        for line in PA.format_report(rep):
+            print(line)
+    return 0 if rep["ok"] else 1
 
 
 def cmd_catalog(argv: list[str]) -> int:
@@ -627,10 +729,10 @@ def cmd_push(argv: list[str]) -> int:
     runs: list[str] = []
     for t in ns.targets:
         (arts if t.startswith("art:") else runs).append(t)
-    if ns.pending:
-        verified = {row[0] for row in st.index.db.execute("SELECT id FROM replicas WHERE location='remote' AND verified_utc IS NOT NULL")}
-        arts += [a for a in st.artifact_ids() if a not in verified]
-        runs += [rid for rid in st.attempt_ids() if r.head(attempt_key(rid)) is None]
+    if ns.pending:                                                 # the queue `research data pending` shows
+        queue = st.pending()
+        arts += queue["artifacts"]
+        runs += queue["attempts"]
     reports: list[dict] = []
     label_targets: dict[str, list[str]] = {}                       # report id -> the label targets its durability covers
     from . import labels_sync as LS  # noqa: PLC0415
@@ -858,12 +960,12 @@ def expand_short_ids(cmd: str, argv: list[str]) -> list[str]:
     def resolve(short: str) -> str:
         nonlocal st
         st = st or LocalStore(_store_root_arg(argv))
-        hits = st.index.resolve_art_prefix(short, limit=6)
+        hits = st.resolve_art(short, limit=6)
         if len(hits) == 1:
             return hits[0]
         if not hits:
-            raise ValueError(f"{short} matches no artifact in the local catalog ({st.root}); give the full id, or run "
-                             "`research data reindex --remote` to catalogue what the remote holds")
+            raise ValueError(f"{short} matches no artifact in the local catalog ({st.root})" + (" or on the remote" if st.remote else "")
+                             + "; give the full id, or run `research data refresh` to catalogue what the remote holds")
         shown = ", ".join(h[:20] + "…" for h in hits[:5]) + (", …" if len(hits) > 5 else "")
         raise ValueError(f"{short} is ambiguous ({shown}); give more digits")
 
@@ -878,7 +980,8 @@ COMMANDS: dict[str, Callable[[list[str]], int]] = {
     "snapshot": cmd_snapshot,
     "labels": cmd_labels, "label": cmd_label, "reindex": cmd_reindex, "sql": cmd_sql, "push": cmd_push, "mint-credential": cmd_mint_credential,
     "vocab": cmd_vocab, "refresh-fixtures": cmd_refresh_fixtures, "doctor": cmd_doctor, "evict": cmd_evict, "labels-sync": cmd_labels_sync,
-    "catalog": cmd_catalog, "vocab-check": cmd_vocab_check,
+    "catalog": cmd_catalog, "vocab-check": cmd_vocab_check, "pending": cmd_pending, "refresh": cmd_refresh,
+    "parity": cmd_parity,
 }
 
 

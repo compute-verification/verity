@@ -372,6 +372,9 @@ def _publish(run_dir: Path, *, tool: Any, store: Any, remote_push: bool | None, 
                 st.push_attempt(run_id)
                 out["preserved"] = all(r.get("preserved") for r in reports)
                 out["preserved_artifacts"] = {r["id"]: bool(r.get("preserved")) for r in reports}
+                if not out["preserved"]:                                # an upload that failed is not "no remote": say what failed
+                    bad = next(r for r in reports if not r.get("preserved"))
+                    out["preserve_error"] = f"{bad['id'][:16]}: {(bad.get('errors') or ['not preserved'])[0]}"
                 if hasattr(st, "push_labels"):                          # the third leg: assertions already made about this attempt, its
                     from . import labels_sync as LS                     # derivation or its outputs (a re-publish after `label`) travel too
 

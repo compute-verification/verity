@@ -28,6 +28,7 @@ import shutil
 import sys
 import threading
 import time
+import tomllib
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Callable
@@ -35,7 +36,7 @@ from typing import Any, Callable
 from . import canon, ids, kinds
 from .index import Index
 from .model import ArtifactManifest, Label, Payload, TreeFile, utc_now, validate_attempt_doc
-from .remote import ConfigError, Remote, load_remote
+from .remote import ConfigError, Remote, config_path, load_remote
 from .remote_s3 import is_md5_etag
 
 DEFAULT_ROOT = Path.home() / ".research" / "store"
@@ -45,6 +46,8 @@ VERIFY_HEAD, VERIFY_READBACK = "etag-md5", "sha256-readback"     # what a replic
 VERIFY_MULTIPART = "etag-multipart"                              # ... a > 5 GiB blob: the service's multipart ETag == the one the local parts yield
 VERIFY_MODES = ("head", "readback")                             # `push(verify=...)`: HEAD size + MD5 ETag, or download + sha256
 WHERE_JOBS = 16                                                 # concurrent HEADs in `where`
+REFRESH_JOBS = 32                                               # concurrent GETs in `refresh`
+WRITE_THROUGH_ENV = "RESEARCH_WRITE_THROUGH"
 _UNSET = object()
 
 
@@ -132,6 +135,22 @@ def write_once(dst: Path, data: bytes | Path) -> bool:
         tmp.unlink(missing_ok=True)
 
 
+def write_through_wanted(explicit: str | os.PathLike[str] | None = None) -> bool:
+    """Whether `label` / `put` upload in the same command (README §7.2).  `$RESEARCH_WRITE_THROUGH` (1/0) decides when set; else the
+    store.toml `[remote] write_through` flag; else, with no store.toml at the default path and `$RESEARCH_STORE_CONFIG` unset, whether
+    the environment names the R2 remote (`R2_ENDPOINT` + `R2_BUCKET`: a cloud machine).  Off on the laptop until its store.toml says so."""
+    v = os.environ.get(WRITE_THROUGH_ENV, "").strip().lower()
+    if v:
+        return v not in ("0", "false", "no", "off")
+    p = config_path(explicit)
+    if p.is_file():
+        try:
+            return (tomllib.loads(p.read_text(encoding="utf-8")).get("remote") or {}).get("write_through") is True
+        except (OSError, tomllib.TOMLDecodeError):
+            return False
+    return explicit is None and "RESEARCH_STORE_CONFIG" not in os.environ and bool(os.environ.get("R2_ENDPOINT") and os.environ.get("R2_BUCKET"))
+
+
 def _rel_files(tree: Path) -> list[Path]:
     """Every file under `tree` (symlinks to files included by content), deterministic order."""
     out = []
@@ -159,8 +178,17 @@ class LocalStore:
 
     @property
     def index(self) -> Index:
+        """The catalog; reopened when `reindex` (here or in another process) has renamed a rebuilt file over it."""
+        path = self.root / "catalog.sqlite"
+        if self._index is not None:
+            try:
+                if path.stat().st_ino != self._index_ino:
+                    self.close()
+            except FileNotFoundError:
+                pass
         if self._index is None:
-            self._index = Index(self.root / "catalog.sqlite")
+            self._index = Index(path)
+            self._index_ino = path.stat().st_ino
         return self._index
 
     @property
@@ -178,6 +206,10 @@ class LocalStore:
                 self._remote = None
                 self.remote_error = str(e)
         return self._remote
+
+    @property
+    def write_through(self) -> bool:
+        return write_through_wanted(self._config_path)
 
     def _require_remote(self) -> Remote:
         r = self.remote
@@ -300,6 +332,21 @@ class LocalStore:
             self.index.index_artifact(m.to_doc(), art_id, local=self._blobs_local(m), remote=True, repo_path=self.replica_map().get(art_id))
             return m
         raise NotFound(f"{art_id}: no manifest locally (no remote configured)")
+
+    def resolve_art(self, ref: str, limit: int = 2) -> list[str]:
+        """Full ids an `art:` id or abbreviation (>= 8 hex digits) names, at most `limit`: the local catalog first, else the remote's
+        `manifests/` listing under that prefix (a pod's upload this machine never pulled).  Several = ambiguous; none = unknown."""
+        if ids.is_art(ref):
+            return [ref]
+        if not ids.is_short_art(ref):
+            raise ValueError(f"not an art: id or abbreviation: {ref!r}")
+        hits = self.index.resolve_art_prefix(ref, limit=limit)
+        if hits or self.remote is None:
+            return hits
+        pre = ids.hex_of(ref)
+        keys = self.remote.list(f"manifests/{pre}")
+        return sorted("art:" + k[len("manifests/"):-len(".json")] for k in keys
+                      if k.endswith(".json") and ids.is_sha256(k[len("manifests/"):-len(".json")]))[:limit]
 
     def has_local(self, art_id: str) -> bool:
         """Manifest and every payload blob present in this store."""
@@ -723,6 +770,92 @@ class LocalStore:
 
         return LS.verify_targets(self, targets)
 
+    def pending(self) -> dict:
+        """What this store holds that the remote does not (the queue `push --pending` drains), from one listing per prefix:
+        `artifacts` without a verified remote replica whose manifest the remote lacks, or whose blobs are all here to verify
+        cheaply (an artifact pulled from the remote without its blobs is the remote's already: `preserved` verifies it on demand);
+        `attempts` the remote lacks; `labels` (content hashes) the remote lacks."""
+        from . import labels_sync as LS  # noqa: PLC0415
+
+        r = self._require_remote()
+        on_remote = {k[len("manifests/"):-len(".json")] for k in r.list("manifests/") if k.endswith(".json")}
+        attempts_remote = {k[len("attempts/"):-len(".json")] for k in r.list("attempts/") if k.endswith(".json")}
+        verified = {row[0] for row in self.index.db.execute("SELECT id FROM replicas WHERE location='remote' AND verified_utc IS NOT NULL")}
+        arts = []
+        for a in self.artifact_ids():
+            h = ids.hex_of(a)
+            if a in verified:
+                continue
+            if h in on_remote:
+                try:
+                    if not self._blobs_local(self._read_manifest(self.manifest_path(h), h)):
+                        continue
+                except (IntegrityError, ValueError, json.JSONDecodeError):
+                    continue
+            arts.append(a)
+        mine, theirs = LS.local_labels(self), LS.remote_labels(r)
+        labels = sorted(set(mine) - set(theirs))
+        return {"remote": r.describe(), "artifacts": arts, "attempts": [x for x in self.attempt_ids() if x not in attempts_remote],
+                "labels": [{"hash": h, "target": mine[h][1].target, "key": mine[h][1].key, "by": mine[h][1].by} for h in labels]}
+
+    def refresh(self, *, jobs: int = REFRESH_JOBS, log: Callable[[str], None] | None = None) -> dict:
+        """Bring this store up to date from the remote without wiping anything: list `manifests/`, `attempts/` and `labels/`, fetch
+        only what is missing (`jobs` concurrent GETs; each manifest re-hashed to its id, each attempt parsed and named by its id),
+        and index just those.  The way a fresh machine builds its catalog from the remote alone."""
+        from . import labels_sync as LS  # noqa: PLC0415
+
+        t0 = time.monotonic()
+        r = self._require_remote()
+        want_m = [k for k in r.list("manifests/") if k.endswith(".json") and ids.is_sha256(k[len("manifests/"):-len(".json")])]
+        want_m = [k for k in want_m if not (self.root / k).exists()]
+        want_a = [k for k in r.list("attempts/") if k.endswith(".json") and ids.is_run_id(k[len("attempts/"):-len(".json")])]
+        want_a = [k for k in want_a if not (self.root / k).exists()]
+        rep: dict[str, Any] = {"remote": r.describe(), "manifests": 0, "attempts": 0, "labels": 0, "errors": []}
+        tmpdir = self.root / "scratch"
+        tmpdir.mkdir(parents=True, exist_ok=True)
+
+        def get(key: str) -> tuple[str, bytes | None, str | None]:     # threads download; the calling thread writes and indexes
+            tmp = tmpdir / f".refresh-{os.getpid()}-{threading.get_ident()}"
+            try:
+                r.get(key, tmp)
+                return key, tmp.read_bytes(), None
+            except Exception as e:  # noqa: BLE001
+                return key, None, f"{key}: {type(e).__name__}: {e}"
+            finally:
+                tmp.unlink(missing_ok=True)
+
+        rmap = self.replica_map()
+        with ThreadPoolExecutor(max_workers=max(1, jobs)) as ex:
+            for key, data, err in ex.map(get, want_m):
+                h = key[len("manifests/"):-len(".json")]
+                if err is None and canon.sha256_bytes(data) != h:
+                    err = f"{key}: content hash does not match its name"
+                if err:
+                    rep["errors"].append(err)
+                    continue
+                m = ArtifactManifest.from_doc(json.loads(data))
+                write_once(self.manifest_path(h), data)
+                self.index.index_artifact(m.to_doc(), "art:" + h, local=self._blobs_local(m), remote=True, repo_path=rmap.get("art:" + h))
+                rep["manifests"] += 1
+            for key, data, err in ex.map(get, want_a):
+                rid = key[len("attempts/"):-len(".json")]
+                try:
+                    doc = json.loads(data) if err is None else None
+                    if doc is not None and doc.get("id") != rid:
+                        err = f"{key}: names attempt {doc.get('id')!r}"
+                except json.JSONDecodeError as e:
+                    err = f"{key}: {e}"
+                if err:
+                    rep["errors"].append(err)
+                    continue
+                write_once(self.attempt_path(rid), data)
+                self.index.index_attempt(doc)
+                rep["attempts"] += 1
+        lrep = LS.sync(self, push=False, pull=True, jobs=jobs, log=log)
+        rep["labels"], rep["errors"] = len(lrep["pulled"]), rep["errors"] + lrep["bad"]
+        rep["seconds"] = round(time.monotonic() - t0, 1)
+        return rep
+
     # ---- index --------------------------------------------------------------------------------------------------------------------------
 
     def reindex(self, remote: bool = False) -> dict:
@@ -762,7 +895,34 @@ class LocalStore:
                 labels.append((Label.from_doc(json.loads(p.read_bytes())), p))
             except (KeyError, ValueError, json.JSONDecodeError) as e:
                 _warn(f"skipping label {p}: {e}")
-        return self.index.rebuild(arts, attempts, labels)
+        return self._swap_in_rebuilt(arts, attempts, labels)
+
+    def _swap_in_rebuilt(self, arts: list, attempts: list, labels: list) -> dict:
+        """Build the new catalog in a side file (the replica records carried over) and rename it over `catalog.sqlite` only once it
+        is complete: a rebuild killed partway leaves the previous catalog answering.  A replica verification recorded by another
+        process while this runs is lost with the old file (the next `preserved` re-verifies)."""
+        path = self.root / "catalog.sqlite"
+        tmp = self.root / f".catalog.sqlite.rebuild-{os.getpid()}"
+        for q in (tmp, tmp.with_name(tmp.name + "-journal")):
+            q.unlink(missing_ok=True)
+        new = Index(tmp)
+        try:
+            old = self.index.db
+            new.db.execute("BEGIN")
+            new.db.executemany("INSERT OR REPLACE INTO replicas(id, location, verified_utc, detail) VALUES (?, ?, ?, ?)",
+                               old.execute("SELECT id, location, verified_utc, detail FROM replicas").fetchall())
+            new.db.executemany("INSERT OR REPLACE INTO replica_checks(id, location, verified) VALUES (?, ?, ?)",
+                               old.execute("SELECT id, location, verified FROM replica_checks").fetchall())
+            new.db.execute("COMMIT")
+            n = new.rebuild(arts, attempts, labels)
+        except BaseException:
+            new.close()
+            tmp.unlink(missing_ok=True)
+            raise
+        new.close()
+        self.close()
+        os.replace(tmp, path)
+        return n
 
     def _remote_copy(self, key: str, dst: Path) -> None:
         tmp = dst.parent / f".tmp-{dst.name}-{os.getpid()}"

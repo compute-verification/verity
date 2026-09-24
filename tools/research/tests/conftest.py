@@ -8,6 +8,7 @@ import pytest
 @pytest.fixture(autouse=True)
 def _isolated_store(monkeypatch, tmp_path_factory):
     monkeypatch.setenv("RESEARCH_STORE", str(tmp_path_factory.mktemp("store")))
+    monkeypatch.delenv("RESEARCH_WRITE_THROUGH", raising=False)         # write-through is each test's explicit choice
     # ... and never the developer's ~/.research/store.toml remote (an S3 config without credentials in the test env would otherwise
     # be what every test sees).  Tests that want a remote point RESEARCH_STORE_CONFIG at their own file.
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(tmp_path_factory.mktemp("cfg") / "absent-store.toml"))

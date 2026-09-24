@@ -141,14 +141,14 @@ def test_label_refuses_what_the_vocabulary_cannot_place_unless_off_vocab(env, ca
     assert st.labels(ART) == []
     assert main(["label", ART, "nonesuch", "v1", "--by", "lane-x", "--off-vocab"]) == 0
     out, err = capsys.readouterr()
-    assert Path(out.strip()).is_file() and err.count("\n") == 1
+    assert Path(out.strip()).is_file() and err.count("\n") == 2 and "local only (write-through off)" in err
     assert "warning: label key 'nonesuch' is not in the vocabulary" in err and "stored anyway (--off-vocab)" in err
     assert main(["label", ART, "model_agrees", "true", "--by", "lane-x", "--value-json"]) == 0
     out, err = capsys.readouterr()
-    assert Path(out.strip()).is_file() and err == ""
+    assert Path(out.strip()).is_file() and err.startswith("research data label: local only (write-through off)") and err.count("\n") == 1
     assert main(["label", ART, "verified", "accepted", "--by", "verifier-1", "--ref", "run:x"]) == 0
     out, err = capsys.readouterr()
-    assert Path(out.strip()).is_file() and err == ""
+    assert Path(out.strip()).is_file() and err.startswith("research data label: local only (write-through off)") and err.count("\n") == 1
     assert {(l.key, l.value) for l in st.labels(ART)} == {("nonesuch", "v1"), ("model_agrees", True), ("verified", "accepted")}
 
 
