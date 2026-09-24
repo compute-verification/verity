@@ -135,16 +135,20 @@ def instances_digest(rel: Relation, n: int, seed: int | None = None, root=None) 
 def instances_ref(rel: Relation, total_vus: int, tile: tuple[int, int] | None = None, root=None) -> dict:
     """The fingerprint's ``instances`` block of a :func:`bench_vu_rel` result over ``total_vus`` VUs (``tile``: the
     ``--tile`` workload) -- field for field what the result carries (``verity_numerical.bench.instance_equiv`` reads it)."""
-    if rel.frozen_tier and tile is None:
+    if tile is not None:
+        # tile_instances draws other VUs than instances() (nx rows x nw columns from (seed, "tile", ...) streams): no
+        # frozen set is a tile, so the ref names the tile (the non-frozen relations named their frozen set here until
+        # lane fused-phases: x, W and y all differ from it)
+        return {"dataset": "synthetic", "tier": f"tile{tile[0]}x{tile[1]}", "range": [0, total_vus],
+                "manifest_sha256": tile_digest(rel, *tile), "seed": rel.instance_seed,
+                "recipe": f"{rel.name} synthetic GEMM tile (relchain.tile_instances: {rel.operands.__name__} rows / columns, "
+                          f"model-recorded accumulators); NOT the {'frozen ' if rel.frozen_tier else ''}"
+                          f"{rel.frozen_tier or rel.instances_tier} set"}
+    if rel.frozen_tier:
         # the frozen set: the same ``instances`` block as vu.bench_vu (no seed, no recipe), so the committed column of the
         # A100 cell names exactly the bare cell's instances
         return contract.instances_ref(rel.instances_tier, 0, total_vus, instances_digest(rel, total_vus, root=root),
                                       dataset=rel.instances_dataset)
-    if rel.frozen_tier:
-        return {"dataset": "synthetic", "tier": f"tile{tile[0]}x{tile[1]}", "range": [0, total_vus],
-                "manifest_sha256": tile_digest(rel, *tile), "seed": rel.instance_seed,
-                "recipe": f"{rel.name} synthetic GEMM tile (relchain.tile_instances: {rel.operands.__name__} rows / columns, "
-                          f"model-recorded accumulators); NOT the frozen {rel.frozen_tier} set"}
     inst = {"dataset": rel.instances_dataset, "tier": rel.instances_tier, "range": [0, total_vus],
             "manifest_sha256": instances_digest(rel, total_vus, root=root), "seed": rel.instance_seed}
     if rel.instances_recipe:
@@ -209,8 +213,8 @@ def tile_instances(rel: Relation, nx: int, nw: int, seed: int | None = None, pro
 
 
 def tile_digest(rel: Relation, nx: int, nw: int, seed: int | None = None) -> str:
-    """The manifest digest of :func:`tile_instances` for a relation whose ``instances_digest`` names a FROZEN set (the
-    tile is a synthetic draw either way; the non-frozen relations keep ``instances_digest(rel, nx nw)``)."""
+    """The manifest digest of :func:`tile_instances` (a synthetic draw of its own, for every relation: its VUs are not
+    ``instances(rel, nx nw)``)."""
     seed = rel.instance_seed if seed is None else seed
     return hashlib.sha256(f"{rel.name} synthetic tile|seed={seed}|{nx}x{nw}|K={K_VU}".encode()).hexdigest()
 
@@ -1683,11 +1687,10 @@ def gate_hashed(args, rel: Relation) -> int:
         data = instances(rel, args.vus, procs=procs, cache=cache, root=root)
         R.commit_vus(data, manifest_sha256=instances_digest(rel, args.vus, root=root))
     else:
-        # a frozen-tier relation (bf16-ampere) has no tile layout in its frozen set: its tile is the synthetic draw
+        # no frozen set has a tile layout: the tile is its own synthetic draw (tile_digest), for every relation
         data, x_rows, w_cols = tile_instances(rel, *tile, procs=procs, cache=cache)
         data = data[:args.vus]
-        R.commit_vus(data, manifest_sha256=(tile_digest(rel, *tile) if rel.frozen_tier else instances_digest(rel, len(data))),
-                     tile=tile, x_rows=x_rows, w_cols=w_cols)
+        R.commit_vus(data, manifest_sha256=tile_digest(rel, *tile), tile=tile, x_rows=x_rows, w_cols=w_cols)
     for lo in range(0, len(data), per_proof):
         vus = data[lo:lo + per_proof]
         proof, pubs, lay = R.prove_vus(vus, check=True, vu_ids=range(lo, lo + len(vus)))
@@ -1935,7 +1938,7 @@ def bench_vu_rel(args, rel: Relation) -> int:
     else:
         # a frozen-tier relation (bf16-ampere): its frozen set has no tile layout, the tile is the synthetic draw
         data, x_rows, w_cols = tile_instances(rel, *tile, procs=getattr(args, "instance_procs", 1), cache=getattr(args, "instances_cache", None))
-    inst_digest = tile_digest(rel, *tile) if (tile is not None and rel.frozen_tier) else instances_digest(rel, total_vus, root=root)
+    inst_digest = tile_digest(rel, *tile) if tile is not None else instances_digest(rel, total_vus, root=root)
     print(f"{total_vus} {'frozen ' + rel.frozen_tier if rel.frozen_tier else 'synthetic'} VUs (recorded accumulators) in {time.perf_counter() - t0:.1f}s")
     commit_seconds = 0.0
     if hashed:
