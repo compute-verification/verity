@@ -138,10 +138,13 @@ __device__ __forceinline__ void permute_store(u64* s, unsigned* __restrict__ W, 
 
 extern "C" __global__ void __launch_bounds__(256)
 poseidon2_rows(unsigned* __restrict__ W, int l, int n_sponges, const int* __restrict__ bitrows,
-               const int* __restrict__ caprows, const unsigned* __restrict__ iv, const int* __restrict__ sboxrows)
+               const int* __restrict__ caprows, const unsigned* __restrict__ iv, const int* __restrict__ sboxrows,
+               int rolerow, const unsigned* __restrict__ ivd)
 {{
     const int col = blockIdx.x * blockDim.x + threadIdx.x;
     if (col >= l) return;
+    // the hash side (hashchain.row_hash_system): IV(role) = IV_x + role (IV_w - IV_x), role the unit's public pin row
+    const u64 role = rolerow >= 0 ? (u64)W[(size_t)rolerow * l + col] : 0ULL;
     for (int sp = 0; sp < n_sponges; ++sp) {{
         u64 s[{h2.WIDTH}];
         const int* br = bitrows + (size_t)sp * {h2.RATE * per * nb};
@@ -153,7 +156,8 @@ poseidon2_rows(unsigned* __restrict__ W, int l, int n_sponges, const int* __rest
             s[j] = v;
         }}
         for (int x = 0; x < {h2.CAPACITY}; ++x)
-            s[{h2.RATE} + x] = ((u64)W[(size_t)caprows[sp * {h2.CAPACITY} + x] * l + col] + iv[sp * {h2.CAPACITY} + x]) % P;
+            s[{h2.RATE} + x] = ((u64)W[(size_t)caprows[sp * {h2.CAPACITY} + x] * l + col] + iv[sp * {h2.CAPACITY} + x]
+                                + (role * ivd[sp * {h2.CAPACITY} + x]) % P) % P;
         permute_store(s, W, l, col, sboxrows + (size_t)sp * {4 * n_sbox});
     }}
 }}
@@ -162,10 +166,14 @@ poseidon2_rows(unsigned* __restrict__ W, int l, int n_sponges, const int* __rest
 
 class Poseidon2Witness:
     """The witness hook (witness_device.py ``sys.witness_hooks``) writing the sponges' S-box rows on the device.
-    ``sponges``: per sponge ``(bit_rows word-major, cap_rows, iv_capacity, sbox_rows [(x2, x3, x4, x7), ...])``."""
+    ``sponges``: per sponge ``(bit_rows word-major, cap_rows, iv_capacity, sbox_rows [(x2, x3, x4, x7), ...])``.
+    ``role_row`` / ``ivd`` (the hash side of row sharing, ``hashchain.row_hash_system``): the capacity IV is
+    ``iv + role * ivd`` with ``role`` the value of that row in the column."""
 
-    def __init__(self, nb: int, per: int, sponges: list):
+    def __init__(self, nb: int, per: int, sponges: list, role_row: int = -1, ivd: list | None = None):
         self.nb, self.per, self.sponges = nb, per, sponges
+        self.role_row = role_row
+        self.ivd = list(ivd) if ivd is not None else [0] * h2.CAPACITY
         self.n_sbox = len(sponges[0][3])
         if any(len(s[3]) != self.n_sbox for s in sponges):
             raise ValueError("sponges with different S-box counts")
@@ -182,13 +190,15 @@ class Poseidon2Witness:
                    cp.asarray(np.array([r for s in self.sponges for r in s[0]], dtype=np.int32)),
                    cp.asarray(np.array([r for s in self.sponges for r in s[1]], dtype=np.int32)),
                    cp.asarray(np.array([v for s in self.sponges for v in s[2]], dtype=np.uint32)),
-                   cp.asarray(np.array([r for s in self.sponges for quad in s[3] for r in quad], dtype=np.int32)))
+                   cp.asarray(np.array([r for s in self.sponges for quad in s[3] for r in quad], dtype=np.int32)),
+                   cp.asarray(np.array(self.ivd * len(self.sponges), dtype=np.uint32)))
             self._dev[dev] = hit
         return hit
 
     def launch(self, cp, W_u32, l: int) -> None:
-        kernel, bitrows, caprows, iv, sboxrows = self._arrays(cp)
-        kernel((-(-l // 256),), (256,), (W_u32, np.int32(l), np.int32(len(self.sponges)), bitrows, caprows, iv, sboxrows))
+        kernel, bitrows, caprows, iv, sboxrows, ivd = self._arrays(cp)
+        kernel((-(-l // 256),), (256,), (W_u32, np.int32(l), np.int32(len(self.sponges)), bitrows, caprows, iv, sboxrows,
+                                         np.int32(self.role_row), ivd))
 
 
 # ---------------------------------------------------------------------------------------------------------------------

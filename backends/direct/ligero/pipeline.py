@@ -30,7 +30,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 import numpy as np
 import torch
 
-__all__ = ["Slot", "POOL", "prove_many", "run_to_completion", "shake_into", "slot_for", "stream_context"]
+__all__ = ["AnyOf", "Slot", "POOL", "prove_many", "run_to_completion", "shake_into", "slot_for", "stream_context"]
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -250,17 +250,30 @@ def cupy_stream_context():
 # Running stage generators
 # ---------------------------------------------------------------------------------------------------------------------
 
+class AnyOf:
+    """A waitable ready when any of ``parts`` is (a job that drives two sub-provers -- relchain's paired G/H -- waits on
+    whichever advances first)."""
+    __slots__ = ("parts",)
+
+    def __init__(self, parts):
+        self.parts = list(parts)
+
+
 def _is_ready(w) -> bool:
     if w is None:
         return True
     if isinstance(w, Future):
         return w.done()
+    if isinstance(w, AnyOf):
+        return any(_is_ready(p) for p in w.parts)
     return bool(w.query())          # torch.cuda.Event
 
 
 def _is_net(w) -> bool:
     """A waitable that stands for a reply from a LIVE VERIFIER (``live.LiveCoins``: a Future with ``net = True``) --
     time the driver spends idle with only such waitables pending is network wait, not prover time."""
+    if isinstance(w, AnyOf):
+        return all(_is_net(p) for p in w.parts)
     return isinstance(w, Future) and bool(getattr(w, "net", False))
 
 
@@ -282,6 +295,9 @@ def _wait(w) -> None:
         return
     if isinstance(w, Future):
         w.result()
+    elif isinstance(w, AnyOf):
+        while not _is_ready(w):
+            time.sleep(WAIT_POLL)
     else:
         w.synchronize()
 

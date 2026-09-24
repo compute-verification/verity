@@ -157,15 +157,36 @@ def config_for(l: int, target_log2: float = -128.0, rate_log2: int = 2, n_proofs
     return Config(l, n, D, t, target_log2, zk, t_pad if zk else 0, mode)
 
 
-def soundness(cfg: Config, n_linear: int, n_quadratic: int, n_proofs: int = 1) -> dict:
+FP_COIN_MAX_PROB = Fraction(3, 2 ** 32)   # a fingerprint coin is a uint32 reduced mod p (_expand): no residue has > 3 preimages
+
+
+def fingerprint_collision(coords: int, steps: int, l: int, n_op: int) -> Fraction:
+    """The fingerprint constraints' collision term (chain.py, "Fingerprint constraints"; PROTOCOL.md "Row sharing"): one
+    of the ``n_op x (l // steps)`` fingerprinted operand slots of a proof holds a row of ``steps`` columns x 16 lanes
+    that differs from the shared row it is matched to, yet agrees with it on all ``coords`` coordinates.  Per slot and
+    coordinate the difference of the two fingerprints is a nonzero polynomial of degree < 16 steps in rho_x
+    (Schwartz-Zippel), so the event has probability <= (16 steps - 1) x max_r Pr[rho_x = r]; the coins are uint32 mod p
+    (``_expand``, no rejection), so that maximum is 3 / 2^32 rather than 1 / p (+0.49 bits per coordinate); the
+    coordinates are independent; the union is over every slot (a VU's row and its W column are two events)."""
+    return n_op * (l // steps) * ((16 * steps - 1) * FP_COIN_MAX_PROB) ** coords
+
+
+def soundness(cfg: Config, n_linear: int, n_quadratic: int, n_proofs: int = 1, fp: tuple[int, int, int] | None = None) -> dict:
     """The error terms actually achieved (Appendix C, e = (n - k) / 2, uniform combinations); with ``n_proofs``
     sub-batches the reported total is ``accounting.union_over_proofs`` (never the per-proof error).  Fiat-Shamir
     mode: every statistical term is multiplied by 2^FS_QUERIES_LOG2 (the campaign's ``q x eps`` rule) and no coin
-    term is booked (there is no step 0)."""
+    term is booked (there is no step 0).  ``fp = (coords, steps, n_op)``: the proof carries fingerprint constraints in the
+    coin mode (the GEMM side of row sharing): the ``fingerprint_collision`` term is booked per proof over its
+    ``n_op x (l // steps)`` fingerprinted slots -- the event that a VU's operand row differs from the shared row it is
+    matched to yet has the same fingerprints (a statistical term: rho is drawn after both rows are committed, so it
+    takes the Fiat-Shamir factor as well)."""
     F = acc.Field.prime("BabyBear", P).extension(cfg.D)
     k = cfg.k if cfg.zk else cfg.l + 1                                        # k = l + 1: validate needs l < k
     p = acc.LigeroParams(n=cfg.n, k=k, l=cfg.l, t=cfg.t, zk=cfg.zk)
     terms = acc.ligero_error(p, acc.Field.prime("BabyBear", P), F, combination="uniform")
+    if fp is not None:
+        coords, steps, n_op = fp
+        terms = {**terms, "fingerprint_collision": fingerprint_collision(coords, steps, cfg.l, n_op)}
     fs_factor = Fraction(2) ** FS_QUERIES_LOG2 if not cfg.interactive else Fraction(1)
     terms = {name: v * fs_factor for name, v in terms.items()}
     bud = acc.Budget("B-Ligero direct (backends/direct/ligero)", {"n": cfg.n, "k": k, "l": cfg.l, "t": cfg.t, "D": cfg.D, "mode": cfg.mode})
@@ -337,6 +358,9 @@ def system_id(sys: System) -> bytes:
         else:   # component ends (chain.py): the expression AND the bit field it is compared against
             h.update(repr([e.key() for e in sys.chain["y"]]).encode())
             h.update(repr([("end", Y.key(), int(lo), int(bits)) for Y, lo, bits in sys.chain["y_end"]]).encode())
+        if sys.chain.get("fp") is not None:     # the fingerprint constraints (chain.py): lane rows, coordinates, mode
+            fp = sys.chain["fp"]
+            h.update(repr(("fp", [list(map(int, op)) for op in fp["lanes"]], int(fp["coords"]), fp["mode"])).encode())
     d = h.digest()
     _SYS_ID[key] = (sys, d)
     return d
@@ -348,11 +372,13 @@ def _u_bytes(x, dtype: str) -> bytes:
 
 
 def statement_digest(sys: System, cfg: Config, a, b, c=None, y=None, layout=None, y16=None,
-                     rel: RelationHooks = BF16_HOOKS, auth: auth_mod.AuthStatement | None = None) -> bytes:
+                     rel: RelationHooks = BF16_HOOKS, auth: auth_mod.AuthStatement | None = None, fp=None) -> bytes:
     """The public statement as the verifier sees it (see the module comment above).  ``auth`` (chain mode,
     ``authentication = included``): the committed-object block of ``auth.py`` -- the three tree references (binding,
     owner, count, root) and the claimed VU indices -- so the challenges are bound to "the words at these leaf indices
-    under these roots", not just to the words."""
+    under these roots", not just to the words.  ``fp`` (chain mode, a fingerprinted chain in the "public" mode of
+    chain.py -- the hash side of row sharing): the ``FpArgs`` (rho, F) the fingerprint constraints take as statement
+    values."""
     h = hashlib.blake2b(digest_size=32)
     h.update(STATEMENT_TAG)
     h.update(rel.tag)
@@ -374,6 +400,11 @@ def statement_digest(sys: System, cfg: Config, a, b, c=None, y=None, layout=None
         if layout is None:
             raise ValueError("authentication is defined for the chain statement only")
         h.update(auth_mod.digest_bytes(auth))
+    if fp is not None:
+        if layout is None:
+            raise ValueError("public fingerprints are defined for the chain statement only")
+        h.update(b"|fp_rho=" + _u_bytes(fp.rho, "<u4"))
+        h.update(b"|fp_F=" + _u_bytes(fp.F, "<u4"))
     return h.digest()
 
 
@@ -496,28 +527,41 @@ def seed1_preimage(stmt: bytes, root: bytes, cc: tuple[bytes, bytes] | None, r1:
 
 
 def seed2_preimage(stmt: bytes, root: bytes, w: np.ndarray, h: np.ndarray, q: np.ndarray | None, v: np.ndarray | None,
-                   cc: tuple[bytes, bytes] | None, r2: bytes | None) -> bytes:
-    """Interactive: ``H(tag || stmt || c1 c2 || r2)`` -- none of root, w, h, q, v.  Fiat-Shamir: the transcript."""
+                   cc: tuple[bytes, bytes] | None, r2: bytes | None, fp: np.ndarray | None = None) -> bytes:
+    """Interactive: ``H(tag || stmt || c1 c2 || r2)`` -- none of root, w, h, q, v.  Fiat-Shamir: the transcript, the
+    fingerprint message ``fp`` (chain.py "coin" mode) included after v."""
     if cc is not None:
         if r2 is None:
             raise ValueError("interactive challenge 2 needs the opened coin r2")
         return b"ligero-b/c2|v2|" + _bound(stmt) + _coin_prefix(cc) + _coin_open(r2)
     return (b"ligero-b/c2|" + _bound(stmt) + root + w.tobytes() + h.tobytes()
-            + (q.tobytes() if q is not None else b"") + (b"|v=" + v.tobytes() if v is not None else b""))
+            + (q.tobytes() if q is not None else b"") + (b"|v=" + v.tobytes() if v is not None else b"")
+            + (b"|fp=" + fp.tobytes() if fp is not None else b""))
+
+
+def fp_coin_coords(sys: System) -> int:
+    """The fingerprint coins challenge 1 expands for ``sys``: ``coords`` in the chain's "coin" mode (chain.py), else 0."""
+    fp = sys.chain.get("fp") if sys.chain is not None else None
+    return int(fp["coords"]) if fp is not None and fp["mode"] == "coin" else 0
 
 
 def _challenge1(stmt: bytes, root: bytes, D: int, m: int, L: int, Q: int, device, l_chain: int = 0,
-                cc: tuple[bytes, bytes] | None = None, r1: bytes | None = None):
+                cc: tuple[bytes, bytes] | None = None, r1: bytes | None = None, n_fp: int = 0):
+    """The challenge block: per coordinate ``r | rho_lin | rho_quad | rc (7 l)`` and, for a fingerprinted chain in the
+    coin mode, ``n_fp`` more elements of which coordinate 0's are the fingerprint coins rho (the others are unused)."""
     seed = merkle.hash_bytes(seed1_preimage(stmt, root, cc, r1))
     extra = N_FAMILIES * l_chain
-    x = _expand(seed, D * (m + L + Q + extra), device).reshape(D, m + L + Q + extra)
-    rc = x[:, m + L + Q:].reshape(D, N_FAMILIES, l_chain) if l_chain else None
-    return x[:, :m], x[:, m:m + L], x[:, m + L:m + L + Q], rc
+    width = m + L + Q + extra + n_fp
+    x = _expand(seed, D * width, device).reshape(D, width)
+    rc = x[:, m + L + Q:m + L + Q + extra].reshape(D, N_FAMILIES, l_chain) if l_chain else None
+    rho = x[0, width - n_fp:] if n_fp else None
+    return x[:, :m], x[:, m:m + L], x[:, m + L:m + L + Q], rc, rho
 
 
 def _challenge2(stmt: bytes, root: bytes, w: np.ndarray, h: np.ndarray, t: int, n: int, q: np.ndarray | None = None,
-                v: np.ndarray | None = None, cc: tuple[bytes, bytes] | None = None, r2: bytes | None = None) -> list[int]:
-    seed = merkle.hash_bytes(seed2_preimage(stmt, root, w, h, q, v, cc, r2))
+                v: np.ndarray | None = None, cc: tuple[bytes, bytes] | None = None, r2: bytes | None = None,
+                fp: np.ndarray | None = None) -> list[int]:
+    seed = merkle.hash_bytes(seed2_preimage(stmt, root, w, h, q, v, cc, r2, fp))
     cols: list[int] = []
     seen = set()
     ctr = 0
@@ -549,13 +593,18 @@ class Proof:
     coin_commit: tuple[bytes, bytes] | None = None   # step 0: (c1, c2)
     coins: Coins | None = None                       # the openings (r1, s1), (r2, s2) as the prover received them
     auth: list[list[bytes]] | None = None            # authentication = included: one Merkle multiproof per tree (a, b, y)
+    fp: np.ndarray | None = None                     # fingerprint message (chain.py coin mode): (n_vus, n_op, C) uint32 after coin 1
+    # NOT part of the proof (never serialized, never read by a verifier): the coins rho the prover's challenge 1 expanded,
+    # kept for the prover of the paired hash-side proof whose statement takes them (relchain.SharedHashedRunner)
+    rho: np.ndarray | None = None
 
     def n_bytes(self) -> dict:
         b = {"root": len(self.root), "w": self.w.nbytes, "h": self.h.nbytes, "cols": 4 * len(self.cols),
              "opened_columns": self.opened.nbytes, "merkle_paths": sum(32 * len(p) for p in self.paths),
              "q_chain": self.q.nbytes if self.q is not None else 0, "v_linear": self.v.nbytes if self.v is not None else 0,
              "coin_commitments_and_openings": 6 * COIN_BYTES if self.coin_commit is not None else 0,
-             "auth_multiproofs": sum(32 * len(s) for s in self.auth) if self.auth is not None else 0}
+             "auth_multiproofs": sum(32 * len(s) for s in self.auth) if self.auth is not None else 0,
+             "fingerprints": self.fp.nbytes if self.fp is not None else 0}
         b["total"] = sum(b.values())
         return b
 
@@ -996,17 +1045,51 @@ def _expand_pinned(seed: bytes, count: int, device, slot, name: str):
     return fut, finish
 
 
+def _fp_setup(sys: System, x: torch.Tensor, M: int, tb: Tables, l_chain: int, lanes, fp_pub, layout):
+    """The fingerprint data of the chain test (chain.py): coin mode -- rho from the challenge block's tail and F the
+    honest fingerprints of the lane rows (the prover's message); public mode -- ``fp_pub`` as given.  ``(FpArgs, F)``
+    with F None in the public mode; ``(None, None)`` for a chain without fingerprint constraints."""
+    from .chain import FpArgs, fp_values
+    spec = sys.chain.get("fp") if sys.chain is not None else None
+    if spec is None:
+        return None, None
+    if spec["mode"] == "coin":
+        C = int(spec["coords"])
+        base = M + tb.L + tb.Q + N_FAMILIES * l_chain
+        rho = x[0, base:base + C]
+        if lanes is None:
+            raise ValueError("fingerprint coin mode: the prover needs the lane rows")
+        F = fp_values(lanes, rho, len(spec["lanes"]), layout.steps, l_chain)
+        return FpArgs(rho, F), F
+    if fp_pub is None:
+        raise ValueError("fingerprint public mode: the chain tuple must carry (Layout, y16, FpArgs)")
+    return fp_pub, None
+
+
+FUSED_CHAINQ = True     # the chain quotient's codeword-domain sum through tests_fused.chain_quotient (bit-exact)
+
+
+def _fused_chainq(D: int, U: torch.Tensor):
+    if not (FUSED_CHAINQ and witness.USE_FUSED and U.is_cuda and U.dtype == torch.int32):
+        return None
+    from . import tests_fused
+    return tests_fused.fused_for(D, U.device)
+
+
 def _tests_compute(sys: System, tb: Tables, cfg: Config, x: torch.Tensor, coefs, U, W, pub, pubmat, y16_pub, layout,
-                   mr: dict, device, check: bool = False, nested_graphs: bool = True):
-    """The prover's tests from the challenge block ``x`` (D, width): (w, h, q, v) on the device -- the batched linear
-    test (``w``; ``v`` = alpha . p in the ZK mode), the quadratic quotient ``h`` and the chain quotient ``q`` (chain
-    mode).  Shared by the eager prover and the captured tests graph (``nested_graphs=False`` while capturing: the
+                   mr: dict, device, check: bool = False, nested_graphs: bool = True, lanes=None, fp_pub=None):
+    """The prover's tests from the challenge block ``x`` (D, width): (w, h, q, v, F) on the device -- the batched linear
+    test (``w``; ``v`` = alpha . p in the ZK mode), the quadratic quotient ``h``, the chain quotient ``q`` (chain
+    mode) and the fingerprint message ``F`` (a fingerprinted chain in the coin mode, from the lane rows ``lanes``;
+    else None).  Shared by the eager prover and the captured tests graph (``nested_graphs=False`` while capturing: the
     NTT chains run eagerly inside the capture)."""
     m, l, n, k, D = sys.m, cfg.l, cfg.n, cfg.k, cfg.D
     M = U.shape[0]
     l_chain = l if layout is not None else 0
     r, rho_lin, rho_quad = x[:, :M], x[:, M:M + tb.L], x[:, M + tb.L:M + tb.L + tb.Q]
-    rc = x[:, M + tb.L + tb.Q:].reshape(D, N_FAMILIES, l_chain) if l_chain else None
+    rc_hi = M + tb.L + tb.Q + N_FAMILIES * l_chain
+    rc = x[:, M + tb.L + tb.Q:rc_hi].reshape(D, N_FAMILIES, l_chain) if l_chain else None
+    fp, F = _fp_setup(sys, x, M, tb, l_chain, lanes, fp_pub, layout) if l_chain else (None, None)
     g = (lambda name, fn, t: _graphed(name, fn, t)) if nested_graphs else (lambda name, fn, t: fn(t))
     v = None
     if cfg.zk:
@@ -1030,18 +1113,24 @@ def _tests_compute(sys: System, tb: Tables, cfg: Config, x: torch.Tensor, coefs,
     h = hcoef[:, :cfg.h_len]
     q = None
     if layout is not None:
-        cc = chain_coefs(sys, layout, rc, y16_pub)
+        cc = chain_coefs(sys, layout, rc, y16_pub, fp)
         R = cc.coef.shape[1]
         penc = _simt_encoder(cfg, device, plain=True)
         # R_i on the codeword domain, in chunks of CHAIN_ENC_CHUNK coefficient rows: a leaf/ composition links 2n + 3
         # rows (131 / 259 for ajtai-n64 / n128) and one (D, R, n) int64 tensor plus its product would be 1.6 GB each at
         # l = 16384 (the n128 bench OOMed at 24 GB); the partial sums are reduced mod P, so the result is bit-identical.
-        Qev = torch.zeros((D, n), dtype=torch.int64, device=device)
+        # Each chunk takes the fused int32 pass when available (one chunk, R <= CHAIN_ENC_CHUNK, is the unchunked path).
+        ft = _fused_chainq(D, U)
+        Qev = None
         for r0 in range(0, R, CHAIN_ENC_CHUNK):
             r1 = min(R, r0 + CHAIN_ENC_CHUNK)
-            cf = cc.coef[:, r0:r1].reshape(D * (r1 - r0), l)
-            Renc = (penc.encode(cf)[0].to(torch.int64) if penc is not None else encode(cf, n)).reshape(D, r1 - r0, n)
-            Qev = (Qev + ((Renc * U.index_select(0, cc.rows[r0:r1])[None, :, :]) % P).sum(1)) % P   # (D, n)
+            cf, rows = cc.coef[:, r0:r1].reshape(D * (r1 - r0), l), cc.rows[r0:r1]
+            if ft is not None and penc is not None:
+                part = ft.chain_quotient(penc.encode(cf)[0].reshape(D, r1 - r0, n), U, rows)
+            else:
+                Renc = (penc.encode(cf)[0].to(torch.int64) if penc is not None else encode(cf, n)).reshape(D, r1 - r0, n)
+                part = ((Renc * U.index_select(0, rows)[None, :, :]) % P).sum(1) % P   # (D, n)
+            Qev = part if Qev is None else (Qev + part) % P
         if cfg.zk:                                                # + u_ca + x^k u_cb (uniform, zero sum over H)
             Qev = (Qev + U[mr["chain_a"]] + (_xk_on_coset(n, k, device)[None, :] * U[mr["chain_b"]]) % P) % P
         qcoef = (g("intt", intt, Qev) * _ginv_powers(n, device)) % P
@@ -1049,11 +1138,13 @@ def _tests_compute(sys: System, tb: Tables, cfg: Config, x: torch.Tensor, coefs,
             assert (qcoef[:, cfg.q_len:] == 0).all(), "chain polynomial degree too high"
             assert torch.equal(_sum_over_H(qcoef[:, :cfg.q_len], l), cc.rhs), "chain constraints violated"
         q = qcoef[:, :cfg.q_len]
-    return w, h, q, v
+    return w, h, q, v, F
 
 
 CHAIN_ENC_CHUNK = int(os.environ.get("LIGERO_CHAIN_ENC_CHUNK", "64"))   # chain-test coefficient rows encoded per chunk (bounded memory for wide chains)
 TESTS_GRAPH = True     # the whole tests chain (challenge block -> w, h, q, v in pinned memory) as ONE CUDA graph (lane hp2-host)
+TESTS_STATIC_KEEP = 2  # static sets kept per (stream, system), most recent first: a run whose last sub-batch is ragged
+#                        (relchain's hash side at l_H = 8192 then 4096) alternates two configurations on one stream
 _TESTS_STATIC: dict = {}
 
 
@@ -1064,7 +1155,8 @@ class _TestsStatic:
     public columns ``pubmat`` and the chain ends ``y16``; the graph writes w, h, q, v into the slot's pinned ``msgs``
     buffer (D2H memcpy nodes).  ~45 launches and ~5 ms of main-thread dispatch per sub-batch become one replay."""
 
-    def __init__(self, key, cfg: Config, sys: System, tb: Tables, m: int, Mrows: int, width: int, chain: bool, device):
+    def __init__(self, key, cfg: Config, sys: System, tb: Tables, m: int, Mrows: int, width: int, chain: bool, device,
+                 steps: int = 0):
         self.key, self.sys, self.tb = key, sys, tb
         n, k, l, D = cfg.n, cfg.k, cfg.l, cfg.D
         self.U = torch.empty((Mrows, n), dtype=torch.int32, device=device)
@@ -1076,12 +1168,29 @@ class _TestsStatic:
         pub_q, _ = _lin_pub_index(tb, device)
         self.pubmat = torch.empty((len(pub_q), l), dtype=torch.int64, device=device) if pub_q else None
         self.y16 = torch.empty((l,), dtype=torch.int64, device=device) if chain else None
-        # the message layout (int32 residues, ``msgs`` pinned buffer): w | h | q | v
+        # a fingerprinted chain (chain.py): the lane rows copied out of the witness at commit (coin mode: F is computed from
+        # them inside the tests graph) or the statement's rho / F (public mode), static inputs of the graph
+        self.lanes = self.fp_rho = self.fp_F = None
+        spec = sys.chain.get("fp") if (chain and sys.chain is not None) else None
+        fp_shape = None
+        if spec is not None:
+            from .chain import fp_lane_rows
+            self.lane_rows = fp_lane_rows(sys.chain).to(device)
+            C, n_op = int(spec["coords"]), len(spec["lanes"])
+            fp_shape = (l // steps, n_op, C)
+            if spec["mode"] == "coin":
+                self.lanes = torch.empty((len(self.lane_rows), l), dtype=torch.int64, device=device)
+            else:
+                self.fp_rho = torch.empty((C,), dtype=torch.int64, device=device)
+                self.fp_F = torch.empty(fp_shape, dtype=torch.int64, device=device)
+        # the message layout (int32 residues, ``msgs`` pinned buffer): w | h | q | v | fp
         shapes = [("w", (D, k if cfg.zk else l)), ("h", (D, cfg.h_len))]
         if chain:
             shapes.append(("q", (D, cfg.q_len)))
         if cfg.zk:
             shapes.append(("v", (D, k)))
+        if spec is not None and spec["mode"] == "coin":
+            shapes.append(("fp", fp_shape))
         self.offs, at = {}, 0
         for name, shape in shapes:
             self.offs[name] = (at, shape)
@@ -1145,18 +1254,24 @@ def _fused_witness(sys: System, device):
         return None
 
 
-def _tests_static(cfg: Config, sys: System, tb: Tables, m: int, Mrows: int, width: int, chain: bool, device):
-    """The static set of the current stream (one per stream; replaced when the configuration changes)."""
-    skey = (str(device), torch.cuda.current_stream(device).cuda_stream)
-    key = (cfg.l, cfg.n, cfg.k, cfg.D, cfg.zk, cfg.t_pad, cfg.h_len, cfg.q_len, m, Mrows, width, chain)
-    st = _TESTS_STATIC.get(skey)
-    if st is None or st.key != key or st.sys is not sys or st.tb is not tb:
-        if st is not None:
-            for g in [g_ for g_, _ in st.graphs.values()] + [st.commit_graph]:
+def _tests_static(cfg: Config, sys: System, tb: Tables, m: int, Mrows: int, width: int, chain: bool, device, steps: int = 0):
+    """The static set of the current stream, system and configuration (up to ``TESTS_STATIC_KEEP`` per (stream,
+    system): the paired prover of relchain.SharedHashedRunner alternates two systems on one stream, and each keeps its
+    buffers and captured graphs; the least recently used configuration is dropped beyond that)."""
+    skey = (str(device), torch.cuda.current_stream(device).cuda_stream, id(sys))
+    key = (cfg.l, cfg.n, cfg.k, cfg.D, cfg.zk, cfg.t_pad, cfg.h_len, cfg.q_len, m, Mrows, width, chain, steps)
+    sets = _TESTS_STATIC.setdefault(skey, [])
+    st = next((s for s in sets if s.key == key and s.sys is sys and s.tb is tb), None)
+    if st is not None:
+        sets.remove(st)
+    else:
+        st = _TestsStatic(key, cfg, sys, tb, m, Mrows, width, chain, device, steps)
+        while len(sets) >= TESTS_STATIC_KEEP:
+            old = sets.pop()
+            for g in [g_ for g_, _ in old.graphs.values()] + [old.commit_graph]:
                 if g:
                     g.reset()
-        st = _TestsStatic(key, cfg, sys, tb, m, Mrows, width, chain, device)
-        _TESTS_STATIC[skey] = st
+    sets.insert(0, st)
     return st
 
 
@@ -1167,10 +1282,12 @@ def _tests_graph_run(st: _TestsStatic, sys: System, tb: Tables, cfg: Config, mr:
     D = cfg.D
 
     def body():
+        from .chain import FpArgs
         x = ((st.xraw.to(torch.int64) & 0xFFFFFFFF) % P).reshape(D, -1)
-        w, h, q, v = _tests_compute(sys, tb, cfg, x, st.coefs, st.U, st.W, None, st.pubmat, st.y16, layout, mr,
-                                    device, check=False, nested_graphs=False)
-        for name, tsr in (("w", w), ("h", h), ("q", q), ("v", v)):
+        fp_pub = FpArgs(st.fp_rho, st.fp_F) if st.fp_rho is not None else None
+        w, h, q, v, F = _tests_compute(sys, tb, cfg, x, st.coefs, st.U, st.W, None, st.pubmat, st.y16, layout, mr,
+                                       device, check=False, nested_graphs=False, lanes=st.lanes, fp_pub=fp_pub)
+        for name, tsr in (("w", w), ("h", h), ("q", q), ("v", v), ("fp", F)):
             if tsr is None:
                 continue
             o, shape = st.offs[name]
@@ -1228,9 +1345,9 @@ def prove(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.
     return pipeline.run_to_completion(gen)
 
 
-def prove_stages(*args, slot=None, **kw):
-    """The prover as a stage generator for ``pipeline.prove_many`` (same arguments as ``prove`` plus ``slot``)."""
-    return _prove_stages(*args, **kw, slot=slot)
+def prove_stages(*args, slot=None, fp_sink=None, **kw):
+    """The prover as a stage generator for ``pipeline.prove_many`` (same arguments as ``prove`` plus ``slot``, ``fp_sink``)."""
+    return _prove_stages(*args, **kw, slot=slot, fp_sink=fp_sink)
 
 
 def _coin_future(src, name: str, *args):
@@ -1244,7 +1361,11 @@ def _coin_future(src, name: str, *args):
 
 def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str, torch.Tensor], hints, device,
                   check=False, mutate=None, chain=None, words=None, coins=None, rel: RelationHooks = BF16_HOOKS,
-                  auth=None, auth_open=None, hints_fn=None, slot=None):
+                  auth=None, auth_open=None, hints_fn=None, slot=None, fp_sink=None):
+    """``chain[2]`` (a fingerprinted chain's public ``FpArgs``) may be a ``Future``: it is awaited after the root (the
+    commitment does not depend on it; the statement digest and the tests do).  ``fp_sink``: a ``Future`` set to
+    ``(rho, F)`` as soon as a coin-mode fingerprint message is on the host (before the openings)."""
+    from concurrent.futures import Future
     from . import pipeline
     _t_enter = time.perf_counter()
     clk = _Clock(device)
@@ -1272,10 +1393,15 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
     cuda = str(device).startswith("cuda")
     # the statement digest (blake2b of the public words, ~1.6 ms of host hashing) on a worker thread; needed at
     # challenge 1 only.  ``words["y16"]`` (a host copy of the chain's y16) keeps the worker off the device.
+    fp_later = chain is not None and len(chain) > 2 and isinstance(chain[2], Future)
     if chain is not None:
         y16_for_digest = words.get("y16", chain[1])
-        stmt_fut = pipeline.POOL.submit(statement_digest, sys, cfg, words["a"], words["b"], layout=chain[0],
-                                        y16=y16_for_digest, rel=rel, auth=auth)
+        fp_public = len(chain) > 2 and (sys.chain.get("fp") or {}).get("mode") == "public"
+
+        def submit_stmt(fp_args):
+            return pipeline.POOL.submit(statement_digest, sys, cfg, words["a"], words["b"], layout=chain[0],
+                                        y16=y16_for_digest, rel=rel, auth=auth, fp=fp_args if fp_public else None)
+        stmt_fut = None if fp_later else submit_stmt(chain[2] if len(chain) > 2 else None)
     else:
         stmt_fut = pipeline.POOL.submit(statement_digest, sys, cfg, words["a"], words["b"], c=words["c"], y=words["y"], rel=rel)
     clk.lap("statement")
@@ -1290,10 +1416,19 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
     Mrows = n_rows(cfg, m, chain is not None)
     enc = _simt_encoder(cfg, device)                              # None: the torch int64 NTT (CPU, or no cupy)
     l_chain = l if chain else 0
-    width = Mrows + tb.L + tb.Q + N_FAMILIES * l_chain            # the challenge block: r | rho_lin | rho_quad | rc
+    n_fp = fp_coin_coords(sys) if chain else 0
+    width = Mrows + tb.L + tb.Q + N_FAMILIES * l_chain + n_fp     # the challenge block: r | rho_lin | rho_quad | rc | rho_fp
+    fp_spec = sys.chain.get("fp") if chain else None
+    fp_pub = chain[2] if (chain is not None and len(chain) > 2) else None
+    if fp_spec is not None and fp_spec["mode"] == "public" and fp_pub is None:
+        raise ValueError("fingerprint public mode: chain = (Layout, y16, FpArgs)")
     # the graphs' static set (CUDA + SIMT encoder, no self-check asserts): U and coefs live in it
-    st = (_tests_static(cfg, sys, tb, m, Mrows, width, chain is not None, device)
+    st = (_tests_static(cfg, sys, tb, m, Mrows, width, chain is not None, device, chain[0].steps if chain else 0)
           if TESTS_GRAPH and cuda and enc is not None and not check else None)
+    lane_rows = None
+    if fp_spec is not None:                                       # the static set holds its own (a pageable upload syncs)
+        from .chain import fp_lane_rows
+        lane_rows = st.lane_rows if st is not None else fp_lane_rows(sys.chain).to(device)
     fw = _fused_witness(sys, device) if (st is not None and COMMIT_GRAPH and mutate is None) else None
     graph_merkle = False
     if fw is not None:
@@ -1314,6 +1449,8 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
 
         def commit_body():
             Wg = fw.run(st.pub_rows, st.hints)                       # (m, l) int32
+            if st.lanes is not None:                                  # the fingerprint's lane rows (coin mode)
+                st.lanes.copy_(Wg.index_select(0, st.lane_rows))
             if cfg.zk:
                 with _cupy_ctx(device):
                     Sg = _sample_masks(cfg, m, chain is not None, device, key_dev=st.mkey)
@@ -1351,6 +1488,8 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
         clk.lap("witness")
         if mutate is not None:
             mutate(W)
+        if st is not None and st.lanes is not None:
+            st.lanes.copy_(W.index_select(0, st.lane_rows))
         if check:
             from .witness import check_constraints
             bad = check_constraints(sys, tb, W, pub)
@@ -1421,6 +1560,12 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
 
     M = U.shape[0]
     sent.append("root")
+    if fp_later:
+        if not fp_pub.done():
+            yield fp_pub                                           # -- wait: the fingerprint statement (the other proof)
+        fp_pub = fp_pub.result()
+        stmt_fut = submit_stmt(fp_pub)
+        clk.host("wait_fp")
     if not stmt_fut.done():
         yield stmt_fut
     stmt = stmt_fut.result()
@@ -1452,6 +1597,15 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
             st.pubmat.copy_(_pubmat(tb, pub, device))
         if chain is not None:
             st.y16.copy_(chain[1].to(device))
+        if st.fp_rho is not None:                                  # public fingerprints (the hash side): static inputs
+            # host tensors go up from the slot's pinned memory, non-blocking: a pageable copy synchronises the stream
+            for nm, dst, src_t in (("fp_rho", st.fp_rho, fp_pub.rho), ("fp_F", st.fp_F, fp_pub.F)):
+                if src_t.device.type == "cpu":
+                    nbytes = dst.numel() * dst.element_size()
+                    buf = _pin(slot, device, nm, nbytes)[:nbytes].view(dst.dtype).view(dst.shape)
+                    buf.copy_(src_t.reshape(dst.shape))
+                    src_t = buf
+                dst.copy_(src_t, non_blocking=True)
         mbuf = _pin(slot, device, "msgs", st.nbytes)[:st.nbytes]
         _tests_graph_run(st, sys, tb, cfg, mr, layout, mbuf, device)
         offs = st.offs
@@ -1464,7 +1618,7 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
         got = {}
         for name, (o, shape) in offs.items():
             got[name] = mbuf[o:o + 4 * math.prod(shape)].numpy().view(np.uint32).reshape(shape).copy()
-        w_np, h_np, q_np, v_np = got["w"], got["h"], got.get("q"), got.get("v")
+        w_np, h_np, q_np, v_np, fp_np = got["w"], got["h"], got.get("q"), got.get("v"), got.get("fp")
     else:
         if cuda:
             fut, finish = _expand_pinned(seed1, D * width, device, slot, "c1")
@@ -1475,14 +1629,17 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
         else:
             x = _expand(seed1, D * width, device).reshape(D, width)
         y16_pub = chain[1] if chain is not None else None
-        w, h, q, v = _tests_compute(sys, tb, cfg, x, coefs, U, W, pub, None, y16_pub, layout, mr, device, check=check)
+        lanes = W.index_select(0, lane_rows) if (lane_rows is not None and W is not None) else None
+        w, h, q, v, F = _tests_compute(sys, tb, cfg, x, coefs, U, W, pub, None, y16_pub, layout, mr, device, check=check,
+                                       lanes=lanes, fp_pub=fp_pub)
         clk.lap("tests_w")
         clk.lap("tests_quad")
         clk.lap("tests_chain")
         clk.host("launch_tests_qc")
     # the test messages leave the device as ONE pinned non-blocking copy (int32: residues < p); host copies below
     if st is None and cuda:
-        msgs = [("w", w), ("h", h)] + ([("q", q)] if q is not None else []) + ([("v", v)] if v is not None else [])
+        msgs = ([("w", w), ("h", h)] + ([("q", q)] if q is not None else []) + ([("v", v)] if v is not None else [])
+                + ([("fp", F)] if F is not None else []))
         offs, at = {}, 0
         for name, tsr in msgs:
             offs[name] = (at, tuple(tsr.shape))
@@ -1496,15 +1653,28 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
         got = {}
         for name, (o, shape) in offs.items():
             got[name] = mbuf[o:o + 4 * math.prod(shape)].numpy().view(np.uint32).reshape(shape).copy()
-        w_np, h_np, q_np, v_np = got["w"], got["h"], got.get("q"), got.get("v")
+        w_np, h_np, q_np, v_np, fp_np = got["w"], got["h"], got.get("q"), got.get("v"), got.get("fp")
     elif st is None:
         w_np = w.cpu().numpy().astype(np.uint32)
         h_np = h.cpu().numpy().astype(np.uint32)
         q_np = q.cpu().numpy().astype(np.uint32) if q is not None else None
         v_np = v.cpu().numpy().astype(np.uint32) if v is not None else None
+        fp_np = F.cpu().numpy().astype(np.uint32) if F is not None else None
+    rho_np = None
+    if fp_np is not None:
+        fp_np = np.ascontiguousarray(fp_np[:layout.n_vus])        # the real VUs' fingerprints (pad slots are zero)
+        if st is not None:                                         # coordinate 0's tail of the challenge block
+            rho_np = ((st.xraw.reshape(-1)[width - n_fp:width].to(torch.int64) & 0xFFFFFFFF) % P).cpu().numpy().astype(np.uint32)
+        else:
+            rho_np = x[0, width - n_fp:].cpu().numpy().astype(np.uint32)
+        if fp_sink is not None:
+            fp_sink.set_result((rho_np, fp_np))
 
-    sent.append("w, h" + (", q" if q_np is not None else "") + (", v" if v_np is not None else ""))
+    sent.append("w, h" + (", q" if q_np is not None else "") + (", v" if v_np is not None else "") + (", fp" if fp_np is not None else ""))
     if cfg.interactive:
+        if fp_np is not None and hasattr(src, "provide_fp"):
+            # a live verifier takes F with the test message: fixed before slot 2 here and before the paired side's slot 1
+            src.provide_fp(fp_np)
         fut = _coin_future(src, "open2", root, w_np, h_np, q_np, v_np)   # V opens coin slot 2 (after the test messages)
         if fut is not None:
             yield fut                                              # -- wait: the verifier's OPEN2 (network, off the driver)
@@ -1515,7 +1685,7 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
             raise CoinOpeningError(2, sent)
     else:
         r2 = s2 = None
-    cols = _challenge2(stmt, root, w_np, h_np, cfg.t, n, q_np, v_np, ccom, r2)
+    cols = _challenge2(stmt, root, w_np, h_np, cfg.t, n, q_np, v_np, ccom, r2, fp_np)
     clk.host("challenge2")
     t = len(cols)
     if gpu_hash:
@@ -1550,7 +1720,7 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
     timings["tests"] = timings.get("tests_w", 0.0) + timings.get("tests_quad", 0.0) + timings.get("tests_chain", 0.0)
     timings["total"] = total - timings.get("hints_host", 0.0)
     return Proof(root, w_np, h_np, cols, opened, paths, hash_name, timings, q_np, v_np, ccom,
-                 Coins(r1, s1, r2, s2) if cfg.interactive else None, auth_sibs)
+                 Coins(r1, s1, r2, s2) if cfg.interactive else None, auth_sibs, fp_np, rho_np)
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -1560,10 +1730,13 @@ def _prove_stages(p: Params, sys: System, tb: Tables, cfg: Config, pub: dict[str
 def verify(p: Params, sys: System, tb: Tables, cfg: Config, c, a, b, y, proof: Proof, device,
            chain: tuple | None = None, coins: Coins | None = None, rel: RelationHooks = BF16_HOOKS,
            auth: auth_mod.AuthStatement | None = None, auth_procs: int | None = None,
-           auth_timing: dict | None = None) -> tuple[bool, str]:
+           auth_timing: dict | None = None, out: dict | None = None) -> tuple[bool, str]:
     """Accept/reject the claim ``y[i] = tc_dot(c[i], a[i], b[i])`` for all l units -- or, with
     ``chain = (Layout, y16_pub)`` (``c = y = None``), the claim that every VU of the layout casts to its
-    ``y16_pub`` word from ``c_0 = 0`` over its 96 units.  Never touches W.
+    ``y16_pub`` word from ``c_0 = 0`` over its 96 units.  Never touches W.  A fingerprinted chain (chain.py):
+    ``chain = (Layout, y16_pub, FpArgs)`` in the public mode (the hash side of row sharing: rho and F are the
+    verifier's statement values); in the coin mode the message ``proof.fp`` is checked against the chain and ``out``
+    (if given) receives ``out["rho"]`` -- the coins THIS verifier derived, for the paired hash-side statement.
     ``coins``: interactive mode -- REQUIRED: the verifier's OWN step-0 randomness; the transcript must carry exactly
     these openings (a proof made in another verifier's session, or with prover-chosen coins, is rejected).
     Fiat-Shamir mode -- must be ``None``: there is no step 0 and the transcript carries no coins.
@@ -1619,8 +1792,10 @@ def verify(p: Params, sys: System, tb: Tables, cfg: Config, c, a, b, y, proof: P
         return False, "malformed Merkle paths"
     if (proof.w >= P).any() or (proof.h >= P).any() or (proof.opened >= P).any():
         return False, "transcript element out of the field"
+    fp_pub = fp_args = None
+    n_fp = 0
     if chain is not None:
-        layout, y16_pub = chain
+        layout, y16_pub = chain[0], chain[1]
         y16_pub = torch.as_tensor(y16_pub, dtype=torch.int64)
         if layout.l != l or proof.q is None or proof.q.shape != (D, cfg.q_len) or (proof.q >= P).any():
             return False, "malformed chain transcript"
@@ -1628,17 +1803,54 @@ def verify(p: Params, sys: System, tb: Tables, cfg: Config, c, a, b, y, proof: P
             return False, "y16 range"
         if auth is not None and len(auth.vu_index) != layout.n_vus:
             return False, "authentication block does not match the layout"
-        stmt = statement_digest(sys, cfg, a, b, layout=layout, y16=y16_pub, rel=rel, auth=auth)
-    elif proof.q is not None:
+        # the fingerprint constraints (chain.py): coin mode -- the message F (n_vus, n_op, C) in the transcript, rho from
+        # challenge 1; public mode -- (rho, F) from the verifier's statement, no message
+        spec = sys.chain.get("fp")
+        n_slots = l // layout.steps
+        if spec is not None:
+            from .chain import FpArgs
+            n_op, C = len(spec["lanes"]), int(spec["coords"])
+            if spec["mode"] == "coin":
+                n_fp = C
+                if proof.fp is None or proof.fp.shape != (layout.n_vus, n_op, C) or (proof.fp >= P).any():
+                    return False, "malformed fingerprint message"
+                if len(chain) > 2 and chain[2] is not None:
+                    return False, "fingerprint coin mode takes no public fingerprints"
+            else:
+                if proof.fp is not None:
+                    return False, "unexpected fingerprint message"
+                if len(chain) < 3 or chain[2] is None:
+                    return False, "fingerprint public mode: the statement must give rho and F"
+                fp_pub = chain[2]
+                if tuple(fp_pub.F.shape) != (n_slots, n_op, C) or tuple(fp_pub.rho.shape) != (C,):
+                    return False, "malformed public fingerprints"
+                if (fp_pub.F >= P).any() or (fp_pub.F < 0).any() or (fp_pub.rho >= P).any() or (fp_pub.rho < 0).any():
+                    return False, "public fingerprints out of the field"
+                if (fp_pub.F[layout.n_vus:] != 0).any():
+                    return False, "public fingerprints of pad slots must be zero"
+        elif proof.fp is not None or (len(chain) > 2 and chain[2] is not None):
+            return False, "unexpected fingerprint data"
+        stmt = statement_digest(sys, cfg, a, b, layout=layout, y16=y16_pub, rel=rel, auth=auth, fp=fp_pub)
+    elif proof.q is not None or proof.fp is not None:
         return False, "unexpected chain transcript"
     else:
         stmt = statement_digest(sys, cfg, a, b, c=c, y=y, rel=rel)
     if len(set(proof.cols)) != t or any(not 0 <= c_ < n for c_ in proof.cols):
         return False, "bad column set"
     # challenges: H(statement, transcript prefix) -- the statement is the verifier's, not the proof's
-    r, rho_lin, rho_quad, rc = _challenge1(stmt, proof.root, D, M, tb.L, tb.Q, device, l if chain else 0, ccom, pc.r1)
-    if proof.cols != _challenge2(stmt, proof.root, proof.w, proof.h, t, n, proof.q, proof.v, ccom, pc.r2):
+    r, rho_lin, rho_quad, rc, rho_fp = _challenge1(stmt, proof.root, D, M, tb.L, tb.Q, device, l if chain else 0, ccom, pc.r1, n_fp)
+    if proof.cols != _challenge2(stmt, proof.root, proof.w, proof.h, t, n, proof.q, proof.v, ccom, pc.r2, proof.fp):
         return False, "column challenge mismatch"
+    if n_fp:
+        from .chain import FpArgs
+        F = torch.zeros((n_slots, proof.fp.shape[1], n_fp), dtype=torch.int64, device=device)
+        F[:layout.n_vus] = torch.from_numpy(proof.fp.astype(np.int64)).to(device)
+        fp_args = FpArgs(rho_fp, F)
+        if out is not None:
+            out["rho"] = rho_fp.cpu().numpy().astype(np.uint32)
+    elif fp_pub is not None:
+        from .chain import FpArgs
+        fp_args = FpArgs(torch.as_tensor(fp_pub.rho, dtype=torch.int64).to(device), torch.as_tensor(fp_pub.F, dtype=torch.int64).to(device))
     cols = torch.tensor(proof.cols, dtype=torch.int64, device=device)
     Uo = torch.from_numpy(proof.opened.astype(np.int64)).to(device)          # (M, t)
     zh = zh_on_coset(n, l, device)[cols]                                      # (t,)
@@ -1677,7 +1889,7 @@ def verify(p: Params, sys: System, tb: Tables, cfg: Config, c, a, b, y, proof: P
         return False, "quadratic constraints failed"
     # (v) chain: the general linear test
     if chain is not None:
-        cc = chain_coefs(sys, layout, rc, torch.as_tensor(y16_pub, dtype=torch.int64))
+        cc = chain_coefs(sys, layout, rc, torch.as_tensor(y16_pub, dtype=torch.int64), fp_args)
         q = torch.from_numpy(proof.q.astype(np.int64)).to(device)
         if not torch.equal(_sum_over_H(q, l), cc.rhs):
             return False, "chain constraints failed (sum over H)"

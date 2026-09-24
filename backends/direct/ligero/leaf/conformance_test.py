@@ -186,7 +186,7 @@ def test_pipelined_prover_publishes_the_sequential_statement(name: str, runners)
     prover starts; it must be the one ``prove_vus`` publishes, and every sub-batch must verify."""
     R, data = runners[name]
     ids = [[0, 2], [1, 3]]
-    many, wall = R.prove_vus_many([[data[i] for i in g] for g in ids], lambda i: None, depth=2, vu_ids=ids)
+    many, wall = R.prove_vus_many([[data[i] for i in g] for g in ids], lambda i: None, depth=2, vu_ids_list=ids)
     assert len(many) == 2 and wall > 0
     for (V, proof, pubs, lay), g in zip(many, ids):
         assert R.verify_vus(proof, pubs, lay, coins=V) == (True, "")

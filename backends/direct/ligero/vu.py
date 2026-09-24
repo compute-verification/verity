@@ -28,7 +28,7 @@ from . import protocol as protocol_mod
 from .chain import Layout
 from .compile import P
 from .hints_torch import hints_torch
-from .protocol import Config, config_for, n_rows, prove, soundness, verify
+from .protocol import Config, config_for, n_rows, prove, prove_stages, soundness, verify
 
 ZK_MODE = ("Ligero HVZK masking: t_pad uniform coefficients (Z_H s_j) per row, 6D committed mask rows "
            "(prox/lin/quad x2/chain x2: q masked by a uniform zero-sum polynomial, AHIV22 u_add -- red team F1 fixed), "
@@ -155,6 +155,61 @@ class ChainRunner:
         if auth_stmt is not None:
             return proof, (a, b, y16), lay, auth_stmt
         return proof, (a, b, y16), lay
+
+    def _prove_stages(self, arrays: tuple, lay: Layout, coins, auth: tuple | None = None, slot=None):
+        """The prover generator for one marshalled sub-batch (``pipeline.prove_many`` drives several at once; lane live-2,
+        the Ampere BF16 counterpart of ``relchain.RelChainRunner._prove_stages``): the public vectors and the torch hints
+        (device, timed ``hints_host`` inside the prover's clock, as ``prove_arrays`` reports them) then
+        ``protocol.prove_stages``.  Returns ``(generator, auth_stmt)``; the caller sets the statement before starting it."""
+        a, b, c_in, y_out, y16 = arrays
+        auth_stmt = auth_open = None
+        if auth is not None:
+            trees, vu_index = auth
+            auth_stmt = auth_mod.AuthStatement.for_vus(trees, vu_index)
+            auth_open = lambda: auth_mod.open_trees(trees, auth_stmt, K=STEP * STEPS, steps=STEPS)  # noqa: E731
+
+        def hints_fn():
+            if self.hints_mode != "torch":
+                raise ValueError("--pipeline needs the torch hint generator (hints_mode='torch')")
+            return hints_torch(self.p, self.sys, c_in, a, b, y_out, self.device)
+
+        pub = public_vectors(self.p, None, a, b, None, device=self.device)
+        gen = prove_stages(self.p, self.sys, self.tb, self.cfg(lay.l), pub, None, self.device, check=False, mutate=None,
+                           chain=(lay, y16), words={"a": a, "b": b}, coins=coins, auth=auth_stmt, auth_open=auth_open,
+                           hints_fn=hints_fn, slot=slot)
+        return gen, auth_stmt
+
+    def prove_arrays_many(self, batches: list[tuple], lays: list[Layout], coins_factory, depth: int = 2,
+                          auths: list | None = None):
+        """``len(batches)`` marshalled sub-batches (``marshal_ids`` arrays each, layouts ``lays``) proved with up to ``depth``
+        in flight on their own CUDA streams (``pipeline.prove_many``; lane live-2 -- ``vu.py --pipeline``).  ``coins_factory(i)``
+        is called per sub-batch as it starts, in order; a live coin source (``set_statement``) gets its statement built off
+        the driver thread and its coin exchanges are non-blocking (``live.LiveCoins``).  ``auths[i]``: the ``auth`` tuple of
+        ``prove_arrays`` per sub-batch (or None).  Returns ``[(coins, proof, pubs, lay, auth_stmt)]`` in order and the pass
+        wall; each proof's ``timings`` is its share of the wall (``pipeline._rescale``)."""
+        from .pipeline import prove_many
+        coins_of: list = [None] * len(batches)
+        auth_of: list = [None] * len(batches)
+
+        def starter(i):
+            def start(slot):
+                c = coins_factory(i)
+                coins_of[i] = c
+                gen, st_auth = self._prove_stages(batches[i], lays[i], c, auth=(auths[i] if auths else None), slot=slot)
+                auth_of[i] = st_auth
+                if hasattr(c, "set_statement"):
+                    from .live import set_statement
+                    a, b, _c, _y, y16 = batches[i]
+                    set_statement(c, self, (a, b, y16), lays[i], self.cfg(lays[i].l), self.n_proofs, auth=st_auth)
+                return gen
+            return start
+
+        proofs, wall = prove_many([starter(i) for i in range(len(batches))], self.device, depth=depth)
+        out = []
+        for i, pf in enumerate(proofs):
+            a, b, _c, _y, y16 = batches[i]
+            out.append((coins_of[i], pf, (a, b, y16), lays[i], auth_of[i]))
+        return out, wall
 
     def verify_vus(self, proof, pubs, lay: Layout, coins=None, auth: auth_mod.AuthStatement | None = None,
                    auth_procs: int | None = None, auth_timing: dict | None = None):
@@ -603,9 +658,19 @@ def bench_vu(args) -> int:
     # (live.py) and every prover message is sent to it as it is produced -- the protocol is unchanged (8c), only the coin
     # source is; the warm-up rep keeps local coins (it presents one sub-batch, not n_proofs).
     live = None
+    # --pipeline N (lane live-2, the Ampere BF16 cell path): the sub-batches proved N-deep on their own CUDA streams
+    # (``ChainRunner.prove_arrays_many`` -> ``pipeline.prove_many``), as ``relchain.bench_vu_rel`` does for the registered
+    # relations; with --verifier the coin exchanges are non-blocking (``live.LiveCoins`` futures) and the verifier commits
+    # N sub-batches ahead (HELLO window).  0/1 = the sequential schedule.
+    pipeline_depth = int(getattr(args, "pipeline", 0) or 0) if args.device.startswith("cuda") else 0
+    if pipeline_depth > 1 and R.hints_mode != "torch":
+        raise SystemExit("--pipeline needs the torch hint generator")
     if getattr(args, "verifier", None):
         from .live import BenchLive
         live = BenchLive(args, R, n_proofs, total_vus, "bf16-ampere", interactive)
+        if pipeline_depth > 1:
+            live.window = pipeline_depth                 # the verifier commits N sub-batches ahead (N openings in flight)
+    local_coins = lambda i: (protocol_mod.Coins.sample() if interactive else None)   # noqa: E731  the honest step 0
     for rep in range(args.reps + 1):
         agg: dict[str, float] = {}
         vsum = 0.0
@@ -618,7 +683,21 @@ def bench_vu(args) -> int:
         cfgs_seen: list[Config] = []
         if live is not None:
             live.begin_rep(rep)
-        for si, (lo, hi) in enumerate(subs):
+        if pipeline_depth > 1 and rep > 0:
+            lays = [Layout(l, hi - lo, STEPS) for lo, hi in subs]
+            arrays_all = [marshal_ids(vu, [i % vu.n for i in range(lo, hi)], lay_s) for (lo, hi), lay_s in zip(subs, lays)]
+            auths = [(trees, list(range(lo, hi))) for lo, hi in subs] if with_auth else None
+            factory = live.pipeline_factory(local_coins) if live is not None else local_coins
+            many, _wall = R.prove_arrays_many(arrays_all, lays, factory, depth=pipeline_depth, auths=auths)
+            del arrays_all
+            for si, ((lo, hi), (V, proof, pubs, lay_i, st_auth)) in enumerate(zip(subs, many)):
+                if live is not None:
+                    V = live.proved(si, proof, V)            # PROOF si on the data channel (async); coins -> plain Coins
+                for k, v in proof.timings.items():
+                    agg[k] = agg.get(k, 0.0) + v
+                proved.append((si, lo, hi, V, proof, pubs, lay_i, st_auth))
+                cfgs_seen.append(R.cfg(lay_i.l))
+        for si, (lo, hi) in enumerate(subs if not proved else []):
             lay_s = Layout(l, hi - lo, STEPS)
             arrays = marshal_ids(vu, [i % vu.n for i in range(lo, hi)], lay_s)     # loader work, outside the prover timer
             V = protocol_mod.Coins.sample() if interactive else None      # the verifier's step 0 (interactive only)
@@ -636,6 +715,14 @@ def bench_vu(args) -> int:
             proved.append((si, lo, hi, V, proof, pubs, lay_i, st_auth))
             cfgs_seen.append(R.cfg(lay_i.l))
             if rep == 0:
+                if pipeline_depth > 1:
+                    # every pipeline slot once (its stream's graph capture, pinned buffers): untimed, like the warm-up
+                    warm = subs[:pipeline_depth] + (subs[-1:] if len(subs) > pipeline_depth else [])   # + the ragged last layout
+                    w_lays = [Layout(l, hi_ - lo_, STEPS) for lo_, hi_ in warm]
+                    w_arrays = [marshal_ids(vu, [i % vu.n for i in range(lo_, hi_)], ly) for (lo_, hi_), ly in zip(warm, w_lays)]
+                    R.prove_arrays_many(w_arrays, w_lays, local_coins, depth=pipeline_depth,
+                                        auths=([(trees, list(range(lo_, hi_))) for lo_, hi_ in warm] if with_auth else None))
+                    del w_arrays
                 break                                        # warm-up: one sub-batch (graph capture, compile)
         if live is not None:
             live.end_rep(rep, agg)                           # END; the verifier's session verdict (waits for its Rust verify)
@@ -697,7 +784,7 @@ def bench_vu(args) -> int:
     per_vu = total / n_vus
     hw = contract.probe_hardware()
     sw = {"backend": {"name": "b-ligero chain (backends/direct/ligero)", "commit": _git_commit(), "hash": proof.hash_name,
-                      "challenge_expander": "SHAKE-256 (placeholder)"},
+                      "challenge_expander": "SHAKE-256 (placeholder)", "pipeline": pipeline_depth},
           "toolchain": {"python": platform.python_version(), "torch": torch.__version__, "numpy": np.__version__}}
     auth_note = ("; the operands and words are published AND authenticated: each is a leaf the statement's roots commit to "
                  "(auth.py), so the ZK claim is about the construction, the privacy of the words is not claimed" if with_auth else "")

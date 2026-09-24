@@ -59,7 +59,7 @@ def u_high_rank(proof: Proof, sys, tb, cfg: Config, layout, y16, a, b, device, m
     M = protocol.n_rows(cfg, sys.m, True)
     cc = tuple(proof.coin_commit) if cfg.interactive else None
     r1 = proof.coins.r1 if cfg.interactive else None
-    _, _, _, rc = protocol._challenge1(stmt, proof.root, D, M, tb.L, tb.Q, device, l, cc, r1)
+    _, _, _, rc, _ = protocol._challenge1(stmt, proof.root, D, M, tb.L, tb.Q, device, l, cc, r1)
     ccf = chain_coefs(sys, layout, rc, y16_t)
     R = ccf.coef.shape[1]
     rows_used = R if max_rows is None else min(R, max_rows)

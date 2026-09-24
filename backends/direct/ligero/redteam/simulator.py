@@ -247,7 +247,7 @@ def simulate(V, p, sys: System, tb, cfg: Config, layout, y16, a, b, device, orac
     # ``s_prox``), ``h`` uniform (masked by ``s_qa``), ``v`` uniform on the public set ``{v|_H = beta}``, ``q`` uniform
     # on the public set ``{sum_H q = rhs}``.  A V* applying the public checks to ``v, q`` behaves identically here
     # and against the real prover.
-    r, rho_lin, rho_quad, rc = protocol._challenge1(stmt, b"", D, M, tb.L, tb.Q, device, l, cc, r1)
+    r, rho_lin, rho_quad, rc, _ = protocol._challenge1(stmt, b"", D, M, tb.L, tb.Q, device, l, cc, r1)
     alpha, beta = protocol._alpha_beta(tb, rho_lin, pub, m, l, device)
     ccf = chain_coefs(sys, layout, rc, y16_t)
     w0 = _u32(_uniform((D, k), device))

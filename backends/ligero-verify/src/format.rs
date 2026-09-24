@@ -27,7 +27,8 @@
 //! ligero-statement/v6  magic "LIGSTM06" | the v5 layout with `l x y16` replaced by `n_vus x y` (y_bytes): the chain-end
 //!                      words in VU order (lane tier0-bytes).  The reader rebuilds the l-vector (y16[v*steps+steps-1] =
 //!                      y[v], 0 elsewhere -- what the hashed prover's public vector is), so the statement digest and
-//!                      every check are those of the v5 file; 91 -> 27 kB per sub-batch at l = 16384.
+//!                      every check are those of the v5 file; 91 -> 27 kB per sub-batch at l = 16384.  The same magic with
+//!                      str authentication "included-hash-shared" is the row-sharing pair (`PairStatement`).
 //! ~~~
 //! The words are kept as `u32` whatever their width; the relation the file names decides (relation.rs) which widths
 //! are legal, how the words enter the statement digest and how the operands decode.  The authentication block's leaf
@@ -191,6 +192,22 @@ impl Chain {
     }
 }
 
+/// The fingerprint constraints of a `ligero-system/v4` chain (chain.py "Fingerprint constraints"; the row-sharing
+/// systems of hashchain.py): `lanes[o]` the 16 lane rows of operand slot `o` (the 16-bit words a Poseidon2 sponge would
+/// absorb), `coords` the number of coins rho, and the mode -- coin (rho the tail of challenge 1, F a prover message
+/// after it: the GEMM side) or public (rho, F statement values: the hash side).  At the END column of every VU `v`,
+/// for every `(o, x)`: `sum_{s < steps} sum_{i < 16} rho_x^(16 s + i) lanes[o][i][steps v + s] = F[v][o][x]`, an extra
+/// constraint of the general linear test with the monomial coefficient of index `2 n_extra_links + o coords + x`.
+#[derive(Clone, Debug)]
+pub struct FpSpec {
+    pub lanes: Vec<Vec<u32>>,
+    pub coords: usize,
+    pub public: bool,
+}
+
+pub const FP_LANES: usize = 16;
+pub const MAX_FP_COORDS: usize = 32;
+
 #[derive(Clone, Debug)]
 pub struct System {
     pub m: usize,
@@ -198,9 +215,11 @@ pub struct System {
     pub linear: Vec<Linear>,
     pub quadratic: Vec<[Expr; 3]>,
     pub chain: Option<Chain>,
+    /// `ligero-system/v4`: the fingerprint constraints (None otherwise).
+    pub fp: Option<FpSpec>,
     pub sys_id: [u8; 32],
-    /// The file format: 1 (`LIGSYS01`), 2 (`LIGSYS02`, the chain end in components) or 3 (`LIGSYS03`, more than
-    /// three linked rows).
+    /// The file format: 1 (`LIGSYS01`), 2 (`LIGSYS02`, the chain end in components), 3 (`LIGSYS03`, more than
+    /// three linked rows) or 4 (`LIGSYS04`, fingerprint constraints).
     pub version: u8,
 }
 
@@ -231,7 +250,8 @@ impl System {
             b"LIGSYS01" => 1,
             b"LIGSYS02" => 2,
             b"LIGSYS03" => 3,
-            _ => return Err("not a ligero-system/v1, /v2 or /v3 file".into()),
+            b"LIGSYS04" => 4,
+            _ => return Err("not a ligero-system/v1, /v2, /v3 or /v4 file".into()),
         };
         let m = r.usize_bounded(1 << 20, "m")?;
         let n_pins = r.usize_bounded(m, "n_pins")?;
@@ -272,7 +292,8 @@ impl System {
             return Err("a ligero-system/v2 or /v3 file carries no chain (the formats exist for the chain block)".into());
         }
         let chain = if has_chain {
-            let n_links = if version == 3 { r.usize_bounded(MAX_LINKS, "chain links")? } else { 3 };
+            // v3 and v4 carry the link count (a v4 file does even with three linked rows: the GEMM side of row sharing)
+            let n_links = if version >= 3 { r.usize_bounded(MAX_LINKS, "chain links")? } else { 3 };
             if n_links < 3 {
                 return Err(format!("chain links {n_links} rows; a chain links at least the three accumulator rows"));
             }
@@ -327,9 +348,44 @@ impl System {
         } else {
             None
         };
+        // v4: the fingerprint block -- n_op x 16 lane rows (distinct witness rows), coords, mode
+        let fp = if version == 4 {
+            let n_op = r.usize_bounded(8, "fingerprint operand slots")?;
+            if n_op == 0 {
+                return Err("fingerprint block names no operand slot".into());
+            }
+            let mut lanes = Vec::with_capacity(n_op);
+            let mut seen = std::collections::HashSet::new();
+            for _ in 0..n_op {
+                let mut op = Vec::with_capacity(FP_LANES);
+                for _ in 0..FP_LANES {
+                    let row = r.u32()?;
+                    if row as usize >= m {
+                        return Err("fingerprint lane row >= m".into());
+                    }
+                    if !seen.insert(row) {
+                        return Err("fingerprint lane rows repeat".into());
+                    }
+                    op.push(row);
+                }
+                lanes.push(op);
+            }
+            let coords = r.usize_bounded(MAX_FP_COORDS, "fingerprint coordinates")?;
+            if coords == 0 {
+                return Err("fingerprint block has no coordinates".into());
+            }
+            let public = match r.u8()? {
+                0 => false,
+                1 => true,
+                _ => return Err("fingerprint mode not 0 (coin) / 1 (public)".into()),
+            };
+            Some(FpSpec { lanes, coords, public })
+        } else {
+            None
+        };
         let sys_id: [u8; 32] = r.take(32)?.try_into().unwrap();
         r.done()?;
-        Ok(System { m, pins, linear, quadratic, chain, sys_id, version })
+        Ok(System { m, pins, linear, quadratic, chain, fp, sys_id, version })
     }
 
     /// This verifier's own digest of the tables it will enforce (BLAKE3 of the canonical file bytes without the
@@ -375,13 +431,44 @@ pub struct Statement {
     /// and `b` the (n_vus x 3) index rows `(vu, x, w)` -- what the Python prover hashes into the statement digest as
     /// `<u4` words.  The leaf scheme is `hash_auth.leaf` (named by the relation string's `+<leaf>` suffix).
     pub hash_auth: Option<HashAuthBlock>,
+    /// `authentication = included-hash-shared` (a v6 file, `PairStatement`): which side of the pair this is.  G: `a` is
+    /// the (l x 1) table `[is_end]`, `b` the (n_vus x 3) index rows; H: `a` the (l x 10) table `[is_end | role |
+    /// d0..d7]`, `b` the (n_units x 2) units `(role, rank)`, `y16` zeros, and the fingerprint (rho, F_H) enters the
+    /// digest.  `hash_auth` is set on both (its digest bytes follow the side's tag).
+    pub side: Option<Side>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Side {
+    G,
+    H,
+}
+
+/// The paired statement of row sharing (`ligero-statement/v6`, relchain.SharedHashedRunner): the GEMM side's statement,
+/// the hash side's, the unit maps and the fingerprint coordinates.
+#[derive(Clone, Debug)]
+pub struct PairStatement {
+    pub g: Statement,
+    pub h: Statement,
+    /// `hashchain.shared_units`: the unit hashing VU v's x row / W column.
+    pub unit_of_x: Vec<usize>,
+    pub unit_of_w: Vec<usize>,
+    /// `(role, rank)` per unit: the distinct x ranks ascending (role 0), then the distinct W ranks (role 1).
+    pub units: Vec<(u32, u32)>,
+    /// The units' digests, n_units x 8.
+    pub digests_h: Vec<u32>,
+    pub coords: usize,
 }
 
 /// The public table of a hashed statement: 1 + 2 digest_elems columns per Ligero column (`hashchain.public_table`).
 pub fn hash_table_cols(leaf: &LeafScheme) -> usize {
     1 + 2 * leaf.digest_elems
 }
+/// The hash side's table of a v6 statement: is_end, role, 8 digest lanes (Poseidon2 rows: `hashchain.row_hash_system`).
+pub const ROW_TABLE_COLS: usize = 2 + N_ROW_DIGEST;
+pub const N_ROW_DIGEST: usize = 8;
 pub const AUTH_HASH: &str = "included-hash";
+pub const AUTH_SHARED: &str = "included-hash-shared";
 
 /// The longest relation string a v4 file may carry (the names are short identifiers: `fp8-ada`, `bf16-hopper`).
 pub const MAX_RELATION_LEN: usize = 64;
@@ -600,7 +687,7 @@ impl Statement {
         r.done()?;
         Ok(Statement {
             l, n, d: dd, t, target_log2, zk, t_pad, interactive, n_proofs, n_vus, steps, k_ops,
-            version, relation, word_bytes, y_bytes, a, b, y16, auth, hash_auth: None,
+            version, relation, word_bytes, y_bytes, a, b, y16, auth, hash_auth: None, side: None,
         })
     }
 
@@ -618,7 +705,13 @@ impl Statement {
         if rel.is_empty() {
             return Err(format!("v{version} statement names no relation"));
         }
-        if r.str()? != AUTH_HASH {
+        // LIGSTM06 is two formats told apart here: the trimmed hashed statement (included-hash) and the row-sharing
+        // pair (included-hash-shared, `PairStatement::parse`)
+        let auth = r.str()?;
+        if version == 6 && auth == AUTH_SHARED {
+            return Err("a ligero-statement/v6 file (authentication = included-hash-shared) is a PAIR: verify it with `pair` / `batch-pair`".into());
+        }
+        if auth != AUTH_HASH {
             return Err(format!("v{version} statement names an authentication other than included-hash"));
         }
         // "<rel>" (Poseidon2) or "<rel>+<leaf>": the leaf scheme fixes the digest table's width and the block's framing
@@ -651,8 +744,66 @@ impl Statement {
         }
         Ok(Statement {
             l, n, d: dd, t, target_log2, zk, t_pad, interactive, n_proofs, n_vus, steps, k_ops,
-            version, relation: Some(rel), word_bytes: 4, y_bytes: yb, a, b, y16, auth: None, hash_auth: Some(hash_auth),
+            version, relation: Some(rel), word_bytes: 4, y_bytes: yb, a, b, y16, auth: None, hash_auth: Some(hash_auth), side: None,
         })
+    }
+
+    /// The Ligero configuration the header fixes, checked as `parse` does (`k_ops` = K / steps for the hashed layouts).
+    fn read_header(r: &mut Rd, k_words_per_row: bool) -> Result<(usize, usize, usize, usize, f64, bool, usize, bool, usize, usize, usize, usize)> {
+        if r.u32()? != 1 {
+            return Err("statement mode is not chain (1)".into());
+        }
+        let l = r.usize_bounded(1 << 22, "l")?;
+        let n = r.usize_bounded(1 << 27, "n")?;
+        let dd = r.usize_bounded(64, "D")?;
+        let t = r.usize_bounded(1 << 16, "t")?;
+        let target_log2 = r.f64()?;
+        let zk = match r.u8()? {
+            0 => false,
+            1 => true,
+            _ => return Err("zk flag not 0/1".into()),
+        };
+        let t_pad = r.usize_bounded(1 << 16, "t_pad")?;
+        let interactive = match r.u8()? {
+            0 => true,
+            1 => false,
+            _ => return Err("mode code not 0 (interactive) / 1 (fiat-shamir)".into()),
+        };
+        let n_proofs = r.usize_bounded(1 << 20, "n_proofs")?;
+        let n_vus = r.usize_bounded(1 << 22, "n_vus")?;
+        let steps = r.usize_bounded(1 << 16, "steps")?;
+        let k_hdr = r.usize_bounded(if k_words_per_row { 1 << 16 } else { 1 << 8 }, "K")?;
+        let k_ops = if k_words_per_row {
+            if steps == 0 || k_hdr % steps != 0 || k_hdr / steps == 0 || k_hdr / steps > 256 {
+                return Err(format!("statement: K = {k_hdr} words per row is not steps ({steps}) x operands per unit"));
+            }
+            k_hdr / steps
+        } else {
+            k_hdr
+        };
+        Self::check_config(l, n, dd, t, target_log2, zk, t_pad, n_proofs, n_vus, steps, k_ops)?;
+        Ok((l, n, dd, t, target_log2, zk, t_pad, interactive, n_proofs, n_vus, steps, k_ops))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn check_config(l: usize, n: usize, dd: usize, t: usize, target_log2: f64, zk: bool, t_pad: usize, n_proofs: usize,
+                    n_vus: usize, steps: usize, k_ops: usize) -> Result<()> {
+        if l == 0 || !l.is_power_of_two() || !n.is_power_of_two() || n <= l {
+            return Err("l, n must be powers of two with n > l".into());
+        }
+        if steps == 0 || n_vus.checked_mul(steps).map_or(true, |x| x > l) {
+            return Err("layout does not fit: steps * n_vus > l".into());
+        }
+        if dd == 0 || t == 0 || n_proofs == 0 || k_ops == 0 {
+            return Err("D, t, n_proofs, K must be positive".into());
+        }
+        if zk != (t_pad > 0) {
+            return Err("t_pad must be positive exactly under zk".into());
+        }
+        if !target_log2.is_finite() || target_log2 >= 0.0 {
+            return Err("target_log2 must be a finite negative number".into());
+        }
+        Ok(())
     }
 
     /// The words as 16-bit values (the authentication leaves): defined only for 2-byte words, which the parser
@@ -691,6 +842,120 @@ impl Statement {
     }
 }
 
+impl PairStatement {
+    /// `serialize._read_v6`.  Both sides' statements are built here: G's table / index rows and H's table / units are
+    /// derived from the block (the units from the claimed ranks, `hashchain.shared_units`; the file's roles must agree),
+    /// and the per-VU digest expansion the leaf check takes is placed in `hash_auth.digests` (x unit's 8 lanes, then
+    /// the W unit's).
+    pub fn parse(d: &[u8]) -> Result<PairStatement> {
+        let mut r = Rd::new(d);
+        if r.take(8)? != b"LIGSTM06" {
+            return Err("not a ligero-statement/v6 file".into());
+        }
+        let (l, n, dd, t, target_log2, zk, t_pad, interactive, n_proofs, n_vus, steps, k_ops) = Statement::read_header(&mut r, true)?;
+        let yb = r.u8()?;
+        if !matches!(yb, 1 | 2 | 4) {
+            return Err(format!("statement word width {yb} bytes is not 1, 2 or 4"));
+        }
+        let n_rel = r.usize_bounded(MAX_RELATION_LEN, "relation name length")?;
+        let rel = String::from_utf8(r.take(n_rel)?.to_vec()).map_err(|_| "relation name: bad utf-8".to_string())?;
+        if rel.is_empty() {
+            return Err("v6 statement names no relation".into());
+        }
+        if r.str()? != AUTH_SHARED {
+            return Err("v6 statement names an authentication other than included-hash-shared".into());
+        }
+        // the rows are hashed by the Poseidon2 sponge of `hashchain.row_hash_system` (8 digest lanes): a leaf suffix other
+        // than the default names a scheme the hash side does not implement
+        let (_, leaf) = crate::leaf::split_relation(&rel)?;
+        if leaf.digest_elems != N_ROW_DIGEST || !std::ptr::eq(leaf, &crate::leaf::POSEIDON2) {
+            return Err(format!("v6 statement: row sharing hashes with Poseidon2 only, the relation names {:?}", leaf.name));
+        }
+        let y16 = r.words(l, yb)?;
+        let l_h = r.usize_bounded(1 << 22, "l_h")?;
+        let n_h = r.usize_bounded(1 << 27, "n_h")?;
+        let d_h = r.usize_bounded(64, "D_h")?;
+        let t_h = r.usize_bounded(1 << 16, "t_h")?;
+        let t_pad_h = r.usize_bounded(1 << 16, "t_pad_h")?;
+        let n_units = r.usize_bounded(1 << 22, "n_units")?;
+        let coords = r.usize_bounded(MAX_FP_COORDS, "fingerprint coordinates")?;
+        if n_units == 0 || coords == 0 {
+            return Err("hash side: no units, or no fingerprint coordinates".into());
+        }
+        Statement::check_config(l_h, n_h, d_h, t_h, target_log2, zk, t_pad_h, n_proofs, n_units, steps, k_ops)?;
+        if d_h != dd {
+            return Err("hash side: D differs from the GEMM side's (one target, one field extension)".into());
+        }
+        let raw = r.fe_vec(n_units * (1 + N_ROW_DIGEST))?;
+        let roles_file: Vec<u32> = (0..n_units).map(|u| raw[u * (1 + N_ROW_DIGEST)]).collect();
+        let mut digests_h = Vec::with_capacity(n_units * N_ROW_DIGEST);
+        for u in 0..n_units {
+            digests_h.extend_from_slice(&raw[u * (1 + N_ROW_DIGEST) + 1..(u + 1) * (1 + N_ROW_DIGEST)]);
+        }
+        if roles_file.iter().any(|&x| x > 1) {
+            return Err("hash side: a unit role is not 0 (x row) / 1 (W column)".into());
+        }
+        let hash_auth = read_hash_auth_block(&mut r, n_vus, Vec::new(), leaf)?;
+        r.done()?;
+        // the units from the block: distinct x ranks ascending (role 0), then distinct W ranks (role 1)
+        let distinct = |v: &[u32]| {
+            let mut u = v.to_vec();
+            u.sort_unstable();
+            u.dedup();
+            u
+        };
+        let (xr, wr) = (distinct(&hash_auth.x_index), distinct(&hash_auth.w_index));
+        if xr.len() + wr.len() != n_units {
+            return Err(format!("hash side: the file has {n_units} units, the authentication block {} distinct rows", xr.len() + wr.len()));
+        }
+        let mut units: Vec<(u32, u32)> = xr.iter().map(|&x| (0u32, x)).collect();
+        units.extend(wr.iter().map(|&w| (1u32, w)));
+        if units.iter().zip(&roles_file).any(|(u, &rf)| u.0 != rf) {
+            return Err("hash side: unit roles do not match the authentication block".into());
+        }
+        let unit_of_x: Vec<usize> = hash_auth.x_index.iter().map(|x| xr.binary_search(x).unwrap()).collect();
+        let unit_of_w: Vec<usize> = hash_auth.w_index.iter().map(|w| xr.len() + wr.binary_search(w).unwrap()).collect();
+        // the per-VU digest expansion (what `auth::check_hashed` opens under the roots)
+        let mut digests = Vec::with_capacity(n_vus * 2 * N_ROW_DIGEST);
+        for v in 0..n_vus {
+            digests.extend_from_slice(&digests_h[unit_of_x[v] * N_ROW_DIGEST..(unit_of_x[v] + 1) * N_ROW_DIGEST]);
+            digests.extend_from_slice(&digests_h[unit_of_w[v] * N_ROW_DIGEST..(unit_of_w[v] + 1) * N_ROW_DIGEST]);
+        }
+        let hash_auth = HashAuthBlock { digests, ..hash_auth };
+        // G: [is_end] (l x 1), the index rows (n_vus x 3)
+        let mut a_g = vec![0u32; l];
+        for v in 0..n_vus {
+            a_g[v * steps + steps - 1] = 1;
+        }
+        let mut b_g = Vec::with_capacity(3 * n_vus);
+        for v in 0..n_vus {
+            b_g.extend_from_slice(&[hash_auth.vu_index[v], hash_auth.x_index[v], hash_auth.w_index[v]]);
+        }
+        // H: [is_end | role | d0..d7] (l_h x 10), the units (n_units x 2), y16 = 0
+        let mut a_h = vec![0u32; l_h * ROW_TABLE_COLS];
+        for (u, &(role, _)) in units.iter().enumerate() {
+            for s in 0..steps {
+                a_h[(u * steps + s) * ROW_TABLE_COLS + 1] = role;
+            }
+            let j = u * steps + steps - 1;
+            a_h[j * ROW_TABLE_COLS] = 1;
+            a_h[j * ROW_TABLE_COLS + 2..(j + 1) * ROW_TABLE_COLS].copy_from_slice(&digests_h[u * N_ROW_DIGEST..(u + 1) * N_ROW_DIGEST]);
+        }
+        let b_h: Vec<u32> = units.iter().flat_map(|&(role, rank)| [role, rank]).collect();
+        let g = Statement {
+            l, n, d: dd, t, target_log2, zk, t_pad, interactive, n_proofs, n_vus, steps, k_ops,
+            version: 6, relation: Some(rel.clone()), word_bytes: 4, y_bytes: yb, a: a_g, b: b_g, y16, auth: None,
+            hash_auth: Some(hash_auth.clone()), side: Some(Side::G),
+        };
+        let h = Statement {
+            l: l_h, n: n_h, d: d_h, t: t_h, target_log2, zk, t_pad: t_pad_h, interactive, n_proofs, n_vus: n_units, steps, k_ops,
+            version: 6, relation: Some(rel), word_bytes: 4, y_bytes: yb, a: a_h, b: b_h, y16: vec![0u32; l_h], auth: None,
+            hash_auth: Some(hash_auth), side: Some(Side::H),
+        };
+        Ok(PairStatement { g, h, unit_of_x, unit_of_w, units, digests_h, coords })
+    }
+}
+
 // ------------------------------------------------------------------------------------------------------- proof ----
 
 #[derive(Clone, Debug)]
@@ -716,19 +981,33 @@ pub struct Proof {
     pub paths: Vec<[u8; 32]>, // t x depth
     /// `ligero-proof/v2`: the canonical multiproofs of the a, b, y trees (authentication = included).
     pub auth: Option<Vec<Vec<[u8; 32]>>>,
+    /// `ligero-proof/v3`: the fingerprint message F (n_vus x n_op x coords, VU-major) of a coin-mode fingerprinted
+    /// system (the GEMM side of row sharing).
+    pub fp: Option<Vec<u32>>,
 }
 
 impl Proof {
     /// Parse with every size fixed by the statement and the system (`m`); a header that disagrees is rejected
     /// before the body is read.  A v2 transcript is only accepted against a v3 statement and vice versa.
     pub fn parse(d: &[u8], st: &Statement, m: usize) -> Result<Proof> {
+        Self::parse_fp(d, st, m, None)
+    }
+
+    /// `parse` with the fingerprint message: `fp_len = Some(n)` demands a v3 transcript carrying exactly n words
+    /// (the GEMM side of row sharing: n_vus x n_op x coords), `None` refuses one.
+    pub fn parse_fp(d: &[u8], st: &Statement, m: usize, fp_len: Option<usize>) -> Result<Proof> {
         let mut r = Rd::new(d);
         let magic = r.take(8)?;
-        let v2 = match magic {
-            b"LIGPRF01" => false,
-            b"LIGPRF02" => true,
-            _ => return Err("not a ligero-proof/v1 or /v2 file".into()),
+        let (v2, v3) = match magic {
+            b"LIGPRF01" => (false, false),
+            b"LIGPRF02" => (true, false),
+            b"LIGPRF03" => (false, true),
+            _ => return Err("not a ligero-proof/v1, /v2 or /v3 file".into()),
         };
+        if v3 != fp_len.is_some() {
+            return Err(if v3 { "transcript carries a fingerprint message but the system has no coin-mode fingerprint constraints" }
+                       else { "the system's fingerprint constraints take a prover message (ligero-proof/v3); the transcript carries none" }.into());
+        }
         if v2 != st.auth.is_some() {
             return Err(if v2 { "transcript carries multiproofs but the statement has no authentication block" }
                        else { "statement has an authentication block but the transcript carries no multiproofs" }.into());
@@ -820,7 +1099,16 @@ impl Proof {
         } else {
             None
         };
+        let fp = if let Some(n_fp) = fp_len {
+            let got = r.u32()? as usize;
+            if got != n_fp {
+                return Err(format!("malformed proof: fingerprint message holds {got} words, the statement fixes {n_fp}"));
+            }
+            Some(r.fe_vec(n_fp)?)
+        } else {
+            None
+        };
         r.done()?;
-        Ok(Proof { coins, root, w, h, q, v, cols, opened, paths, auth })
+        Ok(Proof { coins, root, w, h, q, v, cols, opened, paths, auth, fp })
     }
 }

@@ -3,7 +3,7 @@
 //! the proof is parsed against those bounds, and the checks run reject-first.
 
 use crate::field::{self as f, add, mul, mul_acc, neg, sub, Ntt, P};
-use crate::format::{Expr, Proof, Statement, System};
+use crate::format::{Expr, PairStatement, Proof, Side, Statement, System, FP_LANES};
 use crate::hash::{blake2b_256, blake3, shake256};
 use crate::leaf::LeafScheme;
 use crate::relation::{self, Relation};
@@ -64,6 +64,9 @@ pub struct Soundness {
     pub per_proof_log2: f64,
     pub union_log2: f64,
     pub terms: Vec<(String, f64)>,
+    /// A pair (row sharing): the two sides' own per-proof bounds `[G, H]`, each a commitment of the batch's
+    /// `2 n_proofs` -- what the batch rule counts (`batch_bound` over 2 N entries, as serialize.verify_batch_dir).
+    pub sides: Vec<f64>,
 }
 
 fn log2_pow(base_num: f64, base_den: f64, e: usize) -> f64 {
@@ -79,6 +82,16 @@ fn log2_sum(xs: &[f64]) -> f64 {
 /// `k = l + t_pad` (ZK) or `l + 1` (the accounting's stand-in for k = l), `e = floor((n - k) / 2)`, the challenge
 /// field BabyBear^D, plus the step-0 coin-commitment hiding term when the commitment is on; union over `n_proofs`.
 pub fn soundness(st: &Statement) -> Result<Soundness, String> {
+    soundness_fp(st, None, 1)
+}
+
+/// `soundness` with the fingerprint collision term (`protocol.fingerprint_collision`, `fp = (coords, steps, n_op)`): one
+/// of the proof's `n_op x (l / steps)` fingerprinted slots holds a row that differs from the shared row it is matched
+/// to yet agrees on every coordinate; per slot and coordinate a nonzero polynomial of degree < 16 steps in rho_x has a
+/// root with probability <= (16 steps - 1) x 3 / 2^32 (the coins are uint32 mod p, no rejection: a residue has at most
+/// 3 preimages), the coordinates independent; the Fiat-Shamir factor applies (rho is drawn after the root).  The union
+/// is over `n_proofs_mult x n_proofs` commitments (2 for each side of a pair: `SharedHashedRunner.cfg` sizes t for 2 n_proofs).
+pub fn soundness_fp(st: &Statement, fp: Option<(usize, usize, usize)>, n_proofs_mult: usize) -> Result<Soundness, String> {
     let (n, l, t, d) = (st.n as f64, st.l, st.t, st.d);
     let k = if st.zk { st.l + st.t_pad } else { st.l + 1 };
     if !(0 < st.l && st.l < k && k < st.n) {
@@ -105,8 +118,16 @@ pub fn soundness(st: &Statement) -> Result<Soundness, String> {
     if st.interactive {
         terms.push(("coin_commitment_hiding".to_string(), 1.0 + 64.0 - 256.0));
     }
+    if let Some((coords, steps, n_op)) = fp {
+        if coords == 0 || steps == 0 || 16 * steps >= P as usize || n_op == 0 || steps > st.l {
+            return Err("accounting: fingerprint term needs 0 < 16 steps < p, steps <= l, coords > 0 and an operand slot".into());
+        }
+        let slots = (n_op * (st.l / steps)) as f64;
+        terms.push(("fingerprint_collision".to_string(),
+                    slots.log2() + log2_pow(3.0 * (16 * steps - 1) as f64, 2f64.powi(32), coords) + shift));
+    }
     let per = log2_sum(&terms.iter().map(|x| x.1).collect::<Vec<_>>());
-    Ok(Soundness { per_proof_log2: per, union_log2: per + (st.n_proofs as f64).log2(), terms })
+    Ok(Soundness { per_proof_log2: per, union_log2: per + ((n_proofs_mult * st.n_proofs) as f64).log2(), terms, sides: Vec::new() })
 }
 
 /// The batch verifier's accounting verdict (PROTOCOL.md 8c, "Batch verification").
@@ -173,15 +194,38 @@ fn absorb_words(h: &mut Vec<u8>, words: &[u32], width: u8) {
 /// `HashedRelationRunner.base_tag`: the hashed relation's tag prefix; the hash-auth block's digest bytes follow it
 /// (`hooks_for(auth)`), so the challenges are bound to "digests at these leaf ranks under these roots".
 pub const HASHED_TAG_PREFIX: &[u8] = b"hash/v2h|";
+/// `hashchain.SHARED_TAG` / `ROWS_TAG`: the two sides of row sharing (`SharedHashedRunner.base_tag` / `base_tag_h`),
+/// each followed by the relation tag and the hash-auth block's digest bytes.
+pub const SHARED_TAG_PREFIX: &[u8] = b"share/v1|";
+pub const ROWS_TAG_PREFIX: &[u8] = b"rows/v1|";
 
-fn statement_digest(st: &Statement, rel: &Relation, sys_id: &[u8; 32]) -> Result<Vec<u8>, String> {
+/// The fingerprint data of one verification (chain.py "Fingerprint constraints"): none; the coin mode (rho the tail
+/// of challenge 1, F the proof's message: the GEMM side); the public mode (rho, F statement values: the hash side).
+pub enum FpCtx {
+    None,
+    Coin,
+    Public { rho: Vec<u32>, f: Vec<u32> },
+}
+
+/// What a coin-mode verification hands to the pair check: the verifier's own rho and the prover's F (n_vus x n_op x C).
+pub struct FpOut {
+    pub rho: Vec<u32>,
+    pub f: Vec<u32>,
+}
+
+fn statement_digest(st: &Statement, rel: &Relation, sys_id: &[u8; 32], fp_pub: Option<(&[u32], &[u32])>) -> Result<Vec<u8>, String> {
     let k = st.k();
     let mut h = Vec::new();
     h.extend_from_slice(STATEMENT_TAG);
     // protocol.statement_digest: the relation tag right after the statement tag (b"" for the BF16 relations); a hashed
-    // statement's tag is "hash/v2h|" + the relation tag + hashauth.digest_bytes(auth)
+    // statement's tag is "hash/v2h|" + the relation tag + hashauth.digest_bytes(auth); the two sides of row sharing
+    // "share/v1|" / "rows/v1|" + the same
     if let Some(ha) = &st.hash_auth {
-        h.extend_from_slice(HASHED_TAG_PREFIX);
+        h.extend_from_slice(match st.side {
+            None => HASHED_TAG_PREFIX,
+            Some(Side::G) => SHARED_TAG_PREFIX,
+            Some(Side::H) => ROWS_TAG_PREFIX,
+        });
         h.extend_from_slice(rel.tag);
         h.extend_from_slice(&crate::auth::hash_digest_bytes(ha));
     } else {
@@ -208,6 +252,13 @@ fn statement_digest(st: &Statement, rel: &Relation, sys_id: &[u8; 32]) -> Result
     // the challenges are bound to "the words at these indices under these roots"
     if let Some(ab) = &st.auth {
         h.extend_from_slice(&crate::auth::digest_bytes(ab));
+    }
+    // the hash side of row sharing: the fingerprint coins and values are statement values (protocol.statement_digest fp=)
+    if let Some((rho, f)) = fp_pub {
+        h.extend_from_slice(b"|fp_rho=");
+        h.extend_from_slice(&u32s_le(rho));
+        h.extend_from_slice(b"|fp_F=");
+        h.extend_from_slice(&u32s_le(f));
     }
     Ok(blake2b_256(&h).to_vec())
 }
@@ -257,6 +308,11 @@ fn system_k(sys: &System) -> Result<usize, String> {
 /// statement's words per the relation's `Decode`; rejects a word off the finite domain, a statement whose K is not
 /// the system's, and a pin name the relation does not define.
 fn public_pins(st: &Statement, sys: &System, rel: &Relation) -> Result<Vec<Vec<u32>>, String> {
+    match st.side {
+        Some(Side::G) => return public_pins_shared_g(st, sys),
+        Some(Side::H) => return public_pins_shared_h(st, sys),
+        None => {}
+    }
     if st.hash_auth.is_some() {
         return public_pins_hashed(st, sys);
     }
@@ -339,6 +395,53 @@ fn public_pins_hashed(st: &Statement, sys: &System) -> Result<Vec<Vec<u32>>, Str
     }
     if !seen_end || sys.pins.len() != cols {
         return Err(format!("hashed system pins {} public rows, the hashed relation ({} leaves) has {cols}", sys.pins.len(), leaf.name));
+    }
+    Ok(out)
+}
+
+/// `hashchain.shared_public_vectors`: the GEMM side of row sharing pins ONE public row, `hash.is_end` (the layout's
+/// end mask; the operands are private, the digests live on the hash side).
+fn public_pins_shared_g(st: &Statement, sys: &System) -> Result<Vec<Vec<u32>>, String> {
+    if st.a.len() != st.l {
+        return Err("shared statement: public table is not (l, 1)".into());
+    }
+    if sys.pins.len() != 1 || sys.pins[0].0 != "hash.is_end" {
+        return Err(format!("system pins {} public rows; the GEMM side of row sharing pins hash.is_end alone", sys.pins.len()));
+    }
+    Ok(vec![st.a.clone()])
+}
+
+/// `hashchain.row_hash_public_vectors`: the hash side's 10 pins `hash.is_end`, `hash.role`, `hash.d[0..8]` are the
+/// columns of its table (`PairStatement::parse` derived it from the units and their digests).
+fn public_pins_shared_h(st: &Statement, sys: &System) -> Result<Vec<Vec<u32>>, String> {
+    use crate::format::{N_ROW_DIGEST, ROW_TABLE_COLS};
+    let l = st.l;
+    if st.a.len() != l * ROW_TABLE_COLS {
+        return Err("hash-side statement: public table is not (l, 10)".into());
+    }
+    let mut out = Vec::with_capacity(sys.pins.len());
+    let (mut seen_end, mut seen_role) = (false, false);
+    for (name, _row) in &sys.pins {
+        let col = if name == "hash.is_end" {
+            seen_end = true;
+            0
+        } else if name == "hash.role" {
+            seen_role = true;
+            1
+        } else if let Some(rest) = name.strip_prefix("hash.d[") {
+            let x: usize = rest.strip_suffix(']').ok_or_else(|| format!("pin {name}: bad name"))?
+                .parse().map_err(|_| format!("pin {name}: bad index"))?;
+            if x >= N_ROW_DIGEST {
+                return Err(format!("pin {name}: digest lane >= 8"));
+            }
+            2 + x
+        } else {
+            return Err(format!("pin {name}: not a pin of the hash side of row sharing"));
+        };
+        out.push((0..l).map(|j| st.a[j * ROW_TABLE_COLS + col]).collect());
+    }
+    if !seen_end || !seen_role || sys.pins.len() != ROW_TABLE_COLS {
+        return Err(format!("hash-side system pins {} public rows, the row-hash system has 10", sys.pins.len()));
     }
     Ok(out)
 }
@@ -616,6 +719,25 @@ impl Shared {
         })
     }
 
+    /// The pinned-system gate for one side of a row-sharing statement (`relation::Relation::shared_systems`).
+    fn gate_shared(&self, rel: &Relation, side: Side, interactive: bool) -> Result<(), String> {
+        let name = if side == Side::G { "GEMM" } else { "hash" };
+        let pins = match rel.shared_systems.iter().find(|(ia, _)| *ia == interactive) {
+            Some((_, p)) => p,
+            None => return Err(format!("the {} relation has no pinned row-sharing systems in the {} mode (authentication = included-hash-shared is not composed for it)",
+                                       rel.name, if interactive { "interactive" } else { "Fiat-Shamir" })),
+        };
+        let (want_s, want_t) = if side == Side::G { (pins[0], pins[1]) } else { (pins[2], pins[3]) };
+        if self.sys_id_hex == want_s && self.table_digest_hex == want_t {
+            return Ok(());
+        }
+        Err(format!(
+            "system file is not the pinned row-sharing {} side of {} (sys_id {}..., table digest {}...; pinned {}... / {}...); pass --allow-any-system to verify against it unpinned",
+            name, rel.name, &self.sys_id_hex[..16.min(self.sys_id_hex.len())], &self.table_digest_hex[..16.min(self.table_digest_hex.len())],
+            &want_s[..16.min(want_s.len())], &want_t[..16.min(want_t.len())]
+        ))
+    }
+
     /// The tables of `(l, n)`, built on first use.  The lock is held while building so a second verification of the
     /// same shape waits for the one copy instead of building its own; the content is a function of `(l, n)` alone.
     fn tables(&self, l: usize, n: usize) -> Arc<Tables> {
@@ -748,7 +870,146 @@ pub fn verify_with(shared: &Shared, st_bytes: &[u8], pf_bytes: &[u8], opt: &Opti
     v
 }
 
+/// Row sharing (`authentication = included-hash-shared`, relchain.SharedHashedRunner; chain.py "Fingerprint
+/// constraints"): one `ligero-statement/v6` with a `ligero-proof/v3` of the GEMM side (system G) and a `/v1` of the
+/// hash side (system H).  The verifier: (1) G on (is_end, index rows, y words) with this verifier's own rho (the tail
+/// of ITS challenge 1) and the prover's F; (2) the VUs sharing a unit sent equal F; (3) H on (table, units, rho, F_H)
+/// with the coins as statement values; (4) H's digests, expanded per VU, are leaf/v2h leaves at the claimed ranks (G's
+/// core runs it).  The pair's soundness is the union of the two sides' bounds, each sized for 2 n_proofs.
+/// `own_coins_h`: the verifier's own step-0 coins of the hash side (interactive mode; `opt.own_coins` are G's).
+pub fn verify_pair(shared_g: &Shared, shared_h: &Shared, st_bytes: &[u8], pf_g: &[u8], pf_h: &[u8], opt: &Options,
+                   own_coins_h: Option<[u8; 128]>) -> Verdict {
+    let t0 = Instant::now();
+    let mut v = verify_pair_inner(shared_g, shared_h, st_bytes, pf_g, pf_h, opt, own_coins_h);
+    v.timing.total = t0.elapsed().as_secs_f64();
+    v.system_pinned = !opt.allow_any_system;
+    v
+}
+
+fn verify_pair_inner(shared_g: &Shared, shared_h: &Shared, st_bytes: &[u8], pf_g: &[u8], pf_h: &[u8], opt: &Options,
+                     own_coins_h: Option<[u8; 128]>) -> Verdict {
+    let tm = Timing::default();
+    let pair = match PairStatement::parse(st_bytes) {
+        Ok(p) => p,
+        Err(e) => return reject(&format!("statement file: {e}"), tm, None, None),
+    };
+    let rel = match relation::for_statement(pair.g.relation.as_deref()) {
+        Ok(r) => r,
+        Err(e) => return reject(&format!("statement file: {e}"), tm, None, None),
+    };
+    let info = StatementInfo::of(&pair.g, rel);
+    let (sys_g, sys_h) = match (&shared_g.sys, &shared_h.sys) {
+        (Ok(g), Ok(h)) => (g, h),
+        (Err(e), _) => return reject(&format!("system G: {e}"), tm, None, Some(info)),
+        (_, Err(e)) => return reject(&format!("system H: {e}"), tm, None, Some(info)),
+    };
+    // the systems' fingerprint coordinates are the statement's (F's shape follows them)
+    for (name, sys) in [("G", sys_g), ("H", sys_h)] {
+        match &sys.fp {
+            Some(s) if s.coords == pair.coords => {}
+            Some(s) => return reject(&format!("system {name}: {} fingerprint coordinates, the statement says {}", s.coords, pair.coords), tm, None, Some(info)),
+            None => return reject(&format!("system {name}: no fingerprint constraints (not a side of row sharing)"), tm, None, Some(info)),
+        }
+    }
+    let n_op_g = sys_g.fp.as_ref().map_or(0, |s| s.lanes.len());
+    if n_op_g != 2 || sys_h.fp.as_ref().map_or(0, |s| s.lanes.len()) != 1 {
+        return reject("row sharing: the GEMM side fingerprints 2 operand slots (x, W), the hash side 1 (the row)", tm, None, Some(info));
+    }
+    // the pinned pair of systems for this relation and mode
+    let gate_g = shared_g.gate_shared(rel, Side::G, pair.g.interactive);
+    let gate_h = shared_h.gate_shared(rel, Side::H, pair.g.interactive);
+    // (1) G: this verifier's rho, the prover's F
+    let mut out: Option<FpOut> = None;
+    let mut vg = verify_core(shared_g, &pair.g, pf_g, opt, &FpCtx::Coin, Some(gate_g), &mut out);
+    if !vg.accepted {
+        vg.reason = format!("G: {}", vg.reason);
+        return vg;
+    }
+    let fp = match out {
+        Some(o) => o,
+        None => return reject("G: no fingerprint coins / message", vg.timing, vg.soundness, Some(info)),
+    };
+    // (2) F_H: the VUs of one unit agree on their shared row's fingerprint; (l_h / steps, 1, C), pad slots 0
+    let c = pair.coords;
+    let n_units = pair.units.len();
+    let mut f_h = vec![0u32; (pair.h.l / pair.h.steps) * c];
+    let mut seen = vec![false; n_units];
+    for (o, map) in [(0usize, &pair.unit_of_x), (1usize, &pair.unit_of_w)] {
+        for (v, &u) in map.iter().enumerate() {
+            let mine = &fp.f[(v * 2 + o) * c..(v * 2 + o + 1) * c];
+            if seen[u] {
+                if f_h[u * c..(u + 1) * c] != mine[..] {
+                    return reject("two VUs claim one committed row with different fingerprints", vg.timing, vg.soundness, Some(info));
+                }
+            } else {
+                f_h[u * c..(u + 1) * c].copy_from_slice(mine);
+                seen[u] = true;
+            }
+        }
+    }
+    // (3) H on (table, units, rho, F_H), its own coins
+    let opt_h = Options { own_coins: own_coins_h, ..opt.clone() };
+    let mut vh = verify_core(shared_h, &pair.h, pf_h, &opt_h, &FpCtx::Public { rho: fp.rho, f: f_h }, Some(gate_h), &mut None);
+    if !vh.accepted {
+        vh.reason = format!("H: {}", vh.reason);
+        vh.statement = Some(info);
+        return vh;
+    }
+    // the pair: timings summed, the soundness the union of both sides' (each already over 2 n_proofs)
+    let mut tm = vg.timing.clone();
+    for (a, b) in [(&mut tm.parse, vh.timing.parse), (&mut tm.soundness, vh.timing.soundness), (&mut tm.statement_hash, vh.timing.statement_hash),
+                   (&mut tm.challenge_hash, vh.timing.challenge_hash), (&mut tm.merkle, vh.timing.merkle), (&mut tm.ntt, vh.timing.ntt),
+                   (&mut tm.dfold, vh.timing.dfold), (&mut tm.quadratic, vh.timing.quadratic), (&mut tm.chain, vh.timing.chain),
+                   (&mut tm.auth, vh.timing.auth), (&mut tm.shared, vh.timing.shared)] {
+        *a += b;
+    }
+    let snd = match (vg.soundness, vh.soundness) {
+        (Some(g), Some(h)) => {
+            let per = log2_sum(&[g.per_proof_log2, h.per_proof_log2]);
+            let mut terms = g.terms.iter().map(|(k, v)| (format!("G.{k}"), *v)).collect::<Vec<_>>();
+            terms.extend(h.terms.iter().map(|(k, v)| (format!("H.{k}"), *v)));
+            Some(Soundness { per_proof_log2: per, union_log2: per + (pair.g.n_proofs as f64).log2(), terms, sides: vec![g.per_proof_log2, h.per_proof_log2] })
+        }
+        _ => None,
+    };
+    let distinct_x = pair.units.iter().filter(|u| u.0 == 0).count();
+    let reason = format!(
+        "accept{} (authentication: included-hash-shared, {} VUs, {} x rows + {} W columns hashed once on the hash side, {} y words under the a/b/y roots; fingerprint coordinates {})",
+        if pair.g.interactive {
+            if opt.own_coins.is_some() && own_coins_h.is_some() { " (interactive: coins are this verifier's step-0 coins)" }
+            else { " (interactive: coins replayed from the transcripts; sound only if they were the verifier's step-0 coins)" }
+        } else { "" },
+        pair.g.n_vus, distinct_x, n_units - distinct_x, pair.g.n_vus, c
+    );
+    Verdict { accepted: true, reason, timing: tm, soundness: snd, statement: Some(info), system_pinned: !opt.allow_any_system }
+}
+
 fn verify_inner(shared: &Shared, st_bytes: &[u8], pf_bytes: &[u8], opt: &Options) -> Verdict {
+    let t0 = Instant::now();
+    let st = match Statement::parse(st_bytes) {
+        Ok(s) => s,
+        Err(e) => return reject(&format!("statement file: {e}"), Timing::default(), None, None),
+    };
+    let parse_secs = t0.elapsed().as_secs_f64();
+    let mut v = verify_core(shared, &st, pf_bytes, opt, &FpCtx::None, None, &mut None);
+    v.timing.parse += parse_secs;   // the statement parse, outside the core's clocks (the callers restate `total`)
+    v
+}
+
+/// One Ligero verification against a parsed statement.  `fp`: the fingerprint constraints' data (row sharing);
+/// `gate`: the pinned-system verdict when the caller computed it (a pair side: its own pins), else the relation's
+/// standard gate; `fp_out`: receives the verifier's rho and the prover's F in the coin mode.  `timing.total` is the
+/// core's own wall (the caller restates it).
+fn verify_core(shared: &Shared, st: &Statement, pf_bytes: &[u8], opt: &Options, fp: &FpCtx, gate: Option<Result<(), String>>,
+               fp_out: &mut Option<FpOut>) -> Verdict {
+    let t_core = Instant::now();
+    let mut v = verify_core_inner(shared, st, pf_bytes, opt, fp, gate, fp_out);
+    v.timing.total = t_core.elapsed().as_secs_f64();
+    v
+}
+
+fn verify_core_inner(shared: &Shared, st: &Statement, pf_bytes: &[u8], opt: &Options, fpc: &FpCtx, gate: Option<Result<(), String>>,
+                     fp_out: &mut Option<FpOut>) -> Verdict {
     let mut tm = Timing::default();
     let lap = |since: &mut Instant| -> f64 {
         let now = Instant::now();
@@ -767,17 +1028,13 @@ fn verify_inner(shared: &Shared, st_bytes: &[u8], pf_bytes: &[u8], opt: &Options
         Some(c) => c,
         None => return reject("system has no chain rows (unit-mode systems are not supported)", tm, None, None),
     };
-    let st = match Statement::parse(st_bytes) {
-        Ok(s) => s,
-        Err(e) => return reject(&format!("statement file: {e}"), tm, None, None),
-    };
     // ---- the relation: named by the statement (v4) or the Ampere BF16 unit (v2 / v3); its pinned system ----
     // (a v5 statement's "<rel>+<leaf>" names its leaf scheme too: `Statement::parse` resolved it into `hash_auth.leaf`)
     let rel = match relation::for_statement(st.base_relation()) {
         Ok(r) => r,
         Err(e) => return reject(&format!("statement file: {e}"), tm, None, None),
     };
-    let mut info = StatementInfo::of(&st, rel);
+    let mut info = StatementInfo::of(st, rel);
     let leaf = st.hash_auth.as_ref().map(|ha| ha.leaf);
     let hashed = leaf.is_some();
     // a hashed statement carries no operand words (its `a` slot is the u32 digest table); its y width is the relation's
@@ -790,7 +1047,11 @@ fn verify_inner(shared: &Shared, st_bytes: &[u8], pf_bytes: &[u8], opt: &Options
         return reject(&r, tm, None, Some(info));
     }
     if !opt.allow_any_system {
-        if let Err(gate) = shared.gate(rel, leaf) {
+        let g = match gate {
+            Some(g) => g,
+            None => shared.gate(rel, leaf),
+        };
+        if let Err(gate) = g {
             return reject(&gate, tm, None, Some(info));
         }
     }
@@ -804,20 +1065,48 @@ fn verify_inner(shared: &Shared, st_bytes: &[u8], pf_bytes: &[u8], opt: &Options
             return reject(&e, tm, None, Some(info));
         }
     }
+    // the system's fingerprint constraints must be the ones this verification takes data for (and vice versa)
+    let fp_spec = match (&sys.fp, fpc) {
+        (None, FpCtx::None) => None,
+        (Some(s), FpCtx::Coin) if !s.public => Some(s),
+        (Some(s), FpCtx::Public { .. }) if s.public => Some(s),
+        (None, _) => return reject("system has no fingerprint constraints; the statement is a side of row sharing", tm, None, Some(info)),
+        (Some(_), FpCtx::None) => return reject("system carries fingerprint constraints (ligero-system/v4): verify it as a side of a pair", tm, None, Some(info)),
+        (Some(_), _) => return reject("system's fingerprint mode (coin / public) is not this side's", tm, None, Some(info)),
+    };
+    let steps = st.steps;
+    let n_op = fp_spec.map_or(0, |s| s.lanes.len());
+    let coords = fp_spec.map_or(0, |s| s.coords);
+    let n_fp_coin = if matches!(fpc, FpCtx::Coin) { coords } else { 0 };   // challenge-1 tail: the coins rho (coin mode)
+    if let FpCtx::Public { rho, f } = fpc {
+        // F over every slot of the layout, (l / steps, n_op, C); a pad slot's is 0 and carries no constraint
+        if rho.len() != coords || steps == 0 || f.len() != (st.l / steps) * n_op * coords {
+            return reject("fingerprint statement values do not match the system's coordinates / the layout", tm, None, Some(info));
+        }
+    }
     // the chain end the system file declares must be the relation's (a v2 file's components are read from the file,
-    // so they are checked against the pin even when the digest pin is lifted)
-    if let Err(e) = check_end_components(chain, rel) {
+    // so they are checked against the pin even when the digest pin is lifted); the hash side of row sharing ends on
+    // the constant 0 (its digests are pins, not chain ends)
+    if st.side == Some(Side::H) {
+        let e = &chain.ends;
+        if !(e.len() == 1 && e[0].bits == 0 && e[0].y.lin.is_empty() && e[0].y.c == 0) {
+            return reject("system file: the hash side of row sharing ends its chain on the constant 0", tm, None, Some(info));
+        }
+    } else if let Err(e) = check_end_components(chain, rel) {
         return reject(&format!("system file: {e}"), tm, None, Some(info));
     }
     let m = sys.m;
-    let pf = match Proof::parse(pf_bytes, &st, m) {
+    let fp_len = if matches!(fpc, FpCtx::Coin) { Some(st.n_vus * n_op * coords) } else { None };
+    let pf = match Proof::parse_fp(pf_bytes, st, m, fp_len) {
         Ok(p) => p,
         Err(e) => return reject(&format!("proof file: {e}"), tm, None, Some(info)),
     };
     tm.parse = lap(&mut clk);
 
     // ---- soundness of the parameters the statement fixes ----
-    let snd = match soundness(&st) {
+    // a side of a pair is sized for 2 n_proofs commitments (SharedHashedRunner.cfg); the GEMM side books the
+    // fingerprint collision term (the hash side's F are statement values: no collision event of its own)
+    let snd = match soundness_fp(st, if st.side == Some(Side::G) { Some((coords, steps, n_op)) } else { None }, if st.side.is_some() { 2 } else { 1 }) {
         Ok(s) => s,
         Err(e) => return reject(&e, tm, None, Some(info)),
     };
@@ -860,7 +1149,7 @@ fn verify_inner(shared: &Shared, st_bytes: &[u8], pf_bytes: &[u8], opt: &Options
     }
 
     // ---- statement: public decodes and digest ----
-    let pins = match public_pins(&st, sys, rel) {
+    let pins = match public_pins(st, sys, rel) {
         Ok(p) => p,
         Err(e) => return reject(&format!("public inputs: {e}"), tm, Some(snd), Some(info)),
     };
@@ -870,7 +1159,11 @@ fn verify_inner(shared: &Shared, st_bytes: &[u8], pf_bytes: &[u8], opt: &Options
         let r = format!("public inputs: chain-end word {j} = {} is not a {}-bit word", st.y16[j], rel.y_bits);
         return reject(&r, tm, Some(snd), Some(info));
     }
-    let stmt = match statement_digest(&st, rel, &sys.sys_id) {
+    let fp_pub: Option<(&[u32], &[u32])> = match fpc {
+        FpCtx::Public { rho, f } => Some((&rho[..], &f[..])),
+        _ => None,
+    };
+    let stmt = match statement_digest(st, rel, &sys.sys_id, fp_pub) {
         Ok(d) => d,
         Err(e) => return reject(&e, tm, Some(snd), Some(info)),
     };
@@ -906,8 +1199,15 @@ fn verify_inner(shared: &Shared, st_bytes: &[u8], pf_bytes: &[u8], opt: &Options
         seed1.extend_from_slice(&pf.root);
     }
     let seed1 = blake3(&seed1);
-    let per_d = m_rows + nl + nq + 7 * l;
+    // the challenge block per coordinate: r | rho_lin | rho_quad | rc (7 l) and, in the coin mode of the fingerprint
+    // constraints, C more elements of which coordinate 0's are the coins rho (protocol._challenge1 n_fp; the others unused)
+    let per_d = m_rows + nl + nq + 7 * l + n_fp_coin;
     let x = expand(&seed1, d * per_d);
+    let (rho, f_vals): (Vec<u32>, Vec<u32>) = match fpc {
+        FpCtx::None => (Vec::new(), Vec::new()),
+        FpCtx::Coin => (x[per_d - n_fp_coin..per_d].to_vec(), pf.fp.clone().unwrap_or_default()),
+        FpCtx::Public { rho, f } => (rho.clone(), f.clone()),
+    };
     // challenge 2.  Interactive: BLAKE3(tag_v2 || stmt || c1 c2 || r2) -- none of root, w, h, q, v.
     // Fiat-Shamir: BLAKE3(tag || stmt || root || w || h || q [|| "|v=" v]).
     let mut seed2 = if st.interactive { CHALLENGE2_TAG_IA.to_vec() } else { CHALLENGE2_TAG_FS.to_vec() };
@@ -923,6 +1223,11 @@ fn verify_inner(shared: &Shared, st_bytes: &[u8], pf_bytes: &[u8], opt: &Options
         if st.zk {
             seed2.extend_from_slice(b"|v=");
             seed2.extend_from_slice(&u32s_le(&pf.v));
+        }
+        if let Some(fp_msg) = &pf.fp {
+            // the fingerprint message is a prover message after the coin: absorbed before the column challenge
+            seed2.extend_from_slice(b"|fp=");
+            seed2.extend_from_slice(&u32s_le(fp_msg));
         }
     }
     let seed2 = blake3(&seed2);
@@ -969,7 +1274,7 @@ fn verify_inner(shared: &Shared, st_bytes: &[u8], pf_bytes: &[u8], opt: &Options
     let eta: Vec<u32> = pf.cols.iter().map(|&c| tables.pts[c as usize]).collect();
     let zh: Vec<u32> = eta.iter().map(|&e| sub(f::pow(e, l as u64), 1)).collect();
     let xk: Vec<u32> = eta.iter().map(|&e| f::pow(e, k as u64)).collect();
-    let ctx = Ctx { st: &st, sys, tb: &tables, eta, zh, xk, threads: opt.threads };
+    let ctx = Ctx { st, sys, tb: &tables, eta, zh, xk, threads: opt.threads };
     let _ = &ctx.eta;
     let _ = ctx.sys;
     // mask rows (PROTOCOL.md 8b, b-zk-fix): prox, lin, qa, qb, chain_a, chain_b -- D rows each after the m witness rows
@@ -1137,9 +1442,28 @@ fn verify_inner(shared: &Shared, st_bytes: &[u8], pf_bytes: &[u8], opt: &Options
     for term in &chain.ends {
         evs.push(Ev::Lin(term.y.lin.iter().map(|(row, kappa)| (*row, *kappa)).collect()));
     }
+    // the fingerprint constraints (chain.py "Fingerprint constraints"): one coefficient row per lane row (o, i)
+    let r_fp0 = evs.len();
+    if let Some(spec) = fp_spec {
+        for op in &spec.lanes {
+            for &row in op {
+                evs.push(Ev::Row(row));
+            }
+        }
+    }
     let nr = evs.len();
     let mut coef = vec![0u32; d * nr * l]; // (D, R, l) evaluations on H
     let mut rhs = vec![0u32; d];
+    // rho_x^(16 s + i) for every coordinate and every lane position of a unit (coin or public mode)
+    let rho_pow: Vec<Vec<u32>> = rho.iter().map(|&r| {
+        let mut v = Vec::with_capacity(FP_LANES * steps);
+        let mut acc = 1u32;
+        for _ in 0..FP_LANES * steps {
+            v.push(acc);
+            acc = mul(acc, r % P);
+        }
+        v
+    }).collect();
     for dd in 0..d {
         let rc = |fam: usize, j: usize| x[dd * per_d + m_rows + nl + nq + fam * l + j];
         // extra constraint e at column j: u_{e mod 6} * u_6^(e div 6 + 1) (chain.extra_coef); link extras are
@@ -1186,6 +1510,28 @@ fn verify_inner(shared: &Shared, st_bytes: &[u8], pf_bytes: &[u8], opt: &Options
                 let re = rc(term.family, j);
                 coef[cf(2 * n_links + e) + j] = re;
                 rhs[dd] = add(rhs[dd], mul(re, sub(term.value(st.y16[j]), term.y.c)));
+            }
+        }
+        // fp_{v,o,x} at the end column of VU v: coefficient u_{v,o,x} rho_x^(16 s + i) on lane row (o, i) at column
+        // steps v + s, u the end column's monomial for extra constraint 2 n_extra + o C + x (a pad slot carries none);
+        // rhs += u_{v,o,x} F[v][o][x]  (chain.chain_coefs)
+        if fp_spec.is_some() {
+            for v in 0..st.n_vus {
+                let j_end = v * steps + steps - 1;
+                for o in 0..n_op {
+                    for xx in 0..coords {
+                        let u = extra(2 * n_extra + o * coords + xx, j_end);
+                        rhs[dd] = add(rhs[dd], mul(u, f_vals[(v * n_op + o) * coords + xx] % P));
+                        let pw = &rho_pow[xx];
+                        for i in 0..FP_LANES {
+                            let row = cf(r_fp0 + o * FP_LANES + i);
+                            for s in 0..steps {
+                                let a = &mut coef[row + v * steps + s];
+                                *a = add(*a, mul(u, pw[FP_LANES * s + i]));
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -1247,9 +1593,14 @@ fn verify_inner(shared: &Shared, st_bytes: &[u8], pf_bytes: &[u8], opt: &Options
     // authentication = included: every published word is a leaf at its claimed index under the statement's roots
     // (auth.rs).  Runs after the Ligero tests so a rejection here means "valid proof, unauthenticated words".
     let mut auth_note = String::new();
-    if let Some(ha) = &st.hash_auth {
+    if let FpCtx::Coin = fpc {
+        *fp_out = Some(FpOut { rho: rho.clone(), f: f_vals.clone() });
+    }
+    if let (Some(ha), true) = (&st.hash_auth, st.side != Some(Side::H)) {
         // authentication = included-hash: the digests the proof pinned at the chain ends are leaf/v2h leaves at the
-        // claimed ranks under the a / b roots, the output words under the y root (auth.rs check_hashed)
+        // claimed ranks under the a / b roots, the output words under the y root (auth.rs check_hashed).  Row sharing:
+        // the same on the GEMM side with the hash side's digests expanded per VU (PairStatement::parse) -- the hash
+        // side itself opens nothing (its y words are 0)
         let y_words: Vec<u32> = (0..st.n_vus).map(|v| st.y16[v * st.steps + st.steps - 1]).collect();
         if let Err(e) = crate::auth::check_hashed(ha, &y_words, rel.y_bits, opt.threads) {
             tm.auth += lap(&mut clk);

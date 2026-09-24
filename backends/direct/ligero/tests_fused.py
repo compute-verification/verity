@@ -53,6 +53,57 @@ __device__ __forceinline__ void lincomb_body(const unsigned* __restrict__ C, con
     for (int d = 0; d < D; ++d) partial[((size_t)s * D + d) * cols + col] = (unsigned)(acc[d] % P);
 }
 
+/* out[d][col] = sum_r Renc[d][r][col] * U[rows[r]][col] mod p (the chain quotient on the codeword domain) */
+template <typename T, int D>
+__device__ __forceinline__ void chainq_body(const T* __restrict__ Renc, const unsigned* __restrict__ U,
+                                            const int* __restrict__ rows, u64* __restrict__ out, int R, int cols)
+{
+    const int col = blockIdx.x * blockDim.x + threadIdx.x;
+    if (col >= cols) return;
+    u64 acc[D];
+    #pragma unroll
+    for (int d = 0; d < D; ++d) acc[d] = 0;
+    int cnt = 0;
+    for (int r = 0; r < R; ++r) {
+        const u64 x = (u64)U[(size_t)rows[r] * cols + col];
+        #pragma unroll
+        for (int d = 0; d < D; ++d) acc[d] += (u64)(unsigned)Renc[((size_t)d * R + r) * cols + col] * x;
+        if (++cnt == 3) {
+            cnt = 0;
+            #pragma unroll
+            for (int d = 0; d < D; ++d) acc[d] %= P;
+        }
+    }
+    #pragma unroll
+    for (int d = 0; d < D; ++d) out[(size_t)d * cols + col] = acc[d] % P;
+}
+
+extern "C" __global__ void chainq_u32_D@D@(const unsigned* Renc, const unsigned* U, const int* rows, u64* out, int R, int cols)
+{ chainq_body<unsigned, @D@>(Renc, U, rows, out, R, cols); }
+extern "C" __global__ void chainq_u64_D@D@(const u64* Renc, const unsigned* U, const int* rows, u64* out, int R, int cols)
+{ chainq_body<u64, @D@>(Renc, U, rows, out, R, cols); }
+
+/* coef[d][lane_pos[16 o + i]][steps v + s] += sum_x u[d][o][x][v] pw[x][s][i] mod p (the fingerprint constraints' lane
+   coefficients, chain.chain_coefs); grid (cols / THREADS, n_op 16, D) */
+extern "C" __global__ void fplane_D@D@(const unsigned* __restrict__ u, const unsigned* __restrict__ pw,
+                                       const int* __restrict__ lane_pos, u64* __restrict__ coef,
+                                       int R, int l, int n_op, int C, int n_slots, int steps)
+{
+    const int col = blockIdx.x * blockDim.x + threadIdx.x;
+    const int oi = blockIdx.y, d = blockIdx.z;
+    if (col >= n_slots * steps) return;
+    const int v = col / steps, s = col - v * steps, o = oi >> 4, i = oi & 15;
+    const unsigned* uu = u + (size_t)(d * n_op + o) * C * n_slots + v;
+    const unsigned* pp = pw + (size_t)s * 16 + i;
+    u64 acc = 0;
+    for (int x = 0; x < C; ++x) {
+        acc += (u64)uu[(size_t)x * n_slots] * pp[(size_t)x * steps * 16];
+        if (x % 3 == 2) acc %= P;
+    }
+    u64* dst = coef + ((size_t)d * R + lane_pos[oi]) * l + col;
+    *dst = (*dst + acc) % P;
+}
+
 extern "C" __global__ void lincomb_u32_D@D@(const unsigned* C, const unsigned* X, unsigned* out, int R, int cols, int chunk)
 { lincomb_body<unsigned, @D@, 0>(C, X, out, R, cols, chunk); }
 extern "C" __global__ void lincomb_u64_D@D@(const unsigned* C, const u64* X, unsigned* out, int R, int cols, int chunk)
@@ -267,7 +318,7 @@ class FusedTests:
                   for name in ("lincomb_u32", "lincomb_u64", "boolcomb_u32", "boolcomb_u64", "quad_u32", "quad_u64",
                                "boolcomb_rows_u32", "boolcomb_rows_u64",
                                "lincomb_v4_u32", "lincomb_v4_u64", "boolcomb_v4_u32", "boolcomb_v4_u64",
-                               "boolcomb_rows_v4_u32", "boolcomb_rows_v4_u64")}
+                               "boolcomb_rows_v4_u32", "boolcomb_rows_v4_u64", "chainq_u32", "chainq_u64", "fplane")}
 
     def _cp(self, t: torch.Tensor):
         return self.cp.asarray(t)
@@ -334,6 +385,34 @@ class FusedTests:
         with self._stream():
             self.k[name]((gx, S), (THREADS,), tuple(args), shared_mem=smem)
         return self._reduce(partial)
+
+    def chain_quotient(self, Renc: torch.Tensor, U: torch.Tensor, rows: torch.Tensor) -> torch.Tensor:
+        """(D, n) int64 = sum_r Renc[:, r] * U[rows[r]] mod p in one pass (``Renc`` (D, R, n) int32 codewords or int64
+        residues, ``U`` (M, n) int32 residues) -- the chain test's ``((Renc * U[rows]) % p).sum(1) % p`` without the
+        int64 upcast, the gathered rows and the (D, R, n) product."""
+        D, R, cols = Renc.shape
+        assert D == self.D and U.dtype == torch.int32 and U.shape[1] == cols and rows.shape[0] == R
+        Renc, U = Renc.contiguous(), U.contiguous()
+        out = torch.empty((D, cols), dtype=torch.int64, device=self.device)
+        name = "chainq_u32" if Renc.dtype == torch.int32 else "chainq_u64"
+        with self._stream():
+            self.k[name]((-(-cols // THREADS),), (THREADS,),
+                         (self._cp(Renc), self._cp(U), self._cp(rows.to(torch.int32).contiguous()), self._cp(out),
+                          np.int32(R), np.int32(cols)))
+        return out
+
+    def fp_lanes(self, u: torch.Tensor, pw: torch.Tensor, lane_pos: torch.Tensor, coef: torch.Tensor, steps: int) -> None:
+        """``coef[:, lane_pos[16 o + i], steps v + s] += sum_x u[:, o, x, v] pw[x, s, i] mod p`` in place (``u`` (D, n_op,
+        C, n_slots) and ``pw`` (C, steps, 16) residues, ``coef`` (D, R, l) int64 residues, contiguous)."""
+        D, n_op, C, n_slots = u.shape
+        assert D == self.D and coef.dtype == torch.int64 and coef.is_contiguous() and tuple(pw.shape) == (C, steps, 16)
+        cols = n_slots * steps
+        with self._stream():
+            self.k["fplane"]((-(-cols // THREADS), n_op * 16, D), (THREADS,),
+                             (self._cp(u.to(torch.int32).contiguous()), self._cp(pw.to(torch.int32).contiguous()),
+                              self._cp(lane_pos.to(torch.int32).contiguous()), self._cp(coef),
+                              np.int32(coef.shape[1]), np.int32(coef.shape[2]), np.int32(n_op), np.int32(C),
+                              np.int32(n_slots), np.int32(steps)))
 
     def quad_general(self, rho: torch.Tensor, X: torch.Tensor, csr: dict) -> torch.Tensor:
         """(D, cols) = sum_q rho[d, q] (A_q B_q - C_q)(X) over the general constraints in ``csr`` (see ``csr_tables``)."""
