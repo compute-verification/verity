@@ -244,6 +244,7 @@ def free_bytes(path: Path) -> int:
 
 def reverify(st: Any, result: str, v: Verifier, *, by: str | None, jobs: int, work: Path, asserted: str | None, dry_run: bool, keep: bool) -> Report:
     from research.store import evict as EV
+    from research.store.ids import is_run_id
 
     rep = Report(result)
     m = st.get_manifest(result)
@@ -253,7 +254,8 @@ def reverify(st: Any, result: str, v: Verifier, *, by: str | None, jobs: int, wo
         return rep
     producers = st.index.attempts_by_output(result)
     rep.run = producers[0] if producers else (m.meta or {}).get("run_id")
-    att = st.get_attempt(rep.run) if rep.run else None
+    # a result put by hand from a pod run carries the bench's own run_id (b-ligero-...), which names no attempt
+    att = st.get_attempt(rep.run) if is_run_id(rep.run) else None
     params = (att or {}).get("params") or {}
     tree = st.get_manifest(rep.run_files)
     need = 2 * (tree.payload.bytes if tree.payload else 0) + DISK_MARGIN
