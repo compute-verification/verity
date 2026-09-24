@@ -74,6 +74,8 @@ from __future__ import annotations
 
 import argparse
 import collections
+import dataclasses
+import functools
 import gzip
 import hashlib
 import json
@@ -663,13 +665,17 @@ def canonicalize_record(rec: dict, tokens: dict | None, oracle_rows: list[dict] 
     return {"renamed": len(alias), "unknown_ids": dict(unknown)}
 
 
-_LOAD_DERIVED = C.load_derived
+def match_ops(fast: bool) -> BD.Ops:
+    """The Program operations one check() runs (and hands its X-09 run): the checker of record's, or global_match_fast's compute-once
+    equals (MATCH_IMPL=fast).  A component dir that holds a fold record (program.json: the tests' components) loads as a fold."""
+    ops = GMF.ops() if fast else BD.Ops.record()
+    return dataclasses.replace(ops, load_derived=functools.partial(_load_component, ops))
 
 
-def _load_component(d: str, label: str) -> C.Prog:
+def _load_component(ops: BD.Ops, d: str, label: str) -> C.Prog:
     if os.path.exists(os.path.join(d, "program.json")):
-        return C.load_oracle(d, label)  # a fold record standing in for a derived component (tests)
-    return _LOAD_DERIVED(d, label)
+        return ops.load_oracle(d, label)  # a fold record standing in for a derived component (tests)
+    return ops.load_derived(d, label)
 
 
 class _Check:
@@ -800,16 +806,16 @@ def check(gp: dict, oracle_dir: str, log_path: str | None = None, tokens_path: s
     the alternate-criterion run ([R15 global, GM-01 memory]: the fold Prog is read-only after load; decoding it three times per
     invocation -- check, X-09, alternate -- put GM-01's peak RSS at 87 GB on the B16 1024/128 record). The criteria are unchanged.
 
-    [R17 mprof] MATCH_IMPL=fast (BRIEF s5): the same body with global_match_fast's compute-once hooks installed; the outermost call
-    releases the hooks' caches when it returns or raises (rev F-r17-06), the nested alternate-criterion call keeps them."""
+    [R17 mprof] MATCH_IMPL=fast (BRIEF s5): the same body over global_match_fast's compute-once operations (`match_ops`); the outermost
+    call releases their caches when it returns or raises (rev F-r17-06), the nested alternate-criterion call keeps them."""
     fast = GMF.enabled()
+    ops = match_ops(fast)
     if not fast:
-        return _check(gp, oracle_dir, log_path, tokens_path, run_x09, within_step, record_alternate, _loaded, fast=False,
+        return _check(gp, oracle_dir, log_path, tokens_path, run_x09, within_step, record_alternate, _loaded, ops,
                       tokens_optional=tokens_optional)
-    GMF.install()
     GMF.enter()
     try:
-        return _check(gp, oracle_dir, log_path, tokens_path, run_x09, within_step, record_alternate, _loaded, fast=True,
+        return _check(gp, oracle_dir, log_path, tokens_path, run_x09, within_step, record_alternate, _loaded, ops,
                       tokens_optional=tokens_optional)
     finally:
         GMF.leave()
@@ -826,8 +832,9 @@ X09_DOCUMENT, X09_EXTRA_DERIVED = "x09_document", "x09_extra_derived"
 
 
 def _check(gp: dict, oracle_dir: str, log_path: str | None, tokens_path: str | None, run_x09: bool, within_step: str,
-           record_alternate: bool, _loaded: dict | None, fast: bool, tokens_optional: bool = False) -> dict:
+           record_alternate: bool, _loaded: dict | None, ops: BD.Ops, tokens_optional: bool = False) -> dict:
     # [rel r17-int-2] tokens_optional (stoch F-r17-01) rides the wrapper -> body split of mprof unit 4 unchanged
+    fast = ops.name == "fast"
     t0 = time.time()
     _loaded = _loaded if _loaded is not None else {}
     # [R17 mfast, BRIEF §5 step 1] phase timestamps (elapsed + process CPU since the previous mark): telemetry beside the verdict, never
@@ -872,7 +879,7 @@ def _check(gp: dict, oracle_dir: str, log_path: str | None, tokens_path: str | N
     # ---------------------------------------------------------------- the fold (meta channel of the record) + canonical request ids
     B = _loaded.get("oracle")
     if B is None:
-        B = _loaded["oracle"] = C.load_oracle(oracle_dir, "oracle")
+        B = _loaded["oracle"] = ops.load_oracle(oracle_dir, "oracle")
     mark("load_fold")
     alias = request_aliases(gp)
     # ---------------------------------------------------------------- X-09 evidence (whole run, as row_pod runs it)
@@ -881,11 +888,9 @@ def _check(gp: dict, oracle_dir: str, log_path: str | None, tokens_path: str | N
     comp_dirs = [g["component"]["dir"] for g in gp["requests"] if (g.get("component") or {}).get("dir")]
     comp_dirs += [d for d in _loaded.get(X09_EXTRA_DERIVED) or () if d not in comp_dirs]   # [R17-28 P1] shapes derived at Match time (--derived)
     if run_x09:
-        orig = C.load_derived
         try:
-            C.load_derived = _load_component  # a fold record may stand in for a derived component (tests); derive_step dirs unaffected
             x = BD.decompose(oracle_dir, comp_dirs, log_path, within_step=within_step, oracle=B,   # X-09 evidence under the same criterion
-                             components=_loaded.setdefault("components", {}))             # (same decoded fold + components)
+                             components=_loaded.setdefault("components", {}), ops=ops)     # (same decoded fold + components, same ops)
             _loaded[X09_DOCUMENT] = x   # [R17-28 P1] the whole document (batch_decomp's CLI schema) for the CLI's --decomp-out
             res["x09"] = {"verdict": x["verdict"], "reasons": x["reasons"], "attribution": x["attribution"], "xreq_total": x.get("xreq_total"),
                           "within_step_criterion": x.get("within_step_criterion"),
@@ -895,8 +900,6 @@ def _check(gp: dict, oracle_dir: str, log_path: str | None, tokens_path: str | N
                           "note": "X-09 batch decomposition run on the raw record (its own attribution); request ids mapped to r<k> here"}
         except Exception as e:  # noqa: BLE001 - evidence, not the verdict
             res["x09"] = {"verdict": "ERROR", "error": repr(e)[:300]}
-        finally:
-            C.load_derived = orig
         mark("x09")
 
     res["request_ids"] = canonicalize_record(rec, tokens, B.oracle_rows, alias)
@@ -1218,7 +1221,7 @@ def _check(gp: dict, oracle_dir: str, log_path: str | None, tokens_path: str | N
         if fast:   # [R17 mprof] one Projection per request per process: X-09's (same construction key) / the verdict-of-record run's for the alternate
             P = GMF.projection(_loaded, rid, B, f"oracle[{rid}]", idxs, pidx, weights_nodes, my_seed, peer_node=my_peers)
         else:
-            P = BD.Projection(B, f"oracle[{rid}]", idxs, tok_node=pidx, weights_node=weights_nodes, seed_node=my_seed, peer_node=my_peers)
+            P = ops.projection(B, f"oracle[{rid}]", idxs, tok_node=pidx, weights_node=weights_nodes, seed_node=my_seed, peer_node=my_peers)
         P._all_seed_nodes = set(seed_index)
         proj[rid] = P
         cd = (g.get("component") or {}).get("dir")
@@ -1226,7 +1229,7 @@ def _check(gp: dict, oracle_dir: str, log_path: str | None, tokens_path: str | N
         if cd:
             A = A_cache.get(cd)
             if A is None:
-                A = A_cache[cd] = _load_component(cd, f"component[{rid}]")
+                A = A_cache[cd] = ops.load_derived(cd, f"component[{rid}]")
             comps[rid] = A
         pre.append((g, ent, idxs, P, A, cd))
 
@@ -1316,7 +1319,7 @@ def _check(gp: dict, oracle_dir: str, log_path: str | None, tokens_path: str | N
         n_exec = len(P.steps)
         if n_exec > len(A.steps):
             fails.append(("G3", f"{rid}: executed {n_exec} local steps but the bounded component has {len(A.steps)} (output interface exceeded)"))
-        cmp = C.compare_steps(A, P, unfold_a=False)
+        cmp = ops.compare_steps(A, P, unfold_a=False)
         exec_steps = cmp["steps"][:n_exec]
         bad_seq = [s for s in exec_steps if not s["spec_seq_equal"] or (s.get("wiring") or {}).get("operands_different")]
         tail = cmp["steps"][n_exec:]
@@ -1332,7 +1335,7 @@ def _check(gp: dict, oracle_dir: str, log_path: str | None, tokens_path: str | N
         #             operands with node sources named by their producer's hash) -- the emission order is never an address.
         local_addr: list[list[int | None]] = []
         if within_step == "dag":
-            ha, hb = BD.dag_hashes(A), BD.dag_hashes(P)
+            ha, hb = ops.dag_hashes(A), ops.dag_hashes(P)
             bad_dag, dag_info = [], []
             for s in range(min(n_exec, len(A.steps))):
                 by_hash: dict[str, list[int]] = collections.defaultdict(list)
@@ -1397,7 +1400,7 @@ def _check(gp: dict, oracle_dir: str, log_path: str | None, tokens_path: str | N
                 fails.append(("G3", f"{rid}: {len(bad)} of {n_exec} executed steps not canonical-equal (first: local step {bad[0]['step']})"))
                 if fast and _perm_eligible(A, P, bad[0]["step"]):   # [F-r17-07] G8 names the first divergence: its matching, computed here
                     s0 = bad[0]["step"]
-                    out["perm"][s0] = _perm_match(A, P, s0, BD.dag_hashes(A), BD.dag_hashes(P))
+                    out["perm"][s0] = _perm_match(A, P, s0, ops.dag_hashes(A), ops.dag_hashes(P))
             local_addr = [list(range(len(loc))) for loc in P.steps]
         if P.xreq:
             fails.append(("G3", f"{rid}: cross-request reads"))
@@ -1988,7 +1991,7 @@ def _check(gp: dict, oracle_dir: str, log_path: str | None, tokens_path: str | N
         # matching when it ran (F-r17-07: computed where the hashes were), else this process's hashes on both sides
         pi = (perm_facts.get(rid) or {}).get(s)
         if pi is None:
-            pi = _perm_match(A, P, s, BD.dag_hashes(A), BD.dag_hashes(P))
+            pi = _perm_match(A, P, s, ops.dag_hashes(A), ops.dag_hashes(P))
         same_dag = all(x is not None for x in pi)
         moved = [(j, x) for j, x in enumerate(pi) if x != j]
         es = engine_step_of.get(per_req[rid][P.steps[s][0]])

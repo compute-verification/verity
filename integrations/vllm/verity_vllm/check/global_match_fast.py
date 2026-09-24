@@ -16,9 +16,10 @@ cache hit of `canon`, so `P.xreq` / `P.xreq_examples` evolve exactly as in the c
 hits skip their inner canon calls; after those calls the checker reads `P.xreq` only as a boolean, which the G3 loop has already
 established -- see the call sites in global_match.check.)
 
-Enabled by the environment variable MATCH_IMPL=fast (`enabled()`), installed once per process by `install()` (idempotent), which
-re-binds `compare.Prog.canon`, `compare.compare_steps`, `compare._canonical_hash`, `batch_decomp.dag_hashes`, `batch_decomp.live_cone`
-to memoising wrappers around the ORIGINAL functions (the checker of record's code is not edited).  Without the flag nothing here runs.
+Enabled by the environment variable MATCH_IMPL=fast (`enabled()`): `global_match.check` then runs over `ops()` (a `batch_decomp.Ops`,
+passed explicitly to GM-01 and to the X-09 run inside it) -- the fold and components loaded as `FastProg` (canon memoised per instance),
+Projections as `_ProjectionFast`, and memoising wrappers that call the checker of record's `compare_steps` / `_canonical_hash` /
+`dag_hashes` / `live_cone`.  Nothing is rebound: the record's functions stay what they are.  Without the flag nothing here runs.
 
 Differential gate: mfast's `verity_vllm/harness/match_diff.py` (old vs fast, identical verdicts / per-check outcomes / populations /
 mismatch locations) -- every FIX_READY of this module names the run it passed.
@@ -26,15 +27,15 @@ mismatch locations) -- every FIX_READY of this module names the run it passed.
 from __future__ import annotations
 
 import collections
+import functools
 import json
 import os
+from collections.abc import Callable
 
 from verity_vllm.correspondence import batch_decomp as BD
 from verity_vllm.check import program_compare as C
 
 FLAG = "MATCH_IMPL"
-_installed = False
-_orig: dict = {}
 
 # [R17 mfast, COORD R17-7.2] what this module IS at this revision, on every result document (`impl` block) and in the differential
 # harness's report header; `identity` meant "check re-exports the checker of record" (harness plumbing proof, 69a67a90e).
@@ -80,7 +81,7 @@ def enter() -> None:
     _depth += 1
 
 
-config: dict = {}       # [rev S-r17-17 / M-0276 (4)] the declared configuration of the fast path as installed (workers cap, operand form,
+config: dict = {}       # [rev S-r17-17 / M-0276 (4)] the declared configuration of the fast path as `ops()` read it (workers cap, operand form,
                         # switches as read from the environment) -- stated on the document's impl block
 last_stats: dict = {}   # [rev F-r17-09] the outermost check()'s counters, snapshotted at leave() BEFORE the release: the CLI's impl block
                         # (impl_info, called after check() returned) reports the run's configuration -- MATCH_WORKERS used, MATCH_COMPACT,
@@ -101,43 +102,46 @@ def leave() -> None:
 
 # ------------------------------------------------------------------------------------------------ canon (per Prog, per instance)
 
-def _canon_memo(self: C.Prog, i: int, unfold: bool = False):
-    """`Prog.canon` computed once per (instance, unfold) and returned as the SAME list object thereafter (no caller mutates it:
-    compare._canon_step_relative, batch_decomp.dag_hashes / live_cone and global_match iterate only).  A Projection's `_xreq` calls
-    made during the first computation are recorded and replayed on every hit, so cross-request read counts are unchanged."""
-    cache = self.__dict__.get("_fast_canon")
-    if cache is None:
-        cache = self._fast_canon = {}
-    key = (i, unfold)
-    hit = cache.get(key)
-    if hit is not None:
-        stats["canon_hit"] += 1
-        out, events = hit
-        if events:
-            xreq = self._xreq
-            for ev in events:
-                xreq(*ev)
+class _CanonMemo:
+    """Mixin over compare.Prog (`FastProg`) and batch_decomp.Projection (`_ProjectionFast`): `canon` computed once per (instance,
+    unfold) and returned as the SAME list object thereafter (no caller mutates it: compare._canon_step_relative, batch_decomp.dag_hashes
+    / live_cone and global_match iterate only).  A Projection's `_xreq` calls made during the first computation are recorded and
+    replayed on every hit, so cross-request read counts are unchanged."""
+
+    def canon(self, i: int, unfold: bool = False):
+        cache = self.__dict__.get("_fast_canon")
+        if cache is None:
+            cache = self._fast_canon = {}
+        key = (i, unfold)
+        hit = cache.get(key)
+        if hit is not None:
+            stats["canon_hit"] += 1
+            out, events = hit
+            if events:
+                xreq = self._xreq
+                for ev in events:
+                    xreq(*ev)
+            return out
+        stats["canon_miss"] += 1
+        if hasattr(self, "_xreq"):
+            rec: list = []
+            orig_xreq = self._xreq
+
+            def _rec_xreq(*ev):   # (kind, idx, lo, hi) on the record | (kind, (idx, lo, hi), (dI, dL, dH), count) compact [mfast]
+                rec.append(ev)
+                orig_xreq(*ev)
+
+            self._xreq = _rec_xreq          # instance attribute shadows the class method for this one computation
+            try:
+                out = super().canon(i, unfold)
+            finally:
+                del self._xreq
+            events = tuple(rec)
+        else:
+            out = super().canon(i, unfold)
+            events = ()
+        cache[key] = (out, events)
         return out
-    stats["canon_miss"] += 1
-    if hasattr(self, "_xreq"):
-        rec: list = []
-        orig_xreq = self._xreq
-
-        def _rec_xreq(*ev):   # (kind, idx, lo, hi) on the record | (kind, (idx, lo, hi), (dI, dL, dH), count) compact [mfast]
-            rec.append(ev)
-            orig_xreq(*ev)
-
-        self._xreq = _rec_xreq          # instance attribute shadows the class method for this one computation
-        try:
-            out = _orig["canon"](self, i, unfold)
-        finally:
-            del self._xreq
-        events = tuple(rec)
-    else:
-        out = _orig["canon"](self, i, unfold)
-        events = ()
-    cache[key] = (out, events)
-    return out
 
 
 # ------------------------------------------------------------------------------------------------ compare_steps / hashes
@@ -150,7 +154,7 @@ def _compare_steps_memo(A: C.Prog, B: C.Prog, unfold_a: bool = False) -> dict:
         stats["compare_steps_hit"] += 1
         return hit[2]
     stats["compare_steps_miss"] += 1
-    res = _orig["compare_steps"](A, B, unfold_a)
+    res = C.compare_steps(A, B, unfold_a, canon_step_relative=_canon_step_relative_fast, canonical_hash=_canonical_hash_memo)
     _cmp_memo[key] = (A, B, res)
     return res
 
@@ -161,14 +165,14 @@ def _canonical_hash_memo(P: C.Prog, seqs: list[list[int]], unfold: bool) -> str:
     time, so its `P.xreq` counting (read by X-09 right after compare_steps) is untouched -- its canon calls hit the canon memo."""
     if hasattr(P, "_xreq"):
         stats["canonical_hash_projection"] += 1
-        return _orig["_canonical_hash"](P, seqs, unfold)
+        return C._canonical_hash(P, seqs, unfold, canon_step_relative=_canon_step_relative_fast)
     key = (id(P), bool(unfold))
     hit = _chash_memo.get(key)
     if hit is not None and hit[0] is P:
         stats["canonical_hash_hit"] += 1
         return hit[1]
     stats["canonical_hash_miss"] += 1
-    h = _orig["_canonical_hash"](P, seqs, unfold)
+    h = C._canonical_hash(P, seqs, unfold, canon_step_relative=_canon_step_relative_fast)
     _chash_memo[key] = (P, h)
     return h
 
@@ -317,13 +321,13 @@ def _canon_step_relative_fast(P: C.Prog, i: int, seqs: list[list[int]], unfold: 
     the producer by (step, index within step) -- so the result is canon(i) with each operand as a tuple.  Any other case runs the
     original (unfold_a=True is the padded-vs-flat comparator, not used by GM-01/X-09)."""
     if unfold:
-        return _orig["_canon_step_relative"](P, i, seqs, unfold)
+        return C._canon_step_relative(P, i, seqs, unfold)
     ident = P.__dict__.get("_fast_seqs_ident")
     if ident is None or ident[0] is not seqs:
         P._fast_seqs_ident = ident = (seqs, seqs == P.steps)
         stats["seqs_identity_checks"] += 1
     if not ident[1]:
-        return _orig["_canon_step_relative"](P, i, seqs, unfold)
+        return C._canon_step_relative(P, i, seqs, unfold)
     return [tuple(arg) for arg in P.canon(i, False)]
 
 
@@ -333,14 +337,14 @@ def _live_cone_memo(P: C.Prog) -> set[int]:
         stats["live_cone_hit"] += 1
         return hit[1]
     stats["live_cone_miss"] += 1
-    s = _orig["live_cone"](P)
+    s = BD.live_cone(P)
     _live_memo[id(P)] = (P, s)
     return s
 
 
 # ------------------------------------------------------------------------------------------------ Projections (X-09 <-> GM-01 <-> alternate)
 
-_proj_registry: dict[tuple, tuple] = {}    # construction key -> (oracle Prog, Projection): every Projection built while installed
+_proj_registry: dict[tuple, tuple] = {}    # construction key -> (oracle Prog, Projection): every _ProjectionFast built
 
 
 def _proj_key(oracle: C.Prog, inst_idx, tok_node, weights_node, seed_node, peer_node=None) -> tuple:
@@ -348,20 +352,18 @@ def _proj_key(oracle: C.Prog, inst_idx, tok_node, weights_node, seed_node, peer_
     return (id(oracle), tuple(inst_idx), tok_node, w, seed_node, peer_node)   # [R17 D90] the request's peers node is part of the view
 
 
-class _ProjectionFast(BD.Projection):
-    """batch_decomp.Projection that registers itself by its construction arguments.  `Projection.__init__` is deterministic in
-    (oracle, inst_idx, tok_node, weights_node, seed_node, peer_node) -- the label only names the object -- so two Projections with the same key are
-    the same view of the fold: X-09 (`decompose`, run first inside GM-01 on the same decoded fold + components) and GM-01's G3 build one
-    each per request; `projection()` below hands G3 the X-09 one (relabelled) instead of rebuilding + recanonicalising it."""
+class _ProjectionFast(_CanonMemo, BD.Projection):
+    """batch_decomp.Projection with canon memoised (`_CanonMemo`) that registers itself by its construction arguments.
+    `Projection.__init__` is deterministic in (oracle, inst_idx, tok_node, weights_node, seed_node, peer_node) -- the label only names the
+    object -- so two Projections with the same key are the same view of the fold: X-09 (`decompose`, run first inside GM-01 on the same
+    decoded fold + components) and GM-01's G3 build one each per request; `projection()` below hands G3 the X-09 one (relabelled) instead
+    of rebuilding + recanonicalising it."""
 
     def __init__(self, oracle, label, inst_idx, tok_node, weights_node, seed_node=None, peer_node=None):  # noqa: D107
         super().__init__(oracle, label, inst_idx, tok_node, weights_node, seed_node, peer_node)
         key = _proj_key(oracle, inst_idx, tok_node, weights_node, seed_node, peer_node)
         _proj_registry[key] = (oracle, self)
         stats["projection_built"] += 1
-
-
-_ORIG_PROJECTION = BD.Projection
 
 
 # ------------------------------------------------------------------------------------------------ unit 5: the remaining O(runs) loops
@@ -396,7 +398,8 @@ def _runs_fast(refs):
             out.append((s, i, b, b + c))
         else:
             return out
-    return _orig["runs"](refs)
+    from verity.ir.refs import runs
+    return runs(refs)
 
 
 _chron_memo: dict[int, tuple] = {}   # id(engine_step_of) -> (engine_step_of, B, step_of_k)
@@ -458,7 +461,7 @@ def dep_order_violations(P, rid: str) -> list[dict]:
     return out
 
 
-# ------------------------------------------------------------------------------------------------ install
+# ------------------------------------------------------------------------------------------------ the fast path's Programs and operations
 
 def _spec_id_memo(fn):
     """[R17 mprof unit 3, BRIEF s5 'cache immutable Definition/specialization analysis'] `codec._spec_id(fn)` serialises a
@@ -471,7 +474,8 @@ def _spec_id_memo(fn):
         return fn.__dict__["_gmf_spec_id"]
     except (AttributeError, KeyError):
         pass
-    sid = _orig["_spec_id"](fn)
+    from verity.ir.codec import _spec_id
+    sid = _spec_id(fn)
     try:
         fn.__dict__["_gmf_spec_id"] = sid
     except AttributeError:   # a __slots__ definition class: nothing to keep it on; recompute as the checker of record does
@@ -479,67 +483,34 @@ def _spec_id_memo(fn):
     return sid
 
 
-def install() -> None:
-    """Re-bind the memoised functions over the originals (once per process). Called by global_match.check when enabled()."""
-    global _installed
-    if _installed:
-        return
-    import verity.ir.codec as _codec
-    _orig["_spec_id"] = _codec._spec_id
-    _codec._spec_id = _spec_id_memo   # Prog.__init__ imports the name at call time (`from verity.ir.codec import _spec_id`)
-    import verity.ir.refs as _refs
-    _orig["runs"] = _refs.runs
-    _refs.runs = _runs_fast          # unit 5 (a); Prog.__init__ imports `runs` at call time too
-    _orig["canon"] = C.Prog.canon
-    _orig["compare_steps"] = C.compare_steps
-    _orig["_canonical_hash"] = C._canonical_hash
-    _orig["dag_hashes"] = BD.dag_hashes
-    _orig["live_cone"] = BD.live_cone
-    _orig["Projection"] = BD.Projection
-    _orig["_canon_step_relative"] = C._canon_step_relative
-    C.Prog.canon = _canon_memo
-    C.compare_steps = _compare_steps_memo
-    C._canonical_hash = _canonical_hash_memo
-    C._canon_step_relative = _canon_step_relative_fast
-    BD.dag_hashes = _dag_hashes_memo
-    BD.live_cone = _live_cone_memo
-    BD.Projection = _ProjectionFast
-    BD.X09_LEGS = _x09_legs   # [mfast] X-09's per-request comparisons on forked workers (MATCH_WORKERS)
-    # [R17 mfast, BRIEF §5 step 2] every Prog built from here on holds its operands as run progressions (cb_a.compact) unless
-    # MATCH_COMPACT=0 (the A/B switch for the representation alone); the record's Progs are runs
-    C.COMPACT_ARGS = os.environ.get(COMPACT_ENV, "1").strip() != "0"
-    stats["compact_args"] = int(C.COMPACT_ARGS)
+class FastProg(_CanonMemo, C.Prog):
+    """The fast path's compare.Prog (what `ops()` loads the fold and the components as): canon computed once per instance
+    (`_CanonMemo`), and a run-form decode whose two per-node functions are `_spec_id_memo` and `_runs_fast` (unit 5 (a)) -- each
+    returns what the record's `codec._spec_id` / `refs.runs` returns for the same node."""
+
+    def _node_functions(self):
+        return _spec_id_memo, _runs_fast
+
+
+def ops() -> BD.Ops:
+    """The fast path's Program operations for one `global_match.check` and the X-09 run inside it: the fold and components as FastProg,
+    Projections that register for reuse, the memoised comparison / hashes / live cone, X-09's per-request legs on forked workers
+    (MATCH_WORKERS).  Also states the run's declared configuration (`config`)."""
+    # [R17 mfast, BRIEF §5 step 2] every Prog loaded here holds its operands as run progressions (cb_a.compact) unless MATCH_COMPACT=0
+    # (the A/B switch for the representation alone); the record's Progs are runs
+    compact = os.environ.get(COMPACT_ENV, "1").strip() != "0"
+    stats["compact_args"] = int(compact)
     # [rev S-r17-17 condition / M-0276 (4)] the run's DECLARED configuration, stated on the document's impl block beside the counters:
     # the effective worker cap (MATCH_WORKERS or the default), the operand form, and the switches as read -- not inferred from hits
     raw_w = os.environ.get(WORKERS_ENV, "").strip()
     config.clear()
     config.update({"match_workers": workers(1 << 30), "match_workers_env": raw_w or None, "cpu_count": os.cpu_count(),
-                   "match_compact": bool(C.COMPACT_ARGS), "match_compact_env": os.environ.get(COMPACT_ENV) or None,
-                   "operand_form": "progressions/v1" if C.COMPACT_ARGS else "runs",
+                   "match_compact": compact, "match_compact_env": os.environ.get(COMPACT_ENV) or None,
+                   "operand_form": "progressions/v1" if compact else "runs",
                    "x09_legs": "forked" if workers(1 << 30) > 1 else "in-process", "candidate_stage": CANDIDATE_STAGE})
-    _installed = True
-
-
-def uninstall() -> None:
-    """Restore the originals (tests that run both paths in one process)."""
-    global _installed
-    if not _installed:
-        return
-    import verity.ir.codec as _codec
-    _codec._spec_id = _orig["_spec_id"]
-    import verity.ir.refs as _refs
-    _refs.runs = _orig["runs"]
-    C.Prog.canon = _orig["canon"]
-    C.compare_steps = _orig["compare_steps"]
-    C._canonical_hash = _orig["_canonical_hash"]
-    C._canon_step_relative = _orig["_canon_step_relative"]
-    BD.dag_hashes = _orig["dag_hashes"]
-    BD.live_cone = _orig["live_cone"]
-    BD.Projection = _orig["Projection"]
-    BD.X09_LEGS = None
-    _installed = False
-    reset()
-    C.COMPACT_ARGS = False
+    return BD.Ops("fast", load_oracle=functools.partial(C.load_oracle, cls=FastProg, compact=compact),
+                  load_derived=functools.partial(C.load_derived, cls=FastProg, compact=compact), projection=_ProjectionFast,
+                  compare_steps=_compare_steps_memo, dag_hashes=_dag_hashes_memo, live_cone=_live_cone_memo, legs=_x09_legs)
 
 
 def reset_projections() -> None:
@@ -568,7 +539,7 @@ def projection(loaded: dict, rid: str, oracle: C.Prog, label: str, inst_idx: lis
             P.digest = f"{oracle.digest}#{label}"
             stats["projection_reused_from_x09"] += 1
         else:
-            P = BD.Projection(oracle, label, inst_idx, tok_node, weights_node, seed_node, peer_node)
+            P = _ProjectionFast(oracle, label, inst_idx, tok_node, weights_node, seed_node, peer_node)
         projs[rid] = P
     else:
         stats["projection_reused_alternate"] += 1
@@ -712,8 +683,8 @@ def check(gp: dict, oracle_dir: str, log_path: str | None = None, tokens_path: s
           within_step: str | None = None, record_alternate: bool = True, _loaded: dict | None = None,
           tokens_optional: bool = False) -> dict:
     """[R17 mfast] The candidate's global Match as `global_match.impl_module("fast").check(...)` runs it: the checker of record's
-    `check` with this module's hooks ACTIVE for the duration of the call (whatever the environment says), then restored.  Same
-    signature, same result schema; nothing else is different by construction -- the differential harness proves it on the artifacts.
+    `check` over this module's `ops()` for the duration of the call (whatever the environment says).  Same signature, same result
+    schema; nothing else is different by construction -- the differential harness proves it on the artifacts.
     [rel r17-int-2] `tokens_optional` (stoch F-r17-01, CLI --tokens-optional) forwarded unchanged so the CLI's `mod.check(...)` call has one
     signature for both implementations."""
     global _force
@@ -721,7 +692,6 @@ def check(gp: dict, oracle_dir: str, log_path: str | None = None, tokens_path: s
     prev = _force
     _force = True
     try:
-        install()
         return _record.check(gp, oracle_dir, log_path, tokens_path, run_x09=run_x09,
                              within_step=within_step if within_step is not None else _record.DEFAULT_WITHIN_STEP,
                              record_alternate=record_alternate, _loaded=_loaded, tokens_optional=tokens_optional)

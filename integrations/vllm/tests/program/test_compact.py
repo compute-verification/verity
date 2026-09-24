@@ -194,10 +194,9 @@ def test_tp_rank_compare_in_compact_form_is_the_records(tmp_path, monkeypatch):
         pytest.skip(f"tp2 D90 fixture unavailable: {e}")
 
     def run(compact: bool, sub: str, rank: int, fold_kw: dict, prog_kw: dict):
-        monkeypatch.setattr(C, "COMPACT_ARGS", compact)
         d = tmp_path / f"{sub}_{'c' if compact else 'r'}"
         d.mkdir()
-        res, A, B = T.compare_rank(d, rank, T.fold_rank(rank, **fold_kw), T.rank_program(rank, **prog_kw))
+        res, A, B = T.compare_rank(d, rank, T.fold_rank(rank, **fold_kw), T.rank_program(rank, **prog_kw), compact=compact)
         return res, A, B
 
     def canon_runs(P: C.Prog, i: int) -> list:
@@ -284,22 +283,17 @@ def test_nothing_beside_the_files_of_record_is_read_a_forged_compact_sidecar_cha
     ref = gm.check(gp, oracle)
     assert ref["verdict"] == "PASS"
     for compact in (False, True):
-        monkeypatch.setattr(C, "COMPACT_ARGS", compact)
         C.LOAD_NOTES.clear()
-        P = C.load_oracle(oracle, "o")
+        P = C.load_oracle(oracle, "o", compact=compact)
         assert {k: C.LOAD_NOTES[oracle][k] for k in ("source", "instances_schema", "operand_refs_form")} == {"source": "record files", "instances_schema": RC.INSTANCES_SCHEMA, "operand_refs_form": "runs"}
         # [n2] the two record files are named by content too (sha256 as read)
         from verity_vllm.program.instances_form import sha256_file as _sf
         assert C.LOAD_NOTES[oracle]["instances_sha256"] == _sf(os.path.join(oracle, "instances.jsonl"))[0]
         assert C.LOAD_NOTES[oracle]["program_sha256"] == _sf(os.path.join(oracle, "program.json"))[0]
         assert {r["step"] for r in P.oracle_rows} != {99} and P.compact == compact
-    monkeypatch.setattr(C, "COMPACT_ARGS", False)
     monkeypatch.setenv(GMF.FLAG, "fast")
-    try:
-        fast = gm.check(gp, oracle)
-        cfg = gm.impl_info(GMF)["config"]   # the CLI's impl block, read after check() as main() does
-    finally:
-        GMF.uninstall()
+    fast = gm.check(gp, oracle)
+    cfg = gm.impl_info(GMF)["config"]   # the CLI's impl block, read after check() as main() does
 
     def strip(o):
         if isinstance(o, dict):
@@ -331,10 +325,7 @@ def test_record_document_states_the_stored_form_it_loaded_like_the_fast_one(tmp_
         for tag, (gp, o) in (("v1", (gp1, o1)), ("v2", (gp2, o2))):
             gpp = tmp_path / f"gp_{tag}.json"; gpp.write_text(json.dumps(gp))
             out = tmp_path / f"gm_{impl}_{tag}.json"
-            try:
-                gm.main(["--oracle", o, "--global-program", str(gpp), "--no-x09", "--no-alternate", "--out", str(out)])
-            finally:
-                GMF.uninstall()
+            gm.main(["--oracle", o, "--global-program", str(gpp), "--no-x09", "--no-alternate", "--out", str(out)])
             docs[(impl, tag)] = json.load(open(out))
     for (impl, tag), d in docs.items():
         assert d["verdict"] == "PASS" and d["impl"]["name"] == impl, (impl, tag, d["reasons"])
@@ -419,9 +410,8 @@ def test_persist_program_progressions_form_gives_the_same_prog_and_document_and_
     assert json.loads(open(c21).readline())["operand_refs_form"] == "runs" and json.loads(open(c12).readline())["schema"] == RC.INSTANCES_SCHEMA_V2
     # (2) the same Prog (record form and compact form) and the same GM-01 document
     for compact in (False, True):
-        monkeypatch.setattr(C, "COMPACT_ARGS", compact)
         C.LOAD_NOTES.clear()
-        assert _prog_facts(C.load_oracle(o1, "o")) == _prog_facts(C.load_oracle(o2, "o"))
+        assert _prog_facts(C.load_oracle(o1, "o", compact=compact)) == _prog_facts(C.load_oracle(o2, "o", compact=compact))
         # (4) the form READ is named per fold dir (-> impl.config.fold_load): the two documents are distinguishable by content
         _form_keys = ("source", "instances_schema", "operand_refs_form")
         assert {k: C.LOAD_NOTES[o1][k] for k in _form_keys} == {"source": "record files", "instances_schema": RC.INSTANCES_SCHEMA, "operand_refs_form": "runs"}
@@ -429,7 +419,6 @@ def test_persist_program_progressions_form_gives_the_same_prog_and_document_and_
         # [n2] and by content: the instances.jsonl digests differ between the two stores (the program.json ones are equal -- same descriptor)
         assert C.LOAD_NOTES[o1]["instances_sha256"] == IF.sha256_file(i1)[0] != C.LOAD_NOTES[o2]["instances_sha256"] == IF.sha256_file(i2)[0]
         assert C.LOAD_NOTES[o1]["program_sha256"] == C.LOAD_NOTES[o2]["program_sha256"] == IF.sha256_file(os.path.join(o1, "program.json"))[0]
-    monkeypatch.setattr(C, "COMPACT_ARGS", False)
 
     def strip(o):   # the two folds live in two directories: every path key is volatile, nothing else is
         if isinstance(o, dict):
@@ -439,10 +428,7 @@ def test_persist_program_progressions_form_gives_the_same_prog_and_document_and_
     assert d1["verdict"] == "PASS" and strip(d1) == strip(d2)
     from verity_vllm.check import global_match_fast as GMF
     monkeypatch.setenv(GMF.FLAG, "fast")
-    try:
-        f1, f2 = gm.check(gp1, o1), gm.check(gp2, o2)
-    finally:
-        GMF.uninstall()
+    f1, f2 = gm.check(gp1, o1), gm.check(gp2, o2)
     assert strip(f1) == strip(f2) == strip(d1)
     # (3) nothing but the two record files was written for Match (F-r17-12: no sidecar), and the fold digest of record is the SAME under both
     # stores (it is the Program descriptor's digest, program.json == fold_summary.digest; only F-r16-24's instances_sha256 tie differs)
