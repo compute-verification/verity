@@ -410,15 +410,13 @@ def _b2_mixed_padded(tmp_path=None):
     com = _committer()
     com.padding_hook = lambda c: PS.padding_for_committer(c, manifest=manifest, requests=requests, sampling={"max_tokens": CAP}, served_tokens=served,
                                                           stop={"eos": [0], "lag": 0})
-    run = com.commit_offline(_executed_with_planes(executed))
-    # the offline committer records every tensor as uint8 bytes; the two composition-reference members are [n_seq] id tensors on the pod
-    # (the row split of build_binding_map needs the shape) -- the roots hash bytes, so the dtype/shape of the meta is free to set here
-    for s, present in executed.items():
-        for m in com._layouts[s]:
-            if m.name == "model.embed_tokens/in":
-                m.dtype, m.shape = "int32", (len(present),)
-            elif m.name == "runner.sampler/sampled_token_ids":
-                m.dtype, m.shape = "int64", (len(present),)
+    # the two composition-reference members are [n_seq] id tensors on the pod (the row split of build_binding_map needs the shape); each step
+    # root binds its layout (every meta's dtype and shape), so they are committed typed -- a meta changed after the commit no longer opens
+    typed = {"model.embed_tokens/in": "int32", "runner.sampler/sampled_token_ids": "int64"}
+    steps = _executed_with_planes(executed)
+    for s, ts in zip(sorted(executed), steps):
+        ts[:] = [(n, raw, typed[n], (len(executed[s]),)) if n in typed else (n, raw) for n, raw in ts]
+    run = com.commit_offline(steps)
     rr = {0: [("r0", 0, 1), ("r1", 1, 2)], 1: [("r0", 0, 1), ("r1", 1, 2)], 2: [("r1", 0, 1)]}
     pm = PS.padded_binding_map_of_committer(com, run, PD, chunk=CHUNK, request_id="r0", request_rows=rr)
     hdr = {"engine_steps": [{"engine_step": e, "rows": 2, "n_seq": 2, "members": [{"request_id": r, "step": e, "rows": 1} for r in ("r0", "r1")]} for e in range(CAP)],

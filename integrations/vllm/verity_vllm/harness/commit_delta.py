@@ -1992,6 +1992,9 @@ def main(argv: list[str] | None = None) -> None:
                 "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             }
             if rc is not None:
+                if os.environ.get("VERITY_FAULT", "").strip().startswith("retained_flip"):
+                    row["fault_retained_flip"] = com.fault_retained_flip(os.environ["VERITY_FAULT"].strip())
+                    print(f"[delta] VERITY_FAULT retained_flip (negative test): {row['fault_retained_flip']}", flush=True)
                 # challenge derived from the PRECHALLENGE run root (the root is fixed before the positions exist)
                 from verity_vllm.acquire.committer_api import challenge_positions
 

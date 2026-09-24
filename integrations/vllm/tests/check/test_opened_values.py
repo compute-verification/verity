@@ -104,6 +104,22 @@ def test_host_layout_a_retained_buffer_changed_after_the_commit_fails_its_reads_
     assert rd(0, "a/0", 0, 128) == b"\x11" * 128 and rd(0, "b/0", 0, 100) == b"\x22" * 100
 
 
+@pytest.mark.parametrize("layout", ["block", "host"])
+def test_the_pod_fault_retained_flip_fails_every_opened_read_of_the_flipped_leaf_by_name(layout):
+    """`VERITY_FAULT=retained_flip:<name>` (the real-row negative; `commit_delta` calls `com.fault_retained_flip` after the commit): one bit
+    of the member's retained copy flipped.  Reads of the flipped leaf fail by name; t0.3's first leaves (not shared with t0.4) still verify."""
+    steps = {s: [(n, bytearray(b)) for n, b in ts] for s, ts in _world().items()}      # writable: the per-tensor path retains these buffers
+    com, run = _commit(layout, steps)
+    f = com.fault_retained_flip("retained_flip:t0.4")
+    assert (f["fault"], f["step"], f["name"], f["byte"], f["new"]) == ("retained_flip:t0.4", 0, "t0.4", 0, f["old"] ^ 1)
+    rd = OC.OpenedReader(com, run)
+    with pytest.raises(OC.OpeningNotVerified, match=rf"step 0 t0\.4 \(ordinal 4\) bytes \[0, 1\) = leaves \[{f['leaf']}, {f['leaf'] + 1}\)"):
+        rd(0, "t0.4", 0, 1)
+    assert rd(0, "t0.3", 0, 256) == bytes(steps[0][3][1][:256]) and rd(0, "t1.1", 0, 513) == bytes(steps[1][1][1])
+    with pytest.raises(RuntimeError, match="no committed member name contains 'nope'"):
+        com.fault_retained_flip("retained_flip:nope")
+
+
 def test_the_oracle_compare_passes_on_opened_values_of_an_honest_commit(tmp_path):
     pytest.importorskip("torch")
     d, vals = TOC.make_match(str(tmp_path))

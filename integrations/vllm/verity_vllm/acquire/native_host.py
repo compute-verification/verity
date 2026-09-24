@@ -2517,6 +2517,33 @@ class NativeHostCommitter:
             return s0 // self.chunk, -(-s1 // self.chunk), s0 % self.chunk
         return m.first_leaf + lo // m.chunk, m.first_leaf + -(-hi // m.chunk), lo % m.chunk
 
+    def fault_retained_flip(self, spec: str) -> dict:
+        """NEGATIVE TEST ONLY: `VERITY_FAULT=retained_flip[:<name substring>]` (default `qkv_proj`).  After the commit and before the openings
+        and value checks, flip the low bit of byte 0 of the earliest committed member whose name contains the substring, in THIS committer's
+        retained copy (the copy every opening and value check reads).  The run root binds the unflipped bytes, so the opened value check must
+        FAIL naming the member.  Raises when no member matches or its retained copy is not a writable contiguous one."""
+        sub = spec.partition(":")[2] or "qkv_proj"
+        step, m = next(((s, m) for s in sorted(self._layouts) for m in self._layouts[s] if sub in m.name), (None, None))
+        if m is None:
+            raise RuntimeError(f"{spec}: no committed member name contains {sub!r}")
+        a, _b, _o = self.leaf_span(step, m, 0, 1)
+        if step in self._gpu_blocks:
+            blk, pos = self._gpu_blocks[step][0], m.stream_off
+            if blk is None or getattr(blk, "holds", None) is not None:
+                raise RuntimeError(f"{spec}: step {step} has no contiguous retained block (retain={self.retain})")
+            old = int(blk[pos])
+            blk[pos] = old ^ 1
+        elif step in self._streams:
+            buf, pos = self._streams[step], m.stream_off
+            old = int(buf[pos])
+            buf[pos] = old ^ 1
+        else:
+            if m.host is None:
+                raise RuntimeError(f"{spec}: {m.name} at step {step} has no retained host copy (retain={self.retain})")
+            old = int(m.host[0])
+            m.host[0] = old ^ 1
+        return {"fault": spec, "step": step, "name": m.name, "ordinal": m.ordinal, "byte": 0, "leaf": a, "old": old, "new": old ^ 1}
+
     def _tensor_of_leaves(self, step: int, lo: int, hi: int) -> TensorMeta | None:
         return next((m for m in self._layouts.get(step, []) if m.first_leaf <= lo and hi <= m.first_leaf + m.n_leaves), None)
 
