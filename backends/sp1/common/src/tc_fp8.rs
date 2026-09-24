@@ -63,80 +63,105 @@ pub fn vu(pipeline: &GroupSum, x: &[u8], w: &[u8]) -> Option<u32> {
     groupsum::chain(pipeline, x, w, e4m3_product)
 }
 
+/// u64 words of one VU row.
+pub const ROW_WORDS: usize = K_VU / 8;
+
 /// `fp8-ada`: the RTX 4090 row's VU ([`vu`] over [`ADA_E4M3_M16N8K32`], by the kernel).
 pub fn vu_ada(x: &[u8], w: &[u8]) -> Option<u32> {
-    kernel::<16>(x, w)
+    kernel::<16>(x, w, &words(x), &words(w))
 }
 
 /// `fp8-hopper`: the H100 FP8 row's VU ([`vu`] over [`HOPPER_E4M3_K32`], by the kernel).
 pub fn vu_hopper(x: &[u8], w: &[u8]) -> Option<u32> {
-    kernel::<32>(x, w)
+    kernel::<32>(x, w, &words(x), &words(w))
+}
+
+/// [`vu_ada`] on rows given twice: as bytes and as the same bytes read as little-endian u64 words ([`ROW_WORDS`]
+/// each; the guest holds both views of its input buffer).  The words must be the bytes'.
+pub fn vu_ada_views(x: &[u8], w: &[u8], xw: &[u64], ww: &[u64]) -> Option<u32> {
+    kernel::<16>(x, w, xw, ww)
+}
+
+/// [`vu_hopper`] on both views of the rows, as [`vu_ada_views`].
+pub fn vu_hopper_views(x: &[u8], w: &[u8], xw: &[u64], ww: &[u64]) -> Option<u32> {
+    kernel::<32>(x, w, xw, ww)
+}
+
+fn words(row: &[u8]) -> Vec<u64> {
+    row.chunks_exact(8).map(|b| u64::from_le_bytes(b.try_into().unwrap())).collect()
 }
 
 // --- the kernel ------------------------------------------------------------------------------------------------------
 //
 // `groupsum::chain` specialised to a 14-bit adder, floor -139, 32 products per step in groups of `G`, and E4M3
-// products: each byte decoded by one table load, a group's nonzero products kept as packed words and summed in a
-// second pass once the group maximum is known, and the accumulator carried as a `Term` between steps (a step's
-// result round-trips `pack_fp32` / `fp32_term` exactly: `group_sum` never returns `-0`, and its magnitude has bit 23
-// set unless the exponent is -126).
+// products: a group's largest product exponent found eight lanes at a time on the u64 words (which also catch the
+// NaN codes), then one pass that decodes each byte by a table load and adds its aligned product; the accumulator is
+// carried as a `Term` between steps (a step's result round-trips `pack_fp32` / `fp32_term` exactly: `group_sum`
+// never returns `-0`, and its magnitude has bit 23 set unless the exponent is -126).
 
-/// Per E4M3 byte: `0` for a zero; else the significand (implicit bit included) in bits 0..4, the sign in bit 8 and
-/// `max(field, 1)` in bits 16..20; `1 << 31` alone for the two NaN codes.  The sum of two entries carries the product
-/// sign in bit 8 (bit 9 takes the carry) and `E = max(ea, 1) + max(eb, 1) <= 30` in bits 16..20.
+/// Per E4M3 byte: the significand (implicit bit included) in bits 0..4, the sign in bit 8 and `max(field, 1)` in
+/// bits 16..20 (a zero, and a NaN code -- rejected from the words -- decode likewise).  The sum of two entries carries
+/// the product sign in bit 8 (bit 9 takes the carry) and `E = max(ea, 1) + max(eb, 1) <= 30` in bits 16.. alone.
 static E4M3_DECODE: [u32; 256] = {
     let mut t = [0u32; 256];
     let mut v = 0u32;
     while v < 256 {
         let field = (v >> 3) & 0xF;
         let sig = (v & 7) | if field != 0 { 8 } else { 0 };
-        t[v as usize] = if v & 0x7F == 0x7F {
-            1 << 31
-        } else if sig == 0 {
-            0
-        } else {
-            sig | (v >> 7) << 8 | (if field == 0 { 1 } else { field }) << 16
-        };
+        t[v as usize] = sig | (v >> 7) << 8 | (if field == 0 { 1 } else { field }) << 16;
         v += 1;
     }
     t
 };
 
-/// A kept product: `p` in bits 0..8, its sign in bit 8, `E` in bits 16..21 (so the largest word has the largest `E`).
-const KEPT_MASK: u32 = 0x1F_0100;
+const B01: u64 = 0x0101_0101_0101_0101;
+const B0F: u64 = 0x0F0F_0F0F_0F0F_0F0F;
+const B7F: u64 = 0x7F7F_7F7F_7F7F_7F7F;
+const B80: u64 = 0x8080_8080_8080_8080;
+
+/// Per byte lane of a word pair: `E = max(ea, 1) + max(eb, 1)` where both significands are non-zero, else 0; `bad`
+/// collects bit 7 of the lanes where either byte is a NaN code (low seven bits all set).
+#[inline(always)]
+fn lane_exponents(x: u64, w: u64, bad: &mut u64) -> u64 {
+    let (lx, lw) = (x & B7F, w & B7F);
+    *bad |= (lx + B01) | (lw + B01);
+    let (ex, ew) = ((x >> 3) & B0F, (w >> 3) & B0F);
+    // bit 0 of a lane: its exponent field is non-zero (fields are below 0x10, so no lane carries)
+    let (nx, nw) = (((ex + B7F) >> 7) & B01, ((ew + B7F) >> 7) & B01);
+    let e = (ex | (nx ^ B01)) + (ew | (nw ^ B01));
+    // bit 7 of a lane: both significands are non-zero
+    let nz = (lx + B7F) & (lw + B7F) & B80;
+    e & ((nz >> 7) * 0xFF)
+}
+
+/// The lane-wise maximum of bytes below `0x80`.
+#[inline(always)]
+fn lane_max(a: u64, b: u64) -> u64 {
+    let ge = ((a | B80) - b) & B80;
+    b ^ ((a ^ b) & ((ge >> 7) * 0xFF))
+}
 
 const FLOOR: i32 = -139;
 const ADDER_WIDTH: i32 = 14;
 /// `FP32_SIGNIFICAND_WIDTH - ADDER_WIDTH`: every term is truncated by this many bits before the aligned sum.
 const TRUNC: u32 = 10;
 
-/// `group_sum(acc, products of a[i] * b[i])` at width 14, floor -139; `bad` collects bit 31 of every operand's
-/// decode (set iff one is NaN).  A product `p = sa * sb < 2^8` is `p << 17` on the 25-bit grid, i.e. `p << 7` after
-/// the truncation to the adder, at the `Term` exponent `E - 14` with `E = max(ea, 1) + max(eb, 1)`.
+/// `group_sum(acc, products of a[i] * b[i])` at width 14, floor -139, on the group's bytes and the same bytes as
+/// `G / 8` u64 words; `bad` collects bit 7 of every lane holding a NaN code.  A product `p = sa * sb < 2^8` is
+/// `p << 17` on the 25-bit grid, i.e. `p << 7` after the truncation to the adder, at the `Term` exponent `E - 14`
+/// with `E = max(ea, 1) + max(eb, 1)`; every product's exponent is at least `2 - 14`, above the floor.
 #[inline(always)]
-fn group<const G: usize>(acc: Term, a: &[u8], b: &[u8], bad: &mut u32) -> Term {
+fn group<const G: usize>(acc: Term, a: &[u8], b: &[u8], aw: &[u64], bw: &[u64], bad: &mut u64) -> Term {
     let (a, b): (&[u8; G], &[u8; G]) = (a.try_into().unwrap(), b.try_into().unwrap());
-    let mut kept = [0u32; G];
-    let mut n = 0;
-    let mut max_t = 0u32;
-    for i in 0..G {
-        let da = E4M3_DECODE[a[i] as usize];
-        let db = E4M3_DECODE[b[i] as usize];
-        let p = (da & 0xF) * (db & 0xF);
-        if p != 0 {
-            let t = ((da + db) & KEPT_MASK) | p;
-            if t > max_t {
-                max_t = t;
-            }
-            // n <= i < G, a power of two: the mask is the identity and spares the bounds check
-            kept[n & (G - 1)] = t;
-            n += 1;
-        } else {
-            // a NaN code decodes to a zero significand
-            *bad |= da | db;
-        }
+    let mut m = 0u64;
+    for k in 0..G / 8 {
+        m = lane_max(m, lane_exponents(aw[k], bw[k], bad));
     }
-    let mut max_exp = if n > 0 { (max_t >> 16) as i32 - 14 } else { FLOOR };
+    m = lane_max(m, m >> 32);
+    m = lane_max(m, m >> 16);
+    m = lane_max(m, m >> 8);
+    let max_e = (m & 0xFF) as i32;
+    let mut max_exp = if max_e != 0 { max_e - 14 } else { FLOOR };
     if acc.magnitude != 0 && acc.exponent > max_exp {
         max_exp = acc.exponent;
     }
@@ -146,13 +171,16 @@ fn group<const G: usize>(acc: Term, a: &[u8], b: &[u8], bad: &mut u32) -> Term {
         let v = if d < 14 { (acc.magnitude >> TRUNC >> d) as i64 } else { 0 };
         total = if acc.negative { -v } else { v };
     }
-    // a product's alignment distance is max_exp - (E - 14); p << 7 < 2^15 vanishes from 15
+    // a product's alignment distance is max_exp - (E - 14); p << 7 < 2^15 vanishes from 15, and a zero product adds
+    // nothing wherever it aligns
     let top = max_exp + 14;
-    for &t in kept.iter().take(n) {
-        let d = (top - (t >> 16) as i32) as u32;
+    for i in 0..G {
+        let (da, db) = (E4M3_DECODE[a[i] as usize], E4M3_DECODE[b[i] as usize]);
+        let s = da + db;
+        let d = (top - (s >> 16) as i32) as u32;
         if d < 15 {
-            let v = (((t & 0xFF) << 7) >> d) as i64;
-            if t & 0x100 != 0 {
+            let v = ((((da & 0xF) * (db & 0xF)) << 7) >> d) as i64;
+            if s & 0x100 != 0 {
                 total -= v;
             } else {
                 total += v;
@@ -186,8 +214,8 @@ fn group<const G: usize>(acc: Term, a: &[u8], b: &[u8], bad: &mut u32) -> Term {
 /// The chain of 48 steps of 32 products in groups of `G` (16: Ada, 32: Hopper) from `+0`, as `groupsum::chain`
 /// computes it: a NaN operand of a group rejects before that group's result is used, a saturating group ends the
 /// chain -- with its infinity in the last step (the later groups unexamined), else outside the model.
-fn kernel<const G: usize>(x: &[u8], w: &[u8]) -> Option<u32> {
-    if x.len() != K_VU || w.len() != K_VU {
+fn kernel<const G: usize>(x: &[u8], w: &[u8], xw: &[u64], ww: &[u64]) -> Option<u32> {
+    if x.len() != K_VU || w.len() != K_VU || xw.len() != ROW_WORDS || ww.len() != ROW_WORDS {
         return None;
     }
     const STEP: usize = 32;
@@ -196,9 +224,10 @@ fn kernel<const G: usize>(x: &[u8], w: &[u8]) -> Option<u32> {
     for s in 0..steps {
         let mut at = s * STEP;
         while at < (s + 1) * STEP {
-            let mut bad = 0u32;
-            acc = group::<G>(acc, &x[at..at + G], &w[at..at + G], &mut bad);
-            if bad >> 31 != 0 {
+            let mut bad = 0u64;
+            let (g, gw) = (at..at + G, at / 8..(at + G) / 8);
+            acc = group::<G>(acc, &x[g.clone()], &w[g], &xw[gw.clone()], &ww[gw], &mut bad);
+            if bad & B80 != 0 {
                 return None;
             }
             if acc.magnitude != 0 && acc.exponent > 127 {
@@ -335,5 +364,53 @@ mod tests {
             rejected += ada.is_none() as usize;
         }
         assert_eq!(rejected, (0..cases).filter(|c| c % 7 == 6).count(), "exactly the NaN regime rejects");
+    }
+
+    /// One kernel step (both group sizes) equals `groupsum::step` on single groups: arbitrary bytes (every code,
+    /// NaN in any lane, all zero lanes), and accumulators zero, subnormal, and normal, near or far from the products.
+    #[test]
+    fn group_matches_step() {
+        fn one<const G: usize>(r: &mut Rng, t: usize) -> (bool, bool) {
+            let acc_bits: u32 = match t % 4 {
+                0 => (r.next() as u32) & 0x8000_0000,
+                1 => (r.next() as u32) & 0x807F_FFFF,
+                2 => ((r.next() as u32) & 0x8000_0000) | ((110 + r.below(40) as u32) << 23) | (r.next() as u32 & 0x7F_FFFF),
+                _ => loop {
+                    let v = r.next() as u32;
+                    if (v >> 23) & 0xFF != 0xFF {
+                        break v;
+                    }
+                },
+            };
+            let (mut a, mut b) = ([0u8; G], [0u8; G]);
+            for k in 0..G {
+                (a[k], b[k]) = match (t / 4) % 3 {
+                    0 => (r.next() as u8, r.next() as u8),
+                    1 => (byte(r, 0, 15, 300), byte(r, 0, 15, 300)),
+                    _ => (byte(r, 0, 4, 100), byte(r, 6, 15, 100)),
+                };
+            }
+            if t % 7 == 0 {
+                a[r.below(G as u64) as usize] |= 0x7F;
+            }
+            let pipeline = GroupSum { groups: &[G], width: 14, zero_exponent: -139 };
+            let want = groupsum::step(&pipeline, acc_bits, &a, &b, e4m3_product);
+            let mut bad = 0u64;
+            let acc = groupsum::fp32_term(acc_bits).unwrap();
+            let got = group::<G>(acc, &a, &b, &words(&a), &words(&b), &mut bad);
+            let got = if bad & B80 != 0 { None } else { Some(groupsum::pack_fp32(got)) };
+            assert_eq!(got, want, "G {G} trial {t}: acc {acc_bits:#010x} a {a:02x?} b {b:02x?}");
+            (want.is_none(), want.is_some_and(|v| v & 0x7FFF_FFFF != 0))
+        }
+        let mut r = Rng(0xF8_0000_2026);
+        let trials = if cfg!(debug_assertions) { 20_000 } else { 500_000 };
+        let (mut nan, mut nonzero) = (0, 0);
+        for t in 0..trials {
+            let (n16, z16) = one::<16>(&mut r, t);
+            let (n32, z32) = one::<32>(&mut r, t);
+            nan += n16 as usize + n32 as usize;
+            nonzero += z16 as usize + z32 as usize;
+        }
+        assert!(nan > trials / 20 && nonzero > trials, "NaN rejections {nan}, non-zero results {nonzero}");
     }
 }

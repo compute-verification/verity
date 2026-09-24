@@ -63,19 +63,29 @@ pub fn vu(x: &[u16], w: &[u16]) -> Option<u16> {
     accumulator(x, w).map(|acc| crate::tc::f32_to_bf16(acc as u64) as u16)
 }
 
+/// u64 words of one VU row: BF16 word `k` is bits `16 (k % 4)..` of u64 `k / 4`.
+pub const ROW_WORDS: usize = K_VU / 4;
+
 /// [`vu`] on rows of little-endian BF16 words ([`ROW_BYTES`] each), by the kernel.
 pub fn vu_bytes(x: &[u8], w: &[u8]) -> Option<u16> {
     if x.len() != ROW_BYTES || w.len() != ROW_BYTES {
         return None;
     }
-    const G: usize = 16;
-    const STEPS: usize = K_VU / G;
+    let words = |row: &[u8]| -> Vec<u64> { row.chunks_exact(8).map(|b| u64::from_le_bytes(b.try_into().unwrap())).collect() };
+    vu_words(&words(x), &words(w))
+}
+
+/// [`vu`] on rows of [`ROW_WORDS`] u64 words each, by the kernel.
+pub fn vu_words(x: &[u64], w: &[u64]) -> Option<u16> {
+    let x: &[u64; ROW_WORDS] = x.try_into().ok()?;
+    let w: &[u64; ROW_WORDS] = w.try_into().ok()?;
+    const STEPS: usize = K_VU / 16;
     let mut acc = ZERO;
     for s in 0..STEPS {
-        let mut bad = false;
-        let at = 2 * G * s;
-        acc = group(acc, &x[at..at + 2 * G], &w[at..at + 2 * G], &mut bad);
-        if bad {
+        let mut bad = 0u64;
+        let i = 4 * s;
+        acc = group(acc, [x[i], x[i + 1], x[i + 2], x[i + 3]], [w[i], w[i + 1], w[i + 2], w[i + 3]], &mut bad);
+        if bad & L100 != 0 {
             return None;
         }
         if acc.magnitude != 0 && acc.exponent > 127 {
@@ -90,71 +100,99 @@ pub fn vu_bytes(x: &[u8], w: &[u8]) -> Option<u16> {
 
 // --- the kernel ------------------------------------------------------------------------------------------------------
 //
-// `groupsum::step` specialised to one group of 16 BF16 products, a 26-bit adder and floor -133: a group's nonzero
-// products kept as packed words and summed in a second pass once the group maximum is known, the accumulator
-// carried as a `Term` between steps (exact: see `tc_fp8`'s kernel).
+// `groupsum::step` specialised to one group of 16 BF16 products, a 26-bit adder and floor -133, on four u64 words of
+// each operand: the lane-parallel decode of `bare`'s Ampere kernel (two products per 64x64 -> 128 multiply), the
+// group maximum, then the aligned sum; the accumulator is carried as a `Term` between steps (exact: see `tc_fp8`).
 
-const FLOOR: i32 = -133;
+const LFF: u64 = 0x00FF_00FF_00FF_00FF;
+const L7F: u64 = 0x007F_007F_007F_007F;
+const L80: u64 = 0x0080_0080_0080_0080;
+const L01: u64 = 0x0001_0001_0001_0001;
+/// Bit 8 of a lane of `exponent field + 1`: the field was `0xFF` (a non-finite word).
+const L100: u64 = 0x0100_0100_0100_0100;
+/// Lanes 0 and 2 of a SWAR word, one byte each: two products per 64x64 -> 128 multiply.
+const M02: u64 = 0x0000_00FF_0000_00FF;
+/// A product's `max(ea, 1) + max(eb, 1) - 2` is its `Term` exponent + 252.
+const BIAS: i32 = 252;
+/// The adder's exponent floor `-133`, biased.
+const FLOOR: u64 = (-133 + BIAS) as u64;
 const ADDER_WIDTH: i32 = 26;
 /// `ADDER_WIDTH - FP32_SIGNIFICAND_WIDTH`: every term is scaled up by this many bits before the aligned sum.
 const RESCALE: u32 = 2;
-/// A product's `E = max(ea, 1) + max(eb, 1)` is its `Term` exponent + 254.
-const E_BIAS: i32 = 254;
 
-/// `group_sum(acc, products of 16 BF16 word pairs)` on little-endian row bytes (32 each); `bad` is set when an
-/// operand is non-finite.  A product `p = sa * sb < 2^16` is `p << 9` on the 25-bit grid, `p << 11` in the adder.
+/// Four products of a lane quadruple: significand products, biased exponents (lane `j` of the second word), and the
+/// word whose bit `15 + 16 j` is product `j`'s sign.  `bad` collects bit 8 of `field + 1` for every operand.
 #[inline(always)]
-fn group(acc: Term, a: &[u8], b: &[u8], bad: &mut bool) -> Term {
-    let (a, b): (&[u8; 32], &[u8; 32]) = (a.try_into().unwrap(), b.try_into().unwrap());
-    let mut kept = [0u32; 16];
-    let mut n = 0;
-    let mut max_e = 0u32;
-    for i in 0..16 {
-        let ua = a[2 * i] as u32 | (a[2 * i + 1] as u32) << 8;
-        let ub = b[2 * i] as u32 | (b[2 * i + 1] as u32) << 8;
-        let ea = (ua >> 7) & 0xFF;
-        let eb = (ub >> 7) & 0xFF;
-        if ea == 0xFF || eb == 0xFF {
-            *bad = true;
-        }
-        let sa = (ua & 0x7F) | ((ea != 0) as u32) << 7;
-        let sb = (ub & 0x7F) | ((eb != 0) as u32) << 7;
-        let p = sa * sb;
-        if p != 0 {
-            // p | E << 16 | sign << 31; E <= 508
-            let e = ea + (ea == 0) as u32 + eb + (eb == 0) as u32;
-            if e > max_e {
-                max_e = e;
-            }
-            // n <= i < 16: the mask is the identity and spares the bounds check
-            kept[n & 15] = p | e << 16 | ((ua ^ ub) & 0x8000) << 16;
-            n += 1;
-        }
+fn quad(x: u64, w: u64, bad: &mut u64) -> ([u64; 4], u64, u64) {
+    let ex = (x >> 7) & LFF;
+    let ew = (w >> 7) & LFF;
+    *bad |= (ex + L01) | (ew + L01);
+    // 0x80 in the lanes whose exponent field is non-zero: the implicit bit
+    let ix = ((ex + LFF) >> 1) & L80;
+    let iw = ((ew + LFF) >> 1) & L80;
+    let sx = (x & L7F) | ix;
+    let sw = (w & L7F) | iw;
+    // max(e, 1) - 1 per operand, summed: at most 508 per lane, so no lane carries
+    let g = (ex - (ix >> 7)) + (ew - (iw >> 7));
+    let x02 = sx & M02;
+    let x13 = (sx >> 16) & M02;
+    let w02 = sw & M02;
+    let w13 = (sw >> 16) & M02;
+    // low 64 bits: p0 + (cross terms << 32), below 2^49, so the high 64 bits are exactly p2
+    let t02 = x02 as u128 * w02 as u128;
+    let t13 = x13 as u128 * w13 as u128;
+    ([t02 as u64 & 0xFFFF, t13 as u64 & 0xFFFF, (t02 >> 64) as u64, (t13 >> 64) as u64], g, x ^ w)
+}
+
+/// `group_sum(acc, the 16 products of four word pairs)`.  A product `p = sa * sb < 2^16` is `p << 9` on the 25-bit
+/// grid, `p << 11` in the adder.
+#[inline(always)]
+fn group(acc: Term, x: [u64; 4], w: [u64; 4], bad: &mut u64) -> Term {
+    let mut p = [0u64; 16];
+    let mut g = [0u64; 4];
+    let mut s = [0u64; 4];
+    for q in 0..4 {
+        let (pq, gq, sq) = quad(x[q], w[q], bad);
+        p[4 * q..4 * q + 4].copy_from_slice(&pq);
+        g[q] = gq;
+        s[q] = sq;
     }
-    let mut max_exp = if n > 0 { max_e as i32 - E_BIAS } else { FLOOR };
-    if acc.magnitude != 0 && acc.exponent > max_exp {
-        max_exp = acc.exponent;
+    // a non-zero accumulator has exponent >= -126, above the floor
+    let acc_e = (acc.exponent + BIAS) as u64;
+    let mut mx = if acc.magnitude != 0 { acc_e } else { FLOOR };
+    for q in 0..4 {
+        for j in 0..4 {
+            let e = (g[q] >> (16 * j)) & 0xFFFF;
+            if p[4 * q + j] != 0 && e > mx {
+                mx = e;
+            }
+        }
     }
     let mut total: i64 = 0;
     if acc.magnitude != 0 {
         // acc.magnitude << 2 < 2^26 vanishes from 26
-        let d = (max_exp - acc.exponent) as u32;
-        let v = if d < 26 { ((acc.magnitude << RESCALE) >> d) as i64 } else { 0 };
-        total = if acc.negative { -v } else { v };
+        let d = mx - acc_e;
+        if d < 26 {
+            let v = (((acc.magnitude as u64) << RESCALE) >> d) as i64;
+            total = if acc.negative { -v } else { v };
+        }
     }
-    // p << 11 < 2^27 vanishes from 27
-    let top = max_exp + E_BIAS;
-    for &t in kept.iter().take(n) {
-        let d = (top - ((t >> 16) & 0x7FFF) as i32) as u32;
-        if d < 27 {
-            let v = (((t & 0xFFFF) << 11) >> d) as i64;
-            if t >> 31 != 0 {
-                total -= v;
-            } else {
-                total += v;
+    // p << 11 < 2^27 vanishes from 27; a zero product whose exponent exceeds the maximum wraps `d` past 27 and adds
+    // nothing, as `group_sum` skips it
+    for q in 0..4 {
+        for j in 0..4 {
+            let d = mx.wrapping_sub((g[q] >> (16 * j)) & 0xFFFF);
+            if d < 27 {
+                let v = ((p[4 * q + j] << 11) >> d) as i64;
+                if (s[q] >> (15 + 16 * j)) & 1 != 0 {
+                    total -= v;
+                } else {
+                    total += v;
+                }
             }
         }
     }
+    let max_exp = mx as i32 - BIAS;
     if total == 0 {
         return ZERO;
     }
@@ -262,6 +300,54 @@ mod tests {
             ((lo + r.below(hi - lo + 1)) << 7) | mant
         };
         (sign | v) as u16
+    }
+
+    /// One kernel step equals `groupsum::step` on single steps: accumulators zero, subnormal, small and large, and
+    /// operands whose products straddle the floor (-133) and the FP32 subnormal range, as well as arbitrary words.
+    #[test]
+    fn group_matches_step() {
+        let mut r = Rng(0xF100_2026);
+        let trials = if cfg!(debug_assertions) { 20_000 } else { 1_000_000 };
+        let mut below_floor = 0usize;
+        for t in 0..trials {
+            let acc_bits: u32 = match t % 5 {
+                0 | 1 => (r.next() as u32) & 0x8000_0000,
+                2 => (r.next() as u32) & 0x807F_FFFF,
+                3 => ((r.next() as u32) & 0x81FF_FFFF) | 0x0080_0000,
+                _ => loop {
+                    let v = r.next() as u32;
+                    if (v >> 23) & 0xFF != 0xFF {
+                        break v;
+                    }
+                },
+            };
+            let (mut a, mut b) = ([0u16; 16], [0u16; 16]);
+            for k in 0..16 {
+                (a[k], b[k]) = if t % 3 == 2 {
+                    (r.next() as u16, r.next() as u16)
+                } else {
+                    // ea + eb in 85..=140: products from 2^-169 to 2^-114
+                    let ea = 30 + r.below(60);
+                    let eb = (85 + r.below(56)).saturating_sub(ea).min(254);
+                    let (ma, mb) = (r.next() & 0x7F, r.next() & 0x7F);
+                    let (za, zb) = (r.below(20) == 0, r.below(20) == 0);
+                    let wa = if za { 0 } else { (ea << 7) | ma };
+                    let wb = if zb { 0 } else { (eb << 7) | mb };
+                    ((((r.next() & 1) << 15) | wa) as u16, (((r.next() & 1) << 15) | wb) as u16)
+                };
+            }
+            let want = step(acc_bits, &a, &b);
+            let word = |v: &[u16; 16], q: usize| (0..4).fold(0u64, |acc, j| acc | (v[4 * q + j] as u64) << (16 * j));
+            let mut bad = 0u64;
+            let acc = groupsum::fp32_term(acc_bits).unwrap();
+            let got = group(acc, [0, 1, 2, 3].map(|q| word(&a, q)), [0, 1, 2, 3].map(|q| word(&b, q)), &mut bad);
+            let got = if bad & L100 != 0 { None } else { Some(groupsum::pack_fp32(got)) };
+            assert_eq!(got, want, "trial {t}: acc {acc_bits:#010x} a {a:04x?} b {b:04x?}");
+            if acc.magnitude == 0 && t % 3 != 2 {
+                below_floor += 1;
+            }
+        }
+        assert!(below_floor > trials / 10, "the zero-accumulator floor window exercised: {below_floor}");
     }
 
     /// The kernel equals `vu` on rows from several regimes: the frozen set's exponents, tiny magnitudes (subnormal

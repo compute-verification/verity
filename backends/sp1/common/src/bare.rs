@@ -136,16 +136,16 @@ pub fn check_one(format: Format, vu_bytes: &[u8], vu_words: &[u64], y: u32) -> b
             y <= 0xFFFF && check_vu(x, w) == Some(y as u16)
         }
         Format::Bf16Hopper => {
-            let (x, w) = vu_bytes.split_at(format.row_bytes());
-            y <= 0xFFFF && crate::tc_hopper_bf16::vu_bytes(x, w) == Some(y as u16)
+            let (x, w) = vu_words.split_at(crate::tc_hopper_bf16::ROW_WORDS);
+            y <= 0xFFFF && crate::tc_hopper_bf16::vu_words(x, w) == Some(y as u16)
         }
         Format::Fp8Hopper => {
-            let (x, w) = vu_bytes.split_at(format.row_bytes());
-            crate::tc_fp8::vu_hopper(x, w) == Some(y)
+            let ((x, w), (xw, ww)) = (vu_bytes.split_at(format.row_bytes()), vu_words.split_at(crate::tc_fp8::ROW_WORDS));
+            crate::tc_fp8::vu_hopper_views(x, w, xw, ww) == Some(y)
         }
         Format::Fp8Ada => {
-            let (x, w) = vu_bytes.split_at(format.row_bytes());
-            crate::tc_fp8::vu_ada(x, w) == Some(y)
+            let ((x, w), (xw, ww)) = (vu_bytes.split_at(format.row_bytes()), vu_words.split_at(crate::tc_fp8::ROW_WORDS));
+            crate::tc_fp8::vu_ada_views(x, w, xw, ww) == Some(y)
         }
         Format::Fp4Nvf4 => {
             let (x, w) = vu_bytes.split_at(format.row_bytes());
