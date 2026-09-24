@@ -1349,6 +1349,8 @@ pub struct Report {
     pub key_derived_from: Option<String>,
     pub key_sha256: String,
     pub stmt_sha256: String,
+    /// live coins authenticated by a verifier record (`session::authenticate`): its session id and batch
+    pub live_session: Option<(String, usize)>,
 }
 
 /// The layout of the batch from the key and the statement (`layout.layout_for`), with the key's own consistency checks.
@@ -1581,6 +1583,7 @@ pub fn verify(
         key_derived_from,
         key_sha256: vk,
         stmt_sha256: hex(&sha256(stmt_bytes)),
+        live_session: None,
     })
 }
 

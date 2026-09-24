@@ -162,6 +162,60 @@ fn reads_the_verifier_record_format() {
     assert!(session::read_record(&bad, "{\"accepted\":true}", "dir").unwrap_err().contains("out of order"));
 }
 
+fn zk_live_records() -> Vec<Batch> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/session/fp8ada_l256_zk_live/verifier_sessions");
+    let mut dirs: Vec<_> = std::fs::read_dir(&root).unwrap().flatten().map(|e| e.path()).collect();
+    dirs.sort();
+    dirs.iter()
+        .flat_map(|d| {
+            let rd = |f: &str| std::fs::read_to_string(d.join(f)).unwrap();
+            session::read_record(&rd("session.json"), &rd("verdict.json"), "").unwrap()
+        })
+        .collect()
+}
+
+/// relation-3 2b0f87a6's loopback-verifier test (fp8-ada --zk, LGSC0004, real `ChallengeServerSession` records): the
+/// honest proof authenticates (every MSG against the real record), the label- and context-grinding proofs verify under
+/// their own `.coins` but not under the record, one batch authenticates one proof, and the aborted session counts as an
+/// attempt.
+#[test]
+fn real_verifier_records_lgsc0004_live() {
+    const ZSTMT: &[u8] = include_bytes!("../fixtures/lgto/fp8ada_l256_zk_lgsc4/honest.stmt");
+    const ZKEY: &[u8] = include_bytes!("../fixtures/lgto/fp8ada_l256_zk_lgsc4/key.bin");
+    const HONEST: &[u8] = include_bytes!("../fixtures/session/fp8ada_l256_zk_live/honest.lgto");
+    let recs = zk_live_records();
+    assert_eq!(recs.len(), 4);
+    let strict = Options::default();
+    let a = session::authenticate(ZSTMT, ZKEY, HONEST, &recs, &strict).unwrap();
+    assert_eq!((a.session.as_str(), a.batch, a.rounds), ("c20260924T002130Z-1324", 0, 28));
+    assert_eq!(a.report.sumcheck, "LGSC0004");
+    assert!(a.report.key_pinned && a.report.key_derived_from.is_some());
+    assert_eq!(session::attempts(&recs, &a.stmt_sha256), 4, "3 accepted sessions + 1 aborted, one statement");
+    assert!((a.report.claimed_log2.unwrap() - (a.report.soundness_log2 + 2.0)).abs() < 1e-9);
+    // one batch, one proof
+    let used = vec![(a.session.clone(), a.batch)];
+    let e = session::authenticate_unused(ZSTMT, ZKEY, HONEST, &recs, &used, &strict).unwrap_err();
+    assert!(e.contains("already authenticates another proof"), "{e}");
+    // a real record's MSG
+    let mut bad = recs.clone();
+    let i = bad.iter().position(|b| b.session == a.session).unwrap();
+    bad[i].rounds[13].msg_sha256[0] ^= 1;
+    let e = session::authenticate(ZSTMT, ZKEY, HONEST, &bad[i..=i], &strict).unwrap_err();
+    assert!(e.contains("round 13"), "{e}");
+    // R3-7 A / B: valid proofs under prover-chosen slots (the dump's .coins), rejected under every recorded batch
+    for (pf, coins) in [
+        (&include_bytes!("../fixtures/session/fp8ada_l256_zk_live/label_grinding.lgto")[..], &include_bytes!("../fixtures/session/fp8ada_l256_zk_live/label_grinding.coins")[..]),
+        (&include_bytes!("../fixtures/session/fp8ada_l256_zk_live/context_grinding.lgto")[..], &include_bytes!("../fixtures/session/fp8ada_l256_zk_live/context_grinding.coins")[..]),
+    ] {
+        let mut from_file = |_: &str| -> Result<Box<dyn ligerito_verify::transcript::Coins>, String> { Ok(Box::new(lgto::read_coins(coins)?)) };
+        let cold = lgto::verify(ZSTMT, ZKEY, pf, &mut from_file, &strict).unwrap();
+        assert!(cold.claimed_log2.is_none());
+        let e = session::authenticate(ZSTMT, ZKEY, pf, &recs, &strict).unwrap_err();
+        assert_eq!(e.matches("proof rejected under the recorded coins").count(), 3, "{e}");
+        assert!(e.contains("session not accepted by its verifier"), "{e}");
+    }
+}
+
 /// Real live dumps with the issuing verifier's records (relation-2's bench, `dump_*-live-ro` + `verifier_session/`):
 /// `LIGERITO_LIVE_DUMPS=dir1:dir2 cargo test --release real_live_dumps`.  Skipped when unset (15 MB statements).
 #[test]

@@ -189,6 +189,43 @@ fn batch_over_the_lgsc0004_zk_gate_subset() {
     }
 }
 
+/// `batch --session`: live proofs are authenticated by the verifier's records (R3-7). A second copy of a proof cannot
+/// reuse its recorded batch; a label-grinding proof (valid under its own .coins) is accepted by file replay with no
+/// claim, and rejected under the records.
+#[test]
+fn batch_with_verifier_sessions() {
+    let (z, s) = (fixtures().join("lgto/fp8ada_l256_zk_lgsc4"), fixtures().join("session/fp8ada_l256_zk_live"));
+    let sess = s.join("verifier_sessions");
+    let d = scratch("session");
+    std::fs::copy(z.join("key.bin"), d.join("key.bin")).unwrap();
+    for stem in ["a", "b"] {
+        std::fs::copy(s.join("honest.lgto"), d.join(format!("{stem}.lgto"))).unwrap();
+        std::fs::copy(z.join("honest.stmt"), d.join(format!("{stem}.stmt"))).unwrap();
+    }
+    let o = run(&["batch", "--dir", d.to_str().unwrap(), "--session", sess.to_str().unwrap()]);
+    let out = stdout(&o);
+    assert!(!o.status.success(), "{out}");
+    assert!(out.contains("{\"name\":\"a.lgto\",\"accepted\":true,\"reason\":\"ok (session c20260924T002130Z-1324 batch 0, 28 rounds)\""), "{out}");
+    assert!(out.contains("already authenticates another proof"), "{out}");
+    std::fs::remove_file(d.join("b.lgto")).unwrap();
+    let o = run(&["batch", "--dir", d.to_str().unwrap(), "--session", sess.to_str().unwrap()]);
+    let out = stdout(&o);
+    assert!(o.status.success(), "{out}");
+    for want in ["\"claimed_union_log2\":-126.030", "\"live_session\":{\"session\":\"c20260924T002130Z-1324\",\"batch\":0}", "\"mode\":\"lgto live-session\""] {
+        assert!(out.contains(want), "{want} not in {out}");
+    }
+    std::fs::remove_file(d.join("a.lgto")).unwrap();
+    std::fs::copy(s.join("label_grinding.lgto"), d.join("a.lgto")).unwrap();
+    std::fs::copy(s.join("label_grinding.coins"), d.join("a.coins")).unwrap();
+    let o = run(&["batch", "--dir", d.to_str().unwrap()]);
+    let out = stdout(&o);
+    assert!(o.status.success() && out.contains("\"claimed_union_log2\":null") && out.contains("lgto live-replay"), "{out}");
+    let o = run(&["batch", "--dir", d.to_str().unwrap(), "--session", sess.to_str().unwrap()]);
+    let out = stdout(&o);
+    assert!(!o.status.success() && out.contains("proof rejected under the recorded coins"), "{out}");
+    let _ = std::fs::remove_dir_all(&d);
+}
+
 /// red-team-ligerito-2's V1 forgery (y16[47] += 1 with w' = w - e_(3581, 47)): the sumcheck layer accepts it by
 /// construction; the zero claim on the virtual block holding row 3581 is non-zero on the forged w, so the PCS opening the
 /// full verifier demands (value 0) cannot be met.

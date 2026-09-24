@@ -119,7 +119,7 @@ fn verdict_json(v: &Verdict) -> String {
     };
     let lg = match &v.lgto {
         Some(r) => format!(
-            "{{\"relation\":{},\"coins\":{},\"coin_rounds\":{},\"soundness_log2\":{},\"claimed_log2\":{},\"claim_basis\":{},\"sumcheck\":\"{}\",\"zk\":{},\"zk_mode\":\"{}\",\"vus\":{},\"sub_batches\":{},\"n\":{},\"n_claims\":{},\"zero_blocks\":{},\"opened_rows\":{},\"legacy_no_zero_claims\":{},\"key_pinned\":{},\"key_derived_from\":{},\"key_sha256\":\"{}\",\"stmt_sha256\":\"{}\"}}",
+            "{{\"relation\":{},\"coins\":{},\"coin_rounds\":{},\"soundness_log2\":{},\"claimed_log2\":{},\"claim_basis\":{},\"sumcheck\":\"{}\",\"zk\":{},\"zk_mode\":\"{}\",\"vus\":{},\"sub_batches\":{},\"n\":{},\"n_claims\":{},\"zero_blocks\":{},\"opened_rows\":{},\"legacy_no_zero_claims\":{},\"key_pinned\":{},\"key_derived_from\":{},\"key_sha256\":\"{}\",\"stmt_sha256\":\"{}\",\"live_session\":{}}}",
             json_str(&r.relation),
             json_str(&r.coins_kind),
             r.coins,
@@ -139,7 +139,8 @@ fn verdict_json(v: &Verdict) -> String {
             r.key_pinned,
             r.key_derived_from.as_deref().map(json_str).unwrap_or_else(|| "null".into()),
             r.key_sha256,
-            r.stmt_sha256
+            r.stmt_sha256,
+            r.live_session.as_ref().map(|(s, b)| format!("{{\"session\":{},\"batch\":{b}}}", json_str(s))).unwrap_or_else(|| "null".into())
         ),
         None => "null".into(),
     };
@@ -158,6 +159,7 @@ fn verdict_json(v: &Verdict) -> String {
 }
 
 /// How LGTO0001 proofs are verified (the command-line switches).
+#[derive(Clone)]
 struct LgtoOpts {
     opt: lgto::Options,
     /// local coins (`LocalCoins(seed)`, seed public): verdict only, never a soundness statement; `--no-local` rejects them
@@ -168,6 +170,8 @@ struct LgtoOpts {
     /// `--session`: the issuing verifiers' records; live proofs are then authenticated against them (slots derived from
     /// the record, never from `.coins`) and rejected when no recorded batch authenticates them
     sessions: Option<Vec<session::Batch>>,
+    /// recorded batches (session id, batch) that already authenticate another proof of the run
+    used: Vec<(String, usize)>,
 }
 
 /// `--session PATH` (repeatable): a `live.ChallengeServerSession` record dir (`session.json` + `verdict.json`) or a dir
@@ -254,7 +258,7 @@ fn verify_lgto_file(proof_path: &Path, entry: Option<&LgtoEntry>, lo: &LgtoOpts,
             let t0 = Instant::now();
             let mut res = Err(String::new());
             for _ in 0..reps.max(1) {
-                res = session::authenticate(&stmt, &key, &proof, recs, &lo.opt);
+                res = session::authenticate_unused(&stmt, &key, &proof, recs, &lo.used, &lo.opt);
             }
             let seconds = t0.elapsed().as_secs_f64() / reps.max(1) as f64;
             return match res {
@@ -533,6 +537,7 @@ fn main() {
         key: arg(&args, "--key").map(PathBuf::from),
         coins: arg(&args, "--coins").map(PathBuf::from),
         sessions: sessions.clone(),
+        used: Vec::new(),
     };
     match cmd {
         "verify" => {
@@ -613,6 +618,20 @@ fn main() {
                 }
             });
             let mut verdicts: Vec<Verdict> = results.into_iter().map(|m| m.into_inner().unwrap().unwrap()).collect();
+            // one recorded verifier batch authenticates one proof: in file order, a proof whose batch is taken is
+            // re-authenticated against the batches still unused
+            let mut used: Vec<(String, usize)> = Vec::new();
+            for (i, (p, _)) in files.iter().enumerate() {
+                let Some(sb) = verdicts[i].lgto.as_ref().and_then(|r| r.live_session.clone()).filter(|_| verdicts[i].accepted) else { continue };
+                if used.contains(&sb) {
+                    let lo2 = LgtoOpts { used: used.clone(), ..lo.clone() };
+                    let name = p.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+                    verdicts[i] = verify_lgto_file(p, entries.iter().find(|(n, _)| *n == name).map(|x| &x.1), &lo2, reps);
+                }
+                if let Some(sb) = verdicts[i].lgto.as_ref().and_then(|r| r.live_session.clone()).filter(|_| verdicts[i].accepted) {
+                    used.push(sb);
+                }
+            }
             let mut problems: Vec<String> = Vec::new();
             // ref.py fixture lists: DIR/X.ref.json (+ DIR/X.ref.neg.json tampers), each entry must get ref.py's verdict
             let mut ref_files: Vec<PathBuf> = std::fs::read_dir(&dir)

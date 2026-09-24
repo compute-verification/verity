@@ -203,6 +203,18 @@ pub struct Authenticated {
 /// Verify `proof` with the coins of the recorded batch on its statement.  Every candidate batch (same STMT, session
 /// accepted) is tried; the first under which the proof verifies AND every round's MSG / label equals the record wins.
 pub fn authenticate(stmt_bytes: &[u8], key_bytes: &[u8], proof_bytes: &[u8], records: &[Batch], opt: &Options) -> Result<Authenticated, String> {
+    authenticate_unused(stmt_bytes, key_bytes, proof_bytes, records, &[], opt)
+}
+
+/// `authenticate` over the batches not in `used` (session id, batch): one recorded batch authenticates one proof.
+pub fn authenticate_unused(
+    stmt_bytes: &[u8],
+    key_bytes: &[u8],
+    proof_bytes: &[u8],
+    records: &[Batch],
+    used: &[(String, usize)],
+    opt: &Options,
+) -> Result<Authenticated, String> {
     let proof = lgto::read_proof(proof_bytes)?;
     if proof.params.coins != "live" {
         return Err(format!("not a live proof (coins {:?})", proof.params.coins));
@@ -216,6 +228,10 @@ pub fn authenticate(stmt_bytes: &[u8], key_bytes: &[u8], proof_bytes: &[u8], rec
     let mut why = Vec::new();
     for b in cands {
         let tag = format!("session {} batch {}", b.session, b.batch);
+        if used.iter().any(|(s, i)| *s == b.session && *i == b.batch) {
+            why.push(format!("{tag}: already authenticates another proof"));
+            continue;
+        }
         if !b.accepted {
             why.push(format!("{tag}: session not accepted by its verifier"));
             continue;
@@ -244,6 +260,7 @@ pub fn authenticate(stmt_bytes: &[u8], key_bytes: &[u8], proof_bytes: &[u8], rec
             continue;
         }
         let mut rep = rep;
+        rep.live_session = Some((b.session.clone(), b.batch));
         let tries = attempts(records, &d);
         if !rep.legacy {
             rep.claimed_log2 = Some(rep.soundness_log2 + (tries as f64).log2());
