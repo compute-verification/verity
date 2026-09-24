@@ -58,12 +58,14 @@ def parse(argv: list[str]) -> dict:
     ap.add_argument("--tier", default=None)
     ap.add_argument("--lo", type=int, default=None)
     ap.add_argument("--target", type=int, default=None)
+    ap.add_argument("--relation", default=None)
     ns, unknown = ap.parse_known_args(rest)
     out = vars(ns)
     out["form"] = form
     if form == "bench_result.py":
         out["checker"] = out["checker"] or "v2"
-        out["tier"] = out["tier"] or "vu-k1536"
+        if out["relation"] is None:
+            out["tier"] = out["tier"] or "vu-k1536"
         out["lo"] = 0 if out["lo"] is None else out["lo"]
         out["vus"] = 4096 if out["vus"] is None else out["vus"]
     if out["path"] is None:
@@ -73,7 +75,7 @@ def parse(argv: list[str]) -> dict:
             out["path"] = "packed"
         else:
             out["path"] = "graphed"
-    for key in ("checker", "tier", "lo"):
+    for key in ("checker", "tier", "lo", "relation"):
         if out[key] is None:
             out.pop(key)                 # unknown from argv alone (gpu.run prove): the export's manifest decides; not guessed here
     if unknown:
@@ -85,8 +87,9 @@ A_GPU_PROVE = Tool(
     name="a_gpu_prove", version="2",
     command=["python", "-m", "gpu.run"],
     closure=["backends/gkr/gpu/**", "backends/gkr/packed/**", "backends/gkr/bench_result.py", "backends/gkr/soundness.py",
-             "backends/direct/encode/**", "backends/numerical/python/verity_numerical/**", "packages/verity/src/verity/**"],
-    key_params=["dir", "vus", "checker", "path", "field", "clear", "tier", "lo"],
+             "backends/direct/encode/**", "backends/direct/ligero/**", "backends/numerical/python/verity_numerical/**",
+             "packages/verity/src/verity/**"],
+    key_params=["dir", "vus", "checker", "path", "field", "clear", "tier", "lo", "relation"],
     key_conditions=["hw.family"],
     param_artifacts=["dir"],
     caches=["triton"],

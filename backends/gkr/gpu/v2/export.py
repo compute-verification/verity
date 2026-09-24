@@ -15,6 +15,7 @@ Files (``bb_export`` formats, ``<QQ`` header then u32 LE): ``units.bin`` (264 co
     python -m gpu.v2.export export --root ... --tier vu-k1536-neg --out DIR          # DIR/neg/<id>/ per instance
     python -m gpu.v2.export synth --out DIR --vus 2 --steps 3                      # + DIR/negatives (4 chain cases)
     python -m gpu.v2.export negatives --out DIR                                    # a-v2's 30 unit + 4 chain cases
+    python -m gpu.v2.export circuits --model hopper_bf16_m16n8k16 --out DIR        # statement files only, at that model
 """
 from __future__ import annotations
 
@@ -47,27 +48,29 @@ class BabyBearV2Api:
     variant = "v2"
     modulus = P
 
-    def __init__(self, epilogue: str = "limbs") -> None:
+    def __init__(self, epilogue: str = "limbs", p: Params = REAL) -> None:
         if epilogue not in ("limbs", "word"):
             raise ValueError(epilogue)
         self.epilogue = epilogue
+        self.p = p
         self._word_epi = None
 
     def build_unit(self):
-        return V2.build_unit_circuit_v2()
+        return V2.build_unit_circuit_v2(self.p)
 
     def build_epilogue(self):
         if self.epilogue == "limbs":
-            return EL.build_epilogue_circuit_limbs()
-        return V2.build_epilogue_circuit_v2()
+            return EL.build_epilogue_circuit_limbs(self.p)
+        return V2.build_epilogue_circuit_v2(self.p)
 
     def export_circuit(self, ctx, path: Path) -> None:
-        V2.export_circuit_v2(ctx, path, modulus=P)
+        V2.export_circuit_v2(ctx, path, modulus=P, p=self.p)
 
     def export_extra(self, unit, epi, out: Path) -> None:
-        V2.write_chain(V2.chain_spec(unit, epi), out / "chain.txt", P)
+        V2.write_chain(V2.chain_spec(unit, epi, self.p), out / "chain.txt", P)
 
-    def vu_rows(self, unit, epi, a, b, y16, accs=None, p: Params = REAL, cross_check: bool = True):
+    def vu_rows(self, unit, epi, a, b, y16, accs=None, p: Params | None = None, cross_check: bool = True):
+        p = self.p if p is None else p
         if self.epilogue == "word":
             return V2.vu_rows_v2(unit, epi, a, b, y16, accs, p, cross_check, P)
         # unit rows + the a-v2 (word-form) epilogue row, with its cross-checks; then the limb-form epilogue row from
@@ -197,6 +200,27 @@ def export(root: Path, tier: str, lo: int, hi: int | None, out: Path, procs: int
     return manifest_for(uctx, ectx, out, **extra)
 
 
+def circuits(out: Path, model: str, K: int = 1536) -> dict:
+    """The statement's Params-only files (``circuit.txt``, ``epilogue.txt``, ``chain.txt``, ``manifest.json``) at
+    ``Params.from_model`` of the ``verity.ml.tc.models.MODELS`` entry ``model``: what ``bench_result.py`` reads for a
+    relation whose instances are a recipe, not an exported tier."""
+    import dataclasses
+
+    from verity.ml.tc.models import MODELS
+
+    p = Params.from_model(MODELS[model])
+    if sum(p.groups) != STEP or K % STEP:
+        raise SystemExit(f"{model}: {sum(p.groups)} products per unit; the v2 export chains units of {STEP}")
+    api = BabyBearV2Api("limbs", p)
+    uctx, _ = api.build_unit()
+    ectx, _ = api.build_epilogue()
+    out.mkdir(parents=True, exist_ok=True)
+    api.export_circuit(uctx, out / "circuit.txt")
+    api.export_circuit(ectx, out / "epilogue.txt")
+    api.export_extra(uctx, ectx, out)
+    return manifest_for(uctx, ectx, out, model=model, params=dataclasses.asdict(p), steps=K // STEP, epilogue=api.epilogue)
+
+
 # ---------------------------------------------------------------------------------------------------------------------
 # synthetic VUs + the a-v2 negatives
 # ---------------------------------------------------------------------------------------------------------------------
@@ -254,11 +278,16 @@ def main(argv: list[str] | None = None) -> int:
     n = sub.add_parser("negatives")
     n.add_argument("--out", type=Path, required=True)
     n.add_argument("--seed", type=int, default=20260922)
+    c = sub.add_parser("circuits")
+    c.add_argument("--model", required=True, help="a verity.ml.tc.models.MODELS name, e.g. hopper_bf16_m16n8k16")
+    c.add_argument("--out", type=Path, required=True)
     sub.add_parser("stats")
     args = ap.parse_args(argv)
     if args.cmd == "export":
         m = export(args.root, args.tier, args.lo, args.hi, args.out, args.procs)
         print(json.dumps({k: v for k, v in m.items() if k not in ("index", "written")}, default=str))
+    elif args.cmd == "circuits":
+        print(json.dumps(circuits(args.out, args.model), default=str))
     elif args.cmd == "synth":
         print(json.dumps(synth(args.out, args.vus, args.steps, args.seed), default=str))
     elif args.cmd == "negatives":

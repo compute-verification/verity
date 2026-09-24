@@ -46,6 +46,7 @@ from pathlib import Path
 
 FIELD = "babybear6"          # F_p[X]/(X^6 - 22), p = 2^31 - 2^27 + 1 (gpu/field.py)
 TIER = "vu-k1536"
+AMPERE_MODEL = "ampere_bf16_m16n8k16"   # the frozen vu-k1536 tier's model (Params REAL)
 K_VU = 1536
 BACKEND = "verity-gkr gpu (backends/gkr/gpu: checker v2 + LogUp + Ligero over BabyBear^6, SHA-512 Merkle; torch/Triton)"
 STATEMENT_FILES = ("circuit.txt", "epilogue.txt", "chain.txt", "manifest.json")
@@ -104,6 +105,28 @@ def load_frozen(root: Path, manifest: Path, tier: str, lo: int, n: int):
     return x, w, y, check
 
 
+def load_relation(name: str, src_root: Path, lo: int, n: int, procs: int):
+    """``(x, w, y, rel)`` for a relation whose frozen set is a recipe (``backends/direct/ligero/relations.py``, e.g.
+    ``bf16-hopper``): VUs ``[lo, lo + n)`` of ``relchain.instances`` (the relation's finite operand words from
+    ``(seed, index)``, the accumulators recorded by its model), ``y`` the chain-end public word (the model's final FP32
+    accumulator cast by the relation's epilogue)."""
+    import numpy as np
+
+    if str(src_root) not in sys.path:
+        sys.path.insert(0, str(src_root))
+    from backends.direct.ligero import relchain
+    from backends.direct.ligero.relations import relation
+
+    rel = relation(name)
+    if rel.frozen_tier or rel.y_bits != 16 or rel.k != 16 or rel.steps * rel.k != K_VU:
+        raise SystemExit(f"bench_result.py: {name} is not a recipe BF16-output relation with 16-product units over K = {K_VU}")
+    inst = relchain.instances(rel, lo + n, procs=procs)[lo:]
+    x = np.array([v[0] for v in inst], dtype=np.uint16)
+    w = np.array([v[1] for v in inst], dtype=np.uint16)
+    y = np.array([rel.y_public(int(v[3])) for v in inst], dtype=np.uint16)
+    return x, w, y, rel
+
+
 def write_statement(d: Path, out: Path, y) -> None:
     """``out/``: DIR's Params-only files and ``public.bin`` holding the frozen words (``bb_export.write_rows`` layout)."""
     from gpu.bb_export import write_rows
@@ -117,7 +140,9 @@ def write_statement(d: Path, out: Path, y) -> None:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python backends/gkr/bench_result.py")
     ap.add_argument("dir", help="a checker-v2 export directory (only its Params-only statement files are read)")
-    ap.add_argument("--instances", required=True, help="bench-instances/v1 data directory (the tier's files)")
+    ap.add_argument("--instances", default=None, help="bench-instances/v1 data directory (the tier's files)")
+    ap.add_argument("--relation", default=None,
+                    help="a recipe relation of backends/direct/ligero/relations.py (bf16-hopper) instead of the frozen --tier")
     ap.add_argument("--manifest", default=None, help="the frozen manifest.json (default: <source>/fixtures/bench-instances/v1)")
     ap.add_argument("--tier", default=TIER)
     ap.add_argument("--lo", type=int, default=0)
@@ -166,7 +191,26 @@ def main(argv: list[str] | None = None) -> int:
     # ---- preprocessing (Params-only; not in the buckets) -------------------------------------------------------------
     tp0 = time.perf_counter()
     dev = _dev(args.device)
-    x, w, y, inst_check = load_frozen(Path(args.instances), frozen, args.tier, args.lo, args.vus)
+    if args.relation:
+        x, w, y, rel = load_relation(args.relation, src_root, args.lo, args.vus, args.threads)
+        from backends.direct.ligero import relchain
+        digest = relchain.instances_digest(rel, args.lo + args.vus)
+        if man.get("model") != rel.model.name:
+            raise SystemExit(f"bench_result.py: {d} holds the circuits of {man.get('model')}, {rel.name} needs {rel.model.name}")
+        params, profile, model_name = rel.params, rel.target.name, rel.model.name
+        inst_ref = contract.instances_ref(rel.instances_tier, args.lo, args.lo + args.vus, digest, dataset=rel.instances_dataset)
+        inst_check = {"recipe": rel.instances_recipe, "generator": "backends/direct/ligero/relchain.py instances()",
+                      "seed": rel.instance_seed, "digest": digest}
+    else:
+        if not args.instances:
+            raise SystemExit("bench_result.py: --instances (the frozen tier's data directory) or --relation")
+        if man.get("model", AMPERE_MODEL) != AMPERE_MODEL:
+            raise SystemExit(f"bench_result.py: {d} holds the circuits of {man['model']}, the frozen {args.tier} is {AMPERE_MODEL}")
+        x, w, y, files_check = load_frozen(Path(args.instances), frozen, args.tier, args.lo, args.vus)
+        from verity_numerical.checker import REAL
+        params, profile, model_name = REAL, contract.PROFILE, AMPERE_MODEL
+        inst_ref = contract.instances_ref(args.tier, args.lo, args.lo + args.vus, _sha256(frozen))
+        inst_check = {"manifest": str(frozen), "files_sha256_match": files_check, "data_root": str(Path(args.instances).resolve())}
     t_load = time.perf_counter() - tp0
     ucirc, ecirc = load_circuit(d / "circuit.txt"), load_circuit(d / "epilogue.txt")
     ulayers, elayers = layers(ucirc), layers(ecirc)
@@ -175,7 +219,7 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit(f"bench_result.py: DIR has {steps} steps, the tier has K = {x.shape[1]}")
     public = [int(v) for v in y]
     ops = Ops(str(dev))
-    gen = Generator(ops)
+    gen = Generator(ops, params)
     graphed = dev.type == "cuda" and not os.environ.get("VERITY_GPU_EAGER_WITNESS")
     # the operands as host int16 arrays of their uint16 bits (the device copy happens inside every timed rep)
     x16, w16, y16 = (np.ascontiguousarray(a).view(np.int16).copy() for a in (x, w, y))
@@ -314,6 +358,7 @@ def main(argv: list[str] | None = None) -> int:
     except ImportError:
         cupy_v = None
     sw = {"backend": {"name": BACKEND, "commit": source_commit(), "version": "checker v2 (limb epilogue), proof.bin v2",
+                      "model": f"{model_name} (checker Params.from_model)", "relation": args.relation or args.tier,
                       "path": args.path, "encoder": encoder, "opening": ligero.opening_path(dev),
                       "witness": "gpu/v2/witness.py (device generator; byte-exact with the CPU export)"
                                  + ("; replayed as one CUDA graph captured in the warm-up" if graphed else "")},
@@ -328,18 +373,21 @@ def main(argv: list[str] | None = None) -> int:
                 "zk_statement": "none (no masking)", "by_component_log2": budget["by_component_log2"],
                 "dominant_term": budget["dominant_term"], "source": budget["source"], "union_over": 1}
     fp = contract.fingerprint(
-        profile=contract.PROFILE, domain=contract.DOMAIN, K=K_VU, B=Bn, N_subbatches=1,
+        profile=profile, domain=contract.DOMAIN, K=K_VU, B=Bn, N_subbatches=1,
         proof_class="NON_ZK_PROOF_DIAGNOSTIC", authentication="excluded", zk_mode=contract.ZK_NONE,
         security=security, hardware=hw, software=sw,
         preprocessing=(f"circuit compilation (unit + limb-epilogue circuits, GKR layers, chain spec: functions of Params only), "
-                       f"the witness generator's dense tables on the device, loading the frozen operands from disk "
-                       f"({t_load:.2f}s incl. the sha256 check of every tier file); {t_prep:.2f}s in all.  Triton / CUDA-graph / "
+                       f"the witness generator's dense tables on the device, "
+                       + (f"generating the {args.relation} recipe instances ({t_load:.2f}s, relchain.instances on "
+                          f"{args.threads} processes)" if args.relation else
+                          f"loading the frozen operands from disk ({t_load:.2f}s incl. the sha256 check of every tier file)")
+                       + f"; {t_prep:.2f}s in all.  Triton / CUDA-graph / "
                        f"NVRTC compilation happens in {args.warmup} untimed warm-up rep(s) ({', '.join('%.1fs' % v for v in warm)}), "
                        f"then gc.freeze() of the preprocessing objects"),
         retention="retained",
-        instances=contract.instances_ref(args.tier, args.lo, args.lo + Bn, _sha256(frozen)),
+        instances=inst_ref,
         scope="vu", candidate="A-GKR", checker="v2", field=FIELD,
-        instances_check={"manifest": str(frozen), "files_sha256_match": inst_check, "data_root": str(Path(args.instances).resolve())},
+        instances_check=inst_check,
         witness_generation="device generator (gpu/v2/witness.py) inside t.witness, from the frozen operands (H2D included)",
         omitted="ZK masking",
         steps=steps, units=med["units"], reps=args.reps, warmup=args.warmup,
@@ -366,7 +414,7 @@ def main(argv: list[str] | None = None) -> int:
         contract.measurement("vu.count", Bn),
         contract.measurement("vu.seconds_per_vu", t_total / Bn),
         contract.measurement("vu.per_second", Bn / t_total),
-        *contract.rate_measurements(t_total, Bn, K_VU, contract.PROFILE),
+        *contract.rate_measurements(t_total, Bn, K_VU, profile),
         _m("t_total_min", min(r["t_total"] for r in rows), "s"),
         _m("t_total_max", max(r["t_total"] for r in rows), "s"),
         _m("verify_python_seconds", statistics.median(r["python_verifier_s"] for r in rows), "s"),

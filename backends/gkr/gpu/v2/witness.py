@@ -613,6 +613,48 @@ def compare(export_dir: str, root: str, tier: str, lo: int, hi: int | None, devi
             "unit_shape": list(gu.shape), "gpu": torch.cuda.get_device_name(dev)}
 
 
+def recipe(relation: str, vus: int, device: str, procs: int) -> dict:
+    """The device generator at a relation's Params (``backends/direct/ligero/relations.py``) vs the export's rows
+    (``BabyBearV2Api("limbs", p).vu_rows``, the model-recorded accumulator cross-checked at every unit and the cast
+    against the chain-end word) on the relation's first ``vus`` recipe instances (``relchain.instances``)."""
+    import torch
+    from backends.direct.ligero import relchain
+    from backends.direct.ligero.relations import relation as get_relation
+
+    from .export import BabyBearV2Api
+
+    rel = get_relation(relation)
+    p = rel.params
+    t = time.perf_counter()
+    inst = relchain.instances(rel, vus, procs=procs)
+    t_inst = time.perf_counter() - t
+    x = np.array([v[0] for v in inst], dtype=np.int64)
+    w = np.array([v[1] for v in inst], dtype=np.int64)
+    y = np.array([rel.y_public(int(v[3])) for v in inst], dtype=np.int64)
+    api = BabyBearV2Api("limbs", p)
+    unit, epi = api.build_unit(), api.build_epilogue()
+    want_u, want_e, rejected = [], [], {}
+    for v, (a, b, accs, _) in enumerate(inst):
+        try:
+            rows, erow = api.vu_rows(unit, epi, a, b, int(y[v]), accs)
+        except Reject as e:
+            rejected[v] = str(e)
+            rows, erow = [], []
+        want_u.append(np.array([[c % P for c in r] for r in rows], dtype=np.int64))
+        want_e.append(np.array([c % P for c in erow], dtype=np.int64))
+    ops = Ops(device)
+    got = Generator(ops, p).run(ops.asarray(x), ops.asarray(w), ops.asarray(y))
+    steps = x.shape[1] // STEP
+    gu = _to_np(got.units).reshape(vus, steps, -1)
+    ge = _to_np(got.epilogue)
+    bad = _to_np(got.bad)
+    mism = [v for v in range(vus) if v not in rejected and (bad[v] or not np.array_equal(gu[v], want_u[v]) or not np.array_equal(ge[v], want_e[v]))]
+    return {"ok": not mism and not rejected and not bad.any(), "relation": rel.name, "model": rel.model.name, "vus": vus,
+            "rejected_by_export": rejected, "generator_bad": np.flatnonzero(bad).tolist()[:20], "mismatched_vus": mism[:20],
+            "unit_columns": int(gu.shape[-1]), "epilogue_columns": int(ge.shape[-1]), "instances_s": t_inst,
+            "gpu": torch.cuda.get_device_name(ops.device) if ops.torch is not None and ops.device.type == "cuda" else None}
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m gpu.v2.witness")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -628,9 +670,16 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--hi", type=int, default=None)
     c.add_argument("--device", default="cuda")
     c.add_argument("--reps", type=int, default=3)
+    r_ = sub.add_parser("recipe")
+    r_.add_argument("--relation", required=True, help="a backends/direct/ligero/relations.py name, e.g. bf16-hopper")
+    r_.add_argument("--vus", type=int, default=64)
+    r_.add_argument("--device", default="cuda")
+    r_.add_argument("--procs", type=int, default=8)
     args = ap.parse_args(argv)
     if args.cmd == "selftest":
         r = selftest(args.vus, args.steps, args.seed)
+    elif args.cmd == "recipe":
+        r = recipe(args.relation, args.vus, args.device, args.procs)
     else:
         r = compare(args.dir, args.root, args.tier, args.lo, args.hi, args.device, args.reps)
     print(json.dumps(r, indent=1, default=str))
