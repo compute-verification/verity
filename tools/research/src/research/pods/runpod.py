@@ -5,6 +5,13 @@ Reads the API key from ``~/.runpod/config.toml`` and never prints it.  Talks to
 the REST API (``https://rest.runpod.io/v1``); the GraphQL endpoint is used only
 for the account balance.
 
+Where the laptop files are absent (a cloud VM with only the Cursor secrets) the
+environment stands in, and a file that exists always wins:
+``RUNPOD_API_KEY`` for the API key (with the default GraphQL URL);
+``RUNPOD_SSH_KEY_B64`` for the ssh key, decoded once to a mode-600 file under
+``$XDG_STATE_HOME/research/runpod/`` (default ``~/.local/state``), with its
+known_hosts beside it.  Neither value is ever printed.
+
     python zk/campaign/runpod.py balance
     python zk/campaign/runpod.py gpus                      # price/stock for the SKUs we care about
     python zk/campaign/runpod.py create --name veritor-4090 --gpu "NVIDIA GeForce RTX 4090" --disk 100
@@ -22,6 +29,9 @@ name so a stray pod is recognisable from the console.
 from __future__ import annotations
 
 import argparse
+import base64
+import binascii
+import hashlib
 import json
 import os
 import subprocess
@@ -36,6 +46,8 @@ from typing import Any
 REST = "https://rest.runpod.io/v1"
 CONFIG = Path.home() / ".runpod" / "config.toml"
 SSH_KEY = Path.home() / ".runpod" / "ssh" / "runpodctl-ssh-key"
+KNOWN_HOSTS = Path.home() / ".runpod" / "ssh" / "veritor-campaign-known_hosts"
+GRAPHQL = "https://api.runpod.io/graphql"
 DEFAULT_IMAGE = "runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04"
 
 
@@ -55,7 +67,64 @@ def _config() -> dict[str, Any]:
         with CONFIG.open("rb") as handle:
             return tomllib.load(handle)
     except FileNotFoundError:
-        raise PodError(f"no RunPod API config at {CONFIG}") from None
+        key = os.environ.get("RUNPOD_API_KEY")
+        if key:
+            return {"apikey": key, "apiurl": GRAPHQL}
+        raise PodError(f"no RunPod API config at {CONFIG} and RUNPOD_API_KEY is not set") from None
+
+
+def _env_dir() -> Path:
+    return Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state") / "research" / "runpod"
+
+
+def ssh_key() -> Path:
+    """The private key file: `SSH_KEY` when it exists, else `RUNPOD_SSH_KEY_B64` written once (mode 600, named by its content
+    hash so a rotated secret gets a new file).  Neither set: `SSH_KEY`, so ssh names the missing file as before."""
+    b64 = os.environ.get("RUNPOD_SSH_KEY_B64")
+    if SSH_KEY.is_file() or not b64:
+        return SSH_KEY
+    try:
+        raw = base64.b64decode(b64, validate=True)
+    except (binascii.Error, ValueError):
+        raise PodError("RUNPOD_SSH_KEY_B64 is not valid base64") from None
+    if not raw.endswith(b"\n"):
+        raw += b"\n"
+    path = _env_dir() / f"ssh-key-{hashlib.sha256(raw).hexdigest()[:16]}"
+    try:
+        if path.read_bytes() == raw and (path.stat().st_mode & 0o077) == 0:
+            return path
+    except OSError:
+        pass
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    tmp = path.with_name(f".{path.name}.tmp-{os.getpid()}")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        os.fchmod(fd, 0o600)
+        os.write(fd, raw)
+    finally:
+        os.close(fd)
+    os.replace(tmp, path)
+    return path
+
+
+def known_hosts() -> Path:
+    """`KNOWN_HOSTS` where its directory exists (the laptop), else a writable file beside the env-materialised key."""
+    if KNOWN_HOSTS.parent.is_dir():
+        return KNOWN_HOSTS
+    d = _env_dir()
+    d.mkdir(parents=True, exist_ok=True, mode=0o700)
+    return d / "known_hosts"
+
+
+def public_key() -> str:
+    """The `.pub` beside `SSH_KEY` when it exists, else derived from the private key (`ssh-keygen -y`)."""
+    pub = SSH_KEY.with_suffix(".pub")
+    if pub.is_file():
+        return pub.read_text().strip()
+    out = subprocess.run(["ssh-keygen", "-y", "-f", str(ssh_key())], capture_output=True, text=True, check=False)
+    if out.returncode != 0:
+        raise PodError(f"cannot derive the ssh public key (no {pub}; ssh-keygen rc {out.returncode})")
+    return out.stdout.strip()
 
 
 def _request(method: str, path: str, body: dict[str, Any] | None = None) -> Any:
@@ -119,7 +188,6 @@ def gpus() -> None:
 
 
 def create(args: argparse.Namespace) -> None:
-    public_key = (SSH_KEY.with_suffix(".pub")).read_text().strip()
     body = {
         "name": f"{args.name}-veritor-campaign",
         "imageName": args.image,
@@ -133,7 +201,7 @@ def create(args: argparse.Namespace) -> None:
         # each to a random public port (`portMappings`, `research pods list`); the pod-side process listens on the inner one.
         "ports": ["22/tcp", *(f"{p}/tcp" for p in (getattr(args, "expose_port", None) or []))],
         "supportPublicIp": True,
-        "env": {"PUBLIC_KEY": public_key},
+        "env": {"PUBLIC_KEY": public_key()},
     }
     if args.min_vcpu:
         body["minVCPUPerGPU"] = args.min_vcpu
@@ -206,13 +274,13 @@ def ssh_command(host: str, port: int) -> list[str]:
     return [
         "ssh",
         "-i",
-        str(SSH_KEY),
+        str(ssh_key()),
         "-p",
         str(port),
         "-o",
         "StrictHostKeyChecking=no",
         "-o",
-        f"UserKnownHostsFile={Path.home() / '.runpod' / 'ssh' / 'veritor-campaign-known_hosts'}",
+        f"UserKnownHostsFile={known_hosts()}",
         "-o",
         "ServerAliveInterval=30",
         f"root@{host}",

@@ -284,6 +284,9 @@ secret_access_key_env = "RESEARCH_R2_SECRET_ACCESS_KEY"
 session_token_env = "AWS_SESSION_TOKEN"                # optional (this is the default): set when the key pair is a temporary credential
 ~~~
 
+Without that file (and with `$RESEARCH_STORE_CONFIG` unset) the environment stands in: `R2_ENDPOINT`, `R2_BUCKET` (must equal
+the bucket `tools/research/store.pod.toml` names), `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`. A file that exists wins.
+
 A temporary credential (R2 temp-access credentials, STS-style) is a key pair plus a session token; when the named env var is set
 the token is sent as `x-amz-security-token` inside the SigV4 signed headers on every request, when unset nothing changes.
 
