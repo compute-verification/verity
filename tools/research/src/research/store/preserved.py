@@ -5,10 +5,17 @@
 A target is a run id (every artifact its manifest names under `outputs` and `telemetry`, plus the attempt manifest itself) or
 an `art:` id.  Three legs, each reported by name (`legs`: `manifest`, `artifacts`, `labels`):
   manifest   the attempt manifest is on the remote (HEAD);
-  artifacts  an artifact is PRESERVED when the remote holds its manifest (read back, sha256 == id) and every blob: remote size ==
-             manifest size and, per `mode`, `head` = single-part ETag == local MD5 when the blob is local and the remote gives an
-             MD5 ETag, otherwise a full read-back sha256; `readback` = always read back; `recorded` = trust the local catalog's
-             verified remote replica (offline; what `push --verify`/`verify` recorded);
+  artifacts  an artifact is PRESERVED when the remote holds its manifest (read back, sha256 == id) and every blob is present under
+             its content key with the manifest's size (one HEAD each, `JOBS` at a time) and, per `mode`:
+             `head` (default; no blob body is downloaded) --
+               multipart ETag (`<hex>-<n>`): the put's parts record `<key>.parts.json` names this sha256 and size, its parts are
+                 the plan for that size and part size, and md5(part MD5s)-n == the ETag the service computed from the parts it
+                 stored (`etag-multipart`);
+               single-part ETag: == the local blob's MD5 when the blob is local (`etag-md5`), else present with the right size
+                 (`head-size`) -- sound because objects are only created by `put`s that sign the payload sha256, which for a
+                 single-part blob IS its key: the service refused any body that did not hash to it, and keys are never overwritten;
+             `readback` = every blob downloaded and sha256'd (the explicit, expensive mode: hours for a 55 GB tree);
+             `recorded` = trust the local catalog's verified remote replica (offline; what `push --verify`/`verify` recorded);
   labels     every local assertion about the attempt, its derivation and its named artifacts (`labels_sync.attempt_targets`) is
              listed on the remote under its content key and HEADs back with its canonical size (`labels_sync.verify_targets`) --
              a preserved Attempt is not preserved until its assertions are durable too (r20: labels lived only on the pods).
@@ -19,13 +26,19 @@ Without a usable remote (no store.toml, or credentials not in this environment) 
 """
 from __future__ import annotations
 
+import json
+import os
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from . import ids
 from . import labels_sync as LS
 from .local import (
     VERIFY_HEAD,
+    VERIFY_MULTIPART,
     VERIFY_READBACK,
+    VERIFY_SIZE,
     LocalStore,
     attempt_key,
     manifest_key,
@@ -33,9 +46,10 @@ from .local import (
     utc_now,
 )
 from .remote import md5_file
-from .remote_s3 import SINGLE_PUT_MAX, is_md5_etag
+from .remote_s3 import PARTS_SIDECAR_SCHEMA, SINGLE_PUT_MAX, is_md5_etag, multipart_etag, parts_of, plan_parts, sidecar_key
 
 MODES = ("head", "readback", "recorded")
+JOBS = 32                   # blobs checked at once (HEADs; read-backs in `readback` mode) unless the remote says (`store.toml [remote] jobs`)
 
 
 def attempt_artifacts(doc: dict[str, Any]) -> dict[str, str]:
@@ -48,7 +62,57 @@ def attempt_artifacts(doc: dict[str, Any]) -> dict[str, str]:
     return out
 
 
-def _check_artifact(st: LocalStore, art_id: str, mode: str) -> dict[str, Any]:
+def _sidecar_error(st: LocalStore, r, key: str, sha: str, size: int, etag: str) -> str | None:
+    """None when the put's parts record (`<key>.parts.json`, remote_s3.parts_sidecar) accounts for the multipart object HEAD reported:
+    it names this blob's sha256 and size, its parts are the plan for that size and part size, and the multipart ETag of their MD5s is
+    the ETag the service computed from the parts it stored.  Else the reason."""
+    skey = sidecar_key(key)
+    tmp = st.root / f".sidecar-{os.getpid()}-{threading.get_ident()}"
+    try:
+        r.get(skey, tmp)
+        side = json.loads(tmp.read_bytes())
+    except KeyError:
+        return f"{key}: multipart ETag {etag} but no parts record {skey} (`--mode readback` verifies by content)"
+    except (OSError, ValueError) as e:
+        return f"{skey}: unreadable: {type(e).__name__}: {e}"
+    finally:
+        tmp.unlink(missing_ok=True)
+    try:
+        parts, pb = side["parts"], int(side["part_bytes"])
+        plan = [n for _, _, n in plan_parts(size, pb)]
+        why = ("schema" if side.get("schema") != PARTS_SIDECAR_SCHEMA else "sha256" if side.get("sha256") != sha else "bytes" if side.get("bytes") != size
+               else "part plan" if [p["bytes"] for p in parts] != plan or [p["n"] for p in parts] != list(range(1, len(plan) + 1))
+               else "ETag" if multipart_etag([p["md5"] for p in parts]) != etag or side.get("etag") != etag else None)
+    except (KeyError, TypeError, ValueError) as e:
+        why = f"malformed ({type(e).__name__}: {e})"
+    return None if why is None else f"{key}: parts record {skey} does not account for the object ({why}; remote ETag {etag})"
+
+
+def _check_blob(st: LocalStore, r, h: str, size: int, mode: str) -> tuple[str | None, str | None]:
+    """(error, method) for one blob (module docstring, `artifacts`).  Thread-safe."""
+    key = object_key(h)
+    try:
+        head = r.head(key)
+        if head is None:
+            return f"{key}: absent", None
+        if head["bytes"] != size:
+            return f"{key}: remote size {head['bytes']} != {size}", None
+        if mode == "readback":
+            return st._readback(r, key, h), VERIFY_READBACK  # noqa: SLF001
+        etag = head.get("etag")
+        if parts_of(etag) is not None:
+            return _sidecar_error(st, r, key, h, size, etag), VERIFY_MULTIPART
+        if size > SINGLE_PUT_MAX:
+            return f"{key}: {size} bytes but ETag {etag!r} is not a multipart ETag (no single PUT carries > 5 GiB)", None
+        local = st.object_path(h)
+        if is_md5_etag(etag) and local.is_file():
+            return (None if etag == md5_file(local) else f"{key}: remote ETag {etag} != local MD5"), VERIFY_HEAD
+        return None, VERIFY_SIZE
+    except Exception as e:  # noqa: BLE001  one object's failure is reported, the rest are still checked
+        return f"{key}: {type(e).__name__}: {e}", None
+
+
+def _check_artifact(st: LocalStore, art_id: str, mode: str, jobs: int | None = None) -> dict[str, Any]:
     rep: dict[str, Any] = {"id": art_id, "kind": None, "preserved": False, "checked": 0, "errors": [], "verified": None}
     try:
         m = st.get_manifest(art_id)
@@ -82,33 +146,15 @@ def _check_artifact(st: LocalStore, art_id: str, mode: str) -> dict[str, Any]:
             rep["errors"].append(err)
         else:
             rep["checked"] += 1
-    files = m.payload.files if m.payload and m.payload.type == "tree" else []
-    for h, size in m.blobs():
-        key = object_key(h)
-        head = r.head(key)
-        if head is None:
-            rep["errors"].append(f"{key}: absent")
-            continue
-        if head["bytes"] != size:
-            rep["errors"].append(f"{key}: remote size {head['bytes']} != {size}")
-            continue
-        if size > SINGLE_PUT_MAX:
-            rep["errors"].append(f"{key}: > 5 GiB; per-part check is not implemented")
-            continue
-        local = st.object_path(h)
-        if mode == "head" and local.is_file() and is_md5_etag(head.get("etag")):
-            if head["etag"] == md5_file(local):
-                rep["checked"] += 1
-                methods.add(VERIFY_HEAD)
-            else:
-                rep["errors"].append(f"{key}: remote ETag {head['etag']} != local MD5")
-            continue
-        err = st._readback(r, key, h)  # noqa: SLF001
+    blobs = m.blobs()
+    with ThreadPoolExecutor(max_workers=max(1, min(jobs or getattr(r, "jobs", None) or JOBS, len(blobs) or 1))) as ex:
+        results = list(ex.map(lambda hs: _check_blob(st, r, hs[0], hs[1], mode), blobs))
+    for err, method in results:
         if err:
             rep["errors"].append(err)
         else:
             rep["checked"] += 1
-            methods.add(VERIFY_READBACK)
+            methods.add(method)
     if not rep["errors"]:
         rep["preserved"] = True
         rep["verified"] = ",".join(sorted(methods)) or VERIFY_READBACK
@@ -118,10 +164,10 @@ def _check_artifact(st: LocalStore, art_id: str, mode: str) -> dict[str, Any]:
     return rep
 
 
-def check(st: LocalStore, targets: list[str], mode: str = "head") -> dict[str, Any]:
+def check(st: LocalStore, targets: list[str], mode: str = "head", jobs: int | None = None) -> dict[str, Any]:
     """The gate over several targets.  `preserved` is True iff every target is: for a run id, its attempt manifest is on the remote
     and every artifact it names is preserved (an attempt naming no artifact is preserved once its manifest is); for an art id, the
-    artifact is.  `not_preserved` lists what is not, with reasons."""
+    artifact is.  `not_preserved` lists what is not, with reasons.  `jobs`: blobs checked at once (default the remote's, else `JOBS`)."""
     if mode not in MODES:
         raise ValueError(f"mode must be one of {MODES}, got {mode!r}")
     r = st.remote
@@ -132,7 +178,7 @@ def check(st: LocalStore, targets: list[str], mode: str = "head") -> dict[str, A
 
     def art(a: str) -> dict[str, Any]:
         if a not in seen:
-            seen[a] = _check_artifact(st, a, mode)
+            seen[a] = _check_artifact(st, a, mode, jobs)
         return seen[a]
 
     def labels_leg(t: str, label_targets: list[str]) -> tuple[bool | None, dict[str, Any] | None]:

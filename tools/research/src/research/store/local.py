@@ -43,6 +43,7 @@ REPLICA_MAP = Path("fixtures") / "artifacts.json"
 SNAPSHOT_KIND = "dataset-snapshot/v1"
 VERIFY_HEAD, VERIFY_READBACK = "etag-md5", "sha256-readback"     # what a replica record's `verified` says was checked
 VERIFY_MULTIPART = "etag-multipart"                              # ... a > 5 GiB blob: the service's multipart ETag == the one the local parts yield
+VERIFY_SIZE = "head-size"                                        # ... a single-part blob not held locally: present under its content key, right size
 VERIFY_MODES = ("head", "readback")                             # `push(verify=...)`: HEAD size + MD5 ETag, or download + sha256
 WHERE_JOBS = 16                                                 # concurrent HEADs in `where`
 _UNSET = object()

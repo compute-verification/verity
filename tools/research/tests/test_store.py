@@ -1040,6 +1040,61 @@ def test_push_uploads_a_blob_above_the_single_put_limit_in_parts(fake_s3, tmp_pa
         st.push(art, verify="etag")
 
 
+def test_preserved_default_mode_checks_multipart_blobs_against_the_puts_parts_record_and_reads_nothing_back(fake_s3, tmp_path, monkeypatch, capsys):
+    """r21 close-out: head-mode `data preserved` read back every multipart blob -- hours for a 55 GB tree, longer than the credential.
+    The default now HEADs each blob and checks a multipart ETag against the put's `<key>.parts.json`; `--mode readback` downloads."""
+    from research.store import preserved as P
+
+    s = fake_s3()
+    monkeypatch.setattr(remote_s3.S3Remote, "single_put_max", 8000)     # limits scaled down: 8 kB "PutObject", 4 kB parts
+    monkeypatch.setattr(remote_s3.S3Remote, "part_size", 4096)
+    st = LocalStore()
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    (tree / "big.bin").write_bytes(os.urandom(4096 * 2 + 1000))
+    (tree / "small.bin").write_bytes(b"small blob")
+    art = st.put_artifact("run-files/v1", {}, tree=tree)
+    assert st.push(art, jobs=4)["preserved"]
+    big, small = (hashlib.sha256((tree / n).read_bytes()).hexdigest() for n in ("big.bin", "small.bin"))
+    key, skey = f"objects/sha256/{big}", f"objects/sha256/{big}.parts.json"
+
+    def gets_during(fn):
+        n = len(s.log)
+        out = fn()
+        return out, [k for m_, k, _ in s.log[n:] if m_ == "GET"]
+
+    rep, gets = gets_during(lambda: P.check(st, [art]))
+    assert rep["preserved"] and rep["artifacts"][art]["verified"] == "etag-md5,etag-multipart", rep["artifacts"][art]
+    assert key not in gets and skey in gets and f"objects/sha256/{small}" not in gets, "no blob body downloaded; the parts record is"
+    # blobs not held here (evicted, or a laptop checking what a pod pushed): still no download
+    for h in (big, small):
+        st.object_path(h).unlink()
+    rep, gets = gets_during(lambda: P.check(st, [art]))
+    assert rep["preserved"] and rep["artifacts"][art]["verified"] == "etag-multipart,head-size" and [g for g in gets if g.startswith("objects/")] == [skey]
+    assert st.index.replicas(art)["remote"]["verified"] == "etag-multipart,head-size"
+    # the parts record must account for the object: a part MD5 off, another blob's sha256, or no record at all -> NOT preserved, by name
+    good = s.objects[skey]
+    side = json.loads(good)
+    side["parts"][0]["md5"] = "0" * 32
+    s.objects[skey] = json.dumps(side).encode()
+    err = P.check(st, [art])["artifacts"][art]["errors"]
+    assert len(err) == 1 and err[0].startswith(f"{key}: parts record {skey} does not account for the object (ETag;")
+    s.objects[skey] = json.dumps({**json.loads(good), "sha256": "f" * 64}).encode()
+    assert "(sha256;" in P.check(st, [art])["artifacts"][art]["errors"][0]
+    del s.objects[skey]
+    rep = P.check(st, [art])
+    assert not rep["preserved"] and "no parts record" in rep["artifacts"][art]["errors"][0] and "--mode readback" in rep["artifacts"][art]["errors"][0]
+    # the explicit full mode downloads every blob and needs no parts record
+    rep, gets = gets_during(lambda: P.check(st, [art], mode="readback"))
+    assert rep["preserved"] and rep["artifacts"][art]["verified"] == "sha256-readback" and key in gets and f"objects/sha256/{small}" in gets
+    # and a blob whose body changed under a same-size multipart object is caught by readback, not by the parts record
+    s.objects[skey] = good
+    s.objects[key] = bytes([s.objects[key][0] ^ 1]) + s.objects[key][1:]
+    assert P.check(st, [art])["preserved"] is True, "same parts ETag recorded by the service: the default trusts the put's payload checks"
+    assert "read-back sha256" in P.check(st, [art], mode="readback")["artifacts"][art]["errors"][0]
+    assert main(["preserved", art, "--mode", "readback", "--jobs", "2"]) == 1 and "read-back sha256" in capsys.readouterr().out
+
+
 def test_throttled_put_is_retried_not_failed(fake_s3, tmp_path, monkeypatch):
     # R2 answers 429 under load (the vyv-v2cpu3 bench saw 4 per 10k small PUTs): retried like a 5xx, Retry-After honoured and capped
     s = fake_s3(throttle_once={"bench/a", "bench/b"})

@@ -18,9 +18,10 @@
                                                    free disk: evict blobs (and trees/) whose artifacts are PRESERVED on the remote, largest first;
                                                    --runs also evicts preserved big files of finished run dirs (oldest first); exit 1 if the target is not reached
   research data verify ART [--json]                PRESERVED check against the remote (exit 1 when not preserved)
-  research data preserved (RUN|ART)... [--mode head|readback|recorded] [--json]
+  research data preserved (RUN|ART)... [--mode head|readback|recorded] [--jobs N] [--json]
                                                    the durability gate: exit 0 iff the attempt manifest, every output artifact AND every local
-                                                   assertion about them are verifiably on the remote; otherwise names the failing legs (preserved.py)
+                                                   assertion about them are verifiably on the remote; otherwise names the failing legs (preserved.py);
+                                                   the default mode HEADs each blob (size + ETag vs the put's record), --mode readback downloads them
   research data select [--kind K] [--where meta.key=value]... [--tool T] [--derivation D] [--attempt R] [--label k=v]... [--json]
   research data snapshot --name NAME (--members art:... | --select <select flags>) [--note TEXT]   -> art id
   research data labels TARGET [--history] [--key K] [--by PAT] [--remote] [--json]
@@ -323,14 +324,16 @@ def cmd_preserved(argv: list[str]) -> int:
     ap = _ap("preserved")
     ap.add_argument("targets", nargs="*", help="run ids and/or art:<hex>")
     ap.add_argument("--mode", choices=list(P.MODES), default="head",
-                    help="head: size + MD5 ETag per blob (read-back when unavailable), manifest read back (default); "
-                         "readback: every object read back; recorded: trust the local catalog's verified remote replica (offline)")
+                    help="head (default): one HEAD per blob -- size, and the ETag against the put's record (multipart: its parts record "
+                         "<key>.parts.json; single-part: the local MD5 when the blob is local); no blob is downloaded.  readback: every "
+                         "blob downloaded and sha256'd (hours for a big tree).  recorded: trust the local catalog's verified remote replica (offline)")
+    ap.add_argument("--jobs", type=int, default=None, metavar="N", help=f"blobs checked at once (default: store.toml [remote] jobs, else {P.JOBS})")
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
     if not ns.targets:
         print("research data preserved: give at least one run id or art: id", file=sys.stderr)
         return 2
-    rep = P.check(LocalStore(ns.store), ns.targets, mode=ns.mode)
+    rep = P.check(LocalStore(ns.store), ns.targets, mode=ns.mode, jobs=ns.jobs)
     if ns.json:
         _dump(rep)
     else:
