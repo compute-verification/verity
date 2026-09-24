@@ -1433,3 +1433,135 @@ fn a_statement_whose_vu_shape_is_not_the_relations_is_refused_pinned() {
         assert!(js.contains("\"system_pinned\":true"), "{js}");
     }
 }
+
+// ------------------------------------------------------------------------------------------- fp4-nvf4 + hash ----
+// `fixtures/fp4-nvf4-hash/`: a pod dump (vy-fp4-decode-3, RTX 4090, `--device cuda`) of the HASHED NVFP4 relation -- lane
+// fp4-decode's `hashchain.compose(fp4.hashed.fp4_hashed_relation())`: the `compile_fp4_unit(chain=True)` unit with its 68 + 68
+// operand words (64 E2M1 codes + 4 UE4M3 scales per operand) private, decoded in-circuit (the 141 former pins as hint rows,
+// the bit rows and the E2M1 / UE4M3 gadgets), and the two Poseidon2 sponges over 24-bit lanes (72 nibbles -> 12 rate lanes,
+// two permutations per unit): 4442 rows, 19 linked rows, the chain end the bare relation's three FP32 components.
+// Interactive non-ZK, 40 VUs x 24 steps at l = 1024, one sub-batch, statement `ligero-statement/v5` (32-bit y words), system
+// `ligero-system/v3`.  The v5 header's K is the relation's K = 1536 (`serialize._K_of`: 24 steps x 64 E2M1 ELEMENTS, the
+// GemmAccumulator<1536> dot length), read here as 64 operands per unit -- the committed row itself carries 24 x 68 = 1632
+// words (the 4 UE4M3 scale bytes per operand ride along); nothing in the v5 verdict depends on the header K (the leaves
+// are whole rows), so this is the first relation where the two readings of the field differ (D-style note in lane fp4-decode's report; DISCREPANCIES.md is at its cap).  Python's verifier accepted it (`verify_python.json`, 1/1).
+
+const FH_SYS: &str = "fixtures/fp4-nvf4-hash/system.bin";
+const FH_STMT: &str = "fixtures/fp4-nvf4-hash/sub_00.stmt";
+const FH_PROOF: &str = "fixtures/fp4-nvf4-hash/sub_00.proof";
+const FH_COINS: &str = "fixtures/fp4-nvf4-hash/sub_00.coins";
+const FH_SYS_ID: &str = "8c6d260c675cad40ae7263db08974f1842d04997f344cb4f9e52821e70bb25f5";
+const FH_TABLE_DIGEST: &str = "8dad2d286e92d9927464afb81846fcbdb16f09b2c01910e36fcf8aaac432fc3a";
+
+/// The v5 fixture's field offsets for the NVFP4 widths (y_bytes = 4; header K = 1536, see above).
+fn fh_offsets(st: &[u8]) -> V5 {
+    assert_eq!(&st[..8], b"LIGSTM05");
+    let (l, n_vus, steps, k) = (u32_at(st, 12), u32_at(st, 46), u32_at(st, 50), u32_at(st, 54));
+    assert_eq!((l, n_vus, steps, k), (1024, 40, 24, 1536));
+    let yb = st[58] as usize;
+    assert_eq!(yb, 4);
+    let mut o = 59;
+    let s = |o: &mut usize| { let n = u32_at(st, *o); let v = st[*o + 4..*o + 4 + n].to_vec(); *o += 4 + n; v };
+    assert_eq!(s(&mut o), b"fp4-nvf4");
+    assert_eq!(s(&mut o), b"included-hash");
+    let digests = o;
+    o += 4 * 16 * n_vus;
+    let y16 = o;
+    o += l * yb;
+    assert_eq!(s(&mut o), b"ligero-b/auth/v2h");
+    assert_eq!(s(&mut o), b"poseidon2-babybear-w24/row/v2h");
+    o += 32;
+    assert_eq!(u32_at(st, o), n_vus);
+    o += 4;
+    let indices = o;
+    o += 12 * n_vus;
+    let trees = o;
+    o += 3 * 73;
+    V5 { digests, y16, indices, trees, multiproofs: o }
+}
+
+#[test]
+fn fp4_nvf4_hashed_v5_proof_is_accepted_and_the_hashed_system_is_pinned() {
+    let (code, js) = verify(FH_SYS, FH_STMT, FH_PROOF, &["--coins", FH_COINS]);
+    assert_eq!(code, 0, "{js}");
+    assert_eq!(field(&js, "\"accepted\":"), "true");
+    assert_eq!(field(&js, "\"system_pinned\":"), "true");
+    assert!(js.contains("\"format\":\"ligero-statement/v5\",\"relation\":\"fp4-nvf4\""), "{js}");
+    assert!(js.contains("\"n_vus\":40,\"steps\":24,\"K\":64"), "{js}");
+    assert!(js.contains("authentication: included-hash, 40 VUs, 40 x rows + 40 W columns + 40 y words under the a/b/y roots"), "{js}");
+    assert!(js.contains("coins are this verifier's step-0 coins"), "{js}");
+    let (_, sd) = run(&["system-digest", "--system", FH_SYS]);
+    assert!(sd.contains(&format!("\"sys_id\":\"{FH_SYS_ID}\"")), "{sd}");
+    assert!(sd.contains(&format!("\"table_digest\":\"{FH_TABLE_DIGEST}\"")), "{sd}");
+    assert!(sd.contains("\"pinned_relation\":\"fp4-nvf4+hash\"") && sd.contains("\"format\":\"ligero-system/v3\"") && sd.contains("\"m\":4442"), "{sd}");
+    // the hashed system still ends the chain on the bare relation's three FP32 components
+    assert!(sd.contains("\"chain_end\":[{\"lo\":31,\"bits\":1},{\"lo\":23,\"bits\":8},{\"lo\":0,\"bits\":23}]"), "{sd}");
+    let (code, js) = run(&["batch", "--dir", "fixtures/fp4-nvf4-hash", "--system", FH_SYS, "--threads", "2"]);
+    assert_eq!(code, 0, "{js}");
+    assert!(js.contains("\"pinned_relation\":\"fp4-nvf4+hash\"") && js.contains("\"accepted\":1,\"rejected\":0"), "{js}");
+    // without --coins: replayed from the transcript (the conditional accept)
+    let (code, js) = verify(FH_SYS, FH_STMT, FH_PROOF, &[]);
+    assert_eq!(code, 0, "{js}");
+    assert!(js.contains("coins replayed from the transcript"), "{js}");
+}
+
+#[test]
+fn fp4_nvf4_hashed_negatives_and_system_mismatches_are_rejected() {
+    let st = std::fs::read(FH_STMT).unwrap();
+    let f = fh_offsets(&st);
+    let rej = |name: &str, m: &[u8], expect: &str| {
+        let (code, js) = verify(FH_SYS, &write_tmp(name, m), FH_PROOF, &["--coins", FH_COINS]);
+        assert_eq!(code, 1, "{name}: {js}");
+        assert!(js.contains(expect), "{name}: expected {expect:?} in {js}");
+    };
+    let bound = "column challenge mismatch";
+    let mut m = st.clone();
+    m[f.digests] ^= 1;                                       // VU 0's x digest, lane 0
+    rej("fh_digest.stmt", &m, bound);
+    let mut m = st.clone();
+    m[f.digests + 4 * (16 * 7 + 8)] ^= 1;                     // VU 7's W digest, lane 0
+    rej("fh_wdigest.stmt", &m, bound);
+    let mut m = st.clone();
+    m[f.y16 + 4 * 23] ^= 1;                                  // VU 0's chain-end FP32 word, fraction bit 0
+    rej("fh_y.stmt", &m, bound);
+    let mut m = st.clone();
+    m[f.y16 + 4 * 23 + 3] ^= 0x80;                           // ... its sign bit (a chain-end component of its own)
+    rej("fh_ysign.stmt", &m, bound);
+    let mut m = st.clone();
+    m[f.indices + 8..f.indices + 12].copy_from_slice(&1u32.to_le_bytes());   // VU 0 claims W column 1
+    rej("fh_wswap.stmt", &m, bound);
+    let mut m = st.clone();
+    m[f.trees + 41] ^= 1;                                    // the x root
+    rej("fh_root.stmt", &m, bound);
+    let mut m = st.clone();
+    m[f.indices + 4..f.indices + 8].copy_from_slice(&40u32.to_le_bytes());
+    rej("fh_xrange.stmt", &m, "claims leaves beyond the committed count");
+    // the multiproofs of a 40-leaf tree opened at all 40 leaves are empty: truncating the block is a parse error
+    let (code, js) = verify(FH_SYS, &write_tmp("fh_trunc.stmt", &st[..f.multiproofs]), FH_PROOF, &["--coins", FH_COINS]);
+    assert_eq!(code, 1, "{js}");
+    // the hashed statement against the BARE fp4-nvf4 system: refused by the pin, and unpinned by the row count (4442 vs 1583)
+    let (code, js) = verify(FP4_SYS, FH_STMT, FH_PROOF, &["--coins", FH_COINS]);
+    assert_eq!(code, 1, "{js}");
+    assert!(js.contains("system file is the pinned fp4-nvf4 system, the statement is a hashed fp4-nvf4 statement"), "{js}");
+    let (code, js) = verify(FP4_SYS, FH_STMT, FH_PROOF, &["--coins", FH_COINS, "--allow-any-system"]);
+    assert_eq!(code, 1, "{js}");
+    assert!(js.contains("malformed proof: header M = 4442, the statement fixes 1583"), "{js}");
+    // the bare v4 fp4-nvf4 statement against the hashed system
+    let (code, js) = verify(FH_SYS, FP4_STMT, FP4_PROOF, &["--coins", FP4_COINS]);
+    assert_eq!(code, 1, "{js}");
+    assert!(js.contains("system file is the pinned hashed fp4-nvf4 system, the statement is a fp4-nvf4 statement"), "{js}");
+    // another relation's hashed system (fp8-ada+hash: 32 x 1-byte words per step, 22-bit y) against the FP4 hashed statement
+    let (code, js) = verify(HASH_SYS, FH_STMT, FH_PROOF, &["--coins", FH_COINS]);
+    assert_eq!(code, 1, "{js}");
+    assert!(js.contains("system file is the pinned hashed fp8-ada system, the statement is a hashed fp4-nvf4 statement"), "{js}");
+    // the bare pin does not carry the hashed digests
+    let (_, bare) = run(&["system-digest", "--system", FP4_SYS]);
+    assert!(bare.contains("\"pinned_relation\":\"fp4-nvf4\"") && !bare.contains(FH_SYS_ID), "{bare}");
+    // a proof byte flipped
+    let pf = std::fs::read(FH_PROOF).unwrap();
+    let mut m = pf.clone();
+    let mid = m.len() / 2;
+    m[mid] ^= 1;
+    let (code, js) = verify(FH_SYS, FH_STMT, &write_tmp("fh_proof.proof", &m), &["--coins", FH_COINS]);
+    assert_eq!(code, 1, "{js}");
+}

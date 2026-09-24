@@ -1002,6 +1002,10 @@ def _runner(device: str, st: Statement | None = None):
     mode = st.mode if st is not None else "interactive"
     name = st.relation if st is not None else BF16_RELATION
     if name == "fp4-nvf4":
+        if st is not None and st.v5:        # fp4-nvf4+poseidon2: the hashed statement (fp4/hashed.py on the generic hashed runner)
+            from .fp4.hashed import fp4_hashed_relation
+            from .relchain import HashedRelationRunner
+            return HashedRelationRunner(fp4_hashed_relation(), device, target, 2, n_proofs=n_proofs, zk=zk, mode=mode)
         from .fp4.chain import FP4ChainRunner
         return FP4ChainRunner(device, target, 2, n_proofs=n_proofs, zk=zk, mode=mode)
     if name != BF16_RELATION:
