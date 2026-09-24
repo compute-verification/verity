@@ -406,8 +406,14 @@ def archive_manifest(tar_bytes: bytes) -> dict[str, Any]:
     return _manifest_of(io.BytesIO(tar_bytes))
 
 
+# git's default delta-base cache (96 MiB) and unbounded pack windows put `git archive` itself at ~140 MiB on the laptop; these caps give
+# the same bytes at the same speed in ~70 MiB (what remains is about the largest blob, which git holds whole)
+GIT_ARCHIVE_CAPS = ("-c", "core.deltaBaseCacheLimit=8m", "-c", "core.packedGitWindowSize=4m", "-c", "core.packedGitLimit=16m")
+
+
 def _git_archive(git_dir: Path) -> subprocess.Popen:
-    return subprocess.Popen(["git", "archive", "--format=tar", "HEAD"], cwd=git_dir, stdout=subprocess.PIPE, stderr=tempfile.TemporaryFile())
+    return subprocess.Popen(["git", *GIT_ARCHIVE_CAPS, "archive", "--format=tar", "HEAD"], cwd=git_dir, stdout=subprocess.PIPE,
+                            stderr=tempfile.TemporaryFile())
 
 
 def _git_archive_done(proc: subprocess.Popen) -> str | None:
