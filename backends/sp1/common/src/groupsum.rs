@@ -125,6 +125,16 @@ pub(crate) fn bit_length(m: u64) -> i32 {
     n + v as i32
 }
 
+/// [`bit_length`] of `1 <= m < 2^64`.
+#[inline(always)]
+pub(crate) fn bit_length64(m: u64) -> i32 {
+    if m >> 32 != 0 {
+        32 + bit_length(m >> 32)
+    } else {
+        bit_length(m)
+    }
+}
+
 #[inline(always)]
 fn shr64(m: u64, s: i32) -> u64 {
     if s >= 64 {
@@ -289,6 +299,9 @@ mod tests {
     fn bit_length_below_2_32() {
         for m in (1u64..1 << 20).chain((0..32).flat_map(|b| [1u64 << b, (1u64 << b) | 1, (2u64 << b) - 1])) {
             assert_eq!(bit_length(m), 64 - m.leading_zeros() as i32, "{m}");
+        }
+        for m in (1u64..1 << 16).chain((0..64).flat_map(|b| [1u64 << b, (1u64 << b) | 1, (1u64 << b).wrapping_mul(2).wrapping_sub(1)])) {
+            assert_eq!(bit_length64(m), 64 - m.leading_zeros() as i32, "{m}");
         }
     }
 

@@ -148,8 +148,8 @@ pub fn check_one(format: Format, vu_bytes: &[u8], vu_words: &[u64], y: u32) -> b
             crate::tc_fp8::vu_ada_views(x, w, xw, ww) == Some(y)
         }
         Format::Fp4Nvf4 => {
-            let (x, w) = vu_bytes.split_at(format.row_bytes());
-            crate::nvfp4::vu(x, w) == Some(y)
+            let ((x, w), (xw, ww)) = (vu_bytes.split_at(format.row_bytes()), vu_words.split_at(crate::nvfp4::ROW_WORDS));
+            crate::nvfp4::vu_views(x, w, xw, ww) == Some(y)
         }
     }
 }
