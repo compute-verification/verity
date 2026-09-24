@@ -46,3 +46,8 @@ unsound-relation-only = []
 # rows as private input and commits sha256(statement bytes) || verdict over the public output words.  Sound for
 # that statement.  Only adds the module (declared last), so the checker's ELF is untouched.
 relation-bare = []
+
+# The native oracle of the per-format arithmetic (the modules it checks exist only with the bare statement).
+[[example]]
+name = "format_oracle"
+required-features = ["relation-bare"]

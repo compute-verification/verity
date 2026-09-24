@@ -130,13 +130,27 @@ impl Format {
 /// the same bytes read as little-endian u64 words (the guest holds both views of its input buffer).  A format is a
 /// [`Format`] variant plus one arm here.
 pub fn check_one(format: Format, vu_bytes: &[u8], vu_words: &[u64], y: u32) -> bool {
-    let _ = vu_bytes;
     match format {
         Format::Bf16Ampere => {
             let (x, w) = vu_words.split_at(ROW_WORDS);
             y <= 0xFFFF && check_vu(x, w) == Some(y as u16)
         }
-        Format::Bf16Hopper | Format::Fp8Hopper | Format::Fp8Ada | Format::Fp4Nvf4 => false,
+        Format::Bf16Hopper => {
+            let (x, w) = vu_words.split_at(crate::tc_hopper_bf16::ROW_WORDS);
+            y <= 0xFFFF && crate::tc_hopper_bf16::vu_words(x, w) == Some(y as u16)
+        }
+        Format::Fp8Hopper => {
+            let ((x, w), (xw, ww)) = (vu_bytes.split_at(format.row_bytes()), vu_words.split_at(crate::tc_fp8::ROW_WORDS));
+            crate::tc_fp8::vu_hopper_views(x, w, xw, ww) == Some(y)
+        }
+        Format::Fp8Ada => {
+            let ((x, w), (xw, ww)) = (vu_bytes.split_at(format.row_bytes()), vu_words.split_at(crate::tc_fp8::ROW_WORDS));
+            crate::tc_fp8::vu_ada_views(x, w, xw, ww) == Some(y)
+        }
+        Format::Fp4Nvf4 => {
+            let (x, w) = vu_bytes.split_at(format.row_bytes());
+            crate::nvfp4::vu(x, w) == Some(y)
+        }
     }
 }
 
@@ -688,17 +702,14 @@ mod tests {
     }
 
     #[test]
-    fn a_format_without_an_arm_rejects() {
-        for format in [Format::Bf16Hopper, Format::Fp8Hopper, Format::Fp8Ada, Format::Fp4Nvf4] {
-            let id = [3u8; 32];
-            let yl = encode_y(format, &[0]).unwrap();
+    fn an_all_zero_vu_is_plus_zero_in_every_format() {
+        for format in Format::ALL {
             let chunk = vec![0u8; 8 * format.vu_words()];
-            assert_eq!(decide(&encode_header(format, K as u32, 1, &id, &yl), &[chunk])[32], VERDICT_REJECT, "{format:?}");
+            for (y, verdict) in [(0, VERDICT_ACCEPT), (1, VERDICT_REJECT)] {
+                let yl = encode_y(format, &[y]).unwrap();
+                assert_eq!(decide(&encode_header(format, K as u32, 1, &[3; 32], &yl), &[chunk.clone()])[32], verdict, "{format:?} y {y}");
+            }
         }
-        // an all-zero BF16 VU is +0
-        let yl = y_le(&[0]);
-        let chunk = vec![0u8; 8 * VU_WORDS];
-        assert_eq!(decide(&encode_header(Format::Bf16Ampere, K as u32, 1, &[3; 32], &yl), &[chunk])[32], VERDICT_ACCEPT);
     }
 
     #[test]

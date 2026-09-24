@@ -184,3 +184,13 @@ pub mod relation_only;
 /// `relation-bare/v1` (`relation-bare`): the Table 2 bare statement over a batch of VUs, its input and public values.
 #[cfg(any(feature = "relation-bare", test))]
 pub mod bare;
+/// The arithmetic of the Table 2 rows other than A100 BF16 (`bare`'s other formats): H100 BF16, H100 FP8, RTX 4090 FP8,
+/// RTX 5090 NVFP4.
+#[cfg(any(feature = "relation-bare", test))]
+pub mod groupsum;
+#[cfg(any(feature = "relation-bare", test))]
+pub mod nvfp4;
+#[cfg(any(feature = "relation-bare", test))]
+pub mod tc_fp8;
+#[cfg(any(feature = "relation-bare", test))]
+pub mod tc_hopper_bf16;
