@@ -773,6 +773,13 @@ def test_guardian_kills_go_to_the_owning_lanes_inbox_by_machine_pod_hint_or_cwd(
         "21:00Z KILLED-UNOWNED 2026-09-23T20:58:01+00:00 KILLED pid=9 mem=0.6GB reason=swap cmd=python -m research run --on box-a"]
     log.write_text(kills[2] + "\n")                                          # truncated (rotated): read from the start again
     assert notes.guardian_lines(root, [], fleet, NOW, state, log, machines) == [f"21:00Z ROUTED tables-fix-2 1: {name[:-3]}-2.md"]
+    with log.open("a") as f:                                                  # the owner is final: the coordinator's inbox (contract §5)
+        f.write(kills[2].replace("pid=12048", "pid=12051") + "\n")
+    rows = [{"lane": "tables-fix-2", "state": "final"}]
+    assert notes.guardian_lines(root, rows, fleet, NOW, state, log, machines) == [f"21:00Z ROUTED coordinator 1: {name} (tables-fix-2 is final)"]
+    text = (root / "lanes" / "coordinator" / name).read_text()
+    assert text.startswith("---\nlane: coordinator\nkind: handoff\nfrom: steward\ncreated: 2026-09-23T21:00Z\n---\n\n"
+                           "# the laptop guardian killed 1 process(es) of tables-fix-2 (final) (per-proc cap 1.0GB): rerun\n")
 
 
 def test_snapshot_leaves_the_steward_state_out(tmp_path):

@@ -55,8 +55,8 @@ first such HH:MMZ after the binding was written).  With `--pods`, `OVER-BUDGET <
 pass, passed the binding's budget (its first `$<number>`).  `RENDERED <path>` / `RENDER-FAILED <entry>: <why>`: the `[[render]]`
 entries of `<root>/steward.toml` (daily at `at`, `render_lines`).  `ROUTED <lane> <n>`: new KILLED lines of the laptop guardian's log
 (`--guardian-log`) went to the lane that owns them (`--on <machine>`, or the killed process's cwd under a bound worktree) as one
-handoff per lane per pass; `KILLED-UNOWNED <line>` when no lane does.  A rule that fails prints `STEWARD-ERROR <rule>: <error>`
-and the watch goes on.
+handoff per lane per pass (a final lane's to `lanes/coordinator/`); `KILLED-UNOWNED <line>` when no lane does.  A rule that fails
+prints `STEWARD-ERROR <rule>: <error>` and the watch goes on.
 
 `relaunch` is contract §C in one command: save the lane's uncommitted work to `lanes/<lane>/evidence/uncommitted-<HHMMZ>*`,
 checkpoint it superseded, bind the successor (`<topic>-<N+1>` unless `--as`) to its branch, worktree and pods, print the
@@ -1219,24 +1219,27 @@ def kill_owner(line: str, lanes: set[str], succ: dict[str, str], machines: dict[
     return latest(max(hits)[1], succ, lanes) if hits else None
 
 
-def guardian_handoff(root: Path, lane: str, kills: list[str], now: dt.datetime) -> Path:
-    d = root / "lanes" / lane
+def guardian_handoff(root: Path, lane: str, kills: list[str], now: dt.datetime, to: str | None = None) -> Path:
+    """The handoff in `lanes/<to>/`: `to` is the owning lane, or the coordinator when that lane is final (contract §5)."""
+    to = to or lane
+    d = root / "lanes" / to
     d.mkdir(parents=True, exist_ok=True)
     p, n = d / f"{now:%Y%m%dT%H%MZ}-handoff-steward-guardian.md", 2
     while p.exists():
         p, n = d / f"{now:%Y%m%dT%H%MZ}-handoff-steward-guardian-{n}.md", n + 1
     m = KILLED_RE.match(kills[0])
     why = m["reason"] if m else "?"
-    p.write_text(f"---\nlane: {lane}\nkind: handoff\nfrom: steward\ncreated: {now:%Y-%m-%dT%H:%MZ}\n---\n\n"
-                 f"# the laptop guardian killed {len(kills)} process(es) of {lane} ({why}): rerun\n\n~~~text\n" + "\n".join(kills) +
+    whose = lane if to == lane else f"{lane} (final)"
+    p.write_text(f"---\nlane: {to}\nkind: handoff\nfrom: steward\ncreated: {now:%Y-%m-%dT%H:%MZ}\n---\n\n"
+                 f"# the laptop guardian killed {len(kills)} process(es) of {whose} ({why}): rerun\n\n~~~text\n" + "\n".join(kills) +
                  "\n~~~\n\nkilled on the laptop by the guardian, not on the pod: rerun it (LANE-CONTRACT §7: heavy work runs on the pod).\n")
     return p
 
 
 def guardian_lines(root: Path, rows: list[dict], fleet: Fleet | None, now: dt.datetime, state: dict, log: Path | None = GUARDIAN_LOG,
                    machines: Callable[[], dict] | None = None) -> list[str]:
-    """New guardian kills to the owning lane's inbox (`kill_owner`): one handoff per lane per pass, `ROUTED <lane> <n>`; a kill no
-    lane owns: `KILLED-UNOWNED <line>`."""
+    """New guardian kills to the owning lane's inbox (`kill_owner`): one handoff per lane per pass, `ROUTED <lane> <n>`; a final
+    lane's kills go to the coordinator's (`ROUTED coordinator <n>: ... (<lane> is final)`); a kill no lane owns: `KILLED-UNOWNED <line>`."""
     kills = guardian_kills(log, state) if log else []
     if not kills:
         return []
@@ -1259,8 +1262,11 @@ def guardian_lines(root: Path, rows: list[dict], fleet: Fleet | None, now: dt.da
             by.setdefault(lane, []).append(k)
         else:
             lines.append(f"{now:%H:%MZ} KILLED-UNOWNED {k[:300]}")
+    final = {r["lane"] for r in rows if r["state"] in DONE}
     for lane, ks in sorted(by.items()):
-        lines.append(f"{now:%H:%MZ} ROUTED {lane} {len(ks)}: {guardian_handoff(root, lane, ks, now).name}")
+        to = "coordinator" if lane in final else lane
+        tail = f" ({lane} is final)" if to != lane else ""
+        lines.append(f"{now:%H:%MZ} ROUTED {to} {len(ks)}: {guardian_handoff(root, lane, ks, now, to).name}{tail}")
     return lines
 
 
