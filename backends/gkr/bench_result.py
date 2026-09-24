@@ -17,7 +17,7 @@ from the frozen words) and `proofs/rep<i>.bin`: `verity-gkr-verify verify --dir 
 Per timed rep (wall clock; the device is synchronised at every boundary; the buckets sum to t.total up to the Python
 between the timers, which tables.phases shows as Other):
 
-    t.witness              H2D of the operands + the witness generator (chain, unit rows, limb epilogue) + wire evaluation
+    t.witness              H2D of the operands + the witness generator (chain, unit rows, limb or packed-word epilogue) + wire evaluation
     t.encoding_commitment  x assembly + RS encode (SIMT NTT) + SHA-512 Merkle tree
     t.lookup               LogUp multiplicities + transcript start + every table's LogUp GKR
     t.arithmetic           the circuit GKR layers + the Ligero functional (input / lookup / chain claims) + w, q (INT8 GEMMs)
