@@ -190,6 +190,9 @@ def _member_row(name: str | None, base: str, node_name: str) -> tuple[str | None
 
 def emit_correspondence(ctx, body, *, rank: tuple[int, int] | None = None) -> dict:
     """The `runtime-correspondence/v1` document of the finished flat `body` derived under `ctx` (see module docstring)."""
+    if rank is not None and int(rank[0]) > 2:
+        raise NotImplementedError(f"tensor-parallel world {int(rank[0])} refused: collective records exist only for the two-rank ops "
+                                  f"({', '.join('verity_tp::' + k for k in _COLLECTIVE_KINDS)}: two operands, the peer is the other one)")
     params = list(body.params)
     n_user = len(ctx.user_inputs)
     input_names = [n for n, _ in params[:n_user]]

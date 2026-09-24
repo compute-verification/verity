@@ -407,6 +407,9 @@ def main() -> int:
     args = ap.parse_args()
     if args.world is not None:
         args.tp = int(args.world)
+    if args.tp > 2:
+        raise SystemExit(f"--tp {args.tp} refused: a rank Commit is checked against its rank Builds, and the Build refuses tensor-parallel "
+                         "worlds above 2 (collective records exist only for the two-rank ops)")
     relabel = None
     if args.relabel_rank:
         a, b = args.relabel_rank.split(":")

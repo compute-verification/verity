@@ -20,6 +20,8 @@ import importlib
 import time
 from typing import Any
 
+from verity_vllm.tp.collective_sites import MOE_COLLECTIVE_CLASSES as MOE_SITE_CLASSES, MOE_COLLECTIVE_MODULES
+
 SITES = (("vllm.model_executor.layers.linear", "tensor_model_parallel_all_reduce", "all_reduce"),
          ("vllm.model_executor.layers.vocab_parallel_embedding", "tensor_model_parallel_all_reduce", "all_reduce"),
          ("vllm.model_executor.layers.logits_processor", "tensor_model_parallel_all_gather", "all_gather"),
@@ -27,12 +29,9 @@ SITES = (("vllm.model_executor.layers.linear", "tensor_model_parallel_all_reduce
          # [R15 tp TP-06, moe M-0249] the fused-MoE block's final all-reduce is issued by MoERunner (`model.layers.<L>.mlp.experts`, the
          # module the rank Program names `.../mlp.experts/all_reduce2[k]`): its input is the rank-local fused expert output (width H per
          # routed token row) -- the block's `sum` plane on THIS rank's expert shards, before the ranks are summed
-         ("vllm.model_executor.layers.fused_moe.runner.moe_runner", "tensor_model_parallel_all_reduce", "all_reduce"),
-         ("vllm.model_executor.layers.fused_moe.layer", "tensor_model_parallel_all_reduce", "all_reduce"))
+         *((m, "tensor_model_parallel_all_reduce", "all_reduce") for m in MOE_COLLECTIVE_MODULES))
 COVERS_FAMILIES = ["Gemm_v1 (rank shard, K/W) -> AllReduce2_v1 input", "EmbeddingShard_v1 -> AllReduce2_v1 input", "Gemm_v1 (lm_head shard) -> AllGather2_v1 input",
                    "MoeSum_v1 (rank-local fused expert output, MoERunner) -> AllReduce2_v1 input"]
-#: module classes that issue a TP collective from inside their forward (the partial is attributed to the innermost hooked one)
-MOE_SITE_CLASSES = ("MoERunner", "FusedMoE")
 
 
 def _moe_reduces(m: Any, world: int) -> bool:
