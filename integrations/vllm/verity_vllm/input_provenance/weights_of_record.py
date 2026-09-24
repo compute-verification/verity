@@ -648,6 +648,14 @@ def _check_analytic(f: dict[str, Any], raw: np.ndarray | None) -> dict[str, Any]
     return rep | keep
 
 
+_FULL_DIGEST = re.compile(r"[0-9a-f]{64}")
+
+
+def truncated_digests(digests) -> list[str]:
+    """The digests of `digests` that are not a full sha256 hex digest (sorted, each shown by its first 16 characters)."""
+    return sorted(str(d)[:16] for d in digests if not _FULL_DIGEST.fullmatch(str(d)))
+
+
 def check(record: dict[str, Any], live: dict[str, Any], *, program_digests_of_record: set[str] | list[str] | None = None,
           checkpoint_of_record: dict[str, Any] | None = None, kv_cache_dtype: str | None = None) -> dict[str, Any]:
     """Field by field: the checkpoint-composed digest of record == the served parameter's digest.  Any difference or a Program field
@@ -672,29 +680,28 @@ def check(record: dict[str, Any], live: dict[str, Any], *, program_digests_of_re
         shard_why.append("no shard pin recorded (record built with --no-verify-shards?)")
     shards_ok = ck.get("all_shards_pinned") is True and not shard_why
     prog_why = None
-
-    def _eq(a: str, b: str) -> bool:
-        return a == b or (len(b) >= 16 and a.startswith(b)) or (len(a) >= 16 and b.startswith(a))
-
     if program_digests_of_record is not None:
         pd = str(record.get("program_digest") or "")
         ofr = {str(x) for x in program_digests_of_record}
         stamped = record.get("of_record_set") if isinstance(record.get("of_record_set"), dict) else None
-        if stamped is not None:
-            # [rev-cb M-0733] a record stamped with the WHOLE of-record set is accepted iff that set equals the run's (every run digest
-            # matched by a stamped one and every stamped one by a run digest): a record of another row -- more, fewer or other
-            # components -- is refused by name; the stamp itself must be sound (every component's struct equal)
-            st = {str(x) for x in (stamped.get("program_digests") or [])}
+        st = {str(x) for x in (stamped.get("program_digests") or [])} if stamped is not None else set()
+        # Program digests are compared whole: a prefix of a digest names no Program, so one on either side is refused by name
+        short = truncated_digests(ofr | st | ({pd} if pd else set()))
+        if short:
+            prog_why = f"Program digests not full sha256 (64 hex), compared only whole: {short}"
+        elif stamped is not None:
+            # [rev-cb M-0733] a record stamped with the WHOLE of-record set is accepted iff that set equals the run's: a record of another
+            # row -- more, fewer or other components -- is refused by name; the stamp itself must be sound (every component's struct equal)
             if stamped.get("why"):
                 prog_why = f"record's of-record stamp is not sound: {str(record.get('of_record_why') or stamped.get('why'))[:200]}"
             elif not st:
                 prog_why = "record's of-record stamp is empty"
             else:
-                miss_run = sorted(x[:16] for x in ofr if not any(_eq(x, y) for y in st))
-                miss_rec = sorted(y[:16] for y in st if not any(_eq(y, x) for x in ofr))
+                miss_run = sorted(x[:16] for x in ofr - st)
+                miss_rec = sorted(y[:16] for y in st - ofr)
                 if miss_run or miss_rec:
                     prog_why = (f"record's of-record set != the run's: run digests not on the record {miss_run}; record digests not in the run {miss_rec}")
-        elif not pd or not any(_eq(pd, x) for x in ofr):
+        elif not pd or pd not in ofr:
             prog_why = f"record built for Program {pd[:16] or '?'} != Program of record {sorted(x[:16] for x in ofr)}"
     ent_why = None
     if checkpoint_of_record:
@@ -859,7 +866,7 @@ def stamp_of_record_set(record: dict[str, Any], programs_root: str, *, manifest:
         pd = str(res.get("program_digest") or (prog["instances"].get("digest") or ""))
         st = weights_struct(prog)
         same = st == my_struct
-        in_manifest = any(pd == x or (len(x) >= 16 and pd.startswith(x)) for x in manifest_digests) if pd else False
+        in_manifest = bool(pd) and pd in manifest_digests
         # of record: a shaped component dir (build_request_LP*_T*), or build_request when it is the only Program (B1) or the manifest names it
         of_rec = bool(pd) and (os.path.basename(d) != "build_request" or not shaped or in_manifest)
         comps.append({"dir": os.path.basename(d), "program_digest": pd, "LP": res.get("LP"), "T": res.get("T"), "struct_equal": same,
@@ -881,7 +888,10 @@ def stamp_of_record_set(record: dict[str, Any], programs_root: str, *, manifest:
     if workload_digest:
         digests.add(workload_digest)
     rec_pd = str(record.get("program_digest") or "")
-    if rec_pd and not any(rec_pd == x or (len(x) >= 16 and rec_pd.startswith(x)) or x.startswith(rec_pd) for x in digests):
+    short = truncated_digests(digests | ({rec_pd} if rec_pd else set()))
+    if short:
+        why.append(f"Program digests not full sha256 (64 hex): {short}")
+    elif rec_pd and rec_pd not in digests:
         why.append(f"the record's own Program {rec_pd[:16]} is not of record under {os.path.basename(str(programs_root))} (derived from a non-component)")
     if not comps:
         why.append(f"no component Program under {programs_root}")
