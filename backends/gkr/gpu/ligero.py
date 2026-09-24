@@ -418,6 +418,7 @@ def open_w_qc(cm: Committed, a: torch.Tensor, r: torch.Tensor) -> tuple[torch.Te
     summed over rows) and ``qc[m] = Σ_{u+v=m} G[u, ·, v]``.  Identical to encode-multiply-INTT over the ``n``-domain."""
     p = cm.params
     dev = a.device
+    a = a.to(torch.int64)
     rows, k = cm.rows, p.k
     int8 = use_int8(dev)
     xr = Limbs8(cm.x_rows, "b") if int8 else cm.x_rows                # (rows, k), the B operand twice

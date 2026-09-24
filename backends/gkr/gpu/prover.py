@@ -489,8 +489,9 @@ def n_functionals(inst: Instance) -> int:
 # ---------------------------------------------------------------------------------------------------------------------
 
 class Acc:
-    def __init__(self, l: int, device) -> None:
-        self.a = torch.zeros((l, DEG), dtype=torch.int64, device=device)
+    def __init__(self, l: int, device, dtype: torch.dtype = torch.int64) -> None:
+        # canonical coordinates (< p < 2^31) fit int32; every torch-side update adds an int64 operand, the kernels cast
+        self.a = torch.zeros((l, DEG), dtype=dtype, device=device)
         self.b: Ext = ZERO
         self.device = device
 
@@ -877,7 +878,8 @@ def prove(inst: Instance, pcs: bool = True, params: ligero.LigeroParams = ligero
         t3 = time.perf_counter()
         rhos = tr.challenges(n_functionals(inst))
         geo = tr.challenge() if inst.chain else ZERO
-        acc = Acc(l, dev)
+        fast = dev.type == "cuda" and _field._fast_rank1_add is not None and _field._fast_scatter is not None
+        acc = Acc(l, dev, torch.int32 if fast else torch.int64)
         ri = 0
         for si, s in enumerate(inst.segs):
             (l_star, vl, r_star, vr), c_star = finals[si]
