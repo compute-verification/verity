@@ -181,3 +181,9 @@ pub fn decode_verdict(byte: u8) -> Option<(bool, bool)> {
 /// RELATION-ONLY DIAGNOSTIC (`unsound-relation-only`): the compact input, the bare gate chain, its public values.
 #[cfg(any(feature = "unsound-relation-only", test))]
 pub mod relation_only;
+
+/// The arithmetic of the Table 2 rows other than A100 BF16: H100 BF16, H100 FP8, RTX 4090 FP8, RTX 5090 NVFP4.
+pub mod groupsum;
+pub mod nvfp4;
+pub mod tc_fp8;
+pub mod tc_hopper_bf16;
