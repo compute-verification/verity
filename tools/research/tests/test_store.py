@@ -1296,6 +1296,39 @@ def test_mint_api_calls_the_temp_access_credentials_endpoint():
         C.mint_api("acct123", "t", "b", "P", "admin", opener=Opener(body=ok))
 
 
+def test_mint_without_a_parent_credential_names_what_is_missing_and_what_works(env, monkeypatch, capsys):
+    """r21 close-out: with no parent key loaded, `--via auto` failed with "--via api needs CLOUDFLARE_API_TOKEN" -- a mode nobody asked
+    for, and not the fix (`--via local` after sourcing the parent key)."""
+    from research.store import credentials as C
+
+    ep = "https://1d4dfa0a7dc0639e19f5d0125f14a634.r2.cloudflarestorage.com"
+    (env / "store.toml").write_text(f'[remote]\ntype = "s3"\nbucket = "verity-dev"\nendpoint = "{ep}"\naccess_key_id_env = "P_AK"\nsecret_access_key_env = "P_SK"\n')
+    for v in ("P_AK", "P_SK", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "CLOUDFLARE_API_TOKEN", "R2_ACCOUNT_ID", "CLOUDFLARE_ACCOUNT_ID"):
+        monkeypatch.delenv(v, raising=False)
+
+    def why(**kw) -> str:
+        with pytest.raises(C.MintError) as e:
+            C.mint(**kw)
+        return str(e.value)
+
+    msg = why()
+    assert msg.startswith("--via auto found no parent credential in this environment") and "--via api needs" not in msg
+    assert "P_AK (unset) / P_SK (unset)" in msg and "CLOUDFLARE_API_TOKEN (unset)" in msg
+    assert "research data mint-credential --via local" in msg and C.PARENT_ENV_FILE in msg and "--via api" in msg
+    monkeypatch.setenv("P_AK", "PARENT")                                 # half a key pair: which half is said
+    assert "P_AK (set) / P_SK (unset)" in why() and "P_AK (set) / P_SK (unset)" in why(via="local")
+    monkeypatch.setenv("P_SK", "psecret")
+    assert "the parent key is loaded, so --via local works" in why(via="api")
+    monkeypatch.setenv("CLOUDFLARE_API_TOKEN", "cf")
+    monkeypatch.delenv("P_SK")
+    assert why(via="local").endswith("(or --via api: CLOUDFLARE_API_TOKEN is set)")
+    monkeypatch.delenv("P_AK")
+    assert "parent access key id in P_AK" in why(via="api") and "parent access key id in P_AK" in why(), "auto with only a token: the API path's need"
+    monkeypatch.delenv("CLOUDFLARE_API_TOKEN")
+    assert main(["mint-credential", "--ttl", "5h"]) == 1
+    assert capsys.readouterr().err.startswith("research data mint-credential: --via auto found no parent credential")
+
+
 def test_mint_resolves_inputs_from_config_and_env_and_the_cli_prints_env_lines(env, monkeypatch, capsys):
     """Inputs: store.toml `[remote]` (endpoint, bucket, the env var NAMES of the parent key) > R2_ENDPOINT / R2_BUCKET / AWS_*; the account id
     comes from the endpoint host.  `auto` signs locally when the parent key is present, else needs CLOUDFLARE_API_TOKEN.  `--env` prints the

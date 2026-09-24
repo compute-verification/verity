@@ -40,6 +40,7 @@ ACTIONS = frozenset({"HeadObject", "GetObject", "GetBucketLocation", "ListObject
                      "CreateMultipartUpload", "UploadPart", "UploadPartCopy", "AbortMultipartUpload", "CompleteMultipartUpload"})
 TTL_MAX_S = 604800
 CF_API = "https://api.cloudflare.com/client/v4"
+PARENT_ENV_FILE = "~/.config/verity/r2.env"      # where the control machine keeps the parent R2 key (store README); never on a pod
 _TTL_UNITS = {"s": 1, "m": 60, "h": 3600, "d": 86400}
 
 
@@ -178,27 +179,32 @@ def mint(*, via: str = "auto", scope: str = "object-read-write", ttl_s: int = 36
     if not endpoint or not bucket:
         raise MintError("need the R2 endpoint and bucket: store.toml [remote] type s3, or --endpoint/--bucket, or R2_ENDPOINT/R2_BUCKET")
     account_id = account_id or env.get("R2_ACCOUNT_ID") or env.get("CLOUDFLARE_ACCOUNT_ID") or account_id_from_endpoint(endpoint)
-    ak = env.get(cfg.get("access_key_id_env") or "AWS_ACCESS_KEY_ID")
-    sk = env.get(cfg.get("secret_access_key_env") or "AWS_SECRET_ACCESS_KEY")
+    ak_env, sk_env = cfg.get("access_key_id_env") or "AWS_ACCESS_KEY_ID", cfg.get("secret_access_key_env") or "AWS_SECRET_ACCESS_KEY"
+    ak, sk = env.get(ak_env), env.get(sk_env)
     if env.get(cfg.get("session_token_env") or "AWS_SESSION_TOKEN") and via != "api":
         raise MintError("the environment holds a session token: a temporary credential cannot mint another; source the parent key first")
     api_token = env.get("CLOUDFLARE_API_TOKEN")
+    parent = f"the parent R2 key pair in {ak_env} ({'set' if ak else 'unset'}) / {sk_env} ({'set' if sk else 'unset'})"
+    load = f"load it first, e.g. `(set -a; . {PARENT_ENV_FILE}; set +a; research data mint-credential --via local ...)` on the control machine"
     if via == "auto":
+        if not (ak and sk) and not api_token:
+            raise MintError(f"--via auto found no parent credential in this environment: local signing needs {parent}, the Cloudflare API needs "
+                            f"CLOUDFLARE_API_TOKEN (unset).  Sign locally with the parent key -- {load} -- or set CLOUDFLARE_API_TOKEN for --via api")
         via = "local" if ak and sk else "api"
     if not account_id:
         raise MintError("need the Cloudflare account id: --account-id, R2_ACCOUNT_ID / CLOUDFLARE_ACCOUNT_ID, or an <account>.r2.cloudflarestorage.com endpoint")
     if via == "local":
         if not ak or not sk:
-            raise MintError(f"local signing needs the parent key pair in {cfg.get('access_key_id_env') or 'AWS_ACCESS_KEY_ID'} / "
-                            f"{cfg.get('secret_access_key_env') or 'AWS_SECRET_ACCESS_KEY'} (or CLOUDFLARE_API_TOKEN for --via api)")
+            raise MintError(f"--via local needs {parent}: {load}" + (" (or --via api: CLOUDFLARE_API_TOKEN is set)" if api_token else ""))
         cred = mint_local(endpoint, account_id, ak, sk, bucket, scope, actions=actions, ttl_s=ttl_s, prefixes=prefixes, objects=objects)
     elif via == "api":
         if actions:
             raise MintError("--actions is supported by local signing only (the Temporary Credentials API takes --permission / --prefix / --object)")
         if not api_token:
-            raise MintError("--via api needs CLOUDFLARE_API_TOKEN (an API token with R2 write permission on the account)")
+            raise MintError("--via api needs CLOUDFLARE_API_TOKEN (an API token with R2 write permission on the account), which is unset; "
+                            + ("the parent key is loaded, so --via local works" if ak and sk else f"or sign locally (--via local) with {parent}: {load}"))
         if not ak:
-            raise MintError(f"the API needs the parent access key id in {cfg.get('access_key_id_env') or 'AWS_ACCESS_KEY_ID'} (parentAccessKeyId)")
+            raise MintError(f"the API needs the parent access key id in {ak_env} (parentAccessKeyId), which is unset: {load.replace('--via local', '--via api')}")
         cred = mint_api(account_id, api_token, bucket, ak, scope, ttl_s=ttl_s, prefixes=prefixes, objects=objects, opener=opener)
     else:
         raise MintError(f"--via must be auto, local or api, got {via!r}")
