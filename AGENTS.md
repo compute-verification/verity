@@ -73,6 +73,12 @@ rather than accumulating them.
 - Repo-replicated inputs are registered in `fixtures/artifacts.json` (`{art id: path}`, `research data put --kind fixture/v1 --file …`); `tools/research/tests/test_repo_replicas.py` checks every entry hashes to its id.
 - `tests/test_repository.py` rejects report-genre files (`*HANDOFF*`, `*REPORT*`, `*URGENT*`, `*DRAFT*`, `*TRIAGE*`, `*STATUS*`, anything under `reports/` or `results/`), and `.gitignore` keeps them out of `git add`.
 
+## Lanes (worker agents)
+
+If your launch message names you a lane, `~/.research/notes/kb/LANE-CONTRACT.md` is your rulebook. Keep chatter low
+(contract §3a): every message and every background shell you start reaches the coordinator and the human, so run long
+jobs detached on the pod, write one-line checkpoints, and hand off only to unblock or to change someone's plan.
+
 ## Skills
 
 When creating or modifying a skill in `.agents/skills/`, use
