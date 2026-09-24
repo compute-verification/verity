@@ -207,6 +207,9 @@ enum Command {
         dataset: String,
         #[arg(long)]
         index: Option<PathBuf>,
+        /// The guest input layout each negative is run in.
+        #[arg(long, value_enum, default_value_t = bare_cmd::Layout::Chunks)]
+        layout: bare_cmd::Layout,
     },
 }
 
@@ -487,6 +490,8 @@ struct ExecuteOutput {
     cycle_tracker: BTreeMap<String, u64>,
     gas: Option<u64>,
     syscalls: BTreeMap<String, u64>,
+    /// Executed RISC-V instructions by opcode (non-zero only): with SP1's per-chip trace widths, the proving cost.
+    opcodes: BTreeMap<String, u64>,
     execute_seconds: f64,
     statement_bytes: usize,
     witness_bytes: usize,
@@ -621,6 +626,12 @@ async fn execute<P: Prover>(
         .filter(|(_, count)| **count > 0)
         .map(|(code, count)| (format!("{code:?}"), *count))
         .collect();
+    let opcodes = report
+        .opcode_counts
+        .iter()
+        .filter(|(_, count)| **count > 0)
+        .map(|(op, count)| (format!("{op:?}"), *count))
+        .collect();
     Ok(ExecuteOutput {
         backend: BACKEND,
         outcome,
@@ -628,6 +639,7 @@ async fn execute<P: Prover>(
         cycle_tracker,
         gas: report.gas(),
         syscalls,
+        opcodes,
         execute_seconds,
         statement_bytes: sizes.0,
         witness_bytes: sizes.1,
@@ -890,8 +902,8 @@ async fn main() -> Result<()> {
         #[cfg(feature = "relation-bare")]
         Command::BareStatement { set, out } => bare_cmd::cmd_statement(set, out).await,
         #[cfg(feature = "relation-bare")]
-        Command::BareNegatives { instances, manifest_sha256, dataset, index } => {
-            bare_cmd::cmd_negatives(instances, manifest_sha256, dataset, index).await
+        Command::BareNegatives { instances, manifest_sha256, dataset, index, layout } => {
+            bare_cmd::cmd_negatives(instances, manifest_sha256, dataset, index, layout).await
         }
     }
 }
