@@ -689,8 +689,11 @@ def bench(args) -> int:
     bv = args.batch_vus or total_vus
     if total_vus % bv:
         raise SystemExit(f"--batch-vus {bv} must divide --total-vus {total_vus}")
-    # an n-proof job: each proof sized for 2^-(128 + ceil log2 n) so the union over the distinct statements meets 2^-128 (F5)
-    per_proof_target = -128.0 - math.ceil(math.log2(-(-total_vus // bv)))
+    # an n-proof job: each proof sized for 2^-(128 + ceil log2 n) so the union over the distinct statements meets 2^-128 (F5).
+    # Against a live verifier every rep proves the same statements again: it opens reps x n batches, each an attempt that
+    # verify-session counts (R3-10), so the proofs are sized for 2^-(128 + ceil log2 (reps n))
+    attempts = -(-total_vus // bv) * (args.reps if args.coins == "live" and args.verifier else 1)
+    per_proof_target = -128.0 - math.ceil(math.log2(attempts))
     bts = [pv.batch(data[i:i + bv], args.coins, zk=args.zk, target_log2=per_proof_target) for i in range(0, total_vus, bv)]
     nb_ = len(bts)
     bt = bts[0]
