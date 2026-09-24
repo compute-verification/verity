@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# SP1 with the FRI query count raised (SP1_TARGET_BITS_OF_SECURITY = $SEC_BITS, default 134; stock 100), otherwise
-# unmodified, on a Linux CUDA pod.  The constant is compiled into sp1-primitives (fri_params.rs: it sets only
-# unique_decoding_queries, i.e. the FRI query-phase term: 124 queries at 100, 175 at 134); the prebuilt sp1-gpu-server
-# bakes it in.  So both sides are rebuilt with the one line changed and nothing else:
+# SP1 with the core FRI query count raised to the value SP1's own formula gives for a $SEC_BITS-bit target (default 134:
+# 175 queries; stock SP1_TARGET_BITS_OF_SECURITY 100: 124), otherwise unmodified, on a Linux CUDA pod.  The count is
+# compiled into sp1-primitives (fri_params.rs core_fri_config: unique_decoding_queries(CORE_LOG_BLOWUP)) and the prebuilt
+# sp1-gpu-server bakes it in.  Only core_fri_config changes: raising SP1_TARGET_BITS_OF_SECURITY itself also grows the
+# recursion programs that every prover builds at start-up (compose/deferred, fixed reduce shape), which then panic with
+# "fixed height is too small"; core proofs never use recursion.  Both sides are rebuilt with that one line changed:
 #   - prover: sp1-gpu-server from succinctlabs/sp1 v6.6.0 (f5a5bbf6, the version of the release server the stock cells
 #     ran), installed as $ROOT/home/.sp1/bin/sp1-gpu-server; run the host with HOME=$ROOT/home.  sp1-sdk's cuda client
 #     replaces a server whose `--version` differs from sp1_primitives::SP1_CRATE_VERSION by the release download, so the
@@ -22,16 +24,22 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SP1_SRC="$(dirname "$HERE")"
 ROOT="${SEC128_ROOT:-/workspace/sec128}"
 TAG_COMMIT=f5a5bbf6a1cf6007315b410d88678d96fb399fb5   # succinctlabs/sp1 v6.6.0
-STOCK_LINE='pub const SP1_TARGET_BITS_OF_SECURITY: usize = 100;'
-NEW_LINE="pub const SP1_TARGET_BITS_OF_SECURITY: usize = $SEC_BITS;"
+QUERIES="$(python3 -c "import math; print(math.ceil(($SEC_BITS - 16) / -math.log2(0.5 + 0.25 / 2)))")"
+STOCK_LINE='        unique_decoding_queries(CORE_LOG_BLOWUP),'
+NEW_LINE="        $QUERIES, // verity sec128: unique_decoding_queries at a $SEC_BITS-bit target (stock: unique_decoding_queries(CORE_LOG_BLOWUP) = 124)"
 mkdir -p "$ROOT" /workspace/bin
 stage() { echo; echo "=== [$(date -u +%H:%M:%S)] $*"; }
 
-patch_line() {  # FILE: replace the stock line, and fail unless exactly that one line changed
+patch_line() {  # FILE: replace the stock line (it occurs once, in core_fri_config), and fail unless exactly that line changed
   local f=$1
   cp "$f" "$f.orig"
-  grep -qxF "$STOCK_LINE" "$f.orig" || { echo "stock line not found in $f"; exit 2; }
-  sed -i "s/^$STOCK_LINE\$/$NEW_LINE/" "$f"
+  [ "$(grep -cxF "$STOCK_LINE" "$f.orig")" = 1 ] || { echo "stock line not found once in $f"; exit 2; }
+  python3 - "$f" "$STOCK_LINE" "$NEW_LINE" <<'EOF'
+import sys
+p, old, new = sys.argv[1:]
+s = open(p).read()
+open(p, "w").write(s.replace(old + "\n", new + "\n", 1))
+EOF
   [ "$(diff "$f.orig" "$f" | grep -c '^[<>]')" = 2 ] || { echo "unexpected diff in $f"; diff "$f.orig" "$f"; exit 2; }
   rm "$f.orig"
 }
@@ -55,8 +63,8 @@ fi
 export PATH="/usr/local/cmake/bin:$PATH"
 cmake --version | head -1
 
-stage "prover source: sp1 v6.6.0 $TAG_COMMIT + SP1_TARGET_BITS_OF_SECURITY=$SEC_BITS"
-FORK="$ROOT/sp1-v6.6.0-sec$SEC_BITS"
+stage "prover source: sp1 v6.6.0 $TAG_COMMIT + core_fri_config $QUERIES queries"
+FORK="$ROOT/sp1-v6.6.0-coreq$QUERIES"
 if [ ! -f "$FORK/.sec-done" ]; then
   rm -rf "$FORK"; git init -q "$FORK"
   git -C "$FORK" remote add origin https://github.com/succinctlabs/sp1.git
@@ -100,7 +108,8 @@ diff "$SP1_SRC/Cargo.lock" "$HOST/Cargo.lock" | tee "$ROOT/host-lock.diff" || tr
 BIN=/workspace/bin/veritor-zk-host-cuda-relation-bare-sec$SEC_BITS
 install -m 0755 "$ROOT/target-host/release/veritor-zk-host" "$BIN"
 sha256sum "$BIN"
-SP1_PROVER=cpu RUST_LOG=error "$BIN" info | grep '^{' | tail -1 | tee "$ROOT/host-info.json"
+SP1_PROVER=cpu RUST_LOG=error "$BIN" info > "$ROOT/host-info.log" 2>&1 || { tail -20 "$ROOT/host-info.log"; exit 3; }
+grep '^{' "$ROOT/host-info.log" | tail -1 | tee "$ROOT/host-info.json"
 if [ -x /workspace/bin/veritor-zk-host-cuda-relation-bare ]; then
   echo "stock host:"; SP1_PROVER=cpu RUST_LOG=error /workspace/bin/veritor-zk-host-cuda-relation-bare info | grep '^{' | tail -1
 fi

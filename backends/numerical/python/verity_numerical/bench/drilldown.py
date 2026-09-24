@@ -316,8 +316,9 @@ VARIANTS: tuple[Variant, ...] = (
             "software.backend.name 'sp1…' with 'FRI query count raised' in the name (backends/sp1/sec128)",
             lambda f: f["candidate"] == "SP1" and not f["tcdot"] and bool(f.get("sec_raised")),
             "unknown (as SP1)", "as SP1 unmodified (same relation-bare guest)",
-            "as SP1 unmodified, with SP1_TARGET_BITS_OF_SECURITY = 134 compiled into prover (source-built sp1-gpu-server 6.6.0) and "
-            "verifier (sp1-primitives 6.6.0 patched): 175 FRI queries instead of 124, nothing else changed",
+            "as SP1 unmodified, with core_fri_config's query count at SP1's formula for a 134-bit target (175 instead of 124) "
+            "compiled into prover (source-built sp1-gpu-server 6.6.0) and verifier (sp1-primitives 6.6.0 patched); nothing else "
+            "changed, core proofs only",
             "2^-99.9 per shard proof: the FRI query term becomes 2^-134.7 (proven, unique decoding) but the field-bound terms "
             "stay (LogUp-GKR 2^-100.3, commit rounds 2^-102.4, batching 2^-104.4, zerocheck 2^-112.2, jagged reduction "
             "2^-116.4); union-bounded over shard proofs (envelope security.achieved_log2, terms in security.parameters)",

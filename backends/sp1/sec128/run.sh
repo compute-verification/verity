@@ -25,13 +25,14 @@ import json, sys
 sec, out, bits, server_sha, host_sha, pdiff, vdiff, host, archs = sys.argv[1:]
 v = json.load(open(sec))
 assert v["security_bits"] == int(bits)
-line = f"pub const SP1_TARGET_BITS_OF_SECURITY: usize = {bits};"
+q = v["security_parameters"]["fri_queries"]
+line = f"core_fri_config(): num_queries unique_decoding_queries(CORE_LOG_BLOWUP) = 124 -> {q} (SP1's formula at a {bits}-bit target); recursion configs unchanged"
 v.update({
     "backend_name": f"sp1 relation-bare/v2 (SP1, FRI query count raised to a {bits}-bit target (otherwise unmodified); "
                     f"core STARK, CUDA prover)",
-    "label": f"SP1, FRI query count raised to a {bits}-bit target (otherwise unmodified): 175 queries (stock 124); "
+    "label": f"SP1, FRI query count raised to a {bits}-bit target (otherwise unmodified): {q} core queries (stock 124); "
              f"per-shard soundness stays field-bound at 2^{v['security_per_shard_log2']} (security.parameters)",
-    "toolchain": {"sp1-primitives": f"6.6.0 with SP1_TARGET_BITS_OF_SECURITY = {bits} (vendored crates.io source, one line)",
+    "toolchain": {"sp1-primitives": f"6.6.0 with core_fri_config {q} queries (vendored crates.io source, one line)",
                   "sp1-gpu-server": f"6.6.0 source-built: succinctlabs/sp1 v6.6.0 f5a5bbf6 + the same line, CUDA_ARCHS {archs}"},
     "fork": {"base": "succinctlabs/sp1 v6.6.0 f5a5bbf6a1cf6007315b410d88678d96fb399fb5", "changed": [f"crates/primitives/src/fri_params.rs: {line}"],
              "prover_source_diff": open(pdiff).read(), "verifier_source_diff": open(vdiff).read(),
