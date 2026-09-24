@@ -79,7 +79,10 @@ __all__ = [
     "PRODUCER_LABEL_KEYS",
     "PRODUCER_META_KEYS",
     "PRODUCER_NAME_LABEL_KEYS",
+    "IN_PROOF_HASH",
+    "PHASE_SUM_PROBLEM",
     "RANK",
+    "REASON_LETTERS",
     "REDTEAM_GLOB",
     "RESULT_KIND",
     "SOUNDNESS_LOG2",
@@ -101,7 +104,9 @@ __all__ = [
     "main",
     "normalise_sku",
     "phases",
+    "in_proof_hash_codes",
     "producers",
+    "reject_codes",
     "reject_reasons",
     "render_json",
     "render_markdown",
@@ -477,74 +482,122 @@ def _measurements(result: Mapping[str, Any]) -> dict[str, Any]:
     return out
 
 
-def reject_reasons(result: Mapping[str, Any], labels: Iterable[Any], attempt: Mapping[str, Any] | None, target: Target,
-                   candidate: Candidate, proof_classes: Sequence[str] | None = None, authentication: str = AUTHENTICATION) -> list[str]:
+#: One letter per reject reason, assigned where :func:`reject_codes` writes the reason (drill-down D2, campaign morning-tables
+#: BRIEF §1).  A contract reason is ``P`` when any of its problems is phase accounting (:data:`PHASE_SUM_PROBLEM`).
+REASON_LETTERS: dict[str, str] = {"U": "not independently verified", "I": "different instance set", "P": "phase-sum",
+                                  "S": "shared hashing", "Z": "class/ZK not the column's", "K": "prover not on the row's SKU",
+                                  "B": "batch != 4096", "X": "other"}
+#: ``contract.validate_measurements`` 's wording of a phase-accounting failure: the buckets and joints exceed ``t.total`` beyond
+#: ``contract.TOLERANCE``, or one bucket is counted in two places (user decision 2026-09-24: such a result is out of Tables 2/3).
+PHASE_SUM_PROBLEM = re.compile(r"^(buckets and joints sum to .* more than t\.total|bucket '[a-z_]+' is counted twice)")
+#: Column ``<candidate> + in-proof hash`` (``included-hash``) is Poseidon2-BabyBear per row, no sharing (user decision keep_frozen,
+#: 2026-09-24): the fingerprint's ``hash`` names it and, where the emitter records the leaf interface (lane leaf-iface D0), so do
+#: ``leaf.scheme`` / ``leaf.schema``; ``sharing`` is ``none``.  Another leaf (Ajtai, BLAKE3) or a shared tile is a drill-down.
+IN_PROOF_HASH, IN_PROOF_LEAF, IN_PROOF_SHARING = "poseidon2-babybear-w24", "poseidon2", "none"
+SHARED_AUTHENTICATION = "included-hash-shared"
+_LEAF_FAMILIES = (("ajtai", "an Ajtai (Ring-SIS) leaf"), ("blake3", "a BLAKE3 in-circuit leaf"), ("poseidon2", "a Poseidon2 leaf"))
+
+
+def in_proof_hash_codes(fp: Mapping[str, Any]) -> list[tuple[str, str]]:
+    """Why an ``included-hash`` fingerprint is not column 2's hashing (Poseidon2-BabyBear per row, no sharing), as ``(letter, reason)``."""
+
+    out: list[tuple[str, str]] = []
+    h = fp.get("hash")
+    leaf = fp.get("leaf") if isinstance(fp.get("leaf"), Mapping) else {}
+    scheme, schema = leaf.get("scheme"), leaf.get("schema")
+    if not (h == IN_PROOF_HASH and scheme in (None, IN_PROOF_LEAF) and (schema is None or str(schema).startswith(IN_PROOF_HASH + "/"))):
+        named = " ".join(str(x).lower() for x in (h, scheme, schema) if x is not None)
+        family = next((d for key, d in _LEAF_FAMILIES if key in named), "an unrecognised leaf" if named else "no named leaf")
+        out.append(("X", f"leaf hash {h!r} (leaf.scheme {scheme!r}, schema {schema!r}) is {family}: the ' + in-proof hash' column is "
+                         f"{IN_PROOF_HASH} per row, no sharing"))
+    sharing, rows = fp.get("sharing"), fp.get("row_sharing")
+    if sharing != IN_PROOF_SHARING or rows is not None:
+        shared = rows is not None or sharing is not None
+        out.append(("S" if shared else "X", f"sharing {sharing!r}{' with row_sharing' if rows is not None else ''}: the ' + in-proof hash' "
+                                            f"column hashes every operand row per VU, sharing {IN_PROOF_SHARING!r} (a shared tile is a drill-down)"))
+    return out
+
+
+def reject_codes(result: Mapping[str, Any], labels: Iterable[Any], attempt: Mapping[str, Any] | None, target: Target,
+                 candidate: Candidate, proof_classes: Sequence[str] | None = None, authentication: str = AUTHENTICATION) -> list[tuple[str, str]]:
     """Every reason ``result`` (a ``bench-result/v1`` meta: the result.json) is NOT a valid Table 2 cell for ``target`` x
-    ``candidate``; ``[]`` means valid.  ``proof_classes`` overrides the candidate's declared classes (drill-down).  Frozen:
+    ``candidate``, as ``(letter, reason)`` (:data:`REASON_LETTERS`); ``[]`` means valid.  ``proof_classes`` overrides the candidate's
+    declared classes (drill-down).  Frozen:
 
     contract ``validate()`` empty; ``profile`` == the target; ``K == 1536``, ``B == 4096`` (and ``B_real == B`` when present);
     ``security.target <= -128`` and ``security.achieved_log2 <= -128`` when present; ``instances`` equal to the target's frozen
-    ref; ``proof_class`` in the candidate's declared class(es); ``authentication == "excluded"``; the same-SKU invariant;
-    independently verified (a :data:`VERIFIED_LABELS` label by a non-producer); not downgraded by a ``red-team-*`` verdict."""
+    ref; ``proof_class`` in the candidate's declared class(es); ``authentication`` the column's (``excluded``, or ``included-hash``
+    with Poseidon2-BabyBear per row and no sharing, :func:`in_proof_hash_codes`); the same-SKU invariant; independently verified (a
+    :data:`VERIFIED_LABELS` label by a non-producer, :func:`producers`); not downgraded by a ``red-team-*`` verdict."""
 
-    p: list[str] = []
+    p: list[tuple[str, str]] = []
     problems = contract.validate(result)
     if problems:
-        p.append(_contract_reason(problems))
+        p.append(("P" if any(PHASE_SUM_PROBLEM.match(x) for x in problems) else "X", _contract_reason(problems)))
     fp = result.get("workload_fingerprint") if isinstance(result, Mapping) else None
     if not isinstance(fp, Mapping):
-        return p + ["workload_fingerprint missing"]
+        return p + [("X", "workload_fingerprint missing")]
     if fp.get("profile") != target.name:
-        p.append(f"profile {fp.get('profile')!r} is not the row's target {target.name!r}")
+        p.append(("X", f"profile {fp.get('profile')!r} is not the row's target {target.name!r}"))
     if fp.get("K") != K:
-        p.append(f"K is {fp.get('K')!r}, the tables are at K = {K}")
+        p.append(("X", f"K is {fp.get('K')!r}, the tables are at K = {K}"))
     if fp.get("B") != B:
-        p.append(f"B is {fp.get('B')!r}, the tables are at B = {B}")
+        p.append(("B", f"B is {fp.get('B')!r}, the tables are at B = {B}"))
     if "B_real" in fp and fp.get("B_real") != fp.get("B"):
-        p.append(f"B_real {fp.get('B_real')!r} != B {fp.get('B')!r}: a padded batch is not the frozen workload")
+        p.append(("B", f"B_real {fp.get('B_real')!r} != B {fp.get('B')!r}: a padded batch is not the frozen workload"))
     sec = fp.get("security") if isinstance(fp.get("security"), Mapping) else {}
     tgt = sec.get("target")
     if not _num(tgt) or tgt > SOUNDNESS_LOG2:
-        p.append(f"security.target is {tgt!r}, need <= {SOUNDNESS_LOG2}")
+        p.append(("X", f"security.target is {tgt!r}, need <= {SOUNDNESS_LOG2}"))
     ach = sec.get("achieved_log2")
     if ach is not None and (not _num(ach) or ach > SOUNDNESS_LOG2):
-        p.append(f"security.achieved_log2 is {ach!r}, need <= {SOUNDNESS_LOG2} (union bound over sub-batches)")
+        p.append(("X", f"security.achieved_log2 is {ach!r}, need <= {SOUNDNESS_LOG2} (union bound over sub-batches)"))
     want = frozen_instances(target)
     inst = fp.get("instances")
     if want is None:
-        p.append(f"target {target.name!r} has no frozen instance set yet")
+        p.append(("I", f"target {target.name!r} has no frozen instance set yet"))
     elif not isinstance(inst, Mapping):
-        p.append("instances is null: not measured on the frozen instance set")
+        p.append(("I", "instances is null: not measured on the frozen instance set"))
     else:
         diff = [k for k in ("dataset", "tier", "range", "manifest_sha256") if _canon(inst.get(k)) != _canon(want[k])]
         if diff:
-            p.append("instances differ from the frozen set on " + ", ".join(f"{k} ({inst.get(k)!r} vs {want[k]!r})" for k in diff))
+            p.append(("I", "instances differ from the frozen set on " + ", ".join(f"{k} ({inst.get(k)!r} vs {want[k]!r})" for k in diff)))
     classes = tuple(proof_classes) if proof_classes else candidate.proof_classes
     pc = fp.get("proof_class")
     if pc not in classes:
-        p.append(f"proof_class {pc!r} is not {candidate.id}'s declared class {' | '.join(classes)}")
+        p.append(("Z", f"proof_class {pc!r} is not {candidate.id}'s declared class {' | '.join(classes)}"))
     if fp.get("authentication") != authentication:
-        p.append(f"authentication {fp.get('authentication')!r}: this column is {authentication!r} (Table 2 columns: {' | '.join(AUTH_MODES)})")
+        p.append(("S" if fp.get("authentication") == SHARED_AUTHENTICATION else "X",
+                  f"authentication {fp.get('authentication')!r}: this column is {authentication!r} (Table 2 columns: {' | '.join(AUTH_MODES)})"))
+    elif authentication == "included-hash":
+        p += in_proof_hash_codes(fp)
     hw = fp.get("hardware") if isinstance(fp.get("hardware"), Mapping) else {}
     gpu = hw.get("gpu") if isinstance(hw.get("gpu"), Mapping) else None
     gpu_name = gpu.get("name") if gpu else None
     if not same_sku(gpu_name, target.native_peak.device):
-        p.append(f"same-SKU: prover ran on {gpu_name!r}, the row's native device is {target.native_peak.device!r}")
+        p.append(("K", f"same-SKU: prover ran on {gpu_name!r}, the row's native device is {target.native_peak.device!r}"))
     variant = device_variant(gpu, target)
     if variant:
-        p.append(variant)
+        p.append(("K", variant))
     labs = _labels(labels)
     self_ = producers(attempt, labs, result)
     if attempt is None and not self_:
-        p.append("not independently verified: no attempt and no named producer (meta lane / by, a lane label, a candidate / label "
-                 "asserter), so no verification can be shown independent")
+        p.append(("U", "not independently verified: no attempt and no named producer (meta lane / by, a lane label, a candidate / label "
+                       "asserter), so no verification can be shown independent"))
     elif _verified_by(labs, self_) is None:
         keys = " or ".join(f"{k}={'|'.join(map(str, v))}" for k, v in VERIFIED_LABELS)
-        p.append(f"not independently verified: no label {keys} by a non-producer (producers: {', '.join(sorted(self_)) or 'unknown'})")
+        p.append(("U", f"not independently verified: no label {keys} by a non-producer (producers: {', '.join(sorted(self_)) or 'unknown'})"))
     ceiling, verdict = _redteam_ceiling(labs, self_)
     if verdict is not None and isinstance(pc, str) and RANK.get(ceiling or "", -1) < RANK.get(pc, -1):
-        p.append(f"downgraded: {verdict.by} ({verdict.ref or 'no ref'}, {verdict.ts}) asserts proof_class={ceiling}, below {pc}")
+        p.append(("Z", f"downgraded: {verdict.by} ({verdict.ref or 'no ref'}, {verdict.ts}) asserts proof_class={ceiling}, below {pc}"))
     return p
+
+
+def reject_reasons(result: Mapping[str, Any], labels: Iterable[Any], attempt: Mapping[str, Any] | None, target: Target,
+                   candidate: Candidate, proof_classes: Sequence[str] | None = None, authentication: str = AUTHENTICATION) -> list[str]:
+    """The reasons of :func:`reject_codes` without their letters; ``[]`` means ``result`` is a valid Table 2 cell."""
+
+    return [r for _, r in reject_codes(result, labels, attempt, target, candidate, proof_classes, authentication)]
 
 
 def _canon(v: Any) -> Any:

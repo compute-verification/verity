@@ -421,6 +421,86 @@ def test_included_hash_fills_its_own_column(store: LocalStore) -> None:
     assert store2_bare_missing.artifact == bare
 
 
+#: The leaf interface block ``relchain`` writes for a hashed run (lane leaf-iface D0), per scheme.
+LEAVES = {
+    "poseidon2": ("poseidon2-babybear-w24", {"scheme": "poseidon2", "suffix": "poseidon2", "schema": "poseidon2-babybear-w24/row/v2h", "digest_elems": 8}),
+    "ajtai-n64": ("ajtai-babybear-n64-b1-r0/v1", {"scheme": "ajtai-n64", "suffix": "ajtai-n64", "schema": "ajtai-babybear-n64-b1-r0/row/v1", "digest_elems": 64}),
+    "blake3": ("blake3-keyed", {"scheme": "blake3", "suffix": "blake3", "schema": "blake3-keyed/row/v2", "digest_elems": 8}),
+}
+
+
+def hashed(leaf: str | None = "poseidon2", sharing: str | None = "none", authentication: str = "included-hash", **kw: Any) -> dict[str, Any]:
+    """A column-2 candidate result on the 4090 row: ``included-hash`` with ``leaf``'s hash (``None``: the pre-D0 form, hash only)."""
+
+    doc = result(candidate="B-Ligero", target=FP8_ADA_MMA, gpu=RTX4090, proof_class="COMPLETE_ZK_BACKEND", **kw)
+    fp = doc["workload_fingerprint"]
+    fp.update(authentication=authentication, hash=LEAVES[leaf or "poseidon2"][0])
+    if leaf is not None:
+        fp["leaf"] = dict(LEAVES[leaf][1])
+    if sharing is not None:
+        fp["sharing"] = sharing
+    return doc
+
+
+def test_in_proof_hash_column_is_poseidon2_per_row_without_sharing(store: LocalStore) -> None:
+    """Column ``B-Ligero + in-proof hash`` is Poseidon2-BabyBear per row, no sharing (user decision keep_frozen, 2026-09-24): an
+    Ajtai or BLAKE3 leaf, or a shared tile, is rejected with the reason saying which (05:00Z render: an Ajtai leaf filled the 4090
+    cell).  Both fingerprint forms of a Poseidon2 row hash -- ``hash`` only (pre-D0) and ``hash`` + ``leaf`` (D0) -- are accepted."""
+
+    old = put(store, hashed(leaf=None, t_total=0.70))
+    new = put(store, hashed(t_total=0.69))
+    ajtai = put(store, hashed("ajtai-n64", t_total=0.35))
+    blake = put(store, hashed("blake3", t_total=0.40))
+    tile = put(store, hashed(sharing="tile64x64", t_total=0.30))
+    shared = put(store, hashed(sharing="tile64x64", authentication="included-hash-shared", t_total=0.20))
+    unstated = put(store, hashed(sharing=None, t_total=0.50))
+    tab = T.build(store)
+    row = next(r for r in tab.rows if r["target"] == FP8_ADA_MMA.name)
+    assert row["committed"]["B-Ligero"].artifact == new and {a["artifact"] for a in tab.also_valid} == {old}
+    (r_ajtai,) = rejected(tab, ajtai)
+    assert "is an Ajtai (Ring-SIS) leaf" in r_ajtai and "ajtai-babybear-n64-b1-r0/v1" in r_ajtai and "poseidon2-babybear-w24 per row" in r_ajtai
+    (r_blake,) = rejected(tab, blake)
+    assert "is a BLAKE3 in-circuit leaf" in r_blake and "'blake3-keyed'" in r_blake
+    (r_tile,) = rejected(tab, tile)
+    assert r_tile.startswith("sharing 'tile64x64'") and "a shared tile is a drill-down" in r_tile
+    (r_shared,) = rejected(tab, shared)
+    assert r_shared.startswith("authentication 'included-hash-shared'")
+    assert rejected(tab, unstated) == [r for r in rejected(tab, unstated) if r.startswith("sharing None")] != []
+    # the letters the drill-down prints: X for another leaf, S for sharing (either spelling), X for an unstated sharing
+    cand = T.candidate_for("b-ligero chain")
+    codes = {a: [c for c, _ in T.reject_codes(store.get_manifest(a).meta, store.labels(a), None, FP8_ADA_MMA, cand,
+                                               authentication=("included-hash" if a != shared else "excluded"))]
+             for a in (ajtai, blake, tile, shared, unstated, new)}
+    assert codes == {ajtai: ["X"], blake: ["X"], tile: ["S"], shared: ["S"], unstated: ["X"], new: []}, codes
+    # a Poseidon2 schema of another version or a leaf block naming another scheme is not the column's either
+    fp = hashed()["workload_fingerprint"]
+    assert T.in_proof_hash_codes(fp) == []
+    assert [c for c, _ in T.in_proof_hash_codes({**fp, "leaf": {**fp["leaf"], "scheme": "ajtai-n64"}})] == ["X"]
+    assert [c for c, _ in T.in_proof_hash_codes({**fp, "hash": None, "leaf": None})] == ["X"]
+    assert "is no named leaf" in T.in_proof_hash_codes({**fp, "hash": None, "leaf": None})[0][1]
+
+
+def test_reject_codes_letter_every_reason(store: LocalStore) -> None:
+    """Every reason carries the drill-down's letter (D2): U I P S Z K B X; ``reject_reasons`` is ``reject_codes`` without them."""
+
+    over = result(buckets={"witness": 3.0, "encoding_commitment": 2.0}, t_total=4.0)        # 5 s of buckets in a 4 s total
+    twice = result(buckets={"witness": 1.0, "arithmetic": 1.0}, joints={("witness", "arithmetic"): 1.0}, t_total=4.0)
+    cand = T.CANDIDATES[0]
+    small = result()
+    small["workload_fingerprint"].update(B=64, instances={**T.FROZEN_INSTANCES[FIRST.name], "range": [0, 64]})
+    cases = {"P": over, "B": small, "Z": result(proof_class="ARITHMETIC_DIAGNOSTIC"), "K": result(gpu=H100),
+             "I": result(instances=None), "X": result(K=1024)}
+    for letter, res in cases.items():
+        codes = T.reject_codes(res, [{"key": "verified", "value": "accepted", "by": VERIFIER, "ts": "t"}],
+                               attempt(res["run_id"], "art:x", LANE), FIRST, cand)
+        assert codes and codes[0][0] == letter, (letter, codes)
+    assert T.reject_codes(twice, [], attempt(twice["run_id"], "art:x", LANE), FIRST, cand)[0][0] == "P"
+    assert T.PHASE_SUM_PROBLEM.match(contract.validate(over)[0]) and T.PHASE_SUM_PROBLEM.match(contract.validate(twice)[0])
+    u = T.reject_codes(result(), [], attempt("r", "art:x", LANE), FIRST, cand)
+    assert u == [("U", T.reject_reasons(result(), [], attempt("r", "art:x", LANE), FIRST, cand)[0])]
+    assert set(T.REASON_LETTERS) == set("UIPSZKBX")
+
+
 def test_fp8_ada_row_and_hvzk_drilldown(store: LocalStore) -> None:
     zk = put(store, result(candidate="B-Ligero", target=FP8_ADA_MMA, gpu=RTX4090, proof_class="COMPLETE_ZK_BACKEND", t_total=8.0))
     hv = put(store, result(candidate="B-Ligero", target=FP8_ADA_MMA, gpu=RTX4090, proof_class="COMPLETE_HVZK_BACKEND", t_total=6.0))
