@@ -21,6 +21,7 @@
 //! `v = j / steps`) is leaf `vu_index[v] * K + i * 16 + o`; the chain's output word is leaf `vu_index[v]` of tree y.
 
 use crate::hash::Sha256;
+use crate::leaf::LeafScheme;
 
 pub const FRAME: &[u8] = b"veritor/protocol/merkle/frame/v3\0";
 pub const TAGGED_PREFIX: &[u8] = b"veritor/tagged-sha256/v1\0";
@@ -135,39 +136,43 @@ pub fn digest_bytes(a: &AuthBlock) -> Vec<u8> {
 
 // ------------------------------------------------------------------------- authentication = included-hash (v5) ----
 
-/// `hashauth.HASH_AUTH_VERSION` / `rowleaf.SCHEMA_ROW`: the leaf is one tensor ROW's Poseidon2 digest (8 BabyBear
-/// lanes, each a big-endian u32 -> 32 bytes) under the same SHA-256 range-domain framing as the word leaves.
+/// `hashauth.HASH_AUTH_VERSION`: the leaf is one tensor ROW's digest under the statement's leaf scheme (`leaf.rs`:
+/// `LeafScheme.schema` / `params_sha256` / `digest_elems` / `leaf_bytes`), framed like the word leaves under the
+/// SHA-256 range-domain.
 pub const HASH_VERSION: &str = "ligero-b/auth/v2h";
-pub const SCHEMA_ROW: &str = "poseidon2-babybear-w24/row/v2h";
-/// `poseidon2_babybear.CONSTANTS_SHA256`: SHA-256 of the Plonky3 width-24 BabyBear round constants and the internal
-/// diagonal, as the Python module pins them.  A statement whose parameters digest differs is refused at parse.
-pub const POSEIDON2_CONSTANTS_SHA256: &str = "0b81af1cdcd7e5b1e0e510b632cc692d3c7c0d5923c4f3e0036bc58f69543321";
-pub const N_DIGEST: usize = 16;
-pub const DIGEST_LANES: usize = 8;
 
 /// The statement's hash-authentication block (`hashauth.HashAuth` + the three multiproofs, which a v5 statement carries
-/// itself) and the published digests: per VU the x row's 8 lanes then the W column's.
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// itself) and the published digests: per VU the x row's `digest_elems` lanes then the W column's.
+#[derive(Clone, Debug)]
 pub struct HashAuthBlock {
+    /// The leaf scheme the relation string names (`leaf::split_relation`).
+    pub leaf: &'static LeafScheme,
     pub vu_index: Vec<u32>, // strictly increasing
     pub x_index: Vec<u32>,  // the x row (leaf rank in tree a) VU v computed on
     pub w_index: Vec<u32>,  // the W column (leaf rank in tree b)
     pub trees: [TreeRef; 3],
-    pub digests: Vec<u32>,  // n_vus x 16 canonical lanes
+    pub digests: Vec<u32>,  // n_vus x (2 digest_elems) canonical lanes
     pub multiproofs: Vec<Vec<[u8; 32]>>,
 }
 
+impl HashAuthBlock {
+    /// Lanes per VU in `digests` (x then W).
+    pub fn n_digest(&self) -> usize {
+        2 * self.leaf.digest_elems
+    }
+}
+
 /// What `statement_digest` absorbs for a hashed statement, byte-identical to `hashauth.digest_bytes` (it is appended to
-/// the relation tag, not to the statement body): version, schema, the parameters digest, the (vu, x, w) index rows as
-/// `<u4`, then the three tree references.
+/// the relation tag, not to the statement body): version, the leaf scheme's schema and parameters digest, the (vu, x, w)
+/// index rows as `<u4`, then the three tree references.
 pub fn hash_digest_bytes(a: &HashAuthBlock) -> Vec<u8> {
     let mut out = Vec::new();
     out.extend_from_slice(b"|auth=");
     out.extend_from_slice(HASH_VERSION.as_bytes());
     out.extend_from_slice(b"|schema=");
-    out.extend_from_slice(SCHEMA_ROW.as_bytes());
+    out.extend_from_slice(a.leaf.schema.as_bytes());
     out.extend_from_slice(b"|p2=");
-    out.extend_from_slice(&crate::hash::unhex32(POSEIDON2_CONSTANTS_SHA256));
+    out.extend_from_slice(&crate::hash::unhex32(a.leaf.params_sha256));
     out.extend_from_slice(b"|idx=");
     for v in 0..a.vu_index.len() {
         out.extend_from_slice(&a.vu_index[v].to_le_bytes());
@@ -187,15 +192,6 @@ pub fn hash_digest_bytes(a: &HashAuthBlock) -> Vec<u8> {
     out
 }
 
-/// `rowleaf.row_leaf_value`: the 8 lanes as big-endian u32s.
-pub fn row_leaf_value(lanes: &[u32]) -> [u8; 32] {
-    let mut v = [0u8; 32];
-    for (i, x) in lanes.iter().enumerate().take(DIGEST_LANES) {
-        v[4 * i..4 * i + 4].copy_from_slice(&x.to_be_bytes());
-    }
-    v
-}
-
 /// A leaf of schema `schema` with an arbitrary big-endian value (`CommitmentDomain.leaf(rank, rank, schema, value)`).
 pub fn leaf_value(domain: &[u8; 32], rank: u64, schema: &str, value: &[u8]) -> [u8; 32] {
     let r = uint(rank);
@@ -210,8 +206,12 @@ pub fn check_hashed(a: &HashAuthBlock, y_words: &[u32], y_bits: u32, threads: us
     if a.multiproofs.len() != 3 {
         return Err("auth: expected one multiproof per tree".into());
     }
-    if a.digests.len() != n * N_DIGEST || y_words.len() != n {
+    let (de, nd) = (a.leaf.digest_elems, a.n_digest());
+    if a.digests.len() != n * nd || y_words.len() != n {
         return Err("auth: digest / word table does not match the VU count".into());
+    }
+    if a.digests.iter().any(|&x| x >= crate::field::P) {
+        return Err("auth: digest lane out of the field".into());
     }
     let (y_schema, y_bytes) = if y_bits <= 16 { ("u16", 2usize) } else { ("u32", 4usize) };
     if y_words.iter().any(|&w| (w as u64) >> y_bits != 0) {
@@ -236,9 +236,9 @@ pub fn check_hashed(a: &HashAuthBlock, y_words: &[u32], y_bits: u32, threads: us
             }
         } else {
             let ranks = if ti == 0 { &a.x_index } else { &a.w_index };
-            let lane0 = if ti == 0 { 0 } else { DIGEST_LANES };
-            let mut per: Vec<(u64, [u8; 32])> = (0..n)
-                .map(|v| (ranks[v] as u64, row_leaf_value(&a.digests[v * N_DIGEST + lane0..v * N_DIGEST + lane0 + DIGEST_LANES])))
+            let lane0 = if ti == 0 { 0 } else { de };
+            let mut per: Vec<(u64, Vec<u8>)> = (0..n)
+                .map(|v| (ranks[v] as u64, (a.leaf.leaf_bytes)(&a.digests[v * nd + lane0..v * nd + lane0 + de])))
                 .collect();
             per.sort_by_key(|e| e.0);
             for (r, val) in per {
@@ -248,7 +248,7 @@ pub fn check_hashed(a: &HashAuthBlock, y_words: &[u32], y_bits: u32, threads: us
                             return Err(format!("auth: {name}: VUs claiming leaf {r} published different digests"));
                         }
                     }
-                    _ => entries.push((r, val.to_vec())),
+                    _ => entries.push((r, val)),
                 }
             }
         }
@@ -261,7 +261,7 @@ pub fn check_hashed(a: &HashAuthBlock, y_words: &[u32], y_bits: u32, threads: us
         if entries.len() as u64 > MAX_OPENINGS {
             return Err(format!("auth: {name}: openings {} exceed the limit {MAX_OPENINGS}", entries.len()));
         }
-        let schema = if ti == 2 { y_schema } else { SCHEMA_ROW };
+        let schema = if ti == 2 { y_schema } else { a.leaf.schema };
         let leaves: Vec<(u64, [u8; 32])> =
             crate::verify::par_for(entries.len(), threads, |i| (entries[i].0, leaf_value(&dom, entries[i].0, schema, &entries[i].1)));
         match fold_multiproof(&dom, tree.count, &leaves, sibs, threads) {
@@ -594,7 +594,7 @@ mod tests {
         let ha = st.hash_auth.clone().expect("v5 block");
         let y: Vec<u32> = (0..st.n_vus).map(|v| st.y16[v * st.steps + st.steps - 1]).collect();
         assert_eq!((ha.vu_index.len(), ha.trees[0].count, ha.trees[1].count, ha.trees[2].count), (20, 20, 20, 20));
-        assert_eq!(ha.digests.len(), 20 * N_DIGEST);
+        assert_eq!((ha.leaf.name, ha.digests.len()), ("poseidon2", 20 * ha.n_digest()));
         check_hashed(&ha, &y, 22, 1).expect("the fixture block");
         check_hashed(&ha, &y, 22, 4).expect("the fixture block, 4 threads");
         let refuse = |what: &str, f: &dyn Fn(&mut HashAuthBlock, &mut Vec<u32>), expect: &str| {
@@ -604,7 +604,7 @@ mod tests {
             assert!(e.contains(expect), "{what}: {e}");
         };
         refuse("x digest lane", &|b, _| b.digests[0] ^= 1, "auth: a: multiproof rejected (root mismatch)");
-        refuse("W digest lane", &|b, _| b.digests[3 * N_DIGEST + 8] ^= 1, "auth: b: multiproof rejected (root mismatch)");
+        refuse("W digest lane", &|b, _| b.digests[3 * 16 + 8] ^= 1, "auth: b: multiproof rejected (root mismatch)");
         refuse("x sibling", &|b, _| b.multiproofs[0][0][5] ^= 1, "auth: a: multiproof rejected (root mismatch)");
         refuse("W sibling dropped", &|b, _| { b.multiproofs[1].pop(); }, "auth: b: multiproof rejected");
         refuse("x root", &|b, _| b.trees[0].root[0] ^= 1, "auth: a: multiproof rejected (root mismatch)");

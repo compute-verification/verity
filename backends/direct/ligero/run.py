@@ -356,6 +356,19 @@ def set_impl(impl: str) -> None:
     witness_mod.IMPL = impl
 
 
+_LEAF_SUFFIX: list[str] = []
+
+
+def _relation_arg(value: str) -> str:
+    """``--relation <rel>[+<leaf>]``: the registered relation for argparse's choices; a leaf suffix is remembered for
+    ``--auth included-hash`` (``leaf.registry.split_relation_name``: ``+hash`` is Poseidon2)."""
+    base, _, leaf = value.partition("+")
+    _LEAF_SUFFIX.clear()
+    if leaf:
+        _LEAF_SUFFIX.append(leaf)
+    return base
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -364,7 +377,7 @@ def main(argv=None) -> int:
     # --relation <registered>: relations.py on the generic chain runner (relchain.py); fp4-nvf4: the sm_120 NVFP4 unit
     # (backends/direct/ligero/fp4, its own chain runner); gate-vu / bench-vu dispatch there, nothing else changes for the
     # Ampere BF16 relation (vu.py on the frozen instance set)
-    ap.add_argument("--relation", default="bf16", choices=("bf16", "bf16-hopper", "fp8-hopper", "fp8-ada", "fp4-nvf4",
+    ap.add_argument("--relation", default="bf16", type=_relation_arg, choices=("bf16", "bf16-hopper", "fp8-hopper", "fp8-ada", "fp4-nvf4",
                                                              "bf16-ampere",
                                                              "bf16-hopper-v2", "bf16-ampere-v2", "fp8-hopper-v2", "fp8-ada-v2",
                                                              "bf16-hopper-v3", "bf16-ampere-v3", "fp8-hopper-v3", "fp8-ada-v3",
@@ -375,7 +388,8 @@ def main(argv=None) -> int:
                                                              "bf16-hopper-x4", "bf16-ampere-x4", "fp8-hopper-x4", "fp8-ada-x4"),
                     help="bf16: the Ampere relation on the frozen instance set (vu.py); bf16-ampere: the same unit and frozen set "
                          "(--root) on the generic chain runner (relations.py; its --auth included-hash column); fp4-nvf4: "
-                         "fp4/chain.py; the others: relations.py on synthetic instances")
+                         "fp4/chain.py; the others: relations.py on synthetic instances.  A `+<leaf>` suffix (fp8-ada+poseidon2, "
+                         "fp8-ada+blake3) selects the leaf scheme of --auth included-hash, as --leaf does")
     for name, fn in (("gate", gate), ("bench", bench), ("gate-vu", gate_vu), ("bench-vu", bench_vu)):
         s = sub.add_parser(name)
         s.add_argument("--root", default=str(instances.DEFAULT_ROOT))
@@ -422,6 +436,9 @@ def main(argv=None) -> int:
                                             "multiproofs of every boundary word.  `--auth included-hash` (registered relations): the operands are "
                                             "private witness wires hashed inside the relation with Poseidon2 (hashchain.py); the statement carries "
                                             "the roots, leaf indices, published digests and SHA-256 multiproofs of the ROW leaves (leaf/v2h)")
+        sub.choices[name].add_argument("--leaf", default=None, metavar="SCHEME",
+                                       help="--auth included-hash: the leaf scheme hashing the operand rows (backends/direct/ligero/leaf/ "
+                                            "registry: poseidon2 = the default and the historical `+hash`; `hash` is its alias)")
         sub.choices[name].add_argument("--tile", default=None, metavar="NXxNW",
                                        help="--auth included-hash: the committed workload is a GEMM tile of NX distinct x rows by NW distinct W "
                                             "columns (every pair one VU; sharing = tileNXxNW) instead of every VU its own rows (sharing = none)")
@@ -453,6 +470,19 @@ def main(argv=None) -> int:
                                             "lane fp4-proof's path). Recorded in the result and the dump manifest")
     args = ap.parse_args(argv)
     set_impl(getattr(args, "impl", "device"))
+    if _LEAF_SUFFIX:
+        # --relation <rel>+<leaf>: the suffix names the leaf scheme (--leaf must agree when both are given)
+        if getattr(args, "leaf", None) not in (None, _LEAF_SUFFIX[0]):
+            ap.error(f"--relation names leaf scheme {_LEAF_SUFFIX[0]!r}, --leaf {args.leaf!r}")
+        args.leaf = _LEAF_SUFFIX[0]
+    if getattr(args, "leaf", None) is not None:
+        from .leaf import registry as leaf_registry
+        if getattr(args, "auth", None) != "included-hash":
+            ap.error("--leaf / --relation <rel>+<leaf> select the leaf scheme of --auth included-hash")
+        try:
+            args.leaf = leaf_registry.canonical(args.leaf)
+        except KeyError as e:
+            ap.error(str(e))
     if args.relation != "bf16":
         from .relations import relation
         from .relchain import bench_vu_rel, gate_vu_rel
