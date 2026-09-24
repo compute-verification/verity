@@ -10027,6 +10027,14 @@ sha256 = "0661503423304788570f817eeb527a86905c1fea1ce5623adc3665ca28132c62"
 [rows."olmoe-1b-7b__bf16__l40s__tp2__b8__i1024__o128__mixed__greedy__bi-eager"]
 row = 70
 class = "FAIL"
+# Expected FAIL under v2 as well: fresh Commit r20260924-021402-69d8 (lane/vllm-tp-v2 4f3a1e75, 2026-09-24T03:46Z; verdict
+# art:501019cb3cbc3cde, preserved) over Build art:962a12b3165b496f / Match art:7ecab74a6a319ff2.  Every compared value is equal
+# (match oracle, sampled replay, weights pins, TP-12 picks 154/154).  The named cause is the AllGather2 collective sites
+# (manifest of record ede1ad81, 357,796): query_population False (F-r17b-38), per rank 25,408 replay VUs outside Q(P) (first
+# model.layers.0.self_attn.all_gather2_165/out) and 25,408 Q(P) identities without rows (first model.layers.0.self_attn/out);
+# cross_rank_collectives False, 160 of 161 AllGather2 sites (model.layers.<k>.self_attn.all_gather2_<n>) without a stratum.
+# Also not passing: sampled replay partial (484 / 475 q/k-norm strata recycled-window) and no fold-Match binding (Match is
+# collective-level only).
 selection = "by-name"
 tp = 2
 batch = 8
