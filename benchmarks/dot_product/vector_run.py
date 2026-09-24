@@ -83,7 +83,7 @@ from verity.verification.target import FIRST  # noqa: E402
 from verity_numerical.bench import contract  # noqa: E402
 
 RESULT_SCHEMA = contract.RESULT_SCHEMA
-BACKENDS = ("reference", "sp1-execute", "sp1-prove")
+BACKENDS = ("reference", "sp1-execute", "sp1-prove", "sp1-bare")
 INSTANCES_ROOT = REPO / "fixtures" / "bench-instances" / "v1"
 
 
@@ -113,6 +113,12 @@ def source_sha() -> str | None:
     try:
         return subprocess.run(["git", "rev-parse", "HEAD"], cwd=REPO, capture_output=True, text=True, check=True, timeout=10).stdout.strip()
     except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        pass
+    # a `research run --source` checkout has no .git: the run's job.json names the commit it shipped
+    try:
+        job = json.loads((Path(os.environ["RESEARCH_RUN_DIR"]) / "job.json").read_text())
+        return job["computation"]["tree_sha"] or None
+    except (KeyError, OSError, ValueError, TypeError):
         return None
 
 
@@ -387,11 +393,367 @@ def run_sp1(rec: dict, out: Path, *, prove: bool, mode: str, want_info: bool, di
     return validation, measurements, artifacts, [], identity
 
 
+# --- sp1-bare: the Table 2 bare statement over a frozen batch ---------------------------------------------------------
+#
+# ``--backend sp1-bare`` runs a ``relation-bare`` host (``backends/sp1/host --features relation-bare``, or any SP1 variant
+# with the same ``bare-*`` CLI: ``--host``, ``--backend-name``) on a range of a frozen VU set -- the BF16 fixture
+# (``--instances DIR``, the A100 row) or a ``verity_sp1.format_instances`` file (``--batch FILE``, the other rows) -- and
+# writes one ``bench-result/v1``: public = format + instance-set identity + y, private = x and W (authentication
+# excluded).  Steps: the arrays against their digests; negatives through the executor (the 52 committed ``vu-k1536-neg``
+# instances, or ``--flip-y`` on a batch); ``bare-prove`` (an executor pass for exact cycles, setup, a warm-up proof,
+# ``--reps`` proofs, each dumped under ``proofs/`` and verified in process); ``verify --proof --statement`` per proof in
+# a fresh CPU process (the producer's check; independent verification is not the producer's).  ``--layout indexed``
+# hands the guest each distinct row once plus a row pair per VU instead of every VU's rows (the statement is the same).
+#
+# Phases: SP1 6's prover pipelines execution, CPU event generation, GPU trace generation, commitment and proving across
+# shards and exposes no split, so the prove call is ``SP1_PROVE_STAGE`` and ``t.serialization`` is the proof's bincode
+# write; ``t.total`` = the median rep's sum.  The GPU server's DEBUG log gives the executor time, the wait before the first
+# shard reaches the GPU and the GPU span (``sp1.*``, diagnostics, not buckets).  Soundness is SP1's own accounting:
+# ``SP1_TARGET_BITS_OF_SECURITY = 100`` per STARK proof (sp1-primitives 6.6.0 ``fri_params.rs``), union-bounded over the
+# core proof's shard proofs -- below the tables' 2^-128, recorded as it is.
+
+SP1_BARE_HOST = "/workspace/bin/veritor-zk-host-cuda-relation-bare"
+SP1_BARE_BACKEND_NAME = "sp1 relation-bare/v2 (stock SP1 6.4.0, core STARK, CUDA prover)"
+SP1_VERSION = "6.4.0"
+SP1_SECURITY_BITS = 100
+BARE_TIER = "vu-k1536"
+BARE_NEG_TIER = "vu-k1536-neg"
+
+
+def _sha256_file(p: Path) -> str:
+    h = __import__("hashlib").sha256()
+    with open(p, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _json_lines(text: str) -> list[dict]:
+    """The JSON objects among a process's output lines (the SP1 GPU server's log lines share the streams)."""
+
+    out = []
+    for line in text.splitlines():
+        line = line.strip()
+        if line.startswith("{"):
+            try:
+                out.append(json.loads(line))
+            except json.JSONDecodeError:
+                pass
+    return out
+
+
+def _run_logged(cmd: list[str], env: dict, log: Path, timeout: float) -> tuple[int, str, float]:
+    t0 = time.perf_counter()
+    with open(log, "ab") as err:
+        err.write(("\n$ " + " ".join(cmd) + "\n").encode())
+        err.flush()
+        p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=err, env=env, timeout=timeout)
+    return p.returncode, p.stdout.decode(errors="replace"), time.perf_counter() - t0
+
+
+def sp1_timeline(log_text: str) -> list[dict]:
+    """Per prove call (proof_id), from the GPU server's DEBUG log: the executor's own elapsed time, the time from the
+    call's first log line to the first shard's GPU work ("Proving shard") and from there to the last shard task."""
+
+    import re
+    from datetime import datetime, timezone
+
+    ts_re = re.compile(r"^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d+)Z\s+\w+\s+(.*)$")
+    proofs: dict[str, dict] = {}
+    for raw in log_text.splitlines():
+        line = re.sub(r"\x1b\[[0-9;]*m", "", raw)
+        m = ts_re.match(line)
+        pid = re.search(r"proof_id=(proof_[a-z0-9]+)", line) if m else None
+        if not pid:
+            continue
+        t = datetime.strptime(m.group(1)[:26], "%Y-%m-%dT%H:%M:%S.%f").replace(tzinfo=timezone.utc).timestamp()
+        d = proofs.setdefault(pid.group(1), {"first": t, "gpu": [], "done": [], "executor_seconds": None})
+        d["last"], msg = t, m.group(2)
+        if "minimal Executor finished" in msg:
+            e = re.search(r"elapsed: ([0-9.]+)s", msg)
+            d["executor_seconds"] = float(e.group(1)) if e else None
+        elif "Proving shard" in msg:
+            d["gpu"].append(t)
+        elif "ProveShard" in msg and "task succeeded" in msg:
+            d["done"].append(t)
+    return [{"proof_id": k, "executor_seconds": d["executor_seconds"], "shard_tasks": len(d["done"]),
+             "until_first_gpu_shard_seconds": min(d["gpu"]) - d["first"],
+             "gpu_phase_seconds": (max(d["done"]) if d["done"] else d["last"]) - min(d["gpu"])}
+            for k, d in proofs.items() if d["gpu"]]
+
+
+def _check_bf16_fixtures(root: Path) -> tuple[str, dict]:
+    """sha256 of ``manifest.json`` (must be the frozen BF16 set's, and the checkout's own) and of every array read."""
+
+    from verity_numerical.bench import tables
+
+    man_path = root / "manifest.json"
+    manifest_sha = _sha256_file(man_path)
+    if manifest_sha != tables.BF16_INSTANCES_MANIFEST_SHA256:
+        raise SystemExit(f"sp1-bare: {man_path} is {manifest_sha}, not the frozen {tables.BF16_INSTANCES_MANIFEST_SHA256}")
+    own = INSTANCES_ROOT / "manifest.json"
+    if own.is_file() and _sha256_file(own) != manifest_sha:
+        raise SystemExit(f"sp1-bare: {man_path} differs from the checkout's {own}")
+    man = json.loads(man_path.read_text())
+    checked = {}
+    for tier in (BARE_TIER, BARE_NEG_TIER):
+        files = man["tiers"][tier]["files"]
+        for n in ("x", "w", "y"):
+            fname = f"{tier}.{n}.u16"
+            got = _sha256_file(root / fname)
+            if got != files[fname]["sha256"]:
+                raise SystemExit(f"sp1-bare: {fname} sha256 {got} != manifest {files[fname]['sha256']}")
+            checked[fname] = got
+    return manifest_sha, checked
+
+
+def _batch_header(path: Path) -> dict:
+    data = path.open("rb").read(1 << 20)
+    if data[:8] != b"VYSP1FI\x01":
+        raise SystemExit(f"sp1-bare: {path} is not an sp1-format-instances/v1 file")
+    hl = int.from_bytes(data[8:12], "little")
+    return json.loads(data[12:12 + hl])
+
+
+def run_sp1_bare(a) -> int:
+    from verity_numerical.bench import tables
+
+    started = time.perf_counter()
+    out = Path(a.out or os.environ.get("RESEARCH_RUN_DIR") or ".").resolve()
+    out.mkdir(parents=True, exist_ok=True)
+    proofs_dir, log, prove_log = out / "proofs", out / "host.log", out / "prover.log"
+    host = Path(a.host)
+    variant = json.loads(Path(a.variant).read_text()) if a.variant else {}
+    prover_env = dict(kv.split("=", 1) for kv in a.prover_env)
+    cpu_env = {**os.environ, "SP1_PROVER": "cpu", "RUST_LOG": "error"}
+    gpu_env = {**os.environ, **prover_env, "SP1_PROVER": "cuda", "RUST_LOG": "debug"}
+
+    # the set: the frozen BF16 fixture or a format-instances file
+    if a.batch:
+        batch = Path(a.batch).resolve()
+        header = _batch_header(batch)
+        target_name, ref, n = header["target"], header["instances"], header["n"]
+        source = ["--batch", str(batch)]
+        fixture_digests = {"batch_file_sha256": _sha256_file(batch), **{k: header[k] for k in ("x_sha256", "w_sha256", "y_sha256")}}
+        fmt = header["format"]
+    else:
+        root = Path(a.instances).resolve()
+        manifest_sha, fixture_digests = _check_bf16_fixtures(root)
+        target_name, n, fmt = FIRST.name, 4096, "bf16-ampere"
+        ref = contract.instances_ref(BARE_TIER, 0, n, manifest_sha)
+        source = ["--instances", str(root), "--manifest-sha256", manifest_sha]
+    lo, hi = a.lo, (a.hi if a.hi is not None else n)
+    B = hi - lo
+    base = ref["range"][0]
+    instances = contract.instances_ref(ref["tier"], base + lo, base + hi, ref["manifest_sha256"], dataset=ref["dataset"])
+    layout = ["--layout", a.layout]
+    rng = ["--lo", str(lo), "--hi", str(hi), "--vus-per-read", str(a.vus_per_read), *layout]
+    print(f"sp1-bare: {fmt} {instances} on {host}", flush=True)
+
+    rc, text, _ = _run_logged([str(host), "info"], cpu_env, log, 900)
+    info = (_json_lines(text) or [{}])[-1]
+    if rc != 0 or "relation-bare" not in info.get("guest_features", []):
+        raise SystemExit(f"sp1-bare: {host} is not a relation-bare build: rc {rc} {info}")
+
+    negatives = []
+    if not a.skip_negatives:
+        if a.batch:
+            for j in sorted({0, B // 2, B - 1}):
+                rc, text, wall = _run_logged([str(host), "bare-execute", *source, "--lo", str(lo + j), "--hi", str(lo + j + 1), "--vus-per-read", "1",
+                                              *layout, "--flip-y", "0"], cpu_env, log, 900)
+                doc = (_json_lines(text) or [{}])[-1]
+                negatives.append({"kind": "flip-y", "vu": lo + j, "rc": rc, "verdict": doc.get("verdict"), "matches_native": doc.get("matches_expected")})
+            summary = {"negatives": len(negatives), "claimed_rejected": sum(1 for x in negatives if x["rc"] == 0 and x["verdict"] is False),
+                       "in_domain": 0, "correct_accepted": 0}
+        else:
+            rc, text, _ = _run_logged([str(host), "bare-negatives", "--instances", source[1], "--manifest-sha256", source[3], *layout], cpu_env, log, 1800)
+            lines = _json_lines(text)
+            negatives = [d for d in lines if d.get("event") == "negative"]
+            summary = next((d for d in lines if d.get("event") == "summary"), {"negatives": 0, "claimed_rejected": 0, "in_domain": 0, "correct_accepted": 0})
+        summary["ok"] = summary["negatives"] > 0 and summary["claimed_rejected"] == summary["negatives"] and summary["correct_accepted"] == summary["in_domain"]
+        (out / "negatives.json").write_text(json.dumps({"summary": summary, "items": negatives}, indent=1))
+        print(f"sp1-bare: negatives {summary}", flush=True)
+        if not summary["ok"]:
+            raise SystemExit("sp1-bare: a negative was not rejected -- no result")
+    else:
+        summary = None
+
+    cmd = [str(host), "bare-prove", *source, *rng, "--out-dir", str(proofs_dir), "--reps", str(a.reps), "--warmup-vus", str(a.warmup_vus), "--mode", a.mode]
+    peak = {"mib": None}
+
+    def sample(stop):
+        while not stop.wait(0.5):
+            try:
+                q = subprocess.run(["nvidia-smi", "--query-gpu=memory.used", "--format=csv,noheader,nounits"], capture_output=True, text=True, timeout=5)
+                v = int(q.stdout.split()[0])
+                peak["mib"] = v if peak["mib"] is None else max(peak["mib"], v)
+            except (OSError, subprocess.TimeoutExpired, ValueError, IndexError):
+                pass
+
+    import threading
+    stop = threading.Event()
+    sampler = threading.Thread(target=sample, args=(stop,), daemon=True)
+    sampler.start()
+    t0 = time.perf_counter()
+    with open(prove_log, "wb") as plog:
+        plog.write(("$ " + " ".join(cmd) + "\n").encode())
+        plog.flush()
+        p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=plog, env=gpu_env, timeout=a.timeout)
+    prove_wall = time.perf_counter() - t0
+    stop.set()
+    sampler.join(timeout=10)
+    text = p.stdout.decode(errors="replace")
+    with open(prove_log, "ab") as plog:
+        plog.write(b"\n--- stdout ---\n" + text.encode())
+    lines = _json_lines(text)
+    execute = next((d["report"] for d in lines if d.get("event") == "execute"), None)
+    setup = next((d for d in lines if d.get("event") == "setup"), None)
+    warmup = next((d for d in lines if d.get("event") == "warmup"), None)
+    reps = [d for d in lines if d.get("event") == "rep"]
+    (out / "prove.json").write_text(json.dumps({"cmd": cmd, "rc": p.returncode, "wall": prove_wall, "execute": execute, "setup": setup,
+                                                "warmup": warmup, "reps": reps}, indent=1))
+    if p.returncode != 0 or len(reps) != a.reps or not all(r["accepted"] for r in reps):
+        raise SystemExit(f"sp1-bare: bare-prove failed (rc {p.returncode}, {len(reps)}/{a.reps} reps): see {prove_log}")
+    timeline = sp1_timeline(prove_log.read_text(errors="replace"))[-a.reps:]
+
+    verdicts = []
+    for r in reps:
+        rc, text, wall = _run_logged([str(host), "verify", "--proof", r["proof_path"], "--statement", str(proofs_dir / "statement.bin")], cpu_env, log, 1800)
+        doc = (_json_lines(text) or [{}])[-1]
+        ok = rc == 0 and bool(doc.get("ok")) and doc.get("statement_match") is True and bool(doc.get("verdict"))
+        verdicts.append({"rep": r["rep"], "proof": os.path.relpath(r["proof_path"], out), "accepted": ok, "rc": rc,
+                         "verify_seconds": doc.get("verify_seconds"), "process_wall": wall, "vk_hash": doc.get("vk_hash")})
+        print(f"sp1-bare: verify rep{r['rep']}: {'accept' if ok else 'REJECT'} in {doc.get('verify_seconds')} s (process {wall:.1f} s)", flush=True)
+    verifier_name = variant.get("verifier_name") or f"{host} verify"
+    (out / "verify.json").write_text(json.dumps({"verifier": f"{verifier_name}, SP1_PROVER=cpu (the producer's binary: not independent)",
+                                                 "items": verdicts}, indent=1))
+
+    totals = [r["prove_seconds"] + r["save_seconds"] for r in reps]
+    med = sorted(range(len(reps)), key=totals.__getitem__)[len(reps) // 2]
+    rep, t_total = reps[med], totals[med]
+    shards = int(rep["shards"])
+    sha = source_sha() or os.environ.get("RESEARCH_SOURCE_COMMIT")
+    bits = int(variant.get("security_bits", SP1_SECURITY_BITS))
+    security = {"target": -bits, "achieved_log2": round(-bits + __import__("math").log2(shards), 3),
+                "source": variant.get("security_source") or
+                          "SP1's own accounting: sp1-primitives 6.6.0 src/fri_params.rs SP1_TARGET_BITS_OF_SECURITY = 100 per STARK proof "
+                          "(CORE_LOG_BLOWUP 2, unique_decoding_queries = ceil((100 - 16) / -log2(5/8)) = 124 at SP1_PROOF_OF_WORK_BITS 16; "
+                          "KoalaBear^4), compile-time constants of the pinned SP1",
+                "union_bound": f"{shards} shard proofs in the core proof: -{bits} + log2({shards})"}
+    software = {"backend": {"name": variant.get("backend_name") or a.backend_name, "version": SP1_VERSION, "commit": sha},
+                "toolchain": {"sp1-sdk": SP1_VERSION, "sp1-zkvm": SP1_VERSION, "sp1-primitives": "6.6.0", "sp1-gpu-server": "6.6.0 (release binary)",
+                              "guest toolchain": "succinct sp1up v6.4.0", "python": sys.version.split()[0], **variant.get("toolchain", {})},
+                "guest": {"elf_sha256": setup["elf_sha256"], "vk_hash": setup["vk_hash"], "features": setup["guest_features"]},
+                "host_binary_sha256": _sha256_file(host), "prover": "cuda", "prover_options": prover_env or "SP1 defaults",
+                "verifier": verifier_name}
+    for key in ("fork", "label"):
+        if variant.get(key):
+            software[key] = variant[key]
+    fp = contract.fingerprint(
+        profile=target_name, domain=contract.DOMAIN, K=1536, B=B, proof_class="NON_ZK_PROOF", authentication="excluded", zk_mode=contract.ZK_NONE,
+        security=security, hardware=contract.probe_hardware(), software=software,
+        preprocessing={"setup": "SP1 setup of the relation-bare ELF (proving and verifying keys), once per ELF, outside t.total",
+                       "setup_seconds": setup["setup_seconds"], "per_instance": "none"},
+        retention="retained", instances=instances,
+        workload="sp1-relation-bare", statement="relation-bare/v2", format=fmt, statement_sha256=setup["statement_sha256"],
+        identity=setup["identity"], mode=a.mode, reps=len(reps), input_layout=a.layout,
+        **({"vus_per_read": a.vus_per_read} if a.layout == "chunks" else {"table_rows": setup.get("rows")}), input_bytes=setup["input_bytes"],
+        warmup={"vus": warmup["vus"], "prove_seconds": warmup["prove_seconds"]} if warmup else None, fixtures=fixture_digests,
+        phases="the prove call is one joint stage (SP1 6 pipelines execution, event generation, trace generation, commitment and proving "
+               "across shards); t.serialization is the proof's bincode write",
+        note=a.note or None,
+    )
+    verify_s = sorted(v["verify_seconds"] for v in verdicts)[len(verdicts) // 2]
+    meas = [
+        contract.measurement(contract.T_TOTAL, t_total), contract.measurement(SP1_PROVE_STAGE, rep["prove_seconds"]),
+        contract.measurement("t.serialization", rep["save_seconds"]), contract.measurement("t.zk_additional", 0.0),
+        contract.measurement("vu.count", B), contract.measurement("vu.seconds_per_vu", t_total / B), contract.measurement("vu.per_second", B / t_total),
+        contract.measurement("transcript.bytes", rep["proof_bytes"]), contract.measurement("verifier.seconds", verify_s),
+        contract.measurement("fixed.setup_seconds", setup["setup_seconds"]),
+        *contract.rate_measurements(t_total, B, 1536, target_name),
+        measurement("prove_seconds_reps", sum(r["prove_seconds"] for r in reps) / len(reps), "s"),
+        measurement("prove_seconds_min", min(r["prove_seconds"] for r in reps), "s"),
+        measurement("prove_seconds_max", max(r["prove_seconds"] for r in reps), "s"),
+        measurement("shards", shards, "count"), measurement("proof_bytes", rep["proof_bytes"], "B"),
+        measurement("verify_process_wall", sorted(v["process_wall"] for v in verdicts)[len(verdicts) // 2], "s"),
+        measurement("host_verify_seconds", sorted(r["verify_seconds"] for r in reps)[len(reps) // 2], "s"),
+        measurement("soundness_bits", bits - __import__("math").log2(shards), "bits"),
+        measurement("proofs_verified_producer", sum(v["accepted"] for v in verdicts), "count"),
+    ]
+    if execute:
+        meas += [measurement("total_cycles", execute["total_cycles"], "cycles"), measurement("cycles_per_vu", execute["total_cycles"] / B, "cycles"),
+                 measurement("guest_input_bytes", execute["input_bytes"], "B"), measurement("execute_wall", execute["execute_seconds"], "s")]
+        if execute.get("gas") is not None:
+            meas.append(measurement("gas", execute["gas"], "count"))
+        meas += [measurement(f"cycles.{k}", v, "cycles") for k, v in sorted(execute["cycle_tracker"].items())]
+    if peak["mib"] is not None:
+        meas.append(contract.measurement("mem.peak_device_bytes", peak["mib"] << 20))
+    if len(timeline) == len(reps):
+        t = timeline[med]
+        meas += [measurement(f"sp1.{k}", t[k], "s") for k in ("until_first_gpu_shard_seconds", "gpu_phase_seconds") if t[k] is not None]
+        if t["executor_seconds"] is not None:
+            meas.append(measurement("sp1.executor_seconds", t["executor_seconds"], "s"))
+    if summary:
+        meas += [measurement("negatives_total", summary["negatives"], "count"), measurement("negatives_rejected", summary["claimed_rejected"], "count"),
+                 measurement("negatives_correct_accepted", summary["correct_accepted"], "count")]
+    meas.append(measurement("workload_wall", time.perf_counter() - started, "s"))
+    (out / "measurements.json").write_text(json.dumps(meas, indent=1) + "\n")
+    ok = all(v["accepted"] for v in verdicts) and len(verdicts) == a.reps and (summary is None or summary["ok"])
+    detail = (f"{len(reps)} {a.mode} proofs of B={B} ({fmt}): prove {[round(r['prove_seconds'], 3) for r in reps]} s, serialize "
+              f"{[round(r['save_seconds'], 4) for r in reps]} s, {shards} shards, {rep['proof_bytes']} B; the producer's verify in a fresh CPU "
+              f"process accepted {sum(v['accepted'] for v in verdicts)}/{len(verdicts)} (ok, statement_match, verdict 1)")
+    if summary:
+        detail += f"; negatives: {summary['claimed_rejected']}/{summary['negatives']} wrong words rejected, {summary['correct_accepted']}/{summary['in_domain']} correct words accepted"
+    result = {
+        "schema": RESULT_SCHEMA, "run_id": os.environ.get("RESEARCH_RUN_ID", "local"), "kind": "bench-result/v1", "workload_fingerprint": fp,
+        "validation": {"status": "passed" if ok else "failed", "checker": "executor negatives + veritor-zk-host verify on every dumped proof (producer)",
+                       "detail": detail, "evidence": {"reps": reps, "verify": verdicts, "timeline": timeline, "negatives": summary}},
+        "measurements": meas, "measurement_files": ["measurements.json", "prove.json", "verify.json"] + (["negatives.json"] if summary else []),
+        "artifacts": [os.path.relpath(proofs_dir / "statement.bin", out)] + [v["proof"] for v in verdicts],
+    }
+    problems = contract.validate(result)
+    from verity.verification.target import TARGETS
+    sp1 = next(c for c in tables.CANDIDATES if c.id == "SP1")
+    tgt = TARGETS.get(target_name)
+    reasons = tables.reject_reasons(result, [], None, tgt, sp1) if tgt else [f"unknown target {target_name!r}"]
+    result["validation"]["evidence"]["table2_reasons_at_production"] = reasons
+    tmp = out / "result.json.tmp"
+    tmp.write_text(json.dumps(result, indent=1, sort_keys=True) + "\n")
+    os.replace(tmp, out / "result.json")
+    if problems:
+        print(f"contract: {len(problems)} problem(s): " + "; ".join(problems), file=sys.stderr)
+    print(json.dumps({"backend": "sp1-bare", "format": fmt, "B": B, "t_total": t_total, "prove": rep["prove_seconds"], "serialize": rep["save_seconds"],
+                      "shards": shards, "proof_bytes": rep["proof_bytes"], "cycles": execute["total_cycles"] if execute else None,
+                      "verify_s": verify_s, "validation": result["validation"]["status"], "contract": problems or "conforms",
+                      "table2_reasons": reasons}, indent=1))
+    return 0 if ok and not problems else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--vector", required=True, help="vector name under fixtures/typed-obligation-v0 (without .json)")
+    ap.add_argument("--vector", help="vector name under fixtures/typed-obligation-v0 (without .json); not for sp1-bare")
     ap.add_argument("--backend", choices=BACKENDS, required=True)
-    ap.add_argument("--mode", default="core", choices=("core", "compressed"), help="sp1-prove: proof mode")
+    ap.add_argument("--mode", default="core", choices=("core", "compressed"), help="sp1-prove / sp1-bare: proof mode")
+    bare = ap.add_argument_group("sp1-bare (the Table 2 bare statement over a frozen batch)")
+    bare.add_argument("--host", default=os.environ.get("VERITY_SP1_HOST", SP1_BARE_HOST), help="a relation-bare host binary")
+    bare.add_argument("--backend-name", default=SP1_BARE_BACKEND_NAME, help="software.backend.name (Candidate SP1 recognises 'sp1...')")
+    bare.add_argument("--variant", default=None,
+                      help="JSON file naming a modified SP1 variant: {backend_name, label, toolchain, fork, verifier_name} (all optional)")
+    bare.add_argument("--prover-env", action="append", default=[], metavar="KEY=VALUE",
+                      help="an SP1 prover option for the GPU server's environment (e.g. SP1_WORKER_NUM_CORE_WORKERS=4); recorded")
+    src = bare.add_mutually_exclusive_group()
+    src.add_argument("--instances", help="directory of the frozen BF16 set (fixtures/bench-instances/v1 with the built arrays)")
+    src.add_argument("--batch", help="a verity_sp1.format_instances file (sp1-format-instances/v1)")
+    bare.add_argument("--lo", type=int, default=0)
+    bare.add_argument("--hi", type=int, default=None)
+    bare.add_argument("--reps", type=int, default=3)
+    bare.add_argument("--warmup-vus", type=int, default=64)
+    bare.add_argument("--vus-per-read", type=int, default=64)
+    bare.add_argument("--layout", default="chunks", choices=("chunks", "indexed"),
+                      help="guest input layout: every VU's rows in order, or a table of distinct rows and a row pair per VU (same statement)")
+    bare.add_argument("--skip-negatives", action="store_true")
+    bare.add_argument("--timeout", type=float, default=7200.0)
+    bare.add_argument("--note", default="", help="what this run varies (recorded in the fingerprint)")
     ap.add_argument("--no-info", action="store_true", help="sp1: do not observe the guest identity (saves ~10 s; the fingerprint then carries only the expected one)")
     ap.add_argument("--out", default=None, help="output directory (default $RESEARCH_RUN_DIR)")
     ap.add_argument("--diagnostic", action="store_true",
@@ -400,6 +762,12 @@ def main(argv: list[str] | None = None) -> int:
                     help="sp1, with --diagnostic: the host is the unsound-relation-only build; run the bare gate chain on the compact "
                          "input K || x || W built from the vector (statement_machinery excluded); the arithmetic baseline")
     a = ap.parse_args(argv)
+    if a.backend == "sp1-bare":
+        if not (a.instances or a.batch):
+            ap.error("sp1-bare needs --instances DIR or --batch FILE")
+        return run_sp1_bare(a)
+    if not a.vector:
+        ap.error("--vector is required")
     if a.diagnostic and a.backend == "reference":
         ap.error("--diagnostic applies to the sp1 backends")
     if a.relation_only and not a.diagnostic:

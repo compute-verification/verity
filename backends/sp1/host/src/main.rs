@@ -46,6 +46,13 @@
 //! so in this build the reported `typed_object_digest` is the input digest and `statement_digest`
 //! the output-word digest; `verify --statement` is meaningless (`statement_match` compares the
 //! output-word digest).  The CLI surface is otherwise unchanged.
+//!
+//! RELATION-BARE build (`--features relation-bare`): the embedded guest proves the Table 2 bare
+//! statement of `veritor_zk_common::bare` (public: the format, the instance-set identity and the
+//! output words `y`; private: every VU's rows).  `bare-execute`, `bare-prove`, `bare-statement` and
+//! `bare-negatives` (`bare_cmd`) take a range of a frozen set (a BF16 fixture tier or a
+//! `verity_sp1.format_instances` file); `verify --proof P --statement S`, with `S` from
+//! `bare-statement`, accepts exactly when `ok`, `statement_match` and `verdict`.
 
 use std::{
     collections::BTreeMap,
@@ -61,6 +68,9 @@ use serde::{Deserialize, Serialize};
 use sp1_sdk::prelude::*;
 use sp1_sdk::{ProverClient, SP1Proof};
 use veritor_zk_common::{decode_verdict, sha256, split_public_values, PUBLIC_VALUES_LEN};
+
+#[cfg(feature = "relation-bare")]
+mod bare_cmd;
 
 const ELF: Elf = include_elf!("veritor-zk-guest");
 const BACKEND: &str = "sp1";
@@ -150,6 +160,57 @@ enum Command {
     /// job line {"id", "proof", ["statement"]} on stdin; `{"event":"ready", "setup_seconds", ...}`
     /// first, one `{"event":"verify", ...}` line per job, EOF ends the process.
     VerifyMany,
+    /// relation-bare: the guest in the executor on a range of a frozen set (exact cycles, public values).
+    #[cfg(feature = "relation-bare")]
+    BareExecute {
+        #[command(flatten)]
+        set: bare_cmd::BareSet,
+        /// Claim a wrong word (bit 0 flipped) for VU `lo + I` and require verdict 0: a negative for any format.
+        #[arg(long)]
+        flip_y: Option<usize>,
+    },
+    /// relation-bare: set up once, prove a warm-up range, then prove the range `--reps` times (save and verify each).
+    #[cfg(feature = "relation-bare")]
+    BareProve {
+        #[command(flatten)]
+        set: bare_cmd::BareSet,
+        #[arg(long)]
+        out_dir: PathBuf,
+        #[arg(long, value_enum, default_value_t = Mode::Core)]
+        mode: Mode,
+        #[arg(long, default_value_t = 1)]
+        reps: usize,
+        /// VUs of the warm-up proof (0: none).
+        #[arg(long, default_value_t = 0)]
+        warmup_vus: usize,
+        /// Skip the executor pass (cycles) before proving.
+        #[arg(long)]
+        skip_execute: bool,
+    },
+    /// relation-bare: write the statement bytes of a range (what `verify --statement` hashes).
+    #[cfg(feature = "relation-bare")]
+    BareStatement {
+        #[command(flatten)]
+        set: bare_cmd::BareSet,
+        #[arg(long)]
+        out: PathBuf,
+    },
+    /// relation-bare: every committed negative of `vu-k1536-neg` through the executor.
+    #[cfg(feature = "relation-bare")]
+    BareNegatives {
+        /// Directory holding `vu-k1536-neg.{x,w,y}.u16` and `vu-k1536-neg.index.json`.
+        #[arg(long)]
+        instances: PathBuf,
+        #[arg(long)]
+        manifest_sha256: String,
+        #[arg(long, default_value = "bench-instances/v1")]
+        dataset: String,
+        #[arg(long)]
+        index: Option<PathBuf>,
+        /// The guest input layout each negative is run in.
+        #[arg(long, value_enum, default_value_t = bare_cmd::Layout::Chunks)]
+        layout: bare_cmd::Layout,
+    },
 }
 
 /// One `verify-many` job (a JSON line on stdin).
@@ -429,6 +490,8 @@ struct ExecuteOutput {
     cycle_tracker: BTreeMap<String, u64>,
     gas: Option<u64>,
     syscalls: BTreeMap<String, u64>,
+    /// Executed RISC-V instructions by opcode (non-zero only): with SP1's per-chip trace widths, the proving cost.
+    opcodes: BTreeMap<String, u64>,
     execute_seconds: f64,
     statement_bytes: usize,
     witness_bytes: usize,
@@ -563,6 +626,12 @@ async fn execute<P: Prover>(
         .filter(|(_, count)| **count > 0)
         .map(|(code, count)| (format!("{code:?}"), *count))
         .collect();
+    let opcodes = report
+        .opcode_counts
+        .iter()
+        .filter(|(_, count)| **count > 0)
+        .map(|(op, count)| (format!("{op:?}"), *count))
+        .collect();
     Ok(ExecuteOutput {
         backend: BACKEND,
         outcome,
@@ -570,6 +639,7 @@ async fn execute<P: Prover>(
         cycle_tracker,
         gas: report.gas(),
         syscalls,
+        opcodes,
         execute_seconds,
         statement_bytes: sizes.0,
         witness_bytes: sizes.1,
@@ -822,6 +892,18 @@ async fn main() -> Result<()> {
                 }
             }
             Ok(())
+        }
+        #[cfg(feature = "relation-bare")]
+        Command::BareExecute { set, flip_y } => bare_cmd::cmd_execute(set, flip_y).await,
+        #[cfg(feature = "relation-bare")]
+        Command::BareProve { set, out_dir, mode, reps, warmup_vus, skip_execute } => {
+            bare_cmd::cmd_prove(set, out_dir, mode, reps, warmup_vus, skip_execute).await
+        }
+        #[cfg(feature = "relation-bare")]
+        Command::BareStatement { set, out } => bare_cmd::cmd_statement(set, out).await,
+        #[cfg(feature = "relation-bare")]
+        Command::BareNegatives { instances, manifest_sha256, dataset, index, layout } => {
+            bare_cmd::cmd_negatives(instances, manifest_sha256, dataset, index, layout).await
         }
     }
 }

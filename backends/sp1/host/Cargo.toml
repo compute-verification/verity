@@ -34,6 +34,9 @@ unsound-skip-path-fold = ["veritor-zk-common/unsound-skip-path-fold"]
 # Relation-only guest: the `--witness` file is the compact input (K || x || W);
 # the statement is ignored.  The arithmetic baseline; see the README.
 unsound-relation-only = ["veritor-zk-common/unsound-relation-only"]
+# The Table 2 bare statement: build.rs forwards this to the guest, whose ELF then proves `bare`'s statement; the
+# `bare-*` subcommands build its input from a frozen tier, and `verify --statement` checks its public values.
+relation-bare = ["veritor-zk-common/relation-bare"]
 # Sound: build.rs forwards this to the guest so the sampling profiler can see
 # the interpreter's dispatch / operand assembly / arithmetic separately.
 attribution = ["veritor-zk-common/attribution"]
