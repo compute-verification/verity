@@ -92,7 +92,7 @@
 +  --lane "${LANE:-exec}" --generation "${OWNERSHIP_GENERATION:-1}" --tree-sha "$TC" --release-tag "$TAG" ${WLD:+--workload-digest "$WLD"} --stage "$STAGES" \
 +  --input "workload=$TREE/out/gen/sweep/workloads/$ROW.json" --profile-key MATCH_IMPL --profile-key MATCH_PIPELINE --profile-key HOT_ENGINE --profile-key REPLAY_CACHE --profile-key MATCH_SNAP_STEPS --profile-key MATCH_WORKERS --profile-key GPU_GATE \
 +  --declared-output stages.txt --declared-output timeline.jsonl --timeout "${ROW_TIMEOUT_S:-0}" --reservation-gpu "${GPU_GATE:-0}" ${NEED_CG_GB:+--reservation-host-memory-bytes $(( NEED_CG_GB * 1073741824 ))} \
-+  --policy "$TELE_POLICY" --command bash verity_capture/sweep/row_pod.sh "$ROW" "$ROLE" "$REPO" "$REV" "$STAGES" "${ENVS[@]}" 2>>$Q/telemetry_errors.log >/dev/null || true
++  --policy "$TELE_POLICY" --command bash verity_vllm/ops/row_pod.sh "$ROW" "$ROLE" "$REPO" "$REV" "$STAGES" "${ENVS[@]}" 2>>$Q/telemetry_errors.log >/dev/null || true
 +tele status --attempt-dir "$D" running pid=$$ pgid=$$ stage="$STAGES" started_mono="$(python3 -c 'import time; print(time.monotonic())')"
 +tele event --attempt-dir "$D" --proc run_row started --stage "$STAGES" waited_s="$WAITED"
 +TELE_SAMPLER=""; if [ "${TELEMETRY:-1}" = 1 ] && [ -f "$TELE_DIR/tele" ]; then
@@ -106,7 +106,7 @@
  # -- GPU memory.used (MiB, max over GPUs), cgroup memory.current (MiB), cgroup memory.peak (MiB, when the kernel exposes it), the largest
  # python RSS (MiB) and which stage stages.txt is in.  The telemetry line carries the maxima; the row's own predictions (arena sizing,
 @@ -199,6 +235,21 @@
- env "${ENVS[@]}" bash verity_capture/sweep/row_pod.sh "$ROW" "$ROLE" "$REPO" "$REV" "$STAGES" > $Q/row_${TAG}_$ROW.log 2>&1; rc=$?
+ env "${ENVS[@]}" bash verity_vllm/ops/row_pod.sh "$ROW" "$ROLE" "$REPO" "$REV" "$STAGES" > $Q/row_${TAG}_$ROW.log 2>&1; rc=$?
  S1=$(date +%s)
  kill $RES_PID 2>/dev/null; wait $RES_PID 2>/dev/null
 +# [telemetry v0.1] close the row: status (rc/signal as the shell saw them), span end, stop the sidecar (it takes final readings on SIGTERM),

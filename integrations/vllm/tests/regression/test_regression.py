@@ -1,8 +1,15 @@
-"""R19 REFERENCE REGRESSION -- does a NEW vLLM integration (v2) numerically reproduce the v1 reference?
+"""R19 REFERENCE REGRESSION -- does the vLLM integration (v2, the default since the flip) still reproduce its contract?
+
+THE ORACLE (`VERITY_REGRESSION_ORACLE`, `resolver.oracle()`).  `expected` (default): `expected/<row>.json`, RE-BASELINED on v2's own
+outputs (`rebaseline.py write`, reference `v2-reference`; the v1-reference block is kept under `reference.frozen`) -- a difference is a
+regression of the integration.  `frozen`: the contract is lifted from the R2 frozen v1 records themselves (`check.expected(row)`) -- the
+historical "does v2 reproduce v1" comparison, where the labelled decisions below sanction the known differences.  `python -m
+tests.regression.rebaseline run --record DIR --oracle frozen|expected` runs either and records every result for `write` / `table`.
 
 THE REFERENCE.  v1 = `lane/vllm-integration` at release tag `r19-int-21` (commit 89af272a8c1d37a44b3e8f3253378d7a152fc281, tagged
 `v1-reference`) and the R19 rows it recorded.  Twelve rows are frozen in `fixtures.toml` (row -> files -> sha256/bytes) and
-`expected/<row>.json` (the contract, lifted from each row's OWN documents by `lift_expected.py`, never typed by hand):
+`expected/<row>.json` (the contract: lifted from each row's OWN documents by `lift_expected.py`, then re-baselined on v2 by
+`rebaseline.py` -- never typed by hand):
 
     GREEN   #11 llama32-1b B1 i4096/o512 (l40s)   #23 llama32-1b B64 (l40s)   #39 qwen25-15b B1 i4096/o512 (l40s)   #60 mistral-7b B8 (l40s)
             #67 olmoe-1b-7b B32 (l40s)            #68 olmoe-1b-7b B32 mixed-arrivals (l40s)   #73 qwen3-4b B8 (h100)   #74 qwen3-4b-fp8 B8 (h100)
@@ -18,7 +25,13 @@ with the current code, and the two are diffed as canonical JSON on every field t
                           element_range, rank): manifest_digest, identity count, identity_rows_sha256      STRONG   T0 (rebuild: CPU minutes)
     program_digest        the digest chain of the record is one digest (build_summary == artifact.json == workload_program ==
                           the Commit's key); the T2 rebuild (derive_step on the meta device, 1-4 h, 18-181 GB) is documented, not run   STRONG   T2
+    step_segmentation     per request: `request_component`'s steps / n_nodes / step_nodes (sha256) over the component descriptors ==
+                          build_workload/workload_program.json, the Build's own sampling-event count (result.json spec_histogram),
+                          chronology.json's component_steps_equal_cap + members with no segment                             STRONG   T0
     global_match_checks   GM-01 verdict, G1..G8 status + problem counts, X-09 verdict / XREQ total, alternate criterion, lag account   weak*   T0
+    stoch_value           stochastic rows: stoch_recompute re-run over the capture's sampler-chain snapshots (GumbelTopPTokenSelect_v1
+                          lane walk under the declared seed / T / top-p) == match_stoch.json verdict, summary, per-row tokens and
+                          statuses (sha256), declared facts, Program S; the snapshot steps (every engine step)             STRONG   T0
     executed_prefix       executed_prefix_of_record re-run over the record's served tokens / caps / declared EOS + LAG == tokens.json,
                           G6 lengths, eos_stop_requests                                                                               weak*   T0
     coverage              coverage_check(manifest of record, instrumented layouts) == the Commit's recorded coverage                    STRONG   T0(+manifest)
@@ -52,10 +65,8 @@ ALL of one decision's `expected` reproduced -> PASS with `sanctioned_by=<finding
 neither v1 nor a decision reproduced -> FAIL naming both.  Malformed / `expected`-less decisions sanction nothing.  Today one decision:
 #57 `manifest_digest` since r19-int-22 (F-r19-int-20: `Bf16MulScalarTensor_v1`, classified interior BY NAME by v1, is a module-body
 output read by layer 0; promotion adds exactly its 432 identities -> 163484, complete) -- `test_negative_57` accepts the refusal OR it.
-A decision's `status` is `accepted` (absent = accepted: Daniel confirmed it, sanctions under every engine) or `pending_review`
-(labelled by a lane, awaiting Daniel: consulted ONLY when the actual is not the v1 baseline -- `VERITY_REGRESSION_ENGINE=v2` or a
-candidate document -- so the v2 engine may reproduce v1 OR the decision, and which one is recorded as junit property `matched`; under the
-v1 engine the decision is listed as "not consulted" and the baseline must still reproduce v1).  Today three pending: #67 / #68
+A decision's `status` is `accepted` (absent = accepted: Daniel confirmed it) or `pending_review` (labelled by a lane, awaiting Daniel);
+both sanction, and which side reproduced is recorded as junit property `matched`.  Today three pending: #67 / #68
 `manifest_digest` (F-r19-int-24: `MoeSum_v1`, FusedMoE.forward's returned tensor, read by the next layer's fused add+norm -> boundary
 under Q_module_body_v1; v1 classed it interior by name) and #57 `coverage` (MAN-02: the incomplete v1 manifest is refused, every
 identity counted missing where v1 recorded missing_n = 0).  A decision may also own an INPUT pin (`pins."manifest.json" = { bytes,
@@ -77,7 +88,7 @@ instead of recomputing, and diffs it against the frozen expected:
     cd integrations/vllm && VERITY_REGRESSION=1 VERITY_REGRESSION_CANDIDATE=/path/to/v2/rows python -m pytest tests/regression -m regression -q
 
 Markers: `regression` (all of these), `pod` (T1/T2 and anything reading > 100 MB), `weak` (PASS-side / unexercised).  Green tonight =
-T0 byte-equal on every row where the inputs resolve + the #57 refusal reproduces + tests/ir green.
+T0 byte-equal on every row where the inputs resolve + the #57 refusal reproduces + tests/program green.
 """
 from __future__ import annotations
 
@@ -104,7 +115,7 @@ def _params():
     for row in resolver.rows():
         for chk in checks.all_checks():
             marks = [pytest.mark.regression]
-            if chk.TIER != "T0" or chk.NAME in ("coverage", "manifest_digest"):
+            if chk.TIER != "T0" or chk.NAME in ("coverage", "manifest_digest", "step_segmentation", "stoch_value"):
                 marks.append(pytest.mark.pod)
             if chk.STRENGTH == "weak":
                 marks.append(pytest.mark.weak)
@@ -130,8 +141,8 @@ def test_reproduces(row_key: str, check_name: str, store_state: dict, record_pro
     why = chk.applies(row)
     if why:
         pytest.skip(f"{check_name} does not apply to #{row.number}: {why}")
-    exp = row.expected().get(check_name)
-    if exp is None:
+    exp = row.expected().get(check_name) if resolver.oracle() == "expected" else None
+    if exp is None:                                          # `--oracle frozen`, or a check expected/ never froze: lift from the R2 record
         try:
             exp = chk.expected(row)
         except resolver.NotResolvable as e:
@@ -143,18 +154,21 @@ def test_reproduces(row_key: str, check_name: str, store_state: dict, record_pro
     except resolver.NotResolvable as e:
         pytest.skip(str(e))
     problems = resolver.sanction(row, check_name, act, resolver.diff(exp, act))     # a labelled decision may sanction a difference from v1
+    resolver.record_result(row.key, check_name, exp, act, problems)                  # $VERITY_REGRESSION_RECORD_ACTUAL: rebaseline.py's input
+    record_property("oracle", resolver.oracle())
     if act.get("sanctioned_by"):
         record_property("sanctioned_by", act["sanctioned_by"])
         record_property("decision_status", act.get("decision_status") or "accepted")
     record_property("matched", resolver.matched(act, problems))                     # which side reproduced: v1 | decision <finding> (<status>)
-    record_property("engine", resolver.engine())
+    record_property("engine", resolver.ENGINE)
     for rel, by in sorted(row.pinned_by.items()):                                     # an INPUT resolved by a decision's pin, not v1's
         record_property("pinned_by", f"{rel}: {by}")
     na = resolver.not_applicable_keys(act)
     if na:
         record_property("not_applicable", "; ".join(na))                                 # leaves the candidate declared inapplicable, by key and reason
     strength = "WEAK (PASS-side / unexercised rule)" if chk.STRENGTH == "weak" else "strong"
-    what = "the v1 reference" + (" nor any labelled decision on the fixture" if row.decisions(check_name) else "")
+    what = ("the expected contract (expected/<row>.json)" if resolver.oracle() == "expected" else "the frozen v1 reference") + \
+        (" nor any labelled decision on the fixture" if row.decisions(check_name) else "")
     assert not problems, (f"#{row.number} {row.key}: {check_name} [{chk.TIER}, {strength}] does not reproduce {what} "
                           f"(source={act.get('source')}):\n  " + "\n  ".join(problems[:40]) + f"\n  actual: {resolver.canonical(act)[:1500]}")
 
@@ -186,7 +200,7 @@ def test_negative_57_refusal_reproduces(record_property) -> None:
     record_property("sanctioned_by", act["sanctioned_by"])
     record_property("decision_status", act.get("decision_status") or "accepted")
     record_property("matched", resolver.matched(act, problems))
-    record_property("engine", resolver.engine())
+    record_property("engine", resolver.ENGINE)
 
 
 def test_decisions_are_listed_and_well_formed(record_property) -> None:

@@ -1,8 +1,8 @@
 """(a) The manifest of record reproduces: rebuild `manifest.json` from the row's request Programs x declared workload with the CURRENT
-code, by the exact path `row_pod.sh` used (`required_manifest build-global --fixture WL --programs-root ROW --workload-digest WD` at
-B>=2; `required_manifest build --program ROW/build_request --workload WL` at B=1) and compare:
+code, by the exact path `row_pod.sh` uses (`verity_vllm.query.cli build-global --fixture WL --programs-root ROW --workload-digest WD`
+at B>=2; `verity_vllm.query.cli build --program ROW/build_request --workload WL` at B=1) and compare:
 
-    manifest_digest     sha256 over the sorted (family + IDENTITY_KEY) rows     -- `required_manifest.manifest_digest`
+    manifest_digest     sha256 over the sorted (family + IDENTITY_KEY) rows     -- `manifest_format.manifest_digest`
     program_digest      the Program digest the identities are keyed by          -- GP-01's workload digest (B>=2) / the request Program's (B=1)
     identities          the identity count
     identity_rows_sha256  sha256 over the sorted canonical IDENTITY_KEY tuples (family-blind): byte-for-byte equality of the identity SET
@@ -11,8 +11,8 @@ B>=2; `required_manifest build --program ROW/build_request --workload WL` at B=1
 Expected is lifted from `commit/manifest_verify.json` (used_digest / used_program_digest / used_identities; the v1 Commit's own
 rebuild said `ok`) and, when the recorded manifest.json is reachable, from the file itself.  STRONG: a single identity row moved,
 dropped or renamed changes the digest.  TP rows (#70, #75: rank Programs under build/rank*/) are not built by this path -> not applicable.
-The engine is the code's default (traversal, inventory cross-check on) exactly as the row's Commit ran it; `VERITY_REGRESSION_ENGINE=v2`
-rebuilds with the query path (`verity_vllm.query.cli`, same flags) so the same check gates v2 against the same manifest of record.
+The builder is the integration's (the query path `verity_vllm.query.cli`, Q_module_body_v1 -- the same build / build-global flags
+row_pod.sh uses).
 
 `actual` also states what the built manifest PROMOTED ([R19 int-20, F-r19-int-20]: interior rows whose output crosses a module
 boundary, flagged `promoted: true`) -- the facts a labelled decision on the fixture may name (`resolver.sanction`; #57's decision):
@@ -50,7 +50,7 @@ def applies(row: resolver.Row) -> str | None:
 
 
 def _identity_key(r: dict) -> str:
-    from verity_capture.commit.required_manifest import IDENTITY_KEY
+    from verity_vllm.query.manifest.format import IDENTITY_KEY
     return json.dumps([r[k] if k != "element_range" else list(r[k]) for k in IDENTITY_KEY], separators=(",", ":"), sort_keys=True)
 
 
@@ -122,24 +122,14 @@ def expected(row: resolver.Row) -> dict:
     return out
 
 
-ENGINES = {"v1": "verity_capture.commit.required_manifest",       # the baseline: v1's traversal + by-name tables (the row's Commit ran this)
-           "v2": "verity_vllm.query.cli"}                         # Q_module_body_v1 over the Program + correspondence (same build / build-global flags)
-
-
-def engine() -> str:
-    """`VERITY_REGRESSION_ENGINE` (default `v1`): which builder the rebuild runs.  The baseline stays v1; `v2` runs the query path so
-    this check gates it against the same manifest of record."""
-    e = resolver.engine()
-    if e not in ENGINES:
-        raise ValueError(f"{resolver.ENGINE_ENV}={e!r}: one of {sorted(ENGINES)}")
-    return e
+BUILDER = "verity_vllm.query.cli"         # Q_module_body_v1 over the Program + correspondence (same build / build-global flags as row_pod.sh)
 
 
 def _rebuild_argv(row: resolver.Row, programs_root: Path, out: Path) -> list[str]:
     wl = row.workload()
     fx = json.load(open(wl))
     b = len(fx.get("requests") or [])
-    base = [sys.executable, "-m", ENGINES[engine()]]
+    base = [sys.executable, "-m", BUILDER]
     if b > 1:
         bs = row.json("build_summary.json")
         wd = ((bs.get("workload") or {}).get("workload_digest")) or None
@@ -168,5 +158,5 @@ def actual(row: resolver.Row) -> dict:
         return {"rebuild_rc": p.returncode, "rebuild_argv": argv, "rebuild_tail": (p.stdout + p.stderr).strip()[-1500:], "source": "rebuild"}
     man = json.load(open(out))
     res = dict(_summary(man, with_rows=True), **_promotion(row, man), source="rebuild", rebuild_rc=0,
-               rebuild_engine=(man.get("engine") or man.get("populations", {}).get("engine") or (man.get("query") or {}).get("engine") or engine()))
+               rebuild_engine=(man.get("engine") or man.get("populations", {}).get("engine") or (man.get("query") or {}).get("engine") or resolver.ENGINE))
     return res

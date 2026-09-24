@@ -7,7 +7,7 @@ of record (the git sha of the tree that ran each stage) beside them -- lifted, n
 at 89af272 (the `v1-reference` commit); a v2 reproduces the DIGESTS, not the sha.
 
 Rebuild part (NOT run here; tier T2, 1-4 h and 18-181 GB RAM per row on the meta device, no GPU needed): on a big-RAM pod,
-`STAGES=build bash verity_capture/sweep/row_pod.sh <row> <role> <hf repo> <rev> build` with `--target` = the recorded
+`STAGES=build bash verity_vllm/ops/row_pod.sh <row> <role> <hf repo> <rev> build` with `--target` = the recorded
 `build_request/artifact.json.target_profile`, then compare `build_summary.json` digests to this expected document.  In candidate mode the
 v2's `build_summary.json` is read instead and compared to the same expected.
 """

@@ -6,7 +6,7 @@
 
 schema = "verity-vllm/r19-reference-fixtures/v1"
 snapshot = "r19-reference-v1"
-snapshot_artifact = "art:ae0969d21de08811d50bda7a198a339bf6f3459d62a727e8c32c42bfad9fa335"
+snapshot_artifact = "art:ff7235e0939019315a263852ab7b32525122660469bd094862aa229fa1578b3e"
 
 [reference]
 tag = "v1-reference"
@@ -727,6 +727,11 @@ sha256 = "721ba6ee6dd7625ea785afaa79446fb82c43581f73e0e35314678e724fa539eb"
 [rows."llama32-1b__bf16__l40s__tp1__b64__i1024__o128__mixed__greedy__bi-eager"]
 row = 23
 class = "GREEN"
+# Fresh GM-01 under v2 acquisition: Match r20260923-233020-dc38 (014563ac, ACQUIRE_ENGINE=v2; art:d39b5ef8816334b4) over Build
+# r20260923-222456-bdbc (art:ee33269aab289e33) ran global_match in-row -- impl fast, 8 workers, 317 s, PASS (G1..G8, X-09, alternate
+# `sequence`).  Its global_match_checks lift equals this row's except fold_record_pins (a new fold record); decomp_hashes equal except
+# oracle.digest (the Build epoch).  Re-run fresh at 738e63f5 (r20260924-084953-66e6, preserved; vyv-gm 32 vCPU): 452 s, PASS, output
+# equal to dc38's except timing fields and the checker's own module name / source sha (relayout).  339 s at 32 workers, 880 s at 1.
 selection = "green"
 tp = 1
 batch = 64
@@ -4677,6 +4682,18 @@ finding = "F-r19-int-20"
 reason = "r19-int-22 names Bf16MulScalarTensor_v1 (F-r19-int-20: hinted rows, an evaluator, dataflow promotion). Over the v1 manifest of record (incomplete, nothing promoted) its 4150 rows stay NOT evaluable -- they are not identities -- but the partition now states why by the composition rule ('interior: composed into its epilogue's VU / a hinted row of the module is its returned tensor') where v1 said 'structure / interior: no identity'. One bucket relabelled, same 4150 rows: by_family, vus 651982, strata_n 5846, the 18 not-evaluable buckets (sum 3748888), strata, sample, lifetime, executed_prefix and phase_anchor are equal to the record. Nothing moved to the evaluable population on this manifest (run r20260923-084413-3dd4, both engines)."
 expected = { population = { vus = 651982, strata_n = 5846, by_family = { Embedding_v1 = 4150, Gemm_v1 = 431600, RoPE_v1 = 215800, TokenSelect_v1 = 432 }, not_evaluable_by_family = { "Bf16MulScalarTensor_v1 (interior: composed into its epilogue's VU / a hinted row of the module is its returned tensor)" = 4150 } } }
 
+# labelled decision (Draft 3 §7): the v1 address rule is retired; the pre-flip record's partition is recomputed under the v2 query's rule.
+# Solely the rule: staging 815b837c's own replay_partition with this record's `addresses.rule` set to "v2-query" reproduces the result exactly.
+[[rows."gemma2-2b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager".decisions]]
+check = "replay_partition"
+since = "lane/vllm-retire-v1"
+since_commit = "53d20e6ce63f3e63a580eb6ad49fdddcbea520a2"
+finding = "retire-v1"
+status = "accepted"
+accepted_by = "Daniel Reuter (delegated to the vLLM coordinator: 'clear all the old stuff', 23 Sep)"
+reason = "record predates the v2 rule; v1 code removed; recomputed under v2 rule. The v2 query addresses the 4150 Bf16MulScalarTensor_v1 rows (F-r19-int-20's non-leaf module-body output, read across the boundary by layer 0) as VUs where the v1 rule over the unpromoted v1 manifest of record left them not evaluable: vus 651982 -> 656132, strata_n 5846 -> 5883, and the seeded draw and the window-lifetime split follow from the added strata."
+expected = { population = { vus = 656132, strata_n = 5883, by_family = { Bf16MulScalarTensor_v1 = 4150, Embedding_v1 = 4150, Gemm_v1 = 431600, RoPE_v1 = 215800, TokenSelect_v1 = 432 } }, lifetime = { sampled = { fresh-window = 3657, recycled-window = 2226 }, values = { fresh-window = 596666, recycled-window = 59466 } }, sample = { picked = 5883, cap_effective = 5883, stratified_picked = 5883 } }
+
 # labelled decision (Draft 3 §7): a sanctioned difference from v1, consulted by the named check when its result differs from v1 (test_regression.py, LABELLED DECISIONS)
 [[rows."gemma2-2b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager".decisions]]
 check = "coverage"
@@ -6349,6 +6366,18 @@ accepted_at = "2026-09-23T16:26Z"
 ruling = "Under Q_module_body_v1, a MoeSum_v1 Value consumed by the next layer's normalization body is a boundary Value by construction; the old manifest missing it is the by-name structural bug v2 removes."
 reason = "MoeSum_v1 (FusedMoE.forward's returned tensor) is read by the next layer's fused add+norm → boundary Value under Q_module_body_v1; v1 classed it interior by name and covered the block only via kernel planes. Increases required-value rows by ~5%; same intended query, v1 omission — accepted by Daniel 2026-09-23T16:26Z (ruling above)."
 expected = { identities = 406432, only_new = 20928, promoted_member_class = "model.layers.<k>.mlp.experts/out", complete = true }
+
+# labelled decision (Draft 3 §7): the v1 address rule is retired; the pre-flip record's partition is recomputed under the v2 query's rule.
+# Solely the rule: staging 815b837c's own replay_partition with this record's `addresses.rule` set to "v2-query" reproduces the result exactly.
+[[rows."olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed__greedy__bi-eager".decisions]]
+check = "replay_partition"
+since = "lane/vllm-retire-v1"
+since_commit = "53d20e6ce63f3e63a580eb6ad49fdddcbea520a2"
+finding = "retire-v1"
+status = "accepted"
+accepted_by = "Daniel Reuter (delegated to the vLLM coordinator: 'clear all the old stuff', 23 Sep)"
+reason = "record predates the v2 rule; v1 code removed; recomputed under v2 rule. The v2 query addresses the MoeSum_v1 rows at the experts module (model.layers.<k>.mlp.experts, FusedMoE.forward's returned tensor: F-r19-int-24) where the v1 rule used the synthetic moe/L<k> path: 2416 stratum keys renamed; every count (population, strata sizes, the draw, lifetime, phase anchors) is unchanged."
+expected = { population = { vus = 5745046, strata_n = 38748 }, strata = { "MoeSum_v1{TOPK=8,H=2048}|r0|rank0|first-decode|model.layers.0.mlp.experts|fresh-window" = { population = 1, sampled = 1 } } }
 
 [rows."olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed__greedy__bi-eager".local]
 
@@ -8172,6 +8201,18 @@ accepted_at = "2026-09-23T16:26Z"
 ruling = "Under Q_module_body_v1, a MoeSum_v1 Value consumed by the next layer's normalization body is a boundary Value by construction; the old manifest missing it is the by-name structural bug v2 removes."
 reason = "MoeSum_v1 (FusedMoE.forward's returned tensor) is read by the next layer's fused add+norm → boundary Value under Q_module_body_v1; v1 classed it interior by name and covered the block only via kernel planes. Increases required-value rows by ~5%; same intended query, v1 omission — accepted by Daniel 2026-09-23T16:26Z (ruling above)."
 expected = { identities = 402938, only_new = 20704, promoted_member_class = "model.layers.<k>.mlp.experts/out", complete = true }
+
+# labelled decision (Draft 3 §7): the v1 address rule is retired; the pre-flip record's partition is recomputed under the v2 query's rule.
+# Solely the rule: staging 815b837c's own replay_partition with this record's `addresses.rule` set to "v2-query" reproduces the result exactly.
+[[rows."olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed-arrivals__greedy__bi-eager".decisions]]
+check = "replay_partition"
+since = "lane/vllm-retire-v1"
+since_commit = "53d20e6ce63f3e63a580eb6ad49fdddcbea520a2"
+finding = "retire-v1"
+status = "accepted"
+accepted_by = "Daniel Reuter (delegated to the vLLM coordinator: 'clear all the old stuff', 23 Sep)"
+reason = "record predates the v2 rule; v1 code removed; recomputed under v2 rule. The v2 query addresses the MoeSum_v1 rows at the experts module (model.layers.<k>.mlp.experts, FusedMoE.forward's returned tensor: F-r19-int-24) where the v1 rule used the synthetic moe/L<k> path: 2016 stratum keys renamed; every count (population, strata sizes, the draw, lifetime, phase anchors) is unchanged."
+expected = { population = { vus = 5830562, strata_n = 33192 }, strata = { "MoeSum_v1{TOPK=8,H=2048}|r0|rank0|first-decode|model.layers.0.mlp.experts|fresh-window" = { population = 1, sampled = 1 } } }
 
 [rows."olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed-arrivals__greedy__bi-eager".local]
 tp2 = "/workspace/cp/sweep/r19-int-10/olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed-arrivals__greedy__bi-eager"
@@ -10027,6 +10068,14 @@ sha256 = "0661503423304788570f817eeb527a86905c1fea1ce5623adc3665ca28132c62"
 [rows."olmoe-1b-7b__bf16__l40s__tp2__b8__i1024__o128__mixed__greedy__bi-eager"]
 row = 70
 class = "FAIL"
+# Expected FAIL under v2 as well: fresh Commit r20260924-021402-69d8 (lane/vllm-tp-v2 4f3a1e75, 2026-09-24T03:46Z; verdict
+# art:501019cb3cbc3cde, preserved) over Build art:962a12b3165b496f / Match art:7ecab74a6a319ff2.  Every compared value is equal
+# (match oracle, sampled replay, weights pins, TP-12 picks 154/154).  The named cause is the AllGather2 collective sites
+# (manifest of record ede1ad81, 357,796): query_population False (F-r17b-38), per rank 25,408 replay VUs outside Q(P) (first
+# model.layers.0.self_attn.all_gather2_165/out) and 25,408 Q(P) identities without rows (first model.layers.0.self_attn/out);
+# cross_rank_collectives False, 160 of 161 AllGather2 sites (model.layers.<k>.self_attn.all_gather2_<n>) without a stratum.
+# Also not passing: sampled replay partial (484 / 475 q/k-norm strata recycled-window) and no fold-Match binding (Match is
+# collective-level only).
 selection = "by-name"
 tp = 2
 batch = 8
@@ -13341,3 +13390,1023 @@ sha256 = "e00d82655756d8d0275b80f21f7ab183e8d1b571a7a47e213d426ee68b0c40ab"
 role = "record"
 bytes = 10641
 sha256 = "324cfb6fc602405495855a015063714241a701143774b380fe7e40209d1d0323"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager"]
+row = 101
+class = "GREEN"
+selection = "green"
+tp = 1
+batch = 1
+oracle = "/workspace/stoch/oracle/llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager"
+programs_state = "uploaded"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".local]
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".artifacts]
+records = "art:a4ea1a18cfa0c841b77c9e05f98a22bc1fd20588c061005fb3244199bcc8e0e0"
+programs = "art:a9be8f7c514fc61cabcf913946a17f9d349a00ef3386fd33093ee186790b1802"
+
+# labelled decision (Draft 3 §7): the seeded-Gumbel step segmentation, accepted as a correction of v1 (sanctions under every engine)
+[[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".decisions]]
+check = "step_segmentation"
+since = "lane/vllm-by-name-residue"
+since_commit = "4132fc366ee89bb0f90445db34aa928eeceb8ea0"
+finding = "GP-01 seeded-Gumbel step segmentation"
+status = "accepted"
+accepted_by = "Daniel Reuter (delegated to the vLLM coordinator)"
+accepted_at = "2026-09-23T22:08Z"
+ruling = "A correction, not a regression: at v1-reference #101 records 1 step for its 32 sampling events; the current code cuts 32 steps, each ending at a sampling event (steps == cap == sampling events, no unsegmented member). v1's single segment is the defect."
+reason = "v1's request_component cut a request body at TokenSelect_v1 only, so this row's 32 GumbelTopPTokenSelect_v1 instances left ONE segment: steps 1 for cap 32, 31 chronology members with no programmed instance set, component_steps_equal_cap false (the record of run r20260923-203359-97e0 at v1-reference). lane/vllm-by-name-residue cuts at every sampling event (verity_vllm.program.sampling_event.is_sampling_event): 32 steps == cap == the 32 sampling events the Build counted (result.json spec_histogram), every segment ending at a sampling event, no unsegmented member. A correction of the v1 segmentation, not a regression; component program_digest and n_nodes unchanged (harness run 2026-09-23, vyv-v2cpu3)."
+expected = { component_steps_equal_cap = true, unsegmented_members = 0, requests = { r0 = { cap = 32, steps = 32, sampling_events = 32, n_nodes = 46654, program_digest = "079ee0a8e3e0355b2600b8576588edb4d5df56bb21f3ff707e9117a8e843c1de", step_nodes_sha256 = "053c8718ce4f641e9a0398a0bbf14245bba546afa80e1f457d6be2000d0bfecb" } } }
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."admission.json"]
+role = "record"
+bytes = 10197
+sha256 = "1cbc2f987250179731e9756d6c1aad853eff16fa179c87bcaf524e68e0c06361"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."build_request.log"]
+role = "record"
+bytes = 18933
+sha256 = "b4961a966a7b59fe7935dd71ab7715312f239f31d9a45aace33e1d724113ff9f"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."build_request/artifact.json"]
+role = "record"
+bytes = 5676
+sha256 = "cb25df6f894e8c6203c47cf6e1e3e02819ccc5b972a3cb0d8e2b5f4fd78937f0"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."build_request/construction_manifest.json"]
+role = "record"
+bytes = 85200
+sha256 = "acfd080bf201d802b9070d3ef868fb95ef7a062198c080a4f74bba54db76415a"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."build_request/derive-report.json"]
+role = "record"
+bytes = 8993388
+sha256 = "9c394ddef00b52e11a42e1c1560362e38ef76f018dab9576bdbe49c2d6160501"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."build_request/descriptor.json.gz"]
+role = "record"
+bytes = 1134005
+sha256 = "ddf7b652945ad2c837e3de4329a40b369eac2ba56eea5677cf50a5ecbbc38ad1"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."build_request/inputs.json"]
+role = "record"
+bytes = 26665
+sha256 = "9abe359534d078cd1fc07ee08d1ac7ab6a732de36bddf7e4e5a0b671c542627b"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."build_request/instances.json.gz"]
+role = "program"
+bytes = 1584614
+sha256 = "8a0ce573a3d5aeb4177c41b24670e50403c9dc71c82ceed8836f08973a4e60ff"
+extracted = true
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."build_request/result.json"]
+role = "record"
+bytes = 73002
+sha256 = "ec2c47e502a09e0fc66dd5936475b9b53438dbedbb437b7c3d6dbc2ab87edb35"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."build_request/weights_of_record.json"]
+role = "record"
+bytes = 75839
+sha256 = "b99a9f35900c3ac2616ba99a0a1a9eef15347b6aed98135c86467d6700aef39c"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."build_step.log"]
+role = "record"
+bytes = 2949
+sha256 = "d652bd0566ad1c838797a2e3ed35f228800d5a51531081cdd32031f43777d704"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."build_step/artifact.json"]
+role = "record"
+bytes = 5676
+sha256 = "4290d79c0d8c9092b9ceb61290e260b0eac522d578911447e442bef5036b7b9e"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."build_step/construction_manifest.json"]
+role = "record"
+bytes = 79637
+sha256 = "1b7d1f59f082f2a1f7d5cb2b0d298c7ee87aac312e672920a4343f749c2987b2"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."build_step/derive-report.json"]
+role = "record"
+bytes = 392377
+sha256 = "33ceb1284aee53cc89b8e92876cd0711b5a8e619058ab49ce69e0ead61ef9d9f"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."build_step/descriptor.json.gz"]
+role = "record"
+bytes = 83869
+sha256 = "cf42278ae761bb2865e0773530c19f44f688257a653211f58573d61873cd5478"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."build_step/inputs.json"]
+role = "record"
+bytes = 37382
+sha256 = "0c4654fa73c13baadb781a93ce610230872db6b1e3b24b900e3015efc2713867"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."build_step/instances.json.gz"]
+role = "record"
+bytes = 4592
+sha256 = "cf49122bc9d05e37aaca9c18b860f984bb74f0a7abfd2570394c3e3eac225a3a"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."build_step/result.json"]
+role = "record"
+bytes = 56644
+sha256 = "3297d7fd7dc8b0b36445997f49245f9dde188274a4aa8eb6d5db29ea926da6a9"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."build_summary.json"]
+role = "record"
+bytes = 7917
+sha256 = "72fe78e160374c04d77504f859747e634ea396aa8d03275a0c26bca00f917b78"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."build_workload.log"]
+role = "record"
+bytes = 988
+sha256 = "b1f6b4cdc151fd4aaaa32698ee7145b7cf805fbfa94f35bf0ddd48780a48c665"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."build_workload/address_map.json"]
+role = "record"
+bytes = 61071
+sha256 = "e4291571389f4716cf593face732ff2ae5bc3ae622432eb60f5323606648314d"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."build_workload/chronology.json"]
+role = "record"
+bytes = 10891
+sha256 = "6d4842d0f5a571de2c83da37ec61f89e2ef039c0ae9a6d460878e473e3161a3f"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."build_workload/descriptor.json.gz"]
+role = "record"
+bytes = 716207
+sha256 = "dfbeaa0567048d59f7c6ff61407b5d18813a4fd7402ffcffce0d88b8d309f751"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."build_workload/workload_program.json"]
+role = "record"
+bytes = 102192
+sha256 = "febd227b0e2f539db6bc2ac28bcfc4818a43ce3065ac19dd48bff3f9920ae741"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."commit.log"]
+role = "record"
+bytes = 22283
+sha256 = "cb9c5f64c7ed02fedd18380e88fab4d87b55ec6361c26efc7ca8eae86fcdfb0e"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."commit/admission_native_collect_v2b.json"]
+role = "record"
+bytes = 3278
+sha256 = "c717d328a924fa9e99d298f20233c9b8fcabde0a3d5cd358b0a413b9a7ccb048"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."commit/admission_planner_native_collect_v2b.json"]
+role = "record"
+bytes = 7791
+sha256 = "2d23d955123ba99d9c93090badb5933d3d42eb52105639ff919c65d65150eb6b"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."commit/arena_sizing_native_collect_v2b.json"]
+role = "record"
+bytes = 1247
+sha256 = "ddd9cf3de7128997e4e5c5411d89c40691b230574522b953932c7ec7e449f522"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."commit/declaration_native_collect_v2_auto_nw+hidden_m1.json"]
+role = "record"
+bytes = 5737
+sha256 = "1a6fcc0e0d1d428a5a0c98bfee8ed95ab8dd838e2c58085b578ca40333b62e14"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."commit/fa2_tap_bound.json"]
+role = "record"
+bytes = 435
+sha256 = "72752cf37e92814f64042f010b028129a633abd17e2d8a8107147cbcf9e769ce"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."commit/layouts_pair0_instrumented.json.gz"]
+role = "record"
+bytes = 85622
+sha256 = "9c8c54a15c2f9b2de66460338f636f2703dded036bfdcc09d191344ed89bcb49"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."commit/manifest_verify.json"]
+role = "record"
+bytes = 2312
+sha256 = "26f42d0b16b8fa2295400a3a5847d8a8ba00022145aa233b9fa275a2bd64c6da"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."commit/planner_calibration_native_collect_v2b.json"]
+role = "record"
+bytes = 1185
+sha256 = "70bfcb840223f8e124502f625f5f7d5aaef4cced2e956dbb56ee659c98fb7cae"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."commit/runs.jsonl"]
+role = "record"
+bytes = 88577
+sha256 = "fb341fd7a97ce5aa5fd2861e78e7cf54a747c0f00cda005159e6be322e561c1d"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."commit/sampled_replay_p0.json"]
+role = "record"
+bytes = 186890
+sha256 = "a9aad0133305ce44d07b25ddd64feaf6cdf856e2381d7a7743f5f401bda38fb3"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."commit/source_identity.gpu_ext_load.json"]
+role = "record"
+bytes = 5812
+sha256 = "b36b5b992cfe22e02343da1fbc732c8ddac036852b75f16289f6dc67fa7d3e04"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."commit/source_identity.json"]
+role = "record"
+bytes = 5436
+sha256 = "37dabb6b2c24e95713dc65b264ced5ac5cd90f02dfc633fa7ce0e7a3381008b3"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."commit/steps.jsonl"]
+role = "record"
+bytes = 17089
+sha256 = "8a7eb63f62a6b114ed6bded9e1e96fe638fbacd94ee7658de76de1de39727d17"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."commit/structure_p0.json"]
+role = "record"
+bytes = 18063
+sha256 = "ea9729dd866f900a2f4ce145b95616fdff2f63f6321b49bf2639b36491ffb0ee"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."commit/summary.json"]
+role = "record"
+bytes = 20605
+sha256 = "f2b8e6b3bcc4fef8214be85eb2b8a53cdb191b44c17bf9d3493843e069f5c83c"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."commit/summary.md"]
+role = "record"
+bytes = 2289
+sha256 = "5b61663e7852f5d14c0232856e68881e88d7f8d93251cb10558edf4b979684a9"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."commit/verdict.json"]
+role = "record"
+bytes = 7279
+sha256 = "50182eda8b3a230854a217409db1139f62697dd895c019926716b54398dc5fed"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."commit/versions.json"]
+role = "record"
+bytes = 10029
+sha256 = "54a92d9f0657f63733404a74b7740ec07166a855b894f43854fa776ae0180f23"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."commit/window_ring_native_collect_v2b.json"]
+role = "record"
+bytes = 610
+sha256 = "13b5ff05dd444503018a85cdc890ce3b5d9f081741c090b889816e4bade65361"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."commit_summary.json"]
+role = "record"
+bytes = 3859
+sha256 = "82e4727439394e42f30d323beb60a491c7ffa3f6bbb3853f09506345ab5958f2"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."global_match.json"]
+role = "record"
+bytes = 25052
+sha256 = "19aa14d0f1e668b7cda1ab114f07e1e206ec303efcab655562cca717ac79c5af"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."global_match.log"]
+role = "record"
+bytes = 4718
+sha256 = "f3868c0d04b76612f282229c8c3612eaf0184b6cd05fc58b269843d59d990a77"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."global_match_global_program.json"]
+role = "record"
+bytes = 23979
+sha256 = "ec2f476bb5cf942964257f1e48abcf2a84ea88214a6323910616a56e7a072f8a"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."manifest.json"]
+role = "manifest"
+bytes = 2493973
+sha256 = "2e1c833309568ee80dbc6ea54bd10969990384b50bced401436e6ff4c418bb5f"
+extracted = true
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."manifest.log"]
+role = "record"
+bytes = 14526
+sha256 = "c7e314b160930d079d328917852c8f90a53bebaf22f8651c5639ca35ff3a37ab"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."manifest_verify.log"]
+role = "record"
+bytes = 2358
+sha256 = "95e3ebdb681500fba023439b5dbf4d01c5ef6caa99bcd6f82acccd015eed1628"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match.log"]
+role = "record"
+bytes = 5750
+sha256 = "c84719d68bfdf24a494d3407e5b8db0a4f3b6b5b972852a308115a954116506d"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/CARD.md"]
+role = "record"
+bytes = 4041
+sha256 = "5505e2c2d4916d28ab8cbc922aecfbcbbe928576a01eae0cc103ddc937e7fc2f"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/cos_sin_cache.json"]
+role = "record"
+bytes = 191
+sha256 = "ca08e8a92d191d44437a9e84352a33b3b5d4c15019f8d3f3f17167affe338362"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/cos_sin_cache.npy"]
+role = "record"
+bytes = 16777344
+sha256 = "e8356b9d393c2c928d0152695661a96599f42ebccf9d82adfed93bdd4665fa22"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/log.jsonl.gz"]
+role = "record"
+bytes = 685786
+sha256 = "f918adf404871cda8ccdb1967a6825a604d8e9fb86ad134cae206f20e37b3ac9"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/snapshots.json"]
+role = "record"
+bytes = 61943695
+sha256 = "3c4b63d3cb9d529c6e45ae355c333e3b9ce126b359884e6ce0b68226f56837bf"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/spec_tokens.json"]
+role = "record"
+bytes = 3938
+sha256 = "29e9aab049d13be10bd647d0d2184d90db26a49df7240a9e76677cf59a50b1e5"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/stats.json"]
+role = "record"
+bytes = 7919
+sha256 = "61352b1f3ce574fcaefa979bd835544fbf522aa51dc795d1ea949db54e9bcf50"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/tokens.json"]
+role = "record"
+bytes = 8261
+sha256 = "c83936017d07fd6fbf69f33f1395a2772f485c83c94f5d82b58ed2e07c989228"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/0/030a1a64b337c633.bin"]
+role = "record"
+bytes = 4
+sha256 = "030a1a64b337c633d995221728d15e8b0d086cc0dcf4557205111b089b04464d"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/0/159754eeb1b8e153.bin"]
+role = "record"
+bytes = 8
+sha256 = "159754eeb1b8e153388279fd7cdf7c3224b6052d1b93d07e03beb4375a3a59f7"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/0/1db1f0f344b58605.bin"]
+role = "record"
+bytes = 4
+sha256 = "1db1f0f344b58605d168fb4a2fc7df167d331adc0dc13979949425d10bb577bf"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/0/6783fea2d17acda0.bin"]
+role = "record"
+bytes = 8
+sha256 = "6783fea2d17acda0395a9efcea9816370fccaa6b418ef8a05643d55e264f75ed"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/0/af5570f5a1810b7a.bin"]
+role = "record"
+bytes = 8
+sha256 = "af5570f5a1810b7af78caf4bc70a660f0df51e42baf91d4de5b2328de0e83dfc"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/0/c638db4399c357b0.bin"]
+role = "record"
+bytes = 256512
+sha256 = "c638db4399c357b02d392a92a164da852372b808d63429273124654a26a0bab4"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/0/d524d8d8d2896899.bin"]
+role = "record"
+bytes = 8
+sha256 = "d524d8d8d289689944bebef68a148dae1207447f957082a9a7c3da7825438739"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/0/e6704b6dbcdcb27d.bin"]
+role = "record"
+bytes = 513024
+sha256 = "e6704b6dbcdcb27d9a3409dcc69fe5a48c84a2568d143969ec64516b629f3328"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/1/2e22fd435060cd5d.bin"]
+role = "record"
+bytes = 8
+sha256 = "2e22fd435060cd5d3cf5e3ef39f79e198b35bd2c4af31974db36601b3a2f4c91"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/1/d38a499fa32a8d5b.bin"]
+role = "record"
+bytes = 256512
+sha256 = "d38a499fa32a8d5b6e3a5dc74b23fc36a46daa9f3c37a92a5f8068d46af6bf9f"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/1/e10ee6953c648c73.bin"]
+role = "record"
+bytes = 513024
+sha256 = "e10ee6953c648c73db5dca7179b315b230392f5b7895da01a70bafcf113b5d47"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/10/0977d3f2ab857986.bin"]
+role = "record"
+bytes = 8
+sha256 = "0977d3f2ab8579868bbf7087570c9d9a7f97323e75ef7ab0a367c748203c38b1"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/10/2f7eb95d45200593.bin"]
+role = "record"
+bytes = 256512
+sha256 = "2f7eb95d45200593920d5b73b225f2584ac7149579c79ff0986fac3032f8b109"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/10/4c62d6fe77ee8ac5.bin"]
+role = "record"
+bytes = 513024
+sha256 = "4c62d6fe77ee8ac5cc4d7657a0f0c6238003d091455b30ff35b5f96c5ab15206"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/11/039537adc7ebbef2.bin"]
+role = "record"
+bytes = 8
+sha256 = "039537adc7ebbef2b75ea2bebed06d4a83308dd6102c46dbb9a49386e3daf025"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/11/0f28205d3eb03554.bin"]
+role = "record"
+bytes = 513024
+sha256 = "0f28205d3eb0355423f5aa0fc17ba7401f71c9bbcb2e85472b2577d7fecfefbc"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/11/25307ee8e0542625.bin"]
+role = "record"
+bytes = 256512
+sha256 = "25307ee8e0542625357c55f61f6bcee15ccf083be46f9f496c3e2bd8666fbeb4"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/12/155e34c3b954ac59.bin"]
+role = "record"
+bytes = 256512
+sha256 = "155e34c3b954ac594200fb93da43e760e3742e99acb2b4529fcc7a98fc273689"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/12/c68a12dba9150313.bin"]
+role = "record"
+bytes = 513024
+sha256 = "c68a12dba9150313f76fa814b8ba8a96efb8a87870cbe05eac2d1e6450e6fdc3"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/12/ec1da184fac66dec.bin"]
+role = "record"
+bytes = 8
+sha256 = "ec1da184fac66dec0ac16cb7165680010b9c956a38f7825e94116a60a65d2c58"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/13/2b1a36567f39cc1c.bin"]
+role = "record"
+bytes = 513024
+sha256 = "2b1a36567f39cc1cf388973f33b415fe0a006d14a1b1a29cb45d4870ba9a5f09"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/13/61cf88b7a1c782d3.bin"]
+role = "record"
+bytes = 8
+sha256 = "61cf88b7a1c782d39bfdd9edeef75fa2b42737f3ed30bb24741a5fdc2d5652fe"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/13/8074f7545dbec440.bin"]
+role = "record"
+bytes = 256512
+sha256 = "8074f7545dbec440c9ff90f4c1b9dc90206a66a0e8f67e5230545f19c6a7dab0"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/14/076b8f5c80d4733a.bin"]
+role = "record"
+bytes = 8
+sha256 = "076b8f5c80d4733a0432b44815c6f7f2fe1730007e6e05d31d8a6380b1c5207c"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/14/9ef1b00c56ca56a0.bin"]
+role = "record"
+bytes = 256512
+sha256 = "9ef1b00c56ca56a0b6a96149423eb6f0e4abdcf9d4ce733ac5b15f2aa8261e25"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/14/fc05c248ce190af9.bin"]
+role = "record"
+bytes = 513024
+sha256 = "fc05c248ce190af9a2979bfb965c58d3cb7b81da57616ab678ea012a5a49a938"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/15/412e217afc706ee6.bin"]
+role = "record"
+bytes = 8
+sha256 = "412e217afc706ee6c8a48f9bb1266d53ed68f6b19cc7a0f665007da2ab2d0af9"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/15/73c2359c37b9dcb9.bin"]
+role = "record"
+bytes = 256512
+sha256 = "73c2359c37b9dcb9ba22fef8f14d0c750f086ef1fbe332278f0f32ce220c724d"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/15/cb2554ee024550d0.bin"]
+role = "record"
+bytes = 513024
+sha256 = "cb2554ee024550d0f794b4ff343db85a46ea0833b0282ab35e906de720d40349"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/16/0146fbc180b58910.bin"]
+role = "record"
+bytes = 513024
+sha256 = "0146fbc180b5891075ad006c5e23ca2c219f1490a92fa210ce554ae98562b7f2"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/16/09150e88e4d57a5d.bin"]
+role = "record"
+bytes = 8
+sha256 = "09150e88e4d57a5dea018180fcca7a334a620078532f09e63a81befb1ad79d3a"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/16/7d570a6e0111218b.bin"]
+role = "record"
+bytes = 256512
+sha256 = "7d570a6e0111218b04d9c4cc482d604ab9c9818a102dea941d6f7ca1cad82653"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/17/215b248d65b90675.bin"]
+role = "record"
+bytes = 256512
+sha256 = "215b248d65b9067584ab3c484e46a3ea3def0106602b037874d74f91b144704e"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/17/41f4481a6f945563.bin"]
+role = "record"
+bytes = 8
+sha256 = "41f4481a6f9455638d779a1e804fd839d890666d7fe851503fff5335321ef381"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/17/9a46203dd4ed0303.bin"]
+role = "record"
+bytes = 513024
+sha256 = "9a46203dd4ed030373738b7c3c7e31055d228d23f8d8d61927a96026ab428445"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/18/29e0a55ead9b9d27.bin"]
+role = "record"
+bytes = 256512
+sha256 = "29e0a55ead9b9d27c810d99b1ef949ef377f6825e4ad4bb2701dcc3c00342002"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/18/6d65114c4a282db4.bin"]
+role = "record"
+bytes = 513024
+sha256 = "6d65114c4a282db4c5f5a652cd867941bce7b99a5adb58345a60a929ea0e3d67"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/18/a61b5113da497265.bin"]
+role = "record"
+bytes = 8
+sha256 = "a61b5113da497265c917127c030dac9d3c44701f44e32ed5194bbdd2a08f41d9"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/19/1752e21bf5ca2777.bin"]
+role = "record"
+bytes = 256512
+sha256 = "1752e21bf5ca2777fdbaebb3864711f0fc34b28aca4b22cc8c4f53c0dadfa85e"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/19/1a8d07b8a5cb557f.bin"]
+role = "record"
+bytes = 8
+sha256 = "1a8d07b8a5cb557f5f6ac26591987dcc56db36caa4c0c8df3bf5e491f340e912"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/19/27b43b67213016a1.bin"]
+role = "record"
+bytes = 513024
+sha256 = "27b43b67213016a1854d7e07a21816715d7f6c402b3c07a4b04bb5fff3c357d1"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/2/4adeb4453cb2e0d4.bin"]
+role = "record"
+bytes = 8
+sha256 = "4adeb4453cb2e0d4f186667f3052bf6c34b102cf0fa25910f6964f4f8a55ab84"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/2/75f77ab26dc7afc1.bin"]
+role = "record"
+bytes = 513024
+sha256 = "75f77ab26dc7afc120016cae9406fef1faa815b3976e9e08e2dfab6894279a75"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/2/87724e5562333c4d.bin"]
+role = "record"
+bytes = 256512
+sha256 = "87724e5562333c4dc148a37b93680379dbbaffd5b30e5f6a7f219be0c46f8267"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/20/834081da125888ac.bin"]
+role = "record"
+bytes = 8
+sha256 = "834081da125888acfce2299df0a1ac4dec59aa447b2a5dae1b265af1cfb9a50f"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/20/d2c5630633fbaafa.bin"]
+role = "record"
+bytes = 513024
+sha256 = "d2c5630633fbaafa8f37c19ac11a06a1fa27cd6316e6402f5a96604fac3c908a"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/20/fceb82d043d812dd.bin"]
+role = "record"
+bytes = 256512
+sha256 = "fceb82d043d812dd115b74a5722546767a2891dfa79cc9642f5e8734fc7ef7ba"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/21/3500408bdcb217ce.bin"]
+role = "record"
+bytes = 513024
+sha256 = "3500408bdcb217ce8234b7b2ab05358a62c56658f75f215e16f4493fea23b6bf"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/21/3dedf9bba5e96b1c.bin"]
+role = "record"
+bytes = 8
+sha256 = "3dedf9bba5e96b1cc9ef1aeb791e9a3c28b6f3c531e2ee2047325a996368243d"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/21/53a05c9b58861cca.bin"]
+role = "record"
+bytes = 256512
+sha256 = "53a05c9b58861cca1ba99434bf31371582224869105a56ca3fa9be8f0e50abbf"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/22/41e9c33ecf92319a.bin"]
+role = "record"
+bytes = 513024
+sha256 = "41e9c33ecf92319aed9e6043ed809c8f502601de3c9e63e86e5a77d4bdb4490a"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/22/53e351dc2b0cea5e.bin"]
+role = "record"
+bytes = 256512
+sha256 = "53e351dc2b0cea5e8aa266772f5f17be21474efb0c093434079d79ad5955bb63"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/22/6c60bf64e76ea4f0.bin"]
+role = "record"
+bytes = 8
+sha256 = "6c60bf64e76ea4f08368fa9f05842598ea7db6694cc81f692c45b8fe704e2b2d"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/23/7a75dd12215db222.bin"]
+role = "record"
+bytes = 8
+sha256 = "7a75dd12215db2226209828a1be6346fec14fe704ed33180f72d85df39e4a22b"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/23/7da14a57b32fec97.bin"]
+role = "record"
+bytes = 513024
+sha256 = "7da14a57b32fec97e8597d133c4767c541e54e81eaf5201c9a96608977c86dd7"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/23/f97bdf345f28a80b.bin"]
+role = "record"
+bytes = 256512
+sha256 = "f97bdf345f28a80b02b8a22f53dfb852ce9e57f67622b5710f2fb0b2ad0db746"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/24/16675586dccaf7bf.bin"]
+role = "record"
+bytes = 8
+sha256 = "16675586dccaf7bfc6a78671c0132abfcee5b518e5df6b6ec5ad513b4a80b2b3"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/24/3f45f9f54c9d0689.bin"]
+role = "record"
+bytes = 513024
+sha256 = "3f45f9f54c9d0689907ce6e8d3cf2445ae15571674bb36a9f0a3af0ea5bbfe4f"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/24/e40be60424a34486.bin"]
+role = "record"
+bytes = 256512
+sha256 = "e40be60424a3448679859fb5ed98d91d8e2dfb6b55a6a768c014400f1b9e1cd6"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/25/6bb9a30ef6818fda.bin"]
+role = "record"
+bytes = 256512
+sha256 = "6bb9a30ef6818fda437505340e33b39997b4b382dc322e34225712b1f1ed0187"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/25/8fbd9582f8a4756a.bin"]
+role = "record"
+bytes = 8
+sha256 = "8fbd9582f8a4756ac71f853f1e6d4236de58969f864633825d4773c99d5f9fef"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/25/f8e52a2271f5e9ce.bin"]
+role = "record"
+bytes = 513024
+sha256 = "f8e52a2271f5e9cee178d2677515f60b310d6aedc449b6726ef476ef57ec144f"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/26/8400f7f4ed6639b6.bin"]
+role = "record"
+bytes = 256512
+sha256 = "8400f7f4ed6639b63725465f019a60901443ceeafad24fb3237951bb71706a35"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/26/95e0ae236e541843.bin"]
+role = "record"
+bytes = 513024
+sha256 = "95e0ae236e541843ee4c355a15595abb61880bed2fa830c6db86979eb3f78299"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/26/d2bf0bdf5570e6a5.bin"]
+role = "record"
+bytes = 8
+sha256 = "d2bf0bdf5570e6a5d5ecf4086e4c89448eb41a7823a3e24cdc07e6cdd27ad106"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/27/13086e54ec1bfbba.bin"]
+role = "record"
+bytes = 256512
+sha256 = "13086e54ec1bfbba08d4fce953cd78620f43529cb7af74d280972747983d713c"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/27/3f5a6bd9b6e78f1b.bin"]
+role = "record"
+bytes = 513024
+sha256 = "3f5a6bd9b6e78f1b547d66b45bb8df3a48c46cb8f414042af59d93db15f1baaa"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/27/d82c5cdaa27e7d17.bin"]
+role = "record"
+bytes = 8
+sha256 = "d82c5cdaa27e7d17e0406db300e2674a68cf222ee88d19befc44805a7cfef77e"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/28/98f5e2254d3ecf98.bin"]
+role = "record"
+bytes = 8
+sha256 = "98f5e2254d3ecf9890455e1f8a8496401fad90d238b42ccbd815a8e71170c169"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/28/991d6718b576870d.bin"]
+role = "record"
+bytes = 256512
+sha256 = "991d6718b576870da79ecd59001d1f966aa2d5b492084820719798491a1258f2"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/28/f2d67df8861dae7d.bin"]
+role = "record"
+bytes = 513024
+sha256 = "f2d67df8861dae7d08b8d991d12d3b741618c9f9eaf697c0f82eba64af076ddc"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/29/4c27077756d84a41.bin"]
+role = "record"
+bytes = 8
+sha256 = "4c27077756d84a4180643dbee649ef0b538a2b98c988f396b81a07d122a1819a"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/29/d4fc31c0cf0992b0.bin"]
+role = "record"
+bytes = 513024
+sha256 = "d4fc31c0cf0992b08119f7770940f7538177148317553c85ec4a773c4801bf47"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/29/f24e905b7b61e9e6.bin"]
+role = "record"
+bytes = 256512
+sha256 = "f24e905b7b61e9e6bc163c1e025da4a85dd23f1fc41adfe2e23a695c514f1fe2"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/3/7bd89b1c924fa461.bin"]
+role = "record"
+bytes = 513024
+sha256 = "7bd89b1c924fa4615277e9fcc4c10c51d67293dad67046014d9e4a9ddce63908"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/3/a106a28ba2c2a601.bin"]
+role = "record"
+bytes = 256512
+sha256 = "a106a28ba2c2a60155fad7e7e9ac8d19704e48795170faa3701e82e170c89101"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/3/fb59317b8103f19f.bin"]
+role = "record"
+bytes = 8
+sha256 = "fb59317b8103f19f3850f0be3fe62db1aa481a9a7b31c590e6d243e98eacd375"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/30/1e5b1f8aae066693.bin"]
+role = "record"
+bytes = 256512
+sha256 = "1e5b1f8aae0666936058f686e048610906cd57c876c698c50cb759310812ea68"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/30/d3b9b99260288721.bin"]
+role = "record"
+bytes = 8
+sha256 = "d3b9b992602887215655195f9102b5a7cc010ec2041c11a6ccfe8db75926db88"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/30/ef98541f6f3f36d7.bin"]
+role = "record"
+bytes = 513024
+sha256 = "ef98541f6f3f36d778c6676be69c176f55b909489c1e326f7ddbf84d0be4af01"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/31/64504babae7a9fcb.bin"]
+role = "record"
+bytes = 256512
+sha256 = "64504babae7a9fcbda0598e1327fa476de2e4d5091753eff1602b559e5c28f5e"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/31/9eb9ffa645523544.bin"]
+role = "record"
+bytes = 513024
+sha256 = "9eb9ffa645523544b2781b3e1b3c8484b4543a8192f5d62fd340ad14a10626f3"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/4/21e70694637c91f2.bin"]
+role = "record"
+bytes = 513024
+sha256 = "21e70694637c91f2bbf578103f950b73da06ddc012ca643f4fa79e5c3c86657d"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/4/49c06ee2778aeeb2.bin"]
+role = "record"
+bytes = 8
+sha256 = "49c06ee2778aeeb2546ec20ecee4fe3fdad83788d882576d3ddc12266961387c"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/4/7aa08091ab7fc5d6.bin"]
+role = "record"
+bytes = 256512
+sha256 = "7aa08091ab7fc5d6ed736b571dd6f0933a89dea62ec56412941faa1ded098efd"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/5/794d90e8ed27f7f3.bin"]
+role = "record"
+bytes = 256512
+sha256 = "794d90e8ed27f7f3aabd895170c3d6a29b6beee3868537d3fc88e316e38bdd73"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/5/b2db17b4725d9a4a.bin"]
+role = "record"
+bytes = 513024
+sha256 = "b2db17b4725d9a4abe8b8b927b09a1ffd333b13d76fa26e07faf24fbb304c313"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/5/d080319e19d93849.bin"]
+role = "record"
+bytes = 8
+sha256 = "d080319e19d938493a9c79f7e4407ccd23f555b9771ad0d5692a13ad06097ed3"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/6/3357c908eef27c38.bin"]
+role = "record"
+bytes = 256512
+sha256 = "3357c908eef27c387367375c08490c6e24ccecd442b04008aaf94cce011e2f96"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/6/7ce673c9cb248f48.bin"]
+role = "record"
+bytes = 513024
+sha256 = "7ce673c9cb248f48afc4e9d274c2a8dd493fdf8882826d93d830592d10b465e7"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/6/8d96fade612393d8.bin"]
+role = "record"
+bytes = 8
+sha256 = "8d96fade612393d8a3d27cdff13f17a37cc9516d0fec5e7b6f7485b47792f5df"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/7/1693dbd474f81940.bin"]
+role = "record"
+bytes = 256512
+sha256 = "1693dbd474f819407bc76a0347ab473b6871306c64f0686d4d743553643a2b52"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/7/8ee9b477730a13aa.bin"]
+role = "record"
+bytes = 513024
+sha256 = "8ee9b477730a13aa94669eebe5b9c866c17acd2be7c4b69e61e8975bd81ba63a"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/7/d6f3eed75218d423.bin"]
+role = "record"
+bytes = 8
+sha256 = "d6f3eed75218d423eda611b2c1df678f75b22c601b7a346654bbf5522faebe4a"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/8/664b158e31a19813.bin"]
+role = "record"
+bytes = 256512
+sha256 = "664b158e31a19813fbbb434e5df885f9a563639889491f2018d736e1b3d06bd5"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/8/7a2916b984ea5cc0.bin"]
+role = "record"
+bytes = 513024
+sha256 = "7a2916b984ea5cc0a212db744deb790409545a33d2013ed9c2ab4efda427ff88"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/8/e2f385e5c93ce6ac.bin"]
+role = "record"
+bytes = 8
+sha256 = "e2f385e5c93ce6acf9214002b179f5ee526033df1a55def13089023d05acb81a"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/9/0317e374c81b9671.bin"]
+role = "record"
+bytes = 8
+sha256 = "0317e374c81b96713f6e5f642966c47daac253ddebbf60e776072d2651e35a69"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/9/32023db059e734c2.bin"]
+role = "record"
+bytes = 513024
+sha256 = "32023db059e734c2833956dd44973b86773a0c3dd63a2e8b6b486021230d14e8"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/values/9/6d21253187cce36b.bin"]
+role = "record"
+bytes = 256512
+sha256 = "6d21253187cce36b1af900b3765b40d80a1fb96325d302a436751c77b8c1d96b"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/capture/versions.json"]
+role = "record"
+bytes = 1231
+sha256 = "fede9db59dfe95f2bf927106f3ac33d50a6f741cb3de8b667d455414b047a95e"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/card.json"]
+role = "record"
+bytes = 17215
+sha256 = "e03a05ce6652349f5fff46335d66d7ab36478d6ef7978e7abd18130b086d95d6"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/cards/LLAMA32_1B-llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager.json"]
+role = "record"
+bytes = 17215
+sha256 = "e03a05ce6652349f5fff46335d66d7ab36478d6ef7978e7abd18130b086d95d6"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/control/cos_sin_cache.json"]
+role = "record"
+bytes = 191
+sha256 = "ca08e8a92d191d44437a9e84352a33b3b5d4c15019f8d3f3f17167affe338362"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/control/cos_sin_cache.npy"]
+role = "record"
+bytes = 16777344
+sha256 = "e8356b9d393c2c928d0152695661a96599f42ebccf9d82adfed93bdd4665fa22"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/control/spec_tokens.json"]
+role = "record"
+bytes = 3938
+sha256 = "29e9aab049d13be10bd647d0d2184d90db26a49df7240a9e76677cf59a50b1e5"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/control/tokens.json"]
+role = "record"
+bytes = 7540
+sha256 = "cf359faf67b9750c014ae619d95fa28b31aa55e8d92bd1a78914a434bbd150e5"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/control/versions.json"]
+role = "record"
+bytes = 1231
+sha256 = "330161e9002ee1bf6d6592a0a50e6cea43b6257193f0f98a16d9a14a470034a7"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/experiment.json"]
+role = "record"
+bytes = 10565
+sha256 = "d0c914549d903311832aeef1653ea350630be816a6bc86b4ebe5442cf2de8328"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/fold_summary.json"]
+role = "record"
+bytes = 139247
+sha256 = "b384945f9754e60e9e7e7bf7c96399ea1cd7bb51ab88346cf8025b53ad5982c4"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/gates.json"]
+role = "record"
+bytes = 5383
+sha256 = "55ad67ef482c1c0db6550a02c8ded647163c1d6e3988ce7631d68659a78c94e9"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/gpu_done.json"]
+role = "record"
+bytes = 419
+sha256 = "95fce2492eb355904d4574cc4f1538ca43f89b38cdb0ef270b61036713f7d297"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/logs/capture.log"]
+role = "record"
+bytes = 12904
+sha256 = "3af00c500be01982faf46e11d7c3fa4f64d5d7e0366fd71a756deb4de9af4876"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/logs/control.log"]
+role = "record"
+bytes = 12142
+sha256 = "0424427e09afec50e9075a2fa65f0fe6d59638932cef3140f89a4c85d7b7e83e"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/logs/fold.log"]
+role = "record"
+bytes = 848
+sha256 = "4d694d5dc7b3b0f3fb953a23d8f50ac0e6263e303c9908cb82e9ffc3cb59a433"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/logs/resolve.log"]
+role = "record"
+bytes = 399
+sha256 = "96e2f1ed7f99bd25a3f6aa992a5d9ce153aebe7fa4be84117c66296a3538926d"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/resolution.json"]
+role = "record"
+bytes = 191918
+sha256 = "13a27bb4c17b8cca1148bd72575094af1ddc245abb687532e3a5cc0cb2289047"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/resolution.md"]
+role = "record"
+bytes = 31258
+sha256 = "6644c8ec689dd6e0f36b59b35fd2c8cba9ec01fbd7864ac488e24d6cdda8b9f6"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/run.json"]
+role = "record"
+bytes = 5537
+sha256 = "28684eae467fd27843219b75827c3f22baf4a05eff7192532e5e038f4537ee6f"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/spec.json"]
+role = "record"
+bytes = 6679
+sha256 = "15ebecfca033c512b53d3af89238c1a6a84e98bdb75cca0895010a3c5b092f26"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match/stages.json"]
+role = "record"
+bytes = 5394
+sha256 = "3cdbb3aa462204e4dce9126dd8aa5d3f67350e620ebb87bdfb6725de05527c61"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match_compare.json"]
+role = "record"
+bytes = 100999
+sha256 = "42cbaef23192ebffc742a8d988bc88da19692919723bdcb4edb40ab7f86a79c0"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match_compare.log"]
+role = "record"
+bytes = 805
+sha256 = "2f8e5d8cd7027aad134b31e0b4704278337c2b9c0c821a89d5db25981094df1a"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match_shape.json"]
+role = "record"
+bytes = 183
+sha256 = "6d3709b7efd858c731353821a1cc174e1008c9ca3f24f91ded2ac4f87bd83a66"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match_stoch.json"]
+role = "record"
+bytes = 48898
+sha256 = "7297d35a4514c60ce3bd31fc18d9a2cfea9e3984fff069f2ff11f5bfd9f30a47"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match_stoch.log"]
+role = "record"
+bytes = 1480
+sha256 = "a2ceccf6024aa34f6e6b6e7f9bacf206cb4f1131575b286ceb450efd76ca91e8"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."match_summary.json"]
+role = "record"
+bytes = 5287
+sha256 = "2cc703c5da86faedc1c8ea882b26ea175e1e728019f1ce792de5f7dc4241c75e"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."row.log"]
+role = "record"
+bytes = 3573
+sha256 = "7fa83005bfcafba4a83838108d4e4fc9ff686d99e364e205321a36db11a23635"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."source_identity.json"]
+role = "record"
+bytes = 5439
+sha256 = "0bb29f8123cd9c9edfe80f2731fbe8932fe471acf1ac4cfcbea984104cdc77b2"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."source_identity.venv312.json"]
+role = "record"
+bytes = 5439
+sha256 = "0bb29f8123cd9c9edfe80f2731fbe8932fe471acf1ac4cfcbea984104cdc77b2"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."stages.txt"]
+role = "record"
+bytes = 1008
+sha256 = "51bae4341706abdfefc11c89adf54b9321b673ee441dedefd116f96519b62d19"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."target_family.build.json"]
+role = "record"
+bytes = 438
+sha256 = "83d12146ebd1327abe99c24a1697f5a59c9b5c0220743c37dd1b8a1b59ca15de"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."target_family.json"]
+role = "record"
+bytes = 458
+sha256 = "10763b1ecd78373f5ed695aea8083bd821f28284db3a69123fd40ea2b78ef15f"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."timeline.jsonl"]
+role = "record"
+bytes = 20966
+sha256 = "937345f0e44aef04bc582f57cb2dc34b761856a87b2de3217dc714743bbb7069"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."timeline_report.json"]
+role = "record"
+bytes = 12723
+sha256 = "e7d747457d0dbef1475eaa9ddfaf94fc324daa5b61ba053b67b6c2a8407966f2"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."timeline_report.md"]
+role = "record"
+bytes = 1507
+sha256 = "16909824532c80064ce8dd7e24d3a53fa184f4e10282010e904c9d4e0e53b4c4"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."tree.json"]
+role = "record"
+bytes = 482
+sha256 = "5da9d75a367e03afc18e6b325f43d859bb44af82658d8b7c8cac3f8cd68eb7f6"
+
+[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".files."weights_of_record.log"]
+role = "record"
+bytes = 314
+sha256 = "ec44604a2a2d5b447fc04f461f88abc81eb735408c20a0addfb4bdcb71ab8b71"

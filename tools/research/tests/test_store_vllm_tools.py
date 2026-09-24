@@ -1,4 +1,4 @@
-"""Phase 5a: the vLLM stage Tools (integrations/vllm/verity_vllm/research_tools.py), typed outputs (`outputs.json`) and the
+"""Phase 5a: the vLLM stage Tools (integrations/vllm/verity_vllm/harness/research_tools.py), typed outputs (`outputs.json`) and the
 durability gate (`research data preserved`, store/preserved.py), against a LocalStore with the FsRemote."""
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ REPO = HERE.parents[2]
 RUN_FIXTURE = HERE / "fixtures" / "run_v0.2"
 RUN_ID = "r20260922-120000-abcd"
 ROW = "llama32-1b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager"
-WRAPPER = "integrations/vllm/verity_capture/sweep/run_row_v2.sh"
+WRAPPER = "integrations/vllm/verity_vllm/ops/run_row_v2.sh"
 CONDS = {"hw.family": "l40s", "tool.vllm.build.torch": "2.9.0", "tool.vllm.build.vllm": "0.11.0",
          "tool.vllm.match.torch": "2.9.0", "tool.vllm.match.vllm": "0.11.0", "tool.vllm.commit.torch": "2.9.0", "tool.vllm.commit.vllm": "0.11.0"}
 
@@ -41,7 +41,7 @@ def _drv(tool, argv: list[str], inputs: dict | None = None) -> str:
 def test_vllm_tools_are_registered_and_loadable_by_name():
     for stage in ("build", "match", "commit"):
         t = tools_registry.load(f"vllm.{stage}", REPO)
-        assert t.name == f"vllm.{stage}" and t.spec == f"integrations.vllm.verity_vllm.research_tools:VLLM_{stage.upper()}"
+        assert t.name == f"vllm.{stage}" and t.spec == f"integrations.vllm.verity_vllm.harness.research_tools:VLLM_{stage.upper()}"
         assert t.command == ["bash", WRAPPER, "stage", stage]
         assert t.key_conditions == ["hw.family", f"tool.vllm.{stage}.torch", f"tool.vllm.{stage}.vllm"]
         assert "integrations/vllm/**" in t.closure and "packages/verity/src/verity/verification/**" in t.closure
@@ -97,9 +97,9 @@ def test_stage_flags_that_change_outputs_are_key_with_explicit_defaults():
 def test_parse_accepts_row_pod_argv_too():
     if str(REPO) not in sys.path:
         sys.path.insert(0, str(REPO))         # the declaration module by dotted path (tools_registry falls back to loading it by file)
-    from integrations.vllm.verity_vllm import research_tools as RT
+    from integrations.vllm.verity_vllm.harness import research_tools as RT
 
-    p = RT.parse(["bash", "/workspace/src/integrations/vllm/verity_capture/sweep/row_pod.sh", ROW, "LLAMA32_1B", "repo", "rev", "build,match"], stage="build")
+    p = RT.parse(["bash", "/workspace/src/integrations/vllm/verity_vllm/ops/row_pod.sh", ROW, "LLAMA32_1B", "repo", "rev", "build,match"], stage="build")
     assert p["stage"] == "build,match" and p["row"] == ROW and p["model"] == "repo" and p["batch"] == 1
     q = RT.parse(["bash", WRAPPER, "stage", "commit", ROW, "R", "repo", "rev", "--pairs=4", "--required-classes", "module_out"], stage="commit")
     assert q["pairs"] == "4" and q["required_classes"] == "module_out" and q["replay_args"] is None

@@ -1,0 +1,38 @@
+# Declared entry points of integrations/vllm: the roots of tests/dead_code_census.py and tests/test_no_dead_modules.py.
+#
+# One entry per line (paths relative to integrations/vllm; `#` starts a comment):
+#   <path>.sh or a glob of shells   a shell entry point: every module it runs (`-m mod`, `python path.py`, `<name>.py`, `from mod import`
+#                                   / `import mod` in heredocs and `-c` strings) is live, and so is every shell it names (transitively)
+#   <dir>/                          every module under the directory is a root
+#   <dotted.module>                 a Python entry point
+#
+# A shell entry point is live because it is declared here, not because something imports it.  Add new runners here (or match the rules
+# below); never let the census decide that a runner is dead.  Shells matched by no entry are still never deleted by the census -- a
+# module only such a shell runs stays non-live and must be named in dead_code_keep.json.
+
+# --- rules: every sweep runner and every negatives runner (the adversarial inputs the verifier must reject)
+verity_vllm/ops/canary.sh        # the former sweep/*.sh glob (ops/ also holds bench/ shells)
+verity_vllm/ops/compiled_commit.sh
+verity_vllm/ops/fa3_row_negatives.sh
+verity_vllm/ops/pod_fa2_tap.sh
+verity_vllm/ops/pod_fa3_tap.sh
+verity_vllm/ops/pod_hidden_gpu.sh
+verity_vllm/ops/row_pod.sh
+verity_vllm/ops/row_pod_tp2.sh
+verity_vllm/ops/run_row_v2.sh
+verity_vllm/ops/stoch_negative_n3.sh
+verity_vllm/ops/stoch_negatives.sh
+verity_vllm/ops/tp_stage.sh
+**/*_negatives.sh
+**/*_negative_*.sh
+
+# --- pod runtime and acquisition gates
+verity_vllm/ops/pod_bootstrap.sh
+verity_vllm/ops/pod_gate.sh
+
+# --- Python entry points
+verity_vllm.check.adversarial        # the ov-adversarial mutation harness: hostile-adapter negatives the sealed checkers must reject
+verity_vllm.harness.research_tools
+verity_vllm.harness.rebuild_digest_gate
+verity_vllm.query.cli
+tests/regression/
