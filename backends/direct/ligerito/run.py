@@ -517,69 +517,146 @@ def _file_coins(d: Path, e: dict, cls=LiveCoins):
     return cls(slots)
 
 
-def verify_session(d: Path, records: list[Path], device: str = "cuda") -> dict:
+def record_slots(stream_stmt: bytes, rec: dict, rounds: int) -> list[bytes]:
+    """The coin slots a live verifier issued for one batch, from ITS session record alone (red-team-ligerito-3 R3-7): the
+    batch context of the STMT (rebuilt by the caller from the statement / params / key it verifies, and equal to the
+    record's ``stmt_sha256``) and the verifier's own R commitments ``coin_commit(r_k, s_k)``; slot k =
+    ``expand_challenge(ctx, k, label_k, r_k, 32)`` with ``label_k`` the label the verifier received with MSG k.  Exactly
+    ``rounds`` coins and rounds, in order.  Nothing comes from the dump (``stream_binding`` / ``.coins`` are prover-written:
+    a label or commitment list chosen after the coin opened would grind the challenge)."""
+    coins, rds = rec.get("coins") or [], rec.get("rounds") or []
+    if rounds < 1 or len(coins) != rounds or len(rds) != rounds or [rd.get("k") for rd in rds] != list(range(rounds)):
+        raise ValueError(f"the verifier's record has {len(coins)} coins / {len(rds)} rounds, its session {rounds} rounds")
+    if rec.get("stmt_sha256") != sha256(stream_stmt).hex():
+        raise ValueError("the verifier's record is for another STMT (statement / params / key)")
+    ops = [(bytes.fromhex(c["r"]), bytes.fromhex(c["s"])) for c in coins]
+    ctx = live_mod.batch_context(stream_stmt, [live_mod.pm.coin_commit(r, s) for r, s in ops])
+    return [live_mod.expand_challenge(ctx, k, rd["label"].encode(), r, 32) for k, ((r, _), rd) in enumerate(zip(ops, rds))]
+
+
+def _load_session(sd: Path) -> tuple[str, dict, dict, dict]:
+    sj, vj = (sd / "session.json").read_bytes(), (sd / "verdict.json").read_bytes()
+    sess, verdict = json.loads(sj), json.loads(vj)
+    return verdict.get("session_id", sd.name), sess, verdict, {"dir": str(sd), "session_json_sha256": sha256(sj).hex(),
+                                                               "verdict_json_sha256": sha256(vj).hex()}
+
+
+def verify_session(d: Path, records: list[Path], device: str = "cuda", sessions_root: Path | None = None) -> dict:
     """Authenticate a live dump's coins against the issuing verifier's own session records (``session.json`` +
-    ``verdict.json`` of ``live.ChallengeServerSession``, one dir per session).  Per accepted live proof: the verifier batch
-    whose coin openings are the dump's; its STMT digest = this statement + params + key; every round's recorded
-    ``msg_sha256`` and label = those the proof's own absorbs give (the verifier opened coin k only after MSG k); the session
-    ACCEPTED; the proof verifies.  Only such proofs claim the interactive union, and the job the union over ``n_proofs``
-    (red-team F12, F5)."""
+    ``verdict.json`` of ``live.ChallengeServerSession``, one dir per session).  Per accepted live proof: a batch of an
+    ACCEPTED session whose ``stmt_sha256`` is this statement + params + key; the proof verifies with the coin slots derived
+    from that record alone (``record_slots``: the verifier's commitments, openings and received labels, exact length) and
+    consumes all of them; every round's recorded ``msg_sha256`` and label = those the proof's own absorbs give (the verifier
+    opened coin k only after MSG k).  Each record batch authenticates at most one proof.
+    Claims (red-team F12, F5, R3-10): per proof, the interactive union times the number of batches the verifier opened for
+    that STMT across every session under ``sessions_root`` (the verifier's own store, aborted / refused sessions included:
+    abort-and-retry); without ``sessions_root`` no interactive claim is made.  The job: the union over its distinct
+    statements (at least the manifest's ``n_proofs``)."""
     man = json.loads((d / "manifest.json").read_text())
     pv = _dump_prover(d, man, device)
-    by_open: dict = {}
+    by_stmt: dict = {}
+    rec_meta = []
     for r in records:
-        sd = Path(r) if Path(r).is_dir() else Path(r).parent
-        sess, verdict = json.loads((sd / "session.json").read_text()), json.loads((sd / "verdict.json").read_text())
+        sid, sess, verdict, meta = _load_session(Path(r) if Path(r).is_dir() else Path(r).parent)
+        rec_meta.append(meta)
         for b in sess["batches"]:
-            if b.get("coins"):
-                by_open[b["coins"][0]["r"]] = (verdict.get("session_id", sd.name), b, verdict)
+            if b.get("stmt_sha256"):
+                by_stmt.setdefault(b["stmt_sha256"], []).append((sid, b, verdict))
+    attempts: dict | None = None
+    unrecorded: list[str] = []
+    if sessions_root is not None:
+        attempts = {}
+        for sd in sorted(p for p in Path(sessions_root).iterdir() if p.is_dir()):
+            if not (sd / "session.json").exists():
+                if (sd / "hello.json").exists():
+                    unrecorded.append(sd.name)      # opened, record never written: its statements are unknown
+                continue
+            for b in json.loads((sd / "session.json").read_text()).get("batches", []):
+                if b.get("stmt_sha256"):
+                    attempts[b["stmt_sha256"]] = attempts.get(b["stmt_sha256"], 0) + 1
+        if unrecorded:
+            attempts = None
+    used: set = set()
     items = []
     for e in man["files"]:
         if e["coins"] != "live" or e["expect"] != "accept":
             continue
         item = {"proof": e["proof"], "authenticated": False}
         try:
-            b = e["stream_binding"]
-            sid, rec, verdict = by_open.get(b["openings"][0][0]) or (None, None, None)
-            if rec is None:
-                raise ValueError("no verifier session batch opened these coins")
-            item["session"], item["batch"] = sid, rec["batch"]
-            if not verdict.get("accepted"):
-                raise ValueError(f"session {sid} was not accepted by its verifier: {verdict.get('errors')}")
             st, pf = read_statement((d / e["stmt"]).read_bytes()), read_proof((d / e["proof"]).read_bytes())
             key_sha = pv.key_for(pv.stmt_layout(st, bool(pf.params.get("zk"))))[3]
             stream_stmt = b"lgto-stmt|v1|" + sha256(pf.absorbed_params()) + st.digest() + key_sha
-            if bytes.fromhex(b["statement"]) != stream_stmt or rec.get("stmt_sha256") != sha256(stream_stmt).hex():
-                raise ValueError("the stream's STMT is not this statement / params / key")
-            if [[c["r"], c["s"]] for c in rec["coins"]] != b["openings"]:
-                raise ValueError("the dump's coin openings are not the verifier's")
-            vc = _file_coins(d, e, prove_mod.SessionReplayCoins)
-            ok, why, info = pv.verify(st, pf, vc)
-            if not ok:
-                raise ValueError(f"proof rejected: {why}")
-            if len(vc.msgs) != len(rec["rounds"]):
-                raise ValueError(f"{len(vc.msgs)} coin slots in the proof, {len(rec['rounds'])} rounds in the session")
-            for k, (m, lb, rd) in enumerate(zip(vc.msgs, vc.labels, rec["rounds"])):
-                if rd["msg_sha256"] != sha256(m).hex() or rd["label"] != lb.decode():
-                    raise ValueError(f"round {k}: the verifier opened its coin on another message than the proof's")
-            item.update(authenticated=True, rounds=len(rec["rounds"]),
-                        claim=prove_mod.soundness_claim(info["union"], "live", verifier_record=True))
+            digest = sha256(stream_stmt).hex()
+            item["stmt_sha256"] = digest
+            cands = [c for c in by_stmt.get(digest, []) if (c[0], c[1]["batch"]) not in used]
+            if not cands:
+                raise ValueError("no unused batch of the given verifier sessions has this STMT (statement / params / key)")
+            hint = ((e.get("stream_binding") or {}).get("openings") or [[None]])[0][0]     # an index into the record only
+            cands.sort(key=lambda c: not (c[1].get("coins") and c[1]["coins"][0]["r"] == hint))
+            whys = []
+            for sid, rec, verdict in cands:
+                try:
+                    if not verdict.get("accepted"):
+                        raise ValueError(f"session {sid} was not accepted by its verifier: {verdict.get('errors')}")
+                    slots = record_slots(stream_stmt, rec, int(verdict["rounds"]))
+                    vc = prove_mod.SessionReplayCoins(slots)
+                    try:
+                        ok, why, info = pv.verify(st, pf, vc)
+                    except StopIteration:
+                        raise ValueError(f"the proof draws more than the {len(slots)} coins the verifier issued") from None
+                    if not ok:
+                        raise ValueError(f"proof rejected under the verifier's coins: {why}")
+                    if len(vc.msgs) != len(slots):
+                        raise ValueError(f"the proof drew {len(vc.msgs)} coins, the verifier issued {len(slots)}")
+                    for k, (m, lb, rd) in enumerate(zip(vc.msgs, vc.labels, rec["rounds"])):
+                        if rd["msg_sha256"] != sha256(m).hex() or rd["label"] != lb.decode():
+                            raise ValueError(f"round {k}: the verifier opened its coin on another message / label than the proof's")
+                except (ValueError, KeyError, IndexError) as ex:
+                    whys.append(f"session {sid} batch {rec.get('batch')}: {ex}")
+                    continue
+                used.add((sid, rec["batch"]))
+                n_att = None if attempts is None else max(1, attempts.get(digest, 0))
+                claim = prove_mod.soundness_claim(info["union"], "live", verifier_record=True)
+                if n_att is None:
+                    claim = dict(claim, claimed_log2=None, per_session_log2=claim["claimed_log2"],
+                                 basis=f"none: sessions {unrecorded} under --sessions-root have no record" if unrecorded else
+                                 "none: the verifier's full session store was not given (--sessions-root), so abort-and-retry "
+                                 "sessions for this STMT are not counted (R3-10)")
+                else:
+                    claim = dict(claim, per_session_log2=claim["claimed_log2"], attempts=n_att,
+                                 claimed_log2=claim["claimed_log2"] + math.log2(n_att),
+                                 basis=claim["basis"] + f"; x {n_att} batch(es) the verifier opened for this STMT (sessions root)")
+                dump_slots = None
+                if e.get("coins_file"):
+                    raw = (d / e["coins_file"]).read_bytes()
+                    dump_slots = [raw[4 + 32 * i:4 + 32 * (i + 1)] for i in range(int.from_bytes(raw[:4], "little"))]
+                item.update(authenticated=True, session=sid, batch=rec["batch"], rounds=len(slots), claim=claim,
+                            dump_coins_equal_record=dump_slots == slots)
+                break
+            if not item["authenticated"]:
+                raise ValueError("; ".join(whys))
         except (ValueError, KeyError, IndexError) as ex:
             item["why"] = str(ex)
         items.append(item)
-    n_proofs = int(man.get("n_proofs") or 1)
-    per = [i["claim"]["claimed_log2"] for i in items if i["authenticated"]]
-    ok = bool(items) and all(i["authenticated"] for i in items)
-    out = {"checker": "backends.direct.ligerito.run verify-session (proof MSG digests vs the issuing verifier's session record)",
-           "records": [str(r) for r in records], "live_proofs": len(items), "authenticated": sum(i["authenticated"] for i in items),
-           "n_proofs": n_proofs, "per_proof_claimed_log2": max(per) if ok else None,
-           "job_claimed_log2": max(per) + math.log2(n_proofs) if ok else None, "items": items}
+    stmts = {i["stmt_sha256"]: i["claim"] for i in items if i["authenticated"]}
+    n_proofs = max(int(man.get("n_proofs") or 1), len(stmts))
+    ok = bool(items) and all(i["authenticated"] for i in items) and len(stmts) == n_proofs
+    per = [c["claimed_log2"] for c in stmts.values()]
+    claimable = ok and all(p is not None for p in per)
+    job = math.log2(sum(2.0 ** p for p in per)) if claimable else None
+    out = {"checker": "backends.direct.ligerito.run verify-session (coins derived from the issuing verifier's session record; "
+                      "proof MSG digests + labels vs that record)",
+           "records": rec_meta, "sessions_root": str(sessions_root) if sessions_root else None, "unrecorded_sessions": unrecorded,
+           "live_proofs": len(items), "authenticated": sum(i["authenticated"] for i in items), "n_proofs": n_proofs,
+           "distinct_statements": len(stmts), "per_proof_claimed_log2": max(per) if claimable else None,
+           "job_claimed_log2": job, "items": items}
     (d / "verify_session.json").write_text(json.dumps(out, indent=1, default=str))
     for i in items:
         print(f"  {i['proof']}: {'authenticated' if i['authenticated'] else 'NOT authenticated: ' + i['why']}"
               f"{' (session ' + str(i.get('session')) + ' batch ' + str(i.get('batch')) + ')' if i.get('session') else ''}", flush=True)
     print(f"verify-session {d}: {out['authenticated']}/{out['live_proofs']} live proofs authenticated; job claim "
-          f"{out['job_claimed_log2']} (n_proofs {n_proofs})", flush=True)
+          f"{out['job_claimed_log2']} (n_proofs {n_proofs}; attempts {'from ' + str(sessions_root) if sessions_root else 'not counted: no claim'})",
+          flush=True)
     return out
 
 
@@ -871,10 +948,13 @@ def main(argv=None) -> int:
     s = sub.add_parser("verify-session")
     s.add_argument("dir")
     s.add_argument("records", nargs="+", help="the verifier's session dirs (session.json + verdict.json)")
+    s.add_argument("--sessions-root", help="the verifier's whole session store (every session it opened): counts the "
+                                           "batches per statement, aborted ones included; required for a claim")
     s.add_argument("--device", default="cuda")
     args = ap.parse_args(argv)
     if args.cmd == "verify-session":
-        out = verify_session(Path(args.dir), [Path(r) for r in args.records], args.device)
+        out = verify_session(Path(args.dir), [Path(r) for r in args.records], args.device,
+                             Path(args.sessions_root) if args.sessions_root else None)
         return 0 if out["live_proofs"] and out["authenticated"] == out["live_proofs"] else 1
     if args.cmd == "gate":
         if args.l is None:
