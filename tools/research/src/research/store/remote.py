@@ -11,6 +11,10 @@
 `FsRemote(root)` is a directory (also the test double).  `S3Remote` lives in `remote_s3.py`.  `load_remote()` reads
 `~/.research/store.toml` (or `$RESEARCH_STORE_CONFIG`); no file, or no `[remote]` table, means no remote: the local store is the
 only replica and nothing is ever called PRESERVED.  The config names the ENV VARS that hold credentials; it never holds secrets.
+When the default `~/.research/store.toml` is absent and `$RESEARCH_STORE_CONFIG` is unset, the environment stands in (a cloud VM
+with only the Cursor secrets): `R2_ENDPOINT` + `R2_BUCKET` (which must be the bucket `tools/research/store.pod.toml` names) + `AWS_ACCESS_KEY_ID` /
+`AWS_SECRET_ACCESS_KEY` [+ `AWS_SESSION_TOKEN`].  A file that exists always wins; an explicit `$RESEARCH_STORE_CONFIG` naming a
+missing file still means no remote.
 For `type = "s3"` the optional `session_token_env` (default `AWS_SESSION_TOKEN`) names the env var of a temporary credential's
 session token; when that variable is set the token is sent (and signed) with every request, when unset the key pair is a
 long-lived one and nothing changes.
@@ -24,6 +28,9 @@ import threading
 import tomllib
 from pathlib import Path
 from typing import Protocol, runtime_checkable
+
+
+POD_CONFIG = Path(__file__).resolve().parents[3] / "store.pod.toml"   # names the store's bucket; the environment fallback must match it
 
 
 class RemoteConflict(Exception):
@@ -119,18 +126,43 @@ def config_path(explicit: Path | str | None = None) -> Path:
     return Path(os.environ.get("RESEARCH_STORE_CONFIG", Path.home() / ".research" / "store.toml")).expanduser()
 
 
+def env_remote_config(environ: dict | None = None) -> dict | None:
+    """The `[remote]` table the Cursor secrets stand for, or None when `R2_ENDPOINT` and `R2_BUCKET` are both unset.  ConfigError
+    when only one is set or the bucket is not the store's."""
+    env = os.environ if environ is None else environ
+    endpoint, bucket = env.get("R2_ENDPOINT"), env.get("R2_BUCKET")
+    if not endpoint and not bucket:
+        return None
+    if not endpoint or not bucket:
+        raise ConfigError(f"environment remote: {'R2_BUCKET' if endpoint else 'R2_ENDPOINT'} is not set")
+    try:
+        expected = tomllib.loads(POD_CONFIG.read_text(encoding="utf-8"))["remote"]["bucket"]
+    except (OSError, KeyError, tomllib.TOMLDecodeError) as e:
+        raise ConfigError(f"environment remote: cannot read the store's bucket from {POD_CONFIG} ({type(e).__name__})") from None
+    if bucket != expected:
+        raise ConfigError(f"environment remote: R2_BUCKET is not the research store's bucket ({POD_CONFIG.name})")
+    return {"type": "s3", "bucket": bucket, "endpoint": endpoint, "region": "auto",
+            "access_key_id_env": "AWS_ACCESS_KEY_ID", "secret_access_key_env": "AWS_SECRET_ACCESS_KEY"}
+
+
 def load_remote(path: Path | str | None = None) -> Remote | None:
-    """The configured remote, or None when `store.toml` is absent or has no `[remote]` table."""
+    """The configured remote, or None when `store.toml` is absent or has no `[remote]` table (module docstring: the environment
+    fallback)."""
     p = config_path(path)
     if not p.is_file():
+        if path is None and "RESEARCH_STORE_CONFIG" not in os.environ:
+            r = env_remote_config()
+            return _remote_from(r, "environment (R2_ENDPOINT/R2_BUCKET)") if r else None
         return None
     try:
         cfg = tomllib.loads(p.read_text(encoding="utf-8"))
     except tomllib.TOMLDecodeError as e:
         raise ConfigError(f"{p}: {e}") from e
     r = cfg.get("remote")
-    if not r:
-        return None
+    return _remote_from(r, p) if r else None
+
+
+def _remote_from(r: dict, p: Path | str) -> Remote:
     t = r.get("type")
     if t == "fs":
         if not r.get("path"):

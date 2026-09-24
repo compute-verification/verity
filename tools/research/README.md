@@ -23,22 +23,38 @@ src/research/
 ├── env.py          conditions(): the one baseline of an attempt's conditions (source, runtime, hardware, execution); ONE SKU->family map
 ├── store/          the evidence store (README.md there is the contract): tool, tools_registry, derivation, attempt, cli_prov (provenance)
 │                   + canon, local, index, remote, kinds, cli (storage)
-├── telemetry/      the recorded-attempt harness: job.json, status.json, events.jsonl, resources.jsonl, failure.json  (unmodified upstream)
-└── pods/           RunPod lifecycle (runpod.py), budget cap, memory guard, and pod-side shell guards under sh/           (unmodified upstream)
+├── telemetry/      the recorded-attempt harness: job.json, status.json, events.jsonl, resources.jsonl, failure.json
+└── pods/           RunPod lifecycle (runpod.py), budget cap, memory guard, and pod-side shell guards under sh/
 tests/              pure-Python; the machine side of --on is exercised locally (launch_request is a plain function)
 tests/fixtures/     job_v0.1.json: a record as the harness alone writes it; run_v0.2/: a finished run dir with a `store` section (state.json -> status.json at test time)
 ~~~
 
-`telemetry/` and `pods/` were promoted verbatim from `veritor` `zk/campaign/`
-at commit `df7fbea3d` (branch `lane/r17-mprof`, 2026-09-21) with import paths
-adjusted and nothing else; `research` never edits them, so reconciling a
-newer upstream revision is a directory diff. `pods/sh/deadline.sh` and
+`telemetry/` and `pods/` were promoted from `veritor` `zk/campaign/` at
+commit `df7fbea3d` (branch `lane/r17-mprof`, 2026-09-21) and have since been
+edited here like the rest of the package. `pods/sh/deadline.sh` and
 `rearm.sh` came from the r17 deadman pod (`/root/dm`), where they had never
 been committed. The diffs in `telemetry/patches/` are unapplied cancel-intent
 integrations against veritor's launcher scripts.
 
 `research run` pre-writes `job.json` (the harness keeps an existing one) and
 calls the harness's `run()` directly: one execution engine, one record.
+
+## Credentials
+
+The laptop's files come first and, where they exist, always win:
+`~/.runpod/config.toml` (API key), `~/.runpod/ssh/runpodctl-ssh-key` (+ its
+`.pub` and `veritor-campaign-known_hosts`), `~/.research/store.toml` (the
+store's remote). Where a file is absent (a cloud VM with only the Cursor
+secrets) the environment stands in:
+
+| laptop file | environment | notes |
+|---|---|---|
+| `~/.runpod/config.toml` | `RUNPOD_API_KEY` | default GraphQL URL |
+| `~/.runpod/ssh/runpodctl-ssh-key` | `RUNPOD_SSH_KEY_B64` | decoded once to a mode-600 file under `$XDG_STATE_HOME/research/runpod/` (default `~/.local/state`), known_hosts beside it; public key via `ssh-keygen -y` |
+| `~/.research/store.toml` | `R2_ENDPOINT`, `R2_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` [, `AWS_SESSION_TOKEN`] | only when `$RESEARCH_STORE_CONFIG` is unset; `R2_BUCKET` must be the store's bucket (the one `tools/research/store.pod.toml` names) |
+
+No value is ever printed. `research data mint-credential` already read the
+same variables.
 
 ## Commands
 
