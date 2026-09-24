@@ -479,11 +479,22 @@ def verify_dir(d: Path, device: str = "cuda") -> dict:
         st = read_statement((d / e["stmt"]).read_bytes())
         try:
             pf = read_proof((d / e["proof"]).read_bytes())
-            vc = make_coins(e["coins"], e.get("coins_seed", 1)) if e["coins"] != "live" else _file_coins(d, e)
+            live = e["coins"] == "live"
+            vc = _file_coins(d, e, prove_mod.SessionReplayCoins) if live else make_coins(e["coins"], e.get("coins_seed", 1))
         except (ValueError, KeyError) as ex:
             ok, why, info = False, f"unreadable: {ex}", {"seconds": 0.0}
         else:
-            ok, why, info = pv.verify(st, pf, vc)
+            try:
+                ok, why, info = pv.verify(st, pf, vc)
+            except StopIteration:
+                ok, why, info = False, "the proof draws more coins than the file holds", {"seconds": 0.0}
+            b = e.get("stream_binding") if live else None
+            n_file = int.from_bytes((d / e["coins_file"]).read_bytes()[:4], "little") if live else 0
+            if ok and live and len(vc.msgs) != n_file:
+                ok, why = False, f"the proof drew {len(vc.msgs)} of the file's {n_file} coins"
+            if ok and b is not None and [lb.decode() for lb in vc.labels] != b["labels"]:
+                # a slot derived under a label other than the one the protocol asks for there (red-team-ligerito-3 R3-7 A)
+                ok, why = False, "stream binding labels are not the protocol's"
         good = ok == (e["expect"] == "accept")
         items.append({"proof": e["proof"], "expect": e["expect"], "accepted": ok, "reason": why, "seconds": info["seconds"], "agrees": good,
                       "coin_provenance": COIN_PROVENANCE.get(e["coins"], e["coins"]), "soundness": info.get("soundness")})
@@ -503,10 +514,16 @@ def verify_dir(d: Path, device: str = "cuda") -> dict:
 def _file_coins(d: Path, e: dict, cls=LiveCoins):
     raw = (d / e["coins_file"]).read_bytes()
     n = int.from_bytes(raw[:4], "little")
+    if len(raw) != 4 + 32 * n:
+        raise ValueError(f"coins file: {len(raw)} B for {n} slots")
     slots = [raw[4 + 32 * i:4 + 32 * (i + 1)] for i in range(n)]
     b = e.get("stream_binding")
     if b is not None:
-        # the coins are the stream's: every slot re-derived from the verifier's commitments and openings
+        # the coins are the stream's: every slot re-derived from the verifier's commitments and openings (one per round:
+        # a commitment the verifier never opened only moves batch_context, red-team-ligerito-3 R3-7 B)
+        if not len(b["commitments"]) == len(b["openings"]) == len(b["labels"]) == n:
+            raise ValueError(f"stream binding: {len(b['commitments'])} commitments / {len(b['openings'])} openings / "
+                             f"{len(b['labels'])} labels for {n} slots")
         stmt, ccom = bytes.fromhex(b["statement"]), [bytes.fromhex(c) for c in b["commitments"]]
         ctx = live_mod.batch_context(stmt, ccom)
         for k, ((r, s_), label) in enumerate(zip(b["openings"], b["labels"])):

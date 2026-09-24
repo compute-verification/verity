@@ -1,8 +1,8 @@
 """R3-7 / R3-10 end to end (GPU): a loopback ``live.Server`` (``ChallengeServerSession``: the verifier's own coins and
 session record), one honest live proof, and cheating provers that run a full, ACCEPTED session against it but prove with
-coin slots the verifier never issued, writing a dump whose ``.coins`` / ``stream_binding`` re-derive those slots (so
-``_file_coins`` -- the cold ``verify-dir`` path, which claims nothing -- accepts them).  ``verify_session`` must reject
-every one: it replays with ``record_slots`` (the record alone).
+coin slots the verifier never issued, writing a dump whose ``.coins`` / ``stream_binding`` re-derive those slots.
+``verify_session`` must reject every one: it replays with ``record_slots`` (the record alone).  The cold ``verify-dir``
+(which claims nothing) rejects them too: B by the binding's shape (one commitment per round), A by the replay's labels.
 
   A  label grinding: after r_0 is opened, the prover tries labels until slot 0 has 8 zero bits; the wire carries the
      protocol label, the dump the ground one.
@@ -141,9 +141,10 @@ def main(argv=None) -> int:
         cold = run_mod.verify_dir(d_x, args.device)
         vs = run_mod.verify_session(d_x, [store / sid_x], args.device, store)
         it = vs["items"][0]
-        check(name, verdict_x["accepted"] and not it["authenticated"] and vs["job_claimed_log2"] is None,
-              {"verifier_verdict": verdict_x["accepted"], "cold_verify_dir_accepts": cold["agree"] == cold["total"],
-               "why": it.get("why")})
+        cold_why = json.loads((d_x / "verify_python.json").read_text())["items"][0]["reason"]
+        check(name, verdict_x["accepted"] and not it["authenticated"] and vs["job_claimed_log2"] is None
+              and cold["agree"] == 0,
+              {"verifier_verdict": verdict_x["accepted"], "cold_verify_dir": cold_why, "why": it.get("why")})
 
     d_d = out / "D_two_proofs_one_batch"
     shutil.copytree(d_h, d_d)
