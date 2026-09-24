@@ -190,7 +190,7 @@ def main(argv: list[str] | None = None) -> int:
     from gpu import ligero, prover
     from gpu.circuit import layers, load_circuit
     from gpu.run import _dev, read_chain
-    from gpu.v2.fp8 import relation_params
+    from gpu.v2.fp8 import is_fp8, relation_params
     from gpu.v2.witness import Generator, GraphedGenerator, Ops
     import soundness
 
@@ -224,6 +224,9 @@ def main(argv: list[str] | None = None) -> int:
     unit_k = sum(params.groups)
     if steps * unit_k != x.shape[1]:
         raise SystemExit(f"bench_result.py: DIR has {steps} steps of {unit_k}, the tier has K = {x.shape[1]}")
+    fp8 = is_fp8(params)
+    epi_name = "packed-word epilogue" if fp8 else "limb epilogue"
+    params_src = "gpu/v2/fp8.adder_params: the adder-side view" if fp8 else "checker Params.from_model"
     public = [int(v) for v in y]
     ops = Ops(str(dev))
     gen = Generator(ops, params)
@@ -366,8 +369,8 @@ def main(argv: list[str] | None = None) -> int:
         cupy_v = cupy.__version__
     except ImportError:
         cupy_v = None
-    sw = {"backend": {"name": BACKEND, "commit": source_commit(), "version": "checker v2 (limb epilogue), proof.bin v2",
-                      "model": f"{model_name} (checker Params.from_model)", "relation": args.relation or args.tier,
+    sw = {"backend": {"name": BACKEND, "commit": source_commit(), "version": f"checker v2 ({epi_name}), proof.bin v2",
+                      "model": f"{model_name} ({params_src})", "relation": args.relation or args.tier,
                       "path": args.path, "encoder": encoder, "opening": ligero.opening_path(dev),
                       "witness": "gpu/v2/witness.py (device generator; byte-exact with the CPU export)"
                                  + ("; replayed as one CUDA graph captured in the warm-up" if graphed else "")},
@@ -385,7 +388,7 @@ def main(argv: list[str] | None = None) -> int:
         profile=profile, domain=contract.DOMAIN, K=K_VU, B=Bn, N_subbatches=1,
         proof_class="NON_ZK_PROOF_DIAGNOSTIC", authentication="excluded", zk_mode=contract.ZK_NONE,
         security=security, hardware=hw, software=sw,
-        preprocessing=(f"circuit compilation (unit + limb-epilogue circuits, GKR layers, chain spec: functions of Params only), "
+        preprocessing=(f"circuit compilation (unit + {epi_name} circuits, GKR layers, chain spec: functions of Params only), "
                        f"the witness generator's dense tables on the device, "
                        + (f"generating the {args.relation} recipe instances ({t_load:.2f}s, relchain.instances on "
                           f"{args.threads} processes)" if args.relation else
@@ -403,7 +406,7 @@ def main(argv: list[str] | None = None) -> int:
         verifier={"name": "verity-gkr-verify (backends/gkr/verifier, Rust, shares no code with the prover)", "path": str(vbin),
                   "sha256": vsha, "threads": args.threads, "cpu": next((v["cpu"] for v in verdicts if v.get("cpu")), None)},
         python_verifier="gpu.prover.verify (shares field / transcript / LogUp helpers with the prover)",
-        note=f"one proof of all {Bn} VUs (96 chained units each + the limb epilogue); buckets of the median rep "
+        note=f"one proof of all {Bn} VUs ({steps} chained units each + the {epi_name}); buckets of the median rep "
              f"(rep {med['rep']}) by t.total",
     )
     b = med["buckets"]
