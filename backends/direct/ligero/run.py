@@ -27,7 +27,7 @@ from verity_numerical.bench import contract, instances
 from verity_numerical.checker.params import REAL
 from verity_numerical.checker.step import step_output
 
-from . import protocol as protocol_mod
+from . import protocol as protocol_mod, timing_guard
 from .compile import P
 from .hints_torch import hints_torch
 from .protocol import Config, config_for, prove, soundness, verify
@@ -369,6 +369,7 @@ def _relation_arg(value: str) -> str:
     return base
 
 
+@timing_guard.guarded
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)

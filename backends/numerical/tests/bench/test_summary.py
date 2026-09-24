@@ -1,6 +1,7 @@
 """The bench-result summary helper: discovery over the layouts lanes write (run dir with ``proofs/rust_batch.json`` or
 ``rust_batch.json`` beside ``result.json``, flat ``<tag>.json`` + ``<tag>_rust.json``, store manifests), the row's reuse of
-``tables.phases`` (joints included), the Rust verdict, ``--cols`` / ``--sort``, the renderings and the failure paths."""
+``tables.phases`` (joints included), the Rust verdict, ``--cols`` / ``--sort``, the renderings and the failure paths; the
+timing guard's ``contended`` column, ``--best`` refusing contended rows, and ``vs_ref`` / ``slow-vs-ref`` against the store."""
 
 from __future__ import annotations
 
@@ -8,11 +9,17 @@ import json
 from pathlib import Path
 from typing import Any
 
+import pytest
 from conftest import conforming_result, write_run
 
 from verity_numerical.bench import contract, summary, tables
 
 RUST_OK = {"n": 13, "accepted": 13, "batch_accepted": True, "system_pinned": True, "python_disagree": 0, "batch_log2": -128.32}
+
+
+@pytest.fixture(autouse=True)
+def _no_store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "no-store"))   # vs_ref never reads the machine's real catalog
 
 
 def _json(path: Path, doc: Any) -> Path:
@@ -106,3 +113,80 @@ def test_problems_are_reported_not_fatal(tmp_path: Path, capsys: Any) -> None:
     assert summary.main([str(note)]) == 1
     err = capsys.readouterr().err
     assert "notes.json: unreadable or not a bench result" in err and "no bench results found" in err
+
+
+def _contended(res: dict[str, Any], why: list[str]) -> dict[str, Any]:
+    return {**res, "contention": {"contended": bool(why), "reasons": why}}
+
+
+def _failed(res: dict[str, Any]) -> dict[str, Any]:
+    return {**res, "validation": {**res["validation"], "status": "failed"}}
+
+
+def test_contended_column_and_best_refuses_contended_rows(tmp_path: Path, capsys: Any) -> None:
+    write_run(tmp_path, "fast-busy", _contended(_result("fast-busy", 4.5, {}), ["1 other GPU compute process (pids seen: 9)"]))
+    write_run(tmp_path, "mid", _contended(_result("mid", 5.0, {}), []))
+    write_run(tmp_path, "slow", _result("slow", 6.0, {}))                      # before the guard: no record
+    write_run(tmp_path, "broken", _failed(_result("broken", 4.0, {})))
+    write_run(tmp_path, "other-auth", conforming_result("other-auth", authentication="excluded"))
+    rows = {r["label"]: r for r in _rows(capsys, str(tmp_path))}
+    assert [rows[k]["contended"] for k in ("fast-busy", "mid", "slow")] == [True, False, None]
+    assert rows["fast-busy"]["contention"]["reasons"] == ["1 other GPU compute process (pids seen: 9)"]
+    assert summary.main([str(tmp_path)]) == 0
+    head, *lines = capsys.readouterr().out.splitlines()
+    col = head.split().index("contended")
+    assert {ln.split()[0]: ln.split()[col] for ln in lines if ln.strip() and not ln.startswith(tables.JOINT_CONTINUATION)} == {
+        "broken": "-", "fast-busy": "yes", "mid": "no", "other-auth": "-", "slow": "-"}
+
+    assert summary.main([str(tmp_path), "--best", "--json"]) == 0
+    out, err = capsys.readouterr()
+    chosen = {r["label"]: r for r in json.loads(out)}
+    assert set(chosen) == {"mid", "other-auth"} and chosen["mid"]["refused"] == 1 and chosen["other-auth"]["refused"] == 0
+    assert "--best refuses fast-busy: contended (1 other GPU compute process (pids seen: 9))" in err
+
+
+class _Index:
+    def __init__(self, rows: list[tuple[str, str]]):
+        self.rows, self.queries = rows, []
+
+    def sql(self, query: str, params: tuple = ()) -> list[tuple[str, str]]:
+        self.queries.append((query, params))
+        return self.rows
+
+
+def _manifest(res: dict[str, Any]) -> str:
+    return json.dumps({"kind": tables.RESULT_KIND, "meta": res, "refs": {}})
+
+
+def test_vs_ref_names_the_fastest_preserved_clean_reference_and_flags_slow_rows(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+                                                                                capsys: Any) -> None:
+    a, b, c, d = ("art:" + ch * 64 for ch in "abcd")
+    idx = _Index([(a, _manifest(_result("ref-a", 5.0, {}))),
+                  (b, _manifest(_contended(_result("ref-b", 4.5, {}), ["load average 120.0 > 96 cores"]))),
+                  (c, _manifest(_failed(_result("ref-c", 4.0, {})))),
+                  (d, _manifest(conforming_result("ref-d", authentication="excluded"))),
+                  ("art:" + "e" * 64, "not a manifest")])
+    refs = summary.references(idx)
+    assert idx.queries == [(summary.REFS_SQL, (tables.RESULT_KIND,))] and "replicas" in summary.REFS_SQL
+    res = conforming_result()
+    assert refs[summary.key(summary.config(res["workload_fingerprint"], tables._measurements(res)))] == (5.0, a) and len(refs) == 2
+
+    runs = tmp_path / "runs"
+    write_run(runs, "r-slow", _result("r-slow", 6.0, {}))
+    write_run(runs, "r-ok", _result("r-ok", 5.25, {}))
+    monkeypatch.setattr(summary, "open_index", lambda root: idx)
+    rows = {r["label"]: r for r in _rows(capsys, str(runs))}
+    assert (rows["r-slow"]["vs_ref"], rows["r-slow"]["ref"], rows["r-slow"]["flag"]) == (1.2, a, "slow-vs-ref")
+    assert rows["r-ok"]["vs_ref"] == pytest.approx(1.05) and rows["r-ok"]["ref"] == a and "flag" not in rows["r-ok"]
+    assert summary.main([str(runs)]) == 0
+    text = capsys.readouterr().out
+    assert {"vs_ref", "ref", "flag"} <= set(text.split()) and "1.20x" in text and "slow-vs-ref" in text
+    assert "art:" + "a" * 12 in text and "a" * 13 not in text                          # the id, shortened in the table
+
+    monkeypatch.setattr(summary, "open_index", lambda root: pytest.fail("--no-refs must not open the store"))
+    rows = _rows(capsys, str(runs), "--no-refs")
+    assert all("vs_ref" not in r for r in rows)
+
+
+def test_open_index_reads_only_an_existing_catalog(tmp_path: Path) -> None:
+    assert summary.open_index(str(tmp_path / "nothing")) is None and not (tmp_path / "nothing").exists()
