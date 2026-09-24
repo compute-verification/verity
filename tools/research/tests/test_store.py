@@ -372,6 +372,12 @@ def test_unusable_remote_degrades_to_local(env, monkeypatch):
     assert st.get_manifest(art).kind == "dataset-snapshot/v1"
     with pytest.raises(Exception, match="T_AK_ABSENT"):
         st.push(art)
+    src = env / "payload.bin"
+    src.write_bytes(b"evicted later")
+    blob_art = st.put_artifact("fixture/v1", {}, {}, file=src)
+    st.object_path(st.get_manifest(blob_art).payload.sha256).unlink()             # an evicted blob: only the remote could supply it
+    with pytest.raises(NotFound, match="configured remote is unusable here: .*T_AK_ABSENT"):
+        st.fetch(blob_art, env / "out")
     monkeypatch.setenv("T_AK_ABSENT", "id")
     monkeypatch.setenv("T_SK_ABSENT", "secret")
     assert isinstance(LocalStore(env / "degraded", config_path=env / "s3.toml").remote, remote_s3.S3Remote)
@@ -505,10 +511,11 @@ def test_cli_smoke_every_command(env, fs_remote, tmp_path, capsys):
     assert main(["snapshot", "--name", "nightly2", "--members", tart, "--members", art, "--json"]) == 0 and json.loads(out())["members"] == sorted([art, tart])
     assert main(["snapshot", "--name", "empty", "--select", "--kind", "nothing/v1"]) == 1
 
-    assert main(["label", art, "proof_class", "COMPLETE", "--by", "red-team-1", "--ref", doc["id"]]) == 0 and out().endswith("-red-team-1.json")
-    assert main(["label", art, "proof_class", "PARTIAL", "--by", "red-team-2"]) == 0 and Path(out()).is_file()
-    assert main(["label", art, "proof_class", "COMPLETE", "--by", "red-team-2"]) == 0 and Path(out()).is_file()
-    assert main(["label", art, "score", "0.5", "--by", "bot", "--value-json"]) == 0 and Path(out()).is_file()
+    off = "--off-vocab"                                      # envelope semantics here; the vocabulary is test_store_vocab's
+    assert main(["label", art, "proof_class", "COMPLETE", "--by", "red-team-1", "--ref", doc["id"], off]) == 0 and out().endswith("-red-team-1.json")
+    assert main(["label", art, "proof_class", "PARTIAL", "--by", "red-team-2", off]) == 0 and Path(out()).is_file()
+    assert main(["label", art, "proof_class", "COMPLETE", "--by", "red-team-2", off]) == 0 and Path(out()).is_file()
+    assert main(["label", art, "score", "0.5", "--by", "bot", "--value-json", off]) == 0 and Path(out()).is_file()
     assert main(["labels", art]) == 0
     text = out()
     assert len(text.splitlines()) == 3 and "PARTIAL" not in text, "default view: latest per (key, by)"

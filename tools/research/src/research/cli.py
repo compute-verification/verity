@@ -17,6 +17,12 @@
                                                  # budget guard over pods named P*: trips terminate all (own host last); rate sheds newest first
   research pods guard status|stop --prefix P     # its state file / SIGTERM to exactly its recorded pid
   research env --source TREE [--rev REV] [--json]  # `export PYTHONPATH=...` from TREE's [tool.uv.workspace] members (research.pythonpath)
+  research pods ssh TARGET [--print] [-- CMD...]  # TARGET = machines.toml name | pod id | pod name; the port is looked up, never hard-coded
+  research pods sync TARGET [SRC] [--dest DIR]    # rsync the worktree's git-visible files (default /workspace/src), prune what it shipped before
+  research notes checkpoint LANE STATE TEXT...   # CHECKPOINT <sha> (<HH:MM>Z) [open|blocked|final|superseded] line atop the report
+  research notes bind LANE --branch B --worktree DIR --pod NAME   # where the lane works (successors naming a predecessor's)
+  research notes status [--pods] [--stale-min 30] [--json]  # per lane: freshest of report/checkpoint/commit/uncommitted edit/pod; STALE (exit 1)
+  research notes watch [--every 10] [--pods]     # a line each time a lane goes STALE or comes back
   research launch-request <request.json>         # machine side: claim the run dir, start the detached runner (idempotent per id)
   research mem [--ramlock DIR] [--json]           # machine side: cgroup limit, in use, live reservations, available (research.mem)
 
@@ -270,6 +276,28 @@ def _request_env(remote_json: str | None) -> dict[str, str]:
         return {}
 
 
+def unredact_key_params(command: list[str], redacted: list[str], key_params: set[str]) -> list[str]:
+    """`redact_argv` judges a flag by its name (`--auth` looks like a credential), but a flag the Tool declares as a key param is
+    part of the derivation identity: a scientific choice (`--auth included-hash`), never a secret.  Put those values back, token
+    for token (`redact_argv` keeps the argv's length), unless the value itself is secret-shaped."""
+    from .telemetry.job import SECRET_VALUE
+
+    def dest(flag: str) -> str:
+        return flag.lstrip("-").replace("-", "_")
+
+    out = list(redacted)
+    for i, (orig, red) in enumerate(zip(command, redacted)):
+        if orig == red:
+            continue
+        if orig.startswith("--") and "=" in orig:
+            flag, _, value = orig.partition("=")
+            if dest(flag) in key_params and not SECRET_VALUE.match(value):
+                out[i] = orig
+        elif i and command[i - 1].startswith("--") and dest(command[i - 1]) in key_params and not SECRET_VALUE.match(orig):
+            out[i] = orig
+    return out
+
+
 def _prepare_store(ns: argparse.Namespace, a: argparse.Namespace, command: list[str], run_id: str, run_dir: Path, env_map: dict[str, str] | None = None) -> dict:
     """Before launch: load the Tool (errors propagate: the user asked for it), collect conditions, resolve params and inputs to
     content identity, compute the closure manifest, derivation id and reuse_key, create --scratch dirs.  Everything after the
@@ -299,8 +327,9 @@ def _prepare_store(ns: argparse.Namespace, a: argparse.Namespace, command: list[
         if tool is not None:
             conds.update(tool.tool_conditions(conds))
             params, key = tool.resolve_params(command, source_root)
-            params = {k: ("<redacted>" if SECRET_KEY.search(k) and isinstance(v, str) else v) for k, v in params.items()}
-            params["argv"] = argv_red
+            public = set(tool.key_params)
+            params = {k: ("<redacted>" if k not in public and SECRET_KEY.search(k) and isinstance(v, str) else v) for k, v in params.items()}
+            params["argv"] = unredact_key_params(command, argv_red, public)
             closure = tool.closure_manifest(source_root)
             ident = {"name": tool.name, "version": tool.version, "spec": tool.spec}
             key_params, key_conditions = list(tool.key_params), list(tool.key_conditions)
@@ -684,6 +713,10 @@ def main(argv: list[str] | None = None) -> int:
         from .pods.part import main as pods_main
 
         return pods_main(rest)
+    if cmd == "notes":
+        from .notes import main as notes_main
+
+        return notes_main(rest)
     print(f"research: unknown command {cmd!r}\n\n{__doc__.strip()}", file=sys.stderr)
     return 2
 

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import platform
 import statistics
 import subprocess
@@ -437,8 +438,9 @@ def main(argv=None) -> int:
     for name in ("gate-vu", "bench-vu"):
         sub.choices[name].add_argument("--instance-procs", type=int, default=1,
                                        help="non-bf16 relations: processes recording the synthetic instances' accumulators")
-        sub.choices[name].add_argument("--instances-cache", default=None, metavar="DIR",
-                                       help="non-bf16 relations: keep the synthetic instance set as an .npz under DIR")
+        sub.choices[name].add_argument("--instances-cache", default=os.environ.get("LIGERO_INSTANCES_CACHE"), metavar="DIR",
+                                       help="non-bf16 relations: keep the synthetic instance set as an .npz under DIR "
+                                            "(default $LIGERO_INSTANCES_CACHE: pod_bootstrap.sh's env.sh sets it)")
     sub.choices["gate-vu"].add_argument("--unit-negatives", type=int, default=48,
                                         help="fp4-nvf4 gate: units per edge family for the wrong-rule witness battery (tu-k64-neg)")
     sub.choices["bench-vu"].add_argument("--warmup-subs", type=int, default=1,

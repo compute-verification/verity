@@ -92,12 +92,21 @@ def render(rep: dict[str, Any]) -> str:
 
 def main(argv: list[str]) -> int:
     """`research pods check-part <machine|pod-id> [--json]` | `research pods create <runpod create flags> [--require-reference-part]`
-    | any other verb goes to `python -m research.pods.runpod` unchanged.  Exit 3 = not the reference part."""
+    | `research pods ssh|sync ...` (connect.py) | any other verb goes to `python -m research.pods.runpod` unchanged.  Exit 3 = not the
+    reference part."""
     import argparse
     import sys
 
     from . import runpod
 
+    if argv[:1] == ["ssh"]:
+        from .connect import main_ssh
+
+        return main_ssh(argv[1:])
+    if argv[:1] == ["sync"]:
+        from .connect import main_sync
+
+        return main_sync(argv[1:])
     if argv[:1] == ["check-part"]:
         ap = argparse.ArgumentParser(prog="research pods check-part")
         ap.add_argument("target", metavar="MACHINE|POD_ID")

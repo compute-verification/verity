@@ -340,7 +340,9 @@ class LocalStore:
             _warn(f"repo replica {cand} {'is missing' if not cand.is_file() else 'does not match its manifest'} for {art_id}; trying the remote")
         r = self.remote
         if r is None:
-            raise NotFound(f"{art_id}: blob {hex_} is not local" + (", not in the repo replica" if cand else "") + ", and no remote is configured")
+            why = getattr(self, "remote_error", None)
+            raise NotFound(f"{art_id}: blob {hex_} is not local" + (", not in the repo replica" if cand else "")
+                           + (f", and the configured remote is unusable here: {why}" if why else ", and no remote is configured"))
         tmp = dst.parent / f".tmp-{hex_}-{os.getpid()}"
         try:
             r.get(object_key(hex_), tmp)

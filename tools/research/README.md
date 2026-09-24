@@ -53,6 +53,9 @@ research fetch RUN [--all]               # records only, or every file sha256-ve
 research status [--refresh] [--all] [--json]
 research inspect RUN [--json]
 research data SUBCOMMAND ...             # the store: put/show/fetch/select/... and lookup / pull / attempt publish
+research pods create|list|terminate|check-part ...                # RunPod lifecycle (pods/runpod.py, pods/part.py)
+research pods ssh TARGET [--print] [-- CMD...]                    # TARGET = machines.toml name | pod id | pod name (pods/connect.py)
+research pods sync TARGET [SRC] [--dest DIR] [--exclude G]...     # the worktree's git-visible files -> DIR (default /workspace/src)
 research tele SUBCOMMAND ...             # the harness's own surface
 research data SUBCOMMAND ...             # the evidence store (below)
 ~~~
@@ -154,7 +157,7 @@ research data show ART|RUN|DRV [--json]      research data where ART        rese
 research data verify ART                     # PRESERVED = remote size + full read-back sha256; exit 1 otherwise
 research data select --kind K --where meta.k=v --label k=v --tool T --derivation D --attempt R [--json|--ids]
 research data snapshot --name N --members art:a,art:b | --select <select flags>   # dataset-snapshot/v1; identity = content
-research data label ART proof_class COMPLETE --by red-team-1 [--ref RUN]          research data labels ART [--history]
+research data label ART verified accepted --by red-team-1 [--ref RUN]              research data labels ART [--history]
 research data reindex [--remote]             research data sql "SELECT ..."       # read-only connection
 ~~~
 
