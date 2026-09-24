@@ -668,9 +668,15 @@ def prove(inst: Instance, pcs: bool = True, params: ligero.LigeroParams = ligero
     tm = time.perf_counter()
     committed = None
     mults = []
+    # the query tuples are needed again by the lookup pass; holding them across the commitment (~0.7 GiB at 4096 FP8
+    # VUs) only pays on parts with room to spare, the 24-32 GB cards recompute them
+    keep = dev.type == "cuda" and torch.cuda.get_device_properties(dev).total_memory >= 48 << 30
+    kept = []
     for t in inst.tables:
         vals = [v for v in seg_query_values(inst, t.name) if v is not None]
         mults.append(logup.multiplicities(t, logup.table_rows(t, dev), vals))
+        kept.append(vals if keep else None)
+    vals = None
     _sync(dev)
     st.t_mults = time.perf_counter() - tm
     tc = time.perf_counter()
@@ -692,7 +698,8 @@ def prove(inst: Instance, pcs: bool = True, params: ligero.LigeroParams = ligero
     graphs = packed and logup_packed.use_graphs(dev)
     for ti, t in enumerate(inst.tables):
         n = hypercube_dim(inst, t.name, t)
-        vals = [v for v in seg_query_values(inst, t.name) if v is not None]
+        vals = kept[ti] if kept[ti] is not None else [v for v in seg_query_values(inst, t.name) if v is not None]
+        kept[ti] = None
         trows = logup.table_rows(t, dev)
         n_wit = sum(v.shape[0] for v in vals)
         if packed and t.cols == 1 and n_wit % 2 == 0 and t.nrows % 2 == 0:
