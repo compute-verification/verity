@@ -5,7 +5,8 @@ What this module DECIDES (structure + correspondence, no by-name table):
 * WHICH Values are required: `verity.verification.query.required_values(P, Q_module_body_v1, policy)` -- every Value that crosses a
   module-body boundary in the Program's own dataflow, plus the policy below.  v1's "promotion" of interior rows whose output another
   module reads (F-r19-int-20) is not a pass here: such a Value crosses the boundary and is required by definition.
-* WHERE a Value lives: the producing Call's recorded owning module (correspondence), mapped to the implementation's path.
+* WHERE a Value lives: the producing Call's recorded owning module (correspondence), mapped to the implementation's path; a
+  collective SITE's at its enclosing module, invocation k (`collective_sites`).
 * WHAT the member is called, structurally: the port name when the Definition returns a tuple; else the recorded return-slot hint
   when the Build recorded one; else `out`.
 * WHEN: the step of a Call = the number of sampling events before it (the sampling event ENDS a step).
@@ -120,10 +121,11 @@ NAMED_RESIDUALS: tuple[Residual, ...] = (
     Residual("*", "<rank operand>", "part_rank<r> / shard_rank<r>", "TP-04: a collective's rank-local operand (the one Value of this rank it "
              "reads; its other operands are the received peer partials) is required per rank beside the collective's output, under the "
              "collective's module, as `part_rank<r>` (all-reduce) / `shard_rank<r>` (all-gather), family `tp_rank_partials`", kind="encoding"),
-    Residual("*", "<collective site>", "<enclosing module> @ invocation k", "a module body of collective Calls only is a collective SITE inside "
-             "its enclosing module: the collector hooks the enclosing module and commits its k-th collective of the step as occurrence k, so the "
-             "site's identities live at (enclosing module, k) -- k in Program order, from 1 when the enclosing module has required Values of its "
-             "own -- and the site path is an `op_path_aliases` entry", kind="encoding"),
+    Residual("*", "<collective site>", "<enclosing module> @ invocation k", "a collective whose rank-local operand another module produced "
+             "is a collective SITE of the module whose forward calls it, at the site path `<enclosing module>.<fx node>`: the collector hooks the "
+             "enclosing module and commits its k-th collective of the step as occurrence k, so the site's identities live at (enclosing module, k) "
+             "-- k in Program order, from 1 when the enclosing module has required Values of its own -- and the site path is an "
+             "`op_path_aliases` entry", kind="encoding"),
 )
 
 
@@ -201,22 +203,25 @@ def shared_instances(P: ProgramView, corr: Correspondence, record_fields: Mappin
 
 
 def collective_sites(pop: Population) -> dict[str, tuple[str, int]]:
-    """site module -> (enclosing module, invocation) for the collective SITES of a rank Program (the `<collective site>` encoding): the
-    module bodies whose Calls are all collectives, nested in an enclosing module.  k = the site's order among its enclosing module's sites
-    in the same step (Program order of their first Call), from 1 when the enclosing module's own body produces required Values that step."""
-    if not pop.collectives:
+    """site path -> (enclosing module, invocation) for the collective SITES of a rank Program (the `<collective site>` encoding): the
+    collectives whose rank-local operand another body produced (`pop.carries`), each at its site path `<enclosing module>.<fx node>`
+    (`pop.site`).  k = the site's order among its enclosing module's sites in the same step (Program order of their first Call), from 1
+    when the enclosing module's own body -- its Calls other than sites -- produces required Values that step."""
+    if not pop.site:
         return {}
     bodies = {u.id: u.calls for u in pop.B.units}
     ports = pop._ports()
-    sites = sorted((min(calls), m) for m, calls in bodies.items() if "." in m and calls and all(c in pop.collectives for c in calls))
+    first: dict[str, int] = {}
+    for cid, path in pop.site.items():
+        first[path] = min(cid, first.get(path, cid))
     out: dict[str, tuple[str, int]] = {}
     next_k: dict[tuple[str, int], int] = {}
-    for first, m in sites:
-        parent, step = m.rsplit(".", 1)[0], pop.step_of(first)
+    for f, path in sorted((f, path) for path, f in first.items()):
+        parent, step = path.rsplit(".", 1)[0], pop.step_of(f)
         k = next_k.get((parent, step))
         if k is None:
-            k = 1 if any(c in ports and pop.step_of(c) == step for c in bodies.get(parent, ())) else 0
-        out[m] = (parent, k)
+            k = 1 if any(c in ports and c not in pop.site and pop.step_of(c) == step for c in bodies.get(parent, ())) else 0
+        out[path] = (parent, k)
         next_k[(parent, step)] = k + 1
     return out
 
@@ -301,6 +306,7 @@ class Population:
         self.operand: dict[int, ValueRef] = {}             # collective Call -> its rank-local operand
         self.partial_of: dict[ValueRef, int] = {}          # an operand produced in its collective's own body -> that collective
         self.carries: set[int] = set()                     # collectives naming their partial themselves (the operand is another body's)
+        self.site: dict[int, str] = {}                     # a carried collective -> its site path (`Correspondence.site_path`)
         self.peer_inputs: frozenset[ValueRef] = frozenset()
         self.tp_faults: list[str] = []
         if self.world > 1:
@@ -372,6 +378,7 @@ class Population:
                                       f"{[(p.name, p.elems) for p in c.port_table]} (one output, a multiple of world {self.world}, expected)")
             else:
                 self.carries.add(c.id)
+                self.site[c.id] = corr.site_path(c.id)
         self.peer_inputs = frozenset(v for v, only in collective_only.items() if only)
 
     def _partial(self, port: str, kind: str, width: int, dtype: str) -> CallMember:
@@ -381,6 +388,11 @@ class Population:
     def step_of(self, cid: int) -> int:
         """The step of a Call: the number of sampling events before it (the event itself belongs to the step it ends)."""
         return bisect.bisect_left(self.events, cid)
+
+    def program_path(self, cid: int) -> str:
+        """The Program module path the required Values of Call `cid` are spelt under: its site path for a collective SITE, else its
+        owning module.  `collective_sites` aliases a site path to its (enclosing module, k)."""
+        return self.site.get(cid) or self.corr.module_of(cid)
 
     def member(self, v: ValueRef) -> CallMember:
         """The manifest member of the required Value `v` of a (non-sampling) Call."""
@@ -516,6 +528,7 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
     for cid in pop.producers():
         c = P.call(cid)
         n = corr.name(c.id)
+        mod = pop.program_path(c.id)
         step = step_of(c.id)
         if c.family in SAMPLING_EVENTS:
             add("sampled_token_ids", step, 0, "runner.sampler", "sampled_token_ids", 0, n_seq, dtype="i64", spec=c.family)
@@ -532,13 +545,13 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
             if resid is not None:
                 residual_counts[f"encoding:{resid.structural.strip('<>')}" if resid.kind == "encoding" else
                                 f"{resid.family}:{resid.structural}->{resid.v1_member}"] += 1
-            g = groups.get((step, n.module, member))
+            g = groups.get((step, mod, member))
             if g is None:
-                g = groups[(step, n.module, member)] = {"rows": 0, "width": cm.width, "dtype": cm.dtype, "family": c.family, "spec": c.definition,
-                                                        "manifest_family": cm.family, "nodes": set(), "hinted": bool(n.hint),
-                                                        "structural": structural, "crossing": 0, "returned": 0}
+                g = groups[(step, mod, member)] = {"rows": 0, "width": cm.width, "dtype": cm.dtype, "family": c.family, "spec": c.definition,
+                                                   "manifest_family": cm.family, "nodes": set(), "hinted": bool(n.hint),
+                                                   "structural": structural, "crossing": 0, "returned": 0}
             elif g["family"] != c.family or g["width"] != cm.width:
-                unmodelled[f"{c.family} under {impl(n.module)} ({member}: two producers {g['family']} {g['width']} / {c.family} {cm.width})"] += 1
+                unmodelled[f"{c.family} under {impl(mod)} ({member}: two producers {g['family']} {g['width']} / {c.family} {cm.width})"] += 1
                 continue
             g["rows"] += 1
             g["nodes"].add(n.node)

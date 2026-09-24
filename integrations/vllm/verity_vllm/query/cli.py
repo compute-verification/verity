@@ -140,8 +140,10 @@ def check_correspondence(program_dir: str, *, workload: dict[str, Any] | None = 
         try:
             art_p = os.path.join(program_dir, "artifact.json")
             art = _load_json(art_p) if os.path.exists(art_p) else None
-            ma = request_manifest(P, canon, res, request_id=request_id, workload=workload, artifact=art, program_dir=program_dir).manifest
-            mb = request_manifest(P, fallback, res, request_id=request_id, workload=workload, artifact=art, program_dir=program_dir).manifest
+            tp = res.get("tp") if isinstance(res.get("tp"), dict) else {}
+            rk = dict(rank=int(tp.get("rank") or 0), ranks=int(tp.get("world") or 1))          # a rank Program's manifest is its rank's
+            ma = request_manifest(P, canon, res, request_id=request_id, workload=workload, artifact=art, program_dir=program_dir, **rk).manifest
+            mb = request_manifest(P, fallback, res, request_id=request_id, workload=workload, artifact=art, program_dir=program_dir, **rk).manifest
             out["manifest"] = {"record": {"digest": ma["manifest_digest"], "identities": ma["populations"]["identities"], "complete": ma["complete"], "correspondence": ma["correspondence"]},
                                "v1_annotations": {"digest": mb["manifest_digest"], "identities": mb["populations"]["identities"], "complete": mb["complete"], "correspondence": mb["correspondence"]},
                                "digest_equal": ma["manifest_digest"] == mb["manifest_digest"], "wrapper_prefix": [ma["wrapper_prefix"], mb["wrapper_prefix"]]}

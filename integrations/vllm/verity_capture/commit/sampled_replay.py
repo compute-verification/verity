@@ -364,7 +364,7 @@ class ProgramIndex:
         # relation is a false mismatch (measured: 256/911 on Llama TP2 B1, first o_proj/0 row 0).  `tp` = {"rank": r, "world": W}.
         self.tp: dict[str, Any] | None = (dict(rank=int(tp.get("rank", 0)), world=int(tp.get("world", 1))) if tp and int(tp.get("world", 1) or 1) > 1 else None)
         # [v2 flip, P2] the v2 query's population of this Program: Call id -> [(member, width, dtype)] of the required Values it produces,
-        # and its owning module (the correspondence's).  A rank Program's population carries the TP-04 policy (its rank-local partials
+        # and the Program path they are spelt under (`Population.program_path`: its owning module, a collective site's site path).  A rank Program's population carries the TP-04 policy (its rank-local partials
         # `part_rank<r>` / `shard_rank<r>` beside every collective output), the one the rank's manifest was built with.
         self._v2: dict[int, list[tuple[str, int, str]]] = {}
         self._v2_module: dict[int, str] = {}
@@ -381,7 +381,7 @@ class ProgramIndex:
                 mem = pop.members_of(cid)
                 if mem:
                     self._v2[cid] = [(m.member, m.width, m.dtype) for m in mem]
-                    self._v2_module[cid] = corr.module_of(cid)
+                    self._v2_module[cid] = pop.program_path(cid)
             self.correspondence = corr.provenance()
             del P, corr, pop
         self.params: list[list] = [list(p) for p in inst.get("params", [])]
