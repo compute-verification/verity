@@ -76,7 +76,7 @@ def test_zk_roundtrip(zk_toy, name):
     sys, lay, cons, z, pubs, lay0 = zk_toy
     s = _zk_sched(lay, name, 1 if name == "univariate" else 4)
     coins = sc.LocalCoins(b"z1")
-    proof = sc.prove(lay, cons, z, coins, schedule=s)
+    proof = sc.prove(lay, cons, z, coins, schedule=s, allow_underblinded=True)          # toy n_c = 7: most have vf > 3
     assert coins.rounds == s.coins() and proof.schedule == s
     b = proof.to_bytes()
     assert b[:8] == b"LGSC0004" and len(b) == _zk_bytes(lay, s)
@@ -115,6 +115,62 @@ def test_zk_default_coins_real_n():
     assert small.rb == (4, 4, 4) and small.coins() == 21
     for t in (s, small):                                          # one g row at C = 2^18, inside the layout's reservation
         assert 6 * t.zk_coeffs() <= min(ZK_CELLS_PER_VAR * (12 + 18 + 18 + 12), 1 << 18)
+
+
+def test_zk_underblinded_refused(zk_toy):
+    """R3-6: the prover refuses vf > n_c - 4 on a ZK layout (the final tables would not be blinded); the verifier accepts
+    such a proof (it cannot enforce ZK) and ``zk_mode`` names it.  Every preset keeps vf <= n_c - 4 at gate and real sizes."""
+    from types import SimpleNamespace
+    sys, lay, cons, z, pubs, lay0 = zk_toy
+    assert sc.zk_vf_max(lay) == lay.n_c - 4 == 3
+    s = _zk_sched(lay, "tail")
+    assert s.vf == 4 and sc.zk_mode(lay, s) == "lgsc0004-underblinded"
+    assert sc.zk_mode(lay, sc.zk_schedule(lay)) == "lgsc0004"
+    with pytest.raises(ValueError, match="R3-6"):
+        sc.prove(lay, cons, z, sc.LocalCoins(b"u"), schedule=s)
+    with pytest.raises(ValueError, match="R3-6"):
+        sc.zk_masks(lay, s, z, "cpu")
+    sc.zk_masks(lay, s, None, "cpu")                                  # the verifier's masks: no check
+    proof = sc.prove(lay, cons, z, sc.LocalCoins(b"u"), schedule=s, allow_underblinded=True)
+    ok, why, _ = sc.verify(lay, cons, pubs, proof, sc.LocalCoins(b"u"))
+    assert ok, why
+    for n_c in (10, 18):                                              # gate (C = 1024) and real (C = 2^18) column counts
+        big = SimpleNamespace(n_k=12, n_c=n_c, n_i=12)
+        for name in ("zk", "zk-small"):
+            t = sc.zk_schedule(big, sc._schedule_arg(name, big), 4)
+            assert t.vf <= n_c - 4 and sc.zk_mode(big, t) == "lgsc0004", (n_c, name, t)
+
+
+def test_zk_claim_supports(zk_toy):
+    """R3-4: the claim set handed to the PCS is the one the ZK argument covers -- two evaluation claims with non-boolean row
+    coordinates, the mask claims exactly on their Libra cells (several g rows at this C), disjoint, off the uniform rows --
+    and the mask claims' values are transcript values (T, K_cmb, K_rb: the simulator solves them from the final checks)."""
+    import dataclasses
+    sys, lay, cons, z, pubs, lay0 = zk_toy
+    s = sc.zk_schedule(lay)
+    proof = sc.prove(lay, cons, z, sc.LocalCoins(b"s"))
+    ok, why, claims = sc.verify(lay, cons, pubs, proof, sc.LocalCoins(b"s"))
+    assert ok, why
+    sc.check_zk_claim_supports(lay, s, claims)
+    assert torch.equal(claims[2].value, proof.zk_t) and torch.equal(claims[3].value, proof.values[2]) \
+        and torch.equal(claims[4].value, proof.values_b[1])
+    rows, cols = sc.zk_libra_cells(lay, s)
+    cells = list(zip(rows.tolist(), cols.tolist()))
+    assert len(set(cells)) == len(cells) == 6 * s.zk_coeffs() and len(set(rows.tolist())) > 1
+    assert set(rows.tolist()) <= set(lay.zk.g_rows) and not set(rows.tolist()) & set(lay.zk.uniform)
+    assert [(int(r), int(c)) for cl in claims[2:] for r, c in zip(cl.rows, cl.cols)] == cells
+    bad = list(claims)
+    bad[3] = dataclasses.replace(claims[3], rows=claims[3].rows.clone())
+    bad[3].rows[0] = lay.zk.uniform[0]
+    with pytest.raises(ValueError, match="Libra cells"):
+        sc.check_zk_claim_supports(lay, s, bad)
+    pt = claims[1].point.clone()
+    pt[2] = 0
+    pt[2, 0] = 1
+    with pytest.raises(ValueError, match="boolean"):
+        sc.check_zk_claim_supports(lay, s, [claims[0], dataclasses.replace(claims[1], point=pt)] + claims[2:])
+    with pytest.raises(ValueError, match="expected"):
+        sc.check_zk_claim_supports(lay, s, claims[:4])
 
 
 def test_zk_format_mismatch_rejects(zk_toy):
@@ -240,8 +296,9 @@ def test_zk_cuda_matches_reference(zk_toy, name):
     sys, lay, cons, z, pubs, lay0 = zk_toy
     s = _zk_sched(lay, name)
     consc = type(cons)(cons.K_pad, cons.R, {k: tuple(t.to("cuda") for t in v) for k, v in cons.coo.items()}, cons.names)
-    ref = sc.prove(lay, cons, z, sc.LocalCoins(b"g"), schedule=s)
-    cu = sc.prove(lay, consc, z.to("cuda"), sc.LocalCoins(b"g", device="cuda"), engine="cuda", schedule=s)
+    ref = sc.prove(lay, cons, z, sc.LocalCoins(b"g"), schedule=s, allow_underblinded=True)
+    cu = sc.prove(lay, consc, z.to("cuda"), sc.LocalCoins(b"g", device="cuda"), engine="cuda", schedule=s,
+                  allow_underblinded=True)
     assert ref.to_bytes() == cu.to_bytes()
     ok, why, claims = sc.verify(lay, consc, {k: v.to("cuda") for k, v in pubs.items()}, cu, sc.LocalCoins(b"g", device="cuda"),
                                 device="cuda")

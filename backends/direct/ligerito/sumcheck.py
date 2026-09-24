@@ -45,14 +45,15 @@ try:  # lane ligerito-proto's Coins protocol; the stub below has the same signat
 except Exception:  # noqa: BLE001
     Coins = object  # type: ignore
 
-__all__ = ["EvalClaim", "LocalCoins", "Schedule", "SumcheckProof", "default_schedule", "eq_at", "eq_table", "prove",
-           "succ_mle", "verify"]
+__all__ = ["EvalClaim", "LocalCoins", "Schedule", "SparseClaim", "SumcheckProof", "check_zk_claim_supports", "default_schedule",
+           "eq_at", "eq_table", "prove", "succ_mle", "verify", "zk_libra_cells", "zk_mode", "zk_vf_max"]
 
 MAGIC = b"LGSC0003"
 MAGIC_ZK = b"LGSC0004"
 MAX_ARITY = 4
 ZK_MAX_ARITY = 6                 # LGSC0004 message rounds (3^6 = 729 ext); the engines run them on small tables only
 ZK_MAX_VF = 12                   # LGSC0004 final table round (3 x 2^vf ext)
+ZK_TABLE_SLACK = 4               # the prover's vf <= n_c - 4 (``zk_vf_max``); the verifier accepts any vf <= n_c
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -370,9 +371,22 @@ def zk_default_schedule(lay: Layout, vf: int = 10) -> Schedule:
     <= 6; row reduction <= 6.  fp8-ada: zc 3,3,3,6,5 / vf 10 / cmb 6,6,6 / rb 6,6 = 12 coins."""
     n, n_cmb = lay.n_k + lay.n_c, n_cmb_of(lay)
     zc, rem = [3], n - 3
-    vf = max(1, min(vf, lay.n_c - 4, rem - 1, ZK_MAX_VF))
+    vf = max(1, min(vf, zk_vf_max(lay), rem - 1, ZK_MAX_VF))
     zc += _tail_arities(rem, rem - vf, 21)
     return Schedule(tuple(zc), vf, tuple(_tail_arities(n_cmb, n_cmb, 18)), balanced_arities(lay.n_i, ZK_MAX_ARITY))
+
+
+def zk_vf_max(lay: Layout) -> int:
+    """The largest final-table round that keeps LGSC0004's tables blinded: entry ``b`` of ``Az, Bz, Cz`` is masked by
+    functionals of ``i1`` / ``i2`` over the ``2^(n_c - vf)`` product-row cells whose low ``vf`` column bits are ``b``; ``Az`` and
+    ``Cz`` need 12 independent base functionals of ``i1`` there, so ``2^(n_c - vf) >= 16``."""
+    return lay.n_c - ZK_TABLE_SLACK
+
+
+def zk_mode(lay: Layout, sched: Schedule) -> str:
+    """``"lgsc0004"``, or ``"lgsc0004-underblinded"`` if ``vf > n_c - 4`` (ligerito-verify's ``zk_mode`` strings): a proof of
+    the latter kind verifies but its final tables are not fully blinded (red-team-ligerito-3 R3-6)."""
+    return "lgsc0004" if sched.vf <= zk_vf_max(lay) else "lgsc0004-underblinded"
 
 
 def zk_schedule(lay: Layout, base: Schedule | None = None, rb_arity: int = ZK_MAX_ARITY) -> Schedule:
@@ -753,12 +767,16 @@ class ZkMask:
         return SparseClaim((g_rows[cells // lay.C]).to(dev), (cells % lay.C).to(dev), w.to(dev), value, name)
 
 
-def zk_masks(lay: Layout, sched: Schedule, z: torch.Tensor | None, device) -> tuple:
+def zk_masks(lay: Layout, sched: Schedule, z: torch.Tensor | None, device, allow_underblinded: bool = False) -> tuple:
     """The three masks (zero-check, combined, row reduction) with their coefficients read from ``z``'s g rows (prover) or
-    without (verifier, ``z = None``)."""
+    without (verifier, ``z = None``).  The prover's masks need ``vf <= n_c - 4`` (``zk_vf_max``) unless
+    ``allow_underblinded`` (toy-size format tests: the proof verifies, its final tables are not fully blinded)."""
     n = sched.zk_coeffs()
     if D * n > min(lay.zk.g_cells, len(lay.zk.g_rows) * lay.C):
         raise ValueError(f"schedule needs {D * n} Libra cells > the layout's {lay.zk.g_cells}")
+    if z is not None and not allow_underblinded and sched.vf > zk_vf_max(lay):
+        raise ValueError(f"LGSC0004 prover: vf = {sched.vf} > n_c - {ZK_TABLE_SLACK} = {zk_vf_max(lay)}: the final Az/Bz/Cz "
+                         f"tables would not be blinded by the product triple (red-team-ligerito-3 R3-6)")
     coeffs = None
     if z is not None:
         g = z.index_select(0, torch.tensor(lay.zk.g_rows, dtype=torch.int64, device=z.device)).reshape(-1)[:D * n]
@@ -769,6 +787,39 @@ def zk_masks(lay: Layout, sched: Schedule, z: torch.Tensor | None, device) -> tu
         out.append(ZkMask(arities, kind, off, None if coeffs is None else coeffs[off:off + k], device))
         off += k
     return tuple(out)
+
+
+def zk_libra_cells(lay: Layout, sched: Schedule) -> tuple[torch.Tensor, torch.Tensor]:
+    """``(rows, cols)`` int64 of the ``6 * zk_coeffs`` base cells holding ``sched``'s Libra coefficients (g-block cell ``k`` at
+    ``(g_rows[k // C], k % C)``; several g rows when ``C`` is small).  Nothing else may be written to or claimed on them."""
+    cells = torch.arange(D * sched.zk_coeffs(), dtype=torch.int64)
+    return torch.tensor(lay.zk.g_rows, dtype=torch.int64)[cells // lay.C], cells % lay.C
+
+
+def check_zk_claim_supports(lay: Layout, sched: Schedule, claims: list) -> None:
+    """Raise unless ``claims`` is the claim set LGSC0004's ZK argument covers (red-team-ligerito-3 R3-4): two evaluation
+    claims whose row coordinates are all non-boolean (their row weights ``eq(r, .)`` reach every uniform row), then the three
+    mask claims exactly on their Libra cells (zc, cmb, rb blocks in g-block order: disjoint, and inside ``g_rows``, which
+    share no row with the uniform / product / mask / next rows, the virtual block or the witness rows)."""
+    zr = lay.zk
+    g = set(zr.g_rows)
+    others = set(zr.rows()) - g | set(range(lay.m + len(lay.virt)))
+    if len(g) != len(zr.g_rows) or g & others or D * sched.zk_coeffs() > min(zr.g_cells, len(zr.g_rows) * lay.C):
+        raise ValueError("ZK layout: the Libra block overlaps other rows or is too small")
+    if [type(c).__name__ for c in claims] != ["EvalClaim"] * 2 + ["SparseClaim"] * 3:
+        raise ValueError("ZK claims: expected 2 evaluation + 3 sparse claims")
+    for c in claims[:2]:
+        rc = c.point[:lay.n_i].to("cpu")
+        if tuple(c.point.shape) != (lay.n_vars, D) or bool(((rc[:, 1:] == 0).all(1) & (rc[:, 0] <= 1)).any()):
+            raise ValueError(f"ZK claim {c.name}: a boolean row coordinate (the claim would miss uniform rows)")
+    rows, cols = zk_libra_cells(lay, sched)
+    off = 0
+    for c, arities in zip(claims[2:], (sched.zc, sched.cmb, sched.rb)):
+        k = D * sum(3 ** v - 1 for v in arities)
+        if not (torch.equal(c.rows.to("cpu"), rows[off:off + k]) and torch.equal(c.cols.to("cpu"), cols[off:off + k])) \
+                or tuple(c.weights.shape) != (k, D):
+            raise ValueError(f"ZK claim {c.name}: not exactly its Libra cells")
+        off += k
 
 
 def zk_row_weights(lay: Layout, g3: torch.Tensor, device) -> tuple[torch.Tensor, torch.Tensor]:
@@ -831,15 +882,16 @@ def _next_tables(lay: Layout, z: torch.Tensor, r_hi: torch.Tensor, vf: int, engi
 
 
 def prove(lay: Layout, cons: Constraints, z: torch.Tensor, coins, cheat: str | None = None, engine=None,
-          schedule: Schedule | None = None) -> SumcheckProof:
+          schedule: Schedule | None = None, allow_underblinded: bool = False) -> SumcheckProof:
     """The zero-check and the combined sumcheck on ``z`` (``build_z``).  ``cheat`` (negative tests only): ``"round1"`` fixes
     the opening message so its check passes (caught in the next round); ``"zc"`` fixes every zero-check message and the
     final tables (the zero-check passes; the combined sumcheck's first round catches the false ``Az, Bz, Cz``); ``"all"``
     also fixes every combined round (the combined final check catches it).
     ``engine``: ``None`` = the torch reference (small sizes); ``"cuda"`` = the fused cupy kernels (``CudaZC`` / ``CudaPP``).
-    A ZK layout (``lay.zk``; ``z`` after ``layout.fill_zk``) proves LGSC0004 (``_prove_zk``)."""
+    A ZK layout (``lay.zk``; ``z`` after ``layout.fill_zk``) proves LGSC0004 (``_prove_zk``); it refuses a schedule with
+    ``vf > n_c - 4`` unless ``allow_underblinded`` (``zk_masks``)."""
     if lay.zk is not None:
-        return _prove_zk(lay, cons, z, coins, cheat, engine, schedule)
+        return _prove_zk(lay, cons, z, coins, cheat, engine, schedule, allow_underblinded)
     dev = z.device
     n_k, n_c, n_i = lay.n_k, lay.n_c, lay.n_i
     n = n_k + n_c
@@ -978,7 +1030,7 @@ def prove(lay: Layout, cons: Constraints, z: torch.Tensor, coins, cheat: str | N
 
 
 def _prove_zk(lay: Layout, cons: Constraints, z: torch.Tensor, coins, cheat: str | None, engine,
-              schedule: Schedule | None) -> SumcheckProof:
+              schedule: Schedule | None, allow_underblinded: bool = False) -> SumcheckProof:
     """LGSC0004: the zero-check and the combined sumcheck with Libra masks (``ZkMask``); the committed shifted rows and the mask
     link ride in the combined sumcheck's rows part (``n_w``); then the row reduction of ``V'(rho_c) = sum_i s_w(i) w~(i, rho_c)``
     to ONE claim at a random row point.  Claims: ``w~(r_i, r_c)``, ``w~(rho_i, rho_c)`` and three sparse mask claims."""
@@ -989,7 +1041,7 @@ def _prove_zk(lay: Layout, cons: Constraints, z: torch.Tensor, coins, cheat: str
     sched = schedule if schedule is not None and schedule.rb else zk_schedule(lay, schedule)
     if sum(sched.zc) + sched.vf != n or sum(sched.cmb) != n_cmb or sum(sched.rb) != n_i or sched.vf > n_c:
         raise ValueError(f"schedule {sched} does not fit n = {n}, n_cmb = {n_cmb}, n_i = {n_i}")
-    mz, mc, mr = zk_masks(lay, sched, z, dev)
+    mz, mc, mr = zk_masks(lay, sched, z, dev, allow_underblinded)
     tr = _Transcript(coins, dev)
     t0 = time.perf_counter()
     timings: dict = {}
@@ -1138,6 +1190,7 @@ def _prove_zk(lay: Layout, cons: Constraints, z: torch.Tensor, coins, cheat: str
     claims = [EvalClaim(torch.cat((r_i, r_c)), values[0], "w(r_i, r_c)"),
               EvalClaim(torch.cat((rho_i, rho_c)), values_b[0], "w(rho_i, rho_c)"),
               mz.claim(lay, zk_t, "mask(zc)"), mc.claim(lay, values[2], "mask(cmb)"), mr.claim(lay, values_b[1], "mask(rb)")]
+    check_zk_claim_supports(lay, sched, claims)
     return SumcheckProof(sched, zc_msgs, fabc, torch.zeros((0, 1 << vf, D), dtype=torch.int64, device=dev), cmb_msgs, values,
                          claims, timings, zk_t=zk_t, rb_rounds=rb_msgs, values_b=values_b, zk_links=lay.n_links)
 
@@ -2450,7 +2503,8 @@ def fixture(relation_name: str = "fp8-ada", l: int = 64, S: int = 2, n_vus: int 
     """A complete verifier fixture for ligerito-verify-rs: layout, constraint COO triples, public rows, proof bytes (hex), the
     claims, and the transcript (every absorb and every challenge, in order) of an honest run with ``LocalCoins(b"fixture")``,
     plus negatives (proof bytes that must be rejected, with the Python verifier's reason).  ``zk``: LGSC0004 (masks from the
-    fixed key ``sha256(b"fixture-masks")``; the Libra coefficient cells are included so the sparse claims can be checked)."""
+    fixed key ``sha256(b"fixture-masks")``; the Libra coefficient cells are included so the sparse claims can be checked).
+    Toy sizes are format tests, not ZK instances: the schedule may have ``vf > n_c - 4`` (zk-small: 4 > 3 at l = 64, S = 2)."""
     from backends.direct.ligero.relations import relation
     from backends.direct.ligero.relchain import RelationChainRunner, instances
     from .layout import build_z, constraints, fill_zk, layout_for, public_rows
@@ -2468,7 +2522,7 @@ def fixture(relation_name: str = "fp8-ada", l: int = 64, S: int = 2, n_vus: int 
         schedule = zk_schedule(lay, schedule)
     pubs = public_rows(runner.sys, lay, [s.public() for s in subs], device)
     coins = RecordingCoins(LocalCoins(b"fixture"))
-    proof = prove(lay, cons, z, coins, schedule=schedule)
+    proof = prove(lay, cons, z, coins, schedule=schedule, allow_underblinded=True)
     pb = proof.to_bytes()
     ok, why, claims = verify(lay, cons, pubs, SumcheckProof.from_bytes(pb), LocalCoins(b"fixture"), device=device)
     assert ok, why
@@ -2486,7 +2540,7 @@ def fixture(relation_name: str = "fp8-ada", l: int = 64, S: int = 2, n_vus: int 
     bit = next(r for r in runner.sys.rows if r.kind == "bit")
     z_bad[lay.row_of_sys[bit.idx], 3] = 2
     for cheat in ("zc", "all"):
-        pr = prove(lay, cons, z_bad, LocalCoins(b"fixture"), cheat=cheat, schedule=schedule)
+        pr = prove(lay, cons, z_bad, LocalCoins(b"fixture"), cheat=cheat, schedule=schedule, allow_underblinded=True)
         okb, whyb, _ = verify(lay, cons, pubs, pr, LocalCoins(b"fixture"), device=device)
         assert not okb
         negs.append({"cheat": cheat, "witness": "bit row = 2 at column 3", "proof_hex": pr.to_bytes().hex(), "reason": whyb})
@@ -2495,7 +2549,7 @@ def fixture(relation_name: str = "fp8-ada", l: int = 64, S: int = 2, n_vus: int 
             z_bad = z.clone()
             col = 0 if row == lay.zk.mask_next else 9
             z_bad[row, col] = (int(z_bad[row, col]) + 1) % P
-            pr = prove(lay, cons, z_bad, LocalCoins(b"fixture"), schedule=schedule)
+            pr = prove(lay, cons, z_bad, LocalCoins(b"fixture"), schedule=schedule, allow_underblinded=True)
             okb, whyb, _ = verify(lay, cons, pubs, pr, LocalCoins(b"fixture"), device=device)
             assert not okb
             negs.append({"cheat": None, "witness": what, "proof_hex": pr.to_bytes().hex(), "reason": whyb})
