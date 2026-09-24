@@ -18,7 +18,6 @@ verity_capture/sweep/*.sh
 # --- pod runtime and acquisition gates
 pod_bootstrap.sh
 verity_vllm/acquire/pod_gate.sh
-verity_vllm/acquire/pod_match_v2.sh
 
 # --- GEN-lane pod runners (their workloads/workload_*.json inputs are kept by name)
 verity_capture/bench/gen_batch_pod.sh

@@ -6,8 +6,8 @@ Inputs are STRUCTURE only: the required-value manifest (`verity_capture.commit.r
 `op_path` / `output_member` / `family` / `promoted` / `consumers`) and the runtime correspondence (`correspondence.AcquireCorrespondence`:
 `owning_module`, `return_slot`, `arg_slot` over the `runtime-correspondence/v1` record when the Build carries it, else the manifest's
 v1-annotation reading -- `source` recorded in the plan's `correspondence` block + the runtime module tree).  Nothing here reads a module
-CLASS table to decide a site; the v1 tables are consulted only to name RESIDUALS (`plan.residuals`): v1 hooks the plan cannot derive from
-structure yet, each with its table.
+CLASS table to decide a site; the declared by-name tables (the lifetime leaves, the analytic tables) are consulted only to mark a site's
+lifetime and to name RESIDUALS (`plan.residuals`): facts the plan cannot derive from structure yet, each with its table.
 
 Sites (`SITE_KINDS`):
   producer_output   forward hook on the owning module, return slot = the Value's port (`out` = the whole return, `k` = tuple slot k)
@@ -365,64 +365,46 @@ def choose(sites: list[Site], v: ValuePlan) -> tuple[Site | None, str]:
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------
-# residuals: v1 hooks the structure cannot derive yet, by table
+# residuals: the declared by-name facts the structure does not carry yet, by table
 # ---------------------------------------------------------------------------------------------------------------------------------
 
-def _v1_tables() -> dict[str, Any]:
-    from verity_capture.experimental.commit_integ.native_host import ACQUIRE_CLASSES, ACQUIRE_INPUT_CLASSES, SKIP_CLASSES, NativeHostCommitter
+def _lifetime_tables() -> dict[str, Any]:
+    from verity_capture.experimental.commit_integ.native_host import NativeHostCommitter
     try:
         from verity_capture.commit.native_collect import GATHER_FLUSH_LEAVES, PRE_FLUSH_LEAVES
     except Exception:  # noqa: BLE001  -- native_collect imports torch at module level; the plan must stay importable without it
         GATHER_FLUSH_LEAVES, PRE_FLUSH_LEAVES = frozenset(), frozenset()
-    return {"ACQUIRE_CLASSES": set(ACQUIRE_CLASSES), "ACQUIRE_INPUT_CLASSES": set(ACQUIRE_INPUT_CLASSES), "SKIP_CLASSES": set(SKIP_CLASSES),
-            "HAZARD_LEAVES": set(NativeHostCommitter.HAZARD_LEAVES), "GATHER_FLUSH_LEAVES": set(GATHER_FLUSH_LEAVES), "PRE_FLUSH_LEAVES": set(PRE_FLUSH_LEAVES)}
+    return {"HAZARD_LEAVES": set(NativeHostCommitter.HAZARD_LEAVES), "GATHER_FLUSH_LEAVES": set(GATHER_FLUSH_LEAVES), "PRE_FLUSH_LEAVES": set(PRE_FLUSH_LEAVES)}
 
 
 def hazard_by_table(module: str, slot: str, hazard_leaves: set[str]) -> bool:
-    """v1's `_hazard` decision for a module-output site (the in-place facts the table encodes) -- v1's own function, not a restatement."""
+    """The committer's `_hazard` decision for a module-output site (the in-place facts the table encodes) -- its own function, not a restatement."""
     from verity_capture.experimental.commit_integ.native_host import hazard_of_record
 
     return hazard_of_record(f"{module}/{slot}", hazard_leaves)
 
 
 def residuals_of(values: list[ValuePlan], rt: RuntimeTree, tables: Mapping[str, Any] | None = None) -> list[Residual]:
-    t = dict(tables or _v1_tables())
+    t = dict(tables or _lifetime_tables())
     out: list[Residual] = []
-    planned_out = {v.chosen.module for v in values if v.chosen is not None and v.chosen.kind == "producer_output"}
-    planned_in = {v.chosen.module for v in values if v.chosen is not None and v.chosen.kind == "consumer_input"}
     weights = {v.op_path for v in values if v.family == WEIGHTS_FAMILY}
-    for path in sorted(rt.modules):
-        classes = rt.classes(path)
-        if classes & t["SKIP_CLASSES"]:
-            continue
-        if classes & t["ACQUIRE_CLASSES"] and path not in planned_out:
-            out.append(Residual("ACQUIRE_CLASSES", path, rt.class_name(path) or "?", "v1 hooks this module's forward output by class; no required Value is a return of it "
-                                "(structure names no Value here -- an extra v1 observation, not a required one)"))
-        if classes & t["ACQUIRE_INPUT_CLASSES"] and path not in planned_in:
-            out.append(Residual("ACQUIRE_INPUT_CLASSES", path, rt.class_name(path) or "?", "v1 acquires this module's first input by class; no required Value names it"))
-    if rt.runner.get("sampler_module"):
-        if RUNNER_PATH not in planned_out:
-            out.append(Residual("ACQUIRE_CLASSES", RUNNER_PATH, (rt.runner.get("sampler_class") or ["Sampler"])[0],
-                                "v1 registers a forward hook on the runner's sampler module; the hook never fires (the runner does not call the module) -- "
-                                "the sampler's Values are acquired from sample()'s return (runner_return), which the plan derives",
-                                values=[v.value_id for v in values if v.chosen is not None and v.chosen.kind in ("runner_return", "runner_state", "launch_proxy")]))
-    # lifetime tables: the plan has no alias / in-place facts from the annotations; v1 encodes them by leaf name
+    # lifetime tables: the plan has no alias / in-place facts from the annotations; the committer encodes them by leaf name
     haz = [v for v in values if v.chosen is not None and v.chosen.kind == "producer_output" and hazard_by_table(v.chosen.module, v.chosen.slot, t["HAZARD_LEAVES"])]
     if haz:
-        out.append(Residual("HAZARD_LEAVES", "*", "*", "v1 snapshots these module outputs AT the hook (overwritten in place afterwards: RoPE in the qkv buffer, fused add-norm "
+        out.append(Residual("HAZARD_LEAVES", "*", "*", "the committer snapshots these module outputs AT the hook (overwritten in place afterwards: RoPE in the qkv buffer, fused add-norm "
                             "into its inputs, the residual slot); the plan marks the site's lifetime from the table because the annotations carry no in-place fact",
                             values=[v.value_id for v in haz]))
     for table in ("GATHER_FLUSH_LEAVES", "PRE_FLUSH_LEAVES"):
         hits = [v for v in values if v.chosen is not None and v.chosen.kind == "producer_output" and v.chosen.module.rsplit(".", 1)[-1] in t[table]]
         if hits and t[table]:
-            out.append(Residual(table, "*", "*", f"v1's gather collector flushes staged bytes at these module boundaries ({table}); the flush points are lifetime facts "
+            out.append(Residual(table, "*", "*", f"the gather collector flushes staged bytes at these module boundaries ({table}); the flush points are lifetime facts "
                                 "the structure does not carry yet", values=[v.value_id for v in hits]))
     from verity_capture.root_policy import analytic_table_of_buffer
 
     for b in sorted(rt.buffers):
         table = analytic_table_of_buffer(b)
         if table is not None and b not in weights:
-            out.append(Residual("ANALYTIC_TABLES", b, table, "v1's Match stage dumps this buffer by name and checks it analytically (root_policy.ANALYTIC_TABLES); "
+            out.append(Residual("ANALYTIC_TABLES", b, table, "the Match stage dumps this buffer by name and checks it analytically (root_policy.ANALYTIC_TABLES); "
                                 "the manifest names no weight Value for it"))
     return out
 
@@ -465,7 +447,7 @@ def acquisition_plan(manifest: Mapping[str, Any], correspondence: AcquireCorresp
     prov["modules"] = confirm_modules(values, correspondence)
     rt = correspondence.runtime
     if with_residuals:
-        tabs = tables if tables is not None else _v1_tables()
+        tabs = tables if tables is not None else _lifetime_tables()
         for v in values:                                     # lifetime of a module-output site from the table when the annotations carry none
             if v.chosen is not None and v.chosen.kind == "producer_output" and v.chosen.lifetime == "unknown" and hazard_by_table(v.chosen.module, v.chosen.slot, tabs["HAZARD_LEAVES"]):
                 v.chosen = Site(v.chosen.kind, v.chosen.module, v.chosen.slot, "mutated-after-hook (HAZARD_LEAVES)", v.chosen.derived_from)

@@ -58,7 +58,8 @@ ROOT_TAG_RUN = b"verity/cmt-integ/run-root/v0"
 DEFAULT_CHUNK = 4096
 BLOCK_BYTES = 64 << 20
 
-# under v2 the plan replaces this selection (apply_plan_to_committer; compiled rows: CompiledGraphSource.wrap_model); the tables stay for the ACQUIRE_ENGINE=v1 oracle
+# the construction-time selection: TP1 Commits replace it with the acquisition plan's (apply_plan_to_committer; compiled rows:
+# CompiledGraphSource.wrap_model); TP rank committers (tp/worker.py) have no plan yet and keep it
 # module classes whose forward OUTPUT is an Instance output (census §3 `HBM-materialized (native)`); matched on the MRO class names
 ACQUIRE_CLASSES = {
     "ColumnParallelLinear", "RowParallelLinear", "QKVParallelLinear", "MergedColumnParallelLinear", "ReplicatedLinear", "LinearBase",
@@ -929,22 +930,17 @@ class NativeHostCommitter:
         # input as `<consumer>/in` -- the same mechanism as the embedding's ids, no longer restricted to a module class -- and the binding map
         # binds that tensor to the producer's identity (binding.promoted_input_acquisition).  Set by commit_delta before install / size_arena.
         self.acquire_inputs: dict[str, int] = {}
-        # [v2 acquire, Phase 4a] ACQUIRE_ENGINE=v2: the consumer-input pre-hook set comes from the ACQUISITION PLAN (verity_vllm.acquire.install
-        # .apply_plan_to_committer sets it) instead of ACQUIRE_INPUT_CLASSES; None (v1, the default) = the class table + `acquire_inputs`.
+        # [v2 acquire, Phase 4a] the consumer-input pre-hook set comes from the ACQUISITION PLAN (verity_vllm.acquire.install
+        # .apply_plan_to_committer sets it) instead of ACQUIRE_INPUT_CLASSES; None (no plan: TP rank committers) = the class table + `acquire_inputs`.
         self.plan_inputs: set[str] | None = None
-        # VERITY_SKIP ablation: applied (`apply_skip`) to the selection of record -- the class tables here under ACQUIRE_ENGINE=v1, the
-        # acquisition plan's under v2 (`apply_plan_to_committer`); `skipped` = the modules dropped per class, None until applied
+        # VERITY_SKIP ablation: applied (`apply_skip`) to the acquisition plan's selection (`apply_plan_to_committer`); `skipped` = the
+        # modules dropped per class, None until applied
         self.skip_classes = skip_classes_of_env()
         self.skipped: dict[str, list[str]] | None = None
         self._side = None                           # the worker's CUDA side stream (created lazily on the worker thread)
         if engine is not None:
             self._geo_digest = geo_digest or self._model_geo_digest()
             self._modules: list[tuple[str, Any]] = self._select_modules()
-            if self.skip_classes:
-                from verity_vllm.acquire.switch import v2 as _acquire_v2
-
-                if not _acquire_v2():
-                    self.apply_skip()
             if self.arena is not None and self.arena_explicit:
                 self.arena.prealloc()               # auto mode preallocates in size_arena() once the envelope is known
         else:
@@ -1128,14 +1124,13 @@ class NativeHostCommitter:
         return dropped
 
     def _check_skip(self) -> None:
-        """At install, when the selection is final: a VERITY_SKIP never applied, or a skipped class back in `_modules` (commit_delta's
-        manifest instance_outputs extension adds named modules the committer did not select), is refused."""
+        """At install, when the selection is final: a VERITY_SKIP never applied, or a skipped class back in `_modules`, is refused."""
         if not self.skip_classes:
             return
         label = ",".join(sorted(self.skip_classes))
         if self.skipped is None:
-            raise SkipRefused(f"VERITY_SKIP={label}: never applied to the selection of record (under ACQUIRE_ENGINE=v2 apply_plan_to_committer "
-                              f"applies it to the plan's selection)")
+            raise SkipRefused(f"VERITY_SKIP={label}: never applied to the selection of record (apply_plan_to_committer applies it to the "
+                              f"plan's selection)")
         back = sorted(n for n, m in self._modules if _mro_names(m) & self.skip_classes)
         if back:
             raise SkipRefused(f"VERITY_SKIP={label}: {len(back)} module(s) of a skipped class are selected again at install ({back[:4]}); "

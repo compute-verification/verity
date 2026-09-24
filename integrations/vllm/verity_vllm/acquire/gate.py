@@ -1,20 +1,16 @@
-"""The CPU gate: v1's hook set vs the plan's site set on one row, as identical (module path, kind, slot) sets, differences named with
-the table that caused them.
+"""The CPU gate: the acquisition plan of one row, off-pod (the runtime tree read off the meta-instantiated model or a live engine), and
+plan-vs-plan comparison.
 
     python -m verity_vllm.acquire.gate --manifest <manifest.json> --runtime <runtime_tree.json> --out <dir> [--row-id ID]
                                        [--programs-root <row dir> | --program <derive dir> ...] [--against <acquisition_plan.json>]
     python -m verity_vllm.acquire.gate compare-plans <a.json> <b.json> [--out plan_compare.json]
 
-`--runtime` is a `RuntimeTree` document: written by the GPU stage under ACQUIRE_ENGINE=v2 (`m1_capture` -> DIR/runtime_tree.json) or by
+`--runtime` is a `RuntimeTree` document: written by the GPU stage (`m1_capture` -> DIR/runtime_tree.json) or by
 `python -m verity_vllm.acquire.runtime_tree` from a model instantiated on the meta device as Build does (pod: needs vLLM).  `--programs-root`
 / `--program` name the Build's request Program dirs (`build_request*/`): the owning modules are read off their `runtime-correspondence/v1`
 record when they carry it (`correspondence.source = correspondence`), else off the manifest's v1 annotations -- the source is recorded in
-the plan and the compare document.  Writes `acquisition_plan.json`, `v1_decision.json`, `site_compare.json` (and `plan_compare.json`
-against another plan: every Value whose chosen site differs, listed); exit 0 when there is no UNEXPLAINED difference, 1 otherwise.
-
-Projection: a v1 forward hook takes every returned tensor (slot `*`), so plan producer_output sites are compared per module (their slots
-are listed beside); consumer inputs, runner returns and taps compare exactly; the plan's registered inputs (every `weights` Value) meet
-v1's `register_weights` (every parameter + buffer) as one site (`weights`, registered_input, `*`).
+the plan.  Writes `acquisition_plan.json` (and `plan_compare.json` against another plan: every Value whose chosen site differs, listed);
+exit 0 when the plan is complete (and identical to `--against`), 1 otherwise.
 """
 from __future__ import annotations
 
@@ -28,88 +24,15 @@ from typing import Any, Iterable, Mapping
 
 from verity_vllm.acquire.correspondence import AcquireCorrespondence, RuntimeTree
 from verity_vllm.acquire.plan import AcquisitionPlan, acquisition_plan
-from verity_vllm.acquire.v1_decision import V1Decision, v1_decision
 
-COMPARE_SCHEMA = "verity-vllm/acquisition-site-compare/v1"
 PLAN_COMPARE_SCHEMA = "verity-vllm/acquisition-plan-compare/v1"
 
 
-def project_plan(plan: AcquisitionPlan) -> tuple[set[tuple[str, str, str]], dict[str, list[str]]]:
-    sites: set[tuple[str, str, str]] = set()
-    slots: dict[str, list[str]] = {}
-    for s in plan.chosen_sites():
-        if s.kind == "producer_output":
-            sites.add((s.module, s.kind, "*"))
-            slots.setdefault(s.module, []).append(s.slot)
-        elif s.kind == "registered_input":
-            sites.add(("weights", "registered_input", "*"))
-        elif s.kind == "analytic_table":
-            continue                                          # a check beside the registered input, not an acquisition hook
-        elif s.kind == "native_tap":
-            sites.add((s.module, s.kind, s.slot))
-        else:
-            sites.add(s.key())
-    return sites, {k: sorted(v) for k, v in slots.items()}
-
-
-def explain_v1_only(key: tuple[str, str, str], plan: AcquisitionPlan, d: V1Decision, rt: RuntimeTree) -> str:
-    module, kind, _slot = key
-    cause = d.causes.get(f"{module}|{kind}", "?")
-    res = [r for r in plan.residuals if r.module == module and r.table in cause] or [r for r in plan.residuals if r.module == module]
-    if res:
-        return f"residual {res[0].table}: {res[0].reason}"
-    return f"v1 cause: {cause}; the plan derives no Value here"
-
-
-def explain_plan_only(key: tuple[str, str, str], plan: AcquisitionPlan, d: V1Decision, rt: RuntimeTree, tables: Mapping[str, Any]) -> str:
-    module, kind, _slot = key
-    vals = [v for v in plan.values if v.chosen is not None and v.chosen.module == module and v.chosen.kind == kind]
-    classes = rt.classes(module)
-    if classes & set(tables.get("SKIP_CLASSES", ())):
-        return f"SKIP_CLASSES: v1 skips class {sorted(classes & set(tables['SKIP_CLASSES']))[0]} by table; the manifest requires {[v.value_id for v in vals][:3]}"
-    return f"the manifest requires {[v.value_id for v in vals][:3]} ({len(vals)} Value class(es)) and v1's tables name no hook here (class {rt.class_name(module)})"
-
-
-def compare_sites(plan: AcquisitionPlan, d: V1Decision, rt: RuntimeTree, *, tables: Mapping[str, Any] | None = None, row_id: str | None = None) -> dict[str, Any]:
-    from verity_vllm.acquire.plan import _v1_tables
-    t = dict(tables or _v1_tables())
-    p_sites, p_slots = project_plan(plan)
-    v_sites = d.sites()
-    only_v1 = sorted(v_sites - p_sites)
-    only_plan = sorted(p_sites - v_sites)
-    diffs = []
-    unexplained = []
-    for k in only_v1:
-        why = explain_v1_only(k, plan, d, rt)
-        diffs.append({"site": list(k), "in": "v1", "cause": why})
-        if not why.startswith("residual"):
-            unexplained.append(list(k))
-    for k in only_plan:
-        why = explain_plan_only(k, plan, d, rt, t)
-        diffs.append({"site": list(k), "in": "plan", "cause": why})
-        if not (why.startswith("SKIP_CLASSES") or "v1's tables name no hook" in why):
-            unexplained.append(list(k))
-    by_kind_common: dict[str, int] = {}
-    for k in p_sites & v_sites:
-        by_kind_common[k[1]] = by_kind_common.get(k[1], 0) + 1
-    return {"schema": COMPARE_SCHEMA, "row_id": row_id, "program_digest": plan.program_digest, "manifest_digest": plan.manifest_digest,
-            "plan_digest": plan.digest, "runtime_source": rt.source, "correspondence": dict(plan.correspondence), "plan_complete": plan.complete,
-            "counts": {"v1_sites": len(v_sites), "plan_sites": len(p_sites), "common": len(p_sites & v_sites), "only_v1": len(only_v1), "only_plan": len(only_plan),
-                       "unexplained": len(unexplained), "common_by_kind": by_kind_common, "plan_values": len(plan.values), "plan_unsupported": len(plan.unsupported),
-                       "plan_residuals": len(plan.residuals)},
-            "identical": not only_v1 and not only_plan, "differences": diffs, "unexplained": unexplained,
-            "plan_output_slots": p_slots, "unsupported": [{"value": v.value_id, "why": v.why} for v in plan.unsupported],
-            "residuals": [r.to_json() for r in plan.residuals], "v1_problems": list(d.problems)}
-
-
-def run(manifest: Mapping[str, Any], rt: RuntimeTree, *, row_id: str | None = None, inplace_facts: Mapping[str, Any] | None = None,
-        programs: Iterable[str | Path] = ()) -> tuple[AcquisitionPlan, V1Decision, dict[str, Any]]:
+def run(manifest: Mapping[str, Any], rt: RuntimeTree, *, inplace_facts: Mapping[str, Any] | None = None, programs: Iterable[str | Path] = ()) -> AcquisitionPlan:
     kw = dict(wrapper_prefix=str(manifest.get("wrapper_prefix") or ""), aliases=manifest.get("op_path_aliases") or {}, inplace_facts=inplace_facts)
     programs = list(programs)
     corr = AcquireCorrespondence.from_programs(rt, programs, **kw) if programs else AcquireCorrespondence(rt, **kw)
-    plan = acquisition_plan(manifest, corr)
-    d = v1_decision(rt, manifest)
-    return plan, d, compare_sites(plan, d, rt, row_id=row_id)
+    return acquisition_plan(manifest, corr)
 
 
 def request_program_dirs(root: str | Path) -> list[str]:
@@ -176,23 +99,20 @@ def _main(argv: list[str] | None = None) -> int:
     man = json.loads(Path(a.manifest).read_text())
     rt = RuntimeTree.load(a.runtime)
     programs = list(a.program) + (request_program_dirs(a.programs_root) if a.programs_root else [])
-    plan, d, cmp = run(man, rt, row_id=a.row_id, programs=programs)
+    plan = run(man, rt, programs=programs)
     plan.save(out / "acquisition_plan.json")
-    (out / "v1_decision.json").write_text(json.dumps(d.to_json(), indent=1) + "\n")
-    (out / "site_compare.json").write_text(json.dumps(cmp, indent=1) + "\n")
-    c = cmp["counts"]
     cp = plan.correspondence
-    print(f"[gate] {a.row_id or ''} plan {plan.digest[:16]} values {c['plan_values']} (unsupported {c['plan_unsupported']}) sites v1 {c['v1_sites']} plan {c['plan_sites']} "
-          f"common {c['common']} only_v1 {c['only_v1']} only_plan {c['only_plan']} unexplained {c['unexplained']} residuals {c['plan_residuals']}", flush=True)
+    print(f"[gate] {a.row_id or ''} plan {plan.digest[:16]} values {len(plan.values)} (unsupported {len(plan.unsupported)}) sites {len(plan.chosen_sites())} "
+          f"hooks {len(plan.hooks())} residuals {len(plan.residuals)}", flush=True)
     print(f"[gate]   correspondence source={cp.get('source')} programs={len(cp.get('programs') or {})} absent={len(cp.get('absent') or [])} module_paths={cp.get('module_paths')} "
           f"modules confirmed={(cp.get('modules') or {}).get('confirmed')} unconfirmed={len((cp.get('modules') or {}).get('unconfirmed') or [])} problems={len(cp.get('problems') or [])}", flush=True)
     for u in ((cp.get("modules") or {}).get("unconfirmed") or [])[:20]:
         print(f"[gate]   UNCONFIRMED {u['value']} ({u['role']} {u['module']}): {u['why']}", flush=True)
     for p in (cp.get("problems") or [])[:10]:
         print(f"[gate]   correspondence problem: {p[:200]}", flush=True)
-    for df in cmp["differences"]:
-        print(f"[gate]   {df['in']:<4} {df['site']}: {df['cause'][:160]}", flush=True)
-    rc = 0 if (not cmp["unexplained"] and plan.complete) else 1
+    for v in plan.unsupported[:20]:
+        print(f"[gate]   UNSUPPORTED {v.value_id}: {v.why[:160]}", flush=True)
+    rc = 0 if plan.complete else 1
     if a.against:
         pc = compare_plans(plan.to_json(), json.loads(Path(a.against).read_text()))
         (out / "plan_compare.json").write_text(json.dumps(pc, indent=1) + "\n")

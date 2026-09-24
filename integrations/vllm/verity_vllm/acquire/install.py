@@ -1,4 +1,4 @@
-"""Install EXACTLY the plan's hooks (module path -> hook kind -> slot) on a built module tree, and the collector adapter behind the switch.
+"""Install EXACTLY the plan's hooks (module path -> hook kind -> slot) on a built module tree, and the committer adapter.
 
     inst = install_from_plan(plan, model, runner, sink=...)     forward hooks (producer_output), forward pre-hooks (consumer_input), the
                                                                runner `sample()` wrap (runner_return); `inst.installed` lists what went in,
@@ -6,9 +6,9 @@
                                                                runner state, launch proxies, prescribed): those belong to their sources
     inst.remove()
 
-    apply_plan_to_committer(committer, plan)                    v1's `NativeHostCommitter` (and its native_collect subclass) takes its
-                                                               module set and consumer-input set from the plan instead of the class tables;
-                                                               the rest of the committer (arena, hashing, roots, sources) is untouched
+    apply_plan_to_committer(committer, plan)                    the `NativeHostCommitter` (and its native_collect subclass) takes its
+                                                               module set and consumer-input set from the plan; the rest of the committer
+                                                               (arena, hashing, roots, sources) is untouched
     plan_selection(plan, model)                                 that module set and consumer-input set, shared with the compiled rows'
                                                                record ops (`CompiledGraphSource.wrap_model`)
 
@@ -181,7 +181,7 @@ def install_from_plan(plan: AcquisitionPlan | Mapping[str, Any], model: Any, run
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------
-# the collector adapter (ACQUIRE_ENGINE=v2): v1's committer takes its hook sets from the plan
+# the committer adapter: the committer takes its hook sets from the plan
 # ---------------------------------------------------------------------------------------------------------------------------------
 
 def plan_selection(plan: AcquisitionPlan | Mapping[str, Any], model: Any) -> tuple[list[str], list[str]]:
@@ -209,7 +209,7 @@ def _values_at(plan: AcquisitionPlan | Mapping[str, Any], site: Site) -> list[st
 
 
 def apply_plan_to_committer(committer: Any, plan: AcquisitionPlan | Mapping[str, Any]) -> dict[str, Any]:
-    """Replace the committer's class-table decisions with the plan's (`plan_selection`): `_modules` = the producer_output sites' modules
+    """The committer's selection from the plan (`plan_selection`): `_modules` = the producer_output sites' modules
     (runtime order), `plan_inputs` = the consumer_input sites' modules.  The promoted-member arming (`acquire_inputs` bytes per token,
     `promoted_input_bindings`) stays the manifest's (commit_delta sets it); the plan must name every armed consumer, else the plan is refused.
     A VERITY_SKIP ablation (`committer.skip_classes`) is applied to THIS selection (`apply_skip`, refused by name when it cannot be); the
@@ -223,11 +223,10 @@ def apply_plan_to_committer(committer: Any, plan: AcquisitionPlan | Mapping[str,
     if not armed <= set(in_mods):
         raise IncompletePlan(f"the manifest arms consumer inputs the plan does not name: {sorted(armed - set(in_mods))[:8]}")
     mods = dict(model.named_modules())
-    before = [n for n, _m in committer._modules]
     committer._modules = [(m, mods[m]) for m in out_mods]
     committer.plan_inputs = set(in_mods)
     committer.name = f"{committer.name}+plan"
-    rec = {"engine": "v2", "modules_before": before, "modules_after": list(out_mods), "plan_inputs": list(in_mods),
+    rec = {"engine": "v2", "modules_after": list(out_mods), "plan_inputs": list(in_mods),
            "deferred_sites": [s.key() for s in deferred], "runner_return_sites": [s.key() for s in hooks if s.kind == "runner_return"]}
     if getattr(committer, "skip_classes", None):
         dropped = committer.apply_skip()

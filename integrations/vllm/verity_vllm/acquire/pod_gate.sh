@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # The CPU gate on a pod, over every staged row dir: required-value manifest (the row's Build dir x workload, as row_pod builds it) ->
-# runtime tree (the model on the META device, as Build instantiates it) -> `verity_vllm.acquire.gate` (v1's hook set vs the plan's sites).
+# runtime tree (the model on the META device, as Build instantiates it) -> `verity_vllm.acquire.gate` (the row's acquisition plan).
 #
 #   ROWS=/workspace/rows OUT=$RESEARCH_RUN_DIR/acquire_gate SCRATCH=/workspace/acquire_gate bash verity_vllm/acquire/pod_gate.sh [row-id ...]
 #
-# Small documents (acquisition_plan.json, v1_decision.json, site_compare.json, runtime_tree.json, logs) go to $OUT/<row>/ (fetched with the
+# Small documents (acquisition_plan.json, runtime_tree.json, logs) go to $OUT/<row>/ (fetched with the
 # run); the manifest (hundreds of MB at B=64) stays in $SCRATCH/<row>/manifest.json.  Exit 0 iff every row's gate exits 0.
 set -uo pipefail
 cd "$(dirname "$0")/../.."                      # integrations/vllm
@@ -12,8 +12,7 @@ PY=${PY:-/workspace/venv312/bin/python}
 ROWS=${ROWS:-/workspace/rows}
 OUT=${OUT:-${RESEARCH_RUN_DIR:-out}/acquire_gate}
 SCRATCH=${SCRATCH:-/workspace/acquire_gate}
-# (the core `verity` package must be importable: without it v1's manifest builder cannot derive a promoted member's signature and writes
-#  the crossing under `unmodelled` -- #57's manifest of record, 163052 rows `complete: false`, vs 163484 `complete: true` with it)
+# (the core `verity` package must be importable: the manifest build reads the registry)
 export PYTHONPATH=${PYTHONPATH:-.:$PWD/../../packages/verity/src} HF_HOME=${HF_HOME:-/workspace/hf}
 mkdir -p "$OUT" "$SCRATCH"
 RC=0
@@ -63,7 +62,7 @@ EOF
     echo "[pod_gate] $ROW: runtime tree (meta) FAILED (see runtime_tree.log)"; tail -n 8 "$O/runtime_tree.log"; RC=1; continue
   fi
   # 3. the gate (--programs-root: the owning modules come off the row's request Programs' runtime-correspondence/v1 records when the Build
-  #    carries them, else off the manifest's v1 annotations -- the source is in acquisition_plan.json / site_compare.json `correspondence`;
+  #    carries them, else off the manifest's v1 annotations -- the source is in acquisition_plan.json `correspondence`;
   #    AGAINST=<dir of acquisition_plan.json per row>: compare this plan Value by Value with that run's -> plan_compare.json)
   T0=$(date +%s)
   AG=(); [ -n "${AGAINST:-}" ] && [ -f "$AGAINST/$ROW/acquisition_plan.json" ] && AG=(--against "$AGAINST/$ROW/acquisition_plan.json")

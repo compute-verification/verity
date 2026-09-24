@@ -14,9 +14,8 @@ from verity_vllm.acquire.correspondence import AnnotationCorrespondence, ArgSlot
 
 PD = hashlib.sha256(b"program").hexdigest()
 
-#: the v1 tables the synthetic runtime tree's class names are drawn from (the plan never reads them to choose a site; the residuals do)
-TABLES = {"ACQUIRE_CLASSES": {"Lin", "Norm", "Embed", "Act", "Logits", "Sampler"}, "ACQUIRE_INPUT_CLASSES": {"Embed"}, "SKIP_CLASSES": {"Head"},
-          "HAZARD_LEAVES": {"proj_a", "embed"}, "GATHER_FLUSH_LEAVES": {"proj_a"}, "PRE_FLUSH_LEAVES": {"norm_in"}}
+#: the lifetime tables of the synthetic runtime tree (the plan never reads them to choose a site; the lifetimes and residuals do)
+TABLES = {"HAZARD_LEAVES": {"proj_a", "embed"}, "GATHER_FLUSH_LEAVES": {"proj_a"}, "PRE_FLUSH_LEAVES": {"norm_in"}}
 
 
 def tree(**extra):
@@ -191,13 +190,9 @@ def test_prescribed_padding_identities():
 def test_residuals_name_the_table():
     plan, _, rt = make_plan(base_rows())
     res = {(r.table, r.module): r for r in plan.residuals}
-    # `body.norm` is a Norm (an acquire class) with no required Value -> v1 hooks it by class; the plan does not
-    assert ("ACQUIRE_CLASSES", "body.norm") in res and res[("ACQUIRE_CLASSES", "body.norm")].cls == "Norm"
-    # the runner's sampler module hook (never fires) -> residual naming the sampler Values the plan derives from sample()
-    assert res[("ACQUIRE_CLASSES", "runner.sampler")].values == ["runner.sampler/sampled_token_ids"]
-    # `head` is a SKIP class: never a residual
-    assert not any(m == "head" for _t, m in res)
-    # lifetime tables: the leaf table + v1's two name rules (`embed` in the leaf; tuple slot 1 of a `norm` leaf = the residual slot)
+    # no module-class table is a residual: the plan's sites are the manifest's Values
+    assert {t for t, _m in res} <= {"HAZARD_LEAVES", "GATHER_FLUSH_LEAVES", "PRE_FLUSH_LEAVES", "ANALYTIC_TABLES"}
+    # lifetime tables: the leaf table + the committer's two name rules (`embed` in the leaf; tuple slot 1 of a `norm` leaf = the residual slot)
     assert set(res[("HAZARD_LEAVES", "*")].values) == {"body.blocks.0.proj_a/0", "body.embed/out", "body.blocks.0.norm_in/1", "body.blocks.0.norm_out/1"}
     assert res[("GATHER_FLUSH_LEAVES", "*")].values == ["body.blocks.0.proj_a/0"]
     assert set(res[("PRE_FLUSH_LEAVES", "*")].values) == {"body.blocks.0.norm_in/0", "body.blocks.0.norm_in/1", "body.blocks.0.norm_in/out"}
