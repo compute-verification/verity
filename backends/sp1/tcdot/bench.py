@@ -35,16 +35,18 @@ ARMS = {
         "backend_name": f"sp1 tc-dot relation-bare/v2 ({LABEL}: SP1 6.4.0 fork + TC_DOT_BF16 precompile, core STARK, CUDA prover)",
         "operands": "read from guest memory through SP1's memory argument (the guest hint-reads x and W, the chip reads each step's 8 "
                     "operand words from memory)",
+        "host_operands": "memory",
     },
     "witness": {
         "pin": "_WIT",
         "patches": ["sp1-patches/*.patch", "sp1-patches/witness-operands/*.patch"],
         "backend_name": f"sp1 tc-dot relation-bare/v2 ({LABEL}: SP1 6.4.0 fork + TC_DOT_BF16 precompile, witness operands, core STARK, "
                         "CUDA prover)",
-        "operands": "free witness values of the chip (patch 0007): the executor reads each step's 8 operand words with no memory access, "
-                    "and the chip holds them only as range-checked BF16 decode columns. A proof shows the chained accumulator is reachable "
-                    "from some finite BF16 operand sequence, not from the words in the guest's memory: sound for relation-bare, which is "
-                    "existential in x and W, and not for a statement that authenticates them",
+        "operands": "free witness values of the chip (patch 0007), taken from the input stream (patch 0008; host and guest feature "
+                    "stream-operands): each step's 64 operand bytes are the next stdin buffer, never in memory, and the chip holds them only "
+                    "as range-checked BF16 decode columns. A proof shows the chained accumulator is reachable from some finite BF16 operand "
+                    "sequence: sound for relation-bare, which is existential in x and W, and not for a statement that authenticates them",
+        "host_operands": "stream",
     },
 }
 
@@ -74,6 +76,9 @@ def fork_identity(host: str) -> tuple[str, dict]:
     arm = next((name for name, pinned in pins.items() if info.get("fork_head") == pinned), None)
     if p.returncode != 0 or arm is None:
         raise SystemExit(f"bench.py: host {host} reports fork_head {info.get('fork_head')!r}, the pins are {pins} (rc {p.returncode})")
+    if info.get("operands", "memory") != ARMS[arm]["host_operands"]:
+        raise SystemExit(f"bench.py: host {host} lays operands out for {info.get('operands', 'memory')!r}, the {arm} arm's fork needs "
+                         f"{ARMS[arm]['host_operands']!r} (host feature stream-operands)")
     server = Path(os.environ.get("HOME", "~")).expanduser() / ".sp1" / "bin" / "sp1-gpu-server"
     return arm, {
         "label": LABEL,

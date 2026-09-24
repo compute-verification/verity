@@ -3,12 +3,13 @@
 # patch series in sp1-patches/, applied with fixed committer identities and the author dates so the commit hashes
 # reproduce: 0001-0003 = ~/projects/sp1 branch tc-dot-precompile @ 3510b39a7 (the fp8 TC_DOT chip), 0004-0005 = lane
 # sp1-tcdot's TC_DOT_BF16 chip, 0006 = its prover sharding change (FORK_HEAD, tree FORK_TREE).  OPERANDS=witness adds
-# sp1-patches/witness-operands/0007, the witness-operands arm (FORK_HEAD_WIT, tree FORK_TREE_WIT): TC_DOT_BF16 takes
-# its operands as free witness values instead of reading them through SP1's memory argument, which is sound only for
-# a statement existential in x and W (relation-bare is).  The checkout is linked at ./sp1, where Cargo.toml's
-# [patch] points.  Then the forked sp1-gpu-server (the stock prebuilt server has neither TC_DOT chip), installed under
-# $SERVER_ROOT/bin; sp1-sdk's cuda client runs $HOME/.sp1/bin/sp1-gpu-server.  Build the host with
-# VERITY_TCDOT_FORK_HEAD set to the arm's pin.  Idempotent.
+# sp1-patches/witness-operands/0007-0008, the witness-operands arm (FORK_HEAD_WIT, tree FORK_TREE_WIT): TC_DOT_BF16
+# takes its operands as free witness values from the input stream instead of reading them through SP1's memory
+# argument, which is sound only for a statement existential in x and W (relation-bare is).  The checkout is linked
+# at ./sp1, where Cargo.toml's [patch] points.  Then the forked sp1-gpu-server (the stock prebuilt server has neither
+# TC_DOT chip), installed under $SERVER_ROOT/bin; sp1-sdk's cuda client runs $HOME/.sp1/bin/sp1-gpu-server.  Build
+# the host with VERITY_TCDOT_FORK_HEAD set to the arm's pin, and for the witness arm with --features stream-operands.
+# Idempotent.
 #
 #   bash backends/sp1/tcdot/build_fork.sh                        # fork + GPU server into ~/.sp1/bin
 #   SERVER_ROOT=/workspace/tcdot-root bash backends/sp1/tcdot/build_fork.sh   # keep a stock server in ~/.sp1/bin
