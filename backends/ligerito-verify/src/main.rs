@@ -179,8 +179,9 @@ struct LgtoOpts {
 }
 
 /// `--session PATH` (repeatable): the verifier's session store (a dir of `live.ChallengeServerSession` record dirs; the
-/// other live protocol's `live.Session` records there hold no batch) or one record dir (`session.json` + `verdict.json`).  Also returns why no claim can be made (R3-10: the attempts on a
-/// statement are countable only over a whole store whose every session has its record).
+/// other live protocol's `live.Session` records there hold no batch) or one record dir (`session.json` + `verdict.json`).
+/// Also returns why no claim can be made (R3-10: the attempts on a statement are countable only over a whole store whose
+/// every session has its record).
 fn load_sessions(paths: &[PathBuf]) -> Result<(Vec<session::Batch>, Option<String>), String> {
     let mut dirs = Vec::new();
     let mut single = Vec::new();
