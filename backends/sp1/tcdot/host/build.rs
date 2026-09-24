@@ -26,8 +26,12 @@ fn path_remaps() -> Vec<String> {
 }
 
 fn main() {
+    let features = match env::var_os("CARGO_FEATURE_STREAM_OPERANDS") {
+        Some(_) => vec!["stream-operands".to_string()],
+        None => Vec::new(),
+    };
     build_program_with_args(
         "../guest",
-        BuildArgs { rustflags: path_remaps(), locked: true, ..Default::default() },
+        BuildArgs { rustflags: path_remaps(), locked: true, features, ..Default::default() },
     );
 }

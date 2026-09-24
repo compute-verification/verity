@@ -2,7 +2,8 @@
 //!
 //! Same statement, identity string, public values and JSON events as the stock host's `bare-*` subcommands
 //! (`../../host/src/bare_cmd.rs`); what differs is the guest input.  The host lays each VU out as 96 in-place
-//! operand blocks for the `TC_DOT_BF16` precompile and computes the routing hint by running the fork's own
+//! operand blocks for the `TC_DOT_BF16` precompile (with `stream-operands`, for the witness-operands fork: as 96
+//! input buffers the precompile takes from the input stream) and computes the routing hint by running the fork's own
 //! contract check (`try_tc_dot_bf16_witness`) along the reference chain (`tc::tc_dot`); steps outside the chip's
 //! contract run in software in the guest.  Every chip step's kernel result is compared with `tc::tc_dot`, and the
 //! public values the guest must commit come from the stock layout through `bare::decide`, independently.
@@ -41,6 +42,11 @@ const STEPS: usize = K / 16;
 /// One VU's routing mask: two u64le words, so the guest reads it with two aligned loads (bits 96.. stay clear unless
 /// the whole VU runs in software).
 const ROUTE_BYTES: usize = 16;
+/// Bytes per step block: 16 x words, then 16 W words.
+const BLOCK_BYTES: usize = 64;
+/// Where the fork's `TC_DOT_BF16` takes its operands: from the input stream (`stream-operands`, the witness-operands
+/// fork, FORK_HEAD_WIT) or from guest memory.
+const OPERANDS: &str = if cfg!(feature = "stream-operands") { "stream" } else { "memory" };
 
 #[derive(Parser)]
 #[command(name = "verity-tcdot-host")]
@@ -285,8 +291,19 @@ impl BareSet {
                 let (mask, out) = route_vu(xi, wi, self.vu_software_threshold, &mut blocks, &mut stats);
                 routes.extend_from_slice(&mask);
                 reference_outputs.push(out);
+                // Streamed operands: the VU as its own buffers, whole in the stock layout or one per step block.
+                if cfg!(feature = "stream-operands") {
+                    if mask == [0xFF; ROUTE_BYTES] {
+                        chunks.push(std::mem::take(&mut blocks));
+                    } else {
+                        chunks.extend(blocks.chunks(BLOCK_BYTES).map(<[u8]>::to_vec));
+                        blocks.clear();
+                    }
+                }
             }
-            chunks.push(blocks);
+            if !cfg!(feature = "stream-operands") {
+                chunks.push(blocks);
+            }
             stock.push(bare::encode_chunk(FORMAT, &xb, &wb, lo, hi));
         }
         let expected = bare::decide(&header, &stock);
@@ -448,7 +465,7 @@ async fn cmd_prove(set: BareSet, out_dir: PathBuf, reps: usize, warmup_vus: usiz
     let pk = client.setup(ELF).await.map_err(|error| anyhow!("setup failed: {error}"))?;
     let setup_seconds = started.elapsed().as_secs_f64();
     emit(&serde_json::json!({"event": "setup", "backend": BACKEND, "label": LABEL, "sp1_version": SP1_VERSION,
-        "fork_head": FORK_HEAD, "elf_sha256": hex::encode(sha256(&ELF)), "vk_hash": pk.verifying_key().bytes32(),
+        "fork_head": FORK_HEAD, "operands": OPERANDS, "elf_sha256": hex::encode(sha256(&ELF)), "vk_hash": pk.verifying_key().bytes32(),
         "guest_features": GUEST_FEATURES, "statement": STATEMENT, "format": FORMAT.name(),
         "client_seconds": client_seconds, "prepare_seconds": prepare_seconds, "setup_seconds": setup_seconds,
         "identity": prepared.identity, "statement_sha256": hex::encode(sha256(&prepared.statement)),
@@ -511,7 +528,7 @@ async fn cmd_verify(proof_path: PathBuf, statement_path: PathBuf) -> Result<()> 
     emit(&serde_json::json!({"backend": BACKEND, "label": LABEL, "ok": checked.is_ok(), "unsound": false,
         "error": checked.as_ref().err().map(|e| e.to_string()), "statement_match": statement_match, "verdict": verdict,
         "public_values": hex::encode(public_values), "vk_hash": pk.verifying_key().bytes32(),
-        "elf_sha256": hex::encode(sha256(&ELF)), "fork_head": FORK_HEAD, "shards": shards(&proof),
+        "elf_sha256": hex::encode(sha256(&ELF)), "fork_head": FORK_HEAD, "operands": OPERANDS, "shards": shards(&proof),
         "load_seconds": load_seconds, "setup_seconds": setup_seconds, "verify_seconds": verify_seconds}))?;
     ensure!(checked.is_ok() && statement_match && verdict, "proof rejected");
     Ok(())
@@ -585,7 +602,8 @@ async fn main() -> Result<()> {
             let client = ProverClient::builder().cpu().build().await;
             let pk = client.setup(ELF).await.map_err(|error| anyhow!("setup failed: {error}"))?;
             emit(&serde_json::json!({"backend": BACKEND, "label": LABEL, "sp1_version": SP1_VERSION,
-                "fork_head": FORK_HEAD, "elf_sha256": hex::encode(sha256(&ELF)), "vk_hash": pk.verifying_key().bytes32(),
+                "fork_head": FORK_HEAD, "operands": OPERANDS, "elf_sha256": hex::encode(sha256(&ELF)),
+                "vk_hash": pk.verifying_key().bytes32(),
                 "public_values_len": bare::PUBLIC_VALUES_LEN, "guest_features": GUEST_FEATURES, "statement": STATEMENT,
                 "formats": [FORMAT.name()]}))
         }

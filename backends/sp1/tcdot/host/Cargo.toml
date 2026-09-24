@@ -22,3 +22,6 @@ sp1-build = "=6.4.0"
 [features]
 # GPU proving through the fork's sp1-gpu-server (`SP1_PROVER=cuda`; the stock prebuilt server has no TcDotBf16 chip).
 cuda = ["sp1-sdk/cuda"]
+# For the witness-operands fork (FORK_HEAD_WIT): TC_DOT_BF16 takes each step's operands from the input stream.  Builds
+# the guest with its feature of the same name and writes a bf16-ampere VU as its own buffers.
+stream-operands = []

@@ -12,6 +12,11 @@
 //!    The other formats have no chip: their chunks are in the stock layout and run `bare::check_words`, as the stock
 //!    guest does.
 //!
+//!    With the `stream-operands` feature (the witness-operands fork, whose `TC_DOT_BF16` takes each step's operands
+//!    from the input stream), a `bf16-ampere` VU is its own buffers instead: one stock-layout buffer when its mask is
+//!    all ones, else its 96 step blocks as 96 buffers, which the chip steps' `ecall`s consume and the software steps
+//!    read.  `vus_per_read` is then unused.
+//!
 //! The hint is untrusted prover advice outside the statement, which is existential in the private rows.  A step
 //! routed to the chip is proved by the `TC_DOT_BF16` AIR, which equals `tc::tc_dot` bit for bit inside the chip's
 //! operand contract (finite operands and accumulator, both GroupSum outputs zero or fp32-normal) and has no satisfying
@@ -30,6 +35,8 @@ const STEPS: usize = bare::K / 16;
 const BLOCK_BYTES: usize = 64;
 /// u64 words of one VU's routing mask.
 const ROUTE_WORDS: usize = 2;
+/// Whether `TC_DOT_BF16` takes its operands from the input stream (the witness-operands fork).
+const STREAM: bool = cfg!(feature = "stream-operands");
 
 fn main() {
     let header = sp1_zkvm::io::read_vec();
@@ -49,6 +56,11 @@ fn main() {
                 && (!chip || (route_head.is_empty() && route_tail.is_empty() && masks.len() == b * ROUTE_WORDS));
             let mut i = 0;
             println!("cycle-tracker-report-start: bare.check");
+            while STREAM && chip && ok && i < b {
+                let claimed = u32::from(u16::from_le_bytes([h.y_le[2 * i], h.y_le[2 * i + 1]]));
+                ok = check_vu_stream([masks[ROUTE_WORDS * i], masks[ROUTE_WORDS * i + 1]], claimed);
+                i += 1;
+            }
             while ok && i < b {
                 let n = per.min(b - i);
                 let chunk = sp1_zkvm::io::read_vec();
@@ -122,6 +134,63 @@ fn chip_chain(vu_bytes: &[u8], acc: &mut u64) {
             inout("t0") sp1_zkvm::syscalls::TC_DOT_BF16 => _,
             inout("a0") vu_bytes.as_ptr() => _,
             in("a1") acc as *mut u64,
+            options(nostack),
+        );
+    }
+    #[cfg(not(target_os = "zkvm"))]
+    unreachable!()
+}
+
+/// One `bf16-ampere` VU from its own buffers (`stream-operands`): whether the 96-step chain from `+0` and the BF16
+/// epilogue give the claimed word.
+fn check_vu_stream(mask: [u64; ROUTE_WORDS], claimed: u32) -> bool {
+    if mask == [u64::MAX; ROUTE_WORDS] {
+        let vu = sp1_zkvm::io::read_vec();
+        // SAFETY: every bit pattern is a u64; a misaligned head or a partial tail rejects
+        let (head, words, tail) = unsafe { vu.align_to::<u64>() };
+        return head.is_empty()
+            && tail.is_empty()
+            && words.len() == bare::VU_WORDS
+            && bare::check_one(Format::Bf16Ampere, &vu, words, claimed);
+    }
+    let mut acc: u64 = 0;
+    if mask == [0; ROUTE_WORDS] {
+        stream_steps::<STEPS>(&mut acc);
+    } else {
+        for t in 0..STEPS {
+            if (mask[t / 64] >> (t % 64)) & 1 == 0 {
+                stream_steps::<1>(&mut acc);
+            } else {
+                let block = sp1_zkvm::io::read_vec();
+                if block.len() != BLOCK_BYTES {
+                    return false;
+                }
+                match software_step(acc, &block) {
+                    Some(next) => acc = next,
+                    None => return false,
+                }
+            }
+        }
+    }
+    u32::from(tc::f32_to_bf16(acc) as u16) == claimed
+}
+
+/// `N` steps through `TC_DOT_BF16` with streamed operands (each takes the next input buffer): `N` unrolled `ecall`s.
+#[allow(unused_variables)]
+fn stream_steps<const N: usize>(acc: &mut u64) {
+    let acc: *mut u64 = acc;
+    #[cfg(target_os = "zkvm")]
+    // SAFETY: TC_DOT_BF16 returns no value, so every ecall writes its own code back to t0 and leaves a0 and a1 alone.
+    // a0 is only the chip's operand-address argument (aligned, at least 2^16, never read): the accumulator's address.
+    unsafe {
+        core::arch::asm!(
+            ".rept {n}",
+            "ecall",
+            ".endr",
+            n = const N,
+            inout("t0") sp1_zkvm::syscalls::TC_DOT_BF16 => _,
+            in("a0") acc,
+            in("a1") acc,
             options(nostack),
         );
     }
