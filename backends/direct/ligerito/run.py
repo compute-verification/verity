@@ -868,12 +868,23 @@ def bench(args) -> int:
         statement_format="LGTS0001", proof_format="LGTO0001", key_format="LGVK0001", key_sha256=bt.key_sha256.hex(),
         note=f"{total_vus} VUs as {nb_} Ligerito batch(es) of {lay.n_sub} sub-batches x l = {args.l} columns (S = {lay.S}), N = 2^{lay.n_vars} "
              f"cells each; t.total = wall over all batches{f' ({args.window} in flight)' if live and args.window > 1 else ''}; proof bytes / verify summed; "
-             f"{'live coins: the t.* buckets include the challenge-stream waits (live.stream_wait_seconds, R x RTT per batch); ' if live else ''}"
+             f"{'live verifier: t.total_live = wall, t.total = wall - live.stream_wait_seconds (R x RTT per batch); t.arithmetic / t.encoding_commitment (they hold the waits) not reported; ' if live and args.verifier else 'live coins (local stream): the t.* buckets include the stream waits; ' if live else ''}"
              f"cells; prover time includes witness generation (Ligero's hints + build_witness, marshal cached across reps as in relchain); "
              f"{rel.claim_note}")
-    meas = [contract.measurement(f"t.{k}", v) for k, v in med_b.items()]
+    # the contract's t.total is the prover without its network waits and t.total_live the wall with them (live-verifier);
+    # arithmetic / encoding_commitment hold the challenge-stream waits, so a networked run reports only the wait-free buckets.
+    # t.zk_additional belongs to the ZK classes: the masking of a diagnostic --zk proof is reported as split.zk_masks_seconds
+    networked = live and bool(args.verifier)
+    t_total = med_total - med_wait if networked else med_total
+    shown = [k for k in med_b if (proof_class in contract.ZK_CLASSES or k != "zk_additional")
+             and not (networked and k in ("arithmetic", "encoding_commitment"))]
+    meas = [contract.measurement(f"t.{k}", med_b[k]) for k in shown]
+    if networked:
+        meas.append(contract.measurement("t.total_live", med_total))
+    if "zk_additional" not in shown:
+        meas.append(contract.measurement("split.zk_masks_seconds", med_b["zk_additional"], "s"))
     meas += [
-        contract.measurement("t.total", med_total),
+        contract.measurement("t.total", t_total),
         contract.measurement("verifier.seconds", vmed),
         contract.measurement("transcript.bytes", nbytes["total"]),
         contract.measurement("rounds.protocol", res.coins_rounds),
@@ -882,9 +893,9 @@ def bench(args) -> int:
         contract.measurement("census.witness_elements", lay.m * lay.C),
         contract.measurement("census.committed_elements", 1 << lay.n_vars),
         contract.measurement("census.bytes_encoded", 4 * (1 << lay.n_vars) << d.rates[0]),
-        contract.measurement("vu.seconds_per_vu", med_total / total_vus, "s"),
+        contract.measurement("vu.seconds_per_vu", t_total / total_vus, "s"),
         contract.measurement("vu.count", total_vus, "count"),
-        *contract.rate_measurements(med_total, total_vus, K_VU, rel.target.name),
+        *contract.rate_measurements(t_total, total_vus, K_VU, rel.target.name),
         contract.measurement("proof_bytes", nbytes["total"], "B"),
         contract.measurement("proof.sumcheck_bytes", nbytes["sumcheck"], "B"),
         contract.measurement("proof.pcs_rows_bytes", nbytes["pcs_rows"], "B"),
@@ -928,7 +939,7 @@ def bench(args) -> int:
     problems = contract.validate(result)
     if problems:
         print("contract problems:", problems, flush=True)
-    print(json.dumps({"relation": rel.name, "t.total": med_total, "buckets": med_b, "verifier": vmed, "bytes": nbytes,
+    print(json.dumps({"relation": rel.name, "t.total": t_total, **({"t.total_live": med_total} if networked else {}), "buckets": med_b, "verifier": vmed, "bytes": nbytes,
                       "coins": res.coins_rounds, "peak_device_bytes": peak, "soundness_log2": claimed, "soundness_basis": claim["basis"],
                       "interactive_union_log2": snd["total_log2"], "proof_class": proof_class,
                       "rust_exit": rust["exit"] if rust else None, "validation": status}, indent=1, default=str), flush=True)
