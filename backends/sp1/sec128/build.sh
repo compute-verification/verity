@@ -40,7 +40,12 @@ stage "machine"
 nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader || true
 nproc; df -h /workspace | tail -1
 command -v nvcc >/dev/null && nvcc --version | tail -1
-apt-get install -y -qq --no-install-recommends golang-go time >/dev/null 2>&1 || true
+# sp1-recursion-gnark-ffi (a dependency of the server) builds Go code whose go.mod needs go >= 1.24; apt's is older.
+if ! /usr/local/go/bin/go version 2>/dev/null | grep -qE 'go1\.(2[4-9]|[3-9][0-9])'; then
+  curl -fsSL https://go.dev/dl/go1.24.7.linux-amd64.tar.gz | tar -C /usr/local -xzf -
+fi
+export PATH="/usr/local/go/bin:$PATH"
+go version
 
 stage "prover source: sp1 v6.6.0 $TAG_COMMIT + SP1_TARGET_BITS_OF_SECURITY=$SEC_BITS"
 FORK="$ROOT/sp1-v6.6.0-sec$SEC_BITS"
