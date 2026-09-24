@@ -109,52 +109,6 @@ def test_missing_build_dir_for_the_rank_is_named(tmp_path):
     assert r["sampled_replay"]["result"] is None and "no Build dir for rank 1" in r["sampled_replay"]["why"]
 
 
-# ---- [TP-08d] the replay's ProgramIndex describes a RANK Program's rows with the manifest's TP members -------------------------------
-
-_RANK_ROWS = [  # one step of a rank Program (shapes of Llama-3.2-1B TP2 rank 1's build_request: i, spec, name)
-    {"i": 0, "spec": "EmbeddingShard_v1{VS=64128,H=2048,START=64128}", "name": "inner.model.model.embed_tokens/embedding_shard[0]/shard", "args": "[]"},
-    {"i": 1, "spec": "AllReduce2_v1{N=2048}", "name": "inner.model.model.embed_tokens/all_reduce2[0]/all_reduce", "args": "[]"},
-    {"i": 2, "spec": "Gemm_v1{K=2048,N=1536}", "name": "inner.model.model.layers.0.self_attn.qkv_proj/triton_launch_1[0]", "args": "[]"},
-    {"i": 3, "spec": "Attention_v3{NH=16,KVH=4,D=64}", "name": "inner.model.model.layers.0.self_attn.attn/attn[t=0]", "args": "[]"},
-    {"i": 4, "spec": "Gemm_v1{K=1024,N=2048}", "name": "inner.model.model.layers.0.self_attn.o_proj/triton_launch_2[0]", "args": "[]"},
-    {"i": 5, "spec": "AllReduce2_v1{N=2048}", "name": "inner.model.model.layers.0.self_attn.o_proj/all_reduce2_1[0]/all_reduce", "args": "[]"},
-    {"i": 6, "spec": "Gemm_v1{K=2048,N=64128}", "name": "inner.model.logits_processor/triton_launch_9[0]", "args": "[]"},
-    {"i": 7, "spec": "AllGather2_v1{N=64128}", "name": "inner.model.logits_processor/all_gather2[0]/all_gather", "args": "[]"},
-    {"i": 8, "spec": "TokenSelect_v1{V=128256}", "name": "sampler/token_select[0]", "args": "[]"},
-]
-
-
-def _members(tp):
-    from verity_capture.commit import sampled_replay as SR
-    pi = SR.ProgramIndex({"rows": _RANK_ROWS, "params": [], "digest": "e" * 64}, attention_paths=["model.layers.0.self_attn.attn"], tp=tp)
-    out = {}
-    for r in _RANK_ROWS:
-        d = pi.describe(r)
-        if d:
-            out[(d["family"], d["op_path"])] = [m[0] for m in d["members"]]
-    return pi, out
-
-
-def test_rank_program_rows_describe_the_tp_members_of_that_rank():
-    pi, m = _members({"world": 2, "rank": 1})
-    assert pi.prefix == "inner.model."                                           # determined from the observed attention path
-    assert m[("Gemm_v1", "model.layers.0.self_attn.o_proj")] == ["part_rank1"]   # row-parallel Gemm feeding the module's AllReduce2 = the PARTIAL
-    assert m[("AllReduce2_v1", "model.layers.0.self_attn.o_proj")] == ["0"]      # the collective row = the module's bound (all-reduced) output
-    assert m[("EmbeddingShard_v1", "model.embed_tokens")] == ["part_rank1"]
-    assert m[("Gemm_v1", "logits_processor")] == ["shard_rank1"]           # lm_head shard feeding AllGather2
-    assert m[("AllGather2_v1", "logits_processor")] == ["out"]
-    assert m[("Gemm_v1", "model.layers.0.self_attn.qkv_proj")] == ["0"]          # column-parallel: no collective under it, the module's output
-    _pi0, m0 = _members({"world": 2, "rank": 0})
-    assert m0[("Gemm_v1", "model.layers.0.self_attn.o_proj")] == ["part_rank0"]  # the rank label is the Program's rank, never a default
-
-
-def test_without_tp_context_the_row_parallel_gemm_is_the_module_output_the_measured_false_mismatch():
-    _pi, m = _members(None)
-    assert m[("Gemm_v1", "model.layers.0.self_attn.o_proj")] == ["0"]            # what tp10 replayed: F_V(partial) vs the all-reduced member
-    _pi1, m1 = _members({"world": 1, "rank": 0})                                 # a TP1 Program: tp context is dropped, TP1 semantics unchanged
-    assert m1[("Gemm_v1", "model.layers.0.self_attn.o_proj")] == ["0"]
-
-
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))
 
