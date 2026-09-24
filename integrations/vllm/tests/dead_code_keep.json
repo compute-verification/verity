@@ -1,6 +1,6 @@
 {
  "schema": "vllm-dead-code-keep/v1",
- "dynamic_record": null,
+ "dynamic_record": "art:a265fc569719ee1a410f0863416416af91c66d02b1ed8703a9f60fd19e614f2f",
  "modules": {
   "verity_capture.bench.gen_batch_candidate": "fixture generator: cb_a/tests/test_compact.py (LIVE compact / global_match_fast / rank_match), tests/test_gen_ovbatch.py (LIVE fold)",
   "verity_capture.experimental.cb_a.instances_form": "reference of the progressions form; cb_a/tests/test_compact.py checks the LIVE fold's output against it",
