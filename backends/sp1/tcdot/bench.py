@@ -2,10 +2,12 @@
 with this variant's identity.
 
 This variant builds every SP1 crate and the GPU server from one fork checkout (``build_fork.sh``: v6.4.0 plus
-``sp1-patches/``).  The wrapper asks the host for its fork pin, checks it against ``FORK_HEAD`` and writes vector_run's
-variant file (``OUT/variant.json``: backend name, label, the fork's toolchain, ``fork`` = pin, patch digests, chips,
-routing and the forked GPU server's digest, verifier, security source); everything else -- negatives, proving, the
-per-proof verify, phases, rates, the contract check -- is vector_run's, unchanged.  Arguments are vector_run's
+``sp1-patches/``).  The wrapper asks the host for its fork pin, finds the arm it belongs to (``FORK_HEAD``: operands
+through SP1's memory argument; ``FORK_HEAD_WIT``: ``OPERANDS=witness``, operands as free witness values of the chip) and
+writes vector_run's variant file (``OUT/variant.json``: backend name, label, the fork's toolchain, ``fork`` = pin, patch
+digests, chips, operand binding, routing and the forked GPU server's digest, verifier, security source); everything
+else -- negatives, proving, the per-proof verify, phases, rates, the contract check -- is vector_run's, unchanged.
+Arguments are vector_run's
 (``--backend sp1-bare`` is supplied; SP1 prover options go in ``--prover-env KEY=VALUE``, which vector_run records)::
 
     python3.12 backends/sp1/tcdot/bench.py --host $CARGO_TARGET_DIR/release/verity-tcdot-host \\
@@ -25,8 +27,26 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
 LABEL = "modified SP1 (TC_DOT chip)"
-BACKEND_NAME = f"sp1 tc-dot relation-bare/v2 ({LABEL}: SP1 6.4.0 fork + TC_DOT_BF16 precompile, core STARK, CUDA prover)"
 BASE = "succinctlabs/sp1 v6.4.0 (f66b4bff51d0ccff51d152e0f7f66b2ffedf3529)"
+ARMS = {
+    "memory": {
+        "pin": "",
+        "patches": ["sp1-patches/*.patch"],
+        "backend_name": f"sp1 tc-dot relation-bare/v2 ({LABEL}: SP1 6.4.0 fork + TC_DOT_BF16 precompile, core STARK, CUDA prover)",
+        "operands": "read from guest memory through SP1's memory argument (the guest hint-reads x and W, the chip reads each step's 8 "
+                    "operand words from memory)",
+    },
+    "witness": {
+        "pin": "_WIT",
+        "patches": ["sp1-patches/*.patch", "sp1-patches/witness-operands/*.patch"],
+        "backend_name": f"sp1 tc-dot relation-bare/v2 ({LABEL}: SP1 6.4.0 fork + TC_DOT_BF16 precompile, witness operands, core STARK, "
+                        "CUDA prover)",
+        "operands": "free witness values of the chip (patch 0007): the executor reads each step's 8 operand words with no memory access, "
+                    "and the chip holds them only as range-checked BF16 decode columns. A proof shows the chained accumulator is reachable "
+                    "from some finite BF16 operand sequence, not from the words in the guest's memory: sound for relation-bare, which is "
+                    "existential in x and W, and not for a statement that authenticates them",
+    },
+}
 
 
 def _sha256(path: Path) -> str:
@@ -46,23 +66,26 @@ def _arg(argv: list[str], name: str) -> str | None:
     return None
 
 
-def fork_identity(host: str) -> dict:
-    """The fork pin as the host binary reports it, checked against FORK_HEAD, with the patch series' digests."""
+def fork_identity(host: str) -> tuple[str, dict]:
+    """The arm and fork pin the host binary reports, checked against FORK_HEAD / FORK_HEAD_WIT, with the patch series' digests."""
     p = subprocess.run([host, "info"], capture_output=True, text=True, env={**os.environ, "SP1_PROVER": "cpu", "RUST_LOG": "error"}, timeout=900)
     info = json.loads([line for line in p.stdout.splitlines() if line.startswith("{")][-1])
-    pinned = (HERE / "FORK_HEAD").read_text().strip()
-    if p.returncode != 0 or info.get("fork_head") != pinned:
-        raise SystemExit(f"bench.py: host {host} reports fork_head {info.get('fork_head')!r}, FORK_HEAD pins {pinned} (rc {p.returncode})")
+    pins = {name: (HERE / f"FORK_HEAD{arm['pin']}").read_text().strip() for name, arm in ARMS.items()}
+    arm = next((name for name, pinned in pins.items() if info.get("fork_head") == pinned), None)
+    if p.returncode != 0 or arm is None:
+        raise SystemExit(f"bench.py: host {host} reports fork_head {info.get('fork_head')!r}, the pins are {pins} (rc {p.returncode})")
     server = Path(os.environ.get("HOME", "~")).expanduser() / ".sp1" / "bin" / "sp1-gpu-server"
-    return {
+    return arm, {
         "label": LABEL,
         "base": BASE,
-        "fork_head": pinned,
-        "fork_tree": (HERE / "FORK_TREE").read_text().strip(),
-        "patches": {p.name: _sha256(p) for p in sorted((HERE / "sp1-patches").glob("*.patch"))},
+        "fork_head": pins[arm],
+        "fork_tree": (HERE / f"FORK_TREE{ARMS[arm]['pin']}").read_text().strip(),
+        "patches": {str(p.relative_to(HERE / "sp1-patches")): _sha256(p)
+                    for pattern in ARMS[arm]["patches"] for p in sorted(HERE.glob(pattern))},
         "chips": "TC_DOT (fp8 E4M3 operands through the Ampere BF16 pipeline; ~/projects/sp1 tc-dot-precompile, unused here) and "
                  "TC_DOT_BF16 (one tc-ampere-bf16 m16n8k16 step per call: K = 16 BF16 products, groups [8, 8], 25-bit adder, floor -132, "
                  "truncation; operand contract = finite operands and accumulator, both GroupSum outputs zero or fp32-normal)",
+        "operands": ARMS[arm]["operands"],
         "guest_routing": "steps outside the chip's contract run tc::tc_dot in the guest; a VU with >= vu_software_threshold such steps runs "
                          "bare::check_one whole (the stock kernel)",
         "proof_modes": "core only: the fork's recursion vk map does not contain the TC_DOT chips",
@@ -86,11 +109,11 @@ def main(argv: list[str]) -> int:
         raise SystemExit("bench.py: --host (the verity-tcdot-host binary) and --out are required")
     if _arg(argv, "--mode") not in (None, "core"):
         raise SystemExit("bench.py: core proofs only (the fork's recursion vk map lacks the TC_DOT chips)")
-    fork = fork_identity(host)
+    arm, fork = fork_identity(host)
     head = fork["fork_head"][:12]
     pin = f"6.4.0 (fork @ {head})"
     variant = {
-        "backend_name": BACKEND_NAME,
+        "backend_name": ARMS[arm]["backend_name"],
         "label": LABEL,
         "toolchain": {"sp1-sdk": pin, "sp1-zkvm": pin, "sp1-primitives": pin, "sp1-core-executor": pin,
                       "sp1-gpu-server": f"built from the fork @ {head} (CUDA_ARCHS=80)"},

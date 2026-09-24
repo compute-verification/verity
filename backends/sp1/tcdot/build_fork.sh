@@ -2,12 +2,17 @@
 # Build the modified SP1 (TC_DOT chip) on a Linux CUDA pod: upstream succinctlabs/sp1 at v6.4.0 (f66b4bff5) plus the
 # patch series in sp1-patches/, applied with fixed committer identities and the author dates so the commit hashes
 # reproduce: 0001-0003 = ~/projects/sp1 branch tc-dot-precompile @ 3510b39a7 (the fp8 TC_DOT chip), 0004-0005 = lane
-# sp1-tcdot's TC_DOT_BF16 chip, 0006 = its prover sharding change (FORK_HEAD, tree FORK_TREE).  The checkout is linked at ./sp1, where Cargo.toml's
+# sp1-tcdot's TC_DOT_BF16 chip, 0006 = its prover sharding change (FORK_HEAD, tree FORK_TREE).  OPERANDS=witness adds
+# sp1-patches/witness-operands/0007, the witness-operands arm (FORK_HEAD_WIT, tree FORK_TREE_WIT): TC_DOT_BF16 takes
+# its operands as free witness values instead of reading them through SP1's memory argument, which is sound only for
+# a statement existential in x and W (relation-bare is).  The checkout is linked at ./sp1, where Cargo.toml's
 # [patch] points.  Then the forked sp1-gpu-server (the stock prebuilt server has neither TC_DOT chip), installed under
-# $SERVER_ROOT/bin; sp1-sdk's cuda client runs $HOME/.sp1/bin/sp1-gpu-server.  Idempotent.
+# $SERVER_ROOT/bin; sp1-sdk's cuda client runs $HOME/.sp1/bin/sp1-gpu-server.  Build the host with
+# VERITY_TCDOT_FORK_HEAD set to the arm's pin.  Idempotent.
 #
 #   bash backends/sp1/tcdot/build_fork.sh                        # fork + GPU server into ~/.sp1/bin
 #   SERVER_ROOT=/workspace/tcdot-root bash backends/sp1/tcdot/build_fork.sh   # keep a stock server in ~/.sp1/bin
+#   OPERANDS=witness bash backends/sp1/tcdot/build_fork.sh       # the witness-operands arm
 #   SKIP_SERVER=1 bash backends/sp1/tcdot/build_fork.sh
 #
 # Keep the builds sequential: two concurrent builds race on the nested sp1-core-executor-runner build and leave an
@@ -23,8 +28,13 @@ ROOT="${SP1_TCDOT_ROOT:-/workspace/sp1-tcdot}"
 FORK="$ROOT/sp1-fork"
 SERVER_ROOT="${SERVER_ROOT:-$HOME/.sp1}"
 BASE=f66b4bff51d0ccff51d152e0f7f66b2ffedf3529
-EXPECT_HEAD="$(cat "$HERE/FORK_HEAD")"
-EXPECT_TREE="$(cat "$HERE/FORK_TREE")"
+case "${OPERANDS:-memory}" in
+  memory) PIN=""; EXTRA=() ;;
+  witness) PIN=_WIT; EXTRA=("$HERE"/sp1-patches/witness-operands/*.patch) ;;
+  *) echo "OPERANDS must be memory or witness"; exit 2 ;;
+esac
+EXPECT_HEAD="$(cat "$HERE/FORK_HEAD$PIN")"
+EXPECT_TREE="$(cat "$HERE/FORK_TREE$PIN")"
 mkdir -p "$ROOT"
 
 stage() { echo; echo "=== [$(date -u +%H:%M:%S)] $*"; }
@@ -50,7 +60,7 @@ if ! cargo prove --version 2>/dev/null | grep -q "f66b4bf"; then
 fi
 cargo prove --version
 
-stage "fork: upstream $BASE + $(ls "$HERE"/sp1-patches/*.patch | wc -l) patches"
+stage "fork: upstream $BASE + $(ls "$HERE"/sp1-patches/*.patch "${EXTRA[@]}" | wc -l) patches"
 if [ "$(git -C "$FORK" rev-parse HEAD 2>/dev/null || true)" != "$EXPECT_HEAD" ]; then
   rm -rf "$FORK"
   git init -q "$FORK"
@@ -60,7 +70,7 @@ if [ "$(git -C "$FORK" rev-parse HEAD 2>/dev/null || true)" != "$EXPECT_HEAD" ];
   GIT_COMMITTER_NAME="Daniel Reuter" GIT_COMMITTER_EMAIL="dreuter14@gmail.com" \
     git -C "$FORK" am -q --committer-date-is-author-date "$HERE"/sp1-patches/000[1-3]-*.patch
   GIT_COMMITTER_NAME="verity sp1-tcdot lane" GIT_COMMITTER_EMAIL="lane@verity.local" \
-    git -C "$FORK" am -q --committer-date-is-author-date "$HERE"/sp1-patches/000[4-9]-*.patch
+    git -C "$FORK" am -q --committer-date-is-author-date "$HERE"/sp1-patches/000[4-9]-*.patch "${EXTRA[@]}"
 fi
 GOT="$(git -C "$FORK" rev-parse HEAD)"
 TREE="$(git -C "$FORK" rev-parse 'HEAD^{tree}')"
