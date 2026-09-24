@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import math
 import os
-import sys
 from fractions import Fraction
 from functools import lru_cache
 from importlib import resources
@@ -32,11 +31,6 @@ from verity.ml.tc.silicon import AMPERE_BF16_M16N8K16 as _AMPERE_BF16_M16N8K16
 from verity.ml.tc.total import tc_dot_total as _tc_dot_total
 
 BF16, F32, I32, BIT = Value(16), Value(32), Value(32), Value(1)
-_HERE = os.path.dirname(os.path.abspath(__file__))
-_REPO = os.path.dirname(os.path.dirname(os.path.dirname(_HERE)))
-for _p in (os.path.join(_REPO, "vllm-poc"), os.path.join(_REPO, "src")):
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
 
 np.seterr(all="ignore")
 

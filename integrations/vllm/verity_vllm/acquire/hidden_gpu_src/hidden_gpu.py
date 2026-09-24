@@ -37,9 +37,8 @@ if _env_repo and os.path.realpath(_env_repo) != REPO:
 _vc = sys.modules.get('verity_vllm')
 if _vc is not None and getattr(_vc, '__file__', None) and os.path.realpath(os.path.dirname(os.path.dirname(_vc.__file__))) != REPO:
     raise ImportError(f'PRECHECK_FAIL_SOURCE_IDENTITY: hidden_gpu at {HERE} (tree {REPO}) imported beside verity_vllm from {_vc.__file__}')
-for _p in (os.path.join(REPO, 'vllm-poc'), REPO):
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
+if REPO not in sys.path:
+    sys.path.insert(0, REPO)
 import numpy as np  # noqa: E402  -- identity is settled before anything heavy loads
 import torch  # noqa: E402
 from torch.utils.cpp_extension import load  # noqa: E402

@@ -28,21 +28,18 @@ import hashlib
 import json
 import os
 import struct
-import sys
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-
-from verity_vllm.commit.binding import HIDDEN_FAMILIES, coverage_check  # noqa: E402
-from verity_vllm.check.executed_prefix import executed_prefix_of_record, request_steps_of_record  # noqa: E402
-from verity_vllm.commit import hidden_stream as hs  # noqa: E402
-from verity_vllm.commit.hidden_engine import bind_root  # noqa: E402
-from verity_vllm.commit.merkle import fold_path  # noqa: E402
-from verity_vllm.commit import fasttree as ft  # noqa: E402
-from verity_vllm.commit.semantic_layout import pos_leaf  # noqa: E402
+from verity_vllm.commit.binding import HIDDEN_FAMILIES, coverage_check
+from verity_vllm.check.executed_prefix import executed_prefix_of_record, request_steps_of_record
+from verity_vllm.commit import hidden_stream as hs
+from verity_vllm.commit.hidden_engine import bind_root
+from verity_vllm.commit.merkle import fold_path
+from verity_vllm.commit import fasttree as ft
+from verity_vllm.commit.semantic_layout import pos_leaf
 
 PADDING_RULES_VERSION = "padded-v1"                 # LIFTING-SPEC v0.7 B8: the padded request Program's rules version
 PADDED_MAP_SCHEMA = "padded-binding-map/1"
