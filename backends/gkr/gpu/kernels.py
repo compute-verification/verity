@@ -723,6 +723,73 @@ if triton is not None:
         tl.store(hi_ptr + out, hi)
 
     @triton.jit
+    def _dot_halves(e, x):
+        prod = e[:, None] * x
+        h = prod >> 32
+        return tl.sum(prod - (h << 32), axis=0), tl.sum(h, axis=0)
+
+    @triton.jit
+    def eq_rows_dot_kernel(e_ptr, rows_ptr, lo_ptr, hi_ptr, n_rows, n_in, rows_per, BC: tl.constexpr, BLOCK: tl.constexpr,
+                           FK: tl.constexpr):
+        """Split-row partial sums of ``Σ_c e[c, d] rows[c, l]`` over rows ``[s rows_per, (s+1) rows_per)`` for a block of
+        columns ``l`` and every coordinate ``d``.  Products are ``< 2^62``; their 32-bit halves are summed in int64 (as
+        ``row_code_dot_kernel``), so the result needs one ``mod p`` per output."""
+        pl = tl.program_id(0)
+        ps = tl.program_id(1)
+        l = pl * BLOCK + tl.arange(0, BLOCK)
+        ml = l < n_in
+        r0 = ps * rows_per
+        r1 = tl.minimum(r0 + rows_per, n_rows)
+        lo0 = tl.zeros((BLOCK,), dtype=tl.int64)
+        lo1 = tl.zeros((BLOCK,), dtype=tl.int64)
+        lo2 = tl.zeros((BLOCK,), dtype=tl.int64)
+        lo3 = tl.zeros((BLOCK,), dtype=tl.int64)
+        lo4 = tl.zeros((BLOCK,), dtype=tl.int64)
+        lo5 = tl.zeros((BLOCK,), dtype=tl.int64)
+        hi0 = tl.zeros((BLOCK,), dtype=tl.int64)
+        hi1 = tl.zeros((BLOCK,), dtype=tl.int64)
+        hi2 = tl.zeros((BLOCK,), dtype=tl.int64)
+        hi3 = tl.zeros((BLOCK,), dtype=tl.int64)
+        hi4 = tl.zeros((BLOCK,), dtype=tl.int64)
+        hi5 = tl.zeros((BLOCK,), dtype=tl.int64)
+        for c0 in range(r0, r1, BC):
+            c = (c0 + tl.arange(0, BC)).to(tl.int64)
+            mc = c < r1
+            x = tl.load(rows_ptr + c[:, None] * n_in + l[None, :], mask=mc[:, None] & ml[None, :], other=0).to(tl.int64)
+            eb = e_ptr + c * 6
+            a, b = _dot_halves(tl.load(eb + 0, mask=mc, other=0).to(tl.int64), x)
+            lo0 += a
+            hi0 += b
+            a, b = _dot_halves(tl.load(eb + 1, mask=mc, other=0).to(tl.int64), x)
+            lo1 += a
+            hi1 += b
+            a, b = _dot_halves(tl.load(eb + 2, mask=mc, other=0).to(tl.int64), x)
+            lo2 += a
+            hi2 += b
+            a, b = _dot_halves(tl.load(eb + 3, mask=mc, other=0).to(tl.int64), x)
+            lo3 += a
+            hi3 += b
+            a, b = _dot_halves(tl.load(eb + 4, mask=mc, other=0).to(tl.int64), x)
+            lo4 += a
+            hi4 += b
+            a, b = _dot_halves(tl.load(eb + 5, mask=mc, other=0).to(tl.int64), x)
+            lo5 += a
+            hi5 += b
+        ob = (ps * 6).to(tl.int64) * n_in + l
+        tl.store(lo_ptr + ob, lo0, mask=ml)
+        tl.store(lo_ptr + ob + n_in, lo1, mask=ml)
+        tl.store(lo_ptr + ob + 2 * n_in, lo2, mask=ml)
+        tl.store(lo_ptr + ob + 3 * n_in, lo3, mask=ml)
+        tl.store(lo_ptr + ob + 4 * n_in, lo4, mask=ml)
+        tl.store(lo_ptr + ob + 5 * n_in, lo5, mask=ml)
+        tl.store(hi_ptr + ob, hi0, mask=ml)
+        tl.store(hi_ptr + ob + n_in, hi1, mask=ml)
+        tl.store(hi_ptr + ob + 2 * n_in, hi2, mask=ml)
+        tl.store(hi_ptr + ob + 3 * n_in, hi3, mask=ml)
+        tl.store(hi_ptr + ob + 4 * n_in, hi4, mask=ml)
+        tl.store(hi_ptr + ob + 5 * n_in, hi5, mask=ml)
+
+    @triton.jit
     def split_limbs_kernel(v_ptr, out_ptr, n, BLOCK: tl.constexpr):
         """``out[i, idx] = l_i`` for ``v[idx] = Σ_i 2^(8i) l_i``, ``l_i ∈ [-128, 128)`` (canonical int32 in, 4 x int8 out)."""
         idx = (tl.program_id(0).to(tl.int64) * BLOCK + tl.arange(0, BLOCK)).to(tl.int64)
@@ -786,6 +853,27 @@ def row_code_dot(at: torch.Tensor, ev: torch.Tensor, code: torch.Tensor, split: 
     lo = lo[:, :DEG].sum(0) % P
     hi = hi[:, :DEG].sum(0) % P
     return (hi * (R % P) + lo) % P
+
+
+def eq_rows_dot(e: torch.Tensor, rows: torch.Tensor, split: int | None = None) -> torch.Tensor:
+    """``(n_in, 6)`` int64 canonical: ``out[l] = Σ_c e[c] rows[c, l]`` for an extension column ``e`` ``(n_rows, 6)`` and
+    base ``rows`` ``(n_rows, n_in)`` (any int dtype, canonical) -- ``mm_mod(e.T, rows).T`` as one read of ``rows``."""
+    n_rows, n_in = rows.shape
+    assert e.shape == (n_rows, DEG) and 0 < n_rows < 2**31
+    BLOCK, BC = 128, 16
+    nb = (n_in + BLOCK - 1) // BLOCK
+    if split is None:
+        split = max(1, min(n_rows // (4 * BC), (1024 + nb - 1) // nb))
+    rows_per = (n_rows + split - 1) // split
+    rows_per = (rows_per + BC - 1) // BC * BC
+    split = (n_rows + rows_per - 1) // rows_per
+    out_lo = torch.empty((split, DEG, n_in), dtype=torch.int64, device=rows.device)
+    out_hi = torch.empty_like(out_lo)
+    eq_rows_dot_kernel[(nb, split)](e.contiguous().view(-1), rows.contiguous().view(-1), out_lo, out_hi, n_rows, n_in,
+                                    rows_per, BC=BC, BLOCK=BLOCK, num_warps=4, FK=FIELD_KEY)
+    lo = out_lo.sum(0) % P
+    hi = out_hi.sum(0) % P
+    return ((hi * (R % P) + lo) % P).t().contiguous()
 
 
 def split_limbs(v: torch.Tensor) -> torch.Tensor:

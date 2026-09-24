@@ -194,7 +194,10 @@ def _phase2(layer: Layer, rows: torch.Tensor, wg: torch.Tensor, e_star: torch.Te
     dev = rows.device
     # Ṽ(·) = Σ_c eq(c*, c) V_in(·, c)
     ec = eq_table(c_star, dev)                                   # (copies, 6)
-    vf = mm_mod(ec.T, rows.to(torch.int64)).T.contiguous()       # (n_in, 6)
+    if _field._fast_eq_rows_dot is not None and rows.is_cuda:
+        vf = _field._fast_eq_rows_dot(ec, rows)                  # (n_in, 6), one read of rows
+    else:
+        vf = mm_mod(ec.T, rows.to(torch.int64)).T.contiguous()   # (n_in, 6)
     wp = ext_mul(wg, e_star)                                     # (g_n, 6)
     A, Bm = layer.matrices(dev)
     # phase 2a
