@@ -83,13 +83,17 @@ fn digest_of(j: Option<&Json>, what: &str) -> Result<[u8; 32], String> {
 }
 
 /// `session.json` + `verdict.json` of one session -> its batches (a batch without a statement or coins is kept: it still
-/// counts as an attempt on nothing, and cannot authenticate anything).
+/// counts as an attempt on nothing, and cannot authenticate anything).  A record of the other live protocol sharing the
+/// verifier's store (`live.Session`: `subbatches`, no `batches`) has no challenge batch on any statement.
 pub fn read_record(session_json: &str, verdict_json: &str, name: &str) -> Result<Vec<Batch>, String> {
     let s = json::parse(session_json)?;
     let v = json::parse(verdict_json)?;
     let accepted = v.get("accepted").and_then(Json::as_bool).unwrap_or(false);
     let session = v.get("session_id").and_then(Json::as_str).unwrap_or(name).to_string();
-    let batches = s.get("batches").and_then(Json::as_arr).ok_or("session record: no batches")?;
+    let batches = match (s.get("batches"), s.get("subbatches").and_then(Json::as_arr)) {
+        (None, Some(_)) => return Ok(Vec::new()),
+        (b, _) => b.and_then(Json::as_arr).ok_or("session record: no batches")?,
+    };
     let mut out = Vec::with_capacity(batches.len());
     for (i, b) in batches.iter().enumerate() {
         let Some(stmt) = b.get("stmt_sha256") else { continue };

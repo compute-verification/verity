@@ -160,6 +160,12 @@ fn reads_the_verifier_record_format() {
     rejects(&recs, "session not accepted");
     let bad = sess.replacen("{\"k\":1,", "{\"k\":2,", 1);
     assert!(session::read_record(&bad, "{\"accepted\":true}", "dir").unwrap_err().contains("out of order"));
+    // the store's other live protocol (`live.Session`: `subbatches`, no `batches`): no batch on any statement
+    assert!(session::read_record("{\"verdict\":{},\"subbatches\":[{\"sub\":0}]}", "{\"accepted\":true}", "dir").unwrap().is_empty());
+    assert_eq!(session::read_record(&format!("{},\"subbatches\":[]}}", &sess[..sess.len() - 1]), "{\"accepted\":true}", "dir").unwrap().len(), 1);
+    for bad in ["{\"hello\":{}}", "{\"verdict\":{},\"subbatches\":{}}"] {
+        assert!(session::read_record(bad, "{\"accepted\":true}", "dir").unwrap_err().contains("no batches"), "{bad}");
+    }
 }
 
 fn zk_live_records() -> Vec<Batch> {

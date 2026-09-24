@@ -232,6 +232,23 @@ fn batch_with_verifier_sessions() {
     let o = run(&["batch", "--dir", d.to_str().unwrap(), "--session", store.to_str().unwrap()]);
     let out = stdout(&o);
     assert!(o.status.success() && out.contains("\"claimed_union_log2\":null") && out.contains("[\\\"c-open\\\"] in the verifier's store have no record"), "{out}");
+    // the store also holds the other live protocol's sessions (`subbatches`, no `batches`): no batch on any statement, so
+    // the claim is the c-only store's; a record with neither key is still an error
+    std::fs::remove_dir_all(store.join("c-open")).unwrap();
+    let (sub, to) = (fixtures().join("session/subbatch_record/s20260923T210807Z-dac0"), store.join("s20260923T210807Z-dac0"));
+    std::fs::create_dir_all(&to).unwrap();
+    for f in ["session.json", "verdict.json", "hello.json"] {
+        std::fs::copy(sub.join(f), to.join(f)).unwrap();
+    }
+    let o = run(&["batch", "--dir", d.to_str().unwrap(), "--session", store.to_str().unwrap()]);
+    let out = stdout(&o);
+    assert!(o.status.success() && out.contains("\"claimed_union_log2\":-126.030") && out.contains("; 4 recorded batch(es) on this statement"), "{out}");
+    std::fs::create_dir_all(store.join("c-neither")).unwrap();
+    std::fs::write(store.join("c-neither/session.json"), "{\"hello\":{\"n_batches\":1}}").unwrap();
+    std::fs::write(store.join("c-neither/verdict.json"), "{\"session_id\":\"c-neither\",\"accepted\":true}").unwrap();
+    let o = run(&["batch", "--dir", d.to_str().unwrap(), "--session", store.to_str().unwrap()]);
+    let err = String::from_utf8_lossy(&o.stderr);
+    assert!(!o.status.success() && err.contains("session record: no batches"), "{err}");
     let _ = std::fs::remove_dir_all(&store);
     std::fs::remove_file(d.join("a.lgto")).unwrap();
     std::fs::copy(s.join("label_grinding.lgto"), d.join("a.lgto")).unwrap();
