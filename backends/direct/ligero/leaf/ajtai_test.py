@@ -218,12 +218,13 @@ def test_prove_verify_and_committer_digest(runner) -> None:
 
 def test_statement_v5_round_trip_and_file_verifier(runner, tmp_path) -> None:
     from ..relchain import HashedRelationRunner
-    from ..serialize import STMT_MAGIC_V5, _statement_of, proof_bytes, read_statement, statement_bytes, verify_files
+    from ..serialize import (HASHED_STATEMENT_TRIMMED, STMT_MAGIC_V5, STMT_MAGIC_V6, _statement_of, proof_bytes, read_statement,
+                             statement_bytes, verify_files)
     R, data = runner
     proof, pubs, lay = R.prove_vus([data[1], data[3]], check=False, vu_ids=[1, 3])
     st = _statement_of(R, pubs, lay, R.cfg(lay.l), 1)
     raw = statement_bytes(st)
-    assert raw[:8] == STMT_MAGIC_V5
+    assert raw[:8] == (STMT_MAGIC_V6 if HASHED_STATEMENT_TRIMMED else STMT_MAGIC_V5)
     st2 = read_statement(raw)
     assert st2.v5 and st2.relation == "fp8-ada+ajtai-n64" and st2.digests().shape == (2, 128)
     assert np.array_equal(st2.a, st.a) and st2.hash_auth == st.hash_auth and st2.hash_sibs == st.hash_sibs
