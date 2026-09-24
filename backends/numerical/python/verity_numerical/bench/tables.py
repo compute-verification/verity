@@ -2,8 +2,8 @@
 
     python -m verity_numerical.bench.tables --root <store root> [--format md|json] [--snapshot]
 
-Reads ``bench-result/v1`` and ``native-peak/v1`` artifacts and their labels from the local evidence store
-(``research.store.LocalStore``), applies the frozen validity predicate (:func:`reject_reasons`) and renders:
+Reads ``bench-result/v1``, ``native-peak/v1`` and ``instance-equiv/v1`` artifacts and their labels from the local evidence
+store (``research.store.LocalStore``), applies the frozen validity predicate (:func:`reject_reasons`) and renders:
 
 * **Table 1** -- the candidate proof systems (:data:`CANDIDATES`): definitional, no performance, no status;
 * **Table 2** -- headline proving overhead by target: one row per ``verity.verification.target.TARGETS`` entry, one
@@ -80,6 +80,8 @@ __all__ = [
     "PRODUCER_META_KEYS",
     "PRODUCER_NAME_LABEL_KEYS",
     "IN_PROOF_HASH",
+    "INSTANCE_EQUIV_SCHEMA",
+    "InstanceEquiv",
     "PHASE_SUM_PROBLEM",
     "RANK",
     "REASON_LETTERS",
@@ -101,6 +103,10 @@ __all__ = [
     "fmt_seconds",
     "frozen_instances",
     "independent_verification",
+    "instance_equivalence",
+    "instance_equivs",
+    "instances_diff",
+    "instances_equiv_of",
     "main",
     "normalise_sku",
     "phases",
@@ -519,18 +525,22 @@ def in_proof_hash_codes(fp: Mapping[str, Any]) -> list[tuple[str, str]]:
 
 
 def reject_codes(result: Mapping[str, Any], labels: Iterable[Any], attempt: Mapping[str, Any] | None, target: Target,
-                 candidate: Candidate, proof_classes: Sequence[str] | None = None, authentication: str = AUTHENTICATION) -> list[tuple[str, str]]:
+                 candidate: Candidate, proof_classes: Sequence[str] | None = None, authentication: str = AUTHENTICATION,
+                 equivs: Sequence[InstanceEquiv] | None = None) -> list[tuple[str, str]]:
     """Every reason ``result`` (a ``bench-result/v1`` meta: the result.json) is NOT a valid Table 2 cell for ``target`` x
     ``candidate``, as ``(letter, reason)`` (:data:`REASON_LETTERS`); ``[]`` means valid.  ``proof_classes`` overrides the candidate's
-    declared classes (drill-down).  Frozen:
+    declared classes (drill-down); ``equivs`` are the store's ``instance-equiv/v1`` artifacts (:func:`instance_equivs`).  Frozen:
 
     contract ``validate()`` empty; ``profile`` == the target; ``K == 1536``, ``B == 4096`` (and ``B_real == B`` when present);
     ``security.target <= -128`` and ``security.achieved_log2 <= -128`` when present; ``instances`` equal to the target's frozen
-    ref; ``proof_class`` in the candidate's declared class(es); ``authentication`` the column's (``excluded``, or ``included-hash``
-    with Poseidon2-BabyBear per row and no sharing, :func:`in_proof_hash_codes`); the same-SKU invariant; independently verified (a
-    :data:`VERIFIED_LABELS` label by a non-producer, :func:`producers`); not downgraded by a ``red-team-*`` verdict."""
+    ref, or re-packed with an accepted equivalence (:func:`instance_equivalence`); ``proof_class`` in the candidate's declared
+    class(es); ``authentication`` the column's (``excluded``, or ``included-hash`` with Poseidon2-BabyBear per row and no sharing,
+    :func:`in_proof_hash_codes`); the same-SKU invariant; independently verified (a :data:`VERIFIED_LABELS` label by a non-producer,
+    :func:`producers`); not downgraded by a ``red-team-*`` verdict."""
 
     p: list[tuple[str, str]] = []
+    labs = _labels(labels)
+    self_ = producers(attempt, labs, result)
     problems = contract.validate(result)
     if problems:
         p.append(("P" if any(PHASE_SUM_PROBLEM.match(x) for x in problems) else "X", _contract_reason(problems)))
@@ -559,9 +569,12 @@ def reject_codes(result: Mapping[str, Any], labels: Iterable[Any], attempt: Mapp
     elif not isinstance(inst, Mapping):
         p.append(("I", "instances is null: not measured on the frozen instance set"))
     else:
-        diff = [k for k in ("dataset", "tier", "range", "manifest_sha256") if _canon(inst.get(k)) != _canon(want[k])]
+        diff = instances_diff(inst, want)
         if diff:
-            p.append(("I", "instances differ from the frozen set on " + ", ".join(f"{k} ({inst.get(k)!r} vs {want[k]!r})" for k in diff)))
+            eq, why = instance_equivalence(inst, target, equivs, self_)
+            if eq is None:
+                p.append(("I", "instances differ from the frozen set on " + ", ".join(f"{k} ({inst.get(k)!r} vs {want[k]!r})" for k in diff)
+                          + (f" (instance-equiv: {why})" if why else "")))
     classes = tuple(proof_classes) if proof_classes else candidate.proof_classes
     pc = fp.get("proof_class")
     if pc not in classes:
@@ -579,8 +592,6 @@ def reject_codes(result: Mapping[str, Any], labels: Iterable[Any], attempt: Mapp
     variant = device_variant(gpu, target)
     if variant:
         p.append(("K", variant))
-    labs = _labels(labels)
-    self_ = producers(attempt, labs, result)
     if attempt is None and not self_:
         p.append(("U", "not independently verified: no attempt and no named producer (meta lane / by, a lane label, a candidate / label "
                        "asserter), so no verification can be shown independent"))
@@ -594,14 +605,156 @@ def reject_codes(result: Mapping[str, Any], labels: Iterable[Any], attempt: Mapp
 
 
 def reject_reasons(result: Mapping[str, Any], labels: Iterable[Any], attempt: Mapping[str, Any] | None, target: Target,
-                   candidate: Candidate, proof_classes: Sequence[str] | None = None, authentication: str = AUTHENTICATION) -> list[str]:
+                   candidate: Candidate, proof_classes: Sequence[str] | None = None, authentication: str = AUTHENTICATION,
+                   equivs: Sequence[InstanceEquiv] | None = None) -> list[str]:
     """The reasons of :func:`reject_codes` without their letters; ``[]`` means ``result`` is a valid Table 2 cell."""
 
-    return [r for _, r in reject_codes(result, labels, attempt, target, candidate, proof_classes, authentication)]
+    return [r for _, r in reject_codes(result, labels, attempt, target, candidate, proof_classes, authentication, equivs)]
+
+
+def instances_equiv_of(result: Mapping[str, Any], labels: Iterable[Any], attempt: Mapping[str, Any] | None, target: Target,
+                       equivs: Sequence[InstanceEquiv] | None) -> str | None:
+    """The ``instance-equiv/v1`` artifact through which a re-packed ``result`` counts as the frozen set (for its footnote), or ``None``."""
+
+    fp = result.get("workload_fingerprint") if isinstance(result.get("workload_fingerprint"), Mapping) else {}
+    inst, want = fp.get("instances"), frozen_instances(target)
+    if not isinstance(inst, Mapping) or want is None or not instances_diff(inst, want):
+        return None
+    return instance_equivalence(inst, target, equivs, producers(attempt, labels, result))[0]
 
 
 def _canon(v: Any) -> Any:
     return list(v) if isinstance(v, (list, tuple)) else v
+
+
+# --- re-packed instances: instance-equiv/v1 (user decision 2026-09-24) -------------------------------------------------------------
+
+#: A result whose ``instances`` differ from the frozen ref counts as the frozen set only through an artifact of this schema
+#: (campaign morning-tables BRIEF §5, fixed; lane fused-phases' ``bench.instance_equiv`` writes it) that shows the decoded x, W, y
+#: of both sides byte-identical and that a non-producer labelled ``verified=accepted``.  The document is the artifact's meta
+#: (``research data put --kind instance-equiv/v1 --meta @doc.json``) or, failing that, its JSON payload file (local blob only).
+INSTANCE_EQUIV_SCHEMA = "instance-equiv/v1"
+INSTANCE_EQUIV_ARRAYS = ("x", "W", "y")
+INSTANCE_EQUIV_NOTE = "instances re-packed; decoded values byte-identical to the frozen set"
+_HEX64 = re.compile(r"^[0-9a-f]{64}$")
+_PAYLOAD_JSON_MAX = 1 << 20
+
+
+@dataclass(frozen=True)
+class InstanceEquiv:
+    """One ``instance-equiv/v1`` artifact as the predicate reads it: the document, the artifact's own meta (its attribution:
+    ``lane`` / ``by``), its labels and producing attempt."""
+
+    artifact: str
+    doc: Mapping[str, Any]
+    meta: Mapping[str, Any] = field(default_factory=dict)
+    labels: tuple[Any, ...] = ()
+    attempt: Mapping[str, Any] | None = None
+
+
+def _ref_key(ref: Any) -> str:
+    return json.dumps(ref, sort_keys=True, default=str)
+
+
+def instances_diff(inst: Mapping[str, Any], want: Mapping[str, Any]) -> list[str]:
+    """The fields of the frozen ref ``want`` that the result's ``inst`` does not carry equal."""
+
+    return [k for k in ("dataset", "tier", "range", "manifest_sha256") if _canon(inst.get(k)) != _canon(want[k])]
+
+
+def _equiv_content(doc: Mapping[str, Any], target: Target, inst: Mapping[str, Any]) -> list[str]:
+    p = []
+    if doc.get("schema") != INSTANCE_EQUIV_SCHEMA:
+        p.append(f"schema is {doc.get('schema')!r}")
+    if doc.get("target") != target.name:
+        p.append(f"target is {doc.get('target')!r}")
+    if _ref_key(doc.get("frozen")) != _ref_key(FROZEN_INSTANCES.get(target.name)):
+        p.append("frozen is not FROZEN_INSTANCES[target] field for field")
+    if _ref_key(doc.get("candidate")) != _ref_key(inst):
+        p.append("candidate is not the result's instances ref field for field")
+    if doc.get("equal") is not True:
+        p.append(f"equal is {doc.get('equal')!r}")
+    arrays = doc.get("arrays") if isinstance(doc.get("arrays"), Mapping) else {}
+    missing = [a for a in INSTANCE_EQUIV_ARRAYS if a not in arrays]
+    if missing:
+        p.append("arrays lack " + ", ".join(missing))
+    for name, a in arrays.items():
+        f, c = (a.get("frozen_sha256"), a.get("candidate_sha256")) if isinstance(a, Mapping) else (None, None)
+        if not (isinstance(f, str) and _HEX64.match(f) and f == c):
+            p.append(f"arrays.{name}: frozen_sha256 {f!r} != candidate_sha256 {c!r} (or not a sha256)")
+    return p
+
+
+def _equiv_verdict(eq: InstanceEquiv, result_producers: set[str]) -> str | None:
+    """Why ``eq`` is not ``verified=accepted`` by a non-producer (neither its own producers nor the result's), or ``None``: the
+    latest ``verified`` verdict by a non-producer must be ``accepted``."""
+
+    labs = _labels(eq.labels)
+    own = producers(eq.attempt, labs, eq.meta)
+    if eq.attempt is None and not own:
+        return (f"{eq.artifact} names no producer (no attempt, meta lane / by, lane label): `research data label {eq.artifact} "
+                f"lane=<producer>`, then a non-producer's verified=accepted")
+    excluded = own | result_producers
+    verdicts = [lab for lab in labs if lab.key == _VERIFIED and lab.by not in excluded]
+    if not verdicts:
+        return f"{eq.artifact} has no verified={_VERIFIED_ACCEPTED} by a non-producer (producers: {', '.join(sorted(excluded))})"
+    if verdicts[-1].value != _VERIFIED_ACCEPTED:
+        return f"{eq.artifact}: the latest verdict by a non-producer is verified={verdicts[-1].value} ({verdicts[-1].by})"
+    return None
+
+
+def instance_equivalence(inst: Mapping[str, Any], target: Target, equivs: Sequence[InstanceEquiv] | None,
+                         result_producers: set[str]) -> tuple[str | None, str | None]:
+    """``(art id, None)`` of an ``instance-equiv/v1`` artifact that shows the result's ``inst`` equal to the frozen set of ``target``
+    and is ``verified=accepted`` by a non-producer; else ``(None, why)`` -- ``why`` names what the artifacts for this pair (same
+    target and candidate ref) lack, ``None`` when there is none.  A verified document of the same pair that says ``equal`` is not
+    true contradicts any acceptance."""
+
+    pool = [e for e in equivs or () if e.doc.get("target") == target.name and _ref_key(e.doc.get("candidate")) == _ref_key(inst)]
+    if not pool:
+        return None, None
+    judged = [(e, _equiv_content(e.doc, target, inst), _equiv_verdict(e, result_producers)) for e in pool]
+    contra = [e for e, _, v in judged if v is None and e.doc.get("equal") is not True]
+    if contra:
+        return None, f"{contra[0].artifact}, verified, says equal={contra[0].doc.get('equal')!r}"
+    ok = [e for e, c, v in judged if not c and v is None]
+    if ok:
+        return ok[0].artifact, None
+    return None, "; ".join(f"{e.artifact}: " + (c[0] if c else str(v)) for e, c, v in judged)
+
+
+def _payload_json(store: Any, doc: Mapping[str, Any]) -> Any:
+    pay = doc.get("payload") if isinstance(doc.get("payload"), Mapping) else None
+    if not pay or pay.get("type") != "file" or not isinstance(pay.get("sha256"), str):
+        return None
+    try:
+        path = store.object_path(pay["sha256"])
+        if not path.is_file() or path.stat().st_size > _PAYLOAD_JSON_MAX:
+            return None
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
+def instance_equivs(store: Any) -> list[InstanceEquiv]:
+    """Every ``instance-equiv/v1`` artifact in the store's catalog (by kind, or by ``meta.schema``), with its labels and attempt."""
+
+    rows: dict[str, Mapping[str, Any]] = {}
+    for sel in ({"kind": INSTANCE_EQUIV_SCHEMA}, {"where": {"schema": INSTANCE_EQUIV_SCHEMA}}):
+        try:
+            rows.update({r["id"]: r for r in store.index.select_artifacts(**sel)})
+        except Exception:  # noqa: BLE001  (a store without a catalog, or without this facet)
+            continue
+    out = []
+    for art_id, row in sorted(rows.items()):
+        doc = row.get("manifest")
+        if not isinstance(doc, Mapping):
+            doc = store.get_manifest(art_id).to_doc()
+        meta = doc.get("meta") or {}
+        body = meta if meta.get("schema") == INSTANCE_EQUIV_SCHEMA else _payload_json(store, doc)
+        _, att = _attempt_of(store, art_id)
+        out.append(InstanceEquiv(art_id, body if isinstance(body, Mapping) else meta, meta, tuple(store.labels(art_id)), att))
+    return out
 
 
 def _contract_reason(problems: Sequence[str]) -> str:
@@ -652,6 +805,7 @@ class Cell:
     authentication: str = AUTHENTICATION  #: the fingerprint's ``authentication`` (which Table 2 column the cell fills)
     hash_name: str | None = None       #: ``included-hash``: the fingerprint's ``hash`` (e.g. poseidon2-babybear-w24)
     sharing: str | None = None         #: ``included-hash``: the fingerprint's ``sharing`` (none | tile64x64)
+    instances_equiv: str | None = None  #: re-packed instances: the accepted ``instance-equiv/v1`` artifact that makes them the frozen set
 
     def to_json(self) -> dict[str, Any]:
         return asdict(self)
@@ -762,6 +916,7 @@ def build(store: Any) -> Tables:
 
     T = Tables()
     results = _artifacts(store, RESULT_KIND)
+    equivs = instance_equivs(store)
     valid: dict[tuple[str, str, str], list[Cell]] = {}     # (target, candidate, authentication)
     drill: dict[tuple[str, str, str], list[Cell]] = {}
     for art_id, meta in results:
@@ -782,16 +937,17 @@ def build(store: Any) -> Tables:
             continue
         labels = store.labels(art_id)
         auth = fp.get("authentication") if fp.get("authentication") in AUTH_MODES else AUTHENTICATION
-        reasons = reject_reasons(meta, labels, attempt, target, cand, authentication=auth)
+        reasons = reject_reasons(meta, labels, attempt, target, cand, authentication=auth, equivs=equivs)
         vb = independent_verification(meta, labels, attempt)
         verified_by = vb.by if vb is not None else None
+        eq = instances_equiv_of(meta, labels, attempt, target, equivs)
         if reasons:
             T.rejected.append({**entry, "reasons": reasons})
             for dc in cand.drilldown_classes:
-                if not reject_reasons(meta, labels, attempt, target, cand, proof_classes=(dc,), authentication=auth):
-                    drill.setdefault((target.name, cand.id, dc), []).append(_cell(meta, art_id, rid, target, cand, verified_by))
+                if not reject_reasons(meta, labels, attempt, target, cand, proof_classes=(dc,), authentication=auth, equivs=equivs):
+                    drill.setdefault((target.name, cand.id, dc), []).append(_cell(meta, art_id, rid, target, cand, verified_by, eq))
             continue
-        valid.setdefault((target.name, cand.id, auth), []).append(_cell(meta, art_id, rid, target, cand, verified_by))
+        valid.setdefault((target.name, cand.id, auth), []).append(_cell(meta, art_id, rid, target, cand, verified_by, eq))
 
     for target in TARGETS.values():
         row: dict[str, Any] = {"target": target.name, "status": target.status, "device": target.native_peak.device, "dtype": dtype_of(target),
@@ -833,7 +989,8 @@ def _mode_of(fp: Mapping[str, Any]) -> str | None:
     return None
 
 
-def _cell(meta: Mapping[str, Any], art_id: str, rid: str | None, target: Target, cand: Candidate, verified_by: str | None = None) -> Cell:
+def _cell(meta: Mapping[str, Any], art_id: str, rid: str | None, target: Target, cand: Candidate, verified_by: str | None = None,
+          instances_equiv: str | None = None) -> Cell:
     fp = meta["workload_fingerprint"]
     t_total = float(_measurements(meta)[contract.T_TOTAL])
     r = _rate(t_total)
@@ -847,7 +1004,7 @@ def _cell(meta: Mapping[str, Any], art_id: str, rid: str | None, target: Target,
     return Cell(target=target.name, candidate=cand.id, artifact=art_id, attempt=rid, proof_class=fp["proof_class"], t_total=t_total, r_proved=r,
                 overhead=target.native_peak.flop_per_second / r, hardware=gpu.get("name"), phases=phases(meta), mode=mode, verified_by=verified_by,
                 host=host, authentication=auth, hash_name=fp.get("hash") if isinstance(fp.get("hash"), str) else None,
-                sharing=fp.get("sharing") if isinstance(fp.get("sharing"), str) else None)
+                sharing=fp.get("sharing") if isinstance(fp.get("sharing"), str) else None, instances_equiv=instances_equiv)
 
 
 def cell_artifacts(T: Tables) -> list[str]:
@@ -971,6 +1128,8 @@ def render_markdown(T: Tables) -> str:
             extra = ""
             if c.authentication != AUTHENTICATION:
                 extra = f"; authentication {c.authentication} (hash {c.hash_name or '?'}, sharing {c.sharing or '?'})"
+            if c.instances_equiv:
+                extra += f"; {INSTANCE_EQUIV_NOTE} ({c.instances_equiv})"
             return fmt_overhead(c.overhead) + " " + note(
                 f"{c.artifact} — {cand.id} {c.proof_class} on {c.hardware}" + (f" (host {c.host})" if c.host else "") +
                 f"; attempt {c.attempt or 'unknown'}; t.total {c.t_total:.4g} s; R_proved {c.r_proved:.4g} FLOP/s{extra}; {c.verification_note()}")

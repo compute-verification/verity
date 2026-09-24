@@ -501,6 +501,107 @@ def test_reject_codes_letter_every_reason(store: LocalStore) -> None:
     assert set(T.REASON_LETTERS) == set("UIPSZKBX")
 
 
+# --- re-packed instances: instance-equiv/v1 (user decision 2026-09-24; campaign morning-tables BRIEF §5) ----------------------------
+
+
+def repacked(n: int = 0) -> dict[str, Any]:
+    """A re-packed instance ref of the 4090 row (another layout of the frozen VUs), distinct per ``n``."""
+    return {"dataset": "bench-instances-fp8-ada-x4/v1", "tier": "vu-k1536-fp8-ada-x4", "range": [0, 4096], "manifest_sha256": f"{n:064x}",
+            "seed": 20260922, "recipe": "the frozen fp8-ada VUs re-packed four per column"}
+
+
+def equiv_doc(candidate: dict[str, Any], target=FP8_ADA_MMA, **over: Any) -> dict[str, Any]:
+    arrays = {a: {"frozen_sha256": h * 64, "candidate_sha256": h * 64, "dtype": "e4m3 u8", "shape": [4096, 1536]} for a, h in (("x", "1"), ("W", "2"), ("y", "3"))}
+    doc = {"schema": T.INSTANCE_EQUIV_SCHEMA, "target": target.name, "frozen": copy.deepcopy(T.FROZEN_INSTANCES[target.name]),
+           "candidate": copy.deepcopy(candidate), "canonical": "per array: E4M3 bit words as u8, index order VU-major then K",
+           "arrays": arrays, "equal": True, "tool": "verity_numerical.bench.instance_equiv@0000000"}
+    doc.update(over)
+    return doc
+
+
+def put_equiv(store: LocalStore, doc: dict[str, Any], *, lane: str | None = "fused-phases", verdicts: list[tuple] = (("accepted", "verify-night"),),
+              payload: Path | None = None) -> str:
+    """Register ``doc`` as fused-phases would (``research data put --kind instance-equiv/v1 --meta @doc.json``, or ``--file`` when
+    ``payload`` is a path to write it to) and give it ``verdicts`` = ``(verified value, by)`` in order."""
+
+    attribution = {"lane": lane} if lane else {}
+    if payload is not None:
+        payload.write_text(json.dumps(doc), encoding="utf-8")
+        art = store.put_artifact(T.INSTANCE_EQUIV_SCHEMA, attribution, file=payload)
+    else:
+        art = store.put_artifact(T.INSTANCE_EQUIV_SCHEMA, {**doc, **attribution})
+    for i, (value, by) in enumerate(verdicts):
+        store.add_label(art, "verified", value, by, ts=f"2026-09-24T12:0{i}:00Z")
+    return art
+
+
+def repacked_result(store: LocalStore, n: int, t_total: float = 0.2) -> str:
+    return put(store, result(candidate="B-Ligero", target=FP8_ADA_MMA, gpu=RTX4090, proof_class="COMPLETE_ZK_BACKEND", t_total=t_total,
+                             instances=repacked(n)))
+
+
+def test_repacked_instances_count_only_with_an_accepted_equivalence(store: LocalStore, tmp_path: Path) -> None:
+    art = repacked_result(store, 1)
+    (reason,) = rejected(T.build(store), art)
+    assert reason.startswith("instances differ from the frozen set on dataset") and "instance-equiv" not in reason   # the existing rejection
+    eq = put_equiv(store, equiv_doc(repacked(1)))
+    tab = T.build(store)
+    c = cell(tab, FP8_ADA_MMA, "B-Ligero")
+    assert c is not None and c.artifact == art and c.instances_equiv == eq and tab.rejected == []
+    assert f"instances re-packed; decoded values byte-identical to the frozen set ({eq})" in T.render_markdown(tab)
+    assert T.render_json(tab)["table2"]["rows"][3]["cells"]["B-Ligero"]["instances_equiv"] == eq
+    # the document as the artifact's JSON payload (meta carries only the attribution) counts the same
+    art2 = repacked_result(store, 2, t_total=0.1)
+    eq2 = put_equiv(store, equiv_doc(repacked(2)), payload=tmp_path / "equiv.json")
+    assert cell(T.build(store), FP8_ADA_MMA, "B-Ligero").instances_equiv == eq2 and cell(T.build(store), FP8_ADA_MMA, "B-Ligero").artifact == art2
+    # a frozen-set result needs none and names none
+    frozen = put(store, result(candidate="B-Ligero", target=FP8_ADA_MMA, gpu=RTX4090, proof_class="COMPLETE_ZK_BACKEND", t_total=0.05))
+    assert cell(T.build(store), FP8_ADA_MMA, "B-Ligero").artifact == frozen and cell(T.build(store), FP8_ADA_MMA, "B-Ligero").instances_equiv is None
+
+
+DEFECTS = {
+    "unverified": (dict(), dict(verdicts=()), "has no verified=accepted by a non-producer"),
+    "self-verified by its producer": (dict(), dict(verdicts=(("accepted", "fused-phases"),)), "has no verified=accepted by a non-producer"),
+    "verified by the result's producer": (dict(), dict(verdicts=(("accepted", LANE),)), "has no verified=accepted by a non-producer"),
+    "a later rejection": (dict(), dict(verdicts=(("accepted", "verify-night"), ("rejected", "coordinator"))), "latest verdict by a non-producer is verified=rejected"),
+    "no named producer": (dict(), dict(lane=None), "names no producer"),
+    "digests differ": (dict(arrays={"x": {"frozen_sha256": "1" * 64, "candidate_sha256": "1" * 64}, "W": {"frozen_sha256": "2" * 64, "candidate_sha256": "2" * 64},
+                                    "y": {"frozen_sha256": "3" * 64, "candidate_sha256": "4" * 64}}), dict(), "arrays.y: frozen_sha256"),
+    "a placeholder digest": (dict(arrays={a: {"frozen_sha256": "…", "candidate_sha256": "…"} for a in "xWy"}), dict(), "arrays.W: frozen_sha256 '…'"),
+    "y missing": (dict(arrays={a: {"frozen_sha256": "1" * 64, "candidate_sha256": "1" * 64} for a in "xW"}), dict(), "arrays lack y"),
+    "equal false": (dict(equal=False), dict(), "verified, says equal=False"),
+    "equal as a word": (dict(equal="true"), dict(), "verified, says equal='true'"),
+    "equal false, unverified": (dict(equal=False), dict(verdicts=()), "equal is False"),
+    "another frozen ref": (dict(frozen=copy.deepcopy(T.FROZEN_INSTANCES[FIRST.name])), dict(), "frozen is not FROZEN_INSTANCES[target]"),
+    "another schema": (dict(schema="instance-equiv/v0"), dict(), "schema is 'instance-equiv/v0'"),
+}
+
+
+@pytest.mark.parametrize("defect", sorted(DEFECTS))
+def test_repacked_instances_stay_rejected_without_a_sound_equivalence(store: LocalStore, defect: str) -> None:
+    over, how, fragment = DEFECTS[defect]
+    art = repacked_result(store, 7)
+    eq = put_equiv(store, equiv_doc(repacked(7), **over), **how)
+    tab = T.build(store)
+    assert cell(tab, FP8_ADA_MMA, "B-Ligero") is None
+    (reason,) = rejected(tab, art)
+    assert reason.startswith("instances differ from the frozen set on dataset") and f"(instance-equiv: {eq}" in reason and fragment in reason, reason
+
+
+def test_an_equivalence_of_another_pair_or_a_contradiction_does_not_count(store: LocalStore) -> None:
+    art = repacked_result(store, 3)
+    put_equiv(store, equiv_doc(repacked(4)))                                            # another candidate ref
+    put_equiv(store, equiv_doc(repacked(3), target=BF16_HOPPER))                        # another target's frozen set
+    (reason,) = rejected(T.build(store), art)
+    assert "instance-equiv" not in reason, reason                                       # neither is about this pair: the existing rejection
+    good = put_equiv(store, equiv_doc(repacked(3)))
+    assert cell(T.build(store), FP8_ADA_MMA, "B-Ligero").instances_equiv == good
+    bad = put_equiv(store, equiv_doc(repacked(3), equal=False, arrays={a: {"frozen_sha256": "1" * 64, "candidate_sha256": "2" * 64} for a in "xWy"}),
+                    lane="verify-night-2", verdicts=(("accepted", "coordinator"),))
+    (reason,) = rejected(T.build(store), art)
+    assert f"{bad}, verified, says equal=False" in reason, reason
+
+
 def test_fp8_ada_row_and_hvzk_drilldown(store: LocalStore) -> None:
     zk = put(store, result(candidate="B-Ligero", target=FP8_ADA_MMA, gpu=RTX4090, proof_class="COMPLETE_ZK_BACKEND", t_total=8.0))
     hv = put(store, result(candidate="B-Ligero", target=FP8_ADA_MMA, gpu=RTX4090, proof_class="COMPLETE_HVZK_BACKEND", t_total=6.0))
