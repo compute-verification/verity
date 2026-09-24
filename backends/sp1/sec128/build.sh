@@ -9,9 +9,9 @@
 #     ran), installed as $ROOT/home/.sp1/bin/sp1-gpu-server; run the host with HOME=$ROOT/home.  sp1-sdk's cuda client
 #     replaces a server whose `--version` differs from sp1_primitives::SP1_CRATE_VERSION by the release download, so the
 #     patched crate keeps version 6.6.0 and every run must check the server's sha256 afterwards.
-#   - verifier/host: backends/sp1 copied to $ROOT/host-src with crates.io sp1-primitives 6.6.0 vendored under
-#     vendor/sp1-primitives (same line changed) through [patch.crates-io]; host features cuda,relation-bare, installed as
-#     /workspace/bin/veritor-zk-host-cuda-relation-bare-sec$SEC_BITS.
+#   - verifier/host: backends/sp1 unmodified (--locked), built with CARGO_HOME=$ROOT/cargo-home, a copy of the registry
+#     whose crates.io sp1-primitives 6.6.0 has the same line changed; host features cuda,relation-bare, installed as
+#     /workspace/bin/veritor-zk-host-cuda-relation-bare-sec$SEC_BITS.  Its embedded guest (ELF, vk) equals stock's.
 # Needs the stock toolchain first (backends/sp1/pod_bootstrap.sh with SP1_HOST_FEATURES=cuda,relation-bare, which also
 # fills ~/.cargo/registry with sp1-primitives 6.6.0).  Keep builds sequential (kb/sp1-prover.md).
 #   CUDA_ARCHS=80 bash backends/sp1/sec128/build.sh          # 80 A100, 90 H100, 89 RTX 4090, 120 RTX 5090
@@ -85,26 +85,28 @@ SERVER="$ROOT/home/.sp1/bin/sp1-gpu-server"
 [ "$("$SERVER" --version | tr -d '[:space:]')" = 6.6.0 ] || { echo "server version is not 6.6.0"; exit 2; }
 sha256sum "$SERVER" | tee "$ROOT/server.sha256"
 
-stage "verifier/host source: backends/sp1 + vendored sp1-primitives 6.6.0 (same line)"
-REG="$(ls -d "$HOME"/.cargo/registry/src/*/sp1-primitives-6.6.0 | head -1)"
-[ -n "$REG" ] || { echo "sp1-primitives 6.6.0 not in the cargo registry: run pod_bootstrap.sh first"; exit 2; }
+stage "verifier/host: backends/sp1 unmodified, CARGO_HOME=$ROOT/cargo-home with sp1-primitives 6.6.0 patched in place"
+# The guest ELF carries its registry source paths remapped from <cargo home> to /cargo (host/build.rs), so patching the
+# crate in a copied cargo home (no [patch], lock file unchanged) keeps the embedded guest byte-identical to stock.
+REG_REL="registry/src/index.crates.io-1949cf8c6b5b557f/sp1-primitives-6.6.0"
+[ -d "$HOME/.cargo/$REG_REL" ] || { echo "sp1-primitives 6.6.0 not in the cargo registry: run pod_bootstrap.sh first"; exit 2; }
+CH="$ROOT/cargo-home"
+rm -rf "$CH"; mkdir -p "$CH"
+cp -a "$HOME/.cargo/registry" "$CH/"
+[ -d "$HOME/.cargo/git" ] && cp -a "$HOME/.cargo/git" "$CH/"
+for f in config.toml config; do [ -f "$HOME/.cargo/$f" ] && cp -a "$HOME/.cargo/$f" "$CH/"; done
+patch_line "$CH/$REG_REL/src/fri_params.rs"
+cmp "$CH/$REG_REL/src/fri_params.rs" "$FORK/crates/primitives/src/fri_params.rs" \
+  || { echo "patched registry fri_params.rs differs from the prover's"; exit 2; }
+diff -r "$HOME/.cargo/$REG_REL" "$CH/$REG_REL" | tee "$ROOT/verifier-source.diff" || true
 HOST="$ROOT/host-src"
-rm -rf "$HOST"; mkdir -p "$HOST/vendor"
+rm -rf "$HOST"; mkdir -p "$HOST"
 tar -C "$SP1_SRC" --exclude=./target --exclude=./tcdot --exclude=./sec128 --exclude=./sp1 -cf - . | tar -C "$HOST" -xf -
-cp -r "$REG" "$HOST/vendor/sp1-primitives"
-rm -f "$HOST/vendor/sp1-primitives/.cargo-ok" "$HOST/vendor/sp1-primitives/.cargo_vcs_info.json"
-patch_line "$HOST/vendor/sp1-primitives/src/fri_params.rs"
-cmp "$HOST/vendor/sp1-primitives/src/fri_params.rs" "$FORK/crates/primitives/src/fri_params.rs" \
-  || { echo "vendored fri_params.rs differs from the prover's"; exit 2; }
-diff -r "$REG" "$HOST/vendor/sp1-primitives" | tee "$ROOT/verifier-source.diff" || true
-sed -i 's|^\[patch.crates-io\]$|[patch.crates-io]\nsp1-primitives = { path = "vendor/sp1-primitives" }|' "$HOST/Cargo.toml"
-grep -n -A3 '^\[patch.crates-io\]' "$HOST/Cargo.toml"
 
 stage "host: cuda,relation-bare"
-cd "$HOST"
-CARGO_TARGET_DIR="$ROOT/target-host" cargo build --release -p veritor-zk-host --features cuda,relation-bare 2>&1 \
-  | grep -v -E "^\s+(Compiling|Downloaded|Downloading) "
-diff "$SP1_SRC/Cargo.lock" "$HOST/Cargo.lock" | tee "$ROOT/host-lock.diff" || true
+cd "$HOST"; rm -rf "$ROOT/target-host"   # a fresh guest build under the new cargo home
+CARGO_HOME="$CH" CARGO_TARGET_DIR="$ROOT/target-host" cargo build --release --locked -p veritor-zk-host \
+  --features cuda,relation-bare 2>&1 | grep -v -E "^\s+(Compiling|Downloaded|Downloading) "
 BIN=/workspace/bin/veritor-zk-host-cuda-relation-bare-sec$SEC_BITS
 install -m 0755 "$ROOT/target-host/release/veritor-zk-host" "$BIN"
 sha256sum "$BIN"
