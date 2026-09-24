@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 
 from verity.verification.query import ValueRef as R
+from verity_capture.commit import manifest_format as MF
 from verity_capture.commit import oracle_compare as OC
 from verity_capture.commit.sampled_replay import form_b_families
 from verity_capture.commit.tests.test_oracle_compare import ROWS, U0, U1, H, _exploded_norm_match, make_match, reader
@@ -149,6 +150,46 @@ def test_consumers_are_not_consulted_when_the_fold_names_the_producer_under_the_
     for k in ("result", "complete", "compared", "equal", "mismatch_n", "not_compared"):
         assert a[k] == b[k], k
     assert a["result"] is True
+
+
+def test_handed_down_member_is_observed_at_its_first_consumer_input():
+    """#57's rerun (r20260924-061950-2148): with the v2 row unannotated the acquisition hooked Gemma2Model's forward output for
+    `model/out` (the final norm's rows) while the Value is the embed scale model's body hands to layer 0 -- 432 form (B) mismatches.
+    Marked promoted from the Program's consumers, the manifest's own observation rule arms `<first consumer>/in` for it and nothing else."""
+    P = gemma_like_program()
+    corr = Correspondence(P)
+    man = request_manifest(P, corr, RES, request_id="r0").manifest
+    facts = OC.program_producer_facts(P, corr)
+    assert MF.promoted_observation(man)["names"] == {}
+    n_model = sum(1 for r in man["identities"] if (r["op_path"], r["output_member"]) == ("model", "out"))
+    hd = OC.promote_handed_down(man, facts)
+    assert hd == {"members": {"model/out": [NORM]}, "rows": n_model} and n_model >= 1
+    rows = [r for r in man["identities"] if r["family"] == "instance_outputs"]
+    assert all(r.get("promoted") is True and r["consumers"] == [NORM] for r in rows if r["op_path"] == "model")
+    assert not any(r.get("promoted") for r in rows if r["op_path"] != "model")          # the norm's members and the MLP output are returns
+    obs = MF.promoted_observation(man)
+    assert obs["problems"] == [] and obs["names"] == {f"{NORM}/in": ["model", "out"]}
+    assert OC.promote_handed_down(man, facts)["rows"] == 0                              # already promoted: untouched
+
+
+def test_only_a_value_every_reader_of_which_is_inside_the_producer_subtree_is_promoted():
+    derived = {("m", "out"): {"spec": "S_v1", "consumers": ["m.a", "m.b.c"]},              # handed down to two descendants
+               ("m.a", "0"): {"spec": "G_v1", "consumers": ["m.b"]},                       # a sibling reads it: a return
+               ("m.b", "out"): {"spec": "G_v1", "consumers": ["m.b.c", "m"]},              # a child AND the parent read it: a return
+               ("m.c", "0"): {"spec": "G_v1", "consumers": []},                            # no reader named
+               ("m.d", "0"): {"spec": None, "consumers": ["m.d.x"], "conflict": True},     # the Programs disagree on the family
+               ("m.e", "0"): {"spec": "Other_v1", "consumers": ["m.e.x"]},                 # not the row's family
+               ("mm", "0"): {"spec": "G_v1", "consumers": ["mmx.y"]},                      # a string prefix, not a module ancestor
+               ("m.f", "out"): {"spec": "S_v1", "consumers": ["m.f.x"]}}                   # already promoted by the manifest
+    ids = [{"family": "instance_outputs", "op_path": op, "output_member": mem, "spec": "S_v1" if op in ("m", "m.f") else "G_v1"}
+           for op, mem in derived]
+    ids[-1].update(promoted=True, consumers=["m.f.y"])
+    ids.append({"family": "input_token_ids", "op_path": "m", "output_member": "out", "spec": "S_v1"})
+    hd = OC.promote_handed_down({"identities": ids}, derived)
+    assert hd == {"members": {"m/out": ["m.a", "m.b.c"]}, "rows": 1}
+    assert [(r["op_path"], r.get("promoted"), r.get("consumers")) for r in ids if r.get("promoted")] == [
+        ("m", True, ["m.a", "m.b.c"]), ("m.f", True, ["m.f.y"])]
+    assert OC.promote_handed_down(None, derived) == {"members": {}, "rows": 0}
 
 
 def test_form_b_families_are_the_required_outputs_the_replay_cannot_evaluate():

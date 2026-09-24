@@ -1409,6 +1409,24 @@ def main(argv: list[str] | None = None) -> None:
 
         _sys.setswitchinterval(float(os.environ["VERITY_SWITCH"]))
         print(f"[delta] sys.setswitchinterval({os.environ['VERITY_SWITCH']})", flush=True)
+    # the Programs' producer facts for a v2-query manifest (which carries none), derived once BEFORE the committer is armed: the members
+    # the producer module's body hands down are marked promoted here, so the acquisition below observes them at their first consumer's
+    # input rather than at the module's forward output (oracle_compare.promote_handed_down); form (B) reads the same facts every pair
+    oracle_producers: tuple[dict | None, dict] | None = None
+    if required_manifest is not None and kinds:
+        from verity_capture.commit import oracle_compare as _OCP
+        try:
+            oracle_producers = oracle_producers_of_record(args, required_manifest, reqs, sampling)
+        except Exception as _pe:  # noqa: BLE001  -- no facts: the manifest's own entries stand, the reason is on the record
+            oracle_producers = (None, {"used": False, "why": f"producer facts not derived: {_pe!r}"[:300]})
+        print(f"[delta] form (B) producer facts from the Programs of record: {oracle_producers[1]}", flush=True)
+        if oracle_producers[0]:
+            _hd = _OCP.promote_handed_down(required_manifest, oracle_producers[0])
+            oracle_producers[1]["handed_down"] = _hd
+            if _hd["rows"]:
+                print(f"[delta] v2 manifest: {_hd['rows']} row(s) of {len(_hd['members'])} member(s) handed down by their module's body (every "
+                      f"reader inside its subtree) marked promoted -> observed at the first consumer's input: "
+                      f"{ {k: v[:2] for k, v in sorted(_hd['members'].items())[:6]} }", flush=True)
     for kind in kinds:
         TL.start("prep.committer_setup", kind=kind)
         com = make_committer(kind, eng, args, run_id)
@@ -1947,7 +1965,6 @@ def main(argv: list[str] | None = None) -> None:
     decls: dict[str, dict] = {}
     prev_digests: dict = {}
     replay_cache: dict[str, dict[str, Any]] = {}      # [R16 sys] --replay-cache: full-key -> pair 0's C2 record (this Commit stage only)
-    oracle_producers: tuple[dict | None, dict] | None = None      # the Programs' producer facts for form (B): derived once, every pair reads them
     # [R17-1 / F-moe-r17-03] the Program's declared stop rule + LAG, read once for every consumer of every pair (population, composition,
     # linkage, replay); recorded in versions so the finalizer reads the same fact the Commit counted on
     stop_of_record = stop_rule_of_record(eng, wl, versions)

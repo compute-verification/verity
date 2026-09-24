@@ -654,6 +654,39 @@ def merge_producers(declared: dict[tuple[str, str], dict[str, Any]], derived: di
     return out
 
 
+def promote_handed_down(manifest: dict[str, Any] | None, derived: dict[tuple[str, str], dict[str, Any]]) -> dict[str, Any]:
+    """Mark, in place, the `instance_outputs` rows of a `v2-query` manifest whose Value the producer module's body hands DOWN: every module
+    the Programs name as reading it (`derived[...]["consumers"]`, `producers_of_programs`) is inside the producer's module subtree
+    (`v1_bridge.under`), so it is no return of that module.  Such a row gets `promoted: true` + those `consumers` (Program order) and the
+    acquisition observes it at its first consumer's input (`manifest_format.PROMOTED_OBSERVATION_RULE`) instead of hooking the module's
+    forward output: row #57's `model/out` is Gemma2's embed scale (the model body's `hidden *= normalizer`, read by `model.layers.0`)
+    while `Gemma2Model` returns the final norm's output -- the two differ from element 0 (Commit r20260924-061950-2148, form (B): 432
+    mismatches, 159,408 equal).  A v2 manifest carries no `promoted` flag (`v1_bridge`: such a Value simply crosses the body boundary).
+    Only rows whose family the Programs agree on (`spec` equal to the row's, no conflict) and that are not already promoted; a member
+    read by any module outside the subtree is a return and stays a module output.  Returns {"members": {"op/member": consumers}, "rows": n}."""
+    from verity_vllm.query.v1_bridge import under
+
+    picked: dict[tuple[str, str], list[str]] = {}
+    for key, d in derived.items():
+        cons = [str(c) for c in (d.get("consumers") or [])]
+        if cons and not d.get("conflict") and all(under(c, key[0]) for c in cons):
+            picked[key] = cons
+    rows = 0
+    members: dict[str, list[str]] = {}
+    for r in (manifest or {}).get("identities") or []:
+        if r.get("family") != "instance_outputs" or r.get("promoted"):
+            continue
+        key = (str(r.get("op_path")), str(r.get("output_member")))
+        cons = picked.get(key)
+        if cons is None or str(derived[key].get("spec") or "") != str(r.get("spec") or "").split("{", 1)[0].strip():
+            continue
+        r["promoted"] = True
+        r["consumers"] = list(cons)
+        members[f"{key[0]}/{key[1]}"] = list(cons)
+        rows += 1
+    return {"members": members, "rows": rows}
+
+
 def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callable[[int, str, int, int], bytes | None], *,
                    max_report: int = 12, producers: dict[tuple[str, str], dict[str, Any]] | None = None,
                    workload: dict[str, Any] | None = None, aliases: dict[str, Any] | None = None,
