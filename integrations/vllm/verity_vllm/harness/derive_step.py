@@ -60,26 +60,32 @@ _CONSTRUCTION_SOURCES = ("verity_vllm/program/frontend/export_compat.py", "verit
                          "verity_vllm/program/frontend/rules/vllm_sampling.py")
 
 
-def construction_version(rules) -> dict:
+def construction_version(rules, root: str | None = None) -> dict:
     """Identity of the CONSTRUCTION (not of the target, not of the host): schema, the binding rules (id + version), and the sha256 of
-    the builder's source files. Two hosts running the same tree get the same value; an edited rule/shim gets another."""
-    import verity.ir
-    root = os.path.dirname(os.path.dirname(os.path.abspath(verity.ir.__file__)))
+    the builder's source files, read from the integration root `root` (default: the one `verity_vllm` is imported from). Two hosts
+    running the same tree get the same value; an edited rule/shim gets another. A listed source that is not there raises."""
+    import verity_vllm
+    root = root or os.path.dirname(os.path.dirname(os.path.abspath(verity_vllm.__file__)))
     h = hashlib.sha256()
     files = []
     for rel in _CONSTRUCTION_SOURCES:
         p = os.path.join(root, rel)
-        try:
-            b = open(p, "rb").read()
-        except OSError:
-            b = b""
-            files.append({"file": rel, "sha256": None})
-            h.update(rel.encode() + b"\0missing\0")
-            continue
+        if not os.path.isfile(p):
+            raise FileNotFoundError(f"construction_version: source {rel} is not under the integration root {root}")
+        with open(p, "rb") as f:
+            b = f.read()
         files.append({"file": rel, "sha256": hashlib.sha256(b).hexdigest()})
         h.update(rel.encode() + b"\0" + b + b"\0")
     return {"schema": "cb-a/aot-artifact/v1", "mechanism": "torch.export(strict=False) on meta + verity_vllm.program.frontend.derive (profile mode)",
             "rules": [{"id": r.rule_id, "version": r.info.version} for r in rules], "sources_sha256": h.hexdigest(), "files": files}
+
+
+def engine_dtype(model_config) -> str:
+    """The dtype the engine runs the checkpoint's weights in: vLLM's quantization method when the checkpoint is quantized
+    (`model_config.quantization`, "fp8" for an FP8 checkpoint), else the model dtype ("bfloat16")."""
+    if model_config.quantization:
+        return str(model_config.quantization)
+    return str(model_config.dtype).removeprefix("torch.")
 
 
 #: [R13 X-05] the token-select vocabulary of this builder: sampling policy kind -> the rule family that binds it.  A row whose policy is
@@ -368,8 +374,8 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             # [R13 hopper] `TargetProfile.engine_args()` = the attention knobs the target applies (`attention_backend`, `attention_config.flash_attn_version`)
             cfg = vm.make_vllm_config(model=model_id or vm.PIN["model"], revision=revision or vm.PIN["revision"], max_model_len=max_model_len,
                                       **target.engine_args(), tensor_parallel_size=tp)
-            res["model_pin"] = {"model": model_id or vm.PIN["model"], "revision": revision or vm.PIN["revision"], "dtype": vm.PIN["dtype"], "tp": tp, "rank": rank,
-                                "max_model_len": max_model_len}
+            res["model_pin"] = {"model": model_id or vm.PIN["model"], "revision": revision or vm.PIN["revision"], "dtype": engine_dtype(cfg.model_config), "tp": tp,
+                                "rank": rank, "max_model_len": max_model_len}
             vm.ensure_distributed(cfg, backend)
             bus = None
             if tp > 1:
