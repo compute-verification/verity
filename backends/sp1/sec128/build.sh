@@ -15,11 +15,14 @@
 # Needs the stock toolchain first (backends/sp1/pod_bootstrap.sh with SP1_HOST_FEATURES=cuda,relation-bare, which also
 # fills ~/.cargo/registry with sp1-primitives 6.6.0).  Keep builds sequential (kb/sp1-prover.md).
 #   CUDA_ARCHS=80 bash backends/sp1/sec128/build.sh          # 80 A100, 90 H100, 89 RTX 4090, 120 RTX 5090
+#   VERIFIER_ONLY=1 bash backends/sp1/sec128/build.sh        # CPU verifier: no GPU server, host features relation-bare,
+#                                                            # installed as ...-relation-bare-sec$SEC_BITS-cpu (same guest)
 set -euo pipefail
 export PATH="$HOME/.sp1/bin:$HOME/.cargo/bin:/usr/local/cuda/bin:$HOME/.local/bin:$PATH"
 export CUDACXX="${CUDACXX:-/usr/local/cuda/bin/nvcc}"
 export CUDA_ARCHS="${CUDA_ARCHS:-80}"
 SEC_BITS="${SEC_BITS:-134}"
+VERIFIER_ONLY="${VERIFIER_ONLY:-0}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SP1_SRC="$(dirname "$HERE")"
 ROOT="${SEC128_ROOT:-/workspace/sec128}"
@@ -77,6 +80,7 @@ git -C "$FORK" rev-parse HEAD
 git -C "$FORK" diff --stat
 git -C "$FORK" diff | tee "$ROOT/prover-source.diff"
 
+if [ "$VERIFIER_ONLY" != 1 ]; then
 stage "sp1-gpu-server (CUDA_ARCHS=$CUDA_ARCHS) -> $ROOT/home/.sp1/bin"
 mkdir -p "$ROOT/home/.sp1/bin"
 ( cd "$FORK" && CARGO_TARGET_DIR="$ROOT/target-server" cargo install --locked --force --root "$ROOT/home/.sp1" \
@@ -84,6 +88,7 @@ mkdir -p "$ROOT/home/.sp1/bin"
 SERVER="$ROOT/home/.sp1/bin/sp1-gpu-server"
 [ "$("$SERVER" --version | tr -d '[:space:]')" = 6.6.0 ] || { echo "server version is not 6.6.0"; exit 2; }
 sha256sum "$SERVER" | tee "$ROOT/server.sha256"
+fi
 
 stage "verifier/host: backends/sp1 unmodified, CARGO_HOME=$ROOT/cargo-home with sp1-primitives 6.6.0 patched in place"
 # The guest ELF carries its registry source paths remapped from <cargo home> to /cargo (host/build.rs), so patching the
@@ -111,11 +116,12 @@ HOST="$ROOT/host-src"
 rm -rf "$HOST"; mkdir -p "$HOST"
 tar -C "$SP1_SRC" --exclude=./target --exclude=./tcdot --exclude=./sec128 --exclude=./sp1 -cf - . | tar -C "$HOST" -xf -
 
-stage "host: cuda,relation-bare"
+if [ "$VERIFIER_ONLY" = 1 ]; then FEATURES=relation-bare BIN=/workspace/bin/veritor-zk-host-relation-bare-sec$SEC_BITS-cpu
+else FEATURES=cuda,relation-bare BIN=/workspace/bin/veritor-zk-host-cuda-relation-bare-sec$SEC_BITS; fi
+stage "host: $FEATURES"
 cd "$HOST"; rm -rf "$ROOT/target-host"   # a fresh guest build under the new cargo home
 CARGO_HOME="$CH" CARGO_TARGET_DIR="$ROOT/target-host" cargo build --release --locked -p veritor-zk-host \
-  --features cuda,relation-bare 2>&1 | grep -v -E "^\s+(Compiling|Downloaded|Downloading) "
-BIN=/workspace/bin/veritor-zk-host-cuda-relation-bare-sec$SEC_BITS
+  --features "$FEATURES" 2>&1 | grep -v -E "^\s+(Compiling|Downloaded|Downloading) "
 install -m 0755 "$ROOT/target-host/release/veritor-zk-host" "$BIN"
 sha256sum "$BIN"
 SP1_PROVER=cpu RUST_LOG=error "$BIN" info > "$ROOT/host-info.log" 2>&1 || { tail -20 "$ROOT/host-info.log"; exit 3; }
@@ -124,4 +130,5 @@ if [ -x /workspace/bin/veritor-zk-host-cuda-relation-bare ]; then
   echo "stock host:"; SP1_PROVER=cpu RUST_LOG=error /workspace/bin/veritor-zk-host-cuda-relation-bare info | grep '^{' | tail -1
 fi
 stage "done"
-echo "VERITY_SP1_HOST=$BIN HOME=$ROOT/home (server sha256 $(cut -c1-16 "$ROOT/server.sha256"))"
+if [ "$VERIFIER_ONLY" = 1 ]; then echo "verifier: SP1_PROVER=cpu RUST_LOG=error $BIN verify --proof P --statement S"
+else echo "VERITY_SP1_HOST=$BIN HOME=$ROOT/home (server sha256 $(cut -c1-16 "$ROOT/server.sha256"))"; fi
