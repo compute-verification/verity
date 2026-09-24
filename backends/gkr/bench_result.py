@@ -160,7 +160,7 @@ def main(argv: list[str] | None = None) -> int:
     from gpu import ligero, prover
     from gpu.circuit import layers, load_circuit
     from gpu.run import _dev, read_chain
-    from gpu.v2.witness import Generator, Ops
+    from gpu.v2.witness import Generator, GraphedGenerator, Ops
     import soundness
 
     # ---- preprocessing (Params-only; not in the buckets) -------------------------------------------------------------
@@ -176,6 +176,10 @@ def main(argv: list[str] | None = None) -> int:
     public = [int(v) for v in y]
     ops = Ops(str(dev))
     gen = Generator(ops)
+    graphed = dev.type == "cuda" and not os.environ.get("VERITY_GPU_EAGER_WITNESS")
+    # the operands as host int16 arrays of their uint16 bits (the device copy happens inside every timed rep)
+    x16, w16, y16 = (np.ascontiguousarray(a).view(np.int16).copy() for a in (x, w, y))
+    ggen: list = []
     torch.cuda.synchronize(dev)
     t_prep = time.perf_counter() - tp0
     write_statement(d, run_dir / "statement", y)
@@ -184,15 +188,20 @@ def main(argv: list[str] | None = None) -> int:
     def one_rep():
         torch.cuda.synchronize(dev)
         torch.cuda.reset_peak_memory_stats(dev)
+        if graphed and not ggen:                                 # captured in the (untimed) warm-up rep
+            ggen.append(GraphedGenerator(gen, x16.shape[0], x16.shape[1]))
+            torch.cuda.synchronize(dev)
+            torch.cuda.reset_peak_memory_stats(dev)
         t0 = time.perf_counter()
-        A, B, Y = ops.asarray(x), ops.asarray(w), ops.asarray(y)
-        rows = gen.run(A, B, Y)
+        if graphed:
+            rows = ggen[0].run(x16, w16, y16)
+        else:
+            rows = gen.run(ops.asarray(x), ops.asarray(w), ops.asarray(y))
         bad = int(rows.bad.sum())
         t1 = time.perf_counter()
         if bad:
             raise SystemExit(f"bench_result.py: {bad} VUs rejected at witness generation (the frozen positives are all valid)")
         gen_peak = torch.cuda.max_memory_allocated(dev)
-        del A, B, Y
         inst = prover.Instance([prover.Segment("unit", ucirc, ulayers, rows.units, ucirc.hash),
                                 prover.Segment("epilogue", ecirc, elayers, rows.epilogue, ecirc.hash)],
                                read_chain(d / man.get("chain_file", "chain.txt"), ucirc, ecirc, steps, public))
@@ -202,7 +211,7 @@ def main(argv: list[str] | None = None) -> int:
         data = proof.to_bytes()
         t3 = time.perf_counter()
         return inst, proof, st, data, {"witness_gen": t1 - t0, "prove": t2 - t1, "bytes": t3 - t2, "total": t3 - t0,
-                                       "gen_chain": rows.seconds["chain"], "peak": max(gen_peak, st.peak_mem)}
+                                       "gen_chain": rows.seconds.get("chain"), "peak": max(gen_peak, st.peak_mem)}
 
     def verify_py(inst, proof):
         t = time.perf_counter()
@@ -306,7 +315,8 @@ def main(argv: list[str] | None = None) -> int:
         cupy_v = None
     sw = {"backend": {"name": BACKEND, "commit": source_commit(), "version": "checker v2 (limb epilogue), proof.bin v2",
                       "path": args.path, "encoder": encoder, "opening": ligero.opening_path(dev),
-                      "witness": "gpu/v2/witness.py (device generator; byte-exact with the CPU export)"},
+                      "witness": "gpu/v2/witness.py (device generator; byte-exact with the CPU export)"
+                                 + ("; replayed as one CUDA graph captured in the warm-up" if graphed else "")},
           "toolchain": {"python": platform.python_version(), "torch": torch.__version__, "cuda_runtime": torch.version.cuda,
                         "triton": triton.__version__, "cupy": cupy_v, "numpy": np.__version__}}
     security = {"target": args.target, "achieved_log2": ach, "achieved_bits": -ach, "field": "BabyBear^6 = F_p[X]/(X^6 - 22)",
@@ -367,7 +377,8 @@ def main(argv: list[str] | None = None) -> int:
     ]
     for key in ("witness_gen", "gen_chain", "t_witness_wires", "t_mults", "t_commit", "t_lookup", "t_arith", "t_open_acc", "t_open_wq",
                 "t_open_cols", "to_bytes"):
-        meas.append(_m(f"split.{key}_seconds", med[key], "s"))
+        if med[key] is not None:
+            meas.append(_m(f"split.{key}_seconds", med[key], "s"))
     ok = python_ok and rust_ok and same_proof
     detail = (f"python: {sum(r['python_verified'] for r in rows)}/{len(rows)}; rust: {n_acc}/{len(verdicts)} accepted"
               f"{'' if same_proof else '; the reps produced DIFFERENT proofs'}; reps t.total "

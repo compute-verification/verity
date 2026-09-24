@@ -439,6 +439,48 @@ class Generator:
         return Rows(units, epi, Y16, bad, {"chain": t1 - t0, "unit_rows": t2 - t1, "epilogue": t3 - t2, "total": t3 - t0})
 
 
+class GraphedGenerator:
+    """``Generator.run`` on CUDA captured once as a graph on static operand buffers and replayed per call.  The chain is
+    ~2e4 small elementwise / gather launches (96 steps x 2 groups x ~90 ops over ``N`` lanes) and eager torch is
+    launch-bound on them; every op has fixed shapes and no host round trip, so the replay issues the same kernels back to
+    back.  The operands enter as their 16-bit patterns (int16) and are widened inside the graph.  ``run`` returns the
+    graph's ``Rows``, which the next ``run`` overwrites; ``seconds`` is empty."""
+
+    def __init__(self, gen: Generator, N: int, K: int) -> None:
+        torch = gen.ops.torch
+        dev = gen.ops.device
+        self.gen, self.torch, self.dev = gen, torch, dev
+        self.a16 = torch.zeros((N, K), dtype=torch.int16, device=dev)
+        self.b16 = torch.zeros((N, K), dtype=torch.int16, device=dev)
+        self.y16 = torch.zeros((N,), dtype=torch.int16, device=dev)
+        side = torch.cuda.Stream(dev)
+        side.wait_stream(torch.cuda.current_stream(dev))
+        with torch.cuda.stream(side):
+            self._body()
+        torch.cuda.current_stream(dev).wait_stream(side)
+        torch.cuda.synchronize(dev)
+        self.graph = torch.cuda.CUDAGraph()
+        with torch.cuda.graph(self.graph):
+            rows = self._body()
+        torch.cuda.synchronize(dev)
+        self.rows = Rows(rows.units, rows.epilogue, rows.public, rows.bad, {})
+
+    def _body(self) -> Rows:
+        def u16(t):
+            return t.to(self.torch.int64) & 0xFFFF
+
+        return self.gen.run(u16(self.a16), u16(self.b16), u16(self.y16))
+
+    def run(self, x16: np.ndarray, w16: np.ndarray, y16: np.ndarray) -> Rows:
+        """``x16`` / ``w16`` ``(N, K)`` and ``y16`` ``(N,)``: host int16 arrays holding the uint16 operands' bits."""
+        torch = self.torch
+        self.a16.copy_(torch.from_numpy(x16))
+        self.b16.copy_(torch.from_numpy(w16))
+        self.y16.copy_(torch.from_numpy(y16))
+        self.graph.replay()
+        return self.rows
+
+
 # ---------------------------------------------------------------------------------------------------------------------
 # checks
 # ---------------------------------------------------------------------------------------------------------------------
