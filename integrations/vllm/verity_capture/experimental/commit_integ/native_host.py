@@ -58,7 +58,7 @@ ROOT_TAG_RUN = b"verity/cmt-integ/run-root/v0"
 DEFAULT_CHUNK = 4096
 BLOCK_BYTES = 64 << 20
 
-# P4 remains: under v2 the plan replaces this selection (apply_plan_to_committer); the tables stay for the ACQUIRE_ENGINE=v1 oracle and compiled_source
+# under v2 the plan replaces this selection (apply_plan_to_committer; compiled rows: CompiledGraphSource.wrap_model); the tables stay for the ACQUIRE_ENGINE=v1 oracle
 # module classes whose forward OUTPUT is an Instance output (census §3 `HBM-materialized (native)`); matched on the MRO class names
 ACQUIRE_CLASSES = {
     "ColumnParallelLinear", "RowParallelLinear", "QKVParallelLinear", "MergedColumnParallelLinear", "ReplicatedLinear", "LinearBase",

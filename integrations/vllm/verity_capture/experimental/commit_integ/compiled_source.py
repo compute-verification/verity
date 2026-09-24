@@ -141,10 +141,16 @@ def _install_inductor_lowering(op) -> None:
 
 
 def _make_fwd(orig, nid_out: int, nids_k: tuple[int, ...], nid_in: int, op):
-    """The traced wrapper: record the acquired input (embedding ids) and every tensor output of the module under its static id."""
+    """The traced wrapper: record the acquired input (embedding ids, a consumer-input site) and every tensor output of the module under its
+    static id; `nid_out < 0` = an input-only module (a plan's consumer-input site on a module whose output is not acquired)."""
     Tensor = torch.Tensor
 
-    if nid_in >= 0:
+    if nid_out < 0:
+        def fwd(*a, **kw):
+            if a and isinstance(a[0], Tensor):
+                op(a[0], nid_in)
+            return orig(*a, **kw)
+    elif nid_in >= 0:
         def fwd(*a, **kw):
             if a and isinstance(a[0], Tensor):
                 op(a[0], nid_in)
@@ -191,6 +197,12 @@ class CompiledGraphSource:
         self.stale: dict[tuple[int, int], torch.Tensor] = {}  # compiled_late_drain: previous step's slot values
         self.wrapped: list[str] = []
         self.omitted: list[str] = []
+        # [v2 acquire] the row's required-value manifest (`use_plan`) -> the acquisition plan derived at wrap time; `selection` = the
+        # module boundaries wrapped (before a compiled_omit fault), held to the committer's at install
+        self.plan_manifest: Any = None
+        self.plan_dir: str | None = None
+        self.plan: Any = None
+        self.selection: dict[str, Any] | None = None
         self.renumber: dict[str, Any] = {}
         self.model = None
         self.runner = None
@@ -262,11 +274,33 @@ class CompiledGraphSource:
             self.id_of[name] = nid
         return nid
 
-    def wrap_model(self, model: torch.nn.Module, runner: Any) -> None:
-        """Wrap `forward` of every acquired module with the record op (same selection rules as the committer: ACQUIRE_CLASSES minus
-        SKIP_CLASSES; the sampler is acquired by the committer's runner.sample wrapper, outside the compiled region)."""
-        # P4 remains: compiled rows select by the class tables; the acquisition plan is not threaded into CompiledSource yet
-        from verity_capture.experimental.commit_integ.native_host import ACQUIRE_CLASSES, ACQUIRE_INPUT_CLASSES, SKIP_CLASSES, _mro_names
+    def use_plan(self, manifest: Any, out_dir: str | os.PathLike) -> None:
+        """[v2 acquire] the row's required-value manifest: `wrap_model` (inside the engine build) derives the acquisition plan from it and
+        the built model exactly as the committer's stage entry does (`acquire.stage.plan_at_stage`; documents under `out_dir`)."""
+        self.plan_manifest, self.plan_dir = manifest, str(out_dir)
+
+    def _plan_selection(self, model: torch.nn.Module, runner: Any, plan: Any) -> tuple[list[str], list[str]]:
+        from verity_vllm.acquire.install import plan_selection
+        from verity_vllm.acquire.switch import ENV
+
+        if plan is None:
+            if self.plan_manifest is None:
+                raise RuntimeError(f"{ENV}=v2: compiled rows wrap the acquisition plan's module boundaries and no plan or required-value "
+                                   f"manifest was passed in (commit_delta --required-manifest -> CompiledGraphSource.use_plan, before the engine build)")
+            from verity_vllm.acquire.stage import plan_at_stage
+
+            plan = plan_at_stage(model, runner, self.plan_manifest, self.plan_dir or ".", source="compiled_source wrap_model").plan
+        self.plan = plan
+        return plan_selection(plan, model)
+
+    def wrap_model(self, model: torch.nn.Module, runner: Any, plan: Any = None) -> None:
+        """Wrap `forward` of every acquired module with the record op, with the committer's selection: under ACQUIRE_ENGINE=v2 the
+        acquisition plan's (`install.plan_selection`: producer_output modules record their outputs, consumer_input modules their first
+        argument; `plan`, else derived from the `use_plan` manifest, else refused by name), under v1 the class tables (ACQUIRE_CLASSES minus
+        SKIP_CLASSES).  A VERITY_SKIP class's outputs are not recorded (the committer's `apply_skip`); the sampler is acquired by the
+        committer's runner.sample wrapper, outside the compiled region."""
+        from verity_capture.experimental.commit_integ.native_host import ACQUIRE_CLASSES, ACQUIRE_INPUT_CLASSES, SKIP_CLASSES, _mro_names, skip_classes_of_env
+        from verity_vllm.acquire.switch import v2
 
         self.model, self.runner = model, runner
         if self.rows <= 0:
@@ -278,19 +312,32 @@ class CompiledGraphSource:
         self.stats["rows"] = self.rows
         op = _op()
         omit_leaf = self.fault.split(":", 1)[1] if self.fault.startswith("compiled_omit:") else None
-        for name, m in model.named_modules():
-            names = _mro_names(m)
-            if names & SKIP_CLASSES or not (names & ACQUIRE_CLASSES) or "Sampler" in names:
-                continue
+        skip = skip_classes_of_env()
+        targets: list[tuple[str, Any, bool, bool]] = []          # (name, module, record outputs, record first argument)
+        if v2():
+            outs, ins = self._plan_selection(model, runner, plan)
+            outs_set, ins_set = set(outs), set(ins)
+            for name, m in model.named_modules():
+                out = name in outs_set and not (_mro_names(m) & skip)
+                if out or name in ins_set:
+                    targets.append((name, m, out, name in ins_set))
+        else:
+            for name, m in model.named_modules():
+                names = _mro_names(m)
+                if names & (SKIP_CLASSES | skip) or not (names & ACQUIRE_CLASSES) or "Sampler" in names:
+                    continue
+                targets.append((name, m, True, bool(names & ACQUIRE_INPUT_CLASSES)))
+        self.selection = {"engine": "v2" if v2() else "v1", "plan_digest": getattr(self.plan, "digest", None),
+                          "outputs": [n for n, _m, out, _pre in targets if out], "inputs": [n for n, _m, _out, pre in targets if pre]}
+        for name, m, out, pre in targets:
             leaf = name.rsplit(".", 1)[-1]
             if omit_leaf is not None and leaf == omit_leaf:
                 self.omitted.append(name)
                 continue
             if "forward" in m.__dict__:
                 raise RuntimeError(f"{name}: forward already an instance attribute")
-            pre = bool(names & ACQUIRE_INPUT_CLASSES)
-            nid_out = self._id(name)
-            nids_k = tuple(self._id(f"{name}/{k}") for k in range(8))
+            nid_out = self._id(name) if out else -1
+            nids_k = tuple(self._id(f"{name}/{k}") for k in range(8)) if out else ()
             nid_in = self._id(f"{name}/in") if pre else -1
             m.forward = _make_fwd(m.forward, nid_out, nids_k, nid_in, op)
             self.wrapped.append(name)
@@ -326,7 +373,25 @@ class CompiledGraphSource:
         committer.attach_source(self)
         setattr(committer, "external_acquisition", True)     # the committer must not wrap the (compiled) module forwards itself
 
+    def check_selection(self, committer: Any = None) -> None:
+        """[v2 acquire] the record ops compiled into the graphs must be the committer's selection -- its `_modules` outputs and acquired
+        inputs, after its plan (`apply_plan_to_committer`) and skip: a compiled row never acquires a set other than the committer's plan.
+        Refused by name on a difference."""
+        c = committer if committer is not None else self.c
+        if c is None or not hasattr(c, "_modules") or self.selection is None or self.selection["engine"] != "v2" or self.model is None:
+            return
+        mods = dict(self.model.named_modules())
+        outs = {n for n, _m in c._modules if n in mods}
+        ins = {n for n, m in c._modules if c._acquires_input(n, m)} | {n for n, _m in c._input_only_modules()}
+        mine_out, mine_in = set(self.selection["outputs"]), set(self.selection["inputs"])
+        if outs != mine_out or ins != mine_in:
+            diff = {"outputs_only_compiled": sorted(mine_out - outs)[:4], "outputs_only_committer": sorted(outs - mine_out)[:4],
+                    "inputs_only_compiled": sorted(mine_in - ins)[:4], "inputs_only_committer": sorted(ins - mine_in)[:4]}
+            diff = {k: v for k, v in diff.items() if v}
+            raise RuntimeError(f"compiled source: the record ops compiled into the graphs are not the committer's plan selection: {diff}")
+
     def install(self) -> None:      # committer lifecycle: the taps are in the graphs; nothing to install per run
+        self.check_selection()
         self.eager_inv = {}
         self.eager_rows = {}
         self.direct_step = False
@@ -456,7 +521,7 @@ class CompiledGraphSource:
 
     def summary(self) -> dict[str, Any]:
         return {"short_name": self.short_name, "rows": self.rows, "fault": self.fault, "wrapped_modules": len(self.wrapped),
-                "omitted_modules": list(self.omitted), "renumber": self.renumber, "captured_keys": len(self.captured_keys),
+                "omitted_modules": list(self.omitted), "selection": self.selection, "renumber": self.renumber, "captured_keys": len(self.captured_keys),
                 "stats": dict(self.stats), "errors": list(self.errors)[:20]}
 
     def stats_reset_step_counters(self) -> None:

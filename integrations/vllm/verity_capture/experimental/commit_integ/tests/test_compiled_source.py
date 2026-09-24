@@ -179,7 +179,8 @@ def test_eager_ids_outside_a_step_allocate_nothing():
     assert src.slots == {} and src.stats["direct_calls_outside_step"] == 1
 
 
-def test_omit_fault_leaves_module_unwrapped():
+def test_omit_fault_leaves_module_unwrapped(monkeypatch):
+    monkeypatch.setenv("ACQUIRE_ENGINE", "v1")          # the class-table selection (v2: tests/acquire/test_gate.py, the plan's)
     cs._register_op()
     src = cs.CompiledGraphSource(rows=4, fault="compiled_omit:down_proj")
 

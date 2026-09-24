@@ -1236,6 +1236,8 @@ def main(argv: list[str] | None = None) -> None:
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
+    if compiled_src is not None:
+        compiled_src.use_plan(required_manifest, out / "compiled_source_plan")     # [v2 acquire] the engine build's wrap_model wraps the plan's boundaries
     # [R16 sys, F-stoch-03] the collector's fail-fast watchdog writes this marker (then _exit(3)) when a "collector dead" run does not fail
     # closed within VERITY_COLLECT_DEAD_GRACE_S; row_pod reads rc 3 as COMMIT FAIL, and a present marker names the hang in the row evidence.
     os.environ.setdefault("VERITY_COLLECT_WATCHDOG_MARKER", str(out / "COLLECTOR_DEAD_HUNG.json"))
