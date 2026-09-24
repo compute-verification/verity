@@ -126,7 +126,8 @@ fn group(acc: Term, a: &[u8], b: &[u8], bad: &mut bool) -> Term {
             if e > max_e {
                 max_e = e;
             }
-            kept[n] = p | e << 16 | ((ua ^ ub) & 0x8000) << 16;
+            // n <= i < 16: the mask is the identity and spares the bounds check
+            kept[n & 15] = p | e << 16 | ((ua ^ ub) & 0x8000) << 16;
             n += 1;
         }
     }
@@ -143,7 +144,7 @@ fn group(acc: Term, a: &[u8], b: &[u8], bad: &mut bool) -> Term {
     }
     // p << 11 < 2^27 vanishes from 27
     let top = max_exp + E_BIAS;
-    for &t in &kept[..n] {
+    for &t in kept.iter().take(n) {
         let d = (top - ((t >> 16) & 0x7FFF) as i32) as u32;
         if d < 27 {
             let v = (((t & 0xFFFF) << 11) >> d) as i64;
@@ -159,7 +160,7 @@ fn group(acc: Term, a: &[u8], b: &[u8], bad: &mut bool) -> Term {
     }
     let negative = total < 0;
     let mut m = total.unsigned_abs();
-    let bits = 64 - m.leading_zeros() as i32;
+    let bits = groupsum::bit_length(m);
     let mut exponent = max_exp + bits - ADDER_WIDTH;
     if bits > ADDER_WIDTH {
         m >>= bits - ADDER_WIDTH;

@@ -81,8 +81,9 @@ pub fn vu_hopper(x: &[u8], w: &[u8]) -> Option<u32> {
 // result round-trips `pack_fp32` / `fp32_term` exactly: `group_sum` never returns `-0`, and its magnitude has bit 23
 // set unless the exponent is -126).
 
-/// Per E4M3 byte: `0` for a zero; else the significand (implicit bit included) in bits 0..4, `max(field, 1)` in
-/// bits 8..12 and the sign in bit 16; `1 << 31` alone for the two NaN codes.
+/// Per E4M3 byte: `0` for a zero; else the significand (implicit bit included) in bits 0..4, the sign in bit 8 and
+/// `max(field, 1)` in bits 16..20; `1 << 31` alone for the two NaN codes.  The sum of two entries carries the product
+/// sign in bit 8 (bit 9 takes the carry) and `E = max(ea, 1) + max(eb, 1) <= 30` in bits 16..20.
 static E4M3_DECODE: [u32; 256] = {
     let mut t = [0u32; 256];
     let mut v = 0u32;
@@ -94,12 +95,15 @@ static E4M3_DECODE: [u32; 256] = {
         } else if sig == 0 {
             0
         } else {
-            sig | (if field == 0 { 1 } else { field }) << 8 | (v >> 7) << 16
+            sig | (v >> 7) << 8 | (if field == 0 { 1 } else { field }) << 16
         };
         v += 1;
     }
     t
 };
+
+/// A kept product: `p` in bits 0..8, its sign in bit 8, `E` in bits 16..21 (so the largest word has the largest `E`).
+const KEPT_MASK: u32 = 0x1F_0100;
 
 const FLOOR: i32 = -139;
 const ADDER_WIDTH: i32 = 14;
@@ -114,23 +118,25 @@ fn group<const G: usize>(acc: Term, a: &[u8], b: &[u8], bad: &mut u32) -> Term {
     let (a, b): (&[u8; G], &[u8; G]) = (a.try_into().unwrap(), b.try_into().unwrap());
     let mut kept = [0u32; G];
     let mut n = 0;
-    let mut max_e = 0u32;
+    let mut max_t = 0u32;
     for i in 0..G {
         let da = E4M3_DECODE[a[i] as usize];
         let db = E4M3_DECODE[b[i] as usize];
-        *bad |= da | db;
         let p = (da & 0xF) * (db & 0xF);
         if p != 0 {
-            // p | E << 8 | sign << 16 (the exponent fields sum without carrying into the sign bits)
-            let t = p | ((da + db) & 0x1F00) | ((da ^ db) & 0x1_0000);
-            if t & 0x1F00 > max_e {
-                max_e = t & 0x1F00;
+            let t = ((da + db) & KEPT_MASK) | p;
+            if t > max_t {
+                max_t = t;
             }
-            kept[n] = t;
+            // n <= i < G, a power of two: the mask is the identity and spares the bounds check
+            kept[n & (G - 1)] = t;
             n += 1;
+        } else {
+            // a NaN code decodes to a zero significand
+            *bad |= da | db;
         }
     }
-    let mut max_exp = if n > 0 { (max_e >> 8) as i32 - 14 } else { FLOOR };
+    let mut max_exp = if n > 0 { (max_t >> 16) as i32 - 14 } else { FLOOR };
     if acc.magnitude != 0 && acc.exponent > max_exp {
         max_exp = acc.exponent;
     }
@@ -142,11 +148,11 @@ fn group<const G: usize>(acc: Term, a: &[u8], b: &[u8], bad: &mut u32) -> Term {
     }
     // a product's alignment distance is max_exp - (E - 14); p << 7 < 2^15 vanishes from 15
     let top = max_exp + 14;
-    for &t in &kept[..n] {
-        let d = (top - ((t >> 8) & 0x1F) as i32) as u32;
+    for &t in kept.iter().take(n) {
+        let d = (top - (t >> 16) as i32) as u32;
         if d < 15 {
             let v = (((t & 0xFF) << 7) >> d) as i64;
-            if t & 0x1_0000 != 0 {
+            if t & 0x100 != 0 {
                 total -= v;
             } else {
                 total += v;
@@ -158,7 +164,7 @@ fn group<const G: usize>(acc: Term, a: &[u8], b: &[u8], bad: &mut u32) -> Term {
     }
     let negative = total < 0;
     let mut m = total.unsigned_abs();
-    let bits = 64 - m.leading_zeros() as i32;
+    let bits = groupsum::bit_length(m);
     let mut exponent = max_exp + bits - ADDER_WIDTH;
     if bits > ADDER_WIDTH {
         m >>= bits - ADDER_WIDTH;
