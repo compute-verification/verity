@@ -410,13 +410,15 @@ class ProgramIndex:
         self._epi: list[set[str]] = [V1.epilogue_modules(self.rows[lo: hi + 1]) for lo, hi in self.segs]
         # [TP-08d] per step: module -> the collective it issues (mirror of build_manifest's `coll_of`), only for a rank Program
         self._coll: list[dict[str, str]] = []
+        if self.tp:
+            from verity_vllm.registry.b1_tp2 import collective_kind   # the registry needs the core package: imported only for a rank Program
         for lo, hi in self.segs:
             c: dict[str, str] = {}
             if self.tp:
                 for r in self.rows[lo: hi + 1]:
-                    f0 = RM.spec_family(r["spec"])
-                    if RM.collective_kind(f0) is not None:      # [lane vllm-tp-n] any world's collective family
-                        c[RM.split_name(r.get("name") or "")[0]] = RM.collective_kind(f0)
+                    kind = collective_kind(RM.spec_family(r["spec"]))
+                    if kind is not None:                        # [lane vllm-tp-n] any world's collective family
+                        c[RM.split_name(r.get("name") or "")[0]] = kind
             self._coll.append(c)
         # [MAN-06f v3, moe R16] the fused-MoE block rows of each step: per MoE module its geometry (M routed tokens, TOPK, E, H, I, N_up --
         # `required_manifest.moe_geometry`, the same numbers build_manifest sizes the `moe_block_stream` planes with) and, per row, its
