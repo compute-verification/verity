@@ -1,10 +1,10 @@
-"""P8 (SYNTHESIS §4): model and target facts live only in ``program/registry/quarantine/`` and ``engine/profiles/``.
+"""P8: model and target facts live only in ``program/registry/quarantine/`` and ``engine/profiles/``.
 
 The rule's literal scan: a string literal in code (docstrings excepted) naming a model (``model``), a vLLM layer class
 (``layer-class``), a GPU (``gpu``) or an ``sm_8x``/``sm_9x``/``sm_10x``/``sm_12x`` architecture (``sm-arch``), outside
 the two homes.  Keyed by the normalized token, counted per function, in ``allowlists/p08_facts.json``.
 
-``engine/profiles/`` does not exist yet; ``observe/profiles/``, which §5.2 moves there, is already a home.  The scan
+``engine/profiles/`` does not exist yet; ``observe/profiles/``, which moves there, is already a home.  The scan
 lives here rather than in ``tests/check/test_quarantine_lint.py``, which tests the quarantine lint itself.
 """
 from __future__ import annotations

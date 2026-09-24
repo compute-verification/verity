@@ -1,9 +1,9 @@
-"""P9 (SYNTHESIS §4): dependencies have a declared direction, and runtime patches have one owner.
+"""P9: dependencies have a declared direction, and runtime patches have one owner.
 
 Checked today, against ``allowlists/p09_layering.json``:
 
 * ``layer``: an import from a lower layer into a higher one, with every module of today's layout placed in the layer of
-  its §5.2 destination (``_imports.INTERIM_LAYER``; order ``pipeline`` > ``check|properties`` > ``acquire`` >
+  the package it moves to (``_imports.INTERIM_LAYER``; order ``pipeline`` > ``check|properties`` > ``acquire`` >
   ``observe|commit`` > ``engine`` > ``query|correspondence`` > ``program`` > ``collectives`` > ``config`` > core, with
   modules bound for tests above ``pipeline``).  One entry per (importer, imported) module pair.
 * ``package-cycle``: two of today's top-level packages importing each other.
@@ -20,7 +20,7 @@ Checked today, against ``allowlists/p09_layering.json``:
   in a function that also reads ``getattr(obj, ...)`` (save the original, install the wrapper).  A patch whose target
   and original both live on ``self`` is not visible to this AST check.
 
-Once ``engine/hooks.py`` exists it is the one file exempt from ``runtime-patch``; once the §5.1 packages exist,
+Once ``engine/hooks.py`` exists it is the one file exempt from ``runtime-patch``; once the target packages exist,
 ``INTERIM_LAYER`` shrinks to the package names and the layer order stays as it is.  The rule's other half, "no library
 code imports tests/, tools/ or repo-level data", is ``forbidden-import`` and ``repo-path`` here.
 """

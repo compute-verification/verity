@@ -1,4 +1,4 @@
-"""P1 (SYNTHESIS §4): use core's abstractions; never copy or patch them.
+"""P1: use core's abstractions; never copy or patch them.
 
 Checked today, against ``allowlists/p01_core_abstractions.json``:
 
@@ -9,11 +9,11 @@ Checked today, against ``allowlists/p01_core_abstractions.json``:
   core module or object.
 * ``definition-id``: a Definition id (name and version, from ``@primitive(...)``, ``PrimitiveDefinition(...)`` or
   ``CompositeDefinition(...)`` with literal arguments and without ``register=False``) that another file, in the
-  integration or in core, also registers (D9).  One entry per integration file and id.
+  integration or in core, also registers.  One entry per integration file and id.
 
-Not checked here: the rule's test that imports ``verity.ml`` and every integration registry in one process (it fails
-today at ``core/ir/defs.py:35-38``, which is what ``definition-id`` pins statically); one id computing two functions
-(D8), which only evaluation can see; and, after Decision 1, verifying a production opening with core alone.
+Not checked here: a test that imports ``verity.ml`` and every integration registry in one process (today core's
+Definition registry refuses the duplicates that ``definition-id`` pins statically); one id computing two functions,
+which only evaluation can see; and verifying a production opening with core alone.
 """
 from __future__ import annotations
 

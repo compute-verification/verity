@@ -1,4 +1,4 @@
-"""P3 (SYNTHESIS §4): one evaluator interface, and one challenge derivation.
+"""P3: one evaluator interface, and one challenge derivation.
 
 Checked today, against ``allowlists/p03_one_evaluator.json``:
 
@@ -9,7 +9,7 @@ Checked today, against ``allowlists/p03_one_evaluator.json``:
 * ``rng``: constructing a random generator (``random.Random``, ``random.SystemRandom``, numpy's ``default_rng``,
   ``RandomState``, ``Generator``, ``torch.Generator``): challenge randomness comes from the one challenge module.
 
-``program/backends/`` does not exist yet; ``program/numerics/``, which §5.2 moves there, is already exempt from
+``program/backends/`` does not exist yet; ``program/numerics/``, which moves there, is already exempt from
 ``if-ladder``.  There is no challenge module yet, so every ``rng`` site is a violation today; once it exists, add it to
 ``RNG_OWNERS``.  The rule's parametrized self-check (every registered (backend, Definition) pair against the core
 reference on seeded random inputs) needs ``program/backends/`` and is not a lint.

@@ -1,4 +1,4 @@
-"""P12 (SYNTHESIS §4): each shared key has one owner.
+"""P12: each shared key has one owner.
 
 Checked today, against ``allowlists/p12_shared_keys.json``:
 
@@ -11,7 +11,7 @@ Checked today, against ``allowlists/p12_shared_keys.json``:
   how code identity gets defined outside the one ``code_identity()``.
 
 The owners, ``config.py`` (row-id grammar) and ``pipeline/identity.py`` (code identity), do not exist yet; the modules
-§5.2 turns into them (``harness/target_family.py`` into ``config.py``; ``harness/source_identity.py`` and
+that become them (``harness/target_family.py`` into ``config.py``; ``harness/source_identity.py`` and
 ``harness/release_json.py`` into ``identity``) are already exempt.  Not linted: the dtype vocabulary and ``RowSpec``
 (no single literal shape to scan for), and the rule's test that editing a core file in a temp tree changes the identity.
 """
