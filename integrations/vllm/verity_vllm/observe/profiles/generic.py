@@ -23,7 +23,7 @@ Module names (the `--profile NAME` every consumer imports as `verity_vllm.observ
   `derived_<ROLE>[..]_ovs`  -- the experimental sampled-row variant (`TokenSampleGumbel` first; lanes cov-difr / ov-sampling),
   `dense_<ROLE>`            -- [X-07] the pre-P6 name, still accepted for dense-architecture roles (recorded runs cite it).
 The role's HF `config.json` is `dense_generic.find_hf_config(role)`: the byte copy `profiles/hf_configs/<ROLE>.config.json` (sha256 checked against
-the manifest entry), else the manifest's local snapshot / the hub cache / `data/hf_configs`.
+the manifest entry), else the manifest's local snapshot / the hub cache.
 """
 from __future__ import annotations
 
@@ -84,11 +84,11 @@ def is_ov_sampling(name: str) -> bool:
 # ------------------------------------------------------------------------------------------------------------------------- configuration
 
 def load_hf_config(role: str) -> tuple[dict[str, Any], dict[str, Any]]:
-    """`(config.json document, source record)` of a role, or ImportError with the four places looked at."""
+    """`(config.json document, source record)` of a role, or ImportError with the three places looked at."""
     hit = _dg.find_hf_config(role)
     if hit is None:
         raise ImportError(f"no HF config.json for role {role!r} (profiles/hf_configs/{role}.config.json, the manifest entry's local_path, "
-                          f"$HF_HOME snapshot, or data/hf_configs) -- ship the byte copy with the checkpoints.json entry")
+                          f"or the $HF_HOME snapshot) -- ship the byte copy with the checkpoints.json entry")
     path, source, entry = hit
     cfg = json.loads(path.read_text())
     return cfg, {"path": str(path), "source": source, "sha256": _dg._sha256(path), "repo": (entry or {}).get("repo"),
