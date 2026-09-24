@@ -24,6 +24,11 @@
                     atomically renamed into place carrying READY.json (identity, archive sha256, file count, shipped_at, launcher).
                     A failed or truncated ship removes its partial directory and refuses the run (SourceNotReady); the machine side
                     (`launch-request`) refuses to execute from any source directory without a READY.json naming the requested identity.
+                    The archive is STREAMED, never held in the launcher's memory (0.55-0.69 GB launchers were killed by the laptop's
+                    guardian 2026-09-23): one `git archive` pass computes the digest and manifest, a second is piped through ssh
+                    (compressed) in 1 MiB chunks and hashed again as it goes.  A launcher killed mid-ship leaves a short stream: the machine
+                    finds the digest wrong, extracts nothing and removes the partial directory itself; partial directories untouched for
+                    30 min are removed by the next ship.  The timeout grows with the archive (64 KiB/s floor, >= 600 s).
                     Legacy trees (the old `.complete` marker, no READY.json) are verified once per file against the archive; a tree that
                     matches is adopted (READY.json written), one that does not is moved to <root>/src/.quarantine/ and re-shipped.
     request         <root>/requests/<run-id>/request.json carries the workload argv as a JSON list, its env, cwd, and harness flags.
@@ -58,10 +63,12 @@ import shlex
 import subprocess
 import sys
 import tarfile
+import tempfile
+import threading
 import time
 import tomllib
 from pathlib import Path
-from typing import Any
+from typing import IO, Any, Callable
 
 from .telemetry.events import utc_now_ms
 from .telemetry.job import write_json_atomic
@@ -71,7 +78,10 @@ PRESERVED_SCHEMA = "research/preserved/v0.1"
 READY_SCHEMA = "research/source-ready/v0.1"
 READY_FILE = "READY.json"                     # the only marker that makes <root>/src/<identity>/ executable
 LEGACY_COMPLETE = ".complete"                 # the pre-verification marker: never sufficient on its own
-SHIP_SOURCE_TIMEOUT_S = 600
+SHIP_SOURCE_TIMEOUT_S = 600                   # the floor; a big archive gets size / SHIP_MIN_BYTES_PER_S
+SHIP_MIN_BYTES_PER_S = 64 * 1024              # the slowest link a ship is allowed to be (laptop -> pod measured 130-220 KB/s, 2026-09-24)
+SHIP_CHUNK = 1 << 20                          # the launcher never holds more of the archive than this
+STALE_PARTIAL_MIN = 30                        # a <root>/src/*.partial-* directory with nothing written for this long belongs to a dead ship
 _RC_DIGEST = 75                               # the ship script's exit when the received archive is not the launcher's (nothing extracted)
 WORKLOAD_CWD_DEFAULT = "run_dir"              # the machine-side runner's default workload cwd; a shipped package without this line predates it
 SMALL_FILES = ("job.json", "status.json", "failure.json", "result.json", "launch.json", "refused.json", "events.jsonl")
@@ -174,6 +184,49 @@ def ssh_run(ssh: list[str], remote_argv: list[str], *, stdin: bytes | None = Non
     return subprocess.run(cmd, input=stdin, capture_output=True, timeout=timeout)
 
 
+def ssh_stream(ssh: list[str], remote_argv: list[str], feed: Callable[[IO[bytes]], None], *, timeout: float) -> subprocess.CompletedProcess:
+    """`ssh_run` whose stdin is written by `feed(pipe)` while the remote side reads it, so no payload is held in memory.  A feed cut
+    short (the remote exited, or the timeout killed ssh) just closes stdin: the remote side sees a short stream and must say so.
+    TimeoutExpired after killing ssh; an exception of the feed's own (not a closed pipe) is raised once ssh has exited."""
+    cmd = [*ssh, " ".join(shlex.quote(a) for a in remote_argv)]
+    proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    out: list[bytes] = []
+    err: list[bytes] = []
+    failed: list[BaseException] = []
+
+    def pump() -> None:
+        try:
+            feed(proc.stdin)
+        except (BrokenPipeError, ConnectionResetError, ValueError):     # the far side is gone (ValueError: stdin closed under us)
+            pass
+        except BaseException as e:  # noqa: BLE001
+            failed.append(e)
+        finally:
+            try:
+                proc.stdin.close()
+            except OSError:
+                pass
+
+    threads = [threading.Thread(target=pump, daemon=True),
+               threading.Thread(target=lambda: out.append(proc.stdout.read()), daemon=True),
+               threading.Thread(target=lambda: err.append(proc.stderr.read()), daemon=True)]
+    for t in threads:
+        t.start()
+    try:
+        proc.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait()
+        for t in threads:
+            t.join(10)
+        raise
+    for t in threads:
+        t.join()
+    if failed:
+        raise failed[0]
+    return subprocess.CompletedProcess(cmd, proc.returncode, b"".join(out), b"".join(err))
+
+
 # ---- snapshots --------------------------------------------------------------------------------------------------------------------------
 
 def source_tool_package(source: Path | None) -> Path | None:
@@ -265,19 +318,96 @@ def ship_tool(ssh: list[str], root: str, src: Path | None = None) -> str:
     return dest
 
 
-def archive_manifest(tar_bytes: bytes) -> dict[str, Any]:
-    """What a `git archive` tar promises: its sha256 and, per regular file, the path and content sha256."""
+class _Hashing:
+    """A read-only stream that sha256es and counts everything read through it."""
+
+    def __init__(self, raw: IO[bytes]):
+        self.raw, self.h, self.n = raw, hashlib.sha256(), 0
+
+    def read(self, size: int = -1) -> bytes:
+        b = self.raw.read(size)
+        self.h.update(b)
+        self.n += len(b)
+        return b
+
+
+def _manifest_of(stream: IO[bytes]) -> dict[str, Any]:
+    """archive_manifest over a tar read sequentially from `stream` (at most SHIP_CHUNK of it in memory at a time)."""
+    src = _Hashing(stream)
     files: dict[str, str] = {}
     total = 0
-    with tarfile.open(fileobj=io.BytesIO(tar_bytes), mode="r:") as tf:
+    with tarfile.open(fileobj=src, mode="r|") as tf:
         for m in tf:
             if not m.isreg():
                 continue
+            h = hashlib.sha256()
             f = tf.extractfile(m)
-            data = f.read() if f else b""
-            files[m.name.removeprefix("./")] = hashlib.sha256(data).hexdigest()
-            total += len(data)
-    return {"archive_sha256": hashlib.sha256(tar_bytes).hexdigest(), "files": files, "bytes": total}
+            while f is not None and (chunk := f.read(SHIP_CHUNK)):
+                h.update(chunk)
+                total += len(chunk)
+            files[m.name.removeprefix("./")] = h.hexdigest()
+    while src.read(SHIP_CHUNK):                    # the end-of-archive blocks tarfile stops short of are part of the digest
+        pass
+    return {"archive_sha256": src.h.hexdigest(), "files": files, "bytes": total, "size": src.n}
+
+
+def archive_manifest(tar_bytes: bytes) -> dict[str, Any]:
+    """What a `git archive` tar promises: its sha256 and, per regular file, the path and content sha256 (`size` = archive bytes)."""
+    return _manifest_of(io.BytesIO(tar_bytes))
+
+
+def _git_archive(git_dir: Path) -> subprocess.Popen:
+    return subprocess.Popen(["git", "archive", "--format=tar", "HEAD"], cwd=git_dir, stdout=subprocess.PIPE, stderr=tempfile.TemporaryFile())
+
+
+def _git_archive_done(proc: subprocess.Popen) -> str | None:
+    """None when `git archive` exited 0, else its stderr tail."""
+    proc.stdout.close()
+    if proc.wait() == 0:
+        return None
+    proc.stderr.seek(0)
+    return f"rc {proc.returncode}: {proc.stderr.read().decode(errors='replace')[-300:].strip()}"
+
+
+def archive_manifest_git(git_dir: Path) -> dict[str, Any]:
+    """archive_manifest of `git archive HEAD`, streamed from git (the archive is never in memory)."""
+    proc = _git_archive(git_dir)
+    try:
+        man = _manifest_of(proc.stdout)
+    finally:
+        err = _git_archive_done(proc)
+    if err:
+        raise Refused(f"git archive HEAD failed in {git_dir}: {err}")
+    return man
+
+
+def _archive_feed(git_dir: Path, sent: dict[str, Any]) -> Callable[[IO[bytes]], None]:
+    """A `ssh_stream` feed: a fresh `git archive HEAD` copied to the pipe in SHIP_CHUNK pieces; `sent` gets what was written
+    (sha256, bytes) and git's fault if it had one."""
+    def feed(pipe: IO[bytes]) -> None:
+        proc = _git_archive(git_dir)
+        h, n = hashlib.sha256(), 0
+        try:
+            while chunk := proc.stdout.read(SHIP_CHUNK):
+                pipe.write(chunk)
+                h.update(chunk)
+                n += len(chunk)
+            pipe.flush()
+        except (BrokenPipeError, ConnectionResetError):
+            sent["cut"] = True                     # the far side went away first; git's SIGPIPE below is not git's fault
+            raise
+        finally:
+            sent.update(sha256=h.hexdigest(), bytes=n, git_error=_git_archive_done(proc))
+    return feed
+
+
+def ship_timeout(archive_bytes: int) -> float:
+    return max(float(SHIP_SOURCE_TIMEOUT_S), archive_bytes / SHIP_MIN_BYTES_PER_S)
+
+
+def _compressed(ssh: list[str]) -> list[str]:
+    """The same ssh with transport compression (a source archive halves; the laptop's uplink is the bottleneck)."""
+    return [ssh[0], "-C", *ssh[1:]] if Path(ssh[0]).name == "ssh" else ssh
 
 
 def _sha_lines(text: str) -> dict[str, str]:
@@ -373,7 +503,8 @@ def ship_source(ssh: list[str], root: str, git_dir: Path) -> tuple[str, str, dic
          (kept for inspection, never executable by name) and shipped afresh;
       2. ship into <root>/src/<identity>.partial-<nonce>/: the tar is staged as a file, sha256'd on the machine, extracted, and the
          extracted regular-file set listed back; the machine's archive sha256 must equal the launcher's and the file set must equal the
-         archive's manifest;
+         archive's manifest.  The launcher streams it (`archive_manifest_git`, then `_archive_feed` through `ssh_stream`): its memory
+         does not grow with the tree.  A short stream (a launcher killed mid-ship) makes the machine remove the partial itself;
       3. READY.json is written INTO the partial directory and the directory renamed into place (one rename, so a reader sees either
          nothing or a complete tree with its marker); the marker is read back and its identity checked.
     Any failure (transport rc != 0, the launcher's timeout, digest or manifest mismatch) removes the partial directory and raises
@@ -391,8 +522,7 @@ def ship_source(ssh: list[str], root: str, git_dir: Path) -> tuple[str, str, dic
         if doc.get("identity") != sha or doc.get("schema") != READY_SCHEMA:
             raise SourceNotReady(f"{dest}/{READY_FILE} names identity {doc.get('identity')!r}, not {sha}; inspect the machine before shipping over it")
         return sha, dest, doc
-    tar = subprocess.run(["git", "archive", "--format=tar", "HEAD"], cwd=git_dir, capture_output=True, check=True).stdout
-    man = archive_manifest(tar)
+    man = archive_manifest_git(git_dir)
     if state == "legacy":
         bad = _verify_legacy(ssh, dest, man)
         if not bad:
@@ -408,22 +538,33 @@ def ship_source(ssh: list[str], root: str, git_dir: Path) -> tuple[str, str, dic
     partial = f"{dest}.partial-{secrets.token_hex(4)}"
     q = shlex.quote(partial)
     # the archive is staged as a file and hashed AS RECEIVED; a digest that is not the launcher's exits 75 before anything is extracted
-    # (GNU tar unpacks a truncated stream with a warning and rc 0 -- that is how the r20 half-tree came to be)
-    script = (f"set -e; mkdir -p {q}; cat > {q}/.archive.tar; "
+    # (GNU tar unpacks a truncated stream with a warning and rc 0 -- that is how the r20 half-tree came to be).  Until the file list is
+    # printed the machine removes its own partial on any exit (a launcher killed mid-ship cannot); dead ships' partials go first.
+    script = (f"for d in {shlex.quote(root)}/src/*.partial-*; do [ -d \"$d\" ] && [ -z \"$(find \"$d\" -mmin -{STALE_PARTIAL_MIN} -print 2>/dev/null | head -1)\" ] "
+              f"&& rm -rf \"$d\"; done; "
+              f"trap 'rm -rf {q}' EXIT; trap 'exit 1' HUP INT TERM PIPE; set -e; mkdir -p {q}; cat > {q}/.archive.tar; "
               f"got=$({{ sha256sum {q}/.archive.tar 2>/dev/null || shasum -a 256 {q}/.archive.tar; }} | cut -d' ' -f1); echo \"$got\"; "
               f"[ \"$got\" = \"$1\" ] || exit {_RC_DIGEST}; "
-              f"tar -xf {q}/.archive.tar -C {q}; rm -f {q}/.archive.tar; cd {q} && find . -type f | LC_ALL=C sort")
+              f"tar -xf {q}/.archive.tar -C {q}; rm -f {q}/.archive.tar; trap - EXIT HUP INT TERM PIPE; cd {q} && find . -type f | LC_ALL=C sort")
+    sent: dict[str, Any] = {}
+    timeout = ship_timeout(man["size"])
     try:
-        r = ssh_run(ssh, ["sh", "-c", script, "sh", man["archive_sha256"]], stdin=tar, timeout=SHIP_SOURCE_TIMEOUT_S)
+        r = ssh_stream(_compressed(ssh), ["sh", "-c", script, "sh", man["archive_sha256"]], _archive_feed(git_dir, sent), timeout=timeout)
     except subprocess.TimeoutExpired:
         _rm_rf(ssh, partial)
-        raise SourceNotReady(f"shipping the source snapshot to {dest} exceeded {SHIP_SOURCE_TIMEOUT_S}s; the partial directory was removed, nothing is READY") from None
+        raise SourceNotReady(f"shipping the source snapshot to {dest} exceeded {timeout:.0f}s ({man['size']} bytes at >= {SHIP_MIN_BYTES_PER_S // 1024} KiB/s); "
+                             f"the partial directory was removed, nothing is READY") from None
     lines = r.stdout.decode(errors="replace").splitlines()
     got_sha = lines[0].strip() if lines else ""
     if r.returncode == _RC_DIGEST or (r.returncode == 0 and got_sha != man["archive_sha256"]):
         _rm_rf(ssh, partial)
+        why = "truncated transfer?"
+        if sent.get("git_error") and not sent.get("cut"):
+            why = f"git archive failed while shipping ({sent['git_error']})"
+        elif sent.get("sha256") and sent["sha256"] != man["archive_sha256"] and sent.get("bytes") == man["size"]:
+            why = f"git archive HEAD is not reproducible here (the second pass hashed {sent['sha256']})"
         raise SourceNotReady(f"source archive sha256 mismatch: the machine received {got_sha or '<nothing>'}, the launcher sent {man['archive_sha256']} "
-                             f"({len(tar)} bytes); truncated transfer? nothing was extracted, nothing is READY")
+                             f"({sent.get('bytes', 0)} of {man['size']} bytes written); {why} nothing was extracted, nothing is READY")
     if r.returncode != 0:
         _rm_rf(ssh, partial)
         raise SourceNotReady(f"shipping the source snapshot failed (rc {r.returncode}): {r.stderr.decode(errors='replace')[-400:]}; nothing is READY")
