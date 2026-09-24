@@ -23,7 +23,7 @@ from verity_capture import vu_canonical as VQ
 LP, CAP = 8, 3
 C = b1.B0_CONFIG
 ATT = b1.attention_fa2(C["D"])
-GUARD_IDS = ("LStepLive", "LSelect", "LBot", "LIsEOS", "LEmitNext", "Const")   # the root body's guard + controller rows (required_values.GUARD_PREFIXES + the ⊥ / eos constants)
+GUARD_IDS = ("LStepLive", "LSelect", "LBot", "LIsEOS", "LEmitNext", "Const")   # the root body's guard + controller rows (sampled_replay.GUARD_PREFIXES + the ⊥ / eos constants)
 _ID = re.compile(r"([A-Za-z_][A-Za-z0-9_\.\-]*_v\d+)")
 
 

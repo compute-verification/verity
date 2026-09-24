@@ -17,7 +17,7 @@ import pytest
 torch = pytest.importorskip("torch")
 
 from verity_capture.commit import binding as B  # noqa: E402
-from verity_capture.commit import required_manifest as RM  # noqa: E402
+from verity_capture.commit import manifest_format as RM  # noqa: E402
 from verity_capture.experimental.commit_integ.native_host import NativeHostCommitter, TensorMeta, _StepJob, _dtype_name  # noqa: E402
 
 V, H, TOKENS = 8, 16, 3

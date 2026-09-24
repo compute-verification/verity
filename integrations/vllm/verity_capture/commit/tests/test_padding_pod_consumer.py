@@ -279,7 +279,7 @@ def test_f_r17b_64_rule_a_an_inactive_listed_member_of_a_shared_launch_plane_get
     executed launch bindings are what they were (bound whole to the members the launch ran over)."""
     import json
     ids = _identities(["r0", "r1"]) + _shared_rows(["r0", "r1"])
-    from verity_capture.commit import required_manifest as RM
+    from verity_capture.commit import manifest_format as RM
     manifest = {"schema": RM.SCHEMA, "program_digest": PD, "identities": ids, "manifest_digest": RM.manifest_digest(ids)}
     requests = [{"request_id": "req-a", "index": 0, "max_tokens": CAP, "arrive_step": 0}, {"request_id": "req-b", "index": 1, "max_tokens": CAP, "arrive_step": 0}]
     served = {"req-a-1a2b": [17, 0], "req-b-5e6f": [5, 6, 0]}
@@ -341,7 +341,7 @@ def test_f_r17b_64_the_bot_plane_is_sized_by_the_members_own_geometry_declared_f
     """`member_plane_identity`: `members_geometry[rid]` (the manifest declares the member's single-sequence geometry) wins; else the
     launch geometry reduced to one sequence (HB / n_seq -- the decode-swapped launch packs n_seq x KVH head blocks); a launch HB that is
     not a multiple of n_seq is refused by name; a row with neither sizes by its own width (fixtures)."""
-    from verity_capture.commit.required_manifest import mat_total_words
+    from verity_capture.commit.manifest_format import mat_total_words
     row = {"family": "fa2_hidden_m1_stream", "program_digest": PD, "request_id": "*", "requests": ["r0", "r1"], "step": "*", "engine_step": 7,
            "invocation": 0, "op_path": "fa2.m1/L3", "output_member": "g6x4x2", "element_range": [0, mat_total_words(6, 4, 2, 128, 64)], "rank": 0, "dtype": "u32",
            "geometry": {"HB": 6, "M": 4, "NB": 2, "BN": 128, "D": 64, "seqlen_k": 200, "rows": 2, "n_seq": 2}}
@@ -387,7 +387,7 @@ def test_the_padding_entrys_step_is_the_engine_step_when_a_member_arrives_late()
 
 def _b2_mixed_padded(tmp_path=None):
     """The pod fixture of the F-r17b-64 test: r0 EOS at its 2nd token, r1 at its 3rd, cap 5 (LAG 0) -> step 2 MIXED, steps 3, 4 IDLE."""
-    from verity_capture.commit import required_manifest as RM
+    from verity_capture.commit import manifest_format as RM
     ids = _identities(["r0", "r1"]) + _shared_rows(["r0", "r1"])
     manifest = {"schema": RM.SCHEMA, "program_digest": PD, "identities": ids, "manifest_digest": RM.manifest_digest(ids)}
     requests = [{"request_id": "req-a", "index": 0, "max_tokens": CAP, "arrive_step": 0}, {"request_id": "req-b", "index": 1, "max_tokens": CAP, "arrive_step": 0}]

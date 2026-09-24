@@ -12,6 +12,24 @@ from verity_capture.commit import sampled_replay as SR
 
 EPS = '{"f64":"0x1.4f8b588e368f1p-17"}'
 V, H, I, LP, T = 8, 16, 16, 2, 2          # vocab, hidden, intermediate, prompt len, decode steps (steps = LP-prefill + T decode = 1 + T)
+IMPL = ("model.layers.0.mlp.down_proj",)  # an observed implementation path: the Program's wrapper prefix is `model.`
+
+
+def v2_manifest(inst: dict, request_ids=("r0",), *, digest: str = "t" * 64) -> dict:
+    """The required-value manifest of record (`verity_vllm.query`) of `inst` for each request id: one request manifest, or (several requests of
+    the same Program, arriving together at engine step 0) their global composition, as `query.cli build-global` writes it."""
+    from verity_vllm.query.correspondence import Correspondence
+    from verity_vllm.query.program_view import from_instances
+    from verity_vllm.query.v1_bridge import compose_global, request_manifest
+    res = {"program": {"digest": digest, "function": "Derived[vLLMRequest[Test]]"}, "wrapper": "request", "LP": LP, "T": T,
+           "target": {"declared": {"compute_capability": [8, 9]}}}
+    P = from_instances(inst)
+    parts = {rid: request_manifest(P, Correspondence(P, implementation_paths=IMPL), res, request_id=rid).manifest for rid in request_ids}
+    if len(parts) == 1:
+        return next(iter(parts.values()))
+    reqs = [{"request_id": rid, "workload_request_id": rid, "index": k, "prompt_len": LP, "max_tokens": len(parts[rid]["steps"]), "arrive_step": 0}
+            for k, rid in enumerate(request_ids)]
+    return compose_global({"fixture": "test", "requests": reqs}, parts, reqs, workload_digest=None)
 
 
 def _bf16(rng, n, scale=1.0):
@@ -36,7 +54,7 @@ def _program(bias: bool = False, rope: bool = False, attn: bool = False, scale: 
     `scale`: [R19 int-20, F-r19-int-20] the ROOT module scales the embedding in its own forward body -- `Bf16MulScalarTensor_v1{N=H}` at the
     UNROOTED path `model/mul_{s}[k]` (arg 0 = the embedding row, arg 1 = the one-word `weights` field `model.normalizer`, a buffer) -- and the
     first norm AND the final norm's residual read the SCALED row: an interior family (no member by the vocabulary) whose output crosses a
-    module boundary, the shape the manifest promotes (`required_manifest.PROMOTION_RULE`)."""
+    module boundary (the v2 query requires it as the root module's `out`)."""
     rope = rope or attn
     fields = [("model.model.embed_tokens.weight", V * H, f"Array<{V},Array<{H},Value<16>>>"),
               ("model.model.layers.0.input_layernorm.weight", H, f"Array<{H},Value<16>>"),
@@ -113,11 +131,9 @@ class Honest:
     """Executes the Program per request with the registry evaluators and commits the module outputs per (engine step, member name):
     request blocks side by side (r0 then r1), the shape the collector's packed members have."""
 
-    def __init__(self, inst, woff, weights, prompts, promoted=None):
+    def __init__(self, inst, woff, weights, prompts):
         self.inst, self.woff, self.weights, self.prompts = inst, woff, weights, prompts
-        # `promoted` [R19 int-20]: the manifest's promoted (step, op_path) addresses (SR.promoted_addresses_of) -- a promoted interior row's
-        # output is then a committed member of its own ((module, `out`): the value the collector observes at its consumer's input)
-        self.pi = SR.ProgramIndex(inst, promoted=promoted)
+        self.pi = SR.ProgramIndex(inst)
         self.values: dict[tuple[str, int], np.ndarray] = {}       # (rid, row i) -> flattened output words
         self.blocks: dict[tuple[int, str, str, str], np.ndarray] = {}   # (step, rid, op_path, member) -> block words
         self.dtypes: dict[tuple[int, str, str, str], str] = {}    # (step, rid, op_path, member) -> the member's dtype (bf16 / f32 / i32 / i64)
@@ -164,26 +180,21 @@ class Honest:
                 key = (d["step"], rid, d["op_path"], "in")
                 self.blocks[key] = np.concatenate([self.blocks[key], ids]) if key in self.blocks else ids
 
-    def bmap_and_reader(self, order=("r0", "r1"), mutate=None, committed_names=None):
-        """Binding map entries (request-local element ranges + element_offset) and a committed reader over packed members.
-        `committed_names` [R19 int-20]: {(op_path, member): committed tensor name} -- an identity whose bytes the collector committed under
-        ANOTHER name (a promoted member observed at its consumer's input, `<consumer>/in`): the entry keeps the identity, carries that name
-        and `observation: consumer-input`, exactly as `binding.build_binding_map(name_bindings=...)` emits it."""
+    def bmap_and_reader(self, order=("r0", "r1"), mutate=None):
+        """Binding map entries (request-local element ranges + element_offset) and a committed reader over packed members."""
         packed: dict[tuple[int, str, str], list] = {}
         for (step, rid, op, mem), blk in sorted(self.blocks.items(), key=lambda kv: (kv[0][0], kv[0][2], kv[0][3], order.index(kv[0][1]))):
             packed.setdefault((step, op, mem), []).append((rid, blk))
         entries, store = [], {}
         dtype_of = lambda op, mem: "i64" if op == SR.SAMPLER_OP else ("i32" if mem == "in" else "bf16")  # noqa: E731
         for (step, op, mem), parts in packed.items():
-            rebound = (committed_names or {}).get((op, mem))
-            name = rebound if rebound is not None else f"{op}/{mem}"
+            name = f"{op}/{mem}"
             off, arrs = 0, []
             for rid, blk in parts:
                 entries.append({"identity": {"program_digest": "t" * 64, "request_id": rid, "step": step, "invocation": 0, "op_path": op, "output_member": mem,
                                              "element_range": [0, int(blk.size)], "rank": 0}, "name": name, "element_offset": off,
                                 "encoding": {"dtype": self.dtypes.get((step, rid, op, mem), dtype_of(op, mem))},
-                                "family": "moe_block_stream" if op.startswith("moe/") else "instance_outputs",
-                                **({"observation": "consumer-input"} if rebound is not None else {})})
+                                "family": "moe_block_stream" if op.startswith("moe/") else "instance_outputs"})
                 off += int(blk.size)
                 arrs.append(blk)
             store[(step, name)] = np.concatenate(arrs).tobytes()
@@ -623,14 +634,7 @@ def test_biased_linear_member_is_the_post_bias_tensor_produced_by_biasadd(world,
     interior.  (1) manifest: same identity population as the unbiased Program, the biased module's row carries spec BiasAdd_v1 -- the
     oracle reads the fold's BiasAdd instance, never the pre-bias Gemm view; (2) the replay composes the interior Gemm from its committed
     inputs and matches the committed post-bias bytes bit-for-bit; (3) committing the PRE-bias bytes as member 0 fails named."""
-    from verity_capture.commit import required_manifest as RM
-
-    def prog(w):
-        res = {"program": {"digest": "p" * 64, "function": "Derived[vLLMRequest[Test]]"}, "wrapper": "request", "LP": LP, "T": T,
-               "model_pin": {"model": "test"}, "target": {"declared": {"compute_capability": [8, 9]}}, "attention_impls_observed": {}}
-        return {"instances": w.inst, "result": res, "artifact": {"program_digest": "p" * 64, "identity": "i" * 64}, "dir": "<synthetic>"}
-
-    mb, mu = RM.build_manifest(prog(biased_world)), RM.build_manifest(prog(world))
+    mb, mu = v2_manifest(biased_world.inst), v2_manifest(world.inst)
     assert mb["complete"] is True and mb["unmodelled"] == {}
     key = lambda r: (r["op_path"], r["output_member"], r["step"], tuple(r["element_range"]))  # noqa: E731
     outs = lambda m: sorted(key(r) for r in m["identities"] if r["family"] == "instance_outputs")  # noqa: E731
@@ -638,7 +642,6 @@ def test_biased_linear_member_is_the_post_bias_tensor_produced_by_biasadd(world,
     gu_b = {r["spec"].split("{")[0] for r in mb["identities"] if r["op_path"] == "model.layers.0.mlp.gate_up_proj"}
     gu_u = {r["spec"].split("{")[0] for r in mu["identities"] if r["op_path"] == "model.layers.0.mlp.gate_up_proj"}
     assert gu_b == {"BiasAdd_v1"} and gu_u == {"Gemm_v1"}
-    assert RM.build_manifest(prog(world))["identities"] == mu["identities"]                       # Programs without BiasAdd rows: unchanged
     # (2) population: the interior Gemm is counted by name (not a VU, not 'not evaluable'), the BiasAdd rows are VUs; replay is exact
     pi = SR.ProgramIndex(biased_world.inst)
     vus, not_ev, not_ev_fam = SR.population(pi, "r0")
@@ -1632,7 +1635,7 @@ def test_moe_plane_naming_on_real_programs_dense_zero_moe_nonzero_rev_cb_m0733()
     """[rev-cb M-0733 hardening of MAN-06f] the named-not-evaluable MoE set is derived from Program rows alone, so it must be EMPTY on
     every dense Program and non-empty on every MoE Program: pins that the naming cannot grow silently onto dense rows.  Opt-in on real
     Programs (laptop: the Llama-3.2-1B B8 components; the OLMoE B1 Program)."""
-    from verity_capture.commit import required_manifest as RM
+    from verity_capture.commit import manifest_format as RM
     dense = [d for d in os.environ.get("VERITY_DENSE_PROGRAM_DIRS", "").split(":") if d]
     moe = [d for d in os.environ.get("VERITY_MOE_PROGRAM_DIRS", "").split(":") if d]
     for d in dense:

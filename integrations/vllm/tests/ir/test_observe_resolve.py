@@ -254,7 +254,7 @@ def test_descriptor_correspondence_exposes_the_three_functions():
 def _record_for(prog: RS.ComponentProgram, module_prefix: str = "") -> dict:
     """A minimal `runtime-correspondence/v1` document for the component: one occurrence per row, the owning module = the row's module
     under `module_prefix` (the export wrapper's spelling in the RECORD, e.g. a TP stub's `inner.model.`)."""
-    from verity_capture.commit.required_manifest import split_name
+    from verity_capture.commit.manifest_format import split_name
     occs, calls = [], []
     for r in prog.rows:
         mod, node, hint, _row = split_name(r.get("name") or "")

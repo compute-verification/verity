@@ -1116,7 +1116,7 @@ def main(argv: list[str] | None = None) -> None:
                     help="[R15 COORD 5] the Build's Program digest of record (B=1: build_request's program_digest; B>=2: gprog's workload digest): the "
                          "required manifest's program_digest must equal it or the Commit fails closed as wrong-Program; also the binding map's key digest")
     ap.add_argument("--required-manifest", default=None,
-                    help="[R14 MAN-01] the Program/query-derived required-value manifest (verity_capture.commit.required_manifest build ...): every "
+                    help="[R14 MAN-01] the Program/query-derived required-value manifest (verity_vllm.query.cli build ...): every "
                          "identity it lists (step, invocation, op_path, output_member, element range, request, rank) must be covered by a committed "
                          "tensor of every instrumented run (coverage_check); replaces the REL-02 counts+classes source, which stays as the labelled fallback")
     ap.add_argument("--tensor-digests", action="store_true", help="diagnostic: per-tensor digests of the retained host bytes per instrumented run, diffed across pairs")
@@ -2369,7 +2369,8 @@ def main(argv: list[str] | None = None) -> None:
                         _arr, _moved = SR.arrivals_of_record(_arr, _sched_r)
                         if _moved:
                             print(f"[delta] replay/linkage arrivals follow the engine schedule of record: {_arr} (declared {_sched_r.get('declared_arrive_steps')})", flush=True)
-                        _pi0 = SR.ProgramIndex(next(iter(_progs.values())))
+                        _k0 = next(iter(_progs))
+                        _pi0 = SR.ProgramIndex(_progs[_k0], program_dir=_loaded[_k0].get("dir"))
                         _wp = SR.model_weights_provider(eng.model, _pi0.prefix)
                         _rd = OC.committed_reader(com)
                         # [O5] the weight slices the relations consume must be the COMMITTED weights: re-register the live parameters now and
@@ -2425,7 +2426,7 @@ def main(argv: list[str] | None = None) -> None:
                         _pi_steps: dict[str, int] = {}
                         for _k, _v in _loaded.items():
                             _t = (_v.get("result") or {}).get("T")
-                            _pi_steps[_k] = (int(_t) + 1) if _t is not None else (SR.ProgramIndex(_progs[_k]).n_steps if _k in _progs else None)
+                            _pi_steps[_k] = (int(_t) + 1) if _t is not None else (len(MF.segment_steps(_progs[_k]["rows"])) if _k in _progs else None)
                         _wreq = [{"request_id": _rl[str(r.get("request_id"))], "arrive_step": _arr[_rl[str(r.get("request_id"))]],
                                   "prompt_token_ids": list(r["prompt_token_ids"]),
                                   "seed": (int(r["seed"]) if r.get("seed") is not None else (int(sampling["seed"]) if sampling.get("seed") is not None else None)),

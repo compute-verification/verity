@@ -1,6 +1,6 @@
 """[R15 stoch] The sampling-event families: the Program instances that END an engine step for one request (one sampled token per
 step) — the step boundary `cb_a.compare` / `batch_decomp` / `global_match` segment at and the `sampled_token_ids` identity
-`commit.required_manifest` derives.  Torch-free; the commit and match tooling import it.
+the required-value manifest derives.  Torch-free; the commit and match tooling import it.
 
     TokenSelect_v1{V}                     greedy: first maximum of the bf16 logits row (torch.argmax / greedy _gumbel_sample_kernel)
     GumbelTopPTokenSelect_v1{V,S}         temperature + top-p + seeded Gumbel-max (registry.sampling; vLLM d9105ea80 stochastic path)

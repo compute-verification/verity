@@ -1,4 +1,4 @@
-"""(e) Identity coverage reproduces: `required_manifest.coverage_check(manifest, layouts)` with the CURRENT code over the recorded
+"""(e) Identity coverage reproduces: `manifest_format.coverage_check(manifest, layouts)` with the CURRENT code over the recorded
 manifest of record and the instrumented run's recorded layouts (`commit/layouts_pair<k>_instrumented.json.gz`: {step: [{name, numel|
 shape}]}) must state what the Commit's binding recorded (`commit/runs.jsonl`, treatment entries: `commit.binding.coverage` --
 ok / checked / missing_n / committed_extras_n / duplicate_names_n / manifest_digest).
@@ -58,7 +58,7 @@ def expected(row: resolver.Row) -> dict:
 
 
 def actual(row: resolver.Row) -> dict:
-    from verity_capture.commit.required_manifest import coverage_check
+    from verity_capture.commit.manifest_format import coverage_check
     man_path = row.candidate("manifest.json") or row.path("manifest.json")
     man = json.load(open(man_path))
     with gzip.open(row.path("commit/layouts_pair0_instrumented.json.gz"), "rt") as f:

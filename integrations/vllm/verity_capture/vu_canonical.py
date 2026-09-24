@@ -44,7 +44,7 @@ AUTHOR = "verity_capture.vu_canonical"
 VERSION = "2026-09-17.1"
 #: [COORD R17-10 (Daniel, 17:41Z)] this module's query is ONE query among others -- the FINE relation-level partition (Gemm coordinates,
 #: AttnBlock chains, norm interiors) -- labelled `Q_fine_v1`; nothing in the infrastructure is "canonical".  The sweep's query OF RECORD is
-#: `Q_module_v1` (`verity_capture.commit.required_manifest.Q_MODULE_ID`: one unit per Program row / module boundary), which uses this
+#: `Q_module_v1` (`verity_vllm.query`'s Q_module_body_v1: one unit per module body), which uses this
 #: query's family selection (`query_digest`) and not its unit.  The module keeps its historical name for its importers (16 files); the
 #: label is what records and renders carry.
 QUERY_ID = "Q_fine_v1"

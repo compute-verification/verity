@@ -33,8 +33,8 @@ import pytest
 
 from verity_capture.commit import binding as B
 from verity_capture.commit import weights_of_record as WR
-from verity_capture.commit.required_manifest import build_global_manifest, build_manifest
-from verity_capture.commit.tests.test_required_manifest import _program as _seq_program
+from verity_capture.commit.tests.test_sampled_replay import _program as _wired_program
+from verity_capture.commit.tests.test_sampled_replay import v2_manifest
 from verity_capture.commit.tests.test_weights_of_record import (PREFIX, _program, _served, _write_program, checkpoint,  # noqa: F401 (fixture)
                                                                 live_digests, write_safetensors)
 
@@ -156,13 +156,9 @@ def test_row_pod_derives_the_pin_from_the_first_manifest_component_at_b_ge_2(che
 def test_shared_weights_are_one_registered_input_across_request_subcircuits(tmp_path):
     """[BRIEF §4A / COORD 5] at B>=2 exactly one shared weights input per tensor: the GLOBAL manifest lists each weight field once (not x B),
     binding collapses the weights rows to ONE registered-input identity per rank, request composition never duplicates / omits / selects it."""
-    def fixture(shapes):
-        return {"fixture": "t", "requests": [{"request_id": f"u{i}", "index": i, "prompt_len": lp, "max_tokens": t + 1, "arrive_step": 0} for i, (lp, t) in enumerate(shapes)]}
-
-    b1 = build_manifest(_seq_program(LP=9, T=2), {"sweep": {"row_id": "t", "batch": 1, "arrive_steps": [0]}})
-    g2 = build_global_manifest(fixture(B2_SHAPES), {f"r{i}": _seq_program(LP=lp, T=t) for i, (lp, t) in enumerate(B2_SHAPES)}, workload_digest="2" * 64)
-    g8 = build_global_manifest(fixture(B8_SHAPES), {f"r{i}": _seq_program(LP=lp, T=t) for i, (lp, t) in enumerate(B8_SHAPES)}, workload_digest="8" * 64)
-    n_fields = 2                                                                          # the synthetic Program's weights struct
+    inst, woff = _wired_program()
+    b1, g2, g8 = (v2_manifest(inst, tuple(f"r{i}" for i in range(B_))) for B_ in (1, 2, 8))
+    n_fields = len(woff)                                                                  # the synthetic Program's weights struct
     for man, B_ in ((b1, 1), (g2, 2), (g8, 8)):
         w = [r for r in man["identities"] if r["family"] == "weights"]
         assert len(w) == n_fields, (B_, len(w))                                           # once per field, never x B

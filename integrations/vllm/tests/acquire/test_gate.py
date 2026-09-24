@@ -10,7 +10,7 @@ torch = pytest.importorskip("torch")
 nn = torch.nn
 
 from verity_capture.commit import manifest_format as MF  # noqa: E402
-from verity_capture.commit import required_manifest as RM  # noqa: E402
+from verity_capture.commit import manifest_format as RM  # noqa: E402
 from verity_capture.experimental.commit_integ.native_host import NativeHostCommitter, SkipRefused  # noqa: E402
 from verity_vllm.acquire import gate as G  # noqa: E402
 from verity_vllm.acquire.correspondence import RUNNER_PATH, AnnotationCorrespondence, runtime_tree_of  # noqa: E402

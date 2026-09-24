@@ -2,7 +2,7 @@
 
     acquisition_plan(required_value_manifest, correspondence) -> AcquisitionPlan       serialised as `acquisition-plan/v1`, digested
 
-Inputs are STRUCTURE only: the required-value manifest (`verity_capture.commit.required_manifest`: one identity per required Value,
+Inputs are STRUCTURE only: the required-value manifest (`verity_vllm.query.cli`: one identity per required Value,
 `op_path` / `output_member` / `family` / `promoted` / `consumers`) and the runtime correspondence (`correspondence.AcquireCorrespondence`:
 `owning_module`, `return_slot`, `arg_slot` over the `runtime-correspondence/v1` record when the Build carries it, else the manifest's
 v1-annotation reading -- `source` recorded in the plan's `correspondence` block + the runtime module tree).  Nothing here reads a module
@@ -21,7 +21,7 @@ Sites (`SITE_KINDS`):
   prescribed        no runtime producer: the Value is materialised by rule (a padding step's identities, `padding_steps`)
 
 Policy (`POLICY`): a Value with one legal site takes it; with several, producer output first; consumer input when the producer is a
-PROMOTED interior Call (its output is no module's return: `required_manifest.PROMOTED_OBSERVATION_RULE`); a Value with no legal site is
+PROMOTED interior Call (a pre-flip v1 manifest's row: its output is no module's return, `manifest_format.promoted_observation`); a Value with no legal site is
 UNSUPPORTED and the plan fails closed (`plan.unsupported`, listed by Value; `install` refuses such a plan).
 """
 from __future__ import annotations
@@ -43,7 +43,7 @@ POLICY = ("one legal site: chosen. several: producer output first (the owning mo
           "when the producer is a promoted interior Call (the Value is no module's return, so the first consumer's pre-hook is the only module "
           "boundary that carries it); a native tap / runner return / registered input / prescribed materialisation when the Value's family names "
           "one. none: UNSUPPORTED -- the plan fails closed by Value, nothing is guessed from a module class.")
-#: The required-value manifest's `family` vocabulary (`required_manifest.FAMILIES`, one entry each) -> the ROUTE the plan derives a site by.
+#: The required-value manifest's `family` vocabulary (`manifest_format.FAMILIES`, one entry each) -> the ROUTE the plan derives a site by.
 #: This is the manifest's own schema read from the row's `family` field -- not a module class, a module path or a Definition family -- so
 #: the dispatch below is a schema lookup (`ROUTE_OF_FAMILY.get(fam)`), never a name predicate (by-name lint, Draft 3.1 §12.4).
 ROUTE_OF_FAMILY = {"instance_outputs": "module_output", "input_token_ids": "module_input",

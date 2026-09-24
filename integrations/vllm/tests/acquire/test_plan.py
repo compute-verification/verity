@@ -8,7 +8,7 @@ import json
 
 import pytest
 
-from verity_capture.commit import required_manifest as RM
+from verity_capture.commit import manifest_format as RM
 from verity_vllm.acquire import plan as P
 from verity_vllm.acquire.correspondence import AnnotationCorrespondence, ArgSlot, ReturnSlot, runtime_tree_from_paths
 

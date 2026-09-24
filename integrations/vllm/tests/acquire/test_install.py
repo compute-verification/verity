@@ -6,7 +6,7 @@ import pytest
 torch = pytest.importorskip("torch")
 nn = torch.nn
 
-from verity_capture.commit import required_manifest as RM  # noqa: E402
+from verity_capture.commit import manifest_format as RM  # noqa: E402
 from verity_vllm.acquire import plan as P  # noqa: E402
 from verity_vllm.acquire.correspondence import AnnotationCorrespondence, runtime_tree_of  # noqa: E402
 from verity_vllm.acquire.install import IncompletePlan, OccurrenceSink, install_from_plan  # noqa: E402

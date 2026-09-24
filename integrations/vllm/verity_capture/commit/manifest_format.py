@@ -14,8 +14,7 @@ A manifest (`verity-sweep/required-manifest/v1`) is one identity row per require
                         `RegistryUnavailable` (the environment fault a manifest build refuses under)
 
 Which Values are required is the query's: `verity_vllm.query` (Q_module_body_v1, the manifest of record since the flip; TP rank Programs
-too, with its TP-04 policy) -- the v1 builder `verity_capture.commit.required_manifest` re-derives v1 records only.  Dependency-free
-(json/gzip/hashlib).
+too, with its TP-04 policy).  Dependency-free (json/gzip/hashlib).
 """
 from __future__ import annotations
 
@@ -131,8 +130,14 @@ def lifted_bot(dtype: str) -> int:
 #: collides with a vocabulary member of the same module only by name, and the collision is refused (fail closed), never merged
 PROMOTED_MEMBER = "out"
 
-#: the boundary class of a promoted row: the audit table's column (`required_values.CLASS_INTERIOR_CROSSING`) and the manifest row's `boundary_class`
+#: the boundary class of a promoted row: the manifest row's `boundary_class`
 INTERIOR_CROSSING = "interior_crossing"
+
+
+def promoted_annotations(d: dict[str, Any]) -> dict[str, Any]:
+    """The additive manifest-row fields of a promoted identity (a pre-flip v1 manifest's `promoted: true` row)."""
+    return {"rows": d["rows"], "width": d["width"], "dtype": d["dtype"], "spec": d["spec"], "promoted": True, "boundary_class": INTERIOR_CROSSING,
+            "consumers": list(d["consumers"])}
 
 #: the fail class `row_pod.sh` / the harness classify a RegistryUnavailable under (precheck vocabulary: an environment fault, not a Commit verdict)
 REGISTRY_UNAVAILABLE_FAIL_CLASS = "PRECHECK_FAIL_REGISTRY_UNAVAILABLE"

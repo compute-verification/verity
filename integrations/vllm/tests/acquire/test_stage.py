@@ -8,7 +8,7 @@ import pytest
 torch = pytest.importorskip("torch")
 
 from tests.acquire.test_install import Runner, Tiny, base_rows, row  # noqa: E402
-from verity_capture.commit import required_manifest as RM  # noqa: E402
+from verity_capture.commit import manifest_format as RM  # noqa: E402
 from verity_vllm.acquire.correspondence import RuntimeTree  # noqa: E402
 from verity_vllm.acquire.install import IncompletePlan  # noqa: E402
 from verity_vllm.acquire.plan import load_plan  # noqa: E402

@@ -11,8 +11,7 @@ Q(P) IDENTITY BY IDENTITY and carries the result on the record:
   * `population.query_checks`     the fail-closed reconciliation (a VU outside the query, a required identity no row produces, a block
                                   height that disagrees, a rank set that disagrees, a family with no stated mechanism) -> `ok`
 
-and `commit_verdict` states the scope on EVERY PASS and FAILs by name when the reconciliation fails.  The manifest may come from either
-engine (inventory / traversal adapter): the same identities, the same reconciliation."""
+and `commit_verdict` states the scope on EVERY PASS and FAILs by name when the reconciliation fails."""
 from __future__ import annotations
 
 import copy
@@ -21,17 +20,9 @@ import json
 import pytest
 
 from verity_capture.bench.commit_verdict import _query_population_scope, commit_verdict
-from verity_capture.commit import required_manifest as RM
 from verity_capture.commit import sampled_replay as SR
 from verity_capture.commit.tests import test_sampled_replay as T
 from verity_capture.commit.tests.test_sampled_replay import moe_world, world  # noqa: F401  -- fixtures
-from verity_capture.commit.tests.test_required_manifest import _program as _dense_attention_program
-
-
-def _program_doc(inst: dict) -> dict:
-    return {"instances": inst, "result": {"program": {"digest": "t" * 64, "function": "Derived[vLLMRequest[Test]]"}, "wrapper": "request", "LP": T.LP, "T": T.T,
-                                          "target": {"declared": {"compute_capability": [8, 9]}}, "attention_impls_observed": {}},
-            "artifact": {"program_digest": "t" * 64}, "dir": "<synthetic>"}
 
 
 def _programs(w):
@@ -45,16 +36,13 @@ def _weights(w):
     return read
 
 
-def _manifest_for(w, *, engine: str) -> dict:
-    """The world's Q(P): every request shares one Program shape -> one component manifest per request, merged (the same thing
-    build_global_manifest does for a B>=2 fixture; requests here arrive together at engine step 0)."""
-    parts = [RM.build_manifest(_program_doc(w.inst), request_id=rid, engine=engine) for rid in sorted(w.prompts)]
-    return parts[0] if len(parts) == 1 else RM.merge_manifests(parts)
+def _manifest_for(w) -> dict:
+    """The world's Q(P): every request shares one Program shape (requests arrive together at engine step 0)."""
+    return T.v2_manifest(w.inst, tuple(sorted(w.prompts)))
 
 
-@pytest.mark.parametrize("engine", ["inventory", "traversal"])
-def test_the_honest_world_reconciles_against_its_manifest_identity_by_identity(world, engine):  # noqa: F811
-    man = _manifest_for(world, engine=engine)
+def test_the_honest_world_reconciles_against_its_manifest_identity_by_identity(world):  # noqa: F811
+    man = _manifest_for(world)
     bmap, committed = world.bmap_and_reader()
     rep = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=2, seed=3, workers=0, manifest=man)
     assert rep["result"] is True and rep["grade"] == "complete", rep["why"]
@@ -67,7 +55,7 @@ def test_the_honest_world_reconciles_against_its_manifest_identity_by_identity(w
     assert qt["manifest_digest"] == man["manifest_digest"] and qt["program_digest"] == man["program_digest"]
     assert qt["query_digest"] == man["query"]["query_digest"] and qt["source"].startswith("required manifest: Q_module_v1(P)")
     # [COORD R17-10] the query of record BY ID with its definition digest: on the header, on the record, on the scope line
-    assert man["query"]["query_id"] == "Q_module_v1" == RM.Q_MODULE_ID and man["query"]["implemented_query"] == "Q_module_v1"
+    assert man["query"]["query_id"] == "Q_module_v1" and man["query"]["implemented_query"] == "Q_module_v1"
     assert qt["query_id"] == "Q_module_v1" and qt["query_id_digest"] == man["query"]["query_id_digest"] and len(qt["query_id_digest"]) == 64
     assert man["query"]["family_selector"]["query_id"] == "Q_fine_v1" and man["query"]["family_selector"]["digest"] == man["query"]["query_digest"]
     assert rep["population"]["scope"].startswith("Q_module_v1(P) = ")
@@ -99,7 +87,7 @@ def test_the_record_carries_the_engine_configuration_the_evaluators_were_conditi
     """[revb M-0083 ASK] VLLM_BATCH_INVARIANT (and the split-K workspace configs it pins) as a named fact beside the evaluator strings: the
     Gemm_v2 Hopper pin (dense M-0081) holds only under batch-invariant mode.  Measured from the replay's process; a fact the process cannot
     see is 'unavailable: <why>' by name -- never a declared default."""
-    man = _manifest_for(world, engine="traversal")
+    man = _manifest_for(world)
     bmap, committed = world.bmap_and_reader()
     monkeypatch.setenv("VLLM_BATCH_INVARIANT", "1")
     monkeypatch.setenv("CUBLAS_WORKSPACE_CONFIG", ":16:8")
@@ -122,31 +110,8 @@ def test_the_record_carries_the_engine_configuration_the_evaluators_were_conditi
     assert SR.engine_facts_of_record()["VLLM_BATCH_INVARIANT"] is None
 
 
-def test_the_two_engines_manifests_reconcile_identically(world):  # noqa: F811
-    a, b = _manifest_for(world, engine="inventory"), _manifest_for(world, engine="traversal")
-    assert a["manifest_digest"] == b["manifest_digest"]
-    bmap, committed = world.bmap_and_reader()
-    ra = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=1, seed=5, workers=0, manifest=a)["population"]
-    rb = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=1, seed=5, workers=0, manifest=b)["population"]
-    for k in ("sampled_strata", "uncovered_by_name", "uncovered_identities", "query_checks"):
-        assert ra[k] == rb[k], k
-    # [F-r17b-09] the ONE statement that differs by design: the guard's state -- the inventory has no dataflow audit and says so; the traversal
-    # audited every row (the fixture's rows carry args) and says it is armed; the population itself is the same
-    qa, qb = dict(ra["query_total"]), dict(rb["query_total"])
-    ga, gb = qa.pop("guard"), qb.pop("guard")
-    assert (qa.pop("engine"), qb.pop("engine")) == ("inventory", "traversal")      # the record names which engine built the manifest
-    assert qa == qb
-    assert ga["engine"] == "inventory" and ga["armed"] is False and ga["flags"] is None
-    assert gb["engine"] == "traversal" and gb["armed"] is True and gb["fully_wired"] is True and gb["flags"] == {"unnamed_crossing": 0, "unnamed_input": 0, "hidden_bn_disagreement": 0}
-    assert any(s.startswith("prompt -> input_token_ids") for s in gb["named_input"]) and "weights -> weights" in gb["named_input"]
-    assert "guard NOT armed (inventory)" in ra["scope"] and "guard armed (traversal)" in rb["scope"]
-    assert "no cross-check on the manifest (one engine asked for by name: inventory)" in ra["scope"]
-    assert "no cross-check on the manifest (one engine asked for by name: traversal)" in rb["scope"]
-    assert ra["scope"].replace("guard NOT armed (inventory)", "G").replace("by name: inventory", "N") == rb["scope"].replace("guard armed (traversal)", "G").replace("by name: traversal", "N")
-
-
 def test_a_required_identity_no_row_produces_is_named_and_fails_the_reconciliation_and_the_verdict(world):  # noqa: F811
-    man = _manifest_for(world, engine="inventory")
+    man = _manifest_for(world)
     bad = copy.deepcopy(man)
     ghost = dict(next(r for r in man["identities"] if r["family"] == "instance_outputs"), op_path="model.layers.7.mlp.down_proj", output_member="0")
     bad["identities"].append(ghost)                                              # Q(P) requires something the Program never produces
@@ -175,53 +140,10 @@ def test_a_required_identity_no_row_produces_is_named_and_fails_the_reconciliati
     assert ok is True and "C2 population scope (R17-3; query of record Q_module_v1): Q_module_v1(P) = " in why, why
 
 
-def test_the_one_release_cross_check_travels_onto_the_record_and_a_disagreement_fails_the_verdict_by_name(world):  # noqa: F811
-    """[R17 reqval task 3 -- the flip] the manifest of record built under the default carries `cross_check` (traversal of record, inventory
-    beside it, agreed); the replay copies it onto `population.query_total.cross_check` and the scope line says 'cross-check AGREED'.  A
-    manifest whose cross-check DISAGREED (the build refuses to write one; a record carrying one anyway) fails the verdict by that name.  A
-    manifest built with one engine asked for by name carries no cross-check and the scope says so."""
-    trav, inv = _manifest_for(world, engine="traversal"), _manifest_for(world, engine="inventory")
-    man = copy.deepcopy(trav)
-    man["cross_check"] = RM.cross_check_manifests(trav, inv, primary_engine="traversal", other_engine="inventory")
-    assert man["cross_check"]["agree"]
-    bmap, committed = world.bmap_and_reader()
-    run_root = "71f69377" + "ab" * 28
-    seed, seed_src = int.from_bytes(bytes.fromhex(run_root)[:8], "big"), "run root (first 8 bytes, after commitment)"
-    rep = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=1, seed=seed, seed_source=seed_src, workers=0, manifest=man)
-    qt = rep["population"]["query_total"]
-    assert qt["cross_check"]["agree"] is True and qt["cross_check"]["primary_engine"] == "traversal" and qt["cross_check"]["other_engine"] == "inventory"
-    assert qt["cross_check"]["digests"]["traversal"] == qt["cross_check"]["digests"]["inventory"] == man["manifest_digest"]
-    assert "cross-check AGREED (traversal vs inventory" in rep["population"]["scope"] and "guard armed (traversal)" in rep["population"]["scope"]
-    note, fail = _query_population_scope(rep)
-    assert fail is None and "cross-check AGREED" in note
-    # one engine asked for by name: no cross-check on the manifest, said on the record
-    rep1 = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=1, seed=seed, seed_source=seed_src, workers=0, manifest=inv)
-    assert rep1["population"]["query_total"]["cross_check"] is None and "no cross-check on the manifest (one engine asked for by name: inventory)" in rep1["population"]["scope"]
-    # a DISAGREED cross-check on the record: the verdict fails by name, whatever else holds
-    skew = copy.deepcopy(inv)
-    skew["identities"][1]["rows"] = 777
-    bad = copy.deepcopy(trav)
-    bad["cross_check"] = RM.cross_check_manifests(trav, skew, primary_engine="traversal", other_engine="inventory")
-    assert bad["cross_check"]["agree"] is False
-    rep2 = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=1, seed=seed, seed_source=seed_src, workers=0, manifest=bad)
-    assert rep2["population"]["query_total"]["cross_check"]["agree"] is False and "cross-check DISAGREED" in rep2["population"]["scope"]
-    note, fail = _query_population_scope(rep2)
-    assert note is None and fail.startswith("required manifest engines DISAGREE") and "rows differ at index 1" in fail
-    rec = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64}, "run_root": run_root,
-           "binding": {"context": {"ok": True}, "coverage": {"ok": True}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": 2}},
-           "value_correspondence": {"method": "sampled-exact-replay(complete) + boundary-linkage", "result": True},
-           "boundary_linkage": {"result": True, "pairs": 6, "linked": 6, "unlinked_n": 0},
-           "weights_pin": {"result": True, "compared": 5, "mismatched": [], "missing": []}, "sampled_replay": rep2}
-    ok, why = commit_verdict(rec, True, min_openings=64)
-    assert ok is False and "engines DISAGREE" in why, why
-    ok, why = commit_verdict(dict(rec, sampled_replay=rep), True, min_openings=64)
-    assert ok is True and "cross-check AGREED" in why, why
-
-
 def test_a_vu_whose_identity_the_query_does_not_require_is_outside_the_query_never_added_to_the_reach(world):  # noqa: F811
     """The replay does not enlarge Q(P): a Program row addressing an identity the manifest does not carry is a named finding (the
     replay's enumeration and the query disagree on what the Program produces), and the identity is not counted as reached."""
-    man = _manifest_for(world, engine="inventory")
+    man = _manifest_for(world)
     narrowed = copy.deepcopy(man)
     drop = next(r for r in narrowed["identities"] if r["family"] == "instance_outputs" and r["op_path"].endswith("down_proj") and r["step"] == 1 and r["request_id"] == "r1")
     narrowed["identities"].remove(drop)
@@ -257,7 +179,7 @@ def test_a_replay_record_predating_the_fields_is_graded_as_before_without_a_scop
 def test_moe_plane_identities_reconcile_at_their_planes(moe_world):  # noqa: F811
     """[MAN-06f v3] the fused-MoE block rows are addressed at their PLANES (`moe/L<k>` / plane) -- the manifest's moe_block_stream
     identities.  Every plane identity is either reached (an evaluator exists) or uncovered by name (plane-fed producer without one)."""
-    man = _manifest_for(moe_world, engine="inventory")
+    man = _manifest_for(moe_world)
     assert man["populations"]["by_family"]["moe_block_stream"] > 0
     bmap, committed = moe_world.bmap_and_reader()
     rep = SR.sampled_replay(_programs(moe_world), bmap, committed, _weights(moe_world), per_stratum=1, seed=3, workers=0, manifest=man)
@@ -286,98 +208,8 @@ def _expected_uncovered_class(spec: str) -> str | None:
     return "no-evaluator"
 
 
-def test_not_yet_attention_rope_and_the_shared_rope_alias_reconcile_on_the_dense_program():
-    """The dense Llama shape: Attention_v3 rows (state-linked, NOT_YET on the r16 tree) and RoPE_v1 rows (no evaluator on the r16 tree)
-    produce required identities the exact replay cannot evaluate -> uncovered BY NAME with their class; on a tree that carries their
-    evaluators (dense R17-9 / R17-11) the SAME identities are reached instead and are NOT in `uncovered_by_name` -- either way every
-    identity is accounted for; the manifest's shared-RoPE aliases (one RotaryEmbedding instance called per layer -> the first layer's path
-    with invocation = layer order) resolve, so no RoPE row is 'outside the query'."""
-    prog = _dense_attention_program(LP=4, T=2, layers=2)
-    for engine in ("inventory", "traversal"):
-        man = RM.build_manifest(prog, request_id="r0", engine=engine)
-        assert man.get("op_path_aliases"), "the dense program shares its RoPE across layers"
-        pi = SR.ProgramIndex(prog["instances"], attention_paths=list(prog["result"]["attention_impls_observed"]))
-        addresses: dict = {}
-        vus, _ne, _nef = SR.population(pi, "r0", addresses=addresses)
-        q = SR.query_population(man, addresses, set(), ranks=[0])
-        chk = q["query_checks"]
-        assert chk["ok"] is True and chk["vus_outside_query"]["n"] == 0 and chk["identities_without_rows"]["n"] == 0, (engine, json.dumps(chk, indent=1))
-        by = {(u["family"], u["spec"], u["class"]): u for u in q["uncovered_by_name"]}
-        for spec in ("Attention_v3", "RoPE_v1"):
-            n = sum(1 for r in man["identities"] if r.get("spec") == spec)
-            assert n > 0
-            cls = _expected_uncovered_class(spec)
-            if cls is None:                                                       # the tree evaluates it: reached, never uncovered
-                assert not any(k[1] == spec for k in by), (spec, sorted(by))
-                assert f"{spec} x" not in q["scope"]
-            else:
-                assert by[("instance_outputs", spec, cls)]["identities"] == n, (spec, cls, sorted(by))
-                assert f"{spec} x{n} ({cls})" in q["scope"]
-                if cls == "state-linked":
-                    assert "engineering gap" in by[("instance_outputs", spec, cls)]["mechanism"]
-        assert by[("fa2_hidden_m1_stream", None, "mechanism")]["identities"] == man["populations"]["by_family"]["fa2_hidden_m1_stream"]
-        assert q["sampled_strata"]["identities_reached"] + q["uncovered_identities"] == q["query_total"]["identities"]
-
-
-def test_f_r17b_38_a_manifest_without_its_alias_table_names_the_unreachable_identities_by_cause_and_the_tp_merge_carries_the_table():
-    """[revb F-r17b-38] The TP2 B1 row of record on r17-int-2 read vus_outside_query 960 + identities_without_rows 960 on every rank: the
-    rank merge (`merge_manifests`) had DROPPED `op_path_aliases`, so the shared RotaryEmbedding's invocation >= 1 identities (layer 0's path,
-    invocation = layer order) were the image of no Program path.  (a) The reconciliation names the CAUSE beside the two symptoms
-    (`identities_unreachable_by_alias`, n = the invocation >= 1 identities, table size 0) and fails; the verdict text leads with it.
-    (b) `merge_manifests` carries the parts' table (union) -- the merged manifest reconciles 0 / 0 / 0; parts disagreeing on an alias are refused."""
-    prog = _dense_attention_program(LP=4, T=2, layers=3)
-    man = RM.build_manifest(prog, request_id="r0", engine="traversal")
-    assert man["op_path_aliases"], "the dense program shares its RoPE across layers"
-    n_shared = sum(1 for r in man["identities"] if int(r.get("invocation", 0) or 0) >= 1)
-    assert n_shared > 0 and n_shared == sum(1 for r in man["identities"] if r["op_path"] in {v[0] for v in man["op_path_aliases"].values()}
-                                            and int(r.get("invocation", 0) or 0) >= 1)
-    pi = SR.ProgramIndex(prog["instances"], attention_paths=list(prog["result"]["attention_impls_observed"]))
-    addresses: dict = {}
-    SR.population(pi, "r0", addresses=addresses)
-    # (a) the table stripped, as the TP merge did: the symptoms appear AND the cause is named, n for n
-    stripped = {k: v for k, v in man.items() if k != "op_path_aliases"}
-    q = SR.query_population(stripped, addresses, set(), ranks=[0])
-    chk = q["query_checks"]
-    assert chk["ok"] is False
-    assert chk["identities_unreachable_by_alias"]["n"] == n_shared and chk["identities_unreachable_by_alias"]["alias_entries"] == 0
-    assert chk["identities_without_rows"]["n"] == n_shared and chk["vus_outside_query"]["n"] == n_shared, json.dumps(chk, indent=1)[:1500]
-    f0 = chk["identities_unreachable_by_alias"]["first"][0]
-    assert f0["invocation"] >= 1 and f0["op_path"] in {v[0] for v in man["op_path_aliases"].values()} and f0["family"] == "instance_outputs"
-    assert "F-r17b-38" in chk["identities_unreachable_by_alias"]["why"]
-    text, fail = _query_population_scope({"population": q})
-    assert text is None and fail.startswith("C2 population does not reconcile") and "identities unreachable by alias x%d" % n_shared in fail
-    assert fail.index("unreachable by alias") < fail.index("vus_outside_query")            # the cause leads the symptoms
-    # a PARTIAL table (one alias dropped) names exactly that one identity's invocation on every step it is required at
-    partial = dict(man, op_path_aliases={k: v for k, v in list(man["op_path_aliases"].items())[:-1]})
-    dropped_canon, dropped_inv = list(man["op_path_aliases"].values())[-1]
-    q2 = SR.query_population(partial, addresses, set(), ranks=[0])
-    n_dropped = sum(1 for r in man["identities"] if r["op_path"] == dropped_canon and int(r.get("invocation", 0) or 0) == int(dropped_inv))
-    assert 0 < n_dropped < n_shared and q2["query_checks"]["identities_unreachable_by_alias"]["n"] == n_dropped
-    assert q2["query_checks"]["ok"] is False
-    # the intact manifest: 0 / 0 / 0, ok True -- unchanged by the check
-    q3 = SR.query_population(man, addresses, set(), ranks=[0])
-    assert q3["query_checks"]["identities_unreachable_by_alias"]["n"] == 0
-    assert q3["query_checks"]["identities_unreachable_by_alias"]["alias_entries"] == len(man["op_path_aliases"])
-    assert q3["query_checks"]["ok"] is True and q3["query_checks"]["identities_unreachable_by_alias"]["why"] is None
-    # (b) the merge carries the table: a components merge of two request parts of this Program and a TP rank merge alike
-    m_r1 = RM.build_manifest(prog, request_id="r1", engine="traversal")
-    merged = RM.merge_manifests([man, m_r1])
-    assert merged["op_path_aliases"] == man["op_path_aliases"] == m_r1["op_path_aliases"]
-    addresses2: dict = {}
-    SR.population(pi, "r0", addresses=addresses2)
-    SR.population(pi, "r1", addresses=addresses2)
-    q4 = SR.query_population(merged, addresses2, set(), ranks=[0])
-    assert q4["query_checks"]["identities_unreachable_by_alias"]["n"] == 0 and q4["query_checks"]["vus_outside_query"]["n"] == 0
-    assert q4["query_checks"]["identities_without_rows"]["n"] == 0 and q4["query_checks"]["ok"] is True
-    bad = copy.deepcopy(m_r1)
-    k0 = next(iter(bad["op_path_aliases"]))
-    bad["op_path_aliases"][k0] = [bad["op_path_aliases"][k0][0], 99]
-    with pytest.raises(ValueError, match="disagree on alias"):
-        RM.merge_manifests([man, bad])
-
-
 def test_a_required_family_without_a_stated_mechanism_fails_closed(world):  # noqa: F811
-    man = _manifest_for(world, engine="inventory")
+    man = _manifest_for(world)
     odd = copy.deepcopy(man)
     odd["identities"].append(dict(man["identities"][0], family="future_family", step="*", request_id="*"))
     pi = SR.ProgramIndex(world.inst)
@@ -398,7 +230,7 @@ def test_f_moe_r17_05_batch_level_planes_are_classified_per_listed_request_and_e
     request still executes EXISTS (smaller composition) and stays REQUIRED -- its per-request slots past the stop are counted beside it
     (`batch_level[fam].request_slots_not_executed`, `by_request[rid].batch_level_slots_not_executed`) for the Commit's per-request
     reconciliation.  Arrival enters here only: a listed request's request-relative step = engine step - its arrival."""
-    man = _manifest_for(world, engine="traversal")
+    man = _manifest_for(world)
     bmap, committed = world.bmap_and_reader()
     cap = SR.ProgramIndex(world.inst).n_steps
     fam = "fa2_hidden_m1_stream"
@@ -453,7 +285,7 @@ def test_r17_26_the_executed_prefix_classifies_not_executed_identities_by_name_a
     NAMED class not-executed(R17-1, a_r, LAG) -- a third bucket beside reached / uncovered, out of the sampling pool (never a stratum that
     grades 'not evaluated'), on the scope line; reached + uncovered + not-executed == |Q(P)|.  A prefix whose early stop is not a declared
     EOS is NOT classified and fails the checks by name."""
-    man = _manifest_for(world, engine="traversal")
+    man = _manifest_for(world)
     bmap, committed = world.bmap_and_reader()
     base = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=2, seed=3, workers=0, manifest=man)
     cap = SR.ProgramIndex(world.inst).n_steps
@@ -695,7 +527,7 @@ def test_r3_the_real_continuation_rule_is_the_mechanism_and_agrees_with_the_arit
 
 
 def test_r3_the_population_record_names_the_mechanism_per_request(world):
-    man = _manifest_for(world, engine="traversal")
+    man = _manifest_for(world)
     bmap, committed = world.bmap_and_reader()
     cap = SR.ProgramIndex(world.inst).n_steps
     ok = dict(linked=True, lag_attested=True, a_r_source="match/capture/tokens.json served_by_request sha256 0000")
@@ -728,7 +560,7 @@ GUARD7 = ["LBot32_v1", "LStepLive1_v1", "LSelect32_v1", "LStepLive1_v1", "LSelec
 
 
 def test_r4_a_lifted_programs_controller_rows_are_named_in_the_population_statement_with_their_mechanism(world):
-    man = _manifest_for(world, engine="traversal")
+    man = _manifest_for(world)
     bmap, committed = world.bmap_and_reader()
     # an un-lifted Program: no controller statement (None), nothing in uncovered_by_name under that name
     rep0 = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=2, seed=3, workers=0, manifest=man)
@@ -762,7 +594,7 @@ def test_r4_c2_the_controller_statement_is_cross_checked_against_the_replays_own
     compares AT THE HEADER'S SCOPE (sum vs header), never per request.  A disagreement is a fault BY NAME (`controller_rows_disagree`,
     ok False): a lifted header over an un-lifted Program (foreign / stale header) and a Program with controller rows under a header that
     names none (a header that would drop the statement) both fail; the statement itself is still emitted from the replay's own count."""
-    man = _manifest_for(world, engine="traversal")
+    man = _manifest_for(world)
     bmap, committed = world.bmap_and_reader()
     # (i) a lifted header naming 14 controller rows over the UN-lifted Programs (0 + 0): named, ok False, statement carries both numbers
     man_l = dict(man, query=dict(man["query"], lifted=True, guard_rows=14, guard_families={"LBot": 2, "LSelect": 4, "LStepLive": 4, "LIsEOS": 2, "LEmitNext": 2}))

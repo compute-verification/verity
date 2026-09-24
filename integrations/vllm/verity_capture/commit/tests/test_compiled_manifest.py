@@ -84,7 +84,7 @@ def test_manifest_reproduces_the_row_of_record_digests():
     assert m["program_digest"] == rec["program_digest"]
     # the population is the record's row for row; the digest formula is the consumer's (required_manifest.manifest_digest, rel/int-6:
     # binding.load_required_manifest recomputes it over the rows) -- the record's own field predates that formula
-    from verity_capture.commit import required_manifest as RM
+    from verity_capture.commit import manifest_format as RM
     assert m["schema"] == RM.SCHEMA and m["manifest_digest"] == RM.manifest_digest(rec["identities"]) == RM.manifest_digest(m["identities"])
     assert [RM.canonical_identity(r) for r in m["identities"]] == [RM.canonical_identity(r) for r in rec["identities"]]
     s = json.load(open(os.path.join(ATT, "commit", "summary.json")))
