@@ -7,7 +7,7 @@
     {"file": "verity_vllm/check/adversarial.py", "kind": "function", "symbol": "catalogue", "detail": "lines", "count": 168},
     {"file": "verity_vllm/check/commit_verdict.py", "kind": "function", "symbol": "commit_verdict", "detail": "lines", "count": 225},
     {"file": "verity_vllm/check/compiled_kernel_check.py", "kind": "function", "symbol": "CompiledKernelCheck.run", "detail": "lines", "count": 215},
-    {"file": "verity_vllm/check/fold_compare.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 923},
+    {"file": "verity_vllm/check/fold_compare.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 922},
     {"file": "verity_vllm/check/gates.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1397},
     {"file": "verity_vllm/check/global_match.py", "kind": "function", "symbol": "_check", "detail": "lines", "count": 1231},
     {"file": "verity_vllm/check/global_match.py", "kind": "function", "symbol": "_check.leg", "detail": "lines", "count": 174},
