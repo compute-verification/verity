@@ -167,11 +167,15 @@ def t_exts(xs: list[Ext], device) -> torch.Tensor:
 
 
 def py_ext(t: torch.Tensor) -> Ext:
-    return tuple(int(v) for v in t.reshape(-1).tolist())
+    if t.is_floating_point():
+        return tuple(int(v) for v in t.reshape(-1).tolist())
+    return tuple(t.reshape(-1).tolist())
 
 
 def py_exts(t: torch.Tensor) -> list[Ext]:
-    return [tuple(int(v) for v in row) for row in t.reshape(-1, DEG).tolist()]
+    if t.is_floating_point():
+        return [tuple(int(v) for v in row) for row in t.reshape(-1, DEG).tolist()]
+    return list(map(tuple, t.reshape(-1, DEG).tolist()))
 
 
 def ext_from_base(a: torch.Tensor) -> torch.Tensor:
