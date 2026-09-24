@@ -583,7 +583,8 @@ def render_markdown(D: Drilldowns) -> str:
                 line.append(T.EMPTY)
                 continue
             why = "" if not best.codes else f" — {best.codes[0][1]}"
-            by = f"; independently verified by {best.verified_by}" if best.verified_by else "; not independently verified"
+            by = (f"; independently verified by {best.verified_by}" if best.verified_by
+                  else "" if best.codes and best.codes[0][0] == "U" else "; not independently verified")
             quick = fastest_unverified(D, v.id, target.name)
             faster = f"; faster, unverified: {quick.artifact} {T.fmt_seconds(quick.t_total)} · {T.fmt_overhead(quick.overhead)}" if quick else ""
             also = f"; fastest valid: {ok.artifact} {T.fmt_seconds(ok.t_total)} · {T.fmt_overhead(ok.overhead)}" if ok and ok is not best else ""
