@@ -1,4 +1,4 @@
-"""P10 (SYNTHESIS §4): modules stay at or under 800 lines and functions at or under 150 lines.
+"""P10: modules stay at or under 800 lines and functions at or under 150 lines.
 
 A module's size is its line count; a function's is the span of its ``def`` statement (``lineno`` to ``end_lineno``,
 decorators excluded), methods and nested functions each counted on their own.  Today's offenders are recorded in

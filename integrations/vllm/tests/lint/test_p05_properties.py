@@ -1,8 +1,8 @@
-"""P5 (SYNTHESIS §4): property logic lives in ``properties/``, and runs cite property records by digest.
+"""P5: property logic lives in ``properties/``, and runs cite property records by digest.
 
 The rule's import contract is "``check`` and ``pipeline`` import only ``properties.record`` and
-``properties.check_properties``".  ``properties/`` does not exist yet: its members are the §5.2 property harnesses
-still in ``check/`` (``_imports.PROPERTY_MODULES``: ``noninterference``, ``census``, ``kernel_allowlist``, ``golden``,
+``properties.check_properties``".  ``properties/`` does not exist yet: its members are the property harnesses still in
+``check/`` (``_imports.PROPERTY_MODULES``: ``noninterference``, ``census``, ``kernel_allowlist``, ``golden``,
 ``holdout``, ``difftest``, ``quarantine_lint``, ``protected``), and neither allowed entry point exists.  So today every
 import of a property module by a module bound for ``check`` or ``pipeline`` (interim layers ``check|properties`` and
 ``pipeline``, property modules themselves excepted) is a violation, keyed by (importer, imported) module pair in

@@ -1,4 +1,4 @@
-"""P4 (SYNTHESIS §4): every check returns one result type, and one verdict reads it.
+"""P4: every check returns one result type, and one verdict reads it.
 
 Checked today, against ``allowlists/p04_one_result.json``:
 

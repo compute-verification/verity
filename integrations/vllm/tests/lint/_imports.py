@@ -1,15 +1,15 @@
-"""The integration's internal import graph and the interim layer map (SYNTHESIS §4 P9, §5.2), for the P2/P4/P5/P9 lints.
+"""The integration's internal import graph and the interim layer map, for the P2/P4/P5/P9 lints.
 
 An edge is one import statement in a library module that names another ``verity_vllm`` module: module-level and
 function-level (lazy) imports alike, plus ``importlib.import_module`` with a literal name.  ``from pkg import name``
 resolves to the submodule ``pkg.name`` when that module exists, else to ``pkg``.
 
-``INTERIM_LAYER`` places every module of today's layout in the layer of its §5.2 destination (longest prefix wins).
-The target order, top to bottom, is ``pipeline``, ``check|properties``, ``acquire``, ``observe|commit``, ``engine``,
-``query|correspondence``, ``program``, ``collectives``, ``config``, core.  Modules that §5.2 moves into core sit in
-``core``, and modules it moves to tests sit in ``tests`` above ``pipeline``: they may import anything, and library code
-importing them is a wrong-direction edge.  Peers in one layer (``check|properties``, ``observe|commit``,
-``query|correspondence``) may import each other; P5 is the only rule that restricts a peer edge.
+``INTERIM_LAYER`` places every module of today's layout in the layer of the package it moves to in the target layout
+(longest prefix wins).  The target order, top to bottom, is ``pipeline``, ``check|properties``, ``acquire``,
+``observe|commit``, ``engine``, ``query|correspondence``, ``program``, ``collectives``, ``config``, core.  Modules bound
+for core sit in ``core``, and modules bound for tests sit in ``tests`` above ``pipeline``: they may import anything,
+and library code importing them is a wrong-direction edge.  Peers in one layer (``check|properties``,
+``observe|commit``, ``query|correspondence``) may import each other; P5 is the only rule that restricts a peer edge.
 """
 from __future__ import annotations
 
@@ -82,16 +82,16 @@ INTERIM_LAYER = {
     "verity_vllm.tp.collective_link": "tests",
 }
 
-#: §5.2: the property harnesses that move from check/ to properties/.
+#: The property harnesses that move from check/ to properties/.
 PROPERTY_MODULES = tuple(f"verity_vllm.check.{m}" for m in (
     "noninterference", "census", "kernel_allowlist", "golden", "holdout", "difftest", "quarantine_lint", "protected"))
 
-#: §5.2 / §6 B1: the replay drivers (-> check/replay/) and the determinism value checks.
+#: The replay drivers (-> check/replay/) and the determinism value checks.
 VALUE_CHECK_MODULES = tuple(f"verity_vllm.{m}" for m in (
     "check.replay", "check.sampled_replay", "check.stoch_recompute", "check.compiled_kernel_check", "query.vu_query",
     "check.value_check", "check.compiled_value_check", "check.oracle_compare"))
 
-#: §5.2: the modules check.verdict absorbs (commit_verdict, gates) and today's check.verdict.
+#: The modules check.verdict absorbs (commit_verdict, gates) and today's check.verdict.
 VERDICT_MODULES = ("verity_vllm.check.verdict", "verity_vllm.check.commit_verdict", "verity_vllm.check.gates")
 
 

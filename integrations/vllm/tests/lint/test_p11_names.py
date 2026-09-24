@@ -1,4 +1,4 @@
-"""P11 (SYNTHESIS §4): names say the job, and versions appear only in hashed data.
+"""P11: names say the job, and versions appear only in hashed data.
 
 Checked today, against ``allowlists/p11_names.json``:
 

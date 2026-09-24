@@ -1,4 +1,4 @@
-"""P7 (SYNTHESIS §4): results depend only on declared inputs.
+"""P7: results depend only on declared inputs.
 
 Checked today, against ``allowlists/p07_declared_inputs.json``:
 

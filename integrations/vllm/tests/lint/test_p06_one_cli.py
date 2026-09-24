@@ -1,4 +1,4 @@
-"""P6 (SYNTHESIS §4): one CLI over the public API; no ``__main__``, heredocs or ``python -c`` in library code or ``ops/``.
+"""P6: one CLI over the public API; no ``__main__``, heredocs or ``python -c`` in library code or ``ops/``.
 
 Checked today, against ``allowlists/p06_one_cli.json``:
 
@@ -10,7 +10,7 @@ Checked today, against ``allowlists/p06_one_cli.json``:
 
 Shell checks cover every ``*.sh`` under ``verity_vllm/`` (``ops/`` and the tap build scripts); counts are per script.
 ``pipeline/cli.py`` does not exist yet, so every ``main-block`` and ``argparse`` is a violation today; once it exists,
-it is the one file in ``CLI_OWNERS``.  The ``[project.scripts]`` entry is the CLI lane's.
+it is the one file in ``CLI_OWNERS``.  Not checked: the ``[project.scripts]`` entry that installs the CLI.
 """
 from __future__ import annotations
 
