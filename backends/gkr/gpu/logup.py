@@ -152,17 +152,24 @@ def build_leaves(t: Table, trows: torch.Tensor, values: list[torch.Tensor], m: t
     q[:, 0] = 1
     betas = beta_powers(beta, t.cols, dev)
     zt = t_ext(z, dev)
+    fast = _field._fast_leaf_q if dev.type == "cuda" else None
     pos = 0
     for v in values:
         k = v.shape[0]
         p[pos:pos + k] = 1
-        for lo in range(0, k, CHUNK):
-            hi = min(k, lo + CHUNK)
-            q[pos + lo:pos + hi] = ((zt - combine(v[lo:hi], betas)) % P).to(torch.int32)
+        if fast is not None:
+            fast(v, betas, zt, q[pos:pos + k])
+        else:
+            for lo in range(0, k, CHUNK):
+                hi = min(k, lo + CHUNK)
+                q[pos + lo:pos + hi] = ((zt - combine(v[lo:hi], betas)) % P).to(torch.int32)
         pos += k
     k = trows.shape[0]
     p[pos:pos + k] = ((-m) % P).to(torch.int32)
-    q[pos:pos + k] = ((zt - combine(trows, betas)) % P).to(torch.int32)
+    if fast is not None:
+        fast(trows, betas, zt, q[pos:pos + k])
+    else:
+        q[pos:pos + k] = ((zt - combine(trows, betas)) % P).to(torch.int32)
     return p, q
 
 
