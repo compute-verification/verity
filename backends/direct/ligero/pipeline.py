@@ -30,6 +30,8 @@ from concurrent.futures import Future, ThreadPoolExecutor
 import numpy as np
 import torch
 
+from .phases import rescale as _rescale
+
 __all__ = ["AnyOf", "Slot", "POOL", "prove_many", "run_to_completion", "shake_into", "slot_for", "stream_context"]
 
 
@@ -434,30 +436,3 @@ SWITCH_INTERVAL = 0.0005   # GIL switch interval during a pipelined pass (second
 #: the last ``prove_many`` pass: wall, main-thread busy (launching / host work) and blocked time -- ``host_busy / wall``
 #: near 1 means the pass is bound by the main thread's launch + host work, not by the device.
 LAST_STATS: dict = {}
-
-
-_DERIVED = ("tests",)      # buckets re-derived from leaves after rescaling
-
-
-def _rescale(results, wall: float, key: str) -> None:
-    """Pipelined attribution: each result's leaf phases (event-measured, overlapped) are scaled by a common factor so
-    that they sum to this sub-batch's share of the wall (wall / n); ``key`` (``total``) becomes share - hints_host so
-    that ``total + hints_host`` (the runners' prover time) equals the share.  The event-measured values are kept as
-    ``measured_<phase>`` (their sum over the sub-batches exceeds the wall by the overlap)."""
-    share = wall / max(1, len(results))
-    for r in results:
-        tm = getattr(r, "timings", None)
-        if not isinstance(tm, dict) or key not in tm:
-            continue
-        leaf = {k: v for k, v in tm.items()
-                if k != key and k not in _DERIVED and not k.startswith("measured_") and not k.startswith("host_")
-                and not k.startswith("net_wait")}
-        s = sum(leaf.values())
-        scale = share / s if s > 0 else 0.0
-        for k, v in leaf.items():
-            tm["measured_" + k] = v
-            tm[k] = v * scale
-        tm["measured_" + key] = tm[key]
-        tm[key] = share - tm.get("hints_host", 0.0)
-        if all(k in tm for k in ("tests_w", "tests_quad", "tests_chain")):
-            tm["tests"] = tm["tests_w"] + tm["tests_quad"] + tm["tests_chain"]

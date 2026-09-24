@@ -24,6 +24,7 @@ from verity_numerical.checker.params import REAL
 from verity_numerical.checker.step import step_output
 
 from . import auth as auth_mod
+from . import phases
 from . import protocol as protocol_mod
 from .chain import Layout
 from .compile import P
@@ -769,7 +770,9 @@ def bench_vu(args) -> int:
     if dump_dir is not None:
         (dump_dir / "manifest.json").write_text(json.dumps(dump_manifest, indent=1, default=str))
         print(f"dumped {len(dump_manifest['files'])} proofs to {dump_dir}", flush=True)
-    med = {k: statistics.median(r[0][k] for r in runs) for k in keys}
+    # t.total and every bucket come from one rep (phases.median_rep), as relchain.bench_vu_rel
+    med_rep = phases.median_rep(runs)
+    med = dict(runs[med_rep][0])
     vmed = statistics.median(r[1] for r in runs)
     vauth_med = statistics.median(r[2] for r in runs)
     peak_dev = torch.cuda.max_memory_allocated() if args.device.startswith("cuda") else 0
@@ -840,12 +843,7 @@ def bench_vu(args) -> int:
                 f"instances are proved {total_vus / vu.n:.1f}x over -- the bench has no synthetic VU generator)" if recycled else ""),
     )
     meas = [
-        contract.measurement("t.witness", med["witness"] + med["hints_host"]),
-        contract.measurement("t.encoding_commitment", med["encode"] + med["transfer"] + med["merkle"]),
-        contract.measurement("t.arithmetic", med["tests"]),
-        contract.measurement("t.lookup", 0.0),
-        contract.measurement("t.zk_additional", med.get("zk_masks", 0.0)),
-        contract.measurement("t.serialization", med["openings"] + med.get("statement", 0.0) + med.get("auth_openings", 0.0)),
+        *(contract.measurement(name, v) for name, v in phases.buckets(med, serialization_extra=("auth_openings",)).items()),
         contract.measurement("t.total", total),
         contract.measurement("verifier.seconds", vmed),
         contract.measurement("transcript.bytes", nbytes["total"]),
@@ -886,7 +884,9 @@ def bench_vu(args) -> int:
                                                  "union bound every rep)",
                   "detail": f"{args.reps} reps, {n_vus} VUs as {n_proofs} proofs at l={l}; batch {batch['reason']}",
                   "evidence": {"soundness": snd, "batch": batch,
-                               "reps": [{"prover_total": r[0]["total"] + r[0]["hints_host"], "verifier": r[1]} for r in runs]}}
+                               "reps": [{"prover_total": r[0]["total"] + r[0]["hints_host"], "verifier": r[1]} for r in runs],
+                               "phase_rep": {"index": med_rep, "rule": "t.total and the t.* buckets are this rep's (the median "
+                                                                       "prover_total of reps); verifier.seconds is the median over the reps"}}}
     if with_auth:
         validation["checker"] += " + auth.verify_auth on every sub-batch (multiproofs of every boundary word against the roots)"
         validation["detail"] += (f"; authentication negatives: {auth_neg_report['rejected']}/{auth_neg_report['total']} prover-side "

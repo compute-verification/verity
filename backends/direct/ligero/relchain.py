@@ -30,7 +30,7 @@ import torch
 from verity.ml.tc.silicon import tc_dot
 from verity_numerical.bench import contract
 
-from . import protocol as protocol_mod
+from . import phases, protocol as protocol_mod
 from .chain import Layout
 from .compile import P
 from .fp8.census import census
@@ -2085,7 +2085,10 @@ def bench_vu_rel(args, rel: Relation) -> int:
         (dump_dir / "manifest.json").write_text(json.dumps(dump_manifest, indent=1, default=str))
         print(f"dumped {len(dump_manifest['files'])} proofs to {dump_dir}", flush=True)
         dumps = _verify_dumps(dump_dir, dump_manifest, R, args.device, target_bits)
-    med = {k_: statistics.median(r[0][k_] for r in runs) for k_ in keys}
+    # t.total and every bucket come from one rep (phases.median_rep); the per-key medians are printed as diagnostics only
+    med_rep = phases.median_rep(runs)
+    med = dict(runs[med_rep][0])
+    per_key_med = {k_: statistics.median(r[0][k_] for r in runs) for k_ in keys}
     vmed = statistics.median(r[1] for r in runs)
     peak_dev = torch.cuda.max_memory_allocated() if args.device.startswith("cuda") else 0
     nbytes = {k_: v_ * n_proofs for k_, v_ in proof.n_bytes().items()}
@@ -2179,12 +2182,7 @@ def bench_vu_rel(args, rel: Relation) -> int:
                              "fp_coords": R.fp_coords, "g_rows_per_unit": R.sys.m, "h_rows_per_unit": R.sys_h.m,
                              "h_layouts": [dataclasses.asdict(lh) for lh in lays_h_seen]}
     meas = [
-        contract.measurement("t.witness", med["witness"] + med["hints_host"]),
-        contract.measurement("t.encoding_commitment", med["encode"] + med["transfer"] + med["merkle"]),
-        contract.measurement("t.arithmetic", med["tests"]),
-        contract.measurement("t.lookup", 0.0),
-        contract.measurement("t.zk_additional", med.get("zk_masks", 0.0)),
-        contract.measurement("t.serialization", med["openings"] + med.get("statement", 0.0)),
+        *(contract.measurement(name_, v_) for name_, v_ in phases.buckets(med).items()),
         contract.measurement("t.total", total),
         contract.measurement("verifier.seconds", vmed),
         contract.measurement("transcript.bytes", nbytes["total"]),
@@ -2258,6 +2256,8 @@ def bench_vu_rel(args, rel: Relation) -> int:
     status = "passed"
     evidence = {"soundness": snd, "batch": batch,
                 "reps": [{"prover_total": r[0]["total"] + r[0]["hints_host"], "verifier": r[1]} for r in runs],
+                "phase_rep": {"index": med_rep, "rule": "t.total and the t.* buckets are this rep's (the median prover_total of "
+                                                        "reps); verifier.seconds is the median over the reps"},
                 "verify_wall": "the live in-process Python verifier, median over the reps of the sum over the sub-batches (shares code "
                                "with the prover), batch verdict included; not a file verifier's process wall"}
     detail = f"{args.reps} reps, {total_vus} VUs as {n_proofs} proofs at l={l}; batch {batch['reason']}"
@@ -2293,7 +2293,8 @@ def bench_vu_rel(args, rel: Relation) -> int:
     print(json.dumps({"relation": rel.name, "seconds_per_vu": per_vu, "prover_total": total, "verifier": vmed, "bytes": nbytes,
                       "n_proofs": n_proofs, "per_proof_vus": per_proof, "t": cfg.t, "zk": cfg.zk, "k": cfg.k,
                       "peak_device_bytes": peak_dev, "soundness_log2": snd["total_log2"], "per_proof_log2": snd["per_proof_total_log2"],
-                      "rows": R.sys.m, "medians": med, "dumps": dumps, "validation": status}, indent=1))
+                      "rows": R.sys.m, "medians": med, "per_key_medians": per_key_med, "dumps": dumps, "validation": status},
+                     indent=1))
     if args.out:
         Path(os.path.expandvars(args.out)).write_text(json.dumps(result, indent=1, default=str))   # $RESEARCH_RUN_DIR/result.json
     return 0 if status == "passed" else 1

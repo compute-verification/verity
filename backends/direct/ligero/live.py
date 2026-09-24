@@ -868,9 +868,9 @@ class BenchLive:
         return v
 
     def fields(self, contract, total: float, med: dict) -> tuple[list, dict, str, bool]:
-        """(measurements, evidence, detail fragment, accepted) for the result: t.total_live = t.total + the median
-        network wait (medians over the reps, as t.total), net.* summed over the sessions, verify.* the VERIFIER's own
-        clocks (medians over the sessions' verdicts)."""
+        """(measurements, evidence, detail fragment, accepted) for the result: t.total_live = t.total + the network wait
+        of the same rep (``med``: the rep t.total is taken from, phases.median_rep), net.* summed over the sessions,
+        verify.* the VERIFIER's own clocks (medians over the sessions' verdicts)."""
         ev = net_measurements(self.verifier.sessions, self.n_proofs)
         ev["url"] = self.url
         ev["per_rep"] = self.per_rep
