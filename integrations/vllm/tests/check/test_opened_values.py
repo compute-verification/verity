@@ -115,7 +115,7 @@ def test_the_pod_fault_retained_flip_fails_every_opened_read_of_the_flipped_leaf
     rd = OC.OpenedReader(com, run)
     with pytest.raises(OC.OpeningNotVerified, match=rf"step 0 t0\.4 \(ordinal 4\) bytes \[0, 1\) = leaves \[{f['leaf']}, {f['leaf'] + 1}\)"):
         rd(0, "t0.4", 0, 1)
-    assert rd(0, "t0.3", 0, 256) == bytes(steps[0][3][1][:256]) and rd(0, "t1.1", 0, 513) == bytes(steps[1][1][1])
+    assert rd(0, "t0.3", 0, 256) == bytes(steps[0][3][1][:256]) and rd(1, "t1.1", 0, 513) == bytes(steps[1][1][1])
     with pytest.raises(RuntimeError, match="no committed member name contains 'nope'"):
         com.fault_retained_flip("retained_flip:nope")
 
