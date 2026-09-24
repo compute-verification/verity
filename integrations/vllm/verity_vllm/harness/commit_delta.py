@@ -452,13 +452,6 @@ def make_committer(kind: str, engine: va.Engine, args: argparse.Namespace, run_i
                                                       time.perf_counter(), job.backlog)
 
         return HooksOnly(engine, run_id=run_id, chunk=args.chunk, hash_threads=args.hash_threads, staging="direct")   # no arena: nothing is copied
-    if kind.startswith("cmt_ref"):
-        # CMT-1's engine behind our acquisition: cmt_ref_torch (device SHA-256) | cmt_ref_host (hashlib/leaf) | cmt_ref_torch_compiled
-        from verity_vllm.commit.reference_engine_adapter import CmtRefCommitter
-
-        backend = "host" if kind.endswith("host") else "torch"
-        return CmtRefCommitter(engine, backend=backend, compiled=kind.endswith("compiled"), run_id=run_id, hash_threads=args.hash_threads,
-                               arena_bytes=((args.arena_mb << 20) if args.arena_mb else None))
     if kind.startswith("plugin:"):
         # `plugin:<module>:<factory>` — a sibling lane's committer exposing the api.Committer interface: factory(engine, run_id=..., **kw)
         _, mod, fn = kind.split(":", 2)
@@ -1041,7 +1034,7 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--case", default=None)
     ap.add_argument("--out", required=True)
     ap.add_argument("--pairs", type=int, default=5)
-    ap.add_argument("--committer", default="native_host", help="native_host | native_host_direct | hooks_only | cmt_ref_torch | cmt_ref_host | cmt_ref_torch_compiled | plugin:<module>:<factory>")
+    ap.add_argument("--committer", default="native_host", help="native_host | native_host_direct | hooks_only | plugin:<module>:<factory>")
     ap.add_argument("--chunk", type=int, default=65536, help="native_host leaf = chunk bytes of the packed step stream (opening granularity); 4096 measured 3x slower on decode steps (per-leaf Python overhead)")
     ap.add_argument("--arena-unchecked", action="store_true", help="NEGATIVE TEST ONLY: skip the X-02 arm-time bound check for an explicit --arena-mb so a "
                     "too-small block reaches the collector (its refusal must then yield Commit FAIL under X-03)")
