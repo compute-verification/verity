@@ -44,7 +44,6 @@ def repo_modules_loaded() -> dict[str, Any]:
     the collector's JIT C++/CUDA sources when native_collect was loaded -- what RAN, written from the running process (not a static closure).
     Paths relative to the repo root; a module outside the repo (site-packages, vllm) is not listed."""
     import sys as _sys
-
     from verity_vllm.config import ROOT as root
     roots = [root, root / "vllm-poc"]
     files: set[str] = set()
