@@ -148,6 +148,7 @@ class MatchOracle:
         # [R19 int-20 / oracle-key] per step, every instance's OUTPUT views by storage (alloc -> [(byte lo, byte hi, instance)]), built on
         # demand for the promoted members' dataflow resolution (`_promoted_instances`); a small cache, the compare walks the map by step
         self._outs_by_step: dict[int, dict[int, list[tuple[int, int, dict]]]] = {}
+        self._families_at: dict[tuple[int, str], frozenset[str]] = {}
         tok = os.path.join(cap, "tokens.json")
         self.tokens_sha256 = hashlib.sha256(open(tok, "rb").read()).hexdigest() if os.path.exists(tok) else None
         # the ids of every row of every step: prompt ids + generated ids per request (tokens.json) at the StepStart rows' (request, position)
@@ -285,7 +286,9 @@ class MatchOracle:
         the instance whose OUTPUT storage range contains an OPERAND view of a consumer module's instance at this step, of the producer's
         family.  The first consumer in Program order that resolves wins (the collector observes the promoted value at exactly that
         consumer's input, PROMOTED_OBSERVATION_RULE); no consumer resolving = (None, why) -- not compared, named, never complete.
-        Non-promoted rows never enter here (their key is `_inst[(step, op_path)]`, unchanged)."""
+        Non-promoted rows never enter here (their key is `_inst[(step, op_path)]`, unchanged) -- except a member whose producer family the
+        fold has NO instance of under the identity's path at this step while the Program names its consumers (`_names_producer`): a v2
+        (`Q_module_body_v1`) manifest has no `promoted` flag, and #57's 432 `model/out` are that Value (fold hint `model.normalizer`)."""
         spec = str(producer.get("spec") or "").split("{", 1)[0].strip()
         consumers = [str(c) for c in (producer.get("consumers") or [])]
         if not spec or not consumers:
@@ -314,6 +317,16 @@ class MatchOracle:
             return None, f"no fold instance of the promoted member's consumers {consumers[:3]} at this step"
         return None, f"no fold instance of producer {spec} whose output the consumers {consumers[:3]} read at this step (promoted member)"
 
+    def _names_producer(self, step: int, op_path: str, producer: dict[str, Any] | None) -> bool:
+        """Does the fold hold an instance of the producer's family under `op_path` at `step`?  False with no producer spec."""
+        spec = str((producer or {}).get("spec") or "").split("{", 1)[0].strip()
+        if not spec:
+            return False
+        fams = self._families_at.get((step, op_path))
+        if fams is None:
+            fams = self._families_at[(step, op_path)] = frozenset(str(m.get("spec") or "").split("{", 1)[0] for m in self._inst.get((step, op_path)) or ())
+        return spec in fams
+
     def member_bytes(self, step: int, op_path: str, member: str, request_label: str | None,
                      producer: dict[str, Any] | None = None) -> tuple[bytes | None, str | None, int]:
         """Oracle bytes of (step, op_path, member) for request r<k> (None: all requests, row order): concatenation over the instances'
@@ -332,7 +345,8 @@ class MatchOracle:
             uuid = next((u for u, lab in self.requests.items() if lab == request_label), None)
             if uuid is None:
                 return None, f"request {request_label} not in the Match record's request table", 0
-        promoted = bool((producer or {}).get("promoted"))
+        promoted = bool((producer or {}).get("promoted")) or (bool((producer or {}).get("consumers"))
+                                                              and not self._names_producer(step, op_path, producer))
         if promoted:
             # [R19 int-20 / oracle-key] a promoted member is the output of an interior Program row: its fold instance sits under the
             # producing Call's path, not the identity's module -- resolved through the Value (consumer operand -> producer output), see
@@ -541,6 +555,136 @@ def producers_of(manifest: dict[str, Any] | None) -> dict[tuple[str, str], dict[
         if out[key].get("promoted"):
             out[key]["consumers"] = cl
     return out
+
+
+def producers_of_programs(programs: dict[str, dict[str, Any]], aliases: dict[str, Any] | None = None) -> dict[tuple[str, str], dict[str, Any]]:
+    """(op_path, output_member) -> {"spec", "operand", "consumers"} read from the Programs of record by dataflow, under the query a
+    `v2-query` manifest was built with (`v1_bridge.population`, the Correspondence `query.cli` reads) -- such a manifest carries no
+    producer annotations.  Per required `instance_outputs` Value of every producing Call: `spec` = the Call's family; `operand` = the
+    family of the Call whose output its FIRST operand reads (the order-free selector among same-family instances of one module: a fused
+    norm's two narrowings read AddWidenedBf16 -> `1` and MulVecF32 -> `0`); `consumers` = the modules of the Calls that read the Value
+    outside its own module, Program order (the dataflow resolution when the fold observed the producer under another path).  A fact the
+    member's rows disagree on is None (the oracle then names the ambiguity; never guessed); a family disagreement is a `conflict`.
+    `programs`: request label -> `manifest_format.load_program(dir)`; `aliases`: the manifest's `op_path_aliases` (alias -> [canon, k])."""
+    from verity_vllm.query.correspondence import Correspondence
+    from verity_vllm.query.program_view import from_instances
+
+    out: dict[tuple[str, str], dict[str, Any]] = {}
+    seen: set[int] = set()
+    for prog in programs.values():
+        inst = prog["instances"]
+        if id(inst) in seen:
+            continue
+        seen.add(id(inst))
+        res = prog.get("result") or {}
+        P = from_instances(inst)
+        corr = Correspondence.of(P, prog.get("dir"), implementation_paths=Correspondence.implementation_paths_of(res))
+        tpinfo = res.get("tp") if isinstance(res.get("tp"), dict) else {}
+        world = int(tpinfo.get("world") or 1)
+        program_producer_facts(P, corr, tp=({"world": world, "rank": int(tpinfo.get("rank") or 0)} if world > 1 else None), aliases=aliases, into=out)
+        del P, corr
+    return out
+
+
+def program_producer_facts(P: Any, corr: Any, *, tp: dict[str, Any] | None = None, aliases: dict[str, Any] | None = None,
+                           into: dict[tuple[str, str], dict[str, Any]] | None = None) -> dict[tuple[str, str], dict[str, Any]]:
+    """`producers_of_programs` for one ProgramView + Correspondence, accumulated into `into` (the member's facts over every Program)."""
+    from verity_vllm.query.v1_bridge import population
+
+    canon = {str(k): str(v[0]) for k, v in (aliases or {}).items() if isinstance(v, (list, tuple)) and v}
+    out = {} if into is None else into
+    pop = population(P, corr, tp=tp)
+    members = {cid: [cm.member for cm in pop.members_of(cid) if cm.family == "instance_outputs"] for cid in pop.producers()}
+    members = {cid: ms for cid, ms in members.items() if ms}
+    readers: dict[int, list[int]] = defaultdict(list)
+    for c in P.calls:
+        for r in c.reads:
+            if r.call >= 0 and r.call in members and (not readers[r.call] or readers[r.call][-1] != c.id):
+                readers[r.call].append(c.id)
+    for cid, ms in members.items():
+        c = P.call(cid)
+        own = corr.module_of(cid)
+        path = corr.implementation_path(pop.program_path(cid))
+        path = canon.get(path, path)
+        first = next(iter(c.reads), None)
+        operand = P.call(first.call).family if first is not None and first.call >= 0 else None
+        cons: list[str] = []
+        for rc in readers.get(cid, ()):
+            m = corr.module_of(rc)
+            if m != own:
+                m = corr.implementation_path(m)
+                if m not in cons:
+                    cons.append(m)
+        for mem in ms:
+            key = (path, mem)
+            cur = out.get(key)
+            if cur is None:
+                out[key] = {"spec": c.family, "operand": operand, "consumers": list(cons)}
+                continue
+            if cur.get("conflict"):
+                continue
+            if cur["spec"] != c.family:
+                out[key] = {"spec": None, "operand": None, "consumers": [], "conflict": True}
+                continue
+            if cur["operand"] != operand:
+                cur["operand"] = None
+            for m in cons:
+                if m not in cur["consumers"]:
+                    cur["consumers"].append(m)
+    return out
+
+
+def merge_producers(declared: dict[tuple[str, str], dict[str, Any]], derived: dict[tuple[str, str], dict[str, Any]]) -> dict[tuple[str, str], dict[str, Any]]:
+    """The manifest's producer entries (`producers_of`) completed by the Program-derived facts (`producers_of_programs`) where the
+    manifest row declares no selector of its own: `operand` (when the manifest gives neither `producer_operand` nor `producer_ordinal`)
+    and `consumers` (when it is not a promoted row).  Only for members both name with the SAME family; a manifest entry is never
+    overridden, a member the manifest does not name is never added."""
+    out: dict[tuple[str, str], dict[str, Any]] = {}
+    for key, ent in declared.items():
+        d = derived.get(key)
+        if not d or d.get("conflict") or ent.get("conflict") or not ent.get("spec") or d.get("spec") != ent.get("spec"):
+            out[key] = ent
+            continue
+        ent = dict(ent)
+        if d.get("operand") and ent.get("operand") is None and ent.get("ordinal") is None:
+            ent["operand"] = d["operand"]
+        if d.get("consumers") and not ent.get("promoted"):
+            ent["consumers"] = list(d["consumers"])
+        out[key] = ent
+    return out
+
+
+def promote_handed_down(manifest: dict[str, Any] | None, derived: dict[tuple[str, str], dict[str, Any]]) -> dict[str, Any]:
+    """Mark, in place, the `instance_outputs` rows of a `v2-query` manifest whose Value the producer module's body hands DOWN: every module
+    the Programs name as reading it (`derived[...]["consumers"]`, `producers_of_programs`) is inside the producer's module subtree
+    (`v1_bridge.under`), so it is no return of that module.  Such a row gets `promoted: true` + those `consumers` (Program order) and the
+    acquisition observes it at its first consumer's input (`manifest_format.PROMOTED_OBSERVATION_RULE`) instead of hooking the module's
+    forward output: row #57's `model/out` is Gemma2's embed scale (the model body's `hidden *= normalizer`, read by `model.layers.0`)
+    while `Gemma2Model` returns the final norm's output -- the two differ from element 0 (Commit r20260924-061950-2148, form (B): 432
+    mismatches, 159,408 equal).  A v2 manifest carries no `promoted` flag (`v1_bridge`: such a Value simply crosses the body boundary).
+    Only rows whose family the Programs agree on (`spec` equal to the row's, no conflict) and that are not already promoted; a member
+    read by any module outside the subtree is a return and stays a module output.  Returns {"members": {"op/member": consumers}, "rows": n}."""
+    from verity_vllm.query.v1_bridge import under
+
+    picked: dict[tuple[str, str], list[str]] = {}
+    for key, d in derived.items():
+        cons = [str(c) for c in (d.get("consumers") or [])]
+        if cons and not d.get("conflict") and all(under(c, key[0]) for c in cons):
+            picked[key] = cons
+    rows = 0
+    members: dict[str, list[str]] = {}
+    for r in (manifest or {}).get("identities") or []:
+        if r.get("family") != "instance_outputs" or r.get("promoted"):
+            continue
+        key = (str(r.get("op_path")), str(r.get("output_member")))
+        cons = picked.get(key)
+        if cons is None or str(derived[key].get("spec") or "") != str(r.get("spec") or "").split("{", 1)[0].strip():
+            continue
+        r["promoted"] = True
+        r["consumers"] = list(cons)
+        members[f"{key[0]}/{key[1]}"] = list(cons)
+        rows += 1
+    return {"members": members, "rows": rows}
 
 
 def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callable[[int, str, int, int], bytes | None], *,

@@ -2112,6 +2112,20 @@ def why_class(why: str | None) -> str:
     return "other"
 
 
+def form_b_families(manifest: dict[str, Any] | None) -> dict[str, int]:
+    """Producer family -> the manifest's required `instance_outputs` identities this replay has no registered evaluator for (outside
+    NOT_YET, not a token selector).  The Commit value-checks those by form (B) only, which is complete only over a Match that snapshotted
+    every step (commit_verdict._form_b_complete_over_values): the Match reads this to pick its snapshot steps."""
+    out: Counter = Counter()
+    for r in (manifest or {}).get("identities") or []:
+        if r.get("family") != "instance_outputs" or not r.get("spec"):
+            continue
+        fam = str(r["spec"]).split("{", 1)[0].strip()
+        if fam not in EVALUATORS and fam not in NOT_YET and not RM.is_token_select(fam):
+            out[fam] += 1
+    return dict(out)
+
+
 INTERIOR_DEPTH = 4     # composed interior producers per VU (Gemm under a BiasAdd = 1); a deeper chain is 'not evaluable', named
 
 

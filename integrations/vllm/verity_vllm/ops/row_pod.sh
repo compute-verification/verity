@@ -551,6 +551,16 @@ if [[ ",$STAGES," == *,match,* ]]; then
   # manifest through $ACQUIRE_MANIFEST: the manifest of record beside the Build when it is there (a Match over a Build without one records
   # the runtime tree only, by name in match/capture).  Passthrough only -- the python stages decide what the engine does with it.
   if [ -z "${ACQUIRE_MANIFEST:-}" ] && [ -f "$D/manifest.json" ]; then export ACQUIRE_MANIFEST="$D/manifest.json"; log "acquisition manifest for the capture: $ACQUIRE_MANIFEST (ACQUIRE_ENGINE=${ACQUIRE_ENGINE:-v2})"; fi
+  # [#57] the step set is what the Commit needs: required values the replay has no evaluator for are value-checked by form (B) alone,
+  # complete only over EVERY step, so the row default becomes `all` for them (sampled_replay.form_b_families; a Match over 0,1 made #57's
+  # Commit fail 'steps not snapshotted').  An explicit MATCH_SNAP_STEPS stands, named; a MATCH_PHASE=cpu resume keeps its capture's steps.
+  if [ "$MATCH_PHASE" = all ] && [ "$SNAP_DEF" != all ] && [ -f "$D/manifest.json" ]; then
+    FB=$($PY -c 'import json,sys; from verity_vllm.check.sampled_replay import form_b_families; f=form_b_families(json.load(open(sys.argv[1]))); print(" ".join(f"{k}x{v}" for k, v in sorted(f.items())))' "$D/manifest.json" 2>>"$D/row.log"); FB_RC=$?
+    if [ "$FB_RC" -ne 0 ]; then log "WARN match: form (B) families not derived (rc=$FB_RC, see row.log): snapshot steps stay ${MATCH_SNAP_STEPS:-$SNAP_DEF}"
+    elif [ -n "$FB" ] && [ -z "${MATCH_SNAP_STEPS:-}" ]; then SNAP_DEF=all; log "match: snapshot steps = all (the Commit's form (B) must be complete: required values with no replay evaluator: $FB)"
+    elif [ -n "$FB" ] && [ "$MATCH_SNAP_STEPS" != all ]; then log "WARN match: MATCH_SNAP_STEPS=$MATCH_SNAP_STEPS explicit while form (B) must be complete ($FB): the Commit's form (B) stays partial"
+    fi
+  fi
   CMD_M=($PY312 -m verity_vllm.harness.run_config --case "$ROLE" --workload "$WL" --out "$D/match" --checkpoint-dir "$CK" --phase "$MATCH_PHASE"
          --python-gpu "$PY" --python-cpu "$PY312" --max-num-seqs "$B" --snapshot-steps "${MATCH_SNAP_STEPS:-$SNAP_DEF}"
          ${MATCH_SNAP_MAX_BYTES:+--snapshot-max-bytes "$MATCH_SNAP_MAX_BYTES"} --skip "$SKIP"
