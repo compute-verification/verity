@@ -99,7 +99,7 @@ def load_map(path: Path = MAP) -> MoveMap:
             body = line[len("REWRITE "):]
             f, rest = body.split(" :: ", 1)
             old, new = rest.split(" => ", 1)
-            mm.rewrites.append((f.strip(), old, new))
+            mm.rewrites.append((f.strip(), old, new.replace("\\n", "\n")))   # `\n` in the new literal: a line break (list files)
             continue
         lane = None
         m = re.search(r"\s+(DELETE|ADDED)-BY:(\S+)\s*$", line)

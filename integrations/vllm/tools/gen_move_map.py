@@ -208,7 +208,8 @@ put('verity_capture/experimental/commit_integ/row4_derived.py', 'verity_vllm/che
 put('verity_capture/experimental/commit_integ/spans.py', 'verity_vllm/harness/spans.py')
 put('verity_capture/experimental/commit_integ/tp_partial_source.py', 'verity_vllm/tp/partial_source.py')
 put('verity_capture/experimental/commit_integ/value_check.py', 'verity_vllm/check/value_check.py')
-put('verity_capture/experimental/fa2_commit/__init__.py', 'DROP')
+# the package's docstring describes the prototype, which stays one package; engine / hidden_stream (live) leave it
+put('verity_capture/experimental/fa2_commit/__init__.py', 'verity_vllm/commit/fa2_prototype/__init__.py', DEAD)
 put('verity_capture/experimental/fa2_commit/engine.py', 'verity_vllm/commit/hidden_engine.py')
 put('verity_capture/experimental/fa2_commit/hidden_stream.py', 'verity_vllm/commit/hidden_stream.py')
 for f in ('derived', 'encoding', 'fixture', 'kernel_dump', 'layouts', 'oracle', 'reference'):
@@ -549,7 +550,14 @@ REWRITE verity_vllm_numerics/fa2_relation.py :: return os.path.join(os.path.dirn
 REWRITE verity_vllm_numerics/rms_relation.py :: fixtures = os.path.join(os.path.dirname(here), "fixtures") => fixtures = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(here))), "fixtures")
 # query/correspondence.py becomes correspondence/reader_for_query.py: the query lint's inventory of query/*.py loses it
 REWRITE tests/query/test_lint.py :: {"program_view.py", "correspondence.py", "module_body.py", => {"program_view.py", "module_body.py",
+# fa2_commit's __init__ follows the prototype to commit/fa2_prototype/; engine (its live member) leaves, so the package itself is kept
+REWRITE tests/dead_code_keep.json ::   "verity_capture.experimental.fa2_commit.derived": =>   "verity_capture.experimental.fa2_commit": "fa2_commit fixtures: the package of the kept prototype modules (see derived)",\\n  "verity_capture.experimental.fa2_commit.derived":
 """)
+    # the census root glob sweep/*.sh would become ops/*.sh, which also holds the bench/ shells (not roots): list the sweep shells
+    sweep_sh = sorted(f for f in files if f.startswith('verity_capture/sweep/') and f.count('/') == 2 and f.endswith('.sh'))
+    fh.write("REWRITE tests/census_roots.txt :: verity_capture/sweep/*.sh => "
+             + "\\n".join(f + ("        # the former sweep/*.sh glob (ops/ also holds bench/ shells)" if i == 0 else "")
+                          for i, f in enumerate(sweep_sh)) + "\n")
 print(f"mapped {len(lines)} files; unmapped {len(unmapped)}")
 for u in unmapped: print("  UNMAPPED", u)
 # collisions among non-test targets

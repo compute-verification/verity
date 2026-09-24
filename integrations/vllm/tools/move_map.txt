@@ -516,7 +516,7 @@ verity_capture/experimental/commit_integ/tests/test_tp_partial_source_mid_module
 verity_capture/experimental/commit_integ/tests/test_tp_partial_source_moe.py -> tests/tp/test_tp_partial_source_moe.py
 verity_capture/experimental/commit_integ/tp_partial_source.py -> verity_vllm/tp/partial_source.py
 verity_capture/experimental/commit_integ/value_check.py -> verity_vllm/check/value_check.py
-verity_capture/experimental/fa2_commit/__init__.py -> DROP
+verity_capture/experimental/fa2_commit/__init__.py -> verity_vllm/commit/fa2_prototype/__init__.py  DELETE-BY:vllm-dead-code
 verity_capture/experimental/fa2_commit/derived.py -> verity_vllm/commit/fa2_prototype/derived.py  DELETE-BY:vllm-dead-code
 verity_capture/experimental/fa2_commit/encoding.py -> verity_vllm/commit/fa2_prototype/encoding.py  DELETE-BY:vllm-dead-code
 verity_capture/experimental/fa2_commit/engine.py -> verity_vllm/commit/hidden_engine.py
@@ -1210,3 +1210,6 @@ REWRITE verity_vllm_numerics/fa2_relation.py :: return os.path.join(os.path.dirn
 REWRITE verity_vllm_numerics/rms_relation.py :: fixtures = os.path.join(os.path.dirname(here), "fixtures") => fixtures = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(here))), "fixtures")
 # query/correspondence.py becomes correspondence/reader_for_query.py: the query lint's inventory of query/*.py loses it
 REWRITE tests/query/test_lint.py :: {"program_view.py", "correspondence.py", "module_body.py", => {"program_view.py", "module_body.py",
+# fa2_commit's __init__ follows the prototype to commit/fa2_prototype/; engine (its live member) leaves, so the package itself is kept
+REWRITE tests/dead_code_keep.json ::   "verity_capture.experimental.fa2_commit.derived": =>   "verity_capture.experimental.fa2_commit": "fa2_commit fixtures: the package of the kept prototype modules (see derived)",\n  "verity_capture.experimental.fa2_commit.derived":
+REWRITE tests/census_roots.txt :: verity_capture/sweep/*.sh => verity_capture/sweep/canary.sh        # the former sweep/*.sh glob (ops/ also holds bench/ shells)\nverity_capture/sweep/compiled_commit.sh\nverity_capture/sweep/fa3_row_negatives.sh\nverity_capture/sweep/pod_fa2_tap.sh\nverity_capture/sweep/pod_fa3_tap.sh\nverity_capture/sweep/pod_hidden_gpu.sh\nverity_capture/sweep/row_pod.sh\nverity_capture/sweep/row_pod_tp2.sh\nverity_capture/sweep/run_row_v2.sh\nverity_capture/sweep/stoch_negative_n3.sh\nverity_capture/sweep/stoch_negatives.sh\nverity_capture/sweep/tp_stage.sh
