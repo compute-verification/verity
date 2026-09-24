@@ -405,6 +405,12 @@ pub enum Decode {
     PrivSel(&'static privsel::PrivSel),
 }
 
+/// The K a v5 (hashed) statement header carries: the GEMM reduction length of every relation (`GemmAccumulator<1536>`;
+/// Python `relations.K_VU`, written by `serialize._K_of` whatever the relation).  It is `steps x k_ops` for the
+/// Relation-registry units but NOT for fp4-nvf4 (24 x 64 codes; its bare unit takes 68 words = codes + scales), so a
+/// hashed statement is checked against this, a bare one against `k_ops`.
+pub const HASHED_ROW_K: usize = 1536;
+
 #[derive(Debug)]
 pub struct Relation {
     /// The `relation` string of a v4 statement (also the `--relation` value of `backends.direct.ligero.run`).
@@ -419,6 +425,12 @@ pub struct Relation {
     /// `RelationHooks.y16_bits`: the chain-end public word is in `[0, 2^y_bits)`.
     pub y_bits: u32,
     pub decode: Decode,
+    /// The VU shape (`relations.Relation.steps` = `K_VU // k`, `fp4.relation.STEPS`): `steps` chained units (columns) per
+    /// VU and `k_ops` words per operand per unit.  The compiled system is column-uniform, so its digests do NOT fix the
+    /// shape: a pinned verify refuses a statement whose `steps` / K differ (red-team-leaf-3 H1 / H2; the chain test, the
+    /// public table and the authentication ranks are all laid out from `st.steps`).
+    pub steps: usize,
+    pub k_ops: usize,
     /// The chain end of the relation's compiled system: `None` = one public word compared as a residue (a
     /// `ligero-system/v1` chain, `y16 < 2^y_bits`); `Some` = the `(lo, bits)` bit fields of the public word a
     /// `ligero-system/v2` chain ends on (`compile_fp4_unit`: sign 31/1, exponent field 23/8, fraction 0/23).  A
@@ -428,11 +440,17 @@ pub struct Relation {
     /// The pinned `protocol.system_id` (the last 32 bytes of `system.bin`) and this verifier's own table digest.
     pub sys_id: &'static str,
     pub table_digest: &'static str,
-    /// The same two digests of the HASHED system (`hashchain.compose`: operands private, two Poseidon2 sponges along
-    /// the chain, the digests pinned at the chain end) a v5 statement (`authentication = included-hash`) is checked
-    /// against; empty when the relation is not composed (fp4-nvf4).
+    /// The same two digests of the HASHED system (`hashchain.compose` with the Poseidon2 leaf scheme: operands private,
+    /// two sponges along the chain, the digests pinned at the chain end) a v5 statement (`authentication =
+    /// included-hash`, relation `<name>` or `<name>+poseidon2`) is checked against; empty when the relation is not
+    /// composed (fp4-nvf4).  Hashed systems with OTHER leaf schemes are pinned in `leaf::PINS`.
     pub hashed_sys_id: &'static str,
     pub hashed_table_digest: &'static str,
+    /// The pinned pairs of ROW-SHARING systems (`hashchain.compose_shared` G / `row_hash_system` H; a v6 statement,
+    /// `authentication = included-hash-shared`), one per mode since the fingerprint coordinates differ (chain.FP_COORDS
+    /// interactive / FP_COORDS_FS Fiat-Shamir): `(interactive, [G sys_id, G table digest, H sys_id, H table digest])`.
+    /// Empty when the relation is not composed for sharing.
+    pub shared_systems: &'static [(bool, [&'static str; 4])],
 }
 
 pub static BF16_AMPERE: Relation = Relation {
@@ -443,6 +461,8 @@ pub static BF16_AMPERE: Relation = Relation {
     y_bytes: 2,
     y_bits: 16,
     decode: Decode::Word(Operand::Bf16),
+    steps: 96,
+    k_ops: 16,
     end_components: None,
     sys_id: "44cb05b9e6988219beba2d66582124e67a1893aac39d0b66126ce0b9d4db89cb",
     table_digest: "c147cc4cece7d61cd3046828410d18f487dcde82f709044f4b4f97e282a73a95",
@@ -453,6 +473,15 @@ pub static BF16_AMPERE: Relation = Relation {
     // RTX 4090; the 2048-VU hashed gate on the frozen vu-k1536 set passed with 86 negatives, 0 failures on that tree).
     hashed_sys_id: "673461ab446d96869a0ab32d1291667f4af4ba86cdf5fb6479fefaa50dbb8ed4",
     hashed_table_digest: "3ba12207d9f221dcb2a471044cabb314cc3e05e4512a27559080f431aa7210c9",
+    // lane share-logup-3 (2026-09-23): the row-sharing pairs (`hashchain.compose_shared` G, `row_hash_system` H; H is shared
+    // by every relation with the same steps / word width), `ligero-verify system-digest` on the pod's `bench-vu --auth
+    // included-hash-shared --tile 2x4 --dump-dir` systems, both modes (vy-share-logup, RTX 4090).
+    shared_systems: &[
+        (true, ["b6a145dcabdc96f9730f10d6fc67ba5e9b6a8f4ffaa8a1a927bb1012fcfd5f35", "e72aeb1d3a51a08ba9d007d6381ea39bf521878b0340999cc0924cd91eafb32f",
+               "95d32763d227baea625d62e7ae308f08a16577f44706afaeae7608049bb85a5d", "90dc00d5c56e978c554c51a48fc690a9427b4cee405c1330b3ae920e0d4150f9"]),
+        (false, ["0e20f8912027f3a93972e39c76178e988de5f902f8e7247ac3a09c862e6bd8a9", "a47c272ede439e25e4e9dbac74a00c4b041157d422886066fc8e02f5b1c4624b",
+                "610ba494e7456ce37803a87b98e462d32fd11288eace7025e22c89c4ffa1b1bc", "b1bbb3cfc50f065d96071b259ca3cc802bebbb5ee84eb42aff63f73fc175b678"]),
+    ],
 };
 
 pub static FP8_ADA: Relation = Relation {
@@ -463,11 +492,24 @@ pub static FP8_ADA: Relation = Relation {
     y_bytes: 4,
     y_bits: 22,
     decode: Decode::Word(Operand::E4m3),
+    steps: 48,
+    k_ops: 32,
     end_components: None,
     sys_id: "6b570eef0c7faa07ccd1dddb2508e2699bd5367b108b15920469d46d16073d37",
     table_digest: "443e4fc74c0ac0cc864e50f7125d9585d71986c0b95ff5336d93a6939f3cb952",
     hashed_sys_id: "c4c4b403e07da47f7747b947ad76899ef231112bcc6d62dc0448a83ef8696618",
     hashed_table_digest: "c0e2f48119e2c83ca81cbc8eb1cbba51a676b67a600b8125d75bf438b770e05d",
+    // lane share-logup (2026-09-23): row sharing, `hashchain.compose_shared` (G: 4506 rows = base 3769 + 704 private operand
+    // rows + 32 lane rows + 1 pin, 3 linked rows, fingerprint constraints in the coin mode) and `hashchain.row_hash_system`
+    // (H: 1142 rows, 10 pins, 8 linked capacity rows, public mode); the coordinates differ per mode (chain.FP_COORDS 8
+    // interactive / FP_COORDS_FS 10 Fiat-Shamir), so two pairs.  `ligero-verify system-digest` on the pod's dumps (vy-share-logup,
+    // RTX 4090; `bench-vu --auth included-hash-shared --tile 2x4 --dump-dir`, both modes).
+    shared_systems: &[
+        (true, ["99c9b0538bd70b5b59e520d8072150855a3455c46a6ac4d14d264a4bc385430b", "13fe4c4a74a42584835078d2e6c4863417b991fb913921c5f8f311b3ffdb5221",
+                "e26aaca3d0527c36b76acfbbadf5071f009b96870e5ef64f26ecb8026179d446", "ba38b704d9aeeefc1c7de1f4ccabb579405994d0c57dca4bded2d8c269b252f9"]),
+        (false, ["bc8c8425ca92b54c7a6ef0366aaf9a5b890df795ab0a9b051bb976727227812d", "0e4b6bebfcd2d40be3d1d4b6687ca7c4ec935396bbc7b065464f28850e3f6d60",
+                 "e1e6fd8596ec0d1b447ca636f8508149414847ad986bc07a8f5ac3cbd8e18a9e", "9305a83f6219bdc1fdc98e1f112233d8303f1ab0437a61b03d95ff456d49ce12"]),
+    ],
 };
 
 pub static BF16_HOPPER: Relation = Relation {
@@ -478,11 +520,22 @@ pub static BF16_HOPPER: Relation = Relation {
     y_bytes: 2,
     y_bits: 16,
     decode: Decode::Word(Operand::Bf16),
+    steps: 96,
+    k_ops: 16,
     end_components: None,
     sys_id: "9dcc7cdc1377a00d877440cc01a0dcdb73b3e989d86df8244eccb35a81be0df4",
     table_digest: "74ce68a2801e14fbeaab2b241886bbe3fa9146234289e52c774fd4160a6c469c",
     hashed_sys_id: "3c7570fa029de39af30363599480c7a7bdbb51ba8e5fbe552a852b2ffb0ba1e1",
     hashed_table_digest: "def0ccdae79f092f41bc35ecd054ad64e54e2cfe9769c8cec41737c1ebab6617",
+    // lane share-logup-3 (2026-09-23): the row-sharing pairs (`hashchain.compose_shared` G, `row_hash_system` H; H is shared
+    // by every relation with the same steps / word width), `ligero-verify system-digest` on the pod's `bench-vu --auth
+    // included-hash-shared --tile 2x4 --dump-dir` systems, both modes (vy-share-logup, RTX 4090).
+    shared_systems: &[
+        (true, ["fca47f3a0194672b5394d1686914ad7c4b73ded7724c159d30c58aba819c79d9", "0213dc390566a7e9a95cceb92e462abd89ab8effb449b1f3778c6de54e90c235",
+               "95d32763d227baea625d62e7ae308f08a16577f44706afaeae7608049bb85a5d", "90dc00d5c56e978c554c51a48fc690a9427b4cee405c1330b3ae920e0d4150f9"]),
+        (false, ["23394c0d68e9ae5ff33cc04831f493be1e19aac40181e3dbf5d3c0bb04ebff4e", "e507eaad4583688aede7473eee9207c6bedf807f12a41c6c040b4eb3c424588e",
+                "610ba494e7456ce37803a87b98e462d32fd11288eace7025e22c89c4ffa1b1bc", "b1bbb3cfc50f065d96071b259ca3cc802bebbb5ee84eb42aff63f73fc175b678"]),
+    ],
 };
 
 pub static FP8_HOPPER: Relation = Relation {
@@ -493,11 +546,22 @@ pub static FP8_HOPPER: Relation = Relation {
     y_bytes: 4,
     y_bits: 22,
     decode: Decode::Word(Operand::E4m3),
+    steps: 48,
+    k_ops: 32,
     end_components: None,
     sys_id: "c7cbebe365cb5f773a679bc13b5382fb45714511b1912e4e4ab7fb48accd4bc3",
     table_digest: "d5b77463fee9b3d777174755144edaa84461b3eec6ac6a1750c887dc861d58e7",
     hashed_sys_id: "141a5fdd5ea2314ba7070f35d8eae1cb649c554589b1065033e5382580587c97",
     hashed_table_digest: "801ca79f0f8c5c77e6b90758614acadfc4e20688442e616e756dbd14a464144d",
+    // lane share-logup-3 (2026-09-23): the row-sharing pairs (`hashchain.compose_shared` G, `row_hash_system` H; H is shared
+    // by every relation with the same steps / word width), `ligero-verify system-digest` on the pod's `bench-vu --auth
+    // included-hash-shared --tile 2x4 --dump-dir` systems, both modes (vy-share-logup, RTX 4090).
+    shared_systems: &[
+        (true, ["22acdec1a85a29fd95f6737a68f3157947eb29b8c035b47a68c6cb830306997e", "f958bdde3b144eb400addac99e4feb45bd671c814ed7fc7469d0b3925519829b",
+               "e26aaca3d0527c36b76acfbbadf5071f009b96870e5ef64f26ecb8026179d446", "ba38b704d9aeeefc1c7de1f4ccabb579405994d0c57dca4bded2d8c269b252f9"]),
+        (false, ["e5e4eae5a99238009fec10d52954b32d927847f8620b717ae21d9582cd53df95", "7b475f320c49583d9c89567a5e7705c04516092835da3100c337c400dbdafcd5",
+                "e1e6fd8596ec0d1b447ca636f8508149414847ad986bc07a8f5ac3cbd8e18a9e", "9305a83f6219bdc1fdc98e1f112233d8303f1ab0437a61b03d95ff456d49ce12"]),
+    ],
 };
 
 /// `GemmAccumulator<1536>` over `sm120.mma.m16n8k64.e2m1.nvf4` (24 chained K = 64 steps; `fp4/chain.py FP4_HOOKS`:
@@ -510,11 +574,14 @@ pub static FP4_NVF4: Relation = Relation {
     y_bytes: 4,
     y_bits: 32,
     decode: Decode::Nvf4,
+    steps: 24,
+    k_ops: 68,
     end_components: Some(&[(31, 1), (23, 8), (0, 23)]),
     sys_id: "a825ba0b826a15366bfb8cdd720a5e9978603cbe589491abcbba7346ad35bf3c",
     table_digest: "b597b003e55b8cf1025b517a04d442d9c6d8704f38fd06df13a21b3273b2d2f6",
     hashed_sys_id: "",
     hashed_table_digest: "",
+    shared_systems: &[],
 };
 
 /// The v2 public-selection relations (lane relmin-lookup, 2026-09-23): the same claims as their v1 counterparts (pinned
@@ -532,11 +599,14 @@ pub static BF16_HOPPER_V2: Relation = Relation {
     y_bytes: 2,
     y_bits: 16,
     decode: Decode::PubSel(&pubsel::BF16_HOPPER),
+    steps: 96,
+    k_ops: 16,
     end_components: None,
     sys_id: "cf99d1ce739e621fca7ef52d86cdec3c43aae58464e370da745901316a70b831",
     table_digest: "bc4b95ec3576a22bf16a28ae5d0e83bdbc8fe4f7806dc28b1f6b304c6602bf7f",
     hashed_sys_id: "",
     hashed_table_digest: "",
+    shared_systems: &[],
 };
 
 pub static BF16_AMPERE_V2: Relation = Relation {
@@ -547,11 +617,14 @@ pub static BF16_AMPERE_V2: Relation = Relation {
     y_bytes: 2,
     y_bits: 16,
     decode: Decode::PubSel(&pubsel::BF16_AMPERE),
+    steps: 96,
+    k_ops: 16,
     end_components: None,
     sys_id: "15d793e74cc2b380555920c740c135bbd9e936fe925b2c4ca84f1da2943e7128",
     table_digest: "e70b77d58569b1de95d1304d71f5a4aac6df2ac88581054058a36d7fe03c1c66",
     hashed_sys_id: "",
     hashed_table_digest: "",
+    shared_systems: &[],
 };
 
 pub static FP8_HOPPER_V2: Relation = Relation {
@@ -562,11 +635,14 @@ pub static FP8_HOPPER_V2: Relation = Relation {
     y_bytes: 4,
     y_bits: 22,
     decode: Decode::PubSel(&pubsel::FP8_HOPPER),
+    steps: 48,
+    k_ops: 32,
     end_components: None,
     sys_id: "e2a1573bc37cbd86af3184181da7ca404e60dfab6e82f93ff6fff2177fdaf493",
     table_digest: "a473c735fa661e1f8752679b51b15d935c2a0857ec7f60055b07d7b140169123",
     hashed_sys_id: "",
     hashed_table_digest: "",
+    shared_systems: &[],
 };
 
 pub static FP8_ADA_V2: Relation = Relation {
@@ -577,11 +653,14 @@ pub static FP8_ADA_V2: Relation = Relation {
     y_bytes: 4,
     y_bits: 22,
     decode: Decode::PubSel(&pubsel::FP8_ADA),
+    steps: 48,
+    k_ops: 32,
     end_components: None,
     sys_id: "f23461f82dec60ba24ce05000cc91b72dabcce3c87c249d0cee61a6cdba9eb36",
     table_digest: "82b3041e8cbcf0fc7db77fa1b8693c4517b6d8e62d28e4f1f87ea8e8c5782b67",
     hashed_sys_id: "",
     hashed_table_digest: "",
+    shared_systems: &[],
 };
 
 /// The v3 private-operand relations (lane relmin-private, 2026-09-23): v1's statement on committed operand words, the
@@ -597,11 +676,14 @@ pub static BF16_HOPPER_V3: Relation = Relation {
     y_bytes: 2,
     y_bits: 16,
     decode: Decode::PrivSel(&privsel::BF16_HOPPER),
+    steps: 96,
+    k_ops: 16,
     end_components: None,
     sys_id: "e3ff1f9f0545827545e634268f88775190efd56a4f95887cd69d2a9d488e36b6",
     table_digest: "87ec0bfd9677ee1afe70e389e24aaab0d91c65f75783db4b6ffe26a344a1be5e",
     hashed_sys_id: "",
     hashed_table_digest: "",
+    shared_systems: &[],
 };
 
 pub static BF16_AMPERE_V3: Relation = Relation {
@@ -612,11 +694,14 @@ pub static BF16_AMPERE_V3: Relation = Relation {
     y_bytes: 2,
     y_bits: 16,
     decode: Decode::PrivSel(&privsel::BF16_AMPERE),
+    steps: 96,
+    k_ops: 16,
     end_components: None,
     sys_id: "c961ba703f904355cf7f483b84ba225957ea1a2e54cf0bd6d0f6003286f69189",
     table_digest: "72cc7c90f2fcbb3099fb13f3919967009774e07c3e39845ce86cd12bacdfe1ea",
     hashed_sys_id: "",
     hashed_table_digest: "",
+    shared_systems: &[],
 };
 
 pub static FP8_HOPPER_V3: Relation = Relation {
@@ -627,11 +712,14 @@ pub static FP8_HOPPER_V3: Relation = Relation {
     y_bytes: 4,
     y_bits: 22,
     decode: Decode::PrivSel(&privsel::FP8_HOPPER),
+    steps: 48,
+    k_ops: 32,
     end_components: None,
     sys_id: "c5668bcf1f91a3fd6f64a849f9cdd28551ca3b83ec32dd19ba99606c64391a39",
     table_digest: "36680ea293347b90235d1299e6d96b27fd261ebee52ff95cd0b4f82f47fcc5f2",
     hashed_sys_id: "",
     hashed_table_digest: "",
+    shared_systems: &[],
 };
 
 pub static FP8_ADA_V3: Relation = Relation {
@@ -642,11 +730,14 @@ pub static FP8_ADA_V3: Relation = Relation {
     y_bytes: 4,
     y_bits: 22,
     decode: Decode::PrivSel(&privsel::FP8_ADA),
+    steps: 48,
+    k_ops: 32,
     end_components: None,
     sys_id: "1bf8ce3edcabf155616fa6dbc505ad77281ae8d5fb20503739db448eb0e620ef",
     table_digest: "2f74b24d8a77208f96a0d3552ffa5c2f4d3c31a11b03e041e02608ef26f65417",
     hashed_sys_id: "",
     hashed_table_digest: "",
+    shared_systems: &[],
 };
 
 /// The folded x4 units (EXPERIMENTAL, lane relmin-lookup): four instruction steps per column, the base v2 relation's
@@ -659,11 +750,14 @@ pub static BF16_HOPPER_V2X4: Relation = Relation {
     y_bytes: 2,
     y_bits: 16,
     decode: Decode::PubSel(&pubsel::BF16_HOPPER_X4),
+    steps: 24,
+    k_ops: 64,
     end_components: None,
     sys_id: "f1211dba4dab2014eb446a41b15ac0196e700ba0aee97644746a17a75371d17d",
     table_digest: "dbb924084b89e760324c9e63b1ab6716aa8c17a8874e8db8e0d8d1aab4c9ad16",
     hashed_sys_id: "",
     hashed_table_digest: "",
+    shared_systems: &[],
 };
 
 pub static BF16_AMPERE_V2X4: Relation = Relation {
@@ -674,11 +768,14 @@ pub static BF16_AMPERE_V2X4: Relation = Relation {
     y_bytes: 2,
     y_bits: 16,
     decode: Decode::PubSel(&pubsel::BF16_AMPERE_X4),
+    steps: 24,
+    k_ops: 64,
     end_components: None,
     sys_id: "8ce6ca344ecb6c2e03b4798e0a009f38d92a6100a9947ca4d72ed0f88c2f7684",
     table_digest: "c9611303089dc521262d8401d182760ea6995e4b977e5f4d51acc5cdefa9d645",
     hashed_sys_id: "",
     hashed_table_digest: "",
+    shared_systems: &[],
 };
 
 pub static FP8_HOPPER_V2X4: Relation = Relation {
@@ -689,11 +786,14 @@ pub static FP8_HOPPER_V2X4: Relation = Relation {
     y_bytes: 4,
     y_bits: 22,
     decode: Decode::PubSel(&pubsel::FP8_HOPPER_X4),
+    steps: 12,
+    k_ops: 128,
     end_components: None,
     sys_id: "3463ce9f5391ac211c5ef58b88b634c70cbdd72db8c1635d138f72659e792c28",
     table_digest: "8d6795475a40a6a0b1c115318ee9629cbdd1183658b38b2e3d20dc8ef0c2d3e1",
     hashed_sys_id: "",
     hashed_table_digest: "",
+    shared_systems: &[],
 };
 
 pub static FP8_ADA_V2X4: Relation = Relation {
@@ -704,11 +804,14 @@ pub static FP8_ADA_V2X4: Relation = Relation {
     y_bytes: 4,
     y_bits: 22,
     decode: Decode::PubSel(&pubsel::FP8_ADA_X4),
+    steps: 12,
+    k_ops: 128,
     end_components: None,
     sys_id: "d2272d3fee342813f40e56db6da9bfb7261bdd311fb34cd6cae02bf6b946612a",
     table_digest: "87be1aead4ba410e81ab387510c721e3eac7dd6c760137564a22c7d5a038d3a2",
     hashed_sys_id: "",
     hashed_table_digest: "",
+    shared_systems: &[],
 };
 
 /// The PRIVATE-operand-safe folds (lane fold-private, 2026-09-23): the v3 units and the v1 units with four instruction
@@ -725,11 +828,14 @@ pub static BF16_HOPPER_V3X4: Relation = Relation {
     y_bytes: 2,
     y_bits: 16,
     decode: Decode::PrivSel(&privsel::BF16_HOPPER_X4),
+    steps: 24,
+    k_ops: 64,
     end_components: None,
     sys_id: "7a61e78e0cc2e86592aaae9d7d55cc6877cf50582f5569f646708fdf5717b38b",
     table_digest: "3c25420ef94ddbfc9cbf73f837237f5a157cccfbece3e4057f682f232357e877",
     hashed_sys_id: "",
     hashed_table_digest: "",
+    shared_systems: &[],
 };
 
 pub static BF16_AMPERE_V3X4: Relation = Relation {
@@ -740,11 +846,14 @@ pub static BF16_AMPERE_V3X4: Relation = Relation {
     y_bytes: 2,
     y_bits: 16,
     decode: Decode::PrivSel(&privsel::BF16_AMPERE_X4),
+    steps: 24,
+    k_ops: 64,
     end_components: None,
     sys_id: "ae66575fa98270d7db32380dd0815ab95e35524a464f5393d1f20b63aa89f1e1",
     table_digest: "c464e86b2031128caba3b69f17b9d7951a8b2872640b9d380e91712bf8d948ea",
     hashed_sys_id: "",
     hashed_table_digest: "",
+    shared_systems: &[],
 };
 
 pub static FP8_HOPPER_V3X4: Relation = Relation {
@@ -755,11 +864,14 @@ pub static FP8_HOPPER_V3X4: Relation = Relation {
     y_bytes: 4,
     y_bits: 22,
     decode: Decode::PrivSel(&privsel::FP8_HOPPER_X4),
+    steps: 12,
+    k_ops: 128,
     end_components: None,
     sys_id: "023c022373f4ea45efc141aadf2a4540474f6da50e91ec41746fbee82a9e6f63",
     table_digest: "5fb0491ce4cb1241559a9e70baaf90d103bb911c253cf25b294f3797d25bff77",
     hashed_sys_id: "",
     hashed_table_digest: "",
+    shared_systems: &[],
 };
 
 pub static FP8_ADA_V3X4: Relation = Relation {
@@ -770,11 +882,14 @@ pub static FP8_ADA_V3X4: Relation = Relation {
     y_bytes: 4,
     y_bits: 22,
     decode: Decode::PrivSel(&privsel::FP8_ADA_X4),
+    steps: 12,
+    k_ops: 128,
     end_components: None,
     sys_id: "727b2076042cc6ef300f0daeb4989004caf5d3950ab36ba7639fa2a564e8a8d9",
     table_digest: "a03283b894b958b5e7b084c8d235a8c6d13d147da15bc185ca347190797dcde2",
     hashed_sys_id: "",
     hashed_table_digest: "",
+    shared_systems: &[],
 };
 
 pub static BF16_HOPPER_X4: Relation = Relation {
@@ -785,11 +900,14 @@ pub static BF16_HOPPER_X4: Relation = Relation {
     y_bytes: 2,
     y_bits: 16,
     decode: Decode::Word(Operand::Bf16),
+    steps: 24,
+    k_ops: 64,
     end_components: None,
     sys_id: "6f17f7080dbbfa5c37beb801b9bbe10c0633642442d02715d2a95bfb6696cef8",
     table_digest: "650f3ede18f377054e0139873188ca74d531a817700d676e648e37bac8f16d54",
     hashed_sys_id: "",
     hashed_table_digest: "",
+    shared_systems: &[],
 };
 
 /// The frozen `vu-k1536` set's claim (every fourth recorded accumulator; `relchain.frozen_instances`).
@@ -801,11 +919,14 @@ pub static BF16_AMPERE_X4: Relation = Relation {
     y_bytes: 2,
     y_bits: 16,
     decode: Decode::Word(Operand::Bf16),
+    steps: 24,
+    k_ops: 64,
     end_components: None,
     sys_id: "9bb37c89238c524f99d143efb6d7a727a95c534c2d063d03bcf28bd81b2ccd93",
     table_digest: "ca8407d1273880fbea221f3bed92f05312e83d2a880567c4e46a8d24fb1d3385",
     hashed_sys_id: "",
     hashed_table_digest: "",
+    shared_systems: &[],
 };
 
 pub static FP8_HOPPER_X4: Relation = Relation {
@@ -816,11 +937,14 @@ pub static FP8_HOPPER_X4: Relation = Relation {
     y_bytes: 4,
     y_bits: 22,
     decode: Decode::Word(Operand::E4m3),
+    steps: 12,
+    k_ops: 128,
     end_components: None,
     sys_id: "32704bc7283c4d667f4c1ef9e0531eceff19268344232e66d0dad234caadf41f",
     table_digest: "76e131cc48c44ed7e3e91f16177f6cc9ba3504364a1769e6cec7777b0ec5a175",
     hashed_sys_id: "",
     hashed_table_digest: "",
+    shared_systems: &[],
 };
 
 pub static FP8_ADA_X4: Relation = Relation {
@@ -831,11 +955,14 @@ pub static FP8_ADA_X4: Relation = Relation {
     y_bytes: 4,
     y_bits: 22,
     decode: Decode::Word(Operand::E4m3),
+    steps: 12,
+    k_ops: 128,
     end_components: None,
     sys_id: "d521baca9371467ea9cf8a4d09f9534db3232220eaedf050466745ecb9d48357",
     table_digest: "fcad97cc1a75e452f314ef8e9795fbe1532dc7731b0725570225338239731aa3",
     hashed_sys_id: "",
     hashed_table_digest: "",
+    shared_systems: &[],
 };
 
 pub static RELATIONS: [&Relation; 25] = [
@@ -859,17 +986,20 @@ pub fn for_statement(name: Option<&str>) -> Result<&'static Relation, String> {
     }
 }
 
-/// The relation whose pinned digests a system file carries, if any, and whether it is the hashed system.
-pub fn by_digests(sys_id_hex: &str, table_digest_hex: &str) -> Option<(&'static Relation, bool)> {
+/// The relation whose pinned digests a system file carries, if any, and -- for a hashed system -- its leaf scheme
+/// (`leaf::POSEIDON2` for the relation's own `hashed_*` pins, another scheme for a `leaf::PINS` entry).
+pub fn by_digests(sys_id_hex: &str, table_digest_hex: &str) -> Option<(&'static Relation, Option<&'static crate::leaf::LeafScheme>)> {
     RELATIONS.iter().copied().find_map(|r| {
         if r.sys_id == sys_id_hex && r.table_digest == table_digest_hex {
-            Some((r, false))
+            Some((r, None))
         } else if !r.hashed_sys_id.is_empty() && r.hashed_sys_id == sys_id_hex && r.hashed_table_digest == table_digest_hex {
-            Some((r, true))
+            Some((r, Some(&crate::leaf::POSEIDON2)))
+        } else if r.shared_systems.iter().any(|(_, p)| (p[0] == sys_id_hex && p[1] == table_digest_hex) || (p[2] == sys_id_hex && p[3] == table_digest_hex)) {
+            Some((r, Some(&crate::leaf::POSEIDON2)))     // a side of the relation's row-sharing pair (Poseidon2 rows)
         } else {
             None
         }
-    })
+    }).or_else(|| crate::leaf::by_digests(sys_id_hex, table_digest_hex).map(|(r, l)| (r, Some(l))))
 }
 
 pub fn names() -> Vec<&'static str> {
@@ -1126,6 +1256,41 @@ mod tests {
     }
 
     #[test]
+    fn vu_shapes_are_the_python_registry_and_match_the_decodes() {
+        // relations.Relation.steps = K_VU // k (every registered relation), fp4.relation.STEPS = 1536 // 64 (68 words per
+        // unit: 64 codes + 4 scale bytes)
+        const K_VU: usize = HASHED_ROW_K;
+        for r in RELATIONS.iter() {
+            let products = match r.decode {
+                Decode::Nvf4 => {
+                    assert_eq!(r.k_ops, nvf4::WORDS, "{}", r.name);
+                    nvf4::K
+                }
+                Decode::PubSel(ps) => {
+                    assert_eq!(r.k_ops, ps.k(), "{}", r.name);
+                    r.k_ops
+                }
+                Decode::PrivSel(ps) => {
+                    assert_eq!(r.k_ops, ps.k, "{}", r.name);
+                    r.k_ops
+                }
+                Decode::Word(_) => r.k_ops,
+            };
+            assert_eq!(r.steps * products, K_VU, "{}: {} x {}", r.name, r.steps, products);
+        }
+        let shape = |n: &str| for_statement(Some(n)).map(|r| (r.steps, r.k_ops)).unwrap();
+        assert_eq!((shape("bf16-ampere"), shape("fp8-ada"), shape("fp4-nvf4")), ((96, 16), (48, 32), (24, 68)));
+        assert_eq!((shape("bf16-hopper-v3x4"), shape("fp8-ada-v2x4"), shape("fp8-hopper-x4")), ((24, 64), (12, 128), (12, 128)));
+        // every Ajtai pin's canonical VU fits its ring degree (the leaf's structural bound)
+        for (r, l, _, _) in crate::leaf::PINS {
+            let (rel, leaf) = (for_statement(Some(r)).unwrap(), crate::leaf::by_name(l).unwrap());
+            if let Some(n) = crate::leaf::max_steps(leaf) {
+                assert!(rel.steps <= n, "{r}+{l}: {} columns > n = {n}", rel.steps);
+            }
+        }
+    }
+
+    #[test]
     fn names_are_distinct_and_digests_unique() {
         for (i, a) in RELATIONS.iter().enumerate() {
             for b in RELATIONS.iter().skip(i + 1) {
@@ -1137,13 +1302,13 @@ mod tests {
             assert_eq!(a.table_digest.len(), 64);
             assert_eq!(for_statement(Some(a.name)).unwrap().name, a.name);
             let (r0, h0) = by_digests(a.sys_id, a.table_digest).unwrap();
-            assert!(r0.name == a.name && !h0);
+            assert!(r0.name == a.name && h0.is_none());
             if !a.hashed_sys_id.is_empty() {
                 assert_eq!(a.hashed_sys_id.len(), 64);
                 assert_eq!(a.hashed_table_digest.len(), 64);
                 assert_ne!(a.hashed_sys_id, a.sys_id);
                 let (r1, h1) = by_digests(a.hashed_sys_id, a.hashed_table_digest).unwrap();
-                assert!(r1.name == a.name && h1);
+                assert!(r1.name == a.name && h1.map(|l| l.name) == Some("poseidon2"));
             }
         }
         assert!(FP8_ADA.hashed_sys_id.len() == 64 && BF16_HOPPER.hashed_sys_id.len() == 64 && FP8_HOPPER.hashed_sys_id.len() == 64);

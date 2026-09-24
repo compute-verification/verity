@@ -2,9 +2,12 @@
 
 The store never validates a label beyond its envelope (§8: any key, any canonicalisable value); this module is the *shared spelling*
 of the keys and of the closed value sets, so that a producer, a verifier and a table read the same word.  `research data label`
-warns (stderr, one line) on a key outside the vocabulary or a value outside a declared enum -- and still writes the label: an
-older worktree, a key a lane needs today, a value the enum has not learnt yet all keep working; the warning is the nudge to bring
-the word here.  `research data vocab` prints the table.  Consumers import the constants (`vocab.PROOF_CLASS`, never the string).
+writes the canonical spelling of an old key or value and REFUSES what the vocabulary cannot place -- an unknown key (with the
+nearest known one), a measurement (`MEASUREMENT_KEYS`: it belongs in the result or the artifact's meta), a ref written as a label,
+a value outside a declared enum, a word where the form is a bool / int / number.  `--off-vocab` writes it anyway, for a concept the
+vocabulary has not learnt yet: bring the word here next.  Readers stay lenient (old spellings are read as the canonical key; the
+store keeps whatever older writers wrote).  `research data vocab` prints the table.  Consumers import the constants
+(`vocab.PROOF_CLASS`, never the string).
 
 Three groups, by asserter:
 
@@ -52,6 +55,17 @@ NOTE = "note"
 ASSUMPTIONS = "assumptions"
 OMITTED = "omitted"
 BREAKTHROUGH = "breakthrough"
+LANE = "lane"
+ROW = "row"
+SWEEP = "sweep"
+ARM = "arm"
+STAGE = "stage"
+SOURCE = "source"
+SUPERSEDED_BY = "superseded_by"
+HASH = "hash"
+SHARING = "sharing"
+FOLD = "fold"
+PIPELINE = "pipeline"
 
 # ---- verification labels: an independent verifier, never the producer ----------------------------------------------------------------
 
@@ -60,6 +74,8 @@ VERIFIER = "verifier"
 VERIFIER_SECONDS = "verifier_seconds"
 INDEPENDENTLY_VERIFIED = "independently_verified"     # the back-fill's spelling of verified=accepted|rejected: accepted, deprecated
 VERIFIED_BY = "verified_by"                           # a ledger row's free-text field: carries no verdict, ignored by every table
+SAME_DEVICE = "same_device"
+OUTCOME = "outcome"
 
 # ---- evidence labels: probe captures and instance sets --------------------------------------------------------------------------------
 
@@ -78,6 +94,7 @@ DEVICE = "device"
 INSTANCES_MANIFEST_SHA256 = "instances_manifest_sha256"
 COMPONENT = "component"
 JOBS = "jobs"
+DTYPE = "dtype"
 
 # ---- closed value sets -------------------------------------------------------------------------------------------------------------------
 
@@ -99,12 +116,17 @@ CANDIDATES = ("A-GKR", "B-AIR", "B-Ligero", "C", "SP1", "shared")
 
 #: label key written -> the key it means.  Writers (`research data label`, `ledger_to_store`) store the canonical key only; readers
 #: (`bench.tables`, `bench.store_tables`, `vocab-check`) map an old key to its canonical one with `canonical_key`.
-KEY_ALIASES: dict[str, str] = {"notes": NOTE, "verify_note": NOTE, "batch": B, "checker": VERIFIER}
+KEY_ALIASES: dict[str, str] = {"notes": NOTE, "verify_note": NOTE, "verifier_note": NOTE, "batch": B, "checker": VERIFIER,
+                               "axis": SWEEP, "milestone": ARM, "tree": SOURCE, "release": SOURCE}
 #: (key, value written) -> the value it means.
 VALUE_ALIASES: dict[tuple[str, str], str] = {(CANDIDATE, "A"): "A-GKR"}
-#: Keys whose value names another store object: that is a `ref` (in the manifest at `put`, `--ref name=art:...`), not a label.  A writer
-#: that labels one of these is told so (`research data label` warns; `vocab-check` lists them); the store still records the assertion.
+#: Keys whose value names another store object: that is a `ref` (in the manifest at `put`, `--ref name=art:...`), not a label.
+#: `research data label` refuses them (without `--off-vocab`); `vocab-check` lists the ones already written.
 REF_KEYS = ("path", "result_artifact", "constructed_from_attempt")
+#: Measurements and run parameters lanes have written as labels (2026-09-22/23).  The number is already in the result (or goes in
+#: the artifact's meta at `put`); a label is what a table selects on or a judgement about the result, so these are refused.
+MEASUREMENT_KEYS = ("l", "n", "subbatches", "per_proof_vus", "R_proved", "threads", "window", "rtt_ms_path", "native_peak", "accumulate",
+                    "replicate", "encoder")
 #: Label keys that name evidence / findings written by code today (trust dossiers, the ledger's red-team assertions).
 FINDING = "finding"
 LEVEL = "level"
@@ -188,6 +210,17 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(ASSUMPTIONS, GROUP_RESULT, LIST, "the cryptographic assumptions the number rests on"),
     _k(OMITTED, GROUP_RESULT, LIST, "what the number leaves out (ZK, authentication, key setup, ...)"),
     _k(BREAKTHROUGH, GROUP_RESULT, BOOL, "the lane's own flag that the row moves the campaign"),
+    _k(LANE, GROUP_RESULT, TEXT, "the lane that produced the result, when the artifact's meta does not carry it (tables read meta.lane first)"),
+    _k(ROW, GROUP_RESULT, TEXT, "the table or sweep row the result fills, e.g. 'bf16-hopper int-nonZK 4096 VUs' or a fixture row id"),
+    _k(SWEEP, GROUP_RESULT, TEXT, "the parameter a series of results varies (batch, subbatch, l, zk, ...); old spelling `axis`"),
+    _k(ARM, GROUP_RESULT, TEXT, "this result's point or variant within its sweep or comparison (pipeline4-window4, 1M-vu); old spelling `milestone`"),
+    _k(STAGE, GROUP_RESULT, TEXT, "the pipeline stage the result belongs to (build, match, commit)"),
+    _k(SOURCE, GROUP_RESULT, TEXT, "branch@commit the result was produced from, for an artifact no Attempt records; old spellings `tree`, `release`"),
+    _k(SUPERSEDED_BY, GROUP_RESULT, TEXT, "the run id or art: id of the result that replaces this one (this one stays in the store)"),
+    _k(HASH, GROUP_RESULT, TEXT, "the operand commitment proven in-circuit: none, poseidon2-babybear-w24, or the leaf's name"),
+    _k(SHARING, GROUP_RESULT, TEXT, "how operand rows are shared across VUs in-circuit: none, tile64x64"),
+    _k(FOLD, GROUP_RESULT, INT, "columns folded per VU (the relation's -xN)"),
+    _k(PIPELINE, GROUP_RESULT, INT, "prover pipeline depth (sub-batches in flight; 1 = sequential)"),
     # verification
     _k(VERIFIED, GROUP_VERIFICATION, ENUM, "an independent verifier's verdict on the result's proof(s)", VERIFIED_VALUES),
     _k(VERIFIER, GROUP_VERIFICATION, TEXT, "which verifier produced the verdict (binary or module + revision)"),
@@ -197,6 +230,8 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(VERIFIED_BY, GROUP_VERIFICATION, TEXT, "a ledger row's free-text field: no verdict, ignored by every table (name the verifier under `verifier`)",
        status=IGNORED),
     _k(FINDING, GROUP_VERIFICATION, TEXT, "a red-team or audit finding in prose (DOWNGRADE / EARNED / HOLDS ...), beside the proof_class verdict it explains"),
+    _k(SAME_DEVICE, GROUP_VERIFICATION, BOOL, "whether the verifier ran on the prover's machine"),
+    _k(OUTCOME, GROUP_VERIFICATION, TEXT, "an Attempt's failure class as judged (CGROUP_OOM, UNKNOWN_EXIT, ...), restating or correcting the classifier's"),
     # evidence
     _k(INSTRUCTION, GROUP_EVIDENCE, TEXT, "the tensor-core instruction probed, as the registry names it (sm89.mma.m16n8k32.e4m3)"),
     _k(MODEL, GROUP_EVIDENCE, TEXT, "the silicon model the capture was compared with"),
@@ -213,6 +248,7 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(INSTANCES_MANIFEST_SHA256, GROUP_EVIDENCE, TEXT, "sha256 of the instance set's manifest (or its contract-pinned recipe digest) a replay checked"),
     _k(COMPONENT, GROUP_EVIDENCE, TEXT, "the component a measurement isolates (encoder, hash, lookup, ...)"),
     _k(JOBS, GROUP_EVIDENCE, INT, "the number of jobs a battery or sweep ran"),
+    _k(DTYPE, GROUP_EVIDENCE, TEXT, "the operand format a measurement is for (bf16, e4m3, e2m1)"),
     _k(LEVEL, GROUP_EVIDENCE, TEXT, "a trust dossier's computed trust level for its target (verity.verification.trust)"),
     _k(ANCHOR, GROUP_EVIDENCE, TEXT, "the anchor family a trust dossier rests on"),
 )}
@@ -235,14 +271,32 @@ def check(name: str, value: Any) -> str | None:
         return f"label key {name!r} is the old spelling of {KEY_ALIASES[name]!r} (read as such; write {KEY_ALIASES[name]!r})"
     if name in REF_KEYS:
         return f"label key {name!r} names another store object: that is a ref (`research data put --ref {name}=art:...`), not a label"
+    if name in MEASUREMENT_KEYS:
+        return f"label key {name!r} is a measurement or run parameter: it belongs in the result or the artifact's meta, not a label"
     k = VOCAB.get(name)
     if k is None:
-        return f"label key {name!r} is not in the vocabulary (`research data vocab` lists it)"
+        near = suggest(name)
+        return f"label key {name!r} is not in the vocabulary" + (f" (did you mean {' or '.join(map(repr, near))}?)" if near else "") + \
+            " -- `research data vocab` lists the keys"
     if isinstance(value, str) and (name, value) in VALUE_ALIASES:
         return f"{name}={value!r} is the old spelling of {VALUE_ALIASES[(name, value)]!r} (read as such; write {VALUE_ALIASES[(name, value)]!r})"
     if k.form in (BOOL, INT, NUMBER) and isinstance(value, str) and coerce(name, value) is not value:
         return f"{name}={value!r} is a string; the key's form is {k.form} (`research data label` converts it; other writers must store the {k.form})"
+    if k.form in (INT, NUMBER) and isinstance(value, str):
+        return f"{name}={value!r} is not {'an int' if k.form == INT else 'a number'}"
     return k.check(value)
+
+
+def suggest(name: str) -> list[str]:
+    """Up to two known keys (or old spellings, as their canonical key) close to `name`, case-insensitively."""
+    import difflib  # noqa: PLC0415
+
+    pool = {k.lower(): k for k in KEYS} | {a.lower(): c for a, c in KEY_ALIASES.items()}
+    out: list[str] = []
+    for hit in difflib.get_close_matches(name.lower(), list(pool), n=4, cutoff=0.6):
+        if pool[hit] not in out:
+            out.append(pool[hit])
+    return out[:2]
 
 
 def by_group() -> dict[str, list[Key]]:

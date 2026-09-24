@@ -100,7 +100,7 @@ def main(argv=None) -> int:
         proof, (a, b, y16), lay = R.prove_vus(vus, check=False)
         ok_h, _why_h = R.verify_vus(proof, (a, b, y16), lay)
         stmt = b""
-        _, _, _, rc = protocol._challenge1(stmt, proof.root, R.cfg(lay.l).D, R.sys.m, R.tb.L, R.tb.Q, R.device, lay.l,
+        _, _, _, rc, _ = protocol._challenge1(stmt, proof.root, R.cfg(lay.l).D, R.sys.m, R.tb.L, R.tb.Q, R.device, lay.l,
                                            proof.coin_commit, proof.coins.r1)
         _, _, end = lay.masks(R.device)
         ends = torch.nonzero(end).flatten().tolist()

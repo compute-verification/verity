@@ -231,7 +231,11 @@ class Cgroup:
                 if raw is None:
                     out[key + "_reason"] = why
             raw, why = _read(self.dir / "memory.oom_control")
-            out["memory_events"] = ({"oom_kill": _kv_file(raw).get("oom_kill", 0), "under_oom": _kv_file(raw).get("under_oom", 0)} if raw else None)
+            oc = _kv_file(raw) if raw else {}
+            # oom_kill appeared in memory.oom_control in Linux 4.13: absent is None (no counter), never 0 (no kill)
+            out["memory_events"] = {"oom_kill": oc.get("oom_kill"), "under_oom": oc.get("under_oom", 0)} if raw else None
+            if raw and "oom_kill" not in oc:
+                out["memory_events_reason"] = "memory.oom_control has no oom_kill field (kernel < 4.13): OOM kills are not counted"
             raw, why = _read(self.dir / "memory.stat")
             kv = _kv_file(raw)
             out["memory_stat"] = ({"anon": kv.get("total_rss"), "file": kv.get("total_cache"), "file_dirty": kv.get("total_dirty"),
@@ -245,7 +249,7 @@ class Cgroup:
             raw, _ = _read(self.v1_dir / "memory.usage_in_bytes")
             out["v1_memory_usage_bytes"] = int(raw) if raw and raw.isdigit() else None
             raw, _ = _read(self.v1_dir / "memory.oom_control")
-            out["v1_memory_events"] = {"oom_kill": _kv_file(raw).get("oom_kill", 0)} if raw else None
+            out["v1_memory_events"] = {"oom_kill": _kv_file(raw).get("oom_kill")} if raw else None
         return out
 
 

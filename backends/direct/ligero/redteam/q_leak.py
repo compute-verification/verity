@@ -52,7 +52,7 @@ def chain_challenge(proof: Proof, sys: System, tb, cfg: Config, layout, y16, a, 
     M = n_rows(cfg, sys.m, True)
     ccom = tuple(proof.coin_commit) if (cfg.interactive and proof.coin_commit is not None) else None
     r1 = proof.coins.r1 if (cfg.interactive and proof.coins is not None) else None
-    _, _, _, rc = _challenge1(stmt, proof.root, cfg.D, M, tb.L, tb.Q, device, cfg.l, ccom, r1)
+    _, _, _, rc, _ = _challenge1(stmt, proof.root, cfg.D, M, tb.L, tb.Q, device, cfg.l, ccom, r1)
     return rc.cpu()
 
 

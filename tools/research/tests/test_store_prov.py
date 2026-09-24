@@ -310,7 +310,7 @@ def test_scratch_dir_layout_and_env(tmp_path):
     p = D.scratch_dir(tmp_path, "k" * 64, "r1", "triton")
     assert p == tmp_path / "scratch" / ("k" * 64) / "triton" and p.is_dir()
     q = D.scratch_dir(tmp_path, None, "r1", "nvcc")
-    assert q == tmp_path / "scratch" / "dirty-r1" / "nvcc" and q.is_dir()
+    assert q == tmp_path / "scratch" / "run-r1" / "nvcc" and q.is_dir()
     assert D.scratch_env("triton", p) == {"TRITON_CACHE_DIR": str(p)}
     assert D.scratch_env("nvcc-out", q) == {"RESEARCH_SCRATCH_NVCC_OUT": str(q)}
     with pytest.raises(ValueError):
@@ -448,11 +448,12 @@ def test_publish_old_v01_record_without_store_section(tmp_path):
     assert out["published"], out
     att = st.get_attempt("oom_own")
     assert att["tool"] == {"name": "python3", "version": None} and att["params"] == {"argv": ["python3", "hog.py", "--step-mib", "256"]}
-    assert att["key_params"] == [] and att["inputs"] == {} and att["derivation"].startswith("drv:")
-    assert att["reuse_key"] is None, "no source identity recorded: no reuse claim"
+    assert att["key_params"] == ["argv"] and att["inputs"] == {} and att["derivation"].startswith("drv:")
+    assert att["reuse_key"] is None, "no declared Tool: no reuse claim"
     assert att["conditions"]["hw.family"] == "cpu" and att["conditions"]["hw.hostname"] == "ee56316268c7" and att["conditions"]["rt.torch"] is None
     assert att["cost"]["usd"] is None and att["status"]["rc"] == 137 and att["outputs"] == {"result": None, "run_files": None}
-    assert att["derivation"] == D.derivation_id({"name": "python3", "version": None}, {}, {}, {}, []), "coarse but real"
+    assert att["derivation"] == D.derivation_id({"name": "python3", "version": None}, {}, {"argv": ["python3", "hog.py", "--step-mib", "256"]}, {}, []), \
+        "no store section: the whole argv is the request"
 
 
 # ---- research run integration ------------------------------------------------------------------------------------------------------------------
@@ -476,13 +477,13 @@ def test_run_records_store_section_scratch_and_campaign(tmp_path, monkeypatch, c
     run_dir = next(p for p in (tmp_path / "runs").iterdir() if p.is_dir())
     job = json.loads((run_dir / "job.json").read_text())
     s = job["store"]
-    assert s["tool"] == {"name": Path(PY).name, "version": None, "spec": None} and s["key_params"] == [] and s["key_conditions"] == []
+    assert s["tool"] == {"name": Path(PY).name, "version": None, "spec": None} and s["key_params"] == ["argv"] and s["key_conditions"] == []
     assert s["derivation"].startswith("drv:") and s["params"]["argv"][0] == PY and s["inputs"] == {} and s["closure"] == {}
     assert s["conditions"]["exec.campaign"] == "camp-1" and s["conditions"]["exec.project"] == "t" and s["conditions"]["source.dirty"] is False
-    assert len(s["reuse_key"]) == 64, "clean temp repo: a reuse key even without a Tool"
+    assert s["reuse_key"] is None, "clean temp repo, but no declared Tool: no reuse key"
     lines = (run_dir / "stdout.log").read_text().splitlines()
-    assert lines[0] == str(store / "scratch" / s["reuse_key"] / "triton") == s["scratch"]["triton"]
-    assert lines[1] == str(store / "scratch" / s["reuse_key"] / "nvcc") and lines[2] == "camp-1"
+    assert lines[0] == str(store / "scratch" / f"run-{run_dir.name}" / "triton") == s["scratch"]["triton"]
+    assert lines[1] == str(store / "scratch" / f"run-{run_dir.name}" / "nvcc") and lines[2] == "camp-1"
     err = capsys.readouterr().err
     assert "research: attempt published" in err or "research: attempt not published" in err
     if not _store_core_available():
@@ -516,6 +517,32 @@ def test_run_with_tool_declaration_resolves_before_launch(tmp_path, monkeypatch)
     assert s["derivation"] == D.derivation_id(tool, s["inputs"], s["key_params_resolved"], s["conditions"], ["hw.family"])
     assert s["reuse_key"] == D.reuse_key(s["derivation"], s["conditions"])
     assert research_main(["run", "--runs-dir", str(tmp_path / "runs"), "--tool", "nope", "--", "true"]) == 2, "an unknown tool is refused before anything runs"
+
+
+def test_declared_key_params_are_recorded_even_when_their_name_looks_secret(tmp_path, monkeypatch):
+    """`--auth included-hash` is a scientific choice the Tool declares as a key param; it was stored as `<redacted>`, so hashed and
+    bare runs were indistinguishable in the catalog.  Undeclared secret-looking flags and secret-shaped values stay redacted."""
+    src = _repo(tmp_path)
+    (src / "mytools/decl_auth.py").parent.mkdir()
+    (src / "mytools/decl_auth.py").write_text(textwrap.dedent("""
+        from research.store.tool import Tool
+        T = Tool(name="mine", version="1", command=["python", "-c"], key_params=["auth", "tile"])
+    """))
+    monkeypatch.chdir(src)
+    token = "hf_" + "a" * 24
+    rc = research_main(["run", "--runs-dir", str(tmp_path / "runs"), "--project", "t", "--no-sampler", "--tool", "mytools.decl_auth:T", "--",
+                        PY, "-c", "pass", "--auth", "included-hash", "--tile=64", "--auth-token", "s3cret", "--api-key=abc"])
+    assert rc == 0
+    s = json.loads((next(p for p in (tmp_path / "runs").iterdir() if p.is_dir()) / "job.json").read_text())["store"]
+    assert s["params"]["auth"] == "included-hash" and s["key_params_resolved"]["auth"] == "included-hash"
+    assert s["params"]["auth_token"] == "<redacted>" and s["params"]["api_key"] == "<redacted>"
+    assert s["params"]["argv"][-6:] == ["--auth", "included-hash", "--tile=64", "--auth-token", "<redacted>", "--api-key=<redacted>"]
+
+    from research.cli import unredact_key_params
+    from research.telemetry.job import redact_argv
+    argv = ["x", "--auth", token, "--auth=included"]
+    assert unredact_key_params(argv, redact_argv(argv)[0], {"auth"}) == ["x", "--auth", "<redacted>", "--auth=included"], \
+        "a secret-shaped value stays redacted even under a key-param flag"
 
 
 def test_machine_side_runner_loads_tool_from_shipped_source(tmp_path):
@@ -573,7 +600,7 @@ def test_run_publishes_attempt_to_local_store(tmp_path, monkeypatch):
     st = LocalStore(store)
     att = st.get_attempt(run_dir.name)
     assert att and att["schema"] == A.ATTEMPT_SCHEMA and att["status"]["rc"] == 0 and att["tool"]["name"] == "true"
-    assert att["reuse_key"] and st.index.attempts_by_reuse_key(att["reuse_key"])[0]
+    assert att["reuse_key"] is None and st.index.attempts_by_derivation(att["derivation"])[0]["id"] == run_dir.name
 
 
 # ---- cli_prov: lookup, pull, attempt publish -------------------------------------------------------------------------------------------------

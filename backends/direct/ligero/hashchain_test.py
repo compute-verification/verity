@@ -16,7 +16,9 @@ from .compile import P  # noqa: E402
 from .relations import relation  # noqa: E402
 from .relchain import HashedRelationRunner, hashed_negatives, instances, tile_instances  # noqa: E402
 from .serialize import (  # noqa: E402
+    HASHED_STATEMENT_TRIMMED,
     STMT_MAGIC_V5,
+    STMT_MAGIC_V6,
     SYS_MAGIC_V3,
     _statement_of,
     proof_bytes,
@@ -78,9 +80,11 @@ def test_statement_v5_and_system_v3_round_trip(runner, tmp_path) -> None:
     proof, pubs, lay = R.prove_vus([data[1], data[3]], check=False, vu_ids=[1, 3])
     st = _statement_of(R, pubs, lay, R.cfg(lay.l), 1)
     raw = statement_bytes(st)
-    assert raw[:8] == STMT_MAGIC_V5 and len(raw) < 2000            # no operand words: ~1.5 kB for two VUs
+    # no operand words: ~1.5 kB for two VUs; v6 (the default, lane tier0-bytes) drops the l-vector's zero padding too
+    assert raw[:8] == (STMT_MAGIC_V6 if HASHED_STATEMENT_TRIMMED else STMT_MAGIC_V5) and len(raw) < 2000
     st2 = read_statement(raw)
     assert st2.v5 and st2.authentication == "included-hash" and st2.relation == "fp8-ada"
+    assert st2.trimmed == HASHED_STATEMENT_TRIMMED and statement_bytes(st2) == raw
     assert np.array_equal(st2.a, st.a) and np.array_equal(st2.b, st.b) and np.array_equal(st2.y16, st.y16)
     assert st2.hash_auth == st.hash_auth and st2.hash_sibs == st.hash_sibs
     sysb = system_bytes(R.sys)
@@ -106,7 +110,7 @@ def test_negatives_rejected(runner) -> None:
     assert len(negs) >= 20 and accepted == []
     names = " | ".join(n for n, _ in negs)
     for must in ("digest lane", "swapped", "multiproof sibling", "root replaced", "computed on the flipped row", "W column",
-                 "hashed word", "capacity link", "out of range"):
+                 "hashed word", "carry link", "out of range"):
         assert must in names
 
 
@@ -280,3 +284,21 @@ def test_precomputed_row_sponges_equal_the_per_proof_sponge(runner) -> None:
     other = R.auth_for([0, 2])
     sp2 = R._sponges_for(hashauth.HashAuth(auth.vu_index, other.x_index, auth.w_index, auth.trees), a, b, 2)
     assert sp2 is not None and set(sp2) == {"b"}
+
+
+@pytest.mark.parametrize("name", sorted(CENSUS))
+def test_private_decode_is_the_public_decode(name: str) -> None:
+    """The converted decode pins from the device decode (no domain checks, no host sync) equal the relation's own public
+    decode on finite operands, both as the G-side (compose_shared) and the hashed (compose) name lists."""
+    rel = relation(name)
+    rng = np.random.default_rng(7)
+    l = 64
+    a = torch.as_tensor(np.asarray([rel.operands(rng, (rel.k,)) for _ in range(l)], dtype=np.int64))
+    b = torch.as_tensor(np.asarray([rel.operands(rng, (rel.k,)) for _ in range(l)], dtype=np.int64))
+    vals = rel.public_vectors(rel.params, None, a, b, None, device="cpu")
+    for hr in (hashchain.compose(rel), hashchain.compose_shared(rel)):
+        n_dec = len([n for n in hr.extra_hint_names if n.split(".")[-1] in ("s", "m", "e") and "[" in n and n[0] in "ab"])
+        names = hr.extra_hint_names[:n_dec]
+        assert names and all(n.split(".")[-1] in ("s", "m", "e") for n in names)
+        ref = torch.stack([torch.as_tensor(vals[n]).to(torch.int64) for n in names])
+        assert torch.equal(hashchain.private_decode(hr, a, b, names), ref)

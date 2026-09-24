@@ -36,7 +36,7 @@ class PublicCheckVerifier(Coins):
         y16_t = torch.as_tensor(y16, dtype=torch.int64)
         stmt = protocol.statement_digest(R.sys, cfg, a, b, layout=lay, y16=y16_t)
         M = protocol.n_rows(cfg, R.sys.m, True)
-        _, rho_lin, _, rc = protocol._challenge1(stmt, b"", cfg.D, M, R.tb.L, R.tb.Q, device, cfg.l, self.commitments(), self.r1)
+        _, rho_lin, _, rc, _ = protocol._challenge1(stmt, b"", cfg.D, M, R.tb.L, R.tb.Q, device, cfg.l, self.commitments(), self.r1)
         pub = public_vectors(R.p, None, a, b, None, device=device)
         _, beta = protocol._alpha_beta(R.tb, rho_lin, pub, R.sys.m, cfg.l, device)
         object.__setattr__(self, "beta", (beta % P).cpu())

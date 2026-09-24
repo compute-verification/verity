@@ -38,10 +38,11 @@ def fs_remote(env):
 # ---- vocabulary -----------------------------------------------------------------------------------------------------------------------
 
 RESULT_KEYS = ("candidate", "proof_class", "soundness", "K", "B", "hardware", "authentication", "campaign", "relation", "mode", "zk", "overhead",
-               "seconds_per_vu", "track", "scope", "label", "note", "assumptions", "omitted", "breakthrough")
-VERIFICATION_KEYS = ("verified", "verifier", "verifier_seconds", "independently_verified", "verified_by", "finding")
+               "seconds_per_vu", "track", "scope", "label", "note", "assumptions", "omitted", "breakthrough",
+               "lane", "row", "sweep", "arm", "stage", "source", "superseded_by", "hash", "sharing", "fold", "pipeline")
+VERIFICATION_KEYS = ("verified", "verifier", "verifier_seconds", "independently_verified", "verified_by", "finding", "same_device", "outcome")
 EVIDENCE_KEYS = ("instruction", "model", "model_agrees", "model_status", "model_rejected", "evidence", "family", "instances_dataset", "instances_tier",
-                 "mismatches", "target", "device", "instances_manifest_sha256", "component", "jobs", "level", "anchor")
+                 "mismatches", "target", "device", "instances_manifest_sha256", "component", "jobs", "level", "anchor", "dtype")
 
 
 def test_vocabulary_pins_every_key_by_asserter_and_form():
@@ -119,30 +120,58 @@ def test_render_and_cli_vocab(env, capsys):
     assert doc["model_agrees"]["values"] == ["true", "false"] and doc["independently_verified"]["status"] == "deprecated"
 
 
-def test_label_warns_on_stderr_and_writes_anyway(env, capsys):
+def test_label_refuses_what_the_vocabulary_cannot_place_unless_off_vocab(env, capsys):
+    """Lanes standardise on the vocabulary's words: an unknown key, a measurement, a ref, an off-enum value or a word in a bool key is
+    refused (exit 2, nothing written) with the reason; `--off-vocab` writes it with a warning."""
     st = LocalStore()
-    assert main(["label", ART, "nonesuch", "v1", "--by", "lane-x"]) == 0
+    refused = [(["nonesuch", "v1"], "label key 'nonesuch' is not in the vocabulary"),
+               (["Relation", "fp8-ada"], "did you mean 'relation'?"),
+               (["verfied", "accepted"], "did you mean 'verified' or 'verifier'?"),
+               (["subbatches", "32"], "label key 'subbatches' is a measurement or run parameter"),
+               (["result_artifact", "art:" + "1" * 64], "names another store object: that is a ref"),
+               (["model_agrees", "maybe"], "model_agrees='maybe' is not one of true, false"),
+               (["verified", "yes"], "not one of accepted, rejected, not-transferable, no-dumps"),
+               (["fold", "four"], "fold='four' is not an int"),
+               (["overhead", "n/a"], "overhead='n/a' is not a number")]
+    for args, why in refused:
+        assert main(["label", ART, *args, "--by", "lane-x"]) == 2, args
+        out, err = capsys.readouterr()
+        assert out == "" and err.startswith("research data label: refused: ") and why in err, (args, err)
+        assert "Nothing written (--off-vocab writes it anyway)" in err
+    assert st.labels(ART) == []
+    assert main(["label", ART, "nonesuch", "v1", "--by", "lane-x", "--off-vocab"]) == 0
     out, err = capsys.readouterr()
     assert Path(out.strip()).is_file() and err.count("\n") == 1
-    assert "warning: label key 'nonesuch' is not in the vocabulary" in err and "stored anyway" in err
-    assert main(["label", ART, "model_agrees", "maybe", "--by", "lane-x"]) == 0
-    out, err = capsys.readouterr()
-    assert Path(out.strip()).is_file() and "warning: model_agrees='maybe' is not one of true, false; stored anyway" in err
+    assert "warning: label key 'nonesuch' is not in the vocabulary" in err and "stored anyway (--off-vocab)" in err
     assert main(["label", ART, "model_agrees", "true", "--by", "lane-x", "--value-json"]) == 0
     out, err = capsys.readouterr()
     assert Path(out.strip()).is_file() and err == ""
     assert main(["label", ART, "verified", "accepted", "--by", "verifier-1", "--ref", "run:x"]) == 0
     out, err = capsys.readouterr()
     assert Path(out.strip()).is_file() and err == ""
-    # every one of the four is in the store, the warned ones included, exactly as given
-    labels = {(l.key, l.value) for l in st.labels(ART)}
-    assert labels == {("nonesuch", "v1"), ("model_agrees", "maybe"), ("model_agrees", True), ("verified", "accepted")}
+    assert {(l.key, l.value) for l in st.labels(ART)} == {("nonesuch", "v1"), ("model_agrees", True), ("verified", "accepted")}
+
+
+def test_lane_shorthand_folds_into_one_spelling(env, capsys):
+    """The 2026-09-22/23 lane shorthand: synonyms are written under one key, the adopted concepts are keys of their own."""
+    st = LocalStore()
+    for key, value, want in (("axis", "l", ("sweep", "l")), ("milestone", "1M-vu", ("arm", "1M-vu")), ("tree", "main@6babe27", ("source", "main@6babe27")),
+                             ("release", "lane/x@ec45c0b", ("source", "lane/x@ec45c0b")), ("verifier_note", "Rust", ("note", "Rust")),
+                             ("same_device", "false", ("same_device", False)), ("fold", "4", ("fold", 4)), ("pipeline", "2", ("pipeline", 2)),
+                             ("hash", "poseidon2-babybear-w24", ("hash", "poseidon2-babybear-w24")), ("lane", "b-verify-par", ("lane", "b-verify-par")),
+                             ("superseded_by", "r20260922-231034-0693", ("superseded_by", "r20260922-231034-0693"))):
+        assert main(["label", ART, key, value, "--by", "lane-x"]) == 0, key
+        assert "refused" not in capsys.readouterr().err
+        assert (st.labels(ART, key=want[0])[-1].key, st.labels(ART, key=want[0])[-1].value) == want
+    assert vocab.suggest("supersededby") == ["superseded_by"] and vocab.suggest("Axis") == ["sweep"] and vocab.suggest("zzzzzz") == []
+    assert not set(vocab.MEASUREMENT_KEYS) & set(vocab.KEYS) and not set(vocab.MEASUREMENT_KEYS) & set(vocab.KEY_ALIASES)
+    assert set(vocab.KEY_ALIASES.values()) <= set(vocab.KEYS)
 
 
 def test_label_writes_the_canonical_key_and_form(env, capsys):
     """Hygiene (2026-09-23): the file holds the vocabulary's spelling and form -- a real boolean for zk / model_agrees /
     independently_verified, an int for B, `note` for `notes` / `verify_note`, `verifier` for `checker`, `A-GKR` for candidate `A` --
-    whatever the caller typed; stderr says what was rewritten.  Refs written as labels are stored with a warning."""
+    whatever the caller typed; stderr says what was rewritten.  A ref written as a label is refused unless --off-vocab."""
     st = LocalStore()
     assert main(["label", ART, "zk", "true", "--by", "lane-x"]) == 0
     out, err = capsys.readouterr()
@@ -161,7 +190,8 @@ def test_label_writes_the_canonical_key_and_form(env, capsys):
     assert main(["label", ART, "candidate", "A", "--by", "a-lane"]) == 0
     err = capsys.readouterr().err
     assert "value 'A' written as \"A-GKR\"" in err and "warning" not in err
-    assert main(["label", ART, "result_artifact", "art:" + "1" * 64, "--by", "lane-x"]) == 0
+    assert main(["label", ART, "result_artifact", "art:" + "1" * 64, "--by", "lane-x"]) == 2
+    assert main(["label", ART, "result_artifact", "art:" + "1" * 64, "--by", "lane-x", "--off-vocab"]) == 0
     assert "warning: label key 'result_artifact' names another store object: that is a ref" in capsys.readouterr().err
     assert main(["label", ART, "overhead", "12.5", "--by", "lane-x"]) == 0 and main(["label", ART, "soundness", "128", "--by", "lane-x"]) == 0
     got = {(l.key, l.value) for l in st.labels(ART)}

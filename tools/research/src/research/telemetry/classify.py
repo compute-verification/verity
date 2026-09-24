@@ -25,8 +25,19 @@ Rules (first match by priority; every rule's evidence refs recorded; ambiguity l
   declared-output mount; other low mounts are incidents.
   7 exit by signal                                                -> UNKNOWN_SIGNAL (timeout inferred from the runner's timeout_s + SIGTERM/SIGKILL -> STAGE_TIMEOUT,
                                                                      certainty inferred; evaluated AFTER rule 6; with no resource samples at all: ambiguous)
+  7b rc != 0 (no signal), an oom_kill increment in the job's interval AND a `Killed` line in the job's log
+                                                                  -> CGROUP_OOM (0.1.3, r20 issue 3): the shell/wrapper reported a SIGKILLed descendant
+                                                                     (`bash: line N: PID Killed cmd`, `Out of memory: Killed process`) and the cgroup counted a
+                                                                     kill in the same interval.  certainty established in job_cgroup scope, inferred in the
+                                                                     shared pod scope (the victim is named by the log line and the disappearance window, not by
+                                                                     the kernel).  cgroup v1 counts through memory.oom_control's oom_kill (sampler maps it to
+                                                                     memory_events.oom_kill); memory.failcnt growth is recorded as corroboration only.
+                                                                     A v1 cgroup with NO oom_kill counter (kernel < 4.13, sampled None) substitutes memory.failcnt
+                                                                     growth or under_oom=1 for the increment: inferred in job_cgroup, ambiguous shared (failcnt
+                                                                     also counts reclaim at the limit).  A counter that exists and did not move vetoes the rule.
   8 rc != 0                                                       -> UNKNOWN_EXIT (a traceback is evidence, not a class; a child OOM-killed while the parent exits rc!=0
-                                                                     stays UNKNOWN_EXIT with the incident carrying the vanished child's pid, delta and last oom_score -- rev d4)
+                                                                     WITHOUT a Killed line stays UNKNOWN_EXIT with the incident carrying the vanished child's pid,
+                                                                     delta and last oom_score -- rev d4; the coexisting incident is named in limitations)
 Every cgroup_oom incident carries, per window: who vanished (tree / outsiders), the highest-oom_score process at the preceding sample, and
 attribution_sample_age_s = window end - preceding process sample (rev d8).
 """
@@ -49,6 +60,11 @@ CUDA_RE = re.compile(r"CUDA out of memory|cudaErrorMemoryAllocation|CUBLAS_STATU
 ENOSPC_RE = re.compile(r"No space left on device|Disk quota exceeded|ENOSPC|EDQUOT")
 TRACEBACK_RE = re.compile(r"^Traceback \(most recent call last\):", re.M)
 MEMERR_RE = re.compile(r"MemoryError|std::bad_alloc|Cannot allocate memory")
+# the shell's job-control report of a SIGKILLed child (`bash: line 1: 4242 Killed    python ...`, `sh: 1: python: Killed`, a bare `Killed` line),
+# the kernel's own line when dmesg reaches the log, or Python's subprocess report of the kill.  Prose ("Killed by ...") does not match.  Rule 7b
+# needs a cgroup kill count (or, v1 without one, failcnt/under_oom) beside it; the string alone is evidence only.
+KILLED_RE = re.compile(r"\b\d+\s+Killed(?:\s|$)|^\s*Killed\s*$|:\s+Killed\s*$|Out of memory: Killed process|Memory cgroup out of memory|oom-kill:"
+                       r"|died with <Signals\.SIGKILL|returned non-zero exit status -9\b", re.M)
 ACTOR_CLASS = {"timeout": "STAGE_TIMEOUT", "deadman": "CANCELLED_DEADMAN", "guardian": "CANCELLED_GUARDIAN", "manual": "CANCELLED_MANUAL"}
 SIGNAMES = {9: "SIGKILL", 15: "SIGTERM", 2: "SIGINT", 1: "SIGHUP", 6: "SIGABRT", 11: "SIGSEGV", 7: "SIGBUS"}
 
@@ -168,6 +184,8 @@ def classify(attempt_dir: str | Path, rc: int | None = None, sig: int | None = N
     cg_scope = cg_samples[0]["scope"] if cg_samples else None
     oom_delta: dict[str, int] = {}
     delta_windows: list[dict[str, Any]] = []
+    failcnt_delta: int | None = None
+    under_oom_seen = kill_counter_seen = False
     if cg_samples:
         same_host = all(str(s.get("stream", "")).split(":")[0] == host for s in cg_samples) if host else True
         if not same_host:
@@ -191,9 +209,16 @@ def classify(attempt_dir: str | Path, rc: int | None = None, sig: int | None = N
         for k, v in prev_counts.items():
             if k in first_counts and v != first_counts[k]:
                 oom_delta[k] = v - first_counts[k]
+        # cgroup v1 corroboration: memory.failcnt counts limit hits (reclaim or kill), so its growth is recorded beside the kill counters, never as one
+        fails = [int(s["cgroup"]["memory_failcnt"]) for s in window if isinstance(s["cgroup"].get("memory_failcnt"), int)]
+        failcnt_delta = (fails[-1] - fails[0]) if len(fails) >= 2 else None
+        under_oom_seen = any((s["cgroup"].get("memory_events") or {}).get("under_oom") == 1 for s in window)
+        kill_counter_seen = any(k.endswith("oom_kill") for s in window for k in _oom_count(s["cgroup"]))
         if oom_delta:
             inc = {"kind": "cgroup_oom", "scope": cg_scope, "counters_delta": oom_delta, "windows": delta_windows,
                    "note": "an oom_kill increment in this scope means a process of the scope was OOM-killed; it does not by itself identify the victim"}
+            if failcnt_delta:
+                inc["v1_failcnt_delta"] = failcnt_delta
             incidents.append(inc)
             ref("cgroup.memory.events", scope=cg_scope, delta=oom_delta, file="resources.jsonl")
         peak = max((int(s["cgroup"].get("memory_peak_bytes") or 0) for s in window), default=0) or None
@@ -263,13 +288,13 @@ def classify(attempt_dir: str | Path, rc: int | None = None, sig: int | None = N
     for cand in ("stdout.log", "stderr.log", "job.log"):
         if (d / cand).exists() and (d / cand) not in log_paths:
             log_paths.append(d / cand)
-    cuda_hit = enospc_hit = traceback_hit = memerr_hit = None
+    cuda_hit = enospc_hit = traceback_hit = memerr_hit = killed_hit = None
     for lp in log_paths:
         text = _tail(lp)
         if not text:
             continue
         inputs[lp.name] = {"sha256": _sha(lp)[0], "bytes": _sha(lp)[1], "tail_bytes_scanned": min(len(text), 256 << 10)}
-        for name, rx in (("cuda", CUDA_RE), ("enospc", ENOSPC_RE), ("traceback", TRACEBACK_RE), ("memerr", MEMERR_RE)):
+        for name, rx in (("cuda", CUDA_RE), ("enospc", ENOSPC_RE), ("traceback", TRACEBACK_RE), ("memerr", MEMERR_RE), ("killed", KILLED_RE)):
             m = rx.search(text)
             if m:
                 line = text[text.rfind("\n", 0, m.start()) + 1: text.find("\n", m.end()) if text.find("\n", m.end()) != -1 else None][:200]
@@ -282,10 +307,14 @@ def classify(attempt_dir: str | Path, rc: int | None = None, sig: int | None = N
                     traceback_hit = hit
                 elif name == "memerr" and memerr_hit is None:
                     memerr_hit = hit
+                elif name == "killed" and killed_hit is None:
+                    killed_hit = hit
     if traceback_hit:
         ref("log.traceback", **traceback_hit)
     if memerr_hit:
         ref("log.allocation_error", **memerr_hit, note="user-space allocation failure (not an OOM kill)")
+    if killed_hit:
+        ref("log.killed", **killed_hit, note="a SIGKILLed process reported in the job's log; a class only beside a cgroup kill count (rule 7b)")
 
     # ---- storage --------------------------------------------------------------------------------------------------------------------------
     storage_zero = []          # low mounts that hold the attempt dir or a declared output (rule 4 material)
@@ -445,8 +474,40 @@ def classify(attempt_dir: str | Path, rc: int | None = None, sig: int | None = N
             certainty = "ambiguous" if incidents else "established"
             if oom_delta:
                 limitations.append("an oom_kill incident coexists in the shared scope but is not attributed to this job (listed under incidents)")
+    elif term_rc is not None and killed_hit and (oom_delta or (not kill_counter_seen and (bool(failcnt_delta) or under_oom_seen))):
+        # rule 7b (0.1.3): the workload's wrapper exited rc != 0 and reported a SIGKILLed descendant while the cgroup counted a kill
+        # (or, cgroup v1 with no oom_kill counter at all, hit its limit: failcnt grew / under_oom was raised)
+        shared = cg_scope != "job_cgroup"
+        gone = [{"window": {k: w[k] for k in ("counter", "from", "to", "window_start_mono", "window_end_mono")}, **vanish_in(w)}
+                for w in delta_windows if w["counter"].endswith("oom_kill") or w["counter"].endswith("oom_group_kill")]
+        tree_gone = sorted({p for g in gone for p in g["tree_gone"]})
+        outsiders_gone = sorted({(o.get("pid") if isinstance(o, dict) else o) for g in gone for o in g["outsiders_gone"]}, key=str)
+        cls = "CGROUP_OOM"
+        where = "shared pod" if shared else "job"
+        if oom_delta:
+            certainty = "inferred" if shared else "established"
+            why = (f"exit status {term_rc} (no signal) with a Killed line in the job's log and an oom_kill increment in the {where} cgroup "
+                   f"during the job: a descendant of the job was OOM-killed" + (f" (tree pid(s) {tree_gone} vanished in the kill window)" if tree_gone else ""))
+        else:
+            certainty = "ambiguous" if shared else "inferred"
+            hit = " and ".join(x for x in (f"memory.failcnt grew by {failcnt_delta}" if failcnt_delta else "", "under_oom was raised" if under_oom_seen else "") if x)
+            why = (f"exit status {term_rc} (no signal) with a Killed line in the job's log while the {where} cgroup (v1, no oom_kill counter) hit "
+                   f"its limit ({hit}): a descendant of the job was OOM-killed")
+            limitations.append("cgroup v1 without an oom_kill field in memory.oom_control (kernel < 4.13): no kill was counted; memory.failcnt / under_oom "
+                               "show the limit was hit, which reclaim alone can also cause")
+        ref("oom.attribution", scope=cg_scope, windows=gone, tree_gone=tree_gone, outsiders_gone=outsiders_gone, v1_failcnt_delta=failcnt_delta,
+            v1_under_oom_seen=under_oom_seen, kill_counter=kill_counter_seen,
+            note="rule 7b: the victim is named by the wrapper's Killed line and the disappearance window, not by the kernel")
+        limitations.append("the recorded exit status is the wrapper's (bash/timeout/subprocess), not the OOM-killed descendant's signal")
+        if shared:
+            limitations.append("shared cgroup: the cgroup's counters cover every process of the pod; the Killed line ties the kill to this job's tree (dmesg unavailable)")
+            if outsiders_gone:
+                certainty = "ambiguous"
+                limitations.append(f"an outsider ({outsiders_gone}) also vanished in the kill window: the counted kill may be theirs")
     elif term_rc is not None:
         cls, why = "UNKNOWN_EXIT", f"exit status {term_rc} with no structured checker record"
+        if oom_delta:
+            limitations.append("an oom_kill incident coexists in the scope without a Killed line in the job's log: not attributed (listed under incidents; rev d4)")
     else:
         cls, why, certainty = "UNKNOWN_EXIT", "no termination status recorded", "ambiguous"
 

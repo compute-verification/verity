@@ -46,12 +46,15 @@ def parse(argv: list[str]) -> dict:
     ap.add_argument("--tile", default=None)                                # NXxNW: the shared-row GEMM tile workload (sharing=)
     ap.add_argument("--auth-cache", default=None)                          # where the trees are kept: how, not what
     ap.add_argument("--auth-procs", type=int, default=None)
+    # lane ajtai-leaf: the row-digest scheme of the committed column (`ajtai-n64`, ...); a key param only when given, so
+    # Poseidon2 runs keep their derivation
+    ap.add_argument("--leaf", default=None)
     # lane hash-compose: --relation bf16-ampere reads the FROZEN bench-instances/v1 set from --root; the set is pinned by
     # its manifest sha256 in the result's instances block, the path is where it lives on the machine (not a key param)
     ap.add_argument("--root", default=None)
     ns, unknown = ap.parse_known_args(argv[idx + 1:])
     out = vars(ns)
-    for k in ("auth", "tile"):
+    for k in ("auth", "tile", "leaf"):
         if out.get(k) is None:
             out.pop(k, None)
     out.pop("auth_cache", None)
@@ -69,7 +72,7 @@ BENCH_VU_FP8 = Tool(
     command=["python", "-m", "backends.direct.ligero.run"],
     closure=["backends/direct/ligero/**", "backends/numerical/**", "packages/verity/src/verity/**"],
     key_params=["cmd", "relation", "mode", "zk", "batch", "total_vus", "vus", "reps", "rate_log2", "target", "row_negatives",
-                "auth", "tile"],
+                "auth", "tile", "leaf"],
     key_conditions=["hw.family"],
     caches=["triton"],
     produces=["bench-result/v1", "run-files/v1"],

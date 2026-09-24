@@ -27,7 +27,7 @@ ints are unbounded; keys must be `str`. `canon.sha256(obj) -> hex`.
 ~~~text
 art:<sha256 hex of the canonical artifact manifest>     the manifest embeds payload digests, so the id covers the bytes
 drv:<sha256 hex of the canonical derivation document>   no source revision inside (see §6)
-reuse_key = sha256 hex of canon({"derivation": drv_id, "source": <source identity>})   None for dirty trees
+reuse_key = sha256 hex of canon({"derivation": drv_id, "source": <source identity>})   None for dirty trees and undeclared runs
 attempt id = run id (r20260922-105905-2021)
 ~~~
 
@@ -125,8 +125,11 @@ redacted argv, `execution.run_dir` is where the attempt executed (the machine's 
 derivation by content as the key param `input.<name> = sha256:<hex>` (`inputs` holds `art:` ids only).
 
 Without a Tool declaration (`research run -- CMD` with no `--tool`): `tool = {"name": "<argv[0] basename>", "version": null}`,
-`key_params = []`, `key_conditions = []`, so `derivation = drv(H(tool name, inputs, {}, {}))` — a real but coarse
-derivation; `reuse_key` is still computed (clean tree) so `lookup` is honest. `params` then holds `{"argv": argv}`.
+`key_params = ["argv"]`, `key_conditions = []`, so `derivation = drv(H(tool name, inputs, {"argv": redacted argv}, {}))`: the
+whole command line is the request, and `reuse_key` is `null` whatever the tree (argv cannot name the files, environment or data
+the command reads, so nothing may be served as its reuse). `params` then holds `{"argv": argv}`. The rule used to be
+`key_params = []` with a reuse key: every undeclared `python …` run of one clean tree shared one derivation and one reuse key.
+Publishing applies the rule to a record written by an older runner (or with no `store` section): it is re-derived.
 
 `research run` writes everything it computed before launch into job.json's optional `store` section (`tool {name, version, spec}`,
 `derivation`, `reuse_key`, `key_params`, `key_conditions`, `params`, `key_params_resolved`, `inputs`, `closure`, `conditions`, `scratch`,
@@ -242,7 +245,8 @@ The Triton cache incident (W=31 binaries served to a W=22 tree) is why.
 
 ### 6.5 Scratch / caches
 
-`d.scratch(name)` -> `<store>/scratch/<reuse_key>/<name>/` (for dirty trees: `<store>/scratch/dirty-<run id>/<name>/`).
+`d.scratch(name)` -> `<store>/scratch/<reuse_key>/<name>/` (no reuse key -- a dirty tree, or no declared Tool:
+`<store>/scratch/run-<run id>/<name>/`).
 `research run --scratch triton` exports `TRITON_CACHE_DIR` there; `--scratch <name>` exports `RESEARCH_SCRATCH_<NAME>`.
 Keyed by reuse_key ON PURPOSE: every commit gets a cold cache; the recompile cost is the price of the safe bias. Do not
 "fix" this to derivation_id or a source-independent key without a measured reason and a per-tool `cache_scope` declaration.
@@ -391,18 +395,23 @@ prints the table; the groups are:
   B-Ligero, C, SP1, shared), `proof_class` (enum: the contract's classes + COMPONENT), `soundness`, `K`, `B`, `hardware`,
   `authentication` (enum: included | included-hash | excluded), `campaign`, `relation`, `mode` (enum: interactive | fiat-shamir), `zk` (bool),
   `overhead`, `seconds_per_vu`, `track` (enum), `scope` (enum: unit | vu | component), `label`, `note`, `assumptions` (list),
-  `omitted` (list), `breakthrough` (bool).
+  `omitted` (list), `breakthrough` (bool); grouping and configuration a table selects on: `lane`, `row`, `sweep`, `arm`, `stage`,
+  `source`, `superseded_by`, `hash`, `sharing`, `fold` (int), `pipeline` (int).
 - **verification** — an independent verifier, never the producer: `verified` (enum: accepted | rejected | not-transferable |
-  no-dumps), `verifier`, `verifier_seconds`; `independently_verified` (bool) is the back-fill's spelling of `verified` —
-  accepted by every reader, deprecated for new writes; `verified_by` is a ledger row's free text and carries no verdict — ignored.
+  no-dumps), `verifier`, `verifier_seconds`, `same_device` (bool), `outcome`; `independently_verified` (bool) is the back-fill's
+  spelling of `verified` — accepted by every reader, deprecated for new writes; `verified_by` is a ledger row's free text and
+  carries no verdict — ignored.
 - **evidence** — probe captures and instance sets: `instruction`, `model`, `model_agrees` (bool), `model_status`,
-  `model_rejected`, `evidence`, `family`, `instances_dataset`, `instances_tier`, `mismatches`, `target`, `component`, `jobs`.
+  `model_rejected`, `evidence`, `family`, `instances_dataset`, `instances_tier`, `mismatches`, `target`, `component`, `jobs`, `dtype`.
 
 Enum and bool values are compared as the catalog stores them (`scalar_text`: strings raw, everything else JSON), so `true` and
-`"true"` are one word and `"True"` is another. `research data label` warns on stderr, one line, when the key is outside the
-vocabulary or the value outside its enum — and writes the label regardless: the vocabulary is a shared spelling, not a gate, and
-a worktree on an older `main` keeps working. Consumers (`bench.tables`, the trust module) import the constants; the store
-imports no consumer.
+`"true"` are one word and `"True"` is another. `research data label` writes the canonical spelling of an old key or value
+(`axis` -> `sweep`, `tree` -> `source`, `batch` -> `B`) and refuses — exit 2, nothing written, the reason on stderr — an unknown key
+(naming the nearest known one), a measurement (`l`, `subbatches`, `rtt_ms_path`, ...: the number belongs in the result or the
+artifact's meta), a ref written as a label, a value outside its enum, or a word where the form is bool / int / number.
+`--off-vocab` writes it anyway, for a concept the vocabulary has not learnt yet; add the word to `vocab.py` next. Readers stay
+lenient: whatever older writers stored is still read, old spellings as their canonical key. Consumers (`bench.tables`, the trust
+module) import the constants; the store imports no consumer.
 
 ## 9. CLI (v0.1)
 
@@ -426,7 +435,7 @@ research data select [--kind K] [--where meta.key=value]... [--tool T] [--deriva
 research data snapshot --name NAME (--members art:... | --select <select flags>) [--note TEXT]  -> art id (dataset-snapshot/v1)
 research data labels TARGET [--history] [--key K] [--by PAT] [--remote] [--json]
                                               --remote: both / LOCAL ONLY (not durable) / REMOTE ONLY per assertion; exit 1 if any is local only
-research data label  TARGET KEY VALUE --by WHO [--ref REF] [--value-json]      warns (stderr) outside the vocabulary (§8.1); writes anyway
+research data label  TARGET KEY VALUE --by WHO [--ref REF] [--value-json] [--off-vocab]   refuses what the vocabulary (§8.1) cannot place
 research data preserved (RUN|ART)... [--mode head|readback|recorded] [--json]
                                               the durability gate: attempt manifest + artifacts + labels all on the remote, else the failing legs
 research data vocab [--json]                  the label vocabulary (§8.1): key, asserter group, value form, enum values, status

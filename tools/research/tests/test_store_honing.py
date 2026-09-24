@@ -394,8 +394,8 @@ def test_vocab_check_reads_the_files_and_reports_every_category(store, tmp_path,
     store.add_label(art, "verified", "ligero-verify", "b-sweep")                              # off the enum
     store.add_label(art, "path", "graphed", "h100-bestvsbest")                                # a ref as a label
     store.add_label(art2, "result_artifact", art, "fill-a100")
-    store.add_label(art, "same_device", True, "fill-a100")                                    # unknown key
-    store.add_label(art, "same_device", False, "coordinator")
+    store.add_label(art, "self_proved", True, "fill-a100")                                    # unknown key
+    store.add_label(art, "subbatches", 32, "coordinator")                                     # a measurement
     store.add_label(art, "K", 1536, "a-lane")
     (store.labels_dir(art) / "zzz.json").write_text("{broken")
     rep = VC.audit(store)
@@ -408,7 +408,8 @@ def test_vocab_check_reads_the_files_and_reports_every_category(store, tmp_path,
     assert set(cats["alias_keys"]) == {"batch -> B", "checker -> verifier", "notes -> note", "verify_note -> note"}
     assert cats["off_enum"] == {"verified=ligero-verify": {"count": 1, "by": {"b-sweep": 1}, "examples": [art]}}
     assert set(cats["ref_keys"]) == {"path", "result_artifact"} and cats["ref_keys"]["result_artifact"]["examples"] == [art2]
-    assert cats["unknown_keys"] == {"same_device": {"count": 2, "by": {"coordinator": 1, "fill-a100": 1}, "examples": [art]}}
+    assert cats["unknown_keys"] == {"self_proved": {"count": 1, "by": {"fill-a100": 1}, "examples": [art]}}
+    assert cats["measurement_keys"] == {"subbatches": {"count": 1, "by": {"coordinator": 1}, "examples": [art]}}
     assert list(cats["unreadable"]) == ["JSONDecodeError"]
     assert main(["vocab-check"]) == 0
     out = capsys.readouterr().out

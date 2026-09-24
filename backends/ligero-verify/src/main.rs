@@ -14,6 +14,10 @@
 //!                      # is N (`batch: n_proofs mismatch`).  Agreement with the python_verdict of DIR/manifest.json, or
 //!                      # of DIR/../manifest.json naming the proofs as `<DIR name>/<file>` (a bench-vu dump's rep dirs).
 //! ligero-verify system-digest --system system.bin           # the two digests (and the relation they are pinned for)
+//!
+//! Row sharing (`authentication = included-hash-shared`, a `ligero-statement/v6` with a `ligero-proof/v3` of the GEMM
+//! side and X.hproof of the hash side): add `--system-h system_h.bin` to `verify` / `batch`; the pair is verified as
+//! one sub-batch (verify.rs `verify_pair`); `--coins-h FILE` / DIR/X.hcoins are the hash side's own step-0 coins.
 //! ~~~
 //!
 //! The statement names the relation (`ligero-statement/v4`; v2 / v3 = bf16-ampere) and the system file must carry
@@ -24,6 +28,7 @@ mod auth;
 mod field;
 mod format;
 mod hash;
+mod leaf;
 mod relation;
 mod verify;
 
@@ -148,9 +153,14 @@ fn verdict_json(v: &verify::Verdict, name: &str, python: Option<(bool, &str)>, r
     )
 }
 
-/// `<relation>` for the relation's v1 system, `<relation>+hash` for its hashed system (authentication = included-hash).
-fn pinned_name(name: &str, hashed: bool) -> String {
-    if hashed { format!("{name}+hash") } else { name.to_string() }
+/// `<relation>` for the relation's v1 system, `<relation>+hash` for its Poseidon2 hashed system (authentication =
+/// included-hash; the historical spelling), `<relation>+<leaf>` for a hashed system with another leaf scheme.
+fn pinned_name(name: &str, leaf: Option<&leaf::LeafScheme>) -> String {
+    match leaf {
+        None => name.to_string(),
+        Some(l) if l.name == leaf::DEFAULT => format!("{name}+hash"),
+        Some(l) => format!("{name}+{}", l.name),
+    }
 }
 
 /// The system file's digests and the relation they are pinned for (`null`: none), as a JSON object.
@@ -241,11 +251,22 @@ fn run_one(sys: &[u8], st: &[u8], pf: &[u8], opt: &verify::Options, reps: usize)
     best.unwrap()
 }
 
-/// `run_one` against a `Shared` (batch mode): the fastest of `reps` verifications of this one sub-batch.
-fn run_one_with(shared: &verify::Shared, st: &[u8], pf: &[u8], opt: &verify::Options, reps: usize) -> verify::Verdict {
+/// The hash side of a row-sharing pair (`--system-h`): its parsed system and, per sub-batch, X.hproof [+ X.hcoins].
+struct PairSide<'a> {
+    shared: &'a verify::Shared,
+    coins: Option<[u8; 128]>,
+}
+
+/// `run_one` against a `Shared` (batch mode): the fastest of `reps` verifications of this one sub-batch.  With a
+/// hash side, `pf_h` is the pair's other proof and the sub-batch is the pair.
+fn run_one_with(shared: &verify::Shared, st: &[u8], pf: &[u8], opt: &verify::Options, reps: usize,
+                pair: Option<(&PairSide, &[u8])>) -> verify::Verdict {
     let mut best: Option<verify::Verdict> = None;
     for _ in 0..reps.max(1) {
-        let v = verify::verify_with(shared, st, pf, opt);
+        let v = match pair {
+            Some((side, pf_h)) => verify::verify_pair(shared, side.shared, st, pf, pf_h, opt, side.coins),
+            None => verify::verify_with(shared, st, pf, opt),
+        };
         best = Some(match best {
             Some(b) if b.timing.total <= v.timing.total => b,
             _ => v,
@@ -268,7 +289,8 @@ struct BatchItem {
 /// proof, own challenges, own checks, `--threads` inside); only the parsed system, its pinned-digest verdict and the
 /// domain tables are shared, read-only.  Results land in proof order, so the report and the batch verdict do not
 /// depend on which thread finished first.
-fn verify_batch(shared: &verify::Shared, proofs: &[PathBuf], opt: &verify::Options, reps: usize, jobs: usize) -> Vec<BatchItem> {
+fn verify_batch(shared: &verify::Shared, proofs: &[PathBuf], opt: &verify::Options, reps: usize, jobs: usize,
+                side_h: Option<&verify::Shared>) -> Vec<BatchItem> {
     let next = AtomicUsize::new(0);
     let jobs = jobs.max(1).min(proofs.len().max(1));
     let mut slots: Vec<Option<BatchItem>> = (0..proofs.len()).map(|_| None).collect();
@@ -311,7 +333,36 @@ fn verify_batch(shared: &verify::Shared, proofs: &[PathBuf], opt: &verify::Optio
                             }
                         }
                         item.own_coins = o.own_coins.is_some();
-                        item.verdict = Some(run_one_with(shared, &st, &pf, &o, reps));
+                        // a row-sharing pair: X.hproof (and X.hcoins when X.coins was read) beside X.proof
+                        let (pf_h, side) = match side_h {
+                            Some(sh) => {
+                                let pf_h = match read(&p.with_extension("hproof")) {
+                                    Ok(x) => x,
+                                    Err(e) => {
+                                        item.io_error = Some(e);
+                                        mine.push((i, item));
+                                        continue;
+                                    }
+                                };
+                                let hc = p.with_extension("hcoins");
+                                let coins = if opt.own_coins.is_none() && o.own_coins.is_some() && hc.is_file() {
+                                    match read(&hc).and_then(parse_coins) {
+                                        Ok(c) => Some(c),
+                                        Err(e) => {
+                                            item.io_error = Some(format!("{}: {e}", hc.display()));
+                                            mine.push((i, item));
+                                            continue;
+                                        }
+                                    }
+                                } else {
+                                    None
+                                };
+                                item.own_coins = o.own_coins.is_some() && coins.is_some();
+                                (pf_h, Some(PairSide { shared: sh, coins }))
+                            }
+                            None => (Vec::new(), None),
+                        };
+                        item.verdict = Some(run_one_with(shared, &st, &pf, &o, reps, side.as_ref().map(|s| (s, &pf_h[..]))));
                         mine.push((i, item));
                     }
                     mine
@@ -371,7 +422,24 @@ fn main() {
             let sys = std::fs::read(arg(&args, "--system").expect("--system")).expect("read system");
             let st = std::fs::read(arg(&args, "--statement").expect("--statement")).expect("read statement");
             let pf = std::fs::read(arg(&args, "--proof").expect("--proof")).expect("read proof");
-            let v = run_one(&sys, &st, &pf, &opt, reps);
+            let v = match arg(&args, "--system-h") {
+                Some(sys_h_path) => {
+                    // a row-sharing pair: X.proof (GEMM side, ligero-proof/v3) + X.hproof (hash side)
+                    let sys_h = std::fs::read(&sys_h_path).expect("read system-h");
+                    let pf_h_path = arg(&args, "--proof-h").unwrap_or_else(|| {
+                        PathBuf::from(arg(&args, "--proof").unwrap()).with_extension("hproof").to_string_lossy().to_string()
+                    });
+                    let pf_h = std::fs::read(&pf_h_path).expect("read proof-h");
+                    let coins_h = arg(&args, "--coins-h").map(|path| {
+                        parse_coins(std::fs::read(&path).expect("--coins-h file")).unwrap_or_else(|e| panic!("--coins-h {path}: {e}"))
+                    });
+                    let shared_g = verify::Shared::new(&sys, &opt);
+                    let shared_h = verify::Shared::new(&sys_h, &opt);
+                    let side = PairSide { shared: &shared_h, coins: coins_h };
+                    run_one_with(&shared_g, &st, &pf, &opt, reps, Some((&side, &pf_h[..])))
+                }
+                None => run_one(&sys, &st, &pf, &opt, reps),
+            };
             let js = verdict_json(&v, &arg(&args, "--proof").unwrap(), None, reps);
             println!("{js}");
             if let Some(p) = arg(&args, "--json") {
@@ -414,8 +482,9 @@ fn main() {
             // by the first sub-batch that reaches them and reused by the rest)
             let t0 = Instant::now();
             let shared = verify::Shared::new(&sys, &opt);
+            let shared_h = arg(&args, "--system-h").map(|p| verify::Shared::new(&std::fs::read(&p).expect("read system-h"), &opt));
             let shared_secs = t0.elapsed().as_secs_f64();
-            let results = verify_batch(&shared, &proofs, &opt, reps, jobs);
+            let results = verify_batch(&shared, &proofs, &opt, reps, jobs, shared_h.as_ref());
             // the batch rule, inside the wall: this verifier's bound of every sub-batch (from its own statement) and the
             // n_proofs each was sized for, against the number presented -- arithmetic on N numbers
             let mut per_bits: Vec<f64> = Vec::with_capacity(results.len());
@@ -424,13 +493,24 @@ fn main() {
             for item in &results {
                 if let Some(v) = &item.verdict {
                     if let Some(s) = &v.soundness {
-                        per_bits.push(s.per_proof_log2);
-                        claimed.push(v.statement.as_ref().map_or(0, |st| st.n_proofs));
-                        names.push(item.name.clone());
+                        if s.sides.is_empty() {
+                            per_bits.push(s.per_proof_log2);
+                            claimed.push(v.statement.as_ref().map_or(0, |st| st.n_proofs));
+                            names.push(item.name.clone());
+                        } else {
+                            // a pair: two commitments per sub-batch, each sized for 2 n_proofs (serialize.verify_batch_dir)
+                            let k = 2 * v.statement.as_ref().map_or(0, |st| st.n_proofs);
+                            for (b, tag) in s.sides.iter().zip(["G", "H"]) {
+                                per_bits.push(*b);
+                                claimed.push(k);
+                                names.push(format!("{}.{tag}", item.name));
+                            }
+                        }
                     }
                 }
             }
-            let every_verdict_in = per_bits.len() == results.len() && results.iter().all(|i| i.verdict.as_ref().map_or(false, |v| v.accepted));
+            let every_verdict_in = per_bits.len() == results.len() * if shared_h.is_some() { 2 } else { 1 }
+                && results.iter().all(|i| i.verdict.as_ref().map_or(false, |v| v.accepted));
             let bound = if every_verdict_in { Some(verify::batch_bound(&per_bits, &claimed, target_bits, &names)) } else { None };
             let wall = t0.elapsed().as_secs_f64();
             // the report, in proof order whatever the scheduling
