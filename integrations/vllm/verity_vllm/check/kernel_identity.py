@@ -78,6 +78,20 @@ def normalize_wrapper(src: str) -> str:
     return _WRAPPER_PATH_LINE.sub("", src)
 
 
+_KNAME = re.compile(r"\btriton_(?:red|per|poi|tem|for|unk|foreach)_[A-Za-z0-9_]+")
+_META_NAME = re.compile(r"'kernel_name':\s*'[^']*'")
+_BACKEND_HASH = re.compile(r"'backend_hash':\s*'[^']*'")
+
+
+def normalise_kernel(src: str) -> str:
+    """A Triton kernel source with its name (the trailing index depends on the order within a wrapper), its ``kernel_name``
+    inductor_meta and its ``backend_hash`` replaced by placeholders; everything else is kept byte for byte."""
+    s = _KNAME.sub("KERNEL", src)
+    s = _META_NAME.sub("'kernel_name': 'KERNEL'", s)
+    s = _BACKEND_HASH.sub("'backend_hash': 'BACKEND'", s)
+    return s.strip()
+
+
 def ptx_code(ptx: str) -> str:
     """PTX minus debug line info (``.file``/``.loc``, ``.debug_*`` sections) and the ``assertFile_*``
     source-path strings of ``tl.device_assert``: what ptxas compiles into instructions."""

@@ -3,7 +3,6 @@
  "dynamic_record": "art:a265fc569719ee1a410f0863416416af91c66d02b1ed8703a9f60fd19e614f2f",
  "modules": {
   "verity_vllm.commit.fa2_prototype": "fa2_commit fixtures: the package of the kept prototype modules (see verity_vllm.commit.fa2_prototype.derived)",
-  "verity_vllm.correspondence.batch_candidate": "fixture generator: cb_a/tests/test_compact.py (LIVE compact / global_match_fast / rank_match), tests/test_gen_ovbatch.py (LIVE fold)",
   "verity_vllm.program.instances_form": "reference of the progressions form; cb_a/tests/test_compact.py checks the LIVE fold's output against it",
   "verity_vllm.harness.coverage_workloads": "workload generator: test_chunked_attribution.py / test_coverage_workloads.py (LIVE chunk_attribution, arrivals, gates)",
   "verity_vllm.program.numerics.libdevice_sampling": "libdevice transcription: test_gen_ov_sampling.py checks it against the LIVE resolver / gumbel definitions",
@@ -25,7 +24,6 @@
   "verity_vllm.check.poc_required_interface": "imported by verity_vllm.harness.synthetic",
   "verity_vllm.program.numerics.fa3_model": "independent CPU FA3 model cross-checked by test_composition.py / test_derived_rows.py (LIVE crosscheck / derived_rows)",
   "verity_vllm.program.numerics.inductor_models": "CPU bit-models cross-checked by test_composition.py",
-  "verity_vllm.correspondence.capture_identities_program": "used by tests/program/test_derive_negative.py (LIVE frontend.derive negatives)",
   "verity_vllm.check.fa2_attn_oracle": "the P0 FA2 tap oracle (R8): tests/acquire/test_fa2_tap_geometry.py loads it by file name beside the LIVE commit_integ.hidden_source checks",
   "verity_vllm.tp.collective_link": "TP path (lane/vllm-tp-n extends it: world-N gather identity); tests/tp/test_tp_collective.py",
   "verity_vllm.tp.collective_record": "TP path (lane/vllm-tp-n); test_tp_collective.py",
