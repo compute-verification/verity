@@ -1768,7 +1768,7 @@ def main(argv: list[str] | None = None) -> None:
             # its DOMINANT line, printed before the run; it does not refuse or admit tonight (the admission_of_record above governs); every
             # Commit thereby yields the per-term predicted-vs-measured line (calibrate on verdict.json / footprint.jsonl at the end)
             try:
-                from verity_vllm.harness.admission_planner import plan as _planner_plan
+                from verity_vllm.harness.admission_planner import CALIBRATION as _cal_path, plan as _planner_plan
                 _others = 0
                 with contextlib.suppress(Exception):          # co-tenants: the cgroup's ANON bytes minus this process (file cache is reclaimable)
                     for _ln in Path("/sys/fs/cgroup/memory.stat").read_text().splitlines():
@@ -1783,8 +1783,7 @@ def main(argv: list[str] | None = None) -> None:
                          "chunk_bytes": int(getattr(com, "chunk", 256) or 256)}
                 _smp_max = int((sampling or {}).get("max_tokens") or 1)
                 _preqs = [{**r, "max_tokens": int(r.get("max_tokens") or _smp_max)} for r in reqs]
-                _cal_path = Path(__file__).resolve().parents[2] / "tests" / "harness" / "fixtures" / "admission" / "planner_calibration.jsonl"
-                _cal = [json.loads(_l) for _l in _cal_path.read_text().splitlines() if _l.strip()] if _cal_path.exists() else None
+                _cal = [json.loads(_l) for _l in _cal_path.read_text().splitlines() if _l.strip()]
                 _pl = _planner_plan(asz, _preqs, mode=_mode, engine_rss_bytes=int((rss_kb()[0] or 0) * 1024), host_cap_bytes=host_cap,
                                     host_cap_source=asz.get("host_memory_cap_source"), others_current_bytes=_others,
                                     max_num_batched_tokens=(asz.get("envelope") or {}).get("max_num_batched_tokens"), calibration=_cal)

@@ -46,6 +46,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+from importlib import resources
 from pathlib import Path
 from typing import Any
 
@@ -53,6 +54,8 @@ from verity_vllm.harness.admission_bound import compare_observed, host_cap, obse
 from verity_vllm.acquire.hidden_source import CHUNK_WORDS, fa2_kblock_n, fa3_tile, mat_total_words
 
 SCHEMA = "verity-sweep/admission-planner/v1"
+#: The calibration entries of record (one JSON object per line), read by the Commit's record-only planner line.
+CALIBRATION = resources.files("verity_vllm.harness") / "planner_calibration.jsonl"
 MiB = 1 << 20
 GiB = 1 << 30
 HOST_TERMS = ("host_staging", "hash_backlog", "opening_data", "headroom")

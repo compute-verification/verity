@@ -2,16 +2,12 @@
 (gate I9); untied checkpoints get an lm_head weights field; the structure gate fails unclassified extras (I8)."""
 from __future__ import annotations
 
-from pathlib import Path
-
 import numpy as np
 import pytest
 
+from verity_vllm.check.fold_compare import DEFAULT_COS_SIN as B0_FIXTURE
 from verity_vllm.input_provenance import analytic
 from verity_vllm.program.registry import b1
-
-REPO = Path(__file__).resolve().parents[2]
-B0_FIXTURE = REPO / "fixtures" / "B0-divergence-20260907T1604Z" / "layers.0.self_attn.rotary_emb" / "cos_sin_cache.npy"
 
 # the relevant keys of the checkpoints' config.json (HF hub, the pinned revisions)
 SMOLLM2_135M = {"model_type": "llama", "hidden_size": 576, "num_hidden_layers": 30, "num_attention_heads": 9, "num_key_value_heads": 3,
