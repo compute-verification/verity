@@ -1191,15 +1191,16 @@ def guardian_kills(path: Path, state: dict, max_bytes: int = 8 << 20) -> list[st
 
 
 def kill_owner(line: str, lanes: set[str], succ: dict[str, str], machines: dict[str, dict], pod_lane: dict[str, str],
-               wts: dict[str, str]) -> str | None:
+               wts: dict[str, str], bound: dict[str, str] | None = None) -> str | None:
     """The lane a guardian KILLED line belongs to: `--on <machine>` in its cmd (machines.toml -> pod id -> the lane owning that pod;
-    else the machine name as a pod name, `pod_owner`), else its cwd under a bound worktree (the deepest; the latest attempt)."""
+    else the machine name as a pod name, `pod_owner` with the bindings' pod hints), else its cwd under a bound worktree (the
+    deepest; the latest attempt)."""
     m = KILLED_RE.match(line)
     if not m:
         return None
     if on := ON_RE.search(m["cmd"]):
         pid_ = (machines.get(on[1]) or {}).get("pod_id")
-        if owner := pod_lane.get(pid_) or pod_owner(on[1], lanes, succ):
+        if owner := pod_lane.get(pid_) or pod_owner(on[1], lanes, succ, bound):
             return owner
     cwd = (m["cwd"] or "").strip()
     if not cwd or cwd == "?":
@@ -1237,12 +1238,15 @@ def guardian_lines(root: Path, rows: list[dict], fleet: Fleet | None, now: dt.da
     except Exception:  # noqa: BLE001  (a broken machines.toml: the cwd still maps)
         ms = {}
     lanes, succ = {d.name for d in (root / "lanes").glob("*/")}, successors(root)
-    wts = {lane: w for lane in sorted(lanes) if (w := _binding_json(root, lane).get("worktree"))}
+    bindings = {lane: _binding_json(root, lane) for lane in sorted(lanes)}
+    wts = {lane: b["worktree"] for lane, b in bindings.items() if b.get("worktree")}
     wts.update({r["lane"]: r["worktree"] for r in rows if r.get("worktree") and r["lane"] not in wts})
+    bound = {x.removesuffix(POD_SUFFIX): lane for lane, b in bindings.items()
+             for x in (s.strip() for s in str(b.get("pod") or "").split(",")) if x and x not in NO_POD}
     by: dict[str, list[str]] = {}
     lines = []
     for k in kills:
-        if lane := kill_owner(k, lanes, succ, ms, fleet.owner if fleet else {}, wts):
+        if lane := kill_owner(k, lanes, succ, ms, fleet.owner if fleet else {}, wts, bound):
             by.setdefault(lane, []).append(k)
         else:
             lines.append(f"{now:%H:%MZ} KILLED-UNOWNED {k[:300]}")
