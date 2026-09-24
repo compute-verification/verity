@@ -4,6 +4,7 @@
                       "conditions": {k: conditions[k] for k in key_conditions}}
     drv_id    = "drv:" + canon.sha256(derivation_doc)                       # no source revision inside
     reuse_key = canon.sha256({"derivation": drv_id, "source": {"tree": source.tree, "lockfiles": {...}}})   None for dirty trees
+                (and, set by the callers, for a run with no declared Tool: its derivation's params are just its redacted argv)
 """
 from __future__ import annotations
 
@@ -55,14 +56,14 @@ def reuse_key(drv_id: str, source_conditions: dict[str, Any] | None) -> str | No
 
 
 def scratch_dir(store_root: Path | str, reuse_key: str | None, run_id: str, name: str) -> Path:
-    """<store>/scratch/<reuse_key>/<name>/  (dirty tree: <store>/scratch/dirty-<run id>/<name>/), created.
+    """<store>/scratch/<reuse_key>/<name>/  (no reuse key -- a dirty tree, or no declared Tool: <store>/scratch/run-<run id>/<name>/), created.
 
     Keyed by reuse_key ON PURPOSE: every commit gets a cold cache and the recompile cost is the price of the safe bias.  Do not
     "fix" this to the derivation id or a source-independent key without a measured reason and a per-tool `cache_scope`
     declaration -- the Triton cache incident (W=31 binaries served to a W=22 tree) is why."""
     if not name or "/" in name or name in (".", ".."):
         raise ValueError(f"scratch name must be a plain segment, got {name!r}")
-    d = Path(store_root) / "scratch" / (reuse_key if reuse_key else f"dirty-{run_id}") / name
+    d = Path(store_root) / "scratch" / (reuse_key if reuse_key else f"run-{run_id}") / name
     d.mkdir(parents=True, exist_ok=True)
     return d
 

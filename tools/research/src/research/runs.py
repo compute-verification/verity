@@ -60,7 +60,9 @@ def summarize(run_dir: Path) -> dict[str, Any]:
     res = result.check(run_dir, run_id)
     manifest = _read(run_dir / "preserved.json")
     remote_rec = _read(run_dir / "remote.json")
-    if remote_rec and not status:
+    if not status and (run_dir / "refused.json").exists():
+        state = "refused"                        # the machine refused it (launch-request, or the runner before the workload)
+    elif remote_rec and not status:
         phase = remote_rec.get("phase")
         state = {"launched": "submitted", "refused": "refused", "unknown": "unknown"}.get(phase, "submitted")
     else:

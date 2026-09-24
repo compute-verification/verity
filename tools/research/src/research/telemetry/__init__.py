@@ -21,8 +21,13 @@ STATUS_SCHEMA = "telemetry/status/v0.1"
 EVENTS_SCHEMA = "telemetry/events/v0.1"
 RESOURCES_SCHEMA = "telemetry/resources/v0.1"
 FAILURE_SCHEMA = "telemetry/failure/v0.1"
-COLLECTOR_VERSION = "0.1.1"   # 0.1.1: /proc/<pid>/oom_score sampled for tree + outsiders; TELE_PARENT_SPAN/TELE_ATTEMPT_DIR defaults
-CLASSIFIER_VERSION = "0.1.2"   # 0.1.1: shared-scope attribution window extended by half a sampler round (process record follows the cgroup record)
+COLLECTOR_VERSION = "0.1.2"   # 0.1.1: /proc/<pid>/oom_score sampled for tree + outsiders; TELE_PARENT_SPAN/TELE_ATTEMPT_DIR defaults
+                              # 0.1.2: cgroup v1 memory.oom_control without an oom_kill field (kernel < 4.13) samples oom_kill=None, not 0
+CLASSIFIER_VERSION = "0.1.3"   # 0.1.1: shared-scope attribution window extended by half a sampler round (process record follows the cgroup record)
+                               # 0.1.3 (r20 issue 3): rule 7b CGROUP_OOM = rc != 0 without a signal + oom_kill increment (v2 memory.events or v1
+                               #   memory.oom_control) + a `Killed` line in the job's log; v1 memory.failcnt growth recorded as corroboration.  A v1
+                               #   cgroup with no oom_kill counter (kernel < 4.13) falls back to failcnt growth / under_oom + the Killed line, one
+                               #   certainty step lower; log.killed is evidence whenever the line is present
                                # 0.1.2 (rev M-1748 d1-d4/d8 + S-r17-51 c1/c2): shared-scope attribution = a tree process vanished AND no outsider vanished
                                #   (oom_score / RSS ranking recorded as corroboration, never a veto); any class chosen beside SIGKILL + oom_kill delta is
                                #   ambiguous with both evidence sets under `competing` (a delivered + verified marker stays established); low mounts count

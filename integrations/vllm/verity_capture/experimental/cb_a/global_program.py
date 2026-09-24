@@ -10,6 +10,11 @@ REQUIRED static of the workload Program (`Workload_v1{requests, shared, lag}`): 
 
 Writes: `workload_program.json` (artifact: digest, components, address map, chronology), `descriptor.json.gz` (the workload
 Program's descriptor, decodable with verity.ir.codec), `address_map.json`, `chronology.json`.
+
+Layout 1.1 (`verity_vllm.build_paths`): beside the absolute `inputs.manifest` / `inputs.derived` paths of the build machine, the
+artifact carries a `layout` block with the same paths relative to the artifact root (`--artifact-root`, default the parent of
+`--out`, i.e. the row dir `build_workload/` sits in), so a Build fetched elsewhere resolves its components without being laid out
+at the original path.  Readers go through `build_paths.component_dir` / `manifest_path`.
 """
 
 from __future__ import annotations
@@ -24,6 +29,7 @@ import time
 
 from verity.ir.codec import canonical_json, descriptor_size
 from verity.ir.defs import REGISTRY
+from verity_vllm import build_paths
 from verity_vllm.ir import workload as W
 # [R14 moe] the request descriptors decode through the SAME registry set `cb_a.compare._registry` loads: b1 + serve3 + pad_prims + moe
 # (the fused-MoE Definitions and the ref_prims they use, e.g. F32Sub_v1 -- an OLMoE component failed to decode without it) + hopper if present.
@@ -646,8 +652,12 @@ def weights_of_record_binding(components: dict[str, dict]) -> dict:
                      f"{len(per) - len(have)} of {len(per)} components carry no weights_of_record.json: the row's Commit fails 'weights unpinned' (MAN-09)")}
 
 
-def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir: str | None = None, eos_token_ids: list[int] | None = None) -> dict:
+def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir: str | None = None, eos_token_ids: list[int] | None = None,
+          artifact_root: str | None = None) -> dict:
+    """`artifact_root`: the dir the `vllm-build/v1` tree is rooted at (default: the parent of `out`); the `layout` block's relative paths
+    are taken from it (module docstring)."""
     t0 = time.time()
+    artifact_root = os.path.abspath(artifact_root) if artifact_root else os.path.dirname(os.path.abspath(out))
     raw = open(workload_path, "rb").read()
     m = json.loads(raw)
     mdigest = hashlib.sha256(raw).hexdigest()
@@ -795,6 +805,8 @@ def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir:
                      "component_provenance": comp_provenance,
                      "sampler_schedule": sched["checked"] or None,   # [M-0560 (1)] per-request S-schedule components and their bound request
                      "execution_record_read": False}
+    # layout 1.1: the same paths relative to the artifact root, so a fetched Build resolves its components wherever it lands
+    art["layout"] = build_paths.layout_block(artifact_root, workload_path, art["inputs"]["derived"])
     art["cost"] = {"component_secs": comp_secs, "compose_secs": round(time.time() - t2, 2), "total_secs": round(time.time() - t0, 2)}
     art["ok"] = True
     json.dump(art, open(os.path.join(out, "workload_program.json"), "w"), indent=1)
@@ -811,9 +823,11 @@ def main() -> int:
     ap.add_argument("--checkpoint-dir", default=None, help="the pinned checkpoint: its config.json / generation_config.json eos_token_id "
                                                             "become the Program's declared stop rule (F-pm-24)")
     ap.add_argument("--eos-token-ids", default=None, help="comma-separated EOS token ids declared explicitly (union with --checkpoint-dir's)")
+    ap.add_argument("--artifact-root", default=None, help="the dir the vllm-build/v1 tree is rooted at (holds build_workload/ and the "
+                                                           "build_request*/ dirs); the `layout` block's paths are relative to it. Default: the parent of --out")
     a = ap.parse_args()
     eos = [int(x) for x in a.eos_token_ids.split(",") if x.strip()] if a.eos_token_ids else None
-    res = build(a.workload, a.derived, a.out, checkpoint_dir=a.checkpoint_dir, eos_token_ids=eos)
+    res = build(a.workload, a.derived, a.out, checkpoint_dir=a.checkpoint_dir, eos_token_ids=eos, artifact_root=a.artifact_root)
     if not res.get("ok"):
         print(json.dumps({k: res[k] for k in ("reason", "message", "missing_derived") if k in res}))
         return 4

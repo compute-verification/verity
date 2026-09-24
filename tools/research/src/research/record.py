@@ -57,17 +57,20 @@ def cost_section(*, provider: str | None = None, pod_id: str | None = None, mach
 
 
 def extend_job(job: dict[str, Any], *, run_id: str, runs_root: Path, expected_fingerprint: dict[str, Any] | None,
-               cost: dict[str, Any] | None = None, remote: dict[str, Any] | None = None, store: dict[str, Any] | None = None) -> dict[str, Any]:
+               cost: dict[str, Any] | None = None, remote: dict[str, Any] | None = None, store: dict[str, Any] | None = None,
+               cwd: dict[str, Any] | None = None) -> dict[str, Any]:
     """v0.1 job (from telemetry.job.build_job) -> v0.2.  Adds sections; changes nothing the harness wrote.
 
     `store` (optional): what `research run` computed BEFORE launch for the evidence store -- tool identity, derivation id,
-    reuse_key, key params (content-resolved), inputs, closure manifest, conditions, scratch dirs (research.store README §4/§6)."""
+    reuse_key, key params (content-resolved), inputs, closure manifest, conditions, scratch dirs (research.store README §4/§6).
+    `cwd` (optional): {"path": the workload's cwd, "basis": "run_dir" | "source" | "explicit"} -> run.cwd / run.cwd_basis."""
     if job.get("schema") != JOB_SCHEMA_V1:
         raise ValueError(f"extend_job expects a {JOB_SCHEMA_V1} record, got {job.get('schema')!r}")
     out = dict(job)
     out["schema"] = JOB_SCHEMA
     out["tool"] = tool_identity()
-    out["run"] = {"id": run_id, "runs_root": str(runs_root), "created_utc": utc_now_ms(), "launched_from": socket.gethostname(), "remote": remote}
+    out["run"] = {"id": run_id, "runs_root": str(runs_root), "created_utc": utc_now_ms(), "launched_from": socket.gethostname(), "remote": remote,
+                  "cwd": (cwd or {}).get("path"), "cwd_basis": (cwd or {}).get("basis")}
     out["workload_fingerprint"] = {"expected": expected_fingerprint,
                                    "observed_in": "result.json (workload_fingerprint); expected and observed are never merged"}
     out["cost"] = cost if cost is not None else cost_section()

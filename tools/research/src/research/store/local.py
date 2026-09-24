@@ -620,7 +620,12 @@ class LocalStore:
             if verify is None:
                 return out
             if verify == "head":
-                head = {"bytes": res["bytes"], "etag": res["etag"]} if res["action"] == "skipped" else r.head(key)    # the HEAD `put` did is the check
+                if res["action"] == "skipped":                          # the HEAD `put` did is the check
+                    head = {"bytes": res["bytes"], "etag": res["etag"]}
+                elif res["action"] == "created" and res.get("bytes") == size and is_md5_etag(res.get("etag")) and not res.get("multipart"):
+                    head = {"bytes": size, "etag": res["etag"]}        # the PUT response's ETag is the service's word on what it stored: a HEAD would repeat it
+                else:
+                    head = r.head(key)
                 if head is None:
                     out["error"] = f"{key}: absent after upload"
                 elif head["bytes"] != size:
@@ -702,6 +707,19 @@ class LocalStore:
         if not p.exists():
             raise NotFound(f"attempt {run_id} is not local")
         r.put(attempt_key(run_id), p)
+
+    def push_labels(self, targets: list[str], *, jobs: int = 16) -> dict:
+        """Push the assertions about `targets` (art / drv / run ids) the remote lacks, each under `labels/<target>/<content sha256>.json`
+        (`labels_sync.push_targets`).  Per-assertion failures are in the report's `failed`, never raised; a missing remote is."""
+        from . import labels_sync as LS  # noqa: PLC0415
+
+        return LS.push_targets(self, targets, jobs=jobs)
+
+    def labels_durable(self, targets: list[str]) -> dict:
+        """The labels leg of the durability gate (`labels_sync.verify_targets`): every local assertion of every target listed on the remote."""
+        from . import labels_sync as LS  # noqa: PLC0415
+
+        return LS.verify_targets(self, targets)
 
     # ---- index --------------------------------------------------------------------------------------------------------------------------
 

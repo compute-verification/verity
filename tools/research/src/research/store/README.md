@@ -27,7 +27,7 @@ ints are unbounded; keys must be `str`. `canon.sha256(obj) -> hex`.
 ~~~text
 art:<sha256 hex of the canonical artifact manifest>     the manifest embeds payload digests, so the id covers the bytes
 drv:<sha256 hex of the canonical derivation document>   no source revision inside (see §6)
-reuse_key = sha256 hex of canon({"derivation": drv_id, "source": <source identity>})   None for dirty trees
+reuse_key = sha256 hex of canon({"derivation": drv_id, "source": <source identity>})   None for dirty trees and undeclared runs
 attempt id = run id (r20260922-105905-2021)
 ~~~
 
@@ -125,8 +125,11 @@ redacted argv, `execution.run_dir` is where the attempt executed (the machine's 
 derivation by content as the key param `input.<name> = sha256:<hex>` (`inputs` holds `art:` ids only).
 
 Without a Tool declaration (`research run -- CMD` with no `--tool`): `tool = {"name": "<argv[0] basename>", "version": null}`,
-`key_params = []`, `key_conditions = []`, so `derivation = drv(H(tool name, inputs, {}, {}))` — a real but coarse
-derivation; `reuse_key` is still computed (clean tree) so `lookup` is honest. `params` then holds `{"argv": argv}`.
+`key_params = ["argv"]`, `key_conditions = []`, so `derivation = drv(H(tool name, inputs, {"argv": redacted argv}, {}))`: the
+whole command line is the request, and `reuse_key` is `null` whatever the tree (argv cannot name the files, environment or data
+the command reads, so nothing may be served as its reuse). `params` then holds `{"argv": argv}`. The rule used to be
+`key_params = []` with a reuse key: every undeclared `python …` run of one clean tree shared one derivation and one reuse key.
+Publishing applies the rule to a record written by an older runner (or with no `store` section): it is re-derived.
 
 `research run` writes everything it computed before launch into job.json's optional `store` section (`tool {name, version, spec}`,
 `derivation`, `reuse_key`, `key_params`, `key_conditions`, `params`, `key_params_resolved`, `inputs`, `closure`, `conditions`, `scratch`,
@@ -242,7 +245,8 @@ The Triton cache incident (W=31 binaries served to a W=22 tree) is why.
 
 ### 6.5 Scratch / caches
 
-`d.scratch(name)` -> `<store>/scratch/<reuse_key>/<name>/` (for dirty trees: `<store>/scratch/dirty-<run id>/<name>/`).
+`d.scratch(name)` -> `<store>/scratch/<reuse_key>/<name>/` (no reuse key -- a dirty tree, or no declared Tool:
+`<store>/scratch/run-<run id>/<name>/`).
 `research run --scratch triton` exports `TRITON_CACHE_DIR` there; `--scratch <name>` exports `RESEARCH_SCRATCH_<NAME>`.
 Keyed by reuse_key ON PURPOSE: every commit gets a cold cache; the recompile cost is the price of the safe bias. Do not
 "fix" this to derivation_id or a source-independent key without a measured reason and a per-tool `cache_scope` declaration.
@@ -356,12 +360,20 @@ copies an attempt manifest plus its outputs' manifests and blobs from a machine'
 
 ## 8. Labels
 
-`labels/<target>/<ts>-<by>.json`:
+`labels/<target>/<ts>-<by>.json` locally; on the remote `labels/<target>/<sha256 of the canonical assertion>.json` (content key,
+immutable, append-only; a target's assertion set is the listing of its prefix):
 
 ~~~json
 {"schema": "research/label/v0.1", "target": "art:...", "key": "proof_class", "value": "COMPLETE_ZK_BACKEND",
  "by": "red-team-zk-2", "ts": "2026-09-22T11:20:29Z", "ref": "art:<findings>|r<run id>|<url>"}
 ~~~
+
+Assertions are durable with what they describe (`labels_sync.py`): `push RUN` / `attempt publish` / `push ART` push the assertions
+about the attempt, its derivation and its named artifacts (`attempt_targets`); `push --pending` and `labels-sync` push every local
+one; `reindex --remote`, `labels-sync` and `pull --from MACHINE` bring remote / machine assertions into the local layout and index.
+`preserved` is a three-leg gate — attempt manifest, artifacts, labels — and names the leg that fails; a preserved Attempt is not
+preserved until its assertions are on the remote. `labels TARGET --remote` shows each assertion as both / LOCAL ONLY / REMOTE ONLY.
+Conflicting assertions coexist on both sides.
 
 Append-only, one file per assertion (`O_EXCL`, mode 0444), never read-modify-write. The file name uses the compact ts
 (`20260922T112029Z`), `by` restricted to `[A-Za-z0-9._-]`, and a `~N` suffix when the same asserter labels twice in one
@@ -416,8 +428,11 @@ research data lookup --tool NAME [--param k=v]... [--input name=art:...]... [--c
                                                  come from this machine's conditions(); --source-tree hashes that tree's lockfiles
 research data select [--kind K] [--where meta.key=value]... [--tool T] [--derivation D] [--attempt R] [--label k=v] [--json|--ids]
 research data snapshot --name NAME (--members art:... | --select <select flags>) [--note TEXT]  -> art id (dataset-snapshot/v1)
-research data labels TARGET [--history] [--key K] [--by PAT] [--json]
+research data labels TARGET [--history] [--key K] [--by PAT] [--remote] [--json]
+                                              --remote: both / LOCAL ONLY (not durable) / REMOTE ONLY per assertion; exit 1 if any is local only
 research data label  TARGET KEY VALUE --by WHO [--ref REF] [--value-json]      warns (stderr) outside the vocabulary (§8.1); writes anyway
+research data preserved (RUN|ART)... [--mode head|readback|recorded] [--json]
+                                              the durability gate: attempt manifest + artifacts + labels all on the remote, else the failing legs
 research data vocab [--json]                  the label vocabulary (§8.1): key, asserter group, value form, enum values, status
 research data refresh-fixtures [--preserve] [--dry-run] [--repo DIR] [--json]
                                               re-register every fixtures/artifacts.json entry whose bytes changed (§7): put as a bare

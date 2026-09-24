@@ -21,6 +21,7 @@ from pathlib import Path
 
 import pytest
 
+from verity_vllm import build_paths as BP
 from verity_vllm.lifting import record as R
 from verity_vllm.registry import lifted as L
 
@@ -50,14 +51,13 @@ def _reqs_from_row(row: Path):
     wp = json.loads((row / "build_workload" / "workload_program.json").read_text())
     eos = [int(x) for x in ((wp.get("stop_rule") or {}).get("eos_token_ids") or [])]
     uuids = ((wp.get("request_ids") or {}).get("workload_request_ids") or {})
-    derived = (wp.get("inputs") or {}).get("derived") or {}
     reqs = []
     for r in wp["requests"]:
         rid = str(r["request_id"])
         lp, cap = int(r["prompt_len"]), int(r["cap"])
-        src_dir = derived.get(f"{lp},{cap - 1}")
+        src_dir = BP.declared_component(wp, lp, cap - 1)
         assert src_dir is not None, f"{rid}: inputs.derived['{lp},{cap - 1}'] absent (F-pad-26b: nothing may be inferred)"
-        comp_dir = row / Path(src_dir).name
+        comp_dir = BP.component_dir(wp, lp, cap - 1, row) or row / Path(src_dir).name      # as the CLI resolves it (layout 1.1 / legacy)
         params = None
         ip = comp_dir / "instances.json.gz"
         if ip.exists():

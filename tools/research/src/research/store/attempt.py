@@ -101,11 +101,27 @@ def build(run_dir: Path | str, *, tool: Tool | dict[str, Any] | str | None = Non
                                                           else E.conditions_from_job(job))
     for k in E.KEYS:
         conds.setdefault(k, None)
+    if conds.get("exec.machine") is None and (run_sec.get("remote") or {}).get("machine"):     # a `--on <machine>` run: the machines.toml name
+        conds["exec.machine"] = run_sec["remote"]["machine"]
     if campaign is not None:
         conds["exec.campaign"] = campaign
     closure = closure if closure is not None else (store_sec.get("closure") or {})
-    drv = derivation or store_sec.get("derivation") or D.derivation_id(ident, inputs, key_params_resolved, conds, key_conditions)
-    rk = reuse_key if reuse_key is not ... else (store_sec["reuse_key"] if "reuse_key" in store_sec else D.reuse_key(drv, conds))
+    declared = tool is not None or bool((store_sec.get("tool") or {}).get("spec"))
+    recorded_drv = store_sec.get("derivation")
+    if not declared and "argv" not in key_params_resolved:
+        # an undeclared request is its whole redacted command line (research run's rule); a record from an older runner, or one
+        # with no store section, would otherwise share one derivation with every other run of the same executable
+        from ..telemetry.job import redact_argv
+
+        key_params_resolved = {**key_params_resolved, "argv": redact_argv(argv)[0]}
+        key_params, recorded_drv = ["argv"], None
+    drv = derivation or recorded_drv or D.derivation_id(ident, inputs, key_params_resolved, conds, key_conditions)
+    if reuse_key is not ...:
+        rk = reuse_key
+    elif not declared:
+        rk = None                                                # no declared Tool, no reuse claim
+    else:
+        rk = store_sec["reuse_key"] if "reuse_key" in store_sec else D.reuse_key(drv, conds)
     res = result.check(d, run_id)
     transitions = status.get("transitions") or []
     start = status.get("started_utc") or next((t.get("t_utc") for t in transitions if t.get("state") == "running"), None)
@@ -133,9 +149,15 @@ def build(run_dir: Path | str, *, tool: Tool | dict[str, Any] | str | None = Non
         "execution": {"start_utc": start, "end_utc": end, "wall_s": status.get("wall_s"), "exclusive": exclusive,
                       "load_start": conds.get("exec.load_start"), "load_end": conds.get("exec.load_end"),
                       "host": conds.get("hw.hostname") or (job.get("environment") or {}).get("hostname") or launch.get("hostname"),
+                      "machine": conds.get("exec.machine"),          # the machines.toml name (indexed as exec.machine); host is the container's
                       "project": own.get("project") or conds.get("exec.project"), "campaign": conds.get("exec.campaign"),
                       "run_dir": executed_dir, "stage": (job.get("computation") or {}).get("stage"),
-                      "remote": {k: (run_sec.get("remote") or {}).get(k) for k in ("machine", "pod_id", "root", "source_sha")} if run_sec.get("remote") else None},
+                      "cwd": run_sec.get("cwd"), "cwd_basis": run_sec.get("cwd_basis"),
+                      "mem_gb_reserved": ((run_sec.get("remote") or {}).get("mem") or {}).get("gb"),
+                      # source_sha is the verified source identity the machine executed from; source_archive_sha256 the digest of the archive
+                      # that landed there (remote.py ship_source / READY.json); both None for a run that shipped no tree
+                      "remote": {k: (run_sec.get("remote") or {}).get(k) for k in ("machine", "pod_id", "root", "source_sha", "source_dir",
+                                                                                   "source_archive_sha256", "source_verified")} if run_sec.get("remote") else None},
         "cost": {"provider": cost_sec.get("provider"), "pod_id": cost_sec.get("pod_id"), "rate_usd_per_hour": cost_sec.get("rate_usd_per_hour"),
                  "usd": est.get("usd"), "shared": cost_sec.get("shared")},
         "status": {"state": status.get("state"), "rc": status.get("rc"), "class": failure.get("class"), "failure": failure.get("why"),
@@ -350,6 +372,14 @@ def _publish(run_dir: Path, *, tool: Any, store: Any, remote_push: bool | None, 
                 st.push_attempt(run_id)
                 out["preserved"] = all(r.get("preserved") for r in reports)
                 out["preserved_artifacts"] = {r["id"]: bool(r.get("preserved")) for r in reports}
+                if hasattr(st, "push_labels"):                          # the third leg: assertions already made about this attempt, its
+                    from . import labels_sync as LS                     # derivation or its outputs (a re-publish after `label`) travel too
+
+                    lrep = st.push_labels(LS.attempt_targets(doc))
+                    out["labels"] = {"local": lrep["local"], "pushed": len(lrep["pushed"]), "already": lrep["already"], "failed": lrep["failed"]}
+                    if lrep["failed"]:
+                        out["preserved"] = False
+                        out["preserve_error"] = f"labels: {len(lrep['failed'])} assertion(s) not pushed ({lrep['failed'][0]})"
             except Exception as e:  # noqa: BLE001
                 out["preserved"] = False
                 out["preserve_error"] = f"{type(e).__name__}: {e}"

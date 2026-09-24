@@ -70,7 +70,7 @@ def test_exclusive_refuses_a_live_holder_and_reclaims_a_dead_one(tmp_path):
     assert out["claimed"] and out["started"] is False and "exclusively held by run hold" in out["refused"]
     assert (runs_root / "second" / "refused.json").exists() and not (runs_root / "second" / "job.json").exists()
     s2 = R.summarize(runs_root / "second")
-    assert s2["state"] in ("submitted", "unknown")                 # never invented as "failed" by the runner: it never ran
+    assert s2["state"] == "refused"                                # never invented as "failed" by the runner: it never ran
     s = _wait_terminal(runs_root / "hold")
     assert s["state"] == "done" and not (runs_root / ".exclusive.lock").exists(), "the runner releases its own lock"
     req3, _ = _request(tmp_path, "third", [PY, "-c", "print('yes')"], exclusive=True)
@@ -180,6 +180,9 @@ def test_source_sha_reaches_the_workload_as_research_source_sha(tmp_path):
     d = json.loads(req.read_text())
     d["remote"]["source_sha"] = "a" * 40
     req.write_text(json.dumps(d))
+    src = runs_root.parent / "src" / ("a" * 40)                  # the shipped tree must be verified READY (test_remote_ship_source.py) to execute
+    src.mkdir(parents=True)
+    (src / remote.READY_FILE).write_text(json.dumps({"schema": remote.READY_SCHEMA, "identity": "a" * 40, "archive_sha256": "0" * 64}))
     assert remote.launch_request(req)["started"]
     s = _wait_terminal(runs_root / "s1")
     assert s["state"] == "done" and (runs_root / "s1" / "stdout.log").read_text().strip() == "a" * 40
