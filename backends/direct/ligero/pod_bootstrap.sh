@@ -64,7 +64,9 @@ if [ "${SKIP_RUST:-0}" != 1 ]; then
   stage "rustup stable + ligero-verify (background; joined at the end)"
   ( command -v cargo >/dev/null 2>&1 || curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable >/tmp/rustup.log 2>&1
     "$HOME/.cargo/bin/rustc" --version
-    cd "$SRC/backends/ligero-verify" && cargo build --release 2>&1 | tail -3 && cp "$CARGO_TARGET_DIR/release/ligero-verify" $W/bin/ ) > /tmp/rust_build.log 2>&1 &
+    cd "$SRC/backends/ligero-verify" && cargo build --release 2>&1 | tail -3 && cp "$CARGO_TARGET_DIR/release/ligero-verify" $W/bin/ \
+      && { PYTHONPATH="$SRC/tools/research/src" python3 -m research.binprov record "$W/bin/ligero-verify" --source "$SRC" \
+           || echo "binary provenance not recorded (non-fatal)"; } ) > /tmp/rust_build.log 2>&1 &
   RUST_PID=$!
 fi
 

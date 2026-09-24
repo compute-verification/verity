@@ -193,6 +193,13 @@ def cmd_run(argv: list[str]) -> int:
             return 3
     job = record.extend_job(build_job_from(a, command), run_id=run_id, runs_root=root, expected_fingerprint=_parse_expect(ns.expect),
                             cost=cost, remote=remote_info, store=prep["section"], cwd={"path": a.cwd, "basis": cwd_basis})
+    try:                                                          # which build each installed binary is (binprov.py); never stops a run
+        from .binprov import snapshot
+
+        if bins := snapshot():
+            job["run"]["binaries"] = bins
+    except Exception as e:  # noqa: BLE001
+        job["run"]["binaries_error"] = f"{type(e).__name__}: {e}"
     from .telemetry.job import write_json_atomic
     from .telemetry.run import run as harness_run
 

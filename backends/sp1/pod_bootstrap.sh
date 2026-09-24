@@ -88,6 +88,7 @@ fi
 stage "install"
 install -m 0755 "$BUILT" "$BIN/veritor-zk-host-$SUFFIX"
 sha256sum "$BIN/veritor-zk-host-$SUFFIX"
+PYTHONPATH="$HERE/../../tools/research/src" python3 -m research.binprov record "$BIN/veritor-zk-host-$SUFFIX" --source "$HERE/../.." || echo "binary provenance not recorded (non-fatal)" >&2
 
 stage "done"
 echo "VERITY_SP1_HOST=$BIN/veritor-zk-host-$SUFFIX"

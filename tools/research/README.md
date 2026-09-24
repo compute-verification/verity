@@ -118,6 +118,13 @@ starts the runner detached; re-delivering a launch after an ssh drop finds
 the claim and reports state. `--exclusive` refuses if any run is live, and
 any launch refuses if an exclusive holder is live.
 
+The shipped tree is extracted with extraction mtimes (`tar -m`), not the commit time `git archive` stamps: a build dir shared
+across commits (Cargo's `/workspace/sp1-target`) judges freshness by mtime, and with commit times an older commit shipped after a
+newer build looked built and ran the newer binary. Installed binaries (`/workspace/bin`, or `$RESEARCH_BIN_DIRS`) carry their
+own provenance: a build runs `python -m research.binprov record BINARY --source TREE` after installing (the SP1 and Ligero
+bootstraps do), writing `BINARY.provenance.json` (sha256, source commit/tree/dirty), and every run records each binary's sha256
+with its provenance `recorded` / `stale` (replaced since) / `missing` in job.json `run.binaries` (`binprov.py`).
+
 `--mem-gb N` is memory admission on the machine (`mem.py`). A pod's processes
 share one memory cgroup, and `free` describes the host (vyv-v2cpu3: 946 GB
 host, 256 GB cgroup). The machine admits the run only if the cgroup limit, minus

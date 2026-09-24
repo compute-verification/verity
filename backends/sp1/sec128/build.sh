@@ -124,6 +124,7 @@ CARGO_HOME="$CH" CARGO_TARGET_DIR="$ROOT/target-host" cargo build --release --lo
   --features "$FEATURES" 2>&1 | grep -v -E "^\s+(Compiling|Downloaded|Downloading) "
 install -m 0755 "$ROOT/target-host/release/veritor-zk-host" "$BIN"
 sha256sum "$BIN"
+PYTHONPATH="$SP1_SRC/../../tools/research/src" python3 -m research.binprov record "$BIN" --source "$SP1_SRC/../.." || echo "binary provenance not recorded (non-fatal)" >&2
 SP1_PROVER=cpu RUST_LOG=error "$BIN" info > "$ROOT/host-info.log" 2>&1 || { tail -20 "$ROOT/host-info.log"; exit 3; }
 grep '^{' "$ROOT/host-info.log" | tail -1 | tee "$ROOT/host-info.json"
 if [ -x /workspace/bin/veritor-zk-host-cuda-relation-bare ]; then
