@@ -150,7 +150,7 @@ def test_binding_names_a_predecessors_branch_and_a_lane_with_no_report_still_sho
     assert json.loads((root / "lanes" / "successor" / "binding.json").read_text()) == {"branch": "lane/old-name", "worktree": str(repo)}
     os.utime(root / "lanes" / "successor" / "binding.json", (NOW.timestamp() - 600, NOW.timestamp() - 600))
     row = notes.status(root, 30, None, now=NOW, repo=repo)[0]
-    assert (row["lane"], row["text"], row["branch"], row["pod"]) == ("successor", "(no report yet)", "lane/old-name", "vy-successor-veritor-campaign")
+    assert (row["lane"], row["text"], row["branch"], row["pod"]) == ("successor", "(no report yet)", "lane/old-name", None)   # pod: a hint
     assert (row["life_via"], row["life_min"], row["stale"]) == ("edit", 3.0, False)
 
 
@@ -170,16 +170,34 @@ def test_pod_probe_parses_processes_gpu_and_newest_file():
         {"busy": 0, "newest_proc_s": None, "gpu_util": None, "gpu_mem_mb": None, "file_age_s": None}
 
 
+def _pod(pid: str, name: str, usd: float = 0.74, started_min_ago: float = 120) -> dict:
+    started = (NOW - dt.timedelta(minutes=started_min_ago)).strftime("%Y-%m-%d %H:%M:%S.000 +0000 UTC")
+    return {"id": pid, "name": name + "-veritor-campaign", "desiredStatus": "RUNNING", "costPerHr": usd, "lastStartedAt": started}
+
+
+@pytest.mark.parametrize("gpus,apps,want", [("0, 2\n", "", (0, 2, 0)), ("0, 2\n37, 1000\n", "1234\n", (37, 1002, 1)), ("", "", (None, None, 0))])
+def test_the_pod_probe_reports_the_busiest_gpu_even_at_zero_percent(tmp_path, gpus, apps, want):
+    fake = tmp_path / "bin" / "nvidia-smi"
+    fake.parent.mkdir()
+    fake.write_text(f"#!/bin/sh\ncase \"$*\" in *query-gpu*) printf '{gpus}';; *query-compute-apps*) printf '{apps}';; esac\n")
+    fake.chmod(0o755)
+    out = subprocess.run(["sh", "-c", notes.POD_PROBE], capture_output=True, text=True, env={**os.environ, "PATH": f"{fake.parent}:{os.environ['PATH']}"})
+    p = notes.parse_pod_probe(out.stdout)
+    assert (p["gpu_util"], p["gpu_mem_mb"], p["gpu_apps"], p["serve"]) == (*want, 0)
+
+
 def test_a_busy_pod_counts_as_now_and_an_idle_one_by_its_newest_file(tmp_path):
     _report(tmp_path, "waiting", "CHECKPOINT 1111111 (20:00Z) campaign running\n", 60)
     _report(tmp_path, "idle", "CHECKPOINT 2222222 (20:10Z) bench\n", 50)
-    probes = {"waiting": {"name": "vy-waiting", "busy": 2, "gpu_util": 90, "file_age_s": 30},
-              "idle": {"name": "vy-idle", "busy": 0, "gpu_util": 0, "file_age_s": 2400}}
-    rows = {r["lane"]: r for r in notes.status(tmp_path, 30, None, now=NOW, pods=lambda names: {k: probes[k] for k in names})}
+    probes = {"p1": {"busy": 2, "gpu_util": 90, "file_age_s": 30}, "p2": {"busy": 0, "gpu_util": 0, "file_age_s": 2400}}
+    fleet = notes.load_fleet(tmp_path, pods=lambda: [_pod("p1", "vy-waiting"), _pod("p2", "vy-idle")],
+                             prober=lambda ps: {p["id"]: probes[p["id"]] for p in ps})
+    rows = {r["lane"]: r for r in notes.status(tmp_path, 30, None, now=NOW, fleet=fleet)}
     assert (rows["waiting"]["life_via"], rows["waiting"]["life_min"], rows["waiting"]["stale"]) == ("pod", 0.0, False)
     assert (rows["idle"]["life_via"], rows["idle"]["life_min"], rows["idle"]["stale"]) == ("pod", 40.0, True)
+    assert (rows["idle"]["pods"][0]["idle"], rows["idle"]["pods"][0]["idle_min"]) == (True, 40.0)
     text = notes.render(list(rows.values()))
-    assert "busy2 90%" in text and "idle 0%" in text
+    assert "busy2 90%" in text and "idle 0% 40m" in text and "1 $0.74/h" in text
 
 
 def test_watch_prints_each_transition_once(tmp_path):
@@ -219,8 +237,9 @@ def test_a_successor_gets_its_predecessors_unread_handoffs_and_they_are_not_mail
     assert notes.successors(tmp_path) == {"live-2b": "live-2c"}
     assert [(x["lane_dir"], x["path"].name) for x in notes.inbox(tmp_path, "live-2c")] == [
         ("live-2b", "20260923T2030Z-handoff-from-relation.md")]
-    rows = {r["lane"]: r for r in notes.status(tmp_path, 30, None, now=NOW)}
+    rows = {r["lane"]: r for r in notes.status(tmp_path, 30, None, now=NOW, every_attempt=True)}
     assert (rows["live-2b"]["mail"], rows["live-2c"]["inbox"], rows["live-2c"]["inbox_oldest_min"]) == ([], 1, 20.0)
+    assert [(r["lane"], r["attempt"]) for r in notes.status(tmp_path, 30, None, now=NOW)] == [("live-2c", 2)]   # one row per topic
     notes.bind(tmp_path, "live-2d", succeeds="live-2c")
     assert notes.chain(tmp_path, "live-2d") == ["live-2d", "live-2c", "live-2b"]
 
@@ -264,7 +283,7 @@ def test_finish_checks_custody_pod_worktree_and_handoffs_never_named(tmp_path, r
         cited.append(arts)
         return False, "1/2 cited artifacts not preserved: art:feedbeef00"
 
-    text, rc = notes.finish(root, "fin", repo, custody=custody, pods=lambda lane, bound, lanes: (False, "vy-fin RUNNING"))
+    text, rc = notes.finish(root, "fin", repo, custody=custody, pods=lambda lane, bound, lanes, succ: (False, "vy-fin RUNNING"))
     head = _git(repo, "rev-parse", "HEAD")[:8]
     assert (rc, cited) == (3, [["1234abcd", "feedbeef00"]])
     assert text.splitlines() == [
@@ -308,3 +327,208 @@ def test_a_pod_belongs_to_the_longest_lane_name_it_starts_with():
     assert notes.pod_owner("vy-live-2c-veritor-campaign", lanes) == "live-2c"
     assert notes.pod_owner("vy-live-2-verifier", lanes) == "live-2"
     assert notes.pod_owner("vy-control", lanes) is None
+
+
+# ---- pods by ownership, idle pods, money, the reaper ------------------------------------------------------------------------------------------
+
+def test_pods_belong_to_the_latest_attempt_of_the_topic_their_name_carries():
+    lanes = {"wave-h100", "wave-h100-2", "wave-4090", "live-2", "live-2b", "fold"}
+    succ = {"wave-h100": "wave-h100-2"}
+    own = lambda name, bound=None: notes.pod_owner(name, lanes, succ, bound)  # noqa: E731
+    assert own("vy-wave-h100-veritor-campaign") == "wave-h100-2"            # the successor took over the pod
+    assert own("vy-wave-h100-verifier-veritor-campaign") == "wave-h100-2"   # a role
+    assert own("vy-wave-h100b-veritor-campaign") == "wave-h100-2"           # a sibling: the second H100
+    assert own("vy-wave-h1000") is None and own("vy-wave-4090x2y") is None  # not one letter (+ digits)
+    assert own("vy-live-2b-verifier") == "live-2b" and own("vy-live-2c") == "live-2"
+    assert own("vyv-sw-73b-veritor-campaign") is None and own("vy-control-verity") is None
+    assert own("vy-live2b-verifier-ro-veritor-campaign", {"vy-live2b-verifier-ro": "fold"}) == "fold"   # the binding hint
+    assert own("vy-wave-4090", {"vy-wave-4090": "fold"}) == "wave-4090"    # a name that carries a lane beats a hint
+
+
+def _fleet_rows(tmp_path, probes, listing=None, **kw):
+    listing = listing or [_pod("a", "vy-wave-h100", 3.49), _pod("b", "vy-wave-h100b", 3.49), _pod("c", "vy-wave-h100-verifier", 0.49),
+                          _pod("d", "vyv-sw-73b", 6.98), _pod("e", "vy-control-verity", 0.03)]
+    fleet = notes.load_fleet(tmp_path, pods=lambda: listing, prober=lambda ps: {p["id"]: probes.get(p["id"], {}) for p in ps})
+    return fleet, notes.status(tmp_path, 30, None, now=NOW, fleet=fleet, **kw)
+
+
+def test_status_shows_every_pod_a_lane_owns_with_count_rate_and_probe(tmp_path):
+    _report(tmp_path, "wave-h100", "CHECKPOINT 1111111 (20:00Z) [superseded] by wave-h100-2\n", 60, status="superseded")
+    _report(tmp_path, "wave-h100-2", "CHECKPOINT 2222222 (20:55Z) [open] sweeping\n", 5)
+    probes = {"a": {"busy": 2, "gpu_util": 97, "file_age_s": 10}, "b": {"busy": 0, "gpu_util": 0, "gpu_apps": 0, "file_age_s": 900},
+              "c": {"busy": 0, "serve": 1, "gpu_util": None, "file_age_s": 3000}}
+    fleet, rows = _fleet_rows(tmp_path, probes)
+    assert [(r["lane"], r["attempt"]) for r in rows] == [("wave-h100-2", 2)]
+    r = rows[0]
+    assert [(p["name"], p.get("idle"), p.get("idle_min")) for p in r["pods"]] == [
+        ("vy-wave-h100", False, None), ("vy-wave-h100b", True, 15.0), ("vy-wave-h100-verifier", False, None)]
+    text = notes.render(rows)
+    assert "wave-h100-2 #2" in text and "3 $7.47/h" in text
+    assert "busy2 97%" in text and "idle 0% 15m" in text and "serve1" in text
+    assert sorted(fleet.owner) == ["a", "b", "c"]                            # vyv-* and vy-control: nobody's
+    line, runway = notes.account_line(fleet, {"balance": 117.0, "usd_h": 18.0}, NOW)
+    assert line == "21:00Z ACCOUNT $117.00 at $18.00/h, runway 6.5h; lane pods $7.47/h (3), other pods $7.01/h (2)" and runway == 6.5
+    assert notes.account_line(fleet, None, NOW)[1] is None
+    assert len(notes.status(tmp_path, 30, None, now=NOW, fleet=fleet, every_attempt=True)) == 2
+
+
+def test_a_lane_owning_a_running_pod_shows_however_old_and_a_failed_listing_says_so(tmp_path):
+    _report(tmp_path, "old", "CHECKPOINT 1111111 (09:00Z) [final] done\n", 60 * 30, status="final")
+    rows = notes.status(tmp_path, 30, 8, now=NOW, fleet=notes.Fleet([_pod("x", "vy-old")], {"x": "old"}, {}))
+    assert [(r["lane"], len(r["pods"])) for r in rows] == [("old", 1)]
+    assert notes.status(tmp_path, 30, 8, now=NOW, fleet=notes.Fleet([], {}, {})) == []
+    _report(tmp_path, "new", "CHECKPOINT 1111111 (20:50Z) [open] x\n", 10)
+    rows = notes.status(tmp_path, 30, 8, now=NOW, fleet=notes.load_fleet(tmp_path, pods=lambda: 1 / 0))
+    assert "?" in notes.render(rows) and rows[0]["pods_error"].startswith("pod listing failed")
+
+
+def test_idle_pod_alerts_once_per_idle_spell_of_an_open_lane(tmp_path):
+    rows = [{"lane": "w", "state": "open", "pods": [{"id": "a", "name": "vy-w", "usd_h": 0.74, "idle": True, "idle_min": 2.0, "gpu_util": 0}]},
+            {"lane": "f", "state": "final", "pods": [{"id": "b", "name": "vy-f", "usd_h": 0.74, "idle": True, "idle_min": 60.0}]}]
+    since, alerted = {}, set()
+    assert notes.idle_lines(since, alerted, rows, NOW, 5) == []               # idle 2 min so far
+    later = NOW + dt.timedelta(minutes=3)
+    assert notes.idle_lines(since, alerted, rows, later, 5) == ["21:03Z IDLE-POD w vy-w 5m ($0.74/h, GPU 0%, no work process)"]
+    assert notes.idle_lines(since, alerted, rows, later + dt.timedelta(minutes=2), 5) == []   # once
+    rows[0]["pods"][0]["idle"] = False                                        # busy again: the next spell alerts again
+    assert notes.idle_lines(since, alerted, rows, later, 5) == [] and since == {}
+    rows[0]["pods"][0].update(idle=True, idle_min=9.0)
+    assert notes.idle_lines(since, alerted, rows, later, 5)[0].startswith("21:03Z IDLE-POD w vy-w 9m")
+
+
+def test_runway_alerts_under_the_threshold_then_each_half_hour_shorter():
+    assert notes.runway_alert(3.4, 3, None, NOW) == ([], None)
+    lines, last = notes.runway_alert(2.9, 3, None, NOW)
+    assert lines == ["21:00Z RUNWAY 2.9h (under 3h)"] and last == 2.9
+    assert notes.runway_alert(2.6, 3, last, NOW) == ([], 2.9)
+    assert notes.runway_alert(2.4, 3, last, NOW)[0] == ["21:00Z RUNWAY 2.4h (under 3h)"]
+    assert notes.runway_alert(None, 3, 2.4, NOW) == ([], None)
+
+
+def test_the_reaper_takes_only_pods_of_final_lanes_past_the_grace_that_are_not_kept(tmp_path):
+    pod = {"id": "p1", "name": "vy-done", "usd_h": 0.74}
+    rows = [{"lane": "done", "state": "final", "done_ts": NOW.timestamp() - 900, "pods": [pod]},
+            {"lane": "fresh", "state": "final", "done_ts": NOW.timestamp() - 300, "pods": [{**pod, "id": "p2"}]},
+            {"lane": "kept", "state": "final", "done_ts": NOW.timestamp() - 900, "keep_pod": "live verifier", "pods": [{**pod, "id": "p3"}]},
+            {"lane": "busy", "state": "open", "pods": [{**pod, "id": "p4"}]}]
+    noted, killed = set(), []
+    lines = notes.reap_lines(tmp_path, rows, NOW, 10, noted)
+    assert lines == ["21:00Z FINAL-POD done vy-done p1 $0.74/h (final 15m ago): --reap terminates it, checkpoint --keep-pod WHY keeps it"]
+    assert notes.reap_lines(tmp_path, rows, NOW, 10, noted) == [] and killed == []     # said once; nothing terminated
+    lines = notes.reap_lines(tmp_path, rows, NOW, 10, noted, reap=True, terminate=killed.append)
+    assert killed == ["p1"] and lines == ["21:00Z REAPED done vy-done p1 $0.74/h (final 15m ago)"]
+    assert (tmp_path / "reaper.log").read_text() == lines[0] + "\n"
+
+
+def test_cli_keep_pod_is_recorded_for_the_reaper_and_the_finish_check(tmp_path, capsys):
+    _report(tmp_path, "lv", "", 60)
+    notes.main(["checkpoint", "lv", "open", "serving", "--commit", "abc1234", "--keep-pod", "shared live verifier", "--root", str(tmp_path)])
+    assert notes.binding(tmp_path, "lv")["keep_pod"] == "shared live verifier"
+    row = notes.status(tmp_path, 30, None, now=NOW)[0]
+    assert row["keep_pod"] == "shared live verifier"
+
+
+def test_watch_prints_no_mail_on_its_first_pass_and_never_for_a_superseded_lane(tmp_path, capsys):
+    _report(tmp_path, "done", "CHECKPOINT 1111111 (20:00Z) [final] done\n", 55, status="final")
+    _touch(tmp_path / "lanes" / "done" / "20260923T2058Z-handoff-coordinator.md", 2, "# late\n")
+    _report(tmp_path, "gone", "CHECKPOINT 1111111 (20:00Z) [superseded] folded into done\n", 55, status="superseded")
+    _touch(tmp_path / "lanes" / "gone" / "20260923T2058Z-handoff-x.md", 2, "# late too\n")
+    rows = {r["lane"]: r for r in notes.status(tmp_path, 30, None, now=NOW, every_attempt=True)}
+    assert (rows["done"]["mail"], rows["gone"]["mail"]) == (["20260923T2058Z-handoff-coordinator.md"], [])
+    assert notes.main(["watch", "--root", str(tmp_path), "--all", "--passes", "1"]) == 0
+    out = capsys.readouterr().out
+    assert "MAIL" not in out and "pass 1: 0 open, 0 stale" in out
+
+
+# ---- relaunch, bind fields, worktree gc -------------------------------------------------------------------------------------------------------
+
+def test_bind_records_brief_final_budget_and_refuses_a_final_that_is_not_hhmmz(tmp_path):
+    notes.bind(tmp_path, "l", branch="lane/l", brief="campaigns/w/BRIEF.md", final="06:30Z", budget="$5")
+    assert notes.binding(tmp_path, "l") == {"branch": "lane/l", "brief": "campaigns/w/BRIEF.md", "final": "06:30Z", "budget": "$5"}
+    with pytest.raises(ValueError):
+        notes.bind(tmp_path, "l", final="6:30")
+    assert notes.main(["bind", "l", "--final", "0630", "--root", str(tmp_path)]) == 2
+
+
+def test_relaunch_saves_the_work_supersedes_binds_the_successor_and_prints_its_launch_message(tmp_path, repo):
+    root = tmp_path / "notes"
+    _git(repo, "checkout", "-qb", "other")
+    _touch(repo / "a.py", 1, "theirs\n")
+    _git(repo, "commit", "-qam", "theirs")
+    _git(repo, "checkout", "-qb", "lane/wave-4090", "main")
+    _touch(repo / "a.py", 1, "mine\n")
+    _git(repo, "commit", "-qam", "mine")
+    subprocess.run(["git", "-C", str(repo), "merge", "-q", "other"], capture_output=True)   # conflict: a.py UU, MERGE_HEAD
+    _touch(repo / "notes.txt", 1, "untracked work\n")
+    _report(root, "wave-4090", "CHECKPOINT 1111111 (20:00Z) [open] sweeping\n", 60)
+    notes.bind(root, "wave-4090", branch="lane/wave-4090", worktree=str(repo), pod="vy-wave-4090", brief="campaigns/w/BRIEF.md",
+               final="06:30Z", budget="$5")
+    listing = [_pod("p1", "vy-wave-4090"), _pod("p2", "vy-wave-4090-verifier", 0.24), _pod("p3", "vyv-sw-1", 6.98)]
+    fleet = lambda: notes.load_fleet(root, probe=False, pods=lambda: listing)  # noqa: E731
+    s, done, msg = notes.relaunch(root, "wave-4090", why="stall 4", repo=repo, now=NOW, fleet=fleet)
+    ev = root / "lanes" / "wave-4090" / "evidence"
+    assert s == "wave-4090-2" and sorted(p.name for p in ev.iterdir()) == [
+        "uncommitted-2100Z-untracked.tgz", "uncommitted-2100Z.merge", "uncommitted-2100Z.patch", "uncommitted-2100Z.status"]
+    assert "UU a.py" in (ev / "uncommitted-2100Z.status").read_text() and "notes.txt" in (ev / "uncommitted-2100Z.status").read_text()
+    import tarfile
+    assert tarfile.open(ev / "uncommitted-2100Z-untracked.tgz").getnames() == ["notes.txt"]
+    assert (ev / "uncommitted-2100Z.merge").read_text().strip() == _git(repo, "rev-parse", "other").strip()
+    row = notes.lane_status(notes.report_for(root, "wave-4090"), NOW, 30)
+    assert row["state"] == "superseded" and row["text"] == "by wave-4090-2 (relaunch): stall 4"
+    assert notes.binding(root, "wave-4090-2") == {"branch": "lane/wave-4090", "worktree": str(repo), "pod": "vy-wave-4090",
+                                                  "succeeds": "wave-4090", "brief": "campaigns/w/BRIEF.md", "final": "06:30Z", "budget": "$5"}
+    assert done[1:] == ["checkpoint wave-4090 superseded by wave-4090-2", f"bound wave-4090-2: lane/wave-4090 {repo} succeeds wave-4090"]
+    lines = msg.splitlines()
+    assert lines[0].startswith("You are lane `wave-4090-2` (attempt 2 of wave-4090), taking over `wave-4090`.")
+    assert "`~/.research/bin/research notes inbox wave-4090-2`" in lines[0]
+    assert lines[1] == "- Goal: the brief `campaigns/w/BRIEF.md`; continue where wave-4090 stopped (its report says what is done and what is left)."
+    assert lines[2].startswith(f"- Base: `lane/wave-4090` @ {_git(repo, 'rev-parse', '--short=8', 'HEAD').strip()}, worktree `{repo}`")
+    assert "- Pods (yours now): `vy-wave-4090` (p1, $0.74/h), `vy-wave-4090-verifier` (p2, $0.24/h)" in msg
+    assert "- FINAL: 06:30Z hard; budget: $5." in lines and lines[-1] == "- MID-MERGE: finish the merge first (a.py unmerged)."
+    with pytest.raises(ValueError, match="already taken over by wave-4090-2"):
+        notes.relaunch(root, "wave-4090", repo=repo, now=NOW)
+    s3, _, msg3 = notes.relaunch(root, "wave-4090-2", repo=repo, now=NOW, final="07:00Z")
+    assert s3 == "wave-4090-3" and "(attempt 3 of wave-4090)" in msg3 and "- FINAL: 07:00Z hard; budget: $5." in msg3
+    assert notes.chain(root, "wave-4090-3") == ["wave-4090-3", "wave-4090-2", "wave-4090"]
+
+
+def test_successor_names_count_attempts_from_the_topic(tmp_path):
+    for lane in ("dev-4090", "verify-rs-4", "b-v2"):
+        _report(tmp_path, lane, "x\n", 5)
+    assert [notes.successor_name(tmp_path, x) for x in ("dev-4090", "verify-rs-4", "b-v2")] == ["dev-4090-2", "verify-rs-5", "b-v2-2"]
+    (tmp_path / "lanes" / "dev-4090-2").mkdir()
+    assert notes.successor_name(tmp_path, "dev-4090") == "dev-4090-3"
+
+
+def test_gc_worktrees_removes_only_clean_pushed_worktrees_of_done_lanes(tmp_path, repo):
+    root = tmp_path / "notes"
+    origin = tmp_path / "origin.git"
+    _git(tmp_path, "init", "-q", "--bare", str(origin))
+    _git(repo, "remote", "add", "origin", str(origin))
+    for lane, state in (("done", "final"), ("dirty", "final"), ("local", "final"), ("busy", "open"), ("pred", "superseded")):
+        _git(repo, "worktree", "add", "-q", "-b", f"lane/{lane}", str(tmp_path / lane), "main")
+        _report(root, lane, f"CHECKPOINT 1111111 (20:00Z) [{state}] x\n", 30, status=state)
+        if lane != "local":
+            _git(repo, "push", "-q", "origin", f"lane/{lane}")
+    _git(repo, "worktree", "add", "-q", "-b", "scratch", str(tmp_path / "scratch"), "main")
+    _git(repo, "push", "-q", "origin", "scratch")
+    _touch(tmp_path / "local" / "x.py", 1)
+    _git(tmp_path / "local", "add", "x.py")
+    _git(tmp_path / "local", "commit", "-qm", "not pushed")
+    _touch(tmp_path / "dirty" / "wip.py", 1)
+    (repo / ".git" / "info").mkdir(exist_ok=True)
+    (repo / ".git" / "info" / "exclude").write_text("target/\n")
+    _touch(tmp_path / "done" / "target" / "build.o", 1)                             # ignored: not dirty, goes with the worktree
+    _report(root, "pred-2", "CHECKPOINT 1111111 (20:50Z) [open] x\n", 10)          # took over pred's worktree: still in use
+    notes.bind(root, "pred-2", worktree=str(tmp_path / "pred"), succeeds="pred")
+    rows = {Path(r["worktree"]).name: r for r in notes.gc_worktrees(root, repo, now=NOW)}
+    assert {k: r["keep"] for k, r in rows.items()} == {
+        "busy": "lane busy is open", "dirty": "dirty (1 paths)", "done": None, "local": "branch tip not on origin",
+        "pred": "lane pred-2 is open", "scratch": "no lane"}
+    assert (tmp_path / "done").exists()                                             # listing removes nothing
+    rows = {Path(r["worktree"]).name: r for r in notes.gc_worktrees(root, repo, now=NOW, apply=True)}
+    assert rows["done"]["removed"] is True and "removed" not in rows["dirty"]
+    assert not (tmp_path / "done").exists() and (tmp_path / "dirty" / "wip.py").exists()
+    assert _git(repo, "branch", "--list", "lane/done").strip() == "lane/done"          # the branch stays
+    text = notes.render_gc(list(rows.values()), True)
+    assert "\nremoved  " in "\n" + text and "keep     " in text and text.endswith("1 removed; kept 5: 2 in use by an open lane, 1 with no lane")
