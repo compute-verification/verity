@@ -36,6 +36,7 @@ ARMS = {
         "operands": "read from guest memory through SP1's memory argument (the guest hint-reads x and W, the chip reads each step's 8 "
                     "operand words from memory)",
         "host_operands": "memory",
+        "contract": "finite operands and accumulator, both GroupSum outputs zero or fp32-normal",
     },
     "witness": {
         "pin": "_WIT",
@@ -47,6 +48,8 @@ ARMS = {
                     "as range-checked BF16 decode columns. A proof shows the chained accumulator is reachable from some finite BF16 operand "
                     "sequence: sound for relation-bare, which is existential in x and W, and not for a statement that authenticates them",
         "host_operands": "stream",
+        "contract": "finite operands and accumulator, neither GroupSum output above the fp32 range (a subnormal output is "
+                    "denormalized as tc::group_sum does, patch 0010)",
     },
 }
 
@@ -89,7 +92,7 @@ def fork_identity(host: str) -> tuple[str, dict]:
                     for pattern in ARMS[arm]["patches"] for p in sorted(HERE.glob(pattern))},
         "chips": "TC_DOT (fp8 E4M3 operands through the Ampere BF16 pipeline; ~/projects/sp1 tc-dot-precompile, unused here) and "
                  "TC_DOT_BF16 (one tc-ampere-bf16 m16n8k16 step per call: K = 16 BF16 products, groups [8, 8], 25-bit adder, floor -132, "
-                 "truncation; operand contract = finite operands and accumulator, both GroupSum outputs zero or fp32-normal)",
+                 f"truncation; operand contract = {ARMS[arm]['contract']})",
         "operands": ARMS[arm]["operands"],
         "guest_routing": "steps outside the chip's contract run tc::tc_dot in the guest; a VU with >= vu_software_threshold such steps runs "
                          "bare::check_one whole (the stock kernel)",
