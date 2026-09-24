@@ -170,11 +170,11 @@ def phase1(kern, a: torch.Tensor, bb: torch.Tensor, wg: torch.Tensor, gammas: li
             rs.append(r)
             pfx = _ref.mul(pfx, _ref.eq1(gammas[i - 1], r))
             if i == k:
-                kern.set_fold(inp, rs[:-1], k, k, r)
+                kern.set_fold(inp, rs[:-1], k, k, r, matrices=False)
                 gE, hE = kern.fold_k(g, k, inp), kern.fold_k(h, k, inp)
                 del g, h
             elif i > k:
-                kern.set_fold(inp, rs[:-1], i, k, r)
+                kern.set_fold(inp, rs[:-1], i, k, r, matrices=False)
                 gE, hE = kern.fold_pair(gE, hE, inp)
         if k == 0:
             gE = torch.zeros((t, DEG), dtype=torch.int32, device=dev)

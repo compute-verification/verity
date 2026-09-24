@@ -321,15 +321,18 @@ class Kernel:
             self.set_fold(inp, rs, i, k, r_i)
         return inp
 
-    def set_fold(self, inp: RoundInputs, rs: list[ref.Ext], i: int, k: int, r_i: ref.Ext) -> None:
-        """Fill the fold operands of ``inp`` once ``r_i`` is known (ext round ``i > k``, or ``fold_k`` at ``i == k``)."""
+    def set_fold(self, inp: RoundInputs, rs: list[ref.Ext], i: int, k: int, r_i: ref.Ext, matrices: bool = True) -> None:
+        """Fill the fold operands of ``inp`` once ``r_i`` is known (ext round ``i > k``, or ``fold_k`` at ``i == k``).
+        The Triton folds read only ``fold_r`` / ``fold_coeff``; ``matrices=False`` skips the int8 ``fold_C`` there."""
+        matrices = matrices or self._tk is None
         if i > k:
-            C48 = fold_matrix_ext(r_i)
-            inp.fold_C = torch.tensor(C48, device=self.device)
+            if matrices:
+                inp.fold_C = torch.tensor(fold_matrix_ext(r_i), device=self.device)
             if self._tk is not None:
                 inp.fold_r = pre_scale(to_dev([r_i], self.device))[0].contiguous()
         elif i == k:
-            inp.fold_C = torch.tensor(fold_matrix_k(rs + [r_i]), device=self.device)
+            if matrices:
+                inp.fold_C = torch.tensor(fold_matrix_k(rs + [r_i]), device=self.device)
             if self._tk is not None:
                 inp.fold_coeff = pre_scale(to_dev(ref.eq_table(rs + [r_i]), self.device))
 
