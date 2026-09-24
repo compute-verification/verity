@@ -46,6 +46,14 @@ if ! /usr/local/go/bin/go version 2>/dev/null | grep -qE 'go1\.(2[4-9]|[3-9][0-9
 fi
 export PATH="/usr/local/go/bin:$PATH"
 go version
+# sp1-gpu-sys (v6.6.0) needs CMake >= 3.24; Ubuntu 22.04 images ship 3.22.
+if ! /usr/local/cmake/bin/cmake --version >/dev/null 2>&1; then
+  mkdir -p /usr/local/cmake
+  curl -fsSL https://github.com/Kitware/CMake/releases/download/v3.30.5/cmake-3.30.5-linux-x86_64.tar.gz \
+    | tar -C /usr/local/cmake --strip-components=1 -xzf -
+fi
+export PATH="/usr/local/cmake/bin:$PATH"
+cmake --version | head -1
 
 stage "prover source: sp1 v6.6.0 $TAG_COMMIT + SP1_TARGET_BITS_OF_SECURITY=$SEC_BITS"
 FORK="$ROOT/sp1-v6.6.0-sec$SEC_BITS"
