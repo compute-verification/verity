@@ -159,6 +159,36 @@ fn batch_over_the_v1_fixture() {
     assert!(!o.status.success() && stdout(&o).contains("2^-128.02 > 2^-129"), "{}", stdout(&o));
 }
 
+/// relation-2 e61b24fe's `--zk` gate (LGSC0004): the ZK key (8c4cd91f) is pinned by derivation from the pinned LGSC0003
+/// key, the honest proof verifies at 2^-128, and the ZK V1 must-rejects (committed next:0 / M_next off their shift), a
+/// forged-every-round zero-check and a tampered claim value are rejected where Python rejects them.
+#[test]
+fn batch_over_the_lgsc0004_zk_gate_subset() {
+    let d = fixtures().join("lgto/fp8ada_l256_zk_lgsc4");
+    let o = run(&["batch", "--dir", d.to_str().unwrap(), "--target-bits", "128"]);
+    let s = stdout(&o);
+    assert!(o.status.success(), "{s}");
+    for want in [
+        "\"accepted\":true",
+        "\"n_proofs_expected\":1",
+        "\"n_proofs\":1",
+        "\"n_negatives\":4",
+        "\"n_accepted\":1",
+        "\"manifest_checked\":5",
+        "\"problems\":[]",
+        "\"accepted_unpinned_key\":0",
+        "\"sumcheck\":\"LGSC0004\"",
+        "\"zk_mode\":\"lgsc0004\"",
+        "\"key_pinned\":true",
+        "\"key_derived_from\":\"da27387bb23ff60a60b4b21ef99f180c84c17456edf41efa31e5797aaed9227b\"",
+        "\"key_sha256\":\"8c4cd91f45f28ee47a7c650779068907cf96e7462592c3f80ceb301a186a409a\"",
+        "{\"name\":\"zk_next0.lgto.neg\",\"accepted\":false,\"reason\":\"combined round 0: sum_b q(b) != claim\"",
+        "{\"name\":\"zk_mnext.lgto.neg\",\"accepted\":false,\"reason\":\"combined round 0: sum_b q(b) != claim\"",
+    ] {
+        assert!(s.contains(want), "{want} not in {s}");
+    }
+}
+
 /// red-team-ligerito-2's V1 forgery (y16[47] += 1 with w' = w - e_(3581, 47)): the sumcheck layer accepts it by
 /// construction; the zero claim on the virtual block holding row 3581 is non-zero on the forged w, so the PCS opening the
 /// full verifier demands (value 0) cannot be met.
