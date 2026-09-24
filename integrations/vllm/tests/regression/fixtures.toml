@@ -727,6 +727,11 @@ sha256 = "721ba6ee6dd7625ea785afaa79446fb82c43581f73e0e35314678e724fa539eb"
 [rows."llama32-1b__bf16__l40s__tp1__b64__i1024__o128__mixed__greedy__bi-eager"]
 row = 23
 class = "GREEN"
+# Fresh GM-01 under v2 acquisition: Match r20260923-233020-dc38 (014563ac, ACQUIRE_ENGINE=v2; art:d39b5ef8816334b4) over Build
+# r20260923-222456-bdbc (art:ee33269aab289e33) ran global_match in-row -- impl fast, 8 workers, 317 s, PASS (G1..G8, X-09, alternate
+# `sequence`).  Its global_match_checks lift equals this row's except fold_record_pins (a new fold record); decomp_hashes equal except
+# oracle.digest (the Build epoch).  Re-run fresh at 738e63f5 (r20260924-084953-66e6, preserved; vyv-gm 32 vCPU): 452 s, PASS, output
+# equal to dc38's except timing fields and the checker's own module name / source sha (relayout).  339 s at 32 workers, 880 s at 1.
 selection = "green"
 tp = 1
 batch = 64
