@@ -568,6 +568,8 @@ REWRITE tools/research/tests/test_store_vllm_tools.py :: f"integrations.vllm.ver
 REWRITE tools/research/tests/test_store_vllm_tools.py :: from integrations.vllm.verity_vllm import research_tools as RT => from integrations.vllm.verity_vllm.harness import research_tools as RT
 REWRITE tests/regression/test_attempt_resolution.py :: f"integrations.vllm.verity_vllm.research_tools:VLLM_ => f"integrations.vllm.verity_vllm.harness.research_tools:VLLM_
 REWRITE tests/regression/test_attempt_resolution.py :: from integrations.vllm.verity_vllm import research_tools as RT => from integrations.vllm.verity_vllm.harness import research_tools as RT
+# commit_bench/ dissolved into commit/ under new names: the one prose mention of the directory names its successors
+REWRITE verity_capture/experimental/fa2_commit/__init__.py :: `verity_vllm/commit_bench` => `verity_vllm/commit/{fasttree,semantic_layout,stream_merkle}.py`
 # fa2_commit's __init__ follows the prototype to commit/fa2_prototype/; engine (its live member) leaves, so the package itself is kept
 REWRITE tests/dead_code_keep.json ::  "modules": { =>  "modules": {\\n  "verity_vllm.commit.fa2_prototype": "fa2_commit fixtures: the package of the kept prototype modules (see verity_vllm.commit.fa2_prototype.derived)",
 """)
