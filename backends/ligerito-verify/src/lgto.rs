@@ -438,6 +438,141 @@ pub fn read_key(buf: &[u8]) -> Result<Key, String> {
     Ok(Key { relation, sys_id, m, n_i, n_k, k, c_rows, virt, coo })
 }
 
+/// `proof.Key.to_bytes` (LGVK0001).
+pub fn write_key(key: &Key) -> Vec<u8> {
+    let mut b = MAGIC_KEY.to_vec();
+    let put = |b: &mut Vec<u8>, v: usize| b.extend_from_slice(&(v as u32).to_le_bytes());
+    put(&mut b, key.relation.len());
+    b.extend_from_slice(key.relation.as_bytes());
+    b.extend_from_slice(&key.sys_id);
+    for v in [key.m, key.n_i, key.n_k, key.k, key.c_rows.len()] {
+        put(&mut b, v);
+    }
+    for &c in &key.c_rows {
+        put(&mut b, c);
+    }
+    put(&mut b, key.virt.len());
+    for (name, row) in &key.virt {
+        put(&mut b, name.len());
+        b.extend_from_slice(name.as_bytes());
+        put(&mut b, *row);
+    }
+    for side in &key.coo {
+        put(&mut b, side.len());
+        for &(k, row, coef) in side {
+            put(&mut b, k);
+            put(&mut b, row);
+            b.extend_from_slice(&coef.to_le_bytes());
+        }
+    }
+    b
+}
+
+fn bit_length(x: usize) -> usize {
+    (usize::BITS - x.leading_zeros()) as usize
+}
+
+/// The LGSC0004 key of a batch of `2^n_s` sub-batches x `2^n_j` columns, from the relation's LGSC0003 key
+/// (`layout_for(zk=True)` + `constraints()`): the `next:<x>` virtual rows (the key's last `n_links`, at `m + |virt| - n_links
+/// + x`) become the committed `zk.next[x]`, one more constraint `zk.product` (`i1 * i2 = i3`, emitted last on each side),
+/// `n_k` from the new K, `n_i` grown until the ZK rows fit above the virtual block.  Every other row, constraint and
+/// coefficient is the LGSC0003 key's, in its order.
+pub fn zk_key_of(key3: &Key, n_s: usize, n_j: usize) -> Result<Key, String> {
+    let nl = key3.c_rows.len();
+    let nv = key3.virt.len();
+    if nl == 0 || nv < nl || key3.k == 0 {
+        return Err("LGSC0003 key: no linked rows".into());
+    }
+    let base = nv - nl;
+    if key3.virt.iter().enumerate().any(|(i, (_, r))| *r != key3.m + i)
+        || (0..nl).any(|x| key3.virt[base + x].0 != format!("next:{x}"))
+        || key3.virt[..base].iter().any(|(n, _)| n.starts_with("next:"))
+    {
+        return Err("LGSC0003 key: virtual rows are not const.. then next:0..".into());
+    }
+    let (m, nxt, k) = (key3.m, key3.m + base, key3.k + 1);
+    let n_k = bit_length(k - 1).max(1);
+    let n_c = n_s + n_j;
+    let mut n_i = bit_length(nxt - 1).max(1);
+    loop {
+        let g_cells = crate::lgsc4::ZK_CELLS_PER_VAR * (n_k + n_c + n_i.max(n_c) + n_i);
+        let n_g = g_cells.div_ceil(1 << n_c).max(1);
+        if nxt + nl + 2 + 3 + (1 << crate::lgsc4::ZK_B) + n_g <= 1 << n_i {
+            break;
+        }
+        n_i += 1;
+        if n_i > 30 {
+            return Err("ZK layout: no n_i fits".into());
+        }
+    }
+    let virt = key3.virt[..base].to_vec();
+    let lay = Layout { n_i, n_k, n_s, n_j, m, virt: virt.clone(), c_rows: key3.c_rows.clone() };
+    let zk = crate::lgsc4::zk_rows_for(&lay, k)?;
+    let remap = |row: usize| if (nxt..nxt + nl).contains(&row) { zk.next[row - nxt] } else { row };
+    let mut coo = key3.coo.clone();
+    for side in coo.iter_mut() {
+        for e in side.iter_mut() {
+            e.1 = remap(e.1);
+        }
+    }
+    for (side, &row) in coo.iter_mut().zip(&zk.product) {
+        side.push((k - 1, row, 1));
+    }
+    Ok(Key { relation: key3.relation.clone(), sys_id: key3.sys_id, m, n_i, n_k, k, c_rows: key3.c_rows.clone(), virt, coo })
+}
+
+/// The LGSC0003 key a ZK key would come from ([`zk_key_of`] undone with the ZK rows `zk`): the candidate whose digest must
+/// be pinned; [`zk_key_of`] of it must give the ZK key back byte for byte.
+pub fn lgsc3_key_of(zkey: &Key, zk: &crate::lgsc4::ZkRows) -> Key {
+    let nl = zkey.c_rows.len();
+    let nxt = zkey.m + zkey.virt.len();
+    let mut virt = zkey.virt.clone();
+    virt.extend((0..nl).map(|x| (format!("next:{x}"), nxt + x)));
+    let k = zkey.k.saturating_sub(1);
+    let mut coo = zkey.coo.clone();
+    for side in coo.iter_mut() {
+        side.retain(|e| e.0 != k);
+        for e in side.iter_mut() {
+            if let Some(x) = zk.next.iter().position(|&r| r == e.1) {
+                e.1 = nxt + x;
+            }
+        }
+    }
+    Key {
+        relation: zkey.relation.clone(),
+        sys_id: zkey.sys_id,
+        m: zkey.m,
+        n_i: bit_length((nxt + nl).saturating_sub(1)).max(1),
+        n_k: bit_length(k.saturating_sub(1)).max(1),
+        k,
+        c_rows: zkey.c_rows.clone(),
+        virt,
+        coo,
+    }
+}
+
+/// How a key is pinned: `Direct` (its digest is a pinned one), `DerivedZk(vk3)` (the LGSC0004 key [`zk_key_of`] makes for
+/// the statement's shape from the pinned LGSC0003 key `vk3`), or not at all.
+fn key_pin(spec: &RelSpec, key: &Key, key_bytes: &[u8], sid: &str, vk: &str, stmt: &Statement) -> Option<Option<String>> {
+    if spec.pins.iter().any(|(s, k)| *s == sid && *k == vk) {
+        return Some(None);
+    }
+    let s = stmt.n_vus.len();
+    if key.c_rows.is_empty() || key.virt.iter().any(|(n, _)| n.starts_with("next:")) || !s.is_power_of_two() || !stmt.l.is_power_of_two() {
+        return None;
+    }
+    let (n_s, n_j) = (s.trailing_zeros() as usize, stmt.l.trailing_zeros() as usize);
+    let lay = Layout { n_i: key.n_i, n_k: key.n_k, n_s, n_j, m: key.m, virt: key.virt.clone(), c_rows: key.c_rows.clone() };
+    let zk = crate::lgsc4::zk_rows_for(&lay, key.k).ok()?;
+    let key3 = lgsc3_key_of(key, &zk);
+    let vk3 = hex(&sha256(&write_key(&key3)));
+    if !spec.pins.iter().any(|(s, k)| *s == sid && *k == vk3) {
+        return None;
+    }
+    let back = zk_key_of(&key3, n_s, n_j).ok()?;
+    (write_key(&back) == key_bytes).then_some(Some(vk3))
+}
+
 /// The absorbed parameter JSON (`prove.Prover.batch`), canonical: compact, sorted keys, the known keys only.
 #[derive(Clone, Debug, PartialEq)]
 pub struct LgtoParams {
@@ -961,9 +1096,11 @@ impl PublicRows for StmtRows<'_> {
 pub const FS_QUERIES_LOG2: f64 = 64.0;
 
 /// `prove.Prover.soundness`: `LigeritoParams.soundness` (paper (17) per level, the rate `(2^{k_i} + t_pad) / n_i`, and
-/// the relation's zero-check / (i, i') / batching terms) + the claim batching over J + the zero claims.  Returns the
-/// interactive union (terms summed as Python's `_log2_sum`) and the largest single term.
-pub fn soundness_log2(p: &Params, t_pad: usize, spec: &RelSpec, n_i: usize, n_links: usize, blocks: &[(usize, usize)]) -> Result<(f64, f64), String> {
+/// the relation's zero-check / (i, i') / batching terms) + the claim batching over J + the zero claims.  `n_batched`: the
+/// claims beta batches besides the zero claims (LGSC0003: `1 + n_links` points; LGSC0004: 2 points + 3 sparse terms, its
+/// sumcheck terms counted as LGSC0003's, as Python's `soundness(dims, t_pad, lay)`).  Returns the interactive union
+/// (terms summed as Python's `_log2_sum`) and the largest single term.
+pub fn soundness_log2(p: &Params, t_pad: usize, spec: &RelSpec, n_i: usize, n_batched: usize, blocks: &[(usize, usize)]) -> Result<(f64, f64), String> {
     let f = ext_log2();
     let mut terms: Vec<f64> = Vec::new();
     for i in 1..=p.rounds() {
@@ -987,7 +1124,7 @@ pub fn soundness_log2(p: &Params, t_pad: usize, spec: &RelSpec, n_i: usize, n_li
     terms.push((3.0 * nvars + 7.0 + 4.0).log2() - f);
     terms.push((4.0 * row_vars as f64).log2() - f);
     terms.push((chain + 8.0).log2() - f);
-    terms.push(((1 + n_links + blocks.len()) as f64).log2() - f);
+    terms.push(((n_batched + blocks.len()) as f64).log2() - f);
     if !blocks.is_empty() {
         let s: usize = blocks.iter().map(|(b, _)| b + p.n - n_i).sum();
         terms.push((s as f64).log2() - f);
@@ -1208,6 +1345,8 @@ pub struct Report {
     pub legacy: bool,
     /// the system id and key digest are a pinned pair (false only under `allow_any_key`)
     pub key_pinned: bool,
+    /// an LGSC0004 key pinned by derivation: the pinned LGSC0003 key digest it is `zk_key_of` for the statement's shape
+    pub key_derived_from: Option<String>,
     pub key_sha256: String,
     pub stmt_sha256: String,
 }
@@ -1290,7 +1429,9 @@ pub fn verify(
         return Err("statement names another verification key".into());
     }
     let (sid, vk) = (hex(&stmt.sys_id), hex(&key_sha));
-    let key_pinned = spec.pins.iter().any(|(s, k)| *s == sid && *k == vk);
+    let pin = key_pin(spec, &key, key_bytes, &sid, &vk, &stmt);
+    let key_pinned = pin.is_some();
+    let key_derived_from = pin.flatten();
     if !key_pinned && !opt.allow_any_key {
         return Err(if spec.pins.is_empty() {
             format!("no pinned system / key for {} yet (--allow-any-key to verify against the file's key)", spec.name)
@@ -1347,7 +1488,8 @@ pub fn verify(
     if zk != (prm.t_pad > 0) || (prm.t_pad > 0 && prm.t_pad != T_PAD) {
         return Err("ZK padding does not match the parameters".into());
     }
-    let (snd, max_term) = soundness_log2(p, prm.t_pad, spec, key.n_i, key.c_rows.len(), &blocks)?;
+    let n_batched = if zk_rows.is_some() { 2 + 3 } else { 1 + key.c_rows.len() };
+    let (snd, max_term) = soundness_log2(p, prm.t_pad, spec, key.n_i, n_batched, &blocks)?;
     if let Some(t) = opt.target_log2 {
         if snd > t + 1e-9 {
             return Err(format!("parameters give an interactive union of 2^{snd:.2} > 2^{t}"));
@@ -1371,7 +1513,7 @@ pub fn verify(
     let mut sparse: Vec<SparseTerm> = Vec::new();
     let mut zk_mode = if zk { "partial" } else { "none" };
     let (sc_name, claims): (&str, Vec<EvalClaim>) = if let Some(zkr) = &zk_rows {
-        // provisional until ligerito-relation-2 emits LGSC0004: eval claims w(r_i, r_c), w(rho_i, rho_c), then the zero
+        // ligerito-relation-3 e61b24fe (pcs_points / pcs_sparse): eval claims w(r_i, r_c), w(rho_i, rho_c), then the zero
         // claims; the three Libra claims as sparse PCS terms on f_index(row, col), in sumcheck order
         if magic != crate::lgsc4::MAGIC {
             return Err("sumcheck bytes: a ZK layout (committed next rows) needs LGSC0004".into());
@@ -1436,6 +1578,7 @@ pub fn verify(
         opened_rows: opened,
         legacy: prm.zero_blocks.is_none(),
         key_pinned,
+        key_derived_from,
         key_sha256: vk,
         stmt_sha256: hex(&sha256(stmt_bytes)),
     })
@@ -1710,6 +1853,68 @@ mod tests {
         assert_eq!(json.matches(from).count(), 1, "{from}");
         let json = json.replace(from, to);
         [&V1_PROOF[..open - 4], &(json.len() as u32).to_le_bytes()[..], json.as_bytes(), &V1_PROOF[open + len..]].concat()
+    }
+
+    /// `zk_key_of` on the pinned fp8-ada LGSC0003 key reproduces Python's `layout_for(zk=True)` + `constraints()` at
+    /// ligerito-sumcheck-3 62f24d4 (its toy LGSC0004 fixtures: l = 64, S = 2, C = 128, 246 g rows): m, n_i, n_k, K, virt,
+    /// c_rows, the ZK rows and every A / B / C triple in emission order; `lgsc3_key_of` undoes it byte for byte.
+    #[test]
+    fn zk_key_of_matches_python_layout_and_constraints() {
+        let key3 = read_key(KEY).unwrap();
+        for text in [include_str!("../fixtures/sumcheck/lgsc0004_fp8ada_l64_S2.json"), include_str!("../fixtures/sumcheck/lgsc0004_fp8ada_l64_S2_zksmall.json")] {
+            let fx = crate::relation::load_fixture(text).unwrap();
+            let d = crate::json::parse(text).unwrap();
+            let lj = d.get("layout").unwrap();
+            let (lay, cons) = (&fx.layout, &fx.constraints);
+            let zk = zk_key_of(&key3, lay.n_s, lay.n_j).unwrap();
+            assert_eq!((zk.m, zk.n_i, zk.n_k, zk.k), (lay.m, lay.n_i, lay.n_k, lj.get("K").unwrap().as_usize().unwrap()));
+            assert_eq!((&zk.virt, &zk.c_rows), (&lay.virt, &lay.c_rows));
+            assert_eq!(cons.k_pad, 1 << zk.n_k);
+            assert_eq!([&zk.coo[0], &zk.coo[1], &zk.coo[2]], [&cons.a, &cons.b, &cons.c]);
+            let zr = crate::lgsc4::zk_rows_of_json(lj.get("zk").unwrap()).unwrap();
+            assert_eq!(crate::lgsc4::zk_rows_for(lay, zk.k).unwrap(), zr);
+            assert_eq!(write_key(&lgsc3_key_of(&zk, &zr)), KEY);
+        }
+        assert_eq!(write_key(&key3), KEY);
+        assert_eq!(write_key(&read_key(FP4_KEY).unwrap()), FP4_KEY);
+    }
+
+    /// A ZK key is pinned by derivation only: `zk_key_of(pinned LGSC0003 key)` for the statement's own S and l, byte for
+    /// byte.  The same key under another column count, a key with one coefficient changed or one more constraint, and a
+    /// ZK key derived from an unpinned LGSC0003 key are not pinned.
+    #[test]
+    fn zk_keys_are_pinned_by_derivation() {
+        let spec = relation_spec("fp8-ada").unwrap();
+        let key3 = read_key(KEY).unwrap();
+        let mut st = read_statement(STMT).unwrap();
+        let sid = hex(&key3.sys_id);
+        let (n_s, n_j) = (st.n_vus.len().trailing_zeros() as usize, st.l.trailing_zeros() as usize);
+        let pin = |k: &Key, st: &Statement| {
+            let b = write_key(k);
+            key_pin(spec, &read_key(&b).unwrap(), &b, &sid, &hex(&sha256(&b)), st)
+        };
+        let zk = zk_key_of(&key3, n_s, n_j).unwrap();
+        assert_eq!(pin(&zk, &st), Some(Some(hex(&sha256(KEY)))));
+        assert_eq!(pin(&key3, &st), Some(None));
+        // the gate shape (S = 4, l = 256: 33 g rows) and the real one (S = 16, l = 16384: one g row) give different keys
+        let big = zk_key_of(&key3, 4, 14).unwrap();
+        assert_ne!(write_key(&big), write_key(&zk));
+        assert_eq!(pin(&big, &st), None);
+        let mut st_big = st.clone();
+        st_big.l = 1 << 14;
+        st_big.n_vus = vec![1; 16];
+        assert_eq!(pin(&big, &st_big), Some(Some(hex(&sha256(KEY)))));
+        let mut bad = zk.clone();
+        bad.coo[1][17].2 = (bad.coo[1][17].2 + 1) % P;
+        assert_eq!(pin(&bad, &st), None);
+        let mut bad = zk.clone();
+        bad.coo[0].push((bad.k - 2, bad.m - 1, 1));
+        assert_eq!(pin(&bad, &st), None);
+        let mut other3 = key3.clone();
+        other3.coo[2][0].2 = (other3.coo[2][0].2 + 1) % P;
+        assert_eq!(pin(&zk_key_of(&other3, n_s, n_j).unwrap(), &st), None);
+        st.n_vus = vec![3, 3, 3];
+        assert_eq!(pin(&zk, &st), None);
     }
 
     #[test]

@@ -40,6 +40,7 @@
 //! ~~~
 
 use ligerito_verify::format::{looks_like_proto, read_pcs_v0, read_point, read_proto, write_pcs_v0};
+use ligerito_verify::hash::{hex, sha256};
 use ligerito_verify::lgto;
 use ligerito_verify::params::Params;
 use ligerito_verify::pcs::{verify, Report};
@@ -113,7 +114,7 @@ fn verdict_json(v: &Verdict) -> String {
     };
     let lg = match &v.lgto {
         Some(r) => format!(
-            "{{\"relation\":{},\"coins\":{},\"coin_rounds\":{},\"soundness_log2\":{},\"claimed_log2\":{},\"claim_basis\":{},\"sumcheck\":\"{}\",\"zk\":{},\"zk_mode\":\"{}\",\"vus\":{},\"sub_batches\":{},\"n\":{},\"n_claims\":{},\"zero_blocks\":{},\"opened_rows\":{},\"legacy_no_zero_claims\":{},\"key_pinned\":{},\"key_sha256\":\"{}\",\"stmt_sha256\":\"{}\"}}",
+            "{{\"relation\":{},\"coins\":{},\"coin_rounds\":{},\"soundness_log2\":{},\"claimed_log2\":{},\"claim_basis\":{},\"sumcheck\":\"{}\",\"zk\":{},\"zk_mode\":\"{}\",\"vus\":{},\"sub_batches\":{},\"n\":{},\"n_claims\":{},\"zero_blocks\":{},\"opened_rows\":{},\"legacy_no_zero_claims\":{},\"key_pinned\":{},\"key_derived_from\":{},\"key_sha256\":\"{}\",\"stmt_sha256\":\"{}\"}}",
             json_str(&r.relation),
             json_str(&r.coins_kind),
             r.coins,
@@ -131,6 +132,7 @@ fn verdict_json(v: &Verdict) -> String {
             r.opened_rows,
             r.legacy,
             r.key_pinned,
+            r.key_derived_from.as_deref().map(json_str).unwrap_or_else(|| "null".into()),
             r.key_sha256,
             r.stmt_sha256
         ),
@@ -702,6 +704,34 @@ fn main() {
             eprintln!("{} fixtures/tampers: {} accepted, {} rejected, {}", vs.len(), vs.iter().filter(|(v, _)| v.accepted).count(), vs.iter().filter(|(v, _)| !v.accepted).count(), if all { "all agree with ref.py" } else { "DISAGREEMENTS" });
             write_json(arg(&args, "--json"), &js);
             std::process::exit(if all { 0 } else { 1 });
+        }
+        "zk-key" => {
+            // the LGSC0004 key (`layout_for(zk=True)` + `constraints()`) of an S x l batch, derived from an LGSC0003 key;
+            // `--out F` writes it; the verifier pins exactly these bytes when the LGSC0003 key is pinned
+            let path = PathBuf::from(arg(&args, "--key").expect("--key LGSC0003-key.bin"));
+            let l: usize = arg(&args, "--l").expect("--l L").parse().expect("--l");
+            let s: usize = arg(&args, "--s").expect("--s S (sub-batches, a power of two)").parse().expect("--s");
+            assert!(l.is_power_of_two() && s.is_power_of_two(), "--l and --s must be powers of two");
+            let kb = std::fs::read(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+            let key3 = lgto::read_key(&kb).unwrap_or_else(|e| panic!("{e}"));
+            let zk = lgto::zk_key_of(&key3, s.trailing_zeros() as usize, l.trailing_zeros() as usize).unwrap_or_else(|e| panic!("{e}"));
+            let zb = lgto::write_key(&zk);
+            let (sid, vk3) = (hex(&key3.sys_id), hex(&sha256(&kb)));
+            let pinned = lgto::relation_spec(&key3.relation).is_some_and(|sp| sp.pins.iter().any(|(a, b)| *a == sid && *b == vk3));
+            if let Some(out) = arg(&args, "--out") {
+                std::fs::write(&out, &zb).unwrap_or_else(|e| panic!("{out}: {e}"));
+            }
+            println!(
+                "{{\"relation\":{},\"l\":{l},\"S\":{s},\"lgsc3_key_sha256\":\"{vk3}\",\"lgsc3_key_pinned\":{pinned},\"zk_key_sha256\":\"{}\",\"m\":{},\"n_i\":{},\"n_k\":{},\"K\":{},\"virt\":{},\"bytes\":{}}}",
+                json_str(&key3.relation),
+                hex(&sha256(&zb)),
+                zk.m,
+                zk.n_i,
+                zk.n_k,
+                zk.k,
+                zk.virt.len(),
+                zb.len()
+            );
         }
         "pcs-sparse" => {
             // a sparse-claim PCS document (tools/pcs_sparse_fixture.py on a GPU, or lgto's pcs_sparse_proto_bytes): every
