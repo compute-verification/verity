@@ -102,12 +102,21 @@ def test_dry_run_no_laptop_no_tier_c_and_skip():
     assert c["resolve"][0] == "/pod/py312" and c["compare"][0] == "/pod/py312"
 
 
+def test_the_sampled_replay_stages_need_a_seed_and_the_others_do_not():
+    p = subprocess.run([sys.executable, "-m", "verity_vllm.harness.run_config", *BASE, "--dry-run", "--phase", "cpu"], capture_output=True, text=True,
+                       cwd=ROOT)
+    assert p.returncode == 2 and "--seed is required to run replay_a and replay_chain" in p.stderr
+    c = dry("--phase", "cpu", "--skip", "replay_a,replay_chain", "--tier-c")
+    assert c["replay_a"][0].startswith("SKIP") and c["replay_chain"][0].startswith("SKIP")
+    assert c["replay_c"][c["replay_c"].index("--tier") + 1] == "c" and "--seed" not in c["replay_c"]
+
+
 def test_dry_run_all_and_snapshot_steps():
-    c = dry("--phase", "all", "--snapshot-steps", "0,1,2")
+    c = dry("--phase", "all", "--snapshot-steps", "0,1,2", "--seed", "7")
     assert list(c)[:4] == ["capture", "control", "census", "nonint"]
     assert c["capture"][c["capture"].index("--snapshot-steps") + 1] == "0,1,2"
     assert "wiring" in c and "replay_chain" in c and not any(k.startswith("replay_b_step") for k in c)
-    c = dry("--phase", "all", "--snapshot-steps", "0,1,2", "--full-replay")
+    c = dry("--phase", "all", "--snapshot-steps", "0,1,2", "--full-replay", "--seed", "7")
     assert "replay_b_step2" in c and "replay_b_step3" not in c
     with pytest.raises(subprocess.CalledProcessError):
         dry("--snapshot-steps", "0,2")           # not contiguous from 0
@@ -128,14 +137,15 @@ def test_dry_run_snapshot_caps_reach_the_capture_only():
 
 
 def test_dry_run_existing_capture_paths():
-    c = dry("--phase", "cpu", "--log", "/data/x/log.jsonl.gz", "--snapshots", "/data/x", "--control-tokens", "/data/ctl.json", "--other-log", "/data/y.jsonl.gz")
+    c = dry("--phase", "cpu", "--log", "/data/x/log.jsonl.gz", "--snapshots", "/data/x", "--control-tokens", "/data/ctl.json", "--other-log", "/data/y.jsonl.gz",
+            "--seed", "7")
     assert c["resolve"][3] == "/data/x/log.jsonl.gz" and c["compare"][c["compare"].index("--snapshots") + 1] == "/data/x"
     assert c["nonint_compare"][c["nonint_compare"].index("--accepted-ctl") + 1] == "/data/ctl.json"
     assert c["fold_other"][c["fold_other"].index("--log") + 1] == "/data/y.jsonl.gz"
 
 
 def test_dry_run_writes_nothing(tmp_path):
-    subprocess.run([sys.executable, "-m", "verity_vllm.harness.run_config", *BASE[:8], "--out", str(tmp_path / "RUN"), "--dry-run"],
+    subprocess.run([sys.executable, "-m", "verity_vllm.harness.run_config", *BASE[:8], "--out", str(tmp_path / "RUN"), "--dry-run", "--seed", "7"],
                    capture_output=True, text=True, cwd=ROOT, check=True)
     assert not (tmp_path / "RUN").exists()
 

@@ -3,7 +3,7 @@
     python -m verity_vllm.harness.run_config --config-id ID --profile NAME --workload PATH --case B0|B1 --out RUN_DIR \\
         --phase gpu|cpu|all [--python-gpu PY] [--python-cpu PY] [--snapshot-steps 0,1,2,3] [--max-num-seqs 8] \\
         [--laptop] [--dry-run] [--tier-c] [--skip STAGES] [--checkpoints PATH] [--checkpoint-dir DIR_OR_GLOB] \\
-        [--log LOG --snapshots DIR] [--control-tokens PATH] [--other-log LOG] [--cards-dir out/gen/cards] [--k 3] [--seed 0]
+        [--log LOG --snapshots DIR] [--control-tokens PATH] [--other-log LOG] [--cards-dir out/gen/cards] [--k 3] [--seed S]
 
 GPU phase (the pod's torch venv, Python 3.11):
     capture         bench.m1_capture --snapshot-steps 0,1,2,3 (contiguous from 0: replay of step N finds every earlier
@@ -248,7 +248,7 @@ class Plan:
             n = int(stage[len("replay_b_step"):])
             return self._replay(["--tier", "b", "--step", str(n)], run / G.replay_b_rel(n))
         if stage == "replay_c":
-            return self._replay(["--tier", "c", "--seed", str(a.seed)], self.p("replay_c")) if a.tier_c else None
+            return self._replay(["--tier", "c", *(["--seed", str(a.seed)] if a.seed is not None else [])], self.p("replay_c")) if a.tier_c else None
         return None
 
     def _replay(self, tier: list[str], out: Path) -> list[str]:
@@ -624,7 +624,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--keep-traces", action="store_true", help="census: keep the per-step Chrome traces")
     ap.add_argument("--cards-dir", default="out/gen/cards")
     ap.add_argument("--k", type=int, default=DEFAULT_K, help="tier a instances per (specialization, regime) stratum (gate minimum TIER_A_K)")
-    ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--seed", type=int, default=None, help="the replay sample's seed (replay_a, replay_chain: required when they run)")
     ap.add_argument("--no-program", action="store_true", help="(--worker fold) skip Program(): no digest")
     ap.add_argument("--persist-dir", default=None, help="(--worker fold) write program.json + instances.jsonl + accesses.jsonl.gz here (D85)")
     ap.add_argument("--moe-construction", default=None, help="(--worker fold) [R17-42 route A (4)] the workload's DECLARED MoE construction "
@@ -661,6 +661,9 @@ def main(argv: list[str] | None = None) -> int:
 
     plan = Plan(a)
     stages = plan.stage_list(a.phase)
+    sampled = [st for st in stages if st in ("replay_a", "replay_chain") and not plan.skipped(st)]
+    if sampled and a.seed is None:
+        ap.error(f"--seed is required to run {' and '.join(sampled)} (the replay sample is drawn from it)")
     max_rss = a.max_rss_gb if a.max_rss_gb is not None else (LAPTOP_MAX_RSS_GB if plan.laptop else None)
     timeout = a.stage_timeout if a.stage_timeout is not None else (LAPTOP_STAGE_TIMEOUT_S if plan.laptop else None)
 

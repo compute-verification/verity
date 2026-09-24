@@ -1145,7 +1145,7 @@ def draw_sample(
     reader: CaptureReader,
     n: int,
     *,
-    seed: int = 0,
+    seed: int,
     request_ids: Iterable[str] | None = None,
     op_types: Iterable[str] | None = None,
 ) -> list[str]:
@@ -1277,7 +1277,7 @@ def ensure_adjacent_pair(
     reader: CaptureReader,
     sample: Sequence[str],
     *,
-    seed: int = 0,
+    seed: int,
 ) -> tuple[list[str], list[AdjacentPair]]:
     """Return ``sample`` extended (deterministically in ``seed``) so that it contains at least one
     adjacent pair, plus the pairs found.  Preference: add the committed producer of a consumer

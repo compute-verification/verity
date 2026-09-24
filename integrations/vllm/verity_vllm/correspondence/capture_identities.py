@@ -675,7 +675,7 @@ class Port:
 
 
 def run(store: CommitStore, checkpoint: list[Path], request: str, positions: list[int], layers: list[int],
-        coord_samples: int, full: set[tuple[int, int]], out_path: Path, seed: int = 0, LP: int | None = None,
+        coord_samples: int, full: set[tuple[int, int]], out_path: Path, seed: int, LP: int | None = None,
         STEPS: int | None = None, cos_sin_npy: Path | None = None, cos_sin_cpu_npy: Path | None = None,
         config: str = "B1", program_factory=None, circuit_map=None, static_config: dict | None = None,
         port: Port | None = None) -> dict:
@@ -828,6 +828,7 @@ def run(store: CommitStore, checkpoint: list[Path], request: str, positions: lis
         records.append(rec)
         print(f"[corr] {rec['check']['status']:16s} {cid.split('/ph=')[0].split('/r=')[1][-8:]}/{cid.split('/', 4)[-1]:70s} {call.id[:48]:48s} {rec['check'].get('seconds', 0):8.2f}s", flush=True)
         out = {"schema": "verity-ir/correspondence/v0", "config": port.id, "model": C["model"], "request": request, "positions": positions, "layers": layers,
+               "coordinate_sample": {"seed": seed, "per_gemm": coord_samples},
                "program": {"function": program.fn.id, "gates": program.gates,
                            "input_gates": program.input_gates, "build_seconds": round(build_s, 1),
                            "call_names": port.names or None, "recompute_missing": recomputer.stats if recomputer else None},
@@ -852,7 +853,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--coord-samples", type=int, default=32)
     ap.add_argument("--full", nargs="*", default=[], help="t,L pairs whose Gemms are evaluated in full (L=-1: lm_head)")
     ap.add_argument("--out", type=Path)
-    ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--seed", type=int, default=None, help="the coordinate sample's seed (required)")
     ap.add_argument("--cos-sin-npy", type=Path, default=None, help="precomputed CUDA cos_sin_cache words (uint16 [MAX_POS,128])")
     ap.add_argument("--cos-sin-cpu-npy", type=Path, default=None)
     ap.add_argument("--config", choices=["B1", "B0"], default="B1")
@@ -864,8 +865,8 @@ def main(argv: list[str] | None = None) -> int:
             d = requalify(p)
             print(f"{p}: summary {d['summary']}")
         return 0
-    if not (a.commit and a.checkpoint and a.request and a.positions and a.out):
-        ap.error("--commit, --checkpoint, --request, --positions and --out are required (or use --requalify)")
+    if not (a.commit and a.checkpoint and a.request and a.positions and a.out) or a.seed is None:
+        ap.error("--commit, --checkpoint, --request, --positions, --out and --seed are required (or use --requalify)")
     full = {tuple(int(x) for x in s.split(",")) for s in a.full}
     port = Port.load(a.port) if a.port else None
     run(CommitStore(a.commit), a.checkpoint, a.request, a.positions, a.layers, a.coord_samples, full, a.out, a.seed,  # type: ignore[arg-type]
