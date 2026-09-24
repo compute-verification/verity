@@ -649,11 +649,13 @@ def test_registry_unavailable_is_a_named_fault_not_a_manifest_result(monkeypatch
     RegistryUnavailable (infra/precondition, PRECHECK_FAIL_REGISTRY_UNAVAILABLE) instead of deriving `(None, None, 'registry is not
     importable')` and emitting complete:false; the CLI maps it to exit 3 with the fail class on stderr; nothing is cached as None so a
     repaired environment in the same process recovers."""
+    import importlib
     import sys
 
     from verity_capture.commit import manifest_format as MF
     from verity_capture.commit import required_manifest as RM
 
+    real_defs = importlib.import_module("verity.ir.defs")
     monkeypatch.setattr(RM, "_registry_cache", {})
     monkeypatch.setitem(sys.modules, "verity.ir.defs", None)
     with pytest.raises(RM.RegistryUnavailable) as ei:
@@ -671,8 +673,10 @@ def test_registry_unavailable_is_a_named_fault_not_a_manifest_result(monkeypatch
     monkeypatch.setattr(RM, "_main", lambda: RM._registry() and 0)
     assert RM.main() == RM.REGISTRY_UNAVAILABLE_EXIT == 3
     assert "PRECHECK_FAIL_REGISTRY_UNAVAILABLE" in capsys.readouterr().err
-    # repaired environment (the real module back): the registry loads and the signature derives
-    monkeypatch.delitem(sys.modules, "verity.ir.defs", raising=False)
+    # repaired environment (the real module back): the registry loads and the signature derives.  The SAME module object goes back:
+    # deleting the entry would re-execute verity.ir.defs as a second module with its own empty REGISTRY, and every registry module
+    # first imported here would register into that copy for the rest of the process (the cross-file registry leak).
+    monkeypatch.setitem(sys.modules, "verity.ir.defs", real_defs)
     monkeypatch.setattr(RM, "_registry_cache", {})
     reg, _errors = RM._registry()
     assert reg is not None
