@@ -794,10 +794,9 @@ def check(record: dict[str, Any], live: dict[str, Any], *, program_digests_of_re
 # ---------------------------------------------------------------------------------------------------------------------------- CLI
 
 def _default_manifest() -> str | None:
-    here = os.path.dirname(os.path.abspath(__file__))
-    for up in (os.path.join(here, "..", ".."), os.getcwd()):          # integrations/vllm/ (veritor: vllm-poc/), then the cwd
-        p = os.path.join(up, "manifests", "checkpoints.json")
-        if os.path.exists(p):
+    from verity_vllm.config import CHECKPOINTS
+    for p in (CHECKPOINTS, Path.cwd() / "manifests" / "checkpoints.json"):
+        if p.exists():
             return os.path.abspath(p)
     return None
 
