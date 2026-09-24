@@ -345,19 +345,11 @@ verity_capture/bench/commit_verdict.py -> verity_vllm/check/commit_verdict.py
 verity_capture/bench/compiled_merge.py -> verity_vllm/harness/compiled_merge.py
 verity_capture/bench/cov_pod.sh -> verity_vllm/ops/cov_pod.sh
 verity_capture/bench/gen_adversarial.py -> verity_vllm/check/adversarial.py  DELETE-BY:vllm-dead-code
-verity_capture/bench/gen_batch_attribution.py -> verity_vllm/correspondence/batch_attribution.py  DELETE-BY:vllm-dead-code
 verity_capture/bench/gen_batch_candidate.py -> verity_vllm/correspondence/batch_candidate.py  DELETE-BY:vllm-dead-code
-verity_capture/bench/gen_batch_pod.sh -> verity_vllm/ops/gen_batch_pod.sh
-verity_capture/bench/gen_batch_provenance.py -> verity_vllm/correspondence/batch_provenance.py  DELETE-BY:vllm-dead-code
 verity_capture/bench/gen_coverage_workloads.py -> verity_vllm/harness/coverage_workloads.py  DELETE-BY:vllm-dead-code
-verity_capture/bench/gen_ov_sampling_fetch.sh -> verity_vllm/ops/gen_ov_sampling_fetch.sh
 verity_capture/bench/gen_ov_sampling_libdevice.py -> verity_vllm/program/numerics/libdevice_sampling.py  DELETE-BY:vllm-dead-code
-verity_capture/bench/gen_ov_sampling_pod.sh -> verity_vllm/ops/gen_ov_sampling_pod.sh
-verity_capture/bench/gen_ov_sampling_verify.sh -> verity_vllm/ops/gen_ov_sampling_verify.sh
-verity_capture/bench/gen_ovbatch_pod.sh -> verity_vllm/ops/gen_ovbatch_pod.sh
 verity_capture/bench/gen_sampling_rng.py -> verity_vllm/program/numerics/sampling_rng.py
 verity_capture/bench/m1_capture.py -> verity_vllm/observe/m1_capture.py
-verity_capture/bench/pod_env_extra.sh -> verity_vllm/ops/pod_env_extra.sh
 verity_capture/bench/resolve_log.py -> verity_vllm/observe/resolve_log.py
 verity_capture/bench/run_config.py -> verity_vllm/harness/run_config.py
 verity_capture/bench/stoch_recompute.py -> verity_vllm/check/stoch_recompute.py
@@ -689,7 +681,6 @@ verity_capture/tests/test_fp8_profile.py -> tests/program/test_fp8_profile.py
 verity_capture/tests/test_gates_fixtures.py -> tests/check/test_gates_fixtures.py
 verity_capture/tests/test_gc_tuning.py -> tests/harness/test_gc_tuning.py
 verity_capture/tests/test_gen_adversarial.py -> tests/check/test_gen_adversarial.py  DELETE-BY:vllm-dead-code
-verity_capture/tests/test_gen_batch.py -> tests/correspondence/test_gen_batch.py
 verity_capture/tests/test_gen_batch_engine_arg.py -> tests/observe/test_gen_batch_engine_arg.py
 verity_capture/tests/test_gen_dense2.py -> tests/observe/test_gen_dense2.py
 verity_capture/tests/test_gen_dense_gemma2_patterns.py -> tests/observe/test_gen_dense_gemma2_patterns.py  DELETE-BY:vllm-profiles-generic
