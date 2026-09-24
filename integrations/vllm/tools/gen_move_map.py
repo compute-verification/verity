@@ -550,6 +550,12 @@ REWRITE verity_vllm_numerics/fa2_relation.py :: return os.path.join(os.path.dirn
 REWRITE verity_vllm_numerics/rms_relation.py :: fixtures = os.path.join(os.path.dirname(here), "fixtures") => fixtures = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(here))), "fixtures")
 # query/correspondence.py becomes correspondence/reader_for_query.py: the query lint's inventory of query/*.py loses it
 REWRITE tests/query/test_lint.py :: {"program_view.py", "correspondence.py", "module_body.py", => {"program_view.py", "module_body.py",
+# repo-qualified module names outside the integration (the research store's tool specs): the dotted pass does not see them
+REWRITE tools/research/src/research/store/tools_registry.py :: "integrations.vllm.verity_vllm.research_tools: => "integrations.vllm.verity_vllm.harness.research_tools:
+REWRITE tools/research/tests/test_store_vllm_tools.py :: f"integrations.vllm.verity_vllm.research_tools:VLLM_ => f"integrations.vllm.verity_vllm.harness.research_tools:VLLM_
+REWRITE tools/research/tests/test_store_vllm_tools.py :: from integrations.vllm.verity_vllm import research_tools as RT => from integrations.vllm.verity_vllm.harness import research_tools as RT
+REWRITE tests/regression/test_attempt_resolution.py :: f"integrations.vllm.verity_vllm.research_tools:VLLM_ => f"integrations.vllm.verity_vllm.harness.research_tools:VLLM_
+REWRITE tests/regression/test_attempt_resolution.py :: from integrations.vllm.verity_vllm import research_tools as RT => from integrations.vllm.verity_vllm.harness import research_tools as RT
 # fa2_commit's __init__ follows the prototype to commit/fa2_prototype/; engine (its live member) leaves, so the package itself is kept
 REWRITE tests/dead_code_keep.json ::   "verity_capture.experimental.fa2_commit.derived": =>   "verity_capture.experimental.fa2_commit": "fa2_commit fixtures: the package of the kept prototype modules (see derived)",\\n  "verity_capture.experimental.fa2_commit.derived":
 """)

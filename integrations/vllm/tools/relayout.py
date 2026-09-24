@@ -839,9 +839,25 @@ def residual_lines(rw: Rewriter, text: str, extra_re: re.Pattern | None) -> list
             hit = any(rw.is_residual_path(m.group(1)) for m in rw.path_re.finditer(line))
         if not hit and rw.dotted_re:
             hit = any(rw.is_residual_dotted(m.group(1)) for m in rw.dotted_re.finditer(line))
+        # repo-qualified dotted names (`integrations.vllm.verity_vllm.x:NAME` specs, `from integrations.vllm.verity_vllm import x`),
+        # which the dotted pass does not rewrite: the map's REWRITE lines must, and the sweep refuses what they miss
+        if not hit:
+            for m in _QUALIFIED_RE.finditer(line):
+                tok = m.group(1) + ("." + m.group(2) if m.group(2) else "")
+                if rw.is_residual_dotted(tok):
+                    hit = True
+                    break
         if hit:
             out.append((i, line.strip()[:160]))
     return out
+
+
+_QUALIFIED_RE = re.compile(r"(?<![\w.])integrations\.vllm\.([A-Za-z_][\w.]*\w)(?:\s+import\s+([A-Za-z_]\w*))?")
+
+
+def _recorded(f: str, rel: str | None) -> bool:
+    """rel: the path inside the integration (None outside it).  Outside, any fixtures/ directory is a record too."""
+    return rel.startswith(RECORDED) if rel is not None else "/fixtures/" in f
 
 
 def sweep(repo: Path, rel_iv: str, rw: Rewriter, extra_tokens: list[str], skip: set[str]) -> list[tuple[str, int, str]]:
@@ -851,7 +867,7 @@ def sweep(repo: Path, rel_iv: str, rw: Rewriter, extra_tokens: list[str], skip: 
     for f in git_files(repo):
         p = repo / f
         rel = f[len(rel_iv) + 1:] if f.startswith(rel_iv + "/") else None
-        if rel is not None and rel.startswith(RECORDED):
+        if _recorded(f, rel):
             continue
         if f in skip or not p.is_file() or not is_text(p):
             continue
@@ -1118,7 +1134,7 @@ def cmd_plan_or_apply(root: Path, mm: MoveMap, apply: bool, verbose: bool) -> in
             continue
         p = repo / f
         rel = f[len(rel_iv) + 1:] if f.startswith(rel_iv + "/") else None
-        if rel is not None and (rel.startswith(RECORDED) or rel in plan.drops):
+        if _recorded(f, rel) or (rel is not None and rel in plan.drops):
             continue
         if not p.is_file() or not is_text(p):
             continue
