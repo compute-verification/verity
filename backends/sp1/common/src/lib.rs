@@ -181,3 +181,6 @@ pub fn decode_verdict(byte: u8) -> Option<(bool, bool)> {
 /// RELATION-ONLY DIAGNOSTIC (`unsound-relation-only`): the compact input, the bare gate chain, its public values.
 #[cfg(any(feature = "unsound-relation-only", test))]
 pub mod relation_only;
+/// `relation-bare/v1` (`relation-bare`): the Table 2 bare statement over a batch of VUs, its input and public values.
+#[cfg(any(feature = "relation-bare", test))]
+pub mod bare;

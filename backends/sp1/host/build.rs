@@ -38,6 +38,7 @@ const GUEST_FEATURES: &[(&str, &str)] = &[
         "unsound-relation-only",
     ),
     ("CARGO_FEATURE_ATTRIBUTION", "attribution"),
+    ("CARGO_FEATURE_RELATION_BARE", "relation-bare"),
 ];
 
 /// `--remap-path-prefix` flags for the two prefixes that differ between machines.

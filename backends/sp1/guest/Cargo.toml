@@ -16,3 +16,5 @@ attribution = ["veritor-zk-common/attribution"]
 unsound-skip-authentication = ["veritor-zk-common/unsound-skip-authentication"]
 unsound-skip-path-fold = ["veritor-zk-common/unsound-skip-path-fold"]
 unsound-relation-only = ["veritor-zk-common/unsound-relation-only"]
+# The Table 2 bare statement (sound for it; see src/main.rs and common/src/bare.rs).
+relation-bare = ["veritor-zk-common/relation-bare"]
