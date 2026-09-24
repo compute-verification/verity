@@ -26,14 +26,12 @@ RANK = {name: len(LAYERS) - i for i, name in enumerate(LAYERS)}
 INTERIM_LAYER = {
     "verity_vllm": "pipeline",
     "verity_vllm.build_paths": "pipeline",                     # -> pipeline/layout.py
+    "verity_vllm.config": "config",
     "verity_vllm.harness": "pipeline",                         # derive_step, run_config, commit_delta, research_*, ...
     "verity_vllm.harness.target_family": "config",             # -> config.py
-    "verity_vllm.harness.synthetic": "tests",
     "verity_vllm.check": "check|properties",                   # per-run checks, and the property harnesses -> properties/
     "verity_vllm.check.twins": "program",                      # -> program/backends/
     "verity_vllm.check.relations": "program",                  # -> program/backends/
-    "verity_vllm.check.adversarial": "tests",
-    "verity_vllm.check.fa2_attn_oracle": "tests",
     "verity_vllm.input_provenance": "check|properties",        # weights_of_record, root_policy -> check/provenance.py
     "verity_vllm.input_provenance.analytic": "program",        # -> program/model.py
     "verity_vllm.acquire": "acquire",
@@ -50,8 +48,6 @@ INTERIM_LAYER = {
     "verity_vllm.observe.profiles": "engine",                  # -> engine/profiles/
     "verity_vllm.observe.m1_capture": "pipeline",              # -> the capture stage of pipeline/match.py
     "verity_vllm.commit": "observe|commit",
-    "verity_vllm.commit.fa2_prototype": "tests",
-    "verity_vllm.commit.stream_merkle": "tests",
     "verity_vllm.query": "query|correspondence",
     "verity_vllm.query.cli": "pipeline",                       # the one CLI is pipeline/cli.py (P6)
     "verity_vllm.query.vu_query": "check|properties",          # -> check/replay/
@@ -66,8 +62,6 @@ INTERIM_LAYER = {
     "verity_vllm.program": "program",                          # frontend/, registry/, workload; numerics/ -> program/backends/
     "verity_vllm.program.global_program": "pipeline",          # -> pipeline/build.py
     "verity_vllm.program.frontend.liveness": "core",
-    "verity_vllm.program.frontend.b1_authored": "tests",
-    "verity_vllm.program.numerics.inductor_models": "tests",
     "verity_vllm.tp": "pipeline",                              # capture, commit, match, fold_match -> world-parametric pipeline/ drivers
     "verity_vllm.tp.collective_record": "collectives",
     "verity_vllm.tp.collective_sites": "collectives",
