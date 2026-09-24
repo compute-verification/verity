@@ -449,6 +449,19 @@ def opening_path(dev, params: LigeroParams = DEFAULT) -> str:
     return f"w and q by {mm}s"
 
 
+def open_row_chunk(rows: int, k: int, dev) -> int:
+    """Rows per block of ``open_w_qc_eval``'s encode + reduction (the result is the same for any block size: the
+    blocks' reductions are summed mod p).  All rows at once on an 80 GB part (the recorded A100 / H100 path); on a
+    smaller one (RTX 4090, 24 GB) blocks of ``VERITY_GPU_OPEN_ROWS`` (default 4096) rows, whose ``at`` + ``ev``
+    (``6 * 4k * 4`` bytes per row, 1.6 GB per 4096 rows) fit beside the committed code and the functional."""
+    env = int(os.environ.get("VERITY_GPU_OPEN_ROWS", "0"))
+    if env > 0:
+        return env
+    if dev.type == "cuda" and torch.cuda.get_device_properties(dev).total_memory < 40 * 2**30:
+        return 4096
+    return rows
+
+
 def open_w_qc_eval(cm: Committed, a: torch.Tensor, r: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     """``open_w_qc`` by evaluation: ``deg q <= 2k - 2 < n``, so ``q`` is fixed by ``q(ω^m) = Σ_i a_i(ω^m) U_i(ω^m)``
     over the ``n``-domain, where ``U_i(ω^m)`` is the committed codeword and ``a_i(ω^m)`` is row ``i`` of ``a``
@@ -472,16 +485,22 @@ def open_w_qc_eval(cm: Committed, a: torch.Tensor, r: torch.Tensor) -> tuple[tor
     del xr
     l = a.shape[0]
     full = l // k
-    at = torch.zeros((rows, DEG, k), dtype=torch.int32, device=dev)   # at[i, d, j] = a[i k + j, d]
-    if full:
-        at[:full] = a[: full * k].reshape(full, k, DEG).permute(0, 2, 1)
-    if l - full * k:
-        at[full, :, : l - full * k] = a[full * k:].T
-    at = at.view(rows * DEG, k)
-    ev = cp.empty((rows * DEG, 3 * k), dtype=cp.int32)
-    enc[0](cp.asarray(at).view(cp.uint32), ev.view(cp.uint32), write_systematic=False)
-    q_eval = kernels.row_code_dot(at, torch.as_tensor(ev, device=dev), cm.code)
-    del at, ev
+    q_eval = None
+    ch = open_row_chunk(rows, k, dev)
+    for lo in range(0, rows, ch):
+        hi = min(rows, lo + ch)
+        at = torch.zeros((hi - lo, DEG, k), dtype=torch.int32, device=dev)   # at[i - lo, d, j] = a[i k + j, d]
+        f_hi = min(full, hi)
+        if f_hi > lo:
+            at[: f_hi - lo] = a[lo * k: f_hi * k].reshape(f_hi - lo, k, DEG).permute(0, 2, 1)
+        if l - full * k and lo <= full < hi:
+            at[full - lo, :, : l - full * k] = a[full * k:].T
+        at = at.view((hi - lo) * DEG, k)
+        ev = torch.empty(((hi - lo) * DEG, 3 * k), dtype=torch.int32, device=dev)   # torch's pool, not cupy's
+        enc[0](cp.asarray(at).view(cp.uint32), cp.asarray(ev).view(cp.uint32), write_systematic=False)
+        part = kernels.row_code_dot(at, ev, cm.code[lo:hi])
+        q_eval = part if q_eval is None else (q_eval + part) % P
+        del at, ev
     q = ntt(q_eval, inverse=True)                                     # (6, n) coefficients
     if bool(q[:, 2 * k - 1:].any()):
         raise RuntimeError("open_w_qc_eval: q has coefficients past 2k - 2 (encoder / reduction mismatch)")
