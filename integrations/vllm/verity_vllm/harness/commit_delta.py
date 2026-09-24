@@ -993,9 +993,9 @@ def oracle_producers_of_record(args: argparse.Namespace, required_manifest: dict
     """The oracle's producer facts from the Programs of record (`oracle_compare.producers_of_programs`) for a `v2-query` manifest, which
     carries none: (facts | None, record).  The Programs are the replay's (same lookup, same of-record digest check); None + the named
     reason when the manifest is not v2, no Program dir is given or a Program is not of record."""
-    from verity_capture.commit import manifest_format as MF
-    from verity_capture.commit import oracle_compare as OC
-    from verity_capture.commit import sampled_replay as SR
+    from verity_vllm.check import oracle_compare as OC
+    from verity_vllm.check import sampled_replay as SR
+    from verity_vllm.query.manifest import format as MF
     q = required_manifest.get("query") if isinstance(required_manifest, dict) else None
     if not (isinstance(q, dict) and q.get("engine") == SR.V2_QUERY):
         return None, {"used": False, "why": "manifest is not v2-query: its rows carry the producer annotations"}
@@ -1414,7 +1414,7 @@ def main(argv: list[str] | None = None) -> None:
     # input rather than at the module's forward output (oracle_compare.promote_handed_down); form (B) reads the same facts every pair
     oracle_producers: tuple[dict | None, dict] | None = None
     if required_manifest is not None and kinds:
-        from verity_capture.commit import oracle_compare as _OCP
+        from verity_vllm.check import oracle_compare as _OCP
         try:
             oracle_producers = oracle_producers_of_record(args, required_manifest, reqs, sampling)
         except Exception as _pe:  # noqa: BLE001  -- no facts: the manifest's own entries stand, the reason is on the record

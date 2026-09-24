@@ -566,7 +566,7 @@ def producers_of_programs(programs: dict[str, dict[str, Any]], aliases: dict[str
     outside its own module, Program order (the dataflow resolution when the fold observed the producer under another path).  A fact the
     member's rows disagree on is None (the oracle then names the ambiguity; never guessed); a family disagreement is a `conflict`.
     `programs`: request label -> `manifest_format.load_program(dir)`; `aliases`: the manifest's `op_path_aliases` (alias -> [canon, k])."""
-    from verity_vllm.query.correspondence import Correspondence
+    from verity_vllm.correspondence.reader_for_query import Correspondence
     from verity_vllm.query.program_view import from_instances
 
     out: dict[tuple[str, str], dict[str, Any]] = {}
