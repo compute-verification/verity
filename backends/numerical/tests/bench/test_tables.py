@@ -274,6 +274,62 @@ def test_unverified_or_self_verified_is_rejected(store: LocalStore) -> None:
     assert cell(T.build(store)) is not None and cell(T.build(store)).artifact == art
 
 
+def put_registered(store: LocalStore, res: dict, meta: dict | None = None, labels: list[tuple] = ()) -> str:
+    """Store ``res`` as ``research data put --kind bench-result/v1 --meta @result.json`` does for a pod run: no attempt, only the
+    meta the registering lane wrote (``lane``, ``by``, ...) and the labels it (or anyone) asserts."""
+
+    art = store.put_artifact(T.RESULT_KIND, {**res, **(meta or {})})
+    for key, value, by, ts in labels:
+        store.add_label(art, key, value, by, ts=ts)
+    return art
+
+
+def test_hand_registered_result_is_attributed_to_the_lane_its_meta_names(store: LocalStore) -> None:
+    """A result registered with ``research data put`` has no attempt: its producer is the lane its meta names (``meta.lane``, the
+    registrar's ``meta.by``) or a ``lane`` label names.  That lane's own ``verified=accepted`` is a self-assertion (05:00Z render:
+    the 4090 / 5090 B-Ligero cells); a non-producer's acceptance makes the cell."""
+
+    kw = dict(candidate="B-Ligero", target=FP8_ADA_MMA, gpu=RTX4090, proof_class="COMPLETE_ZK_BACKEND", t_total=0.17)
+    art = put_registered(store, result(**kw), {"lane": "wave-4090-2"},
+                         labels=[("verified", "accepted", "wave-4090-2", "2026-09-24T04:12:37Z"),
+                                 ("verifier", "ligero-verify@e918ac8", "wave-4090-2", "2026-09-24T04:12:37Z")])
+    assert store.index.attempts_by_output(art) == []
+    tab = T.build(store)
+    assert cell(tab, FP8_ADA_MMA, "B-Ligero") is None
+    (reason,) = rejected(tab, art)
+    assert reason.startswith("not independently verified") and "producers: wave-4090-2" in reason, reason
+    store.add_label(art, "verified", "accepted", "verify-night", ts="2026-09-24T11:00:00Z")      # a non-producer re-verifies
+    c = cell(T.build(store), FP8_ADA_MMA, "B-Ligero")
+    assert c is not None and c.artifact == art and c.verified_by == "verify-night" and c.attempt is None
+
+    # the registrar (meta.by) and the lane (meta.lane) are both producers; so is the lane of a prose `constructed_by`
+    art2 = put_registered(store, result(**{**kw, "t_total": 0.16}), {"lane": "v3-scout", "by": "v3-scout-2"},
+                          labels=[("verified", "accepted", "v3-scout-2", "2026-09-24T04:00:00Z")])
+    assert "producers: v3-scout, v3-scout-2" in rejected(T.build(store), art2)[0]
+    art3 = put_registered(store, result(**{**kw, "t_total": 0.15}), {"constructed_by": "fill-a100 (2026-09-22) from the attempt's records"},
+                          labels=[("verified", "accepted", "fill-a100", "2026-09-24T04:00:00Z")])
+    assert "producers: fill-a100" in rejected(T.build(store), art3)[0]
+
+    # attribution by a `lane` label (meta carries none): the named lane is a producer, the label's asserter (a back-fill) is not
+    art4 = put_registered(store, result(**{**kw, "t_total": 0.14}),
+                          labels=[("lane", "wave-4090-3", "coordinator", "2026-09-24T05:00:00Z"),
+                                  ("verified", "accepted", "wave-4090-3", "2026-09-24T05:01:00Z")])
+    assert "producers: wave-4090-3" in rejected(T.build(store), art4)[0]
+    store.add_label(art4, "verified", "accepted", "coordinator", ts="2026-09-24T05:02:00Z")
+    c4 = cell(T.build(store), FP8_ADA_MMA, "B-Ligero")
+    assert c4.artifact == art4 and c4.verified_by == "coordinator"
+
+
+def test_hand_registered_result_naming_no_producer_is_not_independently_verified(store: LocalStore) -> None:
+    """No attempt and no named producer: nobody can be shown independent of it, whoever accepted it."""
+
+    art = put_registered(store, result(), labels=[("verified", "accepted", "verify-night", "2026-09-24T11:00:00Z")])
+    (reason,) = rejected(T.build(store), art)
+    assert reason.startswith("not independently verified: no attempt and no named producer"), reason
+    store.add_label(art, "lane", "lane-a-gkr", "coordinator", ts="2026-09-24T11:05:00Z")          # attribution back-filled
+    assert cell(T.build(store)).artifact == art and cell(T.build(store)).verified_by == "verify-night"
+
+
 def test_every_frozen_constant_is_checked(store: LocalStore) -> None:
     bad_inst = {**T.FROZEN_INSTANCES[FIRST.name], "manifest_sha256": "a" * 64}
     cases = {
@@ -363,6 +419,187 @@ def test_included_hash_fills_its_own_column(store: LocalStore) -> None:
     # a committed result never fills the bare cell, even when it is the only result
     store2_bare_missing = [r for r in tab.rows if r["target"] == FP8_ADA_MMA.name][0]["cells"]["B-Ligero"]
     assert store2_bare_missing.artifact == bare
+
+
+#: The leaf interface block ``relchain`` writes for a hashed run (lane leaf-iface D0), per scheme.
+LEAVES = {
+    "poseidon2": ("poseidon2-babybear-w24", {"scheme": "poseidon2", "suffix": "poseidon2", "schema": "poseidon2-babybear-w24/row/v2h", "digest_elems": 8}),
+    "ajtai-n64": ("ajtai-babybear-n64-b1-r0/v1", {"scheme": "ajtai-n64", "suffix": "ajtai-n64", "schema": "ajtai-babybear-n64-b1-r0/row/v1", "digest_elems": 64}),
+    "blake3": ("blake3-keyed", {"scheme": "blake3", "suffix": "blake3", "schema": "blake3-keyed/row/v2", "digest_elems": 8}),
+}
+
+
+def hashed(leaf: str | None = "poseidon2", sharing: str | None = "none", authentication: str = "included-hash", **kw: Any) -> dict[str, Any]:
+    """A column-2 candidate result on the 4090 row: ``included-hash`` with ``leaf``'s hash (``None``: the pre-D0 form, hash only)."""
+
+    doc = result(candidate="B-Ligero", target=FP8_ADA_MMA, gpu=RTX4090, proof_class="COMPLETE_ZK_BACKEND", **kw)
+    fp = doc["workload_fingerprint"]
+    fp.update(authentication=authentication, hash=LEAVES[leaf or "poseidon2"][0])
+    if leaf is not None:
+        fp["leaf"] = dict(LEAVES[leaf][1])
+    if sharing is not None:
+        fp["sharing"] = sharing
+    return doc
+
+
+def test_in_proof_hash_column_is_poseidon2_per_row_without_sharing(store: LocalStore) -> None:
+    """Column ``B-Ligero + in-proof hash`` is Poseidon2-BabyBear per row, no sharing (user decision keep_frozen, 2026-09-24): an
+    Ajtai or BLAKE3 leaf, or a shared tile, is rejected with the reason saying which (05:00Z render: an Ajtai leaf filled the 4090
+    cell).  Both fingerprint forms of a Poseidon2 row hash -- ``hash`` only (pre-D0) and ``hash`` + ``leaf`` (D0) -- are accepted."""
+
+    old = put(store, hashed(leaf=None, t_total=0.70))
+    new = put(store, hashed(t_total=0.69))
+    ajtai = put(store, hashed("ajtai-n64", t_total=0.35))
+    blake = put(store, hashed("blake3", t_total=0.40))
+    tile = put(store, hashed(sharing="tile64x64", t_total=0.30))
+    shared = put(store, hashed(sharing="tile64x64", authentication="included-hash-shared", t_total=0.20))
+    unstated = put(store, hashed(sharing=None, t_total=0.50))
+    tab = T.build(store)
+    row = next(r for r in tab.rows if r["target"] == FP8_ADA_MMA.name)
+    assert row["committed"]["B-Ligero"].artifact == new and {a["artifact"] for a in tab.also_valid} == {old}
+    (r_ajtai,) = rejected(tab, ajtai)
+    assert "is an Ajtai (Ring-SIS) leaf" in r_ajtai and "ajtai-babybear-n64-b1-r0/v1" in r_ajtai and "poseidon2-babybear-w24 per row" in r_ajtai
+    (r_blake,) = rejected(tab, blake)
+    assert "is a BLAKE3 in-circuit leaf" in r_blake and "'blake3-keyed'" in r_blake
+    (r_tile,) = rejected(tab, tile)
+    assert r_tile.startswith("sharing 'tile64x64'") and "a shared tile is a drill-down" in r_tile
+    (r_shared,) = rejected(tab, shared)
+    assert r_shared.startswith("authentication 'included-hash-shared'")
+    assert rejected(tab, unstated) == [r for r in rejected(tab, unstated) if r.startswith("sharing None")] != []
+    # the letters the drill-down prints: X for another leaf, S for sharing (either spelling), X for an unstated sharing
+    cand = T.candidate_for("b-ligero chain")
+    codes = {a: [c for c, _ in T.reject_codes(store.get_manifest(a).meta, store.labels(a), None, FP8_ADA_MMA, cand,
+                                               authentication=("included-hash" if a != shared else "excluded"))]
+             for a in (ajtai, blake, tile, shared, unstated, new)}
+    assert codes == {ajtai: ["X"], blake: ["X"], tile: ["S"], shared: ["S"], unstated: ["X"], new: []}, codes
+    # a Poseidon2 schema of another version or a leaf block naming another scheme is not the column's either
+    fp = hashed()["workload_fingerprint"]
+    assert T.in_proof_hash_codes(fp) == []
+    assert [c for c, _ in T.in_proof_hash_codes({**fp, "leaf": {**fp["leaf"], "scheme": "ajtai-n64"}})] == ["X"]
+    assert [c for c, _ in T.in_proof_hash_codes({**fp, "hash": None, "leaf": None})] == ["X"]
+    assert "is no named leaf" in T.in_proof_hash_codes({**fp, "hash": None, "leaf": None})[0][1]
+
+
+def test_reject_codes_letter_every_reason(store: LocalStore) -> None:
+    """Every reason carries the drill-down's letter (D2): U I P S Z K B X; ``reject_reasons`` is ``reject_codes`` without them."""
+
+    over = result(buckets={"witness": 3.0, "encoding_commitment": 2.0}, t_total=4.0)        # 5 s of buckets in a 4 s total
+    twice = result(buckets={"witness": 1.0, "arithmetic": 1.0}, joints={("witness", "arithmetic"): 1.0}, t_total=4.0)
+    cand = T.CANDIDATES[0]
+    small = result()
+    small["workload_fingerprint"].update(B=64, instances={**T.FROZEN_INSTANCES[FIRST.name], "range": [0, 64]})
+    cases = {"P": over, "B": small, "Z": result(proof_class="ARITHMETIC_DIAGNOSTIC"), "K": result(gpu=H100),
+             "I": result(instances=None), "X": result(K=1024)}
+    for letter, res in cases.items():
+        codes = T.reject_codes(res, [{"key": "verified", "value": "accepted", "by": VERIFIER, "ts": "t"}],
+                               attempt(res["run_id"], "art:x", LANE), FIRST, cand)
+        assert codes and codes[0][0] == letter, (letter, codes)
+    assert T.reject_codes(twice, [], attempt(twice["run_id"], "art:x", LANE), FIRST, cand)[0][0] == "P"
+    assert T.PHASE_SUM_PROBLEM.match(contract.validate(over)[0]) and T.PHASE_SUM_PROBLEM.match(contract.validate(twice)[0])
+    u = T.reject_codes(result(), [], attempt("r", "art:x", LANE), FIRST, cand)
+    assert u == [("U", T.reject_reasons(result(), [], attempt("r", "art:x", LANE), FIRST, cand)[0])]
+    assert set(T.REASON_LETTERS) == set("UIPSZKBX")
+
+
+# --- re-packed instances: instance-equiv/v1 (user decision 2026-09-24; campaign morning-tables BRIEF §5) ----------------------------
+
+
+def repacked(n: int = 0) -> dict[str, Any]:
+    """A re-packed instance ref of the 4090 row (another layout of the frozen VUs), distinct per ``n``."""
+    return {"dataset": "bench-instances-fp8-ada-x4/v1", "tier": "vu-k1536-fp8-ada-x4", "range": [0, 4096], "manifest_sha256": f"{n:064x}",
+            "seed": 20260922, "recipe": "the frozen fp8-ada VUs re-packed four per column"}
+
+
+def equiv_doc(candidate: dict[str, Any], target=FP8_ADA_MMA, **over: Any) -> dict[str, Any]:
+    arrays = {a: {"frozen_sha256": h * 64, "candidate_sha256": h * 64, "dtype": "e4m3 u8", "shape": [4096, 1536]} for a, h in (("x", "1"), ("W", "2"), ("y", "3"))}
+    doc = {"schema": T.INSTANCE_EQUIV_SCHEMA, "target": target.name, "frozen": copy.deepcopy(T.FROZEN_INSTANCES[target.name]),
+           "candidate": copy.deepcopy(candidate), "canonical": "per array: E4M3 bit words as u8, index order VU-major then K",
+           "arrays": arrays, "equal": True, "tool": "verity_numerical.bench.instance_equiv@0000000"}
+    doc.update(over)
+    return doc
+
+
+def put_equiv(store: LocalStore, doc: dict[str, Any], *, lane: str | None = "fused-phases", verdicts: list[tuple] = (("accepted", "verify-night"),),
+              payload: Path | None = None) -> str:
+    """Register ``doc`` as fused-phases would (``research data put --kind instance-equiv/v1 --meta @doc.json``, or ``--file`` when
+    ``payload`` is a path to write it to) and give it ``verdicts`` = ``(verified value, by)`` in order."""
+
+    attribution = {"lane": lane} if lane else {}
+    if payload is not None:
+        payload.write_text(json.dumps(doc), encoding="utf-8")
+        art = store.put_artifact(T.INSTANCE_EQUIV_SCHEMA, attribution, file=payload)
+    else:
+        art = store.put_artifact(T.INSTANCE_EQUIV_SCHEMA, {**doc, **attribution})
+    for i, (value, by) in enumerate(verdicts):
+        store.add_label(art, "verified", value, by, ts=f"2026-09-24T12:0{i}:00Z")
+    return art
+
+
+def repacked_result(store: LocalStore, n: int, t_total: float = 0.2) -> str:
+    return put(store, result(candidate="B-Ligero", target=FP8_ADA_MMA, gpu=RTX4090, proof_class="COMPLETE_ZK_BACKEND", t_total=t_total,
+                             instances=repacked(n)))
+
+
+def test_repacked_instances_count_only_with_an_accepted_equivalence(store: LocalStore, tmp_path: Path) -> None:
+    art = repacked_result(store, 1)
+    (reason,) = rejected(T.build(store), art)
+    assert reason.startswith("instances differ from the frozen set on dataset") and "instance-equiv" not in reason   # the existing rejection
+    eq = put_equiv(store, equiv_doc(repacked(1)))
+    tab = T.build(store)
+    c = cell(tab, FP8_ADA_MMA, "B-Ligero")
+    assert c is not None and c.artifact == art and c.instances_equiv == eq and tab.rejected == []
+    assert f"instances re-packed; decoded values byte-identical to the frozen set ({eq})" in T.render_markdown(tab)
+    assert T.render_json(tab)["table2"]["rows"][3]["cells"]["B-Ligero"]["instances_equiv"] == eq
+    # the document as the artifact's JSON payload (meta carries only the attribution) counts the same
+    art2 = repacked_result(store, 2, t_total=0.1)
+    eq2 = put_equiv(store, equiv_doc(repacked(2)), payload=tmp_path / "equiv.json")
+    assert cell(T.build(store), FP8_ADA_MMA, "B-Ligero").instances_equiv == eq2 and cell(T.build(store), FP8_ADA_MMA, "B-Ligero").artifact == art2
+    # a frozen-set result needs none and names none
+    frozen = put(store, result(candidate="B-Ligero", target=FP8_ADA_MMA, gpu=RTX4090, proof_class="COMPLETE_ZK_BACKEND", t_total=0.05))
+    assert cell(T.build(store), FP8_ADA_MMA, "B-Ligero").artifact == frozen and cell(T.build(store), FP8_ADA_MMA, "B-Ligero").instances_equiv is None
+
+
+DEFECTS = {
+    "unverified": (dict(), dict(verdicts=()), "has no verified=accepted by a non-producer"),
+    "self-verified by its producer": (dict(), dict(verdicts=(("accepted", "fused-phases"),)), "has no verified=accepted by a non-producer"),
+    "verified by the result's producer": (dict(), dict(verdicts=(("accepted", LANE),)), "has no verified=accepted by a non-producer"),
+    "a later rejection": (dict(), dict(verdicts=(("accepted", "verify-night"), ("rejected", "coordinator"))), "latest verdict by a non-producer is verified=rejected"),
+    "no named producer": (dict(), dict(lane=None), "names no producer"),
+    "digests differ": (dict(arrays={"x": {"frozen_sha256": "1" * 64, "candidate_sha256": "1" * 64}, "W": {"frozen_sha256": "2" * 64, "candidate_sha256": "2" * 64},
+                                    "y": {"frozen_sha256": "3" * 64, "candidate_sha256": "4" * 64}}), dict(), "arrays.y: frozen_sha256"),
+    "a placeholder digest": (dict(arrays={a: {"frozen_sha256": "…", "candidate_sha256": "…"} for a in "xWy"}), dict(), "arrays.W: frozen_sha256 '…'"),
+    "y missing": (dict(arrays={a: {"frozen_sha256": "1" * 64, "candidate_sha256": "1" * 64} for a in "xW"}), dict(), "arrays lack y"),
+    "equal false": (dict(equal=False), dict(), "verified, says equal=False"),
+    "equal as a word": (dict(equal="true"), dict(), "verified, says equal='true'"),
+    "equal false, unverified": (dict(equal=False), dict(verdicts=()), "equal is False"),
+    "another frozen ref": (dict(frozen=copy.deepcopy(T.FROZEN_INSTANCES[FIRST.name])), dict(), "frozen is not FROZEN_INSTANCES[target]"),
+    "another schema": (dict(schema="instance-equiv/v0"), dict(), "schema is 'instance-equiv/v0'"),
+}
+
+
+@pytest.mark.parametrize("defect", sorted(DEFECTS))
+def test_repacked_instances_stay_rejected_without_a_sound_equivalence(store: LocalStore, defect: str) -> None:
+    over, how, fragment = DEFECTS[defect]
+    art = repacked_result(store, 7)
+    eq = put_equiv(store, equiv_doc(repacked(7), **over), **how)
+    tab = T.build(store)
+    assert cell(tab, FP8_ADA_MMA, "B-Ligero") is None
+    (reason,) = rejected(tab, art)
+    assert reason.startswith("instances differ from the frozen set on dataset") and f"(instance-equiv: {eq}" in reason and fragment in reason, reason
+
+
+def test_an_equivalence_of_another_pair_or_a_contradiction_does_not_count(store: LocalStore) -> None:
+    art = repacked_result(store, 3)
+    put_equiv(store, equiv_doc(repacked(4)))                                            # another candidate ref
+    put_equiv(store, equiv_doc(repacked(3), target=BF16_HOPPER))                        # another target's frozen set
+    (reason,) = rejected(T.build(store), art)
+    assert "instance-equiv" not in reason, reason                                       # neither is about this pair: the existing rejection
+    good = put_equiv(store, equiv_doc(repacked(3)))
+    assert cell(T.build(store), FP8_ADA_MMA, "B-Ligero").instances_equiv == good
+    bad = put_equiv(store, equiv_doc(repacked(3), equal=False, arrays={a: {"frozen_sha256": "1" * 64, "candidate_sha256": "2" * 64} for a in "xWy"}),
+                    lane="verify-night-2", verdicts=(("accepted", "coordinator"),))
+    (reason,) = rejected(T.build(store), art)
+    assert f"{bad}, verified, says equal=False" in reason, reason
 
 
 def test_fp8_ada_row_and_hvzk_drilldown(store: LocalStore) -> None:
@@ -568,6 +805,7 @@ def test_label_keys_are_the_store_vocabulary() -> None:
     from verity_numerical.bench import ledger, ledger_to_store
 
     assert T.PRODUCER_LABEL_KEYS == (vocab.CANDIDATE, vocab.LABEL) == ("candidate", "label")
+    assert T.PRODUCER_NAME_LABEL_KEYS == (vocab.LANE,) == ("lane",)
     assert T.VERIFIED_LABELS == ((vocab.INDEPENDENTLY_VERIFIED, (True, "true")), (vocab.VERIFIED, (vocab.VERIFIED_ACCEPTED,)))
     assert (vocab.INDEPENDENTLY_VERIFIED, vocab.VERIFIED, vocab.VERIFIED_ACCEPTED) == ("independently_verified", "verified", "accepted")
     assert vocab.key(vocab.INDEPENDENTLY_VERIFIED).status == vocab.DEPRECATED and vocab.key(vocab.VERIFIED_BY).status == vocab.IGNORED

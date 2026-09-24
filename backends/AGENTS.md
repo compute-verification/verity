@@ -88,11 +88,18 @@ present); `security.target` ≤ −128 and, when present, `security.achieved_log
 ≤ −128; `instances` equals the target's frozen ref (BF16: `bench-instances/v1`
 `vu-k1536` [0, 4096) manifest 059103cf…; FP8 Ada: `bench-instances-fp8-ada/v1`
 `vu-k1536-fp8-ada`, digest `contract.FP8_ADA_INSTANCES_DIGEST`; Hopper has no
-frozen set yet); `proof_class` is the candidate's declared class;
-authentication excluded; same SKU; **independently verified** -- a label
+frozen set yet), or is a re-packing of it that an `instance-equiv/v1` artifact
+(campaign morning-tables BRIEF §5) shows byte-identical, labelled
+`verified=accepted` by a non-producer of it and of the result (user decision
+2026-09-24; the cell's footnote names it); `proof_class` is the candidate's
+declared class; authentication excluded (column B-Ligero + in-proof hash:
+`included-hash`, Poseidon2-BabyBear per row, no sharing; Ajtai, BLAKE3 and
+shared tiles are drill-down); same SKU; **independently verified** -- a label
 `independently_verified=true` (the store's back-fill key; `verified=accepted`
-is also accepted) whose `by` is neither the producing attempt's campaign nor
-an asserter of the result's own `candidate`/`label` labels; **not
+is also accepted) whose `by` is no producer: not the producing attempt's
+campaign, an asserter of the result's own `candidate`/`label` labels, the lane
+a `lane` label or its meta (`lane`, `by`, `registered_by`, `constructed_by`)
+names; an attempt-less result naming none is never verified; **not
 downgraded** -- the latest `red-team-*` `proof_class` verdict on the artifact
 is not below the fingerprint's class. A candidate is recognised from
 `software.backend.name` (`verity-gkr`, `b-ligero chain…`, `sp1`); component
@@ -103,6 +110,15 @@ lookup + zk_additional + serialization + other, each cell `0.41 s (37%)`,
 Other = t.total − Σ buckets − Σ joints (≥ −1 %·t.total); a fused stage
 `t.joint.a+b` prints once as `a+b: 0.41 s (37%)` in the first bucket column it
 covers and `↞` in the others.
+
+Drill-downs D1-D3 (`python -m verity_numerical.bench.drilldown --root <store>
+[--format md|json]`, `verity_numerical/bench/drilldown.py`): D1 variants and
+security properties, one row per `drilldown.VARIANTS` entry (its recogniser and
+its ZK / operands hidden / binding / soundness / Table 2 column, with sources);
+D2 fastest measured `t.total` per variant × target, marked ✓ or with the first
+reason letter of `tables.reject_codes`; D3 communication and verifier cost per
+Table 2 cell, read only from the cell's result envelope (`…` where absent).
+Non-canonical; layout fixed 2026-09-24 (campaign morning-tables BRIEF §1).
 
 ## Proof model: interactive is fine, transferability is not required
 
