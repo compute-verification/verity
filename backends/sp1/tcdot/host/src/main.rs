@@ -63,6 +63,10 @@ struct BareSet {
     /// VUs per `read_vec` chunk.
     #[arg(long, default_value_t = 64)]
     vus_per_read: usize,
+    /// A VU with at least this many steps outside the chip's contract runs whole through `bare::check_vu`
+    /// (97 = never, unless no step is inside).
+    #[arg(long, default_value_t = 8)]
+    vu_software_threshold: u32,
 }
 
 #[derive(Subcommand)]
@@ -118,6 +122,9 @@ enum Command {
         manifest_sha256: String,
         #[arg(long, default_value = "bench-instances/v1")]
         dataset: String,
+        /// As `bare-prove`'s (0 = every VU through `bare::check_vu`, 97 = per-step routing wherever a step is inside).
+        #[arg(long, default_value_t = 8)]
+        vu_software_threshold: u32,
     },
 }
 
@@ -129,13 +136,19 @@ fn read_u16s(path: &Path) -> Result<Vec<u16>> {
 
 #[derive(Default, Serialize, Clone, Debug)]
 struct RouteStats {
+    /// `TC_DOT_BF16` calls the guest makes.
     chip_steps: u64,
+    /// Single steps the guest runs through `tc::tc_dot`.
     software_steps: u64,
-    /// Software steps by the chip's contract violation.
-    software_by_reason: BTreeMap<String, u64>,
+    /// VUs the guest runs whole through `bare::check_vu` (stock layout).
+    software_vus: u64,
+    /// Steps outside the chip's contract, by violation (whatever the VU's route).
+    contract_violations: BTreeMap<String, u64>,
+    /// VUs by their number of steps outside the chip's contract.
+    vus_by_violations: BTreeMap<u32, u64>,
     /// VUs whose reference chain leaves the relation's domain (the guest rejects them).
     rejected_vus: u64,
-    /// Chip steps whose kernel result differs from `tc::tc_dot` (must be 0).
+    /// In-contract steps whose kernel result differs from `tc::tc_dot` (must be 0).
     kernel_mismatches: u64,
 }
 
@@ -147,17 +160,17 @@ fn reason(violation: &TcBf16Violation) -> String {
     }
 }
 
-/// One VU: append its 96 operand blocks (`x[16t..16t+16] || W[16t..16t+16]`, u16le) and return its routing mask and
-/// reference output word (`None` where the chain rejects).
-fn route_vu(x: &[u16], w: &[u16], blocks: &mut Vec<u8>, stats: &mut RouteStats) -> ([u8; ROUTE_BYTES], Option<u16>) {
+/// One VU: route each step along the reference chain (bit t set = step t outside the chip's contract, or after the
+/// chain rejected), then append the VU to `out` -- as 96 operand blocks `x[16t..16t+16] || W[16t..16t+16]` (u16le)
+/// with that mask, or, when at least `threshold` steps are outside the contract or none is inside, in the stock
+/// layout with the all-ones mask.  Returns the mask and the reference output word (`None` where the chain rejects).
+fn route_vu(x: &[u16], w: &[u16], threshold: u32, out: &mut Vec<u8>, stats: &mut RouteStats) -> ([u8; ROUTE_BYTES], Option<u16>) {
     let mut mask = [0u8; ROUTE_BYTES];
     let mut acc: Option<u32> = Some(0);
+    let mut violations = 0u32;
     for t in 0..STEPS {
         let a: [u16; 16] = x[16 * t..16 * t + 16].try_into().expect("16 words");
         let b: [u16; 16] = w[16 * t..16 * t + 16].try_into().expect("16 words");
-        for word in a.iter().chain(b.iter()) {
-            blocks.extend_from_slice(&word.to_le_bytes());
-        }
         let Some(c) = acc else {
             mask[t / 8] |= 1 << (t % 8);
             continue;
@@ -165,15 +178,14 @@ fn route_vu(x: &[u16], w: &[u16], blocks: &mut Vec<u8>, stats: &mut RouteStats) 
         let reference = tc::tc_dot(&tc::AMPERE_BF16_M16N8K16, u64::from(c), &a.map(u64::from), &b.map(u64::from));
         match try_tc_dot_bf16_witness(&a, &b, c) {
             Ok(witness) => {
-                stats.chip_steps += 1;
                 if reference != Some(u64::from(witness.d_bits)) {
                     stats.kernel_mismatches += 1;
                 }
                 acc = Some(witness.d_bits);
             }
             Err(violation) => {
-                stats.software_steps += 1;
-                *stats.software_by_reason.entry(reason(&violation)).or_default() += 1;
+                violations += 1;
+                *stats.contract_violations.entry(reason(&violation)).or_default() += 1;
                 mask[t / 8] |= 1 << (t % 8);
                 acc = reference.map(|bits| bits as u32);
             }
@@ -181,6 +193,21 @@ fn route_vu(x: &[u16], w: &[u16], blocks: &mut Vec<u8>, stats: &mut RouteStats) 
     }
     if acc.is_none() {
         stats.rejected_vus += 1;
+    }
+    *stats.vus_by_violations.entry(violations).or_default() += 1;
+    let software_bits: u32 = mask.iter().map(|byte| byte.count_ones()).sum();
+    if violations >= threshold || software_bits == STEPS as u32 {
+        mask = [0xFF; ROUTE_BYTES];
+        stats.software_vus += 1;
+        out.extend(x.iter().chain(w.iter()).flat_map(|v| v.to_le_bytes()));
+    } else {
+        stats.chip_steps += u64::from(STEPS as u32 - software_bits);
+        stats.software_steps += u64::from(software_bits);
+        for t in 0..STEPS {
+            for word in x[16 * t..16 * t + 16].iter().chain(&w[16 * t..16 * t + 16]) {
+                out.extend_from_slice(&word.to_le_bytes());
+            }
+        }
     }
     (mask, acc.map(|bits| tc::f32_to_bf16(u64::from(bits)) as u16))
 }
@@ -233,7 +260,8 @@ impl BareSet {
             let hi = (lo + self.vus_per_read).min(self.hi);
             let mut blocks = Vec::with_capacity((hi - lo) * bare::VU_BYTES);
             for i in lo..hi {
-                let (mask, out) = route_vu(&x[K * i..K * (i + 1)], &w[K * i..K * (i + 1)], &mut blocks, &mut stats);
+                let (xi, wi) = (&x[K * i..K * (i + 1)], &w[K * i..K * (i + 1)]);
+                let (mask, out) = route_vu(xi, wi, self.vu_software_threshold, &mut blocks, &mut stats);
                 routes.extend_from_slice(&mask);
                 reference_outputs.push(out);
             }
@@ -474,7 +502,7 @@ async fn cmd_crosscheck(set: BareSet) -> Result<()> {
     Ok(())
 }
 
-async fn cmd_negatives(instances: PathBuf, manifest_sha256: String, dataset: String) -> Result<()> {
+async fn cmd_negatives(instances: PathBuf, manifest_sha256: String, dataset: String, vu_software_threshold: u32) -> Result<()> {
     let tier = "vu-k1536-neg";
     let index = instances.join(format!("{tier}.index.json"));
     let doc: serde_json::Value = serde_json::from_str(&fs::read_to_string(&index).with_context(|| format!("reading {}", index.display()))?)?;
@@ -491,6 +519,7 @@ async fn cmd_negatives(instances: PathBuf, manifest_sha256: String, dataset: Str
             lo: i,
             hi: i + 1,
             vus_per_read: 1,
+            vu_software_threshold,
         };
         let (claimed, _) = execute_set(&client, &set, None).await?;
         let claimed_verdict = claimed.outcome.verdict;
@@ -553,6 +582,8 @@ async fn main() -> Result<()> {
             cmd_prove(set, out_dir, reps, warmup_vus, skip_execute).await
         }
         Command::Verify { proof, statement } => cmd_verify(proof, statement).await,
-        Command::BareNegatives { instances, manifest_sha256, dataset } => cmd_negatives(instances, manifest_sha256, dataset).await,
+        Command::BareNegatives { instances, manifest_sha256, dataset, vu_software_threshold } => {
+            cmd_negatives(instances, manifest_sha256, dataset, vu_software_threshold).await
+        }
     }
 }
