@@ -6,7 +6,7 @@ family leaves the body as ONE segment: every step past s = 0 has no programmed i
 
 Lifted from the row's OWN documents: per declared request (`build_workload/workload_program.json` `requests[*]`) its cap, component
 digest, `n_nodes`, `steps`, sha256 of `step_nodes`, and the component's sampling events as its Build counted them (`result.json`
-`spec_histogram`, the families of `verity_vllm.ir.sampling_event`); from `build_workload/chronology.json` the flag and the number of
+`spec_histogram`, the families of `verity_vllm.program.sampling_event`); from `build_workload/chronology.json` the flag and the number of
 members with no segment.  Recomputed: `request_component` over each component's `descriptor.json.gz` with the CURRENT code, the
 sampling events counted in the decoded body, the chronology facts by `WorkloadProgram.chronology`'s rule (segment s exists iff
 s < len(step_nodes)).  In candidate mode the candidate's own build_workload/ documents are lifted the same way.
@@ -48,7 +48,7 @@ def component_dirs(wp: dict) -> dict[str, str]:
 
 
 def sampling_events(hist: dict) -> int:
-    from verity_vllm.ir import sampling_event as SE
+    from verity_vllm.program import sampling_event as SE
     return sum(int(n) for spec, n in (hist or {}).items() if SE.is_sampling_event(spec))
 
 
@@ -91,9 +91,9 @@ def expected(row: resolver.Row) -> dict:
 
 def recompute(desc: dict) -> dict:
     """`request_component` (current code) over one component descriptor: its segmentation and the sampling events in its body."""
-    from verity_capture.experimental.cb_a import global_program as GP     # the registry set build_workload decodes components with
-    from verity_vllm.ir import sampling_event as SE
-    from verity_vllm.ir import workload as W
+    from verity_vllm.program import global_program as GP  # the registry set build_workload decodes components with
+    from verity_vllm.program import sampling_event as SE
+    from verity_vllm.program import workload as W
     comp = W.request_component(desc, GP.REGISTRY, None, canon={})
     specs = [W._spec_id(n.fn) for n in comp.fn.body.nodes]
     return {"program_digest": comp.program_digest, "n_nodes": comp.n_nodes, "steps": len(comp.step_nodes),

@@ -1,7 +1,7 @@
 """The two T1 checks' recomputation paths against the functions they wrap, on synthetic inputs (laptop-safe, no fixture).
 
 `replay_partition.recompute` re-derives the sampled-replay PARTITION from a `sampled_replay` record's stated parameters + the Programs; over
-the synthetic worlds of `verity_capture.commit.tests.test_sampled_replay` it must lift to exactly what `sampled_replay` itself recorded
+the synthetic worlds of `tests.check.test_sampled_replay` it must lift to exactly what `sampled_replay` itself recorded
 (population, strata, draw, picks per (request, step), lifetime, phase anchors) -- and a changed seed / a changed Program must not.
 `decomp_hashes.lift` is the contract over `match_decomp.json`-shaped documents: the fields the check compares, and only those.
 """
@@ -11,9 +11,9 @@ import copy
 
 import pytest
 
-from verity_capture.commit import sampled_replay as SR
-from verity_capture.commit.tests import test_sampled_replay as T
-from verity_capture.commit.tests.test_sampled_replay import moe_world, world  # noqa: F401  -- fixtures
+from verity_vllm.check import sampled_replay as SR
+from tests.check import test_sampled_replay as T
+from tests.check.test_sampled_replay import moe_world, world  # noqa: F401  -- fixtures
 
 from tests.regression import resolver
 from tests.regression.checks import decomp_hashes as DH

@@ -11,17 +11,28 @@
 # module only such a shell runs stays non-live and must be named in dead_code_keep.json.
 
 # --- rules: every sweep runner and every negatives runner (the adversarial inputs the verifier must reject)
-verity_capture/sweep/*.sh
+verity_vllm/ops/canary.sh        # the former sweep/*.sh glob (ops/ also holds bench/ shells)
+verity_vllm/ops/compiled_commit.sh
+verity_vllm/ops/fa3_row_negatives.sh
+verity_vllm/ops/pod_fa2_tap.sh
+verity_vllm/ops/pod_fa3_tap.sh
+verity_vllm/ops/pod_hidden_gpu.sh
+verity_vllm/ops/row_pod.sh
+verity_vllm/ops/row_pod_tp2.sh
+verity_vllm/ops/run_row_v2.sh
+verity_vllm/ops/stoch_negative_n3.sh
+verity_vllm/ops/stoch_negatives.sh
+verity_vllm/ops/tp_stage.sh
 **/*_negatives.sh
 **/*_negative_*.sh
 
 # --- pod runtime and acquisition gates
-pod_bootstrap.sh
-verity_vllm/acquire/pod_gate.sh
+verity_vllm/ops/pod_bootstrap.sh
+verity_vllm/ops/pod_gate.sh
 
 # --- Python entry points
-verity_capture.bench.gen_adversarial        # the ov-adversarial mutation harness: hostile-adapter negatives the sealed checkers must reject
-verity_vllm.research_tools
-verity_capture.sweep.rebuild_digest_gate
+verity_vllm.check.adversarial        # the ov-adversarial mutation harness: hostile-adapter negatives the sealed checkers must reject
+verity_vllm.harness.research_tools
+verity_vllm.harness.rebuild_digest_gate
 verity_vllm.query.cli
 tests/regression/

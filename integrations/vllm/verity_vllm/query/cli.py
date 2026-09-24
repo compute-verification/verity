@@ -22,7 +22,7 @@ import time
 from typing import Any
 
 from .compare import compare, summarize
-from .correspondence import Correspondence
+from verity_vllm.correspondence.reader_for_query import Correspondence
 from .program_view import from_instances
 from .v1_bridge import compose_global, merge_ranks, request_manifest
 

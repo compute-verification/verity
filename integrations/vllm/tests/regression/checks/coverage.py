@@ -58,7 +58,7 @@ def expected(row: resolver.Row) -> dict:
 
 
 def actual(row: resolver.Row) -> dict:
-    from verity_capture.commit.manifest_format import coverage_check
+    from verity_vllm.query.manifest.format import coverage_check
     man_path = row.candidate("manifest.json") or row.path("manifest.json")
     man = json.load(open(man_path))
     with gzip.open(row.path("commit/layouts_pair0_instrumented.json.gz"), "rt") as f:

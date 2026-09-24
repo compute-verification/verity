@@ -11,10 +11,10 @@ from __future__ import annotations
 
 import pytest
 from verity.verification.query import ValueRef, boundary
-from verity_vllm.query.correspondence import Correspondence, implementation_prefix, parse_call_name
+from verity_vllm.correspondence.reader_for_query import Correspondence, implementation_prefix, parse_call_name
 from verity_vllm.query.module_body import Q_module_body_v1
 from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView
-from verity_capture.commit import manifest_format as fmt
+from verity_vllm.query.manifest import format as fmt
 from verity_vllm.query.v1_bridge import NAMED_RESIDUALS, member_name, merge_ranks, request_manifest, shared_instances, under
 
 W = "model.model"                                  # the export wrapper holds the served model under `model`

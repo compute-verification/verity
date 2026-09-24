@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from verity.verification.query import Boundary, Partition, boundary, partition_by
 
-from .correspondence import Correspondence
+from verity_vllm.correspondence.reader_for_query import Correspondence
 from .program_view import ProgramView
 
 __all__ = ["Q_MODULE_BODY_ID", "Q_MODULE_BODY_TEXT", "Q_module_body_v1", "literal_calls", "without_literals", "module_body_boundary"]

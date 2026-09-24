@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from verity.verification.query import ValueRef, boundary
 from verity_vllm.query import program_view as pv
-from verity_vllm.query.correspondence import Correspondence
+from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.query.module_body import Q_module_body_v1, literal_calls, module_body_boundary
 from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView
 from verity_vllm.query.v1_bridge import request_manifest

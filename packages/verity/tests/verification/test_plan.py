@@ -12,7 +12,7 @@ from verity.verification.plan import Obligation, weight_binding_plan
 
 
 def _running_example():
-    """The IR acceptance test's running example (``tests/ir/test_running_example.py``).
+    """The IR acceptance test's running example (``tests/program/test_running_example.py``).
 
     Its definitions register in the global registry at import, so it must be executed once: reuse pytest's
     import when the IR tests are in the same session, else load it by path."""

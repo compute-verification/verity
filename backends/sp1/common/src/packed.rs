@@ -18,7 +18,7 @@
 //! descriptor every position naming one rank must agree on; `index` is the
 //! position's own.
 //!
-//! The serving side's framing (`vllm-poc/verity_vllm/hashing.py`):
+//! The serving side's framing (`vllm-poc/verity_vllm/commit/hashing.py`):
 //!
 //! ```text
 //! H(tag, *parts) = sha256( u32be(len(tag)) || tag || (u64be(len(part)) || part)* )
@@ -35,7 +35,7 @@
 use sha2::{Digest, Sha256};
 
 pub const PACKED_SCHEMA_PREFIX: &str = "packed/v1:";
-/// The serving side's leaf framing (`verity_vllm.hashing.LEAF_TAG`).
+/// The serving side's leaf framing (`verity_vllm.commit.hashing.LEAF_TAG`).
 pub const VLLM_LEAF_FRAMING: &str = "verity-vllm/leaf/v1";
 pub const VLLM_NODE_TAG: &str = "verity-vllm/node/v1";
 pub const VLLM_LIFT_TAG: &str = "verity-vllm/lift/v1";
@@ -218,7 +218,7 @@ pub fn word_be_bytes(width: u32, word: u64) -> Vec<u8> {
     word.to_be_bytes()[8 - size..].to_vec()
 }
 
-/// `verity_vllm.hashing.H`: SHA-256 over the tag and the length-prefixed parts.
+/// `verity_vllm.commit.hashing.H`: SHA-256 over the tag and the length-prefixed parts.
 pub fn vllm_hash(tag: &str, parts: &[&[u8]]) -> [u8; 32] {
     let mut hasher = Sha256::new();
     hasher.update((tag.len() as u32).to_be_bytes());
@@ -354,7 +354,7 @@ mod tests {
 
     #[test]
     fn hashing_matches_python_reference() {
-        // verity_vllm.hashing.H("x", b"a", b"bc") computed by the Python side
+        // verity_vllm.commit.hashing.H("x", b"a", b"bc") computed by the Python side
         let expected = {
             let mut h = Sha256::new();
             h.update(1u32.to_be_bytes());

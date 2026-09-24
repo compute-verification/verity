@@ -7,7 +7,7 @@ Two readers of ONE flat body (`program.fn.body.nodes` of the derived request Pro
 * :func:`from_instances` -- the Build's instance sequence (`instances.json.gz`, `derive_step._instance_sequence`): the same nodes
   written one row per Call (`i`, `spec`, `form`, `name`, `args` = operand runs) -- a projection of the descriptor body plus the
   name annotation, produced by the same derivation on meta tensors (nothing executed).  The output type is not in a row: it is
-  the registered Definition's signature bound to the row's statics (`verity_vllm.registry`), read once per distinct spec.
+  the registered Definition's signature bound to the row's statics (`verity_vllm.program.registry`), read once per distinct spec.
 
 Both yield the same :class:`ProgramView`: Calls with ports, reads and names; prescribed inputs as Values of negative ids
 (`-(k + 1)` for parameter `k`; a record parameter has one port per field, anything else the port `out`); outputs as the reader
@@ -557,14 +557,14 @@ def _registry():
         try:
             from verity.ir.defs import REGISTRY
         except Exception as e:  # noqa: BLE001  -- the core package missing is an ENVIRONMENT fault, named (never a "not registered" answer)
-            from verity_capture.commit.manifest_format import RegistryUnavailable
+            from verity_vllm.query.manifest.format import RegistryUnavailable
             raise RegistryUnavailable(e) from e
         errors = []
         for m in REGISTRY_MODULES:
             try:
-                importlib.import_module(f"verity_vllm.registry.{m}")
+                importlib.import_module(f"verity_vllm.program.registry.{m}")
             except Exception as e:  # noqa: BLE001
-                errors.append(f"verity_vllm.registry.{m}: {type(e).__name__}: {e}")
+                errors.append(f"verity_vllm.program.registry.{m}: {type(e).__name__}: {e}")
         _REGISTRY["reg"], _REGISTRY["errors"] = REGISTRY, errors
     return _REGISTRY["reg"], _REGISTRY["errors"]
 

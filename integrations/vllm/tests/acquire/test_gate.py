@@ -9,11 +9,11 @@ import pytest
 torch = pytest.importorskip("torch")
 nn = torch.nn
 
-from verity_capture.commit import manifest_format as MF  # noqa: E402
-from verity_capture.commit import manifest_format as RM  # noqa: E402
-from verity_capture.experimental.commit_integ.native_host import NativeHostCommitter, SkipRefused  # noqa: E402
+from verity_vllm.query.manifest import format as MF  # noqa: E402
+from verity_vllm.query.manifest import format as RM  # noqa: E402
+from verity_vllm.acquire.native_host import NativeHostCommitter, SkipRefused  # noqa: E402
 from verity_vllm.acquire import gate as G  # noqa: E402
-from verity_vllm.acquire.correspondence import RUNNER_PATH, AnnotationCorrespondence, runtime_tree_of  # noqa: E402
+from verity_vllm.correspondence.reader_for_acquire import RUNNER_PATH, AnnotationCorrespondence, runtime_tree_of  # noqa: E402
 from verity_vllm.acquire.install import apply_plan_to_committer  # noqa: E402
 from verity_vllm.acquire.plan import acquisition_plan  # noqa: E402
 
@@ -206,7 +206,7 @@ def test_compiled_source_wraps_the_committers_plan_selection(monkeypatch, tmp_pa
     """Compiled rows' record ops (wrapped before vLLM compiles) are the committer's plan selection -- not the class tables (which would
     record `norm`, a module the plan does not select) -- with or without a skip; the plan derived from the manifest at wrap time is the
     committer's plan (same digest)."""
-    from verity_capture.experimental.commit_integ import compiled_source as cs
+    from verity_vllm.acquire import compiled_source as cs
 
     cs._register_op()
     monkeypatch.setenv("VERITY_SKIP", skip)
@@ -230,7 +230,7 @@ def test_compiled_source_wraps_the_committers_plan_selection(monkeypatch, tmp_pa
 
 
 def test_compiled_source_refuses_without_a_plan_or_off_the_committers_selection(monkeypatch):
-    from verity_capture.experimental.commit_integ import compiled_source as cs
+    from verity_vllm.acquire import compiled_source as cs
 
     cs._register_op()
     model, runner = Model(), Runner()

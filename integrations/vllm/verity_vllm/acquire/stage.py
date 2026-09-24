@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Mapping
 
-from verity_vllm.acquire.runtime_tree import RuntimeTree, runtime_tree_of
+from verity_vllm.correspondence.runtime_tree import RuntimeTree, runtime_tree_of
 from verity_vllm.acquire.gate import run as gate_run
 from verity_vllm.acquire.install import IncompletePlan
 from verity_vllm.acquire.plan import AcquisitionPlan

@@ -11,7 +11,7 @@
     cli            `python -m verity_vllm.query.cli build|build-global ... --out manifest.json`
 
 Nothing in this package names a model or decides a member by a module-name or Definition-family table
-(`tests/query/test_lint.py` holds that): what a Call produces comes from its Definition's output signature, where it lives from the
+(`tests/program/test_lint.py` holds that): what a Call produces comes from its Definition's output signature, where it lives from the
 recorded correspondence, what crosses from the Program's own dataflow.  What v1 named that the structure cannot is a *named residual*
 on the output, never a rule.
 

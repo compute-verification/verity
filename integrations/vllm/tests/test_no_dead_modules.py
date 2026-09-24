@@ -1,7 +1,7 @@
 """Dead-code lint: no new dead modules in `integrations/vllm` (shrink-only keep-list).
 
-`tests/dead_code_census.py` builds the static import graph of `verity_vllm` / `verity_capture` / `verity_vllm_numerics` /
-`verity_vllm_adapter` from the declared entry points in `census_roots.txt` (shell runners -- every `verity_capture/sweep/*.sh` and
+`tests/dead_code_census.py` builds the static import graph of `verity_vllm` / `verity_vllm` / `verity_vllm.program.numerics` /
+`verity_vllm` from the declared entry points in `census_roots.txt` (shell runners -- every `verity_vllm/ops/*.sh` and
 every `*_negatives.sh` / `*_negative_*.sh` by rule --, Python entry points, the regression harness).  A production module no root
 reaches is dead unless `dead_code_keep.json` names it, with the reason it stays.  The test fails on
 

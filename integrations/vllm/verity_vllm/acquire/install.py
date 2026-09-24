@@ -21,7 +21,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping
 
-from verity_vllm.acquire.runtime_tree import RUNNER_PATH
+from verity_vllm.correspondence.runtime_tree import RUNNER_PATH
 from verity_vllm.acquire.plan import HOOK_KINDS, AcquisitionPlan, Site, hooks_of_doc
 
 Sink = Callable[[tuple[str, str, str], Any], None]

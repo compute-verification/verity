@@ -14,10 +14,10 @@ by name in the keep-list.
 
 STATIC REACHABILITY: an ast import graph over every `.py` under the integration root.  Edges: `import a.b`, `from a.b import c`
 (`c` as a submodule when it is one), relative imports, the parents of every imported dotted name (their `__init__`), string
-literals that name an integration module (`importlib.import_module("verity_capture.analytic")`, dotted registry paths), f-string
-prefixes (`f"verity_vllm.registry.{m}"` + every short literal of the same file that completes to a module), path literals
-(`verity_capture/sweep/hidden_gpu_src/hidden_gpu.py`) and unique `<name>.py` literals joined at runtime.  Anything reachable from a
-root is LIVE.  `verity_capture/profiles/**` is resolved by name at runtime: the whole package is reachable when any consumer is.
+literals that name an integration module (`importlib.import_module("verity_vllm.input_provenance.analytic")`, dotted registry paths), f-string
+prefixes (`f"verity_vllm.program.registry.{m}"` + every short literal of the same file that completes to a module), path literals
+(`verity_vllm/acquire/hidden_gpu_src/hidden_gpu.py`) and unique `<name>.py` literals joined at runtime.  Anything reachable from a
+root is LIVE.  `verity_vllm/observe/profiles/**` is resolved by name at runtime: the whole package is reachable when any consumer is.
 
 CLASSES (per module of the census packages):
     LIVE       static_reachable or dynamically_imported
@@ -44,12 +44,12 @@ from collections import defaultdict
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parent                                     # integrations/vllm
-REPO = ROOT.parent.parent
+ROOT = HERE.parents[0]  # integrations/vllm
+REPO = ROOT.parents[1]
 ROOTS_FILE = HERE / "census_roots.txt"
 KEEP_FILE = HERE / "dead_code_keep.json"
 
-PACKAGES = ("verity_vllm", "verity_capture", "verity_vllm_numerics", "verity_vllm_adapter")
+PACKAGES = ("verity_vllm",)
 CENSUS_PACKAGES = PACKAGES
 _TOPS = "|".join(PACKAGES + ("tests",))
 TOP_MODULE_RE = re.compile(rf"^(?:{_TOPS})(?:\.[A-Za-z_][A-Za-z0-9_]*)+$")
@@ -57,19 +57,19 @@ PATH_LITERAL_RE = re.compile(rf"^(?:{_TOPS})(?:/[A-Za-z0-9_.-]+)+\.py$")
 
 #: Other lanes own these; the census reports them, the deletion plan never touches them (the keep-list names the non-live ones).
 PROTECTED = (
-    "verity_capture/profiles/",
+    "verity_vllm/observe/profiles/",
     "verity_vllm/query/",
     "verity_vllm/acquire/",
-    "verity_capture/experimental/cb_a/global_match.py",
-    "verity_vllm/runtime_correspondence.py",
+    "verity_vllm/check/global_match.py",
+    "verity_vllm/correspondence/runtime.py",
 )
 
 #: row_pod.sh's Match runs run_config with `--skip census,...,golden,...`: the modules those stages would `-m` are statically reachable
 #: (run_config's stage table names them) but never run by the live launcher.  Reported, not deleted.
-RUN_CONFIG_SKIPPED_STAGE_MODULES = ("verity_capture.census", "verity_capture.noninterference", "verity_capture.compare",
-                                    "verity_capture.root_policy", "verity_capture.golden", "verity_capture.provenance")
+RUN_CONFIG_SKIPPED_STAGE_MODULES = ("verity_vllm.check.census", "verity_vllm.check.noninterference", "verity_vllm.check.fold_compare",
+                                    "verity_vllm.input_provenance.root_policy", "verity_vllm.check.golden", "verity_vllm.check.operand_provenance")
 
-ARTIFACT_DELETE_SCOPES = ("verity_capture/bench/fixtures/",)
+ARTIFACT_DELETE_SCOPES = ("verity_vllm/ops/fixtures/",)
 #: Unreferenced by name but read through a name pattern (file -> the reader).
 ARTIFACT_KEEP: dict[str, str] = {
     **{f"tests/regression/expected/{r}.json": "harness contract read as expected/<row>.json" for r in (
@@ -197,7 +197,7 @@ class Graph:
             elif PATH_LITERAL_RE.match(s) and s in self.mod_of:
                 self.add(src_mod, self.mod_of[s])
             elif s.endswith(".py") and "/" not in s and len(self.by_basename.get(s, ())) == 1:
-                self.add(src_mod, self.by_basename[s][0])            # os.path.join(REPO, "verity_capture", "sweep", "<name>.py")
+                self.add(src_mod, self.by_basename[s][0])            # os.path.join(REPO, "verity_vllm", "harness", "<name>.py")
         for pre in fprefixes:
             if not pre.endswith("."):
                 continue
@@ -205,7 +205,7 @@ class Graph:
             if not TOP_MODULE_RE.match(pkg) or not self.exists(pkg):
                 continue
             self.add(src_mod, pkg)
-            if pkg == "verity_capture.profiles":                     # resolved by name from the workload's case at runtime
+            if pkg == "verity_vllm.observe.profiles":                     # resolved by name from the workload's case at runtime
                 for m in self.file_of:
                     if m.startswith(pkg + "."):
                         self.add(src_mod, m)
@@ -435,12 +435,12 @@ def build(imported: set[str] | None, with_dates: bool, with_artifacts: bool) -> 
     roots = set(roots_by_mod)
     live = g.closure(roots)
     static = set(live)
-    profiles_mods = {m for m in g.file_of if m.startswith("verity_capture.profiles.")}
+    profiles_mods = {m for m in g.file_of if m.startswith("verity_vllm.observe.profiles.")}
     live_sans_profiles = g.closure(roots, skip=profiles_mods)
-    saved = set(g.edges["verity_capture.bench.run_config"])
-    g.edges["verity_capture.bench.run_config"] -= set(RUN_CONFIG_SKIPPED_STAGE_MODULES)
+    saved = set(g.edges["verity_vllm.harness.run_config"])
+    g.edges["verity_vllm.harness.run_config"] -= set(RUN_CONFIG_SKIPPED_STAGE_MODULES)
     skipped_only = {m for m in live - g.closure(roots) if not is_test_file(g.file_of[m])}
-    g.edges["verity_capture.bench.run_config"] = saved
+    g.edges["verity_vllm.harness.run_config"] = saved
     if imported:
         live |= {m for m in imported if g.exists(m)}
     shell_refs = all_shell_refs(g)

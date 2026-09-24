@@ -8,7 +8,7 @@ same EOS-stopped set as `global_match.json.lag.eos_stop_requests`, and `ok`.
 Pure and fast (ms).  WEAK by the reference's own admission: no R19 row exercises an EOS stop (`lag.exercised = false` everywhere), so
 the LAG arithmetic (a_r + LAG) is never exercised by these rows -- only the length-stop branch and the fail-closed rules on the declared
 inputs are.  A v2 that changes the rule for EOS stops will pass this check and must be covered by a synthetic unit test instead
-(`tests/ir/test_continuation.py`, `verity_capture/commit/tests`).
+(`tests/program/test_continuation.py`, `tests/commit`).
 """
 from __future__ import annotations
 
@@ -76,7 +76,7 @@ def expected(row: resolver.Row) -> dict:
 
 
 def actual(row: resolver.Row) -> dict:
-    from verity_capture.commit.executed_prefix import executed_prefix_of_record
+    from verity_vllm.check.executed_prefix import executed_prefix_of_record
     fx, order, caps, treqs, stop = _facts(row)
     served = {order[str(e["request_id"])]: [int(t) for t in (e.get("generated_token_ids") or [])] for e in treqs if str(e.get("request_id")) in order}
     epr = executed_prefix_of_record(sorted(caps, key=lambda r: int(r[1:])), served, caps=caps, eos_of_record=stop.get("eos_token_ids"), lag=stop.get("lag"))

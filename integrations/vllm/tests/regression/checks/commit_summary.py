@@ -1,5 +1,5 @@
 """(f) The pre-P5 `commit_summary.json` re-derives: `summarize(row_dir, rc)` (the harness's READER for old records -- the writer,
-`verity_capture.sweep.commit_summary`, is retired: F-r19-int-21 / P5, `verdict.json` is the verdict of record) with the CURRENT
+`verity_vllm.harness.commit_summary`, is retired: F-r19-int-21 / P5, `verdict.json` is the verdict of record) with the CURRENT
 code over the row's `commit/summary.json`, `commit/runs.jsonl` and `commit.log` gives the recorded summary's stable fields (run
 counts, tokens_equal, committer, collector variant / retention, engine settings, engine steps, generated tokens, `pass`).
 

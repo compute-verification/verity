@@ -19,9 +19,6 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = [
     "verity_vllm",
-    "verity_vllm_adapter",
-    "verity_vllm_numerics",
-    "verity_capture",
 ]
 
 [tool.uv.sources]
@@ -29,7 +26,7 @@ verity = { workspace = true }
 
 [tool.pytest.ini_options]
 # Run from this directory: fixtures are read relative to it.  CUDA / vLLM / pod-tree tests skip or fail by name off-pod.
-testpaths = ["tests/ir", "tests/query", "verity_capture"]
+testpaths = ["tests"]
 addopts = "-q -p no:cacheprovider"
 # tests/regression (R19 reference regression; skipped unless VERITY_REGRESSION=1) is run explicitly: `pytest tests/regression -m regression`.
 markers = [

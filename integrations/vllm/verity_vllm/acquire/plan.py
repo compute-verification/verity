@@ -32,7 +32,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
-from verity_vllm.acquire.correspondence import RUNNER_PATH, AcquireCorrespondence, ReturnSlot, RuntimeTree
+from verity_vllm.correspondence.reader_for_acquire import RUNNER_PATH, AcquireCorrespondence, ReturnSlot, RuntimeTree
 
 AnnotationCorrespondence = AcquireCorrespondence
 
@@ -340,7 +340,7 @@ def sites_of(v: ValuePlan, corr: AcquireCorrespondence) -> tuple[list[Site], lis
             legal.append(Site("registered_input", module, "weight", "n/a", "a weight of record: hashed once at registration"))
         else:
             refuse("registered_input", module, "weight", f"neither the weight's owning module {owner!r} nor a buffer of that name is in the runtime tree")
-        from verity_capture.root_policy import analytic_table_of_buffer
+        from verity_vllm.input_provenance.root_policy import analytic_table_of_buffer
 
         table = analytic_table_of_buffer(module)
         if table is not None:
@@ -369,9 +369,9 @@ def choose(sites: list[Site], v: ValuePlan) -> tuple[Site | None, str]:
 # ---------------------------------------------------------------------------------------------------------------------------------
 
 def _lifetime_tables() -> dict[str, Any]:
-    from verity_capture.experimental.commit_integ.native_host import NativeHostCommitter
+    from verity_vllm.acquire.native_host import NativeHostCommitter
     try:
-        from verity_capture.commit.native_collect import GATHER_FLUSH_LEAVES, PRE_FLUSH_LEAVES
+        from verity_vllm.acquire.native_collect import GATHER_FLUSH_LEAVES, PRE_FLUSH_LEAVES
     except Exception:  # noqa: BLE001  -- native_collect imports torch at module level; the plan must stay importable without it
         GATHER_FLUSH_LEAVES, PRE_FLUSH_LEAVES = frozenset(), frozenset()
     return {"HAZARD_LEAVES": set(NativeHostCommitter.HAZARD_LEAVES), "GATHER_FLUSH_LEAVES": set(GATHER_FLUSH_LEAVES), "PRE_FLUSH_LEAVES": set(PRE_FLUSH_LEAVES)}
@@ -379,7 +379,7 @@ def _lifetime_tables() -> dict[str, Any]:
 
 def hazard_by_table(module: str, slot: str, hazard_leaves: set[str]) -> bool:
     """The committer's `_hazard` decision for a module-output site (the in-place facts the table encodes) -- its own function, not a restatement."""
-    from verity_capture.experimental.commit_integ.native_host import hazard_of_record
+    from verity_vllm.acquire.native_host import hazard_of_record
 
     return hazard_of_record(f"{module}/{slot}", hazard_leaves)
 
@@ -399,7 +399,7 @@ def residuals_of(values: list[ValuePlan], rt: RuntimeTree, tables: Mapping[str, 
         if hits and t[table]:
             out.append(Residual(table, "*", "*", f"the gather collector flushes staged bytes at these module boundaries ({table}); the flush points are lifetime facts "
                                 "the structure does not carry yet", values=[v.value_id for v in hits]))
-    from verity_capture.root_policy import analytic_table_of_buffer
+    from verity_vllm.input_provenance.root_policy import analytic_table_of_buffer
 
     for b in sorted(rt.buffers):
         table = analytic_table_of_buffer(b)

@@ -1,0 +1,339 @@
+"""GP-01: the workload Program composes request Programs (as descriptors) hierarchically, with weights once, a deterministic
+global address space and a declared chronology. Toy request Programs stand in for derive_step's request wrappers: the same
+lowering (`Program(fn)` -> Input batches + body), the same descriptor codec."""
+
+import pytest
+
+from verity.ir.codec import encode_program, program_digest
+from verity.ir.defs import CompositeDefinition, PrimitiveDefinition, REGISTRY
+from verity.ir.program import Program
+from verity.ir.refs import coll_concat
+from verity.ir.types import Array, Record, Value
+from verity_vllm.program import workload as W
+
+_ADD = PrimitiveDefinition("GpTestAdd16", 1, (("a", Value(16)), ("b", Value(16))), Value(16), lambda a, b: (a + b) & 0xFFFF)
+
+
+def _toy_request(LP: int, T: int):
+    """`ToyRequest{LP,T}(prompt: Array<LP,16>, weights: Array<4,16>) -> Array<T+1,16>`: T+1 'tokens', each depending on the
+    previous one and on a weight (a request-local state chain, like the decode loop)."""
+    def sig(S):
+        return ((("prompt", Array(S.LP, Value(16))), ("weights", Array(4, Value(16)))), Array(S.T + 1, Value(16)))
+
+    def body(B, S, prompt, weights):
+        acc = B.call(_ADD, prompt[0], weights[0])
+        outs = [acc]
+        for s in range(S.T):
+            acc = B.call(_ADD, acc, weights[(s + 1) % 4])
+            outs.append(acc)
+        return coll_concat(Array(S.T + 1, Value(16)), outs)
+
+    d = REGISTRY["ToyRequest_v1"] if "ToyRequest_v1" in REGISTRY else CompositeDefinition("ToyRequest", 1, ("LP", "T"), sig, body)
+    return d.bind(LP=LP, T=T)
+
+
+def _WP(LP):
+    return [("prompt", f"Array<{LP},Value<16>>"), ("weights", "Array<4,Value<16>>")]
+
+
+def _desc(LP, T):
+    return encode_program(Program(_toy_request(LP, T)))
+
+
+def _wl(shapes, arrivals=None, ids=None):
+    arrivals = arrivals or [0] * len(shapes)
+    reqs = []
+    for i, ((LP, T), a) in enumerate(zip(shapes, arrivals)):
+        c = W.request_component(_desc(LP, T), REGISTRY, _WP(LP))
+        reqs.append(W.WorkloadRequest((ids or [f"r{i}" for i in range(len(shapes))])[i], i, LP, T + 1, a, c, T=T))
+    return W.WorkloadProgram(reqs, manifest_digest="m" * 8, lag=0)
+
+
+def test_component_reproduces_the_request_body():
+    d = _desc(3, 2)
+    c = W.request_component(d, REGISTRY, _WP(3))
+    root_gates = sum(n.gates for n in Program(_toy_request(3, 2)).root.body.nodes)
+    assert c.input_gates == 3 + 4 and c.body_gates == root_gates - c.input_gates == 3
+    assert [n for n, _ in c.params] == ["prompt", "weights"]
+    assert c.program_digest == program_digest(d)
+
+
+def test_two_unequal_requests_weights_once_and_hierarchical():
+    wl = _wl([(3, 2), (5, 0)])
+    body = wl.program.root.body
+    # root = [weights Input, r0.prompt Input, r1.prompt Input, call r0, call r1]
+    forms = [n.form for n in body.nodes]
+    assert forms == ["batch", "batch", "batch", "call", "call"]
+    assert wl.program.input_gates == 4 + 3 + 5  # weights ONCE
+    assert body.nodes[3].fn.gates == 3 and body.nodes[4].fn.gates == 1
+    am = wl.address_map()
+    assert am["inputs"][0]["owner"] == "shared" and am["inputs"][1]["owner"] == "r0" and am["inputs"][2]["owner"] == "r1"
+    assert am["shared"] == {"group": "weights", "root_nodes": [0, 1], "gates": [0, 4], "n_batches": 1}
+    r0, r1 = am["requests"]
+    assert r0["gates"] == [12, 15] and r1["gates"] == [15, 16]
+    assert r0["inputs"][1]["global"] == "shared.weights" and r1["inputs"][1]["gates"] == r0["inputs"][1]["gates"] == [0, 4]
+    # digest commits to the request digests
+    assert {r["program_digest"] for r in am["requests"]} == {program_digest(_desc(3, 2)), program_digest(_desc(5, 0))}
+
+
+def test_digest_is_deterministic_and_order_sensitive():
+    a = _wl([(3, 2), (5, 0)]).digest
+    b = _wl([(3, 2), (5, 0)]).digest
+    c = _wl([(5, 0), (3, 2)], ids=["r1", "r0"]).digest
+    assert a == b and a != c
+    # encode/decode round trip of the workload descriptor
+    wl = _wl([(3, 2), (5, 0)])
+    desc = encode_program(wl.program)
+    assert program_digest(desc) == wl.digest
+    assert desc["program_fn"].startswith("Workload_v1{")
+
+
+def test_same_shape_twice_is_two_instances_of_one_specialization():
+    wl = _wl([(3, 2), (3, 2)])
+    body = wl.program.root.body
+    assert body.nodes[3].fn is body.nodes[4].fn
+    am = wl.address_map()
+    assert am["requests"][0]["gates"] != am["requests"][1]["gates"]
+    assert am["requests"][0]["specialization"] == am["requests"][1]["specialization"]
+
+
+def test_refusals():
+    with pytest.raises(ValueError, match="duplicate request_id"):
+        _wl([(3, 2), (5, 0)], ids=["r0", "r0"])
+    # T not cap-1: a Program rebuilt from a served length is refused
+    c = W.request_component(_desc(3, 2), REGISTRY, _WP(3))
+    with pytest.raises(ValueError, match="never from a served length"):
+        W.WorkloadProgram([W.WorkloadRequest("r0", 0, 3, 5, 0, c, T=2)], lag=0)
+    # a shared group that differs across requests (here: sharing the unequal prompts) = not one prescribed input; refused
+    with pytest.raises(ValueError, match="differs across requests"):
+        ca = W.request_component(_desc(3, 2), REGISTRY, _WP(3))
+        cb = W.request_component(_desc(5, 0), REGISTRY, _WP(5))
+        W.WorkloadProgram([W.WorkloadRequest("a", 0, 3, 3, 0, ca), W.WorkloadRequest("b", 1, 5, 1, 0, cb)], shared="prompt", lag=0)
+    with pytest.raises(ValueError, match="no prescribed parameter group"):
+        W.WorkloadProgram([W.WorkloadRequest("a", 0, 3, 3, 0, ca)], shared="kv", lag=0)
+    # the wrapper parameters must tile the Input batches exactly
+    with pytest.raises(ValueError, match="tile|leaves"):
+        W.request_component(_desc(3, 2), REGISTRY, [("prompt", "Array<2,Value<16>>"), ("weights", "Array<5,Value<16>>")])
+
+
+def test_record_weights_lower_to_several_input_batches_shared_as_one_group():
+    """The real wrapper's `weights` is a mixed-width Record (bf16 tensors + an f32 rotary table), which lowers to one Input
+    batch per field (a homogeneous record would be one batch): the group is shared as a whole either way."""
+    def sig(S):
+        return ((("prompt", Array(S.LP, Value(16))), ("weights", Record(("wa", Array(2, Value(16))), ("wb", Array(3, Value(32)))))),
+                Array(1, Value(16)))
+
+    def body(B, S, prompt, weights):
+        x = B.call(_ADD, prompt[0], weights.field("wa")[1])
+        return coll_concat(Array(1, Value(16)), [B.call(_ADD, x, weights.field("wa")[0])])
+
+    d = REGISTRY["ToyRecReq_v1"] if "ToyRecReq_v1" in REGISTRY else CompositeDefinition("ToyRecReq", 1, ("LP",), sig, body)
+    wp = lambda LP: [("prompt", f"Array<{LP},Value<16>>"), ("weights", "{wa: Array<2,Value<16>>, wb: Array<3,Value<32>>}")]
+    ca = W.request_component(encode_program(Program(d.bind(LP=2))), REGISTRY, wp(2))
+    cb = W.request_component(encode_program(Program(d.bind(LP=4))), REGISTRY, wp(4))
+    assert ca.groups == ("prompt", "weights", "weights") and [n for n, _ in ca.params] == ["prompt", "weights[0]", "weights[1]"]
+    wl = W.WorkloadProgram([W.WorkloadRequest("a", 0, 2, 1, 0, ca), W.WorkloadRequest("b", 1, 4, 1, 0, cb)], lag=0)
+    assert wl.shared == (1, 2) and wl.program.input_gates == 2 + 3 + 2 + 4
+    am = wl.address_map()
+    assert am["shared"] == {"group": "weights", "root_nodes": [0, 2], "gates": [0, 5], "n_batches": 2}
+    assert [i["owner"] for i in am["inputs"]] == ["shared", "shared", "a", "b"]
+    assert am["requests"][0]["inputs"][2]["gates"] == am["requests"][1]["inputs"][2]["gates"] == [2, 5]
+
+
+def _toy_rank_request(LP: int, T: int):
+    """A TP rank Program's shape (tp M-0314): `(prompt, peers_0..peers_T, weights)` -- one received collective value per step, so
+    the number of request-local inputs BEFORE the shared group depends on T and the weights group shifts per component."""
+    def sig(S):
+        peers = tuple((f"peers_{k}", Array(1, Value(16))) for k in range(S.T + 1))
+        return ((("prompt", Array(S.LP, Value(16))),) + peers + (("weights", Array(4, Value(16))),), Array(S.T + 1, Value(16)))
+
+    def body(B, S, prompt, *rest):
+        peers, weights = rest[:-1], rest[-1]
+        acc = B.call(_ADD, prompt[0], weights[0])
+        outs = [B.call(_ADD, acc, peers[0][0])]
+        for s in range(S.T):
+            acc = B.call(_ADD, outs[-1], weights[(s + 1) % 4])
+            outs.append(B.call(_ADD, acc, peers[s + 1][0]))
+        return coll_concat(Array(S.T + 1, Value(16)), outs)
+
+    d = REGISTRY["ToyRankReq_v1"] if "ToyRankReq_v1" in REGISTRY else CompositeDefinition("ToyRankReq", 1, ("LP", "T"), sig, body)
+    return d.bind(LP=LP, T=T)
+
+
+def _WP_rank(LP, T):
+    return [("prompt", f"Array<{LP},Value<16>>")] + [(f"peers_{k}", "Array<1,Value<16>>") for k in range(T + 1)] + [("weights", "Array<4,Value<16>>")]
+
+
+def test_tp_rank_components_share_weights_at_shifting_positions_and_tp1_digests_are_unchanged():
+    """tp M-0314 option (B): request-local `peers_*` inputs before the shared group shift its positions per component; the shared
+    group is still the same Input batches once, each request's peers are its own inputs; a non-request-local group at a shifting
+    position is still refused. The uniform (TP1) static form is untouched, so every existing workload digest stands."""
+    ca = W.request_component(encode_program(Program(_toy_rank_request(3, 2))), REGISTRY, _WP_rank(3, 2))   # weights at 4
+    cb = W.request_component(encode_program(Program(_toy_rank_request(5, 0))), REGISTRY, _WP_rank(5, 0))   # weights at 2
+    assert ca.groups.index("weights") == 4 and cb.groups.index("weights") == 2
+    wl = W.WorkloadProgram([W.WorkloadRequest("r0", 0, 3, 3, 0, ca, T=2), W.WorkloadRequest("r1", 1, 5, 1, 0, cb, T=0)], lag=0)
+    assert wl.shared == (4,) and wl.shared_by_request == ((4,), (2,)) and wl.shared_positions_uniform is False
+    body = wl.program.root.body
+    # root = [weights ONCE, r0.prompt, r0.peers_0..2, r1.prompt, r1.peers_0, call r0, call r1]
+    assert [n.form for n in body.nodes] == ["batch"] * (1 + 4 + 2) + ["call", "call"]
+    assert wl.program.input_gates == 4 + (3 + 3) + (5 + 1)
+    params, _ = wl.fn.signature()
+    assert [p for p, _ in params] == ["shared.weights", "request[r0].prompt", "request[r0].peers_0", "request[r0].peers_1", "request[r0].peers_2",
+                                      "request[r1].prompt", "request[r1].peers_0"]
+    am = wl.address_map()
+    r0, r1 = am["requests"]
+    assert r0["inputs"][4]["global"] == r1["inputs"][2]["global"] == "shared.weights" and r0["inputs"][4]["gates"] == r1["inputs"][2]["gates"] == [0, 4]
+    assert r0["inputs"][1]["global"] == "request[r0].peers_0" and r1["inputs"][1]["global"] == "request[r1].peers_0"
+    assert am["shared"]["component_params_by_request"] == [[4], [2]]
+    assert wl.artifact()["shared_param_index_by_request"] == [[4], [2]]
+    # round trip of the descriptor
+    assert program_digest(encode_program(wl.program)) == wl.digest
+    # the same rank components in the other order compose to another digest (manifest order is part of the identity)
+    wl2 = W.WorkloadProgram([W.WorkloadRequest("r1", 0, 5, 1, 0, cb, T=0), W.WorkloadRequest("r0", 1, 3, 3, 0, ca, T=2)], lag=0)
+    assert wl2.digest != wl.digest
+    # a foreign (non-request-local) group at a shifting position is still refused
+    d = REGISTRY["ToyRankReq_v1"]
+    cx = W.request_component(encode_program(Program(d.bind(LP=3, T=2))), REGISTRY,
+                             [("prompt", "Array<3,Value<16>>")] + [(f"aux_{k}", "Array<1,Value<16>>") for k in range(3)] + [("weights", "Array<4,Value<16>>")])
+    with pytest.raises(ValueError, match="different parameter positions .* non-request-local groups \\['aux_0'"):
+        W.WorkloadProgram([W.WorkloadRequest("r0", 0, 3, 3, 0, cx, T=2), W.WorkloadRequest("r1", 1, 5, 1, 0, cb, T=0)], lag=0)
+    # TP1 (uniform positions): the static keeps its one-tuple form -> the digest of the historical composition is unchanged
+    u = _wl([(3, 2), (5, 0)])
+    assert u.shared_positions_uniform is True and u.fn.statics["shared"] == (1,)
+    assert "shared_param_index_by_request" in u.artifact() and u.artifact()["shared_param_index_by_request"] is None
+    assert u.digest == W.WorkloadProgram([W.WorkloadRequest("r0", 0, 3, 3, 0, W.request_component(_desc(3, 2), REGISTRY, _WP(3)), T=2),
+                                          W.WorkloadRequest("r1", 1, 5, 1, 0, W.request_component(_desc(5, 0), REGISTRY, _WP(5)), T=0)],
+                                         manifest_digest="m" * 8, lag=0).digest
+
+
+def test_chronology_is_declared_and_bounded():
+    wl = _wl([(3, 2), (5, 0), (2, 3)], arrivals=[0, 1, 3])
+    ch = wl.chronology()
+    assert ch["time_unit"].startswith("engine step")
+    rows = {r["request_id"]: r for r in ch["requests"]}
+    assert rows["r0"]["programmed_steps"] == {"prefill": 0, "decode": [1, 2], "count": 3}
+    assert rows["r1"]["programmed_steps"] == {"prefill": 1, "decode": None, "count": 1}
+    assert rows["r2"]["programmed_steps"] == {"prefill": 3, "decode": [4, 6], "count": 4}
+    assert rows["r2"]["output_interface"]["tokens_max"] == 4
+    assert ch["programmed_horizon_steps"] == 7
+    # the programmed instance set of every engine step is defined by the declaration alone (M-ARRIVAL-ORDER lives here)
+    es = {e["e"]: e for e in ch["engine_steps"]}
+    assert [m["request_id"] for m in es[0]["members"]] == ["r0"] and es[0]["members"][0]["phase"] == "prefill"
+    assert [(m["request_id"], m["s"], m["phase"]) for m in es[1]["members"]] == [("r0", 1, "decode"), ("r1", 0, "prefill")]
+    assert es[1]["co_scheduled"] and es[1]["mixed_prefill_decode"]
+    assert [(m["request_id"], m["s"]) for m in es[3]["members"]] == [("r2", 0)] and [(m["request_id"], m["s"]) for m in es[6]["members"]] == [("r2", 3)]
+    # segments: the toy has no TokenSelect, so one trailing segment (kept, never dropped); the real wrapper has cap segments
+    assert ch["component_steps_equal_cap"] is False
+    m0 = es[0]["members"][0]
+    assert m0["nodes"] == [0, 3] and m0["gates"] == [wl.address_map()["requests"][0]["gates"][0], wl.address_map()["requests"][0]["gates"][1]]
+    art = wl.artifact()
+    assert art["padding_scope"].startswith("active-reference")
+    assert "observed" in ch["observed_time"]
+
+
+def test_population_partitions_the_gates():
+    wl = _wl([(3, 2), (5, 0), (3, 2)])
+    p = wl.population()
+    assert p["other_root_nodes"] == 0 and p["sum_equals_total"] and p["components_partition_non_input_gates"]
+    assert p["component_intervals"] == [(15, 18), (18, 19), (19, 22)]
+    assert p["input_gates"] == 4 + 3 + 5 + 3 and p["component_gates"] == 3 + 1 + 3 == p["gates"] - p["input_gates"]
+
+
+def _stepped_request(LP: int, T: int, step_name: str = "GpTestStep"):
+    """Like `_toy_request` but every token step calls a shared composite `GpTestStep_v1` (a stand-in for a layer definition shared
+    by every request Program): the descriptor carries that definition beside the root, so two descriptors can disagree on it."""
+    def ssig(S):
+        return ((("x", Value(16)), ("w", Value(16))), Value(16))
+
+    def sbody(B, S, x, w):
+        return B.call(_ADD, x, w)
+
+    step = REGISTRY[f"{step_name}_v1"] if f"{step_name}_v1" in REGISTRY else CompositeDefinition(step_name, 1, (), ssig, sbody)
+
+    def sig(S):
+        return ((("prompt", Array(S.LP, Value(16))), ("weights", Array(4, Value(16)))), Array(S.T + 1, Value(16)))
+
+    def body(B, S, prompt, weights):
+        acc = B.call(step, prompt[0], weights[0])
+        outs = [acc]
+        for s in range(S.T):
+            acc = B.call(step, acc, weights[(s + 1) % 4])
+            outs.append(acc)
+        return coll_concat(Array(S.T + 1, Value(16)), outs)
+
+    d = REGISTRY["ToyStepped_v1"] if "ToyStepped_v1" in REGISTRY else CompositeDefinition("ToyStepped", 1, ("LP", "T"), sig, body)
+    return d.bind(LP=LP, T=T)
+
+
+def test_canon_is_per_compose_conflicts_refused_inside_one_never_across_composes():
+    """[R15 global, rev-pm M-0123 F(1)] the shared-definition canon belongs to ONE compose: two request Programs of one workload that
+    disagree on a definition under the same id are refused (E_IDENTITY, fail closed); a LATER compose in the same process with its own
+    canon is compared against its own components only, never against an earlier compose's definitions."""
+    import copy
+    from verity.ir.defs import IdentityConflict
+    da = encode_program(Program(_stepped_request(3, 2)))
+    sid = next(k for k, v in da["definitions"].items() if v["form"] == "composite" and k.startswith("GpTestStep"))
+    db = copy.deepcopy(da)
+    node = db["definitions"][sid]["body"]["nodes"][-1]
+    node["args"] = [node["args"][1], node["args"][0]]          # operands swapped: a different body under the same definition id
+    wp = _WP(3)
+    # one compose, both components -> the disagreement is refused
+    canon1: dict = {}
+    W.request_component(da, REGISTRY, wp, canon=canon1)
+    with pytest.raises(IdentityConflict, match="E_IDENTITY"):
+        W.request_component(db, REGISTRY, wp, canon=canon1)
+    # a separate compose in the same process: its own canon, the earlier compose's definitions are not consulted
+    canon2: dict = {}
+    cb = W.request_component(db, REGISTRY, wp, canon=canon2)
+    assert cb.program_digest == program_digest(db) != program_digest(da)
+    wl = W.WorkloadProgram([W.WorkloadRequest("r0", 0, 3, 3, 0, cb, T=2)], manifest_digest="m" * 8, lag=0)
+    assert wl.digest
+    # and the canon that already holds `da`'s definition still refuses `db` (fail-closed direction unchanged)
+    with pytest.raises(IdentityConflict):
+        W.request_component(db, REGISTRY, wp, canon=canon1)
+
+
+def _derived_like(LP: int, T: int, src: dict):
+    """derive.py's shape of a request Program: `Derived[...]_v1{SRC=...}` whose SRC static names the class / mode / profile / INPUT
+    SHAPES / config -- the prompt length is an input shape, the decode-step count T is NOT -- and whose body is the recorded flat body.
+    Two derives of one model at the same LP and different T therefore carry the SAME definition id over DIFFERENT bodies."""
+    def sig(S):
+        return ((("prompt", Array(LP, Value(16))), ("weights", Array(4, Value(16)))), Array(T + 1, Value(16)))
+
+    def body(B, S, prompt, weights):
+        acc = B.call(_ADD, prompt[0], weights[0])
+        outs = [acc]
+        for s in range(T):
+            acc = B.call(_ADD, acc, weights[(s + 1) % 4])
+            outs.append(acc)
+        return coll_concat(Array(T + 1, Value(16)), outs)
+
+    return CompositeDefinition("Derived[ToyRequest]", 1, ("SRC",), sig, body, register=False).bind(SRC=src)
+
+
+def test_two_requests_with_one_root_id_over_different_bodies_compose_by_digest():
+    """[R16 global, llama B64 1024/128 Build FAIL 07:09Z] a manifest with two requests of the same prompt length and different caps
+    (LP11: T24 and T36) derives two request Programs whose roots share derive's id `Root[Derived[vLLMRequest[..]]_v1{SRC=..}]` (SRC does
+    not name T) with different bodies and different digests; the compose compared the ROOTS under that id and refused the workload
+    (E_IDENTITY). The root is never shared -- the component's identity is its program digest -- so it is exempt from the shared-definition
+    canon; every callee stays under the fail-closed rule (the test above)."""
+    src = {"class": "LlamaForCausalLM", "mode": "profile", "inputs": [[3]], "config_sha256": "c" * 16}
+    d24, d36 = encode_program(Program(_derived_like(3, 2, src))), encode_program(Program(_derived_like(3, 3, src)))
+    assert d24["root"] == d36["root"] and d24["root"].startswith("Root[Derived[ToyRequest]_v1{SRC=")
+    assert d24["definitions"][d24["root"]] != d36["definitions"][d36["root"]] and program_digest(d24) != program_digest(d36)
+    canon: dict = {}
+    c24 = W.request_component(d24, REGISTRY, _WP(3), canon=canon)
+    c36 = W.request_component(d36, REGISTRY, _WP(3), canon=canon)          # was: IdentityConflict on the root id
+    assert c24.program_digest == program_digest(d24) and c36.program_digest == program_digest(d36) and c24.fn is not c36.fn
+    assert d24["root"] not in canon                                          # the root is not a shared definition
+    wl = W.WorkloadProgram([W.WorkloadRequest("r0", 0, 3, 3, 0, c24, T=2), W.WorkloadRequest("r1", 1, 3, 4, 0, c36, T=3)], manifest_digest="m" * 8, lag=0)
+    am = wl.address_map()
+    assert [r["program_digest"] for r in am["requests"]] == [program_digest(d24), program_digest(d36)]
+    assert am["requests"][0]["specialization"] != am["requests"][1]["specialization"]
+    assert wl.program.root.body.nodes[-2].fn.gates == 3 and wl.program.root.body.nodes[-1].fn.gates == 4   # T+1 tokens each
+    # the same two shapes with DISTINCT root ids compose to the same workload digest: the root id is not part of the workload identity
+    d24b = encode_program(Program(_derived_like(3, 2, {**src, "T": 2}))); d36b = encode_program(Program(_derived_like(3, 3, {**src, "T": 3})))
+    assert d24b["root"] != d36b["root"]
+    c24b, c36b = W.request_component(d24b, REGISTRY, _WP(3), canon={}), W.request_component(d36b, REGISTRY, _WP(3), canon={})
+    wlb = W.WorkloadProgram([W.WorkloadRequest("r0", 0, 3, 3, 0, c24b, T=2), W.WorkloadRequest("r1", 1, 3, 4, 0, c36b, T=3)], manifest_digest="m" * 8, lag=0)
+    assert (wlb.digest == wl.digest) == (program_digest(d24b) == program_digest(d24))   # digests follow the descriptors, nothing else

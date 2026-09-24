@@ -1,0 +1,298 @@
+"""Export-compatibility shims for idioms in the pinned vLLM source that non-strict `torch.export` cannot trace.
+Each shim is generic (names no model, no layer, no op sequence) and semantics-preserving for inference; the REPORT
+counts them as structural scaffolding.
+
+1. `Tensor.data` reads inside forward (`self.weight.data` in `RMSNorm.forward_cuda`, `layernorm.py:104-113`): under
+   non-strict export `.data` yields an untracked FakeTensor that export then tries to lift as a constant
+   ("We found a fake tensor in the exported program constant's list"). For fake tensors the shim returns `detach()`
+   — the same value, recorded as `aten.detach` of the parameter placeholder.
+"""
+
+from __future__ import annotations
+
+from contextlib import contextmanager
+
+import torch
+
+_ORIG_DATA = torch._C.TensorBase.data
+
+
+def _is_fake(t) -> bool:
+    try:
+        return torch._subclasses.fake_tensor.is_fake(t) or t.device.type == "meta"
+    except Exception:  # noqa: BLE001
+        return False
+
+
+@contextmanager
+def tensor_data_as_detach():
+    had = "data" in torch.Tensor.__dict__
+    saved = torch.Tensor.__dict__.get("data")
+
+    def fget(self):
+        if _is_fake(self):
+            return self.detach()
+        return _ORIG_DATA.__get__(self, type(self))
+
+    def fset(self, v):
+        _ORIG_DATA.__set__(self, v)
+
+    torch.Tensor.data = property(fget, fset)
+    try:
+        yield
+    finally:
+        if had:
+            torch.Tensor.data = saved
+        else:
+            del torch.Tensor.data
+
+
+_TUNED_TABLE_MODULES = ("vllm.model_executor.determinism.batch_invariant_configs", "vllm.model_executor.determinism.batch_invariant")
+_NUM_CU_MODULES = ("vllm.utils.platform_utils", "vllm.model_executor.determinism.batch_invariant")
+
+
+def _reset_tuned_table_cache() -> list:
+    """vLLM caches the tuned-GEMM table per process (`_TUNED_MATMUL_CONFIGS_RESOLVED/_FOR_DEVICE`); force re-resolution under the
+    values now applied. Returns the previous state so the caller can restore it."""
+    import importlib
+    saved = []
+    for modname in _TUNED_TABLE_MODULES:
+        try:
+            m = importlib.import_module(modname)
+        except Exception:  # noqa: BLE001
+            continue
+        if hasattr(m, "_TUNED_MATMUL_CONFIGS_RESOLVED"):
+            saved.append((m, m._TUNED_MATMUL_CONFIGS_RESOLVED, getattr(m, "_TUNED_MATMUL_CONFIGS_FOR_DEVICE", None)))
+            m._TUNED_MATMUL_CONFIGS_RESOLVED = False
+            m._TUNED_MATMUL_CONFIGS_FOR_DEVICE = None
+    return saved
+
+
+@contextmanager
+def apply_target_profile(profile):
+    """2. Apply the declared `TargetProfile` to the pinned vLLM for the whole construction (instantiation, export, derive):
+
+    * `current_platform.get_device_capability()` answers `profile.compute_capability` — this selects the FA version
+      (`get_flash_attn_version`), the batch-invariant GEMM override family and the tuned-GEMM table (`resolve_tuned_matmul_configs`);
+    * `num_compute_units()` answers `profile.num_sms` — vLLM's batch-invariant GEMM sizes its persistent grid by it
+      (`matmul_persistent`), and the GEMM rule checks every launch against the same profile value.
+
+    The builder constructs for the DECLARED target on any host: the patch is applied whether or not a GPU is visible (a visible
+    GPU's own answers are recorded by the driver under `target.host`, never used). There is no other place these two values are set;
+    `read_back_applied()` inside this context returns what vLLM now sees, and the driver refuses if that differs from the profile.
+    Nesting is safe (LIFO restore)."""
+    import importlib
+    from vllm.platforms import current_platform
+    from vllm.platforms.interface import DeviceCapability
+    major, minor = profile.compute_capability
+    cls = type(current_platform)
+    cap_saved = cls.__dict__.get("get_device_capability", None), cls.get_device_capability
+    cls.get_device_capability = classmethod(lambda c, device_id=0, _M=major, _m=minor: DeviceCapability(major=_M, minor=_m))
+    tuned_saved = _reset_tuned_table_cache()
+    cu_saved = []
+    for modname in _NUM_CU_MODULES:
+        try:
+            m = importlib.import_module(modname)
+        except Exception:  # noqa: BLE001
+            continue
+        if hasattr(m, "num_compute_units"):
+            cu_saved.append((m, m.num_compute_units))
+            m.num_compute_units = lambda device_id=None, _n=profile.num_sms: _n
+    try:
+        yield
+    finally:
+        for m, f in cu_saved:
+            m.num_compute_units = f
+        if cap_saved[0] is None:
+            try:
+                del cls.get_device_capability
+            except AttributeError:
+                pass
+        else:
+            cls.get_device_capability = cap_saved[0]
+        for m, resolved, dev in tuned_saved:
+            m._TUNED_MATMUL_CONFIGS_RESOLVED = resolved
+            m._TUNED_MATMUL_CONFIGS_FOR_DEVICE = dev
+
+
+def read_back_applied() -> dict:
+    """What the pinned vLLM answers RIGHT NOW for the target facts the construction consults — the manifest's `target.applied` block
+    is this record, taken inside `apply_target_profile`, never a literal. Absent answers are recorded as None (a mismatch)."""
+    import importlib
+    out: dict = {"compute_capability": None, "num_sms": None, "batch_invariant": None, "vllm_version": None, "torch_version": torch.__version__,
+                 "triton_version": None, "tuned_gemm_arch_family": None}
+    try:
+        from vllm.platforms import current_platform
+        cap = current_platform.get_device_capability()
+        out["compute_capability"] = [int(cap.major), int(cap.minor)] if cap is not None else None
+    except Exception as e:  # noqa: BLE001
+        out["compute_capability_error"] = f"{type(e).__name__}: {e}"
+    for modname in _NUM_CU_MODULES:
+        try:
+            m = importlib.import_module(modname)
+            if hasattr(m, "num_compute_units"):
+                out["num_sms"] = int(m.num_compute_units(0))
+                break
+        except Exception as e:  # noqa: BLE001
+            out["num_sms_error"] = f"{type(e).__name__}: {e}"
+    try:
+        import vllm
+        import vllm.envs as envs
+        out["vllm_version"] = str(vllm.__version__)
+        out["batch_invariant"] = bool(envs.VLLM_BATCH_INVARIANT)
+    except Exception as e:  # noqa: BLE001
+        out["vllm_error"] = f"{type(e).__name__}: {e}"
+    try:
+        import triton
+        out["triton_version"] = str(triton.__version__)
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        bic = importlib.import_module("vllm.model_executor.determinism.batch_invariant_configs")
+        fam = getattr(bic, "_get_tuned_matmul_arch_family", None)
+        if fam is not None and out["compute_capability"] is not None:
+            from vllm.platforms.interface import DeviceCapability
+            out["tuned_gemm_arch_family"] = fam(DeviceCapability(*out["compute_capability"]))
+    except Exception as e:  # noqa: BLE001
+        out["tuned_gemm_arch_family_error"] = f"{type(e).__name__}: {e}"
+    return out
+
+
+def host_facts() -> dict:
+    """The construction HOST (informational; not part of any identity): hostname, CUDA visibility, the host GPU's name."""
+    import os
+    import socket
+    h = {"hostname": socket.gethostname(), "CUDA_VISIBLE_DEVICES": os.environ.get("CUDA_VISIBLE_DEVICES"), "cuda_available": bool(torch.cuda.is_available()),
+         "host_gpu": None}
+    if h["cuda_available"]:
+        try:
+            h["host_gpu"] = torch.cuda.get_device_name(0)
+            h["host_sm_count"] = torch.cuda.get_device_properties(0).multi_processor_count
+            cc = torch.cuda.get_device_capability(0)
+            h["host_compute_capability"] = [int(cc[0]), int(cc[1])]
+        except Exception as e:  # noqa: BLE001
+            h["host_gpu_error"] = f"{type(e).__name__}: {e}"
+    return h
+
+
+#: [R13 moe] the vLLM dispatcher custom ops whose body is PURE PYTHON DISPATCH to the computation (no kernel of their own):
+#: `vllm.moe_forward[_shared](hidden, router_logits, ..., layer_name)` -> `MoERunner._forward_impl`, and inside it
+#: `vllm.fused_experts(...)` -> `fused_moe.fused_experts_op` -> `fused_experts_impl` (the router top-k, the block schedule, the two
+#: grouped-GEMM Triton launches, the activation and the routed sum).  Exported as opaque nodes they hide the whole MoE block behind
+#: ONE mutating op no rule can bind (R12 F-moe-02 / B-MOE); traced through their bodies, the block is the leaf kernels the rules bind
+#: (`_moe_C.topk_softmax`, `_moe_C.moe_align_block_size`, `fused_moe_kernel` x2 via `verity_cba::triton_launch`, `_C.silu_and_mul`,
+#: `_moe_C.moe_sum`) -- the same launches the eager capture records.  Generic: names the dispatcher ops, not a model/layer.
+_MOE_DISPATCH_OPS = ("moe_forward", "moe_forward_shared", "fused_experts")
+
+
+def _moe_c_fake_impls() -> list:
+    """Fake (meta) kernels for the `_moe_C` / `_C` leaf ops the traced MoE body launches, when the pinned vLLM registers none: every one
+    of them writes into caller-allocated outputs and returns nothing, so the fake is `None` (shapes are the allocations').  Returns the
+    ops registered (nothing to undo: registration is per process and is only ever the same None-returning fake)."""
+    done = []
+    for ns, name in (("_moe_C", "topk_softmax"), ("_moe_C", "moe_align_block_size"), ("_moe_C", "moe_sum"), ("_C", "silu_and_mul")):
+        try:
+            op = getattr(getattr(torch.ops, ns), name)
+        except (AttributeError, RuntimeError):
+            continue
+        try:
+            torch.library.register_fake(f"{ns}::{name}")(lambda *a, **k: None)
+            done.append(f"{ns}::{name}")
+        except RuntimeError:  # already has a fake / meta kernel
+            pass
+    return done
+
+
+@contextmanager
+def moe_ops_traced(model=None):
+    """3. Trace THROUGH vLLM's MoE dispatcher custom ops (`_MOE_DISPATCH_OPS`): every module of `model` whose `_forward_entry` is the
+    `vllm.moe_forward[_shared]` op packet gets, for the duration, a Python entry that calls its own `_forward_impl` (what the op's
+    real kernel does: `moe_runner._moe_forward`), and `torch.ops.vllm.fused_experts` is the Python `fused_experts_op` (what the op's
+    real kernel does).  Semantics-preserving by construction (the op bodies ARE these calls); only the export sees a difference.
+    Without vLLM (or a model without MoE layers) it is a no-op."""
+    try:
+        from vllm.model_executor.layers.fused_moe import fused_moe as _fm
+    except Exception:  # noqa: BLE001
+        yield
+        return
+    _moe_c_fake_impls()
+    ns = torch.ops.vllm
+    packets = {}
+    for name in _MOE_DISPATCH_OPS:
+        try:
+            packets[name] = getattr(ns, name)
+        except (AttributeError, RuntimeError):
+            pass
+    saved_entries = []
+    if model is not None:
+        for m in model.modules():
+            # the engine builds each MoE layer's kernel object (prepare/finalize + experts, `make_unquantized_moe_kernel`) in
+            # `process_weights_after_loading`, which a meta instantiation never runs: build it here the same way (pure Python
+            # object construction; the TRITON backend neither pads nor shuffles the weights) so `_forward_impl` has its kernel.
+            qm = getattr(m, "quant_method", None)
+            if qm is not None and hasattr(qm, "_init_moe_kernel") and getattr(qm, "moe_kernel", None) is None and hasattr(m, "w13_weight"):
+                qm._init_moe_kernel(m)
+            fe = getattr(m, "_forward_entry", None)
+            if fe is None or not hasattr(m, "_forward_impl"):
+                continue
+            if fe is packets.get("moe_forward") or fe is packets.get("moe_forward_shared"):
+                saved_entries.append((m, fe))
+                m._forward_entry = (lambda hs, rl, sei, ids, _name, _hd, _l=m: _l._forward_impl(hs, rl, sei, ids))
+    had_fe = "fused_experts" in packets
+    if had_fe:
+        # `_OpNamespace.__getattr__` caches resolved packets as instance attributes; a plain function in its place is what callers
+        # of `torch.ops.vllm.fused_experts(**kw)` now reach, and the packet is restored below.
+        ns.fused_experts = _fm.fused_experts_op
+    # the engine's MoE workspace (`v1/worker/workspace.py`): ONE persistent device buffer per worker that every layer's
+    # intermediate caches are views of (`get_simultaneous`).  Under export a buffer that outlives the trace is hidden state (a lifted
+    # constant); a fresh allocation per request is the same computation (every workspace word is written before it is read within the
+    # layer), so the export-time manager hands out `torch.empty` views -- ordinary `Alloc`s the in-place rules rebind.
+    ws_saved = None
+    try:
+        from vllm.v1.worker import workspace as _ws
+        ws_saved = (_ws, _ws._manager)
+        _ws._manager = _ExportWorkspaceManager()
+    except Exception:  # noqa: BLE001
+        ws_saved = None
+    try:
+        yield
+    finally:
+        for m, fe in saved_entries:
+            m._forward_entry = fe
+        if had_fe:
+            ns.fused_experts = packets["fused_experts"]
+        if ws_saved is not None:
+            ws_saved[0]._manager = ws_saved[1]
+
+
+class _ExportWorkspaceManager:
+    """`WorkspaceManager` for the export: fresh allocations instead of views of one persistent buffer (see `moe_ops_traced`)."""
+
+    def __init__(self) -> None:
+        self._locked = False
+
+    def get_simultaneous(self, *shapes_and_dtypes):
+        return [torch.empty(tuple(s), dtype=d) for s, d in shapes_and_dtypes]
+
+    def lock(self) -> None:
+        self._locked = True
+
+    def unlock(self) -> None:
+        self._locked = False
+
+    def is_locked(self) -> bool:
+        return self._locked
+
+
+@contextmanager
+def export_compat(profile=None, model=None):
+    """The export shims: `.data` -> `detach()` on fake tensors + the declared target applied (default profile if None) + the MoE
+    dispatcher ops traced through their bodies (`moe_ops_traced`; `model` = the instantiated module, for the per-layer entry)."""
+    if profile is None:
+        from verity_vllm.program.frontend.target_profile import TargetProfile
+        profile = TargetProfile.default()
+    with tensor_data_as_detach(), apply_target_profile(profile), moe_ops_traced(model):
+        yield
+
+
+__all__ = ["export_compat", "tensor_data_as_detach", "apply_target_profile", "moe_ops_traced", "read_back_applied", "host_facts"]

@@ -1,8 +1,8 @@
 """(b) [T1] Fold / decomposition hashes reproduce: per request `canonical_sha256{a,b}` (a = the derived component, b = the record's
 projection), `derived_digest`, `n_instances`, the shape facts (LP, T, sampling events, steps, prefill chunks), the cross-request reads and the
 attribution table (`how`, unattributed, row-rule disagreements) of `match_decomp.json`, recomputed over the Match record with the v2 path --
-`verity_vllm.observe.iter_observations` (the stream) -> `verity_vllm.resolve` (occurrence resolution: the request channel wraps
-batch_decomp's meta / dataflow / weight-only / rows rules) -> `verity_vllm.resolve_decomp.decompose` (the per-request projection and the
+`verity_vllm.observe.contract.iter_observations` (the stream) -> `verity_vllm.correspondence.resolve` (occurrence resolution: the request channel wraps
+batch_decomp's meta / dataflow / weight-only / rows rules) -> `verity_vllm.correspondence.resolve_decomp.decompose` (the per-request projection and the
 canonical hash are v1's own `batch_decomp.Projection` / `compare.compare_steps`, wrapped).  STRONG: a value attributed to another request,
 a missed weight-only value, a request-relative step cut elsewhere -- each moves a hash or a count.
 
@@ -96,7 +96,7 @@ def actual(row: resolver.Row) -> dict:
     if progs is None:
         raise resolver.NotResolvable(f"{row.key}: no request Programs (build_request*/instances.json.gz) reachable here")
     dirs = _derived_dirs(progs)
-    from verity_vllm import resolve_decomp as RD
+    from verity_vllm.correspondence import resolve_decomp as RD
     doc = RD.decompose(match_dir, dirs)
     notes = doc.get("fold_load") or {}
     pins = {k: v for k, v in notes.items() if k.endswith("sha256")} or None

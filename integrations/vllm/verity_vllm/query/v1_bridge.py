@@ -34,7 +34,7 @@ What this module cannot derive and therefore RECORDS (`NAMED_RESIDUALS`, emitted
   the attention hidden stream under `fa2.m1/L<k>`, the weights as `<field>/weight`.
 
 Kernel geometry (the FA hidden stream, the MoE block planes) and the identity encoding constants (`SCHEMA`, `IDENTITY_KEY`, the row
-order, the digest) are the manifest format's (`verity_capture.commit.manifest_format`) -- they are what the bridge is a bridge TO, not
+order, the digest) are the manifest format's (`verity_vllm.query.manifest.format`) -- they are what the bridge is a bridge TO, not
 membership decisions.
 """
 
@@ -48,10 +48,10 @@ from dataclasses import dataclass, field
 from typing import Any, Iterable, Mapping
 
 from verity.verification.query import Policy, RequiredValues, ValueRef, required_values
-from verity_capture.commit import manifest_format as fmt
-from verity_vllm.ir.sampling_event import SAMPLING_EVENT_FAMILIES
+from verity_vllm.query.manifest import format as fmt
+from verity_vllm.program.sampling_event import SAMPLING_EVENT_FAMILIES
 
-from .correspondence import CallName, Correspondence
+from verity_vllm.correspondence.reader_for_query import CallName, Correspondence
 from .module_body import Q_MODULE_BODY_ID, Q_MODULE_BODY_TEXT, Q_module_body_v1, literal_calls, module_body_boundary
 from .program_view import CallView, InputView, Port, ProgramView, param_reads, reads_any_of
 
@@ -63,7 +63,7 @@ __all__ = ["Residual", "NAMED_RESIDUALS", "SAMPLING_EVENTS", "STOCHASTIC_SAMPLIN
 # protocol declarations: exact Definition ids (what a Definition IS for the protocol; never a pattern over names)
 # ---------------------------------------------------------------------------------------------------------------------------------
 
-#: the sampling event that ends an engine step for one request (verity_vllm.ir.sampling_event + the explicit-argmax selector)
+#: the sampling event that ends an engine step for one request (verity_vllm.program.sampling_event + the explicit-argmax selector)
 SAMPLING_EVENTS = frozenset(SAMPLING_EVENT_FAMILIES) | {"ArgmaxTokenSelect_v1"}
 #: the sampling events that consume a registered runtime input (seed / splits) beside the logits
 STOCHASTIC_SAMPLING_EVENTS = frozenset({"GumbelTokenSelect_v1", "GumbelTopPTokenSelect_v1"})
@@ -75,7 +75,7 @@ FLASH_ATTENTION_LAUNCHES = frozenset({"Attention_v1", "Attention_v2", "Attention
 def collective_kind(family: str) -> str | None:
     """The tensor-parallel collective a Definition family is, any world: "all_reduce" | "all_gather" | None -- the registry's composites
     decide (AllReduce2_v1 / AllReduce_v2{WORLD,N} / AllGather2_v1 / AllGather_v1{WORLD,N}); imported on first use (only a rank Program asks)."""
-    from verity_vllm.registry.b1_tp2 import collective_kind as kind
+    from verity_vllm.program.registry.b1_tp2 import collective_kind as kind
     return kind(family)
 
 # ---------------------------------------------------------------------------------------------------------------------------------

@@ -88,7 +88,7 @@ instead of recomputing, and diffs it against the frozen expected:
     cd integrations/vllm && VERITY_REGRESSION=1 VERITY_REGRESSION_CANDIDATE=/path/to/v2/rows python -m pytest tests/regression -m regression -q
 
 Markers: `regression` (all of these), `pod` (T1/T2 and anything reading > 100 MB), `weak` (PASS-side / unexercised).  Green tonight =
-T0 byte-equal on every row where the inputs resolve + the #57 refusal reproduces + tests/ir green.
+T0 byte-equal on every row where the inputs resolve + the #57 refusal reproduces + tests/program green.
 """
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""(g) The verdict of record as typed checks (`verdict.json`, vllm-verdict/v1; `verity_capture.commit.verdict`) states the fixture's
+"""(g) The verdict of record as typed checks (`verdict.json`, vllm-verdict/v1; `verity_vllm.check.verdict`) states the fixture's
 class: `outcome == PASS` iff `class = "GREEN"`, `compat.commit_pass` == the v1 `commit/verdict.json.commit_pass`, and every check
 GROUP whose v1 facts the record carries is graded the way those facts say -- lifted here INDEPENDENTLY of verdict.py, straight from
 runs.jsonl / commit/verdict.json / manifest_verify.json (`program_source_identity` from `extra.identity_check.ok`, `checkpoint_binding`
@@ -104,6 +104,6 @@ def actual(row: resolver.Row) -> dict:
         return dict(_lift(json.load(open(cand)), row.cls), source="candidate")
     if row.has("verdict.json"):
         return dict(_lift(row.json("verdict.json"), row.cls), source="recorded")
-    from verity_capture.commit.verdict import from_record
+    from verity_vllm.check.verdict import from_record
     row_dir = row.path("commit/verdict.json", verify=False).parent.parent
     return dict(_lift(from_record(row_dir).to_dict(), row.cls), source="reconstructed")

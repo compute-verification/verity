@@ -8,9 +8,9 @@ import json
 
 import pytest
 
-from verity_capture.commit import manifest_format as RM
+from verity_vllm.query.manifest import format as RM
 from verity_vllm.acquire import plan as P
-from verity_vllm.acquire.correspondence import AnnotationCorrespondence, ArgSlot, ReturnSlot, runtime_tree_from_paths
+from verity_vllm.correspondence.reader_for_acquire import AnnotationCorrespondence, ArgSlot, ReturnSlot, runtime_tree_from_paths
 
 PD = hashlib.sha256(b"program").hexdigest()
 

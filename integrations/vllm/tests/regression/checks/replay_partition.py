@@ -1,7 +1,7 @@
 """(e') [T1] The sampled-replay PARTITION reproduces: `commit/sampled_replay_p<k>.json`'s population (every Program row classified: the VUs
 by family, the not-evaluable rows by name, the strata and their sizes, the window-lifetime split), its R17-1 `not_executed_by_rule` split,
 the seeded stratified draw (the per-stratum sample counts, the round-robin cap, the picks per (request, request-relative step)) and the
-per-request phase anchors -- recomputed with `verity_capture.commit.sampled_replay`'s own pure functions (`ProgramIndex`, `population`,
+per-request phase anchors -- recomputed with `verity_vllm.check.sampled_replay`'s own pure functions (`ProgramIndex`, `population`,
 `executed_prefix_of_record`, `phase_anchor`, `split_not_executed`, `sample`) over the row's request Programs under the v2 query's address
 rule + the facts the record states (seed, per-stratum count, cap, targets, ring depth, arrivals, the executed-prefix facts of record).
 STRONG: a row classified into another family / stratum, a moved phase boundary, a different draw -- each moves a count.
@@ -85,7 +85,7 @@ def recompute(sr: dict, programs: dict[str, dict], program_dirs: dict[str, str] 
     correspondence the manifest is built with).  A record that predates the v2 rule (no `addresses.rule`: every reference record) was
     addressed by the retired v1 rule; its partition is recomputed under v2 here (decision `retire-v1` where that moves a count).  Returns a
     `sampled_replay`-shaped document (`lift` reads it)."""
-    from verity_capture.commit import sampled_replay as SR
+    from verity_vllm.check import sampled_replay as SR
     smp, sk = sr.get("sample") or {}, sr.get("strata_keys") or {}
     seed, per_stratum = int(smp["seed"]), int(smp.get("per_stratum") or 2)
     max_evaluate = int(smp.get("max_evaluate") or 2000)

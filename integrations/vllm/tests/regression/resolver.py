@@ -40,7 +40,7 @@ from pathlib import Path
 from typing import Any
 
 HERE = Path(__file__).resolve().parent
-VLLM_ROOT = HERE.parents[1]                     # integrations/vllm
+VLLM_ROOT = HERE.parents[1]  # integrations/vllm
 FIXTURES = HERE / "fixtures.toml"
 EXPECTED_DIR = HERE / "expected"
 VERIFY_LIMIT = 64 * 1024 * 1024
