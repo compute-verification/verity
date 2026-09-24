@@ -299,10 +299,12 @@ class FP4ChainRunner:
     def prove_vus_many(self, batches: list[list[tuple]], coins_factory, depth: int = 2, min_l: int = 256):
         """``len(batches)`` sub-batches proved with up to ``depth`` in flight on their own CUDA streams
         (``pipeline.prove_many``, lane hp2-host): the host work of one sub-batch (the SHAKE-256 challenge squeeze, the
-        statement digest, transcript copies, launches) hides under the device work of the next.  ``coins_factory()`` is
+        statement digest, transcript copies, launches) hides under the device work of the next.  ``coins_factory(i)`` is
         called per sub-batch as it starts, in order (the honest verifier's step 0), so the transcripts equal the
-        sequential ones under the same coin / mask-key stream.  Returns ``[(coins, proof, pubs, lay)]`` in order and the
-        pass wall; each proof's ``timings`` is its share of the wall (``pipeline._rescale``)."""
+        sequential ones under the same coin / mask-key stream; a live verifier's source (``set_statement``, as
+        relchain.prove_vus_many) gets the sub-batch's statement before proving and its coin exchanges are non-blocking.
+        Returns ``[(coins, proof, pubs, lay)]`` in order and the pass wall; each proof's ``timings`` is its share of the
+        wall (``pipeline._rescale``)."""
         if not _STAGED:
             raise RuntimeError("this tree's protocol has no stage generator (pipeline.prove_many): sequential prove_vus only")
         from ..pipeline import prove_many
@@ -311,8 +313,12 @@ class FP4ChainRunner:
 
         def starter(i):
             def start(slot):
-                coins_of[i] = coins_factory()
-                return self._prove_stages(bundles[i], coins_of[i], check=False, mutate=None, slot=slot)
+                c = coins_of[i] = coins_factory(i)
+                if hasattr(c, "set_statement"):
+                    from ..live import set_statement
+                    bd = bundles[i]
+                    set_statement(c, self, (bd["a"], bd["b"], bd["y32"]), bd["lay"], self.cfg(bd["lay"].l), self.n_proofs)
+                return self._prove_stages(bundles[i], c, check=False, mutate=None, slot=slot)
             return start
 
         proofs, wall = prove_many([starter(i) for i in range(len(batches))], self.device, depth=depth)
@@ -690,18 +696,20 @@ def bench_vu_fp4(args) -> int:
     # --verifier tcp://host:port: the step-0 coins of every RECORDED rep come from a LIVE verifier on another machine
     # (live.py) and every prover message is sent to it as it is produced -- the protocol is unchanged (8c), only the coin
     # source is; the warm-up rep keeps local coins (it presents one sub-batch, not n_proofs).
+    # --pipeline N (the bench-vu flag lane hp2-host added for the registered relations): the sub-batches of a timed rep
+    # interleaved N-deep on their own streams (prove_vus_many); needs the staged protocol, else sequential (recorded).
+    pipeline_depth = int(getattr(args, "pipeline", 0) or 0) if _STAGED and args.device.startswith("cuda") else 0
     live = None
     if getattr(args, "verifier", None):
         from ..live import BenchLive
         live = BenchLive(args, R, n_proofs, total_vus, R.relation, interactive)
+        if pipeline_depth > 1:
+            live.window = pipeline_depth                 # the verifier commits N sub-batches ahead (N openings in flight)
     # rep 0 is the warm-up (untimed): 1 sub-batch by default (main's harness); --warmup-subs N proves N (a full rep at N =
     # n_proofs) so that the caching allocator / kernel caches are warm before the timed reps -- at l = 16384 a rep is only 7
     # sub-batches and rep 1 still runs ~15 % slower than rep 3 after a one-sub-batch warm-up.  Recorded in the result's note.
     warmup_subs = max(1, min(int(getattr(args, "warmup_subs", 1) or 1), n_proofs))
-    # --pipeline N (the bench-vu flag lane hp2-host added for the registered relations): the sub-batches of a timed rep
-    # interleaved N-deep on their own streams (prove_vus_many); needs the staged protocol, else sequential (recorded).
-    pipeline_depth = int(getattr(args, "pipeline", 0) or 0) if _STAGED and args.device.startswith("cuda") else 0
-    coins_factory = (lambda: protocol_mod.Coins.sample()) if interactive else (lambda: None)
+    coins_factory = (lambda i=None: protocol_mod.Coins.sample()) if interactive else (lambda i=None: None)
     for rep in range(args.reps + 1):
         agg: dict[str, float] = {}
         vsum = 0.0
@@ -711,10 +719,14 @@ def bench_vu_fp4(args) -> int:
         proved = []
         if live is not None:
             live.begin_rep(rep)
-        if pipeline_depth > 1 and rep > 0 and live is None:
-            # (with --verifier the sub-batches stay sequential: each one's coins come from the live verifier in order)
-            many, _wall = R.prove_vus_many([data[lo:hi] for lo, hi in subs], coins_factory, depth=pipeline_depth, min_l=l)
+        if pipeline_depth > 1 and rep > 0:
+            # with --verifier the factory hands out the LIVE verifier's coins in sub-batch order and the coin exchanges are
+            # non-blocking (lane live-pipeline, as relchain.bench_vu_rel); PROOF i goes out on the data channel after the pass
+            factory = live.pipeline_factory(coins_factory) if live is not None else coins_factory
+            many, _wall = R.prove_vus_many([data[lo:hi] for lo, hi in subs], factory, depth=pipeline_depth, min_l=l)
             for si, ((lo, hi), (V, proof, pubs, lay_i)) in enumerate(zip(subs, many)):
+                if live is not None:
+                    V = live.proved(si, proof, V)            # PROOF si on the data channel (async); coins -> plain Coins
                 for k_, v_ in proof.timings.items():
                     agg[k_] = agg.get(k_, 0.0) + v_
                 proved.append((si, lo, hi, V, proof, pubs, lay_i))
