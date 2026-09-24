@@ -24,12 +24,18 @@
 //! A verifier writes the statement bytes from its own identity string and the committed `y` words
 //! ([`statement_bytes`]) and accepts `sha256(statement bytes) || 1` under the pinned verifying key only.
 //!
-//! **Input** (`SP1Stdin` buffers): a header `"VYRB" || u32le(2) || u32le(format) || u32le(K) || u32le(B) ||
-//! u32le(vus_per_read) || id || y[0..B]` ([`encode_header`]), then `ceil(B / vus_per_read)` chunks
-//! ([`encode_chunk`]) of `vus_per_read` VUs (the last may be shorter), each VU its x row then its W row,
-//! [`Format::row_bytes`] each.  Every format's row is a whole number of u64 words and SP1 places every `read_vec`
-//! buffer 8-byte aligned, so the guest reads a chunk as little-endian u64 words and [`check_words`] hands each VU
-//! to [`check_one`], the one place a format is dispatched.
+//! **Input** (`SP1Stdin` buffers), in one of two layouts that carry the same private rows:
+//!
+//! - version 2 ([`encode_header`]): a header `"VYRB" || u32le(2) || u32le(format) || u32le(K) || u32le(B) ||
+//!   u32le(vus_per_read) || id || y[0..B]`, then `ceil(B / vus_per_read)` chunks ([`encode_chunk`]) of
+//!   `vus_per_read` VUs (the last may be shorter), each VU its x row then its W row, [`Format::row_bytes`] each;
+//! - version 3, indexed ([`encode_header_indexed`]): the same header with `u32le(3)` and `u32le(rows)` in place of
+//!   `vus_per_read`, then one buffer of `B` u64 words `x_row | W_row << 32`, then one buffer of `rows` distinct rows
+//!   ([`index_rows`]).  A row several VUs share is read and held once, which is what the prover pays for.
+//!
+//! Every format's row is a whole number of u64 words and SP1 places every `read_vec` buffer 8-byte aligned, so the
+//! guest reads its buffers as little-endian u64 words and [`check_words`] / [`check_indexed`] hand each VU to
+//! [`check_pair`], the one place a format is dispatched.
 //!
 //! **Kernel** ([`Format::Bf16Ampere`]).  [`check_vu`] is the `tc` chain specialised to this shape: SWAR decoding of
 //! four words per u64, two 8-bit significand products per multiply, biased integer exponents, and no packing between
@@ -43,8 +49,10 @@ use sha2::{Digest, Sha256};
 pub const TAG: &[u8] = b"verity/sp1/relation-bare/v2";
 /// The header magic.
 pub const MAGIC: [u8; 4] = *b"VYRB";
-/// The input format version.
+/// The input format version of the chunked layout.
 pub const VERSION: u32 = 2;
+/// The input format version of the indexed layout (a table of distinct rows and a row pair per VU).
+pub const VERSION_INDEXED: u32 = 3;
 /// Elements per row: the frozen tiers' K.
 pub const K: usize = 1536;
 /// u64 words per BF16 row (four words each).
@@ -59,7 +67,7 @@ pub const VERDICT_ACCEPT: u8 = 1;
 pub const VERDICT_REJECT: u8 = 0;
 
 /// The numerical format of a batch: which chain a VU's rows run through.  The id is part of the statement.  A
-/// format whose arm in [`check_one`] is not written yet rejects every VU.
+/// format whose arm in [`check_pair`] is not written yet rejects every VU.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum Format {
@@ -126,32 +134,34 @@ impl Format {
 }
 
 /// THE format dispatch: whether one VU gives the claimed word `y` (its `y_bytes` little-endian bytes,
-/// zero-extended).  The VU is its x row then its W row, [`Format::row_bytes`] each, given twice: as bytes and as
-/// the same bytes read as little-endian u64 words (the guest holds both views of its input buffer).  A format is a
-/// [`Format`] variant plus one arm here.
-pub fn check_one(format: Format, vu_bytes: &[u8], vu_words: &[u64], y: u32) -> bool {
+/// zero-extended).  The VU's x row and W row, [`Format::row_bytes`] each, are given twice: as bytes (`x`, `w`) and
+/// as the same bytes read as little-endian u64 words (`xw`, `ww`; the guest holds both views of its input buffers).
+/// A format is a [`Format`] variant plus one arm here.
+pub fn check_pair(format: Format, x: &[u8], w: &[u8], xw: &[u64], ww: &[u64], y: u32) -> bool {
     match format {
-        Format::Bf16Ampere => {
-            let (x, w) = vu_words.split_at(ROW_WORDS);
-            y <= 0xFFFF && check_vu(x, w) == Some(y as u16)
-        }
-        Format::Bf16Hopper => {
-            let (x, w) = vu_words.split_at(crate::tc_hopper_bf16::ROW_WORDS);
-            y <= 0xFFFF && crate::tc_hopper_bf16::vu_words(x, w) == Some(y as u16)
-        }
-        Format::Fp8Hopper => {
-            let ((x, w), (xw, ww)) = (vu_bytes.split_at(format.row_bytes()), vu_words.split_at(crate::tc_fp8::ROW_WORDS));
-            crate::tc_fp8::vu_hopper_views(x, w, xw, ww) == Some(y)
-        }
-        Format::Fp8Ada => {
-            let ((x, w), (xw, ww)) = (vu_bytes.split_at(format.row_bytes()), vu_words.split_at(crate::tc_fp8::ROW_WORDS));
-            crate::tc_fp8::vu_ada_views(x, w, xw, ww) == Some(y)
-        }
-        Format::Fp4Nvf4 => {
-            let ((x, w), (xw, ww)) = (vu_bytes.split_at(format.row_bytes()), vu_words.split_at(crate::nvfp4::ROW_WORDS));
-            crate::nvfp4::vu_views(x, w, xw, ww) == Some(y)
-        }
+        Format::Bf16Ampere => y <= 0xFFFF && check_vu(xw, ww) == Some(y as u16),
+        Format::Bf16Hopper => y <= 0xFFFF && crate::tc_hopper_bf16::vu_words(xw, ww) == Some(y as u16),
+        Format::Fp8Hopper => crate::tc_fp8::vu_hopper_views(x, w, xw, ww) == Some(y),
+        Format::Fp8Ada => crate::tc_fp8::vu_ada_views(x, w, xw, ww) == Some(y),
+        Format::Fp4Nvf4 => crate::nvfp4::vu_views(x, w, xw, ww) == Some(y),
     }
+}
+
+/// [`check_pair`] on one VU laid out as in a chunk: its x row then its W row, as bytes and as u64 words.
+pub fn check_one(format: Format, vu_bytes: &[u8], vu_words: &[u64], y: u32) -> bool {
+    let (rb, rw) = (format.row_bytes(), format.row_bytes() / 8);
+    if vu_bytes.len() != 2 * rb || vu_words.len() != 2 * rw {
+        return false;
+    }
+    let ((x, w), (xw, ww)) = (vu_bytes.split_at(rb), vu_words.split_at(rw));
+    check_pair(format, x, w, xw, ww, y)
+}
+
+/// A claimed word as [`check_pair`] takes it: `y_bytes` little-endian bytes, zero-extended.
+fn claimed(y: &[u8]) -> u32 {
+    let mut word = [0u8; 4];
+    word[..y.len()].copy_from_slice(y);
+    u32::from_le_bytes(word)
 }
 
 /// The identity string of a contiguous id range `[lo, hi)` of a tier.
@@ -211,28 +221,42 @@ pub fn public_values(digest: &[u8; 32], accept: bool) -> [u8; PUBLIC_VALUES_LEN]
     out
 }
 
-/// The header buffer (`y_le` from [`encode_y`]).
-pub fn encode_header(format: Format, k: u32, vus_per_read: u32, id: &[u8; 32], y_le: &[u8]) -> Vec<u8> {
+fn encode_header_version(version: u32, format: Format, k: u32, param: u32, id: &[u8; 32], y_le: &[u8]) -> Vec<u8> {
     let b = (y_le.len() / format.y_bytes()) as u32;
     let mut out = Vec::with_capacity(HEADER_FIXED_BYTES + y_le.len());
     out.extend_from_slice(&MAGIC);
-    out.extend_from_slice(&VERSION.to_le_bytes());
+    out.extend_from_slice(&version.to_le_bytes());
     out.extend_from_slice(&format.id().to_le_bytes());
     out.extend_from_slice(&k.to_le_bytes());
     out.extend_from_slice(&b.to_le_bytes());
-    out.extend_from_slice(&vus_per_read.to_le_bytes());
+    out.extend_from_slice(&param.to_le_bytes());
     out.extend_from_slice(id);
     out.extend_from_slice(y_le);
     out
 }
 
+/// The header buffer of the chunked layout (`y_le` from [`encode_y`]).
+pub fn encode_header(format: Format, k: u32, vus_per_read: u32, id: &[u8; 32], y_le: &[u8]) -> Vec<u8> {
+    encode_header_version(VERSION, format, k, vus_per_read, id, y_le)
+}
+
+/// The header buffer of the indexed layout, for a table of `rows` distinct rows.
+pub fn encode_header_indexed(format: Format, k: u32, rows: u32, id: &[u8; 32], y_le: &[u8]) -> Vec<u8> {
+    encode_header_version(VERSION_INDEXED, format, k, rows, id, y_le)
+}
+
 /// A parsed header; `y_le` borrows the claimed words.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Header<'a> {
+    /// [`VERSION`] (chunked) or [`VERSION_INDEXED`].
+    pub version: u32,
     pub format: Format,
     pub k: u32,
     pub b: u32,
+    /// VUs per chunk (chunked layout; 0 in the indexed one).
     pub vus_per_read: u32,
+    /// Distinct rows in the table (indexed layout; 0 in the chunked one).
+    pub rows: u32,
     pub id: [u8; 32],
     pub y_le: &'a [u8],
 }
@@ -243,17 +267,20 @@ pub fn parse_header(bytes: &[u8]) -> Option<Header<'_>> {
         return None;
     }
     let u32_at = |at: usize| u32::from_le_bytes([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]]);
-    if u32_at(4) != VERSION {
-        return None;
-    }
+    let version = u32_at(4);
     let format = Format::from_id(u32_at(8))?;
-    let (k, b, vus_per_read) = (u32_at(12), u32_at(16), u32_at(20));
+    let (k, b, param) = (u32_at(12), u32_at(16), u32_at(20));
+    let (vus_per_read, rows) = match version {
+        VERSION => (param, 0),
+        VERSION_INDEXED => (0, param),
+        _ => return None,
+    };
     if (bytes.len() - HEADER_FIXED_BYTES) as u64 != format.y_bytes() as u64 * b as u64 {
         return None;
     }
     let mut id = [0u8; 32];
     id.copy_from_slice(&bytes[24..HEADER_FIXED_BYTES]);
-    Some(Header { format, k, b, vus_per_read, id, y_le: &bytes[HEADER_FIXED_BYTES..] })
+    Some(Header { version, format, k, b, vus_per_read, rows, id, y_le: &bytes[HEADER_FIXED_BYTES..] })
 }
 
 /// The chunk buffer of VUs `lo..hi` of VU-major operand blocks (`row_bytes` per row).
@@ -275,30 +302,86 @@ pub fn words_of(bytes: &[u8]) -> Vec<u64> {
 /// Whether every VU of a chunk gives its claimed word (`y_le`, [`Format::y_bytes`] per VU).  The chunk is given as
 /// its bytes and as the same bytes read as little-endian u64 words ([`Format::vu_words`] per VU).
 pub fn check_words(format: Format, bytes: &[u8], words: &[u64], y_le: &[u8]) -> bool {
-    let (per, yb) = (format.vu_words(), format.y_bytes());
+    let (rb, yb) = (format.row_bytes(), format.y_bytes());
+    let (rw, per) = (rb / 8, format.vu_words());
     if y_le.len() % yb != 0 || words.len() != y_le.len() / yb * per || bytes.len() != 8 * words.len() {
         return false;
     }
     for ((vu_bytes, vu_words), y) in bytes.chunks_exact(8 * per).zip(words.chunks_exact(per)).zip(y_le.chunks_exact(yb)) {
-        let mut word = [0u8; 4];
-        word[..yb].copy_from_slice(y);
-        if !check_one(format, vu_bytes, vu_words, u32::from_le_bytes(word)) {
+        let ((x, w), (xw, ww)) = (vu_bytes.split_at(rb), vu_words.split_at(rw));
+        if !check_pair(format, x, w, xw, ww, claimed(y)) {
             return false;
         }
     }
     true
 }
 
-/// What the guest commits for a header and its chunks (the host's expectation and the tests' reference).
-pub fn decide(header: &[u8], chunks: &[Vec<u8>]) -> [u8; PUBLIC_VALUES_LEN] {
+/// The indexed layout of VUs `lo..hi` of VU-major operand blocks (`row_bytes` per row): the index buffer (one u64
+/// `x_row | W_row << 32` per VU), the table of distinct rows in first-use order (a VU's x row before its W row), and
+/// the number of rows.
+pub fn index_rows(format: Format, x: &[u8], w: &[u8], lo: usize, hi: usize) -> (Vec<u8>, Vec<u8>, u32) {
+    let r = format.row_bytes();
+    let mut seen: std::collections::BTreeMap<&[u8], u32> = std::collections::BTreeMap::new();
+    let (mut index, mut table) = (Vec::with_capacity(8 * (hi - lo)), Vec::new());
+    for i in lo..hi {
+        let mut pair = 0u64;
+        for (shift, row) in [(0, &x[r * i..r * (i + 1)]), (32, &w[r * i..r * (i + 1)])] {
+            let next = seen.len() as u32;
+            let at = *seen.entry(row).or_insert(next);
+            if at == next {
+                table.extend_from_slice(row);
+            }
+            pair |= (at as u64) << shift;
+        }
+        index.extend_from_slice(&pair.to_le_bytes());
+    }
+    let rows = seen.len() as u32;
+    (index, table, rows)
+}
+
+/// Whether every VU of the indexed layout gives its claimed word: VU `i`'s rows are rows `index[i] & 0xFFFF_FFFF`
+/// (x) and `index[i] >> 32` (W) of the table, given as bytes and as u64 words.  An index outside the table rejects.
+pub fn check_indexed(format: Format, table: &[u8], table_words: &[u64], index: &[u64], y_le: &[u8]) -> bool {
+    let (rb, yb) = (format.row_bytes(), format.y_bytes());
+    let rw = rb / 8;
+    if y_le.len() % yb != 0 || index.len() != y_le.len() / yb || table.len() != 8 * table_words.len() || table_words.len() % rw != 0 {
+        return false;
+    }
+    let rows = (table_words.len() / rw) as u64;
+    for (&pair, y) in index.iter().zip(y_le.chunks_exact(yb)) {
+        let (a, b) = (pair & 0xFFFF_FFFF, pair >> 32);
+        if a >= rows || b >= rows {
+            return false;
+        }
+        let (a, b) = (a as usize, b as usize);
+        let (x, w) = (&table[rb * a..rb * (a + 1)], &table[rb * b..rb * (b + 1)]);
+        let (xw, ww) = (&table_words[rw * a..rw * (a + 1)], &table_words[rw * b..rw * (b + 1)]);
+        if !check_pair(format, x, w, xw, ww, claimed(y)) {
+            return false;
+        }
+    }
+    true
+}
+
+/// What the guest commits for a header and the buffers after it -- the chunks, or the index and the table -- (the
+/// host's expectation and the tests' reference).
+pub fn decide(header: &[u8], buffers: &[Vec<u8>]) -> [u8; PUBLIC_VALUES_LEN] {
     let Some(h) = parse_header(header) else {
         return public_values(&[0u8; 32], false);
     };
     let digest = statement_digest_le(h.format, &h.id, h.k, h.b, h.y_le);
+    if h.version == VERSION_INDEXED {
+        let ok = h.k as usize == K
+            && buffers.len() == 2
+            && buffers.iter().all(|buffer| buffer.len() % 8 == 0)
+            && buffers[1].len() == h.rows as usize * h.format.row_bytes()
+            && check_indexed(h.format, &buffers[1], &words_of(&buffers[1]), &words_of(&buffers[0]), h.y_le);
+        return public_values(&digest, ok);
+    }
     let (b, per, yb) = (h.b as usize, h.vus_per_read as usize, h.format.y_bytes());
-    let mut ok = h.k as usize == K && per > 0 && chunks.len() == b.div_ceil(per.max(1));
+    let mut ok = h.k as usize == K && per > 0 && buffers.len() == b.div_ceil(per.max(1));
     let mut i = 0;
-    for chunk in chunks {
+    for chunk in buffers {
         if !ok {
             break;
         }
@@ -311,163 +394,207 @@ pub fn decide(header: &[u8], chunks: &[Vec<u8>]) -> [u8; PUBLIC_VALUES_LEN] {
 
 // --- the kernel ------------------------------------------------------------------------------------------------------
 
-const LFF: u64 = 0x00FF_00FF_00FF_00FF;
 const L7F: u64 = 0x007F_007F_007F_007F;
 const L80: u64 = 0x0080_0080_0080_0080;
-const L01: u64 = 0x0001_0001_0001_0001;
-/// Bit 8 of a lane of `exponent field + 1`: the field was `0xFF` (a non-finite word).
-const L100: u64 = 0x0100_0100_0100_0100;
+/// Every lane's exponent field, in place.
+const L7F80: u64 = 0x7F80_7F80_7F80_7F80;
+/// Bit 15 of every lane: of `field << 7 + 0x80`, set iff the field is `0xFF` (a non-finite word); of
+/// `field << 7 + 0x7F80`, set iff the field is non-zero (the implicit bit).
+const L8000: u64 = 0x8000_8000_8000_8000;
 /// Lanes 0 and 2 of a SWAR word, one byte each: two products per 64x64 -> 128 multiply.
 const M02: u64 = 0x0000_00FF_0000_00FF;
+/// [`M02`] at bit 10, for the multiplier: the products come out as `p << 10`, aligned for the adder.
+const M02S: u64 = M02 << 10;
+/// `p << 10` of a product of two 8-bit significands.
+const M26: u64 = (1 << 26) - 1;
 /// Exponents are biased by 252: a product's `max(ea, 1) + max(eb, 1) - 2` is its true exponent + 252.
 const BIAS: i64 = 252;
 /// The adder's exponent floor `-132`, biased.
 const FLOOR: u64 = (-132 + BIAS) as u64;
+/// The smallest normal exponent `-126`, biased.
+const SUBNORMAL: u64 = (-126 + BIAS) as u64;
+/// `tc_dot`'s saturation test `exp > 127`, biased.
+const SATURATED: u64 = (127 + BIAS) as u64;
 
-/// A group's result: `(-1)^neg * mag * 2^(exp - 23)`, `mag` on the 24-bit grid (`tc::Term`); `mag == 0` is `+0` with
-/// `exp == 0`, so `exp > 127` is exactly `tc_dot`'s saturation test.
+/// A group's result: `(-1)^neg * mag * 2^(e - BIAS - 23)`, `mag` on the 24-bit grid (`tc::Term`), `e` biased, `neg`
+/// 0 or 1; `mag == 0` is `+0` with `e == 0`, so `e > SATURATED` is exactly `tc_dot`'s saturation test.
 #[derive(Clone, Copy)]
 struct Acc {
-    neg: bool,
-    exp: i64,
+    neg: u64,
+    e: u64,
     mag: u64,
 }
 
-const ZERO: Acc = Acc { neg: false, exp: 0, mag: 0 };
+const ZERO: Acc = Acc { neg: 0, e: 0, mag: 0 };
 
-/// Four products of a lane quadruple: significand products, biased exponents, and the word whose bit `15 + 16 j` is
-/// product `j`'s sign.  `bad` collects bit 8 of `field + 1` for every operand (set iff the field is `0xFF`).
+/// `BIT_LEN[i]` is the bit length of `i`.
+static BIT_LEN: [u8; 256] = {
+    let mut t = [0u8; 256];
+    let mut i = 1;
+    while i < 256 {
+        t[i] = t[i >> 1] + 1;
+        i += 1;
+    }
+    t
+};
+
+/// `SHIFT[i]` for `1 <= i = m >> 23 < 128`: `bit_length(m) - 24`, the truncating shift of `m` to 24 bits.
+static SHIFT: [u8; 128] = {
+    let mut t = [0u8; 128];
+    let mut i = 1;
+    while i < 128 {
+        t[i] = BIT_LEN[i] - 1;
+        i += 1;
+    }
+    t
+};
+
+/// Whether all sixteen words of a group are finite: bit 15 of `field << 7 + 0x80` is set iff the field is `0xFF`.
+/// Checked before the group's arithmetic, so the test is a branch there rather than an accumulator the compiler
+/// carries (and spills) to the end of the loop.
 #[inline(always)]
-fn quad(x: u64, w: u64, bad: &mut u64) -> ([u64; 4], [u64; 4], u64) {
-    let ex = (x >> 7) & LFF;
-    let ew = (w >> 7) & LFF;
-    *bad |= (ex + L01) | (ew + L01);
+fn finite(x0: u64, x1: u64, w0: u64, w1: u64) -> bool {
+    (((x0 & L7F80) + L80) | ((x1 & L7F80) + L80) | ((w0 & L7F80) + L80) | ((w1 & L7F80) + L80)) & L8000 == 0
+}
+
+/// Four products of a lane quadruple: significand products `<< 10`, the SWAR word of their biased exponents `<< 7`
+/// (lane `j`, bits `7 ..= 15`, is product `j`'s), and the word whose bit `15 + 16 j` is product `j`'s sign.
+#[inline(always)]
+fn quad(x: u64, w: u64) -> ([u64; 4], u64, u64) {
+    let ex = x & L7F80;
+    let ew = w & L7F80;
     // 0x80 in the lanes whose exponent field is non-zero: the implicit bit
-    let ix = ((ex + LFF) >> 1) & L80;
-    let iw = ((ew + LFF) >> 1) & L80;
-    let sx = (x & L7F) | ix;
-    let sw = (w & L7F) | iw;
-    // max(e, 1) - 1 per operand, summed: at most 508 per lane, so no lane carries
-    let g = (ex - (ix >> 7)) + (ew - (iw >> 7));
-    let x02 = sx & M02;
-    let x13 = (sx >> 16) & M02;
-    let w02 = sw & M02;
-    let w13 = (sw >> 16) & M02;
-    // low 64 bits: p0 + (cross terms << 32), below 2^49, so the high 64 bits are exactly p2
-    let t02 = x02 as u128 * w02 as u128;
-    let t13 = x13 as u128 * w13 as u128;
-    let p = [t02 as u64 & 0xFFFF, t13 as u64 & 0xFFFF, (t02 >> 64) as u64, (t13 >> 64) as u64];
-    let e = [g & 0xFFFF, (g >> 16) & 0xFFFF, (g >> 32) & 0xFFFF, g >> 48];
-    (p, e, x ^ w)
+    let fx = ((ex + L7F80) & L8000) >> 8;
+    let fw = ((ew + L7F80) & L8000) >> 8;
+    let sx = (x & L7F) | fx;
+    let sw = (w & L7F) | fw;
+    // (max(e, 1) - 1) << 7 per operand, summed: at most 508 << 7 per lane, so no lane carries or borrows
+    let g = ex + ew - (fx + fw);
+    // low 64 bits: (p0 << 10) + (cross terms << 42), below 2^59, so the high 64 bits are exactly p2 << 10
+    let t02 = (sx & M02) as u128 * ((sw << 10) & M02S) as u128;
+    let t13 = ((sx >> 16) & M02) as u128 * ((sw >> 6) & M02S) as u128;
+    ([t02 as u64 & M26, t13 as u64 & M26, (t02 >> 64) as u64, (t13 >> 64) as u64], g, x ^ w)
+}
+
+/// The four lanes of a [`quad`] exponent word (each below 2^9).
+#[inline(always)]
+fn lanes(g: u64) -> [u64; 4] {
+    [(g >> 7) & 0x1FF, (g >> 23) & 0x1FF, (g >> 39) & 0x1FF, g >> 55]
+}
+
+/// Product `j`'s sign in a [`quad`] sign word.
+#[inline(always)]
+fn negative(s: u64, j: usize) -> bool {
+    ((s << (48 - 16 * j)) as i64) < 0
+}
+
+/// The running maximum over a product: raised only by a non-zero product.  The update is rare once the accumulator
+/// dominates, and `black_box` keeps it a branch (a select costs two branches and moves on every product).
+#[inline(always)]
+fn raise(mx: u64, e: u64, p: u64) -> u64 {
+    if e > mx && p != 0 {
+        core::hint::black_box(e)
+    } else {
+        mx
+    }
+}
+
+/// Adds a product truncated to the group's maximum exponent `mx`: `p << 10 >> d` is zero from d = 26 (and a zero
+/// product adds nothing at any d, so the wrapped `d` of a zero product above the maximum is harmless).
+#[inline(always)]
+fn add_term(total: i64, p: u64, e: u64, neg: bool, mx: u64) -> i64 {
+    let d = mx.wrapping_sub(e);
+    if d < 26 {
+        let v = (p >> d) as i64;
+        if neg {
+            total - v
+        } else {
+            total + v
+        }
+    } else {
+        total
+    }
 }
 
 /// `tc::group_sum` of the accumulator and eight products (width 25, floor -132), on the terms as they come out of
 /// [`quad`]: the largest exponent of a non-zero term, each term's `magnitude << 1` truncated to it, the exact sum,
 /// truncating normalisation to 25 bits, denormalisation below -126, and the truncation back to 24 bits.
 #[inline(always)]
-fn group(acc: Acc, x0: u64, x1: u64, w0: u64, w1: u64, bad: &mut u64) -> Acc {
-    let (pa, ea, sa) = quad(x0, w0, bad);
-    let (pb, eb, sb) = quad(x1, w1, bad);
-    let acc_e = (acc.exp + BIAS) as u64;
+fn group(acc: Acc, x0: u64, x1: u64, w0: u64, w1: u64) -> Acc {
+    let (pa, ga, sa) = quad(x0, w0);
+    let (pb, gb, sb) = quad(x1, w1);
+    let (ea, eb) = (lanes(ga), lanes(gb));
     // a non-zero accumulator has exponent >= -126, above the floor
-    let mut mx = if acc.mag != 0 { acc_e } else { FLOOR };
+    let mut mx = if acc.mag != 0 { acc.e } else { FLOOR };
     for j in 0..4 {
-        if pa[j] != 0 && ea[j] > mx {
-            mx = ea[j];
-        }
+        mx = raise(mx, ea[j], pa[j]);
     }
     for j in 0..4 {
-        if pb[j] != 0 && eb[j] > mx {
-            mx = eb[j];
-        }
+        mx = raise(mx, eb[j], pb[j]);
     }
     let mut total: i64 = 0;
     if acc.mag != 0 {
-        let d = mx - acc_e;
+        let d = mx - acc.e;
         if d < 26 {
-            let v = ((acc.mag << 1) >> d) as i64;
-            total = if acc.neg { -v } else { v };
-        }
-    }
-    // products are below 2^16, so `p << 10 >> d` is zero from d = 26; a zero product whose exponent exceeds the
-    // maximum wraps `d` past 26 and adds nothing, as `group_sum` skips it
-    for j in 0..4 {
-        let d = mx.wrapping_sub(ea[j]);
-        if d < 26 {
-            let v = ((pa[j] << 10) >> d) as i64;
-            if (sa >> (15 + 16 * j)) & 1 != 0 {
-                total -= v;
-            } else {
-                total += v;
-            }
+            let v = ((acc.mag + acc.mag) >> d) as i64;
+            total = if acc.neg != 0 { -v } else { v };
         }
     }
     for j in 0..4 {
-        let d = mx.wrapping_sub(eb[j]);
-        if d < 26 {
-            let v = ((pb[j] << 10) >> d) as i64;
-            if (sb >> (15 + 16 * j)) & 1 != 0 {
-                total -= v;
-            } else {
-                total += v;
-            }
-        }
+        total = add_term(total, pa[j], ea[j], negative(sa, j), mx);
     }
-    normalize(total, mx as i64 - BIAS)
+    for j in 0..4 {
+        total = add_term(total, pb[j], eb[j], negative(sb, j), mx);
+    }
+    normalize(total, mx)
 }
 
-/// The number of significant bits of `1 <= m < 2^32`.
+/// `group_sum`'s tail on the biased maximum exponent `mx`: `|total| < 9 * 2^26`, so the bit length is at most 30.  The
+/// usual sum is at least 2^23 and its exponent normal: then the truncation to 24 bits is one right shift by
+/// `bit_length - 24` and the exponent is `mx + bit_length - 25`.  Everything else is [`normalize_slow`]'s.
 #[inline(always)]
-fn bit_length(m: u64) -> i64 {
-    let (mut v, mut n) = (m, 0i64);
+fn normalize(total: i64, mx: u64) -> Acc {
+    let m = total.unsigned_abs();
+    let top = m >> 23;
+    if top != 0 {
+        let shift = SHIFT[top as usize & 127] as u64;
+        let e = mx + shift - 1;
+        if e >= SUBNORMAL {
+            return Acc { neg: (total < 0) as u64, e, mag: m >> shift };
+        }
+    }
+    let (e, mag) = normalize_slow(total, mx);
+    Acc { neg: (total < 0 && mag != 0) as u64, e, mag }
+}
+
+/// [`normalize`] in general, as `(e, mag)` (two registers, so the accumulator never goes through memory): normalising
+/// to 25 bits, denormalising below -126 and truncating to 24 bits are three truncating shifts of one non-negative
+/// integer, so they are one shift by their sum (a left shift where the sum is negative, exact).
+#[cold]
+#[inline(never)]
+fn normalize_slow(total: i64, mx: u64) -> (u64, u64) {
+    if total == 0 {
+        return (0, 0);
+    }
+    let m = total.unsigned_abs();
+    let (mut v, mut bits) = (m, 0u64);
     if v >> 16 != 0 {
         v >>= 16;
-        n += 16;
+        bits += 16;
     }
     if v >> 8 != 0 {
         v >>= 8;
-        n += 8;
+        bits += 8;
     }
-    if v >> 4 != 0 {
-        v >>= 4;
-        n += 4;
+    let bits = bits + BIT_LEN[v as usize & 255] as u64;
+    // mx >= FLOOR = 120, so this does not wrap
+    let e = mx + bits - 25;
+    let (e, shift) = if e >= SUBNORMAL { (e, bits as i64 - 24) } else { (SUBNORMAL, bits as i64 - 24 + (SUBNORMAL - e) as i64) };
+    let mag = if shift >= 0 { m >> shift } else { m << -shift };
+    if mag == 0 {
+        return (0, 0);
     }
-    if v >> 2 != 0 {
-        v >>= 2;
-        n += 2;
-    }
-    if v >> 1 != 0 {
-        v >>= 1;
-        n += 1;
-    }
-    n + v as i64
-}
-
-/// `group_sum`'s tail: `|total| < 9 * 2^26`, so the bit length is at most 30; `max_exp >= -132`, so the
-/// denormalising shift is at most 30.
-#[inline(always)]
-fn normalize(total: i64, max_exp: i64) -> Acc {
-    if total == 0 {
-        return ZERO;
-    }
-    let neg = total < 0;
-    let mut m = total.unsigned_abs();
-    let bits = bit_length(m);
-    let mut exp = max_exp + bits - 25;
-    if bits > 25 {
-        m >>= bits - 25;
-    } else {
-        m <<= 25 - bits;
-    }
-    if exp < -126 {
-        m >>= -126 - exp;
-        exp = -126;
-    }
-    m >>= 1;
-    if m == 0 {
-        return ZERO;
-    }
-    Acc { neg, exp, mag: m }
+    (e, mag)
 }
 
 /// `f32_to_bf16(pack_fp32(acc))` for a finite result.
@@ -475,16 +602,16 @@ fn to_bf16(acc: Acc) -> u16 {
     if acc.mag == 0 {
         return 0;
     }
-    let mut field = acc.exp + 127;
+    let mut field = acc.e as i64 - BIAS + 127;
     if acc.mag & (1 << 23) == 0 {
         field -= 1;
     }
-    let bits = ((acc.neg as u64) << 31) | ((field as u64) << 23) | (acc.mag & 0x7F_FFFF);
+    let bits = (acc.neg << 31) | ((field as u64) << 23) | (acc.mag & 0x7F_FFFF);
     (((bits + 0x7FFF + ((bits >> 16) & 1)) >> 16) & 0xFFFF) as u16
 }
 
 /// The BF16 infinity of a sign (the cast of the FP32 infinity a saturating last step returns).
-fn infinity(neg: bool) -> u16 {
+fn infinity(neg: u64) -> u16 {
     0x7F80 | ((neg as u16) << 15)
 }
 
@@ -495,33 +622,40 @@ fn infinity(neg: bool) -> u16 {
 pub fn check_vu(x: &[u64], w: &[u64]) -> Option<u16> {
     let x: &[u64; ROW_WORDS] = x.try_into().ok()?;
     let w: &[u64; ROW_WORDS] = w.try_into().ok()?;
-    let mut bad = 0u64;
     let mut acc = ZERO;
+    // every outcome before the last step is a rejection, so a non-finite word and a saturation may reject in either
+    // order; in the last step the first group's words are examined before its saturation, the second group's only
+    // after the first did not saturate
     for step in 0..K / 16 - 1 {
         let i = 4 * step;
-        acc = group(acc, x[i], x[i + 1], w[i], w[i + 1], &mut bad);
-        if acc.exp > 127 {
+        if !finite(x[i], x[i + 1], w[i], w[i + 1]) {
             return None;
         }
-        acc = group(acc, x[i + 2], x[i + 3], w[i + 2], w[i + 3], &mut bad);
-        if acc.exp > 127 {
+        acc = group(acc, x[i], x[i + 1], w[i], w[i + 1]);
+        if acc.e > SATURATED {
+            return None;
+        }
+        if !finite(x[i + 2], x[i + 3], w[i + 2], w[i + 3]) {
+            return None;
+        }
+        acc = group(acc, x[i + 2], x[i + 3], w[i + 2], w[i + 3]);
+        if acc.e > SATURATED {
             return None;
         }
     }
     let i = ROW_WORDS - 4;
-    acc = group(acc, x[i], x[i + 1], w[i], w[i + 1], &mut bad);
-    if bad & L100 != 0 {
+    if !finite(x[i], x[i + 1], w[i], w[i + 1]) {
         return None;
     }
-    if acc.exp > 127 {
+    acc = group(acc, x[i], x[i + 1], w[i], w[i + 1]);
+    if acc.e > SATURATED {
         return Some(infinity(acc.neg));
     }
-    let mut bad = 0u64;
-    acc = group(acc, x[i + 2], x[i + 3], w[i + 2], w[i + 3], &mut bad);
-    if bad & L100 != 0 {
+    if !finite(x[i + 2], x[i + 3], w[i + 2], w[i + 3]) {
         return None;
     }
-    if acc.exp > 127 {
+    acc = group(acc, x[i + 2], x[i + 3], w[i + 2], w[i + 3]);
+    if acc.e > SATURATED {
         return Some(infinity(acc.neg));
     }
     Some(to_bf16(acc))
@@ -629,9 +763,15 @@ mod tests {
             let stmt = statement_bytes(format, &id, K as u32, &yl);
             assert_eq!(&stmt[..TAG.len()], TAG);
             assert_eq!(statement_digest_le(format, &id, K as u32, 70, h.y_le), crate::frame::sha256(&stmt));
+            let indexed = encode_header_indexed(format, K as u32, 9, &id, &yl);
+            let hi = parse_header(&indexed).unwrap();
+            assert_eq!((hi.version, hi.vus_per_read, hi.rows, hi.y_le), (VERSION_INDEXED, 0, 9, &yl[..]));
+            assert_eq!(h.version, VERSION);
+            // the statement does not depend on the layout
+            assert_eq!(statement_digest_le(format, &hi.id, hi.k, hi.b, hi.y_le), statement_digest_le(format, &h.id, h.k, h.b, h.y_le));
             // malformed headers
             assert!(parse_header(&header[..header.len() - 1]).is_none());
-            for (at, v) in [(0, b'X'), (4, 1), (8, 0), (8, 6)] {
+            for (at, v) in [(0, b'X'), (4, 1), (4, 4), (8, 0), (8, 6)] {
                 let mut bad = header.clone();
                 bad[at] = v;
                 assert!(parse_header(&bad).is_none(), "byte {at} = {v}");
@@ -654,9 +794,14 @@ mod tests {
     fn an_all_zero_vu_is_plus_zero_in_every_format() {
         for format in Format::ALL {
             let chunk = vec![0u8; 8 * format.vu_words()];
+            // indexed: one zero row serves as both operands
+            let (index, table, rows) = index_rows(format, &chunk[..format.row_bytes()], &chunk[format.row_bytes()..], 0, 1);
+            assert_eq!((rows, index.clone()), (1, vec![0u8; 8]));
             for (y, verdict) in [(0, VERDICT_ACCEPT), (1, VERDICT_REJECT)] {
                 let yl = encode_y(format, &[y]).unwrap();
                 assert_eq!(decide(&encode_header(format, K as u32, 1, &[3; 32], &yl), &[chunk.clone()])[32], verdict, "{format:?} y {y}");
+                let header = encode_header_indexed(format, K as u32, rows, &[3; 32], &yl);
+                assert_eq!(decide(&header, &[index.clone(), table.clone()])[32], verdict, "{format:?} y {y} indexed");
             }
         }
     }
@@ -696,6 +841,33 @@ mod tests {
             last.truncate(last.len() - 8 * VU_WORDS);
             assert_eq!(decide(&header, &short)[32], VERDICT_REJECT, "per {per}");
         }
+        // the indexed layout of the whole set: every VU's rows come back out of the table, the same statement is
+        // accepted, and a wrong word, an index past the table, a short table or a wrong row count reject
+        let (id, rb) = (identity_digest(&identity_string("bench-instances/v1", "vu-k1536", 0, 4096, MANIFEST)), f.row_bytes());
+        let (index, table, rows) = index_rows(f, &xb, &wb, 0, 4096);
+        let pairs = words_of(&index);
+        assert_eq!((pairs.len(), table.len()), (4096, rows as usize * rb));
+        for (i, &pair) in pairs.iter().enumerate() {
+            let (a, b) = ((pair & 0xFFFF_FFFF) as usize, (pair >> 32) as usize);
+            assert_eq!(&table[rb * a..rb * (a + 1)], &xb[rb * i..rb * (i + 1)], "x row of VU {i}");
+            assert_eq!(&table[rb * b..rb * (b + 1)], &wb[rb * i..rb * (i + 1)], "W row of VU {i}");
+        }
+        eprintln!("indexed layout: {rows} distinct rows for 4096 VUs");
+        assert!(rows < 2 * 4096);
+        let header = encode_header_indexed(f, K as u32, rows, &id, &y_le(&y));
+        let pv = decide(&header, &[index.clone(), table.clone()]);
+        assert_eq!(pv[32], VERDICT_ACCEPT);
+        assert_eq!(&pv[..32], &crate::frame::sha256(&statement_bytes(f, &id, K as u32, &y_le(&y))));
+        let mut wrong = y.clone();
+        wrong[4095] ^= 1;
+        assert_eq!(decide(&encode_header_indexed(f, K as u32, rows, &id, &y_le(&wrong)), &[index.clone(), table.clone()])[32], VERDICT_REJECT);
+        let mut past = index.clone();
+        past[8 * 4095 + 4..8 * 4096].copy_from_slice(&rows.to_le_bytes());
+        assert_eq!(decide(&header, &[past, table.clone()])[32], VERDICT_REJECT);
+        assert_eq!(decide(&header, &[index.clone(), table[..table.len() - rb].to_vec()])[32], VERDICT_REJECT);
+        assert_eq!(decide(&encode_header_indexed(f, K as u32, rows + 1, &id, &y_le(&y)), &[index.clone(), table.clone()])[32], VERDICT_REJECT);
+        assert_eq!(decide(&header, &[index[..index.len() - 8].to_vec(), table.clone()])[32], VERDICT_REJECT);
+        assert_eq!(decide(&header, &[index, table.clone(), table])[32], VERDICT_REJECT);
     }
 
     #[test]
@@ -723,6 +895,8 @@ mod tests {
             let f = Format::Bf16Ampere;
             let chunk = encode_chunk(f, &bytes_of(&x), &bytes_of(&w), i, i + 1);
             assert_eq!(decide(&encode_header(f, K as u32, 1, &id, &y_le(&claimed[i..i + 1])), &[chunk])[32], VERDICT_REJECT);
+            let (index, table, n) = index_rows(f, &bytes_of(&x), &bytes_of(&w), i, i + 1);
+            assert_eq!(decide(&encode_header_indexed(f, K as u32, n, &id, &y_le(&claimed[i..i + 1])), &[index, table])[32], VERDICT_REJECT);
         }
     }
 
@@ -810,5 +984,10 @@ mod tests {
         assert!(check_words(Format::Bf16Ampere, &bytes, &[0; VU_WORDS], &[0, 0]));
         assert!(!check_words(Format::Bf16Ampere, &bytes[8..], &[0; VU_WORDS - 1], &[0, 0]));
         assert!(!check_words(Format::Bf16Ampere, &bytes[8..], &[0; VU_WORDS], &[0, 0]));
+        let row = [0u8; 8 * ROW_WORDS];
+        assert!(check_indexed(Format::Bf16Ampere, &row, &[0; ROW_WORDS], &[0, 0], &[0, 0, 0, 0]));
+        assert!(!check_indexed(Format::Bf16Ampere, &row, &[0; ROW_WORDS], &[0, 1 << 32], &[0, 0, 0, 0]));
+        assert!(!check_indexed(Format::Bf16Ampere, &row, &[0; ROW_WORDS], &[0], &[0, 0, 0, 0]));
+        assert!(!check_indexed(Format::Bf16Ampere, &row[8..], &[0; ROW_WORDS - 1], &[0], &[0, 0]));
     }
 }
