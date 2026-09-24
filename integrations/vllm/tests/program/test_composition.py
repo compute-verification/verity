@@ -343,11 +343,12 @@ def test_attention_on_ampere_captured_calls(T, layer, heads, recorded_cross):
     2/4/5 FA2 blocks, the last-visited one partial; 1/2/3 FA3 blocks)."""
     _need(W11 / "natural" / "index.json", "W11 attention fixtures")
     from verity_vllm.program.numerics import fa2_model as FA2, fa3_model as FA3
+    from verity_vllm.program.numerics.fa2_relation import tables_dir
     try:
         FA3.lib()
     except Exception as e:  # noqa: BLE001
         pytest.skip(f"FA3 CPU model not buildable: {e}")
-    tables = FA2.MufuTables.load(W11 / "mufu")
+    tables = FA2.MufuTables.load(tables_dir())
     q, k, v, out = _attention_call(T, layer)
     cross = 0
     for h in heads:
