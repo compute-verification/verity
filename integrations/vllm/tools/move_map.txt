@@ -11,6 +11,7 @@
 # Layers (Draft 3.1 / README "Vocabulary"): program query correspondence observe acquire input_provenance commit check tp harness ops.
 .gitignore -> .gitignore
 README.md -> README.md
+conftest.py -> conftest.py
 data/census/.keep -> data/census/.keep
 data/census/256x64/partial.json -> data/census/256x64/partial.json
 data/census/census_frontier.json -> data/census/census_frontier.json
@@ -182,6 +183,9 @@ tests/acquire/test_install.py -> tests/acquire/test_install.py
 tests/acquire/test_plan.py -> tests/acquire/test_plan.py
 tests/acquire/test_stage.py -> tests/acquire/test_stage.py
 tests/by_name_allowlist.json -> tests/by_name_allowlist.json
+tests/census_roots.txt -> tests/census_roots.txt
+tests/dead_code_census.py -> tests/dead_code_census.py
+tests/dead_code_keep.json -> tests/dead_code_keep.json
 tests/ir/__init__.py -> DROP
 tests/ir/_wout_prototype_20260917.py -> tests/program/_wout_prototype_20260917.py
 tests/ir/data/fp8_block_operands.npz -> tests/program/data/fp8_block_operands.npz
@@ -194,11 +198,7 @@ tests/ir/data/topp_split_fixture/fstoch01_rows.npz.json -> tests/program/data/to
 tests/ir/data/topp_split_fixture/fstoch01_s16_intermediates.npz -> tests/program/data/topp_split_fixture/fstoch01_s16_intermediates.npz
 tests/ir/data/topp_split_fixture/manifest.json -> tests/program/data/topp_split_fixture/manifest.json
 tests/ir/fixtures_query.py -> tests/program/fixtures_query.py
-tests/ir/lifted_instances_emit.py -> tests/program/lifted_instances_emit.py
-tests/ir/lifted_use_document.py -> tests/program/lifted_use_document.py
-tests/ir/moe_closure_probe.py -> tests/program/moe_closure_probe.py
 tests/ir/padded_commit_tiny.py -> tests/program/padded_commit_tiny.py
-tests/ir/reqval_rows_lift_vs_unlifted.py -> tests/program/reqval_rows_lift_vs_unlifted.py
 tests/ir/test_artifact_applicability_independent.py -> tests/program/test_artifact_applicability_independent.py
 tests/ir/test_b1_authored.py -> tests/program/test_b1_authored.py
 tests/ir/test_boundary_oracle.py -> tests/query/test_boundary_oracle.py
@@ -218,7 +218,6 @@ tests/ir/test_derive_stochastic.py -> tests/program/test_derive_stochastic.py
 tests/ir/test_derive_transfer.py -> tests/program/test_derive_transfer.py
 tests/ir/test_derived_rows.py -> tests/program/test_derived_rows.py
 tests/ir/test_derived_rows_fp8.py -> tests/program/test_derived_rows_fp8.py
-tests/ir/test_derived_rows_torch.py -> tests/program/test_derived_rows_torch.py
 tests/ir/test_descriptor_equivalence.py -> tests/program/test_descriptor_equivalence.py
 tests/ir/test_fa3_launch_context.py -> tests/program/test_fa3_launch_context.py
 tests/ir/test_fp8.py -> tests/program/test_fp8.py
@@ -230,8 +229,6 @@ tests/ir/test_harden_alias.py -> tests/program/test_harden_alias.py
 tests/ir/test_harden_guards.py -> tests/program/test_harden_guards.py
 tests/ir/test_harden_moe.py -> tests/program/test_harden_moe.py
 tests/ir/test_heldout_codec_compose.py -> tests/program/test_heldout_codec_compose.py
-tests/ir/test_lift_q_fine_reqval.py -> tests/program/test_lift_q_fine_reqval.py
-tests/ir/test_lifted_correspondence.py -> tests/program/test_lifted_correspondence.py
 tests/ir/test_lifted_dense_b1.py -> tests/program/test_lifted_dense_b1.py
 tests/ir/test_lifted_dense_b1_padrev.py -> tests/program/test_lifted_dense_b1_padrev.py
 tests/ir/test_lifted_mixed.py -> tests/program/test_lifted_mixed.py
@@ -239,19 +236,11 @@ tests/ir/test_lifted_mixed_padrev.py -> tests/program/test_lifted_mixed_padrev.p
 tests/ir/test_lifted_moe.py -> tests/program/test_lifted_moe.py
 tests/ir/test_lifted_moe_padrev.py -> tests/program/test_lifted_moe_padrev.py
 tests/ir/test_lifted_r17.py -> tests/program/test_lifted_r17.py
-tests/ir/test_lifted_record.py -> tests/program/test_lifted_record.py
-tests/ir/test_lifted_record_attested_padrev.py -> tests/program/test_lifted_record_attested_padrev.py
-tests/ir/test_lifted_record_int3_padrev.py -> tests/program/test_lifted_record_int3_padrev.py
-tests/ir/test_lifted_record_padrev.py -> tests/program/test_lifted_record_padrev.py
-tests/ir/test_lifted_record_real_padrev.py -> tests/program/test_lifted_record_real_padrev.py
 tests/ir/test_lifted_request.py -> tests/program/test_lifted_request.py
 tests/ir/test_lifted_request_padrev.py -> tests/program/test_lifted_request_padrev.py
 tests/ir/test_lifted_tiny.py -> tests/program/test_lifted_tiny.py
 tests/ir/test_lifted_tiny_padrev.py -> tests/program/test_lifted_tiny_padrev.py
-tests/ir/test_lifted_use_document.py -> tests/program/test_lifted_use_document.py
 tests/ir/test_lifted_workload_padrev.py -> tests/program/test_lifted_workload_padrev.py
-tests/ir/test_lifted_workload_record_padrev.py -> tests/program/test_lifted_workload_record_padrev.py
-tests/ir/test_lifted_workload_record_real_padrev.py -> tests/program/test_lifted_workload_record_real_padrev.py
 tests/ir/test_lowering.py -> tests/program/test_lowering.py
 tests/ir/test_moe_pad_route_a3.py -> tests/program/test_moe_pad_route_a3.py
 tests/ir/test_moe_pad_stage2.py -> tests/program/test_moe_pad_stage2.py
@@ -260,7 +249,6 @@ tests/ir/test_norm_chain.py -> tests/program/test_norm_chain.py
 tests/ir/test_observe_resolve.py -> tests/observe/test_observe_resolve.py
 tests/ir/test_pad_prims.py -> tests/program/test_pad_prims.py
 tests/ir/test_padded_commit_tiny.py -> tests/program/test_padded_commit_tiny.py
-tests/ir/test_partition_real.py -> tests/query/test_partition_real.py
 tests/ir/test_partition_structural.py -> tests/query/test_partition_structural.py
 tests/ir/test_partition_stubs.py -> tests/query/test_partition_stubs.py
 tests/ir/test_partition_sweep.py -> tests/query/test_partition_sweep.py
@@ -268,7 +256,6 @@ tests/ir/test_profile_descriptor.py -> tests/program/test_profile_descriptor.py
 tests/ir/test_query_artifact.py -> tests/query/test_query_artifact.py
 tests/ir/test_query_counterexamples.py -> tests/query/test_query_counterexamples.py
 tests/ir/test_query_fixtures.py -> tests/query/test_query_fixtures.py
-tests/ir/test_r17_42_missing_never_inactive_reqval.py -> tests/program/test_r17_42_missing_never_inactive_reqval.py
 tests/ir/test_ref_prims.py -> tests/program/test_ref_prims.py
 tests/ir/test_refs_runs.py -> tests/program/test_refs_runs.py
 tests/ir/test_rmsnorm_fused.py -> tests/program/test_rmsnorm_fused.py
@@ -287,7 +274,6 @@ tests/ir/test_topp_splits_operand.py -> tests/program/test_topp_splits_operand.p
 tests/ir/test_torch_frontend.py -> tests/program/test_torch_frontend.py
 tests/ir/test_tp_collective_site.py -> tests/correspondence/test_tp_collective_site.py
 tests/ir/test_vllm_bindings_pins.py -> tests/program/test_vllm_bindings_pins.py
-tests/ir/test_vu_canonical.py -> tests/query/test_vu_canonical.py
 tests/ir/test_workload_compose_padrev.py -> tests/program/test_workload_compose_padrev.py
 tests/ir/test_workload_program.py -> tests/program/test_workload_program.py
 tests/query/__init__.py -> tests/query/__init__.py
@@ -299,8 +285,11 @@ tests/query/gate/row73_qwen3-4b_h100_b8.json -> tests/query/gate/row73_qwen3-4b_
 tests/query/gate/row74_qwen3-4b-fp8_h100_b8.json -> tests/query/gate/row74_qwen3-4b-fp8_h100_b8.json
 tests/query/test_compare.py -> tests/query/test_compare.py
 tests/query/test_correspondence_source.py -> tests/correspondence/test_correspondence_source_query.py
+tests/query/test_descriptor_annotation_stream.py -> tests/correspondence/test_descriptor_annotation_stream.py
 tests/query/test_lint.py -> tests/program/test_lint.py
+tests/query/test_literal_operands.py -> tests/query/test_literal_operands.py
 tests/query/test_module_body.py -> tests/query/test_module_body.py
+tests/query/test_program_view_columns.py -> tests/query/test_program_view_columns.py
 tests/regression/__init__.py -> tests/regression/__init__.py
 tests/regression/checks/__init__.py -> tests/regression/checks/__init__.py
 tests/regression/checks/attempt_provenance.py -> tests/regression/checks/attempt_provenance.py
@@ -312,9 +301,12 @@ tests/regression/checks/global_match_checks.py -> tests/regression/checks/global
 tests/regression/checks/manifest_digest.py -> tests/regression/checks/manifest_digest.py
 tests/regression/checks/program_digest.py -> tests/regression/checks/program_digest.py
 tests/regression/checks/replay_partition.py -> tests/regression/checks/replay_partition.py
+tests/regression/checks/step_segmentation.py -> tests/regression/checks/step_segmentation.py
+tests/regression/checks/stoch_value.py -> tests/regression/checks/stoch_value.py
 tests/regression/checks/verdict.py -> tests/regression/checks/verdict.py
 tests/regression/decisions.py -> tests/regression/decisions.py
 tests/regression/expected/gemma2-2b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json -> tests/regression/expected/gemma2-2b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json
+tests/regression/expected/llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager.json -> tests/regression/expected/llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager.json
 tests/regression/expected/llama32-1b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager.json -> tests/regression/expected/llama32-1b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager.json
 tests/regression/expected/llama32-1b__bf16__l40s__tp1__b64__i1024__o128__mixed__greedy__bi-eager.json -> tests/regression/expected/llama32-1b__bf16__l40s__tp1__b64__i1024__o128__mixed__greedy__bi-eager.json
 tests/regression/expected/mistral-7b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json -> tests/regression/expected/mistral-7b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json
@@ -328,13 +320,20 @@ tests/regression/expected/qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__gre
 tests/regression/expected/smollm2-135m__bf16__l40s__tp1__b16__i1024__o128__mixed__greedy__bi-eager.json -> tests/regression/expected/smollm2-135m__bf16__l40s__tp1__b16__i1024__o128__mixed__greedy__bi-eager.json
 tests/regression/fixtures.toml -> tests/regression/fixtures.toml
 tests/regression/lift_expected.py -> tests/regression/lift_expected.py
+tests/regression/rebaseline.py -> tests/regression/rebaseline.py
 tests/regression/resolver.py -> tests/regression/resolver.py
 tests/regression/stage_store.py -> tests/regression/stage_store.py
 tests/regression/store_io.py -> tests/regression/store_io.py
 tests/regression/test_attempt_resolution.py -> tests/regression/test_attempt_resolution.py
 tests/regression/test_check_lifts.py -> tests/regression/test_check_lifts.py
+tests/regression/test_global_match_lift.py -> tests/regression/test_global_match_lift.py
+tests/regression/test_rebaseline.py -> tests/regression/test_rebaseline.py
 tests/regression/test_regression.py -> tests/regression/test_regression.py
+tests/regression/test_step_segmentation.py -> tests/regression/test_step_segmentation.py
+tests/regression/test_stoch_value.py -> tests/regression/test_stoch_value.py
 tests/test_no_by_name_rules.py -> tests/test_no_by_name_rules.py
+tests/test_no_dead_modules.py -> tests/test_no_dead_modules.py
+tests/test_pod_bootstrap.py -> tests/ops/test_pod_bootstrap.py
 tests/test_relayout_map.py -> tests/program/test_relayout_map.py
 verity_capture/__init__.py -> verity_vllm/observe/__init__.py
 verity_capture/allowlist.py -> verity_vllm/check/kernel_allowlist.py
@@ -345,7 +344,6 @@ verity_capture/bench/commit_delta.py -> verity_vllm/harness/commit_delta.py
 verity_capture/bench/commit_verdict.py -> verity_vllm/check/commit_verdict.py
 verity_capture/bench/compiled_merge.py -> verity_vllm/harness/compiled_merge.py
 verity_capture/bench/cov_pod.sh -> verity_vllm/ops/cov_pod.sh
-verity_capture/bench/fixtures/llama32-1b__bf16__l40s__tp2__b2__i64__o8__equal__greedy__bi-eager.json -> tests/tp/fixtures/llama32-1b__bf16__l40s__tp2__b2__i64__o8__equal__greedy__bi-eager.json
 verity_capture/bench/gen_adversarial.py -> verity_vllm/check/adversarial.py  DELETE-BY:vllm-dead-code
 verity_capture/bench/gen_batch_attribution.py -> verity_vllm/correspondence/batch_attribution.py  DELETE-BY:vllm-dead-code
 verity_capture/bench/gen_batch_candidate.py -> verity_vllm/correspondence/batch_candidate.py  DELETE-BY:vllm-dead-code
@@ -377,23 +375,7 @@ verity_capture/bench/tests/test_engine_schedule.py -> tests/harness/test_engine_
 verity_capture/bench/tests/test_execution_label.py -> tests/observe/test_execution_label.py
 verity_capture/bench/tests/test_flip_weight_negative.py -> tests/check/test_flip_weight_negative.py
 verity_capture/bench/tests/test_snapshot_cap.py -> tests/harness/test_snapshot_cap.py
-verity_capture/bench/tests/test_tp2_attribution.py -> tests/tp/test_tp2_attribution.py
-verity_capture/bench/tests/test_tp2_commit_query_population.py -> tests/tp/test_tp2_commit_query_population.py
-verity_capture/bench/tests/test_tp2_match_mid_module_rows.py -> tests/tp/test_tp2_match_mid_module_rows.py
-verity_capture/bench/tests/test_tp2_match_provenance_digests.py -> tests/tp/test_tp2_match_provenance_digests.py
-verity_capture/bench/tests/test_tp2_match_sites.py -> tests/tp/test_tp2_match_sites.py
-verity_capture/bench/tests/test_tp2_request_program_dirs.py -> tests/tp/test_tp2_request_program_dirs.py
-verity_capture/bench/tests/test_tp2_sampled_replay_fold.py -> tests/tp/test_tp2_sampled_replay_fold.py
-verity_capture/bench/tests/test_tp2_serve_shard_from.py -> tests/tp/test_tp2_serve_shard_from.py
-verity_capture/bench/tests/test_tp2_t6_4_check.py -> tests/tp/test_tp2_t6_4_check.py
-verity_capture/bench/tests/test_tp2_xrank_collectives.py -> tests/tp/test_tp2_xrank_collectives.py
 verity_capture/bench/topp_split_probe.py -> verity_vllm/harness/topp_split_probe.py  DELETE-BY:vllm-dead-code
-verity_capture/bench/tp2_analyze.py -> verity_vllm/tp/analyze.py  DELETE-BY:vllm-dead-code
-verity_capture/bench/tp2_capture.py -> verity_vllm/tp/capture.py
-verity_capture/bench/tp2_commit.py -> verity_vllm/tp/commit_delta.py
-verity_capture/bench/tp2_fold_match.py -> verity_vllm/tp/fold_match.py
-verity_capture/bench/tp2_match.py -> verity_vllm/tp/match.py
-verity_capture/bench/tp2_worker.py -> verity_vllm/tp/worker.py
 verity_capture/bench/verify_lane.sh -> verity_vllm/ops/verify_lane.sh
 verity_capture/card.py -> verity_vllm/harness/card.py
 verity_capture/census.py -> verity_vllm/check/census.py
@@ -402,9 +384,11 @@ verity_capture/commit/__init__.py -> verity_vllm/commit/__init__.py
 verity_capture/commit/admission.py -> verity_vllm/harness/admission_bound.py
 verity_capture/commit/admission_planner.py -> verity_vllm/harness/admission_planner.py
 verity_capture/commit/binding.py -> verity_vllm/commit/binding.py
-verity_capture/commit/compiled_manifest.py -> verity_vllm/query/v1/compiled_manifest.py
+verity_capture/commit/compiled_manifest.py -> verity_vllm/query/manifest/compiled.py
 verity_capture/commit/executed_prefix.py -> verity_vllm/check/executed_prefix.py
 verity_capture/commit/leafhash.py -> verity_vllm/acquire/leafhash.py
+verity_capture/commit/manifest_format.py -> verity_vllm/query/manifest/format.py
+verity_capture/commit/manifest_verify.py -> verity_vllm/query/manifest/verify.py
 verity_capture/commit/native_collect.cpp -> verity_vllm/acquire/native_collect.cpp
 verity_capture/commit/native_collect.py -> verity_vllm/acquire/native_collect.py
 verity_capture/commit/native_gather.cu -> verity_vllm/acquire/native_gather.cu
@@ -413,8 +397,6 @@ verity_capture/commit/native_leafhash.cu -> verity_vllm/acquire/native_leafhash.
 verity_capture/commit/native_tree.cu -> verity_vllm/acquire/native_tree.cu
 verity_capture/commit/oracle_compare.py -> verity_vllm/check/oracle_compare.py
 verity_capture/commit/padding_steps.py -> verity_vllm/commit/padding_steps.py
-verity_capture/commit/required_manifest.py -> verity_vllm/query/v1/required_manifest.py
-verity_capture/commit/required_values.py -> verity_vllm/query/v1/required_values.py
 verity_capture/commit/sampled_replay.py -> verity_vllm/check/sampled_replay.py
 verity_capture/commit/tests/__init__.py -> DROP
 verity_capture/commit/tests/fixtures/admission/b16.json -> tests/harness/fixtures/admission/b16.json
@@ -430,7 +412,6 @@ verity_capture/commit/tests/test_admission.py -> tests/harness/test_admission_co
 verity_capture/commit/tests/test_admission_planner.py -> tests/harness/test_admission_planner.py
 verity_capture/commit/tests/test_admit_r19_host_working_set.py -> tests/harness/test_admit_r19_host_working_set.py
 verity_capture/commit/tests/test_alias_reference_fixture.py -> tests/check/test_alias_reference_fixture.py
-verity_capture/commit/tests/test_alias_rule_reference.py -> tests/commit/test_alias_rule_reference.py
 verity_capture/commit/tests/test_binding_star_member_index.py -> tests/commit/test_binding_star_member_index.py
 verity_capture/commit/tests/test_committed_reader_shared_module.py -> tests/check/test_committed_reader_shared_module.py
 verity_capture/commit/tests/test_committed_store_aliases.py -> tests/check/test_committed_store_aliases.py
@@ -438,6 +419,7 @@ verity_capture/commit/tests/test_compiled_manifest.py -> tests/query/test_compil
 verity_capture/commit/tests/test_executed_prefix.py -> tests/check/test_executed_prefix.py
 verity_capture/commit/tests/test_fa2_tap_bounded.py -> tests/acquire/test_fa2_tap_bounded.py
 verity_capture/commit/tests/test_form_b_collector_perturbation.py -> tests/commit/test_form_b_collector_perturbation.py
+verity_capture/commit/tests/test_manifest_format.py -> tests/query/test_manifest_format.py
 verity_capture/commit/tests/test_native_collect.py -> tests/acquire/test_native_collect.py
 verity_capture/commit/tests/test_native_collect_flush.py -> tests/acquire/test_native_collect_flush.py
 verity_capture/commit/tests/test_native_collect_splits.py -> tests/acquire/test_native_collect_splits.py
@@ -449,23 +431,16 @@ verity_capture/commit/tests/test_padding_steps.py -> tests/commit/test_padding_s
 verity_capture/commit/tests/test_plan_key.py -> tests/acquire/test_plan_key.py
 verity_capture/commit/tests/test_prescribed_input_linkage.py -> tests/harness/test_prescribed_input_linkage.py
 verity_capture/commit/tests/test_promoted_input_acquisition.py -> tests/acquire/test_promoted_input_acquisition.py
-verity_capture/commit/tests/test_required_manifest.py -> tests/query/test_required_manifest.py
-verity_capture/commit/tests/test_required_manifest_dense.py -> tests/query/test_required_manifest_dense.py
-verity_capture/commit/tests/test_required_manifest_stoch.py -> tests/query/test_required_manifest_stoch.py
-verity_capture/commit/tests/test_required_manifest_tp.py -> tests/query/test_required_manifest_tp.py
-verity_capture/commit/tests/test_required_values.py -> tests/query/test_required_values.py
-verity_capture/commit/tests/test_required_values_promotion.py -> tests/query/test_required_values_promotion.py
 verity_capture/commit/tests/test_rev_r16_duplicate_binding.py -> tests/check/test_rev_r16_duplicate_binding.py
 verity_capture/commit/tests/test_rev_r16_named_population_gap.py -> tests/check/test_rev_r16_named_population_gap.py
 verity_capture/commit/tests/test_row_pod_weights_of_record_reuse.py -> tests/ops/test_row_pod_weights_of_record_reuse.py
 verity_capture/commit/tests/test_sampled_replay.py -> tests/check/test_sampled_replay.py
 verity_capture/commit/tests/test_sampled_replay_aliased_module.py -> tests/check/test_sampled_replay_aliased_module.py
 verity_capture/commit/tests/test_sampled_replay_fp8.py -> tests/check/test_sampled_replay_fp8.py
-verity_capture/commit/tests/test_sampled_replay_moe_tp_sum_copy.py -> tests/check/test_sampled_replay_moe_tp_sum_copy.py
-verity_capture/commit/tests/test_sampled_replay_promoted.py -> tests/check/test_sampled_replay_promoted.py
 verity_capture/commit/tests/test_sampled_replay_query_population.py -> tests/check/test_sampled_replay_query_population.py
 verity_capture/commit/tests/test_sampled_replay_stoch.py -> tests/check/test_sampled_replay_stoch.py
 verity_capture/commit/tests/test_sampled_replay_tp_member_alias.py -> tests/check/test_sampled_replay_tp_member_alias.py
+verity_capture/commit/tests/test_sampled_replay_v2_addresses.py -> tests/check/test_sampled_replay_v2_addresses.py
 verity_capture/commit/tests/test_verdict.py -> tests/check/test_verdict.py
 verity_capture/commit/tests/test_weights_of_record.py -> tests/input_provenance/test_weights_of_record.py
 verity_capture/commit/tests/test_weights_of_record_root_host_independent.py -> tests/input_provenance/test_weights_of_record_root_host_independent.py
@@ -497,6 +472,7 @@ verity_capture/experimental/cb_a/tests/test_batch_decomp_e2e.py -> tests/corresp
 verity_capture/experimental/cb_a/tests/test_compact.py -> tests/program/test_compact.py
 verity_capture/experimental/cb_a/tests/test_compare_divergence_report.py -> tests/check/test_compare_divergence_report.py
 verity_capture/experimental/cb_a/tests/test_compare_splits_binding.py -> tests/check/test_compare_splits_binding.py
+verity_capture/experimental/cb_a/tests/test_ensure_distributed_port_race.py -> tests/observe/test_ensure_distributed_port_race.py
 verity_capture/experimental/cb_a/tests/test_global_match.py -> tests/check/test_global_match.py
 verity_capture/experimental/cb_a/tests/test_global_match_multi_weight_nodes.py -> tests/check/test_global_match_multi_weight_nodes.py
 verity_capture/experimental/cb_a/tests/test_global_program_regress.py -> tests/program/test_global_program_regress.py
@@ -526,7 +502,6 @@ verity_capture/experimental/commit_integ/fa2_plane_classes.py -> verity_vllm/acq
 verity_capture/experimental/commit_integ/hidden_source.py -> verity_vllm/acquire/hidden_source.py
 verity_capture/experimental/commit_integ/moe_source.py -> verity_vllm/acquire/moe_source.py
 verity_capture/experimental/commit_integ/native_host.py -> verity_vllm/acquire/native_host.py
-verity_capture/experimental/commit_integ/row4_derived.py -> verity_vllm/check/row4_derived.py  DELETE-BY:vllm-dead-code
 verity_capture/experimental/commit_integ/spans.py -> verity_vllm/harness/spans.py
 verity_capture/experimental/commit_integ/tests/conftest.py -> tests/acquire/conftest.py
 verity_capture/experimental/commit_integ/tests/schemes.py -> tests/acquire/schemes.py
@@ -535,7 +510,6 @@ verity_capture/experimental/commit_integ/tests/test_compiled_linkage_attribution
 verity_capture/experimental/commit_integ/tests/test_compiled_norm_literal.py -> tests/program/test_compiled_norm_literal.py
 verity_capture/experimental/commit_integ/tests/test_compiled_source.py -> tests/acquire/test_compiled_source.py
 verity_capture/experimental/commit_integ/tests/test_native_host_security.py -> tests/acquire/test_native_host_security.py
-verity_capture/experimental/commit_integ/tests/test_row4_derived.py -> tests/check/test_row4_derived.py  DELETE-BY:vllm-dead-code
 verity_capture/experimental/commit_integ/tests/test_security.py -> tests/acquire/test_security.py
 verity_capture/experimental/commit_integ/tests/test_tp_partial_match_oracle.py -> tests/tp/test_tp_partial_match_oracle.py
 verity_capture/experimental/commit_integ/tests/test_tp_partial_source_mid_module.py -> tests/tp/test_tp_partial_source_mid_module.py
@@ -569,8 +543,6 @@ verity_capture/experimental/fa2_commit/test_kernel_dump.py -> tests/commit/test_
 verity_capture/experimental/fa2_commit/test_negatives.py -> tests/commit/test_negatives.py  DELETE-BY:vllm-dead-code
 verity_capture/experimental/fa2_commit/test_oracle.py -> tests/commit/test_oracle.py  DELETE-BY:vllm-dead-code
 verity_capture/experimental/fa2_commit/test_roundtrip.py -> tests/commit/test_roundtrip.py  DELETE-BY:vllm-dead-code
-verity_capture/experimental/fp16_rules.py -> verity_vllm/check/fp16_rules.py  DELETE-BY:vllm-dead-code
-verity_capture/experimental/prefix_g3_rules.py -> verity_vllm/check/prefix_g3_rules.py  DELETE-BY:vllm-dead-code
 verity_capture/fold.py -> verity_vllm/observe/fold.py
 verity_capture/gates.py -> verity_vllm/check/gates.py
 verity_capture/gc_tuning.py -> verity_vllm/harness/gc_tuning.py
@@ -586,157 +558,66 @@ verity_capture/patterns_fp8.py -> verity_vllm/observe/patterns_fp8.py
 verity_capture/patterns_prefix.py -> verity_vllm/observe/patterns_prefix.py  DELETE-BY:vllm-dead-code
 verity_capture/prefix_cache.py -> verity_vllm/observe/prefix_cache.py  DELETE-BY:vllm-dead-code
 verity_capture/profiles/__init__.py -> verity_vllm/observe/profiles/__init__.py
+verity_capture/profiles/canonical.py -> verity_vllm/observe/profiles/canonical.py  DELETE-BY:vllm-profiles-generic
 verity_capture/profiles/corpus_coverage.json -> verity_vllm/observe/profiles/corpus_coverage.json
 verity_capture/profiles/dense_generic.py -> verity_vllm/observe/profiles/dense_generic.py
-verity_capture/profiles/gen_dense2_gemma2_2b.py -> verity_vllm/observe/profiles/gen_dense2_gemma2_2b.py  DELETE-BY:vllm-profiles-generic
+verity_capture/profiles/expected/derived_B0.json -> verity_vllm/observe/profiles/expected/derived_B0.json  DELETE-BY:vllm-profiles-generic
+verity_capture/profiles/expected/derived_B1.json -> verity_vllm/observe/profiles/expected/derived_B1.json  DELETE-BY:vllm-profiles-generic
+verity_capture/profiles/expected/derived_B1_tp2.json -> verity_vllm/observe/profiles/expected/derived_B1_tp2.json  DELETE-BY:vllm-profiles-generic
+verity_capture/profiles/expected/derived_B7.json -> verity_vllm/observe/profiles/expected/derived_B7.json  DELETE-BY:vllm-profiles-generic
+verity_capture/profiles/expected/derived_GEMMA2_2B.json -> verity_vllm/observe/profiles/expected/derived_GEMMA2_2B.json  DELETE-BY:vllm-profiles-generic
+verity_capture/profiles/expected/derived_LLAMA32_1B.json -> verity_vllm/observe/profiles/expected/derived_LLAMA32_1B.json  DELETE-BY:vllm-profiles-generic
+verity_capture/profiles/expected/derived_LLAMA32_1B_tp2.json -> verity_vllm/observe/profiles/expected/derived_LLAMA32_1B_tp2.json  DELETE-BY:vllm-profiles-generic
+verity_capture/profiles/expected/derived_MISTRAL7B.json -> verity_vllm/observe/profiles/expected/derived_MISTRAL7B.json  DELETE-BY:vllm-profiles-generic
+verity_capture/profiles/expected/derived_OLMOE.json -> verity_vllm/observe/profiles/expected/derived_OLMOE.json  DELETE-BY:vllm-profiles-generic
+verity_capture/profiles/expected/derived_PHI3_MINI.json -> verity_vllm/observe/profiles/expected/derived_PHI3_MINI.json  DELETE-BY:vllm-profiles-generic
+verity_capture/profiles/expected/derived_PYTHIA160M.json -> verity_vllm/observe/profiles/expected/derived_PYTHIA160M.json  DELETE-BY:vllm-profiles-generic
+verity_capture/profiles/expected/derived_QWEN05.json -> verity_vllm/observe/profiles/expected/derived_QWEN05.json  DELETE-BY:vllm-profiles-generic
+verity_capture/profiles/expected/derived_QWEN3_30B_A3B.json -> verity_vllm/observe/profiles/expected/derived_QWEN3_30B_A3B.json  DELETE-BY:vllm-profiles-generic
+verity_capture/profiles/expected/derived_QWEN3_30B_A3B_tp2.json -> verity_vllm/observe/profiles/expected/derived_QWEN3_30B_A3B_tp2.json  DELETE-BY:vllm-profiles-generic
+verity_capture/profiles/expected/derived_QWEN3_4B.json -> verity_vllm/observe/profiles/expected/derived_QWEN3_4B.json  DELETE-BY:vllm-profiles-generic
+verity_capture/profiles/expected/derived_QWEN3_4B_FP8.json -> verity_vllm/observe/profiles/expected/derived_QWEN3_4B_FP8.json  DELETE-BY:vllm-profiles-generic
+verity_capture/profiles/expected/derived_SMOL360.json -> verity_vllm/observe/profiles/expected/derived_SMOL360.json  DELETE-BY:vllm-profiles-generic
+verity_capture/profiles/expected/derived_TINYLLAMA.json -> verity_vllm/observe/profiles/expected/derived_TINYLLAMA.json  DELETE-BY:vllm-profiles-generic
+verity_capture/profiles/family_facts.py -> verity_vllm/observe/profiles/family_facts.py  DELETE-BY:vllm-profiles-generic
 verity_capture/profiles/gen_dense2_patterns.py -> verity_vllm/observe/profiles/gen_dense2_patterns.py  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/gen_dense2_phi3_mini.py -> verity_vllm/observe/profiles/gen_dense2_phi3_mini.py  DELETE-BY:vllm-profiles-generic
 verity_capture/profiles/gen_dense_gemma2_patterns.py -> verity_vllm/observe/profiles/gen_dense_gemma2_patterns.py  DELETE-BY:vllm-profiles-generic
 verity_capture/profiles/gen_dense_softcap_patterns.py -> verity_vllm/observe/profiles/gen_dense_softcap_patterns.py  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/gen_llama_LLAMA32_1B.config.json -> verity_vllm/observe/profiles/gen_llama_LLAMA32_1B.config.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/gen_llama_QWEN05.config.json -> verity_vllm/observe/profiles/gen_llama_QWEN05.config.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/gen_llama_llama32_1b.py -> verity_vllm/observe/profiles/gen_llama_llama32_1b.py  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/gen_llama_llama32_1b_tp2rank.py -> verity_vllm/observe/profiles/gen_llama_llama32_1b_tp2rank.py  DELETE-BY:vllm-profiles-generic
 verity_capture/profiles/gen_llama_patterns.py -> verity_vllm/observe/profiles/gen_llama_patterns.py  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/gen_llama_qwen05.py -> verity_vllm/observe/profiles/gen_llama_qwen05.py  DELETE-BY:vllm-profiles-generic
 verity_capture/profiles/gen_ln_patterns.py -> verity_vllm/observe/profiles/gen_ln_patterns.py  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/gen_ln_pythia160m.py -> verity_vllm/observe/profiles/gen_ln_pythia160m.py  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/gen_moe_olmoe.py -> verity_vllm/observe/profiles/gen_moe_olmoe.py  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/gen_moe_patterns.py -> verity_vllm/observe/profiles/gen_moe_patterns.py  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/gen_ov_easy_B7.config.json -> verity_vllm/observe/profiles/gen_ov_easy_B7.config.json  DELETE-BY:vllm-profiles-generic
 verity_capture/profiles/gen_ov_easy_family.py -> verity_vllm/observe/profiles/gen_ov_easy_family.py  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/gen_ov_easy_qwen25_7b.py -> verity_vllm/observe/profiles/gen_ov_easy_qwen25_7b.py  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/gen_ov_moe_olmoe.py -> verity_vllm/observe/profiles/gen_ov_moe_olmoe.py  DELETE-BY:vllm-profiles-generic
 verity_capture/profiles/gen_ov_moe_patterns.py -> verity_vllm/observe/profiles/gen_ov_moe_patterns.py  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/gen_ov_moe_qwen3.py -> verity_vllm/observe/profiles/gen_ov_moe_qwen3.py  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/gen_ov_sampling_b0.py -> verity_vllm/observe/profiles/gen_ov_sampling_b0.py  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/gen_ov_sampling_b1.py -> verity_vllm/observe/profiles/gen_ov_sampling_b1.py  DELETE-BY:vllm-profiles-generic
 verity_capture/profiles/gen_ov_sampling_patterns.py -> verity_vllm/observe/profiles/gen_ov_sampling_patterns.py  DELETE-BY:vllm-profiles-generic
+verity_capture/profiles/generic.py -> verity_vllm/observe/profiles/generic.py  DELETE-BY:vllm-profiles-generic
+verity_capture/profiles/hf_configs/B0.config.json -> verity_vllm/observe/profiles/hf_configs/B0.config.json
+verity_capture/profiles/hf_configs/B1.config.json -> verity_vllm/observe/profiles/hf_configs/B1.config.json
+verity_capture/profiles/hf_configs/B7.config.json -> verity_vllm/observe/profiles/hf_configs/B7.config.json
+verity_capture/profiles/hf_configs/GEMMA2_2B.config.json -> verity_vllm/observe/profiles/hf_configs/GEMMA2_2B.config.json
+verity_capture/profiles/hf_configs/LLAMA32_1B.config.json -> verity_vllm/observe/profiles/hf_configs/LLAMA32_1B.config.json
 verity_capture/profiles/hf_configs/MISTRAL7B.config.json -> verity_vllm/observe/profiles/hf_configs/MISTRAL7B.config.json
+verity_capture/profiles/hf_configs/OLMOE.config.json -> verity_vllm/observe/profiles/hf_configs/OLMOE.config.json
+verity_capture/profiles/hf_configs/PHI3_MINI.config.json -> verity_vllm/observe/profiles/hf_configs/PHI3_MINI.config.json
+verity_capture/profiles/hf_configs/PYTHIA160M.config.json -> verity_vllm/observe/profiles/hf_configs/PYTHIA160M.config.json
+verity_capture/profiles/hf_configs/QWEN05.config.json -> verity_vllm/observe/profiles/hf_configs/QWEN05.config.json
+verity_capture/profiles/hf_configs/QWEN15_AWQ.config.json -> verity_vllm/observe/profiles/hf_configs/QWEN15_AWQ.config.json
+verity_capture/profiles/hf_configs/QWEN3_30B_A3B.config.json -> verity_vllm/observe/profiles/hf_configs/QWEN3_30B_A3B.config.json
 verity_capture/profiles/hf_configs/QWEN3_4B.config.json -> verity_vllm/observe/profiles/hf_configs/QWEN3_4B.config.json
 verity_capture/profiles/hf_configs/QWEN3_4B_FP8.config.json -> verity_vllm/observe/profiles/hf_configs/QWEN3_4B_FP8.config.json
+verity_capture/profiles/hf_configs/SMOL360.config.json -> verity_vllm/observe/profiles/hf_configs/SMOL360.config.json
+verity_capture/profiles/hf_configs/TINYLLAMA.config.json -> verity_vllm/observe/profiles/hf_configs/TINYLLAMA.config.json
 verity_capture/profiles/quarantine/GEMMA2_2B.json -> verity_vllm/observe/profiles/quarantine/GEMMA2_2B.json  DELETE-BY:vllm-profiles-generic
 verity_capture/profiles/quarantine/PYTHIA160M.json -> verity_vllm/observe/profiles/quarantine/PYTHIA160M.json  DELETE-BY:vllm-profiles-generic
 verity_capture/profiles/vllm_d9105ea80_sm89_eager.py -> verity_vllm/observe/profiles/vllm_d9105ea80_sm89_eager.py
 verity_capture/profiles/vllm_d9105ea80_sm89_eager_qwen15.py -> verity_vllm/observe/profiles/vllm_d9105ea80_sm89_eager_qwen15.py  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/vllm_d9105ea80_sm89_eager_qwen15_tp2rank.py -> verity_vllm/observe/profiles/vllm_d9105ea80_sm89_eager_qwen15_tp2rank.py  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_32x16_1req.json -> verity_vllm/observe/profiles/workload_32x16_1req.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_b0_chunked_200p.json -> verity_vllm/observe/profiles/workload_b0_chunked_200p.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_b0_conc2_small.json -> verity_vllm/observe/profiles/workload_b0_conc2_small.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_b0_conc4_mixed.json -> verity_vllm/observe/profiles/workload_b0_conc4_mixed.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_b0_conc8_mixed.json -> verity_vllm/observe/profiles/workload_b0_conc8_mixed.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_b0_long512_1req.json -> verity_vllm/observe/profiles/workload_b0_long512_1req.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_b0_prefix64_2req.json -> verity_vllm/observe/profiles/workload_b0_prefix64_2req.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_b0_sampling_2req_seeds.json -> verity_vllm/observe/profiles/workload_b0_sampling_2req_seeds.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_b0_sampling_n2.json -> verity_vllm/observe/profiles/workload_b0_sampling_n2.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_b0_sampling_temp07.json -> verity_vllm/observe/profiles/workload_b0_sampling_temp07.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_b0_sampling_topk50_topp09.json -> verity_vllm/observe/profiles/workload_b0_sampling_topk50_topp09.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_b1_sampling_2req_seeds.json -> verity_vllm/observe/profiles/workload_b1_sampling_2req_seeds.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_b1_sampling_combo.json -> verity_vllm/observe/profiles/workload_b1_sampling_combo.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_b1_sampling_mixed.json -> verity_vllm/observe/profiles/workload_b1_sampling_mixed.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_b1_sampling_n2.json -> verity_vllm/observe/profiles/workload_b1_sampling_n2.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_b1_sampling_noseed.json -> verity_vllm/observe/profiles/workload_b1_sampling_noseed.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_b1_sampling_temp07.json -> verity_vllm/observe/profiles/workload_b1_sampling_temp07.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_b1_sampling_topk50.json -> verity_vllm/observe/profiles/workload_b1_sampling_topk50.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_b1_sampling_topk50_topp09.json -> verity_vllm/observe/profiles/workload_b1_sampling_topk50_topp09.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_b1_sampling_topp09.json -> verity_vllm/observe/profiles/workload_b1_sampling_topp09.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_b7_32x16_1req.json -> verity_vllm/observe/profiles/workload_b7_32x16_1req.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_b0_b1_c1024.json -> verity_vllm/observe/profiles/workload_cov_b0_b1_c1024.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_b0_b1_c256.json -> verity_vllm/observe/profiles/workload_cov_b0_b1_c256.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_b0_b1_c256_ck64.json -> verity_vllm/observe/profiles/workload_cov_b0_b1_c256_ck64.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_b0_b1_c256_f16.json -> verity_vllm/observe/profiles/workload_cov_b0_b1_c256_f16.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_b0_b1_c256_r1.json -> verity_vllm/observe/profiles/workload_cov_b0_b1_c256_r1.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_b0_b1_c256_r2.json -> verity_vllm/observe/profiles/workload_cov_b0_b1_c256_r2.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_b0_b1_c256_t1.json -> verity_vllm/observe/profiles/workload_cov_b0_b1_c256_t1.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_b0_b8-mixed_c1024.json -> verity_vllm/observe/profiles/workload_cov_b0_b8-mixed_c1024.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_b0_b8-mixed_c256.json -> verity_vllm/observe/profiles/workload_cov_b0_b8-mixed_c256.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_b0_b8-mixed_c256_r1.json -> verity_vllm/observe/profiles/workload_cov_b0_b8-mixed_c256_r1.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_b0_b8-mixed_c256_r2.json -> verity_vllm/observe/profiles/workload_cov_b0_b8-mixed_c256_r2.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_b0_b8-mixed_c256_t1.json -> verity_vllm/observe/profiles/workload_cov_b0_b8-mixed_c256_t1.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_b0_b8-static_c1024.json -> verity_vllm/observe/profiles/workload_cov_b0_b8-static_c1024.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_b0_b8-static_c256.json -> verity_vllm/observe/profiles/workload_cov_b0_b8-static_c256.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_b0_b8-static_c256_r1.json -> verity_vllm/observe/profiles/workload_cov_b0_b8-static_c256_r1.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_b0_b8-static_c256_r2.json -> verity_vllm/observe/profiles/workload_cov_b0_b8-static_c256_r2.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_b0_prefix_c256.json -> verity_vllm/observe/profiles/workload_cov_b0_prefix_c256.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_b0_prefix_c256_cold.json -> verity_vllm/observe/profiles/workload_cov_b0_prefix_c256_cold.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_b1_b1_c1024.json -> verity_vllm/observe/profiles/workload_cov_b1_b1_c1024.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_b1_b1_c256.json -> verity_vllm/observe/profiles/workload_cov_b1_b1_c256.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_b1_b1_c256_ck64.json -> verity_vllm/observe/profiles/workload_cov_b1_b1_c256_ck64.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_b1_b1_c256_r1.json -> verity_vllm/observe/profiles/workload_cov_b1_b1_c256_r1.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_b1_b1_c256_r2.json -> verity_vllm/observe/profiles/workload_cov_b1_b1_c256_r2.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_b1_b8-mixed_c1024.json -> verity_vllm/observe/profiles/workload_cov_b1_b8-mixed_c1024.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_b1_b8-mixed_c256.json -> verity_vllm/observe/profiles/workload_cov_b1_b8-mixed_c256.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_b1_b8-static_c1024.json -> verity_vllm/observe/profiles/workload_cov_b1_b8-static_c1024.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_b1_b8-static_c256.json -> verity_vllm/observe/profiles/workload_cov_b1_b8-static_c256.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_b1_b8-static_c256_r1.json -> verity_vllm/observe/profiles/workload_cov_b1_b8-static_c256_r1.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_b1_b8-static_c256_r2.json -> verity_vllm/observe/profiles/workload_cov_b1_b8-static_c256_r2.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_gemma2_2b_b1_c1024.json -> verity_vllm/observe/profiles/workload_cov_gemma2_2b_b1_c1024.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_gemma2_2b_b1_c256.json -> verity_vllm/observe/profiles/workload_cov_gemma2_2b_b1_c256.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_gemma2_2b_b1_c256_r1.json -> verity_vllm/observe/profiles/workload_cov_gemma2_2b_b1_c256_r1.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_gemma2_2b_b8-mixed_c1024.json -> verity_vllm/observe/profiles/workload_cov_gemma2_2b_b8-mixed_c1024.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_gemma2_2b_b8-mixed_c256.json -> verity_vllm/observe/profiles/workload_cov_gemma2_2b_b8-mixed_c256.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_gemma2_2b_b8-static_c1024.json -> verity_vllm/observe/profiles/workload_cov_gemma2_2b_b8-static_c1024.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_gemma2_2b_b8-static_c256.json -> verity_vllm/observe/profiles/workload_cov_gemma2_2b_b8-static_c256.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_llama32_1b_b1_c1024.json -> verity_vllm/observe/profiles/workload_cov_llama32_1b_b1_c1024.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_llama32_1b_b1_c256.json -> verity_vllm/observe/profiles/workload_cov_llama32_1b_b1_c256.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_llama32_1b_b1_c256_r1.json -> verity_vllm/observe/profiles/workload_cov_llama32_1b_b1_c256_r1.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_llama32_1b_b1_c256_r2.json -> verity_vllm/observe/profiles/workload_cov_llama32_1b_b1_c256_r2.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_llama32_1b_b8-mixed_c1024.json -> verity_vllm/observe/profiles/workload_cov_llama32_1b_b8-mixed_c1024.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_llama32_1b_b8-mixed_c256.json -> verity_vllm/observe/profiles/workload_cov_llama32_1b_b8-mixed_c256.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_llama32_1b_b8-static_c1024.json -> verity_vllm/observe/profiles/workload_cov_llama32_1b_b8-static_c1024.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_llama32_1b_b8-static_c256.json -> verity_vllm/observe/profiles/workload_cov_llama32_1b_b8-static_c256.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_olmoe_b1_c1024.json -> verity_vllm/observe/profiles/workload_cov_olmoe_b1_c1024.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_olmoe_b1_c256.json -> verity_vllm/observe/profiles/workload_cov_olmoe_b1_c256.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_olmoe_b8-mixed_c1024.json -> verity_vllm/observe/profiles/workload_cov_olmoe_b8-mixed_c1024.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_olmoe_b8-mixed_c256.json -> verity_vllm/observe/profiles/workload_cov_olmoe_b8-mixed_c256.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_olmoe_b8-static_c1024.json -> verity_vllm/observe/profiles/workload_cov_olmoe_b8-static_c1024.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_olmoe_b8-static_c256.json -> verity_vllm/observe/profiles/workload_cov_olmoe_b8-static_c256.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_phi3_mini_b1_c1024.json -> verity_vllm/observe/profiles/workload_cov_phi3_mini_b1_c1024.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_phi3_mini_b1_c256.json -> verity_vllm/observe/profiles/workload_cov_phi3_mini_b1_c256.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_phi3_mini_b8-mixed_c1024.json -> verity_vllm/observe/profiles/workload_cov_phi3_mini_b8-mixed_c1024.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_phi3_mini_b8-mixed_c256.json -> verity_vllm/observe/profiles/workload_cov_phi3_mini_b8-mixed_c256.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_phi3_mini_b8-static_c1024.json -> verity_vllm/observe/profiles/workload_cov_phi3_mini_b8-static_c1024.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_phi3_mini_b8-static_c256.json -> verity_vllm/observe/profiles/workload_cov_phi3_mini_b8-static_c256.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_phi3_mini_b8-static_c256_r1.json -> verity_vllm/observe/profiles/workload_cov_phi3_mini_b8-static_c256_r1.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_phi3_mini_b8-static_c256_r2.json -> verity_vllm/observe/profiles/workload_cov_phi3_mini_b8-static_c256_r2.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_pythia160m_b1_c1024.json -> verity_vllm/observe/profiles/workload_cov_pythia160m_b1_c1024.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_pythia160m_b1_c256.json -> verity_vllm/observe/profiles/workload_cov_pythia160m_b1_c256.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_pythia160m_b1_c256_r1.json -> verity_vllm/observe/profiles/workload_cov_pythia160m_b1_c256_r1.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_pythia160m_b1_c256_r2.json -> verity_vllm/observe/profiles/workload_cov_pythia160m_b1_c256_r2.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_pythia160m_b8-mixed_c1024.json -> verity_vllm/observe/profiles/workload_cov_pythia160m_b8-mixed_c1024.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_pythia160m_b8-mixed_c256.json -> verity_vllm/observe/profiles/workload_cov_pythia160m_b8-mixed_c256.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_pythia160m_b8-mixed_c256_r1.json -> verity_vllm/observe/profiles/workload_cov_pythia160m_b8-mixed_c256_r1.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_pythia160m_b8-mixed_c256_r2.json -> verity_vllm/observe/profiles/workload_cov_pythia160m_b8-mixed_c256_r2.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_pythia160m_b8-static_c1024.json -> verity_vllm/observe/profiles/workload_cov_pythia160m_b8-static_c1024.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_pythia160m_b8-static_c256.json -> verity_vllm/observe/profiles/workload_cov_pythia160m_b8-static_c256.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_pythia160m_b8-static_c256_r1.json -> verity_vllm/observe/profiles/workload_cov_pythia160m_b8-static_c256_r1.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_pythia160m_b8-static_c256_r2.json -> verity_vllm/observe/profiles/workload_cov_pythia160m_b8-static_c256_r2.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_qwen05_b1_c1024.json -> verity_vllm/observe/profiles/workload_cov_qwen05_b1_c1024.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_qwen05_b1_c256.json -> verity_vllm/observe/profiles/workload_cov_qwen05_b1_c256.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_qwen05_b8-mixed_c1024.json -> verity_vllm/observe/profiles/workload_cov_qwen05_b8-mixed_c1024.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_qwen05_b8-mixed_c256.json -> verity_vllm/observe/profiles/workload_cov_qwen05_b8-mixed_c256.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_qwen05_b8-static_c1024.json -> verity_vllm/observe/profiles/workload_cov_qwen05_b8-static_c1024.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_cov_qwen05_b8-static_c256.json -> verity_vllm/observe/profiles/workload_cov_qwen05_b8-static_c256.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_gemma2_2b_32x16_1req.json -> verity_vllm/observe/profiles/workload_gemma2_2b_32x16_1req.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_llama32_1b_32x16_1req.json -> verity_vllm/observe/profiles/workload_llama32_1b_32x16_1req.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_olmoe_1x1_1req.json -> verity_vllm/observe/profiles/workload_olmoe_1x1_1req.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_olmoe_32x16_1req.json -> verity_vllm/observe/profiles/workload_olmoe_32x16_1req.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_olmoe_3x1_1req.json -> verity_vllm/observe/profiles/workload_olmoe_3x1_1req.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_phi3_mini_32x16_1req.json -> verity_vllm/observe/profiles/workload_phi3_mini_32x16_1req.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_qwen05_32x16_1req.json -> verity_vllm/observe/profiles/workload_qwen05_32x16_1req.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_qwen15_32x16_1req.json -> verity_vllm/observe/profiles/workload_qwen15_32x16_1req.json  DELETE-BY:vllm-profiles-generic
-verity_capture/profiles/workload_qwen15_conc4_mixed.json -> verity_vllm/observe/profiles/workload_qwen15_conc4_mixed.json  DELETE-BY:vllm-profiles-generic
 verity_capture/protected.py -> verity_vllm/check/protected.py  DELETE-BY:vllm-dead-code
 verity_capture/provenance.py -> verity_vllm/check/operand_provenance.py
 verity_capture/quarantine_lint.py -> verity_vllm/check/quarantine_lint.py  DELETE-BY:vllm-dead-code
 verity_capture/replay.py -> verity_vllm/check/replay.py
-verity_capture/replay_budgeted.py -> verity_vllm/check/replay_budgeted.py  DELETE-BY:vllm-dead-code
 verity_capture/resolver.py -> verity_vllm/observe/resolver.py
 verity_capture/root_policy.py -> verity_vllm/input_provenance/root_policy.py
 verity_capture/storage.py -> verity_vllm/observe/storage.py
 verity_capture/sweep/__init__.py -> DROP
 verity_capture/sweep/canary.sh -> verity_vllm/ops/canary.sh
-verity_capture/sweep/commit_summary.py -> verity_vllm/harness/commit_summary.py
 verity_capture/sweep/compiled_commit.sh -> verity_vllm/ops/compiled_commit.sh
 verity_capture/sweep/fa2_attn_oracle.py -> verity_vllm/check/fa2_attn_oracle.py  DELETE-BY:vllm-dead-code
 verity_capture/sweep/fa2_tap_src/apply_v8.py -> verity_vllm/acquire/fa2_tap_src/apply_v8.py
@@ -751,7 +632,6 @@ verity_capture/sweep/fa3_tap_src/build_fa3_ext.py -> verity_vllm/acquire/fa3_tap
 verity_capture/sweep/fa3_tap_src/fa3_stubs.cu -> verity_vllm/acquire/fa3_tap_src/fa3_stubs.cu
 verity_capture/sweep/fa3_tap_src/verity_tap_fa3.h -> verity_vllm/acquire/fa3_tap_src/verity_tap_fa3.h
 verity_capture/sweep/fa3_tap_src/verity_tap_params.h -> verity_vllm/acquire/fa3_tap_src/verity_tap_params.h
-verity_capture/sweep/finalize.py -> verity_vllm/harness/finalize.py
 verity_capture/sweep/hidden_gpu_src/hidden_gpu.py -> verity_vllm/acquire/hidden_gpu_src/hidden_gpu.py
 verity_capture/sweep/hidden_gpu_src/hidden_gpu_tree.cu -> verity_vllm/acquire/hidden_gpu_src/hidden_gpu_tree.cu
 verity_capture/sweep/hot_commit.py -> verity_vllm/harness/hot_commit.py
@@ -772,6 +652,7 @@ verity_capture/sweep/stoch_negative_n3.sh -> verity_vllm/ops/stoch_negative_n3.s
 verity_capture/sweep/stoch_negatives.sh -> verity_vllm/ops/stoch_negatives.sh
 verity_capture/sweep/target_family.py -> verity_vllm/harness/target_family.py
 verity_capture/sweep/timeline.py -> verity_vllm/harness/timeline.py
+verity_capture/sweep/tp_stage.sh -> verity_vllm/ops/tp_stage.sh
 verity_capture/sweep/workload.py -> verity_vllm/harness/workload.py
 verity_capture/telemetry/__init__.py -> verity_vllm/harness/telemetry/__init__.py
 verity_capture/telemetry/admission.py -> verity_vllm/harness/telemetry/admission.py
@@ -799,8 +680,6 @@ verity_capture/tests/test_dense_generic.py -> tests/observe/test_dense_generic.p
 verity_capture/tests/test_difftest.py -> tests/check/test_difftest.py
 verity_capture/tests/test_events_log_tree.py -> tests/observe/test_events_log_tree.py
 verity_capture/tests/test_experiment_index.py -> tests/harness/test_experiment_index.py
-verity_capture/tests/test_experimental_fp16_rules.py -> tests/check/test_experimental_fp16_rules.py
-verity_capture/tests/test_experimental_prefix_g3_rules.py -> tests/check/test_experimental_prefix_g3_rules.py
 verity_capture/tests/test_fa2_tap_geometry.py -> tests/acquire/test_fa2_tap_geometry.py
 verity_capture/tests/test_fold_group_part_event.py -> tests/observe/test_fold_group_part_event.py
 verity_capture/tests/test_fold_m1.py -> tests/observe/test_fold_m1.py
@@ -817,11 +696,10 @@ verity_capture/tests/test_gen_dense_gemma2_patterns.py -> tests/observe/test_gen
 verity_capture/tests/test_gen_dense_softcap.py -> tests/observe/test_gen_dense_softcap.py
 verity_capture/tests/test_gen_llama.py -> tests/observe/test_gen_llama.py
 verity_capture/tests/test_gen_ln.py -> tests/observe/test_gen_ln.py
-verity_capture/tests/test_gen_moe_olmoe.py -> tests/observe/test_gen_moe_olmoe.py  DELETE-BY:vllm-profiles-generic
 verity_capture/tests/test_gen_ov_easy.py -> tests/observe/test_gen_ov_easy.py
 verity_capture/tests/test_gen_ov_moe.py -> tests/observe/test_gen_ov_moe.py
 verity_capture/tests/test_gen_ov_moe_padded.py -> tests/observe/test_gen_ov_moe_padded.py
-verity_capture/tests/test_gen_ov_moe_qwen3.py -> tests/observe/test_gen_ov_moe_qwen3.py  DELETE-BY:vllm-profiles-generic
+verity_capture/tests/test_gen_ov_moe_qwen3.py -> tests/observe/test_gen_ov_moe_qwen3.py
 verity_capture/tests/test_gen_ov_moe_vu_shapes.py -> tests/program/test_gen_ov_moe_vu_shapes.py
 verity_capture/tests/test_gen_ov_sampling.py -> tests/observe/test_gen_ov_sampling.py
 verity_capture/tests/test_gen_ovbatch.py -> tests/observe/test_gen_ovbatch.py
@@ -841,13 +719,14 @@ verity_capture/tests/test_p0_footprint.py -> tests/acquire/test_p0_footprint.py
 verity_capture/tests/test_patterns_synthetic.py -> tests/observe/test_patterns_synthetic.py
 verity_capture/tests/test_pinned_pool_exact.py -> tests/acquire/test_pinned_pool_exact.py
 verity_capture/tests/test_prefix_cache.py -> tests/observe/test_prefix_cache.py  DELETE-BY:vllm-dead-code
+verity_capture/tests/test_profiles_generic.py -> tests/observe/test_profiles_generic.py
 verity_capture/tests/test_provenance.py -> tests/check/test_provenance.py
 verity_capture/tests/test_quarantine_lint.py -> tests/check/test_quarantine_lint.py  DELETE-BY:vllm-dead-code
 verity_capture/tests/test_ref_integrity.py -> tests/observe/test_ref_integrity.py
 verity_capture/tests/test_release_json.py -> tests/harness/test_release_json.py
-verity_capture/tests/test_replay_budgeted.py -> tests/check/test_replay_budgeted.py  DELETE-BY:vllm-dead-code
 verity_capture/tests/test_replay_m1.py -> tests/check/test_replay_m1.py
 verity_capture/tests/test_replay_synthetic.py -> tests/check/test_replay_synthetic.py
+verity_capture/tests/test_research_outputs_tp.py -> tests/harness/test_research_outputs_tp.py
 verity_capture/tests/test_resolve_log_group_label.py -> tests/observe/test_resolve_log_group_label.py
 verity_capture/tests/test_resolve_m1.py -> tests/observe/test_resolve_m1.py
 verity_capture/tests/test_root_policy.py -> tests/input_provenance/test_root_policy.py
@@ -861,7 +740,7 @@ verity_capture/tests/test_ship_roots.py -> tests/program/test_ship_roots.py
 verity_capture/tests/test_source_identity.py -> tests/harness/test_source_identity.py
 verity_capture/tests/test_stoch_draw_ledger.py -> tests/check/test_stoch_draw_ledger.py
 verity_capture/tests/test_target_family.py -> tests/harness/test_target_family.py
-verity_capture/tests/test_tp2_analyze.py -> tests/tp/test_tp2_analyze.py  DELETE-BY:vllm-dead-code
+verity_capture/tests/test_tp2_analyze.py -> tests/tp/test_tp2_analyze.py
 verity_capture/tests/test_tp2_d90_fixture.py -> tests/tp/test_tp2_d90_fixture.py
 verity_capture/tests/test_tp2_rank_profiles.py -> tests/tp/test_tp2_rank_profiles.py
 verity_capture/tests/test_tp_collective.py -> tests/tp/test_tp_collective.py
@@ -871,31 +750,44 @@ verity_capture/tests/test_vu_conformance.py -> tests/query/test_vu_conformance.p
 verity_capture/tests/test_x03_identities.py -> tests/acquire/test_x03_identities.py
 verity_capture/tests/test_x03_plane_classes.py -> tests/acquire/test_x03_plane_classes.py
 verity_capture/tp/__init__.py -> verity_vllm/tp/__init__.py
+verity_capture/tp/analyze.py -> verity_vllm/tp/analyze.py
+verity_capture/tp/capture.py -> verity_vllm/tp/capture.py
 verity_capture/tp/collective_link.py -> verity_vllm/tp/collective_link.py
 verity_capture/tp/collective_pattern.py -> verity_vllm/tp/collective_pattern.py
 verity_capture/tp/collective_record.py -> verity_vllm/tp/collective_record.py
 verity_capture/tp/collective_sites.py -> verity_vllm/tp/collective_sites.py
+verity_capture/tp/commit.py -> verity_vllm/tp/commit.py
+verity_capture/tp/embedding_shard.py -> verity_vllm/tp/embedding_shard.py
+verity_capture/tp/fold_match.py -> verity_vllm/tp/fold_match.py
+verity_capture/tp/match.py -> verity_vllm/tp/match.py
 verity_capture/tp/rank_match.py -> verity_vllm/tp/rank_match.py
+verity_capture/tp/tests/test_tp2_attribution.py -> tests/tp/test_tp2_attribution.py
+verity_capture/tp/tests/test_tp2_commit_query_population.py -> tests/tp/test_tp2_commit_query_population.py
+verity_capture/tp/tests/test_tp2_match_mid_module_rows.py -> tests/tp/test_tp2_match_mid_module_rows.py
+verity_capture/tp/tests/test_tp2_match_provenance_digests.py -> tests/tp/test_tp2_match_provenance_digests.py
+verity_capture/tp/tests/test_tp2_match_sites.py -> tests/tp/test_tp2_match_sites.py
+verity_capture/tp/tests/test_tp2_request_program_dirs.py -> tests/tp/test_tp2_request_program_dirs.py
+verity_capture/tp/tests/test_tp2_sampled_replay_fold.py -> tests/tp/test_tp2_sampled_replay_fold.py
+verity_capture/tp/tests/test_tp2_serve_shard_from.py -> tests/tp/test_tp2_serve_shard_from.py
+verity_capture/tp/tests/test_tp2_t6_4_check.py -> tests/tp/test_tp2_t6_4_check.py
+verity_capture/tp/tests/test_tp2_xrank_collectives.py -> tests/tp/test_tp2_xrank_collectives.py
+verity_capture/tp/tests/test_tp_world_n.py -> tests/tp/test_tp_world_n.py
+verity_capture/tp/worker.py -> verity_vllm/tp/worker.py
 verity_capture/tree.py -> verity_vllm/observe/tree.py
 verity_capture/triton_adapter.py -> verity_vllm/observe/triton_adapter.py
 verity_capture/twins.py -> verity_vllm/check/twins.py
 verity_capture/views.py -> verity_vllm/observe/views.py
 verity_capture/vllm_adapter.py -> verity_vllm/observe/vllm_adapter.py
-verity_capture/vu_canonical.py -> verity_vllm/query/vu_canonical.py
 verity_capture/vu_query.py -> verity_vllm/query/vu_query.py
 verity_vllm/__init__.py -> verity_vllm/__init__.py
 verity_vllm/acquire/__init__.py -> verity_vllm/acquire/__init__.py
 verity_vllm/acquire/correspondence.py -> verity_vllm/correspondence/reader_for_acquire.py
 verity_vllm/acquire/gate.py -> verity_vllm/acquire/gate.py  DELETE-BY:vllm-v2-default
 verity_vllm/acquire/install.py -> verity_vllm/acquire/install.py
-verity_vllm/acquire/match_compare.py -> verity_vllm/acquire/match_compare.py  DELETE-BY:vllm-v2-default
 verity_vllm/acquire/plan.py -> verity_vllm/acquire/plan.py
 verity_vllm/acquire/pod_gate.sh -> verity_vllm/ops/pod_gate.sh  DELETE-BY:vllm-v2-default
-verity_vllm/acquire/pod_match_v2.sh -> verity_vllm/ops/pod_match_v2.sh  DELETE-BY:vllm-v2-default
 verity_vllm/acquire/runtime_tree.py -> verity_vllm/correspondence/runtime_tree.py
 verity_vllm/acquire/stage.py -> verity_vllm/acquire/stage.py
-verity_vllm/acquire/switch.py -> verity_vllm/acquire/switch.py  DELETE-BY:vllm-v2-default
-verity_vllm/acquire/v1_decision.py -> verity_vllm/acquire/v1_decision.py  DELETE-BY:vllm-v2-default
 verity_vllm/capture.py -> verity_vllm/observe/capture_v1.py
 verity_vllm/commit.py -> verity_vllm/commit/merkle.py
 verity_vllm/commit_bench/__init__.py -> DROP
@@ -953,9 +845,7 @@ verity_vllm/ir/sampling_event.py -> verity_vllm/program/sampling_event.py
 verity_vllm/ir/workload.py -> verity_vllm/program/workload.py
 verity_vllm/lifting/__init__.py -> verity_vllm/program/lifting/__init__.py
 verity_vllm/lifting/continuation.py -> verity_vllm/program/lifting/continuation.py
-verity_vllm/lifting/correspondence.py -> verity_vllm/program/lifting/correspondence.py
 verity_vllm/lifting/dump.py -> verity_vllm/program/lifting/dump.py
-verity_vllm/lifting/record.py -> verity_vllm/program/lifting/record.py
 verity_vllm/observe.py -> verity_vllm/observe/contract.py
 verity_vllm/query/__init__.py -> verity_vllm/query/__init__.py
 verity_vllm/query/cli.py -> verity_vllm/query/cli.py
@@ -971,7 +861,6 @@ verity_vllm/registry/conformance.py -> verity_vllm/program/registry/conformance.
 verity_vllm/registry/crosscheck.py -> verity_vllm/program/registry/crosscheck.py
 verity_vllm/registry/dense.py -> verity_vllm/program/registry/dense.py
 verity_vllm/registry/derived_rows.py -> verity_vllm/program/registry/derived_rows.py
-verity_vllm/registry/derived_rows_torch.py -> verity_vllm/program/registry/derived_rows_torch.py
 verity_vllm/registry/fp8.py -> verity_vllm/program/registry/fp8.py
 verity_vllm/registry/gemm_targets.py -> verity_vllm/program/registry/gemm_targets.py
 verity_vllm/registry/hopper.py -> verity_vllm/program/registry/hopper.py
@@ -1045,8 +934,6 @@ verity_vllm_numerics/__init__.py -> verity_vllm/program/numerics/__init__.py
 verity_vllm_numerics/_jit.py -> verity_vllm/program/numerics/_jit.py
 verity_vllm_numerics/beyond_gemm.py -> verity_vllm/program/numerics/beyond_gemm.py
 verity_vllm_numerics/cpp/fa2_model.cpp -> verity_vllm/program/numerics/cpp/fa2_model.cpp
-verity_vllm_numerics/cpp/libfa2_model.so -> verity_vllm/program/numerics/cpp/libfa2_model.so  DELETE-BY:vllm-cleanup-2
-verity_vllm_numerics/cpp/librms_triton_model.so -> verity_vllm/program/numerics/cpp/librms_triton_model.so  DELETE-BY:vllm-cleanup-2
 verity_vllm_numerics/cpp/rms_triton_model.cpp -> verity_vllm/program/numerics/cpp/rms_triton_model.cpp
 verity_vllm_numerics/cpp/tc_model.cpp -> verity_vllm/program/numerics/cpp/tc_model.cpp
 verity_vllm_numerics/cpu_model.py -> verity_vllm/program/numerics/cpu_model.py
@@ -1101,6 +988,7 @@ workloads/llama32-1b__bf16__l40s__tp1__b8__i1024__o128__mixed__stoch-t0.8-p0.95_
 workloads/llama32-1b__bf16__l40s__tp1__b8__i256__o32__mixed__greedy__bi-eager.json -> workloads/llama32-1b__bf16__l40s__tp1__b8__i256__o32__mixed__greedy__bi-eager.json
 workloads/llama32-1b__bf16__l40s__tp2__b1__i256__o32__mixed__greedy__bi-eager.json -> workloads/llama32-1b__bf16__l40s__tp2__b1__i256__o32__mixed__greedy__bi-eager.json
 workloads/llama32-1b__bf16__l40s__tp2__b8__i1024__o128__mixed__greedy__bi-eager.json -> workloads/llama32-1b__bf16__l40s__tp2__b8__i1024__o128__mixed__greedy__bi-eager.json
+workloads/llama32-1b__bf16__l40s__tp4__b8__i256__o32__mixed__greedy__bi-eager.json -> workloads/llama32-1b__bf16__l40s__tp4__b8__i256__o32__mixed__greedy__bi-eager.json
 workloads/mistral-7b__bf16__a100__tp1__b1__i1024__o128__mixed__greedy__bi-eager.json -> workloads/mistral-7b__bf16__a100__tp1__b1__i1024__o128__mixed__greedy__bi-eager.json
 workloads/mistral-7b__bf16__l40s__tp1__b1__i1024__o128__mixed__greedy__bi-eager.json -> workloads/mistral-7b__bf16__l40s__tp1__b1__i1024__o128__mixed__greedy__bi-eager.json
 workloads/mistral-7b__bf16__l40s__tp1__b1__i256__o15__mixed__greedy__bi-eager.json -> workloads/mistral-7b__bf16__l40s__tp1__b1__i256__o15__mixed__greedy__bi-eager.json
@@ -1159,6 +1047,41 @@ workloads/smollm2-135m__bf16__l40s__tp1__b2__i32__o32__mixedstop__greedy__bi-eag
 workloads/smollm2-135m__bf16__l40s__tp1__b32__i1024__o128__mixed__greedy__bi-eager.json -> workloads/smollm2-135m__bf16__l40s__tp1__b32__i1024__o128__mixed__greedy__bi-eager.json
 workloads/smollm2-135m__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json -> workloads/smollm2-135m__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json
 workloads/smollm2-135m__bf16__l40s__tp1__b8__i256__o32__mixed__greedy__bi-eager.json -> workloads/smollm2-135m__bf16__l40s__tp1__b8__i256__o32__mixed__greedy__bi-eager.json
+workloads/workload_32x16_1req.json -> workloads/workload_32x16_1req.json
+workloads/workload_b0_chunked_200p.json -> workloads/workload_b0_chunked_200p.json
+workloads/workload_b0_conc2_small.json -> workloads/workload_b0_conc2_small.json
+workloads/workload_b0_conc4_mixed.json -> workloads/workload_b0_conc4_mixed.json
+workloads/workload_b0_conc8_mixed.json -> workloads/workload_b0_conc8_mixed.json
+workloads/workload_b0_long512_1req.json -> workloads/workload_b0_long512_1req.json
+workloads/workload_b0_prefix64_2req.json -> workloads/workload_b0_prefix64_2req.json
+workloads/workload_b0_sampling_2req_seeds.json -> workloads/workload_b0_sampling_2req_seeds.json
+workloads/workload_b0_sampling_n2.json -> workloads/workload_b0_sampling_n2.json
+workloads/workload_b0_sampling_temp07.json -> workloads/workload_b0_sampling_temp07.json
+workloads/workload_b0_sampling_topk50_topp09.json -> workloads/workload_b0_sampling_topk50_topp09.json
+workloads/workload_b1_sampling_2req_seeds.json -> workloads/workload_b1_sampling_2req_seeds.json
+workloads/workload_b1_sampling_combo.json -> workloads/workload_b1_sampling_combo.json
+workloads/workload_b1_sampling_mixed.json -> workloads/workload_b1_sampling_mixed.json
+workloads/workload_b1_sampling_n2.json -> workloads/workload_b1_sampling_n2.json
+workloads/workload_b1_sampling_noseed.json -> workloads/workload_b1_sampling_noseed.json
+workloads/workload_b1_sampling_temp07.json -> workloads/workload_b1_sampling_temp07.json
+workloads/workload_b1_sampling_topk50.json -> workloads/workload_b1_sampling_topk50.json
+workloads/workload_b1_sampling_topk50_topp09.json -> workloads/workload_b1_sampling_topk50_topp09.json
+workloads/workload_b1_sampling_topp09.json -> workloads/workload_b1_sampling_topp09.json
+workloads/workload_b7_32x16_1req.json -> workloads/workload_b7_32x16_1req.json
+workloads/workload_cov_b0_b1_c256.json -> workloads/workload_cov_b0_b1_c256.json
+workloads/workload_cov_b0_b1_c256_ck64.json -> workloads/workload_cov_b0_b1_c256_ck64.json
+workloads/workload_cov_b0_b1_c256_r1.json -> workloads/workload_cov_b0_b1_c256_r1.json
+workloads/workload_cov_b0_b1_c256_t1.json -> workloads/workload_cov_b0_b1_c256_t1.json
+workloads/workload_cov_b0_b8-mixed_c256.json -> workloads/workload_cov_b0_b8-mixed_c256.json
+workloads/workload_cov_b0_b8-mixed_c256_t1.json -> workloads/workload_cov_b0_b8-mixed_c256_t1.json
+workloads/workload_cov_b0_prefix_c256.json -> workloads/workload_cov_b0_prefix_c256.json
+workloads/workload_cov_b0_prefix_c256_cold.json -> workloads/workload_cov_b0_prefix_c256_cold.json
+workloads/workload_gemma2_2b_32x16_1req.json -> workloads/workload_gemma2_2b_32x16_1req.json
+workloads/workload_llama32_1b_32x16_1req.json -> workloads/workload_llama32_1b_32x16_1req.json
+workloads/workload_phi3_mini_32x16_1req.json -> workloads/workload_phi3_mini_32x16_1req.json
+workloads/workload_qwen05_32x16_1req.json -> workloads/workload_qwen05_32x16_1req.json
+workloads/workload_qwen15_32x16_1req.json -> workloads/workload_qwen15_32x16_1req.json
+workloads/workload_qwen15_conc4_mixed.json -> workloads/workload_qwen15_conc4_mixed.json
 
 # prefix rules (for files added later inside these directories)
 verity_vllm/registry/ -> verity_vllm/program/registry/
@@ -1220,13 +1143,7 @@ verity_vllm_adapter/binding.py -> verity_vllm/commit/poc_binding.py  DELETE-BY:g
 verity_vllm_adapter/production.py -> verity_vllm/observe/poc_production.py  DELETE-BY:ghost
 verity_vllm_adapter/tp_worker.py -> verity_vllm/tp/poc_tp_worker.py  DELETE-BY:ghost
 verity_vllm/ir/store_nan_scan.py -> verity_vllm/check/store_nan_scan.py  DELETE-BY:ghost
-
-# files other lanes add / remove (seen on lane/vllm-cleanup-2 @ 6811222)
-tests/test_pod_bootstrap.py -> tests/ops/test_pod_bootstrap.py  ADDED-BY:vllm-cleanup-2
-verity_vllm/ir/store_nan_scan.py -> verity_vllm/check/store_nan_scan.py  DELETE-BY:ghost
-
-# files other lanes add / remove (seen on lane/vllm-cleanup-2 @ 6811222)
-tests/test_pod_bootstrap.py -> tests/ops/test_pod_bootstrap.py  ADDED-BY:vllm-cleanup-2
+verity_capture/sweep/commit_summary.py -> verity_vllm/harness/commit_summary.py  DELETE-BY:ghost
 
 # explicit literal rewrites (REWRITE <old file> :: <old literal> => <new literal>; `<DEL>` removes the lines holding the literal).
 # These are the places where `verity_capture` / `verity_vllm_adapter` name a PACKAGE (their members now all live in verity_vllm):
@@ -1279,3 +1196,6 @@ REWRITE tests/test_no_by_name_rules.py :: SKIP_DIRS = frozenset({"tests", "__pyc
 REWRITE tests/test_no_by_name_rules.py :: if fn.endswith(".py") and not fn.startswith("test_")) => if fn.endswith(".py") and not fn.startswith("test_") and fn not in SKIP_FILES)
 # a test that finds the integration root by splitting its own path on the package directory it used to live in
 REWRITE verity_capture/bench/tests/test_commit_verdict_replay_seed_of_record.py :: __file__.rsplit("/verity_capture/", 1)[0] + "/verity_capture/bench/commit_delta.py" => __file__.rsplit("/tests/", 1)[0] + "/verity_vllm/harness/commit_delta.py"
+# the dead-code census walks the integration's packages by name; after the move there is one
+REWRITE tests/dead_code_census.py :: PACKAGES = ("verity_vllm", "verity_capture", "verity_vllm_numerics", "verity_vllm_adapter") => PACKAGES = ("verity_vllm",)
+REWRITE tests/dead_code_census.py :: # os.path.join(REPO, "verity_capture", "sweep", "<name>.py") => # os.path.join(REPO, "verity_vllm", "harness", "<name>.py")

@@ -146,7 +146,11 @@ put('verity_capture/commit/__init__.py', 'verity_vllm/commit/__init__.py')
 put('verity_capture/commit/admission.py', 'verity_vllm/harness/admission_bound.py')
 put('verity_capture/commit/admission_planner.py', 'verity_vllm/harness/admission_planner.py')
 put('verity_capture/commit/binding.py', 'verity_vllm/commit/binding.py')
-put('verity_capture/commit/compiled_manifest.py', 'verity_vllm/query/v1/compiled_manifest.py')   # by-name (tests/program/test_lint.py forbids it in query/*.py)
+# the required-value manifest (format, compiled rows, verify-by-rebuild): a subpackage, because tests/program/test_lint.py holds only
+# query/*.py free of `.startswith(` / model names and the format's identity parser and the compiled path use both
+put('verity_capture/commit/compiled_manifest.py', 'verity_vllm/query/manifest/compiled.py')
+put('verity_capture/commit/manifest_format.py', 'verity_vllm/query/manifest/format.py')
+put('verity_capture/commit/manifest_verify.py', 'verity_vllm/query/manifest/verify.py')
 put('verity_capture/commit/executed_prefix.py', 'verity_vllm/check/executed_prefix.py')
 put('verity_capture/commit/leafhash.py', 'verity_vllm/acquire/leafhash.py')
 put('verity_capture/commit/native_collect.py', 'verity_vllm/acquire/native_collect.py')
@@ -241,8 +245,11 @@ put('verity_capture/tp/collective_pattern.py', 'verity_vllm/tp/collective_patter
 put('verity_capture/tp/collective_record.py', 'verity_vllm/tp/collective_record.py')
 put('verity_capture/tp/collective_sites.py', 'verity_vllm/tp/collective_sites.py')
 put('verity_capture/tp/rank_match.py', 'verity_vllm/tp/rank_match.py')
+for _m in ('analyze', 'capture', 'commit', 'embedding_shard', 'fold_match', 'match', 'worker'):   # TP=N (the tp2_* renames)
+    put(f'verity_capture/tp/{_m}.py', f'verity_vllm/tp/{_m}.py')
 # root
 put('pod_bootstrap.sh', 'verity_vllm/ops/pod_bootstrap.sh')
+put('tests/test_pod_bootstrap.py', 'tests/ops/test_pod_bootstrap.py')
 
 # ---- prefix rules (dir -> dir[, lane]); exact entries win --------------------------------------------------------------
 P = [
@@ -272,7 +279,9 @@ P = [
     ('data/', 'data/', None), ('docs/', 'docs/', None),
 ]
 STAY = {'README.md', 'pyproject.toml', '.gitignore', 'tests/__init__.py', 'tests/by_name_allowlist.json',
-        'tests/test_no_by_name_rules.py', 'tests/query/__init__.py', 'tests/acquire/__init__.py'}
+        'tests/test_no_by_name_rules.py', 'tests/query/__init__.py', 'tests/acquire/__init__.py',
+        'conftest.py',                                    # the integration-wide autouse guard: it must sit above every test dir
+        'tests/dead_code_census.py', 'tests/census_roots.txt', 'tests/dead_code_keep.json', 'tests/test_no_dead_modules.py'}
 
 def place(old):
     if old in E: return E[old]
@@ -473,13 +482,7 @@ verity_vllm_adapter/binding.py -> verity_vllm/commit/poc_binding.py  DELETE-BY:g
 verity_vllm_adapter/production.py -> verity_vllm/observe/poc_production.py  DELETE-BY:ghost
 verity_vllm_adapter/tp_worker.py -> verity_vllm/tp/poc_tp_worker.py  DELETE-BY:ghost
 verity_vllm/ir/store_nan_scan.py -> verity_vllm/check/store_nan_scan.py  DELETE-BY:ghost
-
-# files other lanes add / remove (seen on lane/vllm-cleanup-2 @ 6811222)
-tests/test_pod_bootstrap.py -> tests/ops/test_pod_bootstrap.py  ADDED-BY:vllm-cleanup-2
-verity_vllm/ir/store_nan_scan.py -> verity_vllm/check/store_nan_scan.py  DELETE-BY:ghost
-
-# files other lanes add / remove (seen on lane/vllm-cleanup-2 @ 6811222)
-tests/test_pod_bootstrap.py -> tests/ops/test_pod_bootstrap.py  ADDED-BY:vllm-cleanup-2
+verity_capture/sweep/commit_summary.py -> verity_vllm/harness/commit_summary.py  DELETE-BY:ghost
 
 # explicit literal rewrites (REWRITE <old file> :: <old literal> => <new literal>; `<DEL>` removes the lines holding the literal).
 # These are the places where `verity_capture` / `verity_vllm_adapter` name a PACKAGE (their members now all live in verity_vllm):
@@ -532,6 +535,9 @@ REWRITE tests/test_no_by_name_rules.py :: SKIP_DIRS = frozenset({"tests", "__pyc
 REWRITE tests/test_no_by_name_rules.py :: if fn.endswith(".py") and not fn.startswith("test_")) => if fn.endswith(".py") and not fn.startswith("test_") and fn not in SKIP_FILES)
 # a test that finds the integration root by splitting its own path on the package directory it used to live in
 REWRITE verity_capture/bench/tests/test_commit_verdict_replay_seed_of_record.py :: __file__.rsplit("/verity_capture/", 1)[0] + "/verity_capture/bench/commit_delta.py" => __file__.rsplit("/tests/", 1)[0] + "/verity_vllm/harness/commit_delta.py"
+# the dead-code census walks the integration's packages by name; after the move there is one
+REWRITE tests/dead_code_census.py :: PACKAGES = ("verity_vllm", "verity_capture", "verity_vllm_numerics", "verity_vllm_adapter") => PACKAGES = ("verity_vllm",)
+REWRITE tests/dead_code_census.py :: # os.path.join(REPO, "verity_capture", "sweep", "<name>.py") => # os.path.join(REPO, "verity_vllm", "harness", "<name>.py")
 """)
 print(f"mapped {len(lines)} files; unmapped {len(unmapped)}")
 for u in unmapped: print("  UNMAPPED", u)
