@@ -63,7 +63,7 @@ def test_unknown_and_ambiguous_prefixes_are_refused_by_name(st, monkeypatch, cap
     _put(st, 1)
     assert main(["show", "art:00000000"]) == 1
     err = capsys.readouterr().err
-    assert "art:00000000 matches no artifact" in err and "reindex --remote" in err
+    assert "art:00000000 matches no artifact" in err and "research data refresh" in err
 
     monkeypatch.setattr(Index, "resolve_art_prefix", lambda self, prefix, limit=2: [prefix + "0" * 8, prefix + "1" * 8][:limit])
     assert main(["where", "art:abcdef12"]) == 1

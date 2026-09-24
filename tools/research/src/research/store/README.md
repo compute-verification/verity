@@ -358,6 +358,29 @@ id into the map's `previous` block (`{"previous": {"art:<new>": ["art:<old>", ..
 copies an attempt manifest plus its outputs' manifests and blobs from a machine's local store over ssh (uses
 `research.remote` helpers) — the same-host tier of the planner until R2 is configured.
 
+### 7.2 Remote-first: write-through, verdicts, refresh, parity
+
+- **Write-through.** With `[remote] write_through = true` in store.toml, or `RESEARCH_WRITE_THROUGH=1`, or (no store.toml, no
+  `$RESEARCH_STORE_CONFIG`) `R2_ENDPOINT` + `R2_BUCKET` in the environment, `research data label` and `put` upload in the same
+  command. The local write stands whatever the upload does; the command says `on <remote>`, `NOT preserved (<why>)` or `local only
+  (write-through off)`, never nothing. Attempt publishing already uploads whenever a remote is usable. Off on the laptop until its
+  store.toml sets the flag.
+- **Pending queue.** `research data pending` lists what this store holds that the remote lacks (one listing per prefix): artifacts
+  with no verified remote replica whose manifest the remote lacks or whose blobs are all local, attempts, assertions. `push
+  --pending` drains exactly that. An artifact pulled from the remote without its blobs is the remote's already and is not queued.
+- **Verdicts do not depend on the uploader.** `preserved --mode recorded` (the FINAL check) trusts a recorded verified replica and,
+  where there is none (a pod's upload), runs the `head` check against the remote, which records the replica when it passes.
+  `head_fallback=False` keeps it offline (the reaper, which bounds what it reads back). Abbreviated `art:` ids the local catalog
+  does not know are resolved against the remote's `manifests/<prefix>` listing.
+- **Refresh.** `research data refresh` fetches only the manifests (re-hashed to their ids), attempts and assertions this store
+  lacks, and indexes just those. A fresh machine builds its catalog this way.
+- **Atomic rebuild.** `reindex` builds the new catalog beside the old one, carries the replica records over, and renames it into
+  place once complete; an open `LocalStore` notices the new file and reopens it.
+- **Parity.** `research data parity --fresh DIR [--render] [--json-out F]` (`parity.py`) builds a store at DIR from the remote alone
+  and compares it with this one on content: ids and manifest bytes, attempt documents, label content hashes, every verified replica
+  row confirmed by HEAD (manifest + blobs, sizes), and with `--render` the `bench.tables` markdown. Every difference gets a cause
+  (`pending here`, `not pulled`, `uploaded during the run`); anything else fails (exit 1). Read-only for the store under test.
+
 ## 8. Labels
 
 `labels/<target>/<ts>-<by>.json` locally; on the remote `labels/<target>/<sha256 of the canonical assertion>.json` (content key,

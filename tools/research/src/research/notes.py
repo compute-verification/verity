@@ -16,8 +16,9 @@ work a successor took over: it is done, never STALE.
 Handoffs are files named `*handoff*` / `*asks*` / `*reply*` in the recipient's lane dir.  `checkpoint` (and `inbox`) print the
 ones changed since the lane was last shown its inbox, by mtime, and mark them read; a successor (`bind --succeeds`, or the
 predecessor's `[superseded] by <lane>` checkpoint) also gets its predecessors' unread ones.  `checkpoint LANE final` then runs
-the finish checks: every `art:` id the report cites is preserved on the remote (catalog-recorded), no pod of the lane is still
-running (`--keep-pod WHY` when one should), the worktree is clean at the branch tip, and every handoff is named in the report.
+the finish checks: every `art:` id the report cites is preserved on the remote (recorded, else verified there now), no pod of
+the lane is still running (`--keep-pod WHY` when one should), the worktree is clean at the branch tip, and every handoff is
+named in the report.
 The FINAL line is written regardless; any failed check exits 3.
 
 `bind` records where a lane works in `<root>/lanes/<lane>/binding.json` (a successor that takes over its predecessor's
@@ -604,12 +605,12 @@ def _custody(arts: list[str]) -> tuple[bool | None, str]:
     st = LocalStore(None)
     full, unknown = [], []
     for a in arts:
-        hits = st.index.resolve_art_prefix(f"art:{a}")
+        hits = st.resolve_art(f"art:{a}")
         (full.append(hits[0]) if len(hits) == 1 else unknown.append(f"art:{a}"))
     rep = preserved.check(st, full, mode="recorded")
     bad = [x["id"] for x in rep["not_preserved"]] + unknown
     if not bad:
-        return True, f"{len(arts)} cited artifacts preserved (catalog-recorded remote replicas)"
+        return True, f"{len(arts)} cited artifacts preserved (recorded remote replicas, else verified on the remote now)"
     ids_ = " ".join(b[:13] for b in bad[:8]) + (" ..." if len(bad) > 8 else "")
     return False, f"{len(bad)}/{len(arts)} cited artifacts not preserved: {ids_} -> research data push <ids> --verify head"
 
@@ -939,10 +940,10 @@ def art_custody(arts: list[str], max_readback_mb: float = 64) -> tuple[bool, str
 
     st = LocalStore(None)
     for a in arts:
-        hits = st.index.resolve_art_prefix(f"art:{a}")
+        hits = st.resolve_art(f"art:{a}")
         if len(hits) != 1:
-            return False, f"art:{a} is {'ambiguous' if hits else 'unknown'} in the local catalog"
-        if preserved.check(st, [hits[0]], mode="recorded")["preserved"]:
+            return False, f"art:{a} is {'ambiguous' if hits else 'unknown'} in the local catalog and on the remote"
+        if preserved.check(st, [hits[0]], mode="recorded", head_fallback=False)["preserved"]:
             continue
         try:
             m = st.get_manifest(hits[0])

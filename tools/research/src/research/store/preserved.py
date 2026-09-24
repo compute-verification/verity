@@ -8,7 +8,9 @@ an `art:` id.  Three legs, each reported by name (`legs`: `manifest`, `artifacts
   artifacts  an artifact is PRESERVED when the remote holds its manifest (read back, sha256 == id) and every blob: remote size ==
              manifest size and, per `mode`, `head` = single-part ETag == local MD5 when the blob is local and the remote gives an
              MD5 ETag, otherwise a full read-back sha256; `readback` = always read back; `recorded` = trust the local catalog's
-             verified remote replica (offline; what `push --verify`/`verify` recorded);
+             verified remote replica (what `push --verify`/`verify` recorded), and where there is none (an upload made from a
+             pod or another machine) run the `head` check against the remote, which records the replica when it passes -- so the
+             verdict does not depend on which machine uploaded; offline only for artifacts already recorded;
   labels     every local assertion about the attempt, its derivation and its named artifacts (`labels_sync.attempt_targets`) is
              listed on the remote under its content key and HEADs back with its canonical size (`labels_sync.verify_targets`) --
              a preserved Attempt is not preserved until its assertions are durable too (r20: labels lived only on the pods).
@@ -48,7 +50,7 @@ def attempt_artifacts(doc: dict[str, Any]) -> dict[str, str]:
     return out
 
 
-def _check_artifact(st: LocalStore, art_id: str, mode: str) -> dict[str, Any]:
+def _check_artifact(st: LocalStore, art_id: str, mode: str, head_fallback: bool = True) -> dict[str, Any]:
     rep: dict[str, Any] = {"id": art_id, "kind": None, "preserved": False, "checked": 0, "errors": [], "verified": None}
     try:
         m = st.get_manifest(art_id)
@@ -61,9 +63,12 @@ def _check_artifact(st: LocalStore, art_id: str, mode: str) -> dict[str, Any]:
         rec = st.index.replicas(art_id).get("remote") or {}
         if rec.get("verified_utc"):
             rep.update(preserved=True, verified=rec.get("verified"), verified_utc=rec["verified_utc"], checked=len(m.blobs()) + 1)
-        else:
-            rep["errors"].append("no verified remote replica recorded in the local catalog")
-        return rep
+            return rep
+        if st.remote is None or not head_fallback:
+            rep["errors"].append("no verified remote replica recorded in the local catalog"
+                                 + (f", and the remote is unusable here: {st.remote_error}" if getattr(st, "remote_error", None) else ""))
+            return rep
+        mode = "head"
     r = st.remote
     if r is None:
         rep["errors"].append(f"remote unusable: {st.remote_error}" if getattr(st, "remote_error", None) else "no remote configured")
@@ -118,8 +123,8 @@ def _check_artifact(st: LocalStore, art_id: str, mode: str) -> dict[str, Any]:
     return rep
 
 
-def check(st: LocalStore, targets: list[str], mode: str = "head") -> dict[str, Any]:
-    """The gate over several targets.  `preserved` is True iff every target is: for a run id, its attempt manifest is on the remote
+def check(st: LocalStore, targets: list[str], mode: str = "head", head_fallback: bool = True) -> dict[str, Any]:
+    """The gate over several targets (`head_fallback=False`: `recorded` stays offline, a caller that bounds what it reads back).  `preserved` is True iff every target is: for a run id, its attempt manifest is on the remote
     and every artifact it names is preserved (an attempt naming no artifact is preserved once its manifest is); for an art id, the
     artifact is.  `not_preserved` lists what is not, with reasons."""
     if mode not in MODES:
@@ -132,7 +137,7 @@ def check(st: LocalStore, targets: list[str], mode: str = "head") -> dict[str, A
 
     def art(a: str) -> dict[str, Any]:
         if a not in seen:
-            seen[a] = _check_artifact(st, a, mode)
+            seen[a] = _check_artifact(st, a, mode, head_fallback)
         return seen[a]
 
     def labels_leg(t: str, label_targets: list[str]) -> tuple[bool | None, dict[str, Any] | None]:
@@ -152,6 +157,14 @@ def check(st: LocalStore, targets: list[str], mode: str = "head") -> dict[str, A
                                  "missing": sum(len(x["missing"]) for x in lrep["targets"].values()), "targets": lrep["targets"], "errors": errors}
 
     for t in targets:
+        if ids.is_short_art(t):
+            hits = st.resolve_art(t)
+            if len(hits) != 1:
+                err = f"{t} is {'ambiguous' if hits else 'unknown'} (local catalog{' and remote' if r is not None else ''})"
+                rep["targets"].append({"target": t, "kind": "?", "preserved": False, "error": err})
+                rep["not_preserved"].append({"id": t, "kind": "?", "errors": [err]})
+                continue
+            t = hits[0]
         if t.startswith("art:"):
             a = art(t)
             tr: dict[str, Any] = {"target": t, "kind": "artifact", "preserved": a["preserved"], "artifacts": {t: a}}
