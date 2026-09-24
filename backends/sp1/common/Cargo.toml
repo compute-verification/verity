@@ -42,3 +42,7 @@ unsound-skip-path-fold = []
 # sha256(input) || sha256(output word) || 0xEE (`relation_only`).  The
 # arithmetic baseline of the zkVM path; measures nothing about verification.
 unsound-relation-only = []
+# The Table 2 bare statement (`bare`, authentication excluded): its own guest ELF, which reads a batch of VUs'
+# rows as private input and commits sha256(statement bytes) || verdict over the public output words.  Sound for
+# that statement.  Only adds the module (declared last), so the checker's ELF is untouched.
+relation-bare = []

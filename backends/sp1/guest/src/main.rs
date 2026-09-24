@@ -51,7 +51,7 @@ sp1_zkvm::entrypoint!(main);
 
 use veritor_zk_common::DIAGNOSTIC_BANNER;
 
-#[cfg(not(feature = "unsound-relation-only"))] fn main() { // (same line: the sound ELF's panic locations stay put)
+#[cfg(not(any(feature = "unsound-relation-only", feature = "relation-bare")))] fn main() { // (same line: the sound ELF's panic locations stay put)
     if let Some(banner) = DIAGNOSTIC_BANNER {
         println!("{banner}");
     }
@@ -103,5 +103,44 @@ fn main() {
     let public_values = veritor_zk_common::relation_only::decide(&input);
     sp1_zkvm::io::commit_slice(&public_values);
     // halt right after the commit, as the sound guest does (the input buffer is never dropped)
+    sp1_zkvm::syscalls::syscall_halt(0);
+}
+
+/// RELATION-BARE BUILD (`--features relation-bare`): the Table 2 bare statement, `veritor_zk_common::bare`.
+///
+/// Reads the header (format, instance-set id, K, B, the claimed words y), then the VUs' rows chunk by chunk as private
+/// input, runs `bare::check_words` on each chunk in place (SP1 places every `read_vec` buffer 8-byte aligned in its
+/// input region, so a chunk is read as u64 words), and commits `sha256(statement bytes) || verdict`.  A malformed
+/// header commits `[0; 32] || 0`; the first failing chunk stops the reading and commits the reject byte.  Sound for
+/// its statement -- a wrong y gives verdict 0 -- and it authenticates nothing: the rows are private and unbound
+/// (Table 2's `authentication = excluded`).  Declared last so the checker's source lines (its ELF) are untouched.
+#[cfg(all(feature = "relation-bare", not(feature = "unsound-relation-only")))]
+fn main() {
+    use veritor_zk_common::bare;
+
+    let header = sp1_zkvm::io::read_vec();
+    let public_values = match bare::parse_header(&header) {
+        None => bare::public_values(&[0u8; 32], false),
+            Some(h) => {
+                println!("cycle-tracker-report-start: bare.digest");
+                let digest = bare::statement_digest_le(h.format, &h.id, h.k, h.b, h.y_le);
+                println!("cycle-tracker-report-end: bare.digest");
+                let (b, per, yb) = (h.b as usize, h.vus_per_read as usize, h.format.y_bytes());
+                let mut ok = h.k as usize == bare::K && per > 0;
+                let mut i = 0;
+                println!("cycle-tracker-report-start: bare.check");
+                while ok && i < b {
+                    let n = per.min(b - i);
+                    let chunk = sp1_zkvm::io::read_vec();
+                    // SAFETY: every bit pattern is a u64; a misaligned head or a partial tail rejects
+                    let (head, words, tail) = unsafe { chunk.align_to::<u64>() };
+                    ok = head.is_empty() && tail.is_empty() && bare::check_words(h.format, &chunk, words, &h.y_le[yb * i..yb * (i + n)]);
+                    i += n;
+                }
+            println!("cycle-tracker-report-end: bare.check");
+            bare::public_values(&digest, ok)
+        }
+    };
+    sp1_zkvm::io::commit_slice(&public_values);
     sp1_zkvm::syscalls::syscall_halt(0);
 }
