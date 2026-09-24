@@ -1,6 +1,8 @@
 [workspace]
 resolver = "2"
 members = ["common", "guest", "host", "check-model"]
+# The TC_DOT fork variant is its own workspace (every SP1 crate resolves to the fork).
+exclude = ["tcdot"]
 
 [workspace.package]
 version = "0.1.0"

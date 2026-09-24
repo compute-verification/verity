@@ -19,19 +19,23 @@ use serde::Serialize;
 use sp1_core_executor::tc_dot::{try_tc_dot_bf16_witness, TcBf16Violation};
 use sp1_sdk::prelude::*;
 use sp1_sdk::{ProverClient, SP1Proof};
-use veritor_zk_common::{bare, sha256, tc};
+use veritor_zk_common::bare::{self, Format};
+use veritor_zk_common::{sha256, tc};
 
 const ELF: Elf = include_elf!("verity-tcdot-guest");
 const BACKEND: &str = "sp1 tc-dot";
 const LABEL: &str = "modified SP1 (TC_DOT chip)";
 const SP1_VERSION: &str = "6.4.0";
+const STATEMENT: &str = "relation-bare/v2";
 /// The fork's HEAD, set by the pod build script; empty when built outside it.
 const FORK_HEAD: &str = match option_env!("VERITY_TCDOT_FORK_HEAD") {
     Some(head) => head,
     None => "",
 };
-/// What `bench_bare.py` reads from `info` / `setup` to accept a host: this guest proves `relation-bare/v1`.
+/// What `vector_run.py --backend sp1-bare` reads from `info` / `setup` to accept a host.
 const GUEST_FEATURES: [&str; 1] = ["relation-bare"];
+/// The one format with a chip: the A100 row's `tc-ampere-bf16`.
+const FORMAT: Format = Format::Bf16Ampere;
 const K: usize = bare::K;
 const STEPS: usize = K / 16;
 const ROUTE_BYTES: usize = STEPS / 8;
@@ -63,9 +67,9 @@ struct BareSet {
     /// VUs per `read_vec` chunk.
     #[arg(long, default_value_t = 64)]
     vus_per_read: usize,
-    /// A VU with at least this many steps outside the chip's contract runs whole through `bare::check_vu`
+    /// A VU with at least this many steps outside the chip's contract runs whole through `bare::check_one`
     /// (97 = never, unless no step is inside).
-    #[arg(long, default_value_t = 8)]
+    #[arg(long, env = "VERITY_TCDOT_VU_SOFTWARE_THRESHOLD", default_value_t = 8)]
     vu_software_threshold: u32,
 }
 
@@ -82,6 +86,9 @@ enum Command {
     BareExecute {
         #[command(flatten)]
         set: BareSet,
+        /// Claim a wrong word (low bit flipped) for VU `lo + I`; the verdict must be 0.
+        #[arg(long)]
+        flip_y: Option<usize>,
     },
     /// Write the statement bytes a verifier hashes.
     BareStatement {
@@ -122,16 +129,20 @@ enum Command {
         manifest_sha256: String,
         #[arg(long, default_value = "bench-instances/v1")]
         dataset: String,
-        /// As `bare-prove`'s (0 = every VU through `bare::check_vu`, 97 = per-step routing wherever a step is inside).
-        #[arg(long, default_value_t = 8)]
+        /// As `bare-prove`'s (0 = every VU through `bare::check_one`, 97 = per-step routing wherever a step is inside).
+        #[arg(long, env = "VERITY_TCDOT_VU_SOFTWARE_THRESHOLD", default_value_t = 8)]
         vu_software_threshold: u32,
     },
 }
 
-fn read_u16s(path: &Path) -> Result<Vec<u16>> {
+fn read_bytes(path: &Path) -> Result<Vec<u8>> {
     let bytes = fs::read(path).with_context(|| format!("reading {}", path.display()))?;
     ensure!(bytes.len() % 2 == 0, "{}: odd length", path.display());
-    Ok(bytes.chunks_exact(2).map(|b| u16::from_le_bytes([b[0], b[1]])).collect())
+    Ok(bytes)
+}
+
+fn u16s(bytes: &[u8]) -> Vec<u16> {
+    bytes.chunks_exact(2).map(|b| u16::from_le_bytes([b[0], b[1]])).collect()
 }
 
 #[derive(Default, Serialize, Clone, Debug)]
@@ -140,7 +151,7 @@ struct RouteStats {
     chip_steps: u64,
     /// Single steps the guest runs through `tc::tc_dot`.
     software_steps: u64,
-    /// VUs the guest runs whole through `bare::check_vu` (stock layout).
+    /// VUs the guest runs whole through `bare::check_one` (stock layout).
     software_vus: u64,
     /// Steps outside the chip's contract, by violation (whatever the VU's route).
     contract_violations: BTreeMap<String, u64>,
@@ -234,23 +245,31 @@ impl BareSet {
         bare::identity_string(&self.dataset, &self.tier, self.lo as u64, self.hi as u64, &self.manifest_sha256)
     }
 
-    fn claimed(&self) -> Result<Vec<u16>> {
-        let y = read_u16s(&self.path("y"))?;
+    fn claimed(&self) -> Result<Vec<u32>> {
+        let y = u16s(&read_bytes(&self.path("y"))?);
         ensure!(self.lo < self.hi && self.hi <= y.len(), "range [{}, {}) is not inside the {} instances of {}", self.lo, self.hi, y.len(), self.tier);
-        Ok(y[self.lo..self.hi].to_vec())
+        Ok(y[self.lo..self.hi].iter().map(|&word| u32::from(word)).collect())
     }
 
-    fn prepare(&self, claimed: Option<Vec<u16>>) -> Result<Prepared> {
+    fn statement(&self, claimed: &[u32]) -> Result<Vec<u8>> {
+        let y_le = bare::encode_y(FORMAT, claimed).ok_or_else(|| anyhow!("a claimed word does not fit {}", FORMAT.name()))?;
+        Ok(bare::statement_bytes(FORMAT, &bare::identity_digest(&self.identity()), K as u32, &y_le))
+    }
+
+    fn prepare(&self, claimed: Option<Vec<u32>>) -> Result<Prepared> {
         let claimed = match claimed {
             Some(words) => words,
             None => self.claimed()?,
         };
         ensure!(claimed.len() == self.hi - self.lo && self.vus_per_read > 0, "bad claim / vus_per_read");
-        let (x, w) = (read_u16s(&self.path("x"))?, read_u16s(&self.path("w"))?);
-        ensure!(x.len() >= self.hi * K && w.len() >= self.hi * K, "{}: fewer than {} rows", self.tier, self.hi);
+        let (xb, wb) = (read_bytes(&self.path("x"))?, read_bytes(&self.path("w"))?);
+        let rb = FORMAT.row_bytes();
+        ensure!(xb.len() >= self.hi * rb && wb.len() >= self.hi * rb, "{}: fewer than {} rows", self.tier, self.hi);
+        let (x, w) = (u16s(&xb), u16s(&wb));
         let identity = self.identity();
         let id = bare::identity_digest(&identity);
-        let header = bare::encode_header(K as u32, self.vus_per_read as u32, &id, &claimed);
+        let y_le = bare::encode_y(FORMAT, &claimed).ok_or_else(|| anyhow!("a claimed word does not fit {}", FORMAT.name()))?;
+        let header = bare::encode_header(FORMAT, K as u32, self.vus_per_read as u32, &id, &y_le);
         let mut stats = RouteStats::default();
         let mut routes = Vec::with_capacity((self.hi - self.lo) * ROUTE_BYTES);
         let mut reference_outputs = Vec::with_capacity(self.hi - self.lo);
@@ -258,7 +277,7 @@ impl BareSet {
         let mut stock = Vec::new();
         for lo in (self.lo..self.hi).step_by(self.vus_per_read) {
             let hi = (lo + self.vus_per_read).min(self.hi);
-            let mut blocks = Vec::with_capacity((hi - lo) * bare::VU_BYTES);
+            let mut blocks = Vec::with_capacity((hi - lo) * 2 * rb);
             for i in lo..hi {
                 let (xi, wi) = (&x[K * i..K * (i + 1)], &w[K * i..K * (i + 1)]);
                 let (mask, out) = route_vu(xi, wi, self.vu_software_threshold, &mut blocks, &mut stats);
@@ -266,7 +285,7 @@ impl BareSet {
                 reference_outputs.push(out);
             }
             chunks.push(blocks);
-            stock.push(bare::encode_chunk(&x, &w, lo, hi));
+            stock.push(bare::encode_chunk(FORMAT, &xb, &wb, lo, hi));
         }
         let expected = bare::decide(&header, &stock);
         let n_chunks = chunks.len();
@@ -279,7 +298,7 @@ impl BareSet {
         }
         Ok(Prepared {
             stdin,
-            statement: bare::statement_bytes(&id, K as u32, &claimed),
+            statement: bare::statement_bytes(FORMAT, &id, K as u32, &y_le),
             identity,
             expected,
             stats,
@@ -313,6 +332,7 @@ fn outcome(bytes: &[u8]) -> Result<Outcome> {
 struct ExecuteOutput {
     backend: &'static str,
     label: &'static str,
+    format: &'static str,
     #[serde(flatten)]
     outcome: Outcome,
     total_cycles: u64,
@@ -333,9 +353,11 @@ struct ExecuteOutput {
     matches_expected: bool,
     statement_sha256: String,
     routing: RouteStats,
+    /// `--flip-y I`: the VU (relative to `lo`) whose claimed word is wrong.
+    flipped: Option<usize>,
 }
 
-async fn execute_set<P: Prover>(client: &P, set: &BareSet, claimed: Option<Vec<u16>>) -> Result<(ExecuteOutput, Prepared)> {
+async fn execute_set<P: Prover>(client: &P, set: &BareSet, claimed: Option<Vec<u32>>) -> Result<(ExecuteOutput, Prepared)> {
     let prepared = set.prepare(claimed)?;
     let started = Instant::now();
     let (public_values, report) = client
@@ -347,6 +369,7 @@ async fn execute_set<P: Prover>(client: &P, set: &BareSet, claimed: Option<Vec<u
     let output = ExecuteOutput {
         backend: BACKEND,
         label: LABEL,
+        format: FORMAT.name(),
         outcome: outcome(public_values.as_slice())?,
         total_cycles: report.total_instruction_count(),
         cycle_tracker: report.cycle_tracker.iter().map(|(k, v)| (k.clone(), *v)).collect(),
@@ -371,6 +394,7 @@ async fn execute_set<P: Prover>(client: &P, set: &BareSet, claimed: Option<Vec<u
         matches_expected: public_values.as_slice() == prepared.expected.as_slice(),
         statement_sha256: hex::encode(sha256(&prepared.statement)),
         routing: prepared.stats.clone(),
+        flipped: None,
     };
     Ok((output, prepared))
 }
@@ -423,10 +447,11 @@ async fn cmd_prove(set: BareSet, out_dir: PathBuf, reps: usize, warmup_vus: usiz
     let setup_seconds = started.elapsed().as_secs_f64();
     emit(&serde_json::json!({"event": "setup", "backend": BACKEND, "label": LABEL, "sp1_version": SP1_VERSION,
         "fork_head": FORK_HEAD, "elf_sha256": hex::encode(sha256(&ELF)), "vk_hash": pk.verifying_key().bytes32(),
-        "guest_features": GUEST_FEATURES.join(","),
+        "guest_features": GUEST_FEATURES, "statement": STATEMENT, "format": FORMAT.name(),
         "client_seconds": client_seconds, "prepare_seconds": prepare_seconds, "setup_seconds": setup_seconds,
         "identity": prepared.identity, "statement_sha256": hex::encode(sha256(&prepared.statement)),
-        "input_bytes": prepared.input_bytes, "chunks": prepared.chunks, "routing": prepared.stats}))?;
+        "input_bytes": prepared.input_bytes, "chunks": prepared.chunks,
+        "vu_software_threshold": set.vu_software_threshold, "routing": prepared.stats}))?;
     fs::create_dir_all(&out_dir)?;
     fs::write(out_dir.join("statement.bin"), &prepared.statement)?;
 
@@ -494,7 +519,7 @@ async fn cmd_crosscheck(set: BareSet) -> Result<()> {
     let started = Instant::now();
     let prepared = set.prepare(None)?;
     let claimed = set.claimed()?;
-    let differing = prepared.reference_outputs.iter().zip(&claimed).filter(|(out, y)| **out != Some(**y)).count();
+    let differing = prepared.reference_outputs.iter().zip(&claimed).filter(|(out, y)| out.map(u32::from) != Some(**y)).count();
     emit(&serde_json::json!({"backend": BACKEND, "vus": set.hi - set.lo, "routing": prepared.stats,
         "reference_outputs_differing_from_y": differing, "decide_verdict": prepared.expected[32],
         "seconds": started.elapsed().as_secs_f64()}))?;
@@ -529,7 +554,7 @@ async fn cmd_negatives(instances: PathBuf, manifest_sha256: String, dataset: Str
         let correct = match row[4].as_u64() {
             Some(word) => {
                 in_domain += 1;
-                let (out, _) = execute_set(&client, &set, Some(vec![word as u16])).await?;
+                let (out, _) = execute_set(&client, &set, Some(vec![word as u32])).await?;
                 if out.outcome.verdict && out.matches_expected {
                     correct_accepted += 1;
                 }
@@ -559,21 +584,31 @@ async fn main() -> Result<()> {
             let pk = client.setup(ELF).await.map_err(|error| anyhow!("setup failed: {error}"))?;
             emit(&serde_json::json!({"backend": BACKEND, "label": LABEL, "sp1_version": SP1_VERSION,
                 "fork_head": FORK_HEAD, "elf_sha256": hex::encode(sha256(&ELF)), "vk_hash": pk.verifying_key().bytes32(),
-                "public_values_len": bare::PUBLIC_VALUES_LEN, "guest_features": GUEST_FEATURES}))
+                "public_values_len": bare::PUBLIC_VALUES_LEN, "guest_features": GUEST_FEATURES, "statement": STATEMENT,
+                "formats": [FORMAT.name()]}))
         }
         Command::Crosscheck { set } => cmd_crosscheck(set).await,
-        Command::BareExecute { set } => {
+        Command::BareExecute { set, flip_y } => {
             let client = ProverClient::builder().mock().build().await;
-            let (output, _) = execute_set(&client, &set, None).await?;
+            let claimed = match flip_y {
+                None => None,
+                Some(j) => {
+                    ensure!(j < set.hi - set.lo, "--flip-y {j} is outside the range's {} VUs", set.hi - set.lo);
+                    let mut words = set.claimed()?;
+                    words[j] ^= 1;
+                    Some(words)
+                }
+            };
+            let (mut output, _) = execute_set(&client, &set, claimed).await?;
+            output.flipped = flip_y;
             ensure!(output.matches_expected, "guest committed {}, bare::decide {}", output.outcome.public_values, output.expected_public_values);
+            ensure!(flip_y.is_none() || !output.outcome.verdict, "a wrong claimed word was accepted (verdict 1)");
             emit(&output)
         }
         Command::BareStatement { set, out } => {
-            let claimed = set.claimed()?;
-            let id = bare::identity_digest(&set.identity());
-            let statement = bare::statement_bytes(&id, K as u32, &claimed);
+            let statement = set.statement(&set.claimed()?)?;
             fs::write(&out, &statement).with_context(|| format!("writing {}", out.display()))?;
-            emit(&serde_json::json!({"backend": BACKEND, "identity": set.identity(), "statement": out.display().to_string(),
+            emit(&serde_json::json!({"backend": BACKEND, "format": FORMAT.name(), "identity": set.identity(), "statement": out.display().to_string(),
                 "statement_bytes": statement.len(), "statement_sha256": hex::encode(sha256(&statement)),
                 "accepting_public_values": hex::encode(bare::public_values(&sha256(&statement), true))}))
         }
