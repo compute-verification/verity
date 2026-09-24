@@ -1,7 +1,8 @@
 [workspace]
 resolver = "2"
 members = ["common", "guest", "host", "check-model"]
-# The TC_DOT fork variant is its own workspace (every SP1 crate resolves to the fork).
+# `tcdot/` is its own workspace (it patches every SP1 crate to its fork); without this, cargo resolves the fork crates'
+# `*.workspace = true` keys against this workspace and fails.
 exclude = ["tcdot"]
 
 [workspace.package]
