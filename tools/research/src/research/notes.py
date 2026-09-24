@@ -7,6 +7,8 @@
   research notes status [--root DIR] [--repo DIR] [--pods] [--stale-min 30] [--since-hours 24] [--all] [--lane GLOB] [--exclude GLOB] [--json]
   research notes watch [--every 10] [--idle-min 5] [--runway-h 3] [--reap] [--reap-stale-min 30] [--guardian-log PATH] [status options]   # alert lines, below
   research notes gc-worktrees [--apply] [--wt-root DIR]     # clean worktrees of finished lanes whose branch tip is on origin
+  research notes push LANE [--repo DIR]                     # after every commit: the lane's branch -> origin (never main, never --force)
+  research notes branches [--fetch] [--all] [--lane GLOB] [--json]   # lane branches vs origin; exit 1 if an open lane's work is not there
 
 A lane's report is `<root>/lanes/<lane>/<stamp>-report-<lane>.md` (the newest one if several).  `checkpoint` writes
 `CHECKPOINT <sha> (<HH:MM>Z) [<state>] <text>` directly under the front matter (newest first, where lanes already put them),
@@ -62,6 +64,13 @@ prints `STEWARD-ERROR <rule>: <error>` and the watch goes on.
 checkpoint it superseded, bind the successor (`<topic>-<N+1>` unless `--as`) to its branch, worktree and pods, print the
 successor's launch message.  `gc-worktrees` lists (`--apply`: removes) clean worktrees under the coordinator's worktree root
 whose lanes are all done and whose branch tip is on origin; branches are never deleted, dirty worktrees never removed.
+
+The push rule: a lane pushes its branch after every commit (`push`), so its work survives its machine and the research coordinator
+merges from origin.  `push` resolves the branch as `finish` does, refuses `main` / `master`, and never forces; a rejected push says
+to integrate origin's commits first.  `branches` lists every local `lane/*` and bound branch against `origin/<branch>` as last
+fetched (`--fetch` refreshes only origin's `lane/*` refs): `unpushed`, `ahead`, `behind`, `diverged`, `in sync`; BLOCKING marks
+an open lane's branch whose work origin lacks, and makes the exit 1.  `checkpoint LANE final` shows a `pushed` line, advisory
+unless `--require-pushed`.
 """
 from __future__ import annotations
 
@@ -629,8 +638,9 @@ def _pods(lane: str, bound: str | None, lanes: set[str], succ: dict[str, str] | 
 
 def finish(root: Path, lane: str, repo: Path | None, keep_pod: str | None = None,
            custody: Callable[[list[str]], tuple[bool | None, str]] = _custody,
-           pods: Callable[..., tuple[bool | None, str]] = _pods) -> tuple[str, int]:
-    """The end-of-lane checks.  They never block the FINAL line (already written); they say what is left, exit 3 if anything is."""
+           pods: Callable[..., tuple[bool | None, str]] = _pods, require_pushed: bool = False) -> tuple[str, int]:
+    """The end-of-lane checks.  They never block the FINAL line (already written); they say what is left, exit 3 if anything is.
+    `pushed` (the branch tip is on origin, as last fetched) is advisory unless `require_pushed`."""
     rep = report_for(root, lane)
     text = rep.read_text(errors="replace") if rep else ""
     b = binding(root, lane, _split_front_matter(text)[0])
@@ -661,6 +671,11 @@ def finish(root: Path, lane: str, repo: Path | None, keep_pod: str | None = None
                        f"{' == ' if head == tip else ' != '}{branch} {tip[:8]}"))
     else:
         checks.append(("worktree", None, f"none found for {branch}"))
+    if repo or wt:
+        s = sync_state(Path(wt) if wt and Path(wt).is_dir() else repo, branch)
+        on = s["sync"] in ("in sync", "behind")
+        why = f"{branch} {'on origin' if on else s['sync']}" + ("" if on else f" -> research notes push {lane}")
+        checks.append(("pushed", True if on else (False if require_pushed else None), why))
     unnamed = [f"{d}/{p.name}" if d != lane else p.name for d in chain(root, lane) for p in mail(root, d) if p.name not in text]
     checks.append(("handoffs", not unnamed, "all named in the report" if not unnamed else
                    f"{len(unnamed)} never named in the report (answer or say why not): " + ", ".join(unnamed[:6])))
@@ -1429,6 +1444,105 @@ def render_gc(rows: list[dict], apply: bool) -> str:
     return "\n".join(lines)
 
 
+# ---- the push rule: a lane pushes its branch after every commit; the research coordinator merges from origin ---------------------------
+
+NEVER_PUSH = ("main", "master")
+
+
+def lane_branch(root: Path, lane: str) -> tuple[str, str | None]:
+    """(branch, bound worktree or None) as `finish` resolves them: binding.json, then front matter, then `lane/<lane>`."""
+    rep = report_for(root, lane)
+    b = binding(root, lane, _split_front_matter(rep.read_text(errors="replace"))[0] if rep else "")
+    return b.get("branch") or f"lane/{lane}", b.get("worktree")
+
+
+def sync_state(repo: Path, branch: str) -> dict:
+    """The local branch against `refs/remotes/origin/<branch>` as last fetched: `unpushed` (origin has no such branch), `in sync`,
+    `ahead` / `behind` / `diverged` with counts, `missing` (no local branch)."""
+    tip = (_git(repo, "rev-parse", "-q", "--verify", f"refs/heads/{branch}^{{commit}}") or "").strip()
+    remote = (_git(repo, "rev-parse", "-q", "--verify", f"refs/remotes/origin/{branch}^{{commit}}") or "").strip()
+    res: dict = {"tip": tip or None, "origin": remote or None, "ahead": None, "behind": None}
+    if not tip:
+        return {**res, "sync": "missing"}
+    if not remote:
+        return {**res, "sync": "unpushed"}
+    if tip == remote:
+        return {**res, "sync": "in sync", "ahead": 0, "behind": 0}
+    counts = (_git(repo, "rev-list", "--left-right", "--count", f"{tip}...{remote}") or "").split()
+    a, b = (int(x) for x in counts) if len(counts) == 2 else (None, None)
+    return {**res, "ahead": a, "behind": b, "sync": "ahead" if a and not b else "behind" if b and not a else "diverged"}
+
+
+def push_branch(root: Path, lane: str, repo: Path | None) -> tuple[str, int]:
+    """`git push origin <branch>` for the lane's branch, from its worktree when there is one.  Never `main` (one merger), never
+    --force: a rejected push says to integrate origin's commits first.  -> (one line, exit code)."""
+    branch, wt = lane_branch(root, lane)
+    if branch in NEVER_PUSH:
+        return f"REFUSED {lane}: its branch is {branch}; lanes push lane/* and never {branch} (the research coordinator merges)", 2
+    wt = wt or (worktrees(repo).get(branch) if repo else None)
+    where = Path(wt).expanduser() if wt and Path(wt).expanduser().is_dir() else repo
+    if where is None:
+        return f"REFUSED {lane}: no worktree bound and no repo (--repo, $RESEARCH_REPO, or run inside the checkout)", 2
+    tip = (_git(where, "rev-parse", "-q", "--verify", f"refs/heads/{branch}^{{commit}}") or "").strip()
+    if not tip:
+        return f"REFUSED {lane}: no local branch {branch} in {_tilde(where)}", 2
+    try:
+        r = subprocess.run(["git", "-C", str(where), "push", "origin", f"refs/heads/{branch}:refs/heads/{branch}"],
+                           capture_output=True, text=True, timeout=600)
+    except (OSError, subprocess.SubprocessError) as e:
+        return f"PUSH-FAILED {branch} {tip[:8]}: {type(e).__name__}: {e}", 1
+    if r.returncode:
+        err = [x for x in r.stderr.strip().splitlines() if x.strip()]
+        hint = (f" -> origin has commits {branch} lacks: git fetch origin {branch} and rebase or merge origin/{branch}, then push again"
+                if any(k in r.stderr for k in ("non-fast-forward", "fetch first", "[rejected]")) else "")
+        return f"PUSH-FAILED {branch} {tip[:8]}: {(err[-1] if err else f'git push rc {r.returncode}')[:200]}{hint}", 1
+    return f"PUSHED {branch} {tip[:8]} -> origin", 0
+
+
+def branches(root: Path, repo: Path, globs: list[str] | None = None, now: dt.datetime | None = None) -> list[dict]:
+    """Every local `lane/*` branch and every bound branch, with the lanes using it (and their states) and its sync state against
+    origin (as last fetched).  `blocking`: an open lane's branch that origin does not have in full (the push rule's check, H1)."""
+    from fnmatch import fnmatch  # noqa: PLC0415
+
+    now = now or _utcnow()
+    lanes = {d.name for d in (root / "lanes").glob("*/")} if (root / "lanes").is_dir() else set()
+    users: dict[str, set[str]] = {}
+    for lane in lanes:
+        users.setdefault(lane_branch(root, lane)[0], set()).add(lane)
+    refs = (_git(repo, "for-each-ref", "--format=%(refname:short)", "refs/heads/lane/") or "").split()
+    names = sorted({*refs, *(b for b in users if b not in NEVER_PUSH and _git(repo, "rev-parse", "-q", "--verify", f"refs/heads/{b}"))})
+    out = []
+    for br in names:
+        who = users.get(br, set()) | ({br[5:]} if br.startswith("lane/") and br[5:] in lanes else set())
+        if globs and not any(fnmatch(x, g) for x in (br, br.removeprefix("lane/"), *who) for g in globs):
+            continue
+        states = {x: _state(root, x, now) for x in sorted(who)}
+        s = sync_state(repo, br)
+        ct = (_git(repo, "log", "-1", "--format=%ct", f"refs/heads/{br}") or "").strip()
+        live = any(v not in DONE for v in states.values())
+        out.append({"branch": br, "lanes": states, **s, "commit_at": _ts(int(ct)).isoformat() if ct.isdigit() else None,
+                    "blocking": live and s["sync"] in ("unpushed", "ahead", "diverged")})
+    return out
+
+
+def render_branches(rows: list[dict], show_all: bool = False) -> str:
+    """One line per branch origin lacks (all with `show_all`), blocking ones first, then the tally."""
+    def cell(r: dict) -> str:
+        n = {"ahead": f"ahead {r['ahead']}", "behind": f"behind {r['behind']}", "diverged": f"diverged +{r['ahead']}/-{r['behind']}"}
+        return n.get(r["sync"], r["sync"])
+    lines = []
+    for r in sorted(rows, key=lambda r: (not r["blocking"], r["sync"] == "in sync", r["branch"])):
+        if show_all or r["sync"] != "in sync":
+            lanes = ", ".join(f"{k} {v}" for k, v in r["lanes"].items()) or "no lane"
+            lines.append(f"{'BLOCKING' if r['blocking'] else '':<8} {r['branch']:<40} {cell(r):<16} {(r['commit_at'] or '')[:16]}  ({lanes})")
+    tally: dict[str, int] = {}
+    for r in rows:
+        tally[r["sync"]] = tally.get(r["sync"], 0) + 1
+    lines.append(f"{len(rows)} branches: " + ", ".join(f"{v} {k}" for k, v in sorted(tally.items())) +
+                 f"; {sum(r['blocking'] for r in rows)} blocking (an open lane's work origin lacks: research notes push <lane>)")
+    return "\n".join(lines)
+
+
 def _add_status_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--root", type=Path, default=None)
     p.add_argument("--repo", type=Path, default=None, help="any worktree of the shared repo (default: $RESEARCH_REPO, else the cwd's)")
@@ -1449,6 +1563,7 @@ def main(argv: list[str]) -> int:
     cp.add_argument("text", nargs="+")
     cp.add_argument("--commit", help="default: git rev-parse --short HEAD in the current directory")
     cp.add_argument("--keep-pod", metavar="WHY", help="final: the lane's pod stays up on purpose (e.g. a shared live verifier)")
+    cp.add_argument("--require-pushed", action="store_true", help="final: a branch tip not on origin fails the checks (exit 3)")
     cp.add_argument("--root", type=Path, default=None)
     cp.add_argument("--repo", type=Path, default=None)
     ib = sub.add_parser("inbox", help="the lane's handoffs it has not been shown yet (its own dir and its predecessors')")
@@ -1494,6 +1609,17 @@ def main(argv: list[str]) -> int:
     gc.add_argument("--wt-root", type=Path, default=None, help="default: the parent of --repo's worktree")
     gc.add_argument("--root", type=Path, default=None)
     gc.add_argument("--repo", type=Path, default=None)
+    ps = sub.add_parser("push", help="push the lane's branch to origin (after every commit); never main, never --force")
+    ps.add_argument("lane")
+    ps.add_argument("--root", type=Path, default=None)
+    ps.add_argument("--repo", type=Path, default=None)
+    br = sub.add_parser("branches", help="lane branches against origin (as last fetched); exit 1 if an open lane's work is not on origin")
+    br.add_argument("--lane", action="append", default=[], metavar="GLOB", help="only branches / lanes matching (repeatable)")
+    br.add_argument("--fetch", action="store_true", help="first fetch origin's lane/* branches (updates remote-tracking refs only)")
+    br.add_argument("--all", action="store_true", help="also list branches in sync")
+    br.add_argument("--json", action="store_true")
+    br.add_argument("--root", type=Path, default=None)
+    br.add_argument("--repo", type=Path, default=None)
     sn = sub.add_parser("snapshot", help="commit the notes tree to its own git repo (files over 1 MB are skipped and listed)")
     sn.add_argument("--root", type=Path, default=None)
     ns = ap.parse_args(argv)
@@ -1510,7 +1636,7 @@ def main(argv: list[str]) -> int:
         if not getattr(ns, "peek", False):
             mark_seen(root, ns.lane, items)
         if ns.cmd == "checkpoint" and ns.state == "final":
-            text, rc = finish(root, ns.lane, ns.repo or repo_default(), keep_pod=ns.keep_pod)
+            text, rc = finish(root, ns.lane, ns.repo or repo_default(), keep_pod=ns.keep_pod, require_pushed=ns.require_pushed)
             print(text)
             return rc
         return 0
@@ -1537,6 +1663,19 @@ def main(argv: list[str]) -> int:
             return 2
         print(render_gc(gc_worktrees(root, repo, ns.wt_root, apply=ns.apply), ns.apply))
         return 0
+    if ns.cmd == "push":
+        line, rc = push_branch(root, ns.lane, repo)
+        print(line, file=sys.stdout if rc == 0 else sys.stderr)
+        return rc
+    if ns.cmd == "branches":
+        if repo is None:
+            print("research notes branches: no repo (--repo, or $RESEARCH_REPO)", file=sys.stderr)
+            return 2
+        if ns.fetch and _git(repo, "fetch", "-q", "origin", "+refs/heads/lane/*:refs/remotes/origin/lane/*", timeout=600) is None:
+            print("research notes branches: git fetch origin failed; showing origin as last fetched", file=sys.stderr)
+        rows = branches(root, repo, ns.lane)
+        print(json.dumps(rows, indent=1) if ns.json else render_branches(rows, ns.all))
+        return 1 if any(r["blocking"] for r in rows) else 0
 
     def run(fleet: Fleet | None) -> list[dict]:
         return status(root, ns.stale_min, None if ns.all else ns.since_hours, lanes=ns.lane, exclude=ns.exclude, repo=repo,

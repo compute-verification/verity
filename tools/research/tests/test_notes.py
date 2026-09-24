@@ -291,6 +291,7 @@ def test_finish_checks_custody_pod_worktree_and_handoffs_never_named(tmp_path, r
         "  custody   1/2 cited artifacts not preserved: art:feedbeef00",
         "  pod       vy-fin RUNNING",
         f"  worktree  clean, HEAD {head} == lane/fin {head}",
+        "  pushed    lane/fin unpushed -> research notes push fin",
         "  handoffs  1 never named in the report (answer or say why not): 20260923T2040Z-handoff-b.md"]
     p.write_text(p.read_text() + "b: not doing it, out of scope (20260923T2040Z-handoff-b.md)\n")
     _touch(repo / "a.py", 1, "dirty\n")
@@ -501,6 +502,85 @@ def test_successor_names_count_attempts_from_the_topic(tmp_path):
     assert [notes.successor_name(tmp_path, x) for x in ("dev-4090", "verify-rs-4", "b-v2")] == ["dev-4090-2", "verify-rs-5", "b-v2-2"]
     (tmp_path / "lanes" / "dev-4090-2").mkdir()
     assert notes.successor_name(tmp_path, "dev-4090") == "dev-4090-3"
+
+
+def test_push_sends_the_lane_branch_never_main_and_never_forces(tmp_path, repo):
+    root = tmp_path / "notes"
+    origin = tmp_path / "origin.git"
+    _git(tmp_path, "init", "-q", "--bare", str(origin))
+    _git(repo, "remote", "add", "origin", str(origin))
+    _git(repo, "worktree", "add", "-q", "-b", "lane/p", str(tmp_path / "p"), "main")
+    _report(root, "p", "CHECKPOINT 1111111 (20:00Z) [open] x\n", 30)
+    line, rc = notes.push_branch(root, "p", repo)
+    tip = _git(repo, "rev-parse", "lane/p").strip()
+    assert (rc, line) == (0, f"PUSHED lane/p {tip[:8]} -> origin") and _git(origin, "rev-parse", "lane/p").strip() == tip
+    assert notes.sync_state(repo, "lane/p")["sync"] == "in sync"
+
+    other = tmp_path / "other"                                   # someone else pushed to lane/p: a rejected push, nothing forced
+    _git(tmp_path, "clone", "-q", "-b", "lane/p", str(origin), str(other))
+    _touch(other / "theirs.py", 1)
+    _git(other, "add", "theirs.py")
+    _git(other, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "theirs")
+    _git(other, "push", "-q", "origin", "lane/p")
+    _touch(tmp_path / "p" / "mine.py", 1)
+    _git(tmp_path / "p", "add", "mine.py")
+    _git(tmp_path / "p", "commit", "-qm", "mine")
+    line, rc = notes.push_branch(root, "p", repo)
+    assert rc == 1 and line.startswith("PUSH-FAILED lane/p ") and "git fetch origin lane/p and rebase or merge origin/lane/p" in line
+    assert _git(origin, "rev-parse", "lane/p").strip() == _git(other, "rev-parse", "HEAD").strip()
+
+    notes.bind(root, "m", branch="main")
+    assert notes.push_branch(root, "m", repo)[1] == 2 and "never main" in notes.push_branch(root, "m", repo)[0]
+    assert notes.push_branch(root, "nobranch", repo) == (f"REFUSED nobranch: no local branch lane/nobranch in {repo}", 2)
+
+
+def test_branches_lists_what_origin_lacks_and_blocks_only_on_open_lanes(tmp_path, repo):
+    root = tmp_path / "notes"
+    origin = tmp_path / "origin.git"
+    _git(tmp_path, "init", "-q", "--bare", str(origin))
+    _git(repo, "remote", "add", "origin", str(origin))
+    for lane, state in (("synced", "open"), ("ahead", "open"), ("local", "open"), ("old", "final"), ("behind", "open")):
+        _git(repo, "branch", f"lane/{lane}", "main")
+        _report(root, lane, f"CHECKPOINT 1111111 (20:00Z) [{state}] x\n", 30, status=state)
+        if lane not in ("local", "old"):
+            _git(repo, "push", "-q", "origin", f"lane/{lane}")
+    _git(repo, "branch", "work-x", "main")                       # a bound branch outside lane/*
+    notes.bind(root, "bound", branch="work-x")
+    _report(root, "bound", "CHECKPOINT 1111111 (20:00Z) [open] x\n", 30)
+    _git(repo, "checkout", "-q", "lane/ahead")
+    _touch(repo / "n.py", 1)
+    _git(repo, "add", "n.py")
+    _git(repo, "commit", "-qm", "n")
+    _git(repo, "push", "-q", "origin", "lane/ahead:lane/behind")
+    _git(repo, "fetch", "-q", "origin")
+    _git(repo, "checkout", "-q", "main")
+    rows = {r["branch"]: r for r in notes.branches(root, repo, now=NOW)}
+    assert {k: (r["sync"], r["blocking"]) for k, r in rows.items()} == {
+        "lane/ahead": ("ahead", True), "lane/behind": ("behind", False), "lane/local": ("unpushed", True),
+        "lane/old": ("unpushed", False), "lane/synced": ("in sync", False), "work-x": ("unpushed", True)}
+    assert rows["lane/ahead"]["ahead"] == 1 and rows["work-x"]["lanes"] == {"bound": "open"}
+    text = notes.render_branches(list(rows.values()))
+    assert text.splitlines()[0].startswith("BLOCKING lane/ahead ") and "lane/synced" not in text
+    assert text.endswith("6 branches: 1 ahead, 1 behind, 1 in sync, 3 unpushed; 3 blocking (an open lane's work origin lacks: "
+                         "research notes push <lane>)")
+    assert [r["branch"] for r in notes.branches(root, repo, ["old"], now=NOW)] == ["lane/old"]
+    assert notes.main(["branches", "--root", str(root), "--repo", str(repo)]) == 1
+
+
+def test_finish_requires_the_push_only_when_asked(tmp_path, repo):
+    root = tmp_path / "notes"
+    _git(repo, "checkout", "-qb", "lane/q")
+    _report(root, "q", "CHECKPOINT 1111111 (20:55Z) [final] done art:1234abcd\n", 5, status="final")
+    kw = {"custody": lambda arts: (True, "ok"), "keep_pod": "x"}
+    text, rc = notes.finish(root, "q", repo, **kw)
+    assert rc == 0 and "  pushed    lane/q unpushed -> research notes push q" in text
+    assert notes.finish(root, "q", repo, require_pushed=True, **kw)[1] == 3
+    origin = tmp_path / "origin.git"
+    _git(tmp_path, "init", "-q", "--bare", str(origin))
+    _git(repo, "remote", "add", "origin", str(origin))
+    _git(repo, "push", "-q", "origin", "lane/q")
+    text, rc = notes.finish(root, "q", repo, require_pushed=True, **kw)
+    assert rc == 0 and "  pushed    lane/q on origin" in text
 
 
 def test_gc_worktrees_removes_only_clean_pushed_worktrees_of_done_lanes(tmp_path, repo):

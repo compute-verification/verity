@@ -79,6 +79,9 @@ If your launch message names you a lane, `~/.research/notes/kb/LANE-CONTRACT.md`
 (contract §3a): every message and every background shell you start reaches the coordinator and the human, so run long
 jobs detached on the pod, write one-line checkpoints, and hand off only to unblock or to change someone's plan.
 
+Push your branch after every commit: `research notes push <you>` (never `main`, never `--force`). Only the research
+coordinator merges `main`, and it merges from origin; `research notes branches --fetch` lists open lanes' work origin lacks.
+
 ## Skills
 
 When creating or modifying a skill in `.agents/skills/`, use
