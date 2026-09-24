@@ -3,7 +3,7 @@
 # the TP analogue of row_pod.sh (the TP1 harness: run_config Match, commit_delta Commit, no --tp/--rank).  Build (derive_step --tp N --rank r
 # per rank: step Program + one request Program per declared (prompt_len, cap-1) shape, GP-01 compose per rank) -> Match (tp.capture
 # observer+collective recorder, control arm, tp.match --arm check = collective-level structure/provenance/tokens over N ranks; then, for a
-# case with a TP RANK PROFILE, the D90 per-rank fold Match tp.fold_match) -> Commit (required_manifest build-global over the N ranks,
+# case with a TP RANK PROFILE, the D90 per-rank fold Match tp.fold_match) -> Commit (verity_vllm.query.cli build-global over the N ranks,
 # tp.commit native_collect_v2b --value-check).  Early stop at the first failing stage.  Evidence under $SWEEP_DIR/<row-id>/ (build/rank<r>/,
 # match/, manifest.json, commit/); one verdict line per stage in stages.txt.
 #
@@ -127,11 +127,11 @@ compose() {  # <rank>: GP-01 workload Program of the rank over its request Progr
   for dd in "$B/rank$r"/build_request_LP*_T*; do [ -f "$dd/result.json" ] && DER+=(--derived "$dd"); done
   run_tl "build.global_program_r$r" "$TO_B" "$B/rank$r/build_workload.log" "$PY" -m verity_capture.experimental.cb_a.global_program --workload "$WL" "${DER[@]}" --out "$B/rank$r/build_workload" --checkpoint-dir "$CK"; }
 wd_of() { jq_ "$B/rank$1/build_workload/workload_program.json" "d.get('workload_digest') or ''"; }
-manifest_global() {  # <timeline stage> <timeout>: the required-value manifest build-global over the N rank Programs -> $D/manifest.json
+manifest_global() {  # <timeline stage> <timeout>: the v2 query (Q_module_body_v1 + TP-04) over the N rank Programs, merged by rank -> $D/manifest.json
   local st=$1 to=$2 r wd MANR=() WDS=()
   for r in $RANKS; do wd=$(wd_of "$r"); [ -n "$wd" ] || { log "manifest: GP-01 workload digest absent for rank $r"; return 4; }
     MANR+=(--programs-root "$B/rank$r" --rank "$r"); WDS+=(--workload-digest "$wd"); done
-  run_tl "$st" "$to" "$D/manifest.log" "$PY" -m verity_capture.commit.required_manifest build-global --fixture "$WL" \
+  run_tl "$st" "$to" "$D/manifest.log" "$PY" -m verity_vllm.query.cli build-global --fixture "$WL" \
          "${MANR[@]}" --ranks "$WORLD" "${WDS[@]}" --out "$D/manifest.json"; }
 man_line() { jq_ "$D/manifest.json" "' '.join(str(x) for x in ['complete',d.get('complete'),'identities',(d.get('populations') or {}).get('identities'),'tp_peer_binding_n_unbound',(d.get('tp_peer_binding') or {}).get('n_unbound'),'unmodelled',json.dumps(d.get('unmodelled'))[:300],'digest',(d.get('manifest_digest') or '')[:16]])"; }
 build_summary() {  # -> PASS|FAIL; writes $D/build_summary.json (per rank: step + request Programs + GP-01)

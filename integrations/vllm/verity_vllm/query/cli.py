@@ -2,12 +2,13 @@
 
     build         --program <derive dir> [--workload wl.json] [--request-id r0] --out manifest.json
     build-global  --fixture wl.json --programs-root <row dir> [--workload-digest WD] --out manifest.json
+                  TP row: --programs-root <rank r dir> --rank r [--workload-digest WD_r], once per rank, --ranks W
     compare       --v1 manifest.json --v2 manifest.json [--out report.json]
 
 `build` / `build-global` take the same inputs as v1's (a derive_step output dir holds `instances.json.gz` + `result.json` [+ `artifact.json`];
 a row dir holds one such dir per request shape, `*LP<prompt_len>_T<max_tokens-1>`), and write a manifest of v1's schema whose identities
-are the bridge's (`v1_bridge.request_manifest` / `compose_global`).  `--no-return-slots` builds the pure-dataflow population (no
-RETURN-SLOT policy) for the record.  `compare` classifies every identity difference (`compare.summarize`).
+are the bridge's (`v1_bridge.request_manifest` / `compose_global`; a TP row's rank manifests merged by `merge_ranks`).  `--no-return-slots`
+builds the pure-dataflow population (no RETURN-SLOT policy) for the record.  `compare` classifies every identity difference (`compare.summarize`).
 """
 
 from __future__ import annotations
@@ -23,9 +24,9 @@ from typing import Any
 from .compare import compare, summarize
 from .correspondence import Correspondence
 from .program_view import from_instances
-from .v1_bridge import compose_global, request_manifest
+from .v1_bridge import compose_global, merge_ranks, request_manifest
 
-__all__ = ["build", "build_global", "main"]
+__all__ = ["build", "build_global", "build_global_ranks", "main"]
 
 
 def _load_json(p: str) -> Any:
@@ -92,6 +93,19 @@ def build_global(fixture: dict[str, Any], programs_root: str, *, workload_digest
         if len(parts[rid]["steps"]) != int(r["max_tokens"]):
             raise ValueError(f"request {rid}: Program has {len(parts[rid]['steps'])} steps, the declaration caps {r['max_tokens']} tokens: wrong component")
     return compose_global(fixture, parts, reqs, workload_digest=workload_digest, rank=rank, ranks=ranks)
+
+
+def build_global_ranks(fixture: dict[str, Any], roots: list[str], ranks: list[int], world: int, *, workload_digests: list[str | None] | None = None,
+                       profile: str | None = None, return_slots: bool = True, log=None) -> dict[str, Any]:
+    """One global manifest per rank Program set (`roots[i]` is rank `ranks[i]`'s), merged by `merge_ranks` when the row is TP."""
+    wds = list(workload_digests or [None] * len(roots))
+    if len(ranks) != len(roots) or len(wds) != len(roots):
+        raise ValueError(f"build-global: {len(roots)} --programs-root, {len(ranks)} --rank, {len(wds)} --workload-digest: give one per rank")
+    if world > 1 and sorted(ranks) != list(range(world)):
+        raise ValueError(f"build-global: TP world {world} needs one --programs-root per rank 0..{world - 1} (got ranks {ranks})")
+    parts = [build_global(fixture, root, workload_digest=wd, rank=r, ranks=world, profile=profile, return_slots=return_slots, log=log)
+             for root, r, wd in zip(roots, ranks, wds)]
+    return merge_ranks(parts) if world > 1 else parts[0]
 
 
 def check_correspondence(program_dir: str, *, workload: dict[str, Any] | None = None, request_id: str | None = None, manifest: bool = True, log=None) -> dict[str, Any]:
@@ -161,10 +175,10 @@ def main(argv: list[str] | None = None) -> int:
     b.add_argument("--out", required=True)
     g = sub.add_parser("build-global")
     g.add_argument("--fixture", required=True)
-    g.add_argument("--programs-root", required=True)
-    g.add_argument("--workload-digest", default=None)
+    g.add_argument("--programs-root", action="append", required=True, help="TP row: repeat per rank, with --rank r at the same position")
+    g.add_argument("--workload-digest", action="append", default=None, help="TP row: repeat per rank")
     g.add_argument("--profile", default=None)
-    g.add_argument("--rank", type=int, default=0)
+    g.add_argument("--rank", type=int, action="append", default=None, help="the TP rank of the --programs-root at the same position (default 0)")
     g.add_argument("--ranks", type=int, default=1)
     g.add_argument("--no-return-slots", action="store_true")
     g.add_argument("--out", required=True)
@@ -197,11 +211,12 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if a.cmd == "build-global":
         fx = _load_json(a.fixture)
-        man = build_global(fx, a.programs_root, workload_digest=a.workload_digest, rank=a.rank, ranks=a.ranks, profile=a.profile,
-                           return_slots=not a.no_return_slots, log=log)
+        man = build_global_ranks(fx, a.programs_root, a.rank or [0] * len(a.programs_root), a.ranks, workload_digests=a.workload_digest,
+                                 profile=a.profile, return_slots=not a.no_return_slots, log=log)
         _write(man, a.out)
         print(json.dumps({"identities": man["populations"]["identities"], "manifest_digest": man["manifest_digest"], "program_digest": man["program_digest"],
-                          "complete": man["complete"], "by_family": man["populations"]["by_family"], "out": a.out}))
+                          "complete": man["complete"], "by_family": man["populations"]["by_family"],
+                          "tp_peer_binding_n_unbound": (man.get("tp_peer_binding") or {}).get("n_unbound"), "out": a.out}))
         return 0
     if a.cmd == "compare":
         m1, m2 = _load_json(a.v1), _load_json(a.v2)

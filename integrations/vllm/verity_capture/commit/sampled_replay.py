@@ -57,7 +57,7 @@ from typing import Any, Callable, Iterable, Sequence
 import numpy as np
 
 from verity_capture.commit import manifest_format as RM
-from verity_capture.commit import required_manifest as V1   # the v1 address rule stays for v1-built manifests: TP rank Programs (until TP=N), pre-flip records
+from verity_capture.commit import required_manifest as V1   # the v1 address rule stays for v1-built manifests: pre-flip records
 from verity_capture.commit.oracle_compare import entry_read_name as _entry_read_name, same_name_invocations as _same_name_invocations
 
 SCHEMA = "verity-sweep/sampled-replay/v1"
@@ -328,7 +328,7 @@ def address_rule_of(manifest: dict[str, Any] | None) -> str:
     """The rule the replay addresses a Program row's committed output by: the rule the manifest of record was built with, read from ITS
     header (`query.engine`).  `v2-query` = the v2 query's population (`verity_vllm.query.v1_bridge.Population.members_of`: the required
     Values a Call produces under `Q_module_body_v1` + the policy, the rows the manifest counts); `v1` = `required_manifest.members_for`
-    (a v1-built manifest -- TP rank manifests, records from before the flip -- or no manifest)."""
+    (a v1-built manifest -- a record from before the flip -- or no manifest)."""
     q = (manifest.get("query") or {}) if isinstance(manifest, dict) else {}
     return V2_QUERY if isinstance(q, dict) and q.get("engine") == V2_QUERY else "v1"
 
@@ -364,22 +364,19 @@ class ProgramIndex:
         # relation is a false mismatch (measured: 256/911 on Llama TP2 B1, first o_proj/0 row 0).  `tp` = {"rank": r, "world": W}.
         self.tp: dict[str, Any] | None = (dict(rank=int(tp.get("rank", 0)), world=int(tp.get("world", 1))) if tp and int(tp.get("world", 1) or 1) > 1 else None)
         # [v2 flip, P2] the v2 query's population of this Program: Call id -> [(member, width, dtype)] of the required Values it produces,
-        # and its owning module (the correspondence's).  A TP rank Program has no v2 population: the v2 query names no rank-local partials
-        # (TP-04), so a TP manifest is v1-built and a v2 rule on a rank Program is refused, never approximated.
+        # and its owning module (the correspondence's).  A rank Program's population carries the TP-04 policy (its rank-local partials
+        # `part_rank<r>` / `shard_rank<r>` beside every collective output), the one the rank's manifest was built with.
         self._v2: dict[int, list[tuple[str, int, str]]] = {}
         self._v2_module: dict[int, str] = {}
         self._v2_fault: dict[int, str] = {}
         self.correspondence: dict[str, Any] | None = None
         if rule == V2_QUERY:
-            if self.tp:
-                raise ValueError(f"TP rank Program (rank {self.tp['rank']} of {self.tp['world']}) under a {V2_QUERY} manifest: the v2 query names no "
-                                 "rank-local partials (TP-04); TP manifests are built by required_manifest")
             from verity_vllm.query.correspondence import Correspondence
             from verity_vllm.query.program_view import from_instances
             from verity_vllm.query.v1_bridge import population
             P = from_instances(inst)
             corr = Correspondence.of(P, program_dir, implementation_paths=attention_paths or ())
-            pop = population(P, corr)
+            pop = population(P, corr, tp=self.tp)
             for cid in pop.producers():
                 mem = pop.members_of(cid)
                 if mem:

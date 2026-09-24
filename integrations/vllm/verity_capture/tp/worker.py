@@ -1223,7 +1223,7 @@ class TP2CaptureWorkerExtension:
             sr = SR.sampled_replay(progs, bmap, rd, wp, arrivals=arr, per_stratum=int(cfg.get("per_stratum") or 2), seed=seed, seed_source=seed_src,
                                    max_evaluate=int(cfg.get("max_evaluate") or 2000), weights_check=wc, targets=list(cfg.get("targets") or []),
                                    workers=cfg.get("workers"), ring_slots=(int(ring) if ring else None), attention_paths=attn_paths, tp=tp_ctx,
-                                   manifest=_man_rank)
+                                   manifest=_man_rank, program_dirs=dirs)
             sr["wrapper_prefix"] = pi0.prefix
             sr["tp_context"] = tp_ctx
             sr["programs"] = {k: {"dir": loaded[k].get("dir"), "program_digest": digs[k]} for k in loaded}
