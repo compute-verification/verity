@@ -71,47 +71,158 @@ def test_complete_ship_lands_ready_with_identity_and_is_idempotent(repo, tmp_pat
     assert remote.require_ready_source(dest, sha) == doc
 
 
+class _Cut:
+    """A pipe that stops accepting after `limit` bytes, as a stalled or severed stream does (the feed sees a closed pipe)."""
+
+    def __init__(self, w, limit):
+        self.w, self.left = w, limit
+
+    def write(self, b):
+        if len(b) > self.left:
+            self.w.write(b[: self.left])
+            self.left = 0
+            raise BrokenPipeError("cut")
+        self.left -= len(b)
+        return self.w.write(b)
+
+    def flush(self):
+        self.w.flush()
+
+
+def _cutting(real, limit):
+    def stream(ssh, argv, feed, *, timeout):
+        return real(ssh, argv, lambda w: feed(_Cut(w, limit)), timeout=timeout)
+    return stream
+
+
 def test_truncated_transfer_is_refused_and_leaves_nothing_ready(repo, tmp_path, monkeypatch):
     root = tmp_path / "root"
-    real = remote.ssh_run
-
-    def truncating(ssh, argv, *, stdin=None, timeout=120):
-        if stdin is not None and any(".archive.tar" in a for a in argv):
-            stdin = stdin[: len(stdin) * 2 // 3]                       # the stream stalls two thirds of the way through
-        return real(ssh, argv, stdin=stdin, timeout=timeout)
-
-    monkeypatch.setattr(remote, "ssh_run", truncating)
-    with pytest.raises(remote.SourceNotReady, match="archive sha256 mismatch"):
+    size = len(_archive(repo))
+    monkeypatch.setattr(remote, "ssh_stream", _cutting(remote.ssh_stream, size * 2 // 3))   # the stream stalls two thirds of the way through
+    with pytest.raises(remote.SourceNotReady, match=r"archive sha256 mismatch.*truncated transfer"):
         remote.ship_source(LOCAL, str(root), repo)
     sha = _git(repo, "rev-parse", "HEAD")
     assert not (root / "src" / sha).exists(), "a failed ship never creates <root>/src/<identity>/"
     assert not list((root / "src").glob("*.partial-*")), "the partial directory is removed"
     # and the launcher's own timeout is the same fault, not a traceback
-    def timing_out(ssh, argv, *, stdin=None, timeout=120):
-        if stdin is not None and any(".archive.tar" in a for a in argv):
-            raise subprocess.TimeoutExpired(cmd="ssh", timeout=timeout)
-        return real(ssh, argv, stdin=stdin, timeout=timeout)
+    def timing_out(ssh, argv, feed, *, timeout):
+        raise subprocess.TimeoutExpired(cmd="ssh", timeout=timeout)
 
-    monkeypatch.setattr(remote, "ssh_run", timing_out)
-    with pytest.raises(remote.SourceNotReady, match="exceeded"):
+    monkeypatch.setattr(remote, "ssh_stream", timing_out)
+    with pytest.raises(remote.SourceNotReady, match="exceeded 600s"):
         remote.ship_source(LOCAL, str(root), repo)
     assert not (root / "src" / sha).exists() and not list((root / "src").glob("*.partial-*"))
     assert issubclass(remote.SourceNotReady, remote.Refused), "the launcher's `refused:` path names it"
+    assert remote.ship_timeout(229_017_600) > 3000 and remote.ship_timeout(1000) == remote.SHIP_SOURCE_TIMEOUT_S, "the timeout grows with the archive"
+
+
+def test_machine_removes_its_own_partial_when_the_launcher_cannot(repo, tmp_path, monkeypatch):
+    """A launcher that dies mid-ship cannot run its cleanup: the machine sees the short archive and removes the partial itself."""
+    root = tmp_path / "root"
+    monkeypatch.setattr(remote, "_rm_rf", lambda ssh, path: None)                           # the launcher's cleanup never runs
+    monkeypatch.setattr(remote, "ssh_stream", _cutting(remote.ssh_stream, 4096))
+    with pytest.raises(remote.SourceNotReady, match="archive sha256 mismatch"):
+        remote.ship_source(LOCAL, str(root), repo)
+    assert list((root / "src").iterdir()) == [], "nothing at all is left on the machine, not even a partial"
+
+
+def test_ship_streams_the_archive_instead_of_holding_it(tmp_path):
+    """The launcher's memory does not grow with the tree: a 24 MiB archive ships with a few MiB of Python allocations (the old
+    launcher held it two to three times over; 0.55-0.69 GB launchers of the verity tree were killed by the laptop's guardian)."""
+    import os
+    import tracemalloc
+
+    big = tmp_path / "big"
+    big.mkdir()
+    (big / "blob.bin").write_bytes(os.urandom(24 << 20))
+    (big / "small.txt").write_text("s\n")
+    _git(big, "init", "-q")
+    _git(big, "-c", "user.email=t@t", "-c", "user.name=t", "add", ".")
+    _git(big, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "big")
+    root = tmp_path / "root"
+    tracemalloc.start()
+    try:
+        sha, dest, doc = remote.ship_source(LOCAL, str(root), big)
+        peak = tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
+    assert doc["files"] == 2 and doc["bytes"] > 24 << 20 and remote.require_ready_source(dest, sha) == doc
+    assert hashlib.sha256((Path(dest) / "blob.bin").read_bytes()).hexdigest() == remote.archive_manifest_git(big)["files"]["blob.bin"]
+    assert peak < 6 << 20, f"peak Python allocation during the ship: {peak / 2**20:.1f} MiB"
+
+
+def test_manifest_streamed_from_git_equals_the_in_memory_one(repo):
+    assert remote.archive_manifest_git(repo) == remote.archive_manifest(_archive(repo))
+    assert remote.archive_manifest(_archive(repo))["size"] == len(_archive(repo))
+
+
+def test_launcher_killed_mid_ship_leaves_nothing_executable(repo, tmp_path):
+    """SIGKILL the launcher while the archive is in flight (a throttled feed): no <root>/src/<sha>/ appears, the machine-side gate
+    refuses the identity, and the orphaned transport removes its partial once it sees the short stream."""
+    import os
+    import signal
+
+    root = tmp_path / "root"
+    sha = _git(repo, "rev-parse", "HEAD")
+    child = f"""
+import pathlib, sys, time
+sys.path.insert(0, {SRC!r})
+from research import remote
+real_feed = remote._archive_feed
+class Slow:
+    def __init__(self, w): self.w = w
+    def write(self, b):
+        for i in range(0, len(b), 1024):
+            self.w.write(b[i:i + 1024]); self.w.flush(); print("SENT", flush=True); time.sleep(0.05)
+    def flush(self): self.w.flush()
+remote._archive_feed = lambda git_dir, sent: (lambda w, inner=real_feed(git_dir, sent): inner(Slow(w)))
+remote.ship_source(["sh", "-c"], {str(root)!r}, pathlib.Path({str(repo)!r}))
+"""
+    p = subprocess.Popen([PY, "-c", child], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    assert p.stdout.readline().strip() == b"SENT", p.stderr.read()
+    p.stdout.readline()
+    assert list((root / "src").glob("*.partial-*")), "the ship is in flight"
+    os.kill(p.pid, signal.SIGKILL)
+    p.wait()
+    deadline = time.time() + 10
+    while time.time() < deadline and list((root / "src").glob("*.partial-*")):
+        time.sleep(0.1)
+    assert not (root / "src" / sha).exists(), "nothing executable by name"
+    assert not list((root / "src").glob("*.partial-*")), "the orphaned transport removed the partial when the stream ended short"
+    req, _ = _request(tmp_path, "rk", [PY, "-c", "print('ran')"], remote_sec={"source_sha": sha, "source_dir": str(root / "src" / sha)})
+    out = remote.launch_request(req)
+    assert out["started"] is False and out["fault"] == "SourceNotReady"
+
+
+def test_a_dead_ships_stale_partial_is_removed_by_the_next_ship(repo, tmp_path):
+    import os
+
+    root = tmp_path / "root"
+    stale = root / "src" / "f00d.partial-deadbeef"
+    (stale / "pkg").mkdir(parents=True)
+    (stale / "pkg" / "half.py").write_text("x")
+    old = time.time() - 3600
+    for p in (stale / "pkg" / "half.py", stale / "pkg", stale):
+        os.utime(p, (old, old))
+    fresh = root / "src" / "cafe.partial-0000beef"                  # another launcher's ship in progress: kept
+    fresh.mkdir()
+    (fresh / ".archive.tar").write_bytes(b"in flight")
+    sha, dest, _ = remote.ship_source(LOCAL, str(root), repo)
+    assert sorted(p.name for p in (root / "src").iterdir()) == sorted([sha, fresh.name])
 
 
 def test_extraction_manifest_mismatch_is_refused(repo, tmp_path, monkeypatch):
     """The digest can match and the extraction still be wrong (tar variant, disk full mid-extract): the file set is checked too."""
     root = tmp_path / "root"
-    real = remote.ssh_run
+    real = remote.ssh_stream
 
-    def dropping(ssh, argv, *, stdin=None, timeout=120):
-        r = real(ssh, argv, stdin=stdin, timeout=timeout)
-        if stdin is not None and any(".archive.tar" in a for a in argv):
-            lines = r.stdout.decode().splitlines()
-            r.stdout = "\n".join(lines[:-1]).encode()                  # the machine lists one file fewer than it should
+    def dropping(ssh, argv, feed, *, timeout):
+        r = real(ssh, argv, feed, timeout=timeout)
+        lines = r.stdout.decode().splitlines()
+        r.stdout = "\n".join(lines[:-1]).encode()                      # the machine lists one file fewer than it should
         return r
 
-    monkeypatch.setattr(remote, "ssh_run", dropping)
+    monkeypatch.setattr(remote, "ssh_stream", dropping)
     with pytest.raises(remote.SourceNotReady, match="manifest mismatch.*1 missing"):
         remote.ship_source(LOCAL, str(root), repo)
     assert not list((root / "src").glob("*")), "nothing READY, nothing partial"

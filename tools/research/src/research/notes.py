@@ -80,6 +80,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable
 
+from .pods.workproc import FIND_PRUNE, NOT_WORK_RE, WORK_RE
+
 STATES = ("open", "blocked", "final", "superseded")
 DONE = ("final", "superseded")
 CHECKPOINT_RE = re.compile(r"CHECKPOINT\s+(?P<sha>[0-9a-fA-F]{4,40}|none)?\)?[:\s]*(?P<fin>\*{0,2}FINAL\*{0,2})?\s*\(?"
@@ -98,11 +100,10 @@ POD_PROBE = rf"""# {PROBE_MARK}
 nvidia-smi --query-gpu=utilization.gpu,memory.used --format=csv,noheader,nounits 2>/dev/null \
   | awk -F', *' 'NF >= 2 {{ if ($1 + 0 > u) u = $1 + 0; m += $2; n++ }} END {{ if (n) print "GPU", u + 0, m + 0; else print "GPU none" }}'
 echo "GPUAPPS $(nvidia-smi --query-compute-apps=pid --format=csv,noheader 2>/dev/null | grep -c .)"
-ps -eo etimes=,args= | grep -E 'python|cargo|rustc|pytest|ligero|nvcc|\.sh( |$)' \
-  | grep -vE 'grep|{PROBE_MARK}|compile_worker|nginx|jupyter|sshd|start\.sh|live serve|sleep' | awk '{{print "PROC", $1}}'
+ps -eo etimes=,args= | grep -E '{WORK_RE}' \
+  | grep -vE '{NOT_WORK_RE}' | awk '{{print "PROC", $1}}'
 echo "SERVE $(ps -eo args= | grep -v {PROBE_MARK} | grep -c '[l]ive serve')"
-f=$(timeout 10 find /workspace -xdev \( -name venv312 -o -name .venv -o -name target -o -name __pycache__ -o -name .cache \
-  -o -name node_modules \) -prune -o -type f -printf '%T@\n' 2>/dev/null | sort -n | tail -1); echo "FILE ${{f:-none}} $(date +%s)"
+f=$(timeout 10 find /workspace -xdev {FIND_PRUNE} -o -type f -printf '%T@\n' 2>/dev/null | sort -n | tail -1); echo "FILE ${{f:-none}} $(date +%s)"
 """
 
 
