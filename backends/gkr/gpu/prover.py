@@ -298,6 +298,38 @@ def table_queries(circ: Circuit, name: str) -> list[Query]:
     return [q for q in circ.queries if q.table == name]
 
 
+_QUERY_PLANS: dict = {}
+
+
+def _query_plan(circ: Circuit, name: str, qs: list[Query], dev: torch.device):
+    """The table's query columns as linear forms ``konst + Σ_t coef · cols[:, idx]`` over ``J = q_t · w`` outputs (leaf
+    order), term position by term position: step ``t`` touches only the forms with more than ``t`` terms (``sel``)."""
+    key = (circ.hash, name, dev.type, dev.index)
+    plan = _QUERY_PLANS.get(key)
+    if plan is None:
+        lins = [l for q in qs for l in q.cols]
+        konst = torch.tensor([l.konst % P for l in lins], dtype=torch.int64, device=dev)
+        steps = []
+        for t in range(max((len(l.terms) for l in lins), default=0)):
+            sel = [j for j, l in enumerate(lins) if len(l.terms) > t]
+            idx = torch.tensor([lins[j].terms[t][0] for j in sel], dtype=torch.int64, device=dev)
+            coef = torch.tensor([lins[j].terms[t][1] % P for j in sel], dtype=torch.int64, device=dev)
+            steps.append((None if len(sel) == len(lins) else torch.tensor(sel, dtype=torch.int64, device=dev), idx, coef))
+        plan = _QUERY_PLANS[key] = (konst, steps)
+    return plan
+
+
+def _query_values_planned(circ: Circuit, name: str, qs: list[Query], cols: torch.Tensor) -> torch.Tensor:
+    konst, steps = _query_plan(circ, name, qs, cols.device)
+    vals = konst.expand(cols.shape[0], -1).clone()
+    for sel, idx, coef in steps:
+        if sel is None:
+            vals = (vals + cols[:, idx] * coef) % P
+        else:
+            vals[:, sel] = (vals[:, sel] + cols[:, idx] * coef) % P
+    return vals
+
+
 def seg_query_values(inst: Instance, name: str) -> list[torch.Tensor]:
     """Per segment the ``(units · q_t, cols)`` matrix of query tuples in leaf order (unit-major)."""
     out = []
@@ -305,6 +337,9 @@ def seg_query_values(inst: Instance, name: str) -> list[torch.Tensor]:
         qs = table_queries(s.circ, name)
         if not qs:
             out.append(None)
+            continue
+        if s.cols.is_cuda and s.cols.dtype == torch.int64:
+            out.append(_query_values_planned(s.circ, name, qs, s.cols).reshape(-1, len(qs[0].cols)))
             continue
         vals = torch.stack([logup.query_values(q, s.cols) for q in qs], dim=1)       # (units, q_t, w)
         out.append(vals.reshape(-1, vals.shape[-1]))
