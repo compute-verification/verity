@@ -165,7 +165,8 @@ def test_vs_ref_names_the_fastest_preserved_clean_reference_and_flags_slow_rows(
                   (b, _manifest(_contended(_result("ref-b", 4.5, {}), ["load average 120.0 > 96 cores"]))),
                   (c, _manifest(_failed(_result("ref-c", 4.0, {})))),
                   (d, _manifest(conforming_result("ref-d", authentication="excluded"))),
-                  ("art:" + "e" * 64, "not a manifest")])
+                  ("art:" + "e" * 64, "not a manifest"),
+                  ("art:" + "f" * 64, _manifest(conforming_result("ref-nogpu", hardware={})))])   # which device? nobody's reference
     refs = summary.references(idx)
     assert idx.queries == [(summary.REFS_SQL, (tables.RESULT_KIND,))] and "replicas" in summary.REFS_SQL
     res = conforming_result()

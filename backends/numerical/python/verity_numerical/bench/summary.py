@@ -151,7 +151,8 @@ def row(name: str, path: Path, result: Mapping[str, Any], cols: Sequence[str] = 
 
 def references(index: Any, kind: str = tables.RESULT_KIND) -> dict[tuple[Any, ...], tuple[float, str]]:
     """``{key: (t.total, art id)}``: per config, the fastest preserved ``kind`` artifact in the store ``index`` (anything with
-    ``.sql``) whose validation did not fail and that was not contended."""
+    ``.sql``) whose validation did not fail, that was not contended, and whose relation and GPU are known (a result that does
+    not say which device ran it is nobody's reference)."""
     best: dict[tuple[Any, ...], tuple[float, str]] = {}
     for art, text in index.sql(REFS_SQL, (kind,)):
         try:
@@ -162,7 +163,10 @@ def references(index: Any, kind: str = tables.RESULT_KIND) -> dict[tuple[Any, ..
         t = m.get(contract.T_TOTAL)
         if not isinstance(fp, Mapping) or not tables._num(t) or t <= 0 or _at(meta, "validation.status") == "failed" or _at(meta, "contention.contended"):
             continue
-        k = key(config(fp, m))
+        c = config(fp, m)
+        if c["relation"] is None or c["gpu"] is None:
+            continue
+        k = key(c)
         if k not in best or t < best[k][0]:
             best[k] = (t, art)
     return best
