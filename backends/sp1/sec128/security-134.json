@@ -1,0 +1,14 @@
+{
+ "security_bits": 134,
+ "security_per_shard_log2": -99.92,
+ "security_terms_log2": {
+  "fri_query_phase": -134.66,
+  "lookup_logup_gkr": -100.3,
+  "fri_commit_rounds_sum": -102.37,
+  "fri_batching": -104.37,
+  "zerocheck": -112.17,
+  "jagged_reduction": -116.38,
+  "sum": -99.92
+ },
+ "security_source": "SP1_TARGET_BITS_OF_SECURITY = 134 (stock 100) in sp1-primitives 6.6.0 src/fri_params.rs, prover and verifier: it sets only the FRI query count (unique_decoding_queries = ceil((134 - 16) / -log2(5/8)) = 175, stock 124). achieved_log2 is the full per-shard sum, not the constant: soundcalc (ethereum/soundcalc @2af5e7d, SP1's gen_soundcalc_toml config, unique-decoding regime, proven bounds) per-shard log2 errors query -134.66, lookup (LogUp-GKR, GKR_GRINDING_BITS 12) -100.30, FRI commit rounds -102.37, batching (BATCH_GRINDING_BITS 5) -104.37, zerocheck -112.17, jagged reduction -116.38; sum -99.92, bounded by KoalaBear^4 (|F| = 2^123.95), which no SP1 constant raises; union-bounded over the core proof's shard proofs"
+}

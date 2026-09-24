@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+# SP1 with the FRI query count raised (SP1_TARGET_BITS_OF_SECURITY = $SEC_BITS, default 134; stock 100), otherwise
+# unmodified, on a Linux CUDA pod.  The constant is compiled into sp1-primitives (fri_params.rs: it sets only
+# unique_decoding_queries, i.e. the FRI query-phase term: 124 queries at 100, 175 at 134); the prebuilt sp1-gpu-server
+# bakes it in.  So both sides are rebuilt with the one line changed and nothing else:
+#   - prover: sp1-gpu-server from succinctlabs/sp1 v6.6.0 (f5a5bbf6, the version of the release server the stock cells
+#     ran), installed as $ROOT/home/.sp1/bin/sp1-gpu-server; run the host with HOME=$ROOT/home.  sp1-sdk's cuda client
+#     replaces a server whose `--version` differs from sp1_primitives::SP1_CRATE_VERSION by the release download, so the
+#     patched crate keeps version 6.6.0 and every run must check the server's sha256 afterwards.
+#   - verifier/host: backends/sp1 copied to $ROOT/host-src with crates.io sp1-primitives 6.6.0 vendored under
+#     vendor/sp1-primitives (same line changed) through [patch.crates-io]; host features cuda,relation-bare, installed as
+#     /workspace/bin/veritor-zk-host-cuda-relation-bare-sec$SEC_BITS.
+# Needs the stock toolchain first (backends/sp1/pod_bootstrap.sh with SP1_HOST_FEATURES=cuda,relation-bare, which also
+# fills ~/.cargo/registry with sp1-primitives 6.6.0).  Keep builds sequential (kb/sp1-prover.md).
+#   CUDA_ARCHS=80 bash backends/sp1/sec128/build.sh          # 80 A100, 90 H100, 89 RTX 4090, 120 RTX 5090
+set -euo pipefail
+export PATH="$HOME/.sp1/bin:$HOME/.cargo/bin:/usr/local/cuda/bin:$HOME/.local/bin:$PATH"
+export CUDACXX="${CUDACXX:-/usr/local/cuda/bin/nvcc}"
+export CUDA_ARCHS="${CUDA_ARCHS:-80}"
+SEC_BITS="${SEC_BITS:-134}"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SP1_SRC="$(dirname "$HERE")"
+ROOT="${SEC128_ROOT:-/workspace/sec128}"
+TAG_COMMIT=f5a5bbf6a1cf6007315b410d88678d96fb399fb5   # succinctlabs/sp1 v6.6.0
+STOCK_LINE='pub const SP1_TARGET_BITS_OF_SECURITY: usize = 100;'
+NEW_LINE="pub const SP1_TARGET_BITS_OF_SECURITY: usize = $SEC_BITS;"
+mkdir -p "$ROOT" /workspace/bin
+stage() { echo; echo "=== [$(date -u +%H:%M:%S)] $*"; }
+
+patch_line() {  # FILE: replace the stock line, and fail unless exactly that one line changed
+  local f=$1
+  cp "$f" "$f.orig"
+  grep -qxF "$STOCK_LINE" "$f.orig" || { echo "stock line not found in $f"; exit 2; }
+  sed -i "s/^$STOCK_LINE\$/$NEW_LINE/" "$f"
+  [ "$(diff "$f.orig" "$f" | grep -c '^[<>]')" = 2 ] || { echo "unexpected diff in $f"; diff "$f.orig" "$f"; exit 2; }
+  rm "$f.orig"
+}
+
+stage "machine"
+nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader || true
+nproc; df -h /workspace | tail -1
+command -v nvcc >/dev/null && nvcc --version | tail -1
+apt-get install -y -qq --no-install-recommends golang-go time >/dev/null 2>&1 || true
+
+stage "prover source: sp1 v6.6.0 $TAG_COMMIT + SP1_TARGET_BITS_OF_SECURITY=$SEC_BITS"
+FORK="$ROOT/sp1-v6.6.0-sec$SEC_BITS"
+if [ ! -f "$FORK/.sec-done" ]; then
+  rm -rf "$FORK"; git init -q "$FORK"
+  git -C "$FORK" remote add origin https://github.com/succinctlabs/sp1.git
+  git -C "$FORK" fetch -q --depth 1 origin "$TAG_COMMIT"
+  git -C "$FORK" checkout -q FETCH_HEAD
+  patch_line "$FORK/crates/primitives/src/fri_params.rs"
+  touch "$FORK/.sec-done"
+fi
+git -C "$FORK" rev-parse HEAD
+git -C "$FORK" diff --stat
+git -C "$FORK" diff | tee "$ROOT/prover-source.diff"
+
+stage "sp1-gpu-server (CUDA_ARCHS=$CUDA_ARCHS) -> $ROOT/home/.sp1/bin"
+mkdir -p "$ROOT/home/.sp1/bin"
+( cd "$FORK" && CARGO_TARGET_DIR="$ROOT/target-server" cargo install --locked --force --root "$ROOT/home/.sp1" \
+    --path sp1-gpu/crates/server 2>&1 | grep -v -E "^\s+(Compiling|Downloaded|Downloading) " )
+SERVER="$ROOT/home/.sp1/bin/sp1-gpu-server"
+[ "$("$SERVER" --version | tr -d '[:space:]')" = 6.6.0 ] || { echo "server version is not 6.6.0"; exit 2; }
+sha256sum "$SERVER" | tee "$ROOT/server.sha256"
+
+stage "verifier/host source: backends/sp1 + vendored sp1-primitives 6.6.0 (same line)"
+REG="$(ls -d "$HOME"/.cargo/registry/src/*/sp1-primitives-6.6.0 | head -1)"
+[ -n "$REG" ] || { echo "sp1-primitives 6.6.0 not in the cargo registry: run pod_bootstrap.sh first"; exit 2; }
+HOST="$ROOT/host-src"
+rm -rf "$HOST"; mkdir -p "$HOST/vendor"
+tar -C "$SP1_SRC" --exclude=./target --exclude=./tcdot --exclude=./sec128 --exclude=./sp1 -cf - . | tar -C "$HOST" -xf -
+cp -r "$REG" "$HOST/vendor/sp1-primitives"
+rm -f "$HOST/vendor/sp1-primitives/.cargo-ok" "$HOST/vendor/sp1-primitives/.cargo_vcs_info.json"
+patch_line "$HOST/vendor/sp1-primitives/src/fri_params.rs"
+cmp "$HOST/vendor/sp1-primitives/src/fri_params.rs" "$FORK/crates/primitives/src/fri_params.rs" \
+  || { echo "vendored fri_params.rs differs from the prover's"; exit 2; }
+diff -r "$REG" "$HOST/vendor/sp1-primitives" | tee "$ROOT/verifier-source.diff" || true
+sed -i 's|^\[patch.crates-io\]$|[patch.crates-io]\nsp1-primitives = { path = "vendor/sp1-primitives" }|' "$HOST/Cargo.toml"
+grep -n -A3 '^\[patch.crates-io\]' "$HOST/Cargo.toml"
+
+stage "host: cuda,relation-bare"
+cd "$HOST"
+CARGO_TARGET_DIR="$ROOT/target-host" cargo build --release -p veritor-zk-host --features cuda,relation-bare 2>&1 \
+  | grep -v -E "^\s+(Compiling|Downloaded|Downloading) "
+diff "$SP1_SRC/Cargo.lock" "$HOST/Cargo.lock" | tee "$ROOT/host-lock.diff" || true
+BIN=/workspace/bin/veritor-zk-host-cuda-relation-bare-sec$SEC_BITS
+install -m 0755 "$ROOT/target-host/release/veritor-zk-host" "$BIN"
+sha256sum "$BIN"
+SP1_PROVER=cpu RUST_LOG=error "$BIN" info | grep '^{' | tail -1 | tee "$ROOT/host-info.json"
+if [ -x /workspace/bin/veritor-zk-host-cuda-relation-bare ]; then
+  echo "stock host:"; SP1_PROVER=cpu RUST_LOG=error /workspace/bin/veritor-zk-host-cuda-relation-bare info | grep '^{' | tail -1
+fi
+stage "done"
+echo "VERITY_SP1_HOST=$BIN HOME=$ROOT/home (server sha256 $(cut -c1-16 "$ROOT/server.sha256"))"
