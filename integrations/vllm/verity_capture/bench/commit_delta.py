@@ -988,6 +988,44 @@ def hot_unsafe_reasons(args: argparse.Namespace) -> list[str]:
     return why
 
 
+def oracle_producers_of_record(args: argparse.Namespace, required_manifest: dict[str, Any] | None, reqs: list[dict[str, Any]],
+                               sampling: dict[str, Any]) -> tuple[dict[tuple[str, str], dict[str, Any]] | None, dict[str, Any]]:
+    """The oracle's producer facts from the Programs of record (`oracle_compare.producers_of_programs`) for a `v2-query` manifest, which
+    carries none: (facts | None, record).  The Programs are the replay's (same lookup, same of-record digest check); None + the named
+    reason when the manifest is not v2, no Program dir is given or a Program is not of record."""
+    from verity_capture.commit import manifest_format as MF
+    from verity_capture.commit import oracle_compare as OC
+    from verity_capture.commit import sampled_replay as SR
+    if SR.address_rule_of(required_manifest) != SR.V2_QUERY:
+        return None, {"used": False, "why": "manifest is not v2-query: its rows carry the producer annotations"}
+    t0 = time.monotonic()
+    labels = {str(r.get("request_id")): f"r{int(r.get('index', i))}" for i, r in enumerate(reqs)}
+    if getattr(args, "programs_root", None):
+        fx = {"requests": [{"request_id": labels[str(r.get("request_id"))], "prompt_len": len(r["prompt_token_ids"]),
+                            "max_tokens": int(r.get("max_tokens") or sampling.get("max_tokens") or 1)} for r in reqs]}
+        loaded = MF.programs_for(fx, args.programs_root)
+    elif getattr(args, "program_dir", None):
+        one = MF.load_program(args.program_dir)
+        loaded = {labels[str(r.get("request_id"))]: one for r in reqs}
+    else:
+        return None, {"used": False, "why": "no --programs-root / --program-dir: producer facts not derivable"}
+    of_record = {str(args.program_digest)} if getattr(args, "program_digest", None) else set()
+    of_record.update(str(x) for x in (required_manifest or {}).get("component_digests") or [])
+    of_record.update(str(c["program_digest"]) for c in ((required_manifest or {}).get("components") or {}).values()
+                     if isinstance(c, dict) and c.get("program_digest"))
+    digs = {k: str((v.get("result") or {}).get("program_digest") or (v.get("instances") or {}).get("digest") or "") for k, v in loaded.items()}
+    bad = sorted(k for k, d in digs.items() if d not in of_record)
+    if bad:
+        return None, {"used": False, "why": f"Program(s) {bad[:4]} not of record (of-record {sorted(x[:16] for x in of_record)})"}
+    facts = OC.producers_of_programs(loaded, aliases=(required_manifest or {}).get("op_path_aliases"))
+    del loaded
+    return facts, {"used": True, "members": len(facts), "with_operand": sum(1 for f in facts.values() if f.get("operand")),
+                   "with_consumers": sum(1 for f in facts.values() if f.get("consumers")),
+                   "conflicts": sum(1 for f in facts.values() if f.get("conflict")), "wall_s": round(time.monotonic() - t0, 1),
+                   "method": "v1_bridge.population over the Programs of record: producing Call family, first-operand producer family, "
+                             "reading modules outside the producer's module (oracle_compare.producers_of_programs)"}
+
+
 def main(argv: list[str] | None = None) -> None:
     global TL
     TL = Timeline.from_env("commit_delta", hot=_HOT is not None)      # hot worker: the job's VERITY_TIMELINE (per row attempt), not the worker's
@@ -1908,6 +1946,7 @@ def main(argv: list[str] | None = None) -> None:
     decls: dict[str, dict] = {}
     prev_digests: dict = {}
     replay_cache: dict[str, dict[str, Any]] = {}      # [R16 sys] --replay-cache: full-key -> pair 0's C2 record (this Commit stage only)
+    oracle_producers: tuple[dict | None, dict] | None = None      # the Programs' producer facts for form (B): derived once, every pair reads them
     # [R17-1 / F-moe-r17-03] the Program's declared stop rule + LAG, read once for every consumer of every pair (population, composition,
     # linkage, replay); recorded in versions so the finalizer reads the same fact the Commit counted on
     stop_of_record = stop_rule_of_record(eng, wl, versions)
@@ -2304,10 +2343,20 @@ def main(argv: list[str] | None = None) -> None:
                         _oracle = OC.MatchOracle(args.match_dir)
                         _wl = {"requests": [{"request_id": r.get("request_id"), "index": r.get("index", i), "prompt_len": r.get("prompt_len"),
                                              "max_tokens": r.get("max_tokens") or sampling.get("max_tokens")} for i, r in enumerate(reqs)]}
+                        _prod = OC.producers_of(required_manifest)
+                        if oracle_producers is None:
+                            try:
+                                oracle_producers = oracle_producers_of_record(args, required_manifest, reqs, sampling)
+                            except Exception as _pe:  # noqa: BLE001  -- no facts: the manifest's own entries stand, the reason is on the record
+                                oracle_producers = (None, {"used": False, "why": f"producer facts not derived: {_pe!r}"[:300]})
+                            print(f"[delta] form (B) producer facts from the Programs of record: {oracle_producers[1]}", flush=True)
+                        if oracle_producers[0]:
+                            _prod = OC.merge_producers(_prod, oracle_producers[0])
                         # [reqval F-moe-r17-06] the manifest's alias table: a shared module's invocation k is compared at ITS Program op
-                        oc = OC.oracle_compare(_oracle, _bm, OC.committed_reader(com), producers=OC.producers_of(required_manifest), workload=_wl,
+                        oc = OC.oracle_compare(_oracle, _bm, OC.committed_reader(com), producers=_prod, workload=_wl,
                                                aliases=(required_manifest.get("op_path_aliases") if isinstance(required_manifest, dict) else None),
                                                query_families=OC.query_families_of(required_manifest))   # [revb n-2.14-1] identities per Q(P) family
+                        oc["producer_facts"] = oracle_producers[1]
                     except Exception as e:  # noqa: BLE001  -- fail closed: an unreadable oracle is 'not checked', never PASS
                         oc = {"schema": OC.SCHEMA if "OC" in dir() else "verity-sweep/oracle-compare/v1", "method": "oracle-compare", "result": None,
                               "why": f"oracle compare not run: {e!r}"[:300], "compared": 0, "mismatch_n": 0, "error": repr(e)[:300]}
