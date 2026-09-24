@@ -293,7 +293,8 @@ if GRAPHS:
             self.levels = {lv: torch.zeros((2, 1 << lv, 6), dtype=i32, device=dev) for lv in range(n)}
             self.rho = torch.zeros((n + 1, 6), dtype=i32, device=dev)
             self.coins = torch.zeros((n + 1, 6), dtype=i32, device=dev)
-            self.lam6 = torch.zeros((1, 6), dtype=i32, device=dev)
+            self.coeff2 = torch.cat([self.one6, torch.zeros((1, 6), dtype=i32, device=dev)], 0)   # [1 | lambda]
+            self.lam6 = self.coeff2[1:2]
             self.consts = torch.zeros((n + 1, 36), dtype=i32, device=dev)
             self.S = torch.zeros((n, n, 4, 6), dtype=i32, device=dev)
             self.vals = torch.zeros((n, 4, 6), dtype=i32, device=dev)
@@ -355,26 +356,31 @@ if GRAPHS:
         def _fs_setup(self) -> None:
             from .fs_cuda import DeviceTranscript
             self.fs = DeviceTranscript(self.device)
+            # prod_{j < i-1} eq(rho_j, r_{j+1}) for the current round, kept by the sponge steps (round_consts_pfx)
+            self.pfx = torch.zeros(6, dtype=torch.int32, device=self.fs.device)
+
+        def _round_consts(self, i: int, c: torch.Tensor) -> None:
+            _kg.round_consts_pfx(self.rho, self.pfx, self.coins, i, c)
 
         def _generic_round(self, T4, lv: int, i: int) -> None:
             super()._generic_round(T4, lv, i)
-            self.fs.step(self.S[lv, i - 1], self.coins[i - 1])
+            self.fs.step(self.S[lv, i - 1], self.coins[i - 1], rho=self.rho[i - 1], pfx=self.pfx)
 
         def _packed_round(self, lv: int, i: int, T4_tab):
             out = super()._packed_round(lv, i, T4_tab)
-            self.fs.step(self.S[lv, i - 1], self.coins[i - 1])
+            self.fs.step(self.S[lv, i - 1], self.coins[i - 1], rho=self.rho[i - 1], pfx=self.pfx)
             return out
 
         def _level_ops(self, lv: int, i0: int, i1: int, tail: bool) -> None:
             super()._level_ops(lv, i0, i1, tail)
             if tail:
-                self.fs.step(self.vals[lv], self.rho[0], self.lam6[0])
+                self.fs.step(self.vals[lv], self.rho[0], self.lam6[0], pfx=self.pfx, reset=True)
                 if lv:
                     self.rho[1:lv + 1] = self.coins[0:lv]
 
         def _tree_ops(self) -> None:
             super()._tree_ops()
-            self.fs.step(self.levels[0][1, 0], self.lam6[0])
+            self.fs.step(self.levels[0][1, 0], self.lam6[0], pfx=self.pfx, reset=True)
 
         def _replay_fs(self, tr: Transcript, out: list[Ext]) -> LeafClaim:
             self.fs.load(tr)

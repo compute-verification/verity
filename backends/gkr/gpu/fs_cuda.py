@@ -21,9 +21,9 @@ try:
 except ImportError:            # pragma: no cover - laptop
     cp = None
 
-from .field import P
+from .field import P, W
 
-SRC = r"""
+SRC = f"#define P_ {P}ull\n#define W_ {W}ull\n" + r"""
 typedef unsigned int u32;
 typedef unsigned long long u64;
 
@@ -68,10 +68,24 @@ __device__ __forceinline__ void sha256_compress(u32 st[8], u32 w[16]) {
     st[0]+=a; st[1]+=b; st[2]+=c; st[3]+=d; st[4]+=e; st[5]+=f; st[6]+=g; st[7]+=h;
 }
 
+// c = a b in F_p[X] / (X^6 - W), canonical in and out
+__device__ __forceinline__ void ext_mul(const u32 a[6], const u32 b[6], u32 c[6]) {
+    u64 lo[6] = {0, 0, 0, 0, 0, 0}, hi[6] = {0, 0, 0, 0, 0, 0};
+    for (int i = 0; i < 6; ++i)
+        for (int j = 0; j < 6; ++j) {
+            const u64 t = ((u64)a[i] * (u64)b[j]) % P_;
+            if (i + j < 6) lo[i + j] += t; else hi[i + j - 6] += t;
+        }
+    for (int d = 0; d < 6; ++d) c[d] = (u32)((lo[d] + (hi[d] % P_) * W_) % P_);
+}
+
 // One block of 8 threads.  st_a: u32[8] state words, ctr_a: u64 counter, msg_a: nmsg u32 words (LE coordinates),
-// out0_a / out1_a: u32[6] challenge destinations (nchal = 1 or 2).
-extern "C" __global__ void fs_step(u64 st_a, u64 ctr_a, u64 msg_a, int nmsg, u64 out0_a, u64 out1_a, int nchal, u32 p)
+// out0_a / out1_a: u32[6] challenge destinations (nchal = 1 or 2).  pfx_a (optional): u32[6] running product; with
+// rho_a (u32[6]) it is multiplied by eq(rho, r) = 1 - rho - r + 2 rho r for the first challenge r; reset_pfx sets it to 1.
+extern "C" __global__ void fs_step(u64 st_a, u64 ctr_a, u64 msg_a, int nmsg, u64 out0_a, u64 out1_a, int nchal, u32 p,
+                                   u64 rho_a, u64 pfx_a, int reset_pfx)
 {
+    u32 r0[6] = {0, 0, 0, 0, 0, 0};
     u32* st_g = (u32*)st_a;
     u64* ctr_g = (u64*)ctr_a;
     const u32* msg = (const u32*)msg_a;
@@ -136,6 +150,8 @@ extern "C" __global__ void fs_step(u64 st_a, u64 ctr_a, u64 msg_a, int nmsg, u64
                 }
                 if (have == 6) {
                     for (int j = 0; j < 6; ++j) outs[c][j] = acc[j];
+                    if (c == 0)
+                        for (int j = 0; j < 6; ++j) r0[j] = acc[j];
                     ++c;
                     have = 0;
                 }
@@ -146,7 +162,26 @@ extern "C" __global__ void fs_step(u64 st_a, u64 ctr_a, u64 msg_a, int nmsg, u64
         __syncthreads();
         if (done) break;
     }
-    if (t == 0) *ctr_g = ctr;
+    if (t == 0) {
+        *ctr_g = ctr;
+        if (pfx_a) {
+            u32* pfx = (u32*)pfx_a;
+            if (rho_a) {
+                const u32* a = (const u32*)rho_a;
+                u32 ab[6], e[6], pv[6], np[6];
+                ext_mul(a, r0, ab);
+                for (int d = 0; d < 6; ++d)
+                    e[d] = (u32)((2ull * ab[d] + (d == 0 ? 1ull : 0ull) + 2ull * P_ - a[d] - r0[d]) % P_);
+                for (int d = 0; d < 6; ++d) pv[d] = pfx[d];
+                ext_mul(pv, e, np);
+                for (int d = 0; d < 6; ++d) pfx[d] = np[d];
+            }
+            if (reset_pfx) {
+                pfx[0] = 1u;
+                for (int d = 1; d < 6; ++d) pfx[d] = 0u;
+            }
+        }
+    }
 }
 """
 
@@ -192,16 +227,21 @@ class DeviceTranscript:
         tr.ctr = int(words[8:].view(np.int64)[0])
         tr.slots += slots
 
-    def step(self, msg: torch.Tensor, out0: torch.Tensor, out1: torch.Tensor | None = None) -> None:
-        assert msg.dtype == torch.int32 and msg.is_contiguous() and msg.device == self.device
-        assert out0.dtype == torch.int32 and out0.is_contiguous() and out0.numel() == 6
-        if out1 is not None:
-            assert out1.dtype == torch.int32 and out1.is_contiguous() and out1.numel() == 6
+    def step(self, msg: torch.Tensor, out0: torch.Tensor, out1: torch.Tensor | None = None, *,
+             rho: torch.Tensor | None = None, pfx: torch.Tensor | None = None, reset: bool = False) -> None:
+        """Absorb ``msg``, draw ``out0`` (and ``out1``); with ``pfx``: ``pfx *= eq(rho, out0)`` when ``rho`` is given, then
+        ``pfx = 1`` when ``reset``."""
+        for t in (msg, out0, out1, rho, pfx):
+            assert t is None or (t.dtype == torch.int32 and t.is_contiguous() and t.device == self.device)
+        assert out0.numel() == 6 and (out1 is None or out1.numel() == 6)
+        assert (rho is None and not reset) or pfx is not None
+
+        def ptr(t):
+            return np.uint64(0 if t is None else t.data_ptr())
+
         with cp.cuda.ExternalStream(torch.cuda.current_stream(self.device).cuda_stream):
-            self.kernel((1,), (8,), (np.uint64(self.st.data_ptr()), np.uint64(self.ctr.data_ptr()), np.uint64(msg.data_ptr()),
-                                     np.int32(msg.numel()), np.uint64(out0.data_ptr()),
-                                     np.uint64(0 if out1 is None else out1.data_ptr()), np.int32(1 if out1 is None else 2),
-                                     np.uint32(P)))
+            self.kernel((1,), (8,), (ptr(self.st), ptr(self.ctr), ptr(msg), np.int32(msg.numel()), ptr(out0), ptr(out1),
+                                     np.int32(1 if out1 is None else 2), np.uint32(P), ptr(rho), ptr(pfx), np.int32(reset)))
 
 
 __all__ = ["DeviceTranscript", "available"]

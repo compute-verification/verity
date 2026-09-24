@@ -133,6 +133,34 @@ def round_consts(rho: torch.Tensor, coins: torch.Tensor, i: int, out: torch.Tens
 
 
 @triton.jit
+def _round_consts_pfx_kernel(rho_ptr, pfx_ptr, coins_ptr, i, out_ptr, R2: tl.constexpr, FK: tl.constexpr):
+    zero = tl.load(rho_ptr + 0) * 0
+    one = zero + 1
+    for s in tl.static_range(6):
+        tl.store(out_ptr + s, tl.load(pfx_ptr + s))
+        g = tl.load(rho_ptr + (i - 1) * 6 + s)
+        if s == 0:
+            x0 = msub(one, g)
+        else:
+            x0 = msub(zero, g)
+        x1 = g
+        x2 = msub(madd(g, g), x0)
+        x3 = msub(madd(x2, x2), x1)
+        tl.store(out_ptr + 6 + s, x0)
+        tl.store(out_ptr + 12 + s, x1)
+        tl.store(out_ptr + 18 + s, x2)
+        tl.store(out_ptr + 24 + s, x3)
+        tl.store(out_ptr + 30 + s, mmul(tl.load(coins_ptr + (i - 1) * 6 + s), R2))
+
+
+def round_consts_pfx(rho: torch.Tensor, pfx: torch.Tensor, coins: torch.Tensor, i: int, out: torch.Tensor) -> torch.Tensor:
+    """:func:`round_consts` with the prefix ``prod_{j < i-1} eq(rho_j, r_{j+1})`` read from ``pfx (6,)`` (a running product
+    the caller keeps: 1 at a level's start, times ``eq(rho_{i-1}, r_i)`` after round ``i``) instead of recomputed."""
+    _round_consts_pfx_kernel[(1,)](rho, pfx, coins, i, out, R2=R2_MOD_P, FK=FIELD_KEY)
+    return out
+
+
+@triton.jit
 def _scale_R_kernel(v_ptr, out_ptr, n, R2: tl.constexpr, BLOCK: tl.constexpr, FK: tl.constexpr):
     i = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
     mask = i < n
