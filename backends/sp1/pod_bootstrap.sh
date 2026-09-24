@@ -11,7 +11,7 @@
 #     uv run research run --on vy-sp1 --project verity --source . --stage sp1.bootstrap -- bash backends/sp1/pod_bootstrap.sh
 # Workloads then point the driver at the binary with VERITY_SP1_HOST=/workspace/bin/veritor-zk-host-cuda.
 #
-# Adapted from veritor's zk/campaign pod_bootstrap.sh (tools/research/src/research/pods/sh/); no credentials are placed
+# Adapted from veritor's zk/campaign pod_bootstrap.sh; no credentials are placed
 # on the pod and the repository is shipped as a snapshot, never cloned.
 #
 # SP1_HOST_FEATURES (default `cuda`) selects the host's cargo features; a DIAGNOSTIC build is e.g.
