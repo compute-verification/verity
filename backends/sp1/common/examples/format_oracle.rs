@@ -3,7 +3,7 @@
 //! model-recorded y of the `sp1-format-instances/v1` file
 //! (`verity_sp1.format_instances`), bit for bit.
 //!
-//!     cargo run --release -p veritor-zk-common --example format_oracle -- FILE.bin...
+//!     cargo run --release -p veritor-zk-common --features relation-bare --example format_oracle -- FILE.bin...
 //!
 //! Negatives, per file: every VU's y with one bit flipped is a mismatch; a NaN
 //! (or otherwise off-domain) operand in the first element of every VU is
