@@ -42,7 +42,7 @@ def registry_version(registry=REGISTRY) -> dict:
     # The record is computed over the DECLARED vocabulary (module-level definitions of `registry.prims` / `registry.b1`),
     # not over `registry.defs` at call time: after a program is built the registry also holds shape-instantiated
     # primitives (`GatherBf16x49152_v1`, `Const32[…]`, `Input16_v1`) and the digest would depend on process state
-    # (R-CAPCORR-1). Same schema as `verity_vllm.correspondence.capture_identities_program.vocabulary_version`.
+    # (R-CAPCORR-1).
     prim_rows = []
     comp_rows = []
     seen: set[str] = set()

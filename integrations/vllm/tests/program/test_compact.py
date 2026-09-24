@@ -389,7 +389,7 @@ def test_persist_program_progressions_form_gives_the_same_prog_and_document_and_
     """[R17 mfast F2] VERITY_INSTANCES_FORM=progressions: persist_program writes instances.jsonl v2 straight from the fold's Refs (no runs()
     expansion); (1) it converts to the v1 file BYTE FOR BYTE (rows) and v1 -> v2 gives the v2 bytes; (2) load_oracle (record form and
     compact form) and the GM-01 document are identical over both files; (3) no sidecar, same fold digest; (4) the header AND the loader
-    name the form; (5) the diagnostic reader (gen_batch_candidate) sees the runs."""
+    name the form."""
     import os
     import shutil
     from verity_vllm.harness import run_config as RC
@@ -448,11 +448,6 @@ def test_persist_program_progressions_form_gives_the_same_prog_and_document_and_
     # stores (it is the Program descriptor's digest, program.json == fold_summary.digest; only F-r16-24's instances_sha256 tie differs)
     assert not [f for f in os.listdir(o2) if ".compact." in f] and h1["digest"] == h2["digest"] == json.load(open(os.path.join(o2, "program.json")))["digest"]
     assert IF.sha256_file(i1)[0] != IF.sha256_file(i2)[0]
-    # (5) the diagnostic reader normalises v2 to runs at load
-    import pathlib
-    from verity_vllm.correspondence.batch_candidate import Candidate as _Diag
-    g1, g2 = _Diag(pathlib.Path(o1), None), _Diag(pathlib.Path(o2), None)
-    assert [m["operand_refs"] for m in g1.insts] == [m["operand_refs"] for m in g2.insts] and g2.inst_header["operand_refs_form"] == "progressions"
 
 
 def test_persist_program_writer_is_byte_identical_to_the_generic_conversion(tmp_path, monkeypatch):
