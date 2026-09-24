@@ -22,6 +22,10 @@
 //!     # the statement names, flagged); proofs without the red-team-2 V1 zero claims are rejected (--allow-legacy reads
 //!     # them, UNSOUND: no soundness figure, and batch lists them as a problem); local-coin proofs are verdicts only (no soundness figure; --no-local rejects them); proofs of
 //!     # one statement count once in the union.  `verify --proof X.lgto [--stmt S] [--key K] [--coins C]` likewise.
+//!     # --session PATH (repeatable; a live.ChallengeServerSession record dir or a dir of them): live proofs are
+//!     # authenticated against the issuing verifier's record instead (`session`: slots from the record's coins, labels
+//!     # and statement, never the dump's .coins; every round's MSG = the record's; session accepted) and claim the
+//!     # interactive union x the recorded batches on the statement (red-team-3 R3-7 / R3-10); unauthenticated: rejected.
 //! ligerito-verify ref-fixtures --file F.json [--neg N.json] [--json out.json] [--reps R]
 //!     # ligerito-design's ref.py fixtures (`python -m backends.direct.ligerito.ref`, format ligerito-ref/v2): every
 //!     # statement + proof must get ref.py's verdict; --neg = declarative tampers (fixtures/ref/negatives.json) replayed
@@ -46,6 +50,7 @@ use ligerito_verify::params::Params;
 use ligerito_verify::pcs::{verify, Report};
 use ligerito_verify::refpcs;
 use ligerito_verify::refprover::{prove, random_point, random_vector, tamper};
+use ligerito_verify::session;
 use ligerito_verify::transcript::{Coins, FiatShamir, Live, Local};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -160,6 +165,38 @@ struct LgtoOpts {
     stmt: Option<PathBuf>,
     key: Option<PathBuf>,
     coins: Option<PathBuf>,
+    /// `--session`: the issuing verifiers' records; live proofs are then authenticated against them (slots derived from
+    /// the record, never from `.coins`) and rejected when no recorded batch authenticates them
+    sessions: Option<Vec<session::Batch>>,
+}
+
+/// `--session PATH` (repeatable): a `live.ChallengeServerSession` record dir (`session.json` + `verdict.json`) or a dir
+/// of them.
+fn load_sessions(paths: &[PathBuf]) -> Result<Vec<session::Batch>, String> {
+    let mut dirs = Vec::new();
+    for p in paths {
+        if p.join("session.json").exists() {
+            dirs.push(p.clone());
+        } else {
+            let mut sub: Vec<PathBuf> = std::fs::read_dir(p)
+                .map_err(|e| format!("--session {}: {e}", p.display()))?
+                .filter_map(|e| e.ok().map(|e| e.path()))
+                .filter(|d| d.join("session.json").exists())
+                .collect();
+            if sub.is_empty() {
+                return Err(format!("--session {}: no session.json in it or its subdirectories", p.display()));
+            }
+            sub.sort();
+            dirs.extend(sub);
+        }
+    }
+    let mut out = Vec::new();
+    for d in dirs {
+        let read = |f: &str| std::fs::read_to_string(d.join(f)).map_err(|e| format!("{}: {e}", d.join(f).display()));
+        let name = d.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+        out.extend(session::read_record(&read("session.json")?, &read("verdict.json")?, &name)?);
+    }
+    Ok(out)
 }
 
 /// run.py's manifest entry for one LGTO0001 file (`{"files": [{"proof", "stmt", "coins", "coins_seed", "coins_file"}]}`).
@@ -208,9 +245,36 @@ fn verify_lgto_file(proof_path: &Path, entry: Option<&LgtoEntry>, lo: &LgtoOpts,
         (Err(e), _) => return fail(format!("statement {}: {e}", stmt_path.display()), proof.len()),
         (_, Err(e)) => return fail(format!("key {}: {e}", key_path.display()), proof.len()),
     };
+    let declared = entry.and_then(|e| e.coins.clone());
+    if let Some(recs) = &lo.sessions {
+        if lgto::read_proof(&proof).is_ok_and(|p| p.params.coins == "live") {
+            if declared.as_deref().is_some_and(|d| d != "live") {
+                return fail(format!("the proof declares live coins, the manifest {}", declared.unwrap()), proof.len());
+            }
+            let t0 = Instant::now();
+            let mut res = Err(String::new());
+            for _ in 0..reps.max(1) {
+                res = session::authenticate(&stmt, &key, &proof, recs, &lo.opt);
+            }
+            let seconds = t0.elapsed().as_secs_f64() / reps.max(1) as f64;
+            return match res {
+                Ok(a) => Verdict {
+                    name,
+                    accepted: true,
+                    reason: format!("ok (session {} batch {}, {} rounds)", a.session, a.batch, a.rounds),
+                    report: None,
+                    params: None,
+                    bytes: proof.len(),
+                    mode: "lgto live-session",
+                    seconds,
+                    lgto: Some(a.report),
+                },
+                Err(e) => Verdict { name, accepted: false, reason: format!("live session: {e}"), report: None, params: None, bytes: proof.len(), mode: "lgto live-session", seconds, lgto: None },
+            };
+        }
+    }
     let coins_path = lo.coins.clone().or_else(|| entry.and_then(|e| e.coins_file.as_ref()).map(|s| dir.join(s))).or_else(|| sidecar(proof_path, "coins"));
     let seed = entry.map(|e| e.seed).unwrap_or(1);
-    let declared = entry.and_then(|e| e.coins.clone());
     let mut coins_for = |kind: &str| -> Result<Box<dyn Coins>, String> {
         if let Some(d) = &declared {
             if d != kind {
@@ -456,6 +520,8 @@ fn main() {
     let n_proofs_arg: Option<usize> = arg(&args, "--n-proofs").map(|s| s.parse().expect("--n-proofs"));
     assert!(n_proofs_arg != Some(0), "--n-proofs must be positive");
     let flag = |f: &str| args.iter().any(|a| a == f);
+    let session_paths: Vec<PathBuf> = args.windows(2).filter(|w| w[0] == "--session").map(|w| PathBuf::from(&w[1])).collect();
+    let sessions = if session_paths.is_empty() { None } else { Some(load_sessions(&session_paths).unwrap_or_else(|e| panic!("{e}"))) };
     let lgto_opts = |n_proofs: usize| LgtoOpts {
         opt: lgto::Options {
             allow_any_key: flag("--allow-any-key"),
@@ -466,6 +532,7 @@ fn main() {
         stmt: arg(&args, "--stmt").map(PathBuf::from),
         key: arg(&args, "--key").map(PathBuf::from),
         coins: arg(&args, "--coins").map(PathBuf::from),
+        sessions: sessions.clone(),
     };
     match cmd {
         "verify" => {

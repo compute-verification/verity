@@ -18,6 +18,7 @@ pub mod pcs;
 pub mod refprover;
 pub mod refpcs;
 pub mod relation;
+pub mod session;
 pub mod sumcheck;
 pub mod transcript;
 
