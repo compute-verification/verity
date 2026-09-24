@@ -15,7 +15,7 @@
 # layout; see fa2_tap_src/apply_v8.py); (3) builds with fa2_tap_src/build_ext.py (same flags as the pinned CMake build, sm arch from the
 # device) into $FA2/build/matReq (the path row_pod.sh / commit_delta --hidden-so use; the R9 hd-64-only .so is kept as
 # build/matReq_hd64_r9/); (4) verifies: the .so loads, exposes verity_set_tap_v8 / verity_tap_hdims, tap mode 3 / src 59, and the
-# hdims mask contains every requested head dim.  Exactness per head dim is a separate step: fa2_tap_xcheck.py (needs the GPU).
+# hdims mask contains every requested head dim.  Exactness per head dim is a separate step: python -m verity_vllm.check.fa_tap_exactness (needs the GPU).
 # Env: VENV (default /workspace/venv-cu129), CUDA_HOME (default: first of /usr/local/cuda-12.9, /usr/local/cuda), FA2 (default
 # /workspace/cp/fa2), FA2_TAP_HDIMS (alias HDIMS; default 64,96,128,256), FA2_TAP_ARCH (default: the device's compute capability, e.g. 8.9
 # on L40S -- the arch the R13 exactness evidence was produced with; the pinned vLLM _vllm_fa2_C ships sm_80 SASS, pass FA2_TAP_ARCH=8.0
