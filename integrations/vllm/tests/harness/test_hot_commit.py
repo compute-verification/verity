@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 from verity_vllm.harness import hot_commit as hc
-from verity_vllm.harness import research_tools
+from verity_vllm.harness import source_identity
 from verity_vllm.harness import timeline as tlm
 
 CORE = Path("packages") / "verity" / "src" / "verity"
@@ -46,7 +46,7 @@ def _tree(tmp_path: Path) -> Path:
 def test_code_identity_is_the_closure_identity_of_the_repository(tmp_path):
     t = _tree(tmp_path)
     a = hc.code_identity(t)
-    assert a["sha256"] == research_tools.code_identity(t.parents[1])["sha256"] == hc.code_identity(t.parents[1])["sha256"]
+    assert a["sha256"] == source_identity.code_identity(t.parents[1])["sha256"] == hc.code_identity(t.parents[1])["sha256"]
     assert a["commit"] == "abc" and a["release"] == "r16-int-9"
     (t / "verity_vllm" / "harness" / "__pycache__" / "a.pyc").write_bytes(b"\1\2")
     (t.parents[1] / "tools" / "research" / "cli.py").write_text("print('s')\n")

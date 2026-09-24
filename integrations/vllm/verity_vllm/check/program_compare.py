@@ -78,11 +78,7 @@ def _registry():
 class Prog:
     """A decoded root body as an instance sequence."""
 
-    # [R17 mfast, BRIEF §5 step 2] operand representation, set per instance in __init__: False = the record's maximal runs
-    # `(space, idx, lo, hi)` (verity.ir.refs.runs); True = run progressions `(space, idx, lo0, ln, stride, count)` (cb_a.compact: the same
-    # run list, run-length-encoded; equality of operands, canonical sources and hashes is the record's -- see compact.py).  The checker of
-    # record builds runs; global_match_fast's loaders ask for progressions (MATCH_COMPACT).
-    compact = False
+    compact = False   # operand representation: runs (record) | run progressions ([R17 mfast] cb_a.compact); set per instance in __init__
 
     def __init__(self, label: str, desc: dict, weight_fields: dict[int, str], tok_node: int, oracle_rows: list[dict] | None = None,
                  compact: bool = False):
@@ -150,12 +146,9 @@ class Prog:
         self._bind_splits()
         self._segment()
 
-    def _node_functions(self):
-        """The run-form decode's two per-node functions: a node's specialization id and its operand runs (a subclass may return
-        functions equal to these on every node)."""
-        from verity.ir.codec import _spec_id
-        from verity.ir.refs import runs
-        return _spec_id, runs
+    def _node_functions(self):   # the run-form decode's per-node spec id and operand runs; a subclass may return functions equal to these
+        from verity.ir import codec, refs
+        return codec._spec_id, refs.runs
 
     def _peer_src(self, idx: int, lo: int, hi: int):
         """("PEER", k, lo', hi') for a read of leaf range [lo, hi) of peers Input node `idx`; None when the range is not inside one field."""
@@ -682,11 +675,8 @@ def _divergence_report(a: list, b: list) -> dict:
 
 
 def compare_steps(A: Prog, B: Prog, unfold_a: bool = False, *, canon_step_relative=None, canonical_hash=None) -> dict:
-    """Spec sequences + wiring per step. `unfold_a`: drop A's pad-kind instances and follow muxes (padded vs flat).
-    `canon_step_relative` / `canonical_hash`: functions returning what `_canon_step_relative` / `_canonical_hash` return (default: those)."""
-    canon_step_relative = canon_step_relative or _canon_step_relative
-    canonical_hash = canonical_hash or _canonical_hash
-
+    """Spec sequences + wiring per step. `unfold_a`: drop A's pad-kind instances and follow muxes (padded vs flat)."""
+    canon_step_relative, canonical_hash = canon_step_relative or _canon_step_relative, canonical_hash or _canonical_hash
     def seq(P: Prog, unfold: bool):
         out = []
         for idxs in P.steps:

@@ -2387,11 +2387,8 @@ def main(argv: list[str] | None = None) -> None:
                         print(f"[delta] replay cache: pair {pair} key differs from pair {_v0['pair']}'s in {_d0}: own replay (root {rc.run_root.hex()[:16]} vs {_v0['run_root'][:16]})", flush=True)
                     TL.start("validate.sampled_replay", pair=pair, cached=_cached is not None)
                     try:
-                        from verity_vllm.check import executed_prefix as EPX
-                        from verity_vllm.check import oracle_compare as OC
+                        from verity_vllm.check import executed_prefix as EPX, oracle_compare as OC, replay_codes as RC, sampled_replay as SR
                         from verity_vllm.query.manifest import format as MF
-                        from verity_vllm.check import replay_codes as RC
-                        from verity_vllm.check import sampled_replay as SR
                         if _cached is not None:
                             raise _ReplayReused()
                         _bm = json.loads((Path(args.out) / f"binding_map_p{pair}.json").read_text())
@@ -2533,7 +2530,7 @@ def main(argv: list[str] | None = None) -> None:
                             print("[delta] WARNING: this tree's sampled_replay has no executed_prefix= (reqval R17-26/R17-27 not in the tree): the EOS-stopped "
                                   "request's rows past the stop are sampled as ordinary strata and grade 'not evaluated' -> C2 partial, never PASS", flush=True)
                         sr = SR.sampled_replay(_progs, _bm, _rd, _wp, arrivals=_arr, per_stratum=int(args.replay_per_stratum), seed=_seed, seed_source=_seed_src,
-                                               seed_challenge=_seed_chal, seed_form=_seed_form,
+                                               seed_challenge=_seed_chal,
                                                max_evaluate=int(args.replay_max), weights_check=_wc, targets=list(getattr(args, "replay_target", None) or []),
                                                workers=getattr(args, "replay_workers", None), retention=_retention,
                                                ring_slots=(int(args.window_slots) if getattr(args, "window_slots", None) and getattr(args, "window_mb", None) else None),
@@ -2541,6 +2538,7 @@ def main(argv: list[str] | None = None) -> None:
                                                manifest=(required_manifest if isinstance(required_manifest, dict) else None),
                                                program_dirs={_k: _v["dir"] for _k, _v in _loaded.items() if _v.get("dir")},
                                                **_sr_kw)
+                        sr["sample"]["seed_form"] = _seed_form            # replay_codes.SEED_FORMS: the verdict reads the form, never the source text
                         sr["programs"] = {k: {"dir": _loaded[k].get("dir"), "program_digest": _digs[k]} for k in _loaded}
                         sr["executed_prefix_of_record"] = {k: {kk: vv for kk, vv in v.items() if kk in ("served_output_len", "executed_prefix_len", "cap", "cap_exhausted", "eos_stop")}
                                                            for k, v in _epr_r["requests"].items()} | {"lag": _epr_r["lag"], "ok": _epr_r["ok"], "problems": _epr_r["problems"][:3],

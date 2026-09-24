@@ -271,6 +271,27 @@ def _query_population_scope(sr: dict | None) -> tuple[str | None, str | None]:
     return f"C2 population scope (R17-3; query of record {qid}): {scope}", None
 
 
+def _dict(x) -> dict:
+    return x if isinstance(x, dict) else {}
+
+
+def _faulted_prefix_facts(sr: dict) -> list[dict]:
+    """The executed-prefix facts of record (`executed_prefix_of_record.facts_of_record`, what `sampled_replay.executed_prefix_of_record`
+    was called with) of each request the replay's executed-prefix rule faulted, in the rule's order.  A fault's cause is read from these
+    fields -- `account_missing` (a Match account leg not beside the Commit, the fault named first), `linked` -- never from its text."""
+    facts = _dict(_dict(sr.get("executed_prefix_of_record")).get("facts_of_record"))
+    rule = _dict(_dict(_dict(sr.get("population")).get("query_checks")).get("executed_prefix_rule"))
+    return [_dict(facts.get(str(f.get("request_id")))) for f in rule.get("faults") or [] if isinstance(f, dict)]
+
+
+def _scope_fail_account_missing(sr: dict) -> bool:
+    """`_query_population_scope`'s FAIL is a missing input: the reconciliation's FAIL (not the engine cross-check's) whose first
+    executed-prefix fault is a request missing a Match account leg."""
+    pop, pf = _dict(sr.get("population")), _faulted_prefix_facts(sr)
+    return (_dict(pop.get("query_checks")).get("ok") is False and _dict(_dict(pop.get("query_total")).get("cross_check")).get("agree") is not False
+            and bool(pf) and bool(pf[0].get("account_missing")))
+
+
 def _complete_replay_population_gap(sr: dict | None, oc: dict | None) -> tuple[str | None, str | None]:
     """[R16 rev F-r16-02 / M-0016; COORD M-0721 (1)] The C2 rule when the sampled replay is COMPLETE but its POPULATION excluded VUs BY NAME
     under a MAN-06f / MAN-06g class (`population.not_evaluable`: VUs fed by MoE block-stream planes; VUs fed by an interior producer without an

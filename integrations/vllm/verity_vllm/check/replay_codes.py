@@ -2,13 +2,12 @@
 
 A reason the replay could not evaluate (`population.not_evaluable`, keyed by its text) carries a code in
 `population.not_evaluable_codes`: {"class": a why class, "family": the Program family the reason counts, "domain": the family is in the
-replay version's stated domain (`sampled_replay.NOT_YET`), "tags": the rulings that name the gap}.  An unevaluated stratum carries
-`classes`, and the sample carries `seed_form` (SEED_FORMS).  The verdict reads those fields, never the texts, so rewording a message
-cannot reclassify an outcome.
+replay version's stated domain (`NOT_YET`), "tags": the rulings that name the gap}.  An unevaluated stratum carries `classes`, and the
+sample carries `seed_form` (SEED_FORMS, stamped by the Commit that chose the seed).  The verdict reads those fields, never the texts, so
+rewording a message cannot reclassify an outcome.
 
 Records written before the codes carry only the texts.  `not_evaluable_codes`, `stratum_classes` and `seed_form` decode those from the
-texts this package wrote, so a record of record grades as it always did.  Dependency-free like `commit_verdict`; only decoding a record
-without codes reads `sampled_replay.NOT_YET`.
+texts this package wrote, so a record of record grades as it always did.  Dependency-free like `commit_verdict`.
 """
 from __future__ import annotations
 
@@ -17,6 +16,18 @@ from __future__ import annotations
 #: failed at run time) never: a fault is a run that did not evaluate, not a gap on the record.
 WHY_CLASSES_BY_NAME = ("no-evaluator", "state-linked", "plane-fed", "interior-composed-v2")
 WHY_CLASSES_FAULT = ("evaluator-error", "mapping", "missing-input", "device", "other")
+
+#: families the Program names that this replay version cannot replay yet -- counted, never skipped silently (their reasons are the
+#: replay version's stated domain: `domain` true)
+NOT_YET = {
+    # RoPE_v1 left this list in R17 (dense, ruling R17-9): sampled_replay.EVALUATORS["RoPE_v1"].  Attention_v3 / Attention_v2 left it in
+    # R17 (dense, ruling R17-11): sampled_replay.EVALUATORS -- the row IS the unit under the query of record Q_module_v1 (R17-10).  Older
+    # records carry the labels by name ("consumes the request's K/V history across steps (state-linked replay, v2)"; commit_verdict reads
+    # them as the replay version of record's stated domain, why_class 'state-linked').  Gemm_v2 (the Hopper GEMM) is NOT here either: since
+    # R17 (ruling R17-3) it HAS a registered evaluator; before that its VUs were a form-(B)-required gap (commit_verdict._no_evaluator_gaps).
+    # [ruling R17-3] NOT_YET is a LABEL on the record, never evidence: a family here is an engineering gap of this replay version.
+    "AttentionHead_v1": "consumes the request's K/V history across steps (state-linked replay, v2)",
+}
 
 #: how the sample seed was chosen: after commitment from the run root, from a verifier challenge bound to the run root, or by the prover
 #: before the run (`--replay-seed`)
@@ -66,7 +77,6 @@ def not_evaluable_codes(population: dict) -> dict[str, dict]:
     stamped = population.get("not_evaluable_codes")
     if isinstance(stamped, dict):
         return stamped
-    from verity_vllm.check.sampled_replay import NOT_YET
     domain = {str(v) for v in NOT_YET.values()}
     out = {}
     for why in map(str, population.get("not_evaluable") or {}):

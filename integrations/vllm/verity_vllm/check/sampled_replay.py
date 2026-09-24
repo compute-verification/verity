@@ -59,7 +59,7 @@ import numpy as np
 from verity_vllm.query.manifest import format as RM
 from verity_vllm.check import replay_codes as RC
 from verity_vllm.check.oracle_compare import entry_read_name as _entry_read_name, same_name_invocations as _same_name_invocations
-from verity_vllm.check.replay_codes import WHY_CLASSES_BY_NAME, WHY_CLASSES_FAULT, why_class  # noqa: F401  (this module's record vocabulary)
+from verity_vllm.check.replay_codes import NOT_YET, WHY_CLASSES_BY_NAME, WHY_CLASSES_FAULT, why_class  # noqa: F401  (this module's record vocabulary)
 
 SCHEMA = "verity-sweep/sampled-replay/v1"
 LINKAGE_SCHEMA = "verity-sweep/boundary-linkage/v1"
@@ -183,16 +183,6 @@ _FP8_TWIN_PROVENANCE = {
 }
 #: family -> provenance of its evaluator when it is a fitted twin (a family absent here is evaluated by the registry's own derived rows)
 EVALUATOR_PROVENANCE: dict[str, dict] = {"Fp8GroupQuant_v1": _FP8_TWIN_PROVENANCE, "ScaledMmFp8Block_v1": _FP8_TWIN_PROVENANCE}
-#: families the Program names that this version cannot replay yet -- counted, never skipped silently
-NOT_YET = {
-    # RoPE_v1 left this list in R17 (dense, ruling R17-9): EVALUATORS["RoPE_v1"] above.  Attention_v3 / Attention_v2 left it in R17 (dense,
-    # ruling R17-11): EVALUATORS above -- the row IS the unit under the query of record Q_module_v1 (R17-10).  Older records carry the
-    # labels by name ("consumes the request's K/V history across steps (state-linked replay, v2)"; commit_verdict reads them as the replay
-    # version of record's stated domain, why_class 'state-linked').  Gemm_v2 (the Hopper GEMM) is NOT here either: since R17 (ruling R17-3)
-    # it HAS a registered evaluator; before that its VUs were a form-(B)-required gap (commit_verdict._no_evaluator_gaps), by name.
-    # [ruling R17-3] NOT_YET is a LABEL on the record, never evidence: a family here is an engineering gap of this replay version.
-    "AttentionHead_v1": "consumes the request's K/V history across steps (state-linked replay, v2)",
-}
 #: [R17 dense, ruling R17-11] the attention families whose ROW the replay evaluates; their block interiors are Q_fine_v1 units (R17-10 (3))
 ATTENTION_ROW_FAMILIES = ("Attention_v3", "Attention_v2")
 #: named in population() whenever a Program carries attention rows: what the row relation does not read (a Q_fine_v1 research item, not a
@@ -2566,9 +2556,8 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
                    weights_check: dict[str, Any] | None = None, targets: list[str] | None = None, workers: int | None = None,
                    ring_slots: int | None = None, retention: str | None = None, seed_challenge: str | None = None,
                    manifest: dict[str, Any] | None = None, executed_prefix: dict[str, dict] | None = None,
-                   program_dirs: dict[str, str] | None = None, seed_form: str | None = None) -> dict[str, Any]:
-    """C2 of record.  `seed_form`: how the caller chose `seed` (`replay_codes.SEED_FORMS`), recorded as `sample.seed_form` for the verdict.
-    `executed_prefix` [COORD R17-26]: request -> `executed_prefix_of_record(...)` from the Commit's own committed tokens;
+                   program_dirs: dict[str, str] | None = None) -> dict[str, Any]:
+    """C2 of record.  `executed_prefix` [COORD R17-26]: request -> `executed_prefix_of_record(...)` from the Commit's own committed tokens;
     rows at request-relative steps >= n_exec leave the sampling pool into the named class `population.not_executed_by_rule` (never a
     stratum that grades 'not evaluated'); a request with prefix faults is not classified and fails `query_checks` by name.  `programs`: request label -> Program instances doc ({"rows", "params", ...}; requests sharing a shape share it).
     `manifest` [R17-3]: the row's required-value manifest (Q(P)) -- the population of record the replay's reach is reconciled against,
@@ -2585,8 +2574,7 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
     store = CommittedStore.of_record(bmap, committed, manifest)                 # [rel M-0367] reads through the manifest's alias table
     arrivals = arrivals or {}
     ranks = sorted({int((e.get("identity") or {}).get("rank", 0) or 0) for e in (bmap.get("entries") or [])}) or [0]
-    all_vus, not_ev, not_ev_fam, indices = [], Counter(), Counter(), {}
-    codes: dict[str, dict] = {}                                                   # not-evaluable reason -> its structured code
+    all_vus, not_ev, not_ev_fam, indices, codes = [], Counter(), Counter(), {}, {}   # codes: not-evaluable reason -> its structured code
     addresses: dict[tuple, dict] = {}                                             # [R17-3] manifest address -> class of the rows producing it
     anchors: dict[str, dict] = {}                                                 # [F-r17b-39] per request: the step `last` is anchored to, named
     addr_rec: dict[str, Any] = {"rule": V2_QUERY, "correspondence": {}}
@@ -2613,9 +2601,7 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
     cap = max(int(max_evaluate), len(strata))                                     # never below one VU per stratum
     picked = picked_all[:min(cap, n_strat)] + picked_all[n_strat:]                # targeted VUs are outside the cap
     if len(ranks) > 1:                                                            # TP: the map carries rank-local partials this version does not replay
-        _w = f"multi-rank map (ranks {ranks}): rank-local partials / collectives not replayed at v1 (rank 0 module outputs only)"
-        not_ev[_w] += 0
-        codes[_w] = RC.reason_code("other")
+        not_ev[f"multi-rank map (ranks {ranks}): rank-local partials / collectives not replayed at v1 (rank 0 module outputs only)"] += 0
     evaluated, equal, mism, not_evald = 0, 0, [], []
     strata_eval: Counter = Counter()
     strata_mism: Counter = Counter()
@@ -2740,9 +2726,8 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
                             controller_rows=controller_rows_of(programs, indices))   # [R4 c2] the replay's own guard-row count per request
     return {"schema": SCHEMA, "method": "sampled-exact-replay", "result": result, "grade": grade, "why": why, "catch_probability": catch,
             "population": {"vus": len(all_vus), "source": "Program instances.json.gz rows (every row; evaluable = families with a registered evaluator)",
-                           "requests": sorted(programs), "by_family": dict(Counter(v["family"] for v in all_vus)),
-                           "not_evaluable_by_family": dict(not_ev_fam), "not_evaluable": dict(not_ev),
-                           "not_evaluable_codes": {k: codes[k] for k in not_ev}, "strata_n": len(strata),
+                           "requests": sorted(programs), "by_family": dict(Counter(v["family"] for v in all_vus)), "not_evaluable_by_family": dict(not_ev_fam),
+                           "not_evaluable": dict(not_ev), "not_evaluable_codes": {k: codes.get(k) or RC.reason_code("other") for k in not_ev}, "strata_n": len(strata),
                            "authority": "Q(P) -- the required manifest (R17-3); `vus` above is the replay's enumeration of the Program rows, reconciled below",
                            "query_total": qpop["query_total"], "sampled_strata": qpop["sampled_strata"], "uncovered_by_name": qpop["uncovered_by_name"],
                            "not_executed_by_family": qpop["not_executed_by_family"], "not_executed_rule": qpop["not_executed_rule"],
@@ -2754,7 +2739,6 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
                            "query_checks": qpop["query_checks"], "scope": qpop["scope"]},
             "addresses": addr_rec,
             "sample": {"per_stratum": int(per_stratum), "seed": int(seed), "seed_source": seed_source,
-                       **({"seed_form": seed_form} if seed_form is not None else {}),
                        # [R16 rev M-0600 / F-r16-23] under the verifier-challenge form the FULL challenge is on the record: a reader recomputes
                        # sha256(challenge|run_root)[:8] (challenge_seed) as a fact -- the source text alone (challenge[:16], repr) cannot be
                        **({"challenge": str(seed_challenge)} if seed_challenge is not None else {}),

@@ -16,8 +16,8 @@ cache hit of `canon`, so `P.xreq` / `P.xreq_examples` evolve exactly as in the c
 hits skip their inner canon calls; after those calls the checker reads `P.xreq` only as a boolean, which the G3 loop has already
 established -- see the call sites in global_match.check.)
 
-Enabled by the environment variable MATCH_IMPL=fast (`enabled()`): `global_match.check` then runs over `ops()` (a `batch_decomp.Ops`,
-passed explicitly to GM-01 and to the X-09 run inside it) -- the fold and components loaded as `FastProg` (canon memoised per instance),
+Enabled by the environment variable MATCH_IMPL=fast (`enabled()`): `global_match.check` then runs over `ops()` (a `program_ops.Ops`,
+passed explicitly to GM-01 and to the X-09 run inside it) -- the fold and components loaded as `MemoProg` (canon memoised per instance),
 Projections as `_ProjectionFast`, and memoising wrappers that call the checker of record's `compare_steps` / `_canonical_hash` /
 `dag_hashes` / `live_cone`.  Nothing is rebound: the record's functions stay what they are.  Without the flag nothing here runs.
 
@@ -34,6 +34,7 @@ from collections.abc import Callable
 
 from verity_vllm.correspondence import batch_decomp as BD
 from verity_vllm.check import program_compare as C
+from verity_vllm.check.program_ops import Ops
 
 FLAG = "MATCH_IMPL"
 
@@ -103,7 +104,7 @@ def leave() -> None:
 # ------------------------------------------------------------------------------------------------ canon (per Prog, per instance)
 
 class _CanonMemo:
-    """Mixin over compare.Prog (`FastProg`) and batch_decomp.Projection (`_ProjectionFast`): `canon` computed once per (instance,
+    """Mixin over compare.Prog (`MemoProg`) and batch_decomp.Projection (`_ProjectionFast`): `canon` computed once per (instance,
     unfold) and returned as the SAME list object thereafter (no caller mutates it: compare._canon_step_relative, batch_decomp.dag_hashes
     / live_cone and global_match iterate only).  A Projection's `_xreq` calls made during the first computation are recorded and
     replayed on every hit, so cross-request read counts are unchanged."""
@@ -483,7 +484,7 @@ def _spec_id_memo(fn):
     return sid
 
 
-class FastProg(_CanonMemo, C.Prog):
+class MemoProg(_CanonMemo, C.Prog):
     """The fast path's compare.Prog (what `ops()` loads the fold and the components as): canon computed once per instance
     (`_CanonMemo`), and a run-form decode whose two per-node functions are `_spec_id_memo` and `_runs_fast` (unit 5 (a)) -- each
     returns what the record's `codec._spec_id` / `refs.runs` returns for the same node."""
@@ -492,8 +493,8 @@ class FastProg(_CanonMemo, C.Prog):
         return _spec_id_memo, _runs_fast
 
 
-def ops() -> BD.Ops:
-    """The fast path's Program operations for one `global_match.check` and the X-09 run inside it: the fold and components as FastProg,
+def ops() -> Ops:
+    """The fast path's Program operations for one `global_match.check` and the X-09 run inside it: the fold and components as MemoProg,
     Projections that register for reuse, the memoised comparison / hashes / live cone, X-09's per-request legs on forked workers
     (MATCH_WORKERS).  Also states the run's declared configuration (`config`)."""
     # [R17 mfast, BRIEF §5 step 2] every Prog loaded here holds its operands as run progressions (cb_a.compact) unless MATCH_COMPACT=0
@@ -508,8 +509,8 @@ def ops() -> BD.Ops:
                    "match_compact": compact, "match_compact_env": os.environ.get(COMPACT_ENV) or None,
                    "operand_form": "progressions/v1" if compact else "runs",
                    "x09_legs": "forked" if workers(1 << 30) > 1 else "in-process", "candidate_stage": CANDIDATE_STAGE})
-    return BD.Ops("fast", load_oracle=functools.partial(C.load_oracle, cls=FastProg, compact=compact),
-                  load_derived=functools.partial(C.load_derived, cls=FastProg, compact=compact), projection=_ProjectionFast,
+    return Ops("fast", load_oracle=functools.partial(C.load_oracle, cls=MemoProg, compact=compact),
+                  load_derived=functools.partial(C.load_derived, cls=MemoProg, compact=compact), projection=_ProjectionFast,
                   compare_steps=_compare_steps_memo, dag_hashes=_dag_hashes_memo, live_cone=_live_cone_memo, legs=_x09_legs)
 
 

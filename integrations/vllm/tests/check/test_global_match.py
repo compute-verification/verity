@@ -442,7 +442,7 @@ def test_fast_path_releases_its_caches_when_the_outermost_check_returns(memory, 
 
 def test_fast_path_passes_its_operations_and_rebinds_nothing(memory, tmp_path, monkeypatch):
     """MATCH_IMPL=fast hands GM-01 and its X-09 run `global_match_fast.ops()` explicitly: after a fast check() every Verity core and
-    checker-of-record function is the object it was before, the fast run's Programs are its own (FastProg, progressions), and a record
+    checker-of-record function is the object it was before, the fast run's Programs are its own (MemoProg, progressions), and a record
     check() in the same process still loads the record's Programs and writes the same document."""
     import verity.ir.codec as codec
     import verity.ir.refs as refs
@@ -460,8 +460,8 @@ def test_fast_path_passes_its_operations_and_rebinds_nothing(memory, tmp_path, m
     loaded_fast: dict = {}
     fast = gm.check(gp, oracle, _loaded=loaded_fast)
     assert all(getattr(m, n) is b for (m, n), b in zip(names, before)) and C.Prog.__dict__["canon"] is canon
-    assert type(loaded_fast["oracle"]) is GMF.FastProg and loaded_fast["oracle"].compact
-    assert all(type(A) is GMF.FastProg for A in loaded_fast["components"].values())
+    assert type(loaded_fast["oracle"]) is GMF.MemoProg and loaded_fast["oracle"].compact
+    assert all(type(A) is GMF.MemoProg for A in loaded_fast["components"].values())
     monkeypatch.delenv(GMF.FLAG)
     loaded_rec: dict = {}
     again = gm.check(gp, oracle, _loaded=loaded_rec)

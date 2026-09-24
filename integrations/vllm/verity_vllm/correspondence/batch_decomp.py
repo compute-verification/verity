@@ -48,16 +48,15 @@ from __future__ import annotations
 
 import argparse
 import collections
-import dataclasses
 import gzip
 import json
 import os
 import re
 import sys
 import time
-from collections.abc import Callable
 
 from verity_vllm.check import program_compare as C
+from verity_vllm.check.program_ops import Ops
 from verity_vllm.program.sampling_event import is_sampling_event as _is_sampling_event  # [R15 stoch]
 
 XREQ = "XREQ"
@@ -447,28 +446,6 @@ def derived_shape(d: str) -> tuple[int, int] | None:
 WITHIN_STEP_CRITERIA = ("sequence", "dag")
 DEFAULT_WITHIN_STEP = "dag"
 
-
-@dataclasses.dataclass(frozen=True)
-class Ops:
-    """The operations X-09 (`decompose`) and GM-01 (`global_match.check`) run on Programs, passed explicitly.  `Ops.record()` = the
-    checker of record's functions; `global_match_fast.ops()` = compute-once equals of them (MATCH_IMPL=fast): each returns what the
-    record's function returns for the same arguments."""
-    name: str
-    load_oracle: Callable        # (fold dir, label) -> Prog
-    load_derived: Callable       # (derived request-wrapper dir, label) -> Prog
-    projection: Callable         # Projection's constructor signature -> Projection
-    compare_steps: Callable      # compare.compare_steps(A, B, unfold_a)
-    dag_hashes: Callable         # dag_hashes(P, only): instance -> equality key of its Merkle class
-    live_cone: Callable          # live_cone(P)
-    # [R17 mfast] decompose's per-request legs: None = in this process, in order (the record); else fn(items, leg, weight) ->
-    # [leg(item) ...] in item order (the fast path: global_match_fast._x09_legs, forked workers)
-    legs: Callable | None = None
-
-    @classmethod
-    def record(cls) -> "Ops":
-        return cls("record", C.load_oracle, C.load_derived, Projection, C.compare_steps, dag_hashes, live_cone)
-
-
 # [R18 x09, F-r18-x09-1] PHASE ACCOUNTING of the per-request leg.  `X09_PROFILE_OUT=<path>` writes one JSON sidecar beside the document
 # (never into it: the X-09 document's bytes are the record's) with, per request, wall seconds and counters for every phase of the leg --
 # projection build, shape, component load, compare_steps (sequence criterion), and the DAG diagnostic (live_cone A / P, dag_hashes A / P,
@@ -557,11 +534,15 @@ def _n_runs_of(arg) -> int:
     return len(arg)
 
 
+def record_ops() -> Ops:   # the checker of record's operations: X-09's default, GM-01's unless MATCH_IMPL=fast
+    return Ops("record", C.load_oracle, C.load_derived, Projection, C.compare_steps, dag_hashes, live_cone)
+
+
 def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = None, within_step: str = DEFAULT_WITHIN_STEP,
               oracle: "C.Prog | None" = None, components: "dict[str, C.Prog] | None" = None, ops: Ops | None = None) -> dict:
     if within_step not in WITHIN_STEP_CRITERIA:
         raise ValueError(f"within_step must be one of {WITHIN_STEP_CRITERIA}, got {within_step!r}")
-    ops = ops or Ops.record()
+    ops = ops or record_ops()
     t0 = time.time()
     profiling = _profile_on()
     force_dag = os.environ.get(FORCE_DAG_ENV, "").strip() == "1"
@@ -858,8 +839,7 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
             # the components are built on the workers too, one per leg (2 s to build vs 0.1 s to pickle a component back: the build is
             # the descriptor walk), then held by the parent so the legs below share them copy-on-write; a build failure raises, as the
             # record's load in the loop does
-            for (d, _), A in zip(to_load, ops.legs(to_load, lambda it: ops.load_derived(*it), lambda it: 1)):
-                components[d] = A
+            components.update(zip((d for d, _ in to_load), ops.legs(to_load, lambda it: ops.load_derived(*it), lambda it: 1)))
         with _Phase(run_prof, "legs") if profiling else _NoPhase():
             outs = ops.legs(items, leg, lambda it: len(it[1]))
     else:

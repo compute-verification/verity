@@ -50,6 +50,7 @@ import numpy as np
 
 SCHEMA = "verity/commit/weights-of-record/v2"       # v2: host-independent root (analytic entries keyed by their exact inputs)
 SCHEMA_V1 = "verity/commit/weights-of-record/v1"    # v1 roots differ per deriving host for models with a rotary table; verdict unaffected
+FULL_DIGEST_RE = re.compile(r"[0-9a-f]{64}")        # a Program digest (sha256 hex): compared only whole, a prefix names no Program
 
 #: safetensors dtype -> (numpy view dtype, element bytes)
 _ST_DTYPE = {"BF16": (np.uint16, 2), "F16": (np.float16, 2), "F32": (np.float32, 4), "F64": (np.float64, 8),
@@ -648,14 +649,6 @@ def _check_analytic(f: dict[str, Any], raw: np.ndarray | None) -> dict[str, Any]
     return rep | keep
 
 
-_FULL_DIGEST = re.compile(r"[0-9a-f]{64}")
-
-
-def truncated_digests(digests) -> list[str]:
-    """The digests of `digests` that are not a full sha256 hex digest (sorted, each shown by its first 16 characters)."""
-    return sorted(str(d)[:16] for d in digests if not _FULL_DIGEST.fullmatch(str(d)))
-
-
 def check(record: dict[str, Any], live: dict[str, Any], *, program_digests_of_record: set[str] | list[str] | None = None,
           checkpoint_of_record: dict[str, Any] | None = None, kv_cache_dtype: str | None = None) -> dict[str, Any]:
     """Field by field: the checkpoint-composed digest of record == the served parameter's digest.  Any difference or a Program field
@@ -685,9 +678,7 @@ def check(record: dict[str, Any], live: dict[str, Any], *, program_digests_of_re
         ofr = {str(x) for x in program_digests_of_record}
         stamped = record.get("of_record_set") if isinstance(record.get("of_record_set"), dict) else None
         st = {str(x) for x in (stamped.get("program_digests") or [])} if stamped is not None else set()
-        # Program digests are compared whole: a prefix of a digest names no Program, so one on either side is refused by name
-        short = truncated_digests(ofr | st | ({pd} if pd else set()))
-        if short:
+        if short := sorted(x[:16] for x in ofr | st | ({pd} if pd else set()) if not FULL_DIGEST_RE.fullmatch(x)):
             prog_why = f"Program digests not full sha256 (64 hex), compared only whole: {short}"
         elif stamped is not None:
             # [rev-cb M-0733] a record stamped with the WHOLE of-record set is accepted iff that set equals the run's: a record of another
@@ -697,8 +688,7 @@ def check(record: dict[str, Any], live: dict[str, Any], *, program_digests_of_re
             elif not st:
                 prog_why = "record's of-record stamp is empty"
             else:
-                miss_run = sorted(x[:16] for x in ofr - st)
-                miss_rec = sorted(y[:16] for y in st - ofr)
+                miss_run, miss_rec = sorted(x[:16] for x in ofr - st), sorted(y[:16] for y in st - ofr)
                 if miss_run or miss_rec:
                     prog_why = (f"record's of-record set != the run's: run digests not on the record {miss_run}; record digests not in the run {miss_rec}")
         elif not pd or pd not in ofr:
@@ -888,8 +878,7 @@ def stamp_of_record_set(record: dict[str, Any], programs_root: str, *, manifest:
     if workload_digest:
         digests.add(workload_digest)
     rec_pd = str(record.get("program_digest") or "")
-    short = truncated_digests(digests | ({rec_pd} if rec_pd else set()))
-    if short:
+    if short := sorted(x[:16] for x in digests | ({rec_pd} if rec_pd else set()) if not FULL_DIGEST_RE.fullmatch(x)):
         why.append(f"Program digests not full sha256 (64 hex): {short}")
     elif rec_pd and rec_pd not in digests:
         why.append(f"the record's own Program {rec_pd[:16]} is not of record under {os.path.basename(str(programs_root))} (derived from a non-component)")

@@ -73,14 +73,13 @@ def negatives_applied(flip_partial: str | None, swap_requests: str | None, omit_
 
 
 def tree_of_record(root: str | os.PathLike | None = None) -> dict:
-    """The executing tree BY CONTENT beside git_head: `research_tools.code_identity` of the repository this module runs from (`root`
+    """The executing tree BY CONTENT beside git_head: `source_identity.code_identity` of the repository this module runs from (`root`
     overrides it) -- its import closure, the integration plus Verity core, the same identity the hot Commit worker keys on -- so a dirty
     tree cannot pass as the tagged commit by git_head alone."""
-    from verity_vllm.harness import research_tools
-    from verity_vllm.harness.source_identity import TREE
+    from verity_vllm.harness import research_tools, source_identity
 
-    root = Path(root) if root is not None else TREE
-    return {"source": "research_tools.code_identity", "root": str(root), "closure": list(research_tools.CLOSURE), **research_tools.code_identity(root)}
+    root = Path(root) if root is not None else source_identity.TREE
+    return {"source": "source_identity.code_identity", "root": str(root), "closure": list(research_tools.CLOSURE), **source_identity.code_identity(root)}
 
 
 def parse_serve_shard_from(specs: list[str] | None, world: int) -> dict[str, list[dict]] | None:

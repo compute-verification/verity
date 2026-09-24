@@ -26,6 +26,7 @@ cannot be imported is a broken environment and is reported as one, not repaired 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import sys
@@ -73,6 +74,21 @@ def normalise_tree(tree: str | os.PathLike[str] | None) -> str:
     if not _is_repo_root(root) and root.name == INTEGRATION_REL.name and root.parent.name == INTEGRATION_REL.parent.name and _is_repo_root(root.parents[1]):
         return str(root.parents[1])
     return str(root)
+
+
+def code_identity(root: str | os.PathLike[str]) -> dict[str, Any]:
+    """The code the integration executes, by content: the canonical sha256 of the manifest {repo path: sha256} of the repository at
+    `root` over `research_tools.CLOSURE` (the integration plus Verity core), the files the store records as the research Tools' closure.
+    The one code identity: the hot Commit worker's key and the TP Commit's tree of record.  Raises FileNotFoundError when `root` holds
+    no integration or no core file (not a repository root: an empty manifest would be a constant key)."""
+    from verity_vllm.harness.research_tools import VLLM_BUILD
+
+    files = VLLM_BUILD.closure_manifest(root)
+    for part in ("integrations/vllm/", "packages/verity/src/verity/"):
+        if not any(p.startswith(part) for p in files):
+            raise FileNotFoundError(f"code identity: no {part} file under {os.fspath(root)!r} (not a repository root)")
+    canonical = json.dumps(files, sort_keys=True, separators=(",", ":")).encode()
+    return {"sha256": hashlib.sha256(canonical).hexdigest(), "files": len(files)}
 
 
 def requested_tree(tree: str | os.PathLike[str] | None = None) -> str:

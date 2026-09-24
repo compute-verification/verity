@@ -75,7 +75,6 @@ from __future__ import annotations
 import argparse
 import collections
 import dataclasses
-import functools
 import gzip
 import hashlib
 import json
@@ -666,10 +665,9 @@ def canonicalize_record(rec: dict, tokens: dict | None, oracle_rows: list[dict] 
 
 
 def match_ops(fast: bool) -> BD.Ops:
-    """The Program operations one check() runs (and hands its X-09 run): the checker of record's, or global_match_fast's compute-once
-    equals (MATCH_IMPL=fast).  A component dir that holds a fold record (program.json: the tests' components) loads as a fold."""
-    ops = GMF.ops() if fast else BD.Ops.record()
-    return dataclasses.replace(ops, load_derived=functools.partial(_load_component, ops))
+    """The Program operations check() runs and hands its X-09 run (the record's, or MATCH_IMPL=fast's); a component dir holding a fold loads as one."""
+    ops = GMF.ops() if fast else BD.record_ops()
+    return dataclasses.replace(ops, load_derived=lambda d, label: _load_component(ops, d, label))
 
 
 def _load_component(ops: BD.Ops, d: str, label: str) -> C.Prog:
@@ -811,11 +809,11 @@ def check(gp: dict, oracle_dir: str, log_path: str | None = None, tokens_path: s
     fast = GMF.enabled()
     ops = match_ops(fast)
     if not fast:
-        return _check(gp, oracle_dir, log_path, tokens_path, run_x09, within_step, record_alternate, _loaded, ops,
+        return _check(gp, oracle_dir, log_path, tokens_path, run_x09, within_step, record_alternate, _loaded, ops, fast=False,
                       tokens_optional=tokens_optional)
     GMF.enter()
     try:
-        return _check(gp, oracle_dir, log_path, tokens_path, run_x09, within_step, record_alternate, _loaded, ops,
+        return _check(gp, oracle_dir, log_path, tokens_path, run_x09, within_step, record_alternate, _loaded, ops, fast=True,
                       tokens_optional=tokens_optional)
     finally:
         GMF.leave()
@@ -832,9 +830,8 @@ X09_DOCUMENT, X09_EXTRA_DERIVED = "x09_document", "x09_extra_derived"
 
 
 def _check(gp: dict, oracle_dir: str, log_path: str | None, tokens_path: str | None, run_x09: bool, within_step: str,
-           record_alternate: bool, _loaded: dict | None, ops: BD.Ops, tokens_optional: bool = False) -> dict:
+           record_alternate: bool, _loaded: dict | None, ops: BD.Ops, fast: bool, tokens_optional: bool = False) -> dict:
     # [rel r17-int-2] tokens_optional (stoch F-r17-01) rides the wrapper -> body split of mprof unit 4 unchanged
-    fast = ops.name == "fast"
     t0 = time.time()
     _loaded = _loaded if _loaded is not None else {}
     # [R17 mfast, BRIEF §5 step 1] phase timestamps (elapsed + process CPU since the previous mark): telemetry beside the verdict, never

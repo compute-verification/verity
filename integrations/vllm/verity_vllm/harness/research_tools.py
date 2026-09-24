@@ -18,12 +18,12 @@ Rules encoded here (Phase 5a of the v2 plan):
   workload interpreter (``$PY``, default ``/workspace/venv312/bin/python``),
   probed via ``importlib.metadata`` so nothing heavy is imported.
 * ``closure`` is the integration's import closure: ``integrations/vllm/**``
-  plus Verity core (``packages/verity/src/verity``).  ``code_identity`` is
-  the one code identity over it (the hot Commit worker's key, the TP
-  Commit's tree of record).
+  plus Verity core (``packages/verity/src/verity``).
+  ``source_identity.code_identity`` is the one code identity over it (the
+  hot Commit worker's key, the TP Commit's tree of record).
 
 This module imports nothing beyond the standard library and
-``research.store`` so it is loadable from any interpreter that can see
+``research.store.tool`` so it is loadable from any interpreter that can see
 ``tools/research/src`` (``research`` loads it by dotted path or, failing
 that, by file — see ``research.store.tools_registry``).
 """
@@ -35,7 +35,6 @@ import subprocess
 from pathlib import PurePosixPath
 from typing import Any
 
-from research.store import canon
 from research.store.tool import Tool
 
 DEFAULT_QUERY = "Q_module_body_v1"
@@ -273,23 +272,6 @@ VLLM_COMMIT = _tool("commit")
 
 TOOLS = {t.name: t for t in (VLLM_BUILD, VLLM_MATCH, VLLM_COMMIT)}
 
-
-def code_identity(root: str | os.PathLike[str]) -> dict[str, Any]:
-    """The code the integration executes, by content: the canonical sha256 of
-    the ``CLOSURE`` manifest ``{repo path: sha256}`` of the repository at
-    ``root`` -- the same files, listed by the same rules, that the store
-    records as these Tools' closure.
-
-    Raises ``FileNotFoundError`` when ``root`` holds no integration or no
-    core file (not a repository root: an empty manifest would be a constant key).
-    """
-    files = VLLM_BUILD.closure_manifest(root)
-    for part in ("integrations/vllm/", "packages/verity/src/verity/"):
-        if not any(p.startswith(part) for p in files):
-            raise FileNotFoundError(f"code identity: no {part} file under {os.fspath(root)!r} (not a repository root)")
-    return {"sha256": canon.sha256(files), "files": len(files)}
-
-
 __all__ = [
     "CLOSURE",
     "DEFAULT_QUERY",
@@ -301,7 +283,6 @@ __all__ = [
     "VLLM_MATCH",
     "VLLM_COMMIT",
     "TOOLS",
-    "code_identity",
     "parse",
     "row_config",
 ]

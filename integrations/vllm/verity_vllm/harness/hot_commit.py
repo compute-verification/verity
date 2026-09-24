@@ -8,7 +8,7 @@ the client is a drop-in for `python -m verity_vllm.harness.commit_delta ARGS` (r
     python -m verity_vllm.harness.hot_commit stop   [--root ...]                      # stop every worker under root
 
 Key (what may share an engine) = sha256 of
-  * CODE identity: `research_tools.code_identity` of the executing repository -- content hashes of its import closure (the integration
+  * CODE identity: `source_identity.code_identity` of the executing repository -- content hashes of its import closure (the integration
     plus Verity core, `research_tools.CLOSURE`), so an edited pod tree is a different key ("hot" never executes stale code),
   * the native extensions the job would load (`--hidden-so`, $NATIVE_COLLECT_BUILD/*.so, the hidden_gpu_tree torch extension) by sha256,
   * the interpreter (`sys.executable`) and the process environment that shapes the engine / collector (PYTHONPATH, VLLM_*, VERITY_* except
@@ -88,13 +88,12 @@ def sha256_file(p: str | os.PathLike, h: "hashlib._Hash | None" = None) -> str:
 
 
 def code_identity(tree: str | os.PathLike = ".") -> dict[str, Any]:
-    """`research_tools.code_identity` of the repository `tree` belongs to (`tree` = its root or its integrations/vllm), plus the
+    """`source_identity.code_identity` of the repository `tree` belongs to (`tree` = its root or its integrations/vllm), plus the
     EXPORT.json commit and RELEASE.json tag of `tree`."""
-    from verity_vllm.harness import research_tools
-    from verity_vllm.harness.source_identity import normalise_tree
+    from verity_vllm.harness import source_identity
 
     tree = Path(tree)
-    ident = research_tools.code_identity(normalise_tree(tree))
+    ident = source_identity.code_identity(source_identity.normalise_tree(tree))
     export = {}
     for name, cands in (("EXPORT.json", (tree / "EXPORT.json",)), ("RELEASE.json", (tree / "RELEASE.json", RELEASE_JSON))):
         for f in cands:                                        # RELEASE.json lives beside the tree (/workspace/cp/RELEASE.json), not in it
