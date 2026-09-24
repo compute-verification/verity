@@ -185,11 +185,13 @@ _B_SRC = "Table 1 (B-Ligero); result envelopes' security.{zk_statement, hash_ass
 _H_ZK = "as the B-Ligero mode it runs in (Ligero masking): malicious-verifier ZK interactive, HVZK under Fiat–Shamir"
 _H_SOUND = "2^-128 (Ligero union bound) plus the leaf's binding"
 _KEEP_FROZEN = "column B-Ligero + in-proof hash is Poseidon2-BabyBear per row, no sharing (user decision keep_frozen, 2026-09-24)"
-_SP1_SOUND = ("2^-99.0 per shard proof, additive (FRI queries 2^-100.1, LogUp-GKR 2^-100.3, FRI commit rounds 2^-102.4, batching "
-              "2^-104.4, zerocheck 2^-112.2, jagged reduction 2^-116.4; KoalaBear^4 challenges, |F| = 2^123.95), union-bounded over "
-              "shard proofs (envelopes book SP1's constant, -100 per shard: ~1 bit optimistic). Cannot reach 2^-128 without protocol "
-              "changes (grinding in every FRI commit round, zerocheck and jagged reduction, or a larger extension field): "
-              "SP1_TARGET_BITS_OF_SECURITY moves only the query term")
+_SP1_PER_SHARD = ("2^-99.0 additive (FRI queries 2^-100.1, LogUp-GKR 2^-100.3, FRI commit rounds 2^-102.4, batching 2^-104.4, "
+                  "zerocheck 2^-112.2, jagged reduction 2^-116.4; KoalaBear^4 challenges, |F| = 2^123.95)")
+_SP1_LIMIT = ("Cannot reach 2^-128 without protocol changes (grinding in every FRI commit round, zerocheck and jagged reduction, "
+              "or a larger extension field): SP1_TARGET_BITS_OF_SECURITY moves only the query term")
+_SP1_SOUND = ("about 2^-94.5 per proof, totalled over all its shard proofs as B-Ligero is over sub-batches: the A100 stock cell "
+              "art:7233a6a3 has 22 shard proofs, 2^-99.0 + log2(22) = 2^-94.5 (its envelope books SP1's constant, -100 per shard, "
+              "i.e. -95.5: ~1 bit optimistic). Per shard proof: " + _SP1_PER_SHARD + ". " + _SP1_LIMIT)
 _SP1_SOUND_SRC = "kb/sp1-prover.md (soundness); soundcalc @2af5e7d on SP1's gen_soundcalc_toml config (lane sp1-128)"
 
 VARIANTS: tuple[Variant, ...] = (
@@ -302,7 +304,7 @@ VARIANTS: tuple[Variant, ...] = (
             "(backends/gkr/verifier, BabyBear^6, SHA-512 Merkle) and the in-process Python replay",
             "backends/gkr/gpu/README.md; backends/gkr/gpu/ligero.py; backends/gkr/gpu/sha512_cuda.py; backends/gkr/verifier; "
             "result envelopes' security (art:300a526a); Table 1 (A-GKR)"),
-    Variant("SP1 unmodified (relation-only / bare guest)", "SP1", "software.backend.name 'sp1…' without tc-dot",
+    Variant("SP1 stock (relation-only / bare guest)", "SP1", "software.backend.name 'sp1…' without tc-dot",
             lambda f: f["candidate"] == "SP1" and not f["tcdot"] and not f.get("sec_raised"),
             "unknown (SP1 6.4.0 core / compressed proofs; the README states no ZK property; Table 1: as configured)",
             "x, W are guest input; the 33 public bytes are h_O || h_L || 1 (sound guest) or sha256(K || x || W) || sha256(output "
@@ -312,21 +314,25 @@ VARIANTS: tuple[Variant, ...] = (
             "Yes: SP1 column in a sound class, but no SP1 configuration reaches 2^-128 (soundness), so none renders; the "
             "relation-only and skip-authentication guests commit 0xEE (DIAGNOSTIC, never accepted as sound)",
             "backends/sp1/README.md; Table 1 (SP1); " + _SP1_SOUND_SRC),
-    Variant("SP1, FRI query count raised (otherwise unmodified)", "SP1",
+    Variant("SP1 stock, FRI query count raised (otherwise unmodified)", "SP1",
             "software.backend.name 'sp1…' with 'FRI query count raised' in the name (backends/sp1/sec128)",
             lambda f: f["candidate"] == "SP1" and not f["tcdot"] and bool(f.get("sec_raised")),
-            "unknown (as SP1)", "as SP1 unmodified (same relation-bare guest)",
-            "as SP1 unmodified, with core_fri_config's query count at SP1's formula for a 134-bit target (175 instead of 124) "
-            "compiled into prover (source-built sp1-gpu-server 6.6.0) and verifier (sp1-primitives 6.6.0 patched); nothing else "
-            "changed, core proofs only",
-            "2^-99.9 per shard proof: the FRI query term becomes 2^-134.7 (proven, unique decoding) but the field-bound terms "
-            "stay (LogUp-GKR 2^-100.3, commit rounds 2^-102.4, batching 2^-104.4, zerocheck 2^-112.2, jagged reduction "
-            "2^-116.4); union-bounded over shard proofs (envelope security.achieved_log2, terms in security.parameters)",
+            "unknown (as SP1)", "as SP1 stock (same relation-bare guest)",
+            "as SP1 stock, with only core_fri_config's FRI query count changed, 124 -> 175 (SP1's formula at a 134-bit target), in "
+            "prover (source-built sp1-gpu-server 6.6.0) and verifier (sp1-primitives 6.6.0 patched); SP1_TARGET_BITS_OF_SECURITY "
+            "stays 100, recursion configs unchanged, core proofs only; embedded guest ELF / vk identical to stock",
+            "2^-95.46 per proof, totalled over all its shard proofs: art:e8c7c331 (A100) has 22, 2^-99.92 + log2(22) (envelope "
+            "security.achieved_log2). Per shard proof 2^-99.92 additive: the FRI query term becomes 2^-134.7 (proven, unique "
+            "decoding) but the field-bound terms stay (LogUp-GKR 2^-100.3, commit rounds 2^-102.4, batching 2^-104.4, zerocheck "
+            "2^-112.2, jagged reduction 2^-116.4; terms in security.parameters). " + _SP1_LIMIT,
             "No: security.achieved_log2 ~ -95.5 > -128; measures what the query phase alone costs", _SP1_SOUND_SRC),
-    Variant("SP1 + TC_DOT chip (modified SP1)", "SP1", "software.backend.name 'sp1 tc-dot…' (tc-dot / tc_dot / modified sp1 in the name)",
+    Variant("SP1 precompile (TC_DOT chip)", "SP1", "software.backend.name 'sp1 tc-dot…' (tc-dot / tc_dot / modified sp1 in the name)",
             lambda f: f["candidate"] == "SP1" and f["tcdot"],
             "unknown (as SP1)", "unknown", "SP1 / STARK hash assumptions plus the TC_DOT chip's constraints (a modified prover)",
-            "at most SP1's (the chip adds constraints and lookups to the same field-bound terms): " + _SP1_SOUND,
+            "about 2^-96.0 per proof at best, totalled over all its shard proofs: the A100 precompile cell art:174d7b4d has 8, "
+            "2^-99.0 + log2(8) (its envelope books -100 + log2(8) = -97.0). Per shard proof no better than SP1 stock's "
+            + _SP1_PER_SHARD + ": the chip adds constraints and lookups to the same field-bound terms (not computed separately). "
+            + _SP1_LIMIT,
             "Yes: SP1 column = best valid SP1 variant (user decision 2026-09-24), footnoted 'modified SP1 (TC_DOT chip)'; the name must "
             "start with 'sp1' for the column to see it; no SP1 configuration reaches 2^-128", "BRIEF §2; lane sp1-tcdot; " + _SP1_SOUND_SRC),
 )
