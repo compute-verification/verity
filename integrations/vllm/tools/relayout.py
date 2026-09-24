@@ -99,7 +99,7 @@ def load_map(path: Path = MAP) -> MoveMap:
             body = line[len("REWRITE "):]
             f, rest = body.split(" :: ", 1)
             old, new = rest.split(" => ", 1)
-            mm.rewrites.append((f.strip(), old, new.replace("\\n", "\n")))   # `\n` in the new literal: a line break (list files)
+            mm.rewrites.append((f.strip(), old.replace("\\n", "\n"), new.replace("\\n", "\n")))   # `\n` in a literal: a line break
             continue
         lane = None
         m = re.search(r"\s+(DELETE|ADDED)-BY:(\S+)\s*$", line)
@@ -245,6 +245,20 @@ class Rewriter:
         for pre, new, _ in mm.prefix:
             if pre != new and pre.count("/") >= 1:
                 path_map.setdefault(pre, new)
+        # an old directory whose files all moved together (same layout under one new directory) is a unit: `verity_capture/golden/`
+        # names verity_vllm/check/golden/, not whatever the coarser verity_capture/ prefix says
+        unit_of: dict[str, set] = defaultdict(set)
+        for old, new in all_old.items():
+            if new == "DROP":
+                continue
+            d, rest = os.path.dirname(old), os.path.basename(old)
+            while d:
+                unit_of[d].add(new[: -len(rest) - 1] if new.endswith("/" + rest) else None)
+                rest = os.path.basename(d) + "/" + rest
+                d = os.path.dirname(d)
+        for d, targets in unit_of.items():
+            if len(targets) == 1 and None not in targets and next(iter(targets)) != d:
+                path_map.setdefault(d + "/", next(iter(targets)) + "/")
         # names that exist AFTER the move: a token that is (a prefix of) one of these is never a residual, even if it also
         # happens to be an old name (verity_vllm.commit is the old commit.py module AND the new commit/ package)
         new_names = set()
@@ -318,7 +332,7 @@ class Rewriter:
         for o, n in self.explicit.get(new_path, ()):
             if n == "<DEL>":
                 text = "".join(l for l in text.splitlines(keepends=True) if o not in l)
-            else:
+            elif not (o in n and n in text):          # an insertion (the new literal keeps the old one) happens once
                 text = text.replace(o, n)
         return text
 
@@ -337,6 +351,23 @@ class Rewriter:
         if thaw:
             text = self._thaw(text)
             self._frozen = []
+            if explicit:
+                text = self._restore_explicit(text, new_path, python=False)
+        return text
+
+    def _restore_explicit(self, text: str, new_path: str, python: bool) -> str:
+        """A REWRITE's new literal is FINAL text: undo what the generic passes made of it (`verity_vllm.commit` in a new literal is
+        the new package, not the old commit.py module the dotted pass would send to commit/merkle.py)."""
+        keep = self._in_integration
+        for _o, n in self.explicit.get(new_path, ()):
+            if n == "<DEL>" or n in text:
+                continue
+            self._frozen = []
+            m = self.rewrite_text(self._fix_split_paths(n) if python else n, new_path, in_integration=keep, explicit=False)
+            if m != n and m in text:
+                text = text.replace(m, n)
+        self._in_integration = keep
+        self._frozen = []
         return text
 
     def is_residual_dotted(self, tok: str) -> bool:
@@ -453,7 +484,7 @@ class Rewriter:
             src = self._fix_file_anchors(src, d)      # frozen (already relocated) anchors carry no `__file__` -> untouched
         src = self._thaw(src)
         self._frozen = []
-        return src
+        return self._restore_explicit(src, new_path, python=True)
 
     # -- `__file__`-anchored paths ---------------------------------------------------------------------------------------------
     # `Path(__file__).resolve().parents[1] / "profiles"`, `os.path.join(HERE, "..", "commit", "native_collect.py")` with

@@ -493,9 +493,11 @@ REWRITE verity_capture/sweep/source_identity.py :: "verity_vllm_adapter": ("veri
 REWRITE verity_capture/sweep/source_identity.py :: "verity", "verity_vllm", "verity_capture", "verity_vllm_adapter" => "verity", "verity_vllm"
 REWRITE verity_capture/sweep/source_identity.py :: (verity, verity_vllm, verity_capture, verity_vllm_adapter, hidden_gpu, research) => (verity, verity_vllm, hidden_gpu, research)
 REWRITE verity_capture/tests/test_source_identity.py :: "verity", "verity_vllm", "verity_capture", "verity_vllm_adapter" => "verity", "verity_vllm"
+# the mixed-tree test copies verity_vllm elsewhere; after the move that copy holds the precheck itself, so the precheck's package
+# resolves from the copy (was: verity_capture, a second package, stayed the tree's)
+REWRITE verity_capture/tests/test_source_identity.py ::     # verity_capture (the package that ran the precheck) is still the tree's\\n    assert doc["packages"]["verity_capture"]["repo_root"] == os.path.realpath(REPO) =>     assert doc["packages"]["verity_vllm"]["repo_root"] == os.path.realpath(elsewhere)   # the precheck ran from the copy too
 REWRITE verity_capture/tests/test_source_identity.py :: doc["packages"]["verity_capture"] => doc["packages"]["verity_vllm"]
 REWRITE verity_capture/tests/test_source_identity.py :: assert doc["packages"]["verity_vllm_adapter"]["sys_path_entry"] == os.path.realpath(INTEGRATION) => <DEL>
-REWRITE verity_capture/tests/test_source_identity.py :: # verity_capture (the package that ran the precheck) => # verity_vllm (the package that ran the precheck)
 REWRITE verity_capture/tests/test_source_identity.py :: `verity_vllm` / `verity_capture` / => `verity_vllm` from integrations/vllm,
 REWRITE verity_capture/tests/test_source_identity.py :: `verity_vllm_adapter` from integrations/vllm, `research` from tools/research/src. => `research` from tools/research/src.
 REWRITE verity_capture/tests/test_source_identity.py :: "integrations/vllm/verity_vllm_adapter", "tools/research/src/research/telemetry" => "tools/research/src/research/telemetry"
@@ -506,7 +508,7 @@ REWRITE verity_capture/experiment.py :: "--", "verity_capture", "verity_vllm", =
 REWRITE verity_capture/sweep/finalize.py :: "verity_capture.sweep.finalize/v1" => "verity_vllm.harness.finalize/v1"
 REWRITE verity_capture/sweep/research_result.py :: "verity_capture.sweep.row_pod stages.txt" => "verity_vllm.ops.row_pod stages.txt"
 REWRITE verity_capture/sweep/row_pod.sh :: (verity verity_vllm verity_capture verity_vllm_adapter hidden_gpu research) => (verity verity_vllm hidden_gpu research)
-REWRITE verity_capture/sweep/row_pod_tp2.sh :: (verity verity_vllm verity_capture verity_vllm_adapter hidden_gpu research) => (verity verity_vllm hidden_gpu research)
+REWRITE verity_capture/sweep/tp_stage.sh :: (verity verity_vllm verity_capture verity_vllm_adapter hidden_gpu research) => (verity verity_vllm hidden_gpu research)
 REWRITE tests/test_no_by_name_rules.py :: SCAN = ("verity_vllm", "verity_capture") => SCAN = ("verity_vllm",)
 REWRITE tests/test_no_by_name_rules.py :: `verity_vllm` / `verity_capture` => `verity_vllm`
 REWRITE tests/test_no_by_name_rules.py :: integrations/vllm/{verity_vllm,verity_capture} => integrations/vllm/verity_vllm
@@ -532,7 +534,7 @@ REWRITE verity_capture/tests/test_source_identity.py :: {"verity", "verity_vllm"
 REWRITE verity_capture/tests/test_source_identity.py :: ("verity", "verity_vllm", "verity_capture", "verity_vllm_adapter", "research") => ("verity", "verity_vllm", "research")
 # by-name lint scope: verity_vllm_adapter/ and verity_vllm_numerics/ were never in SCAN; the move puts them under verity_vllm/.  The
 # allowlist "only shrinks" (never add an entry without a labelled decision), so the tool keeps the OLD scope and marks the decision.
-REWRITE tests/test_no_by_name_rules.py :: SKIP_DIRS = frozenset({"tests", "__pycache__"}) => SKIP_DIRS = frozenset({"tests", "__pycache__", "numerics"}); SKIP_FILES = frozenset({"engine_profile.py"})   # relayout: program/numerics (was verity_vllm_numerics) and observe/engine_profile.py (was verity_vllm_adapter/profile.py) were outside SCAN before the move; 13 by-name rules -- decide (Draft 3.1 §12.4), do not just allowlist
+REWRITE tests/test_no_by_name_rules.py :: SKIP_DIRS = frozenset({"tests", "__pycache__"}) => SKIP_DIRS = frozenset({"tests", "__pycache__", "numerics"}); SKIP_FILES = frozenset({"engine_profile.py"})   # relayout: program/numerics/ and observe/engine_profile.py come from the two packages SCAN never covered; 13 by-name rules -- decide (Draft 3.1 §12.4), do not just allowlist
 REWRITE tests/test_no_by_name_rules.py :: if fn.endswith(".py") and not fn.startswith("test_")) => if fn.endswith(".py") and not fn.startswith("test_") and fn not in SKIP_FILES)
 # a test that finds the integration root by splitting its own path on the package directory it used to live in
 REWRITE verity_capture/bench/tests/test_commit_verdict_replay_seed_of_record.py :: __file__.rsplit("/verity_capture/", 1)[0] + "/verity_capture/bench/commit_delta.py" => __file__.rsplit("/tests/", 1)[0] + "/verity_vllm/harness/commit_delta.py"
@@ -548,6 +550,16 @@ REWRITE verity_capture/tests/test_source_identity.py :: def test_hidden_gpu_refu
 # pass does not follow: verity_vllm_numerics/ -> verity_vllm/program/numerics/ is two levels deeper
 REWRITE verity_vllm_numerics/fa2_relation.py :: return os.path.join(os.path.dirname(here), "fixtures", => return os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(here))), "fixtures",
 REWRITE verity_vllm_numerics/rms_relation.py :: fixtures = os.path.join(os.path.dirname(here), "fixtures") => fixtures = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(here))), "fixtures")
+# pod_bootstrap.sh moves two levels down (verity_vllm/ops/); ROOT stays the integration directory the rest of the script assumes
+REWRITE pod_bootstrap.sh :: ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P) => ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)
+# paths the passes cannot see whole: a regex-escaped path, a climb from another module's file, split segments through a dissolved
+# directory, a fake source tree
+REWRITE verity_capture/tests/test_release_json.py :: python3 verity_capture/sweep/release_json\\.py => python3 verity_vllm/harness/release_json\\.py
+REWRITE verity_capture/experimental/cb_a/tests/test_global_match.py :: os.path.dirname(gm.__file__), "..", "..", "..", "tests", "ir", "data", => os.path.dirname(gm.__file__), "..", "..", "tests", "program", "data",
+REWRITE verity_capture/bench/tests/test_flip_weight_negative.py :: (BENCH.parent / "sweep" / "row_pod.sh") => (BENCH / "row_pod.sh")
+REWRITE verity_capture/tests/test_hot_commit.py :: (t / "verity_capture" / "bench").mkdir(parents=True) => (t / "verity_vllm" / "harness").mkdir(parents=True)
+REWRITE verity_capture/tests/test_hot_commit.py :: (t / "verity_capture" / "tests" => (t / "verity_vllm" / "harness" / "tests"
+REWRITE verity_capture/tests/test_hot_commit.py :: (t / "verity_capture" / "__pycache__" => (t / "verity_vllm" / "harness" / "__pycache__"
 # query/correspondence.py becomes correspondence/reader_for_query.py: the query lint's inventory of query/*.py loses it
 REWRITE tests/query/test_lint.py :: {"program_view.py", "correspondence.py", "module_body.py", => {"program_view.py", "module_body.py",
 # repo-qualified module names outside the integration (the research store's tool specs): the dotted pass does not see them
@@ -557,13 +569,26 @@ REWRITE tools/research/tests/test_store_vllm_tools.py :: from integrations.vllm.
 REWRITE tests/regression/test_attempt_resolution.py :: f"integrations.vllm.verity_vllm.research_tools:VLLM_ => f"integrations.vllm.verity_vllm.harness.research_tools:VLLM_
 REWRITE tests/regression/test_attempt_resolution.py :: from integrations.vllm.verity_vllm import research_tools as RT => from integrations.vllm.verity_vllm.harness import research_tools as RT
 # fa2_commit's __init__ follows the prototype to commit/fa2_prototype/; engine (its live member) leaves, so the package itself is kept
-REWRITE tests/dead_code_keep.json ::   "verity_capture.experimental.fa2_commit.derived": =>   "verity_capture.experimental.fa2_commit": "fa2_commit fixtures: the package of the kept prototype modules (see derived)",\\n  "verity_capture.experimental.fa2_commit.derived":
+REWRITE tests/dead_code_keep.json ::  "modules": { =>  "modules": {\\n  "verity_vllm.commit.fa2_prototype": "fa2_commit fixtures: the package of the kept prototype modules (see verity_vllm.commit.fa2_prototype.derived)",
 """)
     # the census root glob sweep/*.sh would become ops/*.sh, which also holds the bench/ shells (not roots): list the sweep shells
-    sweep_sh = sorted(f for f in files if f.startswith('verity_capture/sweep/') and f.count('/') == 2 and f.endswith('.sh'))
+    new_of_line = {o: n for o, n, _ in lines}
+    sweep_sh = sorted(new_of_line[f] for f in files if f.startswith('verity_capture/sweep/') and f.count('/') == 2 and f.endswith('.sh'))
     fh.write("REWRITE tests/census_roots.txt :: verity_capture/sweep/*.sh => "
              + "\\n".join(f + ("        # the former sweep/*.sh glob (ops/ also holds bench/ shells)" if i == 0 else "")
                           for i, f in enumerate(sweep_sh)) + "\n")
+    # the applicability test mutates cb_a's modules by path prefix; cb_a dissolved, so the prefix becomes the list of its modules
+    cb_a = sorted(new_of_line[f] for f in files if f.startswith('verity_capture/experimental/cb_a/') and f.endswith('.py')
+                  and '/tests/' not in f and not os.path.basename(f).startswith('test_') and new_of_line.get(f, 'DROP') != 'DROP')
+    fh.write('REWRITE tests/ir/test_artifact_applicability_independent.py :: rel.startswith("verity_capture/experimental/cb_a") => '
+             'rel.startswith((' + ", ".join(f'"{f}"' for f in cb_a) + '))\n')
+    # ... and scans cb_a/ + frontend/ for duplicated literals: cb_a's modules outside program/frontend/, then frontend/ as before
+    cb_a_out = [f for f in cb_a if not f.startswith('verity_vllm/program/frontend/')]
+    fh.write('REWRITE tests/ir/test_artifact_applicability_independent.py :: CB_A = REPO / "verity_capture" / "experimental" / "cb_a" => '
+             'CB_A = tuple(REPO / f for f in (' + ", ".join(f'"{f}"' for f in cb_a_out) + '))   # cb_a dissolved: its modules outside frontend/\n')
+    fh.write('REWRITE tests/ir/test_artifact_applicability_independent.py :: '
+             '    for root in (CB_A, FRONTEND):\\n        for p in sorted(root.rglob("*.py")): => '
+             '    for root in (*CB_A, FRONTEND):\\n        for p in ([root] if root.is_file() else sorted(root.rglob("*.py"))):\n')
 print(f"mapped {len(lines)} files; unmapped {len(unmapped)}")
 for u in unmapped: print("  UNMAPPED", u)
 # collisions among non-test targets
