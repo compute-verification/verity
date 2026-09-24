@@ -22,18 +22,19 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--relation", nargs="*", default=RELATIONS)
     ap.add_argument("--vus", nargs="*", default=["12:0", "4096:16384", "16384:16384"],
-                    help="VUS:L (L 0 = the gate's default l)")
+                    help="VUS:L (L 0 = run.py's default: 256 up to 64 VUs, else 16384)")
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--out")
     args = ap.parse_args(argv)
     out = Path(args.out) if args.out else None
     if out:
         out.mkdir(parents=True, exist_ok=True)
-    rows = []
+    rows, provers = [], {}
     for rel in args.relation:
         for spec in args.vus:
             vus, l = (int(x) for x in spec.split(":"))
-            pv = Prover(rel, args.device, l or None)
+            l = l or (256 if vus <= 64 else 16384)
+            pv = provers.get((rel, l)) or provers.setdefault((rel, l), Prover(rel, args.device, l))
             per = pv.l // pv.steps
             n_vus = [min(per, vus - i) for i in range(0, vus, per)]
             lay = layout_for(pv.sys, pv.l, n_vus, pv.steps, zk=True)

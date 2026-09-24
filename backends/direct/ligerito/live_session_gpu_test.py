@@ -98,7 +98,7 @@ def main(argv=None) -> int:
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     time.sleep(0.5)
 
-    pv = run_mod.Prover(args.relation, args.device, args.l)
+    pv = run_mod.Prover(args.relation, args.device, args.l or (256 if args.vus <= 64 else 16384))
     bt = pv.batch(run_mod.instances(pv.rel, args.vus), "live", zk=args.zk)
     stmt = prove_mod.statement_for_stream(bt, bt.key_sha256)
     warm = prove_mod.StreamCoins(live_mod.LocalChallenges(4096), stmt)
