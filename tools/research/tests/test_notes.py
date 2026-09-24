@@ -190,3 +190,101 @@ def test_watch_prints_each_transition_once(tmp_path):
     assert notes.transitions(prev, rows, NOW) == ([], {"a"})
     rows[0].update(stale=False, state="superseded")
     assert notes.transitions(prev, rows, NOW) == (["21:00Z ALIVE a (superseded)"], set())
+
+
+# ---- the inbox and the finish checks --------------------------------------------------------------------------------------------------------
+
+def test_the_inbox_is_handoffs_changed_since_last_shown_by_mtime_not_by_the_name_stamp(tmp_path):
+    _report(tmp_path, "lane-a", "CHECKPOINT 1111111 (20:00Z) [open] x\n", 60)
+    d = tmp_path / "lanes" / "lane-a"
+    _touch(d / "20260923T1900Z-handoff-coordinator.md", 30, "---\nfrom: coordinator\n---\n\n# coordinator -> lane-a: fix H1\n")
+    _touch(d / "20260923T2050Z-asks-from-verify.md", 10, "# verify asks\n")
+    items = notes.inbox(tmp_path, "lane-a")
+    assert [(x["path"].name, x["title"]) for x in items] == [("20260923T1900Z-handoff-coordinator.md", "coordinator -> lane-a: fix H1"),
+                                                             ("20260923T2050Z-asks-from-verify.md", "verify asks")]
+    notes.mark_seen(tmp_path, "lane-a", items)
+    assert notes.inbox(tmp_path, "lane-a") == []
+    _touch(d / "20260923T1900Z-handoff-coordinator.md", 1, "# coordinator -> lane-a: fix H1 (and H2)\n")   # edited in place
+    again = notes.inbox(tmp_path, "lane-a")
+    assert [x["path"].name for x in again] == ["20260923T1900Z-handoff-coordinator.md"]
+    assert notes.render_inbox("lane-a", again).splitlines() == [
+        "INBOX lane-a: 1 new -- act on each, or say in your next checkpoint why not",
+        '  20:59Z 20260923T1900Z-handoff-coordinator.md  "coordinator -> lane-a: fix H1 (and H2)"']
+
+
+def test_a_successor_gets_its_predecessors_unread_handoffs_and_they_are_not_mail(tmp_path):
+    _report(tmp_path, "live-2b", "CHECKPOINT 1111111 (20:00Z) [superseded] by live-2c (coordinator)\n", 60, status="superseded")
+    _touch(tmp_path / "lanes" / "live-2b" / "20260923T2030Z-handoff-from-relation.md", 20, "# relation -> live-2b: may I run?\n")
+    _report(tmp_path, "live-2c", "CHECKPOINT 2222222 (20:50Z) [open] x\n", 10)
+    assert notes.successors(tmp_path) == {"live-2b": "live-2c"}
+    assert [(x["lane_dir"], x["path"].name) for x in notes.inbox(tmp_path, "live-2c")] == [
+        ("live-2b", "20260923T2030Z-handoff-from-relation.md")]
+    rows = {r["lane"]: r for r in notes.status(tmp_path, 30, None, now=NOW)}
+    assert (rows["live-2b"]["mail"], rows["live-2c"]["inbox"], rows["live-2c"]["inbox_oldest_min"]) == ([], 1, 20.0)
+    notes.bind(tmp_path, "live-2d", succeeds="live-2c")
+    assert notes.chain(tmp_path, "live-2d") == ["live-2d", "live-2c", "live-2b"]
+
+
+def test_handoffs_to_a_finished_lane_with_no_successor_are_mail_and_watch_says_so_once(tmp_path):
+    _report(tmp_path, "blake3", "CHECKPOINT 1111111 (20:00Z) [final] done\n", 55, status="final")
+    _touch(tmp_path / "lanes" / "blake3" / "20260923T1900Z-handoff-coordinator.md", 120, "# read before FINAL\n")
+    _touch(tmp_path / "lanes" / "blake3" / "20260923T2058Z-handoff-coordinator-H2.md", 2, "# H2\n")
+    rows = notes.status(tmp_path, 30, None, now=NOW)
+    assert rows[0]["mail"] == ["20260923T2058Z-handoff-coordinator-H2.md"] and "MAIL 1" in notes.render(rows)
+    lines, prev = notes.mail_lines({}, rows, NOW)
+    assert lines == ["21:00Z MAIL blake3 got 1 handoff(s) after it finished: 20260923T2058Z-handoff-coordinator-H2.md"]
+    assert notes.mail_lines(prev, rows, NOW) == ([], prev)
+
+
+def test_cli_checkpoint_prints_the_inbox_once_and_superseded_leaves_it_for_the_successor(tmp_path, capsys):
+    _report(tmp_path, "a", "", 60)
+    _touch(tmp_path / "lanes" / "a" / "20260923T2050Z-handoff-coordinator.md", 10, "# do X\n")
+    assert notes.main(["checkpoint", "a", "open", "step", "--commit", "abc1234", "--root", str(tmp_path)]) == 0
+    out = capsys.readouterr().out
+    assert "INBOX a: 1 new" in out and '"do X"' in out
+    notes.main(["checkpoint", "a", "open", "step 2", "--commit", "abc1234", "--root", str(tmp_path)])
+    assert "INBOX a: nothing new" in capsys.readouterr().out
+    _report(tmp_path, "b", "", 60)
+    _touch(tmp_path / "lanes" / "b" / "20260923T2055Z-handoff-coordinator.md", 5, "# do Y\n")
+    assert notes.main(["checkpoint", "b", "superseded", "by", "b2", "--commit", "none", "--root", str(tmp_path)]) == 0
+    assert "INBOX" not in capsys.readouterr().out
+    assert [x["path"].name for x in notes.inbox(tmp_path, "b2")] == ["20260923T2055Z-handoff-coordinator.md"]
+
+
+def test_finish_checks_custody_pod_worktree_and_handoffs_never_named(tmp_path, repo):
+    root = tmp_path / "notes"
+    _git(repo, "checkout", "-qb", "lane/fin")
+    p = _report(root, "fin", "CHECKPOINT 1111111 (20:55Z) [final] done\n## FINAL\nart:1234abcd, art:feedbeef00 and art:1234abcd again;"
+                " answered 20260923T2000Z-handoff-a.md\n", 5, status="final")
+    _touch(root / "lanes" / "fin" / "20260923T2000Z-handoff-a.md", 60, "# a\n")
+    _touch(root / "lanes" / "fin" / "20260923T2040Z-handoff-b.md", 20, "# b\n")
+    cited = []
+
+    def custody(arts):
+        cited.append(arts)
+        return False, "1/2 cited artifacts not preserved: art:feedbeef00"
+
+    text, rc = notes.finish(root, "fin", repo, custody=custody, pods=lambda lane, bound, lanes: (False, "vy-fin RUNNING"))
+    head = _git(repo, "rev-parse", "HEAD")[:8]
+    assert (rc, cited) == (3, [["1234abcd", "feedbeef00"]])
+    assert text.splitlines() == [
+        "FINISH fin: 3 problem(s) (FINAL line written; exit 3)",
+        "  custody   1/2 cited artifacts not preserved: art:feedbeef00",
+        "  pod       vy-fin RUNNING",
+        f"  worktree  clean, HEAD {head} == lane/fin {head}",
+        "  handoffs  1 never named in the report (answer or say why not): 20260923T2040Z-handoff-b.md"]
+    p.write_text(p.read_text() + "b: not doing it, out of scope (20260923T2040Z-handoff-b.md)\n")
+    _touch(repo / "a.py", 1, "dirty\n")
+    text, rc = notes.finish(root, "fin", repo, keep_pod="the shared live verifier", custody=lambda arts: (True, "2 preserved"))
+    assert rc == 3 and "  pod       kept: the shared live verifier" in text and "1 uncommitted files" in text
+    _git(repo, "checkout", "-q", "a.py")
+    assert notes.finish(root, "fin", repo, keep_pod="x", custody=lambda arts: (True, "ok"))[1] == 0
+
+
+def test_a_pod_belongs_to_the_longest_lane_name_it_starts_with():
+    lanes = {"fp4-decode", "fp4-decode-2", "live-2", "live-2c"}
+    assert notes.pod_owner("vy-fp4-decode-2-5090b-veritor-campaign", lanes) == "fp4-decode-2"
+    assert notes.pod_owner("vy-fp4-decode-veritor-campaign", lanes) == "fp4-decode"
+    assert notes.pod_owner("vy-live-2c-veritor-campaign", lanes) == "live-2c"
+    assert notes.pod_owner("vy-live-2-verifier", lanes) == "live-2"
+    assert notes.pod_owner("vy-control", lanes) is None

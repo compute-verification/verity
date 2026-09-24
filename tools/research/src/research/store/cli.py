@@ -529,7 +529,17 @@ def cmd_sql(argv: list[str]) -> int:
     ap.add_argument("query")
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
-    cols, rows = LocalStore(ns.store).index.sql_with_columns(ns.query)
+    idx = LocalStore(ns.store).index
+    try:
+        cols, rows = idx.sql_with_columns(ns.query)
+    except sqlite3.OperationalError as e:
+        if not str(e).startswith("no such"):
+            raise
+        print(f"research data sql: {e}", file=sys.stderr)
+        for (t,) in idx.sql_with_columns("SELECT name FROM sqlite_master WHERE type IN ('table', 'view') ORDER BY name")[1]:
+            print(f"  {t}({', '.join(r[1] for r in idx.sql_with_columns(f'PRAGMA table_info({t})')[1])})", file=sys.stderr)
+        print("  (custody: `research data preserved ART|RUN...`, not hand-written SQL)", file=sys.stderr)
+        return 2
     if ns.json:
         _dump([dict(zip(cols, r)) for r in rows])
     else:
