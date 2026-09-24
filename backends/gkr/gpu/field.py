@@ -132,6 +132,20 @@ def to_bytes(x: Ext) -> bytes:
     return b"".join(int(c).to_bytes(4, "little") for c in x)
 
 
+def exts_to_bytes(xs) -> bytes:
+    """``b"".join(to_bytes(x) for x in xs)``; long lists (the opening's ``w`` / ``qc``, the proof's messages) in one
+    numpy pass."""
+    xs = xs if isinstance(xs, (list, tuple)) else list(xs)
+    if len(xs) < 64:
+        return b"".join(to_bytes(x) for x in xs)
+    import numpy as np
+
+    a = np.asarray(xs, dtype=np.int64)
+    if a.shape != (len(xs), DEG) or bool(((a < 0) | (a >> 32 != 0)).any()):
+        raise ValueError("exts_to_bytes: not a list of extension elements with u32 coordinates")
+    return a.astype("<u4").tobytes()
+
+
 def from_bytes(b: bytes) -> Ext:
     return tuple(int.from_bytes(b[4 * i:4 * i + 4], "little") for i in range(DEG))
 

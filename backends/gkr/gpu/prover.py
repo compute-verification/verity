@@ -184,22 +184,21 @@ class Proof:
         out = bytearray(self.MAGIC)
         out += struct.pack("<II", self.VERSION, ligero.DIGEST_BYTES)
         out += self.root
+        import numpy as np
+
+        exts = _field.exts_to_bytes
         out += struct.pack("<Q", len(self.msgs))
-        for m in self.msgs:
-            out += _field.to_bytes(m)
+        out += exts(self.msgs)
         op = self.opening
         if op is None:
             out += struct.pack("<Q", 0)
             return bytes(out)
         out += struct.pack("<Q", 1)
         out += struct.pack("<Q", len(op.w))
-        for m in op.w:
-            out += _field.to_bytes(m)
+        out += exts(op.w)
         out += struct.pack("<Q", len(op.qc))
-        for m in op.qc:
-            out += _field.to_bytes(m)
+        out += exts(op.qc)
         # a-gpu2: ``columns`` is an ``(t, rows)`` ``<u4`` array and the Merkle paths live in ``paths``
-        import numpy as np
 
         columns = np.asarray(op.columns, dtype="<u4")
         t = columns.shape[0] if columns.ndim == 2 else 0
