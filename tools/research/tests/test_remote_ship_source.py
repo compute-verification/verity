@@ -4,9 +4,11 @@ would hand to ssh), so the remote script, the staged archive, the digest and the
 shortening the bytes on stdin."""
 from __future__ import annotations
 
+import gzip
 import hashlib
 import io
 import json
+import os
 import subprocess
 import sys
 import tarfile
@@ -52,21 +54,22 @@ def _tree_files(d: Path) -> dict[str, str]:
 
 def test_complete_ship_lands_ready_with_identity_and_is_idempotent(repo, tmp_path, monkeypatch):
     root = tmp_path / "root"
-    sha, dest, ready = remote.ship_source(LOCAL, str(root), repo)
+    sha, dest, ready = remote.ship_source(LOCAL, str(root), repo, python=PY)
     assert sha == _git(repo, "rev-parse", "HEAD") and dest == f"{root}/src/{sha}"
     doc = json.loads((Path(dest) / remote.READY_FILE).read_text())
     assert doc == ready and doc["schema"] == remote.READY_SCHEMA and doc["identity"] == sha and doc["commit"] == sha
     assert doc["tree"] == _git(repo, "rev-parse", "HEAD^{tree}")
-    assert doc["archive_sha256"] == hashlib.sha256(_archive(repo)).hexdigest() and doc["files"] == 3 and doc["verified"] == "archive-sha256+file-manifest"
+    assert doc["archive_sha256"] == hashlib.sha256(_archive(repo)).hexdigest() and doc["files"] == 3 and doc["verified"] == "file-sha256+mode-manifest"
     assert doc["shipped_at_utc"] and doc["launcher"]
     assert _tree_files(Path(dest)) == remote.archive_manifest(_archive(repo))["files"], "the tree on the machine is the archive"
-    assert not (Path(dest) / ".archive.tar").exists() and not (Path(dest) / remote.LEGACY_COMPLETE).exists()
+    assert doc["reused_files"] == 0 and doc["shipped_files"] == 3, "a first ship sends every file"
+    assert not (Path(dest) / ".fill.tar.gz").exists() and not (Path(dest) / ".want.json.gz").exists() and not (Path(dest) / remote.LEGACY_COMPLETE).exists()
     assert [p.name for p in (root / "src").iterdir()] == [sha], "no partial directory left behind"
     # a READY tree is not shipped again: one probe, no transfer
     calls = []
     real = remote.ssh_run
     monkeypatch.setattr(remote, "ssh_run", lambda ssh, argv, **kw: calls.append(argv) or real(ssh, argv, **kw))
-    assert remote.ship_source(LOCAL, str(root), repo) == (sha, dest, doc)
+    assert remote.ship_source(LOCAL, str(root), repo, python=PY) == (sha, dest, doc)
     assert len(calls) == 1 and not any("tar" in a for a in calls[0])
     assert remote.require_ready_source(dest, sha) == doc
 
@@ -76,45 +79,129 @@ def test_truncated_transfer_is_refused_and_leaves_nothing_ready(repo, tmp_path, 
     real = remote.ssh_run
 
     def truncating(ssh, argv, *, stdin=None, timeout=120):
-        if stdin is not None and any(".archive.tar" in a for a in argv):
+        if stdin is not None and any(".fill.tar.gz" in a for a in argv):
             stdin = stdin[: len(stdin) * 2 // 3]                       # the stream stalls two thirds of the way through
         return real(ssh, argv, stdin=stdin, timeout=timeout)
 
     monkeypatch.setattr(remote, "ssh_run", truncating)
     with pytest.raises(remote.SourceNotReady, match="archive sha256 mismatch"):
-        remote.ship_source(LOCAL, str(root), repo)
+        remote.ship_source(LOCAL, str(root), repo, python=PY)
     sha = _git(repo, "rev-parse", "HEAD")
     assert not (root / "src" / sha).exists(), "a failed ship never creates <root>/src/<identity>/"
     assert not list((root / "src").glob("*.partial-*")), "the partial directory is removed"
     # and the launcher's own timeout is the same fault, not a traceback
     def timing_out(ssh, argv, *, stdin=None, timeout=120):
-        if stdin is not None and any(".archive.tar" in a for a in argv):
+        if stdin is not None and any(".fill.tar.gz" in a for a in argv):
             raise subprocess.TimeoutExpired(cmd="ssh", timeout=timeout)
         return real(ssh, argv, stdin=stdin, timeout=timeout)
 
     monkeypatch.setattr(remote, "ssh_run", timing_out)
     with pytest.raises(remote.SourceNotReady, match="exceeded"):
-        remote.ship_source(LOCAL, str(root), repo)
+        remote.ship_source(LOCAL, str(root), repo, python=PY)
     assert not (root / "src" / sha).exists() and not list((root / "src").glob("*.partial-*"))
     assert issubclass(remote.SourceNotReady, remote.Refused), "the launcher's `refused:` path names it"
 
 
 def test_extraction_manifest_mismatch_is_refused(repo, tmp_path, monkeypatch):
-    """The digest can match and the extraction still be wrong (tar variant, disk full mid-extract): the file set is checked too."""
+    """The digest can match and the tree still be wrong (a fill that lacks a file, tar variant, disk full mid-extract): every file of the
+    assembled tree is checked against the manifest."""
     root = tmp_path / "root"
-    real = remote.ssh_run
-
-    def dropping(ssh, argv, *, stdin=None, timeout=120):
-        r = real(ssh, argv, stdin=stdin, timeout=timeout)
-        if stdin is not None and any(".archive.tar" in a for a in argv):
-            lines = r.stdout.decode().splitlines()
-            r.stdout = "\n".join(lines[:-1]).encode()                  # the machine lists one file fewer than it should
-        return r
-
-    monkeypatch.setattr(remote, "ssh_run", dropping)
-    with pytest.raises(remote.SourceNotReady, match="manifest mismatch.*1 missing"):
-        remote.ship_source(LOCAL, str(root), repo)
+    real = remote.fill_archive
+    monkeypatch.setattr(remote, "fill_archive", lambda tar, paths: real(tar, set(sorted(paths)[:-1])))   # one file never sent
+    with pytest.raises(remote.SourceNotReady, match="manifest mismatch.*1 missing.*pkg/c.bin"):
+        remote.ship_source(LOCAL, str(root), repo, python=PY)
     assert not list((root / "src").glob("*")), "nothing READY, nothing partial"
+
+
+def _commit(repo: Path, msg: str = "next", *extra: str) -> str:
+    _git(repo, "-c", "user.email=t@t", "-c", "user.name=t", "add", "-A")
+    _git(repo, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", msg, *extra)
+    return _git(repo, "rev-parse", "HEAD")
+
+
+def test_a_repeat_ship_sends_only_the_files_the_machine_lacks_and_still_verifies_every_file(repo, tmp_path, monkeypatch, capsys):
+    """r21: `run --on <pod> --source .` sent the whole tree (168 MB at 0.3 MB/s) and gave up after 600 s; the workaround was a manual
+    `git archive | tar -x` into <root>/src/<sha>/.  Now the machine copies whatever its trees (that one included) already hold by content
+    and only the rest crosses the link; READY still means every file's sha256 and executable bit was checked on the machine."""
+    root = tmp_path / "root"
+    sha1 = _git(repo, "rev-parse", "HEAD")
+    manual = root / "src" / sha1                                        # the r21 workaround: an unmarked tree of the previous commit
+    manual.mkdir(parents=True)
+    with tarfile.open(fileobj=io.BytesIO(_archive(repo)), mode="r:") as tf:
+        tf.extractall(manual, filter="data")
+    real = remote.ssh_run
+    sent: list[list[str]] = []
+
+    def spy(ssh, argv, *, stdin=None, timeout=120):
+        if stdin is not None and any(".fill.tar.gz" in a for a in argv):
+            with tarfile.open(fileobj=io.BytesIO(gzip.decompress(stdin))) as tf:
+                sent.append(sorted(tf.getnames()))
+        return real(ssh, argv, stdin=stdin, timeout=timeout)
+
+    monkeypatch.setattr(remote, "ssh_run", spy)
+    (repo / "a.txt").write_text("alpha, edited\n")
+    (repo / "run.sh").write_text("#!/bin/sh\necho hi\n")
+    (repo / "run.sh").chmod(0o755)
+    sha2 = _commit(repo)
+    got, dest2, doc2 = remote.ship_source(LOCAL, str(root), repo, python=PY)
+    assert got == sha2 and sent == [["a.txt", "run.sh"]], "the unchanged files are copied on the machine, not sent"
+    assert doc2["reused_files"] == 2 and doc2["shipped_files"] == 2 and doc2["files"] == 4 and doc2["verified"] == "file-sha256+mode-manifest"
+    assert _tree_files(Path(dest2)) == remote.archive_manifest(_archive(repo))["files"] and remote.require_ready_source(dest2, sha2) == doc2
+    assert os.access(Path(dest2) / "run.sh", os.X_OK) and not os.access(Path(dest2) / "pkg" / "b.py", os.X_OK)
+    assert "2 of 4 files already on the machine; shipping 2" in capsys.readouterr().err
+    index = root / "cache" / "src-index"
+    assert {p.name for p in index.iterdir()} == {f"{sha1}.sha256", f"{sha2}.sha256"}, "the manual tree was indexed on demand"
+    assert not (manual / remote.READY_FILE).exists(), "a reuse source is read, never marked or modified"
+
+    # the same content under a new commit: nothing crosses the link, the tree is still verified before READY
+    sha3 = _commit(repo, "empty", "--allow-empty")
+    _, dest3, doc3 = remote.ship_source(LOCAL, str(root), repo, python=PY)
+    assert len(sent) == 1 and doc3["identity"] == sha3 and doc3["reused_files"] == 4 and doc3["shipped_files"] == 0 and doc3["shipped_bytes"] == 0
+    assert _tree_files(Path(dest3)) == _tree_files(Path(dest2))
+
+    # a source edited in place after it was indexed (a workload writing into its tree): hashed as it is copied, not used, sent instead
+    for tree in (manual, Path(dest2), Path(dest3)):
+        (tree / "pkg" / "c.bin").write_bytes(b"edited in place")
+    (repo / "a.txt").write_text("alpha, again\n")
+    sha4 = _commit(repo)
+    _, dest4, doc4 = remote.ship_source(LOCAL, str(root), repo, python=PY)
+    assert sent[-1] == ["a.txt", "pkg/c.bin"] and doc4["reused_files"] == 2 and doc4["identity"] == sha4
+    assert _tree_files(Path(dest4)) == remote.archive_manifest(_archive(repo))["files"]
+    left = {p.name.removesuffix(".sha256") for p in index.glob("*.sha256")}
+    assert sha4 in left and len(left & {sha1, sha2, sha3}) == 2, "the stale source's index is dropped (rebuilt when next needed)"
+
+
+def test_the_machine_side_verify_names_missing_extra_differing_and_mode_mismatched_files(tmp_path, capsys):
+    from research import source_ship as S
+
+    root = tmp_path / "root"
+    partial = root / "src" / "x.partial-1"
+    partial.mkdir(parents=True)
+    h = lambda b: hashlib.sha256(b).hexdigest()  # noqa: E731
+    want = {"a": [h(b"A"), False], "b": [h(b"B"), True], "c": [h(b"C"), False], "d/e": [h(b"E"), True]}
+
+    def verify() -> dict:
+        (partial / S.WANT).write_bytes(gzip.compress(json.dumps(want).encode()))
+        S.verify(str(root), str(partial), "x")
+        return json.loads(capsys.readouterr().out)
+
+    (partial / "a").write_bytes(b"A")
+    (partial / "b").write_bytes(b"B")                                   # should be executable
+    (partial / "c").write_bytes(b"not C")
+    (partial / "zz").write_bytes(b"not in the archive")                 # and d/e is missing
+    out = verify()
+    assert not out["ok"] and out["files"] == 4
+    assert {k: out[k]["e.g."] for k in ("missing", "extra", "differs", "mode")} == {"missing": ["d/e"], "extra": ["zz"], "differs": ["c"], "mode": ["b"]}
+    assert not (root / "cache" / "src-index" / "x.sha256").exists() and not (partial / S.WANT).exists()
+    (partial / "b").chmod(0o755)
+    (partial / "c").write_bytes(b"C")
+    (partial / "zz").unlink()
+    (partial / "d").mkdir()
+    (partial / "d" / "e").write_bytes(b"E")
+    (partial / "d" / "e").chmod(0o755)
+    out = verify()
+    assert out["ok"] and out["files"] == 4
+    assert (root / "cache" / "src-index" / "x.sha256").read_text().splitlines() == [f"{h(b'A')}  a", f"{h(b'B')}  b", f"{h(b'C')}  c", f"{h(b'E')}  d/e"]
 
 
 def test_legacy_complete_tree_is_adopted_when_identical_and_quarantined_when_not(repo, tmp_path, capsys):
@@ -127,7 +214,7 @@ def test_legacy_complete_tree_is_adopted_when_identical_and_quarantined_when_not
     (legacy / remote.LEGACY_COMPLETE).touch()
     with pytest.raises(remote.SourceNotReady, match="legacy"):
         remote.require_ready_source(legacy, sha)                        # `.complete` alone never executes
-    _, dest, doc = remote.ship_source(LOCAL, str(root), repo)
+    _, dest, doc = remote.ship_source(LOCAL, str(root), repo, python=PY)
     assert dest == str(legacy) and doc["verified"] == "legacy-sha256-per-file" and doc["identity"] == sha
     assert json.loads((legacy / remote.READY_FILE).read_text()) == doc and remote.require_ready_source(legacy, sha) == doc
 
@@ -135,8 +222,8 @@ def test_legacy_complete_tree_is_adopted_when_identical_and_quarantined_when_not
     (legacy / remote.READY_FILE).unlink()
     (legacy / "pkg" / "b.py").unlink()
     (legacy / "pkg" / "c.bin").write_bytes(b"trunc")
-    _, dest, doc = remote.ship_source(LOCAL, str(root), repo)
-    assert doc["verified"] == "archive-sha256+file-manifest" and _tree_files(Path(dest)) == remote.archive_manifest(_archive(repo))["files"]
+    _, dest, doc = remote.ship_source(LOCAL, str(root), repo, python=PY)
+    assert doc["verified"] == "file-sha256+mode-manifest" and _tree_files(Path(dest)) == remote.archive_manifest(_archive(repo))["files"]
     q = list((root / "src" / ".quarantine").iterdir())
     assert len(q) == 1 and q[0].name.startswith(sha + "-") and (q[0] / remote.LEGACY_COMPLETE).exists() and not (q[0] / "pkg" / "b.py").exists()
     err = capsys.readouterr().err
@@ -145,7 +232,7 @@ def test_legacy_complete_tree_is_adopted_when_identical_and_quarantined_when_not
     # a READY.json naming another identity is never shipped over
     (legacy / remote.READY_FILE).write_text(json.dumps({**doc, "identity": "f" * 40}))
     with pytest.raises(remote.SourceNotReady, match="names identity"):
-        remote.ship_source(LOCAL, str(root), repo)
+        remote.ship_source(LOCAL, str(root), repo, python=PY)
 
 
 def _request(tmp_path, run_id, command, *, remote_sec):

@@ -19,9 +19,11 @@
     source          --source <git dir> ships `git archive HEAD` of a CLEAN checkout to <root>/src/<identity>/ (the run's cwd, tree_sha);
                     the identity is the commit sha.  A dirty tree is refused rather than mislabeled.  Untracked inputs go with --send.
                     The ship is VERIFIED before it may execute (r20 incident: a stalled transfer left a half-tree that later runs used):
-                    the archive lands in <root>/src/<identity>.partial-<nonce>/, is sha256'd on the machine and compared with the
-                    launcher's, its extracted file set is compared with the archive's manifest, and only then is the directory
-                    atomically renamed into place carrying READY.json (identity, archive sha256, file count, shipped_at, launcher).
+                    the tree is assembled in <root>/src/<identity>.partial-<nonce>/ from the files the machine's existing trees already
+                    hold by content plus a digest-checked tar of the rest (r21: 168 MB over a 0.3 MB/s link gave up; a repeat ship now
+                    sends only what changed), every file's sha256 and executable bit is compared with the archive's manifest, and only
+                    then is the directory atomically renamed into place carrying READY.json (identity, archive sha256, file count,
+                    files reused / shipped, shipped_at, launcher).  Content index: <root>/cache/src-index/ (source_ship.py).
                     A failed or truncated ship removes its partial directory and refuses the run (SourceNotReady); the machine side
                     (`launch-request`) refuses to execute from any source directory without a READY.json naming the requested identity.
                     Legacy trees (the old `.complete` marker, no READY.json) are verified once per file against the archive; a tree that
@@ -49,6 +51,7 @@
 """
 from __future__ import annotations
 
+import gzip
 import hashlib
 import io
 import json
@@ -73,6 +76,7 @@ READY_SCHEMA = "research/source-ready/v0.1"
 READY_FILE = "READY.json"                     # the only marker that makes <root>/src/<identity>/ executable
 LEGACY_COMPLETE = ".complete"                 # the pre-verification marker: never sufficient on its own
 SHIP_SOURCE_TIMEOUT_S = 600
+SHIP_MIN_BYTES_PER_S = 64 * 1024              # the fill transfer's timeout grows by its size at this rate (a live but slow link is not a stall)
 _RC_DIGEST = 75                               # the ship script's exit when the received archive is not the launcher's (nothing extracted)
 WORKLOAD_CWD_DEFAULT = "run_dir"              # the machine-side runner's default workload cwd; a shipped package without this line predates it
 SMALL_FILES = ("job.json", "status.json", "failure.json", "result.json", "launch.json", "refused.json", "events.jsonl")
@@ -308,8 +312,9 @@ def ship_tool(ssh: list[str], root: str, src: Path | None = None) -> str:
 
 
 def archive_manifest(tar_bytes: bytes) -> dict[str, Any]:
-    """What a `git archive` tar promises: its sha256 and, per regular file, the path and content sha256."""
+    """What a `git archive` tar promises: its sha256 and, per regular file, the path and content sha256; which files are executable."""
     files: dict[str, str] = {}
+    exe: list[str] = []
     total = 0
     with tarfile.open(fileobj=io.BytesIO(tar_bytes), mode="r:") as tf:
         for m in tf:
@@ -317,9 +322,40 @@ def archive_manifest(tar_bytes: bytes) -> dict[str, Any]:
                 continue
             f = tf.extractfile(m)
             data = f.read() if f else b""
-            files[m.name.removeprefix("./")] = hashlib.sha256(data).hexdigest()
+            name = m.name.removeprefix("./")
+            files[name] = hashlib.sha256(data).hexdigest()
+            if m.mode & 0o100:
+                exe.append(name)
             total += len(data)
-    return {"archive_sha256": hashlib.sha256(tar_bytes).hexdigest(), "files": files, "bytes": total}
+    return {"archive_sha256": hashlib.sha256(tar_bytes).hexdigest(), "files": files, "exec": sorted(exe), "bytes": total}
+
+
+def fill_archive(tar_bytes: bytes, paths: set[str]) -> tuple[bytes, int]:
+    """gzip'd tar of the archive's regular files named in `paths` plus every symlink (the machine never has those by content), modes
+    normalised to 0755/0644.  (bytes, member count); (b"", 0) when there is nothing to send."""
+    buf = io.BytesIO()
+    n = 0
+    with tarfile.open(fileobj=io.BytesIO(tar_bytes), mode="r:") as src, tarfile.open(fileobj=buf, mode="w") as out:
+        for m in src:
+            if m.isreg() and m.name.removeprefix("./") in paths:
+                m.mode = 0o755 if m.mode & 0o100 else 0o644
+                out.addfile(m, src.extractfile(m))
+                n += 1
+            elif m.issym():
+                out.addfile(m)
+                n += 1
+    return (gzip.compress(buf.getvalue(), 1), n) if n else (b"", 0)
+
+
+def _last_json(out: bytes) -> dict[str, Any] | None:
+    for line in reversed(out.decode(errors="replace").strip().splitlines()):
+        try:
+            doc = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(doc, dict):
+            return doc
+    return None
 
 
 def _sha_lines(text: str) -> dict[str, str]:
@@ -405,7 +441,7 @@ def _write_ready(ssh: list[str], dest: str, doc: dict[str, Any]) -> None:
         raise SourceNotReady(f"could not write {dest}/{READY_FILE}: {r.stderr.decode(errors='replace')[-300:]}")
 
 
-def ship_source(ssh: list[str], root: str, git_dir: Path) -> tuple[str, str, dict[str, Any]]:
+def ship_source(ssh: list[str], root: str, git_dir: Path, *, python: str = "python3") -> tuple[str, str, dict[str, Any]]:
     """`git archive HEAD` of a clean checkout -> a VERIFIED <root>/src/<identity>/.  Returns (identity, remote dir, READY.json doc).
 
     Identity: the commit sha (a dirty tree is refused; there is no patch digest to name).  Protocol:
@@ -413,10 +449,16 @@ def ship_source(ssh: list[str], root: str, git_dir: Path) -> tuple[str, str, dic
          a directory without READY.json (legacy `.complete`, or an interrupted ship) -> per-file sha256 against the archive: identical
          -> adopted (READY.json written, `verified: legacy-sha256-per-file`); otherwise moved to <root>/src/.quarantine/<identity>-<nonce>/
          (kept for inspection, never executable by name) and shipped afresh;
-      2. ship into <root>/src/<identity>.partial-<nonce>/: the tar is staged as a file, sha256'd on the machine, extracted, and the
-         extracted regular-file set listed back; the machine's archive sha256 must equal the launcher's and the file set must equal the
-         archive's manifest;
-      3. READY.json is written INTO the partial directory and the directory renamed into place (one rename, so a reader sees either
+      2. plan: the archive's manifest (path -> sha256, executable bit) goes to the machine, where `source_ship.py plan` (run by the
+         machine's `python`) creates <root>/src/<identity>.partial-<nonce>/ and copies in every file an existing tree under <root>/src/
+         already holds by content (hashed as it is read), and answers with the paths it lacks.  A repeat ship of a nearby commit sends
+         only what changed; a first ship sends everything;
+      3. fill: the lacking files (and any symlinks) go as one gzip'd tar, staged as a file and sha256'd AS RECEIVED; a digest that is not
+         the launcher's stops before anything is extracted.  The transfer's timeout is SHIP_SOURCE_TIMEOUT_S plus its size at
+         SHIP_MIN_BYTES_PER_S;
+      4. verify: `source_ship.py verify` hashes every regular file of the partial tree: the path set, each sha256 and each executable bit
+         must equal the launcher's manifest -- whatever was copied or extracted, the tree is checked as a whole;
+      5. READY.json is written INTO the partial directory and the directory renamed into place (one rename, so a reader sees either
          nothing or a complete tree with its marker); the marker is read back and its identity checked.
     Any failure (transport rc != 0, the launcher's timeout, digest or manifest mismatch) removes the partial directory and raises
     SourceNotReady; `<identity>/` is never created by a failed ship.  The machine side (`launch_request`) enforces `require_ready_source`."""
@@ -449,34 +491,53 @@ def ship_source(ssh: list[str], root: str, git_dir: Path) -> tuple[str, str, dic
         print(f"research: {dest} did not match the archive ({len(bad)} file(s): {'; '.join(bad[:3])}); moved to {quarantine}, shipping afresh", file=sys.stderr)
     partial = f"{dest}.partial-{secrets.token_hex(4)}"
     q = shlex.quote(partial)
-    # the archive is staged as a file and hashed AS RECEIVED; a digest that is not the launcher's exits 75 before anything is extracted
-    # (GNU tar unpacks a truncated stream with a warning and rc 0 -- that is how the r20 half-tree came to be)
-    script = (f"set -e; mkdir -p {q}; cat > {q}/.archive.tar; "
-              f"got=$({{ sha256sum {q}/.archive.tar 2>/dev/null || shasum -a 256 {q}/.archive.tar; }} | cut -d' ' -f1); echo \"$got\"; "
-              f"[ \"$got\" = \"$1\" ] || exit {_RC_DIGEST}; "
-              f"tar -xf {q}/.archive.tar -C {q}; rm -f {q}/.archive.tar; cd {q} && find . -type f | LC_ALL=C sort")
+    helper = (Path(__file__).parent / "source_ship.py").read_text()
+
+    def fail(why: str) -> SourceNotReady:
+        _rm_rf(ssh, partial)
+        return SourceNotReady(f"{why}; the partial directory was removed, nothing is READY")
+
+    exe = set(man["exec"])
+    want = gzip.compress(json.dumps({"files": {p: [h, p in exe] for p, h in man["files"].items()}}).encode(), 1)
     try:
-        r = ssh_run(ssh, ["sh", "-c", script, "sh", man["archive_sha256"]], stdin=tar, timeout=SHIP_SOURCE_TIMEOUT_S)
+        r = ssh_run(ssh, [python, "-c", helper, "plan", root, partial], stdin=want, timeout=SHIP_SOURCE_TIMEOUT_S)
     except subprocess.TimeoutExpired:
-        _rm_rf(ssh, partial)
-        raise SourceNotReady(f"shipping the source snapshot to {dest} exceeded {SHIP_SOURCE_TIMEOUT_S}s; the partial directory was removed, nothing is READY") from None
-    lines = r.stdout.decode(errors="replace").splitlines()
-    got_sha = lines[0].strip() if lines else ""
-    if r.returncode == _RC_DIGEST or (r.returncode == 0 and got_sha != man["archive_sha256"]):
-        _rm_rf(ssh, partial)
-        raise SourceNotReady(f"source archive sha256 mismatch: the machine received {got_sha or '<nothing>'}, the launcher sent {man['archive_sha256']} "
-                             f"({len(tar)} bytes); truncated transfer? nothing was extracted, nothing is READY")
-    if r.returncode != 0:
-        _rm_rf(ssh, partial)
-        raise SourceNotReady(f"shipping the source snapshot failed (rc {r.returncode}): {r.stderr.decode(errors='replace')[-400:]}; nothing is READY")
-    got_files = {ln.strip().removeprefix("./") for ln in lines[1:] if ln.strip()}
-    want_files = set(man["files"])
-    if got_files != want_files:
-        _rm_rf(ssh, partial)
-        missing, extra = sorted(want_files - got_files), sorted(got_files - want_files)
-        raise SourceNotReady(f"source tree manifest mismatch after extraction: {len(missing)} missing, {len(extra)} extra "
-                             f"(e.g. {(missing or extra)[:3]}); nothing is READY")
-    doc = _ready_doc(sha, tree, man, "archive-sha256+file-manifest")
+        raise fail(f"planning the source ship on the machine exceeded {SHIP_SOURCE_TIMEOUT_S}s") from None
+    plan = _last_json(r.stdout)
+    if r.returncode != 0 or plan is None or not isinstance(plan.get("missing"), list):
+        raise fail(f"planning the source ship on the machine failed (rc {r.returncode}, {python}): {r.stderr.decode(errors='replace')[-400:]}")
+    fill, n_fill = fill_archive(tar, set(plan["missing"]))
+    print(f"research: {dest}: {plan['reused']} of {len(man['files'])} files already on the machine; shipping {n_fill} "
+          f"({len(fill) / 1e6:.1f} MB gzip'd)", file=sys.stderr)
+    verify = [python, "-c", helper, "verify", root, partial, sha]
+    if fill:
+        # the fill is staged as a file and hashed AS RECEIVED; a digest that is not the launcher's exits 75 before anything is extracted
+        # (GNU tar unpacks a truncated stream with a warning and rc 0 -- that is how the r20 half-tree came to be)
+        script = (f"set -e; cat > {q}/.fill.tar.gz; "
+                  f"got=$({{ sha256sum {q}/.fill.tar.gz 2>/dev/null || shasum -a 256 {q}/.fill.tar.gz; }} | cut -d' ' -f1); echo \"$got\"; "
+                  f"[ \"$got\" = \"$1\" ] || exit {_RC_DIGEST}; "
+                  f"tar -xzf {q}/.fill.tar.gz -C {q}; rm -f {q}/.fill.tar.gz; shift; exec \"$@\"")
+        digest = hashlib.sha256(fill).hexdigest()
+        timeout = SHIP_SOURCE_TIMEOUT_S + len(fill) / SHIP_MIN_BYTES_PER_S
+        try:
+            r = ssh_run(ssh, ["sh", "-c", script, "sh", digest, *verify], stdin=fill, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            raise fail(f"shipping {n_fill} source files ({len(fill)} bytes) to {dest} exceeded {timeout:.0f}s "
+                       f"({SHIP_SOURCE_TIMEOUT_S}s + size at {SHIP_MIN_BYTES_PER_S // 1024} KiB/s)") from None
+        got_sha = (r.stdout.decode(errors="replace").splitlines() or [""])[0].strip()
+        if r.returncode == _RC_DIGEST or (r.returncode == 0 and got_sha != digest):
+            raise fail(f"source archive sha256 mismatch: the machine received {got_sha or '<nothing>'}, the launcher sent {digest} "
+                       f"({len(fill)} bytes); truncated transfer? nothing was extracted")
+    else:
+        r = ssh_run(ssh, verify, timeout=SHIP_SOURCE_TIMEOUT_S)
+    check = _last_json(r.stdout)
+    if r.returncode != 0 or check is None or "ok" not in check:
+        raise fail(f"shipping the source snapshot failed (rc {r.returncode}): {r.stderr.decode(errors='replace')[-400:]}")
+    if not check["ok"]:
+        raise fail("source tree manifest mismatch after assembly: " + ", ".join(f"{check[k]['n']} {k}" for k in ("missing", "extra", "differs", "mode"))
+                   + f" (e.g. {next(check[k]['e.g.'][:3] for k in ('missing', 'extra', 'differs', 'mode') if check[k]['n'])})")
+    doc = {**_ready_doc(sha, tree, man, "file-sha256+mode-manifest"), "reused_files": plan["reused"], "shipped_files": n_fill,
+           "shipped_bytes": len(fill)}
     _write_ready(ssh, partial, doc)
     r = ssh_run(ssh, ["sh", "-c", f"if [ -e {shlex.quote(dest)} ]; then echo EXISTS; else mv {q} {shlex.quote(dest)} && echo MOVED; fi"])
     outcome = r.stdout.decode(errors="replace").strip()
@@ -756,7 +817,7 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         ready: dict[str, Any] = {}
         remote_cwd = cwd
         if source is not None:
-            tree_sha, src_dir, ready = ship_source(ssh, m["root"], source)
+            tree_sha, src_dir, ready = ship_source(ssh, m["root"], source, python=m["python"])
             remote_cwd = src_dir if cwd is None else str(Path(src_dir) / cwd)
             if "--tree-sha" not in harness_args:
                 harness_args = [*harness_args, "--tree-sha", tree_sha]
