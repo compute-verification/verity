@@ -143,7 +143,7 @@ pub fn check_pair(format: Format, x: &[u8], w: &[u8], xw: &[u64], ww: &[u64], y:
         Format::Bf16Hopper => y <= 0xFFFF && crate::tc_hopper_bf16::vu_words(xw, ww) == Some(y as u16),
         Format::Fp8Hopper => crate::tc_fp8::vu_hopper_views(x, w, xw, ww) == Some(y),
         Format::Fp8Ada => crate::tc_fp8::vu_ada_views(x, w, xw, ww) == Some(y),
-        Format::Fp4Nvf4 => crate::nvfp4::vu(x, w) == Some(y),
+        Format::Fp4Nvf4 => crate::nvfp4::vu_views(x, w, xw, ww) == Some(y),
     }
 }
 

@@ -31,6 +31,8 @@
 //! participating group is shifted left by at most 27 and the accumulator by
 //! at most 12, so the sum is below `2^50`: `i64` is exact.
 
+use crate::groupsum::{bit_length, bit_length64};
+
 /// Elements per firing.
 pub const K: usize = 64;
 /// Elements per group (and per scale block).
@@ -99,7 +101,7 @@ fn trunc_rz_to_grid(mant: i64, exp: i32, lsb: i32) -> i64 {
 fn to_f32_rz(n: i64, lsb: i32) -> Option<u32> {
     let negative = n < 0;
     let mag = n.unsigned_abs();
-    let e_val = 63 - mag.leading_zeros() as i32 + lsb;
+    let e_val = bit_length64(mag) - 1 + lsb;
     let grid = if e_val >= FP32_MIN_NORMAL_EXPONENT { e_val - 23 } else { FP32_SUBNORMAL_EXPONENT };
     let shift = grid - lsb;
     let q = if shift > 0 {
@@ -114,7 +116,8 @@ fn to_f32_rz(n: i64, lsb: i32) -> Option<u32> {
     if q == 0 {
         return Some(0);
     }
-    let e = 63 - q.leading_zeros() as i32 + grid;
+    // q < 2^24: 24 bits at a normal grid, fewer below
+    let e = bit_length(q) - 1 + grid;
     if e > FP32_MAX_EXPONENT {
         return None;
     }
@@ -166,28 +169,103 @@ static E2M1_PRODUCTS: [i32; 256] = {
     t
 };
 
-/// [`step`] with each group dot read from [`E2M1_PRODUCTS`] (a product is nonzero exactly when both numerators are).
-#[inline(always)]
-fn step_kernel(c: u32, a: &[u8; WORDS], b: &[u8; WORDS]) -> Option<u32> {
-    let mut terms = [(0i64, 0i32, false); SCALES];
-    let mut bad = 0u8;
-    for (g, term) in terms.iter_mut().enumerate() {
-        let (mut gd, mut any) = (0i32, 0i32);
-        for i in g * GROUP..(g + 1) * GROUP {
-            let (ca, cb) = (a[i], b[i]);
-            bad |= ca | cb;
-            let p = E2M1_PRODUCTS[((ca as usize & 15) << 4) | (cb as usize & 15)];
-            gd += p;
-            any |= p;
+const B07: u64 = 0x0707_0707_0707_0707;
+const B7F: u64 = 0x7F7F_7F7F_7F7F_7F7F;
+const B80: u64 = 0x8080_8080_8080_8080;
+const BF0: u64 = 0xF0F0_F0F0_F0F0_F0F0;
+
+/// Per scale-byte pair `(sa, sb)` at index `sa << 8 | sb`: `ma * mb <= 225` in bits 0..7 and `ea + eb + 32` (the
+/// sum is in -18..=10) in bits 8..13; `u32::MAX` when either byte is outside the model.
+static UE4M3_PAIRS: [u32; 65536] = {
+    const fn decode(code: u32) -> Option<(u32, i32)> {
+        let (e, m) = ((code >> 3) & 0xF, code & 7);
+        if code & 0x80 != 0 || (e == 15 && m == 7) {
+            None
+        } else if e == 0 {
+            Some((m, -9))
+        } else {
+            Some((8 + m, e as i32 - 10))
         }
-        let (ma, ea) = ue4m3(a[K + g])?;
-        let (mb, eb) = ue4m3(b[K + g])?;
-        *term = (gd as i64 * ma * mb, -2 + ea + eb, any != 0 && ma != 0 && mb != 0);
     }
-    if bad >= 16 {
+    let mut t = [0u32; 65536];
+    let mut i = 0u32;
+    while i < 65536 {
+        t[i as usize] = match (decode(i >> 8), decode(i & 0xFF)) {
+            (Some((ma, ea)), Some((mb, eb))) => ma * mb | ((ea + eb + 32) as u32) << 8,
+            _ => u32::MAX,
+        };
+        i += 1;
+    }
+    t
+};
+
+/// [`step`] on a firing's operands: the codes read from the rows' words starting at word `q` (half-way into it
+/// when `ODD`: a firing starts at byte `68 s`, word `17 s / 2`), the scale bytes from the rows' bytes.  Every lane's
+/// pair index `a << 4 | b` is formed eight at a time and its product read from [`E2M1_PRODUCTS`]; a group
+/// participates when some lane has both numerators nonzero (code bits 0..3), found lane-wise as well, and both
+/// scale mantissas are nonzero.  A code above 4 bits rejects (it also garbles its neighbour's index, which is never
+/// used then).
+#[inline(always)]
+fn firing<const ODD: bool>(c: u32, xw: &[u64], ww: &[u64], q: usize, sa: &[u8], sb: &[u8]) -> Option<u32> {
+    let word = |w: &[u64], k: usize| if ODD { w[q + k] >> 32 | w[q + k + 1] << 32 } else { w[q + k] };
+    let (mut mant, mut unit) = ([0i64; SCALES], [0i32; SCALES]);
+    // the largest anchor so far; i32::MIN while nothing participates
+    let mut lsb = i32::MIN;
+    let mut bad = 0u64;
+    for g in 0..SCALES {
+        let (mut gd, mut nz) = (0i32, 0u64);
+        for k in 2 * g..2 * g + 2 {
+            let (a, b) = (word(xw, k), word(ww, k));
+            bad |= a | b;
+            // bit 7 of a lane: both code values below 8 are nonzero (a lane sum stays below 0x100)
+            nz |= ((a & B07) + B7F) & ((b & B07) + B7F);
+            let idx = a << 4 | b;
+            for j in 0..8 {
+                gd += E2M1_PRODUCTS[(idx >> (8 * j) & 0xFF) as usize];
+            }
+        }
+        let s = UE4M3_PAIRS[(sa[g] as usize) << 8 | sb[g] as usize];
+        if s == u32::MAX {
+            return None;
+        }
+        let m = (s & 0xFF) as i64;
+        (mant[g], unit[g]) = (gd as i64 * m, (s >> 8) as i32 - 34);
+        if nz & B80 != 0 && m != 0 {
+            lsb = lsb.max(unit[g] - FRAC_BITS);
+        }
+    }
+    if bad & BF0 != 0 {
         return None;
     }
-    align_add(c, &terms)
+    // the carried accumulator as an exact dyadic (both zeros are zero)
+    let field = (c >> 23) & 0xFF;
+    if field == 0xFF {
+        return None;
+    }
+    let frac = (c & 0x7F_FFFF) as i64;
+    let (acc_m, acc_e) = if field == 0 { (frac, FP32_SUBNORMAL_EXPONENT) } else { ((1 << 23) | frac, field as i32 - 150) };
+    if acc_m != 0 {
+        lsb = lsb.max((field.max(1) as i32) - 127 - (ACC_WINDOW - 1));
+    }
+    if lsb == i32::MIN {
+        return Some(0); // nothing participates: +0 (a -0 accumulator included)
+    }
+    let lsb = lsb.max(GRID_FLOOR);
+    // a nonzero scaled dot participates
+    let mut total: i64 = 0;
+    for g in 0..SCALES {
+        if mant[g] != 0 {
+            total += trunc_rz_to_grid(mant[g], unit[g], lsb);
+        }
+    }
+    if acc_m != 0 {
+        let v = trunc_rz_to_grid(acc_m, acc_e, lsb);
+        total += if c >> 31 == 1 { -v } else { v };
+    }
+    if total == 0 {
+        return Some(0);
+    }
+    to_f32_rz(total, lsb)
 }
 
 /// The five-way align-add of the scaled group dots `(mant, unit weight exponent, participates)` and the carried
@@ -247,17 +325,35 @@ pub fn vu_reference(x: &[u8], w: &[u8]) -> Option<u32> {
     Some(c)
 }
 
+/// u64 words of one VU row.
+pub const ROW_WORDS: usize = ROW_BYTES / 8;
+
 /// [`vu_reference`] by the kernel.
 pub fn vu(x: &[u8], w: &[u8]) -> Option<u32> {
     if x.len() != ROW_BYTES || w.len() != ROW_BYTES {
         return None;
     }
+    vu_views(x, w, &words(x), &words(w))
+}
+
+/// [`vu`] on rows given twice: as bytes and as the same bytes read as little-endian u64 words ([`ROW_WORDS`] each;
+/// the guest holds both views of its input buffer).  The words must be the bytes'.
+pub fn vu_views(x: &[u8], w: &[u8], xw: &[u64], ww: &[u64]) -> Option<u32> {
+    if x.len() != ROW_BYTES || w.len() != ROW_BYTES || xw.len() != ROW_WORDS || ww.len() != ROW_WORDS {
+        return None;
+    }
     let mut c = 0u32;
-    for s in 0..STEPS {
-        let at = s * WORDS;
-        c = step_kernel(c, x[at..at + WORDS].try_into().unwrap(), w[at..at + WORDS].try_into().unwrap())?;
+    for s in (0..STEPS).step_by(2) {
+        let (at, q) = (s * WORDS + K, 17 * s / 2);
+        c = firing::<false>(c, xw, ww, q, &x[at..at + SCALES], &w[at..at + SCALES])?;
+        let at = at + WORDS;
+        c = firing::<true>(c, xw, ww, q + 8, &x[at..at + SCALES], &w[at..at + SCALES])?;
     }
     Some(c)
+}
+
+fn words(row: &[u8]) -> Vec<u64> {
+    row.chunks_exact(8).map(|b| u64::from_le_bytes(b.try_into().unwrap())).collect()
 }
 
 #[cfg(test)]

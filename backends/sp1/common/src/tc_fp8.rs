@@ -95,21 +95,26 @@ fn words(row: &[u8]) -> Vec<u64> {
 //
 // `groupsum::chain` specialised to a 14-bit adder, floor -139, 32 products per step in groups of `G`, and E4M3
 // products: a group's largest product exponent found eight lanes at a time on the u64 words (which also catch the
-// NaN codes), then one pass that decodes each byte by a table load and adds its aligned product; the accumulator is
-// carried as a `Term` between steps (a step's result round-trips `pack_fp32` / `fp32_term` exactly: `group_sum`
-// never returns `-0`, and its magnitude has bit 23 set unless the exponent is -126).
+// NaN codes), then one pass that looks each byte pair up in a product table and adds its aligned product; the
+// accumulator is carried as a `Term` between steps (a step's result round-trips `pack_fp32` / `fp32_term` exactly:
+// `group_sum` never returns `-0`, and its magnitude has bit 23 set unless the exponent is -126).
 
-/// Per E4M3 byte: the significand (implicit bit included) in bits 0..4, the sign in bit 8 and `max(field, 1)` in
-/// bits 16..20 (a zero, and a NaN code -- rejected from the words -- decode likewise).  The sum of two entries carries
-/// the product sign in bit 8 (bit 9 takes the carry) and `E = max(ea, 1) + max(eb, 1) <= 30` in bits 16.. alone.
-static E4M3_DECODE: [u32; 256] = {
-    let mut t = [0u32; 256];
-    let mut v = 0u32;
-    while v < 256 {
+/// Per byte pair `(a, b)` at index `a << 8 | b`, for a nonzero product: `E = max(ea, 1) + max(eb, 1) <= 30` in bits
+/// 0..4, the product sign in bit 5 and the product significand `p = sa * sb < 2^8` as `p << 7` (its 25-bit grid value
+/// truncated to the adder) in bits 17..31, so that the entry shifted right by `17 + d` is the product aligned `d`
+/// places down.  A zero product's entry is 0.  A NaN code's entry is never used (rejected from the words).
+static E4M3_PAIRS: [u32; 65536] = {
+    const fn decode(v: u32) -> (u32, u32, u32) {
         let field = (v >> 3) & 0xF;
-        let sig = (v & 7) | if field != 0 { 8 } else { 0 };
-        t[v as usize] = sig | (v >> 7) << 8 | (if field == 0 { 1 } else { field }) << 16;
-        v += 1;
+        ((v & 7) | if field != 0 { 8 } else { 0 }, v >> 7, if field == 0 { 1 } else { field })
+    }
+    let mut t = [0u32; 65536];
+    let mut i = 0u32;
+    while i < 65536 {
+        let ((sa, na, ea), (sb, nb, eb)) = (decode(i >> 8), decode(i & 0xFF));
+        let p = sa * sb;
+        t[i as usize] = if p == 0 { 0 } else { (ea + eb) | (na ^ nb) << 5 | p << 24 };
+        i += 1;
     }
     t
 };
@@ -171,19 +176,24 @@ fn group<const G: usize>(acc: Term, a: &[u8], b: &[u8], aw: &[u64], bw: &[u64], 
         let v = if d < 14 { (acc.magnitude >> TRUNC >> d) as i64 } else { 0 };
         total = if acc.negative { -v } else { v };
     }
-    // a product's alignment distance is max_exp - (E - 14); p << 7 < 2^15 vanishes from 15, and a zero product adds
-    // nothing wherever it aligns
+    // a product's alignment distance is d = top - E >= 0 with top = max_exp + 14; p << 7 < 2^15 vanishes from d = 15,
+    // so every product does once top >= 45 (E <= 30), and below that the shift 17 + d stays under 64
     let top = max_exp + 14;
-    for i in 0..G {
-        let (da, db) = (E4M3_DECODE[a[i] as usize], E4M3_DECODE[b[i] as usize]);
-        let s = da + db;
-        let d = (top - (s >> 16) as i32) as u32;
-        if d < 15 {
-            let v = ((((da & 0xF) * (db & 0xF)) << 7) >> d) as i64;
-            if s & 0x100 != 0 {
-                total -= v;
+    if max_e != 0 && top < 45 {
+        let t = (top + 17) as u64;
+        #[inline(always)]
+        fn add(total: &mut i64, t: u64, e: u32) {
+            let e = e as u64;
+            let v = (e >> (t - (e & 0x1F))) as i64;
+            if e & 0x20 != 0 {
+                *total -= v;
             } else {
-                total += v;
+                *total += v;
+            }
+        }
+        for i in (0..G).step_by(8) {
+            for j in i..i + 8 {
+                add(&mut total, t, E4M3_PAIRS[(a[j] as usize) << 8 | b[j] as usize]);
             }
         }
     }
