@@ -27,7 +27,9 @@ HASH_BITS = 512
 HASH_QUERIES = 2**64
 
 
-def budget(inst, ligero_rows: int, linkage_constraints: int, n: int = 16384, k: int = 4096, t: int = 192):
+def budget(inst, ligero_rows: int, linkage_constraints: int, n: int = 16384, k: int = 4096, t: int = 192,
+           K: int | None = None):
+    """``K``: the VU's reduction length (default 16 products per unit)."""
     from verity_numerical.security import accounting as acc
 
     from gpu.field import DEG, P
@@ -45,7 +47,7 @@ def budget(inst, ligero_rows: int, linkage_constraints: int, n: int = 16384, k: 
                                    queries_per_vu=sum(nq(s, tb.name) * (s.units // vus) for s in rest))
                    for tb in inst.tables)
     layers = tuple(acc.CheckerLayer(L.s_out, L.s_in, assertions=True) for L in units.layers)
-    cand = acc.CandidateA(K=16 * steps, B=vus, trace_field=Ft, challenge_field=Fc,
+    cand = acc.CandidateA(K=16 * steps if K is None else K, B=vus, trace_field=Ft, challenge_field=Fc,
                           ligero=acc.LigeroParams(n=n, k=k, l=k - 1, t=t, zk=False), layers=layers, tables=tables,
                           lookup_mode="per_table", hash_bits=HASH_BITS, hash_queries=HASH_QUERIES,
                           leaf_commitment_bits=None, irs_row_combination="powers", ligero_rows=ligero_rows)

@@ -478,7 +478,8 @@ def build_unit(p=R.NVFP4) -> GkrCtx:
     ys = ctx.col("out.ys", s_out)
     yf = ctx.col("out.yf", fh_o * 2**RADIX + fl_o)
     ctx.sys.outputs = {"y.s": ys, "y.t": t_o, "y.f": yf}
-    ctx.sys.chain = {"c": ["acc.s", "acc.t", "acc.f"], "y": ["out.ys", "out.t", "out.yf"]}
+    name = lambda e: ctx.sys.rows[next(iter(e.lin))].name                  # noqa: E731
+    ctx.sys.chain = {"c": ["acc.s", "acc.t", "acc.f"], "y": [name(ys), name(t_o), name(yf)]}
     return ctx
 
 
@@ -630,7 +631,8 @@ def export(out: Path) -> dict:
     out.mkdir(parents=True, exist_ok=True)
     (out / "circuit.txt").write_text(st.ue.text)
     (out / "epilogue.txt").write_text(st.ee.text)
-    chain = "".join(f"link {c} {y} {e} 0 0\n" for c, y, e in zip(("acc.s", "acc.t", "acc.f"), ("out.ys", "out.t", "out.yf"), ("s", "t", "f")))
+    ch = st.unit.sys.chain
+    chain = "".join(f"link {_tok(c)} {_tok(y)} {e} 0 0\n" for c, y, e in zip(ch["c"], ch["y"], ("s", "t", "f")))
     chain += "public s t f\n"
     (out / "chain.txt").write_text(chain)
     man = {"field": "babybear", "variant": "v2", "relation": "fp4-nvf4", "model": MODEL, "modulus": P, "steps": STEPS,
