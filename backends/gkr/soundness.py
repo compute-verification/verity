@@ -41,7 +41,7 @@ def budget(inst, ligero_rows: int, linkage_constraints: int, n: int = 16384, k: 
     def nq(seg, name: str) -> int:
         return sum(1 for q in seg.circ.queries if q.table == name)
 
-    tables = tuple(acc.LookupTable(tb.name, len(tb.rows), nq(units, tb.name), tb.cols,
+    tables = tuple(acc.LookupTable(tb.name, tb.nrows, nq(units, tb.name), tb.cols,
                                    queries_per_vu=sum(nq(s, tb.name) * (s.units // vus) for s in rest))
                    for tb in inst.tables)
     layers = tuple(acc.CheckerLayer(L.s_out, L.s_in, assertions=True) for L in units.layers)

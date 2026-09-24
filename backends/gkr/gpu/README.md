@@ -61,8 +61,21 @@ same function over Z); checker-min's remaining v2 queries re-run with the BabyBe
 (`gpu/v2/results/z3_babybear_v2.json`).  Results: `gpu/v2/results/` (`limbs/` for the honest-label set).
 
 Soundness (`security.accounting.account_candidate_a`, BabyBear^6, Ligero `k = 4096, n = 16384, t = 192`):
-2^-127.7, dominated by the generic SHA-256 collision term; ledger security field `2^-127.7`, proof class
-`NON_ZK_PROOF_DIAGNOSTIC`, authentication excluded, omitted: ZK masking, external authentication.
+**2^-130.19** since lane agkr-table (2026-09-24), computed live on the proved instance by `backends/gkr/soundness.py`
+and written into every result's `security.achieved_log2`.  Before, 2^-127.7: the generic collision term of the
+SHA-256 Merkle tree, `q^2 / 2^256` at `q = 2^64` hash queries, is 2^-128 by itself, so no statistical parameter could
+bring the total under 2^-128.  The Merkle tree is now SHA-512 (`sha512_cuda.py` on the device, `hashlib` on the host,
+`verifier/src/sha512.rs` in the Rust verifier with the FIPS 180-4 vectors; proof.bin v2 carries 64-byte digests),
+which moves that term to 2^-384.  The remaining terms, by component: Ligero IRS query `(1 - e/n)^t = 0.625^192`
+2^-130.19 (dominant), lookups 2^-158.6, batching 2^-164.3 (includes the chain linkage `(N - 1)/|F|` over the ~2.4 M
+constraints folded by powers of one challenge), sumcheck 2^-176.6.  The accountant now books the Ligero proximity test
+as the prover runs it: rows combined by powers `1, r, ..., r^(m-1)` of one challenge (`row_coeffs`), BCIKS20's
+curve bound `((m-1) n + 1) / |F|` at the prover's `m = 26644` rows (2^-156.7) instead of the uniform-combination
+`(n+1)/|F|`.  Model: the interactive protocol (PROTOCOL.md: the verifier's coins are live; B-Ligero's interactive mode
+books the same way, `fiat_shamir_queries_log2: null`).  Proof files derive the coins as SHA-256 of the transcript so
+they can be re-checked offline; no Fiat-Shamir soundness is claimed for them (under the campaign's `q x eps` rule every
+statistical term would take a 2^60 factor).  Proof class `NON_ZK_PROOF_DIAGNOSTIC`, authentication excluded, omitted:
+ZK masking.
 
 ## Negatives
 
