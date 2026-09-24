@@ -79,6 +79,15 @@ def _mro_names(m: Any) -> set[str]:
     return {c.__name__ for c in type(m).__mro__}
 
 
+class SkipRefused(RuntimeError):
+    """VERITY_SKIP names an ablation that cannot be applied as named: the run is refused, never labelled with a skip that did not happen."""
+
+
+def skip_classes_of_env() -> frozenset[str]:
+    """VERITY_SKIP: a comma list of module classes whose module-output acquisition a per-row MARGINAL-cost ablation drops (NOT a commitment)."""
+    return frozenset(filter(None, os.environ.get("VERITY_SKIP", "").split(",")))
+
+
 def _dtype_name(t: Any) -> str:
     return str(t.dtype).replace("torch.", "")
 
@@ -923,14 +932,19 @@ class NativeHostCommitter:
         # [v2 acquire, Phase 4a] ACQUIRE_ENGINE=v2: the consumer-input pre-hook set comes from the ACQUISITION PLAN (verity_vllm.acquire.install
         # .apply_plan_to_committer sets it) instead of ACQUIRE_INPUT_CLASSES; None (v1, the default) = the class table + `acquire_inputs`.
         self.plan_inputs: set[str] | None = None
+        # VERITY_SKIP ablation: applied (`apply_skip`) to the selection of record -- the class tables here under ACQUIRE_ENGINE=v1, the
+        # acquisition plan's under v2 (`apply_plan_to_committer`); `skipped` = the modules dropped per class, None until applied
+        self.skip_classes = skip_classes_of_env()
+        self.skipped: dict[str, list[str]] | None = None
         self._side = None                           # the worker's CUDA side stream (created lazily on the worker thread)
         if engine is not None:
             self._geo_digest = geo_digest or self._model_geo_digest()
             self._modules: list[tuple[str, Any]] = self._select_modules()
-            skip = set(filter(None, os.environ.get("VERITY_SKIP", "").split(",")))   # per-row MARGINAL-cost ablation: drop one module class (NOT a commitment)
-            if skip:
-                self._modules = [(n, m) for n, m in self._modules if not (_mro_names(m) & skip)]
-                self.name = f"{self.name}-skip_{'_'.join(sorted(skip))}"
+            if self.skip_classes:
+                from verity_vllm.acquire.switch import v2 as _acquire_v2
+
+                if not _acquire_v2():
+                    self.apply_skip()
             if self.arena is not None and self.arena_explicit:
                 self.arena.prealloc()               # auto mode preallocates in size_arena() once the envelope is known
         else:
@@ -1086,6 +1100,47 @@ class NativeHostCommitter:
             out.append(("runner.sampler", smp))
         return out
 
+    def apply_skip(self) -> dict[str, list[str]]:
+        """VERITY_SKIP on the current selection (`_modules`): drop every selected module of a skipped class and name the committer after
+        it.  Under a plan, a consumer-input site on a dropped module stays (`_input_only_modules`): the Value there is not that module's
+        output.  Refused (`SkipRefused`) when a skipped class is the runner's sampler (its ids come from the `runner.sample` wrap, which
+        also closes every step: no module hook to drop) or drops no selected module.  Returns {class: dropped module names}."""
+        skip = self.skip_classes
+        if not skip:
+            return {}
+        label = ",".join(sorted(skip))
+        smp = getattr(getattr(self, "runner", None), "sampler", None)
+        on_sampler = sorted(_mro_names(smp) & skip) if smp is not None else []
+        if on_sampler:
+            raise SkipRefused(f"VERITY_SKIP={label}: {on_sampler} is the runner's sampler -- its sampled ids are acquired by the runner.sample "
+                              f"wrap, which also closes every step; there is no module hook to drop")
+        dropped = {c: [n for n, m in self._modules if c in _mro_names(m)] for c in sorted(skip)}
+        unmatched = [c for c, names in dropped.items() if not names]
+        if unmatched:
+            source = "the acquisition plan" if self.plan_inputs is not None else "the class tables"
+            raise SkipRefused(f"VERITY_SKIP={label}: {unmatched} match none of the {len(self._modules)} modules selected by {source}; "
+                              f"nothing would be dropped, so the '-skip_' name would claim an ablation that did not happen")
+        self._modules = [(n, m) for n, m in self._modules if not (_mro_names(m) & skip)]
+        self.skipped = dropped
+        tag = f"-skip_{'_'.join(sorted(skip))}"
+        if tag not in self.name:
+            self.name = f"{self.name}{tag}"
+        return dropped
+
+    def _check_skip(self) -> None:
+        """At install, when the selection is final: a VERITY_SKIP never applied, or a skipped class back in `_modules` (commit_delta's
+        manifest instance_outputs extension adds named modules the committer did not select), is refused."""
+        if not self.skip_classes:
+            return
+        label = ",".join(sorted(self.skip_classes))
+        if self.skipped is None:
+            raise SkipRefused(f"VERITY_SKIP={label}: never applied to the selection of record (under ACQUIRE_ENGINE=v2 apply_plan_to_committer "
+                              f"applies it to the plan's selection)")
+        back = sorted(n for n, m in self._modules if _mro_names(m) & self.skip_classes)
+        if back:
+            raise SkipRefused(f"VERITY_SKIP={label}: {len(back)} module(s) of a skipped class are selected again at install ({back[:4]}); "
+                              f"the ablation would not happen under its name")
+
     def _acquires_input(self, name: str, m: Any) -> bool:
         """Whether module `name`'s first positional tensor argument is acquired as `<name>/in`: by class (the embedding's ids,
         ACQUIRE_INPUT_CLASSES) or [R19 int-20] because the required manifest names it as a promoted member's consumer (`acquire_inputs`).
@@ -1181,6 +1236,7 @@ class NativeHostCommitter:
     def install(self) -> None:
         if self.installed:
             return
+        self._check_skip()
         self._start_worker()
         for src in self.sources:
             src.install()
