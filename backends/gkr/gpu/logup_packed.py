@@ -405,10 +405,11 @@ if GRAPHS:
             if not any(root_q):
                 raise ValueError("LogUp: q_root is zero")
             out.append(root_q)
+            S_l, vals_l = S.tolist(), vals.tolist()
             for lv in range(n):
                 for i in range(lv):
-                    out.extend(tuple(int(v) for v in row) for row in S[lv, i])
-                out.extend(tuple(int(v) for v in row) for row in vals[lv])
+                    out.extend(map(tuple, S_l[lv][i]))
+                out.extend(map(tuple, vals_l[lv]))
             self.fs.store(tr, fsw.astype("int32"), 1 + sum(lv + 2 for lv in range(n)))
             tr.logup_syncs = getattr(tr, "logup_syncs", 0) + 1
             rho = [tuple(int(v) for v in r) for r in rho.reshape(n, DEG)]
