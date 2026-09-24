@@ -45,14 +45,15 @@ try:  # lane ligerito-proto's Coins protocol; the stub below has the same signat
 except Exception:  # noqa: BLE001
     Coins = object  # type: ignore
 
-__all__ = ["EvalClaim", "LocalCoins", "Schedule", "SumcheckProof", "default_schedule", "eq_at", "eq_table", "prove",
-           "succ_mle", "verify"]
+__all__ = ["EvalClaim", "LocalCoins", "Schedule", "SparseClaim", "SumcheckProof", "check_zk_claim_supports", "default_schedule",
+           "eq_at", "eq_table", "prove", "succ_mle", "verify", "zk_libra_cells", "zk_mode", "zk_vf_max"]
 
 MAGIC = b"LGSC0003"
 MAGIC_ZK = b"LGSC0004"
 MAX_ARITY = 4
 ZK_MAX_ARITY = 6                 # LGSC0004 message rounds (3^6 = 729 ext); the engines run them on small tables only
 ZK_MAX_VF = 12                   # LGSC0004 final table round (3 x 2^vf ext)
+ZK_TABLE_SLACK = 4               # the prover's vf <= n_c - 4 (``zk_vf_max``); the verifier accepts any vf <= n_c
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -343,8 +344,9 @@ def balanced_arities(n: int, max_arity: int) -> tuple:
 
 
 def _tail_arities(log_table: int, n_vars: int, small_log2: int, max_arity: int = ZK_MAX_ARITY) -> list:
-    """Bind ``n_vars`` variables of a table of ``2^log_table`` cells: arity 3 (the CUDA kernels) while the table has more than
-    ``2^small_log2`` cells, then balanced rounds of at most ``max_arity`` (the engines' flat path)."""
+    """Bind ``n_vars`` variables of a table of ``2^log_table`` cells: arity 3 (``zc_msg3``) while the table has more than
+    ``2^small_log2`` cells, then balanced rounds of at most ``max_arity`` (``zc_red`` / ``pp_red``: they re-read the corners
+    per entry, 4^v loads per group, so only on tables that are small by then)."""
     out = []
     while n_vars > 0 and log_table > small_log2:
         a = min(3, n_vars)
@@ -355,7 +357,7 @@ def _tail_arities(log_table: int, n_vars: int, small_log2: int, max_arity: int =
 
 def lean_schedule(n_zc: int, n_cmb: int) -> Schedule:
     """LGSC0003 with fewer coins (``--schedule lean``; the default is unchanged): arity 3 (``zc_msg3``) down to 2^16 cells,
-    then arity <= 4 (the engines' flat path), a final table round of 4 variables; combined: arity 3 down to 2^12 cells,
+    then arity <= 4, a final table round of 4 variables; combined: arity 3 down to 2^12 cells,
     then <= 4.  fp8-ada: zc 3,3,3,3,3,4,4,3 / vf 4 / cmb 3,3,4,4,4 = 15 coins (default 18)."""
     vf = min(4, n_zc - 4)
     zc = [3] + _tail_arities(n_zc - 3, n_zc - 3 - vf, 16, MAX_ARITY)
@@ -364,14 +366,27 @@ def lean_schedule(n_zc: int, n_cmb: int) -> Schedule:
 
 def zk_default_schedule(lay: Layout, vf: int = 10) -> Schedule:
     """LGSC0004's default (coins first: one round trip ~ 0.1 s live; a coin is worth ~30 ms of prover time and ~20 KB): the
-    opening round, arity 3 (``zc_msg3``) down to 2^16 cells, then arity <= 6; a final table round of ``vf`` variables
+    opening round, arity 3 (``zc_msg3``) down to 2^21 cells, then arity <= 6; a final table round of ``vf`` variables
     (``<= n_c - 4``: every final-table entry keeps >= 16 product-row cells); combined: arity 3 down to 2^18 cells, then
-    <= 6; row reduction <= 6.  fp8-ada: zc 3,3,3,3,3,5 / vf 10 / cmb 6,6,6 / rb 6,6 = 13 coins."""
+    <= 6; row reduction <= 6.  fp8-ada: zc 3,3,3,6,5 / vf 10 / cmb 6,6,6 / rb 6,6 = 12 coins."""
     n, n_cmb = lay.n_k + lay.n_c, n_cmb_of(lay)
     zc, rem = [3], n - 3
-    vf = max(1, min(vf, lay.n_c - 4, rem - 1, ZK_MAX_VF))
-    zc += _tail_arities(rem, rem - vf, 16)
+    vf = max(1, min(vf, zk_vf_max(lay), rem - 1, ZK_MAX_VF))
+    zc += _tail_arities(rem, rem - vf, 21)
     return Schedule(tuple(zc), vf, tuple(_tail_arities(n_cmb, n_cmb, 18)), balanced_arities(lay.n_i, ZK_MAX_ARITY))
+
+
+def zk_vf_max(lay: Layout) -> int:
+    """The largest final-table round that keeps LGSC0004's tables blinded: entry ``b`` of ``Az, Bz, Cz`` is masked by
+    functionals of ``i1`` / ``i2`` over the ``2^(n_c - vf)`` product-row cells whose low ``vf`` column bits are ``b``; ``Az`` and
+    ``Cz`` need 12 independent base functionals of ``i1`` there, so ``2^(n_c - vf) >= 16``."""
+    return lay.n_c - ZK_TABLE_SLACK
+
+
+def zk_mode(lay: Layout, sched: Schedule) -> str:
+    """``"lgsc0004"``, or ``"lgsc0004-underblinded"`` if ``vf > n_c - 4`` (ligerito-verify's ``zk_mode`` strings): a proof of
+    the latter kind verifies but its final tables are not fully blinded (red-team-ligerito-3 R3-6)."""
+    return "lgsc0004" if sched.vf <= zk_vf_max(lay) else "lgsc0004-underblinded"
 
 
 def zk_schedule(lay: Layout, base: Schedule | None = None, rb_arity: int = ZK_MAX_ARITY) -> Schedule:
@@ -598,25 +613,18 @@ class _RefPP:
         self.T = [fold_top(T, r) for T in self.T]
 
 
-class _FlatPP(_RefPP):
-    """``_RefPP`` with ``_fm``: the CUDA engines' tail once a round of arity > 3 runs (small tables, launch-bound)."""
-
-    def round(self, v: int) -> torch.Tensor:
-        X = [mixed_rep(to_corners(T, v), v) for T in self.T]
-        s = _fm(X[0], X[1])
-        if len(X) > 2:
-            s = s + _fm(X[2], X[3])
-        return s.sum(-2) % P
-
-    def fold(self, r: torch.Tensor) -> None:
-        self.T = [_fold_fm(T, r) for T in self.T]
-
-
-class _RowRed(_FlatPP):
+class _RowRed:
     """LGSC0004's row reduction ``sum_i s_w(i) wr(i)``: two ``(R, 6)`` tables, any arity; launch-bound, so ``_fm``."""
 
     def __init__(self, s_w: torch.Tensor, wr: torch.Tensor):
-        super().__init__([s_w, wr])
+        self.T = [s_w, wr]
+
+    def round(self, v: int) -> torch.Tensor:
+        X = [mixed_rep(to_corners(T, v), v) for T in self.T]
+        return _fm(X[0], X[1]).sum(-2) % P
+
+    def fold(self, r: torch.Tensor) -> None:
+        self.T = [_fold_fm(T, r) for T in self.T]
 
 
 def _fold_fm(T: torch.Tensor, r: torch.Tensor) -> torch.Tensor:
@@ -759,12 +767,16 @@ class ZkMask:
         return SparseClaim((g_rows[cells // lay.C]).to(dev), (cells % lay.C).to(dev), w.to(dev), value, name)
 
 
-def zk_masks(lay: Layout, sched: Schedule, z: torch.Tensor | None, device) -> tuple:
+def zk_masks(lay: Layout, sched: Schedule, z: torch.Tensor | None, device, allow_underblinded: bool = False) -> tuple:
     """The three masks (zero-check, combined, row reduction) with their coefficients read from ``z``'s g rows (prover) or
-    without (verifier, ``z = None``)."""
+    without (verifier, ``z = None``).  The prover's masks need ``vf <= n_c - 4`` (``zk_vf_max``) unless
+    ``allow_underblinded`` (toy-size format tests: the proof verifies, its final tables are not fully blinded)."""
     n = sched.zk_coeffs()
     if D * n > min(lay.zk.g_cells, len(lay.zk.g_rows) * lay.C):
         raise ValueError(f"schedule needs {D * n} Libra cells > the layout's {lay.zk.g_cells}")
+    if z is not None and not allow_underblinded and sched.vf > zk_vf_max(lay):
+        raise ValueError(f"LGSC0004 prover: vf = {sched.vf} > n_c - {ZK_TABLE_SLACK} = {zk_vf_max(lay)}: the final Az/Bz/Cz "
+                         f"tables would not be blinded by the product triple (red-team-ligerito-3 R3-6)")
     coeffs = None
     if z is not None:
         g = z.index_select(0, torch.tensor(lay.zk.g_rows, dtype=torch.int64, device=z.device)).reshape(-1)[:D * n]
@@ -775,6 +787,39 @@ def zk_masks(lay: Layout, sched: Schedule, z: torch.Tensor | None, device) -> tu
         out.append(ZkMask(arities, kind, off, None if coeffs is None else coeffs[off:off + k], device))
         off += k
     return tuple(out)
+
+
+def zk_libra_cells(lay: Layout, sched: Schedule) -> tuple[torch.Tensor, torch.Tensor]:
+    """``(rows, cols)`` int64 of the ``6 * zk_coeffs`` base cells holding ``sched``'s Libra coefficients (g-block cell ``k`` at
+    ``(g_rows[k // C], k % C)``; several g rows when ``C`` is small).  Nothing else may be written to or claimed on them."""
+    cells = torch.arange(D * sched.zk_coeffs(), dtype=torch.int64)
+    return torch.tensor(lay.zk.g_rows, dtype=torch.int64)[cells // lay.C], cells % lay.C
+
+
+def check_zk_claim_supports(lay: Layout, sched: Schedule, claims: list) -> None:
+    """Raise unless ``claims`` is the claim set LGSC0004's ZK argument covers (red-team-ligerito-3 R3-4): two evaluation
+    claims whose row coordinates are all non-boolean (their row weights ``eq(r, .)`` reach every uniform row), then the three
+    mask claims exactly on their Libra cells (zc, cmb, rb blocks in g-block order: disjoint, and inside ``g_rows``, which
+    share no row with the uniform / product / mask / next rows, the virtual block or the witness rows)."""
+    zr = lay.zk
+    g = set(zr.g_rows)
+    others = set(zr.rows()) - g | set(range(lay.m + len(lay.virt)))
+    if len(g) != len(zr.g_rows) or g & others or D * sched.zk_coeffs() > min(zr.g_cells, len(zr.g_rows) * lay.C):
+        raise ValueError("ZK layout: the Libra block overlaps other rows or is too small")
+    if [type(c).__name__ for c in claims] != ["EvalClaim"] * 2 + ["SparseClaim"] * 3:
+        raise ValueError("ZK claims: expected 2 evaluation + 3 sparse claims")
+    for c in claims[:2]:
+        rc = c.point[:lay.n_i].to("cpu")
+        if tuple(c.point.shape) != (lay.n_vars, D) or bool(((rc[:, 1:] == 0).all(1) & (rc[:, 0] <= 1)).any()):
+            raise ValueError(f"ZK claim {c.name}: a boolean row coordinate (the claim would miss uniform rows)")
+    rows, cols = zk_libra_cells(lay, sched)
+    off = 0
+    for c, arities in zip(claims[2:], (sched.zc, sched.cmb, sched.rb)):
+        k = D * sum(3 ** v - 1 for v in arities)
+        if not (torch.equal(c.rows.to("cpu"), rows[off:off + k]) and torch.equal(c.cols.to("cpu"), cols[off:off + k])) \
+                or tuple(c.weights.shape) != (k, D):
+            raise ValueError(f"ZK claim {c.name}: not exactly its Libra cells")
+        off += k
 
 
 def zk_row_weights(lay: Layout, g3: torch.Tensor, device) -> tuple[torch.Tensor, torch.Tensor]:
@@ -837,15 +882,16 @@ def _next_tables(lay: Layout, z: torch.Tensor, r_hi: torch.Tensor, vf: int, engi
 
 
 def prove(lay: Layout, cons: Constraints, z: torch.Tensor, coins, cheat: str | None = None, engine=None,
-          schedule: Schedule | None = None) -> SumcheckProof:
+          schedule: Schedule | None = None, allow_underblinded: bool = False) -> SumcheckProof:
     """The zero-check and the combined sumcheck on ``z`` (``build_z``).  ``cheat`` (negative tests only): ``"round1"`` fixes
     the opening message so its check passes (caught in the next round); ``"zc"`` fixes every zero-check message and the
     final tables (the zero-check passes; the combined sumcheck's first round catches the false ``Az, Bz, Cz``); ``"all"``
     also fixes every combined round (the combined final check catches it).
     ``engine``: ``None`` = the torch reference (small sizes); ``"cuda"`` = the fused cupy kernels (``CudaZC`` / ``CudaPP``).
-    A ZK layout (``lay.zk``; ``z`` after ``layout.fill_zk``) proves LGSC0004 (``_prove_zk``)."""
+    A ZK layout (``lay.zk``; ``z`` after ``layout.fill_zk``) proves LGSC0004 (``_prove_zk``); it refuses a schedule with
+    ``vf > n_c - 4`` unless ``allow_underblinded`` (``zk_masks``)."""
     if lay.zk is not None:
-        return _prove_zk(lay, cons, z, coins, cheat, engine, schedule)
+        return _prove_zk(lay, cons, z, coins, cheat, engine, schedule, allow_underblinded)
     dev = z.device
     n_k, n_c, n_i = lay.n_k, lay.n_c, lay.n_i
     n = n_k + n_c
@@ -984,7 +1030,7 @@ def prove(lay: Layout, cons: Constraints, z: torch.Tensor, coins, cheat: str | N
 
 
 def _prove_zk(lay: Layout, cons: Constraints, z: torch.Tensor, coins, cheat: str | None, engine,
-              schedule: Schedule | None) -> SumcheckProof:
+              schedule: Schedule | None, allow_underblinded: bool = False) -> SumcheckProof:
     """LGSC0004: the zero-check and the combined sumcheck with Libra masks (``ZkMask``); the committed shifted rows and the mask
     link ride in the combined sumcheck's rows part (``n_w``); then the row reduction of ``V'(rho_c) = sum_i s_w(i) w~(i, rho_c)``
     to ONE claim at a random row point.  Claims: ``w~(r_i, r_c)``, ``w~(rho_i, rho_c)`` and three sparse mask claims."""
@@ -995,7 +1041,7 @@ def _prove_zk(lay: Layout, cons: Constraints, z: torch.Tensor, coins, cheat: str
     sched = schedule if schedule is not None and schedule.rb else zk_schedule(lay, schedule)
     if sum(sched.zc) + sched.vf != n or sum(sched.cmb) != n_cmb or sum(sched.rb) != n_i or sched.vf > n_c:
         raise ValueError(f"schedule {sched} does not fit n = {n}, n_cmb = {n_cmb}, n_i = {n_i}")
-    mz, mc, mr = zk_masks(lay, sched, z, dev)
+    mz, mc, mr = zk_masks(lay, sched, z, dev, allow_underblinded)
     tr = _Transcript(coins, dev)
     t0 = time.perf_counter()
     timings: dict = {}
@@ -1144,6 +1190,7 @@ def _prove_zk(lay: Layout, cons: Constraints, z: torch.Tensor, coins, cheat: str
     claims = [EvalClaim(torch.cat((r_i, r_c)), values[0], "w(r_i, r_c)"),
               EvalClaim(torch.cat((rho_i, rho_c)), values_b[0], "w(rho_i, rho_c)"),
               mz.claim(lay, zk_t, "mask(zc)"), mc.claim(lay, values[2], "mask(cmb)"), mr.claim(lay, values_b[1], "mask(rb)")]
+    check_zk_claim_supports(lay, sched, claims)
     return SumcheckProof(sched, zc_msgs, fabc, torch.zeros((0, 1 << vf, D), dtype=torch.int64, device=dev), cmb_msgs, values,
                          claims, timings, zk_t=zk_t, rb_rounds=rb_msgs, values_b=values_b, zk_links=lay.n_links)
 
@@ -1479,8 +1526,10 @@ def check_claims(lay: Layout, z: torch.Tensor, claims: list) -> bool:
 #   matrices (no ``Az/Bz/Cz`` base tables: 12.9 GB and a 12.9 GB write + 2 reads saved at 2^30); the message kernel runs
 #   one block per (``k'``, ``a_1`` slice), 9 of the 27 entries per thread, the ``eq`` row weight applied once per block.
 # zc_msg2: a bivariate round on ext tables (the O(N) rounds), 54 accumulators per thread, block-reduced.
+# zc_msg3: the trivariate analogue on big tables, X1 split over blockIdx.y.
+# zc_red / pp_red: any arity <= 6, one block row per entry (arity >= 4 only on small tables).
 # zc_small / pp_small: any arity <= 3 on small tables: every group writes its 3^v entries, torch sums.
-# zc_fold: in-place fold of up to 4 tables by the 2^v eq weights of the round's challenges.
+# zc_fold: in-place fold of up to 4 tables by the 2^v (v <= 6) eq weights of the round's challenges.
 
 R_MONT = (1 << 32) % P
 R2_MONT = (1 << 64) % P
@@ -1874,6 +1923,10 @@ __device__ void zc_red_body(const int* __restrict__ A, const int* __restrict__ B
 extern "C" __global__ void zc_red1(const int* A, const int* B, const int* Cm, const u32* wr, const u32* wc, u64* acc, long long nq, int cb, long long nwr, long long nwc, long long ps) { zc_red_body<1>(A, B, Cm, wr, wc, acc, nq, cb, nwr, nwc, ps); }
 extern "C" __global__ void zc_red2(const int* A, const int* B, const int* Cm, const u32* wr, const u32* wc, u64* acc, long long nq, int cb, long long nwr, long long nwc, long long ps) { zc_red_body<2>(A, B, Cm, wr, wc, acc, nq, cb, nwr, nwc, ps); }
 extern "C" __global__ void zc_red3(const int* A, const int* B, const int* Cm, const u32* wr, const u32* wc, u64* acc, long long nq, int cb, long long nwr, long long nwc, long long ps) { zc_red_body<3>(A, B, Cm, wr, wc, acc, nq, cb, nwr, nwc, ps); }
+// arity 4..6 (LGSC0004's tail rounds): tables of <= 2^18 cells, so the per-entry corner re-reads hit L2
+extern "C" __global__ void zc_red4(const int* A, const int* B, const int* Cm, const u32* wr, const u32* wc, u64* acc, long long nq, int cb, long long nwr, long long nwc, long long ps) { zc_red_body<4>(A, B, Cm, wr, wc, acc, nq, cb, nwr, nwc, ps); }
+extern "C" __global__ void zc_red5(const int* A, const int* B, const int* Cm, const u32* wr, const u32* wc, u64* acc, long long nq, int cb, long long nwr, long long nwc, long long ps) { zc_red_body<5>(A, B, Cm, wr, wc, acc, nq, cb, nwr, nwc, ps); }
+extern "C" __global__ void zc_red6(const int* A, const int* B, const int* Cm, const u32* wr, const u32* wc, u64* acc, long long nq, int cb, long long nwr, long long nwc, long long ps) { zc_red_body<6>(A, B, Cm, wr, wc, acc, nq, cb, nwr, nwc, ps); }
 
 template <int V>
 __device__ void pp_red_body(const int* __restrict__ T, u64* acc, long long nq, long long ps)
@@ -1896,6 +1949,9 @@ __device__ void pp_red_body(const int* __restrict__ T, u64* acc, long long nq, l
 extern "C" __global__ void pp_red1(const int* T, u64* acc, long long nq, long long ps) { pp_red_body<1>(T, acc, nq, ps); }
 extern "C" __global__ void pp_red2(const int* T, u64* acc, long long nq, long long ps) { pp_red_body<2>(T, acc, nq, ps); }
 extern "C" __global__ void pp_red3(const int* T, u64* acc, long long nq, long long ps) { pp_red_body<3>(T, acc, nq, ps); }
+extern "C" __global__ void pp_red4(const int* T, u64* acc, long long nq, long long ps) { pp_red_body<4>(T, acc, nq, ps); }
+extern "C" __global__ void pp_red5(const int* T, u64* acc, long long nq, long long ps) { pp_red_body<5>(T, acc, nq, ps); }
+extern "C" __global__ void pp_red6(const int* T, u64* acc, long long nq, long long ps) { pp_red_body<6>(T, acc, nq, ps); }
 
 extern "C" __global__ void zc_small1(const int* A, const int* B, const int* Cm, const u32* wr, const u32* wc, u32* out, long long nq, int cb, long long nwr, long long nwc, long long ps) { zc_small_body<1>(A, B, Cm, wr, wc, out, nq, cb, nwr, nwc, ps); }
 extern "C" __global__ void zc_small2(const int* A, const int* B, const int* Cm, const u32* wr, const u32* wc, u32* out, long long nq, int cb, long long nwr, long long nwc, long long ps) { zc_small_body<2>(A, B, Cm, wr, wc, out, nq, cb, nwr, nwc, ps); }
@@ -1927,8 +1983,8 @@ extern "C" __global__ void pp_small3(const int* T, u32* out, long long nq, long 
 // in-place fold of ntab tables (planes at T + t * tstride, plane stride ps) by the 2^v corner weights eqr (Montgomery)
 extern "C" __global__ void zc_fold(int* T, int ntab, long long tstride, const u32* __restrict__ eqr, int v, long long nq, long long ps)
 {
-    __shared__ u32 eqs[16 * 6];
-    if (threadIdx.x < (6 << v)) eqs[threadIdx.x] = eqr[threadIdx.x];
+    __shared__ u32 eqs[64 * 6];
+    for (int i = threadIdx.x; i < (6 << v); i += blockDim.x) eqs[i] = eqr[i];
     __syncthreads();
     for (long long x = (long long)blockIdx.x * blockDim.x + threadIdx.x; x < nq; x += (long long)gridDim.x * blockDim.x) {
         for (int tb = 0; tb < ntab; tb++) {
@@ -2119,19 +2175,7 @@ class CudaZC:
         self.tau, self.tau_r, self.tau_c = tau, tau[self.n_c:], tau[:self.n_c]
         self._planes: dict = {}
         self.T = None
-        self.F = None                    # flat (n, 6) ext tables once a round of arity > 3 (a small table) has run
         self.logn = self.n_k + self.n_c
-
-    def _to_flat(self) -> None:
-        n = 1 << self.logn
-        self.F = [from_mont(self.T[s, :, :n].t()) for s in range(3)]
-        self.T = None
-
-    def _flat_round(self, v: int) -> torch.Tensor:
-        Ah, Bh, Ch = (mixed_rep(to_corners(T, v), v) for T in self.F)
-        q = (_fm(Ah, Bh) - Ch * noinf_mask(v, self.dev)[(...,) + (None, None)]) % P
-        w = eq_table_cuda(self.tau[:self.logn - v]) if self.logn > v else fc_one((1,), self.dev)
-        return _fm(q, w).sum(-2) % P
 
     def _plane(self, which: str, t: int) -> torch.Tensor:
         """``eq_table(tau_part[:t])`` as Montgomery planes ``(6, 2^t)`` (built on first use)."""
@@ -2152,10 +2196,6 @@ class CudaZC:
 
     def round(self, v: int) -> torch.Tensor:
         import cupy as cp
-        if self.F is None and self.T is not None and v > 3:
-            self._to_flat()
-        if self.F is not None:
-            return self._flat_round(v)
         if self.T is None:
             if v != 3:
                 raise ValueError("CudaZC: the opening round binds 3 variables")
@@ -2185,8 +2225,8 @@ class CudaZC:
             _kernel("zc_msg3")((gx, 3), block, (_cp(A), _cp(B), _cp(Cm), _cp(wr), _cp(wc), _cp(acc), cp.int64(nq), cp.int32(cb),
                                                 cp.int64(wr.shape[1]), cp.int64(wc.shape[1]), cp.int64(ps)))
             return from_mont(acc).reshape(3, 3, 3, D)
-        if v > 3:
-            raise ValueError(f"CudaZC: arity {v} > 3")
+        if v > ZK_MAX_ARITY:
+            raise ValueError(f"CudaZC: arity {v} > {ZK_MAX_ARITY}")
         ne = 3 ** v
         acc = torch.zeros((ne * D,), dtype=torch.int64, device=self.dev)
         (gx,), block = _launch(nq, 256, max(1, 2048 // ne))
@@ -2197,10 +2237,6 @@ class CudaZC:
     def fold(self, r: torch.Tensor) -> None:
         import cupy as cp
         v = r.shape[0]
-        if self.F is not None:
-            self.F = [_fold_fm(T, r) for T in self.F]
-            self.logn -= v
-            return
         if self.T is None:
             K8 = self.K // 8
             n0 = K8 * self.C
@@ -2219,8 +2255,6 @@ class CudaZC:
         self.logn -= v
 
     def final_tables(self) -> torch.Tensor:
-        if self.F is not None:
-            return torch.stack(self.F)
         n = 1 << self.logn
         return from_mont(self.T[:, :, :n].permute(0, 2, 1))               # (3, n, 6)
 
@@ -2232,16 +2266,9 @@ class CudaPP:
         self.dev = tabs[0].device
         self.T = torch.stack([mont_planes(t) for t in tabs]).contiguous()
         self.logn = tabs[0].shape[0].bit_length() - 1
-        self.F = None                    # a _FlatPP on the flat tables once a round of arity > 3 (a small table) has run
 
     def round(self, v: int) -> torch.Tensor:
         import cupy as cp
-        if self.F is None and v > 3:
-            n = 1 << self.logn
-            self.F = _FlatPP([from_mont(self.T[k, :, :n].t()) for k in range(4)])
-            self.T = None
-        if self.F is not None:
-            return self.F.round(v)
         nq = 1 << (self.logn - v)
         ne = 3 ** v
         acc = torch.zeros((ne * D,), dtype=torch.int64, device=self.dev)
@@ -2252,10 +2279,6 @@ class CudaPP:
     def fold(self, r: torch.Tensor) -> None:
         import cupy as cp
         v = r.shape[0]
-        if self.F is not None:
-            self.F.fold(r)
-            self.logn -= v
-            return
         nq = 1 << (self.logn - v)
         ps = self.T.shape[2]
         eqr = to_mont(_corner_eq(r)).to(torch.int32).contiguous()
@@ -2480,7 +2503,8 @@ def fixture(relation_name: str = "fp8-ada", l: int = 64, S: int = 2, n_vus: int 
     """A complete verifier fixture for ligerito-verify-rs: layout, constraint COO triples, public rows, proof bytes (hex), the
     claims, and the transcript (every absorb and every challenge, in order) of an honest run with ``LocalCoins(b"fixture")``,
     plus negatives (proof bytes that must be rejected, with the Python verifier's reason).  ``zk``: LGSC0004 (masks from the
-    fixed key ``sha256(b"fixture-masks")``; the Libra coefficient cells are included so the sparse claims can be checked)."""
+    fixed key ``sha256(b"fixture-masks")``; the Libra coefficient cells are included so the sparse claims can be checked).
+    Toy sizes are format tests, not ZK instances: the schedule may have ``vf > n_c - 4`` (zk-small: 4 > 3 at l = 64, S = 2)."""
     from backends.direct.ligero.relations import relation
     from backends.direct.ligero.relchain import RelationChainRunner, instances
     from .layout import build_z, constraints, fill_zk, layout_for, public_rows
@@ -2498,7 +2522,7 @@ def fixture(relation_name: str = "fp8-ada", l: int = 64, S: int = 2, n_vus: int 
         schedule = zk_schedule(lay, schedule)
     pubs = public_rows(runner.sys, lay, [s.public() for s in subs], device)
     coins = RecordingCoins(LocalCoins(b"fixture"))
-    proof = prove(lay, cons, z, coins, schedule=schedule)
+    proof = prove(lay, cons, z, coins, schedule=schedule, allow_underblinded=True)
     pb = proof.to_bytes()
     ok, why, claims = verify(lay, cons, pubs, SumcheckProof.from_bytes(pb), LocalCoins(b"fixture"), device=device)
     assert ok, why
@@ -2516,7 +2540,7 @@ def fixture(relation_name: str = "fp8-ada", l: int = 64, S: int = 2, n_vus: int 
     bit = next(r for r in runner.sys.rows if r.kind == "bit")
     z_bad[lay.row_of_sys[bit.idx], 3] = 2
     for cheat in ("zc", "all"):
-        pr = prove(lay, cons, z_bad, LocalCoins(b"fixture"), cheat=cheat, schedule=schedule)
+        pr = prove(lay, cons, z_bad, LocalCoins(b"fixture"), cheat=cheat, schedule=schedule, allow_underblinded=True)
         okb, whyb, _ = verify(lay, cons, pubs, pr, LocalCoins(b"fixture"), device=device)
         assert not okb
         negs.append({"cheat": cheat, "witness": "bit row = 2 at column 3", "proof_hex": pr.to_bytes().hex(), "reason": whyb})
@@ -2525,7 +2549,7 @@ def fixture(relation_name: str = "fp8-ada", l: int = 64, S: int = 2, n_vus: int 
             z_bad = z.clone()
             col = 0 if row == lay.zk.mask_next else 9
             z_bad[row, col] = (int(z_bad[row, col]) + 1) % P
-            pr = prove(lay, cons, z_bad, LocalCoins(b"fixture"), schedule=schedule)
+            pr = prove(lay, cons, z_bad, LocalCoins(b"fixture"), schedule=schedule, allow_underblinded=True)
             okb, whyb, _ = verify(lay, cons, pubs, pr, LocalCoins(b"fixture"), device=device)
             assert not okb
             negs.append({"cheat": None, "witness": what, "proof_hex": pr.to_bytes().hex(), "reason": whyb})
