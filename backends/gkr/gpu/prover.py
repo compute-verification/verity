@@ -306,35 +306,81 @@ def table_queries(circ: Circuit, name: str) -> list[Query]:
 
 
 _QUERY_PLANS: dict = {}
+_WIRE_PLANS: dict = {}
+
+
+def _lin_plan(lins: list, dev: torch.device):
+    """Linear forms ``konst + Σ_t coef · mat[:, idx]`` over ``J = len(lins)`` outputs, term position by term position:
+    step ``t`` touches only the forms with more than ``t`` terms (``sel``)."""
+    konst = torch.tensor([l.konst % P for l in lins], dtype=torch.int64, device=dev)
+    steps = []
+    for t in range(max((len(l.terms) for l in lins), default=0)):
+        sel = [j for j, l in enumerate(lins) if len(l.terms) > t]
+        idx = torch.tensor([lins[j].terms[t][0] for j in sel], dtype=torch.int64, device=dev)
+        coef = torch.tensor([lins[j].terms[t][1] % P for j in sel], dtype=torch.int64, device=dev)
+        steps.append((None if len(sel) == len(lins) else torch.tensor(sel, dtype=torch.int64, device=dev), idx, coef))
+    return konst, steps
+
+
+def _apply_lin_plan(plan, mat: torch.Tensor) -> torch.Tensor:
+    konst, steps = plan
+    vals = konst.expand(mat.shape[0], -1).clone()
+    for sel, idx, coef in steps:
+        if sel is None:
+            vals = (vals + mat[:, idx] * coef) % P
+        else:
+            vals[:, sel] = (vals[:, sel] + mat[:, idx] * coef) % P
+    return vals
 
 
 def _query_plan(circ: Circuit, name: str, qs: list[Query], dev: torch.device):
-    """The table's query columns as linear forms ``konst + Σ_t coef · cols[:, idx]`` over ``J = q_t · w`` outputs (leaf
-    order), term position by term position: step ``t`` touches only the forms with more than ``t`` terms (``sel``)."""
+    """The table's query columns (``J = q_t · w`` forms over ``cols``, leaf order)."""
     key = (circ.hash, name, dev.type, dev.index)
     plan = _QUERY_PLANS.get(key)
     if plan is None:
-        lins = [l for q in qs for l in q.cols]
-        konst = torch.tensor([l.konst % P for l in lins], dtype=torch.int64, device=dev)
-        steps = []
-        for t in range(max((len(l.terms) for l in lins), default=0)):
-            sel = [j for j, l in enumerate(lins) if len(l.terms) > t]
-            idx = torch.tensor([lins[j].terms[t][0] for j in sel], dtype=torch.int64, device=dev)
-            coef = torch.tensor([lins[j].terms[t][1] % P for j in sel], dtype=torch.int64, device=dev)
-            steps.append((None if len(sel) == len(lins) else torch.tensor(sel, dtype=torch.int64, device=dev), idx, coef))
-        plan = _QUERY_PLANS[key] = (konst, steps)
+        plan = _QUERY_PLANS[key] = _lin_plan([l for q in qs for l in q.cols], dev)
     return plan
 
 
 def _query_values_planned(circ: Circuit, name: str, qs: list[Query], cols: torch.Tensor) -> torch.Tensor:
-    konst, steps = _query_plan(circ, name, qs, cols.device)
-    vals = konst.expand(cols.shape[0], -1).clone()
-    for sel, idx, coef in steps:
-        if sel is None:
-            vals = (vals + cols[:, idx] * coef) % P
-        else:
-            vals[:, sel] = (vals[:, sel] + cols[:, idx] * coef) % P
-    return vals
+    return _apply_lin_plan(_query_plan(circ, name, qs, cols.device), cols)
+
+
+def _wire_plan(circ: Circuit, dev: torch.device):
+    """``eval_wires`` depth by depth: the input wires in one gather, then per product depth ``d`` the ``a`` / ``b`` forms of
+    every depth-``d`` wire at once; ``None`` when a product reads a wire of its own depth or deeper."""
+    key = (circ.hash, dev.type, dev.index)
+    if key not in _WIRE_PLANS:
+        depth = circ.depth_of()
+        ins = [(w, wire[1]) for w, wire in enumerate(circ.wires) if wire[0] == "in"]
+        by_depth: dict[int, list[int]] = {}
+        for w, wire in enumerate(circ.wires):
+            if wire[0] != "in":
+                by_depth.setdefault(wire[1], []).append(w)
+        plan = None
+        if all(depth[i] < d for d, ws in by_depth.items() for w in ws for lin in circ.wires[w][2:] for i, _ in lin.terms):
+            levels = []
+            for d in sorted(by_depth):
+                ws = by_depth[d]
+                levels.append((torch.tensor(ws, dtype=torch.int64, device=dev),
+                               _lin_plan([circ.wires[w][2] for w in ws], dev), _lin_plan([circ.wires[w][3] for w in ws], dev)))
+            plan = (torch.tensor([w for w, _ in ins], dtype=torch.int64, device=dev),
+                    torch.tensor([c for _, c in ins], dtype=torch.int64, device=dev), levels)
+        _WIRE_PLANS[key] = plan
+    return _WIRE_PLANS[key]
+
+
+def _eval_wires(circ: Circuit, cols: torch.Tensor) -> torch.Tensor:
+    """``circuit.eval_wires`` (the same ``(units, nwires)`` int32) with one batch of launches per product depth."""
+    plan = _wire_plan(circ, cols.device) if cols.is_cuda and cols.dtype == torch.int64 else None
+    if plan is None:
+        return eval_wires(circ, cols)
+    w_in, c_in, levels = plan
+    wires = torch.zeros((cols.shape[0], circ.nwires), dtype=torch.int64, device=cols.device)
+    wires[:, w_in] = cols[:, c_in]
+    for ws, pa, pb in levels:
+        wires[:, ws] = (_apply_lin_plan(pa, wires) * _apply_lin_plan(pb, wires)) % P
+    return wires.to(torch.int32)
 
 
 def seg_query_values(inst: Instance, name: str) -> list[torch.Tensor]:
@@ -725,7 +771,7 @@ def check_chain_links_clear(inst: Instance) -> None:
 def prove_segment(seg: Segment, z0: list[Ext], gamma: list[Ext], tr: Transcript, out: list[Ext], st: Stats):
     dev = seg.cols.device
     t1 = time.perf_counter()
-    wires = eval_wires(seg.circ, seg.cols)                           # (units, nwires) int32
+    wires = _eval_wires(seg.circ, seg.cols)                          # (units, nwires) int32
     _sync(dev)
     st.t_witness_wires += time.perf_counter() - t1
     b = log2ceil(seg.units)
