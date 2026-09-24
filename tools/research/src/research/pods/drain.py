@@ -119,7 +119,8 @@ def report(st: LocalStore, target: str, mode: str = "head", hostname: str | None
     for tr in chk["targets"]:
         aid = tr["target"]
         rep["attempts"][aid].update(preserved=tr["preserved"], missing_names=tr.get("missing_names") or [], error=tr.get("error"),
-                                    n_artifacts=tr.get("n_artifacts"))
+                                    n_artifacts=tr.get("n_artifacts"), legs=tr.get("legs"), failures=P.failures(tr, chk),
+                                    label_targets=list(((tr.get("labels") or {}).get("targets") or {})))
         (rep["preserved"] if tr["preserved"] else rep["unpreserved"]).append(aid)
     rep["unpreserved_detail"] = [x for x in chk["not_preserved"]]
     return rep
@@ -132,13 +133,24 @@ def format_report(rep: dict[str, Any]) -> list[str]:
         lines.append(f"  remote: {rep['check']['reason']}")
     for aid in rep["unpreserved"]:
         a = rep["attempts"][aid]
-        why = a.get("error") or (("missing: " + ", ".join(a["missing_names"])) if a.get("missing_names") else "attempt manifest not on the remote")
-        lines.append(f"  NOT preserved  {aid}  ({', '.join(a['matched_by'])})  {why}")
+        fails = a.get("failures") or [{"leg": "?", "what": aid, "why": "not preserved (no failing check named)"}]
+        legs = list(dict.fromkeys(f["leg"] for f in fails))
+        lines.append(f"  NOT preserved  {aid}  ({', '.join(a['matched_by'])})  failing: {', '.join(legs)}")
+        lines += [f"      {f['leg']:<9} {f['what']}: {f['why']}" for f in fails]
     for aid in rep["preserved"]:
         lines.append(f"  preserved      {aid}  ({', '.join(rep['attempts'][aid]['matched_by'])})")
     if not rep["n_attempts"]:
         lines.append(f"  {rep['note']}")
     return lines
+
+
+def _leg_counts(rep: dict[str, Any]) -> str:
+    """`labels x2, manifest x1`: how many unpreserved attempts fail each check."""
+    n: dict[str, int] = {}
+    for aid in rep["unpreserved"]:
+        for leg in dict.fromkeys(f["leg"] for f in rep["attempts"][aid].get("failures") or []):
+            n[leg] = n.get(leg, 0) + 1
+    return ", ".join(f"{leg} x{c}" for leg, c in n.items()) or "?"
 
 
 def log_drain(entry: dict[str, Any], path: Path | None = None) -> None:
@@ -159,10 +171,11 @@ def drain(st: LocalStore, target: str, *, mode: str = "head", force: bool = Fals
         return 2, rep
     blocked = bool(rep["unpreserved"])
     if blocked and not force:
-        rep["decision"] = {"action": "refused", "why": f"{len(rep['unpreserved'])} attempt(s) on the machine are not preserved; `research data push` them "
-                                                       f"(or --force --reason TEXT to terminate anyway, logged)", "forced": False}
+        rep["decision"] = {"action": "refused", "why": f"{len(rep['unpreserved'])} attempt(s) on the machine are not preserved (failing: {_leg_counts(rep)}); "
+                                                       f"`research data push` them (or --force --reason TEXT to terminate anyway, logged)", "forced": False}
         log_drain({"utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "target": target, "machine": rep["machine"], "pod_id": rep["pod_id"],
-                   "action": "refused", "unpreserved": rep["unpreserved"], "mode": mode}, log_path)
+                   "action": "refused", "unpreserved": rep["unpreserved"], "mode": mode,
+                   "failing": {aid: sorted({f["leg"] for f in rep["attempts"][aid].get("failures") or []}) for aid in rep["unpreserved"]}}, log_path)
         return 1, rep
     if blocked and force and not reason:
         rep["decision"] = {"action": "refused", "why": "--force needs --reason TEXT (the override is logged with it)", "forced": False}

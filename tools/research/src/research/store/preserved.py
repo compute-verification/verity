@@ -203,6 +203,35 @@ def check(st: LocalStore, targets: list[str], mode: str = "head") -> dict[str, A
     return rep
 
 
+def failures(t: dict[str, Any], rep: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """Why one target of `check` is not preserved, one entry per failing check: {"leg": attempt|manifest|artifacts|labels, "what":
+    the attempt / object key / `<name> <art id>` / label target it concerns, "why"}.  Empty when the target is preserved."""
+    out: list[dict[str, Any]] = []
+    tid = t["target"]
+    if t.get("error"):
+        return [{"leg": "attempt" if t["kind"] == "attempt" else "target", "what": tid, "why": t["error"]}]
+    legs = t.get("legs") or {}
+    if legs.get("manifest") is False:
+        out.append({"leg": "manifest", "what": attempt_key(tid),
+                    "why": "absent on the remote" if (rep or {}).get("remote") else ((rep or {}).get("reason") or "no remote")})
+    for a, ar in (t.get("artifacts") or {}).items():
+        if not ar["preserved"]:
+            errs = ar.get("errors") or ["?"]
+            out.append({"leg": "artifacts", "what": f"{ar['name']} {a}" if ar.get("name") else a,
+                        "why": "; ".join(errs[:2]) + (f" (+{len(errs) - 2} more)" if len(errs) > 2 else "")})
+    if legs.get("labels") is False:
+        lab = t.get("labels") or {}
+        if lab.get("error"):
+            out.append({"leg": "labels", "what": tid, "why": lab["error"]})
+        for lt, x in (lab.get("targets") or {}).items():
+            if x["missing"]:
+                out.append({"leg": "labels", "what": lt, "why": f"{len(x['missing'])} of {x['local']} local assertion(s) absent on the remote "
+                                                               f"(first: {x['missing'][0]})"})
+            for e in x["errors"][:2]:
+                out.append({"leg": "labels", "what": lt, "why": e})
+    return out
+
+
 def _labels_line(t: dict[str, Any]) -> str:
     legs = t.get("legs") or {}
     lab = t.get("labels")
@@ -259,4 +288,4 @@ def format_report(rep: dict[str, Any]) -> list[str]:
     return lines
 
 
-__all__ = ["MODES", "attempt_artifacts", "check", "format_report"]
+__all__ = ["MODES", "attempt_artifacts", "check", "failures", "format_report"]

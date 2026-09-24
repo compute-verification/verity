@@ -86,11 +86,44 @@ def test_unpreserved_lists_attempts_on_the_machine_that_the_gate_refuses(fs_stor
     # the same predicate as `research data preserved`
     assert P.check(st, [bad])["preserved"] is False and P.check(st, [ok, legacy])["preserved"] is True
     lines = D.format_report(rep)
-    assert "1 NOT preserved, 3 preserved" in lines[0] and any(l.startswith(f"  NOT preserved  {bad}") and "missing: outputs.result" in l for l in lines)
+    assert "1 NOT preserved, 3 preserved" in lines[0] and f"  NOT preserved  {bad}  (exec.machine, execution.machine)  failing: manifest, artifacts" in lines
+    assert f"      manifest  attempts/{bad}.json: absent on the remote" in lines
+    assert any(l.startswith(f"      artifacts outputs.result {local_only}: manifests/") for l in lines)
     # by pod id, and an unknown target
     assert D.report(st, "pod-tp2", probe=False)["machine"] == "vy-tp2"
     assert D.report(st, "abcdefghijkl", probe=False)["n_attempts"] == 0 and D.report(st, "not-a-machine", probe=False)["pod_id"] is None
     assert D.report(st, "vy-tp2", mode="recorded", probe=False)["unpreserved"] == [bad], "offline from the catalog"
+
+
+def test_report_names_the_failing_leg_and_what_it_concerns_not_a_blanket_manifest_reason(fs_store, machines, tmp_path):
+    """r21 close-out: drain said "attempt manifest not on the remote" for attempts whose manifest WAS there; the labels leg failed."""
+    st = fs_store
+    art = st.put_artifact("run-files/v1", {}, tree=_tree(tmp_path / "t1"))
+    st.push(art)
+    aid = _on(st, "r20260923-100000-0001", art, machine="vy-tp2")
+    st.push_attempt(aid)
+    st.add_label(aid, "note", "laptop-only", by="laptop")
+    st.add_label(art, "note", "laptop-only too", by="laptop")
+    rep = D.report(st, "vy-tp2", probe=False)
+    a = rep["attempts"][aid]
+    assert rep["unpreserved"] == [aid] and a["legs"] == {"manifest": True, "artifacts": True, "labels": False}
+    assert [(f["leg"], f["what"]) for f in a["failures"]] == [("labels", aid), ("labels", art)]
+    assert all("1 of 1 local assertion(s) absent on the remote (first: labels/" in f["why"] for f in a["failures"])
+    text = "\n".join(D.format_report(rep))
+    assert f"NOT preserved  {aid}  (exec.machine, execution.machine)  failing: labels" in text and "manifest" not in text
+    # the manifest leg, when it is the one failing, is named with its key; a blob missing is named by output name, art id and object
+    (tmp_path / "t2").mkdir()
+    (tmp_path / "t2" / "only.bin").write_bytes(b"a blob no other artifact shares")
+    st2_art = st.put_artifact("run-files/v1", {"n": 2}, tree=tmp_path / "t2")
+    st.push(st2_art)
+    Path(st.remote.root / "objects" / "sha256" / st.get_manifest(st2_art).blobs()[0][0]).unlink()
+    aid2 = _on(st, "r20260923-100000-0002", st2_art, machine="vy-tp2")
+    a2 = D.report(st, "vy-tp2", probe=False)["attempts"][aid2]
+    assert a2["legs"] == {"manifest": False, "artifacts": False, "labels": True}
+    assert [(f["leg"], f["what"]) for f in a2["failures"]] == [("manifest", f"attempts/{aid2}.json"), ("artifacts", f"outputs.result {st2_art}")]
+    assert a2["failures"][1]["why"].startswith("objects/sha256/") and a2["failures"][1]["why"].endswith(": absent")
+    # `research data preserved` names the same failures (one predicate)
+    assert P.failures(P.check(st, [aid])["targets"][0]) == a["failures"]
 
 
 def test_drain_refuses_while_anything_is_unpreserved_and_logs_a_forced_override(fs_store, machines, tmp_path):
