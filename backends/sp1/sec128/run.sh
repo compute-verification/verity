@@ -32,7 +32,7 @@ v.update({
                     f"core STARK, CUDA prover)",
     "label": f"SP1, FRI query count raised to a {bits}-bit target (otherwise unmodified): {q} core queries (stock 124); "
              f"per-shard soundness stays field-bound at 2^{v['security_per_shard_log2']} (security.parameters)",
-    "toolchain": {"sp1-primitives": f"6.6.0 with core_fri_config {q} queries (vendored crates.io source, one line)",
+    "toolchain": {"sp1-primitives": f"6.6.0 with core_fri_config {q} queries (crates.io source patched in place in a copied CARGO_HOME, one line; lock file unchanged, embedded guest ELF/vk = stock)",
                   "sp1-gpu-server": f"6.6.0 source-built: succinctlabs/sp1 v6.6.0 f5a5bbf6 + the same line, CUDA_ARCHS {archs}"},
     "fork": {"base": "succinctlabs/sp1 v6.6.0 f5a5bbf6a1cf6007315b410d88678d96fb399fb5", "changed": [f"crates/primitives/src/fri_params.rs: {line}"],
              "prover_source_diff": open(pdiff).read(), "verifier_source_diff": open(vdiff).read(),
