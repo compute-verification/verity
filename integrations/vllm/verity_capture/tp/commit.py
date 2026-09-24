@@ -308,6 +308,17 @@ def _sampled_replay_components(rows: list[dict], versions: dict) -> tuple[dict, 
     return sr_comp, lk_comp
 
 
+def _build_dirs(args) -> dict[int, str]:
+    """[lane vllm-tp-n] rank -> Build dir from `--build-rank <dir>` repeated in rank order (world N) or the two-rank `--build-rank0/1` spelling."""
+    if args.build_rank:
+        if args.build_rank0 or args.build_rank1:
+            raise SystemExit("--build-rank (rank order) and --build-rank0/1 are alternative spellings; give one")
+        if len(args.build_rank) != int(args.tp):
+            raise SystemExit(f"--build-rank given {len(args.build_rank)} time(s) for a world of {args.tp}: one Build dir per rank, in rank order")
+        return {r: str(d) for r, d in enumerate(args.build_rank)}
+    return {r: d for r, d in ((0, args.build_rank0), (1, args.build_rank1)) if d}
+
+
 def main() -> int:
     from verity_vllm_adapter import profile as prof
 
@@ -318,8 +329,8 @@ def main() -> int:
     from verity_capture import vllm_adapter as va
     from verity_capture.bench.commit_delta import git_head, run_workload
     from verity_capture.bench.commit_verdict import REQUIRED_CLASSES_DEFAULT, commit_verdict
-    from verity_capture.bench.tp2_capture import parse_engine_args
-    from verity_capture.bench.tp2_worker import EXTENSION
+    from verity_capture.tp.capture import parse_engine_args
+    from verity_capture.tp.worker import EXTENSION
     from verity_capture.experimental.commit_integ.api import challenge_positions
 
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
@@ -342,9 +353,11 @@ def main() -> int:
     ap.add_argument("--rpc-timeout", type=float, default=3600.0)
     ap.add_argument("--build-rank0", default=None, help="derive_step out dir of rank 0's Program (result.json) -> program_digest for the binding map / population")
     ap.add_argument("--build-rank1", default=None)
+    ap.add_argument("--build-rank", action="append", default=[], help="[lane vllm-tp-n] rank r's Build dir, repeated in RANK order (world = --tp); the world-N spelling of --build-rank0/1")
+    ap.add_argument("--world", type=int, default=None, help="alias of --tp (the communicator size)")
     ap.add_argument("--no-tp-partials", action="store_true", help="NEGATIVE (R14 TP-03): collect collective outputs only (the R13 state); the required class tp_rank_partials must fail the verdict")
     ap.add_argument("--omit-rank", type=int, default=None, help="NEGATIVE (brief §4 'omit one TP rank'): drop this rank's entry from the commitment vector before the verdict; must fail closed")
-    ap.add_argument("--required-manifest", default=None, help="[R15 TP-04] manbind's merged TP manifest (required_manifest build --program r0 --rank 0 --program r1 --rank 1 --ranks 2): the population of record per rank (rows with rank=r)")
+    ap.add_argument("--required-manifest", default=None, help="[R15 TP-04] the merged TP manifest (verity_vllm.query.cli build-global --programs-root <rank r dir> --rank r ... --ranks W): the population of record per rank (rows with rank=r)")
     ap.add_argument("--relabel-rank", default=None, help="NEGATIVE (R15 TP-04 'relabel rank 0 as rank 1'): `<from>:<to>` -- rank <from> tags its partials part_rank<to>; coverage must FAIL naming rank <from>")
     ap.add_argument("--wrong-root-rank", type=int, default=None, help="NEGATIVE (R15 TP-04 'wrong root on one rank'): the commitment vector carries a wrong run root for this rank; its openings/context must FAIL")
     ap.add_argument("--xrank-per-stratum", type=int, default=2,
@@ -392,6 +405,8 @@ def main() -> int:
                                                             "seed = sha256(challenge | that rank's run root)[:8]; without it the seed is the rank's run root (honest-prover measurement)")
     ap.add_argument("--replay-target", action="append", default=None, help="<op_path>[@<step>]: add every VU of a module to every rank's sample")
     args = ap.parse_args()
+    if args.world is not None:
+        args.tp = int(args.world)
     relabel = None
     if args.relabel_rank:
         a, b = args.relabel_rank.split(":")
@@ -468,14 +483,15 @@ def main() -> int:
                     return str(w["workload_digest"])
             comps = sorted(P.glob("build_request_LP*_T*/result.json"))
             if comps:
-                from verity_capture.commit.required_manifest import components_fold_digest
+                from verity_capture.commit.manifest_format import components_fold_digest
                 pd_kind[rank_] = f"components-fold of {len(comps)} request Programs"
                 return components_fold_digest(json.loads(c.read_text())["program"]["digest"] for c in comps)
             pd_kind[rank_] = "request Program"
             return json.loads((P / "result.json").read_text())["program"]["digest"]
         except Exception:  # noqa: BLE001
             return None
-    pds = {0: _pd(args.build_rank0, 0), 1: _pd(args.build_rank1, 1)}
+    builds = _build_dirs(args)
+    pds = {r: _pd(builds.get(r), r) for r in range(world)}
     versions["build_program_digest_kind"] = {str(k): v for k, v in pd_kind.items()}
     versions["build_program_digest"] = {str(k): v for k, v in pds.items()}
     (out / "versions.json").write_text(json.dumps(versions, indent=1, default=str) + "\n")
@@ -525,7 +541,6 @@ def main() -> int:
     # (B1: the request Program itself) and, at B>=2, the component digests the GP-01 workload_program of that rank composed (its workload
     # digest is the manifest's per-rank digest, checked above) -- the worker refuses any loaded Program outside this set BY NAME
     replay_cfg = None
-    builds = {0: args.build_rank0, 1: args.build_rank1}
     if args.required_manifest and not args.no_sampled_replay:
         import re as _re
         of_record: dict[str, list[str]] = {}
@@ -589,6 +604,12 @@ def main() -> int:
     if len(made) != world:
         raise SystemExit(f"fail-closed: committer constructed on {len(made)}/{world} ranks")
     (out / "committer_make.json").write_text(json.dumps(made, indent=1, default=str) + "\n")
+    # [lane vllm-tp-n / x03] the per-rank attention plane classes (fa2_plane_classes on THIS rank's Program record) -- said per rank
+    for m in made:
+        apc = m.get("attention_plane_classes") or {}
+        print(f"[tp2commit] rank {m.get('rank')}: X-03 attention plane classes: {apc.get('declarations', 0)} layer declaration(s) from {apc.get('source')} "
+              f"-> classes {apc.get('classes')} heads(NH,KVH,D) {apc.get('per_rank_heads')}; {apc.get('rule')}" + (f"; ERROR {apc['error']}" if apc.get("error") else ""), flush=True)
+    versions["attention_plane_classes"] = {str(m.get("rank")): {k: v for k, v in (m.get("attention_plane_classes") or {}).items() if k != "rank"} for m in made}
     # [R15 moe TP-MOE-SRC] an MoE model's bound block is a required class of every rank (REL-02, as commit_delta): the ranks report the
     # attached MoeBlockSource; all ranks must agree (a rank without MoE layers on an MoE model is a named refusal, not a silent hole)
     moe_ranks = [int(m["rank"]) for m in made if isinstance(m.get("moe_source"), dict) and int((m["moe_source"] or {}).get("layers") or 0) > 0]
@@ -622,7 +643,8 @@ def main() -> int:
     tokens_ref = None
     all_pass = True
     xrank_pairs: list[dict] = []     # [TP-12] one verdict per instrumented pair
-    XRANK_FAMILIES = ("AllReduce2_v1", "AllGather2_v1", "EmbeddingShard_v1")
+    from verity_vllm.registry import b1_tp2 as _TP2
+    xrank_families = _TP2.cross_rank_families(world)      # [lane vllm-tp-n] the cross-rank families of THIS world, from the registry's composites
     for pair in range(args.pairs):
         order = ["control", "instrumented"] if pair % 2 == 0 else ["instrumented", "control"]
         for k, arm in enumerate(order):
@@ -851,7 +873,7 @@ def main() -> int:
                         for f_ in fin:
                             for u_ in ((f_.get("sampled_replay") or {}).get("sampled_replay") or {}).get("unreplayable") or []:
                                 fam_ = str(u_.get("family"))
-                                if fam_ in XRANK_FAMILIES:
+                                if fam_ in xrank_families:
                                     u_["evaluated_by"] = {"pass": "cross_rank_collectives (TP-12, rev F-r16-18 / COORD ruling 27)", "result": xr.get("result"),
                                                           "picks": (byf.get(fam_) or {}).get("picks"), "equal": (byf.get(fam_) or {}).get("equal"),
                                                           "artifact": f"xrank_pair{pair}.json", "rule": "sampled strata over the committed collective outputs (>= per_stratum per site x kind x phase), not every VU"}
@@ -1068,7 +1090,7 @@ def main() -> int:
         (out / "sampled_replay.json").write_text(json.dumps({"schema": "verity-sweep/tp-sampled-replay/v1", "tp": args.tp, "sampled_replay": sr_comp, "boundary_linkage": lk_comp,
                                                              "per_pair_artifacts": [str(out / f"finalize_pair{p}.json") for p in range(args.pairs)],
                                                              "note": "per-rank full records (strata, mismatches, programs) live in finalize_pair<k>.json[rank].sampled_replay",
-                                                             "unreplayable_collectives_evaluated_by": {"pass": "cross_rank_collectives (TP-12)", "families": list(XRANK_FAMILIES),
+                                                             "unreplayable_collectives_evaluated_by": {"pass": "cross_rank_collectives (TP-12)", "families": sorted(xrank_families),
                                                                                                         "result": xr_comp.get("result"), "by_family": xr_comp.get("by_family"), "artifact": "xrank_collectives.json"}},
                                                             indent=1, default=str) + "\n")
 
@@ -1109,7 +1131,7 @@ def main() -> int:
     # process's (after finalize: replay, linkage, pin, partial source all imported) + the collector's JIT C++/CUDA sources -- what ran, not a
     # static closure; the tag-candidate equivalence rule (COORD ruling 24) reads this file when it exists.
     try:
-        from verity_capture.bench.tp2_worker import repo_modules_loaded
+        from verity_capture.tp.worker import repo_modules_loaded
         drv = repo_modules_loaded()
         ranks_mods = llm.collective_rpc("tp2_repo_modules", timeout=args.rpc_timeout)
         union = set(drv["files"])

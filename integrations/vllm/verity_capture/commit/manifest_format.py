@@ -13,8 +13,9 @@ A manifest (`verity-sweep/required-manifest/v1`) is one identity row per require
 * Build inputs       -- `load_program`, `program_dirs_for` / `programs_for` (one request Program per declared (prompt_len, cap-1) shape),
                         `RegistryUnavailable` (the environment fault a manifest build refuses under)
 
-Which Values are required is the query's: `verity_vllm.query` (Q_module_body_v1, the manifest of record since the flip) or, for a TP rank
-Program until v2 names the TP-04 partials, the v1 builder `verity_capture.commit.required_manifest`.  Dependency-free (json/gzip/hashlib).
+Which Values are required is the query's: `verity_vllm.query` (Q_module_body_v1, the manifest of record since the flip; TP rank Programs
+too, with its TP-04 policy) -- the v1 builder `verity_capture.commit.required_manifest` re-derives v1 records only.  Dependency-free
+(json/gzip/hashlib).
 """
 from __future__ import annotations
 
@@ -23,7 +24,7 @@ import hashlib
 import json
 import os
 import re
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 
 SCHEMA = "verity-sweep/required-manifest/v1"
 
@@ -406,6 +407,76 @@ def components_fold_digest(component_digests: Iterable[str]) -> str:
     request-Program digests -- one string (the identity key needs a string), labelled `program_digest_kind: components-fold` beside it,
     replaced by the workload digest (`--workload-digest`, kind `workload`) once the Build carries it."""
     return hashlib.sha256(("workload-components/" + ",".join(sorted(str(d) for d in component_digests))).encode()).hexdigest()
+
+
+def tp_ranks_fold_digest(rank_digests: Iterable[str]) -> str:
+    """[R15 tp TP-04, rev-cb M-0108] A merged TP manifest's header `program_digest`: the labelled fold of the per-rank Program digests
+    (`program_digest_kind: tp-ranks-fold`) -- one string for manbind's loader; every identity row keeps its own rank's digest."""
+    return hashlib.sha256(("tp-ranks/" + ",".join(sorted(str(d) for d in rank_digests))).encode()).hexdigest()
+
+
+TP_PEER_BINDING_RULE = ("a rank Program's collective row (AllReduce2 / AllGather2) consumes the rank's OWN partial and the RECEIVED peer partial "
+                        "(its `peers_<k>` input); the received value IS the peer rank's own partial identity (`tp_rank_partials`: part_rank<peer> / "
+                        "shard_rank<peer>) at the same (request, step, invocation, module) -- so the merged population binds them identity for "
+                        "identity in both directions: a collective output without the peer's partial, or a partial without the peer's collective "
+                        "output, is named and the merge is not complete; the element RANGE binds too (an all_reduce partial is the output's full "
+                        "width, an all_gather shard is 1/world of it; `width_checked` counts the pairs both sides sized) -- the identity level; "
+                        "the committed BYTES are bound at Commit by D90 rank_match.peer_binding / TP-12, not here.  [revb F-r17b-17] `invocation` "
+                        "is 0 for every (module, member, step) on both engines (the shared-RoPE alias is the one exception: layer order): a module "
+                        "path issued TWICE in one step is ONE identity whose element_range is both calls' rows, not two identities -- the binding "
+                        "here sees one pair per (step, module) and says bound; the second issue fails one stage later at `coverage_check`, whose "
+                        "k-th committed occurrence binds to invocation k with the FIRST call's numel < the identity's hi -> MISSING by name")
+
+
+def tp_peer_binding(parts: list[dict[str, Any]], collective_kind: Callable[[str], str | None]) -> dict[str, Any]:
+    """[R17 reqval finding 7] The TP merge's identity-level cross-rank check (see `TP_PEER_BINDING_RULE`).  `parts` are the rank manifests
+    (one per rank); `collective_kind` classifies a row's `spec` ("all_reduce" / "all_gather" / None: the registry's, passed in so this module
+    stays dependency-free).  Returns {world, collective_outputs, peer_partials, bound, n_unbound, unbound: [first 16 by name], rule}."""
+    world = max(int(p.get("ranks") or 1) for p in parts)
+
+    def _width(r: dict[str, Any]) -> int | None:
+        er = r.get("element_range")
+        return int(er[1]) - int(er[0]) if isinstance(er, (list, tuple)) and len(er) == 2 else None
+    partials: dict[tuple, int | None] = {}                        # (request, step, invocation, op_path, member, rank) -> element width
+    outputs: list[tuple] = []                                     # (request, step, invocation, op_path, rank, kind, element width)
+    for p in parts:
+        for r in p["identities"]:
+            if r["family"] == "tp_rank_partials":
+                partials[(str(r["request_id"]), int(r["step"]), int(r.get("invocation", 0)), r["op_path"], r["output_member"], int(r["rank"]))] = _width(r)
+            elif r["family"] == "instance_outputs" and collective_kind(str(r.get("spec") or "")) is not None:
+                outputs.append((str(r["request_id"]), int(r["step"]), int(r.get("invocation", 0)), r["op_path"], int(r["rank"]),
+                                collective_kind(str(r["spec"])), _width(r)))
+    unbound: list[str] = []
+    bound = 0
+    width_checked = 0
+    out_keys: set[tuple] = set()
+    for rq, s, inv, op, rk, kind, w_out in outputs:
+        out_keys.add((rq, s, inv, op, rk))
+        member = (TP_SHARD_MEMBER if kind == "all_gather" else TP_PARTIAL_MEMBER)
+        for peer in range(world):
+            if peer == rk:
+                continue
+            key = (rq, s, inv, op, member.format(rank=peer), peer)
+            if key not in partials:
+                unbound.append(f"rank {rk} {op} step {s} {kind} output: no {member.format(rank=peer)} identity on rank {peer} (request {rq})")
+                continue
+            # [revb M-0143 (a)] the RANGE binds too: an all_reduce partial is the output's full width; an all_gather shard is 1/world of it
+            w_part = partials[key]
+            if w_out is not None and w_part is not None:
+                width_checked += 1
+                want = w_out if kind == "all_reduce" else (w_out // world if w_out % world == 0 else None)
+                if want is None or w_part != want:
+                    unbound.append(f"rank {rk} {op} step {s} {kind} output width {w_out}: {member.format(rank=peer)} on rank {peer} is {w_part} elements, "
+                                   f"not {want if want is not None else f'{w_out}/{world}'} (request {rq})")
+                    continue
+            bound += 1
+    # the reverse direction: a partial whose collective output the peer does not carry (a peer part without the collective row)
+    for rq, s, inv, op, member, rk in sorted(partials):
+        for peer in range(world):
+            if peer != rk and (rq, s, inv, op, peer) not in out_keys:
+                unbound.append(f"rank {rk} {op} step {s} partial {member}: no collective output identity on rank {peer} (request {rq})")
+    return {"world": world, "collective_outputs": len(outputs), "peer_partials": len(partials), "bound": bound, "width_checked": width_checked,
+            "n_unbound": len(unbound), "unbound": sorted(unbound)[:16], "rule": TP_PEER_BINDING_RULE}
 
 
 def manifest_digest(identities: list[dict[str, Any]]) -> str:

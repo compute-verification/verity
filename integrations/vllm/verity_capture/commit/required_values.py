@@ -63,7 +63,7 @@ from dataclasses import dataclass, field
 from typing import Any, Iterable, Iterator, NamedTuple
 
 from . import required_manifest as RM
-# members_for stays while this traversal builds v1 manifests: TP rank Programs (until TP=N) and the harness's BASELINE_ENGINE=v1 oracle
+# members_for stays while this traversal builds v1 manifests: the harness's BASELINE_ENGINE=v1 oracle and v1 records of record
 from .required_manifest import (EPILOGUE_FAMILIES, IDENTITY_KEY, INTERIOR_CROSSING, MOE_LEAF, PROMOTED_MEMBER, UnmodelledFamily, _AGGREGATE_PREFIXES,
                                 _STRUCTURE_PREFIXES, _fa2_geometry, _fa3_geometry, _layer_of, _REQ_RE, collector_path, is_aggregate_family,
                                 is_stochastic_select, is_structure_family, is_token_select, mat_total_words, members_for, moe_identities,
@@ -84,8 +84,8 @@ SCHEMA = "verity-sweep/required-values/v1"
 #: the family is emitted (REQ-03).  Any other param a row reads -- or one of these read by a row outside its rule -- is an `unnamed_input`
 #: (audit + incomplete population).  `NAMED_INPUTS` is kept as the documented vocabulary of param names, not as the decision.
 NAMED_INPUTS = frozenset({"prompt", "input_ids", "weights", "seed"})
-#: [R17 finding 7] the collective families of a rank Program (derive_step --tp): their peer operand is a `peers_<k>` Program input
-_COLLECTIVE_PREFIXES = ("AllReduce2", "AllGather2")
+#: [R17 finding 7] the collective families of a rank Program (derive_step --tp) are decided by the registry (`required_manifest.collective_kind`,
+#: any world); their peer operands are `peers_<k>` Program inputs
 
 CLASS_NAMES = {CLASS_UNSEEN: "unseen", CLASS_BOUNDARY: "boundary", CLASS_INTERIOR: "interior", CLASS_AGGREGATE: "aggregate",
                CLASS_DECLARED: "declared", CLASS_SAMPLER: "sampler", CLASS_STRUCTURE: "structure", CLASS_UNMODELLED: "unmodelled", CLASS_GUARD: "guard",
@@ -547,11 +547,8 @@ class Traversal:
         st.rows_under[mod] += 1
         if fam.startswith(EPILOGUE_FAMILIES):
             st.epi_mods[mod] = int(stx.get("N", 0))
-        if self.world > 1:
-            if fam.startswith("AllReduce2"):
-                st.coll_of[mod] = "all_reduce"
-            elif fam.startswith("AllGather2"):
-                st.coll_of[mod] = "all_gather"
+        if self.world > 1 and RM.collective_kind(fam) is not None:      # [lane vllm-tp-n] any world's collective family, from the registry
+            st.coll_of[mod] = RM.collective_kind(fam)
         if fam.startswith(("Bf16DivScalar", "Bf16Tanh", "Bf16MulScalar_")) and not hint:
             st.softcap.setdefault(mod, fam)
         if fam.startswith(("Attention", "AttentionHead")):
@@ -877,9 +874,10 @@ class Traversal:
         # [R17 reqval finding 7; tp D90 M-0072] a rank Program's RECEIVED peer partial (`peers_<k>`, derive_step --tp 2): every reader is a
         # collective row (AllReduce2 / AllGather2) -> the value is the PEER rank's own partial at the reading row's (request, step, module),
         # an identity the peer rank's population already carries (`tp_rank_partials`: part_rank<1-r> / shard_rank<1-r>).  Named by that
-        # identity, never a new one; the TP merge binds every collective output to it identity for identity (`tp_peer_binding`).  A world
-        # other than 2 has no single peer -> not named (fail closed); a peers param some non-collective row reads stays unnamed by name.
-        if self.world == 2 and fams and all(f.startswith(_COLLECTIVE_PREFIXES) for f in fams):
+        # identity, never a new one; the TP merge binds every collective output to it identity for identity (`tp_peer_binding`).  [lane
+        # vllm-tp-n] any world >= 2: the peers param carries every other rank's partial (one field per (collective, peer rank)), each named
+        # by that peer's own identity; a peers param some non-collective row reads stays unnamed by name.
+        if self.world > 1 and fams and all(RM.collective_kind(f) is not None for f in fams):
             return "tp_rank_partials"
         return None
 
@@ -927,7 +925,7 @@ class Traversal:
                     if fam == "tp_rank_partials":
                         peer_params += 1
                         for f, c in readers.items():
-                            peer_rows["all_reduce" if unlift(f)[0].startswith("AllReduce2") else "all_gather"] += c
+                            peer_rows[RM.collective_kind(unlift(f)[0]) or "all_gather"] += c
                     continue
                 unnamed_input[name] = {"param": j, "type": str(next((t for nm, t in self.p.params if str(nm) == name), "")), "readers": readers}
         # [R17 finding 7] the received peer partials of a rank Program, as a summary (the identities they alias are the peer rank's)
@@ -1214,10 +1212,8 @@ def reference_required_values(program: ProgramView | dict[str, Any], query: Quer
         coll_of: dict[str, str] = {}
         if world > 1:
             for r, fam, mod, *_rest in parsed:
-                if fam.startswith("AllReduce2"):
-                    coll_of[mod] = "all_reduce"
-                elif fam.startswith("AllGather2"):
-                    coll_of[mod] = "all_gather"
+                if RM.collective_kind(fam) is not None:
+                    coll_of[mod] = RM.collective_kind(fam)
         rows_under = Counter(mod for _r, _f, mod, *_ in parsed)
         # expanded candidates: one per (row, member)
         cands: list[dict[str, Any]] = []

@@ -12,19 +12,24 @@ import json
 import types
 from pathlib import Path
 
-from verity_capture.bench import tp2_match as M
+from verity_capture.tp import match as M
 
 SITES = [("model.layers.0.self_attn.o_proj", "all_reduce", 64), ("model.layers.0.mlp.down_proj", "all_reduce", 64), ("lm_head", "all_gather", 32)]
 
 
-def _links(rank: int, *, drop_k: int | None = None) -> dict:
+def _links(rank: int, *, drop_k: int | None = None, v1: bool = False) -> dict:
+    """A rank's tp_links.json as the derive writes it (v2: `model_root` recorded by object identity, so `link.module` is exact) or as a
+    frozen v1 Build spelled it (no root: the readers fall back to dotted-suffix identity, `same_module_path`)."""
     ls = []
     for k, (site, kind, w) in enumerate(SITES):
         l = {"k": k, "kind": kind, "shape": [1, w], "module_path": f"inner.model.{site} (Cls)"}
         if k == drop_k:
             l.pop("module_path")
         ls.append(l)
-    return {"rank": rank, "world": 2, "program_digest": f"d{rank}", "links": ls}
+    doc = {"rank": rank, "world": 2, "program_digest": f"d{rank}", "links": ls}
+    if not v1:
+        doc["model_root"] = "inner.model"
+    return doc
 
 
 def _recs(*, order=None, null_k: int | None = None, tokens: int = 5) -> list[dict]:
@@ -91,3 +96,15 @@ def test_record_without_module_name_fails_closed(tmp_path):
     assert pr["steps_site_mismatching"][0] == {"step": 0, "sites_named_equal": len(SITES) - 1,
                                                "first_mismatch": {"k": 2, "record": None, "link": SITES[2][0]}}
     assert s["per_rank"]["1"]["n_steps_site_mismatching"] == 0
+
+
+def test_v1_links_without_a_recorded_model_root_match_by_dotted_suffix_and_still_catch_a_swap(tmp_path):
+    """[lane vllm-tp-n] a frozen v1 tp_links.json spells the traced wrapper's path and records no `model_root`: the site leg compares by
+    dotted-suffix identity (no spelled prefix) -- the positive passes, an order swap of two same-(kind, width) sites still fails at k 0."""
+    s = _run(tmp_path, "v1pos", _recs(), _recs(), _links(0, v1=True), _links(1, v1=True))
+    assert s["pass"] is True and s["per_rank"]["0"]["model_root"] is None
+    assert "dotted suffix" in s["per_rank"]["0"]["site_rule"]
+    s = _run(tmp_path, "v1swap", _recs(), _recs(order=[1, 0, 2]), _links(0, v1=True), _links(1, v1=True))
+    assert s["pass"] is False
+    bad = s["per_rank"]["1"]["steps_site_mismatching"][0]
+    assert bad["first_mismatch"]["k"] == 0 and bad["first_mismatch"]["record"] == SITES[1][0]

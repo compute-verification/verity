@@ -9,6 +9,8 @@ from __future__ import annotations
 import copy
 import gzip
 import json
+import os
+from pathlib import Path
 
 import pytest
 
@@ -17,6 +19,15 @@ from verity_capture.commit import required_manifest as RM
 from verity_capture.commit import required_values as RV
 from verity_capture.commit.tests.test_required_manifest import EPS, _layouts_from, _program
 from verity_capture.commit.tests.test_required_manifest_tp import _tp_program
+
+_VLLM = Path(__file__).resolve().parents[3]
+
+
+def _child_env() -> dict[str, str]:
+    """The environment of a `python -m verity_capture.commit.*` child: this integration, its vllm-poc and the core package, by path -- a
+    venv without `verity` installed must still import it (the collective classifier reads the registry)."""
+    path = (_VLLM, _VLLM / "vllm-poc", _VLLM.parents[1] / "packages" / "verity" / "src")
+    return dict(os.environ, PYTHONPATH=os.pathsep.join(str(p) for p in path))
 
 # ---------------------------------------------------------------------------------------------------------------------------------
 # a dataflow-wired fixture builder: every row carries `args` = operand runs ["n", producer, lo, hi] | ["p", param, lo, hi]
@@ -516,27 +527,30 @@ def test_the_tp_merge_binds_every_collective_output_to_the_peers_partial_identit
     assert RM.merge_manifests([RM.build_manifest(dense_df(), None, request_id="r0"), RM.build_manifest(dense_df(), None, request_id="r1")])["tp_peer_binding"] is None
 
 
-def test_a_world_other_than_two_leaves_the_peer_inputs_unnamed_and_the_population_incomplete_by_name():
-    """[revb M-0143 (c)] the `tp_rank_partials` naming rule is written for world 2 (the peer is 1 - r; the rows the sweep has).  A rank
-    Program of a wider world with `peers_<k>` inputs read by collectives: the rule does NOT apply, the inputs stay `unnamed_input`, the
-    population is not complete by name -- never a silent guess at which peer a received partial came from.  The inventory (no dataflow) is
-    blind and complete: exactly the differential the one-release cross-check turns into a row failing by name."""
+def test_a_world_other_than_two_names_the_peer_inputs_by_the_peer_partials_and_a_non_collective_reader_still_stays_unnamed():
+    """[lane vllm-tp-n] the `tp_rank_partials` naming rule is world-generic: a `peers_<k>` input every reader of which is a collective is the
+    received peer partials (one field per (collective, peer rank), each the peer's own identity), whatever the world -- the peer is not
+    `1 - r` beyond world 2, so `peer_rank` stays None.  At world 4 the traversal is complete and agrees with the inventory row for row.  A
+    peers input some non-collective row reads stays unnamed by name at any world (never a silent guess)."""
     prog = _tp_df(0, world=4)
     t = RV.Traversal(copy.deepcopy(prog), RV.Query(rank=0, ranks=4))
     ids = list(t)
     ba = t.boundary_audit
-    assert not t.complete and set(ba["unnamed_input"]) == {f"peers_{k}" for k in range(6)}
-    assert all(set(v["readers"]) <= {"AllReduce2_v1", "AllGather2_v1"} for v in ba["unnamed_input"].values())   # collective readers, still unnamed
-    assert ba["peer_inputs"]["world"] == 4 and ba["peer_inputs"]["peer_rank"] is None and ba["peer_inputs"]["params"] == 0
-    assert not any(f == "tp_rank_partials" for f in ba["named_input"].values())
-    assert sum(k.startswith("input `peers_") for k in t.unmodelled) == 6
-    assert len(ids) > 0 and RV.guard_summary(ba, engine="traversal")["flags"]["unnamed_input"] == 6
+    assert t.complete and ba["unnamed_input"] == {}
+    assert {k: ba["named_input"][k] for k in ba["named_input"] if k != "prompt"} == {f"peers_{k}": "tp_rank_partials" for k in range(6)}
+    pi = ba["peer_inputs"]
+    assert pi["world"] == 4 and pi["peer_rank"] is None and pi["params"] == 6 and min(pi["reader_rows_by_kind"].values()) > 0
+    assert not any(k.startswith("input `peers_") for k in t.unmodelled)
+    assert len(ids) > 0 and RV.guard_summary(ba, engine="traversal")["flags"]["unnamed_input"] == 0
     wl = {"sweep": {"row_id": "tp4-df", "batch": 1, "arrive_steps": [0]}}
     trav = RM.build_manifest(copy.deepcopy(prog), wl, rank=0, ranks=4, engine="traversal")
     inv = RM.build_manifest(copy.deepcopy(prog), wl, rank=0, ranks=4, engine="inventory")
-    assert trav["complete"] is False and inv["complete"] is True and trav["identities"] == inv["identities"]
-    cc = RM.cross_check_manifests(trav, inv, primary_engine="traversal", other_engine="inventory")
-    assert not cc["agree"] and cc["rows_equal"] and not cc["complete_equal"] and "complete False (traversal) != True (inventory)" in cc["why"]
+    assert trav["complete"] is True and inv["complete"] is True and trav["identities"] == inv["identities"]
+    assert RM.cross_check_manifests(trav, inv, primary_engine="traversal", other_engine="inventory")["agree"]
+    s = RV.Traversal(_tp_df(0, world=4, stray_reader=True), RV.Query(rank=0, ranks=4))
+    list(s)
+    assert not s.complete and set(s.boundary_audit["unnamed_input"]) == {"peers_1"}
+    assert s.boundary_audit["named_input"]["peers_0"] == "tp_rank_partials" and any(k.startswith("input `peers_1`") for k in s.unmodelled)
 
 
 def test_a_module_path_issued_twice_in_one_step_is_one_identity_and_the_second_issue_fails_at_coverage_by_name_not_at_the_peer_binding():
@@ -696,9 +710,7 @@ def test_audit_cli_exit_codes_and_streaming_reader(tmp_path):
     st = rows_of(list(RV.Traversal(v)))
     mem, _t = traversal_rows(prog)
     assert st == mem
-    env = {"PYTHONPATH": ".:vllm-poc"}
-    import os
-    env = dict(os.environ, **env)
+    env = _child_env()
     run = lambda *args: subprocess.run([sys.executable, "-m", "verity_capture.commit.required_values", *args], capture_output=True, text=True, env=env, cwd=os.getcwd())
     r = run("audit", "--program", str(d), "--out", str(tmp_path / "a.json"))
     assert r.returncode == 0, r.stdout[-800:] + r.stderr[-800:]
@@ -846,7 +858,7 @@ def test_streamed_global_fold_equals_loaded_and_the_build_global_cli_under_the_f
     assert RM._program_dirs_for(fixture, str(root)) == dirs
     fx = tmp_path / "fx.json"
     fx.write_text(json.dumps(fixture))
-    env = {**__import__("os").environ, "PYTHONPATH": ".:vllm-poc"}
+    env = _child_env()
     env.pop(RM.ENGINE_ENV, None)
     outs = {}
     for eng in ("inventory", "traversal"):
@@ -959,7 +971,7 @@ def test_cli_verify_with_traversal_engine_cross_checks_both_engines(tmp_path):
     wl = tmp_path / "wl.json"
     wl.write_text(json.dumps({"sweep": {"row_id": "flag", "batch": 1, "arrive_steps": [0]}}))
     man = tmp_path / "manifest.json"
-    env = {**__import__("os").environ, "PYTHONPATH": ".:vllm-poc"}
+    env = _child_env()
     env.pop(RM.ENGINE_ENV, None)
     r = subprocess.run([sys.executable, "-m", "verity_capture.commit.required_manifest", "build", "--program", d, "--workload", str(wl), "--out", str(man)],
                        capture_output=True, text=True, env=env)
@@ -1159,7 +1171,7 @@ def test_cli_verify_a_tp_rank_fold_manifest_of_record_with_repeated_program_and_
         dirs.append(str(d))
     wl = tmp_path / "wl.json"
     wl.write_text(json.dumps({"sweep": {"row_id": "tp2-test", "batch": 1, "arrive_steps": [0]}}))
-    env = {**__import__("os").environ, "PYTHONPATH": ".:vllm-poc"}
+    env = _child_env()
     env.pop(RM.ENGINE_ENV, None)
     mod = [sys.executable, "-m", "verity_capture.commit.required_manifest"]
     man = tmp_path / "manifest.json"

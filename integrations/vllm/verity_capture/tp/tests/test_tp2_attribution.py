@@ -22,13 +22,13 @@ import pytest
 # instead of skipping -- 2 collection errors, the session interrupted.  If tp2_worker ever needs torch at import, stub it in a
 # fixture with monkeypatch.setitem(sys.modules, ...), never for the process.
 try:
-    w = importlib.import_module("verity_capture.bench.tp2_worker")
+    w = importlib.import_module("verity_capture.tp.worker")
 except ModuleNotFoundError as e:  # pragma: no cover -- only if tp2_worker grows a module-level torch import
     if e.name != "torch":
         raise
     sys.modules["torch"] = types.SimpleNamespace()
     try:
-        w = importlib.import_module("verity_capture.bench.tp2_worker")
+        w = importlib.import_module("verity_capture.tp.worker")
     finally:
         del sys.modules["torch"]
 _cls = next(v for v in vars(w).values() if isinstance(v, type) and hasattr(v, "_tp2_attribution"))

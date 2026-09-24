@@ -76,11 +76,15 @@ def parse_call_name(name: str) -> CallName:
 def call_name_of(rec: CallCorrespondence) -> CallName:
     """The record's naming of a Call as a CallName.  When the record kept the frontend's naming suffix RAW (`hint`: a form it did not parse
     into member / row -- `.../<fx>/<member>[row]`, `[t=3]`, a Call lowered from no source node) it is parsed here exactly as the fallback
-    parses a name, the owning module always the record's."""
+    parses a name, the owning module always the record's.  A collective's `member` is its kind -- the `/<kind>` tag after the row
+    (`<module>/all_reduce2_7[0]/all_reduce`), the fallback's `suffix`, never a return-slot hint."""
     if rec.hint:
         n = parse_call_name(rec.hint)
         return CallName(rec.module, n.node, n.hint, n.row, n.suffix)
-    return CallName(rec.module, rec.node or "", rec.member or "", str(rec.row) if rec.row is not None else None, "")
+    row = str(rec.row) if rec.row is not None else None
+    if rec.collective is not None and rec.member == rec.collective.kind:
+        return CallName(rec.module, rec.node or "", "", row, rec.member)
+    return CallName(rec.module, rec.node or "", rec.member or "", row, "")
 
 
 def implementation_prefix(program_modules: Iterable[str], implementation_paths: Iterable[str]) -> str:
@@ -141,6 +145,14 @@ class Correspondence:
 
     def name(self, cid: int) -> CallName:
         return self.names[cid]
+
+    def site_path(self, cid: int) -> str:
+        """The path of a MID-module collective SITE (a collective whose rank-local operand another module produced, called from its
+        module's own forward: an attention module gathering its q / k): `<module>.<collective fx node>`, the v1 frontend's spelling.  The
+        fallback's names already spell it (the frontend named the Call under it); the record's owning module is the module itself, so the
+        path is composed from the record's (module, node)."""
+        n = self.names[cid]
+        return n.module if self.table is None else f"{n.module}.{n.node}"
 
     def provenance(self) -> dict[str, Any]:
         """What served the owning modules: recorded in the manifest header (`correspondence`)."""

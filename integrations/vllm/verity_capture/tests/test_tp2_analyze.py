@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from verity_capture.bench import tp2_analyze as ta
+from verity_capture.tp import analyze as ta
 
 
 def test_bf16_round_trip_and_rne_ties():

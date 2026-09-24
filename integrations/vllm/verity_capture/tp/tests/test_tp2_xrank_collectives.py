@@ -118,6 +118,32 @@ def test_a_received_output_missing_on_one_rank_is_a_named_fail_not_a_pass():
     assert "rank 1" in r["missing"][0]["why"] and "received" in r["missing"][0]["why"]
 
 
+def _chain(parts, order):
+    acc = parts[order[0]]
+    for r in order[1:]:
+        acc = (acc.float() + parts[r].float()).to(torch.bfloat16)
+    return acc
+
+
+def _dumps_world(parts, recv):
+    site = "model.layers.0.mlp.down_proj"
+    world = len(parts)
+    base = {"step": 2, "site": site, "kind": "all_reduce", "family": XC.family_of(site, "all_reduce", world), "stratum": f"{site}|all_reduce|decode",
+            "rows": list(range(16))}
+    return {r: {"rank": r, "picks": [dict(base, part=parts[r], recv=recv.clone(), recv_member=f"{site}/0", why=None, emb=None)]} for r in range(world)}
+
+
+def test_world_4_all_reduce_is_the_descending_rank_chain():
+    g = torch.Generator().manual_seed(4)
+    parts = [(torch.randn(16, 64, generator=g) * 4.0 ** r).to(torch.bfloat16) for r in range(4)]
+    desc, asc = _chain(parts, [3, 2, 1, 0]), _chain(parts, [0, 1, 2, 3])
+    assert not torch.equal(desc, asc)
+    r = XC.check_picks(_dumps_world(parts, desc), world=4)
+    assert r["result"] is True and r["equal"] == 1 and set(r["by_family"]) == {"AllReduce_v2"}
+    r = XC.check_picks(_dumps_world(parts, asc), world=4)
+    assert r["result"] is False and r["mismatch_n"] == 1 and r["mismatches"][0]["family"] == "AllReduce_v2"
+
+
 def test_one_rank_dump_is_a_fail():
     d = _dumps()
     r = XC.check_picks({0: d[0]}, world=2)

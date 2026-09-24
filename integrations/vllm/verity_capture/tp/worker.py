@@ -71,7 +71,7 @@ def repo_modules_loaded() -> dict[str, Any]:
     return {"method": "runtime: sys.modules of this process filtered to the repo root + vllm-poc, plus native_collect's cpp_extension sources when loaded (TP-11)",
             "pid": os.getpid(), "n": len(files), "files": sorted(files), "native_collect_jit_sources": jit}
 
-EXTENSION = "verity_capture.bench.tp2_worker.TP2CaptureWorkerExtension"
+EXTENSION = "verity_capture.tp.worker.TP2CaptureWorkerExtension"
 
 #: [R15 moe TP-MOE-AR] the module classes that issue the fused-MoE block's final all-reduce (the `mlp.experts` site of a TP MoE
 #: model's rank Program: `layers.N.mlp.experts (MoERunner)` in derive_step's tp_links) -- hooked for the collective's module name.
@@ -473,7 +473,7 @@ class TP2CaptureWorkerExtension:
         belongs to — the logits all-gather runs after the forward, before the next), `k` (index within the step), kind, the calling
         module (path + class), the partial's shape/dtype and sha256, the received output's sha256; the partial and the output
         tensors of steps < `store_steps` are saved (`coll.rank<r>.step<S>.pt`) for the offline cross-rank provenance check
-        (`tp2_match.py`: received == AllReduce2(part_rank0, part_rank1) / AllGather2, bit-exact).  Same wrapping seam as
+        (`tp/match.py`: received == AllReduce2(part_rank0, part_rank1) / AllGather2, bit-exact).  Same wrapping seam as
         `tp2_sem_install` (module-global collective names); the run's computation is unchanged."""
         import hashlib
 
@@ -632,7 +632,7 @@ class TP2CaptureWorkerExtension:
         """Construct THIS rank's committer (`commit_delta.make_committer` on a per-rank engine shim: this worker's model runner + model,
         the rank's loaded weight SHARDS), attach the FA2 hidden source, size the arena from the workload envelope, register the rank's
         weights.  The rank's root binds its own values (its shards' roots, its partial GEMMs, its FA2 hidden stream for its heads); the
-        driver (`tp2_commit.py`) combines the ranks' roots deterministically and fails closed on a missing rank."""
+        driver (`tp/commit.py`) combines the ranks' roots deterministically and fails closed on a missing rank."""
         import argparse
         from types import SimpleNamespace
 
@@ -826,6 +826,26 @@ class TP2CaptureWorkerExtension:
                 else:
                     swap_rule = None
             res["swap_requests_applied"] = swapped
+        # [lane vllm-tp-n; x03 F-r19-int-22 on the TP record] the per-layer attention plane class is DERIVED from THIS RANK's Program record
+        # (`attention_impls_observed` of the rank Build: the rank-local NH/world, KVH/world, D and window each rank Call's Definition was
+        # selected from) x the step's active sequences -- exactly commit_delta's wiring, on the rank's own record: a GQA layer that folds
+        # on decode at world 1 (NH > KVH) may be MHA-shaped at a world where NH/world == KVH/world, so the class is per rank, never copied.
+        # Without a rank record the committer keeps the R13 uniformity rule and the result says so (named, not assumed).
+        res["attention_plane_classes"] = {"rank": rank, "declarations": 0, "source": None, "rule": "R13 uniformity (no rank Build record with attention_impls_observed)"}
+        if hasattr(com, "identity_check"):
+            try:
+                from verity_capture.experimental.commit_integ import fa2_plane_classes as FP
+                _pdir = ((replay or {}).get("programs") or {}).get(str(rank)) or ((weights_pin or {}).get("program_dirs") or {}).get(str(rank))
+                _impls, _impls_path = FP.attention_impls_of_record(program_dir=_pdir, programs_root=_pdir) if _pdir else (None, None)
+                _decls = FP.declarations_from_attention_impls(_impls) if _impls else []
+                if _decls:
+                    com.attention_layer_decls = _decls
+                    _classes = sorted(set(("windowed" if d.window is not None else "global") + ("-gqa" if d.NH > d.KVH else "-mha") for d in _decls))
+                    res["attention_plane_classes"] = {"rank": rank, "declarations": len(_decls), "source": _impls_path, "classes": _classes,
+                                                      "per_rank_heads": sorted({(d.NH, d.KVH, d.D) for d in _decls}),
+                                                      "rule": "per-layer plane class derived per step from the rank Program's attention statics (fa2_plane_classes)"}
+            except Exception as e:  # noqa: BLE001
+                res["attention_plane_classes"]["error"] = repr(e)[:300]
         self._tp2_commit = {"com": com, "eng": eng, "base": baseline_state(eng), "rank": rank, "rc": None, "program_digest": program_digest,
                             "tps": (tps if tp_partials else None), "world": int(facts["tp"]["world_size"]), "n_requests": int(n_requests),
                             "required_manifest": required_manifest, "request_order": list(request_order or []), "arrivals": dict(arrivals or {}),
@@ -1118,6 +1138,7 @@ class TP2CaptureWorkerExtension:
             from verity_capture.commit import oracle_compare as OC
             from verity_capture.commit import required_manifest as RM
             from verity_capture.commit import sampled_replay as SR
+            from verity_vllm.registry import b1_tp2 as _TP2
 
             com = st["com"]
             reqs = list(cfg.get("requests") or [])
@@ -1157,9 +1178,10 @@ class TP2CaptureWorkerExtension:
             # EmbeddingShard rows with a committed member), from the Program itself -- the cross-rank pass records its strata against them
             try:
                 xs: dict[str, set] = {}
+                xr_fams = _TP2.cross_rank_families(int(st["world"]))     # [lane vllm-tp-n] from the registry's composites at this world, not typed
                 for r_ in pi0.rows:
                     fam_ = RM.spec_family(r_["spec"])
-                    if fam_ in ("AllReduce2_v1", "AllGather2_v1", "EmbeddingShard_v1"):
+                    if fam_ in xr_fams:
                         d_ = pi0.describe(r_)
                         if d_ and d_.get("members"):
                             xs.setdefault(fam_, set()).add(str(d_["op_path"]))
@@ -1201,7 +1223,7 @@ class TP2CaptureWorkerExtension:
             sr = SR.sampled_replay(progs, bmap, rd, wp, arrivals=arr, per_stratum=int(cfg.get("per_stratum") or 2), seed=seed, seed_source=seed_src,
                                    max_evaluate=int(cfg.get("max_evaluate") or 2000), weights_check=wc, targets=list(cfg.get("targets") or []),
                                    workers=cfg.get("workers"), ring_slots=(int(ring) if ring else None), attention_paths=attn_paths, tp=tp_ctx,
-                                   manifest=_man_rank)
+                                   manifest=_man_rank, program_dirs=dirs)
             sr["wrapper_prefix"] = pi0.prefix
             sr["tp_context"] = tp_ctx
             sr["programs"] = {k: {"dir": loaded[k].get("dir"), "program_digest": digs[k]} for k in loaded}
@@ -1238,7 +1260,7 @@ class TP2CaptureWorkerExtension:
         com, rank = st["com"], int(st["rank"])
         t0 = _t.perf_counter()
         layouts = {int(s): [(m.name, tuple(m.shape)) for m in ms] for s, ms in getattr(com, "_layouts", {}).items()}
-        plan = XC.pick_strata(layouts, rank, bytes.fromhex(seed_hex), per_stratum=int(per_stratum), max_rows=int(max_rows))
+        plan = XC.pick_strata(layouts, rank, bytes.fromhex(seed_hex), per_stratum=int(per_stratum), max_rows=int(max_rows), world=int(st["world"]))
         picks, missing, nbytes = [], 0, 0
 
         def tensor_of(step: int, meta) -> Any:

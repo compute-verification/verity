@@ -14,7 +14,8 @@ from verity.verification.query import ValueRef, boundary
 from verity_vllm.query.correspondence import Correspondence, implementation_prefix, parse_call_name
 from verity_vllm.query.module_body import Q_module_body_v1
 from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView
-from verity_vllm.query.v1_bridge import NAMED_RESIDUALS, member_name, request_manifest, shared_instances, under
+from verity_capture.commit import manifest_format as fmt
+from verity_vllm.query.v1_bridge import NAMED_RESIDUALS, member_name, merge_ranks, request_manifest, shared_instances, under
 
 W = "model.model"                                  # the export wrapper holds the served model under `model`
 EMBED_W, QKV_W = f"{W}.embed.weight", f"{W}.layers.0.self_attn.qkv_proj.weight"
@@ -148,14 +149,82 @@ def test_request_manifest_rows():
     assert body["boundary"] == {"crossing_rows": 2, "returned_rows": 2, "structural_member": "out"}   # a crossing Value is a returned tensor too
 
 
-def test_request_manifest_refuses_a_tp_rank_program():
-    """A rank Program's population of record names its rank-local partials (TP-04); the v2 query does not, so it refuses by name."""
-    P = program()
+DOWN_W, LM_W = f"{W}.layers.0.mlp.down_proj.weight", f"{W}.lm_head.weight"
+SITE = f"{W}.logits_processor.all_gather2_0"
+
+
+def tp_program(*, two_operands: bool = False) -> ProgramView:
+    """A world-2 rank Program at toy size: the embedding shard all-reduced in its own body, a row-parallel down_proj (Gemm + all-reduce in
+    one body), and lm_head's vocab shard gathered at a collective SITE (a module body of the gather only) under logits_processor.  Every
+    collective reads the rank's own partial and a `peers_<k>` input (the received peer partial) that only collectives read."""
+    weights = InputView(-1, "weights", "{...}", (Port(EMBED_W, 0, 8, 8, 16), Port(DOWN_W, 8, 16, 8, 16), Port(LM_W, 24, 8, 8, 16)))
+    ids = InputView(-2, "ids", "Value<32>", (Port("ids", 0, 1, 1, 32),))
+    peers = tuple(InputView(-3 - k, f"peers_{k}", "Array<1,Array<4,Value<16>>>", (Port(f"peers_{k}", 0, 4, 4, 16),)) for k in range(3))
+    R = ValueRef
+    calls = (
+        _call(0, "Gather_v1", f"{W}.embed/embedding/out[0]", [R(-2, "ids"), R(-1, EMBED_W)]),
+        _call(1, "AllReduce2_v1", f"{W}.embed/all_reduce[0]/all_reduce", [R(0, "out"), R(-3, "peers_0")]),
+        _call(2, "RmsNorm_v1", f"{W}.layers.0.input_layernorm/rms_norm/out[0]", [R(1, "out")]),
+        _call(3, "Gemm_v1", f"{W}.layers.0.mlp.down_proj/linear[0]", [R(2, "out"), R(-1, DOWN_W)]),
+        _call(4, "AllReduce2_v1", f"{W}.layers.0.mlp.down_proj/all_reduce[0]/all_reduce",
+              [R(3, "out"), R(-4, "peers_1")] + ([R(2, "out")] if two_operands else [])),
+        _call(5, "Add_v1", f"{W}/add[0]", [R(1, "out"), R(4, "out")]),
+        _call(6, "Gemm_v1", f"{W}.lm_head/linear[0]", [R(5, "out"), R(-1, LM_W)], n=2),
+        _call(7, "AllGather2_v1", f"{SITE}/all_gather[0]/all_gather", [R(6, "out"), R(-5, "peers_2")]),
+        _call(8, "ArgmaxTokenSelect_v1", "argmax[0]", [R(7, "out")], n=1),
+    )
+    return ProgramView(calls, (weights, ids) + peers, (ValueRef(8, "out"),), "synthetic", "synthetic")
+
+
+def _tp_manifest(rank: int, P: ProgramView | None = None) -> dict:
+    P = P or tp_program()
+    res = {"program": {"digest": f"d{rank}", "function": "f"}, "target": {"declared": {"compute_capability": [8, 9]}}, "tp": {"world": 2, "rank": rank}}
+    return request_manifest(P, Correspondence(P), res, request_id="r0", rank=rank, ranks=2).manifest
+
+
+def test_a_rank_program_requires_its_rank_local_partials_beside_every_collective_output():
+    """TP-04: a collective's output and its rank-local partial are required on every rank.  A partial produced in the collective's own body
+    is its producer's Value (`part_rank<r>`); a collective site whose operand another body produced names its partial itself (`shard_rank<r>`,
+    1/world of the gathered width) at the enclosing module, invocation 0.  The received `peers_<k>` inputs are neither token ids nor rows."""
+    for rank in (0, 1):
+        m = _tp_manifest(rank)
+        assert m["complete"], m["unmodelled"]
+        rows = {(x["family"], x["op_path"], x["output_member"]): x for x in m["identities"] if x["family"] != "weights"}
+        partials = {(op, mem): x["element_range"][1] for (fam, op, mem), x in rows.items() if fam == "tp_rank_partials"}
+        assert partials == {(f"{W}.embed", f"part_rank{rank}"): 4, (f"{W}.layers.0.mlp.down_proj", f"part_rank{rank}"): 4,
+                            (f"{W}.logits_processor", f"shard_rank{rank}"): 2}
+        assert rows[("tp_rank_partials", f"{W}.logits_processor", f"shard_rank{rank}")]["program_op_path"] == SITE
+        assert rows[("instance_outputs", f"{W}.logits_processor", "out")]["invocation"] == 0
+        assert ("instance_outputs", f"{W}.layers.0.mlp.down_proj", "0") in rows                # the row-parallel linear's slot 0 = the all-reduce
+        assert ("instance_outputs", f"{W}.embed", "out") in rows
+        assert {x["op_path"] for x in m["identities"] if x["family"] == "input_token_ids"} == {f"{W}.embed"}
+        assert m["op_path_aliases"][SITE] == [f"{W}.logits_processor", 0]
+        assert m["query"]["residuals_applied"]["encoding:rank operand"] == 3
     res = {"program": {"digest": "d0", "function": "f"}, "target": {"declared": {"compute_capability": [8, 9]}}, "tp": {"world": 2, "rank": 1}}
-    with pytest.raises(ValueError, match="TP rank Program .*required_manifest build-global"):
-        request_manifest(P, Correspondence(P), res, request_id="r0", rank=1, ranks=2)
     with pytest.raises(ValueError, match="rank Program mismatch"):
-        request_manifest(P, Correspondence(P), res, request_id="r0")
+        request_manifest(tp_program(), Correspondence(tp_program()), res, request_id="r0")
+
+
+def test_a_collective_with_two_rank_local_operands_is_named_and_the_rank_manifest_is_incomplete():
+    m = _tp_manifest(0, tp_program(two_operands=True))
+    assert not m["complete"] and any("2 rank-local operands" in k for k in m["unmodelled"])
+
+
+def test_merge_ranks_binds_every_collective_output_to_the_peers_partial_and_keeps_each_ranks_digest():
+    m0, m1 = _tp_manifest(0), _tp_manifest(1)
+    g = merge_ranks([m1, m0])
+    assert g["complete"] and g["tp_peer_binding"]["n_unbound"] == 0 and g["tp_peer_binding"]["bound"] == 6
+    assert g["program_digest_kind"] == "tp-ranks-fold" and g["program_digest"] == fmt.tp_ranks_fold_digest([m0["program_digest"], m1["program_digest"]])
+    assert g["program_digest_per_rank"] == {"0": m0["program_digest"], "1": m1["program_digest"]}
+    assert {x["program_digest"] for x in g["identities"] if x["rank"] == 1} == {m1["program_digest"]}
+    assert len(g["identities"]) == len(m0["identities"]) + len(m1["identities"])
+    lost = dict(m1, identities=[x for x in m1["identities"] if x["output_member"] != "shard_rank1"])
+    bad = merge_ranks([m0, lost])
+    assert not bad["complete"] and bad["tp_peer_binding"]["n_unbound"] == 1 and any(k[:16] == "tp peer binding:" for k in bad["unmodelled"])
+    with pytest.raises(ValueError, match="needs every rank"):
+        merge_ranks([m0, m0])
+    with pytest.raises(ValueError, match="one Program digest"):
+        merge_ranks([m0, dict(m1, program_digest=m0["program_digest"])])
 
 
 def test_return_slot_policy_is_switchable():

@@ -221,3 +221,17 @@ def test_structural_refusals_are_stated():
     m = json.loads((dg.HF_CONFIG_DIR / "QWEN3_30B_A3B.config.json").read_text())
     assert "mlp_only_layers" in G.structural_refusal({**m, "mlp_only_layers": [0]})
     assert "awq" in G.structural_refusal(json.loads((dg.HF_CONFIG_DIR / "QWEN15_AWQ.config.json").read_text()))
+
+
+def test_olmoe_rank_record_holds_the_whole_all_heads_qk_norm():
+    """OLMoE's q/k RMSNorm spans every head (`RMSNorm(total_num_heads * head_dim)`): a TP rank all-gathers q and k first and holds the
+    whole replicated weight, so the rank record's `q_norm` / `k_norm` have the full model's width while its heads are the rank's."""
+    full, rank = (importlib.import_module(f"verity_capture.profiles.{G.module_name('OLMOE', w)}") for w in (1, 2))
+
+    def layer(C):
+        wt = analytic.weights_type(C)
+        return {n: t.leaves for n, t in wt.fields[wt.index("layers")][1].elem.fields}
+
+    f, r = layer(full.C), layer(rank.C)
+    assert rank.C["NH"] * 2 == full.C["NH"] and r["o_w"] * 2 == f["o_w"]
+    assert r["q_norm"] == f["q_norm"] == full.C["NH"] * full.C["D"] and r["k_norm"] == f["k_norm"] == full.C["KVH"] * full.C["D"]

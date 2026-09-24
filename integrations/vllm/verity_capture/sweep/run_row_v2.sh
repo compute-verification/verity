@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# run_row_v2.sh -- the v2 wrapper that runs each sweep stage as ONE `research run --tool vllm.<stage>` Attempt (Phase 5a).  row_pod.sh is
-# untouched: it is called for one stage at a time; this script only maps flags to its env knobs, checks the cited inputs, and on exit
+# run_row_v2.sh -- the v2 wrapper that runs each sweep stage as ONE `research run --tool vllm.<stage>` Attempt (Phase 5a).  row_pod.sh (or
+# tp_stage.sh, for a `__tp<N>__` row with N >= 2) is untouched: it is called for one stage at a time; this script only maps flags to its env knobs, checks the cited inputs, and on exit
 # declares the stage's typed outputs (`outputs.json`, verity_capture/sweep/research_outputs.py) for the runner's publish step.
 #
 #   run_row_v2.sh stage <build|match|commit> <row-id> <ROLE> <hf-repo> <revision> [--flag value ...]
@@ -92,6 +92,7 @@ parse_stage_flags() {
 }
 
 row_batch() { local r=$1 b; b=$(echo "$r" | sed -n 's/.*__b\([0-9]*\)__.*/\1/p'); echo "${b:-1}"; }
+row_world() { local r=$1 w; w=$(echo "$r" | sed -n 's/.*__tp\([0-9]*\)__.*/\1/p'); echo "${w:-1}"; }
 
 # ---- stage ------------------------------------------------------------------------------------------------------------------------------------
 job_input() {  # job_input <name> -> art id recorded by `research run --input <name>=art:...` (job.json store.inputs), or ""
@@ -144,10 +145,11 @@ cmd_stage() {
     fi
     echo "$(date -u +%FT%TZ) [row $row] v2 $stage: consumes Build $build_in (program_digest ${here:0:16} verified)${match_in:+, Match $match_in}" | tee -a "$d/row.log"
   fi
-  local rc
-  bash "${ROW_POD:-verity_capture/sweep/row_pod.sh}" "$row" "$role" "$repo" "$rev" "$stage"; rc=$?     # ROW_POD: a stand-in stage for dry runs / tests
-  # the Build artifact carries the required-value manifest of record: row_pod.sh builds it at the end of a PASS Build
-  # (`required_manifest_build`: verity_vllm.query.cli, Q_module_body_v1), so there is nothing to add here
+  local rc runner=verity_capture/sweep/row_pod.sh
+  [ "$(row_world "$row")" -gt 1 ] && runner=verity_capture/sweep/tp_stage.sh      # a `__tp<N>__` row: the WORLD=N runner
+  bash "${ROW_POD:-$runner}" "$row" "$role" "$repo" "$rev" "$stage"; rc=$?     # ROW_POD: a stand-in stage for dry runs / tests
+  # the Build artifact carries the required-value manifest of record: row_pod.sh / tp_stage.sh build it at the end of a PASS Build
+  # (verity_vllm.query.cli, Q_module_body_v1), so there is nothing to add here
   exit "$rc"
 }
 

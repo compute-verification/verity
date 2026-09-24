@@ -174,7 +174,10 @@ def moe_layer_weights_type(C: dict[str, Any]) -> Record:
         # head (`dense_layer_weights_type`), not OLMoE's all-heads `[NH*D]` / `[KVH*D]` norm.  Same field names, so every reader is unchanged.
         fields += [("q_norm", Array(C["D"], BF16)), ("k_norm", Array(C["D"], BF16))]
     elif C.get("QK_NORM"):
-        fields += [("q_norm", Array(C["NH"] * C["D"], BF16)), ("k_norm", Array(C["KVH"] * C["D"], BF16))]
+        # OLMoE's norm spans ALL heads (`RMSNorm(total_num_heads * head_dim)`): a TP rank all-gathers q / k first and holds the whole
+        # weight, replicated -- C's NH / KVH are the rank's heads, so the width is theirs times the world
+        W = int(C.get("WORLD", 1))
+        fields += [("q_norm", Array(C["NH"] * C["D"] * W, BF16)), ("k_norm", Array(C["KVH"] * C["D"] * W, BF16))]
     fields += [("o_w", Array(H, Array(C["NH"] * C["D"], BF16))), ("ln2", Array(H, BF16)),
                ("gate_w", Array(E, Array(H, BF16))),
                ("w13", Array(E, Array(2 * I, Array(H, BF16)))),

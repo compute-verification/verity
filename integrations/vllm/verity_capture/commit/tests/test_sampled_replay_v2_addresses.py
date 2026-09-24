@@ -80,7 +80,32 @@ def test_address_rule_is_the_manifests_engine():
         SR.ProgramIndex({"rows": [], "params": []}, rule="v3")
 
 
-def test_v2_rule_refuses_a_tp_rank_program():
-    inst, _woff = _program()
-    with pytest.raises(ValueError, match="rank-local partials"):
-        SR.ProgramIndex(inst, tp={"rank": 1, "world": 2}, rule=SR.V2_QUERY)
+@pytest.mark.parametrize("rank", [0, 1])
+def test_v2_rule_addresses_a_tp_rank_program_as_v1_and_its_rank_manifest_has_v1s_identities(rank):
+    """TP-04 on the v2 query: a wired rank Program's v2 manifest carries v1's identities -- the rank-local partials (`part_rank<r>` /
+    `shard_rank<r>`) beside every collective output -- and the v2 rule addresses every row as the v1 rule does with the rank's TP context."""
+    import copy
+
+    from verity_capture.commit import required_manifest as RM
+    from verity_capture.commit.tests.test_required_values import _tp_df
+    from verity_vllm.query.compare import compare, summarize
+    prog = _tp_df(rank)
+    inst, wl = prog["instances"], {"sweep": {"row_id": "tp2-df", "batch": 1, "arrive_steps": [0]}}
+    # the row-parallel Gemm reads its own weight shard (the fixture wires the embedding's read only): the all-reduce takes the Linear's slot "0"
+    H, V, wp = 32, 16, len(inst["params"]) - 1
+    for r in inst["rows"]:
+        if r["spec"][:8] == "Gemm_v1{" and "mlp.down_proj/" in r["name"]:
+            r["args"].append([["p", wp, V * H, V * H + H * (H // 2)]])
+    P = from_instances(inst)
+    man = request_manifest(P, Correspondence(P, implementation_paths=IMPL), prog["result"], request_id="r0", workload=wl, rank=rank, ranks=2).manifest
+    assert man["complete"], man["unmodelled"]
+    assert {x["output_member"] for x in man["identities"] if x["family"] == "tp_rank_partials"} == {f"part_rank{rank}", f"shard_rank{rank}"}
+    v1m = RM.build_manifest(copy.deepcopy(prog), wl, request_id="r0", rank=rank, ranks=2)
+    s = summarize(compare(v1m["identities"], man["identities"], ignore_program_digest=True))
+    assert s["only_v1_n"] == s["only_v2_n"] == s["multiplicity_diff_n"] == 0, s
+    tp = {"rank": rank, "world": 2}
+    v1 = SR.ProgramIndex(inst, tp=tp, rule="v1", attention_paths=list(IMPL))
+    v2 = SR.ProgramIndex(inst, tp=tp, rule=SR.address_rule_of(man), attention_paths=list(IMPL))
+    assert v2.rule == SR.V2_QUERY
+    diffs = [(r["i"], r["spec"], _address(v1, r), _address(v2, r)) for r in inst["rows"] if _address(v1, r) != _address(v2, r)]
+    assert not diffs, diffs[:5]

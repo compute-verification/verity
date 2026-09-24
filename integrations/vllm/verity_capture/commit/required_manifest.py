@@ -37,9 +37,9 @@ are those plus the prescribed inputs (weights, prompt ids) and the protocol-requ
 the manifest header (`query`) and in every manifest_digest stays `Q_module_v1` until a labelled decision renames it -- changing
 the string changes the digest of every manifest of record.  The query IMPLEMENTATION is `verity_vllm.query` (`query.cli build` builds
 the manifest; `sampled_replay.ProgramIndex` addresses a v2-query manifest from `v1_bridge.population`).  `members_for` and the by-name
-tables below are its hand-maintained predecessor, still needed for (a) TP rank Programs -- the v2 query names no rank-local partials and
-`compose_global` has no rank merge (TP-04) -- and (b) re-deriving v1 records of record (the harness's v1 engine, `replay_partition`'s
-recompute of a record whose `addresses.rule` is v1).  They retire when both are gone; `tests/test_no_by_name_rules.py` pins them until then.
+tables below are its hand-maintained predecessor, still needed only to re-derive v1 records of record (the harness's v1 engine,
+`replay_partition`'s recompute of a record whose `addresses.rule` is v1) -- TP rank Programs are on the v2 query (its TP-04 policy and
+`v1_bridge.merge_ranks`).  They retire when those are gone; `tests/test_no_by_name_rules.py` pins them until then.
 The words in this module: an 'identity row' is one required Value's manifest entry; `op_path` + `output_member` + `invocation`
 are the occurrence key (the serialization of a runtime occurrence); 'the manifest' always means the required-value manifest.
 
@@ -74,7 +74,7 @@ from .manifest_format import (alias_family, canonical_identity, collector_path, 
                               moe_geometry, moe_identities, MOE_LEAF, program_dirs_for as _program_dirs_for, programs_for as _programs_for,
                               PROMOTED_MEMBER, REGISTRY_UNAVAILABLE_EXIT, RegistryUnavailable, REQ_RE as _REQ_RE, request_label,
                               row_key as _row_key, SCHEMA, segment_steps, spec_family, spec_statics, split_name, SPLITS_PARAM, TP_PARTIAL_MEMBER,
-                              TP_SHARD_MEMBER, wrapper_prefix_of)
+                              TP_PEER_BINDING_RULE, tp_peer_binding as _fmt_tp_peer_binding, tp_ranks_fold_digest, TP_SHARD_MEMBER, wrapper_prefix_of)
 
 #: [R19 moe, row #70 / F-r19-moe-1] a MID-module collective SITE: the frontend names a collective whose rank-local operand is produced by
 #: ANOTHER module (OLMoE `OlmoeAttention._apply_qk_norm`: q and k all-gathered inside `self_attn`, each a slice of `qkv_proj`'s Gemm) under
@@ -206,9 +206,9 @@ def members_for(family: str, statics: dict[str, Any], module: str, hint: str, tp
         # (Lift(Q_fine_v1), or a declared padded-boundary Q with its own digest) -- the query decides the boundaries, never the collector.
         out = [("out", int(statics.get("H", 0)), "bf16")]
         return out + (padded_slot_members(statics) if padded_slots else [])
-    if family.startswith(("AllReduce2", "AllGather2")):
+    if collective_kind(family) is not None:       # [lane vllm-tp-n] AllReduce2/AllGather2 (world 2) or AllReduce/AllGather{WORLD,N}, from the registry
         n = int(statics.get("N", 0))
-        gather = family.startswith("AllGather2")
+        gather = collective_kind(family) == "all_gather"
         # the all-reduced module output (received by every rank) / the gathered row (rank shards side by side)
         out = [("out", n * world, "bf16")] if gather else [("0" if (leaf in _LINEAR_LEAVES or "proj" in leaf) else "out", n, "bf16")]
         if tp is not None and collective_site(module) is not None:
@@ -346,6 +346,13 @@ def is_aggregate_family(family: str, module: str) -> bool:
 def is_structure_family(family: str) -> bool:
     return family.startswith(_STRUCTURE_PREFIXES)
 
+
+
+def collective_kind(family_or_id: str) -> str | None:
+    """[lane vllm-tp-n] "all_reduce" / "all_gather" / None for a Definition family or id, of any world (`b1_tp2.collective_kind`: the
+    registry's composites decide, never a spelled prefix).  Registry unavailable -> RegistryUnavailable (fail closed, as `_registry`)."""
+    from verity_vllm.registry import b1_tp2 as _TP2
+    return _TP2.collective_kind(family_or_id)
 
 def _registry() -> tuple[Any, list[str]]:
     """(verity.ir REGISTRY with the integration's composite modules imported, [import errors of the integration's OWN registry modules])
@@ -803,7 +810,7 @@ def _inventory_guard() -> dict[str, Any]:
     return guard_summary(None, engine="inventory")
 
 
-# stays for TP rank manifests (row_pod_tp2.sh, until TP=N) and the harness's BASELINE_ENGINE=v1 oracle
+# stays for the harness's BASELINE_ENGINE=v1 oracle and v1 records of record
 def build_manifest(program: dict[str, Any], workload: dict[str, Any] | None = None, *, request_id: str | int | None = None,
                    rank: int = 0, ranks: int = 1, profile: str | None = None, shared_rope: bool = True, engine: str | None = None) -> dict[str, Any]:
     """The manifest of one request Program (B=1, `--wrapper request`).  `workload` (sweep manifest) supplies request id / arrival step."""
@@ -907,10 +914,9 @@ def build_manifest(program: dict[str, Any], workload: dict[str, Any] | None = No
         if prog_world > 1:
             for r in seg:
                 f0 = spec_family(r["spec"])
-                if f0.startswith("AllReduce2"):
-                    coll_of[split_name(r.get("name") or "")[0]] = "all_reduce"
-                elif f0.startswith("AllGather2"):
-                    coll_of[split_name(r.get("name") or "")[0]] = "all_gather"
+                ck = collective_kind(f0)
+                if ck is not None:
+                    coll_of[split_name(r.get("name") or "")[0]] = ck
         epi_mods = epilogue_modules(seg)                                          # [MAN-07] biased linears: BiasAdd produces member 0
         for k_row, r in enumerate(seg):
             i_row = lo_i + k_row                                                 # the row's Program index (the operand runs' `["n", i, ..]`)
@@ -1268,67 +1274,9 @@ def build_global_manifest(fixture: dict[str, Any], programs: dict[str, dict[str,
             "manifest_digest": manifest_digest(ids), "identities": ids, "guard": _inventory_guard()}
 
 
-TP_PEER_BINDING_RULE = ("a rank Program's collective row (AllReduce2 / AllGather2) consumes the rank's OWN partial and the RECEIVED peer partial "
-                        "(its `peers_<k>` input); the received value IS the peer rank's own partial identity (`tp_rank_partials`: part_rank<peer> / "
-                        "shard_rank<peer>) at the same (request, step, invocation, module) -- so the merged population binds them identity for "
-                        "identity in both directions: a collective output without the peer's partial, or a partial without the peer's collective "
-                        "output, is named and the merge is not complete; the element RANGE binds too (an all_reduce partial is the output's full "
-                        "width, an all_gather shard is 1/world of it; `width_checked` counts the pairs both sides sized) -- the identity level; "
-                        "the committed BYTES are bound at Commit by D90 rank_match.peer_binding / TP-12, not here.  [revb F-r17b-17] `invocation` "
-                        "is 0 for every (module, member, step) on both engines (the shared-RoPE alias is the one exception: layer order): a module "
-                        "path issued TWICE in one step is ONE identity whose element_range is both calls' rows, not two identities -- the binding "
-                        "here sees one pair per (step, module) and says bound; the second issue fails one stage later at `coverage_check`, whose "
-                        "k-th committed occurrence binds to invocation k with the FIRST call's numel < the identity's hi -> MISSING by name")
-
-
 def tp_peer_binding(parts: list[dict[str, Any]]) -> dict[str, Any]:
-    """[R17 reqval finding 7] The TP merge's identity-level cross-rank check (see `TP_PEER_BINDING_RULE`).  `parts` are the rank manifests
-    (one per rank).  Returns {world, collective_outputs, peer_partials, bound, n_unbound, unbound: [first 16 by name], rule}."""
-    world = max(int(p.get("ranks") or 1) for p in parts)
-
-    def _width(r: dict[str, Any]) -> int | None:
-        er = r.get("element_range")
-        return int(er[1]) - int(er[0]) if isinstance(er, (list, tuple)) and len(er) == 2 else None
-    partials: dict[tuple, int | None] = {}                        # (request, step, invocation, op_path, member, rank) -> element width
-    outputs: list[tuple] = []                                     # (request, step, invocation, op_path, rank, kind, element width)
-    for p in parts:
-        for r in p["identities"]:
-            if r["family"] == "tp_rank_partials":
-                partials[(str(r["request_id"]), int(r["step"]), int(r.get("invocation", 0)), r["op_path"], r["output_member"], int(r["rank"]))] = _width(r)
-            elif r["family"] == "instance_outputs" and str(r.get("spec") or "").startswith(("AllReduce2", "AllGather2")):
-                outputs.append((str(r["request_id"]), int(r["step"]), int(r.get("invocation", 0)), r["op_path"], int(r["rank"]),
-                                "all_gather" if str(r["spec"]).startswith("AllGather2") else "all_reduce", _width(r)))
-    unbound: list[str] = []
-    bound = 0
-    width_checked = 0
-    out_keys: set[tuple] = set()
-    for rq, s, inv, op, rk, kind, w_out in outputs:
-        out_keys.add((rq, s, inv, op, rk))
-        member = (TP_SHARD_MEMBER if kind == "all_gather" else TP_PARTIAL_MEMBER)
-        for peer in range(world):
-            if peer == rk:
-                continue
-            key = (rq, s, inv, op, member.format(rank=peer), peer)
-            if key not in partials:
-                unbound.append(f"rank {rk} {op} step {s} {kind} output: no {member.format(rank=peer)} identity on rank {peer} (request {rq})")
-                continue
-            # [revb M-0143 (a)] the RANGE binds too: an all_reduce partial is the output's full width; an all_gather shard is 1/world of it
-            w_part = partials[key]
-            if w_out is not None and w_part is not None:
-                width_checked += 1
-                want = w_out if kind == "all_reduce" else (w_out // world if w_out % world == 0 else None)
-                if want is None or w_part != want:
-                    unbound.append(f"rank {rk} {op} step {s} {kind} output width {w_out}: {member.format(rank=peer)} on rank {peer} is {w_part} elements, "
-                                   f"not {want if want is not None else f'{w_out}/{world}'} (request {rq})")
-                    continue
-            bound += 1
-    # the reverse direction: a partial whose collective output the peer does not carry (a peer part without the collective row)
-    for rq, s, inv, op, member, rk in sorted(partials):
-        for peer in range(world):
-            if peer != rk and (rq, s, inv, op, peer) not in out_keys:
-                unbound.append(f"rank {rk} {op} step {s} partial {member}: no collective output identity on rank {peer} (request {rq})")
-    return {"world": world, "collective_outputs": len(outputs), "peer_partials": len(partials), "bound": bound, "width_checked": width_checked,
-            "n_unbound": len(unbound), "unbound": sorted(unbound)[:16], "rule": TP_PEER_BINDING_RULE}
+    """`manifest_format.tp_peer_binding` with the registry's collective classifier (`TP_PEER_BINDING_RULE`)."""
+    return _fmt_tp_peer_binding(parts, collective_kind)
 
 
 def merge_manifests(parts: list[dict[str, Any]]) -> dict[str, Any]:
@@ -1361,7 +1309,7 @@ def merge_manifests(parts: list[dict[str, Any]]) -> dict[str, Any]:
             dup = sorted(r for r, d in per_rank_dig.items() if list(per_rank_dig.values()).count(d) > 1)
             raise ValueError(f"TP manifest: ranks {dup} carry the same Program digest {per_rank_dig[dup[0]][:16]} (one rank Program labelled twice; "
                              f"a rank Program is specific to its rank)")
-        pdig = hashlib.sha256(("tp-ranks/" + ",".join(comp)).encode()).hexdigest()
+        pdig = tp_ranks_fold_digest(comp)
         # a B>=2 TP row: every rank's part is the global manifest of the SAME declaration -> identical engine-step composition on every rank
         es = [json.dumps(p.get("engine_steps") if p.get("global") else None, sort_keys=True) for p in parts]
         if len(set(es)) != 1:
