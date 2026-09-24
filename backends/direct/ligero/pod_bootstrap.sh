@@ -9,7 +9,10 @@
 #                             numpy, cupy-cuda12x, blake3, pytest, pytest-timeout
 #   /workspace/bin/ligero-verify   cargo --release build of $SRC/backends/ligero-verify (target dir /workspace/cargo-target)
 #   /workspace/env.sh         `source` it in every later shell: PY, PATH, PYTHONPATH, CARGO_TARGET_DIR, LIGERO_VERIFY,
-#                             LIGERO_INSTANCES_CACHE (run.py's --instances-cache default)
+#                             LIGERO_INSTANCES_CACHE (run.py's --instances-cache default), and the thread pools sized to the
+#                             cgroup CPU quota: OMP_NUM_THREADS = MKL_NUM_THREADS = OPENBLAS_NUM_THREADS = VY_CPU_THREADS =
+#                             floor(quota) (torch's intra-op pool follows OMP_NUM_THREADS).  A 4090 pod has ~10 cores of quota
+#                             while nproc says 96; pools sized to nproc made jobs crawl (kb/pods-4090.md)
 #   /workspace/instances-cache     relchain instance sets for $RELS at each of $NS VUs (+ 64x64 tiles for $TILE64)
 #
 # Knobs (environment):
@@ -19,6 +22,7 @@
 #                        linked into $SRC/fixtures/bench-instances/v1 (gitignored names) so the default --root works
 #   VERIFIER=tcp://HOST:PORT   probe the live verifier's path (RTT / throughput) at the end
 #   SKIP_RUST=1          no cargo build (a pod that only proves)
+#   HEALTH=0             skip the closing pod health check (pod_health.py, as `research pods health`; DEGRADED fails the bootstrap)
 set -uo pipefail
 export DEBIAN_FRONTEND=noninteractive
 SRC=${SRC:-/workspace/src}
@@ -31,7 +35,14 @@ export PATH="$HOME/.cargo/bin:$HOME/.local/bin:/usr/local/cuda/bin:$PATH"
 export CARGO_TARGET_DIR=$W/cargo-target
 export PYTHONPATH="$SRC/packages/verity/src:$SRC/backends/numerical/python:$SRC/tools/research/src:$SRC"
 mkdir -p "$W/bin" "$W/instances-cache"
-NP=$(nproc); [ "$NP" -gt 24 ] && NP=24
+cpu_quota() {  # floor(cgroup CPU quota) in cores: v2 cpu.max, else v1 cfs_quota_us / cfs_period_us; nproc when unlimited
+  local cg=${CGROUP:-/sys/fs/cgroup} q="" p=""
+  if [ -r "$cg/cpu.max" ]; then read -r q p < "$cg/cpu.max"
+  elif [ -r "$cg/cpu/cpu.cfs_quota_us" ]; then q=$(cat "$cg/cpu/cpu.cfs_quota_us"); p=$(cat "$cg/cpu/cpu.cfs_period_us"); fi
+  case "$q" in ''|max|-1) nproc ;; *) q=$((q / p)); echo $((q > 0 ? q : 1)) ;; esac
+}
+THREADS=$(cpu_quota)
+NP=$(nproc); [ "$NP" -gt 24 ] && NP=24; [ "$NP" -gt "$THREADS" ] && NP=$THREADS
 fail=0
 stage() { echo; echo "=== [$(date -u +%H:%M:%S)] $*"; }
 check() { [ "$1" -eq 0 ] || { echo "FAILED: $2"; fail=1; }; }
@@ -41,6 +52,7 @@ stage "machine"
 nvidia-smi --query-gpu=name,uuid,memory.total,driver_version,compute_cap,power.limit,clocks.max.sm --format=csv,noheader
 CC=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader | head -1)
 nproc; free -g | head -2; df -h $W | tail -1; grep -m1 'model name' /proc/cpuinfo; cat /proc/loadavg
+echo "cgroup CPU quota: $THREADS cores of $(nproc) -> OMP/MKL/OpenBLAS/torch threads = $THREADS, instance procs NP = $NP"
 tr '\0' '\n' < /proc/1/environ 2>/dev/null | grep -E '^RUNPOD_(POD_ID|DC_ID|GPU_COUNT)=' || true
 echo "source: $SRC"; cat "$SRC/.research-source.json" 2>/dev/null || echo "(no .research-source.json: not shipped by research pods sync)"
 
@@ -70,6 +82,8 @@ export PYTHONPATH="$PYTHONPATH"
 export CARGO_TARGET_DIR=$CARGO_TARGET_DIR
 export LIGERO_VERIFY=$W/bin/ligero-verify
 export LIGERO_INSTANCES_CACHE=$W/instances-cache
+# the cgroup CPU quota ($THREADS cores; nproc says $(nproc)): size every pool to it
+export OMP_NUM_THREADS=$THREADS MKL_NUM_THREADS=$THREADS OPENBLAS_NUM_THREADS=$THREADS VY_CPU_THREADS=$THREADS
 cd $SRC
 EOF
 
@@ -162,5 +176,11 @@ stage "versions"
 uv pip list --python "$PY" 2>/dev/null | grep -Ei "^(torch|triton|numpy|cupy-cuda12x|blake3|pytest|pytest-timeout) "
 "$HOME/.cargo/bin/rustc" --version 2>/dev/null
 df -h $W | tail -1
+
+if [ "${HEALTH:-1}" = 1 ]; then
+  stage "pod health (quota, GPU state, encode + matmul vs pod_health_ref.json; = research pods health)"
+  cd "$SRC" && OMP_NUM_THREADS=$THREADS MKL_NUM_THREADS=$THREADS OPENBLAS_NUM_THREADS=$THREADS "$PY" -m backends.direct.ligero.pod_health
+  check $? "pod health (exit 3 = DEGRADED: replace this pod)"
+fi
 echo "next shells: source $W/env.sh"
 if [ $fail -eq 0 ]; then echo BOOTSTRAP_OK; else echo BOOTSTRAP_FAILED; exit 1; fi

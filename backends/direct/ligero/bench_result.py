@@ -315,6 +315,8 @@ def main(argv: list[str] | None = None) -> int:
                                               "auth_negatives_python": bench["validation"]["evidence"].get("auth_negatives"),
                                               "auth_roots": bench["validation"]["evidence"].get("auth_roots")} if with_auth else {})}},
               "measurements": meas, "measurement_files": ["bench_vu.json", "verify/independent.json", "proofs/manifest.json"], "artifacts": []}
+    if "contention" in bench:
+        result["contention"] = bench["contention"]
     tmp = run_dir / "result.json.tmp"
     tmp.write_text(json.dumps(result, indent=1, default=str))
     os.replace(tmp, run_dir / "result.json")

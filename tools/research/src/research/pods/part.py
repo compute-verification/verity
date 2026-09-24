@@ -92,8 +92,8 @@ def render(rep: dict[str, Any]) -> str:
 
 def main(argv: list[str]) -> int:
     """`research pods check-part <machine|pod-id> [--json]` | `research pods create <runpod create flags> [--require-reference-part]`
-    | `research pods ssh|sync ...` (connect.py) | any other verb goes to `python -m research.pods.runpod` unchanged.  Exit 3 = not the
-    reference part."""
+    | `research pods ssh|sync ...` (connect.py) | `research pods health <pod>` (health.py) | any other verb goes to
+    `python -m research.pods.runpod` unchanged.  Exit 3 = not the reference part (check-part, create) or DEGRADED (health)."""
     import argparse
     import sys
 
@@ -140,6 +140,10 @@ def main(argv: list[str]) -> int:
         from .guard import main as guard_main                 # the fleet budget guard (guard.py)
 
         return guard_main(argv[1:])
+    if argv[:1] == ["health"]:
+        from .health import main as health_main               # fit to measure on? quota, GPU state, microbenchmark (health.py)
+
+        return health_main(argv[1:])
     sys.argv = ["research pods", *argv]
     runpod.main()
     return 0
