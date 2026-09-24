@@ -28,8 +28,7 @@ Where the config comes from (`find_hf_config(role)`, first hit wins; the source 
   1. `profiles/hf_configs/<ROLE>.config.json` — a byte copy shipped with the package (`record_v5/ship.sh` ships `verity_vllm/observe/`,
      not `out/gen/`); its sha256 must equal the manifest entry's `config_sha256` when the manifest is present;
   2. the manifest entry's `local_path/config.json` (the downloaded snapshot on the pod);
-  3. `$HF_HOME/hub/models--<repo>/snapshots/<revision>/config.json` (the hub cache);
-  4. `data/hf_configs/<ROLE>.config.json` (laptop-side copies).
+  3. `$HF_HOME/hub/models--<repo>/snapshots/<revision>/config.json` (the hub cache).
 """
 from __future__ import annotations
 
@@ -40,15 +39,13 @@ import types
 from pathlib import Path
 from typing import Any
 
+from verity_vllm.config import CHECKPOINTS as MANIFEST
 from verity_vllm.input_provenance import analytic
 from ..resolver import Profile
 from .vllm_d9105ea80_sm89_eager import with_geometry
 
 MODULE_PREFIX = "dense_"                    # verity_vllm.observe.profiles.dense_<ROLE>
-PACKAGE_ROOT = Path(__file__).resolve().parents[3]
-MANIFEST = PACKAGE_ROOT / "manifests" / "checkpoints.json"
 HF_CONFIG_DIR = Path(__file__).with_name("hf_configs")
-OUT_HF_CONFIG_DIR = PACKAGE_ROOT / "data" / "hf_configs"
 
 #: [P6] the served vocabulary is `family_facts.FAMILY_FACTS` (every family's vLLM hard-codes with provenance); a configuration outside it, or
 #: with a structure the table does not describe, refuses fail-closed in `generic.structural_refusal` -- not a silently mis-fitted profile.
@@ -112,9 +109,6 @@ def find_hf_config(role: str) -> tuple[Path, str, dict[str, Any] | None] | None:
             snap = Path(hf_home) / "hub" / f"models--{repo.replace('/', '--')}" / "snapshots" / rev / "config.json"
             if snap.exists():
                 return snap, "hf_home:snapshot", entry
-    out = OUT_HF_CONFIG_DIR / f"{role}.config.json"
-    if out.exists():
-        return out, "data/hf_configs", entry
     return None
 
 

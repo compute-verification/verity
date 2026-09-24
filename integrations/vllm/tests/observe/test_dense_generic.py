@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+from verity_vllm.config import ROOT
 from verity_vllm.observe.events import RunHeader
 from verity_vllm.observe.patterns import GemmLaunch
 from verity_vllm.observe.profiles import dense_generic as dg
@@ -139,5 +140,5 @@ def test_fresh_process_import_by_name(tmp_path: Path):
     """What resolve_log / compare / gates do: `importlib.import_module("verity_vllm.observe.profiles." + name)` in a new interpreter."""
     code = ("import importlib, json; m = importlib.import_module('verity_vllm.observe.profiles.dense_MISTRAL7B'); "
             "print(json.dumps([m.PROFILE.id, m.PROFILE.config['NL'], m.PROFILE.config['BN'], m.CASE]))")
-    out = subprocess.run([sys.executable, "-c", code], check=True, capture_output=True, text=True, cwd=str(dg.PACKAGE_ROOT)).stdout
+    out = subprocess.run([sys.executable, "-c", code], check=True, capture_output=True, text=True, cwd=str(ROOT)).stdout
     assert json.loads(out.strip().splitlines()[-1]) == ["vllm-d9105ea80-sm89-eager-bf16-mistral7b", 32, 64, "MISTRAL7B"]

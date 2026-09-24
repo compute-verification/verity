@@ -40,9 +40,9 @@ from pathlib import Path
 
 import numpy as np
 
+from verity_vllm.config import ROOT as REPO
 from verity_vllm.program.registry.b1 import B0_CONFIG, FUSED_RMS_BLOCK
 
-REPO = Path(__file__).resolve().parents[3]
 BUNDLE = REPO / "vllm-poc/bundles/B0-358bb6d66805-ta1eager-commit.tar.xz"
 BUNDLE_SHA256 = "7ba7df9b00699d10740a3c25c8c8bbd207bbe364d281451d3d8134ae8fc97dba"
 NORM_WEIGHTS = REPO / "fixtures/verity-ir/rmsnorm-fused-b0/smollm2_norm_weights.npz"

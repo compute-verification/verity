@@ -30,12 +30,14 @@ import hashlib
 import json
 import sys
 import uuid
+from importlib import resources
 from pathlib import Path
 
 import numpy as np
 
-REPO = Path(__file__).resolve().parents[2]
-CORPUS = REPO / "verity_vllm" / "observe" / "profiles" / "corpus_coverage.json"
+from verity_vllm.config import CHECKPOINTS, WORKLOADS
+
+CORPUS = resources.files("verity_vllm") / "observe" / "profiles" / "corpus_coverage.json"
 SCHEMA = "verity-vllm/workload/v1"
 PROFILES = ("B1", "B8-static", "B8-mixed")
 CTX = {"C256": {"lo": 32, "cap": 256, "min_out": 2}, "C1024": {"lo": 128, "cap": 1024, "min_out": 4}}
@@ -371,8 +373,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--profiles", default=",".join(PROFILES))
     ap.add_argument("--ctx", default=",".join(sorted(CTX)))
     ap.add_argument("--seed", type=int, default=0, help="length seed (the draws depend on (profile, ctx, seed) only)")
-    ap.add_argument("--out-dir", default=str(REPO / "workloads"))
-    ap.add_argument("--checkpoints", default=str(REPO / "manifests" / "checkpoints.json"))
+    ap.add_argument("--out-dir", default=str(WORKLOADS))
+    ap.add_argument("--checkpoints", default=str(CHECKPOINTS))
     ap.add_argument("--replicate", type=int, default=0, help="r > 0: same length draws, prompts from prompt seed seed+1000r; file suffix _r<r>")
     ap.add_argument("--variant", action="append", default=[],
                     help="sampling variant ('greedy' | 't1' = temperature 1.0, file suffix _t1) and/or feature variants key=value, "

@@ -33,13 +33,14 @@ import re
 import os
 import sys
 import uuid
+from importlib import resources
 from pathlib import Path
 
 import numpy as np
 
-REPO = Path(__file__).resolve().parents[2]
-CORPUS = REPO / "verity_vllm" / "observe" / "profiles" / "corpus_coverage.json"
-CHECKPOINTS = REPO / "manifests" / "checkpoints.json"
+from verity_vllm.config import CHECKPOINTS, WORKLOADS
+
+CORPUS = resources.files("verity_vllm") / "observe" / "profiles" / "corpus_coverage.json"
 SCHEMA = "verity-vllm/workload/v1"
 SWEEP_SCHEMA = "verity-sweep/workload/v1"
 SAMPLING = {
@@ -349,7 +350,6 @@ def case_for(hf_repo: str, revision: str, explicit: str | None) -> str | None:
     if explicit:
         return explicit
     try:                                    # the adapter's fixed cases first (B0 = SmolLM2, B1 = Qwen2.5-1.5B, ...)
-        sys.path.insert(0, str(REPO / "vllm-poc"))
         from verity_vllm.observe.engine_profile import CASES
         for k, v in CASES.items():
             if v.get("repo") == hf_repo:
@@ -424,7 +424,7 @@ def main(argv: list[str] | None = None) -> int:
             assert len(r["prompt_token_ids"]) == r["prompt_len"], (r["index"], len(r["prompt_token_ids"]), r["prompt_len"])
         texts = [tuple(r["prompt_token_ids"]) for r in doc["requests"]]
         assert len(set(texts)) == len(texts), "duplicate prompt token sequences"
-    out = Path(a.out) if a.out else REPO / "workloads" / f"{a.row_id}.json"
+    out = Path(a.out) if a.out else WORKLOADS / f"{a.row_id}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(doc, indent=1, ensure_ascii=False) + "\n")
     print(f"{out}: {doc['note'][:220]}", file=sys.stderr)

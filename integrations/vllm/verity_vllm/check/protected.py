@@ -23,7 +23,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-REPO = Path(__file__).resolve().parents[2]
+from verity_vllm.config import ROOT as REPO
 
 #: Frozen.  Paths a lane may not touch at all (any diff status).  Globs are repo-relative; fnmatch `*` crosses `/`.
 PROTECTED: tuple[str, ...] = (
