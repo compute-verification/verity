@@ -7,6 +7,7 @@
   research notes status [--root DIR] [--repo DIR] [--pods] [--stale-min 30] [--since-hours 24] [--all] [--lane GLOB] [--exclude GLOB] [--json]
   research notes watch [--every 10] [--idle-min 5] [--runway-h 3] [--reap] [--reap-stale-min 30] [--guardian-log PATH] [status options]   # alert lines, below
   research notes gc-worktrees [--apply] [--wt-root DIR]     # clean worktrees of finished lanes whose branch tip is on origin
+  research notes sync [--path P]... [-m MSG] | scan          # notes_sync.py: commit, rebase, push with retries | history audit
 
 A lane's report is `<root>/lanes/<lane>/<stamp>-report-<lane>.md` (the newest one if several).  `checkpoint` writes
 `CHECKPOINT <sha> (<HH:MM>Z) [<state>] <text>` directly under the front matter (newest first, where lanes already put them),
@@ -1441,6 +1442,24 @@ def _add_status_args(p: argparse.ArgumentParser) -> None:
 
 
 def main(argv: list[str]) -> int:
+    """`sync` / `scan` live in notes_sync; with RESEARCH_NOTES_SYNC=1 a successful checkpoint / bind / relaunch syncs what it wrote."""
+    from . import notes_sync  # noqa: PLC0415
+
+    if argv and argv[0] in ("sync", "scan"):
+        return notes_sync.main(argv, default_root())
+    rc = _main(argv)
+    if rc in (0, 3) and argv and argv[0] in ("checkpoint", "bind", "relaunch"):
+        root = Path(argv[argv.index("--root") + 1]).expanduser() if "--root" in argv[:-1] else default_root()
+        lanes = [argv[1]] if len(argv) > 1 and not argv[1].startswith("-") else []
+        if argv[0] == "relaunch" and "--as" in argv[:-1]:
+            lanes.append(argv[argv.index("--as") + 1])
+        line = notes_sync.auto_sync(root, lanes if argv[0] != "relaunch" or "--as" in argv else [])
+        if line:
+            print(line, file=sys.stderr)
+    return rc
+
+
+def _main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research notes", description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     cp = sub.add_parser("checkpoint", help="write a structured CHECKPOINT line at the top of the lane's report")
@@ -1481,6 +1500,7 @@ def main(argv: list[str]) -> int:
     wa.add_argument("--every", type=float, default=10)
     wa.add_argument("--passes", type=int, default=0, help="stop after N passes (0 = forever)")
     wa.add_argument("--snapshot", action="store_true", help="each pass, commit the notes repo (research notes snapshot)")
+    wa.add_argument("--sync", action="store_true", help="each pass, `research notes sync` the notes repo (commit, rebase, push)")
     wa.add_argument("--idle-min", type=float, default=5, help="--pods: IDLE-POD when an open lane's pod is idle this long")
     wa.add_argument("--runway-h", type=float, default=3, help="--pods: RUNWAY when balance / spend rate drops under this")
     wa.add_argument("--reap", action="store_true", help="--pods: terminate the pods of FINAL lanes (no open successor, not kept) after the grace, "
@@ -1581,7 +1601,13 @@ def main(argv: list[str]) -> int:
         more += steward_rule("guardian", guardian_lines, root, rows, fleet, now, state, guardian)
         more += steward_rule("render", render_lines, root, now, state)
         more += steward_rule("state", lambda: save_state(root, state) or [])
-        if ns.snapshot and (snap := snapshot(root, now=now)) and snap["commit"]:
+        if ns.sync:
+            from . import notes_sync  # noqa: PLC0415
+
+            srep = notes_sync.sync(root)
+            if srep.get("commit") or srep["rc"]:
+                more.append(f"{now:%H:%MZ} {notes_sync.render_sync(srep)}")
+        elif ns.snapshot and (snap := snapshot(root, now=now)) and snap["commit"]:
             more.append(f"{now:%H:%MZ} {_snapshot_line(snap)}")
         open_ = sum(r["state"] not in DONE for r in rows)
         for line in lines + more:
