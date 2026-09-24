@@ -721,7 +721,7 @@ def instance_equivalence(inst: Mapping[str, Any], target: Target, equivs: Sequen
     ok = [e for e, c, v in judged if not c and v is None]
     if ok:
         return ok[0].artifact, None
-    return None, "; ".join(f"{e.artifact}: " + (c[0] if c else str(v)) for e, c, v in judged)
+    return None, "; ".join(f"{e.artifact}: {c[0]}" if c else str(v) for e, c, v in judged)
 
 
 def _payload_json(store: Any, doc: Mapping[str, Any]) -> Any:
