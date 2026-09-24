@@ -723,6 +723,34 @@ if triton is not None:
         tl.store(hi_ptr + out, hi)
 
     @triton.jit
+    def leaf_q_kernel(v_ptr, b_ptr, z_ptr, out_ptr, n, w, BLOCK: tl.constexpr, FK: tl.constexpr):
+        """LogUp denominators ``out[j] = z - Σ_k β_k v[j, k]`` for base ``v`` ``(n, w)`` (canonical, any int dtype),
+        ``b_ptr`` = ``β_k R mod p`` ``(w, 6)``, ``z`` ``(6,)`` canonical; ``out`` ``(n, 6)`` int32."""
+        idx = tl.program_id(0).to(tl.int64) * BLOCK + tl.arange(0, BLOCK)
+        m = idx < n
+        a0 = tl.zeros((BLOCK,), dtype=tl.int32)
+        a1 = tl.zeros((BLOCK,), dtype=tl.int32)
+        a2 = tl.zeros((BLOCK,), dtype=tl.int32)
+        a3 = tl.zeros((BLOCK,), dtype=tl.int32)
+        a4 = tl.zeros((BLOCK,), dtype=tl.int32)
+        a5 = tl.zeros((BLOCK,), dtype=tl.int32)
+        for k in range(w):
+            x = tl.load(v_ptr + idx * w + k, mask=m, other=0).to(tl.int32)
+            a0 = madd(a0, mmul(x, tl.load(b_ptr + k * 6 + 0).to(tl.int32)))
+            a1 = madd(a1, mmul(x, tl.load(b_ptr + k * 6 + 1).to(tl.int32)))
+            a2 = madd(a2, mmul(x, tl.load(b_ptr + k * 6 + 2).to(tl.int32)))
+            a3 = madd(a3, mmul(x, tl.load(b_ptr + k * 6 + 3).to(tl.int32)))
+            a4 = madd(a4, mmul(x, tl.load(b_ptr + k * 6 + 4).to(tl.int32)))
+            a5 = madd(a5, mmul(x, tl.load(b_ptr + k * 6 + 5).to(tl.int32)))
+        ob = idx * 6
+        tl.store(out_ptr + ob + 0, msub(tl.load(z_ptr + 0).to(tl.int32), a0), mask=m)
+        tl.store(out_ptr + ob + 1, msub(tl.load(z_ptr + 1).to(tl.int32), a1), mask=m)
+        tl.store(out_ptr + ob + 2, msub(tl.load(z_ptr + 2).to(tl.int32), a2), mask=m)
+        tl.store(out_ptr + ob + 3, msub(tl.load(z_ptr + 3).to(tl.int32), a3), mask=m)
+        tl.store(out_ptr + ob + 4, msub(tl.load(z_ptr + 4).to(tl.int32), a4), mask=m)
+        tl.store(out_ptr + ob + 5, msub(tl.load(z_ptr + 5).to(tl.int32), a5), mask=m)
+
+    @triton.jit
     def _dot_halves(e, x):
         prod = e[:, None] * x
         h = prod >> 32
@@ -853,6 +881,19 @@ def row_code_dot(at: torch.Tensor, ev: torch.Tensor, code: torch.Tensor, split: 
     lo = lo[:, :DEG].sum(0) % P
     hi = hi[:, :DEG].sum(0) % P
     return (hi * (R % P) + lo) % P
+
+
+def leaf_q(v: torch.Tensor, betas: torch.Tensor, z: torch.Tensor, out: torch.Tensor) -> None:
+    """In place ``out[j] = z - Σ_k betas[k] v[j, k]``: ``v`` ``(n, w)`` base canonical, ``betas`` ``(w, 6)``, ``z`` ``(6,)``
+    canonical int64, ``out`` a contiguous ``(n, 6)`` int32 (a slice of the leaf table) -- ``logup.build_leaves``' ``q``."""
+    n, w = v.shape
+    assert out.shape == (n, DEG) and out.dtype == torch.int32 and out.is_contiguous()
+    if n == 0:
+        return
+    BLOCK = 256
+    leaf_q_kernel[((n + BLOCK - 1) // BLOCK,)](v.contiguous().view(-1), _mont(betas).contiguous().view(-1),
+                                               (z.to(torch.int64) % P).contiguous().view(-1), out.view(-1), n, w,
+                                               BLOCK=BLOCK, num_warps=4, FK=FIELD_KEY)
 
 
 def eq_rows_dot(e: torch.Tensor, rows: torch.Tensor, split: int | None = None) -> torch.Tensor:
