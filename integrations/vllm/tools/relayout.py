@@ -684,8 +684,9 @@ class Rewriter:
 
     def _fix_from_imports(self, src: str, old_path: str, new_path: str) -> str:
         try:
-            tree = ast.parse(src)
+            tree = ast.parse(src.replace("\x00", "_"))   # the anchored pass's frozen `\x00N\x00` tokens; same length, so offsets hold
         except SyntaxError:
+            print(f"[relayout] WARNING: {old_path} does not parse; its from-imports are not regrouped", file=sys.stderr)
             return src
         old_mod = _module_name(old_path)
         new_mod = _module_name(new_path)
