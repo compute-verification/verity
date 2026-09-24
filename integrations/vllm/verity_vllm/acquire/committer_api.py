@@ -60,6 +60,15 @@ class Opening:
     identity: dict              # verifier-derivable (tensor ordinal, name, dtype, shape, byte offset)
 
 
+@dataclass
+class RangeOpening:
+    step: int
+    lo: int                     # leaves [lo, hi) of the step tree
+    hi: int
+    value: bytes                # the leaves' bytes, concatenated in leaf order
+    path: tuple                 # per level (left sibling | None, right sibling | None) — `merkle.range_path_shape` shape
+
+
 class Committer(Protocol):
     name: str
 

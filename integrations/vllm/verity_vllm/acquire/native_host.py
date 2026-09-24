@@ -50,7 +50,8 @@ except ImportError:                      # the offline core (tests, CPU cross-ch
     torch = None  # type: ignore[assignment]
 
 from verity_vllm.commit import hidden_engine as eng  # production engine pieces (imported, not forked)
-from verity_vllm.acquire.committer_api import Opening, RunCommitment, StepCommitment, declaration
+from verity_vllm.commit.merkle import fold_range, range_path_shape
+from verity_vllm.acquire.committer_api import Opening, RangeOpening, RunCommitment, StepCommitment, declaration
 from verity_vllm.harness.spans import Spans
 
 GPU_CHUNK_BYTES = 256
@@ -416,6 +417,25 @@ def _open_levels(levels: list, index: int) -> tuple:
             path.append(lv[cursor ^ 1].cpu().numpy().astype("uint32").tobytes())
         cursor //= 2
     return tuple(path)
+
+
+def _open_range_levels(levels: list, lo: int, hi: int) -> tuple:
+    """Per level, the (left, right) siblings of the leaf run [lo, hi) (`merkle.range_path_shape`'s pattern), read from host levels (lists of
+    digests) or level tensors (int32 [n, 8], gathered in one copy), leaves first."""
+    need: list[tuple[int | None, int | None]] = []
+    for lv in levels[:-1]:
+        width = int(lv.shape[0]) if hasattr(lv, "shape") else len(lv)
+        need.append((lo - 1 if lo % 2 else None, hi if (hi - 1) % 2 == 0 and hi < width else None))
+        lo, hi = lo // 2, (hi + 1) // 2
+    if not levels or not hasattr(levels[0], "shape"):
+        return tuple((None if l is None else levels[d][l], None if r is None else levels[d][r]) for d, (l, r) in enumerate(need))
+    idx = [(d, i) for d, pair in enumerate(need) for i in pair if i is not None]
+    parts = [levels[d][i] for d, i in idx]
+    if len({p.device for p in parts}) > 1:
+        parts = [p.cpu() for p in parts]
+    rows = torch.stack(parts).cpu().numpy().astype("uint32") if parts else None
+    got = {di: rows[k].tobytes() for k, di in enumerate(idx)}
+    return tuple((None if l is None else got[(d, l)], None if r is None else got[(d, r)]) for d, (l, r) in enumerate(need))
 
 
 class _Footprint:
@@ -1986,7 +2006,7 @@ class NativeHostCommitter:
         for s in sorted(self._padding):
             ps = self._padding[s]
             # host-only metas: `dev_off -1` -- a padding tensor has no bytes in the step's device block (a GPU-tree mixed step keeps one),
-            # so `oracle_compare.committed_reader` must read its `host` view, never slice the executed block at offset 0
+            # so a reader of its bytes (`oracle_compare.OpenedReader`: `leaf_span` on `stream_off`) opens the padding leaves, never the executed block at offset 0
             pad_metas = [TensorMeta(m.ordinal, m.name, m.dtype, tuple(m.shape), m.nbytes, m.chunk, m.first_leaf, m.n_leaves,
                                     host=memoryview(ps.stream)[m.stream_off - ps.stream_base:m.stream_off - ps.stream_base + m.nbytes],
                                     stream_off=m.stream_off, dev_off=-1) for m in ps.metas]
@@ -2481,9 +2501,113 @@ class NativeHostCommitter:
                              self.layout_digest(self._layouts[opening.step]), sc.n_leaves, merkle)
         if root != sc.root:
             return False
-        run_root = hashlib.sha256(ROOT_TAG_RUN + self.program_digest + self._geo_digest + len(run.steps).to_bytes(8, "big")
-                                  + eng.ft.fold([s.root for s in run.steps])).digest()
-        return run_root == run.run_root
+        return self._run_root(run) == run.run_root
+
+    def _run_root(self, run: RunCommitment) -> bytes:
+        return hashlib.sha256(ROOT_TAG_RUN + self.program_digest + self._geo_digest + len(run.steps).to_bytes(8, "big")
+                              + eng.ft.fold([s.root for s in run.steps])).digest()
+
+    def leaf_span(self, step: int, m: TensorMeta, lo: int, hi: int) -> tuple[int, int, int]:
+        """The leaves [a, b) of `step` that hold bytes [lo, hi) of tensor `m`, and the offset of byte `lo` in their concatenated bytes."""
+        so = m.stream_off
+        if so is not None and so >= 0:                            # packed (GPU block, host stream, padding): chunks of the step stream
+            s0, s1 = so + lo, so + hi
+            return s0 // self.chunk, -(-s1 // self.chunk), s0 % self.chunk
+        return m.first_leaf + lo // m.chunk, m.first_leaf + -(-hi // m.chunk), lo % m.chunk
+
+    def _tensor_of_leaves(self, step: int, lo: int, hi: int) -> TensorMeta | None:
+        return next((m for m in self._layouts.get(step, []) if m.first_leaf <= lo and hi <= m.first_leaf + m.n_leaves), None)
+
+    def open_range(self, step: int, lo: int, hi: int) -> RangeOpening | None:
+        """A range opening of leaves [lo, hi) of `step` (all executed or all padding): their bytes from this committer's retained copy and the
+        run's boundary siblings from its levels.  None when the retained copy does not hold them (they open by replay, `open(values_from=)`)."""
+        C = self.chunk
+        ps = self._padding_leaf(step, lo)
+        if ps is not None:
+            value = bytes(ps.stream[(lo - ps.leaf_base) * C:(hi - ps.leaf_base) * C])
+            levels = self._levels[step]
+        elif step in self._gpu_blocks:
+            blk = self._gpu_blocks[step][0]
+            if not self._block_holds(blk, lo * C, hi * C):
+                return None
+            seg = blk[lo * C:hi * C]
+            value = bytes((seg.cpu() if getattr(seg, "is_cuda", False) else seg).numpy().tobytes())
+            levels = self._gpu_levels[step]
+        elif step in self._streams:
+            value = bytes(self._streams[step][lo * C:hi * C])
+            levels = self._levels[step]
+        else:
+            m = self._tensor_of_leaves(step, lo, hi)
+            if m is None or m.host is None:
+                return None
+            value = bytes(m.host[(lo - m.first_leaf) * m.chunk:(hi - m.first_leaf) * m.chunk])
+            levels = self._levels[step]
+        return RangeOpening(step, lo, hi, value, _open_range_levels(levels, lo, hi))
+
+    def _range_leaves(self, step: int, lo: int, hi: int, value: bytes) -> list[bytes] | None:
+        """The leaf digests of leaves [lo, hi) of `step` recomputed from their concatenated bytes under `verify`'s leaf rules; None when the
+        bytes do not tile the leaves or the run mixes executed and padding leaves."""
+        C, mv = self.chunk, memoryview(value)
+        ps = self._padding_leaf(step, lo)
+        if ps is not None or self._padding_leaf(step, hi - 1) is not None:
+            if ps is None:
+                return None
+            from verity_vllm.commit import padding_steps as PSm
+
+            end = ps.stream_base + ps.n_bytes - lo * C
+            if len(value) != min((hi - lo) * C, end):
+                return None
+            return [PSm.leaf_digest_of(ps, mv[k * C:min((k + 1) * C, end)], lo + k - ps.leaf_base) for k in range(hi - lo)]
+        if step in self._gpu_blocks:
+            from verity_vllm.commit import hidden_stream as hs
+
+            if len(value) != (hi - lo) * C:
+                return None
+            padded = -(-self._gpu_blocks[step][1] // C) * C
+            layout = self._gpu_layout(step, padded // 4)
+            return [hs.chunk_leaf_digest(hs.chunk_header(layout, step, lo + k, C // 4, self.GPU_TREE_SRC), mv[k * C:(k + 1) * C])
+                    for k in range(hi - lo)]
+        if step in self._streams:
+            end = len(self._streams[step]) - lo * C
+        else:
+            m = self._tensor_of_leaves(step, lo, hi)
+            if m is None:
+                return None
+            C = m.chunk
+            end = m.nbytes - (lo - m.first_leaf) * C
+        if len(value) != min((hi - lo) * C, end):
+            return None
+        return [eng.pos_leaf(mv[k * C:min((k + 1) * C, end)]) for k in range(hi - lo)]
+
+    def verify_range(self, run: RunCommitment, ro: RangeOpening, roots: dict[int, bytes] | None = None) -> bool:
+        """`verify` for a range opening: every leaf digest recomputed from the opening's bytes, the run folded with its boundary siblings to
+        the bare root, which must bind to the step's ORIGINAL root, and the step roots must fold to the run root.  `roots` (step -> bare root
+        already verified against this `run`) lets a caller pay the binding once per step."""
+        if not 0 <= ro.step < len(run.steps):
+            return False
+        sc = run.steps[ro.step]
+        if not 0 <= ro.lo < ro.hi <= sc.n_leaves:
+            return False
+        try:
+            shape = range_path_shape(sc.n_leaves, ro.lo, ro.hi)
+            if len(ro.path) != len(shape) or any((left is None) == need_l or (right is None) == need_r
+                                                 for (left, right), (need_l, need_r) in zip(ro.path, shape)):
+                return False
+            leaves = self._range_leaves(ro.step, ro.lo, ro.hi, ro.value)
+            if leaves is None:
+                return False
+            merkle = fold_range(leaves, sc.n_leaves, ro.lo, ro.path)
+        except (ValueError, TypeError):
+            return False
+        if roots is not None and ro.step in roots:
+            return merkle == roots[ro.step]
+        root = eng.bind_root(self.program_digest, self._ctx_digest(ro.step), self._geo_digest,
+                             self.layout_digest(self._layouts[ro.step]), sc.n_leaves, merkle)
+        if root != sc.root or self._run_root(run) != run.run_root:
+            return False
+        if roots is not None:
+            roots[ro.step] = merkle
+        return True
 
     # ------------------------------------------------------------------ coverage
 

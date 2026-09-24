@@ -58,7 +58,7 @@ import numpy as np
 
 from verity_vllm.query.manifest import format as RM
 from verity_vllm.check import replay_codes as RC
-from verity_vllm.check.oracle_compare import entry_read_name as _entry_read_name, same_name_invocations as _same_name_invocations
+from verity_vllm.check.oracle_compare import OpeningNotVerified, entry_read_name as _entry_read_name, same_name_invocations as _same_name_invocations
 from verity_vllm.check.replay_codes import NOT_YET, WHY_CLASSES_BY_NAME, WHY_CLASSES_FAULT, why_class  # noqa: F401  (this module's record vocabulary)
 
 SCHEMA = "verity-sweep/sampled-replay/v1"
@@ -2235,18 +2235,30 @@ def _dump_row_words(fam: str, rid: str, step: int, op_path: str, row: int, membe
 
 def replay_vu(pi: ProgramIndex, store: CommittedStore, weights: Callable[[str, int, int], np.ndarray | None], vu: dict, *,
               arrive: int) -> dict[str, Any]:
-    """One VU: resolve its inputs to committed words / registered weights, evaluate, compare with its committed outputs."""
+    """One VU: resolve its inputs to committed words / registered weights, evaluate, compare with its committed outputs.  A committed read
+    whose opening does not verify against the run root makes the VU a mismatch (result False), named -- also inside a forked evaluator."""
+    rec: dict[str, Any] = {}
+    try:
+        return _replay_vu(pi, store, weights, vu, arrive, rec)
+    except OpeningNotVerified as e:
+        return rec | {"result": False, "why": f"opened value not verified: {e}"[:300]}
+
+
+def _replay_vu(pi: ProgramIndex, store: CommittedStore, weights: Callable[[str, int, int], np.ndarray | None], vu: dict, arrive: int,
+               rec: dict[str, Any]) -> dict[str, Any]:
     r = pi.by_i[vu["i"]]
     d = pi.describe(r)
     rid = vu["request_id"]
     fam, st = d["family"], d["statics"]
-    rec: dict[str, Any] = {"i": vu["i"], "spec": r["spec"], "request_id": rid, "step": d["step"], "engine_step": arrive + d["step"], "op_path": d["op_path"],
-                           "row": d["row"], "phase": vu["phase"], "inputs": []}
+    rec.update({"i": vu["i"], "spec": r["spec"], "request_id": rid, "step": d["step"], "engine_step": arrive + d["step"], "op_path": d["op_path"],
+                "row": d["row"], "phase": vu["phase"], "inputs": []})
     try:
         got = _evaluate_row(pi, store, weights, r, rid, arrive, rec["inputs"], depth=0, interior={})
     except _Unresolved as u:
         rec["why"] = str(u)
         return rec | {"result": None}
+    except OpeningNotVerified:
+        raise
     except Exception as e:  # noqa: BLE001
         rec["why"] = f"evaluator error: {e!r}"[:300]
         return rec | {"result": None}
@@ -2610,7 +2622,11 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
 
     def _one(vu: dict) -> tuple[dict, dict, float]:
         t0 = time.perf_counter()
+        n0, s0 = dict(getattr(committed, "stats", None) or {}), getattr(committed, "seconds", 0.0)
         rec = replay_vu(indices[vu["request_id"]], store, weights, vu, arrive=int(arrivals.get(vu["request_id"], 0)))
+        n1 = getattr(committed, "stats", None)
+        if n1 is not None:                              # an OpenedReader's reads of this VU: a forked child's counts reach the parent here
+            rec["_opened"] = {k: int(v) - int(n0.get(k, 0)) for k, v in n1.items()} | {"seconds": committed.seconds - s0}
         return vu, rec, time.perf_counter() - t0
 
     # PARALLEL evaluation: the numpy k16-chain evaluators are GIL-bound (many small array ops), so threads gave ~2x on 16 cores; a FORKED
@@ -2641,7 +2657,11 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
         workers = 1
         results = [_one(vu) for vu in picked]
     unev_by_stratum: dict[str, dict] = {}
+    opened_in_children: Counter = Counter()
     for vu, rec, dt in results:
+        opened = rec.pop("_opened", None)
+        if opened and int(workers) > 1:
+            opened_in_children.update(opened)
         fam_time[vu["family"]] += dt
         fam_n[vu["family"]] += 1
         if rec.get("result") is None:
@@ -2760,6 +2780,8 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
                           # [R19 admit, F-r18-admit-1 (c)] gc.freeze before the fork: the children's collections never traverse the
                           # inherited C2 heap (the 72 GB-per-child COW of R17 #23); {} when no pool was forked
                           "fork": dict(_FORK_STATS) if int(workers) > 1 else {}},
+            **({"value_reads_in_children": {k: (round(v, 3) if k == "seconds" else int(v)) for k, v in opened_in_children.items()}}
+               if opened_in_children else {}),
             "strata": strata, "strata_unevaluated": strata_unevaluated,
             # [rev-cb M-0740 G1] EVERY unevaluated stratum with its reason and class, uncapped (the verdict's named-gap rule decides per stratum)
             "unevaluated_strata": [unev_by_stratum[k] for k in strata_unevaluated if k in unev_by_stratum],
@@ -2811,6 +2833,22 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
 
 # ------------------------------------------------------------------------------------------------------------ boundary linkage
 
+class _UnverifiedUnlinked:
+    """A store whose `words` answers (None, why) for a read whose opening does not verify: the linkage names it unlinked (result False)."""
+
+    def __init__(self, store: Any) -> None:
+        self._store = store
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._store, name)
+
+    def words(self, *args: Any) -> tuple[np.ndarray | None, str]:
+        try:
+            return self._store.words(*args)
+        except OpeningNotVerified as e:
+            return None, f"opened value not verified: {e}"
+
+
 def boundary_linkage(bmap: dict[str, Any], committed: Callable[[int, str, int, int], bytes | None], workload_requests: list[dict[str, Any]],
                      *, embed_op_path: str | None = None, splits_of_record: dict[str, Any] | None = None, store: Any = None,
                      eos_of_record: set[int] | list[int] | None = None, eos_lag_rows: int | None = None) -> dict[str, Any]:
@@ -2823,8 +2861,9 @@ def boundary_linkage(bmap: dict[str, Any], committed: Callable[[int, str, int, i
     linked over FEWER steps than its declared cap must end on a declared EOS id, else unlinked by name.
     [padrev M-0517, RULING 21] `eos_lag_rows`: the placeholder rows the ATTESTED scheduler runs after an EOS (RunHeader.profile.engine_kwargs
     .async_scheduling True -> 1, False -> 0; None = unattested -> every early stop is refused by name).  The EOS is verified at
-    steps[-1 - lag]; the trailing `lag` step(s) are the placeholder(s) fed the EOS (their committed embed input == that EOS id, recorded)."""
-    store = store if store is not None else CommittedStore(bmap, committed)
+    steps[-1 - lag]; the trailing `lag` step(s) are the placeholder(s) fed the EOS (their committed embed input == that EOS id, recorded).
+    A read whose opening does not verify against the run root is an unlinked pair by name."""
+    store = _UnverifiedUnlinked(store if store is not None else CommittedStore(bmap, committed))
     # the embedding op_path: the (only) op with an `in` member in the map
     if embed_op_path is None:
         ops = sorted({k[2] for k in store.idx if k[3] == IDS_MEMBER})

@@ -12,8 +12,10 @@ offset, shape, dtype) is its output, attributed to a request and a token positio
 its output view from the snapshot of its producing event.  That is the Program-evaluated value of record for the Match verdict, read
 from the record -- the collector's own bytes never enter the expected side.
 
-    compared identity  : committed bytes (the collector's retained copy of the member, sliced at the binding-map entry's element
-                         offset + the identity's request-local range) == oracle bytes            -> equal | MISMATCH (named)
+    compared identity  : committed bytes (opened from the collector's retained copy of the member and verified against the run root,
+                         `OpenedReader`, sliced at the binding-map entry's element offset + the identity's request-local range) == oracle
+                         bytes                                                                    -> equal | MISMATCH (named; an opening
+                         that does not verify is a mismatch)
     sampled_token_ids  : the committed id == the capture's SampleEnd id for that request at that step (every step, no snapshot needed)
     not compared       : identities of a step the Match did not snapshot (row_pod MATCH_SNAP_STEPS, default 0,1), of a family the
                          Match has no value for (the FA2/FA3 M1 kernel-interior stream: its C2 is the tap's own bit-exact xcheck,
@@ -31,6 +33,7 @@ import gzip
 import hashlib
 import json
 import os
+import time
 from collections import Counter, defaultdict
 from typing import Any, Callable
 
@@ -692,7 +695,8 @@ def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callabl
                    workload: dict[str, Any] | None = None, aliases: dict[str, Any] | None = None,
                    query_families: dict[str, int] | None = None) -> dict[str, Any]:
     """Compare every binding-map entry's committed bytes with the Match oracle.  `committed(step, name, byte_lo, byte_hi)` returns the
-    collector's retained bytes of member `name` at `step` in [byte_lo, byte_hi) (None if not retained).  `producers` (producers_of(manifest))
+    bytes of member `name` at `step` in [byte_lo, byte_hi) (None if not retained) -- in the Commit an `OpenedReader`, whose
+    `OpeningNotVerified` makes the entry a mismatch.  `producers` (producers_of(manifest))
     names each member's producing Program op so exploded-module folds are read at the producer's instances.  `workload` (the run's declared
     requests) is checked against the oracle's request table BY NAME first: a foreign Match record is result False 'foreign oracle' with
     nothing compared [rev-cb M-0301 R3].
@@ -767,7 +771,14 @@ def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callabl
             continue
         eo = int(e.get("element_offset") or 0)
         blo, bhi = (eo + int(lo)) * isz, (eo + int(hi)) * isz
-        got = committed(step, entry_read_name(e, name_inv.get((step, str(e.get("name"))), 1)), blo, bhi)     # [moe F-moe-r17-06] exact invocation
+        try:
+            got = committed(step, entry_read_name(e, name_inv.get((step, str(e.get("name"))), 1)), blo, bhi)   # [moe F-moe-r17-06] exact invocation
+        except OpeningNotVerified as exc:
+            compared += 1
+            by_fam_cmp[fam] += 1
+            steps_cmp.add(step)
+            mism.append({"identity": ident, "family": fam, "name": e.get("name"), "why": f"opened value not verified: {exc}"})
+            continue
         if got is None:
             not_cmp["committed bytes not retained on host (retain=none, or an excluded family under retain=host + exclude)"] += 1
             not_cmp_fam[fam] += 1
@@ -911,43 +922,92 @@ def entry_read_name(e: dict[str, Any], same_name_invocations: int) -> str:
     return name
 
 
-def committed_reader(com) -> Callable[[int, str, int, int], bytes | None]:
-    """The collector's retained bytes (host copy / retained device block / host windows) of member `name` at `step`, sliced [lo, hi)."""
-    def read(step: int, name: str, lo: int, hi: int) -> bytes | None:
-        metas = (getattr(com, "_layouts", None) or {}).get(step)
-        if not metas:
+def meta_by_name(metas: list, name: str) -> Any:
+    """The committed meta a reader is asked for by member name, or None.
+    [moe F-moe-r17-06] a SHARED module (vLLM's one RotaryEmbedding, called once per layer) publishes one meta per INVOCATION under the SAME
+    member name; the binding map binds each as its own identity (invocation k, tensor_ordinal = that meta's ordinal).  A reader asked by name
+    alone can only return the FIRST meta's bytes (layer 0's words for every layer: the OLMoE mixedstop record, layers 1..15 RoPE_v1 /
+    Attention_v3 rows all unequal, layer 0 equal).  `<name>#ord<ordinal>` selects the meta EXACTLY.  [revb S-r17b-19 n3] a BARE name with
+    more than one meta at the step is a shared member asked without its ordinal: there is no first-meta answer to give (that read IS the
+    alias class) -- None by name, so a third caller cannot regress silently."""
+    base, _sep, ordinal = name.partition(ORDINAL_SEP)
+    if _sep:
+        return next((x for x in metas if x.name == base and int(getattr(x, "ordinal", -1)) == int(ordinal)), None)
+    same = [x for x in metas if x.name == base]
+    return same[0] if len(same) == 1 else None
+
+
+class OpeningNotVerified(RuntimeError):
+    """A value a check was about to consume did not verify against the run root.  The check's result is False (named), never 'not
+    evaluated': the committer's memory no longer holds what the root commits to."""
+
+
+OPENED_METHOD = ("every byte a value check consumes is opened from the committer (`open_range`: the retained copy's leaves + the boundary "
+                 "siblings of its tree) and verified against the ORIGINAL run commitment (`verify_range`: leaf digests recomputed, folded to "
+                 "the step root, step root in the run root) before it is compared; a read that does not verify fails the check by name")
+
+
+class OpenedReader:
+    """The value checks' one byte source.  `reader(step, name, lo, hi)` -> bytes | None, `reader.read_meta(step, meta, lo, hi)` for readers
+    that hold the meta: the bytes [lo, hi) of the member (clamped to the member), taken from an opening of every leaf that holds them, verified
+    against `run` (the run commitment of record) before they are returned.  None = the member is not committed at the step or its bytes are
+    not retained here (retain=none / sparse retention: they open by replay after release) -- not compared.  A read whose opening does not
+    verify raises `OpeningNotVerified`; unverified bytes are never returned.  The first verified read of a step authenticates its bare root
+    (context binding + layout digest + run-root membership, once per step); every read re-hashes its own leaves."""
+
+    def __init__(self, com: Any, run: Any) -> None:
+        self.com, self.run = com, run
+        self._roots: dict[int, bytes] = {}
+        self._own: dict[int, set[int]] = {}
+        self.stats: Counter = Counter()
+        self.seconds = 0.0
+        self.failures: list[dict[str, Any]] = []
+
+    def __call__(self, step: int, name: str, lo: int, hi: int) -> bytes | None:
+        metas = (getattr(self.com, "_layouts", None) or {}).get(step)
+        m = meta_by_name(metas, name) if metas else None
+        return None if m is None else self.read_meta(step, m, lo, hi)
+
+    def read_meta(self, step: int, m: Any, lo: int = 0, hi: int | None = None) -> bytes | None:
+        own = self._own.get(step)
+        if own is None:
+            own = self._own[step] = {id(x) for x in (getattr(self.com, "_layouts", None) or {}).get(step, [])}
+        if id(m) not in own:
+            raise ValueError(f"step {step} {getattr(m, 'name', m)!r}: not a meta of this committer's layout at the step (its offsets would "
+                             "open another tensor's leaves)")
+        t0 = time.perf_counter()
+        try:
+            lo, hi = max(0, int(lo)), int(m.nbytes) if hi is None else min(int(hi), int(m.nbytes))
+            if hi <= lo:
+                return b""
+            a, b, off = self.com.leaf_span(step, m, lo, hi)
+            ro = self.com.open_range(step, a, b)
+            if ro is None:
+                self.stats["not_retained"] += 1
+                return None
+            if not self.com.verify_range(self.run, ro, self._roots):
+                self.stats["failed"] += 1
+                if len(self.failures) < 10:
+                    self.failures.append({"step": step, "name": m.name, "ordinal": int(getattr(m, "ordinal", -1)), "byte_lo": lo, "byte_hi": hi,
+                                          "leaves": [a, b]})
+                raise OpeningNotVerified(f"step {step} {m.name} (ordinal {getattr(m, 'ordinal', '?')}) bytes [{lo}, {hi}) = leaves [{a}, {b}): "
+                                         "the opening does not verify against the run root")
+            self.stats["reads"] += 1
+            self.stats["leaves"] += b - a
+            self.stats["bytes"] += hi - lo
+            return ro.value[off:off + hi - lo]
+        finally:
+            self.seconds += time.perf_counter() - t0
+
+    def or_none(self, step: int, name: str, lo: int, hi: int) -> bytes | None:
+        """For a consumer that fails an unread entry by name: a read that does not verify is None (and counted in `failed`)."""
+        try:
+            return self(step, name, lo, hi)
+        except OpeningNotVerified:
             return None
-        # [moe F-moe-r17-06] a SHARED module (vLLM's one RotaryEmbedding, called once per layer) publishes one meta per INVOCATION under the
-        # SAME member name; the binding map binds each as its own identity (invocation k, tensor_ordinal = that meta's ordinal).  A reader
-        # asked by name alone can only return the FIRST meta's bytes (layer 0's words for every layer: the OLMoE mixedstop record, layers 1..15
-        # RoPE_v1 / Attention_v3 rows all unequal, layer 0 equal).  `<name>#ord<ordinal>` selects the meta EXACTLY; a bare name keeps the
-        # first-meta read (every non-shared member has one meta per step).
-        base, _sep, ordinal = name.partition(ORDINAL_SEP)
-        if _sep:
-            m = next((x for x in metas if x.name == base and int(getattr(x, "ordinal", -1)) == int(ordinal)), None)
-        else:
-            # [revb S-r17b-19 n3] a BARE name that has more than one meta at the step is a shared member asked without its ordinal: there is
-            # no first-meta answer to give (that read IS the alias class) -- None by name, so a third caller cannot regress silently
-            same = [x for x in metas if x.name == base]
-            m = same[0] if len(same) == 1 else None
-        if m is None:
-            return None
-        blocks = getattr(com, "_gpu_blocks", None) or {}
-        # [B9.1] a padding meta (bot by enablement, appended to a mixed step) is host-only: `dev_off -1`, its bytes in `host`; the step's
-        # device block holds the EXECUTED members only -- slicing it at offset 0 for a padding read would return another request's words
-        if step in blocks and blocks[step][0] is not None and int(getattr(m, "dev_off", 0)) >= 0:
-            blk = blocks[step][0]                                   # contiguous keep tensor (device | host) or host windows: both slice by bytes
-            holds = getattr(blk, "holds", None)                     # [R17 fp8] sparse host retention (retain=sample / retain=host + exclude):
-            if holds is not None and not holds(m.dev_off + lo, m.dev_off + hi):   # a member whose bytes were not kept is 'not committed
-                return None                                                         # on host' (opens by replay), never a raise mid-compare
-            seg = blk[m.dev_off + lo:m.dev_off + hi]
-            return bytes((seg.cpu() if getattr(seg, "is_cuda", False) else seg).numpy().tobytes())
-        host = getattr(m, "host", None)
-        if host is not None:
-            if hasattr(host, "numpy"):                                  # slice FIRST (never tobytes() of the whole retained block per read)
-                import numpy as np
-                a = host.numpy()
-                return bytes(a.reshape(-1).view(np.uint8)[lo:hi].tobytes()) if a.flags.c_contiguous else bytes(a.tobytes()[lo:hi])
-            return bytes(memoryview(host)[lo:hi])
-        return None
-    return read
+
+    def record(self) -> dict[str, Any]:
+        return {"source": "opened", "method": OPENED_METHOD, "run_root": bytes(self.run.run_root).hex(), "reads": int(self.stats["reads"]),
+                "leaves": int(self.stats["leaves"]), "bytes": int(self.stats["bytes"]), "not_retained": int(self.stats["not_retained"]),
+                "failed": int(self.stats["failed"]), "steps_bound": len(self._roots), "seconds": round(self.seconds, 3),
+                "failures": list(self.failures)}

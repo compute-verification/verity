@@ -1894,6 +1894,7 @@ def main(argv: list[str] | None = None) -> None:
 
     if args.value_check and com is not None and hasattr(com, "_layouts"):
         # VALUE-CORRECTNESS (VALUE-FIRST §5): one extra instrumented run with reference taps + re-execution of the registered relation
+        from verity_vllm.check import oracle_compare as OC
         from verity_vllm.check.value_check import ValueChecker
 
         com.reset()
@@ -1902,7 +1903,7 @@ def main(argv: list[str] | None = None) -> None:
         vc.install()
         r = run_workload(eng, reqs, sampling)
         rc = com.finalize()
-        vres = vc.compare()
+        vres = vc.compare(OC.OpenedReader(com, rc))
         vc.uninstall()
         com.uninstall()
         com.reset()
@@ -1912,7 +1913,8 @@ def main(argv: list[str] | None = None) -> None:
         (out / "value_check.json").write_text(json.dumps(vres, indent=1, default=str) + "\n")
         print(f"[delta] VALUE CHECK {vres['verdict']}: {vres['tensors']} tensors, tap-equal {vres['tap_equal']}, tap-mismatch {vres['tap_mismatch_n']}; "
               f"re-exec {vres['reexec_equal']}/{vres['reexec_tensors']} equal, mismatch {vres['reexec_mismatch_n']}; repeated-call modules {vres['repeated_calls']}; "
-              f"missing {len(vres['missing_in_commit'])}; skipped {vres['reexec_skipped']}; by class {vres['by_class']}", flush=True)
+              f"missing {len(vres['missing_in_commit'])}; not verified {vres['not_verified_n']}; skipped {vres['reexec_skipped']}; by class {vres['by_class']}; "
+              f"opened {vres['value_source']['reads']} reads / {vres['value_source']['bytes']} B in {vres['value_source']['seconds']} s", flush=True)
         del vc, vres
 
     rows: list[dict] = []
@@ -2328,17 +2330,20 @@ def main(argv: list[str] | None = None) -> None:
                         if oracle_producers[0]:
                             _prod = OC.merge_producers(_prod, oracle_producers[0])
                         # [reqval F-moe-r17-06] the manifest's alias table: a shared module's invocation k is compared at ITS Program op
-                        oc = OC.oracle_compare(_oracle, _bm, OC.committed_reader(com), producers=_prod, workload=_wl,
+                        _ocr = OC.OpenedReader(com, rc)
+                        oc = OC.oracle_compare(_oracle, _bm, _ocr, producers=_prod, workload=_wl,
                                                aliases=(required_manifest.get("op_path_aliases") if isinstance(required_manifest, dict) else None),
                                                query_families=OC.query_families_of(required_manifest))   # [revb n-2.14-1] identities per Q(P) family
                         oc["producer_facts"] = oracle_producers[1]
+                        oc["value_source"] = _ocr.record()
+                        row["commit"].setdefault("opened_values", {"method": OC.OPENED_METHOD})["oracle_compare"] = oc["value_source"]
                     except Exception as e:  # noqa: BLE001  -- fail closed: an unreadable oracle is 'not checked', never PASS
                         oc = {"schema": OC.SCHEMA if "OC" in dir() else "verity-sweep/oracle-compare/v1", "method": "oracle-compare", "result": None,
                               "why": f"oracle compare not run: {e!r}"[:300], "compared": 0, "mismatch_n": 0, "error": repr(e)[:300]}
                     row["commit"]["oracle_compare"] = oc
                     vc = row["commit"]["value_correspondence"]
                     vc["method"] = ("oracle-compare" if oc.get("complete") else "oracle-compare(partial)") + " + " + vc["method"]
-                    vc["oracle_compare"] = {k: oc.get(k) for k in ("result", "why", "grade", "compared", "equal", "mismatch_n", "steps_compared", "steps_not_snapshotted", "complete", "attribution", "workload_check")}
+                    vc["oracle_compare"] = {k: oc.get(k) for k in ("result", "why", "grade", "compared", "equal", "mismatch_n", "steps_compared", "steps_not_snapshotted", "complete", "attribution", "workload_check", "value_source")}
                     vc["oracle_provenance"] = oc.get("oracle")
                     components["oracle_compare"] = dict(vc["oracle_compare"], reference="live Match oracle of this attempt (--match-dir)", provenance=oc.get("oracle"))
                     if oc.get("result") is False:
@@ -2351,6 +2356,10 @@ def main(argv: list[str] | None = None) -> None:
                           f"attribution {_at.get('complete')} ({_at.get('pairs')} step/request pairs, unverified {_at.get('unverified_n')}, ambiguous {_at.get('ambiguous_steps')}) compared {oc.get('compared')} "
                           f"equal {oc.get('equal')} mismatch {oc.get('mismatch_n')} steps {oc.get('steps_compared')} not-snapshotted {oc.get('steps_not_snapshotted')} "
                           f"by-family {oc.get('compared_by_family')} not-compared {oc.get('not_compared')}{(' -- ' + str(oc.get('why'))) if oc.get('why') else ''}", flush=True)
+                    _ovs = oc.get("value_source") or {}
+                    print(f"[delta] C2 ORACLE COMPARE opened values (pair {pair}): {_ovs.get('reads')} reads, {_ovs.get('leaves')} leaves, {_ovs.get('bytes')} B "
+                          f"verified against the run root in {_ovs.get('seconds')} s ({_ovs.get('steps_bound')} steps bound); not retained {_ovs.get('not_retained')}, "
+                          f"failed {_ovs.get('failed')}", flush=True)
                 if getattr(args, "program_dir", None) or getattr(args, "programs_root", None):
                     # [DECISIONS-2 §4 C2 / M-0356 (1), manbind M-0394] C2 OF RECORD: sampled exact VU replay -- for a seeded stratified sample of
                     # Program instance rows (spec x request x phase), read the COMMITTED bytes of the row's inputs (the Program's dataflow -> the
@@ -2429,7 +2438,7 @@ def main(argv: list[str] | None = None) -> None:
                         _k0 = next(iter(_progs))
                         _pi0 = SR.ProgramIndex(_progs[_k0], program_dir=_loaded[_k0].get("dir"))
                         _wp = SR.model_weights_provider(eng.model, _pi0.prefix)
-                        _rd = OC.committed_reader(com)
+                        _rd = OC.OpenedReader(com, rc)
                         # [O5] the weight slices the relations consume must be the COMMITTED weights: re-register the live parameters now and
                         # compare the root with the run's weights root (registered before the workload; a param swap after it is a named FAIL)
                         _wc: dict[str, Any]
@@ -2552,7 +2561,7 @@ def main(argv: list[str] | None = None) -> None:
                             # `inactive_by_enablement`, every entry read back == the bot word; the one-mechanism reconciliation compares the
                             # Commit's padding classification against that bucket family by family (kept, renamed, never dropped)
                             from verity_vllm.commit import padding_steps as _PSm
-                            _pp = _PSm.padded_population(sr, _bm, _rd, _epr_r)
+                            _pp = _PSm.padded_population(sr, _bm, _rd.or_none, _epr_r)
                             # [revb S-r17b-70 C3, M-1495] the two documents agree on one number: oracle_compare.padding (by family, pairs) == this stratum
                             _pp["oracle_c3"] = _PSm.padding_vs_oracle(_pp, row["commit"].get("oracle_compare"), _bm)
                             row["commit"]["inactive_by_enablement"] = _pp
@@ -2580,6 +2589,11 @@ def main(argv: list[str] | None = None) -> None:
                                 _cv = row["commit"].get("coverage")
                                 if isinstance(_cv, dict) and _cv.get("ok"):            # in place: row["commit"]["coverage"] and rc.extra["coverage"] alias one dict
                                     _cv["ok"], _cv["error"] = False, "R17-27 one mechanism: " + "; ".join(_recon["problems"][:3])
+                        sr["value_source"] = dict(_rd.record(), forked_children=sr.pop("value_reads_in_children", None))
+                        row["commit"].setdefault("opened_values", {"method": OC.OPENED_METHOD})["replay_linkage"] = sr["value_source"]
+                        _ovr = sr["value_source"]
+                        print(f"[delta] C2 SAMPLED REPLAY + LINKAGE opened values (pair {pair}): {_ovr.get('reads')} reads, {_ovr.get('bytes')} B verified in "
+                              f"{_ovr.get('seconds')} s in this process, forked evaluators {_ovr.get('forked_children')}; failed {_ovr.get('failed')}", flush=True)
                         if _rc_key is not None and sr.get("result") is not None:
                             replay_cache[_rc_key] = {"pair": pair, "run_root": rc.run_root.hex(), "sr": sr, "lk": lk, "artifact": str(Path(args.out) / f"sampled_replay_p{pair}.json"),
                                                      "seed": (sr.get("sample") or {}).get("seed"), "code": versions.get("git_head")}
