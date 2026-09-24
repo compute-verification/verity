@@ -66,6 +66,9 @@ def fork_identity(host: str) -> dict:
         "guest_routing": "steps outside the chip's contract run tc::tc_dot in the guest; a VU with >= vu_software_threshold such steps runs "
                          "bare::check_one whole (the stock kernel)",
         "proof_modes": "core only: the fork's recursion vk map does not contain the TC_DOT chips",
+        "prover_sharding": "patch 0006: the shape checker charges a deferred precompile's memory accesses to its precompile shard, not "
+                           "the CPU shard; local_gpu_opts honours ELEMENT_THRESHOLD (prover scheduling only: no AIR or verifier change)",
+        "prover_env": {k: os.environ[k] for k in ("ELEMENT_THRESHOLD", "VERITY_TCDOT_VU_SOFTWARE_THRESHOLD") if k in os.environ},
         "gpu_server": {"build": "cargo install --path sp1-gpu/crates/server from the fork (CUDA_ARCHS=80)", "path": str(server),
                        "sha256": _sha256(server) if server.is_file() else None},
         "host_info": {k: info.get(k) for k in ("elf_sha256", "vk_hash", "statement", "formats")},

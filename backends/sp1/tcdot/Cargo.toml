@@ -1,6 +1,6 @@
 # modified SP1 (TC_DOT chip): its own workspace, because every SP1 crate resolves to the fork.
 #
-# The fork is upstream succinctlabs/sp1 v6.4.0 (f66b4bff5) plus sp1-patches/0001-0005, checked out at ./sp1 by
+# The fork is upstream succinctlabs/sp1 v6.4.0 (f66b4bff5) plus sp1-patches/0001-0006, checked out at ./sp1 by
 # build_fork.sh (gitignored; pinned by FORK_HEAD).  The SP1 workspace wires its internal crates by path, so patching
 # the entry points pulls the whole fork tree.
 [workspace]

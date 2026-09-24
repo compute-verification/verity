@@ -2,7 +2,7 @@
 # Build the modified SP1 (TC_DOT chip) on a Linux CUDA pod: upstream succinctlabs/sp1 at v6.4.0 (f66b4bff5) plus the
 # patch series in sp1-patches/, applied with fixed committer identities and the author dates so the commit hashes
 # reproduce: 0001-0003 = ~/projects/sp1 branch tc-dot-precompile @ 3510b39a7 (the fp8 TC_DOT chip), 0004-0005 = lane
-# sp1-tcdot's TC_DOT_BF16 chip (FORK_HEAD, tree FORK_TREE).  The checkout is linked at ./sp1, where Cargo.toml's
+# sp1-tcdot's TC_DOT_BF16 chip, 0006 = its prover sharding change (FORK_HEAD, tree FORK_TREE).  The checkout is linked at ./sp1, where Cargo.toml's
 # [patch] points.  Then the forked sp1-gpu-server (the stock prebuilt server has neither TC_DOT chip), installed under
 # $SERVER_ROOT/bin; sp1-sdk's cuda client runs $HOME/.sp1/bin/sp1-gpu-server.  Idempotent.
 #
