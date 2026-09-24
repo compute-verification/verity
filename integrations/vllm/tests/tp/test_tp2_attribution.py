@@ -1,11 +1,13 @@
 """[R15 tp, rev-cb M-0359 T6-3] per-(request, engine step) attribution of a rank's committed sampled ids against the Match record
-(`tp2_worker._tp2_attribution`) -- CPU-only, torch-free: the committer is a stub with `step_rows` (the rank's request->rows map) and
-`_layouts` (committed TensorMeta with retained host bytes).
+(`tp2_worker._tp2_attribution`) -- CPU-only: the committer is the production per-tensor host committer (`tests.check.opened`) with
+`step_rows` (the rank's request->rows map) set; the sampled ids are read through `oracle_compare.OpenedReader` (opened, verified against
+the run root).
 
   * positive: every committed sampled row is the Match record's k-th generated id of the request the map names -> ok
   * NEGATIVE (equal-count request-label swap): two requests of equal (prompt, max_tokens) relabelled a<->b on one rank keep every per-request
     identity COUNT (what coverage / composition see) -- the attribution FAILS naming the rank, the step, the row and both ids
   * a step without committed sampled ids -> not ok (fail closed; attribution cannot be established)
+  * NEGATIVE (D1): a retained id changed after the commit to agree with the Match record -> not verified, not ok, named
 """
 from __future__ import annotations
 
@@ -34,34 +36,24 @@ except ModuleNotFoundError as e:  # pragma: no cover -- only if tp2_worker grows
 _cls = next(v for v in vars(w).values() if isinstance(v, type) and hasattr(v, "_tp2_attribution"))
 
 
-class _Meta:
-    def __init__(self, ids: list[int]) -> None:
-        self.name = "runner.sampler/sampled_token_ids"
-        self.dtype = "int64"
-        self.shape = (len(ids), 1)
-        self.host = memoryview(np.asarray(ids, dtype=np.int64).reshape(-1, 1).tobytes())
-        self.nbytes = 8 * len(ids)
-        self.stream_off = 0
-
-
-class _Com:
-    pass
-
-
 class _Stub:
     _tp2_logical_request = _cls._tp2_logical_request
     _tp2_attribution = _cls._tp2_attribution
 
 
 TOK = {"A": [11, 12, 13], "B": [21, 22, 23]}
+SAMPLED = "runner.sampler/sampled_token_ids"
 
 
 def _make(match: dict, *, swap: list[str] | None = None, rank: int = 1) -> _Stub:
+    """The rank's committed sampled ids (int64 [2, 1] per step) committed; `s.rc` = the run commitment, `s.ids[step]` = the retained buffer."""
+    from tests.check.opened import commit_host_steps
+
     s = _Stub()
-    com = _Com()
+    s.ids = {st: bytearray(np.asarray([TOK["A"][st], TOK["B"][st]], dtype=np.int64).reshape(-1, 1).tobytes()) for st in range(3)}
+    com, s.rc = commit_host_steps({st: [(SAMPLED, b, 0, "int64", (2, 1))] for st, b in s.ids.items()})
     # two requests of EQUAL prompt length (5) and equal max_tokens (3): prefill step 0, decode steps 1, 2; engine ids carry vLLM's -<hex> suffix
     com.step_rows = {0: [("A-1a2b3c4d", 0, 5), ("B-9f8e7d6c", 5, 10)], 1: [("A-1a2b3c4d", 0, 1), ("B-9f8e7d6c", 1, 2)], 2: [("A-1a2b3c4d", 0, 1), ("B-9f8e7d6c", 1, 2)]}
-    com._layouts = {st: [_Meta([TOK["A"][st], TOK["B"][st]])] for st in range(3)}
     rid = {"A": "r0", "B": "r1"} if not swap else {"A": "r1", "B": "r0"}
     s._tp2_commit = {"com": com, "rank": rank, "request_ids": rid, "match_tokens": match, "swap_requests": swap}
     return s
@@ -71,13 +63,16 @@ MATCH = {"r0": [11, 12, 13], "r1": [21, 22, 23]}
 
 
 def test_attribution_passes_when_every_committed_sampled_row_is_the_match_records_token_of_its_request():
-    r = _make(MATCH)._tp2_attribution(None)
+    s = _make(MATCH)
+    r = s._tp2_attribution(s.rc)
     assert r["ok"] is True and r["steps_checked"] == 3 and r["rows_checked"] == 6 and r["mismatches_n"] == 0
     assert r["requests"] == {"r0": {"sampled_rows_committed": 3, "match_record_generated": 3}, "r1": {"sampled_rows_committed": 3, "match_record_generated": 3}}
+    assert r["value_source"]["source"] == "opened" and r["value_source"]["reads"] == 3 and r["value_source"]["failed"] == 0
 
 
 def test_equal_count_request_label_swap_fails_naming_rank_step_row_and_ids():
-    r = _make(MATCH, swap=["r0", "r1"])._tp2_attribution(None)
+    s = _make(MATCH, swap=["r0", "r1"])
+    r = s._tp2_attribution(s.rc)
     assert r["ok"] is False and r["mismatches_n"] == 6
     # the swap is invisible to counts: both requests still have 3 sampled rows each
     assert {k: v["sampled_rows_committed"] for k, v in r["requests"].items()} == {"r0": 3, "r1": 3}
@@ -89,16 +84,28 @@ def test_equal_count_request_label_swap_fails_naming_rank_step_row_and_ids():
 def test_step_without_committed_sampled_ids_is_not_ok():
     s = _make(MATCH)
     s._tp2_commit["com"]._layouts[2] = []
-    r = s._tp2_attribution(None)
+    r = s._tp2_attribution(s.rc)
     assert r["ok"] is False and r["missing_steps"] == [{"step": 2, "why": "no committed sampled ids"}]
 
 
 def test_match_record_shorter_than_the_run_is_a_mismatch_and_no_record_means_not_run():
-    r = _make({"r0": [11, 12], "r1": [21, 22, 23]})._tp2_attribution(None)
+    s = _make({"r0": [11, 12], "r1": [21, 22, 23]})
+    r = s._tp2_attribution(s.rc)
     assert r["ok"] is False and r["mismatches"][0]["match_record"] is None and r["mismatches"][0]["request"] == "r0" and r["mismatches"][0]["k"] == 2
     s = _make(MATCH)
     s._tp2_commit["match_tokens"] = None
-    assert s._tp2_attribution(None) is None
+    assert s._tp2_attribution(s.rc) is None
+
+
+def test_a_sampled_id_changed_after_the_commit_to_agree_with_the_match_record_is_not_verified_and_not_ok():
+    """D1: the Match record says r0's 3rd token is 99; the rank committed 13.  After the commit the retained id is changed to 99 -- a compare
+    of the committer's memory would attribute every row.  The opening of step 2 does not verify against the run root: not ok, named."""
+    s = _make({"r0": [11, 12, 99], "r1": [21, 22, 23]})
+    s.ids[2][:8] = np.int64(99).tobytes()
+    r = s._tp2_attribution(s.rc)
+    assert r["ok"] is False and r["steps_checked"] == 2 and r["mismatches_n"] == 1
+    assert r["mismatches"][0]["step"] == 2 and r["mismatches"][0]["why"].startswith("opened value not verified")
+    assert r["why"].startswith("rank 1: step 2: opened value not verified") and r["value_source"]["failed"] == 1
 
 
 @pytest.mark.parametrize("rid,expect", [("A", "r0"), ("A-1a2b3c4d", "r0"), ("B-ffff", "r1"), ("zzz", "zzz")])

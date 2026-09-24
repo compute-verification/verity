@@ -501,7 +501,7 @@ def test_the_inactive_stratum_is_the_padded_records_population_every_bot_entry_r
           "not_executed_rule": {"n": sum(pop_fam.values()), "requests": {"r0": {"n_exec": 2, "a_r": 2, "cap": CAP}, "r1": {"n_exec": 3, "a_r": 3, "cap": CAP}}},
           "not_executed_by_family": dict(pop_fam)}
     epr = executed_prefix_of_record(["r0", "r1"], {"r0": [17, 0], "r1": [5, 6, 0]}, caps={"r0": CAP, "r1": CAP}, eos_of_record=[0], lag=0)
-    rd = OC.committed_reader(com)
+    rd = OC.OpenedReader(com, run)
     out = PS.padded_population(sr, pm, rd, epr)
     assert out["ok"], out["problems"]
     assert out["padding_entries"] == out["checked_entries"] == 35 and out["unread_n"] == 0 and out["mismatches_n"] == 0
@@ -625,7 +625,7 @@ def test_brief_7e_past_a_requests_stop_the_moe_route_planes_are_bot_words_and_a_
             body = ps.stream[m.stream_off - ps.stream_base: m.stream_off - ps.stream_base + m.nbytes]
             assert len(body) == n * len(word) and set(body[i:i + len(word)] for i in range(0, len(body), len(word))) == {word}, f"{mem}: every word is bot"
     # r1's live route at the mixed step 2: the bare name names ONE meta -- r1's executed plane, expert indices, not bot words
-    rd = OC.committed_reader(com)
+    rd = OC.OpenedReader(com, run)
     live = rd(2, "moe/L0/router_ids", 0, 8 * 4)
     assert live is not None and len(live) == 32 and set(int.from_bytes(live[i:i + 4], "little") for i in range(0, 32, 4)) <= set(range(64))
     assert live[:8] != PS.bot_word("i32")

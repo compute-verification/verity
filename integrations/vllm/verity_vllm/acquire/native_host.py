@@ -1063,9 +1063,10 @@ class NativeHostCommitter:
 
     # ------------------------------------------------------------------ offline core (tests; no engine, no CUDA)
 
-    def commit_offline(self, steps: list[list[tuple[str, bytes]]], *, padding: list | None = None) -> RunCommitment:
-        """Commit the given per-step tensors (name, raw bytes) synchronously — the exact hashing / layout / root code the online
-        path runs on the worker thread, minus hooks and D2H.  Used by the security tests and for CPU cross-checks.
+    def commit_offline(self, steps: list[list[tuple]], *, padding: list | None = None) -> RunCommitment:
+        """Commit the given per-step tensors (name, raw bytes[, dtype, shape]; default uint8 of the byte length) synchronously — the exact
+        hashing / layout / root code the online path runs on the worker thread, minus hooks and D2H.  Used by the security tests and for CPU
+        cross-checks.
         `padding`: [B9.1] PaddingSteps -- or a callable(committer) -> PaddingSteps run after the steps are committed -- registered
         before `finalize()` (see `add_padding_steps`)."""
         class _Ev:
@@ -1076,10 +1077,11 @@ class NativeHostCommitter:
         for tensors in steps:
             job = _StepJob(self._step_index, [], _Ev())
             self._step_index += 1
-            for name, raw in tensors:
+            for name, raw, *typed in tensors:
                 first_leaf = (job.metas[-1].first_leaf + job.metas[-1].n_leaves) if job.metas else 0
                 n_leaves = (len(raw) + self.chunk - 1) // self.chunk
-                m = TensorMeta(len(job.metas), name, "uint8", (len(raw),), len(raw), self.chunk, first_leaf, n_leaves)
+                dtype, shape = (str(typed[0]), tuple(typed[1])) if typed else ("uint8", (len(raw),))
+                m = TensorMeta(len(job.metas), name, dtype, shape, len(raw), self.chunk, first_leaf, n_leaves)
                 m.host = memoryview(raw)
                 job.metas.append(m)
             job.t_step_end = time.perf_counter()

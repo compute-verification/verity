@@ -1005,7 +1005,8 @@ class TP2CaptureWorkerExtension:
         if not ok:
             if n_mis:
                 f = mismatches[0]
-                why = (f"rank {rank}: {n_mis} of {checked} committed sampled rows disagree with the Match record (first: step {f.get('step')} row {f.get('row')} "
+                why = (f"rank {rank}: step {f.get('step')}: {f['why']}" if "why" in f else
+                       f"rank {rank}: {n_mis} of {checked} committed sampled rows disagree with the Match record (first: step {f.get('step')} row {f.get('row')} "
                        f"labelled {f.get('request')} k={f.get('k')}: committed {f.get('committed')} != match {f.get('match_record')})")
             elif missing:
                 why = f"rank {rank}: {len(missing)} steps without attributable sampled ids (first: {missing[0]})"
