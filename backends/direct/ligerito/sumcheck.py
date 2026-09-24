@@ -656,15 +656,27 @@ def _fm(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     a, b = torch.broadcast_tensors(a, b)
     if a.numel() > D << 15:
         return _fm_big(a, b)
-    W = _FOLD.get(a.device)
+    pr = (a[..., :, None] * b[..., None, :]) % P
+    return (pr.reshape(pr.shape[:-2] + (1, D * D)) * _fold_w(a.device)).sum(-1) % P
+
+
+def _fold_w(dev) -> torch.Tensor:
+    """``(6, 36)``: coordinate product ``a_i b_j`` -> ext coordinate ``(i + j) % 6``, times 31 if wrapped (``X^6 = 31``)."""
+    W = _FOLD.get(dev)
     if W is None:
         W = torch.zeros((D, D * D), dtype=torch.int64)
         for i in range(D):
             for j in range(D):
                 W[(i + j) % D, D * i + j] = 1 if i + j < D else 31
-        W = _FOLD[a.device] = W.to(a.device)
-    pr = (a[..., :, None] * b[..., None, :]) % P
-    return (pr.reshape(pr.shape[:-2] + (1, D * D)) * W).sum(-1) % P
+        W = _FOLD[dev] = W.to(dev)
+    return W
+
+
+def _fdot(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+    """``sum_e a[e] b[e]`` over the leading axis of two ``(n, 6)`` ext tensors (= ``_fm(a, b).sum(0) % P``): the reduced
+    coordinate products summed first (n < 2^32), then one fold."""
+    pr = (a[:, :, None] * b[:, None, :] % P).sum(0) % P
+    return (pr.reshape(1, D * D) * _fold_w(a.device)).sum(-1) % P
 
 
 def _fm_big(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
@@ -711,6 +723,7 @@ class ZkMask:
         self.coeffs = None if coeffs is None else coeffs.to("cpu")
         self._K = torch.zeros((D,), dtype=torch.int64)
         self._base: dict = {}                                     # t -> (base_t, outer base weights (3^v, 6))
+        self._msg: dict = {}                                      # t -> (g_t in the mixed representation, its ones)
         self.claim_w: list = []                                   # per bound group: (3^v - 1, 6) weights of K
 
     @property
@@ -727,21 +740,34 @@ class ZkMask:
             v = self.arities[t]
             pts = torch.stack(list(taus)) if self.kind == "eq" else None
             Wb = _outer(list(_mono_weights(self.kind, pts, v))).reshape(3 ** v, D)
-            base = (_fm(self._c(t), Wb).sum(0) % P) if self.coeffs is not None else None
+            base = _fdot(self._c(t), Wb) if self.coeffs is not None else None
             self._base[t] = (base, Wb)
         return self._base[t]
 
+    def _msg_part(self, t: int, taus: list | None) -> tuple:
+        if t not in self._msg:
+            v = self.arities[t]
+            M = self._c(t).reshape((3,) * v + (D,))
+            ones = torch.ones((1,) * v, dtype=torch.int64)
+            for a in range(v):              # X^0, X^1, X^2 -> (1, 1, 0), (0, 1, 0), (0, 1, 1) in (q(0), q(1), q_inf) per axis
+                c0, c1, c2 = M.select(a, 0), M.select(a, 1), M.select(a, 2)
+                M = torch.stack((c0, (c0 + c1 + c2) % P, c2), dim=a)
+                ones = torch.cat((ones, ones, torch.zeros_like(ones)), dim=a)
+            self._base_w(t, taus)
+            self._msg[t] = (M, ones[..., None])
+        return self._msg[t]
+
+    def prepare(self, taus: list | None = None) -> None:
+        """Every round's challenge-independent message part (``eq``: ``taus[t]`` = round ``t``'s tau entries, on the CPU so
+        that nothing waits for the device): the prover runs this while the device computes the opening round."""
+        for t in range(len(self.arities)):
+            self._msg_part(t, None if taus is None else taus[t])
+
     def message(self, t: int, taus: list | None = None, n_rest: int = 0) -> torch.Tensor:
         """Round ``t``'s mask part in the mixed representation: ``K + g_t(X) - base_t`` (``eq``), times ``2^n_rest`` (``avg``)."""
-        v = self.arities[t]
+        M, ones = self._msg_part(t, taus)
         base, _ = self._base_w(t, taus)
-        M = self._c(t).reshape((3,) * v + (D,))
-        ones = torch.ones((1,) * v, dtype=torch.int64)
-        for a in range(v):                  # X^0, X^1, X^2 -> (1, 1, 0), (0, 1, 0), (0, 1, 1) in (q(0), q(1), q_inf) per axis
-            c0, c1, c2 = M.select(a, 0), M.select(a, 1), M.select(a, 2)
-            M = torch.stack((c0, (c0 + c1 + c2) % P, c2), dim=a)
-            ones = torch.cat((ones, ones, torch.zeros_like(ones)), dim=a)
-        M = (M + ones[..., None] * ((self._K - base) % P)) % P
+        M = (M + ones * ((self._K - base) % P)) % P
         if self.kind == "avg" and n_rest:
             M = (M * pow(2, n_rest, P)) % P
         return M.to(self.device)
@@ -753,7 +779,7 @@ class ZkMask:
         W = (_outer(list(_mono_weights("eval", r, v))).reshape(3 ** v, D) - Wb) % P
         self.claim_w.append(W[1:])
         if self.coeffs is not None:
-            self._K = (self._K + _fm(self._c(t), W).sum(0)) % P
+            self._K = (self._K + _fdot(self._c(t), W)) % P
 
     def claim(self, lay: Layout, value: torch.Tensor, name: str) -> SparseClaim:
         """``K = value`` as a sparse claim on the committed cells: coefficient ``u`` (global index ``offset + u``) has its
@@ -1056,14 +1082,21 @@ def _prove_zk(lay: Layout, cons: Constraints, z: torch.Tensor, coins, cheat: str
     E, claim = one.clone(), zero.clone()
     rs: list = []
     zc_msgs, per_round, msg_t = [], [], []
+    tau_h, zc_taus, nrem = tau.cpu(), [], n
+    for v in sched.zc:
+        zc_taus.append([tau_h[nrem - 1 - j] for j in range(v)])
+        nrem -= v
     nrem = n
     for t, v in enumerate(sched.zc):
         tr_ = time.perf_counter()
         M = st.round(v)
+        if t == 0:
+            for mk, tk in ((mz, zc_taus), (mc, None), (mr, None)):
+                mk.prepare(tk)
         _sync(dev)
         msg_t.append(time.perf_counter() - tr_)
         taus = [tau[nrem - 1 - j] for j in range(v)]
-        M = (M + mz.message(t, taus)) % P
+        M = (M + mz.message(t, zc_taus[t])) % P
         if cheat in ("zc", "all") or (cheat == "round1" and t == 0):
             M = _fix_zc_round(M, taus, claim, E)
         zc_msgs.append(M)
