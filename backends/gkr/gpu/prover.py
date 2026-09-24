@@ -384,12 +384,46 @@ def seg_query_values(inst: Instance, name: str) -> list[torch.Tensor]:
         if not qs:
             out.append(None)
             continue
+        if _field._fast_gate_eval is not None and s.cols.is_cuda:
+            w = len(qs[0].cols)
+            ptr, idx, coef = _query_csr(s.circ, name, qs, s.cols.device)
+            vals = _field._fast_gate_eval(s.cols, ptr, idx, coef, len(qs) * w)        # (units, q_t w)
+            out.append(vals.reshape(-1, w))
+            continue
         if s.cols.is_cuda and s.cols.dtype == torch.int64:
             out.append(_query_values_planned(s.circ, name, qs, s.cols).reshape(-1, len(qs[0].cols)))
             continue
         vals = torch.stack([logup.query_values(q, s.cols) for q in qs], dim=1)       # (units, q_t, w)
         out.append(vals.reshape(-1, vals.shape[-1]))
     return out
+
+
+_QUERY_CSR: dict = {}
+
+
+def _query_csr(circ: Circuit, name: str, qs: list[Query], device):
+    """The query columns of one table as ``gate_eval`` linear forms (gate ``q w + j`` = column ``j`` of query ``q``; the
+    constant on the one column): CSR ``ptr``, ``idx`` int32, ``coef R mod p`` int64 (cached per circuit, table, device)."""
+    key = (circ.hash, name, str(device))
+    if key not in _QUERY_CSR:
+        if len({len(q.cols) for q in qs}) != 1:
+            raise ValueError(f"table {name}: queries of different widths")
+        ptr, idx, coef = [0], [], []
+        for q in qs:
+            for lin in q.cols:
+                acc: dict[int, int] = {}
+                for i, c in lin.terms:
+                    acc[i] = (acc.get(i, 0) + c) % P
+                if lin.konst % P:
+                    acc[circ.one_col] = (acc.get(circ.one_col, 0) + lin.konst) % P
+                for i, c in sorted(acc.items()):
+                    if c:
+                        idx.append(i)
+                        coef.append(c * (1 << 32) % P)
+                ptr.append(len(idx))
+        _QUERY_CSR[key] = (torch.tensor(ptr, dtype=torch.int32, device=device), torch.tensor(idx, dtype=torch.int32, device=device),
+                           torch.tensor(coef, dtype=torch.int64, device=device))
+    return _QUERY_CSR[key]
 
 
 def hypercube_dim(inst: Instance, name: str, table: Table) -> int:
