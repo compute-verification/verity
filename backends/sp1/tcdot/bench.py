@@ -1,12 +1,12 @@
-"""The modified-SP1 (TC_DOT chip) bench-result: ``benchmarks/dot_product/vector_run.py --backend sp1-bare`` with this
-variant's software identity.
+"""The modified-SP1 (TC_DOT chip) bench-result: ``benchmarks/dot_product/vector_run.py --backend sp1-bare --variant``
+with this variant's identity.
 
-vector_run.py writes stock SP1's toolchain into the fingerprint (Succinct's release ``sp1-gpu-server``, sp1-primitives
-6.6.0).  This variant builds every SP1 crate and the GPU server from one fork checkout (``build_fork.sh``: v6.4.0 plus
-``sp1-patches/``), so the wrapper asks the host for its fork pin, checks it against ``FORK_HEAD``, swaps those fields
-for the fork's and adds ``software.modified``; everything else -- negatives, proving, the per-proof verify, phases,
-rates, the contract check -- is vector_run's, unchanged.  Arguments are vector_run's (``--backend sp1-bare`` and a
-default ``--backend-name`` are supplied)::
+This variant builds every SP1 crate and the GPU server from one fork checkout (``build_fork.sh``: v6.4.0 plus
+``sp1-patches/``).  The wrapper asks the host for its fork pin, checks it against ``FORK_HEAD`` and writes vector_run's
+variant file (``OUT/variant.json``: backend name, label, the fork's toolchain, ``fork`` = pin, patch digests, chips,
+routing and the forked GPU server's digest, verifier, security source); everything else -- negatives, proving, the
+per-proof verify, phases, rates, the contract check -- is vector_run's, unchanged.  Arguments are vector_run's
+(``--backend sp1-bare`` is supplied; SP1 prover options go in ``--prover-env KEY=VALUE``, which vector_run records)::
 
     python3.12 backends/sp1/tcdot/bench.py --host $CARGO_TARGET_DIR/release/verity-tcdot-host \\
         --instances /workspace/bi --reps 3 --out RUN_DIR
@@ -68,7 +68,7 @@ def fork_identity(host: str) -> dict:
         "proof_modes": "core only: the fork's recursion vk map does not contain the TC_DOT chips",
         "prover_sharding": "patch 0006: the shape checker charges a deferred precompile's memory accesses to its precompile shard, not "
                            "the CPU shard; local_gpu_opts honours ELEMENT_THRESHOLD (prover scheduling only: no AIR or verifier change)",
-        "prover_env": {k: os.environ[k] for k in ("ELEMENT_THRESHOLD", "VERITY_TCDOT_VU_SOFTWARE_THRESHOLD") if k in os.environ},
+        "vu_software_threshold": os.environ.get("VERITY_TCDOT_VU_SOFTWARE_THRESHOLD", "host default (8)"),
         "gpu_server": {"build": "cargo install --path sp1-gpu/crates/server from the fork (CUDA_ARCHS=80)", "path": str(server),
                        "sha256": _sha256(server) if server.is_file() else None},
         "host_info": {k: info.get(k) for k in ("elf_sha256", "vk_hash", "statement", "formats")},
@@ -81,34 +81,28 @@ def main(argv: list[str]) -> int:
     vector_run = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(vector_run)
 
-    host = _arg(argv, "--host")
-    if not host:
-        raise SystemExit("bench.py: --host (the verity-tcdot-host binary) is required")
-    modified = fork_identity(host)
-    contract = vector_run.contract
-    stock_fingerprint = contract.fingerprint
-
-    def fingerprint(**kw):
-        software = json.loads(json.dumps(kw["software"]))
-        software["backend"]["version"] = f"6.4.0 fork @ {modified['fork_head'][:12]} ({LABEL})"
-        fork = f"6.4.0 (fork @ {modified['fork_head'][:12]})"
-        software["toolchain"].update({"sp1-sdk": fork, "sp1-zkvm": fork, "sp1-primitives": fork, "sp1-core-executor": fork,
-                                      "sp1-gpu-server": f"built from the fork @ {modified['fork_head'][:12]} (CUDA_ARCHS=80)"})
-        software["modified"] = modified
-        security = dict(kw["security"])
-        security["source"] = ("SP1's own accounting, unchanged by the TC_DOT patches: the fork's crates/primitives/src/fri_params.rs (v6.4.0) "
-                              "SP1_TARGET_BITS_OF_SECURITY = 100 per STARK proof (CORE_LOG_BLOWUP 2, SP1_PROOF_OF_WORK_BITS 16; KoalaBear^4)")
-        return stock_fingerprint(**{**kw, "software": software, "security": security, "label": LABEL})
-
-    contract.fingerprint = fingerprint
-    args = list(argv)
-    if "--backend" not in args:
-        args = ["--backend", "sp1-bare", *args]
-    if _arg(args, "--backend-name") is None:
-        args += ["--backend-name", BACKEND_NAME]
-    if _arg(args, "--mode") not in (None, "core"):
+    host, out = _arg(argv, "--host"), _arg(argv, "--out")
+    if not host or not out:
+        raise SystemExit("bench.py: --host (the verity-tcdot-host binary) and --out are required")
+    if _arg(argv, "--mode") not in (None, "core"):
         raise SystemExit("bench.py: core proofs only (the fork's recursion vk map lacks the TC_DOT chips)")
-    return vector_run.main(args)
+    fork = fork_identity(host)
+    head = fork["fork_head"][:12]
+    pin = f"6.4.0 (fork @ {head})"
+    variant = {
+        "backend_name": BACKEND_NAME,
+        "label": LABEL,
+        "toolchain": {"sp1-sdk": pin, "sp1-zkvm": pin, "sp1-primitives": pin, "sp1-core-executor": pin,
+                      "sp1-gpu-server": f"built from the fork @ {head} (CUDA_ARCHS=80)"},
+        "fork": fork,
+        "verifier_name": f"{host} verify (verity-tcdot-host, fork @ {head})",
+        "security_source": "SP1's own accounting, unchanged by the TC_DOT patches: the fork's crates/primitives/src/fri_params.rs (v6.4.0) "
+                           "SP1_TARGET_BITS_OF_SECURITY = 100 per STARK proof (CORE_LOG_BLOWUP 2, SP1_PROOF_OF_WORK_BITS 16; KoalaBear^4)",
+    }
+    Path(out).mkdir(parents=True, exist_ok=True)
+    (Path(out) / "variant.json").write_text(json.dumps(variant, indent=1))
+    args = list(argv) if "--backend" in argv else ["--backend", "sp1-bare", *argv]
+    return vector_run.main([*args, "--variant", str(Path(out) / "variant.json")])
 
 
 if __name__ == "__main__":
