@@ -214,6 +214,15 @@ def _generate_regs(sys: System, program: list | None = None) -> str:
                     raise ValueError("selector bound outside int64")
                 out.append(g.store(row0 + i, f"(u64)((sx >= {int(k0)}LL) && (sx <= {int(k1)}LL))",
                                    derived=(f"((u64)((sx{row0} >= {int(k0)}LL) && (sx{row0} <= {int(k1)}LL)))" if keep else None)))
+        elif kind == "xadd":
+            _, row0, lo, hi, olo, ohi = op
+            keep = REGISTER_ROWS and any(row0 + b in g.reads for b in range(32))
+            out.append(f"    x = {g.eval(lo)}; y = {g.eval(hi)}; x = (x + (y << 16)) & 0xFFFFFFFFULL;")
+            out.append(f"    y = {g.eval(olo)}; x ^= y; y = {g.eval(ohi)}; x ^= y << 16;")
+            if keep:
+                out.append(f"    const u64 xb{row0} = x;")
+            for b in range(32):
+                out.append(g.store(row0 + b, f"(x >> {b}) & 1ULL", derived=(f"((xb{row0} >> {b}) & 1ULL)" if keep else None)))
         elif kind == "inv":
             _, idx, x = op
             out.append(f"    x = {g.eval(x)};")
@@ -276,6 +285,11 @@ def _generate_tab(sys: System, tab: list, program: list | None = None) -> str:
                 if not (-(2**63) <= k0 < 2**63 and -(2**63) <= k1 < 2**63):
                     raise ValueError("selector bound outside int64")
                 out.append(f"    W({row0 + i}) = (unsigned)((sx >= {int(k0)}LL) && (sx <= {int(k1)}LL));")
+        elif kind == "xadd":
+            _, row0, lo, hi, olo, ohi = op
+            out.append(f"    x = {_eval(lo, tab)}; y = {_eval(hi, tab)}; x = (x + (y << 16)) & 0xFFFFFFFFULL;")
+            out.append(f"    y = {_eval(olo, tab)}; x ^= y; y = {_eval(ohi, tab)}; x ^= y << 16;")
+            out.append(f"    for (int b = 0; b < 32; ++b) W({row0} + b) = (unsigned)((x >> b) & 1ULL);")
         elif kind == "inv":
             _, idx, x = op
             out.append(f"    x = {_eval(x, tab)}; W({idx}) = (unsigned)modinv_p(x);")
@@ -326,6 +340,8 @@ witness_program(const i64* __restrict__ pub, const i64* __restrict__ hints, unsi
                   const int ns = o[2], so = o[4];
                   for (int s = 0; s < ns; ++s) W(idx + s) = (unsigned)((sx >= SEL[2 * (so + s)]) && (sx <= SEL[2 * (so + s) + 1])); } break;
         case 5: { const u64 x = EV(o[2]); W(idx) = (unsigned)modinv_p(x); } break;
+        case 6: { const u64 x = ((EV(o[2]) + (EV(o[3]) << 16)) & 0xFFFFFFFFULL) ^ (EV(o[4]) + (EV(o[5]) << 16));
+                  for (int b = 0; b < 32; ++b) W(idx + b) = (unsigned)((x >> b) & 1ULL); } break;
         default: break;
         }
     }
@@ -365,6 +381,8 @@ witness_level(const i64* __restrict__ pub, const i64* __restrict__ hints, unsign
               const int ns = o[2], so = o[4];
               for (int s = 0; s < ns; ++s) W(idx + s) = (unsigned)((sx >= SEL[2 * (so + s)]) && (sx <= SEL[2 * (so + s) + 1])); } break;
     case 5: { const u64 x = EV(o[2]); W(idx) = (unsigned)modinv_p(x); } break;
+    case 6: { const u64 x = ((EV(o[2]) + (EV(o[3]) << 16)) & 0xFFFFFFFFULL) ^ (EV(o[4]) + (EV(o[5]) << 16));
+              for (int b = 0; b < 32; ++b) W(idx + b) = (unsigned)((x >> b) & 1ULL); } break;
     default: break;
     }
 #undef EV
@@ -381,7 +399,8 @@ def _interp_levels(ops, opd, J, m: int):
     lv = np.empty(len(ops), dtype=np.int64)
     for i, o in enumerate(ops):
         kind, idx = int(o[0]), int(o[1])
-        reads = () if kind in (0, 1) else (o[2], o[3]) if kind == 2 else (o[3],) if kind in (3, 4) else (o[2],)
+        reads = (() if kind in (0, 1) else (o[2], o[3]) if kind == 2 else (o[3],) if kind in (3, 4)
+                 else (o[2], o[3], o[4], o[5]) if kind == 6 else (o[2],))
         lev = 0
         for k in reads:
             off, n = int(opd[k, 0]), int(opd[k, 1])
@@ -390,7 +409,7 @@ def _interp_levels(ops, opd, J, m: int):
                 if not written[js].all():
                     return None
                 lev = max(lev, int(lvl_row[js].max()) + 1)
-        nw = int(o[2]) if kind in (3, 4) else 1
+        nw = int(o[2]) if kind in (3, 4) else 32 if kind == 6 else 1
         if written[idx:idx + nw].any():
             return None
         written[idx:idx + nw] = True
@@ -439,6 +458,8 @@ def _interp_tables(sys: System, program: list) -> tuple:
             ops.append((4, row0, len(k0s), operand(key), so, 0))
         elif kind == "inv":
             ops.append((5, op[1], operand(op[2]), 0, 0, 0))
+        elif kind == "xadd":
+            ops.append((6, op[1], operand(op[2]), operand(op[3]), operand(op[4]), operand(op[5])))
         else:
             raise ValueError(kind)
     return (np.array(J, dtype=np.int32), np.array(Cc, dtype=np.uint32),
