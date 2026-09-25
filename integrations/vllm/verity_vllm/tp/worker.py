@@ -1501,61 +1501,10 @@ class TP2CaptureWorkerExtension:
         return _jsonable(res)
 
     def _t6_4_check(self, com: Any, rc: Any) -> dict[str, Any]:
-        """[rev-cb M-0424 T6-4, report M-0435] late-read detector for the fused-MoE received all-reduce output: the committed bytes of
-        `model.layers.<L>.mlp.experts/out` vs the committed `model.layers.<L+1>.input_layernorm/0` (last layer: `model.norm/0`) in the
-        same step, for EVERY step and layer of the last finalized run.  The /out is staged (a held reference, copied at the next gather
-        flush); vLLM's fused_add_rms_norm writes the next norm's output INTO that tensor in place, so a late read commits bytes equal
-        to the next norm's /0.  Any equal pair = late read (result False, count named); result True needs > 0 pairs compared and 0
-        equal / 0 missing."""
-        import hashlib
-        import re
+        """The fused-MoE late-read detector over the last finalized run on this rank (`partial_source.late_read_check`)."""
+        from verity_vllm.tp.partial_source import late_read_check
 
-        from verity_vllm.check import oracle_compare as OC
-        from verity_vllm.tp.partial_source import _committed
-
-        layouts = getattr(com, "_layouts", {}) or {}
-        rd = OC.OpenedReader(com, rc)
-        pairs: list[dict] = []
-        equal = missing = compared = not_verified = 0
-        steps = 0
-        for step in sorted(layouts):
-            metas = {m.name: m for m in layouts[step]}
-            outs = sorted((int(re.search(r"layers\.(\d+)\.", n).group(1)), n) for n in metas if n.endswith(".mlp.experts/out"))
-            if not outs:
-                continue
-            steps += 1
-            last = max(L for L, _n in outs)
-            for L, n in outs:
-                nxt = n.rsplit(".layers.", 1)[0] + (f".layers.{L + 1}.input_layernorm/0" if L < last else ".norm/0")
-                try:
-                    a = _committed(rd, step, metas.get(n))
-                    b = _committed(rd, step, metas.get(nxt))
-                except OC.OpeningNotVerified as e:
-                    not_verified += 1
-                    if len(pairs) < 240:
-                        pairs.append({"step": step, "layer": L, "out": n, "next_norm": nxt, "not_verified": str(e)[:200]})
-                    continue
-                if a is None or b is None:
-                    missing += 1
-                    if len(pairs) < 240:
-                        pairs.append({"step": step, "layer": L, "out": n, "next_norm": nxt, "missing": [x for x, v in (("out", a), ("next_norm", b)) if v is None]})
-                    continue
-                compared += 1
-                eq = a == b
-                equal += int(eq)
-                if eq or step < 2 or len(pairs) < 96:
-                    pairs.append({"step": step, "layer": L, "out": n, "next_norm": nxt, "out_sha": hashlib.sha256(a).hexdigest()[:16],
-                                  "next_norm_sha": hashlib.sha256(b).hexdigest()[:16], "nbytes": len(a), "equal": eq})
-        # [tp fold of moe cf29c7e72] a dense TP row (Llama: no fused-MoE `/out` member in any step) has nothing for this detector to
-        # compare -- record NOT APPLICABLE (result None, applicable False) rather than a False that reads as a detected late read;
-        # on a MoE row the rule is moe's: True only with > 0 pairs compared, 0 equal, 0 missing
-        applicable = steps > 0
-        return {"schema": "verity/commit-integ/t6_4-check/v1", "rank": int(self._tp2_commit["rank"]), "applicable": applicable,
-                "result": (bool(compared > 0 and equal == 0 and missing == 0 and not_verified == 0) if applicable else None),
-                "steps": steps, "layers_compared": compared, "equal_pairs": equal, "missing_pairs": missing, "not_verified_pairs": not_verified,
-                "value_source": rd.record(), "pairs": pairs[:240],
-                "why": (None if applicable else "no fused-MoE received all-reduce member (*.mlp.experts/out) in any committed step: dense TP row, detector not applicable"),
-                "rule": "committed <L>.mlp.experts/out == committed <L+1>.input_layernorm/0 (last: model.norm/0) in the same step => late read"}
+        return late_read_check(com, rc, int(self._tp2_commit["rank"]))
 
     def tp2_commit_reset(self) -> dict[str, Any]:
         st = self._tp2_commit

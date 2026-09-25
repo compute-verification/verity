@@ -15,12 +15,12 @@ Run by `commit_delta.py --value-check` on one extra instrumented run; result in 
 from __future__ import annotations
 
 import time
-from typing import Any
+from typing import Any, Callable
 
 import torch
 
 from verity_vllm.acquire.native_host import _mro_names
-from verity_vllm.check.oracle_compare import OpeningNotVerified
+from verity_vllm.commit.opened import OpenedReader, OpeningNotVerified
 
 REEXEC_CLASSES = ("Linear", "RMSNorm", "GemmaRMSNorm", "SiluAndMul", "GeluAndMul", "RotaryEmbedding")
 
@@ -106,7 +106,7 @@ class ValueChecker:
     @staticmethod
     def _committed(reader, step: int, m):
         """Committed bytes of tensor `m`, opened from the committer and verified against the run root by `reader`
-        (`oracle_compare.OpenedReader`); a read that does not verify raises `OpeningNotVerified`."""
+        (`commit.opened.OpenedReader`); a read that does not verify raises `OpeningNotVerified`."""
         return None if m is None else reader.read_meta(step, m)
 
     @staticmethod
@@ -115,7 +115,7 @@ class ValueChecker:
 
     @torch.inference_mode()
     def compare(self, reader) -> dict:
-        """After finalize(): committed bytes (opened and verified against the run root by `reader`, an `oracle_compare.OpenedReader`) vs
+        """After finalize(): committed bytes (opened and verified against the run root by `reader`, an `commit.opened.OpenedReader`) vs
         (T) tap clones and (R) re-execution.  A tensor whose opening does not verify is `not_verified` (FAIL)."""
         t0 = time.perf_counter()
         res = {"steps": len(self.steps), "tensors": 0, "tap_equal": 0, "tap_mismatch": [], "reexec_tensors": 0, "reexec_equal": 0,
@@ -201,3 +201,22 @@ class ValueChecker:
                                     and res["not_verified_n"] == 0) else "FAIL"
         self.steps = []
         return res
+
+
+def run_value_check(com: Any, run: Callable[[], Any], restore: Callable[[], None]) -> dict:
+    """One extra instrumented run with reference taps + re-execution of the registered relation: `run()` executes the workload with `com` and
+    a `ValueChecker` installed, then the committed bytes -- opened and verified against that run's root -- are compared; `restore()` runs
+    once both are uninstalled.  The result carries the run root and the committer's errors."""
+    com.reset()
+    com.install()
+    vc = ValueChecker(com)
+    vc.install()
+    run()
+    rc = com.finalize()
+    vres = vc.compare(OpenedReader(com, rc))
+    vc.uninstall()
+    com.uninstall()
+    com.reset()
+    restore()
+    vres.update({"run_root": rc.run_root.hex(), "errors": rc.extra.get("errors")})
+    return vres

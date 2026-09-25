@@ -58,8 +58,10 @@ import numpy as np
 
 from verity_vllm.query.manifest import format as RM
 from verity_vllm.check import replay_codes as RC
-from verity_vllm.check.oracle_compare import OpeningNotVerified, entry_read_name as _entry_read_name, same_name_invocations as _same_name_invocations
+from verity_vllm.check.oracle_compare import entry_read_name as _entry_read_name, same_name_invocations as _same_name_invocations
 from verity_vllm.check.replay_codes import NOT_YET, WHY_CLASSES_BY_NAME, WHY_CLASSES_FAULT, why_class  # noqa: F401  (this module's record vocabulary)
+from verity_vllm.check.replay_dump import dump_row_words
+from verity_vllm.commit.opened import OpeningNotVerified, UnverifiedUnlinked, opened_check, opened_in_children
 
 SCHEMA = "verity-sweep/sampled-replay/v1"
 LINKAGE_SCHEMA = "verity-sweep/boundary-linkage/v1"
@@ -2200,48 +2202,10 @@ def _evaluate_row(pi: ProgramIndex, store: CommittedStore, weights: Callable[[st
     return evaluate(fam, st, inputs, wslices)
 
 
-_DUMP_N = [0]
-
-
-def _dump_row_words(fam: str, rid: str, step: int, op_path: str, row: int, member: str, have: np.ndarray, want: np.ndarray, eq: bool, *,
-                    store: "CommittedStore | None" = None, elo: int | None = None, ehi: int | None = None) -> None:
-    """[moe F-moe-r17-06, DIAGNOSTIC, opt-in, record-neutral] `VERITY_REPLAY_DUMP_DIR=<dir>` + `VERITY_REPLAY_DUMP_FAMILIES=Fam1,Fam2`: write
-    the committed words and the evaluated words of every evaluated row of those families (equal or not; <= VERITY_REPLAY_DUMP_MAX files,
-    default 1024) so a reader can test, offline, WHICH committed invocation an evaluated row matches (the aliased shared module: layer L's
-    rope output vs the canonical path's invocation L).  Off unless the directory is set; nothing on the record changes."""
-    import os
-    dd = os.environ.get("VERITY_REPLAY_DUMP_DIR")
-    if not dd:
-        return
-    fams = {f for f in os.environ.get("VERITY_REPLAY_DUMP_FAMILIES", "").split(",") if f}
-    if fams and fam not in fams:
-        return
-    if _DUMP_N[0] >= int(os.environ.get("VERITY_REPLAY_DUMP_MAX", "1024")):
-        return
-    _DUMP_N[0] += 1
-    os.makedirs(dd, exist_ok=True)
-    fn = f"{fam}__{rid}__s{int(step)}__{op_path.replace('/', '_')}__row{int(row)}__{member}__{'EQ' if eq else 'NE'}.npz"
-    extra: dict[str, np.ndarray] = {}
-    if store is not None and elo is not None and hasattr(store, "resolve") and isinstance(getattr(store, "aliases", None), dict):
-        # every invocation of the resolved canonical path at this (request, step, member, range): the other layers' words of a shared module
-        canon, _inv = store.resolve(op_path)
-        paths = {canon: 0} | {a: i for a, (c, i) in store.aliases.items() if c == canon}
-        for p, i in sorted(paths.items(), key=lambda t: t[1]):
-            w, _why = store.words(rid, step, p, member, elo, ehi)
-            if w is not None:
-                extra[f"inv{int(i)}__{p}"] = np.asarray(w).reshape(-1)
-    np.savez(os.path.join(dd, fn), committed=np.asarray(have).reshape(-1), evaluated=np.asarray(want).reshape(-1), **extra)
-
-
 def replay_vu(pi: ProgramIndex, store: CommittedStore, weights: Callable[[str, int, int], np.ndarray | None], vu: dict, *,
               arrive: int) -> dict[str, Any]:
-    """One VU: resolve its inputs to committed words / registered weights, evaluate, compare with its committed outputs.  A committed read
-    whose opening does not verify against the run root makes the VU a mismatch (result False), named -- also inside a forked evaluator."""
-    rec: dict[str, Any] = {}
-    try:
-        return _replay_vu(pi, store, weights, vu, arrive, rec)
-    except OpeningNotVerified as e:
-        return rec | {"result": False, "why": f"opened value not verified: {e}"[:300]}
+    """One VU: resolve its inputs to committed words / registered weights, evaluate, compare with its committed outputs (`opened_check`)."""
+    return opened_check(getattr(store, "committed", None), lambda rec: _replay_vu(pi, store, weights, vu, arrive, rec))
 
 
 def _replay_vu(pi: ProgramIndex, store: CommittedStore, weights: Callable[[str, int, int], np.ndarray | None], vu: dict, arrive: int,
@@ -2321,7 +2285,7 @@ def _replay_vu(pi: ProgramIndex, store: CommittedStore, weights: Callable[[str, 
                          "first_diff": (int(np.flatnonzero(have16 != want)[0]) if (not eq and nd > 0) else None)})
         if not eq:
             mism.append(member)
-        _dump_row_words(fam, rid, arrive + d["step"], d["op_path"], d["row"], member, have, want, eq, store=store, elo=elo, ehi=ehi)
+        dump_row_words(fam, rid, arrive + d["step"], d["op_path"], d["row"], member, have, want, eq, store=store, elo=elo, ehi=ehi)
     for c in d.get("copies") or []:
         # [MOE-TP-02] the same output committed under its second required name (the TP rank's moe/L<k>/sum plane beside part_rank<r>):
         # read back at the plane address and compared against the SAME evaluated words -- a plane copy that disagrees is a mismatch by name
@@ -2344,7 +2308,7 @@ def _replay_vu(pi: ProgramIndex, store: CommittedStore, weights: Callable[[str, 
                      "first_diff": (int(np.flatnonzero(have16 != want)[0]) if (not eq and nd > 0) else None)})
         if not eq:
             mism.append(label)
-        _dump_row_words(fam, rid, arrive + d["step"], c["op_path"], int(c["row"]), c["member"], have, want, eq, store=store, elo=elo, ehi=ehi)
+        dump_row_words(fam, rid, arrive + d["step"], c["op_path"], int(c["row"]), c["member"], have, want, eq, store=store, elo=elo, ehi=ehi)
     rec["outputs"] = outs
     rec["result"] = not mism
     if mism:
@@ -2562,6 +2526,21 @@ def engine_facts_of_record() -> dict[str, Any]:
     return facts
 
 
+def _picks_by_request_step(results: list) -> dict[str, dict[str, list[int]]]:
+    # [revb n-pad-c-1, M-1581] the picks BY (request, step): the strata carry phases, not steps, so "the other request's mid VUs evaluated
+    # beside a stopped request's padding steps" was inferred from the phase arithmetic; this states it -- per request, per step: picked /
+    # evaluated / mismatch (a padded record's reader splits `mid` at the other request's transition from these)
+    picks_by_step: dict[str, dict[int, list[int]]] = {}
+    for vu, rec, _dt in results:
+        row = picks_by_step.setdefault(str(vu["request_id"]), {}).setdefault(int(vu["step"]), [0, 0, 0])
+        row[0] += 1
+        if rec.get("result") is not None:
+            row[1] += 1
+            if not rec["result"]:
+                row[2] += 1
+    return {r: {str(s): v for s, v in sorted(d.items())} for r, d in sorted(picks_by_step.items())}
+
+
 def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], committed: Callable[[int, str, int, int], bytes | None],
                    weights: Callable[[str, int, int], np.ndarray | None], *, arrivals: dict[str, int] | None = None, per_stratum: int = 2,
                    seed: int, seed_source: str = "caller", max_evaluate: int = 2000, attention_paths: list[str] | None = None, tp: dict[str, Any] | None = None,
@@ -2622,11 +2601,7 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
 
     def _one(vu: dict) -> tuple[dict, dict, float]:
         t0 = time.perf_counter()
-        n0, s0 = dict(getattr(committed, "stats", None) or {}), getattr(committed, "seconds", 0.0)
         rec = replay_vu(indices[vu["request_id"]], store, weights, vu, arrive=int(arrivals.get(vu["request_id"], 0)))
-        n1 = getattr(committed, "stats", None)
-        if n1 is not None:                              # an OpenedReader's reads of this VU: a forked child's counts reach the parent here
-            rec["_opened"] = {k: int(v) - int(n0.get(k, 0)) for k, v in n1.items()} | {"seconds": committed.seconds - s0}
         return vu, rec, time.perf_counter() - t0
 
     # PARALLEL evaluation: the numpy k16-chain evaluators are GIL-bound (many small array ops), so threads gave ~2x on 16 cores; a FORKED
@@ -2657,11 +2632,8 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
         workers = 1
         results = [_one(vu) for vu in picked]
     unev_by_stratum: dict[str, dict] = {}
-    opened_in_children: Counter = Counter()
+    child_reads = opened_in_children(results, forked=int(workers) > 1)
     for vu, rec, dt in results:
-        opened = rec.pop("_opened", None)
-        if opened and int(workers) > 1:
-            opened_in_children.update(opened)
         fam_time[vu["family"]] += dt
         fam_n[vu["family"]] += 1
         if rec.get("result") is None:
@@ -2685,18 +2657,7 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
         strata[k]["evaluated"] = int(strata_eval.get(k, 0))
         if strata_mism.get(k):
             strata[k]["mismatch"] = int(strata_mism[k])                       # [moe F-moe-r17-06] the stratum's own count, uncapped
-    # [revb n-pad-c-1, M-1581] the picks BY (request, step): the strata carry phases, not steps, so "the other request's mid VUs evaluated
-    # beside a stopped request's padding steps" was inferred from the phase arithmetic; this states it -- per request, per step: picked /
-    # evaluated / mismatch (a padded record's reader splits `mid` at the other request's transition from these)
-    picks_by_step: dict[str, dict[int, list[int]]] = {}
-    for vu, rec, _dt in results:
-        row = picks_by_step.setdefault(str(vu["request_id"]), {}).setdefault(int(vu["step"]), [0, 0, 0])
-        row[0] += 1
-        if rec.get("result") is not None:
-            row[1] += 1
-            if not rec["result"]:
-                row[2] += 1
-    picks_by_request_step = {r: {str(s): v for s, v in sorted(d.items())} for r, d in sorted(picks_by_step.items())}
+    picks_by_request_step = _picks_by_request_step(results)
     # [moe F-moe-r17-06] EVERY mismatch counted by name, uncapped (the first-12 list below carries the inputs/outputs detail only): a
     # reader of the record learns which mechanisms / requests / phases / modules disagree without re-running the replay
     mism_by = {"by_family": dict(Counter(m["spec"].split("{")[0] for m in mism)),
@@ -2780,9 +2741,7 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
                           # [R19 admit, F-r18-admit-1 (c)] gc.freeze before the fork: the children's collections never traverse the
                           # inherited C2 heap (the 72 GB-per-child COW of R17 #23); {} when no pool was forked
                           "fork": dict(_FORK_STATS) if int(workers) > 1 else {}},
-            **({"value_reads_in_children": {k: (round(v, 3) if k == "seconds" else int(v)) for k, v in opened_in_children.items()}}
-               if opened_in_children else {}),
-            "strata": strata, "strata_unevaluated": strata_unevaluated,
+            "strata": strata, "strata_unevaluated": strata_unevaluated, **({"value_reads_in_children": child_reads} if child_reads else {}),
             # [rev-cb M-0740 G1] EVERY unevaluated stratum with its reason and class, uncapped (the verdict's named-gap rule decides per stratum)
             "unevaluated_strata": [unev_by_stratum[k] for k in strata_unevaluated if k in unev_by_stratum],
             "why_classes": {"by_name": list(WHY_CLASSES_BY_NAME), "fault": list(WHY_CLASSES_FAULT),
@@ -2833,22 +2792,6 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
 
 # ------------------------------------------------------------------------------------------------------------ boundary linkage
 
-class _UnverifiedUnlinked:
-    """A store whose `words` answers (None, why) for a read whose opening does not verify: the linkage names it unlinked (result False)."""
-
-    def __init__(self, store: Any) -> None:
-        self._store = store
-
-    def __getattr__(self, name: str) -> Any:
-        return getattr(self._store, name)
-
-    def words(self, *args: Any) -> tuple[np.ndarray | None, str]:
-        try:
-            return self._store.words(*args)
-        except OpeningNotVerified as e:
-            return None, f"opened value not verified: {e}"
-
-
 def boundary_linkage(bmap: dict[str, Any], committed: Callable[[int, str, int, int], bytes | None], workload_requests: list[dict[str, Any]],
                      *, embed_op_path: str | None = None, splits_of_record: dict[str, Any] | None = None, store: Any = None,
                      eos_of_record: set[int] | list[int] | None = None, eos_lag_rows: int | None = None) -> dict[str, Any]:
@@ -2863,7 +2806,7 @@ def boundary_linkage(bmap: dict[str, Any], committed: Callable[[int, str, int, i
     .async_scheduling True -> 1, False -> 0; None = unattested -> every early stop is refused by name).  The EOS is verified at
     steps[-1 - lag]; the trailing `lag` step(s) are the placeholder(s) fed the EOS (their committed embed input == that EOS id, recorded).
     A read whose opening does not verify against the run root is an unlinked pair by name."""
-    store = _UnverifiedUnlinked(store if store is not None else CommittedStore(bmap, committed))
+    store = UnverifiedUnlinked(store if store is not None else CommittedStore(bmap, committed))
     # the embedding op_path: the (only) op with an `in` member in the map
     if embed_op_path is None:
         ops = sorted({k[2] for k in store.idx if k[3] == IDS_MEMBER})

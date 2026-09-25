@@ -33,9 +33,11 @@ import gzip
 import hashlib
 import json
 import os
-import time
 from collections import Counter, defaultdict
 from typing import Any, Callable
+
+# re-exported: the engine-layer tp worker may import this module but not commit/ (tests/lint P9)
+from verity_vllm.commit.opened import ORDINAL_SEP, OPENED_METHOD, OpenedReader, OpeningNotVerified, meta_by_name  # noqa: F401  -- re-exported
 
 SCHEMA = "verity-sweep/oracle-compare/v1"
 METHOD = "oracle-compare (Match capture of the same attempt: snapshots at the fold's instance output views + SampleEnd ids)"
@@ -690,6 +692,27 @@ def promote_handed_down(manifest: dict[str, Any] | None, derived: dict[tuple[str
     return {"members": members, "rows": rows}
 
 
+def _foreign_oracle(oracle: MatchOracle, bmap: dict[str, Any], wcheck: dict[str, Any]) -> dict[str, Any]:
+    """The result of a Match record whose request table is not this workload's: False, nothing compared."""
+    why = "foreign oracle: the Match record is not this workload's -- " + "; ".join(wcheck["problems"][:4])
+    return {"schema": SCHEMA, "method": "oracle-compare (Match capture of the same attempt: snapshots + fold + capture log + tokens.json)",
+            "result": False, "grade": "foreign-oracle", "why": why, "complete": False, "compared": 0, "equal": 0, "mismatch_n": 0, "mismatch": [],
+            "compared_by_family": {}, "not_compared": {"foreign oracle": len(bmap.get("entries") or [])}, "steps_compared": [], "steps_not_snapshotted": [],
+            "attribution": {"complete": False, "pairs": 0, "unverified_n": 0, "ambiguous_steps": []}, "workload_check": wcheck, "oracle": oracle.provenance()}
+
+
+def _ambiguous_steps(pairs_seen: set[tuple[int, str]], attrib: dict[tuple[int, str], dict[str, Any]], snapshot_steps: Any) -> list[int]:
+    """Steps not snapshotted where two requests carry the same ids AND the same sampled id: a swap there is not attributable."""
+    ambiguous: list[int] = []
+    for s in sorted({s for s, _ in pairs_seen}):
+        if s in snapshot_steps:
+            continue
+        sig = Counter((attrib.get((s, r), {}).get("ids_sha"), attrib.get((s, r), {}).get("sampled_value")) for ss, r in pairs_seen if ss == s)
+        if any(n > 1 for n in sig.values()):
+            ambiguous.append(s)
+    return ambiguous
+
+
 def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callable[[int, str, int, int], bytes | None], *,
                    max_report: int = 12, producers: dict[tuple[str, str], dict[str, Any]] | None = None,
                    workload: dict[str, Any] | None = None, aliases: dict[str, Any] | None = None,
@@ -710,11 +733,7 @@ def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callabl
     inv_alias = {(str(v[0]), int(v[1])): str(k) for k, v in (aliases or {}).items()}       # (canonical op, invocation) -> Program op_path
     wcheck = oracle.workload_check(workload)
     if wcheck.get("ok") is False:
-        why = "foreign oracle: the Match record is not this workload's -- " + "; ".join(wcheck["problems"][:4])
-        return {"schema": SCHEMA, "method": "oracle-compare (Match capture of the same attempt: snapshots + fold + capture log + tokens.json)",
-                "result": False, "grade": "foreign-oracle", "why": why, "complete": False, "compared": 0, "equal": 0, "mismatch_n": 0, "mismatch": [],
-                "compared_by_family": {}, "not_compared": {"foreign oracle": len(bmap.get("entries") or [])}, "steps_compared": [], "steps_not_snapshotted": [],
-                "attribution": {"complete": False, "pairs": 0, "unverified_n": 0, "ambiguous_steps": []}, "workload_check": wcheck, "oracle": oracle.provenance()}
+        return _foreign_oracle(oracle, bmap, wcheck)
     compared = equal = 0
     mism: list[dict] = []
     not_cmp: Counter = Counter()
@@ -844,13 +863,7 @@ def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callabl
     # attribution: every (step, request) the map binds has BOTH id families compared and equal; steps where two requests carry the same
     # ids AND the same sampled id are ambiguous for a swap unless the step's values were snapshotted (then instance_outputs decide)
     attrib_missing = sorted(k for k in pairs_seen if not (attrib.get(k, {}).get("ids") and attrib.get(k, {}).get("sampled")))
-    ambiguous: list[int] = []
-    for s in sorted({s for s, _ in pairs_seen}):
-        if s in oracle.snapshot_steps:
-            continue
-        sig = Counter((attrib.get((s, r), {}).get("ids_sha"), attrib.get((s, r), {}).get("sampled_value")) for ss, r in pairs_seen if ss == s)
-        if any(n > 1 for n in sig.values()):
-            ambiguous.append(s)
+    ambiguous = _ambiguous_steps(pairs_seen, attrib, oracle.snapshot_steps)
     attribution_complete = compared > 0 and not mism and not attrib_missing and not ambiguous
     grade = ("mismatch" if mism else "complete" if complete else "attribution-complete" if attribution_complete else "partial")
     why = None
@@ -898,9 +911,6 @@ def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callabl
             "workload_check": wcheck, "oracle": oracle.provenance()}
 
 
-ORDINAL_SEP = "#ord"      # [moe F-moe-r17-06] `<member name>#ord<tensor_ordinal>`: the reader's exact meta of a shared module's k-th invocation
-
-
 def same_name_invocations(bmap: dict[str, Any]) -> dict[tuple[int, str], int]:
     """(step, member name) -> the number of DISTINCT invocations bound under that name at that step (> 1 = a shared module's metas)."""
     inv: dict[tuple[int, str], set[int]] = {}
@@ -920,94 +930,3 @@ def entry_read_name(e: dict[str, Any], same_name_invocations: int) -> str:
     if same_name_invocations > 1 and e.get("tensor_ordinal") is not None and ORDINAL_SEP not in name:
         return f"{name}{ORDINAL_SEP}{int(e['tensor_ordinal'])}"
     return name
-
-
-def meta_by_name(metas: list, name: str) -> Any:
-    """The committed meta a reader is asked for by member name, or None.
-    [moe F-moe-r17-06] a SHARED module (vLLM's one RotaryEmbedding, called once per layer) publishes one meta per INVOCATION under the SAME
-    member name; the binding map binds each as its own identity (invocation k, tensor_ordinal = that meta's ordinal).  A reader asked by name
-    alone can only return the FIRST meta's bytes (layer 0's words for every layer: the OLMoE mixedstop record, layers 1..15 RoPE_v1 /
-    Attention_v3 rows all unequal, layer 0 equal).  `<name>#ord<ordinal>` selects the meta EXACTLY.  [revb S-r17b-19 n3] a BARE name with
-    more than one meta at the step is a shared member asked without its ordinal: there is no first-meta answer to give (that read IS the
-    alias class) -- None by name, so a third caller cannot regress silently."""
-    base, _sep, ordinal = name.partition(ORDINAL_SEP)
-    if _sep:
-        return next((x for x in metas if x.name == base and int(getattr(x, "ordinal", -1)) == int(ordinal)), None)
-    same = [x for x in metas if x.name == base]
-    return same[0] if len(same) == 1 else None
-
-
-class OpeningNotVerified(RuntimeError):
-    """A value a check was about to consume did not verify against the run root.  The check's result is False (named), never 'not
-    evaluated': the committer's memory no longer holds what the root commits to."""
-
-
-OPENED_METHOD = ("every byte a value check consumes is opened from the committer (`open_range`: the retained copy's leaves + the boundary "
-                 "siblings of its tree) and verified against the ORIGINAL run commitment (`verify_range`: leaf digests recomputed, folded to "
-                 "the step root, step root in the run root) before it is compared; a read that does not verify fails the check by name")
-
-
-class OpenedReader:
-    """The value checks' one byte source.  `reader(step, name, lo, hi)` -> bytes | None, `reader.read_meta(step, meta, lo, hi)` for readers
-    that hold the meta: the bytes [lo, hi) of the member (clamped to the member), taken from an opening of every leaf that holds them, verified
-    against `run` (the run commitment of record) before they are returned.  None = the member is not committed at the step or its bytes are
-    not retained here (retain=none / sparse retention: they open by replay after release) -- not compared.  A read whose opening does not
-    verify raises `OpeningNotVerified`; unverified bytes are never returned.  The first verified read of a step authenticates its bare root
-    (context binding + layout digest + run-root membership, once per step); every read re-hashes its own leaves."""
-
-    def __init__(self, com: Any, run: Any) -> None:
-        self.com, self.run = com, run
-        self._roots: dict[int, bytes] = {}
-        self._own: dict[int, set[int]] = {}
-        self.stats: Counter = Counter()
-        self.seconds = 0.0
-        self.failures: list[dict[str, Any]] = []
-
-    def __call__(self, step: int, name: str, lo: int, hi: int) -> bytes | None:
-        metas = (getattr(self.com, "_layouts", None) or {}).get(step)
-        m = meta_by_name(metas, name) if metas else None
-        return None if m is None else self.read_meta(step, m, lo, hi)
-
-    def read_meta(self, step: int, m: Any, lo: int = 0, hi: int | None = None) -> bytes | None:
-        own = self._own.get(step)
-        if own is None:
-            own = self._own[step] = {id(x) for x in (getattr(self.com, "_layouts", None) or {}).get(step, [])}
-        if id(m) not in own:
-            raise ValueError(f"step {step} {getattr(m, 'name', m)!r}: not a meta of this committer's layout at the step (its offsets would "
-                             "open another tensor's leaves)")
-        t0 = time.perf_counter()
-        try:
-            lo, hi = max(0, int(lo)), int(m.nbytes) if hi is None else min(int(hi), int(m.nbytes))
-            if hi <= lo:
-                return b""
-            a, b, off = self.com.leaf_span(step, m, lo, hi)
-            ro = self.com.open_range(step, a, b)
-            if ro is None:
-                self.stats["not_retained"] += 1
-                return None
-            if not self.com.verify_range(self.run, ro, self._roots):
-                self.stats["failed"] += 1
-                if len(self.failures) < 10:
-                    self.failures.append({"step": step, "name": m.name, "ordinal": int(getattr(m, "ordinal", -1)), "byte_lo": lo, "byte_hi": hi,
-                                          "leaves": [a, b]})
-                raise OpeningNotVerified(f"step {step} {m.name} (ordinal {getattr(m, 'ordinal', '?')}) bytes [{lo}, {hi}) = leaves [{a}, {b}): "
-                                         "the opening does not verify against the run root")
-            self.stats["reads"] += 1
-            self.stats["leaves"] += b - a
-            self.stats["bytes"] += hi - lo
-            return ro.value[off:off + hi - lo]
-        finally:
-            self.seconds += time.perf_counter() - t0
-
-    def or_none(self, step: int, name: str, lo: int, hi: int) -> bytes | None:
-        """For a consumer that fails an unread entry by name: a read that does not verify is None (and counted in `failed`)."""
-        try:
-            return self(step, name, lo, hi)
-        except OpeningNotVerified:
-            return None
-
-    def record(self) -> dict[str, Any]:
-        return {"source": "opened", "method": OPENED_METHOD, "run_root": bytes(self.run.run_root).hex(), "reads": int(self.stats["reads"]),
-                "leaves": int(self.stats["leaves"]), "bytes": int(self.stats["bytes"]), "not_retained": int(self.stats["not_retained"]),
-                "failed": int(self.stats["failed"]), "steps_bound": len(self._roots), "seconds": round(self.seconds, 3),
-                "failures": list(self.failures)}

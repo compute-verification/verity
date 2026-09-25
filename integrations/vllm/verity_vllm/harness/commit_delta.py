@@ -70,6 +70,7 @@ import torch  # noqa: E402
 
 from verity_vllm.observe import vllm_adapter as va  # noqa: E402
 from verity_vllm.harness.timeline import Timeline  # noqa: E402  (torch-free; VERITY_TIMELINE -> append-only JSONL, else a no-op sink)
+from verity_vllm.commit import opened as OV  # noqa: E402
 
 SCHEMA = "verity/commit-integ/delta/v1"
 
@@ -1197,6 +1198,7 @@ def main(argv: list[str] | None = None) -> None:
             # the worker records this as the restart reason and the client re-runs the job in a fresh process; the engine stays untouched
             raise SystemExit("HOT-UNSAFE: " + "; ".join(_unsafe))
     compiled_src = None
+    fault = os.environ.get("VERITY_FAULT", "").strip()
     compiled_kernels = None
     if args.compiled_taps == "kernels":
         if args.only_arm == "control":
@@ -1209,8 +1211,7 @@ def main(argv: list[str] | None = None) -> None:
         from verity_vllm.acquire.compiled_kernel_source import CompiledKernelSource
 
         _prof.apply_env()
-        _f = os.environ.get("VERITY_FAULT", "").strip()
-        compiled_kernels = CompiledKernelSource(fault=_f if _f.startswith("compiled_") else None)
+        compiled_kernels = CompiledKernelSource(fault=fault if fault.startswith("compiled_") else None)
         compiled_kernels.install_hooks()                       # before vLLM compiles: the generated wrappers carry the hook lines
         print(f"[delta] COMPILED KERNEL TAPS (P_compiled): Inductor wrapper hooks {compiled_kernels.hooks_info}, fault {compiled_kernels.fault!r}", flush=True)
     if args.compiled_taps == "on":
@@ -1894,28 +1895,16 @@ def main(argv: list[str] | None = None) -> None:
 
     if args.value_check and com is not None and hasattr(com, "_layouts"):
         # VALUE-CORRECTNESS (VALUE-FIRST §5): one extra instrumented run with reference taps + re-execution of the registered relation
-        from verity_vllm.check import oracle_compare as OC
-        from verity_vllm.check.value_check import ValueChecker
+        from verity_vllm.check.value_check import run_value_check
 
-        com.reset()
-        com.install()
-        vc = ValueChecker(com)
-        vc.install()
-        r = run_workload(eng, reqs, sampling)
-        rc = com.finalize()
-        vres = vc.compare(OC.OpenedReader(com, rc))
-        vc.uninstall()
-        com.uninstall()
-        com.reset()
-        assert_pristine(eng, base)
-        vres.update({"committer": com.name, "case": eng.case, "model": eng.cp["repo"], "gpu": torch.cuda.get_device_name(0), "label": "measured",
-                     "run_root": rc.run_root.hex(), "errors": rc.extra.get("errors")})
+        vres = run_value_check(com, lambda: run_workload(eng, reqs, sampling), lambda: assert_pristine(eng, base))
+        vres.update({"committer": com.name, "case": eng.case, "model": eng.cp["repo"], "gpu": torch.cuda.get_device_name(0), "label": "measured"})
         (out / "value_check.json").write_text(json.dumps(vres, indent=1, default=str) + "\n")
         print(f"[delta] VALUE CHECK {vres['verdict']}: {vres['tensors']} tensors, tap-equal {vres['tap_equal']}, tap-mismatch {vres['tap_mismatch_n']}; "
               f"re-exec {vres['reexec_equal']}/{vres['reexec_tensors']} equal, mismatch {vres['reexec_mismatch_n']}; repeated-call modules {vres['repeated_calls']}; "
               f"missing {len(vres['missing_in_commit'])}; not verified {vres['not_verified_n']}; skipped {vres['reexec_skipped']}; by class {vres['by_class']}; "
               f"opened {vres['value_source']['reads']} reads / {vres['value_source']['bytes']} B in {vres['value_source']['seconds']} s", flush=True)
-        del vc, vres
+        del vres
 
     rows: list[dict] = []
     step_rows: list[dict] = []
@@ -1992,8 +1981,8 @@ def main(argv: list[str] | None = None) -> None:
                 "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             }
             if rc is not None:
-                if os.environ.get("VERITY_FAULT", "").strip().startswith("retained_flip"):
-                    row["fault_retained_flip"] = com.fault_retained_flip(os.environ["VERITY_FAULT"].strip())
+                if fault.startswith("retained_flip"):
+                    row["fault_retained_flip"] = com.fault_retained_flip(fault)
                     print(f"[delta] VERITY_FAULT retained_flip (negative test): {row['fault_retained_flip']}", flush=True)
                 # challenge derived from the PRECHALLENGE run root (the root is fixed before the positions exist)
                 from verity_vllm.acquire.committer_api import challenge_positions
@@ -2339,7 +2328,7 @@ def main(argv: list[str] | None = None) -> None:
                                                query_families=OC.query_families_of(required_manifest))   # [revb n-2.14-1] identities per Q(P) family
                         oc["producer_facts"] = oracle_producers[1]
                         oc["value_source"] = _ocr.record()
-                        row["commit"].setdefault("opened_values", {"method": OC.OPENED_METHOD})["oracle_compare"] = oc["value_source"]
+                        print(f"[delta] C2 ORACLE COMPARE opened values (pair {pair}): {OV.filed(row['commit'], 'oracle_compare', oc['value_source'])}", flush=True)
                     except Exception as e:  # noqa: BLE001  -- fail closed: an unreadable oracle is 'not checked', never PASS
                         oc = {"schema": OC.SCHEMA if "OC" in dir() else "verity-sweep/oracle-compare/v1", "method": "oracle-compare", "result": None,
                               "why": f"oracle compare not run: {e!r}"[:300], "compared": 0, "mismatch_n": 0, "error": repr(e)[:300]}
@@ -2359,10 +2348,6 @@ def main(argv: list[str] | None = None) -> None:
                           f"attribution {_at.get('complete')} ({_at.get('pairs')} step/request pairs, unverified {_at.get('unverified_n')}, ambiguous {_at.get('ambiguous_steps')}) compared {oc.get('compared')} "
                           f"equal {oc.get('equal')} mismatch {oc.get('mismatch_n')} steps {oc.get('steps_compared')} not-snapshotted {oc.get('steps_not_snapshotted')} "
                           f"by-family {oc.get('compared_by_family')} not-compared {oc.get('not_compared')}{(' -- ' + str(oc.get('why'))) if oc.get('why') else ''}", flush=True)
-                    _ovs = oc.get("value_source") or {}
-                    print(f"[delta] C2 ORACLE COMPARE opened values (pair {pair}): {_ovs.get('reads')} reads, {_ovs.get('leaves')} leaves, {_ovs.get('bytes')} B "
-                          f"verified against the run root in {_ovs.get('seconds')} s ({_ovs.get('steps_bound')} steps bound); not retained {_ovs.get('not_retained')}, "
-                          f"failed {_ovs.get('failed')}", flush=True)
                 if getattr(args, "program_dir", None) or getattr(args, "programs_root", None):
                     # [DECISIONS-2 §4 C2 / M-0356 (1), manbind M-0394] C2 OF RECORD: sampled exact VU replay -- for a seeded stratified sample of
                     # Program instance rows (spec x request x phase), read the COMMITTED bytes of the row's inputs (the Program's dataflow -> the
@@ -2593,10 +2578,8 @@ def main(argv: list[str] | None = None) -> None:
                                 if isinstance(_cv, dict) and _cv.get("ok"):            # in place: row["commit"]["coverage"] and rc.extra["coverage"] alias one dict
                                     _cv["ok"], _cv["error"] = False, "R17-27 one mechanism: " + "; ".join(_recon["problems"][:3])
                         sr["value_source"] = dict(_rd.record(), forked_children=sr.pop("value_reads_in_children", None))
-                        row["commit"].setdefault("opened_values", {"method": OC.OPENED_METHOD})["replay_linkage"] = sr["value_source"]
-                        _ovr = sr["value_source"]
-                        print(f"[delta] C2 SAMPLED REPLAY + LINKAGE opened values (pair {pair}): {_ovr.get('reads')} reads, {_ovr.get('bytes')} B verified in "
-                              f"{_ovr.get('seconds')} s in this process, forked evaluators {_ovr.get('forked_children')}; failed {_ovr.get('failed')}", flush=True)
+                        print(f"[delta] C2 SAMPLED REPLAY + LINKAGE opened values (pair {pair}): {OV.filed(row['commit'], 'replay_linkage', sr['value_source'])}",
+                              flush=True)
                         if _rc_key is not None and sr.get("result") is not None:
                             replay_cache[_rc_key] = {"pair": pair, "run_root": rc.run_root.hex(), "sr": sr, "lk": lk, "artifact": str(Path(args.out) / f"sampled_replay_p{pair}.json"),
                                                      "seed": (sr.get("sample") or {}).get("seed"), "code": versions.get("git_head")}

@@ -20,7 +20,7 @@ import importlib
 import time
 from typing import Any
 
-from verity_vllm.check.oracle_compare import OpeningNotVerified
+from verity_vllm.commit.opened import OpenedReader, OpeningNotVerified
 from verity_vllm.tp.collective_sites import MOE_COLLECTIVE_CLASSES as MOE_SITE_CLASSES, MOE_COLLECTIVE_MODULES
 
 SITES = (("vllm.model_executor.layers.linear", "tensor_model_parallel_all_reduce", "all_reduce"),
@@ -57,7 +57,7 @@ def _bytes(t: Any) -> bytes:
 
 def _committed(reader: Any, step: int, m: Any) -> bytes | None:
     """Committed bytes of layout meta `m`, opened from the committer and verified against the run root by `reader`
-    (`oracle_compare.OpenedReader`).  None = not committed at the step or not retained; a read that does not verify raises
+    (`commit.opened.OpenedReader`).  None = not committed at the step or not retained; a read that does not verify raises
     `OpeningNotVerified` (the caller fails it by name)."""
     return None if m is None else reader.read_meta(step, m)
 
@@ -375,7 +375,7 @@ class TPPartialSource:
     # -- value correspondence (C2) -----------------------------------------------------------------------------------------
     def compare(self, reader: Any) -> dict[str, Any]:
         """[R15 TP-04 C2] After finalize(): for every partial this source bound, the committed bytes (opened and verified against the
-        rank's run root by `reader`, an `oracle_compare.OpenedReader`) must equal (T) the hook-time reference clone taken in `_bind`, and,
+        rank's run root by `reader`, an `commit.opened.OpenedReader`) must equal (T) the hook-time reference clone taken in `_bind`, and,
         for the RowParallelLinear sites of the first `ref_reexec_steps` steps, (R) a re-execution of the rank-local GEMM on the shard from
         the tapped module input (`quant_method.apply(layer, x)` -- the exact relation `part_rank_r = Gemm_v1{K/W}(x_r, W_r)` the rank
         Program declares).  Bit-identity is what VLLM_BATCH_INVARIANT promises.  A partial the committer did not bind is
@@ -442,7 +442,7 @@ class TPPartialSource:
     def compare_match_oracle(self, capture_dir: str, reader: Any) -> dict[str, Any]:
         """[R15 coord M-0481 C2 form (B), TP family] Every committed TP partial (`<site>/part_rank<r>` | `/shard_rank<r>`) and received
         fused-MoE output (`<site>/out`) of THIS rank -- opened and verified against the rank's run root by `reader` (an
-        `oracle_compare.OpenedReader`; a member whose opening does not verify is `not_verified`, FAIL) -- compared bit-for-bit against the
+        `commit.opened.OpenedReader`; a member whose opening does not verify is `not_verified`, FAIL) -- compared bit-for-bit against the
         INDEPENDENT Match observation of the same workload:
         `tp2_match --arm capture`'s per-rank recorder stored every collective's input and output per step in call order
         (`coll.rank<r>.jsonl` = (step, k, kind, module), `coll.rank<r>.step<s>.pt` = {part[k], out[k]}).  The oracle is a different
@@ -587,3 +587,58 @@ class TPPartialSource:
 
 
 __all__ = ["TPPartialSource", "SITES", "COVERS_FAMILIES"]
+
+
+def late_read_check(com: Any, rc: Any, rank: int) -> dict[str, Any]:
+    """[rev-cb M-0424 T6-4, report M-0435] late-read detector for the fused-MoE received all-reduce output: the committed bytes of
+    `model.layers.<L>.mlp.experts/out` vs the committed `model.layers.<L+1>.input_layernorm/0` (last layer: `model.norm/0`) in the
+    same step, for EVERY step and layer of the last finalized run.  The /out is staged (a held reference, copied at the next gather
+    flush); vLLM's fused_add_rms_norm writes the next norm's output INTO that tensor in place, so a late read commits bytes equal
+    to the next norm's /0.  Any equal pair = late read (result False, count named); result True needs > 0 pairs compared and 0
+    equal / 0 missing."""
+    import hashlib
+    import re
+
+    layouts = getattr(com, "_layouts", {}) or {}
+    rd = OpenedReader(com, rc)
+    pairs: list[dict] = []
+    equal = missing = compared = not_verified = 0
+    steps = 0
+    for step in sorted(layouts):
+        metas = {m.name: m for m in layouts[step]}
+        outs = sorted((int(re.search(r"layers\.(\d+)\.", n).group(1)), n) for n in metas if n.endswith(".mlp.experts/out"))
+        if not outs:
+            continue
+        steps += 1
+        last = max(L for L, _n in outs)
+        for L, n in outs:
+            nxt = n.rsplit(".layers.", 1)[0] + (f".layers.{L + 1}.input_layernorm/0" if L < last else ".norm/0")
+            try:
+                a = _committed(rd, step, metas.get(n))
+                b = _committed(rd, step, metas.get(nxt))
+            except OpeningNotVerified as e:
+                not_verified += 1
+                if len(pairs) < 240:
+                    pairs.append({"step": step, "layer": L, "out": n, "next_norm": nxt, "not_verified": str(e)[:200]})
+                continue
+            if a is None or b is None:
+                missing += 1
+                if len(pairs) < 240:
+                    pairs.append({"step": step, "layer": L, "out": n, "next_norm": nxt, "missing": [x for x, v in (("out", a), ("next_norm", b)) if v is None]})
+                continue
+            compared += 1
+            eq = a == b
+            equal += int(eq)
+            if eq or step < 2 or len(pairs) < 96:
+                pairs.append({"step": step, "layer": L, "out": n, "next_norm": nxt, "out_sha": hashlib.sha256(a).hexdigest()[:16],
+                              "next_norm_sha": hashlib.sha256(b).hexdigest()[:16], "nbytes": len(a), "equal": eq})
+    # [tp fold of moe cf29c7e72] a dense TP row (Llama: no fused-MoE `/out` member in any step) has nothing for this detector to
+    # compare -- record NOT APPLICABLE (result None, applicable False) rather than a False that reads as a detected late read;
+    # on a MoE row the rule is moe's: True only with > 0 pairs compared, 0 equal, 0 missing
+    applicable = steps > 0
+    return {"schema": "verity/commit-integ/t6_4-check/v1", "rank": int(rank), "applicable": applicable,
+            "result": (bool(compared > 0 and equal == 0 and missing == 0 and not_verified == 0) if applicable else None),
+            "steps": steps, "layers_compared": compared, "equal_pairs": equal, "missing_pairs": missing, "not_verified_pairs": not_verified,
+            "value_source": rd.record(), "pairs": pairs[:240],
+            "why": (None if applicable else "no fused-MoE received all-reduce member (*.mlp.experts/out) in any committed step: dense TP row, detector not applicable"),
+            "rule": "committed <L>.mlp.experts/out == committed <L+1>.input_layernorm/0 (last: model.norm/0) in the same step => late read"}
