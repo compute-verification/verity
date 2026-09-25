@@ -1,4 +1,5 @@
-"""red-team-standard-hash: mutate-and-recompute determinism scan of a leaf gadget (``leaf/blake3.py``, ``leaf/sha256.py``).
+"""red-team-standard-hash: mutate-and-recompute determinism scan of a leaf gadget (``leaf/blake3.py``, ``leaf/blake3_xob.py``,
+``leaf/sha256.py``).
 
 For each column shape (word bits, blocks per column), build the one-role column system of ``leaf/blake3_test.py`` and
 the honest inputs of one VU row (operand words + carried state: the relation's bit decode and the chain test bind those).
@@ -9,11 +10,11 @@ the same operand words (a candidate forgery of the digest).  The system has no c
 inputs), so each program run tests one mutation per column over ``--width`` tiled copies of the row's columns, at two
 column offsets per row.
 
-The positive control drops one addition's low-limb bit decomposition and must show free rows.  Also checked: the honest
-witness satisfies every constraint, and its digest at the last column equals ``native`` and folds to the leaf's reference
-digest (keyed BLAKE3 / ``sha256_row_digest``).
+The positive control drops one addition's low-limb bit decomposition (``blake3-xob``: one ``xadd`` addition's low-limb
+identity) and must show free rows.  Also checked: the honest witness satisfies every constraint, and its digest at the last
+column equals ``native`` and folds to the leaf's reference digest (keyed BLAKE3 / ``sha256_row_digest``).
 
-    python -m backends.direct.ligero.redteam.rtsh_blake3_free_rows [--leaf blake3|sha256] [--shapes 8:0.5,8:1,16:1,8:2]
+    python -m backends.direct.ligero.redteam.rtsh_blake3_free_rows [--leaf blake3|blake3-xob|sha256] [--shapes 8:0.5,8:1,16:1,8:2]
         [--control-shape 8:0.5] [--width 1536] [--out DIR]
 
 Exit 0 iff no computed row is free for any shape, the honest digests match, and the control shows free rows."""
@@ -37,6 +38,19 @@ def _column(leaf_name: str, word_bits: int, nblk: float, seed: int):
         leaf, sys, words, carry, digest, carry_out = _column_system(word_bits, role, nblk)
         rows, steps, _car, _pub, hints = _one_row_inputs(leaf, sys, word_bits, role, seed, nblk)
         return leaf, sys, words, carry, digest, rows, steps, hints
+    if leaf_name == "blake3-xob":
+        from ..leaf import blake3 as L
+        from ..leaf.blake3_xob import Blake3XobLeaf
+        from ..relations import FP8_ADA_RELATION
+        leaf = Blake3XobLeaf()
+        ctx = LigeroCtx(FP8_ADA_RELATION.params)
+        ctx.scope = "t"
+        k = int(nblk * 8 * L.BLOCK_LEN) // word_bits
+        words = [ctx.hint(f"w[{i}]") for i in range(k)]
+        carry = [ctx.hint(f"carry[{i}]") for i in range(L.CARRY_ELEMS)]
+        digest, _ = leaf.gadget(ctx, words, word_bits=word_bits, role=role, row_words=L.K_VU, carry_in=carry)
+        rows, steps, _car, _pub, hints = _one_row_inputs(leaf, ctx.sys, word_bits, role, seed, nblk)
+        return leaf, ctx.sys, words, carry, digest, rows, steps, hints
     from ..leaf import sha256 as S
     from ..relations import FP8_ADA_RELATION
     leaf = S.Sha256Leaf()
@@ -84,6 +98,12 @@ def _run(sys, hints: dict, width: int, mut: dict[int, np.ndarray], alt: str) -> 
             for i, (lo, hi) in enumerate(zip(los, his)):
                 W[row0 + i] = ((lo <= x) & (x <= hi)).astype(np.int64)
                 apply(row0 + i)
+        elif op[0] == "xadd":
+            from ..leaf.blake3_xob import run_xadd
+            _, row0, lo, hi, olo, ohi = op
+            W[row0:row0 + 32] = run_xadd(_eval(lo, W), _eval(hi, W), _eval(olo, W), _eval(ohi, W))
+            for i in range(32):
+                apply(row0 + i)
         else:
             raise ValueError(op[0])
     return W
@@ -112,7 +132,8 @@ def scan(leaf_name: str, word_bits: int, nblk: float, width: int, seed: int = 7,
                  and leaf.leaf_bytes(dg) == leaf.reference_digest(rows, word_bits=word_bits, role=role)[0])
     dropped = None
     if control:                                           # positive control: drop the median addition's low-limb decomposition
-        cands = [c.name for c in sys.linear if c.name.endswith("lo.decomp")]
+        suffix = ("a1.lo", "a2.lo", "c1.lo", "c2.lo") if leaf_name == "blake3-xob" else ("lo.decomp",)
+        cands = [c.name for c in sys.linear if c.name.endswith(suffix)]
         dropped = cands[len(cands) // 2]
         sys.linear = [c for c in sys.linear if c.name != dropped]
     width = max(steps, width - width % steps)
@@ -125,6 +146,8 @@ def scan(leaf_name: str, word_bits: int, nblk: float, width: int, seed: int = 7,
             computed += list(range(op[1], op[1] + op[2]))
         elif op[0] == "sels":
             computed += list(range(op[1], op[1] + len(op[2])))
+        elif op[0] == "xadd":
+            computed += list(range(op[1], op[1] + 32))
     free: dict[int, dict] = {}
     runs = 0
     for off in (0, steps // 2 + 1):
@@ -150,7 +173,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--shapes", default="8:0.5,8:1,16:1,8:2", help="word_bits:blocks_per_column, comma-separated")
     ap.add_argument("--width", type=int, default=1536, help="columns per program run (mutations tested at once)")
-    ap.add_argument("--leaf", default="blake3", choices=("blake3", "sha256"))
+    ap.add_argument("--leaf", default="blake3", choices=("blake3", "blake3-xob", "sha256"))
     ap.add_argument("--control-shape", default="8:0.5", help="the positive control's word_bits:blocks_per_column")
     ap.add_argument("--out", default=None)
     a = ap.parse_args()
