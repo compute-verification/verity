@@ -48,9 +48,8 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from verity_census import REFERENCE_NETWORK, SENSITIVITY_NETWORKS
 from verity.proofs.target import BF16_HOPPER, FP8_ADA_MMA, FP8_HOPPER_WGMMA, NVFP4_SM120, TARGETS, Target
-from verity_numerical.bench import contract
+from verity_numerical.bench import census, contract
 from verity_numerical.bench import drilldown as D
 from verity_numerical.bench import tables as T
 
@@ -408,7 +407,7 @@ def native(target: Target, K: int = T.K) -> dict[str, Any]:
     peak = contract.native_peak_of(target)
     return {"instances_per_second": peak.flop_per_second / flop, "unit": "tensor cores", "ops_per_instance": flop, "steps": steps,
             "dtype": (T.dtype_of(target) or "?").upper(), "peak_flop_per_second": peak.flop_per_second, "device": peak.device,
-            "source": peak.source, "work_model": WORK_MODEL}
+            "source": census.source(peak), "work_model": WORK_MODEL}
 
 
 # --- the view's rules -------------------------------------------------------------------------------------------------------------
@@ -456,9 +455,9 @@ def whole_proof_log2(fp: Mapping[str, Any]) -> float | None:
 
 # --- interaction: t = compute + rounds x RTT + bytes / bandwidth (reporting standard, Daniel 2026-09-25) --------------------------
 
-#: The reference network the Table 2 cell is evaluated at (``verity_census.REFERENCE_NETWORK``: same datacenter); the
-#: interaction drill-down adds ``verity_census.SENSITIVITY_NETWORKS``.
-REF_RTT_S, REF_BANDWIDTH_BPS = REFERENCE_NETWORK.rtt_s, REFERENCE_NETWORK.bandwidth_bps
+#: The reference network the Table 2 cell is evaluated at (``census.REFERENCE_NETWORK``, ``census/networks.json``: same datacenter); the
+#: interaction drill-down adds ``census.SENSITIVITY_NETWORKS``.
+REF_RTT_S, REF_BANDWIDTH_BPS = census.REFERENCE_NETWORK.rtt_s, census.REFERENCE_NETWORK.bandwidth_bps
 #: A measured interactive run must be within this fraction of the formula at the reference profile.
 INTERACTION_TOLERANCE = 0.10
 
@@ -1318,7 +1317,7 @@ def render_markdown(V: Views, published: bool = False) -> str:
             rowsi.append([_cell_name(c), rounds, D._bytes(ix["bytes_up"]),
                           D._bytes(ix["bytes_down"]), rtt, T.fmt_seconds(ix["prover_s"] or 0.0), T.fmt_seconds(ix["verifier_s"]),
                           T.fmt_seconds(ix["wait_s"]) if ix["wait_s"] is not None else T.UNMEASURED,
-                          *[T.fmt_overhead(at(n.rtt_s, n.bandwidth_bps)) for n in (REFERENCE_NETWORK, *SENSITIVITY_NETWORKS)]])
+                          *[T.fmt_overhead(at(n.rtt_s, n.bandwidth_bps)) for n in (census.REFERENCE_NETWORK, *census.SENSITIVITY_NETWORKS)]])
         out += ["### Interaction drill-down — the formula t = compute + rounds × RTT + bytes ÷ bandwidth", "",
                 T._md_table(("Cell", "Rounds", "Bytes up", "Bytes down", "Measured RTT (method)", "Prover compute", "Verifier compute (waited on)",
                              "Measured network wait", "Cell at 1 ms, 100 Gb/s (reference)", "At 20 ms, 100 Gb/s", "At 100 ms, 100 Gb/s",

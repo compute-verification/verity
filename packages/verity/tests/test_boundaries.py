@@ -13,6 +13,7 @@ specification the Rust guest, the Lean vectors and the probes are checked agains
 from __future__ import annotations
 
 import ast
+import re
 from pathlib import Path
 
 import pytest
@@ -30,8 +31,7 @@ ALLOWED = {
     "randomness": set(),
 }
 FORBIDDEN_EXTERNAL = ("verity_sp1", "verity_vllm", "verity_torch", "sp1", "vllm", "torch", "jax", "onnx",
-                      "backends", "frontends", "integrations", "research", "veritor",
-                      "verity_census")
+                      "backends", "frontends", "integrations", "research", "veritor")
 #: Source subtrees that must stay stdlib-only: the scalar references.
 NUMPY_FREE = ("ir", "ml/tc", "randomness")
 
@@ -78,3 +78,28 @@ def test_scalar_references_are_stdlib_only(subtree: str) -> None:
                  if name.split(".")[0] == "numpy" or (subtree == "ml/tc" and name.split(".")[:2] != ["verity", "errors"]
                                                       and name.startswith("verity."))]
     assert not offenders, "\n".join(offenders)
+
+
+def _docstrings(tree: ast.AST) -> set[int]:
+    out = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)) and node.body:
+            first = node.body[0]
+            if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant) and isinstance(first.value.value, str):
+                out.add(id(first.value))
+    return out
+
+
+CENSUS_PATH = re.compile(r"census[/\\]|\b(hardware|networks|workloads|instance_sets)(\.schema)?\.json\b")
+
+
+def test_core_never_reads_the_census() -> None:
+    """The census (``census/``, data only) is read by the renderer, benchmarks, tools and the website, never by core: core takes
+    such numbers as parameters.  No string in core code (docstrings aside) names the directory or one of its files."""
+    offenders = []
+    for path in SRC.rglob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        docs = _docstrings(tree)
+        offenders += [f"{path.relative_to(SRC)}:{n.lineno}" for n in ast.walk(tree)
+                      if isinstance(n, ast.Constant) and isinstance(n.value, str) and id(n) not in docs and CENSUS_PATH.search(n.value)]
+    assert not offenders, offenders

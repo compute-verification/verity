@@ -1,14 +1,22 @@
 # Changelog: `verity_numerical` (the bench renderers and their rules)
 
-## 2026-09-25: peaks, networks and instance sets come from the census (`verity_census`)
+## 2026-09-25: peaks, networks and instance sets come from the census (`census/`, data only)
 
-- The renderers read the native peaks, the reference network (1 ms, 100 Gb/s), the interaction drill-down's sensitivity
-  profiles, K and B, and the frozen instance sets from `census/` (distribution `verity-census`: JSON data with sources, a
-  typed loader), where each has a stable id (`a100-sxm4-80gb/bf16`, `dc-1ms-100gbps`, `vu-k1536`, ...). No value changed:
-  renders are byte-identical and `--parity` is unchanged.
-- Core holds no peak: `verity.proofs.target.Target` names its `anchor_device` (`native_peak` and `NativePeak` are gone), and
-  `contract.native_peak_of(target)` is the census line of that device and the target's operand dtype.
-  `latency.pipeline` takes `native_s_per_vu` as a parameter (default: FIRST's census line).
+- The renderers read these values from `census/` at the repository root:
+  - the native peaks;
+  - the reference network (1 ms, 100 Gb/s) and the interaction drill-down's sensitivity profiles;
+  - K and B;
+  - the frozen instance sets.
+
+  `census/` is data only: four JSON files, each with a JSON Schema, and a README. Each entry has a stable id, such as
+  `a100-sxm4-80gb/bf16`, `dc-1ms-100gbps` or `vu-k1536`, and its sources.
+- `verity_numerical.bench.census` reads the files directly (`$VERITY_CENSUS` overrides the location), and
+  `tests/bench/test_census_data.py` validates them against their schemas.
+- No value changed. Renders are byte-identical, and `--parity` is unchanged.
+- Core holds no peak. `verity.proofs.target.Target` names only its `anchor_device`; `native_peak` and `NativePeak`
+  are gone.
+- `contract.native_peak_of(target)` returns the census line for the target's anchor device and operand dtype.
+- `latency.pipeline` takes `native_s_per_vu` as a parameter.
 
 ## 2026-09-25: route (a) is its own full-relation A-GKR configuration
 

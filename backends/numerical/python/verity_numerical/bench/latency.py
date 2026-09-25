@@ -46,7 +46,7 @@ from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any
 
-from verity_census import HARDWARE
+from verity_numerical.bench import census
 
 __all__ = [
     "BANDWIDTHS_GBPS",
@@ -71,7 +71,7 @@ GIB = 1 << 30
 GB = 1e9
 MB = 1e6
 #: The default native seconds per VU (``pipeline``'s ``native_s_per_vu``): FIRST's census line at K = 1536 (9.85 ps).
-NATIVE_S_PER_VU = HARDWARE["a100-sxm4-80gb/bf16"].seconds_per_vu(1536)
+NATIVE_S_PER_VU = census.seconds_per_vu(census.HARDWARE["a100-sxm4-80gb/bf16"], 1536)
 
 
 @dataclass(frozen=True)
