@@ -845,7 +845,7 @@ class NativeHostCommitter(NativeRangeOpenings):
         self.run_id = run_id
         self.program_digest = program_digest or hashlib.sha256(b"cmt-integ/no-program-digest/" + run_id.encode()).digest()
         self.acquire_classes = acquire_classes or ACQUIRE_CLASSES
-        self.spans = Spans()
+        self.spans = Spans(scheme.NAME)
         self.x03_expected = 0
         self.x03_committed = 0
         # [X-03 F-r19-int-22] the Program's per-layer attention Call statics (fa2_plane_classes.AttnLayerDecl, set by the driver from the
@@ -1312,7 +1312,7 @@ class NativeHostCommitter(NativeRangeOpenings):
         self._padding = {}
         self.padding_stats = None
         self._step_index = 0
-        self.spans = Spans()
+        self.spans = Spans(scheme.NAME)
         self.pool.reset()
         self.errors = []
 
@@ -1488,7 +1488,7 @@ class NativeHostCommitter(NativeRangeOpenings):
         layout_dig = self.layout_digest(job.metas)
         root = scheme.step_root(self.program_digest, self._ctx_digest(job.step), self._geo_digest, layout_dig, n, mr)
         t2 = time.perf_counter()
-        self.spans.add("hashing", t1 - t0, step=job.step, nbytes=nbytes)
+        self.spans.add("hashing", t1 - t0, step=job.step, nbytes=nbytes, leaves=n)
         self.spans.add("root_finalisation", t2 - t1, step=job.step)
         self._gpu_levels[job.step] = levels
         self._gpu_blocks[job.step] = (keep, used)
@@ -1943,7 +1943,7 @@ class NativeHostCommitter(NativeRangeOpenings):
         layout_dig = self.layout_digest(job.metas)
         root = scheme.step_root(self.program_digest, self._ctx_digest(job.step), self._geo_digest, layout_dig, n, levels[-1][0])
         t2 = time.perf_counter()
-        self.spans.add("hashing", t1 - t0, step=job.step, nbytes=nbytes)
+        self.spans.add("hashing", t1 - t0, step=job.step, nbytes=nbytes, leaves=n)
         self.spans.add("root_finalisation", t2 - t1, step=job.step)
         self._levels[job.step] = levels
         self._layouts[job.step] = job.metas
@@ -2020,7 +2020,7 @@ class NativeHostCommitter(NativeRangeOpenings):
                 self._done[s] = sc
                 steps.append(sc)
                 self._step_index = s + 1
-            self.spans.add("padding", time.perf_counter() - t, step=s, nbytes=ps.n_bytes)
+            self.spans.add("padding", time.perf_counter() - t, step=s, nbytes=ps.n_bytes, leaves=ps.n_leaves)
         return steps
 
     def _padding_leaf(self, step: int, index: int):

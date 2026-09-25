@@ -1748,7 +1748,7 @@ class NativeCollectCommitter(NativeHostCommitter):
         layout_dig = self.layout_digest(metas)
         root = scheme.step_root(self.program_digest, self._ctx_digest(job.step), self._geo_digest, layout_dig, n, mr)
         t2 = time.perf_counter()
-        self.spans.add("hashing", t1 - t0, step=job.step, nbytes=nbytes)
+        self.spans.add("hashing", t1 - t0, step=job.step, nbytes=nbytes, leaves=n)
         self.spans.add("root_finalisation", t2 - t1, step=job.step)
         self._gpu_levels[job.step] = levels
         self._gpu_blocks[job.step] = (keep, used)
@@ -1804,7 +1804,7 @@ class NativeCollectCommitter(NativeHostCommitter):
         layout_dig = self.layout_digest(metas)
         root = scheme.step_root(self.program_digest, self._ctx_digest(job.step), self._geo_digest, layout_dig, n, mr)
         t2 = time.perf_counter()
-        self.spans.add("hashing", t1 - t0, step=job.step, nbytes=nbytes)
+        self.spans.add("hashing", t1 - t0, step=job.step, nbytes=nbytes, leaves=n)
         self.spans.add("root_finalisation", t2 - t1, step=job.step)
         self._gpu_levels[job.step] = levels
         self._gpu_blocks[job.step] = (keep, job.cursor)
@@ -1853,7 +1853,7 @@ class NativeCollectCommitter(NativeHostCommitter):
         layout_dig = self.layout_digest(job.metas)
         root = scheme.step_root(self.program_digest, self._ctx_digest(job.step), self._geo_digest, layout_dig, n, mr)
         t2 = time.perf_counter()
-        self.spans.add("hashing", t1 - t0, step=job.step, nbytes=nbytes)
+        self.spans.add("hashing", t1 - t0, step=job.step, nbytes=nbytes, leaves=n)
         self.spans.add("root_finalisation", t2 - t1, step=job.step)
         self._gpu_levels[job.step] = levels
         self._gpu_blocks[job.step] = (keep, used)
