@@ -40,14 +40,15 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import hashlib
 import json
 import math
 import sys
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from verity.verification.target import TARGETS, Target
+from verity.verification.target import BF16_HOPPER, FP8_ADA_MMA, FP8_HOPPER_WGMMA, NVFP4_SM120, TARGETS, Target
 from verity_numerical.bench import contract
 from verity_numerical.bench import drilldown as D
 from verity_numerical.bench import tables as T
@@ -466,6 +467,54 @@ def _security(fp: Mapping[str, Any], rules: Rules, config: Configuration | None)
     return out
 
 
+def _recipe(text: str) -> Callable[[int], str]:
+    return lambda n: hashlib.sha256(text.format(n=n).encode()).hexdigest()
+
+
+#: The synthetic sets as streams: instance i is a function of (generator, seed, i) alone (``relchain._instance``,
+#: ``fp4.chain.instances_fp4``), so the set over [0, n) is a prefix-consistent extension of the frozen [0, 4096).  Their
+#: ``manifest_sha256`` hashes the generator, seed and n (``relchain.instances_digest``, ``fp4.chain.instances_digest``); each
+#: recipe here reproduces the digest ``contract`` pins at n = 4096 (tested).  The A100 set is a fixture of 4,096 instances with
+#: no stream beyond them: a larger batch repeats instances, which can inflate throughput, so it is rejected (I).
+STREAMS: dict[str, Callable[[int], str]] = {
+    FP8_ADA_MMA.name: _recipe(f"fp8-ada synthetic|seed={contract.FP8_ADA_INSTANCES_SEED}|n={{n}}|K={T.K}"),
+    BF16_HOPPER.name: _recipe(f"bf16-hopper synthetic|seed={contract.BF16_HOPPER_INSTANCES_SEED}|n={{n}}|K={T.K}"),
+    FP8_HOPPER_WGMMA.name: _recipe(f"fp8-hopper synthetic|seed={contract.FP8_HOPPER_INSTANCES_SEED}|n={{n}}|K={T.K}"),
+    NVFP4_SM120.name: _recipe(f"fp4-nvf4 synthetic|seed={contract.NVFP4_INSTANCES_SEED}|n={{n}}|K={T.K}|families="
+                              + ",".join(contract.NVFP4_INSTANCES_FAMILIES)),
+}
+_STREAM_SEEDS = {FP8_ADA_MMA.name: contract.FP8_ADA_INSTANCES_SEED, BF16_HOPPER.name: contract.BF16_HOPPER_INSTANCES_SEED,
+                 FP8_HOPPER_WGMMA.name: contract.FP8_HOPPER_INSTANCES_SEED, NVFP4_SM120.name: contract.NVFP4_INSTANCES_SEED}
+
+
+def instance_range(target: Target, inst: Mapping[str, Any]) -> tuple[str | None, str | None]:
+    """``(how, None)`` when ``inst`` is the target's declared instance set over [0, n) -- ``how`` is ``"frozen"`` (exactly the
+    frozen ref), ``"prefix"`` (a prefix of it) or ``"stream"`` (a prefix-consistent extension of a synthetic set, identified by
+    generator, seed and n) -- else ``(None, why)``, ``why`` ``None`` when it simply names another set."""
+
+    want = T.frozen_instances(target)
+    if want is None or any(inst.get(k) != want[k] for k in ("dataset", "tier")):
+        return None, None
+    rng = inst.get("range")
+    if not (isinstance(rng, (list, tuple)) and len(rng) == 2 and rng[0] == 0 and isinstance(rng[1], int) and rng[1] > 0):
+        return None, None
+    n, size = rng[1], want["range"][1]
+    if n == size:
+        return ("frozen", None) if inst.get("manifest_sha256") == want["manifest_sha256"] else (None, None)
+    recipe = STREAMS.get(target.name)
+    if recipe is not None:
+        seed = inst.get("seed", _STREAM_SEEDS[target.name])
+        if seed == _STREAM_SEEDS[target.name] and inst.get("manifest_sha256") == recipe(n):
+            return ("prefix" if n < size else "stream"), None
+        return None, None
+    if inst.get("manifest_sha256") != want["manifest_sha256"]:
+        return None, None
+    if n < size:
+        return "prefix", None
+    return None, (f"instances [0, {n}) of {want['tier']}: the frozen set holds {size} instances and has no stream beyond them, "
+                  f"so this batch repeats instances (repeats can inflate throughput)")
+
+
 def _instances(ctx: Ctx, rules: Rules, equivs: Sequence[T.InstanceEquiv], self_: set[str]) -> list[tuple[str, str]]:
     fp = ctx.meta["workload_fingerprint"]
     want, inst = T.frozen_instances(ctx.target), fp.get("instances")
@@ -474,12 +523,14 @@ def _instances(ctx: Ctx, rules: Rules, equivs: Sequence[T.InstanceEquiv], self_:
     if not isinstance(inst, Mapping):
         return [("I", "instances is null: not measured on the frozen instance set")]
     diff = T.instances_diff(inst, want)
-    if not rules.legacy:
-        rng = inst.get("range")
-        stream = isinstance(rng, (list, tuple)) and len(rng) == 2 and rng[0] == 0 and _num(rng[1]) and rng[1] > 0
-        diff = [k for k in diff if not (k == "range" and stream)]
     if not diff:
         return []
+    if not rules.legacy:
+        how, repeats = instance_range(ctx.target, inst)
+        if how is not None:
+            return []
+        if repeats:
+            return [("I", repeats)]
     eq, why = T.instance_equivalence(inst, ctx.target, equivs, self_)
     if eq is not None:
         return []
@@ -550,6 +601,9 @@ def reject_codes(store: Any, ctx: Ctx, rules: Rules, equivs: Sequence[T.Instance
     ceiling, verdict = T._redteam_ceiling(verdicts, self_)
     if verdict is not None and isinstance(pc, str) and T.RANK.get(ceiling or "", -1) < T.RANK.get(pc, -1):
         p.append(("D", f"capped: {verdict.by} ({verdict.ref or 'no ref'}, {verdict.ts}) asserts proof_class={ceiling}, below {pc}"))
+    state, flab = T.cell_finding(ctx.labels)
+    if state == "pulled":
+        p.append(("D", f"pulled: {T.finding_note(flab)}"))
     return sorted(p, key=lambda x: _ORDER[x[0]])
 
 
@@ -582,6 +636,7 @@ class ViewCell:
     scheme: str | None = None
     unfiltered: dict[str, Any] | None = None
     algebraic: list[str] = field(default_factory=list)   #: the algebraic hashes of its soundness argument (Table 1's flag)
+    instances: dict[str, Any] = field(default_factory=dict)  #: the result's instance ref
 
     def to_json(self) -> dict[str, Any]:
         d = dataclasses.asdict(self)
@@ -700,9 +755,11 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
                                 bound_log2=whole_proof_log2(c.meta["workload_fingerprint"]),
                                 provisional=None if rules.legacy else provisional(c),
                                 legacy=T._cell(c.meta, c.art, T._attempt_of(store, c.art)[0], target, _CANDIDATE[c.family.id],
-                                               vb.by if vb else None, T.instances_equiv_of(c.meta, c.labels, c.attempt, target, equivs)),
+                                               vb.by if vb else None, T.instances_equiv_of(c.meta, c.labels, c.attempt, target, equivs),
+                                               _open_finding(c.labels)),
                                 batching=_batching(c.meta["workload_fingerprint"]), scheme=scheme,
-                                algebraic=[h.text() for h in (c.config.algebraic() if c.config else ())])
+                                algebraic=[h.text() for h in (c.config.algebraic() if c.config else ())],
+                                instances=dict(c.meta["workload_fingerprint"].get("instances") or {}))
                 alt = best(pools.get(key, []) + unfiltered.get(key, []))
                 if alt is not None and alt[0].art != c.art:
                     cell.unfiltered = pick(*alt, N["instances_per_second"])
@@ -710,6 +767,11 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
                 V.cells.append(cell)
             V.lines.append(line)
     return V
+
+
+def _open_finding(labels: Sequence[Any]) -> str | None:
+    state, lab = T.cell_finding(labels)
+    return T.finding_note(lab) if state == "open" else None
 
 
 def _empty_reason(rejected: Sequence[Mapping[str, Any]], target: Target, scheme: str | None, line_schemes: Sequence[str | None],
@@ -784,6 +846,14 @@ def _fmt_bound(b: float | None) -> str:
     return f"2^{b:.1f}" if b is not None else "unknown"
 
 
+def _instances_text(target_name: str, inst: Mapping[str, Any]) -> str:
+    rng = inst.get("range") or ["?", "?"]
+    how, _ = instance_range(TARGETS[target_name], inst) if target_name in TARGETS and inst else (None, None)
+    kind = {"stream": "a prefix-consistent extension of the frozen set", "prefix": "a prefix of the frozen set",
+            "frozen": "the frozen set"}.get(how or "", "re-packed")
+    return f"instances [{rng[0]}, {rng[1]}) of {inst.get('tier', '?')} ({kind})"
+
+
 def _native_text(N: Mapping[str, Any]) -> str:
     return f"{fmt_rate(N['instances_per_second'])} · {N['unit']}, {N['dtype']} {T._fmt_tflops(N['peak_flop_per_second'])}"
 
@@ -845,6 +915,7 @@ def render_markdown(V: Views) -> str:
             "N = compute-bound datasheet estimate, instances/s (busiest unit, peak entry); P = instances/s end to end "
             f"(committing the batch, `{COMMIT}`, then proving){'; legacy: proving only' if rules.legacy else ''}; cell = N / P of the "
             "family's best admissible configuration (highest P). `(prov.)` = no red-team clearance of the statement yet; "
+            f"`({T.UNDER_REVERIFICATION})` = the latest `finding` label on the result is open (a `PULLED` one rejects it, D); "
             f"`(alg.)` = its soundness argument uses an algebraic hash: {ALGEBRAIC_FLAG} (Table 1's flag); "
             f"`{T.EMPTY}` = no admissible result; `n/s` = declared unsupported.", ""]
     notes: list[str] = []
@@ -871,18 +942,21 @@ def render_markdown(V: Views) -> str:
             text = (f"{c.artifact} — {c.configuration or col}{', scheme ' + c.scheme if c.scheme else ''}; P {fmt_rate(P['instances_per_second'])} ({P['instances']} instances in "
                     f"{fmt_per_instance(P['end_to_end_s'])}: commitment {fmt_per_instance(P['commit_s'])}, proving {fmt_per_instance(P['proving_s'])}); "
                     f"batching total {b['total']}, per proof {b['per_proof'] or '?'}, proofs {b['proofs'] or '?'}, in flight {b['in_flight'] or '?'}; "
-                    f"whole-proof bound {_fmt_bound(c.bound_log2)}; host {c.legacy.host or '?'}; {c.legacy.verification_note()}")
+                    f"{_instances_text(c.legacy.target, c.instances)}; whole-proof bound {_fmt_bound(c.bound_log2)}; host {c.legacy.host or '?'}; {c.legacy.verification_note()}")
             if c.legacy.instances_equiv:
                 text += f"; {T.INSTANCE_EQUIV_NOTE} ({c.legacy.instances_equiv})"
             if c.provisional:
                 text += f"; provisional: {c.provisional}"
+            if c.legacy.finding:
+                text += f"; {c.legacy.finding}"
             if c.algebraic:
                 text += f"; {ALGEBRAIC_FLAG} (Table 1, {c.configuration}: {'; '.join(c.algebraic)})"
             if c.unfiltered:
                 u = c.unfiltered
                 text += (f"; unfiltered pick: {u['configuration']} {u['artifact']}, bound {_fmt_bound(u['bound_log2'])}, hashes "
                          f"{'; '.join(u['hashes'])}, {T.fmt_overhead(u['overhead'])}")
-            row.append(T.fmt_overhead(c.overhead) + (" (prov.)" if c.provisional else "") + (" (alg.)" if c.algebraic else "") + " " + note(text))
+            row.append(T.fmt_overhead(c.overhead) + (" (prov.)" if c.provisional else "") + (" (alg.)" if c.algebraic else "")
+                       + (f" ({T.UNDER_REVERIFICATION})" if c.legacy.finding else "") + " " + note(text))
         rows2.append(row)
     out += [T._md_table(("Subcircuit · hardware · scheme", "Native N", *cols), rows2), ""]
 
