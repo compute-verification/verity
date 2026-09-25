@@ -26,6 +26,52 @@ def _run(d: Path) -> dict:
             "host": (job.get("environment") or {}).get("hostname")}
 
 
+def _live(path: Path) -> list[dict]:
+    out = []
+    for line in path.read_text().splitlines():
+        if line.startswith("LIVE\t"):
+            r = json.loads(line.split("\t", 1)[1], strict=False)
+            if not r.get("warm") and r.get("accepted"):
+                out.append(r)
+    return out
+
+
+def coin_waits(point_dir: Path) -> dict:
+    """The coin wait of each timed session without the verifier's final replay and the proof uploads: the transport's
+    ``wait_s`` is read after ``Finish``, so it includes ``verdict.verify_s``, which ``e2e_s`` does not."""
+    import statistics
+    subs = sorted(point_dir.glob("prove-s*.txt"))
+    per = [_live(f) for f in subs]
+    runs = list(zip(*per))
+    wait = statistics.median(sum(max(0.0, r["wait_s"] - r["verdict"]["verify_s"]) for r in run) for run in runs)
+    handle = statistics.median(sum(r["verdict"].get("handle_s", 0.0) for r in run) for run in runs)
+    calls = sum(r["calls"] for r in per[0][:1]) if len(per) == 1 else sum(x[0]["calls"] for x in per)
+    lb = [max(0.0, r["wait_s"] - r["verdict"]["verify_s"]) / r["calls"] for f in sorted(point_dir.glob("loopback-prove-s*.txt")) for r in _live(f)]
+    return {"wait": wait, "handle": handle, "calls": calls, "loopback": statistics.median(lb) if lb else None, "loopback_sessions": len(lb)}
+
+
+def correct_waits(doc: dict, cw: dict) -> dict:
+    ms = {m["name"]: m for m in doc["measurements"]}
+    t_total = ms["t.total"]["value"]
+    vals = {"net.wait_seconds": cw["wait"], "live.network_wait_seconds": max(0.0, cw["wait"] - cw["handle"]),
+            "live.prover_compute_seconds": t_total - cw["wait"],
+            "live.coin_wait_per_round_ms": 1e3 * max(0.0, cw["wait"] - cw["handle"]) / max(1, cw["calls"])}
+    if cw["loopback"] is not None:
+        vals["live.loopback_round_seconds"] = cw["loopback"]
+    for k, v in vals.items():
+        if k in ms:
+            ms[k]["value"] = v
+        else:
+            doc["measurements"].append({"name": k, "value": v, "unit": "ms" if k.endswith("_ms") else "s"})
+    inter = doc.setdefault("interaction", {})
+    inter["wait_correction"] = ("coin waits exclude the verifier's end-of-session replay and the proof uploads: per session "
+                                "wait_s - verdict.verify_s (the transport's wait_s is read after Finish; e2e_s and t.total never "
+                                "included them); the loopback probe's per-round figure is corrected the same way")
+    if cw["loopback"] is not None and inter.get("loopback_method") and "wait_s - verify_s" not in inter["loopback_method"]:
+        inter["loopback_method"] = inter["loopback_method"].replace("(wait_s / calls)", "((wait_s - verify_s) / calls)")
+    return doc
+
+
 def patch(doc: dict, prover: dict, verifier: dict, a) -> dict:
     fp = doc["workload_fingerprint"]
     k = int(fp.get("N_subbatches") or 1)
@@ -75,11 +121,16 @@ def main(argv=None) -> int:
     ap.add_argument("--supersedes", default=None)
     a = ap.parse_args(argv)
     pd, vd = Path(a.prover_run), Path(a.verifier_run)
-    doc = patch(json.loads((pd / "result.json").read_text()), _run(pd), _run(vd), a)
+    raw = json.loads((pd / "result.json").read_text())
+    point = pd / raw["artifacts"][0]
+    doc = patch(raw, _run(pd), _run(vd), a)
+    doc = correct_waits(doc, coin_waits(point))
     problems = contract.validate(doc)
     doc["validation"]["contract_problems"] = problems
     Path(a.out).write_text(json.dumps(doc, indent=1, default=str))
-    print(json.dumps({"problems": problems, "achieved_log2": doc["workload_fingerprint"]["security"]["achieved_log2"],
+    print(json.dumps({"problems": problems, "live": {m["name"]: m["value"] for m in doc["measurements"]
+                                                     if m["name"].startswith(("live.", "net.", "t.total"))},
+                      "achieved_log2": doc["workload_fingerprint"]["security"]["achieved_log2"],
                       "verifier": doc["workload_fingerprint"]["software"]["verifier"]}))
     return 0
 

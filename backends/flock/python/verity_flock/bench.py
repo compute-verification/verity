@@ -68,10 +68,17 @@ def _quota() -> int:
 
 
 def _lines(path: Path, tag: str) -> list[dict]:
+    """The tagged JSON lines. A LIVE record's ``wait_s`` is the transport's wait read after ``Finish``, so it includes the
+    verifier's end-of-session replay (``verdict.verify_s``), which ``e2e_s`` does not: that is taken out here (the raw figure
+    stays as ``wait_s_raw``)."""
     out = []
     for line in path.read_text().splitlines():
         if line.startswith(tag + "\t"):
-            out.append(json.loads(line.split("\t", 1)[1]))
+            r = json.loads(line.split("\t", 1)[1], strict=False)
+            if tag == "LIVE" and "wait_s" in r and isinstance(r.get("verdict"), dict) and r["verdict"].get("verify_s") is not None:
+                r["wait_s_raw"] = r["wait_s"]
+                r["wait_s"] = max(0.0, r["wait_s"] - r["verdict"]["verify_s"])
+            out.append(r)
     return out
 
 
@@ -180,7 +187,7 @@ def loopback_probe(a, q: dict, out: Path, net: Path) -> dict:
                 per.append(r["wait_s"] / r["calls"])
     return {"seconds_per_round": statistics.median(per) if per else None, "sessions": len(per),
             "method": f"loopback probe in this run: {len(per)} timed sessions ({a.runs} per sub-batch) of the plateau point's "
-                      f"instance files with the same binary against `serve` on 127.0.0.1, median per-round coin wait (wait_s / calls)"}
+                      f"instance files with the same binary against `serve` on 127.0.0.1, median per-round coin wait ((wait_s - verify_s) / calls)"}
 
 
 def _merge(parts: list[list[dict]]) -> list[dict]:
