@@ -26,6 +26,7 @@ use flock_core::{
 };
 use flock_field::F128;
 use flock_live::{chunk::digest_of, pure_block::*, *};
+#[allow(unused_imports)]
 use flock_prover::{pcs::Commitment, prover::prove_fast_ligerito_from_witness_extra, r1cs_hashes::blake3::Compression};
 use rayon::prelude::*;
 use serde_json::{Value, json};
@@ -95,7 +96,23 @@ fn fv3_root(domain_id: &[u8], leaves: Vec<[u8; 32]>) -> [u8; 32] {
 /// The row digests (x, W) and the three frame-v3 roots, from the values.
 fn commit(inst: &Instances) -> ([Vec<[u8; 32]>; 2], [[u8; 32]; 3]) {
     let keys = [flock_live::chunk::row_key(b"x"), flock_live::chunk::row_key(b"w")];
-    let digests: [Vec<[u8; 32]>; 2] = from_fn(|r| (0..inst.vus).into_par_iter().map(|v| *blake3::keyed_hash(&keys[r], inst.row(r, v)).as_bytes()).collect());
+    let sha = inst.header["schemas"]["a"] == "sha256/row/v1";
+    let digests: [Vec<[u8; 32]>; 2] = from_fn(|r| {
+        (0..inst.vus)
+            .into_par_iter()
+            .map(|v| {
+                if sha {
+                    let row = inst.row(r, v);
+                    let mut h = Sha256::new();
+                    h.update(flock_live::pure_block::sha_prefix(r, if inst.row_bytes == 3072 { 16 } else { 8 }, 1536));
+                    h.update(row);
+                    h.finalize().into()
+                } else {
+                    *blake3::keyed_hash(&keys[r], inst.row(r, v)).as_bytes()
+                }
+            })
+            .collect()
+    });
     let hexs = |k: &str, n: &str| unhex(inst.header[k][n].as_str().unwrap());
     let roots: [[u8; 32]; 3] = from_fn(|t| {
         let n = ["a", "b", "y"][t];
@@ -156,7 +173,7 @@ impl StatementVerifier for PureVerifier {
                 }
             }
         }
-        for v in 0..self.inst.vus {
+        for v in 0..if lay.is_sha() { 0 } else { self.inst.vus } {
             for r in 0..2 {
                 let (bpv, nch) = (lay.blocks_per_vu(), lay.chunks().len());
                 let cvs: Vec<[u32; 8]> = (bpv * v..bpv * (v + 1)).flat_map(|b| (0..nch).map(move |c| (b, c))).map(|(b, c)| p.cv[b][r * nch + c]).collect();
@@ -202,7 +219,7 @@ type PHook<'a> = &'a mut dyn FnMut(&[u8], Option<&Publics>) -> Vec<Vec<F128>>;
 
 /// A (possibly dishonest) prover's witness.
 struct Wit {
-    comps: Vec<Compression>,
+    comps: Arc<Comps>,
     inputs: Box<dyn Fn(usize, usize) -> [F128; 5] + Sync>,
     flip_z: Option<usize>,
 }
@@ -244,6 +261,7 @@ fn prove_gpu(st: &PureStmt, src: PureSrc<'_>, lig: LigeritoProfile, rep: usize, 
 enum PureSrc<'a> {
     Host { comps: &'a [Compression], inputs: &'a (dyn Fn(usize, usize) -> [F128; 5] + Sync) },
     Device { inst: &'a Instances, cache: i32 },
+    HostWitness { z: &'a [F128], a: &'a [F128], b: &'a [F128] },
 }
 
 #[cfg(feature = "gpu")]
@@ -324,45 +342,76 @@ fn session(st: &Arc<PureStmt>, inst: &Arc<Instances>, t: SharedTransport, plan: 
     let hello = config(st, sig).hello();
     let tr = Instant::now();
     // Honest GPU witnesses are built on the device from the rows (publics read back); a tampered witness needs the host.
-    let device = plan.gpu && !(plan.forge_middle || plan.bad_params.is_some() || plan.key_substituted || plan.operand_flip
+    // The SHA layouts build every witness on the host (no device SHA-256 witness kernel yet).
+    let sha = st.lay.is_sha();
+    let device = plan.gpu && !sha && !(plan.forge_middle || plan.bad_params.is_some() || plan.key_substituted || plan.operand_flip
         || plan.acc_in_wrong || plan.rep1_other_witness || plan.unit_flip);
-    let (mut comps, cvs) = if device { (Vec::new(), Vec::new()) } else { st.compressions(inst) };
-    if plan.forge_middle {
-        let c = &mut comps[5];
-        c.1[2] ^= 1;
-    }
-    if let Some(what) = plan.bad_params {
-        let r = &mut comps[15];
-        match what {
-            0 => r.4 &= !flock_live::chunk::CHUNK_END,
-            1 => r.2 = 7,
-            _ => r.3 = 32,
-        }
-    }
-    if plan.key_substituted {
-        let mut cv = st.keys[1];
-        for j in 0..16 {
-            comps[j].0 = cv;
-            let c = comps[j];
-            cv = flock_hash::blake3_compress(&c.0, &c.1, c.2, c.3, c.4)[..8].try_into().unwrap();
-        }
-    }
-    let st2 = st.clone();
-    let inst2 = inst.clone();
-    let comps_in = comps.clone();
-    let (operand_flip, acc_in_wrong) = (plan.operand_flip, plan.acc_in_wrong);
-    let inputs = move |b: usize, u: usize| -> [F128; 5] {
-        let mut c_in = st2.c_in(&inst2, b, u);
-        if acc_in_wrong && b == 1 && u == 0 {
-            c_in ^= 1;
-        }
-        let mut r = st2.unit_inputs(&comps_in, b, u, c_in);
-        if operand_flip && b == 0 && u == 3 {
-            r[0].lo ^= 1 << 9;
-        }
-        r
+    let (mut comps, cvs) = if device {
+        (Comps::B3(Vec::new()), Vec::new())
+    } else if sha {
+        (Comps::Sha(st.sha_compressions(inst)), vec![Vec::new(); st.blocks_real])
+    } else {
+        let (c, v) = st.compressions(inst);
+        (Comps::B3(c), v)
     };
-    let (y16, acc) = if device { (Vec::new(), Vec::new()) } else { unit31_words(st, &inputs) };
+    match &mut comps {
+        Comps::B3(comps) => {
+            if plan.forge_middle {
+                comps[5].1[2] ^= 1;
+            }
+            if let Some(what) = plan.bad_params {
+                let r = &mut comps[15];
+                match what {
+                    0 => r.4 &= !flock_live::chunk::CHUNK_END,
+                    1 => r.2 = 7,
+                    _ => r.3 = 32,
+                }
+            }
+            if plan.key_substituted {
+                let mut cv = st.keys[1];
+                for j in 0..16 {
+                    comps[j].0 = cv;
+                    let c = comps[j];
+                    cv = flock_hash::blake3_compress(&c.0, &c.1, c.2, c.3, c.4)[..8].try_into().unwrap();
+                }
+            }
+        }
+        Comps::Sha(comps) => {
+            if plan.forge_middle {
+                comps[5].1[2] ^= 1;
+            }
+            if plan.bad_params.is_some() {
+                comps[st.lay.per_role() - 1].1[15] ^= 1;
+            }
+            if plan.key_substituted {
+                comps[0].0 = flock_live::pure_block::sha_midstate(1, st.lay.row_bytes());
+            }
+        }
+    }
+    let comps = Arc::new(comps);
+    let (operand_flip, acc_in_wrong) = (plan.operand_flip, plan.acc_in_wrong);
+    let make_inputs = |zero: bool| -> Box<dyn Fn(usize, usize) -> [F128; 5] + Sync> {
+        let (st2, inst2, c2) = (st.clone(), inst.clone(), comps.clone());
+        Box::new(move |b: usize, u: usize| -> [F128; 5] {
+            if zero {
+                return [F128::ZERO; 5];
+            }
+            let mut c_in = st2.c_in(&inst2, b, u);
+            if acc_in_wrong && b == 1 && u == 0 {
+                c_in ^= 1;
+            }
+            let mut r = match &*c2 {
+                Comps::B3(c) => st2.unit_inputs(c, b, u, c_in),
+                Comps::Sha(_) => st2.unit_inputs_rows(&inst2, b, u, c_in),
+            };
+            if operand_flip && b == 0 && u == 3 {
+                r[0].lo ^= 1 << 9;
+            }
+            r
+        })
+    };
+    let inputs = make_inputs(false);
+    let (y16, acc) = if device { (Vec::new(), Vec::new()) } else { unit31_words(st, &*inputs) };
     let tamper = |mut p: Publics| -> Vec<u8> {
         if plan.cv_flip {
             p.cv[1][0][3] ^= 1;
@@ -376,11 +425,9 @@ fn session(st: &Arc<PureStmt>, inst: &Arc<Instances>, t: SharedTransport, plan: 
         p.bytes()
     };
     let host_publics = if device { None } else { Some(Publics { cv: cvs, y16, acc }) };
-    let wit = Wit { comps: comps.clone(), inputs: Box::new(inputs), flip_z: plan.unit_flip.then_some(700 + ((st.lay.unit_pos0() + 5) << UNIT_LOG)) };
-    let wit1 = if plan.rep1_other_witness { Wit { comps: comps.clone(), inputs: Box::new(|_, _| [F128::ZERO; 5]), flip_z: None } } else { Wit { comps, inputs: Box::new({
-        let st3 = st.clone(); let inst3 = inst.clone(); let c3 = wit.comps.clone();
-        move |b, u| { let mut c_in = st3.c_in(&inst3, b, u); if acc_in_wrong && b == 1 && u == 0 { c_in ^= 1; } let mut r = st3.unit_inputs(&c3, b, u, c_in); if operand_flip && b == 0 && u == 3 { r[0].lo ^= 1 << 9; } r }
-    }), flip_z: wit.flip_z } };
+    let flip_z = plan.unit_flip.then_some(700 + ((st.lay.unit_pos0() + 5) << UNIT_LOG));
+    let wit = Wit { comps: comps.clone(), inputs, flip_z };
+    let wit1 = Wit { comps: comps.clone(), inputs: make_inputs(plan.rep1_other_witness), flip_z };
     let rows_s = tr.elapsed().as_secs_f64();
     let mut prove_s = Vec::new();
     let mut buckets = Vec::new();
@@ -426,7 +473,15 @@ fn session(st: &Arc<PureStmt>, inst: &Arc<Instances>, t: SharedTransport, plan: 
             let lig = plan.profile[rep];
             let (p, bk) = catch_unwind(AssertUnwindSafe(|| {
                 if plan.gpu {
-                    let src = if device { PureSrc::Device { inst, cache: if rep == 0 { 1 } else { 2 } } } else { PureSrc::Host { comps: &w.comps, inputs: &*w.inputs } };
+                    let hw;
+                    let src = if device {
+                        PureSrc::Device { inst, cache: if rep == 0 { 1 } else { 2 } }
+                    } else if let Comps::B3(c) = &*w.comps {
+                        PureSrc::Host { comps: c, inputs: &*w.inputs }
+                    } else {
+                        hw = st.witness(&w.comps, &*w.inputs);
+                        PureSrc::HostWitness { z: &hw.0, a: &hw.1, b: &hw.2 }
+                    };
                     prove_gpu(st, src, lig, rep, &mut hook, &mut lch)
                 } else {
                     prove_cpu(st, w, lig, &mut hook, &mut lch)
@@ -540,7 +595,10 @@ fn selftest(st: &Arc<PureStmt>, inst: &Arc<Instances>, gpu: bool) {
     }
     let mut all = true;
     for &(name, want_accept, _) in CASES {
-        if st.lay == Layout::Fp8 && matches!(name, "y16_public_forged" | "committed_acc_differs_from_block_acc_out") {
+        if st.lay != Layout::Bf16 && matches!(name, "y16_public_forged" | "committed_acc_differs_from_block_acc_out") {
+            continue;
+        }
+        if st.lay.is_sha() && matches!(name, "chunk_end_flag_dropped" | "wrong_counter" | "chunk_value_forged") {
             continue;
         }
         let v = if gpu {
@@ -579,7 +637,7 @@ fn main() {
         assert_eq!(got, pin, "the netlist's sha256 is not the pinned lowering");
     }
     assert_eq!(inst.relation, net.relation, "instances and netlist name different relations");
-    let lay = Layout::of(inst.row_bytes, inst.units);
+    let lay = Layout::of(inst.row_bytes, inst.units, inst.header["schemas"]["a"] == "sha256/row/v1");
     let st = Arc::new(PureStmt::new(net, inst.vus, lay));
     eprintln!("statement {} vus={} blocks={} nbl={} m={} built in {:.2}s", inst.relation, inst.vus, st.blocks_real, st.nbl, st.m, tb.elapsed().as_secs_f64());
     match cmd.as_str() {

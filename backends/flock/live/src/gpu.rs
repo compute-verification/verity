@@ -135,6 +135,9 @@ struct ChunkParams {
     chunk_nb1: i32,
     blocks_per_vu: i32,
     dummy_keyed: i32,
+    host_z: *const F128,
+    host_a: *const F128,
+    host_b: *const F128,
 }
 
 unsafe extern "C" {
@@ -212,14 +215,13 @@ struct Static {
 }
 
 fn statics(st: &ChunkStmt) -> &'static Static {
-    statics_with(&st.circuit.da, &st.circuit.db)
+    statics_with(comp(), &st.circuit.da, &st.circuit.db)
 }
 
 /// One statement per process: the first caller's Δ is the process's.
-fn statics_with(da: &[(u32, u32)], db: &[(u32, u32)]) -> &'static Static {
+fn statics_with(c: &'static flock_prover::r1cs::BlockR1cs, da: &[(u32, u32)], db: &[(u32, u32)]) -> &'static Static {
     static S: OnceLock<Static> = OnceLock::new();
     S.get_or_init(|| {
-        let c = comp();
         let ntt_s = AdditiveNttGf8::new(K_SKIP, F8::ZERO);
         let ntt_l = AdditiveNttGf8::new(K_SKIP, F8(1u8 << K_SKIP));
         let mut mcol = vec![0u8; 64 * 64];
@@ -392,7 +394,7 @@ impl ChunkParams {
             u_useful: 0, u_const: 0, u_n_in: 0, u_inputs: null(), rows_x: null(), rows_w: null(), accs: null(), vus: 0,
             row_bytes: 0, units_per_vu: 0, keys: null(), blocks_real: 0, unit_cache: 0, pub_cv: null_mut(), pub_y16: null_mut(),
             pub_acc: null_mut(), u_out_acc: -1, u_out_y: -1, per_role: 0, chunks_per_block: 0, chunk_nb0: 0, chunk_nb1: 0,
-            blocks_per_vu: 0, dummy_keyed: 0,
+            blocks_per_vu: 0, dummy_keyed: 0, host_z: null(), host_a: null(), host_b: null(),
         }
     }
 }
@@ -483,6 +485,8 @@ pub enum PureSrc<'a> {
     /// The honest witness, built on the device from the instance rows and recorded accumulators; `cache` 1 stores the
     /// unit region for the next rep, 2 reuses it.
     Device { inst: &'a crate::pure_block::Instances, cache: i32 },
+    /// The whole block witness `(z, a, b)` from the host (the SHA-256 layouts).
+    HostWitness { z: &'a [F128], a: &'a [F128], b: &'a [F128] },
 }
 
 pub type PureHook<'a> = &'a mut dyn FnMut(&[u8], Option<&crate::pure_block::Publics>) -> Vec<Vec<F128>>;
@@ -498,7 +502,7 @@ pub fn prove_pure(
 ) -> (R1csProofLigerito, Commitment, [f64; 8]) {
     use crate::pure_block as pb;
     use rayon::prelude::*;
-    let s = statics_with(&st.circuit.da, &st.circuit.db);
+    let s = statics_with(st.lay.comp(), &st.circuit.da, &st.circuit.db);
     let (sc, cfg) = sched(pcs);
     let m = pcs.m;
     let params = prove_params(s, &sc, &cfg, pcs, &st.digest, domain, st.lay.k_log(), pb::PIN, ch);
@@ -544,6 +548,11 @@ pub fn prove_pure(
             (None, 0)
         }
         PureSrc::Device { inst, cache } => (Some(*inst), *cache),
+        PureSrc::HostWitness { .. } => (None, 0),
+    };
+    let (hz, ha, hb) = match &src {
+        PureSrc::HostWitness { z, a, b } => (z.as_ptr(), a.as_ptr(), b.as_ptr()),
+        _ => (null(), null(), null()),
     };
     let (pcv, py, pa) = (pub_cv.as_mut_ptr(), pub_y16.as_mut_ptr(), pub_acc.as_mut_ptr());
     let mut wrapped = move |root: &[u8]| -> Vec<Vec<F128>> {
@@ -573,7 +582,7 @@ pub fn prove_pure(
         n_delta_a: (s.da.len() / 2) as i32,
         delta_b: s.db.as_ptr(),
         n_delta_b: (s.db.len() / 2) as i32,
-        sub_log: SUB_LOG as i32,
+        sub_log: lay.comp_log() as i32,
         link_cb: Some(link_cb),
         link_ctx: &mut hook as *mut Hook<'_> as *mut c_void,
         gamma_bits: if n_claims > 1 { og.claim_batch_bits as i32 } else { 0 },
@@ -617,6 +626,9 @@ pub fn prove_pure(
         chunk_nb1: lay.chunks().get(1).map_or(0, |&n| n as i32),
         blocks_per_vu: lay.blocks_per_vu() as i32,
         dummy_keyed: (lay == pb::Layout::Fp8) as i32,
+        host_z: hz,
+        host_a: ha,
+        host_b: hb,
     };
     let (proof, commitment) = run(&params, &chunk, pcs, m);
     (proof, commitment, phase)
