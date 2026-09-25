@@ -16,6 +16,7 @@ Files (``bb_export`` formats, ``<QQ`` header then u32 LE): ``units.bin`` (264 co
     python -m gpu.v2.export synth --out DIR --vus 2 --steps 3                      # + DIR/negatives (4 chain cases)
     python -m gpu.v2.export negatives --out DIR                                    # a-v2's 30 unit + 4 chain cases
     python -m gpu.v2.export circuits --model hopper_bf16_m16n8k16 --out DIR        # statement files only, at that model
+    python -m gpu.v2.export circuits --model ada_e4m3_m16n8k32 --out DIR           # E4M3: adder-side view, fp8 epilogue
 """
 from __future__ import annotations
 
@@ -32,6 +33,7 @@ from verity_numerical.checker import REAL, Params, Reject
 from verity_numerical.gkr_export import v2 as V2
 
 from . import epilogue_limbs as EL
+from . import fp8 as FP8
 
 P = 2**31 - 2**27 + 1
 STEP = 16
@@ -49,8 +51,10 @@ class BabyBearV2Api:
     modulus = P
 
     def __init__(self, epilogue: str = "limbs", p: Params = REAL) -> None:
-        if epilogue not in ("limbs", "word"):
+        if epilogue not in ("limbs", "word", "fp8"):
             raise ValueError(epilogue)
+        if (epilogue == "fp8") != FP8.is_fp8(p):
+            raise ValueError(f"epilogue {epilogue!r} does not match the operand format of {p}")
         self.epilogue = epilogue
         self.p = p
         self._word_epi = None
@@ -61,6 +65,8 @@ class BabyBearV2Api:
     def build_epilogue(self):
         if self.epilogue == "limbs":
             return EL.build_epilogue_circuit_limbs(self.p)
+        if self.epilogue == "fp8":
+            return FP8.build_epilogue_circuit_fp8(self.p)
         return V2.build_epilogue_circuit_v2(self.p)
 
     def export_circuit(self, ctx, path: Path) -> None:
@@ -71,6 +77,8 @@ class BabyBearV2Api:
 
     def vu_rows(self, unit, epi, a, b, y16, accs=None, p: Params | None = None, cross_check: bool = True):
         p = self.p if p is None else p
+        if self.epilogue == "fp8":
+            return FP8.vu_rows_fp8(unit, epi, a, b, y16, accs, p, cross_check)
         if self.epilogue == "word":
             return V2.vu_rows_v2(unit, epi, a, b, y16, accs, p, cross_check, P)
         # unit rows + the a-v2 (word-form) epilogue row, with its cross-checks; then the limb-form epilogue row from
@@ -200,25 +208,96 @@ def export(root: Path, tier: str, lo: int, hi: int | None, out: Path, procs: int
     return manifest_for(uctx, ectx, out, **extra)
 
 
-def circuits(out: Path, model: str, K: int = 1536) -> dict:
+#: the one row-listed table every query of a merged circuit goes to (``merge_tables``)
+MERGED = "LK"
+TAG_SHIFT = 2**20
+
+
+def merge_tables(text: str) -> str:
+    """The circuit text with every table (row-listed, ``itable``, the implicit ``R<w>``) as one row-listed table ``LK``:
+    source table ``i >= 1`` (by name) contributes the rows ``(i 2^20 + k, i, v_1(k), ..., 0...)``, a query ``(key, out...)``
+    into it becomes ``(key + i 2^20, i, out..., 0...)``.  The tag column pins a match to table ``i``'s rows, so a query
+    matches exactly the tuples it matched before; every source key is in ``[0, 2^20)``, which keeps the first column unique
+    (``logup.multiplicities``).  The GKR prover's LogUp cost is mostly a per-round latency paid per table, so one tree of
+    ``2^25`` leaves costs a fraction of ten of ``2^18..2^24``."""
+    from ..circuit import parse_circuit
+
+    circ = parse_circuit(text)
+    used = sorted({q.table for q in circ.queries})
+    if not used:
+        return text
+    src = {t: circ.table(t).device_rows("cpu").numpy() % P for t in used}
+    width = 1 + max(r.shape[1] for r in src.values())
+    blocks = []
+    tag = {}
+    for i, t in enumerate(used, 1):
+        tag[t] = i
+        r = src[t]
+        if int(r[:, 0].min()) < 0 or int(r[:, 0].max()) >= TAG_SHIFT or len(np.unique(r[:, 0])) != len(r):
+            raise ValueError(f"{t}: keys not unique in [0, 2^20), cannot be merged")
+        b = np.zeros((len(r), width), dtype=np.int64)
+        b[:, 0] = r[:, 0] + i * TAG_SHIFT
+        b[:, 1] = i
+        b[:, 2:1 + r.shape[1]] = r[:, 1:]
+        blocks.append(b)
+    rows = np.concatenate(blocks)
+    head, queries = [], []
+    for line in text.splitlines():
+        toks = line.split()
+        if not toks or toks[0] in ("table", "itable", "row"):
+            continue
+        if toks[0] != "query":
+            head.append(line)
+            continue
+        n, pos, lins = int(toks[2]), 3, []
+        for _ in range(n):
+            k = int(toks[pos])
+            lins.append(toks[pos:pos + 2 * k + 2])
+            pos += 2 * k + 2
+        if pos != len(toks):
+            raise ValueError(f"query line: {line[:80]}")
+        i = tag[toks[1]]
+        lins[0] = lins[0][:-1] + [str((int(lins[0][-1]) + i * TAG_SHIFT) % P)]
+        lins = [lins[0], ["0", str(i)]] + lins[1:] + [["0", "0"]] * (width - 1 - n)
+        queries.append(f"query {MERGED} {width} " + " ".join(" ".join(l) for l in lins))
+    lines = head + [f"table {MERGED} {width} {len(rows)}"] + ["row " + " ".join(map(str, r)) for r in rows.tolist()] + queries
+    return "\n".join(lines) + "\n"
+
+
+def circuits(out: Path, model: str, K: int = 1536, merge: bool = True) -> dict:
     """The statement's Params-only files (``circuit.txt``, ``epilogue.txt``, ``chain.txt``, ``manifest.json``) at
     ``Params.from_model`` of the ``verity.ml.tc.models.MODELS`` entry ``model``: what ``bench_result.py`` reads for a
-    relation whose instances are a recipe, not an exported tier."""
+    relation whose instances are a recipe, not an exported tier.  An E4M3 model gets the adder-side view and the
+    packed-word epilogue of ``gpu/v2/fp8.py`` (units of ``sum(groups) = 32`` products); with ``merge`` its unit circuit's
+    tables are the one tagged table of ``merge_tables`` (the epilogue queries none)."""
     import dataclasses
 
     from verity.ml.tc.models import MODELS
+    from verity.ml.tc.term import FORMATS
 
-    p = Params.from_model(MODELS[model])
-    if sum(p.groups) != STEP or K % STEP:
-        raise SystemExit(f"{model}: {sum(p.groups)} products per unit; the v2 export chains units of {STEP}")
-    api = BabyBearV2Api("limbs", p)
+    m = MODELS[model]
+    if FORMATS[m.dtype].nan_rule == "e4m3":
+        p, epilogue, step = FP8.adder_params(m), "fp8", sum(m.groups)
+    else:
+        p, epilogue, step = Params.from_model(m), "limbs", STEP
+        if sum(p.groups) != STEP:
+            raise SystemExit(f"{model}: {sum(p.groups)} products per unit; the BF16 v2 export chains units of {STEP}")
+    if K % step:
+        raise SystemExit(f"{model}: K = {K} is not a multiple of {step}")
+    api = BabyBearV2Api(epilogue, p)
     uctx, _ = api.build_unit()
     ectx, _ = api.build_epilogue()
     out.mkdir(parents=True, exist_ok=True)
     api.export_circuit(uctx, out / "circuit.txt")
     api.export_circuit(ectx, out / "epilogue.txt")
+    extra = {}
+    if merge and epilogue == "fp8":
+        f = out / "circuit.txt"
+        f.write_text(merge_tables(f.read_text()))
+        extra["lookup_tables"] = "merged"
     api.export_extra(uctx, ectx, out)
-    return manifest_for(uctx, ectx, out, model=model, params=dataclasses.asdict(p), steps=K // STEP, epilogue=api.epilogue)
+    return manifest_for(uctx, ectx, out, model=model, params=dataclasses.asdict(p), steps=K // step, epilogue=api.epilogue,
+                        **extra)
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -281,13 +360,14 @@ def main(argv: list[str] | None = None) -> int:
     c = sub.add_parser("circuits")
     c.add_argument("--model", required=True, help="a verity.ml.tc.models.MODELS name, e.g. hopper_bf16_m16n8k16")
     c.add_argument("--out", type=Path, required=True)
+    c.add_argument("--no-merge", action="store_true", help="E4M3: keep one LogUp table per source table")
     sub.add_parser("stats")
     args = ap.parse_args(argv)
     if args.cmd == "export":
         m = export(args.root, args.tier, args.lo, args.hi, args.out, args.procs)
         print(json.dumps({k: v for k, v in m.items() if k not in ("index", "written")}, default=str))
     elif args.cmd == "circuits":
-        print(json.dumps(circuits(args.out, args.model), default=str))
+        print(json.dumps(circuits(args.out, args.model, merge=not args.no_merge), default=str))
     elif args.cmd == "synth":
         print(json.dumps(synth(args.out, args.vus, args.steps, args.seed), default=str))
     elif args.cmd == "negatives":

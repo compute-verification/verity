@@ -13,6 +13,7 @@ Bagad-Domb-Thaler), the rest on ``(t / 8, 6)`` extension tables; the round messa
 """
 from __future__ import annotations
 
+import numpy as np
 import torch
 
 from .field import DEG, ONE, P, ZERO, Ext, e_inv, e_mul, e_sub, ext_mul, py_exts, t_ext
@@ -112,27 +113,42 @@ class _EqSlices:
         return ext_mul(sl, t_ext(e_mul(self.invpref[i], self.invsuf[i + n]), self.E.device))
 
 
-def _inputs(kern, gammas: list[Ext], rs: list[Ext], i: int, k: int, kappa: int, wgt: torch.Tensor, t: int,
-            eqs: _EqSlices):
-    """``Kernel.inputs`` with ``e_hi = w(g) ⊗ eq(γ[i+κ:], c_rest)``."""
+def _inputs_static(kern, gammas: list[Ext], i: int, kappa: int, wgt: torch.Tensor, t: int, eqs: _EqSlices):
+    """The challenge-independent operands of round ``i`` (``e_lo`` limbs, ``e_hi = w(g) ⊗ eq(γ[i+κ:], c_rest)``, ``eq_x``):
+    queued while the previous round runs, so their launches are off the Fiat-Shamir round trip."""
     b = len(gammas)
     dev = kern.device
     m = t >> i
     K1 = 1 << kappa
     K2 = m // K1
-    e_lo = eqs.suffix(i, kappa).to(torch.int32)                                # (K1, 6)
-    eq_c = eqs.suffix(i + kappa, b - i - kappa)                                # (2^(b-i-κ), 6)
-    e_hi = ext_mul(wgt[:, None, :], eq_c[None, :, :]).reshape(K2, DEG).to(torch.int32)
     gm = gammas[i - 1]
-    eq_x = _sp.to_dev([_ref.eval_at(_ref.sub(_ref.ONE, gm), gm, x) for x in range(4)], dev)
-    prefix = _sp.to_dev(_ref.eq_points(gammas[:i - 1], rs), dev)
-    coeff = None
-    if i <= k:
-        eq_r = _ref.eq_table(rs)
-        coeff = _sp.to_dev([_ref.mul(x, y) for x in eq_r for y in eq_r], dev)
+    # the host-side operands in one pinned, non-blocking copy (each pageable copy waits for the stream)
+    host = [e_mul(eqs.invpref[i], eqs.invsuf[i + kappa]), e_mul(eqs.invpref[i + kappa], eqs.invsuf[b])]
+    host += [_ref.eval_at(_ref.sub(_ref.ONE, gm), gm, x) for x in range(4)]
+    hb = torch.from_numpy(np.asarray(host, dtype=np.int64))
+    buf = (hb.pin_memory().to(dev, non_blocking=True) if dev.type == "cuda" else hb.to(dev))
+    e_lo = ext_mul(eqs.E[:: 1 << i][:K1], buf[0]).to(torch.int32)                           # (K1, 6)
+    eq_c = ext_mul(eqs.E[:: 1 << (i + kappa)][: 1 << (b - i - kappa)], buf[1])              # (2^(b-i-κ), 6)
+    e_hi = ext_mul(wgt[:, None, :], eq_c[None, :, :]).reshape(K2, DEG).to(torch.int32)
+    eq_x = buf[2:].to(torch.int32)
     if kern._tk is not None:      # Montgomery Hadamards: the weight limbs carry the compensating R
         e_lo = _sp.pre_scale(e_lo)
-    return _sp.RoundInputs(_sp.decompose(e_lo), e_hi, eq_x, prefix, coeff, None)
+    return _sp.decompose(e_lo), e_hi, eq_x
+
+
+def _inputs(kern, static, gammas: list[Ext], rs: list[Ext], i: int, k: int, pfx: Ext | None = None):
+    """``Kernel.inputs`` from the round's static operands and ``pfx = eq(γ[:i-1], rs)`` (computed when ``None``)."""
+    dev = kern.device
+    e_lo_limbs, e_hi, eq_x = static
+    host = [_ref.eq_points(gammas[:i - 1], rs) if pfx is None else pfx]
+    if i <= k:
+        eq_r = _ref.eq_table(rs)
+        host += [_ref.mul(x, y) for x in eq_r for y in eq_r]
+    hb = torch.from_numpy(np.asarray(host, dtype=np.int64).astype(np.int32))
+    small = (hb.pin_memory().to(dev, non_blocking=True) if dev.type == "cuda" else hb.to(dev))
+    prefix = small[0]
+    coeff = small[1:] if i <= k else None
+    return _sp.RoundInputs(e_lo_limbs, e_hi, eq_x, prefix, coeff, None)
 
 
 def phase1(kern, a: torch.Tensor, bb: torch.Tensor, wg: torch.Tensor, gammas: list[Ext], e: torch.Tensor, tr,
@@ -145,6 +161,7 @@ def phase1(kern, a: torch.Tensor, bb: torch.Tensor, wg: torch.Tensor, gammas: li
     if copies != 1 << b:
         raise ValueError("copies must be 2^b")
     dev = a.device
+    cuda = dev.type == "cuda"
     t = g_n * copies
     k = min(k, b)
     g, h = _layout(a, b), _layout(bb, b)
@@ -152,27 +169,48 @@ def phase1(kern, a: torch.Tensor, bb: torch.Tensor, wg: torch.Tensor, gammas: li
     wgt = (wg[:g_n].to(torch.int64) % P).contiguous()
     saved = kern.k1_log2
     rs: list[Ext] = []
+    pfx = _ref.ONE
     gE = hE = None
+
+    def static(i: int):
+        kappa = min(saved, b - i)          # b1 = the next κ copy bits; the gate index lives in b2
+        return kappa, _inputs_static(kern, gammas, i, kappa, wgt, t, eqs)
+
     try:
+        nxt = static(1)
         for i in range(1, b + 1):
-            kappa = min(saved, b - i)          # b1 = the next κ copy bits; the gate index lives in b2
+            kappa, st = nxt
             kern.k1_log2 = kappa
-            inp = _inputs(kern, gammas, rs, i, k, kappa, wgt, t, eqs)
+            inp = _inputs(kern, st, gammas, rs, i, k, pfx)
             if i <= k:
                 S = kern.packed_round(g, h, i, inp)
             else:
                 S, _, _ = kern.ext_round(gE, hE, i, inp, fold=False)
-            s_py = py_exts(S.to(torch.int64))
+            S = S.to(torch.int64)
+            if cuda:
+                # the message's D2H is queued before round i+1's static operands, which then run behind it
+                hS = torch.empty(S.shape, dtype=torch.int64, pin_memory=True)
+                hS.copy_(S, non_blocking=True)
+                ev = torch.cuda.Event()
+                ev.record()
+            if i < b:
+                nxt = static(i + 1)
+            if cuda:
+                ev.synchronize()
+                s_py = list(map(tuple, hS.tolist()))
+            else:
+                s_py = py_exts(S)
             out.extend(s_py)
             tr.absorb_exts(s_py)
             r = tr.challenge()
             rs.append(r)
+            pfx = _ref.mul(pfx, _ref.eq1(gammas[i - 1], r))
             if i == k:
-                kern.set_fold(inp, rs[:-1], k, k, r)
+                kern.set_fold(inp, rs[:-1], k, k, r, matrices=False)
                 gE, hE = kern.fold_k(g, k, inp), kern.fold_k(h, k, inp)
                 del g, h
             elif i > k:
-                kern.set_fold(inp, rs[:-1], i, k, r)
+                kern.set_fold(inp, rs[:-1], i, k, r, matrices=False)
                 gE, hE = kern.fold_pair(gE, hE, inp)
         if k == 0:
             gE = torch.zeros((t, DEG), dtype=torch.int32, device=dev)

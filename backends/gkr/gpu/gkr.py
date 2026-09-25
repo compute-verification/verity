@@ -24,6 +24,7 @@ from .field import (
     DEG,
     Ext,
     P,
+    W,
     base_contract_ext,
     e_add,
     e_mul,
@@ -114,8 +115,51 @@ def phase1_round(a: torch.Tensor, bb: torch.Tensor, e: torch.Tensor, wg: torch.T
     return py_exts(h)
 
 
+HOST_SUMCHECK_MAX = 1 << 12
+
+
+def _np_ext_mul(a, b):
+    """``(n, 6) x (n | 1, 6)`` canonical int64 -> canonical ``(n, 6)``: every partial product is reduced before summing."""
+    import numpy as np
+
+    prod = (a[:, :, None] * b[:, None, :]) % P                   # < 2^31 each
+    acc = np.zeros((prod.shape[0], 2 * DEG - 1), dtype=np.int64)
+    for i in range(DEG):
+        acc[:, i:i + DEG] += prod[:, i, :]                          # < 6 p
+    out = acc[:, :DEG].copy()
+    out[:, :DEG - 1] += W * acc[:, DEG:]                            # < 6 p + 22 * 6 p < 2^39
+    return out % P
+
+
+def _sumcheck_prod_host(u: torch.Tensor, w: torch.Tensor, tr: Transcript, out: list[Ext]):
+    """``sumcheck_prod`` on the host (numpy) for small tables: one read-back instead of per-round launches and syncs."""
+    import numpy as np
+
+    dev = u.device
+    un = u.to(torch.int64).cpu().numpy() % P
+    wn = w.to(torch.int64).cpu().numpy() % P
+    point: list[Ext] = []
+    while un.shape[0] > 1:
+        half = un.shape[0] // 2
+        u0, u1, w0, w1 = un[:half], un[half:], wn[:half], wn[half:]
+        s0 = _np_ext_mul(u0, w0).sum(axis=0) % P
+        s1 = _np_ext_mul(u1, w1).sum(axis=0) % P
+        s2 = _np_ext_mul((2 * u1 - u0) % P, (2 * w1 - w0) % P).sum(axis=0) % P
+        s = [tuple(s0.tolist()), tuple(s1.tolist()), tuple(s2.tolist())]
+        out.extend(s)
+        tr.absorb_exts(s)
+        r = tr.challenge()
+        point.append(r)
+        rn = np.asarray([r], dtype=np.int64)
+        un = (u0 + _np_ext_mul((u1 - u0) % P, rn)) % P
+        wn = (w0 + _np_ext_mul((w1 - w0) % P, rn)) % P
+    return point, torch.from_numpy(un).to(dev), torch.from_numpy(wn).to(dev)
+
+
 def sumcheck_prod(u: torch.Tensor, w: torch.Tensor, tr: Transcript, out: list[Ext]) -> tuple[list[Ext], torch.Tensor, torch.Tensor]:
     """Degree-2 sumcheck of ``Σ_x U(x) W(x)``; returns the bound point and the folded (length-1) tables."""
+    if u.is_cuda and u.dim() == 2 and u.shape == w.shape and u.shape[0] <= HOST_SUMCHECK_MAX:
+        return _sumcheck_prod_host(u, w, tr, out)
     point: list[Ext] = []
     while u.shape[0] > 1:
         half = u.shape[0] // 2
@@ -194,7 +238,10 @@ def _phase2(layer: Layer, rows: torch.Tensor, wg: torch.Tensor, e_star: torch.Te
     dev = rows.device
     # Ṽ(·) = Σ_c eq(c*, c) V_in(·, c)
     ec = eq_table(c_star, dev)                                   # (copies, 6)
-    vf = mm_mod(ec.T, rows.to(torch.int64)).T.contiguous()       # (n_in, 6)
+    if _field._fast_eq_rows_dot is not None and rows.is_cuda:
+        vf = _field._fast_eq_rows_dot(ec, rows)                  # (n_in, 6), one read of rows
+    else:
+        vf = mm_mod(ec.T, rows.to(torch.int64)).T.contiguous()   # (n_in, 6)
     wp = ext_mul(wg, e_star)                                     # (g_n, 6)
     A, Bm = layer.matrices(dev)
     # phase 2a

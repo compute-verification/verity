@@ -30,6 +30,7 @@ from .field import (
     P,
     e_add,
     e_scale,
+    exts_to_bytes,
     geometric,
     inv_mod,
     mm_mod_int8,
@@ -170,11 +171,11 @@ class Merkle:
 
     def path(self, j: int) -> list[bytes]:
         if self._gpu:
-            lv = [l.get() for l in self.tree_levels[:-1]] if not hasattr(self, "_host") else self._host
-            self._host = lv
+            if not hasattr(self, "_host"):              # every level big-endian once, not per node (t · depth nodes)
+                self._host = [np.asarray(l.get(), dtype=np.uint64).astype(">u8") for l in self.tree_levels[:-1]]
             out, idx = [], j
-            for level in lv:
-                out.append(np.asarray(level[idx ^ 1], dtype=np.uint64).astype(">u8").tobytes())
+            for level in self._host:
+                out.append(level[idx ^ 1].tobytes())
                 idx >>= 1
             return out
         out, idx = [], j
@@ -283,6 +284,7 @@ class Opening:
     qc: list[Ext]               # 2k - 1
     columns: np.ndarray         # (t, rows) '<u4': the opened columns' values
     paths: list[list[bytes]]    # per opened column its Merkle path (depth siblings)
+    raw: tuple[bytes, bytes] | None = None    # the prover's serialized (w, qc), as absorbed
 
     def nbytes(self) -> int:
         b = (len(self.w) + len(self.qc)) * 4 * DEG
@@ -418,6 +420,7 @@ def open_w_qc(cm: Committed, a: torch.Tensor, r: torch.Tensor) -> tuple[torch.Te
     summed over rows) and ``qc[m] = Σ_{u+v=m} G[u, ·, v]``.  Identical to encode-multiply-INTT over the ``n``-domain."""
     p = cm.params
     dev = a.device
+    a = a.to(torch.int64)
     rows, k = cm.rows, p.k
     int8 = use_int8(dev)
     xr = Limbs8(cm.x_rows, "b") if int8 else cm.x_rows                # (rows, k), the B operand twice
@@ -449,6 +452,19 @@ def opening_path(dev, params: LigeroParams = DEFAULT) -> str:
     return f"w and q by {mm}s"
 
 
+def open_row_chunk(rows: int, k: int, dev) -> int:
+    """Rows per block of ``open_w_qc_eval``'s encode + reduction (the result is the same for any block size: the
+    blocks' reductions are summed mod p).  All rows at once on an 80 GB part (the recorded A100 / H100 path); on a
+    smaller one (RTX 4090, 24 GB) blocks of ``VERITY_GPU_OPEN_ROWS`` (default 4096) rows, whose ``at`` + ``ev``
+    (``6 * 4k * 4`` bytes per row, 1.6 GB per 4096 rows) fit beside the committed code and the functional."""
+    env = int(os.environ.get("VERITY_GPU_OPEN_ROWS", "0"))
+    if env > 0:
+        return env
+    if dev.type == "cuda" and torch.cuda.get_device_properties(dev).total_memory < 40 * 2**30:
+        return 4096
+    return rows
+
+
 def open_w_qc_eval(cm: Committed, a: torch.Tensor, r: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     """``open_w_qc`` by evaluation: ``deg q <= 2k - 2 < n``, so ``q`` is fixed by ``q(ω^m) = Σ_i a_i(ω^m) U_i(ω^m)``
     over the ``n``-domain, where ``U_i(ω^m)`` is the committed codeword and ``a_i(ω^m)`` is row ``i`` of ``a``
@@ -472,16 +488,22 @@ def open_w_qc_eval(cm: Committed, a: torch.Tensor, r: torch.Tensor) -> tuple[tor
     del xr
     l = a.shape[0]
     full = l // k
-    at = torch.zeros((rows, DEG, k), dtype=torch.int32, device=dev)   # at[i, d, j] = a[i k + j, d]
-    if full:
-        at[:full] = a[: full * k].reshape(full, k, DEG).permute(0, 2, 1)
-    if l - full * k:
-        at[full, :, : l - full * k] = a[full * k:].T
-    at = at.view(rows * DEG, k)
-    ev = cp.empty((rows * DEG, 3 * k), dtype=cp.int32)
-    enc[0](cp.asarray(at).view(cp.uint32), ev.view(cp.uint32), write_systematic=False)
-    q_eval = kernels.row_code_dot(at, torch.as_tensor(ev, device=dev), cm.code)
-    del at, ev
+    q_eval = None
+    ch = open_row_chunk(rows, k, dev)
+    for lo in range(0, rows, ch):
+        hi = min(rows, lo + ch)
+        at = torch.zeros((hi - lo, DEG, k), dtype=torch.int32, device=dev)   # at[i - lo, d, j] = a[i k + j, d]
+        f_hi = min(full, hi)
+        if f_hi > lo:
+            at[: f_hi - lo] = a[lo * k: f_hi * k].reshape(f_hi - lo, k, DEG).permute(0, 2, 1)
+        if l - full * k and lo <= full < hi:
+            at[full - lo, :, : l - full * k] = a[full * k:].T
+        at = at.view((hi - lo) * DEG, k)
+        ev = torch.empty(((hi - lo) * DEG, 3 * k), dtype=torch.int32, device=dev)   # torch's pool, not cupy's
+        enc[0](cp.asarray(at).view(cp.uint32), cp.asarray(ev).view(cp.uint32), write_systematic=False)
+        part = kernels.row_code_dot(at, ev, cm.code[lo:hi])
+        q_eval = part if q_eval is None else (q_eval + part) % P
+        del at, ev
     q = ntt(q_eval, inverse=True)                                     # (6, n) coefficients
     if bool(q[:, 2 * k - 1:].any()):
         raise RuntimeError("open_w_qc_eval: q has coefficients past 2k - 2 (encoder / reduction mismatch)")
@@ -520,14 +542,20 @@ def prove_open(cm: Committed, a: torch.Tensor, tr: Transcript, timers: dict | No
     r = row_coeffs(tr, rows, dev)                                     # (rows, 6)
     code = cm.code
     w, qc = open_w_qc_eval(cm, a, r)
-    w_py, qc_py = py_exts(w), py_exts(qc)
+    h = torch.cat([w, qc]).to(torch.int64).cpu().numpy()
+    w_np, qc_np = h[: w.shape[0]], h[w.shape[0]:]
+    w_py, qc_py = list(map(tuple, w_np.tolist())), list(map(tuple, qc_np.tolist()))
     if timers is not None:
         timers["wq"] = time.perf_counter() - t0
-    tr.absorb_exts(w_py)
-    tr.absorb_exts(qc_py)
+    raw = (exts_to_bytes(w_np), exts_to_bytes(qc_np))
+    tr.absorb(raw[0])
+    tr.absorb(raw[1])
     js = open_set(tr, n, p.t)
-    code_cols = np.ascontiguousarray(code[:, torch.tensor(js, dtype=torch.int64, device=dev)].T.contiguous().cpu().numpy().view("<u4"))
-    return Opening(w_py, qc_py, code_cols, [cm.merkle.path(j) for j in js])
+    sel = code[:, torch.tensor(js, dtype=torch.int64, device=dev)].T.contiguous()
+    host = torch.empty(sel.shape, dtype=sel.dtype, pin_memory=dev.type == "cuda")
+    host.copy_(sel)
+    code_cols = np.ascontiguousarray(host.numpy().view("<u4"))
+    return Opening(w_py, qc_py, code_cols, [cm.merkle.path(j) for j in js], raw)
 
 
 def verify_open(root: bytes, params: LigeroParams, length: int, a: torch.Tensor, b: Ext, op: Opening, tr: Transcript, device) -> None:

@@ -40,11 +40,13 @@ def _ifchain(z3, key, cases: list[tuple[int, object]], default):
 
 @cache
 def op_table(p: Params) -> Table:
-    """T_OP: operand word w -> (s, m, e_op); finite words only (the all-ones exponent field has no row).
+    """T_OP: operand word w -> (s, m, e_op); finite words only (``ieee``: the all-ones exponent field has no row;
+    ``e4m3``: only the all-ones exponent AND fraction word, the NaN, has none).
     ``e_op = e_zero`` for a zero operand (``m = 0``), else ``max(t, 1) - bias``."""
     check_widths(p)
     ez = V2.e_zero(p)
     fmask, emask = 2**p.frac - 1, 2**p.exp - 1
+    e4m3 = p.op_nan_rule == "e4m3"
 
     def fn(w: int) -> tuple[int, int, int]:
         s, t, f = w >> (p.word_bits - 1), (w >> p.frac) & emask, w & fmask
@@ -52,6 +54,8 @@ def op_table(p: Params) -> Table:
         return s, m, (ez if m == 0 else max(t, 1) - p.bias)
 
     def dom(w: int) -> bool:
+        if e4m3:
+            return w & (emask * 2**p.frac + fmask) != emask * 2**p.frac + fmask
         return (w >> p.frac) & emask != p.t_finite
 
     def sym(z3, w):
@@ -60,27 +64,27 @@ def op_table(p: Params) -> Table:
         f = w % 2**p.frac
         m = f + z3.If(t == 0, 0, 2**p.frac)
         e = z3.If(m == 0, ez, z3.If(t == 0, 1, t) - p.bias)
-        return t != p.t_finite, (s, m, e)
+        return (z3.Or(t != p.t_finite, f != fmask) if e4m3 else t != p.t_finite), (s, m, e)
 
     return Table("T_OP", 0, 2**p.word_bits, ("s", "m", "e"), fn, domain=dom, sym=sym,
-                 size=2**p.word_bits - 2 * 2**p.frac)
+                 size=2**p.word_bits - (2 if e4m3 else 2 * 2**p.frac))
 
 
 @cache
 def hdr_table(p: Params) -> Table:
-    """T_HDR: the accumulator word's header h = s 2^exp + t (finite t) -> (s, nz, e = max(t, 1) - bias)."""
-    emask = 2**p.exp - 1
+    """T_HDR: the accumulator word's header h = s 2^acc_exp + t (finite t) -> (s, nz, e = max(t, 1) - acc_bias)."""
+    emask = 2**p.acc_exp - 1
 
     def fn(h: int) -> tuple[int, int, int]:
-        s, t = h >> p.exp, h & emask
-        return s, int(t != 0), max(t, 1) - p.bias
+        s, t = h >> p.acc_exp, h & emask
+        return s, int(t != 0), max(t, 1) - p.acc_bias
 
     def dom(h: int) -> bool:
-        return h & emask != p.t_finite
+        return h & emask != p.acc_t_finite
 
     def sym(z3, h):
-        s, t = h / 2**p.exp, h % 2**p.exp
-        return t != p.t_finite, (s, z3.If(t == 0, 0, 1), z3.If(t == 0, 1, t) - p.bias)
+        s, t = h / 2**p.acc_exp, h % 2**p.acc_exp
+        return t != p.acc_t_finite, (s, z3.If(t == 0, 0, 1), z3.If(t == 0, 1, t) - p.acc_bias)
 
     return Table("T_HDR", 0, V2.hdr_rows(p), ("s", "nz", "e"), fn, domain=dom, sym=sym, size=V2.hdr_rows(p) - 2)
 
@@ -168,9 +172,9 @@ def lead_table(p: Params) -> Table:
 @cache
 def leadnorm_table(p: Params) -> Table:
     """LEADNORM: key l + (l_hi + 1)(E - floor) -> (koff = k - k_lo, A = 2^(vb + k), e_hat, z, ovf_eff, isfloor)
-    with k = min(acc_sig - l, E - e_min + acc_sig - W) (the clamp as a minimum), e1 = E - k + acc_sig - W,
+    with k = min(acc_sig - l, E - acc_e_min + acc_sig - W) (the clamp as a minimum), e1 = E - k + acc_sig - W,
     z = [l = 0 or l + k <= 0] (= [floor(v 2^k) = 0] for 2^(l-1) <= v < 2^l), e_hat = floor if z else e1,
-    ovf_eff = [not z and e1 > e_max], isfloor = [E = floor]."""
+    ovf_eff = [not z and e1 > acc_e_max], isfloor = [E = floor]."""
     check_widths(p)
     L = p.l_hi + 1
     vb = V2.vb(p)
@@ -179,20 +183,20 @@ def leadnorm_table(p: Params) -> Table:
     def fn(key: int) -> tuple[int, ...]:
         E, l = divmod(key, L)
         E += p.floor
-        k = min(p.acc_sig - l, E - p.e_min + cl)
+        k = min(p.acc_sig - l, E - p.acc_e_min + cl)
         e1 = E - k + cl
         z = l == 0 or l + k <= 0
-        return k - p.k_lo, 2 ** (vb + k), (p.floor if z else e1), int(z), int(not z and e1 > p.e_max), int(E == p.floor)
+        return k - p.k_lo, 2 ** (vb + k), (p.floor if z else e1), int(z), int(not z and e1 > p.acc_e_max), int(E == p.floor)
 
     def sym(z3, key):
         l, E = key % L, key / L + p.floor
-        ku, kc = p.acc_sig - l, E - p.e_min + cl
+        ku, kc = p.acc_sig - l, E - p.acc_e_min + cl
         k = z3.If(ku < kc, ku, kc)
         e1 = E - k + cl
         z = z3.Or(l == 0, l + k <= 0)
         A = _ifchain(z3, k, [(kk, z3.IntVal(2 ** (vb + kk))) for kk in range(p.k_lo, p.k_hi + 1)], z3.IntVal(0))
         return True, (k - p.k_lo, A, z3.If(z, p.floor, e1), z3.If(z, 1, 0),
-                      z3.If(z3.And(z3.Not(z), e1 > p.e_max), 1, 0), z3.If(E == p.floor, 1, 0))
+                      z3.If(z3.And(z3.Not(z), e1 > p.acc_e_max), 1, 0), z3.If(E == p.floor, 1, 0))
 
     return Table("LEADNORM", 0, V2.leadnorm_rows(p), ("koff", "A", "e_hat", "z", "ovf", "isfloor"), fn, sym=sym)
 
