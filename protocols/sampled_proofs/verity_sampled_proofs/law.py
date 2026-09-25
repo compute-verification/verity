@@ -15,9 +15,10 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from fractions import Fraction
+from typing import Any
 
 from verity.randomness import Key, Part, derive
-from verity.resource_accounting import IntegrityProfile
+from verity.proofs.profile import IntegrityProfile
 
 RU_DOMAIN = "verity/sampled-proofs/ru-sample/v1"
 VU_DOMAIN = "verity/sampled-proofs/vu-sample/v1"
@@ -58,11 +59,11 @@ class TwoStageLaw:
         except KeyError:
             raise KeyError(f"the law has no stage for replay-unit class {cls!r}") from None
 
-    def profile(self, cls: str, *, n_r: int, n_v: int, delta: float, covered: Iterable[str] = ()) -> IntegrityProfile:
-        """The profile an accepted transcript leaves over `n_r` RUs of class `cls`, each holding `n_v` VUs, with the
-        `covered` families proved on every audit."""
+    def profile(self, cls: str, *, n_r: int, n_v: int, delta: float, **facts: Any) -> IntegrityProfile:
+        """The profile an accepted transcript leaves over `n_r` RUs of class `cls`, each holding `n_v` VUs; `facts` are
+        the exhaustively checked fields (`programs`, `prescribed`, `linked`, `covered`, `replayed`)."""
         stage = self.stage(cls)
-        return IntegrityProfile(n_r=n_r, n_v=n_v, p=Fraction(stage.p), k=stage.checked(n_v), delta=delta, covered=frozenset(covered))
+        return IntegrityProfile(n_r=n_r, n_v=n_v, p=Fraction(stage.p), k=stage.checked(n_v), delta=delta, **facts)
 
     def to_json(self) -> dict:
         return {name: stage.to_json() for name, stage in sorted(self.stages.items())}

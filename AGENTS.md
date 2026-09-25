@@ -29,10 +29,12 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
  challenge derivation, with exact samplers (`uniform`, `bernoulli`, `subset`)
  over counter-mode streams. Stdlib only, and it imports no other core module.
  Its byte formats are pinned by `tests/randomness/vectors.json`.
- - `verity.resource_accounting`: `IntegrityProfile`, which records what was
- verified: the covered families, the two-stage law and δ. It comes with
- consumer-side worst-case readers.
- - `verity.commitments`, `verity.proofs`: see their module docstrings.
+ - `verity.proofs`: single statements and how a backend is judged on them,
+ plus `proofs.profile.IntegrityProfile`, which records what verification
+ established: the exhaustive facts, the two-stage law and δ. Consumers read
+ it with their own utilities; their readers stay out of core. Its tests live
+ in `tests/verification/`, a path the hash-registered discrepancy log cites.
+ - `verity.commitments`: see its module docstring.
  Other modules are created when code lands, not before.
  - Tests live in `packages/verity/tests/<module>/`.
 - `protocols/`: one distribution per protocol, and each imports only the

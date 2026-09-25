@@ -72,7 +72,7 @@ Hardware-specific semantics belong here when they are reusable facts about the c
 
 `verity.proofs` defines **backend-independent single statements over Verity programs**: the concrete relations and authenticated values a backend must establish, and how a backend's proof of them is judged.
 
-Which parts of a Program are checked, how checks are selected or sampled, and which values must be bound before a challenge are protocol questions. They belong to `protocols/sampled_proofs`, which draws its challenges through `verity.randomness` and summarises an accepted audit as a `verity.resource_accounting.IntegrityProfile`.
+Which parts of a Program are checked, how checks are selected or sampled, and which values must be bound before a challenge are protocol questions. They belong to `protocols/sampled_proofs`, which draws its challenges through `verity.randomness` and summarises an accepted audit as a `verity.proofs` `IntegrityProfile`: what verification established, which resource accounting, policies and other protocols read.
 
 Proofs are separate from computation semantics: changing which units are sampled or how they are grouped for checking does not redefine the Program.
 

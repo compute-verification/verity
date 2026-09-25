@@ -13,10 +13,11 @@ Spot-checks a committed transcript of a Verity Program, and says what an accepte
    exactly `k` of its verification units (VUs) are checked (`select_verification_units`), or all of them when it
    holds fewer.
 5. Each checked VU is established on its authenticated boundary values.
-6. An accepted audit emits a `verity.resource_accounting.IntegrityProfile` per RU class (`TwoStageLaw.profile`).
-   The profile holds the covered families (proved on every audit, `VerificationPlan.covered`), the law
-   (`n_r, n_v, p, k`) and `delta`. Each consumer reads what it needs off the profile, through
-   `resource_accounting`'s worst-case readers or its own.
+6. An accepted audit emits a `verity.proofs.profile.IntegrityProfile` per RU class (`TwoStageLaw.profile`). It
+   holds the exhaustively checked facts: the evaluated Programs, the prescribed families, linkage, and the families
+   covered on every audit (`VerificationPlan.covered`). It also holds the law (`n_r, n_v, p, k`), what was
+   replayed, and `delta`. Resource accounting, policies and PoUW each read what they need off it, passing their own
+   utility to `worst_case`. The application counts `delta` once.
 
 ## Randomness
 
