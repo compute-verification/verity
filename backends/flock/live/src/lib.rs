@@ -115,6 +115,8 @@ pub enum Req {
     Round { stream: String, content: Vec<u8>, n: u32 },
     Proof { table: String, rep: u32, bytes: Vec<u8> },
     Finish,
+    /// A round-trip probe on the open connection: answered `Ok`, touches no session state.
+    Ping(Vec<u8>),
 }
 
 #[derive(Clone, Debug)]
@@ -188,6 +190,10 @@ impl Req {
                 put_bytes(&mut w, bytes);
             }
             Req::Finish => w.push(6),
+            Req::Ping(b) => {
+                w.push(8);
+                put_bytes(&mut w, b);
+            }
             Req::Commit { root_f, roots, publics } => {
                 w.push(7);
                 put_bytes(&mut w, root_f);
@@ -212,6 +218,7 @@ impl Req {
             4 => Req::Round { stream: c.string()?, content: c.bytes()?, n: c.u32()? },
             5 => Req::Proof { table: c.string()?, rep: c.u32()?, bytes: c.bytes()? },
             6 => Req::Finish,
+            8 => Req::Ping(c.bytes()?),
             7 => {
                 let root_f = c.bytes()?;
                 let mut lists = Vec::new();
@@ -318,6 +325,28 @@ impl TcpTransport {
         let s = TcpStream::connect(addr)?;
         s.set_nodelay(true)?;
         Ok(Self { r: BufReader::new(s.try_clone()?), w: BufWriter::new(s), sent: 0, recv: 0, calls: 0, wait: Default::default() })
+    }
+}
+
+impl TcpTransport {
+    /// Round trips of a 64-byte `Ping` on this open connection, before the session starts (not counted in the session's
+    /// bytes, calls or wait): (median ms, min ms, n).
+    pub fn ping_rtt(&mut self, n: usize) -> (f64, f64, usize) {
+        let b = Req::Ping(vec![0u8; 64]).encode();
+        let mut ts = Vec::with_capacity(n);
+        for _ in 0..n {
+            let t = std::time::Instant::now();
+            if write_frame(&mut self.w, &b).is_err() || read_frame(&mut self.r).is_err() {
+                break;
+            }
+            ts.push(t.elapsed().as_secs_f64() * 1e3);
+        }
+        if ts.is_empty() {
+            return (f64::NAN, f64::NAN, 0);
+        }
+        let mut v = ts.clone();
+        v.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        (v[v.len() / 2], v[0], v.len())
     }
 }
 
@@ -773,6 +802,9 @@ impl Server {
     }
 
     pub fn handle(&mut self, req: Req) -> Resp {
+        if matches!(req, Req::Ping(_)) {
+            return Resp::Ok;
+        }
         let finish = matches!(req, Req::Finish);
         let t = std::time::Instant::now();
         let r = self.handle_inner(req);
@@ -936,6 +968,7 @@ impl Server {
                 self.proofs.insert((table, rep as usize), bytes);
                 Resp::Ok
             }
+            Req::Ping(_) => Resp::Ok,
             Req::Finish => {
                 let v = self.finish();
                 Resp::Verdict(v.to_string())
