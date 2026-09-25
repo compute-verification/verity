@@ -9,7 +9,7 @@ import pytest
 from verity_vllm.observe.events import (DispatchEnter, DispatchExit, Root, RunHeader, SampleEnd, StepEnd, StepLink, StepStart,
                                    StorageAlloc, TritonLaunch, ViewDesc, from_json, to_json, views_in)
 from verity_vllm.observe.log import LogWriter, dumps, read_log, read_log_lines, split_steps
-from verity_vllm.observe.tree import build_trees, op_histogram, step_events
+from verity_vllm.observe.fold.tree import build_trees, op_histogram, step_events
 
 
 def _view(a=1, off=0, shape=(4, 576), strides=(576, 1), dtype="bfloat16"):
@@ -90,6 +90,6 @@ def test_split_steps_and_trees():
 
 
 def test_build_trees_rejects_dangling_parent():
-    from verity_vllm.observe.tree import TreeError
+    from verity_vllm.observe.fold.tree import TreeError
     with pytest.raises(TreeError):
         build_trees([DispatchEnter(5, 99, 0, "forward", "aten.mm.default", "s", [], {}, 0)])

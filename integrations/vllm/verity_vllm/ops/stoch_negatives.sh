@@ -26,7 +26,7 @@ mkdir -p "$OUT"
 log() { echo "$(date -u +%FT%TZ) [stoch-neg $ROW] $*" | tee -a "$OUT/negatives.log"; }
 B=$($PY312 -c "import json;print(len(json.load(open('$WL'))['requests']))")
 MML=$($PY312 -c "import json;w=json.load(open('$WL'));print(max(r['prompt_len']+r['max_tokens'] for r in w['requests']))")
-PROFILE=${FOLD_PROFILE:-$($PY312 -c "from verity_vllm.observe.profiles import profile_module_for_case as f; print(f('$ROLE'))")}   # as run_config does
+PROFILE=${FOLD_PROFILE:-$($PY312 -c "from verity_vllm.engine.profiles import profile_module_for_case as f; print(f('$ROLE'))")}   # as run_config does
 
 run_one() {   # $1 = N1|N2, $2 = python mutation snippet applied to the manifest dict `w`
   N=$OUT/$1; mkdir -p "$N/match/capture"
@@ -35,16 +35,16 @@ import json,sys
 w=json.load(open(sys.argv[1])); exec(sys.argv[3]); json.dump(w, open(sys.argv[2],"w"), indent=1)
 EOF
   log "$1: mutated manifest $N/workload.json ($2)"
-  $PY -m verity_vllm.observe.m1_capture --workload "$N/workload.json" --case "$ROLE" --max-num-seqs "$B" \
+  $PY -m verity_vllm.pipeline.m1_capture --workload "$N/workload.json" --case "$ROLE" --max-num-seqs "$B" \
       --checkpoints manifests/checkpoints.json --engine-arg=max_num_batched_tokens=2048 --engine-arg=max_model_len="$MML" \
       --engine-arg=gpu_memory_utilization="$GPU_UTIL" --out "$N/match/capture" --snapshot-steps 0,1 --verify-weights > "$N/capture.log" 2>&1
   rc1=$?; log "$1: capture rc=$rc1"
-  $PY312 -m verity_vllm.harness.run_config --worker fold --log "$N/match/capture/log.jsonl.gz" --profile "$PROFILE" \
+  $PY312 -m verity_vllm.pipeline.match --worker fold --log "$N/match/capture/log.jsonl.gz" --profile "$PROFILE" \
       --out "$N/match/fold_summary.json" --persist-dir "$N/match" > "$N/fold.log" 2>&1
   rc2=$?; log "$1: fold rc=$rc2"
-  $PY312 -m verity_vllm.check.program_compare --a "$D/build_request" --b "$N/match" --out "$N/match_compare.json" > "$N/compare.log" 2>&1
+  $PY312 -m verity_vllm.check.match.program_compare --a "$D/build_request" --b "$N/match" --out "$N/match_compare.json" > "$N/compare.log" 2>&1
   rc3=$?; log "$1: compare rc=$rc3"
-  $PY312 -m verity_vllm.check.stoch_recompute --run "$N/match" --workload "$WL" --out "$N/match_stoch.json" > "$N/recompute.log" 2>&1
+  $PY312 -m verity_vllm.check.replay.stoch_recompute --run "$N/match" --workload "$WL" --out "$N/match_stoch.json" > "$N/recompute.log" 2>&1
   rc4=$?; log "$1: recompute rc=$rc4"
   $PY312 - "$N" "$1" "$rc1" "$rc2" "$rc3" "$rc4" <<'EOF' | tee -a "$OUT/negatives.log"
 import json, os, sys

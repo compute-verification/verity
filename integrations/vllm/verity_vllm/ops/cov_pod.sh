@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Coverage campaign 2026-09-17 (D87) — pod-side runner.  One configuration = one cell of out/gen/COVERAGE-20260917.md:
 # GPU phase (capture / control / census / nonint) then the CPU phase (resolve … tier A k=3 … gates + card) of
-# verity_vllm.harness.run_config, all on the pod's container disk (/workspace; /vol was over quota all through the last wave and the
+# verity_vllm.pipeline.match, all on the pod's container disk (/workspace; /vol was over quota all through the last wave and the
 # laptop must stay a thin client), then a SMALL bundle (json reports, cards, logs, tokens -- no snapshots, no instances.jsonl) at
 # /workspace/cp/cov/bundles/<run>.small.tgz for the laptop to pull.  The frozen candidate (program.json / instances.jsonl /
 # accesses.jsonl.gz) stays in the run dir on the pod (and is copied to /vol/cp/cov/<run>/ when the volume takes it).
@@ -29,7 +29,7 @@ K=${COV_K:-3}; PAR=${COV_PAR:-8}; SNAP_MB=${COV_SNAP_MB:-256}; SNAP_MB_MOE=${COV
 # (evidence rule from the 2026-09-17 window: a recheck of a copy must not publish over the original).
 VOL=${COV_VOL:-/vol/cp/cov}
 say() { echo "[cov_pod] $(date -u +%FT%TZ) $*"; }
-drv() { $PY312 -m verity_vllm.harness.run_config --python-gpu $PY311 --python-cpu $PY312 --cards-dir "$CARDS" "$@"; }
+drv() { $PY312 -m verity_vllm.pipeline.match --python-gpu $PY311 --python-cpu $PY312 --cards-dir "$CARDS" "$@"; }
 
 ckpt_dir() {  # <case> -> the seeded HF snapshot dir of the role (checkpoints.json local_path)
   $PY312 - "$1" <<'EOF'
@@ -97,9 +97,9 @@ inherit_quarantine() {  # <run-name>: a run dir without quarantine.json inherits
   # [window 2026-09-17, lead] G4 needs `quarantine.json` whenever the run resolves to quarantine Definitions (Pythia: GeluErf_v1,
   # LayerNormAten_v1).  That record is per-Definition (difftest check + verify_lane rule 2a), written once by the lane and copied into
   # the PRIMARY run dir only -- so replicates / runs on other workers were REJECTED at G4 for a missing file, not for numerics.  The
-  # admitted record is tracked at verity_vllm/observe/profiles/quarantine/<CASE>.json (with `admitted_by`); it is copied in here, stamped
+  # admitted record is tracked at verity_vllm/engine/profiles/quarantine/<CASE>.json (with `admitted_by`); it is copied in here, stamped
   # `inherited`, and G4 still re-runs tier-a replay on THIS run's own instances.  Cases without a record (no quarantine specs) skip.
-  local n=$1 rec="$PWD/verity_vllm/observe/profiles/quarantine/${1%%-*}.json"   # cwd = the code snapshot (cd above)
+  local n=$1 rec="$PWD/verity_vllm/engine/profiles/quarantine/${1%%-*}.json"   # cwd = the code snapshot (cd above)
   [ -f "$OUT/$n/quarantine.json" ] && return 0
   [ -f "$rec" ] || return 0
   $PY312 - "$rec" "$OUT/$n/quarantine.json" "$n" <<'EOF' && say "quarantine.json inherited for $n from $(basename "$rec") (per-Definition admission record)"
@@ -163,7 +163,7 @@ holdouts() {  # <primary-run> <holdout-run>...: the replicate runs' gates.json a
     [ -f "$OUT/$h/gates.json" ] || { say "holdouts $n: $h has no gates.json"; return 1; }
     ln -sfn "$OUT/$h" "$hd/$h"
   done
-  $PY312 -m verity_vllm.check.holdout --assemble "$hd" --out "$OUT/$n/holdouts.json" > "$LOGS/$n.holdouts.log" 2>&1 || say "holdouts $n: assemble rc=$?"
+  $PY312 -m verity_vllm.properties.holdout --assemble "$hd" --out "$OUT/$n/holdouts.json" > "$LOGS/$n.holdouts.log" 2>&1 || say "holdouts $n: assemble rc=$?"
   drv --run-dir "$OUT/$n" --phase cpu --skip resolve,census_reconcile,nonint_compare,compare,fold,fold_2,fold_other,root_policy,golden,wiring,replay \
       >> "$LOGS/$n.holdouts.log" 2>&1
   local rc=$?

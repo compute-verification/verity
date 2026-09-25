@@ -155,7 +155,7 @@ AttentionHeadFA3 = _port(b1.AttentionHead, "AttentionHeadFA3",
 AttentionFA3 = _port(b1.Attention, "AttentionFA3",
                      "GQA over AttentionHeadFA3.  Conformance: every attention leaf of the H100 correspondence exact (39 leaves, T = 1..527, "
                      "request 917b9faa, layers 0/1/13/27: results/CONF-b1-hopper-*/correspondence.json) and AttentionHeadFA3 equal word for word "
-                     "to the FA3 CPU model (verity_vllm.program.numerics.fa3_model; tests/poc/test_fa3_model.py).")
+                     "to the FA3 CPU model (verity_vllm.program.kernels.fa3_model; tests/poc/test_fa3_model.py).")
 LayerPreHopper = _port(b1.LayerPre, "LayerPreHopper", "GemmHopper for the QKV projection; otherwise TA1's functions.")
 LayerPostHopper = _port(b1.LayerPost, "LayerPostHopper", "GemmHopper for o_proj, gate_up, down; otherwise TA1's functions.")
 FinalHopper = _port(b1.Final, "FinalHopper", "GemmHopper for the LM head; TA1's RMSNormFusedCuda and TokenSelect.",

@@ -12,7 +12,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 
-from verity_vllm.check.sampled_replay import _tp_member_alias  # noqa: E402
+from verity_vllm.check.replay.sampled_replay import _tp_member_alias  # noqa: E402
 
 
 def test_moesum_sum_is_the_ranks_partial():

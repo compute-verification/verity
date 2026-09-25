@@ -519,6 +519,57 @@ def instance_range(target: Target, inst: Mapping[str, Any]) -> tuple[str | None,
                   f"so this batch repeats instances (repeats can inflate throughput)")
 
 
+def _declared_side(target: Target, frozen: Any, inst: Mapping[str, Any]) -> str | None:
+    """Why an ``instance-equiv/v1`` document's ``frozen`` side is not the target's declared set over the candidate's range, or
+    ``None``.  The side is an instance ref as the runner writes it (dataset, tier, range, manifest_sha256, and for a synthetic
+    set seed and recipe): the frozen ref itself, a prefix of it, or a synthetic stream over [0, n) by generator, seed and n
+    (:func:`instance_range`).  A fixture's repeats (A100 past 4,096) never are."""
+
+    if not isinstance(frozen, Mapping):
+        return "frozen is not an instance ref"
+    if T._ref_key(frozen) != T._ref_key(T.frozen_instances(target)):
+        how, why = instance_range(target, frozen)
+        if how is None:
+            return why or "frozen is neither FROZEN_INSTANCES[target] nor the declared set's stream over its range (generator, seed and n)"
+    fr, cr = frozen.get("range"), inst.get("range")
+    if not (isinstance(fr, (list, tuple)) and isinstance(cr, (list, tuple)) and len(fr) == len(cr) == 2 and fr[1] - fr[0] == cr[1] - cr[0]):
+        return f"frozen range {fr!r} and candidate range {cr!r} do not hold the same number of instances"
+    return None
+
+
+def stream_equivalence(inst: Mapping[str, Any], target: Target, equivs: Sequence[T.InstanceEquiv] | None,
+                       result_producers: set[str]) -> tuple[str | None, str | None]:
+    """:func:`tables.instance_equivalence` with the frozen side generalised by :func:`_declared_side`: ``(art id, None)`` of an
+    ``instance-equiv/v1`` document that shows the result's instances equal to the declared set over the same range and is
+    ``verified=accepted`` by a non-producer, else ``(None, why)``.  One document shape serves 4,096 and any stream n."""
+
+    pool = [e for e in equivs or () if e.doc.get("target") == target.name and T._ref_key(e.doc.get("candidate")) == T._ref_key(inst)]
+    if not pool:
+        return None, T.unreadable_equivs(equivs, target)
+    judged = []
+    for e in pool:
+        problems = [x for x in T._equiv_content(e.doc, target, inst, e.unreadable) if not x.startswith("frozen is not FROZEN_INSTANCES")]
+        side = _declared_side(target, e.doc.get("frozen"), inst)
+        judged.append((e, problems + ([side] if side else []), T._equiv_verdict(e, result_producers)))
+    contra = [e for e, _, v in judged if v is None and e.doc.get("equal") is not True]
+    if contra:
+        return None, f"{contra[0].artifact}, verified, says equal={contra[0].doc.get('equal')!r}"
+    ok = [e for e, c, v in judged if not c and v is None]
+    if ok:
+        return ok[0].artifact, None
+    return None, "; ".join(f"{e.artifact}: {c[0]}" if c else str(v) for e, c, v in judged)
+
+
+def _equiv_of(ctx: Ctx, rules: Rules, equivs: Sequence[T.InstanceEquiv]) -> str | None:
+    """The equivalence artifact a re-packed result counts through (its footnote), or ``None``."""
+    if rules.legacy:
+        return T.instances_equiv_of(ctx.meta, ctx.labels, ctx.attempt, ctx.target, equivs)
+    inst, want = ctx.meta["workload_fingerprint"].get("instances"), T.frozen_instances(ctx.target)
+    if not isinstance(inst, Mapping) or want is None or not T.instances_diff(inst, want) or instance_range(ctx.target, inst)[0] is not None:
+        return None
+    return stream_equivalence(inst, ctx.target, equivs, T.producers(ctx.attempt, ctx.labels, ctx.meta))[0]
+
+
 def _instances(ctx: Ctx, rules: Rules, equivs: Sequence[T.InstanceEquiv], self_: set[str]) -> list[tuple[str, str]]:
     fp = ctx.meta["workload_fingerprint"]
     want, inst = T.frozen_instances(ctx.target), fp.get("instances")
@@ -535,7 +586,7 @@ def _instances(ctx: Ctx, rules: Rules, equivs: Sequence[T.InstanceEquiv], self_:
             return []
         if repeats:
             return [("I", repeats)]
-    eq, why = T.instance_equivalence(inst, ctx.target, equivs, self_)
+    eq, why = (T.instance_equivalence if rules.legacy else stream_equivalence)(inst, ctx.target, equivs, self_)
     if eq is not None:
         return []
     return [("I", "instances differ from the frozen set on " + ", ".join(f"{k} ({inst.get(k)!r} vs {want[k]!r})" for k in diff)
@@ -656,6 +707,7 @@ class Views:
     rejected: list[dict[str, Any]] = field(default_factory=list)
     not_families: dict[str, list[str]] = field(default_factory=dict)
     configurations: tuple[Configuration, ...] = CONFIGURATIONS
+    unreadable: list[str] = field(default_factory=list)   #: artifacts the views could not read here (payload not local, ...)
 
     def columns(self) -> list[str]:
         if not self.rules.legacy:
@@ -676,6 +728,7 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
     V = Views(rules=rules, configurations=tuple(configurations))
     cfgs = {c.id: c for c in configurations}
     equivs = T.instance_equivs(store)
+    V.unreadable = [f"{e.artifact}: {e.unreadable}" for e in equivs if e.unreadable]
     entries: list[Ctx] = []
     for art, meta in T._artifacts(store, T.RESULT_KIND):
         fp = meta.get("workload_fingerprint") if isinstance(meta.get("workload_fingerprint"), Mapping) else {}
@@ -759,7 +812,7 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
                                 bound_log2=whole_proof_log2(c.meta["workload_fingerprint"]),
                                 provisional=None if rules.legacy else provisional(c),
                                 legacy=T._cell(c.meta, c.art, T._attempt_of(store, c.art)[0], target, _CANDIDATE[c.family.id],
-                                               vb.by if vb else None, T.instances_equiv_of(c.meta, c.labels, c.attempt, target, equivs),
+                                               vb.by if vb else None, _equiv_of(c, rules, equivs),
                                                _open_finding(c.labels)),
                                 batching=_batching(c.meta["workload_fingerprint"]), scheme=scheme,
                                 algebraic=[h.text() for h in (c.config.algebraic() if c.config else ())],
@@ -995,6 +1048,9 @@ def render_markdown(V: Views) -> str:
         how = f"{COMMIT} {pre['commit_s']:.3g} s" if pre and pre["commit_warm"] else f"{COMMIT_V1} {pre['commit_s']:.3g} s, once before the timed runs" if pre else ""
         extra = f" [end to end with its commitment ({how}): {T.fmt_overhead(pre['overhead'])}]" if pre else ""
         out.append(f"- {r['artifact']} ({r['configuration'] or r['family']} / {r['line'] or '?'}) → {k}: {why}{extra}")
+    if V.unreadable:
+        out += ["", f"Unreadable here ({len(V.unreadable)}; the render cannot use them until their payloads are fetched):",
+                *[f"- {u}" for u in V.unreadable]]
     if V.not_families:
         n = sum(len(v) for v in V.not_families.values())
         out += ["", f"Not a backend family's result ({n}; by software.backend.name): "
@@ -1019,6 +1075,7 @@ def render_json(V: Views) -> dict[str, Any]:
                     "serving_overhead": overheads(c)[0], "proving_overhead": overheads(c)[1], **c.legacy.phases} for c in V.cells],
         "rejected": [{**r, "codes": [list(x) for x in r["codes"]]} for r in V.rejected],
         "not_families": V.not_families,
+        "unreadable": V.unreadable,
     }
 
 

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from verity_vllm.check import sampled_replay as SR
+from verity_vllm.check.replay import sampled_replay as SR
 
 ROT = "model.layers.0.self_attn.rotary_emb"
 W = 8                                                                            # words per identity

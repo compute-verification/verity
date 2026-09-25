@@ -51,9 +51,9 @@ from verity_vllm.program.registry import b1
 from verity.ir.types import Array, Tuple as TupleT, Type
 
 from verity_vllm.observe.events import ViewDesc
-from verity_vllm.observe.fold import FoldResult, fold, summarize
+from verity_vllm.observe.fold.fold import FoldResult, fold, summarize
 from verity_vllm.observe.log import read_log
-from verity_vllm.observe.resolver import Profile
+from verity_vllm.observe.fold.resolver import Profile
 
 DEFAULT_COS_SIN = Path(str(resources.files(__package__) / "tables" / "B0-divergence-20260907T1604Z" / "cos_sin_cache.npy"))
 HF_GLOB = str(Path.home() / ".cache" / "huggingface" / "hub" / "models--HuggingFaceTB--SmolLM2-135M" / "snapshots" / "*" / "model.safetensors")
@@ -75,9 +75,9 @@ _NP = {"bfloat16": np.uint16, "float16": np.uint16, "float32": np.uint32, "int32
 # --- loaders ----------------------------------------------------------------------------------------------
 
 def load_profile(name: str) -> Profile:
-    """`verity_vllm.observe.profiles.<name>`: its `PROFILE` / `profile` object or `build_profile()` / `make_profile()`."""
+    """`verity_vllm.engine.profiles.<name>`: its `PROFILE` / `profile` object or `build_profile()` / `make_profile()`."""
     import importlib
-    mod = importlib.import_module(f"verity_vllm.observe.profiles.{name}")
+    mod = importlib.import_module(f"verity_vllm.engine.profiles.{name}")
     for attr in ("PROFILE", "profile"):
         p = getattr(mod, attr, None)
         if isinstance(p, Profile):
@@ -86,7 +86,7 @@ def load_profile(name: str) -> Profile:
         f = getattr(mod, attr, None)
         if callable(f):
             return f()
-    raise ImportError(f"verity_vllm.observe.profiles.{name} exposes no Profile (PROFILE / profile / build_profile())")
+    raise ImportError(f"verity_vllm.engine.profiles.{name} exposes no Profile (PROFILE / profile / build_profile())")
 
 
 def fold_log(log_path: str | Path, profile: Profile, *, strict: bool | None = None, with_program: bool = True) -> FoldResult:
@@ -311,7 +311,7 @@ def _f16_words_to_bf16(w: np.ndarray) -> np.ndarray:
     """[SHARED-CODE lane cov-ln] the bf16 word vLLM's loader produces from an fp16 checkpoint word: `param.data.copy_(loaded)`
     into a bf16 parameter on the GPU is `__float2bfloat16((float)half)` — fp16 -> f32 exact, f32 -> bf16 round-to-nearest-even
     (`analytic.f32_to_bf16_words`; NaN payloads are not preserved by the CUDA convert, but a checkpoint has no NaN words)."""
-    from verity_vllm.input_provenance.analytic import f32_to_bf16_words
+    from verity_vllm.program.model import f32_to_bf16_words
     return f32_to_bf16_words(np.ascontiguousarray(w, dtype=np.uint16).view(np.float16).astype(np.float32))
 
 
@@ -404,7 +404,7 @@ class WeightSource:
         elif name == "normalizer":
             # [ADAPTER lane cov-dense] Gemma-2's `model.normalizer` (analytic-table root, `analytic.weights_type`): one bf16 word,
             # bf16(sqrt(H)); H is the Record's own hidden width (the `norm` field's length), so no configuration is needed here.
-            from verity_vllm.input_provenance import analytic
+            from verity_vllm.program import model as analytic
             H = self.weights_type.fields[self.weights_type.index("norm")][1].n
             w = np.array([analytic.normalizer_word(int(H))], dtype=np.uint16)
         elif name in self._weight_fields:

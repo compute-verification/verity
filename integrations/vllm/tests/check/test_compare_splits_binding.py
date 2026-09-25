@@ -8,8 +8,8 @@ fold) and run the real `compare.Prog` binding + `compare_steps`."""
 
 from __future__ import annotations
 
-from verity_vllm.check import program_compare as C
-from verity_vllm.check import global_match as gm
+from verity_vllm.check.match import program_compare as C
+from verity_vllm.check.match import global_match as gm
 
 SEL = "GumbelTopPTokenSelect_v1{V=16}"
 LP, T = 4, 2          # 3 sampling events

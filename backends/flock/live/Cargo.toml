@@ -1,0 +1,25 @@
+# Dropped into a flock b684b12 checkout as crates/flock-live (backends/flock/pod/*.sh do it) and added to its
+# workspace members; the path dependencies are relative to that location.
+[package]
+name = "flock-live"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Live-coin sessions for Flock (flock-128-r2): a forwarding prover challenger, a verifier coin server, and the replaying session verifier"
+
+[features]
+# GPU tables built from the binary-census unit netlist (crates/flock-prover/src/r1cs_hashes/verity_unit.rs, which
+# flock-bench's 22-gpu-unit.sh installs into the checkout).
+verity-unit = []
+
+[dependencies]
+flock-core = { path = "../flock-core" }
+flock-prover = { path = "../flock-prover" }
+flock-transcript = { workspace = true }
+flock-field = { workspace = true }
+sha2 = { workspace = true }
+serde_json = { workspace = true }
+bincode = { workspace = true }
+
+[lints]
+workspace = true

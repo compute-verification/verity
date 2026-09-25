@@ -104,7 +104,7 @@ def test_detectors_on_examples() -> None:
     assert sorted(v.kind for v in py_violations(py, "verity_vllm/x.py")) == ["argparse", "main-block"]
     sh = (
         "# $PY -m verity_vllm.not_code in a comment\n"
-        "$PY312 -m verity_vllm.harness.commit_delta --case B0\n"
+        "$PY312 -m verity_vllm.pipeline.commit --case B0\n"
         "B=$(python3 -c \"import json;print(1)\")\n"
         "N=$((SNAP_MB << 20))\n"
         "$PY - \"$1\" <<'EOF' >> log\n"
@@ -113,4 +113,4 @@ def test_detectors_on_examples() -> None:
         "verity-vllm row R --config row.toml\n"
     )
     got = sorted((v.kind, v.detail) for v in sh_violations(sh, "verity_vllm/ops/x.sh"))
-    assert got == [("heredoc", "$PY <<"), ("python-c", "python -c"), ("python-m", "verity_vllm.harness.commit_delta")], got
+    assert got == [("heredoc", "$PY <<"), ("python-c", "python -c"), ("python-m", "verity_vllm.pipeline.commit")], got

@@ -4,8 +4,7 @@ The rule's literal scan: a string literal in code (docstrings excepted) naming a
 (``layer-class``), a GPU (``gpu``) or an ``sm_8x``/``sm_9x``/``sm_10x``/``sm_12x`` architecture (``sm-arch``), outside
 the two homes.  Keyed by the normalized token, counted per function, in ``allowlists/p08_facts.json``.
 
-``engine/profiles/`` does not exist yet; ``observe/profiles/``, which moves there, is already a home.  The scan
-lives here rather than in ``tests/check/test_quarantine_lint.py``, which tests the quarantine lint itself.
+The scan lives here rather than in ``tests/properties/test_quarantine_lint.py``, which tests the quarantine lint itself.
 """
 from __future__ import annotations
 
@@ -17,7 +16,7 @@ from . import _ratchet as R
 
 NAME = "p08_facts"
 RULE = "P8 (model and target facts live in their two homes)"
-HOMES = ("verity_vllm/program/registry/quarantine/", "verity_vllm/observe/profiles/", "verity_vllm/engine/profiles/")
+HOMES = ("verity_vllm/program/registry/quarantine/", "verity_vllm/engine/profiles/")
 MODEL = re.compile(r"(?i)(?<![a-z0-9])(llama|qwen|gemma|olmoe|olmo|mixtral|mistral|smollm|deepseek|phi-?[0-9]|pythia|"
                    r"gpt-?neox|gpt2|granite|falcon|starcoder|opt-[0-9])")
 LAYER_CLASS = re.compile(r"\b((?:QKV|Row|Column|MergedColumn|Replicated|ReplicatedLinear|VocabParallel|Parallel)"
@@ -80,5 +79,5 @@ def test_detectors_on_examples() -> None:
     got = sorted((v.kind, v.detail) for v in file_violations(bad, "verity_vllm/tp/x.py"))
     assert got == [("gpu", "h100"), ("layer-class", "FusedMoE"), ("layer-class", "MoERunner"), ("model", "llama"),
                    ("model", "qwen"), ("sm-arch", "sm_90a")], got
-    assert file_violations(bad, "verity_vllm/observe/profiles/x.py") == []
+    assert file_violations(bad, "verity_vllm/engine/profiles/x.py") == []
     assert file_violations("x = ('bf16', 'float32', 'tp1', 'layers.0.mlp')\n", "verity_vllm/tp/x.py") == []

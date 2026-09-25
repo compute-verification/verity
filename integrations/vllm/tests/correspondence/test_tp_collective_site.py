@@ -4,7 +4,7 @@ A collective whose rank-local operand is produced UNDER its own module (vLLM `Ro
 forward) keeps the module vocabulary `<module>/<node>[i]/all_reduce` -- the Gemm under the module is the rank's partial (TP-04).  A
 collective issued MID-module, whose rank-local operand is another module's output (OLMoE `OlmoeAttention._apply_qk_norm`: q and k
 all-gathered inside `self_attn`, each a slice of the `qkv_proj` Gemm's output), is named at its call SITE `<module>.<fx node>/<node>`,
-which the v2 query (`v1_bridge.collective_sites`) turns into the module's k-th collective identity with its own `shard_rank<r>` member.
+which the v2 query (`required.collective_sites`) turns into the module's k-th collective identity with its own `shard_rank<r>` member.
 Without the site the manifest folded both gathers into one `self_attn/out` of twice the width with no partial to bind (row #70:
 6,944 unbound identities per rank).  CPU, meta tensors; no vLLM.
 
@@ -17,7 +17,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from verity_vllm.query.manifest.format import split_name
-from verity_vllm.tp.export_ops import ensure_ops
+from verity_vllm.program.frontend.export_ops import ensure_ops
 from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
 

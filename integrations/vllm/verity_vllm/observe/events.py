@@ -112,7 +112,7 @@ class RunHeader:
 
     schema: str
     created_utc: str
-    profile_id: str            # `verity_vllm.observe.engine_profile.profile_id_of(manifest)` of the pinned profile
+    profile_id: str            # `verity_vllm.engine.engine_profile.profile_id_of(manifest)` of the pinned profile
     profile: dict              # the manifest itself (versions, flags, gpu, model, sampling)
     model: dict                # {"repo", "revision", "config": {...hf config subset...}}
     workload: dict             # {"requests": [{"request_id", "prompt_token_ids", "max_tokens"}], "sampling": {...}}

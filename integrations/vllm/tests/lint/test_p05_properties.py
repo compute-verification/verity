@@ -1,16 +1,12 @@
 """P5: property logic lives in ``properties/``, and runs cite property records by digest.
 
 The rule's import contract is "``check`` and ``pipeline`` import only ``properties.record`` and
-``properties.check_properties``".  ``properties/`` does not exist yet: its members are the property harnesses still in
-``check/`` (``_imports.PROPERTY_MODULES``: ``noninterference``, ``census``, ``kernel_allowlist``, ``golden``,
-``holdout``, ``difftest``, ``quarantine_lint``, ``protected``), and neither allowed entry point exists.  So today every
-import of a property module by a module bound for ``check`` or ``pipeline`` (interim layers ``check|properties`` and
-``pipeline``, property modules themselves excepted) is a violation, keyed by (importer, imported) module pair in
-``allowlists/p05_properties.json``.
+``properties.check_properties``".  Neither allowed entry point exists yet, so every import of a ``properties`` module
+(``_imports.PROPERTY_MODULES``) by a module in layer ``check|properties`` or ``pipeline`` (``properties`` itself
+excepted) is a violation, keyed by (importer, imported) module pair in ``allowlists/p05_properties.json``.
 
-Once ``properties/`` exists, the imported side becomes ``verity_vllm.properties`` minus ``properties.record`` and
-``properties.check_properties``, and the rule's registry test (every property the verdict names exists in
-``properties.REGISTRY``) applies.
+Once the entry points exist, they go in ``ALLOWED_ENTRY_POINTS``, and the rule's registry test (every property the
+verdict names exists in ``properties.REGISTRY``) applies.
 """
 from __future__ import annotations
 
@@ -47,5 +43,5 @@ def test_allowlist_has_no_stale_entries() -> None:
 def test_contract_modules_exist() -> None:
     known = I.modules()
     assert [m for m in I.PROPERTY_MODULES if m not in known] == []
-    assert importer("verity_vllm.harness.commit_delta") and importer("verity_vllm.check.global_match")
-    assert not importer("verity_vllm.check.census") and not importer("verity_vllm.commit.binding")
+    assert importer("verity_vllm.pipeline.commit") and importer("verity_vllm.check.match.global_match")
+    assert not importer("verity_vllm.properties.census") and not importer("verity_vllm.commit.binding")

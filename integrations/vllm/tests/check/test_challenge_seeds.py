@@ -7,9 +7,9 @@ import inspect
 
 import pytest
 
-SEEDED = [("verity_vllm.check.replay", "tier_a"), ("verity_vllm.check.replay", "tier_chain"),
-          ("verity_vllm.check.relations", "draw_sample"), ("verity_vllm.check.relations", "ensure_adjacent_pair"),
-          ("verity_vllm.check.sampled_replay", "sampled_replay"), ("verity_vllm.check.compiled_kernel_check", "CompiledKernelCheck"),
+SEEDED = [("verity_vllm.check.replay.replay", "tier_a"), ("verity_vllm.check.replay.replay", "tier_chain"),
+          ("verity_vllm.program.kernels.relations", "draw_sample"), ("verity_vllm.program.kernels.relations", "ensure_adjacent_pair"),
+          ("verity_vllm.check.replay.sampled_replay", "sampled_replay"), ("verity_vllm.check.replay.compiled_kernel_check", "CompiledKernelCheck"),
           ("verity_vllm.correspondence.capture_identities", "run")]
 
 
@@ -23,7 +23,7 @@ def test_the_seed_has_no_default(module, name):
 
 @pytest.mark.parametrize("tier", ["a", "chain"])
 def test_replay_refuses_a_sampled_tier_without_a_seed(tier, tmp_path, capsys):
-    from verity_vllm.check import replay
+    from verity_vllm.check.replay import replay
 
     with pytest.raises(SystemExit) as e:
         replay.main(["--log", str(tmp_path / "log.jsonl.gz"), "--profile", "unused", "--tier", tier, "--out", str(tmp_path / "out.json")])

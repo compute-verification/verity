@@ -6,8 +6,8 @@ on `cuda:r`, all-reduces with `ReduceOp.SUM`, and returns rank 0's result; every
 rank receives the same word" fact of the module docstring).  Needs a host with R visible GPUs (2×4090 pod) — UNTESTED in the
 2026-09-17 window (no 2-GPU worker); the request is in `out/gen/window/tp2.md`.
 
-    python -m verity_vllm.check.difftest produce --adapter verity_vllm.program.registry.quarantine.collective.allreduce_difftest --n 20 --seed 7 --out DIR
-    python -m verity_vllm.check.difftest check   --adapter verity_vllm.program.registry.quarantine.collective.allreduce_difftest --dir DIR --out quarantine.json
+    python -m verity_vllm.properties.admission produce --adapter verity_vllm.program.registry.quarantine.collective.allreduce_difftest --n 20 --seed 7 --out DIR
+    python -m verity_vllm.properties.admission check   --adapter verity_vllm.program.registry.quarantine.collective.allreduce_difftest --dir DIR --out quarantine.json
 
 `torch.distributed.all_reduce` and vLLM's `PyNcclCommunicator.all_reduce` both end in `ncclAllReduce` with the same (op, dtype); NCCL may
 pick RING instead of the captured TREE for a stand-alone communicator — for R = 2 both perform the same single addition per element.

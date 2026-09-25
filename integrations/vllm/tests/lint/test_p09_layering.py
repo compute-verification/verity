@@ -2,11 +2,11 @@
 
 Checked today, against ``allowlists/p09_layering.json``:
 
-* ``layer``: an import from a lower layer into a higher one, with every module of today's layout placed in the layer of
-  the package it moves to (``_imports.INTERIM_LAYER``; order ``pipeline`` > ``check|properties`` > ``acquire`` >
-  ``observe|commit`` > ``engine`` > ``query|correspondence`` > ``program`` > ``collectives`` > ``config`` > core, with
-  modules bound for tests above ``pipeline``).  One entry per (importer, imported) module pair.
-* ``package-cycle``: two of today's top-level packages importing each other.
+* ``layer``: an import from a lower layer into a higher one, with every module placed in the layer of its package
+  (``_imports.LAYER``; order ``pipeline`` > ``check|properties`` > ``acquire`` > ``observe|commit`` > ``engine`` >
+  ``query|correspondence`` > ``program`` > ``collectives`` > ``config`` > core).  One entry per (importer, imported)
+  module pair.
+* ``package-cycle``: two top-level packages importing each other.
 * ``module-cycle``: a strongly connected component of the module import graph.  The entry names its members, so a
   cycle that gains a member fails too.
 * ``forbidden-import``: library code importing ``tests``, ``tools``, ``research`` (tools/research) or ``relayout``.
@@ -20,8 +20,7 @@ Checked today, against ``allowlists/p09_layering.json``:
   in a function that also reads ``getattr(obj, ...)`` (save the original, install the wrapper).  A patch whose target
   and original both live on ``self`` is not visible to this AST check.
 
-Once ``engine/hooks.py`` exists it is the one file exempt from ``runtime-patch``; once the target packages exist,
-``INTERIM_LAYER`` shrinks to the package names and the layer order stays as it is.  The rule's other half, "no library
+Once ``engine/hooks.py`` exists it is the one file exempt from ``runtime-patch``.  The rule's other half, "no library
 code imports tests/, tools/ or repo-level data", is ``forbidden-import`` and ``repo-path`` here.
 """
 from __future__ import annotations
@@ -236,7 +235,7 @@ def scan() -> tuple[R.Violation, ...]:
 
 def test_no_new_violations() -> None:
     R.assert_no_new(NAME, scan(), RULE,
-                    "Import downward only (see _imports.INTERIM_LAYER), keep test/tool code and repo data out of the "
+                    "Import downward only (see _imports.LAYER), keep test/tool code and repo data out of the "
                     "library, and route vLLM/torch/triton patches through the patch owner.")
 
 
@@ -244,11 +243,11 @@ def test_allowlist_has_no_stale_entries() -> None:
     R.assert_no_stale(NAME, scan(), RULE)
 
 
-def test_interim_layer_map_names_existing_modules() -> None:
+def test_layer_map_names_existing_modules() -> None:
     known = I.modules()
-    missing = [m for m in I.INTERIM_LAYER if m not in known and not any(k.startswith(m + ".") for k in known)]
-    assert not missing, f"INTERIM_LAYER names modules or packages that no longer exist (update the map): {missing}"
-    assert all(v in I.RANK for v in I.INTERIM_LAYER.values())
+    missing = [m for m in I.LAYER if m not in known and not any(k.startswith(m + ".") for k in known)]
+    assert not missing, f"LAYER names modules or packages that no longer exist (update the map): {missing}"
+    assert all(v in I.RANK for v in I.LAYER.values())
     for m in known:
         I.layer_of(m)
 
@@ -257,8 +256,8 @@ def test_detectors_on_examples() -> None:
     assert I.RANK["pipeline"] > I.RANK["check|properties"] > I.RANK["acquire"] > I.RANK["observe|commit"] \
         > I.RANK["engine"] > I.RANK["query|correspondence"] > I.RANK["program"] > I.RANK["collectives"] \
         > I.RANK["config"] > I.RANK["core"]
-    assert I.layer_of("verity_vllm.observe.vllm_adapter") == "engine"
-    assert I.layer_of("verity_vllm.observe.fold") == "observe|commit"
+    assert I.layer_of("verity_vllm.engine.vllm_adapter") == "engine"
+    assert I.layer_of("verity_vllm.observe.fold.fold") == "observe|commit"
     assert I.sccs({"a", "b", "c", "d"}, {"a": {"b"}, "b": {"a", "c"}, "c": {"d"}}) == [["a", "b"]]
     bad = (
         "import os, sys, types\n"

@@ -32,7 +32,7 @@ from verity_vllm.program.registry import serve3_reference as ref  # noqa: E402
 from verity_vllm.program.registry.b1 import weights_type  # noqa: E402
 from tests.program.test_serve3 import D_MAX, LP, TINY, _inputs  # noqa: E402
 from verity.ir.types import Array, Value  # noqa: E402
-from verity_vllm.program import global_program as GP  # noqa: E402
+from verity_vllm.pipeline import global_program as GP  # noqa: E402
 
 I32, BF16 = Value(32), Value(16)
 BOT32, BOT16, INV32, INV16 = L.enc_bot(32), L.enc_bot(16), L.inv(32), L.inv(16)

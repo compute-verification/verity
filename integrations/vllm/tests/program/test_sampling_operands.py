@@ -6,7 +6,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity_vllm.check.difftest import evaluate_spec
+from verity_vllm.properties.admission import evaluate_spec
 from verity.ir.defs import bind
 from verity_vllm.program.registry import sampling as S
 from verity_vllm.program.registry.quarantine.ov_sampling.gumbel import (

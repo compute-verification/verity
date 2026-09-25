@@ -16,7 +16,7 @@ import pytest
 from verity_vllm.observe.events import (DispatchEnter, DispatchExit, Root, RunHeader, SampleEnd, StepEnd, StepLink, StepStart,
                                    StorageAlloc, StorageFree, TritonLaunch, ViewDesc, views_in)
 from verity_vllm.observe.log import read_log, split_steps
-from verity_vllm.observe.tree import op_histogram, step_events
+from verity_vllm.observe.fold.tree import op_histogram, step_events
 
 ROOT = Path(__file__).resolve().parents[2]
 LOG = ROOT / "data" / "logs" / "m1.jsonl.gz"

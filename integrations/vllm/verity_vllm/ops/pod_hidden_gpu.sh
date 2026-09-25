@@ -8,7 +8,7 @@
 #   -> prints  HIDDEN-GPU-OK <sha256 of hidden_gpu_tree.so>   (or HIDDEN-GPU-FAIL <reason>, exit 1)
 #
 # What it does: (1) materialises `out/gen/r9/cmt-hidden/src/{hidden_gpu.py,hidden_gpu_tree.cu}` from the shipped copies in
-# `verity_vllm/acquire/hidden_gpu_src/` (byte-identical to the R9 sources at f2c2e2a0c) when the r9 directory is absent;
+# `verity_vllm/commit/committer/hidden_gpu_src/` (byte-identical to the R9 sources at f2c2e2a0c) when the r9 directory is absent;
 # (2) JIT-builds the extension with torch.utils.cpp_extension.load for THIS pod's GPU (TORCH_CUDA_ARCH_LIST from the device: sm80/sm89/sm90)
 # into the default torch-extensions cache -- the same directory the vLLM worker's `hidden_gpu.ext()` resolves when HIDDEN_GPU_BUILD is
 # unset, so the worker only re-checks the ninja build (no compile) -- and also into $HIDDEN_GPU_BUILD if a lane sets it;
@@ -26,7 +26,7 @@ command -v nvcc >/dev/null || fail "nvcc not found (CUDA_HOME=$CUDA_HOME)"
 $PY -c "import ninja" 2>/dev/null || $PY -m pip install -q ninja || fail "ninja"
 
 # (1) the CMT-2 sources at the path native_host imports from
-SRC=$REPO/out/gen/r9/cmt-hidden/src; SHIP=$REPO/verity_vllm/acquire/hidden_gpu_src
+SRC=$REPO/out/gen/r9/cmt-hidden/src; SHIP=$REPO/verity_vllm/commit/committer/hidden_gpu_src
 mkdir -p "$SRC"
 # [R18 infra, F-r17-tp-06] the shipped copy is the source of record: a stale r9 copy (an earlier ship's tar leaves it in place) is
 # OVERWRITTEN when its bytes differ, never kept -- the fixed hidden_gpu.py (REPO from the importing tree) must be what native_host imports

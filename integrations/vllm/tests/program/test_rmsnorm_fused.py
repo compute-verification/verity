@@ -1,7 +1,7 @@
 """`RMSNormFusedCuda_v2` (generic `fused_add_rms_norm_kernel` under `VLLM_BATCH_INVARIANT=1`): the IR body equals its
 numpy twin gate for gate, and the twin reproduces every fused-norm row of the B0 commit store (v1 does not).
 
-Needs the numerics lane's MUFU.RSQ model (`verity_vllm.program.numerics`: `librms_triton_model.so`, built on demand into the
+Needs the numerics lane's MUFU.RSQ model (`verity_vllm.program.kernels`: `librms_triton_model.so`, built on demand into the
 gitignored `cpp/build/`); skipped when it cannot be built here (no C++ compiler) or its tables are unavailable."""
 
 from __future__ import annotations
@@ -19,9 +19,9 @@ if str(REPO / "vllm-poc") not in sys.path:
 
 def _numerics():
     try:
-        from verity_vllm.program.numerics import rms_relation, rms_triton_model as RM
+        from verity_vllm.program.kernels import rms_relation, rms_triton_model as RM
     except Exception as e:  # pragma: no cover
-        pytest.skip(f"verity_vllm.program.numerics not importable: {e}")
+        pytest.skip(f"verity_vllm.program.kernels not importable: {e}")
     try:
         RM.build()                                     # into cpp/build/ (gitignored); a no-op when fresh
     except Exception as e:  # noqa: BLE001  -- no compiler / compile failure: skip, do not fail

@@ -1,7 +1,7 @@
 """[R16 stoch] `TopPMask_v1{V,S}` (registry/topp_split.py) against GPU truth at EVERY split geometry S = 1, 2, 4, 8, 16, 32 --
 F-stoch-01 (R15 board M-0743): the model had been fitted at S = 32 only and mis-assigned each thread's Z (and the ladder / pivot /
 dup / numkeep / num_preceding derived from it) at S = 16.  CPU only; the kernel outputs come from the committed fixture
-(tests/program/data/topp_split_fixture/, produced on cp-dev1 L40S by `verity_vllm.harness.topp_split_probe produce`, vLLM
+(tests/program/data/topp_split_fixture/, produced on cp-dev1 L40S by `verity_vllm.pipeline.topp_split_probe produce`, vLLM
 d9105ea80 / Triton 3.7.1 / torch 2.13.0+cu129; `manifest.json` records the environment and every case's parameters).
 
   1. the ORIGINAL failure: the 3 preserved B8-record rows (bf16 logits row, kernel-consumed masked fp32 row, device facts) -> 0 lanes
@@ -89,7 +89,7 @@ def test_fstoch01_old_grouping_reproduces_the_failure():
 def test_zgroup_matches_kernel_observed_lane_Z_at_s16_and_old_grouping_does_not():
     z, meta = _record()
     pr = np.load(INTER)
-    from verity_vllm.harness.topp_split_probe import thread_lane
+    from verity_vllm.pipeline.topp_split_probe import thread_lane
     any_old_wrong = False
     for ri, key in enumerate(["step37_row4", "step82_row3", "step92_row3"]):
         x_in, p, S, V = _x_in(z, meta, key)
@@ -121,7 +121,7 @@ def test_zgroup_structure():
 
 
 def test_gpu_fixture_every_split_geometry_bit_exact():
-    from verity_vllm.harness.topp_split_probe import check
+    from verity_vllm.pipeline.topp_split_probe import check
     rep = check(FIX, RECORD, verbose=False)
     assert rep["ok"], rep["fail"][:5]
     assert rep["n"] >= 180 and rep["mask_ok"] == rep["n"] and rep["stats_ok"] == rep["n"]

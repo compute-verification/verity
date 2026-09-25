@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity_vllm.check import sampled_replay as SR
+from verity_vllm.check.replay import sampled_replay as SR
 
 EPS = '{"f64":"0x1.4f8b588e368f1p-17"}'
 V, H, I, LP, T = 8, 16, 16, 2, 2          # vocab, hidden, intermediate, prompt len, decode steps (steps = LP-prefill + T decode = 1 + T)
@@ -20,7 +20,7 @@ def v2_manifest(inst: dict, request_ids=("r0",), *, digest: str = "t" * 64) -> d
     the same Program, arriving together at engine step 0) their global composition, as `query.cli build-global` writes it."""
     from verity_vllm.correspondence.reader_for_query import Correspondence
     from verity_vllm.query.program_view import from_instances
-    from verity_vllm.query.v1_bridge import compose_global, request_manifest
+    from verity_vllm.query.required import compose_global, request_manifest
     res = {"program": {"digest": digest, "function": "Derived[vLLMRequest[Test]]"}, "wrapper": "request", "LP": LP, "T": T,
            "target": {"declared": {"compute_capability": [8, 9]}}}
     P = from_instances(inst)
@@ -1554,7 +1554,7 @@ def _jit_slow_compile(out):
 
 
 def _jit_worker(args):
-    from verity_vllm.program.numerics import _jit
+    from verity_vllm.program.kernels import _jit
     lib, src = Path(args[0]), Path(args[1])
     p = _jit.atomic_build(lib, [src], _jit_slow_compile)
     return len(Path(p).read_bytes()) == 4 + 256 * 64     # a reader after publish always sees the whole library
@@ -1567,7 +1567,7 @@ def test_jit_twin_library_build_is_atomic_and_serialised_across_concurrent_first
     fresh library is not rebuilt.  The parent prewarms the evaluators' libraries before forking (`_prewarm_evaluators`)."""
     import multiprocessing as mp
     import time
-    from verity_vllm.program.numerics import _jit
+    from verity_vllm.program.kernels import _jit
 
     lib = tmp_path / "libtwin.so"
     src = tmp_path / "twin.cpp"
@@ -1769,7 +1769,7 @@ def test_population_stamps_on_every_reason_the_code_its_text_decodes_to(moe_worl
     and a record of record grade alike."""
     from collections import Counter
 
-    from verity_vllm.check import replay_codes as RC
+    from verity_vllm.check.replay import replay_codes as RC
 
     monkeypatch.delitem(SR.EVALUATORS, "RMSNormFusedCuda_v2")                  # direct no-evaluator gaps
     monkeypatch.delitem(SR.EVALUATORS, "MoeRouterTopK_v1")                     # a plane producer without an evaluator (MAN-06f)

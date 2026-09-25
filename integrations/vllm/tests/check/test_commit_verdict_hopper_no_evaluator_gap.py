@@ -19,7 +19,7 @@ from __future__ import annotations
 import pytest
 
 from verity_vllm.check.commit_verdict import _complete_replay_population_gap, _no_evaluator_gaps, commit_verdict
-from verity_vllm.check.sampled_replay import EVALUATORS, NOT_YET, why_class
+from verity_vllm.check.replay.sampled_replay import EVALUATORS, NOT_YET, why_class
 from verity_vllm.program.registry import targets as T
 
 
@@ -76,7 +76,7 @@ def test_the_mechanism_is_in_the_registry_and_the_evaluator_table():
     sel, other = _no_evaluator_gaps(SR_HOPPER["population"]["not_evaluable"])
     assert sel == {} and other == {"Gemm_v2": 3616}                             # an R16 record's text: Attention_v2 is domain; Gemm_v2 was the gap
     # a record produced by THIS version names no Gemm_v2 gap: the population's not_evaluable text never carries K_GEMM2 (the family evaluates)
-    from verity_vllm.check import sampled_replay as SR
+    from verity_vllm.check.replay import sampled_replay as SR
     assert SR.gemm_dot_prim({"DOT": '{"fn":"HopperBF16WgmmaDot16_v1"}'}) == "HopperBF16WgmmaDot16_v1"
 
 

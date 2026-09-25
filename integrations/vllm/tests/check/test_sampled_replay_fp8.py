@@ -11,7 +11,7 @@ import json
 import numpy as np
 import pytest
 
-from verity_vllm.check import sampled_replay as SR
+from verity_vllm.check.replay import sampled_replay as SR
 
 EPS = '{"f64":"0x1.4f8b588e368f1p-17"}'
 V, H, I, LP, T, G = 8, 256, 128, 2, 2, 128     # H, I multiples of the 128 block; gate_up N = 2I = 256

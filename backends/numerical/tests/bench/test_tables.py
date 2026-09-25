@@ -899,3 +899,12 @@ def test_other_findings_change_nothing(store: LocalStore) -> None:
     c = cell(T.build(store))
     assert c.artifact == art and c.finding is None
     assert T.cell_finding([]) == (None, None)
+
+
+def test_a_4096_equivalence_may_carry_the_runners_seed_and_recipe(store: LocalStore) -> None:
+    """One instance-equiv/v1 shape for 4,096 and stream points: the frozen side is the runner's instance ref, compared on
+    dataset, tier, range and manifest_sha256 (the extra seed and recipe fields change nothing)."""
+    art = repacked_result(store, 3)
+    frozen = {**T.FROZEN_INSTANCES[FP8_ADA_MMA.name], "seed": 20260922, "recipe": "fp8-ada synthetic"}
+    eq = put_equiv(store, equiv_doc(repacked(3), frozen=frozen))
+    assert cell(T.build(store), FP8_ADA_MMA, "B-Ligero").artifact == art and cell(T.build(store), FP8_ADA_MMA, "B-Ligero").instances_equiv == eq

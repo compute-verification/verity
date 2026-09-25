@@ -31,6 +31,7 @@ import time
 import tomllib
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+from collections.abc import Sequence
 from typing import Any, Callable
 
 from . import canon, ids, kinds
@@ -47,6 +48,7 @@ VERIFY_MULTIPART = "etag-multipart"                              # ... a > 5 GiB
 VERIFY_MODES = ("head", "readback")                             # `push(verify=...)`: HEAD size + MD5 ETag, or download + sha256
 WHERE_JOBS = 16                                                 # concurrent HEADs in `where`
 REFRESH_JOBS = 32                                               # concurrent GETs in `refresh`
+REFRESH_PAYLOAD_MAX = 1 << 20                                   # `refresh(payload_kinds=...)` fetches file payloads up to this size
 WRITE_THROUGH_ENV = "RESEARCH_WRITE_THROUGH"
 _UNSET = object()
 
@@ -799,10 +801,13 @@ class LocalStore:
                 "labels": [{"hash": h, "target": mine[h][1].target, "key": mine[h][1].key, "by": mine[h][1].by} for h in labels]}
 
     def refresh(self, *, jobs: int = REFRESH_JOBS, log: Callable[[str], None] | None = None,
-                progress: Callable[[str, int, int], None] | None = None) -> dict:
+                progress: Callable[[str, int, int], None] | None = None, payload_kinds: Sequence[str] = (),
+                payload_max_bytes: int = REFRESH_PAYLOAD_MAX) -> dict:
         """Bring this store up to date from the remote without wiping anything: list `manifests/`, `attempts/` and `labels/`, fetch
         only what is missing (`jobs` concurrent GETs; each manifest re-hashed to its id, each attempt parsed and named by its id),
-        and index just those.  The way a fresh machine builds its catalog from the remote alone."""
+        and index just those.  The way a fresh machine builds its catalog from the remote alone.  `payload_kinds`: also make
+        local the file payloads (at most `payload_max_bytes` each) of every catalogued artifact of those kinds whose blob is not
+        here yet -- what a reader of payloads (a render) needs; the count is `payloads`."""
         from . import labels_sync as LS  # noqa: PLC0415
 
         t0 = time.monotonic()
@@ -860,8 +865,39 @@ class LocalStore:
         tick("labels", 0, 0)
         lrep = LS.sync(self, push=False, pull=True, jobs=jobs, log=log)
         rep["labels"], rep["errors"] = len(lrep["pulled"]), rep["errors"] + lrep["bad"]
+        if payload_kinds:
+            got, errs = self.fetch_payloads(payload_kinds, max_bytes=payload_max_bytes, jobs=jobs)
+            rep["payloads"], rep["errors"] = got, rep["errors"] + errs
         rep["seconds"] = round(time.monotonic() - t0, 1)
         return rep
+
+    def fetch_payloads(self, kinds: Sequence[str], *, max_bytes: int = REFRESH_PAYLOAD_MAX, jobs: int = REFRESH_JOBS) -> tuple[int, list[str]]:
+        """Make local the file payloads (<= `max_bytes`) of every catalogued artifact of `kinds` whose blob is not here.
+        Returns (fetched, errors)."""
+        want = []
+        for kind in kinds:
+            for row in self.index.select_artifacts(kind=kind):
+                pay = (row.get("manifest") or {}).get("payload") or {}
+                if (pay.get("type") == "file" and isinstance(pay.get("sha256"), str) and (pay.get("bytes") or 0) <= max_bytes
+                        and not self.object_path(pay["sha256"]).exists()):
+                    want.append((row["id"], pay["sha256"]))
+
+        def one(item: tuple[str, str]) -> tuple[str, str | None]:     # threads download; the calling thread records presence
+            art_id, hex_ = item
+            try:
+                self._resolve_blob(hex_, art_id, None)
+                return art_id, None
+            except Exception as e:  # noqa: BLE001  one payload's failure is reported, the rest still land
+                return art_id, f"payload {art_id}: {type(e).__name__}: {e}"
+
+        errs = []
+        with ThreadPoolExecutor(max_workers=max(1, jobs)) as ex:
+            for art_id, err in ex.map(one, want):
+                if err:
+                    errs.append(err)
+                else:
+                    self.index.set_presence(art_id, local=True)
+        return len(want) - len(errs), errs
 
     # ---- index --------------------------------------------------------------------------------------------------------------------------
 

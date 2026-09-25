@@ -187,7 +187,7 @@ fi
 
 # ------------------------------------------------------------------ negatives on SmolLM2 (fast; the same commit_delta the rows use)
 WL=workloads/$SMOL.json
-BASE=($PY -m verity_vllm.harness.commit_delta --case B0 --workload "$WL" --committer native_collect_v2b --fast-copy --gpu-tree --openings 64
+BASE=($PY -m verity_vllm.pipeline.commit --case B0 --workload "$WL" --committer native_collect_v2b --fast-copy --gpu-tree --openings 64
       --pairs 1 --warmup 1 --max-num-seqs 1 --engine-arg max_model_len=288 --engine-arg "gpu_memory_utilization=$GPU_UTIL")
 negative() {   # <name> <expect: exit3|rootdiff> <reason-regex> <args...>
   local name=$1 expect=$2 rx=$3; shift 3
@@ -262,7 +262,7 @@ fi
 if [[ ",$NEG," == *,lateflush,* ]]; then
   d=$CD/neg_lateflush; rm -rf "$d"; mkdir -p "$d"
   NATIVE_COLLECT_BUILD=${NATIVE_COLLECT_BUILD:-/workspace/cp/nc_build} timeout 900 $PY -m pytest -q -p no:cacheprovider \
-      tests/acquire/test_native_collect_flush.py > "$d/pytest.log" 2>&1; rc=$?
+      tests/commit/test_native_collect_flush.py > "$d/pytest.log" 2>&1; rc=$?
   summ=$(grep -E "^[0-9]+ (passed|failed|skipped|error)|^[0-9]+ passed" "$d/pytest.log" | tail -1); summ=${summ:-$(tail -1 "$d/pytest.log")}
   npass=$(echo "$summ" | sed -nE 's/.*\b([0-9]+) passed.*/\1/p'); npass=${npass:-0}
   if [ $rc -eq 0 ] && [ "$npass" -ge 4 ] && [[ "$summ" != *skipped* ]] && [[ "$summ" != *failed* ]]; then
@@ -289,8 +289,8 @@ wl["note"] = "CANARY NEGATIVE wl_swapped: " + str(wl.get("note", ""))
 json.dump(wl, open(sys.argv[2], "w"), indent=1)
 EOF
     DER=(--derived "$RB/build_request"); for dd in "$RB"/build_request_LP*_T*; do [ -d "$dd" ] && DER+=(--derived "$dd"); done
-    timeout 1500 $PY312 -m verity_vllm.program.global_program --workload "$NW/wl_swapped.json" "${DER[@]}" --out "$NW/gp_swapped" > "$NW/gp_swapped.log" 2>&1; rcg=$?
-    timeout 1500 $PY312 -m verity_vllm.check.global_match --gprog "$NW/gp_swapped/workload_program.json" --workload "$NW/wl_swapped.json" --oracle "$RB/match" \
+    timeout 1500 $PY312 -m verity_vllm.pipeline.global_program --workload "$NW/wl_swapped.json" "${DER[@]}" --out "$NW/gp_swapped" > "$NW/gp_swapped.log" 2>&1; rcg=$?
+    timeout 1500 $PY312 -m verity_vllm.check.match.global_match --gprog "$NW/gp_swapped/workload_program.json" --workload "$NW/wl_swapped.json" --oracle "$RB/match" \
         --out "$NW/gm_swapped.json" --within-step "${WITHIN_STEP:-dag}" > "$NW/gm_swapped.log" 2>&1; rcm=$?
     verd=$(python3 -c "import json;g=json.load(open('$NW/gm_swapped.json'));print(g.get('verdict'), ','.join(g.get('failed_checks') or []))" 2>/dev/null)
     if [ $rcg -ne 0 ]; then rec neg_wl_swapped FAIL "GP-01 compose of the swapped manifest failed rc=$rcg (the negative needs a composed Program): $(grep -m1 -E 'Error|Traceback' "$NW/gp_swapped.log" | cut -c1-120)"

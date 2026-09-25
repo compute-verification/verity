@@ -42,11 +42,12 @@ from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import prims as P
 from verity.ir.types import Array
 
-from verity_vllm.check import operand_provenance as provenance, replay
-from verity_vllm.query import vu_query as vq
+from verity_vllm.check import operand_provenance as provenance
+from verity_vllm.check.replay import replay
+from verity_vllm.check.replay import vu_query as vq
 from verity_vllm.observe.events import ViewDesc
-from verity_vllm.observe.fold import FoldResult, fold
-from verity_vllm.observe.resolver import Compute, Gather, GatherMany, Group, PerRow, Profile, Shared, Transparent, Unsupported, parts_of
+from verity_vllm.observe.fold.fold import FoldResult, fold
+from verity_vllm.observe.fold.resolver import Compute, Gather, GatherMany, Group, PerRow, Profile, Shared, Transparent, Unsupported, parts_of
 
 REPO = Path(__file__).resolve().parents[2]
 BF16 = P.BF16
@@ -553,7 +554,7 @@ class M1Record:
         return None
 
     def catalogue(self, layer: int = 7) -> dict[str, Mutation]:
-        from verity_vllm.observe.profiles.vllm_d9105ea80_sm89_eager import make_weight_field
+        from verity_vllm.engine.profiles.vllm_d9105ea80_sm89_eager import make_weight_field
         wf = self.profile.weight_field
         return catalogue(layer=layer, o_hint=f"model.layers.{layer}.self_attn.o_proj", big_hint="logits_processor", ln1_hint="model.layers.0.input_layernorm", alt_hint=f"model.layers.{layer}.input_layernorm",
                          silu_hint=f"model.layers.{layer}.mlp.act_fn", attn_hint=f"model.layers.{layer}.self_attn.attn",
@@ -562,7 +563,7 @@ class M1Record:
                          swap_fields=("model.layers.3.self_attn.qkv_proj.weight", "model.layers.5.self_attn.qkv_proj.weight"), toy=False)
 
     def root_policy(self, profile: Profile) -> Callable[[], dict]:
-        from verity_vllm.input_provenance import root_policy
+        from verity_vllm.check import root_policy
         h = self.header
         events = [dataclasses.replace(h, notes={**h.notes, "weights_verified": True})] + self.events[1:]
         return lambda: root_policy.evaluate(events, M1_SNAPS, profile, cos_sin=self.cos_sin, weight_bytes=False)
@@ -571,8 +572,8 @@ class M1Record:
         """census.reconcile over the HOSTILE profile (it loads profiles by module name; the hostile one lives in memory)."""
         if not M1_CENSUS.exists():
             return None
-        from verity_vllm.check import census
-        from verity_vllm.observe import resolve_log
+        from verity_vllm.properties import census
+        from verity_vllm.observe.fold import resolve_log
 
         def run() -> dict:
             orig = resolve_log.load_profile

@@ -16,7 +16,7 @@ from verity.ir.refs import runs
 
 from verity_vllm.check import fold_compare as cmp
 from verity_vllm.observe.events import ViewDesc
-from verity_vllm.observe.fold import fold
+from verity_vllm.observe.fold.fold import fold
 
 from tests.observe.test_fold_synthetic import BN, C, REQ, SAMPLED, _real_memory_available, install_stub_memory, toy_log, toy_profile
 

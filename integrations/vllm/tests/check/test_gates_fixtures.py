@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from verity_vllm.harness import card as CARD
+from verity_vllm.pipeline import report as CARD
 from verity_vllm.check import gates as G
 
 RID = "req-0"
@@ -753,7 +753,7 @@ def test_card_vu_partition_row(tmp_path):
 
 
 def test_experiment_index_vu_partition(tmp_path):
-    from verity_vllm.harness import experiment as EXP
+    from verity_vllm.pipeline import experiment as EXP
     arts = passing_artifacts()
     write_run(tmp_path, arts)
     G.write_gates(tmp_path, G.evaluate_gates(tmp_path))

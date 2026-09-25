@@ -15,7 +15,7 @@ import pytest
 
 from verity_vllm.observe import contract as OB
 from verity_vllm.correspondence import resolve as RS
-from verity_vllm.correspondence import batch_decomp as BD
+from verity_vllm.check.match import batch_decomp as BD
 
 A, B = "req-A", "req-B"
 N_IN = 3        # prompt_A, prompt_B, weights

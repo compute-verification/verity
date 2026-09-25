@@ -16,7 +16,7 @@ import os
 
 import pytest
 
-from verity_vllm.harness.derive_step import SAMPLERS_BOUND, applicability_conditions, run, sampling_policy
+from verity_vllm.pipeline.build import SAMPLERS_BOUND, applicability_conditions, run, sampling_policy
 
 
 def _sweep_manifest(tmp_path, sampling: str, params: dict, seeds: list[int]):
@@ -129,7 +129,7 @@ def test_mixed_batch_is_refused(tmp_path):
 
 
 def _requests_manifest(tmp_path, n: int, arrive=None, caps=None, seeds=True):
-    from verity_vllm.harness.workload import SAMPLING
+    from verity_vllm.pipeline.workload import SAMPLING
     p = tmp_path / f"wl_{n}.json"
     reqs = [{"request_id": f"r{i}", "index": i, "prompt_len": 8, "max_tokens": int((caps or [16] * n)[i]),
              "arrive_step": int((arrive or [0] * n)[i]), **({"seed": 1000 + i} if seeds else {})} for i in range(n)]
@@ -151,7 +151,7 @@ def test_geometry_is_derived_for_every_batch_and_chronology(tmp_path, monkeypatc
     """Every stochastic row -- B1, B2, the uniform B8, the B8 whose live count changes S, staggered arrivals, a shape that is no declared
     request -- gets the SAME geometry: splits 'derived' + the relation; no schedule, no per-request field, no assumption.  The R15 knob
     STOCH_DECLARED_CHRONOLOGY_S is dead (set or not: same result)."""
-    from verity_vllm.harness.derive_step import sampler_geometry
+    from verity_vllm.pipeline.build import sampler_geometry
     cases = [dict(n=1), dict(n=2, arrive=[0, 5], caps=[16, 9]), dict(n=8), dict(n=8, caps=[16] * 4 + [3] * 4),
              dict(n=8, arrive=[0, 0, 0, 0, 3, 3, 6, 6], caps=[16] * 8)]
     geoms: dict[int, set] = {}
@@ -176,7 +176,7 @@ def test_geometry_is_derived_for_every_batch_and_chronology(tmp_path, monkeypatc
 
 
 def test_geometry_refusals_are_named(tmp_path):
-    from verity_vllm.harness.derive_step import sampler_geometry
+    from verity_vllm.pipeline.build import sampler_geometry
     from verity_vllm.program.frontend.target_profile import TargetProfile
     # B > 64: vLLM runs `_topk_topp_kernel`, not the split pipeline
     pol = sampling_policy(None, _requests_manifest(tmp_path, 65))
@@ -202,7 +202,7 @@ def test_geometry_refusals_are_named(tmp_path):
 
 
 def test_declared_live_counts_follow_arrivals_and_caps():
-    from verity_vllm.harness.derive_step import declared_live_counts
+    from verity_vllm.pipeline.build import declared_live_counts
     reqs = [{"arrive_step": 0, "max_tokens": 4}, {"arrive_step": 1, "max_tokens": 2}, {"arrive_step": 5, "max_tokens": 1}]
     assert declared_live_counts(reqs) == [1, 2, 2, 1, 0, 1]
 

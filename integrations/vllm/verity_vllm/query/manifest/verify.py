@@ -1,4 +1,4 @@
-"""Is `manifest.json` THE manifest of record of this Program x workload?  Rebuild it by the integration's query path (`verity_vllm.query.cli`:
+"""Is `manifest.json` THE manifest of record of this Program x workload?  Rebuild it by the integration's query path (`verity_vllm.pipeline.cli`:
 `Q_module_body_v1` over the Build's Programs + correspondence, the same `build` / `build-global` inputs row_pod.sh built it with) and
 compare digests; write the `verity-sweep/manifest-verify/v1` record beside the Commit (`commit/manifest_verify.json`).
 
@@ -36,7 +36,7 @@ def _load(p: str) -> Any:
 def rebuild(*, program: str | None = None, workload: str | None = None, fixture: str | None = None, programs_root: str | None = None,
             workload_digest: str | None = None, rank: int = 0, ranks: int = 1, profile: str | None = None, log=None) -> dict[str, Any]:
     """The manifest of this Program x workload by the query path (`cli.build` at B=1, `cli.build_global` at B>=2)."""
-    from verity_vllm.query import cli
+    from verity_vllm.pipeline import cli
     if program:
         wl = _load(workload) if workload else None
         return cli.build(program, workload=wl, rank=rank, ranks=ranks, profile=profile, log=log)

@@ -683,6 +683,8 @@ class InstanceEquiv:
     meta: Mapping[str, Any] = field(default_factory=dict)
     labels: tuple[Any, ...] = ()
     attempt: Mapping[str, Any] | None = None
+    #: why the document could not be read (its meta is not the document and its JSON payload is not usable here), else ``None``
+    unreadable: str | None = None
 
 
 def _ref_key(ref: Any) -> str:
@@ -695,14 +697,19 @@ def instances_diff(inst: Mapping[str, Any], want: Mapping[str, Any]) -> list[str
     return [k for k in ("dataset", "tier", "range", "manifest_sha256") if _canon(inst.get(k)) != _canon(want[k])]
 
 
-def _equiv_content(doc: Mapping[str, Any], target: Target, inst: Mapping[str, Any]) -> list[str]:
+def _equiv_content(doc: Mapping[str, Any], target: Target, inst: Mapping[str, Any], unreadable: str | None = None) -> list[str]:
+    if unreadable:
+        return [unreadable]
     p = []
     if doc.get("schema") != INSTANCE_EQUIV_SCHEMA:
         p.append(f"schema is {doc.get('schema')!r}")
     if doc.get("target") != target.name:
         p.append(f"target is {doc.get('target')!r}")
-    if _ref_key(doc.get("frozen")) != _ref_key(FROZEN_INSTANCES.get(target.name)):
-        p.append("frozen is not FROZEN_INSTANCES[target] field for field")
+    frozen = doc.get("frozen")
+    if target.name not in FROZEN_INSTANCES:
+        return p + ["the target has no frozen set"]
+    if not isinstance(frozen, Mapping) or instances_diff(frozen, FROZEN_INSTANCES[target.name]):
+        p.append("frozen is not FROZEN_INSTANCES[target] (dataset, tier, range, manifest_sha256)")
     if _ref_key(doc.get("candidate")) != _ref_key(inst):
         p.append("candidate is not the result's instances ref field for field")
     if doc.get("equal") is not True:
@@ -745,8 +752,8 @@ def instance_equivalence(inst: Mapping[str, Any], target: Target, equivs: Sequen
 
     pool = [e for e in equivs or () if e.doc.get("target") == target.name and _ref_key(e.doc.get("candidate")) == _ref_key(inst)]
     if not pool:
-        return None, None
-    judged = [(e, _equiv_content(e.doc, target, inst), _equiv_verdict(e, result_producers)) for e in pool]
+        return None, unreadable_equivs(equivs, target)
+    judged = [(e, _equiv_content(e.doc, target, inst, e.unreadable), _equiv_verdict(e, result_producers)) for e in pool]
     contra = [e for e, _, v in judged if v is None and e.doc.get("equal") is not True]
     if contra:
         return None, f"{contra[0].artifact}, verified, says equal={contra[0].doc.get('equal')!r}"
@@ -756,17 +763,33 @@ def instance_equivalence(inst: Mapping[str, Any], target: Target, equivs: Sequen
     return None, "; ".join(f"{e.artifact}: {c[0]}" if c else str(v) for e, c, v in judged)
 
 
-def _payload_json(store: Any, doc: Mapping[str, Any]) -> Any:
+def payload_json(store: Any, doc: Mapping[str, Any]) -> tuple[Any, str | None]:
+    """``(the artifact's JSON payload, None)``, or ``(None, why)``: no file payload, ``payload not local`` (the manifest is in the
+    catalog but its blob is not in this store: `research data fetch <art>`, or a render refresh with payloads), too large, or not
+    JSON."""
     pay = doc.get("payload") if isinstance(doc.get("payload"), Mapping) else None
     if not pay or pay.get("type") != "file" or not isinstance(pay.get("sha256"), str):
-        return None
+        return None, "no file payload"
     try:
         path = store.object_path(pay["sha256"])
-        if not path.is_file() or path.stat().st_size > _PAYLOAD_JSON_MAX:
-            return None
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError, AttributeError):
-        return None
+        if not path.is_file():
+            return None, f"payload not local (blob {pay['sha256'][:12]}… is not in this store: `research data fetch`)"
+        if path.stat().st_size > _PAYLOAD_JSON_MAX:
+            return None, f"payload of {path.stat().st_size} bytes is over the {_PAYLOAD_JSON_MAX}-byte JSON limit"
+        return json.loads(path.read_text(encoding="utf-8")), None
+    except (OSError, ValueError, AttributeError) as e:
+        return None, f"payload unreadable ({type(e).__name__})"
+
+
+def unreadable_equivs(equivs: Sequence[InstanceEquiv] | None, target: Target) -> str | None:
+    """The unreadable ``instance-equiv/v1`` artifacts that may be the target's (their meta names it, or names no target), as
+    one reason -- a document that could not be read never matches a result, so say so instead of staying silent."""
+    bad = [f"{e.artifact}: {e.unreadable}" for e in equivs or () if e.unreadable and e.meta.get("target") in (None, target.name)]
+    return "; ".join(bad) if bad else None
+
+
+def _payload_json(store: Any, doc: Mapping[str, Any]) -> Any:
+    return payload_json(store, doc)[0]
 
 
 def instance_equivs(store: Any) -> list[InstanceEquiv]:
@@ -784,9 +807,13 @@ def instance_equivs(store: Any) -> list[InstanceEquiv]:
         if not isinstance(doc, Mapping):
             doc = store.get_manifest(art_id).to_doc()
         meta = doc.get("meta") or {}
-        body = meta if meta.get("schema") == INSTANCE_EQUIV_SCHEMA else _payload_json(store, doc)
+        body, why = (meta, None) if meta.get("schema") == INSTANCE_EQUIV_SCHEMA else payload_json(store, doc)
+        if body is not None and not isinstance(body, Mapping):
+            body, why = None, "payload is not a JSON object"
+        if body is None and why == "no file payload":
+            body, why = meta, None                  # the meta is all there is: judge it as the document (its own schema says what is wrong)
         _, att = _attempt_of(store, art_id)
-        out.append(InstanceEquiv(art_id, body if isinstance(body, Mapping) else meta, meta, tuple(store.labels(art_id)), att))
+        out.append(InstanceEquiv(art_id, body if isinstance(body, Mapping) else meta, meta, tuple(store.labels(art_id)), att, unreadable=why))
     return out
 
 

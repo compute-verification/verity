@@ -23,7 +23,7 @@ The C2 rules decide from the structured codes the sampled replay stamps on its r
 every not-evaluable reason, the classes of every unevaluated stratum, the seed form), never from its message texts."""
 from __future__ import annotations
 
-from verity_vllm.check import replay_codes as RC
+from verity_vllm.check.replay import replay_codes as RC
 
 # The interim required-value manifest for the native committer + FA2 hidden tap on an FA2 dense model (the R12 canary rows' `required_classes`
 # minus the two derived-from-bound norm classes, which are protocol clauses with no leaves and are checked for presence only when declared).

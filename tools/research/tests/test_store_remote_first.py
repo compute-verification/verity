@@ -171,6 +171,26 @@ def test_d6_refresh_picks_up_pod_writes_without_wiping(env):
     assert here.refresh()["manifests"] == 0
 
 
+def test_refresh_fetches_the_small_payloads_of_the_named_kinds(env):
+    """A render machine reads some payloads (instance-equiv/v1 documents): `refresh(payload_kinds=...)` makes the file payloads
+    of those kinds local -- up to the size cap, new and already-catalogued artifacts alike -- and nothing else."""
+    pod = LocalStore(env / "pod-store")
+    doc = pod.put_artifact("instance-equiv/v1", {"lane": "x"}, file=_file(env / "pod", "e.json", b'{"schema": "instance-equiv/v1"}'))
+    big = pod.put_artifact("instance-equiv/v1", {"lane": "y"}, file=_file(env / "pod", "big.json", b"x" * 64))
+    other = pod.put_artifact("fixture/v1", {"pod": True}, file=_file(env / "pod", "p.bin", b"p"))
+    for a in (doc, big, other):
+        pod.push(a)
+    here = LocalStore()
+    assert here.refresh()["manifests"] == 3 and "payloads" not in here.refresh()
+    blob = lambda a: here.object_path(here.get_manifest(a).payload.sha256)  # noqa: E731
+    assert not blob(doc).exists()
+    rep = here.refresh(payload_kinds=["instance-equiv/v1"], payload_max_bytes=40)
+    assert (rep["payloads"], rep["errors"]) == (1, [])
+    assert blob(doc).exists() and not blob(big).exists() and not blob(other).exists()
+    assert here.index.artifact(doc)["local"]
+    assert here.refresh(payload_kinds=["instance-equiv/v1"], payload_max_bytes=40)["payloads"] == 0
+
+
 def test_parity_explains_every_difference_and_fails_on_content(env):
     here = LocalStore()
     shared = here.put_artifact("fixture/v1", {"s": 1}, file=_file(env / "in", "s.bin", b"shared"))

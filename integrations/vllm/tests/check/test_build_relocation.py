@@ -1,4 +1,4 @@
-"""Layout 1.1 (`verity_vllm.build_paths`): a `vllm-build/v1` tree built at one path resolves its components after being moved.
+"""Layout 1.1 (`verity_vllm.pipeline.layout`): a `vllm-build/v1` tree built at one path resolves its components after being moved.
 
 r20 fetched Builds had to be symlinked back to `/workspace/cp/<sweep>/<row>/...` because `workload_program.json` carried only the build
 machine's absolute paths.  GP-01 now writes a `layout` block with artifact-root-relative paths beside them; readers resolve through
@@ -13,9 +13,9 @@ from pathlib import Path
 
 import pytest
 
-from verity_vllm.program import global_program as gp
-from tests.program.test_global_program_regress import _derived_dir, _manifest
-from verity_vllm import build_paths as BP
+from verity_vllm.pipeline import global_program as gp
+from tests.pipeline.test_global_program_regress import _derived_dir, _manifest
+from verity_vllm.pipeline import layout as BP
 
 
 def _synthetic_build(tmp_path: Path) -> tuple[Path, dict]:

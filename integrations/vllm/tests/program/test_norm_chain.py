@@ -1,7 +1,7 @@
 """R15 dense (F-dense-05) — the unfused norm chain (`ir.ops.rms_norm` / `ir.ops.fused_add_rms_norm` as ATen on an f32 copy, vLLM
 `GemmaRMSNorm.forward_native`) derived by the op-shaped rules of `vllm_bindings` into the promoted `verity_vllm.program.registry.dense` kinds of
 the pinned `b1-eager-v3` vocabulary — the SAME specialization ids, in the SAME order, as the eager Match fold resolves the chain to
-(`verity_vllm/observe/profiles/gen_dense_gemma2_patterns.py`), so `cb_a.compare` can be canonical-equal.
+(`verity_vllm/engine/profiles/gen_dense_gemma2_patterns.py`), so `cb_a.compare` can be canonical-equal.
 
 What is under test:
   * the residual-free form (`x -> (1+w) * x/rms(x)`): `AddScalarBf16{N,1.0} x1, SquareBf16{N} xM, MeanTriton{N} xM, AddScalarF32{1,eps} xM,
