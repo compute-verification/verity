@@ -159,7 +159,7 @@ fn domain(rep: usize) -> Vec<u8> {
 struct Verifier(Arc<Stmt>);
 
 impl StatementVerifier for Verifier {
-    fn verify(&self, table: &str, _rep: usize, proof: &[u8], ch: &mut ReplayChallenger) -> Result<Vec<u8>, String> {
+    fn verify(&self, table: &str, _rep: usize, proof: &[u8], ch: &mut ReplayChallenger, _link: &LinkCtx<'_>) -> Result<Vec<u8>, String> {
         assert_eq!(table, TABLE);
         self.0.verify_with(proof, &self.0.params(LigeritoProfile::Fast100), ch)
     }
@@ -368,7 +368,7 @@ fn gpu_params(r1cs: &BlockR1cs) -> PcsParams {
 struct GpuVerifier(Arc<BlockR1cs>);
 
 impl StatementVerifier for GpuVerifier {
-    fn verify(&self, _table: &str, _rep: usize, proof: &[u8], ch: &mut ReplayChallenger) -> Result<Vec<u8>, String> {
+    fn verify(&self, _table: &str, _rep: usize, proof: &[u8], ch: &mut ReplayChallenger, _link: &LinkCtx<'_>) -> Result<Vec<u8>, String> {
         let (commitment, proof): (Commitment, R1csProofLigerito) =
             bincode::deserialize(proof).map_err(|e| format!("decode: {e}"))?;
         let pcs = gpu_params(&self.0);
@@ -467,6 +467,21 @@ fn selftest(st: Arc<Stmt>) {
     t("cross_session_replay_both_reps", "neg9 (link neg 15)",
       Plan { substitute: BTreeMap::from([(0, Subst::Other(other[0].clone())), (1, Subst::Other(other[1].clone()))]), ..h() }, true, false, &mut all);
     t("witness_bit_flip_both_reps", "neg8", Plan { witness_flip: true, ..h() }, true, false, &mut all);
+    // F3: child streams opened at parent position 0, or before the rep root's binding round, are refused.
+    for (case, at, rounds) in [("fork_at_parent_position_0", 0u64, 0usize), ("fork_before_root_binding", 1, 0)] {
+        let s = Arc::new(Mutex::new(server(&st, true)));
+        let t = shared(InProc(s.clone()));
+        let _ = call(&t, Req::Hello(SessionConfig::flock_128_r2(vec![st.spec()]).hello()));
+        let _ = call(&t, Req::Link(link_context(7)));
+        let _ = call(&t, Req::Open { stream: rep_stream(TABLE, 0), parent: String::new(), label: domain(0), at: 0 });
+        for _ in 0..rounds {
+            let _ = call(&t, Req::Round { stream: rep_stream(TABLE, 0), content: vec![0; 16], n: 1 });
+        }
+        let r = call(&t, Req::Open { stream: format!("{}/f0", rep_stream(TABLE, 0)), parent: rep_stream(TABLE, 0), label: b"x".to_vec(), at });
+        let ok = matches!(r, Ok(Resp::Refused(_)));
+        all &= ok;
+        println!("NEG\t{}", json!({"case": case, "maps_to": "F3", "expect": "reject", "pass": ok, "why": format!("{r:?}")}));
+    }
     let np = st.n - st.n / 4;
     all &= neg(&Arc::new(Stmt::new(np)), "honest_live_session_with_padding_rows", "neg10 (padding benign)", &h(), true, true);
     println!("SELFTEST\t{}", json!({"n": st.n, "all_pass": all}));
@@ -509,6 +524,12 @@ fn main() {
     if cmd == "serve-gpu" {
         return serve_gpu();
     }
+    #[cfg(feature = "verity-unit")]
+    match cmd.as_str() {
+        "selftest-f2" => return f2::selftest(),
+        "serve-union" => return f2::serve_union(),
+        _ => {}
+    }
     let st = Arc::new(Stmt::new(n));
     match cmd.as_str() {
         "serve" => serve(st),
@@ -523,5 +544,160 @@ fn main() {
             println!("LIVE\t{}", session(&st, t, &p));
         }
         _ => eprintln!("usage: flock-live serve|prove|selftest|bench [--n N] ..."),
+    }
+}
+
+/// flock-link F2: the production statement verifiers, pinned from the verifier's configuration: the CPU census unit +
+/// BLAKE3 union (registry digest of both table types, counts [n_blake3, n_units], Fast100 parameters) and the GPU unit
+/// table (the unit netlist's statement digest, Flock-CUDA's Fast100 / batch 6 / SHA-256 parameters). The GPU-shaped
+/// proofs here come from the CPU `prove_ligerito` (same protocol, same serialization); the H100 runs use Flock-CUDA.
+#[cfg(feature = "verity-unit")]
+mod f2 {
+    use super::*;
+    use flock_prover::{prover::prove_ligerito, r1cs_hashes::verity_unit::{CombinedSetup, Netlist}};
+
+    pub const UNION: &str = "unit+blake3";
+
+    pub struct UnionStmt {
+        pub setup: CombinedSetup,
+        pub counts: [usize; 2],
+    }
+
+    impl UnionStmt {
+        pub fn new(netlist: &str, n: usize, units: usize) -> Self {
+            let net = Netlist::load(netlist);
+            assert_eq!(net.self_check(), 0, "netlist self-check");
+            Self { setup: CombinedSetup::new(net, n.max(units)), counts: [n, units] }
+        }
+        pub fn spec(&self) -> TableSpec {
+            TableSpec {
+                name: UNION.into(),
+                binding: Binding::Mixed {
+                    registry_digest: self.setup.registry.digest(),
+                    counts_le: self.counts.iter().flat_map(|&c| (c as u64).to_le_bytes()).collect(),
+                },
+            }
+        }
+        pub fn prove(&self, seed: u64, lig: LigeritoProfile, ch: &mut LiveChallenger) -> Vec<u8> {
+            let bl = blocks(seed, self.counts[0]);
+            let ids: Vec<u32> = (0..self.counts[1] as u32).collect();
+            let (proof, commitment, _) = self.setup.prove_with(&bl, &ids, lig, ch);
+            R1csProofBundleLigerito { commitment, proof }.to_bytes()
+        }
+    }
+
+    pub struct UnionVerifier(pub Arc<UnionStmt>);
+
+    impl StatementVerifier for UnionVerifier {
+        fn verify(&self, _t: &str, _rep: usize, proof: &[u8], ch: &mut ReplayChallenger, _l: &LinkCtx<'_>) -> Result<Vec<u8>, String> {
+            let s = &self.0;
+            match peek_flavor(proof).map_err(|e| format!("decode: {e:?}"))? {
+                BundleFlavor::R1cs => {}
+                f => return Err(format!("R7: bundle flavour {f:?} refused (RS flavour only)")),
+            }
+            let b = R1csProofBundleLigerito::from_bytes(proof).map_err(|e| format!("decode: {e:?}"))?;
+            let pcs = s.setup.pcs_params_with(s.counts, LigeritoProfile::Fast100);
+            if b.commitment.params != pcs {
+                return Err("F2: proof's PCS parameters differ from the pinned Fast100 parameters".into());
+            }
+            let u = UnionInstance::new(&s.setup.registry, s.counts.to_vec());
+            let circs: Vec<&dyn flock_core::lincheck::LincheckCircuit> =
+                vec![s.setup.blake3_r1cs.csc_lincheck_circuit(), s.setup.unit_r1cs.csc_lincheck_circuit()];
+            catch_unwind(AssertUnwindSafe(|| verify_ligerito_union(&u, &circs, &b.commitment, &b.proof, &pcs, ch)))
+                .map_err(|_| "verifier panicked".to_string())?
+                .map_err(|e| format!("{e:?}").chars().take(160).collect::<String>())?;
+            Ok(b.commitment.cap.as_flattened().to_vec())
+        }
+        fn domain(&self, _t: &str, rep: usize) -> Vec<u8> {
+            domain(rep)
+        }
+    }
+
+    fn union_server(st: &Arc<UnionStmt>) -> Server {
+        Server::new(SessionConfig::flock_128_r2(vec![st.spec()]), Box::new(UnionVerifier(st.clone())))
+    }
+
+    pub fn serve_union() {
+        let st = Arc::new(UnionStmt::new(&arg("--netlist", ""), arg("--n", "4096").parse().unwrap(), arg("--units", "4096").parse().unwrap()));
+        serve_loop(move || union_server(&st));
+    }
+
+    /// One two-rep session of `prover` against a server built for `verifier`'s statement.
+    fn run(server: Server, table: &str, prove: &dyn Fn(usize, &mut LiveChallenger) -> Vec<u8>, hello: Option<String>) -> Value {
+        let s = Arc::new(Mutex::new(server));
+        let t = shared(InProc(s.clone()));
+        let want = s.lock().unwrap().cfg.hello();
+        let res: Result<(), String> = (|| {
+            match call(&t, Req::Hello(hello.unwrap_or(want)))? {
+                Resp::Ok => {}
+                r => return Err(format!("hello: {r:?}")),
+            }
+            call(&t, Req::Link(link_context(9)))?;
+            for rep in 0..2 {
+                let mut ch = LiveChallenger::new(t.clone(), table, rep, &domain(rep))?;
+                let p = catch_unwind(AssertUnwindSafe(|| prove(rep, &mut ch))).map_err(|e| {
+                    e.downcast_ref::<String>().cloned().or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string())).unwrap_or_default()
+                })?;
+                call(&t, Req::Proof { table: table.into(), rep: rep as u32, bytes: p })?;
+            }
+            Ok(())
+        })();
+        let v: Value = match call(&t, Req::Finish) {
+            Ok(Resp::Verdict(v)) => serde_json::from_str(&v).unwrap(),
+            other => json!({"accepted": false, "why": format!("{other:?}")}),
+        };
+        json!({"accepted": v["accepted"], "why": v["why"], "prover_stopped": res.err().map(|e| e.chars().take(200).collect::<String>())})
+    }
+
+    fn report(all: &mut bool, case: &str, maps: &str, v: Value, want: bool) {
+        let acc = v["accepted"].as_bool().unwrap_or(false);
+        *all &= acc == want;
+        println!("NEG\t{}", json!({"case": case, "maps_to": maps, "expect": if want {"accept"} else {"reject"}, "accepted": acc,
+            "pass": acc == want, "why": v["why"], "prover_stopped": v["prover_stopped"]}));
+    }
+
+    pub fn selftest() {
+        let (net, other) = (arg("--netlist", ""), arg("--netlist-other", ""));
+        let (n, units, nbl): (usize, usize, usize) =
+            (arg("--n", "512").parse().unwrap(), arg("--units", "512").parse().unwrap(), arg("--nbl", "10").parse().unwrap());
+        let mut all = true;
+        // CPU census unit + BLAKE3 union.
+        let st = Arc::new(UnionStmt::new(&net, n, units));
+        let ot = Arc::new(UnionStmt::new(&other, n, units));
+        let fewer = Arc::new(UnionStmt::new(&net, n, units - 1));
+        let honest = |st: &Arc<UnionStmt>, lig: LigeritoProfile| {
+            let st = st.clone();
+            move |_rep: usize, ch: &mut LiveChallenger| st.prove(0xA, lig, ch)
+        };
+        report(&mut all, "union_honest", "F2 honest", run(union_server(&st), UNION, &honest(&st, LigeritoProfile::Fast100), None), true);
+        report(&mut all, "union_other_counts", "F2 counts pin", run(union_server(&st), UNION, &honest(&fewer, LigeritoProfile::Fast100), None), false);
+        report(&mut all, "union_other_netlist", "F2 registry digest pin", run(union_server(&st), UNION, &honest(&ot, LigeritoProfile::Fast100), None), false);
+        report(&mut all, "union_fast_profile", "F2 params pin", run(union_server(&st), UNION, &honest(&st, LigeritoProfile::Fast), None), false);
+        // BLAKE3-only statement presented to the union verifier.
+        let b3 = Arc::new(Stmt::new(n));
+        let b3p = { let b3 = b3.clone(); move |_r: usize, ch: &mut LiveChallenger| b3.prove(&blocks(0xA, b3.n), LigeritoProfile::Fast100, ch) };
+        report(&mut all, "union_blake3_only_statement", "F2 registry digest pin", run(union_server(&st), UNION, &b3p, None), false);
+
+        // GPU unit table (non-union prove_ligerito, Flock-CUDA's pinned parameters).
+        let gpu_server = |netlist: &str| {
+            let r1cs = Arc::new(gpu_r1cs(netlist, nbl));
+            let spec = TableSpec { name: "unit".into(), binding: Binding::R1cs { statement_digest: r1cs.statement_digest() } };
+            Server::new(SessionConfig::flock_128_r2(vec![spec]), Box::new(GpuVerifier(r1cs)))
+        };
+        let gpu_prove = |netlist: &str, lig: LigeritoProfile| {
+            let net = Netlist::load(netlist);
+            let r1cs = net.block_r1cs(nbl);
+            let (z, _, _, _) = net.witness_row_major(nbl);
+            move |_rep: usize, ch: &mut LiveChallenger| {
+                let mut pcs = gpu_params(&r1cs);
+                pcs.profile = lig;
+                let (proof, commitment, _) = prove_ligerito(&r1cs, z.clone(), &pcs, ch);
+                bincode::serialize(&(commitment, proof)).unwrap()
+            }
+        };
+        report(&mut all, "gpu_unit_honest", "F2 honest (GPU statement, CPU-made proof)", run(gpu_server(&net), "unit", &gpu_prove(&net, LigeritoProfile::Fast100), None), true);
+        report(&mut all, "gpu_unit_other_netlist", "F2 statement digest pin", run(gpu_server(&net), "unit", &gpu_prove(&other, LigeritoProfile::Fast100), None), false);
+        report(&mut all, "gpu_unit_fast_profile", "F2 params pin", run(gpu_server(&net), "unit", &gpu_prove(&net, LigeritoProfile::Fast), None), false);
+        println!("SELFTEST\t{}", json!({"f2": true, "n": n, "units": units, "nbl": nbl, "all_pass": all}));
     }
 }

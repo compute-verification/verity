@@ -68,6 +68,15 @@ def budget(inst, ligero_rows: int, linkage_constraints: int, n: int = 16384, k: 
         # (rho_bind, geo_bind), both drawn after every message the residuals depend on
         B.add("batching", f"operand binding: {bind_constraints} constraints, fresh rho_bind times powers of fresh geo_bind",
               Fraction(bind_constraints, Fc.size))
+    lk = getattr(inst, "link", None)
+    if lk is not None:
+        # route (a), prime side (gpu/link.py): the 256 sigma constraints by powers of one rho drawn after them, and the
+        # two GF(2^128) session points (drawn by the live verifier after root_F and root_B): b^ = z^ at both only with
+        # probability (m / 2^128)^2 when b != z.  The Flock side's own terms (its reps, its link-claim reduction) are its
+        # accountant's (red-team-flock third audit).
+        B.add("batching", "link: 256 sigma constraints folded by powers of one rho", Fraction(255, Fc.size))
+        B.add("batching", f"link: Schwartz-Zippel over two GF(2^128) session points, m = {lk.layout.m}",
+              Fraction(lk.layout.m, 2**128) ** 2)
     return B
 
 

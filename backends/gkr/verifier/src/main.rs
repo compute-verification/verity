@@ -363,6 +363,10 @@ fn cmd_verify(args: &[String]) -> i32 {
                                   dir.display(), root.display(), absorbed.steps, absorbed.chain.as_deref().map_or("none", |h| &h[..16])));
         }
     }
+    // a pinned linked unit (route a) binds the operands only through the session's link: never verify it without one
+    if pinned.is_some() && stmt.link.is_none() && unit.circ.col_names.iter().any(|n| n.starts_with("link.")) {
+        return refuse("link: this circuit set is the route (a) linked statement: it verifies only with the session's link.txt".into());
+    }
     let bytes = std::fs::read(arg(args, "--proof").expect("--proof")).expect("proof file");
     let th = threads(args);
     if args.iter().any(|a| a == "--trace-logup") { verify::TRACE_LOGUP.store(true, std::sync::atomic::Ordering::Relaxed); }
@@ -384,7 +388,7 @@ fn cmd_verify(args: &[String]) -> i32 {
         (Some(_), _) if info.is_some() => Some("statement: both operands-bound (bind.txt) and operands-committed (commitment.txt)".into()),
         (None, Some(h)) => Some(format!("statement: not operands-committed (no commitment.txt), the proof is claimed for a {} relation", h.suffix())),
         (Some(c), None) if !allow_any => Some(format!("statement: operands-committed (commitment.txt); claim it as {}", c.spec.relation)),
-        (Some(c), Some(_)) => c.problem(false).or_else(|| (Some(c.spec.relation.as_str()) != relation.as_deref())
+        (Some(c), Some(_)) => c.problem(args.iter().any(|a| a == "--allow-unpinned-commitment")).or_else(|| (Some(c.spec.relation.as_str()) != relation.as_deref())
             .then(|| format!("commitment: commitment.txt names {}, the proof is claimed for {}", c.spec.relation, relation.as_deref().unwrap_or("")))),
         (None, None) if allow_any && args.iter().any(|a| a == "--require-commitment") => Some("statement: not operands-committed (no commitment.txt)".into()),
         (None, None) => None,
