@@ -204,6 +204,8 @@ enum Subst {
     FlipByte(usize),
     Flavor(u8),
     RelabelFast,
+    /// A proof from another (honest, accepted) session.
+    Other(Vec<u8>),
 }
 
 impl Plan {
@@ -228,6 +230,10 @@ fn call(t: &SharedTransport, r: Req) -> Result<Resp, String> {
 
 /// Run one session through `t`; returns the verdict (or where the verifier refused) and prover timings.
 fn session(st: &Stmt, t: SharedTransport, plan: &Plan) -> Value {
+    session_p(st, t, plan).0
+}
+
+fn session_p(st: &Stmt, t: SharedTransport, plan: &Plan) -> (Value, Vec<Vec<u8>>) {
     let hello = plan.hello.clone().unwrap_or_else(|| SessionConfig::flock_128_r2(vec![st.spec()]).hello());
     let t0 = Instant::now();
     let mut prove_s = Vec::new();
@@ -261,7 +267,7 @@ fn session(st: &Stmt, t: SharedTransport, plan: &Plan) -> Value {
             Ok(Resp::Verdict(v)) => serde_json::from_str(&v).unwrap(),
             other => json!({"accepted": false, "why": format!("{other:?}")}),
         };
-        return json!({"accepted": v["accepted"], "why": v["why"], "prover_stopped": e.chars().take(200).collect::<String>()});
+        return (json!({"accepted": v["accepted"], "why": v["why"], "prover_stopped": e.chars().take(200).collect::<String>()}), proofs);
     }
     for (rep, s) in &plan.substitute {
         proofs[*rep] = match s {
@@ -274,6 +280,7 @@ fn session(st: &Stmt, t: SharedTransport, plan: &Plan) -> Value {
                 p[i] ^= 1;
                 p
             }
+            Subst::Other(p) => p.clone(),
             Subst::RelabelFast => {
                 let mut b = R1csProofBundleLigerito::from_bytes(&proofs[*rep]).unwrap();
                 b.commitment.params.profile = LigeritoProfile::Fast;
@@ -294,12 +301,13 @@ fn session(st: &Stmt, t: SharedTransport, plan: &Plan) -> Value {
         other => json!({"accepted": false, "why": format!("{other:?}")}),
     };
     let (sent, recv, calls) = t.lock().unwrap().stats();
-    json!({
+    let out = json!({
         "accepted": v["accepted"], "why": v["why"], "verdict": v, "prove_s": prove_s,
         "prove_total_s": prove_s.iter().sum::<f64>(), "session_wall_s": t0.elapsed().as_secs_f64(),
         "proof_bytes": proofs.iter().map(|p| p.len()).collect::<Vec<_>>(),
         "wire_sent": sent, "wire_recv": recv, "calls": calls,
-    })
+    });
+    (out, proofs)
 }
 
 fn inproc(st: &Arc<Stmt>, require_link: bool) -> (SharedTransport, Arc<Mutex<Server>>) {
@@ -453,6 +461,10 @@ fn selftest(st: Arc<Stmt>) {
     t("ag_flavour_bundle", "neg7 R7", Plan { substitute: BTreeMap::from([(0, Subst::Flavor(6))]), ..h() }, true, false, &mut all);
     t("byte_flip_rep1", "neg8", Plan { substitute: BTreeMap::from([(1, Subst::FlipByte(500))]), ..h() }, true, false, &mut all);
     t("coins_before_link_context", "R5", Plan { send_link: false, ..h() }, true, false, &mut all);
+    let (a, other) = session_p(&st, inproc(&st, true).0, &h());
+    assert_eq!(a["accepted"], true);
+    t("cross_session_replay_both_reps", "neg9 (link neg 15)",
+      Plan { substitute: BTreeMap::from([(0, Subst::Other(other[0].clone())), (1, Subst::Other(other[1].clone()))]), ..h() }, true, false, &mut all);
     t("witness_bit_flip_both_reps", "neg8", Plan { witness_flip: true, ..h() }, true, false, &mut all);
     let np = st.n - st.n / 4;
     all &= neg(&Arc::new(Stmt::new(np)), "honest_live_session_with_padding_rows", "neg10 (padding benign)", &h(), true, true);
