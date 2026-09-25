@@ -125,7 +125,7 @@ fn wait_root_f(file: &str) -> Vec<u8> {
                 return (0..32).map(|i| u8::from_str_radix(&s[2 * i..2 * i + 2], 16).unwrap()).collect();
             }
         }
-        assert!(t.elapsed().as_secs() < 600, "no root_F in {file} after 600 s");
+        assert!(t.elapsed().as_secs() < 3600, "no root_F in {file} after 3600 s");
         std::thread::sleep(std::time::Duration::from_millis(2));
     }
 }
