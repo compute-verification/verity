@@ -24,6 +24,11 @@
 //! * [`Server::from_record`] rebuilds a finished session from its record alone (G2: the record keeps root_F, every
 //!   root_B and the committed public words), so [`Server::finish`] re-verifies the Flock side offline.
 
+pub mod chunk;
+pub mod pure_block;
+#[cfg(feature = "gpu")]
+pub mod gpu;
+
 use std::{
     collections::BTreeMap,
     fs::File,
@@ -716,6 +721,8 @@ pub struct Server {
     verdict: Option<Value>,
     urandom: Option<File>,
     t0: std::time::Instant,
+    /// Seconds spent handling everything but `Finish` (the verifier's compute inside the prover's coin waits).
+    handle_s: f64,
 }
 
 fn parse_frame<'a>(c: &'a [u8], at: &mut usize, op: u8) -> Result<&'a [u8], String> {
@@ -753,6 +760,7 @@ impl Server {
             verdict: None,
             urandom: Some(File::open("/dev/urandom").expect("/dev/urandom")),
             t0: std::time::Instant::now(),
+            handle_s: 0.0,
         })
     }
 
@@ -851,6 +859,16 @@ impl Server {
     }
 
     pub fn handle(&mut self, req: Req) -> Resp {
+        let finish = matches!(req, Req::Finish);
+        let t = std::time::Instant::now();
+        let r = self.handle_inner(req);
+        if !finish {
+            self.handle_s += t.elapsed().as_secs_f64();
+        }
+        r
+    }
+
+    fn handle_inner(&mut self, req: Req) -> Resp {
         if let Some(why) = &self.aborted {
             return Resp::Refused(format!("session aborted: {why}"));
         }
@@ -1099,7 +1117,7 @@ impl Server {
         let v = json!({
             "accepted": ok, "why": why, "reps": reps_out, "streams": self.streams.len(), "rounds": rounds,
             "rounds_without_prover_message": empty, "prime_rounds": self.prime.len(), "prime_before_commit": self.prime_before_commit,
-            "verify_s": t.elapsed().as_secs_f64(), "session_s": self.t0.elapsed().as_secs_f64(),
+            "verify_s": t.elapsed().as_secs_f64(), "session_s": self.t0.elapsed().as_secs_f64(), "handle_s": self.handle_s,
         });
         self.verdict = Some(v.clone());
         v
