@@ -45,6 +45,40 @@ def build(words: int, bits: int, k: int) -> tuple[Builder, dict]:
                "nwires": len(b.cols) + len(b.prods), "asserts": len(b.asserts), "max_depth": depth}
 
 
+def extend_unit(text: str, cols: list[int], bits: int = 16) -> str:
+    """``text`` (a unit circuit) with the bits of its columns ``cols`` committed in-unit: ``bits`` new input columns per
+    column after every existing wire (inputs are the non-product wires in order, so nothing is renumbered), each with
+    b (b - 1) = 0, and ``col - Σ_i 2^i b_i = 0``.  The witness gains the bits LSB first, column after column, at the end
+    of each row (``unit_bits``)."""
+    lines = text.splitlines()
+    head = {t[0]: int(t[1]) for t in (l.split() for l in lines) if t and t[0] in ("ncols", "nwires")}
+    nc, nw = head["ncols"], head["nwires"]
+    prods = {int(l.split()[1]) for l in lines if l.startswith("prod ")}
+    colwire, c = {}, 0
+    for w in range(nw):
+        if w not in prods:
+            colwire[c] = w
+            c += 1
+    nb = len(cols) * bits
+    out = [f"ncols {nc + nb}" if l.startswith("ncols ") else f"nwires {nw + 2 * nb}" if l.startswith("nwires ") else l for l in lines]
+    for j, col in enumerate(cols):
+        terms = [f"{colwire[col]} 1"]
+        for i in range(bits):
+            b = j * bits + i
+            out.append(f"col {nc + b} link.b{col}.{i}")
+            out.append(f"prod {nw + nb + b} 1 1 {nw + b} 1 0 1 {nw + b} 1 {P - 1}")
+            out.append(f"assert link.bool{col}.{i} 1 {nw + nb + b} 1 0")
+            terms.append(f"{nw + b} {(P - (1 << i)) % P}")
+        out.append(f"assert link.rec{col} {len(terms)} {' '.join(terms)} 0")
+    return "\n".join(out) + "\n"
+
+
+def unit_bits(rows: np.ndarray, cols: list[int], bits: int = 16) -> np.ndarray:
+    """The ``extend_unit`` witness columns of unit rows ``rows`` (values of ``cols`` below 2^bits)."""
+    v = rows[:, cols].astype(np.uint64)
+    return ((v[:, :, None] >> np.arange(bits, dtype=np.uint64)) & 1).reshape(rows.shape[0], -1)
+
+
 def witness(units: int, words: int, bits: int, k: int, seed: int) -> np.ndarray:
     rng = np.random.default_rng(seed)
     x = rng.integers(0, 1 << bits, size=(units, words), dtype=np.uint64)
