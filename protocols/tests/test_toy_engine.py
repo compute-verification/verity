@@ -35,8 +35,9 @@ def test_honest_epoch_runs_all_three_phases(honest):
     p = report["profile"]
     assert p.linked and p.prescribed == {"prompt", "kv-init", "weights", "noise"}
     assert p.n_r == sum(len(s.requests) for s in world.engine.steps) == report["policy"]["tokens"]
-    assert {a[0] for a in world.audits} == {"accepted"} and any(a[1] > 0 for a in world.audits)  # audits hit steps
-    assert all(s.accounted > 0.9 * s.declared for s in report["space"].values())
+    assert {a[0] for a in world.audits} == {"accepted"}
+    assert all(s.accounted > 0.95 * s.declared for s in report["space"].values())
+    assert report["planned"] == world.pous.certified("filler", world.engine.cfg.yield_latency, len(world.audits))
     assert all(w.macs > 0 for w in report["work"])
     assert set(report["events"]) == {"integrity", "pous/audits/gpu0", "pouw/tickets/gpu0"}  # integrity once
 
@@ -53,27 +54,34 @@ def test_sampling_at_audit_retains_every_step_and_does_not_fit_the_workspace(hon
     world, _ = honest
     audit_mode = epoch(replace(CFG, sample="audit"))
     assert demo.audit(audit_mode)["profile"].n_r == demo.audit(world)["profile"].n_r
-    assert audit_mode.memory.peak["sp/retained"] > 4 * world.memory.peak["sp/retained"]
+    assert audit_mode.memory.peak["sp/retained"] > 3 * world.memory.peak["sp/retained"]
     epoch(replace(CFG, retention="hbm"))  # serving-mode retention fits the unaudited workspace
     with pytest.raises(Conflict, match="sp/retained.*filler \\(pous\\)"):
         epoch(replace(CFG, sample="audit", retention="hbm"))
 
 
-def test_a_non_preemptible_step_loop_conflicts_with_pous():
-    with pytest.raises(Conflict, match="max_nonpreemptible_s"):
-        demo.setup(replace(CFG, preemptible=False))
-    forced = epoch(replace(CFG, preemptible=False, enforce=False))
-    report = demo.audit(forced)
-    assert "late" in {a[0] for a in forced.audits} and report["conflicts"]
-    assert all(s.accounted == 0 for s in report["space"].values())
-    assert all(w.macs > 0 for w in report["work"])  # the other protocols are unaffected
+STRESS = replace(CFG, epoch=0.05, audit_rate=400.0, mean_gap=5e-5)  # audits land inside steps
 
 
-def test_offloaded_filler_is_late_and_only_pous_loses():
-    world = epoch(after_wiring=lambda w: w.memory.offloaded.update(("filler", s) for s in range(200)))
-    report = demo.audit(world)
-    assert "late" in {a[0] for a in world.audits}
-    assert all(s.accounted == 0 for s in report["space"].values()) and all(w.macs > 0 for w in report["work"])
+def test_yield_latency_costs_certified_fraction_instead_of_failing_audits():
+    reports = {}
+    for launch in (1e-6, 1e-3):
+        world = epoch(replace(STRESS, launch=launch))
+        assert {a[0] for a in world.audits} == {"accepted"}
+        assert max(a[1] for a in world.audits) <= world.engine.cfg.yield_latency  # never waits past the declared latency
+        reports[launch] = demo.audit(world)
+    fast, slow = (reports[k]["space"]["filler"] for k in (1e-6, 1e-3))
+    assert 0 < slow.accounted < fast.accounted and slow.window > fast.window + 5e-4
+    assert reports[1e-3]["work"][0].macs > 0  # the other protocols are unaffected
+
+
+def test_offloaded_filler_answers_slowly_and_only_pous_loses(honest):
+    _, report = honest
+    world = epoch(after_wiring=lambda w: w.memory.offloaded.update(("filler", s) for s in range(64)))
+    cheat = demo.audit(world)
+    assert {a[0] for a in world.audits} == {"accepted"}
+    assert cheat["space"]["filler"].accounted < report["space"]["filler"].accounted
+    assert cheat["work"] == report["work"]
 
 
 def test_fabricated_noised_outputs_are_caught_by_sampled_proofs():

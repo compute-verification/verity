@@ -7,17 +7,19 @@ Three minimal protocols, and a toy CPU inference engine that composes them, to l
   exhaustively and sampled units by replay, and emits an `IntegrityProfile`.
 - `pouw/` (`verity_pouw`): device-bound seeds issued at admission, per-step noise, tickets collected at step end, and
   a work claim that reads the profile.
-- `pous/` (`verity_pous`): design C with auditor-secret filler, timed linear-MAC audits that interrupt serving, a KV
-  write tap, and a KV-usefulness claim that reads the profile.
+- `pous/` (`verity_pous`): design C with auditor-secret filler, linear-MAC audits that interrupt serving and are
+  timed (no deadline: the certified fraction falls with response time), a KV write tap, and a KV-usefulness claim
+  that reads the profile.
 - `examples/toy_engine/`: the application. `engine.py` is a request queue, batched decode steps (one small IR Program
   per batch size), weights and a KV pool in memory regions, a simulated clock, and hook points (admit, alloc,
   step_start, commit, step_end, idle). `wiring.py` hooks the protocols in three ways; `demo.py` runs setup, serving
-  and audit.
+  and audit; `sweep.py` tabulates PoUS's certified fraction against the engine's yield latency.
 
 Protocols import only the core (`tests/test_protocol_boundaries.py`).
 
 ~~~text
-uv run python protocols/examples/toy_engine/demo.py            # --sample audit, --retention hbm, --no-preempt [--force], --wiring phases, --k 10
+uv run python protocols/examples/toy_engine/demo.py            # --sample audit, --retention hbm, --no-preempt, --launch 1e-3, --wiring phases, --k 10
+uv run python protocols/examples/toy_engine/sweep.py [--plot out.png]
 uv run pytest protocols
 ~~~
 

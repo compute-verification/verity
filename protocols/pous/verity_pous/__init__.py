@@ -1,22 +1,36 @@
 """Proof of useful space, design C, across a serving epoch (prototype).
 
-    setup    Challenger(cfg, key, device, regions=..., filler_sectors=...) tags the declared regions and generates
-             filler from a key only it holds; `requires` states what it needs of the engine
-    serving  times(duration)       secret Poisson audit times, for the application to schedule on its clock
-             challenge / respond / check   one timed linear-MAC audit; `waited` is how long the engine took to yield
-             tap(region, sector, words)    the KV write stream: re-tag a sector as it is written
-    audit    fold(outcomes) -> Space per region;  useful_kv(space, ..., profile) reads the integrity profile
+    setup     Challenger(cfg, key, device, regions=..., filler_sectors=...) tags the declared regions and generates
+              filler from a key only it holds
+    serving   times(duration)               secret Poisson audit times, for the application to schedule
+              challenge / respond / check   one linear-MAC audit; the application records how long the response took
+              tap(region, sector, words)    the KV write stream: re-tag a sector as it is written
+    audit     fold(records) -> Space per region;  useful_kv(space, ..., profile) reads the integrity profile
+    planning  DesignC.certified(region, latency), before anything runs
 
-Tags are t_s = <alpha, sector_s> + prf(s) mod P with alpha secret, so answering needs the sampled sectors.  An honest
-read of X bytes takes X / b_hbm; the deadline allows (1 + slack) of it plus `preempt_bound`, the longest the engine
-may take to yield to an audit.  A fraction tau(X) = (slack X / b_hbm + preempt_bound) / (X / b_alt - X / b_hbm) of the
-challenged bytes may therefore come over a slower link: the engine's preemption latency is paid in deficit.
+There is no deadline.  An audit reads X bytes of random sectors.  A response that arrives W seconds after the
+challenge gave a cheating prover W seconds to fetch what it does not hold over the off-HBM paths (at most b_alt) or to
+rebuild it from a smaller representation (at most b_rec for that region), so at most
+
+    tau(W) = (b_alt + b_rec) * W / X
+
+of the challenged bytes can be missing from HBM, and the certified fraction falls smoothly as responses slow down.  An
+honest response takes W = X / b_hbm + jitter + L, where L is how long the engine takes to yield to the audit.  This is
+the bandwidth-audit bound of the useful-space proposal, tau <~ B_alt / B_HBM + B_alt * J / X, with the engine's yield
+latency counted in the slack J.  Assumptions:
+  - b_alt bounds every path to bytes outside this GPU's HBM (host DRAM, NVMe, NIC, and NVLink peers unless the whole
+    NVLink domain is challenged at once); fetching and rebuilding run in parallel with the HBM reads and each other;
+  - b_rec bounds rebuilding bytes that are not stored: 0 for filler (its seed never leaves the challenger), an open
+    measurement for plaintext weights and KV (compressibility, the useful-space proposal's open risk 1);
+  - sectors and coefficients are unknown until the challenge (no prefetch), and audits never overlap;
+  - slow memory is passive (no compute beside it), and the challenger's clock is trusted;
+  - b_hbm and jitter are calibrations: they decide how good an honest certificate is, never soundness.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from math import log
 
 import numpy as np
@@ -29,25 +43,36 @@ P = (1 << 31) - 1
 
 @dataclass(frozen=True)
 class DesignC:
-    sector_words: int = 512  # u16 words per sector
+    """Defaults are the H100 figures of the PoUS research (POUS_STATE, challenger2): X = 4 GB per audit, honest
+    random-sector reads at 3.1 TB/s, every PCIe-attached tier together at 55 GB/s (NVLink peers neutralised by
+    challenging the whole NVLink domain at once), idle kernel jitter about 0.1 ms, 5 audits per second."""
+
+    sector_words: int = 512  # toy storage per sector; a sector stands for audit_bytes / sampled sectors real bytes
     sectors: int = 64  # sampled per region per audit
-    rate: float = 300.0  # audits per second
-    b_hbm: float = 1e9  # honest HBM read rate, bytes/s: a calibration, so it sets completeness only
-    b_alt: float = 1e8  # bound on every off-HBM path, bytes/s: a capacity bound, so it sets soundness
-    slack: float = 0.1
-    latency: float = 1e-6
-    preempt_bound: float = 2e-6  # longest the engine may run before servicing an audit, s
+    audit_bytes: float = 4e9  # X
+    rate: float = 5.0
+    b_hbm: float = 3.1e12
+    b_alt: float = 55e9
+    b_rec: dict[str, float] = field(default_factory=dict, hash=False)  # per region; absent means 0
+    jitter: float = 1e-4
     delta: float = 0.01
 
-    @property
-    def requires(self) -> dict[str, float]:
-        return {"max_nonpreemptible_s": self.preempt_bound}
+    def window(self, latency: float) -> float:
+        """How long an honest response takes when the engine needs `latency` seconds to yield."""
+        return self.audit_bytes / self.b_hbm + self.jitter + latency
 
-    def deadline(self, nbytes: int) -> float:
-        return self.latency + self.preempt_bound + (1 + self.slack) * nbytes / self.b_hbm
+    def tau(self, region: str, window: float) -> float:
+        return min(1.0, (self.b_alt + self.b_rec.get(region, 0.0)) * window / self.audit_bytes)
 
-    def tau(self, nbytes: int) -> float:
-        return (self.slack * nbytes / self.b_hbm + self.preempt_bound) / (nbytes / self.b_alt - nbytes / self.b_hbm)
+    def epsilon(self, audits: int) -> float:
+        """Sampling: a region missing a fraction eps passes n audits of s uniform sectors w.p. <= (1 - eps)^(n s)."""
+        return min(1.0, log(1 / self.delta) / (audits * self.sectors)) if audits else 1.0
+
+    def certified(self, region: str, latency: float, audits: int | None = None) -> float:
+        """Planning: the certified fraction of `region` for an engine that yields within `latency`, including the
+        sampling term when `audits` is given."""
+        eps = self.epsilon(audits) if audits is not None else 0.0
+        return max(0.0, 1 - eps - self.tau(region, self.window(latency)))
 
 
 @dataclass(frozen=True)
@@ -60,7 +85,7 @@ class Challenge:
 @dataclass(frozen=True)
 class Response:
     mu: Mapping[str, tuple[int, ...]]
-    elapsed: float  # from the scheduled instant: the wait for the engine to yield, plus the reads
+    elapsed: float  # from the challenge: the wait for the engine to yield, plus the reads
 
 
 @dataclass(frozen=True)
@@ -72,17 +97,18 @@ class Space:
     declared: int
     accounted: int
     deficit: float
+    window: float  # the slowest accepted response, s: what the deficit was paid for
     events: Mapping[str, float]
-    assumptions: tuple[str, ...] = ("b_alt bounds every off-HBM path",
+    assumptions: tuple[str, ...] = ("b_alt bounds every path to bytes outside this GPU's HBM",
+                                    "b_rec bounds rebuilding bytes that are not stored (0 for filler)",
                                     "the challenger key is secret and the challenger tamper-resistant",
-                                    "no smaller representation answers within the slack (compressibility kappa)",
                                     "the workspace is declared and capped, not audited")
 
 
 def respond(cfg: DesignC, read: Callable[[str, int], tuple[np.ndarray, float]], ch: Challenge,
             waited: float = 0.0) -> Response:
     """The device-side audit kernel.  `read(region, sector)` returns the words and the simulated seconds taken."""
-    elapsed, mu = waited + cfg.latency, {}
+    elapsed, mu = waited, {}
     for region, (secs, coeffs) in ch.picks.items():
         acc = np.zeros(cfg.sector_words, dtype=np.int64)
         for s, c in zip(secs, coeffs):
@@ -109,15 +135,16 @@ class Challenger:
         self._alpha = np.array([mac.below(P, j) for j in range(cfg.sector_words)], dtype=np.int64)
         self._tags = {name: [self._tag(name, s, row) for s, row in enumerate(r)] for name, r in regions.items()}
 
+    @property
+    def sector_bytes(self) -> int:
+        """Real bytes one toy sector stands for, so that an audit reads `audit_bytes`."""
+        return int(self.cfg.audit_bytes // (self.cfg.sectors * len(self.sizes)))
+
     def _prf(self, region: str, s: int) -> int:
         return derive(self.key, "verity/pous/tag/v1", {"device": self.device, "region": region}).below(P, s)
 
     def _tag(self, region: str, s: int, words: np.ndarray) -> int:
         return (int(words.astype(np.int64) @ self._alpha) + self._prf(region, s)) % P
-
-    @property
-    def audit_bytes(self) -> int:
-        return 2 * self.cfg.sector_words * self.cfg.sectors * len(self.sizes)
 
     def tap(self, region: str, sector: int, words: np.ndarray) -> None:
         self._tags[region][sector] = self._tag(region, sector, words)
@@ -137,8 +164,7 @@ class Challenger:
             for name, n in self.sizes.items()})
 
     def check(self, ch: Challenge, resp: Response) -> str:
-        if resp.elapsed > self.cfg.deadline(self.audit_bytes):
-            return "late"
+        """The MAC only.  Timing is not pass/fail: `fold` charges the slowest response against the certificate."""
         for name, (secs, coeffs) in ch.picks.items():
             mu = resp.mu.get(name, ())
             if len(mu) != self.cfg.sector_words:
@@ -148,17 +174,20 @@ class Challenger:
                 return "rejected"
         return "accepted"
 
-    def fold(self, outcomes: Sequence[str]) -> dict[str, Space]:
-        """Design C's security function: after n accepted audits of s uniform sectors per region, a region missing a
-        fraction eps passes all of them with probability at most (1 - eps)^(n s); tau(X) is added for the link and
-        preemption slack.  Any late or rejected audit leaves the device's regions unaccounted."""
-        cfg, n = self.cfg, len(outcomes)
-        ok = n > 0 and all(o == "accepted" for o in outcomes)
-        deficit = min(1.0, log(1 / cfg.delta) / (n * cfg.sectors) + cfg.tau(self.audit_bytes)) if ok else 1.0
+    def fold(self, records: Sequence[tuple[str, float]]) -> dict[str, Space]:
+        """`records` are (outcome, elapsed seconds) per audit.  Deficit per region = epsilon(n) + tau(slowest
+        response): at every challenge instant the prover had at most that long.  A rejected MAC leaves every region
+        unaccounted."""
+        cfg, n = self.cfg, len(records)
+        ok = n > 0 and all(o == "accepted" for o, _ in records)
+        window = max((w for _, w in records), default=0.0)
         events = {f"pous/audits/{self.device}": cfg.delta + n / P}
-        return {name: Space(self.device, name, 2 * cfg.sector_words * size,
-                            int(2 * cfg.sector_words * size * (1 - deficit)), deficit, events)
-                for name, size in self.sizes.items()}
+        out = {}
+        for name, size in self.sizes.items():
+            deficit = min(1.0, cfg.epsilon(n) + cfg.tau(name, window)) if ok else 1.0
+            declared = self.sector_bytes * size
+            out[name] = Space(self.device, name, declared, int(declared * (1 - deficit)), deficit, window, events)
+        return out
 
 
 def useful_kv(kv: Space, live_bytes: int, page_bytes: int, profile: IntegrityProfile) -> Space:
@@ -166,10 +195,10 @@ def useful_kv(kv: Space, live_bytes: int, page_bytes: int, profile: IntegrityPro
     that steps are linked (else a page need not be what any verified step wrote) and the touched-unit worst case,
     since one incorrect unit can make its request's whole page covert."""
     if not profile.linked:
-        return Space(kv.device, "kv/useful", kv.declared, 0, 1.0, kv.events)
+        return Space(kv.device, "kv/useful", kv.declared, 0, 1.0, kv.window, kv.events)
     laundered = min(live_bytes, int(profile.touched_units()) * page_bytes)
     accounted = max(0, min(kv.accounted, live_bytes) - laundered)
-    return Space(kv.device, "kv/useful", kv.declared, accounted, 1 - accounted / kv.declared,
+    return Space(kv.device, "kv/useful", kv.declared, accounted, 1 - accounted / kv.declared, kv.window,
                  {**kv.events, "integrity": profile.delta})
 
 

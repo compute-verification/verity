@@ -75,8 +75,9 @@ class Memory:
     """Memory regions in tiers ("hbm", "host").  `offloaded` sectors are really held in host memory (they read at the
     host rate); `dropped` sectors are gone (they read as zeros).  Both model a cheating deployment."""
 
-    def __init__(self, sector_words: int, capacity: dict[str, int], rates: dict[str, float]) -> None:
+    def __init__(self, sector_words: int, capacity: dict[str, int], rates: dict[str, float], sector_bytes: int) -> None:
         self.sector_words, self.capacity, self.rates = sector_words, capacity, rates
+        self.sector_bytes = sector_bytes  # real bytes a toy sector stands for, for timing
         self.regions: dict[str, Region] = {}
         self.offloaded: set[tuple[str, int]] = set()
         self.dropped: set[tuple[str, int]] = set()
@@ -101,7 +102,7 @@ class Memory:
         r = self.regions[region]
         words = np.zeros_like(r.words[sector]) if (region, sector) in self.dropped else r.words[sector]
         tier = "host" if (region, sector) in self.offloaded else r.tier
-        return words, words.nbytes / self.rates[tier]
+        return words, self.sector_bytes / self.rates[tier]
 
 
 class Clock:
@@ -208,9 +209,9 @@ class EngineConfig:
         return 3 * self.K * self.K / self.compute_rate  # noised product plus correction, per request
 
     @property
-    def properties(self) -> dict[str, float]:
-        worst = max(self.launch, self.chunk) if self.preemptible else self.launch + self.batch * self.chunk
-        return {"max_nonpreemptible_s": worst}
+    def yield_latency(self) -> float:
+        """The longest a timer can wait for this engine: its longest non-preemptible stretch."""
+        return max(self.launch, self.chunk) if self.preemptible else self.launch + self.batch * self.chunk
 
 
 class Engine:

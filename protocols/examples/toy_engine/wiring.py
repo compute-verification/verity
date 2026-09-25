@@ -35,7 +35,7 @@ def _audit(world, index: int):
         r = respond(world.pous, world.memory.read, c, waited)
         clock.advance(r.elapsed - waited)
         owned = len(world.memory.regions["kv"].words) - len(world.engine.free_pages)
-        world.audits.append((ch.check(c, r), waited, r.elapsed - waited, owned, clock.now))
+        world.audits.append((ch.check(c, r), waited, r.elapsed, owned, clock.now))
     return handler
 
 

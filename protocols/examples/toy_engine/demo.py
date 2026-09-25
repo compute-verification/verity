@@ -1,12 +1,12 @@
 """One epoch of the toy engine with sampled proofs, PoUW and PoUS, in three phases.
 
-    uv run python protocols/examples/toy_engine/demo.py [--sample audit] [--retention hbm] [--no-preempt] [--wiring phases]
+    uv run python protocols/examples/toy_engine/demo.py [--sample audit] [--retention hbm] [--no-preempt] [--launch S]
 
     setup    memory map (weights, KV pool, PoUS filler, a small unaudited workspace), the challenger's tags and filler,
-             device keys, the log and beacon; engine properties checked against what protocols require; hooks wired
+             device keys, the log and beacon; PoUS's planned certificate at the engine's yield latency; hooks wired
     serving  requests arrive, batched steps run on the simulated clock; PoUW seeds each request and collects tickets,
              sampled proofs commits every step (and samples as rounds publish, in "serving" mode), PoUS audits
-             interrupt at secret times and wait for the engine to yield
+             interrupt at secret times, wait for the engine to yield, and are timed
     audit    sampled proofs closes and verifies, producing the integrity profile; PoUW and PoUS read what they need
              off it; the application unions failure events
 """
@@ -41,14 +41,14 @@ DEVICE = "gpu0"
 class Config:
     n_requests: int = 48
     mean_gap: float = 3e-6  # mean request inter-arrival, s
-    epoch: float = 1e-3  # s of serving
-    audit_rate: float = 1e4  # PoUS audits per simulated second
+    epoch: float = 1.0  # s of serving; the engine idles once the requests are done
+    audit_rate: float = 5.0  # PoUS audits per simulated second (the research recommends 3.8-5/s)
     p: Fraction = Fraction(1, 2)  # sampled proofs' law: RU rate, and VUs checked per selected RU
     k: int = 3
     sample: str = "serving"  # sampled proofs: "serving" or "audit"
     retention: str = "host"  # tier for sampled proofs' retained interiors
     preemptible: bool = True
-    enforce: bool = True  # refuse a composition whose requirements the engine does not meet
+    launch: float = 1e-6  # non-preemptible per-step overhead, s
     wiring: str = "registry"
     hbm_sectors: int = 256
     kv_pages: int = 32
@@ -100,15 +100,16 @@ class World:
     pouw: PoUW
     pous: DesignC
     challenger: Challenger
-    conflicts: list[str]
     tickets: list = field(default_factory=list)
-    audits: list = field(default_factory=list)  # (outcome, waited, exclusive s, KV pages owned, end)
+    audits: list = field(default_factory=list)  # (outcome, waited, response s, KV pages owned, end)
 
 
 def setup(cfg: Config = Config()) -> World:
     rng = np.random.default_rng(cfg.seed)
-    pous = DesignC(rate=cfg.audit_rate, sectors=16)
-    memory = Memory(pous.sector_words, {"hbm": cfg.hbm_sectors, "host": 1 << 20}, {"hbm": pous.b_hbm, "host": pous.b_alt})
+    pous = DesignC(rate=cfg.audit_rate)
+    sector_bytes = int(pous.audit_bytes // (pous.sectors * 3))  # weights, kv, filler
+    memory = Memory(pous.sector_words, {"hbm": cfg.hbm_sectors, "host": 1 << 20}, {"hbm": pous.b_hbm, "host": pous.b_alt},
+                    sector_bytes)
     weights = rng.integers(0, 1 << 16, size=(K, K), dtype=np.uint16)
     memory.allocate("weights", "hbm", 1, "engine", np.pad(weights.ravel(), (0, pous.sector_words - K * K))[None])
     memory.allocate("kv", "hbm", cfg.kv_pages, "engine")
@@ -119,13 +120,7 @@ def setup(cfg: Config = Config()) -> World:
     memory.allocate("filler", "hbm", filler, "pous", challenger.filler.copy())
 
     clock, hooks = Clock(), Hooks()
-    engine_cfg = EngineConfig(K=K, preemptible=cfg.preemptible)
-    engine = Engine(engine_cfg, memory, clock, hooks)
-    conflicts = [f"clock: pous requires {k} <= {v * 1e6:.2f} us, the engine guarantees "
-                 f"{engine_cfg.properties[k] * 1e6:.2f} us" for k, v in pous.requires.items()
-                 if engine_cfg.properties[k] > v]
-    if conflicts and cfg.enforce:
-        raise Conflict(conflicts[0])
+    engine = Engine(EngineConfig(K=K, preemptible=cfg.preemptible, launch=cfg.launch), memory, clock, hooks)
 
     arrivals = np.cumsum(rng.exponential(cfg.mean_gap, cfg.n_requests))
     requests = []
@@ -138,7 +133,7 @@ def setup(cfg: Config = Config()) -> World:
                        delta=0.01, sample=cfg.sample)
     world = World(cfg, DEVICE, memory, clock, engine, weights, requests, log, beacon, sp,
                   Prover(sp, beacon=beacon, register=log.register), PoUW({DEVICE: key}, K, Fraction(1, 4), 0.01),
-                  pous, challenger, conflicts)
+                  pous, challenger)
     if cfg.cheat:
         cfg.cheat(world)
     SHAPES[cfg.wiring](world)
@@ -186,8 +181,8 @@ def audit(world: World) -> dict:
     counts = pouw.verify(world.tickets, requests, programs, placements, SampledProofs.reader(evidence))
     tiles = {world.device: sum(len(pouw.tiles(programs[s], span)) for s, p in placements.items() for span in p.values())}
     work = pouw.claim(counts, tiles, profile, tiles_per_vu=1)
-    spaces = world.challenger.fold([a[0] for a in world.audits])
-    page_bytes = 2 * world.memory.sector_words
+    spaces = world.challenger.fold([(a[0], a[2]) for a in world.audits])
+    page_bytes = world.memory.sector_bytes
     owned = [a[3] for a in world.audits] or [0]
     kv = useful_kv(spaces["kv"], int(sum(owned) / len(owned) * page_bytes), page_bytes, profile)  # mean over instants
 
@@ -199,13 +194,14 @@ def audit(world: World) -> dict:
         "policy": {"tokens": served, "incorrect_tokens_max": profile.touched_units()},
         "steps": len(eng.steps), "duration": world.clock.now, "busy": eng.busy,
         "audits": world.audits, "retention_peak_sectors": world.memory.peak.get("sp/retained", 0),
-        "conflicts": world.conflicts,
+        "yield_latency": eng.cfg.yield_latency,
+        "planned": world.pous.certified("filler", eng.cfg.yield_latency, len(world.audits)),
     }
 
 
 def show(report: dict) -> None:
     p, audits = report["profile"], report["audits"]
-    audit_time = sum(a[2] for a in audits)
+    audit_time = sum(a[2] - a[1] for a in audits)
     print(f"serving: {report['steps']} steps over {report['duration'] * 1e3:.1f} ms simulated; engine busy "
           f"{report['busy'] * 1e3:.2f} ms, PoUS audits held the clock {audit_time * 1e3:.2f} ms "
           f"({len(audits)} audits: {', '.join(f'{o} {n}' for o, n in Counter(a[0] for a in audits).items())}; "
@@ -218,13 +214,14 @@ def show(report: dict) -> None:
     for w in report["work"]:
         print(f"pouw {w.device}: {w.tickets} tickets, {w.forgeable} forgeable -> >= {w.macs} MACs "
               f"(declared-count bound {w.declared_macs})")
+    print(f"pous: engine yields within {report['yield_latency'] * 1e6:.2f} us -> planned certified filler fraction "
+          f"{report['planned']:.4f}; slowest response {max((a[2] for a in audits), default=0) * 1e3:.3f} ms")
     for s in [*report["space"].values(), report["kv"]]:
-        print(f"pous {s.device}/{s.region}: {s.accounted}/{s.declared} bytes, deficit {s.deficit:.4f}")
+        print(f"pous {s.device}/{s.region}: {s.accounted / 1e9:.2f}/{s.declared / 1e9:.2f} GB certified "
+              f"({1 - s.deficit:.4f})")
     pol = report["policy"]
     print(f"output policy: at most {pol['incorrect_tokens_max']:.1f} of {pol['tokens']} served tokens may be wrong")
     print(f"failure <= {report['failure']:.4f} over events {sorted(report['events'])}")
-    for c in report["conflicts"]:
-        print(f"conflict (not enforced): {c}")
 
 
 def main(argv=None) -> None:
@@ -232,11 +229,11 @@ def main(argv=None) -> None:
     ap.add_argument("--sample", default="serving", choices=("serving", "audit"))
     ap.add_argument("--retention", default="host", choices=("host", "hbm"))
     ap.add_argument("--no-preempt", action="store_true")
-    ap.add_argument("--force", action="store_true", help="run even if requirements conflict")
+    ap.add_argument("--launch", type=float, default=1e-6, help="non-preemptible per-step overhead, s")
     ap.add_argument("--wiring", default="registry", choices=sorted(SHAPES))
     ap.add_argument("--k", type=int, default=3, help="VUs replayed per selected RU (10 = all)")
     a = ap.parse_args(argv)
-    cfg = Config(sample=a.sample, retention=a.retention, preemptible=not a.no_preempt, enforce=not a.force,
+    cfg = Config(sample=a.sample, retention=a.retention, preemptible=not a.no_preempt, launch=a.launch,
                  wiring=a.wiring, k=a.k)
     try:
         world = setup(cfg)
