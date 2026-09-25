@@ -1,4 +1,4 @@
-"""The Hopper BF16 draft target (``verity.verification.target.BF16_HOPPER``) and its pinned vectors.
+"""The Hopper BF16 draft target (``verity.proofs.target.BF16_HOPPER``) and its pinned vectors.
 
 FIRST's program and epilogue (``GemmCoordinate<K>``, ``f32_to_bf16``) with the steps on ``HOPPER_BF16_M16N8K16`` (one
 group of 16, the 26-bit adder, floor -133) under the family ``veritor.tc-bf16.hopper_bf16_m16n8k16@1``.  The vectors
@@ -17,9 +17,9 @@ from verity.ml.tc.cast import f32_to_bf16_word
 from verity.ml.tc.errors import InvalidArtifact
 from verity.ml.tc.instructions import INSTRUCTIONS
 from verity.ml.tc.models import AMPERE_BF16_M16N8K16, HOPPER_BF16_M16N8K16
-from verity.verification.families import make_tc_ampere_bf16_gate_set, make_tc_bf16_gate_set
-from verity.verification.programs import gemm_coordinate
-from verity.verification.target import BF16_HOPPER, FIRST, TARGETS, TC_VECTORS
+from verity.proofs.families import make_tc_ampere_bf16_gate_set, make_tc_bf16_gate_set
+from verity.proofs.programs import gemm_coordinate
+from verity.proofs.target import BF16_HOPPER, FIRST, TARGETS, TC_VECTORS
 
 ROOT = Path(__file__).resolve().parents[4]
 

@@ -20,7 +20,7 @@ External computation representations
         |                      |
         |  IR                  |  What computation?
         |  ML semantics        |  What do exact ML/hardware operations mean?
-        |  Verification        |  What must be checked?
+        |  Proofs              |  What must be established?
         |  Commitments         |  What values are bound and authenticated?
         |  Resource accounting |  What resource claims follow?
         +-----------+----------+
@@ -68,22 +68,15 @@ Examples include exact floating-point operations, dot products, tensor-core arit
 
 Hardware-specific semantics belong here when they are reusable facts about the computation itself. A backend should not invent a second definition of an H100 dot product, and a vLLM integration should not own its numerical meaning.
 
-### Verification
+### Proofs
 
-`verity.verification` defines **backend-independent verification plans and obligations over Verity programs**.
+`verity.proofs` defines **backend-independent single statements over Verity programs**: the concrete relations and authenticated values a backend must establish, and how a backend's proof of them is judged.
 
-It answers questions such as:
+Which parts of a Program are checked, how checks are selected or sampled, and which values must be bound before a challenge are protocol questions. They belong to `protocols/sampled_proofs`, which draws its challenges through `verity.randomness` and summarises an accepted audit as a `verity.resource_accounting.IntegrityProfile`.
 
-- which parts of a Program must be checked;
-- what the boundary values of those checks are;
-- which values must already be bound before a challenge;
-- how checks are selected or sampled;
-- what concrete relations and authenticated values a backend must establish;
-- what acceptance structure the protocol requires.
+Proofs are separate from computation semantics: changing which units are sampled or how they are grouped for checking does not redefine the Program.
 
-Verification is separate from computation semantics: changing which units are sampled or how they are grouped for checking does not redefine the Program.
-
-Verification is also separate from proof implementation: the same obligation may be checked by SP1, a custom STARK, direct evaluation, or another backend.
+Proofs are also separate from proof implementation: the same statement may be established by SP1, a custom STARK, direct evaluation, or another backend.
 
 ### Commitments
 
@@ -219,10 +212,12 @@ packages/
   verity/                Core Python library
     verity.ir
     verity.ml
-    verity.verification
+    verity.proofs
     verity.commitments
+    verity.randomness
     verity.resource_accounting
 
+protocols/               Runtime protocols over the core (sampled_proofs); each imports only the core
 frontends/               External computation representations -> Verity IR
 backends/                Verity obligations -> proofs/checks
 integrations/            End-to-end integrations with real systems
@@ -246,7 +241,7 @@ with explicit imports such as:
 ~~~python
 from verity.ir import Program
 from verity.ml import ...
-from verity.verification import ...
+from verity.proofs import ...
 from verity.commitments import ...
 from verity.resource_accounting import ...
 ~~~
@@ -293,9 +288,9 @@ commitments
 ir + commitments
        ^
        |
-verification
+proofs
 
-ir + verification + observations
+ir + proofs + observations
        ^
        |
 resource_accounting

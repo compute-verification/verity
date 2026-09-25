@@ -1,15 +1,15 @@
 """The backend boundary: a ``typed-obligation/v0`` object in, an accepted-or-not proof out.
 
-The object (:class:`verity.verification.typed_obligation.TypedObligationSet`) is the backend-independent
+The object (:class:`verity.proofs.typed_obligation.TypedObligationSet`) is the backend-independent
 statement of what must hold: which exact relations, over which committed words, under which roots.  This module
-lowers it to the statement bytes the guest reads (``verity.verification.lowering``), hands the host the witness
+lowers it to the statement bytes the guest reads (``verity.proofs.lowering``), hands the host the witness
 (the openings, format 3 for packed leaves) and the object digest ``h_O``, and judges the outcome the way the
 protocol requires (README "First vertical slice"): a proof is *accepted* only when
 
 1. it verifies under the **approved** verifying key (:data:`verity_sp1.host.APPROVED`), not merely the one the
    host reports;
 2. its public values are exactly ``h_O || h_L || 0x01`` for *this* object and *its own* lowering
-   (:func:`verity.verification.binding.check_binding`): the same statement reached through another object, an
+   (:func:`verity.proofs.binding.check_binding`): the same statement reached through another object, an
    unbound 33-byte proof, or a self-consistent proof of some other statement all fail here;
 3. the guest was sound (no diagnostic verdict byte).
 
@@ -24,9 +24,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity.verification.binding import BindingResult, check_binding
-from verity.verification.lowering import statement_bytes, statement_bytes_v3
-from verity.verification.typed_obligation import TypedObligationSet, object_digest
+from verity.proofs.binding import BindingResult, check_binding
+from verity.proofs.lowering import statement_bytes, statement_bytes_v3
+from verity.proofs.typed_obligation import TypedObligationSet, object_digest
 
 from .host import APPROVED, ExecutionReport, GuestIdentity, Host, ProofReport, ProveMode, VerifyReport
 

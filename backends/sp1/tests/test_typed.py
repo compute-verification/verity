@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.verification.binding import BindingCode, check_binding
+from verity.proofs.binding import BindingCode, check_binding
 from verity_sp1.host import APPROVED, GuestIdentity, Host, SP1Unavailable
 from verity_sp1.typed import execute_object, lower_object, prove_object, verify_object
 

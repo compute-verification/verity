@@ -77,9 +77,9 @@ for candidate, module in (
     except ImportError:
         sys.path.insert(0, str(candidate))
 
-from verity.verification.binding import bound_public_values  # noqa: E402
-from verity.verification.conformance import interpret  # noqa: E402
-from verity.verification.target import FIRST  # noqa: E402
+from verity.proofs.binding import bound_public_values  # noqa: E402
+from verity.proofs.conformance import interpret  # noqa: E402
+from verity.proofs.target import FIRST  # noqa: E402
 from verity_numerical.bench import contract  # noqa: E402
 
 RESULT_SCHEMA = contract.RESULT_SCHEMA
@@ -178,7 +178,7 @@ def run_reference(rec: dict, out: Path) -> tuple[dict, list[dict], list[str], li
             problems.append(f"relation check said {got.relations}, the record {rec['relations']}")
     validation = {
         "status": "passed" if not problems else "failed",
-        "checker": "verity.verification.conformance.interpret + TransparentBackend",
+        "checker": "verity.proofs.conformance.interpret + TransparentBackend",
         "detail": "; ".join(problems) or f"every recorded field re-derived; transparent checker: {got.witness_verdict}",
         "evidence": [],
     }
@@ -344,7 +344,7 @@ def run_sp1(rec: dict, out: Path, *, prove: bool, mode: str, want_info: bool, di
                 problems.append("public values differ from the ones recorded for this vector")
             if not (binding.ok and binding.verdict == 1):
                 problems.append(f"binding check: {binding.code} {binding.detail}")
-            checker = "verity_sp1 execute + verity.verification.binding.check_binding"
+            checker = "verity_sp1 execute + verity.proofs.binding.check_binding"
     else:
         proof = out / "proof.bin"
         started = time.perf_counter()
@@ -717,7 +717,7 @@ def run_sp1_bare(a) -> int:
         "artifacts": [os.path.relpath(proofs_dir / "statement.bin", out)] + [v["proof"] for v in verdicts],
     }
     problems = contract.validate(result)
-    from verity.verification.target import TARGETS
+    from verity.proofs.target import TARGETS
     sp1 = next(c for c in tables.CANDIDATES if c.id == "SP1")
     tgt = TARGETS.get(target_name)
     reasons = tables.reject_reasons(result, [], None, tgt, sp1) if tgt else [f"unknown target {target_name!r}"]
@@ -813,7 +813,7 @@ def main(argv: list[str] | None = None) -> int:
     if a.backend == "reference":
         validation, measurements, artifacts, _ = run_reference(rec, out)
         fingerprint["security"] = {"target": None, "note": "no proof: the transparent checker's own verdict, nothing established to a verifier"}
-        fingerprint["software"] = {"backend": {"name": "verity.verification.transparent", "version": None, "commit": sha}, "toolchain": {"python": python}}
+        fingerprint["software"] = {"backend": {"name": "verity.proofs.transparent", "version": None, "commit": sha}, "toolchain": {"python": python}}
         fingerprint["preprocessing"] = "none"
     else:
         validation, measurements, artifacts, _, identity = run_sp1(

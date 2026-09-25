@@ -32,7 +32,7 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
  - `verity.resource_accounting`: `IntegrityProfile`, which records what was
  verified: the covered families, the two-stage law and δ. It comes with
  consumer-side worst-case readers.
- - `verity.commitments`, `verity.verification`: see their module docstrings.
+ - `verity.commitments`, `verity.proofs`: see their module docstrings.
  Other modules are created when code lands, not before.
  - Tests live in `packages/verity/tests/<module>/`.
 - `protocols/`: one distribution per protocol, and each imports only the
@@ -51,7 +51,7 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
   `research run --on vy-sp1 ...` (`~/.research/machines.toml`).
 
 Dependency direction (README "Development"): `ir <- ml`, `ir <- commitments`,
-`ir + commitments <- verification`, everything else depends inward on the
+`ir + commitments <- proofs`, everything else depends inward on the
 core. Backends must be testable without a frontend or runtime integration.
 
 ~~~text

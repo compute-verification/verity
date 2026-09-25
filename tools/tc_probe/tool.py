@@ -118,7 +118,7 @@ def parse_instances(argv: list[str]) -> dict:
 INSTANCES_HW = Tool(
     name="instances_hw", version="1",
     command=["python", "tools/tc_probe/instances_hw.py"],
-    closure=["tools/tc_probe/**", "packages/verity/src/verity/ml/tc/**", "packages/verity/src/verity/verification/target.py",
+    closure=["tools/tc_probe/**", "packages/verity/src/verity/ml/tc/**", "packages/verity/src/verity/proofs/target.py",
              "backends/numerical/python/verity_numerical/bench/instances.py", "backends/numerical/python/verity_numerical/bench/instances_gen.py",
              "fixtures/bench-instances/v1/manifest.json"],
     key_params=["instances", "instruction", "arch", "root", "manifest", "range", "only_ids", "repeat", "sass_check"],

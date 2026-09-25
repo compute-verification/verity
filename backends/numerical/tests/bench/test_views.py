@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 
-from verity.verification.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, NVFP4_SM120, TARGETS
+from verity.proofs.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, NVFP4_SM120, TARGETS
 from verity_numerical.bench import tables as T
 from verity_numerical.bench import views as V
 

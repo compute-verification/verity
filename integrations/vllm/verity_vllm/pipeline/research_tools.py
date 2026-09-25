@@ -49,7 +49,7 @@ CLOSURE = [
     "packages/verity/src/verity/commitments/**",
     "packages/verity/src/verity/ir/**",
     "packages/verity/src/verity/ml/**",
-    "packages/verity/src/verity/verification/**",
+    "packages/verity/src/verity/proofs/**",
 ]
 
 # Row id grammar (see verity_vllm/ops/README):

@@ -7,8 +7,8 @@ import json
 import pytest
 
 from verity.errors import InvalidArtifact
-from verity.verification.gateset import GateSet, make_isa_gate_set
-from verity.verification.int8 import INT8_Q7_MAX_CONTRACTION, make_int8_q7_gate_set, requant_s8, requant_u7, signed, word
+from verity.proofs.gateset import GateSet, make_isa_gate_set
+from verity.proofs.int8 import INT8_Q7_MAX_CONTRACTION, make_int8_q7_gate_set, requant_s8, requant_u7, signed, word
 
 
 INT8_Q7_DIGEST = "88162784922551008cdff19a0a08a118d4bd6f02fbd65c71629c502a988b69c6"

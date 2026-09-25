@@ -1,4 +1,4 @@
-"""The NVFP4 draft target (``verity.verification.target.NVFP4_SM120``) and its pinned vectors.
+"""The NVFP4 draft target (``verity.proofs.target.NVFP4_SM120``) and its pinned vectors.
 
 Like ``test_fp8_targets.py``: each clause of the statement is pinned to the code that implements it (the model, the
 program builder, the family) and the recorded ``fixtures/tc/vectors`` replay on the model.  The vectors are model
@@ -16,9 +16,9 @@ import pytest
 
 from verity.ml.tc.instructions import INSTRUCTIONS
 from verity.ml.tc.models import BLACKWELL_SM120_NVF4, BlockScaledAlignAdd
-from verity.verification.families import make_tensor_core_gate_set
-from verity.verification.programs import gemm_accumulator_nvfp4
-from verity.verification.target import FP8_ADA_MMA, NVFP4_SM120, TARGETS, TC_VECTORS
+from verity.proofs.families import make_tensor_core_gate_set
+from verity.proofs.programs import gemm_accumulator_nvfp4
+from verity.proofs.target import FP8_ADA_MMA, NVFP4_SM120, TARGETS, TC_VECTORS
 
 ROOT = Path(__file__).resolve().parents[4]
 

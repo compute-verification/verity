@@ -1,4 +1,4 @@
-"""The frozen first target (``verity.verification.target``) is exactly what the recorded vectors prove.
+"""The frozen first target (``verity.proofs.target``) is exactly what the recorded vectors prove.
 
 Each test pins one clause of the target's statement against the code that implements it and against the
 conformance vectors a correct prover produced public values for; a semantic drift in any column fails here.
@@ -14,9 +14,9 @@ import pytest
 from verity.ml.tc.cast import f32_to_bf16_hw_word, f32_to_bf16_word
 from verity.ml.tc.errors import InvalidArtifact
 from verity.ml.tc.silicon import AMPERE_BF16_M16N8K16, tc_dot
-from verity.verification.families import make_tc_ampere_bf16_gate_set
-from verity.verification.programs import gemm_coordinate
-from verity.verification.target import FAMILY, FAMILY_DIGEST, FIRST, K16_VECTOR, K1536_VECTOR
+from verity.proofs.families import make_tc_ampere_bf16_gate_set
+from verity.proofs.programs import gemm_coordinate
+from verity.proofs.target import FAMILY, FAMILY_DIGEST, FIRST, K16_VECTOR, K1536_VECTOR
 
 FIXTURES = Path(__file__).resolve().parents[4] / "fixtures" / "typed-obligation-v0"
 
@@ -55,7 +55,7 @@ def test_each_reference_vector_is_one_gemm_coordinate_in_the_family(name: str) -
     # step 0 without an accumulator, then K/16 - 1 chained steps in ascending k, then the epilogue cast
     assert ops == ["tc_dot16_0", *["tc_dot16"] * (k // 16 - 1), "f32_to_bf16"]
     assert len(sc["in"]) == 2 * k and sc["out"] == [len(ops) - 1]
-    # the same body verity.verification.programs constructs
+    # the same body verity.proofs.programs constructs
     assert gemm_coordinate(k).digest == sc["digest"]
     assert name in FIRST.reference_vectors
 

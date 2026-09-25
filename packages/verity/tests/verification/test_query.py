@@ -1,4 +1,4 @@
-"""``verity.verification.query``: the one-unit / two-unit contract of the design on tiny synthetic Programs."""
+"""``verity.proofs.query``: the one-unit / two-unit contract of the design on tiny synthetic Programs."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from verity.verification.query import (PartitionError, Policy, ValueRef, VerificationUnit, admissibility, boundary, boundary_values,
+from verity.proofs.query import (PartitionError, Policy, ValueRef, VerificationUnit, admissibility, boundary, boundary_values,
                                        partition_by, required_values, unit_boundary)
 
 

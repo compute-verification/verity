@@ -14,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from verity.verification.conformance import interpret
-from verity.verification.typed_obligation import SUPPORTED_FAMILIES
+from verity.proofs.conformance import interpret
+from verity.proofs.typed_obligation import SUPPORTED_FAMILIES
 
 FIXTURES = Path(__file__).resolve().parents[4] / "fixtures" / "typed-obligation-v0"
 

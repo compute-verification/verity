@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 
-from verity.verification.query import ValueRef as R
+from verity.proofs.query import ValueRef as R
 from verity_vllm.check import oracle_compare as OC
 from verity_vllm.check.replay.sampled_replay import form_b_families
 from verity_vllm.query.manifest import format as MF

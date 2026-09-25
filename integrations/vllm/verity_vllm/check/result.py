@@ -13,7 +13,7 @@ import copy
 from dataclasses import dataclass, field
 from typing import Any, Iterable
 
-from verity.verification.codes import VerificationCode
+from verity.proofs.codes import VerificationCode
 
 PASS, FAIL, INSUFFICIENT, NOT_RUN = "PASS", "FAIL", "INSUFFICIENT_EVIDENCE", "NOT_RUN"
 OUTCOMES = (PASS, FAIL, INSUFFICIENT, NOT_RUN)

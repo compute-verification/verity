@@ -1,4 +1,4 @@
-"""``verity.verification.trust``: trust is computed from store evidence and repo fixtures, never asserted.
+"""``verity.proofs.trust``: trust is computed from store evidence and repo fixtures, never asserted.
 
 Synthetic evidence in an isolated store root lifts one target (FP8_ADA_MMA over ``sm89.mma.m16n8k32.e4m3``, anchor RTX 4090) from
 UNPROBED through HYPOTHESIS and PINNED to TRUSTED and TRUSTED_STABLE as artifacts and labels are added; an open D-entry, a red-team
@@ -18,8 +18,8 @@ import pytest
 pytest.importorskip("research.store.local")
 from research.store.local import LocalStore  # noqa: E402
 
-from verity.verification import trust  # noqa: E402
-from verity.verification.trust import (  # noqa: E402
+from verity.proofs import trust  # noqa: E402
+from verity.proofs.trust import (  # noqa: E402
     DOSSIER_KIND, HONEST_MIN, INVALIDATION_TRIGGERS, N_MIN, NEGATIVES_MIN, REGRESSION_TILES, RELITIGATION_PROCEDURE, Level, TrustReport,
     assess, publish, render_markdown,
 )
@@ -363,7 +363,7 @@ def test_registry_status_values_are_trust_ladder_members_and_never_above_pinned(
     """No store: the registry may assert at most PINNED (TRUSTED and above are computed), every status is a ladder level, and a
     dossier reference, when set, is a store artifact id."""
     from verity.ml.tc.instructions import INSTRUCTIONS
-    from verity.verification.target import TARGETS
+    from verity.proofs.target import TARGETS
 
     for ins in INSTRUCTIONS.values():
         assert ins.status.upper() in Level.__members__, f"{ins.id}: status {ins.status!r} is not a trust-ladder level"
