@@ -3,7 +3,7 @@ with a gap (a forgotten Input gate, a forgotten constant gate), a set whose inte
 w_out is 32 (dead return), sets whose exact w_out exceeds 32 (AttnBlock calls: 640 / 672 bits), scan-carry boundaries,
 fan-out counted once, dead parameters, 64-bit gates -- and the RA rule that `Unsupported` is never a pass.
 
-The three core modules are other owners' (`verity.ir.query_ast`, `verity_vllm.query.boundary`, `verity_vllm.query.partition`): every test
+The three core modules are other owners' (`verity.ir.query_ast`, `verity.ir.boundary`, `verity.ir.partition`): every test
 `importorskip`s what it needs, so this file SKIPS (never fails) until the branches are merged.  The oracle side of every
 assertion is `fixtures_query` (explicit `Subcircuit` on the expanded circuit)."""
 from __future__ import annotations
@@ -20,7 +20,7 @@ from tests.program import fixtures_query as FX
 _OWNER = {"gateset": "qapi", "boundary": "qbound", "partition": "qpart"}
 
 
-_MODULES = {"gateset": "verity.ir.query_ast", "boundary": "verity_vllm.query.boundary", "partition": "verity_vllm.query.partition"}
+_MODULES = {"gateset": "verity.ir.query_ast", "boundary": "verity.ir.boundary", "partition": "verity.ir.partition"}
 
 
 def _mod(name: str):

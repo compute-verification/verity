@@ -1,4 +1,4 @@
-"""Differential tests of `verity_vllm.query.boundary` against the explicit oracle `Subcircuit.out` / `Subcircuit.in_`.
+"""Differential tests of `verity.ir.boundary` on the registry's Programs against the explicit oracle `Subcircuit.out` / `Subcircuit.in_`.
 
 Every exact answer must equal the oracle on the expanded circuit; every bound must be >= the exact `w_out`; every
 `Unsupported` must be on a case named here (in the natural fixtures there are none; the named ones are produced by
@@ -14,9 +14,9 @@ import time
 
 import pytest
 
-from verity_vllm.query import boundary as B
+from verity.ir import boundary as B
 from verity.ir.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity_vllm.program.frontend.liveness import Liveness
+from verity.ir.liveness import Liveness
 from verity.ir.layout import FunctionCall, Scope, Subcircuit
 from verity.ir.parts import Limits, Part, Unsupported, n_members
 from verity.ir.program import Program

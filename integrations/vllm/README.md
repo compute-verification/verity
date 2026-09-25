@@ -19,7 +19,7 @@ verity_vllm/
   pipeline/           stage drivers      build.py match.py commit.py report.py hot.py layout.py cli.py research_tools.py admission_*.py tp/
   engine/             the vLLM engine    vllm_adapter.py engine_driver.py engine_profile.py arrivals.py rank_worker.py profiles/
   program/            Program            registry/ frontend/ lifting/ kernels/ model.py workload.py compact.py dtypes.py
-  query/              verification query module_body.py required.py program_view.py boundary.py partition.py manifest/ compare.py
+  query/              verification query module_body.py required.py program_view.py manifest/ compare.py
   correspondence/     runtime corresp.   runtime.py reader_for_*.py resolve*.py capture_identities.py
   observe/            value observation  observer.py events.py log.py storage.py contract.py runtime_tree.py chunks.py fold/
   acquire/            value acquisition  plan.py install.py stage.py gate.py compiled.py sources/ *_tap_src/
@@ -54,11 +54,11 @@ and `kernels/`, the independent kernel models the Definitions wrap (numpy / C++ 
 their tables).  Entrypoints: `program.frontend.derive`, `program.registry`.  Never: module paths as identity, hook sets,
 VU policy, model-name tables (`registry/quarantine/` is the by-name residue and only shrinks).
 
-**`query/`** implements the *verification query*: `module_body.py` (Q_module_body_v1), `program_view.py`, `boundary.py` /
-`partition.py` (boundary values, VU partitions), `manifest/` (the required-value manifest: `format.py` the shared vocabulary,
-`verify.py` the rebuild-and-compare check of record), `query_artifact.py` (query artifact identities), `compare.py` (a v2
-manifest against a v1 one), `required.py` (v1 `IDENTITY_KEY` rows).  Never: execution data, hooks, model names, anything read
-from a run.
+**`query/`** implements the *verification query*: `module_body.py` (Q_module_body_v1), `program_view.py`, `manifest/` (the
+required-value manifest: `format.py` the shared vocabulary, `verify.py` the rebuild-and-compare check of record),
+`query_artifact.py` (query artifact identities), `compare.py` (a v2 manifest against a v1 one), `required.py` (v1
+`IDENTITY_KEY` rows).  Boundary values, VU partitions and dead gates are core's `verity.ir.boundary`, `verity.ir.partition`
+and `verity.ir.liveness`.  Never: execution data, hooks, model names, anything read from a run.
 
 **`correspondence/`** implements *runtime correspondence* as data: `runtime.py` (runtime-correspondence/v1),
 `reader_for_query.py` / `reader_for_acquire.py`; and *occurrence resolution*: `resolve.py`, `resolve_decomp.py`.  Never:
