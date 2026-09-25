@@ -33,7 +33,7 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
  plus `proofs.profile.IntegrityProfile`, which records what verification
  established: the exhaustive facts, the two-stage law and δ. Consumers read
  it with their own utilities; their readers stay out of core. Its tests live
- in `tests/verification/`, a path the hash-registered discrepancy log cites.
+ in `tests/proofs/`.
  - `verity.commitments`: see its module docstring.
  Other modules are created when code lands, not before.
  - Tests live in `packages/verity/tests/<module>/`.

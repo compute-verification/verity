@@ -18,7 +18,7 @@ This module is deliberately small and dependency-free: it knows Calls, ports, re
 Definition instance of some registry), how a Program is stored, which annotation says which module owns a Call, and how
 an identity is spelt for a collector are the integration's concern (``verity_vllm.query``).  The one-unit / two-unit
 example of the design (``x -- Matmul -- u -- Activation -- y``: one unit -> {x, y}; two units -> {x, u, y}) is the
-contract; see ``tests/verification/test_query.py``.
+contract; see ``tests/proofs/test_query.py``.
 
 The Program is read through the :class:`Program` protocol so an integration can present a decoded ``verity.ir`` descriptor,
 a streamed instance sequence, or a synthetic graph without converting it: a Program is a sequence of :class:`Call` records
