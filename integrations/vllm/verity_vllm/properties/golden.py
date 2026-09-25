@@ -25,6 +25,7 @@ from typing import Any
 
 from verity_vllm.config import ROOT as REPO
 from verity_vllm.config import UsageError, option
+from verity_vllm.properties.record import seal
 
 CORPUS = Path(__file__).resolve().parent / "golden" / "corpus.json"
 
@@ -82,7 +83,7 @@ def check(corpus_path: Path = CORPUS, only: list[str] | None = None) -> dict[str
     st = [x["status"] for x in out["entries"]]
     out["n_pass"], out["n_fail"], out["n_skipped"] = st.count("pass"), st.count("fail"), st.count("skipped")
     out["status"] = "fail" if out["n_fail"] else ("pass" if out["n_pass"] else "skipped")
-    return out
+    return seal(out, out["status"] == "pass")
 
 
 def record(name: str, log: str, profile_name: str, *, decision: str | None = None, corpus_path: Path = CORPUS) -> dict[str, Any]:

@@ -39,6 +39,8 @@ from dataclasses import dataclass, field
 
 from verity_vllm.config import option
 
+from verity_vllm.properties.record import seal
+
 REQUIRED_EDGE_KINDS = ("zeros", "max", "subnormal", "alternating")
 DTYPE_BITS = {"bfloat16": 16, "float16": 16, "float32": 32, "int32": 32, "int64": 64, "uint8": 8, "int8": 8, "bool": 8}
 
@@ -206,7 +208,7 @@ def check(adapter: str, d: Path) -> dict[str, Any]:
     rep["status"] = "pass" if passed == len(man["cases"]) > 0 and not missing else "fail"
     if missing:
         rep["reason"] = f"edge-kind inputs missing: {missing}"
-    return rep
+    return seal(rep, rep["status"] == "pass")
 
 
 @dataclass(frozen=True, kw_only=True)

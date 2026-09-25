@@ -18,6 +18,8 @@ from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHea
 from verity_vllm.check.match import global_match as gm
 from verity_vllm.check.match import global_match_fast as GMF
 from verity_vllm.pipeline import cli
+from verity_vllm.check.match import declaration as GD
+from verity_vllm.check.match import sampler_geometry as SG
 from tests.check import test_batch_decomp_e2e as e2e
 from tests.check.test_batch_decomp_e2e import (A_DOWN_W, A_EMBED, A_GU_W, A_IDS, A_LN1, A_LN2, A_NORM, A_O_W, A_POS, A_QKV_W, BF,
                                                                             BS, I32D, I64D, W_COS, W_DOWN, W_EMBED, W_GU, W_LN1, W_LN2, W_NORM,
@@ -912,7 +914,7 @@ def test_from_gprog_relocates_component_dirs_beside_a_staged_build_artifact(tmp_
     assert set(reloc) == {"1024,127"}
     assert reloc["1024,127"] == {"from": derived["1024,127"], "to": str(row / "build_request_LP1024_T127")}
     # the same resolution the requests' component dirs get (from_gprog looks the "lp,t" key up in the resolved map)
-    r = gm.relocate_components(derived, str(p))
+    r = GD.relocate_components(derived, str(p))
     assert r["derived"]["1024,127"] == str(row / "build_request_LP1024_T127")
     assert r["derived"]["7,3"] == str(present) and r["derived"]["5,1"] == derived["5,1"]
     assert r["base"] == str(row)
@@ -922,10 +924,10 @@ def test_from_gprog_relocates_component_dirs_beside_a_staged_build_artifact(tmp_
     attempt.mkdir()
     for name in ("build_workload", "build_request_LP1024_T127"):
         os.symlink(row / name, attempt / name)
-    r2 = gm.relocate_components(derived, str(attempt / "build_workload" / "workload_program.json"))
+    r2 = GD.relocate_components(derived, str(attempt / "build_workload" / "workload_program.json"))
     assert r2["derived"]["1024,127"] == str(attempt / "build_request_LP1024_T127")
     # nothing to move -> an empty record (a document of a Build read where it was built is unchanged in content)
-    assert gm.relocate_components({"7,3": str(present)}, str(p))["relocated"] == {}
+    assert GD.relocate_components({"7,3": str(present)}, str(p))["relocated"] == {}
 
 
 def test_impl_module_defaults_to_the_match_of_record_and_names_what_runs(monkeypatch):
@@ -976,7 +978,7 @@ def test_from_gprog_reads_the_lag_static_where_the_codec_writes_it_and_refuses_a
     for lag in (0, 1):
         wl, desc = _real_workload_descriptor(lag)
         assert desc["program_fn"].endswith(f",lag={lag}}}") and desc["root"].endswith(f",lag={lag}}}]_v1"), (desc["program_fn"][-30:], desc["root"][-30:])
-        assert gm.workload_lag_static(desc) == lag
+        assert GD.workload_lag_static(desc) == lag
         d = tmp_path / f"lag{lag}" / "build_workload"; d.mkdir(parents=True)
         with gzip.open(d / "descriptor.json.gz", "wb") as f:
             f.write(canonical_json(desc))
@@ -997,17 +999,17 @@ def test_from_gprog_reads_the_lag_static_where_the_codec_writes_it_and_refuses_a
             gm.from_gprog(str(p))
     # a pre-R17-1 shaped descriptor: no static anywhere -> None; an artifact CLAIMING a lag over it is refused
     _, old = _real_workload_descriptor(None)
-    assert gm.workload_lag_static(old) is None
+    assert GD.workload_lag_static(old) is None
     # program_fn and root disagreeing on the static -> not one Program
     _, dz = _real_workload_descriptor(1)
     with pytest.raises(ValueError, match="not one Program"):
-        gm.workload_lag_static(dict(dz, root=dz["root"].replace(",lag=1}]", ",lag=0}]")))
+        GD.workload_lag_static(dict(dz, root=dz["root"].replace(",lag=1}]", ",lag=0}]")))
     # [rev S-r17-03 n2] an explicit root bindings.lag (mock form) disagreeing with the spec-id static -> refused too
     dd = {k: (dict(v, bindings={**v.get("bindings", {}), "lag": 0}) if k == dz["root"] else v) for k, v in dz["definitions"].items()}
     with pytest.raises(ValueError, match="bindings.lag 0 != the spec-id lag static 1"):
-        gm.workload_lag_static(dict(dz, definitions=dd))
+        GD.workload_lag_static(dict(dz, definitions=dd))
     dd1 = {k: (dict(v, bindings={**v.get("bindings", {}), "lag": 1}) if k == dz["root"] else v) for k, v in dz["definitions"].items()}
-    assert gm.workload_lag_static(dict(dz, definitions=dd1)) == 1
+    assert GD.workload_lag_static(dict(dz, definitions=dd1)) == 1
 
 
 def test_record_engine_conditions_outside_the_declared_applicability_fail_g1(memory, tmp_path):
@@ -1360,18 +1362,18 @@ def test_g1_ties_the_manifest_of_record_to_the_run_header_sha_and_sampling_field
     assert res["verdict"] == "FAIL"
     assert any("sampling variant='stoch-t0.8-p0.95' but the run header records variant='greedy'" in p for p in pr), pr
     assert any("sampling temperature=0.8 but the run header records temperature=0.0" in p for p in pr), pr
-    lab = gm.manifest_sampling({"sampling": {"variant": "stoch-t0.8-p0.95-k20"}})
+    lab = GD.manifest_sampling({"sampling": {"variant": "stoch-t0.8-p0.95-k20"}})
     assert {k: lab[k] for k in ("variant", "temperature", "top_p", "top_k")} == {"variant": "stoch-t0.8-p0.95-k20", "temperature": 0.8, "top_p": 0.95, "top_k": 20}
     assert "conflict" not in lab
     # [rev-pm M-0667 TIP N5] the driver consumes variants[variant] (vllm_adapter.load_workload), not the label: the table is the value of
     # record, and label / table / explicit fields / sweep params must agree -- a laundered header (sha recomputed over the edited doc) with
     # variants[v].top_p edited 0.95 -> 0.9 under the label p0.95 is caught by the manifest's OWN disagreement, fail closed, named
-    tab = gm.manifest_sampling({"sampling": {"variant": "stoch-t0.8-p0.95"}, "variants": {"stoch-t0.8-p0.95": {"temperature": 0.8, "top_p": 0.9, "top_k": 0}}})
+    tab = GD.manifest_sampling({"sampling": {"variant": "stoch-t0.8-p0.95"}, "variants": {"stoch-t0.8-p0.95": {"temperature": 0.8, "top_p": 0.9, "top_k": 0}}})
     assert tab["top_p"] == 0.9 and tab["conflict"] == ["top_p: label=0.95, variants_table=0.9"]
-    agree = gm.manifest_sampling({"sampling": {"variant": "stoch-t0.8-p0.95"}, "variants": {"stoch-t0.8-p0.95": {"temperature": 0.8, "top_p": 0.95, "top_k": 0}},
+    agree = GD.manifest_sampling({"sampling": {"variant": "stoch-t0.8-p0.95"}, "variants": {"stoch-t0.8-p0.95": {"temperature": 0.8, "top_p": 0.95, "top_k": 0}},
                                   "sweep": {"sampling_params": {"top_p": 0.95}}})
     assert "conflict" not in agree and agree["sources"]["top_p"] == ["label", "sweep.sampling_params", "variants_table"]
-    assert "not in the manifest's `variants` table" in gm.manifest_sampling({"sampling": {"variant": "stoch-t0.8-p0.95"}, "variants": {"greedy": {}}})["conflict"][0]
+    assert "not in the manifest's `variants` table" in GD.manifest_sampling({"sampling": {"variant": "stoch-t0.8-p0.95"}, "variants": {"greedy": {}}})["conflict"][0]
 
     # [rev-pm BLOCKER M-0717 (i)] a per-request variant pin added AFTER the run: the header has no per-request sampling record -> FAIL named
     def pin_r1_greedy(wl):
@@ -1778,34 +1780,34 @@ def test_sampler_geometry_check_evaluates_s_per_engine_step_against_the_realized
     steps = {0: {"logits_rows": [(f"r{i}", 9) for i in range(8)]}, 1: {"logits_rows": [(f"r{i}", 10) for i in range(4)]}}
     specs = [_topp(64, 16)] * 8 + ["TokenSelect_v1{V=64}"] + [_topp(64, 32)] * 4
     es = {i: 0 for i in range(8)} | {8: 1} | {i: 1 for i in range(9, 13)}
-    ok = gm.sampler_geometry_check(gp, _StubFold(specs), es, steps, {0: 8, 1: 4})
+    ok = SG.sampler_geometry_check(gp, _StubFold(specs), es, steps, {0: 8, 1: 4})
     assert ok["problems"] == [] and ok["info"]["checked_steps"] == 2 and ok["info"]["top_p_token_selects"] == 12
     assert ok["info"]["live_to_S"] == {"live=4:S=32": 1, "live=8:S=16": 1} and ok["info"]["num_sms"] == 142
     assert ok["info"]["declared_by"] == "applicability.components.num_sms" and ok["info"]["sampler_batch_recorded_steps"] == 2
     # (-) the launch at step 1 kept S = 16 for 4 live rows (the geometry of the declared chronology, not of the realized batch): FAIL by name
-    bad = gm.sampler_geometry_check(gp, _StubFold([_topp(64, 16)] * 8 + [_topp(64, 16)] * 4), {i: (0 if i < 8 else 1) for i in range(12)}, steps)
+    bad = SG.sampler_geometry_check(gp, _StubFold([_topp(64, 16)] * 8 + [_topp(64, 16)] * 4), {i: (0 if i < 8 else 1) for i in range(12)}, steps)
     assert len(bad["problems"]) == 1 and "step" in bad["problems"][0] and "'expected_S': 32" in bad["problems"][0] and "'fold_S': [16]" in bad["problems"][0]
     assert bad["info"]["steps_with_mismatch"] == 1 and "M-0571 (3)" in bad["problems"][0]
     # (-) the Program declares no num_SMs at all: the relation cannot be evaluated -> fail closed, named
-    nod = gm.sampler_geometry_check({"applicability": {"components": {}}}, _StubFold([_topp(64, 16)]), {0: 0}, steps)
+    nod = SG.sampler_geometry_check({"applicability": {"components": {}}}, _StubFold([_topp(64, 16)]), {0: 0}, steps)
     assert len(nod["problems"]) == 1 and "declares no num_SMs" in nod["problems"][0] and "fail closed" in nod["problems"][0]
     # (+) the Program's own sampler_geometry declaration (GP-01) is the source of record when present
-    sg = gm.sampler_geometry_check({"sampler_geometry": {"num_sms": 132}, "applicability": {"components": {"num_sms": 142}}},
+    sg = SG.sampler_geometry_check({"sampler_geometry": {"num_sms": 132}, "applicability": {"components": {"num_sms": 142}}},
                                    _StubFold([_topp(64, 16)] * 8), {i: 0 for i in range(8)}, steps)
     assert sg["problems"] == [] and sg["info"]["declared_by"] == "sampler_geometry" and sg["info"]["num_sms"] == 132
     # (-) the SampleEnd's own logits_view batch disagrees with the chronology's logits rows: named, never averaged away
-    sb = gm.sampler_geometry_check(gp, _StubFold([_topp(64, 16)] * 8), {i: 0 for i in range(8)}, steps, {0: 7})
+    sb = SG.sampler_geometry_check(gp, _StubFold([_topp(64, 16)] * 8), {i: 0 for i in range(8)}, steps, {0: 7})
     assert len(sb["problems"]) == 1 and "logits_view batch != the record's logits rows" in sb["problems"][0]
     # (-) a top-p TokenSelect without a readable S / on an engine step the record does not list: named
-    nos = gm.sampler_geometry_check(gp, _StubFold(["GumbelTopPTokenSelect_v1{V=64}"]), {0: 0}, steps)
+    nos = SG.sampler_geometry_check(gp, _StubFold(["GumbelTopPTokenSelect_v1{V=64}"]), {0: 0}, steps)
     assert any("no readable split count" in p for p in nos["problems"])
-    unk = gm.sampler_geometry_check(gp, _StubFold([_topp(64, 16)]), {}, steps)
+    unk = SG.sampler_geometry_check(gp, _StubFold([_topp(64, 16)]), {}, steps)
     assert any("the record does not list" in p for p in unk["problems"])
     # (0) a greedy fold has nothing to check -- no problem, checked 0, no num_SMs needed
-    g = gm.sampler_geometry_check({}, _StubFold(["TokenSelect_v1{V=64}"] * 3), {0: 0, 1: 0, 2: 1}, steps)
+    g = SG.sampler_geometry_check({}, _StubFold(["TokenSelect_v1{V=64}"] * 3), {0: 0, 1: 0, 2: 1}, steps)
     assert g["problems"] == [] and g["info"]["checked_steps"] == 0 and g["info"]["top_p_token_selects"] == 0
     # the fold's spec strings may carry a prefix (batch:) -- S is still read
-    assert gm.top_p_split_count("batch:" + _topp(64, 8)) == 8 and gm.top_p_split_count("TokenSelect_v1{V=64}") is None
+    assert SG.top_p_split_count("batch:" + _topp(64, 8)) == 8 and SG.top_p_split_count("TokenSelect_v1{V=64}") is None
 
 
 class _OperandFold:
@@ -1834,28 +1836,28 @@ def test_sampler_geometry_check_reads_s_from_the_const32_splits_operand():
     steps = {0: {"logits_rows": [(f"r{i}", 9) for i in range(8)]}, 1: {"logits_rows": [(f"r{i}", 10) for i in range(4)]}}
     fold = _OperandFold([(16, None)] * 8 + [(32, None)] * 4)
     sel = [i for i, x in enumerate(fold.inst) if x["spec"].startswith("GumbelTopP")]
-    assert len(sel) == 12 and all(gm.top_p_split_count(fold.inst[i]["spec"], fold, fold.inst[i]) == (16 if n < 8 else 32) for n, i in enumerate(sel))
+    assert len(sel) == 12 and all(SG.top_p_split_count(fold.inst[i]["spec"], fold, fold.inst[i]) == (16 if n < 8 else 32) for n, i in enumerate(sel))
     es = {sel[n]: (0 if n < 8 else 1) for n in range(12)}
-    ok = gm.sampler_geometry_check(gp, fold, es, steps, {0: 8, 1: 4})
+    ok = SG.sampler_geometry_check(gp, fold, es, steps, {0: 8, 1: 4})
     assert ok["problems"] == [] and ok["info"]["live_to_S"] == {"live=4:S=32": 1, "live=8:S=16": 1} and ok["info"]["top_p_token_selects"] == 12
     # the bound path wins when compare has bound the operand (splits_values keyed by the select's k), whatever the operand says
     fold.splits_values = {fold.inst[sel[8]]["k"]: 16}
-    kept = gm.sampler_geometry_check(gp, fold, es, steps)
+    kept = SG.sampler_geometry_check(gp, fold, es, steps)
     assert len(kept["problems"]) == 1 and "'expected_S': 32" in kept["problems"][0] and "'fold_S': [16]" in kept["problems"][0]
     # (-) S kept at 16 for the 4 live rows of step 1: FAIL by name, exactly as with the static form
     bad = _OperandFold([(16, None)] * 12)
-    b = gm.sampler_geometry_check(gp, bad, {sel[n]: (0 if n < 8 else 1) for n in range(12)}, steps)
+    b = SG.sampler_geometry_check(gp, bad, {sel[n]: (0 if n < 8 else 1) for n in range(12)}, steps)
     assert len(b["problems"]) == 1 and "'expected_S': 32" in b["problems"][0] and "'fold_S': [16]" in b["problems"][0]
     # (-) a 6th operand that is not ONE run onto a Const32 -- a 2-wide run, a non-Const instance, an unknown k -- carries no readable S
     for override in ([("n", 1, 0, 2)], [("n", 900, 0, 1)], [("n", 555, 0, 1)], [("n", 1, 0, 1), ("n", 1, 0, 1)], []):
         f = _OperandFold([(16, override)])
         i = [i for i, x in enumerate(f.inst) if x["spec"].startswith("GumbelTopP")][0]
-        r = gm.sampler_geometry_check(gp, f, {i: 0}, {0: {"logits_rows": [("r0", 9)]}})
+        r = SG.sampler_geometry_check(gp, f, {i: 0}, {0: {"logits_rows": [("r0", 9)]}})
         assert len(r["problems"]) == 1 and "no readable split count" in r["problems"][0] and "Const32[S] splits operand" in r["problems"][0], override
     # a Const of another width (Const64) in the operand slot is not a split count either
     f = _OperandFold([(16, None)])
     f.inst[0]["spec"] = "Const64[0x0000000000000010]_v1"
-    assert gm.top_p_split_count(f.inst[1]["spec"], f, f.inst[1]) is None
+    assert SG.top_p_split_count(f.inst[1]["spec"], f, f.inst[1]) is None
 
 
 def test_read_record_carries_the_sampler_batch_of_every_sample_end(tmp_path):
@@ -1929,7 +1931,7 @@ def test_scheduled_live_counts_builds_the_workload_state_from_g6_facts_and_names
     # r0 arrives 0, cap 6 (length); r1 arrives 1, cap 6, EOS after 2 answers + 1 declared lag row -> sampler rows at steps 1, 2, 3;
     # r2 arrives 2 with a 2-chunk prefill (one discarded chunk sample) and 2 answers -> steps 2, 3, 4
     reqs = [_req("r0", 0, 6), _req("r1", 1, 2, cap=6, lag=1, finish="eos", eos_verified=True), _req("r2", 2, 2, chunks=2)]
-    sc = gm.scheduled_live_counts(reqs, _present(reqs))
+    sc = SG.scheduled_live_counts(reqs, _present(reqs))
     assert sc["live"] == {0: 1, 1: 2, 2: 3, 3: 3, 4: 2, 5: 1} and sc["max_live"] == 3 and sc["unestablished"] == {}
     assert sc["requests"]["r1"] == {"established": True, "first_step": 1, "last_step": 3, "prefill_chunks": 1, "answer_events": 2, "lag_rows": 1, "finish": "eos"}
     t = {x["step"]: x for x in sc["transitions"]}
@@ -1940,13 +1942,13 @@ def test_scheduled_live_counts_builds_the_workload_state_from_g6_facts_and_names
     assert t[5]["departures"][0]["request"] == "r2" and t[6]["departures"][0]["request"] == "r0" and t[6]["live_to"] == 0
     # (-) an EOS stop that is NOT verified leaves the state unestablished at every step the request touches (never a fallback to the rows)
     bad = [_req("r0", 0, 6), _req("r1", 1, 2, cap=6, lag=1, finish="eos", eos_verified=False)]
-    sb = gm.scheduled_live_counts(bad, _present(bad))
+    sb = SG.scheduled_live_counts(bad, _present(bad))
     assert sb["unestablished"] == {1: ["r1"], 2: ["r1"], 3: ["r1"]} and sb["live"] == {s: 1 for s in range(6)} and sb["requests"]["r1"]["established"] is False
     # (-) a request with a G6 problem is unestablished too; (-) rows that do not equal the scheduled steps (a row past the stop) are named
-    g6 = gm.scheduled_live_counts([_req("r0", 0, 6, g6=1)], _present([_req("r0", 0, 6)]))
+    g6 = SG.scheduled_live_counts([_req("r0", 0, 6, g6=1)], _present([_req("r0", 0, 6)]))
     assert g6["unestablished"] == {s: ["r0"] for s in range(6)}
     past = [_req("r0", 0, 3)]
-    sp = gm.scheduled_live_counts(past, {"r0": [0, 1, 2, 3]})
+    sp = SG.scheduled_live_counts(past, {"r0": [0, 1, 2, 3]})
     assert sp["requests"]["r0"]["note"] == "scheduled sampler steps != observed rows" and sp["unestablished"] == {s: ["r0"] for s in range(4)}
 
 
@@ -1957,12 +1959,12 @@ def test_sampler_geometry_check_reads_live_from_the_scheduled_state_and_refuses_
     from verity_vllm.program.registry.topp_split import splits_for
     gp = {"applicability": {"components": {"num_sms": 142}}}
     reqs = [_req(f"r{i}", 0, 2) for i in range(4)] + [_req("r4", 0, 1)]      # 5 live at step 0 (S 16), 4 at step 1 (S 32)
-    sc = gm.scheduled_live_counts(reqs, _present(reqs))
+    sc = SG.scheduled_live_counts(reqs, _present(reqs))
     assert sc["live"] == {0: 5, 1: 4}
     steps = {0: {"logits_rows": [(f"r{i}", 9) for i in range(5)]}, 1: {"logits_rows": [(f"r{i}", 10) for i in range(4)]}}
     specs = [_topp(64, 16)] * 5 + [_topp(64, 32)] * 4
     es = {i: 0 for i in range(5)} | {i: 1 for i in range(5, 9)}
-    ok = gm.sampler_geometry_check(gp, _StubFold(specs), es, steps, {0: 5, 1: 4}, sc)
+    ok = SG.sampler_geometry_check(gp, _StubFold(specs), es, steps, {0: 5, 1: 4}, sc)
     assert ok["problems"] == [], ok["problems"]
     assert ok["info"]["live_source"].startswith("scheduled workload state") and ok["info"]["checked_steps"] == 2
     assert ok["info"]["S_transitions"] == [{"step": 0, "live": 5, "S": 16}, {"step": 1, "live": 4, "S": 32}]
@@ -1974,24 +1976,24 @@ def test_sampler_geometry_check_reads_live_from_the_scheduled_state_and_refuses_
     specs_x = [_topp(64, 16)] * 5 + [_topp(64, 16)] * 5
     es_x = {i: 0 for i in range(5)} | {i: 1 for i in range(5, 10)}
     assert splits_for(5, 142) == 16
-    r16 = gm.sampler_geometry_check(gp, _StubFold(specs_x), es_x, steps_x, {0: 5, 1: 5})
+    r16 = SG.sampler_geometry_check(gp, _StubFold(specs_x), es_x, steps_x, {0: 5, 1: 5})
     assert r16["problems"] == [] and r16["info"]["live_source"].startswith("observed logits rows")
-    r17 = gm.sampler_geometry_check(gp, _StubFold(specs_x), es_x, steps_x, {0: 5, 1: 5}, sc)
+    r17 = SG.sampler_geometry_check(gp, _StubFold(specs_x), es_x, steps_x, {0: 5, 1: 5}, sc)
     assert len(r17["problems"]) == 3, r17["problems"]
     assert any("logits rows != the scheduled live count [{'step': 1, 'scheduled_live': 4, 'logits_rows': 5}]" in p and "never the observed batch" in p for p in r17["problems"])
     assert any("SampleEnd logits_view batch != the scheduled live count" in p for p in r17["problems"])
     assert any("'expected_S': 32" in p and "'fold_S': [16]" in p and "'live': 4" in p for p in r17["problems"])
     # (-) a top-p select on a step the state schedules nobody at; (-) a scheduled sampling step without a select; (-) an unestablished step
     steps_2 = dict(steps) | {2: {"logits_rows": [("rX", 11)]}}
-    extra = gm.sampler_geometry_check(gp, _StubFold(specs + [_topp(64, 32)]), es | {9: 2}, steps_2, None, sc)
+    extra = SG.sampler_geometry_check(gp, _StubFold(specs + [_topp(64, 32)]), es | {9: 2}, steps_2, None, sc)
     assert len(extra["problems"]) == 1 and "scheduled workload state has NO live request" in extra["problems"][0] and "'step': 2" in extra["problems"][0]
-    miss = gm.sampler_geometry_check(gp, _StubFold(specs[:5]), {i: 0 for i in range(5)}, steps, None, sc)
+    miss = SG.sampler_geometry_check(gp, _StubFold(specs[:5]), {i: 0 for i in range(5)}, steps, None, sc)
     assert len(miss["problems"]) == 1 and "carry no top-p TokenSelect in the fold: [1]" in miss["problems"][0]
     un = dict(sc, unestablished={1: ["r2"]})
-    ue = gm.sampler_geometry_check(gp, _StubFold(specs), es, steps, None, un)
+    ue = SG.sampler_geometry_check(gp, _StubFold(specs), es, steps, None, un)
     assert len(ue["problems"]) == 1 and "NOT established" in ue["problems"][0] and "fail closed" in ue["problems"][0] and ue["info"]["checked_steps"] == 1
     # (0) a greedy fold still reports the transitions of the scheduled state (the RESULT's achieved-concurrency evidence)
-    g = gm.sampler_geometry_check(gp, _StubFold(["TokenSelect_v1{V=64}"] * 9), es, steps, None, sc)
+    g = SG.sampler_geometry_check(gp, _StubFold(["TokenSelect_v1{V=64}"] * 9), es, steps, None, sc)
     assert g["problems"] == [] and g["info"]["checked_steps"] == 0 and [t["step"] for t in g["info"]["transitions"]] == [0, 1, 2]
 
 
@@ -2007,7 +2009,7 @@ def test_scheduled_state_on_the_r15_b8_record_reproduces_the_kernel_s_flips():
     for st in d["steps"]:
         for rid in st["requests"]:
             present.setdefault(rid, []).append(st["step"])
-    sc = gm.scheduled_live_counts(reqs, present)
+    sc = SG.scheduled_live_counts(reqs, present)
     assert sc["unestablished"] == {} and sc["max_live"] == 7 and len(sc["live"]) == d["engine_steps"] == 157
     assert all(sc["live"][st["step"]] == st["live_realized"] == st["live_declared"] for st in d["steps"])
     assert all(splits_for(sc["live"][st["step"]], d["num_sms"]) == st["S_kernel"] for st in d["steps"])

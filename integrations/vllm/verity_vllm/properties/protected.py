@@ -25,6 +25,7 @@ from typing import Any
 
 from verity_vllm.config import ROOT as REPO
 from verity_vllm.config import option
+from verity_vllm.properties.record import seal
 
 #: Frozen.  Paths a lane may not touch at all (any diff status).  Globs are repo-relative; fnmatch `*` crosses `/`.
 PROTECTED: tuple[str, ...] = (
@@ -188,7 +189,7 @@ def provenance(base: str, head: str, *, cwd: Path = REPO, head_checkout: Path | 
         rows["new_patterns"] = None
     rows["sealed"] = not rows["protected_files_modified"]
     rows["schema"] = "verity-gen/provenance/v1"
-    return rows
+    return seal(rows, rows["sealed"])
 
 
 @dataclass(frozen=True, kw_only=True)

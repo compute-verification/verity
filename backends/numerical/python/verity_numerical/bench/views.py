@@ -64,6 +64,8 @@ PREVIEW = ("PREVIEW of the approved tables spec (kb/TABLES.md): not the publishe
 COMMIT = "commit.seconds"
 #: v1 in-proof-hash results record their commitment once, before the timed runs (possibly a tree cache load): shown, never counted.
 COMMIT_V1 = "relation.hash.commit_seconds"
+#: One-time setup of a run (keys, circuit setup), outside ``t.total``: Table 3 shows it beside the cell, never in it.
+SETUP = "fixed.setup_seconds"
 MIN_RUNS = 5
 #: How Table 1 flags a configuration whose soundness argument uses an algebraic hash; its Table 2 cells carry ``(alg.)``.
 ALGEBRAIC_FLAG = "algebraic hash, not for highest-stakes use"
@@ -692,6 +694,7 @@ class ViewCell:
     unfiltered: dict[str, Any] | None = None
     algebraic: list[str] = field(default_factory=list)   #: the algebraic hashes of its soundness argument (Table 1's flag)
     instances: dict[str, Any] = field(default_factory=dict)  #: the result's instance ref
+    setup_s: float | None = None                          #: one-time setup (``fixed.setup_seconds``), outside the cell
 
     def to_json(self) -> dict[str, Any]:
         d = dataclasses.asdict(self)
@@ -816,7 +819,8 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
                                                _open_finding(c.labels)),
                                 batching=_batching(c.meta["workload_fingerprint"]), scheme=scheme,
                                 algebraic=[h.text() for h in (c.config.algebraic() if c.config else ())],
-                                instances=dict(c.meta["workload_fingerprint"].get("instances") or {}))
+                                instances=dict(c.meta["workload_fingerprint"].get("instances") or {}),
+                                setup_s=T._measurements(c.meta).get(SETUP) if _num(T._measurements(c.meta).get(SETUP)) else None)
                 alt = best(pools.get(key, []) + unfiltered.get(key, []))
                 if alt is not None and alt[0].art != c.art:
                     cell.unfiltered = pick(*alt, N["instances_per_second"])
@@ -948,6 +952,24 @@ def overheads(c: ViewCell) -> tuple[float, float]:
     return c.native * P["commit_s"] / P["instances"], c.native * P["proving_s"] / P["instances"]
 
 
+def _fmt_x(v: float) -> str:
+    return "0×" if v == 0 else T.fmt_overhead(v)
+
+
+def stages(c: ViewCell) -> dict[str, Any]:
+    """Table 3 in overhead units: each stage's seconds per instance × N (commitment, the six buckets, joints, Other), which sum to
+    the cell's ``N / P``; and the one-time setup (``fixed.setup_seconds``) as seconds and amortized ×native over the measured
+    batch (setup × N ÷ instances), outside that sum."""
+    P, ph = c.throughput, c.legacy.phases
+    k = c.native / P["instances"]
+    setup = c.setup_s
+    return {"commitment": P["commit_s"] * k,
+            "buckets": {b: (v * k if v is not None else None) for b, v in ph["buckets"].items()},
+            "joints": {name: {"covers": j["covers"], "overhead": j["seconds"] * k} for name, j in ph["joints"].items()},
+            "other": ph["other"] * k if _num(ph["other"]) else None,
+            "setup": {"seconds": float(setup), "amortized": float(setup) * k, "instances": P["instances"]} if _num(setup) and setup > 0 else None}
+
+
 def render_markdown(V: Views) -> str:
     rules = V.rules
     filt = ", ".join(([f"whole-proof bound 2^{rules.security_log2:g} or better"] if rules.security_log2 is not None else [])
@@ -1017,27 +1039,42 @@ def render_markdown(V: Views) -> str:
         rows2.append(row)
     out += [T._md_table(("Subcircuit · hardware · scheme", "Native N", *cols), rows2), ""]
 
-    out += ["## Table 3 — Where the time goes (per instance, share of end to end)", "",
-            "Commitment = computing the commitments the statement names; proving = the six buckets and Other (proving total − Σ buckets − "
-            f"Σ joints); end to end = commitment + proving. A fused stage prints once in its first column, `{T.JOINT_CONTINUATION}` in the others. "
-            "Serving overhead = commitment time × N, proving overhead = proving time × N; they add up to the Table 2 cell.", ""]
-    rows3 = []
+    out += ["## Table 3 — Where the overhead comes from (each stage × N, share of the cell)", "",
+            "Each stage is its contribution to the Table 2 overhead: its time per instance × N, so commitment + the six buckets + Other "
+            "add up to the cell (Total). Commitment is the serving overhead; the buckets and Other are the proving overhead. A fused stage "
+            f"prints once in its first column, `{T.JOINT_CONTINUATION}` in the others. Setup, one-time (keys, circuit setup: "
+            "`fixed.setup_seconds`) is outside the cell: its seconds, and ×native amortized over the measured batch (setup × N ÷ the "
+            "batch's instances). Seconds per instance are in the drill-down below.", ""]
+    rows3, rows3s = [], []
     for c in V.cells:
+        st = stages(c)
+        share = lambda v: f"{_fmt_x(v)} ({100 * v / c.overhead:.0f}%)"  # noqa: E731
+        cells = {b: share(v) for b, v in st["buckets"].items() if v is not None}
+        for name, j in st["joints"].items():
+            first, *rest = j["covers"]
+            cells[first] = f"{'+'.join(j['covers'])}: {share(j['overhead'])}"
+            cells.update({b: T.JOINT_CONTINUATION for b in rest})
+        su = st["setup"]
+        setup = f"{T.fmt_seconds(su['seconds'])} · {_fmt_x(su['amortized'])} over {su['instances']}" if su else T.EMPTY
+        rows3.append([_cell_name(c), share(st["commitment"]), *[cells.get(b, T.EMPTY) for b in contract.BUCKETS],
+                      share(st["other"]) if st["other"] is not None else T.EMPTY, f"{T.fmt_overhead(c.overhead)} (100%)", setup])
         P, ph = c.throughput, c.legacy.phases
         n, total = P["instances"], P["end_to_end_s"]
         pct = lambda v: f"{fmt_per_instance(v / n)} ({100 * v / total:.0f}%)"  # noqa: E731
-        cells: dict[str, str] = {b: pct(v) for b, v in ph["buckets"].items() if v is not None}
+        secs = {b: pct(v) for b, v in ph["buckets"].items() if v is not None}
         for j in ph["joints"].values():
             first, *rest = j["covers"]
-            cells[first] = f"{'+'.join(j['covers'])}: {pct(j['seconds'])}"
-            cells.update({b: T.JOINT_CONTINUATION for b in rest})
-        serving, proving = overheads(c)
-        rows3.append([_cell_name(c), pct(P["commit_s"]), *[cells.get(b, T.EMPTY) for b in contract.BUCKETS],
-                      pct(ph["other"]) if _num(ph["other"]) else T.EMPTY, f"{fmt_per_instance(total / n)} (100%)",
-                      T.fmt_overhead(serving) if serving > 0 else "0×", T.fmt_overhead(proving)])
-    out += [T._md_table(("Cell", "Commitment", "Witness", "Encoding + witness commitment", "Arithmetic", "Lookup", "ZK additional",
-                         "Serialization", "Other", "End to end", "Serving overhead", "Proving overhead"), rows3)
+            secs[first] = f"{'+'.join(j['covers'])}: {pct(j['seconds'])}"
+            secs.update({b: T.JOINT_CONTINUATION for b in rest})
+        rows3s.append([_cell_name(c), pct(P["commit_s"]), *[secs.get(b, T.EMPTY) for b in contract.BUCKETS],
+                       pct(ph["other"]) if _num(ph["other"]) else T.EMPTY, f"{fmt_per_instance(total / n)} (100%)",
+                       T.fmt_seconds(su["seconds"]) if su else T.EMPTY])
+    head = ("Cell", "Commitment", "Witness", "Encoding + witness commitment", "Arithmetic", "Lookup", "ZK additional", "Serialization", "Other")
+    out += [T._md_table((*head, "Total (the cell)", "Setup, one-time (not in the total)"), rows3)
             if rows3 else f"(no Table 2 cell {T.EMPTY} nothing to decompose)", ""]
+    if rows3s:
+        out += ["### Table 3 drill-down — seconds per instance (share of end to end)", "",
+                T._md_table((*head, "End to end", "Setup, one-time (s)"), rows3s), ""]
     if notes:
         out += ["Footnotes:", *[f"[{i}] {n}" for i, n in enumerate(notes, 1)], ""]
     out.append(f"Rejected ({len(V.rejected)} result{'s' if len(V.rejected) != 1 else ''}; artifact → first reason; letters: "
@@ -1072,7 +1109,8 @@ def render_json(V: Views) -> dict[str, Any]:
                                                     for ln in V.lines]},
         "table3": [{"cell": _cell_name(c), "artifact": c.artifact, "scheme": c.scheme, "instances": c.throughput["instances"],
                     "commit_s": c.throughput["commit_s"], "end_to_end_s": c.throughput["end_to_end_s"],
-                    "serving_overhead": overheads(c)[0], "proving_overhead": overheads(c)[1], **c.legacy.phases} for c in V.cells],
+                    "serving_overhead": overheads(c)[0], "proving_overhead": overheads(c)[1], "stages_overhead": stages(c),
+                    **c.legacy.phases} for c in V.cells],
         "rejected": [{**r, "codes": [list(x) for x in r["codes"]]} for r in V.rejected],
         "not_families": V.not_families,
         "unreadable": V.unreadable,

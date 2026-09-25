@@ -596,6 +596,7 @@ def test_single_weights_input_node_baseline_still_passes(tmp_path):
 # reference here; `memory` is their fold fixture.  R1_EOS: cap 4, stops on the declared EOS 11 after 2 events -> a_r = n_r = 2.
 
 from verity_vllm.check.match import global_match as gm  # noqa: E402
+from verity_vllm.check.match import sampler_geometry as SG  # noqa: E402
 from tests.check import test_global_match as TGM  # noqa: E402
 from tests.check.test_global_match import memory  # noqa: E402,F401 - the fold fixture
 from verity_vllm.program.registry.topp_split import splits_for  # noqa: E402
@@ -603,7 +604,7 @@ from verity_vllm.program.registry.topp_split import splits_for  # noqa: E402
 NSM = 4   # a num_SMs at which S discriminates 1 vs 2 live rows: splits_for(1, 4) = 4, splits_for(2, 4) = 2 (142 SMs gives 32 for both)
 
 # this section regresses global's derived-S unit (lane/r16-global 7aa472c07): on a tree without it there is nothing to regress -- named skip
-_needs_derived_s = pytest.mark.skipif(not hasattr(gm, "sampler_geometry_check"),
+_needs_derived_s = pytest.mark.skipif(not hasattr(SG, "sampler_geometry_check"),
                                       reason="GM-01 without sampler_geometry_check: lane/r16-global 7aa472c07 (COORD M-0169 derived S) not on this tree")
 
 
@@ -643,7 +644,7 @@ class _OperandStubFold:
 
 def _reader_takes_the_bound_operand() -> bool:
     import inspect
-    f = getattr(gm, "top_p_split_count", None)
+    f = getattr(SG, "top_p_split_count", None)
     return f is not None and len(inspect.signature(f).parameters) >= 3
 
 
@@ -693,11 +694,11 @@ def test_derived_s_live_count_is_the_programs_activity_on_every_step_of_a_passin
     assert declared == [2, 2, 2, 1] and declared[2] == 2 != activity[2] == 1 and 3 not in observed and declared[3] == 1
     gsm = dict(gpd, sampler_geometry={"num_sms": NSM})
     ok_fold, ok_es = _topp_fold_for(observed, {s: splits_for(activity[s], NSM) for s in observed}, form)
-    ok = gm.sampler_geometry_check(gsm, ok_fold, ok_es, rec["steps"], rec["sampler_batch"])
+    ok = SG.sampler_geometry_check(gsm, ok_fold, ok_es, rec["steps"], rec["sampler_batch"])
     assert ok["problems"] == [] and ok["info"]["checked_steps"] == 3 and ok["info"]["live_to_S"] == {"live=1:S=4": 1, "live=2:S=2": 2}
     # (-) the launch geometry of the DECLARED schedule at step 2 (as if r1 were still live): S=2 where the activity says S=4
     bad_fold, bad_es = _topp_fold_for(observed, {s: splits_for(declared[s], NSM) for s in observed}, form)
-    bad = gm.sampler_geometry_check(gsm, bad_fold, bad_es, rec["steps"], rec["sampler_batch"])
+    bad = SG.sampler_geometry_check(gsm, bad_fold, bad_es, rec["steps"], rec["sampler_batch"])
     assert len(bad["problems"]) == 1 and "'step': 2" in bad["problems"][0] and "'expected_S': 4" in bad["problems"][0] and "'fold_S': [2]" in bad["problems"][0]
 
 
@@ -735,12 +736,12 @@ def test_a_placeholder_row_after_the_verified_eos_is_not_activity_the_record_fai
     gsm = dict(gpd, sampler_geometry={"num_sms": NSM})
     # (2) the launch's S for the batch the engine actually ran (2 rows at step 2 -> S=2): the S check alone is satisfied
     launch_fold, launch_es = _topp_fold_for(observed, {s: splits_for(observed[s], NSM) for s in observed}, form)
-    alone = gm.sampler_geometry_check(gsm, launch_fold, launch_es, rec["steps"], rec["sampler_batch"])
+    alone = SG.sampler_geometry_check(gsm, launch_fold, launch_es, rec["steps"], rec["sampler_batch"])
     assert alone["problems"] == [] and alone["info"]["live_to_S"] == {"live=2:S=2": 3}
     # (3) the S the Program's activity prescribes at step 2 (1 live -> S=4) is not the launch's: an activity-reading check refuses by name
     assert splits_for(activity[2], NSM) == 4 != splits_for(observed[2], NSM) == 2
     act_fold, act_es = _topp_fold_for(observed, {s: splits_for(activity[s], NSM) for s in observed}, form)
-    vs = gm.sampler_geometry_check(gsm, act_fold, act_es, rec["steps"], rec["sampler_batch"])
+    vs = SG.sampler_geometry_check(gsm, act_fold, act_es, rec["steps"], rec["sampler_batch"])
     assert len(vs["problems"]) == 1 and "'step': 2" in vs["problems"][0] and "'fold_S': [4]" in vs["problems"][0]
     # and the SampleEnd's own batch at the placeholder step is the inflated one -- the record is self-consistent, only the Program disagrees
     assert rec["sampler_batch"].get(2) in (None, 2)
@@ -782,11 +783,11 @@ def test_under_an_attested_async_scheduler_the_placeholder_row_is_declared_activ
     assert observed == lag1 == {0: 2, 1: 2, 2: 2} and lag0 == {0: 2, 1: 2, 2: 1}   # the placeholder row is activity under lag 1 only
     gsm = dict(gpd, sampler_geometry={"num_sms": NSM})
     ok_fold, ok_es = _topp_fold_for(observed, {s: splits_for(lag1[s], NSM) for s in observed}, form)
-    ok = gm.sampler_geometry_check(gsm, ok_fold, ok_es, rec["steps"], rec["sampler_batch"])
+    ok = SG.sampler_geometry_check(gsm, ok_fold, ok_es, rec["steps"], rec["sampler_batch"])
     assert ok["problems"] == [] and ok["info"]["checked_steps"] == 3 and ok["info"]["live_to_S"] == {"live=2:S=2": 3}
     # (-) the lag-0 activity's S at the placeholder step (1 live -> S=4) is refused: under the attested lag the row counts
     bad_fold, bad_es = _topp_fold_for(observed, {s: splits_for(lag0[s], NSM) for s in observed}, form)
-    bad = gm.sampler_geometry_check(gsm, bad_fold, bad_es, rec["steps"], rec["sampler_batch"])
+    bad = SG.sampler_geometry_check(gsm, bad_fold, bad_es, rec["steps"], rec["sampler_batch"])
     assert len(bad["problems"]) == 1 and "'step': 2" in bad["problems"][0] and "'expected_S': 2" in bad["problems"][0] and "'fold_S': [4]" in bad["problems"][0]
     # one recorded fact: the same record attesting False (a LAG-0 header) is not an execution of the LAG-1 Program -- FAIL by name (G1 + G6);
     # unattested it is refused by name, no default; the rule stays the Program's (eos_lag_rows 1), never re-read from the trace or the header

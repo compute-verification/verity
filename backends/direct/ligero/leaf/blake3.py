@@ -589,12 +589,12 @@ class Blake3Leaf:
                     cv_in.append(_W32(_bits_raw(ctx, lo, 16, f"{sc}.cv{w}.lo") + _bits_raw(ctx, hi, 16, f"{sc}.cv{w}.hi")))
             flags = _W32([cs, ce, zero, zero, one] + [zero] * 27)      # CHUNK_START | CHUNK_END | KEYED_HASH
             msg = _message_words((msg_hold_in + limbs) if half else limbs[32 * t:32 * (t + 1)])
-            v = compress_gadget(ctx, cv_in, msg, counter, _W32.const(ctx, BLOCK_LEN), flags, sc)
+            fin = self._compress(ctx, cv_in, msg, counter, _W32.const(ctx, BLOCK_LEN), flags, sc)
             # output chaining value h_i = v_i ^ v_{i+8}, copied into single rows (the links / digest read one row each);
             # a half-block column keeps the carried CV unless it is the odd (completing) column
             h_out = []
             for w in range(8):
-                for i, e in enumerate(_xor(ctx, v[w], v[w + 8], sc + ".fin").limbs):
+                for i, e in enumerate(fin(w).limbs):
                     if half:
                         prev = h_in[w].limbs[i]
                         h_out.append(prev + _prod(ctx, pbits[0], e - prev, sc + ".hout"))
@@ -621,6 +621,13 @@ class Blake3Leaf:
             else:
                 digest += [zero] * 16
         return digest, carry_out
+
+    def _compress(self, ctx: LigeroCtx, cv: list[_W32], msg: list[_W32], counter: _W32, block_len: _W32, flags: _W32,
+                  scope: str):
+        """``w -> h_w``, the compression's output chaining value word ``v_w ^ v_{w+8}``.  Each word's XOR rows are
+        emitted when it is asked for: the pinned systems interleave them with the gadget's copy rows."""
+        v = compress_gadget(ctx, cv, msg, counter, block_len, flags, scope)
+        return lambda w: _xor(ctx, v[w], v[w + 8], scope + ".fin")
 
     def carry_values(self, rows: np.ndarray, *, word_bits: int, role: int, steps: int) -> np.ndarray:
         """The honest carried rows of every column of every row: (R, steps, CARRY_ELEMS) int64 -- ``carry_in`` of column

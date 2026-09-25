@@ -26,6 +26,7 @@ from typing import Any
 
 from verity_vllm.config import ROOT as REPO
 from verity_vllm.config import option
+from verity_vllm.properties.record import seal
 
 ROOT = REPO / "verity_vllm" / "program" / "registry" / "quarantine"
 FORBIDDEN_IMPORTS = ("os", "sys", "time", "datetime", "random", "secrets", "pathlib", "io", "json", "pickle", "subprocess", "socket",
@@ -106,9 +107,9 @@ def lint(root: Path = ROOT) -> dict[str, Any]:
     reports = [lint_file(p) for p in files]
     ids = [r["semantic_id"] for r in reports if r["semantic_id"] and not r["adapter"]]
     dup = sorted({i for i in ids if ids.count(i) > 1})
-    return {"schema": "verity-gen/quarantine-lint/v1", "root": str(root), "n_files": len(files),
-            "status": "pass" if all(r["status"] == "pass" for r in reports) and not dup else "fail",
-            "duplicate_semantic_ids": dup, "files": reports}
+    ok = all(r["status"] == "pass" for r in reports) and not dup
+    return seal({"schema": "verity-gen/quarantine-lint/v1", "root": str(root), "n_files": len(files), "status": "pass" if ok else "fail",
+                 "duplicate_semantic_ids": dup, "files": reports}, ok)
 
 
 @dataclass(frozen=True, kw_only=True)

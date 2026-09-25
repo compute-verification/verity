@@ -31,10 +31,11 @@ from fractions import Fraction
 from verity.ir.defs import bind, composite, primitive
 from verity.ir.refs import Coll, array_of, concat, strided_view, tuple_of
 from verity.ir.types import Array, Tuple
+from verity.ml.scalar import F32BitsShl23, F32IsFinite, F32Neg, F32Sat
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry import ref_prims as R
-from verity_vllm.program.registry.prims import BF16, BIT, F32, I32, _decode, f32_of, bits_of
+from verity_vllm.program.registry.prims import BF16, F32, I32, _decode, f32_of, bits_of
 
 SEMANTIC_ID = "moe/FusedMoE@v1"   # (the quarantine module kept its ov-moe id)
 
@@ -44,20 +45,6 @@ SEMANTIC_ID = "moe/FusedMoE@v1"   # (the quarantine module kept its ov-moe id)
 
 F32GtStrict = R.F32GtStrict   # a > b on f32 values (NaN false): greedy argmax, first index wins ties
 F32Sub = R.F32Sub             # RN(a - b), no ftz
-
-
-@primitive("F32Sat", 1, [("a", F32)], F32, conformance="exact-model-tested")
-def F32Sat(a: int) -> int:
-    """`cvt.sat.f32.f32`: clamp to [+0.0, 1.0]; NaN -> +0.0 (PTX ISA: "NaN results are flushed to positive zero");
-    -0.0 -> +0.0 (the saturated range's lower bound is +0)."""
-    c, v = _decode(a)
-    if c == 2:
-        return 0
-    if c == 1:
-        return 0x3F800000
-    if c == -1 or v <= 0:
-        return 0
-    return 0x3F800000 if v >= 1 else a & 0xFFFFFFFF
 
 
 def _round_f32_toward_neg_inf(x: Fraction) -> int:
@@ -114,20 +101,6 @@ def F32FmaRm(a: int, b: int, c: int) -> int:
     return P.F32_NAN
 
 
-@primitive("F32Neg", 1, [("a", F32)], F32, conformance="exact-model-tested")
-def F32Neg(a: int) -> int:
-    """`neg.f32`: flip the sign bit (exact; -0 for +0, NaN stays NaN)."""
-    return (a ^ 0x80000000) & 0xFFFFFFFF
-
-
-@primitive("F32BitsShl23", 1, [("a", F32)], F32, conformance="exact-model-tested")
-def F32BitsShl23(a: int) -> int:
-    """`mov.b32 r, a; shl.b32 r, r, 23; mov.b32 f, r`: the encoding shifted left by 23 (mod 2^32) read back as f32.  For
-    `a = 12582912 + n` (`0x4B400000 | n`, n in [1, 253]) this is the normal f32 `2^(n - 127)` — the CUDA `expf`
-    exponent-scaling trick (the magic constant's own bits shift out)."""
-    return ((a & 0xFFFFFFFF) << 23) & 0xFFFFFFFF
-
-
 #: The constants of nvcc's `expf` (sm_89, CUDA 12.x math headers; PTX of `y = expf(x)` on the pod, 2026-09-17):
 #:   fma.rn  t  = x * 0f3BBB989D + 0.5          (0x3BBB989D = log2(e) / 252)
 #:   cvt.sat s  = clamp(t, 0, 1)                (NaN -> 0)
@@ -174,12 +147,6 @@ def nv_expf_bits(x: int) -> int:
     f = P.F32Fma.evaluate(x, 0x3FB8AA3B, F32Neg.evaluate(j))
     f = P.F32Fma.evaluate(x, 0x32A57060, f)
     return P.F32Mul.evaluate(P.MufuEx2Ftz.evaluate(f), F32BitsShl23.evaluate(jb))
-
-
-@primitive("F32IsFinite", 1, [("a", F32)], BIT, conformance="model-untested")
-def F32IsFinite(a: int) -> int:
-    """1 iff the f32 value is neither NaN nor +-Inf (the router's NaN/Inf -> 0 mask; wave-1 reading of the kernel)."""
-    return 0 if (a & 0x7F800000) == 0x7F800000 else 1
 
 
 ONE32 = b1.f32c(1.0)

@@ -21,7 +21,7 @@ import ast
 import re
 from pathlib import Path
 
-from verity_vllm.check.commit_verdict import commit_verdict
+from verity_vllm.check.verdict import commit_verdict
 
 BENCH = Path(__file__).resolve().parents[2] / "verity_vllm" / "ops"
 DELTA = BENCH.parents[0] / "pipeline" / "commit.py"

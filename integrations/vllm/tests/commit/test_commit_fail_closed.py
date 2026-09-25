@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 
-from verity_vllm.check.commit_verdict import commit_verdict
+from verity_vllm.check.verdict import commit_verdict
 
 # GPU e2e negatives run on SHARED pods: VERITY_E2E_GPU_UTIL lowers vLLM's gpu_memory_utilization (default 0.5) so a neighbour's Commit keeps its headroom
 _E2E_GPU_UTIL = os.environ.get("VERITY_E2E_GPU_UTIL", "0.5")

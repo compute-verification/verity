@@ -8,7 +8,7 @@ or when attribution is complete (value-partial by snapshot gaps, M-0217, is not 
 """
 from __future__ import annotations
 
-from verity_vllm.check.commit_verdict import commit_verdict
+from verity_vllm.check.verdict import commit_verdict
 
 WP_OK = {"result": True, "why": None, "root_of_record": "ab" * 32, "compared": 163, "mismatched": [], "missing": [], "unpinned": []}
 VC_OK = {"method": "sampled-exact-replay(complete) + boundary-linkage", "result": True}

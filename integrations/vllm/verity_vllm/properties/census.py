@@ -46,6 +46,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.config import UsageError, option
+from verity_vllm.properties.record import seal
 
 # ---------------------------------------------------------------------------------------------------------
 # declared name -> regexes over the demangled kernel name (torch-free)
@@ -444,7 +445,7 @@ def reconcile(census: dict, log_path: str, profile_name: str, proposed_allowlist
         "proposed_allowlist": sorted(proposed_allowlist),
     }
     rep["residue_zero"] = rep["totals"]["residue_kernels"] == 0 and rep["steps_aligned"] and all("error" not in s for s in steps_out)
-    return rep
+    return seal(rep, rep["residue_zero"])
 
 
 def reconciliation_markdown(rep: dict) -> str:

@@ -20,7 +20,7 @@ from verity_vllm.engine.profiles import dense_generic as dg
 from verity_vllm.engine.profiles import family_facts as FF
 from verity_vllm.engine.profiles import generic as G
 from verity_vllm.engine.profiles import profile_for_case, profile_module_for_case
-from verity_vllm.observe.fold.collective_pattern import TpCollective
+from verity_vllm.observe.fold.patterns.collectives import TpCollective
 from verity_vllm.collectives.embedding_shard import EmbeddingShardCuda
 
 FIXTURES = sorted(K.EXPECTED_DIR.glob("derived_*.json"))

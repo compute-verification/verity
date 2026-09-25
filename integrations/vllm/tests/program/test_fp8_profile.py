@@ -14,7 +14,7 @@ import pytest
 from verity_vllm.program import model as analytic
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepStart, ViewDesc
 from verity_vllm.observe.fold.patterns import ALIAS_OPS, classify_transparent
-from verity_vllm.observe.fold.patterns_fp8 import CutlassScaledMmFp8Block, PerTokenGroupFp8Quant
+from verity_vllm.observe.fold.patterns.fp8 import CutlassScaledMmFp8Block, PerTokenGroupFp8Quant
 from verity_vllm.engine.profiles import dense_generic as dg
 from verity_vllm.engine.profiles import profile_for_case, profile_module_for_case
 from verity_vllm.observe.fold.resolver import Compute, PerRow, Shared, StepContext, Transparent, Unsupported, spec_label
