@@ -1,4 +1,4 @@
-"""[R15 compiled S3] P_compiled x query required manifest (verity_vllm/query/manifest/compiled.py) -- torch-free.
+"""[R15 compiled S3] P_compiled x query required manifest (verity_vllm/acquire/compiled.py) -- torch-free.
 
 The manifest is built from a process's Inductor output code (the wrappers' `Runner.call` launch programs + buffer allocations + the split
 graph's piece wiring), never from what the collector emitted.  Pinned against the row of record's committed output code of BOTH arms
@@ -13,7 +13,7 @@ import os
 
 import pytest
 
-from verity_vllm.query.manifest import compiled as CM
+from verity_vllm.acquire import compiled as CM
 from verity_vllm.program.kernels.compiled_relations import OUTPUT_ROLES, roles_of
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))

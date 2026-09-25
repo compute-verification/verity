@@ -162,7 +162,7 @@ def test_fold_over_pairs_is_true_only_when_every_pair_is_true():
 
 def test_flip_site_alters_the_collective_input_but_not_the_committed_partial():
     """The TP-12 negative: TPPartialSource binds x (commits it) and then hands the collective a different tensor."""
-    from verity_vllm.tp import partial_source as TPS
+    from verity_vllm.acquire.sources import partial_source as TPS
 
     class _C:  # a committer stub: records what was bound
         _cur = object()
@@ -208,7 +208,7 @@ def test_flip_site_alters_the_collective_input_but_not_the_committed_partial():
 
 
 def test_flip_partial_spec_parses_the_ulp_mode():
-    from verity_vllm.tp import partial_source as TPS
+    from verity_vllm.acquire.sources import partial_source as TPS
     for spec, site, mode in (("layers.3.mlp.down_proj", "layers.3.mlp.down_proj", "gross"), ("layers.3.mlp.down_proj:ulp", "layers.3.mlp.down_proj", "ulp"), (None, None, "gross")):
         assert TPS.TPPartialSource.parse_flip(spec) == (site, mode)
 

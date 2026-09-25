@@ -181,7 +181,7 @@ def run(so: str, out: str, hdims: list[int] | None = None, quick: bool = False) 
     import torch
     import vllm.vllm_flash_attn as vfa
 
-    from verity_vllm.acquire.hidden_source import make_hidden_source
+    from verity_vllm.acquire.sources.hidden_source import make_hidden_source
 
     torch.ops.load_library(so)
     fa_version = 3 if hasattr(getattr(torch.ops, Path(so).stem), "verity_set_tap_v9") else 2

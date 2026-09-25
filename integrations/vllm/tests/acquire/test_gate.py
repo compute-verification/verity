@@ -206,7 +206,7 @@ def test_compiled_source_wraps_the_committers_plan_selection(monkeypatch, tmp_pa
     """Compiled rows' record ops (wrapped before vLLM compiles) are the committer's plan selection -- not the class tables (which would
     record `norm`, a module the plan does not select) -- with or without a skip; the plan derived from the manifest at wrap time is the
     committer's plan (same digest)."""
-    from verity_vllm.acquire import compiled_source as cs
+    from verity_vllm.acquire.sources import compiled_source as cs
 
     cs._register_op()
     monkeypatch.setenv("VERITY_SKIP", skip)
@@ -230,7 +230,7 @@ def test_compiled_source_wraps_the_committers_plan_selection(monkeypatch, tmp_pa
 
 
 def test_compiled_source_refuses_without_a_plan_or_off_the_committers_selection(monkeypatch):
-    from verity_vllm.acquire import compiled_source as cs
+    from verity_vllm.acquire.sources import compiled_source as cs
 
     cs._register_op()
     model, runner = Model(), Runner()

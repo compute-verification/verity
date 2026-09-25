@@ -51,7 +51,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.pipeline.admission_bound import compare_observed, host_cap, observed_steps, scheduled_step_bytes
-from verity_vllm.acquire.hidden_source import CHUNK_WORDS, fa2_kblock_n, fa3_tile, mat_total_words
+from verity_vllm.acquire.sources.hidden_source import CHUNK_WORDS, fa2_kblock_n, fa3_tile, mat_total_words
 
 SCHEMA = "verity-sweep/admission-planner/v1"
 #: The calibration entries of record (one JSON object per line), read by the Commit's record-only planner line.

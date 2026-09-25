@@ -1167,9 +1167,9 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--compiled-taps", choices=["off", "on", "kernels"], default="off",
                     help="[R15 compiled] kernels = P_compiled (DECISIONS-2 §7 S3): acquire every non-weight buffer of every Inductor kernel launch through Inductor's "
                          "wrapper-level hook seam (kernels/fusion untouched; captured pieces copy into preallocated slots at graph capture, drained per step; "
-                         "verity_vllm/acquire/compiled_kernel_source.py); requires --required-manifest from compiled_manifest.py. "
+                         "verity_vllm/acquire/sources/compiled_kernel_source.py); requires --required-manifest from compiled_manifest.py. "
                          "on = [WITHDRAWN as the row's path, M-0389] record ops compiled INTO the graphs (graph-replay-safe "
-                         "staging ring; verity_vllm/acquire/compiled_source.py) for Execution=compiled rows (enforce_eager=false). "
+                         "staging ring; verity_vllm/acquire/sources/compiled_source.py) for Execution=compiled rows (enforce_eager=false). "
                          "The op nodes live in the graphs for the whole process, so the paired control must be a separate process with "
                          "`--compiled-taps off --only-arm control` and the same engine args (verity_vllm/ops/compiled_commit.sh)")
     ap.add_argument("--compiled-ring-rows", type=int, default=0, help="[R15 compiled] rows per staging slot; 0 = auto: the engine's largest CUDA graph capture size (larger, uncaptured steps use the direct path)")
@@ -1206,9 +1206,9 @@ def main(argv: list[str] | None = None) -> None:
         if args.arms:
             raise SystemExit("--compiled-taps kernels: single committer only (no --arms)")
         if not getattr(args, "required_manifest", None):
-            raise SystemExit("--compiled-taps kernels needs --required-manifest (verity_vllm.query.manifest.compiled build ... from the control process's Inductor dir)")
+            raise SystemExit("--compiled-taps kernels needs --required-manifest (verity_vllm.acquire.compiled build ... from the control process's Inductor dir)")
         from verity_vllm.engine import engine_profile as _prof
-        from verity_vllm.acquire.compiled_kernel_source import CompiledKernelSource
+        from verity_vllm.acquire.sources.compiled_kernel_source import CompiledKernelSource
 
         _prof.apply_env()
         compiled_kernels = CompiledKernelSource(fault=fault if fault.startswith("compiled_") else None)
@@ -1220,7 +1220,7 @@ def main(argv: list[str] | None = None) -> None:
         if args.arms:
             raise SystemExit("--compiled-taps on: single committer only (no --arms)")
         from verity_vllm.engine import engine_profile as _prof
-        from verity_vllm.acquire.compiled_source import CompiledGraphSource
+        from verity_vllm.acquire.sources.compiled_source import CompiledGraphSource
 
         _prof.apply_env()                                    # before any vllm import (build_engine does the same, idempotent)
         compiled_src = CompiledGraphSource(rows=args.compiled_ring_rows)
@@ -1341,7 +1341,7 @@ def main(argv: list[str] | None = None) -> None:
     versions["enforce_eager"] = eng.kwargs.get("enforce_eager")
     # [R15 compiled] what is actually compiled / graphed in THIS process (CompilationMode, CUDAGraphMode, capture sizes, splitting ops):
     # recorded for every attempt, control and treatment alike -- the paired processes must agree (compiled_commit.sh checks)
-    from verity_vllm.acquire.compiled_source import compile_settings as _compile_settings
+    from verity_vllm.acquire.sources.compiled_source import compile_settings as _compile_settings
 
     versions["compilation"] = _compile_settings(eng.llm)
     versions["compilation"]["compiled_taps"] = args.compiled_taps
@@ -1438,7 +1438,7 @@ def main(argv: list[str] | None = None) -> None:
             compiled_src.attach(com)                         # sets com.external_acquisition: the committer does not wrap the compiled forwards
             print(f"[delta] compiled source attached -> committer {com.name}", flush=True)
         if args.hidden_so:
-            from verity_vllm.acquire.hidden_source import HiddenM1Source, make_hidden_source
+            from verity_vllm.acquire.sources.hidden_source import HiddenM1Source, make_hidden_source
 
             # R11 collector-meas: the op namespace defaults to the .so stem (verity_fa2_matReq | verity_fa2_matAll), as e2e_commit_run.py does.
             # R13 hopper: the source class follows the tap build (FA2 v7/v8 -> HiddenM1Source, FA3 v9 -> HiddenM1SourceFA3) and must agree with
@@ -1477,7 +1477,7 @@ def main(argv: list[str] | None = None) -> None:
                   f"{list((required_manifest.get('populations') or {}).get('by_family') or {})}; the Program's MoE construction has no MOE-01 rows) -- "
                   f"nothing is staged that the manifest does not name", flush=True)
         if args.moe_source != "off" and _moe_planes_required is not False and hasattr(com, "attach_source") and getattr(com, "model", None) is not None:
-            from verity_vllm.acquire.moe_source import MoeBlockSource
+            from verity_vllm.acquire.sources.moe_source import MoeBlockSource
 
             msrc = MoeBlockSource(com, com.model)
             if msrc.layers:

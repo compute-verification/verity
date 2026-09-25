@@ -495,7 +495,7 @@ def schedule_stream_bound(asz: dict[str, Any], reqs: list[dict[str, Any]], sampl
     for a known workload this is the stream of record: per step, and the hidden family's share (the bytes `--retain-exclude fa3_hidden_m1`
     leaves on the device).  Conservative where vLLM's actual packing is unknown: a step with prefill AND decode sequences pads every
     sequence of its hidden launch to the step's longest query (the FA3 varlen slab); chunked prefill is not modelled (one step per prompt)."""
-    from verity_vllm.acquire.hidden_source import mat_total_words, CHUNK_WORDS, fa2_kblock_n, fa3_tile
+    from verity_vllm.acquire.sources.hidden_source import mat_total_words, CHUNK_WORDS, fa2_kblock_n, fa3_tile
 
     md = asz.get("model") or {}
     heads, kv_heads = int(md.get("heads") or 1), int(md.get("kv_heads") or 1)
@@ -762,7 +762,7 @@ def step_bound_bytes(model: Any, modules: list[tuple[str, Any]], envelope: dict[
     # R13 fa2: the M1 stream is arithmetic in the kernel tile (kBlockN, head_dim) -- 128/64 for hd 64, 64/hd otherwise (num_splits==1 kernel).
     # R13 hopper: under FA3 (attn_backend "fa3") the slab is (sequence, KV head) and the rows are PackGQA-packed (M = seqlen_q * g); the tile
     # is tile_size_fwd_sm90's (hd 64: 192x128 prefill / 64x192 one-warpgroup decode; hd 128: 128x128 / 64x128) -- hidden_source.fa3_tile.
-    from verity_vllm.acquire.hidden_source import mat_total_words, CHUNK_WORDS, fa2_kblock_n, fa3_tile
+    from verity_vllm.acquire.sources.hidden_source import mat_total_words, CHUNK_WORDS, fa2_kblock_n, fa3_tile
     g = max(1, heads // kv_heads)
     fa3 = attn_backend == "fa3"
 

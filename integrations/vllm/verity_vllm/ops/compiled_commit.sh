@@ -2,8 +2,8 @@
 # [R15 compiled] Commit + overhead for an Execution=compiled row: vLLM torch.compile + CUDA graphs (enforce_eager=false), production DEFAULT
 # compiled configuration (ruling M-0380).  TAPS=kernels (default, DECISIONS-2 §7 S3): P_compiled's VU boundaries = every non-weight buffer of every
 # Inductor kernel launch, acquired through Inductor's wrapper-level hook seam (kernels untouched; captured pieces copy into slots at graph
-# capture) -- verity_vllm/acquire/compiled_kernel_source.py; the required manifest is P_compiled x query, built by
-# verity_vllm/query/manifest/compiled.py from the CONTROL process's Inductor output code (so the control runs first in round 1).
+# capture) -- verity_vllm/acquire/sources/compiled_kernel_source.py; the required manifest is P_compiled x query, built by
+# verity_vllm/acquire/compiled.py from the CONTROL process's Inductor output code (so the control runs first in round 1).
 # TAPS=on = the withdrawn record-op path (M-0389), kept for reference.
 #
 # Two processes with IDENTICAL engine args (recorded in each versions.json `compilation`; compiled_merge refuses a mismatch):
@@ -76,7 +76,7 @@ print(json.load(open(fs[-1]))['num_hidden_layers']+1) if fs else sys.exit(1)" 2>
   # --workload: the request schedule (B>=2: r<i> arrive_step / prompt / max_tokens -> one identity per request per launch per role)
   local sg; sg=$(ls "$cdir"/vllm_compile_cache/rank_0_0/*/computation_graph.py 2>/dev/null | head -n 1)
   [ -n "$sg" ] || log "WARNING: no split graph (computation_graph.py) under $cdir/vllm_compile_cache -- the manifest's wiring will be undeclared"
-  if $PY -m verity_vllm.query.manifest.compiled build --inductor-dir "$cdir/inductor_cache" --pieces "$pieces" --workload "$WL" --steps "$steps" \
+  if $PY -m verity_vllm.acquire.compiled build --inductor-dir "$cdir/inductor_cache" --pieces "$pieces" --workload "$WL" --steps "$steps" \
        ${kset:+--kernel-set "$kset"} ${sg:+--split-graph "$sg"} ${WEIGHTS_PROGRAM_DIGEST:+--weights-program-digest "$WEIGHTS_PROGRAM_DIGEST"} \
        --out "$out" > "${out%.json}.log" 2>&1; then
     log "P_compiled manifest from $cdir -> $out: $(tail -n 1 "${out%.json}.log")"
@@ -174,7 +174,7 @@ cat "$D/commit_merge.log"
 cat "$D"/commit_control_r*.log "$D"/commit_treatment_r*.log > "$D/commit.log"
 # [MAN-05 for compiled rows] the manifest the treatment USED (control-derived) vs the same derivation from the treatment's own output code
 if [ "$TAPS" = kernels ] && [ -f "$D/compiled_manifest.json" ] && [ -f "$D/compiled_manifest_treatment.json" ]; then
-  $PY -m verity_vllm.query.manifest.compiled verify --manifest "$D/compiled_manifest.json" --rebuilt "$D/compiled_manifest_treatment.json" \
+  $PY -m verity_vllm.acquire.compiled verify --manifest "$D/compiled_manifest.json" --rebuilt "$D/compiled_manifest_treatment.json" \
       --out "$D/commit/manifest_verify.json" > "$D/manifest_verify.log" 2>&1; rcv=$?
   log "manifest verify (compiled MAN-05) rc=$rcv: $(tail -n 1 "$D/manifest_verify.log")"
   [ $rcv -ne 0 ] && [ $rcm -eq 0 ] && rcm=$rcv

@@ -643,7 +643,7 @@ class TP2CaptureWorkerExtension:
         if hidden_so:
             from pathlib import Path as _P
 
-            from verity_vllm.acquire.hidden_source import HiddenM1Source
+            from verity_vllm.acquire.sources.hidden_source import HiddenM1Source
 
             src_cls = getattr(com, "hidden_source_cls", HiddenM1Source)
             com.attach_source(src_cls(com, hidden_so, ns=(hidden_ns or _P(hidden_so).stem)))
@@ -653,7 +653,7 @@ class TP2CaptureWorkerExtension:
         # Without it a TP MoE row's Commit binds no `moe/L<n>` plane (Qwen3-30B-A3B TP2 B2: 37 440 of 132 708 required identities per
         # rank unbound, coverage FAIL) -- the manifest requires the six planes per rank at shard widths, and this rank's kernel sees them.
         try:
-            from verity_vllm.acquire.moe_source import MoeBlockSource
+            from verity_vllm.acquire.sources.moe_source import MoeBlockSource
 
             msrc = MoeBlockSource(com, model)
             if msrc.layers:
@@ -669,7 +669,7 @@ class TP2CaptureWorkerExtension:
         if tp_partials:
             # [R14 TP-03] bind THIS rank's rank-local inputs of every TP collective (partial GEMMs before the all-reduce, masked embedding
             # partial, logits shard before the all-gather) -- the values the rank Program requires; the module hooks only see the outputs
-            from verity_vllm.tp.partial_source import TPPartialSource
+            from verity_vllm.acquire.sources.partial_source import TPPartialSource
 
             relabel = None
             if isinstance(tp_relabel, dict) and str(rank) in {str(k) for k in tp_relabel}:
@@ -947,7 +947,7 @@ class TP2CaptureWorkerExtension:
         import numpy as np
 
         from verity_vllm.check import oracle_compare as OC
-        from verity_vllm.tp.partial_source import _committed
+        from verity_vllm.acquire.sources.partial_source import _committed
 
         com, rank = st["com"], int(st["rank"])
         rd = OC.OpenedReader(com, rc)
@@ -1049,7 +1049,7 @@ class TP2CaptureWorkerExtension:
             if tps is None and int(st.get("world") or 1) > 1:
                 # the population is STRUCTURAL: the rank-local collective members are required by the model's TP structure whether or
                 # not a source binds them (a collective-outputs-only collector must fail coverage, not just the required-class check)
-                from verity_vllm.tp.partial_source import TPPartialSource
+                from verity_vllm.acquire.sources.partial_source import TPPartialSource
                 tps = TPPartialSource(com, st["eng"].model, rank=rank, world=int(st["world"]))     # site set only; never installed
             tp_members = 0
             if tps is not None:
@@ -1261,7 +1261,7 @@ class TP2CaptureWorkerExtension:
 
         from verity_vllm.check import oracle_compare as OC
         from verity_vllm.tp import xrank_collectives as XC
-        from verity_vllm.tp.partial_source import _committed
+        from verity_vllm.acquire.sources.partial_source import _committed
 
         st = self._tp2_commit
         com, rank = st["com"], int(st["rank"])
@@ -1502,7 +1502,7 @@ class TP2CaptureWorkerExtension:
 
     def _t6_4_check(self, com: Any, rc: Any) -> dict[str, Any]:
         """The fused-MoE late-read detector over the last finalized run on this rank (`partial_source.late_read_check`)."""
-        from verity_vllm.tp.partial_source import late_read_check
+        from verity_vllm.acquire.sources.partial_source import late_read_check
 
         return late_read_check(com, rc, int(self._tp2_commit["rank"]))
 

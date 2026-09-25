@@ -76,7 +76,7 @@ def test_flush_03_the_moe_up_plane_leaves_right_after_staging_and_only_that_plan
 def test_moe_source_asks_the_committer_to_flush_the_up_plane_only():
     """The MoE source binds `up` then calls `flush_after_plane("up")`; `act`/`down`/`sum`/router are bound without a flush; a committer
     without the method (an older tree) is tolerated."""
-    from verity_vllm.acquire import moe_source as MS
+    from verity_vllm.acquire.sources import moe_source as MS
 
     log: list[tuple] = []
 
@@ -205,7 +205,7 @@ def test_moe_up_plane_is_committed_before_the_blocks_w2_launch_overwrites_its_wo
     The MoE source stages `up` after the w13 launch; the block's own w2 launch then writes `down` into the same bytes; the next hook (the
     next layer's `input_layernorm` pre-flush) is the first flush.  With FLUSH-03 the committed `up` is the w13 output; with
     `late_flush_moe_up` (the pre-FLUSH-03 record) it is the same layer's `down` -- byte for byte what the R16 OLMoE B1 C2 v3 found."""
-    from verity_vllm.acquire import moe_source as MS
+    from verity_vllm.acquire.sources import moe_source as MS
 
     mod = NC.ext(verbose=False)
     c = mod.Collector()

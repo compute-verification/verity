@@ -52,7 +52,7 @@ INTERIM_LAYER = {
     "verity_vllm.query": "query|correspondence",
     "verity_vllm.pipeline.cli": "pipeline",                       # the one CLI is pipeline/cli.py (P6)
     "verity_vllm.query.vu_query": "check|properties",          # -> check/replay/
-    "verity_vllm.query.manifest.compiled": "acquire",
+    "verity_vllm.acquire.compiled": "acquire",
     "verity_vllm.query.boundary": "core",                      # -> verity.ir
     "verity_vllm.query.partition": "core",                     # -> verity.ir
     "verity_vllm.correspondence": "query|correspondence",
@@ -68,7 +68,7 @@ INTERIM_LAYER = {
     "verity_vllm.tp.collective_sites": "collectives",
     "verity_vllm.tp.embedding_shard": "collectives",
     "verity_vllm.engine.rank_worker": "engine",                         # -> engine/rank_worker.py
-    "verity_vllm.tp.partial_source": "acquire",                # -> acquire/sources/
+    "verity_vllm.acquire.sources.partial_source": "acquire",                # -> acquire/sources/
     "verity_vllm.program.frontend.export_ops": "program",                    # -> program/frontend/
     "verity_vllm.observe.fold.collective_pattern": "observe|commit",     # -> observe/fold/patterns/
     "verity_vllm.tp.rank_match": "check|properties",           # -> check/match/

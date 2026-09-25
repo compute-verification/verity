@@ -30,7 +30,7 @@ from typing import Any, Iterator
 
 import numpy as np
 
-from verity_vllm.acquire.hidden_source import KBLOCK_M, fa2_kblock_n, fa2_swapped, fa3_tile
+from verity_vllm.acquire.sources.hidden_source import KBLOCK_M, fa2_kblock_n, fa2_swapped, fa3_tile
 from verity_vllm.commit.hidden_stream import SRC_BITS, StreamLayout
 from verity_vllm.correspondence.runtime import canonical_json
 

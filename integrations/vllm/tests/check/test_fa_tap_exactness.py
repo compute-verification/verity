@@ -7,7 +7,7 @@ import json
 
 import pytest
 
-from verity_vllm.acquire.hidden_source import fa3_tile
+from verity_vllm.acquire.sources.hidden_source import fa3_tile
 from verity_vllm.check import fa_tap_exactness as X
 from verity_vllm.commit.hidden_stream import SRC_BITS, StreamLayout
 from tests.check import fa_tap_exactness_gpu as G

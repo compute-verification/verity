@@ -20,7 +20,7 @@ import itertools
 import numpy as np
 import pytest
 
-from verity_vllm.acquire.hidden_source import (
+from verity_vllm.acquire.sources.hidden_source import (
     CHUNK_WORDS,
     fa2_tap_buffer_words,
     fa2_tap_words_per_seq,

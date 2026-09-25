@@ -6,7 +6,7 @@ non-weight argument role) in the vocabulary of required_manifest.py / binding.py
 role, element_range = the member's whole extent for the step's token count).  Nothing here reads a checkpoint: the manifest is the
 artifact x the workload's steps.  program_digest = sha256(kernel_set_sha256 || the composed launch table || widths).
 
-    python -m verity_vllm.query.manifest.compiled build --inductor-dir <control process cache> --pieces 17 --steps 32 \
+    python -m verity_vllm.acquire.compiled build --inductor-dir <control process cache> --pieces 17 --steps 32 \
         --prefill-tokens 256 --request r0 --out manifest.json
 """
 from __future__ import annotations

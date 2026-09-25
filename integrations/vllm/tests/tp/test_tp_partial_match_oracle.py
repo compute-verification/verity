@@ -23,7 +23,7 @@ import pytest
 torch = pytest.importorskip("torch")
 from tests.check.opened import commit_steps, meta, retained_block  # noqa: E402
 from verity_vllm.check import oracle_compare as OC  # noqa: E402
-from verity_vllm.tp import partial_source as tps  # noqa: E402
+from verity_vllm.acquire.sources import partial_source as tps  # noqa: E402
 
 OPROJ, MOE = "model.layers.0.self_attn.o_proj", "model.layers.0.mlp.experts"
 

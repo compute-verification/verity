@@ -57,7 +57,7 @@ from typing import Any
 import torch
 
 from verity_vllm.commit.committer.flush_points import GATHER_FLUSH_LEAVES, PRE_FLUSH_LEAVES
-from verity_vllm.acquire.hidden_source import (
+from verity_vllm.acquire.sources.hidden_source import (
     HiddenM1Source,
     HiddenM1SourceFA3,
     fa2_kblock_n,

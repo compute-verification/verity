@@ -38,7 +38,7 @@ import math
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.acquire.hidden_source import CHUNK_WORDS, fa2_kblock_n, fa3_tile, mat_total_words
+from verity_vllm.acquire.sources.hidden_source import CHUNK_WORDS, fa2_kblock_n, fa3_tile, mat_total_words
 
 SCHEMA = "verity-sweep/admission/f-da-15/v1"
 LEVELS_FACTOR = 1.25          # raw x1.25 for the merkle levels pinned beside the raw bytes (the factor of the original F-dA-15 warning)

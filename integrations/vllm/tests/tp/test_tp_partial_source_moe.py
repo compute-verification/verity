@@ -10,8 +10,8 @@ from typing import Any
 
 import pytest
 
-pytest.importorskip("verity_vllm.tp.partial_source")
-from verity_vllm.tp import partial_source as tps  # noqa: E402
+pytest.importorskip("verity_vllm.acquire.sources.partial_source")
+from verity_vllm.acquire.sources import partial_source as tps  # noqa: E402
 
 
 class _Dev:

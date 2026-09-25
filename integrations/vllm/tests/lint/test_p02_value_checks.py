@@ -46,5 +46,5 @@ def test_allowlist_has_no_stale_entries() -> None:
 def test_contract_modules_exist() -> None:
     known = I.modules()
     assert [m for m in I.VALUE_CHECK_MODULES if m not in known] == []
-    assert forbidden("verity_vllm.commit.committer.native_host") and forbidden("verity_vllm.tp.partial_source")
+    assert forbidden("verity_vllm.commit.committer.native_host") and forbidden("verity_vllm.acquire.sources.partial_source")
     assert not forbidden("verity_vllm.commit.binding")
