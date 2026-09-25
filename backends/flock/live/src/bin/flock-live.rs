@@ -159,7 +159,7 @@ fn domain(rep: usize) -> Vec<u8> {
 struct Verifier(Arc<Stmt>);
 
 impl StatementVerifier for Verifier {
-    fn verify(&self, table: &str, _rep: usize, proof: &[u8], ch: &mut ReplayChallenger) -> Result<Vec<u8>, String> {
+    fn verify(&self, table: &str, _rep: usize, proof: &[u8], ch: &mut ReplayChallenger, _link: &LinkCtx<'_>) -> Result<Vec<u8>, String> {
         assert_eq!(table, TABLE);
         self.0.verify_with(proof, &self.0.params(LigeritoProfile::Fast100), ch)
     }
@@ -368,7 +368,7 @@ fn gpu_params(r1cs: &BlockR1cs) -> PcsParams {
 struct GpuVerifier(Arc<BlockR1cs>);
 
 impl StatementVerifier for GpuVerifier {
-    fn verify(&self, _table: &str, _rep: usize, proof: &[u8], ch: &mut ReplayChallenger) -> Result<Vec<u8>, String> {
+    fn verify(&self, _table: &str, _rep: usize, proof: &[u8], ch: &mut ReplayChallenger, _link: &LinkCtx<'_>) -> Result<Vec<u8>, String> {
         let (commitment, proof): (Commitment, R1csProofLigerito) =
             bincode::deserialize(proof).map_err(|e| format!("decode: {e}"))?;
         let pcs = gpu_params(&self.0);
