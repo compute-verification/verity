@@ -623,6 +623,25 @@ fn main() {
     }
 }
 
+/// The honest device prover's y16 and acc publics (`pure_unit_outputs`): the last unit of every real block, both layouts.
+fn last_unit_words(st: &PureStmt, inputs: &(dyn Fn(usize, usize) -> [F128; 5] + Sync)) -> (Vec<u32>, Vec<u32>) {
+    let cols = st.net.out_cols.clone();
+    let u = st.lay.units() - 1;
+    (0..st.blocks_real)
+        .into_par_iter()
+        .map(|b| {
+            let r = inputs(b, u);
+            let (z, _, _) = st.net.eval64(|bit| {
+                let w = r[bit >> 7];
+                let j = bit & 127;
+                (if j < 64 { w.lo >> j } else { w.hi >> (j - 64) }) & 1
+            });
+            let word = |col: usize, n: usize| (0..n).fold(0u32, |w, t| w | (((z[col * 128 + t] & 1) as u32) << t));
+            (if cols.len() > 1 { word(cols[1], 16) } else { 0 }, word(cols[0], 32))
+        })
+        .unzip()
+}
+
 fn f128_of_hex(s: &str) -> F128 {
     F128::new(u64::from_str_radix(&s[16..32], 16).unwrap(), u64::from_str_radix(&s[..16], 16).unwrap())
 }
@@ -648,7 +667,7 @@ fn replay(st: &Arc<PureStmt>, inst: &Arc<Instances>, rec: &Value, proofs: &[Vec<
     }
     let (comps, cvs) = st.compressions(inst);
     let inputs = |b: usize, u: usize| st.unit_inputs(&comps, b, u, st.c_in(inst, b, u));
-    let (y16, acc) = unit31_words(st, &inputs);
+    let (y16, acc) = last_unit_words(st, &inputs);
     let publics = Publics { cv: cvs, y16, acc }.bytes();
     if rec["link"]["publics_sha256"][TABLE].as_str() != Some(hex(&sha256(&publics)).as_str()) {
         return Err("C4: the record's committed publics are not this instance set's chunk values, accumulators and outputs".into());
