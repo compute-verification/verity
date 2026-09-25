@@ -66,10 +66,16 @@ def test_static_contract(name: str) -> None:
     assert len(s.params_sha256) == 64 and int(s.params_sha256, 16) >= 0
     assert s.schema and s.assumption and s.hash_name
     if name in registry.names():
-        assert registry.by_schema(s.schema).name == name
+        assert registry.by_schema(s.schema).schema == s.schema
     assert registry.get(name) is not registry.get(name)                        # fresh instances (gadgets hold state)
     others = [registry.get(n) for n in SCHEMES if n != name]
-    assert all(o.schema != s.schema and o.params_sha256 != s.params_sha256 for o in others), "schema / params must identify the scheme"
+    # a schema names the committed leaf, the scheme name the circuit proving it: two circuits of one leaf (blake3 /
+    # blake3-xob) must commit the same object
+    assert all((o.schema == s.schema) == (o.params_sha256 == s.params_sha256) for o in others), "schema / params must identify the leaf"
+    for o in others:
+        if o.schema == s.schema:
+            assert (o.digest_elems, o.carry_elems, o.hash_name) == (s.digest_elems, s.carry_elems, s.hash_name)
+            assert type(o).leaf_bytes is type(s).leaf_bytes and type(o).native is type(s).native
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -230,8 +236,20 @@ def test_statement_v5_carries_the_scheme_and_verifies_from_files(name: str, runn
     (tmp_path / "s.proof").write_bytes(proof_bytes(proof))
     ok, why, _ = verify_files(tmp_path / "s.stmt", tmp_path / "s.proof", "cpu")      # the runner is resolved from the file
     assert ok, why
+    # a statement rewritten with the suffix of another circuit of the same leaf parses, but not against that circuit
+    for twin in (n for n in SCHEMES if n != name and registry.get(n).schema == R.leaf.schema):
+        t_rel = registry.relation_name(REL, twin)
+        i = raw.index(st2.relation.encode())
+        forged = raw[:i - 4] + len(t_rel).to_bytes(4, "little") + t_rel.encode() + raw[i + len(st2.relation):]
+        (tmp_path / "t.stmt").write_bytes(forged)
+        (tmp_path / "t.proof").write_bytes(proof_bytes(proof))
+        try:
+            ok, _why, _ = verify_files(tmp_path / "t.stmt", tmp_path / "t.proof", "cpu")
+        except ValueError:
+            ok = False
+        assert not ok, f"{name} proof accepted as {twin}"
     # the block must name the scheme's schema: a statement rewritten with another scheme's suffix is refused at parse
-    other = next((n for n in SCHEMES if n != name), None)
+    other = next((n for n in SCHEMES if n != name and registry.get(n).schema != R.leaf.schema), None)
     if other is not None:
         o_rel = registry.relation_name(REL, other)
         i = raw.index(st2.relation.encode()) if st2.relation.encode() in raw else -1

@@ -1,7 +1,7 @@
 {
   "rule": "P3 (one evaluator interface, one challenge derivation)",
   "entries": [
-    {"file": "verity_vllm/check/match/global_match.py", "kind": "if-ladder", "symbol": "read_record", "detail": "tag"},
+    {"file": "verity_vllm/check/match/record.py", "kind": "if-ladder", "symbol": "read_record", "detail": "tag"},
     {"file": "verity_vllm/check/replay/compiled_kernel_check.py", "kind": "rng", "symbol": "CompiledKernelCheck.run", "detail": "random.Random"},
     {"file": "verity_vllm/check/replay/replay.py", "kind": "rng", "symbol": "tier_a", "detail": "random.Random"},
     {"file": "verity_vllm/check/replay/replay.py", "kind": "rng", "symbol": "tier_chain", "detail": "random.Random"},

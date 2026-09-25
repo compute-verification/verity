@@ -37,10 +37,11 @@ from __future__ import annotations
 import types
 
 from verity.ir.defs import CompositeDefinition, FunctionDefinition, PrimitiveDefinition, SpecializedDefinition, primitive
+from verity.ml.prims import HopperBF16WgmmaDot16
 from verity.ml.tc.total import HOPPER_BF16_WGMMA_K16, tc_dot_total
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import prims as P
-from verity_vllm.program.registry.prims import A16, F32, f32_is_nan
+from verity_vllm.program.registry.prims import F32, f32_is_nan
 
 # ---------------------------------------------------------------------------------------------------------
 # primitives
@@ -66,18 +67,6 @@ def hopper_wgmma_dot16_total(acc_bits: int, a, b) -> int:
     +0 / subnormal rules of the total step) on the Hopper pipeline.  tests/program/test_derived_rows.py holds the registered primitive
     to it word for word."""
     return tc_dot_total(HOPPER_BF16_WGMMA_K16, acc_bits, a, b)
-
-
-@primitive("HopperBF16WgmmaDot16", 1, [("acc", F32), ("a", A16), ("b", A16)], F32, conformance="exact-model-tested")
-def HopperBF16WgmmaDot16(acc: int, *ab: int) -> int:
-    """One accumulator-coordinate transition of `wgmma.mma_async.sync.aligned.m64n{N}k16.f32.bf16.bf16` (16 products
-    into `acc`): `veritor.tensor-core.hopper_bf16_wgmma_k16@1` — one group of 16 + acc, 26-bit adder, floor -133,
-    total on every encoding (NaN -> 0x7FFFFFFF, sticky/saturating infinities, zero always +0).  `scale-d = 0`
-    (CUTLASS `ScaleOut::Zero`, Triton zero-init) measured equal to `acc = +0`.  Pinned on the H100:
-    docs/data/tc-hopper-2026-09-07 (307,281,920 output words, 0 mismatches, 0 nondeterministic tiles).
-    Evaluated by `hopper_wgmma_dot16_total` (pure Python, no `veritor` import: the pods' venv is 3.11), which the
-    tests hold word-equal to `silicon_total.tc_dot_total(HOPPER_BF16_WGMMA_K16, ...)` where that reference imports."""
-    return hopper_wgmma_dot16_total(acc, ab[:16], ab[16:32])
 
 
 @primitive("Fa3InvSum", 1, [("sum", F32)], F32, conformance="exact-model-tested")
@@ -187,7 +176,7 @@ NAME_MAP: dict[str, str] = {**CALL_NAMES, **{k: v.name for k, v in _BoundPrims._
 
 def set_conformance(status: dict[str, str]) -> None:
     """Set conformance statuses from evidence (the profile's `expectations.json` / conformance run)."""
-    by_name = {d.name: d for d in HOPPER_COMPOSITES + HOPPER_PRIMITIVES}
+    by_name = {d.name: d for d in HOPPER_COMPOSITES + [Fa3InvSum]}  # HopperBF16WgmmaDot16's conformance is core's
     for name, st in status.items():
         by_name[name].conformance = st
 

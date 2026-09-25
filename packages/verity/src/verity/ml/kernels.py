@@ -385,7 +385,7 @@ def _sample_block_scaled(model: BlockScaledAlignAdd):
     return sample
 
 
-# ---- FP8 and NVFP4 references (no core Definition yet) and their kernels -----------------------------------------------
+# ---- FP8 and NVFP4 references and their kernels (the FP8 step is also the Definition `prims.HopperE4m3QgmmaDot32`) -----
 
 _E4M3, _E2M1, _SCALE = Value(8), Value(4), Value(8)
 

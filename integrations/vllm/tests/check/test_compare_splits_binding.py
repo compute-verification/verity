@@ -9,7 +9,7 @@ fold) and run the real `compare.Prog` binding + `compare_steps`."""
 from __future__ import annotations
 
 from verity_vllm.check.match import program_compare as C
-from verity_vllm.check.match import global_match as gm
+from verity_vllm.check.match import sampler_geometry as SG
 
 SEL = "GumbelTopPTokenSelect_v1{V=16}"
 LP, T = 4, 2          # 3 sampling events
@@ -84,8 +84,8 @@ def test_fold_const32_splits_binds_to_the_programs_splits_input_entry_of_the_sam
         assert F.inst[i_f]["spec"] == A.inst[i_a]["spec"] == SEL
         assert F.canon(i_f)[C.SPLITS_OPERAND] == A.canon(i_a)[C.SPLITS_OPERAND] == [("SPLITS", e, e + 1)]
         # the constant's value is what GM-01 reads for the relation check; the static-form reader still works for R15 Programs
-        assert gm.top_p_split_count(F.inst[i_f]["spec"], F, F.inst[i_f]) == S[e]
-        assert gm.top_p_split_count(A.inst[i_a]["spec"], A, A.inst[i_a]) is None
+        assert SG.top_p_split_count(F.inst[i_f]["spec"], F, F.inst[i_f]) == S[e]
+        assert SG.top_p_split_count(A.inst[i_a]["spec"], A, A.inst[i_a]) is None
     res = C.compare_steps(F, A)
     assert res["totals"]["steps_spec_equal"] == 3 and res["totals"]["operands_different"] == 0 and res["totals"]["operands_equal"] > 0
     assert res["canonical_sha256"]["equal"], res
@@ -114,7 +114,7 @@ def test_a_program_reading_the_wrong_splits_entry_or_an_unbound_fold_constant_is
     assert not res["canonical_sha256"]["equal"] and res["totals"]["steps_spec_equal"] < 3
     # (c) the R15 static form {V,S} against the operand-form Program: different specs, no binding on either side, named
     F_static = _prog("fold-static", splits_form="static", S=S, weights=2)
-    assert F_static.n_splits_consts_bound == 0 and gm.top_p_split_count(F_static.inst[F_static.steps[0][-1]]["spec"], F_static,
+    assert F_static.n_splits_consts_bound == 0 and SG.top_p_split_count(F_static.inst[F_static.steps[0][-1]]["spec"], F_static,
                                                                           F_static.inst[F_static.steps[0][-1]]) == 32
     res = C.compare_steps(F_static, A)
     assert not res["canonical_sha256"]["equal"] and res["totals"]["steps_spec_equal"] == 0
