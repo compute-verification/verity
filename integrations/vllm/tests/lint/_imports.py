@@ -38,9 +38,6 @@ LAYER = {
     "verity_vllm.collectives": "collectives",
     "verity_vllm.config": "config",
     "verity_vllm.target_family": "config",                     # -> config.py
-    "verity_vllm.query.boundary": "core",                      # -> verity.ir
-    "verity_vllm.query.partition": "core",                     # -> verity.ir
-    "verity_vllm.program.frontend.liveness": "core",           # -> verity.ir
 }
 
 #: The property harnesses.

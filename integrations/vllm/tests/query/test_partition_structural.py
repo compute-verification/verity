@@ -5,9 +5,9 @@ from __future__ import annotations
 
 import pytest
 
-from verity_vllm.query import partition
+from verity.ir import partition
 from verity.ir.parts import Limits, Part
-from verity_vllm.query.partition import (ReadinessReport, VuVerdict, WidthVerdict, gate_width_readiness, readiness_32bit,
+from verity.ir.partition import (ReadinessReport, VuVerdict, WidthVerdict, gate_width_readiness, readiness_32bit,
                                  validate_partition, validate_vu_family, validate_width, vu_status)
 from tests.query.test_partition_stubs import (OracleBoundary, StubFamily, StubGateSet, body_tiling, family_of,
                                                   gemm_program,                                                   materialise, members_k, ranges_of, synth_program, tiling,
@@ -161,7 +161,7 @@ def test_shared_callee_from_two_parents_two_plans():
     assert fast.detail["sets"] == 2 + 2 * 32 * (3 + 1) == sweep.detail["sets"] and fast.detail["bodies"] == 5
     # width: the tiling path must count 64 coordinate activations (2 parents x 32 members) and 64 dot activations
     B = OracleBoundary(P_)
-    import verity_vllm.query.partition as pm
+    import verity.ir.partition as pm
     saved = pm._BOUNDARY
     pm._BOUNDARY = B
     try:
@@ -189,8 +189,8 @@ def test_scopes_of_enumerates_every_activation():
     coord_t = whole_body(coord, key="coord")
     g = whole_body(gemm_spec, {0: ("descend", coord_t)}, key="gemm")
     t = tiling(whole_body(P_.root, {2: ("descend", g), 3: ("descend", g)}))
-    from verity_vllm.query.partition import _Tiling
-    T = _Tiling(P_, t)
+    from verity.ir.partition import CheckedTiling
+    T = CheckedTiling(P_, t)
     assert T.instances == {(t.root,): 1, ("gemm",): 2, ("coord",): 64}
     scopes = list(T.scopes_of(("coord",)))
     assert len(scopes) == 64 and len({sc.offset for sc in scopes}) == 64
@@ -456,7 +456,7 @@ def test_vu_verdict_fail_and_not_ready_and_unsupported(gemm, oracle):
     assert v.status == "ok"
     v = validate_vu_family(W, fam, 96)
     assert v.status == "ok"
-    from verity_vllm.query.partition import gate_width_readiness
+    from verity.ir.partition import gate_width_readiness
     assert not gate_width_readiness(W, 32).ok
 
     class L(Limits):
@@ -468,7 +468,7 @@ def test_vu_verdict_fail_and_not_ready_and_unsupported(gemm, oracle):
 
 
 def test_vu_status_precedence():
-    from verity_vllm.query.partition import PartitionVerdict
+    from verity.ir.partition import PartitionVerdict
     ok_p = PartitionVerdict("exact", (), {})
     gap_p = PartitionVerdict("gap", (), {})
     un_p = PartitionVerdict("unsupported", (), {})

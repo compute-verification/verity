@@ -1,6 +1,6 @@
 """Compact boundary analysis over `Part`s: in(S), out(S) and W_out(S) without expanded-gate traversal.
 
-Circuit terminology (gate-centric, see `verity.ir/parts.py`): gates are `Value<w>` producers, wires are operand edges.
+Circuit terminology (gate-centric, see `verity.ir.parts`): gates are `Value<w>` producers, wires are operand edges.
 
     in(S)  = { u not in S : exists v in S, (u, v) in E }          distinct gates outside S with a wire into S
     out(S) = { u in S : u designated output  or  exists v not in S, (u, v) in E }
@@ -9,7 +9,7 @@ Circuit terminology (gate-centric, see `verity.ir/parts.py`): gates are `Value<w
 Fan-out counts the producer once; a declared-but-unread parameter is not a wire; an unread nested return is not
 automatically an escaping value; `Input<w>` gates are ordinary gates; designated outputs are `program.root_outputs()`.
 
-Method (design report v2 §5).  Everything is derived from three *intrinsic*, per-specialization summaries — valid for
+Method.  Everything is derived from three *intrinsic*, per-specialization summaries — valid for
 every activation of the specialization, cached once:
 
 1. the canonical return form (`_ret_canon`): every return leaf of the body named by its *producing* position in the body
@@ -50,14 +50,13 @@ import weakref
 from dataclasses import dataclass
 from typing import Iterator
 
-from verity.ir.defs import Body, Node, PrimitiveDefinition, SpecializedDefinition
-from verity_vllm.program.frontend.liveness import LivenessLimit, _norm, _strided_targets
-from verity.ir.layout import Scope
-from verity.ir.parts import Item, Limits, Part, Unsupported, n_members
-from verity.ir.refs import Affine, Concat, Explicit, Refs, Strided, runs
-from verity.ir.types import Array, Record, Tuple as TupleT, Type, Value
+from .defs import Body, Node, PrimitiveDefinition, SpecializedDefinition
+from .intervals import IntervalLimit, Intervals, contains, full, isect, norm, ref_intervals, total
+from .layout import Scope, resolve_gate
+from .parts import Limits, Part, Unsupported, n_members
+from .refs import Affine, Refs, Strided, runs
+from .types import Array, Record, Tuple as TupleT, Type, Value
 
-Intervals = tuple[tuple[int, int], ...]  # sorted, disjoint, non-empty half-open [lo, hi)
 Key = tuple[str, int]  # (space, idx): "n" node output leaves, "s" scan-internal carry leaves, "p" parameter leaves
 
 _MEMBER_CAP = 1 << 16       # members of one consumer node resolved individually before the edge becomes `_Lazy`
@@ -78,38 +77,6 @@ class BoundaryLimit(Exception):
         return Unsupported(self.reason, self.detail)
 
 
-# ---------------------------------------------------------------------------------------------------------
-# interval helpers
-# ---------------------------------------------------------------------------------------------------------
-
-
-def _full(n: int) -> Intervals:
-    return ((0, n),) if n > 0 else ()
-
-
-def _total(iv: Intervals) -> int:
-    return sum(hi - lo for lo, hi in iv)
-
-
-def _contains(iv: Intervals, x: int) -> bool:
-    k = bisect.bisect_right(iv, (x, 1 << 62)) - 1
-    return k >= 0 and iv[k][0] <= x < iv[k][1]
-
-
-def _isect(a: Intervals, b: Intervals) -> Intervals:
-    out: list[tuple[int, int]] = []
-    i = j = 0
-    while i < len(a) and j < len(b):
-        lo, hi = max(a[i][0], b[j][0]), min(a[i][1], b[j][1])
-        if lo < hi:
-            out.append((lo, hi))
-        if a[i][1] < b[j][1]:
-            i += 1
-        else:
-            j += 1
-    return tuple(out)
-
-
 def _restrict_refs(refs: Refs, used: Intervals) -> list[Refs]:
     """`refs` cut down to the leaf positions in `used` (the whole sequence when `used` covers it)."""
     if not used:
@@ -121,33 +88,15 @@ def _restrict_refs(refs: Refs, used: Intervals) -> list[Refs]:
 
 def _leaf_sets(refs_list: list[Refs]) -> dict[Key, Intervals]:
     """{(space, idx): leaf intervals} referenced by the sequences (a set: order and repeats dropped).  Strided
-    sequences use the liveness module's exact interval decomposition; one without interval structure and more than
-    its enumeration limit raises `BoundaryLimit`."""
+    sequences use the exact interval decomposition of `intervals.strided_intervals`; one without interval structure and
+    more than its enumeration limit raises `BoundaryLimit`."""
     acc: dict[Key, list[tuple[int, int]]] = {}
-    for r in refs_list:
-        _acc_leaves(r, acc)
-    return {k: _norm(v) for k, v in acc.items()}
-
-
-def _acc_leaves(r: Refs, acc: dict[Key, list[tuple[int, int]]]) -> None:
-    if isinstance(r, Affine):
-        if r.count:
-            acc.setdefault((r.space, r.idx), []).append((r.base, r.base + r.count))
-    elif isinstance(r, Concat):
-        for p in r.parts:
-            _acc_leaves(p, acc)
-    elif isinstance(r, Explicit):
-        for s, i, leaf in r.items:
-            acc.setdefault((s, i), []).append((leaf, leaf + 1))
-    elif isinstance(r, Strided):
-        lst = acc.setdefault((r.space, r.idx), [])
-        try:
-            _strided_targets(r, lambda lo, hi: lst.append((lo, hi)))
-        except LivenessLimit as e:
-            raise BoundaryLimit("strided_enumeration", str(e)) from None
-    else:  # pragma: no cover - unknown Refs subclass
-        for s, i, leaf in r:
-            acc.setdefault((s, i), []).append((leaf, leaf + 1))
+    try:
+        for r in refs_list:
+            ref_intervals(r, acc)
+    except IntervalLimit as e:
+        raise BoundaryLimit("strided_enumeration", str(e)) from None
+    return {k: norm(v) for k, v in acc.items()}
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -164,7 +113,7 @@ def _scan_shape(node: Node) -> tuple[int, int]:
 def _member_leaves(node: Node, m: int) -> Intervals:
     """Output leaves ("n" space) produced by member `m` of `node` (all of them for primitive / call nodes)."""
     if node.form in ("primitive", "call"):
-        return _full(node.out_leaves)
+        return full(node.out_leaves)
     if node.form == "batch":
         L = node.fn.out_leaves
         return ((m * L, (m + 1) * L),) if L else ()
@@ -174,19 +123,19 @@ def _member_leaves(node: Node, m: int) -> Intervals:
         ivs.append((0, c))
     if y:
         ivs.append((c + m * y, c + (m + 1) * y))
-    return _norm(ivs)
+    return norm(ivs)
 
 
 def _members_leaves(node: Node, ms: set[int]) -> Intervals:
     if node.form in ("primitive", "call") or len(ms) == n_members(node):
-        return _full(node.out_leaves)
+        return full(node.out_leaves)
     if node.form == "batch":
         L = node.fn.out_leaves
-        return _norm([(m * L, (m + 1) * L) for m in ms]) if L else ()
+        return norm([(m * L, (m + 1) * L) for m in ms]) if L else ()
     ivs: list[tuple[int, int]] = []
     for m in ms:
         ivs.extend(_member_leaves(node, m))
-    return _norm(ivs)
+    return norm(ivs)
 
 
 def _leaf_member(node: Node, leaf: int) -> int:
@@ -203,7 +152,7 @@ def _carry_leaves(node: Node, ms: set[int]) -> Intervals:
     c, _ = _scan_shape(node)
     if not c:
         return ()
-    return _norm([(m * c, (m + 1) * c) for m in ms if m < node.n - 1])
+    return norm([(m * c, (m + 1) * c) for m in ms if m < node.n - 1])
 
 
 def _sum_widths(t: Type) -> int:
@@ -219,71 +168,8 @@ def _sum_widths(t: Type) -> int:
 
 
 # ---------------------------------------------------------------------------------------------------------
-# resolution to gates (layout.resolve, also returning the producing primitive)
+# resolution to gates (layout.resolve_gate: the gate and its producing primitive)
 # ---------------------------------------------------------------------------------------------------------
-
-
-def _resolve_prim(scope: Scope, ref: tuple[str, int, int]) -> tuple[int, PrimitiveDefinition]:
-    """Root gate index and producing primitive of body-scoped `ref` in `scope` (the walk of `layout.resolve` and
-    `layout.param_leaf`, kept in one loop so the primitive is at hand for `w(g)`)."""
-    space, idx, leaf = ref
-    while True:
-        if space == "p":
-            parent = scope.parent
-            if parent is None:
-                raise ValueError("the root has no parameters (prescribed inputs are Input gates)")
-            node = parent.spec.body.nodes[scope.node_idx]
-            if node.form == "call":
-                space, idx, leaf = node.args[idx].refs[leaf]
-            elif node.form == "batch":
-                ax, a = node.axes[idx], node.args[idx]
-                if ax is None:
-                    space, idx, leaf = a.refs[leaf]
-                elif ax == 0:
-                    space, idx, leaf = a.refs[scope.member * a.type.elem.leaves + leaf]
-                else:
-                    space, idx, leaf = a.take(ax, scope.member).refs[leaf]
-            else:  # scan: params are (carry, xs..., shared...)
-                if idx == 0:
-                    if scope.member == 0:
-                        space, idx, leaf = node.args[0].refs[leaf]
-                    else:
-                        prev = Scope(scope.spec, scope.offset - scope.spec.gates, parent, scope.node_idx, scope.member - 1)
-                        scope = prev
-                        space, idx, leaf = prev.spec.body.ret[leaf]
-                        continue
-                elif idx <= node.n_xs:
-                    a = node.args[idx]
-                    space, idx, leaf = a.refs[scope.member * a.type.elem.leaves + leaf]
-                else:
-                    space, idx, leaf = node.args[idx].refs[leaf]
-            scope = parent
-            continue
-        body = scope.spec.body
-        node = body.nodes[idx]
-        node_off = scope.offset + body.offsets[idx]
-        fn = node.fn
-        if node.form == "primitive":
-            return node_off, fn
-        if node.form == "call":
-            scope = Scope(fn, node_off, scope, idx, 0)
-            space, idx, leaf = fn.body.ret[leaf]
-            continue
-        if node.form == "batch":
-            m, j = divmod(leaf, fn.out_leaves)
-            if isinstance(fn, PrimitiveDefinition):
-                return node_off + m, fn
-            scope = Scope(fn, node_off + m * fn.gates, scope, idx, m)
-            space, idx, leaf = fn.body.ret[j]
-            continue
-        c, y = _scan_shape(node)
-        if leaf < c:
-            m, j = node.n - 1, leaf
-        else:
-            m, r = divmod(leaf - c, y)
-            j = c + r
-        scope = Scope(fn, node_off + m * fn.gates, scope, idx, m)
-        space, idx, leaf = fn.body.ret[j]
 
 
 def _gate_of(scope: Scope, key: Key, leaf: int) -> tuple[int, PrimitiveDefinition]:
@@ -293,8 +179,8 @@ def _gate_of(scope: Scope, key: Key, leaf: int) -> tuple[int, PrimitiveDefinitio
         node = scope.spec.body.nodes[idx]
         c, _ = _scan_shape(node)
         m, l = divmod(leaf, c)
-        return _resolve_prim(scope.child(idx, m), node.fn.body.ret[l])
-    return _resolve_prim(scope, (space, idx, leaf))
+        return resolve_gate(scope.child(idx, m), node.fn.body.ret[l])
+    return resolve_gate(scope, (space, idx, leaf))
 
 
 def gate_prim(program, g: int) -> PrimitiveDefinition:
@@ -509,7 +395,7 @@ def _canon_sets(body: Body, refs_list: list[Refs]) -> dict[Key, Intervals]:
                     out.setdefault((s2, i2), []).append((l2, h2))
         else:
             out.setdefault((sp, idx), []).extend(ivs)
-    return {k: _norm(v) for k, v in out.items()}
+    return {k: norm(v) for k, v in out.items()}
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -534,7 +420,7 @@ class _Aff:
 
     def reader(self, leaf: int) -> int | None:
         q, r = divmod(leaf - self.base, self.stride)
-        return q if self.m_lo <= q < self.m_hi and _contains(self.used, r) else None
+        return q if self.m_lo <= q < self.m_hi and contains(self.used, r) else None
 
 
 @dataclass(frozen=True)
@@ -563,27 +449,27 @@ class _Aff2:
         else:
             i, rem = divmod(d, self.i_stride)
             m, r2 = divmod(rem, self.m_stride)
-        if r2 or i >= self.inner or not (self.m_lo <= m < self.m_hi) or not _contains(self.used, i):
+        if r2 or i >= self.inner or not (self.m_lo <= m < self.m_hi) or not contains(self.used, i):
             return None
         return m
 
     def leaves(self, cap: int) -> Intervals | None:
         """The leaves read by all members as intervals, or None when listing them would exceed `cap` tuples."""
         n = self.m_hi - self.m_lo
-        n_used = _total(self.used)
+        n_used = total(self.used)
         if self.major == "i" and self.m_stride == 1:  # every i-row is one run over the members
             if n_used > cap:
                 return None
-            return _norm([(self.base + i * self.i_stride + self.m_lo, self.base + i * self.i_stride + self.m_hi)
+            return norm([(self.base + i * self.i_stride + self.m_lo, self.base + i * self.i_stride + self.m_hi)
                           for lo, hi in self.used for i in range(lo, hi)])
         if self.major == "m" and self.i_stride == 1:  # every member's row is a run
             if n * len(self.used) > cap:
                 return None
-            return _norm([(self.base + m * self.m_stride + lo, self.base + m * self.m_stride + hi)
+            return norm([(self.base + m * self.m_stride + lo, self.base + m * self.m_stride + hi)
                           for m in range(self.m_lo, self.m_hi) for lo, hi in self.used])
         if n * n_used > cap:
             return None
-        return _norm([(self.base + m * self.m_stride + i * self.i_stride, self.base + m * self.m_stride + i * self.i_stride + 1)
+        return norm([(self.base + m * self.m_stride + i * self.i_stride, self.base + m * self.m_stride + i * self.i_stride + 1)
                       for m in range(self.m_lo, self.m_hi) for lo, hi in self.used for i in range(lo, hi)])
 
     def hull(self) -> Intervals:
@@ -631,7 +517,7 @@ class ConsumerIndex:
             self._build()
         except BoundaryLimit as e:
             self.incomplete = str(e)
-            self.used = tuple(_full(t.leaves) for _, t in self.body.params)  # conservative: everything read
+            self.used = tuple(full(t.leaves) for _, t in self.body.params)  # conservative: everything read
             self.used_exact_params = tuple(False for _ in self.body.params)
             if not hasattr(self, "ret"):
                 self.ret = _RetCanon([])
@@ -653,7 +539,7 @@ class ConsumerIndex:
 
         def used_of(fn) -> tuple[tuple[Intervals, ...], tuple[bool, ...]]:
             if isinstance(fn, PrimitiveDefinition):
-                return tuple(_full(t.leaves) for _, t in fn.params), tuple(True for _ in fn.params)
+                return tuple(full(t.leaves) for _, t in fn.params), tuple(True for _ in fn.params)
             ix = consumer_index(fn)
             return ix.used, ix.used_exact_params
 
@@ -669,7 +555,7 @@ class ConsumerIndex:
             if node.form == "scan" and pi == 0 and node.n > 1:
                 c, _ = _scan_shape(node)
                 if c:
-                    edges.setdefault(("s", jp), []).append((jp, _Lazy(_full((node.n - 1) * c), False)))
+                    edges.setdefault(("s", jp), []).append((jp, _Lazy(full((node.n - 1) * c), False)))
 
         def add(jp: int, sets: dict[Key, Intervals], make) -> None:
             for key, ivs in sets.items():
@@ -680,7 +566,7 @@ class ConsumerIndex:
 
         def add_aff(jp: int, key: Key, base: int, stride: int, used: Intervals, m_lo: int, m_hi: int) -> None:
             if key[0] == "p":
-                if used == _full(stride):
+                if used == full(stride):
                     pacc[key[1]].append((base + m_lo * stride, base + m_hi * stride))
                 elif (m_hi - m_lo) * len(used) <= _MEMBER_CAP:
                     pacc[key[1]].extend((base + m * stride + lo, base + m * stride + hi) for m in range(m_lo, m_hi) for lo, hi in used)
@@ -727,7 +613,7 @@ class ConsumerIndex:
                 for m in range(node.n):
                     add(jp, _canon_sets(body, _restrict_refs(r.slice(m * L, (m + 1) * L), used)), lambda ivs, m=m: _One(m, ivs))
                 return
-            whole = used == _full(L)
+            whole = used == full(L)
             for key, ivs in _canon_sets(body, [r]).items():
                 if key[0] == "p":
                     pacc[key[1]].extend(ivs)
@@ -761,7 +647,7 @@ class ConsumerIndex:
                         for m in range(node.n):
                             add(jp, _canon_sets(body, _restrict_refs(a.take(ax, m).refs, u)), lambda ivs, m=m: _One(m, ivs))
                     else:
-                        whole = u == _full(a.take(ax, 0).refs.count)
+                        whole = u == full(a.take(ax, 0).refs.count)
                         for key, ivs in _canon_sets(body, [a.refs]).items():
                             if key[0] == "p":
                                 pacc[key[1]].extend(ivs)
@@ -785,14 +671,14 @@ class ConsumerIndex:
                                 for lo, hi in u0:
                                     for s2, i2, l2, h2 in _canon_scan_iter(body, jp, m - 1, lo, hi, 0):
                                         acc.setdefault((s2, i2), []).append((l2, h2))
-                                add(jp, {k: _norm(v) for k, v in acc.items()}, lambda ivs, m=m: _One(m, ivs))
+                                add(jp, {k: norm(v) for k, v in acc.items()}, lambda ivs, m=m: _One(m, ivs))
                 for pi in range(1, 1 + node.n_xs):
                     if used[pi] and exact[pi]:
                         per_member(jp, node, pi, used[pi], node.args[pi].type.elem.leaves)
                 for pi in range(1 + node.n_xs, len(node.args)):
                     if used[pi] and exact[pi]:
                         add(jp, _canon_sets(body, _restrict_refs(node.args[pi].refs, used[pi])), _All)
-        self.used = tuple(_norm(p) for p in pacc)
+        self.used = tuple(norm(p) for p in pacc)
         self.used_exact_params = tuple(pexact)
 
     # -- queries --------------------------------------------------------------------------------------
@@ -801,12 +687,12 @@ class ConsumerIndex:
         when an unresolved edge leaves it undetermined."""
         for _jp, d in self.edges.get(key, ()):
             if isinstance(d, (_All, _One)):
-                if _contains(d.ivs, leaf):
+                if contains(d.ivs, leaf):
                     return True
             elif isinstance(d, (_Aff, _Aff2)):
                 if d.reader(leaf) is not None:
                     return True
-            elif _contains(d.union, leaf):
+            elif contains(d.union, leaf):
                 if d.exact:
                     return True
                 raise BoundaryLimit("unresolved_consumer", f"{self.spec_id}: node {_jp} reads {key} with unresolved members")
@@ -874,7 +760,7 @@ def _member_reads(spec: SpecializedDefinition, j: int, m: int) -> dict[Key, Inte
         used = _used_params(fn)
         return _canon_sets(body, [s for pi, a in enumerate(node.args) for s in _restrict_refs(a.refs, used[pi])])
     if node.form == "batch":
-        used = tuple(_full(t.leaves) for _, t in fn.params) if isinstance(fn, PrimitiveDefinition) else _used_params(fn)
+        used = tuple(full(t.leaves) for _, t in fn.params) if isinstance(fn, PrimitiveDefinition) else _used_params(fn)
         refs: list[Refs] = []
         for pi, (a, ax) in enumerate(zip(node.args, node.axes)):
             u = used[pi]
@@ -904,7 +790,7 @@ def _member_reads(spec: SpecializedDefinition, j: int, m: int) -> dict[Key, Inte
             refs.extend(_restrict_refs(_member_arg_refs(node, m, pi, 0, node.args[pi].type.leaves if pi > node.n_xs else node.args[pi].type.elem.leaves), used[pi]))
     for key, ivs in _canon_sets(body, refs).items():
         acc.setdefault(key, []).extend(ivs)
-    return {k: _norm(v) for k, v in acc.items()}
+    return {k: norm(v) for k, v in acc.items()}
 
 
 def _check_part(part: Part) -> None:
@@ -938,8 +824,8 @@ def _by_node(part: Part) -> dict[int, set[int]]:
 
 def _aff_select(d: _Aff | _Aff2, pivs: Intervals, inside: set[int] | None, budget: list[int]) -> Iterator[int]:
     """Producer leaves in `pivs` read by a member of the `_Aff` / `_Aff2` consumer not in `inside`."""
-    if isinstance(d, _Aff) and d.used == _full(d.stride) and not inside:
-        for lo, hi in _isect(pivs, ((d.base + d.m_lo * d.stride, d.base + d.m_hi * d.stride),)):
+    if isinstance(d, _Aff) and d.used == full(d.stride) and not inside:
+        for lo, hi in isect(pivs, ((d.base + d.m_lo * d.stride, d.base + d.m_hi * d.stride),)):
             budget[0] -= hi - lo
             if budget[0] < 0:
                 raise BoundaryLimit("boundary_too_large", "more boundary leaves than Limits.max_intervals")
@@ -1025,16 +911,16 @@ def _out_leaves(part: Part, exact: bool) -> set[tuple[Key, int]]:
             if inside is not None and len(inside) == n_members(body.nodes[jp]):
                 continue  # every item of the consumer is inside the part
             if isinstance(d, _All):
-                take(key, _isect(d.ivs, pivs))
+                take(key, isect(d.ivs, pivs))
             elif isinstance(d, _One):
                 if not inside or d.m not in inside:
-                    take(key, _isect(d.ivs, pivs))
+                    take(key, isect(d.ivs, pivs))
             elif isinstance(d, (_Aff, _Aff2)):
                 out.update((key, leaf) for leaf in _aff_select(d, pivs, inside, budget))
             else:  # _Lazy
                 if exact and (inside or not d.exact):
                     raise BoundaryLimit("unresolved_consumer", f"{spec.id}: node {jp} reads {key} with unresolved members")
-                take(key, _isect(d.union, pivs))
+                take(key, isect(d.union, pivs))
     # returned leaves sourced in the part
     for plo, phi, sp, idx, base in ix.ret.pieces:
         if sp == "p":
@@ -1042,7 +928,7 @@ def _out_leaves(part: Part, exact: bool) -> set[tuple[Key, int]]:
         pivs = producers.get((sp, idx))
         if not pivs:
             continue
-        for lo, hi in _isect(((base, base + phi - plo),), pivs):
+        for lo, hi in isect(((base, base + phi - plo),), pivs):
             budget[0] -= hi - lo
             if budget[0] < 0:
                 raise BoundaryLimit("boundary_too_large", "more boundary leaves than Limits.max_intervals")
@@ -1091,20 +977,20 @@ def in_gates(part: Part) -> frozenset[int] | Unsupported:
                     if budget < 0:
                         raise BoundaryLimit("boundary_too_large", "more boundary leaves than Limits.max_intervals")
                     if sp == "p":
-                        gates.update(_resolve_prim(scope, ("p", idx, leaf))[0] for leaf in range(lo, hi))
+                        gates.update(resolve_gate(scope, ("p", idx, leaf))[0] for leaf in range(lo, hi))
                         continue
                     node = body.nodes[idx]
                     inside = by_node.get(idx)
                     if sp == "n":
                         for leaf in range(lo, hi):
                             if not inside or _leaf_member(node, leaf) not in inside:
-                                gates.add(_resolve_prim(scope, ("n", idx, leaf))[0])
+                                gates.add(resolve_gate(scope, ("n", idx, leaf))[0])
                     else:  # "s": carry leaf m'*c + l produced inside iteration m' of scan `idx`
                         c, _ = _scan_shape(node)
                         for leaf in range(lo, hi):
                             mm, l = divmod(leaf, c)
                             if not inside or mm not in inside:
-                                gates.add(_resolve_prim(scope.child(idx, mm), node.fn.body.ret[l])[0])
+                                gates.add(resolve_gate(scope.child(idx, mm), node.fn.body.ret[l])[0])
         return frozenset(gates)
     except BoundaryLimit as e:
         return e.unsupported()
