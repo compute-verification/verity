@@ -100,11 +100,24 @@ class PropertyRecord:
 
     @classmethod
     def load(cls, path: str | Path, root: str | Path | None = None) -> "PropertyRecord":
+        """An unreadable file loads as an empty document, so its citation names the problems instead of dropping the file."""
         p = Path(path)
-        return cls(json.loads(p.read_text()), str(p.relative_to(root)) if root else str(p))
+        try:
+            doc = json.loads(p.read_text())
+        except (OSError, ValueError):
+            doc = {}
+        return cls(doc if isinstance(doc, dict) else {}, str(p.relative_to(root)) if root else str(p))
 
 
 def records_of(run_dir: str | Path) -> list[PropertyRecord]:
     """The property records a run cites: every `<run_dir>/properties/*.json`, by file name."""
     d = Path(run_dir)
     return [PropertyRecord.load(p, d) for p in sorted((d / DIR).glob("*.json"))]
+
+
+def citations(run_dir: str | Path) -> tuple[list[dict[str, Any]], list[str]]:
+    """The citation of every record of the run, and a note for each record that does not hold or whose digest does not recompute."""
+    cites = [r.citation() for r in records_of(run_dir)]
+    notes = [f"property {c['name'] or c['schema']} ({c['source']}): {'; '.join(c['problems']) or 'does not hold'}"
+             for c in cites if c["problems"] or not c["ok"]]
+    return cites, notes

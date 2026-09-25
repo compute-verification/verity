@@ -54,6 +54,7 @@ from verity_vllm.check import c2_rules as C2
 from verity_vllm.check import commit_rules as CR
 from verity_vllm.check.commit_rules import _d, _int
 from verity_vllm.check.result import FAIL, INSUFFICIENT, NOT_RUN, OUTCOMES, PASS, CheckResult, worst
+from verity_vllm.properties.record import citations
 
 SCHEMA = "vllm-verdict/v1"
 
@@ -184,6 +185,7 @@ class Verdict:
     execution: dict[str, Any] = field(default_factory=dict)    # labels / measurements carried over, not decisions
     compat: dict[str, Any] = field(default_factory=dict)       # the v1 decision fields, read back
     notes: list[str] = field(default_factory=list)
+    properties: list[dict[str, Any]] = field(default_factory=list)   # citations of the run's property records; omitted when none
 
     def __post_init__(self) -> None:
         if self.outcome not in OUTCOMES:
@@ -199,7 +201,7 @@ class Verdict:
         return {c.name: c.outcome for c in self.checks if c.rule is None and "/" not in c.name}
 
     def to_dict(self) -> dict[str, Any]:
-        d = asdict(self)
+        d = {k: v for k, v in asdict(self).items() if v or k != "properties"}
         d["checks"] = [c.to_dict() for c in self.checks]
         return d
 
@@ -771,7 +773,8 @@ def from_record(row_dir: str | os.PathLike, *, rc: int | None = None, stage_ok: 
     `commit_summary.json` is read when present).  A row whose Commit never ran gives NOT_RUN with the missing files named.
     `rc` = commit_delta's exit code when the caller (row_pod.sh) knows it; `stage_ok` = a stage decision made OUTSIDE this verdict (pre-P5
     rows: the commit_summary word), recorded under `compat.stage_ok` and compared (a disagreement is a note, never a changed decision).
-    Since P5 the verdict's `outcome` IS the Commit stage's decision (row_pod.sh reads it back)."""
+    Since P5 the verdict's `outcome` IS the Commit stage's decision (row_pod.sh reads it back).  Every `<row>/properties/*.json` is cited
+    under `properties` by digest; a record that does not hold, or whose digest does not recompute, is a note, never a changed decision."""
     d = Path(row_dir)
     digests: dict[str, str] = {}
     for rel in RECORD_FILES + tuple(sorted(os.path.relpath(p, d) for p in glob.glob(str(d / "commit" / "sampled_replay_p*.json")))):
@@ -810,6 +813,8 @@ def from_record(row_dir: str | os.PathLike, *, rc: int | None = None, stage_ok: 
         v.compat["stage_ok"] = stage_ok
         if (stage_ok.upper() == PASS) != (v.outcome == PASS):
             v.notes.append(f"STAGE MISMATCH: row_pod.sh's Commit stage says {stage_ok} but the rule-by-rule outcome is {v.outcome}; the stage decision stands (F-r19-int-21)")
+    v.properties, notes = citations(d)
+    v.notes += notes
     return v
 
 
