@@ -742,6 +742,7 @@ fn session(p: &Pure, inst: &Instances, t: SharedTransport, plan: &Plan) -> (Valu
         };
         return (json!({"accepted": v["accepted"], "why": v["why"], "verdict": v, "prover_stopped": e.chars().take(200).collect::<String>()}), proofs);
     }
+    let e2e = t0.elapsed().as_secs_f64();
     let sent = plan.substitute.clone().unwrap_or_else(|| proofs.clone());
     for (rep, pr) in sent.iter().enumerate() {
         call(&t, Req::Proof { table: TABLE.into(), rep: rep as u32, bytes: pr.clone() }).unwrap();
@@ -752,13 +753,13 @@ fn session(p: &Pure, inst: &Instances, t: SharedTransport, plan: &Plan) -> (Valu
     };
     let (ws, wr, calls) = t.lock().unwrap().stats();
     let wait_s = t.lock().unwrap().wait_s();
-    let e2e = t0.elapsed().as_secs_f64();
+    let session_s = t0.elapsed().as_secs_f64();
     (
         json!({"accepted": v["accepted"], "why": v["why"], "verdict": v, "relation": inst.relation, "vus": p.vus, "units": p.units,
                "n_blake3": p.n_b3, "n_units": p.vus * p.units, "nu": p.nu, "dense_m": p.params(LigeritoProfile::Fast100).m,
                "sigma": hex(&sigma), "roots": c.roots.iter().map(|r| hex(r)).collect::<Vec<_>>(),
                "commit_s": commit_s, "rows_s": rows_s, "prove_s": prove_s, "prove_total_s": prove_s.iter().sum::<f64>(),
-               "e2e_s": e2e, "proof_bytes": proofs.iter().map(|p| p.len()).collect::<Vec<_>>(), "wire_sent": ws, "wire_recv": wr,
+               "e2e_s": e2e, "session_s": session_s, "proof_bytes": proofs.iter().map(|p| p.len()).collect::<Vec<_>>(), "wire_sent": ws, "wire_recv": wr,
                "calls": calls, "wait_s": wait_s}),
         proofs,
     )
@@ -849,6 +850,87 @@ fn selftest(p: Arc<Pure>, inst: Instances, other_net: Option<Arc<UnitNet>>) {
         "netlist_sha256": hex(&p.net.sha256), "all_pass": all}));
 }
 
+
+// ------------------------------------------------------------------------------------------------------------
+// Re-verification of a recorded session (the store's copy: session record, proof files, the instance set)
+// ------------------------------------------------------------------------------------------------------------
+
+fn f128_of_hex(s: &str) -> F128 {
+    F128::new(u64::from_str_radix(&s[16..32], 16).unwrap(), u64::from_str_radix(&s[..16], 16).unwrap())
+}
+
+/// Replay a verifier's session record against its proofs with this machine's own statement (instance set, lowering,
+/// commitments): the replayed coins are the recorded ones, so this is not transferable evidence, but every message
+/// the proofs carry must hash to what the verifier recorded before issuing each coin.
+fn replay(p: &Arc<Pure>, inst: &Instances, rec: &Value, proofs: &[Vec<u8>]) -> Result<Value, String> {
+    let c = commit(inst);
+    let sigma = p.sigma(inst, &c.roots);
+    let mut cfg = SessionConfig::flock_128_r2(vec![p.spec()]);
+    cfg.link = Some(LinkSpec { sigma, m: 0, points: 0 });
+    if rec["kind"] != "flock-live-session/v1" {
+        return Err("not a flock-live session record".into());
+    }
+    if rec["hello"].as_str() != Some(cfg.hello().as_str()) {
+        return Err("the record's session parameters (Σ) are not this statement's".into());
+    }
+    if rec["config"]["require_link"] != true || rec["link_sha256"].is_null() || rec["link_mode"] != "exchange" {
+        return Err("F1: the record is not a session whose statement was committed before any coin".into());
+    }
+    if rec["aborted"].is_string() || rec["verdict"]["accepted"] != true {
+        return Err("the live verifier did not accept this session".into());
+    }
+    let (_, _, public) = p.rows(inst);
+    let publics = f128_bytes(&public[p.fixed.len()..]);
+    if rec["link"]["publics_sha256"][TABLE].as_str() != Some(hex(&sha256(&publics)).as_str()) {
+        return Err("C4: the record's public words are not this instance set's chunk values and outputs".into());
+    }
+    let v = PureVerifier { p: p.clone(), digests: c.digests, out: inst.out.clone() };
+    v.statement_publics(TABLE, &publics)?;
+    let want_proofs: Vec<String> = rec["proof_sha256"].as_array().ok_or("no proofs recorded")?.iter()
+        .map(|x| x["sha256"].as_str().unwrap_or_default().to_string()).collect();
+    if proofs.len() != 2 || want_proofs.len() != 2 || proofs.iter().zip(&want_proofs).any(|(b, w)| hex(&sha256(b)) != *w) {
+        return Err("the proof files are not the recorded proofs".into());
+    }
+    let mut streams = std::collections::BTreeMap::new();
+    let mut roots = std::collections::BTreeMap::new();
+    for s in rec["streams"].as_array().ok_or("no streams")? {
+        let name = s["stream"].as_str().unwrap().to_string();
+        let rounds = s["rounds"].as_array().unwrap().iter().map(|r| RoundRec {
+            sha: unhex(r["msg_sha256"].as_str().unwrap()).try_into().unwrap(),
+            len: r["msg_len"].as_u64().unwrap() as usize,
+            n: r["n"].as_u64().unwrap() as u32,
+            coins: r["coins"].as_array().unwrap().iter().map(|c| f128_of_hex(c.as_str().unwrap())).collect(),
+        }).collect();
+        roots.insert(name.clone(), s["root_sha256"].as_str().map(|x| x.to_string()));
+        streams.insert(name, StreamRec { parent: s["parent"].as_str().unwrap().to_string(), label: s["label"].as_str().unwrap().as_bytes().to_vec(),
+                                         at: s["at"].as_u64().unwrap(), rounds, cap: None });
+    }
+    let record = Arc::new(streams);
+    let ctx = LinkCtx { points: &[], y: &[], publics: &publics };
+    let t = Instant::now();
+    let mut caps = Vec::new();
+    for rep in 0..2 {
+        let root = rep_stream(TABLE, rep);
+        let mut ch = ReplayChallenger::new(record.clone(), &root, &domain(rep));
+        let cap = v.verify(TABLE, rep, &proofs[rep], &mut ch, &ctx).map_err(|e| match ch.first_failure() {
+            Some(r) => format!("{r} (then the verifier: {e})"),
+            None => e,
+        })?;
+        ch.finish()?;
+        let h = hex(&sha256(&cap));
+        if roots.get(&root).cloned().flatten() != Some(h.clone()) {
+            return Err(format!("{root}: the proof's root is not the root the session committed"));
+        }
+        caps.push(h);
+    }
+    if caps[0] != caps[1] {
+        return Err("R1: the reps are on different roots".into());
+    }
+    Ok(json!({"accepted": true, "relation": inst.relation, "vus": p.vus, "sigma": hex(&sigma), "roots": c.roots.iter().map(|r| hex(r)).collect::<Vec<_>>(),
+              "netlist_sha256": hex(&p.net.sha256), "root_b_sha256": caps[0], "link_sha256": rec["link_sha256"], "verify_s": t.elapsed().as_secs_f64(),
+              "proof_sha256": want_proofs}))
+}
+
 fn main() {
     let cmd = std::env::args().nth(1).unwrap_or_default();
     let inst = Instances::load(&arg("--instances", "instances.bin"));
@@ -877,12 +959,40 @@ fn main() {
         "prove" => {
             let runs: usize = arg("--runs", "1").parse().unwrap();
             let warm: usize = arg("--warm", "0").parse().unwrap();
+            let dump = arg("--dump", "");
             for run in 0..warm + runs {
                 let t = shared(TcpTransport::connect(&arg("--verifier", "127.0.0.1:7200")).unwrap());
-                let (mut v, _) = session(&p, &inst, t, &Plan::honest());
+                let (mut v, proofs) = session(&p, &inst, t, &Plan::honest());
                 v["run"] = json!(run as i64 - warm as i64);
                 v["warm"] = json!(run < warm);
+                if !dump.is_empty() {
+                    std::fs::create_dir_all(&dump).unwrap();
+                    for (rep, pr) in proofs.iter().enumerate() {
+                        let f = format!("{dump}/run{:02}-rep{rep}.proof", run);
+                        std::fs::write(&f, pr).unwrap();
+                    }
+                    v["dump"] = json!(format!("run{:02}-rep{{0,1}}.proof", run));
+                }
                 println!("LIVE\t{v}");
+            }
+        }
+        "replay" => {
+            let rec: Value = serde_json::from_slice(&std::fs::read(arg("--session", "session.json")).unwrap()).unwrap();
+            let proofs: Vec<Vec<u8>> = arg("--proofs", "").split(',').map(|f| std::fs::read(f).unwrap()).collect();
+            if pin.is_empty() {
+                eprintln!("replay needs --pin (the pinned lowering's sha256)");
+                std::process::exit(2);
+            }
+            if let Err(e) = check_roots(&inst) {
+                eprintln!("{e}");
+                std::process::exit(2);
+            }
+            match replay(&p, &inst, &rec, &proofs) {
+                Ok(v) => println!("REPLAY\t{v}"),
+                Err(e) => {
+                    println!("REPLAY\t{}", json!({"accepted": false, "why": e}));
+                    std::process::exit(1);
+                }
             }
         }
         _ => eprintln!("usage: flock-pure serve|prove|selftest --instances FILE --netlist FILE ..."),
