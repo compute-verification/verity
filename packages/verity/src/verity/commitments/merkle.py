@@ -14,7 +14,7 @@ mirrored by the SP1 kernel (``frame.rs``); every recorded root depends on them.
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 
 from verity.errors import ProtocolError
@@ -141,11 +141,38 @@ class CommitmentDomain:
             value,
         )
 
+    def leaf_prefix(self, rank: int, position: int, schema: str, value_len: int) -> bytes:
+        """Every byte of :meth:`leaf`'s SHA-256 message before the value: ``leaf == SHA-256(prefix || value)``."""
+
+        parts = (self.domain_id, _uint(rank), _uint(position), schema.encode("utf-8"))
+        out = _FRAME + len(_LEAF).to_bytes(4, "big") + _LEAF
+        for part in parts:
+            out += len(part).to_bytes(8, "big") + part
+        return out + value_len.to_bytes(8, "big")
+
     def node(self, level: int, index: int, left: bytes, right: bytes) -> bytes:
         return _hash(_NODE, self.domain_id, _uint(level), _uint(index), left, right)
 
     def empty_root(self) -> bytes:
         return _hash(_EMPTY, self.domain_id)
+
+
+def tree_levels(domain: CommitmentDomain, leaves: Sequence[bytes]) -> tuple[tuple[bytes, ...], ...]:
+    """The levels over one domain's leaf digests (in rank order), padded to a power of two; ``()`` for none."""
+
+    if len(leaves) != domain.count:
+        raise ProtocolError(f"expected {domain.count} leaves, got {len(leaves)}")
+    if not leaves:
+        return ()
+    width = 1 << merkle_depth(len(leaves))
+    level = [*leaves, *(_hash(_PAD, domain.domain_id, _uint(rank)) for rank in range(len(leaves), width))]
+    levels = [tuple(level)]
+    depth = 0
+    while len(level) > 1:
+        level = [domain.node(depth, index // 2, level[index], level[index + 1]) for index in range(0, len(level), 2)]
+        levels.append(tuple(level))
+        depth += 1
+    return tuple(levels)
 
 
 class MerkleTree:
@@ -175,26 +202,9 @@ class MerkleTree:
                 raise ProtocolError("committed values must be bytes")
             ordered.append(value)
             leaves.append(domain.leaf(rank, position, schema(position), value))
-        levels: list[tuple[bytes, ...]] = []
-        if leaves:
-            width = 1 << merkle_depth(len(leaves))
-            leaves.extend(
-                _hash(_PAD, domain.domain_id, _uint(rank))
-                for rank in range(len(leaves), width)
-            )
-            level = leaves
-            levels.append(tuple(level))
-            depth = 0
-            while len(level) > 1:
-                level = [
-                    domain.node(depth, index // 2, level[index], level[index + 1])
-                    for index in range(0, len(level), 2)
-                ]
-                levels.append(tuple(level))
-                depth += 1
         self._domain = domain
         self._values = tuple(ordered)
-        self._levels = tuple(levels)
+        self._levels = tree_levels(domain, leaves)
 
     @property
     def domain(self) -> CommitmentDomain:
