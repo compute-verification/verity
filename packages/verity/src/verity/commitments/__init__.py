@@ -6,9 +6,9 @@ tree at once), and trees over whole runtime tensor leaves under the ``verity-vll
 the scheme the packed-word obligations of the serving path authenticate against.  ``indexed`` holds the domains,
 ``identity`` the canonical-manifest digests every identity here is built from, ``limits`` the verifier's limits.
 
-``vllm_production`` names the framing vLLM's production Commit path emits (position and ``fa2h`` leaves, raw-SHA
-root bindings) with its spec and conformance vectors; no backend proves over it.  ``scheme`` holds the
-``CommitmentScheme`` interface a named scheme implements.
+Two named schemes sit behind ``scheme.CommitmentScheme`` and are selectable by configured backends: frame-v3
+(``merkle.FrameV3``) and ``vllm_production``, the framing vLLM's production Commit path emits (id, position and
+``fa2h`` leaves, node/lift trees, raw-SHA root bindings), with its spec and conformance vectors beside it.
 
 These establish that the values supplied to a check are the values previously bound.  They say nothing about the
 relation between those values; that is a verification obligation (``verity.verification``) a backend establishes.

@@ -14,7 +14,7 @@ mirrored by the SP1 kernel (``frame.rs``); every recorded root depends on them.
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 
 from verity.errors import ProtocolError
@@ -148,6 +148,61 @@ class CommitmentDomain:
         return _hash(_EMPTY, self.domain_id)
 
 
+def tree_levels(domain: CommitmentDomain, leaves: Sequence[bytes]) -> tuple[tuple[bytes, ...], ...]:
+    """The levels over one domain's leaf digests (in rank order), padded to a power of two; ``()`` for none."""
+
+    if len(leaves) != domain.count:
+        raise ProtocolError(f"expected {domain.count} leaves, got {len(leaves)}")
+    if not leaves:
+        return ()
+    width = 1 << merkle_depth(len(leaves))
+    level = [*leaves, *(_hash(_PAD, domain.domain_id, _uint(rank)) for rank in range(len(leaves), width))]
+    levels = [tuple(level)]
+    depth = 0
+    while len(level) > 1:
+        level = [domain.node(depth, index // 2, level[index], level[index + 1]) for index in range(0, len(level), 2)]
+        levels.append(tuple(level))
+        depth += 1
+    return tuple(levels)
+
+
+class FrameV3:
+    """frame-v3's tree rule over one verifier-derived domain, as a :class:`~verity.commitments.scheme.CommitmentScheme`.
+
+    Leaves are ``domain.leaf(rank, position, schema, value)``; every node is bound to the domain, level and index.
+    """
+
+    name = "frame-v3"
+
+    def __init__(self, domain: CommitmentDomain) -> None:
+        self.domain = domain
+
+    def root(self, leaves: Sequence[bytes]) -> bytes:
+        levels = tree_levels(self.domain, leaves)
+        return levels[-1][0] if levels else self.domain.empty_root()
+
+    def path(self, leaves: Sequence[bytes], index: int) -> tuple[bytes, ...]:
+        if not 0 <= index < len(leaves):
+            raise ProtocolError(f"index {index} out of range for {len(leaves)} leaves")
+        out = []
+        for level in tree_levels(self.domain, leaves)[:-1]:
+            out.append(level[index ^ 1])
+            index >>= 1
+        return tuple(out)
+
+    def verify_path(self, root: bytes, leaf_count: int, index: int, leaf: bytes, path: Sequence[bytes | None]) -> bool:
+        if leaf_count != self.domain.count or not 0 <= index < leaf_count or len(path) != merkle_depth(leaf_count):
+            return False
+        if any(type(s) is not bytes or len(s) != 32 for s in path):
+            return False
+        digest, cursor = leaf, index
+        for level, sibling in enumerate(path):
+            pair = (digest, sibling) if cursor % 2 == 0 else (sibling, digest)
+            digest = self.domain.node(level, cursor >> 1, *pair)
+            cursor >>= 1
+        return digest == root
+
+
 class MerkleTree:
     """Prover-side committed values for one domain."""
 
@@ -175,26 +230,9 @@ class MerkleTree:
                 raise ProtocolError("committed values must be bytes")
             ordered.append(value)
             leaves.append(domain.leaf(rank, position, schema(position), value))
-        levels: list[tuple[bytes, ...]] = []
-        if leaves:
-            width = 1 << merkle_depth(len(leaves))
-            leaves.extend(
-                _hash(_PAD, domain.domain_id, _uint(rank))
-                for rank in range(len(leaves), width)
-            )
-            level = leaves
-            levels.append(tuple(level))
-            depth = 0
-            while len(level) > 1:
-                level = [
-                    domain.node(depth, index // 2, level[index], level[index + 1])
-                    for index in range(0, len(level), 2)
-                ]
-                levels.append(tuple(level))
-                depth += 1
         self._domain = domain
         self._values = tuple(ordered)
-        self._levels = tuple(levels)
+        self._levels = tree_levels(domain, leaves)
 
     @property
     def domain(self) -> CommitmentDomain:
