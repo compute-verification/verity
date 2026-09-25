@@ -86,7 +86,7 @@ def test_unknown_argument_exits_2(tmp_path: Path) -> None:
 def _readiness_source() -> str:
     """The step-5 Python heredoc, as the script feeds it to $PY."""
     text = SCRIPT.read_text()
-    m = re.search(r'\$PY - "\$ROOT" "\$CORE" "\$OUT/readiness\.json" "\$HG_SO" "\$CC" "\$RESEARCH" "\$MODE" <<\'EOF\'.*?\n(.*?)\nEOF\n', text, re.S)
+    m = re.search(r'\$PY - "\$ROOT" "\$CORE" "\$OUT/readiness\.json" "\$HG_SO" "\$CC" "\$RESEARCH" "\$MODE" "\$SAMPLED" <<\'EOF\'.*?\n(.*?)\nEOF\n', text, re.S)
     assert m, "step-5 readiness heredoc not found (argument list or heredoc marker changed)"
     return m.group(1)
 
@@ -103,9 +103,10 @@ def test_readiness_cpu_mode_record(tmp_path: Path) -> None:
     src.write_text(_readiness_source())
     out = tmp_path / "readiness.json"
     root, core, research = VLLM, TREE / "packages" / "verity" / "src", TREE / "tools" / "research" / "src"
-    env = dict(os.environ, PYTHONPATH=os.pathsep.join(str(p) for p in (root, core, research)),
+    sampled = TREE / "protocols" / "sampled_proofs"
+    env = dict(os.environ, PYTHONPATH=os.pathsep.join(str(p) for p in (root, core, research, sampled)),
                https_proxy="http://127.0.0.1:9", HTTPS_PROXY="http://127.0.0.1:9")   # the network probe fails fast, recorded as an error
-    r = subprocess.run([sys.executable, str(src), str(root), str(core), str(out), "", "", str(research), "cpu"],
+    r = subprocess.run([sys.executable, str(src), str(root), str(core), str(out), "", "", str(research), "cpu", str(sampled)],
                        capture_output=True, text=True, env=env, timeout=300)
     assert out.exists(), f"readiness.json not written\nstdout: {r.stdout}\nstderr: {r.stderr}"
     rec = json.loads(out.read_text())
@@ -116,9 +117,9 @@ def test_readiness_cpu_mode_record(tmp_path: Path) -> None:
     assert checks["torch_cpu"]["value"]["cuda_available"] == rec["cuda_available"]
     assert not {"torch_cuda", "hidden_gpu_so", "fa2_tap_so", "fa3_tap_so"} & set(checks), "GPU checks must not appear in cpu mode"
     for name in ("python_3_12", "vllm_import", "vllm_commit_d9105ea80", "verity_from_tree", "verity_vllm_from_tree",
-                 "research_telemetry_from_tree", "numpy_import", "no_old_tree_on_path"):
+                 "research_telemetry_from_tree", "sampled_proofs_from_tree", "numpy_import", "no_old_tree_on_path"):
         assert name in checks, name
-    for name in ("verity_from_tree", "verity_vllm_from_tree", "research_telemetry_from_tree", "numpy_import"):
+    for name in ("verity_from_tree", "verity_vllm_from_tree", "research_telemetry_from_tree", "sampled_proofs_from_tree", "numpy_import"):
         assert checks[name]["ok"], (name, checks[name])
     assert rec["ok"] == all(c["ok"] for c in checks.values())
     assert (r.returncode == 0) == rec["ok"]
