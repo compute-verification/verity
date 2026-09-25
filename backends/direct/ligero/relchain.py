@@ -120,11 +120,20 @@ def _word_rows(rows) -> np.ndarray:
     return np.asarray(rows, dtype=np.int64)
 
 
-def _rows_to_device(rows: np.ndarray, device):
-    """``rows`` as an int64 torch tensor on ``device``, copied in its narrow dtype and widened there."""
+def _rows_to_device(rows: np.ndarray, device, narrow: dict | None = None, name: str | None = None):
+    """``rows`` as an int64 torch tensor on ``device``, copied in its narrow dtype and widened there.  ``narrow``: records
+    ``narrow[name]`` = the copied tensor when it holds the rows' bytes (uint8 words, or uint16 words as int16)."""
+    if rows.dtype == np.uint16:
+        t = torch.from_numpy(np.ascontiguousarray(rows).view(np.int16)).to(device)
+        if narrow is not None:
+            narrow[name] = t
+        return t.to(torch.int64) & 0xFFFF
     if rows.dtype not in (np.uint8, np.int8, np.int16, np.int32, np.int64):
         rows = rows.astype(np.int32 if rows.dtype.itemsize <= 2 else np.int64)
-    return torch.from_numpy(np.ascontiguousarray(rows)).to(device).to(torch.int64)
+    t = torch.from_numpy(np.ascontiguousarray(rows)).to(device)
+    if narrow is not None and rows.dtype == np.uint8:
+        narrow[name] = t
+    return t.to(torch.int64)
 
 
 def instances(rel: Relation, n: int, seed: int | None = None, procs: int = 1, cache: str | Path | None = None, root=None):
@@ -503,7 +512,10 @@ class HashedRelationRunner(RelationChainRunner):
         t0 = time.perf_counter()
         x_rows, w_cols = _word_rows(x_rows), _word_rows(w_cols)
         self.rows = {"a": x_rows, "b": w_cols}
-        rows_d = {nm: _rows_to_device(r, self.device) for nm, r in self.rows.items()}
+        narrow: dict = {}
+        rows_d = {nm: _rows_to_device(r, self.device, narrow, nm) for nm, r in self.rows.items()}
+        if str(self.device).startswith("cuda"):
+            torch.cuda.synchronize()
         t1 = time.perf_counter()
         self.tile = tile
         # the chain states of every committed row, once (the prover's cost of hashing; gathered per sub-batch in prove_vus);
@@ -519,10 +531,15 @@ class HashedRelationRunner(RelationChainRunner):
         self.trees, self.digests, cached = hashauth.load_or_build_trees(
             cache, x_rows=x_rows, w_cols=w_cols,
             y_words=np.asarray(y_words, dtype=np.int64), word_bits=self.hr.word_bits, y_bits=self.rel.y_bits, bindings=bindings,
-            leaf=self.leaf, digests=chain_digests)
+            leaf=self.leaf, digests=chain_digests, rows_dev={nm: narrow.get(nm, rows_d[nm]) for nm in rows_d})
+        if str(self.device).startswith("cuda"):
+            torch.cuda.synchronize()
         t3 = time.perf_counter()
         self._committed_digests(rows_d)
-        self.commit_timings = {"rows": t1 - t0, "chain": t2 - t1, "trees": t3 - t2, "host": time.perf_counter() - t3}
+        # committer = what the commitment itself costs (rows to the device, row digests, framing, the trees, the y leaves);
+        # chain = the prover's carried states of every committed row, precomputed here
+        self.commit_timings = {"rows": t1 - t0, "chain": t2 - t1, "trees": t3 - t2, "host": time.perf_counter() - t3,
+                               "committer": (t1 - t0) + (t3 - t2)}
         return cached
 
     def commit_evidence(self) -> dict:
