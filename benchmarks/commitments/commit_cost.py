@@ -96,13 +96,19 @@ def measure(scheme: str, n: int, nbytes: int, reps: int) -> dict[str, Any]:
 def measurements(row: dict[str, Any]) -> list[dict[str, Any]]:
     key = row["scheme"]
     total = row["commit_s"]
-    return [
+    out = [
         {"name": f"{key}.leaf_s", "value": row["leaf_s"], "unit": "s"},
         {"name": f"{key}.tree_s", "value": row["tree_s"], "unit": "s"},
         {"name": f"{key}.commit_s", "value": total, "unit": "s"},
         {"name": f"{key}.leaves_per_s", "value": row["leaves"] / total if total else None, "unit": "leaf/s"},
         {"name": f"{key}.bytes_per_s", "value": row["leaves"] * row["leaf_bytes"] / total if total else None, "unit": "B/s"},
     ]
+    if "h2d_s" in row:
+        with_copy = row["commit_h2d_s"]
+        out += [{"name": f"{key}.h2d_s", "value": row["h2d_s"], "unit": "s"},
+                {"name": f"{key}.commit_h2d_s", "value": with_copy, "unit": "s"},
+                {"name": f"{key}.bytes_per_s_h2d", "value": row["leaves"] * row["leaf_bytes"] / with_copy if with_copy else None, "unit": "B/s"}]
+    return out
 
 
 def parse(argv: list[str]) -> argparse.Namespace:
@@ -111,6 +117,8 @@ def parse(argv: list[str]) -> argparse.Namespace:
     ap.add_argument("--leaves", type=int, default=1 << 16)
     ap.add_argument("--leaf-bytes", type=int, default=256)
     ap.add_argument("--reps", type=int, default=3)
+    ap.add_argument("--impl", choices=("python", "gpu"), default="python",
+                    help="python = the plain references; gpu = the CUDA committer (commit_cost_gpu.py), roots checked against them")
     ap.add_argument("--out", default=None, help="directory for result.json (default $RESEARCH_RUN_DIR)")
     ns = ap.parse_args(argv)
     if ns.leaves <= 0 or ns.leaf_bytes < 0 or ns.reps <= 0:
@@ -122,9 +130,15 @@ def parse(argv: list[str]) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     ns = parse(sys.argv[1:] if argv is None else argv)
     started = time.perf_counter()
-    rows = [measure(s, ns.leaves, ns.leaf_bytes, ns.reps) for s in ns.schemes]
+    if ns.impl == "gpu":
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import commit_cost_gpu
+        rows = [commit_cost_gpu.measure(s, ns.leaves, ns.leaf_bytes, ns.reps, setup) for s in ns.schemes]
+    else:
+        rows = [measure(s, ns.leaves, ns.leaf_bytes, ns.reps) for s in ns.schemes]
     for row in rows:
-        print(json.dumps({k: row[k] for k in ("scheme", "leaves", "leaf_bytes", "leaf_s", "tree_s", "commit_s", "opening_verified")}))
+        print(json.dumps({k: row[k] for k in ("scheme", "leaves", "leaf_bytes", "leaf_s", "tree_s", "commit_s", "h2d_s", "opening_verified")
+                          if k in row}))
     out = ns.out or os.environ.get("RESEARCH_RUN_DIR")
     if out:
         d = Path(out)
@@ -136,9 +150,13 @@ def main(argv: list[str] | None = None) -> int:
             "run_id": os.environ.get("RESEARCH_RUN_ID", "local"),
             "kind": "bench-result/v1",
             "workload_fingerprint": {"workload": "commit_cost", "schemes": [r["scheme"] for r in rows], "leaves": ns.leaves,
-                                     "leaf_bytes": ns.leaf_bytes, "reps": ns.reps, "implementation": "python-reference",
+                                     "leaf_bytes": ns.leaf_bytes, "reps": ns.reps,
+                                     "implementation": "python-reference" if ns.impl == "python" else "gpu-cuda hash_gpu.frame_v3",
+                                     **({"device": rows[0]["device"]} if ns.impl == "gpu" and rows else {}),
                                      "python": sys.version.split()[0]},
-            "validation": {"status": "passed" if ok else "failed", "checker": "one opening per scheme through verify_path",
+            "validation": {"status": "passed" if ok else "failed",
+                           "checker": "one opening per scheme through verify_path" + (
+                               "; every rep's root equal to the plain reference root, the leaves too" if ns.impl == "gpu" else ""),
                            "detail": ", ".join(f"{r['scheme']}={'ok' if r['opening_verified'] else 'FAILED'}" for r in rows), "evidence": []},
             "measurements": [m for r in rows for m in measurements(r)] + [{"name": "workload_wall", "value": time.perf_counter() - started, "unit": "s"}],
             "measurement_files": ["commit_cost.json"],

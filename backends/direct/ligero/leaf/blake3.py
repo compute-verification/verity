@@ -650,6 +650,16 @@ class Blake3Leaf:
         car[:, :, CARRY_ELEMS - 1] = np.arange(steps)[None, :]
         return car
 
+    def row_sponges(self, words, *, word_bits: int, role: int, row_words: int, n: int, steps: int):
+        """The committer's chains of ``n`` whole rows at once on the GPU (``frame_gpu.blake3_chain``): ``words`` (n * steps,
+        k) int64 CUDA torch, row-major -> ``(carry (n, steps, CARRY_ELEMS), digests (n, DIGEST_ELEMS))`` =
+        :meth:`carry_values` / :meth:`native`; ``None`` off CUDA or without the GPU committer (the caller falls back to
+        :meth:`chain_witness`)."""
+        from .. import frame_gpu
+        if not words.is_cuda or not frame_gpu.available() or n_chunks(word_bits, row_words) < 2:
+            return None
+        return frame_gpu.blake3_chain(words, word_bits=word_bits, role=role, row_words=row_words, n=n, steps=steps)
+
     def chain_witness(self, words, *, word_bits: int, role: int, row_words: int, n_vus: int, steps: int, l: int):
         """``words`` (l, k) int64 torch (VU v in columns [v steps, (v + 1) steps), pad columns 0) -> (carry (CARRY_ELEMS,
         l) torch: the carried rows entering every column, digests (n_vus, DIGEST_ELEMS) torch)."""

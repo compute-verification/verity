@@ -198,9 +198,41 @@ pub fn leaf_value(domain: &[u8; 32], rank: u64, schema: &str, value: &[u8]) -> [
     frame(b"leaf", &[&domain[..], &r[..], &r[..], schema.as_bytes(), value])
 }
 
-/// `hashauth.verify_hash_auth`: every VU's x digest is the leaf at its claimed x rank under root a, its W digest under
-/// root b, its output word (`y_bits` wide: schema u16 / u32, big-endian) under root y; VUs claiming one leaf must have
-/// published one digest.  `y_words`: one per VU (the chain-end columns' words).
+/// `hashauth.layout_error`: a VU's x row and W column are fixed by its y leaf and the committed layout, never chosen by
+/// the prover.  One leaf per VU in all three trees (unshared): x = W = vu; an nx x nw tile (x tree nx, W tree nw, y tree
+/// nx * nw leaves): x = vu / nw, W = vu % nw.  Any other tree shape or claim is refused (red-team-standard-hash R1).
+pub fn layout_error(vu_index: &[u32], x_index: &[u32], w_index: &[u32], counts: [u64; 3]) -> Option<String> {
+    let [na, nb, ny] = counts;
+    if x_index.len() != vu_index.len() || w_index.len() != vu_index.len() {
+        return Some("auth: one (x, W, y) leaf triple per VU".into());
+    }
+    if vu_index.iter().any(|&v| v as u64 >= ny) {
+        return Some("auth: y: leaf index out of range".into());
+    }
+    let tile_nw = if na == nb && nb == ny {
+        None
+    } else if na.checked_mul(nb) == Some(ny) {
+        Some(nb)
+    } else {
+        return Some(format!("auth: tree counts a={na} b={nb} y={ny} are neither one leaf per VU nor an nx x nw tile"));
+    };
+    for v in 0..vu_index.len() {
+        let vu = vu_index[v] as u64;
+        let (ex, ew) = match tile_nw {
+            None => (vu, vu),
+            Some(nw) => (vu / nw, vu % nw),
+        };
+        if x_index[v] as u64 != ex || w_index[v] as u64 != ew {
+            return Some("auth: a VU's x row / W column is not the one its index fixes in the committed layout".into());
+        }
+    }
+    None
+}
+
+/// `hashauth.verify_hash_auth`: the (x, W) leaf of every VU is the one its y leaf fixes (`layout_error`); every VU's x
+/// digest is the leaf at that x rank under root a, its W digest under root b, its output word (`y_bits` wide: schema
+/// u16 / u32, big-endian) under root y; VUs claiming one leaf must have published one digest.  `y_words`: one per VU
+/// (the chain-end columns' words).
 pub fn check_hashed(a: &HashAuthBlock, y_words: &[u32], y_bits: u32, threads: usize) -> Result<(), String> {
     let n = a.vu_index.len();
     if a.multiproofs.len() != 3 {
@@ -216,6 +248,9 @@ pub fn check_hashed(a: &HashAuthBlock, y_words: &[u32], y_bits: u32, threads: us
     let (y_schema, y_bytes) = if y_bits <= 16 { ("u16", 2usize) } else { ("u32", 4usize) };
     if y_words.iter().any(|&w| (w as u64) >> y_bits != 0) {
         return Err("auth: y word out of range".into());
+    }
+    if let Some(e) = layout_error(&a.vu_index, &a.x_index, &a.w_index, [a.trees[0].count, a.trees[1].count, a.trees[2].count]) {
+        return Err(e);
     }
     for ti in 0..3 {
         let name = TREE_NAMES[ti];
@@ -610,12 +645,35 @@ mod tests {
         refuse("x root", &|b, _| b.trees[0].root[0] ^= 1, "auth: a: multiproof rejected (root mismatch)");
         refuse("y root", &|b, _| b.trees[2].root[31] ^= 1, "auth: y: multiproof rejected (root mismatch)");
         refuse("tree binding", &|b, _| b.trees[1].binding[0] ^= 1, "auth: b: multiproof rejected (root mismatch)");
-        refuse("swapped W column", &|b, _| b.w_index.swap(0, 1), "auth: b: ");
-        refuse("x row of another VU", &|b, _| b.x_index[0] = 5, "auth: a: ");
+        const LAYOUT: &str = "is not the one its index fixes in the committed layout";
+        refuse("swapped W column", &|b, _| b.w_index.swap(0, 1), LAYOUT);
+        refuse("x row of another VU", &|b, _| b.x_index[0] = 5, LAYOUT);
+        // red-team-standard-hash R1: VU 0 claims VU 1's x row AND W column (VU 1's output under an honest x / W pair)
+        refuse("VU 0 on VU 1's (x, W)", &|b, _| { b.x_index[0] = 1; b.w_index[0] = 1; }, LAYOUT);
         refuse("y word", &|_, yy| yy[7] ^= 1, "auth: y: multiproof rejected (root mismatch)");
         refuse("y word out of range", &|_, yy| yy[0] = 1 << 22, "auth: y word out of range");
-        refuse("leaf beyond the count", &|b, _| b.x_index[19] = 20, "auth: a: leaf index out of range");
+        refuse("leaf beyond the count", &|b, _| b.x_index[19] = 20, LAYOUT);
+        refuse("x tree of another shape", &|b, _| b.trees[0].count = 19, "neither one leaf per VU nor an nx x nw tile");
         refuse("one multiproof short", &|b, _| { b.multiproofs.pop(); }, "expected one multiproof per tree");
         refuse("VU dropped", &|b, _| { b.vu_index.pop(); }, "does not match the VU count");
+    }
+
+    #[test]
+    fn layout_fixes_x_and_w_from_the_vu_index() {
+        // unshared: x = W = vu
+        assert_eq!(layout_error(&[0, 2, 5], &[0, 2, 5], &[0, 2, 5], [6, 6, 6]), None);
+        assert!(layout_error(&[0, 1], &[1, 1], &[1, 1], [2, 2, 2]).unwrap().contains("committed layout"));
+        assert!(layout_error(&[0, 1], &[0, 1], &[1, 0], [2, 2, 2]).unwrap().contains("committed layout"));
+        // a 2 x 3 tile: x = vu / 3, W = vu % 3 (relchain.tile_indices)
+        assert_eq!(layout_error(&[3, 4, 5], &[1, 1, 1], &[0, 1, 2], [2, 3, 6]), None);
+        assert!(layout_error(&[3, 4, 5], &[1, 1, 1], &[0, 2, 2], [2, 3, 6]).unwrap().contains("committed layout"));
+        assert!(layout_error(&[3], &[0], &[1], [3, 2, 6]).unwrap().contains("committed layout"));
+        // one VU: both readings agree
+        assert_eq!(layout_error(&[0], &[0], &[0], [1, 1, 1]), None);
+        // shapes that are neither, indices past y, ragged triples
+        assert!(layout_error(&[0], &[0], &[0], [2, 3, 5]).unwrap().contains("neither"));
+        assert!(layout_error(&[6], &[2], &[0], [2, 3, 6]).unwrap().contains("y: leaf index out of range"));
+        assert!(layout_error(&[0, 1], &[0], &[0, 1], [2, 2, 2]).unwrap().contains("one (x, W, y) leaf triple per VU"));
+        assert_eq!(layout_error(&[], &[], &[], [0, 0, 0]), None);
     }
 }

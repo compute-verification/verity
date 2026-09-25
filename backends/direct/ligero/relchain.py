@@ -47,16 +47,21 @@ __all__ = ["RelationChainRunner", "bench_vu_rel", "gate_vu_rel", "instances", "i
 # ---------------------------------------------------------------------------------------------------------------------
 
 def _instance(args) -> tuple[list, list, list, int]:
+    return _instance_np(args)[2]
+
+
+def _instance_np(args) -> tuple[np.ndarray, np.ndarray, tuple[list, list, list, int]]:
+    """VU ``i``'s operands as drawn (arrays) and the VU ``(a, b, accs, y_final)`` of :func:`_instance`."""
     name, seed, i = args
     rel = relation(name)
     rng = np.random.default_rng([seed, i])
-    a = rel.operands(rng, (K_VU,)).tolist()
-    b = rel.operands(rng, (K_VU,)).tolist()
+    a_np, b_np = rel.operands(rng, (K_VU,)), rel.operands(rng, (K_VU,))
+    a, b = a_np.tolist(), b_np.tolist()
     k, accs, c = rel.k, [], 0
     for s in range(rel.steps):
         c = tc_dot(rel.model, c, a[k * s:k * s + k], b[k * s:k * s + k])
         accs.append(c)
-    return a, b, accs, accs[-1]
+    return a_np, b_np, (a, b, accs, accs[-1])
 
 
 def _frozen_root(root) -> Path:
@@ -84,7 +89,74 @@ def frozen_instances(rel: Relation, n: int, root=None):
         if len(accs) != rel.steps or rel.y_public(int(accs[-1])) != y16:
             raise ValueError(f"{rel.frozen_tier} instance {j}: {len(accs)} accumulators / final word does not cast to the expected y")
         out.append((a, b, accs, int(accs[-1])))
+    x = np.frombuffer(vu.x, dtype=np.uint16 if vu.x.itemsize == 2 else np.uint32).reshape(vu.n, vu.K)
+    w = np.frombuffer(vu.w, dtype=np.uint16 if vu.w.itemsize == 2 else np.uint32).reshape(vu.n, vu.K)
+    if n <= vu.n:
+        return _with_rows(out, x[:n], w[:n])
+    return _with_rows(out, [x[i % vu.n] for i in range(n)], [w[i % vu.n] for i in range(n)])
+
+
+class VUs(list):
+    """An instance list (:func:`instances`) carrying the committed operand rows in the form they were read or drawn in
+    (``x_rows``, ``w_cols``: an (n, K) integer array or n integer arrays of K, the words of ``self[i][0]`` /
+    ``self[i][1]``): what ``commit_vus`` commits instead of converting the per-VU lists back."""
+    x_rows: np.ndarray | None = None
+    w_cols: np.ndarray | None = None
+
+
+def _with_rows(vus: list, x_rows, w_cols) -> VUs:
+    out = VUs(vus)
+    out.x_rows, out.w_cols = x_rows, w_cols
     return out
+
+
+def _word_rows(rows) -> np.ndarray:
+    """Committed rows as a 2-D integer array: an integer ndarray as it is (its own dtype), a list of 1-D integer ndarrays
+    stacked, anything else as int64."""
+    if isinstance(rows, np.ndarray) and rows.ndim == 2 and rows.dtype.kind in "iu":
+        return rows
+    if isinstance(rows, list) and rows and all(isinstance(r, np.ndarray) and r.ndim == 1 and r.dtype.kind in "iu" for r in rows):
+        return np.stack(rows)
+    return np.asarray(rows, dtype=np.int64)
+
+
+def narrow_rows(rows, word_bits: int, pin: bool = False) -> np.ndarray:
+    """Committed rows (:func:`_word_rows`) in their words' own dtype, as a committed set is stored: uint8 / uint16 for
+    8- / 16-bit words (range-checked), any other width as it is.  ``pin``: in page-locked host memory (a serving stack's
+    staging buffer; the copy to the device is then a DMA without host staging)."""
+    r = _word_rows(rows)
+    dt = {8: np.uint8, 16: np.uint16}.get(int(word_bits))
+    if dt is not None and r.dtype != dt:
+        if r.size and (int(r.min()) < 0 or int(r.max()) >= 1 << int(word_bits)):
+            raise ValueError(f"committed words out of range for {word_bits} bits")
+        r = r.astype(dt)
+    if pin and torch.cuda.is_available():
+        buf = torch.empty(r.nbytes, dtype=torch.uint8, pin_memory=True).numpy().view(r.dtype).reshape(r.shape)
+        buf[...] = r
+        return buf
+    return np.ascontiguousarray(r)
+
+
+def _h2d(a: np.ndarray, device) -> torch.Tensor:
+    """``a`` on ``device``: from page-locked memory without blocking the host (the stream orders its readers)."""
+    t = torch.from_numpy(a)
+    return t.to(device, non_blocking=str(device).startswith("cuda") and t.is_pinned())
+
+
+def _rows_to_device(rows: np.ndarray, device, narrow: dict | None = None, name: str | None = None):
+    """``rows`` as an int64 torch tensor on ``device``, copied in its narrow dtype and widened there.  ``narrow``: records
+    ``narrow[name]`` = the copied tensor when it holds the rows' bytes (uint8 words, or uint16 words as int16)."""
+    if rows.dtype == np.uint16:
+        t = _h2d(np.ascontiguousarray(rows).view(np.int16), device)
+        if narrow is not None:
+            narrow[name] = t
+        return t.to(torch.int64) & 0xFFFF
+    if rows.dtype not in (np.uint8, np.int8, np.int16, np.int32, np.int64):
+        rows = rows.astype(np.int32 if rows.dtype.itemsize <= 2 else np.int64)
+    t = _h2d(np.ascontiguousarray(rows), device)
+    if narrow is not None and rows.dtype == np.uint8:
+        narrow[name] = t
+    return t.to(torch.int64)
 
 
 def instances(rel: Relation, n: int, seed: int | None = None, procs: int = 1, cache: str | Path | None = None, root=None):
@@ -100,19 +172,20 @@ def instances(rel: Relation, n: int, seed: int | None = None, procs: int = 1, ca
     if path is not None and path.exists():
         with np.load(path) as z:  # materialise each array once (indexing the lazy NpzFile re-reads the member every time)
             a, b, accs = z["a"], z["b"], z["accs"]
-        return [(a[i].tolist(), b[i].tolist(), accs[i].tolist(), int(accs[i][-1])) for i in range(n)]
+        return _with_rows([(a[i].tolist(), b[i].tolist(), accs[i].tolist(), int(accs[i][-1])) for i in range(n)], a, b)
     if path is not None and rel.fold > 1 and rel.folded_from and (Path(cache) / f"{rel.folded_from}-{seed}-{n}.npz").exists():
         # the fold's VUs ARE the base's (same operands from the same (seed, i) streams, the same chain): every ``fold``-th
         # recorded accumulator is a column's end, the others are the words the fold keeps private
         with np.load(Path(cache) / f"{rel.folded_from}-{seed}-{n}.npz") as z:
             a, b, accs = z["a"], z["b"], z["accs"][:, rel.fold - 1::rel.fold]
-        return [(a[i].tolist(), b[i].tolist(), accs[i].tolist(), int(accs[i][-1])) for i in range(n)]
+        return _with_rows([(a[i].tolist(), b[i].tolist(), accs[i].tolist(), int(accs[i][-1])) for i in range(n)], a, b)
     jobs = [(rel.name, seed, i) for i in range(n)]
     if procs > 1 and n > 1:
         with ProcessPoolExecutor(procs) as ex:
-            out = list(ex.map(_instance, jobs, chunksize=max(1, n // (8 * procs))))
+            drawn = list(ex.map(_instance_np, jobs, chunksize=max(1, n // (8 * procs))))
     else:
-        out = [_instance(j) for j in jobs]
+        drawn = [_instance_np(j) for j in jobs]
+    out = _with_rows([d[2] for d in drawn], [d[0] for d in drawn], [d[1] for d in drawn])
     if path is not None:
         path.parent.mkdir(parents=True, exist_ok=True)
         np.savez(path, a=np.asarray([o[0] for o in out], dtype=np.int64), b=np.asarray([o[1] for o in out], dtype=np.int64),
@@ -431,6 +504,8 @@ class HashedRelationRunner(RelationChainRunner):
         self.leaf_name = leaf_registry.suffix_of(self.leaf)     # the relation suffix ("poseidon2", "blake3", "ajtai-n64")
         self.sys = self.hr.sys
         self.tb = tables(self.sys, self.device)
+        if hashchain.ROW_SPONGE_KERNEL and str(device).startswith("cuda") and getattr(self.leaf, "prepare", None) is not None:
+            self.leaf.prepare()
         self.compile_seconds = time.perf_counter() - t0
         self._cfg = {}
         self._base_sys = dataclasses.replace(self.sys, hints=self.sys.hints[:self.hr.n_base_hints])
@@ -457,29 +532,61 @@ class HashedRelationRunner(RelationChainRunner):
     def commit(self, *, x_rows, w_cols, y_words, bindings, cache=None, tile=None):
         """Build (or load) the three trees of the committed set; ``tile = (nx, nw)`` records the sharing layout."""
         from . import hashauth, hashchain
-        x_rows, w_cols = np.asarray(x_rows, dtype=np.int64), np.asarray(w_cols, dtype=np.int64)
+        t0 = time.perf_counter()
+        x_rows, w_cols = _word_rows(x_rows), _word_rows(w_cols)
+        self.rows = {"a": x_rows, "b": w_cols}
+        narrow: dict = {}
+        rows_d = {nm: _rows_to_device(r, self.device, narrow, nm) for nm, r in self.rows.items()}
+        if str(self.device).startswith("cuda"):
+            torch.cuda.synchronize()
+        t1 = time.perf_counter()
+        self.tile = tile
+        # the chain states of every committed row, once (the prover's cost of hashing; gathered per sub-batch in prove_vus);
+        # with the device row sponges their digests ARE the tree leaves' (scheme.native), so the trees take them
+        self.sponges = {nm: hashchain.row_chain(self.hr, rows_d[nm], role, self.device) for _, nm, role in hashchain.ROLES}
+        if str(self.device).startswith("cuda"):
+            torch.cuda.synchronize()
+        t2 = time.perf_counter()
+        self.sponge_seconds = t2 - t1
+        chain_digests = None
+        if hashchain.ROW_SPONGE_KERNEL and getattr(self.leaf, "row_sponges", None) is not None and str(self.device).startswith("cuda"):
+            from . import frame_gpu
+            on_dev = frame_gpu.available() and self.leaf.name in frame_gpu.ROW_SCHEMES      # compared on the device
+            chain_digests = {nm: self.sponges[nm][1] if on_dev else self.sponges[nm][1].cpu().numpy().astype(np.int64)
+                             for nm in self.sponges}
         self.trees, self.digests, cached = hashauth.load_or_build_trees(
             cache, x_rows=x_rows, w_cols=w_cols,
             y_words=np.asarray(y_words, dtype=np.int64), word_bits=self.hr.word_bits, y_bits=self.rel.y_bits, bindings=bindings,
-            leaf=self.leaf)
-        self.tile = tile
-        # the chain states of every committed row, once (the prover's cost of hashing; gathered per sub-batch in prove_vus)
-        t0 = time.perf_counter()
-        self.rows = {"a": x_rows, "b": w_cols}
-        self.sponges = {nm: hashchain.row_chain(self.hr, self.rows[nm], role, self.device) for _, nm, role in hashchain.ROLES}
+            leaf=self.leaf, digests=chain_digests, rows_dev={nm: narrow.get(nm, rows_d[nm]) for nm in rows_d})
         if str(self.device).startswith("cuda"):
             torch.cuda.synchronize()
-        self.sponge_seconds = time.perf_counter() - t0
-        self._committed_digests()
+        t3 = time.perf_counter()
+        self._committed_digests(rows_d)
+        # committer = what the commitment itself costs (rows to the device, row digests, framing, the trees, the y leaves);
+        # chain = the prover's carried states of every committed row, precomputed here
+        self.commit_timings = {"rows": t1 - t0, "chain": t2 - t1, "trees": t3 - t2, "host": time.perf_counter() - t3,
+                               "committer": (t1 - t0) + (t3 - t2)}
         return cached
 
-    def _committed_digests(self):
+    def commit_evidence(self) -> dict:
+        """What the committed set IS, byte for byte: the three tree references (bindings, counts, roots), the sha256 of every
+        tree level, of the published row digests and of the prover's precomputed chain states (``<i8`` bytes)."""
+        sha = lambda a: hashlib.sha256(np.ascontiguousarray(np.asarray(a, dtype=np.int64)).astype("<i8").tobytes()).hexdigest()  # noqa: E731
+        out = {"trees": {n: {**t.ref.to_json(), "levels_sha256": hashlib.sha256(b"".join(np.ascontiguousarray(lv).tobytes()
+                                                                                          for lv in t.levels)).hexdigest()}
+                         for n, t in self.trees.items()},
+               "digests_sha256": {n: sha(d) for n, d in self.digests.items()},
+               "chain_sha256": {nm: [sha(x.cpu().numpy()) for x in sp[:2]] for nm, sp in self.sponges.items()}}
+        out["sha256"] = hashlib.sha256(json.dumps(out, sort_keys=True).encode()).hexdigest()
+        return out
+
+    def _committed_digests(self, rows_d: dict | None = None):
         """Host copies of the committed rows' digests (public: the leaves of the x / W trees) for the statement tables
         of the pipelined prover, and device copies of the committed rows (the hash side gathers its witness from them).
         Only the hashed statements depend on the commitment: the base marshal of the instance words stays cached."""
         self._marshal_cache = {k: v for k, v in self._marshal_cache.items() if k[0] != "hashed"}
         self.dg_host = {nm: self.sponges[nm][1].cpu().numpy().astype(np.int64) for nm in self.sponges}
-        self.rows_d = {nm: torch.as_tensor(self.rows[nm], dtype=torch.int64).to(self.device) for nm in self.rows}
+        self.rows_d = rows_d if rows_d is not None else {nm: _rows_to_device(self.rows[nm], self.device) for nm in self.rows}
 
     def marshal_hashed(self, vus: list, vu_ids, min_l: int = 256) -> dict:
         """The sub-batch's statement (public table from the committed digests, leaf indices, authentication block, public
@@ -591,15 +698,23 @@ class HashedRelationRunner(RelationChainRunner):
         return [(coins_of[i], pf, (bd["table"], bd["idx"], bd["ypub"], bd["auth"], sibs[i]), bd["lay"])
                 for i, (pf, bd) in enumerate(zip(proofs, bundles))], wall
 
+    def committed_rows(self, data) -> tuple:
+        """The worst-case committed set of an instance list (every VU its own x row and W column) as stored: ``(x_rows,
+        w_cols)`` in the words' dtype, page-locked for a CUDA runner (:func:`narrow_rows`)."""
+        x_rows, w_cols = getattr(data, "x_rows", None), getattr(data, "w_cols", None)
+        if x_rows is None or w_cols is None:
+            x_rows, w_cols = [v[0] for v in data], [v[1] for v in data]
+        pin = str(self.device).startswith("cuda")
+        return narrow_rows(x_rows, self.hr.word_bits, pin), narrow_rows(w_cols, self.hr.word_bits, pin)
+
     def commit_vus(self, data: list, dataset: str = "synthetic", tier: str = "dev", manifest_sha256: str = "", cache=None, tile=None,
                    x_rows=None, w_cols=None):
         """Commit an instance list: the worst case (every VU its own x row and W column: ``x_rows = a``, ``w_cols = b``) or a
         tile (``x_rows`` / ``w_cols`` given, ``tile = (nx, nw)``)."""
         from . import hashauth
         y = [self.rel.y_public(int(v[3])) for v in data]
-        if tile is None:
-            x_rows = [v[0] for v in data]
-            w_cols = [v[1] for v in data]
+        if tile is None and (x_rows is None or w_cols is None):
+            x_rows, w_cols = self.committed_rows(data)
         ysch, _ = hashauth.word_schema(self.rel.y_bits)
         bindings = {n: hashauth.binding_digest(dataset=dataset, tier=tier, manifest_sha256=manifest_sha256, lo=0, hi=len(data),
                                                K=getattr(self.rel, "vu_words", K_VU), tree=n,
@@ -1935,7 +2050,8 @@ def bench_vu_rel(args, rel: Relation) -> int:
     t0 = time.perf_counter()
     if tile is None:
         data = instances(rel, total_vus, procs=getattr(args, "instance_procs", 1), cache=getattr(args, "instances_cache", None), root=root)
-        x_rows = w_cols = None
+        # the committed set as stored (the rows in their words' dtype): the committer's input, made once with the set
+        x_rows, w_cols = R.committed_rows(data) if hashed else (None, None)
     else:
         # a frozen-tier relation (bf16-ampere): its frozen set has no tile layout, the tile is the synthetic draw
         data, x_rows, w_cols = tile_instances(rel, *tile, procs=getattr(args, "instance_procs", 1), cache=getattr(args, "instances_cache", None))
@@ -1948,18 +2064,33 @@ def bench_vu_rel(args, rel: Relation) -> int:
     commit_per_rep = bool(getattr(args, "commit_per_rep", False))
     if commit_per_rep and not (hashed and not shared and pipeline_depth > 1 and args.device.startswith("cuda")):
         raise SystemExit("--commit-per-rep: --auth included-hash (unshared) with --pipeline >= 2 on CUDA only")
+    if commit_per_rep and int(getattr(args, "commit_reps", 0) or 0):
+        raise SystemExit("--commit-per-rep and --commit-reps are two timings of the commitment bucket: pick one")
 
     def commit_batch(cache):
         R.commit_vus(data, dataset=rel.instances_dataset, tier=rel.instances_tier, manifest_sha256=inst_digest,
                      cache=cache, tile=tile, x_rows=x_rows, w_cols=w_cols)
 
+    commit_runs: list[tuple[float, dict]] = []
+    commit_ev = None
     if hashed:
-        t0 = time.perf_counter()
-        commit_batch(None if commit_per_rep else getattr(args, "auth_cache", None))
-        commit_seconds = time.perf_counter() - t0
+        # --commit-reps N: the whole commitment (row digests, the three trees, the prover's chain states) built from scratch
+        # 1 + N times; the first call (cold) stays relation.hash.commit_seconds, commit.seconds is the median of the N
+        # (the per-batch cost of a committer that has run before), every call's evidence must be identical
+        for ci in range(1 + max(0, int(getattr(args, "commit_reps", 0) or 0))):
+            t0 = time.perf_counter()
+            commit_batch(None if commit_per_rep or ci > 0 else getattr(args, "auth_cache", None))
+            commit_runs.append((time.perf_counter() - t0, dict(getattr(R, "commit_timings", {}))))
+            ev = R.commit_evidence()
+            assert commit_ev is None or ev["sha256"] == commit_ev["sha256"], "commitment differs between two builds of one set"
+            commit_ev = ev
+            print(f"commit {ci}: {commit_runs[-1][0]:.3f}s {json.dumps({k_: round(v_, 4) for k_, v_ in commit_runs[-1][1].items()})}")
+        commit_seconds = commit_runs[0][0]
         print(f"committed: x tree {R.trees['a'].count} rows, W tree {R.trees['b'].count} columns, y tree {R.trees['y'].count} words "
               f"({R.leaf.schema} + SHA-256) in {commit_seconds:.1f}s (row digests on {args.device}: {R.sponge_seconds:.2f}s); "
-              f"roots a={R.trees['a'].root.hex()[:16]} b={R.trees['b'].root.hex()[:16]}")
+              f"roots a={R.trees['a'].root.hex()[:16]} b={R.trees['b'].root.hex()[:16]}; evidence sha256 {commit_ev['sha256']}")
+        if getattr(args, "commit_evidence", None):
+            Path(os.path.expandvars(args.commit_evidence)).write_text(json.dumps(commit_ev, indent=1, sort_keys=True))
     lay = R.layout(per_proof)
     l = lay.l
     cfg = R.cfg(l)
@@ -2012,6 +2143,9 @@ def bench_vu_rel(args, rel: Relation) -> int:
             t_c = time.perf_counter()
             commit_batch(None)
             agg["commitment"] = time.perf_counter() - t_c - R.sponge_seconds
+            assert {n: t.ref.to_json() for n, t in R.trees.items()} == {
+                n: {k: v for k, v in e.items() if k != "levels_sha256"} for n, e in commit_ev["trees"].items()}, \
+                f"rep {rep}: the recommitted trees differ from the first build's"
             agg["hints_host"] = agg["row_chain"] = R.sponge_seconds
             t_s = time.perf_counter()
             for lo, hi in subs:
@@ -2267,6 +2401,17 @@ def bench_vu_rel(args, rel: Relation) -> int:
                  contract.measurement("relation.hash.auth_openings_seconds", med.get("auth_openings", 0.0), "s"),
                  contract.measurement("relation.hash.committed_x_rows", R.trees["a"].count, "count"),
                  contract.measurement("relation.hash.committed_w_cols", R.trees["b"].count, "count")]
+        if not commit_per_rep:
+            # the commitment-building bucket (kb/TABLES.md "Commitment time counts"): NOT a t.* bucket (outside t.total, which
+            # stays the prover's), reported on its own and end to end; the breakdown is the median call's
+            steady = commit_runs[1:] or commit_runs
+            c_med = sorted(steady, key=lambda r: r[0])[(len(steady) - 1) // 2]
+            meas += [contract.measurement("commit.seconds", c_med[0], "s"),
+                     contract.measurement("commit.cold_seconds", commit_runs[0][0], "s"),
+                     contract.measurement("commit.reps", len(steady), "count"),
+                     *(contract.measurement(f"commit.{k_}_seconds", v_, "s") for k_, v_ in c_med[1].items()),
+                     contract.measurement("e2e.seconds", c_med[0] + total, "s"),
+                     contract.measurement("e2e.cold_seconds", commit_runs[0][0] + total, "s")]
     if commit_per_rep:
         c_med = statistics.median(r[0]["commitment"] for r in runs)
         e2e = total + c_med
@@ -2313,6 +2458,12 @@ def bench_vu_rel(args, rel: Relation) -> int:
                "warm-up sub-batch")
     status = "passed"
     evidence = {"soundness": snd, "batch": batch,
+                **({"commit": {"runs": [{"seconds": s_, **b_} for s_, b_ in commit_runs], "evidence": commit_ev,
+                               "rule": "commit.seconds = median over calls 1..N of the full commitment built from scratch "
+                                       "(--commit-reps N; call 0 = cold, relation.hash.commit_seconds); e2e.seconds = "
+                                       "commit.seconds + t.total"}} if hashed and not commit_per_rep else
+                   {"commit": {"evidence": commit_ev, "rule": "--commit-per-rep: every rep recommits the set; its tree "
+                                                              "references must equal this first build's"}} if commit_per_rep else {}),
                 "reps": [{"prover_total": r[0]["total"] + r[0]["hints_host"], "verifier": r[1],
                           **({"commit": r[0]["commitment"], "e2e": r[0]["total"] + r[0]["hints_host"] + r[0]["commitment"]}
                              if commit_per_rep else {})} for r in runs],
