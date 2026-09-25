@@ -24,7 +24,8 @@ What is NOT known (and why this stays in quarantine):
     (leaves → root along the tree NCCL built for the communicator; with two interleaved trees per channel), or RING (for chunk c the
     reduce-scatter accumulation starts at rank (c + const) mod R and walks the ring — different elements of ONE buffer are summed in
     different rank orders).  The kernel name records the algorithm (`TREE`) and protocol (`LL`); the tree/ring structure itself is only
-    printed under `NCCL_DEBUG=INFO` and is not in the record.  This module fixes the order 0 → R-1 as an ASSUMPTION.
+    printed under `NCCL_DEBUG=INFO` and is not in the record.  This module therefore refuses R > 2: the one statement of the order is
+    `b1_tp2.allreduce_order`, and the R > 2 all-reduce is `b1_tp2.all_reduce(R, N)`.
   * the NaN word `__hadd2` produces (0x7FFF as `F2fpBf16`, or payload-preserving) — no NaN occurred in the evidence; `F2fpBf16` is used.
   * the custom all-reduce path (`_C.custom_ar`, `cross_device_reduce_1stage/2stage`) accumulates in F32 in rank order 0 → R-1 and
     rounds ONCE at the end (`custom_all_reduce.cuh::packed_reduce`): a different function for R > 2 (equal for R = 2).  It was disabled
@@ -43,24 +44,28 @@ from verity.ir.types import Array
 
 SEMANTIC_ID = "tp2/AllReduceSumBf16@v1"
 
-#: The rank order the R-1 additions are ASSUMED to follow (see the module docstring: not recorded by the capture for R > 2).
-ASSUMED_REDUCTION_ORDER = "rank 0 -> 1 -> ... -> R-1, one bf16 rounding per hop (NCCL reduces in the datatype)"
-
 
 def _rank_params(S):
     return tuple((f"x{r}", BF16) for r in range(int(S.R)))
 
 
-@composite("AllReduceSumBf16Elem", 1, ["R"], lambda S: (_rank_params(S), BF16),
-           conformance="quarantine (lane tp2): NCCL ncclSum/ncclBfloat16 reduces in the datatype, one RNE rounding per hop; the hop "
-                       "order 0->R-1 is ASSUMED (tree/ring order not recorded for R>2); R=2 is one commutative add = b1_tp2.AllReduce2 "
-                       "on non-NaN words (ov-tp2: 114/114 snapshotted all-reduces, both ranks bit-equal); difftest pending")
-def AllReduceSumBf16Elem(B, S, *xs):
-    """One element of the all-reduce output: `acc = x_0; acc = F2fpBf16(F32Add(Bf16ToF32(acc), Bf16ToF32(x_r)))` for r = 1..R-1.
-    `R >= 2`.  For R = 2: `bf16_rne(f32(x_0) + f32(x_1))`, order-free."""
-    R = int(S.R)
+def _two_ranks(R: int) -> None:
     if R < 2:
         raise ValueError("an all-reduce needs at least two ranks")
+    if R > 2:
+        raise ValueError(f"R = {R}: the hop order over more than two ranks is b1_tp2.allreduce_order; use b1_tp2.all_reduce({R}, N)")
+
+
+@composite("AllReduceSumBf16Elem", 1, ["R"], lambda S: (_rank_params(S), BF16),
+           conformance="quarantine (lane tp2): NCCL ncclSum/ncclBfloat16 reduces in the datatype, one RNE rounding per hop; R=2 only "
+                       "(R>2 refused: its hop order is b1_tp2.allreduce_order, its all-reduce b1_tp2.AllReduce_v2); R=2 is one "
+                       "commutative add = b1_tp2.AllReduce2 on non-NaN words (ov-tp2: 114/114 snapshotted all-reduces, both ranks "
+                       "bit-equal); difftest pending")
+def AllReduceSumBf16Elem(B, S, *xs):
+    """One element of the all-reduce output: `acc = x_0; acc = F2fpBf16(F32Add(Bf16ToF32(acc), Bf16ToF32(x_r)))` for r = 1..R-1.
+    `R = 2`: `bf16_rne(f32(x_0) + f32(x_1))`, order-free."""
+    R = int(S.R)
+    _two_ranks(R)
     if len(xs) != R:
         raise TypeError(f"AllReduceSumBf16Elem{{R={R}}}: {len(xs)} operands")
     acc = xs[0]
@@ -91,8 +96,7 @@ def all_reduce_sum_bf16_words(xs: list[list[int]]) -> list[int]:
     """The same function evaluated directly on bf16 encodings (R lists of N words), for tests and the linkage tool's self-check:
     hop r: `F2fpBf16(F32Add(Bf16ToF32(acc), Bf16ToF32(x_r)))`."""
     R = len(xs)
-    if R < 2:
-        raise ValueError("an all-reduce needs at least two ranks")
+    _two_ranks(R)
     N = len(xs[0])
     out: list[int] = []
     for i in range(N):

@@ -9,7 +9,7 @@
 # (1) pinned vllm-project/flash-attention @ 506341a1 (+ cutlass) at /workspace/cp/vllm-flash-attn (cloned if absent); (2) copied to
 # $FA2/trees/fa3tap and patched by fa3_tap_src/apply_fa3_tap.py; (3) built by fa3_tap_src/build_fa3_ext.py into $FA2/build/fa3_matReq;
 # (4) verified: loads, exposes fwd + verity_set_tap_v9 / verity_tap_hdims, mode 3 / src 59 / layout 9, hdims mask covers the request.
-# Exactness per coordinate is a separate step: fa3_tap_xcheck.py (needs the GPU).  Env: VENV (/workspace/venv-cu129), CUDA_HOME
+# Exactness is a separate step: tests/check/fa_tap_exactness_gpu.py (needs the GPU).  Env: VENV (/workspace/venv-cu129), CUDA_HOME
 # (first of /usr/local/cuda-12.9, /usr/local/cuda), FA2 (/workspace/cp/fa2), FA3_TAP_HDIMS (64,128), MAX_JOBS (32), TREE_ONLY=1.
 set -uo pipefail
 REPO=${REPO:-$(cd "$(dirname "$0")/../.." && pwd)}; cd "$REPO"

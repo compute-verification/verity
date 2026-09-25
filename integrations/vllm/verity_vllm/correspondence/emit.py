@@ -188,6 +188,16 @@ def _member_row(name: str | None, base: str, node_name: str) -> tuple[str | None
 # ---------------------------------------------------------------------------------------------------------------------------
 
 
+def _rank_coordinate(rank: tuple[int, int] | None) -> dict[str, int] | None:
+    """The document's TP rank coordinate.  A world above 2 is refused: collective records exist only for the two-rank ops."""
+    if rank is None:
+        return None
+    if int(rank[0]) > 2:
+        raise NotImplementedError(f"tensor-parallel world {int(rank[0])} refused: collective records exist only for the two-rank ops "
+                                  f"({', '.join('verity_tp::' + k for k in _COLLECTIVE_KINDS)}: two operands, the peer is the other one)")
+    return {"world": int(rank[0]), "rank": int(rank[1])}
+
+
 def emit_correspondence(ctx, body, *, rank: tuple[int, int] | None = None) -> dict:
     """The `runtime-correspondence/v1` document of the finished flat `body` derived under `ctx` (see module docstring)."""
     params = list(body.params)
@@ -403,7 +413,7 @@ def emit_correspondence(ctx, body, *, rank: tuple[int, int] | None = None) -> di
         calls.append({"occ": o, "member": member, "row": row, "hint": hint, "returns": rets, "args": args})
 
     return {"schema": SCHEMA, "body": "program_fn", "inputs": input_names, "weights": field_names or None,
-            "rank": {"world": int(rank[0]), "rank": int(rank[1])} if rank is not None else None,
+            "rank": _rank_coordinate(rank),
             "occurrences": occurrences, "calls": calls}
 
 

@@ -90,7 +90,7 @@ def _v(a, shape=(32, 1536), dtype="bfloat16", off=0):
 
 # --- the definition -----------------------------------------------------------------------------------------------------
 
-@pytest.mark.parametrize("N,R", [(8, 2), (5, 3), (1, 4)])
+@pytest.mark.parametrize("N,R", [(8, 2), (1, 2)])
 def test_allreduce_definition_shape_gates_and_identity(N, R):
     sp = A.all_reduce_sum_bf16(N, R)
     assert sp.id == f"AllReduceSumBf16_v1{{N={N},R={R}}}"
@@ -101,13 +101,22 @@ def test_allreduce_definition_shape_gates_and_identity(N, R):
     assert sp.gates == 4 * N * (R - 1)
     assert A.SEMANTIC_ID == "tp2/AllReduceSumBf16@v1"
     assert sp.defn.conformance.startswith("quarantine") and A.AllReduceSumBf16Elem.conformance.startswith("quarantine")
-    assert "ASSUMED" in A.AllReduceSumBf16Elem.conformance and "difftest pending" in A.AllReduceSumBf16Elem.conformance
+    assert "R=2 only" in A.AllReduceSumBf16Elem.conformance and "difftest pending" in A.AllReduceSumBf16Elem.conformance
     assert set(QC.ALL_DEFINITIONS) == {A.AllReduceSumBf16Elem, A.AllReduceSumBf16}
 
 
 def test_allreduce_rejects_fewer_than_two_ranks():
     with pytest.raises(ValueError):
         A.all_reduce_sum_bf16(4, 1).body
+
+
+@pytest.mark.parametrize("R", [3, 4])
+def test_allreduce_refuses_more_than_two_ranks(R):
+    """More than two ranks is `b1_tp2.all_reduce` (the hop order of `b1_tp2.allreduce_order`), never a chain of this family."""
+    with pytest.raises(ValueError, match="allreduce_order"):
+        A.all_reduce_sum_bf16(4, R).body
+    with pytest.raises(ValueError, match="allreduce_order"):
+        A.all_reduce_sum_bf16_words([[0]] * R)
 
 
 def test_r2_equals_allreduce2_bf16add_and_the_exact_single_rounding():
@@ -141,26 +150,34 @@ def test_r2_single_rounding_edge_cases(a, b):
 
 
 def test_r3_per_hop_rounding_and_order_dependence_exist():
-    """Why the R > 2 body is flagged: NCCL reduces in bf16 hop by hop, so (i) it differs from one f32 accumulation rounded once and
-    (ii) it depends on the rank order.  Both effects are exhibited on small bf16 triples; the definition follows order 0 -> 1 -> 2."""
+    """Why R > 2 needs a stated order: NCCL reduces in bf16 hop by hop, so (i) it differs from one f32 accumulation rounded once and
+    (ii) it depends on the rank order.  Both effects are exhibited on small bf16 triples.  This family refuses R = 3; the three-rank
+    all-reduce is `b1_tp2.all_reduce(3, N)`, whose chain follows `allreduce_order(3)` and not the ascending order."""
     words = _bf16_words([1.0, 1.0 + 2.0 ** -7, 2.0 ** -8, 3 * 2.0 ** -9, 2.0 ** -9, -2.0 ** -8, 0.75, 1.5])
-    hop = A.all_reduce_sum_bf16_words
+
+    def hop(xs, order=(0, 1, 2)):
+        acc = xs[order[0]]
+        for r in order[1:]:
+            acc = P.F2fpBf16.evaluate(P.F32Add.evaluate(P.Bf16ToF32.evaluate(acc), P.Bf16ToF32.evaluate(xs[r])))
+        return acc
+
+    measured = b1_tp2.allreduce_order(3)
     differs_from_f32_once = order_dependent = None
     for a in words:
         for b in words:
             for c in words:
-                chain = hop([[a], [b], [c]])[0]
+                chain = hop([a, b, c])
                 once = P.F2fpBf16.evaluate(P.F32Add.evaluate(P.F32Add.evaluate(P.Bf16ToF32.evaluate(a), P.Bf16ToF32.evaluate(b)), P.Bf16ToF32.evaluate(c)))
                 if chain != once and differs_from_f32_once is None:
                     differs_from_f32_once = (a, b, c, chain, once)
-                if chain != hop([[a], [c], [b]])[0] and order_dependent is None:
+                if chain != hop([a, b, c], measured) and order_dependent is None:
                     order_dependent = (a, b, c)
     assert differs_from_f32_once is not None, "per-hop bf16 rounding never differed from a single f32 accumulation"
     assert order_dependent is not None, "the hop order never mattered"
     a, b, c = order_dependent
-    prog = Program(A.all_reduce_sum_bf16(1, 3))
-    assert _eval(prog, [[a], [b], [c]]) == hop([[a], [b], [c]])
-    assert _eval(prog, [[a], [c], [b]]) == hop([[a], [c], [b]]) != hop([[a], [b], [c]])
+    with pytest.raises(ValueError):
+        Program(A.all_reduce_sum_bf16(1, 3))
+    assert _eval(Program(b1_tp2.all_reduce(3, 1)), [[a, b, c]]) == [hop([a, b, c], measured)] != [hop([a, b, c])]
 
 
 def test_r2_equals_the_wave1_body_checker_formula():

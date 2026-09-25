@@ -76,6 +76,6 @@
     {"file": "verity_vllm/tp/match.py", "kind": "function", "symbol": "_check_main", "detail": "lines", "count": 208},
     {"file": "verity_vllm/tp/rank_match.py", "kind": "function", "symbol": "cross_rank_check", "detail": "lines", "count": 267},
     {"file": "verity_vllm/tp/worker.py", "kind": "function", "symbol": "TP2CaptureWorkerExtension.tp2_commit_make", "detail": "lines", "count": 254},
-    {"file": "verity_vllm/tp/worker.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1579}
+    {"file": "verity_vllm/tp/worker.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1573}
   ]
 }

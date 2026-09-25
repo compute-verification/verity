@@ -32,4 +32,5 @@ verity_vllm/ops/pod_gate.sh
 # --- Python entry points
 verity_vllm.harness.research_tools
 verity_vllm.query.cli
+verity_vllm.check.fa_tap_exactness
 tests/regression/
