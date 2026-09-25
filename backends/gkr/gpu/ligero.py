@@ -170,11 +170,11 @@ class Merkle:
 
     def path(self, j: int) -> list[bytes]:
         if self._gpu:
-            lv = [l.get() for l in self.tree_levels[:-1]] if not hasattr(self, "_host") else self._host
-            self._host = lv
+            if not hasattr(self, "_host"):              # every level big-endian once, not per node (t · depth nodes)
+                self._host = [np.asarray(l.get(), dtype=np.uint64).astype(">u8") for l in self.tree_levels[:-1]]
             out, idx = [], j
-            for level in lv:
-                out.append(np.asarray(level[idx ^ 1], dtype=np.uint64).astype(">u8").tobytes())
+            for level in self._host:
+                out.append(level[idx ^ 1].tobytes())
                 idx >>= 1
             return out
         out, idx = [], j
