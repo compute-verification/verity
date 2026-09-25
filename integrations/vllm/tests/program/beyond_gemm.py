@@ -23,7 +23,7 @@ Probes, each against the kernel vLLM 0.28 ships:
   exact arithmetic (float64) rounded once to FP32 and once to BF16.  The cache itself is a
   runtime-computed constant; we compare vLLM's cache with two independent recomputations.
 
-Usage: python -m verity_vllm.program.kernels.beyond_gemm --acts /workspace/results/numerics/qwen_acts --out beyond_gemm.json
+Usage: python -m tests.program.beyond_gemm --acts /workspace/results/numerics/qwen_acts --out beyond_gemm.json
 """
 
 from __future__ import annotations
