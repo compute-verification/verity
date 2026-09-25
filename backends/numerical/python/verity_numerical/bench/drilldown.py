@@ -486,10 +486,17 @@ def is_live(env: Mapping[str, Any]) -> bool:
             and isinstance(sec, Mapping) and all(T._num(sec.get(k)) and sec[k] <= -128 for k in ("target", "achieved_log2")))
 
 
+def is_loopback(env: Mapping[str, Any]) -> bool:
+    """The live verifier ran on the prover's own pod (its URL is 127.x / localhost)."""
+    lv = _get(env, "validation", "evidence", "live_verifier")
+    return isinstance(lv, Mapping) and bool(LOOPBACK.match(str(lv.get("url") or "")))
+
+
 def live_records(cell_art: str, cell_env: Mapping[str, Any], lives: Mapping[str, Mapping[str, Any]]) -> dict[str, Any] | None:
     """The cell's live record: ``{"artifact", "env", "from": "cell" | "companion", "pool": [art...]}`` -- the cell itself when it is
     live (:func:`is_live`), else the median-``verify.cpu_s`` member (lower median, ties by id) of the live results that agree with
-    the cell on every :data:`LIVE_MATCH` path; ``None`` when there is none."""
+    the cell on every :data:`LIVE_MATCH` path -- among those whose verifier ran on its own host when there is any, loopback ones
+    (:func:`is_loopback`) otherwise; ``None`` when there is none."""
 
     fp = cell_env.get("workload_fingerprint") if isinstance(cell_env.get("workload_fingerprint"), Mapping) else {}
     key = [_get(fp, *p) for p in LIVE_MATCH]
@@ -502,7 +509,9 @@ def live_records(cell_art: str, cell_env: Mapping[str, Any], lives: Mapping[str,
         return {"artifact": cell_art, "env": lives[cell_art], "from": "cell", "pool": pool, "pool_cpu_s": cpu}
     if not pool:
         return None
-    pick = pool[(len(pool) - 1) // 2]
+    # a verifier on its own host is what D3 describes; loopback runs (verifier on the prover's pod) count only when nothing else exists
+    separate = [a for a in pool if not is_loopback(lives[a])]
+    pick = (separate or pool)[(len(separate or pool) - 1) // 2]
     return {"artifact": pick, "env": lives[pick], "from": "companion", "pool": pool, "pool_cpu_s": cpu}
 
 
@@ -635,7 +644,7 @@ def render_markdown(D: Drilldowns) -> str:
             "session), rounds (`rounds.protocol`), verifier CPU s (`verify.cpu_s`, the live verifier's own clock) and the live tax "
             "(`t.total_live / t.total`, and `t.total_live − t.total`) from the cell's live record: the cell itself when it ran against a "
             "same-datacenter live verifier at 2^-128, else the median-verifier-CPU run of the same config (relation, l, B, K, instances, "
-            "authentication, SKU, pipeline depth). Cores to keep pace = verifier CPU s / the cell's t.total. ‡ = no live record: "
+            "authentication, SKU, pipeline depth), taken among runs whose verifier had its own host when any exist. Cores to keep pace = verifier CPU s / the cell's t.total. ‡ = no live record: "
             "`verify.cpu_s` of a re-verification of the cell's own proof on a CPU host (verification-verdict/v1). † = neither: the "
             "emitter's `verifier.seconds` (CPU vs wall not stated). ° = the live verifier ran on the prover's pod (loopback). "
             "`…` = nothing states the field.", ""]

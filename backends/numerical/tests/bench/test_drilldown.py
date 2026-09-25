@@ -281,6 +281,16 @@ def test_d3_takes_the_median_same_config_same_dc_live_run(store: LocalStore) -> 
     assert "3 same-config live run(s), verifier CPU 2.2–2.6 s" in md
 
 
+def test_d3_companion_prefers_a_verifier_on_its_own_host_over_loopback_runs(store: LocalStore) -> None:
+    cell_art = put(store, with_d3(result(**LIGERO_4090, t_total=0.3), cpu="verifier.seconds"))
+    for c in (2.0, 2.1, 2.2):
+        put(store, live(result(**LIGERO_4090, t_total=0.31), cpu=c, t_live=0.32, url="tcp://127.0.0.1:7000"))
+    own = {c: put(store, live(result(**LIGERO_4090, t_total=0.31), cpu=c, t_live=0.33)) for c in (3.0, 3.4)}
+    (r,) = D.build(store).d3
+    assert r["artifact"] == cell_art and r["live_from"] == "companion" and r["live_artifact"] == own[3.0]
+    assert r["verifier_cpu_s"] == 3.0 and r["loopback"] is False and len(r["live_pool"]) == 5
+
+
 def test_d3_prefers_the_cells_own_live_run_and_marks_a_loopback_verifier(store: LocalStore) -> None:
     cell_art = put(store, live(result(**LIGERO_4090, t_total=0.3), cpu=7.0, t_live=0.301, url="tcp://127.0.0.1:7000"))
     put(store, live(result(**LIGERO_4090, t_total=0.31), cpu=6.0, t_live=0.32))
