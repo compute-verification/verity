@@ -50,7 +50,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from verity import claims as claims_registry
-from verity.census import HARDWARE, INSTANCE_SETS, NETWORKS, REFERENCE_NETWORK, SENSITIVITY_NETWORKS, VU_K1536, WORKLOADS
+from verity_census import HARDWARE, INSTANCE_SETS, NETWORKS, REFERENCE_NETWORK, SENSITIVITY_NETWORKS, VU_K1536, WORKLOADS
 from verity.proofs.target import BF16_HOPPER, FP8_ADA_MMA, FP8_HOPPER_WGMMA, NVFP4_SM120, TARGETS, Target
 from verity_numerical.bench import contract
 from verity_numerical.bench import drilldown as D
@@ -398,7 +398,7 @@ def configuration_of(meta: Mapping[str, Any], configurations: Mapping[str, Confi
 # --- native throughput N ----------------------------------------------------------------------------------------------------------
 
 #: The work model until ``verity.silicon`` declares per-primitive costs: a GemmCoordinate<K> is K/16 tensor-core steps of 16
-#: multiply-adds (32 FLOP each) plus one FP32 -> operand-dtype conversion, which never binds; the peaks are ``Target.native_peak``.
+#: multiply-adds (32 FLOP each) plus one FP32 -> operand-dtype conversion, which never binds; the peaks are ``contract.native_peak_of``.
 WORK_MODEL = "work-model/v0: K/16 tensor-core steps x 32 FLOP (+1 conversion, not binding); peaks Target.native_peak"
 
 
@@ -407,7 +407,7 @@ def native(target: Target, K: int = T.K) -> dict[str, Any]:
     tensor cores being the busiest unit of a GEMM coordinate; with the busiest unit, the peak entry and the work model."""
 
     steps, flop = K // 16, (K // 16) * 32
-    peak = target.native_peak
+    peak = contract.native_peak_of(target)
     return {"instances_per_second": peak.flop_per_second / flop, "unit": "tensor cores", "ops_per_instance": flop, "steps": steps,
             "dtype": (T.dtype_of(target) or "?").upper(), "peak_flop_per_second": peak.flop_per_second, "device": peak.device,
             "source": peak.source, "work_model": WORK_MODEL}
@@ -458,8 +458,8 @@ def whole_proof_log2(fp: Mapping[str, Any]) -> float | None:
 
 # --- interaction: t = compute + rounds x RTT + bytes / bandwidth (reporting standard, Daniel 2026-09-25) --------------------------
 
-#: The reference network the Table 2 cell is evaluated at (``verity.census.REFERENCE_NETWORK``: same datacenter); the
-#: interaction drill-down adds ``verity.census.SENSITIVITY_NETWORKS``.
+#: The reference network the Table 2 cell is evaluated at (``verity_census.REFERENCE_NETWORK``: same datacenter); the
+#: interaction drill-down adds ``verity_census.SENSITIVITY_NETWORKS``.
 REF_RTT_S, REF_BANDWIDTH_BPS = REFERENCE_NETWORK.rtt_s, REFERENCE_NETWORK.bandwidth_bps
 #: A measured interactive run must be within this fraction of the formula at the reference profile.
 INTERACTION_TOLERANCE = 0.10
@@ -818,8 +818,8 @@ def reject_codes(store: Any, ctx: Ctx, rules: Rules, equivs: Sequence[T.Instance
             p.append(("F", why))
     p += _instances(ctx, rules, equivs, self_)
     gpu = _get(fp, "hardware", "gpu") if isinstance(_get(fp, "hardware", "gpu"), Mapping) else None
-    if not T.same_sku(gpu.get("name") if gpu else None, ctx.target.native_peak.device):
-        p.append(("K", f"same-SKU: prover ran on {(gpu or {}).get('name')!r}, the line's device is {ctx.target.native_peak.device!r}"))
+    if not T.same_sku(gpu.get("name") if gpu else None, contract.native_peak_of(ctx.target).device):
+        p.append(("K", f"same-SKU: prover ran on {(gpu or {}).get('name')!r}, the line's device is {contract.native_peak_of(ctx.target).device!r}"))
     variant = T.device_variant(gpu, ctx.target)
     if variant:
         p.append(("K", variant))
@@ -996,7 +996,7 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
         N = native(target)
         for scheme in line_schemes:
             line: dict[str, Any] = {"line": target.name, "scheme": scheme, "scheme_label": _SCHEME[scheme].label if scheme else None,
-                                    "status": target.status, "device": target.native_peak.device, "native": N,
+                                    "status": target.status, "device": contract.native_peak_of(target).device, "native": N,
                                     "instruction": target.instruction, "cells": {}, "empty": {}}
             for col in columns:
                 key = (target.name, scheme, col)
@@ -1465,50 +1465,83 @@ def verity_commit() -> str | None:
 
 
 #: ``verity.claims`` instances of the hash names Table 1 uses (a name joining two hashes names both).
-HASH_INSTANCES = {"SHA-256": ("sha-256",), "SHA-512": ("sha-512",), "BLAKE3": ("blake3",), "BLAKE3 (keyed)": ("blake3-keyed",),
+HASH_INSTANCES = {"SHA-256": ("sha-256",), "SHA-512": ("sha-512",), "BLAKE3": ("blake3",), "BLAKE3 (keyed)": ("blake3",),
                   "BLAKE2b": ("blake2b",), "SHAKE-256": ("shake-256",), "BLAKE3 / BLAKE2b": ("blake3", "blake2b"),
                   "Poseidon2-BabyBear": ("poseidon2-babybear",), "Poseidon2-KoalaBear": ("poseidon2-koalabear",),
                   "Ajtai n=64 (linear digest)": ("ajtai-n64",), "Ajtai n=128 (linear digest)": ("ajtai-n128",)}
-#: ``verity.claims`` properties by the leading words of a hash's assumed property.
-HASH_PROPERTIES = (("collision resistance", "cr"), ("random oracle", "ro"), ("prg", "prg"), ("ring-sis", "sis"))
+#: ``verity.claims`` properties by the leading words of a hash's assumed property; a hash assumed to be a random oracle
+#: is cited once, as the ``random-oracle`` model.
+HASH_PROPERTIES = (("collision resistance", "cr"), ("prg", "xof"), ("ring-sis", "sis"))
 PROXIMITY_REGIMES = {"unique decoding": "rs-proximity-udr", "johnson regime (list decoding)": "rs-proximity-johnson"}
 #: ``verity.claims`` ids of a Table 1 assumption, by a phrase it contains.
 ASSUMPTION_PHRASES = (("logup fractional-sum soundness", "logup"),)
 _ZK_GUARANTEE = {"malicious-verifier-zk": "malicious-verifier-zk", "hvzk": "hvzk", "none": "no-zk"}
 
 
-def claims_of(cfg: Configuration, bits: float | None = None) -> dict[str, list[dict[str, Any]]]:
-    """A configuration's security claims as ``verity.claims`` ids, each with the Table 1 text it comes from:
-    ``guarantees`` (soundness, ZK, transferability), ``assumptions`` (each hash's property of its instance, each proximity
-    bound, then the configuration's other assumptions), ``models`` and ``setup``.  An item the renderer cannot map yet keeps
-    its text with ``id`` ``None`` and ``unmapped`` true.  Soundness carries ``param``: the weakest whole-proof bound at the
-    configuration's cells (``bits``), as TeX."""
+def _role(h: Hash) -> str:
+    """A hash's role as the configuration declares it: its role, with the detail its assumed property gives in parentheses
+    (``statement commitment (row digests)``), or the property itself when it is not a bare property name
+    (``PRG of the verifier's coins``)."""
+    prop = h.prop
+    if "(" in prop and prop.endswith(")"):
+        detail = prop[prop.index("(") + 1:-1]
+    else:
+        detail = "" if prop.lower() in (_CR, _RO) else prop
+    return f"{h.role} ({detail})" if detail else h.role
 
-    def item(id_: str | None, text: str, param: str | None = None) -> dict[str, Any]:
+
+def claims_of(cfg: Configuration, bits: float | None = None) -> list[dict[str, Any]]:
+    """A configuration's security claims: each a ``property`` (a ``verity.claims`` id with its Table 1 text, and for soundness
+    ``param``, the weakest whole-proof bound at its cells as TeX) with the ``assumptions`` it rests on, each an id (``None``
+    and ``unmapped`` when the renderer has none yet), its ``role`` as the configuration declares it (a hash's role and
+    detail, a proximity bound's component; empty where nothing is declared) and its Table 1 text.
+
+    * soundness rests on every hash of the soundness argument but those assumed to be random oracles, the proximity bounds
+      and the configuration's other assumptions;
+    * ZK: malicious-verifier ZK whose text names the coin commitment rests on the hashes that commit the coins; HVZK on an
+      honest verifier;
+    * non-interactive (transferable) rests on the random oracle, once per hash modelled as one; an interactive
+      configuration is designated-verifier and rests on nothing further;
+    * setup: transparent, resting on nothing."""
+
+    def prop(id_: str | None, text: str, param: str | None = None) -> dict[str, Any]:
         return {"id": id_, "param": param, "text": text, "unmapped": id_ is None}
 
+    def rests(id_: str | None, role: str, text: str) -> dict[str, Any]:
+        return {"id": id_, "role": role, "text": text, "unmapped": id_ is None}
+
+    def hash_ids(h: Hash) -> list[str | None]:
+        p = next((pid for words, pid in HASH_PROPERTIES if h.prop.lower().startswith(words)), None)
+        return [f"{p}/{i}" for i in HASH_INSTANCES.get(h.name, ())] if p else []
+
     transferable = cfg.transferability.startswith("transferable")
-    zk = _ZK_GUARANTEE.get(zk_class(cfg))
-    guarantees = [item("computational-soundness" if transferable else "statistical-soundness", cfg.soundness,
-                       f"2^{{-{bits:.1f}}}" if bits is not None else None), item(zk, cfg.zk),
-                  item("transferable" if transferable else "designated-verifier" if cfg.transferability.startswith("interactive") else None,
-                       cfg.transferability)]
-    assumptions = []
-    for h in cfg.hashes:
-        prop = next((pid for words, pid in HASH_PROPERTIES if h.prop.lower().startswith(words)), None)
-        insts = HASH_INSTANCES.get(h.name, ()) if prop else ()
-        assumptions += [item(f"{prop}/{i}", h.text()) for i in insts] or [item(None, h.text())]
-    for x in cfg.proximity:
-        assumptions.append(item(PROXIMITY_REGIMES.get(x.regime.lower()) if x.basis.startswith("proven") else None, x.text()))
-    assumptions += [item(next((i for words, i in ASSUMPTION_PHRASES if words in a.lower()), None), a) for a in split_list(cfg.assumptions)]
-    models = [item("live-verifier" if not transferable else "fiat-shamir", cfg.interaction or cfg.transferability)]
-    if any(h.prop.lower().startswith("random oracle") for h in cfg.hashes):
-        models.append(item("random-oracle", "; ".join(h.text() for h in cfg.hashes if h.prop.lower().startswith("random oracle"))))
-    if zk == "hvzk":
-        models.append(item("honest-verifier", cfg.zk))
+    oracles = [h for h in cfg.hashes if h.prop.lower().startswith("random oracle")]
+    sound = [rests(i, _role(h), h.text()) for h in cfg.hashes if h not in oracles for i in (hash_ids(h) or [None])]
+    sound += [rests(PROXIMITY_REGIMES.get(x.regime.lower()) if x.basis.startswith("proven") else None, x.component, x.text())
+              for x in cfg.proximity]
+    sound += [rests(next((i for words, i in ASSUMPTION_PHRASES if words in a.lower()), None), "", a) for a in split_list(cfg.assumptions)]
+    if transferable:
+        sound += [rests("random-oracle", _role(h), h.text()) for h in oracles]
+    cls = zk_class(cfg)
+    zk_rests: list[dict[str, Any]] = []
+    if cls == "malicious-verifier-zk" and "coin commitment" in cfg.zk.lower():
+        zk_rests = [rests(i, _role(h), h.text()) for h in cfg.hashes if "coin commitment" in h.prop.lower() for i in (hash_ids(h) or [None])]
+    elif cls == "hvzk":
+        zk_rests = [rests("honest-verifier", "", cfg.zk)]
+    claims = [{"property": prop("computational-soundness" if transferable else "statistical-soundness", cfg.soundness,
+                                f"2^{{-{bits:.1f}}}" if bits is not None else None), "assumptions": sound},
+              {"property": prop(_ZK_GUARANTEE.get(cls), cfg.zk), "assumptions": zk_rests}]
+    if transferable:
+        claims.append({"property": prop("non-interactive", cfg.transferability),
+                       "assumptions": [rests("random-oracle", _role(h), h.text()) for h in oracles]})
+    elif cfg.transferability.startswith("interactive"):
+        claims.append({"property": prop("designated-verifier", cfg.transferability), "assumptions": []})
+    else:
+        claims.append({"property": prop(None, cfg.transferability), "assumptions": []})
     fam = _FAMILY.get(cfg.family or "")
-    setup = [item("transparent-setup" if fam.setup.startswith("none") else None, fam.setup)] if fam else []
-    return {"guarantees": guarantees, "assumptions": assumptions, "models": models, "setup": setup}
+    if fam:
+        claims.append({"property": prop("transparent-setup" if fam.setup.startswith("none") else None, fam.setup), "assumptions": []})
+    return claims
 
 
 def render_entities(V: Views, published: bool = False, rendered_at: str | None = None, commit: str | None = None) -> dict[str, Any]:
@@ -1518,12 +1551,13 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
       instance set and native N;
     * ``families`` and ``configurations`` -- Table 1: family, variant, commitment scheme, statement, ZK class (short, with the
       text), soundness bits (the weakest whole-proof bound at its cells) and text, hashes with their class and the algebraic
-      flag, interaction and assumption texts as lists; ``guarantees``, ``assumptions``, ``models`` and ``setup`` as
-      ``verity.claims`` ids, with ``claims`` giving each id beside its text and ``unmapped`` the texts with no id yet;
+      flag, interaction and assumption texts as lists; ``claims`` (:func:`claims_of`): each property with the assumptions it
+      rests on and their roles, as ``verity.claims`` ids beside their text; ``properties``, ``assumptions`` and ``models``
+      as flat id lists, ``params``, and ``unmapped`` the texts with no id yet;
     * ``results`` -- one per Table 2 cell (configuration x circuit): overhead, the phases that sum to it, one-time setup apart,
       state (provisional, algebraic, verified, under re-verification), the artifact and the render time;
     * ``tables`` -- the printed layout: every Table 1 / 2 / 3 cell's exact display string, numeric value, marks and footnote;
-    * ``claims`` -- the ``verity.claims`` entries Table 1 cites (the site imports these); ``census`` -- the ``verity.census`` entries cited; ``provenance`` -- render time, verity commit, rules, banner.
+    * ``claims`` -- the ``verity.claims`` entries Table 1 cites (the site imports these); ``census`` -- the ``verity_census`` entries cited; ``provenance`` -- render time, verity commit, rules, banner.
 
     Ids: circuits by target name, configurations by the slug of their name, results ``<configuration>@<circuit>``, census
     entries by their census id."""
@@ -1539,8 +1573,8 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
     circuits = []
     for target in TARGETS.values():
         N = native(target)
-        circuits.append({"id": target.name, "hardware": target.native_peak.id, "device": target.native_peak.device,
-                         "dtype": target.native_peak.dtype, "instruction": target.instruction, "step": target.transition_unit, "status": target.status,
+        peak = contract.native_peak_of(target)
+        circuits.append({"id": target.name, "hardware": peak.id, "device": peak.device, "dtype": peak.dtype, "instruction": target.instruction, "step": target.transition_unit, "status": target.status,
                          "workload": VU_K1536.id, "instance_set": sets.get(target.name),
                          "native": {"value": N["instances_per_second"], "unit": "instances/s", "display": _native_text(N),
                                     "peak_flop_per_second": N["peak_flop_per_second"], "ops_per_instance": N["ops_per_instance"],
@@ -1563,9 +1597,11 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
             "hash_class": "algebraic" if cfg.algebraic() else "standard", "algebraic_flag": ALGEBRAIC_FLAG if cfg.algebraic() else None,
             "proximity": [dataclasses.asdict(x) for x in cfg.proximity],
             "interaction": split_list(cfg.interaction), "transferability": cfg.transferability, "assumptions_text": split_list(cfg.assumptions),
-            **{k: [x["id"] for x in v if x["id"]] for k, v in claims.items()}, "claims": claims,
-            "params": {x["id"]: x["param"] for v in claims.values() for x in v if x["id"] and x["param"]},
-            "unmapped": [x["text"] for v in claims.values() for x in v if x["unmapped"]],
+            "claims": claims, "properties": [c["property"]["id"] for c in claims if c["property"]["id"]],
+            "assumptions": list(dict.fromkeys(a["id"] for c in claims for a in c["assumptions"] if a["id"])),
+            "models": ["fiat-shamir" if cfg.transferability.startswith("transferable") else "live-verifier"],
+            "params": {c["property"]["id"]: c["property"]["param"] for c in claims if c["property"]["id"] and c["property"]["param"]},
+            "unmapped": [x["text"] for c in claims for x in (c["property"], *c["assumptions"]) if x["unmapped"]],
             "setup_text": fam.setup if fam else None, "pin": cfg.pin, "archived": cfg.archived, "unsupported": dict(cfg.unsupported),
             "results": [result_id(c) for c in held], "display": dict(zip(TABLE1_COLUMNS, row))})
         assert row[0] == cfg.id
@@ -1635,7 +1671,7 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
                    "networks": {n.id: dataclasses.asdict(n) for n in NETWORKS.values()},
                    "workloads": {w.id: dataclasses.asdict(w) for w in WORKLOADS.values()},
                    "instance_sets": {x.id: dataclasses.asdict(x) for x in INSTANCE_SETS.values()}},
-        "claims": {i: dataclasses.asdict(claims_registry.get(i)) for i in sorted({i for c in configurations for k in ("guarantees", "assumptions", "models", "setup")
+        "claims": {i: dataclasses.asdict(claims_registry.get(i)) for i in sorted({i for c in configurations for k in ("properties", "assumptions", "models")
                                                                                    for i in c[k]})},
         "circuits": circuits,
         "schemes": [{**dataclasses.asdict(x), "admissible": x.admissible} for x in SCHEMES],

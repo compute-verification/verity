@@ -6,6 +6,7 @@ requires-python = ">=3.12"
 members = [
     "research",
     "verity",
+    "verity-census",
     "verity-numerical",
     "verity-sampled-proofs",
     "verity-sp1",
@@ -1004,12 +1005,18 @@ dependencies = [
 requires-dist = [{ name = "numpy", specifier = ">=1.26" }]
 
 [[package]]
+name = "verity-census"
+version = "0.1.0"
+source = { editable = "census" }
+
+[[package]]
 name = "verity-numerical"
 version = "0.1.0"
 source = { editable = "backends/numerical" }
 dependencies = [
     { name = "matplotlib" },
     { name = "verity" },
+    { name = "verity-census" },
     { name = "z3-solver" },
 ]
 
@@ -1017,6 +1024,7 @@ dependencies = [
 requires-dist = [
     { name = "matplotlib", specifier = ">=3.8" },
     { name = "verity", editable = "packages/verity" },
+    { name = "verity-census", editable = "census" },
     { name = "z3-solver", specifier = ">=4.13" },
 ]
 
@@ -1073,6 +1081,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "research" },
     { name = "verity" },
+    { name = "verity-census" },
     { name = "verity-numerical" },
     { name = "verity-sampled-proofs" },
     { name = "verity-sp1" },
@@ -1088,6 +1097,7 @@ dev = [
 requires-dist = [
     { name = "research", editable = "tools/research" },
     { name = "verity", editable = "packages/verity" },
+    { name = "verity-census", editable = "census" },
     { name = "verity-numerical", editable = "backends/numerical" },
     { name = "verity-sampled-proofs", editable = "protocols/sampled_proofs" },
     { name = "verity-sp1", editable = "backends/sp1" },

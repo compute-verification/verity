@@ -10,14 +10,14 @@ from verity.claims import ENTRIES, INSTANCES, PROPERTIES, assumption, get
 def test_a_primitive_assumption_is_property_slash_instance_with_its_label_and_standing() -> None:
     e = get("cr/sha-512")
     assert (e.id, e.kind, e.name, e.label, e.standing) == ("cr/sha-512", "assumption", "Collision resistance of SHA-512", "CR · SHA-512", "standard")
-    assert assumption("ro", "poseidon2-koalabear").standing == "algebraic"
+    assert assumption("cr", "poseidon2-koalabear").standing == "algebraic" and get("xof/shake-256").label == "XOF · SHAKE-256"
     assert all(get(f"{p}/{i}").id == f"{p}/{i}" for p in PROPERTIES for i in INSTANCES)
 
 
 def test_entries_are_keyed_by_id_and_unknown_ids_raise() -> None:
     assert all(k == e.id for k, e in ENTRIES.items()) and all(k == p.id for k, p in PROPERTIES.items())
     assert all(k == i.id for k, i in INSTANCES.items())
-    assert {e.kind for e in ENTRIES.values()} == {"guarantee", "assumption", "model", "setup"}
+    assert {e.kind for e in ENTRIES.values()} == {"guarantee", "assumption", "model"}
     for bad in ("cr/md5", "nope/sha-256", "nothing"):
         with pytest.raises(KeyError):
             get(bad)
@@ -32,3 +32,10 @@ def test_bare_ids_are_kebab_case_without_a_slash() -> None:
 
     assert all(re.fullmatch(r"[a-z0-9]+(-[a-z0-9]+)*", k) for k in ENTRIES)
     assert all(re.fullmatch(r"[a-z0-9]+(-[a-z0-9]+)*", k) for k in (*PROPERTIES, *INSTANCES))
+
+
+def test_the_sites_nine_assumptions_resolve_and_the_retired_ones_do_not() -> None:
+    site = ("cr/sha-256", "cr/sha-512", "cr/blake3", "cr/blake2b", "cr/poseidon2-babybear", "cr/poseidon2-koalabear", "xof/shake-256",
+            "random-oracle", "honest-verifier")
+    assert all(get(i).id == i and get(i).kind == "assumption" for i in site)
+    assert not [k for k in ENTRIES if any(r in k for r in ("beacon", "auditor", "challenger"))]

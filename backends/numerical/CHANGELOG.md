@@ -7,8 +7,9 @@
   - `circuits`: a census hardware id, the dtype, the tensor-core step, the workload, the instance set and the native N;
   - `configurations`: Table 1 from the spec's configurations (route (a) and Flock included). Each has its family, variant,
     scheme, ZK class (a short enum with the text), soundness bits, hash classes with the algebraic flag, and interaction
-    and assumption texts as lists. Its `guarantees`, `assumptions`, `models` and `setup` are `verity.claims` ids. Text
-    with no id yet is kept and flagged `unmapped`;
+    and assumption texts as lists. Its `claims` list each property (soundness with its bound, ZK, non-interactive or
+    designated-verifier, transparent setup) with the assumptions it rests on, each a `verity.claims` id with its role as
+    the code declares it (empty where it declares none) and its text. Text with no id yet is kept and flagged `unmapped`;
   - `results`: one per Table 2 cell, configuration × circuit. Each has its overhead, the phases that sum to it, one-time
     setup kept apart, its state (provisional, algebraic, verified, under re-verification), the artifact and the render time;
   - `tables`: every Table 1, 2 and 3 cell's exact display string, its numeric value, its marks and its footnote text;
@@ -20,12 +21,15 @@
   (`table2_grid`, `table3_row`) that both renders use.
 - The steward's `published = "views"` entry also writes `<stamp>-tables.json` (the entities render).
 
-## 2026-09-25: peaks, networks and instance sets come from `verity.census`
+## 2026-09-25: peaks, networks and instance sets come from the census (`verity_census`)
 
 - The renderers read the native peaks, the reference network (1 ms, 100 Gb/s), the interaction drill-down's sensitivity
-  profiles, K and B, and the frozen instance sets from the core registry `verity.census`, where each has a stable id
-  (`a100-sxm4-80gb/bf16`, `dc-1ms-100gbps`, `vu-k1536`, ...). No value changed: renders are byte-identical and `--parity`
-  is unchanged. `verity.proofs.target.NativePeak` is gone; a target's `native_peak` is a `verity.census.Hardware`.
+  profiles, K and B, and the frozen instance sets from `census/` (distribution `verity-census`: JSON data with sources, a
+  typed loader), where each has a stable id (`a100-sxm4-80gb/bf16`, `dc-1ms-100gbps`, `vu-k1536`, ...). No value changed:
+  renders are byte-identical and `--parity` is unchanged.
+- Core holds no peak: `verity.proofs.target.Target` names its `anchor_device` (`native_peak` and `NativePeak` are gone), and
+  `contract.native_peak_of(target)` is the census line of that device and the target's operand dtype.
+  `latency.pipeline` takes `native_s_per_vu` as a parameter (default: FIRST's census line).
 
 ## 2026-09-25: route (a) is its own full-relation A-GKR configuration
 

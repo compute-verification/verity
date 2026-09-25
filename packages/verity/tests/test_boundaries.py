@@ -1,7 +1,7 @@
 """The core dependency rules (README "Development") as import-boundary checks over the source tree.
 
-    ir <- evaluation <- ml,  ir <- commitments,  ir + ml + commitments + census <- proofs;  randomness, census and claims
-    import no core module;  nothing depends back on a later layer, and no core module imports a backend, frontend, integration, or
+    ir <- evaluation <- ml,  ir <- commitments,  ir + ml + commitments <- proofs;  randomness and claims import no
+    core module;  nothing depends back on a later layer, and no core module imports a backend, frontend, integration, or
     external runtime.
 
 numpy is a core dependency (architecture decision: `verity.evaluation` batches over numpy arrays and kernels sit beside
@@ -25,16 +25,16 @@ ALLOWED = {
     "evaluation": {"ir"},
     "ml": {"ir", "evaluation"},
     "commitments": {"ir"},
-    "proofs": {"ir", "ml", "commitments", "census"},
+    "proofs": {"ir", "ml", "commitments"},
     "resource_accounting": {"ir", "proofs", "commitments"},
     "randomness": set(),
-    "census": set(),
     "claims": set(),
 }
 FORBIDDEN_EXTERNAL = ("verity_sp1", "verity_vllm", "verity_torch", "sp1", "vllm", "torch", "jax", "onnx",
-                      "backends", "frontends", "integrations", "research", "veritor")
+                      "backends", "frontends", "integrations", "research", "veritor",
+                      "verity_census")
 #: Source subtrees that must stay stdlib-only: the scalar references.
-NUMPY_FREE = ("ir", "ml/tc", "randomness", "census", "claims")
+NUMPY_FREE = ("ir", "ml/tc", "randomness", "claims")
 
 
 def _imports(path: Path) -> list[tuple[str, int]]:

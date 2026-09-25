@@ -12,6 +12,7 @@ from typing import Any
 import pytest
 
 from verity.proofs.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, NVFP4_SM120, TARGETS
+from verity_numerical.bench import contract
 from verity_numerical.bench import tables as T
 from verity_numerical.bench import views as V
 
@@ -204,7 +205,7 @@ def test_native_is_the_compute_bound_datasheet_estimate() -> None:
     for target in TARGETS.values():
         n = V.native(target)
         assert n["ops_per_instance"] == 3072 and n["steps"] == 96 and n["unit"] == "tensor cores"
-        assert n["instances_per_second"] == pytest.approx(1 / target.native_peak.seconds_per_vu(T.K))
+        assert n["instances_per_second"] == pytest.approx(1 / contract.native_peak_of(target).seconds_per_vu(T.K))
     assert V._native_text(V.native(FIRST)) == "1.0e11/s · tensor cores, BF16 312 T"
 
 
@@ -817,7 +818,7 @@ def test_entity_ids_are_stable_across_renders(store: LocalStore) -> None:
     a = V.render_entities(views, rendered_at="2026-09-25T23:00:00Z", commit="abc")
     b = V.render_entities(V.build(store), rendered_at="2026-09-26T13:00:00Z", commit="def")
     strip = lambda d: json.loads(json.dumps(d).replace("2026-09-26T13:00:00Z", "2026-09-25T23:00:00Z").replace('"def"', '"abc"'))  # noqa: E731
-    assert strip(b) == a
+    assert strip(b) == json.loads(json.dumps(a))
     ids = [c["id"] for c in a["configurations"]]
     assert len(ids) == len(set(ids)) == len(V.CONFIGURATIONS)
     assert set(a["census"]["hardware"]) == {c["hardware"] for c in a["circuits"]}
@@ -850,32 +851,50 @@ def test_cli_entities(store: LocalStore, capsys: pytest.CaptureFixture[str]) -> 
     assert js["provenance"]["rendered_at"].endswith("Z") and len(js["results"]) == 2
 
 
-def test_entities_table1_claims_are_registry_ids_beside_their_text_and_unmapped_text_is_flagged() -> None:
+def test_entities_table1_claims_are_properties_with_the_assumptions_they_rest_on_and_their_declared_roles() -> None:
     from verity import claims
 
     ent = V.render_entities(V.Views(rules=V.SPEC), rendered_at="2026-09-25T23:00:00Z", commit="abc")
     cfgs = {c["variant"]: c for c in ent["configurations"]}
     for e in cfgs.values():
-        for kind, items in e["claims"].items():
-            assert e[kind] == [x["id"] for x in items if x["id"]]
-            assert all(x["param"] is None for x in items if x["id"] != "statistical-soundness" and x["id"] != "computational-soundness")
-            for x in items:
-                assert x["text"] and x["unmapped"] == (x["id"] is None)
-                if x["id"]:
-                    entry = claims.get(x["id"])
-                    assert entry.kind == {"guarantees": "guarantee", "assumptions": "assumption", "models": "model", "setup": "setup"}[kind]
-        assert e["unmapped"] == [x["text"] for v in e["claims"].values() for x in v if x["unmapped"]]
-        assert e["guarantees"][0] in ("statistical-soundness", "computational-soundness")
+        assert [c["property"]["id"] for c in e["claims"] if c["property"]["id"]] == e["properties"]
+        for c in e["claims"]:
+            p = c["property"]
+            assert p["text"] and p["unmapped"] == (p["id"] is None) and (p["id"] is None or claims.get(p["id"]).kind == "guarantee")
+            for a in c["assumptions"]:
+                assert a["text"] and isinstance(a["role"], str) and a["unmapped"] == (a["id"] is None)
+                assert a["id"] is None or claims.get(a["id"]).kind == "assumption"
+        assert e["assumptions"] == list(dict.fromkeys(a["id"] for c in e["claims"] for a in c["assumptions"] if a["id"]))
+        assert e["models"] in (["fiat-shamir"], ["live-verifier"])
+    by = lambda variant: {c["property"]["id"]: c["assumptions"] for c in cfgs[variant]["claims"]}  # noqa: E731
+    # interactive B-Ligero: statistical soundness on its hashes and bounds; ZK on the coin commitment; designated verifier
+    v1 = by("B-Ligero v1")
+    assert list(v1) == ["statistical-soundness", "malicious-verifier-zk", "designated-verifier", "transparent-setup"]
+    assert [(a["id"], a["role"]) for a in v1["malicious-verifier-zk"]] == [("cr/blake2b", "Fiat–Shamir / coins (coin commitments)")]
+    roles = {a["id"]: a["role"] for a in v1["statistical-soundness"] if a["id"]}
+    assert roles["cr/blake3"] == "proof-internal commitment" and roles["xof/shake-256"] == "Fiat–Shamir / coins (PRG of the verifier's coins)"
+    assert roles["rs-proximity-udr"] == "Ligero column tests (interleaved RS, rate 1/4)"
+    assert all(a["role"] == "" for a in v1["statistical-soundness"] if a["id"] is None and "BabyBear" in a["text"])
+    assert v1["designated-verifier"] == [] and v1["transparent-setup"] == []
+    # its Fiat–Shamir sibling is a separate entry: computational soundness, HVZK on an honest verifier, non-interactive on the oracle
+    fs = by("B-Ligero Fiat–Shamir (HVZK)")
+    assert list(fs) == ["computational-soundness", "hvzk", "non-interactive", "transparent-setup"]
+    assert fs["hvzk"] == [{"id": "honest-verifier", "role": "", "text": cfgs["B-Ligero Fiat–Shamir (HVZK)"]["zk"]["text"], "unmapped": False}]
+    assert {a["id"] for a in fs["non-interactive"]} == {"random-oracle"} and len(fs["non-interactive"]) == 2
+    assert [a["role"] for a in fs["non-interactive"]] == ["Fiat–Shamir / coins (Fiat–Shamir)", "Fiat–Shamir / coins"]
+    assert fs["non-interactive"] == [a for a in fs["computational-soundness"] if a["id"] == "random-oracle"]
+    # an in-circuit configuration whose ZK text names no coin commitment rests its ZK on nothing the code declares
+    assert by("B-Ligero + BLAKE3 in circuit")["malicious-verifier-zk"] == []
     rt = cfgs[V.ROUTE_A]
-    assert {"cr/sha-256", "cr/blake3-keyed", "cr/sha-512", "rs-proximity-udr", "rs-proximity-johnson"} <= set(rt["assumptions"])
-    assert rt["guarantees"] == ["statistical-soundness", "no-zk", "designated-verifier"] and rt["models"] == ["live-verifier"]
-    assert rt["setup"] == ["transparent-setup"] and "SHA-256 (Fiat–Shamir / coins; live transcript and root_F binding; standard)" in rt["unmapped"]
+    assert {"cr/sha-256", "cr/blake3", "cr/sha-512", "rs-proximity-udr", "rs-proximity-johnson"} <= set(rt["assumptions"])
+    assert rt["properties"] == ["statistical-soundness", "no-zk", "designated-verifier", "transparent-setup"]
+    assert "SHA-256 (Fiat–Shamir / coins; live transcript and root_F binding; standard)" in rt["unmapped"]
     sp1 = cfgs["SP1 stock (relation-only / bare guest)"]
-    assert sp1["guarantees"] == ["computational-soundness", "transferable"] and sp1["claims"]["guarantees"][1]["unmapped"]
-    assert {"cr/poseidon2-koalabear", "ro/poseidon2-koalabear"} <= set(sp1["assumptions"]) and sp1["models"] == ["fiat-shamir", "random-oracle"]
-    assert claims.get("cr/poseidon2-koalabear").standing == "algebraic" and claims.get("cr/sha-512").label == "CR · SHA-512"
+    assert sp1["properties"] == ["computational-soundness", "non-interactive", "transparent-setup"] and sp1["claims"][1]["property"]["unmapped"]
+    assert sp1["assumptions"][:1] == ["cr/poseidon2-koalabear"] and "random-oracle" in sp1["assumptions"]
     assert "logup" in cfgs["A-GKR CPU (Rust)"]["assumptions"]
-    assert set(ent["claims"]) == {i for e in cfgs.values() for k in ("guarantees", "assumptions", "models", "setup") for i in e[k]}
+    assert set(ent["claims"]) == {i for e in cfgs.values() for k in ("properties", "assumptions", "models") for i in e[k]}
     assert ent["claims"]["cr/sha-512"]["label"] == "CR · SHA-512"
-    fs = cfgs["B-Ligero Fiat–Shamir (HVZK)"]
-    assert {"ro/blake3", "ro/blake2b", "ro/shake-256"} <= set(fs["assumptions"]) and "honest-verifier" in fs["models"]
+    assert not any(i.startswith("ro/") for e in cfgs.values() for i in e["assumptions"])
+    retired = ("beacon", "auditor", "challenger")
+    assert not any(r in i for i in ent["claims"] for r in retired)

@@ -1,5 +1,6 @@
-"""The vocabulary of security claims, each with a stable id: what a configuration provides (guarantees), what that rests on
-(assumptions) and the setting it is proven in (models), plus its setup.
+"""The vocabulary of security claims, each with a stable id: what a configuration provides (guarantees: soundness, ZK,
+non-interactive or designated-verifier, transparent setup), what that rests on (assumptions) and the setting it is proven
+in (models).
 
 Id format (shared with the docs site's assumptions registry): an assumption over a primitive is ``<property>/<instance>``,
 composing a :data:`PROPERTIES` entry with an :data:`INSTANCES` entry -- ``cr/sha-512`` is collision resistance of SHA-512,
@@ -16,7 +17,7 @@ from typing import Literal
 
 __all__ = ["ENTRIES", "INSTANCES", "PROPERTIES", "Entry", "Instance", "Property", "assumption", "get"]
 
-Kind = Literal["guarantee", "assumption", "model", "setup"]
+Kind = Literal["guarantee", "assumption", "model"]
 Standing = Literal["standard", "algebraic", "proven", "conjectured"]
 
 
@@ -51,8 +52,7 @@ class Instance:
 
 PROPERTIES: dict[str, Property] = {p.id: p for p in (
     Property("cr", "Collision resistance", "CR"),
-    Property("ro", "Random-oracle behaviour", "RO"),
-    Property("prg", "Pseudorandom-generator security", "PRG"),
+    Property("xof", "Extendable-output-function security", "XOF"),
     Property("sis", "Ring-SIS binding", "SIS"),
 )}
 
@@ -60,7 +60,6 @@ INSTANCES: dict[str, Instance] = {i.id: i for i in (
     Instance("sha-256", "SHA-256"),
     Instance("sha-512", "SHA-512"),
     Instance("blake3", "BLAKE3"),
-    Instance("blake3-keyed", "keyed BLAKE3"),
     Instance("blake2b", "BLAKE2b"),
     Instance("shake-256", "SHAKE-256"),
     Instance("poseidon2-babybear", "Poseidon2-BabyBear", algebraic=True),
@@ -75,16 +74,17 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("malicious-verifier-zk", "guarantee", "Zero knowledge against a malicious verifier", "Malicious-verifier ZK"),
     Entry("hvzk", "guarantee", "Honest-verifier zero knowledge", "HVZK"),
     Entry("no-zk", "guarantee", "No zero knowledge", "No ZK"),
-    Entry("transferable", "guarantee", "Transferable proof", "Transferable"),
+    Entry("non-interactive", "guarantee", "Non-interactive, transferable proof", "Non-interactive"),
     Entry("designated-verifier", "guarantee", "Designated-verifier proof (convinces only the live verifier)", "Designated verifier"),
     Entry("rs-proximity-udr", "assumption", "Reed–Solomon proximity gaps, unique-decoding regime", "RS proximity · UDR", "proven"),
     Entry("rs-proximity-johnson", "assumption", "Reed–Solomon proximity gaps up to the Johnson bound", "RS proximity · Johnson", "proven"),
     Entry("logup", "assumption", "LogUp fractional-sum soundness", "LogUp", "proven"),
     Entry("live-verifier", "model", "Live verifier: the verifier's coins arrive online during the proof", "Live verifier"),
     Entry("fiat-shamir", "model", "Fiat–Shamir (non-interactive) in the random-oracle model", "Fiat–Shamir"),
-    Entry("random-oracle", "model", "Random-oracle model", "Random oracle"),
-    Entry("honest-verifier", "model", "Honest verifier", "Honest verifier"),
-    Entry("transparent-setup", "setup", "Transparent setup (no trusted setup)", "Transparent setup"),
+
+    Entry("random-oracle", "assumption", "A hash behaves as a random oracle", "Random oracle", "standard"),
+    Entry("honest-verifier", "assumption", "The verifier follows the protocol", "Honest verifier", "standard"),
+    Entry("transparent-setup", "guarantee", "Transparent setup (no trusted setup)", "Transparent setup"),
 )}
 
 
