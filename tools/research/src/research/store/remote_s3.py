@@ -822,6 +822,29 @@ class S3Remote:
                 tmp.unlink(missing_ok=True)
                 raise
 
+    def list_meta(self, prefix: str, progress: Callable[[int], None] | None = None, keep: Callable[[str], bool] | None = None) -> dict[str, tuple]:
+        """`{key: (bytes, etag)}` for every key under `prefix` that `keep` accepts, from the listing itself (1,000 keys per request, each request under
+        the hard deadline): one pass over a prefix instead of a HEAD per key.  `progress(n)` after each page."""
+        out: dict[str, dict] = {}
+        token = None
+        while True:
+            q = {"list-type": "2", "prefix": prefix}
+            if token:
+                q["continuation-token"] = token
+            with self._request("GET", "", query=q) as r:
+                root = ET.parse(io.BytesIO(r.read())).getroot()
+            page = 0
+            for c in root.iter(f"{S3_NS}Contents"):
+                k = c.findtext(f"{S3_NS}Key")
+                if k and (keep is None or keep(k)):
+                    out[k] = (int(c.findtext(f"{S3_NS}Size") or 0), etag_value(c.findtext(f"{S3_NS}ETag")))
+                page += 1
+            if progress:
+                progress(page)
+            if root.findtext(f"{S3_NS}IsTruncated") != "true":
+                return out
+            token = root.findtext(f"{S3_NS}NextContinuationToken")
+
     def list(self, prefix: str) -> list[str]:
         keys, token = [], None
         while True:
