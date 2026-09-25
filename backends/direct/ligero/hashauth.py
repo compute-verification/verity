@@ -33,7 +33,7 @@ from .leaf import registry as leaf_registry
 from verity.errors import ResourceLimit
 
 __all__ = ["BINDING_TAG", "HASH_AUTH_VERSION", "HashAuth", "binding_digest", "build_row_tree", "build_trees", "digest_bytes",
-           "load_or_build_trees", "open_trees", "verify_hash_auth", "word_schema"]
+           "layout_error", "load_or_build_trees", "open_trees", "verify_hash_auth", "word_schema"]
 
 HASH_AUTH_VERSION = "ligero-b/auth/v2h"
 BINDING_TAG = "verity/ligero-b/auth-binding/v2h"
@@ -213,6 +213,26 @@ def digest_bytes(auth: HashAuth, leaf=None) -> bytes:
     return bytes(out)
 
 
+def layout_error(auth: HashAuth) -> str | None:
+    """The x row and W column of a VU are fixed by its ``y`` leaf and the committed layout, never chosen by the prover:
+    one leaf per VU in all three trees (unshared) is x = W = vu; an ``nx`` x ``nw`` tile (x tree ``nx``, W tree ``nw``,
+    y tree ``nx * nw`` leaves, :func:`relchain.tile_indices`) is x = vu // nw, W = vu % nw.  Any other tree shape or
+    claim is refused (red-team-standard-hash R1: a statement pairing an output with another VU's rows)."""
+    na, nb, ny = (int(t.count) for t in auth.trees)
+    vu = np.asarray(auth.vu_index, dtype=np.int64)
+    if vu.size and int(vu.max()) >= ny:
+        return "auth: y: leaf index out of range"
+    if na == nb == ny:
+        ex, ew = vu, vu
+    elif na * nb == ny:
+        ex, ew = vu // nb, vu % nb
+    else:
+        return f"auth: tree counts a={na} b={nb} y={ny} are neither one leaf per VU nor an nx x nw tile"
+    if not (np.array_equal(np.asarray(auth.x_index, dtype=np.int64), ex) and np.array_equal(np.asarray(auth.w_index, dtype=np.int64), ew)):
+        return "auth: a VU's x row / W column is not the one its index fixes in the committed layout"
+    return None
+
+
 def _ranks(auth: HashAuth) -> dict[str, np.ndarray]:
     return {"a": np.unique(np.asarray(auth.x_index, dtype=np.int64)), "b": np.unique(np.asarray(auth.w_index, dtype=np.int64)),
             "y": np.asarray(auth.vu_index, dtype=np.int64)}
@@ -239,6 +259,8 @@ def verify_hash_auth(auth: HashAuth, siblings: Sequence[Sequence[bytes]], *, dig
         return False, "auth: digest / word table does not match the VU count"
     if len(siblings) != len(TREE_NAMES):
         return False, "auth: expected one multiproof per tree"
+    if (why := layout_error(auth)) is not None:
+        return False, why
     if ((digests < 0) | (digests >= h2.P)).any():
         return False, "auth: digest lane out of the field"
     yschema, ybytes = word_schema(y_bits)
