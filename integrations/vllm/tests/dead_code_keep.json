@@ -17,12 +17,12 @@
   "verity_vllm.tp.collective_link": "TP path (lane/vllm-tp-n extends it: world-N gather identity); tests/tp/test_tp_collective.py",
   "verity_vllm.tp.collective_record": "TP path (lane/vllm-tp-n); test_tp_collective.py",
   "verity_vllm.tp.analyze": "TP path (lane/vllm-tp-n); test_tp2_analyze.py / test_tp_collective.py",
-  "verity_vllm.check.quarantine_lint": "next candidate, sealed-verifier cluster: verify_lane.sh runs it; test_tp_collective.py imports it",
+  "verity_vllm.properties.quarantine_lint": "next candidate, sealed-verifier cluster: verify_lane.sh runs it; test_tp_collective.py imports it",
   "verity_vllm.program.registry.quarantine.collective": "provisional TP AllReduce definitions; test_tp_collective.py",
   "verity_vllm.program.registry.quarantine.collective.allreduce": "see quarantine.collective",
   "verity_vllm.program.registry.quarantine.collective.allreduce_difftest": "see quarantine.collective",
-  "verity_vllm.check.protected": "next candidate, sealed-verifier cluster: verify_lane.sh (bench/, not a root) runs it",
-  "verity_vllm.check.holdout": "next candidate, sealed-verifier cluster: verify_lane.sh / cov_pod.sh (bench/, not roots) run it",
+  "verity_vllm.properties.protected": "next candidate, sealed-verifier cluster: verify_lane.sh (bench/, not a root) runs it",
+  "verity_vllm.properties.holdout": "next candidate, sealed-verifier cluster: verify_lane.sh / cov_pod.sh (bench/, not roots) run it",
   "verity_vllm.observe.prefix_cache": "generator of workloads/workload_cov_b0_prefix_c256{,_cold}.json (`depends_on: constants of verity_vllm.observe.prefix_cache`; coverage row M1), read by test_prefix_cache.py",
   "verity_vllm.observe.fold.patterns_prefix": "the Program-level reading of prefix_cache's linkage record; test_prefix_cache.py"
  }

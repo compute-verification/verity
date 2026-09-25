@@ -314,7 +314,7 @@ def test_moe_scope_resolves_as_the_six_part_pair_major_group(M, naive):
     if aligns:
         # the claim must cover both of vLLM's dispatch paths as Kineto names them: the small-batch kernel (decode) and the
         # sorted pair (prefill; lane cov-moe: G1 residue 32 kernels on a 155-token prompt under the single-name claim)
-        from verity_vllm.check.census import claims_for
+        from verity_vllm.properties.census import claims_for
         declared = set(aligns[0].kernels)
         for kineto in ("void vllm::moe::moe_align_block_size_small_batch_expert_kernel<int>(int const*, int*, int*, int*, unsigned long, int, int, int)",
                        "void vllm::moe::moe_align_block_size_kernel<int>(int const*, int*, int*, int*, int*, int, int, int, int, unsigned long)",

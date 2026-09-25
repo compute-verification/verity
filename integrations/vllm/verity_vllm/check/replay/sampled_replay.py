@@ -120,9 +120,9 @@ EVALUATORS = {
     "TokenSelect_v1": "first-max argmax over the bf16 logits (TokenSelect_v1: Bf16GtStrict scan, lowest index on ties)",
     # [R16 stoch, rev F-r16-20(a)] the stochastic selector IS replayed: the registered composite GumbelTopPTokenSelect_v1{V} (TemperatureScale
     # -> TopPMask_v1 with the committed `splits` S as its operand -> GumbelSelectF32: Philox draws from the committed seed + the Const64 pos)
-    # evaluated by the registry (`verity_vllm.check.difftest.evaluate_spec` on `sampling_topp_difftest.spec_registered`) on the committed bf16
+    # evaluated by the registry (`verity_vllm.properties.admission.evaluate_spec` on `sampling_topp_difftest.spec_registered`) on the committed bf16
     # logits row + the Program's Const32 top_p / temperature + the committed runner.sampler/seed and /splits words of the (step, request)
-    "GumbelTopPTokenSelect_v1": "verity_vllm.program.registry.sampling.GumbelTopPTokenSelect{V} via verity_vllm.check.difftest.evaluate_spec (TemperatureScale -> "
+    "GumbelTopPTokenSelect_v1": "verity_vllm.program.registry.sampling.GumbelTopPTokenSelect{V} via verity_vllm.properties.admission.evaluate_spec (TemperatureScale -> "
                                 "TopPMask_v1 (S = the committed `splits` operand) -> GumbelSelectF32 on the committed seed + Const64 pos)",
     # [R16 fp8] the block-scaled FP8 linear (Qwen3-4B-FP8, CutlassFp8BlockScaledMMKernel): the quant is INTERIOR (members [], composed
     # from the committed bf16 row), the GEMM row is the VU -- registered e4m3 weight + f32 `weight_scale_inv` slices (8- and 32-bit fields)
@@ -716,7 +716,7 @@ def gumbel_topp_token_select(statics: dict[str, Any], operands: list[np.ndarray]
     `evaluate_spec` walk the difftest (G4) and the Match-time stoch recompute run.  The words arrive as the committed / Const encodings;
     every operand is checked against the signature's leaf count before the walk (a slice that is not exactly one f32 word is a fault
     of the Program's wiring, named here, never a silent truncation)."""
-    from verity_vllm.check.difftest import evaluate_spec
+    from verity_vllm.properties.admission import evaluate_spec
     from verity_vllm.program.registry import sampling_topp_difftest as DT
     V = int(statics["V"])
     if len(operands) != len(_GUMBEL_TOPP_OPERANDS):

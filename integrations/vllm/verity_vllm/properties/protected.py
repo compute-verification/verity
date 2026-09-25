@@ -1,7 +1,7 @@
-"""verity_vllm/check/protected.py — PROTECTED.  The frozen list of protected paths and the mechanical diff check the sealed
+"""verity_vllm/properties/protected.py — PROTECTED.  The frozen list of protected paths and the mechanical diff check the sealed
 verifier runs on a lane's candidate commit.
 
-    uv run python -m verity_vllm.check.protected --base <core-commit> --head <lane-commit> --out provenance.json
+    uv run python -m verity_vllm.properties.protected --base <core-commit> --head <lane-commit> --out provenance.json
 
 "What counts as evidence" is not lane-writable: a lane's mergeable diff may touch only its capability surface (config,
 weight-name maps, more-specific patterns, specializations, quarantined definitions, tests, workloads, notes).  This module
@@ -28,10 +28,10 @@ from verity_vllm.config import ROOT as REPO
 #: Frozen.  Paths a lane may not touch at all (any diff status).  Globs are repo-relative; fnmatch `*` crosses `/`.
 PROTECTED: tuple[str, ...] = (
     # what counts as evidence
-    "verity_vllm/check/gates.py", "verity_vllm/pipeline/report.py", "verity_vllm/check/root_policy.py", "verity_vllm/check/golden.py",
-    "verity_vllm/check/golden/*", "verity_vllm/check/holdout.py", "verity_vllm/check/protected.py", "verity_vllm/check/kernel_allowlist.py",
-    "verity_vllm/check/replay/replay.py", "verity_vllm/check/operand_provenance.py", "verity_vllm/check/noninterference.py", "verity_vllm/check/census.py", "verity_vllm/check/fold_compare.py",
-    "verity_vllm/program/model.py", "verity_vllm/check/difftest.py", "verity_vllm/check/quarantine_lint.py",
+    "verity_vllm/check/gates.py", "verity_vllm/pipeline/report.py", "verity_vllm/check/root_policy.py", "verity_vllm/properties/golden.py",
+    "verity_vllm/properties/golden/*", "verity_vllm/properties/holdout.py", "verity_vllm/properties/protected.py", "verity_vllm/properties/kernel_allowlist.py",
+    "verity_vllm/check/replay/replay.py", "verity_vllm/check/operand_provenance.py", "verity_vllm/properties/noninterference.py", "verity_vllm/properties/census.py", "verity_vllm/check/fold_compare.py",
+    "verity_vllm/program/model.py", "verity_vllm/properties/admission.py", "verity_vllm/properties/quarantine_lint.py",
     "verity_vllm/pipeline/match.py", "verity_vllm/ops/verify_lane.sh",
     # the derivation itself (observer, resolver core, existing matchers, memory, fold, program identity, engine adapter)
     "verity_vllm/observe/observer.py", "verity_vllm/observe/events.py", "verity_vllm/observe/log.py", "verity_vllm/observe/fold/memory.py",
@@ -80,9 +80,9 @@ def classify(changed: list[tuple[str, str]]) -> dict[str, Any]:
             prot.append({"status": st, "path": path, "rule": "existing file in a lane-additive tree"})
         if _match(path, PRIMITIVE_PATHS) and st != "A":
             prims.append(path)
-        if path == "verity_vllm/check/kernel_allowlist.py":
+        if path == "verity_vllm/properties/kernel_allowlist.py":
             allow.append(path)
-        if path.startswith("verity_vllm/check/golden/"):
+        if path.startswith("verity_vllm/properties/golden/"):
             golden.append(path)
         if path == "verity_vllm/check/root_policy.py":
             roots.append(path)

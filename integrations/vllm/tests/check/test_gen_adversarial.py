@@ -12,7 +12,8 @@ from __future__ import annotations
 
 import pytest
 
-from verity_vllm.check import census, gates, operand_provenance as provenance
+from verity_vllm.properties import census
+from verity_vllm.check import gates, operand_provenance as provenance
 from verity_vllm.check.replay import replay
 from verity_vllm.check.replay import vu_query as vq
 from tests.check import adversarial as G

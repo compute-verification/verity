@@ -152,7 +152,7 @@ def test_lane_registry_lists_the_three_definitions():
 
 
 def test_layer_norm_body_matches_a_float64_layer_norm_within_bf16_rounding():
-    from verity_vllm.check.difftest import evaluate_spec
+    from verity_vllm.properties.admission import evaluate_spec
     from verity.ir.defs import bind
     N = 64
     rng = np.random.default_rng(0)

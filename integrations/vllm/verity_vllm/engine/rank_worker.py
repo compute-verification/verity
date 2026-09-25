@@ -1526,7 +1526,7 @@ class TP2CaptureWorkerExtension:
     def tp2_profiler_stop(self, *, out_dir: str, keep_trace: bool = False) -> dict[str, Any]:
         import torch
 
-        from verity_vllm.check import census
+        from verity_vllm.properties import census
 
         p = self._tp2_prof
         torch.cuda.synchronize()

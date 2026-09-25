@@ -1,4 +1,4 @@
-"""verity_vllm/check/kernel_allowlist.py — PROTECTED (gate G1, census half).  The kernel-census allowlist: device kernels that a step may
+"""verity_vllm/properties/kernel_allowlist.py — PROTECTED (gate G1, census half).  The kernel-census allowlist: device kernels that a step may
 launch without any pattern claiming them, because they compute no modeled value (copies, fills, the model runner's integer
 metadata kernels).  Every entry needs a D71-style justification: what the kernel computes and why it is non-semantic under κ.
 

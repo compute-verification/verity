@@ -1,10 +1,10 @@
-"""verity_vllm/check/difftest.py — PROTECTED (gate G4, quarantine admission).  Randomized differential tests of a registered
+"""verity_vllm/properties/admission.py — PROTECTED (gate G4, quarantine admission).  Randomized differential tests of a registered
 body against the pinned production operation, bit-exact, in two halves so the torch venv and the 3.12 verity venv never meet:
 
     # on the pod, in the vLLM venv (torch + the production kernel):
-    python -m verity_vllm.check.difftest produce --adapter verity_vllm.program.registry.quarantine.<lane>.<def>_difftest --n 32 --seed 7 --out DIR
+    python -m verity_vllm.properties.admission produce --adapter verity_vllm.program.registry.quarantine.<lane>.<def>_difftest --n 32 --seed 7 --out DIR
     # on the pod in /workspace/venv-py312 (or on the laptop after copying DIR):
-    python -m verity_vllm.check.difftest check --adapter <same> --dir DIR --out quarantine.json [--append]
+    python -m verity_vllm.properties.admission check --adapter <same> --dir DIR --out quarantine.json [--append]
 
 The ADAPTER (lane-written, next to the quarantined definition) is a plain module with three functions and no import of
 torch at module level:

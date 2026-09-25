@@ -3,7 +3,7 @@ lane (`quarantine/<lane>/`), pending admission.  Existing registered bodies (`b1
 lane that needs different exact semantics — a GELU, a different reduction order, a quantized GEMM, another attention kernel's
 arithmetic — adds a NEW versioned definition here and never edits an old one.
 
-Admission (gate G4 + `verity_vllm.check.quarantine_lint` + `verity_vllm.check.difftest`), all mechanical:
+Admission (gate G4 + `verity_vllm.properties.quarantine_lint` + `verity_vllm.properties.admission`), all mechanical:
   1. purity: the body is a function of its declared operands and statics only — no os/env/time/random/torch/file/network
      imports, no `open`, no `global`, no reads of capture objects (lint);
   2. identity: `SEMANTIC_ID = "<lane>/<Definition>@v<k>"` at module level and a definition version >= 1; a re-derived

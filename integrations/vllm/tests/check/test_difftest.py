@@ -11,7 +11,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity_vllm.check import difftest
+from verity_vllm.properties import admission as difftest
 from verity.ir.defs import bind
 from verity_vllm.program.registry import b1
 

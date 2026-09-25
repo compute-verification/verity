@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StorageAlloc, StorageFree, TritonLaunch, ViewDesc
-from verity_vllm.check.quarantine_lint import lint
+from verity_vllm.properties.quarantine_lint import lint
 from verity_vllm.tp import collective_link as CL
 from verity_vllm.tp.collective_record import COLLECTIVE_KINDS, MISSING_IN_RECORD, SCHEMA_LINK, SCHEMA_SHARD, validate_launch
 from verity.ir.codec import decode_program, encode_program, program_digest

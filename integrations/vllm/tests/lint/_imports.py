@@ -29,7 +29,8 @@ INTERIM_LAYER = {
     "verity_vllm.config": "config",
     "verity_vllm.pipeline": "pipeline",                         # derive_step, run_config, commit_delta, research_*, ...
     "verity_vllm.target_family": "config",             # -> config.py
-    "verity_vllm.check": "check|properties",                   # per-run checks, and the property harnesses -> properties/
+    "verity_vllm.check": "check|properties",                   # per-run checks
+    "verity_vllm.properties": "check|properties",
     "verity_vllm.program.kernels.twins": "program",                      # -> program/kernels/
     "verity_vllm.program.kernels.relations": "program",                  # -> program/kernels/
     "verity_vllm.program.model": "program",        # -> program/model.py
@@ -76,9 +77,8 @@ INTERIM_LAYER = {
     "verity_vllm.tp.collective_link": "tests",
 }
 
-#: The property harnesses that move from check/ to properties/.
-PROPERTY_MODULES = tuple(f"verity_vllm.check.{m}" for m in (
-    "noninterference", "census", "kernel_allowlist", "golden", "holdout", "difftest", "quarantine_lint", "protected"))
+#: The property harnesses.
+PROPERTY_MODULES = ("verity_vllm.properties",)
 
 #: The replay drivers (check/replay/) and the determinism value checks.
 VALUE_CHECK_MODULES = tuple(f"verity_vllm.{m}" for m in (

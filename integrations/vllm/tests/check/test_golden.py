@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from verity_vllm.check import golden
+from verity_vllm.properties import golden
 
 REPO = Path(__file__).resolve().parents[2]
 pytestmark = pytest.mark.skipif(not (REPO / "data" / "logs" / "m1.jsonl.gz").exists(), reason="corpus logs not present")

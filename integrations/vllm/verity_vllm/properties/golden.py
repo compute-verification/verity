@@ -1,8 +1,8 @@
-"""verity_vllm/check/golden.py — PROTECTED (gate G6, regression half).  The frozen golden corpus: every previously accepted
+"""verity_vllm/properties/golden.py — PROTECTED (gate G6, regression half).  The frozen golden corpus: every previously accepted
 observation log must keep resolving to exactly its recorded pattern attribution and Program digest.
 
-    uv run python -m verity_vllm.check.golden --check [--out golden.json]          # CPU only, no GPU, every candidate commit
-    uv run python -m verity_vllm.check.golden --record NAME --log LOG --profile MOD  # integrator only (protected path)
+    uv run python -m verity_vllm.properties.golden --check [--out golden.json]          # CPU only, no GPU, every candidate commit
+    uv run python -m verity_vllm.properties.golden --record NAME --log LOG --profile MOD  # integrator only (protected path)
 
 Why: a lane that adds a Gemma pattern which accidentally also matches a Qwen operation, or loosens a matcher, changes how an
 *old* capture resolves.  Re-folding the corpus catches that without a GPU: `attribution_sha` is the sha256 of the node-ordered
@@ -10,7 +10,7 @@ sequence `(step, event, pattern, specialization)` of every instance plus the fol
 canonical digest.  Additive specializations leave both unchanged; anything else is a regression that needs an explicit,
 versioned migration (a new corpus entry recorded by the integrator with the decision id), never a silent edit.
 
-Corpus manifest: `verity_vllm/check/golden/corpus.json`.  Logs live under `data/logs/` (tracked).
+Corpus manifest: `verity_vllm/properties/golden/corpus.json`.  Logs live under `data/logs/` (tracked).
 """
 from __future__ import annotations
 

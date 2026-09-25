@@ -87,7 +87,7 @@ def _manifest_facts(path: str | Path) -> dict[str, dict]:
 def _eval_job(job: tuple) -> tuple[int, "np.ndarray", float]:
     """One sampled row through the Definition of record: GumbelTopPTokenSelect_v1{V,S} on (bf16 logits row, top_p, seed, pos, T) ->
     (token, the masked fp32 row it went through, seconds).  Module-level so a worker process can run it."""
-    from verity_vllm.check.difftest import evaluate_spec
+    from verity_vllm.properties.admission import evaluate_spec
     from verity_vllm.program.registry import sampling_topp_difftest as D
     V, S, words = job
     t1 = time.time()
@@ -402,7 +402,7 @@ def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = No
                   reference_rows: int = 0) -> dict:
     from verity_vllm.program.kernels import sampling_rng as R
     from verity_vllm.check.fold_compare import SnapshotStore
-    from verity_vllm.check.difftest import evaluate_spec
+    from verity_vllm.properties.admission import evaluate_spec
     from verity_vllm.observe.events import SampleEnd, StepStart, TritonLaunch, ViewDesc
     from verity_vllm.observe.log import read_log
     from verity_vllm.program.registry import sampling_topp_difftest as D

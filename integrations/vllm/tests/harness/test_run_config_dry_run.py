@@ -45,9 +45,9 @@ def test_dry_run_gpu_phase():
     ctl = c["control"]
     assert "--no-observer" in ctl and ctl[ctl.index("--out") + 1] == "/r/RUN/control" and "--snapshot-steps" not in ctl
     cen = c["census"]
-    assert cen[1:3] == ["-m", "verity_vllm.check.census"] and cen[cen.index("--out") + 1] == "/r/RUN/census" and "--no-traces" in cen
+    assert cen[1:3] == ["-m", "verity_vllm.properties.census"] and cen[cen.index("--out") + 1] == "/r/RUN/census" and "--no-traces" in cen
     ni = c["nonint"]
-    assert ni[1:3] == ["-m", "verity_vllm.check.noninterference"] and ni[ni.index("--out") + 1] == "/r/RUN/nonint"
+    assert ni[1:3] == ["-m", "verity_vllm.properties.noninterference"] and ni[ni.index("--out") + 1] == "/r/RUN/nonint"
     assert ni[ni.index("--case") + 1] == "B1"                        # expected_layers resolves from the case
     assert ni[ni.index("--accepted-ctl") + 1] == "/r/RUN/control/tokens.json"   # the control run, never a workload list
     assert not any("accepted" in a and "control" not in a for a in ni if not a.startswith("--"))   # no workload-authored list anywhere
@@ -74,7 +74,7 @@ def test_dry_run_cpu_phase():
     rp = c["root_policy"]
     assert rp[1:3] == ["-m", "verity_vllm.check.root_policy"] and rp[rp.index("--safetensors") + 1] == "/ck/snap/model*.safetensors"
     assert rp[rp.index("--out") + 1] == "/r/RUN/root_policy.json" and rp[rp.index("--snapshots") + 1] == "/r/RUN/capture"
-    assert c["golden"][1:5] == ["-m", "verity_vllm.check.golden", "--check", "--out"] and c["golden"][-1] == "/r/RUN/golden.json"
+    assert c["golden"][1:5] == ["-m", "verity_vllm.properties.golden", "--check", "--out"] and c["golden"][-1] == "/r/RUN/golden.json"
     ra = c["replay_a"]
     assert ra[1:3] == ["-m", "verity_vllm.check.replay.replay"] and ra[ra.index("--tier") + 1] == "a" and ra[ra.index("--k") + 1] == str(RC.DEFAULT_K)
     assert ra[ra.index("--max-arg-leaves") + 1] == "4000000" and ra[ra.index("--out") + 1] == "/r/RUN/replay_a.json"

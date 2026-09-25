@@ -40,7 +40,7 @@ Writes DIR/noninterference.json and DIR/noninterference.md; exit status 1 on any
 
     HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 PYTHONPATH=. VLLM_BATCH_INVARIANT=1 VLLM_USE_V2_MODEL_RUNNER=1 \
     VLLM_ENABLE_V1_MULTIPROCESSING=0 VLLM_USE_FLASHINFER_SAMPLER=0 /workspace/venv-cu129/bin/python -m \
-    verity_vllm.check.noninterference --workload workloads/workload_32x16_1req.json --out /vol/cp/l5/nonint
+    verity_vllm.properties.noninterference --workload workloads/workload_32x16_1req.json --out /vol/cp/l5/nonint
 """
 
 from __future__ import annotations
@@ -738,8 +738,8 @@ def orchestrate(args) -> int:
         common += ["--max-tokens", str(args.max_tokens)]
     common += [f"--engine-arg={x}" for x in args.engine_arg]
     runs = [
-        ("a_observer", [py, "-m", "verity_vllm.check.noninterference", "--variant", "observer", "--out", str(out / "a_observer"), *common]),
-        ("b_hooks", [py, "-m", "verity_vllm.check.noninterference", "--variant", "hooks", "--out", str(out / "b_hooks"), *common]),
+        ("a_observer", [py, "-m", "verity_vllm.properties.noninterference", "--variant", "observer", "--out", str(out / "a_observer"), *common]),
+        ("b_hooks", [py, "-m", "verity_vllm.properties.noninterference", "--variant", "hooks", "--out", str(out / "b_hooks"), *common]),
         ("c_bare", [py, "-m", "verity_vllm.pipeline.m1_capture", "--no-observer", "--out", str(out / "c_bare"), *common]),
     ]
     timings = {}

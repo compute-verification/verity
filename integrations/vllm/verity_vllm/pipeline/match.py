@@ -22,7 +22,7 @@ CPU phase (Python 3.12, torch-free; pod or laptop):
     fold, fold_2      this module's fold worker in two separate processes -> RUN_DIR/fold_summary.json, fold_summary_2.json
     fold_other        (with --other-log) a second capture's digest -> RUN_DIR/fold_summary_other.json (G6 detail only)
     root_policy       verity_vllm.check.root_policy -> RUN_DIR/root_policy.json
-    golden            verity_vllm.check.golden --check -> RUN_DIR/golden.json
+    golden            verity_vllm.properties.golden --check -> RUN_DIR/golden.json
     wiring            verity_vllm.check.operand_provenance -> RUN_DIR/wiring.json (G5: exhaustive operand provenance, D82)
     replay_a          verity_vllm.check.replay.replay --tier a --k 10 -> RUN_DIR/replay_a.json (G4 bodies; G5 sampled VUs + served tokens)
     replay_chain      verity_vllm.check.replay.replay --tier chain -> RUN_DIR/replay_chain.json (G5 chaining smoke test)
@@ -84,7 +84,7 @@ SKIP_GROUPS = {
 }
 #: Stages whose module may be missing in a worktree (a sibling lane's / the integrator's); a missing module is recorded
 #: as `missing_module`, not run.
-OPTIONAL_MODULES = {"root_policy": "verity_vllm.check.root_policy", "golden": "verity_vllm.check.golden", "replay_a": "verity_vllm.check.replay.replay",
+OPTIONAL_MODULES = {"root_policy": "verity_vllm.check.root_policy", "golden": "verity_vllm.properties.golden", "replay_a": "verity_vllm.check.replay.replay",
                     "replay_chain": "verity_vllm.check.replay.replay", "replay_b": "verity_vllm.check.replay.replay", "replay_c": "verity_vllm.check.replay.replay",
                     "wiring": "verity_vllm.check.operand_provenance"}
 
@@ -194,17 +194,17 @@ class Plan:
         if stage == "control":
             return [self.py_gpu, "-m", "verity_vllm.pipeline.m1_capture", *common_gpu, "--out", str(self.control_dir), "--no-observer"]
         if stage == "census":
-            return [self.py_gpu, "-m", "verity_vllm.check.census", *common_gpu, "--out", str(self.census_dir)] + ([] if a.keep_traces else ["--no-traces"])
+            return [self.py_gpu, "-m", "verity_vllm.properties.census", *common_gpu, "--out", str(self.census_dir)] + ([] if a.keep_traces else ["--no-traces"])
         if stage == "nonint":
-            return [self.py_gpu, "-m", "verity_vllm.check.noninterference", *common_gpu, "--out", str(self.nonint_dir), "--python", self.py_gpu,
+            return [self.py_gpu, "-m", "verity_vllm.properties.noninterference", *common_gpu, "--out", str(self.nonint_dir), "--python", self.py_gpu,
                     "--accepted-ctl", str(self.control_tokens_path())]
         if stage == "resolve":
             return [self.py_cpu, "-m", "verity_vllm.observe.fold.resolve_log", str(self.log), "--profile", a.profile, "--out", str(run / "resolution"), "--quiet"]
         if stage == "census_reconcile":
-            return [self.py_cpu, "-m", "verity_vllm.check.census", "--reconcile", str(self.census_dir / "census.json"), "--log", str(self.log),
+            return [self.py_cpu, "-m", "verity_vllm.properties.census", "--reconcile", str(self.census_dir / "census.json"), "--log", str(self.log),
                     "--profile", a.profile, "--report", str(run / "census_reconcile")]
         if stage == "nonint_compare":
-            return [self.py_cpu, "-m", "verity_vllm.check.noninterference", "--compare", "--out", str(self.nonint_dir), "--workload", a.workload,
+            return [self.py_cpu, "-m", "verity_vllm.properties.noninterference", "--compare", "--out", str(self.nonint_dir), "--workload", a.workload,
                     "--case", a.case, "--accepted-ctl", str(self.control_tokens_path())]
         if stage == "compare":
             c = [self.py_cpu, "-m", "verity_vllm.check.fold_compare", "--log", str(self.log), "--snapshots", str(self.snapshots), "--profile", a.profile,
@@ -237,7 +237,7 @@ class Plan:
                 c += ["--cos-sin", str(cs)]
             return c
         if stage == "golden":
-            return [self.py_cpu, "-m", "verity_vllm.check.golden", "--check", "--out", str(self.p("golden"))]
+            return [self.py_cpu, "-m", "verity_vllm.properties.golden", "--check", "--out", str(self.p("golden"))]
         if stage == "wiring":
             return [self.py_cpu, "-m", "verity_vllm.check.operand_provenance", "--log", str(self.log), "--profile", a.profile, "--out", str(self.p("wiring"))]
         if stage == "replay_a":

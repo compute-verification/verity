@@ -62,7 +62,7 @@ git -C "$WT" checkout --detach "$LANE_REF" >/dev/null 2>&1 || git -C "$WT" read-
 cd "$WT"; ln -s "$REPO/.venv" .venv 2>/dev/null || true
 
 # 1. protected paths (from the CORE checkout's protected.py — never the lane's copy)
-( cd "$REPO" && "$PY" -m verity_vllm.check.protected --base "$BASE" --head "$LANE_REF" --repo "$REPO" --head-checkout "$WT" --out "$RUN_DIR/provenance.json" ) 2>&1 | tee -a "$RUN_DIR/verify_lane.log" || log "protected paths touched (card will say REJECTED)"
+( cd "$REPO" && "$PY" -m verity_vllm.properties.protected --base "$BASE" --head "$LANE_REF" --repo "$REPO" --head-checkout "$WT" --out "$RUN_DIR/provenance.json" ) 2>&1 | tee -a "$RUN_DIR/verify_lane.log" || log "protected paths touched (card will say REJECTED)"
 
 # 1b. the verifier's fresh sampling seed (D82: the orchestrator, not the lane author, selects the tier-a / chain sample);
 #     recorded in provenance.json so the card can quote it
@@ -111,11 +111,11 @@ EOF
 fi
 
 # 2b. quarantine purity/identity lint (from the CORE checkout's lint over the LANE's quarantine tree)
-( cd "$REPO" && "$PY" -m verity_vllm.check.quarantine_lint --root "$WT/verity_vllm/program/registry/quarantine" --out "$RUN_DIR/quarantine_lint.json" ) 2>&1 | tee -a "$RUN_DIR/verify_lane.log" || log "quarantine lint failed"
+( cd "$REPO" && "$PY" -m verity_vllm.properties.quarantine_lint --root "$WT/verity_vllm/program/registry/quarantine" --out "$RUN_DIR/quarantine_lint.json" ) 2>&1 | tee -a "$RUN_DIR/verify_lane.log" || log "quarantine lint failed"
 
 # 3. holdouts (orchestrator-run) -> holdouts.json
 if [ -n "$HOLDOUTS" ]; then
-  ( cd "$WT" && "$PY" -m verity_vllm.check.holdout --assemble "$HOLDOUTS" --out "$RUN_DIR/holdouts.json" ) 2>&1 | tee -a "$RUN_DIR/verify_lane.log" || true
+  ( cd "$WT" && "$PY" -m verity_vllm.properties.holdout --assemble "$HOLDOUTS" --out "$RUN_DIR/holdouts.json" ) 2>&1 | tee -a "$RUN_DIR/verify_lane.log" || true
 fi
 
 # 4. the CPU phase of the sealed driver in the fresh checkout: resolve, fold x2, root policy, replay tiers, census reconcile,

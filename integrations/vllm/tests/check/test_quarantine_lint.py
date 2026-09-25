@@ -1,7 +1,7 @@
 """quarantine_lint.py (protected): purity + identity rules on synthetic quarantine modules."""
 from __future__ import annotations
 
-from verity_vllm.check import quarantine_lint
+from verity_vllm.properties import quarantine_lint
 
 GOOD = '''
 from verity.ir.defs import CompositeDefinition

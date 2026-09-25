@@ -163,7 +163,7 @@ holdouts() {  # <primary-run> <holdout-run>...: the replicate runs' gates.json a
     [ -f "$OUT/$h/gates.json" ] || { say "holdouts $n: $h has no gates.json"; return 1; }
     ln -sfn "$OUT/$h" "$hd/$h"
   done
-  $PY312 -m verity_vllm.check.holdout --assemble "$hd" --out "$OUT/$n/holdouts.json" > "$LOGS/$n.holdouts.log" 2>&1 || say "holdouts $n: assemble rc=$?"
+  $PY312 -m verity_vllm.properties.holdout --assemble "$hd" --out "$OUT/$n/holdouts.json" > "$LOGS/$n.holdouts.log" 2>&1 || say "holdouts $n: assemble rc=$?"
   drv --run-dir "$OUT/$n" --phase cpu --skip resolve,census_reconcile,nonint_compare,compare,fold,fold_2,fold_other,root_policy,golden,wiring,replay \
       >> "$LOGS/$n.holdouts.log" 2>&1
   local rc=$?

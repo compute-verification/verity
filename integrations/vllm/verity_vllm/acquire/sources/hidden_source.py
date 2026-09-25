@@ -231,12 +231,12 @@ class HiddenM1Source:
                               f"{self.stats['hdims']}) in place of _vllm_fa2_C.varlen_fwd; stream buffer per launch acquired into the packed step "
                               f"stream (same run root); geometries (HB, M, NB[, kBlockN, head_dim]) {self.stats['geometries']}; tap_skipped "
                               f"{self.stats['skipped']}; value correspondence: CMT-2 xcheck_m1.json / check_base.json (hd 64, 38 shapes); out/lse "
-                              f"bit-identical to the installed kernel: verity_vllm.check.fa_tap_exactness")}]
+                              f"bit-identical to the installed kernel: verity_vllm.properties.fa_tap_exactness")}]
 
 
 # ----------------------------------------------------------------------------------------------------------------------------------
 # R13 lane hopper: the same M1 export-and-commit source for FlashAttention-3 (sm90, `_vllm_fa3_C.fwd`), tap layout v9 = the FA2 v8 word
-# layout over PackGQA-packed rows (`verity_vllm/acquire/fa3_tap_src/verity_tap_fa3.h`; exactness: verity_vllm.check.fa_tap_exactness).
+# layout over PackGQA-packed rows (`verity_vllm/acquire/fa3_tap_src/verity_tap_fa3.h`; exactness: verity_vllm.properties.fa_tap_exactness).
 # ----------------------------------------------------------------------------------------------------------------------------------
 def fa3_tile(head_dim: int, max_seqlen_q: int, qheads_per_kvhead: int, num_splits: int) -> tuple[int, int]:
     """(kBlockM, kBlockN) of the pinned FA3 (506341a1 hopper/) forward vLLM launches: `tile_size_fwd_sm90` (bf16, causal, paged KV without TMA)
@@ -384,7 +384,7 @@ class HiddenM1SourceFA3(HiddenM1Source):
                               f"{self.stats['hdims']}) in place of _vllm_fa3_C.fwd; stream buffer per launch acquired into the packed step stream "
                               f"(same run root); geometries (HB=b*h_k, M=packed rows, NB, kBlockN, head_dim) {self.stats['geometries']}; tiles {self.stats['tiles']}; "
                               f"tap_skipped {self.stats['skipped']}; out/lse bit-identical to the installed _vllm_fa3_C.fwd (hd 64/128, tiles 192x128 / "
-                              f"64x192 / 128x128 / 64x128): verity_vllm.check.fa_tap_exactness")}]
+                              f"64x192 / 128x128 / 64x128): verity_vllm.properties.fa_tap_exactness")}]
 
 
 def hidden_class_for(flash_attn_version: int | None) -> str:

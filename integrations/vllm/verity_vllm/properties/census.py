@@ -3,7 +3,7 @@
 Two halves, one CLI:
 
   GPU pod (torch, vLLM):
-    python -m verity_vllm.check.census --workload workloads/workload_32x16_1req.json --out DIR
+    python -m verity_vllm.properties.census --workload workloads/workload_32x16_1req.json --out DIR
         Builds the engine exactly like `bench/m1_capture.py` (κ, `vllm_adapter.build_engine`), runs the uninstrumented
         throwaway warm-up (Triton JIT / cuBLAS / allocator / CUPTI), then runs the workload request with **no observer, no
         Triton hook, no module hooks**: every `engine.step()` is wrapped in its own `torch.profiler.profile(activities=
@@ -14,7 +14,7 @@ Two halves, one CLI:
         Steps that launch no device kernel (the engine's trailing bookkeeping step) are listed but not numbered.
 
   laptop (torch-free):
-    python -m verity_vllm.check.census --reconcile DIR/census.json --log data/logs/m1.jsonl.gz \
+    python -m verity_vllm.properties.census --reconcile DIR/census.json --log data/logs/m1.jsonl.gz \
         [--profile vllm_d9105ea80_sm89_eager] [--report out/capture/reports/census_m1]
         Resolves the M1 log with `bench/resolve_log.resolve_log` and, per step, collects the kernel names every resolution
         part declares (`Compute.kernels` / `Transparent.kernels` over `resolver.parts_of`) plus the profile's
@@ -357,7 +357,7 @@ def reconcile(census: dict, log_path: str, profile_name: str, proposed_allowlist
     from verity_vllm.observe.fold.resolve_log import load_profile, resolve_log
 
     profile, prof_mod = load_profile(profile_name)
-    from verity_vllm.check.kernel_allowlist import KERNEL_ALLOWLIST as FROZEN_ALLOWLIST  # protected: a profile cannot allowlist kernels by itself
+    from verity_vllm.properties.kernel_allowlist import KERNEL_ALLOWLIST as FROZEN_ALLOWLIST  # protected: a profile cannot allowlist kernels by itself
     allow = set(FROZEN_ALLOWLIST) | set(proposed_allowlist)
     profile_extra_allowlist = sorted(set(profile.kernel_allowlist) - set(FROZEN_ALLOWLIST))
     per_step_roots: dict[int, list] = {}

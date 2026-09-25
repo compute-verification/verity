@@ -572,7 +572,7 @@ class M1Record:
         """census.reconcile over the HOSTILE profile (it loads profiles by module name; the hostile one lives in memory)."""
         if not M1_CENSUS.exists():
             return None
-        from verity_vllm.check import census
+        from verity_vllm.properties import census
         from verity_vllm.observe.fold import resolve_log
 
         def run() -> dict:

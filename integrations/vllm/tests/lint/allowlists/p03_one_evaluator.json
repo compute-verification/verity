@@ -1,10 +1,6 @@
 {
   "rule": "P3 (one evaluator interface, one challenge derivation)",
   "entries": [
-    {"file": "verity_vllm/check/difftest.py", "kind": "rng", "symbol": "produce", "detail": "numpy.random.default_rng"},
-    {"file": "verity_vllm/check/difftest.py", "kind": "rng", "symbol": "produce", "detail": "random.Random"},
-    {"file": "verity_vllm/check/holdout.py", "kind": "rng", "symbol": "generate", "detail": "random.Random"},
-    {"file": "verity_vllm/check/holdout.py", "kind": "rng", "symbol": "make_workload", "detail": "random.Random"},
     {"file": "verity_vllm/check/match/global_match.py", "kind": "if-ladder", "symbol": "read_record", "detail": "tag"},
     {"file": "verity_vllm/check/replay/compiled_kernel_check.py", "kind": "rng", "symbol": "CompiledKernelCheck.run", "detail": "random.Random"},
     {"file": "verity_vllm/check/replay/replay.py", "kind": "rng", "symbol": "tier_a", "detail": "random.Random"},
@@ -35,6 +31,10 @@
     {"file": "verity_vllm/program/kernels/twins.py", "kind": "rng", "symbol": "main", "detail": "numpy.random.default_rng"},
     {"file": "verity_vllm/program/kernels/twins.py", "kind": "rng", "symbol": "self_check", "detail": "numpy.random.default_rng"},
     {"file": "verity_vllm/program/registry/crosscheck.py", "kind": "rng", "symbol": "main", "detail": "numpy.random.default_rng"},
+    {"file": "verity_vllm/properties/admission.py", "kind": "rng", "symbol": "produce", "detail": "numpy.random.default_rng"},
+    {"file": "verity_vllm/properties/admission.py", "kind": "rng", "symbol": "produce", "detail": "random.Random"},
+    {"file": "verity_vllm/properties/holdout.py", "kind": "rng", "symbol": "generate", "detail": "random.Random"},
+    {"file": "verity_vllm/properties/holdout.py", "kind": "rng", "symbol": "make_workload", "detail": "random.Random"},
     {"file": "verity_vllm/query/manifest/format.py", "kind": "if-ladder", "symbol": "moe_geometry", "detail": "fam"}
   ]
 }
