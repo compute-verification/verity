@@ -1242,3 +1242,34 @@ commitment, r20260925-114925-2f5c, art:60cabb96): prove 0.607 → 0.778 s (link 
 Rust verify 1.706 → 2.35 s plus 0.219 s. Proof +6,144 bytes on both. Every §17 negative (bit flip, non-boolean bit,
 altered operand with its own bits, sigma out of range, sigma off by 2, root_b changed, z differs, VU remap, duplicate
 link cell, dropped booleanity) is rejected by both verifiers.
+
+### 17.5 Route (a) in one live session (v2, lane agkr-flock-cell; supersedes 17.1's stand-in and 17.2's point)
+
+The binary side is Flock (`backends/flock/live`, `flock-link cell-prove` / `cell-serve`, flock-128-r2) in the same live
+session as this proof; the red-team-flock third audit's P1-P3 and E0-E1 are what this section implements.
+
+* **Scheme (P3):** `bf16-ampere+blake3`, frame-v3 with `blake3-keyed/row/v2` row leaves, the leaf Flock proves (its chunk
+  chain starts from the role's key, KEYED_HASH on every compression, keyed parents natively). Chosen over a SHA-256
+  chunk chain in Flock: it is two constants in the existing BLAKE3 circuit, needs no big-endian Λ_B, and keeps Flock's
+  faster hash; nothing else used the plain-BLAKE3 leaf. The instance commitment is pinned (`commitments.rs`), and so is
+  the linked circuit set (`pins.txt`, `python -m tools.cell circuits`), which the verifier refuses without a `link.txt`.
+* **Order (P1):** after the GKR segments the prover publishes root_F = SHA-256(`verity-gkr/link/root-f/v2` || transcript
+  state || ctr) (it binds the Ligero root and every GKR message). The session's `Commit` carries root_F with Flock's
+  root_B; the verifier draws the link points from the OS; Flock sends y; only then Flock's coins. The prime transcript
+  absorbs TAG || Σ || SHA-256(root_B) || points || y (TAG = `verity-gkr/link/sigma-2xgf2_128/v2`), then the sigma
+  messages, then rho. The prime verifier takes Σ, SHA-256(root_F), SHA-256(root_B), the points and y from the session
+  record (`link.txt`: `link session-2xgf2_128/v2`, written from the record by `tools/cell_gate.py`), recomputes root_F
+  from its own replay and refuses a record whose root_F differs.
+* **Points (P2):** two GF(2^128) points (Flock's field, x^128 + x^7 + x^2 + x + 1), m = 28 coordinates each. A plane pair
+  (point 0, point 1) is one 256-bit value, so the 256 sigma messages are 128 planes of each point; everything after the
+  eq tables is 17.2 unchanged. Σ (`sigma.txt`, SHA-256 = the session's Σ) names the point choice, the scheme, both Λ,
+  N, m, the Flock statement, SHA-256(commitment.txt) and SHA-256 of the leaf digests; the prime verifier checks every
+  line it can derive from its own statement.
+* **Evidence (E1):** `tools/cell_gate.py` admits a record only with `link_mode` exchange, `require_link` true, the cell's
+  Σ, an accepted verdict, two points and two y, the proofs kept beside the record with their hashes, a verifier operator
+  that is not a producer lane or pod, and (with `--rust`) the prime verifier accepting the prime proof against the
+  record's link with the circuit set and the commitment pinned. E0 is in the session library: `SessionConfig::check`
+  refuses `link: Some` with `require_link: false`, and the R5 gate applies whenever there is a link.
+* **Soundness:** `soundness.py` adds 255/p^6 (the sigma batching) and (m/2^128)^2 (Schwartz-Zippel over the two
+  session points); the Flock side's terms are its own (red-team-flock third audit: about 2^-195.5 for the two reps,
+  2^-243.9 for the link claims' reduction). The composed bound is set by A-GKR's Ligero queries, 2^-130.19.
