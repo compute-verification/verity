@@ -18,16 +18,18 @@ import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from verity.ml.tc.models import ADA_E4M3_M16N8K32, HOPPER_BF16_M16N8K16, HOPPER_E4M3_K32
-from verity.verification.target import BF16_HOPPER, FP8_ADA_MMA, FP8_HOPPER_WGMMA, Target
+from verity.ml.tc.models import ADA_E4M3_M16N8K32, AMPERE_BF16_M16N8K16, HOPPER_BF16_M16N8K16, HOPPER_E4M3_K32
+from verity.verification.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, Target
 
 from . import lowering
 
 __all__ = ["BACKENDS", "FLOCK_FRAME_V3_BLAKE3", "Flock", "GemmSub", "Supported", "Unavailable", "Unsupported"]
 
 #: Pipelines with a pinned lowering, by the model object the target names (imported: a rename fails at import time).
-_LOWERED = {HOPPER_BF16_M16N8K16: "bf16-hopper", ADA_E4M3_M16N8K32: "fp8-ada", HOPPER_E4M3_K32: "fp8-hopper"}
-_TARGETS = {BF16_HOPPER.name: "bf16-hopper", FP8_ADA_MMA.name: "fp8-ada", FP8_HOPPER_WGMMA.name: "fp8-hopper"}
+_LOWERED = {HOPPER_BF16_M16N8K16: "bf16-hopper", ADA_E4M3_M16N8K32: "fp8-ada", HOPPER_E4M3_K32: "fp8-hopper",
+            AMPERE_BF16_M16N8K16: "bf16-ampere"}
+_TARGETS = {BF16_HOPPER.name: "bf16-hopper", FP8_ADA_MMA.name: "fp8-ada", FP8_HOPPER_WGMMA.name: "fp8-hopper",
+            FIRST.name: "bf16-ampere"}
 _HERE = Path(__file__).resolve().parent
 _LOWERING_SOURCES = ("lowering.py", "unit.py", "gf2.py")
 

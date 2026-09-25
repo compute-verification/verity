@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 
 import pytest
-from verity.verification.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA
+from verity.verification.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, NVFP4_SM120
 
 from verity_flock import instances, lowering
 from verity_flock.backend import FLOCK_FRAME_V3_BLAKE3 as FLOCK, GemmSub, Supported, Unavailable, Unsupported
@@ -39,7 +39,8 @@ def test_io_words_are_aligned_and_zero_padded():
 def test_supports():
     for t in (BF16_HOPPER, FP8_ADA_MMA, FP8_HOPPER_WGMMA):
         assert isinstance(FLOCK.supports(GemmSub(t)), (Supported, Unavailable))
-    assert isinstance(FLOCK.supports(GemmSub(FIRST)), Unsupported)
+    assert isinstance(FLOCK.supports(GemmSub(FIRST)), (Supported, Unavailable))
+    assert isinstance(FLOCK.supports(GemmSub(NVFP4_SM120)), Unsupported)
     assert isinstance(FLOCK.supports(GemmSub(BF16_HOPPER, 1000)), Unsupported)
     assert isinstance(FLOCK.supports(GemmSub(FP8_ADA_MMA, 512)), Unsupported)
 

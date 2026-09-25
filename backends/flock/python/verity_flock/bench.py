@@ -32,7 +32,7 @@ from .backend import FLOCK_BLOCK, FLOCK_FRAME_V3_BLAKE3, lowering_version
 RULE = ("double total VUs from start at fixed per-proof settings until two successive doublings together raise the median "
         "throughput by < 2 % or a point fails; plateau = the point with the highest median throughput (kb/TABLES.md)")
 PROFILES = {"bf16-hopper": "bf16-hopper-mma-draft/2026-09-22", "fp8-ada": "fp8-ada-mma-draft/2026-09-22",
-            "fp8-hopper": "fp8-hopper-wgmma-draft/2026-09-22"}
+            "fp8-hopper": "fp8-hopper-wgmma-draft/2026-09-22", "bf16-ampere": "first-campaign-target/2026-09-21"}
 
 
 def _guard():

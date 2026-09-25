@@ -37,15 +37,29 @@ def _ligero():
     return relation, hashauth, auth
 
 
+def _frozen(rel):
+    """The relation's frozen tier (``bench-instances/v1`` ``vu-k1536`` for the A100 row), or None for a synthetic stream."""
+    if not rel.frozen_tier:
+        return None
+    from verity_numerical.bench import instances as frozen
+    return frozen
+
+
 def instances_digest(name: str, n: int) -> str:
     relation, _, _ = _ligero()
     rel = relation(name)
+    fz = _frozen(rel)
+    if fz is not None:
+        return fz.manifest_sha256(fz.DEFAULT_ROOT)
     return hashlib.sha256(f"{rel.name} synthetic|seed={rel.instance_seed}|n={n}|K={K}".encode()).hexdigest()
 
 
 def instances_ref(name: str, total: int) -> dict:
     relation, _, _ = _ligero()
     rel = relation(name)
+    if rel.frozen_tier:
+        return {"dataset": rel.instances_dataset, "tier": rel.instances_tier, "range": [0, total],
+                "manifest_sha256": instances_digest(name, total)}
     ref = {"dataset": rel.instances_dataset, "tier": rel.instances_tier, "range": [0, total],
            "manifest_sha256": instances_digest(name, total), "seed": rel.instance_seed}
     if rel.instances_recipe:
@@ -87,6 +101,17 @@ def draw(name: str, total: int, procs: int = 1, cache: str | Path | None = None,
     relation, _, _ = _ligero()
     rel = relation(name)
     hi = total if hi is None else hi
+    fz = _frozen(rel)
+    if fz is not None:
+        # the frozen set: its recorded x rows, W columns and accumulators; it has no stream beyond its instances
+        vu = fz.load(rel.frozen_tier, fz.DEFAULT_ROOT)
+        if hi > vu.n:
+            raise ValueError(f"{rel.frozen_tier} holds {vu.n} instances; [{lo}, {hi}) would repeat instances")
+        K_ = vu.K
+        x = np.frombuffer(vu.x, dtype=np.uint16).reshape(vu.n, K_)[lo:hi]
+        w = np.frombuffer(vu.w, dtype=np.uint16).reshape(vu.n, K_)[lo:hi]
+        accs = np.frombuffer(vu.acc, dtype=np.uint32).reshape(vu.n, rel.steps)[lo:hi]
+        return x, w, accs
     path = Path(cache) / f"flock-{name}-{rel.instance_seed}-{lo}-{hi}.npz" if cache else None
     if path is not None and path.exists():
         with np.load(path) as z:
