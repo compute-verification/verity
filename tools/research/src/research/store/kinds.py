@@ -16,6 +16,9 @@ KINDS: dict[str, str] = {
     "tc-evidence/v1": "one tensor-core probe capture: meta {instruction, arch, sku, families, counts, model, model_agrees, first_mismatches, "
                       "seed, n}; payload tree = probe_results.json, capture_sample.json, tiles_*.npz",
     "dataset-snapshot/v1": "meta {name, note, query?}; refs.members = [art:...]; payload null",
+    "tables-parity/v1": "the switch's parity render (verity_numerical.bench.views --parity --record): meta {schema, rules, ok, differences, "
+                        "snapshot, tables_cells, cells: [{line, column, artifact, views_overhead, tables_overhead, printed}]}; refs.snapshot "
+                        "(the tables --snapshot compared with), refs.cells; payload null",
     "verification-verdict/v1": "meta {result: PASS|FAIL, verifier, detail}; refs.proof, refs.verifier_attempt",
     "proof/v1": "payload = proof bytes; meta {statement_digest, backend, params}",
     "fixture/v1": "a repo-replicated input (golden records, instances); payload file/tree",

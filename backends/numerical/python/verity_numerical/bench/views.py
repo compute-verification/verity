@@ -2,7 +2,7 @@
 
     python -m verity_numerical.bench.views --root <store root> [--format md|json] [--rules spec|unfiltered|legacy]
                                            [--security-bits N] [--include-archived]
-    python -m verity_numerical.bench.views --root <store root> --parity [--snapshot NAME]
+    python -m verity_numerical.bench.views --root <store root> --parity [--snapshot NAME | --take-snapshot] [--record]
 
 Until the switch (a labelled 6 PM PT digest) the published tables stay :mod:`verity_numerical.bench.tables` and
 :mod:`~verity_numerical.bench.drilldown`; these views are previews and are never shown as the published numbers.
@@ -58,6 +58,9 @@ __all__ = ["COMMIT", "CONFIGURATIONS", "FAMILIES", "LEGACY", "REASON_LETTERS", "
 
 PREVIEW = ("PREVIEW of the approved tables spec (kb/TABLES.md): not the published tables. The published numbers switch once, in a "
            "6 PM PT digest labelled as a change of method; until then the canonical tables are `verity_numerical.bench.tables`.")
+#: The banner of the published render (``--published``, the steward's ``published = "views"``): the switch has happened.
+PUBLISHED = ("The published tables, under the approved spec (kb/TABLES.md), since the switch digest labelled as a change of method. "
+             "The frozen 2026-09-22 tables (`verity_numerical.bench.tables`) remain as a drill-down beside this render (`<stamp>-tables-frozen.md`).")
 
 #: Commitment seconds per batch: the warm median of committing the batch's values afresh, as lane hash-commit writes it (with
 #: ``commit.cold_seconds``, ``commit.reps`` and ``e2e.seconds`` = this + ``t.total``).
@@ -122,7 +125,15 @@ class Family:
     description: str
     setup: str
     interaction: str
+    note: str = ""
 
+
+#: Which composite configurations a family column holds (Table 1's family row): route (a) stays A-GKR's (brief tables-switch).
+FAMILY_NOTES = {
+    "A-GKR": "route (a), the A-GKR prime side with Flock's keyed-BLAKE3 row hashes and the sigma link in one live session, is an "
+             "A-GKR configuration and fills this column",
+    "Flock": "pure Flock only: the relation and its row hashes in one binary-field circuit; route (a) is in the A-GKR column",
+}
 
 #: Flock is its own backend family (Daniel, 2026-09-25); the frozen tables have no Flock column, so its candidate lives here.  The
 #: v1 adapter recognises it by ``software.backend.name`` starting ``flock``.  Declared class NON_ZK_PROOF: Flock is not zero-knowledge
@@ -134,7 +145,8 @@ FLOCK = T.Candidate(
     proof_classes=("NON_ZK_PROOF",), drilldown_classes=(),
     backend_names=("flock",))
 CANDIDATES = (*T.CANDIDATES, FLOCK)
-FAMILIES: tuple[Family, ...] = tuple(Family(c.id, c.proof_classes, c.description, c.setup, c.interaction) for c in CANDIDATES)
+FAMILIES: tuple[Family, ...] = tuple(Family(c.id, c.proof_classes, c.description, c.setup, c.interaction, FAMILY_NOTES.get(c.id, ""))
+                                     for c in CANDIDATES)
 _FAMILY = {f.id: f for f in FAMILIES}
 _CANDIDATE = {c.id: c for c in CANDIDATES}
 
@@ -1025,6 +1037,23 @@ def parity(store: Any, frozen: T.Tables | None = None, members: Sequence[str] | 
     return out
 
 
+PARITY_KIND = "tables-parity/v1"
+
+
+def parity_record(store: Any, snapshot: tuple[str, str, Sequence[str]] | None, frozen: T.Tables | None = None) -> dict[str, Any]:
+    """The recorded parity render (TABLES.md "The switch", condition 2): :func:`parity` against ``snapshot`` = (name, art id,
+    members), with every legacy-rules cell's artifact and ratio beside the frozen one."""
+    frozen = frozen or T.build(store)
+    diffs = parity(store, frozen, members=snapshot[2] if snapshot else None)
+    old = {(c.target, c.candidate + T.AUTH_COLUMN_SUFFIX.get(c.authentication, "")): c for c in frozen.cells}
+    cells = [{"line": c.line, "column": c.column, "artifact": c.artifact, "views_overhead": c.overhead,
+              "tables_overhead": old[(c.line, c.column)].overhead if (c.line, c.column) in old else None, "printed": T.fmt_overhead(c.overhead)}
+             for c in build(store, LEGACY).cells]
+    return {"schema": "verity/tables-parity/v1", "rules": LEGACY.name, "ok": not diffs, "differences": diffs,
+            "snapshot": snapshot[0] if snapshot else None, "snapshot_artifact": snapshot[1] if snapshot else None,
+            "tables_cells": len(frozen.cells), "cells": cells}
+
+
 # --- rendering --------------------------------------------------------------------------------------------------------------------
 
 
@@ -1109,18 +1138,19 @@ def stages(c: ViewCell) -> dict[str, Any]:
             "setup": {"seconds": float(setup), "amortized": float(setup) * k, "instances": P["instances"]} if _num(setup) and setup > 0 else None}
 
 
-def render_markdown(V: Views) -> str:
+def render_markdown(V: Views, published: bool = False) -> str:
     rules = V.rules
     filt = ", ".join(([f"whole-proof bound 2^{rules.security_log2:g} or better"] if rules.security_log2 is not None else [])
                      + (["no algebraic hash in the soundness argument"] if rules.standard_hashes else [])) or "unfiltered"
-    out = [f"> {PREVIEW}", "", f"Rules: `{rules.name}` ({filt}" + ("; legacy parameters: B = 4096, K = 1536, bare and + in-proof hash "
+    out = [f"> {PUBLISHED if published else PREVIEW}", "", f"Rules: `{rules.name}` ({filt}" + ("; legacy parameters: B = 4096, K = 1536, bare and + in-proof hash "
                                                                  "columns, proving time only" if rules.legacy else "") + ").", "",
            "## Table 1 — Backend configurations and their security", ""]
     rows1, fam_seen = [], None
     for fid, row in table1_rows(V):
         if fid != fam_seen:
             fam = _FAMILY.get(fid)
-            desc = f"{fam.description}; declared class {' | '.join(fam.declared_classes)}; setup {fam.setup}; {fam.interaction}" if fam else "not a Table 2 column"
+            desc = (f"{fam.description}; declared class {' | '.join(fam.declared_classes)}; setup {fam.setup}; {fam.interaction}"
+                    + (f"; {fam.note}" if fam.note else "") if fam else "not a Table 2 column")
             rows1.append([f"**{fid}**", "", desc, *([""] * (len(TABLE1_COLUMNS) - 3))])
             fam_seen = fid
         rows1.append(row)
@@ -1257,9 +1287,9 @@ def render_markdown(V: Views) -> str:
     return "\n".join(out) + "\n"
 
 
-def render_json(V: Views) -> dict[str, Any]:
+def render_json(V: Views, published: bool = False) -> dict[str, Any]:
     return {
-        "schema": "verity/tables-views/v1", "preview": PREVIEW, "rules": dataclasses.asdict(V.rules),
+        "schema": "verity/tables-views/v1", **({"published": PUBLISHED} if published else {"preview": PREVIEW}), "rules": dataclasses.asdict(V.rules),
         "reason_letters": REASON_LETTERS, "schemes": [{**dataclasses.asdict(x), "admissible": x.admissible} for x in SCHEMES],
         "work_model": WORK_MODEL,
         "table1": {"columns": list(TABLE1_COLUMNS), "families": [dataclasses.asdict(f) for f in FAMILIES],
@@ -1294,24 +1324,40 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--standard-hashes-only", action="store_true", help="drop configurations with an algebraic hash in the soundness argument")
     ap.add_argument("--parity", action="store_true", help="compare the legacy-rules views with a fresh `tables` build; exit 1 on a difference")
     ap.add_argument("--snapshot", default=None, metavar="NAME", help="with --parity: also compare with this `tables --snapshot`'s members")
+    ap.add_argument("--take-snapshot", action="store_true",
+                    help="with --parity: first take the `tables --snapshot` (tables-<UTC date>) to compare with")
+    ap.add_argument("--record", action="store_true", help=f"with --parity: store the parity render as a {PARITY_KIND} artifact (its id on stderr)")
+    ap.add_argument("--published", action="store_true", help="the published render (after the switch): the published banner, not the preview's")
     ns = ap.parse_args(argv)
     from research.store.local import LocalStore  # noqa: PLC0415  (only the CLI needs the store package)
 
     st = LocalStore(ns.root)
     if ns.parity:
-        members = None
-        if ns.snapshot:
+        frozen, snap = T.build(st), None
+        if ns.take_snapshot:
+            if not frozen.cells:
+                print("views: no populated tables cell, no snapshot to take", file=sys.stderr)
+                return 2
+            art = T.take_snapshot(st, frozen)
+            snap = (T.snapshot_name(), art, T.cell_artifacts(frozen))
+        elif ns.snapshot:
             rows = [r for r in st.index.select_artifacts(kind="dataset-snapshot/v1") if (D._doc(st, r).get("meta") or {}).get("name") == ns.snapshot]
             if not rows:
                 print(f"views: no dataset-snapshot/v1 named {ns.snapshot!r}", file=sys.stderr)
                 return 2
-            members = list((D._doc(st, rows[-1]).get("refs") or {}).get("members") or [])
-        diffs = parity(st, members=members)
+            snap = (ns.snapshot, rows[-1]["id"], list((D._doc(st, rows[-1]).get("refs") or {}).get("members") or []))
+        rec = parity_record(st, snap, frozen)
+        if ns.record:
+            refs = {k: v for k, v in (("snapshot", rec["snapshot_artifact"]), ("cells", sorted({c["artifact"] for c in rec["cells"]}))) if v}
+            rec["artifact"] = st.put_artifact(PARITY_KIND, {k: v for k, v in rec.items() if k != "snapshot_artifact"}, refs)
+            print(f"parity recorded as {rec['artifact']}" + (f" (snapshot {rec['snapshot']} {rec['snapshot_artifact']})" if snap else ""), file=sys.stderr)
         if ns.format == "json":
-            print(json.dumps({"schema": "verity/tables-parity/v1", "snapshot": ns.snapshot, "ok": not diffs, "differences": diffs}, indent=2))
+            print(json.dumps(rec, indent=2))
         else:
-            print("parity: ok (the legacy-rules views select exactly today's cells)" if not diffs else "\n".join(["parity: DIFFERENT", *diffs]))
-        return 0 if not diffs else 1
+            print("parity: ok (the legacy-rules views select exactly today's cells)" if rec["ok"] else "\n".join(["parity: DIFFERENT", *rec["differences"]]))
+            for c in rec["cells"]:
+                print(f"  {c['line']} · {c['column']}: {c['artifact']} {c['printed']}")
+        return 0 if rec["ok"] else 1
     rules = RULES[ns.rules]
     if ns.security_bits is not None:
         rules = dataclasses.replace(rules, name=f"{rules.name}@{ns.security_bits:g}", security_log2=-ns.security_bits)
@@ -1323,9 +1369,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         rules = dataclasses.replace(rules, name=f"{rules.name}+standard-hashes", standard_hashes=True)
     V = build(st, rules)
     if ns.format == "json":
-        print(json.dumps(render_json(V), indent=2, sort_keys=True, default=str))
+        print(json.dumps(render_json(V, ns.published), indent=2, sort_keys=True, default=str))
     else:
-        print(render_markdown(V), end="")
+        print(render_markdown(V, ns.published), end="")
     return 0
 
 

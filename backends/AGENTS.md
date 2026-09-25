@@ -130,8 +130,13 @@ algebraic-hash configurations flagged and marked `(alg.)`, Table 3 with
 serving and proving overhead) render as a labelled preview with
 `python -m verity_numerical.bench.views --root <store> [--rules spec|unfiltered|legacy]`;
 `--parity` checks that the legacy-rules views select exactly today's cells
-(the switch's gate). The steward renders it only for a `[[render]]` entry with
-`preview = true`. It replaces the canonical tables only at the labelled switch.
+(the switch's gate; `--take-snapshot --record` stores the check as a
+`tables-parity/v1` artifact). The steward renders it as a preview for a
+`[[render]]` entry with `preview = true`. It replaces the canonical tables only
+at the labelled switch: an entry with `published = "views"` publishes
+`views --published` as `<stamp>-tables.md` and the frozen tables as the
+drill-down `<stamp>-tables-frozen.md`; `python -m verity_numerical.bench.switch`
+renders the switch digest (`backends/numerical/CHANGELOG.md`).
 
 ## Proof model: interactive is fine, transferability is not required
 

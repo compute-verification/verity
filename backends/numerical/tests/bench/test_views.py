@@ -145,7 +145,8 @@ def test_parity_reports_a_difference(store: LocalStore) -> None:
 
 def committed(store: LocalStore, leaf: str = "blake3", *, t_total: float = 0.4, commit: float = 0.6, protocol: bool = True,
               custody: bool = True, security: dict | None = None, verified_by: str | None = VERIFIER, labels: list[tuple] = (),
-              B: int = 4096, manifest: str | None = None, setup: float | None = None, interaction: dict | None = None) -> str:
+              B: int = 4096, manifest: str | None = None, setup: float | None = None, interaction: dict | None = None,
+              backend: str | None = None, proof_class: str | None = None) -> str:
     """A B-Ligero in-proof-hash result on the 4090 line, measured under the protocol, with its commitment time and preserved dumps."""
 
     doc = hashed(leaf, t_total=t_total, security=security)
@@ -161,6 +162,12 @@ def committed(store: LocalStore, leaf: str = "blake3", *, t_total: float = 0.4, 
                 "proof_bytes": "B", "relation.statement_bytes_total": "B"}.get(name, "s")
         doc["measurements"].append({"name": name, "value": value, "unit": unit})
     fp = doc["workload_fingerprint"]
+    if backend is not None:
+        fp["software"]["backend"]["name"] = backend
+    if proof_class is not None:
+        fp["proof_class"] = proof_class
+        if proof_class.startswith("NON_ZK"):
+            fp["zk_mode"] = "none"
     if B != 4096:
         fp.update(B=B, instances={**fp["instances"], "range": [0, B], "manifest_sha256": V.STREAMS[FP8_ADA_MMA.name](B)})
         doc["measurements"] = [m for m in doc["measurements"] if not m["name"].startswith(("rate.", "overhead.", "vu."))]
@@ -417,6 +424,42 @@ def test_cli_json_round_trips_and_parity_exit_codes(store: LocalStore, capsys: p
     assert V.main(["--root", str(store.root), "--parity", "--snapshot", "tables-none"]) == 2
 
 
+def test_the_parity_render_takes_its_snapshot_and_is_recorded_as_an_artifact(store: LocalStore, capsys: pytest.CaptureFixture[str]) -> None:
+    """The switch's gate 2 as one command: `--parity --take-snapshot --record` freezes the frozen cells as `tables --snapshot` does,
+    compares, and stores the report (every cell's artifact and both ratios) as a tables-parity/v1 artifact."""
+    a = put(store, result(t_total=4.0))
+    committed(store, t_total=0.4)
+    assert V.main(["--root", str(store.root), "--parity", "--take-snapshot", "--record", "--format", "json"]) == 0
+    out = capsys.readouterr()
+    rec = json.loads(out.out)
+    snap = T.take_snapshot(store, T.build(store))
+    assert rec["ok"] and rec["differences"] == [] and rec["snapshot"] == T.snapshot_name() and rec["snapshot_artifact"] == snap
+    assert [(c["column"], c["artifact"]) for c in rec["cells"]] == [("A-GKR", a)]
+    assert rec["cells"][0]["views_overhead"] == pytest.approx(rec["cells"][0]["tables_overhead"], rel=1e-12)
+    m = store.get_manifest(rec["artifact"])
+    assert m.kind == V.PARITY_KIND and m.refs == {"snapshot": snap, "cells": [a]} and m.meta["ok"] is True
+    assert f"parity recorded as {rec['artifact']}" in out.err
+    # the same store names the same snapshot and records the same parity artifact (content-addressed)
+    assert V.main(["--root", str(store.root), "--parity", "--snapshot", T.snapshot_name(), "--record"]) == 0
+    assert f"parity recorded as {rec['artifact']}" in capsys.readouterr().err
+    # a difference is recorded too, and exits 1
+    store.snapshot("tables-empty", [], note="empty")
+    assert V.main(["--root", str(store.root), "--parity", "--snapshot", "tables-empty"]) == 1
+    assert capsys.readouterr().out.startswith(f"parity: DIFFERENT\nlegacy-rules cell {a} is not in the snapshot")
+
+
+def test_the_published_render_drops_the_preview_banner(store: LocalStore, capsys: pytest.CaptureFixture[str]) -> None:
+    committed(store, t_total=0.4)
+    views = V.build(store)
+    assert V.render_markdown(views).startswith(f"> {V.PREVIEW}")
+    pub = V.render_markdown(views, published=True)
+    assert pub.startswith(f"> {V.PUBLISHED}") and V.PREVIEW not in pub
+    assert pub.split("\n", 1)[1] == V.render_markdown(views).split("\n", 1)[1]          # only the banner changes
+    assert V.main(["--root", str(store.root), "--published"]) == 0 and capsys.readouterr().out == pub
+    js = V.render_json(views, published=True)
+    assert js["published"] == V.PUBLISHED and "preview" not in js
+
+
 def test_finding_labels_mark_or_pull_cells_in_both_renderers(store: LocalStore) -> None:
     open_ = "UNDER RE-VERIFICATION: soundness issue R1/R2"
     art = committed(store, t_total=0.4, labels=[("finding", open_, "coordinator", "2026-09-25T07:45:00Z")])
@@ -566,6 +609,31 @@ def test_flock_is_its_own_family_and_column(store: LocalStore) -> None:
     rows = dict((r[0], dict(zip(V.TABLE1_COLUMNS, r))) for _, r in V.table1_rows(views))
     assert rows["Flock (flock-128-r2, live coins)"]["Interaction model"].startswith("live verifier")
     assert rows["B-Ligero Fiat–Shamir (HVZK)"]["Interaction model"].startswith("non-interactive")
+
+
+def test_route_a_stays_in_the_a_gkr_column_with_a_note() -> None:
+    route_a = ("verity-gkr gpu (backends/gkr/gpu: checker v2 + LogUp + Ligero over BabyBear^6, SHA-512 Merkle; torch/Triton) + Flock "
+               "flock-128-r2 (backends/flock/live flock-link, CPU) + the sigma link (route (a))")
+    assert V.candidate_for(route_a).id == "A-GKR"
+    md = V.render_markdown(V.Views(rules=V.SPEC))
+    assert f"| **A-GKR** |  | " in md and V.FAMILY_NOTES["A-GKR"] in md and V.FAMILY_NOTES["Flock"] in md
+
+
+FLOCK_LIVE = {"rounds.sequential_depth": 1070, "net.bytes_out": 922_000.0, "net.bytes_in": 34_240.0, "net.rtt_ms": 0.9,
+              "rtt_method": "median of the session's coin round trips (same datacenter)", "net.wait_seconds": 1.071}
+
+
+def test_a_pure_flock_record_fills_the_flock_column_without_renderer_changes(store: LocalStore) -> None:
+    """The record contract agreed with lane flock-backend: backend name starting ``flock``, a complete class, the line's GPU SKU,
+    whole-proof bound, protocol + plateau sweep, commitment timed, the interaction record, preserved dumps, a non-producer's
+    verification label.  It lands in the Flock column on the keyed-BLAKE3 row line, provisional until red-team-flock grants it."""
+    art = committed(store, t_total=0.4, commit=0.6, interaction=FLOCK_LIVE, backend="flock union, flock-128-r2 (backends/flock)",
+                    proof_class="NON_ZK_PROOF", security={"target": -128, "achieved_log2": -195.5})
+    views = V.build(store)
+    cell = line(views)["cells"]["Flock"]
+    assert cell is not None and cell.artifact == art and cell.configuration == V.FLOCK_CONFIG.id and cell.provisional
+    assert line(views)["cells"]["B-Ligero"] is None
+    assert cell.throughput["interaction_s"] == pytest.approx(1070 * 0.001 + (922_000 + 34_240) * 8 / 10e9)
 
 
 def test_a_file_verified_result_derives_rounds_0_and_pays_its_bytes_over_the_reference_link(store: LocalStore) -> None:
