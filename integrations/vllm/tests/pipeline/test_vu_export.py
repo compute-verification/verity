@@ -81,7 +81,7 @@ def test_a_gemm_coordinate_is_the_row_word(attn_world, tmp_path):
     assert rows and all(len(r["c"]) == N for (_v, _s, N), r in rows.items())
     for (_v, _s, N), r in rows.items():                       # every row re-derived by the registered Gemm kernel from its coordinates
         W = np.stack([r["c"][j][0] for j in range(N)])
-        got = EV.evaluate("Gemm_v1", {"K": H, "N": N}, [[np.asarray(r["x"], dtype=np.uint16)]], [W.reshape(-1)])["out"]
+        got = EV.evaluate("Gemm_v1", {"K": H, "N": N}, [[np.asarray(r["x"], dtype=np.uint16)], []], [None, W.reshape(-1)])["out"]
         assert got.tolist() == [int(r["c"][j][1]) for j in range(N)]
 
 
@@ -114,7 +114,7 @@ def test_a_tampered_set_fails_verify(attn_world, tmp_path):
 def test_decomposition_mismatch_is_raised_not_written():
     rng = np.random.default_rng(3)
     x, w = _bf16(rng, H), _bf16(rng, 4 * H)
-    out = EV.evaluate("Gemm_v1", {"K": H, "N": 4}, [[x]], [w])
+    out = EV.evaluate("Gemm_v1", {"K": H, "N": 4}, [[x], []], [None, w])
     bad = {"0": out["0"].copy()}
     bad["0"][:] ^= 1
     with pytest.raises(VX.DecompositionMismatch):
