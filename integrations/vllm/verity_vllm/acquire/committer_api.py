@@ -73,35 +73,6 @@ class Committer(Protocol):
     def reset(self) -> None: ...
 
 
-def challenge_positions(run_root: bytes, leaves_per_step: list[int], k: int, salt: bytes = b"") -> list[tuple[int, int]]:
-    """The sampling challenge, derived from the PRECHALLENGE run root (Fiat–Shamir style): the prover cannot learn the positions
-    before the root is fixed, and a root recomputed after the fact yields a different challenge.  Deterministic, so the harness and a
-    verifier derive the same (step, rank) list from (root, layout sizes, k)."""
-    import hashlib as _h
-
-    if len(run_root) != 32:
-        raise ValueError("run root must be 32 bytes")
-    total = sum(leaves_per_step)
-    if total == 0 or k <= 0:
-        return []
-    cum = []
-    acc = 0
-    for n in leaves_per_step:
-        acc += n
-        cum.append(acc)
-    out = []
-    ctr = 0
-    while len(out) < k:
-        d = _h.sha256(b"verity/cmt-integ/challenge/v0" + run_root + salt + ctr.to_bytes(8, "big")).digest()
-        ctr += 1
-        for i in range(0, 32, 8):
-            g = int.from_bytes(d[i:i + 8], "big") % total
-            s = next(j for j, c in enumerate(cum) if g < c)
-            out.append((s, g - (cum[s - 1] if s else 0)))
-            if len(out) >= k:
-                break
-    return out
-
 
 DECLARATION_SCHEMA = "verity/commit-integ/coverage-declaration/v1"
 

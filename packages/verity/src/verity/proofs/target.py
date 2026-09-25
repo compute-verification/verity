@@ -8,7 +8,7 @@ silent change to the semantics, the family manifest or the program shape fails t
 The function
 ============
 
-``GemmCoordinate<K>`` in the gate family ``veritor.tc-ampere-bf16@1`` (:func:`verity.verification.programs.gemm_coordinate`):
+``GemmCoordinate<K>`` in the gate family ``veritor.tc-ampere-bf16@1`` (:func:`verity.proofs.programs.gemm_coordinate`):
 one output coordinate ``y[j]`` of a BF16 GEMM, ``K`` a positive multiple of 16.
 
 * **Sources.** ``2K`` incoming 16-bit BF16 words: ``x[0..K]`` (the activation row) then ``W[j, 0..K]`` (one weight
@@ -38,7 +38,7 @@ one output coordinate ``y[j]`` of a BF16 GEMM, ``K`` a positive multiple of 16.
   exponent instead and is not the reference there.
 * **Statement and binding.** An obligation is a ``typed-obligation/v0`` object (``statement_format = 2``) whose
   family digest is :data:`FAMILY_DIGEST`; boundary words are authenticated as packed words against the object's
-  Merkle roots (``verity.verification.packed``, ``verity.commitments.leaves``).  The guest's public values are
+  Merkle roots (``verity.proofs.packed``, ``verity.commitments.leaves``).  The guest's public values are
   ``h_O || h_L || verdict`` and are accepted only under the approved verifying key (``verity_sp1.host.APPROVED``).
 
 Transition unit versus verification unit
@@ -106,7 +106,7 @@ much hardware stands behind the model the target computes with.
 
 * :data:`FP8_HOPPER_WGMMA` -- ``sm90.wgmma.m64n8k32.e4m3`` (pinned: veritor H100, 144,543,744 words), model
   :data:`verity.ml.tc.models.HOPPER_E4M3_K32` (one group of 32, 14-bit truncating adder, floor -139).  Program
-  ``GemmAccumulator<K>`` (:func:`verity.verification.programs.gemm_accumulator_fp8`), ``K`` a multiple of 32:
+  ``GemmAccumulator<K>`` (:func:`verity.proofs.programs.gemm_accumulator_fp8`), ``K`` a multiple of 32:
   ``tc_dot32_0`` then ``K/32 - 1`` chained ``tc_dot32`` in ascending ``k``, the FP32 accumulator word **public**
   (the bare dot).  Domain: finite E4M3 operands (every byte but ``0x7F``/``0xFF``; 448 is finite) and finite FP32
   accumulators at every step.  The scale-and-``cvt.rn.satfinite.e4m3x2`` epilogue of a production FP8 GEMM is a
@@ -115,7 +115,7 @@ much hardware stands behind the model the target computes with.
 * :data:`FP8_ADA_MMA` -- ``sm89.mma.m16n8k32.e4m3`` (pinned: veritor RTX 4090, 24,898,304 elements), model
   :data:`verity.ml.tc.models.ADA_E4M3_M16N8K32` (two groups of 16, the same 14-bit adder and floor).  Same program,
   same domain, same absent epilogue; a different grouping and so a different function.
-* The families are the cast-free ``veritor.tensor-core.<pipeline>@2`` sets of :func:`verity.verification.families.make_tensor_core_gate_set`
+* The families are the cast-free ``veritor.tensor-core.<pipeline>@2`` sets of :func:`verity.proofs.families.make_tensor_core_gate_set`
   (``tc_dot32`` / ``tc_dot32_0`` with 8-bit operand arguments); their digests are recorded here but **no guest is
   bound to them** and no ``typed-obligation/v0`` lowering has been produced -- the reference vectors are model
   replays (``fixtures/tc/vectors/``, schema ``verity/tc-reference-vector/v0``), not authenticated obligations.
@@ -124,13 +124,13 @@ much hardware stands behind the model the target computes with.
   :data:`verity.ml.tc.models.HOPPER_BF16_M16N8K16` (one group of 16, the 26-bit adder, floor -133; exact BF16
   products).  FIRST's program and epilogue -- ``GemmCoordinate<K>`` with ``f32_to_bf16`` -- so the Hopper row of the
   table is the same function as the Ampere row up to the step; the family is
-  ``veritor.tc-bf16.hopper_bf16_m16n8k16@1`` (:func:`verity.verification.families.make_tc_bf16_gate_set`), FIRST's
+  ``veritor.tc-bf16.hopper_bf16_m16n8k16@1`` (:func:`verity.proofs.families.make_tc_bf16_gate_set`), FIRST's
   vocabulary with the steps on the Hopper pipeline.  Native peak: the H100 SXM5 dense BF16 rate (989.4 TFLOPS).
 * :data:`NVFP4_SM120` -- ``sm120.mma.m16n8k64.e2m1.nvf4`` (pinned: RTX 5090, lanes fp4-re / fp4-proof), model
   :data:`verity.ml.tc.models.BLACKWELL_SM120_NVF4` (``BlockScaledAlignAdd``: exact E2M1 x E2M1 group dots over four
   groups of 16, one UE4M3 scale byte per 16-element block on A and on B, the five-way align-add anchored on the leading
   participating group's scale exponent (27 fraction bits), the accumulator's 36-bit window, truncation toward zero,
-  every zero result +0).  Program ``GemmAccumulator<K>`` (:func:`verity.verification.programs.gemm_accumulator_nvfp4`),
+  every zero result +0).  Program ``GemmAccumulator<K>`` (:func:`verity.proofs.programs.gemm_accumulator_nvfp4`),
   ``K`` a multiple of 64 (K = 1536 is 24 steps = 96 blocks): ``tc_dot64_0`` then chained ``tc_dot64`` in ascending
   ``k``, the FP32 accumulator word public.  Domain: every E2M1 nibble, UE4M3 scale bytes with the padding bit clear
   and not the NaN code ``0x7F``, finite FP32 accumulators at every step (D20: NaN / inf accumulators and sums leaving
@@ -258,7 +258,7 @@ class Target:
     native_peak: NativePeak
     status: Status = "frozen"
     instruction: str | None = None
-    #: The ``trust-dossier/v1`` artifact id whose computed trust level this target cites (``verity.verification.trust``).
+    #: The ``trust-dossier/v1`` artifact id whose computed trust level this target cites (``verity.proofs.trust``).
     dossier: str | None = None
 
 

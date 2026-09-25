@@ -368,7 +368,7 @@ def main(args: Options) -> int:
     from verity_vllm.check.verdict import REQUIRED_CLASSES_DEFAULT, commit_verdict
     from verity_vllm.pipeline.tp.capture import parse_engine_args
     from verity_vllm.engine.rank_worker import EXTENSION
-    from verity_vllm.acquire.committer_api import challenge_positions
+    from verity_vllm.commit.challenge import challenge_positions
 
     if args.world is not None:
         args.tp = int(args.world)

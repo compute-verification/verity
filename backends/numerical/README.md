@@ -1,6 +1,6 @@
 # backends/numerical
 
-Campaign-side numerical work for `verity.verification.target.FIRST` (rules: `backends/AGENTS.md`). `verity_numerical.reference`
+Campaign-side numerical work for `verity.proofs.target.FIRST` (rules: `backends/AGENTS.md`). `verity_numerical.reference`
 is lane WP1 (independent numerical references); `verity_numerical.checker` is lane WP2.
 
 ## WP1: independence audit of the existing columns
@@ -121,7 +121,7 @@ What changed (`python/verity_numerical/checker/`):
   significand to the adder width, placed before `AlignState` on lossy paths only. `Normalise` produces a `width`-bit magnitude
   and scales it back up exactly (`norm_up`) where the truncation no longer folds into one floor division. `Bf16Decode` (alias
   `OperandDecode`) admits the E4M3 NaN rule through one extra range check; the accumulator gadgets read the `acc_*` widths.
-  No new *family* in `verity.verification.families` was needed: the cast-free `veritor.tensor-core.<pipeline>@2` sets already
+  No new *family* in `verity.proofs.families` was needed: the cast-free `veritor.tensor-core.<pipeline>@2` sets already
   describe the FP8 pipelines' `tc_dot32` / `tc_dot32_0`; the rescale is a gadget of the checker's decomposition of that step.
 - `reference.py`, `step.py`, `search.py`: use the split formats; `gen_step` / `check_step_expr` route lossy paths through
   `RescaleState`. `z3_group_step` and the `v2` arithmetisation remain BF16-only and raise `Reject` / `ValueError` when asked
@@ -131,6 +131,6 @@ What changed (`python/verity_numerical/checker/`):
   the zero-product truncation of D10, the E4M3 NaN words, rescale-hint mutations rejected, the E5M2 hypotheses through the same
   `Params`, and an exhaustive slice of `TOY_LOSSY`.
 
-The FP8 drafts these serve are `verity.verification.target.FP8_HOPPER_WGMMA` / `FP8_ADA_MMA` (`status="draft"`, no guest bound);
+The FP8 drafts these serve are `verity.proofs.target.FP8_HOPPER_WGMMA` / `FP8_ADA_MMA` (`status="draft"`, no guest bound);
 their instructions and evidence are in `verity.ml.tc.instructions`, the replicas in `fixtures/tc/`, the open hardware questions
 in `fixtures/discrepancy_log.json` D13-D15.

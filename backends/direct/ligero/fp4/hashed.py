@@ -32,7 +32,7 @@ import hashlib
 
 import numpy as np
 
-from verity.verification.target import NVFP4_SM120
+from verity.proofs.target import NVFP4_SM120
 from verity_numerical.bench import contract
 
 from .. import poseidon2 as h2

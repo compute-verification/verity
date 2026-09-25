@@ -101,7 +101,7 @@ and the embedding shard layout (`embedding_shard.py`).
 above would import.
 
 The stdlib-only core of `verity_ir` (`types refs defs program layout evaluate query codec parts query_codec`, `gateset`
-as `query_ast`, `plan`) is `verity.ir` / `verity.verification.plan` in `packages/verity`; the on-demand primitive families
+as `query_ast`, `plan`) is `verity.ir` / `verity.proofs.plan` in `packages/verity`; the on-demand primitive families
 veritor hardcoded in `codec.py` are registered by `verity_vllm/program/registry/__init__.py` through `verity.ir.codec.register_lazy_family`.
 
 ## Vocabulary (frozen; Notion "vLLM integration v2 — Draft 3" §12)

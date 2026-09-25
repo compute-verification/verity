@@ -7,7 +7,6 @@
     {"file": "verity_vllm/check/replay/replay.py", "kind": "rng", "symbol": "tier_chain", "detail": "random.Random"},
     {"file": "verity_vllm/check/replay/sampled_replay.py", "kind": "if-ladder", "symbol": "evaluate", "detail": "family"},
     {"file": "verity_vllm/check/replay/sampled_replay.py", "kind": "if-ladder", "symbol": "moe_plane_kind", "detail": "family"},
-    {"file": "verity_vllm/check/replay/sampled_replay.py", "kind": "rng", "symbol": "sample", "detail": "random.Random"},
     {"file": "verity_vllm/check/replay/stoch_recompute.py", "kind": "rng", "symbol": "recompute_run", "detail": "random.Random"},
     {"file": "verity_vllm/check/replay/vu_query.py", "kind": "rng", "symbol": "production_sample", "detail": "random.Random"},
     {"file": "verity_vllm/commit/committer/hidden_gpu_src/hidden_gpu.py", "kind": "rng", "symbol": "cmd_check", "detail": "numpy.random.default_rng", "count": 2},

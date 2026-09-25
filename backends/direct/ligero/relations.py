@@ -30,7 +30,7 @@ from typing import Callable
 import numpy as np
 from verity.ml.tc.cast import f32_to_bf16_word
 from verity.ml.tc.models import ADA_E4M3_M16N8K32, AMPERE_BF16_M16N8K16, HOPPER_BF16_M16N8K16, HOPPER_E4M3_K32, GroupSum
-from verity.verification.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, Target
+from verity.proofs.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, Target
 from verity_numerical.bench import contract
 from verity_numerical.checker.params import Params
 

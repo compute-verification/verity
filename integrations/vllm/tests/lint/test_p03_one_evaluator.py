@@ -9,8 +9,8 @@ Checked today, against ``allowlists/p03_one_evaluator.json``:
 * ``rng``: constructing a random generator (``random.Random``, ``random.SystemRandom``, numpy's ``default_rng``,
   ``RandomState``, ``Generator``, ``torch.Generator``): challenge randomness comes from the one challenge module.
 
-``program/kernels/`` is exempt from ``if-ladder``.  There is no challenge module yet, so every ``rng`` site is a
-violation today; once it exists, add it to ``RNG_OWNERS``.  The rule's parametrized self-check (every registered
+``program/kernels/`` is exempt from ``if-ladder``.  The one challenge module, ``commit/challenge.py``, is the
+``RNG_OWNERS`` entry: its legacy replay sample keeps ``random.Random`` until the re-baseline epoch.  The rule's parametrized self-check (every registered
 (backend, Definition) pair against the core reference on seeded random inputs) needs ``program/kernels/`` and is not a
 lint.
 """
@@ -27,7 +27,7 @@ RULE = "P3 (one evaluator interface, one challenge derivation)"
 LADDER_MIN = 4
 LADDER_HOMES = ("verity_vllm/program/kernels/",)
 FAMILY = re.compile(r"^[A-Z][A-Za-z0-9]*(?:_v[0-9]+)?$")
-RNG_OWNERS: frozenset[str] = frozenset()
+RNG_OWNERS: frozenset[str] = frozenset({"verity_vllm/commit/challenge.py"})
 RNG_CALLS = frozenset({"random.Random", "random.SystemRandom", "numpy.random.default_rng", "numpy.random.RandomState",
                        "numpy.random.Generator", "torch.Generator"})
 

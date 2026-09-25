@@ -1,7 +1,7 @@
 """What authenticating the boundary values against Verity's leaf-Merkle roots costs Candidates A and B.
 
 A relation-only proof (``authentication = excluded``, both PROTOCOL.md files) is not a Verity proof: the batch's
-``x``, ``W[j,:]`` and ``y`` must be bound to the object's roots (``verity.verification.target``: "boundary words are
+``x``, ``W[j,:]`` and ``y`` must be bound to the object's roots (``verity.proofs.target``: "boundary words are
 authenticated as packed words against the object's Merkle roots").  This module reads the real K=1536 obligation
 (``fixtures/typed-obligation-v0/stage2--qkv-proj-decode-0-k1536.json``) for the leaf structure -- nothing about
 leaf sizes, tree depths or hash framing is hard-coded -- and costs four ways of paying for that binding.
@@ -10,7 +10,7 @@ What is authenticated per instance (read from the fixture by :func:`read_opening
 ====================================================================================
 
 Three whole-tensor leaves under the ``verity-vllm/leaf/v1`` scheme (``verity.commitments.leaves``), opened as packed
-leaves (``verity.verification.packed``): the checker hashes the *whole* leaf and reads words at statement-fixed
+leaves (``verity.proofs.packed``): the checker hashes the *whole* leaf and reads words at statement-fixed
 indices; range openings do not exist yet (``leaves.py`` docstring).
 
 * ``x``: the activation row, one leaf of the runtime tree (``ru/<session>``, 368 leaves, depth 9), layout
@@ -29,7 +29,7 @@ coordinate ``j``), so leaf hashing amortises across the batch by the sharing str
 What is private (the reading this module costs first, and the alternative)
 ==========================================================================
 
-*Reading P (protocol as written).*  The opened values are the prover's private input: ``verity.verification.wire``
+*Reading P (protocol as written).*  The opened values are the prover's private input: ``verity.proofs.wire``
 calls the witness "the guest's private input"; the SP1 guest commits only ``h_O || h_L || verdict`` (65 bytes,
 ``binding.BOUND_PUBLIC_VALUES_LEN``), so the verifier sees the roots (through ``O``) and the verdict, never ``x``,
 ``W`` or ``y``.  Both candidate protocols say so outright: Candidate A section 1 marks the per-unit words
@@ -38,7 +38,7 @@ beyond what ``O`` states (leaf identities, ranks, layouts, roots are public in `
 committed material as well: disclosing them to the verifier is a hiding assumption on SHA-256 beyond the collision
 resistance the protocols assume (section 7 of both), recorded on the options that do it.
 
-*Reading C (values in the clear).*  ``verity.verification.transparent`` and ``packed.check_packed_openings`` are
+*Reading C (values in the clear).*  ``verity.proofs.transparent`` and ``packed.check_packed_openings`` are
 reference checkers that see the openings in the clear and are declared "not zero-knowledge; it is the reference".
 Nothing in ``verity.commitments`` forbids handing the opened leaves to a verifier; a backend that does so is a
 ``NON_ZK_PROOF`` at best under ``backends/AGENTS.md``'s labels.  Option (b) is costed under this reading and marked
@@ -98,7 +98,7 @@ from verity.commitments.leaves import (
     NODE_TAG,
     path_shape,
 )
-from verity.verification.packed import decode_packed_witness
+from verity.proofs.packed import decode_packed_witness
 
 from verity_numerical.security import accounting
 from verity_numerical.security.census import census_vu
@@ -147,13 +147,13 @@ CITATIONS: dict[str, str] = {
     "poseidon2_r1cs": "faulhornlabs/hash-circuits: Poseidon2 (t=3, BN254) two-to-one compression ~240 nonlinear R1CS constraints (order-of-magnitude cross-check).",
     "leaf_scheme": "packages/verity/src/verity/commitments/leaves.py: H(tag,*parts)=sha256(u32be(len tag)||tag||(u64be(len part)||part)*); "
                    "leaf=(id,dtype,shape,value); node/lift; DIGEST_BYTES=32; path_shape/tree_depth.",
-    "packed": "packages/verity/src/verity/verification/packed.py: 'the guest authenticates the whole packed leaf against the committed root, then reads the "
+    "packed": "packages/verity/src/verity/proofs/packed.py: 'the guest authenticates the whole packed leaf against the committed root, then reads the "
               "word at the statement-fixed index'; 'a leaf is hashed once however many positions read words of it'; canonical_id/dtype/shape are the prover's to supply.",
-    "privacy_witness": "packages/verity/src/verity/verification/wire.py:465 'The canonical bytes of a witness (the guest's private input)'; "
+    "privacy_witness": "packages/verity/src/verity/proofs/wire.py:465 'The canonical bytes of a witness (the guest's private input)'; "
                        "binding.py: public values = h_O || h_L || verdict (65 bytes), nothing else.",
     "privacy_protocol": "backends/gkr/PROTOCOL.md section 1: x_u (per-unit words, hints, row columns) public? **no**; section 7: only collision resistance "
                         "of H is assumed for soundness, hiding beyond CRH is an extra assumption; backends/direct/PROTOCOL.md sections 1, 7, 8 likewise.",
-    "privacy_reference": "packages/verity/src/verity/verification/transparent.py:10: the reference checker is 'not zero-knowledge; it is the reference every other "
+    "privacy_reference": "packages/verity/src/verity/proofs/transparent.py:10: the reference checker is 'not zero-knowledge; it is the reference every other "
                          "backend must agree with' -- it sees openings in the clear.",
     "readme_commitments": "README.md 'Commitments': verity.commitments owns application-level layouts, roots, openings; proof-system-internal commitments "
                           "are the backend's.  Changing the leaf hash is a verity.commitments (protocol) change.",

@@ -6,7 +6,7 @@ Reads ``bench-result/v1``, ``native-peak/v1`` and ``instance-equiv/v1`` artifact
 store (``research.store.LocalStore``), applies the frozen validity predicate (:func:`reject_reasons`) and renders:
 
 * **Table 1** -- the candidate proof systems (:data:`CANDIDATES`): definitional, no performance, no status;
-* **Table 2** -- headline proving overhead by target: one row per ``verity.verification.target.TARGETS`` entry, one
+* **Table 2** -- headline proving overhead by target: one row per ``verity.proofs.target.TARGETS`` entry, one
   column per candidate; a cell is the *best valid* implementation of that candidate (min ``t.total``) run on the row's
   native device SKU, printed as ``R_native_spec / R_proved`` with ``R_proved = 2KB / t.total``;
 * **Table 3** -- the prover phase decomposition of every populated Table 2 cell (the six buckets, joints, ``Other``).
@@ -30,7 +30,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from verity.ml.tc.instructions import INSTRUCTIONS
-from verity.verification.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, NVFP4_SM120, TARGETS, Target
+from verity.proofs.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, NVFP4_SM120, TARGETS, Target
 from verity_numerical.bench import contract
 
 try:  # the label keys are pinned with the store (`research.store.vocab`, tools/research); verity-numerical does not depend on that package
@@ -994,7 +994,7 @@ def build(store: Any) -> Tables:
                  "backend": backend, "profile": fp.get("profile"), "proof_class": fp.get("proof_class")}
         if target is None:
             problems = contract.validate(meta)
-            T.rejected.append({**entry, "reasons": [f"profile {fp.get('profile')!r} is not a target of verity.verification.target"]
+            T.rejected.append({**entry, "reasons": [f"profile {fp.get('profile')!r} is not a target of verity.proofs.target"]
                                + ([_contract_reason(problems)] if problems else [])})
             continue
         labels = store.labels(art_id)

@@ -31,6 +31,7 @@ import json
 from collections import Counter
 from typing import Any, Iterable, Iterator
 
+from verity_vllm.commit import challenge as CH
 from verity_vllm.query.manifest.format import PROMOTED_DTYPE_BYTES  # noqa: F401  -- re-exported (R19 int-20)
 from verity_vllm.query.manifest.format import PROMOTED_OBSERVATION_RULE as PROMOTED_INPUT_RULE  # noqa: F401  -- re-exported
 from verity_vllm.query.manifest.format import promoted_observation as promoted_input_acquisition  # noqa: F401  -- re-exported
@@ -674,9 +675,11 @@ def composition_check(man_hdr: dict[str, Any], bmap: dict[str, Any], *, max_repo
 # ---------------------------------------------------------------------- sampling from the expected population
 
 def challenge_identities(population: Iterable[tuple], bmap: dict[str, Any], run_root: bytes, k: int, *, salt: bytes = b"",
-                         forced_late_step: bool = True) -> list[tuple[tuple, dict[str, Any], int]]:
-    """Draw `k` identities from the EXPECTED population (not from the leaves that exist), Fiat-Shamir from (run_root, map digest, salt);
-    map each to one committed leaf of its binding (a leaf chosen by the same hash inside the entry's leaf range).  Forced picks: the
+                         forced_late_step: bool = True, legacy: bool = CH.LEGACY,
+                         source: bytes | None = None) -> list[tuple[tuple, dict[str, Any], int]]:
+    """Draw `k` identities from the EXPECTED population (not from the leaves that exist) with `challenge.identity_picker` over
+    (run_root, map digest, salt); map each to one committed leaf of its binding (a leaf chosen by the same picker inside the entry's
+    leaf range).  Forced picks: the
     last step and one identity of every op class family present.  Returns [(identity, entry, leaf_index)]; an identity WITHOUT a
     binding is returned with entry None (the opening then fails -- coverage and openings are both fail-closed)."""
     pop = sorted(p for p in set(population) if p[2] >= 0)      # leaf-bound identities only (registered inputs open by digest, not by leaf)
@@ -684,10 +687,7 @@ def challenge_identities(population: Iterable[tuple], bmap: dict[str, Any], run_
         return []
     idx = {kk: [e for e in es if e.get("kind") == "leaf"] for kk, es in map_index(bmap).items()}
     idx = {kk: es for kk, es in idx.items() if es}
-    seed = hashlib.sha256(run_root + bytes.fromhex(bmap["digest"]) + salt).digest()
-
-    def pick(i: int, n: int) -> int:
-        return int.from_bytes(hashlib.sha256(seed + i.to_bytes(4, "big")).digest()[:8], "big") % n
+    pick = CH.identity_picker(run_root, bmap["digest"], salt, legacy=legacy, source=source)
 
     chosen: list[tuple] = [pop[pick(i, len(pop))] for i in range(k)]
     if forced_late_step:

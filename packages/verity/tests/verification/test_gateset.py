@@ -1,9 +1,9 @@
 import pytest
 
 from verity.errors import InvalidArtifact
-from verity.verification.gateset import (Gate, GateSet, decode_value, encode_value, make_isa_gate_set, make_word_gate_set,
+from verity.proofs.gateset import (Gate, GateSet, decode_value, encode_value, make_isa_gate_set, make_word_gate_set,
                                          namespaced, union_gate_set)
-from verity.verification.int8 import make_int8_q7_gate_set
+from verity.proofs.int8 import make_int8_q7_gate_set
 
 
 def test_word_gate_set_declares_add_and_mul_with_costs():

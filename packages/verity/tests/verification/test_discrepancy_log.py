@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 
 from verity.ml.tc.instructions import INSTRUCTIONS
-from verity.verification.target import DISCREPANCY_LOG, FIRST, HAWKEYE_PIN, TARGETS
+from verity.proofs.target import DISCREPANCY_LOG, FIRST, HAWKEYE_PIN, TARGETS
 
 ROOT = Path(__file__).resolve().parents[4]
 REQUIRED = ("id", "profile", "class", "issue", "hawkeye_paper", "hawkeye_simulator", "verity_reference",

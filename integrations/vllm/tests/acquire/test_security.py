@@ -17,7 +17,7 @@ import random
 
 import pytest
 
-from verity_vllm.acquire.committer_api import challenge_positions
+from verity_vllm.commit.challenge import challenge_positions
 from tests.acquire.schemes import SCHEMES
 
 CTX = b"ctx/request-A/step-3"

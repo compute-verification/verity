@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 
-from verity.verification.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, TARGETS
+from verity.proofs.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, TARGETS
 from verity_numerical.bench import contract
 from verity_numerical.bench import tables as T
 
@@ -656,7 +656,7 @@ def test_native_measured_column(store: LocalStore) -> None:
 def test_native_measured_block_scaled_format_names_its_operand_dtype(store: LocalStore) -> None:
     """``tools/native_peak --dtype nvfp4`` measures the sm_120 block-scaled instruction on E2M1 operands: it is the measured
     peak of the ``e2m1`` NVFP4 target (``NATIVE_DTYPE_ALIASES``), and of no other row."""
-    from verity.verification.target import NVFP4_SM120
+    from verity.proofs.target import NVFP4_SM120
 
     spec = NVFP4_SM120.native_peak.flop_per_second
     assert T.dtype_of(NVFP4_SM120) == "e2m1" and T.native_dtype({"dtype": "nvfp4"}) == "e2m1" and T.native_dtype({"dtype": "bf16"}) == "bf16"
@@ -673,7 +673,7 @@ def test_native_measured_prefers_the_gemm_over_an_instruction_microbenchmark(sto
     sustained clock above the rated boost) and cuBLASLt's block-scaled GEMM (1283 T).  The column is one methodology across
     rows -- the vendor-library GEMM -- so it takes the GEMM even though the microbenchmark is faster; the microbenchmark is
     the cell only when no GEMM exists, and its footnote says so."""
-    from verity.verification.target import NVFP4_SM120
+    from verity.proofs.target import NVFP4_SM120
 
     spec = NVFP4_SM120.native_peak.flop_per_second
     method = ("instruction microbenchmark: mma.sync.aligned.kind::mxf4nvf4 issued back to back from 2720 warps; "

@@ -102,6 +102,7 @@ __all__ = [
     "commitment_position",
     "from_statement",
     "lower",
+    "lower_subcircuit",
     "lower_v3",
     "lowering_json",
     "lowering_v3_json",
@@ -788,3 +789,39 @@ def check_relations(
                 return False
             produced.append(claimed[j])
     return True
+
+
+def lower_subcircuit(sub: Any) -> dict:
+    """Lowering adapter: a supported IR subcircuit (``verity.ir.layout.Subcircuit``) -> the legacy backend's local
+    straight-line program (the `typed-obligation/v0` lowering section). Semantics: gates read `port k` (k-th
+    distinct boundary-in value, ascending producing-gate index) or `local i` (i-th gate of the subcircuit in
+    canonical order); `outputs` are the local indices of the subcircuit's `out` boundary. An `Input` gate inside the subcircuit lowers to a `port` whose expected
+    value is the prescribed input (the sampled `Input[k]` obligation: authenticated supplied value == x[k])."""
+    gates = list(sub)
+    index_of = {g.index: i for i, g in enumerate(gates)}
+    ports = list(sub.in_)
+    port_of = {g: k for k, g in enumerate(ports)}
+    lowered_gates = []
+    input_ports = []
+    for i, g in enumerate(gates):
+        if getattr(g.prim, "family", None) == "Input":
+            # prescribed-input equation: the backend authenticates a supplied value and pins it to x[k]
+            input_ports.append({"local": i, "gate": g.index, "expected": "prescribed x[k]", "width": g.prim.ret.w})
+            lowered_gates.append({"kind": g.prim.id, "operands": [], "width": g.prim.ret.w, "input_equation": True})
+            continue
+        ops = []
+        for o in g.operands:
+            if o in index_of:
+                ops.append({"local": index_of[o]})
+            else:
+                ops.append({"port": port_of[o]})
+        lowered_gates.append({"kind": g.prim.id, "operands": ops, "width": g.prim.ret.w})
+    return {
+        "schema": "typed-obligation/v0/lowering",
+        "KindProgram": {
+            "ports": [{"port": k, "gate": g, "width": None} for k, g in enumerate(ports)],
+            "gates": lowered_gates,
+            "outputs": [index_of[o] for o in sub.out],
+            "input_equations": input_ports,
+        },
+    }

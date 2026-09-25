@@ -1,6 +1,6 @@
 """Trust: when we trust a silicon circuit.  Computed from evidence, never asserted.
 
-A *subject* is one exact tensor-core relation on one architecture: a :class:`~verity.verification.target.Target` (its
+A *subject* is one exact tensor-core relation on one architecture: a :class:`~verity.proofs.target.Target` (its
 ``instruction`` and ``pipeline`` model) or, for instructions no target wraps yet, a registry
 :class:`~verity.ml.tc.instructions.Instruction` with its model.  Its trust **level** is the highest of
 
@@ -34,7 +34,7 @@ Label contract (the exact keys this module reads; producers write them, nobody n
     any                trust_downgrade=<trigger id>  /  trust_downgrade=resolved:<D-id>                              (invalidation)
     trust-dossier/v1   target=<subject>  instruction=<id>  level=<LEVEL>  anchor=<family>                          (written by --publish)
 
-Dossier: ``python -m verity.verification.trust <target|instruction|--all> [--root STORE] [--format md|json] [--publish]``.
+Dossier: ``python -m verity.proofs.trust <target|instruction|--all> [--root STORE] [--format md|json] [--publish]``.
 """
 from __future__ import annotations
 
@@ -53,8 +53,8 @@ from typing import Any, Iterable
 from verity.ml.tc import models as _models
 from verity.ml.tc.instructions import INSTRUCTIONS, Instruction
 from verity.ml.tc.models import Model
-from verity.verification import target as _target
-from verity.verification.target import TARGETS, Target
+from verity.proofs import target as _target
+from verity.proofs.target import TARGETS, Target
 
 __all__ = [
     "ANCHOR_SKU", "CANONICAL_FAMILIES", "Criterion", "DOSSIER_KIND", "EvidenceRef", "HONEST_MIN", "INDEPENDENT_REFERENCES",
@@ -77,7 +77,7 @@ class Level(IntEnum):
 def registry_level(status: str | None) -> Level:
     """The ladder level a registry ``Instruction.status`` asserts (``pinned`` -> PINNED, ``hypothesis`` -> HYPOTHESIS, ``unprobed`` ->
     UNPROBED).  The registry may never sit above the computed level (TRUSTED and above are computed only): ``python -m
-    verity.verification.trust --all --publish`` reports every instruction whose status exceeds its level, and the registry is
+    verity.proofs.trust --all --publish`` reports every instruction whose status exceeds its level, and the registry is
     downgraded citing the dossier."""
     if status is None:
         return Level.UNPROBED
@@ -1673,7 +1673,7 @@ def _open_store(root: str | None, store_class: str = DEFAULT_STORE_CLASS):
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="python -m verity.verification.trust", description=__doc__.split("\n\n")[0])
+    ap = argparse.ArgumentParser(prog="python -m verity.proofs.trust", description=__doc__.split("\n\n")[0])
     ap.add_argument("target", nargs="*", help="target name, target constant (FIRST) or instruction id; or --all")
     ap.add_argument("--all", action="store_true", help="every Target plus every modelled registry instruction")
     ap.add_argument("--root", default=None, help="store root (default: the store class's default, ~/.research/store)")

@@ -1,4 +1,4 @@
-"""The FP8 draft targets (``verity.verification.target.FP8_HOPPER_WGMMA`` / ``FP8_ADA_MMA``) and their pinned vectors.
+"""The FP8 draft targets (``verity.proofs.target.FP8_HOPPER_WGMMA`` / ``FP8_ADA_MMA``) and their pinned vectors.
 
 A draft target is a relation stated precisely enough to generate vectors against; these tests pin each clause of the
 statement to the code that implements it (the model, the program builder, the family) and replay the recorded
@@ -17,9 +17,9 @@ import pytest
 from verity.ml.tc.errors import InvalidArtifact
 from verity.ml.tc.instructions import INSTRUCTIONS
 from verity.ml.tc.models import ADA_E4M3_M16N8K32, HOPPER_E4M3_K32
-from verity.verification.families import make_tensor_core_gate_set
-from verity.verification.programs import gemm_accumulator_fp8
-from verity.verification.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, TARGETS, TC_VECTORS, Target
+from verity.proofs.families import make_tensor_core_gate_set
+from verity.proofs.programs import gemm_accumulator_fp8
+from verity.proofs.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, TARGETS, TC_VECTORS, Target
 
 ROOT = Path(__file__).resolve().parents[4]
 DRAFTS = (FP8_HOPPER_WGMMA, FP8_ADA_MMA)

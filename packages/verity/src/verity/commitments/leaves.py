@@ -3,7 +3,7 @@
 This is the Verity protocol's application-level commitment to runtime values (README "Commitments"): a
 *leaf* is one whole tensor row or tensor -- ``(canonical_id, dtype, shape, raw little-endian bytes)`` -- and a
 *tree* commits a set of leaves in code-point order of their ids.  A verification obligation then names words
-*inside* a leaf (``packed/v1:verity-vllm/leaf/v1:u16le:<count>:<index>``, :mod:`verity.verification.schema`),
+*inside* a leaf (``packed/v1:verity-vllm/leaf/v1:u16le:<count>:<index>``, :mod:`verity.proofs.schema`),
 and a checker authenticates the whole leaf against the committed root before reading the word at the
 statement-fixed index.  The SP1 guest re-derives exactly this chain (``backends/sp1/common/src/packed.rs``).
 

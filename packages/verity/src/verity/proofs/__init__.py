@@ -1,6 +1,7 @@
-"""Backend-independent verification plans and obligations over Verity programs.
+"""verity.proofs: backend-independent single statements over Verity programs, and how a backend is judged on them.
 
-Two layers, both promoted from veritor (``interface/``, ``protocol/proofs/``) at eb865ce2:
+Formerly ``verity.verification`` (item 25).  Two layers, both promoted from veritor (``interface/``,
+``protocol/proofs/``) at eb865ce2:
 
 - ``typed_obligation`` is the ``typed-obligation/v0`` interface object: family, types, references, roots,
   subcircuits, obligations -- the smallest backend-independent statement of "these exact relations over these
@@ -9,9 +10,11 @@ Two layers, both promoted from veritor (``interface/``, ``protocol/proofs/``) at
 - ``lowering`` maps the interface object onto the flat ``statement`` (obligations over positions in commitments,
   a ``programs`` table) that ``wire`` encodes and every backend consumes; ``transparent`` is the reference
   checker for that statement (the proof *is* the openings), ``schema``/``packed`` its witness formats.
+  ``lowering.lower_subcircuit`` is the IR-level adapter: one IR subcircuit -> its ``typed-obligation/v0/lowering``
+  section.
 
-``plan`` is the IR-level selection layer (verification plans, sampled gates, the lowering adapter);
-``conformance`` is the Python column of the cross-language vector suite in ``fixtures/typed-obligation-v0``.
+Verification plans and sampling are a protocol, ``protocols/sampled_proofs`` (decision 41).  ``conformance`` is the Python
+column of the cross-language vector suite in ``fixtures/typed-obligation-v0``.
 
 Import from the owning submodule.  This package depends on ``verity.ir``, ``verity.ml`` (for the pinned
 tensor-core family) and ``verity.commitments``; never on a backend.
