@@ -25,6 +25,12 @@ SRC = str(Path(remote.__file__).resolve().parents[1])
 LOCAL = ["sh", "-c"]                     # `ssh_run(LOCAL, argv)` runs the remote argv on this machine
 
 
+@pytest.fixture(autouse=True)
+def _stream_transport(monkeypatch):
+    """These tests are the archive stream's (truncation, digests, legacy trees); the git transport has test_remote_ship_git.py."""
+    monkeypatch.setenv(remote.SHIP_ENV, "stream")
+
+
 def _git(repo: Path, *args: str) -> str:
     return subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
 

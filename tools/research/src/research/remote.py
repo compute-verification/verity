@@ -549,6 +549,100 @@ def _write_ready(ssh: list[str], dest: str, doc: dict[str, Any]) -> None:
         raise SourceNotReady(f"could not write {dest}/{READY_FILE}: {r.stderr.decode(errors='replace')[-300:]}")
 
 
+SHIP_ENV = "RESEARCH_SHIP"                     # `stream` forces the archive stream (the pre-git transport)
+POD_GIT_REPO = "git/verity.git"                # <root>/git/verity.git: the machine's bare repository, fed by `git push`
+_RC_NO_GIT = 69                                # the machine has no git: the archive stream ships instead
+_RC_TREE = 76                                  # the pushed commit's tree on the machine is not the launcher's
+
+
+def _ext_escape(arg: str) -> str:
+    return arg.replace("%", "%%").replace(" ", "% ")
+
+
+def git_push_url(ssh: list[str], repo: str) -> str:
+    """A git `ext::` URL that runs `git receive-pack <repo>` through the very ssh argv the launcher already uses (its key, port,
+    known_hosts, timeouts): no credential, no second connection setup to maintain.  Needs `-c protocol.ext.allow=always`."""
+    return "ext::" + " ".join(_ext_escape(a) for a in ssh) + " " + _ext_escape(f"git receive-pack {shlex.quote(repo)}")
+
+
+def _stale_partials_sweep(root: str) -> str:
+    return (f"for d in {shlex.quote(root)}/src/*.partial-*; do [ -d \"$d\" ] && [ -z \"$(find \"$d\" -mmin -{STALE_PARTIAL_MIN} -print 2>/dev/null "
+            f"| head -1)\" ] && rm -rf \"$d\"; done; ")
+
+
+def _git_ship_script(root: str, repo: str, partial: str, sha: str) -> str:
+    """The machine side of a git ship: the pushed commit's tree must be the launcher's ($1), then `git archive` of it is extracted
+    (`tar -m`, extraction mtimes) into the partial directory and every extracted file's sha256 is listed back.  The partial removes
+    itself on any exit until the listing starts."""
+    q, g = shlex.quote(partial), shlex.quote(repo)
+    return (_stale_partials_sweep(root) +
+            f"trap 'rm -rf {q}' EXIT; trap 'exit 1' HUP INT TERM PIPE; set -e; "
+            f"t=$(git --git-dir={g} rev-parse --verify -q {sha}^{{tree}}) || exit {_RC_TREE}; [ \"$t\" = \"$1\" ] || exit {_RC_TREE}; "
+            f"mkdir -p {q}; git --git-dir={g} archive --format=tar {sha} > {q}/.archive.tar; "
+            f"sha256sum {q}/.archive.tar | cut -d' ' -f1; tar -xmf {q}/.archive.tar -C {q}; rm -f {q}/.archive.tar; "
+            f"trap - EXIT HUP INT TERM PIPE; cd {q} && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 -r sha256sum")
+
+
+def _ship_git(ssh: list[str], root: str, git_dir: Path, sha: str, tree: str | None, man: dict[str, Any], dest: str) -> tuple[str | None, str | None]:
+    """Ship commit `sha` as git objects: `git push` into <root>/git/verity.git over `ssh` (only the objects the machine lacks travel),
+    then extract and verify on the machine (tree hash, per-file sha256 against the launcher's archive manifest).  Returns
+    (partial dir ready to be marked, None) or (None, why the archive stream must ship instead).  Never raises for the transport:
+    every failure falls back, and nothing is marked READY by a failed git ship."""
+    repo = f"{root}/{POD_GIT_REPO}"
+    if not tree:
+        return None, "no tree hash for HEAD"
+    r = ssh_run(ssh, ["sh", "-c", f"command -v git >/dev/null 2>&1 || exit {_RC_NO_GIT}; mkdir -p {shlex.quote(str(Path(repo).parent))} && "
+                                  f"{{ [ -d {shlex.quote(repo)} ] || git init -q --bare {shlex.quote(repo)}; }}"], timeout=120)
+    if r.returncode == _RC_NO_GIT:
+        return None, "the machine has no git"
+    if r.returncode != 0:
+        return None, f"could not create {repo}: {r.stderr.decode(errors='replace')[-200:].strip()}"
+    try:
+        push = subprocess.run(["git", "-c", "protocol.ext.allow=always", "push", "-q", git_push_url(ssh, repo), f"{sha}:refs/research/src/{sha}"],
+                              cwd=git_dir, capture_output=True, text=True, timeout=ship_timeout(2 * man["size"]))
+    except subprocess.TimeoutExpired:
+        return None, "git push timed out"
+    if push.returncode != 0:
+        return None, f"git push failed: {push.stderr.strip()[-200:]}"
+    partial = f"{dest}.partial-{secrets.token_hex(4)}"
+    try:
+        r = ssh_run(ssh, ["sh", "-c", _git_ship_script(root, repo, partial, sha), "sh", tree], timeout=ship_timeout(man["size"]))
+    except subprocess.TimeoutExpired:
+        _rm_rf(ssh, partial)
+        return None, "extraction on the machine timed out"
+    if r.returncode != 0:
+        _rm_rf(ssh, partial)
+        why = "the pushed commit's tree is not the launcher's" if r.returncode == _RC_TREE else r.stderr.decode(errors="replace")[-200:].strip()
+        return None, f"extraction failed (rc {r.returncode}): {why}"
+    lines = r.stdout.decode(errors="replace").splitlines()
+    have = _sha_lines("\n".join(lines[1:]))
+    want = man["files"]
+    if have != want:
+        _rm_rf(ssh, partial)
+        bad = [f"missing {p}" for p in sorted(set(want) - set(have))] + [f"extra {p}" for p in sorted(set(have) - set(want))]
+        bad += [f"differs {p}" for p in sorted(set(want) & set(have)) if want[p] != have[p]]
+        return None, f"extracted tree does not match the archive manifest ({len(bad)}: {'; '.join(bad[:3])})"
+    man["pod_archive_sha256"] = lines[0].strip() if lines else None
+    return partial, None
+
+
+def _mark_ready(ssh: list[str], partial: str, dest: str, sha: str, doc: dict[str, Any]) -> dict[str, Any]:
+    """READY.json into the verified partial, one rename into place, the marker read back (step 3 of `ship_source`)."""
+    q = shlex.quote(partial)
+    _write_ready(ssh, partial, doc)
+    r = ssh_run(ssh, ["sh", "-c", f"if [ -e {shlex.quote(dest)} ]; then echo EXISTS; else mv {q} {shlex.quote(dest)} && echo MOVED; fi"])
+    outcome = r.stdout.decode(errors="replace").strip()
+    if r.returncode != 0 or outcome not in ("MOVED", "EXISTS"):
+        _rm_rf(ssh, partial)
+        raise SourceNotReady(f"could not move {partial} into place: {r.stderr.decode(errors='replace')[-300:]}")
+    if outcome == "EXISTS":                       # another launcher won the race: theirs stands if it is READY for this identity, ours goes
+        _rm_rf(ssh, partial)
+    state, have = _probe_source(ssh, dest)
+    if state != "ready" or have.get("identity") != sha:
+        raise SourceNotReady(f"{dest} appeared without a READY.json for {sha} (another writer?); refusing to execute from it")
+    return have
+
+
 def ship_source(ssh: list[str], root: str, git_dir: Path) -> tuple[str, str, dict[str, Any]]:
     """`git archive HEAD` of a clean checkout -> a VERIFIED <root>/src/<identity>/.  Returns (identity, remote dir, READY.json doc).
 
@@ -557,7 +651,12 @@ def ship_source(ssh: list[str], root: str, git_dir: Path) -> tuple[str, str, dic
          a directory without READY.json (legacy `.complete`, or an interrupted ship) -> per-file sha256 against the archive: identical
          -> adopted (READY.json written, `verified: legacy-sha256-per-file`); otherwise moved to <root>/src/.quarantine/<identity>-<nonce>/
          (kept for inspection, never executable by name) and shipped afresh;
-      2. ship into <root>/src/<identity>.partial-<nonce>/: the tar is staged as a file, sha256'd on the machine, extracted, and the
+      2. git first (`_ship_git`): `git push` of the commit into the machine's bare repo <root>/git/verity.git over the same ssh
+         (only the objects it lacks travel; no credential anywhere), then on the machine the commit's tree hash must be HEAD's,
+         `git archive` of it is extracted and every file's sha256 must equal the launcher's archive manifest (`verified:
+         git-push+tree+file-sha256`, `transport: git`).  A machine without git, or any failure of that path, prints one line and
+         falls through to the archive stream below; `RESEARCH_SHIP=stream` goes straight there;
+      2'. the archive stream into <root>/src/<identity>.partial-<nonce>/: the tar is staged as a file, sha256'd on the machine, extracted, and the
          extracted regular-file set listed back; the machine's archive sha256 must equal the launcher's and the file set must equal the
          archive's manifest.  The launcher streams it (`archive_manifest_git`, then `_archive_feed` through `ssh_stream`): its memory
          does not grow with the tree.  A short stream (a launcher killed mid-ship) makes the machine remove the partial itself;
@@ -591,6 +690,13 @@ def ship_source(ssh: list[str], root: str, git_dir: Path) -> tuple[str, str, dic
             raise SourceNotReady(f"{dest} is an unverified tree that does not match HEAD ({len(bad)} file(s): {'; '.join(bad[:3])}) and could not be moved aside: "
                                  f"{r.stderr.decode(errors='replace')[-300:]}")
         print(f"research: {dest} did not match the archive ({len(bad)} file(s): {'; '.join(bad[:3])}); moved to {quarantine}, shipping afresh", file=sys.stderr)
+    if os.environ.get(SHIP_ENV, "").strip().lower() != "stream":
+        gpartial, why = _ship_git(ssh, root, git_dir, sha, tree, man, dest)
+        if gpartial is not None:
+            doc = {**_ready_doc(sha, tree, man, "git-push+tree+file-sha256"), "transport": "git",
+                   "pod_archive_sha256": man.get("pod_archive_sha256")}
+            return sha, dest, _mark_ready(ssh, gpartial, dest, sha, doc)
+        print(f"research: git ship to {dest} not used ({why}); shipping the archive stream", file=sys.stderr)
     partial = f"{dest}.partial-{secrets.token_hex(4)}"
     q = shlex.quote(partial)
     # the archive is staged as a file and hashed AS RECEIVED; a digest that is not the launcher's exits 75 before anything is extracted
@@ -599,8 +705,7 @@ def ship_source(ssh: list[str], root: str, git_dir: Path) -> tuple[str, str, dic
     # `tar -m`: files get the extraction time, not the commit time `git archive` stamps.  Builds that share a target dir across
     # commits (Cargo's `/workspace/sp1-target`) judge freshness by mtime; with commit times an older commit shipped after a newer
     # build looks built, and runs the newer commit's binary.
-    script = (f"for d in {shlex.quote(root)}/src/*.partial-*; do [ -d \"$d\" ] && [ -z \"$(find \"$d\" -mmin -{STALE_PARTIAL_MIN} -print 2>/dev/null | head -1)\" ] "
-              f"&& rm -rf \"$d\"; done; "
+    script = (_stale_partials_sweep(root) +
               f"trap 'rm -rf {q}' EXIT; trap 'exit 1' HUP INT TERM PIPE; set -e; mkdir -p {q}; cat > {q}/.archive.tar; "
               f"got=$({{ sha256sum {q}/.archive.tar 2>/dev/null || shasum -a 256 {q}/.archive.tar; }} | cut -d' ' -f1); echo \"$got\"; "
               f"[ \"$got\" = \"$1\" ] || exit {_RC_DIGEST}; "
@@ -634,19 +739,8 @@ def ship_source(ssh: list[str], root: str, git_dir: Path) -> tuple[str, str, dic
         missing, extra = sorted(want_files - got_files), sorted(got_files - want_files)
         raise SourceNotReady(f"source tree manifest mismatch after extraction: {len(missing)} missing, {len(extra)} extra "
                              f"(e.g. {(missing or extra)[:3]}); nothing is READY")
-    doc = _ready_doc(sha, tree, man, "archive-sha256+file-manifest")
-    _write_ready(ssh, partial, doc)
-    r = ssh_run(ssh, ["sh", "-c", f"if [ -e {shlex.quote(dest)} ]; then echo EXISTS; else mv {q} {shlex.quote(dest)} && echo MOVED; fi"])
-    outcome = r.stdout.decode(errors="replace").strip()
-    if r.returncode != 0 or outcome not in ("MOVED", "EXISTS"):
-        _rm_rf(ssh, partial)
-        raise SourceNotReady(f"could not move {partial} into place: {r.stderr.decode(errors='replace')[-300:]}")
-    if outcome == "EXISTS":                       # another launcher won the race: theirs stands if it is READY for this identity, ours goes
-        _rm_rf(ssh, partial)
-    state, have = _probe_source(ssh, dest)
-    if state != "ready" or have.get("identity") != sha:
-        raise SourceNotReady(f"{dest} appeared without a READY.json for {sha} (another writer?); refusing to execute from it")
-    return sha, dest, have
+    doc = {**_ready_doc(sha, tree, man, "archive-sha256+file-manifest"), "transport": "stream"}
+    return sha, dest, _mark_ready(ssh, partial, dest, sha, doc)
 
 
 def stage_request(ssh: list[str], root: str, run_id: str, request: dict[str, Any], sends: list[Path]) -> str:
@@ -1012,7 +1106,8 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
                               "root": m["root"], "tool": tool_dir, "tool_identity": rec["tool_identity"] if rec["tool_checked"] else None,
                               "source_sha": tree_sha, "source_dir": src_dir,
                               "source_archive_sha256": ready.get("archive_sha256"), "source_files": ready.get("files"),
-                              "source_verified": ready.get("verified"), "launched_from": os.uname().nodename}}
+                              "source_verified": ready.get("verified"), "source_transport": ready.get("transport"),
+                              "launched_from": os.uname().nodename}}
         req_path = stage_request(ssh, m["root"], run_id, request, sends)
         rec.update(phase="launching", request=req_path, remote_run_dir=f"{m['root']}/runs/{run_id}", tool=tool_dir, source_sha=tree_sha,
                    source_archive_sha256=ready.get("archive_sha256"), rate_usd_per_hour=tgt["cost_per_hr"])
