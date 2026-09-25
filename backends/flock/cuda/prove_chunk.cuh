@@ -58,6 +58,41 @@ __global__ void chunk_delta_scatter(const uint32_t* __restrict__ pairs, int n, c
     atomicXor((unsigned long long*)&comb[c].hi, (unsigned long long)v.hi);
 }
 
+// Sparse extra claims: a coordinate of exactly 0 or 1 makes its eq factor an indicator, so a claim whose point fixes
+// f index bits is supported on len / 2^f packed words. idx(k) deposits k's bits into the free positions over `fixed`.
+struct SparseBits { int n_free; int free[48]; unsigned long long fixed; };
+
+__device__ __forceinline__ long long sparse_index(const SparseBits& s, long long k) {
+    unsigned long long i = s.fixed;
+    for (int t = 0; t < s.n_free; t++) i |= (unsigned long long)((k >> t) & 1) << s.free[t];
+    return (long long)i;
+}
+
+__global__ void chunk_sparse_gather(const F128* __restrict__ z, SparseBits s, long long n, F128* __restrict__ out) {
+    for (long long k = (long long)blockIdx.x * blockDim.x + threadIdx.x; k < n; k += (long long)gridDim.x * blockDim.x)
+        out[k] = z[sparse_index(s, k)];
+}
+
+__global__ void chunk_sparse_combine(const F128* __restrict__ e, const F128* __restrict__ weights, SparseBits s, long long n,
+                                     F128* __restrict__ combined) {
+    for (long long k = (long long)blockIdx.x * blockDim.x + threadIdx.x; k < n; k += (long long)gridDim.x * blockDim.x) {
+        long long i = sparse_index(s, k);
+        F128 acc = combined[i];
+        F128 v = e[k];
+        for (int half = 0; half < 2; half++) {
+            u64 bits = half ? v.hi : v.lo;
+            while (bits) {
+                int bit = __ffsll((long long)bits) - 1;
+                F128 w = weights[64 * half + bit];
+                acc.lo ^= w.lo;
+                acc.hi ^= w.hi;
+                bits &= bits - 1;
+            }
+        }
+        combined[i] = acc;
+    }
+}
+
 __global__ void chunk_combine_accum(const F128* __restrict__ suffix, const F128* __restrict__ weights, long long len,
                                     F128* __restrict__ combined) {
     long long i = (long long)blockIdx.x * blockDim.x + threadIdx.x;
@@ -498,7 +533,7 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
     vector<F128> xfull_c(zc_r.begin() + 6, zc_r.end());
     const int n_cl = 2 + n_extra;
     vector<vector<F128>> shats(n_cl, vector<F128>(128));
-    F128 *d_suffix_ab, *d_suffix_c, *d_suffix_x, *d_shat, *d_shat_partials;
+    F128 *d_suffix_ab, *d_suffix_c, *d_shat, *d_shat_partials;
     const int ring_switch_chunks = 64;
     {
         F128 *d_eq_shat_ab;
@@ -513,7 +548,6 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
     }
     CK(ffi_malloc(&d_suffix_ab, len * sizeof(F128)));
     CK(ffi_malloc(&d_suffix_c, len * sizeof(F128)));
-    CK(ffi_malloc(&d_suffix_x, len * sizeof(F128)));
     CK(ffi_malloc(&d_shat_partials, 128 * ring_switch_chunks * sizeof(F128)));
     build_eq_device(d_suffix_ab, xfull_ab.data() + 1, (int)xfull_ab.size() - 1);
     auto fold_rows = [&](const F128* suffix, vector<F128>& shat) -> int {
@@ -525,9 +559,37 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
     };
     build_eq_device(d_suffix_c, xfull_c.data() + 1, (int)xfull_c.size() - 1);
     CKI(fold_rows(d_suffix_c, shats[1]));
+    // Extra claims on their support only (see SparseBits): gather the words, fold them against the free-coordinate eq.
+    std::vector<SparseBits> sp(n_extra);
+    std::vector<std::vector<F128>> free_x(n_extra);
+    const F128 F0{0, 0}, F1{1, 0};
     for (int e = 0; e < n_extra; e++) {
-        build_eq_device(d_suffix_x, x_extra[e].data() + 1, m - 7);
-        CKI(fold_rows(d_suffix_x, shats[2 + e]));
+        SparseBits& b = sp[e];
+        b.n_free = 0; b.fixed = 0;
+        for (int j = 0; j < m - 7; j++) {
+            F128 v = x_extra[e][1 + j];
+            if (v.lo == F0.lo && v.hi == F0.hi) continue;
+            if (v.lo == F1.lo && v.hi == F1.hi) { b.fixed |= 1ull << j; continue; }
+            b.free[b.n_free++] = j;
+            free_x[e].push_back(v);
+        }
+    }
+    auto sparse_n = [&](int e) { return 1LL << sp[e].n_free; };
+    F128 *d_e, *d_wx;
+    long long max_n = 1;
+    for (int e = 0; e < n_extra; e++) max_n = std::max(max_n, sparse_n(e));
+    CK(ffi_malloc(&d_e, max_n * sizeof(F128)));
+    CK(ffi_malloc(&d_wx, max_n * sizeof(F128)));
+    for (int e = 0; e < n_extra; e++) {
+        const long long n = sparse_n(e);
+        if (sp[e].n_free) build_eq_device(d_e, free_x[e].data(), sp[e].n_free);
+        else { F128 one{1, 0}; CK(cudaMemcpy(d_e, &one, sizeof(F128), cudaMemcpyHostToDevice)); }
+        chunk_sparse_gather<<<(unsigned)std::min<long long>((n + 255) / 256, 65535), 256>>>(df, sp[e], n, d_wx);
+        CK(cudaGetLastError());
+        ring_switch_fold_rows_grouped<<<dim3(ring_switch_chunks, 16), 256>>>(d_wx, d_e, n, ring_switch_chunks, d_shat_partials);
+        ring_switch_fold_rows_reduce<<<128, 256>>>(d_shat_partials, ring_switch_chunks, d_shat);
+        CK(cudaGetLastError());
+        CK(cudaMemcpy(shats[2 + e].data(), d_shat, 128 * sizeof(F128), cudaMemcpyDeviceToHost));
     }
     ch.observe_label((const uint8_t*)"flock-pcs-open-batch-v0", 23);
     vector<uint64_t> rs_nonce(n_cl, 0);
@@ -576,11 +638,13 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
         vector<F128> w(128);
         for (int j = 0; j < 128; j++) w[j] = MUL(gam[2 + e], eq_rd[2 + e][j]);
         CK(cudaMemcpy(d_w, w.data(), 128 * sizeof(F128), cudaMemcpyHostToDevice));
-        build_eq_device(d_suffix_x, x_extra[e].data() + 1, m - 7);
-        chunk_combine_accum<<<(unsigned)((len + 255) / 256), 256>>>(d_suffix_x, d_w, len, dcb);
+        const long long n = sparse_n(e);
+        if (sp[e].n_free) build_eq_device(d_e, free_x[e].data(), sp[e].n_free);
+        else { F128 one{1, 0}; CK(cudaMemcpy(d_e, &one, sizeof(F128), cudaMemcpyHostToDevice)); }
+        chunk_sparse_combine<<<(unsigned)std::min<long long>((n + 255) / 256, 65535), 256>>>(d_e, d_w, sp[e], n, dcb);
         CK(cudaGetLastError());
     }
-    CK(ffi_free(d_suffix_x)); CK(ffi_free(d_w)); CK(ffi_free(d_shat)); CK(ffi_free(d_shat_partials));
+    CK(ffi_free(d_e)); CK(ffi_free(d_wx)); CK(ffi_free(d_w)); CK(ffi_free(d_shat)); CK(ffi_free(d_shat_partials));
     F128 first_u0, first_u2;
     {
         F128 *p0, *p2, *du0, *du2;
