@@ -8,7 +8,7 @@ rendered by `python -m verity_numerical.bench.views --published`. The frozen 202
 
 - **Method.** Table 1 lists backend configurations and their security. Table 2 is the end-to-end overhead
   N ÷ P per subcircuit, hardware class and commitment scheme. N is the compute-bound datasheet estimate. P is
-  instances per second, counting commitment, proving and the reference network (1 ms RTT, 10 Gb/s). A cell must
+  instances per second, counting commitment, proving and the reference network (1 ms RTT, 100 Gb/s). A cell must
   prove the full committed relation over a scheme defined in `verity.commitments`. Table 3 splits each cell into
   serving (commitment), interaction and proving overhead. 2^-128 becomes the view's default filter, not a validity
   rule. The fixed B = 4096 and K = 1536 checks give way to the plateau of a recorded batch sweep. Algebraic hashes
