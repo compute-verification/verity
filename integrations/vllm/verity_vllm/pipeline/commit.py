@@ -2022,7 +2022,7 @@ def main(argv: list[str] | None = None) -> None:
                 row["commit"] = {
                     "run_root": rc.run_root.hex(), "steps": len(rc.steps), "leaves": sum(s.n_leaves for s in rc.steps),
                     "bytes_bound": sum(s.n_bytes for s in rc.steps), "tensors": sum(s.n_tensors for s in rc.steps),
-                    "spans_total_s": rc.spans["total_s"], "spans_calls": rc.spans["calls"], "spans_bytes": rc.spans["bytes"],
+                    "spans_total_s": rc.spans["total_s"], "spans_calls": rc.spans["calls"], "spans_bytes": rc.spans["bytes"], "spans_throughput": rc.spans.get("throughput"),
                     "root_ready_delay_s": rc.root_ready_delay_s, "finalize_s": rc.t_finalize_s, "t_ready_minus_last_step_s": t_ready - r["t_last_step"],
                     "persistent_bytes": rc.persistent_bytes, "temporary_bytes_peak": rc.temporary_bytes_peak, "extra": rc.extra,
                     "openings": {"n": len(ops), "verified": sum(ok), "generate_s": t_open, "verify_s": t_ver, "skipped": skipped,

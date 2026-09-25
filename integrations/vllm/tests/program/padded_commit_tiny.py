@@ -59,9 +59,8 @@ from tests.program.test_serve3 import D_MAX, LP, TINY, Y_RAW, _inputs
 
 try:  # the production host core (the one revb accepted on F-r17b-44 / moe M-1023): pos_leaf + fold_levels + fold_path
     from verity_vllm.commit.merkle import fold_path
-    from verity_vllm.commit.fasttree import fold_levels
-    from verity_vllm.commit.semantic_layout import pos_leaf
-    CORE = "verity_vllm.commit.{semantic_layout,stream_merkle} (production host core: pos_leaf + fold_levels; verity_vllm.commit.merkle.fold_path for openings)"
+    from verity_vllm.commit.scheme import fold_levels, pos_leaf
+    CORE = "verity_vllm.commit.scheme (production host core: pos_leaf + fold_levels; verity_vllm.commit.merkle.fold_path for openings)"
 except Exception as ex:  # noqa: BLE001  -- named, never silent: without the core the record is not the production hashing
     CORE = f"UNAVAILABLE: {type(ex).__name__}: {ex}"
     pos_leaf = fold_levels = fold_path = None  # type: ignore[assignment]

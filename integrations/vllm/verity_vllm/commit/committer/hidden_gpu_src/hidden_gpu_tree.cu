@@ -2,7 +2,7 @@
 //   chunk_leaves : one thread per 64-word chunk -> SHA-256(16-word header(chunk index, tag, geometry) || 64 stream words)
 //                  (bit-identical to hidden_stream.commit_stream's leaves)
 //   tree_level   : one thread per parent -> production node rule  h(NODE_PREFIX || left || u64be(32) || right)
-//                  and lift rule h(LIFT_PREFIX || child) for the odd trailing node (verity_vllm.commit.hashing, fasttree)
+//                  and lift rule h(LIFT_PREFIX || child) for the odd trailing node (verity_vllm.commit.scheme)
 // Plain SHA-256 (FIPS 180-4), one message per thread, register-resident blocks; correctness is checked against hashlib
 // on the host (hidden_gpu.py --check) before any timing is reported.
 #include <torch/extension.h>

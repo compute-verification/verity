@@ -8,7 +8,7 @@ import hashlib
 import numpy as np
 import pytest
 
-from verity_vllm.commit import hidden_engine as E
+from verity_vllm.commit import scheme
 from tests.commit.fa2_prototype.derived import DerivedOpening, open_derived, verify_derived
 from tests.commit.fa2_prototype.encoding import Geometry, ValueId
 from tests.commit.fa2_prototype.fixture import AttentionFixture, Context, synthetic_fixture
@@ -199,18 +199,18 @@ def test_flat_hash_is_not_a_tree_root(committed):  # noqa: ANN001, ANN201
     fx, (HL, hc, RH), _P = committed
     rl = HL.row_layout(4, 133)
     words, _ = replay_row(rl, *fx.row_inputs(4, 133))
-    flat = E.pos_leaf(words.tobytes())                           # what a flat "tile hash" commitment would publish
+    flat = scheme.pos_leaf(words.tobytes())                           # what a flat "tile hash" commitment would publish
     # a fine tree over the same words built after the fact
-    leaves = [E.pos_leaf(words[i:i + 1].tobytes()) for i in range(words.size)]
-    fine_root = E.ft.fold(list(leaves))
+    leaves = [scheme.pos_leaf(words[i:i + 1].tobytes()) for i in range(words.size)]
+    fine_root = scheme.fold(list(leaves))
     assert fine_root != flat
     # a word-level path against the flat hash fails; the same path against the fine root verifies -- but that root was
     # not fixed before the challenge, so it authenticates nothing under the commitment
     i = rl.rank(VID)
-    levels = E.ft.fold_levels(list(leaves))
-    path = E.path_in_levels(levels, i)
-    assert E.fold_path(leaves[i], i, path) == fine_root
-    assert E.fold_path(leaves[i], i, path) != flat
+    levels = scheme.fold_levels(list(leaves))
+    path = scheme.path_in_levels(levels, i)
+    assert scheme.fold_path(leaves[i], i, path) == fine_root
+    assert scheme.fold_path(leaves[i], i, path) != flat
     # the hierarchical layout's fine subtrees DID exist before the challenge: the replayed subtree root equals the
     # retained one, and the opening verifies under RH (the original root)
     op = hc.open(fx, VID)

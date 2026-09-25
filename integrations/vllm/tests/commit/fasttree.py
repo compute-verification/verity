@@ -1,15 +1,13 @@
-"""Packed-identity Merkle construction with the frozen ``verity-vllm`` framing and a pluggable hash backend.
+"""Packed-identity id leaves with the frozen ``verity-vllm`` framing and a pluggable hash backend.
 
-Same preimages as :mod:`verity_vllm.commit.hashing` (so the SHA-256 backend reproduces the production roots bit for bit):
+Same preimage as :mod:`verity_vllm.commit.hashing` (so the SHA-256 backend reproduces the production leaves bit for bit):
 
     leaf = h( u32be(len(tag)) || tag || u64be(len(id)) || id || u64be(len(dtype)) || dtype || u64be(len(shape)) || shape || u64be(len(v)) || v )
-    node = h( u32be(len(tag)) || tag || u64be(32) || left || u64be(32) || right )
-    lift = h( u32be(len(tag)) || tag || u64be(32) || child )
 
 "Packed identity": the per-leaf header (everything before the value) is built ONCE from the pre-resolved
 (canonical_id, dtype, shape) triple and kept as bytes; the hot path is one ``h(header + len || value)`` per leaf
-with no regex parse, no dict of ids, and leaves already in tree order.  The fold is a list-of-bytes loop that calls
-the backend directly.  ``memoryview`` values are accepted (zero-copy from a memmap).
+with no regex parse, no dict of ids, and leaves already in tree order.  The tree over them is the scheme's fold
+(:func:`verity_vllm.commit.scheme.fold`).  ``memoryview`` values are accepted (zero-copy from a memmap).
 
 Backends: ``sha256`` (hashlib/OpenSSL), ``blake3`` (the ``blake3`` wheel, single-threaded per call),
 ``noop`` (builds the framing bytes, returns a constant 32-byte digest: the "surrounding pipeline intact, no hash
@@ -22,20 +20,11 @@ import hashlib
 from collections.abc import Callable, Sequence
 from typing import Any
 
-from verity_vllm.commit import hashing
+from verity_vllm.commit import hashing, scheme
 
 ZERO32 = bytes(32)
-U64_32 = (32).to_bytes(8, "big")
-
-
-def _tag_prefix(tag: str) -> bytes:
-    t = tag.encode("utf-8")
-    return len(t).to_bytes(4, "big") + t
-
-
-LEAF_PREFIX = _tag_prefix(hashing.LEAF_TAG)
-NODE_PREFIX = _tag_prefix(hashing.NODE_TAG) + U64_32
-LIFT_PREFIX = _tag_prefix(hashing.LIFT_TAG) + U64_32
+_LEAF_TAG = hashing.LEAF_TAG.encode("utf-8")
+LEAF_PREFIX = len(_LEAF_TAG).to_bytes(4, "big") + _LEAF_TAG
 
 
 class _Noop:
@@ -82,32 +71,9 @@ def leaf_digest(header: bytes, value: bytes | memoryview, new: Callable[..., Any
     return h.digest()
 
 
-def fold(level: list[bytes], new: Callable[..., Any] = hashlib.sha256) -> bytes:
-    """Fold leaf digests (already in tree order) to the root; identical shape rule to ``MerkleTree``."""
-    if not level:
-        return hashing.empty_root()
-    while len(level) > 1:
-        nxt = [new(NODE_PREFIX + level[i] + U64_32 + level[i + 1]).digest() for i in range(0, len(level) - 1, 2)]
-        if len(level) % 2 == 1:
-            nxt.append(new(LIFT_PREFIX + level[-1]).digest())
-        level = nxt
-    return level[0]
-
-
-def fold_levels(level: list[bytes], new: Callable[..., Any] = hashlib.sha256) -> list[list[bytes]]:
-    levels = [level]
-    while len(level) > 1:
-        nxt = [new(NODE_PREFIX + level[i] + U64_32 + level[i + 1]).digest() for i in range(0, len(level) - 1, 2)]
-        if len(level) % 2 == 1:
-            nxt.append(new(LIFT_PREFIX + level[-1]).digest())
-        level = nxt
-        levels.append(level)
-    return levels
-
-
 def tree_root(headers: Sequence[bytes], values: Sequence[bytes | memoryview], new: Callable[..., Any] = hashlib.sha256) -> bytes:
     """headers/values in tree order -> root (one leaf hash per value, then the fold)."""
-    return fold([leaf_digest(h, v, new) for h, v in zip(headers, values, strict=True)], new)
+    return scheme.fold([leaf_digest(h, v, new) for h, v in zip(headers, values, strict=True)], new)
 
 
 def chunk_layout(tree_id: str, buf: bytes | memoryview, chunk: int, dtype: str = "uint8") -> tuple[list[bytes], list[memoryview]]:

@@ -8,7 +8,7 @@
 Adapters:
   (the Δ_commit committer `native_host` exposes `verify(RunCommitment, Opening)` — the verifier's held commitment — and is
    tested directly in `test_native_host_security.py` through its offline core `commit_offline`)
-  * `C0PrimitiveScheme`  — the bare production primitive both native_host and fa2_commit build on: `pos_leaf` + `fasttree.fold_levels`
+  * `C0PrimitiveScheme`  — the bare production primitive both native_host and fa2_commit build on: `pos_leaf` + `scheme.fold_levels`
                            + `path_in_levels` + `commit.fold_path`/`path_shape` (verity_vllm, the production opening verifier core)
 """
 
@@ -18,7 +18,7 @@ import hashlib
 from dataclasses import dataclass
 from typing import Any
 
-from verity_vllm.commit import hidden_engine as eng
+from verity_vllm.commit import scheme
 
 
 @dataclass
@@ -30,34 +30,34 @@ class Committed:
 
 
 class C0PrimitiveScheme:
-    """pos_leaf leaves (one per value), fasttree fold, path_in_levels; verifier = commit.path_shape + fold_path + bind_root(ctx)."""
+    """pos_leaf leaves (one per value), scheme fold, path_in_levels; verifier = scheme.path_shape + fold_path + step_root(ctx)."""
 
     name = "c0_primitive"
 
     def _bind(self, ctx: bytes, n: int, merkle: bytes) -> bytes:
         z = hashlib.sha256(ctx).digest()
-        return eng.bind_root(z, z, z, z, n, merkle)
+        return scheme.step_root(z, z, z, z, n, merkle)
 
     def commit(self, values: list[bytes], ctx: bytes) -> Committed:
-        leaves = [eng.pos_leaf(v) for v in values]
-        levels = eng.ft.fold_levels(list(leaves))
+        leaves = [scheme.pos_leaf(v) for v in values]
+        levels = scheme.fold_levels(list(leaves))
         return Committed(self._bind(ctx, len(values), levels[-1][0]), len(values), ctx, (levels, list(values)))
 
     def open(self, c: Committed, i: int):
         levels, values = c.state
-        return (i, values[i], eng.path_in_levels(levels, i))
+        return (i, values[i], scheme.path_in_levels(levels, i))
 
     def verify(self, root: bytes, n: int, ctx: bytes, opening) -> bool:
         i, value, path = opening
         if not 0 <= i < n:
             return False
         try:
-            shape = eng.path_shape(n, i)
+            shape = scheme.path_shape(n, i)
         except Exception:  # noqa: BLE001
             return False
         if len(path) != len(shape) or any((p is None) == has for p, has in zip(path, shape, strict=True)):
             return False
-        return self._bind(ctx, n, eng.fold_path(eng.pos_leaf(value), i, list(path))) == root
+        return self._bind(ctx, n, scheme.fold_path(scheme.pos_leaf(value), i, list(path))) == root
 
     @staticmethod
     def with_value(opening, value: bytes):

@@ -16,8 +16,9 @@ from verity_vllm.observe.capture_v1 import CaptureReader
 from verity_vllm.commit.merkle import MerkleTree, Value, build_commitments, verify_opening
 from tests.commit.synthetic import build_toy_run
 
-from verity_vllm.commit import fasttree as ft
-from verity_vllm.commit.semantic_layout import POS_LEAF_TAG, Layout, RowSpec, RUContext, StaticContext, Template, pos_leaf, verify_position_opening
+from verity_vllm.commit import scheme
+from verity_vllm.commit.scheme import POS_LEAF_TAG, pos_leaf
+from tests.commit.semantic_layout import Layout, RowSpec, RUContext, StaticContext, Template, verify_position_opening
 from tests.commit.stream_merkle import StreamingMerkle
 
 
@@ -62,7 +63,7 @@ def test_position_opening_authenticates_the_same_bytes_as_production(store):
         mm = memoryview(np.memmap(ru.dir / "values.bin", dtype=np.uint8, mode="r"))
         order = [by[lay.canonical_id(i)] for i in range(lay.count)]
         # runtime: packed values only
-        mroot = ft.fold([pos_leaf(mm[e.offset : e.offset + e.nbytes]) for e in order])
+        mroot = scheme.fold([pos_leaf(mm[e.offset : e.offset + e.nbytes]) for e in order])
         sc = StaticContext(hashlib.sha256(b"program").digest(), hashlib.sha256(b"query").digest(), template, lay.ctx, 0, lay.count)
         R = sc.root(mroot)
         for i in (0, lay.count // 2, lay.count - 1):
