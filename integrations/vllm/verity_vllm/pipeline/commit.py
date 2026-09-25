@@ -254,6 +254,12 @@ def run_workload(engine: va.Engine, requests: list[dict], sampling: dict) -> dic
 COMPILED_REPLAY_SEED_SOURCE = "run root (first 4 bytes, after commitment): int(run_root.hex()[:8], 16)"
 
 
+def admission_lag(wl: dict) -> int:
+    """[moe R17-1] The lag rows the host admission counts: the declared LAG of the manifest target (`global_program.workload_target`)."""
+    from verity_vllm.pipeline import global_program as _GP
+    return int(_GP.workload_target(wl).lag())
+
+
 def stop_rule_of_record(eng, wl: dict, versions: dict) -> dict[str, Any]:
     """[rev M-0485; R17-1 / DP-pad-02 (b), F-moe-r17-03] the Program's DECLARED stop rule, read ONCE for every Commit consumer (required
     population, composition, boundary linkage, sampled-replay population): `eos` = global_program.stop_rule's eos_token_ids over the pinned
@@ -1646,14 +1652,8 @@ def main(args: Options, argv: list[str] | None = None) -> None:
             # (rc 3 = COMMIT FAIL in row_pod; the record carries the numbers).  VERITY_ADMIT_OVER_BOUND=1 overrides -- named on the record.
             try:
                 from verity_vllm.pipeline import admission_bound as ADM
-                _lag = 1
-                try:
-                    from verity_vllm.pipeline.workload import workload_target as _wt      # [moe R17-1] the declared LAG of the manifest target
-                    _lag = int(_wt(wl).lag())
-                except Exception:  # noqa: BLE001  -- pre-R17-1 tree / no target block: async scheduling assumed (1 lag row, the sound side)
-                    _lag = 1
                 adm = ADM.admission(asz, reqs, host_cap, retain=str(getattr(com, "retain", "host")),
-                                    max_num_batched_tokens=eng.kwargs.get("max_num_batched_tokens"), lag=_lag,
+                                    max_num_batched_tokens=eng.kwargs.get("max_num_batched_tokens"), lag=admission_lag(wl),
                                     envelope_bound_bytes=int(asz["retained_bytes_bound"]))
                 adm["override"] = os.environ.get("VERITY_ADMIT_OVER_BOUND") == "1"
                 adm["host_cap_source"] = host_cap_src
