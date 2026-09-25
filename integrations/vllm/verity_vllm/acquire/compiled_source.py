@@ -66,7 +66,7 @@ def compile_settings(llm: Any = None, runner: Any = None) -> dict[str, Any]:
             vc = getattr(runner, "vllm_config", None)
         if vc is None and llm is not None:
             try:
-                from verity_vllm.observe import engine_profile as prof
+                from verity_vllm.engine import engine_profile as prof
 
                 vc = getattr(prof.get_model_runner(llm), "vllm_config", None)
             except Exception:  # noqa: BLE001

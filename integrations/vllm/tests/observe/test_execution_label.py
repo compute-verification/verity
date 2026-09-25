@@ -46,7 +46,7 @@ def test_run_config_mirror_refuses_unknown_label(tmp_path):
 
 # --------------------------------------------------------------------------------------------------------------- adapter (torch)
 def _va():
-    return pytest.importorskip("verity_vllm.observe.vllm_adapter")   # per test: the laptop (no torch) still runs the mirror tests above
+    return pytest.importorskip("verity_vllm.engine.vllm_adapter")   # per test: the laptop (no torch) still runs the mirror tests above
 
 
 def test_adapter_execution_of_workload_and_labels():
@@ -79,7 +79,7 @@ def _no_llm(monkeypatch):
             raise AssertionError("LLM() was reached: the execution check did not fail closed")
     fake.LLM = LLM
     monkeypatch.setitem(sys.modules, "vllm", fake)
-    from verity_vllm.observe import engine_profile as prof
+    from verity_vllm.engine import engine_profile as prof
     monkeypatch.setattr(prof, "apply_env", lambda: {})
     monkeypatch.setattr(prof, "checkpoint_for", lambda case, ck: {"local_path": "/nonexistent", "repo": "x", "revision": "y"})
 

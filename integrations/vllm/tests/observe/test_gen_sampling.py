@@ -91,7 +91,7 @@ def test_sampled_token_paths():
 # --- the workloads + `load_workload`'s sampling block (the adapter imports torch; exec the pure function instead) ---
 
 def _adapter_fn(name: str):
-    src = (Path(__file__).resolve().parents[2] / "verity_vllm" / "observe" / "vllm_adapter.py").read_text()
+    src = (Path(__file__).resolve().parents[2] / "verity_vllm" / "engine" / "vllm_adapter.py").read_text()
     tree = ast.parse(src)
     ns: dict = {"json": json, "Path": Path, "hashlib": hashlib, "Any": object}
     for node in tree.body:

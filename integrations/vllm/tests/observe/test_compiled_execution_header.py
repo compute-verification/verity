@@ -15,7 +15,7 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity_vllm.observe import vllm_adapter as A  # noqa: E402
+from verity_vllm.engine import vllm_adapter as A  # noqa: E402
 from verity_vllm.program.frontend.target_profile import TargetProfile  # noqa: E402
 
 

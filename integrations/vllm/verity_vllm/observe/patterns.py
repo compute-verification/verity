@@ -605,7 +605,7 @@ def _targets():
 def target_of(ctx: StepContext) -> tuple[TargetProfile, bool]:
     """[X-01] The record's `TargetProfile` — the ONE SM-count fact both builder bets and this resolver pin against.  For a
     captured log it is the capture host's own device query, recorded by the GPU phase in the run header
-    (`RunHeader.profile["gpu"]`: `verity_vllm.observe.engine_profile.gpu_info` -> `multi_processor_count`, `compute_capability`) and read
+    (`RunHeader.profile["gpu"]`: `verity_vllm.engine.engine_profile.gpu_info` -> `multi_processor_count`, `compute_capability`) and read
     back through `TargetProfile.from_gpu_document`; a header without a GPU document (synthetic / hand-built logs) keeps
     `DEFAULT_TARGET`.  Returns (profile, recorded) where `recorded` says the header carried the fact."""
     try:
@@ -619,7 +619,7 @@ def target_of(ctx: StepContext) -> tuple[TargetProfile, bool]:
 
 def header_gemm_arch_family(ctx: StepContext):
     """[R13 ampere] The tuned-GEMM arch family the CAPTURE host reported (`RunHeader.profile["gpu"]["tuned_gemm_arch_family"]`, written by
-    `verity_vllm.observe.engine_profile.gpu_info` from vLLM's own `_get_tuned_matmul_arch_family`), or `...` when the header predates the field
+    `verity_vllm.engine.engine_profile.gpu_info` from vLLM's own `_get_tuned_matmul_arch_family`), or `...` when the header predates the field
     (the registry then derives it from the capability alone)."""
     try:
         gpu = (ctx.header.profile or {}).get("gpu") or {}

@@ -8,9 +8,9 @@ Why (R12 finding M-NOPROFILE, lane dC): Mistral-7B Build passed but Match said "
 The κ machinery was already configuration-only in the model dimension (`build_profile(analytic.config_of(config.json))`, D72) —
 but a hand-authored MODULE per role was still required (`profiles.PROFILE_BY_CASE` / the `PROFILE.notes["case"]` scan), so the
 profile was in effect keyed to the model NAME.  Daniel's rule: applicability comes from the selected kernels and the target facts,
-not from an allowlist of names.  This module removes the name: `verity_vllm.observe.profiles.dense_<ROLE>` is materialised on import
+not from an allowlist of names.  This module removes the name: `verity_vllm.engine.profiles.dense_<ROLE>` is materialised on import
 (a `sys.meta_path` finder in `profiles/__init__.py`) from the role's HF `config.json` — every consumer that does
-`importlib.import_module(f"verity_vllm.observe.profiles.{name}")` (resolve_log, compare, gates, run_config, fold, cb_a) works
+`importlib.import_module(f"verity_vllm.engine.profiles.{name}")` (resolve_log, compare, gates, run_config, fold, cb_a) works
 unchanged, in a fresh process, with `--profile dense_MISTRAL7B`.
 
 What decides applicability at Match time (unchanged, and the point):
@@ -41,10 +41,10 @@ from typing import Any
 
 from verity_vllm.config import CHECKPOINTS as MANIFEST
 from verity_vllm.input_provenance import analytic
-from ..resolver import Profile
-from .vllm_d9105ea80_sm89_eager import with_geometry
+from verity_vllm.observe.resolver import Profile
+from verity_vllm.engine.profiles.vllm_d9105ea80_sm89_eager import with_geometry
 
-MODULE_PREFIX = "dense_"                    # verity_vllm.observe.profiles.dense_<ROLE>
+MODULE_PREFIX = "dense_"                    # verity_vllm.engine.profiles.dense_<ROLE>
 HF_CONFIG_DIR = Path(__file__).with_name("hf_configs")
 
 #: [P6] the served vocabulary is `family_facts.FAMILY_FACTS` (every family's vLLM hard-codes with provenance); a configuration outside it, or
@@ -66,7 +66,7 @@ def role_of_module(name: str) -> str | None:
 
 def checkpoint_entry(role: str) -> dict[str, Any] | None:
     """The manifest entry of a role: `role == case`, else (the contract's B0 / B1 / B7 / SMOL360 cases, whose manifest `role` is prose) the
-    entry of the repo `verity_vllm.observe.engine_profile.CASES[case]` names."""
+    entry of the repo `verity_vllm.engine.engine_profile.CASES[case]` names."""
     if not MANIFEST.exists():
         return None
     m = json.loads(MANIFEST.read_text())
@@ -74,7 +74,7 @@ def checkpoint_entry(role: str) -> dict[str, Any] | None:
         if e.get("role") == role:
             return e
     try:
-        from verity_vllm.observe.engine_profile import CASES
+        from verity_vllm.engine.engine_profile import CASES
     except Exception:                                   # pragma: no cover - the adapter is optional off-pod
         return None
     repo = (CASES.get(role) or {}).get("repo")
@@ -114,7 +114,7 @@ def find_hf_config(role: str) -> tuple[Path, str, dict[str, Any] | None] | None:
 
 def supported_family(cfg: dict[str, Any]) -> str | None:
     """None when the family facts table describes the configuration (`generic.structural_refusal`), else the refusal reason."""
-    from . import generic
+    from verity_vllm.engine.profiles import generic
     return generic.structural_refusal(cfg)
 
 
@@ -133,12 +133,12 @@ def derive_config(cfg: dict[str, Any], *, repo: str | None, revision: str | None
 def build_dense_profile(role: str, cfg: dict[str, Any], *, repo: str | None = None, revision: str | None = None,
                         source: str = "caller") -> Profile:
     """[P6] `generic.build_profile(role, hf_config=cfg)` after the dense-vocabulary structural checks (fail-closed)."""
-    from . import generic
+    from verity_vllm.engine.profiles import generic
     derive_config(cfg, repo=repo, revision=revision)
     return generic.build_profile(role, 1, hf_config=cfg, repo=repo, revision=revision)
 
 
 def make_module(fullname: str) -> types.ModuleType:
-    """[P6] `verity_vllm.observe.profiles.dense_<ROLE>` -> `generic.make_module` (the X-07 name, dense-architecture roles only)."""
-    from . import generic
+    """[P6] `verity_vllm.engine.profiles.dense_<ROLE>` -> `generic.make_module` (the X-07 name, dense-architecture roles only)."""
+    from verity_vllm.engine.profiles import generic
     return generic.make_module(fullname)

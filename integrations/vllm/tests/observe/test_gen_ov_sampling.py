@@ -17,7 +17,7 @@ B1 = ["temp07", "topk50", "topp09", "topk50_topp09", "n2", "2req_seeds", "noseed
 
 
 def _adapter_fn(name: str):
-    src = (Path(__file__).resolve().parents[2] / "verity_vllm" / "observe" / "vllm_adapter.py").read_text()
+    src = (Path(__file__).resolve().parents[2] / "verity_vllm" / "engine" / "vllm_adapter.py").read_text()
     tree = ast.parse(src)
     ns: dict = {"json": json, "Path": Path, "hashlib": hashlib, "Any": object}
     for node in tree.body:
@@ -195,7 +195,7 @@ def _lane_ctx(events, start, sampling, seed=None, sample=None):
     import dataclasses
     from verity_vllm.observe.resolver import StepContext
     from tests.observe import test_patterns_synthetic as S
-    from verity_vllm.observe.profiles.gen_ov_sampling_patterns import ov_sampling_patterns
+    from verity_vllm.engine.profiles.gen_ov_sampling_patterns import ov_sampling_patterns
     hdr = S.header(sampling)
     if seed is not None:
         hdr.workload["requests"][0]["seed"] = seed

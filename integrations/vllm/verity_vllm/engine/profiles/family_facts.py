@@ -1,6 +1,6 @@
 """[P6, 2026-09-23] The declared FAMILY FACTS table: what vLLM d9105ea80 hard-codes per HF `model_type` and `config.json` does not say.
 
-This is the ONE place in `verity_vllm/observe/profiles/` where a model family name may appear (by-name lint class L, `retires: stays`;
+This is the ONE place in `verity_vllm/engine/profiles/` where a model family name may appear (by-name lint class L, `retires: stays`;
 `tests/by_name_allowlist.json`, decision "P6 2026-09-23: family facts table is the declared home of vLLM's per-family hard-codes").
 Everything else a κ profile needs is a function of the role's `config.json` (`analytic.config_of`) and of the κ pins
 (`vllm_d9105ea80_sm89_eager`); `profiles.generic.build_profile(role)` is that function.  Before P6 these facts were spread over nine

@@ -635,7 +635,7 @@ def main(argv: list[str] | None = None) -> int:
         _defaults_from_run_dir(a, ap)
     if a.profile is None and a.case:
         try:
-            from verity_vllm.observe.profiles import profile_module_for_case
+            from verity_vllm.engine.profiles import profile_module_for_case
             a.profile = profile_module_for_case(a.case)
         except Exception as e:  # noqa: BLE001
             ap.error(f"--profile not given and no profile module declares case {a.case!r}: {e}")
@@ -953,7 +953,7 @@ def fold_summary_result(log_path: str | Path, profile_name: str, *, with_program
 
     t0 = time.time()
     profile = load_profile(profile_name)
-    prof_mod = importlib.import_module(f"verity_vllm.observe.profiles.{profile_name}")
+    prof_mod = importlib.import_module(f"verity_vllm.engine.profiles.{profile_name}")
     if moe_construction not in (None, "indexed-read"):
         hook = getattr(prof_mod, "with_moe_construction", None)
         if hook is None:

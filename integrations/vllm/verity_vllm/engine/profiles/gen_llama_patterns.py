@@ -29,9 +29,9 @@ from typing import Any
 
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET
 
-from ..patterns import GemmLaunch, base_op, bound_args, gemm_target_of, triton_name
-from ..resolver import Resolution, StepContext
-from ..tree import TreeNode
+from verity_vllm.observe.patterns import GemmLaunch, base_op, bound_args, gemm_target_of, triton_name
+from verity_vllm.observe.resolver import Resolution, StepContext
+from verity_vllm.observe.tree import TreeNode
 
 #: [R13 ampere] the pinned sm_89 table now lives in the GEMM target registry (`verity_vllm.program.registry.gemm_targets.ADA_TUNED_GEMM`, the
 #: `ada` record's `tuned_table`) and is re-exported here unchanged for the tests / profile notes that cite it by this name.

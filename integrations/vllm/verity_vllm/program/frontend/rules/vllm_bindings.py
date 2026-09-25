@@ -18,7 +18,7 @@ What the export of a real vLLM class contains that the vLLM-*shaped* examples (`
 * `aten.to.dtype(int32 ids, int64)` (`VocabParallelEmbedding.forward`): the I32 token id widened for `aten.embedding`;
   value-preserving for ids in [0, V) -> a reinterpretation, no gate.
 
-Profile pins (declared record, `verity_vllm/observe/profiles/vllm_d9105ea80_sm89_eager.py:60-80`; a launch that differs is
+Profile pins (declared record, `verity_vllm/engine/profiles/vllm_d9105ea80_sm89_eager.py:60-80`; a launch that differs is
 refused, never adapted to).
 """
 

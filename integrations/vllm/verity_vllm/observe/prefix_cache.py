@@ -28,7 +28,7 @@ Two things live here:
    `verity-capture/prefix-linkage/v1`) beside tokens.json.  A slot with no writer in the log is state from outside the observed
    run (a warm server, a previous run): `unlinked`, the checker's hard blocker.
 
-    python -m verity_vllm.observe.prefix_cache gen --tokenizer <dir-or-tokenizer.json> [--out-dir verity_vllm/observe/profiles]
+    python -m verity_vllm.observe.prefix_cache gen --tokenizer <dir-or-tokenizer.json> [--out-dir verity_vllm/engine/profiles]
     python -m verity_vllm.observe.prefix_cache extract <run-dir | capture/log.jsonl.gz> [--out <path>] [--instances instances.jsonl]
 """
 from __future__ import annotations

@@ -97,9 +97,9 @@ inherit_quarantine() {  # <run-name>: a run dir without quarantine.json inherits
   # [window 2026-09-17, lead] G4 needs `quarantine.json` whenever the run resolves to quarantine Definitions (Pythia: GeluErf_v1,
   # LayerNormAten_v1).  That record is per-Definition (difftest check + verify_lane rule 2a), written once by the lane and copied into
   # the PRIMARY run dir only -- so replicates / runs on other workers were REJECTED at G4 for a missing file, not for numerics.  The
-  # admitted record is tracked at verity_vllm/observe/profiles/quarantine/<CASE>.json (with `admitted_by`); it is copied in here, stamped
+  # admitted record is tracked at verity_vllm/engine/profiles/quarantine/<CASE>.json (with `admitted_by`); it is copied in here, stamped
   # `inherited`, and G4 still re-runs tier-a replay on THIS run's own instances.  Cases without a record (no quarantine specs) skip.
-  local n=$1 rec="$PWD/verity_vllm/observe/profiles/quarantine/${1%%-*}.json"   # cwd = the code snapshot (cd above)
+  local n=$1 rec="$PWD/verity_vllm/engine/profiles/quarantine/${1%%-*}.json"   # cwd = the code snapshot (cd above)
   [ -f "$OUT/$n/quarantine.json" ] && return 0
   [ -f "$rec" ] || return 0
   $PY312 - "$rec" "$OUT/$n/quarantine.json" "$n" <<'EOF' && say "quarantine.json inherited for $n from $(basename "$rec") (per-Definition admission record)"

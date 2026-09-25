@@ -35,7 +35,7 @@ def _available() -> str | None:
         return f"{LOG} missing (L1)"
     if not (SNAPS / "snapshots.json").exists():
         return f"{SNAPS}/snapshots.json missing (L1 snapshots)"
-    if importlib.util.find_spec(f"verity_vllm.observe.profiles.{PROFILE}") is None:
+    if importlib.util.find_spec(f"verity_vllm.engine.profiles.{PROFILE}") is None:
         return f"profile {PROFILE} missing (L3)"
     from verity_vllm.check.fold_compare import hf_safetensors_glob
     import glob

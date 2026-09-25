@@ -31,12 +31,12 @@ import time
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.observe import engine_profile as prof
+from verity_vllm.engine import engine_profile as prof
 
 prof.apply_env()
 
-from verity_vllm.observe import vllm_adapter as va
-from verity_vllm.tp.worker import EXTENSION
+from verity_vllm.engine import vllm_adapter as va
+from verity_vllm.engine.rank_worker import EXTENSION
 
 
 def parse_engine_args(items: list[str]) -> dict[str, Any]:

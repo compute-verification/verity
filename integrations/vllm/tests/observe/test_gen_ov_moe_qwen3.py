@@ -27,11 +27,11 @@ from verity.ir.program import Program
 from verity_vllm.input_provenance import analytic
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepStart, TritonLaunch, ViewDesc
 from verity_vllm.observe.patterns import TokenSelectArgmax, TokenSelectGumbelTwoStage
-from verity_vllm.observe.profiles import profile_module_for_case
-from verity_vllm.observe.profiles.gen_ov_moe_patterns import FUSED_MOE_PINS, MoEFusedExperts
+from verity_vllm.engine.profiles import profile_module_for_case
+from verity_vllm.engine.profiles.gen_ov_moe_patterns import FUSED_MOE_PINS, MoEFusedExperts
 from verity_vllm.tp.embedding_shard import EmbeddingShardCuda
 
-Q3 = importlib.import_module("verity_vllm.observe.profiles.derived_QWEN3_30B_A3B_tp2")
+Q3 = importlib.import_module("verity_vllm.engine.profiles.derived_QWEN3_30B_A3B_tp2")
 from verity_vllm.observe.resolver import Compute, Group, StepContext, Transparent, Unsupported, resolve_step
 from verity_vllm.tp.collective_pattern import TpCollective
 from verity_vllm.observe.tree import step_events
@@ -348,7 +348,7 @@ def test_padded_construction_refuses_under_the_renormalising_router():
 
 
 def test_olmoe_profile_is_unchanged_by_the_renormalize_and_scope_pattern_fields():
-    OV = importlib.import_module("verity_vllm.observe.profiles.derived_OLMOE")
+    OV = importlib.import_module("verity_vllm.engine.profiles.derived_OLMOE")
     moe = next(x for x in OV.PROFILE.patterns if isinstance(x, MoEFusedExperts))
     assert moe.renormalize is False and moe.scope_patterns == () and moe.fused_pins == FUSED_MOE_PINS
 

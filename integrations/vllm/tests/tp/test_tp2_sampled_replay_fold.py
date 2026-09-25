@@ -68,7 +68,7 @@ def test_not_run_shape_when_replay_disabled():
 # ------------------------------------------------------------------------------------------------------------ worker fail-closed paths
 
 def _worker(cfg, bmap, rc=None, model=None):
-    from verity_vllm.tp import worker as W
+    from verity_vllm.engine import rank_worker as W
 
     class Stub:
         _tp2_sampled_replay = W.TP2CaptureWorkerExtension._tp2_sampled_replay

@@ -11,7 +11,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 
-from verity_vllm.tp.worker import _tp2_request_program_dirs  # noqa: E402
+from verity_vllm.engine.rank_worker import _tp2_request_program_dirs  # noqa: E402
 
 
 def _prog(root, name, lp, t, ok=True):

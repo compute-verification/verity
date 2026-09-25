@@ -188,10 +188,10 @@ def run_census(workload_path: str, out_dir: str, checkpoints: str, *, max_tokens
     import torch
     from torch.profiler import ProfilerActivity, profile
 
-    from verity_vllm.observe import engine_profile as prof
+    from verity_vllm.engine import engine_profile as prof
 
     prof.apply_env()
-    from verity_vllm.observe import vllm_adapter as va
+    from verity_vllm.engine import vllm_adapter as va
 
     out = Path(out_dir)
     (out / "traces").mkdir(parents=True, exist_ok=True)
@@ -210,7 +210,7 @@ def run_census(workload_path: str, out_dir: str, checkpoints: str, *, max_tokens
     def profiled_run(requests: list[dict], tag: str) -> tuple[list[dict], dict[str, list[int]]]:
         """`driver.run_requests` with one profiler session per engine step (the bare engine: no wrappers at all).
 
-        [coverage D87, adapter-level] the same step-indexed arrival rule as `verity_vllm.observe.arrivals.run_requests_arrivals`: request
+        [coverage D87, adapter-level] the same step-indexed arrival rule as `verity_vllm.engine.arrivals.run_requests_arrivals`: request
         r is admitted right before iteration r["arrive_step"] (all 0 = the historical loop); an idle engine admits the next arrival at
         once.  The census must profile the batch composition the capture saw, or its per-step kernel counts cannot align with the
         log (G1: "census steps not aligned with log steps" on every B8-mixed cell).  Iterations that launched no device kernel
@@ -578,7 +578,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _engine_args(items: list[str]) -> dict:
-    from verity_vllm.observe import vllm_adapter as va  # torch import only on the GPU half
+    from verity_vllm.engine import vllm_adapter as va  # torch import only on the GPU half
     return va.parse_engine_args(items)
 
 

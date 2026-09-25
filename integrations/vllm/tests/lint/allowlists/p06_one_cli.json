@@ -51,13 +51,14 @@
     {"file": "verity_vllm/correspondence/resolve_decomp.py", "kind": "main-block", "symbol": "<module>", "detail": "if __name__ == \"__main__\""},
     {"file": "verity_vllm/correspondence/runtime_tree.py", "kind": "argparse", "symbol": "<module>", "detail": "import argparse"},
     {"file": "verity_vllm/correspondence/runtime_tree.py", "kind": "main-block", "symbol": "<module>", "detail": "if __name__ == \"__main__\""},
+    {"file": "verity_vllm/engine/profiles/canonical.py", "kind": "main-block", "symbol": "<module>", "detail": "if __name__ == \"__main__\""},
+    {"file": "verity_vllm/engine/rank_worker.py", "kind": "argparse", "symbol": "TP2CaptureWorkerExtension.tp2_commit_make", "detail": "import argparse"},
     {"file": "verity_vllm/input_provenance/root_policy.py", "kind": "argparse", "symbol": "<module>", "detail": "import argparse"},
     {"file": "verity_vllm/input_provenance/root_policy.py", "kind": "main-block", "symbol": "<module>", "detail": "if __name__ == \"__main__\""},
     {"file": "verity_vllm/input_provenance/weights_of_record.py", "kind": "argparse", "symbol": "<module>", "detail": "import argparse"},
     {"file": "verity_vllm/input_provenance/weights_of_record.py", "kind": "main-block", "symbol": "<module>", "detail": "if __name__ == \"__main__\""},
     {"file": "verity_vllm/observe/prefix_cache.py", "kind": "argparse", "symbol": "<module>", "detail": "import argparse"},
     {"file": "verity_vllm/observe/prefix_cache.py", "kind": "main-block", "symbol": "<module>", "detail": "if __name__ == \"__main__\""},
-    {"file": "verity_vllm/observe/profiles/canonical.py", "kind": "main-block", "symbol": "<module>", "detail": "if __name__ == \"__main__\""},
     {"file": "verity_vllm/observe/resolve_log.py", "kind": "argparse", "symbol": "<module>", "detail": "import argparse"},
     {"file": "verity_vllm/observe/resolve_log.py", "kind": "main-block", "symbol": "<module>", "detail": "if __name__ == \"__main__\""},
     {"file": "verity_vllm/ops/canary.sh", "kind": "heredoc", "symbol": "<script>", "detail": "python3 <<", "count": 4},
@@ -220,7 +221,6 @@
     {"file": "verity_vllm/tp/analyze.py", "kind": "argparse", "symbol": "<module>", "detail": "import argparse"},
     {"file": "verity_vllm/tp/analyze.py", "kind": "main-block", "symbol": "<module>", "detail": "if __name__ == \"__main__\""},
     {"file": "verity_vllm/tp/collective_link.py", "kind": "argparse", "symbol": "<module>", "detail": "import argparse"},
-    {"file": "verity_vllm/tp/collective_link.py", "kind": "main-block", "symbol": "<module>", "detail": "if __name__ == \"__main__\""},
-    {"file": "verity_vllm/tp/worker.py", "kind": "argparse", "symbol": "TP2CaptureWorkerExtension.tp2_commit_make", "detail": "import argparse"}
+    {"file": "verity_vllm/tp/collective_link.py", "kind": "main-block", "symbol": "<module>", "detail": "if __name__ == \"__main__\""}
   ]
 }

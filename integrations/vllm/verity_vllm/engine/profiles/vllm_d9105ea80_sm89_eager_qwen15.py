@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from verity_vllm.program.registry import b1
 
-from .vllm_d9105ea80_sm89_eager import (build_profile, make_check_header, make_root_class, make_weight_field,  # noqa: F401
+from verity_vllm.engine.profiles.vllm_d9105ea80_sm89_eager import (build_profile, make_check_header, make_root_class, make_weight_field,  # noqa: F401
                                         with_geometry)
 
 PROFILE_ID = "vllm-d9105ea80-sm89-eager-bf16-qwen2.5-1.5b"

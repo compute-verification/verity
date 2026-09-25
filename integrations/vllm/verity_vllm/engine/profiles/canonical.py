@@ -12,7 +12,7 @@ read -- and nothing of its free text:
   * `check_header`: probed over the profile's own HF config (must be consistent) and one perturbed copy per checked key;
   * `id`, `accepted`, `case`, the kernel allowlist's length and sha.
 The per-role fixtures under `profiles/expected/<derived module name>.json` pin this form (`tests/test_profiles_generic.py`);
-`python -m verity_vllm.observe.profiles.canonical --write` regenerates them from the generic constructor (a deliberate re-pin, reviewed in the diff).
+`python -m verity_vllm.engine.profiles.canonical --write` regenerates them from the generic constructor (a deliberate re-pin, reviewed in the diff).
 """
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ def probe_vocabulary() -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...
     """(layer prefixes, per-layer suffixes, top-level names): the union over the base Llama map and every family's declared parameter names
     (`family_facts.FAMILY_FACTS[*]["params"]`), plus the FP8 block scales of the base linears, the attention-scale placeholders and the
     unbound probes.  Derived from the maps, so a new family's names enter the probe set with its facts entry."""
-    from . import family_facts as FF, vllm_d9105ea80_sm89_eager as base
+    from verity_vllm.engine.profiles import family_facts as FF, vllm_d9105ea80_sm89_eager as base
     prefixes: list[str] = ["model.layers"]
     suffixes: list[str] = [*base._LAYER_FIELDS, base.COS_SIN_BUFFER]
     suffixes += [f"{k}{_SCALE_SUFFIX}" for k in base._LAYER_FIELDS if k.endswith(".weight") and "norm" not in k]
@@ -124,7 +124,7 @@ def _type_tree(t: Any) -> Any:
 
 
 def _header(cfg: dict[str, Any]):
-    from ..events import RunHeader
+    from verity_vllm.observe.events import RunHeader
     fields = {f.name for f in dataclasses.fields(RunHeader)}
     kw: dict[str, Any] = {"model": {"config": cfg}}
     for f in dataclasses.fields(RunHeader):
@@ -189,25 +189,25 @@ EXPECTED_DIR = __import__("pathlib").Path(__file__).resolve().parent / "expected
 def fixture_roles() -> list[tuple[str, int]]:
     """Every role with a shipped HF config.json (`profiles/hf_configs/<ROLE>.config.json`) at TP1, plus every (role, world) a fixture
     already pins (the tensor-parallel worlds with recorded runs are data -- the fixture files -- not a table here; pin a new world with
-    `python -m verity_vllm.observe.profiles.canonical --write ROLE:W`)."""
-    from . import dense_generic as _dg, generic
+    `python -m verity_vllm.engine.profiles.canonical --write ROLE:W`)."""
+    from verity_vllm.engine.profiles import dense_generic as _dg, generic
     roles = sorted(p.name[: -len(".config.json")] for p in _dg.HF_CONFIG_DIR.glob("*.config.json"))
     out = {(r, 1) for r in roles}
     for p in EXPECTED_DIR.glob("*.json"):
-        parsed = generic.parse_module(f"verity_vllm.observe.profiles.{p.stem}")
+        parsed = generic.parse_module(f"verity_vllm.engine.profiles.{p.stem}")
         if parsed is not None:
             out.add(parsed[:2])
     return sorted(out)
 
 
 def canonical_of_role(role: str, world: int = 1) -> dict[str, Any]:
-    from . import generic
-    mod = generic.make_module(f"verity_vllm.observe.profiles.{generic.module_name(role, world)}")
+    from verity_vllm.engine.profiles import generic
+    mod = generic.make_module(f"verity_vllm.engine.profiles.{generic.module_name(role, world)}")
     return canonical(mod.PROFILE, mod, hf_config=mod.HF_CONFIG)
 
 
 def write_fixtures(roles: list[tuple[str, int]] | None = None) -> list[str]:
-    from . import generic
+    from verity_vllm.engine.profiles import generic
     EXPECTED_DIR.mkdir(exist_ok=True)
     written = []
     for role, world in roles or fixture_roles():

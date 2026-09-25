@@ -16,7 +16,7 @@ What a record says
   tabled `(N, K)`; without one (Ampere: the function returns None) every shape launches the default tiling
   `128/128/64, 8 warps, 3 stages`.  The construction host reads the family back from vLLM under the target shim and refuses
   when it differs from the record (`export_compat.read_back_applied`); the capture host records it in the run header
-  (`verity_vllm.observe.engine_profile.gpu_info`).
+  (`verity_vllm.engine.engine_profile.gpu_info`).
 * `tuned_table` — the pinned copy of vLLM's tuned table for that family (identity = `table_sha256()`, an applicability
   condition), `{}` for a family without one.  `launch_config(M, N, K)` mirrors `_get_matmul_config` on that table.
 * `dot` — the k16 tensor-core step the registered Definition binds: `Gemm_v1{K,N}` (`verity_vllm.program.registry.b1.GemmV2` with
@@ -53,7 +53,7 @@ FIXED_CONSTEXPRS: dict[str, Any] = {"GROUP_SIZE_M": 8, "A_LARGE": False, "B_LARG
 #: for such a model was refused at its first tabled launch (`constexpr BLOCK_SIZE_M=16 differs from the profile pin 128`:
 #: Qwen3-30B-A3B lm_head at TP1, R15 lane moe GEMM-ADA-TABLE; the (2048, 6144) row has BLOCK_SIZE_K 128).  Read from vLLM on
 #: cp-moe3 (L40S) 2026-09-19; `tests/program/test_gemm_targets.py` checks the copy against vLLM's table wherever vLLM imports.
-#: (moved here from `verity_vllm.observe.profiles.gen_llama_patterns.ADA_TUNED_GEMM`, which re-exports it.)
+#: (moved here from `verity_vllm.engine.profiles.gen_llama_patterns.ADA_TUNED_GEMM`, which re-exports it.)
 #: APPLICABILITY IDENTITY (global M-0140 (3)): `REGISTERED["ada"].table_sha256()` is the `tuned_gemm_table_sha256` derive_step writes into
 #: every L40S/4090 component's applicability, and GP-01 refuses a workload whose components disagree on it.  The one-key table of
 #: r14-rc3 hashed to ADA_TABLE_SHA256_RC3 below (the value in every L40S artifact Built before the release that carries this file);

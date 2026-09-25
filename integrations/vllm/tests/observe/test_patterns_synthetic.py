@@ -10,7 +10,7 @@ from verity_vllm.observe.events import (DispatchEnter, DispatchExit, Root, RunHe
                                    TritonLaunch, ViewDesc)
 from verity_vllm.observe.patterns import (ComputeGroup, GeometryError, TransparentGroup, as_slot_rows, as_weight_view, members,
                                      schema_param_names, split_heads)
-from verity_vllm.observe.profiles import vllm_d9105ea80_sm89_eager as PROF
+from verity_vllm.engine.profiles import vllm_d9105ea80_sm89_eager as PROF
 from verity_vllm.observe.resolver import (Compute, Gather, GatherMany, PerRow, ResolutionError, Shared, StepContext,
                                      Transparent, Unsupported, resolve_step)
 from verity_vllm.observe.tree import step_events
@@ -361,7 +361,7 @@ def test_gemm_constexpr_mismatch_is_unsupported():
 
 def _context_on_host(start, sample, sms):
     """A StepContext whose run header carries the capture host's GPU document (`profile.gpu.multi_processor_count`), as
-    `verity_vllm.observe.engine_profile.gpu_info` records it; `sms=None` = no GPU document (synthetic log)."""
+    `verity_vllm.engine.engine_profile.gpu_info` records it; `sms=None` = no GPU document (synthetic log)."""
     ctx = context(start, sample)
     prof = dict(ctx.header.profile)
     if sms is not None:

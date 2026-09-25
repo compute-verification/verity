@@ -11,7 +11,7 @@ Dimensions (out/gen/COVERAGE-20260917.md):
   context class     C256       prompt_len ~ U{32..256},   max_tokens = max(2, prompt_len // 10)  (<= 25)
                     C1024      prompt_len ~ U{128..1024}, max_tokens = max(4, prompt_len // 10)  (<= 102)
 The lengths depend on (profile, ctx, seed) ONLY — the same draws for every model, so the model dimension is isolated.
-Prompts are natural text (verity_vllm/observe/profiles/corpus_coverage.json: three public-domain Gutenberg books), each request
+Prompts are natural text (verity_vllm/engine/profiles/corpus_coverage.json: three public-domain Gutenberg books), each request
 starting at a different seeded paragraph, tokenized with the served model's tokenizer (add_special_tokens=False) and truncated to
 the drawn prompt length.  `expected_engine_steps` is the upper bound max_r(arrive_r + max_tokens_r) (every request runs to
 max_tokens; a request stopping at EOS earlier shortens the run — gates compare against the control run's realized steps, D87).
@@ -37,7 +37,7 @@ import numpy as np
 
 from verity_vllm.config import CHECKPOINTS, WORKLOADS
 
-CORPUS = resources.files("verity_vllm") / "observe" / "profiles" / "corpus_coverage.json"
+CORPUS = resources.files("verity_vllm") / "engine" / "profiles" / "corpus_coverage.json"
 SCHEMA = "verity-vllm/workload/v1"
 PROFILES = ("B1", "B8-static", "B8-mixed")
 CTX = {"C256": {"lo": 32, "cap": 256, "min_out": 2}, "C1024": {"lo": 128, "cap": 1024, "min_out": 4}}

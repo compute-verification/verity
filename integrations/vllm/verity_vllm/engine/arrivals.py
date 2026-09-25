@@ -1,6 +1,6 @@
-"""verity_vllm/observe/arrivals.py — step-indexed request arrivals (coverage campaign D87, serving profile B8-mixed).  Torch-free.
+"""verity_vllm/engine/arrivals.py — step-indexed request arrivals (coverage campaign D87, serving profile B8-mixed).  Torch-free.
 
-`run_requests_arrivals(llm, requests, params_for, on_step=...)` is `verity_vllm.observe.engine_driver.run_requests` with one addition:
+`run_requests_arrivals(llm, requests, params_for, on_step=...)` is `verity_vllm.engine.engine_driver.run_requests` with one addition:
 request `r` is added to the engine right before engine step `r.arrive_step` (0 = before the first step, the historical
 behaviour).  Arrivals are keyed to the engine-step counter, never to wall time, so the observer run, the control run and the
 non-interference variants schedule the same batch at every step -- dynamic batch membership becomes a declared, reproducible

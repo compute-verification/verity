@@ -5,7 +5,7 @@
         [--lengths-only] [--check] --out workloads/<row-id>.json
 
 Output = the existing request-list workload format (`verity-vllm/workload/v1`, see `workloads/workload_cov_*.json`) that
-`verity_vllm.observe.vllm_adapter.load_workload` / `bench/commit_delta.py` / `zk/bench/e2e_commit_run.py` / the eager capture consume unchanged,
+`verity_vllm.engine.vllm_adapter.load_workload` / `bench/commit_delta.py` / `zk/bench/e2e_commit_run.py` / the eager capture consume unchanged,
 plus one extra top-level key `sweep` (row id, seed, the length/cap/seed/arrival vectors, the plan) that existing loaders ignore.
 
 Determinism: `seed = SHA256(row_id)`; every draw comes from `numpy.random.default_rng` seeded from that digest and a purpose tag.
@@ -16,7 +16,7 @@ Shape plan for batch B over [lo, I] (lo = 8, or 1 when I < 32):
   (stratified: one draw per equal log-width stratum), nudged off powers of two.  Output caps over [2, O]: O exactly · 2 (very short) ·
   one odd cap per quartile · log-uniform remainder; caps are paired with the lengths by a seeded permutation.  For B >= 8 this gives
   >= 6 distinct lengths and caps, one near the min, one at the max, one per quartile, several non-power-of-two values (`--check`).
-Prompts: distinct real text from `verity_vllm/observe/profiles/corpus_coverage.json` (three public-domain Gutenberg books), each request
+Prompts: distinct real text from `verity_vllm/engine/profiles/corpus_coverage.json` (three public-domain Gutenberg books), each request
 starting at a different seeded paragraph, tokenized with the served model's tokenizer.json (`tokenizers`, add_special_tokens=False like
 every earlier workload) and truncated to the exact planned length.  Sampling `stoch-t0.8-p0.95`: temperature 0.8 / top_p 0.95 and an
 independent stored seed per request (`requests[i].seed`, read by `load_workload`).  Arrivals `staggered`: request 0 at 0 s, the
@@ -40,7 +40,7 @@ import numpy as np
 
 from verity_vllm.config import CHECKPOINTS, WORKLOADS
 
-CORPUS = resources.files("verity_vllm") / "observe" / "profiles" / "corpus_coverage.json"
+CORPUS = resources.files("verity_vllm") / "engine" / "profiles" / "corpus_coverage.json"
 SCHEMA = "verity-vllm/workload/v1"
 SWEEP_SCHEMA = "verity-sweep/workload/v1"
 SAMPLING = {
@@ -350,7 +350,7 @@ def case_for(hf_repo: str, revision: str, explicit: str | None) -> str | None:
     if explicit:
         return explicit
     try:                                    # the adapter's fixed cases first (B0 = SmolLM2, B1 = Qwen2.5-1.5B, ...)
-        from verity_vllm.observe.engine_profile import CASES
+        from verity_vllm.engine.engine_profile import CASES
         for k, v in CASES.items():
             if v.get("repo") == hf_repo:
                 return k

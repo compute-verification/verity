@@ -30,10 +30,10 @@ import numpy as np
 
 from verity_vllm.program.registry.quarantine.ov_sampling.gumbel import GumbelArgmaxBf16, GumbelArgmaxTempBf16
 
-from ..events import ViewDesc
-from ..patterns import SCRATCH_TOKEN_SELECT, ComputeGroup, _fmt, bound_args, first, hint_of, is_int, sub_rows, triton_name, unsupported, widened_source
-from ..resolver import Compute, PerRow, Resolution, StepContext, Transparent
-from ..tree import TreeNode
+from verity_vllm.observe.events import ViewDesc
+from verity_vllm.observe.patterns import SCRATCH_TOKEN_SELECT, ComputeGroup, _fmt, bound_args, first, hint_of, is_int, sub_rows, triton_name, unsupported, widened_source
+from verity_vllm.observe.resolver import Compute, PerRow, Resolution, StepContext, Transparent
+from verity_vllm.observe.tree import TreeNode
 
 SCRATCH_OV = "ov_sampling_token_sample"
 

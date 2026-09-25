@@ -147,7 +147,7 @@ def links_for_rank(rank: int, build: Path, compare: dict, derived: list[str]) ->
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--capture", required=True, help="tp2_capture --record-collectives run dir: log.rank<r>.jsonl.gz, tokens.json, coll.rank<r>.jsonl")
-    ap.add_argument("--profile", required=True, help="rank profile module (verity_vllm.observe.profiles.<name>), e.g. derived_LLAMA32_1B_tp2 (profiles.generic, world = W)")
+    ap.add_argument("--profile", required=True, help="rank profile module (verity_vllm.engine.profiles.<name>), e.g. derived_LLAMA32_1B_tp2 (profiles.generic, world = W)")
     ap.add_argument("--build-rank0", default=None)
     ap.add_argument("--build-rank1", default=None)
     ap.add_argument("--derived-rank0", action="append", default=[], help="B>1: further request Programs of rank 0 (per served (LP, T))")

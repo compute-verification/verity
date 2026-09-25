@@ -60,7 +60,7 @@ from typing import Any
 
 def scheduler_of(llm: Any) -> Any | None:
     """The in-process V1 scheduler of an offline `LLM` (`llm_engine.engine_core[.engine_core].scheduler`, as
-    `verity_vllm.observe.engine_profile.get_scheduler`), or None when the path does not exist or exposes no `requests` dict."""
+    `verity_vllm.engine.engine_profile.get_scheduler`), or None when the path does not exist or exposes no `requests` dict."""
     try:
         eng = llm.llm_engine
         core = getattr(eng, "engine_core", None)

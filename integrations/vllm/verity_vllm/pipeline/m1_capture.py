@@ -41,11 +41,11 @@ import json
 import sys
 from pathlib import Path
 
-from verity_vllm.observe import engine_profile as prof  # noqa: F401  (apply_env before vllm import)
+from verity_vllm.engine import engine_profile as prof  # noqa: F401  (apply_env before vllm import)
 
 prof.apply_env()
 
-from verity_vllm.observe import vllm_adapter as va  # noqa: E402
+from verity_vllm.engine import vllm_adapter as va  # noqa: E402
 from verity_vllm.pipeline.timeline import Timeline  # noqa: E402  (torch-free; VERITY_TIMELINE -> JSONL, else no-op)
 
 ACCEPTED_TOKENS = va.ACCEPTED_TOKENS   # the B0 request's accepted tokens (kept for the older importers); prefer workload["accepted"]

@@ -26,7 +26,7 @@ mkdir -p "$OUT"
 log() { echo "$(date -u +%FT%TZ) [stoch-neg $ROW] $*" | tee -a "$OUT/negatives.log"; }
 B=$($PY312 -c "import json;print(len(json.load(open('$WL'))['requests']))")
 MML=$($PY312 -c "import json;w=json.load(open('$WL'));print(max(r['prompt_len']+r['max_tokens'] for r in w['requests']))")
-PROFILE=${FOLD_PROFILE:-$($PY312 -c "from verity_vllm.observe.profiles import profile_module_for_case as f; print(f('$ROLE'))")}   # as run_config does
+PROFILE=${FOLD_PROFILE:-$($PY312 -c "from verity_vllm.engine.profiles import profile_module_for_case as f; print(f('$ROLE'))")}   # as run_config does
 
 run_one() {   # $1 = N1|N2, $2 = python mutation snippet applied to the manifest dict `w`
   N=$OUT/$1; mkdir -p "$N/match/capture"

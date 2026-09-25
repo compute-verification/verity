@@ -15,9 +15,9 @@ import types
 
 import pytest
 
-from verity_vllm.observe.profiles.gen_ov_moe_patterns import MOE_CONSTRUCTION_PATTERNS, MoEFusedExperts, MoEFusedExpertsPadded, ov_moe_patterns
+from verity_vllm.engine.profiles.gen_ov_moe_patterns import MOE_CONSTRUCTION_PATTERNS, MoEFusedExperts, MoEFusedExpertsPadded, ov_moe_patterns
 
-OV = importlib.import_module("verity_vllm.observe.profiles.derived_OLMOE")
+OV = importlib.import_module("verity_vllm.engine.profiles.derived_OLMOE")
 from verity_vllm.observe.resolver import Compute, Group, StepContext, Transparent, Unsupported, resolve_step
 from tests.observe.test_gen_ov_moe import C, E, H, I, TOPK, _ctx, _start, moe_scope_events
 from verity_vllm.observe.tree import step_events
@@ -122,11 +122,11 @@ def test_the_construction_is_declared_and_selected_by_name_never_inferred(tmp_pa
 def test_fold_refuses_a_declared_construction_the_profile_cannot_fold():
     """A `padded` declaration on a profile without the hook FAILS by name before the log is read: the MOE-01 fold is never a silent stand-in."""
     from verity_vllm.pipeline.match import fold_summary_result
-    fake = types.ModuleType("verity_vllm.observe.profiles._moe_test_nohook")
+    fake = types.ModuleType("verity_vllm.engine.profiles._moe_test_nohook")
     fake.PROFILE = OV.PROFILE
-    sys.modules["verity_vllm.observe.profiles._moe_test_nohook"] = fake
+    sys.modules["verity_vllm.engine.profiles._moe_test_nohook"] = fake
     try:
         with pytest.raises(SystemExit, match="with_moe_construction"):
             fold_summary_result("/nonexistent/log.jsonl.gz", "_moe_test_nohook", moe_construction="padded")
     finally:
-        del sys.modules["verity_vllm.observe.profiles._moe_test_nohook"]
+        del sys.modules["verity_vllm.engine.profiles._moe_test_nohook"]

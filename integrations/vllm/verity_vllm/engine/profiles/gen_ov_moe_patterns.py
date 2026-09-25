@@ -40,12 +40,12 @@ from verity.ir.defs import bind
 from verity_vllm.program.registry import moe as _MOE
 from verity_vllm.program.registry.quarantine.ov_moe import moe as Q
 
-from ..events import ViewDesc
-from ..patterns import (SiluAndMul, bound_args, find_descendants, is_int, is_row_major, op_name, scope_transparents, triton_name,
+from verity_vllm.observe.events import ViewDesc
+from verity_vllm.observe.patterns import (SiluAndMul, bound_args, find_descendants, is_int, is_row_major, op_name, scope_transparents, triton_name,
                         unsupported)
-from ..resolver import Compute, Gather, Group, PerRow, Resolution, Shared, StepContext, Transparent, Unsupported
-from ..tree import TreeNode
-from .gen_llama_patterns import GemmLaunchTuned
+from verity_vllm.observe.resolver import Compute, Gather, Group, PerRow, Resolution, Shared, StepContext, Transparent, Unsupported
+from verity_vllm.observe.tree import TreeNode
+from verity_vllm.engine.profiles.gen_llama_patterns import GemmLaunchTuned
 
 #: The op name prefix of the MoE custom op(s) (`vllm.moe_forward.default`, `vllm.moe_forward_shared.default`).
 MOE_OP_PREFIX = "moe_forward"

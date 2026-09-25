@@ -32,12 +32,14 @@
     {"file": "verity_vllm/correspondence/capture_identities.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 882},
     {"file": "verity_vllm/correspondence/chunk_attribution.py", "kind": "function", "symbol": "attribute", "detail": "lines", "count": 193},
     {"file": "verity_vllm/correspondence/emit.py", "kind": "function", "symbol": "emit_correspondence", "detail": "lines", "count": 217},
+    {"file": "verity_vllm/engine/rank_worker.py", "kind": "function", "symbol": "TP2CaptureWorkerExtension.tp2_commit_make", "detail": "lines", "count": 254},
+    {"file": "verity_vllm/engine/rank_worker.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1558},
+    {"file": "verity_vllm/engine/vllm_adapter.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1949},
     {"file": "verity_vllm/input_provenance/root_policy.py", "kind": "function", "symbol": "evaluate", "detail": "lines", "count": 219},
     {"file": "verity_vllm/input_provenance/weights_of_record.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 999},
     {"file": "verity_vllm/observe/capture_v1.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 2102},
     {"file": "verity_vllm/observe/fold.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1318},
     {"file": "verity_vllm/observe/patterns.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1903},
-    {"file": "verity_vllm/observe/vllm_adapter.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1949},
     {"file": "verity_vllm/pipeline/admission_planner.py", "kind": "function", "symbol": "plan", "detail": "lines", "count": 180},
     {"file": "verity_vllm/pipeline/build.py", "kind": "function", "symbol": "_construct", "detail": "lines", "count": 160},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "function", "symbol": "binding_record", "detail": "lines", "count": 210},
@@ -74,8 +76,6 @@
     {"file": "verity_vllm/query/v1_bridge.py", "kind": "function", "symbol": "request_manifest", "detail": "lines", "count": 188},
     {"file": "verity_vllm/query/v1_bridge.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 802},
     {"file": "verity_vllm/query/vu_query.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 813},
-    {"file": "verity_vllm/tp/rank_match.py", "kind": "function", "symbol": "cross_rank_check", "detail": "lines", "count": 267},
-    {"file": "verity_vllm/tp/worker.py", "kind": "function", "symbol": "TP2CaptureWorkerExtension.tp2_commit_make", "detail": "lines", "count": 254},
-    {"file": "verity_vllm/tp/worker.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1558}
+    {"file": "verity_vllm/tp/rank_match.py", "kind": "function", "symbol": "cross_rank_check", "detail": "lines", "count": 267}
   ]
 }

@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from verity_vllm.observe.resolve_log import resolve_log
-from verity_vllm.observe.profiles.vllm_d9105ea80_sm89_eager import C, PROFILE, check_header
+from verity_vllm.engine.profiles.vllm_d9105ea80_sm89_eager import C, PROFILE, check_header
 
 LOG = Path(__file__).resolve().parents[2] / "data" / "logs" / "m1.jsonl.gz"
 
@@ -73,7 +73,7 @@ def test_prefill_then_decode(resolved):
 
 
 def test_weight_roots_are_classified(resolved):
-    from verity_vllm.observe.profiles.vllm_d9105ea80_sm89_eager import root_class
+    from verity_vllm.engine.profiles.vllm_d9105ea80_sm89_eager import root_class
     _, _, roots = resolved
     names = [rt.name for rs in roots.values() for rt in rs if rt.role in ("weight", "buffer")]
     assert names, "no weight roots in the preamble"

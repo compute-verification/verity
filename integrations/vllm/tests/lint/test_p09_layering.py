@@ -257,7 +257,7 @@ def test_detectors_on_examples() -> None:
     assert I.RANK["pipeline"] > I.RANK["check|properties"] > I.RANK["acquire"] > I.RANK["observe|commit"] \
         > I.RANK["engine"] > I.RANK["query|correspondence"] > I.RANK["program"] > I.RANK["collectives"] \
         > I.RANK["config"] > I.RANK["core"]
-    assert I.layer_of("verity_vllm.observe.vllm_adapter") == "engine"
+    assert I.layer_of("verity_vllm.engine.vllm_adapter") == "engine"
     assert I.layer_of("verity_vllm.observe.fold") == "observe|commit"
     assert I.sccs({"a", "b", "c", "d"}, {"a": {"b"}, "b": {"a", "c"}, "c": {"d"}}) == [["a", "b"]]
     bad = (

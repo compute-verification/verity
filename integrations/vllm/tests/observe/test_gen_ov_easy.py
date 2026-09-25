@@ -20,14 +20,14 @@ from verity_vllm.input_provenance import analytic
 from verity_vllm.pipeline.report import workload_summary
 from verity_vllm.observe.events import RunHeader
 from verity_vllm.observe.patterns import GemmLaunch
-from verity_vllm.observe.profiles import gen_llama_patterns as GP
-from verity_vllm.observe.profiles import profile_for_case, profile_module_for_case
-from verity_vllm.observe.profiles import vllm_d9105ea80_sm89_eager as BASE
-from verity_vllm.observe.profiles import vllm_d9105ea80_sm89_eager_qwen15 as Q15
+from verity_vllm.engine.profiles import gen_llama_patterns as GP
+from verity_vllm.engine.profiles import profile_for_case, profile_module_for_case
+from verity_vllm.engine.profiles import vllm_d9105ea80_sm89_eager as BASE
+from verity_vllm.engine.profiles import vllm_d9105ea80_sm89_eager_qwen15 as Q15
 
-L = importlib.import_module("verity_vllm.observe.profiles.derived_LLAMA32_1B")
-Q = importlib.import_module("verity_vllm.observe.profiles.derived_QWEN05")
-B7 = importlib.import_module("verity_vllm.observe.profiles.derived_B7")
+L = importlib.import_module("verity_vllm.engine.profiles.derived_LLAMA32_1B")
+Q = importlib.import_module("verity_vllm.engine.profiles.derived_QWEN05")
+B7 = importlib.import_module("verity_vllm.engine.profiles.derived_B7")
 from verity_vllm.program.registry import b1
 
 REPO = Path(__file__).resolve().parents[2]
@@ -71,9 +71,9 @@ def test_config_json_copy_is_the_pinned_hub_file():
 
 
 def test_case_b7_is_the_contracts_pinned_7b_role_no_manifest_change():
-    """`verity_vllm.observe.engine_profile.CASES["B7"]` names the repo; `checkpoint_for("B7")` resolves to the frozen entry above."""
+    """`verity_vllm.engine.engine_profile.CASES["B7"]` names the repo; `checkpoint_for("B7")` resolves to the frozen entry above."""
     sys.path.insert(0, str(REPO / "vllm-poc"))
-    from verity_vllm.observe import engine_profile as adapter_profile
+    from verity_vllm.engine import engine_profile as adapter_profile
     assert adapter_profile.CASES["B7"] == {"repo": B7.REPO_ID}
     entry = adapter_profile.load_checkpoints(MANIFEST)[B7.REPO_ID]
     assert entry["revision"] == B7.REVISION and entry["downloaded"]
@@ -252,7 +252,7 @@ def _weights_intervals(C):
 
 def test_serve_untied_is_not_registered_and_binds_from_the_profile_config():
     from verity.ir.defs import REGISTRY
-    from verity_vllm.observe.profiles import gen_ov_easy_family as F
+    from verity_vllm.engine.profiles import gen_ov_easy_family as F
     assert not any(k.startswith("ServeUntied") for k in REGISTRY.defs), "a diagnostic reference must not register itself"
     fam = F.serve_family(B7.C)
     assert fam.id.startswith("ServeUntied_v1{C=") and fam.id.endswith(",LP=32,STEPS=15,BN=64}"), fam.id
@@ -272,7 +272,7 @@ def test_serve_untied_differs_from_serve_v4_only_at_the_lm_head_operands():
     its 16 lm_head Gemm leaves read the `lm_head` field where `Serve_v4` reads `embed` -- the divergence that fails the fork
     point's structure check for B7 (the tied family's `embed` interval cannot map onto a second flat interval)."""
     from verity_vllm.program.frontend.rules.family import _runs, expand_leaves
-    from verity_vllm.observe.profiles import gen_ov_easy_family as F
+    from verity_vllm.engine.profiles import gen_ov_easy_family as F
     LP, STEPS = 4, 2                                           # small statics: the same construction, seconds on the laptop
     C = {k: v for k, v in B7.C.items() if k != "BN"}
     untied = F.serve_family(B7.C, LP=LP, STEPS=STEPS)

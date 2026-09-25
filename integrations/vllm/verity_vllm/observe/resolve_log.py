@@ -35,7 +35,7 @@ DEFAULT_PROFILE = "vllm_d9105ea80_sm89_eager"
 
 
 def load_profile(name: str) -> tuple[Profile, Any]:
-    mod_name = name if "." in name else f"verity_vllm.observe.profiles.{name}"
+    mod_name = name if "." in name else f"verity_vllm.engine.profiles.{name}"
     mod = importlib.import_module(mod_name)
     return mod.PROFILE, mod
 

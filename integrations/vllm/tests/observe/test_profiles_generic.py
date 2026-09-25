@@ -2,7 +2,7 @@
 module, no role -> module table.  The per-role fixtures `profiles/expected/derived_<ROLE>[_tp<W>].json` pin the canonical form
 (`profiles.canonical`) the generic constructor produced when the hand-written modules were retired (they were shown equal to it, object by
 object, by the `test_profiles_generic_equals_hand.py` that left with those modules); a change here is a deliberate re-pin
-(`python -m verity_vllm.observe.profiles.canonical --write`, reviewed in the diff)."""
+(`python -m verity_vllm.engine.profiles.canonical --write`, reviewed in the diff)."""
 from __future__ import annotations
 
 import dataclasses
@@ -15,11 +15,11 @@ import pytest
 from verity_vllm.input_provenance import analytic
 from verity_vllm.observe.events import RunHeader
 from verity_vllm.observe.patterns import TokenSelectArgmax
-from verity_vllm.observe.profiles import canonical as K
-from verity_vllm.observe.profiles import dense_generic as dg
-from verity_vllm.observe.profiles import family_facts as FF
-from verity_vllm.observe.profiles import generic as G
-from verity_vllm.observe.profiles import profile_for_case, profile_module_for_case
+from verity_vllm.engine.profiles import canonical as K
+from verity_vllm.engine.profiles import dense_generic as dg
+from verity_vllm.engine.profiles import family_facts as FF
+from verity_vllm.engine.profiles import generic as G
+from verity_vllm.engine.profiles import profile_for_case, profile_module_for_case
 from verity_vllm.tp.collective_pattern import TpCollective
 from verity_vllm.tp.embedding_shard import EmbeddingShardCuda
 
@@ -51,7 +51,7 @@ def test_every_shipped_config_has_a_fixture_and_vice_versa():
     expected = set()
     for role, world in ROLES:
         try:
-            G.make_module(f"verity_vllm.observe.profiles.{G.module_name(role, world)}")
+            G.make_module(f"verity_vllm.engine.profiles.{G.module_name(role, world)}")
         except ImportError:
             continue
         expected.add(G.module_name(role, world))
@@ -64,7 +64,7 @@ def test_generic_profile_equals_its_fixture(fixture):
     built = json.loads(K.dumps(K.canonical_of_role(role, world)))     # through JSON: the fixture's own value domain
     expected = json.loads(fixture.read_text())
     delta = _diff(expected, built)
-    assert not delta, f"{fixture.name}: {len(delta)} differences (a deliberate re-pin is `python -m verity_vllm.observe.profiles.canonical --write`):\n  " + "\n  ".join(delta[:40])
+    assert not delta, f"{fixture.name}: {len(delta)} differences (a deliberate re-pin is `python -m verity_vllm.engine.profiles.canonical --write`):\n  " + "\n  ".join(delta[:40])
 
 
 def test_fixture_config_sha_is_the_manifest_bytes():
@@ -84,7 +84,7 @@ def test_fixture_config_sha_is_the_manifest_bytes():
 
 def test_module_name_grammar():
     assert G.module_name("B1") == "derived_B1" and G.module_name("B1", 2) == "derived_B1_tp2"
-    assert G.parse_module("verity_vllm.observe.profiles.derived_QWEN3_30B_A3B_tp2") == ("QWEN3_30B_A3B", 2)
+    assert G.parse_module("verity_vllm.engine.profiles.derived_QWEN3_30B_A3B_tp2") == ("QWEN3_30B_A3B", 2)
     assert G.parse_module("derived_LLAMA32_1B") == ("LLAMA32_1B", 1)
     assert G.parse_module("dense_MISTRAL7B") == ("MISTRAL7B", 1)                  # the X-07 name recorded runs cite
     assert G.parse_module("gen_llama_llama32_1b") is None and G.parse_module("vllm_d9105ea80_sm89_eager") is None
@@ -92,22 +92,22 @@ def test_module_name_grammar():
 
 def test_finder_materialises_every_fixture_module_and_the_x07_name():
     for fixture in FIXTURES:
-        mod = importlib.import_module(f"verity_vllm.observe.profiles.{fixture.stem}")
+        mod = importlib.import_module(f"verity_vllm.engine.profiles.{fixture.stem}")
         assert mod.PROFILE.id == json.loads(fixture.read_text())["id"]
         assert callable(mod.weight_field) and callable(mod.root_class) and callable(mod.check_header) and callable(mod.build_profile)
-    dense = importlib.import_module("verity_vllm.observe.profiles.dense_MISTRAL7B")
-    assert dense.PROFILE.id == importlib.import_module("verity_vllm.observe.profiles.derived_MISTRAL7B").PROFILE.id
+    dense = importlib.import_module("verity_vllm.engine.profiles.dense_MISTRAL7B")
+    assert dense.PROFILE.id == importlib.import_module("verity_vllm.engine.profiles.derived_MISTRAL7B").PROFILE.id
 
 
 def test_the_x07_name_is_for_dense_architectures_only():
     with pytest.raises(ImportError, match="derived_OLMOE"):
-        importlib.import_module("verity_vllm.observe.profiles.dense_OLMOE")
+        importlib.import_module("verity_vllm.engine.profiles.dense_OLMOE")
     with pytest.raises(ImportError, match="derived_PYTHIA160M"):
-        importlib.import_module("verity_vllm.observe.profiles.dense_PYTHIA160M")
+        importlib.import_module("verity_vllm.engine.profiles.dense_PYTHIA160M")
 
 
 def test_profile_module_for_case_is_derived_not_looked_up():
-    from verity_vllm.observe import profiles
+    from verity_vllm.engine import profiles
     assert not hasattr(profiles, "PROFILE_BY_CASE")
     for role, world in ROLES:
         if role == "QWEN15_AWQ":
@@ -195,7 +195,7 @@ def test_rank_profile_is_the_world_divided_configuration(role):
 
 def test_rank_check_header_reshards_the_recorded_full_config():
     cfg = json.loads((dg.HF_CONFIG_DIR / "LLAMA32_1B.config.json").read_text())
-    mod = importlib.import_module("verity_vllm.observe.profiles.derived_LLAMA32_1B_tp2")
+    mod = importlib.import_module("verity_vllm.engine.profiles.derived_LLAMA32_1B_tp2")
     h = RunHeader("verity-capture/log/v1", "2026-09-23T00:00:00Z", "pid", {}, {"repo": mod.REPO_ID, "config": cfg, "tp": 2}, {"requests": []})
     assert mod.check_header(h) == []
     assert any("tensor_parallel_size" in m for m in mod.check_header(dataclasses.replace(h, model={**h.model, "tp": 1})))
@@ -205,7 +205,7 @@ def test_rank_check_header_reshards_the_recorded_full_config():
 
 def test_world_must_divide_the_sharded_keys():
     with pytest.raises(ImportError, match="not divisible"):
-        importlib.import_module("verity_vllm.observe.profiles.derived_B0_tp2")          # SmolLM2-135M: 9 heads
+        importlib.import_module("verity_vllm.engine.profiles.derived_B0_tp2")          # SmolLM2-135M: 9 heads
 
 
 # ------------------------------------------------------------------------------------------------------------------- refusals
@@ -226,7 +226,7 @@ def test_structural_refusals_are_stated():
 def test_olmoe_rank_record_holds_the_whole_all_heads_qk_norm():
     """OLMoE's q/k RMSNorm spans every head (`RMSNorm(total_num_heads * head_dim)`): a TP rank all-gathers q and k first and holds the
     whole replicated weight, so the rank record's `q_norm` / `k_norm` have the full model's width while its heads are the rank's."""
-    full, rank = (importlib.import_module(f"verity_vllm.observe.profiles.{G.module_name('OLMOE', w)}") for w in (1, 2))
+    full, rank = (importlib.import_module(f"verity_vllm.engine.profiles.{G.module_name('OLMOE', w)}") for w in (1, 2))
 
     def layer(C):
         wt = analytic.weights_type(C)

@@ -73,7 +73,7 @@ def repo_modules_loaded() -> dict[str, Any]:
     return {"method": "runtime: sys.modules of this process filtered to the repo root + vllm-poc, plus native_collect's cpp_extension sources when loaded (TP-11)",
             "pid": os.getpid(), "n": len(files), "files": sorted(files), "native_collect_jit_sources": jit}
 
-EXTENSION = "verity_vllm.tp.worker.TP2CaptureWorkerExtension"
+EXTENSION = "verity_vllm.engine.rank_worker.TP2CaptureWorkerExtension"
 
 
 def _moe_collective_modules() -> list[Any]:
@@ -220,7 +220,7 @@ class TP2CaptureWorkerExtension:
                     weights_verified: bool = False, argv: list[str] | None = None) -> dict[str, Any]:
         import torch
 
-        from verity_vllm.observe import vllm_adapter as va
+        from verity_vllm.engine import vllm_adapter as va
         from verity_vllm.pipeline.m1_capture import dump_cos_sin
 
         facts = _tp_facts(self)
@@ -243,7 +243,7 @@ class TP2CaptureWorkerExtension:
         man = header.profile
         pid_adapter = header.profile_id
         if isinstance(man, dict) and man.get("schema") == "verity-vllm/profile/v1":
-            from verity_vllm.observe import engine_profile as prof
+            from verity_vllm.engine import engine_profile as prof
             man.setdefault("parallelism", {})["tensor_parallel_size"] = world
             man.setdefault("engine_kwargs", {})["tensor_parallel_size"] = world
             pid = prof.profile_id_of(man)

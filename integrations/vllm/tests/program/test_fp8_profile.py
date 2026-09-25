@@ -15,8 +15,8 @@ from verity_vllm.input_provenance import analytic
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepStart, ViewDesc
 from verity_vllm.observe.patterns import ALIAS_OPS, classify_transparent
 from verity_vllm.observe.patterns_fp8 import CutlassScaledMmFp8Block, PerTokenGroupFp8Quant
-from verity_vllm.observe.profiles import dense_generic as dg
-from verity_vllm.observe.profiles import profile_for_case, profile_module_for_case
+from verity_vllm.engine.profiles import dense_generic as dg
+from verity_vllm.engine.profiles import profile_for_case, profile_module_for_case
 from verity_vllm.observe.resolver import Compute, PerRow, Shared, StepContext, Transparent, Unsupported, spec_label
 from verity_vllm.observe.tree import build_trees
 
@@ -60,7 +60,7 @@ def test_qwen3_fp8_role_derives_a_profile_with_the_fp8_patterns_first():
     assert p.patterns[0].group == 128 and p.patterns[1].group == 128
     assert "RMSNormTritonLaunch" in names and "GemmLaunch" in names
     assert p.notes["fp8"]["families"] == ["Fp8GroupQuant_v1{K,G}", "ScaledMmFp8Block_v1{K,N,G}"]
-    mod = importlib.import_module(f"verity_vllm.observe.profiles.dense_{ROLE}")
+    mod = importlib.import_module(f"verity_vllm.engine.profiles.dense_{ROLE}")
     assert mod.PROVENANCE["QK_NORM"] == "hand" and mod.PROVENANCE["FP8_BLOCK"] == "hf-config"
 
 

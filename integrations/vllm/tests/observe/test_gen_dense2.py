@@ -14,10 +14,10 @@ import pytest
 
 from verity_vllm.input_provenance import analytic
 from verity_vllm.observe.events import RunHeader
-from verity_vllm.observe.profiles import profile_module_for_case
+from verity_vllm.engine.profiles import profile_module_for_case
 
-gemma = importlib.import_module("verity_vllm.observe.profiles.derived_GEMMA2_2B")
-phi3 = importlib.import_module("verity_vllm.observe.profiles.derived_PHI3_MINI")
+gemma = importlib.import_module("verity_vllm.engine.profiles.derived_GEMMA2_2B")
+phi3 = importlib.import_module("verity_vllm.engine.profiles.derived_PHI3_MINI")
 from verity_vllm.program.registry import b1
 
 REPO = Path(__file__).resolve().parents[2]
@@ -333,8 +333,8 @@ import dataclasses
 
 from verity_vllm.observe.events import DispatchEnter
 from verity_vllm.observe.patterns import AttentionScope
-from verity_vllm.observe.profiles import vllm_d9105ea80_sm89_eager as B1PROF
-from verity_vllm.observe.profiles.gen_dense2_patterns import AttentionScopeInertWindow, with_dense2_patterns
+from verity_vllm.engine.profiles import vllm_d9105ea80_sm89_eager as B1PROF
+from verity_vllm.engine.profiles.gen_dense2_patterns import AttentionScopeInertWindow, with_dense2_patterns
 from verity_vllm.observe.resolver import Compute, Unsupported, resolve_step
 from tests.observe.test_patterns_synthetic import by_spec, context, decode_step
 from verity_vllm.observe.tree import step_events

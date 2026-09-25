@@ -401,8 +401,8 @@ class RunArtifacts:
 
 
 def load_profile_config(name: str) -> dict:
-    """`verity_vllm.observe.profiles.<name>.PROFILE.config` (torch-free import)."""
-    mod = importlib.import_module(name if "." in name else f"verity_vllm.observe.profiles.{name}")
+    """`verity_vllm.engine.profiles.<name>.PROFILE.config` (torch-free import)."""
+    mod = importlib.import_module(name if "." in name else f"verity_vllm.engine.profiles.{name}")
     prof = getattr(mod, "PROFILE", None) or getattr(mod, "profile", None)
     if prof is None:
         for attr in ("build_profile", "make_profile", "get_profile"):
@@ -1353,7 +1353,7 @@ FOLD_SUMMARY_FIELDS: dict[str, str] = {
     "schema": f"`{FOLD_SUMMARY_SCHEMA}`",
     "utc": "UTC time the summary was written",
     "log": "path of the raw observation log folded",
-    "profile": "profile module name (`verity_vllm.observe.profiles.<name>`)",
+    "profile": "profile module name (`verity_vllm.engine.profiles.<name>`)",
     "profile_id": "`Profile.id` of that module",
     "with_program": "true when `Program()` and the digest were built (G6 needs it)",
     "digest": "`program_digest(Program(Captured_v1{PROFILE, WORKLOAD}))` — the structure digest G6 compares (empty without Program())",

@@ -33,14 +33,14 @@ from verity_vllm.pipeline.build import read_tp_links, same_module_path
 
 
 def _engine_main(args) -> None:
-    from verity_vllm.observe import engine_profile as prof
+    from verity_vllm.engine import engine_profile as prof
 
     prof.apply_env()
     from vllm import LLM
 
-    from verity_vllm.observe import vllm_adapter as va
+    from verity_vllm.engine import vllm_adapter as va
     from verity_vllm.pipeline.tp.capture import parse_engine_args
-    from verity_vllm.tp.worker import EXTENSION
+    from verity_vllm.engine.rank_worker import EXTENSION
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)

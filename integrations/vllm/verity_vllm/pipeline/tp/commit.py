@@ -303,17 +303,17 @@ def _build_dirs(args) -> dict[int, str]:
 
 
 def main() -> int:
-    from verity_vllm.observe import engine_profile as prof
+    from verity_vllm.engine import engine_profile as prof
 
     prof.apply_env()
     import torch
     from vllm import LLM
 
-    from verity_vllm.observe import vllm_adapter as va
+    from verity_vllm.engine import vllm_adapter as va
     from verity_vllm.pipeline.commit import git_head, run_workload
     from verity_vllm.check.commit_verdict import REQUIRED_CLASSES_DEFAULT, commit_verdict
     from verity_vllm.pipeline.tp.capture import parse_engine_args
-    from verity_vllm.tp.worker import EXTENSION
+    from verity_vllm.engine.rank_worker import EXTENSION
     from verity_vllm.acquire.committer_api import challenge_positions
 
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
@@ -1114,7 +1114,7 @@ def main() -> int:
     # process's (after finalize: replay, linkage, pin, partial source all imported) + the collector's JIT C++/CUDA sources -- what ran, not a
     # static closure; the tag-candidate equivalence rule (COORD ruling 24) reads this file when it exists.
     try:
-        from verity_vllm.tp.worker import repo_modules_loaded
+        from verity_vllm.engine.rank_worker import repo_modules_loaded
         drv = repo_modules_loaded()
         ranks_mods = llm.collective_rpc("tp2_repo_modules", timeout=args.rpc_timeout)
         union = set(drv["files"])

@@ -15,7 +15,7 @@ from verity_vllm.observe.patterns import TokenSelectArgmax, TokenSelectGumbelTwo
 ])
 def test_rank_profile_states_the_shard_configuration_and_the_rank_patterns(mod, shard, full_vocab, qkv, gu, bias):
     import importlib
-    p = importlib.import_module(f"verity_vllm.observe.profiles.{mod}")
+    p = importlib.import_module(f"verity_vllm.engine.profiles.{mod}")
     assert p.WORLD == 2
     assert {k: p.C[k] for k in shard} == shard
     assert (p.C["QKV"], p.C["GU"], bool(p.C["BIAS"])) == (qkv, gu, bias)
@@ -30,8 +30,8 @@ def test_rank_profile_states_the_shard_configuration_and_the_rank_patterns(mod, 
 def test_qwen_rank_profile_shares_the_llama_rank_facts_not_a_copy():
     import importlib
     from verity_vllm.tp.embedding_shard import EmbeddingShardCuda
-    llama = importlib.import_module("verity_vllm.observe.profiles.derived_LLAMA32_1B_tp2")
-    qwen = importlib.import_module("verity_vllm.observe.profiles.derived_B1_tp2")
+    llama = importlib.import_module("verity_vllm.engine.profiles.derived_LLAMA32_1B_tp2")
+    qwen = importlib.import_module("verity_vllm.engine.profiles.derived_B1_tp2")
     assert type(qwen.PROFILE.patterns[0]) is type(llama.PROFILE.patterns[0]) is EmbeddingShardCuda   # one generic `world > 1` branch
     assert qwen.C["BN"] == 64 and llama.C["BN"] == 128                          # head dim 128 vs 64: FA2 kBlockN differs, nothing else is model-authored
     assert qwen.C["tie_word_embeddings"] is True

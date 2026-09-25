@@ -51,6 +51,7 @@
     {"file": "verity_vllm/check/sampled_replay.py", "kind": "reason-prefix", "symbol": "_fork_worker", "detail": "why.startswith"},
     {"file": "verity_vllm/check/stoch_recompute.py", "kind": "reason-prefix", "symbol": "recompute_run", "detail": "'...' in str(r.get('why'))"},
     {"file": "verity_vllm/check/twins.py", "kind": "reason-prefix", "symbol": "_skip_class", "detail": "'...' in msg", "count": 3},
+    {"file": "verity_vllm/engine/rank_worker.py", "kind": "reason-prefix", "symbol": "TP2CaptureWorkerExtension.tp2_commit_make", "detail": "'...' in str(note.get('shard') or '')"},
     {"file": "verity_vllm/pipeline/experiment.py", "kind": "g-literal", "symbol": "vu_partition_index", "detail": "G8"},
     {"file": "verity_vllm/pipeline/report.py", "kind": "g-literal", "symbol": "build_card", "detail": "G4"},
     {"file": "verity_vllm/pipeline/report.py", "kind": "g-literal", "symbol": "build_card", "detail": "G5"},
@@ -63,7 +64,6 @@
     {"file": "verity_vllm/program/frontend/derive.py", "kind": "reason-prefix", "symbol": "_no_rule", "detail": "msg.startswith"},
     {"file": "verity_vllm/program/frontend/rules/vocab.py", "kind": "reason-prefix", "symbol": "Vocabulary.to_json", "detail": "'...' in self.notes"},
     {"file": "verity_vllm/program/frontend/torch_frontend.py", "kind": "reason-prefix", "symbol": "_classify", "detail": "'...' in msg", "count": 3},
-    {"file": "verity_vllm/program/frontend/torch_frontend.py", "kind": "reason-prefix", "symbol": "_classify", "detail": "'...' in msg.lower()"},
-    {"file": "verity_vllm/tp/worker.py", "kind": "reason-prefix", "symbol": "TP2CaptureWorkerExtension.tp2_commit_make", "detail": "'...' in str(note.get('shard') or '')"}
+    {"file": "verity_vllm/program/frontend/torch_frontend.py", "kind": "reason-prefix", "symbol": "_classify", "detail": "'...' in msg.lower()"}
   ]
 }

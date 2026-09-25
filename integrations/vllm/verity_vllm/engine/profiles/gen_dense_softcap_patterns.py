@@ -19,7 +19,7 @@ same operands / outputs / attribution / consumed ids.  `softcap` in `(None, 0.0)
 NaN or infinite `softcap` is Unsupported here (FA2 takes the softcap path iff `softcap > 0`; the Definition requires `CAP > 0`).
 
 The Definition stays in `quarantine/dense` (no promotion inside the r8 window, brief §2 rule 2); G4 admits it through the run's
-`quarantine.json` (per-Definition difftest record, `verity_vllm/observe/profiles/quarantine/GEMMA2_2B.json`, inherited by `cov_pod.sh`).
+`quarantine.json` (per-Definition difftest record, `verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json`, inherited by `cov_pod.sh`).
 """
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ from verity.ir.defs import bind
 from verity_vllm.program.registry.quarantine.dense import softcap as _softcap
 
 from verity_vllm.observe.patterns import FA2_OP_NAMES, AttentionScope, ComputeGroup, as_float, bound_args, find_descendants, op_name, unsupported
-from verity_vllm.observe.profiles.gen_dense2_patterns import AttentionScopeInertWindow, _annotate, _replace_descendant, _rewrite_args
+from verity_vllm.engine.profiles.gen_dense2_patterns import AttentionScopeInertWindow, _annotate, _replace_descendant, _rewrite_args
 from verity_vllm.observe.resolver import Compute, Resolution, StepContext, Unsupported
 from verity_vllm.observe.tree import TreeNode
 

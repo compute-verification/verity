@@ -62,13 +62,13 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.observe import engine_profile as prof  # noqa: F401
+from verity_vllm.engine import engine_profile as prof  # noqa: F401
 
 prof.apply_env()
 
 import torch  # noqa: E402
 
-from verity_vllm.observe import vllm_adapter as va  # noqa: E402
+from verity_vllm.engine import vllm_adapter as va  # noqa: E402
 from verity_vllm.pipeline.timeline import Timeline  # noqa: E402  (torch-free; VERITY_TIMELINE -> append-only JSONL, else a no-op sink)
 from verity_vllm.commit import opened as OV  # noqa: E402
 
@@ -81,12 +81,12 @@ TL = Timeline.from_env("commit_delta", hot=False)
 
 def _rid_of(order: dict, rid) -> str:
     """The engine's per-step row id -> the workload's `r<i>`: vLLM may suffix the id we passed to add_request with `-<8 hex>`
-    (verity_vllm.observe.engine_driver.external_id strips it); an id the workload does not name is returned raw (named downstream)."""
+    (verity_vllm.engine.engine_driver.external_id strips it); an id the workload does not name is returned raw (named downstream)."""
     r = str(rid)
     if r in order:
         return order[r]
     try:
-        from verity_vllm.observe.engine_driver import external_id
+        from verity_vllm.engine.engine_driver import external_id
         e = external_id(r)
         if e in order:
             return order[e]
@@ -1207,7 +1207,7 @@ def main(argv: list[str] | None = None) -> None:
             raise SystemExit("--compiled-taps kernels: single committer only (no --arms)")
         if not getattr(args, "required_manifest", None):
             raise SystemExit("--compiled-taps kernels needs --required-manifest (verity_vllm.query.manifest.compiled build ... from the control process's Inductor dir)")
-        from verity_vllm.observe import engine_profile as _prof
+        from verity_vllm.engine import engine_profile as _prof
         from verity_vllm.acquire.compiled_kernel_source import CompiledKernelSource
 
         _prof.apply_env()
@@ -1219,7 +1219,7 @@ def main(argv: list[str] | None = None) -> None:
             raise SystemExit("--compiled-taps on is the treatment process; the control process runs with --compiled-taps off --only-arm control")
         if args.arms:
             raise SystemExit("--compiled-taps on: single committer only (no --arms)")
-        from verity_vllm.observe import engine_profile as _prof
+        from verity_vllm.engine import engine_profile as _prof
         from verity_vllm.acquire.compiled_source import CompiledGraphSource
 
         _prof.apply_env()                                    # before any vllm import (build_engine does the same, idempotent)

@@ -75,9 +75,9 @@ _NP = {"bfloat16": np.uint16, "float16": np.uint16, "float32": np.uint32, "int32
 # --- loaders ----------------------------------------------------------------------------------------------
 
 def load_profile(name: str) -> Profile:
-    """`verity_vllm.observe.profiles.<name>`: its `PROFILE` / `profile` object or `build_profile()` / `make_profile()`."""
+    """`verity_vllm.engine.profiles.<name>`: its `PROFILE` / `profile` object or `build_profile()` / `make_profile()`."""
     import importlib
-    mod = importlib.import_module(f"verity_vllm.observe.profiles.{name}")
+    mod = importlib.import_module(f"verity_vllm.engine.profiles.{name}")
     for attr in ("PROFILE", "profile"):
         p = getattr(mod, attr, None)
         if isinstance(p, Profile):
@@ -86,7 +86,7 @@ def load_profile(name: str) -> Profile:
         f = getattr(mod, attr, None)
         if callable(f):
             return f()
-    raise ImportError(f"verity_vllm.observe.profiles.{name} exposes no Profile (PROFILE / profile / build_profile())")
+    raise ImportError(f"verity_vllm.engine.profiles.{name} exposes no Profile (PROFILE / profile / build_profile())")
 
 
 def fold_log(log_path: str | Path, profile: Profile, *, strict: bool | None = None, with_program: bool = True) -> FoldResult:

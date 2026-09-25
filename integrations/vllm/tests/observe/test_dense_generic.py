@@ -14,9 +14,9 @@ import pytest
 from verity_vllm.config import ROOT
 from verity_vllm.observe.events import RunHeader
 from verity_vllm.observe.patterns import GemmLaunch
-from verity_vllm.observe.profiles import dense_generic as dg
-from verity_vllm.observe.profiles import profile_for_case, profile_module_for_case
-from verity_vllm.observe.profiles.gen_llama_patterns import ADA_TUNED_GEMM, GemmLaunchTuned
+from verity_vllm.engine.profiles import dense_generic as dg
+from verity_vllm.engine.profiles import profile_for_case, profile_module_for_case
+from verity_vllm.engine.profiles.gen_llama_patterns import ADA_TUNED_GEMM, GemmLaunchTuned
 
 MISTRAL_CFG = dg.HF_CONFIG_DIR / "MISTRAL7B.config.json"
 
@@ -51,7 +51,7 @@ def test_shipped_dense_qwen3_config_derives_the_qk_norm_profile():
 
 def test_mistral_role_resolves_to_a_derived_module_without_an_allowlist_entry():
     assert profile_module_for_case("MISTRAL7B") == "derived_MISTRAL7B"
-    mod = importlib.import_module("verity_vllm.observe.profiles.dense_MISTRAL7B")          # the X-07 name recorded runs cite: the same module
+    mod = importlib.import_module("verity_vllm.engine.profiles.dense_MISTRAL7B")          # the X-07 name recorded runs cite: the same module
     p = mod.PROFILE
     assert p.id == profile_for_case("MISTRAL7B").id and p.config == profile_for_case("MISTRAL7B").config   # two module names, one derivation
     assert p.notes["case"] == "MISTRAL7B" and p.id == "vllm-d9105ea80-sm89-eager-bf16-mistral7b"
@@ -66,7 +66,7 @@ def test_mistral_role_resolves_to_a_derived_module_without_an_allowlist_entry():
 
 
 def test_weight_map_follows_the_derived_facts_not_the_name():
-    mod = importlib.import_module("verity_vllm.observe.profiles.dense_MISTRAL7B")
+    mod = importlib.import_module("verity_vllm.engine.profiles.dense_MISTRAL7B")
     wf = mod.weight_field
     assert wf("lm_head.weight") == ("lm_head",)                              # untied -> its own field
     assert wf("model.embed_tokens.weight") == ("embed",)
@@ -90,7 +90,7 @@ def test_pattern_list_is_the_shared_one_with_the_target_tuned_gemm_specializatio
 
 
 def test_check_header_compares_facts_including_untied_embeddings():
-    mod = importlib.import_module("verity_vllm.observe.profiles.dense_MISTRAL7B")
+    mod = importlib.import_module("verity_vllm.engine.profiles.dense_MISTRAL7B")
     cfg = json.loads(MISTRAL_CFG.read_text())
     assert mod.check_header(_header(cfg, mod.REPO_ID)) == []
     assert mod.check_header(_header({**cfg, "tie_word_embeddings": True}, mod.REPO_ID)) == ["tie_word_embeddings=True != C[tie_word_embeddings]=False"]
@@ -101,8 +101,8 @@ def test_check_header_compares_facts_including_untied_embeddings():
 def test_x07_name_and_derived_name_are_one_profile():
     """[P6] `dense_<ROLE>` (the X-07 name recorded runs cite) and `derived_<ROLE>` build the same profile; the hand-authored module it
     was once compared with is gone (`profiles/expected/derived_LLAMA32_1B.json` pins what both produced)."""
-    d = importlib.import_module("verity_vllm.observe.profiles.dense_LLAMA32_1B").PROFILE
-    g = importlib.import_module("verity_vllm.observe.profiles.derived_LLAMA32_1B").PROFILE
+    d = importlib.import_module("verity_vllm.engine.profiles.dense_LLAMA32_1B").PROFILE
+    g = importlib.import_module("verity_vllm.engine.profiles.derived_LLAMA32_1B").PROFILE
     assert d.config == g.config and d.id == g.id
     assert [type(x).__name__ for x in d.patterns] == [type(x).__name__ for x in g.patterns]
     assert d.kernel_allowlist == g.kernel_allowlist
@@ -130,15 +130,15 @@ def test_unknown_role_and_bad_module_names():
     with pytest.raises(KeyError, match="no HF config.json"):
         profile_module_for_case("NO_SUCH_ROLE_XYZ")
     with pytest.raises(ImportError):
-        importlib.import_module("verity_vllm.observe.profiles.dense_NO_SUCH_ROLE_XYZ")
-    assert dg.role_of_module("verity_vllm.observe.profiles.dense_lowercase") is None
-    assert dg.role_of_module("verity_vllm.observe.profiles.dense_generic") is None    # this module itself is not a role
-    assert dg.role_of_module("verity_vllm.observe.profiles.dense_MISTRAL7B") == "MISTRAL7B"
+        importlib.import_module("verity_vllm.engine.profiles.dense_NO_SUCH_ROLE_XYZ")
+    assert dg.role_of_module("verity_vllm.engine.profiles.dense_lowercase") is None
+    assert dg.role_of_module("verity_vllm.engine.profiles.dense_generic") is None    # this module itself is not a role
+    assert dg.role_of_module("verity_vllm.engine.profiles.dense_MISTRAL7B") == "MISTRAL7B"
 
 
 def test_fresh_process_import_by_name(tmp_path: Path):
-    """What resolve_log / compare / gates do: `importlib.import_module("verity_vllm.observe.profiles." + name)` in a new interpreter."""
-    code = ("import importlib, json; m = importlib.import_module('verity_vllm.observe.profiles.dense_MISTRAL7B'); "
+    """What resolve_log / compare / gates do: `importlib.import_module("verity_vllm.engine.profiles." + name)` in a new interpreter."""
+    code = ("import importlib, json; m = importlib.import_module('verity_vllm.engine.profiles.dense_MISTRAL7B'); "
             "print(json.dumps([m.PROFILE.id, m.PROFILE.config['NL'], m.PROFILE.config['BN'], m.CASE]))")
     out = subprocess.run([sys.executable, "-c", code], check=True, capture_output=True, text=True, cwd=str(ROOT)).stdout
     assert json.loads(out.strip().splitlines()[-1]) == ["vllm-d9105ea80-sm89-eager-bf16-mistral7b", 32, 64, "MISTRAL7B"]

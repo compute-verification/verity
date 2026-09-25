@@ -42,11 +42,11 @@ INTERIM_LAYER = {
     "verity_vllm.acquire.leafhash": "observe|commit",
     "verity_vllm.acquire.hidden_gpu_src": "observe|commit",
     "verity_vllm.observe": "observe|commit",                   # observer, triton adapter, storage, events; fold/tree/... -> observe/fold/
-    "verity_vllm.observe.vllm_adapter": "engine",
-    "verity_vllm.observe.engine_profile": "engine",
-    "verity_vllm.observe.arrivals": "engine",
-    "verity_vllm.observe.engine_driver": "engine",
-    "verity_vllm.observe.profiles": "engine",                  # -> engine/profiles/
+    "verity_vllm.engine.vllm_adapter": "engine",
+    "verity_vllm.engine.engine_profile": "engine",
+    "verity_vllm.engine.arrivals": "engine",
+    "verity_vllm.engine.engine_driver": "engine",
+    "verity_vllm.engine.profiles": "engine",                  # -> engine/profiles/
     "verity_vllm.pipeline.m1_capture": "pipeline",              # -> the capture stage of pipeline/match.py
     "verity_vllm.commit": "observe|commit",
     "verity_vllm.query": "query|correspondence",
@@ -67,7 +67,7 @@ INTERIM_LAYER = {
     "verity_vllm.tp.collective_record": "collectives",
     "verity_vllm.tp.collective_sites": "collectives",
     "verity_vllm.tp.embedding_shard": "collectives",
-    "verity_vllm.tp.worker": "engine",                         # -> engine/rank_worker.py
+    "verity_vllm.engine.rank_worker": "engine",                         # -> engine/rank_worker.py
     "verity_vllm.tp.partial_source": "acquire",                # -> acquire/sources/
     "verity_vllm.tp.export_ops": "program",                    # -> program/frontend/
     "verity_vllm.tp.collective_pattern": "observe|commit",     # -> observe/fold/patterns/

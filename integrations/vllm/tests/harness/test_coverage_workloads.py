@@ -48,7 +48,7 @@ def test_draws_are_seeded_and_model_independent():
 def test_generated_b0_workloads_match_their_draws():
     for prof in gw.PROFILES:
         for ctx in sorted(gw.CTX):
-            p = REPO / "verity_vllm" / "observe" / "profiles" / f"workload_cov_b0_{prof.lower()}_{ctx.lower()}.json"
+            p = REPO / "verity_vllm" / "engine" / "profiles" / f"workload_cov_b0_{prof.lower()}_{ctx.lower()}.json"
             if not p.exists():
                 pytest.skip(f"{p.name} not generated in this checkout")
             doc = json.loads(p.read_text())
@@ -106,8 +106,8 @@ class _StubEngine:
 
 
 def _load_adapter():
-    """The arrival loop lives in the torch-free `verity_vllm.observe.arrivals` (vllm_adapter re-exports it)."""
-    from verity_vllm.observe import arrivals
+    """The arrival loop lives in the torch-free `verity_vllm.engine.arrivals` (vllm_adapter re-exports it)."""
+    from verity_vllm.engine import arrivals
     return arrivals
 
 

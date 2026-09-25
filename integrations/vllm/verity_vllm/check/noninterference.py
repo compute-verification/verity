@@ -95,12 +95,12 @@ def _read_json(path: Path) -> dict:
 
 def run_observer_variant(workload: str, out_dir: str, checkpoints: str, *, max_tokens: int | None, max_num_seqs: int,
                          warmup: bool, case: str | None = None, engine_args: dict | None = None) -> None:
-    from verity_vllm.observe import engine_profile as prof
+    from verity_vllm.engine import engine_profile as prof
 
     prof.apply_env()
     import torch  # noqa: F401
 
-    from verity_vllm.observe import vllm_adapter as va
+    from verity_vllm.engine import vllm_adapter as va
 
     class HashOnlyCapture(va.Capture):
         """`Capture` whose snapshot flush hashes the pinned copies and writes no value files."""
@@ -157,12 +157,12 @@ def run_observer_variant(workload: str, out_dir: str, checkpoints: str, *, max_t
 
 def run_hooks_variant(workload: str, out_dir: str, checkpoints: str, *, max_tokens: int | None, max_num_seqs: int,
                       warmup: bool, case: str | None = None, engine_args: dict | None = None) -> None:
-    from verity_vllm.observe import engine_profile as prof
+    from verity_vllm.engine import engine_profile as prof
 
     prof.apply_env()
     import torch
 
-    from verity_vllm.observe import vllm_adapter as va
+    from verity_vllm.engine import vllm_adapter as va
 
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -546,7 +546,7 @@ def expected_layers_for(case: str | None) -> int | None:
     if not case:
         return None
     try:
-        from verity_vllm.observe.profiles import profile_for_case
+        from verity_vllm.engine.profiles import profile_for_case
         return int(profile_for_case(case).config["NL"])
     except Exception:  # noqa: BLE001
         return None
@@ -722,7 +722,7 @@ def compare_markdown(rep: dict) -> str:
 
 
 def _engine_args(items: list[str]) -> dict:
-    from verity_vllm.observe import vllm_adapter as va  # torch import only on the GPU half
+    from verity_vllm.engine import vllm_adapter as va  # torch import only on the GPU half
     return va.parse_engine_args(items)
 
 

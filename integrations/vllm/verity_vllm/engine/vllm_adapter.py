@@ -55,14 +55,14 @@ from typing import Any, Callable
 import numpy as np
 import torch
 
-from .events import (Event, Note, Root, RunEnd, RunHeader, SampleEnd, StepEnd, StepLink, StepStart, StorageAlloc,
+from verity_vllm.observe.events import (Event, Note, Root, RunEnd, RunHeader, SampleEnd, StepEnd, StepLink, StepStart, StorageAlloc,
                      ViewDesc, to_json)
-from .log import LogWriter
-from .observer import EmptyMode, ModuleNamer, Observer, Recorder, encode_arg, reenter_impl_name
-from .storage import StorageAdapter, dtype_name
+from verity_vllm.observe.log import LogWriter
+from verity_vllm.observe.observer import EmptyMode, ModuleNamer, Observer, Recorder, encode_arg, reenter_impl_name
+from verity_vllm.observe.storage import StorageAdapter, dtype_name
 from verity_vllm.observe import triton_adapter
 
-from .arrivals import run_requests_arrivals  # [coverage D87] step-indexed arrivals (torch-free module, unit-tested)
+from verity_vllm.engine.arrivals import run_requests_arrivals  # [coverage D87] step-indexed arrivals (torch-free module, unit-tested)
 from verity_vllm.correspondence import chunk_attribution as _chunks  # [chunked 2026-09-17] prefill-chunk / token-step attribution (torch-free, unit-tested)
 
 SCHEMA = "verity-capture/log/v1"
@@ -212,7 +212,7 @@ def effective_execution_doc(llm: Any, model: Any = None) -> dict:
     compare it with the row id / the Program's declared applicability (COORD M-0063 (3)).  Every field is read; unreadable ones are None."""
     doc: dict[str, Any] = {}
     try:
-        from verity_vllm.observe import engine_profile as prof
+        from verity_vllm.engine import engine_profile as prof
         doc.update(prof.effective_compilation(llm))
     except Exception as e:  # noqa: BLE001
         doc["compilation_error"] = repr(e)[:200]
@@ -315,7 +315,7 @@ def engine_kwargs_for(checkpoints: str | Path = "manifests/checkpoints.json", *,
     """[R16 sys] The exact `LLM(**kw)` keyword set `build_engine` would build from these inputs (+ the env flags it applies and the
     checkpoint record), WITHOUT building: a hot worker compares it with its live engine's `kwargs` to decide reuse vs restart.  Applies the
     same environment knobs as `build_engine` (idempotent).  Refusals (unknown execution, contradicting enforce_eager) are the same."""
-    from verity_vllm.observe import engine_profile as prof
+    from verity_vllm.engine import engine_profile as prof
 
     if target is not None:
         # [R15 fp8] the declared target's ENVIRONMENT knobs (`TargetProfile.env()`: VLLM_BATCH_INVARIANT, VLLM_USE_DEEP_GEMM for
@@ -348,7 +348,7 @@ def engine_kwargs_for(checkpoints: str | Path = "manifests/checkpoints.json", *,
 def build_engine(checkpoints: str | Path = "manifests/checkpoints.json", *, max_num_seqs: int = 8,
                  verify_weights: bool = False, case: str = CASE, engine_args: dict[str, Any] | None = None, target: Any = None,
                  execution: str | None = None) -> Engine:
-    from verity_vllm.observe import engine_profile as prof
+    from verity_vllm.engine import engine_profile as prof
 
     # [R15 EXEC-02 / COORD M-0063 (2)] `enforce_eager` comes from the row's declared execution (`execution_of_workload`), not from a literal:
     # an undeclared execution (no row id) keeps the historical eager default and is recorded as `declared_execution: null`; an unknown label
@@ -884,7 +884,7 @@ def profile_manifest(engine: Engine, *, adapter_revision: str, wheel_sha256: str
                      sampling: dict) -> tuple[dict, str, dict]:
     """(manifest, profile_id, notes) via `profile.build_manifest` exactly like the production recorder; falls back
     to a sha256 of the engine kwargs + versions when build_manifest cannot run (and says so in the notes)."""
-    from verity_vllm.observe import engine_profile as prof
+    from verity_vllm.engine import engine_profile as prof
 
     case = engine.case
     acc = ACCEPTED.get(case, {})
@@ -1053,7 +1053,7 @@ def run_requests(engine: Engine, requests: list[dict], sampling: dict) -> tuple[
     params_for = lambda r: sampling_params({"max_tokens": r.max_tokens, "seed": r.seed, "n": r.n, **r.params}, sampling)  # noqa: E731
     # [D87] one loop for every profile: with all arrive_steps 0 `run_requests_arrivals` is the driver's loop, and its `engine_steps`
     # counts forwards (the observer's / gates' unit) rather than step() iterations (vLLM V1 returns the previous forward's sample, so
-    # iterations = forwards + 1); verity_vllm.observe.engine_driver.run_requests stays available for callers that want the raw iteration count
+    # iterations = forwards + 1); verity_vllm.engine.engine_driver.run_requests stays available for callers that want the raw iteration count
     outs, timing = run_requests_arrivals(engine.llm, rs, params_for, on_step=_collect)
     timing["arrivals"] = any(r.arrive_step > 0 for r in rs)
     try:
@@ -1461,7 +1461,7 @@ class Capture:
         try:
             ems = self.runner.execute_model_state
             ib = ems.input_batch
-            from verity_vllm.observe.engine_driver import external_id
+            from verity_vllm.engine.engine_driver import external_id
 
             n = int(ib.num_reqs)
             qsl = np.asarray(ib.query_start_loc_np[: n + 1]).astype(np.int64).copy()

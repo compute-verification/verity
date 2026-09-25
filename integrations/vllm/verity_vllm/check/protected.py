@@ -35,9 +35,9 @@ PROTECTED: tuple[str, ...] = (
     "verity_vllm/pipeline/match.py", "verity_vllm/ops/verify_lane.sh",
     # the derivation itself (observer, resolver core, existing matchers, memory, fold, program identity, engine adapter)
     "verity_vllm/observe/observer.py", "verity_vllm/observe/events.py", "verity_vllm/observe/log.py", "verity_vllm/observe/memory.py",
-    "verity_vllm/observe/fold.py", "verity_vllm/observe/resolver.py", "verity_vllm/observe/patterns.py", "verity_vllm/observe/vllm_adapter.py",
+    "verity_vllm/observe/fold.py", "verity_vllm/observe/resolver.py", "verity_vllm/observe/patterns.py", "verity_vllm/engine/vllm_adapter.py",
     # the two base profiles (a lane derives its own profile module from `build_profile`; it does not edit these)
-    "verity_vllm/observe/profiles/vllm_d9105ea80_sm89_eager.py", "verity_vllm/observe/profiles/vllm_d9105ea80_sm89_eager_qwen15.py",
+    "verity_vllm/engine/profiles/vllm_d9105ea80_sm89_eager.py", "verity_vllm/engine/profiles/vllm_d9105ea80_sm89_eager_qwen15.py",
     # existing registered semantics and the IR
     "verity_vllm/*",
     # frozen decisions / accepted results / the design notes the integrator owns
@@ -45,7 +45,7 @@ PROTECTED: tuple[str, ...] = (
 )
 #: Frozen.  Existing files a lane may not modify or delete, in trees where ADDING files is the normal lane move.
 PROTECTED_EXISTING: tuple[str, ...] = (
-    "tests/observe/*", "verity_vllm/observe/profiles/*", "verity_vllm/ops/*", "verity_vllm/observe/*.py",
+    "tests/observe/*", "verity_vllm/engine/profiles/*", "verity_vllm/ops/*", "verity_vllm/observe/*.py",
     "verity_vllm/observe/*", "manifests/*",
 )
 #: Frozen.  Lane-writable exceptions inside otherwise protected trees.
@@ -104,13 +104,13 @@ def new_patterns(head_checkout: Path, base_profiles: tuple[str, ...] = ("vllm_d9
     """Pattern names registered by head's profile modules that the base profiles do not have (runs `python` in the head checkout)."""
     code = r'''
 import importlib, json, pkgutil, sys
-import verity_vllm.observe.profiles as P
+import verity_vllm.engine.profiles as P
 base = set(sys.argv[1].split(","))
 names = {}
 for m in pkgutil.iter_modules(P.__path__):
     if m.name.startswith("vllm_") or m.name.startswith("gen_"):
         try:
-            mod = importlib.import_module(f"verity_vllm.observe.profiles.{m.name}")
+            mod = importlib.import_module(f"verity_vllm.engine.profiles.{m.name}")
             names[m.name] = sorted({p.name for p in mod.PROFILE.patterns})
         except Exception as e:
             names[m.name] = f"import failed: {type(e).__name__}: {e}"
