@@ -161,6 +161,7 @@ def result(a, p: dict, sweep: dict) -> dict:
     e2e = [r["e2e_s"] for r in timed]
     t_e2e, t_commit = statistics.median(e2e), med("commit_s")
     t_prove = t_e2e - t_commit
+    net_wait = max(0.0, statistics.median(r["wait_s"] - r["verdict"].get("handle_s", 0.0) for r in timed))
     n = p["total"]
     profile = PROFILES[a.relation]
     rec = FLOCK_FRAME_V3_BLAKE3.record()
@@ -181,7 +182,9 @@ def result(a, p: dict, sweep: dict) -> dict:
         retention="retained", instances=p["header"]["instances"],
         scheme="frame-v3/blake3-keyed/row/v2", statement="verity/flock-pure/v1", relation=a.relation,
         roots=first["roots"], sigma=first["sigma"], dense_m=first["dense_m"], units_per_vu=first["units"],
-        n_blake3=first["n_blake3"], n_units=first["n_units"], verifier={"placement": "loopback" if not a.verifier else a.verifier,
+        n_blake3=first["n_blake3"], n_units=first["n_units"],
+        rtt_method="net.rtt_ms = (prover coin wait - verifier handling time) / round trips, per timed session, median",
+        verifier={"placement": "loopback" if not a.verifier else a.verifier,
                                                                          "process": "flock-pure serve (separate process)"})
     ms = [contract.measurement("t.total", t_prove), contract.measurement("vu.count", n),
           contract.measurement("vu.seconds_per_vu", t_prove / n), contract.measurement("vu.per_second", n / t_prove),
@@ -196,6 +199,11 @@ def result(a, p: dict, sweep: dict) -> dict:
           contract.measurement("net.wait_seconds", med("wait_s")), contract.measurement("net.messages", int(first["calls"])),
           contract.measurement("net.bytes_out", int(first["wire_sent"])), contract.measurement("net.bytes_in", int(first["wire_recv"])),
           contract.measurement("rounds.protocol", int(first["verdict"]["rounds"])),
+          contract.measurement("rounds.sequential_depth", int(first["calls"])),
+          {"name": "live.verifier_round_seconds", "value": statistics.median(r["verdict"].get("handle_s", 0.0) for r in timed), "unit": "s"},
+          {"name": "live.network_wait_seconds", "value": net_wait, "unit": "s"},
+          contract.measurement("net.rtt_ms", 1e3 * net_wait / max(1, int(first["calls"]))),
+          {"name": "live.prover_compute_seconds", "value": t_prove - med("wait_s"), "unit": "s"},
           contract.measurement("transcript.bytes", int(first["wire_sent"]) + int(first["wire_recv"])),
           contract.measurement("verify.wall_s", statistics.median(r["verdict"]["verify_s"] for r in timed)),
           {"name": "proof.bytes", "value": sum(first["proof_bytes"]), "unit": "B"},
