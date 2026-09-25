@@ -601,3 +601,11 @@ def test_flock_is_its_own_family_and_column(store: LocalStore) -> None:
     rows = dict((r[0], dict(zip(V.TABLE1_COLUMNS, r))) for _, r in V.table1_rows(views))
     assert rows["Flock (flock-128-r2, live coins)"]["Interaction model"].startswith("live verifier")
     assert rows["B-Ligero Fiat–Shamir (HVZK)"]["Interaction model"].startswith("non-interactive")
+
+
+def test_route_a_stays_in_the_a_gkr_column_with_a_note() -> None:
+    route_a = ("verity-gkr gpu (backends/gkr/gpu: checker v2 + LogUp + Ligero over BabyBear^6, SHA-512 Merkle; torch/Triton) + Flock "
+               "flock-128-r2 (backends/flock/live flock-link, CPU) + the sigma link (route (a))")
+    assert V.candidate_for(route_a).id == "A-GKR"
+    md = V.render_markdown(V.Views(rules=V.SPEC))
+    assert f"| **A-GKR** |  | " in md and V.FAMILY_NOTES["A-GKR"] in md and V.FAMILY_NOTES["Flock"] in md

@@ -125,7 +125,15 @@ class Family:
     description: str
     setup: str
     interaction: str
+    note: str = ""
 
+
+#: Which composite configurations a family column holds (Table 1's family row): route (a) stays A-GKR's (brief tables-switch).
+FAMILY_NOTES = {
+    "A-GKR": "route (a), the A-GKR prime side with Flock's keyed-BLAKE3 row hashes and the sigma link in one live session, is an "
+             "A-GKR configuration and fills this column",
+    "Flock": "pure Flock only: the relation and its row hashes in one binary-field circuit; route (a) is in the A-GKR column",
+}
 
 #: Flock is its own backend family (Daniel, 2026-09-25); the frozen tables have no Flock column, so its candidate lives here.  The
 #: v1 adapter recognises it by ``software.backend.name`` starting ``flock``.  Declared class: any complete proof, until the
@@ -137,7 +145,8 @@ FLOCK = T.Candidate(
     proof_classes=("NON_ZK_PROOF", "NON_ZK_PROOF_DIAGNOSTIC", "COMPLETE_HVZK_BACKEND", "COMPLETE_ZK_BACKEND"), drilldown_classes=(),
     backend_names=("flock",))
 CANDIDATES = (*T.CANDIDATES, FLOCK)
-FAMILIES: tuple[Family, ...] = tuple(Family(c.id, c.proof_classes, c.description, c.setup, c.interaction) for c in CANDIDATES)
+FAMILIES: tuple[Family, ...] = tuple(Family(c.id, c.proof_classes, c.description, c.setup, c.interaction, FAMILY_NOTES.get(c.id, ""))
+                                     for c in CANDIDATES)
 _FAMILY = {f.id: f for f in FAMILIES}
 _CANDIDATE = {c.id: c for c in CANDIDATES}
 
@@ -1119,7 +1128,8 @@ def render_markdown(V: Views, published: bool = False) -> str:
     for fid, row in table1_rows(V):
         if fid != fam_seen:
             fam = _FAMILY.get(fid)
-            desc = f"{fam.description}; declared class {' | '.join(fam.declared_classes)}; setup {fam.setup}; {fam.interaction}" if fam else "not a Table 2 column"
+            desc = (f"{fam.description}; declared class {' | '.join(fam.declared_classes)}; setup {fam.setup}; {fam.interaction}"
+                    + (f"; {fam.note}" if fam.note else "") if fam else "not a Table 2 column")
             rows1.append([f"**{fid}**", "", desc, *([""] * (len(TABLE1_COLUMNS) - 3))])
             fam_seen = fid
         rows1.append(row)
