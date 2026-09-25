@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import re
 
+#: the final norm under its family's vLLM name: Llama-style `model.norm`, GPT-NeoX `gpt_neox.final_layer_norm` (Pythia)
+FINAL_NORM_MODULES = ("model.norm", "gpt_neox.final_layer_norm")
 _PRE_FF_RE = re.compile(r"^model\.layers\.(\d+)\.pre_feedforward_layernorm$")
 _POST_FF_RE = re.compile(r"^model\.layers\.(\d+)\.post_feedforward_layernorm$")
 

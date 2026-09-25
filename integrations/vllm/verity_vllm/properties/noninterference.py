@@ -62,15 +62,14 @@ from collections import OrderedDict
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.properties.noninterference_families import parallel_residual_boundaries, unfused_norm_boundaries
+from verity_vllm.properties.noninterference_families import FINAL_NORM_MODULES, parallel_residual_boundaries, unfused_norm_boundaries
 from verity_vllm.properties.record import seal
 
 # [SHARED-CODE lane cov-ln] the decoder-layer module and the final norm under their family's vLLM names: Llama-style
 # `model.layers.N` / `model.norm` (SmolLM2, Qwen, Gemma-2, Phi-3, the MoE lanes) and GPT-NeoX `gpt_neox.layers.N` /
 # `gpt_neox.final_layer_norm` (Pythia).  The (b) hooks and the hooks-side parser read these; the Llama-shaped (a)-side rules
-# (`_DOWN_RE`, `_POST_RE`) stay Llama-only and the GPT-NeoX (a)-side boundaries are `_parallel_residual_boundaries` below.
+# (`_DOWN_RE`, `_POST_RE`) stay Llama-only and the GPT-NeoX (a)-side boundaries are `parallel_residual_boundaries`.
 _LAYER_RE = re.compile(r"^(?:model|gpt_neox)\.layers\.(\d+)$")
-_FINAL_NORM_MODULES = ("model.norm", "gpt_neox.final_layer_norm")
 _DOWN_RE = re.compile(r"^model\.layers\.(\d+)\.mlp\.down_proj$")
 _POST_RE = re.compile(r"^model\.layers\.(\d+)\.post_attention_layernorm$")
 #: MoE layers (OLMoE, lane `moe`): the layer's return[0] is the `vllm.moe_forward*` custom op's output (module hint
@@ -202,7 +201,7 @@ def run_hooks_variant(workload: str, out_dir: str, checkpoints: str, *, max_toke
     handles = []
     hooked: list[str] = []
     for name, mod in eng.model.named_modules():
-        if _LAYER_RE.match(name) or name in _FINAL_NORM_MODULES or name in ("logits_processor", "lm_head"):
+        if _LAYER_RE.match(name) or name in FINAL_NORM_MODULES or name in ("logits_processor", "lm_head"):
             handles.append(mod.register_forward_hook(make_hook(name)))
             hooked.append(name)
     print(f"[nonint/b] {len(hooked)} forward hooks: {hooked[:3]} ... {hooked[-3:]}", flush=True)
@@ -396,7 +395,7 @@ def hooks_boundary_hashes(b_dir: Path) -> tuple[dict, list[str]]:
                     rec["rows"] = r["shape"][0]
                 elif r["index"] == 1:
                     rec["residual"][L] = r["sha256"]
-            elif r["module"] in _FINAL_NORM_MODULES and r["index"] == 0:
+            elif r["module"] in FINAL_NORM_MODULES and r["index"] == 0:
                 rec["final"] = r["sha256"]
             elif r["module"] == "logits_processor" and r["index"] == 0:
                 rec["logits"] = r["sha256"]
