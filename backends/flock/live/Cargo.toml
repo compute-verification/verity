@@ -26,3 +26,8 @@ rayon = { workspace = true }
 
 [lints]
 workspace = true
+
+[[bin]]
+name = "flock-pure"
+path = "src/bin/flock-pure.rs"
+required-features = ["verity-unit"]

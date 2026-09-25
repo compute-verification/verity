@@ -763,7 +763,7 @@ impl Server {
                     return self.refuse("link context sent twice".into());
                 }
                 if let Some(spec) = self.cfg.link.clone() {
-                    if self.points.is_empty() {
+                    if self.commit.is_none() {
                         return self.refuse("L1: y sent before root_F, root_B and the link points".into());
                     }
                     let want = 16 * spec.points * self.cfg.tables.len();
@@ -790,6 +790,10 @@ impl Server {
                 }
                 if root_f.is_empty() {
                     return self.refuse("L1/C2: no root_F: the points must follow both sides' roots".into());
+                }
+                // A statement with no link points (flock-pure) commits its Σ in root_F's place.
+                if spec.points == 0 && root_f != spec.sigma {
+                    return self.refuse("statement: Commit names another statement than the verifier's Σ".into());
                 }
                 let roots: BTreeMap<String, Vec<u8>> = roots.into_iter().collect();
                 let publics: BTreeMap<String, Vec<u8>> = publics.into_iter().collect();
