@@ -1,5 +1,15 @@
 # Changelog: `verity_numerical` (the bench renderers and their rules)
 
+## 2026-09-25: route (a) is its own full-relation A-GKR configuration
+
+- Route (a) (A-GKR's prime proof, the operands as keyed-BLAKE3 rows proved in Flock flock-128-r2 with live coins, joined by the
+  sigma link; PROTOCOL 17.5–17.6) gets a drill-down variant and a Table 1 configuration: full committed relation over
+  `frame-v3/blake3-row`, NON_ZK_PROOF, 2^-130.19 (red-team-flock's fifth audit), live coins, collision resistance a Table 1
+  assumption (decision 57). Its results fill the A-GKR column; plain A-GKR GPU results still read "weaker statement".
+- The spec views read a result registered with a lane summary as its meta and the envelope as its JSON payload (as
+  `cell.py rederive` registers art:4b52879f), as the drill-down already did. The legacy rules still read the meta only, so
+  `--parity` is unchanged (15/15).
+
 ## 2026-09-25: live cells count prover compute once, and loopback coin handling as compute
 
 - A live result whose `interaction` block says `t_total_includes_wait` (Flock's live coins) takes its prover compute from

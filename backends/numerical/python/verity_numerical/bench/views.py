@@ -184,6 +184,8 @@ class Proximity:
 
 
 FULL = "full relation"
+#: Route (a): A-GKR's prime proof with Flock's keyed-BLAKE3 rows and the sigma link (drilldown's variant of the same id).
+ROUTE_A = "A-GKR route (a): prime + Flock rows + sigma link"
 _WEAK_PUBLIC = "weaker: operands public, no commitment (the verifier could recompute y)"
 _WEAK_PRIVATE = "weaker: operands private and bound to nothing"
 _WEAK_REHASH = "weaker: operands published for the verifier to re-hash (it could recompute y)"
@@ -311,6 +313,16 @@ CONFIGURATIONS: tuple[Configuration, ...] = (
          (Hash("SHA-512", _INTERNAL, _CR), Hash("SHA-256", _COINS, _RO + " (Fiat–Shamir coins)")), _AGKR_DOMINANT, _AGKR_PROX,
          "transferable (SHA-256 Fiat–Shamir coins)", "BabyBear^6; LogUp fractional-sum soundness",
          "verity-gkr-verify refuses a circuit set its pins.txt does not list (PR #13)"),
+    _cfg(ROUTE_A, FULL, "x, W committed (private) as keyed-BLAKE3 rows proved in Flock; y public", "frame-v3/blake3-row",
+         "A-GKR prime proof of the relation, with the operands committed as keyed-BLAKE3 rows (blake3-keyed/row/v2) proved in Flock "
+         "(flock-128-r2, live coins) and joined to the prime side by the sigma link (two GF(2^128) points); frame-v3 SHA-256 trees",
+         (_SHA256_STMT, Hash("BLAKE3 (keyed)", _STMT, _CR + " (row leaves, proved in Flock)"), Hash("SHA-256", _COINS, "live transcript and root_F binding"),
+          Hash("SHA-512", _INTERNAL, _CR + " (Merkle on the A-GKR Ligero side)")),
+         "A-GKR's interactive terms (2^-130.19 whole proof); Flock flock-128-r2 2^-195.5 and the sigma link 2^-243.9 / 2^-246.4 do not bind",
+         (*_AGKR_PROX, Proximity("Ligerito PCS in Flock (binary field)", "Johnson regime (list decoding)", "proven (Haböck ePrint 2025/2110; BCHKS25 MCA)")),
+         "interactive: live-verifier-only (live prime and Flock coins in one session)",
+         "collision resistance of SHA-256, keyed BLAKE3 and SHA-512 is a Table 1 assumption (decision 57); BabyBear^6 and GF(2^128) fields",
+         "verity-gkr-verify pins (PR #13) plus the Flock profile params and the link version (session-2xgf2_128/v2, verity/link-L/v2)"),
     _cfg("SP1 stock (relation-only / bare guest)", _WEAK_PRIVATE, "x, W guest input (unbound)", None, "none for the operands",
          _SP1_HASHES, _SP1_DOMINANT, _SP1_PROX, "transferable (STARK, Fiat–Shamir)", _SP1_ASSUME,
          "verifying key (guest ELF digest), sp1-sdk =6.4.0"),
@@ -341,6 +353,8 @@ _INTERACTION = {
     "Ligerito": "live verify session: the verifier is online for the session's rounds",
     "A-GKR CPU (Rust)": "non-interactive (SHA-256 Fiat–Shamir): rounds = 0; the interactive object is not implemented",
     "A-GKR GPU (torch/Triton)": "non-interactive (SHA-256 Fiat–Shamir coins): rounds = 0; the interactive object is not implemented",
+    ROUTE_A: "live verifier: the prime side's coins and Flock's coins in one session (PROTOCOL 17.6); the verifier must be online for "
+             "the whole proof",
     **{c.id: "non-interactive (Fiat–Shamir STARK): rounds = 0, no one online" for c in CONFIGURATIONS if c.family == "SP1"},
 }
 FLOCK_CONFIG = Configuration(
@@ -897,6 +911,22 @@ def _batching(fp: Mapping[str, Any]) -> dict[str, Any]:
             "in_flight": _get(fp, "software", "backend", "pipeline"), "columns_per_proof": _get(fp, "security", "rs_l")}
 
 
+def _results(store: Any, rules: Rules) -> list[tuple[str, Mapping[str, Any]]]:
+    """Every ``bench-result/v1`` as ``(art, envelope)``.  The spec rules also read a result registered with a lane summary as its
+    meta and the result envelope as its JSON payload (the drill-down's ``_envelope``; route (a)'s cell art:4b52879f is one); the
+    legacy rules read the meta only, as the frozen tables do."""
+    out = []
+    for row in store.index.select_artifacts(kind=T.RESULT_KIND):
+        doc = D._doc(store, row)
+        meta = doc.get("meta") or {}
+        if not rules.legacy and not isinstance(meta.get("workload_fingerprint"), Mapping):
+            env, _, payload = D._envelope(store, row["id"], doc)
+            if env is not None and payload:
+                meta = env
+        out.append((row["id"], meta))
+    return out
+
+
 def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuration] = CONFIGURATIONS) -> Views:
     """Read the store, apply :func:`reject_codes` under ``rules`` and assemble Tables 1-3 (rendering is separate)."""
 
@@ -905,7 +935,7 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
     equivs = T.instance_equivs(store)
     V.unreadable = [f"{e.artifact}: {e.unreadable}" for e in equivs if e.unreadable]
     entries: list[Ctx] = []
-    for art, meta in T._artifacts(store, T.RESULT_KIND):
+    for art, meta in _results(store, rules):
         fp = meta.get("workload_fingerprint") if isinstance(meta.get("workload_fingerprint"), Mapping) else {}
         backend = _get(fp, "software", "backend", "name")
         cand = candidate_for(backend)
