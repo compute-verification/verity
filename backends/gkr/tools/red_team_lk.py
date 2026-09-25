@@ -521,7 +521,7 @@ def forge_cases(relation: str, uc, pc, units, steps: int) -> dict:
     lk = _rows(uc.table("LK"))
 
     def single(k):
-        return len(_var(uc.queries[k].cols[0], one)) == 1
+        return len(_var(uc.queries[k].cols[0], one)) >= 1
 
     # (1) merged-table tag: a query of range table A given the first column of a row of range table B (key + tag_B 2^20);
     #     only the constant tag column still tells them apart
