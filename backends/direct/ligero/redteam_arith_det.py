@@ -75,6 +75,39 @@ def _install() -> None:
     for m in list(sys.modules.values()):
         if getattr(m, "prove_many", None) is orig_pm:
             m.prove_many = prove_many
+    _instrument_kernels()
+
+
+KERNELS: dict = {}
+
+
+def _instrument_kernels() -> None:
+    """Count the fused-kernel entry points the run reaches (Python calls: eager passes and graph captures) and the shapes
+    they see, so a byte-identical A/B also shows which of the changed kernels it exercised."""
+    from . import tests_fused
+
+    def wrap(name, shape_of):
+        orig = getattr(tests_fused.FusedTests, name, None)
+        if orig is None:
+            return
+
+        def f(self, *a, **k):
+            e = KERNELS.setdefault(name, {"calls": 0, "shapes": {}})
+            e["calls"] += 1
+            try:
+                key = str(shape_of(self, *a, **k))
+                e["shapes"][key] = e["shapes"].get(key, 0) + 1
+            except Exception as ex:  # noqa: BLE001
+                e["shapes"][f"?{type(ex).__name__}"] = 1
+            return orig(self, *a, **k)
+        setattr(tests_fused.FusedTests, name, f)
+
+    wrap("lincomb", lambda s, C, X, square_minus=False, rows=None: (s.D, tuple(C.shape), tuple(X.shape), str(X.dtype), square_minus, rows is not None))
+    wrap("lincomb2", lambda s, C1, C2, X: (s.D, tuple(C1.shape), C1.stride(0), tuple(C2.shape), tuple(X.shape), str(X.dtype)))
+    wrap("quad_general", lambda s, rho, X, csr: (s.D, tuple(rho.shape), tuple(X.shape), str(X.dtype)))
+    wrap("_quad_v4", lambda s, rho, X, csr: (s.D, tuple(rho.shape), tuple(X.shape)))
+    wrap("intt_scaled", lambda s, x, post: (tuple(x.shape),))
+    wrap("_reduce", lambda s, p: (tuple(p.shape), tests_fused.REDUCE_KERNEL if hasattr(tests_fused, "REDUCE_KERNEL") else None))
 
 
 def main() -> int:
@@ -87,7 +120,8 @@ def main() -> int:
         rc = run.main(rest)
     finally:
         with open(trace_path, "w") as f:
-            json.dump({"passes": _STATE["passes"], "last_pass": _STATE["last_trace"], "outside": _STATE["trace"]}, f, indent=0)
+            json.dump({"passes": _STATE["passes"], "last_pass": _STATE["last_trace"], "outside": _STATE["trace"],
+                       "kernels": KERNELS}, f, indent=0)
     return rc
 
 
