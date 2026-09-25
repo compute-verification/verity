@@ -552,6 +552,12 @@ pub static PINS: &[(&str, &str, &str, &str)] = &[
      "f67ab8174346973350e673f0b1164a3a824e5c9f4f8ae48d136eabdfd970f374"),
     ("fp8-hopper", "blake3", "433bdfc37ef7ce64dcac32cdfd9b99e43b33f0df848112e96fd01601531a3bd1",
      "a27af32fe5ef8b8995b5cc4d874bcbac3a7f5196600e5cce062537ab7d1a55d8"),
+    // lane b-ligero-sha256, schema `sha256/row/v1`: `hashchain.compose(<rel>, "sha256")` (data blocks in-circuit, 18,128
+    // rows per block), each gated 2048 VUs (7 honest sub-batches) + 86 negatives on vy-b-ligero-sha256 2026-09-25 09:05Z
+    ("fp8-hopper-x4", "sha256", "6cf20505b38e142533dfa1011a65bd1fb36b3b4792854916dffaeaddfd7f7e9f",
+     "76c1ce7f09b99fac28c5576f95a5f037e68e7195ce2f14d7532256835338c40c"),
+    ("fp8-ada-x4", "sha256", "d6b0cd8d69cb7ff504ebeb5cef28dc43b57bd318dcbb325229572959ec3282ff",
+     "b04a579ceb48fb57a3c18159b13a86b600c6aadb03fa2f10e3510b75d5af9b3f"),
 ];
 
 pub fn names() -> Vec<&'static str> {
