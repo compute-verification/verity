@@ -27,14 +27,17 @@ use flock_core::{
 use flock_live::*;
 use flock_prover::{
     challenger::FsChallenger,
+    lincheck::SparseMatrixCircuit,
     merkle::HashKind,
+    pcs::Commitment,
+    proof::R1csProofLigerito,
     proof_io::{BundleFlavor, R1csProofBundleLigerito, peek_flavor},
     prover::{UnionSlotProverInput, prove_fast_ligerito_union},
     r1cs::BlockR1cs,
     r1cs_hashes::blake3::{Compression, build_block_r1cs, generate_witness_batch_major_partial_into, min_n_blocks_log},
     schedule::{Registry, TableType},
     union::UnionInstance,
-    verifier::verify_ligerito_union,
+    verifier::{verify_ligerito, verify_ligerito_union},
 };
 use serde_json::{Value, json};
 
@@ -305,6 +308,77 @@ fn inproc(st: &Arc<Stmt>, require_link: bool) -> (SharedTransport, Arc<Mutex<Ser
 }
 
 fn serve(st: Arc<Stmt>) {
+    let no_link = arg("--no-link", "0") == "1";
+    serve_loop(move || server(&st, !no_link));
+}
+
+/// GPU tables (Flock-CUDA proves non-union `prove_ligerito`, one table per session): `--table NAME --nbl N`, with
+/// `--netlist P` for a census unit (feature `verity-unit`), else the BLAKE3 statement.
+fn serve_gpu() {
+    let name = arg("--table", "blake3");
+    let nbl: usize = arg("--nbl", "17").parse().unwrap();
+    let netlist = arg("--netlist", "");
+    let r1cs = Arc::new(gpu_r1cs(&netlist, nbl));
+    let no_link = arg("--no-link", "0") == "1";
+    serve_loop(move || {
+        let spec = TableSpec { name: name.clone(), binding: Binding::R1cs { statement_digest: r1cs.statement_digest() } };
+        let mut cfg = SessionConfig::flock_128_r2(vec![spec]);
+        cfg.require_link = !no_link;
+        Server::new(cfg, Box::new(GpuVerifier(r1cs.clone())))
+    });
+}
+
+#[cfg(feature = "verity-unit")]
+fn gpu_r1cs(netlist: &str, nbl: usize) -> BlockR1cs {
+    if netlist.is_empty() {
+        return build_block_r1cs(nbl);
+    }
+    let net = flock_prover::r1cs_hashes::verity_unit::Netlist::load(netlist);
+    assert_eq!(net.self_check(), 0, "netlist self-check");
+    net.block_r1cs(nbl)
+}
+
+#[cfg(not(feature = "verity-unit"))]
+fn gpu_r1cs(netlist: &str, nbl: usize) -> BlockR1cs {
+    assert!(netlist.is_empty(), "--netlist needs the verity-unit feature");
+    build_block_r1cs(nbl)
+}
+
+/// Flock-CUDA's parameters, pinned: Fast100, rate 1/2, batch 6, SHA-256 Merkle trees.
+fn gpu_params(r1cs: &BlockR1cs) -> PcsParams {
+    PcsParams {
+        m: r1cs.m,
+        log_inv_rate: 1,
+        log_batch_size: 6,
+        profile: LigeritoProfile::Fast100,
+        num_lanes: None,
+        merkle_hash: HashKind::Sha256,
+    }
+}
+
+struct GpuVerifier(Arc<BlockR1cs>);
+
+impl StatementVerifier for GpuVerifier {
+    fn verify(&self, _table: &str, _rep: usize, proof: &[u8], ch: &mut ReplayChallenger) -> Result<Vec<u8>, String> {
+        let (commitment, proof): (Commitment, R1csProofLigerito) =
+            bincode::deserialize(proof).map_err(|e| format!("decode: {e}"))?;
+        let pcs = gpu_params(&self.0);
+        if commitment.params != pcs {
+            return Err("R7: proof's PCS parameters differ from the pinned Fast100 parameters".into());
+        }
+        let r1cs = &*self.0;
+        let lc = SparseMatrixCircuit::new(&r1cs.a_0, &r1cs.b_0).with_const_pin(r1cs.const_pin);
+        catch_unwind(AssertUnwindSafe(|| verify_ligerito(r1cs, &commitment, &proof, &lc, &pcs, ch)))
+            .map_err(|_| "verifier panicked".to_string())?
+            .map_err(|e| format!("{e:?}").chars().take(160).collect::<String>())?;
+        Ok(commitment.cap.as_flattened().to_vec())
+    }
+    fn domain(&self, _table: &str, rep: usize) -> Vec<u8> {
+        domain(rep)
+    }
+}
+
+fn serve_loop(make: impl Fn() -> Server) {
     let listen = arg("--listen", "127.0.0.1:7100");
     let out = std::path::PathBuf::from(arg("--out", "sessions"));
     std::fs::create_dir_all(&out).unwrap();
@@ -315,7 +389,7 @@ fn serve(st: Arc<Stmt>) {
         conn.set_nodelay(true).unwrap();
         let mut r = BufReader::new(conn.try_clone().unwrap());
         let mut w = BufWriter::new(conn);
-        let mut s = server(&st, arg("--no-link", "0") != "1");
+        let mut s = make();
         let id = format!("f{:04}-{}", i, std::process::id());
         loop {
             let Ok(b) = read_frame(&mut r) else { break };
@@ -419,6 +493,9 @@ fn bench(st: Arc<Stmt>) {
 fn main() {
     let cmd = std::env::args().nth(1).unwrap_or_default();
     let n: usize = arg("--n", "4096").parse().unwrap();
+    if cmd == "serve-gpu" {
+        return serve_gpu();
+    }
     let st = Arc::new(Stmt::new(n));
     match cmd.as_str() {
         "serve" => serve(st),
