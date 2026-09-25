@@ -38,7 +38,7 @@ from dataclasses import dataclass, field
 
 from verity_vllm.config import option
 
-from verity_vllm.check.replay import challenge as CH
+from verity_vllm.commit import challenge as CH
 from verity_vllm.properties.record import seal
 
 REQUIRED_EDGE_KINDS = ("zeros", "max", "subnormal", "alternating")

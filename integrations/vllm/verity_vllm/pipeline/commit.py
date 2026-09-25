@@ -72,7 +72,7 @@ import torch  # noqa: E402
 from verity_vllm.engine import vllm_adapter as va  # noqa: E402
 from verity_vllm.pipeline.timeline import Timeline  # noqa: E402  (torch-free; VERITY_TIMELINE -> append-only JSONL, else a no-op sink)
 from verity_vllm.commit import opened as OV  # noqa: E402
-from verity_vllm.check.replay import challenge as CH  # noqa: E402
+from verity_vllm.commit import challenge as CH  # noqa: E402
 
 SCHEMA = "verity/commit-integ/delta/v1"
 
@@ -772,7 +772,7 @@ def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, 
     makes the replay byte-identical, which the ORIGINAL roots check (a differing byte fails to open).  Nothing here changes what was bound."""
     import copy
 
-    from verity_vllm.acquire.committer_api import challenge_positions
+    from verity_vllm.commit.challenge import challenge_positions
     from verity_vllm.commit.committer.native_host import value_family
 
     frozen = copy.copy(com)                     # shallow: keeps THIS run's per-step dicts (reset() rebinds the live committer's, never mutates them)
@@ -1880,10 +1880,10 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 if getattr(args, "padded_finalize", False):
                     # [B9.1] the padding hook runs INSIDE finalize (after the worker drained: every executed step's leaf count / layout is
                     # known, before the run-root fold); the served tokens of THIS run + stop_rule_of_record place the executed prefix
+                    from functools import partial
                     from verity_vllm.commit import padding_steps as PS
-                    _served = r["tokens"]
-                    com.padding_hook = lambda c, _t=_served: PS.padding_for_committer(c, manifest=required_manifest, requests=reqs, sampling=sampling,
-                                                                                      served_tokens=_t, stop=stop_of_record)
+                    com.padding_hook = partial(PS.padding_for_committer, manifest=required_manifest, requests=reqs, sampling=sampling,
+                                               served_tokens=r["tokens"], stop=stop_of_record)
                 rc = com.finalize()
                 t_ready = time.perf_counter()
                 com.uninstall()
@@ -1916,7 +1916,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                     row["fault_retained_flip"] = com.fault_retained_flip(fault)
                     print(f"[delta] VERITY_FAULT retained_flip (negative test): {row['fault_retained_flip']}", flush=True)
                 # challenge derived from the PRECHALLENGE run root (the root is fixed before the positions exist)
-                from verity_vllm.acquire.committer_api import challenge_positions
+                from verity_vllm.commit.challenge import challenge_positions
 
                 sample = challenge_positions(rc.run_root, [s.n_leaves for s in rc.steps], args.openings, salt=str(pair).encode())
                 TL.start("validate.openings", pair=pair)

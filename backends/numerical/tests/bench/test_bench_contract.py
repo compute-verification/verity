@@ -12,7 +12,7 @@ from types import SimpleNamespace
 import pytest
 from conftest import REPO, VECTOR_RUN, conforming_result
 
-from verity.verification.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, K16_VECTOR, NVFP4_SM120, NativePeak
+from verity.proofs.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, K16_VECTOR, NVFP4_SM120, NativePeak
 from verity_numerical.bench import contract
 
 FIXTURES = REPO / "fixtures" / "typed-obligation-v0"
@@ -56,8 +56,8 @@ def test_envelope_problems_are_reported(conforming: dict) -> None:
 @pytest.mark.parametrize(
     ("field", "value", "fragment"),
     [
-        ("profile", "another-target", "profile must be a target of verity.verification.target"),
-        ("profile", None, "profile must be a target of verity.verification.target"),
+        ("profile", "another-target", "profile must be a target of verity.proofs.target"),
+        ("profile", None, "profile must be a target of verity.proofs.target"),
         ("domain", "", "domain must be a non-empty string"),
         ("K", 24, "K must be a positive multiple of 16"),
         ("K", None, "K must be a positive multiple of 16"),
@@ -362,7 +362,7 @@ def test_every_target_is_a_valid_profile_and_an_unknown_one_is_not(conforming: d
     fp8 = contract.fingerprint(**{**{k: fp[k] for k in contract.REQUIRED_FIELDS}, "profile": FP8_ADA_MMA.name})
     assert fp8["profile"] == FP8_ADA_MMA.name and contract.validate_fingerprint(fp8) == []
     problems = contract.validate({**conforming, "workload_fingerprint": {**fp, "profile": "fp8-ada-mma-draft/2099-01-01"}})
-    assert len(problems) == 1 and problems[0].startswith("profile must be a target of verity.verification.target, one of (") and "fp8-ada-mma-draft/2099-01-01" in problems[0]
+    assert len(problems) == 1 and problems[0].startswith("profile must be a target of verity.proofs.target, one of (") and "fp8-ada-mma-draft/2099-01-01" in problems[0]
     with pytest.raises(ValueError, match="profile must be a target"):
         contract.fingerprint(**{**{k: fp[k] for k in contract.REQUIRED_FIELDS}, "profile": "another-target"})
 
@@ -516,7 +516,7 @@ def test_reference_run_writes_a_conforming_result(tmp_path) -> None:
     assert (fp["profile"], fp["domain"], fp["K"], fp["B"], fp["proof_class"], fp["authentication"], fp["zk_mode"], fp["retention"]) == (
         FIRST.name, "finite", 16, 1, "NO_PROOF", "included", "none", "retained")
     assert fp["security"]["target"] is None and set(fp["hardware"]) == {"gpu", "cpu"}
-    assert fp["software"]["backend"]["name"] == "verity.verification.transparent"
+    assert fp["software"]["backend"]["name"] == "verity.proofs.transparent"
     assert {m["name"] for m in result["measurements"]} >= {"reference_check_wall", "vu.count", "workload_wall"}
     assert json.loads(proc.stdout)["contract"] == "conforms"
 

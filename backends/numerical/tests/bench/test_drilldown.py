@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 
-from verity.verification.target import FIRST, FP8_ADA_MMA
+from verity.proofs.target import FIRST, FP8_ADA_MMA
 from verity_numerical.bench import contract
 from verity_numerical.bench import drilldown as D
 from verity_numerical.bench import tables as T

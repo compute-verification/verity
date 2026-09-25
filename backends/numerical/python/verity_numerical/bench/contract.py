@@ -20,7 +20,7 @@ Envelope (``research/result/v0.1``, ``tools/research/src/research/result.py``)::
 
 Fingerprint fields (all required; a sub-field whose value is not known is ``null``, never a guess)::
 
-    profile         the name of the target actually proved (one of :data:`PROFILES`, ``verity.verification.target.TARGETS``);
+    profile         the name of the target actually proved (one of :data:`PROFILES`, ``verity.proofs.target.TARGETS``);
                     the campaign target is FIRST.name (:data:`PROFILE`); results of different profiles are never compared
     domain          the relation's domain, "finite" for FIRST (a total-semantics backend is another domain)
     K               GemmCoordinate<K>: a positive multiple of 16
@@ -56,7 +56,7 @@ The headline is throughput, ``vu.per_second``, and better its inverse relative t
 
 ``R_proved`` is intrinsic to the prover (one VU of GemmCoordinate<K> is K MACs = 2K FLOP).  ``R_native`` depends on
 the target named by the fingerprint's ``profile``: the datasheet dense tensor-core peak of the target's conformance
-anchor for its operand dtype at FP32 accumulate (``Target.native_peak``, ``verity.verification.target``; A100 BF16
+anchor for its operand dtype at FP32 accumulate (``Target.native_peak``, ``verity.proofs.target``; A100 BF16
 312 TFLOPS for FIRST, RTX 4090 FP8 330.3 TFLOPS for FP8_ADA_MMA, H100 FP8 1978.9 TFLOPS for FP8_HOPPER_WGMMA).  The
 identity ``overhead.vs_native_peak == rate.native_peak_flop_per_second / rate.proved_flop_per_second`` holds by
 construction (:func:`rate_measurements`); :func:`validate` recomputes each of the three from ``t.total``,
@@ -84,7 +84,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-from verity.verification.target import FIRST, TARGETS, NativePeak
+from verity.proofs.target import FIRST, TARGETS, NativePeak
 
 __all__ = [
     "AUTHENTICATION",
@@ -154,7 +154,7 @@ RESULT_SCHEMA = "research/result/v0.1"
 #: The campaign target's profile name and domain label (``backends/AGENTS.md``: the target is fixed).
 PROFILE = FIRST.name
 DOMAIN = "finite"
-#: Every profile a result may name: the targets of ``verity.verification.target.TARGETS`` (FIRST and the FP8 drafts).
+#: Every profile a result may name: the targets of ``verity.proofs.target.TARGETS`` (FIRST and the FP8 drafts).
 #: ``profile`` is an identity field, so a result of one profile is never compared with a result of another.
 PROFILES = tuple(TARGETS)
 
@@ -222,7 +222,7 @@ NVFP4_INSTANCES_TIER = "vu-k1536-nvfp4-sm120"
 NVFP4_INSTANCES_SEED = 20260922
 NVFP4_INSTANCES_DIGEST = "d2d65f6523b49e673847746d725fbce3282f2734b0b424637c01e88f188a240a"
 #: The recipe's family composition at the frozen tier size (4096 VUs; VU ``i`` is of family ``i % 14``): the corner families
-#: ``verity.verification.trust`` criterion Tc asks the honest set to include (a contract-pinned set has no fixture manifest to
+#: ``verity.proofs.trust`` criterion Tc asks the honest set to include (a contract-pinned set has no fixture manifest to
 #: carry them).  Every family but ``random`` is an edge family of ``BlockScaledAlignAdd``.
 NVFP4_INSTANCES_FAMILIES = {
     "random": 293, "zero-scales": 293, "subnormal-scales": 293, "top-scales": 293, "top-scales-zero-acc": 293, "span-scales": 293,
@@ -288,7 +288,7 @@ RATE_TOLERANCE = 1e-6
 def native_reference(profile: str = PROFILE) -> NativePeak:
     """The native peak the headline overhead of a ``profile`` divides by: that target's ``Target.native_peak`` -- the
     datasheet dense tensor-core peak of the instruction's conformance anchor for the target's operand dtype at FP32
-    accumulate, no sparsity (``verity.verification.target``, "Native peak").  A GemmCoordinate<K> is K MACs = 2K FLOP,
+    accumulate, no sparsity (``verity.proofs.target``, "Native peak").  A GemmCoordinate<K> is K MACs = 2K FLOP,
     so the native time of one VU at peak is 2K / rate: 9.85 ps at K=1536 for FIRST (A100 BF16, ~1.0e11 VU/s).  Peak is
     the conservative choice (a real decode step runs below peak, so the true overhead is *lower* than this number); it
     is also the only reference every result can share without a runtime capture.  The prover's own hardware is in the
@@ -500,7 +500,7 @@ def validate_fingerprint(fp: Any) -> list[str]:
     present = {f: fp[f] for f in REQUIRED_FIELDS if f in fp}
 
     if "profile" in present and present["profile"] not in PROFILES:
-        p.append(f"profile must be a target of verity.verification.target, one of {PROFILES} (the campaign target is {PROFILE!r}), got {present['profile']!r}")
+        p.append(f"profile must be a target of verity.proofs.target, one of {PROFILES} (the campaign target is {PROFILE!r}), got {present['profile']!r}")
     if "domain" in present and (not isinstance(present["domain"], str) or not present["domain"]):
         p.append(f"domain must be a non-empty string (FIRST: {DOMAIN!r}), got {present['domain']!r}")
     if "K" in present and not (_is_int(present["K"]) and present["K"] > 0 and present["K"] % 16 == 0):

@@ -40,7 +40,7 @@ def test_capture_identities_refuses_to_sample_coordinates_without_a_seed(tmp_pat
 
 
 def test_the_derivations_of_record_are_pinned():
-    from verity_vllm.check.replay import challenge as CH
+    from verity_vllm.commit import challenge as CH
 
     root = bytes(range(32))
     assert CH.root_seed(root) == 283686952306183 == int.from_bytes(root[:8], "big")
@@ -55,7 +55,7 @@ def test_the_generators_are_the_stdlib_and_numpy_ones_over_the_seed_as_given():
 
     import numpy as np
 
-    from verity_vllm.check.replay import challenge as CH
+    from verity_vllm.commit import challenge as CH
 
     for seed in (0, 12345, 2610256019655222637):
         assert CH.stream(seed).sample(range(1000), 20) == random.Random(seed).sample(range(1000), 20)
@@ -64,7 +64,8 @@ def test_the_generators_are_the_stdlib_and_numpy_ones_over_the_seed_as_given():
 
 
 def test_sampled_replay_draws_its_challenge_seed_from_the_challenge_module():
-    from verity_vllm.check.replay import challenge as CH, replay_codes as RC, sample as SM
+    from verity_vllm.check.replay import replay_codes as RC, sample as SM
+    from verity_vllm.commit import challenge as CH
 
     root = bytes(range(32))
     assert SM.challenge_seed("verifier-challenge-1", root) == (CH.challenge_seed("verifier-challenge-1", root),

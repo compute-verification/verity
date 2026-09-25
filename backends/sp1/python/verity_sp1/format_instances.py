@@ -38,7 +38,7 @@ MAGIC = b"VYSP1FI\x01"
 SCHEMA = "sp1-format-instances/v1"
 K_VU = 1536
 
-#: format -> (target attribute of verity.verification.target, row bytes, y bytes, relation)
+#: format -> (target attribute of verity.proofs.target, row bytes, y bytes, relation)
 FORMATS = {
     "bf16-hopper": ("BF16_HOPPER", 2 * K_VU, 2, "bf16-hopper"),
     "fp8-hopper": ("FP8_HOPPER_WGMMA", K_VU, 4, "fp8-hopper"),
@@ -83,7 +83,7 @@ def _nvfp4_chunk(args: tuple[str, int, int, int]) -> list[tuple[bytes, bytes, in
 
 def recipe(fmt: str) -> tuple[object, dict, int, str]:
     """(target, frozen ref, seed, recipe digest) of ``fmt``; the digest must equal the frozen ref's manifest_sha256."""
-    from verity.verification import target as targets
+    from verity.proofs import target as targets
     from verity_numerical.bench.tables import FROZEN_INSTANCES
 
     tgt = getattr(targets, FORMATS[fmt][0])

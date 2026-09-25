@@ -74,7 +74,7 @@ from verity.ir.refs import runs
 
 from verity_vllm.check.fold_compare import SnapshotStore, Values, WeightSource, _attach_specs, _component_ranges, _jsonable, _max_rss_gb, fold_log, load_profile
 from verity_vllm.observe.fold.fold import FoldResult
-from verity_vllm.check.replay import challenge as CH
+from verity_vllm.commit import challenge as CH
 
 TIER_STATUSES = ("pass", "fail", "skipped", "error")
 EVALUATORS = ("gates", "twins", "auto")

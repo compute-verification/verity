@@ -28,7 +28,7 @@ HASH_QUERIES = 2**64
 
 
 def budget(inst, ligero_rows: int, linkage_constraints: int, n: int = 16384, k: int = 4096, t: int = 192,
-           K: int | None = None):
+           K: int | None = None, bind_constraints: int = 0):
     """``K``: the VU's reduction length (default 16 products per unit)."""
     from verity_numerical.security import accounting as acc
 
@@ -63,6 +63,20 @@ def budget(inst, ligero_rows: int, linkage_constraints: int, n: int = 16384, k: 
             B.add("sumcheck", f"{s.name} layer {j}: {e['rounds']} rounds", e["sumcheck"])
     B.add("batching", f"chain linkage: {linkage_constraints} constraints folded by powers of one challenge",
           Fraction(max(0, linkage_constraints - 1), Fc.size))
+    if bind_constraints:
+        # rho_bind * sum_c geo_bind^c r_c: a nonzero residual vector leaves a nonzero polynomial of degree <= N in
+        # (rho_bind, geo_bind), both drawn after every message the residuals depend on
+        B.add("batching", f"operand binding: {bind_constraints} constraints, fresh rho_bind times powers of fresh geo_bind",
+              Fraction(bind_constraints, Fc.size))
+    lk = getattr(inst, "link", None)
+    if lk is not None:
+        # route (a), prime side (gpu/link.py): the 256 sigma constraints by powers of one rho drawn after them, and the
+        # two GF(2^128) session points (drawn by the live verifier after root_F and root_B): b^ = z^ at both only with
+        # probability (m / 2^128)^2 when b != z.  The Flock side's own terms (its reps, its link-claim reduction) are its
+        # accountant's (red-team-flock third audit).
+        B.add("batching", "link: 256 sigma constraints folded by powers of one rho", Fraction(255, Fc.size))
+        B.add("batching", f"link: Schwartz-Zippel over two GF(2^128) session points, m = {lk.layout.m}",
+              Fraction(lk.layout.m, 2**128) ** 2)
     return B
 
 

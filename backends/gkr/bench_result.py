@@ -53,6 +53,7 @@ AMPERE_RELATION = "bf16-ampere"         # its relation: the name its circuit fil
 K_VU = 1536
 BACKEND = "verity-gkr gpu (backends/gkr/gpu: checker v2 + LogUp + Ligero over BabyBear^6, SHA-512 Merkle; torch/Triton)"
 STATEMENT_FILES = ("circuit.txt", "epilogue.txt", "chain.txt", "manifest.json")
+BIND_FILES = ("bind.txt", "instances.txt", "x.bin", "w.bin")
 
 
 def _m(name: str, value, unit: str) -> dict:
@@ -182,7 +183,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--verifier", default=None, help="verity-gkr-verify binary (independent Rust verifier)")
     ap.add_argument("--threads", type=int, default=16)
     ap.add_argument("--target", type=int, default=-128)
+    ap.add_argument("--bind", action="store_true",
+                    help="the operands-bound statement (gpu/bind.py): bind.txt + the frozen x.bin / w.bin, checked by both verifiers")
+    ap.add_argument("--commit", choices=("sha256", "blake3", "vllm-v1"), default=None,
+                    help="the operands-committed statement (gpu/commit.py): per-VU row digests as public words, checked against "
+                         "the frame-v3 (sha256, blake3) or vllm-v1 trees by the Rust verifier")
     args = ap.parse_args(argv)
+    if args.bind and args.commit:
+        raise SystemExit("bench_result.py: --bind and --commit are two statements; pick one")
 
     if args.path == "torch":
         os.environ["VERITY_GPU_TORCH_ONLY"] = "1"
@@ -220,7 +228,7 @@ def main(argv: list[str] | None = None) -> int:
     dev = _dev(args.device)
     nvf4 = args.relation == "fp4-nvf4"
     if nvf4:
-        from verity.verification.target import NVFP4_SM120
+        from verity.proofs.target import NVFP4_SM120
 
         if str(src_root) not in sys.path:
             sys.path.insert(0, str(src_root))
@@ -302,9 +310,59 @@ def main(argv: list[str] | None = None) -> int:
             if g is not None:
                 return g.run(x16, w16, y16)
             return gen.run(ops.asarray(x), ops.asarray(w), ops.asarray(y))
+    write_statement(d, run_dir / "statement", y)
+    bind = bind_info = None
+    commitment = commit_info = None
+    chain_path, ecirc_s, elayers_s, public_s, epi_extra = d / man.get("chain_file", "chain.txt"), ecirc, elayers, public, None
+    relation = (args.relation or AMPERE_RELATION) + ("+bound" if args.bind else "")   # gpu.bind.BOUND
+    if args.commit:
+        from gpu import commit as CM
+        from gpu.bb_export import write_rows
+        from gpu.circuit import parse_circuit
+
+        sd = run_dir / "statement"
+        base = args.relation or AMPERE_RELATION
+        ox, ow = (A8.reshape(n_vus, -1), B8.reshape(n_vus, -1)) if nvf4 else (x, w)
+        yw = 4 if nvf4 or y.dtype == np.uint32 else 2
+        tc0 = time.perf_counter()
+        iset = CM.instance_set(base, args.lo, n_vus, src_root, frozen, nvf4_k=ox.shape[1] if nvf4 else None)
+        commitment = CM.commit(args.commit, base, iset, args.lo, ox, ow, np.asarray(public, dtype=np.int64).reshape(n_vus, -1), yw)
+        t_commit_serving = time.perf_counter() - tc0
+        relation = commitment.relation
+        (sd / "commitment.txt").write_text(commitment.text())
+        etext = CM.extend_epilogue((d / "epilogue.txt").read_text())
+        (sd / "epilogue.txt").write_text(etext)
+        (sd / "chain.txt").write_text(CM.extend_chain(chain_path.read_text()))
+        pub2 = commitment.public(np.asarray(public, dtype=np.int64))
+        write_rows(pub2.tolist(), sd / "public.bin")
+        chain_path, public_s = sd / "chain.txt", [int(v) for v in pub2.reshape(-1)]
+        ecirc_s = parse_circuit(etext)
+        elayers_s = layers(ecirc_s)
+        epi_extra = torch.from_numpy(commitment.limb_columns()).to(dev)
+        commit_info = {**commitment.info(), "serving_commit_seconds": t_commit_serving, "digest_columns": len(CM.DIGEST_COLS),
+                       "circuit_binds_digests": False,
+                       "spec": "gpu/commit.py: per VU the x row / W column row digests as 16-bit limbs after the y words; the Rust "
+                               f"verifier rebuilds the {commitment.scheme} trees and compares the roots (commitments.rs, "
+                               "vllm_v1.rs).  SCAFFOLD: no hash layer constrains the digest columns yet"}
+    if args.bind:
+        from gpu import bind as BD
+        from gpu.field import P as FP
+
+        sd = run_dir / "statement"
+        (sd / "bind.txt").write_text(BD.spec_text(BD.derive(ucirc, man)))
+        spec = BD.read_spec(sd / "bind.txt", ucirc)
+        if nvf4:
+            ox, ow, xdt, ydt = A8.reshape(n_vus, -1), B8.reshape(n_vus, -1), "u8", "u32"
+        else:
+            ox, ow, xdt, ydt = x, w, "u16", ("u32" if y.dtype == np.uint32 else "u16")
+        bind_info = BD.write_instances(sd, relation, args.lo, ox, ow, np.asarray(public, dtype=np.int64), xdt, ydt)
+        bind = prover.Bind(spec.cols, BD.digests(sd), torch.from_numpy(BD.values(spec, ox, ow, steps, FP)).to(dev))
+        bind_info.update({"bind_sha256": hashlib.sha256(spec.text.encode()).hexdigest(), "bound_columns": len(spec.cols),
+                          "constraints": n_vus * steps * len(spec.cols),
+                          "spec": "gpu/bind.py: X[(v,i), col] = sum coef * ARR[v, stride*i + off] per bind.txt line; "
+                                  "the verifier reads x.bin / w.bin and checks them and the public words against its pinned table"})
     torch.cuda.synchronize(dev)
     t_prep = time.perf_counter() - tp0
-    write_statement(d, run_dir / "statement", y)
     encoder = "SIMT (backends/direct/encode)" if ligero.simt_encoder(ligero.DEFAULT.k, ligero.DEFAULT.n) is not None else "torch NTT"
 
     def one_rep():
@@ -316,14 +374,17 @@ def main(argv: list[str] | None = None) -> int:
             torch.cuda.reset_peak_memory_stats(dev)
         t0 = time.perf_counter()
         rows = gen_rows(ggen[0] if graphed else None)
+        epi_cols = rows.epilogue if epi_extra is None else torch.cat([rows.epilogue, epi_extra], 1)
         bad = int(rows.bad.sum())
         t1 = time.perf_counter()
         if bad:
             raise SystemExit(f"bench_result.py: {bad} VUs rejected at witness generation (the frozen positives are all valid)")
         gen_peak = torch.cuda.max_memory_allocated(dev)
+        chain = read_chain(chain_path, ucirc, ecirc_s, steps, public_s)
+        chain.bind = bind
+        chain.commit_digest = None if commitment is None else hashlib.sha256(commitment.text().encode()).digest()
         inst = prover.Instance([prover.Segment("unit", ucirc, ulayers, rows.units, ucirc.hash),
-                                prover.Segment("epilogue", ecirc, elayers, rows.epilogue, ecirc.hash)],
-                               read_chain(d / man.get("chain_file", "chain.txt"), ucirc, ecirc, steps, public))
+                                prover.Segment("epilogue", ecirc_s, elayers_s, epi_cols, ecirc_s.hash)], chain)
         proof, st = prover.prove(inst, True)
         torch.cuda.synchronize(dev)
         t2 = time.perf_counter()
@@ -360,7 +421,8 @@ def main(argv: list[str] | None = None) -> int:
         inst, proof, st, data, tm = one_rep()
         err, tv = verify_py(inst, proof)
         if budget is None:
-            budget = soundness.summary(soundness.budget(inst, st.ligero_rows, st.linkage_constraints, K=K_VU))
+            budget = soundness.summary(soundness.budget(inst, st.ligero_rows, st.linkage_constraints, K=K_VU,
+                                                        bind_constraints=st.bind_constraints))
         pf = proofs_dir / f"rep{rep}.bin"
         pf.write_bytes(data)
         row = {"rep": rep, "vus": inst.vus(), "units": inst.segs[0].units, "t_total": tm["total"], "witness_gen": tm["witness_gen"],
@@ -385,7 +447,6 @@ def main(argv: list[str] | None = None) -> int:
         del inst, proof, st, data
 
     # ---- the independent verifier on every recorded proof ------------------------------------------------------------
-    relation = args.relation or AMPERE_RELATION
     vbin = Path(args.verifier) if args.verifier else None
     verdicts = []
     for row in rows:
@@ -394,7 +455,11 @@ def main(argv: list[str] | None = None) -> int:
             break
         out_json = run_dir / f"verify_rep{row['rep']}.json"
         cmd = [str(vbin), "verify", "--dir", str(run_dir / "statement"), "--proof", str(run_dir / row["proof_file"]),
-               "--vus", str(row["vus"]), "--relation", relation, "--threads", str(args.threads), "--json", str(out_json)]
+               "--vus", str(row["vus"]), "--threads", str(args.threads), "--json", str(out_json)]
+        # no circuit set is pinned for R+sha256 / R+blake3 until hash layers bind the digest columns: the scaffold's
+        # verdict is the tree check under --allow-any-circuit, never an accepted (pinned) result
+        cmd += (["--allow-any-circuit", "--require-commitment", "--allow-unpinned-commitment"] if commitment is not None
+                else ["--relation", relation])
         t1 = time.perf_counter()
         r = subprocess.run(cmd, capture_output=True, text=True)
         wall = time.perf_counter() - t1
@@ -404,15 +469,25 @@ def main(argv: list[str] | None = None) -> int:
             doc = None
         # a binary built before the pins ignores --relation and verifies whatever circuit files it is given
         pinned = (doc or {}).get("circuit_pinned") is True
-        accepted = bool(doc and doc.get("accepted")) and pinned and r.returncode == 0
+        accepted = (bool(doc and doc.get("accepted")) and pinned and r.returncode == 0
+                    and (bind is None or (doc or {}).get("operands_bound") is True))
         error = (doc or {}).get("error") or (None if doc is None or pinned else
+                                             f"scaffold: no circuit set is pinned for {relation} until hash layers bind the "
+                                             f"digest columns" if commitment is not None else
                                              f"{vbin} does not pin circuit files (built before backends/gkr/verifier/pins.txt): rebuild it")
+        cdoc = (doc or {}).get("commitment") or {}
         verdicts.append({"rep": row["rep"], "proof_sha256": row["proof_sha256"], "accepted": accepted, "rc": r.returncode,
+                         "commitment_checked": bool(doc and doc.get("accepted") and doc.get("operands_committed")) if commitment else None,
+                         "commitment_pinned": cdoc.get("pinned") if commitment else None,
+                         "commitment_roots_match": (all(cdoc.get(f"root_{n}") == commitment.roots[n].hex() for n in "aby")
+                                                    if commitment else None),
                          "error": error, "verify_seconds": (doc or {}).get("verify_seconds"), "process_wall": wall,
                          "relation": (doc or {}).get("relation"), "circuit_pinned": pinned,
                          "threads": (doc or {}).get("threads"), "cpu": (doc or {}).get("cpu"), "json": out_json.name,
                          "command": " ".join(cmd), "stderr_tail": r.stderr[-300:]})
-        print(f"verify rep{row['rep']}: {'accept' if accepted else 'REJECT'} {wall:.3f}s ({error})", flush=True)
+        print(f"verify rep{row['rep']}: {'accept' if accepted else 'REJECT'} {wall:.3f}s ({error})"
+              + (f"; commitment scaffold: checked {verdicts[-1]['commitment_checked']}, roots match "
+                 f"{verdicts[-1]['commitment_roots_match']}, pinned {verdicts[-1]['commitment_pinned']}" if commitment else ""), flush=True)
     vsha = _sha256(vbin) if vbin and vbin.is_file() else None
     (run_dir / "verify_independent.json").write_text(json.dumps({"verifier": str(vbin), "verifier_sha256": vsha, "threads": args.threads,
                                                                  "items": verdicts}, indent=1))
@@ -438,7 +513,8 @@ def main(argv: list[str] | None = None) -> int:
         cupy_v = cupy.__version__
     except ImportError:
         cupy_v = None
-    sw = {"backend": {"name": BACKEND, "commit": source_commit(), "version": f"checker v2 ({epi_name}), proof.bin v2",
+    sw = {"backend": {"name": BACKEND, "commit": source_commit(),
+                      "version": f"checker v2 ({epi_name}), proof.bin v2" + ("; operands bound (bind.txt, x.bin, w.bin)" if bind else ""),
                       "model": f"{model_name} ({params_src})", "relation": args.relation or args.tier,
                       "path": args.path, "encoder": encoder, "opening": ligero.opening_path(dev),
                       "witness": ("gpu/nvf4/witness.py (device generator: B-Ligero's fp4/hints_device chain + the unit's program)"
@@ -463,6 +539,8 @@ def main(argv: list[str] | None = None) -> int:
                        + (f"generating the {args.relation} recipe instances ({t_load:.2f}s, relchain.instances on "
                           f"{args.threads} processes)" if args.relation else
                           f"loading the frozen operands from disk ({t_load:.2f}s incl. the sha256 check of every tier file)")
+                       + ("; the operands-bound statement files (bind.txt, instances.txt, x.bin, w.bin, their digests) and "
+                          "the verifier's bound values" if bind else "")
                        + f"; {t_prep:.2f}s in all.  Triton / CUDA-graph / "
                        f"NVRTC compilation happens in {args.warmup} untimed warm-up rep(s) ({', '.join('%.1fs' % v for v in warm)}), "
                        f"then gc.freeze() of the preprocessing objects"),
@@ -478,8 +556,16 @@ def main(argv: list[str] | None = None) -> int:
                   "sha256": vsha, "threads": args.threads, "cpu": next((v["cpu"] for v in verdicts if v.get("cpu")), None),
                   "relation": relation, "circuit_pinned": bool(verdicts) and all(v["circuit_pinned"] for v in verdicts)},
         python_verifier="gpu.prover.verify (shares field / transcript / LogUp helpers with the prover)",
-        note=f"one proof of all {Bn} VUs ({steps} chained units each + the {epi_name}); buckets of the median rep "
-             f"(rep {med['rep']}) by t.total",
+        note=f"one proof of all {Bn} VUs ({steps} chained units each + the {epi_name})"
+             + (f"; operands bound: every unit's operand columns equal the frozen x, W the verifier reads "
+                f"({bind_info['constraints']} constraints)" if bind else "")
+             + (f"; operands committed ({commit_info['relation']}, SCAFFOLD): each VU's x / W row digests are public words the "
+                f"verifier checks against the {commit_info['scheme']} roots, but no circuit layer constrains them yet (serving-side commit "
+                f"{commit_info['serving_commit_seconds']:.2f}s, outside t.total)" if commitment else "")
+             + f"; buckets of the median rep (rep {med['rep']}) by t.total",
+        **({"variant": "A-GKR, operands bound", "operand_binding": bind_info} if bind else {}),
+        **({"variant": "A-GKR, operands committed (scaffold: digests not bound in circuit)", "operand_commitment": commit_info}
+           if commitment else {}),
     )
     b = med["buckets"]
     meas = [contract.measurement(name, b[name]) for name in contract.BUCKET_NAMES]
@@ -507,6 +593,8 @@ def main(argv: list[str] | None = None) -> int:
         _m("soundness_bits", -ach, "bits"),
         _m("warmup_seconds", warm[0] if warm else 0.0, "s"),
     ]
+    if commitment is not None:
+        meas.append(_m("commit.serving_seconds", commit_info["serving_commit_seconds"], "s"))
     for key in ("witness_gen", "gen_chain", "t_witness_wires", "t_mults", "t_commit", "t_lookup", "t_arith", "t_open_acc", "t_open_wq",
                 "t_open_cols", "to_bytes"):
         if med[key] is not None:
@@ -514,7 +602,9 @@ def main(argv: list[str] | None = None) -> int:
     ok = python_ok and rust_ok and same_proof
     detail = (f"python: {sum(r['python_verified'] for r in rows)}/{len(rows)}; rust: {n_acc}/{len(verdicts)} accepted "
               f"(--relation {relation})"
-              f"{'' if same_proof else '; the reps produced DIFFERENT proofs'}; reps t.total "
+              + (f"; commitment scaffold (--allow-any-circuit): {sum(bool(v['commitment_checked']) for v in verdicts)}/{len(verdicts)} "
+                 f"tree checks passed, roots match {all(v['commitment_roots_match'] for v in verdicts)}" if commitment else "")
+              + f"{'' if same_proof else '; the reps produced DIFFERENT proofs'}; reps t.total "
               f"{['%.3f' % r['t_total'] for r in rows]} s, rust verify {['%.3f' % v for v in rust_reps]} s")
     result = {"schema": contract.RESULT_SCHEMA, "run_id": run_id, "kind": "bench-result/v1", "workload_fingerprint": fp,
               "validation": {"status": "passed" if ok else "failed",
@@ -528,7 +618,9 @@ def main(argv: list[str] | None = None) -> int:
                                           "soundness": budget}},
               "measurements": meas,
               "measurement_files": ["prove_reps.json", "verify_independent.json"] + [v["json"] for v in verdicts],
-              "artifacts": [r["proof_file"] for r in rows] + [f"statement/{n}" for n in (*STATEMENT_FILES, "public.bin")]}
+              "artifacts": [r["proof_file"] for r in rows] + [f"statement/{n}" for n in (*STATEMENT_FILES, "public.bin")]
+                           + ([f"statement/{n}" for n in BIND_FILES] if bind else [])
+                           + (["statement/commitment.txt"] if commitment else [])}
     problems = contract.validate(result)
     result["contract_problems"] = problems
     tmp = run_dir / "result.json.tmp"

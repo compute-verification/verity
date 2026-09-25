@@ -6,7 +6,7 @@ driver / ptxas / toolkit change, on a second physical device of the SKU (TRUSTED
 A canary is < 1 minute on the device, exits non-zero on any mismatch against a declared model, and under ``research run`` writes a
 ``tc-evidence/v1`` ``result.json`` whose ``tc_evidence.canary`` holds the counts and whose ``workload_fingerprint.family`` is
 ``canary``; the lane then labels the artifact ``family=canary instruction=<id> hardware=<sku family> model=<name>
-model_agrees=<true|false>`` (the ``research data label`` lines are printed at the end; ``verity.verification.trust`` reads them).
+model_agrees=<true|false>`` (the ``research data label`` lines are printed at the end; ``verity.proofs.trust`` reads them).
 
 The tile set is a pure function of the instruction id, the repository fixtures and :data:`CANARY_SEED` (:func:`canary_plan`,
 :func:`canary_tiles`, witnessed by :func:`canary_digest`):
@@ -15,7 +15,7 @@ The tile set is a pure function of the instruction id, the repository fixtures a
   same generator as ``--sweep`` with ``n_random = CANARY_N_RANDOM`` (a small sweep, in the sweep's order, so a canary tile is a
   sweep tile of a known seed);
 * every regression tile of every *resolved* discrepancy-log entry naming the instruction or a Target over it
-  (:data:`verity.verification.trust.REGRESSION_TILES`): ``family:<name>`` tiles join the family set, ``replay:<fragment>`` files
+  (:data:`verity.proofs.trust.REGRESSION_TILES`): ``family:<name>`` tiles join the family set, ``replay:<fragment>`` files
   are replayed in full (golden records; the tc-total special captures for BF16).
 
 TODO(pod): the device half (``run_canary``: ``Probe.tiles`` + ``model_eval`` + ``replay_golden``) has not been executed on
@@ -44,7 +44,7 @@ if str(HERE) not in sys.path:  # `python tools/tc_probe/tc_probe.py` puts HERE f
 
 import tc_probe as P  # noqa: E402
 
-from verity.verification.trust import REGRESSION_TILES, _load_discrepancies, subjects  # noqa: E402
+from verity.proofs.trust import REGRESSION_TILES, _load_discrepancies, subjects  # noqa: E402
 
 CANARY_SEED = 20260922
 CANARY_N_RANDOM = 64      # families() n_random for the canary draws: every family then has >= CANARY_TILES tiles
@@ -291,7 +291,7 @@ def canary_failures(report: dict) -> list[str]:
 
 
 def evidence_labels(ins: P.Instruction, report: dict, identity: dict, *, evidence: str, family: str | None = None) -> list[dict]:
-    """The label contract of a ``tc-evidence/v1`` artifact (``verity.verification.trust`` reads exactly these keys): ``instruction``,
+    """The label contract of a ``tc-evidence/v1`` artifact (``verity.proofs.trust`` reads exactly these keys): ``instruction``,
     ``hardware`` (the SKU family), ``model`` (the declared pipelines), ``model_agrees``, ``evidence`` (``sweep`` / ``canary``),
     ``device`` (the GPU UUID, S1's device identity) and, for canaries, ``family=canary``.  ``report`` is a sweep or canary report
     with ``model_agrees`` per model (a canary's also lists ``declared_models``)."""
@@ -315,7 +315,7 @@ def result_labels(ins: P.Instruction, report: dict, identity: dict) -> list[dict
 
 
 def sku_family(device: str | None) -> str | None:
-    from verity.verification.trust import sku_family as _f
+    from verity.proofs.trust import sku_family as _f
 
     return _f(device)
 

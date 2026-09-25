@@ -108,9 +108,9 @@ def test_recorded_stage2_leaves_authenticate_against_their_recorded_roots() -> N
     """The serving side's real openings (the ``stage2--*`` conformance vectors, witness format 3) fold to the
     roots the objects name: the scheme here is the one those roots were committed under."""
 
-    from verity.verification.packed import decode_packed_witness
-    from verity.verification.statement import Statement
-    from verity.verification.wire import decode_statement
+    from verity.proofs.packed import decode_packed_witness
+    from verity.proofs.statement import Statement
+    from verity.proofs.wire import decode_statement
 
     checked = 0
     for path in sorted(FIXTURES.glob("stage2--*.json")):
@@ -120,7 +120,7 @@ def test_recorded_stage2_leaves_authenticate_against_their_recorded_roots() -> N
         statement: Statement = decode_statement(bytes.fromhex(record["statement"]))
         witness = decode_packed_witness(bytes.fromhex(record["witness"]))
         roots = {bytes.fromhex(root["root"]): root for root in record["object"]["roots"]}
-        from verity.verification.packed import packed_table
+        from verity.proofs.packed import packed_table
 
         for tree, leaves in zip(packed_table(statement).trees, witness.trees, strict=True):
             root = roots[tree.commitment.root]

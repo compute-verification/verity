@@ -73,6 +73,7 @@ from verity_vllm.commit.committer.native_host import (
     _StepJob,
     memtrace,
 )
+from verity_vllm.engine import hooks
 
 _EXT = None
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -628,30 +629,26 @@ class _SplitKernelProxy:
         return getattr(self._kernel, item)
 
 
-def install_split_kernel_proxies(sink: list) -> dict[str, Any]:
-    """Replace the three split kernels in vLLM's module namespace with recording proxies; returns {name: original} for uninstall (empty
+def install_split_kernel_proxies(sink: list) -> dict[str, hooks.Patch]:
+    """Replace the three split kernels in vLLM's module namespace with recording proxies; returns {name: patch} for uninstall (empty
     when the module / kernels are absent -- an older vLLM without the split pipeline binds no splits, and the manifest's `sampler_splits`
     rows then fail coverage closed, visibly)."""
     try:
         mod = sys.modules.get(TOPP_SPLIT_MODULE) or __import__(TOPP_SPLIT_MODULE, fromlist=["_"])
     except Exception:  # noqa: BLE001
         return {}
-    orig: dict[str, Any] = {}
+    patches: dict[str, hooks.Patch] = {}
     for nm in TOPP_SPLIT_KERNELS:
         k = getattr(mod, nm, None)
         if k is None or isinstance(k, _SplitKernelProxy):
             continue
-        orig[nm] = k
-        setattr(mod, nm, _SplitKernelProxy(k, nm, sink))
-    return orig
+        patches[nm] = hooks.patch(mod, nm, _SplitKernelProxy(k, nm, sink))
+    return patches
 
 
-def uninstall_split_kernel_proxies(orig: dict[str, Any]) -> None:
-    mod = sys.modules.get(TOPP_SPLIT_MODULE)
-    if mod is None:
-        return
-    for nm, k in orig.items():
-        setattr(mod, nm, k)
+def uninstall_split_kernel_proxies(patches: dict[str, hooks.Patch]) -> None:
+    for p in reversed(list(patches.values())):
+        p.uninstall()
 
 
 def split_count_of_launches(launches: list[tuple], n_rows: int) -> tuple[int | None, str | None]:
@@ -806,12 +803,13 @@ class NativeCollectCommitter(NativeHostCommitter):
                 pre = self._acquires_input(name, m)                     # by class (the embedding's ids) or [R19 int-20] by the manifest (a promoted member's consumer)
                 if "forward" in m.__dict__:
                     raise RuntimeError(f"{name}: forward already wrapped")
-                m.forward = self._make_native_wrapper(m.forward, name, pre) if (self.native_hooks and not self.fault) else self._make_wrapper(m.forward, name, pre)
+                self._hooks.patch(m, "forward", self._make_native_wrapper(m.forward, name, pre) if (self.native_hooks and not self.fault)
+                                  else self._make_wrapper(m.forward, name, pre))
                 self._wrapped.append(m)
             for name, m in self._input_only_modules():                  # [R19 int-20] a consumer of no acquire class: input acquired, output not
                 if "forward" in m.__dict__:
                     raise RuntimeError(f"{name}: forward already wrapped")
-                m.forward = self._make_input_wrapper(m.forward, name)
+                self._hooks.patch(m, "forward", self._make_input_wrapper(m.forward, name))
                 self._wrapped.append(m)
         else:
             for name, m in self._modules:
@@ -823,7 +821,6 @@ class NativeCollectCommitter(NativeHostCommitter):
         runner = self.runner
         for nm in ("execute_model", "sample"):
             if hasattr(runner, nm):
-                self._had_attr[nm] = nm in runner.__dict__
                 self._orig[nm] = getattr(runner, nm)
         orig_exec = self._orig["execute_model"]
         me = self
@@ -858,9 +855,8 @@ class NativeCollectCommitter(NativeHostCommitter):
                 return res
             return orig_exec(scheduler_output, *a, **kw)
 
-        runner.execute_model = execute_model
+        self._hooks.patch(runner, "execute_model", execute_model)
         if hasattr(runner, "gather_batch_req_state"):                          # new `vllm.v1.worker.gpu` runner: capture the step's sorted batch rows
-            self._had_attr["gather_batch_req_state"] = "gather_batch_req_state" in runner.__dict__
             orig_gather = self._orig["gather_batch_req_state"] = runner.gather_batch_req_state
 
             def gather_batch_req_state(*a, **kw):
@@ -873,7 +869,7 @@ class NativeCollectCommitter(NativeHostCommitter):
                     pass
                 return res
 
-            runner.gather_batch_req_state = gather_batch_req_state
+            self._hooks.patch(runner, "gather_batch_req_state", gather_batch_req_state)
         if "sample" in self._orig:
             orig_sample = self._orig["sample"]
             # [R16 stoch REQ-03] the top-p split count S of this step's sampling (manifest family `sampler_splits`, identity
@@ -920,16 +916,13 @@ class NativeCollectCommitter(NativeHostCommitter):
                     me._end_step()
                 return res
 
-            runner.sample = sample
+            self._hooks.patch(runner, "sample", sample)
         self.installed = True
 
     def uninstall(self) -> None:
         if not self.installed:
             return
         super().uninstall()
-        for m in self._wrapped:
-            if "forward" in m.__dict__:
-                delattr(m, "forward")
         self._wrapped = []
         uninstall_split_kernel_proxies(getattr(self, "_split_orig", None) or {})     # [R16 stoch REQ-03]
         self._split_orig = {}

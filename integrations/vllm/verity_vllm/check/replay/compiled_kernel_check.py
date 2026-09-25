@@ -20,7 +20,7 @@ from typing import Any
 import torch
 
 from verity_vllm.check import compiled_autotune
-from verity_vllm.check.replay import challenge as CH
+from verity_vllm.commit import challenge as CH
 from verity_vllm.program.kernels.compiled_relations import OUTPUT_ROLES, relation, roles_of, rms_eps_of
 
 _DT = {"bfloat16": torch.bfloat16, "float16": torch.float16, "float32": torch.float32, "int64": torch.int64, "int32": torch.int32,

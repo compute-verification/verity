@@ -1,6 +1,6 @@
-"""verity_numerical: the numerical relation of ``verity.verification.target.FIRST``, campaign-side.
+"""verity_numerical: the numerical relation of ``verity.proofs.target.FIRST``, campaign-side.
 
-Shared by the proof backends and owned by the campaign, not by ``verity.verification`` (which owns *what* must
+Shared by the proof backends and owned by the campaign, not by ``verity.proofs`` (which owns *what* must
 be established, not a proof decomposition).  Subpackages, each owned by one lane and landing on ``main`` through
 the coordinator:
 

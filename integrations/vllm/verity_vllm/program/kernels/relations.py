@@ -40,7 +40,7 @@ from verity_vllm.commit import hashing, identity
 from verity_vllm.observe.capture_v1 import CaptureError, CaptureReader, Value
 from verity_vllm.commit.merkle import CommitError, Opening, TreeCache, verify_opening_in
 from verity_vllm.check.poc_description import Description, DescriptionError, NodeInstance
-from verity_vllm.check.replay import challenge as CH
+from verity_vllm.commit import challenge as CH
 
 SAME_RUNTIME = "same_runtime"
 INDEPENDENT = "independent"

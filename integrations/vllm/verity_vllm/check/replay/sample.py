@@ -1,31 +1,33 @@
 """The stratified sample of VUs and its seed: seeded round-robin across strata (`sample`), the seed under a verifier
-challenge (`challenge_seed`, derived in `verity_vllm.check.replay.challenge`), and the honest-prover catch probability."""
+challenge (`challenge_seed`, derived in `verity_vllm.commit.challenge`), and the honest-prover catch probability."""
 from __future__ import annotations
 
 from typing import Any
 
-from verity_vllm.check.replay import challenge as CH, replay_codes as RC
+from verity.randomness import Key
+
+from verity_vllm.check.replay import replay_codes as RC
+from verity_vllm.commit import challenge as CH
 
 
-def sample(vus: list[dict], per_stratum: int, seed: int, *, targets: list[str] | None = None) -> tuple[list[dict], dict[str, dict[str, int]], dict]:
-    """Seeded stratified sample, emitted ROUND-ROBIN across strata (every stratum's first pick before any stratum's second) so that a
-    caller's cap keeps >= 1 VU per stratum.  `targets`: `<op_path>[@<step>]` -- every VU of that module (at that request-local step, if
-    given) is added to the sample and recorded as targeted (the negatives of record: a single-identity fault at a mid-phase step)."""
+def sample(vus: list[dict], per_stratum: int, seed: int, *, targets: list[str] | None = None,
+           key: Key | None = None) -> tuple[list[dict], dict[str, dict[str, int]], dict]:
+    """Stratified sample (`challenge.stratum_picks`: legacy from `seed`, or from `key`), emitted ROUND-ROBIN across strata (every stratum's
+    first pick before any stratum's second) so that a caller's cap keeps >= 1 VU per stratum.  `targets`: `<op_path>[@<step>]` -- every VU
+    of that module (at that request-local step, if given) is added to the sample and recorded as targeted (the negatives of record)."""
     by: dict[str, list[dict]] = {}
     for v in vus:
         by.setdefault(v["stratum"], []).append(v)
-    rng = CH.stream(int(seed))
     rounds: list[list[dict]] = []
     strata = {}
-    for k in sorted(by):
-        pool = by[k]
-        n = min(int(per_stratum), len(pool))
-        chosen = rng.sample(pool, n) if n < len(pool) else list(pool)
+    names = sorted(by)
+    picks = CH.stratum_picks([by[k] for k in names], per_stratum, None if key is not None else seed, key)
+    for k, chosen in zip(names, picks):
         for j, c in enumerate(chosen):
             while len(rounds) <= j:
                 rounds.append([])
             rounds[j].append(c)
-        strata[k] = {"population": len(pool), "sampled": n}
+        strata[k] = {"population": len(by[k]), "sampled": len(chosen)}
     picked = [c for rnd in rounds for c in rnd]
     n_strat = len(picked)
     targeted: dict[str, int] = {}
@@ -46,8 +48,9 @@ def sample(vus: list[dict], per_stratum: int, seed: int, *, targets: list[str] |
 def challenge_seed(challenge: str, run_root: bytes) -> tuple[int, str]:
     """[rev-cb M-0572, v2] the sample seed under a VERIFIER-ISSUED post-commitment challenge: sha256(challenge || run_root)[:8].  Binding the
     challenge to the root means a challenge issued before the root was fixed (or for another run) selects a different sample, and the
-    prover cannot grind the sample by recommitting (the root changes -> the verifier issues a fresh challenge).  Returns (seed, source)."""
-    return CH.challenge_seed(challenge, run_root), RC.challenge_seed_source(challenge)
+    prover cannot grind the sample by recommitting (the root changes -> the verifier issues a fresh challenge).  Returns (seed, source).
+    Legacy (`challenge.LEGACY`); its successor is `challenge.replay_key`, a beacon-keyed draw passed as `challenge_key`."""
+    return CH.legacy_replay_seed(challenge, run_root), RC.challenge_seed_source(challenge)
 
 
 def _catch_probability(strata: dict[str, dict]) -> dict[str, Any]:

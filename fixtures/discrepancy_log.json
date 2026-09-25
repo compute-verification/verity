@@ -1,6 +1,6 @@
 {
   "schema": "verity/discrepancy-log/v0",
-  "what": "Where the paper, the pinned simulator, Verity's reference and the hardware disagree or are silent about the frozen target. An entry leaves `open` only with an explicit `resolution` and `evidence_refs`; editing the reference implementation never resolves an entry by itself (tests/verification/test_discrepancy_log.py).  Silicon Phase 0 (2026-09-22) extends the log beyond the frozen target: an entry's `profile` names a target of verity.verification.target.TARGETS (frozen or draft) or, for an instruction class with no target yet, an id of verity.ml.tc.instructions.INSTRUCTIONS; the `hawkeye_*` columns then hold what the nearest published model (Hawkeye's Hopper FP8 simulator; autoproof's lockfile for FP4) says.",
+  "what": "Where the paper, the pinned simulator, Verity's reference and the hardware disagree or are silent about the frozen target. An entry leaves `open` only with an explicit `resolution` and `evidence_refs`; editing the reference implementation never resolves an entry by itself (tests/proofs/test_discrepancy_log.py).  Silicon Phase 0 (2026-09-22) extends the log beyond the frozen target: an entry's `profile` names a target of verity.proofs.target.TARGETS (frozen or draft) or, for an instruction class with no target yet, an id of verity.ml.tc.instructions.INSTRUCTIONS; the `hawkeye_*` columns then hold what the nearest published model (Hawkeye's Hopper FP8 simulator; autoproof's lockfile for FP4) says.",
   "statuses": {
     "open": "unresolved; a lane owns it",
     "resolved": "settled with evidence; the resolution says what the target does",
@@ -291,7 +291,7 @@
         "r20260922-183435-fd5d",
         "r20260922-232403-fbd0",
         "tools/tc_probe/tc_probe.py",
-        "packages/verity/tests/verification/test_tc_probe_families.py"
+        "packages/verity/tests/proofs/test_tc_probe_families.py"
       ],
       "owner": "pin-bf16"
     },

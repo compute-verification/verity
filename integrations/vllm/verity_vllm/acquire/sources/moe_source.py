@@ -33,6 +33,8 @@ from __future__ import annotations
 import time
 from typing import Any
 
+from verity_vllm.engine import hooks
+
 MOE_MODULE_CLASSES = {"MoERunner", "MoERunnerInterface", "FusedMoE", "SharedFusedMoE"}
 TENSORS_PER_LAYER = 6
 COVERS_FAMILIES = ["MoeRouterTopK_v1", "MoeExpertGemm_v1", "SiluMul_v1", "MoeExpertGemmW_v1", "MoeSum_v1"]
@@ -63,7 +65,7 @@ class MoeBlockSource:
         self.modules = [(n, m) for n, m in model.named_modules() if n in self.layers]
         self.cur_layer: int | None = None
         self._handles: list = []
-        self._patched: list[tuple[Any, str, Any]] = []
+        self._hooks = hooks.Hooks()
         self.active = False
         self.stats = {"launches": 0, "bytes": 0, "layers": len(self.layers), "tensors_per_layer": TENSORS_PER_LAYER, "acquire_s": 0.0,
                       "unattributed": 0, "shapes": {}, "plane_flushes": 0}
@@ -96,18 +98,14 @@ class MoeBlockSource:
 
             self._handles.append(m.register_forward_pre_hook(pre_hook))
         for mod, attr in self._sites():
-            orig = getattr(mod, attr)
-            self._patched.append((mod, attr, orig))
-            setattr(mod, attr, self._wrap(attr, orig))
+            self._hooks.wrap(mod, attr, lambda orig, attr=attr: self._wrap(attr, orig))
         self.active = True
 
     def uninstall(self) -> None:
         for h in self._handles:
             h.remove()
         self._handles = []
-        for mod, attr, orig in reversed(self._patched):
-            setattr(mod, attr, orig)
-        self._patched = []
+        self._hooks.uninstall()
         self.active = False
 
     def on_step_begin(self) -> None:
