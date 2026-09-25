@@ -107,3 +107,16 @@ for _name in ("validate_partition", "validate_width", "readiness_32bit", "gate_w
 for _k, _v in vars(_pmod).items():
     if _k.startswith("test_") or _k in ("gemm", "synth", "oracle"):
         globals()[_k] = _v
+
+
+def test_differential_detects_a_disagreement():
+    ns = types.SimpleNamespace
+    d = Differential(ns(f=lambda x: frozenset({x}), g=lambda: Unsupported("r", "d")), ns(f=lambda x: frozenset({x + 1}), g=lambda: 0))
+    with pytest.raises(AssertionError):
+        d.f(1)
+    with pytest.raises(AssertionError):
+        d.g()
+    same = Differential(ns(f=lambda x: x, e=lambda: 1 // 0), ns(f=lambda x: x, e=lambda: 1 // 0))
+    assert same.f(3) == 3
+    with pytest.raises(ZeroDivisionError):
+        same.e()
