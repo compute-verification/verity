@@ -24,6 +24,8 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+from verity_vllm.properties.record import seal
+
 #: prompt lengths that straddle the kernel-specialization boundaries of the pinned profile (FA2 kBlockN 64 / 128, the
 #: persistent matmul's 64/128-row tiles) plus a short and a long one; the generator draws from this pool.
 LENGTH_POOL = (7, 31, 33, 63, 64, 65, 96, 127, 128, 129, 200)
@@ -88,7 +90,7 @@ def assemble(holdouts_dir: Path) -> dict[str, Any]:
         out["holdouts"].append(ent)
     out["n"] = len(out["holdouts"])
     out["status"] = "pass" if out["holdouts"] and all(h["status"] == "pass" for h in out["holdouts"]) else "fail"
-    return out
+    return seal(out, out["status"] == "pass")
 
 
 def main(argv: list[str] | None = None) -> int:
