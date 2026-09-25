@@ -28,17 +28,13 @@ import subprocess
 import sys
 from typing import Any
 
+from verity_vllm.config import TARGETS
+
 FAIL_CLASS = "PRECHECK_FAIL_TARGET_FAMILY"
 SCHEMA = "verity-sweep/target-family/v1"
 
-# device token in a row id -> compute capability family.  Extend by name; an unknown token is a refusal, not a guess.
-DEVICE_FAMILY: dict[str, tuple[int, int]] = {
-    "l40s": (8, 9), "l40": (8, 9), "l4": (8, 9), "rtx4090": (8, 9),
-    "a100": (8, 0),
-    "a10": (8, 6), "a10g": (8, 6), "a40": (8, 6),
-    "h100": (9, 0), "h200": (9, 0), "h20": (9, 0),
-    "b200": (10, 0), "gb200": (10, 0),
-}
+# device token in a row id -> compute capability family: the target table of `config.py`
+DEVICE_FAMILY: dict[str, tuple[int, int]] = TARGETS
 
 _ROW_RE = re.compile(r"^[^_]+(?:_[^_]+)*__[^_]+__([a-z0-9]+)__tp\d+__")
 
