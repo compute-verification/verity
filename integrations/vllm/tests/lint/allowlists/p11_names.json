@@ -528,7 +528,6 @@
     {"file": "verity_vllm/program/registry/derived_rows.py", "kind": "doc-round", "symbol": "attention_rows", "detail": "R1N", "count": 2},
     {"file": "verity_vllm/program/registry/fp8.py", "kind": "doc-date", "symbol": "f32_to_e4m3_sat_bits", "detail": "date"},
     {"file": "verity_vllm/program/registry/gemm_targets.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N", "count": 5},
-    {"file": "verity_vllm/program/registry/hopper.py", "kind": "doc-date", "symbol": "HopperBF16WgmmaDot16", "detail": "date"},
     {"file": "verity_vllm/program/registry/hopper.py", "kind": "doc-round", "symbol": "_hopper_total", "detail": "R1N"},
     {"file": "verity_vllm/program/registry/lifted.py", "kind": "def-name", "symbol": "<module>", "detail": "_splits_for_v1"},
     {"file": "verity_vllm/program/registry/lifted.py", "kind": "def-name", "symbol": "<module>", "detail": "lifted_prim_v1"},
