@@ -3,7 +3,9 @@ R1), the same rule as ligero-verify's ``auth::layout_error``.  End to end (the r
 fp8-ada+blake3 on the CPU): VU 0's committed output is VU 1's under honest x / W roots and the statement claims VU 0 on
 (x row 1, W column 1) -- refused by Python and ``$LIGERO_VERIFY`` (when set); ``reverify.commitment_problems`` (R2) flags
 its y root against the recomputed instance set, a statement without a proof (R4) and a rep that claims a VU twice; the
-honest dump passes all three.
+honest dump passes all three.  Tile layouts (a +shared v6 dump of a 2 x 3 tile written by ``bench-vu``): the dump is
+recomputed from its manifest's ``set.tile`` and passes ``verify_tree``; a remapped tile VU, a wrong ``set.tile``, a root
+that is not the set's and a dump without ``set.tile`` are refused.
 
     uv run pytest backends/direct/ligero/hashauth_test.py
 """
@@ -137,3 +139,154 @@ def test_reverify_recomputes_the_trees_and_the_cover(remap, tmp_path) -> None:
     assert commitment_problems(twice, man, "fp8-ada+blake3", ["rep0"])[1][0].startswith("rep0/sub_01.stmt: unreadable statement")
     other = dict(man, set={"total_vus": 3, "instances": man["set"]["instances"]})
     assert "manifest digest" in commitment_problems(out["honest"][0], other, "fp8-ada+blake3", ["rep0"])[1][0]
+
+
+# ---- tile layouts: a +shared (v6) dump is recomputed as the GEMM tile its manifest's `set.tile` names (fp8-ada, a 2 x 3
+# tile: 6 VUs as 2 sub-batches of 3, Fiat-Shamir + ZK, written on the CPU by the bench itself) ----
+
+TILE = (2, 3)
+PINNED_SHARED = "fp8-ada+hash"          # what `system-digest` names a row-sharing pair's G system
+
+
+def _rust_pair(root: Path, d: Path) -> dict:
+    exe = os.environ.get("LIGERO_VERIFY")
+    if not exe:
+        pytest.skip("LIGERO_VERIFY is not set")
+    r = subprocess.run([exe, "verify", "--system", str(root / "system.bin"), "--system-h", str(root / "system_h.bin"),
+                        "--statement", str(d / "sub_00.stmt"), "--proof", str(d / "sub_00.proof"), "--proof-h", str(d / "sub_00.hproof")],
+                       capture_output=True, text=True)
+    return json.loads(r.stdout.strip().splitlines()[-1])
+
+
+@pytest.fixture(scope="module")
+def tile(tmp_path_factory):
+    """``(honest dump, its manifest, forgery dir, python verdict of the forgery)``.  The honest dump is ``run bench-vu
+    --auth included-hash-shared --tile 2x3 --dump-dir``.  The forgery is R1 on a tile: VU 0's committed output is VU 4's
+    (x row 1, W column 1) under honest x / W roots, and its sub-batch claims VU 0 on x row 1 / W column 1 (the tile fixes
+    x row 0 / W column 0)."""
+    pytest.importorskip("torch")
+    from .relations import relation
+    from .relchain import SharedHashedRunner, tile_digest, tile_instances
+    from .run import main as run_main
+    from .serialize import _statement_of, proof_bytes, statement_bytes
+
+    root = tmp_path_factory.mktemp("tile")
+    d = root / "honest"
+    assert run_main(["--relation", "fp8-ada", "bench-vu", "--device", "cpu", "--auth", "included-hash-shared", "--tile", "2x3",
+                     "--total-vus", "6", "--batch", str(3 * 48), "--reps", "1", "--zk", "--mode", "fiat-shamir", "--pipeline", "0",
+                     "--dump-dir", str(d)]) == 0
+    man = json.loads((d / "manifest.json").read_text())
+    rel = relation("fp8-ada")
+    data, x, w = tile_instances(rel, *TILE)
+    served = list(data)
+    served[0] = (data[0][0], data[0][1], data[0][2], data[4][3])
+    R = SharedHashedRunner(rel, "cpu", -128.0, zk=True, mode="fiat-shamir", n_proofs=2)
+    R.commit_vus(served, dataset=rel.instances_dataset, tier=rel.instances_tier, manifest_sha256=tile_digest(rel, *TILE),
+                 tile=TILE, x_rows=x, w_cols=w)
+    auth = HashAuth.for_vus(R.trees, [0, 1, 2], [1, 0, 0], [1, 1, 2])
+    pf, pubs, lay = R.prove_vus([data[4], data[1], data[2]], check=False, vu_ids=[0, 1, 2], auth=auth)
+    py = R.verify_vus(pf, pubs, lay)
+    f = root / "forgery"
+    shutil.copytree(d, f)
+    (f / "rep1" / "sub_00.stmt").write_bytes(statement_bytes(_statement_of(R, pubs, lay, R.cfg(lay.l), 2)))
+    (f / "rep1" / "sub_00.proof").write_bytes(proof_bytes(pf.g))
+    (f / "rep1" / "sub_00.hproof").write_bytes(proof_bytes(pf.h))
+    return d, man, f, (bool(py[0]), py[1])
+
+
+def test_the_bench_writes_set_tile(tile) -> None:
+    from .relations import relation
+    from .relchain import TILE_DRAW, TILE_LAYOUT, tile_digest
+    d, man, *_ = tile
+    rel = relation("fp8-ada")
+    assert man["set"]["tile"] == {"nx": 2, "nw": 3, "seed": rel.instance_seed, "draw": TILE_DRAW, "layout": TILE_LAYOUT}
+    assert man["set"]["instances"] == tile_digest(rel, *TILE) and man["set"]["total_vus"] == 6
+    assert man["system_h_file"]["path"] == "system_h.bin"
+    assert sorted(p.name for p in (d / "rep1").iterdir()) == [f"sub_0{i}.{s}" for i in (0, 1) for s in ("hproof", "proof", "stmt")]
+
+
+def test_an_honest_tile_dump_is_recomputed(tile, tmp_path) -> None:
+    from .reverify import Report, Verifier, _sha256, commitment_problems, committed_trees, verify_tree
+    d, man, *_ = tile
+    want = committed_trees(PINNED_SHARED, man)
+    assert [want[n][2] for n in ("a", "b", "y")] == [2, 3, 6]
+    assert commitment_problems(d, man, PINNED_SHARED, ["rep1"]) == (True, [])
+    exe = os.environ.get("LIGERO_VERIFY")
+    if not exe:
+        pytest.skip("LIGERO_VERIFY is not set")
+    rep = Report("art:test")
+    verify_tree(d, man, Verifier(Path(exe), _sha256(Path(exe)), None), rep, jobs=2, params={}, asserted=None, out_dir=tmp_path)
+    assert (rep.status, rep.why, rep.relation, rep.hashed, rep.tile) == ("PASS", [], PINNED_SHARED, True, "2x3"), rep.why
+    assert rep.reps["rep1"]["accepted"] == 2 and rep.custody == {"files": 8, "mismatched": 0, "missing": 0}, rep.reps
+
+
+def test_a_remapped_tile_vu_is_refused(tile) -> None:
+    from .reverify import commitment_problems
+    from .serialize import verify_files
+    d, man, f, py = tile
+    assert not py[0] and LAYOUT in py[1], py
+    ok, why, _ = verify_files(f / "rep1" / "sub_00.stmt", f / "rep1" / "sub_00.proof", "cpu")
+    assert not ok and LAYOUT in why, why
+    assert commitment_problems(f, man, PINNED_SHARED, ["rep1"]) == (True, [
+        "rep1/sub_00.stmt: tree y root differ from the instance set's", f"rep1/sub_00.stmt: {LAYOUT}"])
+    js = _rust_pair(f, f / "rep1")
+    assert not js["accepted"] and LAYOUT in js["reason"], js
+
+
+def _tile_set(man: dict, **tile) -> dict:
+    return dict(man, set={**man["set"], "tile": {**man["set"]["tile"], **tile}})
+
+
+@pytest.mark.parametrize("edit,why", [
+    ({"nx": 3, "nw": 2}, "commitment: the fp8-ada 3x2 tile (seed "),
+    ({"nx": 1}, "commitment: manifest `set.tile` is 1x3 = 3 VUs, the set has total_vus = 6"),
+    ({"nw": 0}, "commitment: manifest `set.tile`: nx = 2, nw = 0 are not positive integers"),
+    ({"seed": 7}, "commitment: manifest `set.tile` seed 7 is not the fp8-ada instance seed"),
+    ({"draw": "relchain.tile_instances/v2"}, "commitment: manifest `set.tile` names draw 'relchain.tile_instances/v2'"),
+    ({"layout": "column-major"}, "commitment: manifest `set.tile` names draw"),
+], ids=["swapped", "wrong-count", "zero", "other-seed", "other-draw", "other-layout"])
+def test_a_wrong_set_tile_is_refused(tile, edit, why) -> None:
+    from .reverify import commitment_problems
+    d, man, *_ = tile
+    hashed, bad = commitment_problems(d, _tile_set(man, **edit), PINNED_SHARED, ["rep1"])
+    assert hashed and len(bad) == 1 and bad[0].startswith(why), bad
+
+
+def test_a_consistent_manifest_of_another_tile_does_not_match_the_roots(tile) -> None:
+    """A manifest naming the 3 x 2 tile with ITS digest: the set is recomputed, and the statements' trees (2 x rows, 3 W
+    columns under the 2 x 3 bindings) are not its trees."""
+    from .relations import relation
+    from .relchain import tile_digest
+    from .reverify import commitment_problems
+    d, man, *_ = tile
+    other = _tile_set(man, nx=3, nw=2)
+    other["set"]["instances"] = tile_digest(relation("fp8-ada"), 3, 2)
+    hashed, bad = commitment_problems(d, other, PINNED_SHARED, ["rep1"])
+    assert hashed and bad == [f"rep1/sub_0{i}.stmt: tree {n} {what} differ from the instance set's"
+                              for i in (0, 1) for n, what in (("a", "binding/count/root"), ("b", "binding/count/root"), ("y", "binding/root"))], bad
+
+
+def test_a_tile_statement_whose_root_is_not_the_sets_is_refused(tile, tmp_path) -> None:
+    from .reverify import commitment_problems
+    from .serialize import read_statement
+    d, man, *_ = tile
+    e = shutil.copytree(d, tmp_path / "root")
+    p = e / "rep1" / "sub_01.stmt"
+    raw = bytearray(p.read_bytes())
+    at = raw.find(read_statement(bytes(raw)).hash_auth.tree("a").root)
+    assert at > 0
+    raw[at] ^= 1
+    p.write_bytes(bytes(raw))
+    assert commitment_problems(e, man, PINNED_SHARED, ["rep1"]) == (True, ["rep1/sub_01.stmt: tree a root differ from the instance set's"])
+
+
+def test_a_tile_dump_without_set_tile_fails_closed(tile) -> None:
+    """The dumps before `set.tile` (the shared-local cells): their manifests name no tile, some the unshared set's digest."""
+    from .relations import relation
+    from .relchain import instances_digest
+    from .reverify import commitment_problems
+    d, man, *_ = tile
+    s = {k: v for k, v in man["set"].items() if k != "tile"}
+    closed = (True, ["commitment: 2 row-sharing (v6) statement(s) and no manifest `set.tile`: the shared-row layout is not recomputed"])
+    assert commitment_problems(d, dict(man, set=s), PINNED_SHARED, ["rep1"]) == closed
+    assert commitment_problems(d, dict(man, set=dict(s, instances=instances_digest(relation("fp8-ada"), 6))), PINNED_SHARED, ["rep1"]) == closed
