@@ -67,10 +67,13 @@ def _sorted_rows(a: np.ndarray) -> np.ndarray:
 def check_merge(plain_text: str, merged_text: str, merged_name: str = "LK") -> dict:
     from gpu.circuit import parse_circuit
 
-    pc, mc = parse_circuit(plain_text), parse_circuit(merged_text)
     bad: list[str] = []
     if _head(plain_text) != _head(merged_text):
         bad.append("non-table lines differ")
+    return _check_merge(parse_circuit(plain_text), parse_circuit(merged_text), merged_name, bad)
+
+
+def _check_merge(pc, mc, merged_name: str, bad: list[str]) -> dict:
     one = pc.one_col
     if len(pc.queries) != len(mc.queries):
         bad.append(f"query count {len(pc.queries)} vs {len(mc.queries)}")
@@ -133,11 +136,14 @@ def check_paired(plain_text: str, paired_text: str, widths=(3, 5, 6, 7)) -> dict
     """``paired_text`` = ``plain_text`` with pairs of R<b> queries x, y as (x + 2^b y, x, y) into PR<b> (rows exactly that)."""
     from gpu.circuit import parse_circuit
 
-    pc, qc = parse_circuit(plain_text), parse_circuit(paired_text)
-    one = pc.one_col
     bad: list[str] = []
     if _head(plain_text) != _head(paired_text):
         bad.append("non-table lines differ")
+    return _check_paired(parse_circuit(plain_text), parse_circuit(paired_text), widths, bad)
+
+
+def _check_paired(pc, qc, widths, bad: list[str]) -> dict:
+    one = pc.one_col
     other_p = Counter((q.table, tuple(_lin(l, one) for l in q.cols)) for q in pc.queries if _rw(q.table) not in widths)
     other_q = Counter((q.table, tuple(_lin(l, one) for l in q.cols)) for q in qc.queries
                       if not q.table.startswith("PR") and _rw(q.table) not in widths)
@@ -299,6 +305,117 @@ def static_nvf4(paired: bool) -> dict:
         res["merge_paired_unit"] = check_merge(t1, C.export_circuit(u1.ctx, merge=True).text, C.MERGED)
     res["ok"] = all(v.get("ok", True) for v in res.values() if isinstance(v, dict))
     return res
+
+
+def selftest(plain_text: str, merged_text: str, paired_plain: str | None = None, paired_text: str | None = None) -> dict:
+    """planted defects the static checks must catch (non-vacuity): each entry must come out ``caught``"""
+    import copy
+
+    from gpu.circuit import Lin, parse_circuit
+
+    pc0, mc0 = parse_circuit(plain_text), parse_circuit(merged_text)
+    one = pc0.one_col
+    out = {}
+
+    def run(name, mutate, check):
+        pc, mc = copy.deepcopy(pc0), copy.deepcopy(mc0)
+        mutate(pc, mc)
+        for t in mc.tables + pc.tables:
+            t._dev_rows = {}
+        out[name] = "caught" if not check(pc, mc)["ok"] else "MISSED"
+
+    merged = lambda pc, mc: _check_merge(pc, mc, "LK", [])          # noqa: E731
+    tags = sorted({_lin(q.cols[1], one)[1] for q in mc0.queries})
+
+    def q_tag(pc, mc):
+        q = mc.queries[len(mc.queries) // 2]
+        t = _lin(q.cols[1], one)[1]
+        q.cols[1] = Lin([], next(x for x in tags if x != t))
+
+    def row_tag(pc, mc):
+        lk = mc.table("LK")
+        lk.rows[len(lk.rows) // 2][1] = next(x for x in tags if x != lk.rows[len(lk.rows) // 2][1])
+
+    def row_drop(pc, mc):
+        del mc.table("LK").rows[len(mc.table("LK").rows) // 3]
+
+    def key_shift(pc, mc):
+        q = mc.queries[len(mc.queries) // 3]
+        q.cols[0] = Lin(list(q.cols[0].terms), (q.cols[0].konst + TAG_SHIFT) % P)
+
+    def pad_one(pc, mc):
+        q = next(q for q in mc.queries if all(_lin(l, one) == ((), 0) for l in q.cols[-1:]))
+        q.cols[-1] = Lin([], 1)
+
+    def out_col(pc, mc):
+        q = next(q for q in mc.queries if _lin(q.cols[2], one)[0])
+        q.cols[2] = Lin(list(q.cols[2].terms), (q.cols[2].konst + 1) % P)
+
+    for n, f in (("query tag changed", q_tag), ("LK row tag changed", row_tag), ("LK row dropped", row_drop),
+                 ("query key shifted by 2^20", key_shift), ("pad column nonzero", pad_one), ("output column +1", out_col)):
+        run(n, f, merged)
+    if paired_text is not None:
+        pp0, qq0 = parse_circuit(paired_plain), parse_circuit(paired_text)
+
+        def prun(name, mutate):
+            pp, qq = copy.deepcopy(pp0), copy.deepcopy(qq0)
+            mutate(qq)
+            for t in qq.tables:
+                t._dev_rows = {}
+            out[name] = "caught" if not _check_paired(pp, qq, (3, 5, 6, 7), [])["ok"] else "MISSED"
+
+        def pr_row(qq):
+            t = qq.table("PR5")
+            t.rows[3][1] = (t.rows[3][1] + 32) % P
+
+        def pr_swap(qq):
+            q = next(q for q in qq.queries if q.table == "PR5")
+            q.cols[1], q.cols[2] = q.cols[2], q.cols[1]
+
+        def pr_drop(qq):
+            i = next(i for i, q in enumerate(qq.queries) if q.table == "PR3")
+            del qq.queries[i]
+
+        for n, f in (("PR5 row x out of range", pr_row), ("PR5 query x/y swapped", pr_swap), ("PR3 query dropped", pr_drop)):
+            prun(n, f)
+    return {"ok": all(v == "caught" for v in out.values()), "cases": out}
+
+
+def selftest_nvf4(paired: bool) -> dict:
+    """planted defects in the constraint systems (flatten; bool quadratic) the Sys comparison must catch"""
+    from gpu.nvf4 import circuit as C
+
+    out = {}
+    u0 = Sys(C.build_unit(max_depth=99))
+    p0 = u0.parts()
+
+    def flat_case(name, mutate):
+        u1 = Sys(C.build_unit())
+        mutate(u1)
+        u1.memo.clear()
+        pr = u1.aux_defs_ok() + _cmp(p0, u1.parts())
+        out[name] = "caught" if pr else "MISSED"
+
+    def drop_def(u1):
+        j = max(u1.aux_def)
+        nm = u1.rows[j].name + ".def"
+        u1.ctx.sys.linear = [l for l in u1.ctx.sys.linear if not l.name.endswith(nm)]
+
+    def wrong_operand(u1):
+        r = next(r for r in u1.rows if r.kind == "prod" and any(u1.rows[j].name.startswith("flat.") for j in r.spec[0].lin))
+        a, b = r.spec
+        r.spec = (b, b)
+
+    def drop_quad(u1):
+        u1.ctx.sys.quadratic.pop(len(u1.ctx.sys.quadratic) // 2)
+
+    def drop_range(u1):
+        u1.ctx.ranges.pop(len(u1.ctx.ranges) // 2)
+
+    for n, f in (("flatten def dropped", drop_def), ("flattened product operand swapped", wrong_operand),
+                 ("quadratic dropped", drop_quad), ("range dropped", drop_range)):
+        flat_case(n, f)
+    return {"ok": all(v == "caught" for v in out.values()), "cases": out}
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------
@@ -565,6 +682,10 @@ def main(argv=None) -> int:
     a.add_argument("--merged", type=Path, required=True)
     b = sub.add_parser("static-nvf4")
     b.add_argument("--paired", action="store_true")
+    s = sub.add_parser("selftest")
+    s.add_argument("--plain", type=Path, help="fp8: the --no-merge statement dir (else gpu.nvf4.circuit is exported)")
+    s.add_argument("--merged", type=Path)
+    s.add_argument("--paired", action="store_true")
     c = sub.add_parser("forge")
     c.add_argument("--relation", required=True, choices=("fp8-ada", "fp4-nvf4"))
     c.add_argument("--vus", type=int, default=64)
@@ -580,6 +701,22 @@ def main(argv=None) -> int:
         res["manifest_keys_differing"] = sorted(k for k in set(mp) | set(mm) if mp.get(k) != mm.get(k))
     elif args.cmd == "static-nvf4":
         res = static_nvf4(args.paired)
+    elif args.cmd == "selftest":
+        if args.plain is not None:
+            res = {"merge": selftest((args.plain / "circuit.txt").read_text(), (args.merged / "circuit.txt").read_text())}
+        else:
+            from gpu.nvf4 import circuit as C
+
+            u = C.build_unit()
+            pp = pt = None
+            if args.paired:
+                keep, C.PAIRED = C.PAIRED, ()
+                pp = C.export_circuit(u, merge=False).text
+                C.PAIRED = keep
+                pt = C.export_circuit(u, merge=False).text
+            res = {"merge": selftest(C.export_circuit(u, merge=False).text, C.export_circuit(u, merge=True).text, pp, pt),
+                   "systems": selftest_nvf4(args.paired)}
+        res["ok"] = all(v["ok"] for v in res.values())
     else:
         res = forge(args.relation, args.vus, args.out, args.verifier, args.threads)
     print(json.dumps(res, indent=1, default=str))
