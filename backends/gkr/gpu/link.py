@@ -165,20 +165,22 @@ def _kernels():
     import triton.language as tl
 
     @triton.jit
-    def eq_level(T, TB, TAB, h, lim, BLOCK: tl.constexpr):
+    def eq_level(T, TW, TAB, h, lim, BLOCK: tl.constexpr):
+        # T[i + h] = T[i] r_j, T[i] = T[i] (1 + r_j): multiplication by r_j as 64 nibble lookups (TAB: 64 x 16 x 32 B)
         i = tl.program_id(0).to(tl.int64) * BLOCK + tl.arange(0, BLOCK).to(tl.int64)
         m = (i < h) & (i < lim)
         l0 = tl.zeros([BLOCK], dtype=tl.int64)
         l1 = tl.zeros([BLOCK], dtype=tl.int64)
         l2 = tl.zeros([BLOCK], dtype=tl.int64)
         l3 = tl.zeros([BLOCK], dtype=tl.int64)
-        for kk in tl.static_range(32):
-            b = tl.load(TB + i * 32 + kk, mask=m, other=0).to(tl.int64)
-            q = TAB + (kk * 256 + b) * 4
-            l0 ^= tl.load(q, mask=m, other=0)
-            l1 ^= tl.load(q + 1, mask=m, other=0)
-            l2 ^= tl.load(q + 2, mask=m, other=0)
-            l3 ^= tl.load(q + 3, mask=m, other=0)
+        for w in tl.static_range(8):
+            x = tl.load(TW + i * 8 + w, mask=m, other=0)
+            for nb in tl.static_range(8):
+                q = TAB + ((w * 8 + nb) * 16 + ((x >> (4 * nb)) & 15).to(tl.int64)) * 4
+                l0 ^= tl.load(q, mask=m, other=0)
+                l1 ^= tl.load(q + 1, mask=m, other=0)
+                l2 ^= tl.load(q + 2, mask=m, other=0)
+                l3 ^= tl.load(q + 3, mask=m, other=0)
         mo = m & (i + h < lim)
         o = T + (i + h) * 4
         tl.store(o, l0, mask=mo)
@@ -254,25 +256,25 @@ def eq_table(r: list[int], device, n: int | None = None) -> torch.Tensor:
     """``(n, 4)`` int64: eq(r, i) for every i < n <= 2^m (bit j of i against r_j)."""
     triton, eq_level, _ = _kernels()
     m = len(r)
-    sel = ((np.arange(256)[:, None] >> np.arange(8)[None, :]) & 1).astype(bool)
-    tabs = np.zeros((m, 32, 256, 4), dtype=np.int64)
+    sel = ((np.arange(16)[:, None] >> np.arange(4)[None, :]) & 1).astype(bool)
+    tabs = np.zeros((m, 64, 16, 4), dtype=np.int64)
     for j in range(m):
         basis, v = np.zeros((256, 4), dtype=np.int64), r[j]
         for s in range(256):
             basis[s] = _split(v)
             v = ((v << 1) & MASK) ^ (RED if v >> 255 else 0)
-        basis = basis.reshape(32, 8, 4)
-        for q in range(8):
-            tabs[j] ^= np.where(sel[None, :, q, None], basis[:, None, q, :], 0)
+        basis = basis.reshape(64, 4, 4)
+        for c in range(4):
+            tabs[j] ^= np.where(sel[None, :, c, None], basis[:, None, c, :], 0)
     tabs = torch.from_numpy(tabs).to(device)
     n = 1 << m if n is None else n
     assert 0 < n <= 1 << m
     T = torch.zeros((n, 4), dtype=torch.int64, device=device)
     T[0, 0] = 1
-    tb = T.view(torch.uint8).view(n, 32)
+    tw = T.view(torch.int32)
     for j in range(m):
         h = 1 << j
-        eq_level[(triton.cdiv(min(h, n), 1024),)](T, tb, tabs[j], h, n, BLOCK=1024)
+        eq_level[(triton.cdiv(min(h, n), 512),)](T, tw, tabs[j], h, n, BLOCK=512)
     return T
 
 
