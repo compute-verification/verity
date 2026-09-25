@@ -142,20 +142,23 @@ def test_native_collect_build_dir_per_tree():
     assert rj.native_collect_build_dir("/workspace/cp/r17-int-1/") == "/workspace/cp/nc_build-r17-int-1"
 
 
-def test_cli_check_and_line_with_system_python(tmp_path):
-    """row_pod / pod_release call the file with the pod's system python3: stdlib only, exit codes as documented."""
+def test_cli_check_and_line_as_a_process(tmp_path):
+    """The row reads its release line through `verity-vllm release-json line` in a child process: exit codes and output as documented."""
     own = _tree_with_export(tmp_path, "r16-int-3")
     pod = tmp_path / "RELEASE.json"
     rj.write_record(_rec(own), str(own), str(pod))
-    py = [sys.executable, str(HERE / ".." / "pipeline" / "release_json.py")]
-    r = subprocess.run(py + ["check", "--tree", str(own), "--tag", "r16-int-3", "--commit", "a2dabe493", "--pod-path", str(pod)], capture_output=True, text=True)
+    py = [sys.executable, "-m", "verity_vllm.pipeline.cli", "release-json"]
+    cwd = HERE.parents[1]
+    r = subprocess.run(py + ["check", "--tree", str(own), "--tag", "r16-int-3", "--commit", "a2dabe493", "--pod-path", str(pod)], capture_output=True, text=True,
+                       cwd=cwd)
     assert r.returncode == 0 and r.stdout.startswith("RELEASE-TREE-OK r16-int-3 a2dabe493 tree=")
-    r = subprocess.run(py + ["check", "--tree", str(own), "--tag", "r16-int-4", "--commit", "a2dabe493", "--pod-path", str(pod)], capture_output=True, text=True)
+    r = subprocess.run(py + ["check", "--tree", str(own), "--tag", "r16-int-4", "--commit", "a2dabe493", "--pod-path", str(pod)], capture_output=True, text=True,
+                       cwd=cwd)
     assert r.returncode == 1 and r.stdout.startswith("RELEASE-TREE-FAIL")
-    r = subprocess.run(py + ["line", str(own), "--pod-path", str(pod)], capture_output=True, text=True)
+    r = subprocess.run(py + ["line", str(own), "--pod-path", str(pod)], capture_output=True, text=True, cwd=cwd)
     line, src = r.stdout.rstrip("\n").split("\t")
     assert r.returncode == 0 and line.startswith("r16-int-3|commit=a2dabe493 ") and src.endswith("/r16-int-3/RELEASE.json")
-    r = subprocess.run(py + ["nc-build", "/workspace/cp/r16-int-3"], capture_output=True, text=True)
+    r = subprocess.run(py + ["nc-build", "/workspace/cp/r16-int-3"], capture_output=True, text=True, cwd=cwd)
     assert r.stdout.strip() == "/workspace/cp/nc_build-r16-int-3"
 
 

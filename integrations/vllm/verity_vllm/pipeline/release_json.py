@@ -14,11 +14,11 @@ first time the field was a constant; the second time an older tag's pod_release.
   * `line` is row_pod's REL-09 / REL-14 release line: the tree-local record when it names this tree, else the pod-wide one, else
     UNRELEASED -- a record applies only when its `tree` == realpath(cwd) AND its commit + dirty-patch digest equal this tree's EXPORT.json.
 
-Stdlib only at import time (row_pod calls it with the system python3); `write` imports torch/vllm lazily for the env identity.
+Stdlib only at import time; `write` imports torch/vllm lazily for the env identity.
 
   verity-vllm release-json write --tag <tag> --tree <tree> --hg "HIDDEN-GPU-OK ..." --tp "FA2-TAP-OK ..." --nc "<sha> <path>" [--tp3 "FA3-TAP-OK ..."] [--nc-build <dir>]
-  python3 verity_vllm/pipeline/release_json.py check --tree <tree> --tag <tag> --commit <sha>      -> RELEASE-TREE-OK ... | RELEASE-TREE-FAIL <why> (exit 1)
-  python3 verity_vllm/pipeline/release_json.py line <tree>                                          -> "<release line>\t<record path or ->"
+  verity-vllm release-json check --tree <tree> --tag <tag> --commit <sha>      -> RELEASE-TREE-OK ... | RELEASE-TREE-FAIL <why> (exit 1)
+  verity-vllm release-json line <tree>                                          -> "<release line>\t<record path or ->"
 """
 from __future__ import annotations
 
