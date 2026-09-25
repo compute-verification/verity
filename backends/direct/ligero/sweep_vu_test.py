@@ -23,6 +23,8 @@ def test_throughput_prefers_end_to_end() -> None:
                             {"name": "end_to_end.vu_per_second", "value": 1000.0}]}
     assert S.throughput(doc) == 1000.0
     assert S.throughput({"measurements": doc["measurements"][:2]}) == 2048.0
+    e2e = doc["measurements"][:2] + [{"name": "e2e.vu_per_second", "value": 900.0}]
+    assert S.throughput({"measurements": e2e}) == 900.0
 
 
 def test_stamp_adds_the_blocks_views_read() -> None:

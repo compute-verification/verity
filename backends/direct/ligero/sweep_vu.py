@@ -8,7 +8,7 @@ per rep (``--commit-per-rep``: ``commitment.seconds``).
         [--dump plateau|all|none] -- --zk --mode interactive --auth included-hash --commit-per-rep --batch 16384 --pipeline 4 \\
         --target -128 --reps 5 --device cuda
 
-Throughput is ``end_to_end.vu_per_second`` (commitment + proving) when present, else VUs / ``t.total``.  Each point is its own
+Throughput is ``e2e.vu_per_second`` (``--commit-per-rep``: commitment + proving; ``end_to_end.vu_per_second`` too) when present, else VUs / ``t.total``.  Each point is its own
 ``run bench-vu`` process: its warm-up pass is untimed, its ``--reps`` timed runs give the median, and the timing guard writes
 its ``contention`` verdict.  ``--dump plateau`` re-runs nothing: it dumps rep 1 of every point (``--dump-reps 1``) and deletes
 the proof files of every non-plateau point once the sweep is decided (their manifests stay).
@@ -36,8 +36,9 @@ def _meas(doc: dict[str, Any]) -> dict[str, Any]:
 
 def throughput(doc: dict[str, Any]) -> float | None:
     m = _meas(doc)
-    if isinstance(m.get("end_to_end.vu_per_second"), (int, float)):
-        return float(m["end_to_end.vu_per_second"])
+    for name in ("e2e.vu_per_second", "end_to_end.vu_per_second"):
+        if isinstance(m.get(name), (int, float)):
+            return float(m[name])
     t, n = m.get("t.total"), m.get("vu.count")
     return float(n) / float(t) if isinstance(t, (int, float)) and t > 0 and isinstance(n, (int, float)) else None
 
