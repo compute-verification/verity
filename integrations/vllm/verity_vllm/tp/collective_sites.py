@@ -29,6 +29,13 @@ COLLECTIVE_NAMES = (("tensor_model_parallel_all_reduce", "all_reduce"), ("tensor
 #: the python-module prefix of vLLM's model implementations (the classes whose direct collective calls are sites)
 MODEL_MODULE_PREFIX = "vllm.model_executor.models."
 _CALL_RE = re.compile(r"\btensor_model_parallel_(all_reduce|all_gather)\s*\(")
+#: the module classes that issue the fused-MoE block's final all-reduce from inside their forward; both observers hook them, and a
+#: wrapper holding a runner submodule is the site (the nested runner is not hooked)
+MOE_COLLECTIVE_CLASSES = ("MoERunner", "FusedMoE", "SharedFusedMoE")
+#: the vLLM modules whose OWN `tensor_model_parallel_all_reduce` name those forwards call (the call moved from fused_moe/layer.py to
+#: fused_moe/runner/moe_runner.py in 0.28); every one that imports is patched, missing ones are skipped
+MOE_COLLECTIVE_MODULES = ("vllm.model_executor.layers.fused_moe.runner.moe_runner", "vllm.model_executor.layers.fused_moe.layer",
+                          "vllm.model_executor.layers.fused_moe.shared_fused_moe")
 
 
 def class_collective_calls(cls: type, *, model_prefix: str | None = None) -> dict[str, int]:

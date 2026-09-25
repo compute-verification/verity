@@ -175,6 +175,14 @@ def test_rank_argument_is_validated():
                       rules=vllm_ruleset(), name="TpSite", rank=(2, 2))
 
 
+def test_world_above_two_is_refused():
+    """Collective records exist for the two-rank ops only: a rank of a larger world is refused, never emitted with `collective: null`."""
+    tp.ensure_ops()
+    with pytest.raises(NotImplementedError, match="world 3 refused"):
+        derive_report(tp.Model(), (tp._meta(3, tp.H), tp._meta(3, tp.Q), tp._meta(3, tp.Q), tp._meta(3, tp.H)), **tp.PROF,
+                      rules=vllm_ruleset(), name="TpSite", rank=(3, 0))
+
+
 # ---------------------------------------------------------------------------------------------------------------------------
 # (d) TP rank coordinate on collective Calls
 # ---------------------------------------------------------------------------------------------------------------------------

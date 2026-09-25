@@ -210,10 +210,14 @@ def _geom(v: dict | None) -> tuple | None:
 
 def _definition_for(kind: str, count: int | None, world: int | None, rows: dict[int, dict]) -> dict:
     if kind == "all_reduce":
+        from verity_vllm.program.registry import b1_tp2 as TP2
         from verity_vllm.program.registry.quarantine.collective.allreduce import all_reduce_sum_bf16
         R = int(world) if world else len(rows)
-        sp = all_reduce_sum_bf16(int(count), R) if count else None
-        return {"id": sp.id if sp else None, "module": "verity_vllm.program.registry.quarantine.collective.allreduce", "conformance": sp.defn.conformance if sp else None,
+        if R > 2:
+            sp, module = (TP2.all_reduce(R, int(count)) if count else None), "verity_vllm.program.registry.b1_tp2"
+        else:
+            sp, module = (all_reduce_sum_bf16(int(count), R) if count else None), "verity_vllm.program.registry.quarantine.collective.allreduce"
+        return {"id": sp.id if sp else None, "module": module, "conformance": sp.defn.conformance if sp else None,
                 "operands": [f"x{r} = rank {r}'s operand view" for r in range(R)], "output": "every rank's result view (journaled write on each rank)"}
     if kind == "all_gather":
         from verity_vllm.program.registry import b1_tp2 as TP2

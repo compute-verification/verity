@@ -38,6 +38,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+from verity_vllm.tp.collective_sites import MOE_COLLECTIVE_CLASSES, MOE_COLLECTIVE_MODULES
+
 
 def repo_modules_loaded() -> dict[str, Any]:
     """[R16 tp TP-11, rev F-r16-19] the repo-local files THIS process has imported (sys.modules, filtered to the repo root and vllm-poc) plus
@@ -72,14 +74,6 @@ def repo_modules_loaded() -> dict[str, Any]:
             "pid": os.getpid(), "n": len(files), "files": sorted(files), "native_collect_jit_sources": jit}
 
 EXTENSION = "verity_vllm.tp.worker.TP2CaptureWorkerExtension"
-
-#: [R15 moe TP-MOE-AR] the module classes that issue the fused-MoE block's final all-reduce (the `mlp.experts` site of a TP MoE
-#: model's rank Program: `layers.N.mlp.experts (MoERunner)` in derive_step's tp_links) -- hooked for the collective's module name.
-MOE_COLLECTIVE_CLASSES = ("MoERunner", "FusedMoE", "SharedFusedMoE")
-#: the vLLM modules whose OWN `tensor_model_parallel_all_reduce` name the fused-MoE runner calls (the call moved from
-#: fused_moe/layer.py to fused_moe/runner/moe_runner.py in 0.28); every one that imports is patched, missing ones are skipped.
-MOE_COLLECTIVE_MODULES = ("vllm.model_executor.layers.fused_moe.runner.moe_runner", "vllm.model_executor.layers.fused_moe.layer",
-                          "vllm.model_executor.layers.fused_moe.shared_fused_moe")
 
 
 def _moe_collective_modules() -> list[Any]:
