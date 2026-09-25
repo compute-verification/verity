@@ -21,7 +21,9 @@ import pytest
 
 from verity_vllm.check.c2_rules import _query_population_scope
 from verity_vllm.check.verdict import commit_verdict
-from verity_vllm.check.replay import sampled_replay as SR
+from verity_vllm.check.replay import coverage as COV, driver as SR, index as IX, population as POP
+from verity_vllm.check.replay import replay_codes as RC
+from verity_vllm.program.kernels import rows as RK
 from tests.check import test_sampled_replay as T
 from tests.check.test_sampled_replay import moe_world, world  # noqa: F401  -- fixtures
 
@@ -60,7 +62,7 @@ def test_the_honest_world_reconciles_against_its_manifest_identity_by_identity(w
     assert qt["query_id"] == "Q_module_body_v1" and qt["query_id_digest"] == man["query"]["query_id_digest"] and len(qt["query_id_digest"]) == 64
     assert rep["population"]["scope"].startswith("Q_module_body_v1(P) = ")
     # every family of this world has an evaluator: the reach is every instance output + every sampled id, and the sample evaluated some
-    n_rows_fams = sum(v for k, v in qt["by_family"].items() if k in SR.QUERY_FAMILIES_WITH_ROWS)
+    n_rows_fams = sum(v for k, v in qt["by_family"].items() if k in COV.QUERY_FAMILIES_WITH_ROWS)
     assert ss["identities_reached"] == n_rows_fams == qt["by_family"]["instance_outputs"] + qt["by_family"]["sampled_token_ids"]
     assert 0 < ss["identities_under_evaluated_module"] <= ss["identities_reached"]
     assert ss["by_family_reached"] == {"instance_outputs": qt["by_family"]["instance_outputs"], "sampled_token_ids": qt["by_family"]["sampled_token_ids"]}
@@ -199,10 +201,10 @@ def _expected_uncovered_class(spec: str) -> str | None:
     the class the entry states (K/V history = state-linked); neither -> no-evaluator.  Read from the registry, never hard-coded: dense's
     RoPE_v1 (af80855b4, R17-9) and Attention_v2/v3 Stage A (M-0156, R17-11) evaluators land on int and this test must hold on both trees
     (rel M-0157 collision 3)."""
-    if spec in SR.EVALUATORS and spec not in SR.NOT_YET:
+    if spec in RK.EVALUATORS and spec not in RC.NOT_YET:
         return None
-    if spec in SR.NOT_YET:
-        return "state-linked" if "K/V history" in SR.NOT_YET[spec] else "no-evaluator"
+    if spec in RC.NOT_YET:
+        return "state-linked" if "K/V history" in RC.NOT_YET[spec] else "no-evaluator"
     return "no-evaluator"
 
 
@@ -210,11 +212,11 @@ def test_a_required_family_without_a_stated_mechanism_fails_closed(world):  # no
     man = _manifest_for(world)
     odd = copy.deepcopy(man)
     odd["identities"].append(dict(man["identities"][0], family="future_family", step="*", request_id="*"))
-    pi = SR.ProgramIndex(world.inst)
+    pi = IX.ProgramIndex(world.inst)
     addresses: dict = {}
     for rid in sorted(world.prompts):
-        SR.population(pi, rid, addresses=addresses)
-    q = SR.query_population(odd, addresses, set(), ranks=[0])
+        POP.population(pi, rid, addresses=addresses)
+    q = COV.query_population(odd, addresses, set(), ranks=[0])
     assert q["query_checks"]["ok"] is False and q["query_checks"]["unstated_families"] == ["future_family"]
     u = next(u for u in q["uncovered_by_name"] if u["family"] == "future_family")
     assert u["class"] == "unstated" and u["mechanism"].startswith("UNSTATED")
@@ -230,7 +232,7 @@ def test_f_moe_r17_05_batch_level_planes_are_classified_per_listed_request_and_e
     reconciliation.  Arrival enters here only: a listed request's request-relative step = engine step - its arrival."""
     man = _manifest_for(world)
     bmap, committed = world.bmap_and_reader()
-    cap = SR.ProgramIndex(world.inst).n_steps
+    cap = IX.ProgramIndex(world.inst).n_steps
     fam = "fa2_hidden_m1_stream"
     planes = [{"family": fam, "program_digest": man["identities"][0]["program_digest"], "request_id": "*", "step": "*", "invocation": 0,
                "op_path": "model.layers.0.self_attn.attn", "output_member": "fa2.m1/L0", "element_range": [0, 64], "rank": 0,
@@ -238,8 +240,8 @@ def test_f_moe_r17_05_batch_level_planes_are_classified_per_listed_request_and_e
     man2 = dict(man, identities=list(man["identities"]) + planes)
     ok = dict(linked=True, lag_attested=True, a_r_source="match/capture/tokens.json served_by_request sha256 0000")
     # (i) r0 stops early (n_exec = cap-1), r1 serves its cap: every plane has r1 executing -> none excluded, ONE partially executed (step cap-1)
-    ep = {"r0": SR.executed_prefix_of_record("r0", a_r=cap - 2, lag=1, cap=cap, eos_declared=True, served_len_commit=cap - 2, **ok),
-          "r1": SR.executed_prefix_of_record("r1", a_r=cap, lag=1, cap=cap, served_len_commit=cap, **ok)}
+    ep = {"r0": POP.executed_prefix_of_record("r0", a_r=cap - 2, lag=1, cap=cap, eos_declared=True, served_len_commit=cap - 2, **ok),
+          "r1": POP.executed_prefix_of_record("r1", a_r=cap, lag=1, cap=cap, served_len_commit=cap, **ok)}
     rep = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=2, seed=3, workers=0, manifest=man2, executed_prefix=ep)
     pop = rep["population"]
     ne = pop["not_executed_by_rule"]
@@ -256,7 +258,7 @@ def test_f_moe_r17_05_batch_level_planes_are_classified_per_listed_request_and_e
     assert chk["ok"] is True and chk["accounted"] is True
     assert pop["sampled_strata"]["identities_reached"] + pop["uncovered_identities"] + ne["identities"] == pop["query_total"]["identities"]
     # (ii) BOTH stop before the cap (r1 at n_exec = cap-1 too): the plane at engine step cap-1 has no executing request -> excluded by name
-    ep2 = dict(ep, r1=SR.executed_prefix_of_record("r1", a_r=cap - 2, lag=1, cap=cap, eos_declared=True, served_len_commit=cap - 2, **ok))
+    ep2 = dict(ep, r1=POP.executed_prefix_of_record("r1", a_r=cap - 2, lag=1, cap=cap, eos_declared=True, served_len_commit=cap - 2, **ok))
     rep2 = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=2, seed=3, workers=0, manifest=man2, executed_prefix=ep2)
     pop2 = rep2["population"]
     ne2 = pop2["not_executed_by_rule"]
@@ -270,7 +272,7 @@ def test_f_moe_r17_05_batch_level_planes_are_classified_per_listed_request_and_e
     # (iii) arrival: r1 arrived at engine step 1 with the same early stop -> at engine step cap-1 its request-relative step is cap-2 < n_exec:
     # it still executes there, the plane is NOT excluded; the plane at engine step cap (none here) would be.  Only the batch-level arithmetic
     # reads the arrival -- the per-request identities carry their own request-relative `step`.
-    ep3 = dict(ep, r1=SR.executed_prefix_of_record("r1", a_r=cap - 2, lag=1, cap=cap, arrive=1, eos_declared=True, served_len_commit=cap - 2, **ok))
+    ep3 = dict(ep, r1=POP.executed_prefix_of_record("r1", a_r=cap - 2, lag=1, cap=cap, arrive=1, eos_declared=True, served_len_commit=cap - 2, **ok))
     rep3 = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=2, seed=3, workers=0, manifest=man2, executed_prefix=ep3)
     ne3 = rep3["population"]["not_executed_by_rule"]
     assert ne3["batch_level"][fam]["identities_not_executed"] == 0 and ne3["batch_level"][fam]["request_slots_not_executed"] == 1
@@ -286,12 +288,12 @@ def test_r17_26_the_executed_prefix_classifies_not_executed_identities_by_name_a
     man = _manifest_for(world)
     bmap, committed = world.bmap_and_reader()
     base = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=2, seed=3, workers=0, manifest=man)
-    cap = SR.ProgramIndex(world.inst).n_steps
+    cap = IX.ProgramIndex(world.inst).n_steps
     assert cap >= 3
     # the R17-27 (a)(b) facts, asserted by the Commit; a_r_source REQUIRED (S-r17b-09 n1): where a_r was read, never a default label
     ok = dict(linked=True, lag_attested=True, a_r_source="match/capture/tokens.json served_by_request sha256 0000")
-    ep = {"r0": SR.executed_prefix_of_record("r0", a_r=cap - 2, lag=1, cap=cap, eos_declared=True, served_len_commit=cap - 2, **ok),
-          "r1": SR.executed_prefix_of_record("r1", a_r=cap, lag=1, cap=cap, served_len_commit=cap, **ok)}   # r1 served its cap: nothing to classify
+    ep = {"r0": POP.executed_prefix_of_record("r0", a_r=cap - 2, lag=1, cap=cap, eos_declared=True, served_len_commit=cap - 2, **ok),
+          "r1": POP.executed_prefix_of_record("r1", a_r=cap, lag=1, cap=cap, served_len_commit=cap, **ok)}   # r1 served its cap: nothing to classify
     assert ep["r0"]["n_exec"] == cap - 1 and ep["r0"]["steps_not_executed"] == [cap - 1, cap] and ep["r0"]["faults"] == []
     assert ep["r1"]["n_exec"] == cap and ep["r1"]["steps_not_executed"] is None and ep["r1"]["faults"] == []
     rep = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=2, seed=3, workers=0, manifest=man, executed_prefix=ep)
@@ -299,15 +301,15 @@ def test_r17_26_the_executed_prefix_classifies_not_executed_identities_by_name_a
     # the population of record is UNCHANGED: same identities, same digests, same by_family
     assert pop["query_total"] == bpop["query_total"] and pop["vus"] == bpop["vus"]
     ne = pop["not_executed_by_rule"]
-    assert ne["applied"] is True and ne["rule"] == SR.EXECUTED_PREFIX_RULE and ne["scope"] == SR.NOT_EXECUTED_SCOPE
+    assert ne["applied"] is True and ne["rule"] == POP.EXECUTED_PREFIX_RULE and ne["scope"] == POP.NOT_EXECUTED_SCOPE
     assert "active-reference implementation classification only" in ne["rule"] and "tau(e) = bot" in ne["rule"]   # R17-27 verbatim, on the rule
     # exactly r0's identities at request-relative step cap-1 left the pool, by name: its ROWS and [moe F-moe-r17-05] its named input
     # (`input_token_ids` at that step) -- the rule names identities of a request past its stop whatever their family; `weights` (step '*')
     # and r1 are untouched
     r0_last = [i for i in man["identities"] if i.get("request_id") == "r0" and i.get("step") == cap - 1]
-    n_r0_last_rows = sum(1 for i in r0_last if i.get("family") in SR.QUERY_FAMILIES_WITH_ROWS)
+    n_r0_last_rows = sum(1 for i in r0_last if i.get("family") in COV.QUERY_FAMILIES_WITH_ROWS)
     n_r0_last_ids = len(r0_last)
-    assert n_r0_last_rows > 0 and n_r0_last_ids > n_r0_last_rows and {i["family"] for i in r0_last} - set(SR.QUERY_FAMILIES_WITH_ROWS) == {"input_token_ids"}
+    assert n_r0_last_rows > 0 and n_r0_last_ids > n_r0_last_rows and {i["family"] for i in r0_last} - set(COV.QUERY_FAMILIES_WITH_ROWS) == {"input_token_ids"}
     assert ne["identities"] == n_r0_last_ids and ne["by_request"]["r0"]["identities"] == n_r0_last_ids
     assert ne["by_request"]["r1"]["identities"] == 0 and ne["by_request"]["r0"]["n_exec"] == cap - 1
     assert ne["vus"] > 0 and set(ne["vus_by_request"]) == {"r0"}
@@ -316,20 +318,20 @@ def test_r17_26_the_executed_prefix_classifies_not_executed_identities_by_name_a
     assert pop["not_executed_by_family"] == ne["by_family"] and sum(ne["by_family"].values()) == n_r0_last_ids
     assert ne["by_family"]["input_token_ids"] == n_r0_last_ids - n_r0_last_rows and "weights" not in ne["by_family"]
     assert pop["not_executed_rule"]["n"] == n_r0_last_ids and pop["not_executed_rule"]["requests"]["r0"]["step_range"] == [cap - 1, cap]
-    assert pop["not_executed_rule"]["requests"]["r0"]["n"] == n_r0_last_ids and pop["not_executed_rule"]["scope"] == SR.NOT_EXECUTED_SCOPE
+    assert pop["not_executed_rule"]["requests"]["r0"]["n"] == n_r0_last_ids and pop["not_executed_rule"]["scope"] == POP.NOT_EXECUTED_SCOPE
     bf = ne["totals"]["by_family"]
     assert set(bf) == set(pop["query_total"]["by_family"]) and all(v["N_manifest"] == v["N_required"] + v["N_excluded"] for v in bf.values())
     assert {k: v["N_excluded"] for k, v in bf.items() if v["N_excluded"]} == ne["by_family"]
     # the reach of the class over every family is stated by kind; the named input's uncovered count shrank by exactly the class
     assert ne["kind_by_family"]["input_token_ids"] == "named-input" and ne["kind_by_family"]["weights"] == "static"
-    assert all(ne["kind_by_family"][f] == "row" for f in SR.QUERY_FAMILIES_WITH_ROWS if f in ne["kind_by_family"]) and ne["batch_level"] == {}
+    assert all(ne["kind_by_family"][f] == "row" for f in COV.QUERY_FAMILIES_WITH_ROWS if f in ne["kind_by_family"]) and ne["batch_level"] == {}
     unc_in = next(u for u in pop["uncovered_by_name"] if u["family"] == "input_token_ids")
     unc_in_base = next(u for u in bpop["uncovered_by_name"] if u["family"] == "input_token_ids")
     assert unc_in["identities"] == unc_in_base["identities"] - ne["by_family"]["input_token_ids"]
     r0 = ne["by_request"]["r0"]
     assert r0["executed_prefix"] == cap - 1 and r0["excluded_unexecuted_identities"] == n_r0_last_ids and r0["required_row_identities"] > 0
     assert r0["excluded_row_identities"] == n_r0_last_rows and r0["batch_level_slots_not_executed"] == 0
-    assert r0["required_row_identities"] + n_r0_last_rows == sum(1 for i in man["identities"] if i.get("request_id") == "r0" and i.get("family") in SR.QUERY_FAMILIES_WITH_ROWS)
+    assert r0["required_row_identities"] + n_r0_last_rows == sum(1 for i in man["identities"] if i.get("request_id") == "r0" and i.get("family") in COV.QUERY_FAMILIES_WITH_ROWS)
     # [revb F-r17b-39] the excluded rows are 'not-executed' (never a 'last'): r0's `last` stratum is anchored to its last EXECUTED step
     # n_exec - 1 (the lag step), so r0 HAS a `last` stratum in the pool -- at step cap-2, where the cap-anchored base has a `mid`
     assert ne["strata_excluded"] and all(k.split("|")[1] == "r0" and k.split("|")[3] == "not-executed" and v["label"] == "not evaluable: unexecuted (R17-1)"
@@ -365,7 +367,7 @@ def test_r17_26_the_executed_prefix_classifies_not_executed_identities_by_name_a
     note, fail = _query_population_scope(rep)
     assert fail is None and "not-executed(R17-1)" in note
     # NEGATIVE: an early stop that is not a declared EOS -> the class is not applicable: nothing classified, the checks fail by name
-    bad = {"r0": SR.executed_prefix_of_record("r0", a_r=cap - 2, lag=1, cap=cap, eos_declared=False, served_len_commit=cap - 2, **ok)}
+    bad = {"r0": POP.executed_prefix_of_record("r0", a_r=cap - 2, lag=1, cap=cap, eos_declared=False, served_len_commit=cap - 2, **ok)}
     assert bad["r0"]["faults"] and "not asserted a declared EOS id" in bad["r0"]["faults"][0]
     rep2 = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=2, seed=3, workers=0, manifest=man, executed_prefix=bad)
     p2 = rep2["population"]
@@ -374,20 +376,20 @@ def test_r17_26_the_executed_prefix_classifies_not_executed_identities_by_name_a
     assert "executed-prefix FAULTS: r0:" in p2["scope"]
     assert p2["query_total"] == bpop["query_total"] and p2["sampled_strata"]["identities_reached"] == bpop["sampled_strata"]["identities_reached"]
     # the arithmetic is the rule's, not the caller's: LAG outside {0, 1} and a_r > cap are faults by name
-    assert SR.executed_prefix_of_record("r0", a_r=2, lag=2, cap=cap, eos_declared=True, served_len_commit=2, **ok)["faults"][0].startswith("LAG 2 outside")
-    assert "outside [0, cap" in SR.executed_prefix_of_record("r0", a_r=cap + 1, lag=1, cap=cap, served_len_commit=cap + 1, **ok)["faults"][0]
+    assert POP.executed_prefix_of_record("r0", a_r=2, lag=2, cap=cap, eos_declared=True, served_len_commit=2, **ok)["faults"][0].startswith("LAG 2 outside")
+    assert "outside [0, cap" in POP.executed_prefix_of_record("r0", a_r=cap + 1, lag=1, cap=cap, served_len_commit=cap + 1, **ok)["faults"][0]
     # R17-27 (a)(b)(c) + rev (2), each a fault BY NAME; an unasserted fact is a fault, never a default
-    f = lambda **kw: SR.executed_prefix_of_record("r0", **{**dict(a_r=cap - 2, lag=1, cap=cap, eos_declared=True, served_len_commit=cap - 2), **ok, **kw})["faults"]
+    f = lambda **kw: POP.executed_prefix_of_record("r0", **{**dict(a_r=cap - 2, lag=1, cap=cap, eos_declared=True, served_len_commit=cap - 2), **ok, **kw})["faults"]
     assert f() == []
     assert any("not linked to the served output" in x for x in f(linked=None)) and any("(R17-27 a)" in x for x in f(linked=False))
     assert any("LAG rule not attested" in x for x in f(lag_attested=None)) and any("(R17-27 b)" in x for x in f(lag_attested=False))
     assert any("execution past the stop: 3 committed row(s)" in x for x in f(rows_past_stop=3))
     assert any(f"Commit served length {cap - 3} != record a_r {cap - 2}" in x for x in f(served_len_commit=cap - 3)) and any("!= record a_r" in x for x in f(served_len_commit=None))
-    assert SR.executed_prefix_of_record("r1", a_r=cap, lag=0, cap=cap, served_len_commit=cap, **ok)["faults"] == []            # LAG 0 profile, cap stop
+    assert POP.executed_prefix_of_record("r1", a_r=cap, lag=0, cap=cap, served_len_commit=cap, **ok)["faults"] == []            # LAG 0 profile, cap stop
     # [revb S-r17b-09 n1] a_r_source has NO default: omitted -> TypeError (the caller cannot put 'match record' on the record by omission);
     # empty -> a fault by name
     with pytest.raises(TypeError):
-        SR.executed_prefix_of_record("r1", a_r=cap, lag=0, cap=cap, served_len_commit=cap, linked=True, lag_attested=True)
+        POP.executed_prefix_of_record("r1", a_r=cap, lag=0, cap=cap, served_len_commit=cap, linked=True, lag_attested=True)
     assert any("a_r_source unstated" in x for x in f(a_r_source=""))
     assert ep["r0"]["a_r_source"] == ok["a_r_source"]
     # no executed_prefix -> the class is present, not applied, empty (never silently absent)
@@ -405,51 +407,51 @@ def test_f_r17b_39_the_last_phase_is_anchored_to_the_last_executed_step_and_the_
     the cap step (31, not executed), its last executed step 11 -- the lag step, the R17-1 / F-r17-14 boundary -- sat in `mid` at catch
     probability n / |mid|.  Now: `last` = n_exec - 1 per request under a fault-free executed prefix, the steps past it are 'not-executed'
     (split out, never sampled), and the anchor is named on the record with the lag step."""
-    pi = SR.ProgramIndex(world.inst)
+    pi = IX.ProgramIndex(world.inst)
     cap = pi.n_steps
     assert cap >= 3
     # the label function itself (r17_2241's r0: cap 32, n_exec 12 -> last step 11; steps 12..31 not executed)
-    assert SR._phase(0, 31) == "prefill" and SR._phase(1, 31) == "first-decode" and SR._phase(11, 31) == "mid" and SR._phase(31, 31) == "last"
-    assert SR._phase(11, 11) == "last" and SR._phase(12, 11) == "not-executed" and SR._phase(31, 11) == "not-executed" and SR._phase(5, 11) == "mid"
-    assert SR._phase(1, 1) == "last"                                              # n_exec 2: step 1 is the last executed step, not 'first-decode'
+    assert POP._phase(0, 31) == "prefill" and POP._phase(1, 31) == "first-decode" and POP._phase(11, 31) == "mid" and POP._phase(31, 31) == "last"
+    assert POP._phase(11, 11) == "last" and POP._phase(12, 11) == "not-executed" and POP._phase(31, 11) == "not-executed" and POP._phase(5, 11) == "mid"
+    assert POP._phase(1, 1) == "last"                                              # n_exec 2: step 1 is the last executed step, not 'first-decode'
     # the population under an anchor: the same rows (the population is Q(P)'s, not the anchor's), the phase labels moved
     ok = dict(linked=True, lag_attested=True, a_r_source="match/capture/tokens.json served_by_request sha256 0000")
-    ep = SR.executed_prefix_of_record("r0", a_r=1, lag=1, cap=cap, eos_declared=True, served_len_commit=1, **ok)
+    ep = POP.executed_prefix_of_record("r0", a_r=1, lag=1, cap=cap, eos_declared=True, served_len_commit=1, **ok)
     assert ep["n_exec"] == 2 and ep["faults"] == []
-    anchor = SR.phase_anchor(cap, ep)
+    anchor = POP.phase_anchor(cap, ep)
     assert anchor == {"last_step": 1, "anchor": "n_exec - 1", "cap_last_step": cap - 1, "n_exec": 2, "lag_step": 1, "why": anchor["why"]}
     assert "lag step" in anchor["why"] and "F-r17b-39" in anchor["why"]
-    base, _, _ = SR.population(pi, "r0")
-    moved, _, _ = SR.population(pi, "r0", last_step=anchor["last_step"])
+    base, _, _ = POP.population(pi, "r0")
+    moved, _, _ = POP.population(pi, "r0", last_step=anchor["last_step"])
     assert [v["i"] for v in base] == [v["i"] for v in moved]                      # the SAME rows
     by_step_base = {s: {v["phase"] for v in base if v["step"] == s} for s in range(cap)}
     by_step_moved = {s: {v["phase"] for v in moved if v["step"] == s} for s in range(cap)}
     assert by_step_base[0] <= {"prefill"} and by_step_base[1] <= {"first-decode"} and by_step_base[cap - 1] <= {"last"}
     assert by_step_moved[0] <= {"prefill"} and by_step_moved[1] <= {"last"} and all(by_step_moved[s] <= {"not-executed"} for s in range(2, cap))
     assert all(v["stratum"].split("|")[3] == v["phase"] for v in moved)          # the key carries the moved label
-    pool, out = SR.split_not_executed(moved, {"r0": ep})
+    pool, out = POP.split_not_executed(moved, {"r0": ep})
     assert {v["phase"] for v in out} == {"not-executed"} and "not-executed" not in {v["phase"] for v in pool}
     # no prefix / a faulted prefix / a request at its cap: the cap anchors, said so
-    assert SR.phase_anchor(cap, None)["anchor"] == "cap - 1" and SR.phase_anchor(cap, None)["why"] == "no executed prefix"
-    full = SR.executed_prefix_of_record("r1", a_r=cap, lag=1, cap=cap, served_len_commit=cap, **ok)
-    assert SR.phase_anchor(cap, full) == {"last_step": cap - 1, "anchor": "cap - 1", "cap_last_step": cap - 1, "n_exec": cap, "lag_step": None,
+    assert POP.phase_anchor(cap, None)["anchor"] == "cap - 1" and POP.phase_anchor(cap, None)["why"] == "no executed prefix"
+    full = POP.executed_prefix_of_record("r1", a_r=cap, lag=1, cap=cap, served_len_commit=cap, **ok)
+    assert POP.phase_anchor(cap, full) == {"last_step": cap - 1, "anchor": "cap - 1", "cap_last_step": cap - 1, "n_exec": cap, "lag_step": None,
                                           "why": "the request ran to its cap"}
     faulted = dict(ep, faults=["a fault"])
-    assert SR.phase_anchor(cap, faulted)["anchor"] == "cap - 1" and SR.phase_anchor(cap, faulted)["n_exec"] is None
-    assert "faults" in SR.phase_anchor(cap, faulted)["why"]
+    assert POP.phase_anchor(cap, faulted)["anchor"] == "cap - 1" and POP.phase_anchor(cap, faulted)["n_exec"] is None
+    assert "faults" in POP.phase_anchor(cap, faulted)["why"]
     # [revb NIT n-39-1] an EOS stop at a_r = cap - 1 under LAG 1: n_exec == cap so the cap anchors, but step cap - 1 IS a lag step -- the
     # flag follows the stop (a_r < cap and LAG > 0), not n_exec < cap
-    edge = SR.executed_prefix_of_record("r2", a_r=cap - 1, lag=1, cap=cap, eos_declared=True, served_len_commit=cap - 1, **ok)
+    edge = POP.executed_prefix_of_record("r2", a_r=cap - 1, lag=1, cap=cap, eos_declared=True, served_len_commit=cap - 1, **ok)
     assert not edge["faults"] and edge["n_exec"] == cap
-    a = SR.phase_anchor(cap, edge)
+    a = POP.phase_anchor(cap, edge)
     assert a["anchor"] == "cap - 1" and a["last_step"] == cap - 1 and a["n_exec"] == cap and a["lag_step"] == cap - 1 and "lag step" in a["why"]
     # ...and without LAG the same stop has no lag step; at the cap it 'ran to its cap', at a_r = cap - 1 (EOS at the last slot) the why
     # says the STOP, not 'ran to its cap' (n-39-2)
-    edge0 = SR.executed_prefix_of_record("r3", a_r=cap, lag=0, cap=cap, served_len_commit=cap, **ok)
-    assert SR.phase_anchor(cap, edge0)["lag_step"] is None and SR.phase_anchor(cap, edge0)["why"] == "the request ran to its cap"
-    eos0 = SR.executed_prefix_of_record("r4", a_r=cap - 1, lag=0, cap=cap, eos_declared=True, served_len_commit=cap - 1, **ok)
+    edge0 = POP.executed_prefix_of_record("r3", a_r=cap, lag=0, cap=cap, served_len_commit=cap, **ok)
+    assert POP.phase_anchor(cap, edge0)["lag_step"] is None and POP.phase_anchor(cap, edge0)["why"] == "the request ran to its cap"
+    eos0 = POP.executed_prefix_of_record("r4", a_r=cap - 1, lag=0, cap=cap, eos_declared=True, served_len_commit=cap - 1, **ok)
     assert not eos0["faults"] and eos0["n_exec"] == cap - 1                     # LAG 0: n_exec = a_r < cap -> anchored at n_exec - 1, no lag step
-    a0 = SR.phase_anchor(cap, eos0)
+    a0 = POP.phase_anchor(cap, eos0)
     assert a0["anchor"] == "n_exec - 1" and a0["lag_step"] is None and "EOS step" in a0["why"] and "is the lag step" not in a0["why"]
     assert "is the lag step" in a["why"] and "is the lag step" in anchor["why"]  # ...and the LAG 1 stops say so
 
@@ -478,23 +480,23 @@ def test_r3_the_not_executed_class_is_derived_from_r_t_when_the_served_list_is_s
     ok = dict(linked=True, lag_attested=True, a_r_source="match/capture/tokens.json served_by_request sha256 0000")
     EOS = 2
     # early stop: served [5, 7, EOS], cap 8, LAG 1 -> r_t = 1 on rows 0..3 (the lag row 3 executed, its token never served): n_exec 4
-    e = SR.executed_prefix_of_record("r0", a_r=3, lag=1, cap=8, eos_declared=True, served_len_commit=3, served=[5, 7, EOS], eos_ids=[EOS], rule=_rule_like_pad, **ok)
+    e = POP.executed_prefix_of_record("r0", a_r=3, lag=1, cap=8, eos_declared=True, served_len_commit=3, served=[5, 7, EOS], eos_ids=[EOS], rule=_rule_like_pad, **ok)
     assert e["faults"] == [] and e["n_exec"] == 4 and e["r3_one_mechanism"] is True and e["mechanism"].startswith("recurrence(Continuation_v1)")
     assert e["by_rule"]["executed_prefix_len"] == 4 and e["by_rule"]["eos_step"] == 2 and e["by_rule"]["lag_steps"] == [3] and e["by_rule"]["problems"] == []
     # the cap exhausted: served 8 non-EOS tokens -> every row executed, the class is empty
-    e8 = SR.executed_prefix_of_record("r1", a_r=8, lag=1, cap=8, served_len_commit=8, served=[5] * 8, eos_ids=[EOS], rule=_rule_like_pad, **ok)
+    e8 = POP.executed_prefix_of_record("r1", a_r=8, lag=1, cap=8, served_len_commit=8, served=[5] * 8, eos_ids=[EOS], rule=_rule_like_pad, **ok)
     assert e8["faults"] == [] and e8["n_exec"] == 8 and e8["steps_not_executed"] is None and e8["r3_one_mechanism"] is True
     # LAG 0: the EOS row is the last executed row
-    e0 = SR.executed_prefix_of_record("r2", a_r=3, lag=0, cap=8, eos_declared=True, served_len_commit=3, served=[5, 7, EOS], eos_ids=[EOS], rule=_rule_like_pad, **ok)
+    e0 = POP.executed_prefix_of_record("r2", a_r=3, lag=0, cap=8, eos_declared=True, served_len_commit=3, served=[5, 7, EOS], eos_ids=[EOS], rule=_rule_like_pad, **ok)
     assert e0["faults"] == [] and e0["n_exec"] == 3 and e0["by_rule"]["lag_steps"] == []
     # the served list disagrees with the record's a_r -> a fault by name (the recurrence would run over another prefix)
-    bad = SR.executed_prefix_of_record("r0", a_r=4, lag=1, cap=8, eos_declared=True, served_len_commit=4, served=[5, 7, EOS], eos_ids=[EOS], rule=_rule_like_pad, **ok)
+    bad = POP.executed_prefix_of_record("r0", a_r=4, lag=1, cap=8, eos_declared=True, served_len_commit=4, served=[5, 7, EOS], eos_ids=[EOS], rule=_rule_like_pad, **ok)
     assert any("!= a_r 4" in f and "another prefix" in f for f in bad["faults"])
     # served PAST the first EOS (rev F-r17-14): the rule's problem is the record's fault; a last-token test would have accepted [EOS, x, EOS]
-    pe = SR.executed_prefix_of_record("r0", a_r=3, lag=1, cap=8, eos_declared=True, served_len_commit=3, served=[EOS, 5, EOS], eos_ids=[EOS], rule=_rule_like_pad, **ok)
+    pe = POP.executed_prefix_of_record("r0", a_r=3, lag=1, cap=8, eos_declared=True, served_len_commit=3, served=[EOS, 5, EOS], eos_ids=[EOS], rule=_rule_like_pad, **ok)
     assert any(f.startswith("Continuation_v1 rule: served past an EOS at index 0") for f in pe["faults"])
     # a rule that disagrees with the arithmetic -> the disagreement is a fault BY NAME and the rule's value stands (the rule is the mechanism)
-    dis = SR.executed_prefix_of_record("r0", a_r=3, lag=1, cap=8, eos_declared=True, served_len_commit=3, served=[5, 7, EOS], eos_ids=[EOS], **ok,
+    dis = POP.executed_prefix_of_record("r0", a_r=3, lag=1, cap=8, eos_declared=True, served_len_commit=3, served=[5, 7, EOS], eos_ids=[EOS], **ok,
                                        rule=lambda served, *, cap, A, eos: dict(_rule_like_pad(served, cap=cap, A=A, eos=eos), executed_prefix_len=5))
     assert dis["n_exec"] == 5 and any("disagrees with the recurrence" in f and "R3" in f for f in dis["faults"])
     # revb M-0589 n-r3-1: a faulted request produced no class -- its mechanism reads 'not classified', r3_one_mechanism False, never 'recurrence: True' beside a fault
@@ -504,34 +506,34 @@ def test_r3_the_not_executed_class_is_derived_from_r_t_when_the_served_list_is_s
 
 def test_r3_without_a_served_list_the_arithmetic_is_the_mechanism_and_is_named_on_the_record():
     ok = dict(linked=True, lag_attested=True, a_r_source="match/capture/tokens.json served_by_request sha256 0000")
-    e = SR.executed_prefix_of_record("r0", a_r=3, lag=1, cap=8, eos_declared=True, served_len_commit=3, **ok)
+    e = POP.executed_prefix_of_record("r0", a_r=3, lag=1, cap=8, eos_declared=True, served_len_commit=3, **ok)
     assert e["faults"] == [] and e["n_exec"] == 4 and e["r3_one_mechanism"] is False and e["by_rule"] is None
     assert e["mechanism"].startswith("arithmetic(a_r, LAG)") and "served list was not supplied" in e["mechanism"] and "R3" in e["mechanism"]
     # the served list supplied on a tree WITHOUT the Continuation_v1 unit: the arithmetic, named as such (never silently the same thing)
-    e2 = SR.executed_prefix_of_record("r0", a_r=3, lag=1, cap=8, eos_declared=True, served_len_commit=3, served=[5, 7, 2], eos_ids=[2], rule=None, **ok)
-    if SR._continuation_rule() is None:
+    e2 = POP.executed_prefix_of_record("r0", a_r=3, lag=1, cap=8, eos_declared=True, served_len_commit=3, served=[5, 7, 2], eos_ids=[2], rule=None, **ok)
+    if POP._continuation_rule() is None:
         assert e2["mechanism"].startswith("arithmetic(a_r, LAG)") and "not on this tree" in e2["mechanism"] and e2["r3_one_mechanism"] is False
     else:
         assert e2["mechanism"].startswith("recurrence(Continuation_v1)") and e2["r3_one_mechanism"] is True and e2["n_exec"] == 4
 
 
-@pytest.mark.skipif(SR._continuation_rule() is None, reason="verity_vllm.program.lifting.continuation (pad R17-32) is not on this tree")
+@pytest.mark.skipif(POP._continuation_rule() is None, reason="verity_vllm.program.lifting.continuation (pad R17-32) is not on this tree")
 def test_r3_the_real_continuation_rule_is_the_mechanism_and_agrees_with_the_arithmetic_on_well_formed_records():
     ok = dict(linked=True, lag_attested=True, a_r_source="match/capture/tokens.json served_by_request sha256 0000")
     for a_r, lag, cap in ((12, 1, 32), (9, 1, 32), (12, 0, 32), (32, 1, 32)):
         served = [5] * (a_r - 1) + [2] if a_r < cap else [5] * cap
-        e = SR.executed_prefix_of_record("r0", a_r=a_r, lag=lag, cap=cap, eos_declared=(a_r < cap) or None, served_len_commit=a_r, served=served, eos_ids=[2], **ok)
+        e = POP.executed_prefix_of_record("r0", a_r=a_r, lag=lag, cap=cap, eos_declared=(a_r < cap) or None, served_len_commit=a_r, served=served, eos_ids=[2], **ok)
         assert e["faults"] == [] and e["r3_one_mechanism"] is True and e["n_exec"] == (cap if a_r >= cap else min(a_r + lag, cap))
 
 
 def test_r3_the_population_record_names_the_mechanism_per_request(world):
     man = _manifest_for(world)
     bmap, committed = world.bmap_and_reader()
-    cap = SR.ProgramIndex(world.inst).n_steps
+    cap = IX.ProgramIndex(world.inst).n_steps
     ok = dict(linked=True, lag_attested=True, a_r_source="match/capture/tokens.json served_by_request sha256 0000")
-    ep = {"r0": SR.executed_prefix_of_record("r0", a_r=cap - 2, lag=1, cap=cap, eos_declared=True, served_len_commit=cap - 2, served=[5] * (cap - 3) + [2], eos_ids=[2],
+    ep = {"r0": POP.executed_prefix_of_record("r0", a_r=cap - 2, lag=1, cap=cap, eos_declared=True, served_len_commit=cap - 2, served=[5] * (cap - 3) + [2], eos_ids=[2],
                                              rule=_rule_like_pad, **ok),
-          "r1": SR.executed_prefix_of_record("r1", a_r=cap, lag=1, cap=cap, served_len_commit=cap, **ok)}
+          "r1": POP.executed_prefix_of_record("r1", a_r=cap, lag=1, cap=cap, served_len_commit=cap, **ok)}
     rep = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=2, seed=3, workers=0, manifest=man, executed_prefix=ep)
     nr = rep["population"]["not_executed_rule"]
     assert nr["mechanism"] == {"arithmetic(a_r, LAG)": 1, "recurrence(Continuation_v1)": 1} and nr["r3_one_mechanism"] is False
@@ -627,7 +629,7 @@ def test_r4_c2_the_controller_statement_is_cross_checked_against_the_replays_own
     assert fail is not None and "controller rows: header 7 != request Programs' sum 14" in fail and "F-r17b-36" in fail
     # (iv) the controller families of Continuation_v1 (LIsEOS / LEmitNext) count as controller rows: 2 rows -> 2, never 0
     progs5 = {rid: _with_guard_rows(world.inst, ["LIsEOS1_v1", "LEmitNext[H=1]_v1"]) for rid in world.prompts}
-    assert SR.controller_rows_of(progs5) == {str(rid): 2 for rid in world.prompts}
+    assert COV.controller_rows_of(progs5) == {str(rid): 2 for rid in world.prompts}
     # (v) no manifest: no reconciliation, but the replay's own count still stands in the statement (rows_agree None: nothing to agree with)
     rep6 = SR.sampled_replay(progs, bmap, committed, _weights(world), per_stratum=2, seed=3, workers=0, manifest=None)
     c6 = rep6["population"]["controller"]
@@ -638,6 +640,6 @@ def test_revb_n_2_16_1_the_sampler_families_mechanism_names_what_consumes_them()
     committed values (the sampler VU's exact replay in form (A); stoch_recompute's R17-2 attribution), as `input_token_ids`' entry does --
     not only the linkage check on the values themselves."""
     for fam in ("sampler_seed", "sampler_splits"):
-        m = SR.QUERY_FAMILY_MECHANISM[fam]
+        m = COV.QUERY_FAMILY_MECHANISM[fam]
         assert "prescribed_input_linkage" in m and "GumbelTopPTokenSelect_v1" in m and "stoch_recompute" in m and "R17-2" in m, m
-    assert "boundary linkage" in SR.QUERY_FAMILY_MECHANISM["input_token_ids"]
+    assert "boundary linkage" in COV.QUERY_FAMILY_MECHANISM["input_token_ids"]

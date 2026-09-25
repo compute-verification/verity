@@ -98,7 +98,7 @@ def check_attention_head(rng, Ts=(1, 5, 64, 65, 130, 200), D=128):
 
 
 def check_silu_rope(rng):
-    from verity_vllm.program.kernels import beyond_gemm as BG
+    from tests.program import beyond_gemm as BG
     out = {}
     I = 8960
     prog, call = _standalone(bind(b1.SiluMul, I=I))
