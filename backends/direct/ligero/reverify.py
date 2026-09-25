@@ -248,10 +248,10 @@ def committed_trees(pinned: str, man: dict, *, instances_root: str | None = None
 
 
 def commitment_problems(pdir: Path, man: dict, pinned: str, reps: list[str], *, instances_root: str | None = None) -> tuple[bool, list[str]]:
-    """``(hashed, problems)``.  A dump whose statements carry a hash-authentication block (``included-hash``) passes only when
-    every statement's three tree references equal :func:`committed_trees` and each rep's statements' ``vu_index`` together
-    cover ``[0, total_vus)`` exactly once (red-team-standard-hash R2); a dump without one is not checked here.  A relation
-    named with a leaf (``+<leaf>``) is hashed: every statement must carry the block.  Coverage counts only what ``batch``
+    """``(hashed, problems)``.  A dump whose pinned relation names a leaf (``+hash``, ``+blake3``, ...: the systems that take a
+    hash-authentication block) passes only when every statement carries the block, its three tree references equal
+    :func:`committed_trees` and each rep's statements' ``vu_index`` together cover ``[0, total_vus)`` exactly once
+    (red-team-standard-hash R2); a bare relation's statements are not read here.  Coverage counts only what ``batch``
     verifies, so in every dump each rep's ``.stmt`` stems must equal its ``.proof`` stems and the manifest's entries for it
     (red-team-standard-hash R4: a statement without a proof claims VUs nobody proved)."""
     from .serialize import read_statement
@@ -266,13 +266,13 @@ def commitment_problems(pdir: Path, man: dict, pinned: str, reps: list[str], *, 
             orphans.append(f"{r}: the manifest lists a statement without a proof")
         if listed and {Path(f["proof"]).stem for f in listed if f.get("proof")} != proofs:
             orphans.append(f"{r}: the manifest's proofs are not the rep's proofs")
+    hashed = "+" in (pinned or "")
+    if orphans or not hashed:
+        return hashed, orphans
     per_rep: dict[str, list] = {}
     for r in reps:
         for f in sorted((pdir / r).glob("*.stmt")):
             per_rep.setdefault(r, []).append((f.name, read_statement(f.read_bytes())))
-    hashed = "+" in (pinned or "") or any(getattr(st, "hash_auth", None) is not None for sts in per_rep.values() for _, st in sts)
-    if orphans or not hashed:
-        return hashed, orphans
     try:
         want = committed_trees(pinned, man, instances_root=instances_root)
     except ValueError as e:
