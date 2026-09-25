@@ -16,7 +16,7 @@ def _repo(tmp_path: Path) -> Path:
     (repo / "pyproject.toml").write_text("[project]\nname = 'verity'\n")
     (repo / CORE / "__init__.py").write_text("")
     (repo / CORE / "ir" / "codec.py").write_text("def _spec_id(fn): return fn\n")
-    (repo / "integrations" / "vllm" / "verity_vllm" / "tp").mkdir(parents=True)
+    (repo / "integrations" / "vllm" / "verity_vllm" / "pipeline" / "tp").mkdir(parents=True)
     (repo / "integrations" / "vllm" / "verity_vllm" / "__init__.py").write_text("")
     (repo / "integrations" / "vllm" / "verity_vllm" / "pipeline" / "tp" / "commit.py").write_text("TAG = 1\n")
     return repo
