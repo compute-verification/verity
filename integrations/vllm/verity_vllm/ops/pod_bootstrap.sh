@@ -81,6 +81,9 @@ if ! $PY -c "import vllm, torch" 2>/dev/null; then
   done
 fi
 $PY -c "import ninja" 2>/dev/null || uv pip install --python "$PY" ninja >/dev/null 2>&1
+# the `verity-vllm` launcher ([project.scripts] entry point); verity_vllm resolves from PYTHONPATH like every process on the pod
+printf '#!%s\nimport sys\nfrom verity_vllm.pipeline.cli import main\nsys.exit(main())\n' "$PY" > "$VENV/bin/verity-vllm" \
+  && chmod +x "$VENV/bin/verity-vllm" || fail VENV "cannot write $VENV/bin/verity-vllm"
 rm -rf /root/.cache/uv /root/.cache/pip 2>/dev/null
 
 # ---- 3. pinned checkpoints (manifests/checkpoints.json; sha256 of every safetensors) --------------------------------------------

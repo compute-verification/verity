@@ -129,7 +129,7 @@ def test_submit_without_spawn_runs_cold_with_the_reason_on_the_timeline(tmp_path
     rc = hc.submit(["--case", "LLAMA32_1B", "--workload", "wl.json", "--out", "o"], root=tmp_path / "hot", idle_s=1, timeout_s=None, spawn=False, log=lambda *a, **k: None)
     assert rc == 0 and len(calls) == 1
     cmd, env = calls[0]
-    assert cmd[:3] == [sys.executable, "-m", "verity_vllm.pipeline.commit"] and cmd[-2:] == ["--out", "o"]
+    assert cmd[:4] == [sys.executable, "-m", "verity_vllm.pipeline.cli", "commit"] and cmd[-2:] == ["--out", "o"]
     assert env["VERITY_HOT_RESTART_REASON"].startswith("no live hot worker")
     ev = tlm.read(tl_path)
     assert [e["stage"] for e in ev] == ["hot.key", "hot.fallback_cold"]

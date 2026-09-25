@@ -20,15 +20,15 @@ Torch-free; stdlib only.  Record schema: verity-sweep/target-family/v1.
 """
 from __future__ import annotations
 
-import argparse
 import json
 import os
 import re
 import subprocess
 import sys
+from dataclasses import dataclass
 from typing import Any
 
-from verity_vllm.config import TARGETS
+from verity_vllm.config import TARGETS, option
 
 FAIL_CLASS = "PRECHECK_FAIL_TARGET_FAMILY"
 SCHEMA = "verity-sweep/target-family/v1"
@@ -171,16 +171,21 @@ def summary_line(rec: dict) -> str:
     return f"{FAIL_CLASS}: {why} [{facts}]"
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--row", required=True, help="row id (device class in its third token)")
-    ap.add_argument("--workload", default=None, help="workload manifest (declared target block)")
-    ap.add_argument("--stages", default="build,match,commit")
-    ap.add_argument("--build-summary", default=None, help="check the Build that came out (step.target) as well")
-    ap.add_argument("--no-device", action="store_true", help="do not read the pod GPU (CPU-only host doing a declared-target Build)")
-    ap.add_argument("--waiver", default=os.environ.get("TARGET_FAMILY_WAIVER") or None, help="named waiver (canary); recorded, never silent")
-    ap.add_argument("--out", default=None, help="write the record here")
-    a = ap.parse_args(argv)
+@dataclass(frozen=True, kw_only=True)
+class Options:
+    row: str = option("--row", help="row id (device class in its third token)")
+    workload: str | None = option("--workload", default=None, help="workload manifest (declared target block)")
+    stages: str = option("--stages", default="build,match,commit")
+    build_summary: str | None = option("--build-summary", default=None,
+                                       help="check the Build that came out (step.target) as well")
+    no_device: bool = option("--no-device", default=False, action="store_true",
+                             help="do not read the pod GPU (CPU-only host doing a declared-target Build)")
+    waiver: str | None = option("--waiver", env="TARGET_FAMILY_WAIVER", default=None,
+                                help="named waiver (canary); recorded, never silent")
+    out: str | None = option("--out", default=None, help="write the record here")
+
+
+def main(a: Options) -> int:
     wl = json.load(open(a.workload)) if a.workload and os.path.exists(a.workload) else None
     bs = json.load(open(a.build_summary)) if a.build_summary and os.path.exists(a.build_summary) else None
     stages = [s for s in a.stages.replace(" ", "").split(",") if s]
@@ -197,7 +202,3 @@ def main(argv: list[str] | None = None) -> int:
         return 3
     print(line)
     return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())

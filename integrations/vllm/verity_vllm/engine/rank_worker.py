@@ -627,7 +627,6 @@ class TP2CaptureWorkerExtension:
         the rank's loaded weight SHARDS), attach the FA2 hidden source, size the arena from the workload envelope, register the rank's
         weights.  The rank's root binds its own values (its shards' roots, its partial GEMMs, its FA2 hidden stream for its heads); the
         driver (`pipeline/tp/commit.py`) combines the ranks' roots deterministically and fails closed on a missing rank."""
-        import argparse
         from types import SimpleNamespace
 
         from verity_vllm.pipeline.commit import baseline_state, make_committer
@@ -637,7 +636,7 @@ class TP2CaptureWorkerExtension:
         runner = self.model_runner
         model = runner.get_model()
         eng = SimpleNamespace(llm=_LLMShim(self), runner=runner, model=model, cp=cp, kwargs=engine_kwargs, env_flags={}, build_s=0.0, case=case)
-        args = argparse.Namespace(arena_mb=arena_mb, chunk=None, hash_threads=None, profile_hooks=False, fast_copy=True, gpu_tree=True)
+        args = SimpleNamespace(arena_mb=arena_mb, chunk=None, hash_threads=None, profile_hooks=False, fast_copy=True, gpu_tree=True)
         com = make_committer(kind, eng, args, f"{run_id}/rank{rank}")
         res: dict[str, Any] = {"rank": rank, "committer": com.name}
         if hidden_so:

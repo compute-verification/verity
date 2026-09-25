@@ -2,8 +2,8 @@
 d9105ea80 split top-p pipeline can launch (S = 1, 2, 4, 8, 16, 32) with constructed pivot ties -- and the CPU checker the committed
 test uses (F-stoch-01 follow-up: the model was fitted at S=32 only).
 
-  produce (pod, torch venv):   python -m verity_vllm.pipeline.topp_split_probe produce --out DIR [--record fstoch01_rows.npz]
-  check   (any venv, no torch): python -m verity_vllm.pipeline.topp_split_probe check --dir DIR [--record fstoch01_rows.npz]
+  produce (pod, torch venv):   verity-vllm topp-split-probe produce --out DIR [--record fstoch01_rows.npz]
+  check   (any venv, no torch): verity-vllm topp-split-probe check --dir DIR [--record fstoch01_rows.npz]
 
 Cases are REGENERATED on the CPU from the manifest (seed / V / kind / params), so the fixture ships only the kernel's outputs:
 `keep` bits (the masked row is `where(keep, x_in, -inf)` -- the mask kernel stores the loaded fp32 x for kept lanes), the stats
@@ -21,7 +21,6 @@ Kinds:
 """
 from __future__ import annotations
 
-import argparse
 import json
 import os
 import sys
@@ -29,6 +28,9 @@ import time
 from pathlib import Path
 
 import numpy as np
+from dataclasses import dataclass, field
+
+from verity_vllm.config import option
 
 f32 = np.float32
 NEG_INF_BITS = 0xFF800000
@@ -407,13 +409,32 @@ def check(d: str, record_npz: str | None = None, verbose: bool = True) -> dict:
     return rep
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser()
-    sub = ap.add_subparsers(dest="cmd", required=True)
-    a = sub.add_parser("produce"); a.add_argument("--out", required=True); a.add_argument("--record", default=None); a.add_argument("--seed", type=int, default=20260920)
-    b = sub.add_parser("check"); b.add_argument("--dir", required=True); b.add_argument("--record", default=None); b.add_argument("--out", default=None)
-    m = sub.add_parser("manifest"); m.add_argument("--record", action="store_true")
-    args = ap.parse_args()
+@dataclass(frozen=True, kw_only=True)
+class ProduceOptions:
+    out: str = option("--out")
+    record: str | None = option("--record", default=None)
+    seed: int = option("--seed", type=int, default=20260920)
+    cmd: str = field(default="produce", init=False)
+
+
+@dataclass(frozen=True, kw_only=True)
+class CheckOptions:
+    dir: str = option("--dir")
+    record: str | None = option("--record", default=None)
+    out: str | None = option("--out", default=None)
+    cmd: str = field(default="check", init=False)
+
+
+@dataclass(frozen=True, kw_only=True)
+class ManifestOptions:
+    record: bool = option("--record", default=False, action="store_true")
+    cmd: str = field(default="manifest", init=False)
+
+
+COMMANDS = {"produce": ProduceOptions, "check": CheckOptions, "manifest": ManifestOptions}
+
+
+def main(args: ProduceOptions | CheckOptions | ManifestOptions) -> None:
     if args.cmd == "produce":
         produce(args.out, args.record, args.seed)
     elif args.cmd == "check":
@@ -424,7 +445,3 @@ def main() -> None:
     else:
         for c in build_manifest(with_record=args.record):
             print(json.dumps(c))
-
-
-if __name__ == "__main__":
-    main()

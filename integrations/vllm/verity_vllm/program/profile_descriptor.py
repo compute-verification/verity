@@ -24,23 +24,25 @@ over the descriptor and counts distinct payloads, so `bytes - distinct_bytes` is
 one copy could save *inside this codec* (a reference to an existing definition, a shared definition, or a
 range where an explicit list is affine).
 
-    PYTHONPATH=. python -m verity_vllm.program.profile_descriptor --config B0 --LP 32 --STEPS 7 --out prof-B0.json
-    PYTHONPATH=. python -m verity_vllm.program.profile_descriptor --desc program.json --out prof.json
+    PYTHONPATH=. verity-vllm profile-descriptor --config B0 --LP 32 --STEPS 7 --out prof-B0.json
+    PYTHONPATH=. verity-vllm profile-descriptor --desc program.json --out prof.json
 """
 
 from __future__ import annotations
 
-import argparse
 import hashlib
 import json
 import re
 import sys
 import time
 from collections import Counter, defaultdict
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from verity.ir.codec import canonical_json, encode_program, program_digest
+
+from verity_vllm.config import UsageError, option
 
 _FAMILY = re.compile(r"^([A-Za-z0-9]+_v\d+)")
 
@@ -260,20 +262,23 @@ def render(prof: dict) -> str:
     return "\n".join(out)
 
 
-def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--desc", type=Path, help="a serialised descriptor (JSON)")
-    ap.add_argument("--config", choices=["B0", "B1"])
-    ap.add_argument("--LP", type=int)
-    ap.add_argument("--STEPS", type=int)
-    ap.add_argument("--out", type=Path)
-    ap.add_argument("--save-desc", type=Path, help="also write the built descriptor (canonical JSON)")
-    a = ap.parse_args(argv)
+@dataclass(frozen=True, kw_only=True)
+class Options:
+    desc: Path | None = option("--desc", default=None, type=Path, help="a serialised descriptor (JSON)")
+    config: str | None = option("--config", default=None, choices=["B0", "B1"])
+    LP: int | None = option("--LP", default=None, type=int)
+    STEPS: int | None = option("--STEPS", default=None, type=int)
+    out: Path | None = option("--out", default=None, type=Path)
+    save_desc: Path | None = option("--save-desc", default=None, type=Path,
+                                    help="also write the built descriptor (canonical JSON)")
+
+
+def main(a: Options) -> int:
     if a.desc:
         desc = json.loads(a.desc.read_text())
     else:
         if not (a.config and a.LP is not None and a.STEPS is not None):
-            ap.error("--desc or --config/--LP/--STEPS")
+            raise UsageError("--desc or --config/--LP/--STEPS")
         desc = build(a.config, a.LP, a.STEPS)
         print(f"[profile] built {a.config} LP={a.LP} STEPS={a.STEPS}: {desc['annotations']}", file=sys.stderr, flush=True)
     if a.save_desc:
@@ -285,7 +290,3 @@ def main(argv=None) -> int:
         a.out.write_text(json.dumps(prof, indent=1))
     print(render(prof))
     return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())

@@ -33,6 +33,7 @@ import pytest
 
 from verity_vllm.commit import binding as B
 from verity_vllm.check import weights_of_record as WR
+from verity_vllm.pipeline import cli
 from tests.check.test_sampled_replay import _program as _wired_program
 from tests.check.test_sampled_replay import v2_manifest
 from tests.check.test_weights_of_record import (PREFIX, _program, _served, _write_program, checkpoint,  # noqa: F401 (fixture)
@@ -337,7 +338,7 @@ def test_pin_record_is_built_once_per_row_not_per_request(checkpoint, tmp_path, 
     shapes = B1_SHAPES if name == "b1" else B2_SHAPES
     root, ofr, _ = _row(tmp_path, name, prog, shapes, workload_digest="c" * 64)
     out = root / "weights_of_record.json"
-    rc = WR.main(["--programs-root", str(root), "--checkpoint-dir", str(d), "--checkpoints", str(man), "--out", str(out)])
+    rc = cli.main(["weights-of-record", "--programs-root", str(root), "--checkpoint-dir", str(d), "--checkpoints", str(man), "--out", str(out)])
     rec = json.load(open(out))
     assert rc == 0 and rec["of_record"] is True and set(rec["of_record_set"]["program_digests"]) == ofr
     live = live_digests(_served(t, fields))

@@ -2,9 +2,9 @@
 body against the pinned production operation, bit-exact, in two halves so the torch venv and the 3.12 verity venv never meet:
 
     # on the pod, in the vLLM venv (torch + the production kernel):
-    python -m verity_vllm.properties.admission produce --adapter verity_vllm.program.registry.quarantine.<lane>.<def>_difftest --n 32 --seed 7 --out DIR
+    verity-vllm properties-admission produce --adapter verity_vllm.program.registry.quarantine.<lane>.<def>_difftest --n 32 --seed 7 --out DIR
     # on the pod in /workspace/venv-py312 (or on the laptop after copying DIR):
-    python -m verity_vllm.properties.admission check --adapter <same> --dir DIR --out quarantine.json [--append]
+    verity-vllm properties-admission check --adapter <same> --dir DIR --out quarantine.json [--append]
 
 The ADAPTER (lane-written, next to the quarantined definition) is a plain module with three functions and no import of
 torch at module level:
@@ -26,7 +26,6 @@ Torch-free except inside `produce`.
 """
 from __future__ import annotations
 
-import argparse
 import importlib
 import json
 import random
@@ -36,6 +35,9 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from dataclasses import dataclass, field
+
+from verity_vllm.config import option
 
 REQUIRED_EDGE_KINDS = ("zeros", "max", "subnormal", "alternating")
 DTYPE_BITS = {"bfloat16": 16, "float16": 16, "float32": 32, "int32": 32, "int64": 64, "uint8": 8, "int8": 8, "bool": 8}
@@ -207,14 +209,29 @@ def check(adapter: str, d: Path) -> dict[str, Any]:
     return rep
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    sub = ap.add_subparsers(dest="cmd", required=True)
-    p = sub.add_parser("produce"); p.add_argument("--adapter", required=True); p.add_argument("--n", type=int, default=32)
-    p.add_argument("--seed", type=int, default=7); p.add_argument("--out", required=True); p.add_argument("--device", default="cuda")
-    c = sub.add_parser("check"); c.add_argument("--adapter", required=True); c.add_argument("--dir", required=True)
-    c.add_argument("--out", required=True); c.add_argument("--append", action="store_true", help="merge into an existing quarantine.json")
-    a = ap.parse_args(argv)
+@dataclass(frozen=True, kw_only=True)
+class ProduceOptions:
+    adapter: str = option("--adapter")
+    n: int = option("--n", type=int, default=32)
+    seed: int = option("--seed", type=int, default=7)
+    out: str = option("--out")
+    device: str = option("--device", default="cuda")
+    cmd: str = field(default="produce", init=False)
+
+
+@dataclass(frozen=True, kw_only=True)
+class CheckOptions:
+    adapter: str = option("--adapter")
+    dir: str = option("--dir")
+    out: str = option("--out")
+    append: bool = option("--append", default=False, action="store_true", help="merge into an existing quarantine.json")
+    cmd: str = field(default="check", init=False)
+
+
+COMMANDS = {"produce": ProduceOptions, "check": CheckOptions}
+
+
+def main(a: ProduceOptions | CheckOptions) -> int:
     if a.cmd == "produce":
         m = produce(a.adapter, a.n, a.seed, Path(a.out), a.device)
         print(f"[difftest] produced {len(m['cases'])} cases for {m['semantic_id']} -> {a.out}", file=sys.stderr)
@@ -234,7 +251,3 @@ def main(argv: list[str] | None = None) -> int:
     print(f"[difftest] {rep['status']}: {rep['differential']['passed']}/{rep['differential']['total']} cases bit-exact for {rep['semantic_id']}"
           + (f"; {rep['reason']}" if rep.get("reason") else ""), file=sys.stderr)
     return 0 if rep["status"] == "pass" else 1
-
-
-if __name__ == "__main__":
-    sys.exit(main())

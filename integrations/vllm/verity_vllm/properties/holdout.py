@@ -1,7 +1,7 @@
 """verity_vllm/properties/holdout.py — PROTECTED (gate G7).  Orchestrator-side holdout workload generator and assembler.
 
-    uv run python -m verity_vllm.properties.holdout --generate --case B0 --model HuggingFaceTB/SmolLM2-135M --vocab 49152 --n 3 --seed 20260917 --out out/gen/holdouts/B0
-    uv run python -m verity_vllm.properties.holdout --assemble RUN_DIR/holdouts --out RUN_DIR/holdouts.json
+    uv run verity-vllm holdout --generate --case B0 --model HuggingFaceTB/SmolLM2-135M --vocab 49152 --n 3 --seed 20260917 --out out/gen/holdouts/B0
+    uv run verity-vllm holdout --assemble RUN_DIR/holdouts --out RUN_DIR/holdouts.json
 
 After a lane says it is done, the ORCHESTRATOR (never the lane) generates fresh workloads — new token values, prompt/decode
 lengths that straddle kernel-specialization boundaries (the FA2 kBlockN 64/128 rows, the persistent-matmul tile edges),
@@ -14,15 +14,17 @@ Holdouts carry NO expected tokens: the clean control run of the sealed driver is
 """
 from __future__ import annotations
 
-import argparse
 import datetime as dt
 import hashlib
 import json
 import random
 import sys
 import uuid
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from verity_vllm.config import UsageError, option
 
 #: prompt lengths that straddle the kernel-specialization boundaries of the pinned profile (FA2 kBlockN 64 / 128, the
 #: persistent matmul's 64/128-row tiles) plus a short and a long one; the generator draws from this pool.
@@ -91,19 +93,21 @@ def assemble(holdouts_dir: Path) -> dict[str, Any]:
     return out
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--generate", action="store_true")
-    ap.add_argument("--assemble", default=None, metavar="DIR")
-    ap.add_argument("--case", default=None)
-    ap.add_argument("--model", default=None)
-    ap.add_argument("--vocab", type=int, default=None)
-    ap.add_argument("--tokenizer-revision", default=None)
-    ap.add_argument("--n", type=int, default=3)
-    ap.add_argument("--n-requests", type=int, default=1)
-    ap.add_argument("--seed", type=int, default=None, help="orchestrator seed (default: from the clock)")
-    ap.add_argument("--out", required=True)
-    a = ap.parse_args(argv)
+@dataclass(frozen=True, kw_only=True)
+class Options:
+    generate: bool = option("--generate", default=False, action="store_true")
+    assemble: str | None = option("--assemble", default=None, metavar="DIR")
+    case: str | None = option("--case", default=None)
+    model: str | None = option("--model", default=None)
+    vocab: int | None = option("--vocab", type=int, default=None)
+    tokenizer_revision: str | None = option("--tokenizer-revision", default=None)
+    n: int = option("--n", type=int, default=3)
+    n_requests: int = option("--n-requests", type=int, default=1)
+    seed: int | None = option("--seed", type=int, default=None, help="orchestrator seed (default: from the clock)")
+    out: str = option("--out")
+
+
+def main(a: Options) -> int:
     if a.assemble:
         rep = assemble(Path(a.assemble))
         Path(a.out).write_text(json.dumps(rep, indent=1) + "\n")
@@ -111,7 +115,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if rep["status"] == "pass" else 1
     if a.generate:
         if not (a.case and a.model and a.vocab):
-            ap.error("--generate needs --case, --model, --vocab")
+            raise UsageError("--generate needs --case, --model, --vocab")
         seed = a.seed if a.seed is not None else int(dt.datetime.now().timestamp()) % (2**31)
         paths = generate(Path(a.out), case=a.case, model=a.model, vocab=a.vocab, n=a.n, seed=seed, n_requests=a.n_requests,
                          tokenizer_revision=a.tokenizer_revision)
@@ -120,9 +124,5 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{p}  lengths={d['prompt_lengths']} max_tokens={[r['max_tokens'] for r in d['requests']]}")
         print(f"[holdout] seed {seed}: {len(paths)} workloads", file=sys.stderr)
         return 0
-    ap.error("one of --generate / --assemble")
+    raise UsageError("one of --generate / --assemble")
     return 2
-
-
-if __name__ == "__main__":
-    sys.exit(main())

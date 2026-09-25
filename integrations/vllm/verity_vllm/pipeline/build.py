@@ -4,14 +4,13 @@ pos0), `request` (prefill LP + T decode steps, flat), `padded` (the fixed padded
 values). Writes the derive report (provenance: every rule application), the program's descriptor + digest, a per-spec histogram,
 the instance sequence (comparator input), and the inputs trace.
 
-    PYTHONPATH=. python -m verity_vllm.pipeline.build --out /workspace/cp/cba/step_decode --wrapper step --M 1 --pos0 8
-    PYTHONPATH=. python -m verity_vllm.pipeline.build --out /workspace/cp/cba/request_8_4 --wrapper request --LP 8 --T 4
-    PYTHONPATH=. python -m verity_vllm.pipeline.build --out /workspace/cp/cba/padded_8_4 --wrapper padded --LP 8 --T 4 --eos 0
+    PYTHONPATH=. verity-vllm build --out /workspace/cp/cba/step_decode --wrapper step --M 1 --pos0 8
+    PYTHONPATH=. verity-vllm build --out /workspace/cp/cba/request_8_4 --wrapper request --LP 8 --T 4
+    PYTHONPATH=. verity-vllm build --out /workspace/cp/cba/padded_8_4 --wrapper padded --LP 8 --T 4 --eos 0
 """
 
 from __future__ import annotations
 
-import argparse
 import gzip
 import hashlib
 import json
@@ -19,7 +18,9 @@ import os
 import sys
 import time
 import traceback
+from dataclasses import dataclass
 
+from verity_vllm.config import option
 from verity_vllm.program.frontend.inputs_trace import InputsTrace
 
 
@@ -673,32 +674,38 @@ def _write_manifest(out: str, res: dict) -> None:
     json.dump(m, open(os.path.join(out, "construction_manifest.json"), "w"), indent=1, default=str)
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--M", type=int, default=1)
-    ap.add_argument("--pos0", type=int, default=8)
-    ap.add_argument("--profile", default="b1-eager-v3")
-    ap.add_argument("--backend", default="gloo")
-    ap.add_argument("--wrapper", default="step", choices=("step", "request", "padded"))
-    ap.add_argument("--LP", type=int, default=8)
-    ap.add_argument("--T", type=int, default=4)
-    ap.add_argument("--eos", type=int, default=0)
-    ap.add_argument("--model", default=None, help="HF repo id (default: the B0 pin)")
-    ap.add_argument("--revision", default=None)
-    ap.add_argument("--max-model-len", type=int, default=2048)
-    ap.add_argument("--target", default=None, help="TargetProfile: JSON overrides of the default (e.g. '{\"compute_capability\": [9, 0]}') or a path to a JSON profile")
-    ap.add_argument("--sampling", default=None, help="[X-05] the row's sampling policy: greedy | stoch-t<T>-p<P>[-k<K>] | JSON (must agree with --workload if both)")
-    ap.add_argument("--workload", default=None, help="[X-05] the row's workload manifest; its sampling policy becomes the structural input `sampling`")
-    ap.add_argument("--tp", type=int, default=1, help="[R13 tp] tensor-parallel world size (structural input); the Program describes ONE rank")
-    ap.add_argument("--rank", type=int, default=0, help="[R13 tp] which rank's Program to construct (0..tp-1)")
-    ap.add_argument("--launch-max-seqlen-q", default=None,
-                    help="[R15 hopper HOP-03] the LAUNCH CONTEXT this request Program is built under (structural input): the varlen launch's "
-                         "max_seqlen_q over every co-scheduled sequence, per request step -- int N (step 0 = a prefill launch whose longest prompt "
-                         "has N rows), JSON list [n0, n1, ...] (per step), or 'conflict' (requests of this shape are co-scheduled differently: "
-                         "refused under FA3, whose tile reads it; recorded and inert under FA2).  Omitted = own rows (a batch of one).  "
-                         "row_pod.sh derives it from the workload (verity_vllm.pipeline.launch_context) for B >= 2.")
-    a = ap.parse_args()
+@dataclass(frozen=True, kw_only=True)
+class Options:
+    out: str = option("--out")
+    M: int = option("--M", type=int, default=1)
+    pos0: int = option("--pos0", type=int, default=8)
+    profile: str = option("--profile", default="b1-eager-v3")
+    backend: str = option("--backend", default="gloo")
+    wrapper: str = option("--wrapper", default="step", choices=("step", "request", "padded"))
+    LP: int = option("--LP", type=int, default=8)
+    T: int = option("--T", type=int, default=4)
+    eos: int = option("--eos", type=int, default=0)
+    model: str | None = option("--model", default=None, help="HF repo id (default: the B0 pin)")
+    revision: str | None = option("--revision", default=None)
+    max_model_len: int = option("--max-model-len", type=int, default=2048)
+    target: str | None = option("--target", default=None,
+                                help="TargetProfile: JSON overrides of the default (e.g. '{\"compute_capability\": [9, 0]}') or a path to a JSON profile")
+    sampling: str | None = option("--sampling", default=None,
+                                  help="[X-05] the row's sampling policy: greedy | stoch-t<T>-p<P>[-k<K>] | JSON (must agree with --workload if both)")
+    workload: str | None = option("--workload", default=None,
+                                  help="[X-05] the row's workload manifest; its sampling policy becomes the structural input `sampling`")
+    tp: int = option("--tp", type=int, default=1,
+                     help="[R13 tp] tensor-parallel world size (structural input); the Program describes ONE rank")
+    rank: int = option("--rank", type=int, default=0, help="[R13 tp] which rank's Program to construct (0..tp-1)")
+    launch_max_seqlen_q: str | None = option("--launch-max-seqlen-q", default=None,
+                                             help="[R15 hopper HOP-03] the LAUNCH CONTEXT this request Program is built under (structural input): the varlen launch's "
+                                             "max_seqlen_q over every co-scheduled sequence, per request step -- int N (step 0 = a prefill launch whose longest prompt "
+                                             "has N rows), JSON list [n0, n1, ...] (per step), or 'conflict' (requests of this shape are co-scheduled differently: "
+                                             "refused under FA3, whose tile reads it; recorded and inert under FA2).  Omitted = own rows (a batch of one).  "
+                                             "row_pod.sh derives it from the workload (verity_vllm.pipeline.launch_context) for B >= 2.")
+
+
+def main(a: Options) -> int:
     try:
         from verity_vllm.program.frontend.target_profile import parse_target_arg
         from verity_vllm.program.registry.targets import parse_launch_context
@@ -719,7 +726,3 @@ def main() -> int:
     if res.get("ok"):
         print(json.dumps(res["spec_histogram"], indent=1))
     return 0 if res.get("ok") else 1
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

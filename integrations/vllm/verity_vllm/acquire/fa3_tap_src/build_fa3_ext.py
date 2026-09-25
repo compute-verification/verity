@@ -11,11 +11,14 @@ The narrowing macros only remove template branches (each remaining instantiation
 library dispatches to); `fa3_tap_xcheck.py` verifies out / lse bit-identical to the installed `_vllm_fa3_C.fwd`.
 
 Usage:
-  build_fa3_ext.py --tree /path/to/vllm-flash-attn --name verity_fa3_matReq --build-dir /path/build --hdims 64,128 \
+  verity-vllm fa3-tap-build --tree /path/to/vllm-flash-attn --name verity_fa3_matReq --build-dir /path/build --hdims 64,128 \
       [--define VERITY_TAP=3 --define VERITY_MAT_SRC=59]
 Writes <build-dir>/build_info.json and <build-dir>/resource_usage.txt.
 """
-import argparse, glob, hashlib, json, os, subprocess, time
+import glob, hashlib, json, os, subprocess, time
+from dataclasses import dataclass
+
+from verity_vllm.config import option
 
 
 def sha256(path):
@@ -26,19 +29,20 @@ def sha256(path):
     return h.hexdigest()
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument('--tree', required=True, help='vllm-flash-attn tree root (contains hopper/, csrc/common, csrc/cutlass)')
-    ap.add_argument('--name', required=True)
-    ap.add_argument('--build-dir', required=True)
-    ap.add_argument('--src-dir', default=os.path.dirname(os.path.abspath(__file__)))
-    ap.add_argument('--define', action='append', default=[])
-    ap.add_argument('--hdims', default='64,128')
-    ap.add_argument('--arch', default='9.0a')
-    ap.add_argument('--no-ptxas-v', action='store_true')
-    ap.add_argument('--tree-commit', default='')
-    args = ap.parse_args()
+@dataclass(frozen=True, kw_only=True)
+class Options:
+    tree: str = option('--tree', help='vllm-flash-attn tree root (contains hopper/, csrc/common, csrc/cutlass)')
+    name: str = option('--name')
+    build_dir: str = option('--build-dir')
+    src_dir: str = option('--src-dir', default=os.path.dirname(os.path.abspath(__file__)))
+    define: list[str] = option('--define', action='append', default=[])
+    hdims: str = option('--hdims', default='64,128')
+    arch: str = option('--arch', default='9.0a')
+    no_ptxas_v: bool = option('--no-ptxas-v', default=False, action='store_true')
+    tree_commit: str = option('--tree-commit', default='')
 
+
+def main(args: Options):
     os.environ.setdefault('CUDA_HOME', '/usr/local/cuda')
     os.environ['TORCH_CUDA_ARCH_LIST'] = args.arch
     os.environ.setdefault('MAX_JOBS', '32')
@@ -107,7 +111,3 @@ def main():
     with open(os.path.join(args.build_dir, 'build_info.json'), 'w') as f:
         json.dump(info, f, indent=1)
     print('BUILD-OK', args.name, info['compile_seconds'], 's', so, ops)
-
-
-if __name__ == '__main__':
-    main()
