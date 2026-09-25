@@ -160,24 +160,20 @@ covers a parameter the verifier gets wrong, such as N, the chunk size or the lea
 
 ## 6. Implementations that must pass the vectors
 
-**Python** (the integration test checks all but the weights root):
+**Python**: `verity_vllm/commit/scheme.py` is the integration's one route to this module. Headers, root bindings,
+tags and the tree walk are imported from here; the position leaf and the level fold keep a prefix-once form over
+these tags, with a pluggable hash for benchmarks. Every committer, the opening verifiers (`hidden_stream.py`,
+`semantic_layout.py`, `native_host.py`, `native_ranges.py`) and `padding_steps.py` hash through it, and
+`hashing.py` / `merkle.py` re-export the id-leaf rules of `verity.commitments.leaves`.
+`tests/commit/test_production_vectors.py` checks it against every vector, the weights root included.
 
-- `verity_vllm/commit/hashing.py`: H, id leaf, ids, node, lift, empty.
-- `verity_vllm/commit/fasttree.py`: the packed prefixes and the fold.
-- `verity_vllm/commit/semantic_layout.py`: `pos_leaf`, `semantic_root` and `verify_position_opening`.
-- `verity_vllm/commit/hidden_engine.py`: the step `bind_root` and `path_in_levels`.
-- `verity_vllm/commit/hidden_stream.py`: the `fa2h` headers, the stream and thread roots, and both opening verifiers.
-- `verity_vllm/commit/padding_steps.py`: `run_root_of` and the padding chunk leaves.
-- `verity_vllm/acquire/native_host.py`: the run root (inline twice) and the weights root (inline in
-  `register_weights`). The weights root is untested, because it needs a live model.
+**CUDA** (checked against the vectors by the pod-marked `tests/commit/test_scheme_cuda.py`):
 
-**CUDA** (not yet checked against the vectors; each needs a GPU harness that feeds the vector inputs):
-
-- `verity_vllm/acquire/native_tree.cu`: `fa2h` chunk leaves and the node/lift levels. Words 8 and 9 of its header
-  are hard-wired to 0, so it can only reproduce the legacy-tile chunk vectors.
-- `verity_vllm/acquire/hidden_gpu_src/hidden_gpu_tree.cu`: the same chunk-leaf and level kernels, and the same
-  legacy-tile limit.
-- `verity_vllm/acquire/native_leafhash.cu`: position leaves and the node/lift fold (device weights hashing).
+- `verity_vllm/commit/committer/native_tree.cu`: `fa2h` chunk leaves and the node/lift levels. Words 8 and 9 of its
+  header are hard-wired to 0, so it can only reproduce the legacy-tile chunk vectors.
+- `verity_vllm/commit/committer/hidden_gpu_src/hidden_gpu_tree.cu`: the same chunk-leaf and level kernels, and the
+  same legacy-tile limit.
+- `verity_vllm/commit/committer/native_leafhash.cu`: position leaves and the node/lift fold (device weights hashing).
 - `verity_vllm/acquire/fa2_tap_src/verity_tap.h`: the in-kernel thread-leaf header and SHA-256 (`Verity_sha_ctx`).
 
 The FA3 tap (`fa3_tap_src/verity_tap_fa3.h`) only materialises the stream and does no hashing.
