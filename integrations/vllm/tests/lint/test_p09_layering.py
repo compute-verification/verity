@@ -6,8 +6,8 @@ Checked today, against ``allowlists/p09_layering.json``:
   (``_imports.LAYER``; order ``pipeline`` > ``check|properties`` > ``acquire`` > ``observe|commit`` > ``engine`` >
   ``query|correspondence`` > ``program`` > ``collectives`` > ``config`` > core).  One entry per (importer, imported)
   module pair.
-* ``package-cycle``: two top-level packages importing each other (the patch owner, which imports nothing, counts apart
-  from ``engine``).
+* ``package-cycle``: two top-level packages importing each other (``engine.hooks`` and ``engine.env``, which import
+  nothing, count apart from ``engine``).
 * ``module-cycle``: a strongly connected component of the module import graph.  The entry names its members, so a
   cycle that gains a member fails too.
 * ``forbidden-import``: library code importing ``tests``, ``tools``, ``research`` (tools/research) or ``relayout``.
@@ -58,12 +58,13 @@ def layer_violations() -> list[R.Violation]:
     return out
 
 
-_PATCH_OWNER_MODULES = frozenset(p.removesuffix(".py").replace("/", ".") for p in PATCH_OWNERS)
+#: Engine modules every layer calls (the patch owner and the env-pin writer); they import nothing from the package.
+LEAF_MODULES = frozenset(p.removesuffix(".py").replace("/", ".") for p in PATCH_OWNERS) | {"verity_vllm.engine.env"}
 
 
 def _package(m: str) -> str:
-    if m in _PATCH_OWNER_MODULES:
-        return _short(m)          # imports nothing from the package (test_patch_owner_imports_nothing): closes no cycle
+    if m in LEAF_MODULES:
+        return _short(m)          # imports nothing from the package (test_leaf_modules_import_nothing): closes no cycle
     parts = m.split(".")
     return parts[1] if len(parts) > 1 else parts[0]
 
@@ -259,9 +260,9 @@ def test_allowlist_has_no_stale_entries() -> None:
     R.assert_no_stale(NAME, scan(), RULE)
 
 
-def test_patch_owner_imports_nothing() -> None:
-    out = [f"{e.file}:{e.line} {_short(e.dst)}" for e in I.edges() if e.src in _PATCH_OWNER_MODULES]
-    assert not out, f"the patch owner must import nothing from verity_vllm (every layer calls it): {out}"
+def test_leaf_modules_import_nothing() -> None:
+    out = [f"{e.file}:{e.line} {_short(e.dst)}" for e in I.edges() if e.src in LEAF_MODULES]
+    assert not out, f"engine.hooks and engine.env must import nothing from verity_vllm (every layer calls them): {out}"
 
 
 def test_layer_map_names_existing_modules() -> None:

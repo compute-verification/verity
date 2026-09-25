@@ -62,7 +62,7 @@ from verity_vllm.observe.observer import EmptyMode, ModuleNamer, Observer, Recor
 from verity_vllm.observe.storage import StorageAdapter, dtype_name
 from verity_vllm.observe import triton_adapter
 
-from verity_vllm.engine import hooks
+from verity_vllm.engine import env as engine_env, hooks
 from verity_vllm.engine.arrivals import run_requests_arrivals  # [coverage D87] step-indexed arrivals (torch-free module, unit-tested)
 from verity_vllm.observe import chunks as _chunks  # [chunked 2026-09-17] prefill-chunk / token-step attribution (torch-free, unit-tested)
 
@@ -286,29 +286,8 @@ def parse_engine_args(items: list[str] | None) -> dict[str, Any]:
     return out
 
 
-_VERITY_INDUCTOR_DIR_MARK = "VERITY_INDUCTOR_DIR_PER_PROCESS"
-
-
-def prepare_compiled_process_cache() -> dict[str, Any]:
-    """[R15 compiled, rev-pm M-0266 (b)] Before a COMPILED engine is built: make this process's Inductor output code identifiable.  (1) A fresh,
-    empty TORCHINDUCTOR_CACHE_DIR unless the caller already exported one it marks as per-process (compiled_commit.sh) -- torch's default
-    /tmp/torchinductor_<user> is shared by every process on the pod, so a pin read from it would digest other rows' kernels; (2)
-    VLLM_DISABLE_COMPILE_CACHE=1 -- a vLLM compile-cache hit replays another process's artifacts and emits no output code here (the pin
-    would be null: a compiled record without positive evidence of compilation).  Costs one Inductor compilation per process (~70 s for
-    Llama-3.2-1B), recorded in the header as compilation.compile_cache = disabled."""
-    import tempfile
-
-    out: dict[str, Any] = {}
-    if os.environ.get(_VERITY_INDUCTOR_DIR_MARK) != "1":
-        d = tempfile.mkdtemp(prefix="verity_inductor_")
-        os.environ["TORCHINDUCTOR_CACHE_DIR"] = d
-        os.environ[_VERITY_INDUCTOR_DIR_MARK] = "1"
-        out["inductor_cache_dir"] = d
-    else:
-        out["inductor_cache_dir"] = os.environ.get("TORCHINDUCTOR_CACHE_DIR")
-    os.environ["VLLM_DISABLE_COMPILE_CACHE"] = "1"
-    out["compile_cache"] = "disabled"
-    return out
+_VERITY_INDUCTOR_DIR_MARK = engine_env.INDUCTOR_DIR_MARK
+prepare_compiled_process_cache = engine_env.prepare_compiled_process_cache
 
 
 def engine_kwargs_for(checkpoints: str | Path = "manifests/checkpoints.json", *, max_num_seqs: int = 8, case: str = CASE,
@@ -322,10 +301,10 @@ def engine_kwargs_for(checkpoints: str | Path = "manifests/checkpoints.json", *,
         # [R15 fp8] the declared target's ENVIRONMENT knobs (`TargetProfile.env()`: VLLM_BATCH_INVARIANT, VLLM_USE_DEEP_GEMM for
         # `fp8_block_gemm`) are applied before vLLM reads them -- the same object the builder applied; the header records them
         # (`target_env`) and `target_mismatches` reads the selected FP8 kernel back
-        os.environ.update(target.env())
+        target_env = engine_env.apply_target(target.env())
     env_flags = prof.apply_env()
     if target is not None:
-        env_flags = {**env_flags, **{k: os.environ[k] for k in target.env()}}
+        env_flags = {**env_flags, **target_env}
     cp = prof.checkpoint_for(case, checkpoints)
     if execution is not None and execution not in EXECUTION_ENFORCE_EAGER:
         raise RuntimeError(f"execution label {execution!r} is not modelled by the harness (known: {sorted(EXECUTION_ENFORCE_EAGER)}); refusing to build an engine")

@@ -20,7 +20,7 @@ import sys
 import time
 import traceback
 
-from verity_vllm.engine import hooks
+from verity_vllm.engine import env as engine_env, hooks
 from verity_vllm.program.frontend.inputs_trace import InputsTrace
 
 
@@ -58,7 +58,9 @@ _CONSTRUCTION_SOURCES = ("verity_vllm/program/frontend/export_compat.py", "verit
                          # [R13 tp] the TP construction scaffolding (group stub, collective bus, verity_tp ops) and the TP2 Definitions
                          "verity_vllm/program/frontend/export_ops.py", "verity_vllm/program/registry/b1_tp2.py",
                          # [R15 stoch] the stochastic token-select rule (the sampler Definitions are registry digests in the descriptor)
-                         "verity_vllm/program/frontend/rules/vllm_sampling.py")
+                         "verity_vllm/program/frontend/rules/vllm_sampling.py",
+                         # the vLLM switches the meta instantiation pins (engine.env.EXPORT)
+                         "verity_vllm/engine/env.py")
 
 
 def construction_version(rules, root: str | None = None) -> dict:
@@ -317,7 +319,7 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
     except Exception:  # noqa: BLE001
         res["code_rev"] = None
     # the profile's environment is applied BEFORE vLLM is imported (vllm_meta's setdefaults are the fallback for callers without a profile)
-    os.environ.update(target.env())
+    engine_env.apply_target(target.env())
     res["ok"] = False
     try:
         # [X-05] applicability declares the sampler: a policy outside the builder's token-select vocabulary is refused HERE, before any
