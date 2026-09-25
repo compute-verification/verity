@@ -62,6 +62,7 @@ from verity_vllm.observe.observer import EmptyMode, ModuleNamer, Observer, Recor
 from verity_vllm.observe.storage import StorageAdapter, dtype_name
 from verity_vllm.observe import triton_adapter
 
+from verity_vllm.engine import env as engine_env, hooks
 from verity_vllm.engine.arrivals import run_requests_arrivals  # [coverage D87] step-indexed arrivals (torch-free module, unit-tested)
 from verity_vllm.observe import chunks as _chunks  # [chunked 2026-09-17] prefill-chunk / token-step attribution (torch-free, unit-tested)
 
@@ -285,29 +286,8 @@ def parse_engine_args(items: list[str] | None) -> dict[str, Any]:
     return out
 
 
-_VERITY_INDUCTOR_DIR_MARK = "VERITY_INDUCTOR_DIR_PER_PROCESS"
-
-
-def prepare_compiled_process_cache() -> dict[str, Any]:
-    """[R15 compiled, rev-pm M-0266 (b)] Before a COMPILED engine is built: make this process's Inductor output code identifiable.  (1) A fresh,
-    empty TORCHINDUCTOR_CACHE_DIR unless the caller already exported one it marks as per-process (compiled_commit.sh) -- torch's default
-    /tmp/torchinductor_<user> is shared by every process on the pod, so a pin read from it would digest other rows' kernels; (2)
-    VLLM_DISABLE_COMPILE_CACHE=1 -- a vLLM compile-cache hit replays another process's artifacts and emits no output code here (the pin
-    would be null: a compiled record without positive evidence of compilation).  Costs one Inductor compilation per process (~70 s for
-    Llama-3.2-1B), recorded in the header as compilation.compile_cache = disabled."""
-    import tempfile
-
-    out: dict[str, Any] = {}
-    if os.environ.get(_VERITY_INDUCTOR_DIR_MARK) != "1":
-        d = tempfile.mkdtemp(prefix="verity_inductor_")
-        os.environ["TORCHINDUCTOR_CACHE_DIR"] = d
-        os.environ[_VERITY_INDUCTOR_DIR_MARK] = "1"
-        out["inductor_cache_dir"] = d
-    else:
-        out["inductor_cache_dir"] = os.environ.get("TORCHINDUCTOR_CACHE_DIR")
-    os.environ["VLLM_DISABLE_COMPILE_CACHE"] = "1"
-    out["compile_cache"] = "disabled"
-    return out
+_VERITY_INDUCTOR_DIR_MARK = engine_env.INDUCTOR_DIR_MARK
+prepare_compiled_process_cache = engine_env.prepare_compiled_process_cache
 
 
 def engine_kwargs_for(checkpoints: str | Path = "manifests/checkpoints.json", *, max_num_seqs: int = 8, case: str = CASE,
@@ -321,10 +301,10 @@ def engine_kwargs_for(checkpoints: str | Path = "manifests/checkpoints.json", *,
         # [R15 fp8] the declared target's ENVIRONMENT knobs (`TargetProfile.env()`: VLLM_BATCH_INVARIANT, VLLM_USE_DEEP_GEMM for
         # `fp8_block_gemm`) are applied before vLLM reads them -- the same object the builder applied; the header records them
         # (`target_env`) and `target_mismatches` reads the selected FP8 kernel back
-        os.environ.update(target.env())
+        target_env = engine_env.apply_target(target.env())
     env_flags = prof.apply_env()
     if target is not None:
-        env_flags = {**env_flags, **{k: os.environ[k] for k in target.env()}}
+        env_flags = {**env_flags, **target_env}
     cp = prof.checkpoint_for(case, checkpoints)
     if execution is not None and execution not in EXECUTION_ENFORCE_EAGER:
         raise RuntimeError(f"execution label {execution!r} is not modelled by the harness (known: {sorted(EXECUTION_ENFORCE_EAGER)}); refusing to build an engine")
@@ -1187,8 +1167,7 @@ class Capture:
         self.errors: list[dict] = []
         self.events_written = 0
         self.timing = {"flush_s": 0.0, "snapshot_s": 0.0, "sync_s": 0.0}
-        self._orig: dict[str, Any] = {}
-        self._had_attr: dict[str, bool] = {}
+        self._hooks = hooks.Hooks()
         self._pin_cache: dict[str, torch.Tensor] = {}
         self._root_handles: list = []
         self._arena: PinnedArena | None = None
@@ -1241,17 +1220,7 @@ class Capture:
         if not self.installed:
             return
         self._finalize_pending()
-        for name in ("execute_model", "sample", "compute_logits"):
-            if name not in self._orig:
-                continue
-            target = self.model if name == "compute_logits" else self.runner
-            if self._had_attr.get(name):
-                setattr(target, name, self._orig[name])
-            else:
-                try:
-                    delattr(target, name)
-                except AttributeError:
-                    pass
+        self._hooks.uninstall()
         if self.namer is not None:
             self.namer.remove()
             self.namer = None
@@ -1353,10 +1322,7 @@ class Capture:
 
     def _wrap_runner(self) -> None:
         runner, cap = self.runner, self
-        for name in ("execute_model", "sample"):
-            self._had_attr[name] = name in runner.__dict__
-            self._orig[name] = getattr(runner, name)
-        orig_execute, orig_sample = self._orig["execute_model"], self._orig["sample"]
+        orig_execute, orig_sample = runner.execute_model, runner.sample
 
         def execute_model(scheduler_output, *a, **kw):
             dummy = bool(kw.get("dummy_run", False)) or (len(a) >= 2 and bool(a[1]))
@@ -1388,16 +1354,14 @@ class Capture:
                 cap._end_timing_only(st)
             return res
 
-        runner.execute_model = execute_model
-        runner.sample = sample
+        self._hooks.patch(runner, "execute_model", execute_model)
+        self._hooks.patch(runner, "sample", sample)
 
         # the logits tensor is the return value of model.compute_logits (V2 runner: sample() -> compute_logits ->
         # sampler); record its ViewDesc only (no tensor reference is kept)
         model = self.model
         if hasattr(model, "compute_logits"):
-            self._had_attr["compute_logits"] = "compute_logits" in model.__dict__
-            self._orig["compute_logits"] = model.compute_logits
-            orig_cl = self._orig["compute_logits"]
+            orig_cl = model.compute_logits
 
             def compute_logits(*a, **kw):
                 out = orig_cl(*a, **kw)
@@ -1409,7 +1373,7 @@ class Capture:
                         cap.errors.append({"where": "compute_logits", "step": st.step, "error": repr(e)[:200]})
                 return out
 
-            model.compute_logits = compute_logits
+            self._hooks.patch(model, "compute_logits", compute_logits)
 
     def _run_observed(self, fn: Callable[[], Any], *, phase: str) -> Any:
         cfg, rec = self.cfg, self.rec

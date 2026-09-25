@@ -6,7 +6,8 @@ Checked today, against ``allowlists/p09_layering.json``:
   (``_imports.LAYER``; order ``pipeline`` > ``check|properties`` > ``acquire`` > ``observe|commit`` > ``engine`` >
   ``query|correspondence`` > ``program`` > ``collectives`` > ``config`` > core).  One entry per (importer, imported)
   module pair.
-* ``package-cycle``: two top-level packages importing each other.
+* ``package-cycle``: two top-level packages importing each other (``engine.hooks`` and ``engine.env``, which import
+  nothing, count apart from ``engine``).
 * ``module-cycle``: a strongly connected component of the module import graph.  The entry names its members, so a
   cycle that gains a member fails too.
 * ``forbidden-import``: library code importing ``tests``, ``tools``, ``research`` (tools/research) or ``relayout``.
@@ -16,12 +17,13 @@ Checked today, against ``allowlists/p09_layering.json``:
 * ``runtime-patch``: assignment, ``setattr`` or ``delattr`` on a module or object imported from ``vllm``, ``torch`` or
   ``triton``, or on a module fetched by name (``sys.modules`` / ``importlib.import_module`` / ``__import__``);
   replacing ``forward`` on a module instance; replacing a method of a live object with a function defined in the same
-  function (``runner.execute_model = execute_model``); and ``setattr(obj, name, <call, lambda or local function>)``
-  in a function that also reads ``getattr(obj, ...)`` (save the original, install the wrapper).  A patch whose target
-  and original both live on ``self`` is not visible to this AST check.
+  function (``runner.execute_model = execute_model``), unless that function just constructed the object
+  (``p = PrimitiveDefinition(...)``, ``mod = types.ModuleType(...)``); and ``setattr(obj, name, <call, lambda or local
+  function>)`` in a function that also reads ``getattr(obj, ...)`` (save the original, install the wrapper).  A patch
+  whose target and original both live on ``self`` is not visible to this AST check.
 
-Once ``engine/hooks.py`` exists it is the one file exempt from ``runtime-patch``.  The rule's other half, "no library
-code imports tests/, tools/ or repo-level data", is ``forbidden-import`` and ``repo-path`` here.
+``engine/hooks.py`` is the one file exempt from ``runtime-patch``: every other site calls it.  The rule's other half,
+"no library code imports tests/, tools/ or repo-level data", is ``forbidden-import`` and ``repo-path`` here.
 """
 from __future__ import annotations
 
@@ -36,7 +38,7 @@ NAME = "p09_layering"
 RULE = "P9 (dependency direction, one patch owner)"
 FORBIDDEN_TOPS = frozenset({"tests", "tools", "research", "relayout", "conftest"})
 PATCH_ROOTS = frozenset({"vllm", "torch", "triton"})
-PATCH_OWNERS: frozenset[str] = frozenset()      # engine/hooks.py, once it exists
+PATCH_OWNERS = frozenset({"verity_vllm/engine/hooks.py"})
 MODULE_FETCH = frozenset({"importlib.import_module", "import_module", "__import__", "sys.modules.get"})
 COMPOUND = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.If, ast.For, ast.While, ast.With, ast.Try, ast.AsyncFor,
             ast.AsyncWith, ast.Match)
@@ -56,7 +58,13 @@ def layer_violations() -> list[R.Violation]:
     return out
 
 
+#: Engine modules every layer calls (the patch owner and the env-pin writer); they import nothing from the package.
+LEAF_MODULES = frozenset(p.removesuffix(".py").replace("/", ".") for p in PATCH_OWNERS) | {"verity_vllm.engine.env"}
+
+
 def _package(m: str) -> str:
+    if m in LEAF_MODULES:
+        return _short(m)          # imports nothing from the package (test_leaf_modules_import_nothing): closes no cycle
     parts = m.split(".")
     return parts[1] if len(parts) > 1 else parts[0]
 
@@ -122,6 +130,12 @@ def _depth(rel_to_pkg: str) -> int:
     return len(Path(rel_to_pkg).parts)
 
 
+def _constructs(call: ast.Call) -> bool:
+    """``Name(...)`` / ``mod.Name(...)`` with a CapWords name: an instance the calling function creates."""
+    leaf = (R.dotted(call.func) or "").rsplit(".", 1)[-1]
+    return leaf[:1].isupper() and not leaf.isupper()
+
+
 def file_violations(src: str, rel: str, module: str = "", is_package: bool = False) -> list[R.Violation]:
     tree = R.parse_src(src)
     aliases = R.aliases(tree, module, is_package)
@@ -136,12 +150,15 @@ def file_violations(src: str, rel: str, module: str = "", is_package: bool = Fal
     env: dict[str, int] = {}
     nested_defs: dict[str, set[str]] = {}
     got_attr: dict[str, set[str]] = {}
+    fresh: dict[str, set[str]] = {}
     for node, symbol in R.walk(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             nested_defs.setdefault(symbol, set()).add(node.name)
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "getattr" and node.args:
             got_attr.setdefault(symbol, set()).add(R.text(node.args[0]))
         if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+            if isinstance(node.value, ast.Call) and _constructs(node.value):
+                fresh.setdefault(symbol, set()).add(node.targets[0].id)
             if any(isinstance(c, ast.Call) and (R.dotted(c.func) or "") in MODULE_FETCH for c in ast.walk(node.value)) \
                     or any(isinstance(c, ast.Subscript) and R.dotted(c.value) == "sys.modules" for c in ast.walk(node.value)):
                 dyn_modules.add(node.targets[0].id)
@@ -202,7 +219,7 @@ def file_violations(src: str, rel: str, module: str = "", is_package: bool = Fal
                 emit("runtime-patch", node, symbol, f"{hit}.{t.attr}")
             elif owner not in ("self", "cls") and t.attr == "forward":
                 emit("runtime-patch", node, symbol, f"<instance>.forward")
-            elif owner not in ("self", "cls") and value is not None and (
+            elif owner not in ("self", "cls") and owner not in fresh.get(symbol, ()) and value is not None and (
                     isinstance(value, ast.Lambda)
                     or (isinstance(value, ast.Name) and value.id in nested_defs.get(symbol, ()))
                     or (isinstance(value, ast.Call) and (R.dotted(value.func) or "").endswith("MethodType"))):
@@ -241,6 +258,11 @@ def test_no_new_violations() -> None:
 
 def test_allowlist_has_no_stale_entries() -> None:
     R.assert_no_stale(NAME, scan(), RULE)
+
+
+def test_leaf_modules_import_nothing() -> None:
+    out = [f"{e.file}:{e.line} {_short(e.dst)}" for e in I.edges() if e.src in LEAF_MODULES]
+    assert not out, f"engine.hooks and engine.env must import nothing from verity_vllm (every layer calls them): {out}"
 
 
 def test_layer_map_names_existing_modules() -> None:
@@ -297,7 +319,7 @@ def test_detectors_on_examples() -> None:
         ("runtime-patch", "setattr(<site>, *)"), ("runtime-patch", "<object>.compute_logits"),
     }, got
     good = (
-        "import os\n"
+        "import os, types\n"
         "from pathlib import Path\n"
         "HERE = Path(__file__).resolve().parent\n"
         "DATA = os.path.join(os.path.dirname(__file__), 'data.json')\n"
@@ -305,5 +327,13 @@ def test_detectors_on_examples() -> None:
         "    def __init__(self):\n"
         "        self.forward = None\n"
         "        self.x = 1\n"
+        "def make(name):\n"
+        "    def ev(get):\n"
+        "        return get(0)\n"
+        "    mod = types.ModuleType(name)\n"
+        "    mod.build = lambda: None\n"
+        "    mod.evaluate = ev\n"
     )
     assert file_violations(good, "verity_vllm/a/b.py") == []
+    exempt = file_violations(bad, "verity_vllm/engine/hooks.py")
+    assert exempt and all(v.kind != "runtime-patch" for v in exempt)

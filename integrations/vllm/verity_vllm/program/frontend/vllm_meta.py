@@ -4,7 +4,7 @@ wrap one engine step (forward -> compute_logits -> greedy argmax) as an ordinary
 Everything here is model-agnostic structural scaffolding (counted in the REPORT): no layer order, no op sequence, no
 family flags. The architecture comes from whatever `vllm_config.model_config.architectures` resolves to.
 
-Environment knobs of the pinned vLLM that the construction sets (declared, not hidden):
+Environment knobs of the pinned vLLM that the construction sets (declared, not hidden; `engine.env.EXPORT`):
   VLLM_BATCH_INVARIANT=1     the admitted profile (selects the BI code paths: fused_add_rms_norm / Triton rms_norm / BI GEMM)
   VLLM_USE_LAYERNAME=0       layer names as plain `str` op arguments (torch>=2.11 default wraps them in an opaque `LayerName`
                              object, which export would lift as a custom object); the vLLM source documents this switch.
@@ -18,11 +18,9 @@ import socket
 from contextlib import contextmanager
 from typing import Any
 
-os.environ.setdefault("VLLM_BATCH_INVARIANT", "1")
-os.environ.setdefault("VLLM_USE_LAYERNAME", "0")
-os.environ.setdefault("HF_HUB_OFFLINE", "1")
-os.environ.setdefault("VLLM_LOGGING_LEVEL", "WARNING")
-os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+from verity_vllm.engine import env as engine_env
+
+engine_env.pin(engine_env.EXPORT)
 
 import torch  # noqa: E402
 from torch import nn  # noqa: E402

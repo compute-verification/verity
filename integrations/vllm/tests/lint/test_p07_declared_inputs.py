@@ -14,7 +14,7 @@ Checked today, against ``allowlists/p07_declared_inputs.json``:
 * ``seed-default``: a parameter named ``seed``/``*_seed``/``seed_*`` with a default value.
 
 ``ENV_OWNERS`` may read the environment and name machine paths: ``pipeline/cli.py`` turns both into declared inputs
-(option defaults, ``config.RunEnv``).  ``engine/env.py`` (which writes vLLM's pins from config) joins it once it exists.
+(option defaults, ``config.RunEnv``), and ``engine/env.py`` writes vLLM's pins.  Every other ``environ`` use is a violation.
 The rule's torch-stub test (the plan digest is the same with torch present and stubbed out) is not a lint.
 """
 from __future__ import annotations
@@ -27,7 +27,7 @@ from . import _ratchet as R
 
 NAME = "p07_declared_inputs"
 RULE = "P7 (results depend only on declared inputs)"
-ENV_OWNERS: frozenset[str] = frozenset({"verity_vllm/pipeline/cli.py"})
+ENV_OWNERS: frozenset[str] = frozenset({"verity_vllm/engine/env.py", "verity_vllm/pipeline/cli.py"})
 ENV_NAMES = frozenset({"os.environ", "os.environb", "os.getenv", "os.putenv", "os.unsetenv", "os.getenvb"})
 CWD_CALLS = frozenset({"os.getcwd", "os.getcwdb", "pathlib.Path.cwd", "Path.cwd"})
 MACHINE_PATH = re.compile(r"^(/workspace|/root|/home|/Users|/tmp|/mnt|/opt|/usr/local|/data|/scratch|/dev/shm)(/|$)")
@@ -122,6 +122,37 @@ def file_violations(src: str, rel: str) -> list[R.Violation]:
     return out
 
 
+PIN_OWNER = "verity_vllm/engine/env.py"
+PIN_PREFIXES = ("VLLM_", "HF_", "TORCHINDUCTOR_", "TOKENIZERS_")
+
+
+def pin_writes(src: str, rel: str) -> list[str]:
+    """Writes of a vLLM / Hugging Face / Inductor switch (literal key) and ``os.environ.update(<x>.env())`` outside
+    ``PIN_OWNER``: ``engine/env.py`` is the one writer of vLLM's pins (``pipeline/cli.py`` only reads the environment)."""
+    if rel == PIN_OWNER or "environ" not in src:
+        return []
+    tree = R.parse_src(src)
+    aliases = R.aliases(tree)
+    out = []
+    for node, symbol in R.walk(tree):
+        keys: list[ast.AST] = []
+        if isinstance(node, (ast.Assign, ast.AugAssign)):
+            for t in node.targets if isinstance(node, ast.Assign) else [node.target]:
+                if isinstance(t, ast.Subscript) and aliases.resolve(t.value) == "os.environ":
+                    keys.append(t.slice)
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
+                and aliases.resolve(node.func.value) == "os.environ" and node.args:
+            if node.func.attr == "setdefault":
+                keys.append(node.args[0])
+            elif node.func.attr == "update" and isinstance(node.args[0], ast.Call) \
+                    and isinstance(node.args[0].func, ast.Attribute) and node.args[0].func.attr == "env":
+                out.append(f"{rel}:{node.lineno} {symbol} os.environ.update(....env())")
+        for k in keys:
+            if R.is_str(k) and k.value.startswith(PIN_PREFIXES):
+                out.append(f"{rel}:{node.lineno} {symbol} {k.value}")
+    return out
+
+
 @lru_cache(maxsize=None)
 def scan() -> tuple[R.Violation, ...]:
     out: list[R.Violation] = []
@@ -138,6 +169,23 @@ def test_no_new_violations() -> None:
 
 def test_allowlist_has_no_stale_entries() -> None:
     R.assert_no_stale(NAME, scan(), RULE)
+
+
+def test_only_engine_env_writes_vllm_pins() -> None:
+    out = [w for p in R.library_files() for w in pin_writes(R.source(p), R.rel(p))]
+    assert not out, f"write vLLM's switches through verity_vllm.engine.env: {out}"
+    bad = (
+        "import os\n"
+        "os.environ.setdefault('VLLM_BATCH_INVARIANT', '1')\n"
+        "def build(target):\n"
+        "    os.environ['HF_HUB_OFFLINE'] = '1'\n"
+        "    os.environ.update(target.env())\n"
+        "    os.environ['VERITY_RETAIN'] = 'x'\n"
+        "    os.environ.update(saved)\n"
+    )
+    assert sorted(w.split(" ", 1)[1] for w in pin_writes(bad, "verity_vllm/x.py")) == [
+        "<module> VLLM_BATCH_INVARIANT", "build HF_HUB_OFFLINE", "build os.environ.update(....env())"]
+    assert pin_writes(bad, "verity_vllm/engine/env.py") == []
 
 
 def test_detectors_on_examples() -> None:
