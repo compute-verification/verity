@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import hot as hc
 from verity_vllm.pipeline import source_identity
 from verity_vllm.pipeline import timeline as tlm
@@ -217,15 +218,13 @@ def test_hot_unsafe_flags_are_refused_by_commit_delta(argv, unsafe, monkeypatch)
     torch = pytest.importorskip("torch")  # noqa: F841  commit_delta imports torch at module level
     from verity_vllm.pipeline import commit as cd
 
-    ap = cd.argparse.ArgumentParser()
-    # the same parser main() builds: reuse it by parsing through main's namespace defaults
     monkeypatch.delenv("VERITY_FAULT", raising=False)
     monkeypatch.delenv("VERITY_SWITCH", raising=False)
-    ns = _parse_with_main_parser(cd, argv)
+    ns = cli.parse("commit", argv, {})
     assert bool(cd.hot_unsafe_reasons(ns)) is unsafe
     assert bool(hc.unsafe_hints(argv, {})) is unsafe          # the client pre-check agrees with the worker's rule on every case
     monkeypatch.setenv("VERITY_FAULT", "skip_copy:1")
-    assert cd.hot_unsafe_reasons(_parse_with_main_parser(cd, ["--out", "o"]))
+    assert cd.hot_unsafe_reasons(cli.parse("commit", ["--out", "o"], {}))
 
 
 @pytest.mark.parametrize("argv,env,unsafe", [
@@ -261,16 +260,3 @@ def test_submit_pre_check_runs_unsafe_jobs_cold_without_touching_workers(tmp_pat
     assert calls[0][1]["VERITY_HOT_RESTART_REASON"].startswith("HOT-UNSAFE (client pre-check): VERITY_FAULT")
     ev = tlm.read(tmp_path / "tl.jsonl")
     assert [e["stage"] for e in ev] == ["hot.fallback_cold"]
-
-
-def _parse_with_main_parser(cd, argv):
-    """Build main()'s argparse namespace without running main: execute main's source up to parse_args with a stub."""
-    import inspect
-    import re
-
-    src = inspect.getsource(cd.main)
-    body = src.split("ap = argparse.ArgumentParser()", 1)[1].split("args = ap.parse_args(argv)", 1)[0]
-    body = re.sub(r"^    ", "", body, flags=re.M)
-    ns_env = {"argparse": cd.argparse, "ap": cd.argparse.ArgumentParser(), "os": os, "REQUIRED_CLASSES_DEFAULT": getattr(cd, "REQUIRED_CLASSES_DEFAULT", ())}
-    exec(body, ns_env)  # noqa: S102  -- test-only: the option declarations themselves
-    return ns_env["ap"].parse_args(argv)
