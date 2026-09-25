@@ -4,7 +4,7 @@
 # at SELF="8 64", loopback sessions at SWEEP="2048 4096 8192" (WARM warm-ups + RUNS timed each), and, with VERIFIER=host:port,
 # REMOTE_RUNS sessions at REMOTE_N against that verifier (which serves the same instance file).
 set -uxo pipefail
-SRC=$(pwd); I=$RESEARCH_RUN_DIR/inputs; O=$RESEARCH_RUN_DIR/out; mkdir -p $O
+SRC=$(pwd); I=$RESEARCH_RUN_DIR/inputs; O=$RESEARCH_RUN_DIR/out${TAG:+-$TAG}; mkdir -p $O
 REL=${REL:-bf16-hopper}; NET=$I/net-$REL.txt; PIN=$(sha256sum $NET | cut -d' ' -f1)
 MODE=build GPU=${GPU:-1} bash backends/flock/pod/20-gpu-link.sh || exit 1
 source $HOME/.cargo/env; C13=/usr/local/cuda-13.3; export LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
