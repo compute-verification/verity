@@ -69,8 +69,11 @@ use sp1_sdk::prelude::*;
 use sp1_sdk::{ProverClient, SP1Proof};
 use veritor_zk_common::{decode_verdict, sha256, split_public_values, PUBLIC_VALUES_LEN};
 
-#[cfg(feature = "relation-bare")]
+#[cfg(any(feature = "relation-bare", feature = "relation-committed"))]
+#[cfg_attr(not(feature = "relation-bare"), allow(dead_code))]
 mod bare_cmd;
+#[cfg(feature = "relation-committed")]
+mod committed_cmd;
 
 const ELF: Elf = include_elf!("veritor-zk-guest");
 const BACKEND: &str = "sp1";
@@ -210,6 +213,62 @@ enum Command {
         /// The guest input layout each negative is run in.
         #[arg(long, value_enum, default_value_t = bare_cmd::Layout::Chunks)]
         layout: bare_cmd::Layout,
+    },
+    /// relation-committed: commit a range natively (row digests, frame-v3 trees) and write its statement JSON.
+    #[cfg(feature = "relation-committed")]
+    CommittedCommit {
+        #[command(flatten)]
+        set: bare_cmd::BareSet,
+        #[arg(long)]
+        out: PathBuf,
+    },
+    /// relation-committed: the guest in the executor, its public values checked against the range's roots.
+    #[cfg(feature = "relation-committed")]
+    CommittedExecute {
+        #[command(flatten)]
+        set: bare_cmd::BareSet,
+        /// Claim a wrong word for VU `lo + I`: verdict 0 required.
+        #[arg(long)]
+        flip_y: Option<usize>,
+        /// Change an operand word of VU `lo + I`'s x row (honest y): rejection required.
+        #[arg(long)]
+        tamper_x: Option<usize>,
+        /// Check against a statement whose root of tree a, b or y is wrong: rejection required.
+        #[arg(long)]
+        wrong_root: Option<String>,
+    },
+    /// relation-committed: set up once, warm up, then `--reps` times commit the range and prove it (save, verify).
+    #[cfg(feature = "relation-committed")]
+    CommittedProve {
+        #[command(flatten)]
+        set: bare_cmd::BareSet,
+        #[arg(long)]
+        out_dir: PathBuf,
+        #[arg(long, value_enum, default_value_t = Mode::Core)]
+        mode: Mode,
+        #[arg(long, default_value_t = 1)]
+        reps: usize,
+        #[arg(long, default_value_t = 0)]
+        warmup_vus: usize,
+        #[arg(long)]
+        skip_execute: bool,
+        /// Prove over a tampered x row of VU `lo + I` against the honest statement: every rep must be REJECTED.
+        #[arg(long)]
+        tamper_x: Option<usize>,
+    },
+    /// relation-committed: verify a saved proof against a statement JSON (SP1 under the vk, then the tree check).
+    #[cfg(feature = "relation-committed")]
+    CommittedVerify {
+        #[arg(long)]
+        proof: PathBuf,
+        #[arg(long)]
+        statement: PathBuf,
+        /// The pinned verifying-key hash (0x...); a different embedded guest fails.
+        #[arg(long)]
+        expect_vk: Option<String>,
+        /// Check against the statement with the root of tree a, b or y altered (a negative).
+        #[arg(long)]
+        wrong_root: Option<String>,
     },
 }
 
@@ -904,6 +963,20 @@ async fn main() -> Result<()> {
         #[cfg(feature = "relation-bare")]
         Command::BareNegatives { instances, manifest_sha256, dataset, index, layout } => {
             bare_cmd::cmd_negatives(instances, manifest_sha256, dataset, index, layout).await
+        }
+        #[cfg(feature = "relation-committed")]
+        Command::CommittedCommit { set, out } => committed_cmd::cmd_commit(set, out).await,
+        #[cfg(feature = "relation-committed")]
+        Command::CommittedExecute { set, flip_y, tamper_x, wrong_root } => {
+            committed_cmd::cmd_execute(set, flip_y, tamper_x, wrong_root).await
+        }
+        #[cfg(feature = "relation-committed")]
+        Command::CommittedProve { set, out_dir, mode, reps, warmup_vus, skip_execute, tamper_x } => {
+            committed_cmd::cmd_prove(set, out_dir, mode, reps, warmup_vus, skip_execute, tamper_x).await
+        }
+        #[cfg(feature = "relation-committed")]
+        Command::CommittedVerify { proof, statement, expect_vk, wrong_root } => {
+            committed_cmd::cmd_verify(proof, statement, expect_vk, wrong_root).await
         }
     }
 }

@@ -33,29 +33,29 @@ const BATCH_SCHEMA: &str = "sp1-format-instances/v1";
 pub(crate) struct BareSet {
     /// Directory holding `<tier>.x.u16`, `<tier>.w.u16`, `<tier>.y.u16` (a BF16 tier of `bench-instances/v1`).
     #[arg(long, conflicts_with = "batch", required_unless_present = "batch")]
-    instances: Option<PathBuf>,
+    pub(crate) instances: Option<PathBuf>,
     #[arg(long, default_value = "vu-k1536")]
-    tier: String,
+    pub(crate) tier: String,
     #[arg(long, default_value = "bench-instances/v1")]
-    dataset: String,
+    pub(crate) dataset: String,
     /// sha256 of the dataset's manifest.json (part of the identity string; required with --instances).
     #[arg(long, required_unless_present = "batch")]
-    manifest_sha256: Option<String>,
+    pub(crate) manifest_sha256: Option<String>,
     /// A `sp1-format-instances/v1` file (`verity_sp1.format_instances`): format, frozen ref and blocks from the file.
     #[arg(long)]
-    batch: Option<PathBuf>,
+    pub(crate) batch: Option<PathBuf>,
     #[arg(long, default_value_t = 0)]
-    lo: usize,
+    pub(crate) lo: usize,
     /// End of the range (default: every VU of the set).
     #[arg(long)]
-    hi: Option<usize>,
+    pub(crate) hi: Option<usize>,
     /// VUs per `read_vec` chunk (chunked layout).
     #[arg(long, default_value_t = 64)]
-    vus_per_read: usize,
+    pub(crate) vus_per_read: usize,
     /// The guest input layout: `chunks` (version 2: every VU's rows in order) or `indexed` (version 3: a table of
     /// distinct rows, read once, and a row pair per VU).  The statement is the same.
     #[arg(long, value_enum, default_value_t = Layout::Chunks)]
-    layout: Layout,
+    pub(crate) layout: Layout,
 }
 
 #[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
@@ -65,7 +65,7 @@ pub(crate) enum Layout {
 }
 
 impl Layout {
-    fn name(self) -> &'static str {
+    pub(crate) fn name(self) -> &'static str {
         match self {
             Layout::Chunks => "chunks",
             Layout::Indexed => "indexed",
@@ -76,14 +76,14 @@ impl Layout {
 /// A loaded set: VU-major operand blocks, the committed words, the identity's parts.
 pub(crate) struct Loaded {
     pub format: Format,
-    dataset: String,
-    tier: String,
-    manifest_sha256: String,
+    pub(crate) dataset: String,
+    pub(crate) tier: String,
+    pub(crate) manifest_sha256: String,
     /// The tier id of the set's first VU (the frozen ref's range start).
-    base: usize,
-    x: Vec<u8>,
-    w: Vec<u8>,
-    y: Vec<u32>,
+    pub(crate) base: usize,
+    pub(crate) x: Vec<u8>,
+    pub(crate) w: Vec<u8>,
+    pub(crate) y: Vec<u32>,
 }
 
 impl Loaded {
@@ -178,7 +178,7 @@ pub(crate) struct Prepared {
 }
 
 impl BareSet {
-    fn load(&self) -> Result<Loaded> {
+    pub(crate) fn load(&self) -> Result<Loaded> {
         match (&self.batch, &self.instances) {
             (Some(path), _) => load_batch(path),
             (None, Some(dir)) => {
@@ -190,7 +190,7 @@ impl BareSet {
     }
 
     /// `[lo, hi)` within the loaded set.
-    fn range(&self, set: &Loaded) -> Result<(usize, usize)> {
+    pub(crate) fn range(&self, set: &Loaded) -> Result<(usize, usize)> {
         let hi = self.hi.unwrap_or(set.n());
         if self.lo >= hi || hi > set.n() {
             bail!("range [{}, {hi}) is not inside the {} VUs of {}", self.lo, set.n(), set.tier);
@@ -198,7 +198,7 @@ impl BareSet {
         Ok((self.lo, hi))
     }
 
-    fn identity(&self, set: &Loaded) -> Result<String> {
+    pub(crate) fn identity(&self, set: &Loaded) -> Result<String> {
         let (lo, hi) = self.range(set)?;
         Ok(bare::identity_string(&set.dataset, &set.tier, (set.base + lo) as u64, (set.base + hi) as u64, &set.manifest_sha256))
     }
