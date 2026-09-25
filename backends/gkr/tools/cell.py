@@ -308,7 +308,7 @@ def result(a, cell: Path, meta: dict, rows: list[dict]) -> None:
                           "checker": "per session: the live Flock verifier's verdict, gpu.prover.verify and verity-gkr-verify against the session's link",
                           "detail": f"{len(timed)} timed sessions; the independent evidence is the non-producer verifier's records (tools/cell_gate.py)",
                           "evidence": {"sessions": timed}},
-           "measurements": meas, "artifacts": [f"s{r['session']}/proof.bin" for r in timed]}
+           "measurements": meas, "artifacts": [f"out/cell-{n}/s{r['session']}/proof.bin" for r in timed]}   # where 10-cell.sh keeps them in the run
     res["contract_problems"] = contract.validate(res)
     Path(a.result).write_text(json.dumps(res, indent=1, default=str))
     print(f"result {a.result}: t.total {tt:.3f} s, bound 2^{ach:.1f}, problems {res['contract_problems']}", flush=True)
