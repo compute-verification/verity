@@ -7,8 +7,8 @@ by digest -- no rehash of the model per request.  These tests hold, on a synthet
   1. B1 / B2 / B8 of the SAME model: the record is a function of (weights struct, checkpoint) only -- identical fields, digests and
      root_of_record across sequence shapes; each B's run accepts a record derived from one of ITS components; the default-shape record
      of a mixed B>=2 row is refused by name (hopper M-0723 / exec M-0727 reproduced at the checker), a stamped record of ANOTHER row too.
-  2. row_pod.sh's component pick (rel int-6 4ef1198b6, the fix of record for M-0723/M-0727): the heredoc is extracted from the script
-     and run on synthetic row dirs -- first manifest component, build_request only when it declares that component's shape.
+  2. the row's component pick (rel int-6 4ef1198b6, the fix of record for M-0723/M-0727), run on synthetic row dirs -- first manifest
+     component, build_request only when it declares that component's shape.
   3. Shared weights across request subcircuits: the GLOBAL manifest carries every weight field ONCE (not x B) and binding collapses them
      to ONE registered-input identity per rank; an omitted registration is a named missing identity, a duplicate is a reported copy.
   4. Wrong registered root / wrong checkpoint context: shard sha != pin (W1), no manifest entry, another repo / revision (W2), another
@@ -24,9 +24,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import re
-import subprocess
-import sys
 
 import numpy as np
 import pytest
@@ -34,13 +31,13 @@ import pytest
 from verity_vllm.commit import binding as B
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.pipeline import cli
+from verity_vllm.pipeline import row_records as R
 from tests.check.test_sampled_replay import _program as _wired_program
 from tests.check.test_sampled_replay import v2_manifest
 from tests.check.test_weights_of_record import (PREFIX, _program, _served, _write_program, checkpoint,  # noqa: F401 (fixture)
                                                                 live_digests, write_safetensors)
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
-ROW_POD = os.path.join(REPO, "verity_vllm", "ops", "row_pod.sh")
 
 # the three panel shapes of one model: B1 = the envelope, B2 / B8 mixed (no request has both maxima -> the default shape is NOT a component)
 B1_SHAPES = [(9, 2)]
@@ -85,7 +82,7 @@ def test_b1_b2_b8_same_model_one_pin_per_row_and_the_default_shape_record_is_ref
     digs = {tuple((f["field"], f["digest"]) for f in r["fields"]) for r in recs.values()}
     assert len(digs) == 1 and all(r["complete"] and r["of_record"] for r in recs.values())
     assert all(r["compared"] == len(fields) for r in (WR.check(rec, live) for rec in recs.values()))      # one compare per field, B-independent
-    # (b) each B accepts a record derived from one of ITS components (un-stamped, single-digest rule = row_pod's --program-dir path)
+    # (b) each B accepts a record derived from one of ITS components (un-stamped, single-digest rule = the row's --program-dir path)
     for root, ofr in ((r1, set1), (r2, set2), (r8, set8)):
         comp = WR.component_program_dirs(str(root))[0]
         res = WR.check(recs[comp], live, program_digests_of_record=ofr)
@@ -112,21 +109,12 @@ def test_b1_b2_b8_same_model_one_pin_per_row_and_the_default_shape_record_is_ref
     assert WR.check(st2, live, program_digests_of_record=set8)["result"] is False
 
 
-def _row_pod_component_pick_source() -> str:
-    """The python heredoc row_pod.sh runs to pick the Program dir the weights of record are derived from at B>1 (rel int-6 4ef1198b6)."""
-    src = open(ROW_POD).read()
-    m = re.search(r'PD_WOR=\$\(python3 - "\$D" <<\'EOF\'\n(.*?)\nEOF\n\)', src, re.S)
-    assert m, "row_pod.sh: the weights-of-record component pick heredoc (PD_WOR=$(python3 - \"$D\" <<'EOF') is not where it was"
-    return m.group(1)
-
-
 def _pick(root) -> str:
-    out = subprocess.run([sys.executable, "-", str(root)], input=_row_pod_component_pick_source(), capture_output=True, text=True, check=True)
-    return out.stdout.strip()
+    return R.wor_component(str(root))
 
 
-def test_row_pod_derives_the_pin_from_the_first_manifest_component_at_b_ge_2(checkpoint, tmp_path):
-    """[rel int-6 4ef1198b6 / M-0723] row_pod's pick = the manifest's first component (r0) -> build_request_LP<LP>_T<T>, or build_request only
+def test_the_row_derives_the_pin_from_the_first_manifest_component_at_b_ge_2(checkpoint, tmp_path):
+    """[rel int-6 4ef1198b6 / M-0723] the row's pick = the manifest's first component (r0) -> build_request_LP<LP>_T<T>, or build_request only
     when its own result.json declares that shape; the record derived from the pick is of record for the run (M-0829: independent of when
     the Build ran -- the pick reads the Build's dirs and manifest, nothing from a previous Commit)."""
     d, man, t = checkpoint
