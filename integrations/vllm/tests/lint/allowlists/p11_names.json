@@ -635,7 +635,6 @@
     {"file": "verity_vllm/query/manifest/format.py", "kind": "doc-round", "symbol": "tp_ranks_fold_digest", "detail": "R1N"},
     {"file": "verity_vllm/query/module_body.py", "kind": "def-name", "symbol": "<module>", "detail": "Q_module_body_v1"},
     {"file": "verity_vllm/query/module_body.py", "kind": "doc-board-id", "symbol": "<module>", "detail": "F-rN"},
-    {"file": "verity_vllm/query/partition.py", "kind": "doc-date", "symbol": "<module>", "detail": "date"},
     {"file": "verity_vllm/query/program_view.py", "kind": "doc-board-id", "symbol": "<module>", "detail": "F-rN"},
     {"file": "verity_vllm/query/query_artifact.py", "kind": "doc-date", "symbol": "<module>", "detail": "date"},
     {"file": "verity_vllm/query/required.py", "kind": "doc-board-id", "symbol": "<module>", "detail": "F-rN"},

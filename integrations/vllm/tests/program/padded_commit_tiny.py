@@ -48,9 +48,9 @@ from typing import Any
 import numpy as np
 
 from verity.ir import Program, bind
-from verity_vllm.query import boundary as BD
+from verity.ir import boundary as BD
 from verity.ir import query_ast as GS
-from verity_vllm.query import partition as PT
+from verity.ir import partition as PT
 from verity.ir.codec import encode_program, program_digest
 from verity.ir.evaluate import evaluate_region
 from verity_vllm.program.registry import b1, lifted as L
