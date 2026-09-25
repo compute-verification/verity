@@ -437,9 +437,11 @@ def whole_proof_log2(fp: Mapping[str, Any]) -> float | None:
 # --- interaction: t = compute + rounds x RTT + bytes / bandwidth (reporting standard, Daniel 2026-09-25) --------------------------
 
 #: The reference network the Table 2 cell is evaluated at: same datacenter.
-REF_RTT_S, REF_BANDWIDTH_BPS = 0.001, 10e9
+REF_RTT_S, REF_BANDWIDTH_BPS = 0.001, 100e9
 #: The drill-down's other network profiles (RTT, same bandwidth).
 DRILL_RTTS_S = (0.020, 0.100)
+#: The drill-down's other bandwidth (at the reference RTT).
+DRILL_BANDWIDTH_BPS = 10e9
 #: A measured interactive run must be within this fraction of the formula at the reference profile.
 INTERACTION_TOLERANCE = 0.10
 
@@ -512,13 +514,13 @@ def interaction_problem(ix: Mapping[str, Any]) -> str | None:
     measured = (ix["prover_s"] or 0.0) + ix["wait_s"]
     if ref > 0 and abs(measured - ref) > INTERACTION_TOLERANCE * ref:
         return (f"interaction: measured {measured:.3g} s is {100 * (measured - ref) / ref:+.0f}% from the reference profile's {ref:.3g} s "
-                f"(1 ms RTT, 10 Gb/s; tolerance ±{100 * INTERACTION_TOLERANCE:.0f}%; measured RTT {ix['rtt_ms']:.3g} ms)")
+                f"(1 ms RTT, 100 Gb/s; tolerance ±{100 * INTERACTION_TOLERANCE:.0f}%; measured RTT {ix['rtt_ms']:.3g} ms)")
     return None
 
 
 def throughput(meta: Mapping[str, Any], rules: Rules) -> dict[str, Any] | None:
     """``P``: instances per timed run over its end-to-end seconds (committing the batch, :data:`COMMIT`, then the interaction
-    formula at the reference profile: prover compute + rounds x 1 ms + bytes / 10 Gb/s); under the legacy rules proving only.
+    formula at the reference profile: prover compute + rounds x 1 ms + bytes / 100 Gb/s); under the legacy rules proving only.
     ``None`` without a positive ``t.total`` and batch."""
 
     fp = meta.get("workload_fingerprint") if isinstance(meta.get("workload_fingerprint"), Mapping) else {}
@@ -1161,7 +1163,7 @@ def render_markdown(V: Views, published: bool = False) -> str:
             "are the accountant's whole-proof figures at each cell's batching (`security.achieved_log2`), from proven proximity bounds only.", "",
             "## Table 2 — End-to-end overhead per subcircuit, hardware class and commitment scheme", "",
             "N = compute-bound datasheet estimate, instances/s (busiest unit, peak entry); P = instances/s end to end at the reference "
-            "network (same datacenter, 1 ms RTT, 10 Gb/s: t = compute + rounds × RTT + bytes ÷ bandwidth) "
+            "network (same datacenter, 1 ms RTT, 100 Gb/s: t = compute + rounds × RTT + bytes ÷ bandwidth) "
             f"(committing the batch, `{COMMIT}`, then proving){'; legacy: proving only' if rules.legacy else ''}; cell = N / P of the "
             "family's best admissible configuration (highest P). `(prov.)` = no red-team clearance of the statement yet; "
             f"`({T.UNDER_REVERIFICATION})` = the latest `finding` label on the result is open (a `PULLED` one rejects it, D); "
@@ -1212,7 +1214,7 @@ def render_markdown(V: Views, published: bool = False) -> str:
     out += ["## Table 3 — Where the overhead comes from (each stage × N, share of the cell)", "",
             "Each stage is its contribution to the Table 2 overhead: its time per instance × N, so commitment + interaction + the six "
             "buckets + Other add up to the cell (Total). Commitment is the serving overhead; interaction is the network wait at the "
-            "reference profile (rounds × 1 ms + bytes ÷ 10 Gb/s, plus verifier compute the prover waits on); the buckets and Other are "
+            "reference profile (rounds × 1 ms + bytes ÷ 100 Gb/s, plus verifier compute the prover waits on); the buckets and Other are "
             "the proving overhead. A fused stage "
             f"prints once in its first column, `{T.JOINT_CONTINUATION}` in the others. Setup, one-time (keys, circuit setup: "
             "`fixed.setup_seconds`) is outside the cell: its seconds, and ×native amortized over the measured batch (setup × N ÷ the "
@@ -1248,7 +1250,7 @@ def render_markdown(V: Views, published: bool = False) -> str:
     if derived:
         shares = [100 * stages(c)["interaction"] / c.overhead for c in derived]
         out += [f"Interaction note: {len(derived)} of {len(V.cells)} cells are verified from files, so their interaction is derived "
-                f"(rounds = 0; network time = (proof + statement bytes) ÷ 10 Gb/s). Moving the proof alone is {min(shares):.0f}–"
+                f"(rounds = 0; network time = (proof + statement bytes) ÷ 100 Gb/s). Moving the proof alone is {min(shares):.0f}–"
                 f"{max(shares):.0f}% of those cells at the reference network: proof size is a real cost.", ""]
     if rows3s:
         out += ["### Table 3 drill-down — seconds per instance (share of end to end)", "",
@@ -1256,17 +1258,18 @@ def render_markdown(V: Views, published: bool = False) -> str:
         rowsi = []
         for c in V.cells:
             ix, P = c.throughput["interaction"], c.throughput
-            at = lambda rtt: c.native * (P["commit_s"] + interaction_time(ix, rtt)) / P["instances"]  # noqa: E731
+            at = lambda rtt, bw=REF_BANDWIDTH_BPS: c.native * (P["commit_s"] + interaction_time(ix, rtt, bw)) / P["instances"]  # noqa: E731
             rtt = (f"{ix['rtt_ms']:.3g} ms ({ix['rtt_method'] or 'method not recorded'})" if ix["rtt_ms"] is not None
                    else "— (file-verified)" if ix["derived"] else T.EMPTY)
             rounds = "0 (derived)" if ix["derived"] else f"{ix['rounds']:.0f}" if ix["rounds"] is not None else T.UNMEASURED
             rowsi.append([_cell_name(c), rounds, D._bytes(ix["bytes_up"]),
                           D._bytes(ix["bytes_down"]), rtt, T.fmt_seconds(ix["prover_s"] or 0.0), T.fmt_seconds(ix["verifier_s"]),
                           T.fmt_seconds(ix["wait_s"]) if ix["wait_s"] is not None else T.UNMEASURED,
-                          *[T.fmt_overhead(at(r)) for r in (REF_RTT_S, *DRILL_RTTS_S)]])
-        out += ["### Interaction drill-down — the formula t = compute + rounds × RTT + bytes ÷ bandwidth (10 Gb/s)", "",
+                          *[T.fmt_overhead(at(r)) for r in (REF_RTT_S, *DRILL_RTTS_S)], T.fmt_overhead(at(REF_RTT_S, DRILL_BANDWIDTH_BPS))])
+        out += ["### Interaction drill-down — the formula t = compute + rounds × RTT + bytes ÷ bandwidth", "",
                 T._md_table(("Cell", "Rounds", "Bytes up", "Bytes down", "Measured RTT (method)", "Prover compute", "Verifier compute (waited on)",
-                             "Measured network wait", "Cell at 1 ms (reference)", "At 20 ms", "At 100 ms"), rowsi), ""]
+                             "Measured network wait", "Cell at 1 ms, 100 Gb/s (reference)", "At 20 ms, 100 Gb/s", "At 100 ms, 100 Gb/s",
+                             "At 1 ms, 10 Gb/s"), rowsi), ""]
     if notes:
         out += ["Footnotes:", *[f"[{i}] {n}" for i, n in enumerate(notes, 1)], ""]
     out.append(f"Rejected ({len(V.rejected)} result{'s' if len(V.rejected) != 1 else ''}; artifact → first reason; letters: "

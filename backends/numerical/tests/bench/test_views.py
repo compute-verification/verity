@@ -556,25 +556,27 @@ def test_setup_is_one_time_shown_beside_the_cell_amortized_over_the_batch(store:
 
 
 LIVE = {"rounds.sequential_depth": 3, "net.bytes_out": 1.25e9, "net.bytes_in": 384.0, "net.rtt_ms": 1.0, "rtt_method": "ping median of 20, same pod pair",
-        "net.wait_seconds": 1.003}
+        "net.wait_seconds": 0.103}
 
 
 def test_the_cell_is_the_interaction_formula_at_the_reference_network(store: LocalStore) -> None:
-    """t = compute + rounds x RTT + bytes / bandwidth at 1 ms and 10 Gb/s; Table 3's interaction stage is that network time x N; the
-    drill-down gives the formula at 20 ms and 100 ms."""
+    """t = compute + rounds x RTT + bytes / bandwidth at 1 ms and 100 Gb/s; Table 3's interaction stage is that network time x N; the
+    drill-down gives the formula at 20 ms and 100 ms, and at 10 Gb/s."""
     committed(store, t_total=0.4, commit=0.6, interaction=LIVE)
     views = V.build(store)
     cell = line(views)["cells"]["B-Ligero"]
     N = V.native(FP8_ADA_MMA)["instances_per_second"]
-    net = 3 * 0.001 + (1.25e9 + 384) * 8 / 10e9                                 # 1.003 s at the reference profile
+    net = 3 * 0.001 + (1.25e9 + 384) * 8 / 100e9                                # 0.103 s at the reference profile
     assert cell.throughput["interaction_s"] == pytest.approx(net)
     assert cell.overhead == pytest.approx(N * (0.6 + 0.4 + net) / 4096)
     st = V.stages(cell)
     assert st["interaction"] == pytest.approx(N * net / 4096)
     assert st["commitment"] + st["interaction"] + sum(v for v in st["buckets"].values() if v) + st["other"] == pytest.approx(cell.overhead)
     md = V.render_markdown(views)
-    at20 = N * (0.6 + 0.4 + 3 * 0.020 + (1.25e9 + 384) * 8 / 10e9) / 4096
+    at20 = N * (0.6 + 0.4 + 3 * 0.020 + (1.25e9 + 384) * 8 / 100e9) / 4096
+    at10g = N * (0.6 + 0.4 + 3 * 0.001 + (1.25e9 + 384) * 8 / 10e9) / 4096
     assert "### Interaction drill-down" in md and T.fmt_overhead(at20) in md and "ping median of 20" in md
+    assert "At 1 ms, 10 Gb/s" in md and T.fmt_overhead(at10g) in md and V.REF_BANDWIDTH_BPS == 100e9
 
 
 @pytest.mark.parametrize(("over", "why"), [
@@ -633,12 +635,12 @@ def test_a_pure_flock_record_fills_the_flock_column_without_renderer_changes(sto
     cell = line(views)["cells"]["Flock"]
     assert cell is not None and cell.artifact == art and cell.configuration == V.FLOCK_CONFIG.id and cell.provisional
     assert line(views)["cells"]["B-Ligero"] is None
-    assert cell.throughput["interaction_s"] == pytest.approx(1070 * 0.001 + (922_000 + 34_240) * 8 / 10e9)
+    assert cell.throughput["interaction_s"] == pytest.approx(1070 * 0.001 + (922_000 + 34_240) * 8 / 100e9)
 
 
 def test_a_file_verified_result_derives_rounds_0_and_pays_its_bytes_over_the_reference_link(store: LocalStore) -> None:
     """Every B-Ligero cell today is verified from its files: no measured RTT is needed. Its record is derived -- rounds = 0 whatever
-    the protocol's round count, bytes = proof + statement bytes, network time = bytes / 10 Gb/s -- and Table 3 keeps that transfer
+    the protocol's round count, bytes = proof + statement bytes, network time = bytes / 100 Gb/s -- and Table 3 keeps that transfer
     as the interaction stage, footnoted."""
     art = committed(store, t_total=0.4, commit=0.6, interaction={"rounds.sequential_depth": 3, "rounds.protocol": 3,
                                                                  "proof_bytes": 1.25e9, "relation.statement_bytes_total": 5e6})
@@ -647,7 +649,7 @@ def test_a_file_verified_result_derives_rounds_0_and_pays_its_bytes_over_the_ref
     assert cell is not None and cell.artifact == art
     ix = cell.throughput["interaction"]
     assert ix["derived"] and not ix["live"] and ix["rounds"] == 0 and ix["bytes_up"] == 1.255e9
-    assert cell.throughput["interaction_s"] == pytest.approx(1.255e9 * 8 / 10e9)
+    assert cell.throughput["interaction_s"] == pytest.approx(1.255e9 * 8 / 100e9)
     md = V.render_markdown(views)
     share = 100 * V.stages(cell)["interaction"] / cell.overhead
     assert f"Moving the proof alone is {share:.0f}–{share:.0f}% of those cells" in md and "0 (derived)" in md and "— (file-verified)" in md
