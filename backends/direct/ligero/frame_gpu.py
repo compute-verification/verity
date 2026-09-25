@@ -51,13 +51,13 @@ def _torch_stream():
     """cupy launches on torch's current stream (the rows come from torch)."""
     try:
         import torch
-        if torch.cuda.is_available() and torch.cuda.is_initialized():
-            with cp.cuda.ExternalStream(torch.cuda.current_stream().cuda_stream):
-                yield
-            return
     except ImportError:
-        pass
-    yield
+        torch = None
+    if torch is not None and torch.cuda.is_available() and torch.cuda.is_initialized():
+        with cp.cuda.ExternalStream(torch.cuda.current_stream().cuda_stream):
+            yield
+    else:
+        yield
 
 
 def _dev(x):
