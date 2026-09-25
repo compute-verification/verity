@@ -93,7 +93,12 @@ def test_native_shape_range_determinism_and_roles(name: str) -> None:
     for d in (dx, dw):
         assert d.shape == (6, s.digest_elems) and d.dtype == np.int64 and (0 <= d).all() and (d < protocol.P).all()
     assert np.array_equal(dx, s.native(rows, word_bits=nb, role=hashchain.ROLES[0][2]))
-    assert not np.array_equal(dx, dw), "the x and W roles must hash differently (domain separation)"
+    if getattr(s, "tree", "frame-v3") == "vllm-v1":
+        # vllm-v1 position leaves carry no role: x rows and W columns are separated by their ports' trees and domains
+        # (vllm-v1 PROTOCOL.md section 9.7), which the statement binds; the leaf rule itself must be role-free
+        assert np.array_equal(dx, dw), "a vllm-v1 position leaf does not depend on the role"
+    else:
+        assert not np.array_equal(dx, dw), "the x and W roles must hash differently (domain separation)"
     assert len({tuple(r) for r in dx}) == 6, "distinct rows, distinct digests"
     rows2 = rows.copy()
     rows2[2, K // 2] ^= 1
