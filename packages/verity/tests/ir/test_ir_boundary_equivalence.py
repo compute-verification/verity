@@ -9,6 +9,7 @@ from __future__ import annotations
 import dataclasses
 import importlib.util
 import pathlib
+import sys
 import types
 
 import pytest
@@ -80,6 +81,7 @@ class Differential:
 def _load(stem: str):
     spec = importlib.util.spec_from_file_location(f"_differential_{stem}", pathlib.Path(__file__).with_name(f"{stem}.py"))
     mod = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = mod
     spec.loader.exec_module(mod)
     return mod
 
