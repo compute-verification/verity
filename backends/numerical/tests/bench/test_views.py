@@ -416,6 +416,42 @@ def test_cli_json_round_trips_and_parity_exit_codes(store: LocalStore, capsys: p
     assert V.main(["--root", str(store.root), "--parity", "--snapshot", "tables-none"]) == 2
 
 
+def test_the_parity_render_takes_its_snapshot_and_is_recorded_as_an_artifact(store: LocalStore, capsys: pytest.CaptureFixture[str]) -> None:
+    """The switch's gate 2 as one command: `--parity --take-snapshot --record` freezes the frozen cells as `tables --snapshot` does,
+    compares, and stores the report (every cell's artifact and both ratios) as a tables-parity/v1 artifact."""
+    a = put(store, result(t_total=4.0))
+    committed(store, t_total=0.4)
+    assert V.main(["--root", str(store.root), "--parity", "--take-snapshot", "--record", "--format", "json"]) == 0
+    out = capsys.readouterr()
+    rec = json.loads(out.out)
+    snap = T.take_snapshot(store, T.build(store))
+    assert rec["ok"] and rec["differences"] == [] and rec["snapshot"] == T.snapshot_name() and rec["snapshot_artifact"] == snap
+    assert [(c["column"], c["artifact"]) for c in rec["cells"]] == [("A-GKR", a)]
+    assert rec["cells"][0]["views_overhead"] == pytest.approx(rec["cells"][0]["tables_overhead"], rel=1e-12)
+    m = store.get_manifest(rec["artifact"])
+    assert m.kind == V.PARITY_KIND and m.refs == {"snapshot": snap, "cells": [a]} and m.meta["ok"] is True
+    assert f"parity recorded as {rec['artifact']}" in out.err
+    # the same store names the same snapshot and records the same parity artifact (content-addressed)
+    assert V.main(["--root", str(store.root), "--parity", "--snapshot", T.snapshot_name(), "--record"]) == 0
+    assert f"parity recorded as {rec['artifact']}" in capsys.readouterr().err
+    # a difference is recorded too, and exits 1
+    store.snapshot("tables-empty", [], note="empty")
+    assert V.main(["--root", str(store.root), "--parity", "--snapshot", "tables-empty"]) == 1
+    assert capsys.readouterr().out.startswith(f"parity: DIFFERENT\nlegacy-rules cell {a} is not in the snapshot")
+
+
+def test_the_published_render_drops_the_preview_banner(store: LocalStore, capsys: pytest.CaptureFixture[str]) -> None:
+    committed(store, t_total=0.4)
+    views = V.build(store)
+    assert V.render_markdown(views).startswith(f"> {V.PREVIEW}")
+    pub = V.render_markdown(views, published=True)
+    assert pub.startswith(f"> {V.PUBLISHED}") and V.PREVIEW not in pub
+    assert pub.split("\n", 1)[1] == V.render_markdown(views).split("\n", 1)[1]          # only the banner changes
+    assert V.main(["--root", str(store.root), "--published"]) == 0 and capsys.readouterr().out == pub
+    js = V.render_json(views, published=True)
+    assert js["published"] == V.PUBLISHED and "preview" not in js
+
+
 def test_finding_labels_mark_or_pull_cells_in_both_renderers(store: LocalStore) -> None:
     open_ = "UNDER RE-VERIFICATION: soundness issue R1/R2"
     art = committed(store, t_total=0.4, labels=[("finding", open_, "coordinator", "2026-09-25T07:45:00Z")])

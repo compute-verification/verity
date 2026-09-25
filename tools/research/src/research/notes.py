@@ -1228,7 +1228,9 @@ def render_lines(root: Path, now: dt.datetime, state: dict, config: Path | None 
     at or after `at`, `python -m verity_numerical.bench.tables` and `.drilldown --root STORE --format md` run with the source tree's
     workspace import roots and root on PYTHONPATH (`research env --source`, `pythonpath.tree_pythonpath`) into <out>/<stamp>-tables.md / -drilldowns.md: `RENDERED <path>`, or `RENDER-FAILED <entry>: <stderr tail>` (both
     within 10 min).  An entry with `preview = true` also renders `.views` (the approved spec's tables, a labelled preview that is
-    never the published numbers) into <stamp>-tables-preview.md.  Before rendering, the entry's store is caught up from the remote
+    never the published numbers) into <stamp>-tables-preview.md.  An entry with `published = "views"` (the switch, kb/TABLES.md) publishes
+    `.views --published` as <stamp>-tables.md and keeps the frozen `.tables` as the drill-down <stamp>-tables-frozen.md (`preview` is
+    then moot); `published = "tables"` is the default.  Before rendering, the entry's store is caught up from the remote
     with `research data refresh --payloads <kinds>` (`payloads`, default :data:`RENDER_PAYLOAD_KINDS`), so a render on a machine
     that did not write the records (the control pod) reads what the pods published, payloads included; `refresh = false` skips it,
     and a failed refresh is `RENDER-REFRESH-FAILED <entry>: ...` while the render still runs on the store as it is.  The snapshot
@@ -1249,10 +1251,12 @@ def render_lines(root: Path, now: dt.datetime, state: dict, config: Path | None 
     for e in entries if isinstance(entries, list) else []:
         at, out = str(e.get("at", "")), str(e.get("out", ""))
         key, m = f"{out}@{at}", HHMMZ_RE.fullmatch(at)
-        if not (m and out and e.get("source")):
+        bad = ("an entry needs at = \"HH:MMZ\", source and out" if not (m and out and e.get("source")) else
+               f"published = {e['published']!r}: \"tables\" or \"views\"" if e.get("published", "tables") not in ("tables", "views") else None)
+        if bad:
             if done.get(key) != "invalid":
                 done[key] = "invalid"
-                lines.append(f"{now:%H:%MZ} RENDER-FAILED {key}: an entry needs at = \"HH:MMZ\", source and out")
+                lines.append(f"{now:%H:%MZ} RENDER-FAILED {key}: {bad}")
             continue
         if now < now.replace(hour=int(m[1]) % 24, minute=int(m[2]), second=0, microsecond=0) or done.get(key) == today:
             continue
@@ -1267,10 +1271,13 @@ def render_lines(root: Path, now: dt.datetime, state: dict, config: Path | None 
             if rc != 0:
                 lines.append(f"{now:%H:%MZ} RENDER-REFRESH-FAILED {key}: {' '.join((stderr or stdout).split())[-200:] or f'rc {rc}'}")
         deadline = time.monotonic() + timeout_s
-        mods = [("tables", "tables"), ("drilldown", "drilldowns")] + ([("views", "tables-preview")] if e.get("preview") is True else [])
-        for mod, suffix in mods:
+        if e.get("published", "tables") == "views":
+            mods = [("views", "tables", ["--published"]), ("tables", "tables-frozen", []), ("drilldown", "drilldowns", [])]
+        else:
+            mods = [("tables", "tables", []), ("drilldown", "drilldowns", [])] + ([("views", "tables-preview", [])] if e.get("preview") is True else [])
+        for mod, suffix, extra in mods:
             left = deadline - time.monotonic()
-            cmd = [sys.executable, "-m", f"verity_numerical.bench.{mod}", "--root", str(store), "--format", "md"]
+            cmd = [sys.executable, "-m", f"verity_numerical.bench.{mod}", "--root", str(store), "--format", "md", *extra]
             rc, stdout, stderr = run(cmd, env, src, left) if left > 0 else (None, "", f"timeout after {timeout_s:.0f}s")
             if rc == 0:
                 f = root / out / f"{now:%Y%m%dT%H%MZ}-{suffix}.md"

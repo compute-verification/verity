@@ -123,6 +123,7 @@ __all__ = [
     "same_sku",
     "device_variant",
     "snapshot_name",
+    "take_snapshot",
 ]
 
 # --- caption constants (frozen) -----------------------------------------------------------------------------------------
@@ -1084,6 +1085,11 @@ def cell_artifacts(T: Tables) -> list[str]:
     return sorted(set(ids))
 
 
+def take_snapshot(store: Any, T: Tables) -> str:
+    """``--snapshot``: freeze :func:`cell_artifacts` as the ``dataset-snapshot/v1`` named :func:`snapshot_name`; -> its art id."""
+    return store.snapshot(snapshot_name(), cell_artifacts(T), note=f"canonical tables (frozen {FROZEN_ON}): the Table 2 cell artifacts")
+
+
 def snapshot_name(now: _dt.datetime | None = None) -> str:
     now = now or _dt.datetime.now(_dt.UTC)
     return f"tables-{now.astimezone(_dt.UTC).strftime('%Y-%m-%d')}"
@@ -1292,7 +1298,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if not members:
             print("tables: no populated cell, no snapshot written", file=sys.stderr)
             return 1
-        T.snapshot = st.snapshot(snapshot_name(), members, note=f"canonical tables (frozen {FROZEN_ON}): the Table 2 cell artifacts")
+        T.snapshot = take_snapshot(st, T)
     if ns.format == "json":
         print(json.dumps(render_json(T), indent=2, sort_keys=True, default=str))
     else:
