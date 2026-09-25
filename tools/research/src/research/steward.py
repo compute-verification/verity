@@ -12,7 +12,8 @@ keeps its mtime, since only this machine has that write.  Report age, which repo
 (`--fetch`, and every watch pass, fetch them first); the local worktree signal (uncommitted edits, `dirty`) is not read, since the
 push rule and the 20-minute checkpoint replace it.  `relaunch` bases the successor on origin's tip when the dead lane's worktree is
 not on this machine.  The stale reaper's run-custody leg fails closed here: the local run directories it reads only exist where the
-launcher ran (run custody on R2 is step f).
+launcher ran; `watch --custody-r2` (step f) takes run custody from the store's remote and the pod guard instead, and the service
+definition sets it.
 
 LEASE (`Lease`).  At most one steward reaps, routes, renders, keeps steward-state.json and commits the notes (I5).  The lease is one
 JSON object, `steward/lease.json` in the store's bucket (`--lease` / `--lease store`; for an fs remote, the same key under its
@@ -296,7 +297,7 @@ def holder(doc: dict | None, now: float | None = None) -> str:
 
 # ---- the service definition ----------------------------------------------------------------------------------------------------------
 
-DEFAULT_WATCH = ["--every", "2", "--pods", "--reap", "--lease", "--standby", "--liveness", "git", "--fetch", "--sync",
+DEFAULT_WATCH = ["--every", "2", "--pods", "--reap", "--custody-r2", "--lease", "--standby", "--liveness", "git", "--fetch", "--sync",
                  "--stale-min", "12", "--since-hours", "8", "--idle-min", "5", "--exclude", "vllm*"]
 SYSTEMD_NAME = "research-steward.service"
 LAUNCHD_LABEL = "com.research.steward"

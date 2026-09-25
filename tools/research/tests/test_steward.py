@@ -151,7 +151,7 @@ def test_e5_relaunch_from_origin_when_the_machine_is_gone(notes_pair, code, monk
 def test_run_custody_fails_closed_without_the_launchers_records(monkeypatch, tmp_path):
     monkeypatch.setenv(steward.LIVENESS_ENV, "git")
     ok, why = notes.run_custody("pod123", runs_dir=tmp_path, registered=lambda _: True)
-    assert not ok and "step f" in why
+    assert not ok and "--custody-r2" in why
 
 
 # ---- the lease ---------------------------------------------------------------------------------------------------------------------------
@@ -295,7 +295,7 @@ def test_e4_service_definitions_restart_and_start_at_boot(tmp_path):
     assert "Restart=always" in u and "WantedBy=default.target" in u and "EnvironmentFile=-/etc/research/r2.env" in u
     exec_ = next(x for x in u.splitlines() if x.startswith("ExecStart="))
     assert exec_.startswith("ExecStart=/opt/venv/bin/python -m research notes watch ")
-    for flag in ("--lease", "--standby", "--liveness git", "--reap", "--sync", "--guardian-log none", "'--exclude' 'vllm*'"):
+    for flag in ("--lease", "--standby", "--liveness git", "--reap", "--custody-r2", "--sync", "--guardian-log none", "'--exclude' 'vllm*'"):
         assert flag.replace("'", "") in exec_.replace("'", "")
     p = steward.unit("launchd", "/usr/bin/python3", Path("/Users/d/verity"), log=tmp_path / "steward.log")
     doc = plistlib.loads(p.encode())

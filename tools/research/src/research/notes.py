@@ -1027,7 +1027,7 @@ def run_custody(pod_id: str, runs_dir: Path | None = None, registered: Callable[
 
     if steward.git_liveness():
         return False, ("run custody not checked: with --liveness git, runs launched from other machines are not in this host's run "
-                       "records (custody from R2 is step f)")
+                       "records; watch --custody-r2 takes it from the store's remote and the pod guard")
     registered = registered or _store_attempt()
     n = 0
     for rj in sorted((runs_dir or runs_root()).glob("*/remote.json")):
@@ -1041,6 +1041,17 @@ def run_custody(pod_id: str, runs_dir: Path | None = None, registered: Callable[
         if not (rj.parent / "preserved.json").exists() and not registered(rj.parent.name):
             return False, f"run {rj.parent.name} on it is neither fetched nor in the store -> research fetch --all {rj.parent.name}"
     return True, f"{n} run(s) on it fetched or registered"
+
+
+def run_custody_r2(pod_id: str) -> tuple[bool, str]:
+    """Custody (b) from any machine (`watch --custody-r2`): `pods.drain.pod_custody` -- the catalog refreshed from the store's remote,
+    every attempt tied to the pod preserved there, and the pod guard's verdict that every run dir on it has custody (.fetched or
+    .custody).  Needs neither ~/.research/runs nor the machine that launched the runs."""
+    from .pods.drain import pod_custody  # noqa: PLC0415
+    from .store.local import LocalStore  # noqa: PLC0415
+
+    ok, why, _ = pod_custody(LocalStore(None), pod_id, refresh=True, probe=False)
+    return ok, why
 
 
 def reap_custody(root: Path, lane: str, pod_id: str, arts: Callable[[list[str]], tuple[bool, str]] = art_custody,
@@ -1684,6 +1695,8 @@ def _main(argv: list[str]) -> int:
                                                         "and idle pods of STALE lanes once custody passes")
     wa.add_argument("--reap-grace-min", type=float, default=10)
     wa.add_argument("--reap-stale-min", type=float, default=30, help="--reap: a STALE lane's pod idle this long is terminated (custody permitting)")
+    wa.add_argument("--custody-r2", action="store_true", help="--reap: a pod's run custody comes from the store's remote and the pod guard "
+                                                              "(run_custody_r2), not from ~/.research/runs on this machine")
     wa.add_argument("--guardian-log", default=str(GUARDIAN_LOG), help="the laptop guardian's log, whose KILLED lines go to the owning "
                                                                         "lane's inbox ('none': off)")
     wa.add_argument("--lease", nargs="?", const="store", default=None, metavar="store|PATH",
@@ -1858,7 +1871,9 @@ def _watch(ns: argparse.Namespace, root: Path, repo: Path | None, run: Callable[
             alert, runway_last = runway_alert(runway, ns.runway_h, runway_last, now)
             more += [line, *alert, *reap_lines(root, rows, now, ns.reap_grace_min, pods_noted, reap=ns.reap and acting)]
             if acting:
-                more += [*steward_rule("reap-stale", stale_reap_lines, root, rows, now, ns.reap_stale_min, state, reap=ns.reap),
+                more += [*steward_rule("reap-stale", stale_reap_lines, root, rows, now, ns.reap_stale_min, state, reap=ns.reap,
+                                       custody=(lambda lane, pod: reap_custody(root, lane, pod["id"], runs=run_custody_r2))
+                                       if ns.custody_r2 else None),
                          *steward_rule("budget", budget_lines, root, fleet, now, state)]
         if acting:
             more += steward_rule("overdue", overdue_lines, root, rows, now, state)

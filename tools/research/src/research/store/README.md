@@ -504,6 +504,27 @@ status.json is missing or not terminal (`--force` overrides, for the CLI only).
 `research fetch RUN --all` continues to work as before; `research data pull` complements it by moving store objects.
 Active run state stays in the run registry; the store only ever sees completed/failed attempts.
 
+### 10.1 Run custody on the remote — `research run --on M --custody-r2` (`custody.py`)
+
+With `--custody-r2` the run's custody does not depend on the launcher's disk: the launcher mints an action-scoped temporary key
+(§7.1, local signing; `--custody-ttl`, default 6h, must outlast the run; no `DeleteObject`/`CopyObject`) and stages it with a
+secret-free store.toml under `<root>/requests/<run id>/custody/` (mode 600; never in request.json, remote.json or the workload's
+environment). Without the parent key on the launcher the launch is refused. After the workload exits, the runner publishes the
+attempt with one more output, `outputs.run_record`: a `run-record/v1` tree of every file in the run dir (stdout.log, stderr.log,
+launcher.log, job.json, status.json, outputs; markers excluded), pushes and verifies it (`preserved.check`, head; retried), deletes
+the key, and writes `<run dir>/.custody` (`research/run-custody/v0.1`: `verified_from`, the file list with sizes and sha256).
+The marker is written only when every file now in the run dir is in the record by content; after it the runner writes nothing more
+there. Without the flag attempts are unchanged (no `run_record`).
+
+- The pod guard accepts a valid `.custody` like a valid `.fetched`: every file listed, none changed at or after `verified_from`.
+- `research data custody RUN [--publish]` checks the same predicate from any machine (and rewrites the marker); `--publish` puts a
+  local run dir on the remote first. `research data custody --triage [--verify]` sorts a runs root into `fetched`, `r2`,
+  `attempt-no-record`, `attempt-unpreserved`, `no-custody`, `running`, `never-ran`, `waived`; a waiver or never-ran verdict is a
+  label: `research data label RUN custody waived|never-ran --by WHO`.
+- `research pods drain|unpreserved --custody-r2` and `research notes watch --reap --custody-r2` (`pods.drain.pod_custody`) refresh
+  the catalog from the remote, require every attempt tied to the pod to be preserved, and read the pod guard's state for its run
+  dirs: without a guard state younger than 10 min, custody is unknown and nothing is terminated.
+
 ## 11. Known kinds (`kinds.py`)
 
 ~~~text
@@ -515,6 +536,7 @@ verification-verdict/v1  meta {result: PASS|FAIL, verifier, detail}; refs.proof,
 proof/v1                 payload = proof bytes; meta {statement_digest, backend, params}
 fixture/v1               a repo-replicated input (golden records, instances); payload file/tree
 run-files/v1             the files a result.json pointed at, as one tree
+run-record/v1            every file of a run dir (logs included) as one tree; outputs.run_record of a --custody-r2 attempt (§10.1)
 telemetry/v1             events.jsonl or resources.jsonl of an attempt
 redteam-findings/v1      meta {findings: [...]}; refs.target
 ledger-row/v1            one frozen overhead-ledger row whose run is not an attempt here: meta = the ledger/v1 row; payload null;

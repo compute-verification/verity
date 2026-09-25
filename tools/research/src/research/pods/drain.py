@@ -9,6 +9,8 @@
         terminated, 1 = refused (unpreserved Attempts listed, pod left running), 2 = usage / machine unknown / API error.
     research pods terminate <pod-id> --require-preserved [--force --reason TEXT]
         `drain` by pod id (part.main routes it here).
+    --custody-r2 (either verb): from any machine -- the catalog is refreshed from the remote first, and `pod_custody` must pass too:
+        the pod guard's fresh state says every run dir on the pod has custody (.fetched or .custody; store.custody).
 
 Machine -> Attempt link.  `execution.machine` / the indexed condition `exec.machine` = the `machines.toml` name a `research run --on`
 ran on (recorded from job.json `run.remote.machine`, `env.KEYS`); older manifests carry it at `execution.remote.machine`.  Runs
@@ -27,7 +29,7 @@ import re
 import sys
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from .. import remote
 from ..store import preserved as P
@@ -131,6 +133,9 @@ def format_report(rep: dict[str, Any]) -> list[str]:
     if rep.get("check") and rep["check"].get("reason"):
         lines.append(f"  remote: {rep['check']['reason']}")
     for aid in rep["unpreserved"]:
+        if aid not in rep["attempts"]:                 # the --custody-r2 leg (pod_custody)
+            lines.append(f"  NOT preserved  {aid}")
+            continue
         a = rep["attempts"][aid]
         why = a.get("error") or (("missing: " + ", ".join(a["missing_names"])) if a.get("missing_names") else "attempt manifest not on the remote")
         lines.append(f"  NOT preserved  {aid}  ({', '.join(a['matched_by'])})  {why}")
@@ -141,6 +146,65 @@ def format_report(rep: dict[str, Any]) -> list[str]:
     return lines
 
 
+GUARD_STATE_MAX_AGE_S = 600       # a guard ticks every minute; older state is a dead guard's
+
+
+def guard_state(pod_id: str | None, root: str, timeout: int = 30) -> tuple[dict[str, Any] | None, str]:
+    """The pod guard's <root>/guard/state.json (read-only, over ssh), or (None, why not)."""
+    if not pod_id:
+        return None, "no pod id"
+    try:
+        from . import runpod
+
+        pod = runpod.get(pod_id)
+        tgt = runpod.ssh_target(pod) if pod and (pod.get("desiredStatus") or "").upper() == "RUNNING" else None
+        if tgt is None:
+            return None, f"pod {pod_id} is not RUNNING with ssh"
+        r = remote.ssh_run(remote.ssh_argv(*tgt), ["cat", f"{root.rstrip('/')}/guard/state.json"], timeout=timeout)
+    except Exception as e:  # noqa: BLE001
+        return None, f"{type(e).__name__}: {str(e)[:120]}"
+    if r.returncode != 0:
+        return None, "no guard state on the pod (no guard = N in its machines entry?)"
+    try:
+        doc = json.loads(r.stdout)
+    except ValueError:
+        return None, "unreadable guard state"
+    return (doc, "") if isinstance(doc, dict) else (None, "unreadable guard state")
+
+
+def pod_custody(st: LocalStore, target: str, *, refresh: bool = True, probe: bool = True, mode: str = "recorded", now: float | None = None,
+                state: Callable[[str | None, str], tuple[dict[str, Any] | None, str]] = guard_state) -> tuple[bool, str, dict[str, Any]]:
+    """Custody of everything on a pod, from any machine (--custody-r2): the catalog refreshed from the store's remote (so attempts published
+    on the pod or by another launcher are seen), every attempt tied to the pod PRESERVED (`report`), and the pod guard's own verdict that
+    every run dir under <root>/runs has custody (a valid .fetched or .custody; pods/sh/pod_guard.sh).  Without a fresh guard state the
+    pod's unpublished run dirs are unknown, and custody does not pass.  -> (ok, why, detail)."""
+    t = resolve_target(target)
+    detail: dict[str, Any] = {"target": target, "pod_id": t["pod_id"], "refresh": None, "attempts": None, "guard": None}
+    if refresh:
+        try:
+            r = st.refresh()
+            detail["refresh"] = {k: r.get(k) for k in ("manifests", "attempts", "labels", "errors")}
+        except Exception as e:  # noqa: BLE001
+            return False, f"catalog refresh from the remote failed ({type(e).__name__}: {str(e)[:100]})", detail
+    rep = report(st, target, mode=mode, probe=probe)
+    detail["attempts"] = {"n": rep["n_attempts"], "unpreserved": rep["unpreserved"]}
+    if rep["unpreserved"]:
+        return False, f"{len(rep['unpreserved'])} attempt(s) on it not preserved (first {rep['unpreserved'][0]}) -> research data preserved RUN", detail
+    root = (t.get("entry") or {}).get("root") or "/workspace/research"
+    gs, why = state(t["pod_id"], root)
+    if gs is None:
+        detail["guard"] = {"error": why}
+        return False, f"its run dirs' custody is unknown: {why}", detail
+    age = (time.time() if now is None else now) - float(gs.get("updated_epoch") or 0)
+    detail["guard"] = {"verdict": gs.get("verdict"), "age_s": round(age), "unfetched": gs.get("unfetched") or [], "runs": gs.get("runs")}
+    if age > GUARD_STATE_MAX_AGE_S:
+        return False, f"the pod guard's state is {age / 60:.0f} min old (guard dead?): its run dirs' custody is unknown", detail
+    if gs.get("unfetched"):
+        u = gs["unfetched"][0]
+        return False, f"{len(gs['unfetched'])} run dir(s) on it without custody (first {u.get('run')}: {u.get('why')})", detail
+    return True, f"{rep['n_attempts']} attempt(s) preserved, {gs.get('runs', 0)} run dir(s) with custody (guard)", detail
+
+
 def log_drain(entry: dict[str, Any], path: Path | None = None) -> None:
     path = path or drain_log_path()
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -149,14 +213,22 @@ def log_drain(entry: dict[str, Any], path: Path | None = None) -> None:
 
 
 def drain(st: LocalStore, target: str, *, mode: str = "head", force: bool = False, reason: str | None = None, hostname: str | None = None,
-          probe: bool = True, terminate=None, log_path: Path | None = None) -> tuple[int, dict[str, Any]]:
+          probe: bool = True, terminate=None, log_path: Path | None = None, custody_r2: bool = False,
+          pod_custody_fn: Callable[..., tuple[bool, str, dict[str, Any]]] | None = None) -> tuple[int, dict[str, Any]]:
     """Report, then terminate unless something is unpreserved (module docstring).  `terminate(pod_id)` defaults to runpod's; the
-    decision and its reason are appended to `log_path`.  Returns (exit code, report)."""
+    decision and its reason are appended to `log_path`.  `custody_r2`: the catalog is refreshed from the remote first and `pod_custody`
+    must pass too (every run dir on the pod has custody, by the pod guard's verdict).  Returns (exit code, report)."""
     log_path = log_path or drain_log_path()
+    if custody_r2:
+        ok, why, detail = (pod_custody_fn or pod_custody)(st, target, refresh=True, probe=probe)
     rep = report(st, target, mode=mode, hostname=hostname, probe=probe)
     if not rep["pod_id"]:
         rep["decision"] = {"action": "refused", "why": f"{target!r} is neither a machines.toml entry nor a pod id"}
         return 2, rep
+    if custody_r2:
+        rep["custody_r2"] = {"ok": ok, "why": why, **detail}
+        if not ok and why not in rep["unpreserved"]:
+            rep["unpreserved"].append(f"custody: {why}")
     blocked = bool(rep["unpreserved"])
     if blocked and not force:
         rep["decision"] = {"action": "refused", "why": f"{len(rep['unpreserved'])} attempt(s) on the machine are not preserved; `research data push` them "
@@ -197,6 +269,8 @@ def _parser(prog: str, drain_flags: bool):
     ap.add_argument("--hostname", default=None, help="the pod's container hostname (default: probed over ssh when the pod is RUNNING)")
     ap.add_argument("--no-probe", action="store_true", help="do not ssh the pod for its hostname")
     ap.add_argument("--json", action="store_true")
+    ap.add_argument("--custody-r2", action="store_true", help="from any machine: refresh the catalog from the remote first, and require every run dir "
+                                                               "on the pod to have custody by the pod guard's verdict (.fetched or .custody)")
     if drain_flags:
         ap.add_argument("--force", action="store_true", help="terminate although attempts are unpreserved (needs --reason; logged)")
         ap.add_argument("--reason", default=None, help="why the override is acceptable (goes to the drain log and the report)")
@@ -217,13 +291,19 @@ def main(argv: list[str]) -> int:
         print(f"research pods {verb}: no store: {e}", file=sys.stderr)
         return 2
     if verb == "unpreserved":
+        custody = pod_custody(st, ns.target, refresh=True, probe=not ns.no_probe) if ns.custody_r2 else None
         rep = report(st, ns.target, mode=ns.mode, hostname=ns.hostname, probe=not ns.no_probe)
+        if custody is not None:
+            rep["custody_r2"] = {"ok": custody[0], "why": custody[1], **custody[2]}
+            if not custody[0]:
+                rep["unpreserved"].append(f"custody: {custody[1]}")
         if not rep["pod_id"]:
             print(f"research pods unpreserved: {ns.target!r} is neither a machines.toml entry nor a pod id", file=sys.stderr)
             return 2
         print(json.dumps(rep, indent=2, sort_keys=True) if ns.json else "\n".join(format_report(rep)))
         return 1 if rep["unpreserved"] else 0
-    rc, rep = drain(st, ns.target, mode=ns.mode, force=ns.force, reason=ns.reason, hostname=ns.hostname, probe=not ns.no_probe)
+    rc, rep = drain(st, ns.target, mode=ns.mode, force=ns.force, reason=ns.reason, hostname=ns.hostname, probe=not ns.no_probe,
+                    custody_r2=ns.custody_r2)
     if ns.json:
         print(json.dumps(rep, indent=2, sort_keys=True))
     else:
