@@ -536,8 +536,49 @@ pub static BLAKE3_XOB: LeafScheme = LeafScheme {
     leaf_bytes: blake3_leaf_bytes,
 };
 
+// vllm-v1 (`leaf/vllm_v1.py`, lane b-ligero-vllm-v1): the relation proves every compression of the position leaf
+// `SHA-256("verity/pos-leaf/v0" || u64be(len) || row_bytes)` and publishes the digest as 16 limbs (big-endian words, low
+// limb first); the leaf value IS those 32 bytes, the tree leaf itself (`vllm_v1.rs` folds and binds the trees).  A
+// malformed row (a limb >= 2^16) maps to the tagged SHA-256 of its elements.
+const VLLM_MALFORMED_TAG: &[u8] = b"verity/vllm-v1-leaf/malformed-digest/v1\0";
+const VLLM_DIGEST_ELEMS: usize = 16;
+
+fn vllm_leaf_bytes(elems: &[u32]) -> Vec<u8> {
+    if elems.len() != VLLM_DIGEST_ELEMS || elems.iter().any(|&x| x >= BABYBEAR_P) {
+        return Vec::new();
+    }
+    if elems.iter().any(|&x| x >= 1 << 16) {
+        let mut h = crate::hash::Sha256::new();
+        h.update(VLLM_MALFORMED_TAG);
+        for &x in elems {
+            h.update(&x.to_le_bytes());
+        }
+        return h.finalize().to_vec();
+    }
+    let mut out = Vec::with_capacity(32);
+    for w in 0..8 {
+        out.extend_from_slice(&(elems[2 * w] | (elems[2 * w + 1] << 16)).to_be_bytes());
+    }
+    out
+}
+
+/// `leaf.vllm_v1.VllmV1Leaf`: `schema` / `params_sha256` are the module's `SCHEMA` / `params_sha256()`.
+pub static VLLM_V1: LeafScheme = LeafScheme {
+    name: "vllm-v1",
+    display: "vllm-v1 position leaf (SHA-256)",
+    schema: "vllm-v1/pos-leaf/v0",
+    params_sha256: "e613f010bd33edecbb4a00b5fb62d9ede1a68a31a5e791e71cb584f6e42ba314",
+    digest_elems: VLLM_DIGEST_ELEMS,
+    leaf_bytes: vllm_leaf_bytes,
+};
+
+/// Whether statements of `leaf` commit under `vllm-v1` port trees (`vllm_v1.rs`) instead of frame-v3 indexed trees.
+pub fn is_vllm(leaf: &LeafScheme) -> bool {
+    std::ptr::eq(leaf, &VLLM_V1)
+}
+
 /// Every scheme this build knows.
-pub static SCHEMES: &[&LeafScheme] = &[&POSEIDON2, &BLAKE3, &BLAKE3_XOB, &SHA256, &AJTAI_N64, &AJTAI_N128];
+pub static SCHEMES: &[&LeafScheme] = &[&POSEIDON2, &BLAKE3, &BLAKE3_XOB, &SHA256, &VLLM_V1, &AJTAI_N64, &AJTAI_N128];
 
 /// `leaf.registry.DEFAULT` / `ALIASES`: a relation string without a suffix, or with `+hash`, names Poseidon2.
 pub const DEFAULT: &str = "poseidon2";
