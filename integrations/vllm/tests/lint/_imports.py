@@ -8,7 +8,8 @@ resolves to the submodule ``pkg.name`` when that module exists, else to ``pkg``.
 is ``pipeline``, ``check|properties``, ``acquire``, ``observe|commit``, ``engine``, ``query|correspondence``,
 ``program``, ``collectives``, ``config``, core, with ``tests`` above ``pipeline``.  The modules bound for core sit in
 ``core``, and ``target_family`` (bound for ``config.py``) sits in ``config``.  ``engine.hooks``, the one owner of
-runtime patches, imports nothing from the package and sits in ``core`` so every layer may call it.  Peers in one layer
+runtime patches, and ``engine.env``, the one writer of vLLM's env pins, import nothing from the package and sit in
+``core`` so every layer may call them.  Peers in one layer
 (``check|properties``, ``observe|commit``, ``query|correspondence``) may import each other; P5 is the only rule that
 restricts a peer edge.
 """
@@ -40,6 +41,7 @@ LAYER = {
     "verity_vllm.config": "config",
     "verity_vllm.target_family": "config",                     # -> config.py
     "verity_vllm.engine.hooks": "core",                        # the patch owner; imports nothing from verity_vllm
+    "verity_vllm.engine.env": "core",                          # the vLLM env pins; imports nothing from verity_vllm
     "verity_vllm.query.boundary": "core",                      # -> verity.ir
     "verity_vllm.query.partition": "core",                     # -> verity.ir
     "verity_vllm.program.frontend.liveness": "core",           # -> verity.ir
