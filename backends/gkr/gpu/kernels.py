@@ -755,6 +755,23 @@ if triton is not None:
         tl.store(hi_ptr + out, hi)
 
     @triton.jit
+    def lookup_mults_kernel(v_ptr, kmap_ptr, trows_ptr, m_ptr, bad_ptr, n, nkeys, W: tl.constexpr, BLOCK: tl.constexpr):
+        """``m[kmap[v[i, 0]]] += 1`` for every query tuple ``v[i]`` ``(n, W)`` that equals its key's table row, and
+        ``bad += #`` the others (key out of range, no row, or a column differs).  Column 0 matches by the map."""
+        i = tl.program_id(0).to(tl.int64) * BLOCK + tl.arange(0, BLOCK)
+        mi = i < n
+        key = tl.load(v_ptr + i * W, mask=mi, other=0).to(tl.int64)
+        ok = mi & (key >= 0) & (key < nkeys)
+        idx = tl.load(kmap_ptr + key, mask=ok, other=-1).to(tl.int64)
+        ok = ok & (idx >= 0)
+        for c in tl.static_range(1, W):
+            tv = tl.load(trows_ptr + idx * W + c, mask=ok, other=0).to(tl.int64)
+            qv = tl.load(v_ptr + i * W + c, mask=ok, other=0).to(tl.int64)
+            ok = ok & (tv == qv)
+        tl.atomic_add(m_ptr + idx, 1, mask=ok)
+        tl.atomic_add(bad_ptr, tl.sum((mi & ~ok).to(tl.int32), axis=0))
+
+    @triton.jit
     def leaf_q_kernel(v_ptr, b_ptr, z_ptr, out_ptr, n, w, BLOCK: tl.constexpr, FK: tl.constexpr):
         """LogUp denominators ``out[j] = z - Σ_k β_k v[j, k]`` for base ``v`` ``(n, w)`` (canonical, any int dtype),
         ``b_ptr`` = ``β_k R mod p`` ``(w, 6)``, ``z`` ``(6,)`` canonical; ``out`` ``(n, 6)`` int32."""
@@ -926,6 +943,23 @@ def leaf_q(v: torch.Tensor, betas: torch.Tensor, z: torch.Tensor, out: torch.Ten
     leaf_q_kernel[((n + BLOCK - 1) // BLOCK,)](v.contiguous().view(-1), _mont(betas).contiguous().view(-1),
                                                (z.to(torch.int64) % P).contiguous().view(-1), out.view(-1), n, w,
                                                BLOCK=BLOCK, num_warps=4, FK=FIELD_KEY)
+
+
+def lookup_mults(values: list[torch.Tensor], kmap: torch.Tensor, trows: torch.Tensor) -> tuple[torch.Tensor, int]:
+    """``logup.multiplicities`` over a key -> row map in one pass per query matrix: ``(m`` int64 ``(rows,)``, the number
+    of tuples that are not table rows``)``, one read-back."""
+    nrows, w = trows.shape
+    trows = trows.contiguous()
+    m = torch.zeros((nrows,), dtype=torch.int32, device=trows.device)
+    bad = torch.zeros((1,), dtype=torch.int32, device=trows.device)
+    BLOCK = 512
+    for v in values:
+        assert v.shape[1] == w and v.shape[0] < 2**31
+        if v.shape[0]:
+            v = v.contiguous()
+            lookup_mults_kernel[((v.shape[0] + BLOCK - 1) // BLOCK,)](v, kmap, trows, m, bad, v.shape[0], kmap.shape[0],
+                                                                      W=w, BLOCK=BLOCK, num_warps=4)
+    return m.to(torch.int64), int(bad.item())
 
 
 def eq_rows_dot(e: torch.Tensor, rows: torch.Tensor, split: int | None = None) -> torch.Tensor:
