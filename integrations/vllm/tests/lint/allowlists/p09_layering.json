@@ -1,7 +1,7 @@
 {
   "rule": "P9 (dependency direction, one patch owner)",
   "entries": [
-    {"file": "verity_vllm", "kind": "module-cycle", "symbol": "<package>", "detail": "check.match.batch_decomp <-> check.match.global_match <-> check.match.global_match_fast <-> check.match.program_compare <-> pipeline.global_program <-> program.registry.lifted <-> program.registry.moe_pad"},
+    {"file": "verity_vllm", "kind": "module-cycle", "symbol": "<package>", "detail": "check.match.attribution <-> check.match.batch_decomp <-> check.match.chronology <-> check.match.declaration <-> check.match.engine_steps <-> check.match.global_match <-> check.match.global_match_fast <-> check.match.match_run <-> check.match.per_request <-> check.match.program_compare <-> check.match.sampler_geometry <-> pipeline.global_program <-> program.registry.lifted <-> program.registry.moe_pad"},
     {"file": "verity_vllm", "kind": "module-cycle", "symbol": "<package>", "detail": "check.replay.replay <-> check.replay.vu_query"},
     {"file": "verity_vllm", "kind": "module-cycle", "symbol": "<package>", "detail": "commit.committer.leafhash <-> commit.committer.native_collect <-> commit.committer.native_host"},
     {"file": "verity_vllm", "kind": "module-cycle", "symbol": "<package>", "detail": "engine.profiles.dense_generic <-> engine.profiles.generic"},
@@ -41,8 +41,8 @@
     {"file": "verity_vllm/acquire/sources/moe_source.py", "kind": "runtime-patch", "symbol": "MoeBlockSource.install", "detail": "setattr(<mod>, *)"},
     {"file": "verity_vllm/acquire/sources/partial_source.py", "kind": "runtime-patch", "symbol": "TPPartialSource.install", "detail": "setattr(<mod>, *)"},
     {"file": "verity_vllm/check/match/batch_decomp.py", "kind": "layer", "symbol": "<module>", "detail": "check.match.batch_decomp -> pipeline.gc_tuning"},
+    {"file": "verity_vllm/check/match/declaration.py", "kind": "layer", "symbol": "<module>", "detail": "check.match.declaration -> pipeline.global_program"},
     {"file": "verity_vllm/check/match/global_match.py", "kind": "layer", "symbol": "<module>", "detail": "check.match.global_match -> pipeline.gc_tuning"},
-    {"file": "verity_vllm/check/match/global_match.py", "kind": "layer", "symbol": "<module>", "detail": "check.match.global_match -> pipeline.global_program"},
     {"file": "verity_vllm/check/match/rank_match.py", "kind": "layer", "symbol": "<module>", "detail": "check.match.rank_match -> pipeline.build"},
     {"file": "verity_vllm/check/weights_of_record.py", "kind": "layer", "symbol": "<module>", "detail": "check.weights_of_record -> pipeline.experiment"},
     {"file": "verity_vllm/collectives/embedding_shard.py", "kind": "layer", "symbol": "<module>", "detail": "collectives.embedding_shard -> observe.events"},

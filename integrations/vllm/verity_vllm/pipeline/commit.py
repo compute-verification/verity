@@ -474,7 +474,8 @@ def bootstrap_ci(xs: list[float], n: int = 4000, seed: int = 0) -> tuple[float, 
     return means[int(0.025 * n)], means[int(0.975 * n) - 1]
 
 
-from verity_vllm.check.commit_verdict import REQUIRED_CLASSES_DEFAULT, class_coverage, commit_verdict  # noqa: E402  (X-03/REL-02 fail-closed verdict)
+from verity_vllm.check.commit_rules import REQUIRED_CLASSES_DEFAULT, class_coverage, required_classes_default  # noqa: E402
+from verity_vllm.check.verdict import commit_verdict  # noqa: E402  (X-03/REL-02 fail-closed verdict)
 
 
 def tensor_digests(com, out, pair: int, prev: dict) -> int:
@@ -1313,7 +1314,6 @@ def main(argv: list[str] | None = None) -> None:
     # R13 hopper: the attention implementation the engine executes (FA2 / FA3) -- selects the hidden class the verdict requires and the tap class
     fa_version = va.observed_flash_attn_version(eng.model)
     if not required_classes_cli:
-        from verity_vllm.check.commit_verdict import required_classes_default
         required_classes = required_classes_default(fa_version)
         if compiled_kernels is not None:
             # [R15 compiled S3] the execution's leaf class is P_compiled's kernel buffers, not the eager module outputs (never fired: not wrapped)

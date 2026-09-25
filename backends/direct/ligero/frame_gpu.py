@@ -18,7 +18,7 @@ from pathlib import Path
 import numpy as np
 
 ENABLED = os.environ.get("LIGERO_COMMIT_GPU", "1") != "0"
-ROW_SCHEMES = ("blake3",)              # leaf schemes whose row digests run here
+ROW_SCHEMES = ("blake3", "blake3-xob")  # leaf schemes whose row digests run here (one leaf, two circuits)
 
 try:
     _shared = str(Path(__file__).resolve().parents[2] / "shared")
@@ -144,7 +144,7 @@ def row_tree(name: str, binding: bytes, rows, *, word_bits: int, role: int, sche
     int64 host) from ``rows`` (N, n_words) words (device or host).  ``expect``: digests (host or device) that must be
     these."""
     from .auth import LIMITS, OWNER, TreeRef, WordTree, domain_for
-    if scheme.name != "blake3":
+    if scheme.name not in ROW_SCHEMES:
         raise ValueError(f"no GPU row digest for leaf scheme {scheme.name!r}")
     with _torch_stream():
         (cvs, roots), _ = blake3_rows(rows, word_bits=word_bits, role=role)

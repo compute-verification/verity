@@ -79,14 +79,14 @@ def _evaluate_returns(program: Program, arrays: list[np.ndarray]) -> list[int]:
     (7 * 2.0 ** -9, 0x07), (7.5 * 2.0 ** -9, 0x08), (6.5 * 2.0 ** -9, 0x06), (0.0, 0x00), (-0.0, 0x80),
 ])
 def test_f32_to_e4m3_sat_words(value: float, word: int) -> None:
-    assert F.f32_to_e4m3_sat_bits(int(P.bits_of(np.float32(value)))) == word
+    assert F.F32ToE4m3Sat.evaluate(int(P.bits_of(np.float32(value)))) == word
 
 
 def test_f32_to_e4m3_sat_nan_is_canonical_positive() -> None:
     # measured on the H100 over all 2^32 words: every NaN input (either sign) -> 0x7F
-    assert F.f32_to_e4m3_sat_bits(0x7FC00000) == 0x7F
-    assert F.f32_to_e4m3_sat_bits(0xFFC00000) == 0x7F
-    assert F.f32_to_e4m3_sat_bits(0x7F800001) == 0x7F
+    assert F.F32ToE4m3Sat.evaluate(0x7FC00000) == 0x7F
+    assert F.F32ToE4m3Sat.evaluate(0xFFC00000) == 0x7F
+    assert F.F32ToE4m3Sat.evaluate(0x7F800001) == 0x7F
 
 
 def test_numpy_twin_matches_scalar_model() -> None:
@@ -94,7 +94,7 @@ def test_numpy_twin_matches_scalar_model() -> None:
     u = rng.integers(0, 1 << 32, 20000, dtype=np.uint64).astype(np.uint32)
     u = np.concatenate([u, (np.arange(0, 1 << 16, 7, dtype=np.uint32) << 16)])  # a spread of bf16-representable words
     got = F.np_f32_to_e4m3_sat(u.view(np.float32))
-    want = np.array([F.f32_to_e4m3_sat_bits(int(w)) for w in u], dtype=np.uint8)
+    want = np.array([F.F32ToE4m3Sat.evaluate(int(w)) for w in u], dtype=np.uint8)
     assert np.array_equal(got, want)
 
 

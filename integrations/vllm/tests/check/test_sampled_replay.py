@@ -403,7 +403,7 @@ def _bnd(n_req):
 def test_verdict_c2_of_record_replay_plus_linkage_replaces_the_oracle_gate_at_b2():
     """DECISIONS-2 §4 C2 / M-0356: at B>=2 a complete sampled replay + linked boundaries PASS without any Match oracle; a replay mismatch or
     an unlinked boundary is a named FAIL at any B; a partial replay alone does not attribute (F-cb-23 stays closed)."""
-    from verity_vllm.check.commit_verdict import commit_verdict
+    from verity_vllm.check.verdict import commit_verdict
     base = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64},
             "value_correspondence": {"method": "sampled-exact-replay(complete) + boundary-linkage", "result": True}}
     ok_sr = {"result": True, "grade": "complete", "why": None}
@@ -448,7 +448,7 @@ def test_partial_replay_with_named_gaps_is_covered_by_a_complete_form_b_coord_m0
     unevaluated stratum is NAMED (family | module | reason) + a COMPLETE form (B) oracle compare = PASS carrying the named gap; the same
     partial replay without form (B), with a form (B) mismatch / incomplete attribution, with an UNNAMED gap, or with any replay mismatch =
     FAIL (O1 stands: absence of both forms never passes)."""
-    from verity_vllm.check.commit_verdict import commit_verdict
+    from verity_vllm.check.verdict import commit_verdict
     base = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64},
             "value_correspondence": {"method": "sampled-exact-replay(partial) + boundary-linkage + oracle", "result": True},
             "boundary_linkage": {"result": True, "pairs": 6, "linked": 6, "unlinked_n": 0},
@@ -1645,7 +1645,7 @@ def test_a_fault_on_some_picks_inside_an_evaluated_stratum_is_partial_named_neve
     assert RC.why_class("committed bytes not retained ...") in RC.WHY_CLASSES_FAULT and "missing-input" not in RC.WHY_CLASSES_BY_NAME
     assert all(x["why_class"] == "missing-input" for x in rep["not_evaluated"])
     # the row verdict: fail closed on the partial replay, the fault in the text (no named-gap lift: no fully unevaluated stratum)
-    from verity_vllm.check.commit_verdict import commit_verdict
+    from verity_vllm.check.verdict import commit_verdict
     base = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64},
             "value_correspondence": {"method": "sampled-exact-replay(partial) + boundary-linkage", "result": None},
             "boundary_linkage": {"result": True, "pairs": 6, "linked": 6, "unlinked_n": 0},

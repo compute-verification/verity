@@ -19,7 +19,8 @@ import json
 
 import pytest
 
-from verity_vllm.check.commit_verdict import _query_population_scope, commit_verdict
+from verity_vllm.check.c2_rules import _query_population_scope
+from verity_vllm.check.verdict import commit_verdict
 from verity_vllm.check.replay import coverage as COV, driver as SR, index as IX, population as POP
 from verity_vllm.check.replay import replay_codes as RC
 from verity_vllm.program.kernels import rows as RK

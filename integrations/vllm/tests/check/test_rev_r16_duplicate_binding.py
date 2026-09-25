@@ -130,7 +130,7 @@ def test_duplicate_of_another_identity_does_not_hide_a_missing_one():
 
 def test_commit_verdict_names_the_ambiguous_binding():
     """The row verdict reads coverage.ok: an ambiguous binding (all bound, none missing) FAILs with the C1 text naming the identity + copies."""
-    from verity_vllm.check.commit_verdict import commit_verdict
+    from verity_vllm.check.verdict import commit_verdict
     bm = _bmap([_leaf("model.norm/out", lo=0, hi=8, stream_offset=0), _leaf("model.norm/out#2", lo=0, hi=8, stream_offset=64)])
     cov = coverage_check(_population(), bm)
     rec = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64},

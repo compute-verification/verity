@@ -1,7 +1,8 @@
-"""IR-registered primitives over the tensor-core semantics: the k16 accumulator steps and the BF16/FP32 casts.
+"""IR-registered primitives over the tensor-core semantics: the BF16 k16 and E4M3 k32 accumulator steps and the
+BF16/E4M3/FP32 casts.
 
-Encodings: bf16 = `Value<16>`, f32 = `Value<32>`.  Every evaluator is total on encodings.  The evaluators are the
-functions of `verity.ml.tc`; nothing is re-derived here.
+Encodings: bf16 = `Value<16>`, e4m3 = `Value<8>`, f32 = `Value<32>`.  Every evaluator is total on encodings.  The
+evaluators are the functions of `verity.ml.tc`; nothing is re-derived here.
 
 Provenance.  `Bf16ToF32_v1`, `F32ToBf16Rn_v1`, `F2fpBf16_v1` are the definitions registered in veritor
 `verity.ir/registry/prims.py` (same ids, same functions).  `HopperBF16WgmmaDot16_v1` is veritor's
@@ -11,6 +12,8 @@ model but extended it to NaN/Inf encodings by a hand-written rule ("documented, 
 A100/RTX 4090 campaign on the NaN word (`0x7FC00000` vs the measured `0x7FFFFFFF`) and on a saturated group followed by
 an opposite-sign infinity (rule R6).  `_v2` is `tc_dot_total(AMPERE_BF16_M16N8K16, ...)`, the measured total function;
 equal to `_v1` on every finite input.  A registered id denotes one function, so the id changed.
+`F32ToE4m3Sat_v1` and `HopperE4m3QgmmaDot32_v1` are the definitions the vLLM integration registered for its FP8 linear
+(same ids, same functions).
 """
 from __future__ import annotations
 
@@ -20,11 +23,14 @@ from verity.ir.types import Array, Value
 from .tc import cast
 from .tc.silicon import AMPERE_BF16_M16N8K16
 from .tc.total import HOPPER_BF16_WGMMA_K16, tc_dot_total
+from .tc.total_fp8 import HOPPER_E4M3_WGMMA_K32, tc_dot_total_e4m3
 
-BF16, F32 = Value(16), Value(32)
+BF16, F32, E4M3 = Value(16), Value(32), Value(8)
 A16 = Array(16, BF16)
+A32_8 = Array(32, E4M3)
 
-__all__ = ["A16", "BF16", "F32", "AmpereBF16TcDot16", "Bf16ToF32", "F2fpBf16", "F32ToBf16Rn", "HopperBF16WgmmaDot16", "const"]
+__all__ = ["A16", "A32_8", "BF16", "E4M3", "F32", "AmpereBF16TcDot16", "Bf16ToF32", "F2fpBf16", "F32ToBf16Rn", "F32ToE4m3Sat",
+           "HopperBF16WgmmaDot16", "HopperE4m3QgmmaDot32", "const"]
 
 
 @primitive("Bf16ToF32", 1, [("a", BF16)], F32, conformance="exact-model-tested")
@@ -68,6 +74,26 @@ def HopperBF16WgmmaDot16(acc: int, *ab: int) -> int:
     return tc_dot_total(HOPPER_BF16_WGMMA_K16, acc, ab[:16], ab[16:32])
 
 
+@primitive("F32ToE4m3Sat", 1, [("x", F32)], E4M3,
+           conformance="exact-model-tested; every f32 word (2^32) through cvt.rn.satfinite.e4m3x2.f32 on the H100 (tc-fp8-2026-09-08 "
+                       "cvt_e4m3): 0 mismatches; NaN of either sign -> 0x7F")
+def F32ToE4m3Sat(x: int) -> int:
+    """`cvt.rn.satfinite.e4m3x2.f32` (SASS `F2FP.E4M3.F32.PACK_AB` with SATFINITE), one lane: `cast.f32_to_e4m3_sat_word`."""
+    return cast.f32_to_e4m3_sat_word(x)
+
+
+@primitive("HopperE4m3QgmmaDot32", 1, [("acc", F32), ("a", A32_8), ("b", A32_8)], F32,
+           conformance="exact-model-tested; H100 80GB QGMMA.64x64x32.F32.E4M3.E4M3 campaign (tc-fp8-2026-09-08): 16 families, "
+                       "35,289 tiles x3, 144,543,744 words, 0 mismatches")
+def HopperE4m3QgmmaDot32(acc: int, *ab: int) -> int:
+    """One accumulator-coordinate transition of `wgmma.mma_async.sync.aligned.m64n64k32.f32.e4m3.e4m3` (SASS
+    `QGMMA.64x64x32.F32.E4M3.E4M3`): one group of 32 exact E4M3 products plus `acc` through a 14-bit truncating adder,
+    exponent floor -139 (only bounded to [-152, -126] by the measurement; every floor in that range computes the same word
+    on E4M3 operands); total on every encoding (NaN -> 0x7FFFFFFF, sticky/saturating infinities, zero always +0).  The
+    accumulator itself passes through the 14-bit adder, so `acc + 0 != acc` for most f32 words."""
+    return tc_dot_total_e4m3(HOPPER_E4M3_WGMMA_K32, acc, list(ab[:32]), list(ab[32:64]))
+
+
 # ---- constants: one primitive per (width, bits), materialised on demand and decodable by id -------------------------------------------
 
 _CONSTS: dict[tuple[int, int], PrimitiveDefinition] = {}
@@ -109,6 +135,8 @@ def _register_kernels() -> None:
     register_kernel(AmpereBF16TcDot16, lambda acc, a, b: K.group_sum_total_batch(AMPERE_BF16_M16N8K16, acc, a, b),
                     domain=every, sample=K.sample_tc)
     register_kernel(HopperBF16WgmmaDot16, lambda acc, a, b: K.group_sum_total_batch(HOPPER_BF16_WGMMA_K16, acc, a, b),
+                    domain=every, sample=K.sample_tc)
+    register_kernel(HopperE4m3QgmmaDot32, lambda acc, a, b: K.group_sum_total_batch(HOPPER_E4M3_WGMMA_K32, acc, a, b),
                     domain=every, sample=K.sample_tc)
 
 
