@@ -24,7 +24,7 @@ from typing import Any, Callable, Sequence
 
 import numpy as np
 
-from verity.evaluation import type_dtype, type_shape
+from verity.evaluation.batch import type_dtype, type_shape
 from verity_vllm.program.kernels.kernel_registry import Declined, register
 
 #: spec family -> the registry reference that evaluates its relation (recorded in every report)
