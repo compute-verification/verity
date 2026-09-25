@@ -175,3 +175,16 @@ def test_liveness_copies_agree():
         compare_liveness(label, P)
     for label, P in library_programs():
         compare_liveness(label, P)
+
+
+def test_differential_detects_a_disagreement():
+    ns = types.SimpleNamespace
+    d = Differential(ns(f=lambda x: frozenset({x}), g=lambda: Unsupported("r", "d")), ns(f=lambda x: frozenset({x + 1}), g=lambda: 0))
+    with pytest.raises(AssertionError):
+        d.f(1)
+    with pytest.raises(AssertionError):
+        d.g()
+    same = Differential(ns(f=lambda x: x, e=lambda: 1 // 0), ns(f=lambda x: x, e=lambda: 1 // 0))
+    assert same.f(3) == 3
+    with pytest.raises(ZeroDivisionError):
+        same.e()
