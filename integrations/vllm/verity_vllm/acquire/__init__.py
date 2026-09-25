@@ -1,7 +1,7 @@
 """verity_vllm.acquire: value acquisition derived from the required-value manifest + runtime correspondence (v2, Phase 4a).
 
 An ACQUISITION PLAN is derived from the required-value manifest and the runtime correspondence (`plan.acquisition_plan`), and exactly
-the plan's hooks are installed (`install.install_from_plan`, `install.apply_plan_to_committer`).  TP rank committers (`tp/worker.py`)
+the plan's hooks are installed (`install.install_from_plan`, `install.apply_plan_to_committer`).  TP rank committers (`engine/rank_worker.py`)
 have no plan yet: they still select their modules by `native_host`'s class tables.
 
 - `correspondence`  `owning_module(call)` / `return_slot(call, port)` / `arg_slot(call, i)` over the ONE reader of where a Call lives at runtime

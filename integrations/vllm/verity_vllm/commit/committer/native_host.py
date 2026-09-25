@@ -60,7 +60,7 @@ DEFAULT_CHUNK = 4096
 BLOCK_BYTES = 64 << 20
 
 # the construction-time selection: TP1 Commits replace it with the acquisition plan's (apply_plan_to_committer; compiled rows:
-# CompiledGraphSource.wrap_model); TP rank committers (tp/worker.py) have no plan yet and keep it
+# CompiledGraphSource.wrap_model); TP rank committers (engine/rank_worker.py) have no plan yet and keep it
 # module classes whose forward OUTPUT is an Instance output (census §3 `HBM-materialized (native)`); matched on the MRO class names
 ACQUIRE_CLASSES = {
     "ColumnParallelLinear", "RowParallelLinear", "QKVParallelLinear", "MergedColumnParallelLinear", "ReplicatedLinear", "LinearBase",

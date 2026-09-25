@@ -467,7 +467,7 @@ class TP2CaptureWorkerExtension:
         belongs to — the logits all-gather runs after the forward, before the next), `k` (index within the step), kind, the calling
         module (path + class), the partial's shape/dtype and sha256, the received output's sha256; the partial and the output
         tensors of steps < `store_steps` are saved (`coll.rank<r>.step<S>.pt`) for the offline cross-rank provenance check
-        (`tp/match.py`: received == AllReduce2(part_rank0, part_rank1) / AllGather2, bit-exact).  Same wrapping seam as
+        (`pipeline/tp/match.py`: received == AllReduce2(part_rank0, part_rank1) / AllGather2, bit-exact).  Same wrapping seam as
         `tp2_sem_install` (module-global collective names); the run's computation is unchanged."""
         import hashlib
 
@@ -626,7 +626,7 @@ class TP2CaptureWorkerExtension:
         """Construct THIS rank's committer (`commit_delta.make_committer` on a per-rank engine shim: this worker's model runner + model,
         the rank's loaded weight SHARDS), attach the FA2 hidden source, size the arena from the workload envelope, register the rank's
         weights.  The rank's root binds its own values (its shards' roots, its partial GEMMs, its FA2 hidden stream for its heads); the
-        driver (`tp/commit.py`) combines the ranks' roots deterministically and fails closed on a missing rank."""
+        driver (`pipeline/tp/commit.py`) combines the ranks' roots deterministically and fails closed on a missing rank."""
         import argparse
         from types import SimpleNamespace
 
