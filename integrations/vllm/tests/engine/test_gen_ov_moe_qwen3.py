@@ -33,7 +33,7 @@ from verity_vllm.collectives.embedding_shard import EmbeddingShardCuda
 
 Q3 = importlib.import_module("verity_vllm.engine.profiles.derived_QWEN3_30B_A3B_tp2")
 from verity_vllm.observe.fold.resolver import Compute, Group, StepContext, Transparent, Unsupported, resolve_step
-from verity_vllm.observe.fold.collective_pattern import TpCollective
+from verity_vllm.observe.fold.patterns.collectives import TpCollective
 from verity_vllm.observe.fold.tree import step_events
 from verity_vllm.program.registry import moe as MOE
 from verity_vllm.program.registry import prims as P
