@@ -794,15 +794,18 @@ def _capture_failed(e: BaseException) -> None:
 _CAPTURE_WARNED: set = set()
 
 def _alpha_beta(tb: Tables, rho_lin: torch.Tensor, pub: dict | None, m: int, l: int, device,
-                pubmat: torch.Tensor | None = None):
+                pubmat: torch.Tensor | None = None, with_beta: bool = True):
     """The batched linear test's combination alpha (D, m) over the rows and its public right-hand side beta (D, l)
     (evaluations on H): sum_j alpha_j W[j] = beta for an honest witness.  ``pubmat``: ``_pubmat(tb, pub, device)``
-    precomputed (the tests graph), else it is built from ``pub`` here."""
+    precomputed (the tests graph), else it is built from ``pub`` here.  ``with_beta=False``: (alpha, None) (the ZK
+    prover sends v = alpha . p, never beta)."""
     D = rho_lin.shape[0]
     alpha = torch.zeros((D, m), dtype=torch.int64, device=device)
     terms = (rho_lin[:, tb.lin_q] * tb.lin_coef[None, :]) % P                 # (D, nnz)
     alpha.index_add_(1, tb.lin_j, terms)
     alpha %= P
+    if not with_beta:
+        return alpha, None
     beta = torch.zeros((D, l), dtype=torch.int64, device=device)
     const = ((rho_lin * ((-tb.lin_c) % P)[None, :]) % P).sum(1) % P           # (D,)
     beta += const[:, None]
@@ -852,6 +855,26 @@ def _simt_encoder(cfg: Config, device, plain: bool = False):
 
 def _combine_row(c: torch.Tensor, M: torch.Tensor) -> torch.Tensor:
     return ((c[:, None] * M) % P).sum(0) % P
+
+
+def _intt_ginv(g, x: torch.Tensor, n: int, device) -> torch.Tensor:
+    """``intt(x) * g^-i mod p`` (x canonical (D, n) int64): one fused kernel when available, else ``g("intt", ...)``."""
+    gi = _ginv_powers(n, device)
+    if witness.USE_FUSED:
+        from . import tests_fused
+        f = tests_fused.fused_for(x.shape[0], x.device)
+        if f is not None and f.intt_ok(x):
+            return f.intt_scaled(x, gi)
+    return (g("intt", intt, x) * gi) % P
+
+
+def _fused_lincomb2(C1: torch.Tensor, C2: torch.Tensor, M: torch.Tensor):
+    """The fused kernels when they take (C1 @ M, C2 @ M[:R2]) in one pass here, else None."""
+    if not witness.USE_FUSED:
+        return None
+    from . import tests_fused
+    f = tests_fused.fused_for(C1.shape[0], M.device)
+    return f if f is not None and f.lincomb2_ok(C1, C2, M) else None
 
 
 def _combine(coef: torch.Tensor, M: torch.Tensor) -> torch.Tensor:
@@ -1094,9 +1117,14 @@ def _tests_compute(sys: System, tb: Tables, cfg: Config, x: torch.Tensor, coefs,
     v = None
     if cfg.zk:
         r[:, mr["prox"]] = 0                                      # the proximity mask enters with coefficient 1
-        w = (_combine(r, coefs) + coefs[mr["prox"]]) % P          # (D, k) coefficients, uniform
-        alpha, _beta = _alpha_beta(tb, rho_lin, pub, m, l, device, pubmat=pubmat)
-        v = _combine(alpha, coefs[:m])                            # (D, k): alpha . p, = beta on H
+        alpha, _ = _alpha_beta(tb, rho_lin, pub, m, l, device, pubmat=pubmat, with_beta=False)
+        ft = _fused_lincomb2(r, alpha, coefs)
+        if ft is not None:                                        # both combinations in one pass over coefs
+            rw, v = ft.lincomb2(r, alpha, coefs)
+            w = (rw + coefs[mr["prox"]]) % P
+        else:
+            w = (_combine(r, coefs) + coefs[mr["prox"]]) % P      # (D, k) coefficients, uniform
+            v = _combine(alpha, coefs[:m])                        # (D, k): alpha . p, = beta on H
         _add_zh_times(v, coefs[mr["lin"]][:, :cfg.t_pad], l)     # + Z_H s_lin (the committed row is s_lin)
     else:
         w = _combine(r, W)                                        # (D, l) evaluations on H
@@ -1106,8 +1134,7 @@ def _tests_compute(sys: System, tb: Tables, cfg: Config, x: torch.Tensor, coefs,
     hev = (P0 * zinv) % P
     if cfg.zk:                                                    # + s_qa + x^k s_qb  (the mask / Z_H)
         hev = (hev + U[mr["qa"]] + (_xk_on_coset(n, k, device)[None, :] * U[mr["qb"]]) % P) % P
-    hcoef = g("intt", intt, hev)                                  # coefficients of h(g x): c_k g^k
-    hcoef = (hcoef * _ginv_powers(n, device)) % P
+    hcoef = _intt_ginv(g, hev, n, device)                         # coefficients of h(g x): c_k g^k, times g^-k
     if check:
         assert (hcoef[:, cfg.h_len:] == 0).all(), "quotient degree too high: constraints violated"
     h = hcoef[:, :cfg.h_len]
@@ -1133,7 +1160,7 @@ def _tests_compute(sys: System, tb: Tables, cfg: Config, x: torch.Tensor, coefs,
             Qev = part if Qev is None else (Qev + part) % P
         if cfg.zk:                                                # + u_ca + x^k u_cb (uniform, zero sum over H)
             Qev = (Qev + U[mr["chain_a"]] + (_xk_on_coset(n, k, device)[None, :] * U[mr["chain_b"]]) % P) % P
-        qcoef = (g("intt", intt, Qev) * _ginv_powers(n, device)) % P
+        qcoef = _intt_ginv(g, Qev, n, device)
         if check:
             assert (qcoef[:, cfg.q_len:] == 0).all(), "chain polynomial degree too high"
             assert torch.equal(_sum_over_H(qcoef[:, :cfg.q_len], l), cc.rhs), "chain constraints violated"

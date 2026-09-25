@@ -365,7 +365,14 @@ def prove_many(starters, device, depth: int = 2, timings_key: str = "total") -> 
     while nxt < n or active:
         # start jobs while slots are free (their first stage launches device work immediately)
         while nxt < n and free_slots:
-            slot = free_slots.pop(0)
+            if FIXED_SLOTS:
+                want = [s for s in free_slots if s.index == nxt % depth]
+                if not want:
+                    break
+                slot = want[0]
+                free_slots.remove(slot)
+            else:
+                slot = free_slots.pop(0)
             job = _Job(nxt, None, slot)
             tb = time.perf_counter()
             with stream_context(slot):
@@ -432,6 +439,10 @@ def prove_many(starters, device, depth: int = 2, timings_key: str = "total") -> 
 
 
 SWITCH_INTERVAL = 0.0005   # GIL switch interval during a pipelined pass (seconds)
+
+#: sub-batch i always runs on slot ``i % depth``: the per-(slot, layout) captured graphs (the ragged last sub-batch has
+#: its own layout) are then the same every pass, so a later pass never pays a capture that an earlier one did not
+FIXED_SLOTS = True
 
 #: the last ``prove_many`` pass: wall, main-thread busy (launching / host work) and blocked time -- ``host_busy / wall``
 #: near 1 means the pass is bound by the main thread's launch + host work, not by the device.

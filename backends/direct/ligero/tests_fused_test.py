@@ -106,6 +106,71 @@ def main():
     t_new = _bench(lambda: f.quad_general(rho, X, csr), a.reps)
     rep["timing"]["quad_general_853x65536"] = {"torch_ms": t_ref, "fused_ms": t_new}
     print(f"quad_general 853x65536: torch {t_ref:.2f} ms | fused {t_new:.2f} ms")
+    # quad_v4 (Montgomery, 4 columns per thread) against the scalar kernel: sides of 0..44 terms (fp8-ada-v3x4 has up to
+    # 44 / 30 / 8), residues up to p - 1, every grid layout; and the partial-sum reduction kernel against torch's
+    Q2, cols2, R2 = 301, 4096, 700
+    X2 = torch.randint(0, P, (R2, cols2), generator=g).to(torch.int32)
+    X2[:, :64] = P - 1
+    X2 = X2.to(dev)
+    gen2 = {}
+    for side, hi in (("a", 45), ("b", 31), ("c", 9)):
+        nnz = torch.randint(0, hi, (Q2,), generator=g)
+        qq = torch.repeat_interleave(torch.arange(Q2), nnz)
+        jj = torch.randint(0, R2, (qq.numel(),), generator=g)
+        cc = torch.randint(0, P, (qq.numel(),), generator=g)
+        cc[:16] = P - 1
+        consts = torch.randint(0, P, (Q2,), generator=g)
+        gen2[side] = tuple(t.to(dev) for t in (qq, jj, cc, consts))
+    rho2 = torch.randint(0, P, (D, Q2), generator=g).to(dev)
+    csr2 = tests_fused.csr_tables(gen2, Q2, dev)
+    saved = (tests_fused.QUAD_V4, tests_fused.REDUCE_KERNEL, tests_fused.QUAD_SPLITS, tests_fused.QUAD_QFAST,
+             tests_fused.QUAD_THREADS)
+    tests_fused.QUAD_V4, tests_fused.REDUCE_KERNEL = False, False
+    ref2 = f.quad_general(rho2, X2, csr2)
+    tests_fused.QUAD_V4, tests_fused.REDUCE_KERNEL = True, True
+    ok2 = True
+    for thr in (128, 256):
+        for qf in (False, True):
+            for S in (1, 7, 128):
+                tests_fused.QUAD_THREADS, tests_fused.QUAD_QFAST, tests_fused.QUAD_SPLITS = thr, qf, S
+                ok2 &= torch.equal(f.quad_general(rho2, X2, csr2), ref2)
+    (tests_fused.QUAD_V4, tests_fused.REDUCE_KERNEL, tests_fused.QUAD_SPLITS, tests_fused.QUAD_QFAST,
+     tests_fused.QUAD_THREADS) = saved
+    rep["exact"]["quad_v4_vs_scalar_301x4096"] = bool(ok2)
+    part = torch.randint(0, P, (37, D, 1000), generator=g).to(torch.int32).to(dev)
+    tests_fused.REDUCE_KERNEL = True
+    rep["exact"]["reduce_partial"] = torch.equal(f._reduce(part), part.to(torch.int64).sum(0) % P)
+    tests_fused.REDUCE_KERNEL = saved[1]
+    # lincomb2 (w and v in one pass) against two lincomb calls: C1 a row-strided view with negative and >= p entries,
+    # C2 over a row prefix, residues up to p - 1, several split counts
+    Rl, Rv, colsl = 1037, 1001, 2176
+    Xl = torch.randint(0, P, (Rl, colsl), generator=g).to(torch.int32)
+    Xl[:, :32] = P - 1
+    Xl = Xl.to(dev)
+    big = torch.randint(-3 * P, 3 * P, (D, Rl + 40), generator=g, dtype=torch.int64)
+    big[:, :8] = P - 1
+    C1 = big.to(dev)[:, :Rl]
+    C2 = torch.randint(0, P, (D, Rv), generator=g, dtype=torch.int64).to(dev)
+    ref_w, ref_v = f.lincomb(C1 % P, Xl), f.lincomb(C2, Xl[:Rv])
+    ok3 = f.lincomb2_ok(C1, C2, Xl)
+    saved3 = (tests_fused.LINCOMB2_SPLITS, tests_fused.LINCOMB2_THREADS)
+    for thr in (64, 128, 256):
+        for S in (0, 1, 9, 200):
+            tests_fused.LINCOMB2_THREADS, tests_fused.LINCOMB2_SPLITS = thr, S
+            w2, v2 = f.lincomb2(C1, C2, Xl)
+            ok3 &= torch.equal(w2, ref_w) and torch.equal(v2, ref_v)
+    tests_fused.LINCOMB2_SPLITS, tests_fused.LINCOMB2_THREADS = saved3
+    rep["exact"]["lincomb2_vs_lincomb_1037x2176"] = bool(ok3)
+    # intt_scaled against field.intt * post, residues up to p - 1
+    from .field import intt as field_intt
+    ok4 = True
+    for nn in (2, 8, 1024, 16384):
+        xi = torch.randint(0, P, (D, nn), generator=g, dtype=torch.int64)
+        xi[:, :2] = P - 1
+        xi = xi.to(dev)
+        post = torch.randint(0, P, (nn,), generator=g, dtype=torch.int64).to(dev)
+        ok4 &= f.intt_ok(xi) and torch.equal(f.intt_scaled(xi, post), (field_intt(xi) * post) % P)
+    rep["exact"]["intt_scaled_vs_field_intt"] = bool(ok4)
     ok = all(rep["exact"].values())
     print("exact:", rep["exact"])
     print("bit-exact:", "PASS" if ok else "FAIL")
