@@ -34,7 +34,7 @@ from verity_vllm.observe.events import (DispatchEnter, DispatchExit, Root, RunHe
 from verity_vllm.observe.fold.fold import FoldError, fold
 from verity_vllm.observe.fold.resolver import Compute, PerRow, Profile, Shared, Transparent, Gather
 from verity_vllm.check.match import rank_match as RM
-from verity_vllm.observe.fold.collective_pattern import TpCollective
+from verity_vllm.observe.fold.patterns.collectives import TpCollective
 from verity.ir.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.ir.program import Program
 from verity.ir.refs import Coll, array_of, concat, runs
