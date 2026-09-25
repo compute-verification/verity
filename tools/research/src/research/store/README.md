@@ -79,6 +79,8 @@ snapshots are ordinary artifacts (kind dataset-snapshot/v1)
 trees/<hex>/                         LOCAL ONLY: where `fetch ART` (no --to) materialises a tree payload
 catalog.sqlite                       LOCAL ONLY: rebuildable index (§5); never uploaded
 scratch/<reuse_key>/<name>/          LOCAL ONLY: tool caches namespaced by reuse_key (§6.5)
+steward/lease.json                   REMOTE ONLY, not a store record: the steward lease, the one mutable key, changed by conditional
+                                     PUT only (research/steward.py); the store never reads, lists or indexes it
 ~~~
 
 Python API: `research.store.local.LocalStore(root=None, *, config_path=None, repo=None)` (root from `$RESEARCH_STORE`, config

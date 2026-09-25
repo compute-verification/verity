@@ -10,6 +10,9 @@
   research notes push LANE [--repo DIR]                     # after every commit: the lane's branch -> origin (never main, never --force)
   research notes branches [--fetch] [--all] [--lane GLOB] [--json]   # lane branches vs origin; exit 1 if an open lane's work is not there
   research notes sync [--path P]... [-m MSG] | scan          # notes_sync.py: commit, rebase, push with retries | history audit
+  research notes status|watch --liveness git [--fetch] ...   # steward.py: notes commit times and origin's lane/* tips, not mtimes
+  research notes watch --lease [store|PATH] [--standby] ...   # steward.py: only the steward lease's holder acts
+  research notes service systemd|launchd [...] [-- WATCH ARGS] # steward.py: the steward's service definition
 
 A lane's report is `<root>/lanes/<lane>/<stamp>-report-<lane>.md` (the newest one if several).  `checkpoint` writes
 `CHECKPOINT <sha> (<HH:MM>Z) [<state>] <text>` directly under the front matter (newest first, where lanes already put them),
@@ -131,8 +134,28 @@ def _ts(t: float) -> dt.datetime:
     return dt.datetime.fromtimestamp(t, dt.timezone.utc)
 
 
+_TIMES: dict[str, object] = {}
+
+
+def file_time(root: Path, p: Path) -> float:
+    """A notes file's time: its mtime, or with RESEARCH_LIVENESS=git its newest notes commit (steward.GitTimes), which every
+    clone agrees on."""
+    from . import steward  # noqa: PLC0415
+
+    if not steward.git_liveness():
+        return p.stat().st_mtime
+    t = _TIMES.get(str(root))
+    if t is None:
+        t = _TIMES[str(root)] = steward.GitTimes(root)
+    return t.time(p)
+
+
+def refresh_times() -> None:
+    _TIMES.clear()
+
+
 def report_for(root: Path, lane: str) -> Path | None:
-    reports = sorted((root / "lanes" / lane).glob("*report*.md"), key=lambda p: p.stat().st_mtime)
+    reports = sorted((root / "lanes" / lane).glob("*report*.md"), key=lambda p: file_time(root, p))
     return reports[-1] if reports else None
 
 
@@ -265,7 +288,7 @@ def _seen(root: Path, lane: str) -> float | None:
 
 def mail(root: Path, lane: str) -> list[Path]:
     d = root / "lanes" / lane
-    return sorted({p for g in MAIL_GLOBS for p in d.glob(g)}, key=lambda p: p.stat().st_mtime)
+    return sorted({p for g in MAIL_GLOBS for p in d.glob(g)}, key=lambda p: file_time(root, p))
 
 
 def _title(p: Path) -> str:
@@ -284,7 +307,7 @@ def inbox(root: Path, lane: str, succ: dict[str, str] | None = None) -> list[dic
     for d in chain(root, lane, succ):
         cutoff = own if own is not None else (_seen(root, d) or 0.0)
         for p in mail(root, d):
-            t = p.stat().st_mtime
+            t = file_time(root, p)
             if t > cutoff:
                 out.append({"path": p, "lane_dir": d, "mtime": t, "title": _title(p)})
     return sorted(out, key=lambda x: x["mtime"])
@@ -320,7 +343,7 @@ def _checkpoint_time(hh: str | None, mm: str | None, mtime: dt.datetime) -> dt.d
 
 def lane_status(path: Path, now: dt.datetime, stale_min: float) -> dict:
     text = path.read_text(errors="replace")
-    mtime = _ts(path.stat().st_mtime)
+    mtime = _ts(file_time(path.parents[2], path))           # <root>/lanes/<lane>/<report>
     best = None
     for line in text.splitlines():
         i = line.find("CHECKPOINT")
@@ -388,10 +411,12 @@ def worktrees(repo: Path) -> dict[str, str]:
     return res
 
 
-def git_signals(repo: Path, branch: str | None, worktree: str | None) -> dict:
-    """commit_at: the branch's last commit; edit_at: newest mtime among the worktree's uncommitted files; dirty: their count."""
+def git_signals(repo: Path, branch: str | None, worktree: str | None, remote: bool = False) -> dict:
+    """commit_at: the branch's last commit (origin's tip as last fetched with `remote`); edit_at: newest mtime among the worktree's
+    uncommitted files; dirty: their count."""
     res: dict = {"commit_at": None, "edit_at": None, "dirty": None}
-    if branch and (ct := (_git(repo, "log", "-1", "--format=%ct", f"refs/heads/{branch}") or "").strip()).isdigit():
+    ref = f"refs/remotes/origin/{branch}" if remote else f"refs/heads/{branch}"
+    if branch and (ct := (_git(repo, "log", "-1", "--format=%ct", ref) or "").strip()).isdigit():
         res["commit_at"] = _ts(int(ct))
     if worktree and Path(worktree).is_dir():
         out = _git(Path(worktree), "status", "--porcelain=v1", "-z", "--untracked-files=all")
@@ -546,14 +571,17 @@ def enrich(rows: list[dict], root: Path, repo: Path | None, stale_min: float, no
             if fleet.error:
                 r["pods_error"] = fleet.error
         if r["state"] in DONE:
-            late = [p for p in mail(root, r["lane"]) if r.get("done_ts") and p.stat().st_mtime > r["done_ts"]]
+            late = [p for p in mail(root, r["lane"]) if r.get("done_ts") and file_time(root, p) > r["done_ts"]]
             r["mail"] = [] if r["lane"] in succ or r["state"] == "superseded" else [p.name for p in late]   # a successor has it
             continue
         r["branch"] = b.get("branch") or f"lane/{r['lane']}"
         r["worktree"] = b.get("worktree") or wts.get(r["branch"])
         r["pod"] = b.get("pod")
         if repo:
-            g = git_signals(repo, r["branch"], r["worktree"])
+            from . import steward  # noqa: PLC0415
+
+            gitl = steward.git_liveness()                   # origin's tip; no worktree signal (steward.py, TIMES)
+            g = git_signals(repo, r["branch"], None if gitl else r["worktree"], remote=gitl)
             r["dirty"] = g["dirty"]
             for k in ("commit", "edit"):
                 r[f"{k}_min"] = round((now - g[f"{k}_at"]).total_seconds() / 60, 1) if g[f"{k}_at"] else None
@@ -582,6 +610,7 @@ def status(root: Path, stale_min: float = 30, since_hours: float | None = 24, no
     from fnmatch import fnmatch  # noqa: PLC0415
 
     now = now or _utcnow()
+    refresh_times()
     owners = set(fleet.owner.values()) if fleet else set()
     rows = []
     for d in sorted((root / "lanes").glob("*/")):
@@ -589,13 +618,13 @@ def status(root: Path, stale_min: float = 30, since_hours: float | None = 24, no
             continue
         path = report_for(root, d.name)
         bound = d / BINDING
-        newest = max([p.stat().st_mtime for p in (path, bound) if p is not None and p.exists()], default=None)
+        newest = max([file_time(root, p) for p in (path, bound) if p is not None and p.exists()], default=None)
         if newest is None or (since_hours is not None and now.timestamp() - newest > since_hours * 3600 and d.name not in owners):
             continue
         if path is not None:
             rows.append(lane_status(path, now, stale_min))
         else:                                       # bound at launch, never reported: exactly the lane that dies unseen
-            age = round((now.timestamp() - bound.stat().st_mtime) / 60, 1)
+            age = round((now.timestamp() - file_time(root, bound)) / 60, 1)
             rows.append({"lane": d.name, "report": None, "state": "open", "age_min": age, "stale": age > stale_min,
                          "checkpoint_at": None, "checkpoint_min": None, "commit": None, "text": "(no report yet)", "front": ""})
     rows = enrich(rows, root, repo, stale_min, now, fleet)
@@ -993,8 +1022,12 @@ def _store_attempt() -> Callable[[str], bool]:
 def run_custody(pod_id: str, runs_dir: Path | None = None, registered: Callable[[str], bool] | None = None) -> tuple[bool, str]:
     """Custody (b): every local run launched on the pod (remote.json `pod_id`) that reached its runner has preserved.json (`research
     fetch --all` verified every file) or is registered in the store (an attempt)."""
+    from . import steward  # noqa: PLC0415
     from .runs import runs_root  # noqa: PLC0415
 
+    if steward.git_liveness():
+        return False, ("run custody not checked: with --liveness git, runs launched from other machines are not in this host's run "
+                       "records; watch --custody-r2 takes it from the store's remote and the pod guard")
     registered = registered or _store_attempt()
     n = 0
     for rj in sorted((runs_dir or runs_root()).glob("*/remote.json")):
@@ -1078,7 +1111,7 @@ def final_deadline(root: Path, lane: str, final: str) -> dt.datetime | None:
     p = root / "lanes" / lane / BINDING
     if not m or not p.exists():
         return None
-    anchor = _ts(p.stat().st_mtime)
+    anchor = _ts(file_time(root, p))
     t = anchor.replace(hour=int(m[1]) % 24, minute=int(m[2]), second=0, microsecond=0)
     return t if t > anchor else t + dt.timedelta(days=1)
 
@@ -1368,6 +1401,15 @@ def relaunch(root: Path, lane: str, successor: str | None = None, why: str = "",
     else:
         done.append(f"no worktree found for {branch}: nothing saved")
     sha = ((_git(Path(wt), "rev-parse", "--short=8", "HEAD") or "").strip() if saved else "") or "none"
+    from . import steward  # noqa: PLC0415
+
+    on_origin = False
+    if not saved and repo and steward.git_liveness():       # the dead lane's machine is gone: its pushed branch is the base
+        _git(repo, "fetch", "-q", "origin", f"+refs/heads/{branch}:refs/remotes/origin/{branch}", timeout=300)
+        if tip := (_git(repo, "rev-parse", "-q", "--verify", "--short=8", f"refs/remotes/origin/{branch}^{{commit}}") or "").strip():
+            sha, on_origin = tip, True
+            done.append(f"base: origin/{branch} @ {sha}")
+        wt = None if not (wt and Path(wt).is_dir()) else wt  # a worktree path on another machine binds nothing here
     checkpoint(root, lane, "superseded", f"by {s} (relaunch){': ' + why if why else ''}", commit=sha, now=now)
     done.append(f"checkpoint {lane} superseded by {s}")
     extra = {"brief": brief or b.get("brief"), "final": final or b.get("final"), "budget": budget or b.get("budget")}
@@ -1382,7 +1424,11 @@ def relaunch(root: Path, lane: str, successor: str | None = None, why: str = "",
            f"(its report says what is done and what is left)."]
     keep = f"; its {saved['dirty']} uncommitted files stay yours, a copy is in `{_tilde(saved['files'][0].parent)}/uncommitted-{stamp}*`" \
         if saved and saved["dirty"] else ""
-    msg.append(f"- Base: `{branch}` @ {sha}" + (f", worktree `{_tilde(wt)}` (bound to you{keep})." if wt else "."))
+    if on_origin:
+        msg.append(f"- Base: `{branch}` @ {sha} on origin: `git fetch origin {branch} && git checkout -B {branch} origin/{branch}` "
+                   f"in your own checkout; push after every commit (`research notes push {s}`).")
+    else:
+        msg.append(f"- Base: `{branch}` @ {sha}" + (f", worktree `{_tilde(wt)}` (bound to you{keep})." if wt else "."))
     if rep:
         msg.append(f"- Read: `{_tilde(rep)}` and `git log {branch}`.")
     if pods:
@@ -1565,6 +1611,17 @@ def _add_status_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--all", action="store_true", help="every lane however old its report, and every attempt (predecessors too)")
     p.add_argument("--lane", action="append", default=[], metavar="GLOB", help="only lanes matching (repeatable)")
     p.add_argument("--exclude", action="append", default=[], metavar="GLOB", help="skip lanes matching (repeatable)")
+    p.add_argument("--liveness", choices=["mtime", "git"], default=None,
+                   help="git: notes commit times and origin's lane/* tips, no worktree signal (steward.py; default $RESEARCH_LIVENESS, else mtime)")
+    p.add_argument("--fetch", action="store_true", help="first fetch origin's lane/* branches (every pass, for watch)")
+
+
+def fetch_lanes(repo: Path | None) -> str | None:
+    """Fetch origin's lane/* into refs/remotes/origin/lane/*; None, or why it failed."""
+    if repo is None:
+        return "no repo (--repo, or $RESEARCH_REPO)"
+    return None if _git(repo, "fetch", "-q", "origin", "+refs/heads/lane/*:refs/remotes/origin/lane/*", timeout=300) is not None \
+        else "git fetch origin lane/* failed; origin as last fetched"
 
 
 def main(argv: list[str]) -> int:
@@ -1573,6 +1630,10 @@ def main(argv: list[str]) -> int:
 
     if argv and argv[0] in ("sync", "scan"):
         return notes_sync.main(argv, default_root())
+    if argv and argv[0] == "service":
+        from .steward import service_main  # noqa: PLC0415
+
+        return service_main(argv[1:])
     rc = _main(argv)
     if rc in (0, 3) and argv and argv[0] in ("checkpoint", "bind", "relaunch"):
         root = Path(argv[argv.index("--root") + 1]).expanduser() if "--root" in argv[:-1] else default_root()
@@ -1638,6 +1699,12 @@ def _main(argv: list[str]) -> int:
                                                               "(run_custody_r2), not from ~/.research/runs on this machine")
     wa.add_argument("--guardian-log", default=str(GUARDIAN_LOG), help="the laptop guardian's log, whose KILLED lines go to the owning "
                                                                         "lane's inbox ('none': off)")
+    wa.add_argument("--lease", nargs="?", const="store", default=None, metavar="store|PATH",
+                    help="act only while holding the steward lease (steward.py): the store bucket's steward/lease.json, or a file")
+    wa.add_argument("--standby", action="store_true", help="--lease: when another steward holds it, watch read-only and take over when it frees")
+    wa.add_argument("--steward-id", default=None, help="--lease: the owner name recorded in the lease (default: the host name)")
+    sv = sub.add_parser("service", help="print the steward's systemd unit or launchd plist (steward.py)")
+    sv.add_argument("kind", choices=["systemd", "launchd"])
     gc = sub.add_parser("gc-worktrees", help="clean worktrees of finished lanes whose branch tip is on origin: list, or --apply to remove")
     gc.add_argument("--apply", action="store_true", help="git worktree remove them (never --force; branches stay)")
     gc.add_argument("--wt-root", type=Path, default=None, help="default: the parent of --repo's worktree")
@@ -1658,6 +1725,10 @@ def _main(argv: list[str]) -> int:
     sn.add_argument("--root", type=Path, default=None)
     ns = ap.parse_args(argv)
     root = ns.root or default_root()
+    if getattr(ns, "liveness", None):
+        from .steward import LIVENESS_ENV  # noqa: PLC0415
+
+        os.environ[LIVENESS_ENV] = ns.liveness
     if ns.cmd in ("checkpoint", "inbox"):
         if ns.cmd == "checkpoint":
             print(checkpoint(root, ns.lane, ns.state, " ".join(ns.text), commit=ns.commit))
@@ -1716,9 +1787,41 @@ def _main(argv: list[str]) -> int:
                       fleet=fleet, every_attempt=ns.all)
 
     if ns.cmd == "status":
+        if ns.fetch and (err := fetch_lanes(repo)):
+            print(f"research notes status: {err}", file=sys.stderr)
         rows = run(load_fleet(root) if ns.pods else None)
         print(json.dumps(rows, indent=1, default=str) if ns.json else render(rows))
         return 1 if any(r["stale"] for r in rows) else 0
+    lease = None
+    if ns.lease:
+        from . import steward  # noqa: PLC0415
+
+        load_env_file(R2_ENV)                               # the lease lives in the store's bucket
+        try:
+            lease = steward.Lease(steward.lease_backend(ns.lease), owner=ns.steward_id,
+                                  ttl_s=max(steward.LEASE_TTL_MIN_S, 3 * ns.every * 60))
+            held, doc = lease.ensure()
+        except Exception as e:  # noqa: BLE001
+            print(f"research notes watch: steward lease unavailable ({type(e).__name__}: {str(e)[:200]}); refusing to act without it",
+                  file=sys.stderr)
+            return 2
+        if not held and not ns.standby:
+            print(f"research notes watch: REFUSED: the steward lease ({lease.backend.describe()}) is held by {steward.holder(doc)}; "
+                  "only the holder reaps, routes, renders and commits the notes (--standby waits for it)", file=sys.stderr)
+            return 2
+        import signal  # noqa: PLC0415
+
+        signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))   # the service manager's stop still releases the lease
+    try:
+        return _watch(ns, root, repo, run, lease)
+    finally:
+        if lease is not None:
+            lease.release()
+
+
+def _watch(ns: argparse.Namespace, root: Path, repo: Path | None, run: Callable[[Fleet | None], list[dict]], lease) -> int:
+    """The watch loop.  With a lease, the steward rules (reaping, budget/overdue memory, guardian routing, renders, the state file,
+    the notes commit) run only in a pass that renewed it; the alerts print either way."""
     prev: set[str] = set()
     prev_mail: dict[str, set[str]] | None = None
     idle_since: dict[str, float] = {}
@@ -1730,10 +1833,29 @@ def _main(argv: list[str]) -> int:
         load_env_file(R2_ENV)                               # custody asks the remote; launchd gives the watcher no credentials
     guardian = None if ns.guardian_log in ("", "none") else Path(ns.guardian_log).expanduser()
     n = 0
+    was_acting: bool | None = None
     while True:
+        if ns.fetch and (err := fetch_lanes(repo)):
+            print(f"{_utcnow():%H:%MZ} FETCH-FAILED {err}", flush=True)
         fleet = load_fleet(root) if ns.pods else None
         rows = run(fleet)
         now = _utcnow()
+        acting, lease_line = True, None
+        if lease is not None:
+            from . import steward  # noqa: PLC0415
+
+            try:
+                acting, doc = lease.ensure()
+            except Exception as e:  # noqa: BLE001  (the store is unreachable: nobody may assume the lease is still ours)
+                acting, doc = False, {"owner": f"unknown ({type(e).__name__}: {str(e)[:80]})"}
+            if acting and was_acting is False:
+                lease_line = f"{now:%H:%MZ} LEASE-ACQUIRED {lease.owner}: this watcher is the steward now"
+            elif not acting and was_acting is not False:
+                lease_line = f"{now:%H:%MZ} {'LEASE-LOST' if was_acting else 'STANDBY'}: the steward lease is held by {steward.holder(doc)}"
+            if not acting and not ns.standby:
+                print(lease_line, flush=True)
+                return 3
+            was_acting = acting
         lines, prev = transitions(prev, rows, now)
         more, cur_mail = mail_lines(prev_mail or {}, rows, now)
         if prev_mail is None:                               # the first pass: mail already there is not news
@@ -1747,21 +1869,28 @@ def _main(argv: list[str]) -> int:
                 acct = None
             line, runway = account_line(fleet, acct, now)
             alert, runway_last = runway_alert(runway, ns.runway_h, runway_last, now)
-            more += [line, *alert, *reap_lines(root, rows, now, ns.reap_grace_min, pods_noted, reap=ns.reap),
-                     *steward_rule("reap-stale", stale_reap_lines, root, rows, now, ns.reap_stale_min, state, reap=ns.reap,
-                                   custody=(lambda lane, pod: reap_custody(root, lane, pod["id"], runs=run_custody_r2)) if ns.custody_r2 else None),
-                     *steward_rule("budget", budget_lines, root, fleet, now, state)]
-        more += steward_rule("overdue", overdue_lines, root, rows, now, state)
-        more += steward_rule("guardian", guardian_lines, root, rows, fleet, now, state, guardian)
-        more += steward_rule("render", render_lines, root, now, state)
-        more += steward_rule("state", lambda: save_state(root, state) or [])
-        if ns.sync:
+            more += [line, *alert, *reap_lines(root, rows, now, ns.reap_grace_min, pods_noted, reap=ns.reap and acting)]
+            if acting:
+                more += [*steward_rule("reap-stale", stale_reap_lines, root, rows, now, ns.reap_stale_min, state, reap=ns.reap,
+                                       custody=(lambda lane, pod: reap_custody(root, lane, pod["id"], runs=run_custody_r2))
+                                       if ns.custody_r2 else None),
+                         *steward_rule("budget", budget_lines, root, fleet, now, state)]
+        if acting:
+            more += steward_rule("overdue", overdue_lines, root, rows, now, state)
+            more += steward_rule("guardian", guardian_lines, root, rows, fleet, now, state, guardian)
+            more += steward_rule("render", render_lines, root, now, state)
+            more += steward_rule("state", lambda: save_state(root, state) or [])
+        if lease_line:
+            more.append(lease_line)
+        if ns.sync and acting:
             from . import notes_sync  # noqa: PLC0415
 
             srep = notes_sync.sync(root)
             if srep.get("commit") or srep["rc"]:
                 more.append(f"{now:%H:%MZ} {notes_sync.render_sync(srep)}")
-        elif ns.snapshot and (snap := snapshot(root, now=now)) and snap["commit"]:
+        elif ns.sync:                                       # standby: read the others' notes, write nothing
+            _git(root, "pull", "-q", "--ff-only", timeout=300)
+        elif ns.snapshot and acting and (snap := snapshot(root, now=now)) and snap["commit"]:
             more.append(f"{now:%H:%MZ} {_snapshot_line(snap)}")
         open_ = sum(r["state"] not in DONE for r in rows)
         for line in lines + more:
