@@ -600,13 +600,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--engine-arg", action="append", default=[],
                     help="LLM(**kw) override key=value (JSON value) for every GPU stage, repeatable; e.g. max_num_batched_tokens=64, enable_prefix_caching=true")
     ap.add_argument("--max-tokens", type=int, default=None, help="override the workload's max_tokens (passed to the GPU stages)")
-    ap.add_argument("--snapshot-max-bytes", type=int, default=None,
-                    help="(capture) per-tensor snapshot cap in bytes (m1_capture default 32 MiB; D87: a prefill MLP row block above the cap "
-                         "has no snapshot evidence -- raise it for long / batched prefills, the run.json records the value)")
-    ap.add_argument("--snapshot-max-bytes-op", type=int, default=None,
-                    help="(capture) lower per-tensor cap at dispatcher-call events; Triton launch events keep --snapshot-max-bytes, so a "
-                         "large launch output is copied once (cov-moe: the fused-MoE intermediates of a 2048-token prefill otherwise "
-                         "exceed the pod's pinned host memory; the run.json records the value)")
+    ap.add_argument("--snapshot-max-bytes", type=int, default=None, help="(capture) per-tensor snapshot cap in bytes (m1_capture default 32 MiB; D87: a "
+                    "prefill MLP row block above the cap has no snapshot evidence -- raise it for long / batched prefills, the run.json records the value)")
+    ap.add_argument("--snapshot-max-bytes-op", type=int, default=None, help="(capture) lower per-tensor cap at dispatcher-call events; Triton "
+                    "launch events keep --snapshot-max-bytes, so a large launch output is copied once (cov-moe: the fused-MoE intermediates of a "
+                    "2048-token prefill otherwise exceed the pod's pinned host memory; the run.json records the value)")
     ap.add_argument("--checkpoints", default=DEFAULT_CHECKPOINTS)
     ap.add_argument("--checkpoint-dir", default=None, help="HF snapshot dir or model*.safetensors glob (root_policy, compare --safetensors)")
     ap.add_argument("--hf-config", default=None, help="HF config.json for per-field C provenance (analytic.config_of)")
@@ -661,8 +659,7 @@ def main(argv: list[str] | None = None) -> int:
 
     plan = Plan(a)
     stages = plan.stage_list(a.phase)
-    sampled = [st for st in stages if st in ("replay_a", "replay_chain") and not plan.skipped(st)]
-    if sampled and a.seed is None:
+    if a.seed is None and (sampled := [st for st in stages if st in ("replay_a", "replay_chain") and not plan.skipped(st)]):
         ap.error(f"--seed is required to run {' and '.join(sampled)} (the replay sample is drawn from it)")
     max_rss = a.max_rss_gb if a.max_rss_gb is not None else (LAPTOP_MAX_RSS_GB if plan.laptop else None)
     timeout = a.stage_timeout if a.stage_timeout is not None else (LAPTOP_STAGE_TIMEOUT_S if plan.laptop else None)

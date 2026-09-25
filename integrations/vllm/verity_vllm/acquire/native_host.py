@@ -2058,8 +2058,7 @@ class NativeHostCommitter:
                 "padding_leaves": sum(ps.n_leaves for ps in pads), "padding_tensors": sum(len(ps.metas) for ps in pads),
                 "steps_after": len(steps), "bytes_after": sum(s.n_bytes for s in steps), "leaves_after": sum(s.n_leaves for s in steps),
                 "hook_wall_s": t_hook - t1, "apply_wall_s": time.perf_counter() - t_hook,
-                "padding_bytes_over_executed": (sum(ps.n_bytes for ps in pads) / ex_bytes) if ex_bytes else None,
-            }
+                "padding_bytes_over_executed": (sum(ps.n_bytes for ps in pads) / ex_bytes) if ex_bytes else None}
         step_roots = [s.root for s in steps]
         run_root = hashlib.sha256(ROOT_TAG_RUN + self.program_digest + self._geo_digest + len(step_roots).to_bytes(8, "big")
                                   + eng.ft.fold(list(step_roots))).digest()

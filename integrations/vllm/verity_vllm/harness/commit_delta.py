@@ -407,8 +407,7 @@ def cuda_residue(base: dict[int, tuple[int, str]], now: dict[int, tuple[int, str
 
 
 def make_committer(kind: str, engine: va.Engine, args: argparse.Namespace, run_id: str):
-    layout = getattr(args, "layout", "chunk-leaf-v1")
-    if layout != "chunk-leaf-v1" and not kind.startswith("native_collect"):
+    if (layout := getattr(args, "layout", "chunk-leaf-v1")) != "chunk-leaf-v1" and not kind.startswith("native_collect"):
         raise ValueError(f"leaf layout {layout} is implemented by the native_collect committers only, not {kind}")
     if kind in ("native_host", "native_host_direct"):
         from verity_vllm.acquire.native_host import NativeHostCommitter

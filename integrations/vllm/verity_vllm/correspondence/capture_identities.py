@@ -828,12 +828,11 @@ def run(store: CommitStore, checkpoint: list[Path], request: str, positions: lis
         records.append(rec)
         print(f"[corr] {rec['check']['status']:16s} {cid.split('/ph=')[0].split('/r=')[1][-8:]}/{cid.split('/', 4)[-1]:70s} {call.id[:48]:48s} {rec['check'].get('seconds', 0):8.2f}s", flush=True)
         out = {"schema": "verity-ir/correspondence/v0", "config": port.id, "model": C["model"], "request": request, "positions": positions, "layers": layers,
-               "coordinate_sample": {"seed": seed, "per_gemm": coord_samples},
                "program": {"function": program.fn.id, "gates": program.gates,
                            "input_gates": program.input_gates, "build_seconds": round(build_s, 1),
                            "call_names": port.names or None, "recompute_missing": recomputer.stats if recomputer else None},
                "input_gate_records": {"prompt": prompt_record, "weights": wb.records},
-               "not_in_program": not_in_program, "records": records,
+               "coordinate_sample": {"seed": seed, "per_gemm": coord_samples}, "not_in_program": not_in_program, "records": records,
                "summary": {**summary, "qualifications": summary_qualifications(wb.records, records, summary)}}
         out_path.write_text(json.dumps(out, indent=1))
     return out

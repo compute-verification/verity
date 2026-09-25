@@ -675,7 +675,6 @@ def vu_population(result: FoldResult, rep: Replayer, max_arg_leaves: int | None,
         return {"status": "error", "error": f"{type(e).__name__}: {e}", "seconds": round(time.time() - t0, 3)}
 
 
-
 def _regime(m: dict) -> str:
     """The execution regime of an instance: `prefill` (step 0) or `decode`."""
     return "prefill" if int(m["step"]) == 0 else "decode"
@@ -1141,7 +1140,6 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  [{i}/{n}] {e.get('name')} {e['status']} {e.get('seconds', '')}s rss={_max_rss_gb():.2f}GB", file=sys.stderr, flush=True)
 
     prog = progress if a.progress else None
-    self_check_seed = 0 if a.seed is None else a.seed
     if a.tier == "a":
         if store is None:
             rep = {"tier": "a", "status": "skipped", "reason": "no snapshots.json"}
@@ -1159,12 +1157,11 @@ def main(argv: list[str] | None = None) -> int:
         else:
             layers = [int(x) for x in a.layers.split(",") if x.strip()] if a.layers else None
             rep = tier_b(result, store, weights, step=a.step, max_arg_leaves=a.max_arg_leaves, compare_outputs=not a.no_compare,
-                         max_instances=a.max_instances, layers=layers, progress=prog, evaluator=a.evaluator,
-                         self_check_n=a.self_check_n, seed=self_check_seed)
+                         max_instances=a.max_instances, layers=layers, progress=prog, evaluator=a.evaluator, self_check_n=a.self_check_n, seed=a.seed or 0)
     else:
         steps = [s["step"] for s in result.steps if a.step is None or s["step"] <= a.step]
         rep = tier_c(result, weights, steps=steps, max_arg_leaves=a.max_arg_leaves, progress=prog, evaluator=a.evaluator,
-                     self_check_n=a.self_check_n, seed=self_check_seed)
+                     self_check_n=a.self_check_n, seed=a.seed or 0)
     rep = {"log": a.log, "profile": a.profile, "model": repo, "digest": result.digest, "fold_seconds": fold_s,
            "weights_available": weights.available(), **rep}
     rep["total_seconds"] = round(time.time() - t0, 3)
