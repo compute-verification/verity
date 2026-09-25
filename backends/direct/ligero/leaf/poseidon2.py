@@ -167,6 +167,96 @@ poseidon2_rows(unsigned* __restrict__ W, int l, int n_sponges, const int* __rest
 """
 
 
+def row_sponge_kernel_source() -> str:
+    """CUDA source of ``row_sponge``: one thread per committed row, the sponge along its ``steps`` rate blocks with the
+    state in registers (the permutation as :func:`poseidon2_babybear.permute_ring`'s straight-line code, as
+    :func:`sponge_kernel_source`), writing the linked rows ``cap - IV`` before every block and the digest after the last:
+    :func:`sponge_lanes` / ``hash_rows_np`` for all rows at once."""
+    em: list[str] = []
+    state = [_Sym(em, f"s[{i}]", P - 1) for i in range(h2.WIDTH)]
+
+    def reduce(x):
+        if isinstance(x, _Sym):
+            return x if x.bound < P else x._new(f"{x.var} % P", P - 1)
+        return int(x) % P
+
+    def sbox(x: _Sym) -> _Sym:
+        x2 = x._new(f"({x.var} * {x.var}) % P", P - 1)
+        x3 = x._new(f"({x2.var} * {x.var}) % P", P - 1)
+        x4 = x._new(f"({x2.var} * {x2.var}) % P", P - 1)
+        return x._new(f"({x4.var} * {x3.var}) % P", P - 1)
+
+    out = h2.permute_ring(state, sbox, reduce)
+    em += [f"    s[{i}] = {o.var};" for i, o in enumerate(out)]
+    body = "\n".join(em)
+    return f"""
+#define P {P}ULL
+typedef unsigned long long u64;
+
+__device__ __forceinline__ void permute(u64* s)
+{{
+{body}
+}}
+
+extern "C" __global__ void __launch_bounds__(32)
+row_sponge(const long long* __restrict__ el, int n, int steps, const unsigned* __restrict__ iv, long long* __restrict__ cap,
+           long long* __restrict__ dg)
+{{
+    const int r = blockIdx.x * blockDim.x + threadIdx.x;
+    if (r >= n) return;
+    u64 s[{h2.WIDTH}];
+#pragma unroll
+    for (int x = 0; x < {h2.CAPACITY}; ++x) s[{h2.RATE} + x] = iv[x];
+    for (int st = 0; st < steps; ++st) {{
+        const size_t base = (size_t)r * steps + st;
+#pragma unroll
+        for (int x = 0; x < {h2.CAPACITY}; ++x) cap[base * {h2.CAPACITY} + x] = (long long)((s[{h2.RATE} + x] + P - iv[x]) % P);
+#pragma unroll
+        for (int j = 0; j < {h2.RATE}; ++j) s[j] = (u64)el[base * {h2.RATE} + j] % P;
+        permute(s);
+    }}
+#pragma unroll
+    for (int x = 0; x < {h2.OUT}; ++x) dg[(size_t)r * {h2.OUT} + x] = (long long)s[x];
+}}
+"""
+
+
+_ROW_SPONGE: dict = {}
+
+
+def row_sponge_kernel():
+    """The compiled ``row_sponge`` of the current device (cupy RawModule, once per process and device), or ``None`` without
+    cupy.  Compiling is a function of the Poseidon2 constants alone: :meth:`Poseidon2Leaf.prepare` does it before any clock."""
+    try:
+        import cupy as cp
+    except ImportError:
+        return None
+    dev = cp.cuda.Device().id
+    fn = _ROW_SPONGE.get(dev)
+    if fn is None:
+        fn = _ROW_SPONGE[dev] = cp.RawModule(code=row_sponge_kernel_source(), options=("-std=c++17",)).get_function("row_sponge")
+    return fn
+
+
+def row_sponges_lanes(el, iv: list[int], n: int, steps: int):
+    """``el`` (n * steps, 16) int64 CUDA torch rate lanes (row-major: row r's block s at r * steps + s) from the capacity
+    ``iv`` -> ``(cap (n, steps, 8): cap - IV before every block, digests (n, 8))`` int64, by :func:`row_sponge_kernel`;
+    ``None`` when it is unavailable.  Equal to :func:`sponge_lanes` (``cap.T.reshape(n, steps, 8)``, digests)."""
+    import torch
+    fn = row_sponge_kernel()
+    if fn is None or not el.is_cuda:
+        return None
+    import cupy as cp
+    el = el.to(torch.int64).contiguous()
+    cap = torch.empty((n, steps, h2.CAPACITY), dtype=torch.int64, device=el.device)
+    dg = torch.empty((n, h2.OUT), dtype=torch.int64, device=el.device)
+    if n:
+        with cp.cuda.ExternalStream(torch.cuda.current_stream(el.device).cuda_stream):
+            ivc = cp.asarray(np.asarray([int(v) for v in iv[h2.RATE:]], dtype=np.uint32))
+            fn((-(-n // 32),), (32,), (cp.asarray(el), np.int32(n), np.int32(steps), ivc, cp.asarray(cap), cp.asarray(dg)))
+    return cap, dg
+
+
 class Poseidon2Witness:
     """The witness hook (witness_device.py ``sys.witness_hooks``) writing the sponges' S-box rows on the device.
     ``sponges``: per sponge ``(bit_rows word-major, cap_rows, iv_capacity, sbox_rows [(x2, x3, x4, x7), ...])``.
@@ -352,6 +442,11 @@ def _pack_elements_np(el: np.ndarray, lanes: LaneFormat) -> np.ndarray:
     return out
 
 
+def _arange_like(n: int, like):
+    import torch
+    return torch.arange(n, dtype=torch.int64, device=like.device)
+
+
 def _pack_elements_torch(el, lanes: LaneFormat):
     import torch
     per, n_lanes = lane_geometry(lanes)
@@ -419,6 +514,14 @@ class Poseidon2Leaf:
     def leaf_bytes(self, digest_row) -> bytes:
         return row_leaf_value(digest_row)
 
+    def leaf_bytes_many(self, digests: np.ndarray) -> list[bytes]:
+        """:meth:`leaf_bytes` of every row of ``digests`` (count, 8) in [0, p)."""
+        d = np.asarray(digests, dtype=np.int64)
+        if d.ndim != 2 or d.shape[1] != h2.OUT or ((d < 0) | (d >= h2.P)).any():
+            raise ValueError("a row digest is 8 BabyBear lanes")
+        b = d.astype(">u4").tobytes()
+        return [b[32 * i:32 * i + 32] for i in range(d.shape[0])]
+
     # --- gadget --------------------------------------------------------------------------------------------------------
     def gadget(self, ctx: LigeroCtx, words: Sequence[Expr], *, word_bits: int, role: int, row_words: int,
                carry_in: Sequence[Expr], first: bool = False, last: bool = True) -> tuple[list[Expr], list[Expr]]:
@@ -464,6 +567,31 @@ class Poseidon2Leaf:
             return sponge_states(words, word_bits, role, row_words, n_vus, steps, l)
         el = _pack_elements_torch(self.lanes.elements_torch(words), self.lanes)
         return sponge_lanes(el, h2.IV(role, self.lanes.elem_bits, self._row_elems(row_words)), n_vus, steps, l)
+
+    def row_sponges(self, words, *, word_bits: int, role: int, row_words: int, n: int, steps: int):
+        """The committer's sponges of ``n`` whole rows at once: ``words`` (n * steps, k) int64 CUDA torch, row-major ->
+        ``(cap (n, steps, 8), digests (n, 8))`` = :meth:`chain_witness` reshaped per row, whose digests are :meth:`native`'s
+        (the tree leaves); ``None`` off CUDA or without cupy (the caller falls back to :meth:`chain_witness`)."""
+        if not words.is_cuda:
+            return None
+        if self.lanes is None:
+            per = h2.LANE_BITS // word_bits
+            if bool(((words < 0) | (words >= 2**word_bits)).any()):
+                raise ValueError("word out of range")
+            w = words.reshape(words.shape[0], h2.RATE, per)
+            el = (w * (2 ** (word_bits * _arange_like(per, words)))[None, None, :]).sum(2)
+            iv = h2.IV(role, word_bits, row_words)
+        else:
+            e = self.lanes.elements_torch(words)
+            if bool(((e < 0) | (e >= 2**self.lanes.elem_bits)).any()):
+                raise ValueError("lane element out of range")
+            el = _pack_elements_torch(e, self.lanes)
+            iv = h2.IV(role, self.lanes.elem_bits, self._row_elems(row_words))
+        return row_sponges_lanes(el, iv, n, steps)
+
+    def prepare(self) -> None:
+        """Compile the committer's device kernel (a function of the constants only; outside every clock)."""
+        row_sponge_kernel()
 
     def census(self) -> dict:
         out = {"permutations_per_unit": 2,

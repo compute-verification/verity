@@ -251,6 +251,129 @@ def test_sponge_kernel_source_is_the_permutation() -> None:
         hashchain.sponge_kernel_source(8, 2, 212)
 
 
+def test_row_sponge_kernel_permute_is_the_permutation() -> None:
+    """The committer kernel's ``permute`` body, executed in Python, is Poseidon2 (KAT)."""
+    import re
+    from .leaf.poseidon2 import row_sponge_kernel_source
+    src = row_sponge_kernel_source()
+    body = src.split("permute(u64* s)\n{\n", 1)[1].split("\n}\n", 1)[0].splitlines()
+    inp, exp = h2.KAT_24
+    env = {f"s{i}": v for i, v in enumerate(inp)}
+    out = {}
+    tmp, fin = re.compile(r"\s*u64 (t\d+) = (.*);"), re.compile(r"\s*s\[(\d+)\] = (t\d+);")
+    for line in body:
+        m = tmp.match(line)
+        if m:
+            env[m.group(1)] = eval(re.sub(r"s\[(\d+)\]", r"s\1", m.group(2).replace("ULL", "")), {"P": P}, env)  # noqa: S307
+            assert 0 <= env[m.group(1)] < 2**64
+            continue
+        m = fin.match(line)
+        assert m, line
+        out[int(m.group(1))] = env[m.group(2)]
+    assert [out[i] for i in range(h2.WIDTH)] == list(exp)
+
+
+def test_batch_merkle_framing_is_the_domain_framing() -> None:
+    """``auth.leaf_hashes`` / ``_node_chunk`` / ``_pad_chunk`` (one hashed prefix per domain) hash the bytes
+    ``CommitmentDomain.leaf`` / ``.node`` and the pad leaf do; ``leaf_bytes_many`` is ``row_leaf_value`` per row."""
+    from verity.commitments.merkle import _PAD, _hash, _uint
+    from verity.commitments.rowleaf import row_leaf_value
+
+    from . import auth
+    from .leaf.poseidon2 import Poseidon2Leaf
+    rng = np.random.default_rng(9)
+    for count in (1, 5, 300):
+        dom = auth.domain_for(bytes(range(32)), 1, count)
+        vals = [rng.integers(0, 256, int(rng.integers(0, 40)), dtype=np.uint8).tobytes() for _ in range(count)]
+        for start in (0, 255, 70000):
+            want = b"".join(dom.leaf(start + i, start + i, "sch", v) for i, v in enumerate(vals))
+            assert auth.leaf_hashes(dom.domain_id, start, "sch", vals) == want
+        pairs = rng.integers(0, 256, (count, 64), dtype=np.uint8)
+        for lv, start in ((0, 0), (3, 255), (11, 1 << 20)):
+            want = b"".join(dom.node(lv, start + i, pairs[i, :32].tobytes(), pairs[i, 32:].tobytes()) for i in range(count))
+            assert auth._node_chunk((dom, lv, start, pairs)) == want
+        want = b"".join(_hash(_PAD, dom.domain_id, _uint(r)) for r in range(250, 260))
+        assert auth._pad_chunk((dom.domain_id, 250, 260)) == want
+    d = rng.integers(0, P, (7, 8))
+    assert Poseidon2Leaf().leaf_bytes_many(d) == [row_leaf_value(r) for r in d]
+    with pytest.raises(ValueError):
+        Poseidon2Leaf().leaf_bytes_many(np.full((1, 8), P))
+
+
+def test_synthetic_rows_are_the_vu_words(tmp_path) -> None:
+    """``instances``' ``x_rows`` / ``w_cols`` (what ``commit_vus`` commits) are the VUs' own ``a`` / ``b`` words, drawn
+    and from the npz cache; ``_instance`` is unchanged."""
+    from .relchain import _instance, _word_rows
+    rel = relation("fp8-ada")
+    for data in (instances(rel, 4), instances(rel, 4, cache=tmp_path), instances(rel, 4, cache=tmp_path)):
+        x, w = _word_rows(data.x_rows), _word_rows(data.w_cols)
+        assert x.shape == w.shape == (4, len(data[0][0]))
+        assert x.tolist() == [list(v[0]) for v in data] and w.tolist() == [list(v[1]) for v in data]
+    assert _instance((rel.name, rel.instance_seed, 2)) == tuple(data[2])
+
+
+def test_frozen_rows_are_the_vu_words() -> None:
+    """``frozen_instances``' ``x_rows`` / ``w_cols`` are the VUs' own ``a`` / ``b`` words, past the tier's end too
+    (recycled ``i mod n``)."""
+    from verity_numerical.bench import instances as frozen
+
+    from .relchain import _word_rows, frozen_instances
+    rel = relation("bf16-ampere")
+    try:
+        n_tier = frozen.load(rel.frozen_tier, frozen.DEFAULT_ROOT).n
+    except FileNotFoundError:
+        pytest.skip("frozen instances not built")
+    data = frozen_instances(rel, n_tier + 2)
+    x, w = _word_rows(data.x_rows), _word_rows(data.w_cols)
+    assert x.shape == w.shape == (n_tier + 2, len(data[0][0]))
+    for i in (0, 1, n_tier - 1, n_tier, n_tier + 1):
+        assert x[i].tolist() == list(data[i][0]) and w[i].tolist() == list(data[i][1])
+    small = frozen_instances(rel, 3)
+    assert np.array_equal(small.x_rows, x[:3]) and np.array_equal(small.w_cols, w[:3])
+
+
+def _fp4_rows(rng, n: int, steps: int) -> np.ndarray:
+    from .fp4.hashed import FP4Format
+    k = FP4Format().k
+    codes = rng.integers(0, 16, (n * steps, k - 4))
+    scales = rng.integers(0, 128, (n * steps, 4))
+    return np.concatenate([codes, scales], 1).reshape(n, steps * k)
+
+
+@pytest.mark.parametrize("fmt", ["w8", "w16", "fp4"])
+def test_row_sponge_kernel_equals_chain_witness_and_native(fmt) -> None:
+    """On CUDA: the committer's one-thread-per-row sponge gives the linked rows of :meth:`chain_witness` (reshaped per
+    row) and the digests of :meth:`native` (the tree leaves), for plain 8- and 16-bit words and the fp4 lane format."""
+    if not torch.cuda.is_available():
+        pytest.skip("CUDA")
+    from .leaf.poseidon2 import Poseidon2Leaf, row_sponge_kernel
+    if row_sponge_kernel() is None:
+        pytest.skip("cupy")
+    rng = np.random.default_rng(5)
+    n, steps = 37, 5
+    if fmt == "fp4":
+        from .fp4.hashed import FP4Format
+        leaf, word_bits = Poseidon2Leaf().with_lanes(FP4Format()), 4
+        k = FP4Format().k
+        rows = _fp4_rows(rng, n, steps)
+    else:
+        leaf, word_bits = Poseidon2Leaf(), int(fmt[1:])
+        k = h2.RATE * (16 // word_bits)
+        rows = rng.integers(0, 2**word_bits, (n, steps * k))
+    for role in (h2.ROLE_X, h2.ROLE_W):
+        words = torch.as_tensor(rows.reshape(n * steps, k), dtype=torch.int64, device="cuda")
+        got = leaf.row_sponges(words, word_bits=word_bits, role=role, row_words=steps * k, n=n, steps=steps)
+        assert got is not None
+        cap, dg = leaf.chain_witness(words, word_bits=word_bits, role=role, row_words=steps * k, n_vus=n, steps=steps,
+                                     l=n * steps)[:2]
+        assert torch.equal(got[0], cap.T.reshape(n, steps, h2.CAPACITY)) and torch.equal(got[1], dg)
+        assert np.array_equal(got[1].cpu().numpy(), leaf.native(rows, word_bits=word_bits, role=role))
+    bad = torch.as_tensor(rows.reshape(n * steps, k), dtype=torch.int64, device="cuda")
+    bad[3, 0] = -1
+    with pytest.raises(ValueError):
+        leaf.row_sponges(bad, word_bits=word_bits, role=h2.ROLE_X, row_words=steps * k, n=n, steps=steps)
+
+
 def test_precomputed_row_sponges_equal_the_per_proof_sponge(runner) -> None:
     """``commit`` runs every committed row's sponge once; the gathered capacity rows / digests are what the per-proof
     sponge computes on the same words, and a prover whose words differ from the claimed rows falls back to them."""

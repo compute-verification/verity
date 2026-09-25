@@ -452,6 +452,12 @@ def main(argv=None) -> int:
                                          help="--auth included-hash, --pipeline >= 2: every rep commits its batch from scratch (no tree "
                                               "cache), timed apart from t.total: commit.seconds = the median over the timed reps, "
                                               "e2e.seconds = commit.seconds + t.total (what the Table 2 P divides)")
+    sub.choices["bench-vu"].add_argument("--commit-reps", type=int, default=0, metavar="N",
+                                         help="--auth included-hash[-shared]: build the commitment from scratch N more times after the first "
+                                              "(which may load --auth-cache); commit.seconds = their median, e2e.seconds = commit.seconds + t.total")
+    sub.choices["bench-vu"].add_argument("--commit-evidence", default=None, metavar="FILE",
+                                         help="--auth included-hash[-shared]: write the committed set's roots and the sha256 of its digests, "
+                                              "tree levels and chain states (identical over every build) as JSON")
     sub.choices["bench-vu"].add_argument("--verifier", default=None, metavar="tcp://HOST:PORT",
                                          help="interactive mode: take the step-0 coins of every recorded rep from a LIVE verifier "
                                               "(backends.direct.ligero.live serve) on another machine and send it every prover message as "
