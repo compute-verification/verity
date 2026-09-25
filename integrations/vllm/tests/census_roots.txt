@@ -17,11 +17,8 @@ verity_vllm/ops/fa3_row_negatives.sh
 verity_vllm/ops/pod_fa2_tap.sh
 verity_vllm/ops/pod_fa3_tap.sh
 verity_vllm/ops/pod_hidden_gpu.sh
-verity_vllm/ops/row_pod.sh
-verity_vllm/ops/run_row_v2.sh
 verity_vllm/ops/stoch_negative_n3.sh
 verity_vllm/ops/stoch_negatives.sh
-verity_vllm/ops/tp_stage.sh
 **/*_negatives.sh
 **/*_negative_*.sh
 

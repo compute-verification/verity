@@ -36,11 +36,12 @@ import time
 
 _T_PROCESS0 = time.time()      # [R16 sys] process start (before the torch / vLLM imports)
 
-import argparse
 import json
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
+from verity_vllm.config import option
 from verity_vllm.engine import engine_profile as prof  # noqa: F401  (apply_env before vllm import)
 
 prof.apply_env()
@@ -117,35 +118,44 @@ def parse_steps(s: str | None) -> frozenset[int]:
     return frozenset(int(x) for x in s.split(",") if x.strip() != "")
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--workload", default="workloads/workload_32x16_1req.json")
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--checkpoints", default="manifests/checkpoints.json")
-    ap.add_argument("--snapshot-steps", default=None, help="comma-separated engine steps to snapshot, e.g. 0,1,8")
-    ap.add_argument("--snapshot-max-bytes", type=int, default=32 << 20)
-    ap.add_argument("--snapshot-max-bytes-op", type=int, default=None,
-                    help="lower per-tensor cap at dispatcher-call events (aten / custom ops); Triton launch events keep --snapshot-max-bytes "
-                         "(a large launch output is copied once at the launch, not at every view that touches it)")
-    ap.add_argument("--no-observer", action="store_true", help="non-interference control: same workload, no observer")
-    ap.add_argument("--no-reenter", action="store_true")
-    ap.add_argument("--no-triton", action="store_true")
-    ap.add_argument("--no-module-hooks", action="store_true")
-    ap.add_argument("--max-tokens", type=int, default=None)
-    ap.add_argument("--no-warmup", action="store_true", help="skip the uninstrumented throwaway warm-up pass")
-    ap.add_argument("--adapter-revision", default=None)
-    ap.add_argument("--wheel-sha256", default="7aa52ac71500caf74643135a340eb2d03ae0386d4282fc0b23846940029fbbb3")
-    ap.add_argument("--vllm-commit", default="d9105ea80")
-    ap.add_argument("--max-num-seqs", type=int, default=8)
-    ap.add_argument("--case", default=None, help="checkpoint role (B0 SmolLM2-135M, B1 Qwen2.5-1.5B); default: the workload file's, else B0")
-    ap.add_argument("--verify-weights", action="store_true", help="sha256-verify the local checkpoint files against the manifest before loading (root policy: weight identity)")
-    ap.add_argument("--engine-arg", action="append", default=[], help="LLM(**kw) override key=value (JSON value), repeatable; e.g. max_num_batched_tokens=64")
-    ap.add_argument("--target", default=None, help="[R13 hopper] TargetProfile JSON overrides / path the engine is built for (default: the workload's `target` block over this device)")
-    ap.add_argument("--acquisition-manifest", default=None, help="[v2 acquire, Phase 4a] the row's required-value manifest: the plan's hooks are installed beside "
-                    "the observer (occurrence counts only: DIR/acquisition_observed.json) and DIR/runtime_tree.json, acquisition_plan.json are "
-                    "written (default: $ACQUIRE_MANIFEST)")
-    args = ap.parse_args()
+@dataclass(frozen=True, kw_only=True)
+class Options:
+    workload: str = option("--workload", default="workloads/workload_32x16_1req.json")
+    out: str = option("--out")
+    checkpoints: str = option("--checkpoints", default="manifests/checkpoints.json")
+    snapshot_steps: str | None = option("--snapshot-steps", default=None,
+                                        help="comma-separated engine steps to snapshot, e.g. 0,1,8")
+    snapshot_max_bytes: int = option("--snapshot-max-bytes", type=int, default=32 << 20)
+    snapshot_max_bytes_op: int | None = option("--snapshot-max-bytes-op", type=int, default=None,
+                                               help="lower per-tensor cap at dispatcher-call events (aten / custom ops); Triton launch events keep --snapshot-max-bytes "
+                                               "(a large launch output is copied once at the launch, not at every view that touches it)")
+    no_observer: bool = option("--no-observer", default=False, action="store_true",
+                               help="non-interference control: same workload, no observer")
+    no_reenter: bool = option("--no-reenter", default=False, action="store_true")
+    no_triton: bool = option("--no-triton", default=False, action="store_true")
+    no_module_hooks: bool = option("--no-module-hooks", default=False, action="store_true")
+    max_tokens: int | None = option("--max-tokens", type=int, default=None)
+    no_warmup: bool = option("--no-warmup", default=False, action="store_true",
+                             help="skip the uninstrumented throwaway warm-up pass")
+    adapter_revision: str | None = option("--adapter-revision", default=None)
+    wheel_sha256: str = option("--wheel-sha256", default="7aa52ac71500caf74643135a340eb2d03ae0386d4282fc0b23846940029fbbb3")
+    vllm_commit: str = option("--vllm-commit", default="d9105ea80")
+    max_num_seqs: int = option("--max-num-seqs", type=int, default=8)
+    case: str | None = option("--case", default=None,
+                              help="checkpoint role (B0 SmolLM2-135M, B1 Qwen2.5-1.5B); default: the workload file's, else B0")
+    verify_weights: bool = option("--verify-weights", default=False, action="store_true",
+                                  help="sha256-verify the local checkpoint files against the manifest before loading (root policy: weight identity)")
+    engine_arg: list[str] = option("--engine-arg", action="append", default=[],
+                                   help="LLM(**kw) override key=value (JSON value), repeatable; e.g. max_num_batched_tokens=64")
+    target: str | None = option("--target", default=None,
+                                help="[R13 hopper] TargetProfile JSON overrides / path the engine is built for (default: the workload's `target` block over this device)")
+    acquisition_manifest: str | None = option("--acquisition-manifest", default=None,
+                                              help="[v2 acquire, Phase 4a] the row's required-value manifest: the plan's hooks are installed beside "
+                                              "the observer (occurrence counts only: DIR/acquisition_observed.json) and DIR/runtime_tree.json, acquisition_plan.json are "
+                                              "written (default: $ACQUIRE_MANIFEST)")
 
+
+def main(args: Options) -> None:
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     wl = va.load_workload(args.workload, args.max_tokens)
@@ -314,7 +324,3 @@ def main() -> None:
     (out / "tokens.json").write_text(json.dumps(doc, indent=1) + "\n")
     tl.event("process.end", "mark", rc=0, s=round(time.time() - _T_PROCESS0, 3))
     print(f"[m1] done -> {out}", flush=True)
-
-
-if __name__ == "__main__":
-    main()

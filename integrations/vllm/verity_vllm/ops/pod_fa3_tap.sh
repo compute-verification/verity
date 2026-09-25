@@ -57,7 +57,7 @@ fi
 if [ -n "$WHY" ]; then
   log "REBUILD fa3_matReq hdims=$HDIMS (nvcc $NVCC_VER) MAX_JOBS=$MAX_JOBS -- $WHY; source-set ${SRC_SHA:0:16}"
   NEW="$OUT.build-$$"; rm -rf "$NEW"; mkdir -p "$NEW"          # build beside the live .so, swap when done (see pod_fa2_tap.sh)
-  $PY "$SRC/build_fa3_ext.py" --tree "$TREE" --name verity_fa3_matReq --build-dir "$NEW" --hdims "$HDIMS" \
+  PYTHONPATH="$REPO${PYTHONPATH:+:$PYTHONPATH}" verity-vllm fa3-tap-build --tree "$TREE" --name verity_fa3_matReq --build-dir "$NEW" --hdims "$HDIMS" \
       --tree-commit "$PIN+fa3tap" --define VERITY_TAP=3 --define VERITY_MAT_SRC=59 > "$FA2/logs/build_fa3_matReq.log" 2>&1 \
       || { rm -rf "$NEW"; fail "build (see $FA2/logs/build_fa3_matReq.log: $(grep -a -m1 -i 'error' "$FA2/logs/build_fa3_matReq.log" | cut -c1-300))"; }
   echo "$SRC_SHA" > "$NEW/source_set.sha256"

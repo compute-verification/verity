@@ -12,7 +12,7 @@ are core `verity.evaluation` kernels (`KERNEL`) of their Definitions, checked ag
                                            # order, holding the leaf encodings exactly as `Replayer.operand_words`
                                            # lists them (uint64; uint16/uint32 straight from a snapshot/checkpoint
                                            # carry the same values); returns the output encodings as uint64.
-    uv run python -m verity_vllm.program.kernels.twins --check --log LOG --snapshots DIR --profile P --seed S --out twins.json
+    uv run verity-vllm twins --check --log LOG --snapshots DIR --profile P --seed S --out twins.json
 
 Twins (twin_id -> registered body it reproduces; see `out/capture/reports/h4_twins.md` for the reduction orders):
     gemm.bf16.tc_chain.v1        Gemm_v1              tc_model.cpp `gemm_model` (one ascending k16 chain per coordinate,
@@ -34,7 +34,6 @@ captured instances against their output snapshots, edge words) and written as `v
 """
 from __future__ import annotations
 
-import argparse
 import ctypes
 import glob
 import json
@@ -49,9 +48,11 @@ from functools import partial
 from typing import Any, Callable
 
 import numpy as np
+from dataclasses import dataclass
 
 from verity.evaluation import self_check
 from verity.ir.defs import SpecializedDefinition, bind
+from verity_vllm.config import UsageError, option
 from verity_vllm.program.kernels.kernel_registry import Declined, covers, instance, register
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import prims as P
@@ -1006,27 +1007,30 @@ def check_families(rng: np.random.Generator, *, n_random: int, n_edge: int) -> d
     return out
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--check", action="store_true", help="equivalence evidence against the gate evaluator (writes --out)")
-    ap.add_argument("--log", default=None)
-    ap.add_argument("--snapshots", default=None)
-    ap.add_argument("--profile", default=None)
-    ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--n-random", type=int, default=12, help="random instances per spec (and per family)")
-    ap.add_argument("--n-edge", type=int, default=8, help="edge-word instances per spec (and per family)")
-    ap.add_argument("--k", type=int, default=3, help="captured instances per spec")
-    ap.add_argument("--only", default=None, help="comma-separated base ids or spec ids to check")
-    ap.add_argument("--safetensors", default=None)
-    ap.add_argument("--cos-sin", default=None)
-    ap.add_argument("--out", default=None)
-    a = ap.parse_args(argv)
+@dataclass(frozen=True, kw_only=True)
+class Options:
+    check: bool = option("--check", default=False, action="store_true",
+                         help="equivalence evidence against the gate evaluator (writes --out)")
+    log: str | None = option("--log", default=None)
+    snapshots: str | None = option("--snapshots", default=None)
+    profile: str | None = option("--profile", default=None)
+    seed: int = option("--seed", type=int, default=0)
+    n_random: int = option("--n-random", type=int, default=12, help="random instances per spec (and per family)")
+    n_edge: int = option("--n-edge", type=int, default=8, help="edge-word instances per spec (and per family)")
+    k: int = option("--k", type=int, default=3, help="captured instances per spec")
+    only: str | None = option("--only", default=None, help="comma-separated base ids or spec ids to check")
+    safetensors: str | None = option("--safetensors", default=None)
+    cos_sin: str | None = option("--cos-sin", default=None)
+    out: str | None = option("--out", default=None)
+
+
+def main(a: Options) -> int:
     if not a.check:
-        ap.error("nothing to do: --check")
+        raise UsageError("nothing to do: --check")
     t0 = time.time()
     if a.log:
         if not a.profile:
-            ap.error("--log needs --profile")
+            raise UsageError("--log needs --profile")
         rep = check_log(a.log, a.profile, a.snapshots, seed=a.seed, n_random=a.n_random, n_edge=a.n_edge, k=a.k,
                         safetensors=a.safetensors, cos_sin=a.cos_sin, only=set(a.only.split(",")) if a.only else None)
     else:
@@ -1043,7 +1047,3 @@ def main(argv: list[str] | None = None) -> int:
         print(str(out))
     print(f"twins {rep['status']}: {rep.get('summary')} {rep['seconds']}s {rep.get('max_rss_gb')}GB", file=sys.stderr)
     return 0 if rep["status"] == "pass" else 1
-
-
-if __name__ == "__main__":
-    sys.exit(main())

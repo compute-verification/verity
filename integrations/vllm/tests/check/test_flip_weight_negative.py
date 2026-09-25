@@ -43,9 +43,9 @@ def _canary_regex() -> str:
 def test_commit_delta_declares_flip_weight_and_applies_it_before_register_weights():
     src = DELTA.read_text()
     tree = ast.parse(src)
-    main = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "main")
-    opts = [a.value for node in ast.walk(main) if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
-            and node.func.attr == "add_argument" for a in node.args if isinstance(a, ast.Constant)]
+    options = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "Options")
+    opts = [a.value for node in ast.walk(options) if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+            and node.func.id == "option" for a in node.args if isinstance(a, ast.Constant)]
     assert opts.count("--flip-weight") == 1
     # order in the source of main(): record initialised -> flip applied (named_parameters, before register_weights) -> verdict.json carries it
     i_init = src.index("flip_weight_rec: dict | None = None")
@@ -56,8 +56,8 @@ def test_commit_delta_declares_flip_weight_and_applies_it_before_register_weight
     # the flip refuses to be a no-op (an unchanged element would make the negative un-failable)
     assert "did not change the element" in src
     # the flag is documented as a negative-test-only flag, never a row-procedure flag
-    row_pod = (BENCH / "row_pod.sh").read_text()
-    assert "--flip-weight" not in row_pod
+    for driver in ("row_stages.py", "row_tp.py"):
+        assert "--flip-weight" not in (BENCH.parent / "pipeline" / driver).read_text()
 
 
 def test_canary_flipweight_regex_matches_the_verdict_text_of_a_pin_fail():

@@ -23,18 +23,18 @@ def test_the_seed_has_no_default(module, name):
 
 @pytest.mark.parametrize("tier", ["a", "chain"])
 def test_replay_refuses_a_sampled_tier_without_a_seed(tier, tmp_path, capsys):
-    from verity_vllm.check.replay import replay
+    from verity_vllm.pipeline import cli
 
     with pytest.raises(SystemExit) as e:
-        replay.main(["--log", str(tmp_path / "log.jsonl.gz"), "--profile", "unused", "--tier", tier, "--out", str(tmp_path / "out.json")])
+        cli.main(["replay", "--log", str(tmp_path / "log.jsonl.gz"), "--profile", "unused", "--tier", tier, "--out", str(tmp_path / "out.json")])
     assert e.value.code == 2 and "--seed is required" in capsys.readouterr().err and not (tmp_path / "out.json").exists()
 
 
 def test_capture_identities_refuses_to_sample_coordinates_without_a_seed(tmp_path, capsys):
-    from verity_vllm.correspondence import capture_identities as CO
+    from verity_vllm.pipeline import cli
 
     with pytest.raises(SystemExit) as e:
-        CO.main(["--commit", str(tmp_path), "--checkpoint", str(tmp_path / "x.safetensors"), "--request", "r0", "--positions", "0",
+        cli.main(["capture-identities", "--commit", str(tmp_path), "--checkpoint", str(tmp_path / "x.safetensors"), "--request", "r0", "--positions", "0",
                  "--out", str(tmp_path / "corr.json")])
     assert e.value.code == 2 and "--seed" in capsys.readouterr().err and not (tmp_path / "corr.json").exists()
 

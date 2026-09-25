@@ -1,27 +1,23 @@
-"""verity_vllm: the Verity x vLLM replay proof-of-concept harness (worker W2).
+"""verity_vllm: Verity for vLLM serving.
 
-Pure Python + numpy.  Nothing here imports torch at module level; the
-``same_runtime`` relation checkers that need torch live behind optional
-imports inside :mod:`verity_vllm.program.kernels.relations`.
-
-Module map (see ``docs/vllm-poc/capture-format.md`` for the on-disk format):
-
-- :mod:`verity_vllm.commit.hashing`     ``H(tag, *parts)`` and the leaf/node/lift/ids tags
-- :mod:`verity_vllm.program.dtypes`      torch-style dtype strings, itemsizes, BF16 <-> float32
-- :mod:`verity_vllm.commit.identity`    canonical ids (contract section 5), weight ids, boundary ids
-- :mod:`verity_vllm.observe.capture_v1`     capture format v1 writer and lazy reader
-- :mod:`verity_vllm.commit.merkle`      Merkle trees, openings, ``commitments.json``
-- :mod:`verity_vllm.check.poc_description` ``description.json`` schema and validation
-- :mod:`verity_vllm.check.poc_required_interface`    ``required.json`` derivation and freeze
-- :mod:`verity_vllm.program.kernels.relations`   relation registry, the ``check`` runner, adjacent-VU helpers
-- :mod:`verity_vllm.relations_torch` optional torch ``same_runtime`` checkers (``install()``)
-- :mod:`verity_vllm.negatives`   targeted negative tests N01-N07, N13, N14
-- :mod:`verity_vllm.render`      ``docs/fixtures/results.md`` renderer (``python -m``)
-- :mod:`verity_vllm.verify`      fresh-process bundle verifier (``python -m``, contract 15.1)
+:class:`LLM` (``from verity_vllm import LLM``) is a pinned vLLM engine that is constructed and called like ``vllm.LLM``;
+the ``verity-vllm`` command (:mod:`verity_vllm.pipeline.cli`) runs the Build, Match and Commit stages of a row and every
+other tool.  Importing the package imports neither torch nor vLLM; ``LLM`` loads them when it is first used.
 """
 
 from __future__ import annotations
 
+from typing import Any
+
 __version__ = "0.1.0"
 
 CAPTURE_FORMAT_VERSION = 1
+
+__all__ = ["LLM"]
+
+
+def __getattr__(name: str) -> Any:
+    if name == "LLM":
+        from verity_vllm.pipeline.llm import LLM
+        return LLM
+    raise AttributeError(f"module 'verity_vllm' has no attribute {name!r}")

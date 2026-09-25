@@ -14,6 +14,7 @@ import sys
 import pytest
 
 from verity_vllm.pipeline import match as RC
+from verity_vllm.pipeline import cli
 
 LLAMA_1B = {"H": 2048, "I": 8192, "GU": 16384, "QKV": 3072, "V": 128256}         # analytic.config_of keys
 QWEN_15B = {"H": 1536, "I": 8960, "GU": 17920, "QKV": 2048, "V": 151936}
@@ -89,12 +90,12 @@ def test_main_derives_the_cap_only_when_none_is_given_and_records_the_derivation
     base = ["--case", "LLAMA32_1B", "--profile", "derived_LLAMA32_1B", "--workload", str(wl), "--out", str(tmp_path / "run"),
             "--hf-config", str(hf), "--dry-run"]
     with pytest.raises(SystemExit):
-        RC.main(base)
+        cli.main(["match", *base])
     a = seen["a"]
     assert a.snapshot_max_bytes == 2048 * 16384 * 2 and a.snapshot_cap_derivation["raised"] is True
     assert a.snapshot_cap_derivation["row_bytes_source"] == "hf config GU=16384 x bf16"
     with pytest.raises(SystemExit):
-        RC.main(base + ["--snapshot-max-bytes", "4096"])
+        cli.main(["match", *base, "--snapshot-max-bytes", "4096"])
     a2 = seen["a"]
     assert a2.snapshot_max_bytes == 4096 and a2.snapshot_cap_derivation is None
     # a run.json re-run (--run-dir) keeps the cap the capture ran with, never a re-derived one
@@ -102,7 +103,7 @@ def test_main_derives_the_cap_only_when_none_is_given_and_records_the_derivation
     (run / RC.G.ARTIFACTS.get("run", "run.json")).write_text(json.dumps({"case": "LLAMA32_1B", "workload_path": str(wl), "profile": "derived_LLAMA32_1B",
                                                                        "config_id": "x", "snapshot_max_bytes": 777, "snapshot_cap_derivation": {"rows": 1}}))
     with pytest.raises(SystemExit):
-        RC.main(["--run-dir", str(run), "--phase", "cpu", "--dry-run"])
+        cli.main(["match", "--run-dir", str(run), "--phase", "cpu", "--dry-run"])
     a3 = seen["a"]
     assert a3.snapshot_max_bytes == 777 and a3.snapshot_cap_derivation == {"rows": 1}
 

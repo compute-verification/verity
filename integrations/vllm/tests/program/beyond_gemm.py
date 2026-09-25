@@ -23,12 +23,11 @@ Probes, each against the kernel vLLM 0.28 ships:
   exact arithmetic (float64) rounded once to FP32 and once to BF16.  The cache itself is a
   runtime-computed constant; we compare vLLM's cache with two independent recomputations.
 
-Usage: python -m tests.program.beyond_gemm --acts /workspace/results/numerics/qwen_acts --out beyond_gemm.json
+Usage (a test-side probe, not a `verity-vllm` command): `main(Options(acts="/workspace/results/numerics/qwen_acts", out="beyond_gemm.json"))`
 """
 
 from __future__ import annotations
 
-import argparse
 import json
 import os
 import time
@@ -36,6 +35,9 @@ import time
 import numpy as np
 import torch
 import torch.nn.functional as F
+from dataclasses import dataclass
+
+from verity_vllm.config import option
 
 HIDDEN, INTER, HEAD, NQ, NKV = 1536, 8960, 128, 12, 2
 EPS = 1e-6
@@ -387,14 +389,16 @@ def probe_rope(ops, acts_dir: str, layers: list[int], Ms: list[int]) -> dict:
     return res
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--acts", required=True)
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--layers", default="0,13,27")
-    ap.add_argument("--ms", default="7,64,512")
-    ap.add_argument("--skip", default="")
-    args = ap.parse_args()
+@dataclass(frozen=True, kw_only=True)
+class Options:
+    acts: str = option("--acts")
+    out: str = option("--out")
+    layers: str = option("--layers", default="0,13,27")
+    ms: str = option("--ms", default="7,64,512")
+    skip: str = option("--skip", default="")
+
+
+def main(args: Options) -> None:
     import vllm
     import vllm._custom_ops as ops
 
@@ -418,7 +422,3 @@ def main() -> None:
             print("  ", json.dumps(c), flush=True)
         with open(args.out, "w") as fh:
             json.dump(out, fh, indent=1)
-
-
-if __name__ == "__main__":
-    main()

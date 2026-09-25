@@ -1,6 +1,6 @@
 """Lane tp2 (mechanism prototype): the M1 capture driven through vLLM's multiprocess executor at `tensor_parallel_size > 1`.
 
-    HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 PYTHONPATH=. /workspace/venv-cu129/bin/python -m verity_vllm.pipeline.tp.capture \
+    HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 PYTHONPATH=. verity-vllm tp-capture \
         --workload workloads/workload_qwen15_32x16_1req.json --case B1 --tp 2 --out /vol/cp/tp2/runs/<name>/capture \
         [--snapshot-steps all|0,1,2,3] [--no-observer] [--census] [--verify-weights] [--engine-arg key=value ...]
 
@@ -23,14 +23,15 @@ driver (sanity of the driver itself).
 
 from __future__ import annotations
 
-import argparse
 import json
 import os
 import sys
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from verity_vllm.config import option
 from verity_vllm.engine import engine_profile as prof
 
 prof.apply_env()
@@ -60,35 +61,42 @@ def parse_steps(s: str | None, max_tokens: int | None) -> list[int]:
     return sorted({int(x) for x in s.split(",") if x.strip() != ""})
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--workload", default="workloads/workload_qwen15_32x16_1req.json")
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--checkpoints", default="manifests/checkpoints.json")
-    ap.add_argument("--case", default=None)
-    ap.add_argument("--tp", type=int, default=2, help="tensor_parallel_size")
-    ap.add_argument("--engine-arg", action="append", default=[], help="extra LLM(...) kwarg key=value (JSON value)")
-    ap.add_argument("--snapshot-steps", default="all", help="`all` = every step of the workload, or a comma list; empty = none")
-    ap.add_argument("--snapshot-max-bytes", type=int, default=32 << 20)
-    ap.add_argument("--no-observer", action="store_true", help="control: same engine, no extension, no observer")
-    ap.add_argument("--census", action="store_true", help="no observer; per-rank torch.profiler kernel census")
-    ap.add_argument("--no-reenter", action="store_true")
-    ap.add_argument("--no-triton", action="store_true")
-    ap.add_argument("--no-module-hooks", action="store_true")
-    ap.add_argument("--max-tokens", type=int, default=None)
-    ap.add_argument("--no-warmup", action="store_true")
-    ap.add_argument("--max-num-seqs", type=int, default=8)
-    ap.add_argument("--verify-weights", action="store_true")
-    ap.add_argument("--param-hashes", action="store_true", help="capture mode: sha256 of every rank's parameter shards -> param_hashes.rank<r>.json")
-    ap.add_argument("--record-collectives", action="store_true",
-                    help="[R17 tp D90] capture mode: also run tp2_match's collective recorder in the same engine run -> <out>/coll.rank<r>.jsonl (+ .pt of --store-steps)")
-    ap.add_argument("--store-steps", type=int, default=1 << 30, help="--record-collectives: store the partial/received tensors of steps < N (default all)")
-    ap.add_argument("--adapter-revision", default=None)
-    ap.add_argument("--wheel-sha256", default="7aa52ac71500caf74643135a340eb2d03ae0386d4282fc0b23846940029fbbb3")
-    ap.add_argument("--vllm-commit", default="d9105ea80")
-    ap.add_argument("--rpc-timeout", type=float, default=1800.0)
-    args = ap.parse_args()
+@dataclass(frozen=True, kw_only=True)
+class Options:
+    workload: str = option("--workload", default="workloads/workload_qwen15_32x16_1req.json")
+    out: str = option("--out")
+    checkpoints: str = option("--checkpoints", default="manifests/checkpoints.json")
+    case: str | None = option("--case", default=None)
+    tp: int = option("--tp", type=int, default=2, help="tensor_parallel_size")
+    engine_arg: list[str] = option("--engine-arg", action="append", default=[],
+                                   help="extra LLM(...) kwarg key=value (JSON value)")
+    snapshot_steps: str = option("--snapshot-steps", default="all",
+                                 help="`all` = every step of the workload, or a comma list; empty = none")
+    snapshot_max_bytes: int = option("--snapshot-max-bytes", type=int, default=32 << 20)
+    no_observer: bool = option("--no-observer", default=False, action="store_true",
+                               help="control: same engine, no extension, no observer")
+    census: bool = option("--census", default=False, action="store_true",
+                          help="no observer; per-rank torch.profiler kernel census")
+    no_reenter: bool = option("--no-reenter", default=False, action="store_true")
+    no_triton: bool = option("--no-triton", default=False, action="store_true")
+    no_module_hooks: bool = option("--no-module-hooks", default=False, action="store_true")
+    max_tokens: int | None = option("--max-tokens", type=int, default=None)
+    no_warmup: bool = option("--no-warmup", default=False, action="store_true")
+    max_num_seqs: int = option("--max-num-seqs", type=int, default=8)
+    verify_weights: bool = option("--verify-weights", default=False, action="store_true")
+    param_hashes: bool = option("--param-hashes", default=False, action="store_true",
+                                help="capture mode: sha256 of every rank's parameter shards -> param_hashes.rank<r>.json")
+    record_collectives: bool = option("--record-collectives", default=False, action="store_true",
+                                      help="[R17 tp D90] capture mode: also run tp2_match's collective recorder in the same engine run -> <out>/coll.rank<r>.jsonl (+ .pt of --store-steps)")
+    store_steps: int = option("--store-steps", type=int, default=1 << 30,
+                              help="--record-collectives: store the partial/received tensors of steps < N (default all)")
+    adapter_revision: str | None = option("--adapter-revision", default=None)
+    wheel_sha256: str = option("--wheel-sha256", default="7aa52ac71500caf74643135a340eb2d03ae0386d4282fc0b23846940029fbbb3")
+    vllm_commit: str = option("--vllm-commit", default="d9105ea80")
+    rpc_timeout: float = option("--rpc-timeout", type=float, default=1800.0)
 
+
+def main(args: Options) -> None:
     from vllm import LLM
 
     out = Path(args.out)
@@ -208,7 +216,3 @@ def main() -> None:
     doc["all_equal_accepted"] = all_equal
     (out / "tokens.json").write_text(json.dumps(doc, indent=1) + "\n")
     print(f"[tp2] done -> {out}", flush=True)
-
-
-if __name__ == "__main__":
-    main()

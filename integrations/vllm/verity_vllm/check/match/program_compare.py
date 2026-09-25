@@ -18,13 +18,12 @@ runs), segmented into engine steps at `TokenSelect` boundaries (one sampling eve
 
 Every difference is reported with counts and examples; nothing is dropped silently.
 
-    python -m verity_vllm.check.match.program_compare --a <dir with descriptor.json.gz + derive-report.json> \\
+    verity-vllm program-compare --a <dir with descriptor.json.gz + derive-report.json> \\
         --b <oracle dir with program.json + instances.jsonl | derived dir> --out compare.json [--unfold-a]
 """
 
 from __future__ import annotations
 
-import argparse
 import collections
 import difflib
 import gzip
@@ -32,7 +31,9 @@ import json
 import os
 import re
 import time
+from dataclasses import dataclass
 
+from verity_vllm.config import option
 from verity_vllm.program.sampling_event import is_sampling_event as _is_sampling_event  # [R15 stoch] the step-boundary families
 
 PAD_SPECS = ("Const", "I32Eq_v1", "BitNot_v1", "BitAnd_v1", "SelectI32_v1", "SelectBf16_v1")
@@ -860,15 +861,18 @@ def per_step_templates(P: Prog) -> list[dict]:
     return out
 
 
-def main(argv=None) -> int:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--a", required=True, help="derived dir (descriptor.json.gz + derive-report.json)")
-    ap.add_argument("--b", required=True, help="oracle dir (program.json + instances.jsonl) or derived dir")
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--unfold-a", action="store_true", help="A is a padded program: drop pad kinds, follow muxes")
-    ap.add_argument("--label-a", default="derived")
-    ap.add_argument("--label-b", default="oracle")
-    a = ap.parse_args(argv)
+@dataclass(frozen=True, kw_only=True)
+class Options:
+    a: str = option("--a", help="derived dir (descriptor.json.gz + derive-report.json)")
+    b: str = option("--b", help="oracle dir (program.json + instances.jsonl) or derived dir")
+    out: str = option("--out")
+    unfold_a: bool = option("--unfold-a", default=False, action="store_true",
+                            help="A is a padded program: drop pad kinds, follow muxes")
+    label_a: str = option("--label-a", default="derived")
+    label_b: str = option("--label-b", default="oracle")
+
+
+def main(a: Options) -> int:
     t0 = time.time()
     A = load_derived(a.a, a.label_a)
     B = load_oracle(a.b, a.label_b) if os.path.exists(os.path.join(a.b, "program.json")) else load_derived(a.b, a.label_b)
@@ -900,7 +904,3 @@ def main(argv=None) -> int:
                       "instances": [res["compare"]["a"]["instances"], res["compare"]["b"]["instances"]], "totals": t,
                       "histogram_diff_T_normalised": res["histogram_diff_T_normalised"], "seconds": res["seconds"]}, indent=1))
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

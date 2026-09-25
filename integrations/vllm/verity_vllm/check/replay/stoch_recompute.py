@@ -23,7 +23,7 @@ A wrong declared seed (manifest vs run) fails here by name: the kernel consumed 
 recomputed token differs (mismatch, with probability ~1).  A mutated sampler chain (another kernel / another noise / another mask)
 fails the masked-row or token comparison.  Fail closed: no snapshotted sampled row -> exit 2 (nothing was checked).
 
-    PYTHONPATH=. python -m verity_vllm.check.replay.stoch_recompute --run <match dir> [--out <json>]
+    PYTHONPATH=. verity-vllm stoch-recompute --run <match dir> [--out <json>]
     exit 0 PASS, 1 FAIL (named reasons in the report), 2 nothing checked
 
 Implementation variant this checks against (recorded in the report): vLLM d9105ea80 V2 sampler with an explicit `SamplingParams.seed`
@@ -33,14 +33,15 @@ Implementation variant this checks against (recorded in the report): vLLM d9105e
 """
 from __future__ import annotations
 
-import argparse
 import json
-import os
 import struct
 import time
 from pathlib import Path
 
 import numpy as np
+from dataclasses import dataclass
+
+from verity_vllm.config import option
 
 VARIANT = ("vllm d9105ea80 V2 sampler, explicit seed: FlashInfer disabled; _temperature_kernel -> _apply_topp_split(S) "
            "[_topp_sb_stats_kernel, _topp_sb_step_kernel x5, _topp_sb_mask_kernel] -> _gumbel_sample_kernel (Philox tl.rand + Gumbel) "
@@ -709,22 +710,27 @@ def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = No
             "reasons": reasons, "rows": rows}
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--run", required=True, help="Match dir (RUN_DIR/capture/{log.jsonl.gz,snapshots.json,values/})")
-    ap.add_argument("--out", default=None)
-    ap.add_argument("--max-rows", type=int, default=None)
-    ap.add_argument("--workload", default=None, help="the workload manifest of record (declared seeds / policy); the run's header must agree with it")
-    ap.add_argument("--jobs", type=int, default=None, help="worker processes for the row evaluations (default min(32, cpus))")
-    ap.add_argument("--build", default=None, help="the row dir holding the Build's build_request*/result.json (the Program's S per request "
-                                                  "shape, compared with the mask kernel's constexpr S at every checked row; needs --workload)")
-    ap.add_argument("--evaluator", default=os.environ.get("STOCH_EVALUATOR", "lane"), choices=sorted(EVALUATORS),
-                    help="'lane' = the registry interpreter over the V lanes (the path of record; default; env STOCH_EVALUATOR); 'rows' = the "
-                         "vectorised twins of the same gates (verity_vllm/program/registry/sampling_rows.py), milliseconds per row")
-    ap.add_argument("--reference-rows", type=int, default=int(os.environ.get("STOCH_REFERENCE_ROWS", "8")),
-                    help="under --evaluator rows: this many value-checked rows ALSO go through the lane walk; token + masked row must agree "
-                         "word for word or the verdict is FAIL by name (default 8; env STOCH_REFERENCE_ROWS)")
-    a = ap.parse_args(argv)
+@dataclass(frozen=True, kw_only=True)
+class Options:
+    run: str = option("--run", help="Match dir (RUN_DIR/capture/{log.jsonl.gz,snapshots.json,values/})")
+    out: str | None = option("--out", default=None)
+    max_rows: int | None = option("--max-rows", type=int, default=None)
+    workload: str | None = option("--workload", default=None,
+                                  help="the workload manifest of record (declared seeds / policy); the run's header must agree with it")
+    jobs: int | None = option("--jobs", type=int, default=None,
+                              help="worker processes for the row evaluations (default min(32, cpus))")
+    build: str | None = option("--build", default=None,
+                               help="the row dir holding the Build's build_request*/result.json (the Program's S per request "
+                               "shape, compared with the mask kernel's constexpr S at every checked row; needs --workload)")
+    evaluator: str = option("--evaluator", env="STOCH_EVALUATOR", default="lane", choices=sorted(EVALUATORS),
+                            help="'lane' = the registry interpreter over the V lanes (the path of record; default; env STOCH_EVALUATOR); 'rows' = the "
+                            "vectorised twins of the same gates (verity_vllm/program/registry/sampling_rows.py), milliseconds per row")
+    reference_rows: int = option("--reference-rows", type=int, env="STOCH_REFERENCE_ROWS", default=8,
+                                 help="under --evaluator rows: this many value-checked rows ALSO go through the lane walk; token + masked row must agree "
+                                 "word for word or the verdict is FAIL by name (default 8; env STOCH_REFERENCE_ROWS)")
+
+
+def main(a: Options) -> int:
     run = Path(a.run)
     rep = recompute_run(run / "capture" / "log.jsonl.gz", run / "capture", a.max_rows, workload=a.workload, jobs=a.jobs, build_dir=a.build,
                         evaluator=a.evaluator, reference_rows=a.reference_rows)
@@ -742,7 +748,3 @@ def main(argv: list[str] | None = None) -> int:
     for r in rep["reasons"][:12]:
         print("  FAIL:", r)
     return 0 if s["verdict"] == "PASS" else (2 if s["verdict"] == "NOTHING-CHECKED" else 1)
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

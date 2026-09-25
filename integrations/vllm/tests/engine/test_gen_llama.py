@@ -224,7 +224,7 @@ def test_workload_file(case):
 @pytest.mark.parametrize("case, module_name", [("LLAMA32_1B", "derived_LLAMA32_1B"), ("QWEN05", "derived_QWEN05")])
 def test_run_config_dry_run_resolves_the_profile_from_the_case(case, module_name):
     wl = f"workloads/{WORKLOADS[case]}"
-    out = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.match", "--case", case, "--workload", wl, "--out", "/r/RUN",
+    out = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "match", "--case", case, "--workload", wl, "--out", "/r/RUN",
                           "--cards-dir", "/r/cards", "--python-gpu", "/pod/py311", "--python-cpu", "/pod/py312", "--checkpoint-dir", "/ck/snap",
                           "--phase", "all", "--parallel", "8", "--replay-budget-leaves", "8000000", "--seed", "7", "--dry-run"],
                          capture_output=True, text=True, cwd=REPO, check=True).stdout
