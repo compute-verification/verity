@@ -26,6 +26,7 @@ ALLOWED = {
     "verification": {"ir", "ml", "commitments"},
     "resource_accounting": {"ir", "verification", "commitments"},
     "randomness": set(),
+    "proofs": set(),
 }
 FORBIDDEN_EXTERNAL = ("verity_sp1", "verity_vllm", "verity_torch", "sp1", "vllm", "torch", "jax", "onnx",
                       "backends", "frontends", "integrations", "research", "veritor")
