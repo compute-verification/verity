@@ -573,7 +573,7 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
                     ac, aP = best(unfiltered[(target.name, col)])
                     line["empty"][col] = {"state": "below-filter", "text": (
                         f"only below the filter: unfiltered pick {ac.config.id if ac.config else ac.family.id} {ac.art}, bound "
-                        f"2^{whole_proof_log2(ac.meta['workload_fingerprint']):.1f}, {T.fmt_overhead(N['instances_per_second'] / aP['instances_per_second'])}")}
+                        f"{_fmt_bound(whole_proof_log2(ac.meta['workload_fingerprint']))}, {T.fmt_overhead(N['instances_per_second'] / aP['instances_per_second'])}")}
         V.lines.append(line)
     return V
 
