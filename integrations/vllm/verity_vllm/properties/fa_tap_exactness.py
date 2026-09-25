@@ -25,14 +25,13 @@ passes to the installed op and parses its arguments, which library code may not 
 """
 from __future__ import annotations
 
-import hashlib
 from typing import Any, Iterator
 
 import numpy as np
 
 from verity_vllm.acquire.sources.hidden_source import KBLOCK_M, fa2_kblock_n, fa2_swapped, fa3_tile
 from verity_vllm.commit.hidden_stream import SRC_BITS, StreamLayout
-from verity_vllm.correspondence.runtime import canonical_json
+from verity_vllm.properties.record import digest_of, seal as seal_record
 
 
 SCHEMA = "verity-vllm/fa-tap-exactness/v1"
@@ -178,22 +177,16 @@ def _verdict(doc: dict[str, Any]) -> bool:
     return bool(cs) and bool(ns) and all(map(case_ok, cs)) and all(map(negative_ok, ns))
 
 
-def _digest(doc: dict[str, Any]) -> str:
-    return hashlib.sha256(canonical_json({k: v for k, v in doc.items() if k != "digest"})).hexdigest()
-
-
 def seal(doc: dict[str, Any]) -> dict[str, Any]:
     """`doc` with `ok` (at least one case and one negative, every one ok) and its `digest`."""
-    body = {k: v for k, v in doc.items() if k != "digest"}
-    body["ok"] = _verdict(body)
-    return {**body, "digest": _digest(body)}
+    return seal_record(doc, _verdict(doc))
 
 
 def verify_record(doc: dict[str, Any]) -> list[str]:
     """What is wrong with a record: its schema, its digest, and every `ok` re-derived from the fields beside it (empty = intact and
     consistent)."""
     problems = [] if doc.get("schema") == SCHEMA else [f"schema {doc.get('schema')!r}, not {SCHEMA}"]
-    if doc.get("digest") != _digest(doc):
+    if doc.get("digest") != digest_of(doc):
         problems.append("digest does not match the record")
     for kind, rule in (("cases", case_ok), ("negatives", negative_ok)):
         for e in doc.get(kind) or []:

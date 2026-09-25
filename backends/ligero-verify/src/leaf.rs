@@ -525,8 +525,19 @@ pub static SHA256: LeafScheme = LeafScheme {
     leaf_bytes: sha256_leaf_bytes,
 };
 
+/// `leaf.blake3_xob.Blake3XobLeaf` (lane b-ligero-standard-hash): the `blake3` leaf -- schema, keys, framing, digest
+/// layout -- proved by the XOR-output-bits compression circuit, so only its `PINS` differ from `BLAKE3`'s.
+pub static BLAKE3_XOB: LeafScheme = LeafScheme {
+    name: "blake3-xob",
+    display: "BLAKE3 (xob circuit)",
+    schema: "blake3-keyed/row/v2",
+    params_sha256: "6654cdb9680d9f9c782092d0cb7cf0820bcba2612b28742c2b48cdd8957785a6",
+    digest_elems: BLAKE3_DIGEST_ELEMS,
+    leaf_bytes: blake3_leaf_bytes,
+};
+
 /// Every scheme this build knows.
-pub static SCHEMES: &[&LeafScheme] = &[&POSEIDON2, &BLAKE3, &SHA256, &AJTAI_N64, &AJTAI_N128];
+pub static SCHEMES: &[&LeafScheme] = &[&POSEIDON2, &BLAKE3, &BLAKE3_XOB, &SHA256, &AJTAI_N64, &AJTAI_N128];
 
 /// `leaf.registry.DEFAULT` / `ALIASES`: a relation string without a suffix, or with `+hash`, names Poseidon2.
 pub const DEFAULT: &str = "poseidon2";
@@ -552,6 +563,12 @@ pub static PINS: &[(&str, &str, &str, &str)] = &[
      "f67ab8174346973350e673f0b1164a3a824e5c9f4f8ae48d136eabdfd970f374"),
     ("fp8-hopper", "blake3", "433bdfc37ef7ce64dcac32cdfd9b99e43b33f0df848112e96fd01601531a3bd1",
      "a27af32fe5ef8b8995b5cc4d874bcbac3a7f5196600e5cce062537ab7d1a55d8"),
+    // lane b-ligero-standard-hash, the blake3 leaf under the XOR-output-bits compression (`hashchain.compose(<rel>,
+    // "blake3-xob")`: 28,584 rows for fp8-ada against 35,370), fixtures on vy-b-ligero-sh 2026-09-25 11:39Z
+    ("fp8-ada", "blake3-xob", "3d6cc67b686f8b146d65acd55598b687c29f4b7fea1ce5893baa6e0b865c0b07",
+     "a655b6b8fe461a17ae2ff3e460e6ebe5088d980fab56657291f7d73ff6e92c2b"),
+    ("fp8-ada-x4", "blake3-xob", "f90e7b41920155ae9f0e58d8985adf0d00b711aa369922d9054c1444ad3e3dc8",
+     "6ecf18dabee9959687be6c2b71a3c932d94738f66f60ca16b43513edb7e921c9"),
     // lane b-ligero-sha256, schema `sha256/row/v1`: `hashchain.compose(<rel>, "sha256")` (data blocks in-circuit, 18,128
     // rows per block), each gated 2048 VUs (7 honest sub-batches) + 86 negatives on vy-b-ligero-sha256 2026-09-25 09:05Z
     ("fp8-hopper-x4", "sha256", "6cf20505b38e142533dfa1011a65bd1fb36b3b4792854916dffaeaddfd7f7e9f",

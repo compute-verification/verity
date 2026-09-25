@@ -473,7 +473,8 @@ def bootstrap_ci(xs: list[float], n: int = 4000, seed: int = 0) -> tuple[float, 
     return means[int(0.025 * n)], means[int(0.975 * n) - 1]
 
 
-from verity_vllm.check.commit_verdict import REQUIRED_CLASSES_DEFAULT, class_coverage, commit_verdict  # noqa: E402  (X-03/REL-02 fail-closed verdict)
+from verity_vllm.check.commit_rules import REQUIRED_CLASSES_DEFAULT, class_coverage, required_classes_default  # noqa: E402
+from verity_vllm.check.verdict import commit_verdict  # noqa: E402  (X-03/REL-02 fail-closed verdict)
 
 
 def tensor_digests(com, out, pair: int, prev: dict) -> int:
@@ -1312,7 +1313,6 @@ def main(argv: list[str] | None = None) -> None:
     # R13 hopper: the attention implementation the engine executes (FA2 / FA3) -- selects the hidden class the verdict requires and the tap class
     fa_version = va.observed_flash_attn_version(eng.model)
     if not required_classes_cli:
-        from verity_vllm.check.commit_verdict import required_classes_default
         required_classes = required_classes_default(fa_version)
         if compiled_kernels is not None:
             # [R15 compiled S3] the execution's leaf class is P_compiled's kernel buffers, not the eager module outputs (never fired: not wrapped)
@@ -2022,7 +2022,7 @@ def main(argv: list[str] | None = None) -> None:
                 row["commit"] = {
                     "run_root": rc.run_root.hex(), "steps": len(rc.steps), "leaves": sum(s.n_leaves for s in rc.steps),
                     "bytes_bound": sum(s.n_bytes for s in rc.steps), "tensors": sum(s.n_tensors for s in rc.steps),
-                    "spans_total_s": rc.spans["total_s"], "spans_calls": rc.spans["calls"], "spans_bytes": rc.spans["bytes"],
+                    "spans_total_s": rc.spans["total_s"], "spans_calls": rc.spans["calls"], "spans_bytes": rc.spans["bytes"], "spans_throughput": rc.spans.get("throughput"),
                     "root_ready_delay_s": rc.root_ready_delay_s, "finalize_s": rc.t_finalize_s, "t_ready_minus_last_step_s": t_ready - r["t_last_step"],
                     "persistent_bytes": rc.persistent_bytes, "temporary_bytes_peak": rc.temporary_bytes_peak, "extra": rc.extra,
                     "openings": {"n": len(ops), "verified": sum(ok), "generate_s": t_open, "verify_s": t_ver, "skipped": skipped,

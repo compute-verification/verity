@@ -85,6 +85,10 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
+from verity.verification.codes import VerificationCode as VC
+from verity_vllm.check.result import MISSING_INPUT, CheckResult
+from verity_vllm.check.verdict import match_verdict
+
 # ---------------------------------------------------------------------------------------------------------
 # FROZEN CONSTANTS — part of the accepted invariant set; change only through an approved decision in
 # `out/capture/decisions.md`.
@@ -213,6 +217,11 @@ class GateResult:
     def from_json(cls, d: dict) -> "GateResult":
         return cls(id=d["id"], name=d.get("name", GATE_NAMES.get(d["id"], "")), status=d["status"],
                    evidence=list(d.get("evidence") or []), detail=dict(d.get("detail") or {}), reason=d.get("reason"))
+
+    def result(self) -> CheckResult:
+        """The gate as a `CheckResult` named by its id: `pass` holds, `fail` is a mismatch, `skipped` did not run, any other status is undecided."""
+        code = {"pass": VC.ACCEPTED, "fail": VC.CHECK_MISMATCH, "skipped": None}.get(self.status, MISSING_INPUT)
+        return CheckResult(name=self.id, code=code, claim=self.name, scope=dict(self.detail), reason=self.reason)
 
 
 class ArtifactError(Exception):
@@ -1187,19 +1196,10 @@ def evaluate_gates(run_dir: str | Path, *, manifest: dict | None = None) -> list
 
 
 def verdict(results: list[GateResult]) -> str:
-    """ACCEPTED iff all seven frozen gates pass; REJECTED if any gate fails; INCOMPLETE otherwise (skipped / error / missing).
-    Gates outside the frozen set (G8, R1) contribute only `fail` -> REJECTED and `error` / `unsupported` / `unverified` ->
-    INCOMPLETE: a run without a query-use document (G8 `skipped`) or a record that predates G8 / R1 keeps the verdict of G1..G7.
-    [R9 ref 2026-09-18] R1 `unverified` (no fold error evidence) is INCOMPLETE, never ACCEPTED — the fail-closed rule."""
-    core = [r for r in results if r.id in GATES]
-    extra = [r for r in results if r.id not in GATES]
-    st = {r.status for r in core}
-    if "fail" in st or any(r.status == "fail" for r in extra):
-        return "REJECTED"
-    if ("skipped" in st or "error" in st or {r.id for r in core} != set(GATES)
-            or any(r.status in ("error", "unsupported", "unverified") for r in extra)):   # G8 `unsupported`: undecided, never REJECTED (lead 22:22Z)
-        return "INCOMPLETE"
-    return "ACCEPTED"
+    """ACCEPTED iff all seven frozen gates pass; REJECTED if any gate fails; INCOMPLETE otherwise (skipped / error / missing).  Gates outside the frozen set (G8, R1)
+    contribute only `fail` -> REJECTED and `error` / `unsupported` / `unverified` -> INCOMPLETE: a run without a query-use document (G8 `skipped`) or a record that
+    predates G8 / R1 keeps the verdict of G1..G7.  [R9 ref 2026-09-18] R1 `unverified` (no fold error evidence) is INCOMPLETE, never ACCEPTED — the fail-closed rule."""
+    return match_verdict([r.result() for r in results], GATES)
 
 
 def gates_json(results: list[GateResult], run_dir: str | Path | None = None, diagnostics_: dict | None = None) -> dict:

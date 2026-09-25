@@ -758,10 +758,22 @@ fn fp8_ada_hashed_v5_proof_is_accepted_and_the_hashed_system_is_pinned() {
     assert!(sd.contains(&format!("\"sys_id\":\"{HASH_SYS_ID}\"")), "{sd}");
     assert!(sd.contains(&format!("\"table_digest\":\"{HASH_TABLE_DIGEST}\"")), "{sd}");
     assert!(sd.contains("\"pinned_relation\":\"fp8-ada+hash\"") && sd.contains("\"format\":\"ligero-system/v3\""), "{sd}");
-    // the batch command over the fixture directory reports the hashed pin and the authentication
+    // the fixture directory also holds sub_00_v6.stmt (the same statement as v6) with no proof of its own: as a batch
+    // it claims VUs nothing proves, so batch refuses it
     let (code, js) = run(&["batch", "--dir", "fixtures/fp8-ada-hash", "--system", HASH_SYS, "--threads", "2"]);
+    assert_eq!(code, 1, "{js}");
+    assert!(js.contains("\"batch_reason\":\"batch: 1 statement(s) without a proof (sub_00_v6.stmt)\""), "{js}");
+    // the batch command over the proved sub-batch alone reports the hashed pin and the authentication
+    let dir = std::env::temp_dir().join(format!("ligero-verify-fp8-ada-hash-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    for f in ["manifest.json", "sub_00.coins", "sub_00.proof", "sub_00.stmt"] {
+        std::fs::copy(format!("fixtures/fp8-ada-hash/{f}"), dir.join(f)).unwrap();
+    }
+    let (code, js) = run(&["batch", "--dir", dir.to_str().unwrap(), "--system", HASH_SYS, "--threads", "2"]);
     assert_eq!(code, 0, "{js}");
     assert!(js.contains("\"pinned_relation\":\"fp8-ada+hash\"") && js.contains("\"accepted\":1,\"rejected\":0"), "{js}");
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]

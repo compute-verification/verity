@@ -15,9 +15,9 @@ import pytest
 
 from verity_vllm.check import executed_prefix as EP
 from verity_vllm.commit import padding_steps as PS
+from verity_vllm.commit import scheme
 from verity_vllm.commit.merkle import fold_path
-from verity_vllm.commit import fasttree as ft
-from verity_vllm.commit.semantic_layout import pos_leaf
+from verity_vllm.commit.scheme import pos_leaf
 
 PD = hashlib.sha256(b"padding-steps-test-program").hexdigest()
 EOS = 0
@@ -72,10 +72,9 @@ def _record(tmp: Path, *, served: dict[str, list[int]], lag: int, executed_steps
             k += 1
         blob = b"".join(stream)
         leaves = [pos_leaf(blob[o:o + 256]) for o in range(0, len(blob), 256)]
-        lv = ft.fold_levels(leaves)
+        lv = scheme.fold_levels(leaves)
         ldig = hashlib.sha256(json.dumps([[m[0], m[1], m[2], m[3], m[4], 256, m[5] // 256, (m[4] + 255) // 256, m[5]] for m in metas], separators=(",", ":")).encode()).digest()
-        from verity_vllm.commit.hidden_engine import bind_root
-        root = bind_root(bytes.fromhex(PD), PS.ctx_digest("test-run", s), geo, ldig, len(leaves), lv[-1][0])
+        root = scheme.step_root(bytes.fromhex(PD), PS.ctx_digest("test-run", s), geo, ldig, len(leaves), lv[-1][0])
         step_roots[s] = root
         for (k, name, dt, shape, nbytes, so), (op, mem, _dt, n, fam) in zip(metas, OPS):
             for i, r in enumerate(present):
@@ -85,7 +84,7 @@ def _record(tmp: Path, *, served: dict[str, list[int]], lag: int, executed_steps
                                 "encoding": {"dtype": dt, "shape": shape}, "element_offset": i * n, "tensor_ordinal": k, "name": name})
     entries.append({"identity": {"program_digest": PD, "request_id": "*", "step": -1, "invocation": 0, "op_path": "weights", "output_member": "registered",
                                  "element_range": [0, 0], "rank": 0}, "kind": "registered-input", "digest": "ab" * 32})
-    run_root = PS.run_root_of(bytes.fromhex(PD), geo, [step_roots[s] for s in steps])
+    run_root = scheme.run_root(bytes.fromhex(PD), geo, [step_roots[s] for s in steps])
     with gzip.open(rd / "commit" / "binding_map_p0.json.gz", "wt") as f:
         json.dump({"schema": "binding-map/1", "rules_version": "r14-v1", "program_digest": PD, "run_root": run_root.hex(), "rank": 0,
                    "layout": "chunk-leaf-v1", "collector": {"variant": "test"}, "entries_n": len(entries), "digest": "0" * 64, "entries": entries}, f)
@@ -130,7 +129,7 @@ def test_b1_early_stop_the_padding_steps_are_the_cap_suffix_every_word_bot_one_r
         if e["kind"] == "leaf":
             roots.setdefault(e["identity"]["step"], set()).add(e["step_root"])
     assert sorted(roots) == list(range(CAP)) and all(len(v) == 1 for v in roots.values())
-    assert pm["run_root"] == PS.run_root_of(bytes.fromhex(PD), geo, [bytes.fromhex(next(iter(roots[s]))) for s in range(CAP)]).hex()
+    assert pm["run_root"] == scheme.run_root(bytes.fromhex(PD), geo, [bytes.fromhex(next(iter(roots[s]))) for s in range(CAP)]).hex()
     # [revb M-1335 CORRECTION 2 / R17-42] a CONVERSION never re-labels the record's Program: program_rules_version stays the record's (None
     # for an ordinary Program); the padding rule is named beside it (`conversion`, `padding_rules_version`)
     assert pm["schema"] == "padded-binding-map/1" and pm["program_rules_version"] is None and pm["padding_rules_version"] == "padded-v1"
@@ -184,17 +183,15 @@ def test_b2_mixed_stop_the_padding_is_appended_to_the_executed_steps_and_the_one
     # the padding leaves under the leaf rule of record (chunk-leaf-v1 = the GPU tree's CMT-2 chunk header): HB = step, M = the padding
     # BLOCK's padded words, NB = PADDING_BLOCK (1; executed leaves carry 0), launch_tag = step, chunk_index continuing from the executed
     # leaves, chunk_words 64, src_mask 0 -- recomputed here field by field, not through the module
-    from verity_vllm.commit import hidden_stream as hs
-    from verity_vllm.commit.hidden_engine import bind_root
     assert len(ps.stream) % 256 == 0
 
     class _L:
         HB, M, NB = 3, len(ps.stream) // 4, 1
-    pad_leaves = [hs.chunk_leaf_digest(hs.chunk_header(_L, 3, ps.leaf_base + i, 64, 0), ps.stream[i * 256:(i + 1) * 256]) for i in range(len(ps.stream) // 256)]
+    pad_leaves = [scheme.chunk_leaf(scheme.chunk_header(_L, 3, ps.leaf_base + i, 64, 0), ps.stream[i * 256:(i + 1) * 256]) for i in range(len(ps.stream) // 256)]
     assert pad_leaves == ps.levels[0] and pad_leaves != [pos_leaf(ps.stream[o:o + 256]) for o in range(0, len(ps.stream), 256)]
     all_leaves = exec_leaves + pad_leaves
-    assert levels[-1][0] == ft.fold(all_leaves)
-    assert root == bind_root(bytes.fromhex(PD), PS.ctx_digest("test-run", 3), geo, PS.layout_digest(exec_metas + ps.metas), len(all_leaves), ft.fold(all_leaves))
+    assert levels[-1][0] == scheme.fold(all_leaves)
+    assert root == scheme.step_root(bytes.fromhex(PD), PS.ctx_digest("test-run", 3), geo, PS.layout_digest(exec_metas + ps.metas), len(all_leaves), scheme.fold(all_leaves))
     # a padding leaf opens against the REFOLDED step tree at its appended rank
     r = ps.leaf_base + 1
     path, k = [], r

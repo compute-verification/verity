@@ -13,8 +13,7 @@ import pytest
 from verity_vllm.commit import binding as B
 from verity_vllm.commit import padding_steps as PS
 from verity_vllm.commit.committer.native_host import NativeHostCommitter
-from verity_vllm.commit.hidden_engine import bind_root
-from verity_vllm.commit import fasttree as ft
+from verity_vllm.commit import scheme
 
 PDB = hashlib.sha256(b"pod-consumer-test-program").digest()
 PD = PDB.hex()
@@ -79,7 +78,7 @@ def test_b1_early_stop_the_padding_steps_are_steps_of_the_one_run_root_and_their
     assert len(run.steps) == CAP and len(plain.steps) == 2
     assert [s.root for s in run.steps[:2]] == [s.root for s in plain.steps], "the executed steps' roots are untouched by the padding"
     assert run.run_root != plain.run_root
-    assert run.run_root == PS.run_root_of(PDB, com._geo_digest, [s.root for s in run.steps]), "finalize's fold over ALL S = cap steps"
+    assert run.run_root == scheme.run_root(PDB, com._geo_digest, [s.root for s in run.steps]), "finalize's fold over ALL S = cap steps"
     for s in range(2, CAP):
         ps = com._padding[s]
         assert run.steps[s].root == ps.root and run.steps[s].n_leaves == ps.n_leaves and run.steps[s].n_bytes == ps.n_bytes
@@ -137,11 +136,11 @@ def test_b2_mixed_stop_the_mixed_steps_are_refolded_from_retained_leaf_digests_a
         # the ONE root: the executed leaf digests (retained, never re-hashed) + the padding leaves, bound over executed + padding metas
         exec_leaves = plain.steps[s] and _committer_levels(plain, s)
         leaves = exec_leaves + list(ps.levels[0])
-        lv = ft.fold_levels(leaves)
+        lv = scheme.fold_levels(leaves)
         assert sc.merkle_root == lv[-1][0]
-        assert sc.root == bind_root(PDB, PS.ctx_digest("run", s), com._geo_digest, com.layout_digest(com._layouts[s]), len(leaves), lv[-1][0])
+        assert sc.root == scheme.step_root(PDB, PS.ctx_digest("run", s), com._geo_digest, com.layout_digest(com._layouts[s]), len(leaves), lv[-1][0])
         assert sc.layout_digest == com.layout_digest(com._layouts[s]) == PS.layout_digest(com._layouts[s])
-    assert run.run_root == PS.run_root_of(PDB, com._geo_digest, [s.root for s in run.steps])
+    assert run.run_root == scheme.run_root(PDB, com._geo_digest, [s.root for s in run.steps])
     # openings at a mixed step: an executed leaf (r1's live row -- its path is through the REFOLDED tree) and a padding leaf (r0's ⊥ row)
     s = 3
     sample = [(s, 0), (s, run.steps[s].n_leaves - 1), (0, 1)]
@@ -165,7 +164,7 @@ def test_b2_mixed_stop_the_mixed_steps_are_refolded_from_retained_leaf_digests_a
 
 def _committer_levels(plain, s: int) -> list[bytes]:
     """Recompute the executed leaf digests of `plain`'s step s the way the committer retained them (host pos_leaf per tensor chunk)."""
-    from verity_vllm.commit.semantic_layout import pos_leaf
+    from verity_vllm.commit.scheme import pos_leaf
 
     c = _committer()
     c.commit_offline(_executed({0: ["r0", "r1"], 1: ["r0", "r1"], 2: ["r1"], 3: ["r1"], 4: ["r1"]}))

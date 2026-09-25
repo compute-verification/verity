@@ -233,7 +233,7 @@ def test_reverify_fails_a_shared_pair_closed(shared) -> None:
     root, honest, _, _ = shared
     man = {"set": {"total_vus": 4, "instances": "0" * 64}}
     assert commitment_problems(root, man, "fp8-ada+hash", [honest.name]) == (
-        True, ["commitment: 1 row-sharing (v6) statement(s): shared-row layouts are not recomputed"])
+        True, ["commitment: 1 row-sharing (v6) statement(s) and no manifest `set.tile`: the shared-row layout is not recomputed"])
 
 
 SHARED_NEG = [

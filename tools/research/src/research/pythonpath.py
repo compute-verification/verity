@@ -122,3 +122,12 @@ def pythonpath(root: str, derived: dict, extra: str | None = None) -> str:
     if extra:
         parts += [p for p in extra.split(":") if p and p not in parts]
     return ":".join(parts)
+
+
+def tree_pythonpath(tree: Path | str) -> str:
+    """The PYTHONPATH a command run from a source tree needs: the tree's workspace import roots (what `research env --source` prints),
+    then the tree root itself (modules addressed from the top, `backends.direct...`).  The steward's render and the parity tool's
+    render both use it, so a new workspace member (`packages/verity/src`) reaches them without a hand-kept list."""
+    root = str(Path(tree))
+    return pythonpath(root, import_roots_dir(root), extra=root)
+

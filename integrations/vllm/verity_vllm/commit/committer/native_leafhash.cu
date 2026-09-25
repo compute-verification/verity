@@ -1,12 +1,12 @@
 // [R16 sys SYS-05] Device-side weight registration: the SAME leaves and the SAME tree as native_host.register_weights' host path
-// (verity_vllm.commit.semantic_layout.pos_leaf over CHUNK-byte position-identified leaves, fasttree.fold: node / lift rule), computed on the
+// (verity_vllm.commit.scheme.pos_leaf over CHUNK-byte position-identified leaves, scheme.fold: node / lift rule), computed on the
 // GPU where the parameters already live.  The host path hashes 256-byte leaves in Python (~0.9 us per leaf + the fold): 2.5 GB of weights =
 // 10 M leaves = 17-24 s per registration, 120 s for a 7B model, and a Commit registers twice (before the workload, again at the C2 replay
 // for the O5 weights check).  Same bytes in -> same root out; equality with the host path is asserted by the tests on many sizes (tail
 // leaves shorter than a chunk included) and, in `device-checked` mode, at runtime on the real model.
 //
-//   pos_leaf(value)  = SHA-256("verity/pos-leaf/v0" || u64be(len(value)) || value)          (fasttree.leaf_digest with POS_LEAF_TAG)
-//   node(l, r)       = SHA-256(NODE_PREFIX || l || u64be(32) || r), lift(c) = SHA-256(LIFT_PREFIX || c)   (fasttree.fold: odd trailing node)
+//   pos_leaf(value)  = SHA-256("verity/pos-leaf/v0" || u64be(len(value)) || value)          (scheme.pos_leaf)
+//   node(l, r)       = SHA-256(NODE_PREFIX || l || u64be(32) || r), lift(c) = SHA-256(LIFT_PREFIX || c)   (scheme.fold: odd trailing node)
 //
 // SHA-256 core and tree_level_kernel are VERBATIM native_tree.cu (R9 cmt-hidden, checked against hashlib there); only pos_leaves_kernel is new.
 #include <torch/extension.h>
@@ -166,7 +166,7 @@ at::Tensor pos_leaves(const at::Tensor &buf, int64_t chunk) {
     return out;
 }
 
-// leaves: [n, 32] uint8 CUDA -> [32] uint8 CUDA root (fasttree.fold: node / lift levels down to one node)
+// leaves: [n, 32] uint8 CUDA -> [32] uint8 CUDA root (scheme.fold: node / lift levels down to one node)
 at::Tensor tree_root(const at::Tensor &leaves) {
     TORCH_CHECK(leaves.is_cuda() && leaves.scalar_type() == at::kByte && leaves.is_contiguous() && leaves.dim() == 2 && leaves.size(1) == 32,
                 "tree_root: [n, 32] contiguous CUDA uint8 leaves required");
@@ -190,5 +190,5 @@ at::Tensor tree_root(const at::Tensor &leaves) {
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("pos_leaves", &pos_leaves, "pos_leaf digests of CHUNK-byte leaves of a CUDA uint8 buffer -> [n, 32] uint8");
-    m.def("tree_root", &tree_root, "fasttree.fold of [n, 32] leaf digests -> [32] uint8 root");
+    m.def("tree_root", &tree_root, "scheme.fold of [n, 32] leaf digests -> [32] uint8 root");
 }
