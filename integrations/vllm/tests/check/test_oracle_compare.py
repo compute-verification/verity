@@ -249,7 +249,7 @@ def test_b2swapeq_relabel_on_the_shared_decode_step_fails_named(tmp_path):
     assert {(m["identity"]["step"], m["identity"]["request_id"]) for m in res["mismatch"]} == {(1, "r0"), (1, "r1")}
     assert {m["family"] for m in res["mismatch"]} == {"input_token_ids", "sampled_token_ids"}
     assert res["attribution"]["complete"] is False
-    from verity_vllm.check.commit_verdict import commit_verdict
+    from verity_vllm.check.verdict import commit_verdict
     commit = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64},
               "binding": _bnd(2), "oracle_compare": res,
               "value_correspondence": {"method": "oracle-compare(partial) + root-compare-vs-independent-run", "result": False, "oracle_compare": {"why": res["why"]}}}
@@ -281,7 +281,7 @@ def test_b2_attribution_ambiguous_when_two_requests_share_ids_on_an_unsnapshotte
     assert res["mismatch_n"] == 0 and res["result"] is None
     assert res["attribution"]["ambiguous_steps"] == [1] and res["attribution"]["complete"] is False and res["grade"] == "partial"
     assert "ambiguous at steps [1]" in res["why"]
-    from verity_vllm.check.commit_verdict import commit_verdict
+    from verity_vllm.check.verdict import commit_verdict
     commit = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64},
               "binding": _bnd(2), "oracle_compare": res, "value_correspondence": {"method": "oracle-compare(partial)", "result": None}}
     ok, why = commit_verdict(commit, True, min_openings=64)
@@ -291,7 +291,7 @@ def test_b2_attribution_ambiguous_when_two_requests_share_ids_on_an_unsnapshotte
 def test_verdict_b2_requires_a_live_oracle_compare():
     """F-cb-23: at B>=2 a Commit without the live oracle-compare (no --match-dir) is FAIL named, whatever root-compare says; at B=1 the
     root-compare with provenance remains acceptable (COORD M-0111)."""
-    from verity_vllm.check.commit_verdict import commit_verdict
+    from verity_vllm.check.verdict import commit_verdict
     base = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64},
             "value_correspondence": {"method": "root-compare-vs-independent-run", "result": True}}
     # [DECISIONS-2 §4 / rev-cb M-0411 O1] the C2 of record is the sampled replay + boundary linkage at EVERY B; a row record without it is
@@ -314,7 +314,7 @@ def test_verdict_b2_requires_a_live_oracle_compare():
 
 
 def test_verdict_gates_on_oracle_mismatch():
-    from verity_vllm.check.commit_verdict import commit_verdict
+    from verity_vllm.check.verdict import commit_verdict
     commit = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64},
               "value_correspondence": {"method": "oracle-compare + offline-suite", "result": False,
                                        "oracle_compare": {"result": False, "why": "C2 oracle mismatch: 2 identities differ from the Match oracle (first: step 0 model.layers.0.self_attn.qkv_proj/0 inv 0 req r1 range [0, 12] -- bytes differ)"}}}
@@ -524,7 +524,7 @@ def test_foreign_oracle_is_refused_by_name_before_any_value_compare(tmp_path):
     res = OC.oracle_compare(OC.MatchOracle(d), bmap, reader(committed))
     assert res["result"] is True and res["workload_check"]["ok"] is None
     # the verdict names it
-    from verity_vllm.check.commit_verdict import commit_verdict
+    from verity_vllm.check.verdict import commit_verdict
     commit = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64}, "binding": _bnd(2),
               "value_correspondence": {"method": "oracle-compare(partial) + offline-suite", "result": False, "oracle_compare": {"result": False, "why": "foreign oracle: x"}},
               "oracle_compare": {"result": False, "why": "foreign oracle: x", "compared": 0}}
@@ -535,7 +535,7 @@ def test_foreign_oracle_is_refused_by_name_before_any_value_compare(tmp_path):
 def test_verdict_names_the_failing_component_not_the_oracle_partial_note():
     """[rev-cb M-0301 R1] b2flip1_s5 + --expect-root: the oracle ran partial (result None, why = its coverage note) and the ROOT compare failed;
     first_fail_reason must quote the root-compare cause, never the oracle's partial note.  [R2] components carry their own result/reference."""
-    from verity_vllm.check.commit_verdict import commit_verdict
+    from verity_vllm.check.verdict import commit_verdict
     partial_note = "attribution-complete: steps [2, 3, 4, 5] not snapshotted by the Match (MATCH_SNAP_STEPS); ids + sampled ids verified on every step"
     vc = {"method": "oracle-compare(partial) + offline-suite + root-compare-vs-independent-run (--expect-root)", "result": False,
           "why": "root_compare: run root 0123456789abcdef != expected root fedcba9876543210 (--expect-root)",

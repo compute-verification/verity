@@ -67,7 +67,6 @@
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "environ", "symbol": "skip_classes_of_env", "detail": "VERITY_SKIP"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "optional-import", "symbol": "<module>", "detail": "except ImportError"},
     {"file": "verity_vllm/properties/census.py", "kind": "environ", "symbol": "run_census", "detail": "VERITY_CENSUS_GPU_UTIL", "count": 2},
-    {"file": "verity_vllm/check/commit_verdict.py", "kind": "broad-except", "symbol": "_is_token_select", "detail": "except Exception"},
     {"file": "verity_vllm/check/compiled_autotune.py", "kind": "broad-except", "symbol": "_decorator_hints", "detail": "except Exception"},
     {"file": "verity_vllm/check/compiled_autotune.py", "kind": "broad-except", "symbol": "_scan", "detail": "except Exception"},
     {"file": "verity_vllm/check/compiled_autotune.py", "kind": "broad-except", "symbol": "candidates", "detail": "except Exception"},
