@@ -2037,7 +2037,8 @@ def bench_vu_rel(args, rel: Relation) -> int:
     t0 = time.perf_counter()
     if tile is None:
         data = instances(rel, total_vus, procs=getattr(args, "instance_procs", 1), cache=getattr(args, "instances_cache", None), root=root)
-        x_rows = w_cols = None
+        # the committed set as stored (the rows in their words' dtype): the committer's input, made once with the set
+        x_rows, w_cols = R.committed_rows(data) if hashed else (None, None)
     else:
         # a frozen-tier relation (bf16-ampere): its frozen set has no tile layout, the tile is the synthetic draw
         data, x_rows, w_cols = tile_instances(rel, *tile, procs=getattr(args, "instance_procs", 1), cache=getattr(args, "instances_cache", None))
