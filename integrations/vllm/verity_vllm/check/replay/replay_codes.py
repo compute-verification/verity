@@ -20,8 +20,8 @@ WHY_CLASSES_FAULT = ("evaluator-error", "mapping", "missing-input", "device", "o
 #: families the Program names that this replay version cannot replay yet -- counted, never skipped silently (their reasons are the
 #: replay version's stated domain: `domain` true)
 NOT_YET = {
-    # RoPE_v1 left this list in R17 (dense, ruling R17-9): sampled_replay.EVALUATORS["RoPE_v1"].  Attention_v3 / Attention_v2 left it in
-    # R17 (dense, ruling R17-11): sampled_replay.EVALUATORS -- the row IS the unit under the query of record Q_module_v1 (R17-10).  Older
+    # RoPE_v1 left this list in R17 (dense, ruling R17-9): rows.EVALUATORS["RoPE_v1"].  Attention_v3 / Attention_v2 left it in
+    # R17 (dense, ruling R17-11): rows.EVALUATORS -- the row IS the unit under the query of record Q_module_v1 (R17-10).  Older
     # records carry the labels by name ("consumes the request's K/V history across steps (state-linked replay, v2)"; commit_verdict reads
     # them as the replay version of record's stated domain, why_class 'state-linked').  Gemm_v2 (the Hopper GEMM) is NOT here either: since
     # R17 (ruling R17-3) it HAS a registered evaluator; before that its VUs were a form-(B)-required gap (commit_verdict._no_evaluator_gaps).
@@ -39,7 +39,7 @@ _NO_EVALUATOR_PREFIX = "no registered evaluator for "
 
 
 def challenge_seed_source(challenge: str) -> str:
-    """The `seed_source` text of the verifier-challenge form (`sampled_replay.challenge_seed`)."""
+    """The `seed_source` text of the verifier-challenge form (`sample.challenge_seed`)."""
     return f"{_CHALLENGE_SEED_PREFIX}{challenge[:16]!r} bound to the run root (sha256(challenge|root)[:8], post-commitment)"
 
 

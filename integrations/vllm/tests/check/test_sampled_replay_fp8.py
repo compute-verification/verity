@@ -11,7 +11,7 @@ import json
 import numpy as np
 import pytest
 
-from verity_vllm.check.replay import sampled_replay as SR
+from verity_vllm.check.replay import compare as CMP, driver as SR, evaluate as EV, index as IX, opening as OP
 
 EPS = '{"f64":"0x1.4f8b588e368f1p-17"}'
 V, H, I, LP, T, G = 8, 256, 128, 2, 2, 128     # H, I multiples of the 128 block; gate_up N = 2I = 256
@@ -82,12 +82,12 @@ def _program_fp8():
 
 
 class HonestFp8:
-    """Executes the FP8 Program per request with `SR.evaluate` (the twins) and commits the module outputs per (engine step, member):
+    """Executes the FP8 Program per request with `EV.evaluate` (the twins) and commits the module outputs per (engine step, member):
     registered weights held PER FIELD in the declared width (u8 / u16 / u32), interior rows (the quant's two ports) flow on unwidened."""
 
     def __init__(self, inst, woff, wbits, fields: dict[str, np.ndarray], prompts):
         self.inst, self.woff, self.wbits, self.fields, self.prompts = inst, woff, wbits, fields, prompts
-        self.pi = SR.ProgramIndex(inst)
+        self.pi = IX.ProgramIndex(inst)
         self.values: dict[tuple[str, int], dict[str, np.ndarray]] = {}
         self.blocks: dict[tuple[int, str, str, str], np.ndarray] = {}
         for rid, prompt in prompts.items():
@@ -111,10 +111,10 @@ class HonestFp8:
                     elif kind == "p":
                         words.append(np.asarray(prompt[lo:hi], dtype=np.uint32))
                     else:
-                        words.append(SR._interior_slice(self.values[(rid, a)], lo, hi))
+                        words.append(CMP._interior_slice(self.values[(rid, a)], lo, hi))
                 inputs.append(words)
                 wsl.append(w)
-            got = SR.evaluate(fam, d["statics"], inputs, wsl)
+            got = EV.evaluate(fam, d["statics"], inputs, wsl)
             self.values[(rid, r["i"])] = {k: np.asarray(v).reshape(-1) for k, v in got.items()}
             if not d["members"]:
                 continue
@@ -133,7 +133,7 @@ class HonestFp8:
         for (step, rid, op, mem), blk in sorted(self.blocks.items(), key=lambda kv: (kv[0][0], kv[0][2], kv[0][3], order.index(kv[0][1]))):
             packed.setdefault((step, op, mem), []).append((rid, blk))
         entries, store = [], {}
-        dtype_of = lambda op, mem: "i64" if op == SR.SAMPLER_OP else ("i32" if mem == "in" else "bf16")  # noqa: E731
+        dtype_of = lambda op, mem: "i64" if op == IX.SAMPLER_OP else ("i32" if mem == "in" else "bf16")  # noqa: E731
         for (step, op, mem), parts in packed.items():
             name = f"{op}/{mem}"
             off, arrs = 0, []
@@ -219,10 +219,10 @@ def test_honest_fp8_program_replays_bit_exactly_the_gemm_rows_are_vus_the_quant_
 
 def test_gemm_vu_replay_record_composes_the_quant_and_reads_both_weight_widths(fp8_world):
     bmap, committed = fp8_world.bmap_and_reader()
-    store = SR.CommittedStore(bmap, committed)
+    store = OP.CommittedStore(bmap, committed)
     pi = fp8_world.pi
     r = next(r for r in pi.rows if r["spec"].startswith("ScaledMmFp8Block") and "gate_up" in r["name"] and pi.step_of(r["i"]) == 1)
-    rec = SR.replay_vu(pi, store, fp8_world.read, {"i": r["i"], "request_id": "r1", "phase": "first-decode"}, arrive=0)
+    rec = EV.replay_vu(pi, store, fp8_world.read, {"i": r["i"], "request_id": "r1", "phase": "first-decode"}, arrive=0)
     assert rec["result"] is True, rec
     kinds = [(x["kind"], x.get("family"), x.get("bits")) for x in rec["inputs"]]
     assert kinds[0] == ("interior", "Fp8GroupQuant_v1", None) and kinds[1] == ("interior", "Fp8GroupQuant_v1", None)
@@ -267,16 +267,16 @@ def test_weight_field_provided_in_the_wrong_width_is_refused_by_name_never_cast(
         return a.astype(np.uint16) if a.dtype == np.uint8 else a
 
     bmap, committed = fp8_world.bmap_and_reader()
-    store = SR.CommittedStore(bmap, committed)
+    store = OP.CommittedStore(bmap, committed)
     pi = fp8_world.pi
     r = next(r for r in pi.rows if r["spec"].startswith("ScaledMmFp8Block"))
-    rec = SR.replay_vu(pi, store, read16, {"i": r["i"], "request_id": "r0", "phase": "prefill"}, arrive=0)
+    rec = EV.replay_vu(pi, store, read16, {"i": r["i"], "request_id": "r0", "phase": "prefill"}, arrive=0)
     assert rec["result"] is None and "provided as uint16 but the Program declares Value<8>" in rec["why"]
 
 
 def test_interior_slice_spans_the_quant_ports_in_return_order():
     got = {"0": np.arange(6, dtype=np.uint8), "1": np.array([7, 8], dtype=np.uint32)}
-    assert SR._interior_slice(got, 0, 6).tolist() == [0, 1, 2, 3, 4, 5]
-    assert SR._interior_slice(got, 6, 8).tolist() == [7, 8]
-    assert SR._interior_slice(got, 4, 8).tolist() == [4, 5, 7, 8]
-    assert SR._interior_slice(got, 0, 9) is None
+    assert CMP._interior_slice(got, 0, 6).tolist() == [0, 1, 2, 3, 4, 5]
+    assert CMP._interior_slice(got, 6, 8).tolist() == [7, 8]
+    assert CMP._interior_slice(got, 4, 8).tolist() == [4, 5, 7, 8]
+    assert CMP._interior_slice(got, 0, 9) is None

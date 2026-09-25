@@ -9,7 +9,7 @@ import pytest
 
 SEEDED = [("verity_vllm.check.replay.replay", "tier_a"), ("verity_vllm.check.replay.replay", "tier_chain"),
           ("verity_vllm.program.kernels.relations", "draw_sample"), ("verity_vllm.program.kernels.relations", "ensure_adjacent_pair"),
-          ("verity_vllm.check.replay.sampled_replay", "sampled_replay"), ("verity_vllm.check.replay.compiled_kernel_check", "CompiledKernelCheck"),
+          ("verity_vllm.check.replay.driver", "sampled_replay"), ("verity_vllm.check.replay.compiled_kernel_check", "CompiledKernelCheck"),
           ("verity_vllm.correspondence.capture_identities", "run")]
 
 
@@ -64,8 +64,8 @@ def test_the_generators_are_the_stdlib_and_numpy_ones_over_the_seed_as_given():
 
 
 def test_sampled_replay_draws_its_challenge_seed_from_the_challenge_module():
-    from verity_vllm.check.replay import challenge as CH, replay_codes as RC, sampled_replay as SR
+    from verity_vllm.check.replay import challenge as CH, replay_codes as RC, sample as SM
 
     root = bytes(range(32))
-    assert SR.challenge_seed("verifier-challenge-1", root) == (CH.challenge_seed("verifier-challenge-1", root),
+    assert SM.challenge_seed("verifier-challenge-1", root) == (CH.challenge_seed("verifier-challenge-1", root),
                                                                RC.challenge_seed_source("verifier-challenge-1"))

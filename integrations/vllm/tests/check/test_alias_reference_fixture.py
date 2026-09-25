@@ -1,5 +1,5 @@
 """[Daniel R17-39 (c), coord M-0762] ONE deliberately dumb, independent reference fixture for the alias mechanism the committed READER
-(sampled_replay.CommittedStore / oracle_compare.OpenedReader, entry_read_name) and the ORACLE side (oracle_compare's inverse alias
+(opening.CommittedStore / oracle_compare.OpenedReader, entry_read_name) and the ORACLE side (oracle_compare's inverse alias
 table) SHARE.  "Reader and oracle sharing one alias mechanism prevents drift AND lets them share the same bug" -- so this file derives what
 every side must say BY COUNTING (layers x members x steps x requests, invocation k = layer order, ordinal = position in acquisition order),
 never by reading `op_path_aliases`, `entry_read_name`, `same_name_invocations` or the inverse table; then drives the production chain
@@ -31,7 +31,7 @@ import pytest
 from tests.check.opened import commit_steps
 from verity_vllm.commit import binding as B
 from verity_vllm.check import oracle_compare as OC
-from verity_vllm.check.replay import sampled_replay as SR
+from verity_vllm.check.replay import opening as OP
 
 CANON = "model.layers.0.self_attn.rotary_emb"
 MEMBERS = ("0", "1")                                    # the shared RotaryEmbedding's two outputs (q, k)
@@ -171,7 +171,7 @@ def test_2_the_reader_returns_layer_ks_own_words_for_every_step_request_layer_me
     bmap = build_map(rec, REQS)
     table = expected_table(N)
     rd = OC.OpenedReader(*rec)
-    st = SR.CommittedStore.of_record(bmap, rd, {"op_path_aliases": table})
+    st = OP.CommittedStore.of_record(bmap, rd, {"op_path_aliases": table})
     for s in STEPS:
         for r, rid in enumerate(REQS):
             for k in range(N):

@@ -17,7 +17,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity_vllm.check.replay import sampled_replay as SR
+from verity_vllm.check.replay import evaluate as EV, index as IX, population as POP
+from verity_vllm.check.replay import replay_codes as RC
+from verity_vllm.query.manifest import format as RM
 from verity_vllm.program.kernels import rows as RK
 
 V, H, T = 64, 8, 2          # vocab, hidden (the logits Gemm's K), decode steps after the arrival step
@@ -78,7 +80,7 @@ def _logits(rng, seed_row):
 def _honest(arrive: int = 5, rid: str = "r0", seed: int = SEED, splits=S_OF_STEP):
     """The committed world of one honest request: logits rows, seed / splits words per step, and sampled ids = the registry's own evaluation."""
     inst = _program()
-    pi = SR.ProgramIndex(inst)
+    pi = IX.ProgramIndex(inst)
     rng = np.random.default_rng(7)
     blocks: dict[tuple[str, int, str, str], np.ndarray] = {}
     lg_op = pi.describe(pi.by_i[0])["op_path"]
@@ -86,12 +88,12 @@ def _honest(arrive: int = 5, rid: str = "r0", seed: int = SEED, splits=S_OF_STEP
     for s in range(1 + T):
         lg = _logits(rng, s)
         blocks[(rid, arrive + s, lg_op, LG_MEMBER)] = lg
-        blocks[(rid, arrive + s, SR.SAMPLER_OP, "seed")] = np.asarray([seed], dtype=np.uint64)
-        blocks[(rid, arrive + s, SR.SAMPLER_OP, "splits")] = np.asarray([splits[s]], dtype=np.uint32)
+        blocks[(rid, arrive + s, IX.SAMPLER_OP, "seed")] = np.asarray([seed], dtype=np.uint64)
+        blocks[(rid, arrive + s, IX.SAMPLER_OP, "splits")] = np.asarray([splits[s]], dtype=np.uint32)
         tok = RK.gumbel_topp_token_select({"V": V}, [lg, np.asarray([_f32(TOP_P)], np.uint32), np.asarray([seed], np.uint64),
                                                     np.asarray([100 + s], np.uint64), np.asarray([_f32(TEMP)], np.uint32),
                                                     np.asarray([splits[s]], np.uint32)])
-        blocks[(rid, arrive + s, SR.SAMPLER_OP, SR.SAMPLED_MEMBER)] = np.asarray([tok], dtype=np.uint64)
+        blocks[(rid, arrive + s, IX.SAMPLER_OP, RK.SAMPLED_MEMBER)] = np.asarray([tok], dtype=np.uint64)
     return inst, pi, blocks, lg_op
 
 
@@ -100,7 +102,7 @@ def _select_rows(pi):
 
 
 def test_the_stochastic_selector_has_a_registered_evaluator_equal_to_the_registry_difftest_walk():
-    assert "GumbelTopPTokenSelect_v1" in SR.EVALUATORS and "GumbelTopPTokenSelect_v1" not in SR.NOT_YET
+    assert "GumbelTopPTokenSelect_v1" in RK.EVALUATORS and "GumbelTopPTokenSelect_v1" not in RC.NOT_YET
     from verity_vllm.properties.admission import evaluate_spec
     from verity_vllm.program.registry import sampling_topp_difftest as DT
     rng = np.random.default_rng(11)
@@ -108,10 +110,10 @@ def test_the_stochastic_selector_has_a_registered_evaluator_equal_to_the_registr
     for S in (1, 2, 4, 8):
         ops = [lg, np.asarray([_f32(TOP_P)], np.uint32), np.asarray([SEED], np.uint64), np.asarray([9], np.uint64),
                np.asarray([_f32(TEMP)], np.uint32), np.asarray([S], np.uint32)]
-        got = SR.evaluate("GumbelTopPTokenSelect_v1", {"V": V}, [[o] for o in ops], [None] * 6)
+        got = EV.evaluate("GumbelTopPTokenSelect_v1", {"V": V}, [[o] for o in ops], [None] * 6)
         ref = evaluate_spec(DT.spec({"V": V, "S": S}), [lg.astype(np.uint64)] + [o.astype(np.uint64) for o in ops[1:5]])
-        assert list(got) == [SR.SAMPLED_MEMBER] and got[SR.SAMPLED_MEMBER].dtype == np.uint64
-        assert int(got[SR.SAMPLED_MEMBER][0]) == int(ref[0]) & 0xFFFFFFFF
+        assert list(got) == [RK.SAMPLED_MEMBER] and got[RK.SAMPLED_MEMBER].dtype == np.uint64
+        assert int(got[RK.SAMPLED_MEMBER][0]) == int(ref[0]) & 0xFFFFFFFF
     with pytest.raises(ValueError, match="6 operands"):
         RK.gumbel_topp_token_select({"V": V}, ops[:5])
     with pytest.raises(ValueError, match="operand logits"):
@@ -119,11 +121,11 @@ def test_the_stochastic_selector_has_a_registered_evaluator_equal_to_the_registr
 
 
 def test_const_rows_read_from_the_program_text():
-    assert SR.const_word({"spec": "Const32[0x3f733333]_v1"}).tolist() == [0x3f733333]
-    w = SR.const_word({"spec": "Const64[0x00000000000000ff]_v1"})
+    assert IX.const_word({"spec": "Const32[0x3f733333]_v1"}).tolist() == [0x3f733333]
+    w = IX.const_word({"spec": "Const64[0x00000000000000ff]_v1"})
     assert w.dtype == np.uint64 and w.tolist() == [255]
-    assert SR.const_word({"spec": "Gemm_v1{K=8,N=64}"}) is None and SR.const_word(None) is None
-    assert SR.const_word({"spec": "Const32[0x1ffffffff]_v1"}) is None      # not a 32-bit word: unmodelled, never truncated
+    assert IX.const_word({"spec": "Gemm_v1{K=8,N=64}"}) is None and IX.const_word(None) is None
+    assert IX.const_word({"spec": "Const32[0x1ffffffff]_v1"}) is None      # not a 32-bit word: unmodelled, never truncated
 
 
 def test_honest_stochastic_request_replays_every_selector_from_committed_inputs_by_name():
@@ -131,24 +133,24 @@ def test_honest_stochastic_request_replays_every_selector_from_committed_inputs_
     store = _Store(blocks)
     for s, r in enumerate(_select_rows(pi)):
         d = pi.describe(r)
-        assert d["op_path"] == SR.SAMPLER_OP and d["members"] == [(SR.SAMPLED_MEMBER, 1, "i64")] and d["step"] == s
-        rec = SR.replay_vu(pi, store, lambda *_a: None, {"i": r["i"], "phase": "decode", "request_id": "r0"}, arrive=5)
+        assert d["op_path"] == IX.SAMPLER_OP and d["members"] == [(RK.SAMPLED_MEMBER, 1, "i64")] and d["step"] == s
+        rec = EV.replay_vu(pi, store, lambda *_a: None, {"i": r["i"], "phase": "decode", "request_id": "r0"}, arrive=5)
         assert rec["result"] is True, rec
         kinds = [(x["kind"], x.get("identity", [None, None, None, None])[2:4] if x["kind"] == "committed" else x.get("spec")) for x in rec["inputs"]]
         assert kinds == [("committed", [lg_op, LG_MEMBER]), ("const", f"Const32[0x{_f32(TOP_P):08x}]_v1"),
-                         ("committed", [SR.SAMPLER_OP, "seed"]), ("const", f"Const64[0x{(100 + s):016x}]_v1"),
-                         ("const", f"Const32[0x{_f32(TEMP):08x}]_v1"), ("committed", [SR.SAMPLER_OP, "splits"])]
+                         ("committed", [IX.SAMPLER_OP, "seed"]), ("const", f"Const64[0x{(100 + s):016x}]_v1"),
+                         ("const", f"Const32[0x{_f32(TEMP):08x}]_v1"), ("committed", [IX.SAMPLER_OP, "splits"])]
         # the seed and splits identities are THIS step's (engine step = arrive + s), request-local element 0
         assert [x["identity"][1] for x in rec["inputs"] if x["kind"] == "committed"] == [5 + s] * 3
-        assert rec["outputs"][0]["committed"] == rec["outputs"][0]["evaluated"] == int(blocks[("r0", 5 + s, SR.SAMPLER_OP, SR.SAMPLED_MEMBER)][0])
+        assert rec["outputs"][0]["committed"] == rec["outputs"][0]["evaluated"] == int(blocks[("r0", 5 + s, IX.SAMPLER_OP, RK.SAMPLED_MEMBER)][0])
 
 
 def test_a_flipped_committed_sampled_id_fails_named_at_the_sampler_identity():
     inst, pi, blocks, _ = _honest()
     r = _select_rows(pi)[1]
-    key = ("r0", 6, SR.SAMPLER_OP, SR.SAMPLED_MEMBER)
+    key = ("r0", 6, IX.SAMPLER_OP, RK.SAMPLED_MEMBER)
     blocks[key] = (blocks[key] + 1) % V
-    rec = SR.replay_vu(pi, _Store(blocks), lambda *_a: None, {"i": r["i"], "phase": "decode", "request_id": "r0"}, arrive=5)
+    rec = EV.replay_vu(pi, _Store(blocks), lambda *_a: None, {"i": r["i"], "phase": "decode", "request_id": "r0"}, arrive=5)
     assert rec["result"] is False
     assert "runner.sampler/sampled_token_ids" in rec["why"] and "step 1" in rec["why"]
 
@@ -159,27 +161,27 @@ def test_the_committed_seed_and_splits_words_are_load_bearing():
     inst, pi, blocks, _ = _honest()
     honest = {k: v for k, v in blocks.items()}
     for s in range(1 + T):
-        blocks[("r0", 5 + s, SR.SAMPLER_OP, "seed")] = np.asarray([SEED ^ 0xFFFF], dtype=np.uint64)
-    res = [SR.replay_vu(pi, _Store(blocks), lambda *_a: None, {"i": r["i"], "phase": "decode", "request_id": "r0"}, arrive=5)
+        blocks[("r0", 5 + s, IX.SAMPLER_OP, "seed")] = np.asarray([SEED ^ 0xFFFF], dtype=np.uint64)
+    res = [EV.replay_vu(pi, _Store(blocks), lambda *_a: None, {"i": r["i"], "phase": "decode", "request_id": "r0"}, arrive=5)
            for r in _select_rows(pi)]
     assert all(x["result"] is not None for x in res)
     assert any(x["result"] is False for x in res), [x["outputs"] for x in res]
     bad = next(x for x in res if x["result"] is False)
     assert bad["outputs"][0]["committed"] != bad["outputs"][0]["evaluated"] and "runner.sampler/sampled_token_ids" in bad["why"]
     # honest words again -> all pass (the failure above was the seed, nothing else)
-    assert all(SR.replay_vu(pi, _Store(honest), lambda *_a: None, {"i": r["i"], "phase": "decode", "request_id": "r0"}, arrive=5)["result"]
+    assert all(EV.replay_vu(pi, _Store(honest), lambda *_a: None, {"i": r["i"], "phase": "decode", "request_id": "r0"}, arrive=5)["result"]
                for r in _select_rows(pi))
 
 
 def test_a_missing_splits_identity_is_partial_by_name_never_a_pass():
     inst, pi, blocks, _ = _honest()
-    del blocks[("r0", 7, SR.SAMPLER_OP, "splits")]
+    del blocks[("r0", 7, IX.SAMPLER_OP, "splits")]
     r = _select_rows(pi)[2]
-    rec = SR.replay_vu(pi, _Store(blocks), lambda *_a: None, {"i": r["i"], "phase": "decode", "request_id": "r0"}, arrive=5)
+    rec = EV.replay_vu(pi, _Store(blocks), lambda *_a: None, {"i": r["i"], "phase": "decode", "request_id": "r0"}, arrive=5)
     assert rec["result"] is None and "runner.sampler/splits" in rec["why"] and "step 7" in rec["why"]
-    del blocks[("r0", 6, SR.SAMPLER_OP, "seed")]
+    del blocks[("r0", 6, IX.SAMPLER_OP, "seed")]
     r = _select_rows(pi)[1]
-    rec = SR.replay_vu(pi, _Store(blocks), lambda *_a: None, {"i": r["i"], "phase": "decode", "request_id": "r0"}, arrive=5)
+    rec = EV.replay_vu(pi, _Store(blocks), lambda *_a: None, {"i": r["i"], "phase": "decode", "request_id": "r0"}, arrive=5)
     assert rec["result"] is None and "runner.sampler/seed" in rec["why"] and "step 6" in rec["why"]
 
 
@@ -187,18 +189,18 @@ def test_a_splits_slice_naming_another_step_is_unresolved_by_name():
     inst = _program()
     sel = [r for r in inst["rows"] if r["spec"].startswith("GumbelTopPTokenSelect_v1")][2]
     sel["args"][5] = [["p", 2, 0, 1]]                                            # step 2's selector reading splits[0]
-    pi = SR.ProgramIndex(inst)
+    pi = IX.ProgramIndex(inst)
     _, _, blocks, _ = _honest()
-    rec = SR.replay_vu(pi, _Store(blocks), lambda *_a: None, {"i": sel["i"], "phase": "decode", "request_id": "r0"}, arrive=5)
+    rec = EV.replay_vu(pi, _Store(blocks), lambda *_a: None, {"i": sel["i"], "phase": "decode", "request_id": "r0"}, arrive=5)
     assert rec["result"] is None and "splits slice [0, 1) names step 0" in rec["why"] and "step 2" in rec["why"]
 
 
 def test_the_selector_is_a_replayed_stratum_of_the_population_not_a_no_evaluator_gap():
     inst, pi, blocks, _ = _honest()
-    pop = SR.population(pi, "r0", arrive=5) if hasattr(SR, "population") else None
+    pop = POP.population(pi, "r0", arrive=5) if hasattr(POP, "population") else None
     if pop is None:
         pytest.skip("population API not exposed by name")
     vus, not_ev = pop[0], pop[1]
-    fams = {SR.RM.spec_family(pi.by_i[v["i"]]["spec"]) for v in vus}
+    fams = {RM.spec_family(pi.by_i[v["i"]]["spec"]) for v in vus}
     assert "GumbelTopPTokenSelect_v1" in fams
     assert not any("GumbelTopPTokenSelect_v1" in k for k in not_ev)
