@@ -991,7 +991,7 @@ def oracle_producers_of_record(args: argparse.Namespace, required_manifest: dict
     carries none: (facts | None, record).  The Programs are the replay's (same lookup, same of-record digest check); None + the named
     reason when the manifest is not v2, no Program dir is given or a Program is not of record."""
     from verity_vllm.check import oracle_compare as OC
-    from verity_vllm.check.replay import sampled_replay as SR
+    from verity_vllm.check.replay import driver as SR
     from verity_vllm.query.manifest import format as MF
     q = required_manifest.get("query") if isinstance(required_manifest, dict) else None
     if not (isinstance(q, dict) and q.get("engine") == SR.V2_QUERY):
@@ -2384,7 +2384,7 @@ def main(argv: list[str] | None = None) -> None:
                         print(f"[delta] replay cache: pair {pair} key differs from pair {_v0['pair']}'s in {_d0}: own replay (root {rc.run_root.hex()[:16]} vs {_v0['run_root'][:16]})", flush=True)
                     TL.start("validate.sampled_replay", pair=pair, cached=_cached is not None)
                     try:
-                        from verity_vllm.check import executed_prefix as EPX, oracle_compare as OC; from verity_vllm.check.replay import replay_codes as RC, sampled_replay as SR
+                        from verity_vllm.check import executed_prefix as EPX, oracle_compare as OC; from verity_vllm.check.replay import replay_codes as RC, driver as SR
                         from verity_vllm.query.manifest import format as MF
                         if _cached is not None:
                             raise _ReplayReused()

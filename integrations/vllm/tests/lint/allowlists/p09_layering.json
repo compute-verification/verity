@@ -121,7 +121,7 @@
     {"file": "verity_vllm/engine/rank_worker.py", "kind": "layer", "symbol": "<module>", "detail": "engine.rank_worker -> acquire.sources.partial_source"},
     {"file": "verity_vllm/engine/rank_worker.py", "kind": "layer", "symbol": "<module>", "detail": "engine.rank_worker -> check.match.xrank_collectives"},
     {"file": "verity_vllm/engine/rank_worker.py", "kind": "layer", "symbol": "<module>", "detail": "engine.rank_worker -> check.oracle_compare"},
-    {"file": "verity_vllm/engine/rank_worker.py", "kind": "layer", "symbol": "<module>", "detail": "engine.rank_worker -> check.replay.sampled_replay"},
+    {"file": "verity_vllm/engine/rank_worker.py", "kind": "layer", "symbol": "<module>", "detail": "engine.rank_worker -> check.replay.driver"},
     {"file": "verity_vllm/engine/rank_worker.py", "kind": "layer", "symbol": "<module>", "detail": "engine.rank_worker -> check.value_check"},
     {"file": "verity_vllm/engine/rank_worker.py", "kind": "layer", "symbol": "<module>", "detail": "engine.rank_worker -> check.weights_of_record"},
     {"file": "verity_vllm/engine/rank_worker.py", "kind": "layer", "symbol": "<module>", "detail": "engine.rank_worker -> commit.binding"},
