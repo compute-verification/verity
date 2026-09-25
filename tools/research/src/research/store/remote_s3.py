@@ -510,7 +510,7 @@ class S3Remote:
                     with self._stats_lock:
                         self.requests += 1
                     conn.request(method, target, body=data, headers=signed)     # a file body streams in blocks (content-length is set above)
-                    dog.sock = conn.sock
+                    dog.sock = getattr(conn, "sock", None)
                     resp = conn.getresponse()
                 except _RETRIABLE as e:
                     dog.cancel()
