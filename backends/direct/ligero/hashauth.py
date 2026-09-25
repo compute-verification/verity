@@ -93,7 +93,9 @@ def build_row_tree(name: str, binding: bytes, rows: np.ndarray, word_bits: int, 
     digests = np.asarray(scheme.native(rows, word_bits=word_bits, role=role), dtype=np.int64)
     if digests.shape != (count, scheme.digest_elems) or ((digests < 0) | (digests >= h2.P)).any():
         raise ValueError(f"leaf {scheme.name}: native() must return (count, {scheme.digest_elems}) elements in [0, p)")
-    leaves = [domain.leaf(r, r, scheme.schema, scheme.leaf_bytes(digests[r])) for r in range(count)]
+    many = getattr(scheme, "leaf_bytes_many", None)
+    values = many(digests) if many is not None else [scheme.leaf_bytes(digests[r]) for r in range(count)]
+    leaves = [domain.leaf(r, r, scheme.schema, values[r]) for r in range(count)]
     levels = _levels(domain, leaves, count)
     ref = TreeRef(name, bytes(binding), OWNER[name], count, levels[-1][0].tobytes())
     return WordTree(ref, levels), digests
