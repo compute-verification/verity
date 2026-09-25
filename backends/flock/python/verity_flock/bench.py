@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import math
 import json
 import os
 import platform
@@ -135,8 +136,51 @@ def _probe(addr: str, timeout: float = 1800) -> None:
     raise RuntimeError(f"no verifier at {addr}")
 
 
-def _rtt(addr: str, n: int = 20) -> dict | None:
-    return None
+PER_PROOF_LOG2 = -195.44   # flock-128-r2 whole-proof bound per proof (red-team-flock grant of flock-pure-block/v2)
+
+
+def tcp_rtt(target: str, n: int = 30) -> dict | None:
+    """TCP connect time to ``target`` (the verifier pod's sshd, not its session port: a connect there would use up a
+    session): median and min over ``n`` connects, in ms."""
+    import socket
+    if not target:
+        return None
+    host, port = target.rsplit(":", 1)
+    ts = []
+    for _ in range(n):
+        t = time.perf_counter()
+        try:
+            socket.create_connection((host, int(port)), timeout=5).close()
+        except OSError:
+            continue
+        ts.append((time.perf_counter() - t) * 1e3)
+        time.sleep(0.02)
+    return {"median_ms": statistics.median(ts), "min_ms": min(ts), "n": len(ts), "target": target} if ts else None
+
+
+def loopback_probe(a, q: dict, out: Path, net: Path) -> dict:
+    """The same binary and batch as the plateau point, verifier on 127.0.0.1: per-round coin wait, median over sessions."""
+    d = out / q["dir"]
+    pin = lowering.PINS[a.relation]
+    per = []
+    for i, _ in enumerate(q["subbatches"]):
+        common = ["--instances", str(d / f"instances-s{i}.bin"), "--netlist", str(net)]
+        log = d / f"loopback-serve-s{i}.log"
+        srv = subprocess.Popen([a.bin, "serve", "--listen", "127.0.0.1:7391", "--out", str(d / f"loopback-sessions-s{i}"), "--pin", pin,
+                                *common], stdout=open(log, "w"), stderr=subprocess.STDOUT)
+        try:
+            _wait_serving(log, srv)
+            subprocess.call([a.bin, "prove", "--verifier", "127.0.0.1:7391", "--warm", "1", "--runs", str(a.runs), *a.prove_arg, *common],
+                            stdout=open(d / f"loopback-prove-s{i}.txt", "w"), stderr=open(d / f"loopback-prove-s{i}.err", "w"))
+        finally:
+            srv.terminate()
+            srv.wait()
+        for r in _lines(d / f"loopback-prove-s{i}.txt", "LIVE"):
+            if not r.get("warm") and r.get("accepted") and r.get("calls"):
+                per.append(r["wait_s"] / r["calls"])
+    return {"seconds_per_round": statistics.median(per) if per else None, "sessions": len(per),
+            "method": f"loopback probe in this run: {len(per)} timed sessions ({a.runs} per sub-batch) of the plateau point's "
+                      f"instance files with the same binary against `serve` on 127.0.0.1, median per-round coin wait (wait_s / calls)"}
 
 
 def _merge(parts: list[list[dict]]) -> list[dict]:
@@ -196,6 +240,7 @@ def point(a, total: int, d: Path, net: Path) -> dict:
             _OURS.add(pr.pid)
             try:
                 rcs.append(pr.wait())
+                time.sleep(2)  # NVML lists an exited context for a moment: still ours
             finally:
                 _OURS.discard(pr.pid)
         finally:
@@ -248,7 +293,9 @@ def result(a, p: dict, sweep: dict) -> dict:
     fp = contract.fingerprint(
         profile=profile, domain="finite", K=instances.K, B=n, proof_class="NON_ZK_PROOF", authentication="included-hash",
         zk_mode="none",
-        security={"target": -128, "achieved_log2": -195.5, "profile": "flock-128-r2", "reps": 2, "per_rep_log2": -97.8,
+        security={"target": -128, "achieved_log2": PER_PROOF_LOG2 + math.log2(len(p["subbatches"])), "per_proof_log2": PER_PROOF_LOG2,
+                  "proofs": len(p["subbatches"]), "union": "union bound over the batch's sequential sub-batch proofs",
+                  "profile": "flock-128-r2", "reps": 2, "per_rep_log2": -97.8,
                   "coins": "live verifier (flock-live R1-R8)", "accountant": rec["soundness"]["accountant"]},
         hardware=hw,
         software={"backend": {"name": binary, "configuration": rec["configuration"], "commit": a.commit,
@@ -283,7 +330,10 @@ def result(a, p: dict, sweep: dict) -> dict:
           contract.measurement("rounds.sequential_depth", int(first["calls"])),
           {"name": "live.verifier_round_seconds", "value": statistics.median(r["verdict"].get("handle_s", 0.0) for r in timed), "unit": "s"},
           {"name": "live.network_wait_seconds", "value": net_wait, "unit": "s"},
-          contract.measurement("net.rtt_ms", 1e3 * net_wait / max(1, int(first["calls"]))),
+          {"name": "live.coin_wait_per_round_ms", "value": 1e3 * net_wait / max(1, int(first["calls"])), "unit": "ms"},
+          *([contract.measurement("net.rtt_ms", a.tcp["median_ms"])] if getattr(a, "tcp", None) else []),
+          *([{"name": "live.loopback_round_seconds", "value": p["loopback"]["seconds_per_round"], "unit": "s"}]
+            if p.get("loopback", {}).get("seconds_per_round") else []),
           {"name": "live.prover_compute_seconds", "value": t_prove - med("wait_s"), "unit": "s"},
           contract.measurement("transcript.bytes", int(first["wire_sent"]) + int(first["wire_recv"])),
           contract.measurement("verify.wall_s", statistics.median(r["verdict"]["verify_s"] for r in timed)),
@@ -303,8 +353,11 @@ def result(a, p: dict, sweep: dict) -> dict:
                           "evidence": [f"{p['dir']}/sessions/index.jsonl"]},
            "measurements": ms, "measurement_files": [], "artifacts": [],
            "sweep": sweep, "contention": p["contention"],
-           "interaction": {"rtt_method": "net.rtt_ms = (the prover's coin wait - the verifier's round-handling time) / round trips, "
-                                         "median over the timed sessions; verifier " + ("on loopback" if not a.verifier else a.verifier),
+           "interaction": {"rtt_method": (f"net.rtt_ms = TCP connect time from the prover pod to the verifier pod ({a.tcp['target']}, its sshd), "
+                                          f"median of {a.tcp['n']}, measured in this run before the sweep") if getattr(a, "tcp", None) else None,
+                           "coin_wait_method": "live.coin_wait_per_round_ms = (the prover's coin wait - the verifier's round-handling time) / "
+                                               "round trips, median over the timed sessions; verifier " + ("on loopback" if not a.verifier else a.verifier),
+                           "loopback_method": p.get("loopback", {}).get("method"),
                            "hello_rtt_ms": statistics.median(x for r in timed for x in (r["rtt_ms"] if isinstance(r.get("rtt_ms"), list) else [r.get("rtt_ms")]) if x is not None)
                            if any(r.get("rtt_ms") is not None for r in timed) else None,
                            "hello_rtt_method": "the session's Hello request/response time (flock-pure-gpu rtt_ms), median",
@@ -359,6 +412,8 @@ def main(argv=None) -> int:
     ap.add_argument("--serve-plan", action="store_true", help="verifier side: serve every point's sub-batches in order")
     ap.add_argument("--listen", default="0.0.0.0:7400")
     ap.add_argument("--operator", default="")
+    ap.add_argument("--rtt-target", default="", help="host:port on the verifier pod to time TCP connects to (its sshd)")
+    ap.add_argument("--loopback", action="store_true", help="after the sweep, a loopback probe at the plateau point")
     a = ap.parse_args(argv)
     a.rustc = subprocess.run(["rustc", "--version"], capture_output=True, text=True).stdout.strip()
     out = Path(a.out_dir)
@@ -371,6 +426,8 @@ def main(argv=None) -> int:
     plan = [int(x) for x in a.points.split()] if a.points else None
     if a.serve_plan:
         return serve_plan(a, plan, out, net)
+    a.tcp = tcp_rtt(a.rtt_target)
+    print(f"RTT\t{json.dumps(a.tcp)}", flush=True)
     sid = "sweep-" + hashlib.sha256(json.dumps([a.relation, a.start, a.runs, time.time()]).encode()).hexdigest()[:12]
     points = []
     total = plan[0] if plan else a.start
@@ -397,11 +454,15 @@ def main(argv=None) -> int:
     ok = [q for q in points if q["vu_per_second"]]
     if not ok:
         return 1
-    best = max(ok, key=lambda q: (q["vu_per_second"], -q["total"]))
+    clean = [q for q in ok if not q["contention"].get("contended")] or ok
+    best = max(clean, key=lambda q: (q["vu_per_second"], -q["total"]))  # a contended point is never the plateau
     tps = [q["vu_per_second"] for q in ok]
     done_at = next((i for i in range(2, len(tps)) if tps[i] < 1.02 * tps[i - 2]), None)
     stop = "a point failed" if points[-1]["vu_per_second"] is None else (
         f"< 2 % over two doublings at {ok[done_at]['total']}" if done_at is not None else "reached the last planned point / --max")
+    if a.loopback:
+        best["loopback"] = loopback_probe(a, best, out, net)
+        print(f"LOOPBACK\t{json.dumps(best['loopback'])}", flush=True)
     for q in ok:
         sweep = {"id": sid, "point": points.index(q), "plateau": q is best, "total_vus": q["total"], "rule": RULE, "stopped": stop,
                  "points": [[x["total"], x["vu_per_second"]] for x in points]}

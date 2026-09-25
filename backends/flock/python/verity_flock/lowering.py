@@ -176,7 +176,10 @@ def evaluate(relation: str, x: list[int], w: list[int], c: int) -> tuple[int, in
 
 def self_check(relation: str, n: int = 200, seed: int = 20260925) -> int:
     """Mismatches of the lowered unit against ``verity.ml.tc`` (``tc_dot`` and the ``f32_to_bf16`` epilogue) on ``n``
-    finite random units."""
+    random units over the whole finite domain: operand words uniform over every finite encoding (all exponent fields,
+    subnormals and signed zeros included), and accumulators uniform over every finite FP32 exponent field, with a third of
+    the cases drawn near each other in exponent so the alignment and cancellation paths are exercised too. Saturating
+    units (the reference's +-inf word) are compared like any other."""
     from verity.ml.tc import models
     from verity.ml.tc.cast import f32_to_bf16_word
     from verity.ml.tc.silicon import tc_dot
@@ -184,15 +187,20 @@ def self_check(relation: str, n: int = 200, seed: int = 20260925) -> int:
     pipe = PIPES[relation]
     model = getattr(models, pipe.model)
     rng = random.Random(seed)
+    bits = pipe.word_bits
+    finite = (lambda w: (w >> 7) & 0xFF != 0xFF) if bits == 16 else (lambda w: w & 0x7F != 0x7F)
     bad = 0
-    for _ in range(n):
-        if pipe.word_bits == 16:
-            op = lambda: (rng.getrandbits(1) << 15) | (rng.randint(96, 159) << 7) | rng.getrandbits(7)  # noqa: E731
+    for t in range(n):
+        near = t % 3 == 0
+        if bits == 16:
+            e0 = rng.randint(0, 254)
+            op = (lambda: (rng.getrandbits(1) << 15) | (min(254, max(0, e0 + rng.randint(-8, 8))) << 7) | rng.getrandbits(7)) if near \
+                else (lambda: rng.choice([w for w in (rng.getrandbits(16) for _ in range(4)) if finite(w)] or [0]))
         else:
-            op = lambda: rng.choice([b for b in range(256) if b & 0x7F != 0x7F])  # noqa: E731
+            op = lambda: rng.choice([w for w in range(256) if finite(w)])  # noqa: E731
         x = [op() for _ in range(pipe.k)]
         w = [op() for _ in range(pipe.k)]
-        c = (rng.getrandbits(1) << 31) | (rng.randint(100, 150) << 23) | rng.getrandbits(23)
+        c = (rng.getrandbits(1) << 31) | (rng.randint(0, 254) << 23) | rng.getrandbits(23)
         want = tc_dot(model, c, x, w)
         got, y, ok = evaluate(relation, x, w, c)
         if not ok or got != want or (pipe.epilogue and y != f32_to_bf16_word(want)):
