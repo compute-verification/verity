@@ -121,11 +121,13 @@ def test_3_the_signed_stage2_block_is_unchanged_by_the_factoring():
     (S-r17b-S2 (2)); `LMoeBlockL_v1` differs from it (no router GEMM node, `logits` an input) and from nothing else."""
     sp = MP.block(E, 2, VPT, H, I)
     d = program_digest(encode_program(Program(sp)))
-    # The PIN is the digest of the Stage 2 block on the lifting stack of record; a pin is a pin, not a claim (rev M-1280).  It moved once:
+    # The PIN is the digest of the Stage 2 block on the lifting stack of record; a pin is a pin, not a claim (rev M-1280).  It moved twice:
     #   1dd831feee7ac882  pad v0.7 / B7 (lifted.py 5460c3e03 .. 90d284951) -- the digest revb signed, S-r17b-S2 (2);
     #   de34ef2c82f65eb4  pad G1 5261740d7 (ORDINARY class: ORD statics in the lifted ids) -- the same block, the same relation; the Stage 2
-    #                     evidence JSON (dump_routes.py at v2) still carries the v0.7 digest and is compared only when it names the current stack.
-    STAGE2_DIGESTS = {"1dd831feee7ac882": "pad v0.7 (B7)", "de34ef2c82f65eb4": "pad G1 5261740d7 (ORD statics)"}
+    #                     evidence JSON (dump_routes.py at v2) still carries the v0.7 digest and is compared only when it names the current stack;
+    #   43bb1ede072b2031  the k16 step cited as core's AmpereBF16TcDot16_v2 (the integration's _v1 superseded) -- the same relation.
+    STAGE2_DIGESTS = {"1dd831feee7ac882": "pad v0.7 (B7)", "de34ef2c82f65eb4": "pad G1 5261740d7 (ORD statics)",
+                      "43bb1ede072b2031": "AmpereBF16TcDot16_v2"}
     assert d[:16] in STAGE2_DIGESTS, d
     if os.path.exists(STAGE2_EVIDENCE):
         ev = json.load(open(STAGE2_EVIDENCE))["program_digest"]

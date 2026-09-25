@@ -20,6 +20,7 @@ def test_registry_record_has_the_qualifications():
     defs = rec["definitions"]
     assert defs["RMSNormFusedCuda_v2"]["status"] == "exact-model-tested"
     assert defs["RMSNormFusedCuda_v1"]["status"] == "superseded"
+    assert defs["AmpereBF16TcDot16_v1"]["status"] == "superseded" and defs["AmpereBF16TcDot16_v2"]["status"] == "exact-model-tested"
     assert "captured" in defs["RMSNormFusedCuda_v1"]["divergences"][0]
     for fid in ("RoPEHead_v1", "RoPE_v1"):
         assert defs[fid]["input_qualifications"] == ["weights.cos_sin"]
@@ -31,7 +32,7 @@ def test_registry_record_has_the_qualifications():
     assert rec["summary"].startswith("not universally exact")
     # other tests may register extra definitions in the same process; the library's own counts are lower bounds
     c = rec["counts"]
-    assert c["superseded"] == 1 and c["exact-model-tested"] >= 51 and c["model-untested"] >= 5
+    assert c["superseded"] == 2 and c["exact-model-tested"] >= 51 and c["model-untested"] >= 5
 
 
 def test_requalify_is_explicit_and_idempotent(tmp_path):

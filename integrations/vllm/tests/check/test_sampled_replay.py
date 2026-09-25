@@ -725,7 +725,7 @@ def test_hopper_gemm_v2_is_registered_and_dispatches_on_the_dot_static():
     # the spec text of a real Hopper row parses to the same statics the Build wrote (codec._spec_id form)
     st = SR.RM.spec_statics('Gemm_v2{K=2048,N=6144,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}')
     assert st == {"K": 2048, "N": 6144, "DOT": '{"fn":"HopperBF16WgmmaDot16_v1"}'} and SR.gemm_dot_prim(st) == "HopperBF16WgmmaDot16_v1"
-    assert set(D.TC_DOT16_BY_PRIM) == {"AmpereBF16TcDot16_v1", "HopperBF16WgmmaDot16_v1"}
+    assert set(D.TC_DOT16_BY_PRIM) == {"AmpereBF16TcDot16_v2", "AmpereBF16TcDot16_v1", "HopperBF16WgmmaDot16_v1"}
 
 
 def test_hopper_gemm_v2_evaluator_is_the_registered_wgmma_chain_not_the_ampere_one():
@@ -761,7 +761,7 @@ def test_hopper_gemm_v2_evaluator_is_the_registered_wgmma_chain_not_the_ampere_o
     xa, wb, want_h, want_m = found
     st16 = {"K": 16, "N": 1}
     assert int(SR.evaluate("Gemm_v2", st16 | {"DOT": '{"fn":"HopperBF16WgmmaDot16_v1"}'}, [[xa], [wb]], [None, wb])["0"][0]) == want_h
-    assert int(SR.evaluate("Gemm_v2", st16 | {"DOT": '{"fn":"AmpereBF16TcDot16_v1"}'}, [[xa], [wb]], [None, wb])["0"][0]) == want_m
+    assert int(SR.evaluate("Gemm_v2", st16 | {"DOT": '{"fn":"AmpereBF16TcDot16_v2"}'}, [[xa], [wb]], [None, wb])["0"][0]) == want_m
     assert int(SR.evaluate("Gemm_v1", st16, [[xa], [wb]], [None, wb])["0"][0]) == want_m and want_h != want_m
     # an unregistered step / a non-finite operand lane: unresolved BY NAME, never a word under another adder
     with pytest.raises(SR._Unresolved, match="no registered evaluator for Gemm_v2 with DOT=BlackwellBF16TcDot16_v1"):

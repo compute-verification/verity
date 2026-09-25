@@ -370,7 +370,7 @@ def test_v1_kv_cache_arguments_alias_the_previous_position_and_denote_the_same_p
 V0_DIGESTS = {  # recorded with the codec at vllm-poc e47be70
     "running-example": "ce880dad211f11d5ed2f37d921168d622d1d4190e3204243ec8c96e36e1c755a",
     "running-example-Id16": "aaef9ec70fc17a5227b64647bee6da5e5a8da41ba2c110567504d87172e5900b",
-    "Gemm{K=32,N=4}": "708fd264406533ee3d8cdcd3baef62398d38ae6057a617a0f32e51746ff33002",  # = docs/data/frontend acceptance
+    "Gemm{K=32,N=4}": "082b51d00404e4fc3807a6b7940f636f45787f2ac8f2361c140e54843350bf55",  # _v2 dot; docs/data/frontend: 708fd264… (_v1)
 }
 # Programs with broadcasts or KV caches (B0/B1 `Serve`, `AttentionHead`) moved: descriptor-codec.md records old -> new.
 
