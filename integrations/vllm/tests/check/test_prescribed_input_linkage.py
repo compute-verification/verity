@@ -382,4 +382,4 @@ def test_arrivals_of_record_follow_the_observed_schedule_only_when_the_populatio
     # the commit_delta wiring: the replay/linkage _arr goes through this one rule, fed the binding record's schedule
     from pathlib import Path
     src = (Path(__file__).resolve().parents[2] / "verity_vllm" / "pipeline" / "commit.py").read_text()
-    assert '_arr, _moved = LK.arrivals_of_record(_arr, _sched_r)' in src and '.get("coverage") or {}).get("schedule")' in src
+    assert '_arr, _moved = SR.arrivals_of_record(_arr, _sched_r)' in src and '.get("coverage") or {}).get("schedule")' in src
