@@ -216,10 +216,10 @@ fn build(st: &VllmStmt, w: &Wit) -> (Vec<F128>, Vec<F128>, Vec<F128>, Vec<u8>) {
     }
 }
 
-fn prove_cpu(st: &VllmStmt, w: &Wit, lig: LigeritoProfile, hook: PHook<'_>, ch: &mut LiveChallenger) -> (Vec<u8>, Value) {
-    let t = Instant::now();
-    let (z, a, b, zl) = build(st, w);
-    let tw = t.elapsed().as_secs_f64();
+type Built = (Vec<F128>, Vec<F128>, Vec<F128>, Vec<u8>);
+
+fn prove_cpu(st: &VllmStmt, w: &Built, lig: LigeritoProfile, hook: PHook<'_>, ch: &mut LiveChallenger) -> (Vec<u8>, Value) {
+    let (z, a, b, zl) = w.clone();
     let (proof, commitment) = prove_fast_ligerito_from_witness_extra(
         &st.r1cs,
         &params(st.m, lig),
@@ -231,24 +231,21 @@ fn prove_cpu(st: &VllmStmt, w: &Wit, lig: LigeritoProfile, hook: PHook<'_>, ch: 
         &mut |cm: &Commitment| -> Vec<Vec<F128>> { hook(cm.cap.as_flattened()).into_iter().map(|p| p[6..].to_vec()).collect() },
         ch,
     );
-    (bincode::serialize(&(commitment, proof)).unwrap(), json!({"t.witness": tw}))
+    (bincode::serialize(&(commitment, proof)).unwrap(), json!({}))
 }
 
 #[cfg(feature = "gpu")]
-fn prove_gpu(st: &VllmStmt, w: &Wit, lig: LigeritoProfile, rep: usize, hook: PHook<'_>, ch: &mut LiveChallenger) -> (Vec<u8>, Value) {
-    let t = Instant::now();
-    let (z, a, b, _) = build(st, w);
-    let tw = t.elapsed().as_secs_f64();
-    let (proof, commitment, ph) = flock_live::gpu::prove_vllm(st, &z, &a, &b, &params(st.m, lig), &domain(rep), hook, ch);
-    let bk = json!({"t.host_witness": tw, "t.witness": ph[0], "t.encoding_commitment": ph[1], "t.link": ph[2], "t.zerocheck": ph[3],
-                    "t.lincheck": ph[4], "t.ring_switch": ph[5], "t.ligerito": ph[6], "t.total": ph[7] + tw,
+fn prove_gpu(st: &VllmStmt, w: &Built, lig: LigeritoProfile, rep: usize, hook: PHook<'_>, ch: &mut LiveChallenger) -> (Vec<u8>, Value) {
+    let (proof, commitment, ph) = flock_live::gpu::prove_vllm(st, &w.0, &w.1, &w.2, &params(st.m, lig), &domain(rep), hook, ch);
+    let bk = json!({"t.witness": ph[0], "t.encoding_commitment": ph[1], "t.link": ph[2], "t.zerocheck": ph[3],
+                    "t.lincheck": ph[4], "t.ring_switch": ph[5], "t.ligerito": ph[6], "t.total": ph[7],
                     "t.arithmetic": ph[3] + ph[4] + ph[5] + ph[6]});
     eprintln!("GPUPHASE\t{bk}");
     (bincode::serialize(&(commitment, proof)).unwrap(), bk)
 }
 
 #[cfg(not(feature = "gpu"))]
-fn prove_gpu(_: &VllmStmt, _: &Wit, _: LigeritoProfile, _: usize, _: PHook<'_>, _: &mut LiveChallenger) -> (Vec<u8>, Value) {
+fn prove_gpu(_: &VllmStmt, _: &Built, _: LigeritoProfile, _: usize, _: PHook<'_>, _: &mut LiveChallenger) -> (Vec<u8>, Value) {
     panic!("built without the gpu feature")
 }
 
@@ -375,6 +372,11 @@ fn session(st: &Arc<VllmStmt>, inst: &Arc<Instances>, t: SharedTransport, plan: 
     } else {
         Wit { comps: comps.clone(), inputs: mk_inputs(comps), flip_z }
     };
+    // The host builds the packed witness once; rep 1 proves the same one unless the plan gives it another.
+    let tw = Instant::now();
+    let built0 = build(st, &wit);
+    let built1 = plan.rep1_other_witness.then(|| build(st, &wit1));
+    let host_witness_s = tw.elapsed().as_secs_f64();
     let rows_s = tr.elapsed().as_secs_f64();
     let mut prove_s = Vec::new();
     let mut buckets = Vec::new();
@@ -417,7 +419,7 @@ fn session(st: &Arc<VllmStmt>, inst: &Arc<Instances>, t: SharedTransport, plan: 
                 e
             };
             let tp = Instant::now();
-            let w = if rep == 0 { &wit } else { &wit1 };
+            let w = if rep == 0 { &built0 } else { built1.as_ref().unwrap_or(&built0) };
             let (p, bk) = catch_unwind(AssertUnwindSafe(|| {
                 if plan.gpu { prove_gpu(st, w, lig, rep, &mut hook, &mut lch) } else { prove_cpu(st, w, lig, &mut hook, &mut lch) }
             }))
@@ -451,7 +453,7 @@ fn session(st: &Arc<VllmStmt>, inst: &Arc<Instances>, t: SharedTransport, plan: 
         json!({"accepted": v["accepted"], "why": v["why"], "verdict": v, "statement": STATEMENT, "scheme": "vllm-v1",
                "prover": if plan.gpu { "flock-cuda-block" } else { "flock-cpu-block" }, "gpu": plan.gpu, "relation": inst.relation,
                "vus": inst.vus, "units": inst.units, "n_sha256": st.lay.comp_slots() * st.vus, "n_units": st.lay.units * st.vus,
-               "dense_m": st.m, "nbl": st.nbl, "e2e_s": e2e_s, "commit_s": commit_s, "rows_s": rows_s,
+               "dense_m": st.m, "nbl": st.nbl, "e2e_s": e2e_s, "commit_s": commit_s, "rows_s": rows_s, "host_witness_s": host_witness_s,
                "prove_s": prove_s, "prove_total_s": prove_s.iter().sum::<f64>(), "buckets": buckets, "wait_s": wait_s, "calls": calls,
                "wire_sent": ws, "wire_recv": wr, "rtt_ms": rtt_ms,
                "rtt_method": "the session's Hello request/response time (one round trip, the verifier's work is a string compare)",

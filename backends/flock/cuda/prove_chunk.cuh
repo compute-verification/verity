@@ -270,14 +270,14 @@ __global__ void pure_unit_outputs(const F128* __restrict__ z, int blocks_real, i
     y16[b] = col_y >= 0 ? (uint32_t)(z[at + col_y].lo & 0xFFFF) : 0;
 }
 
-__global__ void pure_comb_expand(const F128* __restrict__ base_c, const F128* __restrict__ ratio_c, int slots,
+__global__ void pure_comb_expand(const F128* __restrict__ base_c, const F128* __restrict__ ratio_c, int slots, int sub_log,
                                  const F128* __restrict__ base_u, const F128* __restrict__ ratio_u, int units, int unit_log, int unit_pos0,
                                  long long k, F128* __restrict__ comb) {
     long long i = (long long)blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= k) return;
-    long long s = i >> 14, p = i >> unit_log;
+    long long s = i >> sub_log, p = i >> unit_log;
     F128 v{0, 0};
-    if (s < slots) v = ghash_mul_karatsuba(ratio_c[s], base_c[i & 16383]);
+    if (s < slots) v = ghash_mul_karatsuba(ratio_c[s], base_c[i & ((1LL << sub_log) - 1)]);
     else if (p >= unit_pos0 && p < unit_pos0 + units) v = ghash_mul_karatsuba(ratio_u[p - unit_pos0], base_u[i & ((1LL << unit_log) - 1)]);
     comb[i] = v;
 }
@@ -325,6 +325,9 @@ typedef struct {
     // the block layout (flock_live::pure_block::Layout): compressions per role, chunks per block and their sizes, blocks
     // per VU; dummy_keyed: dummy blocks keep the role keys and chunk counters (fp8, where they are per-slot constants)
     int per_role, chunks_per_block, chunk_nb0, chunk_nb1, blocks_per_vu, dummy_keyed;
+    // mode 1, host witness (verity/flock-vllm-block/v1): the whole packed z, a = A z, b = B z ([2^(m-7)] F128, lo then
+    // hi) from the host; the compression slots are 2^sub_log bits (the CSC in P is that circuit's)
+    const uint64_t* host_z; const uint64_t* host_a; const uint64_t* host_b;
 } FlockChunkParams;
 
 int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams* C, uint8_t** out, size_t* out_len) {
@@ -345,7 +348,8 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
     const long long n_comp = C->mode == 1 ? (1LL << (m - k_log)) * C->comp_slots : 1LL << C->n_comp_log;
     const bool pure = C->mode == 1;
     const int n_blocks_log = m - k_log;
-    if (pure ? (C->comp_slots > 64 || (k_log != 20 && k_log != 21))
+    if (pure ? (C->host_z ? (C->comp_slots > 256 || k_log < 20 || k_log > 22 || (C->comp_slots << sub_log) > (1 << k_log))
+                          : (C->comp_slots > 64 || (k_log != 20 && k_log != 21)))
              : (C->n_comp_log + 14 != m || k_log <= sub_log || k_log - sub_log > 8)) { printf("FFI chunk: bad shape\n"); return 201; }
     const size_t packed_witness_bytes = (size_t)len * sizeof(F128);
     // + the lincheck's K-length vectors, which dominate at small m (k_log 21: 2^21 words each)
@@ -357,7 +361,14 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
     CK(ffi_malloc(&d_a, len * sizeof(F128)));
     CK(ffi_malloc(&d_b, len * sizeof(F128)));
     CK(ffi_malloc(&d_zlin, (size_t)len * 16));
-    {
+    if (pure && C->host_z) {
+        CK(cudaMemcpy(df, C->host_z, len * sizeof(F128), cudaMemcpyHostToDevice));
+        CK(cudaMemcpy(d_a, C->host_a, len * sizeof(F128), cudaMemcpyHostToDevice));
+        CK(cudaMemcpy(d_b, C->host_b, len * sizeof(F128), cudaMemcpyHostToDevice));
+        chunk_zlin_transpose<<<4096, 256>>>(df, k_log, (1LL << (m - k_log)) / 8, d_zlin);
+        CK(cudaGetLastError());
+        CK(cudaStreamSynchronize(0));
+    } else {
         uint32_t *d_cv, *d_m, *d_blen, *d_flags; b3u64* d_ctr;
         CK(ffi_malloc(&d_cv, (size_t)n_comp * 8 * 4)); CK(ffi_malloc(&d_m, (size_t)n_comp * 16 * 4));
         CK(ffi_malloc(&d_blen, (size_t)n_comp * 4)); CK(ffi_malloc(&d_flags, (size_t)n_comp * 4));
@@ -760,7 +771,7 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
             CK(cudaMemcpy(g0.data(), d_ratio, sizeof(F128), cudaMemcpyDeviceToHost));
             if (g0[0].lo == 0 && g0[0].hi == 0) { printf("FFI chunk: eq_inner[0] = 0\n"); return 203; }
             F128 inv = f128_inv_host(g0[0]);
-            pure_eq_gather<<<1, 256>>>(d_eq_inner, 14, 0, C->comp_slots, d_ratio);
+            pure_eq_gather<<<1, 256>>>(d_eq_inner, sub_log, 0, C->comp_slots, d_ratio);
             pure_eq_gather<<<1, 256>>>(d_eq_inner, C->unit_log, C->unit_pos0, C->units, d_ratio_u);
             CK(cudaMemcpy(gc.data(), d_ratio, C->comp_slots * sizeof(F128), cudaMemcpyDeviceToHost));
             CK(cudaMemcpy(gu.data(), d_ratio_u, C->units * sizeof(F128), cudaMemcpyDeviceToHost));
@@ -771,7 +782,7 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
             launch_linear_check_compressed_column_fold(d_eq_inner, d_acp, d_ar, d_bcp, d_br, alpha, KS, d_comb_sub);
             launch_linear_check_compressed_column_fold(d_eq_inner, d_uacp, d_uar, d_ubcp, d_ubr, alpha, US, d_base_u);
             CK(cudaGetLastError());
-            pure_comb_expand<<<(unsigned)((K + 255) / 256), 256>>>(d_comb_sub, d_ratio, C->comp_slots, d_base_u, d_ratio_u,
+            pure_comb_expand<<<(unsigned)((K + 255) / 256), 256>>>(d_comb_sub, d_ratio, C->comp_slots, sub_log, d_base_u, d_ratio_u,
                 C->units, C->unit_log, C->unit_pos0, K, d_comb);
             CK(cudaGetLastError());
             ffi_free(d_base_u); ffi_free(d_ratio_u);
