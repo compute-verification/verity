@@ -86,6 +86,9 @@ export LIGERO_VERIFY=$W/bin/ligero-verify
 export LIGERO_INSTANCES_CACHE=$W/instances-cache
 # the cgroup CPU quota ($THREADS cores; nproc says $(nproc)): size every pool to it
 export OMP_NUM_THREADS=$THREADS MKL_NUM_THREADS=$THREADS OPENBLAS_NUM_THREADS=$THREADS VY_CPU_THREADS=$THREADS
+# glibc otherwise mmaps each large host buffer afresh and every first touch page-faults (~20 MB/s on some pod
+# classes); keep freed memory in the heap instead.  The bench fingerprint records both (software.allocator).
+export MALLOC_MMAP_MAX_=\${MALLOC_MMAP_MAX_:-0} MALLOC_TRIM_THRESHOLD_=\${MALLOC_TRIM_THRESHOLD_:-1000000000000}
 cd $SRC
 EOF
 

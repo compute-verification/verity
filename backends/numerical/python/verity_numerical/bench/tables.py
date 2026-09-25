@@ -527,10 +527,11 @@ REASON_LETTERS: dict[str, str] = {"U": "not independently verified", "I": "diffe
 PHASE_SUM_PROBLEM = re.compile(r"^(buckets and joints sum to .* more than t\.total|bucket '[a-z_]+' is counted twice)")
 #: Column ``<candidate> + in-proof hash`` (``included-hash``) is Poseidon2-BabyBear per row, no sharing (user decision keep_frozen,
 #: 2026-09-24): the fingerprint's ``hash`` names it and, where the emitter records the leaf interface (lane leaf-iface D0), so do
-#: ``leaf.scheme`` / ``leaf.schema``; ``sharing`` is ``none``.  Another leaf (Ajtai, BLAKE3) or a shared tile is a drill-down.
+#: ``leaf.scheme`` / ``leaf.schema``; ``sharing`` is ``none``.  Another leaf (Ajtai, BLAKE3, SHA-256) or a shared tile is a drill-down.
 IN_PROOF_HASH, IN_PROOF_LEAF, IN_PROOF_SHARING = "poseidon2-babybear-w24", "poseidon2", "none"
 SHARED_AUTHENTICATION = "included-hash-shared"
-_LEAF_FAMILIES = (("ajtai", "an Ajtai (Ring-SIS) leaf"), ("blake3", "a BLAKE3 in-circuit leaf"), ("poseidon2", "a Poseidon2 leaf"))
+_LEAF_FAMILIES = (("ajtai", "an Ajtai (Ring-SIS) leaf"), ("blake3", "a BLAKE3 in-circuit leaf"), ("sha256", "a SHA-256 in-circuit leaf"),
+                  ("poseidon2", "a Poseidon2 leaf"))
 
 
 def in_proof_hash_codes(fp: Mapping[str, Any]) -> list[tuple[str, str]]:

@@ -43,7 +43,7 @@ def canonical(name: str | None) -> str:
 
 #: the in-tree schemes (each module registers itself on import); a scheme whose optional dependency is missing is skipped.
 #: The test-only ``dummy`` is NOT here: a test imports ``leaf.dummy`` explicitly.
-BUILTIN = ("poseidon2", "blake3", "ajtai")
+BUILTIN = ("poseidon2", "blake3", "sha256", "ajtai")
 
 
 def _ensure_builtin() -> None:
