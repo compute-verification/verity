@@ -49,3 +49,5 @@ def test_commit_cost_tool_is_registered() -> None:
     assert tool.name == "commit_cost"
     params, key = tool.resolve_params(["--scheme", "vllm-v1", "--leaves", "1024"], ROOT)
     assert key == {"scheme": "vllm-v1", "leaves": 1024, "leaf_bytes": 256}
+    _, key = tool.resolve_params(["--scheme", "vllm-v1", "--leaves", "1024", "--impl", "gpu"], ROOT)
+    assert key == {"scheme": "vllm-v1", "leaves": 1024, "leaf_bytes": 256, "impl": "gpu"}

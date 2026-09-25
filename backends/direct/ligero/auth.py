@@ -211,15 +211,32 @@ class WordTree:
 
     def __init__(self, ref: TreeRef, levels: Sequence[np.ndarray]):
         self.ref = ref
-        self.levels = list(levels)
-        if len(self.levels) != merkle_depth(ref.count) + 1 or self.levels[-1].shape[0] != 1:
+        self._dev = None
+        self._levels = list(levels)
+        if len(self._levels) != merkle_depth(ref.count) + 1 or self._levels[-1].shape[0] != 1:
             raise ValueError("levels do not form a tree of the declared count")
         if self.root != ref.root:
             raise ValueError("stored root does not match the reference")
 
+    @classmethod
+    def on_device(cls, ref: TreeRef, tree) -> WordTree:
+        """A tree built on the device (``frame_gpu``: a ``hash_gpu.frame_v3.Tree``); its levels come to the host once,
+        when first read (openings, saving), unless the tree was small enough to be copied at build time."""
+        self = cls.__new__(cls)
+        self.ref, self._dev, self._levels = ref, tree, None
+        if tree.depth != merkle_depth(ref.count) or tree.root != ref.root:
+            raise ValueError("device tree does not match the reference")
+        return self
+
+    @property
+    def levels(self) -> list[np.ndarray]:
+        if self._levels is None:
+            self._levels = self._dev.levels
+        return self._levels
+
     @property
     def root(self) -> bytes:
-        return self.levels[-1][0].tobytes()
+        return self._dev.root if self._levels is None else self._levels[-1][0].tobytes()
 
     @property
     def count(self) -> int:
@@ -241,7 +258,11 @@ class WordTree:
 
 
 def build_word_tree(name: str, binding: bytes, words: np.ndarray, *, procs: int | None = None) -> WordTree:
-    """Commit ``words`` (uint16, one per leaf, leaf rank == position == array index) in the tree's domain."""
+    """Commit ``words`` (uint16, one per leaf, leaf rank == position == array index) in the tree's domain; on the GPU
+    (``frame_gpu``) when it is available."""
+    from . import frame_gpu
+    if frame_gpu.available():
+        return frame_gpu.word_tree(name, binding, words, nbytes=2, schema=SCHEMA)
     words = np.ascontiguousarray(words, dtype=np.uint16).ravel()
     count = int(words.shape[0])
     LIMITS.enforce("max_positions", count)

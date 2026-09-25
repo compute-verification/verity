@@ -120,11 +120,43 @@ def _word_rows(rows) -> np.ndarray:
     return np.asarray(rows, dtype=np.int64)
 
 
-def _rows_to_device(rows: np.ndarray, device):
-    """``rows`` as an int64 torch tensor on ``device``, copied in its narrow dtype and widened there."""
+def narrow_rows(rows, word_bits: int, pin: bool = False) -> np.ndarray:
+    """Committed rows (:func:`_word_rows`) in their words' own dtype, as a committed set is stored: uint8 / uint16 for
+    8- / 16-bit words (range-checked), any other width as it is.  ``pin``: in page-locked host memory (a serving stack's
+    staging buffer; the copy to the device is then a DMA without host staging)."""
+    r = _word_rows(rows)
+    dt = {8: np.uint8, 16: np.uint16}.get(int(word_bits))
+    if dt is not None and r.dtype != dt:
+        if r.size and (int(r.min()) < 0 or int(r.max()) >= 1 << int(word_bits)):
+            raise ValueError(f"committed words out of range for {word_bits} bits")
+        r = r.astype(dt)
+    if pin and torch.cuda.is_available():
+        buf = torch.empty(r.nbytes, dtype=torch.uint8, pin_memory=True).numpy().view(r.dtype).reshape(r.shape)
+        buf[...] = r
+        return buf
+    return np.ascontiguousarray(r)
+
+
+def _h2d(a: np.ndarray, device) -> torch.Tensor:
+    """``a`` on ``device``: from page-locked memory without blocking the host (the stream orders its readers)."""
+    t = torch.from_numpy(a)
+    return t.to(device, non_blocking=str(device).startswith("cuda") and t.is_pinned())
+
+
+def _rows_to_device(rows: np.ndarray, device, narrow: dict | None = None, name: str | None = None):
+    """``rows`` as an int64 torch tensor on ``device``, copied in its narrow dtype and widened there.  ``narrow``: records
+    ``narrow[name]`` = the copied tensor when it holds the rows' bytes (uint8 words, or uint16 words as int16)."""
+    if rows.dtype == np.uint16:
+        t = _h2d(np.ascontiguousarray(rows).view(np.int16), device)
+        if narrow is not None:
+            narrow[name] = t
+        return t.to(torch.int64) & 0xFFFF
     if rows.dtype not in (np.uint8, np.int8, np.int16, np.int32, np.int64):
         rows = rows.astype(np.int32 if rows.dtype.itemsize <= 2 else np.int64)
-    return torch.from_numpy(np.ascontiguousarray(rows)).to(device).to(torch.int64)
+    t = _h2d(np.ascontiguousarray(rows), device)
+    if narrow is not None and rows.dtype == np.uint8:
+        narrow[name] = t
+    return t.to(torch.int64)
 
 
 def instances(rel: Relation, n: int, seed: int | None = None, procs: int = 1, cache: str | Path | None = None, root=None):
@@ -503,7 +535,10 @@ class HashedRelationRunner(RelationChainRunner):
         t0 = time.perf_counter()
         x_rows, w_cols = _word_rows(x_rows), _word_rows(w_cols)
         self.rows = {"a": x_rows, "b": w_cols}
-        rows_d = {nm: _rows_to_device(r, self.device) for nm, r in self.rows.items()}
+        narrow: dict = {}
+        rows_d = {nm: _rows_to_device(r, self.device, narrow, nm) for nm, r in self.rows.items()}
+        if str(self.device).startswith("cuda"):
+            torch.cuda.synchronize()
         t1 = time.perf_counter()
         self.tile = tile
         # the chain states of every committed row, once (the prover's cost of hashing; gathered per sub-batch in prove_vus);
@@ -515,14 +550,22 @@ class HashedRelationRunner(RelationChainRunner):
         self.sponge_seconds = t2 - t1
         chain_digests = None
         if hashchain.ROW_SPONGE_KERNEL and getattr(self.leaf, "row_sponges", None) is not None and str(self.device).startswith("cuda"):
-            chain_digests = {nm: self.sponges[nm][1].cpu().numpy().astype(np.int64) for nm in self.sponges}
+            from . import frame_gpu
+            on_dev = frame_gpu.available() and self.leaf.name in frame_gpu.ROW_SCHEMES      # compared on the device
+            chain_digests = {nm: self.sponges[nm][1] if on_dev else self.sponges[nm][1].cpu().numpy().astype(np.int64)
+                             for nm in self.sponges}
         self.trees, self.digests, cached = hashauth.load_or_build_trees(
             cache, x_rows=x_rows, w_cols=w_cols,
             y_words=np.asarray(y_words, dtype=np.int64), word_bits=self.hr.word_bits, y_bits=self.rel.y_bits, bindings=bindings,
-            leaf=self.leaf, digests=chain_digests)
+            leaf=self.leaf, digests=chain_digests, rows_dev={nm: narrow.get(nm, rows_d[nm]) for nm in rows_d})
+        if str(self.device).startswith("cuda"):
+            torch.cuda.synchronize()
         t3 = time.perf_counter()
         self._committed_digests(rows_d)
-        self.commit_timings = {"rows": t1 - t0, "chain": t2 - t1, "trees": t3 - t2, "host": time.perf_counter() - t3}
+        # committer = what the commitment itself costs (rows to the device, row digests, framing, the trees, the y leaves);
+        # chain = the prover's carried states of every committed row, precomputed here
+        self.commit_timings = {"rows": t1 - t0, "chain": t2 - t1, "trees": t3 - t2, "host": time.perf_counter() - t3,
+                               "committer": (t1 - t0) + (t3 - t2)}
         return cached
 
     def commit_evidence(self) -> dict:
@@ -654,17 +697,23 @@ class HashedRelationRunner(RelationChainRunner):
         return [(coins_of[i], pf, (bd["table"], bd["idx"], bd["ypub"], bd["auth"], sibs[i]), bd["lay"])
                 for i, (pf, bd) in enumerate(zip(proofs, bundles))], wall
 
+    def committed_rows(self, data) -> tuple:
+        """The worst-case committed set of an instance list (every VU its own x row and W column) as stored: ``(x_rows,
+        w_cols)`` in the words' dtype, page-locked for a CUDA runner (:func:`narrow_rows`)."""
+        x_rows, w_cols = getattr(data, "x_rows", None), getattr(data, "w_cols", None)
+        if x_rows is None or w_cols is None:
+            x_rows, w_cols = [v[0] for v in data], [v[1] for v in data]
+        pin = str(self.device).startswith("cuda")
+        return narrow_rows(x_rows, self.hr.word_bits, pin), narrow_rows(w_cols, self.hr.word_bits, pin)
+
     def commit_vus(self, data: list, dataset: str = "synthetic", tier: str = "dev", manifest_sha256: str = "", cache=None, tile=None,
                    x_rows=None, w_cols=None):
         """Commit an instance list: the worst case (every VU its own x row and W column: ``x_rows = a``, ``w_cols = b``) or a
         tile (``x_rows`` / ``w_cols`` given, ``tile = (nx, nw)``)."""
         from . import hashauth
         y = [self.rel.y_public(int(v[3])) for v in data]
-        if tile is None:
-            x_rows, w_cols = getattr(data, "x_rows", None), getattr(data, "w_cols", None)
-            if x_rows is None or w_cols is None:
-                x_rows = [v[0] for v in data]
-                w_cols = [v[1] for v in data]
+        if tile is None and (x_rows is None or w_cols is None):
+            x_rows, w_cols = self.committed_rows(data)
         ysch, _ = hashauth.word_schema(self.rel.y_bits)
         bindings = {n: hashauth.binding_digest(dataset=dataset, tier=tier, manifest_sha256=manifest_sha256, lo=0, hi=len(data),
                                                K=getattr(self.rel, "vu_words", K_VU), tree=n,
@@ -2000,7 +2049,8 @@ def bench_vu_rel(args, rel: Relation) -> int:
     t0 = time.perf_counter()
     if tile is None:
         data = instances(rel, total_vus, procs=getattr(args, "instance_procs", 1), cache=getattr(args, "instances_cache", None), root=root)
-        x_rows = w_cols = None
+        # the committed set as stored (the rows in their words' dtype): the committer's input, made once with the set
+        x_rows, w_cols = R.committed_rows(data) if hashed else (None, None)
     else:
         # a frozen-tier relation (bf16-ampere): its frozen set has no tile layout, the tile is the synthetic draw
         data, x_rows, w_cols = tile_instances(rel, *tile, procs=getattr(args, "instance_procs", 1), cache=getattr(args, "instances_cache", None))
