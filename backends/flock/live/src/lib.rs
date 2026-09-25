@@ -16,6 +16,8 @@
 //!   proof's absorbed bytes hash to the round the server recorded before it issued that coin, then returns that coin.
 //!   The session record ([`Server::record_json`]) is the evidence; a proof file alone verifies nothing.
 
+pub mod chunk;
+
 use std::{
     collections::BTreeMap,
     fs::File,
