@@ -475,8 +475,9 @@ class HashedRelationRunner(RelationChainRunner):
 
     def _committed_digests(self):
         """Host copies of the committed rows' digests (public: the leaves of the x / W trees) for the statement tables
-        of the pipelined prover, and device copies of the committed rows (the hash side gathers its witness from them)."""
-        self._marshal_cache = {}
+        of the pipelined prover, and device copies of the committed rows (the hash side gathers its witness from them).
+        Only the hashed statements depend on the commitment: the base marshal of the instance words stays cached."""
+        self._marshal_cache = {k: v for k, v in self._marshal_cache.items() if k[0] != "hashed"}
         self.dg_host = {nm: self.sponges[nm][1].cpu().numpy().astype(np.int64) for nm in self.sponges}
         self.rows_d = {nm: torch.as_tensor(self.rows[nm], dtype=torch.int64).to(self.device) for nm in self.rows}
 
@@ -1941,10 +1942,20 @@ def bench_vu_rel(args, rel: Relation) -> int:
     inst_digest = tile_digest(rel, *tile) if tile is not None else instances_digest(rel, total_vus, root=root)
     print(f"{total_vus} {'frozen ' + rel.frozen_tier if rel.frozen_tier else 'synthetic'} VUs (recorded accumulators) in {time.perf_counter() - t0:.1f}s")
     commit_seconds = 0.0
+    # --commit-per-rep: every rep (the warm-up included) commits its batch from scratch (no tree cache), timed apart from
+    # proving: the statement's commitments (trees + row digests) are the commitment bucket; the prover's precomputed row
+    # chains go to the witness bucket and rebuilding the hashed statements to serialization, both inside t.total
+    commit_per_rep = bool(getattr(args, "commit_per_rep", False))
+    if commit_per_rep and not (hashed and not shared and pipeline_depth > 1 and args.device.startswith("cuda")):
+        raise SystemExit("--commit-per-rep: --auth included-hash (unshared) with --pipeline >= 2 on CUDA only")
+
+    def commit_batch(cache):
+        R.commit_vus(data, dataset=rel.instances_dataset, tier=rel.instances_tier, manifest_sha256=inst_digest,
+                     cache=cache, tile=tile, x_rows=x_rows, w_cols=w_cols)
+
     if hashed:
         t0 = time.perf_counter()
-        R.commit_vus(data, dataset=rel.instances_dataset, tier=rel.instances_tier, manifest_sha256=inst_digest,
-                     cache=getattr(args, "auth_cache", None), tile=tile, x_rows=x_rows, w_cols=w_cols)
+        commit_batch(None if commit_per_rep else getattr(args, "auth_cache", None))
         commit_seconds = time.perf_counter() - t0
         print(f"committed: x tree {R.trees['a'].count} rows, W tree {R.trees['b'].count} columns, y tree {R.trees['y'].count} words "
               f"({R.leaf.schema} + SHA-256) in {commit_seconds:.1f}s (row digests on {args.device}: {R.sponge_seconds:.2f}s); "
@@ -1994,6 +2005,18 @@ def bench_vu_rel(args, rel: Relation) -> int:
     for rep in range(args.reps + 1):
         agg: dict[str, float] = {}
         vsum = 0.0
+        if commit_per_rep:
+            R.sponges = R.rows_d = None
+            if rep > 0:
+                torch.cuda.synchronize()
+            t_c = time.perf_counter()
+            commit_batch(None)
+            agg["commitment"] = time.perf_counter() - t_c - R.sponge_seconds
+            agg["hints_host"] = agg["row_chain"] = R.sponge_seconds
+            t_s = time.perf_counter()
+            for lo, hi in subs:
+                R.marshal_hashed(data[lo:hi], range(lo, hi), l)
+            agg["statement"] = agg["total"] = time.perf_counter() - t_s
         t_pass = time.perf_counter()
         # Prove every sub-batch of the rep first, then verify (and dump) them: the verifier's host work must not sit
         # between two timed prover sub-batches (vu.bench_vu since f28c13d; the same discipline here).
@@ -2103,14 +2126,22 @@ def bench_vu_rel(args, rel: Relation) -> int:
         keys = agg.keys()
         runs.append((agg, vsum))
         print(f"rep {rep}: prover {agg['total']:.3f}s (+hints {agg['hints_host']:.3f}s) over {n_proofs} proofs; "
-              f"verifier {vsum:.3f}s; pass wall {wall:.3f}s ({(agg['total'] + agg['hints_host']) / total_vus * 1e3:.3f} ms/VU)")
+              f"verifier {vsum:.3f}s; pass wall {wall:.3f}s ({(agg['total'] + agg['hints_host']) / total_vus * 1e3:.3f} ms/VU)"
+              + (f"; commitment {agg['commitment']:.3f}s (+ row chains {agg['row_chain']:.3f}s in hints, statements "
+                 f"{agg['statement']:.3f}s in total); end to end {agg['commitment'] + agg['total'] + agg['hints_host']:.3f}s"
+                 if commit_per_rep else ""))
     dumps = None
     if dump_dir is not None:
         (dump_dir / "manifest.json").write_text(json.dumps(dump_manifest, indent=1, default=str))
         print(f"dumped {len(dump_manifest['files'])} proofs to {dump_dir}", flush=True)
         dumps = _verify_dumps(dump_dir, dump_manifest, R, args.device, target_bits)
     # t.total and every bucket come from one rep (phases.median_rep); the per-key medians are printed as diagnostics only
-    med_rep = phases.median_rep(runs)
+    if commit_per_rep:
+        # the reported rep is the one with the median END-TO-END time (commitment + proving), which is what P divides
+        e2e_of = [phases.prover_seconds(r[0]) + r[0]["commitment"] for r in runs]
+        med_rep = sorted(range(len(runs)), key=lambda i: e2e_of[i])[len(runs) // 2]
+    else:
+        med_rep = phases.median_rep(runs)
     med = dict(runs[med_rep][0])
     per_key_med = {k_: statistics.median(r[0][k_] for r in runs) for k_ in keys}
     vmed = statistics.median(r[1] for r in runs)
@@ -2240,6 +2271,22 @@ def bench_vu_rel(args, rel: Relation) -> int:
                  contract.measurement("relation.hash.auth_openings_seconds", med.get("auth_openings", 0.0), "s"),
                  contract.measurement("relation.hash.committed_x_rows", R.trees["a"].count, "count"),
                  contract.measurement("relation.hash.committed_w_cols", R.trees["b"].count, "count")]
+    if commit_per_rep:
+        e2e = total + med["commitment"]
+        native = contract.native_reference(rel.target.name).flop_per_second
+        meas += [contract.measurement("commitment.seconds", med["commitment"], "s"),
+                 contract.measurement("commitment.row_chain_seconds", med["row_chain"], "s"),
+                 contract.measurement("commitment.statement_seconds", med["statement"], "s"),
+                 contract.measurement("end_to_end.seconds", e2e, "s"),
+                 contract.measurement("end_to_end.vu_per_second", total_vus / e2e, "1/s"),
+                 contract.measurement("end_to_end.overhead_vs_native_peak", native * e2e / (2 * K_VU * total_vus), "ratio")]
+        fp["commitment"] = {
+            "per_rep": True, "scheme": "frame-v3", "leaf_schema": R.leaf.schema, "trees": ["x", "W", "y"],
+            "committer": "relchain.HashedRelationRunner.commit_vus (hashauth.load_or_build_trees, no cache)",
+            "timed": "commitment.seconds = the x / W / y trees and their row digests, per rep; the prover's row chains "
+                     "(commitment.row_chain_seconds) are in t.witness and rebuilding the hashed statements "
+                     "(commitment.statement_seconds) in t.serialization, both inside t.total; end_to_end.seconds = "
+                     "commitment.seconds + t.total, from the rep with the median end-to-end time"}
     if shared:
         meas += [contract.measurement("relation.share.g_seconds", med.get("g_total", 0.0), "s"),
                  contract.measurement("relation.share.h_seconds", med.get("h_total", 0.0), "s"),
@@ -2267,7 +2314,9 @@ def bench_vu_rel(args, rel: Relation) -> int:
                "warm-up sub-batch")
     status = "passed"
     evidence = {"soundness": snd, "batch": batch,
-                "reps": [{"prover_total": r[0]["total"] + r[0]["hints_host"], "verifier": r[1]} for r in runs],
+                "reps": [{"prover_total": r[0]["total"] + r[0]["hints_host"], "verifier": r[1],
+                          **({"commitment": r[0]["commitment"], "end_to_end": r[0]["total"] + r[0]["hints_host"] + r[0]["commitment"]}
+                             if commit_per_rep else {})} for r in runs],
                 "phase_rep": {"index": med_rep, "rule": "t.total and the t.* buckets are this rep's (the median prover_total of "
                                                         "reps); verifier.seconds is the median over the reps"},
                 "verify_wall": "the live in-process Python verifier, median over the reps of the sum over the sub-batches (shares code "

@@ -448,6 +448,10 @@ def main(argv=None) -> int:
                                             "columns (every pair one VU; sharing = tileNXxNW) instead of every VU its own rows (sharing = none)")
     sub.choices["bench-vu"].add_argument("--auth-cache", default=None, metavar="DIR", help="--auth: directory holding the built trees (reused when the bindings match)")
     sub.choices["bench-vu"].add_argument("--auth-procs", type=int, default=None, help="--auth: processes for leaf hashing (default: all cores)")
+    sub.choices["bench-vu"].add_argument("--commit-per-rep", action="store_true",
+                                         help="--auth included-hash, --pipeline >= 2: every rep commits its batch from scratch (no tree "
+                                              "cache), timed as commitment.seconds apart from t.total; end_to_end.seconds = both (the "
+                                              "Table 2 P); the reported rep is the median end to end")
     sub.choices["bench-vu"].add_argument("--verifier", default=None, metavar="tcp://HOST:PORT",
                                          help="interactive mode: take the step-0 coins of every recorded rep from a LIVE verifier "
                                               "(backends.direct.ligero.live serve) on another machine and send it every prover message as "
