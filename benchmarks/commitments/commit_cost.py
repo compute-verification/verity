@@ -1,17 +1,21 @@
 #!/usr/bin/env python3
 """Commit cost of each named commitment scheme: hash N leaves of B bytes, then build the tree over them.
 
-    python benchmarks/commitments/commit_cost.py --scheme all --leaves 65536 --leaf-bytes 256 --reps 5
+    python benchmarks/commitments/commit_cost.py --leaves 65536 --leaf-bytes 256 --reps 5
     research run --tool commit_cost --project verity -- python benchmarks/commitments/commit_cost.py --scheme all --leaves 1048576
 
 Schemes (``--scheme``, repeatable, or ``all``):
 
-    frame-v3            ``verity.commitments.merkle``: leaf = ``domain.leaf(rank, position, schema, value)``, tree =
-                        ``FrameV3(domain).root`` (domain-, level- and index-bound nodes, padded to a power of two)
-    vllm-production     ``verity.commitments.vllm_production``: leaf = ``pos_leaf(value)`` (the host path), tree =
-                        ``SCHEME.root`` (node/lift, no padding)
+    frame-v3            ``verity.commitments.frame_v3``, word leaves: leaf = ``domain.leaf(rank, position, schema, value)``,
+                        tree = domain-, level- and index-bound nodes, padded to a power of two
+    frame-v3-sha256-row the same tree over ``sha256/row/v1`` row leaves (the value is one row of 16-bit words)
+    frame-v3-blake3-row the same tree over ``blake3-keyed/row/v2`` row leaves (plain-Python BLAKE3: slow by design)
+    vllm-v1             ``verity.commitments.vllm_v1``: leaf = ``pos_leaf(value)`` (the host path), tree = node/lift,
+                        no padding, root bound by the step root
 
-Both run the plain-Python references, so the numbers are the cost of the *framing* on one CPU core under
+Every scheme runs through ``CommitmentScheme``: the leaf phase is ``leaf_layout(...).digest(value)`` then
+``tree_leaf`` (what a prover's digest plus the verifier's native step cost together), the tree phase is ``root``.
+All run the plain-Python references, so the numbers are the cost of the *framing* on one CPU core under
 ``hashlib``, not of any production fast path (GPU trees, thread pools).  Each rep times the leaf phase and the tree
 phase separately; the reported value is the median.  After timing, one opening per scheme is produced and checked
 through the scheme's ``verify_path``, and the validation status says whether all of them verified.
@@ -33,12 +37,15 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
-from verity.commitments import vllm_production as vp
+from verity.commitments import vllm_v1
+from verity.commitments.frame_v3 import FrameV3, Port, RowLeaf, WordLeaf
 from verity.commitments.indexed import RangeIndexedDomain
-from verity.commitments.merkle import CommitmentDomain, FrameV3
+from verity.commitments.merkle import CommitmentDomain
+from verity.commitments.rowleaf import ROLE_X
 from verity.commitments.scheme import CommitmentScheme
 
-SCHEMES = ("frame-v3", "vllm-production")
+SCHEMES = ("frame-v3", "frame-v3-sha256-row", "frame-v3-blake3-row", "vllm-v1")
+DEFAULT_SCHEMES = ("frame-v3", "frame-v3-sha256-row", "vllm-v1")
 RESULT_SCHEMA = "research/result/v0.1"
 
 
@@ -49,40 +56,45 @@ def values(n: int, nbytes: int) -> list[bytes]:
     return [(i.to_bytes(8, "little") + block)[:nbytes] for i in range(n)]
 
 
-def setup(scheme: str, n: int, nbytes: int) -> tuple[CommitmentScheme, Callable[[Sequence[bytes]], list[bytes]]]:
-    """(the scheme, a function from values to its leaf digests)."""
+def setup(scheme: str, n: int, nbytes: int) -> CommitmentScheme:
+    """The scheme configured with one port ``"v"`` of ``n`` leaves of ``nbytes`` bytes."""
 
-    if scheme == "frame-v3":
-        domain = CommitmentDomain(hashlib.sha256(b"commit-cost/binding").digest(), 0, RangeIndexedDomain(n))
-        schema = f"u8[{nbytes}]"
-        return FrameV3(domain), lambda vs: [domain.leaf(r, r, schema, v) for r, v in enumerate(vs)]
-    if scheme == "vllm-production":
-        return vp.SCHEME, lambda vs: [vp.pos_leaf(v) for v in vs]
+    digest = hashlib.sha256(f"commit-cost/{scheme}".encode()).digest()
+    if scheme.startswith("frame-v3"):
+        domain = CommitmentDomain(digest, 0, RangeIndexedDomain(n))
+        if scheme == "frame-v3":
+            return FrameV3({"v": Port(domain, WordLeaf(f"u8[{nbytes}]", nbytes))})
+        if nbytes % 2 or not nbytes:
+            raise ValueError("row leaves need a positive even --leaf-bytes (16-bit words)")
+        return FrameV3({"v": Port(domain, RowLeaf(scheme.split("-")[2], ROLE_X, 16, nbytes // 2))})
+    if scheme == "vllm-v1":
+        return vllm_v1.VllmV1({"v": vllm_v1.StepDomain(digest, digest, digest, digest, n)}, value_nbytes={"v": lambda _i: nbytes})
     raise ValueError(f"unknown scheme {scheme!r}; known: {', '.join(SCHEMES)}")
 
 
 def measure(scheme: str, n: int, nbytes: int, reps: int) -> dict[str, Any]:
     vs = values(n, nbytes)
-    impl, leaf_rule = setup(scheme, n, nbytes)
+    impl = setup(scheme, n, nbytes)
+    layouts = [impl.leaf_layout("v", i) for i in range(n)]
     leaf_s, tree_s = [], []
     root = b""
     for _ in range(reps):
         t0 = time.perf_counter()
-        leaves = leaf_rule(vs)
+        leaves = [impl.tree_leaf("v", i, lay.digest(v)) for i, (lay, v) in enumerate(zip(layouts, vs))]
         t1 = time.perf_counter()
-        root = impl.root(leaves)
+        root = impl.root("v", leaves)
         t2 = time.perf_counter()
         leaf_s.append(t1 - t0)
         tree_s.append(t2 - t1)
     index = n // 2
-    verified = impl.verify_path(root, n, index, leaves[index], impl.path(leaves, index))
+    verified = impl.verify_path("v", root, n, index, leaves[index], impl.path("v", leaves, index))
     leaf, tree = statistics.median(leaf_s), statistics.median(tree_s)
-    return {"scheme": impl.name, "leaves": n, "leaf_bytes": nbytes, "reps": reps, "leaf_s": leaf, "tree_s": tree,
+    return {"scheme": scheme, "hashes": list(impl.hashes), "leaves": n, "leaf_bytes": nbytes, "reps": reps, "leaf_s": leaf, "tree_s": tree,
             "commit_s": leaf + tree, "root": root.hex(), "opening_verified": verified}
 
 
 def measurements(row: dict[str, Any]) -> list[dict[str, Any]]:
-    key = row["scheme"].split("/")[0]
+    key = row["scheme"]
     total = row["commit_s"]
     return [
         {"name": f"{key}.leaf_s", "value": row["leaf_s"], "unit": "s"},
@@ -95,7 +107,7 @@ def measurements(row: dict[str, Any]) -> list[dict[str, Any]]:
 
 def parse(argv: list[str]) -> argparse.Namespace:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--scheme", action="append", choices=(*SCHEMES, "all"), help="repeatable; default all")
+    ap.add_argument("--scheme", action="append", choices=(*SCHEMES, "all"), help=f"repeatable; default {', '.join(DEFAULT_SCHEMES)}; all = every scheme")
     ap.add_argument("--leaves", type=int, default=1 << 16)
     ap.add_argument("--leaf-bytes", type=int, default=256)
     ap.add_argument("--reps", type=int, default=3)
@@ -103,7 +115,7 @@ def parse(argv: list[str]) -> argparse.Namespace:
     ns = ap.parse_args(argv)
     if ns.leaves <= 0 or ns.leaf_bytes < 0 or ns.reps <= 0:
         ap.error("--leaves and --reps must be positive, --leaf-bytes nonnegative")
-    ns.schemes = list(SCHEMES) if not ns.scheme or "all" in ns.scheme else list(dict.fromkeys(ns.scheme))
+    ns.schemes = list(DEFAULT_SCHEMES) if not ns.scheme else list(SCHEMES) if "all" in ns.scheme else list(dict.fromkeys(ns.scheme))
     return ns
 
 

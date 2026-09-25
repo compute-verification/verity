@@ -25,22 +25,27 @@ def test_commit_cost_writes_a_valid_result(tmp_path: Path) -> None:
     assert check.valid, check.errors
     assert check.validation_status == "passed"
     rows = json.loads((tmp_path / "commit_cost.json").read_text())
-    assert [r["scheme"] for r in rows] == ["frame-v3", "vllm-production/v1"]
-    assert rows[0]["root"] != rows[1]["root"]
+    assert [r["scheme"] for r in rows] == ["frame-v3", "frame-v3-sha256-row", "vllm-v1"]
+    assert len({r["root"] for r in rows}) == 3
     names = {m["name"] for m in check.doc["measurements"]}
-    assert {"frame-v3.commit_s", "vllm-production.commit_s", "vllm-production.leaves_per_s"} <= names
+    assert {"frame-v3.commit_s", "frame-v3-sha256-row.tree_s", "vllm-v1.commit_s", "vllm-v1.leaves_per_s"} <= names
+
+
+def test_commit_cost_blake3_rows(tmp_path: Path) -> None:
+    assert _bench().main(["--scheme", "frame-v3-blake3-row", "--leaves", "5", "--leaf-bytes", "64", "--out", str(tmp_path)]) == 0
 
 
 def test_commit_cost_root_is_the_reference_root() -> None:
-    from verity.commitments import vllm_production as vp
+    from verity.commitments import vllm_v1
 
     bench = _bench()
-    row = bench.measure("vllm-production", 9, 16, 1)
-    assert row["root"] == vp.SCHEME.root([vp.pos_leaf(v) for v in bench.values(9, 16)]).hex()
+    row = bench.measure("vllm-v1", 9, 16, 1)
+    domain = bench.setup("vllm-v1", 9, 16).ports["v"]
+    assert row["root"] == domain.bind(vllm_v1.fold([vllm_v1.pos_leaf(v) for v in bench.values(9, 16)])).hex()
 
 
 def test_commit_cost_tool_is_registered() -> None:
     tool = tools_registry.load("commit_cost", ROOT)
     assert tool.name == "commit_cost"
-    params, key = tool.resolve_params(["--scheme", "vllm-production", "--leaves", "1024"], ROOT)
-    assert key == {"scheme": "vllm-production", "leaves": 1024, "leaf_bytes": 256}
+    params, key = tool.resolve_params(["--scheme", "vllm-v1", "--leaves", "1024"], ROOT)
+    assert key == {"scheme": "vllm-v1", "leaves": 1024, "leaf_bytes": 256}

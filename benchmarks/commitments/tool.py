@@ -21,7 +21,9 @@ def parse(argv: list[str]) -> dict:
     ap.add_argument("--reps", type=int, default=3)
     ap.add_argument("--out", default=None)
     ns, _ = ap.parse_known_args(argv)
-    schemes = sorted({"frame-v3", "vllm-production"} if not ns.scheme or "all" in ns.scheme else set(ns.scheme))
+    default = {"frame-v3", "frame-v3-sha256-row", "vllm-v1"}
+    every = default | {"frame-v3-blake3-row"}
+    schemes = sorted(default if not ns.scheme else every if "all" in ns.scheme else set(ns.scheme))
     return {"scheme": ",".join(schemes), "leaves": ns.leaves, "leaf_bytes": ns.leaf_bytes, "reps": ns.reps}
 
 
