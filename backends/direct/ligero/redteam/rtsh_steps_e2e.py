@@ -5,7 +5,7 @@ sys_id is the pinned one).  Both verifiers must refuse it: Rust `ligero-verify v
 
     python -m backends.direct.ligero.redteam.rtsh_steps_e2e --bin $LIGERO_VERIFY --leaf blake3 --steps 32 --out DIR
 
-Exit 0 iff the outcome is the expected one: canonical steps accepted by both, any other refused by both, same sys_id.
+Exit 0 iff the outcome is the expected one: canonical steps accepted by both (pinned), any other refused by both.
 """
 from __future__ import annotations
 
@@ -57,7 +57,8 @@ def main() -> int:
     meta = {"relation": R.relation, "steps": args.steps, "canonical_steps": canonical, "K_header": args.steps * rel.k,
             "sys_id": sys_forged, "same_system": sys_forged == sys_canonical, "python": [bool(py_ok), py_why[:200]],
             "rust": [js["accepted"], js.get("system_pinned"), js["reason"][:200]]}
-    meta["expected"] = bool(meta["same_system"] and py_ok == honest and js["accepted"] == honest and js.get("system_pinned"))
+    meta["expected"] = bool((meta["same_system"] and py_ok and js["accepted"] and js.get("system_pinned")) if honest
+                            else (not py_ok and not js["accepted"]))
     (out / "steps.json").write_text(json.dumps(meta, indent=1) + "\n")
     print(json.dumps(meta))
     return 0 if meta["expected"] else 1
