@@ -1175,3 +1175,59 @@ If any bound column differs from its value, \(\rho_b \sum_c g_b^c r_c\) is a non
 \(\le N_b = U n_b\) in \((\rho_b, g_b)\), both drawn after the commitment root and every message: error
 \(\le N_b / |F|\), \(|F| = p^6\) (\(2^{-161.9}\) at \(U n_b = 393216 \cdot 32 = 196608 \cdot 64\), BF16 / E4M3; \(2^{-162.8}\) for fp4-nvf4), far below the
 Ligero query term (\(2^{-130.19}\)), so the achieved bound is unchanged at 2 decimals.
+
+## 17. The bit link, prime side (implemented 2026-09-25, lane agkr-bound; `link.txt`; drill-down only)
+
+Route (a) of the standard-hash workstream: a binary proof (Flock, GF(2^128)) proves the SHA-256 / BLAKE3 row digests over
+the operand **bits** z, and this proof shows that the operand words its units consume ARE those bits.  Sigma form (the
+link red team's S1, `lanes/red-team-link` §4): the prover sends its 256 plane sums in the clear, so this is a
+**NON_ZK_PROOF**-class construction only; no second commitment, no masking vector.  Results stay in the drill-down
+(reason L) until the red team's C1 (one GF(2^256) point: done here), C3 (Flock at 2^-128, interactive coins) and C4
+(chain glue across Flock blocks) hold.
+
+### 17.1 Statement **[implemented: `tools/link_stub.extend_unit`, `gpu/link.py::derive`, `verifier/src/link.rs::{derive, load}`]**
+
+* The unit circuit carries, after every other column, `link.b{5+j}.{i}` for each operand column `5 + j` (j < 2k: the k x
+  words, then the k W words of the step) and bit i < bits (16 BF16, 8 E4M3), with the booleanity assertion
+  b (b - 1) = 0 and the recomposition assertion col = sum_i 2^i b_i.  The verifier checks the names, the order, and both
+  constraints for every bit (red team C7), from the circuit it verifies.
+* Lambda_F, derived by the verifier and never read: cell jb = j bits + i of unit u = v steps + s goes to position
+  pos = ((port vus + v) K + k s + (j mod k)) bits + i, port = j div k (x rows, then W columns; words in order; bit i
+  LSB first).  It requires steps k = K and n_cells = 2 vus steps k bits = n_pos = 2 vus K bits <= p - 1 (C6: at most
+  40,960 VUs at K = 1536 for BF16), and checks injectivity with a bitmap over [0, n_pos) (C5).  The binary side's
+  Lambda_B must map its hash's message-bit order (SHA-256: big-endian words) onto these positions (red team F2); that
+  map belongs to the binary proof.
+* `link.txt`: `link sigma-gf2_256/v1`, `root_b <hex>`; the statement must be operands-committed (§16's successor,
+  `commitment.txt`).  STAND-IN until the binary proof is wired: root_b = SHA-256(TAG || "/root-b-standin/" ||
+  commitment.txt), TAG = `verity-gkr/link/sigma-gf2_256/v1`, and the binary side's claim y is computed by the verifier
+  from `x.bin` / `w.bin`, which it first requires to hash (`sha256/row/v1`) to the public digest limbs of every VU.
+
+### 17.2 Protocol **[implemented: `gpu/link.py::{prove, verify, add}`, `verify.rs` (`link_term`, `unit_row`)]**
+
+After the GKR segments, before the functional's rho's (so after the Ligero root and every GKR message; C2):
+
+1. absorb TAG || root_b; draw r_0 .. r_{m-1}, m = log2ceil(n_pos) (28 for BF16 at 4096 VUs), each one whole digest
+   (`challenge_bytes`: its own coin slot), a GF(2^256) element little-endian.  GF(2^256) = GF(2)[x]/(x^256 + x^10 +
+   x^5 + x^2 + 1), bit t = the coefficient of x^t; eq(r, p) = prod_j (p_j ? r_j : 1 + r_j), bit j of p against r_j.
+2. y = z^(r) = sum over the positions p with z_p = 1 of eq(r, p) (binary side; stand-in above); absorb "link/y" || y.
+3. The prover sends sigma_t = sum_q bit_t(eq(r, pos(q))) b_q for t < 256, each as the extension element (sigma_t, 0, ..,
+   0).  The verifier requires every sigma_t canonical with 0 <= sigma_t <= n_cells and sigma_t = bit_t(y) mod 2.
+4. absorb the 256 messages; draw rho.  The functional gains a[q] += sum_t rho^t bit_t(eq(r, pos(q))) on every link cell
+   of segment 0, and b += sum_t rho^t sigma_t; it is opened with everything else (one Ligero opening, no new rows).
+
+Cost: 256 messages (6,144 bytes), m + 1 coin slots.  The verifier's term of a is one GF(2^256) product
+eq_hi(p >> 14) eq_lo(p mod 2^14) per cell and 32 byte-table lookups of rho powers; the prover's plane sums and term of
+a are int8 tensor-core products of the bit planes of the eq table (2^m x 32 bytes) with 0/1 vectors and with the 7-bit
+limbs of the rho powers.
+
+### 17.3 Soundness **[derivation; not yet in `soundness.py`]**
+
+Suppose some committed bit differs from z at its position (the bits are boolean by the unit's assertions, and Lambda_F
+is a bijection, so b viewed in position order is a boolean vector b').  Then b'^ - z^ is a nonzero multilinear
+polynomial over GF(2^256) in m variables and b'^(r) = y with probability at most m / 2^256 (2^-251.2 at m = 28;
+r is drawn after both roots).  Otherwise b'^(r) != y differ in some bit t, i.e. sum_q bit_t(eq(r, pos(q))) b_q and
+sigma_t differ in parity, so they differ as integers; both lie in [0, n_cells] with n_cells <= p - 1, so they differ
+mod p, and the 256 linear constraints fail.  rho batches them with error <= 255 / p^6, and the Ligero linear test on
+the batched functional is the existing term.  Total added error <= m / 2^256 + 255 / p^6, far below Ligero's 2^-130.19.
+Not covered here: the binary proof (Flock's bound, C3), the chain glue between Flock blocks (C4), and the whole-proof
+accountant (C8).
