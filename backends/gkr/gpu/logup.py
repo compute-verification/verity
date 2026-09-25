@@ -100,6 +100,22 @@ def table_rows(t: Table, device) -> torch.Tensor:
     return t.device_rows(device)
 
 
+KEY_MAP_MAX = 1 << 26
+
+
+def _key_map(t: Table, keys: torch.Tensor) -> torch.Tensor | None:
+    """Row index by key (``-1`` = no row) for a row-listed table whose keys are below ``KEY_MAP_MAX``, cached on the table;
+    None otherwise (the sorted-key search is used)."""
+    ck = ("key_map", str(keys.device))
+    if ck not in t._dev_rows:
+        kmap = None
+        if keys.numel() and int(keys.min()) >= 0 and (kmax := int(keys.max())) < KEY_MAP_MAX:
+            kmap = torch.full((kmax + 1,), -1, dtype=torch.int64, device=keys.device)
+            kmap[keys] = torch.arange(keys.shape[0], dtype=torch.int64, device=keys.device)
+        t._dev_rows[ck] = kmap
+    return t._dev_rows[ck]
+
+
 def multiplicities(t: Table, trows: torch.Tensor, values: list[torch.Tensor]) -> torch.Tensor:
     """``m_j`` = how many query tuples equal table row ``j`` (int64 ``(rows,)``); raises if a tuple is not a row."""
     dev = trows.device
@@ -115,6 +131,17 @@ def multiplicities(t: Table, trows: torch.Tensor, values: list[torch.Tensor]) ->
             m += torch.bincount(key, minlength=trows.shape[0])
         return m
     keys = trows[:, 0]
+    kmap = _key_map(t, keys)
+    if kmap is not None:
+        for v in values:
+            key = v[:, 0]
+            if bool((key >= kmap.shape[0]).any()):
+                raise ValueError(f"query tuple not in table {t.name}")
+            idx = kmap[key]
+            if not bool(((idx >= 0) & (trows[idx.clamp(min=0)] == v).all(dim=1)).all()):
+                raise ValueError(f"query tuple not in table {t.name}")
+            m += torch.bincount(idx, minlength=trows.shape[0])
+        return m
     order = torch.argsort(keys)
     skeys = keys[order]
     for v in values:
