@@ -12,6 +12,9 @@ RESULT is a bench-result/v1 artifact id (abbreviated ids welcome).  For each one
      (and the attempt's `relation` param, and --relation when given);
   4. `ligero-verify batch --target-bits 128` on every rep dir: batch ACCEPT, zero rejections, Rust/Python verdicts agree, and
      the rep holds as many proofs as the manifest lists for it;
+     before it, a dump whose statements carry hash authentication (included-hash) must commit to the claimed instance set: the
+     a/b/y bindings and roots are recomputed from the set (--instances-root, default $BENCH_INSTANCES) and every statement's
+     trees must equal them, and each rep's statements must cover every VU of [0, total) exactly once;
   5. PASS -> a PRESERVED verification-verdict/v1 artifact (refs proof=<run-files>, result=RESULT; the per-rep batch JSON as its
      payload) and labels on RESULT by --by: verified=accepted, verifier, verifier_seconds, note (pushed with the labels sync).
      FAIL (custody / pin / verifier rejection) -> nothing is written; the per-rep JSON stays in --work, exit 1.
@@ -125,6 +128,7 @@ class Report:
     reps: dict[str, dict] = field(default_factory=dict)
     verdict: str | None = None
     labels: list[str] = field(default_factory=list)
+    hashed: bool = False                    # included-hash statements: trees recomputed from the instance set
 
     def line(self) -> str:
         acc = sum(v.get("accepted", 0) for v in self.reps.values())
@@ -170,7 +174,123 @@ def expected_relations(man: dict, params: dict, asserted: str | None) -> dict[st
     return out
 
 
-def verify_tree(pdir: Path, man: dict, v: Verifier, rep: Report, *, jobs: int, params: dict, asserted: str | None, out_dir: Path) -> None:
+# ---- the committed set (authentication = included-hash) ---------------------------------------------------------------------------------
+
+TreeKey = tuple[bytes, int, int, bytes]          # (binding, owner, count, root)
+
+
+def _row_digests(rows, word_bits: int, role: int) -> list[bytes]:
+    """Keyed-BLAKE3 row digests (``blake3-keyed/row/v2``): the ``blake3`` package when installed, else core's reference."""
+    from verity.commitments import rowleaf
+    key = rowleaf.blake3_row_key(role)
+    try:
+        import blake3
+    except ImportError:
+        return [rowleaf.blake3_row_digest(r, word_bits, role) for r in rows]
+    return [blake3.blake3(rowleaf.row_bytes(r, word_bits), key=key).digest() for r in rows]
+
+
+def committed_trees(pinned: str, man: dict, *, instances_root: str | None = None) -> dict[str, TreeKey]:
+    """The x / W / y tree references of the instance set the dump names, recomputed from the set itself: the pinned relation
+    (``system-digest``) fixes the relation and leaf scheme, the manifest's ``set`` block the range ``[0, total_vus)`` and the
+    set's manifest digest, which the regenerated set must reproduce.  Bindings are ``hashauth.binding_digest`` of (dataset,
+    tier, manifest digest, range, K, tree, schema); keyed-BLAKE3 row trees are framed by core ``frame-v3`` over digests of the
+    raw rows (independent of the prover's leaf code); other leaf schemes use the backend's reference tree builder.
+    ``ValueError`` when the set cannot be recomputed (no ``set`` block, a tile, a digest mismatch, an operand format with
+    its own lanes)."""
+    from verity.commitments import CommitmentDomain, RangeIndexedDomain
+    from verity.commitments.frame_v3 import FrameV3, Port, RowLeaf, WordLeaf
+    from verity.commitments.rowleaf import ROLE_W, ROLE_X
+
+    from . import hashauth
+    from .auth import OWNER
+    from .leaf import registry as leaf_registry
+    from .relations import relation
+    from .relchain import instances, instances_digest
+
+    base, leaf_name = leaf_registry.split_relation_name(pinned)
+    s = man.get("set") or {}
+    total, claimed = s.get("total_vus"), s.get("instances")
+    if not isinstance(total, int) or total <= 0 or not isinstance(claimed, str):
+        raise ValueError("the dump names no instance set (manifest `set`: total_vus, instances): the commitments cannot be recomputed")
+    if s.get("tile") or s.get("sharing") not in (None, "none"):
+        raise ValueError(f"shared-row layouts (set {s.get('tile') or s.get('sharing')}) are not recomputed")
+    rel = relation(base)
+    if getattr(rel, "hash_format", None) is not None or rel.word_dtype not in ("<u1", "<u2"):
+        raise ValueError(f"{rel.name}: operands of dtype {rel.word_dtype} / a lane format are not recomputed")
+    digest = instances_digest(rel, total, root=instances_root)
+    if digest != claimed:
+        raise ValueError(f"the regenerated {rel.name} set of {total} VUs has manifest digest {digest[:16]}…, the dump claims {claimed[:16]}…")
+    data = instances(rel, total, root=instances_root)
+    word_bits = 16 if rel.word_dtype == "<u2" else 8
+    K = int(getattr(rel, "vu_words", 1536))
+    scheme = leaf_registry.get(leaf_name)
+    ysch, ybytes = hashauth.word_schema(rel.y_bits)
+    x_rows = [[int(w) for w in v[0]] for v in data]
+    w_cols = [[int(w) for w in v[1]] for v in data]
+    y_words = [int(rel.y_public(int(v[3]))) for v in data]
+    if any(len(r) != K for r in x_rows + w_cols):
+        raise ValueError(f"{rel.name}: instance rows are not K = {K} words")
+    bindings = {n: hashauth.binding_digest(dataset=rel.instances_dataset, tier=rel.instances_tier, manifest_sha256=claimed, lo=0,
+                                           hi=total, K=K, tree=n, schema=(scheme.schema if n != "y" else ysch)) for n in ("a", "b", "y")}
+    if scheme.schema == "blake3-keyed/row/v2":
+        dom = {n: CommitmentDomain(bindings[n], OWNER[n], RangeIndexedDomain(0, total)) for n in ("a", "b", "y")}
+        fv = FrameV3({"a": Port(dom["a"], RowLeaf("blake3", ROLE_X, word_bits, K)), "b": Port(dom["b"], RowLeaf("blake3", ROLE_W, word_bits, K)),
+                      "y": Port(dom["y"], WordLeaf(ysch, ybytes))})
+        leaves = {"a": [fv.tree_leaf("a", r, d) for r, d in enumerate(_row_digests(x_rows, word_bits, ROLE_X))],
+                  "b": [fv.tree_leaf("b", r, d) for r, d in enumerate(_row_digests(w_cols, word_bits, ROLE_W))],
+                  "y": [fv.tree_leaf("y", r, fv.leaf_layout("y", r).digest(w.to_bytes(ybytes, "big"))) for r, w in enumerate(y_words)]}
+        return {n: (bindings[n], OWNER[n], total, fv.root(n, leaves[n])) for n in ("a", "b", "y")}
+    import numpy as np
+    trees, _ = hashauth.build_trees(x_rows=np.asarray(x_rows), w_cols=np.asarray(w_cols), y_words=np.asarray(y_words),
+                                    word_bits=word_bits, y_bits=rel.y_bits, bindings=bindings, leaf=scheme)
+    return {n: (t.ref.binding, t.ref.owner, t.ref.count, t.ref.root) for n, t in trees.items()}
+
+
+def commitment_problems(pdir: Path, man: dict, pinned: str, reps: list[str], *, instances_root: str | None = None) -> tuple[bool, list[str]]:
+    """``(hashed, problems)``.  A dump whose statements carry a hash-authentication block (``included-hash``) passes only when
+    every statement's three tree references equal :func:`committed_trees` and each rep's statements' ``vu_index`` together
+    cover ``[0, total_vus)`` exactly once (red-team-standard-hash R2); a dump without one is not checked here."""
+    from .serialize import read_statement
+
+    per_rep: dict[str, list] = {}
+    for r in reps:
+        for f in sorted((pdir / r).glob("*.stmt")):
+            per_rep.setdefault(r, []).append((f.name, read_statement(f.read_bytes())))
+    hashed = any(getattr(st, "hash_auth", None) is not None for sts in per_rep.values() for _, st in sts)
+    if not hashed:
+        return False, []
+    try:
+        want = committed_trees(pinned, man, instances_root=instances_root)
+    except ValueError as e:
+        return True, [f"commitment: {e}"]
+    total = want["y"][2]
+    problems: list[str] = []
+    for r in reps:
+        sts = per_rep.get(r, [])
+        covered: list[int] = []
+        for name, st in sts:
+            ha = getattr(st, "hash_auth", None)
+            if ha is None:
+                problems.append(f"{r}/{name}: no hash-authentication block beside hashed statements")
+                continue
+            if sorted(t.name for t in ha.trees) != sorted(want):
+                problems.append(f"{r}/{name}: trees {sorted(t.name for t in ha.trees)}, the instance set commits {sorted(want)}")
+                continue
+            for t in ha.trees:
+                got = (bytes(t.binding), int(t.owner), int(t.count), bytes(t.root))
+                if got != want[t.name]:
+                    what = [k for k, a, b in zip(("binding", "owner", "count", "root"), got, want[t.name]) if a != b]
+                    problems.append(f"{r}/{name}: tree {t.name} {'/'.join(what)} differ from the instance set's")
+            covered += list(ha.vu_index)
+        if sorted(covered) != list(range(total)):
+            dup = len(covered) - len(set(covered))
+            problems.append(f"{r}: statements cover {len(set(covered))} distinct VUs of [0, {total}) ({dup} claimed twice)")
+    return True, problems[:8] + ([f"… {len(problems) - 8} more"] if len(problems) > 8 else [])
+
+
+def verify_tree(pdir: Path, man: dict, v: Verifier, rep: Report, *, jobs: int, params: dict, asserted: str | None, out_dir: Path,
+                instances_root: str | None = None) -> None:
     n, bad, missing = custody(pdir, man)
     rep.custody = {"files": n, "mismatched": len(bad), "missing": len(missing)}
     if bad:
@@ -205,6 +325,10 @@ def verify_tree(pdir: Path, man: dict, v: Verifier, rep: Report, *, jobs: int, p
     if not reps:
         rep.status, rep.why = "FAIL", ["no rep*/ directory in the dump"]
         return
+    rep.hashed, bad = commitment_problems(pdir, man, rep.relation, reps, instances_root=instances_root)
+    if bad:
+        rep.status, rep.why = "FAIL", bad
+        return
     out_dir.mkdir(parents=True, exist_ok=True)
     for r in reps:
         out = out_dir / f"{r}.json"
@@ -234,6 +358,8 @@ def detail(rep: Report, v: Verifier) -> str:
          f"(custody: {rep.custody['files']}/{rep.custody['files']} files match proofs/manifest.json): {acc}/{tot} accepted over {len(rep.reps)} rep(s), "
          f"every batch ACCEPT, min union bound 2^-{bits:.2f}, system PINNED ({rep.relation}), Rust/Python verdict agreement {tot}/{tot}; "
          f"host {os.uname().nodename}, 1 thread per proof; mode={rep.mode}")
+    if rep.hashed:
+        s += "; hash commitments recomputed from the instance set (a/b/y bindings + roots equal, every VU covered once per rep)"
     if rep.mode == "interactive":
         s += (" -- each sub-batch verified against its recorded step-0 coins (the live verifier's session coins): consistency with that "
               "session, not transferable evidence (D7)")
@@ -245,7 +371,8 @@ def free_bytes(path: Path) -> int:
     return st.f_bavail * st.f_frsize
 
 
-def reverify(st: Any, result: str, v: Verifier, *, by: str | None, jobs: int, work: Path, asserted: str | None, dry_run: bool, keep: bool) -> Report:
+def reverify(st: Any, result: str, v: Verifier, *, by: str | None, jobs: int, work: Path, asserted: str | None, dry_run: bool, keep: bool,
+             instances_root: str | None = None) -> Report:
     from research.store import evict as EV
     from research.store.ids import is_run_id
 
@@ -278,7 +405,7 @@ def reverify(st: Any, result: str, v: Verifier, *, by: str | None, jobs: int, wo
         man = json.loads((pdir / "manifest.json").read_text())
         rep.mode = man.get("mode") or params.get("mode")
         per_rep = work / f"{d.name}.reps"
-        verify_tree(pdir, man, v, rep, jobs=jobs, params=params, asserted=asserted, out_dir=per_rep)
+        verify_tree(pdir, man, v, rep, jobs=jobs, params=params, asserted=asserted, out_dir=per_rep, instances_root=instances_root)
         if rep.status != "PASS":
             if per_rep.is_dir():
                 print(f"reverify: {result}: per-rep verifier JSON kept in {per_rep}", file=sys.stderr)
@@ -330,6 +457,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--keep", action="store_true", help="keep the fetched trees")
     ap.add_argument("--dry-run", action="store_true", help="fetch, check and verify; write nothing to the store")
     ap.add_argument("--store", default=None, help="store root (default $RESEARCH_STORE or ~/.research/store)")
+    ap.add_argument("--instances-root", default=os.environ.get("BENCH_INSTANCES"),
+                    help="where frozen instance sets live, to recompute hash commitments (default $BENCH_INSTANCES)")
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
     if not ns.by and not ns.dry_run:
@@ -345,7 +474,8 @@ def main(argv: list[str] | None = None) -> int:
     for res in expand_short_ids("show", [*ns.results, *(["--store", ns.store] if ns.store else [])])[:len(ns.results)]:
         t0 = time.monotonic()
         try:
-            rep = reverify(st, res, v, by=ns.by, jobs=ns.jobs, work=ns.work, asserted=ns.relation, dry_run=ns.dry_run, keep=ns.keep)
+            rep = reverify(st, res, v, by=ns.by, jobs=ns.jobs, work=ns.work, asserted=ns.relation, dry_run=ns.dry_run, keep=ns.keep,
+                           instances_root=ns.instances_root)
         except Exception as e:  # noqa: BLE001  (one result's environment failure must not abandon the batch)
             rep = Report(res, "ERROR", [f"{type(e).__name__}: {e}"])
         reports.append(rep)
