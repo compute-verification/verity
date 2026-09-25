@@ -280,7 +280,8 @@ def result(a, cell: Path, meta: dict, rows: list[dict]) -> None:
         authentication="included-hash", zk_mode=contract.ZK_NONE, security=security, hardware=contract.probe_hardware(), software=sw,
         preprocessing=("circuit files, GKR layers, Lambda_F derivation, the Flock statement shape (untimed; the Flock prover starts on a "
                        "signal once built); Triton compilation in the untimed warm-up session"),
-        retention="retained", instances=contract.instances_ref(br.TIER, 0, n, meta["manifest_sha256"]),
+        retention="retained", instances=contract.instances_ref(br.TIER, 0, n, meta.get("manifest_sha256") or hashlib.sha256(
+            (HERE.parents[1] / "fixtures" / "bench-instances" / "v1" / "manifest.json").read_bytes()).hexdigest()),
         scope="vu", candidate="A-GKR", checker="v2", field=br.FIELD, variant="A-GKR route (a): A-GKR + Flock + link",
         leaf="blake3", sharing=None, sessions=len(timed), warmup=a.warmup,
         verifier={"flock": "flock-link cell-serve (live coins; the session record is the evidence, admitted by tools/cell_gate.py)",
@@ -333,7 +334,17 @@ def main(argv=None) -> int:
     p.add_argument("--threads", type=int, default=16)
     p.add_argument("--warmup-verifier", default=None, help="the warm-up sessions' verifier (a loopback one: warm-ups are never evidence)")
     p.add_argument("--result", default=None, help="write the bench-result/v1 envelope here")
+    r = sub.add_parser("result", help="the bench-result/v1 envelope from CELL/sessions.json (on the prover pod: it probes the hardware)")
+    r.add_argument("--cell", required=True)
+    r.add_argument("--sessions-json", action="append", default=[], help="more sessions.json files (other runs of the same cell)")
+    r.add_argument("--warmup", type=int, default=1)
+    r.add_argument("--result", required=True)
     a = ap.parse_args(argv)
+    if a.cmd == "result":
+        cell = Path(a.cell)
+        rows = [r for f in [cell / "sessions.json", *map(Path, a.sessions_json)] for r in json.loads(Path(f).read_text())]
+        result(a, cell, json.loads((cell / "cell.json").read_text()), rows)
+        return 0
     if a.cmd == "circuits":
         Path(a.out).mkdir(parents=True, exist_ok=True)
         circuits(Path(a.out))
