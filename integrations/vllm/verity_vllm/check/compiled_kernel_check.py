@@ -88,7 +88,7 @@ def check_edges(dataflow: dict[str, Any], committed, n_rows: int) -> dict[str, A
 
 
 class CompiledKernelCheck:
-    def __init__(self, committer: Any, model: torch.nn.Module, tokens: list[int] | dict[str, list[int]] | None = None, *, seed: int | None = None,
+    def __init__(self, committer: Any, model: torch.nn.Module, tokens: list[int] | dict[str, list[int]] | None = None, *, seed: int,
                  seed_source: str | None = None,
                  n_random: int = 4, pieces: int | None = None, request_rows: dict[int, list[tuple[str, int, int]]] | None = None,
                  arrivals: dict[str, int] | None = None, prompts: dict[str, list[int]] | None = None) -> None:
@@ -203,7 +203,7 @@ class CompiledKernelCheck:
         sample = {steps[0]}
         if len(steps) > 1:
             sample |= {steps[1], steps[len(steps) // 2], steps[-1]}
-        rng = random.Random(self.seed if self.seed is not None else 0)
+        rng = random.Random(self.seed)
         pool = [s for s in steps if s not in sample]
         sample |= set(rng.sample(pool, min(self.n_random, len(pool))))
         res["sampled_steps"] = sorted(sample)

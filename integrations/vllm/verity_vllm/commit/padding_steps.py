@@ -26,7 +26,6 @@ from __future__ import annotations
 import gzip
 import hashlib
 import json
-import os
 import struct
 from collections import Counter
 from dataclasses import dataclass, field
@@ -362,8 +361,7 @@ def padding_entries(ps: PaddingStep, *, layout_version: str = "chunk-leaf-v1", s
 
 
 def padding_for_committer(com: Any, *, manifest: dict[str, Any], requests: list[dict[str, Any]], sampling: dict[str, Any],
-                          served_tokens: dict[str, list[int]] | None, stop: dict[str, Any] | None, arrivals: dict[str, int] | None = None,
-                          layout: str | None = None) -> list[PaddingStep]:
+                          served_tokens: dict[str, list[int]] | None, stop: dict[str, Any] | None, arrivals: dict[str, int] | None = None) -> list[PaddingStep]:
     """The POD consumer's hook (`NativeHostCommitter.padding_hook`; run inside `finalize()` after every executed step is hashed, before the
     run-root fold): the padding steps of THIS run.  `manifest` = the required-value manifest document (cap shape; `identities` rows);
     `requests` / `sampling` = the workload's (request ids `r<index>`, caps, declared arrivals, as commit_delta.binding_record reads them);
@@ -398,8 +396,7 @@ def padding_for_committer(com: Any, *, manifest: dict[str, Any], requests: list[
               for d in ids if d.get("request_id") == "*" and isinstance(d.get("requests"), list) and d.get("engine_step") is not None
               and d.get("family") != "weights"]
     by_step = padding_steps_of_record(per_request + shared, epr, arr)
-    if layout is None:
-        layout = (os.environ.get("VERITY_LEAF_LAYOUT", "chunk-leaf-v1") if getattr(com, "gpu_tree", False) else "host-pos-leaf")
+    layout = com.layout if getattr(com, "gpu_tree", False) else "host-pos-leaf"
     out: list[PaddingStep] = []
     for s, sids in by_step.items():
         kw: dict[str, Any] = dict(program_digest=com.program_digest, run_id=com.run_id, geo_digest=com._geo_digest, chunk=com.chunk, layout=layout)

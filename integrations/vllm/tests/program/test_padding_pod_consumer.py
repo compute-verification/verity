@@ -243,6 +243,20 @@ def test_padding_hook_end_to_end_b2_eos_stop_full_cap_coverage_context_and_popul
         com2.commit_offline(_executed(executed))
 
 
+def test_the_padding_leaf_rule_is_the_committers_not_the_environment(monkeypatch):
+    """The hook's padding steps take the committer's leaf rule: its GPU tree's declared `layout`, `host-pos-leaf` off the GPU tree."""
+    monkeypatch.setenv("VERITY_LEAF_LAYOUT", "chunk-leaf-v2")
+    kw = dict(manifest={"identities": _identities(["r0"]), "program_digest": PD}, sampling={"max_tokens": CAP}, stop={"eos": [0], "lag": 0},
+              requests=[{"request_id": "req-a", "index": 0, "max_tokens": CAP, "arrive_step": 0}], served_tokens={"req-a": [17, 0]})
+    host = PS.padding_for_committer(_committer(), **kw)
+    assert sorted(ps.step for ps in host) == [2, 3, 4] and {ps.layout for ps in host} == {"host-pos-leaf"}
+    gpu = NativeHostCommitter(None, run_id="run", chunk=CHUNK, hash_threads=1, program_digest=PDB, gpu_tree=True)
+    assert {ps.layout for ps in PS.padding_for_committer(gpu, **kw)} == {"chunk-leaf-v1"}
+    gpu.layout = "chunk-leaf-v2"
+    v2 = PS.padding_for_committer(gpu, **kw)
+    assert {ps.layout for ps in v2} == {"chunk-leaf-v2"} and all(PS.verify_opening(ps, 0) for ps in v2)
+
+
 # ------------------------------------------------------------------------------------------------------------------ F-r17b-64: shared planes, rule (a)
 
 LAYERS = 2

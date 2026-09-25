@@ -1,7 +1,7 @@
 """`verity_vllm.program.registry.sampling_rows` — the vectorised twins of the sampler Definition are WORD-EQUAL to the registered scalar
 evaluators and to the lane-walk `evaluate_spec(GumbelTopPTokenSelect_v1)`; on the R16 GPU fixture rows both equal the device's
 served token and the device kernel's masked row.  [R17 stoch, COORD R17-34 (3) lever (a)]  CPU only; the `div.full` model
-(TemperatureScale) needs the MUFU tables (VERITY_RMS_TABLES) -- those tests skip without them, the noise / log / select tests do not.
+(TemperatureScale) needs the in-tree MUFU tables (`rms_relation.tables`) -- those tests skip without them, the noise / log / select tests do not.
 """
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ def _tables_ok() -> bool:
         return False
 
 
-needs_tables = pytest.mark.skipif(not _tables_ok(), reason="MUFU tables (VERITY_RMS_TABLES) unavailable: div.full model needs them")
+needs_tables = pytest.mark.skipif(not _tables_ok(), reason="MUFU tables (rms_relation.tables) unavailable: div.full model needs them")
 
 
 def f32b(x: float) -> int:

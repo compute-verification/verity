@@ -34,9 +34,14 @@ from .fa2_relation import GemmRelationError, _arg_cols, _const, _extra, _node_of
 
 MODEL_VERSION = "rmsnorm-triton-sm89-bf16.v1"
 CUDA_MODEL_VERSION = "rmsnorm-cuda-sm89-bf16.v1"
-TABLES_ENV = "VERITY_RMS_TABLES"
 FIXTURE_ID = "W11R-40f0cebeb670-20260907T1802Z"  # MUFU.SQRT + MUFU.RCP tables (Triton)
 CUDA_FIXTURE_ID = "W11C-40f0cebeb670-20260907T1900Z"  # + MUFU.RSQ (CUDA); a superset of the W11R tables
+_SQRT_SHA256 = "c5859583cdad12c5f5a6b75061417715a8489870d47216156c2f94b7479a6538"
+_RCP_SHA256 = "291d1c9cc1beed5152e3805c279aa0b34d9d15cbe7ece084c6237ca5d44e7ebc"
+TABLE_SHA256 = {  # what the MUFU Definitions evaluate through: another table is another Definition version, not a new pin
+    "triton": {"sqrt": _SQRT_SHA256, "rcp": _RCP_SHA256},
+    "cuda": {"sqrt": _SQRT_SHA256, "rcp": _RCP_SHA256, "rsq": "e9892020427a18c04c9c038775d3c793ff3920e8aee1cb7d1ca202d120fabc45"},
+}
 TRITON_OP = "verity.bi_rms_norm"
 CUDA_OP = "_C.rms_norm"
 
@@ -53,9 +58,6 @@ _TABLES: dict[str, RM.RmsTables] = {}
 
 
 def tables_dir(kernel: str = "triton") -> str:
-    env = os.environ.get(TABLES_ENV)
-    if env:
-        return env
     return str(resources.files(__package__) / "tables" / (CUDA_FIXTURE_ID if kernel == "cuda" else FIXTURE_ID))
 
 
@@ -63,11 +65,14 @@ def tables(kernel: str = "triton") -> RM.RmsTables:
     d = tables_dir(kernel)
     if d not in _TABLES:
         if not os.path.isdir(d):
-            raise RmsUnresolved(f"unresolved: MUFU.SQRT / MUFU.RCP / MUFU.RSQ tables not found at {d} (set {TABLES_ENV})")
+            raise RmsUnresolved(f"unresolved: MUFU.SQRT / MUFU.RCP / MUFU.RSQ tables not found at {d}")
         _TABLES[d] = RM.RmsTables.load(d)
     t = _TABLES[d]
     if kernel == "cuda" and t.rsq is None:
         raise RmsUnresolved(f"unresolved: no MUFU.RSQ table (mufu_rsq_delta_int8.xz) in {d}; the CUDA kernel model needs it")
+    got = {name: t.source.get(name, {}).get("sha256") for name in TABLE_SHA256[kernel]}
+    if got != TABLE_SHA256[kernel]:
+        raise ValueError(f"MUFU tables at {d}: sha256 {got} != pinned {TABLE_SHA256[kernel]}")
     return t
 
 
@@ -111,9 +116,8 @@ def coverage(node_or_inst: Any, inputs: Mapping[str, Any], kernel: str = "triton
     x = inputs.get("x")
     # numpy uint16 / int16 arrays and raw bytes are BF16 words by convention (_words); a W2 Value carries its dtype
     x_dtype = "bfloat16" if isinstance(x, (np.ndarray, bytes, bytearray, memoryview)) else str(getattr(x, "dtype", "bfloat16"))
-    arch = consts.get("arch") or os.environ.get("VERITY_ARCH")
     try:
-        RM.gate(int(xw.size), x_dtype, True, True, eps, arch=arch, kernel=kernel)
+        RM.gate(int(xw.size), x_dtype, True, True, eps, arch=consts.get("arch"), kernel=kernel)
     except RM.RmsUnresolved as e:
         return {"covered": False, "reason": f"unresolved: {e}"}
     return {"covered": True, "reason": f"measured family ({kernel} kernel, sm_89, n_cols {xw.size}, BF16, weighted, eps {eps})",
