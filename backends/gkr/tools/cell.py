@@ -517,11 +517,12 @@ def session_measurements(contract, timed: list[dict], n: int, live: bool, rtt_ms
 
 
 def rederive(src: Path, out: Path, supersedes: str | None, protocol: dict | None = None, sweep: dict | None = None,
-             commit: str | None = None) -> dict:
+             commit: str | None = None, loopback: tuple[dict, str] | None = None) -> dict:
     """A new envelope from an old one's embedded sessions (no pod): the measurements and the interaction block again, from
     the same runs; the fingerprint, hardware and evidence are kept.  ``protocol`` / ``sweep`` (JSON documents) become the
     fingerprint's blocks of those names; ``commit`` names the committer whose time (the envelope's ``commit.serving_seconds``)
-    is reported as ``commit.seconds``, the commitment P counts."""
+    is reported as ``commit.seconds``, the commitment P counts.  ``loopback`` = (the times.json of a session against a verifier
+    on 127.0.0.1 in the same run, its description): ``live.loopback_round_seconds`` = its critical-path coin wait / its rounds."""
     for p in (HERE.parents[1] / "packages" / "verity" / "src", HERE.parents[1] / "backends" / "numerical" / "python"):
         sys.path.insert(0, str(p))
     from verity_numerical.bench import contract
@@ -545,6 +546,16 @@ def rederive(src: Path, out: Path, supersedes: str | None, protocol: dict | None
         fp["protocol"] = protocol
     if sweep is not None:
         fp["sweep"] = sweep
+    if loopback is not None:
+        row, where = loopback
+        if not str(row.get("verifier", "")).startswith("127.0.0.1") or not (row.get("net") or {}).get("rounds"):
+            raise SystemExit("rederive --loopback-times: not a loopback session with rounds")
+        per = critical_wait(row) / row["net"]["rounds"]
+        meas.append(contract.measurement("live.loopback_round_seconds", per) if "live.loopback_round_seconds" in contract.UNITS
+                    else {"name": "live.loopback_round_seconds", "value": per, "unit": "s"})
+        fp["interaction"] = dict(fp["interaction"] or {}, t_total_includes_wait=False, loopback_method=(
+            f"loopback probe in this run: {where} (verifier on 127.0.0.1, same pod, binary and batch), its critical-path coin wait "
+            f"(prime rounds before root_F + Flock's rounds, {critical_wait(row):.3f} s) / its {row['net']['rounds']} rounds; one session, a mean"))
     if commit is not None:
         cs = om.get("commit.serving_seconds")
         if not isinstance(cs, (int, float)) or cs <= 0:
@@ -595,6 +606,8 @@ def main(argv=None) -> int:
     d.add_argument("--supersedes", default=None, help="the old envelope's art: id")
     d.add_argument("--protocol", default=None, help="JSON file: the fingerprint's protocol block (warm, runs, statistic, contended, contention)")
     d.add_argument("--sweep", default=None, help="JSON file: the fingerprint's sweep block (id, point, plateau, points)")
+    d.add_argument("--loopback-times", default=None, help="times.json of the same run's loopback session (live.loopback_round_seconds)")
+    d.add_argument("--loopback-where", default="the warm-up session", help="which session --loopback-times is, for loopback_method")
     d.add_argument("--commit", default=None, help="the committer whose time (commit.serving_seconds) is reported as commit.seconds")
     r = sub.add_parser("result", help="the bench-result/v1 envelope from CELL/sessions.json (on the prover pod: it probes the hardware)")
     r.add_argument("--cell", required=True)
@@ -606,7 +619,8 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     if a.cmd == "rederive":
         rd = lambda f: json.loads(Path(f).read_text()) if f else None   # noqa: E731
-        rederive(Path(a.src), Path(a.result), a.supersedes, rd(a.protocol), rd(a.sweep), a.commit)
+        lb = (rd(a.loopback_times), a.loopback_where) if a.loopback_times else None
+        rederive(Path(a.src), Path(a.result), a.supersedes, rd(a.protocol), rd(a.sweep), a.commit, lb)
         return 0
     if a.cmd == "result":
         cell = Path(a.cell)
