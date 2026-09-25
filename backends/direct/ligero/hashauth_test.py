@@ -4,8 +4,9 @@ fp8-ada+blake3 on the CPU): VU 0's committed output is VU 1's under honest x / W
 (x row 1, W column 1) -- refused by Python and ``$LIGERO_VERIFY`` (when set); ``reverify.commitment_problems`` (R2) flags
 its y root against the recomputed instance set, a statement without a proof (R4) and a rep that claims a VU twice; the
 honest dump passes all three.  Tile layouts (a +shared v6 dump of a 2 x 3 tile written by ``bench-vu``): the dump is
-recomputed from its manifest's ``set.tile`` and passes ``verify_tree``; a remapped tile VU, a wrong ``set.tile``, a root
-that is not the set's and a dump without ``set.tile`` are refused.
+recomputed from its manifest's ``set.tile`` and passes ``verify_tree``; a remapped tile VU, a wrong ``set.tile`` (a float
+seed included), a root that is not the set's, a dump without ``set.tile``, a ``sharing`` label that is not the tile's and a
+sub-batch without its ``.hproof`` are refused (a FAIL or ERROR with a reason, never an exception).
 
     uv run pytest backends/direct/ligero/hashauth_test.py
 """
@@ -290,3 +291,60 @@ def test_a_tile_dump_without_set_tile_fails_closed(tile) -> None:
     closed = (True, ["commitment: 2 row-sharing (v6) statement(s) and no manifest `set.tile`: the shared-row layout is not recomputed"])
     assert commitment_problems(d, dict(man, set=s), PINNED_SHARED, ["rep1"]) == closed
     assert commitment_problems(d, dict(man, set=dict(s, instances=instances_digest(relation("fp8-ada"), 6))), PINNED_SHARED, ["rep1"]) == closed
+
+
+def test_a_float_seed_fails_cleanly(tile) -> None:
+    """``seed = 20260922.0`` equals the int seed but would format another digest and crash the draw (red team, 1455Z)."""
+    from .relations import relation
+    from .reverify import commitment_problems
+    d, man, *_ = tile
+    seed = relation("fp8-ada").instance_seed
+    hashed, bad = commitment_problems(d, _tile_set(man, seed=float(seed)), PINNED_SHARED, ["rep1"])
+    assert hashed and bad == [f"commitment: manifest `set.tile` seed {float(seed)!r} is not the fp8-ada instance seed {seed}"], bad
+
+
+def test_a_sharing_label_must_be_the_tiles(tile, tmp_path) -> None:
+    """``set.sharing`` and the result's ``sharing`` (what the tables show) must name the recomputed tile."""
+    from .reverify import Report, Verifier, _sha256, commitment_problems, verify_tree
+    d, man, *_ = tile
+    assert commitment_problems(d, dict(man, set=dict(man["set"], sharing="tile2x3")), PINNED_SHARED, ["rep1"]) == (True, [])
+    for label in ("tile3x2", "tile64x64", "none"):
+        hashed, bad = commitment_problems(d, dict(man, set=dict(man["set"], sharing=label)), PINNED_SHARED, ["rep1"])
+        assert hashed and bad == [f"commitment: set sharing {label!r} is not the 2x3 `set.tile` ('tile2x3')"], bad
+    exe = os.environ.get("LIGERO_VERIFY")
+    if not exe:
+        pytest.skip("LIGERO_VERIFY is not set")
+    v = Verifier(Path(exe), _sha256(Path(exe)), None)
+    rep = Report("art:test")
+    verify_tree(d, man, v, rep, jobs=2, params={}, asserted=None, out_dir=tmp_path / "a", fingerprint={"sharing": "tile64x64"})
+    assert (rep.status, rep.why) == ("FAIL", ["the result's sharing 'tile64x64' is not the dump's ('tile2x3')"])
+    rep = Report("art:test")
+    verify_tree(d, man, v, rep, jobs=2, params={}, asserted=None, out_dir=tmp_path / "b", fingerprint={"sharing": "tile2x3"})
+    assert (rep.status, rep.why) == ("PASS", []), rep.why
+
+
+def test_a_sub_batch_without_its_hproof_is_refused(tile, tmp_path) -> None:
+    """One ``.hproof`` removed: listed in the manifest it is an incomplete dump (ERROR); unlisted, the R4 stem check fails it
+    and ligero-verify's batch does not accept it."""
+    from .reverify import Report, Verifier, _sha256, commitment_problems, verify_tree
+    d, man, *_ = tile
+    e = shutil.copytree(d, tmp_path / "nohproof")
+    (e / "rep1" / "sub_01.hproof").unlink()
+    unlisted = dict(man, files=[{k: v for k, v in f.items() if not k.startswith("proof_h")} if f.get("proof", "").endswith("sub_01.proof")
+                                else f for f in man["files"]])
+    assert commitment_problems(e, unlisted, PINNED_SHARED, ["rep1"]) == (
+        True, ["rep1: 1 row-sharing proof(s) without a hash-side .hproof, 0 .hproof(s) without a proof"])
+    exe = os.environ.get("LIGERO_VERIFY")
+    if not exe:
+        pytest.skip("LIGERO_VERIFY is not set")
+    v = Verifier(Path(exe), _sha256(Path(exe)), None)
+    rep = Report("art:test")
+    verify_tree(e, man, v, rep, jobs=2, params={}, asserted=None, out_dir=tmp_path / "a")
+    assert rep.status == "ERROR" and rep.why[0].startswith("incomplete dump: 1 of 8 files") and "rep1/sub_01.hproof" in rep.why[0], rep.why
+    rep = Report("art:test")
+    verify_tree(e, unlisted, v, rep, jobs=2, params={}, asserted=None, out_dir=tmp_path / "b")
+    assert (rep.status, rep.why) == ("FAIL", ["rep1: 1 row-sharing proof(s) without a hash-side .hproof, 0 .hproof(s) without a proof"])
+    r = subprocess.run([exe, "batch", "--system", "system.bin", "--system-h", "system_h.bin", "--dir", "rep1", "--jobs", "2",
+                        "--json", str(tmp_path / "b.json")], cwd=e, capture_output=True, text=True)
+    js = json.loads((tmp_path / "b.json").read_text())
+    assert not js["batch_accepted"] and js["accepted"] < js["n"], js["batch_reason"]

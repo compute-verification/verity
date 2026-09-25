@@ -213,9 +213,14 @@ def tile_shape(rel, tile: Any, total: int) -> tuple[int, int, int]:
     if tile.get("draw") != TILE_DRAW or tile.get("layout") != TILE_LAYOUT:
         raise ValueError(f"manifest `set.tile` names draw {tile.get('draw')!r} / layout {tile.get('layout')!r}; this verifier "
                          f"recomputes {TILE_DRAW!r} / {TILE_LAYOUT!r} only")
-    if seed != rel.instance_seed or isinstance(seed, bool):
+    if not (isinstance(seed, int) and not isinstance(seed, bool) and seed == rel.instance_seed):
         raise ValueError(f"manifest `set.tile` seed {seed!r} is not the {rel.name} instance seed {rel.instance_seed}")
     return nx, nw, seed
+
+
+def sharing_label(tile: Any) -> str:
+    """The ``sharing`` label a dump with this manifest ``set.tile`` must carry (``relchain``'s ``tile<nx>x<nw>`` / ``none``)."""
+    return "none" if tile is None else f"tile{tile['nx']}x{tile['nw']}"
 
 
 def committed_trees(pinned: str, man: dict, *, instances_root: str | None = None, procs: int = 1) -> dict[str, TreeKey]:
@@ -259,6 +264,8 @@ def committed_trees(pinned: str, man: dict, *, instances_root: str | None = None
         w_cols = [[int(w) for w in v[1]] for v in data]
     else:
         nx, nw, seed = tile_shape(rel, tile, total)
+        if s.get("sharing") is not None and s["sharing"] != sharing_label(tile):
+            raise ValueError(f"set sharing {s['sharing']!r} is not the {nx}x{nw} `set.tile` ({sharing_label(tile)!r})")
         digest = tile_digest(rel, nx, nw, seed)
         if digest != claimed:
             raise ValueError(f"the {rel.name} {nx}x{nw} tile (seed {seed}) has manifest digest {digest[:16]}…, the dump claims {claimed[:16]}…")
@@ -304,11 +311,14 @@ def commitment_problems(pdir: Path, man: dict, pinned: str, reps: list[str], *, 
     from .serialize import read_statement
 
     orphans: list[str] = []
+    pair = isinstance(man.get("system_h_file"), dict)
     for r in reps:
-        stmts, proofs = ({f.stem for f in (pdir / r).glob(f"*.{s}")} for s in ("stmt", "proof"))
+        stmts, proofs, hproofs = ({f.stem for f in (pdir / r).glob(f"*.{s}")} for s in ("stmt", "proof", "hproof"))
         listed = [f for f in man.get("files", []) if isinstance(f, dict) and str(f.get("proof") or f.get("stmt") or "").split("/", 1)[0] == r]
         if stmts != proofs:
             orphans.append(f"{r}: {len(stmts - proofs)} statement(s) without a proof, {len(proofs - stmts)} proof(s) without a statement")
+        if (pair or hproofs) and hproofs != proofs:
+            orphans.append(f"{r}: {len(proofs - hproofs)} row-sharing proof(s) without a hash-side .hproof, {len(hproofs - proofs)} .hproof(s) without a proof")
         if any(not f.get("proof") for f in listed):
             orphans.append(f"{r}: the manifest lists a statement without a proof")
         listed_proofs = [Path(f["proof"]).stem for f in listed if f.get("proof")]
@@ -364,7 +374,8 @@ def commitment_problems(pdir: Path, man: dict, pinned: str, reps: list[str], *, 
 
 
 def verify_tree(pdir: Path, man: dict, v: Verifier, rep: Report, *, jobs: int, params: dict, asserted: str | None, out_dir: Path,
-                instances_root: str | None = None) -> None:
+                instances_root: str | None = None, fingerprint: dict | None = None) -> None:
+    """``fingerprint``: the result's ``workload_fingerprint``; its ``sharing`` label (what the tables show) must be the dump's."""
     n, bad, missing = custody(pdir, man)
     rep.custody = {"files": n, "mismatched": len(bad), "missing": len(missing)}
     if bad:
@@ -405,6 +416,10 @@ def verify_tree(pdir: Path, man: dict, v: Verifier, rep: Report, *, jobs: int, p
         return
     if rep.hashed and isinstance(t := (man.get("set") or {}).get("tile"), dict):
         rep.tile = f"{t['nx']}x{t['nw']}"
+    label = (fingerprint or {}).get("sharing")
+    if rep.hashed and label is not None and label != sharing_label((man.get("set") or {}).get("tile")):
+        rep.status, rep.why = "FAIL", [f"the result's sharing {label!r} is not the dump's ({sharing_label((man.get('set') or {}).get('tile'))!r})"]
+        return
     sysh = man.get("system_h_file")
     pair = ["--system-h", sysh.get("path", "system_h.bin")] if isinstance(sysh, dict) else []
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -490,7 +505,9 @@ def reverify(st: Any, result: str, v: Verifier, *, by: str | None, jobs: int, wo
         man = json.loads((pdir / "manifest.json").read_text())
         rep.mode = man.get("mode") or params.get("mode")
         per_rep = work / f"{d.name}.reps"
-        verify_tree(pdir, man, v, rep, jobs=jobs, params=params, asserted=asserted, out_dir=per_rep, instances_root=instances_root)
+        fp = (m.meta or {}).get("workload_fingerprint")
+        verify_tree(pdir, man, v, rep, jobs=jobs, params=params, asserted=asserted, out_dir=per_rep, instances_root=instances_root,
+                    fingerprint=fp if isinstance(fp, dict) else None)
         if rep.status != "PASS":
             if per_rep.is_dir():
                 print(f"reverify: {result}: per-rep verifier JSON kept in {per_rep}", file=sys.stderr)
