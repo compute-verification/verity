@@ -6,8 +6,8 @@ extremes, ⊥, INV, three other `1‖nonzero` words) and a fresh RNG seed.  Each
 runs.  A test marked `xfail(strict=True)` documents an OPEN finding (F-pad-NN in LIFTING-REVIEW §5): it flips to a failure
 the moment pad fixes it, so the marker must then be removed.
 
-Skips cleanly on a tree without `verity_vllm.program.registry.lifted` (the module lives on lane/r16-pad); needs `VERITY_RMS_TABLES` /
-`VERITY_MUFU_TABLES` like `test_serve3.py` for the LServe_v1 cases.
+Skips cleanly on a tree without `verity_vllm.program.registry.lifted` (the module lives on lane/r16-pad); needs the in-tree MUFU
+tables like `test_serve3.py` for the LServe_v1 cases.
 """
 
 from __future__ import annotations

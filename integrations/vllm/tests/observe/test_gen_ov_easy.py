@@ -209,7 +209,7 @@ def test_workload_file():
 def test_run_config_dry_run_resolves_b7_and_forwards_the_engine_arg():
     out = subprocess.run([sys.executable, "-m", "verity_vllm.harness.run_config", "--case", "B7", "--workload", WORKLOAD, "--out", "/r/RUN",
                           "--cards-dir", "/r/cards", "--python-gpu", "/pod/py311", "--python-cpu", "/pod/py312", "--checkpoint-dir", "/ck/snap",
-                          "--phase", "all", "--parallel", "8", "--engine-arg", "gpu_memory_utilization=0.95", "--dry-run"],
+                          "--phase", "all", "--parallel", "8", "--engine-arg", "gpu_memory_utilization=0.95", "--seed", "7", "--dry-run"],
                          capture_output=True, text=True, cwd=REPO, check=True).stdout
     cmds = {}
     for ln in out.splitlines():

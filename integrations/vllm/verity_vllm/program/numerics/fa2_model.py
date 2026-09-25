@@ -20,7 +20,6 @@ from __future__ import annotations
 import ctypes
 import hashlib
 import lzma
-import os
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -248,9 +247,9 @@ MEASURED = {
 
 
 def arch_of(consts: dict, arch: str | None = None) -> str | None:
-    """Declared arch: explicit argument, ``consts['arch']``, a GPU name in ``consts['gpu'|'gpu_name']``,
-    or the ``VERITY_ARCH`` environment variable.  None when nothing is declared."""
-    a = arch or consts.get("arch") or os.environ.get("VERITY_ARCH")
+    """Declared arch: explicit argument, ``consts['arch']`` or a GPU name in ``consts['gpu'|'gpu_name']``.
+    None when nothing is declared."""
+    a = arch or consts.get("arch")
     if a:
         return str(a)
     name = str(consts.get("gpu") or consts.get("gpu_name") or "")
@@ -270,7 +269,7 @@ def coverage(seqlen_q: int, seqlen_k: int, H: int, KVH: int, D: int, consts: dic
     """
     a = arch_of(consts, arch)
     if a is None:
-        return "arch not declared (consts.arch / consts.gpu / VERITY_ARCH); measured only on sm_89"
+        return "arch not declared (consts.arch / consts.gpu); measured only on sm_89"
     if a not in MEASURED["arch"]:
         return f"arch {a} not measured (measured: {MEASURED['arch']})"
     if D != HEAD_DIM:

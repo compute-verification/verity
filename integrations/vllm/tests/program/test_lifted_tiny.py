@@ -18,7 +18,7 @@ Every group has positive AND negative cases (BRIEF §7B):
 * PAD-02: the lifted width rule beside the untouched 32-bit validator; the codec round trip of a lifted Program.
 
 Fixture: TINY-PAD (`test_serve3.TINY`, LP=4, D_MAX=8; raw greedy samples `[15, 23, 26, 17, 26, 17, 26, 17, 26]`, so EOS 15 / 17 /
-63 realise 0 / 3 / 8 live decode steps).  Needs `VERITY_RMS_TABLES` / `VERITY_MUFU_TABLES` like `test_serve3.py`.
+63 realise 0 / 3 / 8 live decode steps).  Needs the in-tree MUFU tables like `test_serve3.py`.
 """
 
 from __future__ import annotations

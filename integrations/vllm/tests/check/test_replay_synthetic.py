@@ -220,7 +220,7 @@ def test_tier_c_reports_token_mismatch_and_continues_with_the_computed_token(con
 
 def test_reports_are_json(consistent_toy, snapshots):
     r, weights, _, _ = consistent_toy
-    for rep in (replay.tier_a(r, snapshots, weights, k=1), replay.tier_b(r, snapshots, weights, step=0), replay.tier_c(r, weights)):
+    for rep in (replay.tier_a(r, snapshots, weights, k=1, seed=0), replay.tier_b(r, snapshots, weights, step=0), replay.tier_c(r, weights)):
         s = json.dumps(cmp._jsonable(rep))
         assert json.loads(s)["status"] in replay.TIER_STATUSES
         assert "seconds" in rep and "max_rss_gb" in rep
