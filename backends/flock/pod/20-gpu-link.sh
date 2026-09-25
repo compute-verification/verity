@@ -31,8 +31,8 @@ git apply $SRC/backends/flock/flock-link-b684b12.patch && git apply $SRC/backend
 cp -r $SRC/backends/flock/live crates/flock-live
 grep -q '"crates/flock-live"' Cargo.toml || sed -i 's|    "crates/flock-transcript",|    "crates/flock-transcript",\n    "crates/flock-live",|' Cargo.toml
 FEAT=; if [ "$GPU" = 1 ]; then SM=$SM CUDA=$C13 python3 $SRC/backends/flock/cuda_chunk_patch.py || exit 1; FEAT="--features gpu"; fi
-cargo build --release -p flock-live $FEAT --bin flock-gpu-link -j $TH > $O/build.txt 2>&1 || { tail -40 $O/build.txt; exit 1; }
-B=$F/target/release/flock-gpu-link; sha256sum $B | tee $O/binary.sha256
+cargo build --release -p flock-live $FEAT --bin flock-gpu-link --bin flock-pure-gpu -j $TH > $O/build.txt 2>&1 || { tail -40 $O/build.txt; exit 1; }
+B=$F/target/release/flock-gpu-link; sha256sum $B $F/target/release/flock-pure-gpu | tee $O/binary.sha256
 [ "$MODE" = build ] && exit 0
 G=; [ "$GPU" = 1 ] && G=--gpu
 if [ "$MODE" = all ] || [ "$MODE" = selftest ]; then

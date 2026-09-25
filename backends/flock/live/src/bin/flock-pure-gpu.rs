@@ -358,12 +358,15 @@ fn session(st: &Arc<PureStmt>, inst: &Arc<Instances>, t: SharedTransport, plan: 
     let mut buckets = Vec::new();
     let mut proofs: Vec<Vec<u8>> = Vec::new();
     let mut cached: Option<Vec<Vec<F128>>> = None;
+    let mut rtt_ms = 0.0;
     let tp0 = Instant::now();
     let res: Result<(), String> = (|| {
+        let th = Instant::now();
         match call(&t, Req::Hello(hello))? {
             Resp::Ok => {}
             r => return Err(format!("hello: {r:?}")),
         }
+        rtt_ms = th.elapsed().as_secs_f64() * 1e3;
         for rep in 0..2 {
             let mut lch = LiveChallenger::new(t.clone(), TABLE, rep, &domain(rep))?;
             let tt = t.clone();
@@ -426,7 +429,8 @@ fn session(st: &Arc<PureStmt>, inst: &Arc<Instances>, t: SharedTransport, plan: 
                "gpu": plan.gpu, "relation": inst.relation, "vus": inst.vus, "units": inst.units, "n_blake3": 2 * 16 * st.blocks_real,
                "n_units": UNITS * st.blocks_real, "dense_m": st.m, "nbl": st.nbl, "e2e_s": e2e_s, "commit_s": commit_s, "rows_s": rows_s,
                "prove_s": prove_s, "prove_total_s": prove_s.iter().sum::<f64>(), "buckets": buckets, "wait_s": wait_s, "calls": calls,
-               "wire_sent": ws, "wire_recv": wr, "proof_bytes": proofs.iter().map(|p| p.len()).collect::<Vec<_>>(),
+               "wire_sent": ws, "wire_recv": wr, "rtt_ms": rtt_ms,
+               "rtt_method": "the session's Hello request/response time (one round trip, the verifier's work is a string compare)", "proof_bytes": proofs.iter().map(|p| p.len()).collect::<Vec<_>>(),
                "roots": {"a": hexs(&roots[0]), "b": hexs(&roots[1]), "y": hexs(&roots[2])}, "sigma": hexs(&sig),
                "netlist_sha256": hexs(&st.net.sha256), "statement_digest": hexs(&st.digest)}),
         proofs,

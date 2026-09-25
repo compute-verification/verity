@@ -96,6 +96,25 @@ struct ChunkParams {
     link_ctx: *mut c_void,
     gamma_bits: i32,
     phase_s: *mut f64,
+    mode: i32,
+    comp_slots: i32,
+    units: i32,
+    unit_log: i32,
+    unit_pos0: i32,
+    u_a_col_ptr: *const u32,
+    u_a_rows: *const u32,
+    u_a_nnz: u32,
+    u_b_col_ptr: *const u32,
+    u_b_rows: *const u32,
+    u_b_nnz: u32,
+    u_a_off: *const u32,
+    u_a_col: *const u32,
+    u_b_off: *const u32,
+    u_b_col: *const u32,
+    u_useful: i32,
+    u_const: i32,
+    u_n_in: i32,
+    u_inputs: *const u64,
 }
 
 unsafe extern "C" {
@@ -173,6 +192,11 @@ struct Static {
 }
 
 fn statics(st: &ChunkStmt) -> &'static Static {
+    statics_with(&st.circuit.da, &st.circuit.db)
+}
+
+/// One statement per process: the first caller's Δ is the process's.
+fn statics_with(da: &[(u32, u32)], db: &[(u32, u32)]) -> &'static Static {
     static S: OnceLock<Static> = OnceLock::new();
     S.get_or_init(|| {
         let c = comp();
@@ -195,7 +219,7 @@ fn statics(st: &ChunkStmt) -> &'static Static {
             }
         }
         let flat = |d: &[(u32, u32)]| d.iter().flat_map(|&(i, c)| [i, c]).collect();
-        Static { a: csc_from_rows(&c.a_0), b: csc_from_rows(&c.b_0), mcol, f8mul, da: flat(&st.circuit.da), db: flat(&st.circuit.db) }
+        Static { a: csc_from_rows(&c.a_0), b: csc_from_rows(&c.b_0), mcol, f8mul, da: flat(da), db: flat(db) }
     })
 }
 
@@ -332,10 +356,200 @@ pub fn prove_chunk(
         link_ctx: &mut hook as *mut Hook<'_> as *mut c_void,
         gamma_bits: if n_claims > 1 { og.claim_batch_bits as i32 } else { 0 },
         phase_s: phase.as_mut_ptr(),
+        ..ChunkParams::none()
     };
+    let (proof, commitment) = run(&params, &chunk, pcs, m);
+    (proof, commitment, phase)
+}
+
+impl ChunkParams {
+    fn none() -> Self {
+        ChunkParams {
+            n_comp_log: 0, cv: null(), msg: null(), ctr: null(), blen: null(), flags: null(), delta_a: null(), n_delta_a: 0,
+            delta_b: null(), n_delta_b: 0, sub_log: 0, link_cb: None, link_ctx: null_mut(), gamma_bits: 0, phase_s: null_mut(),
+            mode: 0, comp_slots: 0, units: 0, unit_log: 0, unit_pos0: 0, u_a_col_ptr: null(), u_a_rows: null(), u_a_nnz: 0,
+            u_b_col_ptr: null(), u_b_rows: null(), u_b_nnz: 0, u_a_off: null(), u_a_col: null(), u_b_off: null(), u_b_col: null(),
+            u_useful: 0, u_const: 0, u_n_in: 0, u_inputs: null(),
+        }
+    }
+}
+
+/// The pinned Fast100 schedule and the compression circuit, as the FFI takes them (`hook`/`ch` filled by the caller).
+struct Sched {
+    log_inv_rates: Vec<i32>,
+    recursive_ks: Vec<i32>,
+    queries: Vec<i32>,
+    grinding_bits: Vec<i32>,
+    claim_batch: Vec<i32>,
+    consistency_batch: Vec<i32>,
+    ood_samples: Vec<i32>,
+}
+
+fn sched(pcs: &PcsParams) -> (Sched, flock_prover::pcs::ligerito::ProverConfig) {
+    let cfg = pcs.ligerito_prover_config().unwrap_or_else(|_| panic!("no ligerito config for m={}", pcs.m));
+    let to_i32 = |v: &[usize]| -> Vec<i32> { v.iter().map(|&x| x as i32).collect() };
+    (
+        Sched {
+            log_inv_rates: to_i32(&cfg.log_inv_rates),
+            recursive_ks: to_i32(&cfg.recursive_ks),
+            queries: to_i32(&cfg.queries),
+            grinding_bits: to_i32(&cfg.grinding_bits),
+            claim_batch: to_i32(&cfg.claim_batch_grinding_bits),
+            consistency_batch: to_i32(&cfg.consistency_batch_grinding_bits),
+            ood_samples: to_i32(&cfg.ood_samples),
+        },
+        cfg,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn prove_params(s: &Static, sc: &Sched, cfg: &flock_prover::pcs::ligerito::ProverConfig, pcs: &PcsParams, digest: &[u8; 32], domain: &[u8],
+                k_log: usize, pin: usize, ch: &mut LiveChallenger) -> ProveParams {
+    let m = pcs.m;
+    let zc = pcs.zerocheck_grinding();
+    let lc = pcs.lincheck_grinding();
+    let og = pcs.opening_grinding();
+    let opt = |b: Option<u32>| b.map_or(0, |x| x as i32);
+    ProveParams {
+        m: m as i32,
+        statement_digest: digest.as_ptr(),
+        domain: domain.as_ptr(),
+        domain_len: domain.len() as u32,
+        a_col_ptr: s.a.0.as_ptr(),
+        a_rows: s.a.1.as_ptr(),
+        a_nnz: s.a.1.len() as u32,
+        b_col_ptr: s.b.0.as_ptr(),
+        b_rows: s.b.1.as_ptr(),
+        b_nnz: s.b.1.len() as u32,
+        const_pin_col: pin as i32,
+        useful_bits: 1 << k_log,
+        k_log: k_log as i32,
+        zc_mcol: s.mcol.as_ptr(),
+        zc_f8mul: s.f8mul.as_ptr(),
+        initial_k: cfg.initial_k as i32,
+        num_levels: sc.log_inv_rates.len() as i32,
+        log_inv_rates: sc.log_inv_rates.as_ptr(),
+        recursive_ks: sc.recursive_ks.as_ptr(),
+        queries: sc.queries.as_ptr(),
+        grinding_bits: sc.grinding_bits.as_ptr(),
+        claim_batch_grinding_bits: sc.claim_batch.as_ptr(),
+        consistency_batch_grinding_bits: sc.consistency_batch.as_ptr(),
+        ood_samples: sc.ood_samples.as_ptr(),
+        recursive_steps: cfg.recursive_steps as i32,
+        zc_initial_bits: opt(zc.initial_bits(m)),
+        zc_skip_bits: opt(zc.skip_bits()),
+        zc_round_bits: opt(zc.multilinear_round_bits()),
+        lc_alpha_bits: opt(lc.alpha_bits()),
+        lc_beta_bits: opt(lc.beta_bits()),
+        lc_round_bits: opt(lc.multilinear_round_bits()),
+        lc_skip_bits: opt(lc.skip_bits(K_SKIP)),
+        rs_bits: og.ring_switch_bits as i32,
+        gamma_bits: og.claim_batch_bits as i32,
+        dump_z_path: null(),
+        live_cb: Some(live_cb),
+        live_ctx: ch as *mut LiveChallenger as *mut c_void,
+    }
+}
+
+/// verity/flock-pure-block/v1 on the GPU: compressions and units witnessed on the device, the two-circuit lincheck
+/// fold, the region claims (points from `hook`) in the sparse ring switch. Same return shape as [`prove_chunk`].
+#[allow(clippy::too_many_arguments)]
+pub fn prove_pure(
+    st: &crate::pure_block::PureStmt,
+    comps: &[Compression],
+    inputs: &(dyn Fn(usize, usize) -> [F128; 5] + Sync),
+    pcs: &PcsParams,
+    domain: &[u8],
+    mut hook: Hook<'_>,
+    ch: &mut LiveChallenger,
+) -> (R1csProofLigerito, Commitment, [f64; 8]) {
+    use crate::pure_block as pb;
+    use rayon::prelude::*;
+    let s = statics_with(&st.circuit.da, &st.circuit.db);
+    let (sc, cfg) = sched(pcs);
+    let m = pcs.m;
+    let params = prove_params(s, &sc, &cfg, pcs, &st.digest, domain, pb::K_LOG, pb::PIN, ch);
+    static U: OnceLock<(Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>)> = OnceLock::new();
+    let u = U.get_or_init(|| {
+        let k = 1usize << pb::UNIT_LOG;
+        let pad = |rows: &Vec<Vec<usize>>| {
+            let mut r = rows.clone();
+            r.resize(k, Vec::new());
+            SparseBinaryMatrix { num_rows: k, num_cols: k, rows: r.into() }
+        };
+        let (ca, cb) = (csc_from_rows(&pad(&st.net.a)), csc_from_rows(&pad(&st.net.b)));
+        let csr = |rows: &Vec<Vec<usize>>| {
+            let mut off = vec![0u32];
+            let mut col = Vec::new();
+            for r in rows {
+                col.extend(r.iter().map(|&c| c as u32));
+                off.push(col.len() as u32);
+            }
+            (off, col)
+        };
+        let (ao, ac) = csr(&st.net.a);
+        let (bo, bc) = csr(&st.net.b);
+        (ca.0, ca.1, cb.0, cb.1, ao, ac, bo, bc)
+    });
+    let blocks = st.blocks();
+    let n_units = blocks * pb::UNITS;
+    let uin: Vec<u64> = (0..n_units)
+        .into_par_iter()
+        .flat_map_iter(|i| inputs(i / pb::UNITS, i % pb::UNITS).into_iter().flat_map(|w| [w.lo, w.hi]))
+        .collect();
+    let cv: Vec<u32> = comps.iter().flat_map(|c| c.0).collect();
+    let msg: Vec<u32> = comps.iter().flat_map(|c| c.1).collect();
+    let ctr: Vec<u64> = comps.iter().map(|c| c.2).collect();
+    let blen: Vec<u32> = comps.iter().map(|c| c.3).collect();
+    let flags: Vec<u32> = comps.iter().map(|c| c.4).collect();
+    assert_eq!(comps.len(), blocks * pb::COMP_SLOTS);
+    let n_claims = 2 + 2 * st.regions.len();
+    let og = pcs.opening_grinding();
+    let mut phase = [0f64; 8];
+    let chunk = ChunkParams {
+        n_comp_log: (st.nbl + 5) as i32,
+        cv: cv.as_ptr(),
+        msg: msg.as_ptr(),
+        ctr: ctr.as_ptr(),
+        blen: blen.as_ptr(),
+        flags: flags.as_ptr(),
+        delta_a: s.da.as_ptr(),
+        n_delta_a: (s.da.len() / 2) as i32,
+        delta_b: s.db.as_ptr(),
+        n_delta_b: (s.db.len() / 2) as i32,
+        sub_log: SUB_LOG as i32,
+        link_cb: Some(link_cb),
+        link_ctx: &mut hook as *mut Hook<'_> as *mut c_void,
+        gamma_bits: if n_claims > 1 { og.claim_batch_bits as i32 } else { 0 },
+        phase_s: phase.as_mut_ptr(),
+        mode: 1,
+        comp_slots: pb::COMP_SLOTS as i32,
+        units: pb::UNITS as i32,
+        unit_log: pb::UNIT_LOG as i32,
+        unit_pos0: pb::UNIT_POS0 as i32,
+        u_a_col_ptr: u.0.as_ptr(),
+        u_a_rows: u.1.as_ptr(),
+        u_a_nnz: u.1.len() as u32,
+        u_b_col_ptr: u.2.as_ptr(),
+        u_b_rows: u.3.as_ptr(),
+        u_b_nnz: u.3.len() as u32,
+        u_a_off: u.4.as_ptr(),
+        u_a_col: u.5.as_ptr(),
+        u_b_off: u.6.as_ptr(),
+        u_b_col: u.7.as_ptr(),
+        u_useful: st.net.useful as i32,
+        u_const: st.net.const_pos as i32,
+        u_n_in: 544,
+        u_inputs: uin.as_ptr(),
+    };
+    let (proof, commitment) = run(&params, &chunk, pcs, m);
+    (proof, commitment, phase)
+}
+
+fn run(params: &ProveParams, chunk: &ChunkParams, pcs: &PcsParams, m: usize) -> (R1csProofLigerito, Commitment) {
     let mut out: *mut u8 = null_mut();
     let mut out_len: usize = 0;
-    let rc = unsafe { flock_cuda_prove_chunk(&params, &chunk, &mut out, &mut out_len) };
+    let rc = unsafe { flock_cuda_prove_chunk(params, chunk, &mut out, &mut out_len) };
     assert_eq!(rc, 0, "CUDA chunk prover returned error {rc} at m={m}");
     let bytes = unsafe { from_raw_parts(out, out_len) }.to_vec();
     unsafe { flock_cuda_free(out) };
@@ -396,5 +610,5 @@ pub fn prove_chunk(
             },
         },
     };
-    (proof, Commitment { cap, params: pcs.clone() }, phase)
+    (proof, Commitment { cap, params: pcs.clone() })
 }
