@@ -26,11 +26,10 @@ Two data paths feed the planner:
 
 API: `predict(row_config) -> {stage: {"reserved_bytes", "terms": {...}, "margin", "peak_point", "admit"}}`,
 `compare(attempt_dir) -> per-stage predicted vs observed peak + residual`, `peak_overlap(intervals)`.
-CLI: `python -m verity_vllm.pipeline.telemetry.admission compare <attempt_dir>... [--md]` / `predict --model ... --requests ...`.
+CLI: `verity-vllm telemetry-admission compare <attempt_dir>... [--md]` / `predict --model ... --requests ...`.
 """
 from __future__ import annotations
 
-import argparse
 import datetime as _dt
 import glob
 import gzip
@@ -41,6 +40,8 @@ from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
+
+from verity_vllm.config import option
 
 MiB = 1 << 20
 GiB = 1 << 30
@@ -1107,49 +1108,75 @@ def plan_row(cfg: RowConfig, out_path: str | None, advisory: bool = True) -> dic
     return doc
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="verity_vllm.pipeline.telemetry.admission")
-    sub = ap.add_subparsers(dest="cmd", required=True)
-    r = sub.add_parser("plan", help="ADVISORY admission plan for a sweep row from its workload file (row_pod.sh hook): writes admission.json, prints one line, exit 0")
-    r.add_argument("--workload", required=True)
-    r.add_argument("--row")
-    r.add_argument("--out")
-    r.add_argument("--stages", default="build,match,commit")
-    r.add_argument("--pairs", type=int, default=3)
-    r.add_argument("--replay-workers", type=int)
-    r.add_argument("--snapshot-steps")
-    r.add_argument("--snapshot-max-bytes", type=int)
-    r.add_argument("--host-limit-bytes", type=int, help="default: this cgroup's memory.max")
-    r.add_argument("--largest-vu-in-parent", action="store_true")
-    r.add_argument("--retain", default=None, choices=["host", "device", "none", "sample"], help="the run's --retain (default: the workload's / host)")
-    r.add_argument("--bounded-staging", action="store_true", help="the run uses --bounded-staging (R19 admit fix (a) with --retain host --retain-exclude hidden_m1)")
-    r.add_argument("--retain-exclude", default=None, help="the run's --retain-exclude families (hidden_m1 = fa2_hidden_m1,fa3_hidden_m1)")
-    r.add_argument("--no-fork-gc-freeze", action="store_true", help="model the pre-R19 forked pool (no gc.freeze before the fork: two children may copy the C2 heap, F-r17-24)")
-    c = sub.add_parser("compare", help="predicted vs observed per stage for attempt dirs")
-    c.add_argument("attempt_dirs", nargs="+")
-    c.add_argument("--md", action="store_true")
-    c.add_argument("--points", action="store_true", help="also print the commit-point tables")
-    c.add_argument("--largest-vu-in-parent", action="store_true", help="predict with the FIX: the largest strata evaluated in the parent, forked workers are 250 MiB workers")
-    c.add_argument("--no-fork-gc-freeze", action="store_true", help="predict with the pre-R19 forked pool (the R17/R18 records were made without gc.freeze)")
-    c.add_argument("--json-out")
-    p = sub.add_parser("predict", help="reservation per stage for a row config")
-    p.add_argument("--model", required=True)
-    p.add_argument("--requests", type=int, default=1)
-    p.add_argument("--prompt-tokens", type=int, default=1024)
-    p.add_argument("--decode-rows", type=int, default=129)
-    p.add_argument("--steps", type=int, default=129)
-    p.add_argument("--max-context", type=int, default=1153)
-    p.add_argument("--pairs", type=int, default=3)
-    p.add_argument("--replay-workers", type=int)
-    p.add_argument("--host-limit-gib", type=float)
-    p.add_argument("--n-instances", type=int)
-    p.add_argument("--raw-bytes", type=int)
-    p.add_argument("--largest-vu-in-parent", action="store_true")
-    p.add_argument("--retain", default="host", choices=["host", "device", "none", "sample"])
-    p.add_argument("--bounded-staging", action="store_true")
-    p.add_argument("--retain-exclude", default=None)
-    p.add_argument("--no-fork-gc-freeze", action="store_true")
-    a = ap.parse_args(argv)
+@dataclass(frozen=True, kw_only=True)
+class PlanOptions:
+    """ADVISORY admission plan for a sweep row from its workload file (row_pod.sh hook): writes admission.json, prints one
+    line, exit 0"""
+
+    workload: str = option("--workload")
+    row: str | None = option("--row", default=None)
+    out: str | None = option("--out", default=None)
+    stages: str = option("--stages", default="build,match,commit")
+    pairs: int = option("--pairs", type=int, default=3)
+    replay_workers: int | None = option("--replay-workers", default=None, type=int)
+    snapshot_steps: str | None = option("--snapshot-steps", default=None)
+    snapshot_max_bytes: int | None = option("--snapshot-max-bytes", default=None, type=int)
+    host_limit_bytes: int | None = option("--host-limit-bytes", default=None, type=int,
+                                          help="default: this cgroup's memory.max")
+    largest_vu_in_parent: bool = option("--largest-vu-in-parent", default=False, action="store_true")
+    retain: str | None = option("--retain", default=None, choices=["host", "device", "none", "sample"],
+                                help="the run's --retain (default: the workload's / host)")
+    bounded_staging: bool = option("--bounded-staging", default=False, action="store_true",
+                                   help="the run uses --bounded-staging (R19 admit fix (a) with --retain host --retain-exclude hidden_m1)")
+    retain_exclude: str | None = option("--retain-exclude", default=None,
+                                        help="the run's --retain-exclude families (hidden_m1 = fa2_hidden_m1,fa3_hidden_m1)")
+    no_fork_gc_freeze: bool = option("--no-fork-gc-freeze", default=False, action="store_true",
+                                     help="model the pre-R19 forked pool (no gc.freeze before the fork: two children may copy the C2 heap, F-r17-24)")
+    cmd: str = field(default="plan", init=False)
+
+
+@dataclass(frozen=True, kw_only=True)
+class CompareOptions:
+    """predicted vs observed per stage for attempt dirs"""
+
+    attempt_dirs: list[str] = option("attempt_dirs", nargs="+")
+    md: bool = option("--md", default=False, action="store_true")
+    points: bool = option("--points", default=False, action="store_true", help="also print the commit-point tables")
+    largest_vu_in_parent: bool = option("--largest-vu-in-parent", default=False, action="store_true",
+                                        help="predict with the FIX: the largest strata evaluated in the parent, forked workers are 250 MiB workers")
+    no_fork_gc_freeze: bool = option("--no-fork-gc-freeze", default=False, action="store_true",
+                                     help="predict with the pre-R19 forked pool (the R17/R18 records were made without gc.freeze)")
+    json_out: str | None = option("--json-out", default=None)
+    cmd: str = field(default="compare", init=False)
+
+
+@dataclass(frozen=True, kw_only=True)
+class PredictOptions:
+    """reservation per stage for a row config"""
+
+    model: str = option("--model")
+    requests: int = option("--requests", type=int, default=1)
+    prompt_tokens: int = option("--prompt-tokens", type=int, default=1024)
+    decode_rows: int = option("--decode-rows", type=int, default=129)
+    steps: int = option("--steps", type=int, default=129)
+    max_context: int = option("--max-context", type=int, default=1153)
+    pairs: int = option("--pairs", type=int, default=3)
+    replay_workers: int | None = option("--replay-workers", default=None, type=int)
+    host_limit_gib: float | None = option("--host-limit-gib", default=None, type=float)
+    n_instances: int | None = option("--n-instances", default=None, type=int)
+    raw_bytes: int | None = option("--raw-bytes", default=None, type=int)
+    largest_vu_in_parent: bool = option("--largest-vu-in-parent", default=False, action="store_true")
+    retain: str = option("--retain", default="host", choices=["host", "device", "none", "sample"])
+    bounded_staging: bool = option("--bounded-staging", default=False, action="store_true")
+    retain_exclude: str | None = option("--retain-exclude", default=None)
+    no_fork_gc_freeze: bool = option("--no-fork-gc-freeze", default=False, action="store_true")
+    cmd: str = field(default="predict", init=False)
+
+
+COMMANDS = {"plan": PlanOptions, "compare": CompareOptions, "predict": PredictOptions}
+
+
+def main(a: PlanOptions | CompareOptions | PredictOptions) -> int:
     if a.cmd == "plan":
         # advisory: never a non-zero exit, never an exception out of the hook -- the failure is written into the line instead
         try:
@@ -1192,7 +1219,3 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print(json.dumps(results, indent=1, default=str))
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

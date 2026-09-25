@@ -1,6 +1,6 @@
 """bench/run_config.py — one-shot driver: every stage of one configuration into one run directory, then gates + card.
 
-    python -m verity_vllm.pipeline.match --config-id ID --profile NAME --workload PATH --case B0|B1 --out RUN_DIR \\
+    verity-vllm match --config-id ID --profile NAME --workload PATH --case B0|B1 --out RUN_DIR \\
         --phase gpu|cpu|all [--python-gpu PY] [--python-cpu PY] [--snapshot-steps 0,1,2,3] [--max-num-seqs 8] \\
         [--laptop] [--dry-run] [--tier-c] [--skip STAGES] [--checkpoints PATH] [--checkpoint-dir DIR_OR_GLOB] \\
         [--log LOG --snapshots DIR] [--control-tokens PATH] [--other-log LOG] [--cards-dir out/gen/cards] [--k 3] [--seed S]
@@ -44,7 +44,6 @@ and writes the `gates.FOLD_SUMMARY_SCHEMA` summary.
 
 from __future__ import annotations
 
-import argparse
 import hashlib
 import importlib
 import importlib.util
@@ -55,10 +54,12 @@ import subprocess
 import sys
 import time
 from collections import Counter
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from verity_vllm.check import gates as G
+from verity_vllm.config import UsageError, option
 from verity_vllm.pipeline import experiment as EXP
 
 DEFAULT_SNAPSHOT_STEPS = "all"        # evidence for every specialization (h1: attention T at non-snapshot steps was uncovered)
@@ -97,7 +98,7 @@ OPTIONAL_MODULES = {"root_policy": "verity_vllm.check.root_policy", "golden": "v
 class Plan:
     """Paths and command lines of one run (pure: building a plan touches nothing)."""
 
-    def __init__(self, a: argparse.Namespace) -> None:
+    def __init__(self, a: Options) -> None:
         self.a = a
         self.run = Path(a.out)
         self.py_gpu = a.python_gpu or sys.executable
@@ -187,27 +188,27 @@ class Plan:
             common_gpu += ["--max-tokens", str(a.max_tokens)]
         common_gpu += [f"--engine-arg={x}" for x in self.engine_args()]   # [GEN batch SHARED-CODE] scheduler/memory knobs -> build_engine
         if stage == "capture":
-            return [self.py_gpu, "-m", "verity_vllm.pipeline.m1_capture", *common_gpu, "--out", str(self.capture_dir),
+            return [self.py_gpu, "-m", "verity_vllm.pipeline.cli", "m1-capture", *common_gpu, "--out", str(self.capture_dir),
                     "--snapshot-steps", ",".join(map(str, self.steps))] + (["--verify-weights"] if self.verify_weights else []) + \
                    (["--snapshot-max-bytes", str(a.snapshot_max_bytes)] if a.snapshot_max_bytes is not None else []) + \
                    (["--snapshot-max-bytes-op", str(a.snapshot_max_bytes_op)] if a.snapshot_max_bytes_op is not None else [])   # D87
         if stage == "control":
-            return [self.py_gpu, "-m", "verity_vllm.pipeline.m1_capture", *common_gpu, "--out", str(self.control_dir), "--no-observer"]
+            return [self.py_gpu, "-m", "verity_vllm.pipeline.cli", "m1-capture", *common_gpu, "--out", str(self.control_dir), "--no-observer"]
         if stage == "census":
-            return [self.py_gpu, "-m", "verity_vllm.properties.census", *common_gpu, "--out", str(self.census_dir)] + ([] if a.keep_traces else ["--no-traces"])
+            return [self.py_gpu, "-m", "verity_vllm.pipeline.cli", "census", *common_gpu, "--out", str(self.census_dir)] + ([] if a.keep_traces else ["--no-traces"])
         if stage == "nonint":
-            return [self.py_gpu, "-m", "verity_vllm.properties.noninterference", *common_gpu, "--out", str(self.nonint_dir), "--python", self.py_gpu,
+            return [self.py_gpu, "-m", "verity_vllm.pipeline.cli", "noninterference", *common_gpu, "--out", str(self.nonint_dir), "--python", self.py_gpu,
                     "--accepted-ctl", str(self.control_tokens_path())]
         if stage == "resolve":
-            return [self.py_cpu, "-m", "verity_vllm.observe.fold.resolve_log", str(self.log), "--profile", a.profile, "--out", str(run / "resolution"), "--quiet"]
+            return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "resolve-log", str(self.log), "--profile", a.profile, "--out", str(run / "resolution"), "--quiet"]
         if stage == "census_reconcile":
-            return [self.py_cpu, "-m", "verity_vllm.properties.census", "--reconcile", str(self.census_dir / "census.json"), "--log", str(self.log),
+            return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "census", "--reconcile", str(self.census_dir / "census.json"), "--log", str(self.log),
                     "--profile", a.profile, "--report", str(run / "census_reconcile")]
         if stage == "nonint_compare":
-            return [self.py_cpu, "-m", "verity_vllm.properties.noninterference", "--compare", "--out", str(self.nonint_dir), "--workload", a.workload,
+            return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "noninterference", "--compare", "--out", str(self.nonint_dir), "--workload", a.workload,
                     "--case", a.case, "--accepted-ctl", str(self.control_tokens_path())]
         if stage == "compare":
-            c = [self.py_cpu, "-m", "verity_vllm.check.fold_compare", "--log", str(self.log), "--snapshots", str(self.snapshots), "--profile", a.profile,
+            c = [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "fold-compare", "--log", str(self.log), "--snapshots", str(self.snapshots), "--profile", a.profile,
                  "--out", str(self.p("compare"))]
             g = self.safetensors_glob()
             if g:
@@ -218,16 +219,16 @@ class Plan:
         mc = _workload_moe_construction(a.workload)
         MC = ["--moe-construction", mc] if mc else []
         if stage in ("fold", "fold_2"):
-            return [self.py_cpu, "-m", "verity_vllm.pipeline.match", "--worker", "fold", "--log", str(self.log), "--profile", a.profile,
+            return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "match", "--worker", "fold", "--log", str(self.log), "--profile", a.profile,
                     "--out", str(self.p("fold_summary" if stage == "fold" else "fold_summary_2"))] + MC + \
                    (["--persist-dir", str(run)] if stage == "fold" else [])      # D85: program.json / instances.jsonl / accesses.jsonl.gz
         if stage == "fold_other":
             if not a.other_log:
                 return None
-            return [self.py_cpu, "-m", "verity_vllm.pipeline.match", "--worker", "fold", "--log", a.other_log, "--profile", a.profile,
+            return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "match", "--worker", "fold", "--log", a.other_log, "--profile", a.profile,
                     "--out", str(self.p("fold_summary_other"))] + MC
         if stage == "root_policy":
-            c = [self.py_cpu, "-m", "verity_vllm.check.root_policy", "--log", str(self.log), "--snapshots", str(self.snapshots), "--profile", a.profile,
+            c = [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "root-policy", "--log", str(self.log), "--snapshots", str(self.snapshots), "--profile", a.profile,
                  "--out", str(self.p("root_policy"))]
             g = self.safetensors_glob()
             if g:
@@ -237,9 +238,9 @@ class Plan:
                 c += ["--cos-sin", str(cs)]
             return c
         if stage == "golden":
-            return [self.py_cpu, "-m", "verity_vllm.properties.golden", "--check", "--out", str(self.p("golden"))]
+            return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "golden", "--check", "--out", str(self.p("golden"))]
         if stage == "wiring":
-            return [self.py_cpu, "-m", "verity_vllm.check.operand_provenance", "--log", str(self.log), "--profile", a.profile, "--out", str(self.p("wiring"))]
+            return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "operand-provenance", "--log", str(self.log), "--profile", a.profile, "--out", str(self.p("wiring"))]
         if stage == "replay_a":
             return self._replay(["--tier", "a", "--k", str(a.k), "--seed", str(a.seed)], self.p("replay_a"))
         if stage == "replay_chain":
@@ -252,7 +253,7 @@ class Plan:
         return None
 
     def _replay(self, tier: list[str], out: Path) -> list[str]:
-        c = [self.py_cpu, "-m", "verity_vllm.check.replay.replay", "--log", str(self.log), "--snapshots", str(self.snapshots), "--profile", self.a.profile, *tier]
+        c = [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "replay", "--log", str(self.log), "--snapshots", str(self.snapshots), "--profile", self.a.profile, *tier]
         budget = self.a.replay_budget_leaves if self.a.replay_budget_leaves is not None else (LAPTOP_MAX_ARG_LEAVES if self.laptop else None)
         if budget is not None:
             c += ["--max-arg-leaves", str(budget)]
@@ -371,7 +372,7 @@ def _sha256_file(p: Path) -> str | None:
         return None
 
 
-def _hf_config_of(a: argparse.Namespace, C: dict | None) -> dict | None:
+def _hf_config_of(a: Options, C: dict | None) -> dict | None:
     """`analytic.config_of(<hf config.json>)` when the integrator's module and an HF config are available."""
     try:
         an = importlib.import_module("verity_vllm.program.model")
@@ -410,7 +411,7 @@ def _engine_arg_dict(items: list[str]) -> dict:
     return out
 
 
-def write_manifest(plan: Plan, a: argparse.Namespace) -> dict:
+def write_manifest(plan: Plan, a: Options) -> dict:
     from verity_vllm.pipeline.report import workload_summary
     C = profile_config(a.profile)
     man = {
@@ -441,7 +442,7 @@ def write_manifest(plan: Plan, a: argparse.Namespace) -> dict:
     return man
 
 
-def write_spec_for(plan: Plan, a: argparse.Namespace, man: dict) -> dict | None:
+def write_spec_for(plan: Plan, a: Options, man: dict) -> dict | None:
     """[D88] spec.json -- the specification (configuration / workload / initial state) as known before execution, from the workload
     file, the driver's arguments, the checkpoint manifest entry and the HF config.  Written once; a later phase never rewrites it (a
     mismatch is returned and lands in experiment.json).  For `--phase cpu` over an old capture with no spec.json the file is written
@@ -556,7 +557,7 @@ def save_stages(run: Path, recs: list[dict]) -> None:
     (run / G.ARTIFACTS["stages"]).write_text(json.dumps({"schema": "verity-gen/stages/v1", "stages": list(byname.values())}, indent=1) + "\n")
 
 
-def gates_stage(plan: Plan, a: argparse.Namespace) -> dict:
+def gates_stage(plan: Plan, a: Options) -> dict:
     """In-process: gates.json, card.json, CARD.md, <cards-dir>/<config_id>.json."""
     from verity_vllm.pipeline import report as CARD
     t0 = time.time()
@@ -575,75 +576,101 @@ def gates_stage(plan: Plan, a: argparse.Namespace) -> dict:
             "reason": None, "verdict": card.verdict, "card": str(dest)}
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--worker", choices=["fold"], default=None, help="(internal) run one worker in this process")
-    ap.add_argument("--config-id", default=None)
-    ap.add_argument("--profile", default=None)
-    ap.add_argument("--workload", default=None)
-    ap.add_argument("--case", default=None, help="checkpoint role (B0, B1, QWEN05, ... any role in checkpoints.json with a profile module)")
-    ap.add_argument("--out", default=None, help="RUN_DIR (driver) or fold_summary.json (--worker fold)")
-    ap.add_argument("--run-dir", default=None, help="an existing RUN_DIR: --out plus case/workload/profile/config-id/checkpoint-dir/steps from its run.json "
-                    "(the sealed verifier re-runs the CPU phase this way from a fresh checkout)")
-    ap.add_argument("--phase", choices=["gpu", "cpu", "all"], default="all")
-    ap.add_argument("--python-gpu", default=None, help="the pod's torch venv python (default: sys.executable)")
-    ap.add_argument("--python-cpu", default=None, help="the torch-free 3.12 python (default: sys.executable)")
-    ap.add_argument("--snapshot-steps", default=DEFAULT_SNAPSHOT_STEPS, help="contiguous from 0, or `all` = every step of the workload (default all)")
-    ap.add_argument("--full-replay", action="store_true", help="also run the tier-b full-step replays (diagnostic only since D82; never gating)")
-    ap.add_argument("--tier-b-steps", default=DEFAULT_TIER_B_STEPS, help="with --full-replay: steps replayed by tier b (default 0,1,2,3; must be snapshot steps)")
-    ap.add_argument("--chains", type=int, default=DEFAULT_CHAINS, help="tier chain: connected slices replayed with computed intermediates (G5)")
-    ap.add_argument("--no-verify-weights", action="store_true", help="skip the checkpoint sha verification at engine build (root policy weight identity then fails)")
-    ap.add_argument("--parallel", type=int, default=None, help="concurrent replay stages (default 4; 1 with --laptop)")
-    ap.add_argument("--replay-budget-leaves", type=int, default=None,
-                    help="replay --max-arg-leaves (tier a/chain evaluate oversize instances at a child unit or skip them). Default: none on the pod, 4e6 with --laptop")
-    ap.add_argument("--max-num-seqs", type=int, default=8)
-    ap.add_argument("--engine-arg", action="append", default=[],
-                    help="LLM(**kw) override key=value (JSON value) for every GPU stage, repeatable; e.g. max_num_batched_tokens=64, enable_prefix_caching=true")
-    ap.add_argument("--max-tokens", type=int, default=None, help="override the workload's max_tokens (passed to the GPU stages)")
-    ap.add_argument("--snapshot-max-bytes", type=int, default=None, help="(capture) per-tensor snapshot cap in bytes (m1_capture default 32 MiB; D87: a "
-                    "prefill MLP row block above the cap has no snapshot evidence -- raise it for long / batched prefills, the run.json records the value)")
-    ap.add_argument("--snapshot-max-bytes-op", type=int, default=None, help="(capture) lower per-tensor cap at dispatcher-call events; Triton "
-                    "launch events keep --snapshot-max-bytes, so a large launch output is copied once (cov-moe: the fused-MoE intermediates of a "
-                    "2048-token prefill otherwise exceed the pod's pinned host memory; the run.json records the value)")
-    ap.add_argument("--checkpoints", default=DEFAULT_CHECKPOINTS)
-    ap.add_argument("--checkpoint-dir", default=None, help="HF snapshot dir or model*.safetensors glob (root_policy, compare --safetensors)")
-    ap.add_argument("--hf-config", default=None, help="HF config.json for per-field C provenance (analytic.config_of)")
-    ap.add_argument("--family", default=None, help="hand-authored family reference name (default Serve_v4 in the card)")
-    ap.add_argument("--log", default=None, help="reuse an existing raw log instead of RUN_DIR/capture/log.jsonl.gz")
-    ap.add_argument("--snapshots", default=None, help="its snapshots dir (default: the log's directory)")
-    ap.add_argument("--other-log", default=None, help="a second capture of the same workload (G6 detail: cross-capture digest)")
-    ap.add_argument("--control-tokens", default=None, help="reuse an existing control run's tokens.json instead of RUN_DIR/control/tokens.json")
-    ap.add_argument("--laptop", action="store_true", help="laptop budget: RSS/wall watchdog, replay --max-arg-leaves")
-    ap.add_argument("--max-rss-gb", type=float, default=None, help="kill a stage above this RSS (default 1.5 with --laptop)")
-    ap.add_argument("--stage-timeout", type=float, default=None, help="kill a stage above this wall time in s (default 180 with --laptop)")
-    ap.add_argument("--dry-run", action="store_true", help="print the exact command lines, run nothing")
-    ap.add_argument("--tier-c", action="store_true", help="also run the tier-c replay")
-    ap.add_argument("--skip", default="", help="comma list of stages/groups to skip")
-    ap.add_argument("--keep-traces", action="store_true", help="census: keep the per-step Chrome traces")
-    ap.add_argument("--cards-dir", default="out/gen/cards")
-    ap.add_argument("--k", type=int, default=DEFAULT_K, help="tier a instances per (specialization, regime) stratum (gate minimum TIER_A_K)")
-    ap.add_argument("--seed", type=int, default=None, help="the replay sample's seed (replay_a, replay_chain: required when they run)")
-    ap.add_argument("--no-program", action="store_true", help="(--worker fold) skip Program(): no digest")
-    ap.add_argument("--persist-dir", default=None, help="(--worker fold) write program.json + instances.jsonl + accesses.jsonl.gz here (D85)")
-    ap.add_argument("--moe-construction", default=None, help="(--worker fold) [R17-42 route A (4)] the workload's DECLARED MoE construction "
-                                                             "(manifest target.moe_construction: indexed-read | padded); the driver passes it from --workload")
-    a = ap.parse_args(argv)
+@dataclass(kw_only=True)
+class Options:
+    worker: str | None = option("--worker", choices=["fold"], default=None, help="(internal) run one worker in this process")
+    config_id: str | None = option("--config-id", default=None)
+    profile: str | None = option("--profile", default=None)
+    workload: str | None = option("--workload", default=None)
+    case: str | None = option("--case", default=None,
+                              help="checkpoint role (B0, B1, QWEN05, ... any role in checkpoints.json with a profile module)")
+    out: str | None = option("--out", default=None, help="RUN_DIR (driver) or fold_summary.json (--worker fold)")
+    run_dir: str | None = option("--run-dir", default=None,
+                                 help="an existing RUN_DIR: --out plus case/workload/profile/config-id/checkpoint-dir/steps from its run.json "
+                                      "(the sealed verifier re-runs the CPU phase this way from a fresh checkout)")
+    phase: str = option("--phase", choices=["gpu", "cpu", "all"], default="all")
+    python_gpu: str | None = option("--python-gpu", default=None, help="the pod's torch venv python (default: sys.executable)")
+    python_cpu: str | None = option("--python-cpu", default=None, help="the torch-free 3.12 python (default: sys.executable)")
+    snapshot_steps: str = option("--snapshot-steps", default=DEFAULT_SNAPSHOT_STEPS,
+                                 help="contiguous from 0, or `all` = every step of the workload (default all)")
+    full_replay: bool = option("--full-replay", default=False, action="store_true",
+                               help="also run the tier-b full-step replays (diagnostic only since D82; never gating)")
+    tier_b_steps: str = option("--tier-b-steps", default=DEFAULT_TIER_B_STEPS,
+                               help="with --full-replay: steps replayed by tier b (default 0,1,2,3; must be snapshot steps)")
+    chains: int = option("--chains", type=int, default=DEFAULT_CHAINS,
+                         help="tier chain: connected slices replayed with computed intermediates (G5)")
+    no_verify_weights: bool = option("--no-verify-weights", default=False, action="store_true",
+                                     help="skip the checkpoint sha verification at engine build (root policy weight identity then fails)")
+    parallel: int | None = option("--parallel", type=int, default=None,
+                                  help="concurrent replay stages (default 4; 1 with --laptop)")
+    replay_budget_leaves: int | None = option("--replay-budget-leaves", type=int, default=None,
+                                              help="replay --max-arg-leaves (tier a/chain evaluate oversize instances at a child unit or skip them). Default: none on the pod, 4e6 with --laptop")
+    max_num_seqs: int = option("--max-num-seqs", type=int, default=8)
+    engine_arg: list[str] = option("--engine-arg", action="append", default=[],
+                                   help="LLM(**kw) override key=value (JSON value) for every GPU stage, repeatable; e.g. max_num_batched_tokens=64, enable_prefix_caching=true")
+    max_tokens: int | None = option("--max-tokens", type=int, default=None,
+                                    help="override the workload's max_tokens (passed to the GPU stages)")
+    snapshot_max_bytes: int | None = option("--snapshot-max-bytes", type=int, default=None,
+                                            help="(capture) per-tensor snapshot cap in bytes (m1_capture default 32 MiB; D87: a "
+                                                 "prefill MLP row block above the cap has no snapshot evidence -- raise it for long / batched prefills, the run.json records the value)")
+    snapshot_max_bytes_op: int | None = option("--snapshot-max-bytes-op", type=int, default=None,
+                                               help="(capture) lower per-tensor cap at dispatcher-call events; Triton "
+                                                    "launch events keep --snapshot-max-bytes, so a large launch output is copied once (cov-moe: the fused-MoE intermediates of a "
+                                                    "2048-token prefill otherwise exceed the pod's pinned host memory; the run.json records the value)")
+    checkpoints: str = option("--checkpoints", default=DEFAULT_CHECKPOINTS)
+    checkpoint_dir: str | None = option("--checkpoint-dir", default=None,
+                                        help="HF snapshot dir or model*.safetensors glob (root_policy, compare --safetensors)")
+    hf_config: str | None = option("--hf-config", default=None,
+                                   help="HF config.json for per-field C provenance (analytic.config_of)")
+    family: str | None = option("--family", default=None,
+                                help="hand-authored family reference name (default Serve_v4 in the card)")
+    log: str | None = option("--log", default=None, help="reuse an existing raw log instead of RUN_DIR/capture/log.jsonl.gz")
+    snapshots: str | None = option("--snapshots", default=None, help="its snapshots dir (default: the log's directory)")
+    other_log: str | None = option("--other-log", default=None,
+                                   help="a second capture of the same workload (G6 detail: cross-capture digest)")
+    control_tokens: str | None = option("--control-tokens", default=None,
+                                        help="reuse an existing control run's tokens.json instead of RUN_DIR/control/tokens.json")
+    laptop: bool = option("--laptop", default=False, action="store_true",
+                          help="laptop budget: RSS/wall watchdog, replay --max-arg-leaves")
+    max_rss_gb: float | None = option("--max-rss-gb", type=float, default=None,
+                                      help="kill a stage above this RSS (default 1.5 with --laptop)")
+    stage_timeout: float | None = option("--stage-timeout", type=float, default=None,
+                                         help="kill a stage above this wall time in s (default 180 with --laptop)")
+    dry_run: bool = option("--dry-run", default=False, action="store_true", help="print the exact command lines, run nothing")
+    tier_c: bool = option("--tier-c", default=False, action="store_true", help="also run the tier-c replay")
+    skip: str = option("--skip", default="", help="comma list of stages/groups to skip")
+    keep_traces: bool = option("--keep-traces", default=False, action="store_true",
+                               help="census: keep the per-step Chrome traces")
+    cards_dir: str = option("--cards-dir", default="out/gen/cards")
+    k: int = option("--k", type=int, default=DEFAULT_K,
+                    help="tier a instances per (specialization, regime) stratum (gate minimum TIER_A_K)")
+    seed: int | None = option("--seed", type=int, default=None,
+                              help="the replay sample's seed (replay_a, replay_chain: required when they run)")
+    no_program: bool = option("--no-program", default=False, action="store_true",
+                              help="(--worker fold) skip Program(): no digest")
+    persist_dir: str | None = option("--persist-dir", default=None,
+                                     help="(--worker fold) write program.json + instances.jsonl + accesses.jsonl.gz here (D85)")
+    moe_construction: str | None = option("--moe-construction", default=None,
+                                          help="(--worker fold) [R17-42 route A (4)] the workload's DECLARED MoE construction "
+                                               "(manifest target.moe_construction: indexed-read | padded); the driver passes it from --workload")
 
+
+def main(a: Options) -> int:
     if a.worker == "fold":
         return fold_worker(a)
     if a.run_dir:
-        _defaults_from_run_dir(a, ap)
+        _defaults_from_run_dir(a)
     if a.profile is None and a.case:
         try:
             from verity_vllm.engine.profiles import profile_module_for_case
             a.profile = profile_module_for_case(a.case)
         except Exception as e:  # noqa: BLE001
-            ap.error(f"--profile not given and no profile module declares case {a.case!r}: {e}")
+            raise UsageError(f"--profile not given and no profile module declares case {a.case!r}: {e}")
     if a.config_id is None and a.case and a.workload:
         a.config_id = f"{a.case}-{Path(a.workload).stem}"
     for req in ("config_id", "profile", "workload", "case", "out"):
         if getattr(a, req) is None:
-            ap.error(f"--{req.replace('_', '-')} is required")
+            raise UsageError(f"--{req.replace('_', '-')} is required")
     # [R16 global, F-global-SNAP] no explicit --snapshot-max-bytes: derive the cap from the workload's largest forward and the checkpoint's
     # widths (snapshot_cap_bytes) instead of m1_capture's fixed 32 MiB, which left the prefill MLP rows of every 1024-class row without
     # snapshot evidence (D87).  An explicit value still wins; the run.json records the derivation either way.
@@ -660,7 +687,7 @@ def main(argv: list[str] | None = None) -> int:
     plan = Plan(a)
     stages = plan.stage_list(a.phase)
     if a.seed is None and (sampled := [st for st in stages if st in ("replay_a", "replay_chain") and not plan.skipped(st)]):
-        ap.error(f"--seed is required to run {' and '.join(sampled)} (the replay sample is drawn from it)")
+        raise UsageError(f"--seed is required to run {' and '.join(sampled)} (the replay sample is drawn from it)")
     max_rss = a.max_rss_gb if a.max_rss_gb is not None else (LAPTOP_MAX_RSS_GB if plan.laptop else None)
     timeout = a.stage_timeout if a.stage_timeout is not None else (LAPTOP_STAGE_TIMEOUT_S if plan.laptop else None)
 
@@ -764,12 +791,12 @@ def main(argv: list[str] | None = None) -> int:
     return 1 if bad else 0
 
 
-def _defaults_from_run_dir(a: argparse.Namespace, ap: argparse.ArgumentParser) -> None:
+def _defaults_from_run_dir(a: Options) -> None:
     """Fill unset arguments from RUN_DIR/run.json (the manifest the GPU phase wrote)."""
     run = Path(a.run_dir)
     man_p = run / G.ARTIFACTS.get("run", "run.json")
     if not man_p.exists():
-        ap.error(f"--run-dir {run}: no {man_p.name} (the GPU phase writes it)")
+        raise UsageError(f"--run-dir {run}: no {man_p.name} (the GPU phase writes it)")
     man = json.loads(man_p.read_text())
     a.out = a.out or str(run)
     for arg, key in (("case", "case"), ("workload", "workload_path"), ("profile", "profile"), ("config_id", "config_id"),
@@ -792,7 +819,7 @@ def _defaults_from_run_dir(a: argparse.Namespace, ap: argparse.ArgumentParser) -
         # the fresh checkout may hold the workload under the same relative path
         rel = Path(a.workload)
         if not rel.is_absolute() and not rel.exists():
-            ap.error(f"workload {a.workload} not found in this checkout")
+            raise UsageError(f"workload {a.workload} not found in this checkout")
 
 
 def _batch_replays(stages: list[str], parallel: int) -> list:
@@ -1157,7 +1184,7 @@ def persist_program(result: Any, run_dir: Path, *, profile_name: str, log_path: 
     return written
 
 
-def fold_worker(a: argparse.Namespace) -> int:
+def fold_worker(a: Options) -> int:
     for req in ("log", "profile", "out"):
         if getattr(a, req) is None:
             raise SystemExit(f"--worker fold needs --{req}")
@@ -1190,7 +1217,3 @@ def _jsonable(x: Any) -> Any:
     if hasattr(x, "tolist"):
         return x.tolist()
     return repr(x)
-
-
-if __name__ == "__main__":
-    sys.exit(main())

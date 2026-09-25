@@ -12,7 +12,7 @@ read -- and nothing of its free text:
   * `check_header`: probed over the profile's own HF config (must be consistent) and one perturbed copy per checked key;
   * `id`, `accepted`, `case`, the kernel allowlist's length and sha.
 The per-role fixtures under `profiles/expected/<derived module name>.json` pin this form (`tests/test_profiles_generic.py`);
-`python -m verity_vllm.engine.profiles.canonical --write` regenerates them from the generic constructor (a deliberate re-pin, reviewed in the diff).
+`verity-vllm canonical-profiles --write` regenerates them from the generic constructor (a deliberate re-pin, reviewed in the diff).
 """
 from __future__ import annotations
 
@@ -189,7 +189,7 @@ EXPECTED_DIR = __import__("pathlib").Path(__file__).resolve().parent / "expected
 def fixture_roles() -> list[tuple[str, int]]:
     """Every role with a shipped HF config.json (`profiles/hf_configs/<ROLE>.config.json`) at TP1, plus every (role, world) a fixture
     already pins (the tensor-parallel worlds with recorded runs are data -- the fixture files -- not a table here; pin a new world with
-    `python -m verity_vllm.engine.profiles.canonical --write ROLE:W`)."""
+    `verity-vllm canonical-profiles --write ROLE:W`)."""
     from verity_vllm.engine.profiles import dense_generic as _dg, generic
     roles = sorted(p.name[: -len(".config.json")] for p in _dg.HF_CONFIG_DIR.glob("*.config.json"))
     out = {(r, 1) for r in roles}

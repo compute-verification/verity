@@ -1,6 +1,6 @@
 """verity_vllm/check/fold_compare.py — M4: the four comparisons of a folded observation log against the evidence and Serve_v4.
 
-    uv run python -m verity_vllm.check.fold_compare --log data/logs/m1.jsonl.gz --snapshots data/logs/m1 \
+    uv run verity-vllm fold-compare --log data/logs/m1.jsonl.gz --snapshots data/logs/m1 \
         --profile vllm_d9105ea80_sm89_eager --out out/capture/reports/compare_m1.json
 
 Each comparison is a function returning a JSON-able dict with a `status` in {"pass", "fail", "skipped", "error"}:
@@ -29,7 +29,6 @@ tracked fixture the interior producer uses.
 """
 from __future__ import annotations
 
-import argparse
 import glob
 import json
 import sys
@@ -44,6 +43,7 @@ import numpy as np
 
 from verity.ir.defs import bind
 from verity.ir.evaluate import evaluate_call
+from verity_vllm.config import option
 from verity_vllm.program.frontend.rules.family import _field_intervals, expand_leaves, match_program, node_leaf_id
 from verity.ir.layout import FunctionCall
 from verity.ir.refs import Refs, runs
@@ -867,22 +867,28 @@ def _jsonable(x):
     return x
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--log", required=True)
-    ap.add_argument("--snapshots", default=None, help="directory with snapshots.json, values/, tokens.json")
-    ap.add_argument("--profile", required=True)
-    ap.add_argument("--record", default=None, help="accepted record dir with adapter/*/ru/*/boundary.json (default: none, no record comparison)")
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--strict", action="store_true")
-    ap.add_argument("--no-program", action="store_true", help="skip Program() (comparison 3 is then skipped)")
-    ap.add_argument("--lp", type=int, default=32)
-    ap.add_argument("--steps", type=int, default=15)
-    ap.add_argument("--bn", type=int, default=None, help="Serve_v4 BN (default: the profile config's / the FA2 rule at D)")
-    ap.add_argument("--safetensors", default=None, help="glob of the checkpoint's model*.safetensors (default: the HF cache of the profile's model)")
-    ap.add_argument("--cos-sin", default=None, help="uint16 .npy of the rotary cos_sin table (default: <snapshots>/cos_sin_cache.npy, else the B0 fixture)")
-    a = ap.parse_args(argv)
+@dataclass(frozen=True, kw_only=True)
+class Options:
+    log: str = option("--log")
+    snapshots: str | None = option("--snapshots", default=None, help="directory with snapshots.json, values/, tokens.json")
+    profile: str = option("--profile")
+    record: str | None = option("--record", default=None,
+                                help="accepted record dir with adapter/*/ru/*/boundary.json (default: none, no record comparison)")
+    out: str = option("--out")
+    strict: bool = option("--strict", default=False, action="store_true")
+    no_program: bool = option("--no-program", default=False, action="store_true",
+                              help="skip Program() (comparison 3 is then skipped)")
+    lp: int = option("--lp", type=int, default=32)
+    steps: int = option("--steps", type=int, default=15)
+    bn: int | None = option("--bn", type=int, default=None,
+                            help="Serve_v4 BN (default: the profile config's / the FA2 rule at D)")
+    safetensors: str | None = option("--safetensors", default=None,
+                                     help="glob of the checkpoint's model*.safetensors (default: the HF cache of the profile's model)")
+    cos_sin: str | None = option("--cos-sin", default=None,
+                                 help="uint16 .npy of the rotary cos_sin table (default: <snapshots>/cos_sin_cache.npy, else the B0 fixture)")
 
+
+def main(a: Options) -> int:
     t0 = time.time()
     profile = load_profile(a.profile)
     case = (profile.notes or {}).get("case", "B0")
@@ -916,7 +922,3 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{k:12s} {report[k]['status']}", file=sys.stderr)
     print(str(out))
     return 0 if all(report[k]["status"] in ("pass", "skipped") for k in ("tokens", "boundary", "subcircuits", "structure")) else 1
-
-
-if __name__ == "__main__":
-    sys.exit(main())

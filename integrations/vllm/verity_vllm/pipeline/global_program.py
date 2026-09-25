@@ -1,6 +1,6 @@
 """GP-01 driver: build the workload Program of a declared manifest from the derived request-wrapper Programs.
 
-    python -m verity_vllm.pipeline.global_program --workload <manifest.json> --derived <dir> [--derived <dir> ...] --out <dir>
+    verity-vllm global-program --workload <manifest.json> --derived <dir> [--derived <dir> ...] --out <dir>
 
 Inputs (pre-execution only): the request manifest (request ids, prompt lengths, caps, `arrive_step`, the row's declared `target`
 block) and derive_step request artifacts (`descriptor.json.gz` + `construction_manifest.json` / `instances.json.gz`) — one per
@@ -19,16 +19,17 @@ at the original path.  Readers go through `build_paths.component_dir` / `manifes
 
 from __future__ import annotations
 
-import argparse
 import gzip
 import hashlib
 import json
 import os
 import sys
 import time
+from dataclasses import dataclass
 
 from verity.ir.codec import canonical_json, descriptor_size
 from verity.ir.defs import REGISTRY
+from verity_vllm.config import option
 from verity_vllm.pipeline import layout as build_paths
 from verity_vllm.program import workload as W
 # [R14 moe] the request descriptors decode through the SAME registry set `cb_a.compare._registry` loads: b1 + serve3 + pad_prims + moe
@@ -815,17 +816,22 @@ def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir:
     return art
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--workload", required=True)
-    ap.add_argument("--derived", action="append", default=[])
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--checkpoint-dir", default=None, help="the pinned checkpoint: its config.json / generation_config.json eos_token_id "
-                                                            "become the Program's declared stop rule (F-pm-24)")
-    ap.add_argument("--eos-token-ids", default=None, help="comma-separated EOS token ids declared explicitly (union with --checkpoint-dir's)")
-    ap.add_argument("--artifact-root", default=None, help="the dir the vllm-build/v1 tree is rooted at (holds build_workload/ and the "
-                                                           "build_request*/ dirs); the `layout` block's paths are relative to it. Default: the parent of --out")
-    a = ap.parse_args()
+@dataclass(frozen=True, kw_only=True)
+class Options:
+    workload: str = option("--workload")
+    derived: list[str] = option("--derived", action="append", default=[])
+    out: str = option("--out")
+    checkpoint_dir: str | None = option("--checkpoint-dir", default=None,
+                                        help="the pinned checkpoint: its config.json / generation_config.json eos_token_id "
+                                        "become the Program's declared stop rule (F-pm-24)")
+    eos_token_ids: str | None = option("--eos-token-ids", default=None,
+                                       help="comma-separated EOS token ids declared explicitly (union with --checkpoint-dir's)")
+    artifact_root: str | None = option("--artifact-root", default=None,
+                                       help="the dir the vllm-build/v1 tree is rooted at (holds build_workload/ and the "
+                                       "build_request*/ dirs); the `layout` block's paths are relative to it. Default: the parent of --out")
+
+
+def main(a: Options) -> int:
     eos = [int(x) for x in a.eos_token_ids.split(",") if x.strip()] if a.eos_token_ids else None
     res = build(a.workload, a.derived, a.out, checkpoint_dir=a.checkpoint_dir, eos_token_ids=eos, artifact_root=a.artifact_root)
     if not res.get("ok"):
@@ -838,7 +844,3 @@ def main() -> int:
                       "moe_construction": (res.get("moe_construction") or {}).get("value"),
                       "moe_block_present": (res.get("moe_construction") or {}).get("moe_block_present")}))
     return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())

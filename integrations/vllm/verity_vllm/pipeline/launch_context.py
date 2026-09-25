@@ -15,7 +15,7 @@ records it inert under FA2, whose tile does not read seqlen_q).  Chunked prefill
 `enable_chunked_prefill=False`; the row's expected_engine_steps assume no preemption) -- a scheduler that does either changes the launches
 and the Match would show it.
 
-    python -m verity_vllm.pipeline.launch_context <workload.json> [<LP> <T>]      -> the shape's JSON list (or 'conflict'); no shape: all shapes
+    verity-vllm launch-context <workload.json> [<LP> <T>]      -> the shape's JSON list (or 'conflict'); no shape: all shapes
 """
 from __future__ import annotations
 

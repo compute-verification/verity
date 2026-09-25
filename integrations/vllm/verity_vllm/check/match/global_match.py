@@ -72,7 +72,6 @@ PROTOCOL SUMMARY (Match stage: the record checker -- GM-01, the runtime match ve
 """
 from __future__ import annotations
 
-import argparse
 import collections
 import dataclasses
 import gzip
@@ -82,8 +81,10 @@ import os
 import re
 import sys
 import time
+from dataclasses import dataclass
 
 from verity_vllm.check.match import batch_decomp as BD
+from verity_vllm.config import UsageError, option
 from verity_vllm.program.compact import n_max_producer as _n_max_producer, n_producers as _n_producers  # [R17 mfast]
 from verity_vllm.check.match import program_compare as C
 from verity_vllm.check.match import global_match_fast as GMF  # [R17 mprof] MATCH_IMPL=fast: compute-once memo of the pure per-request work; inert without the flag
@@ -2128,34 +2129,43 @@ def impl_info(mod) -> dict:
     return info
 
 
-def main(argv=None) -> int:
-    from verity_vllm.pipeline.gc_tuning import tune as _gc_tune   # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
-    _gc_tune()
-    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--oracle", required=True, help="Match dir: program.json + instances.jsonl + capture/log.jsonl.gz")
-    ap.add_argument("--global-program", help="cb-a/global-program/v1 JSON; omit to assemble the mock from --workload + --component")
-    ap.add_argument("--gprog", help="lane gprog's workload_program.json (GP-01) -> converted with from_gprog")
-    ap.add_argument("--workload", help="workload manifest (for the mock global Program)")
-    ap.add_argument("--component", action="append", default=[], help="request component dir (derive_step output); repeatable")
-    ap.add_argument("--log")
-    ap.add_argument("--tokens")
-    ap.add_argument("--tokens-optional", action="store_true", help="accept a record without capture/tokens.json (G6 output-association legs skipped, "
-                    "LABELLED checks[G6].tokens_json=false; mechanism/fixture runs only, never a row of record) [F-r17-01]")
-    ap.add_argument("--no-x09", action="store_true")
-    ap.add_argument("--within-step", choices=WITHIN_STEP_CRITERIA, default=DEFAULT_WITHIN_STEP,
-                    help="within-engine-step correspondence of a request's instances: dag (default of record, COORD ruling M-0177/M-0031) | "
-                         "sequence (the r14-v1 criterion); the other criterion's verdict is recorded beside it (alternate_verdict)")
-    ap.add_argument("--no-alternate", action="store_true", help="do not run/record the other criterion's verdict beside the verdict of record")
-    ap.add_argument("--out")
-    ap.add_argument("--decomp-out", help="[COORD R17-28, P1] also write the X-09 batch decomposition document here (cb_a.batch_decomp's CLI "
+@dataclass(frozen=True, kw_only=True)
+class Options:
+    oracle: str = option("--oracle", help="Match dir: program.json + instances.jsonl + capture/log.jsonl.gz")
+    global_program: str | None = option("--global-program", default=None,
+                                        help="cb-a/global-program/v1 JSON; omit to assemble the mock from --workload + --component")
+    gprog: str | None = option("--gprog", default=None,
+                               help="lane gprog's workload_program.json (GP-01) -> converted with from_gprog")
+    workload: str | None = option("--workload", default=None, help="workload manifest (for the mock global Program)")
+    component: list[str] = option("--component", action="append", default=[],
+                                  help="request component dir (derive_step output); repeatable")
+    log: str | None = option("--log", default=None)
+    tokens: str | None = option("--tokens", default=None)
+    tokens_optional: bool = option("--tokens-optional", default=False, action="store_true",
+                                   help="accept a record without capture/tokens.json (G6 output-association legs skipped, "
+                                        "LABELLED checks[G6].tokens_json=false; mechanism/fixture runs only, never a row of record) [F-r17-01]")
+    no_x09: bool = option("--no-x09", default=False, action="store_true")
+    within_step: str = option("--within-step", choices=WITHIN_STEP_CRITERIA, default=DEFAULT_WITHIN_STEP,
+                              help="within-engine-step correspondence of a request's instances: dag (default of record, COORD ruling M-0177/M-0031) | "
+                                   "sequence (the r14-v1 criterion); the other criterion's verdict is recorded beside it (alternate_verdict)")
+    no_alternate: bool = option("--no-alternate", default=False, action="store_true",
+                                help="do not run/record the other criterion's verdict beside the verdict of record")
+    out: str | None = option("--out", default=None)
+    decomp_out: str | None = option("--decomp-out", default=None,
+                                    help="[COORD R17-28, P1] also write the X-09 batch decomposition document here (cb_a.batch_decomp's CLI "
                                          "schema, the same decompose() call whose verdict is this document's x09 block): row_pod's match_decomp.json "
                                          "without a second batch_decomp process over the same fold and components. Exit 4 when X-09 names "
                                          "missing derived shapes (batch_decomp's protocol: derive them and rerun), else GM-01's 0 / 3.")
-    ap.add_argument("--derived", action="append", default=[], help="[P1] derived request-wrapper dir X-09 may use beside the global Program's "
-                                                                    "components (repeatable): the shapes row_pod derived after an exit 4")
-    a = ap.parse_args(argv)
+    derived: list[str] = option("--derived", action="append", default=[],
+                                help="[P1] derived request-wrapper dir X-09 may use beside the global Program's "
+                                     "components (repeatable): the shapes row_pod derived after an exit 4")
+
+
+def main(a: Options) -> int:
+    from verity_vllm.pipeline.gc_tuning import tune as _gc_tune   # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
+    _gc_tune()
     if a.decomp_out and a.no_x09:
-        ap.error("--decomp-out needs the X-09 run (drop --no-x09)")
+        raise UsageError("--decomp-out needs the X-09 run (drop --no-x09)")
     loaded = {X09_EXTRA_DERIVED: list(a.derived)}   # shared with check(): the fold / components decoded once + the X-09 document (P1)
     if a.global_program:
         gp = json.load(open(a.global_program))
@@ -2163,7 +2173,7 @@ def main(argv=None) -> int:
         gp = from_gprog(a.gprog, a.workload)
     else:
         if not a.workload:
-            ap.error("--workload is required without --global-program")
+            raise UsageError("--workload is required without --global-program")
         gp = mock_global_program(a.workload, a.component)
     mod = impl_module()   # MATCH_IMPL: fast (default, the Match of record) | record (the audit checker) -- never a silent fallback
     print(impl_banner(mod, gp), file=sys.stderr, flush=True)   # what is about to run, BEFORE the hours it may take (not after)
@@ -2200,7 +2210,3 @@ def main(argv=None) -> int:
     if rc_x09 == 4:   # the shapes X-09 could not compare are not derived yet: row_pod derives them and reruns (the compare stage's exit 4)
         return 4
     return 0 if res["verdict"] == "PASS" else 3
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

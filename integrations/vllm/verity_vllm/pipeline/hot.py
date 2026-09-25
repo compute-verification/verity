@@ -1,11 +1,11 @@
 """Hot Commit worker (R16 BRIEF §5 / §8 #4, lane sys): one commit_delta process serves consecutive Commit jobs of the SAME engine key
 instead of building a fresh vLLM engine per invocation.  Not a distributed service: one worker per pod, files under one directory,
-the client is a drop-in for `python -m verity_vllm.pipeline.commit ARGS` (row_pod.sh `HOT_ENGINE=1`).
+the client is a drop-in for `verity-vllm commit ARGS` (row_pod.sh `HOT_ENGINE=1`).
 
-    python -m verity_vllm.pipeline.hot submit [--root /workspace/cp/hot] [--idle 900] -- <commit_delta args...>
-    python -m verity_vllm.pipeline.hot serve  <worker dir> --idle <s> --reason <why this worker started>
-    python -m verity_vllm.pipeline.hot key    -- <commit_delta args...>        # print the key (diagnostics)
-    python -m verity_vllm.pipeline.hot stop   [--root ...]                      # stop every worker under root
+    verity-vllm hot submit [--root /workspace/cp/hot] [--idle 900] -- <commit_delta args...>
+    verity-vllm hot serve  <worker dir> --idle <s> --reason <why this worker started>
+    verity-vllm hot key    -- <commit_delta args...>        # print the key (diagnostics)
+    verity-vllm hot stop   [--root ...]                      # stop every worker under root
 
 Key (what may share an engine) = sha256 of
   * CODE identity: `source_identity.code_identity` of the executing repository -- content hashes of its import closure (the integration
@@ -33,7 +33,6 @@ Files (worker dir = <root>/<key16>): KEY, worker.json (pid, started, reason, key
 
 from __future__ import annotations
 
-import argparse
 import contextlib
 import glob
 import hashlib
@@ -44,8 +43,11 @@ import signal
 import subprocess
 import sys
 import time
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+from verity_vllm.config import option
 
 SCHEMA = "verity-sweep/hot-commit/v1"
 # PATH / LD_LIBRARY_PATH are part of the identity: they decide which nvcc / ninja / CUDA libs a JIT build in the worker would use (a worker
@@ -313,7 +315,7 @@ def submit(argv: list[str], *, root: Path, idle_s: float, timeout_s: float | Non
         if not spawn:
             log(f"[hot] no worker and spawning disabled: cold run ({reason})")
             return cold_run(argv, reason, log=log)
-        cmd = [sys.executable, "-m", "verity_vllm.pipeline.hot", "serve", str(wdir), "--idle", str(idle_s), "--reason", reason]
+        cmd = [sys.executable, "-m", "verity_vllm.pipeline.cli", "manifest", "hot", "serve", str(wdir), "--idle", str(idle_s), "--reason", reason]
         with open(wdir / "worker.log", "a") as wl:
             wl.write(f"$ {shlex.join(cmd)}  (cwd {os.getcwd()}, by pid {os.getpid()})\n")
             wl.flush()
@@ -382,7 +384,7 @@ def cold_run(argv: list[str], reason: str, log=print) -> int:
     tl = Timeline.from_env("hot_commit", hot=False)
     tl.event("hot.fallback_cold", "mark", restart_reason=reason)
     log(f"[hot] COLD fallback: fresh commit_delta process ({reason})", flush=True)
-    cmd = [sys.executable, "-m", "verity_vllm.pipeline.commit", *argv]
+    cmd = [sys.executable, "-m", "verity_vllm.pipeline.cli", "manifest", "commit", *argv]
     env = dict(os.environ, VERITY_HOT_RESTART_REASON=reason)
     env.pop("VERITY_HOT_SUBMIT", None)          # the cold process must not route back through the worker (commit_delta.__main__ hook)
     sys.stdout.flush()
@@ -529,7 +531,7 @@ def serve(wdir: Path, *, idle_s: float, reason: str) -> int:
                 rc: int | None = None
                 refused = None
                 try:
-                    cd.main(list(job["argv"]))
+                    cd.main(cli.parse("commit", list(job["argv"])), argv=list(job["argv"]))
                     rc = 0
                 except SystemExit as e:
                     code = e.code
@@ -626,43 +628,54 @@ def serve(wdir: Path, *, idle_s: float, reason: str) -> int:
 
 
 # ---------------------------------------------------------------------------------------------------------------------------- CLI
-def main(argv: list[str] | None = None) -> int:
-    argv = list(sys.argv[1:] if argv is None else argv)
-    rest: list[str] = []
-    if "--" in argv:
-        i = argv.index("--")
-        argv, rest = argv[:i], argv[i + 1:]
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    sub = ap.add_subparsers(dest="cmd", required=True)
-    s = sub.add_parser("submit")
-    s.add_argument("--root", default=os.environ.get("HOT_ROOT", "/workspace/cp/hot"))
-    s.add_argument("--idle", type=float, default=float(os.environ.get("HOT_IDLE", "900")))
-    s.add_argument("--timeout", type=float, default=None)
-    s.add_argument("--no-spawn", action="store_true", help="use a live worker if one exists, else run cold")
-    v = sub.add_parser("serve")
-    v.add_argument("wdir")
-    v.add_argument("--idle", type=float, default=900.0)
-    v.add_argument("--reason", default="started by hand")
-    k = sub.add_parser("key")
-    k.add_argument("--tree", default=".")
-    st = sub.add_parser("stop")
-    st.add_argument("--root", default=os.environ.get("HOT_ROOT", "/workspace/cp/hot"))
-    st.add_argument("--idle-only", action="store_true", help="stop idle workers only; a worker running a job is left alone (release ships)")
-    a = ap.parse_args(argv)
+@dataclass(frozen=True, kw_only=True)
+class SubmitOptions:
+    root: str = option("--root", env="HOT_ROOT", default="/workspace/cp/hot")
+    idle: float = option("--idle", type=float, env="HOT_IDLE", default=900.0)
+    timeout: float | None = option("--timeout", type=float, default=None)
+    no_spawn: bool = option("--no-spawn", default=False, action="store_true",
+                            help="use a live worker if one exists, else run cold")
+    commit_args: list[str] = option("commit_args", nargs="*", default=[], metavar="-- COMMIT_ARGS")
+    cmd: str = field(default="submit", init=False)
+
+
+@dataclass(frozen=True, kw_only=True)
+class ServeOptions:
+    wdir: str = option("wdir")
+    idle: float = option("--idle", type=float, default=900.0)
+    reason: str = option("--reason", default="started by hand")
+    cmd: str = field(default="serve", init=False)
+
+
+@dataclass(frozen=True, kw_only=True)
+class KeyOptions:
+    tree: str = option("--tree", default=".")
+    commit_args: list[str] = option("commit_args", nargs="*", default=[], metavar="-- COMMIT_ARGS")
+    cmd: str = field(default="key", init=False)
+
+
+@dataclass(frozen=True, kw_only=True)
+class StopOptions:
+    root: str = option("--root", env="HOT_ROOT", default="/workspace/cp/hot")
+    idle_only: bool = option("--idle-only", default=False, action="store_true",
+                             help="stop idle workers only; a worker running a job is left alone (release ships)")
+    cmd: str = field(default="stop", init=False)
+
+
+COMMANDS = {"submit": SubmitOptions, "serve": ServeOptions, "key": KeyOptions, "stop": StopOptions}
+
+
+def main(a: SubmitOptions | ServeOptions | KeyOptions | StopOptions) -> int:
     if a.cmd == "submit":
         def _log(msg: str, flush: bool = True) -> None:
             print(msg, flush=flush)
-        return submit(rest, root=Path(a.root), idle_s=a.idle, timeout_s=a.timeout, spawn=not a.no_spawn, log=_log)
+        return submit(list(a.commit_args), root=Path(a.root), idle_s=a.idle, timeout_s=a.timeout, spawn=not a.no_spawn, log=_log)
     if a.cmd == "serve":
         return serve(Path(a.wdir), idle_s=a.idle, reason=a.reason)
     if a.cmd == "key":
-        print(json.dumps(job_key(rest, a.tree), indent=1, default=str))
+        print(json.dumps(job_key(list(a.commit_args), a.tree), indent=1, default=str))
         return 0
     if a.cmd == "stop":
         print(json.dumps({"stopped": stop_workers(Path(a.root), idle_only=bool(a.idle_only))}))
         return 0
     return 2
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

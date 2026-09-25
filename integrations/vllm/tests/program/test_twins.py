@@ -235,7 +235,7 @@ def test_m1_tier_b_step0_full_prefill_with_twins(tmp_path):
         pytest.skip(why)
     out = tmp_path / "replay_b0_twins.json"
     t0 = time.time()
-    cmd = [sys.executable, "-m", "verity_vllm.check.replay.replay", "--log", str(m1t.LOG), "--snapshots", str(m1t.SNAPS), "--profile", m1t.PROFILE,
+    cmd = [sys.executable, "-m", "verity_vllm.pipeline.cli", "replay", "--log", str(m1t.LOG), "--snapshots", str(m1t.SNAPS), "--profile", m1t.PROFILE,
            "--tier", "b", "--step", "0", "--evaluator", "twins", "--out", str(out)]
     proc = subprocess.run(cmd, cwd=str(m1t.REPO), capture_output=True, text=True, timeout=600)
     total = time.time() - t0

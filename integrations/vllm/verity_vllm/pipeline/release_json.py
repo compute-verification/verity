@@ -16,13 +16,12 @@ first time the field was a constant; the second time an older tag's pod_release.
 
 Stdlib only at import time (row_pod calls it with the system python3); `write` imports torch/vllm lazily for the env identity.
 
-  python -m verity_vllm.pipeline.release_json write --tag <tag> --tree <tree> --hg "HIDDEN-GPU-OK ..." --tp "FA2-TAP-OK ..." --nc "<sha> <path>" [--tp3 "FA3-TAP-OK ..."] [--nc-build <dir>]
+  verity-vllm release-json write --tag <tag> --tree <tree> --hg "HIDDEN-GPU-OK ..." --tp "FA2-TAP-OK ..." --nc "<sha> <path>" [--tp3 "FA3-TAP-OK ..."] [--nc-build <dir>]
   python3 verity_vllm/pipeline/release_json.py check --tree <tree> --tag <tag> --commit <sha>      -> RELEASE-TREE-OK ... | RELEASE-TREE-FAIL <why> (exit 1)
   python3 verity_vllm/pipeline/release_json.py line <tree>                                          -> "<release line>\t<record path or ->"
 """
 from __future__ import annotations
 
-import argparse
 import hashlib
 import json
 import os
@@ -30,6 +29,9 @@ import platform
 import subprocess
 import sys
 import time
+from dataclasses import dataclass, field
+
+from verity_vllm.config import option
 
 SCHEMA = "verity-sweep/release/v1"
 POD_RELEASE_JSON = "/workspace/cp/RELEASE.json"
@@ -183,22 +185,57 @@ def _env_identity() -> tuple[dict, dict, str]:
     return env, gpu, freeze
 
 
-def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    sub = ap.add_subparsers(dest="cmd", required=True)
-    w = sub.add_parser("write", help="write /workspace/cp/RELEASE.json + <tree>/RELEASE.json (pod side, cwd must be the tree)")
-    w.add_argument("--tag", required=True); w.add_argument("--tree", required=True)
-    w.add_argument("--hg", required=True); w.add_argument("--tp", required=True); w.add_argument("--nc", required=True); w.add_argument("--tp3", default="")
-    w.add_argument("--nc-build", default=None, help="collector JIT build dir used by this ship (recorded under build_dirs)")
-    w.add_argument("--out", default=POD_RELEASE_JSON); w.add_argument("--export", default="EXPORT.json")
-    w.add_argument("--freeze-out", default=None, help="write pip freeze here (default /workspace/cp/release-logs/pip_freeze_<tag>.txt)")
-    c = sub.add_parser("check", help="after the ship: both records name this tree / tag / commit")
-    c.add_argument("--tree", required=True); c.add_argument("--tag", required=True); c.add_argument("--commit", required=True); c.add_argument("--pod-path", default=POD_RELEASE_JSON)
-    l = sub.add_parser("line", help="row_pod's REL-09 release line for <tree>")
-    l.add_argument("tree"); l.add_argument("--pod-path", default=POD_RELEASE_JSON)
-    n = sub.add_parser("nc-build", help="the collector JIT build dir of <tree> (pod-wide default for the default tree, per-tree otherwise)")
-    n.add_argument("tree")
-    a = ap.parse_args(argv)
+@dataclass(frozen=True, kw_only=True)
+class WriteOptions:
+    "write /workspace/cp/RELEASE.json + <tree>/RELEASE.json (pod side, cwd must be the tree)"
+
+    tag: str = option("--tag")
+    tree: str = option("--tree")
+    hg: str = option("--hg")
+    tp: str = option("--tp")
+    nc: str = option("--nc")
+    tp3: str = option("--tp3", default="")
+    nc_build: str | None = option("--nc-build", default=None,
+                                  help="collector JIT build dir used by this ship (recorded under build_dirs)")
+    out: str = option("--out", default=POD_RELEASE_JSON)
+    export: str = option("--export", default="EXPORT.json")
+    freeze_out: str | None = option("--freeze-out", default=None,
+                                    help="write pip freeze here (default /workspace/cp/release-logs/pip_freeze_<tag>.txt)")
+    cmd: str = field(default="write", init=False)
+
+
+@dataclass(frozen=True, kw_only=True)
+class CheckOptions:
+    "after the ship: both records name this tree / tag / commit"
+
+    tree: str = option("--tree")
+    tag: str = option("--tag")
+    commit: str = option("--commit")
+    pod_path: str = option("--pod-path", default=POD_RELEASE_JSON)
+    cmd: str = field(default="check", init=False)
+
+
+@dataclass(frozen=True, kw_only=True)
+class LineOptions:
+    "row_pod's REL-09 release line for <tree>"
+
+    tree: str = option("tree")
+    pod_path: str = option("--pod-path", default=POD_RELEASE_JSON)
+    cmd: str = field(default="line", init=False)
+
+
+@dataclass(frozen=True, kw_only=True)
+class NcBuildOptions:
+    "the collector JIT build dir of <tree> (pod-wide default for the default tree, per-tree otherwise)"
+
+    tree: str = option("tree")
+    cmd: str = field(default="nc-build", init=False)
+
+
+COMMANDS = {"write": WriteOptions, "check": CheckOptions, "line": LineOptions, "nc-build": NcBuildOptions}
+
+
+def main(a: WriteOptions | CheckOptions | LineOptions | NcBuildOptions) -> int:
     if a.cmd == "nc-build":
         print(native_collect_build_dir(a.tree))
         return 0
@@ -226,7 +263,3 @@ def main(argv=None) -> int:
         print(f"{line}\t{src}")
         return 0
     return 2
-
-
-if __name__ == "__main__":
-    sys.exit(main())

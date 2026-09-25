@@ -1,8 +1,8 @@
 """The Commit VERDICT as typed records (`vllm-verdict/v1`): every check the Commit decides, by its human name, with what it read, what
 it established and what it found -- ONE document (`<row>/verdict.json`) beside the files it is derived from.
 
-    python -m verity_vllm.check.verdict from-record <row_dir> [--out PATH]      rebuild the record from a row's evidence
-    python -m verity_vllm.check.verdict mapping                                  the old -> new check-name table (markdown)
+    verity-vllm verdict from-record <row_dir> [--out PATH]      rebuild the record from a row's evidence
+    verity-vllm verdict mapping                                  the old -> new check-name table (markdown)
 
 WHY.  The v1 Commit records its decision three times over: `commit/verdict.json` (`commit_pass`, one `first_fail_reason` string: the FIRST
 rule that failed, the others silent), `commit/runs.jsonl` (per instrumented run, every rule's own block under `commit.*`, the check
@@ -39,7 +39,6 @@ required-value manifest.
 """
 from __future__ import annotations
 
-import argparse
 import glob
 import hashlib
 import json
@@ -51,6 +50,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from verity_vllm.check import commit_verdict as CV
+from verity_vllm.config import option
 
 SCHEMA = "vllm-verdict/v1"
 PASS, FAIL, INSUFFICIENT, NOT_RUN = "PASS", "FAIL", "INSUFFICIENT_EVIDENCE", "NOT_RUN"
@@ -1380,17 +1380,31 @@ def mapping_markdown() -> str:
     return "\n".join(lines) + "\n"
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="verity_vllm.check.verdict", description=__doc__.split("\n\n", 1)[0])
-    sub = ap.add_subparsers(dest="cmd", required=True)
-    fr = sub.add_parser("from-record", help="rebuild <row_dir>/verdict.json from the row's Commit evidence")
-    fr.add_argument("row_dir")
-    fr.add_argument("--out", default=None, help="where to write (default <row_dir>/verdict.json)")
-    fr.add_argument("--rc", type=int, default=None, help="commit_delta's exit code (row_pod.sh passes it; a pre-P5 row's commit_summary.json supplies it otherwise)")
-    fr.add_argument("--stage-ok", default=None, help="a stage decision made outside this verdict, if any (recorded as compat.stage_ok; a disagreement is a note)")
-    fr.add_argument("--quiet", action="store_true")
-    sub.add_parser("mapping", help="print the old -> new check-name table (markdown)")
-    a = ap.parse_args(argv)
+@dataclass(frozen=True, kw_only=True)
+class FromRecordOptions:
+    """rebuild <row_dir>/verdict.json from the row's Commit evidence"""
+
+    row_dir: str = option("row_dir")
+    out: str | None = option("--out", default=None, help="where to write (default <row_dir>/verdict.json)")
+    rc: int | None = option("--rc", type=int, default=None,
+                            help="commit_delta's exit code (row_pod.sh passes it; a pre-P5 row's commit_summary.json supplies it otherwise)")
+    stage_ok: str | None = option("--stage-ok", default=None,
+                                  help="a stage decision made outside this verdict, if any (recorded as compat.stage_ok; a disagreement is a note)")
+    quiet: bool = option("--quiet", default=False, action="store_true")
+    cmd: str = field(default="from-record", init=False)
+
+
+@dataclass(frozen=True, kw_only=True)
+class MappingOptions:
+    """print the old -> new check-name table (markdown)"""
+
+    cmd: str = field(default="mapping", init=False)
+
+
+COMMANDS = {"from-record": FromRecordOptions, "mapping": MappingOptions}
+
+
+def main(a: FromRecordOptions | MappingOptions) -> int:
     if a.cmd == "mapping":
         print(mapping_markdown(), end="")
         return 0
@@ -1401,7 +1415,3 @@ def main(argv: list[str] | None = None) -> int:
         gs = " ".join(f"{k}={v_}" for k, v_ in v.groups().items())
         print(f"{v.outcome} {out} [{gs}]")
     return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())

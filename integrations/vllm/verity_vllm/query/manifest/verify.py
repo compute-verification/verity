@@ -2,9 +2,9 @@
 `Q_module_body_v1` over the Build's Programs + correspondence, the same `build` / `build-global` inputs row_pod.sh built it with) and
 compare digests; write the `verity-sweep/manifest-verify/v1` record beside the Commit (`commit/manifest_verify.json`).
 
-    python -m verity_vllm.query.manifest.verify --manifest D/manifest.json --out D/commit/manifest_verify.json \\
+    verity-vllm manifest-verify --manifest D/manifest.json --out D/commit/manifest_verify.json \\
         --program D/build_request --workload workloads/<row>.json                                 # B=1
-    python -m verity_vllm.query.manifest.verify --manifest D/manifest.json --out D/commit/manifest_verify.json \\
+    verity-vllm manifest-verify --manifest D/manifest.json --out D/commit/manifest_verify.json \\
         --fixture workloads/<row>.json --programs-root D [--workload-digest WD]                     # B>=2
 
 Exit 0 iff `ok`: the used manifest's `manifest_digest` == the digest of its own rows == the rebuilt digest, the program digests agree and
@@ -16,12 +16,13 @@ manifest in the evidence dir has the wrong digest here even when its own `manife
 """
 from __future__ import annotations
 
-import argparse
 import json
 import os
 import sys
+from dataclasses import dataclass
 from typing import Any
 
+from verity_vllm.config import option
 from verity_vllm.query.manifest.format import manifest_digest
 
 SCHEMA = "verity-sweep/manifest-verify/v1"
@@ -71,19 +72,22 @@ def verify(used: dict[str, Any], rebuilt: dict[str, Any], *, manifest_path: str 
     return rec
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--manifest", required=True, help="the manifest the Commit used (D/manifest.json)")
-    ap.add_argument("--program", default=None, help="B=1: the Build's derive_step dir (build_request)")
-    ap.add_argument("--workload", default=None, help="B=1: the sweep workload manifest the build used")
-    ap.add_argument("--fixture", default=None, help="B>=2: the workload manifest / fixture (as build-global)")
-    ap.add_argument("--programs-root", default=None, help="B>=2: the Build dir holding the request Programs")
-    ap.add_argument("--workload-digest", default=None, help="B>=2: GP-01's FULL workload digest (as build-global)")
-    ap.add_argument("--profile", default=None)
-    ap.add_argument("--rank", type=int, default=0)
-    ap.add_argument("--ranks", type=int, default=1)
-    ap.add_argument("--out", default=None, help="write the verification record (json)")
-    a = ap.parse_args(argv)
+@dataclass(frozen=True, kw_only=True)
+class Options:
+    manifest: str = option("--manifest", help="the manifest the Commit used (D/manifest.json)")
+    program: str | None = option("--program", default=None, help="B=1: the Build's derive_step dir (build_request)")
+    workload: str | None = option("--workload", default=None, help="B=1: the sweep workload manifest the build used")
+    fixture: str | None = option("--fixture", default=None, help="B>=2: the workload manifest / fixture (as build-global)")
+    programs_root: str | None = option("--programs-root", default=None, help="B>=2: the Build dir holding the request Programs")
+    workload_digest: str | None = option("--workload-digest", default=None,
+                                         help="B>=2: GP-01's FULL workload digest (as build-global)")
+    profile: str | None = option("--profile", default=None)
+    rank: int = option("--rank", type=int, default=0)
+    ranks: int = option("--ranks", type=int, default=1)
+    out: str | None = option("--out", default=None, help="write the verification record (json)")
+
+
+def main(a: Options) -> int:
     log = lambda s: print(s, file=sys.stderr, flush=True)  # noqa: E731
     used = _load(a.manifest)
     rebuilt = rebuild(program=a.program, workload=a.workload, fixture=a.fixture, programs_root=a.programs_root, workload_digest=a.workload_digest,
@@ -96,7 +100,3 @@ def main(argv: list[str] | None = None) -> int:
     print(json.dumps(rec, indent=1))
     print(f"[manifest] VERIFY {'OK: the manifest of record' if rec['ok'] else 'FAIL: ' + rec['why']}")
     return 0 if rec["ok"] else 1
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

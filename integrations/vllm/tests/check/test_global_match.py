@@ -2301,7 +2301,7 @@ def test_cli_decomp_out_is_the_standalone_batch_decomp_document(memory, tmp_path
         import subprocess, sys as _sys
         dout2 = tmp_path / "decomp_m.json"
         env = dict(os.environ, MATCH_IMPL=impl, MATCH_WORKERS=workers, PYTHONPATH=os.pathsep.join(p for p in _sys.path if p))
-        p = subprocess.run([_sys.executable, "-m", "verity_vllm.check.match.global_match", "--global-program", str(gpp), "--oracle", str(oracle),
+        p = subprocess.run([_sys.executable, "-m", "verity_vllm.pipeline.cli", "global-match", "--global-program", str(gpp), "--oracle", str(oracle),
                             "--out", str(tmp_path / "gm_m.json"), "--decomp-out", str(dout2), "--within-step", "dag"], env=env, capture_output=True, text=True)
         assert p.returncode == 0, p.stderr[-800:]
         assert json.dumps(strip(json.loads(dout2.read_text())), sort_keys=True, default=str) == json.dumps(strip(ref), sort_keys=True, default=str)

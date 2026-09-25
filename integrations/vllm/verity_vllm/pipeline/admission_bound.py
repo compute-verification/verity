@@ -26,19 +26,20 @@ removes bytes; R17-1 LAG is declared -- pass the Program's lag); a prompt longer
 widths are those `step_bound_bytes` measured (a sizing record that predates the per-layer RoPE count is corrected here by name).
 The multiplier for the merkle levels (x1.25) is the one the F-dA-15 warning always used.
 
-CLI (torch-free, laptop):  python -m verity_vllm.pipeline.admission_bound --workload <manifest.json> --sizing <arena_sizing_*.json>
+CLI (torch-free, laptop):  verity-vllm admission-bound --workload <manifest.json> --sizing <arena_sizing_*.json>
                                   [--cap-bytes N] [--lag 1] [--observed <steps.jsonl>]
 """
 
 from __future__ import annotations
 
-import argparse
 import json
 import math
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from verity_vllm.acquire.sources.hidden_source import CHUNK_WORDS, fa2_kblock_n, fa3_tile, mat_total_words
+from verity_vllm.config import option
 
 SCHEMA = "verity-sweep/admission/f-da-15/v1"
 LEVELS_FACTOR = 1.25          # raw x1.25 for the merkle levels pinned beside the raw bytes (the factor of the original F-dA-15 warning)
@@ -256,19 +257,28 @@ def _cgroup_cap() -> int | None:
     return host_cap()[0]
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--workload", required=True, help="verity-sweep/workload/v1 manifest (requests[] with prompt_len, max_tokens, arrive_step)")
-    ap.add_argument("--sizing", required=True, help="arena_sizing_*.json of a Commit on the same model (per-module widths + geometry)")
-    ap.add_argument("--cap-bytes", type=int, default=None, help="container memory limit (default: this host's cgroup, if any)")
-    ap.add_argument("--lag", type=int, default=1, help="post-EOS rows per request (R17-1 declared LAG; default 1 = async scheduling)")
-    ap.add_argument("--retain", default="host", choices=["host", "device", "none", "sample"])
-    ap.add_argument("--per-step-blocks", action="store_true", help="the collector stages per-step blocks (--window-mb 0); default: windowed (row_pod's 256 MiB ring)")
-    ap.add_argument("--bounded-staging", action="store_true", help="the run uses --bounded-staging (no hedge copies; retain host keeps the non-excluded families)")
-    ap.add_argument("--retain-exclude", default=None, help="the run's --retain-exclude families (e.g. hidden_m1 = fa2_hidden_m1,fa3_hidden_m1)")
-    ap.add_argument("--observed", default=None, help="a record's commit/steps.jsonl: report per-step soundness of the prediction")
-    ap.add_argument("--json", action="store_true")
-    a = ap.parse_args(argv)
+@dataclass(frozen=True, kw_only=True)
+class Options:
+    workload: str = option("--workload",
+                           help="verity-sweep/workload/v1 manifest (requests[] with prompt_len, max_tokens, arrive_step)")
+    sizing: str = option("--sizing", help="arena_sizing_*.json of a Commit on the same model (per-module widths + geometry)")
+    cap_bytes: int | None = option("--cap-bytes", type=int, default=None,
+                                   help="container memory limit (default: this host's cgroup, if any)")
+    lag: int = option("--lag", type=int, default=1,
+                      help="post-EOS rows per request (R17-1 declared LAG; default 1 = async scheduling)")
+    retain: str = option("--retain", default="host", choices=["host", "device", "none", "sample"])
+    per_step_blocks: bool = option("--per-step-blocks", default=False, action="store_true",
+                                   help="the collector stages per-step blocks (--window-mb 0); default: windowed (row_pod's 256 MiB ring)")
+    bounded_staging: bool = option("--bounded-staging", default=False, action="store_true",
+                                   help="the run uses --bounded-staging (no hedge copies; retain host keeps the non-excluded families)")
+    retain_exclude: str | None = option("--retain-exclude", default=None,
+                                        help="the run's --retain-exclude families (e.g. hidden_m1 = fa2_hidden_m1,fa3_hidden_m1)")
+    observed: str | None = option("--observed", default=None,
+                                  help="a record's commit/steps.jsonl: report per-step soundness of the prediction")
+    json: bool = option("--json", default=False, action="store_true")
+
+
+def main(a: Options) -> int:
     wl = json.loads(Path(a.workload).read_text())
     sizing = json.loads(Path(a.sizing).read_text())
     mnbt = (wl.get("engine_args_required") or {}).get("max_num_batched_tokens") or (sizing.get("envelope") or {}).get("max_num_batched_tokens")
@@ -308,7 +318,3 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  observed check: {o['steps_observed']} steps, under-predicted {o['steps_under_predicted']}, pred/obs total {o['ratio_pred_over_obs']:.3f}, "
               f"worst obs/pred {o['worst_obs_over_pred']:.3f} at step {o['worst_step']} -> {'SOUND' if o['sound'] else 'UNSOUND'}")
     return 0 if rec["admitted"] else 3
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

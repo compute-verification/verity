@@ -39,7 +39,7 @@ def _env(**extra: str) -> dict[str, str]:
 
 
 def _run(*args: str, cwd: Path = INTEGRATION, **env: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run([PY, "-m", "verity_vllm.pipeline.source_identity", *args], cwd=cwd, env=_env(PYTHONPATH=PP, **env),
+    return subprocess.run([PY, "-m", "verity_vllm.pipeline.cli", "source-identity", *args], cwd=cwd, env=_env(PYTHONPATH=PP, **env),
                           capture_output=True, text=True)
 
 
@@ -130,7 +130,7 @@ def test_negative_mixed_tree_copy_of_verity_vllm_elsewhere_is_refused_by_name(tm
     shutil.copytree(INTEGRATION / "verity_vllm", elsewhere / "verity_vllm", ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
     (elsewhere / "EXPORT.json").write_text(json.dumps({"commit": "c0ffee" * 6 + "c0ff", "branch": "stale-copy", "dirty_patch_sha256": "0" * 64}))
     out = tmp_path / "source_identity.json"
-    r = subprocess.run([PY, "-m", "verity_vllm.pipeline.source_identity", "--tree", str(INTEGRATION), "--out", str(out)], cwd=tmp_path,
+    r = subprocess.run([PY, "-m", "verity_vllm.pipeline.cli", "source-identity", "--tree", str(INTEGRATION), "--out", str(out)], cwd=tmp_path,
                        env=_env(PYTHONPATH=f"{elsewhere}{os.pathsep}{PP}"), capture_output=True, text=True)
     assert r.returncode == 3, (r.stdout, r.stderr)
     assert r.stderr.startswith(gsid.FAIL_CLASS) and "verity_vllm:" in r.stderr and str(elsewhere) in r.stderr, r.stderr
@@ -250,7 +250,7 @@ def test_shipped_tree_takes_its_sha_from_research_source_sha(tmp_path):
     t = _shipped_tree(tmp_path)
     integ = t / "integrations" / "vllm"
     out = tmp_path / "sid.json"
-    r = subprocess.run([PY, "-m", "verity_vllm.pipeline.source_identity", "--tree", str(integ), "--out", str(out)], cwd=integ,
+    r = subprocess.run([PY, "-m", "verity_vllm.pipeline.cli", "source-identity", "--tree", str(integ), "--out", str(out)], cwd=integ,
                        env=_env(PYTHONPATH=_shipped_pp(t), RESEARCH_SOURCE_SHA="f" * 40), capture_output=True, text=True)
     assert r.returncode == 0, (r.stdout, r.stderr)
     doc = json.loads(out.read_text())
@@ -261,13 +261,13 @@ def test_shipped_tree_takes_its_sha_from_research_source_sha(tmp_path):
     assert doc["packages"]["hidden_gpu"]["resolved_path"] is None      # optional: not shipped in the stub, not a mismatch
     assert "f" * 9 in r.stdout and doc["RESEARCH_SOURCE_SHA"] == "f" * 40
     # --sha wins over the environment and is checked against it: a differing env sha is not a package mismatch (env is only a fallback)
-    r = subprocess.run([PY, "-m", "verity_vllm.pipeline.source_identity", "--tree", str(integ), "--sha", "e" * 40, "--out", str(out)], cwd=integ,
+    r = subprocess.run([PY, "-m", "verity_vllm.pipeline.cli", "source-identity", "--tree", str(integ), "--sha", "e" * 40, "--out", str(out)], cwd=integ,
                        env=_env(PYTHONPATH=_shipped_pp(t)), capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
     doc = json.loads(out.read_text())
     assert doc["packages"]["verity"]["git_sha"] == "e" * 40 and doc["packages"]["verity"]["git_sha_source"] == "--sha"
     # no declaration at all: ok, sha None, source says why
-    r = subprocess.run([PY, "-m", "verity_vllm.pipeline.source_identity", "--tree", str(integ), "--out", str(out)], cwd=integ,
+    r = subprocess.run([PY, "-m", "verity_vllm.pipeline.cli", "source-identity", "--tree", str(integ), "--out", str(out)], cwd=integ,
                        env=_env(PYTHONPATH=_shipped_pp(t)), capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
     doc = json.loads(out.read_text())
@@ -280,7 +280,7 @@ def test_shipped_tree_still_refuses_a_foreign_package(tmp_path):
     t = _shipped_tree(tmp_path)
     integ = t / "integrations" / "vllm"
     pp = os.pathsep.join([str(REPO / "packages" / "verity" / "src"), _shipped_pp(t)])
-    r = subprocess.run([PY, "-m", "verity_vllm.pipeline.source_identity", "--tree", str(integ)], cwd=integ,
+    r = subprocess.run([PY, "-m", "verity_vllm.pipeline.cli", "source-identity", "--tree", str(integ)], cwd=integ,
                        env=_env(PYTHONPATH=pp, RESEARCH_SOURCE_SHA="f" * 40), capture_output=True, text=True)
     assert r.returncode == 3 and r.stderr.startswith(gsid.FAIL_CLASS) and "verity:" in r.stderr and os.path.realpath(REPO) in r.stderr, r.stderr
 

@@ -93,14 +93,14 @@ def test_cli_fails_by_name_with_rc_3_and_writes_the_record(tmp_path):
     out = tmp_path / "target_family.json"
     env = {**os.environ, "PYTHONPATH": f"{TREE}:{TREE / 'vllm-poc'}"}
     env.pop("TARGET_FAMILY_WAIVER", None)
-    r = subprocess.run([sys.executable, "-m", "verity_vllm.target_family", "--row", ROW_L40S, "--stages", "build", "--no-device",
+    r = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "target-family", "--row", ROW_L40S, "--stages", "build", "--no-device",
                         "--build-summary", str(bs), "--out", str(out)], capture_output=True, text=True, env=env, cwd=TREE)
     assert r.returncode == 3, r.stderr
     assert r.stderr.startswith("PRECHECK_FAIL_TARGET_FAMILY:") and "Build target 9.0 != row family 8.9" in r.stderr
     rec = json.loads(out.read_text())
     assert rec["schema"] == "verity-sweep/target-family/v1" and rec["fail_class"] == "PRECHECK_FAIL_TARGET_FAMILY"
     # the waiver from the environment (canary.sh exports TARGET_FAMILY_WAIVER) turns it into a named WAIVED, rc 0
-    r2 = subprocess.run([sys.executable, "-m", "verity_vllm.target_family", "--row", ROW_L40S, "--stages", "build", "--no-device",
+    r2 = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "target-family", "--row", ROW_L40S, "--stages", "build", "--no-device",
                          "--build-summary", str(bs), "--out", str(out)], capture_output=True, text=True, env={**env, "TARGET_FAMILY_WAIVER": "canary t"}, cwd=TREE)
     assert r2.returncode == 0 and r2.stdout.startswith("TARGET-FAMILY-WAIVED (canary t)")
     assert json.loads(out.read_text())["verdict"] == "WAIVED"
@@ -120,7 +120,7 @@ def test_row_pod_match_argv_carries_the_explicit_snapshot_cap_only_when_set():
     """[r18-int-2; cheap M-0082, F-r18-cheap-2] MATCH_SNAP_MAX_BYTES -> --snapshot-max-bytes N; unset -> byte-identical argv to int-1."""
     probe = r'''
     PY312=python3; ROLE=B0; WL=w.json; D=/tmp/d; CK=/tmp/ck; B=1; SNAP_DEF=0,1; SKIP=x; GPU_UTIL=0.5; PY=python3
-    CMD_M=($PY312 -m verity_vllm.pipeline.match --case "$ROLE" --workload "$WL" --out "$D/match" --checkpoint-dir "$CK" --phase all
+    CMD_M=(verity-vllm match --case "$ROLE" --workload "$WL" --out "$D/match" --checkpoint-dir "$CK" --phase all
          --python-gpu "$PY" --python-cpu "$PY312" --max-num-seqs "$B" --snapshot-steps "${MATCH_SNAP_STEPS:-$SNAP_DEF}"
          ${MATCH_SNAP_MAX_BYTES:+--snapshot-max-bytes "$MATCH_SNAP_MAX_BYTES"} --skip "$SKIP"
          --engine-arg "gpu_memory_utilization=$GPU_UTIL" --cards-dir "$D/match/cards")
