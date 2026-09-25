@@ -894,7 +894,9 @@ class TP2CaptureWorkerExtension:
         match_oracle = None
         if st.get("match_capture_dir") and st.get("tps") is not None:
             try:
-                match_oracle = st["tps"].compare_match_oracle(st["match_capture_dir"])
+                from verity_vllm.check import oracle_compare as OC
+
+                match_oracle = st["tps"].compare_match_oracle(st["match_capture_dir"], OC.OpenedReader(com, rc))
             except Exception as e:  # noqa: BLE001
                 match_oracle = {"rank": st["rank"], "verdict": "FAIL", "error": repr(e)[:300]}
         elif st.get("match_capture_dir"):
@@ -944,9 +946,11 @@ class TP2CaptureWorkerExtension:
             return None
         import numpy as np
 
+        from verity_vllm.check import oracle_compare as OC
         from verity_vllm.tp.partial_source import _committed
 
         com, rank = st["com"], int(st["rank"])
+        rd = OC.OpenedReader(com, rc)
         step_rows = getattr(com, "step_rows", None) or {}
         layouts = getattr(com, "_layouts", None) or {}
         seen: dict[str, int] = {}
@@ -960,7 +964,11 @@ class TP2CaptureWorkerExtension:
             if m is None or not rows:
                 missing.append({"step": s, "why": ("no committed sampled ids" if m is None else "no request rows recorded")})
                 continue
-            b = _committed(com, s, m)
+            try:
+                b = _committed(rd, s, m)
+            except OC.OpeningNotVerified as e:
+                mismatches.append({"step": s, "why": f"opened value not verified: {e}"[:200]})
+                continue
             if b is None:
                 missing.append({"step": s, "why": "committed bytes not retained (VERITY_RETAIN)"})
                 continue
@@ -997,7 +1005,8 @@ class TP2CaptureWorkerExtension:
         if not ok:
             if n_mis:
                 f = mismatches[0]
-                why = (f"rank {rank}: {n_mis} of {checked} committed sampled rows disagree with the Match record (first: step {f.get('step')} row {f.get('row')} "
+                why = (f"rank {rank}: step {f.get('step')}: {f['why']}" if "why" in f else
+                       f"rank {rank}: {n_mis} of {checked} committed sampled rows disagree with the Match record (first: step {f.get('step')} row {f.get('row')} "
                        f"labelled {f.get('request')} k={f.get('k')}: committed {f.get('committed')} != match {f.get('match_record')})")
             elif missing:
                 why = f"rank {rank}: {len(missing)} steps without attributable sampled ids (first: {missing[0]})"
@@ -1008,7 +1017,7 @@ class TP2CaptureWorkerExtension:
         return {"ok": ok, "rank": rank, "reference": "tp2_match capture arm tokens.json (per request generated ids; independent instrumented run)",
                 "identity": "runner.sampler/sampled_token_ids row j of step s -> request of row j in this rank's request->rows map (step_rows) -> k-th sampled token of that request",
                 "steps_checked": steps_checked, "rows_checked": checked, "requests": lens, "mismatches_n": n_mis, "mismatches": mismatches[:12],
-                "missing_steps": missing[:8], "swap_requests_negative": st.get("swap_requests"), "why": why}
+                "missing_steps": missing[:8], "swap_requests_negative": st.get("swap_requests"), "value_source": rd.record(), "why": why}
 
     def _tp2_binding(self, rc: Any) -> dict[str, Any] | None:
         """[R14 TP-03 x BIND-01] THIS rank's binding map (bind's `verity_vllm.commit.binding`: identity -> commitment location, fixed at
@@ -1183,7 +1192,7 @@ class TP2CaptureWorkerExtension:
                 st["xrank_unreplayable_sites"] = {f_: sorted(v_) for f_, v_ in xs.items()}
             except Exception as e:  # noqa: BLE001
                 st["xrank_unreplayable_sites"] = {"error": repr(e)[:200]}
-            rd = OC.committed_reader(com)
+            rd = OC.OpenedReader(com, rc)
             # [O5] the shards the relations consume must be the COMMITTED shards: re-register the live parameters now vs the run's weights root
             try:
                 w_saved = getattr(com, "weights", None)
@@ -1227,6 +1236,7 @@ class TP2CaptureWorkerExtension:
                      "steps": list(range(arr[str(r["request_id"])], arr[str(r["request_id"])] + int(r.get("max_tokens") or 1)))} for r in reqs]
             lk = SR.boundary_linkage(bmap, rd, wreq, embed_op_path=pi0.embed_op_path())
             lk["rank"] = rank
+            sr["value_source"] = dict(rd.record(), forked_children=sr.pop("value_reads_in_children", None))
         except Exception as e:  # noqa: BLE001  -- fail closed: an unrunnable replay is 'not evaluated', never PASS
             import traceback
             sr = {"schema": "verity-sweep/sampled-replay/v1", "method": "sampled-exact-replay", "result": None, "grade": "not-evaluated", "rank": rank,
@@ -1239,8 +1249,9 @@ class TP2CaptureWorkerExtension:
         return dict(repo_modules_loaded(), rank=int(self._tp2_commit["rank"]) if getattr(self, "_tp2_commit", None) else None)
 
     def tp2_commit_xrank_dump(self, *, out_dir: str, seed_hex: str, pair: int, per_stratum: int = 2, max_rows: int = 16) -> dict[str, Any]:
-        """[R16 tp TP-12, rev F-r16-18] THIS rank's picks for the cross-rank collective-output pass, from the COMMITTED bytes (the retained host
-        copy / GPU block of every member, the same rule as the value check and the sampled replay): per pick the rank's partial rows and the
+        """[R16 tp TP-12, rev F-r16-18] THIS rank's picks for the cross-rank collective-output pass, from the COMMITTED bytes (every member opened
+        and verified against this rank's run root, the same reader as the value check and the sampled replay; a member that does not verify
+        is a pick without bytes, named -> the driver's check FAILs it): per pick the rank's partial rows and the
         rows of the received collective output as this rank committed it (`<site>/0` dense module output, `<site>/out` MoE block).  Picks are
         drawn identically on every rank from the pair's combined root (fixed after commitment) -> xrank_pair<k>_rank<r>.pt; the driver pairs
         the ranks and evaluates the definition (xrank_collectives.check_picks)."""
@@ -1248,6 +1259,7 @@ class TP2CaptureWorkerExtension:
 
         import torch
 
+        from verity_vllm.check import oracle_compare as OC
         from verity_vllm.tp import xrank_collectives as XC
         from verity_vllm.tp.partial_source import _committed
 
@@ -1257,9 +1269,18 @@ class TP2CaptureWorkerExtension:
         layouts = {int(s): [(m.name, tuple(m.shape)) for m in ms] for s, ms in getattr(com, "_layouts", {}).items()}
         plan = XC.pick_strata(layouts, rank, bytes.fromhex(seed_hex), per_stratum=int(per_stratum), max_rows=int(max_rows), world=int(st["world"]))
         picks, missing, nbytes = [], 0, 0
+        rd = OC.OpenedReader(com, st["rc"]) if st.get("rc") is not None else None
+        unverified: dict[tuple[int, str], str] = {}
 
         def tensor_of(step: int, meta) -> Any:
-            b = _committed(com, step, meta)
+            if rd is None:
+                unverified[(step, meta.name)] = "no run commitment on this rank (not finalized)"
+                return None
+            try:
+                b = _committed(rd, step, meta)
+            except OC.OpeningNotVerified as e:
+                unverified[(step, meta.name)] = f"opened value not verified: {e}"[:200]
+                return None
             if b is None:
                 return None
             dt = getattr(torch, str(meta.dtype).replace("torch.", ""))
@@ -1276,9 +1297,11 @@ class TP2CaptureWorkerExtension:
             recv = tensor_of(step, rm) if rm is not None else None
             why = None
             if part is None or recv is None:
-                why = ("partial " + ("not in this step's layout" if pm is None else "bytes not retained") if part is None else "") + \
+                def _gone(meta) -> str:
+                    return unverified.get((step, meta.name), "bytes not retained")
+                why = ("partial " + ("not in this step's layout" if pm is None else _gone(pm)) if part is None else "") + \
                       ("; " if part is None and recv is None else "") + \
-                      (("received output " + ("not committed under any of " + "/".join(pk["recv_candidates"]) if rm is None else "bytes not retained")) if recv is None else "")
+                      (("received output " + ("not committed under any of " + "/".join(pk["recv_candidates"]) if rm is None else _gone(rm))) if recv is None else "")
                 missing += 1
             else:
                 if part.dim() >= 2 and recv.dim() >= 2 and part.shape[0] == recv.shape[0] == pk["rows_total"]:
@@ -1296,7 +1319,8 @@ class TP2CaptureWorkerExtension:
                     mod = dict(st["eng"].model.named_modules()).get(pk["site"])
                     si = getattr(mod, "shard_indices", None)
                     if ids_t is None or mod is None or si is None or part is None:
-                        emb = {"ok": None, "why": ("no committed ids member <site>/in" if ids_t is None else "no VocabParallelEmbedding shard_indices on the module" if si is None else "partial not committed")}
+                        emb = {"ok": None, "why": (((unverified.get((step, im.name)) if im is not None else None) or "no committed ids member <site>/in") if ids_t is None
+                                                   else "no VocabParallelEmbedding shard_indices on the module" if si is None else "partial not committed")}
                     else:
                         lo, hi = int(si.org_vocab_start_index), int(si.org_vocab_end_index)
                         idx = ids_t.reshape(-1)
@@ -1316,6 +1340,7 @@ class TP2CaptureWorkerExtension:
         fn = Path(out_dir) / f"xrank_pair{int(pair)}_rank{rank}.pt"
         torch.save(rec, fn)
         return {"rank": rank, "file": str(fn), "picks": len(picks), "strata": len(plan["strata"]), "missing": missing, "bytes": nbytes,
+                "value_source": rd.record() if rd is not None else {"source": "opened", "reads": 0, "why": "no run commitment on this rank"},
                 "unreplayable_sites": st.get("xrank_unreplayable_sites"), "strata_sites": sorted({v["site"] for v in plan["strata"].values()}),
                 "families": sorted({p["family"] for p in picks}), "flipped_collective_inputs": int(getattr(st.get("tps"), "flipped", 0) or 0),
                 "wall_s": round(_t.perf_counter() - t0, 3)}
@@ -1424,8 +1449,10 @@ class TP2CaptureWorkerExtension:
         return {"rank": st["rank"], "installed": True, "value_checker": True, "tp_reference_tap": tps is not None}
 
     def tp2_commit_value_check(self) -> dict[str, Any]:
-        """After the value-check run: finalize, then committed bytes vs (T) reference clones / (R) re-execution, for the module outputs
-        (ValueChecker) and for THIS rank's partials (TPPartialSource.compare).  PASS only if both pass on this rank."""
+        """After the value-check run: finalize, then committed bytes (opened and verified against this run's root) vs (T) reference clones /
+        (R) re-execution, for the module outputs (ValueChecker) and for THIS rank's partials (TPPartialSource.compare).  PASS only if both
+        pass on this rank."""
+        from verity_vllm.check import oracle_compare as OC
         from verity_vllm.harness.commit_delta import assert_pristine
 
         st = self._tp2_commit
@@ -1433,15 +1460,15 @@ class TP2CaptureWorkerExtension:
         rc = com.finalize()
         res: dict[str, Any] = {"rank": st["rank"], "run_root": rc.run_root.hex()}
         try:
-            res["modules"] = vc.compare() if vc is not None else {"verdict": "NOT_RUN"}
+            res["modules"] = vc.compare(OC.OpenedReader(com, rc)) if vc is not None else {"verdict": "NOT_RUN"}
         except Exception as e:  # noqa: BLE001
             res["modules"] = {"verdict": "FAIL", "error": repr(e)[:300]}
         try:
-            res["tp_partials"] = tps.compare() if tps is not None else {"verdict": "NOT_RUN", "why": "no tp partial source"}
+            res["tp_partials"] = tps.compare(OC.OpenedReader(com, rc)) if tps is not None else {"verdict": "NOT_RUN", "why": "no tp partial source"}
         except Exception as e:  # noqa: BLE001
             res["tp_partials"] = {"verdict": "FAIL", "error": repr(e)[:300]}
         try:                                   # [R15 moe, rev-cb M-0424 T6-4 / report M-0435] while the retained bytes still exist (before reset)
-            res["t6_4"] = self._t6_4_check(com)
+            res["t6_4"] = self._t6_4_check(com, rc)
             # [report M-0478] the bind-time-clone count for the SAME /out members: committed /out != TPPartialSource's _bytes(y) at bind
             # (compare()'s by_member['out']: tensors - tap_equal); any nonzero = late read whatever the next-norm/0 comparison says
             tpp = res.get("tp_partials") or {}
@@ -1473,53 +1500,11 @@ class TP2CaptureWorkerExtension:
         res["oracle"] = "hook-time reference clone + re-executed relation (same attempt, same rank, independent of the collector's bytes); not the Match fold"
         return _jsonable(res)
 
-    def _t6_4_check(self, com: Any) -> dict[str, Any]:
-        """[rev-cb M-0424 T6-4, report M-0435] late-read detector for the fused-MoE received all-reduce output: the committed bytes of
-        `model.layers.<L>.mlp.experts/out` vs the committed `model.layers.<L+1>.input_layernorm/0` (last layer: `model.norm/0`) in the
-        same step, for EVERY step and layer of the last finalized run.  The /out is staged (a held reference, copied at the next gather
-        flush); vLLM's fused_add_rms_norm writes the next norm's output INTO that tensor in place, so a late read commits bytes equal
-        to the next norm's /0.  Any equal pair = late read (result False, count named); result True needs > 0 pairs compared and 0
-        equal / 0 missing."""
-        import hashlib
-        import re
+    def _t6_4_check(self, com: Any, rc: Any) -> dict[str, Any]:
+        """The fused-MoE late-read detector over the last finalized run on this rank (`partial_source.late_read_check`)."""
+        from verity_vllm.tp.partial_source import late_read_check
 
-        from verity_vllm.tp.partial_source import _committed
-
-        layouts = getattr(com, "_layouts", {}) or {}
-        pairs: list[dict] = []
-        equal = missing = compared = 0
-        steps = 0
-        for step in sorted(layouts):
-            metas = {m.name: m for m in layouts[step]}
-            outs = sorted((int(re.search(r"layers\.(\d+)\.", n).group(1)), n) for n in metas if n.endswith(".mlp.experts/out"))
-            if not outs:
-                continue
-            steps += 1
-            last = max(L for L, _n in outs)
-            for L, n in outs:
-                nxt = n.rsplit(".layers.", 1)[0] + (f".layers.{L + 1}.input_layernorm/0" if L < last else ".norm/0")
-                a = _committed(com, step, metas.get(n))
-                b = _committed(com, step, metas.get(nxt))
-                if a is None or b is None:
-                    missing += 1
-                    if len(pairs) < 240:
-                        pairs.append({"step": step, "layer": L, "out": n, "next_norm": nxt, "missing": [x for x, v in (("out", a), ("next_norm", b)) if v is None]})
-                    continue
-                compared += 1
-                eq = a == b
-                equal += int(eq)
-                if eq or step < 2 or len(pairs) < 96:
-                    pairs.append({"step": step, "layer": L, "out": n, "next_norm": nxt, "out_sha": hashlib.sha256(a).hexdigest()[:16],
-                                  "next_norm_sha": hashlib.sha256(b).hexdigest()[:16], "nbytes": len(a), "equal": eq})
-        # [tp fold of moe cf29c7e72] a dense TP row (Llama: no fused-MoE `/out` member in any step) has nothing for this detector to
-        # compare -- record NOT APPLICABLE (result None, applicable False) rather than a False that reads as a detected late read;
-        # on a MoE row the rule is moe's: True only with > 0 pairs compared, 0 equal, 0 missing
-        applicable = steps > 0
-        return {"schema": "verity/commit-integ/t6_4-check/v1", "rank": int(self._tp2_commit["rank"]), "applicable": applicable,
-                "result": (bool(compared > 0 and equal == 0 and missing == 0) if applicable else None),
-                "steps": steps, "layers_compared": compared, "equal_pairs": equal, "missing_pairs": missing, "pairs": pairs[:240],
-                "why": (None if applicable else "no fused-MoE received all-reduce member (*.mlp.experts/out) in any committed step: dense TP row, detector not applicable"),
-                "rule": "committed <L>.mlp.experts/out == committed <L+1>.input_layernorm/0 (last: model.norm/0) in the same step => late read"}
+        return late_read_check(com, rc, int(self._tp2_commit["rank"]))
 
     def tp2_commit_reset(self) -> dict[str, Any]:
         st = self._tp2_commit

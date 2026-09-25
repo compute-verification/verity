@@ -24,6 +24,7 @@ import os
 
 import numpy as np
 
+from tests.check.opened import commit_host_steps
 from verity_vllm.check import oracle_compare as OC
 
 U0 = "aaaaaaaa-0000-0000-0000-000000000000"
@@ -73,39 +74,22 @@ def make_match(tmp: str) -> str:
     return d
 
 
-class _Host:
-    def __init__(self, a: np.ndarray):
-        self._a = np.ascontiguousarray(a)
-
-    def numpy(self) -> np.ndarray:
-        return self._a
-
-
-class _Meta:
-    def __init__(self, name: str, ordinal: int, host: np.ndarray):
-        self.name, self.ordinal, self.dev_off, self.host = name, ordinal, 0, _Host(host)
-
-
-class _Com:
-    def __init__(self, metas):
-        self._layouts, self._gpu_blocks = {0: metas}, {}
-
-
 def make_committed(layer_of_invocation=None):
     """The collector's shape: per invocation k one meta per member under the SAME canonical name `ROT/<member>`; binding map identities under
-    the canonical op_path with invocation k.  `layer_of_invocation(k)` = whose words meta k holds (default: its own layer's -- the honest record)."""
+    the canonical op_path with invocation k.  `layer_of_invocation(k)` = whose words meta k holds (default: its own layer's -- the honest record).
+    Returns (the production OpenedReader over those tensors, committed on the per-tensor host path; the binding map)."""
     who = layer_of_invocation or (lambda k: k)
-    metas, entries = [], []
+    tensors, entries = [], []
     ordinal = 0
     for k in range(N_LAYERS):
         for member in ("0", "1"):
-            metas.append(_Meta(f"{ROT}/{member}", ordinal, _rows(who(k), member)))
+            tensors.append((f"{ROT}/{member}", _rows(who(k), member).tobytes()))
             entries.append({"identity": {"program_digest": "p" * 64, "request_id": "r0", "step": 0, "invocation": k, "op_path": ROT, "output_member": member,
                                          "element_range": [0, POS * H], "rank": 0},
                             "kind": "leaf", "name": f"{ROT}/{member}", "element_offset": 0, "tensor_ordinal": ordinal, "stream_offset": ordinal * POS * H * 2,
                             "encoding": {"dtype": "bfloat16", "shape": [POS, H]}})
             ordinal += 1
-    return _Com(metas), {"entries": entries}
+    return OC.OpenedReader(*commit_host_steps({0: tensors})), {"entries": entries}
 
 
 ALIASES = {f"model.layers.{L}.self_attn.rotary_emb": [ROT, L] for L in range(1, N_LAYERS)}
@@ -113,8 +97,8 @@ ALIASES = {f"model.layers.{L}.self_attn.rotary_emb": [ROT, L] for L in range(1, 
 
 def test_the_oracle_side_reads_a_shared_invocation_at_its_per_layer_path_and_the_honest_record_is_equal(tmp_path):
     d = make_match(str(tmp_path))
-    com, bmap = make_committed()
-    res = OC.oracle_compare(OC.MatchOracle(d), bmap, OC.committed_reader(com), aliases=ALIASES)
+    rd, bmap = make_committed()
+    res = OC.oracle_compare(OC.MatchOracle(d), bmap, rd, aliases=ALIASES)
     assert res["mismatch_n"] == 0 and res["compared"] == N_LAYERS * 2 and res["equal"] == N_LAYERS * 2, res
     assert res["shared_invocations"]["compared_at_program_op"] == (N_LAYERS - 1) * 2 and res["shared_invocations"]["not_compared"] == 0 and res["not_compared"] == {}
     assert res["result"] is True and res["complete"] and res["grade"] == "complete"
@@ -124,8 +108,8 @@ def test_without_the_alias_table_an_aliased_invocation_is_not_compared_by_name_n
     """The pre-fix shape: no aliases -> the canonical path names layer 0's fold instances.  Invocation 0 compares (equal); invocations 1.. are
     NOT compared, by name -- result None (partial), never a false equal, never a false mismatch."""
     d = make_match(str(tmp_path))
-    com, bmap = make_committed()
-    res = OC.oracle_compare(OC.MatchOracle(d), bmap, OC.committed_reader(com))
+    rd, bmap = make_committed()
+    res = OC.oracle_compare(OC.MatchOracle(d), bmap, rd)
     assert res["mismatch_n"] == 0 and res["compared"] == 2 and res["equal"] == 2 and res["result"] is None and res["grade"] == "partial", res
     assert list(res["not_compared"].values()) == [(N_LAYERS - 1) * 2] and "shared-module invocation >= 1 with no Program path in the alias table" in next(iter(res["not_compared"]))
     assert res["shared_invocations"] == {"compared_at_program_op": 0, "not_compared": (N_LAYERS - 1) * 2, "note": res["shared_invocations"]["note"]}
@@ -135,21 +119,21 @@ def test_the_false_equal_of_int5_int6_int7_is_gone_a_layer_zero_read_for_every_i
     """The record that fooled the compare: committed words of invocation k = layer 0's (the by-name reader).  Against the per-layer oracle every
     invocation >= 1 MISMATCHES by name (first element 0); invocation 0 is equal.  On the real record: 1320 = 15 layers x 44 pairs x 2 members."""
     d = make_match(str(tmp_path))
-    com, bmap = make_committed(layer_of_invocation=lambda k: 0)
-    res = OC.oracle_compare(OC.MatchOracle(d), bmap, OC.committed_reader(com), aliases=ALIASES)
+    rd, bmap = make_committed(layer_of_invocation=lambda k: 0)
+    res = OC.oracle_compare(OC.MatchOracle(d), bmap, rd, aliases=ALIASES)
     assert res["result"] is False and res["mismatch_n"] == (N_LAYERS - 1) * 2 and res["equal"] == 2, res
     assert all(m["identity"]["invocation"] >= 1 and m["identity"]["op_path"] == ROT and m["why"].startswith("bytes differ (first element 0") for m in res["mismatch"])
     assert res["why"].startswith(f"C2 oracle mismatch: {(N_LAYERS - 1) * 2} identities differ from the Match oracle (first: step 0 {ROT}/0 inv 1 req r0")
     # ... and the honest record whose layer-2 meta holds layer 1's words: exactly that invocation, named
-    com2, bmap2 = make_committed(layer_of_invocation=lambda k: 1 if k == 2 else k)
-    res2 = OC.oracle_compare(OC.MatchOracle(d), bmap2, OC.committed_reader(com2), aliases=ALIASES)
+    rd2, bmap2 = make_committed(layer_of_invocation=lambda k: 1 if k == 2 else k)
+    res2 = OC.oracle_compare(OC.MatchOracle(d), bmap2, rd2, aliases=ALIASES)
     assert res2["mismatch_n"] == 2 and {m["identity"]["invocation"] for m in res2["mismatch"]} == {2}
 
 
 def test_a_malformed_alias_table_is_no_table_the_invocations_are_not_compared_by_name(tmp_path):
     """moe's `alias_inverse` shape test, as behaviour on the train: a table that names nothing usable == no table (fail closed, by name)."""
     d = make_match(str(tmp_path))
-    com, bmap = make_committed()
+    rd, bmap = make_committed()
     for bad in (None, {}, {"model.layers.9.self_attn.rotary_emb": [ROT, 9]}):
-        res = OC.oracle_compare(OC.MatchOracle(d), bmap, OC.committed_reader(com), aliases=bad)
+        res = OC.oracle_compare(OC.MatchOracle(d), bmap, rd, aliases=bad)
         assert res["compared"] == 2 and res["result"] is None and res["shared_invocations"]["not_compared"] == (N_LAYERS - 1) * 2, (bad, res["not_compared"])

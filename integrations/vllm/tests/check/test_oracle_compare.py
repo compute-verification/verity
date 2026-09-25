@@ -621,16 +621,17 @@ def _shared_rotary_match(tmp: str, n_layers: int = 3):
 
 def _shared_rotary_bmap(vals: dict, *, tensor_bytes: dict | None = None):
     """The collector's shape: every invocation is a meta NAMED `<ROT>/0` (ordinal 10+k), bound under the canonical path at invocation k;
-    the reader is the PRODUCTION committed_reader over those metas (host path)."""
-    from types import SimpleNamespace
+    the reader is the PRODUCTION OpenedReader over those metas, committed on the per-tensor host path (ordinals 0-9: other tensors)."""
+    from tests.check.opened import commit_host_steps
     n = ROWS[U0]
-    entries, metas = [], []
+    entries = []
+    tensors = [(f"model.other.{i}", b"\0" * 4) for i in range(10)]
     for k in vals:
         entries.append({"identity": {"program_digest": "p" * 64, "request_id": "r0", "step": 0, "invocation": k, "op_path": ROT, "output_member": "0",
                                      "element_range": [0, n * H], "rank": 0, "family": "instance_outputs"}, "kind": "leaf", "name": f"{ROT}/0", "tensor_ordinal": 10 + k,
                         "element_offset": 0, "encoding": {"dtype": "bfloat16", "shape": [n, H]}})
-        metas.append(SimpleNamespace(name=f"{ROT}/0", ordinal=10 + k, dev_off=0, host=np.frombuffer((tensor_bytes or vals)[k], dtype=np.uint8).copy()))
-    rd = OC.committed_reader(SimpleNamespace(_layouts={0: metas}, _gpu_blocks={}))
+        tensors.append((f"{ROT}/0", (tensor_bytes or vals)[k], 10 + k))
+    rd = OC.OpenedReader(*commit_host_steps({0: tensors}))
     aliases = {f"model.layers.{k}.self_attn.rotary_emb": [ROT, k] for k in vals if k > 0}
     return {"entries": entries}, rd, aliases
 
