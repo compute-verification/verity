@@ -1,6 +1,6 @@
 """The tables of the approved spec (``kb/TABLES.md``, approved 2026-09-25): a labelled PREVIEW beside the frozen canonical tables.
 
-    python -m verity_numerical.bench.views --root <store root> [--format md|json] [--rules spec|unfiltered|legacy]
+    python -m verity_numerical.bench.views --root <store root> [--format md|json|entities] [--rules spec|unfiltered|legacy]
                                            [--security-bits N] [--include-archived]
     python -m verity_numerical.bench.views --root <store root> --parity [--snapshot NAME | --take-snapshot] [--record]
 
@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import datetime as _dt
 import hashlib
 import json
 import math
@@ -48,14 +49,15 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from verity.census import REFERENCE_NETWORK, SENSITIVITY_NETWORKS
+from verity import claims as claims_registry
+from verity.census import HARDWARE, INSTANCE_SETS, NETWORKS, REFERENCE_NETWORK, SENSITIVITY_NETWORKS, VU_K1536, WORKLOADS
 from verity.proofs.target import BF16_HOPPER, FP8_ADA_MMA, FP8_HOPPER_WGMMA, NVFP4_SM120, TARGETS, Target
 from verity_numerical.bench import contract
 from verity_numerical.bench import drilldown as D
 from verity_numerical.bench import tables as T
 
 __all__ = ["COMMIT", "CONFIGURATIONS", "FAMILIES", "LEGACY", "REASON_LETTERS", "SPEC", "UNFILTERED", "Configuration", "Family",
-           "Rules", "Views", "build", "configuration_of", "main", "native", "parity", "render_json", "render_markdown", "throughput"]
+           "Rules", "Views", "build", "configuration_of", "main", "native", "parity", "render_entities", "render_json", "render_markdown", "throughput"]
 
 PREVIEW = ("PREVIEW of the approved tables spec (kb/TABLES.md): not the published tables. The published numbers switch once, in a "
            "6 PM PT digest labelled as a change of method; until then the canonical tables are `verity_numerical.bench.tables`.")
@@ -1189,6 +1191,88 @@ def stages(c: ViewCell) -> dict[str, Any]:
             "setup": {"seconds": float(setup), "amortized": float(setup) * k, "instances": P["instances"]} if _num(setup) and setup > 0 else None}
 
 
+def _family_text(fam: Family) -> str:
+    return (f"{fam.description}; declared class {' | '.join(fam.declared_classes)}; setup {fam.setup}; {fam.interaction}"
+            + (f"; {fam.note}" if fam.note else ""))
+
+
+def _mark_names(c: ViewCell) -> list[str]:
+    """The Table 2 marks of a cell, in print order: ``provisional``, ``algebraic``, ``under-reverification``."""
+    return [m for m, on in (("provisional", c.provisional), ("algebraic", c.algebraic), ("under-reverification", c.legacy.finding)) if on]
+
+
+_MARK_TEXT = {"provisional": "(prov.)", "algebraic": "(alg.)", "under-reverification": f"({T.UNDER_REVERIFICATION})"}
+
+
+def _cell_note(c: ViewCell, col: str) -> str:
+    P, b = c.throughput, c.batching
+    text = (f"{c.artifact} — {c.configuration or col}{', scheme ' + c.scheme if c.scheme else ''}; P {fmt_rate(P['instances_per_second'])} ({P['instances']} instances in "
+            f"{fmt_per_instance(P['end_to_end_s'])}: commitment {fmt_per_instance(P['commit_s'])}, proving {fmt_per_instance(P['proving_s'])}); "
+            f"batching total {b['total']}, per proof {b['per_proof'] or '?'}, proofs {b['proofs'] or '?'}, in flight {b['in_flight'] or '?'}; "
+            f"{_instances_text(c.legacy.target, c.instances)}; whole-proof bound {_fmt_bound(c.bound_log2)}; host {c.legacy.host or '?'}; {c.legacy.verification_note()}")
+    if c.legacy.instances_equiv:
+        text += f"; {T.INSTANCE_EQUIV_NOTE} ({c.legacy.instances_equiv})"
+    ixl = P.get("interaction") or {}
+    if ixl.get("loopback_s"):
+        text += (f"; live-coin handling {1e3 * ixl['loopback_round_s']:.3g} ms per round, measured on loopback, counted as prover compute "
+                 f"({ixl['loopback_method'] or 'method not recorded'})")
+    if c.provisional:
+        text += f"; provisional: {c.provisional}"
+    if c.legacy.finding:
+        text += f"; {c.legacy.finding}"
+    if c.algebraic:
+        text += f"; {ALGEBRAIC_FLAG} (Table 1, {c.configuration}: {'; '.join(c.algebraic)})"
+    if c.unfiltered:
+        u = c.unfiltered
+        text += (f"; unfiltered pick: {u['configuration']} {u['artifact']}, bound {_fmt_bound(u['bound_log2'])}, hashes "
+                 f"{'; '.join(u['hashes'])}, {T.fmt_overhead(u['overhead'])}")
+    return text
+
+
+def table2_grid(V: Views) -> list[dict[str, Any]]:
+    """Table 2 as printed, one entry per line: its row ``label``, the native column and each family column as ``display`` (the
+    printed text without its footnote number) and ``note`` (the footnote text), with ``state`` (``cell``, or the empty
+    cell's: ``n/s``, ``none``, ``weaker``, ``rejected``, ``below-filter``), ``marks`` and the ``cell`` itself.  The markdown
+    numbers the footnotes in this order: each line's native column, then its family columns."""
+    out = []
+    for ln in V.lines:
+        N = ln["native"]
+        g: dict[str, Any] = {
+            "line": ln, "label": f"{N['device']} · {N['dtype']} · {ln['line']}" + (f" · {ln['scheme_label']}" if ln["scheme"] else ""),
+            "native": {"display": _native_text(N), "note": f"{ln['line']}: {N['work_model']}; {N['ops_per_instance']} tensor-core FLOP per instance "
+                                                           f"({N['steps']} steps); peak {N['peak_flop_per_second']:.4g} FLOP/s, {N['source']}"},
+            "cells": {}}
+        for col in V.columns():
+            c = ln["cells"].get(col)
+            if c is None:
+                e = ln["empty"].get(col) or {"state": "none", "text": "no result"}
+                where = f"{ln['line']}{' · ' + ln['scheme_label'] if ln['scheme'] else ''} · {col}"
+                g["cells"][col] = {"display": "n/s" if e["state"] == "n/s" else T.EMPTY, "note": f"{where}: {e['text']}", "state": e["state"],
+                                   "marks": [], "cell": None}
+                continue
+            marks = _mark_names(c)
+            g["cells"][col] = {"display": " ".join([T.fmt_overhead(c.overhead), *(_MARK_TEXT[m] for m in marks)]), "note": _cell_note(c, col),
+                               "state": "cell", "marks": marks, "cell": c}
+        out.append(g)
+    return out
+
+
+def table3_row(c: ViewCell) -> dict[str, str]:
+    """Table 3's printed row of a cell: ``commitment``, ``interaction``, each of :data:`contract.BUCKETS`, ``other``, ``total`` and
+    ``setup`` (a fused stage prints once in its first bucket, the continuation mark in the others)."""
+    st = stages(c)
+    share = lambda v: f"{_fmt_x(v)} ({100 * v / c.overhead:.0f}%)"  # noqa: E731
+    cells = {b: share(v) for b, v in st["buckets"].items() if v is not None}
+    for j in st["joints"].values():
+        first, *rest = j["covers"]
+        cells[first] = f"{'+'.join(j['covers'])}: {share(j['overhead'])}"
+        cells.update({b: T.JOINT_CONTINUATION for b in rest})
+    su = st["setup"]
+    return {"commitment": share(st["commitment"]), "interaction": share(st["interaction"]), **{b: cells.get(b, T.EMPTY) for b in contract.BUCKETS},
+            "other": share(st["other"]) if st["other"] is not None else T.EMPTY, "total": f"{T.fmt_overhead(c.overhead)} (100%)",
+            "setup": f"{T.fmt_seconds(su['seconds'])} · {_fmt_x(su['amortized'])} over {su['instances']}" if su else T.EMPTY}
+
+
 def render_markdown(V: Views, published: bool = False) -> str:
     rules = V.rules
     filt = ", ".join(([f"whole-proof bound 2^{rules.security_log2:g} or better"] if rules.security_log2 is not None else [])
@@ -1200,8 +1284,7 @@ def render_markdown(V: Views, published: bool = False) -> str:
     for fid, row in table1_rows(V):
         if fid != fam_seen:
             fam = _FAMILY.get(fid)
-            desc = (f"{fam.description}; declared class {' | '.join(fam.declared_classes)}; setup {fam.setup}; {fam.interaction}"
-                    + (f"; {fam.note}" if fam.note else "") if fam else "not a Table 2 column")
+            desc = _family_text(fam) if fam else "not a Table 2 column"
             rows1.append([f"**{fid}**", "", desc, *([""] * (len(TABLE1_COLUMNS) - 3))])
             fam_seen = fid
         rows1.append(row)
@@ -1225,43 +1308,8 @@ def render_markdown(V: Views, published: bool = False) -> str:
         return f"[{len(notes)}]"
 
     cols = V.columns()
-    rows2 = []
-    for ln in V.lines:
-        N = ln["native"]
-        row = [f"{N['device']} · {N['dtype']} · {ln['line']}" + (f" · {ln['scheme_label']}" if ln["scheme"] else ""),
-               _native_text(N) + " " + note(f"{ln['line']}: {N['work_model']}; {N['ops_per_instance']} tensor-core FLOP per instance "
-                                            f"({N['steps']} steps); peak {N['peak_flop_per_second']:.4g} FLOP/s, {N['source']}")]
-        for col in cols:
-            c = ln["cells"].get(col)
-            if c is None:
-                e = ln["empty"].get(col) or {"state": "none", "text": "no result"}
-                where = f"{ln['line']}{' · ' + ln['scheme_label'] if ln['scheme'] else ''} · {col}"
-                row.append(("n/s " if e["state"] == "n/s" else f"{T.EMPTY} ") + note(f"{where}: {e['text']}"))
-                continue
-            P, b = c.throughput, c.batching
-            text = (f"{c.artifact} — {c.configuration or col}{', scheme ' + c.scheme if c.scheme else ''}; P {fmt_rate(P['instances_per_second'])} ({P['instances']} instances in "
-                    f"{fmt_per_instance(P['end_to_end_s'])}: commitment {fmt_per_instance(P['commit_s'])}, proving {fmt_per_instance(P['proving_s'])}); "
-                    f"batching total {b['total']}, per proof {b['per_proof'] or '?'}, proofs {b['proofs'] or '?'}, in flight {b['in_flight'] or '?'}; "
-                    f"{_instances_text(c.legacy.target, c.instances)}; whole-proof bound {_fmt_bound(c.bound_log2)}; host {c.legacy.host or '?'}; {c.legacy.verification_note()}")
-            if c.legacy.instances_equiv:
-                text += f"; {T.INSTANCE_EQUIV_NOTE} ({c.legacy.instances_equiv})"
-            ixl = P.get("interaction") or {}
-            if ixl.get("loopback_s"):
-                text += (f"; live-coin handling {1e3 * ixl['loopback_round_s']:.3g} ms per round, measured on loopback, counted as prover compute "
-                         f"({ixl['loopback_method'] or 'method not recorded'})")
-            if c.provisional:
-                text += f"; provisional: {c.provisional}"
-            if c.legacy.finding:
-                text += f"; {c.legacy.finding}"
-            if c.algebraic:
-                text += f"; {ALGEBRAIC_FLAG} (Table 1, {c.configuration}: {'; '.join(c.algebraic)})"
-            if c.unfiltered:
-                u = c.unfiltered
-                text += (f"; unfiltered pick: {u['configuration']} {u['artifact']}, bound {_fmt_bound(u['bound_log2'])}, hashes "
-                         f"{'; '.join(u['hashes'])}, {T.fmt_overhead(u['overhead'])}")
-            row.append(T.fmt_overhead(c.overhead) + (" (prov.)" if c.provisional else "") + (" (alg.)" if c.algebraic else "")
-                       + (f" ({T.UNDER_REVERIFICATION})" if c.legacy.finding else "") + " " + note(text))
-        rows2.append(row)
+    rows2 = [[g["label"], g["native"]["display"] + " " + note(g["native"]["note"]),
+              *[g["cells"][col]["display"] + " " + note(g["cells"][col]["note"]) for col in cols]] for g in table2_grid(V)]
     out += [T._md_table(("Subcircuit · hardware · scheme", "Native N", *cols), rows2), ""]
 
     out += ["## Table 3 — Where the overhead comes from (each stage × N, share of the cell)", "",
@@ -1274,17 +1322,9 @@ def render_markdown(V: Views, published: bool = False) -> str:
             "batch's instances). Seconds per instance are in the drill-down below.", ""]
     rows3, rows3s = [], []
     for c in V.cells:
-        st = stages(c)
-        share = lambda v: f"{_fmt_x(v)} ({100 * v / c.overhead:.0f}%)"  # noqa: E731
-        cells = {b: share(v) for b, v in st["buckets"].items() if v is not None}
-        for name, j in st["joints"].items():
-            first, *rest = j["covers"]
-            cells[first] = f"{'+'.join(j['covers'])}: {share(j['overhead'])}"
-            cells.update({b: T.JOINT_CONTINUATION for b in rest})
-        su = st["setup"]
-        setup = f"{T.fmt_seconds(su['seconds'])} · {_fmt_x(su['amortized'])} over {su['instances']}" if su else T.EMPTY
-        rows3.append([_cell_name(c), share(st["commitment"]), share(st["interaction"]), *[cells.get(b, T.EMPTY) for b in contract.BUCKETS],
-                      share(st["other"]) if st["other"] is not None else T.EMPTY, f"{T.fmt_overhead(c.overhead)} (100%)", setup])
+        r3 = table3_row(c)
+        su = stages(c)["setup"]
+        rows3.append([_cell_name(c), r3["commitment"], r3["interaction"], *[r3[b] for b in contract.BUCKETS], r3["other"], r3["total"], r3["setup"]])
         P, ph = c.throughput, c.legacy.phases
         n, total = P["instances"], P["end_to_end_s"]
         pct = lambda v: f"{fmt_per_instance(v / n)} ({100 * v / total:.0f}%)"  # noqa: E731
@@ -1365,13 +1405,262 @@ def render_json(V: Views, published: bool = False) -> dict[str, Any]:
     }
 
 
+# --- entities: the render as charted by the docs site -----------------------------------------------------------------------------
+
+ENTITIES_SCHEMA = "verity/tables-entities/v1"
+#: The ZK class of a configuration, from the leading words of its declared ZK text (the text rides alongside).  A B-Ligero
+#: configuration that runs "as the B-Ligero mode it runs in" is one of its live interactive modes: malicious-verifier ZK.
+ZK_CLASSES = (("malicious-verifier zk", "malicious-verifier-zk"), ("as the b-ligero mode it runs in", "malicious-verifier-zk"),
+              ("hvzk", "hvzk"), ("no", "none"), ("unknown", "unknown"))
+#: Table 3's stages in print order, with the column titles: the phases a result's overhead splits into.
+PHASES = (("commitment", "Commitment"), ("interaction", "Interaction"), ("witness", "Witness"),
+          ("encoding_commitment", "Encoding + witness commitment"), ("arithmetic", "Arithmetic"), ("lookup", "Lookup"),
+          ("zk_additional", "ZK additional"), ("serialization", "Serialization"), ("other", "Other"))
+
+
+def zk_class(cfg: Configuration) -> str:
+    """The short ZK class (:data:`ZK_CLASSES`) of a configuration; ``ValueError`` when its text matches none."""
+    t = cfg.zk.lower()
+    for prefix, cls in ZK_CLASSES:
+        if t.startswith(prefix):
+            return cls
+    raise ValueError(f"{cfg.id}: no ZK class for {cfg.zk!r}")
+
+
+def split_list(text: str) -> list[str]:
+    """``text``'s ``"; "``-separated items outside parentheses (``"; ".join`` of the result is ``text``)."""
+    out, depth, cur = [], 0, ""
+    i = 0
+    while i < len(text):
+        ch = text[i]
+        depth += (ch == "(") - (ch == ")")
+        if depth == 0 and text.startswith("; ", i):
+            out.append(cur)
+            cur, i = "", i + 2
+            continue
+        cur += ch
+        i += 1
+    return [*out, cur] if cur or out else []
+
+
+def slug(text: str) -> str:
+    return "-".join("".join(ch if ch.isalnum() else " " for ch in text.lower()).split())
+
+
+def result_id(c: ViewCell) -> str:
+    """A result's id, stable across renders: its configuration (else its column) at its circuit."""
+    return f"{slug(c.configuration or c.column)}@{c.line}"
+
+
+def verity_commit() -> str | None:
+    """The commit of the source tree this renderer runs from (``None`` outside a git checkout)."""
+    import subprocess  # noqa: PLC0415
+    from pathlib import Path  # noqa: PLC0415
+
+    try:
+        out = subprocess.run(["git", "rev-parse", "HEAD"], cwd=Path(__file__).resolve().parent, capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return out.stdout.strip() or None if out.returncode == 0 else None
+
+
+#: ``verity.claims`` instances of the hash names Table 1 uses (a name joining two hashes names both).
+HASH_INSTANCES = {"SHA-256": ("sha-256",), "SHA-512": ("sha-512",), "BLAKE3": ("blake3",), "BLAKE3 (keyed)": ("blake3-keyed",),
+                  "BLAKE2b": ("blake2b",), "SHAKE-256": ("shake-256",), "BLAKE3 / BLAKE2b": ("blake3", "blake2b"),
+                  "Poseidon2-BabyBear": ("poseidon2-babybear",), "Poseidon2-KoalaBear": ("poseidon2-koalabear",),
+                  "Ajtai n=64 (linear digest)": ("ajtai-n64",), "Ajtai n=128 (linear digest)": ("ajtai-n128",)}
+#: ``verity.claims`` properties by the leading words of a hash's assumed property.
+HASH_PROPERTIES = (("collision resistance", "cr"), ("random oracle", "ro"), ("prg", "prg"), ("ring-sis", "sis"))
+PROXIMITY_REGIMES = {"unique decoding": "rs-proximity-udr", "johnson regime (list decoding)": "rs-proximity-johnson"}
+#: ``verity.claims`` ids of a Table 1 assumption, by a phrase it contains.
+ASSUMPTION_PHRASES = (("logup fractional-sum soundness", "logup"),)
+_ZK_GUARANTEE = {"malicious-verifier-zk": "malicious-verifier-zk", "hvzk": "hvzk", "none": "no-zk"}
+
+
+def claims_of(cfg: Configuration, bits: float | None = None) -> dict[str, list[dict[str, Any]]]:
+    """A configuration's security claims as ``verity.claims`` ids, each with the Table 1 text it comes from:
+    ``guarantees`` (soundness, ZK, transferability), ``assumptions`` (each hash's property of its instance, each proximity
+    bound, then the configuration's other assumptions), ``models`` and ``setup``.  An item the renderer cannot map yet keeps
+    its text with ``id`` ``None`` and ``unmapped`` true.  Soundness carries ``param``: the weakest whole-proof bound at the
+    configuration's cells (``bits``), as TeX."""
+
+    def item(id_: str | None, text: str, param: str | None = None) -> dict[str, Any]:
+        return {"id": id_, "param": param, "text": text, "unmapped": id_ is None}
+
+    transferable = cfg.transferability.startswith("transferable")
+    zk = _ZK_GUARANTEE.get(zk_class(cfg))
+    guarantees = [item("computational-soundness" if transferable else "statistical-soundness", cfg.soundness,
+                       f"2^{{-{bits:.1f}}}" if bits is not None else None), item(zk, cfg.zk),
+                  item("transferable" if transferable else "designated-verifier" if cfg.transferability.startswith("interactive") else None,
+                       cfg.transferability)]
+    assumptions = []
+    for h in cfg.hashes:
+        prop = next((pid for words, pid in HASH_PROPERTIES if h.prop.lower().startswith(words)), None)
+        insts = HASH_INSTANCES.get(h.name, ()) if prop else ()
+        assumptions += [item(f"{prop}/{i}", h.text()) for i in insts] or [item(None, h.text())]
+    for x in cfg.proximity:
+        assumptions.append(item(PROXIMITY_REGIMES.get(x.regime.lower()) if x.basis.startswith("proven") else None, x.text()))
+    assumptions += [item(next((i for words, i in ASSUMPTION_PHRASES if words in a.lower()), None), a) for a in split_list(cfg.assumptions)]
+    models = [item("live-verifier" if not transferable else "fiat-shamir", cfg.interaction or cfg.transferability)]
+    if any(h.prop.lower().startswith("random oracle") for h in cfg.hashes):
+        models.append(item("random-oracle", "; ".join(h.text() for h in cfg.hashes if h.prop.lower().startswith("random oracle"))))
+    if zk == "hvzk":
+        models.append(item("honest-verifier", cfg.zk))
+    fam = _FAMILY.get(cfg.family or "")
+    setup = [item("transparent-setup" if fam.setup.startswith("none") else None, fam.setup)] if fam else []
+    return {"guarantees": guarantees, "assumptions": assumptions, "models": models, "setup": setup}
+
+
+def render_entities(V: Views, published: bool = False, rendered_at: str | None = None, commit: str | None = None) -> dict[str, Any]:
+    """The render as entities a site can chart and follow across renders by id (schema :data:`ENTITIES_SCHEMA`):
+
+    * ``circuits`` -- one per subcircuit (``Target``): its census hardware line, datatype, tensor-core step, workload, frozen
+      instance set and native N;
+    * ``families`` and ``configurations`` -- Table 1: family, variant, commitment scheme, statement, ZK class (short, with the
+      text), soundness bits (the weakest whole-proof bound at its cells) and text, hashes with their class and the algebraic
+      flag, interaction and assumption texts as lists; ``guarantees``, ``assumptions``, ``models`` and ``setup`` as
+      ``verity.claims`` ids, with ``claims`` giving each id beside its text and ``unmapped`` the texts with no id yet;
+    * ``results`` -- one per Table 2 cell (configuration x circuit): overhead, the phases that sum to it, one-time setup apart,
+      state (provisional, algebraic, verified, under re-verification), the artifact and the render time;
+    * ``tables`` -- the printed layout: every Table 1 / 2 / 3 cell's exact display string, numeric value, marks and footnote;
+    * ``claims`` -- the ``verity.claims`` entries Table 1 cites (the site imports these); ``census`` -- the ``verity.census`` entries cited; ``provenance`` -- render time, verity commit, rules, banner.
+
+    Ids: circuits by target name, configurations by the slug of their name, results ``<configuration>@<circuit>``, census
+    entries by their census id."""
+
+    rendered_at = rendered_at or _dt.datetime.now(_dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    grid = table2_grid(V)
+    cfg_of = {c.id: c for c in V.configurations}
+    sets = {s.target: s.id for s in INSTANCE_SETS.values()}
+    cells_of: dict[str, list[ViewCell]] = {}
+    for c in V.cells:
+        cells_of.setdefault(c.configuration or "", []).append(c)
+
+    circuits = []
+    for target in TARGETS.values():
+        N = native(target)
+        circuits.append({"id": target.name, "hardware": target.native_peak.id, "device": target.native_peak.device,
+                         "dtype": target.native_peak.dtype, "instruction": target.instruction, "step": target.transition_unit, "status": target.status,
+                         "workload": VU_K1536.id, "instance_set": sets.get(target.name),
+                         "native": {"value": N["instances_per_second"], "unit": "instances/s", "display": _native_text(N),
+                                    "peak_flop_per_second": N["peak_flop_per_second"], "ops_per_instance": N["ops_per_instance"],
+                                    "work_model": N["work_model"]}})
+
+    rows1 = table1_rows(V)
+    configurations = []
+    for (fid, row), cfg in zip(rows1, [c for fid in [*(f.id for f in FAMILIES), None]
+                                       for c in V.configurations if c.family == fid or (fid is None and c.family not in _FAMILY)]):
+        held = cells_of.get(cfg.id, [])
+        bits = [-c.bound_log2 for c in held if c.bound_log2 is not None]
+        fam = _FAMILY.get(cfg.family or "")
+        claims = claims_of(cfg, min(bits) if bits else None)
+        configurations.append({
+            "id": slug(cfg.id), "variant": cfg.id, "family": cfg.family, "scheme": cfg.scheme,
+            "statement": {"full_relation": cfg.full_relation, "text": cfg.statement}, "ports": cfg.ports, "commitment": cfg.commitment,
+            "zk": {"class": zk_class(cfg), "text": cfg.zk},
+            "soundness": {"bits": min(bits) if bits else None, "text": cfg.soundness, "dominant_term": cfg.dominant_term},
+            "hashes": [{"name": h.name, "role": h.role, "property": h.prop, "class": "algebraic" if h.algebraic else "standard"} for h in cfg.hashes],
+            "hash_class": "algebraic" if cfg.algebraic() else "standard", "algebraic_flag": ALGEBRAIC_FLAG if cfg.algebraic() else None,
+            "proximity": [dataclasses.asdict(x) for x in cfg.proximity],
+            "interaction": split_list(cfg.interaction), "transferability": cfg.transferability, "assumptions_text": split_list(cfg.assumptions),
+            **{k: [x["id"] for x in v if x["id"]] for k, v in claims.items()}, "claims": claims,
+            "params": {x["id"]: x["param"] for v in claims.values() for x in v if x["id"] and x["param"]},
+            "unmapped": [x["text"] for v in claims.values() for x in v if x["unmapped"]],
+            "setup_text": fam.setup if fam else None, "pin": cfg.pin, "archived": cfg.archived, "unsupported": dict(cfg.unsupported),
+            "results": [result_id(c) for c in held], "display": dict(zip(TABLE1_COLUMNS, row))})
+        assert row[0] == cfg.id
+
+    results, table2_lines, footnotes = [], [], []
+
+    def footnote(text: str) -> int:
+        footnotes.append({"number": len(footnotes) + 1, "text": text})
+        return len(footnotes)
+
+    for g in grid:
+        ln = g["line"]
+        line = {"circuit": ln["line"], "scheme": ln["scheme"], "label": g["label"],
+                "native": {"display": g["native"]["display"], "value": ln["native"]["instances_per_second"], "footnote": footnote(g["native"]["note"])},
+                "cells": {}}
+        for col, gc in g["cells"].items():
+            c = gc["cell"]
+            line["cells"][col] = {"display": gc["display"], "value": c.overhead if c else None, "marks": gc["marks"], "state": gc["state"],
+                                  "footnote": footnote(gc["note"]), "result": result_id(c) if c else None}
+            if c is None:
+                continue
+            st, r3, P = stages(c), table3_row(c), c.throughput
+            share = (lambda v: v / c.overhead) if c.overhead else (lambda v: None)  # noqa: E731
+            phases = [{"id": "commitment", "value": st["commitment"], "share": share(st["commitment"]), "display": r3["commitment"]},
+                      {"id": "interaction", "value": st["interaction"], "share": share(st["interaction"]), "display": r3["interaction"]}]
+            phases += [{"id": b, "value": v, "share": share(v), "display": r3[b]} for b, v in st["buckets"].items() if v is not None]
+            phases += [{"id": name, "covers": list(j["covers"]), "value": j["overhead"], "share": share(j["overhead"]), "display": r3[j["covers"][0]]}
+                       for name, j in st["joints"].items()]
+            if st["other"] is not None:
+                phases.append({"id": "other", "value": st["other"], "share": share(st["other"]), "display": r3["other"]})
+            su, ix = st["setup"], P["interaction"]
+            cfg = cfg_of.get(c.configuration or "")
+            results.append({
+                "id": result_id(c), "configuration": slug(c.configuration) if c.configuration else None, "circuit": c.line, "scheme": c.scheme,
+                "family": col, "artifact": c.artifact, "rendered_at": rendered_at, "network": REFERENCE_NETWORK.id, "workload": VU_K1536.id,
+                "overhead": {"value": c.overhead, "display": T.fmt_overhead(c.overhead)},
+                "phases": phases, "serving_overhead": overheads(c)[0], "proving_overhead": overheads(c)[1],
+                "setup": {"seconds": su["seconds"], "amortized_overhead": su["amortized"], "instances": su["instances"], "display": r3["setup"]} if su else None,
+                "state": {"provisional": bool(c.provisional), "provisional_reason": c.provisional, "algebraic": bool(c.algebraic),
+                          "algebraic_hashes": list(c.algebraic), "verified": bool(c.legacy.verified_by), "verified_by": c.legacy.verified_by,
+                          "under_reverification": c.legacy.finding},
+                "marks": gc["marks"], "soundness_bits": -c.bound_log2 if c.bound_log2 is not None else None,
+                "zk_class": zk_class(cfg) if cfg else None,
+                "throughput": {k: P[k] for k in ("instances", "instances_per_second", "end_to_end_s", "commit_s", "proving_s", "interaction_s")},
+                "native": c.native, "batching": dict(c.batching), "instances": dict(c.instances),
+                "interaction": {"live": ix["live"], "rounds": ix["rounds"], "bytes_up": ix["bytes_up"], "bytes_down": ix["bytes_down"]},
+                "overhead_at": {n.id: c.native * (P["commit_s"] + interaction_time(ix, n.rtt_s, n.bandwidth_bps)) / P["instances"]
+                                for n in (REFERENCE_NETWORK, *SENSITIVITY_NETWORKS)} if not V.rules.legacy else None})
+        table2_lines.append(line)
+
+    families = [{**dataclasses.asdict(f), "declared_classes": list(f.declared_classes), "display": _family_text(f)} for f in FAMILIES]
+    table1 = []
+    fam_seen = None
+    for (fid, row), cfg in zip(rows1, configurations):
+        if fid != fam_seen:
+            table1.append({"kind": "family", "id": fid})
+            fam_seen = fid
+        table1.append({"kind": "configuration", "id": cfg["id"], "cells": row})
+    phase_cols = [pid for pid, _ in PHASES]
+    return {
+        "schema": ENTITIES_SCHEMA,
+        "provenance": {"rendered_at": rendered_at, "verity_commit": commit if commit is not None else verity_commit(), "rules": dataclasses.asdict(V.rules),
+                       "published": published, "banner": PUBLISHED if published else PREVIEW},
+        "axes": {"circuits": [c["id"] for c in circuits], "schemes": [s.id for s in SCHEMES if s.admissible], "families": V.columns(),
+                 "phases": phase_cols, "networks": [n.id for n in (REFERENCE_NETWORK, *SENSITIVITY_NETWORKS)]},
+        "census": {"hardware": {h.id: dataclasses.asdict(h) for h in HARDWARE.values()},
+                   "networks": {n.id: dataclasses.asdict(n) for n in NETWORKS.values()},
+                   "workloads": {w.id: dataclasses.asdict(w) for w in WORKLOADS.values()},
+                   "instance_sets": {x.id: dataclasses.asdict(x) for x in INSTANCE_SETS.values()}},
+        "claims": {i: dataclasses.asdict(claims_registry.get(i)) for i in sorted({i for c in configurations for k in ("guarantees", "assumptions", "models", "setup")
+                                                                                   for i in c[k]})},
+        "circuits": circuits,
+        "schemes": [{**dataclasses.asdict(x), "admissible": x.admissible} for x in SCHEMES],
+        "families": families,
+        "configurations": configurations,
+        "results": results,
+        "tables": {
+            "table1": {"columns": list(TABLE1_COLUMNS), "rows": table1},
+            "table2": {"columns": ["native", *V.columns()], "lines": table2_lines, "footnotes": footnotes},
+            "table3": {"columns": [*phase_cols, "total", "setup"], "labels": dict(PHASES),
+                       "rows": [{"result": result_id(c), "label": _cell_name(c), "cells": table3_row(c)} for c in V.cells]},
+        },
+        "rejected": [{"artifact": r["artifact"], "configuration": slug(r["configuration"]) if r["configuration"] else None, "family": r["family"],
+                      "circuit": r["line"], "scheme": r.get("scheme"), "reason": r["codes"][0][0], "text": r["codes"][0][1]} for r in V.rejected],
+    }
+
+
 # --- CLI --------------------------------------------------------------------------------------------------------------------------
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--root", default=None, metavar="ROOT", help="store root (default $RESEARCH_STORE or ~/.research/store)")
-    ap.add_argument("--format", choices=("md", "json"), default="md")
+    ap.add_argument("--format", choices=("md", "json", "entities"), default="md",
+                    help="md; json (the raw views); entities (the docs site's render: circuits, configurations, results, the printed tables)")
     ap.add_argument("--rules", choices=tuple(RULES), default=SPEC.name)
     ap.add_argument("--security-bits", type=float, default=None, metavar="N", help="filter to a whole-proof bound of 2^-N or better")
     ap.add_argument("--include-archived", action="store_true")
@@ -1426,6 +1715,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     V = build(st, rules)
     if ns.format == "json":
         print(json.dumps(render_json(V, ns.published), indent=2, sort_keys=True, default=str))
+    elif ns.format == "entities":
+        print(json.dumps(render_entities(V, ns.published), indent=2, default=str))
     else:
         print(render_markdown(V, ns.published), end="")
     return 0

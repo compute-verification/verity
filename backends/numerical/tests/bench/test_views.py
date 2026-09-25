@@ -756,3 +756,126 @@ def test_a_result_registered_with_its_envelope_as_payload_counts_in_the_spec_vie
     assert cell is not None, next((r["codes"] for r in views.rejected if r["artifact"] == art), "not seen")
     assert cell.artifact == art and cell.configuration == V.ROUTE_A
     assert art not in {c.artifact for c in V.build(store, V.LEGACY).cells} and V.parity(store) == []
+
+
+# --- entities: the docs site's render -------------------------------------------------------------------------------------------------
+
+
+def _entities_store(store: LocalStore) -> dict[str, str]:
+    return {"blake3": committed(store, "blake3", t_total=0.4, commit=0.6, setup=2.0),
+            "poseidon2": committed(store, "poseidon2", t_total=0.2, commit=0.1,
+                                   labels=[("finding", "UNDER RE-VERIFICATION: R1", "coordinator", "2026-09-25T07:45:00Z")]),
+            "a-gkr": put(store, result(t_total=4.0))}
+
+
+def test_entities_print_every_table2_cell_and_footnote_exactly_as_the_markdown(store: LocalStore) -> None:
+    _entities_store(store)
+    views = V.build(store)
+    md, ent = V.render_markdown(views), V.render_entities(views, rendered_at="2026-09-25T23:00:00Z", commit="abc")
+    notes = dict(line.split("] ", 1) for line in md.splitlines() if line.startswith("[") and "] " in line)
+    t2 = ent["tables"]["table2"]
+    assert [f["text"] for f in t2["footnotes"]] == [notes[f"[{f['number']}"] for f in t2["footnotes"]]
+    assert len(t2["footnotes"]) == len(notes)
+    for ln in t2["lines"]:
+        assert f"| {ln['label']} | {ln['native']['display']} [{ln['native']['footnote']}] |" in md
+        for col in t2["columns"][1:]:
+            cell = ln["cells"][col]
+            assert f" {cell['display']} [{cell['footnote']}] |" in md
+            assert (cell["value"] is None) == (cell["result"] is None) == (cell["state"] != "cell")
+    assert ent["axes"]["families"] == t2["columns"][1:] == ["A-GKR", "B-Ligero", "SP1", "Flock"]
+    assert ent["axes"]["circuits"] == [c["id"] for c in ent["circuits"]] == list(TARGETS)
+
+
+def test_entities_results_split_into_phases_that_sum_to_the_overhead_with_setup_apart(store: LocalStore) -> None:
+    arts = _entities_store(store)
+    ent = V.render_entities(V.build(store), rendered_at="2026-09-25T23:00:00Z", commit="abc")
+    by_art = {r["artifact"]: r for r in ent["results"]}
+    b3, p2 = by_art[arts["blake3"]], by_art[arts["poseidon2"]]
+    for r in ent["results"]:
+        assert sum(p["value"] for p in r["phases"]) == pytest.approx(r["overhead"]["value"], rel=1e-12)
+        assert r["serving_overhead"] + r["proving_overhead"] + next(p["value"] for p in r["phases"] if p["id"] == "interaction") \
+            == pytest.approx(r["overhead"]["value"], rel=1e-9)
+        assert r["rendered_at"] == "2026-09-25T23:00:00Z" and r["network"] == "dc-1ms-100gbps" and r["workload"] == "vu-k1536"
+        assert r["overhead_at"]["dc-1ms-100gbps"] == pytest.approx(r["overhead"]["value"])
+    assert b3["id"] == f"b-ligero-blake3-in-circuit@{FP8_ADA_MMA.name}" and b3["configuration"] == "b-ligero-blake3-in-circuit"
+    assert b3["setup"]["seconds"] == 2.0 and b3["setup"]["amortized_overhead"] == pytest.approx(2.0 * b3["native"] / 4096)
+    assert all(p["id"] != "setup" for p in b3["phases"])
+    assert b3["state"] == {"provisional": True, "provisional_reason": b3["state"]["provisional_reason"], "algebraic": False, "algebraic_hashes": [],
+                           "verified": True, "verified_by": VERIFIER, "under_reverification": None}
+    assert b3["marks"] == ["provisional"] and b3["zk_class"] == "malicious-verifier-zk"
+    b3cfg = next(c for c in ent["configurations"] if c["id"] == "b-ligero-blake3-in-circuit")
+    assert b3cfg["params"] == {"statistical-soundness": f"2^{{-{b3['soundness_bits']:.1f}}}"}
+    assert p2["marks"] == ["provisional", "algebraic", "under-reverification"] and p2["state"]["algebraic"]
+    assert p2["state"]["under_reverification"].startswith("UNDER RE-VERIFICATION")
+    rows3 = {r["result"]: r["cells"] for r in ent["tables"]["table3"]["rows"]}
+    assert rows3[b3["id"]]["setup"] == b3["setup"]["display"] and rows3[b3["id"]]["commitment"] == b3["phases"][0]["display"]
+
+
+def test_entity_ids_are_stable_across_renders(store: LocalStore) -> None:
+    _entities_store(store)
+    views = V.build(store)
+    a = V.render_entities(views, rendered_at="2026-09-25T23:00:00Z", commit="abc")
+    b = V.render_entities(V.build(store), rendered_at="2026-09-26T13:00:00Z", commit="def")
+    strip = lambda d: json.loads(json.dumps(d).replace("2026-09-26T13:00:00Z", "2026-09-25T23:00:00Z").replace('"def"', '"abc"'))  # noqa: E731
+    assert strip(b) == a
+    ids = [c["id"] for c in a["configurations"]]
+    assert len(ids) == len(set(ids)) == len(V.CONFIGURATIONS)
+    assert set(a["census"]["hardware"]) == {c["hardware"] for c in a["circuits"]}
+
+
+def test_entities_table1_is_the_new_configurations_with_lists_and_a_short_zk_class() -> None:
+    ent = V.render_entities(V.Views(rules=V.SPEC), rendered_at="2026-09-25T23:00:00Z", commit="abc")
+    cfgs = {c["variant"]: c for c in ent["configurations"]}
+    assert set(cfgs) == {c.id for c in V.CONFIGURATIONS}
+    assert cfgs[V.FLOCK_CONFIG.id]["family"] == "Flock" and cfgs[V.ROUTE_A]["family"] == "A-GKR"
+    for cfg in V.CONFIGURATIONS:
+        e = cfgs[cfg.id]
+        assert e["zk"] == {"class": V.zk_class(cfg), "text": cfg.zk} and e["zk"]["class"] in {c for _, c in V.ZK_CLASSES}
+        assert "; ".join(e["interaction"]) == cfg.interaction and "; ".join(e["assumptions_text"]) == cfg.assumptions
+        assert e["hash_class"] == ("algebraic" if cfg.algebraic() else "standard") and (e["algebraic_flag"] is not None) == bool(cfg.algebraic())
+        assert e["display"]["Configuration"] == cfg.id and list(e["display"]) == list(V.TABLE1_COLUMNS)
+    assert cfgs["B-Ligero Fiat–Shamir (HVZK)"]["zk"]["class"] == "hvzk" and cfgs[V.FLOCK_CONFIG.id]["zk"]["class"] == "none"
+    assert cfgs["SP1 precompile (TC_DOT chip)"]["zk"]["class"] == "unknown"
+    assert cfgs["B-Ligero v1"]["assumptions_text"] == ["BabyBear with its extension for challenges",
+                                                   "interactive: statistical given the committed coins (HM96)"]
+    assert V.split_list("a (b; c); d") == ["a (b; c)", "d"] and V.split_list("") == []
+    assert [r["kind"] for r in ent["tables"]["table1"]["rows"]].count("configuration") == len(V.CONFIGURATIONS)
+
+
+def test_cli_entities(store: LocalStore, capsys: pytest.CaptureFixture[str]) -> None:
+    _entities_store(store)
+    assert V.main(["--root", str(store.root), "--format", "entities", "--published"]) == 0
+    js = json.loads(capsys.readouterr().out)
+    assert js["schema"] == V.ENTITIES_SCHEMA and js["provenance"]["published"] and js["provenance"]["banner"] == V.PUBLISHED
+    assert js["provenance"]["rendered_at"].endswith("Z") and len(js["results"]) == 2
+
+
+def test_entities_table1_claims_are_registry_ids_beside_their_text_and_unmapped_text_is_flagged() -> None:
+    from verity import claims
+
+    ent = V.render_entities(V.Views(rules=V.SPEC), rendered_at="2026-09-25T23:00:00Z", commit="abc")
+    cfgs = {c["variant"]: c for c in ent["configurations"]}
+    for e in cfgs.values():
+        for kind, items in e["claims"].items():
+            assert e[kind] == [x["id"] for x in items if x["id"]]
+            assert all(x["param"] is None for x in items if x["id"] != "statistical-soundness" and x["id"] != "computational-soundness")
+            for x in items:
+                assert x["text"] and x["unmapped"] == (x["id"] is None)
+                if x["id"]:
+                    entry = claims.get(x["id"])
+                    assert entry.kind == {"guarantees": "guarantee", "assumptions": "assumption", "models": "model", "setup": "setup"}[kind]
+        assert e["unmapped"] == [x["text"] for v in e["claims"].values() for x in v if x["unmapped"]]
+        assert e["guarantees"][0] in ("statistical-soundness", "computational-soundness")
+    rt = cfgs[V.ROUTE_A]
+    assert {"cr/sha-256", "cr/blake3-keyed", "cr/sha-512", "rs-proximity-udr", "rs-proximity-johnson"} <= set(rt["assumptions"])
+    assert rt["guarantees"] == ["statistical-soundness", "no-zk", "designated-verifier"] and rt["models"] == ["live-verifier"]
+    assert rt["setup"] == ["transparent-setup"] and "SHA-256 (Fiat–Shamir / coins; live transcript and root_F binding; standard)" in rt["unmapped"]
+    sp1 = cfgs["SP1 stock (relation-only / bare guest)"]
+    assert sp1["guarantees"] == ["computational-soundness", "transferable"] and sp1["claims"]["guarantees"][1]["unmapped"]
+    assert {"cr/poseidon2-koalabear", "ro/poseidon2-koalabear"} <= set(sp1["assumptions"]) and sp1["models"] == ["fiat-shamir", "random-oracle"]
+    assert claims.get("cr/poseidon2-koalabear").standing == "algebraic" and claims.get("cr/sha-512").label == "CR · SHA-512"
+    assert "logup" in cfgs["A-GKR CPU (Rust)"]["assumptions"]
+    assert set(ent["claims"]) == {i for e in cfgs.values() for k in ("guarantees", "assumptions", "models", "setup") for i in e[k]}
+    assert ent["claims"]["cr/sha-512"]["label"] == "CR · SHA-512"
+    fs = cfgs["B-Ligero Fiat–Shamir (HVZK)"]
+    assert {"ro/blake3", "ro/blake2b", "ro/shake-256"} <= set(fs["assumptions"]) and "honest-verifier" in fs["models"]

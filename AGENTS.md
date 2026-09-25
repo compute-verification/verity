@@ -39,6 +39,9 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
  (device, dtype, dense peak, source), networks (the 1 ms / 100 Gb/s reference and the sensitivity
  profiles), workloads and frozen instance sets. Stdlib only; imports no other core module. A
  `Target.native_peak` is a census line; add an entry rather than hand-typing a peak.
+ - `verity.claims`: the ids of security claims (guarantees, assumptions as `property/instance`
+ such as `cr/sha-512`, models, setup) that Table 1 cites; the docs site imports them from the
+ entities render. Stdlib only; imports no other core module.
  Other modules are created when code lands, not before.
  - Tests live in `packages/verity/tests/<module>/`.
 - `protocols/`: one distribution per protocol, and each imports only the

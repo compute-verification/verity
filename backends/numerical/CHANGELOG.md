@@ -1,5 +1,25 @@
 # Changelog: `verity_numerical` (the bench renderers and their rules)
 
+## 2026-09-25: `views --format entities`, the docs site's render
+
+- `python -m verity_numerical.bench.views --root <store> --format entities [--published]` prints the render as entities
+  (schema `verity/tables-entities/v1`):
+  - `circuits`: a census hardware id, the dtype, the tensor-core step, the workload, the instance set and the native N;
+  - `configurations`: Table 1 from the spec's configurations (route (a) and Flock included). Each has its family, variant,
+    scheme, ZK class (a short enum with the text), soundness bits, hash classes with the algebraic flag, and interaction
+    and assumption texts as lists. Its `guarantees`, `assumptions`, `models` and `setup` are `verity.claims` ids. Text
+    with no id yet is kept and flagged `unmapped`;
+  - `results`: one per Table 2 cell, configuration × circuit. Each has its overhead, the phases that sum to it, one-time
+    setup kept apart, its state (provisional, algebraic, verified, under re-verification), the artifact and the render time;
+  - `tables`: every Table 1, 2 and 3 cell's exact display string, its numeric value, its marks and its footnote text;
+  - `claims` and `census`: the registry entries cited;
+  - `provenance`: the render time and the verity commit.
+- Ids are stable across renders: circuits by target name, configurations by the slug of their name, results as
+  `<configuration>@<circuit>`.
+- The markdown is unchanged byte for byte. Table 2's cells and footnotes and Table 3's rows now come from shared helpers
+  (`table2_grid`, `table3_row`) that both renders use.
+- The steward's `published = "views"` entry also writes `<stamp>-tables.json` (the entities render).
+
 ## 2026-09-25: peaks, networks and instance sets come from `verity.census`
 
 - The renderers read the native peaks, the reference network (1 ms, 100 Gb/s), the interaction drill-down's sensitivity
