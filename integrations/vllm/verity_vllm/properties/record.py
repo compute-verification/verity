@@ -27,7 +27,7 @@ class Property:
 
 REGISTRY: dict[str, Property] = {p.name: p for p in (
     Property("fa_tap_exactness", "verity-vllm/fa-tap-exactness/v1",
-             "The FA tap build computes exactly the installed FlashAttention kernel's output, writes exactly the declared stream words, "
+             "The FA tap build computes exactly the installed FA kernel's output, writes exactly the declared stream words, "
              "and skips a launch whose declared tile is not the kernel's."),
     Property("noninterference", "verity-vllm/noninterference/v2",
              "At the record's tensor-parallel world, the observed engine generated the bare engine's tokens for every request (and, "
