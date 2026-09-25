@@ -63,9 +63,14 @@ def statement(cell: Path, instances: Path, n: int, flock: str) -> None:
     circuits(sd)
     src = HERE.parents[1]
     frozen = src / "fixtures" / "bench-instances" / "v1" / "manifest.json"
-    x, W, y0, _ = br.load_frozen(instances, frozen, br.TIER, 0, n)
-    X = np.array(x, dtype=np.uint16)
-    Wn = np.array(W, dtype=np.uint16).reshape(n, -1)
+    # past the frozen set's 4,096 VUs the sweep tiles it: VU i is frozen VU i mod 4096 (a re-packing; Rule I wants an
+    # instance-equiv/v1 document for it before such a point can head a cell)
+    n0 = min(n, 4096)
+    x, W, y0, _ = br.load_frozen(instances, frozen, br.TIER, 0, n0)
+    reps = -(-n // n0)
+    X = np.tile(np.array(x, dtype=np.uint16), (reps, 1))[:n]
+    Wn = np.tile(np.array(W, dtype=np.uint16).reshape(n0, -1), (reps, 1))[:n]
+    y0 = np.tile(np.asarray(y0), reps)[:n]
     y = np.asarray(y0).reshape(n, 1)
     tc = time.perf_counter()
     C = CM.commit(LEAF, REL, CM.instance_set(REL, 0, n, src, frozen), 0, X, Wn, y, 2)
@@ -81,7 +86,8 @@ def statement(cell: Path, instances: Path, n: int, flock: str) -> None:
     (sd / "sigma.txt").write_text(sig)
     (cell / "cell.json").write_text(json.dumps({"relation": C.relation, "vus": n, "prime_commitment": pc, "serving_commit_seconds": t_commit,
                                                 "manifest_sha256": hashlib.sha256(frozen.read_bytes()).hexdigest(),
-                                                "sigma": hashlib.sha256(sig.encode()).hexdigest()}, indent=1))
+                                                "sigma": hashlib.sha256(sig.encode()).hexdigest(),
+                                                "tiled_from": None if n <= 4096 else f"bench-instances/v1 vu-k1536 [0, 4096) x {reps}"}, indent=1))
     print(f"statement {C.relation} vus {n} prime_commitment {pc} sigma {hashlib.sha256(sig.encode()).hexdigest()}", flush=True)
 
 
@@ -198,8 +204,16 @@ def prove(a) -> int:
         # the prover's time: both provers run at once from the start signal; the Flock prover's includes its live-coin
         # round trips (wait_s), the prime prover's the wait for the session's points (exchange_wait_s)
         t_flock = float(fls.get("prove_total_s", 0.0)) + float(fls.get("y_s", 0.0))
+        calls, wait = int(fls.get("calls", 0) or 0), float(fls.get("wait_s", 0.0) or 0.0)
+        vv = (fls.get("verdict") or {})
+        net = {"rounds": calls, "bytes_up": fls.get("wire_sent"), "bytes_down": fls.get("wire_recv"),
+               "flock_wait_s": wait, "in_session_rtt_ms": 1e3 * wait / calls if calls else None,
+               "rtt_probe_ms": a.rtt_ms, "rtt_probe_method": a.rtt_method,
+               "flock_prover_compute_s": float(fls.get("prove_total_s", 0.0)) - wait,
+               "verifier_compute_s": vv.get("verify_s"),
+               "session_wall_s": fls.get("session_wall_s")}
         row = {"session": i, "warmup": i < a.warmup, "verifier": addr, "t_total": max(t_prime, t_flock), "t_cell_s": t_cell, "t_prime_prove_s": t_prime,
-               "t_flock_prove_s": t_flock, "t_link_s": st.t_link,
+               "t_flock_prove_s": t_flock, "t_link_s": st.t_link, "net": net,
                "buckets": {"t.witness": t_wit + st.t_witness_wires, "t.encoding_commitment": st.t_commit,
                            "t.arithmetic": st.t_arith + st.t_open_acc + st.t_open_wq, "t.lookup": st.t_mults + st.t_lookup,
                            "t.zk_additional": 0.0, "t.serialization": st.t_open_cols + t_bytes},
@@ -280,8 +294,9 @@ def result(a, cell: Path, meta: dict, rows: list[dict]) -> None:
         authentication="included-hash", zk_mode=contract.ZK_NONE, security=security, hardware=contract.probe_hardware(), software=sw,
         preprocessing=("circuit files, GKR layers, Lambda_F derivation, the Flock statement shape (untimed; the Flock prover starts on a "
                        "signal once built); Triton compilation in the untimed warm-up session"),
-        retention="retained", instances=contract.instances_ref(br.TIER, 0, n, meta.get("manifest_sha256") or hashlib.sha256(
-            (HERE.parents[1] / "fixtures" / "bench-instances" / "v1" / "manifest.json").read_bytes()).hexdigest()),
+        retention="retained", instances=None if n > 4096 else contract.instances_ref(br.TIER, 0, n, meta.get("manifest_sha256") or
+            hashlib.sha256((HERE.parents[1] / "fixtures" / "bench-instances" / "v1" / "manifest.json").read_bytes()).hexdigest()),
+        instances_tiled=meta.get("tiled_from"),
         scope="vu", candidate="A-GKR", checker="v2", field=br.FIELD, variant="A-GKR route (a): A-GKR + Flock + link",
         leaf="blake3", sharing=None, sessions=len(timed), warmup=a.warmup,
         verifier={"flock": "flock-link cell-serve (live coins; the session record is the evidence, admitted by tools/cell_gate.py)",
@@ -301,6 +316,16 @@ def result(a, cell: Path, meta: dict, rows: list[dict]) -> None:
              br._m("t_prime_seconds", med["t_prime_prove_s"], "s"), br._m("t_flock_seconds", med["t_flock_prove_s"], "s"),
              br._m("t_session_wall_seconds", med["t_cell_s"], "s"), br._m("soundness_bits", -ach, "bits"),
              br._m("commit.serving_seconds", meta.get("serving_commit_seconds", 0.0), "s")]
+    nets = [r["net"] for r in timed if r.get("net")]
+    md = lambda k: statistics.median(float(x[k]) for x in nets if x.get(k) is not None)   # noqa: E731
+    if nets:
+        # interactive record (coordinator 1836Z): rounds, bytes each way, RTT and the wall split, median session
+        meas += [br._m("session.rounds", md("rounds"), "count"), br._m("session.bytes_up", md("bytes_up"), "bytes"),
+                 br._m("session.bytes_down", md("bytes_down"), "bytes"), br._m("net.rtt_in_session_ms", md("in_session_rtt_ms"), "ms"),
+                 br._m("t.flock_prover_compute", md("flock_prover_compute_s"), "s"), br._m("t.flock_network_wait", md("flock_wait_s"), "s"),
+                 br._m("t.flock_verifier_compute", md("verifier_compute_s"), "s")]
+        if a.rtt_ms is not None:
+            meas.append(br._m("net.rtt_probe_ms", a.rtt_ms, "ms"))
     if rust:
         meas.append(contract.measurement("verifier.seconds", statistics.median(rust)))
     res = {"schema": contract.RESULT_SCHEMA, "run_id": os.environ.get("RESEARCH_RUN_ID"), "kind": "bench-result/v1", "workload_fingerprint": fp,
@@ -334,11 +359,15 @@ def main(argv=None) -> int:
     p.add_argument("--threads", type=int, default=16)
     p.add_argument("--warmup-verifier", default=None, help="the warm-up sessions' verifier (a loopback one: warm-ups are never evidence)")
     p.add_argument("--result", default=None, help="write the bench-result/v1 envelope here")
+    p.add_argument("--rtt-ms", type=float, default=None, help="the prover-to-verifier RTT measured before the sessions")
+    p.add_argument("--rtt-method", default=None)
     r = sub.add_parser("result", help="the bench-result/v1 envelope from CELL/sessions.json (on the prover pod: it probes the hardware)")
     r.add_argument("--cell", required=True)
     r.add_argument("--sessions-json", action="append", default=[], help="more sessions.json files (other runs of the same cell)")
     r.add_argument("--warmup", type=int, default=1)
     r.add_argument("--result", required=True)
+    r.add_argument("--rtt-ms", type=float, default=None)
+    r.add_argument("--rtt-method", default=None)
     a = ap.parse_args(argv)
     if a.cmd == "result":
         cell = Path(a.cell)
