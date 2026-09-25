@@ -21,7 +21,7 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity_vllm.check.commit_verdict import commit_verdict  # noqa: E402
+from verity_vllm.check.verdict import commit_verdict  # noqa: E402
 from verity_vllm.acquire.committer_api import challenge_positions  # noqa: E402
 from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, NativeHostCommitter, TensorMeta, value_family  # noqa: E402
 
@@ -387,7 +387,7 @@ def test_verdict_rules_for_host_plus_replay_and_bounded_records():
     assert not commit_verdict(rec, True)[0]
     # the population-drawn openings (binding) partition the same way: host share verifies, deferred share must reach the replay stage.
     # A record WITH a binding block is a row-procedure record: C2 of record (replay / linkage / pin) must be on it for the PASS branch.
-    from verity_vllm.check.commit_verdict import binding_check
+    from verity_vllm.check.commit_rules import binding_check
     po = {"n": 81, "bound": 81, "unbound_n": 0, "opened": 76, "verified": 76, "skipped": "retain=host excluding [...]: 5 of 81 -> replay", "deferred_replay_n": 5}
     bnd = {"context": {"ok": True}, "coverage": {"ok": True}, "population": {"n": 69761}, "openings_population": po}
     assert binding_check(bnd) == (True, "PASS")

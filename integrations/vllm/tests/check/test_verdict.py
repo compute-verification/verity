@@ -19,8 +19,9 @@ import pytest
 
 from verity.verification.codes import VerificationCode as VC
 
-from verity_vllm.check.commit_verdict import commit_verdict
+from verity_vllm.check.verdict import commit_verdict
 from verity_vllm.check import verdict as V
+from verity_vllm.check.commit_rules import REJECT
 from verity_vllm.check.result import MISSING_INPUT, CheckResult, code_of, outcome_of
 
 RUN_ROOT = "71f69377" + "ab" * 28
@@ -122,7 +123,7 @@ def test_the_code_is_the_outcome():
     with pytest.raises(ValueError):
         code_of(V.FAIL)
     _, _, checks = _both(_base())
-    assert {c.name for c in checks} <= set(V.REJECT)
+    assert {c.name for c in checks} <= set(REJECT)
     (ok, _), _, failed = _both(dict(_base(), fa2_zero_rows=3))
     assert not ok and {c.name: c.code for c in failed if c.outcome == V.FAIL} == {"runtime_match/fa2_zero_rows": VC.INVALID_VALUE}
 

@@ -4,7 +4,7 @@ Checked today, against ``allowlists/p04_one_result.json``:
 
 * ``verdict-import``: the rule's import contract, "``check.verdict`` imports only ``check.result`` and
   ``properties.record``" (``VERDICT_ALLOWED``).  Any other integration import made by the modules ``check/verdict.py``
-  absorbs (``_imports.VERDICT_MODULES``: ``check.verdict``, ``check.commit_verdict``, ``check.gates``) is a violation.
+  absorbs (``_imports.VERDICT_MODULES``: ``check.verdict``, ``check.commit_rules``, ``check.c2_rules``, ``check.gates``) is a violation.
   One entry per (importer, imported) module pair.
 * ``g-identifier``: a ``G1`` to ``G8`` token in an identifier (names, attributes, defs, classes, arguments, keywords).
 * ``g-literal``: a string literal in code (docstrings excepted) that starts with a ``G1`` to ``G8`` token, as in a
