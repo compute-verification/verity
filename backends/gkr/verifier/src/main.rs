@@ -1,6 +1,7 @@
 //! Independent verifier for Candidate A's GPU proofs (`backends/gkr/gpu`, BabyBear^6 / X^6 - 22).
 //!
 //!   verity-gkr-verify verify    --dir D --proof P (--relation R | --allow-any-circuit) [--vus N] [--threads T] [--json OUT] [--trace-logup]
+//!                               [--require-bound] [--allow-unpinned-instances] [--require-commitment] [--allow-unpinned-commitment]
 //!                                                                                        accept / reject one proof (the flag prints every LogUp level's operands)
 //!   verity-gkr-verify negatives --dir D --proofs PD [--threads T] [--json OUT]           every PD/<id>.bin (D/neg/<id>) must be rejected
 //!   verity-gkr-verify mutate    --dir D --proof P [--vus N] [--threads T] [--sample K] [--json OUT]
@@ -11,10 +12,27 @@
 //! `steps` count) and `public.bin` -- never `units.bin` / `epilogue.bin` (the witness).  `verify` refuses circuit files
 //! that are not a pinned circuit set of the relation `R` the proof is claimed for (pins.rs); `--allow-any-circuit`
 //! lifts the pin and the verdict then reports `circuit_pinned = false`.
+//!
+//! With a `bind.txt` the statement is operands-bound (PROTOCOL 16): it also reads `instances.txt`, `x.bin`, `w.bin`,
+//! requires `bind.txt` to be the unit circuit's operand columns, and batches the binding into the functional.  A bound
+//! statement is claimed as `R+bound`: the circuit files must be a pinned set of `R` and the instance files the
+//! `R+bound` pin of `instances.rs`; `--relation R` refuses a bound statement and `--relation R+bound` an unbound one.
+//! Under `--allow-any-circuit` only, `--require-bound` refuses an unbound statement and `--allow-unpinned-instances`
+//! skips the instance pin.
+//!
+//! With a `commitment.txt` the statement is operands-committed (commitments.rs): its public words carry each VU's
+//! x row and W column digests after the `y` words, and the verifier rebuilds the scheme's trees from them and compares
+//! the roots with the pinned roots of the instance set.  It is claimed as `R+sha256` / `R+blake3`, whose circuit set
+//! (the hash layers binding the digests to the operand columns) is pinned under that name.  Under
+//! `--allow-any-circuit` only, `--require-commitment` refuses an uncommitted statement and `--allow-unpinned-commitment`
+//! skips the root pin.
 
 mod circuit;
+mod commitments;
 mod field;
+mod instances;
 mod lanes;
+mod link;
 mod ntt;
 mod pins;
 mod proof;
@@ -22,6 +40,7 @@ mod sha256;
 mod sha512;
 mod transcript;
 mod verify;
+mod vllm_v1;
 
 use circuit::{layers, read_rows, Circuit, Layer};
 use std::path::{Path, PathBuf};
@@ -80,9 +99,145 @@ fn read_chain(path: &Path, uc: &Circuit, ec: &Circuit) -> Result<(Vec<Link>, Vec
     Ok((links, epi_pub, sha256::Sha256::digest(text.as_bytes())))
 }
 
+fn manifest_str(root: &Path, key: &str) -> Option<String> {
+    let text = std::fs::read_to_string(root.join("manifest.json")).ok()?;
+    let rest = text.split(&format!("\"{key}\":")).nth(1)?.trim_start().strip_prefix('"')?;
+    Some(rest[..rest.find('"')?].to_string())
+}
+
+fn hex(d: &[u8]) -> String { d.iter().map(|b| format!("{b:02x}")).collect() }
+
+/// The operand columns an export's unit circuit must bind, as `bind.txt` text (`gpu/bind.py::derive`, re-derived here
+/// from the column layout): checker v2 `one, x.s, x.e, x.M, x.z, <k x words>, <k w words>, y.s, ...` binds column
+/// `5 + j` to `x[v, k i + j]` and `5 + k + j` to `w[v, k i + j]`; fp4-nvf4 binds `x.p{i} = 16 a + b` for the 64 E2M1
+/// code pairs and `x.s{g} = 128 a + b` for the 4 UE4M3 scale pairs of the 68-byte step.
+fn expected_bind(uc: &Circuit, root: &Path) -> Result<String, String> {
+    let mut s = String::new();
+    if manifest_str(root, "relation").as_deref() == Some("fp4-nvf4") {
+        for i in 0..64 { s += &format!("bind x.p{i} x:68:{i}:16 w:68:{i}:1\n"); }
+        for g in 0..4 { s += &format!("bind x.s{g} x:68:{}:128 w:68:{}:1\n", 64 + g, 64 + g); }
+        return Ok(s);
+    }
+    let n = &uc.col_names;
+    let ys = n.iter().position(|c| c == "y.s").ok_or("bind: the unit circuit has no y.s column")?;
+    if n.len() < 5 || n[..5] != ["one", "x.s", "x.e", "x.M", "x.z"] || ys < 7 || (ys - 5) % 2 != 0 {
+        return Err("bind: not a checker-v2 unit column layout".into());
+    }
+    let k = (ys - 5) / 2;
+    for j in 0..k { s += &format!("bind {} x:{k}:{j}:1\n", n[5 + j]); }
+    for j in 0..k { s += &format!("bind {} w:{k}:{j}:1\n", n[5 + k + j]); }
+    Ok(s)
+}
+
+/// What an operands-bound statement names (`instances.txt`) and what this verifier found in its files.
+pub struct BindInfo {
+    pub relation: String, pub lo: usize, pub vus: usize, pub model: String,
+    pub x_sha: String, pub w_sha: String, pub y_sha: String, pub spec_matches: bool,
+    pub pin: Option<&'static instances::Pin>,
+}
+impl BindInfo {
+    /// `None` when the statement binds the circuit's operand columns to a pinned frozen set.
+    fn problem(&self, allow_unpinned: bool) -> Option<String> {
+        if !self.spec_matches { return Some("bind: bind.txt is not the unit circuit's operand columns".into()); }
+        if allow_unpinned { return None; }
+        let Some(p) = self.pin else {
+            return Some(format!("instances: {} [{}, {}) is not a pinned frozen set", self.relation, self.lo, self.lo + self.vus));
+        };
+        if p.model != self.model { return Some(format!("instances: {} is pinned for {}, the circuits are {}", p.relation, p.model, self.model)); }
+        for (what, got, want) in [("x.bin", &self.x_sha, p.x), ("w.bin", &self.w_sha, p.w), ("public words", &self.y_sha, p.y)] {
+            if got != want { return Some(format!("instances: {what} sha256 {got} is not the pinned {want}")); }
+        }
+        None
+    }
+    fn pinned(&self) -> bool { self.pin.is_some() && self.problem(false).is_none() }
+    fn json(&self) -> String {
+        format!("{{\"relation\": \"{}\", \"lo\": {}, \"vus\": {}, \"model\": \"{}\", \"x_sha256\": \"{}\", \"w_sha256\": \"{}\", \"y_sha256\": \"{}\", \"bind_spec_matches_circuit\": {}, \"pinned\": {}, \"pin_source\": {}}}",
+            self.relation, self.lo, self.vus, self.model, self.x_sha, self.w_sha, self.y_sha, self.spec_matches, self.pinned(),
+            self.pin.map(|p| format!("\"{}\"", p.source)).unwrap_or("null".into()))
+    }
+}
+
+/// `bind.txt` (in `d`, else the export root), `instances.txt`, `x.bin`, `w.bin` (in `d`): the binding and what it names.
+fn read_bind(d: &Path, root: &Path, uc: &Circuit, steps: usize, vus: usize, public: &[u32]) -> Result<Option<(verify::Bind, BindInfo)>, String> {
+    let bp = if d.join("bind.txt").is_file() { d.join("bind.txt") } else { root.join("bind.txt") };
+    if !bp.is_file() { return Ok(None); }
+    let spec = std::fs::read_to_string(&bp).map_err(|e| format!("bind.txt: {e}"))?;
+    let (mut cols, mut terms) = (Vec::new(), Vec::new());
+    for line in spec.lines() {
+        let t: Vec<&str> = line.split_whitespace().collect();
+        if t.is_empty() { continue; }
+        if t[0] != "bind" || t.len() < 3 { return Err(format!("bind.txt: unknown line {line:?}")); }
+        cols.push(uc.col_index(t[1]).ok_or_else(|| format!("bind.txt: the unit circuit has no column {}", t[1]))?);
+        let mut ts = Vec::new();
+        for tok in &t[2..] {
+            let f: Vec<&str> = tok.split(':').collect();
+            let arr = match f.first() { Some(&"x") => 0, Some(&"w") => 1, _ => return Err(format!("bind.txt: bad term {tok}")) };
+            let num = |i: usize| -> Result<u64, String> { f.get(i).and_then(|s| s.parse().ok()).ok_or_else(|| format!("bind.txt: bad term {tok}")) };
+            if f.len() != 4 || num(1)? == 0 { return Err(format!("bind.txt: bad term {tok}")); }
+            ts.push((arr, num(1)? as usize, num(2)? as usize, (num(3)? % field::P as u64) as u32));
+        }
+        terms.push(ts);
+    }
+    let mut seen = cols.clone();
+    seen.sort_unstable();
+    seen.dedup();
+    if seen.len() != cols.len() || cols.is_empty() { return Err("bind.txt: the bound columns must be distinct and non-empty".into()); }
+    let inst = std::fs::read_to_string(d.join("instances.txt")).map_err(|e| format!("instances.txt: {e}"))?;
+    let mut kv: std::collections::HashMap<&str, Vec<&str>> = std::collections::HashMap::new();
+    for line in inst.lines() {
+        let t: Vec<&str> = line.split_whitespace().collect();
+        if let Some((k, v)) = t.split_first() { kv.insert(k, v.to_vec()); }
+    }
+    let get = |k: &str, i: usize| -> Result<&str, String> { kv.get(k).and_then(|v| v.get(i).copied()).ok_or_else(|| format!("instances.txt: {k}")) };
+    let parse = |s: &str| -> Result<usize, String> { s.parse().map_err(|_| format!("instances.txt: {s:?}")) };
+    let (relation, lo, n_inst) = (get("relation", 0)?.to_string(), parse(get("lo", 0)?)?, parse(get("vus", 0)?)?);
+    if n_inst != vus { return Err(format!("instances.txt: {n_inst} VUs, the statement has {vus}")); }
+    let width = |s: &str| -> Result<usize, String> { match s { "u8" => Ok(1), "u16" => Ok(2), "u32" => Ok(4), _ => Err(format!("instances.txt: word {s}")) } };
+    let (xw, words) = (width(get("x", 0)?)?, parse(get("x", 1)?)?);
+    if get("w", 0)? != get("x", 0)? || parse(get("w", 1)?)? != words { return Err("instances.txt: x and w differ in shape".into()); }
+    let yw = width(get("y", 0)?)?;
+    let mut arrs: [Vec<u32>; 2] = [Vec::new(), Vec::new()];
+    let mut dig = vec![sha256::Sha256::digest(spec.as_bytes()), sha256::Sha256::digest(inst.as_bytes())];
+    for (a, name) in ["x.bin", "w.bin"].iter().enumerate() {
+        let bytes = std::fs::read(d.join(name)).map_err(|e| format!("{name}: {e}"))?;
+        if bytes.len() != vus * words * xw { return Err(format!("{name}: {} bytes, instances.txt says {}", bytes.len(), vus * words * xw)); }
+        arrs[a] = bytes.chunks_exact(xw).map(|c| c.iter().rev().fold(0u64, |acc, &b| (acc << 8) | b as u64) as u32).collect();
+        if arrs[a].iter().any(|&v| v >= field::P) { return Err(format!("{name}: a word is not a canonical BabyBear element")); }
+        dig.push(sha256::Sha256::digest(&bytes));
+    }
+    let mut ybytes = Vec::with_capacity(public.len() * yw);
+    for &y in public {
+        if yw < 4 && (y as u64) >> (8 * yw) != 0 { return Err("public.bin: a public word exceeds instances.txt's y width".into()); }
+        ybytes.extend_from_slice(&y.to_le_bytes()[..yw]);
+    }
+    for ts in &terms { for &(_, s, o, _) in ts { if s * (steps - 1) + o >= words { return Err("bind.txt: a term reads past the VU's words".into()); } } }
+    let info = BindInfo {
+        relation: relation.clone(), lo, vus, model: manifest_str(root, "model").unwrap_or_default(),
+        x_sha: hex(&dig[2]), w_sha: hex(&dig[3]), y_sha: hex(&sha256::Sha256::digest(&ybytes)),
+        spec_matches: expected_bind(uc, root).map(|e| e == spec).unwrap_or(false), pin: instances::find(&relation, lo, vus),
+    };
+    Ok(Some((verify::Bind { cols, terms, arrs, words, digests: dig }, info)))
+}
+
+/// `commitment.txt`: in `d`, else the export root.
+fn commitment_file(d: &Path, root: &Path) -> Option<PathBuf> {
+    [d.join("commitment.txt"), root.join("commitment.txt")].into_iter().find(|p| p.is_file())
+}
+
+/// `commitment.txt` and the tree check of the public words (commitments.rs).
+fn read_commitment(d: &Path, root: &Path, public: &[u32]) -> Result<Option<commitments::Checked>, String> {
+    let Some(p) = commitment_file(d, root) else { return Ok(None) };
+    let spec = commitments::Spec::parse(&std::fs::read_to_string(&p).map_err(|e| format!("commitment.txt: {e}"))?)?;
+    commitments::check(spec, public).map(Some)
+}
+
 /// The statement of a batch directory: circuits, `vus` (prefix of the public words), steps.  `d` may be a
 /// `neg/<id>` subdirectory sharing its parent's manifest and circuits.
 fn statement<'a>(unit: &'a Loaded, epi: &'a Loaded, d: &Path, vus: Option<usize>) -> Result<Statement<'a>, String> {
+    Ok(statement_bound(unit, epi, d, vus)?.0)
+}
+
+fn statement_bound<'a>(unit: &'a Loaded, epi: &'a Loaded, d: &Path, vus: Option<usize>) -> Result<(Statement<'a>, Option<BindInfo>), String> {
     let root = if d.join("manifest.json").is_file() { d.to_path_buf() } else { d.parent().unwrap().parent().unwrap().to_path_buf() };
     let steps = manifest_steps(&root);
     let (n, m, pub_words) = read_rows(&std::fs::read(d.join("public.bin")).map_err(|e| format!("public.bin: {e}"))?)?;
@@ -108,13 +263,31 @@ fn statement<'a>(unit: &'a Loaded, epi: &'a Loaded, d: &Path, vus: Option<usize>
             epi_pub: vec![col(ec, "y16")],
         }
     };
-    Ok(Statement {
+    let bound = read_bind(d, &root, uc, steps, b, &chain.public_y16)?;
+    let (bind, info) = match bound { Some((bd, info)) => (Some(bd), Some(info)), None => (None, None) };
+    let commit_text = match commitment_file(d, &root) {
+        Some(p) => Some(std::fs::read(&p).map_err(|e| format!("commitment.txt: {e}"))?),
+        None => None,
+    };
+    let commit = commit_text.as_ref().map(|t| sha256::Sha256::digest(t));
+    let link = match [d.join("link.txt"), root.join("link.txt")].into_iter().find(|p| p.is_file()) {
+        None => None,
+        Some(p) => {
+            let text = std::fs::read_to_string(&p).map_err(|e| format!("link.txt: {e}"))?;
+            let ct = commit_text.as_ref().ok_or("link.txt: a linked statement must be operands-committed (commitment.txt)")?;
+            Some(link::load(d, &text, uc, steps, b, ct, &chain.public_y16)?)
+        }
+    };
+    Ok((Statement {
         segs: vec![
             Segment { name: "unit".into(), circ: uc, layers: &unit.layers, units: b * steps },
             Segment { name: "epilogue".into(), circ: ec, layers: &epi.layers, units: b },
         ],
         chain,
-    })
+        bind,
+        commit,
+        link,
+    }, info))
 }
 
 fn arg(args: &[String], key: &str) -> Option<String> { args.iter().position(|a| a == key).map(|i| args[i + 1].clone()) }
@@ -143,9 +316,9 @@ fn cpu_model() -> Option<String> {
 
 fn stats_json(res: &Result<(), String>, st: &verify::Stats, extra: &str) -> String {
     format!(
-        "{{\"accepted\": {}, \"error\": {}, \"verify_seconds\": {:.6}, \"t_parse\": {:.6}, \"t_transcript\": {:.6}, \"t_functional_value\": {:.6}, \"t_merkle_proximity\": {:.6}, \"t_rows_linear_test\": {:.6}, \"t_rows_fill_cpu\": {:.6}, \"t_rows_eval_cpu\": {:.6}, \"bytes_read\": {}, \"msgs\": {}, \"slots\": {}, \"committed_elements\": {}, \"ligero_rows\": {}, \"threads\": {}, \"peak_rss_bytes\": {}, \"cpu\": {}{}}}",
+        "{{\"accepted\": {}, \"error\": {}, \"verify_seconds\": {:.6}, \"t_parse\": {:.6}, \"t_transcript\": {:.6}, \"t_link\": {:.6}, \"t_link_derive\": {:.6}, \"t_functional_value\": {:.6}, \"t_merkle_proximity\": {:.6}, \"t_rows_linear_test\": {:.6}, \"t_rows_fill_cpu\": {:.6}, \"t_rows_eval_cpu\": {:.6}, \"bytes_read\": {}, \"msgs\": {}, \"slots\": {}, \"committed_elements\": {}, \"ligero_rows\": {}, \"threads\": {}, \"peak_rss_bytes\": {}, \"cpu\": {}{}}}",
         res.is_ok(), match res { Ok(()) => "null".to_string(), Err(e) => format!("\"{}\"", e.replace('"', "'")) },
-        st.t_total, st.t_parse, st.t_transcript, st.t_konst, st.t_merkle, st.t_rows, st.t_rows_fill_cpu, st.t_rows_eval_cpu, st.bytes_read, st.msgs, st.slots, st.committed_elements, st.rows, st.threads,
+        st.t_total, st.t_parse, st.t_transcript, st.t_link, st.t_link_derive, st.t_konst, st.t_merkle, st.t_rows, st.t_rows_fill_cpu, st.t_rows_eval_cpu, st.bytes_read, st.msgs, st.slots, st.committed_elements, st.rows, st.threads,
         peak_rss_bytes().map(|v| v.to_string()).unwrap_or("null".into()), cpu_model().map(|m| format!("\"{m}\"")).unwrap_or("null".into()), extra)
 }
 
@@ -167,11 +340,13 @@ fn cmd_verify(args: &[String]) -> i32 {
         if let Some(out) = arg(args, "--json") { std::fs::write(out, json + "\n").expect("write json"); }
         1
     };
+    // `Some(true)`: claimed for a bound relation R+bound, whose circuit files are R's
+    let bound_claim = relation.as_deref().filter(|_| !allow_any).map(|r| r.ends_with(instances::BOUND));
     // checked on the raw files, before any of them is parsed
     let pinned = match (relation.as_deref(), allow_any) {
         (Some(r), false) => {
             let c = pins::Circuits::read(&root, manifest_steps(&root), manifest_is_v2(&root)).unwrap_or_else(|e| { eprintln!("{e}"); std::process::exit(2) });
-            if let Err(e) = pins::check(&c, r) { return refuse(e); }
+            if let Err(e) = pins::check(&c, r.strip_suffix(instances::BOUND).unwrap_or(r)) { return refuse(e); }
             Some(c)
         }
         _ => None,
@@ -179,7 +354,7 @@ fn cmd_verify(args: &[String]) -> i32 {
     let unit = load_circuit(&root.join("circuit.txt"));
     let epi = load_circuit(&root.join("epilogue.txt"));
     let vus: Option<usize> = arg(args, "--vus").map(|s| s.parse().unwrap());
-    let stmt = statement(&unit, &epi, &dir, vus).unwrap_or_else(|e| { eprintln!("{e}"); std::process::exit(2) });
+    let (stmt, info) = statement_bound(&unit, &epi, &dir, vus).unwrap_or_else(|e| { eprintln!("{e}"); std::process::exit(2) });
     // statement() finds manifest.json and chain.txt by its own rule: what the transcript absorbs must be the set checked
     if let Some(c) = &pinned {
         let absorbed = pins::Circuits::of(&unit.circ.hash, &epi.circ.hash, stmt.chain.spec_hash.as_ref(), stmt.chain.steps);
@@ -188,11 +363,45 @@ fn cmd_verify(args: &[String]) -> i32 {
                                   dir.display(), root.display(), absorbed.steps, absorbed.chain.as_deref().map_or("none", |h| &h[..16])));
         }
     }
+    // a pinned linked unit (route a) binds the operands only through the session's link: never verify it without one
+    if pinned.is_some() && stmt.link.is_none() && unit.circ.col_names.iter().any(|n| n.starts_with("link.")) {
+        return refuse("link: this circuit set is the route (a) linked statement: it verifies only with the session's link.txt".into());
+    }
     let bytes = std::fs::read(arg(args, "--proof").expect("--proof")).expect("proof file");
     let th = threads(args);
     if args.iter().any(|a| a == "--trace-logup") { verify::TRACE_LOGUP.store(true, std::sync::atomic::Ordering::Relaxed); }
-    let (res, st) = verify::verify(&stmt, &bytes, &LIGERO, th);
-    let extra = format!(", \"vus\": {}, \"units\": {}, \"steps\": {}{pin}", stmt.vus(), stmt.segs[0].units, stmt.chain.steps);
+    let problem = match (&info, bound_claim) {
+        (None, Some(true)) => Some(format!("statement: not operands-bound (no bind.txt), the proof is claimed for {}", relation.as_deref().unwrap_or(""))),
+        (Some(_), Some(false)) => Some(format!("statement: operands-bound (bind.txt); claim it as {}{}", relation.as_deref().unwrap_or(""), instances::BOUND)),
+        (Some(bi), Some(true)) => bi.problem(false).or_else(|| (Some(bi.relation.as_str()) != relation.as_deref())
+            .then(|| format!("instances: instances.txt names {}, the proof is claimed for {}", bi.relation, relation.as_deref().unwrap_or("")))),
+        (None, _) if args.iter().any(|a| a == "--require-bound") => Some("statement: not operands-bound (no bind.txt)".to_string()),
+        (None, _) => None,
+        (Some(bi), None) => bi.problem(args.iter().any(|a| a == "--allow-unpinned-instances")),
+    };
+    let committed = match read_commitment(&dir, &root, &stmt.chain.public_y16) {
+        Ok(c) => c,
+        Err(e) => return refuse(e),
+    };
+    let commit_claim = relation.as_deref().filter(|_| !allow_any).and_then(commitments::relation_hash);
+    let problem = problem.or_else(|| match (&committed, commit_claim) {
+        (Some(_), _) if info.is_some() => Some("statement: both operands-bound (bind.txt) and operands-committed (commitment.txt)".into()),
+        (None, Some(h)) => Some(format!("statement: not operands-committed (no commitment.txt), the proof is claimed for a {} relation", h.suffix())),
+        (Some(c), None) if !allow_any => Some(format!("statement: operands-committed (commitment.txt); claim it as {}", c.spec.relation)),
+        (Some(c), Some(_)) => c.problem(args.iter().any(|a| a == "--allow-unpinned-commitment")).or_else(|| (Some(c.spec.relation.as_str()) != relation.as_deref())
+            .then(|| format!("commitment: commitment.txt names {}, the proof is claimed for {}", c.spec.relation, relation.as_deref().unwrap_or("")))),
+        (None, None) if allow_any && args.iter().any(|a| a == "--require-commitment") => Some("statement: not operands-committed (no commitment.txt)".into()),
+        (None, None) => None,
+        (Some(c), None) => c.problem(args.iter().any(|a| a == "--allow-unpinned-commitment")),
+    });
+    let (res, st) = match problem {
+        Some(e) => (Err(e), verify::Stats { threads: th, ..Default::default() }),
+        None => verify::verify(&stmt, &bytes, &LIGERO, th),
+    };
+    let extra = format!(", \"vus\": {}, \"units\": {}, \"steps\": {}{pin}, \"operands_bound\": {}, \"instances\": {}, \"operands_committed\": {}, \"commitment\": {}",
+        stmt.vus(), stmt.segs[0].units, stmt.chain.steps, info.is_some() && res.is_ok(),
+        info.as_ref().map(|i| i.json()).unwrap_or("null".into()), committed.is_some() && res.is_ok(),
+        committed.as_ref().map(|c| c.json()).unwrap_or("null".into()));
     let json = stats_json(&res, &st, &extra);
     println!("{json}");
     if let Some(out) = arg(args, "--json") { std::fs::write(out, json + "\n").expect("write json"); }
@@ -294,8 +503,8 @@ fn cmd_mutate(args: &[String]) -> i32 {
         let b = rng.below(8 * D);
         muts.push(("merkle_sibling", cols_at + oi * per_col + 4 * rows + D * di + b / 8, (b % 8) as u8));
     }
-    let n_total = muts.len() + 2 + 2;
-    println!("mutations: {} bit flips + 2 count mutations + 2 statement mutations = {n_total}", muts.len());
+    let n_stmt = if stmt.bind.is_some() { 3 } else { 2 };
+    println!("mutations: {} bit flips + 2 count mutations + {n_stmt} statement mutations = {}", muts.len(), muts.len() + 2 + n_stmt);
     let counter = std::sync::atomic::AtomicUsize::new(0);
     let results: Vec<Vec<(usize, bool, String, f64)>> = std::thread::scope(|s| {
         let hs: Vec<_> = (0..parallel).map(|_| s.spawn(|| {
@@ -355,13 +564,28 @@ fn cmd_mutate(args: &[String]) -> i32 {
         if r.is_err() { stmt_ok += 1; } else { accepted_list.push("public_word".into()); }
         *errors.entry(r.err().unwrap_or_default().split(|c: char| c.is_ascii_digit()).next().unwrap_or("").trim().to_string()).or_insert(0) += 1;
         if stmt.vus() > 1 {
-            let s3 = statement(&unit, &epi, &dir, Some(stmt.vus() - 1)).unwrap();
-            let (r, _) = verify::verify(&s3, &bytes, &LIGERO, th);
+            // an operands-bound statement names its VU count: fewer VUs is already not the statement
+            let r = match statement(&unit, &epi, &dir, Some(stmt.vus() - 1)) {
+                Ok(s3) => verify::verify(&s3, &bytes, &LIGERO, th).0,
+                Err(e) => Err(e),
+            };
             if r.is_err() { stmt_ok += 1; } else { accepted_list.push("vu_count".into()); }
             *errors.entry(r.err().unwrap_or_default().split(|c: char| c.is_ascii_digit()).next().unwrap_or("").trim().to_string()).or_insert(0) += 1;
         } else { stmt_ok += 1; }
     }
-    per_group.insert("statement", (stmt_ok, 2));
+    let mut stmt_total = 2;
+    if stmt.bind.is_some() {
+        // operands bound: one frozen x word changed (bit 0: the proof's witness no longer matches the statement)
+        stmt_total += 1;
+        let mut s4 = statement(&unit, &epi, &dir, vus).unwrap();
+        let bd = s4.bind.as_mut().unwrap();
+        let i = rng.below(bd.arrs[0].len());
+        bd.arrs[0][i] ^= 1;
+        let (r, _) = verify::verify(&s4, &bytes, &LIGERO, th);
+        if r.is_err() { stmt_ok += 1; } else { accepted_list.push("operand_word".into()); }
+        *errors.entry(r.err().unwrap_or_default().split(|c: char| c.is_ascii_digit()).next().unwrap_or("").trim().to_string()).or_insert(0) += 1;
+    }
+    per_group.insert("statement", (stmt_ok, stmt_total));
     let total_rej: usize = per_group.values().map(|v| v.0).sum();
     let total: usize = per_group.values().map(|v| v.1).sum();
     for (g, (r, n)) in &per_group { println!("  {g}: {r}/{n} rejected"); }

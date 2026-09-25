@@ -46,3 +46,10 @@ class Transcript:
 
     def challenges(self, n: int) -> list[Ext]:
         return [self.challenge() for _ in range(n)]
+
+    def challenge_bytes(self) -> bytes:
+        """One whole digest (32 uniform bytes, a GF(2^256) coin of the bit link); the next challenge starts afresh."""
+        self.slots += 1
+        d = hashlib.sha256(self.state + b"chal" + self.ctr.to_bytes(8, "little")).digest()
+        self.ctr += 1
+        return d
