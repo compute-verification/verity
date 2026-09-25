@@ -32,7 +32,7 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
 const TABLE: &str = "pure";
-const SIGMA_TAG: &[u8] = b"verity/flock-pure-block/sigma/v1";
+const SIGMA_TAG: &[u8] = b"verity/flock-pure-block/sigma/v2";
 const FRAME: &[u8] = b"veritor/protocol/merkle/frame/v3\0";
 
 fn arg(k: &str, d: &str) -> String {
@@ -53,7 +53,7 @@ fn f128_bytes(v: &[F128]) -> Vec<u8> {
 }
 
 fn domain(rep: usize) -> Vec<u8> {
-    format!("flock-pure-block/fast100x2/rep{rep}").into_bytes()
+    format!("flock-pure-block-v2/fast100x2/rep{rep}").into_bytes()
 }
 
 fn params(m: usize, lig: LigeritoProfile) -> PcsParams {
@@ -148,6 +148,13 @@ impl StatementVerifier for PureVerifier {
             return Err(format!("C4: {table} is not in the statement"));
         }
         let p = Publics::parse(publics, self.st.blocks_real)?;
+        if !self.st.net.epilogue() {
+            for v in 0..self.inst.vus {
+                if p.acc[3 * v + 2] != self.inst.out[v] {
+                    return Err(format!("C4: VU {v}'s committed final accumulator is not its output word"));
+                }
+            }
+        }
         for v in 0..self.inst.vus {
             for r in 0..2 {
                 let cvs: Vec<[u32; 8]> = (0..3).map(|c| p.cv[3 * v + c][r]).collect();
@@ -255,6 +262,7 @@ struct Plan {
     unit_flip: bool,
     operand_flip: bool,
     acc_in_wrong: bool,
+    acc_public_flip: bool,
     rep1_other_witness: bool,
     profile: [LigeritoProfile; 2],
     substitute: Option<Vec<Vec<u8>>>,
@@ -263,7 +271,7 @@ struct Plan {
 impl Plan {
     fn honest(gpu: bool) -> Self {
         Plan { gpu, commit: CommitMode::Honest, forge_middle: false, bad_params: None, key_substituted: false, cv_flip: false, y_flip: false,
-               unit_flip: false, operand_flip: false, acc_in_wrong: false, rep1_other_witness: false,
+               unit_flip: false, operand_flip: false, acc_in_wrong: false, acc_public_flip: false, rep1_other_witness: false,
                profile: [LigeritoProfile::Fast100; 2], substitute: None }
     }
 }
@@ -276,13 +284,9 @@ fn panic_msg(e: Box<dyn std::any::Any + Send>) -> String {
     e.downcast_ref::<String>().cloned().or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string())).unwrap_or_default()
 }
 
-/// The unit y16 words at unit 31 of every real block (the prover's publics), from the honest evaluation.
-fn y16_words(st: &PureStmt, comps: &[Compression], inputs: &(dyn Fn(usize, usize) -> [F128; 5] + Sync)) -> Vec<u32> {
-    if !st.net.epilogue() {
-        return vec![0; st.blocks_real];
-    }
-    let col = st.net.out_cols[1];
-    let _ = comps;
+/// Unit 31's y16 and c_out words of every real block (the prover's publics), from its own evaluation.
+fn unit31_words(st: &PureStmt, inputs: &(dyn Fn(usize, usize) -> [F128; 5] + Sync)) -> (Vec<u32>, Vec<u32>) {
+    let cols = st.net.out_cols.clone();
     (0..st.blocks_real)
         .into_par_iter()
         .map(|b| {
@@ -292,9 +296,10 @@ fn y16_words(st: &PureStmt, comps: &[Compression], inputs: &(dyn Fn(usize, usize
                 let j = bit & 127;
                 (if j < 64 { w.lo >> j } else { w.hi >> (j - 64) }) & 1
             });
-            (0..16).fold(0u32, |w, t| w | (((z[col * 128 + t] & 1) as u32) << t))
+            let word = |col: usize, n: usize| (0..n).fold(0u32, |w, t| w | (((z[col * 128 + t] & 1) as u32) << t));
+            (if cols.len() > 1 { word(cols[1], 16) } else { 0 }, word(cols[0], 32))
         })
-        .collect()
+        .unzip()
 }
 
 fn session(st: &Arc<PureStmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Plan) -> (Value, Vec<Vec<u8>>) {
@@ -343,11 +348,14 @@ fn session(st: &Arc<PureStmt>, inst: &Arc<Instances>, t: SharedTransport, plan: 
         }
         r
     };
-    let mut y16 = y16_words(st, &comps, &inputs);
+    let (mut y16, mut acc) = unit31_words(st, &inputs);
     if plan.y_flip {
         y16[0] ^= 1;
     }
-    let publics = Publics { cv: cvs, y16 }.bytes();
+    if plan.acc_public_flip {
+        acc[0] ^= 1;
+    }
+    let publics = Publics { cv: cvs, y16, acc }.bytes();
     let wit = Wit { comps: comps.clone(), inputs: Box::new(inputs), flip_z: plan.unit_flip.then_some(700 + ((UNIT_POS0 + 5) << UNIT_LOG)) };
     let wit1 = if plan.rep1_other_witness { Wit { comps: comps.clone(), inputs: Box::new(|_, _| [F128::ZERO; 5]), flip_z: None } } else { Wit { comps, inputs: Box::new({
         let st3 = st.clone(); let inst3 = inst.clone(); let c3 = wit.comps.clone();
@@ -425,7 +433,7 @@ fn session(st: &Arc<PureStmt>, inst: &Arc<Instances>, t: SharedTransport, plan: 
     let wait_s = t.lock().unwrap().wait_s();
     let hexs = |b: &[u8]| b.iter().map(|x| format!("{x:02x}")).collect::<String>();
     (
-        json!({"accepted": v["accepted"], "why": v["why"], "verdict": v, "statement": "verity/flock-pure-block/v1", "prover": "flock-cuda-block",
+        json!({"accepted": v["accepted"], "why": v["why"], "verdict": v, "statement": "verity/flock-pure-block/v2", "prover": "flock-cuda-block",
                "gpu": plan.gpu, "relation": inst.relation, "vus": inst.vus, "units": inst.units, "n_blake3": 2 * 16 * st.blocks_real,
                "n_units": UNITS * st.blocks_real, "dense_m": st.m, "nbl": st.nbl, "e2e_s": e2e_s, "commit_s": commit_s, "rows_s": rows_s,
                "prove_s": prove_s, "prove_total_s": prove_s.iter().sum::<f64>(), "buckets": buckets, "wait_s": wait_s, "calls": calls,
@@ -451,7 +459,8 @@ const CASES: &[(&str, bool, bool)] = &[
     ("y16_public_forged", false, true),
     ("unit_internal_bit_flipped", false, true),
     ("unit_operand_differs_from_message", false, true),
-    ("unit_acc_in_differs_from_recorded", false, true),
+    ("next_block_acc_in_differs_from_committed_acc", false, true),
+    ("committed_acc_differs_from_block_acc_out", false, true),
     ("reps_with_different_witness", false, false),
     ("fast_profile_proofs", false, false),
     ("cross_session_replay_both_reps", false, false),
@@ -471,7 +480,8 @@ fn plan_of(name: &str, gpu: bool) -> Plan {
         "y16_public_forged" => Plan { y_flip: true, ..h },
         "unit_internal_bit_flipped" => Plan { unit_flip: true, gpu: false, ..h },
         "unit_operand_differs_from_message" => Plan { operand_flip: true, ..h },
-        "unit_acc_in_differs_from_recorded" => Plan { acc_in_wrong: true, ..h },
+        "next_block_acc_in_differs_from_committed_acc" => Plan { acc_in_wrong: true, ..h },
+        "committed_acc_differs_from_block_acc_out" => Plan { acc_public_flip: true, ..h },
         "reps_with_different_witness" => Plan { rep1_other_witness: true, ..h },
         "fast_profile_proofs" => Plan { profile: [LigeritoProfile::Fast; 2], ..h },
         _ => h,
@@ -525,7 +535,7 @@ fn selftest(st: &Arc<PureStmt>, inst: &Arc<Instances>, gpu: bool) {
         all &= v["pass"] == true;
         println!("NEG\t{v}");
     }
-    println!("SELFTEST\t{}", json!({"statement": "verity/flock-pure-block/v1", "relation": inst.relation, "vus": inst.vus, "m": st.m,
+    println!("SELFTEST\t{}", json!({"statement": "verity/flock-pure-block/v2", "relation": inst.relation, "vus": inst.vus, "m": st.m,
         "gpu": gpu, "all_pass": all}));
 }
 
