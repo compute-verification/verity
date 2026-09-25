@@ -15,6 +15,25 @@ TH=$([ "$Q" = max ] && nproc || echo $(( Q / PER_ ))); export RAYON_NUM_THREADS=
 [ -x $HOME/.local/bin/uv ] || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
 [ -x $W/py/bin/python ] || { $HOME/.local/bin/uv venv -q --python 3.12 $W/py && $HOME/.local/bin/uv pip install -q --python $W/py/bin/python numpy blake3; }
 export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO/packages/verity/src:$REPO/backends/numerical/python:$REPO/backends/flock/python
+if [ "$REL" = bf16-ampere ]; then
+  BI=$W/bench-instances/v1; FZ=$REPO/fixtures/bench-instances/v1
+  [ -f $BI/vu-k1536.x.u16 ] || python3 -m verity_numerical.bench.instances build --out $BI --seeds $FZ/seeds --procs $TH 2>&1 | tail -3
+  python3 - $BI $FZ <<'PYEOF' | tee $O/bench-instances.txt || exit 4
+import json, sys
+from pathlib import Path
+from verity_numerical.bench.instances import sha256_file
+bi, fz = Path(sys.argv[1]), Path(sys.argv[2])
+man = json.loads((fz / "manifest.json").read_text())
+built = {n: f for t in man["tiers"].values() for n, f in t.get("files", {}).items() if not f.get("committed")}
+bad = [n for n, f in built.items() if not (bi / n).is_file() or sha256_file(bi / n) != f["sha256"]]
+assert not bad, f"rebuilt arrays differ from the committed manifest: {bad}"
+for n in built:
+    dst = fz / n
+    dst.unlink(missing_ok=True)
+    dst.symlink_to(bi / n)
+print(f"{len(built)} rebuilt arrays match the committed manifest; linked into {fz}")
+PYEOF
+fi
 B=/workspace/flock-gpu-link/flock/target/release/flock-pure-gpu; sha256sum $B | tee $O/binary.sha256
 lscpu | grep -E 'Model name|^CPU\(s\)' | tee $O/host.txt; echo threads $TH | tee -a $O/host.txt
 S=$W/rec-$TAG; rm -rf $S; mkdir -p $S; tar xzf $RD/inputs/$TAG.tgz -C $S
