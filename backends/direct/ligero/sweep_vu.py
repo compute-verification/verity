@@ -11,7 +11,7 @@ per rep (``--commit-per-rep``: ``commitment.seconds``).
 Throughput is ``e2e.vu_per_second`` (``--commit-per-rep``: commitment + proving; ``end_to_end.vu_per_second`` too) when present, else VUs / ``t.total``.  Each point is its own
 ``run bench-vu`` process: its warm-up pass is untimed, its ``--reps`` timed runs give the median, and the timing guard writes
 its ``contention`` verdict.  ``--dump plateau`` re-runs nothing: it dumps rep 1 of every point (``--dump-reps 1``) and deletes
-the proof files of every non-plateau point once the sweep is decided (their manifests stay).
+the proof files of every point but the plateau and the ``--keep`` totals once the sweep is decided (their manifests stay).
 """
 from __future__ import annotations
 
@@ -70,6 +70,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--start", type=int, default=1024)
     ap.add_argument("--max", type=int, default=1 << 17)
     ap.add_argument("--dump", choices=("plateau", "all", "none"), default="plateau")
+    ap.add_argument("--keep", type=int, nargs="*", default=[4096],
+                    help="--dump plateau: also keep the proofs of these totals (default 4096: the frozen sets' size)")
     ap.add_argument("--id", default=None, help="sweep id (default: a digest of relation, bench args and start time)")
     a = ap.parse_args(own)
     for flag in ("--total-vus", "--out", "--dump-dir", "--dump-reps"):
@@ -109,7 +111,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     best = max(ok, key=lambda p: (p["vu_per_second"], -p["total_vus"]))
     stop = ("a point failed (rc %d)" % points[-1]["rc"]) if points[-1]["vu_per_second"] is None else \
-        ("< 2 %% over two doublings" if done([p["vu_per_second"] for p in ok]) else "reached --max")
+        ("< 2 % over two doublings" if done([p["vu_per_second"] for p in ok]) else "reached --max")
     summary = {"id": sid, "relation": a.relation, "bench": bench, "rule": RULE, "stopped": stop,
                "plateau_point": best["point"], "plateau_total_vus": best["total_vus"], "points": points}
     for p in ok:
@@ -117,7 +119,7 @@ def main(argv: list[str] | None = None) -> int:
         sweep = {"id": sid, "point": p["point"], "plateau": p is best, "total_vus": p["total_vus"], "rule": RULE,
                  "stopped": stop, "points": [[q["total_vus"], q["vu_per_second"]] for q in points]}
         rj.write_text(json.dumps(stamp(json.loads(rj.read_text()), sweep, reps), indent=1, default=str))
-        if a.dump == "plateau" and p is not best:
+        if a.dump == "plateau" and p is not best and p["total_vus"] not in a.keep:
             for rep in (out / p["dir"] / "proofs").glob("rep*"):
                 shutil.rmtree(rep, ignore_errors=True)
     (out / "sweep.json").write_text(json.dumps(summary, indent=1))
