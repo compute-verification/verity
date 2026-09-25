@@ -938,8 +938,8 @@ def run_sp1_committed(a) -> int:
         if src != 0 or not sreps or not all(r["accepted"] for r in sreps):
             raise SystemExit(f"sp1-committed: sweep point B={b} failed (rc {src})")
         st = min(r["prove_seconds"] + r["save_seconds"] for r in sreps)
-        sc = min(r["commit_seconds"] for r in sreps)
-        sweep_points.append({"B": b, "reps": len(sreps), "t_total": st, "commit_seconds": sc, "e2e_seconds": st + sc, "per_second": b / (st + sc),
+        scm = min(r["commit_seconds"] for r in sreps)
+        sweep_points.append({"B": b, "reps": len(sreps), "t_total": st, "commit_seconds": scm, "e2e_seconds": st + scm, "per_second": b / (st + scm),
                              "shards": sreps[0]["shards"]})
     sweep_points.sort(key=lambda p: p["B"])
     best = max(p["per_second"] for p in sweep_points)
@@ -997,7 +997,7 @@ def run_sp1_committed(a) -> int:
         measurement("commit.rows_seconds", statistics.median(r["commit_rows_seconds"] for r in reps), "s"),
         measurement("commit.trees_seconds", statistics.median(r["commit_trees_seconds"] for r in reps), "s"),
         measurement("commit.threads", setup["commit_threads"], "count"),
-        measurement("verifier.tree_check_seconds", sorted(v["tree_check_seconds"] for v in verdicts)[len(verdicts) // 2], "s"),
+        measurement("tree_check_seconds", sorted(v["tree_check_seconds"] for v in verdicts)[len(verdicts) // 2], "s"),
         measurement("prove_seconds_reps", sum(r["prove_seconds"] for r in reps) / len(reps), "s"),
         measurement("prove_seconds_min", min(r["prove_seconds"] for r in reps), "s"),
         measurement("prove_seconds_max", max(r["prove_seconds"] for r in reps), "s"),
@@ -1009,13 +1009,14 @@ def run_sp1_committed(a) -> int:
         measurement("proofs_verified_producer", sum(v["accepted"] for v in verdicts), "count"),
         measurement("proof_negatives_rejected", sum(1 for x in proof_negatives if x.get("accepted") is False), "count"),
     ]
-    if execute_doc:
-        meas += [measurement("total_cycles", execute_doc["total_cycles"], "cycles"), measurement("cycles_per_vu", execute_doc["total_cycles"] / B, "cycles"),
-                 measurement("guest_input_bytes", setup["input_bytes"], "B"), measurement("execute_wall", execute_doc["execute_seconds"], "s")]
-        if execute_doc.get("gas") is not None:
-            meas.append(measurement("gas", execute_doc["gas"], "count"))
-        meas += [measurement(f"cycles.{k}", v, "cycles") for k, v in sorted(execute_doc["cycle_tracker"].items())]
-        meas += [measurement(f"syscalls.{k}", v, "count") for k, v in sorted(execute_doc["syscalls"].items())]
+    ex = (execute_doc or {}).get("report")
+    if ex:
+        meas += [measurement("total_cycles", ex["total_cycles"], "cycles"), measurement("cycles_per_vu", ex["total_cycles"] / B, "cycles"),
+                 measurement("guest_input_bytes", setup["input_bytes"], "B"), measurement("execute_wall", ex["execute_seconds"], "s")]
+        if ex.get("gas") is not None:
+            meas.append(measurement("gas", ex["gas"], "count"))
+        meas += [measurement(f"cycles.{k}", v, "cycles") for k, v in sorted(ex["cycle_tracker"].items())]
+        meas += [measurement(f"syscalls.{k}", v, "count") for k, v in sorted(ex["syscalls"].items())]
     if peak["mib"] is not None:
         meas.append(contract.measurement("mem.peak_device_bytes", peak["mib"] << 20))
     if len(timeline) == len(reps):
@@ -1061,7 +1062,7 @@ def run_sp1_committed(a) -> int:
         print(f"contract: {len(problems)} problem(s): " + "; ".join(problems), file=sys.stderr)
     print(json.dumps({"backend": "sp1-committed", "scheme": a.committed_scheme, "format": fmt, "B": B, "t_total": t_total, "commit_seconds": commit_s, "e2e_seconds": e2e,
                       "prove": rep["prove_seconds"], "serialize": rep["save_seconds"], "shards": shards, "security_log2": security["achieved_log2"],
-                      "proof_bytes": rep["proof_bytes"], "cycles": execute_doc["total_cycles"] if execute_doc else None, "vk": vk,
+                      "proof_bytes": rep["proof_bytes"], "cycles": ex["total_cycles"] if ex else None, "vk": vk,
                       "verify_s": verify_s, "sweep": sweep_points, "plateau": sweep["plateau"], "validation": result["validation"]["status"],
                       "contract": problems or "conforms"}, indent=1))
     return 0 if ok and not problems else 1
