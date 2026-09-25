@@ -1199,7 +1199,17 @@ fn main() {
             while !start.is_empty() && !std::path::Path::new(&start).exists() {
                 std::thread::sleep(std::time::Duration::from_millis(1));
             }
-            let t = shared(TcpTransport::connect(&arg("--verifier", "127.0.0.1:7200")).unwrap());
+            // the verifier may be re-binding its port between the sweep's sizes
+            let addr = arg("--verifier", "127.0.0.1:7200");
+            let tc = Instant::now();
+            let conn = loop {
+                match TcpTransport::connect(&addr) {
+                    Ok(c) => break c,
+                    Err(e) if tc.elapsed().as_secs() < 60 => { eprintln!("connect {addr}: {e}; retrying"); std::thread::sleep(std::time::Duration::from_millis(500)) }
+                    Err(e) => panic!("connect {addr}: {e}"),
+                }
+            };
+            let t = shared(conn);
             let sock = arg("--prime-sock", "");
             let plan = Plan { proxy: (!sock.is_empty()).then(|| PrimeProxy::start(&sock, t.clone())), ..plan };
             let (v, _) = session(&ch, t, seed, &plan);
