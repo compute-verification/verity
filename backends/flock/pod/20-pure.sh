@@ -16,7 +16,10 @@ command -v cc >/dev/null || { apt-get update -qq && DEBIAN_FRONTEND=noninteracti
 [ -x /usr/bin/time ] || { apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq time >/dev/null; }
 [ -x $HOME/.cargo/bin/cargo ] || curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable >/dev/null
 source $HOME/.cargo/env
-python3 -c "import numpy, blake3" 2>/dev/null || pip install -q numpy blake3 2>&1 | tail -1 || pip install -q --break-system-packages numpy blake3 2>&1 | tail -1
+# Python 3.12 (the core's syntax) in a venv of its own, with numpy and blake3
+[ -x $HOME/.local/bin/uv ] || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
+[ -x $W/py/bin/python ] || { $HOME/.local/bin/uv venv -q --python 3.12 $W/py && $HOME/.local/bin/uv pip install -q --python $W/py/bin/python numpy blake3; }
+export PATH=$W/py/bin:$PATH; python3 --version
 export PYTHONPATH=$REPO/packages/verity/src:$REPO/backends/numerical/python:$REPO/backends/flock/python
 cd $W; [ -d flock ] || git clone -q https://github.com/succinctlabs/flock.git
 cd $F && git checkout -q b684b12 && git checkout -q -- . && git clean -qfd crates && git apply $SRC/flock-link-b684b12.patch || exit 1
