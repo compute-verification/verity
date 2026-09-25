@@ -1,12 +1,12 @@
 """P5: property logic lives in ``properties/``, and runs cite property records by digest.
 
 The rule's import contract is "``check`` and ``pipeline`` import only ``properties.record`` and
-``properties.check_properties``".  Neither allowed entry point exists yet, so every import of a ``properties`` module
+``properties.check_properties``" (``ALLOWED_ENTRY_POINTS``).  Any other import of a ``properties`` module
 (``_imports.PROPERTY_MODULES``) by a module in layer ``check|properties`` or ``pipeline`` (``properties`` itself
 excepted) is a violation, keyed by (importer, imported) module pair in ``allowlists/p05_properties.json``.
 
-Once the entry points exist, they go in ``ALLOWED_ENTRY_POINTS``, and the rule's registry test (every property the
-verdict names exists in ``properties.REGISTRY``) applies.
+The rule's registry test (every property the verdict names exists in ``properties.record.REGISTRY``) applies once
+the verdict cites records.  Once ``properties.check_properties`` exists, it joins ``ALLOWED_ENTRY_POINTS``.
 """
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from . import _ratchet as R
 
 NAME = "p05_properties"
 RULE = "P5 (property logic lives in properties/)"
-ALLOWED_ENTRY_POINTS: tuple[str, ...] = ()      # verity_vllm.properties.record, verity_vllm.properties.check_properties
+ALLOWED_ENTRY_POINTS: tuple[str, ...] = ("verity_vllm.properties.record",)
 
 
 def importer(src: str) -> bool:
