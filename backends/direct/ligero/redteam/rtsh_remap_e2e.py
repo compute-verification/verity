@@ -6,8 +6,8 @@ Python `hashauth.verify_hash_auth`) only check that those leaves open under the 
 `w_index` from `vu_index` and the committed set's layout (unshared: x = W = vu; a tile: v // nw, v % nw).  So a committer
 that serves a WRONG output y_v gets it accepted: prove VU v on any committed (row a, column b) whose product is y_v.
 
-Here: honest x rows and W columns (tree a and b roots equal the honest instance set's), VU 1's committed output is VU 2's
-true output, the statement claims VU 1 on (x row 2, W column 2).  Checks, exit 0 iff all hold:
+Here (2 VUs, l = 256): honest x rows and W columns (tree a and b roots equal the honest instance set's), VU 0's committed
+output is VU 1's true output, the statement claims VU 0 on (x row 1, W column 1).  Checks, exit 0 iff all hold:
   * a / b roots equal the honest commitment's, y root differs (only the served output is wrong);
   * Python verify_vus ACCEPTS; Rust `verify` PINNED ACCEPTS; Rust `batch --target-bits 128` PINNED ACCEPTS;
   * reverify.verify_tree (the independent re-verification that writes verified=accepted) PASSES on the dump;
@@ -34,7 +34,8 @@ def main() -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--relation", default="fp8-ada")
     ap.add_argument("--leaf", default="blake3")
-    ap.add_argument("--vus", type=int, default=4)
+    ap.add_argument("--vus", type=int, default=2)
+    ap.add_argument("--min-l", type=int, default=256)
     ap.add_argument("--mode", default="fiat-shamir")
     ap.add_argument("--zk", action="store_true")
     ap.add_argument("--device", default="cpu")
@@ -51,19 +52,18 @@ def main() -> int:
     n = args.vus
     base = instances(rel, n)
     y_true = [int(v[3]) for v in base]
-    assert y_true[1] != y_true[2], "pick another seed: VU 1 and VU 2 share an output"
+    assert y_true[0] != y_true[1], "pick another seed: VU 0 and VU 1 share an output"
 
     def runner():
         return HashedRelationRunner(rel, args.device, -128.0, zk=args.zk, mode=args.mode, leaf=args.leaf)
 
-    honest = runner()
-    honest.commit_vus(base)
-    h_roots = {nm: honest.trees[nm].ref.root.hex() for nm in "aby"}
-    h_bind = {nm: honest.trees[nm].ref.binding.hex() for nm in "aby"}
+    R = runner()
+    R.commit_vus(base)
+    h_roots = {nm: R.trees[nm].ref.root.hex() for nm in "aby"}
+    h_bind = {nm: R.trees[nm].ref.binding.hex() for nm in "aby"}
 
     served = list(base)
-    served[1] = (base[1][0], base[1][1], base[1][2], base[2][3])      # VU 1's committed output: VU 2's true output
-    R = runner()
+    served[0] = (base[0][0], base[0][1], base[0][2], base[1][3])      # VU 0's committed output: VU 1's true output
     R.commit_vus(served)
     roots = {nm: R.trees[nm].ref.root.hex() for nm in "aby"}
     binds = {nm: R.trees[nm].ref.binding.hex() for nm in "aby"}
@@ -75,7 +75,7 @@ def main() -> int:
 
     def emit(tag, vus, xi, wi):
         auth = HashAuth.for_vus(R.trees, list(range(n)), xi, wi)
-        proof, pubs, lay = R.prove_vus(vus, check=False, vu_ids=list(range(n)), auth=auth, coins=None, min_l=1024)
+        proof, pubs, lay = R.prove_vus(vus, check=False, vu_ids=list(range(n)), auth=auth, coins=None, min_l=args.min_l)
         ok, why = R.verify_vus(proof, pubs, lay, coins=None)
         d = out / tag
         (d / "rep0").mkdir(parents=True, exist_ok=True)
@@ -103,7 +103,7 @@ def main() -> int:
         return row
 
     remap = list(range(n))
-    remap[1] = 2
+    remap[0] = 1
     res["forgery"] = emit("forgery", [base[i] for i in remap], remap, remap)
     res["control"] = emit("control", base, list(range(n)), list(range(n)))
 
@@ -114,7 +114,7 @@ def main() -> int:
     res["verdict"] = "FORGERY ACCEPTED" if broke else "not reproduced"
     (out / "remap.json").write_text(json.dumps(res, indent=1, default=str))
     print(f"\na/b roots == honest: {ab_honest}; y root differs: {roots['y'] != h_roots['y']}; bindings == honest: {binds == h_bind}")
-    print(f"VU 1: true y {y_true[1]}, committed y {served[1][3]} (VU 2's)")
+    print(f"VU 0: true y {y_true[0]}, committed y {served[0][3]} (VU 1's)")
     print("\n*** R1: wrong output under honest x/W roots ACCEPTED (python, rust pinned, reverify PASS); honest-mapping control "
           "rejected ***" if broke else "\n(not reproduced)")
     return 0 if broke else 1
