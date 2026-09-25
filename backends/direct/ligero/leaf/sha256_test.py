@@ -90,3 +90,16 @@ def test_compression_gadget_computes_sha256_and_rejects_a_flipped_carry() -> Non
     sels = [op[1] for op in sys.program if op[0] == "sels"]
     W[sels[len(sels) // 2]] ^= 1
     assert _violations(sys, W) > 0
+
+
+@pytest.mark.parametrize("word_bits,steps", ((8, 12), (8, 48), (16, 12), (16, 24), (16, 96)))
+def test_row_sponges_are_carry_values_and_native(word_bits: int, steps: int) -> None:
+    torch = pytest.importorskip("torch", exc_type=ImportError)
+    if not torch.cuda.is_available():
+        pytest.skip("no CUDA device")
+    rows = np.random.default_rng(steps).integers(0, 1 << word_bits, size=(37, S.K_VU))
+    words = torch.as_tensor(rows, device="cuda").reshape(37 * steps, S.K_VU // steps)
+    for role in (1, 2):
+        car, dg = L.row_sponges(words, word_bits=word_bits, role=role, row_words=S.K_VU, n=37, steps=steps)
+        assert np.array_equal(car.cpu().numpy(), L.carry_values(rows, word_bits=word_bits, role=role, steps=steps))
+        assert np.array_equal(dg.cpu().numpy(), L.native(rows, word_bits=word_bits, role=role))

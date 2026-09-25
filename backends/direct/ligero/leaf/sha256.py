@@ -162,6 +162,71 @@ def chain_states(rows: np.ndarray, word_bits: int, role: int) -> np.ndarray:
     return out
 
 
+_CHAIN_KERNEL = r"""
+typedef unsigned char u8;
+
+// row i (nblocks whole 64-byte blocks at rows + 64 nblocks i, 4-byte aligned): the chaining value before every block
+// and after the last, from the midstate, as out[i][b][0..8)
+extern "C" __global__
+void sha256_row_chain(const u32* __restrict__ mid, const u8* __restrict__ rows, int nblocks, long long n,
+                      u32* __restrict__ out)
+{
+    long long i = (long long)blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n) return;
+    u32 st[8], w[16];
+    u32* o = out + i * (long long)(nblocks + 1) * 8;
+    #pragma unroll
+    for (int j = 0; j < 8; ++j) { st[j] = mid[j]; o[j] = st[j]; }
+    const u32* p = (const u32*)(rows + i * (long long)nblocks * 64);
+    for (int b = 0; b < nblocks; ++b) {
+        #pragma unroll
+        for (int j = 0; j < 16; ++j) w[j] = __byte_perm(p[16 * b + j], 0, 0x0123);
+        sha256_compress(st, w);
+        #pragma unroll
+        for (int j = 0; j < 8; ++j) o[8 * (b + 1) + j] = st[j];
+    }
+}
+"""
+_chain_fn = None
+
+
+def chain_states_gpu(rb, role: int, word_bits: int, row_words: int):
+    """:func:`chain_states` on the GPU: ``rb`` (R, n_bytes) uint8 cupy row bytes (whole blocks) -> (R, n_blocks + 1, 8)
+    uint32 cupy, one thread per row (``hash_gpu/sha256_cuda.py``'s compression)."""
+    global _chain_fn
+    from .. import frame_gpu
+    cp = frame_gpu.cp
+    if _chain_fn is None:
+        src = frame_gpu.fv3.sha256_cuda.SRC.split('extern "C"')[0] + _CHAIN_KERNEL
+        _chain_fn = cp.RawModule(code=src, options=("-std=c++17",)).get_function("sha256_row_chain")
+    rb = cp.ascontiguousarray(rb, dtype=cp.uint8)
+    R, nbytes = rb.shape
+    if nbytes % BLOCK_LEN:
+        raise ValueError("rows must be whole 64-byte blocks (1536 or 3072 bytes are)")
+    nb = nbytes // BLOCK_LEN
+    out = cp.empty((R, nb + 1, 8), dtype=cp.uint32)
+    if R:
+        mid = cp.asarray(np.asarray(midstate(role, word_bits, row_words), dtype=np.uint32))
+        _chain_fn((-(-R // 128),), (128,), (mid, rb, np.int32(nb), np.int64(R), out))
+    return out
+
+
+def _row_bytes_torch(rows, word_bits: int):
+    """:func:`row_bytes` of (R, n_words) int64 torch words in range -> (R, n_bytes) uint8 torch (little-endian u16)."""
+    import torch
+    if word_bits == 8:
+        return rows.to(torch.uint8).contiguous()
+    if word_bits == 16:
+        return torch.stack([rows & 0xFF, rows >> 8], -1).to(torch.uint8).reshape(rows.shape[0], -1).contiguous()
+    raise ValueError(f"word_bits {word_bits}: rows are bytes or little-endian u16 words")
+
+
+def _limbs_cp(h):
+    """:func:`_limbs` of (..., 8) int64 cupy words."""
+    import cupy as cp
+    return cp.stack([h & 0xFFFF, h >> 16], -1).reshape(*h.shape[:-1], 16)
+
+
 def _limbs(h: np.ndarray) -> np.ndarray:
     """(..., 8) u32 -> (..., 16) int64 limbs, word-major, low limb first."""
     h = np.asarray(h, dtype=np.int64)
@@ -476,6 +541,39 @@ class Sha256Leaf:
             car[:, 1:, HOLD:HOLD + 16] = np.ascontiguousarray(rb[:, :-1, :]).view("<u2").astype(np.int64)
             car[:, :, PAR] = np.arange(steps) % 2
         return car
+
+    def row_sponges(self, words, *, word_bits: int, role: int, row_words: int, n: int, steps: int):
+        """The committer's chains of ``n`` whole rows at once on the GPU (:func:`chain_states_gpu`): ``words`` (n * steps,
+        k) int64 CUDA torch, row-major -> ``(carry (n, steps, CARRY_ELEMS), digests (n, DIGEST_ELEMS))`` int64 torch =
+        :meth:`carry_values` / :meth:`native`; ``None`` off CUDA or without the GPU committer (the caller falls back to
+        :meth:`chain_witness`)."""
+        from .. import frame_gpu
+        if not words.is_cuda or not frame_gpu.available():
+            return None
+        import torch
+        cp = frame_gpu.cp
+        rows = words.reshape(n, row_words)
+        if bool(((rows < 0) | (rows >= 1 << word_bits)).any()):
+            raise ValueError("word out of range")
+        with frame_gpu._torch_stream():
+            rb = _row_bytes_torch(rows, word_bits)
+            st = chain_states_gpu(cp.asarray(rb), role, word_bits, row_words).astype(cp.int64)    # (n, nb + 1, 8)
+            nb = st.shape[1] - 1
+            half = steps == 2 * nb
+            if not half and nb % steps:
+                raise ValueError("whole (or half) blocks per column")
+            blk_before = (cp.arange(steps) // 2) if half else cp.arange(steps) * (nb // steps)
+            m = cp.asarray(_limbs(np.asarray(midstate(role, word_bits, row_words), dtype=np.uint32)))
+            car = cp.zeros((n, steps, CARRY_ELEMS), dtype=cp.int64)
+            car[:, :, :16] = (_limbs_cp(st[:, blk_before]) - m) % P
+            if half:
+                prev = cp.asarray(rb).reshape(n, steps, 16, 2).astype(cp.int64)
+                car[:, 1:, HOLD:HOLD + 16] = prev[:, :-1, :, 0] | (prev[:, :-1, :, 1] << 8)
+                car[:, :, PAR] = cp.arange(steps)[None, :] % 2
+            dg = cp.empty((n, DIGEST_ELEMS), dtype=cp.int64)
+            dg[:, 0] = header(role, word_bits, row_words)
+            dg[:, 1:] = _limbs_cp(st[:, -1])
+            return torch.as_tensor(car, device=words.device), torch.as_tensor(dg, device=words.device)
 
     def chain_witness(self, words, *, word_bits: int, role: int, row_words: int, n_vus: int, steps: int, l: int):
         """``words`` (l, k) int64 torch (VU v in columns [v steps, (v + 1) steps), pad columns 0) -> (carry (CARRY_ELEMS,
