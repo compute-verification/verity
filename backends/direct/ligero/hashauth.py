@@ -80,17 +80,20 @@ def _levels(domain, leaves: list[bytes], count: int) -> list[np.ndarray]:
     return levels
 
 
-def build_row_tree(name: str, binding: bytes, rows: np.ndarray, word_bits: int, role: int, leaf=None) -> tuple[WordTree, np.ndarray]:
+def build_row_tree(name: str, binding: bytes, rows: np.ndarray, word_bits: int, role: int, leaf=None,
+                   digests: np.ndarray | None = None) -> tuple[WordTree, np.ndarray]:
     """Commit ``rows`` (count, n_words) of ``word_bits``-bit words as row leaves of the scheme ``leaf`` (default: Poseidon2,
     ``leaf/v2h``): the digest of each row (``role``: ``h2.ROLE_X`` / ``ROLE_W``, the scheme's domain tag), framed by
     ``leaf.leaf_bytes`` under schema ``leaf.schema``, under the SHA-256 tree.  Returns the tree and the digests
-    (count, digest_elems)."""
+    (count, digest_elems).  ``digests``: the rows' ``scheme.native`` digests already computed (the committer's device
+    sponges, ``relchain.HashedRelationRunner.commit``) instead of hashing ``rows`` here."""
     scheme = _leaf(leaf)
-    rows = np.ascontiguousarray(rows, dtype=np.int64)
-    count = int(rows.shape[0])
+    count = int(np.shape(rows)[0])
     LIMITS.enforce("max_positions", count)
     domain = domain_for(binding, OWNER[name], count)
-    digests = np.asarray(scheme.native(rows, word_bits=word_bits, role=role), dtype=np.int64)
+    if digests is None:
+        digests = scheme.native(np.ascontiguousarray(rows, dtype=np.int64), word_bits=word_bits, role=role)
+    digests = np.asarray(digests, dtype=np.int64)
     if digests.shape != (count, scheme.digest_elems) or ((digests < 0) | (digests >= h2.P)).any():
         raise ValueError(f"leaf {scheme.name}: native() must return (count, {scheme.digest_elems}) elements in [0, p)")
     leaves = [domain.leaf(r, r, scheme.schema, scheme.leaf_bytes(digests[r])) for r in range(count)]
@@ -113,11 +116,14 @@ def build_word_tree(name: str, binding: bytes, words: np.ndarray, y_bits: int) -
 
 
 def build_trees(*, x_rows: np.ndarray, w_cols: np.ndarray, y_words: np.ndarray, word_bits: int, y_bits: int,
-                bindings: Mapping[str, bytes], leaf=None) -> tuple[dict[str, WordTree], dict[str, np.ndarray]]:
-    """The three trees of a committed instance set; also the operand digests (what the honest prover will publish)."""
+                bindings: Mapping[str, bytes], leaf=None, digests: Mapping[str, np.ndarray] | None = None
+                ) -> tuple[dict[str, WordTree], dict[str, np.ndarray]]:
+    """The three trees of a committed instance set; also the operand digests (what the honest prover will publish).
+    ``digests``: ``{"a": x digests, "b": W digests}`` computed already (:func:`build_row_tree`)."""
     scheme = _leaf(leaf)
-    ta, da = build_row_tree("a", bindings["a"], x_rows, word_bits, h2.ROLE_X, scheme)
-    tb, db = build_row_tree("b", bindings["b"], w_cols, word_bits, h2.ROLE_W, scheme)
+    digests = digests or {}
+    ta, da = build_row_tree("a", bindings["a"], x_rows, word_bits, h2.ROLE_X, scheme, digests=digests.get("a"))
+    tb, db = build_row_tree("b", bindings["b"], w_cols, word_bits, h2.ROLE_W, scheme, digests=digests.get("b"))
     ty = build_word_tree("y", bindings["y"], y_words, y_bits)
     return {"a": ta, "b": tb, "y": ty}, {"a": da, "b": db}
 

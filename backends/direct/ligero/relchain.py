@@ -431,6 +431,8 @@ class HashedRelationRunner(RelationChainRunner):
         self.leaf_name = leaf_registry.suffix_of(self.leaf)     # the relation suffix ("poseidon2", "blake3", "ajtai-n64")
         self.sys = self.hr.sys
         self.tb = tables(self.sys, self.device)
+        if hashchain.ROW_SPONGE_KERNEL and str(device).startswith("cuda") and getattr(self.leaf, "prepare", None) is not None:
+            self.leaf.prepare()
         self.compile_seconds = time.perf_counter() - t0
         self._cfg = {}
         self._base_sys = dataclasses.replace(self.sys, hints=self.sys.hints[:self.hr.n_base_hints])
@@ -460,21 +462,25 @@ class HashedRelationRunner(RelationChainRunner):
         t0 = time.perf_counter()
         x_rows, w_cols = np.asarray(x_rows, dtype=np.int64), np.asarray(w_cols, dtype=np.int64)
         t1 = time.perf_counter()
-        self.trees, self.digests, cached = hashauth.load_or_build_trees(
-            cache, x_rows=x_rows, w_cols=w_cols,
-            y_words=np.asarray(y_words, dtype=np.int64), word_bits=self.hr.word_bits, y_bits=self.rel.y_bits, bindings=bindings,
-            leaf=self.leaf)
         self.tile = tile
-        # the chain states of every committed row, once (the prover's cost of hashing; gathered per sub-batch in prove_vus)
-        t2 = time.perf_counter()
         self.rows = {"a": x_rows, "b": w_cols}
+        # the chain states of every committed row, once (the prover's cost of hashing; gathered per sub-batch in prove_vus);
+        # with the device row sponges their digests ARE the tree leaves' (scheme.native), so the trees take them
         self.sponges = {nm: hashchain.row_chain(self.hr, self.rows[nm], role, self.device) for _, nm, role in hashchain.ROLES}
         if str(self.device).startswith("cuda"):
             torch.cuda.synchronize()
+        t2 = time.perf_counter()
+        self.sponge_seconds = t2 - t1
+        chain_digests = None
+        if hashchain.ROW_SPONGE_KERNEL and getattr(self.leaf, "row_sponges", None) is not None and str(self.device).startswith("cuda"):
+            chain_digests = {nm: self.sponges[nm][1].cpu().numpy().astype(np.int64) for nm in self.sponges}
+        self.trees, self.digests, cached = hashauth.load_or_build_trees(
+            cache, x_rows=x_rows, w_cols=w_cols,
+            y_words=np.asarray(y_words, dtype=np.int64), word_bits=self.hr.word_bits, y_bits=self.rel.y_bits, bindings=bindings,
+            leaf=self.leaf, digests=chain_digests)
         t3 = time.perf_counter()
-        self.sponge_seconds = t3 - t2
         self._committed_digests()
-        self.commit_timings = {"rows": t1 - t0, "trees": t2 - t1, "chain": t3 - t2, "host": time.perf_counter() - t3}
+        self.commit_timings = {"rows": t1 - t0, "chain": t2 - t1, "trees": t3 - t2, "host": time.perf_counter() - t3}
         return cached
 
     def commit_evidence(self) -> dict:

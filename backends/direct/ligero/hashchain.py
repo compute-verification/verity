@@ -33,6 +33,7 @@ see the lane notes).
 """
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 
 import numpy as np
@@ -56,6 +57,11 @@ __all__ = ["HASH_PIN_END", "N_DIGEST", "N_ROW_DIGEST", "PIN_ROLE", "ROLES", "ROW
            "RowHashSystem", "compose", "compose_shared", "hash_hints", "hash_pin", "hash_public_vectors", "pack_lanes",
            "public_table", "row_chain", "row_hash_hints", "row_hash_public_vectors", "row_hash_system", "row_sponges",
            "shared_hints", "shared_public_vectors", "shared_units", "sponge_states_roles"]
+
+#: ``row_chain`` runs a scheme's ``row_sponges`` device kernel (Poseidon2: one thread per committed row) when it has one, and
+#: the committer takes the tree leaves' digests from it instead of hashing the rows again on the host (``hashauth``).  Same
+#: states, digests, leaves and roots; ``LIGERO_ROW_SPONGE_KERNEL=0`` keeps the torch sponge and the host digests.
+ROW_SPONGE_KERNEL = os.environ.get("LIGERO_ROW_SPONGE_KERNEL", "1") != "0"
 
 HASH_PIN_END = "hash.is_end"
 N_DIGEST = 2 * h2.OUT          # the default (Poseidon2) digest table width: x digest (8) then W digest (8)
@@ -579,6 +585,12 @@ def row_chain(hr: HashedRelation, rows, role: int, device) -> tuple:
     rows = torch.as_tensor(np.asarray(rows, dtype=np.int64), device=device)
     n, steps, k = rows.shape[0], hr.steps, hr.k
     words = rows.reshape(n * steps, k)
+    fast = getattr(hr.leaf, "row_sponges", None) if ROW_SPONGE_KERNEL else None
+    if fast is not None:
+        # one thread per row, the whole sponge in registers (leaf/poseidon2.py row_sponge): the same states and digests
+        res = fast(words, word_bits=hr.word_bits, role=role, row_words=steps * k, n=n, steps=steps)
+        if res is not None:
+            return res
     out = hr.leaf.chain_witness(words, word_bits=hr.word_bits, role=role, row_words=steps * k, n_vus=n, steps=steps, l=n * steps)
     cap, dg = out[0], out[1]
     res = (cap.T.reshape(n, steps, hr.leaf.carry_elems).contiguous(), dg)
