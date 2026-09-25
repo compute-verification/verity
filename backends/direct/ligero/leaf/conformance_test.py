@@ -243,7 +243,10 @@ def test_statement_v5_carries_the_scheme_and_verifies_from_files(name: str, runn
         forged = raw[:i - 4] + len(t_rel).to_bytes(4, "little") + t_rel.encode() + raw[i + len(st2.relation):]
         (tmp_path / "t.stmt").write_bytes(forged)
         (tmp_path / "t.proof").write_bytes(proof_bytes(proof))
-        ok, why, _ = verify_files(tmp_path / "t.stmt", tmp_path / "t.proof", "cpu")
+        try:
+            ok, _why, _ = verify_files(tmp_path / "t.stmt", tmp_path / "t.proof", "cpu")
+        except ValueError:
+            ok = False
         assert not ok, f"{name} proof accepted as {twin}"
     # the block must name the scheme's schema: a statement rewritten with another scheme's suffix is refused at parse
     other = next((n for n in SCHEMES if n != name and registry.get(n).schema != R.leaf.schema), None)
