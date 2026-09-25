@@ -155,7 +155,7 @@ def committed(store: LocalStore, leaf: str = "blake3", *, t_total: float = 0.4, 
         doc["measurements"].append({"name": "fixed.setup_seconds", "value": setup, "unit": "s"})
     ix = {"rounds.sequential_depth": 0} if interaction is None else interaction
     for name, value in ix.items():
-        if name in ("rtt_method", "t_total_includes_wait"):
+        if name in ("rtt_method", "t_total_includes_wait", "loopback_method"):
             doc.setdefault("interaction", {})[name] = value
             continue
         unit = {"rounds.sequential_depth": "count", "rounds.protocol": "count", "net.bytes_out": "B", "net.bytes_in": "B", "net.rtt_ms": "ms",
@@ -600,6 +600,13 @@ def test_live_coin_handling_measured_on_loopback_is_prover_compute_not_network(s
     ix = V.interaction(store.get_manifest(art).meta)
     assert ix["loopback_s"] == pytest.approx(0.03) and ix["wait_s"] == pytest.approx(0.103 - 0.03)
     assert ix["prover_s"] == pytest.approx(0.43)
+
+
+def test_a_borrowed_loopback_figure_is_named_in_the_cell_footnote(store: LocalStore) -> None:
+    committed(store, t_total=0.4, commit=0.6, interaction={**LIVE, "live.loopback_round_seconds": 0.01,
+                                                           "loopback_method": "BORROWED from r20260925-000000-0000"})
+    md = V.render_markdown(V.build(store))
+    assert "live-coin handling 10 ms per round, measured on loopback, counted as prover compute (BORROWED from r20260925-000000-0000)" in md
 
 
 @pytest.mark.parametrize(("over", "why"), [

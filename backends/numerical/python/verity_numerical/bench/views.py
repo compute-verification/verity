@@ -487,7 +487,8 @@ def interaction(meta: Mapping[str, Any]) -> dict[str, Any]:
         stmt = next((v for v in (num(k) for k in STATEMENT_BYTES) if v is not None), 0.0)
         return {"live": False, "derived": True, "rounds": 0.0, "bytes_up": (proof or 0.0) + stmt, "bytes_down": 0.0,
                 "proof_bytes": proof, "statement_bytes": stmt, "rtt_ms": None, "rtt_method": None,
-                "prover_s": num(contract.T_TOTAL), "verifier_s": 0.0, "wait_s": None, "loopback_s": 0.0}
+                "prover_s": num(contract.T_TOTAL), "verifier_s": 0.0, "wait_s": None, "loopback_s": 0.0,
+                "loopback_round_s": None, "loopback_method": None}
     rounds = num("rounds.sequential_depth")
     rounds = num("rounds.protocol") if rounds is None else rounds
     up = next((v for v in (num("net.bytes_out"), proof) if v is not None), None)
@@ -504,7 +505,8 @@ def interaction(meta: Mapping[str, Any]) -> dict[str, Any]:
     return {"live": True, "derived": False, "rounds": rounds, "bytes_up": up or 0.0, "bytes_down": num("net.bytes_in") or 0.0,
             "proof_bytes": proof, "statement_bytes": None, "rtt_ms": num("net.rtt_ms"),
             "rtt_method": block.get("rtt_method") or lv.get("rtt_method"), "prover_s": compute,
-            "verifier_s": num("verify.critical_s") or 0.0, "wait_s": wait, "loopback_s": moved}
+            "verifier_s": num("verify.critical_s") or 0.0, "wait_s": wait, "loopback_s": moved,
+            "loopback_round_s": loop if moved else None, "loopback_method": block.get("loopback_method") if moved else None}
 
 
 def interaction_time(ix: Mapping[str, Any], rtt_s: float = REF_RTT_S, bandwidth_bps: float = REF_BANDWIDTH_BPS) -> float:
@@ -1212,6 +1214,10 @@ def render_markdown(V: Views, published: bool = False) -> str:
                     f"{_instances_text(c.legacy.target, c.instances)}; whole-proof bound {_fmt_bound(c.bound_log2)}; host {c.legacy.host or '?'}; {c.legacy.verification_note()}")
             if c.legacy.instances_equiv:
                 text += f"; {T.INSTANCE_EQUIV_NOTE} ({c.legacy.instances_equiv})"
+            ixl = P.get("interaction") or {}
+            if ixl.get("loopback_s"):
+                text += (f"; live-coin handling {1e3 * ixl['loopback_round_s']:.3g} ms per round, measured on loopback, counted as prover compute "
+                         f"({ixl['loopback_method'] or 'method not recorded'})")
             if c.provisional:
                 text += f"; provisional: {c.provisional}"
             if c.legacy.finding:
