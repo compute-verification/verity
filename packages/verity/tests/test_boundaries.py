@@ -1,11 +1,13 @@
 """The core dependency rules (README "Development") as import-boundary checks over the source tree.
 
-    ir <- evaluation <- ml,  ir <- commitments,  ir + ml + commitments <- verification;  nothing depends back on a later
-    layer, and no core module imports a backend, frontend, integration, or external runtime.
+    ir <- evaluation <- ml,  ir <- commitments,  ir + ml + commitments <- verification;  randomness imports no core
+    module;  nothing depends back on a later layer, and no core module imports a backend, frontend, integration, or
+    external runtime.
 
 numpy is a core dependency (architecture decision: `verity.evaluation` batches over numpy arrays and kernels sit beside
 their Definitions in `verity.ml`).  The plain-integer references stay numpy-free on purpose, because they are the
 specification the Rust guest, the Lean vectors and the probes are checked against: `verity.ir` and `verity.ml.tc`.
+`verity.randomness` and `verity.resource_accounting` are exact stdlib arithmetic too.
 """
 
 from __future__ import annotations
@@ -25,11 +27,12 @@ ALLOWED = {
     "commitments": {"ir"},
     "verification": {"ir", "ml", "commitments"},
     "resource_accounting": {"ir", "verification", "commitments"},
+    "randomness": set(),
 }
 FORBIDDEN_EXTERNAL = ("verity_sp1", "verity_vllm", "verity_torch", "sp1", "vllm", "torch", "jax", "onnx",
                       "backends", "frontends", "integrations", "research", "veritor")
 #: Source subtrees that must stay stdlib-only: the scalar references.
-NUMPY_FREE = ("ir", "ml/tc")
+NUMPY_FREE = ("ir", "ml/tc", "randomness", "resource_accounting")
 
 
 def _imports(path: Path) -> list[tuple[str, int]]:
