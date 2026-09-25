@@ -81,7 +81,8 @@ impl Bind {
 }
 
 /// `commit`: SHA-256 of an operands-committed statement's `commitment.txt`, absorbed after the binding digests.
-pub struct Statement<'a> { pub segs: Vec<Segment<'a>>, pub chain: Chain, pub bind: Option<Bind>, pub commit: Option<[u8; 32]> }
+/// `link`: the bit link's prime side (`link.txt`, link.rs, PROTOCOL 17).
+pub struct Statement<'a> { pub segs: Vec<Segment<'a>>, pub chain: Chain, pub bind: Option<Bind>, pub commit: Option<[u8; 32]>, pub link: Option<crate::link::Spec> }
 impl<'a> Statement<'a> {
     /// Every table any segment queries: segment 0's in order, then the later segments' new ones
     /// (`gpu/prover.py::union_tables`; a v1 statement's epilogue adds none).
@@ -98,7 +99,7 @@ impl<'a> Statement<'a> {
 #[derive(Default, Debug, Clone)]
 pub struct Stats {
     pub bytes_read: usize, pub slots: u64, pub msgs: usize, pub committed_elements: usize, pub rows: usize,
-    pub t_parse: f64, pub t_transcript: f64, pub t_konst: f64, pub t_merkle: f64, pub t_rows: f64, pub t_total: f64, pub t_rows_fill_cpu: f64, pub t_rows_eval_cpu: f64,
+    pub t_parse: f64, pub t_transcript: f64, pub t_link: f64, pub t_link_derive: f64, pub t_konst: f64, pub t_merkle: f64, pub t_rows: f64, pub t_total: f64, pub t_rows_fill_cpu: f64, pub t_rows_eval_cpu: f64,
     pub threads: usize, pub opened: Vec<usize>,
 }
 
@@ -145,6 +146,7 @@ pub fn expected_msgs(stmt: &Statement) -> usize {
         let b = log2ceil(s.units);
         for layer in s.layers { n += 4 * b + 3 * layer.s_in + 2 + 3 * layer.s_in + 1; }
     }
+    if stmt.link.is_some() { n += crate::link::PLANES; }
     n
 }
 
@@ -368,6 +370,7 @@ struct Functional<'a> {
     /// operand binding: rho_bind * geo_bind^(u * nb) per unit of segment 0, and the planar matrices of geo_bind^j
     bind_u: Vec<Ext>,
     bind_mats: Option<PlanarMats>,
+    link: Option<crate::link::Term>,
 }
 
 /// The R16-style flush: `out[touched[r]] += (rl * hi[block]) * acc[r]` for every touched column, as one planar
@@ -461,6 +464,7 @@ impl<'a> Functional<'a> {
                 bm.matvec(&self.bind_u[u], &mut planar[..DEG * nb]);
                 for (j, &c) in bd.cols.iter().enumerate() { out[c] += Ext(std::array::from_fn(|d| planar[d * nb + j])); }
             }
+            if let Some(lt) = &self.link { lt.add_row(u, out); }
         }
         // chain (gpu/prover.py::add_chain ordering: k = i * L + j for the incoming-word constraints, then
         // k = steps * L + j for the epilogue links, then per_vu - 1 for the public word)
@@ -709,6 +713,18 @@ fn verify_inner(stmt: &Statement, proof_bytes: &[u8], p: &Params, threads: usize
             claim = next;
         }
     }
+    let link_term = match &stmt.link {
+        Some(ls) => {
+            if ls.layout.ncols != stmt.segs[0].ncols() || ls.layout.vus * ls.layout.steps != stmt.segs[0].units { return Err("link: layout disagrees with the unit segment".into()); }
+            let sig = rd.take(crate::link::PLANES)?;
+            let tl = Instant::now();
+            let term = crate::link::verify(ls, &mut tr, &sig, threads)?;
+            st.t_link = tl.elapsed().as_secs_f64();
+            st.t_link_derive = ls.t_derive;
+            Some(term)
+        }
+        None => None,
+    };
     if rd.pos != proof.msgs.len() { return Err("trailing proof data".into()); }
     let rhos = tr.challenges(n_functionals(stmt));
     let geo = tr.challenge();
@@ -832,8 +848,9 @@ fn verify_inner(stmt: &Statement, proof_bytes: &[u8], p: &Params, threads: usize
             (gu, Some(PlanarMats::new(&gj)))
         }
     };
+    if let Some(lt) = &link_term { b += lt.b; }
     let v_mats: Vec<PlanarMats> = v_col.iter().map(|v| PlanarMats::new(v)).collect();
-    let func = Functional { stmt, tables: stmt.tables(), seg_offs, table_offs, l, eq_c, v_col, v_mats, lookups, chain_v, chain_k, per_vu, bind_u, bind_mats };
+    let func = Functional { stmt, tables: stmt.tables(), seg_offs, table_offs, l, eq_c, v_col, v_mats, lookups, chain_v, chain_k, per_vu, bind_u, bind_mats, link: link_term };
     st.t_konst = t2.elapsed().as_secs_f64();
 
     // ---- Ligero: r, w, qc, the functional value, the opened set

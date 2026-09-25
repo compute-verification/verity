@@ -50,4 +50,9 @@ impl Transcript {
         Ext(c)
     }
     pub fn challenges(&mut self, n: usize) -> Vec<Ext> { (0..n).map(|_| self.challenge()).collect() }
+    /// One whole digest (a GF(2^256) coin of the bit link, `gpu/transcript.py::challenge_bytes`).
+    pub fn challenge_bytes(&mut self) -> [u8; 32] {
+        self.slots += 1;
+        self.digest()
+    }
 }

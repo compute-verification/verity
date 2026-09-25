@@ -32,6 +32,7 @@ mod commitments;
 mod field;
 mod instances;
 mod lanes;
+mod link;
 mod ntt;
 mod pins;
 mod proof;
@@ -264,9 +265,18 @@ fn statement_bound<'a>(unit: &'a Loaded, epi: &'a Loaded, d: &Path, vus: Option<
     };
     let bound = read_bind(d, &root, uc, steps, b, &chain.public_y16)?;
     let (bind, info) = match bound { Some((bd, info)) => (Some(bd), Some(info)), None => (None, None) };
-    let commit = match commitment_file(d, &root) {
-        Some(p) => Some(sha256::Sha256::digest(&std::fs::read(&p).map_err(|e| format!("commitment.txt: {e}"))?)),
+    let commit_text = match commitment_file(d, &root) {
+        Some(p) => Some(std::fs::read(&p).map_err(|e| format!("commitment.txt: {e}"))?),
         None => None,
+    };
+    let commit = commit_text.as_ref().map(|t| sha256::Sha256::digest(t));
+    let link = match [d.join("link.txt"), root.join("link.txt")].into_iter().find(|p| p.is_file()) {
+        None => None,
+        Some(p) => {
+            let text = std::fs::read_to_string(&p).map_err(|e| format!("link.txt: {e}"))?;
+            let ct = commit_text.as_ref().ok_or("link.txt: a linked statement must be operands-committed (commitment.txt)")?;
+            Some(link::load(d, &text, uc, steps, b, ct, &chain.public_y16)?)
+        }
     };
     Ok((Statement {
         segs: vec![
@@ -276,6 +286,7 @@ fn statement_bound<'a>(unit: &'a Loaded, epi: &'a Loaded, d: &Path, vus: Option<
         chain,
         bind,
         commit,
+        link,
     }, info))
 }
 
@@ -305,9 +316,9 @@ fn cpu_model() -> Option<String> {
 
 fn stats_json(res: &Result<(), String>, st: &verify::Stats, extra: &str) -> String {
     format!(
-        "{{\"accepted\": {}, \"error\": {}, \"verify_seconds\": {:.6}, \"t_parse\": {:.6}, \"t_transcript\": {:.6}, \"t_functional_value\": {:.6}, \"t_merkle_proximity\": {:.6}, \"t_rows_linear_test\": {:.6}, \"t_rows_fill_cpu\": {:.6}, \"t_rows_eval_cpu\": {:.6}, \"bytes_read\": {}, \"msgs\": {}, \"slots\": {}, \"committed_elements\": {}, \"ligero_rows\": {}, \"threads\": {}, \"peak_rss_bytes\": {}, \"cpu\": {}{}}}",
+        "{{\"accepted\": {}, \"error\": {}, \"verify_seconds\": {:.6}, \"t_parse\": {:.6}, \"t_transcript\": {:.6}, \"t_link\": {:.6}, \"t_link_derive\": {:.6}, \"t_functional_value\": {:.6}, \"t_merkle_proximity\": {:.6}, \"t_rows_linear_test\": {:.6}, \"t_rows_fill_cpu\": {:.6}, \"t_rows_eval_cpu\": {:.6}, \"bytes_read\": {}, \"msgs\": {}, \"slots\": {}, \"committed_elements\": {}, \"ligero_rows\": {}, \"threads\": {}, \"peak_rss_bytes\": {}, \"cpu\": {}{}}}",
         res.is_ok(), match res { Ok(()) => "null".to_string(), Err(e) => format!("\"{}\"", e.replace('"', "'")) },
-        st.t_total, st.t_parse, st.t_transcript, st.t_konst, st.t_merkle, st.t_rows, st.t_rows_fill_cpu, st.t_rows_eval_cpu, st.bytes_read, st.msgs, st.slots, st.committed_elements, st.rows, st.threads,
+        st.t_total, st.t_parse, st.t_transcript, st.t_link, st.t_link_derive, st.t_konst, st.t_merkle, st.t_rows, st.t_rows_fill_cpu, st.t_rows_eval_cpu, st.bytes_read, st.msgs, st.slots, st.committed_elements, st.rows, st.threads,
         peak_rss_bytes().map(|v| v.to_string()).unwrap_or("null".into()), cpu_model().map(|m| format!("\"{m}\"")).unwrap_or("null".into()), extra)
 }
 
