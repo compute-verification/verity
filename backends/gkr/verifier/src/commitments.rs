@@ -268,7 +268,28 @@ pub struct Pin {
     pub source: &'static str,
 }
 
-pub const PINS: &[Pin] = &[];
+pub const PINS: &[Pin] = &[
+    Pin {
+        relation: "bf16-ampere+sha256", lo: 0, vus: 4096,
+        dataset: "bench-instances/v1", tier: "vu-k1536",
+        manifest_sha256: "059103cf9bd55ee83cbd4bb14ae6db2f60db2cb4ddf85cdc22b1cecee6e4eeea",
+        k: 1536, x_bits: 16, w_bits: 16, y_width: 2, n_y: 1,
+        a: "780aae0ac7471dfdbd3a5e4ec0ac7204ece23576cf55bdfb0d179c9c21c3b128",
+        b: "1e8c3fd306ecf6a02be71a1306aac2b0dddb823e1b53f4f0f0866e843adaaa82",
+        y: "9fff0fdc3d33d27fd358d42111e3a62856f1cf56cc1a81e2a9efab19adf0a0f6",
+        source: "fixtures/bench-instances/v1/manifest.json tier vu-k1536 (python -m gpu.commit pin bf16-ampere --leaf sha256)",
+    },
+    Pin {
+        relation: "fp8-hopper+blake3", lo: 0, vus: 4096,
+        dataset: "bench-instances-fp8-hopper/v1", tier: "vu-k1536-fp8-hopper",
+        manifest_sha256: "0ff750026b8d8df0418d3ec360ed6ade683a33b8264d66973021cbfbff7945bc",
+        k: 1536, x_bits: 8, w_bits: 8, y_width: 4, n_y: 1,
+        a: "300b209243d767f444a3531c05cfd9da3fb73d7dab216d0a8f3fe73889c24ec1",
+        b: "69740dc3f6c06ed566b7da893472a7fa7d4b23236571086dca09f300f47d0347",
+        y: "22fa3c6e7e514a35afb9c5d3041343179467e4338ee32ce3158d28d1885b70d1",
+        source: "backends/direct/ligero/relchain.py instances() seed 20260922 (python -m gpu.commit pin fp8-hopper --leaf blake3)",
+    },
+];
 
 pub fn find(relation: &str, lo: u64, vus: u64) -> Option<&'static Pin> {
     PINS.iter().find(|p| p.relation == relation && p.lo == lo && p.vus == vus)
