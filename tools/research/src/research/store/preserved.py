@@ -191,10 +191,19 @@ def check(st: LocalStore, targets: list[str], mode: str = "head", head_fallback:
                     man_ok = False
                     tr["attempt_manifest"] = False
                 else:
-                    man_ok = r.head(attempt_key(t)) is not None
+                    hd = r.head(attempt_key(t))
+                    local = st.attempt_path(t) if hasattr(st, "attempt_path") else None
+                    differs = (hd is not None and local is not None and local.exists() and
+                               (hd["bytes"] != local.stat().st_size or (is_md5_etag(hd.get("etag")) and hd["etag"] != md5_file(local))))
+                    man_ok = hd is not None and not differs
                     tr["attempt_manifest"] = man_ok
+                    if differs:
+                        tr["attempt_manifest_differs"] = True
                 if not man_ok:
-                    rep["not_preserved"].append({"id": t, "kind": "attempt", "errors": [f"{attempt_key(t)}: absent on the remote" if r else rep.get("reason", "no remote")]})
+                    why = (f"{attempt_key(t)}: the remote holds a DIFFERENT attempt document for this run id (`research data "
+                           f"reconcile-attempts {t}`)" if tr.get("attempt_manifest_differs") else
+                           f"{attempt_key(t)}: absent on the remote" if r else rep.get("reason", "no remote"))
+                    rep["not_preserved"].append({"id": t, "kind": "attempt", "errors": [why]})
                 named = attempt_artifacts(doc)
                 for name, a in named.items():
                     ar = art(a)
@@ -250,7 +259,8 @@ def format_report(rep: dict[str, Any]) -> list[str]:
                 lines.append(f"{t['target']}  attempt  NOT preserved: {t['error']}")
                 continue
             man = t.get("attempt_manifest")
-            lines.append(f"{t['target']}  attempt manifest  {'on remote' if man else ('not checked (recorded mode)' if man is None else 'ABSENT on remote')}")
+            lines.append(f"{t['target']}  attempt manifest  " + ("on remote" if man else "not checked (recorded mode)" if man is None else
+                         "DIFFERS from the remote's copy (research data reconcile-attempts)" if t.get("attempt_manifest_differs") else "ABSENT on remote"))
             for a, ar in t["artifacts"].items():
                 lines.append(f"  {ar['name']:<22} {a}  {str(ar['kind']):<22} "
                              + (f"PRESERVED ({ar.get('verified')})" if ar["preserved"] else "NOT preserved: " + "; ".join(ar["errors"] or ["?"])))
