@@ -52,6 +52,7 @@ except ImportError:                      # the offline core (tests, CPU cross-ch
 from verity_vllm.commit import hidden_engine as eng  # production engine pieces (imported, not forked)
 from verity_vllm.commit.native_ranges import NativeRangeOpenings
 from verity_vllm.acquire.committer_api import Opening, RunCommitment, StepCommitment, declaration
+from verity_vllm.engine import hooks
 from verity_vllm.pipeline.spans import Spans
 
 GPU_CHUNK_BYTES = 256
@@ -856,7 +857,7 @@ class NativeHostCommitter(NativeRangeOpenings):
         self.pool = _PinnedPool()
         self._handles: list = []
         self._orig: dict[str, Any] = {}
-        self._had_attr: dict[str, bool] = {}
+        self._hooks = hooks.Hooks()
         self._cur: _StepJob | None = None
         self._step_index = 0
         self._q: queue.Queue = queue.Queue()
@@ -1246,7 +1247,6 @@ class NativeHostCommitter(NativeRangeOpenings):
         runner = self.runner
         for nm in ("execute_model", "sample"):
             if hasattr(runner, nm):
-                self._had_attr[nm] = nm in runner.__dict__
                 self._orig[nm] = getattr(runner, nm)
         orig_exec = self._orig["execute_model"]
         me = self
@@ -1259,7 +1259,7 @@ class NativeHostCommitter(NativeRangeOpenings):
             me._begin_step()
             return orig_exec(scheduler_output, *a, **kw)
 
-        runner.execute_model = execute_model
+        self._hooks.patch(runner, "execute_model", execute_model)
         if "sample" in self._orig:
             orig_sample = self._orig["sample"]
 
@@ -1279,7 +1279,7 @@ class NativeHostCommitter(NativeRangeOpenings):
                     me._end_step()
                 return res
 
-            runner.sample = sample
+            self._hooks.patch(runner, "sample", sample)
         self.installed = True
 
     def uninstall(self) -> None:
@@ -1291,14 +1291,7 @@ class NativeHostCommitter(NativeRangeOpenings):
         for h in self._handles:
             h.remove()
         self._handles = []
-        for nm, fn in self._orig.items():
-            if self._had_attr.get(nm):
-                setattr(self.runner, nm, fn)
-            else:
-                try:
-                    delattr(self.runner, nm)
-                except AttributeError:
-                    pass
+        self._hooks.uninstall()
         self._orig = {}
         self.installed = False
 

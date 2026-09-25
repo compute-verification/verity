@@ -21,6 +21,7 @@ import time
 from typing import Any
 
 from verity_vllm.commit.opened import OpenedReader, OpeningNotVerified
+from verity_vllm.engine import hooks
 from verity_vllm.collectives.collective_sites import MOE_COLLECTIVE_CLASSES as MOE_SITE_CLASSES, MOE_COLLECTIVE_MODULES
 
 SITES = (("vllm.model_executor.layers.linear", "tensor_model_parallel_all_reduce", "all_reduce"),
@@ -150,7 +151,7 @@ class TPPartialSource:
         self.cur: tuple[str, str] | None = None
         self._cur_stack: list[tuple[str, str]] = []
         self._handles: list = []
-        self._patched: list[tuple[Any, str, Any]] = []
+        self._hooks = hooks.Hooks()
         self.active = False
         self.stats = {"launches": 0, "bytes": 0, "sites": len(self.sites), "acquire_s": 0.0, "unattributed": 0, "shapes": {}, "kinds": {}}
 
@@ -245,18 +246,14 @@ class TPPartialSource:
             if (id(mod), attr) in done or not hasattr(mod, attr):
                 continue
             done.add((id(mod), attr))
-            orig = getattr(mod, attr)
-            self._patched.append((mod, attr, orig))
-            setattr(mod, attr, self._wrap(kind, orig))
+            self._hooks.wrap(mod, attr, lambda orig, kind=kind: self._wrap(kind, orig))
         self.active = True
 
     def uninstall(self) -> None:
         for h in self._handles:
             h.remove()
         self._handles = []
-        for mod, attr, orig in reversed(self._patched):
-            setattr(mod, attr, orig)
-        self._patched = []
+        self._hooks.uninstall()
         self.active = False
 
     def on_step_begin(self) -> None:

@@ -62,6 +62,7 @@ from verity_vllm.observe.observer import EmptyMode, ModuleNamer, Observer, Recor
 from verity_vllm.observe.storage import StorageAdapter, dtype_name
 from verity_vllm.observe import triton_adapter
 
+from verity_vllm.engine import hooks
 from verity_vllm.engine.arrivals import run_requests_arrivals  # [coverage D87] step-indexed arrivals (torch-free module, unit-tested)
 from verity_vllm.observe import chunks as _chunks  # [chunked 2026-09-17] prefill-chunk / token-step attribution (torch-free, unit-tested)
 
@@ -1187,8 +1188,7 @@ class Capture:
         self.errors: list[dict] = []
         self.events_written = 0
         self.timing = {"flush_s": 0.0, "snapshot_s": 0.0, "sync_s": 0.0}
-        self._orig: dict[str, Any] = {}
-        self._had_attr: dict[str, bool] = {}
+        self._hooks = hooks.Hooks()
         self._pin_cache: dict[str, torch.Tensor] = {}
         self._root_handles: list = []
         self._arena: PinnedArena | None = None
@@ -1241,17 +1241,7 @@ class Capture:
         if not self.installed:
             return
         self._finalize_pending()
-        for name in ("execute_model", "sample", "compute_logits"):
-            if name not in self._orig:
-                continue
-            target = self.model if name == "compute_logits" else self.runner
-            if self._had_attr.get(name):
-                setattr(target, name, self._orig[name])
-            else:
-                try:
-                    delattr(target, name)
-                except AttributeError:
-                    pass
+        self._hooks.uninstall()
         if self.namer is not None:
             self.namer.remove()
             self.namer = None
@@ -1353,10 +1343,7 @@ class Capture:
 
     def _wrap_runner(self) -> None:
         runner, cap = self.runner, self
-        for name in ("execute_model", "sample"):
-            self._had_attr[name] = name in runner.__dict__
-            self._orig[name] = getattr(runner, name)
-        orig_execute, orig_sample = self._orig["execute_model"], self._orig["sample"]
+        orig_execute, orig_sample = runner.execute_model, runner.sample
 
         def execute_model(scheduler_output, *a, **kw):
             dummy = bool(kw.get("dummy_run", False)) or (len(a) >= 2 and bool(a[1]))
@@ -1388,16 +1375,14 @@ class Capture:
                 cap._end_timing_only(st)
             return res
 
-        runner.execute_model = execute_model
-        runner.sample = sample
+        self._hooks.patch(runner, "execute_model", execute_model)
+        self._hooks.patch(runner, "sample", sample)
 
         # the logits tensor is the return value of model.compute_logits (V2 runner: sample() -> compute_logits ->
         # sampler); record its ViewDesc only (no tensor reference is kept)
         model = self.model
         if hasattr(model, "compute_logits"):
-            self._had_attr["compute_logits"] = "compute_logits" in model.__dict__
-            self._orig["compute_logits"] = model.compute_logits
-            orig_cl = self._orig["compute_logits"]
+            orig_cl = model.compute_logits
 
             def compute_logits(*a, **kw):
                 out = orig_cl(*a, **kw)
@@ -1409,7 +1394,7 @@ class Capture:
                         cap.errors.append({"where": "compute_logits", "step": st.step, "error": repr(e)[:200]})
                 return out
 
-            model.compute_logits = compute_logits
+            self._hooks.patch(model, "compute_logits", compute_logits)
 
     def _run_observed(self, fn: Callable[[], Any], *, phase: str) -> Any:
         cfg, rec = self.cfg, self.rec
