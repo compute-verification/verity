@@ -187,7 +187,8 @@ def test_parity_explains_every_difference_and_fails_on_content(env):
     rep = PA.run(here.root, env / "fresh-1")
     assert rep["ok"], rep["unexplained"]
     assert rep["artifacts"]["only_here"] == {pending[4:]: "pending here"} and rep["artifacts"]["not_pulled"] == [pulled[4:]]
-    assert rep["attempts"]["both"] == 1 and rep["labels"]["both"] == 1 and rep["replicas"] == {"rows": 1, "confirmed": 1, "not_confirmed": {}}
+    assert rep["attempts"]["both"] == 1 and rep["labels"]["both"] == 1 and rep["replicas"] == {"rows": 1, "confirmed": 1, "not_confirmed": {},
+                                                                                  "blobs_etag_verified": 1, "blobs_remote_only_size_verified": 0}
     lines = PA.format_report(rep)
     assert lines[-1] == "PARITY OK: every difference is explained" and "1 pending here" in lines[1]
 
@@ -208,3 +209,62 @@ def test_parity_cli_writes_the_report(env, capsys):
     assert capsys.readouterr().out.strip().endswith("PARITY OK: every difference is explained")
     assert json.loads((env / "parity.json").read_text())["ok"] is True
     assert LS.local_labels(here) == {}
+
+
+def test_parity_never_downloads_an_evicted_blob_and_catches_a_same_size_corruption_by_etag(env, monkeypatch):
+    here = LocalStore()
+    art = here.put_artifact("fixture/v1", {"s": 1}, file=_file(env / "in", "s.bin", b"payload-bytes"))
+    here.push(art)
+    blob = json.loads(here.manifest_path(art[4:]).read_text())["payload"]["sha256"]
+    here.object_path(blob).chmod(0o644)
+    here.object_path(blob).unlink()                                   # evicted on the laptop
+    gets: list[str] = []
+    real_get = FsRemote.get
+    monkeypatch.setattr(FsRemote, "get", lambda self, key, path: gets.append(key) or real_get(self, key, path))
+    rep = PA.run(here.root, env / "fresh-1")
+    assert rep["ok"] and rep["replicas"]["blobs_remote_only_size_verified"] == 1 and rep["replicas"]["blobs_etag_verified"] == 0
+    assert not [k for k in gets if k.startswith("objects/")], "the comparison fetched blob bytes"
+    assert "1 remote-only, size-verified; nothing downloaded" in "\n".join(PA.format_report(rep))
+
+    other = here.put_artifact("fixture/v1", {"s": 2}, file=_file(env / "in", "t.bin", b"AAAA"))
+    here.push(other)
+    ob = env / "vault" / "objects" / "sha256" / json.loads(here.manifest_path(other[4:]).read_text())["payload"]["sha256"]
+    ob.chmod(0o644)
+    ob.write_bytes(b"BBBB")                                           # same size, different bytes
+    rep = PA.run(here.root, env / "fresh-2")
+    assert not rep["ok"] and any("ETag" in u and "local blob's MD5" in u for u in rep["unexplained"])
+
+
+def test_the_render_goes_through_a_view_that_writes_nothing_to_the_store_under_test(env, monkeypatch):
+    here = LocalStore()
+    art = here.put_artifact("fixture/v1", {"s": 1}, file=_file(env / "in", "s.bin", b"rendered"))
+    here.push(art)
+    blob = json.loads(here.manifest_path(art[4:]).read_text())["payload"]["sha256"]
+    here.object_path(blob).chmod(0o644)
+    here.object_path(blob).unlink()
+    before = sorted((p.relative_to(here.root).as_posix(), p.stat().st_mtime_ns) for p in here.root.rglob("*") if p.is_file())
+    gets: list[str] = []
+    real_get = FsRemote.get
+    monkeypatch.setattr(FsRemote, "get", lambda self, key, path: gets.append(key) or real_get(self, key, path))
+
+    def fake_render(root, timeout):                                   # what bench.tables does: catalog query + payload reads
+        st = LocalStore(root)
+        return "".join(st.fetch(a["id"]).read_text() for a in st.index.artifacts()), None
+
+    monkeypatch.setattr(PA, "_render", fake_render)
+    rep = PA.run(here.root, env / "fresh", render=True)
+    assert rep["ok"] and rep["render"]["identical"], rep["unexplained"]
+    assert gets.count(f"objects/sha256/{blob}") == 1, "each blob the render reads is downloaded once, for both renders"
+    after = sorted((p.relative_to(here.root).as_posix(), p.stat().st_mtime_ns) for p in here.root.rglob("*") if p.is_file())
+    assert after == before, "the store under test was written"
+
+
+def test_progress_lines_come_on_schedule(capsys):
+    lines: list[str] = []
+    prog = PA.Progress(lines.append, every=0.05)
+    prog.phase("replicas", 10)
+    prog.tick(3)
+    import time as _t
+    _t.sleep(0.2)
+    prog.stop()
+    assert lines[0].startswith("parity: replicas (10) at ") and any(x.startswith("parity: replicas 3/10 (") for x in lines[1:])
