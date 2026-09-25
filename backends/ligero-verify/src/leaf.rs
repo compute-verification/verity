@@ -473,8 +473,60 @@ pub static BLAKE3: LeafScheme = LeafScheme {
     leaf_bytes: blake3_leaf_bytes,
 };
 
+// SHA-256 (`leaf/sha256.py`, lane b-ligero-sha256): the core frame-v3 row leaf `sha256/row/v1` =
+// `SHA-256(prefix64(role, word_bits, n_words) || row_bytes)`.  The relation proves the data-block compressions from the
+// prefix's midstate and publishes the chaining value after the last data block (`[role + 4 word_bits + 256 n_words |
+// H_0..H_7 as 16-bit limbs, low first]`); the verifier runs the padding compression here (the row is whole blocks, so the
+// last block is `0x80`, zeros, the bit length of the 64 + n_words word_bits / 8 message bytes) -- the leaf is exactly
+// `sha256(prefix || row_bytes)`.  A malformed frame (bad header, a limb >= 2^16) maps to the tagged SHA-256 of the elements.
+const SHA256_MALFORMED_TAG: &[u8] = b"verity/sha256-leaf/malformed-digest/v1\0";
+const SHA256_DIGEST_ELEMS: usize = 17;
+
+/// `leaf.sha256.leaf_bytes`: the padding compression of the published chaining value, big-endian.  Wrong length or a
+/// non-field element: NO bytes (the leaf cannot open).
+fn sha256_leaf_bytes(elems: &[u32]) -> Vec<u8> {
+    if elems.len() != SHA256_DIGEST_ELEMS || elems.iter().any(|&x| x >= BABYBEAR_P) {
+        return Vec::new();
+    }
+    let h0 = elems[0];
+    let (role, wb, n) = (h0 & 3, (h0 >> 2) & 63, (h0 >> 8) as u64);
+    let n_bytes = n * u64::from(wb) / 8;
+    if !(1..=2).contains(&role) || ![8, 16, 32].contains(&wb) || n == 0 || n_bytes % 64 != 0 || elems[1..].iter().any(|&x| x >= 1 << 16) {
+        let mut h = crate::hash::Sha256::new();
+        h.update(SHA256_MALFORMED_TAG);
+        for &x in elems {
+            h.update(&x.to_le_bytes());
+        }
+        return h.finalize().to_vec();
+    }
+    let mut cv = [0u32; 8];
+    for (w, slot) in cv.iter_mut().enumerate() {
+        *slot = elems[1 + 2 * w] | (elems[2 + 2 * w] << 16);
+    }
+    let mut pad = [0u8; 64];
+    pad[0] = 0x80;
+    pad[56..].copy_from_slice(&(8 * (64 + n_bytes)).to_be_bytes());
+    crate::hash::Sha256::compress(&mut cv, &pad);
+    let mut out = Vec::with_capacity(32);
+    for w in cv {
+        out.extend_from_slice(&w.to_be_bytes());
+    }
+    out
+}
+
+/// `leaf.sha256.Sha256Leaf` (lane b-ligero-sha256): `schema` is the core `rowleaf.SCHEMA_SHA256_ROW`, `params_sha256` the
+/// module's `params_sha256()`.
+pub static SHA256: LeafScheme = LeafScheme {
+    name: "sha256",
+    display: "SHA-256",
+    schema: "sha256/row/v1",
+    params_sha256: "f23f6deff5feda68f5d242933d4634d5921737697c2656a33a9f12fd15c7738b",
+    digest_elems: SHA256_DIGEST_ELEMS,
+    leaf_bytes: sha256_leaf_bytes,
+};
+
 /// Every scheme this build knows.
-pub static SCHEMES: &[&LeafScheme] = &[&POSEIDON2, &BLAKE3, &AJTAI_N64, &AJTAI_N128];
+pub static SCHEMES: &[&LeafScheme] = &[&POSEIDON2, &BLAKE3, &SHA256, &AJTAI_N64, &AJTAI_N128];
 
 /// `leaf.registry.DEFAULT` / `ALIASES`: a relation string without a suffix, or with `+hash`, names Poseidon2.
 pub const DEFAULT: &str = "poseidon2";
@@ -756,6 +808,46 @@ mod tests {
             // the same row through the tag directly
             let mut h = crate::hash::Sha256::new();
             h.update(BLAKE3_MALFORMED_TAG);
+            for &e in &bad {
+                h.update(&e.to_le_bytes());
+            }
+            assert_eq!(out, h.finalize().to_vec());
+        }
+    }
+
+    #[test]
+    fn sha256_leaf_bytes_match_the_python_scheme() {
+        // leaf/sha256.py: Sha256Leaf().native(rows, word_bits=, role=) of 1536-word rows (rng seeds 1 / 2), then leaf_bytes
+        // == verity.commitments.rowleaf.sha256_row_digest (hashlib over the core prefix || row bytes)
+        let x: [u32; 17] = [393249, 60336, 42228, 53307, 8065, 20306, 48806, 19787, 63601, 59087, 60567, 13660, 6583, 26673,
+            9928, 34867, 32873];
+        let w: [u32; 17] = [393250, 1457, 21848, 63781, 48250, 47699, 9984, 32060, 40006, 63166, 30315, 25577, 45471, 16651,
+            21663, 5717, 38760];
+        let x16: [u32; 17] = [393281, 13221, 13212, 62113, 17770, 42013, 46476, 29751, 43698, 64962, 43923, 57936, 4845, 46076,
+            47400, 5138, 40235];
+        let hex = |v: Vec<u8>| -> String { v.iter().map(|b| format!("{b:02x}")).collect() };
+        assert_eq!(hex((SHA256.leaf_bytes)(&x)), "037adf01086dadbeb3ae2cae92d1e04c60ba9a07dd9289071aec73e1804e0b7d");
+        assert_eq!(hex((SHA256.leaf_bytes)(&w)), "a7fadc52b1b8a5bf95674b2285823f9c84cccb643b6cd3976b2cddab81de7266");
+        assert_eq!(hex((SHA256.leaf_bytes)(&x16)), "adac69c7694e2c0fcdd770176cdf317d23d318b66b27cf9ec89d8eb74058011b");
+        let (b, s) = split_relation("fp8-ada-x4+sha256").unwrap();
+        assert_eq!((b, s.name), ("fp8-ada-x4", "sha256"));
+        assert!((SHA256.leaf_bytes)(&x[..16]).is_empty());
+        let mut bad = x;
+        bad[3] = BABYBEAR_P;
+        assert!((SHA256.leaf_bytes)(&bad).is_empty());
+        // malformed frames: the tagged SHA-256 domain (Python `leaf_bytes([header(1, 8)] + [1] * 16)` is well formed;
+        // `[5] + [1] * 16` is not)
+        let mut m = [1u32; 17];
+        m[0] = 393249;
+        assert_eq!(hex((SHA256.leaf_bytes)(&m)), "acff57533da448036b527c5133b3fa21f5e1be73aee6fc4e7837ffb7ed45ab43");
+        m[0] = 5;
+        assert_eq!(hex((SHA256.leaf_bytes)(&m)), "fa6a31bd116bfdb5902759cc25593702901bfc375e2bf30871b48add29cacfef");
+        for (i, v) in [(0usize, 393251u32), (0, 1 + 4 * 12 + 256 * 1536), (0, 1 + 4 * 8 + 256 * 1500), (5, 1 << 16)] {
+            let mut bad = x;
+            bad[i] = v;
+            let out = (SHA256.leaf_bytes)(&bad);
+            let mut h = crate::hash::Sha256::new();
+            h.update(SHA256_MALFORMED_TAG);
             for &e in &bad {
                 h.update(&e.to_le_bytes());
             }
