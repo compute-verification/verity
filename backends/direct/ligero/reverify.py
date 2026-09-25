@@ -301,6 +301,8 @@ def committed_trees(pinned: str, man: dict, *, instances_root: str | None = None
     if any(len(r) != K for r in (*x_rows, *w_cols)):
         raise ValueError(f"{rel.name}: instance rows are not K = {K} words")
     counts = {"a": len(x_rows), "b": len(w_cols), "y": total}
+    if hashauth.is_vllm(scheme):
+        return _vllm_committed_trees(x_rows, w_cols, y_words, rel=rel, claimed=claimed, total=total, K=K, word_bits=word_bits)
     bindings = {n: hashauth.binding_digest(dataset=rel.instances_dataset, tier=rel.instances_tier, manifest_sha256=claimed, lo=0,
                                            hi=total, K=K, tree=n, schema=(scheme.schema if n != "y" else ysch)) for n in ("a", "b", "y")}
     if scheme.schema == "blake3-keyed/row/v2":
@@ -315,6 +317,33 @@ def committed_trees(pinned: str, man: dict, *, instances_root: str | None = None
     trees, _ = hashauth.build_trees(x_rows=np.asarray(x_rows), w_cols=np.asarray(w_cols), y_words=np.asarray(y_words),
                                     word_bits=word_bits, y_bits=rel.y_bits, bindings=bindings, leaf=scheme)
     return {n: (t.ref.binding, t.ref.owner, t.ref.count, t.ref.root) for n, t in trees.items()}
+
+
+def _vllm_committed_trees(x_rows, w_cols, y_words, *, rel, claimed: str, total: int, K: int, word_bits: int) -> dict[str, TreeKey]:
+    """The ``vllm-v1`` port references of the set, from the core scheme alone (``verity.commitments.vllm_v1``: position
+    leaves of the raw row bytes and of each output word's little-endian bytes, node/lift fold, step-root binding) under
+    the verifier-derived domains of ``vllm_tree`` (ctx = instance set and range)."""
+    from verity.commitments import vllm_v1
+
+    from . import vllm_tree
+    from .auth import OWNER
+    from .leaf.blake3 import row_bytes
+    import numpy as np
+    yb = vllm_tree.y_bytes_of(rel.y_bits)
+    values = {"a": [bytes(r) for r in row_bytes(np.asarray(x_rows, dtype=np.int64), word_bits)],
+              "b": [bytes(r) for r in row_bytes(np.asarray(w_cols, dtype=np.int64), word_bits)],
+              "y": [int(w).to_bytes(yb, "little") for w in y_words]}
+    out = {}
+    for n in ("a", "b", "y"):
+        ctx = vllm_tree.ctx_digest(dataset=rel.instances_dataset, tier=rel.instances_tier, manifest_sha256=claimed, lo=0, hi=total, tree=n)
+        dom = vllm_tree.domain(n, ctx, len(values[n]), K=K, word_bits=word_bits, y_bytes=yb)
+        vl = vllm_tree.value_len(n, K=K, word_bits=word_bits, y_bytes=yb)
+        cfg = vllm_v1.VllmV1({n: dom}, value_nbytes={n: lambda _i, vl=vl: vl})
+        if any(len(v) != vl for v in values[n]):
+            raise ValueError(f"{rel.name}: a {n} value is not {vl} bytes")
+        leaves = [cfg.tree_leaf(n, i, cfg.leaf_layout(n, i).digest(v)) for i, v in enumerate(values[n])]
+        out[n] = (ctx, OWNER[n], len(values[n]), cfg.root(n, leaves))
+    return out
 
 
 def commitment_problems(pdir: Path, man: dict, pinned: str, reps: list[str], *, instances_root: str | None = None,

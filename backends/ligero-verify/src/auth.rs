@@ -153,6 +153,8 @@ pub struct HashAuthBlock {
     pub trees: [TreeRef; 3],
     pub digests: Vec<u32>,  // n_vus x (2 digest_elems) canonical lanes
     pub multiproofs: Vec<Vec<[u8; 32]>>,
+    /// `vllm-v1` statements (`leaf::is_vllm`): the relation's shape the ports' domains derive from; `None` = frame-v3 trees.
+    pub vllm: Option<crate::vllm_v1::Shape>,
 }
 
 impl HashAuthBlock {
@@ -188,6 +190,11 @@ pub fn hash_digest_bytes(a: &HashAuthBlock) -> Vec<u8> {
         out.extend_from_slice(format!("|count={}", t.count).as_bytes());
         out.extend_from_slice(b"|root=");
         out.extend_from_slice(&t.root);
+        if let Some(s) = &a.vllm {
+            // vllm-v1 PROTOCOL.md section 9.1: the verifier-held domain of every port beside its bound root
+            out.extend_from_slice(b"|domain=");
+            out.extend_from_slice(&crate::vllm_v1::domain_digest(TREE_NAMES.iter().position(|n| n == name).unwrap(), t, s));
+        }
     }
     out
 }
@@ -251,6 +258,13 @@ pub fn check_hashed(a: &HashAuthBlock, y_words: &[u32], y_bits: u32, threads: us
     }
     if let Some(e) = layout_error(&a.vu_index, &a.x_index, &a.w_index, [a.trees[0].count, a.trees[1].count, a.trees[2].count]) {
         return Err(e);
+    }
+    if crate::leaf::is_vllm(a.leaf) {
+        let s = a.vllm.as_ref().ok_or("auth: a vllm-v1 statement over a relation without a vllm-v1 shape")?;
+        if (y_bytes as u64) != s.y_bytes {
+            return Err("auth: y value length is not the relation's".into());
+        }
+        return crate::vllm_v1::check(a, s, y_words, threads);
     }
     for ti in 0..3 {
         let name = TREE_NAMES[ti];

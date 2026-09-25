@@ -134,6 +134,8 @@ def features(env: Mapping[str, Any], meta: Mapping[str, Any] | None = None) -> d
         f["leaf"] = f"ajtai-n{n.group(1)}" if n else "ajtai"
     elif "blake3" in named:
         f["leaf"] = "blake3"
+    elif "vllm-v1" in named:
+        f["leaf"] = "vllm-v1"
     elif "sha256" in named:
         f["leaf"] = "sha256"
     elif "poseidon2" in named or "poseidon2" in name:
@@ -268,6 +270,12 @@ VARIANTS: tuple[Variant, ...] = (
             "SHA-256 collision resistance: frame-v3 sha256/row/v1 row leaves, the data-block compressions in-circuit, the chaining "
             "value published and the padding block compressed by the verifier; a tagged SHA-256 domain for malformed frames",
             _H_SOUND, "No: " + _KEEP_FROZEN, "b-ligero-sha256 (red-team-standard-hash pending)"),
+    Variant("B-Ligero + vllm-v1 SHA-256 in circuit", "B-Ligero", "B-Ligero, authentication included-hash*, leaf vllm-v1 (vllm-v1/pos-leaf/v0)",
+            lambda f: _hashed(f, "vllm-v1"),
+            _H_ZK, "x, W committed; digests deterministic, not hiding (as the frame-v3 SHA-256 leaf)",
+            "SHA-256 collision resistance: vllm-v1 position leaves with every compression in-circuit (the padding block "
+            "included), vllm-v1 node/lift trees bound by step roots over verifier-derived domains (PROTOCOL.md section 9); "
+            "a tagged SHA-256 domain for malformed digests", _H_SOUND, "No: " + _KEEP_FROZEN, "b-ligero-vllm-v1 (red-team pending)"),
     Variant("B-Ligero + Ajtai n=64", "B-Ligero", "B-Ligero, authentication included-hash*, hash / leaf ajtai…n64",
             lambda f: _hashed(f, "ajtai-n64"),
             _H_ZK, "No hiding: binding-only, a low-entropy row can be brute-forced from its public digest (red-team-leaf-3)",
