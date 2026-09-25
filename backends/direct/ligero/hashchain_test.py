@@ -300,25 +300,36 @@ def test_batch_merkle_framing_is_the_domain_framing() -> None:
         Poseidon2Leaf().leaf_bytes_many(np.full((1, 8), P))
 
 
+def test_synthetic_rows_are_the_vu_words(tmp_path) -> None:
+    """``instances``' ``x_rows`` / ``w_cols`` (what ``commit_vus`` commits) are the VUs' own ``a`` / ``b`` words, drawn
+    and from the npz cache; ``_instance`` is unchanged."""
+    from .relchain import _instance, _word_rows
+    rel = relation("fp8-ada")
+    for data in (instances(rel, 4), instances(rel, 4, cache=tmp_path), instances(rel, 4, cache=tmp_path)):
+        x, w = _word_rows(data.x_rows), _word_rows(data.w_cols)
+        assert x.shape == w.shape == (4, len(data[0][0]))
+        assert x.tolist() == [list(v[0]) for v in data] and w.tolist() == [list(v[1]) for v in data]
+    assert _instance((rel.name, rel.instance_seed, 2)) == tuple(data[2])
+
+
 def test_frozen_rows_are_the_vu_words() -> None:
-    """``frozen_instances``' ``x_rows`` / ``w_cols`` (what ``commit_vus`` commits) are the VUs' own ``a`` / ``b`` words,
-    past the tier's end too (recycled ``i mod n``)."""
+    """``frozen_instances``' ``x_rows`` / ``w_cols`` are the VUs' own ``a`` / ``b`` words, past the tier's end too
+    (recycled ``i mod n``)."""
     from verity_numerical.bench import instances as frozen
 
-    from .relchain import frozen_instances
-    rel = relation("fp8-ada")
-    if not rel.frozen_tier:
-        pytest.skip("no frozen tier")
+    from .relchain import _word_rows, frozen_instances
+    rel = relation("bf16-ampere")
     try:
         n_tier = frozen.load(rel.frozen_tier, frozen.DEFAULT_ROOT).n
     except FileNotFoundError:
         pytest.skip("frozen instances not built")
     data = frozen_instances(rel, n_tier + 2)
-    assert data.x_rows.shape == data.w_cols.shape == (n_tier + 2, len(data[0][0]))
+    x, w = _word_rows(data.x_rows), _word_rows(data.w_cols)
+    assert x.shape == w.shape == (n_tier + 2, len(data[0][0]))
     for i in (0, 1, n_tier - 1, n_tier, n_tier + 1):
-        assert data.x_rows[i].tolist() == list(data[i][0]) and data.w_cols[i].tolist() == list(data[i][1])
+        assert x[i].tolist() == list(data[i][0]) and w[i].tolist() == list(data[i][1])
     small = frozen_instances(rel, 3)
-    assert np.array_equal(small.x_rows, data.x_rows[:3]) and np.array_equal(small.w_cols, data.w_cols[:3])
+    assert np.array_equal(small.x_rows, x[:3]) and np.array_equal(small.w_cols, w[:3])
 
 
 def _fp4_rows(rng, n: int, steps: int) -> np.ndarray:

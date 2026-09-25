@@ -47,16 +47,21 @@ __all__ = ["RelationChainRunner", "bench_vu_rel", "gate_vu_rel", "instances", "i
 # ---------------------------------------------------------------------------------------------------------------------
 
 def _instance(args) -> tuple[list, list, list, int]:
+    return _instance_np(args)[2]
+
+
+def _instance_np(args) -> tuple[np.ndarray, np.ndarray, tuple[list, list, list, int]]:
+    """VU ``i``'s operands as drawn (arrays) and the VU ``(a, b, accs, y_final)`` of :func:`_instance`."""
     name, seed, i = args
     rel = relation(name)
     rng = np.random.default_rng([seed, i])
-    a = rel.operands(rng, (K_VU,)).tolist()
-    b = rel.operands(rng, (K_VU,)).tolist()
+    a_np, b_np = rel.operands(rng, (K_VU,)), rel.operands(rng, (K_VU,))
+    a, b = a_np.tolist(), b_np.tolist()
     k, accs, c = rel.k, [], 0
     for s in range(rel.steps):
         c = tc_dot(rel.model, c, a[k * s:k * s + k], b[k * s:k * s + k])
         accs.append(c)
-    return a, b, accs, accs[-1]
+    return a_np, b_np, (a, b, accs, accs[-1])
 
 
 def _frozen_root(root) -> Path:
@@ -84,26 +89,34 @@ def frozen_instances(rel: Relation, n: int, root=None):
         if len(accs) != rel.steps or rel.y_public(int(accs[-1])) != y16:
             raise ValueError(f"{rel.frozen_tier} instance {j}: {len(accs)} accumulators / final word does not cast to the expected y")
         out.append((a, b, accs, int(accs[-1])))
-    out = FrozenVUs(out)
     x = np.frombuffer(vu.x, dtype=np.uint16 if vu.x.itemsize == 2 else np.uint32).reshape(vu.n, vu.K)
     w = np.frombuffer(vu.w, dtype=np.uint16 if vu.w.itemsize == 2 else np.uint32).reshape(vu.n, vu.K)
-    ids = np.arange(n) % vu.n
-    out.x_rows, out.w_cols = (x[:n], w[:n]) if n <= vu.n else (x[ids], w[ids])
-    return out
+    if n <= vu.n:
+        return _with_rows(out, x[:n], w[:n])
+    return _with_rows(out, [x[i % vu.n] for i in range(n)], [w[i % vu.n] for i in range(n)])
 
 
-class FrozenVUs(list):
-    """:func:`frozen_instances`' VU list, carrying the committed operand rows as the tier's own arrays (``x_rows``,
-    ``w_cols`` (n, K), the words of ``self[i][0]`` / ``self[i][1]``): what ``commit_vus`` commits without re-reading
-    the per-VU lists."""
+class VUs(list):
+    """An instance list (:func:`instances`) carrying the committed operand rows in the form they were read or drawn in
+    (``x_rows``, ``w_cols``: an (n, K) integer array or n integer arrays of K, the words of ``self[i][0]`` /
+    ``self[i][1]``): what ``commit_vus`` commits instead of converting the per-VU lists back."""
     x_rows: np.ndarray | None = None
     w_cols: np.ndarray | None = None
 
 
+def _with_rows(vus: list, x_rows, w_cols) -> VUs:
+    out = VUs(vus)
+    out.x_rows, out.w_cols = x_rows, w_cols
+    return out
+
+
 def _word_rows(rows) -> np.ndarray:
-    """Committed rows as a 2-D integer array: an integer ndarray as it is (its own dtype), anything else as int64."""
+    """Committed rows as a 2-D integer array: an integer ndarray as it is (its own dtype), a list of 1-D integer ndarrays
+    stacked, anything else as int64."""
     if isinstance(rows, np.ndarray) and rows.ndim == 2 and rows.dtype.kind in "iu":
         return rows
+    if isinstance(rows, list) and rows and all(isinstance(r, np.ndarray) and r.ndim == 1 and r.dtype.kind in "iu" for r in rows):
+        return np.stack(rows)
     return np.asarray(rows, dtype=np.int64)
 
 
@@ -127,19 +140,20 @@ def instances(rel: Relation, n: int, seed: int | None = None, procs: int = 1, ca
     if path is not None and path.exists():
         with np.load(path) as z:  # materialise each array once (indexing the lazy NpzFile re-reads the member every time)
             a, b, accs = z["a"], z["b"], z["accs"]
-        return [(a[i].tolist(), b[i].tolist(), accs[i].tolist(), int(accs[i][-1])) for i in range(n)]
+        return _with_rows([(a[i].tolist(), b[i].tolist(), accs[i].tolist(), int(accs[i][-1])) for i in range(n)], a, b)
     if path is not None and rel.fold > 1 and rel.folded_from and (Path(cache) / f"{rel.folded_from}-{seed}-{n}.npz").exists():
         # the fold's VUs ARE the base's (same operands from the same (seed, i) streams, the same chain): every ``fold``-th
         # recorded accumulator is a column's end, the others are the words the fold keeps private
         with np.load(Path(cache) / f"{rel.folded_from}-{seed}-{n}.npz") as z:
             a, b, accs = z["a"], z["b"], z["accs"][:, rel.fold - 1::rel.fold]
-        return [(a[i].tolist(), b[i].tolist(), accs[i].tolist(), int(accs[i][-1])) for i in range(n)]
+        return _with_rows([(a[i].tolist(), b[i].tolist(), accs[i].tolist(), int(accs[i][-1])) for i in range(n)], a, b)
     jobs = [(rel.name, seed, i) for i in range(n)]
     if procs > 1 and n > 1:
         with ProcessPoolExecutor(procs) as ex:
-            out = list(ex.map(_instance, jobs, chunksize=max(1, n // (8 * procs))))
+            drawn = list(ex.map(_instance_np, jobs, chunksize=max(1, n // (8 * procs))))
     else:
-        out = [_instance(j) for j in jobs]
+        drawn = [_instance_np(j) for j in jobs]
+    out = _with_rows([d[2] for d in drawn], [d[0] for d in drawn], [d[1] for d in drawn])
     if path is not None:
         path.parent.mkdir(parents=True, exist_ok=True)
         np.savez(path, a=np.asarray([o[0] for o in out], dtype=np.int64), b=np.asarray([o[1] for o in out], dtype=np.int64),
