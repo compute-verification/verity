@@ -122,6 +122,22 @@ def compress_np(h: np.ndarray, block: np.ndarray) -> np.ndarray:
         return (h + np.stack([a, b, c, d, e, f, g, hh])).astype(np.uint32)
 
 
+def compress_one(h, block: bytes) -> tuple[int, ...]:
+    """:func:`compress_np` of one lane in Python ints (a 64-byte ``block``): ~40x faster than a width-1 numpy call."""
+    M = 0xFFFFFFFF
+    r = lambda x, n: ((x >> n) | (x << (32 - n))) & M  # noqa: E731
+    w = list(np.frombuffer(block, dtype=">u4").tolist())
+    for t in range(16, 64):
+        x, y = w[t - 15], w[t - 2]
+        w.append((w[t - 16] + (r(x, 7) ^ r(x, 18) ^ (x >> 3)) + w[t - 7] + (r(y, 17) ^ r(y, 19) ^ (y >> 10))) & M)
+    a, b, c, d, e, f, g, hh = (int(v) for v in h)
+    for t in range(64):
+        t1 = (hh + (r(e, 6) ^ r(e, 11) ^ r(e, 25)) + ((e & f) ^ (~e & g)) + K[t] + w[t]) & M
+        t2 = ((r(a, 2) ^ r(a, 13) ^ r(a, 22)) + ((a & b) ^ (a & c) ^ (b & c))) & M
+        hh, g, f, e, d, c, b, a = g, f, e, (d + t1) & M, c, b, a, (t1 + t2) & M
+    return tuple((int(x) + y) & M for x, y in zip(h, (a, b, c, d, e, f, g, hh)))
+
+
 def _words_be(block: bytes) -> np.ndarray:
     return np.frombuffer(block, dtype=">u4").astype(np.uint32)
 
@@ -259,8 +275,7 @@ def leaf_bytes(digest_row) -> bytes:
         h, _role, wb, n = elems_to_cv(e)
     except ValueError:
         return hashlib.sha256(MALFORMED_TAG + e.astype("<u4").tobytes()).digest()
-    out = compress_np(h[:, None], _words_be(padding_block(n * wb // 8))[:, None])[:, 0]
-    return out.astype(">u4").tobytes()
+    return np.asarray(compress_one(h, padding_block(n * wb // 8)), dtype=">u4").tobytes()
 
 
 def leaf_bytes_many(digests) -> list[bytes]:
