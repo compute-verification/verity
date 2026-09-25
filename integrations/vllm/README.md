@@ -17,7 +17,7 @@ Imports point down the layer order `pipeline` > `check` | `properties` > `acquir
 ~~~text
 verity_vllm/
   pipeline/           stage drivers      build.py match.py commit.py report.py hot.py layout.py cli.py research_tools.py admission_*.py tp/
-  engine/             the vLLM engine    vllm_adapter.py engine_driver.py engine_profile.py arrivals.py rank_worker.py profiles/
+  engine/             the vLLM engine    build.py capture.py pinned.py run_facts.py code_identity.py vllm_adapter.py engine_driver.py engine_profile.py arrivals.py rank_worker.py profiles/
   program/            Program            registry/ frontend/ lifting/ kernels/ model.py workload.py compact.py dtypes.py
   query/              verification query module_body.py required.py program_view.py boundary.py partition.py manifest/ compare.py
   correspondence/     runtime corresp.   runtime.py reader_for_*.py resolve*.py capture_identities.py
@@ -42,8 +42,10 @@ workloads/ manifests/ fixtures/ data/ docs/    records of the qualification tabl
 `python -m verity_vllm.pipeline.cli`, `python -m verity_vllm.pipeline.m1_capture`.  Never: Verity semantics -- a check that
 lives here is misfiled.
 
-**`engine/`** is the vLLM engine we attach to: `vllm_adapter.py`, `engine_driver.py`, `engine_profile.py`, `arrivals.py`,
-`rank_worker.py` (the TP rank worker extension), and `profiles/` (kappa: capture profiles and workload JSON; one generic
+**`engine/`** is the vLLM engine we attach to: `build.py` (the engine under κ and what it reads back), `capture.py` (the
+step observer and run header; `pinned.py` its host buffers), `run_facts.py` (profile manifest, versions), `code_identity.py` (executed code objects),
+`vllm_adapter.py` (workloads and request driving; the stages import the engine's names from it), `engine_driver.py`,
+`engine_profile.py`, `arrivals.py`, `rank_worker.py` (the TP rank worker extension), and `profiles/` (kappa: capture profiles and workload JSON; one generic
 constructor + a facts table).  Never: commit, decide what is required.
 
 **`program/`** implements *Program*: Definitions (`registry/`, the registered library; importing it registers the on-demand
