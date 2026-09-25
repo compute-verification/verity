@@ -37,7 +37,7 @@ BodyTiling])`; `BodyTiling(spec, entries, n_nodes?, count?)`; `NodeTiling(node, 
 of the range are tiled by `bodies[child]`).  A node's ranges over all its entries must partition `[0, n)`; bodies are
 keyed by plan, not by specialization, so one specialization may be tiled differently in different contexts.  Several
 `descend` entries of one node may send the same members into different plans (`concat(A, rest())`): those plans form a
-*group* and the induction checks that the group's entries together tile the callee body (`_Tiling`).  Read duck-typed
+*group* and the induction checks that the group's entries together tile the callee body (`CheckedTiling`).  Read duck-typed
 (attributes or mapping keys).
 
 Nothing here touches `program_digest`.
@@ -277,7 +277,7 @@ class _Plan:
     descends: dict[int, list[tuple[int, int, str]]] = field(default_factory=dict)  # node -> (a, b, child plan)
 
 
-class _Tiling:
+class CheckedTiling:
     """The interpreted `Family.tiling()` (a `query_ast.Tiling`: `root` plan key, `bodies` plan key ->
     `BodyTiling(spec, entries)`, entries `NodeTiling(node, kind, members, k, group, child)`).
 
@@ -495,7 +495,8 @@ class _Tiling:
 # ---------------------------------------------------------------------------------------------------------
 
 
-def _family_tiling(fam: Any) -> Any:
+def family_tiling(fam: Any) -> Any:
+    """`fam.tiling()` (or `fam.tiling`), or None when the family has no tiling or cannot produce one."""
     t = getattr(fam, "tiling", None)
     if t is None:
         return None
@@ -520,12 +521,12 @@ def validate_partition(program: "Program", fam, limits: Limits = Limits()) -> Pa
 
     Fast path from `fam.tiling()` by per-body induction; fallback interval sweep over materialised intervals up to
     `limits.max_intervals`; beyond that "unsupported" (never a verdict).  See the module docstring."""
-    tiling = _family_tiling(fam)
+    tiling = family_tiling(fam)
     fallback_codes: list[str] = []
     fallback_detail: dict = {}
     if tiling is not None:
         try:
-            t = _Tiling(program, tiling)
+            t = CheckedTiling(program, tiling)
         except _Malformed as e:
             fallback_codes.append("tiling-malformed")
             fallback_detail["tiling_malformed"] = str(e)
@@ -542,7 +543,7 @@ def validate_partition(program: "Program", fam, limits: Limits = Limits()) -> Pa
     return v
 
 
-def _count_mismatch(t: _Tiling, fam: Any) -> dict | None:
+def _count_mismatch(t: CheckedTiling, fam: Any) -> dict | None:
     """The tiling must describe the family: the structural count read here equals `Family.count()` and every
     `BodyTiling.count` the family declared.  A disagreement means the description is not of these sets."""
     per_body = t.declared_count_mismatch()
@@ -554,7 +555,7 @@ def _count_mismatch(t: _Tiling, fam: Any) -> dict | None:
     return None
 
 
-def _tiling_verdict(program: "Program", t: _Tiling, count: int) -> PartitionVerdict:
+def _tiling_verdict(program: "Program", t: CheckedTiling, count: int) -> PartitionVerdict:
     codes = tuple(sorted({code for code, _ in t.problems}))
     if "tiling-members-overlap" in codes:
         status: PartitionStatus = "overlap"
@@ -747,10 +748,10 @@ def validate_width(program: "Program", fam, w_max: int, limits: Limits = Limits(
     otherwise exact `boundary.w_out` per set within `limits.max_members_exact` exact evaluations.  A bound above
     `w_max` never proves a violation; `Unsupported` is reported separately, never counted as pass or fail."""
     run = _WidthRun(w_max, limits)
-    tiling = _family_tiling(fam)
+    tiling = family_tiling(fam)
     if tiling is not None:
         try:
-            t = _Tiling(program, tiling)
+            t = CheckedTiling(program, tiling)
         except _Malformed:
             t = None
         if t is not None and not t.problems and _count_mismatch(t, fam) is None:
@@ -774,7 +775,7 @@ def total_width(fn: Any, memo: dict[int, tuple[Any, int]] | None = None) -> int:
     return w
 
 
-def _width_by_classes(run: _WidthRun, t: _Tiling, fam: Any) -> WidthVerdict:
+def _width_by_classes(run: _WidthRun, t: CheckedTiling, fam: Any) -> WidthVerdict:
     """One representative instance per class.  Three tiers per class:
 
     1. structural: `sum w(g)` over one set of each shape (`_Class.shapes`) -- if `<= w_max`, every set of that shape
