@@ -15,11 +15,12 @@ Run by `commit_delta.py --value-check` on one extra instrumented run; result in 
 from __future__ import annotations
 
 import time
-from typing import Any
+from typing import Any, Callable
 
 import torch
 
 from verity_vllm.acquire.native_host import _mro_names
+from verity_vllm.commit.opened import OpenedReader, OpeningNotVerified
 
 REEXEC_CLASSES = ("Linear", "RMSNorm", "GemmaRMSNorm", "SiluAndMul", "GeluAndMul", "RotaryEmbedding")
 
@@ -102,29 +103,23 @@ class ValueChecker:
             return None
         return post
 
-    def _committed(self, step: int, m):
-        """Committed bytes of tensor `m`: the committer's retained host copy, or (GPU-tree mode) a verification-time D2H from the retained
-        device block at the tensor's offset in the packed step stream (not in the serving path)."""
-        if m is None:
-            return None
-        if m.host is not None:
-            return bytes(m.host)
-        blocks = getattr(self.c, "_gpu_blocks", None)
-        if blocks and step in blocks:
-            blk, _used = blocks[step]
-            return bytes(blk[m.stream_off:m.stream_off + m.nbytes].cpu().numpy().tobytes())
-        return None
+    @staticmethod
+    def _committed(reader, step: int, m):
+        """Committed bytes of tensor `m`, opened from the committer and verified against the run root by `reader`
+        (`commit.opened.OpenedReader`); a read that does not verify raises `OpeningNotVerified`."""
+        return None if m is None else reader.read_meta(step, m)
 
     @staticmethod
     def _bytes(t: torch.Tensor) -> bytes:
         return t.contiguous().reshape(-1).view(torch.uint8).cpu().numpy().tobytes() if t.dtype != torch.uint8 else t.contiguous().reshape(-1).cpu().numpy().tobytes()
 
     @torch.inference_mode()
-    def compare(self) -> dict:
-        """After finalize(): committed bytes (committer's retained host copies) vs (T) tap clones and (R) re-execution."""
+    def compare(self, reader) -> dict:
+        """After finalize(): committed bytes (opened and verified against the run root by `reader`, an `commit.opened.OpenedReader`) vs
+        (T) tap clones and (R) re-execution.  A tensor whose opening does not verify is `not_verified` (FAIL)."""
         t0 = time.perf_counter()
         res = {"steps": len(self.steps), "tensors": 0, "tap_equal": 0, "tap_mismatch": [], "reexec_tensors": 0, "reexec_equal": 0,
-               "reexec_mismatch": [], "reexec_skipped": {}, "repeated_calls": 0, "missing_in_commit": [], "by_class": {}}
+               "reexec_mismatch": [], "reexec_skipped": {}, "repeated_calls": 0, "missing_in_commit": [], "not_verified": [], "by_class": {}}
         for step, taps in enumerate(self.steps):
             metas_by: dict[str, list] = {}
             for m in sorted(self.c._layouts.get(step, []), key=lambda m: m.ordinal):
@@ -147,7 +142,11 @@ class ValueChecker:
                         else:
                             key = name if d["single"][call_idx] else f"{name}/{k}"
                         m = meta_at(key, call_idx)
-                        committed = self._committed(step, m)
+                        try:
+                            committed = self._committed(reader, step, m)
+                        except OpeningNotVerified as e:
+                            res["not_verified"].append((step, key, str(e)[:200]))
+                            continue
                         if committed is None:
                             res["missing_in_commit"].append((step, key))
                             continue
@@ -175,7 +174,11 @@ class ValueChecker:
                                 continue
                             key = name if single else f"{name}/{k}"
                             m = meta_at(key, call_idx)
-                            committed2 = self._committed(step, m)
+                            try:
+                                committed2 = self._committed(reader, step, m)
+                            except OpeningNotVerified as e:
+                                res["not_verified"].append((step, key, str(e)[:200]))
+                                continue
                             if committed2 is None:
                                 continue
                             res["reexec_tensors"] += 1
@@ -190,7 +193,30 @@ class ValueChecker:
         res["tap_mismatch"] = res["tap_mismatch"][:40]
         res["reexec_mismatch"] = res["reexec_mismatch"][:40]
         res["missing_in_commit"] = res["missing_in_commit"][:40]
+        res["not_verified_n"] = len(res["not_verified"])
+        res["not_verified"] = res["not_verified"][:40]
+        res["value_source"] = reader.record()
         res["wall_s"] = time.perf_counter() - t0
-        res["verdict"] = "PASS" if (res["tap_mismatch_n"] == 0 and res["reexec_mismatch_n"] == 0 and res["tensors"] > 0 and not res["missing_in_commit"]) else "FAIL"
+        res["verdict"] = "PASS" if (res["tap_mismatch_n"] == 0 and res["reexec_mismatch_n"] == 0 and res["tensors"] > 0 and not res["missing_in_commit"]
+                                    and res["not_verified_n"] == 0) else "FAIL"
         self.steps = []
         return res
+
+
+def run_value_check(com: Any, run: Callable[[], Any], restore: Callable[[], None]) -> dict:
+    """One extra instrumented run with reference taps + re-execution of the registered relation: `run()` executes the workload with `com` and
+    a `ValueChecker` installed, then the committed bytes -- opened and verified against that run's root -- are compared; `restore()` runs
+    once both are uninstalled.  The result carries the run root and the committer's errors."""
+    com.reset()
+    com.install()
+    vc = ValueChecker(com)
+    vc.install()
+    run()
+    rc = com.finalize()
+    vres = vc.compare(OpenedReader(com, rc))
+    vc.uninstall()
+    com.uninstall()
+    com.reset()
+    restore()
+    vres.update({"run_root": rc.run_root.hex(), "errors": rc.extra.get("errors")})
+    return vres

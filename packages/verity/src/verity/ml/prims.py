@@ -95,3 +95,21 @@ def _register_lazy_families() -> None:
 
 
 _register_lazy_families()
+
+
+def _register_kernels() -> None:
+    from verity.evaluation import register_kernel
+
+    from . import kernels as K
+
+    every = "every encoding"
+    register_kernel(Bf16ToF32, K.bf16_to_f32_batch, domain=every)
+    register_kernel(F32ToBf16Rn, K.f32_to_bf16_rn_batch, domain=every)
+    register_kernel(F2fpBf16, K.f2fp_bf16_batch, domain=every)
+    register_kernel(AmpereBF16TcDot16, lambda acc, a, b: K.group_sum_total_batch(AMPERE_BF16_M16N8K16, acc, a, b),
+                    domain=every, sample=K.sample_tc)
+    register_kernel(HopperBF16WgmmaDot16, lambda acc, a, b: K.group_sum_total_batch(HOPPER_BF16_WGMMA_K16, acc, a, b),
+                    domain=every, sample=K.sample_tc)
+
+
+_register_kernels()

@@ -55,20 +55,29 @@ fn manifest_is_v2(root: &Path) -> bool {
     text.split("\"variant\":").nth(1).map(|r| r.trim_start().starts_with("\"v2\"")).unwrap_or(false)
 }
 
-/// `chain.txt` (`gpu/run.py::read_chain`, `main.rs::read_chain`): `link <in|-> <out> <epi> <init> <zero_nonlast>`.
-fn read_chain(path: &Path, uc: &Circuit, ec: &Circuit) -> Result<(Vec<Link>, [u8; 32]), String> {
+/// `chain.txt` (`gpu/run.py::read_chain`, `main.rs::read_chain`): `link <in|-> <out> <epi> <init> <zero_nonlast>`,
+/// and optionally one `public <epi col> ...` line naming the epilogue columns bound to `public.bin`'s columns
+/// (default `public y16`).
+fn read_chain(path: &Path, uc: &Circuit, ec: &Circuit) -> Result<(Vec<Link>, Vec<usize>, [u8; 32]), String> {
     let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
     let mut links = Vec::new();
+    let mut epi_pub: Option<Vec<usize>> = None;
     for line in text.lines() {
         let t: Vec<&str> = line.split_whitespace().collect();
         if t.is_empty() { continue; }
+        if t[0] == "public" {
+            if epi_pub.is_some() || t.len() < 2 { return Err("chain.txt: one public line with at least one column".into()); }
+            epi_pub = Some(t[1..].iter().map(|n| col(ec, n)).collect());
+            continue;
+        }
         if t[0] != "link" || t.len() != 6 { return Err(format!("chain.txt: unknown line {line:?}")); }
         let init: u64 = t[4].parse().map_err(|_| "chain.txt: init".to_string())?;
         if init >= field::P as u64 { return Err("chain.txt: init is not a canonical BabyBear element (a Goldilocks chain file?)".into()); }
         let col_c = if t[1] == "-" { None } else { Some(col(uc, t[1])) };
         links.push(Link { col_c, col_y: col(uc, t[2]), epi: col(ec, t[3]), init: init as u32, zero_nonlast: t[5] == "1" });
     }
-    Ok((links, sha256::Sha256::digest(text.as_bytes())))
+    let epi_pub = epi_pub.unwrap_or_else(|| vec![col(ec, "y16")]);
+    Ok((links, epi_pub, sha256::Sha256::digest(text.as_bytes())))
 }
 
 /// The statement of a batch directory: circuits, `vus` (prefix of the public words), steps.  `d` may be a
@@ -77,15 +86,16 @@ fn statement<'a>(unit: &'a Loaded, epi: &'a Loaded, d: &Path, vus: Option<usize>
     let root = if d.join("manifest.json").is_file() { d.to_path_buf() } else { d.parent().unwrap().parent().unwrap().to_path_buf() };
     let steps = manifest_steps(&root);
     let (n, m, pub_words) = read_rows(&std::fs::read(d.join("public.bin")).map_err(|e| format!("public.bin: {e}"))?)?;
-    if m != 1 { return Err("public.bin: one word per VU expected".into()); }
     let b = vus.unwrap_or(n);
     if b > n || b == 0 { return Err(format!("{n} public words, {b} requested")); }
     let uc = &unit.circ;
     let ec = &epi.circ;
     let chain = if manifest_is_v2(&root) {
-        let (links, spec_hash) = read_chain(&root.join("chain.txt"), uc, ec)?;
-        Chain { steps, col_c: vec![], col_y: vec![], epi_y32: vec![], epi_y16: col(ec, "y16"), public_y16: pub_words[..b].to_vec(), links: Some(links), spec_hash: Some(spec_hash) }
+        let (links, epi_pub, spec_hash) = read_chain(&root.join("chain.txt"), uc, ec)?;
+        if m != epi_pub.len() { return Err(format!("public.bin: {} words per VU expected, {m} found", epi_pub.len())); }
+        Chain { steps, col_c: vec![], col_y: vec![], epi_y32: vec![], epi_y16: epi_pub[0], public_y16: pub_words[..b * m].to_vec(), links: Some(links), spec_hash: Some(spec_hash), epi_pub }
     } else {
+        if m != 1 { return Err("public.bin: one word per VU expected".into()); }
         Chain {
             steps,
             col_c: vec![col(uc, "x.c_lo"), col(uc, "x.c_hi")],
@@ -95,6 +105,7 @@ fn statement<'a>(unit: &'a Loaded, epi: &'a Loaded, d: &Path, vus: Option<usize>
             public_y16: pub_words[..b].to_vec(),
             links: None,
             spec_hash: None,
+            epi_pub: vec![col(ec, "y16")],
         }
     };
     Ok(Statement {
@@ -338,7 +349,7 @@ fn cmd_mutate(args: &[String]) -> i32 {
     let mut stmt_ok = 0;
     {
         let mut s2 = statement(&unit, &epi, &dir, vus).unwrap();
-        let v = rng.below(s2.vus());
+        let v = rng.below(s2.chain.public_y16.len());
         s2.chain.public_y16[v] = (s2.chain.public_y16[v] + 1) % field::P;
         let (r, _) = verify::verify(&s2, &bytes, &LIGERO, th);
         if r.is_err() { stmt_ok += 1; } else { accepted_list.push("public_word".into()); }

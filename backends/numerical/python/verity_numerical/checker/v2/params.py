@@ -67,19 +67,21 @@ class V2:
 
     @staticmethod
     def vb(p: Params) -> int:                      # low-half bits of the sum magnitude (also the LEAD table width)
-        return (p.s_bits + 1) // 2
+        # widened to the deepest normalisation right shift when that exceeds half of s_bits (the FP8 adder: s_bits 20,
+        # k_lo = -13 from the floor clamp); unchanged at REAL (15 >= 7)
+        return max((p.s_bits + 1) // 2, -p.k_lo)
 
     @staticmethod
     def vh(p: Params) -> int:
         return p.s_bits - V2.vb(p)
 
     @staticmethod
-    def k_of(p: Params, l: int, E: int) -> int:    # M' = floor(v 2^k): unclamped acc_sig - l, clamped by e_min
-        return min(p.acc_sig - l, E - p.e_min + p.acc_sig - p.width)
+    def k_of(p: Params, l: int, E: int) -> int:    # M' = floor(v 2^k): unclamped acc_sig - l, clamped by acc_e_min
+        return min(p.acc_sig - l, E - p.acc_e_min + p.acc_sig - p.width)
 
     @staticmethod
     def e1_of(p: Params, l: int, E: int) -> int:
-        return max(E + l - p.width, p.e_min)
+        return max(E + l - p.width, p.acc_e_min)
 
     @staticmethod
     def k_rows(p: Params) -> int:
@@ -94,14 +96,19 @@ class V2:
         return l + (p.l_hi + 1) * (E - p.floor)
 
     @staticmethod
-    def hdr_rows(p: Params) -> int:                # state header s 2^exp + t, t finite
-        return 2**(p.exp + 1)
+    def hdr_rows(p: Params) -> int:                # state header s 2^acc_exp + t, t finite
+        return 2**(p.acc_exp + 1)
 
 
 def check_widths(p: Params) -> None:
-    """The bounds the v2 tables rely on; raised at construction, never silently."""
-    if p.lossy or p.acc_exp != p.exp:
-        raise ValueError("v2 arithmetises the BF16 -> FP32 step only: no lossy rescale, one exponent width")
+    """The bounds the v2 tables rely on; raised at construction, never silently.
+
+    The operand and accumulator exponent widths may differ (E4M3 -> FP32); the adder may not be narrower than the
+    state (no lossy rescale inside a unit).  The FP8 pipelines are arithmetised on their *adder-side* view
+    (``acc_sig = width = 14``, ``gpu/v2/fp8.py``): the chained state is the adder's 14-bit magnitude, so the
+    silicon's rescale of the incoming FP32 word (``M >> 10``) is exact on every chained state."""
+    if p.lossy:
+        raise ValueError("v2 has no lossy rescale: arithmetise the adder-side view (acc_sig = width)")
     if -p.k_lo > V2.vb(p):
         raise ValueError("the normalisation right shift must not exceed the low half of v")
     if V2.vb(p) + p.k_lo < 0:

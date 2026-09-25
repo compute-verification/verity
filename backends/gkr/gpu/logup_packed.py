@@ -310,18 +310,24 @@ if GRAPHS:
 
         def _tree_ops(self) -> None:
             n = self.n
-            np_, nq = logup._combine_level(self.p_leaf, self.q_leaf)
             pq = self.levels[n - 1]
-            pq[0] = _deinterleave(np_)
-            pq[1] = _deinterleave(nq)
+            fused = logup._field._fast_combine_level is not None and n >= 2
+            if fused:
+                from . import kernels as _gk
+                _gk.combine_leaves_into(self.p_leaf, self.q_leaf, pq, self.T4_big)
+            else:
+                np_, nq = logup._combine_level(self.p_leaf, self.q_leaf)
+                pq[0] = _deinterleave(np_)
+                pq[1] = _deinterleave(nq)
             for lv in range(n - 1, 0, -1):
                 src, dst = self.levels[lv], self.levels[lv - 1]
                 m = 1 << (lv - 1)
                 self.tk._tree_level_kernel[(-(-m // 256),)](src[0], src[1], dst[0], dst[1], m, R2=self.tk.R2_MOD_P, BLOCK=256, FK=self.tk.FIELD_KEY)
-            self.T4_big[0, :, 0] = self.p_leaf[0::2]
-            self.T4_big[1, :, 0] = self.p_leaf[1::2]
-            self.T4_big[2] = self.q_leaf[0::2]
-            self.T4_big[3] = self.q_leaf[1::2]
+            if not fused:
+                self.T4_big[0, :, 0] = self.p_leaf[0::2]
+                self.T4_big[1, :, 0] = self.p_leaf[1::2]
+                self.T4_big[2] = self.q_leaf[0::2]
+                self.T4_big[3] = self.q_leaf[1::2]
 
         def _level_ops(self, lv: int, i0: int, i1: int, tail: bool) -> None:
             self._big = False
@@ -341,8 +347,10 @@ if GRAPHS:
         def prove_fs_ext(self, p_leaf: torch.Tensor, q_leaf: torch.Tensor, n: int, tr: Transcript, out: list[Ext]) -> LeafClaim:
             if not self.built or self.n != n:
                 self.build_ext(n)
-            self.p_leaf.copy_(p_leaf)
-            self.q_leaf.copy_(q_leaf)
+            if p_leaf.data_ptr() != self.p_leaf.data_ptr():
+                self.p_leaf.copy_(p_leaf)
+            if q_leaf.data_ptr() != self.q_leaf.data_ptr():
+                self.q_leaf.copy_(q_leaf)
             self.g_tree.replay()
             return self._walk_fs(tr, out)
 
@@ -405,10 +413,11 @@ if GRAPHS:
             if not any(root_q):
                 raise ValueError("LogUp: q_root is zero")
             out.append(root_q)
+            S_l, vals_l = S.tolist(), vals.tolist()
             for lv in range(n):
                 for i in range(lv):
-                    out.extend(tuple(int(v) for v in row) for row in S[lv, i])
-                out.extend(tuple(int(v) for v in row) for row in vals[lv])
+                    out.extend(map(tuple, S_l[lv][i]))
+                out.extend(map(tuple, vals_l[lv]))
             self.fs.store(tr, fsw.astype("int32"), 1 + sum(lv + 2 for lv in range(n)))
             tr.logup_syncs = getattr(tr, "logup_syncs", 0) + 1
             rho = [tuple(int(v) for v in r) for r in rho.reshape(n, DEG)]
@@ -442,8 +451,10 @@ if GRAPHS:
         def prove_fs_ext(self, p_leaf: torch.Tensor, q_leaf: torch.Tensor, n: int, tr: Transcript, out: list[Ext]) -> LeafClaim:
             if not self.built or self.n != n:
                 self.build_ext(n)
-            self.p_leaf.copy_(p_leaf)
-            self.q_leaf.copy_(q_leaf)
+            if p_leaf.data_ptr() != self.p_leaf.data_ptr():
+                self.p_leaf.copy_(p_leaf)
+            if q_leaf.data_ptr() != self.q_leaf.data_ptr():
+                self.q_leaf.copy_(q_leaf)
             return self._replay_fs(tr, out)
 
     _GRAPHS: dict = {}
@@ -467,6 +478,13 @@ if GRAPHS:
             _GRAPHS[key] = _FSGraphExtDev(device) if dev_fs else _FSGraphExt(device)
         return _GRAPHS[key]
 
+    def leaf_buffers(device, n: int) -> tuple[torch.Tensor, torch.Tensor]:
+        """The static leaf buffers of the ``n`` ext-table graph (``build_leaves(out=...)`` fills them in place)."""
+        g = graph_ext(device, n)
+        if not g.built or g.n != n:
+            g.build_ext(n)
+        return g.p_leaf, g.q_leaf
+
 
 def use_graphs(device) -> bool:
     import os
@@ -489,4 +507,4 @@ def prove_ext_table_graphed(p_leaf: torch.Tensor, q_leaf: torch.Tensor, n: int, 
 
 
 __all__ = ["AVAILABLE", "GRAPHS", "prove_range_table", "prove_ext_table", "prove_range_table_graphed",
-           "prove_ext_table_graphed", "use_graphs", "FSCoins", "DEG"]
+           "prove_ext_table_graphed", "use_graphs", "leaf_buffers", "FSCoins", "DEG"]

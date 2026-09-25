@@ -49,6 +49,7 @@ def server(monkeypatch):
     srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _Stall)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     monkeypatch.setattr(remote_s3, "REQUEST_DEADLINE_S", 0.5)
+    monkeypatch.setattr(remote_s3, "HEAD_DEADLINE_S", 0.3)
     monkeypatch.setattr(remote_s3, "RETRY_BACKOFF_S", 0.01)
     yield remote_s3.S3Remote(f"http://127.0.0.1:{srv.server_address[1]}", "b", "ak", "sk", timeout=30)
     srv.shutdown()
@@ -60,10 +61,25 @@ def test_a_get_whose_body_stalls_is_cut_off_and_retried(server, tmp_path):
     assert (tmp_path / "out").read_bytes() == BODY and _Stall.calls == ["GET", "GET"] and time.monotonic() - t < 4
 
 
-def test_a_head_that_never_answers_is_cut_off_and_retried(server):
+def test_a_head_that_never_answers_is_cut_off_and_retried(server, capsys):
     t = time.monotonic()
     assert server.head("k") == {"bytes": len(BODY), "etag": "0123456789abcdef0123456789abcdef"}
     assert _Stall.calls == ["HEAD", "HEAD"] and time.monotonic() - t < 4
+    assert server.deadline_hits == [{"method": "HEAD", "key": "k", "try": 1, "of": 2, "deadline_s": 0.3}] and server.exhausted == []
+    assert "research: HEAD k: no response within 0s (try 1 of 2); retrying" in capsys.readouterr().err
+
+
+def test_a_head_that_never_answers_is_exhausted_after_its_one_retry_and_named(server, monkeypatch):
+    orig = _Stall.do_HEAD
+
+    def always(self):
+        _Stall.calls[:] = []
+        orig(self)
+    monkeypatch.setattr(_Stall, "do_HEAD", always)
+    t = time.monotonic()
+    with pytest.raises(TimeoutError, match="HEAD k2: no response within the 0s deadline on all 2 tries"):
+        server.head("k2")
+    assert time.monotonic() - t < 3 and [x["key"] for x in server.exhausted] == ["k2"] and len(server.deadline_hits) == 2
 
 
 def test_a_request_that_always_stalls_fails_within_its_retries(server, tmp_path, monkeypatch):

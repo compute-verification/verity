@@ -83,16 +83,16 @@ class StateDecode:
         return Contract(
             "state_decode",
             inputs={"c": _bits(p.acc_word_bits)},
-            hints={"hdr": _bits(p.exp + 1), "f": _bits(p.acc_frac), "z": _bit()},
+            hints={"hdr": _bits(p.acc_exp + 1), "f": _bits(p.acc_frac), "z": _bit()},
             checked={"M+z-1": _bits(p.acc_sig)},
-            outputs={"s": _bit(), "e_hat": (p.floor, p.e_max + 1), "M": _bits(p.acc_sig), "z": _bit()},
+            outputs={"s": _bit(), "e_hat": (p.floor, p.acc_e_max + 1), "M": _bits(p.acc_sig), "z": _bit()},
             tables=("T_HDR",),
         )
 
     @staticmethod
     def gen(p: Params, c: int) -> dict:
         f = c & (2**p.acc_frac - 1)
-        t = (c >> p.acc_frac) & (2**p.exp - 1)
+        t = (c >> p.acc_frac) & (2**p.acc_exp - 1)
         return {"hdr": c >> p.acc_frac, "f": f, "z": int(t == 0 and f == 0)}
 
     @staticmethod
@@ -333,7 +333,7 @@ class Pack:
     @staticmethod
     def word(p: Params, state) -> object:
         s, e_hat, M, z = state
-        fld = e_hat + (p.bias - 1) + z * (p.e_min - p.floor)
+        fld = e_hat + (p.acc_bias - 1) + z * (p.acc_e_min - p.floor)
         return s * 2 ** (p.acc_word_bits - 1) + fld * 2**p.acc_frac + M
 
     @staticmethod
@@ -346,4 +346,4 @@ class Pack:
             inf_sign = inf_sign + first * sgn_g
             none_yet = none_yet - first
         top = 2 ** (p.acc_word_bits - 1)
-        return fin - any_ovf * fin + inf_sign * top + any_ovf * (p.t_finite * 2**p.acc_frac)
+        return fin - any_ovf * fin + inf_sign * top + any_ovf * (p.acc_t_finite * 2**p.acc_frac)

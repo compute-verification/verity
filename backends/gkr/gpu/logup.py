@@ -100,6 +100,22 @@ def table_rows(t: Table, device) -> torch.Tensor:
     return t.device_rows(device)
 
 
+KEY_MAP_MAX = 1 << 26
+
+
+def _key_map(t: Table, keys: torch.Tensor) -> torch.Tensor | None:
+    """Row index by key (``-1`` = no row) for a row-listed table whose keys are below ``KEY_MAP_MAX``, cached on the table;
+    None otherwise (the sorted-key search is used)."""
+    ck = ("key_map", str(keys.device))
+    if ck not in t._dev_rows:
+        kmap = None
+        if keys.numel() and int(keys.min()) >= 0 and (kmax := int(keys.max())) < KEY_MAP_MAX:
+            kmap = torch.full((kmax + 1,), -1, dtype=torch.int64, device=keys.device)
+            kmap[keys] = torch.arange(keys.shape[0], dtype=torch.int64, device=keys.device)
+        t._dev_rows[ck] = kmap
+    return t._dev_rows[ck]
+
+
 def multiplicities(t: Table, trows: torch.Tensor, values: list[torch.Tensor]) -> torch.Tensor:
     """``m_j`` = how many query tuples equal table row ``j`` (int64 ``(rows,)``); raises if a tuple is not a row."""
     dev = trows.device
@@ -115,6 +131,22 @@ def multiplicities(t: Table, trows: torch.Tensor, values: list[torch.Tensor]) ->
             m += torch.bincount(key, minlength=trows.shape[0])
         return m
     keys = trows[:, 0]
+    kmap = _key_map(t, keys)
+    if kmap is not None and dev.type == "cuda" and _field._fast_lookup_mults is not None:
+        m, bad = _field._fast_lookup_mults(values, kmap, trows)
+        if bad:
+            raise ValueError(f"query tuple not in table {t.name}")
+        return m
+    if kmap is not None:
+        for v in values:
+            key = v[:, 0]
+            if bool((key >= kmap.shape[0]).any()):
+                raise ValueError(f"query tuple not in table {t.name}")
+            idx = kmap[key]
+            if not bool(((idx >= 0) & (trows[idx.clamp(min=0)] == v).all(dim=1)).all()):
+                raise ValueError(f"query tuple not in table {t.name}")
+            m += torch.bincount(idx, minlength=trows.shape[0])
+        return m
     order = torch.argsort(keys)
     skeys = keys[order]
     for v in values:
@@ -143,26 +175,41 @@ def beta_powers(beta: Ext, w: int, device) -> torch.Tensor:
     return t_exts(pw, device)
 
 
-def build_leaves(t: Table, trows: torch.Tensor, values: list[torch.Tensor], m: torch.Tensor, z: Ext, beta: Ext, n: int):
-    """``(p_leaf (2^n,) int32 base, q_leaf (2^n, 6) int32)`` in the order [seg0 queries, seg1 queries, table, padding]."""
+def build_leaves(t: Table, trows: torch.Tensor, values: list[torch.Tensor], m: torch.Tensor, z: Ext, beta: Ext, n: int,
+                 out: tuple[torch.Tensor, torch.Tensor] | None = None):
+    """``(p_leaf (2^n,) int32 base, q_leaf (2^n, 6) int32)`` in the order [seg0 queries, seg1 queries, table, padding]
+    (written into ``out`` when given)."""
     dev = trows.device
     size = 1 << n
-    p = torch.zeros((size,), dtype=torch.int32, device=dev)
-    q = torch.zeros((size, DEG), dtype=torch.int32, device=dev)
-    q[:, 0] = 1
+    if out is None:
+        p = torch.empty((size,), dtype=torch.int32, device=dev)
+        q = torch.empty((size, DEG), dtype=torch.int32, device=dev)
+    else:
+        p, q = out
     betas = beta_powers(beta, t.cols, dev)
     zt = t_ext(z, dev)
+    fast = _field._fast_leaf_q if dev.type == "cuda" else None
     pos = 0
     for v in values:
         k = v.shape[0]
         p[pos:pos + k] = 1
-        for lo in range(0, k, CHUNK):
-            hi = min(k, lo + CHUNK)
-            q[pos + lo:pos + hi] = ((zt - combine(v[lo:hi], betas)) % P).to(torch.int32)
+        if fast is not None:
+            fast(v, betas, zt, q[pos:pos + k])
+        else:
+            for lo in range(0, k, CHUNK):
+                hi = min(k, lo + CHUNK)
+                q[pos + lo:pos + hi] = ((zt - combine(v[lo:hi], betas)) % P).to(torch.int32)
         pos += k
     k = trows.shape[0]
     p[pos:pos + k] = ((-m) % P).to(torch.int32)
-    q[pos:pos + k] = ((zt - combine(trows, betas)) % P).to(torch.int32)
+    if fast is not None:
+        fast(trows, betas, zt, q[pos:pos + k])
+    else:
+        q[pos:pos + k] = ((zt - combine(trows, betas)) % P).to(torch.int32)
+    pos += k
+    p[pos:] = 0
+    q[pos:] = 0
+    q[pos:, 0] = 1
     return p, q
 
 

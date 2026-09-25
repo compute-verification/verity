@@ -20,6 +20,7 @@ import importlib
 import time
 from typing import Any
 
+from verity_vllm.commit.opened import OpenedReader, OpeningNotVerified
 from verity_vllm.tp.collective_sites import MOE_COLLECTIVE_CLASSES as MOE_SITE_CLASSES, MOE_COLLECTIVE_MODULES
 
 SITES = (("vllm.model_executor.layers.linear", "tensor_model_parallel_all_reduce", "all_reduce"),
@@ -54,18 +55,11 @@ def _bytes(t: Any) -> bytes:
     return (t.contiguous().reshape(-1).view(torch.uint8) if t.dtype != torch.uint8 else t.contiguous().reshape(-1)).cpu().numpy().tobytes()
 
 
-def _committed(committer: Any, step: int, m: Any) -> bytes | None:
-    """Committed bytes of layout meta `m` (same rule as value_check.ValueChecker._committed): retained host copy, else a verification-time
-    D2H from the retained GPU block at the tensor's offset in the packed step stream."""
-    if m is None:
-        return None
-    if getattr(m, "host", None) is not None:
-        return bytes(m.host)
-    blocks = getattr(committer, "_gpu_blocks", None)
-    if blocks and step in blocks and blocks[step][0] is not None:
-        blk = blocks[step][0]
-        return bytes(blk[m.stream_off:m.stream_off + m.nbytes].cpu().numpy().tobytes())
-    return None
+def _committed(reader: Any, step: int, m: Any) -> bytes | None:
+    """Committed bytes of layout meta `m`, opened from the committer and verified against the run root by `reader`
+    (`commit.opened.OpenedReader`).  None = not committed at the step or not retained; a read that does not verify raises
+    `OpeningNotVerified` (the caller fails it by name)."""
+    return None if m is None else reader.read_meta(step, m)
 
 
 def _ref_key(member: str, occ: int) -> str:
@@ -379,17 +373,19 @@ class TPPartialSource:
         return w
 
     # -- value correspondence (C2) -----------------------------------------------------------------------------------------
-    def compare(self) -> dict[str, Any]:
-        """[R15 TP-04 C2] After finalize(): for every partial this source bound, the committer's committed bytes (retained host copy or a
-        verification-time D2H of the GPU block) must equal (T) the hook-time reference clone taken in `_bind`, and, for the RowParallelLinear
-        sites of the first `ref_reexec_steps` steps, (R) a re-execution of the rank-local GEMM on the shard from the tapped module input
-        (`quant_method.apply(layer, x)` -- the exact relation `part_rank_r = Gemm_v1{K/W}(x_r, W_r)` the rank Program declares).
-        Bit-identity is what VLLM_BATCH_INVARIANT promises.  A partial the committer did not bind is `missing_in_commit` (FAIL)."""
+    def compare(self, reader: Any) -> dict[str, Any]:
+        """[R15 TP-04 C2] After finalize(): for every partial this source bound, the committed bytes (opened and verified against the
+        rank's run root by `reader`, an `commit.opened.OpenedReader`) must equal (T) the hook-time reference clone taken in `_bind`, and,
+        for the RowParallelLinear sites of the first `ref_reexec_steps` steps, (R) a re-execution of the rank-local GEMM on the shard from
+        the tapped module input (`quant_method.apply(layer, x)` -- the exact relation `part_rank_r = Gemm_v1{K/W}(x_r, W_r)` the rank
+        Program declares).  Bit-identity is what VLLM_BATCH_INVARIANT promises.  A partial the committer did not bind is
+        `missing_in_commit` (FAIL); one whose opening does not verify is `not_verified` (FAIL)."""
         import torch
 
         t0 = time.perf_counter()
         res: dict[str, Any] = {"rank": self.rank, "steps": len(self.ref), "tensors": 0, "tap_equal": 0, "tap_mismatch": [], "reexec_tensors": 0,
-                               "reexec_equal": 0, "reexec_mismatch": [], "reexec_skipped": {}, "missing_in_commit": [], "by_member": {}}
+                               "reexec_equal": 0, "reexec_mismatch": [], "reexec_skipped": {}, "missing_in_commit": [], "not_verified": [],
+                               "by_member": {}}
         mods = dict(self.modules)
         for step, refs in sorted(self.ref.items()):
             by_name = _metas_by_name(self.c._layouts.get(step, []))
@@ -398,7 +394,11 @@ class TPPartialSource:
                 kind = member.rsplit("/", 1)[-1].split("_rank")[0]
                 bm = res["by_member"].setdefault(kind, {"tensors": 0, "tap_equal": 0, "reexec": 0, "reexec_equal": 0})
                 m = _nth(by_name, member, occ)
-                committed = _committed(self.c, step, m)
+                try:
+                    committed = _committed(reader, step, m)
+                except OpeningNotVerified as e:
+                    res["not_verified"].append((step, member, str(e)[:200]))
+                    continue
                 if committed is None:
                     res["missing_in_commit"].append((step, member))
                     continue
@@ -429,17 +429,21 @@ class TPPartialSource:
                     else:
                         res["reexec_mismatch"].append((step, member, len(committed)))
         res["tap_mismatch_n"], res["reexec_mismatch_n"] = len(res["tap_mismatch"]), len(res["reexec_mismatch"])
-        res["missing_n"] = len(res["missing_in_commit"])
+        res["missing_n"], res["not_verified_n"] = len(res["missing_in_commit"]), len(res["not_verified"])
         res["tap_mismatch"], res["reexec_mismatch"], res["missing_in_commit"] = res["tap_mismatch"][:20], res["reexec_mismatch"][:20], res["missing_in_commit"][:20]
+        res["not_verified"] = res["not_verified"][:20]
+        res["value_source"] = reader.record()
         res["wall_s"] = time.perf_counter() - t0
         res["verdict"] = "PASS" if (res["tensors"] > 0 and res["tap_mismatch_n"] == 0 and res["reexec_mismatch_n"] == 0 and res["missing_n"] == 0
-                                    and res["reexec_tensors"] > 0) else "FAIL"
+                                    and res["not_verified_n"] == 0 and res["reexec_tensors"] > 0) else "FAIL"
         self.ref, self.ref_in = {}, {}
         return res
 
-    def compare_match_oracle(self, capture_dir: str) -> dict[str, Any]:
+    def compare_match_oracle(self, capture_dir: str, reader: Any) -> dict[str, Any]:
         """[R15 coord M-0481 C2 form (B), TP family] Every committed TP partial (`<site>/part_rank<r>` | `/shard_rank<r>`) and received
-        fused-MoE output (`<site>/out`) of THIS rank compared bit-for-bit against the INDEPENDENT Match observation of the same workload:
+        fused-MoE output (`<site>/out`) of THIS rank -- opened and verified against the rank's run root by `reader` (an
+        `commit.opened.OpenedReader`; a member whose opening does not verify is `not_verified`, FAIL) -- compared bit-for-bit against the
+        INDEPENDENT Match observation of the same workload:
         `tp2_match --arm capture`'s per-rank recorder stored every collective's input and output per step in call order
         (`coll.rank<r>.jsonl` = (step, k, kind, module), `coll.rank<r>.step<s>.pt` = {part[k], out[k]}).  The oracle is a different
         process and a different run (batch-invariant execution promises bit-identity); a committed member the oracle does not name is
@@ -455,7 +459,7 @@ class TPPartialSource:
         cap = Path(capture_dir)
         res: dict[str, Any] = {"rank": self.rank, "oracle": str(cap), "steps_compared": 0, "steps_without_oracle": [], "oracle_steps_not_committed": [],
                                "duplicate_module_steps": [], "oracle_inconsistent": [], "tensors": 0, "equal": 0,
-                               "mismatches": [], "missing_in_commit": [], "committed_not_in_oracle": [], "by_member": {},
+                               "mismatches": [], "missing_in_commit": [], "not_verified": [], "committed_not_in_oracle": [], "by_member": {},
                                "families_covered": ["tp_rank_partials"], "families_not_covered": ["instance_outputs", "fa2_hidden_m1_stream", "input_token_ids", "weights"],
                                # [rev-pm M-0585 TIP3] the pairing key is (step, MODULE): the committed member is named by its issuing module (one partial per
                                # site per step is what identity_check requires), the oracle record by (step, k, module); a module recorded twice in one
@@ -509,7 +513,12 @@ class TPPartialSource:
                     pairs.append((f"{mod}/out", v["out"][k], "out"))
                 for member, oracle_t, what in pairs:
                     bm = res["by_member"].setdefault(what, {"tensors": 0, "equal": 0})
-                    committed = _committed(self.c, step, _nth(by_name, member, j))
+                    try:
+                        committed = _committed(reader, step, _nth(by_name, member, j))
+                    except OpeningNotVerified as e:
+                        seen.add(member)
+                        res["not_verified"].append((step, k, member, str(e)[:200]))
+                        continue
                     if committed is None:
                         res["missing_in_commit"].append((step, k, member))
                         continue
@@ -532,13 +541,19 @@ class TPPartialSource:
                 res["committed_not_in_oracle"].append((step, n))
             res["steps_compared"] += 1
         res["mismatch_n"], res["missing_n"], res["not_in_oracle_n"] = len(res["mismatches"]), len(res["missing_in_commit"]), len(res["committed_not_in_oracle"])
+        res["not_verified_n"] = len(res["not_verified"])
         res["mismatches"], res["missing_in_commit"], res["committed_not_in_oracle"] = res["mismatches"][:20], res["missing_in_commit"][:20], res["committed_not_in_oracle"][:20]
+        res["not_verified"] = res["not_verified"][:20]
+        res["value_source"] = reader.record()
         res["wall_s"] = time.perf_counter() - t0
         res["verdict"] = "PASS" if (res["tensors"] > 0 and res["mismatch_n"] == 0 and res["missing_n"] == 0 and res["not_in_oracle_n"] == 0
+                                    and res["not_verified_n"] == 0
                                     and not res["steps_without_oracle"] and not res["oracle_steps_not_committed"] and not res["oracle_inconsistent"]
                                     and not res["duplicate_module_steps"] and res["steps_compared"] == len(self.c._layouts)) else "FAIL"
         if res["verdict"] == "FAIL" and "why" not in res:
-            if res["oracle_steps_not_committed"]:
+            if res["not_verified_n"]:
+                res["why"] = f"{res['not_verified_n']} committed member(s) whose opening does not verify against the run root (first {res['not_verified'][0][:3]})"
+            elif res["oracle_steps_not_committed"]:
                 res["why"] = f"oracle stored {len(res['oracle_steps_not_committed'])} step(s) the committer never committed (first {res['oracle_steps_not_committed'][0]}): the Commit stopped early or the runs differ"
             elif res["oracle_inconsistent"]:
                 oi = res["oracle_inconsistent"][0]
@@ -572,3 +587,58 @@ class TPPartialSource:
 
 
 __all__ = ["TPPartialSource", "SITES", "COVERS_FAMILIES"]
+
+
+def late_read_check(com: Any, rc: Any, rank: int) -> dict[str, Any]:
+    """[rev-cb M-0424 T6-4, report M-0435] late-read detector for the fused-MoE received all-reduce output: the committed bytes of
+    `model.layers.<L>.mlp.experts/out` vs the committed `model.layers.<L+1>.input_layernorm/0` (last layer: `model.norm/0`) in the
+    same step, for EVERY step and layer of the last finalized run.  The /out is staged (a held reference, copied at the next gather
+    flush); vLLM's fused_add_rms_norm writes the next norm's output INTO that tensor in place, so a late read commits bytes equal
+    to the next norm's /0.  Any equal pair = late read (result False, count named); result True needs > 0 pairs compared and 0
+    equal / 0 missing."""
+    import hashlib
+    import re
+
+    layouts = getattr(com, "_layouts", {}) or {}
+    rd = OpenedReader(com, rc)
+    pairs: list[dict] = []
+    equal = missing = compared = not_verified = 0
+    steps = 0
+    for step in sorted(layouts):
+        metas = {m.name: m for m in layouts[step]}
+        outs = sorted((int(re.search(r"layers\.(\d+)\.", n).group(1)), n) for n in metas if n.endswith(".mlp.experts/out"))
+        if not outs:
+            continue
+        steps += 1
+        last = max(L for L, _n in outs)
+        for L, n in outs:
+            nxt = n.rsplit(".layers.", 1)[0] + (f".layers.{L + 1}.input_layernorm/0" if L < last else ".norm/0")
+            try:
+                a = _committed(rd, step, metas.get(n))
+                b = _committed(rd, step, metas.get(nxt))
+            except OpeningNotVerified as e:
+                not_verified += 1
+                if len(pairs) < 240:
+                    pairs.append({"step": step, "layer": L, "out": n, "next_norm": nxt, "not_verified": str(e)[:200]})
+                continue
+            if a is None or b is None:
+                missing += 1
+                if len(pairs) < 240:
+                    pairs.append({"step": step, "layer": L, "out": n, "next_norm": nxt, "missing": [x for x, v in (("out", a), ("next_norm", b)) if v is None]})
+                continue
+            compared += 1
+            eq = a == b
+            equal += int(eq)
+            if eq or step < 2 or len(pairs) < 96:
+                pairs.append({"step": step, "layer": L, "out": n, "next_norm": nxt, "out_sha": hashlib.sha256(a).hexdigest()[:16],
+                              "next_norm_sha": hashlib.sha256(b).hexdigest()[:16], "nbytes": len(a), "equal": eq})
+    # [tp fold of moe cf29c7e72] a dense TP row (Llama: no fused-MoE `/out` member in any step) has nothing for this detector to
+    # compare -- record NOT APPLICABLE (result None, applicable False) rather than a False that reads as a detected late read;
+    # on a MoE row the rule is moe's: True only with > 0 pairs compared, 0 equal, 0 missing
+    applicable = steps > 0
+    return {"schema": "verity/commit-integ/t6_4-check/v1", "rank": int(rank), "applicable": applicable,
+            "result": (bool(compared > 0 and equal == 0 and missing == 0 and not_verified == 0) if applicable else None),
+            "steps": steps, "layers_compared": compared, "equal_pairs": equal, "missing_pairs": missing, "not_verified_pairs": not_verified,
+            "value_source": rd.record(), "pairs": pairs[:240],
+            "why": (None if applicable else "no fused-MoE received all-reduce member (*.mlp.experts/out) in any committed step: dense TP row, detector not applicable"),
+            "rule": "committed <L>.mlp.experts/out == committed <L+1>.input_layernorm/0 (last: model.norm/0) in the same step => late read"}

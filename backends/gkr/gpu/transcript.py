@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import hashlib
 
-from .field import DEG, Ext, P, to_bytes
+from .field import DEG, Ext, P, exts_to_bytes, to_bytes
 
 DOMAIN = b"verity-gkr/candidate-a/v1/babybear6"
 
@@ -28,7 +28,7 @@ class Transcript:
         self.absorb(to_bytes(x))
 
     def absorb_exts(self, xs) -> None:
-        self.absorb(b"".join(to_bytes(x) for x in xs))
+        self.absorb(exts_to_bytes(xs))
 
     def _words(self):
         while True:

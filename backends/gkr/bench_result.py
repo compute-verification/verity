@@ -19,7 +19,7 @@ claims (`backends/gkr/verifier/pins.txt`), so a rep counts as verified only with
 Per timed rep (wall clock; the device is synchronised at every boundary; the buckets sum to t.total up to the Python
 between the timers, which tables.phases shows as Other):
 
-    t.witness              H2D of the operands + the witness generator (chain, unit rows, limb epilogue) + wire evaluation
+    t.witness              H2D of the operands + the witness generator (chain, unit rows, limb or packed-word epilogue) + wire evaluation
     t.encoding_commitment  x assembly + RS encode (SIMT NTT) + SHA-512 Merkle tree
     t.lookup               LogUp multiplicities + transcript start + every table's LogUp GKR
     t.arithmetic           the circuit GKR layers + the Ligero functional (input / lookup / chain claims) + w, q (INT8 GEMMs)
@@ -110,34 +110,56 @@ def load_frozen(root: Path, manifest: Path, tier: str, lo: int, n: int):
 
 def load_relation(name: str, src_root: Path, lo: int, n: int, procs: int):
     """``(x, w, y, rel)`` for a relation whose frozen set is a recipe (``backends/direct/ligero/relations.py``, e.g.
-    ``bf16-hopper``): VUs ``[lo, lo + n)`` of ``relchain.instances`` (the relation's finite operand words from
-    ``(seed, index)``, the accumulators recorded by its model), ``y`` the chain-end public word (the model's final FP32
-    accumulator cast by the relation's epilogue)."""
+    ``bf16-hopper``, ``fp8-ada``, ``fp8-hopper``): VUs ``[lo, lo + n)`` of ``relchain.instances`` (the relation's finite
+    operand words from ``(seed, index)``, the accumulators recorded by its model), ``y`` the chain-end public word (the
+    model's final FP32 accumulator cast by the relation's epilogue: BF16 uint16, or the FP8 relations' 22-bit packing
+    as uint32)."""
     import numpy as np
 
     if str(src_root) not in sys.path:
         sys.path.insert(0, str(src_root))
     from backends.direct.ligero import relchain
     from backends.direct.ligero.relations import relation
+    from gpu.v2.fp8 import relation_params
 
     rel = relation(name)
-    if rel.frozen_tier or rel.y_bits != 16 or rel.k != 16 or rel.steps * rel.k != K_VU:
-        raise SystemExit(f"bench_result.py: {name} is not a recipe BF16-output relation with 16-product units over K = {K_VU}")
+    p, epilogue = relation_params(rel)
+    y_bits = 22 if epilogue == "fp8" else 16
+    if rel.frozen_tier or rel.y_bits != y_bits or rel.k != sum(p.groups) or rel.steps * rel.k != K_VU:
+        raise SystemExit(f"bench_result.py: {name} is not a recipe BF16- or FP8-output relation over K = {K_VU}")
     inst = relchain.instances(rel, lo + n, procs=procs)[lo:]
     x = np.array([v[0] for v in inst], dtype=np.uint16)
     w = np.array([v[1] for v in inst], dtype=np.uint16)
-    y = np.array([rel.y_public(int(v[3])) for v in inst], dtype=np.uint16)
+    y = np.array([rel.y_public(int(v[3])) for v in inst], dtype=np.uint16 if y_bits == 16 else np.uint32)
     return x, w, y, rel
 
 
+def load_nvf4(lo: int, n: int, procs: int):
+    """``(A, B, Y, inst_ref, inst_check)`` for ``fp4-nvf4``: VUs ``[lo, lo + n)`` of the frozen NVFP4 set
+    (``backends/direct/ligero/fp4/chain.instances_fp4``: seed, edge families, model-recorded accumulators), ``A`` / ``B``
+    (n, 24, 68) uint8 operand words, ``Y`` (n,) the final FP32 words."""
+    from verity_numerical.bench import contract
+
+    from backends.direct.ligero.fp4.chain import INSTANCE_SEED, VU_FAMILIES, instances_digest
+    from gpu.nvf4.witness import load_instances
+
+    A, B, Y = load_instances(lo, n, procs)
+    digest = instances_digest(lo + n)
+    ref = contract.instances_ref(contract.NVFP4_INSTANCES_TIER, lo, lo + n, digest, dataset=contract.NVFP4_INSTANCES_DATASET)
+    check = {"recipe": f"fp4-nvf4 synthetic (edge families {', '.join(VU_FAMILIES)} cycling per VU; model-recorded accumulators)",
+             "generator": "backends/direct/ligero/fp4/chain.py instances_fp4()", "seed": INSTANCE_SEED, "digest": digest}
+    return A, B, Y, ref, check
+
+
 def write_statement(d: Path, out: Path, y) -> None:
-    """``out/``: DIR's Params-only files and ``public.bin`` holding the frozen words (``bb_export.write_rows`` layout)."""
+    """``out/``: DIR's Params-only files and ``public.bin`` holding the frozen words (``bb_export.write_rows`` layout);
+    ``y`` (N,) one word per VU, or (N, m) for a ``chain.txt`` with a ``public`` line of m columns."""
     from gpu.bb_export import write_rows
 
     out.mkdir(parents=True, exist_ok=True)
     for name in STATEMENT_FILES:
         shutil.copyfile(d / name, out / name)
-    write_rows([[int(v)] for v in y], out / "public.bin")
+    write_rows([[int(c) for c in v] if hasattr(v, "__len__") else [int(v)] for v in y], out / "public.bin")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -145,7 +167,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("dir", help="a checker-v2 export directory (only its Params-only statement files are read)")
     ap.add_argument("--instances", default=None, help="bench-instances/v1 data directory (the tier's files)")
     ap.add_argument("--relation", default=None,
-                    help="a recipe relation of backends/direct/ligero/relations.py (bf16-hopper) instead of the frozen --tier")
+                    help="a recipe relation of backends/direct/ligero/relations.py (bf16-hopper, fp8-ada, fp8-hopper) instead "
+                         "of the frozen --tier")
     ap.add_argument("--manifest", default=None, help="the frozen manifest.json (default: <source>/fixtures/bench-instances/v1)")
     ap.add_argument("--tier", default=TIER)
     ap.add_argument("--lo", type=int, default=0)
@@ -188,19 +211,32 @@ def main(argv: list[str] | None = None) -> int:
     from gpu import ligero, prover
     from gpu.circuit import layers, load_circuit
     from gpu.run import _dev, read_chain
+    from gpu.v2.fp8 import is_fp8, relation_params
     from gpu.v2.witness import Generator, GraphedGenerator, Ops
     import soundness
 
     # ---- preprocessing (Params-only; not in the buckets) -------------------------------------------------------------
     tp0 = time.perf_counter()
     dev = _dev(args.device)
-    if args.relation:
+    nvf4 = args.relation == "fp4-nvf4"
+    if nvf4:
+        from verity.verification.target import NVFP4_SM120
+
+        if str(src_root) not in sys.path:
+            sys.path.insert(0, str(src_root))
+
+        from gpu.nvf4.circuit import MODEL as NVF4_MODEL
+        A8, B8, Y32, inst_ref, inst_check = load_nvf4(args.lo, args.vus, args.threads)
+        if man.get("model") != NVF4_MODEL or man.get("relation") != "fp4-nvf4":
+            raise SystemExit(f"bench_result.py: {d} is not the fp4-nvf4 export (python -m gpu.nvf4.circuit export)")
+        params, profile, model_name = None, NVFP4_SM120.name, NVF4_MODEL
+    elif args.relation:
         x, w, y, rel = load_relation(args.relation, src_root, args.lo, args.vus, args.threads)
         from backends.direct.ligero import relchain
         digest = relchain.instances_digest(rel, args.lo + args.vus)
         if man.get("model") != rel.model.name:
             raise SystemExit(f"bench_result.py: {d} holds the circuits of {man.get('model')}, {rel.name} needs {rel.model.name}")
-        params, profile, model_name = rel.params, rel.target.name, rel.model.name
+        params, profile, model_name = relation_params(rel)[0], rel.target.name, rel.model.name
         inst_ref = contract.instances_ref(rel.instances_tier, args.lo, args.lo + args.vus, digest, dataset=rel.instances_dataset)
         inst_check = {"recipe": rel.instances_recipe, "generator": "backends/direct/ligero/relchain.py instances()",
                       "seed": rel.instance_seed, "digest": digest}
@@ -218,15 +254,54 @@ def main(argv: list[str] | None = None) -> int:
     ucirc, ecirc = load_circuit(d / "circuit.txt"), load_circuit(d / "epilogue.txt")
     ulayers, elayers = layers(ucirc), layers(ecirc)
     steps = man["steps"]
-    if steps * 16 != x.shape[1]:
-        raise SystemExit(f"bench_result.py: DIR has {steps} steps, the tier has K = {x.shape[1]}")
-    public = [int(v) for v in y]
-    ops = Ops(str(dev))
-    gen = Generator(ops, params)
     graphed = dev.type == "cuda" and not os.environ.get("VERITY_GPU_EAGER_WITNESS")
-    # the operands as host int16 arrays of their uint16 bits (the device copy happens inside every timed rep)
-    x16, w16, y16 = (np.ascontiguousarray(a).view(np.int16).copy() for a in (x, w, y))
     ggen: list = []
+    if nvf4:
+        from gpu.nvf4.circuit import STEPS as NVF4_STEPS
+        from gpu.nvf4.circuit import statement as nvf4_statement
+        from gpu.nvf4.witness import GraphedNVF4Generator, NVF4Generator, public_words
+
+        if steps != NVF4_STEPS or A8.shape[1] != steps:
+            raise SystemExit(f"bench_result.py: DIR has {steps} steps, the NVFP4 VU has {NVF4_STEPS}")
+        epi_name = "(s, t, f) epilogue: the public FP32 word as three components"
+        params_src = "gpu/nvf4/circuit: B-Ligero's compile_fp4_unit on GkrCtx"
+        y = public_words(torch.from_numpy(Y32)).numpy()                  # (N, 3): sign, exponent field, fraction
+        public = [int(v) for v in y.reshape(-1)]
+        ngen = NVF4Generator(nvf4_statement(), dev)
+        if ngen.st.ue.text != (d / "circuit.txt").read_text() or ngen.st.ee.text != (d / "epilogue.txt").read_text():
+            raise SystemExit(f"bench_result.py: {d}'s circuits are not this tree's gpu.nvf4.circuit export")
+        n_vus = A8.shape[0]
+
+        def make_graphed():
+            return GraphedNVF4Generator(ngen, n_vus)
+
+        def gen_rows(g):
+            if g is not None:
+                return g.run(A8, B8, Y32)
+            return ngen.run(torch.from_numpy(A8).to(dev).long(), torch.from_numpy(B8).to(dev).long(), torch.from_numpy(Y32).to(dev))
+    else:
+        unit_k = sum(params.groups)
+        if steps * unit_k != x.shape[1]:
+            raise SystemExit(f"bench_result.py: DIR has {steps} steps of {unit_k}, the tier has K = {x.shape[1]}")
+        fp8 = is_fp8(params)
+        epi_name = "packed-word epilogue" if fp8 else "limb epilogue"
+        params_src = "gpu/v2/fp8.adder_params: the adder-side view" if fp8 else "checker Params.from_model"
+        public = [int(v) for v in y]
+        ops = Ops(str(dev))
+        gen = Generator(ops, params)
+        # the operands as host int16 arrays of their uint16 bits, the FP8 packed words as int32 (the device copy happens
+        # inside every timed rep)
+        x16, w16 = (np.ascontiguousarray(a).view(np.int16).copy() for a in (x, w))
+        y16 = np.ascontiguousarray(y).view(np.int32 if y.dtype == np.uint32 else np.int16).copy()
+        n_vus = x16.shape[0]
+
+        def make_graphed():
+            return GraphedGenerator(gen, x16.shape[0], x16.shape[1])
+
+        def gen_rows(g):
+            if g is not None:
+                return g.run(x16, w16, y16)
+            return gen.run(ops.asarray(x), ops.asarray(w), ops.asarray(y))
     torch.cuda.synchronize(dev)
     t_prep = time.perf_counter() - tp0
     write_statement(d, run_dir / "statement", y)
@@ -236,14 +311,11 @@ def main(argv: list[str] | None = None) -> int:
         torch.cuda.synchronize(dev)
         torch.cuda.reset_peak_memory_stats(dev)
         if graphed and not ggen:                                 # captured in the (untimed) warm-up rep
-            ggen.append(GraphedGenerator(gen, x16.shape[0], x16.shape[1]))
+            ggen.append(make_graphed())
             torch.cuda.synchronize(dev)
             torch.cuda.reset_peak_memory_stats(dev)
         t0 = time.perf_counter()
-        if graphed:
-            rows = ggen[0].run(x16, w16, y16)
-        else:
-            rows = gen.run(ops.asarray(x), ops.asarray(w), ops.asarray(y))
+        rows = gen_rows(ggen[0] if graphed else None)
         bad = int(rows.bad.sum())
         t1 = time.perf_counter()
         if bad:
@@ -288,7 +360,7 @@ def main(argv: list[str] | None = None) -> int:
         inst, proof, st, data, tm = one_rep()
         err, tv = verify_py(inst, proof)
         if budget is None:
-            budget = soundness.summary(soundness.budget(inst, st.ligero_rows, st.linkage_constraints))
+            budget = soundness.summary(soundness.budget(inst, st.ligero_rows, st.linkage_constraints, K=K_VU))
         pf = proofs_dir / f"rep{rep}.bin"
         pf.write_bytes(data)
         row = {"rep": rep, "vus": inst.vus(), "units": inst.segs[0].units, "t_total": tm["total"], "witness_gen": tm["witness_gen"],
@@ -366,10 +438,11 @@ def main(argv: list[str] | None = None) -> int:
         cupy_v = cupy.__version__
     except ImportError:
         cupy_v = None
-    sw = {"backend": {"name": BACKEND, "commit": source_commit(), "version": "checker v2 (limb epilogue), proof.bin v2",
-                      "model": f"{model_name} (checker Params.from_model)", "relation": args.relation or args.tier,
+    sw = {"backend": {"name": BACKEND, "commit": source_commit(), "version": f"checker v2 ({epi_name}), proof.bin v2",
+                      "model": f"{model_name} ({params_src})", "relation": args.relation or args.tier,
                       "path": args.path, "encoder": encoder, "opening": ligero.opening_path(dev),
-                      "witness": "gpu/v2/witness.py (device generator; byte-exact with the CPU export)"
+                      "witness": ("gpu/nvf4/witness.py (device generator: B-Ligero's fp4/hints_device chain + the unit's program)"
+                                  if nvf4 else "gpu/v2/witness.py (device generator; byte-exact with the CPU export)")
                                  + ("; replayed as one CUDA graph captured in the warm-up" if graphed else "")},
           "toolchain": {"python": platform.python_version(), "torch": torch.__version__, "cuda_runtime": torch.version.cuda,
                         "triton": triton.__version__, "cupy": cupy_v, "numpy": np.__version__}}
@@ -385,7 +458,7 @@ def main(argv: list[str] | None = None) -> int:
         profile=profile, domain=contract.DOMAIN, K=K_VU, B=Bn, N_subbatches=1,
         proof_class="NON_ZK_PROOF_DIAGNOSTIC", authentication="excluded", zk_mode=contract.ZK_NONE,
         security=security, hardware=hw, software=sw,
-        preprocessing=(f"circuit compilation (unit + limb-epilogue circuits, GKR layers, chain spec: functions of Params only), "
+        preprocessing=(f"circuit compilation (unit + {epi_name} circuits, GKR layers, chain spec: functions of Params only), "
                        f"the witness generator's dense tables on the device, "
                        + (f"generating the {args.relation} recipe instances ({t_load:.2f}s, relchain.instances on "
                           f"{args.threads} processes)" if args.relation else
@@ -397,14 +470,15 @@ def main(argv: list[str] | None = None) -> int:
         instances=inst_ref,
         scope="vu", candidate="A-GKR", checker="v2", field=FIELD,
         instances_check=inst_check,
-        witness_generation="device generator (gpu/v2/witness.py) inside t.witness, from the frozen operands (H2D included)",
+        witness_generation=f"device generator ({'gpu/nvf4/witness.py' if nvf4 else 'gpu/v2/witness.py'}) inside t.witness, "
+                           f"from the frozen operands (H2D included)",
         omitted="ZK masking",
         steps=steps, units=med["units"], reps=args.reps, warmup=args.warmup,
         verifier={"name": "verity-gkr-verify (backends/gkr/verifier, Rust, shares no code with the prover)", "path": str(vbin),
                   "sha256": vsha, "threads": args.threads, "cpu": next((v["cpu"] for v in verdicts if v.get("cpu")), None),
                   "relation": relation, "circuit_pinned": bool(verdicts) and all(v["circuit_pinned"] for v in verdicts)},
         python_verifier="gpu.prover.verify (shares field / transcript / LogUp helpers with the prover)",
-        note=f"one proof of all {Bn} VUs (96 chained units each + the limb epilogue); buckets of the median rep "
+        note=f"one proof of all {Bn} VUs ({steps} chained units each + the {epi_name}); buckets of the median rep "
              f"(rep {med['rep']}) by t.total",
     )
     b = med["buckets"]

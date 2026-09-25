@@ -533,10 +533,11 @@ if triton is not None:
     @triton.jit
     def scatter_terms_kernel(e_ptr, v_ptr, ptr_ptr, tj_ptr, tc_ptr, units, q_t, ncols, BLOCK: tl.constexpr, FK: tl.constexpr):
         """``v[u, idx] += Σ_{terms t of column idx} e[u, j_t] · c_t`` for a block of units ``u`` and one column ``idx``
-        (grid ``(units / BLOCK, ncols)``; CSR ``ptr_ptr[idx]..ptr_ptr[idx+1]`` -> ``tj_ptr`` query index, ``tc_ptr`` the
-        coefficient ``c R mod p`` as 6 words).  ``e`` is ``(units, q_t, 6)``, ``v`` ``(units, ncols, 6)`` int64."""
-        pb = tl.program_id(0)
-        idx = tl.program_id(1)
+        (grid ``(ncols, units / BLOCK)``, columns fastest so a unit block's ``e`` rows stay in L2 across its columns; CSR
+        ``ptr_ptr[idx]..ptr_ptr[idx+1]`` -> ``tj_ptr`` query index, ``tc_ptr`` the coefficient ``c R mod p`` as 6 words).
+        ``e`` is ``(units, q_t, 6)``, ``v`` ``(units, ncols, 6)`` int64."""
+        idx = tl.program_id(0)
+        pb = tl.program_id(1)
         lo = tl.load(ptr_ptr + idx)
         hi = tl.load(ptr_ptr + idx + 1)
         if hi > lo:
@@ -569,10 +570,16 @@ if triton is not None:
 
 
     @triton.jit
-    def gate_eval_kernel(rows_ptr, ptr_ptr, idx_ptr, coef_ptr, out_ptr, copies, n_in, g_n, BLOCK: tl.constexpr, FK: tl.constexpr):
-        """``out[c, g] = Σ_{terms t of gate g} rows[c, idx_t] · coef_t`` (base field; CSR by gate, ``coef_ptr`` = ``coef R mod p``)."""
-        pb = tl.program_id(0)
-        g = tl.program_id(1)
+    def gate_eval_kernel(rows_ptr, ptr_ptr, idx_ptr, coef_ptr, out_ptr, copies, n_in, g_n, BLOCK: tl.constexpr, FK: tl.constexpr,
+                         GFAST: tl.constexpr = False):
+        """``out[c, g] = Σ_{terms t of gate g} rows[c, idx_t] · coef_t`` (base field; CSR by gate, ``coef_ptr`` = ``coef R mod p``).
+        ``GFAST``: grid ``(g_n, copies / BLOCK)``, gates fastest, so a copy block's rows stay in L2 across its gates."""
+        if GFAST:
+            g = tl.program_id(0)
+            pb = tl.program_id(1)
+        else:
+            pb = tl.program_id(0)
+            g = tl.program_id(1)
         lo = tl.load(ptr_ptr + g)
         hi = tl.load(ptr_ptr + g + 1)
         c = pb * BLOCK + tl.arange(0, BLOCK)
@@ -587,16 +594,38 @@ if triton is not None:
 
 
     @triton.jit
-    def combine_level_kernel(p_ptr, q_ptr, np_ptr, nq_ptr, n, PBASE: tl.constexpr, BLOCK: tl.constexpr, FK: tl.constexpr):
+    def combine_level_kernel(p_ptr, q_ptr, np_ptr, nq_ptr, t4_ptr, n, t4_stride, PBASE: tl.constexpr, BLOCK: tl.constexpr,
+                             FK: tl.constexpr, DEINT: tl.constexpr = False, T4OUT: tl.constexpr = False):
         """LogUp tree level: ``np[i] = p[2i] q[2i+1] + p[2i+1] q[2i]``, ``nq[i] = q[2i] q[2i+1]`` (int32 in/out, canonical;
-        ``PBASE``: ``p`` is base-field and ``np`` is extension)."""
+        ``PBASE``: ``p`` is base-field and ``np`` is extension).  ``DEINT``: parents written de-interleaved (``i`` even ->
+        row ``i / 2``, odd -> ``n / 2 + i / 2``); ``T4OUT`` (with ``PBASE``): the children also copied to the four
+        ``(n, 6)`` tables at ``t4_ptr + j t4_stride`` = ``p[2i], p[2i+1]`` (coordinate 0 only), ``q[2i], q[2i+1]``."""
         pid = tl.program_id(0)
         i = pid * BLOCK + tl.arange(0, BLOCK)
         m = i < n
         q0_0, q0_1, q0_2, q0_3, q0_4, q0_5 = load6(q_ptr, i * 12, m)
         q1_0, q1_1, q1_2, q1_3, q1_4, q1_5 = load6(q_ptr, i * 12 + 6, m)
         r0, r1, r2, r3, r4, r5 = ext_mmul(q0_0, q0_1, q0_2, q0_3, q0_4, q0_5, q1_0, q1_1, q1_2, q1_3, q1_4, q1_5)
-        ob = i * 6
+        if DEINT:
+            ob = (i // 2 + (i % 2) * (n // 2)) * 6
+        else:
+            ob = i * 6
+        if T4OUT:
+            tb = t4_ptr + i.to(tl.int64) * 6
+            tq0 = tb + 2 * t4_stride
+            tq1 = tb + 3 * t4_stride
+            tl.store(tq0 + 0, q0_0, mask=m)
+            tl.store(tq0 + 1, q0_1, mask=m)
+            tl.store(tq0 + 2, q0_2, mask=m)
+            tl.store(tq0 + 3, q0_3, mask=m)
+            tl.store(tq0 + 4, q0_4, mask=m)
+            tl.store(tq0 + 5, q0_5, mask=m)
+            tl.store(tq1 + 0, q1_0, mask=m)
+            tl.store(tq1 + 1, q1_1, mask=m)
+            tl.store(tq1 + 2, q1_2, mask=m)
+            tl.store(tq1 + 3, q1_3, mask=m)
+            tl.store(tq1 + 4, q1_4, mask=m)
+            tl.store(tq1 + 5, q1_5, mask=m)
         tl.store(nq_ptr + ob + 0, mmul(r0, R2_C), mask=m)
         tl.store(nq_ptr + ob + 1, mmul(r1, R2_C), mask=m)
         tl.store(nq_ptr + ob + 2, mmul(r2, R2_C), mask=m)
@@ -606,6 +635,9 @@ if triton is not None:
         if PBASE:
             a = tl.load(p_ptr + i * 2, mask=m, other=0).to(tl.int32)
             b = tl.load(p_ptr + i * 2 + 1, mask=m, other=0).to(tl.int32)
+            if T4OUT:
+                tl.store(tb, a, mask=m)
+                tl.store(tb + t4_stride, b, mask=m)
             s0 = madd(mmul(a, q1_0), mmul(b, q0_0))
             s1 = madd(mmul(a, q1_1), mmul(b, q0_1))
             s2 = madd(mmul(a, q1_2), mmul(b, q0_2))
@@ -723,6 +755,118 @@ if triton is not None:
         tl.store(hi_ptr + out, hi)
 
     @triton.jit
+    def lookup_mults_kernel(v_ptr, kmap_ptr, trows_ptr, m_ptr, bad_ptr, n, nkeys, W: tl.constexpr, BLOCK: tl.constexpr):
+        """``m[kmap[v[i, 0]]] += 1`` for every query tuple ``v[i]`` ``(n, W)`` that equals its key's table row, and
+        ``bad += #`` the others (key out of range, no row, or a column differs).  Column 0 matches by the map."""
+        i = tl.program_id(0).to(tl.int64) * BLOCK + tl.arange(0, BLOCK)
+        mi = i < n
+        key = tl.load(v_ptr + i * W, mask=mi, other=0).to(tl.int64)
+        ok = mi & (key >= 0) & (key < nkeys)
+        idx = tl.load(kmap_ptr + key, mask=ok, other=-1).to(tl.int64)
+        ok = ok & (idx >= 0)
+        for c in tl.static_range(1, W):
+            tv = tl.load(trows_ptr + idx * W + c, mask=ok, other=0).to(tl.int64)
+            qv = tl.load(v_ptr + i * W + c, mask=ok, other=0).to(tl.int64)
+            ok = ok & (tv == qv)
+        tl.atomic_add(m_ptr + idx, 1, mask=ok)
+        tl.atomic_add(bad_ptr, tl.sum((mi & ~ok).to(tl.int32), axis=0))
+
+    @triton.jit
+    def leaf_q_kernel(v_ptr, b_ptr, z_ptr, out_ptr, n, w, BLOCK: tl.constexpr, FK: tl.constexpr):
+        """LogUp denominators ``out[j] = z - Σ_k β_k v[j, k]`` for base ``v`` ``(n, w)`` (canonical, any int dtype),
+        ``b_ptr`` = ``β_k R mod p`` ``(w, 6)``, ``z`` ``(6,)`` canonical; ``out`` ``(n, 6)`` int32."""
+        idx = tl.program_id(0).to(tl.int64) * BLOCK + tl.arange(0, BLOCK)
+        m = idx < n
+        a0 = tl.zeros((BLOCK,), dtype=tl.int32)
+        a1 = tl.zeros((BLOCK,), dtype=tl.int32)
+        a2 = tl.zeros((BLOCK,), dtype=tl.int32)
+        a3 = tl.zeros((BLOCK,), dtype=tl.int32)
+        a4 = tl.zeros((BLOCK,), dtype=tl.int32)
+        a5 = tl.zeros((BLOCK,), dtype=tl.int32)
+        for k in range(w):
+            x = tl.load(v_ptr + idx * w + k, mask=m, other=0).to(tl.int32)
+            a0 = madd(a0, mmul(x, tl.load(b_ptr + k * 6 + 0).to(tl.int32)))
+            a1 = madd(a1, mmul(x, tl.load(b_ptr + k * 6 + 1).to(tl.int32)))
+            a2 = madd(a2, mmul(x, tl.load(b_ptr + k * 6 + 2).to(tl.int32)))
+            a3 = madd(a3, mmul(x, tl.load(b_ptr + k * 6 + 3).to(tl.int32)))
+            a4 = madd(a4, mmul(x, tl.load(b_ptr + k * 6 + 4).to(tl.int32)))
+            a5 = madd(a5, mmul(x, tl.load(b_ptr + k * 6 + 5).to(tl.int32)))
+        ob = idx * 6
+        tl.store(out_ptr + ob + 0, msub(tl.load(z_ptr + 0).to(tl.int32), a0), mask=m)
+        tl.store(out_ptr + ob + 1, msub(tl.load(z_ptr + 1).to(tl.int32), a1), mask=m)
+        tl.store(out_ptr + ob + 2, msub(tl.load(z_ptr + 2).to(tl.int32), a2), mask=m)
+        tl.store(out_ptr + ob + 3, msub(tl.load(z_ptr + 3).to(tl.int32), a3), mask=m)
+        tl.store(out_ptr + ob + 4, msub(tl.load(z_ptr + 4).to(tl.int32), a4), mask=m)
+        tl.store(out_ptr + ob + 5, msub(tl.load(z_ptr + 5).to(tl.int32), a5), mask=m)
+
+    @triton.jit
+    def _dot_halves(e, x):
+        prod = e[:, None] * x
+        h = prod >> 32
+        return tl.sum(prod - (h << 32), axis=0), tl.sum(h, axis=0)
+
+    @triton.jit
+    def eq_rows_dot_kernel(e_ptr, rows_ptr, lo_ptr, hi_ptr, n_rows, n_in, rows_per, BC: tl.constexpr, BLOCK: tl.constexpr,
+                           FK: tl.constexpr):
+        """Split-row partial sums of ``Σ_c e[c, d] rows[c, l]`` over rows ``[s rows_per, (s+1) rows_per)`` for a block of
+        columns ``l`` and every coordinate ``d``.  Products are ``< 2^62``; their 32-bit halves are summed in int64 (as
+        ``row_code_dot_kernel``), so the result needs one ``mod p`` per output."""
+        pl = tl.program_id(0)
+        ps = tl.program_id(1)
+        l = pl * BLOCK + tl.arange(0, BLOCK)
+        ml = l < n_in
+        r0 = ps * rows_per
+        r1 = tl.minimum(r0 + rows_per, n_rows)
+        lo0 = tl.zeros((BLOCK,), dtype=tl.int64)
+        lo1 = tl.zeros((BLOCK,), dtype=tl.int64)
+        lo2 = tl.zeros((BLOCK,), dtype=tl.int64)
+        lo3 = tl.zeros((BLOCK,), dtype=tl.int64)
+        lo4 = tl.zeros((BLOCK,), dtype=tl.int64)
+        lo5 = tl.zeros((BLOCK,), dtype=tl.int64)
+        hi0 = tl.zeros((BLOCK,), dtype=tl.int64)
+        hi1 = tl.zeros((BLOCK,), dtype=tl.int64)
+        hi2 = tl.zeros((BLOCK,), dtype=tl.int64)
+        hi3 = tl.zeros((BLOCK,), dtype=tl.int64)
+        hi4 = tl.zeros((BLOCK,), dtype=tl.int64)
+        hi5 = tl.zeros((BLOCK,), dtype=tl.int64)
+        for c0 in range(r0, r1, BC):
+            c = (c0 + tl.arange(0, BC)).to(tl.int64)
+            mc = c < r1
+            x = tl.load(rows_ptr + c[:, None] * n_in + l[None, :], mask=mc[:, None] & ml[None, :], other=0).to(tl.int64)
+            eb = e_ptr + c * 6
+            a, b = _dot_halves(tl.load(eb + 0, mask=mc, other=0).to(tl.int64), x)
+            lo0 += a
+            hi0 += b
+            a, b = _dot_halves(tl.load(eb + 1, mask=mc, other=0).to(tl.int64), x)
+            lo1 += a
+            hi1 += b
+            a, b = _dot_halves(tl.load(eb + 2, mask=mc, other=0).to(tl.int64), x)
+            lo2 += a
+            hi2 += b
+            a, b = _dot_halves(tl.load(eb + 3, mask=mc, other=0).to(tl.int64), x)
+            lo3 += a
+            hi3 += b
+            a, b = _dot_halves(tl.load(eb + 4, mask=mc, other=0).to(tl.int64), x)
+            lo4 += a
+            hi4 += b
+            a, b = _dot_halves(tl.load(eb + 5, mask=mc, other=0).to(tl.int64), x)
+            lo5 += a
+            hi5 += b
+        ob = (ps * 6).to(tl.int64) * n_in + l
+        tl.store(lo_ptr + ob, lo0, mask=ml)
+        tl.store(lo_ptr + ob + n_in, lo1, mask=ml)
+        tl.store(lo_ptr + ob + 2 * n_in, lo2, mask=ml)
+        tl.store(lo_ptr + ob + 3 * n_in, lo3, mask=ml)
+        tl.store(lo_ptr + ob + 4 * n_in, lo4, mask=ml)
+        tl.store(lo_ptr + ob + 5 * n_in, lo5, mask=ml)
+        tl.store(hi_ptr + ob, hi0, mask=ml)
+        tl.store(hi_ptr + ob + n_in, hi1, mask=ml)
+        tl.store(hi_ptr + ob + 2 * n_in, hi2, mask=ml)
+        tl.store(hi_ptr + ob + 3 * n_in, hi3, mask=ml)
+        tl.store(hi_ptr + ob + 4 * n_in, hi4, mask=ml)
+        tl.store(hi_ptr + ob + 5 * n_in, hi5, mask=ml)
+
+    @triton.jit
     def split_limbs_kernel(v_ptr, out_ptr, n, BLOCK: tl.constexpr):
         """``out[i, idx] = l_i`` for ``v[idx] = Σ_i 2^(8i) l_i``, ``l_i ∈ [-128, 128)`` (canonical int32 in, 4 x int8 out)."""
         idx = (tl.program_id(0).to(tl.int64) * BLOCK + tl.arange(0, BLOCK)).to(tl.int64)
@@ -788,6 +932,57 @@ def row_code_dot(at: torch.Tensor, ev: torch.Tensor, code: torch.Tensor, split: 
     return (hi * (R % P) + lo) % P
 
 
+def leaf_q(v: torch.Tensor, betas: torch.Tensor, z: torch.Tensor, out: torch.Tensor) -> None:
+    """In place ``out[j] = z - Σ_k betas[k] v[j, k]``: ``v`` ``(n, w)`` base canonical, ``betas`` ``(w, 6)``, ``z`` ``(6,)``
+    canonical int64, ``out`` a contiguous ``(n, 6)`` int32 (a slice of the leaf table) -- ``logup.build_leaves``' ``q``."""
+    n, w = v.shape
+    assert out.shape == (n, DEG) and out.dtype == torch.int32 and out.is_contiguous()
+    if n == 0:
+        return
+    BLOCK = 256
+    leaf_q_kernel[((n + BLOCK - 1) // BLOCK,)](v.contiguous().view(-1), _mont(betas).contiguous().view(-1),
+                                               (z.to(torch.int64) % P).contiguous().view(-1), out.view(-1), n, w,
+                                               BLOCK=BLOCK, num_warps=4, FK=FIELD_KEY)
+
+
+def lookup_mults(values: list[torch.Tensor], kmap: torch.Tensor, trows: torch.Tensor) -> tuple[torch.Tensor, int]:
+    """``logup.multiplicities`` over a key -> row map in one pass per query matrix: ``(m`` int64 ``(rows,)``, the number
+    of tuples that are not table rows``)``, one read-back."""
+    nrows, w = trows.shape
+    trows = trows.contiguous()
+    m = torch.zeros((nrows,), dtype=torch.int32, device=trows.device)
+    bad = torch.zeros((1,), dtype=torch.int32, device=trows.device)
+    BLOCK = 512
+    for v in values:
+        assert v.shape[1] == w and v.shape[0] < 2**31
+        if v.shape[0]:
+            v = v.contiguous()
+            lookup_mults_kernel[((v.shape[0] + BLOCK - 1) // BLOCK,)](v, kmap, trows, m, bad, v.shape[0], kmap.shape[0],
+                                                                      W=w, BLOCK=BLOCK, num_warps=4)
+    return m.to(torch.int64), int(bad.item())
+
+
+def eq_rows_dot(e: torch.Tensor, rows: torch.Tensor, split: int | None = None) -> torch.Tensor:
+    """``(n_in, 6)`` int64 canonical: ``out[l] = Σ_c e[c] rows[c, l]`` for an extension column ``e`` ``(n_rows, 6)`` and
+    base ``rows`` ``(n_rows, n_in)`` (any int dtype, canonical) -- ``mm_mod(e.T, rows).T`` as one read of ``rows``."""
+    n_rows, n_in = rows.shape
+    assert e.shape == (n_rows, DEG) and 0 < n_rows < 2**31
+    BLOCK, BC = 128, 16
+    nb = (n_in + BLOCK - 1) // BLOCK
+    if split is None:
+        split = max(1, min(n_rows // (4 * BC), (1024 + nb - 1) // nb))
+    rows_per = (n_rows + split - 1) // split
+    rows_per = (rows_per + BC - 1) // BC * BC
+    split = (n_rows + rows_per - 1) // rows_per
+    out_lo = torch.empty((split, DEG, n_in), dtype=torch.int64, device=rows.device)
+    out_hi = torch.empty_like(out_lo)
+    eq_rows_dot_kernel[(nb, split)](e.contiguous().view(-1), rows.contiguous().view(-1), out_lo, out_hi, n_rows, n_in,
+                                    rows_per, BC=BC, BLOCK=BLOCK, num_warps=4, FK=FIELD_KEY)
+    lo = out_lo.sum(0) % P
+    hi = out_hi.sum(0) % P
+    return ((hi * (R % P) + lo) % P).t().contiguous()
+
+
 def split_limbs(v: torch.Tensor) -> torch.Tensor:
     """``(4, *v.shape)`` int8 balanced limbs of a contiguous canonical int32 tensor, one pass."""
     v = v.contiguous()
@@ -809,9 +1004,23 @@ def combine_level(p: torch.Tensor, q: torch.Tensor) -> tuple[torch.Tensor, torch
         return np_, nq
     BLOCK = 256
     grid = ((n + BLOCK - 1) // BLOCK,)
-    combine_level_kernel[grid](p.contiguous().view(-1), q.contiguous().view(-1), np_.view(-1), nq.view(-1), n,
+    combine_level_kernel[grid](p.contiguous().view(-1), q.contiguous().view(-1), np_.view(-1), nq.view(-1), nq, n, 0,
                                PBASE=pbase, BLOCK=BLOCK, num_warps=4, FK=FIELD_KEY)
     return np_, nq
+
+
+def combine_leaves_into(p: torch.Tensor, q: torch.Tensor, pq: torch.Tensor, T4: torch.Tensor) -> None:
+    """The leaf level of a LogUp tree in one pass: base ``p (2n,)`` and ``q (2n, 6)`` int32 -> the parents de-interleaved
+    into ``pq (2, n, 6)`` (``pq[0]`` = p, ``pq[1]`` = q) and the children into ``T4 (4, n, 6)`` = ``p even, p odd, q even,
+    q odd`` (``T4[0:2, :, 1:]`` is left as it is)."""
+    n = q.shape[0] // 2
+    if p.ndim != 1 or n % 2 or tuple(pq.shape) != (2, n, DEG) or tuple(T4.shape) != (4, n, DEG) or not (
+            pq.is_contiguous() and T4.is_contiguous() and p.is_contiguous() and q.is_contiguous()):
+        raise ValueError("combine_leaves_into: base p, even n, contiguous (2, n, 6) / (4, n, 6) outputs")
+    BLOCK = 256
+    grid = ((n + BLOCK - 1) // BLOCK,)
+    combine_level_kernel[grid](p, q, pq[0], pq[1], T4, n, n * DEG, PBASE=True, BLOCK=BLOCK, num_warps=4, FK=FIELD_KEY,
+                               DEINT=True, T4OUT=True)
 
 
 def gate_eval(rows: torch.Tensor, ptr: torch.Tensor, idx: torch.Tensor, coef_m: torch.Tensor, g_n: int) -> torch.Tensor:
@@ -821,8 +1030,11 @@ def gate_eval(rows: torch.Tensor, ptr: torch.Tensor, idx: torch.Tensor, coef_m: 
     if copies == 0 or g_n == 0:
         return out
     BLOCK = 128
-    grid = ((copies + BLOCK - 1) // BLOCK, g_n)
-    gate_eval_kernel[grid](rows.contiguous().view(-1), ptr, idx, coef_m, out.view(-1), copies, n_in, g_n, BLOCK=BLOCK, num_warps=4, FK=FIELD_KEY)
+    nb = (copies + BLOCK - 1) // BLOCK
+    gfast = nb < 65536
+    grid = (g_n, nb) if gfast else (nb, g_n)
+    gate_eval_kernel[grid](rows.contiguous().view(-1), ptr, idx, coef_m, out.view(-1), copies, n_in, g_n, BLOCK=BLOCK, num_warps=4, FK=FIELD_KEY,
+                           GFAST=gfast)
     return out
 
 
@@ -835,7 +1047,7 @@ def scatter_terms(e: torch.Tensor, v: torch.Tensor, ptr: torch.Tensor, tj: torch
     if units == 0 or tj.numel() == 0:
         return
     BLOCK = 128
-    grid = ((units + BLOCK - 1) // BLOCK, ncols)
+    grid = (ncols, (units + BLOCK - 1) // BLOCK)
     scatter_terms_kernel[grid](e.view(-1), v.view(-1), ptr, tj, _mont(tc).view(-1), units, q_t, ncols, BLOCK=BLOCK, num_warps=4, FK=FIELD_KEY)
 
 

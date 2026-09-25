@@ -44,7 +44,6 @@ from .field import (
     W,
     e_add,
     e_mul,
-    e_scale,
     e_sub,
     eq_table,
     ext_mul,
@@ -52,7 +51,6 @@ from .field import (
     mm_mod,
     py_ext,
     t_ext,
-    t_exts,
 )
 from .gkr import LayerClaim, Reader, VerifyError
 from .logup import LeafClaim
@@ -110,15 +108,22 @@ class Chain:
     public_y16: list[int]
     links: list[Link] | None = None
     spec_hash: bytes | None = None      # v2: sha256 of chain.txt, absorbed in the preamble (the links are public data)
+    # v2 with a `public` line in chain.txt: the epilogue columns bound to the public words, `public_y16` then holds
+    # len(epi_pub) words per VU, VU-major (fp4-nvf4: the FP32 word's sign, exponent field and fraction)
+    epi_pub: list[int] | None = None
 
     @property
     def limbs(self) -> int:
         return len(self.col_c)
 
+    @property
+    def pub_cols(self) -> list[int]:
+        return self.epi_pub if self.epi_pub is not None else [self.epi_y16]
+
     def constraints_per_vu(self) -> int:
         if self.links is None:
             return (self.steps + 1) * self.limbs + 1
-        return 1 + sum(lk.constraints_per_vu(self.steps) for lk in self.links)
+        return len(self.pub_cols) + sum(lk.constraints_per_vu(self.steps) for lk in self.links)
 
 
 def union_tables(segs: list[Segment]) -> list[Table]:
@@ -178,19 +183,16 @@ class Proof:
         out += struct.pack("<II", self.VERSION, ligero.DIGEST_BYTES)
         out += self.root
         out += struct.pack("<Q", len(self.msgs))
-        for m in self.msgs:
-            out += _field.to_bytes(m)
+        out += _field.exts_to_bytes(self.msgs)
         op = self.opening
         if op is None:
             out += struct.pack("<Q", 0)
             return bytes(out)
         out += struct.pack("<Q", 1)
         out += struct.pack("<Q", len(op.w))
-        for m in op.w:
-            out += _field.to_bytes(m)
+        out += op.raw[0] if op.raw is not None else _field.exts_to_bytes(op.w)
         out += struct.pack("<Q", len(op.qc))
-        for m in op.qc:
-            out += _field.to_bytes(m)
+        out += op.raw[1] if op.raw is not None else _field.exts_to_bytes(op.qc)
         # a-gpu2: ``columns`` is an ``(t, rows)`` ``<u4`` array and the Merkle paths live in ``paths``
         import numpy as np
 
@@ -303,6 +305,139 @@ def table_queries(circ: Circuit, name: str) -> list[Query]:
     return [q for q in circ.queries if q.table == name]
 
 
+_QUERY_PLANS: dict = {}
+_WIRE_PLANS: dict = {}
+
+
+def _lin_plan(lins: list, dev: torch.device):
+    """Linear forms ``konst + Σ_t coef · mat[:, idx]`` over ``J = len(lins)`` outputs, term position by term position:
+    step ``t`` touches only the forms with more than ``t`` terms (``sel``)."""
+    konst = torch.tensor([l.konst % P for l in lins], dtype=torch.int64, device=dev)
+    steps = []
+    for t in range(max((len(l.terms) for l in lins), default=0)):
+        sel = [j for j, l in enumerate(lins) if len(l.terms) > t]
+        idx = torch.tensor([lins[j].terms[t][0] for j in sel], dtype=torch.int64, device=dev)
+        coef = torch.tensor([lins[j].terms[t][1] % P for j in sel], dtype=torch.int64, device=dev)
+        steps.append((None if len(sel) == len(lins) else torch.tensor(sel, dtype=torch.int64, device=dev), idx, coef))
+    return konst, steps
+
+
+def _apply_lin_plan(plan, mat: torch.Tensor) -> torch.Tensor:
+    konst, steps = plan
+    vals = konst.expand(mat.shape[0], -1).clone()
+    for sel, idx, coef in steps:
+        if sel is None:
+            vals = (vals + mat[:, idx] * coef) % P
+        else:
+            vals[:, sel] = (vals[:, sel] + mat[:, idx] * coef) % P
+    return vals
+
+
+def _query_plan(circ: Circuit, name: str, qs: list[Query], dev: torch.device):
+    """The table's query columns (``J = q_t · w`` forms over ``cols``, leaf order)."""
+    key = (circ.hash, name, dev.type, dev.index)
+    plan = _QUERY_PLANS.get(key)
+    if plan is None:
+        plan = _QUERY_PLANS[key] = _lin_plan([l for q in qs for l in q.cols], dev)
+    return plan
+
+
+def _query_values_planned(circ: Circuit, name: str, qs: list[Query], cols: torch.Tensor) -> torch.Tensor:
+    return _apply_lin_plan(_query_plan(circ, name, qs, cols.device), cols)
+
+
+def _wire_plan(circ: Circuit, dev: torch.device):
+    """``eval_wires`` depth by depth: the input wires in one gather, then per product depth ``d`` the ``a`` / ``b`` forms of
+    every depth-``d`` wire at once; ``None`` when a product reads a wire of its own depth or deeper."""
+    key = (circ.hash, dev.type, dev.index)
+    if key not in _WIRE_PLANS:
+        depth = circ.depth_of()
+        ins = [(w, wire[1]) for w, wire in enumerate(circ.wires) if wire[0] == "in"]
+        by_depth: dict[int, list[int]] = {}
+        for w, wire in enumerate(circ.wires):
+            if wire[0] != "in":
+                by_depth.setdefault(wire[1], []).append(w)
+        plan = None
+        if all(depth[i] < d for d, ws in by_depth.items() for w in ws for lin in circ.wires[w][2:] for i, _ in lin.terms):
+            levels = []
+            for d in sorted(by_depth):
+                ws = by_depth[d]
+                levels.append((torch.tensor(ws, dtype=torch.int64, device=dev),
+                               _lin_plan([circ.wires[w][2] for w in ws], dev), _lin_plan([circ.wires[w][3] for w in ws], dev)))
+            plan = (torch.tensor([w for w, _ in ins], dtype=torch.int64, device=dev),
+                    torch.tensor([c for _, c in ins], dtype=torch.int64, device=dev), levels)
+        _WIRE_PLANS[key] = plan
+    return _WIRE_PLANS[key]
+
+
+def _lin_csr(lins: list, konst_at: int | None, device):
+    """``gate_eval`` CSR of linear forms over wires (the constant on wire ``konst_at``); None if a constant has no wire."""
+    ptr, idx, coef = [0], [], []
+    for lin in lins:
+        acc: dict[int, int] = {}
+        for i, c in lin.terms:
+            acc[i] = (acc.get(i, 0) + c) % P
+        if lin.konst % P:
+            if konst_at is None:
+                return None
+            acc[konst_at] = (acc.get(konst_at, 0) + lin.konst) % P
+        for i, c in sorted(acc.items()):
+            if c:
+                idx.append(i)
+                coef.append(c * (1 << 32) % P)
+        ptr.append(len(idx))
+    return (torch.tensor(ptr, dtype=torch.int32, device=device), torch.tensor(idx, dtype=torch.int32, device=device),
+            torch.tensor(coef, dtype=torch.int64, device=device))
+
+
+def _wire_csr(circ: Circuit, dev: torch.device):
+    """``_wire_plan`` with each depth's ``a`` / ``b`` forms as ``gate_eval`` CSRs (one launch per side and depth); None
+    when there is no depth plan or a wire is neither an input nor a product."""
+    key = ("csr", circ.hash, dev.type, dev.index)
+    if key not in _WIRE_PLANS:
+        plan = _wire_plan(circ, dev)
+        out = None
+        if plan is not None:
+            w_in, c_in, levels = plan
+            one = [w for w, c in zip(w_in.tolist(), c_in.tolist()) if c == circ.one_col]
+            one_w = one[0] if one else None
+            lv = []
+            for ws, _, _ in levels:
+                wl = ws.tolist()
+                ca = _lin_csr([circ.wires[w][2] for w in wl], one_w, dev)
+                cb = _lin_csr([circ.wires[w][3] for w in wl], one_w, dev)
+                if ca is None or cb is None:
+                    lv = None
+                    break
+                lv.append((ws, ca, cb))
+            if lv is not None and w_in.shape[0] + sum(ws.shape[0] for ws, _, _ in lv) == circ.nwires:
+                out = (w_in, c_in, lv)
+        _WIRE_PLANS[key] = out
+    return _WIRE_PLANS[key]
+
+
+def _eval_wires(circ: Circuit, cols: torch.Tensor) -> torch.Tensor:
+    """``circuit.eval_wires`` (the same ``(units, nwires)`` int32) with one batch of launches per product depth."""
+    csr = _wire_csr(circ, cols.device) if cols.is_cuda and _field._fast_gate_eval is not None else None
+    if csr is not None:
+        w_in, c_in, levels = csr
+        wires = torch.empty((cols.shape[0], circ.nwires), dtype=torch.int32, device=cols.device)
+        wires[:, w_in] = cols[:, c_in].to(torch.int32)
+        for ws, ca, cb in levels:
+            n = ws.shape[0]
+            wires[:, ws] = (_field._fast_gate_eval(wires, *ca, n) * _field._fast_gate_eval(wires, *cb, n) % P).to(torch.int32)
+        return wires
+    plan = _wire_plan(circ, cols.device) if cols.is_cuda and cols.dtype == torch.int64 else None
+    if plan is None:
+        return eval_wires(circ, cols)
+    w_in, c_in, levels = plan
+    wires = torch.zeros((cols.shape[0], circ.nwires), dtype=torch.int64, device=cols.device)
+    wires[:, w_in] = cols[:, c_in]
+    for ws, pa, pb in levels:
+        wires[:, ws] = (_apply_lin_plan(pa, wires) * _apply_lin_plan(pb, wires)) % P
+    return wires.to(torch.int32)
+
+
 def seg_query_values(inst: Instance, name: str) -> list[torch.Tensor]:
     """Per segment the ``(units · q_t, cols)`` matrix of query tuples in leaf order (unit-major)."""
     out = []
@@ -311,9 +446,46 @@ def seg_query_values(inst: Instance, name: str) -> list[torch.Tensor]:
         if not qs:
             out.append(None)
             continue
+        if _field._fast_gate_eval is not None and s.cols.is_cuda:
+            w = len(qs[0].cols)
+            ptr, idx, coef = _query_csr(s.circ, name, qs, s.cols.device)
+            vals = _field._fast_gate_eval(s.cols, ptr, idx, coef, len(qs) * w)        # (units, q_t w)
+            out.append(vals.reshape(-1, w))
+            continue
+        if s.cols.is_cuda and s.cols.dtype == torch.int64:
+            out.append(_query_values_planned(s.circ, name, qs, s.cols).reshape(-1, len(qs[0].cols)))
+            continue
         vals = torch.stack([logup.query_values(q, s.cols) for q in qs], dim=1)       # (units, q_t, w)
         out.append(vals.reshape(-1, vals.shape[-1]))
     return out
+
+
+_QUERY_CSR: dict = {}
+
+
+def _query_csr(circ: Circuit, name: str, qs: list[Query], device):
+    """The query columns of one table as ``gate_eval`` linear forms (gate ``q w + j`` = column ``j`` of query ``q``; the
+    constant on the one column): CSR ``ptr``, ``idx`` int32, ``coef R mod p`` int64 (cached per circuit, table, device)."""
+    key = (circ.hash, name, str(device))
+    if key not in _QUERY_CSR:
+        if len({len(q.cols) for q in qs}) != 1:
+            raise ValueError(f"table {name}: queries of different widths")
+        ptr, idx, coef = [0], [], []
+        for q in qs:
+            for lin in q.cols:
+                acc: dict[int, int] = {}
+                for i, c in lin.terms:
+                    acc[i] = (acc.get(i, 0) + c) % P
+                if lin.konst % P:
+                    acc[circ.one_col] = (acc.get(circ.one_col, 0) + lin.konst) % P
+                for i, c in sorted(acc.items()):
+                    if c:
+                        idx.append(i)
+                        coef.append(c * (1 << 32) % P)
+                ptr.append(len(idx))
+        _QUERY_CSR[key] = (torch.tensor(ptr, dtype=torch.int32, device=device), torch.tensor(idx, dtype=torch.int32, device=device),
+                           torch.tensor(coef, dtype=torch.int64, device=device))
+    return _QUERY_CSR[key]
 
 
 def hypercube_dim(inst: Instance, name: str, table: Table) -> int:
@@ -372,8 +544,9 @@ def n_functionals(inst: Instance) -> int:
 # ---------------------------------------------------------------------------------------------------------------------
 
 class Acc:
-    def __init__(self, l: int, device) -> None:
-        self.a = torch.zeros((l, DEG), dtype=torch.int64, device=device)
+    def __init__(self, l: int, device, dtype: torch.dtype = torch.int64) -> None:
+        # canonical coordinates (< p < 2^31) fit int32; every torch-side update adds an int64 operand, the kernels cast
+        self.a = torch.zeros((l, DEG), dtype=dtype, device=device)
         self.b: Ext = ZERO
         self.device = device
 
@@ -397,54 +570,111 @@ def add_input_claim(acc: Acc, rho: Ext, seg_off: int, seg: Segment, x_pt: list[E
     acc.b = e_add(acc.b, e_mul(rho, value))
 
 
+def add_input_claims(acc: Acc, rhos: tuple[Ext, Ext], seg_off: int, seg: Segment, x_pts: tuple[list[Ext], list[Ext]],
+                     c_pt: list[Ext], values: tuple[Ext, Ext]) -> None:
+    """Both phase-2 claims of a segment (one copy point): ``eq(c) ⊗ (ρ_l eq(x_l) + ρ_r eq(x_r))`` is one rank-1 update,
+    so the segment is read and written once."""
+    dev = acc.device
+    if _field._fast_rank1_add is None or dev.type != "cuda":
+        for rho, x_pt, value in zip(rhos, x_pts, values):
+            add_input_claim(acc, rho, seg_off, seg, x_pt, c_pt, value)
+        return
+    ec = eq_table(c_pt, dev)[: seg.units]
+    ex = (ext_mul(eq_table(x_pts[0], dev)[: seg.ncols], t_ext(rhos[0], dev))
+          + ext_mul(eq_table(x_pts[1], dev)[: seg.ncols], t_ext(rhos[1], dev))) % P
+    _field._fast_rank1_add(acc.seg_view(seg_off, seg.units, seg.ncols), ec, ex)
+    for rho, value in zip(rhos, values):
+        acc.b = e_add(acc.b, e_mul(rho, value))
+
+
+@dataclass
+class _LookupPlan:
+    """The challenge-independent part of one segment's queries into one table, in the CSR order of the scatter:
+    per query ``j`` and table column ``k`` the constant ``konst[j, k]``, and per (query, input column) term ``t``
+    (sorted by (idx, j)) its coefficients ``coef[t, k]``, so that ``z - Σ_k β^k konst[j, k]`` and
+    ``-Σ_k β^k coef[t, k]`` are two small device reductions against the β powers."""
+    q_t: int
+    konst: torch.Tensor     # (q_t, K) int64 mod p
+    coef: torch.Tensor      # (T, K) int64 mod p
+    tj: torch.Tensor        # (T,) int32: the term's query
+    tidx: torch.Tensor      # (T,) int64: the term's input column
+    ptr: torch.Tensor       # (ncols + 1,) int32: CSR row pointer over input columns
+
+
+_LOOKUP_PLANS: dict = {}
+
+
+def _lookup_plan(circ: Circuit, table: Table, dev) -> _LookupPlan | None:
+    key = (circ.hash, table.name, table.cols, dev.type, dev.index)
+    if key in _LOOKUP_PLANS:
+        return _LOOKUP_PLANS[key]
+    qs = table_queries(circ, table.name)
+    plan = None
+    if qs:
+        K = max(len(qu.cols) for qu in qs)
+        konst = torch.zeros((len(qs), K), dtype=torch.int64)
+        terms: dict[tuple[int, int], list[int]] = {}
+        for j, qu in enumerate(qs):
+            for kk, lin in enumerate(qu.cols):
+                konst[j, kk] = lin.konst % P
+                for idx, coef in lin.terms:
+                    row = terms.setdefault((j, idx), [0] * K)
+                    row[kk] = (row[kk] + coef) % P
+        keys = sorted(terms, key=lambda k: (k[1], k[0]))
+        counts = torch.zeros((circ.ncols + 1,), dtype=torch.int64)
+        for (_j, idx) in keys:
+            counts[idx + 1] += 1
+        plan = _LookupPlan(len(qs), konst.to(dev),
+                           torch.tensor([terms[k] for k in keys], dtype=torch.int64).reshape(len(keys), K).to(dev),
+                           torch.tensor([j for j, _ in keys], dtype=torch.int32, device=dev),
+                           torch.tensor([i for _, i in keys], dtype=torch.int64, device=dev),
+                           torch.cumsum(counts, dim=0).to(torch.int32).to(dev))
+    _LOOKUP_PLANS[key] = plan
+    return plan
+
+
+def _beta_combine(m: torch.Tensor, bs: torch.Tensor) -> torch.Tensor:
+    """``Σ_k m[:, k] · β^k`` mod p, (R, 6), for base coefficients ``m`` (R, K) in [0, p)."""
+    out = torch.zeros((m.shape[0], DEG), dtype=torch.int64, device=m.device)
+    for kk in range(m.shape[1]):
+        out = (out + m[:, kk: kk + 1] * bs[kk]) % P
+    return out
+
+
 def add_lookup_claim(acc: Acc, rho: Ext, inst: Instance, seg_offs: list[int], table_off: int, table: Table, ch, n: int, c: LeafClaim) -> None:
     dev = acc.device
     z, beta = ch
     eqt = eq_table(c.rho, dev, out_dtype=torch.int32)                 # (2^n, 6), written once in int32
     bs = logup.beta_powers(beta, table.cols, dev)                     # (cols, 6)
-    bs_py = [py_ext(b) for b in bs]
     lam_t = t_ext(c.lam, dev)
     rho_t = t_ext(rho, dev)
     rl_t = t_ext(e_mul(rho, c.lam), dev)
+    zt = t_ext(z, dev)
     konst = torch.zeros((DEG,), dtype=torch.int64, device=dev)
+    used = torch.zeros((DEG,), dtype=torch.int64, device=dev)       # Σ eq over the query leaves (fast path)
     base = 0
     for si, s in enumerate(inst.segs):
-        qs = table_queries(s.circ, table.name)
-        q_t = len(qs)
-        if q_t == 0:
+        plan = _lookup_plan(s.circ, table, dev)
+        if plan is None:
             continue
+        q_t = plan.q_t
         v = acc.seg_view(seg_offs[si], s.units, s.ncols)
         # per query the constant part of  z - Σ_k β^k lin_k  and the per-column coefficients -Σ_k β^k coef_{k,idx}
-        csts = []
-        terms: dict[tuple[int, int], Ext] = {}                        # (j, idx) -> -Σ_k β^k coef_{k, idx}
-        for j, qu in enumerate(qs):
-            cst = z
-            for kk, lin in enumerate(qu.cols):
-                cst = e_sub(cst, e_scale(bs_py[kk], lin.konst))
-                for idx, coef in lin.terms:
-                    terms[(j, idx)] = e_sub(terms.get((j, idx), ZERO), e_scale(bs_py[kk], coef))
-            csts.append(cst)
-        cst_t = t_exts(csts, dev)                                      # (q_t, 6)
+        cst_t = (zt - _beta_combine(plan.konst, bs)) % P                # (q_t, 6)
+        tvals = (-_beta_combine(plan.coef, bs)) % P                     # (T, 6), the terms in CSR order
         e_all = eqt[base: base + s.units * q_t].view(s.units, q_t, DEG)
         if _field._fast_scatter is not None and dev.type == "cuda":
             # konst += Σ_u Σ_j e[u, j] (1 + λ cst_j)   (p = 1 for every query leaf)
             S = e_all.sum(dim=0, dtype=torch.int64) % P                # (q_t, 6)
+            used = (used + S.sum(dim=0)) % P
             K = ext_mul(cst_t, lam_t)
             K[:, 0] = (K[:, 0] + 1) % P
             konst = (konst + ext_mul(S, K).sum(dim=0)) % P
             # v[u, idx] += Σ_j e[u, j] · (ρ λ C[j, idx])   as a CSR scatter over the (query, column) terms
-            keys = sorted(terms, key=lambda k: (k[1], k[0]))
-            counts = torch.zeros((s.ncols + 1,), dtype=torch.int64)
-            for (_j, idx) in keys:
-                counts[idx + 1] += 1
-            ptr = torch.cumsum(counts, dim=0).to(torch.int32).to(dev)
-            tj = torch.tensor([j for j, _ in keys], dtype=torch.int32, device=dev)
-            tc = ext_mul(t_exts([terms[k] for k in keys], dev), rl_t)  # (T, 6)
-            _field._fast_scatter(e_all, v, ptr, tj, tc)
+            _field._fast_scatter(e_all, v, plan.ptr, plan.tj, ext_mul(tvals, rl_t))
         else:
             C = torch.zeros((q_t, s.ncols, DEG), dtype=torch.int64)   # C[j, idx] = -Σ_k β^k coef_{k, idx}
-            for (j, idx), val in terms.items():
-                C[j, idx] = torch.tensor(val, dtype=torch.int64)
+            C[plan.tj.long().cpu(), plan.tidx.cpu()] = tvals.cpu()
             # Cmat[(j, i), (idx, d)]: coefficient of rle[j]_i in coordinate d of rle[j] · C[j, idx]
             Cmat = torch.zeros((q_t, DEG, s.ncols, DEG), dtype=torch.int64)
             for i in range(DEG):
@@ -459,7 +689,9 @@ def add_lookup_claim(acc: Acc, rho: Ext, inst: Instance, seg_offs: list[int], ta
             for lo in range(0, s.units, step):
                 hi = min(s.units, lo + step)
                 e = e_all[lo:hi].to(torch.int64)
-                konst = (konst + e.sum(dim=(0, 1))) % P                # p = 1
+                es = e.sum(dim=(0, 1)) % P
+                used = (used + es) % P
+                konst = (konst + es) % P                               # p = 1
                 le = ext_mul(e, lam_t)                                 # λ e        (chunk, q_t, 6)
                 konst = (konst + ext_mul(le, cst_t.unsqueeze(0)).sum(dim=(0, 1))) % P
                 del le
@@ -472,11 +704,13 @@ def add_lookup_claim(acc: Acc, rho: Ext, inst: Instance, seg_offs: list[int], ta
     acc.a[table_off: table_off + rows] = (acc.a[table_off: table_off + rows] - ext_mul(e_tab, rho_t)) % P
     trows = logup.table_rows(table, dev)
     comb = logup.combine(trows, bs)                                    # (rows, 6)
-    zt = t_ext(z, dev)
     konst = (konst + ext_mul(ext_mul(e_tab, lam_t), (zt - comb) % P).sum(dim=0)) % P
-    pad = eqt[base + rows:]
-    if pad.shape[0]:
-        konst = (konst + ext_mul(pad, lam_t).sum(dim=0)) % P
+    if base + rows < eqt.shape[0]:
+        # Σ_pad eq(c.rho, x) = 1 - Σ_used eq (the eq table sums to 1), so the pad term is λ (1 - Σ_used eq)
+        used = (used + e_tab.sum(dim=0, dtype=torch.int64)) % P
+        pad_sum = (-used) % P
+        pad_sum[0] = (pad_sum[0] + 1) % P
+        konst = (konst + ext_mul(pad_sum, lam_t)) % P
     acc.b = e_add(acc.b, e_mul(rho, e_sub(c.value, py_ext(konst))))
 
 
@@ -541,12 +775,14 @@ def add_chain_links(acc: Acc, rho: Ext, geo: Ext, inst: Instance, seg_offs: list
         ve[:, lk.epi] = (ve[:, lk.epi] + pw[:, o]) % P
         vu[:, -1, lk.col_y] = (vu[:, -1, lk.col_y] - pw[:, o]) % P
         o += 1
-    last = pw[:, o]
-    ve[:, ch.epi_y16] = (ve[:, ch.epi_y16] + last) % P
-    y16 = torch.tensor([int(y) % P for y in ch.public_y16], dtype=torch.int64, device=dev)
-    b_acc = (b_acc + ext_scale(last, y16).sum(dim=0)) % P
+    npub = len(ch.pub_cols)
+    ys = torch.tensor([int(y) % P for y in ch.public_y16], dtype=torch.int64, device=dev).view(vus, npub)
+    for j, col in enumerate(ch.pub_cols):
+        last = pw[:, o + j]
+        ve[:, col] = (ve[:, col] + last) % P
+        b_acc = (b_acc + ext_scale(last, ys[:, j]).sum(dim=0)) % P
     acc.b = e_add(acc.b, py_ext(b_acc))
-    assert o + 1 == per_vu
+    assert o + npub == per_vu
     return vus * per_vu
 
 
@@ -587,8 +823,8 @@ def check_chain_links_clear(inst: Instance) -> None:
             raise VerifyError(f"chain: column {lk.col_y} must be 0 before the last unit")
         if bool((ec[:, lk.epi] != uc[:, -1, lk.col_y]).any()):
             raise VerifyError(f"chain: epilogue input (column {lk.epi}) differs from the last unit's value")
-    y16 = torch.tensor([int(y) % P for y in ch.public_y16], dtype=torch.int64, device=ec.device)
-    if bool((ec[:, ch.epi_y16] != y16).any()):
+    ys = torch.tensor([int(y) % P for y in ch.public_y16], dtype=torch.int64, device=ec.device).view(vus, len(ch.pub_cols))
+    if bool((ec[:, ch.pub_cols] != ys).any()):
         raise VerifyError("chain: output word differs from the public word")
 
 
@@ -599,7 +835,7 @@ def check_chain_links_clear(inst: Instance) -> None:
 def prove_segment(seg: Segment, z0: list[Ext], gamma: list[Ext], tr: Transcript, out: list[Ext], st: Stats):
     dev = seg.cols.device
     t1 = time.perf_counter()
-    wires = eval_wires(seg.circ, seg.cols)                           # (units, nwires) int32
+    wires = _eval_wires(seg.circ, seg.cols)                          # (units, nwires) int32
     _sync(dev)
     st.t_witness_wires += time.perf_counter() - t1
     b = log2ceil(seg.units)
@@ -636,9 +872,19 @@ def prove(inst: Instance, pcs: bool = True, params: ligero.LigeroParams = ligero
     tm = time.perf_counter()
     committed = None
     mults = []
+    # the query tuples are needed again by the lookup pass; they are held across the commitment on >= 48 GB parts, and
+    # on smaller ones while they total at most a tenth of the device (1.8 GiB for the merged FP8 table at 4096 VUs)
+    mem = torch.cuda.get_device_properties(dev).total_memory if dev.type == "cuda" else 0
+    held = 0
+    kept = []
     for t in inst.tables:
         vals = [v for v in seg_query_values(inst, t.name) if v is not None]
         mults.append(logup.multiplicities(t, logup.table_rows(t, dev), vals))
+        size = sum(v.numel() * v.element_size() for v in vals)
+        keep = mem >= 48 << 30 or held + size <= mem // 10
+        held += size if keep else 0
+        kept.append(vals if keep and mem else None)
+    vals = None
     _sync(dev)
     st.t_mults = time.perf_counter() - tm
     tc = time.perf_counter()
@@ -660,7 +906,8 @@ def prove(inst: Instance, pcs: bool = True, params: ligero.LigeroParams = ligero
     graphs = packed and logup_packed.use_graphs(dev)
     for ti, t in enumerate(inst.tables):
         n = hypercube_dim(inst, t.name, t)
-        vals = [v for v in seg_query_values(inst, t.name) if v is not None]
+        vals = kept[ti] if kept[ti] is not None else [v for v in seg_query_values(inst, t.name) if v is not None]
+        kept[ti] = None
         trows = logup.table_rows(t, dev)
         n_wit = sum(v.shape[0] for v in vals)
         if packed and t.cols == 1 and n_wit % 2 == 0 and t.nrows % 2 == 0:
@@ -674,7 +921,8 @@ def prove(inst: Instance, pcs: bool = True, params: ligero.LigeroParams = ligero
                 lc = logup_packed.prove_range_table(w, tab, mults[ti], chs[ti][0], n, tr, out)
             del w
         else:
-            p_leaf, q_leaf = logup.build_leaves(t, trows, vals, mults[ti], chs[ti][0], chs[ti][1], n)
+            bufs = logup_packed.leaf_buffers(dev, n) if graphs else None
+            p_leaf, q_leaf = logup.build_leaves(t, trows, vals, mults[ti], chs[ti][0], chs[ti][1], n, out=bufs)
             del vals
             if graphs:
                 lc = logup_packed.prove_ext_table_graphed(p_leaf, q_leaf, n, tr, out)
@@ -697,12 +945,12 @@ def prove(inst: Instance, pcs: bool = True, params: ligero.LigeroParams = ligero
         t3 = time.perf_counter()
         rhos = tr.challenges(n_functionals(inst))
         geo = tr.challenge() if inst.chain else ZERO
-        acc = Acc(l, dev)
+        fast = dev.type == "cuda" and _field._fast_rank1_add is not None and _field._fast_scatter is not None
+        acc = Acc(l, dev, torch.int32 if fast else torch.int64)
         ri = 0
         for si, s in enumerate(inst.segs):
             (l_star, vl, r_star, vr), c_star = finals[si]
-            add_input_claim(acc, rhos[ri], seg_offs[si], s, l_star, c_star, vl)
-            add_input_claim(acc, rhos[ri + 1], seg_offs[si], s, r_star, c_star, vr)
+            add_input_claims(acc, (rhos[ri], rhos[ri + 1]), seg_offs[si], s, (l_star, r_star), c_star, (vl, vr))
             ri += 2
         for ti, t in enumerate(inst.tables):
             n, lc = lookup_claims[ti]

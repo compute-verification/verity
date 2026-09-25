@@ -52,3 +52,20 @@ def Gemm(B, S, x, w):
 #: Binding records for the two measured architectures.
 GEMM_AMPERE: dict = {"DOT": P.AmpereBF16TcDot16}
 GEMM_HOPPER: dict = {"DOT": P.HopperBF16WgmmaDot16}
+
+
+def _register_kernels() -> None:
+    from verity.evaluation import register_kernel
+
+    from . import kernels as K
+    from .tc.silicon import AMPERE_BF16_M16N8K16
+    from .tc.total import HOPPER_BF16_WGMMA_K16
+
+    steps = {P.AmpereBF16TcDot16: AMPERE_BF16_M16N8K16, P.HopperBF16WgmmaDot16: HOPPER_BF16_WGMMA_K16}
+    domain = "every encoding; DOT one of the core BF16 steps (other steps fall back to the reference)"
+    register_kernel(DotBf16, K.dot_kernel(steps), domain=domain, sample=K.sample_tc)
+    register_kernel(GemmCoordinate, K.gemm_coordinate_kernel(steps), domain=domain, sample=K.sample_tc)
+    register_kernel(Gemm, K.gemm_kernel(steps), domain=domain)
+
+
+_register_kernels()

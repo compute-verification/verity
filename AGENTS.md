@@ -13,9 +13,15 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
   convenience re-export at `verity`.
   - `verity.ir`: types, definitions, canonical layout, evaluator, descriptor
     codec. Stdlib only; imports no other core module.
+  - `verity.evaluation`: the one evaluator. The plain-integer reference
+    (`evaluate`, the IR oracle), `evaluate_batch` over numpy arrays,
+    `register_kernel`, `self_check`. Every registered kernel must be listed
+    in `tests/evaluation/test_evaluation.py`, which self-checks it.
   - `verity.ml`: exact hardware semantics of the tensor-core accumulator step
     (`verity.ml.tc`, stdlib only) and their IR registrations (`prims`,
-    `gemm`). `verity.ml.tc.relation` restates the step as witness columns +
+    `gemm`), with numpy kernels beside them (`kernels`; numpy is a core
+    dependency, kept out of `verity.ir` and `verity.ml.tc` by
+    `tests/test_boundaries.py`). `verity.ml.tc.relation` restates the step as witness columns +
     mul/linear/lookup predicates and counts them (`census()`). Tests replay
     the A100 / RTX 4090 / H100 captures under `tests/ml/fixtures/` (see its
     README for provenance).
