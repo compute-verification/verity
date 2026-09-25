@@ -241,6 +241,25 @@ called PRESERVED without a remote; nothing in the store is ever overwritten.
 - `research data lookup --tool T [--param k=v]... [--condition k=v]...
   [--source-tree SHA | --any-source] [-- ARGV...]` answers "have we done this?"
 
+### The steward off the laptop
+
+`research notes watch` is the steward: liveness, reaping, deadlines,
+budgets and the daily render (`notes.py`). Three flags let it run on any
+always-on host (`steward.py`):
+
+- `--liveness git` (or `RESEARCH_LIVENESS=git`): a notes file's time is
+  its newest notes commit, not its mtime, so a fresh clone gives the same
+  rows as the laptop. A lane's branch signal is origin's `lane/*` tip
+  (`--fetch` refreshes it), and the local worktree isn't read. `relaunch`
+  bases the successor on origin's tip when the dead lane's machine is gone.
+- `--lease [store|PATH]`: only the holder of `steward/lease.json` in the
+  store's bucket reaps, routes, renders, keeps `steward-state.json` and
+  commits the notes. The lease is changed by conditional PUT only. A second
+  copy refuses (exit 2) and names the holder; with `--standby` it watches
+  read-only and takes over when the lease frees.
+- `research notes service systemd|launchd` prints the service definition
+  (restart on exit and after a reboot; `watch --lease --standby`).
+
 ## Not yet built, in order
 
 1. `research compare <a> <b>`: descriptive diff of two run records
