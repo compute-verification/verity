@@ -83,7 +83,7 @@ from verity.verification.target import FIRST  # noqa: E402
 from verity_numerical.bench import contract  # noqa: E402
 
 RESULT_SCHEMA = contract.RESULT_SCHEMA
-BACKENDS = ("reference", "sp1-execute", "sp1-prove", "sp1-bare")
+BACKENDS = ("reference", "sp1-execute", "sp1-prove", "sp1-bare", "sp1-committed")
 INSTANCES_ROOT = REPO / "fixtures" / "bench-instances" / "v1"
 
 
@@ -522,7 +522,8 @@ def run_sp1_bare(a) -> int:
     out = Path(a.out or os.environ.get("RESEARCH_RUN_DIR") or ".").resolve()
     out.mkdir(parents=True, exist_ok=True)
     proofs_dir, log, prove_log = out / "proofs", out / "host.log", out / "prover.log"
-    host = Path(a.host)
+    host = Path(a.host or os.environ.get("VERITY_SP1_HOST") or SP1_BARE_HOST)
+    a.backend_name = a.backend_name or SP1_BARE_BACKEND_NAME
     variant = json.loads(Path(a.variant).read_text()) if a.variant else {}
     prover_env = dict(kv.split("=", 1) for kv in a.prover_env)
     cpu_env = {**os.environ, "SP1_PROVER": "cpu", "RUST_LOG": "error"}
@@ -734,14 +735,333 @@ def run_sp1_bare(a) -> int:
     return 0 if ok and not problems else 1
 
 
+# --- sp1-committed: the full relation, operands bound to frame-v3 SHA-256 row trees -------------------------------------------------
+#
+# ``--backend sp1-committed`` runs a ``relation-committed`` host (``backends/sp1/host --features relation-committed``) on the same
+# frozen sets as sp1-bare: the guest checks the relation on every VU and publishes y and the ``sha256/row/v1`` digest of every
+# x row and W column (SP1's SHA-256 precompile); the verifier rebuilds the frame-v3 trees a, b, y from them and compares the
+# statement's roots (``verity_sp1.committed`` is the Python side).  Steps: negatives through the executor (a wrong claimed word,
+# a wrong operand word with the honest y -- by preference the sign of an exact zero, which keeps the relation so only tree a can
+# reject --, a wrong root of each tree, and an honest control); ``committed-prove`` (executor pass, cold commit, setup, warm-up,
+# then per rep: commit the range afresh, prove, save, verify in process); a real-proof negative (a small range proved over a
+# tampered x row, rejected against the honest statement); ``committed-verify --expect-vk`` on every proof in a fresh CPU process
+# and a wrong-root verify; an optional B sweep (``--sweep-b``) for the plateau.
+#
+# Buckets: ``t.total`` = prove + serialization (the contract has no commitment bucket and the views add it:
+# end to end = ``t.total`` + ``commit.seconds``, ``bench.views.throughput``); ``commit.seconds`` is the warm median of the reps'
+# fresh commits (row digests and trees, host threads), with ``commit.cold_seconds``, ``commit.reps`` and ``e2e.seconds``.
+
+SP1_COMMITTED_HOST = "/workspace/bin/veritor-zk-host-cuda-relation-committed"
+SP1_COMMITTED_BACKEND_NAME = "sp1 relation-committed/v1 (stock SP1 6.4.0, frame-v3 SHA-256 rows; core STARK, CUDA prover)"
+#: soundcalc on SP1's own configuration, per shard proof, additive (kb/sp1-prover.md; lane sp1-128)
+SP1_PER_SHARD_LOG2 = -99.0
+
+
+def _gpu_peak_sampler():
+    import threading
+
+    peak = {"mib": None}
+    stop = threading.Event()
+
+    def sample():
+        while not stop.wait(0.5):
+            try:
+                q = subprocess.run(["nvidia-smi", "--query-gpu=memory.used", "--format=csv,noheader,nounits"], capture_output=True, text=True, timeout=5)
+                v = int(q.stdout.split()[0])
+                peak["mib"] = v if peak["mib"] is None else max(peak["mib"], v)
+            except (OSError, subprocess.TimeoutExpired, ValueError, IndexError):
+                pass
+
+    t = threading.Thread(target=sample, daemon=True)
+    t.start()
+    return peak, stop, t
+
+
+def run_sp1_committed(a) -> int:
+    import math
+    import statistics
+
+    from verity_numerical.bench import tables
+
+    started = time.perf_counter()
+    out = Path(a.out or os.environ.get("RESEARCH_RUN_DIR") or ".").resolve()
+    out.mkdir(parents=True, exist_ok=True)
+    proofs_dir, log, prove_log = out / "proofs", out / "host.log", out / "prover.log"
+    host = Path(a.host or SP1_COMMITTED_HOST)
+    backend_name = a.backend_name or SP1_COMMITTED_BACKEND_NAME
+    prover_env = dict(kv.split("=", 1) for kv in a.prover_env)
+    cpu_env = {**os.environ, "SP1_PROVER": "cpu", "RUST_LOG": "error"}
+    gpu_env = {**os.environ, **prover_env, "SP1_PROVER": "cuda", "RUST_LOG": "debug"}
+
+    if a.batch:
+        batch = Path(a.batch).resolve()
+        header = _batch_header(batch)
+        target_name, ref, n, fmt = header["target"], header["instances"], header["n"], header["format"]
+        source = ["--batch", str(batch)]
+        fixture_digests = {"batch_file_sha256": _sha256_file(batch), **{k: header[k] for k in ("x_sha256", "w_sha256", "y_sha256")}}
+    else:
+        root = Path(a.instances).resolve()
+        manifest_sha, fixture_digests = _check_bf16_fixtures(root)
+        target_name, n, fmt = FIRST.name, 4096, "bf16-ampere"
+        ref = contract.instances_ref(BARE_TIER, 0, n, manifest_sha)
+        source = ["--instances", str(root), "--manifest-sha256", manifest_sha]
+    lo, hi = a.lo, (a.hi if a.hi is not None else n)
+    B = hi - lo
+    base = ref["range"][0]
+    instances = contract.instances_ref(ref["tier"], base + lo, base + hi, ref["manifest_sha256"], dataset=ref["dataset"])
+    per_read = ["--vus-per-read", str(a.vus_per_read)]
+    print(f"sp1-committed: {fmt} {instances} on {host}", flush=True)
+
+    rc, text, _ = _run_logged([str(host), "info"], cpu_env, log, 900)
+    info = (_json_lines(text) or [{}])[-1]
+    if rc != 0 or "relation-committed" not in info.get("guest_features", []):
+        raise SystemExit(f"sp1-committed: {host} is not a relation-committed build: rc {rc} {info}")
+    vk = info["vk_hash"]
+    if a.expect_vk and a.expect_vk.lower() != vk.lower():
+        raise SystemExit(f"sp1-committed: the host's vk {vk} is not the pinned {a.expect_vk}")
+
+    def execute(extra: list[str], j: int) -> dict:
+        rc, text, wall = _run_logged([str(host), "committed-execute", *source, "--lo", str(lo + j), "--hi", str(lo + j + 1), "--vus-per-read", "1",
+                                      *extra], cpu_env, log, 900)
+        doc = next((d for d in _json_lines(text) if d.get("event") == "committed-execute"), {})
+        return {"args": extra, "vu": lo + j, "rc": rc, "verdict": doc.get("verdict"), "tree_check": doc.get("tree_check"),
+                "accepted": doc.get("accepted"), "matches_native": doc.get("matches_expected"), "tamper": doc.get("tamper"), "wall": wall}
+
+    negatives, control = [], None
+    if not a.skip_negatives:
+        control = execute([], 0)
+        for j in sorted({0, B // 2, B - 1}):
+            negatives.append({"kind": "flip-y", **execute(["--flip-y", "0"], j)})
+            negatives.append({"kind": "tamper-x", **execute(["--tamper-x", "0"], j)})
+        for t in ("a", "b", "y"):
+            negatives.append({"kind": f"wrong-root-{t}", **execute(["--wrong-root", t], 0)})
+        ok_neg = control["rc"] == 0 and control["accepted"] is True and all(x["rc"] == 0 and x["accepted"] is False for x in negatives)
+        summary = {"negatives": len(negatives), "rejected": sum(1 for x in negatives if x["rc"] == 0 and x["accepted"] is False),
+                   "tree_a_caught_relation_preserving": sum(1 for x in negatives if x["kind"] == "tamper-x" and (x.get("tamper") or {}).get("sign_of_zero")
+                                                            and "tree a" in (x["tree_check"] or "")),
+                   "control_accepted": bool(control["accepted"]), "ok": ok_neg}
+        (out / "negatives.json").write_text(json.dumps({"summary": summary, "control": control, "items": negatives}, indent=1))
+        print(f"sp1-committed: negatives {summary}", flush=True)
+        if not ok_neg:
+            raise SystemExit("sp1-committed: a negative was not rejected (or the control was) -- no result")
+    else:
+        summary = None
+
+    def prove(lo_: int, hi_: int, reps: int, out_dir: Path, extra: list[str], logf: Path) -> tuple[int, list[dict], float]:
+        cmd = [str(host), "committed-prove", *source, "--lo", str(lo_), "--hi", str(hi_), *per_read, "--out-dir", str(out_dir),
+               "--reps", str(reps), "--mode", a.mode, *extra]
+        t0 = time.perf_counter()
+        with open(logf, "ab") as plog:
+            plog.write(("\n$ " + " ".join(cmd) + "\n").encode())
+            plog.flush()
+            p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=plog, env=gpu_env, timeout=a.timeout)
+        wall = time.perf_counter() - t0
+        text = p.stdout.decode(errors="replace")
+        with open(logf, "ab") as plog:
+            plog.write(b"\n--- stdout ---\n" + text.encode())
+        return p.returncode, _json_lines(text), wall
+
+    peak, stop, sampler = _gpu_peak_sampler()
+    rc, lines, prove_wall = prove(lo, hi, a.reps, proofs_dir, ["--warmup-vus", str(a.warmup_vus)], prove_log)
+    stop.set()
+    sampler.join(timeout=10)
+    execute_doc = next((d for d in lines if d.get("event") == "execute"), None)
+    setup = next((d for d in lines if d.get("event") == "setup"), None)
+    warmup = next((d for d in lines if d.get("event") == "warmup"), None)
+    reps = [d for d in lines if d.get("event") == "rep"]
+    (out / "prove.json").write_text(json.dumps({"rc": rc, "wall": prove_wall, "execute": execute_doc, "setup": setup, "warmup": warmup, "reps": reps}, indent=1))
+    if rc != 0 or len(reps) != a.reps or not all(r["accepted"] for r in reps):
+        raise SystemExit(f"sp1-committed: committed-prove failed (rc {rc}, {len(reps)}/{a.reps} reps): see {prove_log}")
+    if setup["vk_hash"] != vk:
+        raise SystemExit(f"sp1-committed: the prover's vk {setup['vk_hash']} is not info's {vk}")
+    timeline = sp1_timeline(prove_log.read_text(errors="replace"))[-a.reps:]
+    statement = proofs_dir / "statement.json"
+
+    def verify(proof: str, stmt: Path, extra: list[str]) -> dict:
+        rc, text, wall = _run_logged([str(host), "committed-verify", "--proof", proof, "--statement", str(stmt), "--expect-vk", vk, *extra],
+                                     cpu_env, log, 1800)
+        doc = next((d for d in _json_lines(text) if d.get("event") == "committed-verify"), {})
+        return {"proof": os.path.relpath(proof, out), "rc": rc, "accepted": rc == 0 and doc.get("ok") is True, "sp1_ok": doc.get("sp1_ok"),
+                "vk_pinned": doc.get("vk_pinned"), "tree_check": doc.get("tree_check"), "verify_seconds": doc.get("verify_seconds"),
+                "tree_check_seconds": doc.get("tree_check_seconds"), "process_wall": wall, "args": extra}
+
+    verdicts = []
+    for r in reps:
+        v = verify(r["proof_path"], statement, [])
+        verdicts.append({"rep": r["rep"], **v})
+        print(f"sp1-committed: verify rep{r['rep']}: {'accept' if v['accepted'] else 'REJECT'} ({v['verify_seconds']} s)", flush=True)
+    proof_negatives = [{"kind": f"wrong-root-{t}", **verify(reps[0]["proof_path"], statement, ["--wrong-root", t])} for t in ("a", "b", "y")]
+    if not a.skip_negatives:
+        m = min(a.warmup_vus or 64, B)
+        neg_dir = out / "proofs-tampered"
+        nrc, nlines, _ = prove(lo, lo + m, 1, neg_dir, ["--tamper-x", "0", "--skip-execute"], out / "prover-tampered.log")
+        nrep = next((d for d in nlines if d.get("event") == "rep"), None)
+        tamper = next((d.get("tamper") for d in nlines if d.get("event") == "setup"), None)
+        entry = {"kind": "proof-over-tampered-x", "vus": m, "prove_rc": nrc, "tamper": tamper,
+                 "in_process": {k: nrep.get(k) for k in ("sp1_ok", "tree_check", "accepted")} if nrep else None}
+        if nrep:
+            entry.update(verify(nrep["proof_path"], neg_dir / "statement.json", []))
+        proof_negatives.append(entry)
+    (out / "verify.json").write_text(json.dumps({"verifier": f"{host} committed-verify --expect-vk {vk}, SP1_PROVER=cpu (the producer's binary: not independent)",
+                                                 "items": verdicts, "negatives": proof_negatives}, indent=1))
+    neg_ok = all(x.get("rc") == 1 and x.get("accepted") is False for x in proof_negatives)
+    if proof_negatives and proof_negatives[-1]["kind"] == "proof-over-tampered-x":
+        pn = proof_negatives[-1]
+        neg_ok = neg_ok and pn["prove_rc"] == 0 and pn.get("sp1_ok") is True
+
+    totals = [r["prove_seconds"] + r["save_seconds"] for r in reps]
+    med = sorted(range(len(reps)), key=totals.__getitem__)[len(reps) // 2]
+    rep, t_total = reps[med], totals[med]
+    commit_s = statistics.median(r["commit_seconds"] for r in reps)
+    e2e = t_total + commit_s
+    shards = int(rep["shards"])
+
+    sweep_points = [{"B": B, "reps": len(reps), "t_total": t_total, "commit_seconds": commit_s, "e2e_seconds": e2e, "per_second": B / e2e, "shards": shards}]
+    for b in [int(x) for x in a.sweep_b.split(",") if x.strip()] if a.sweep_b else []:
+        if b >= B:
+            continue
+        src, sl, _ = prove(lo, lo + b, 2, out / f"sweep-B{b}", ["--skip-execute"], out / f"prover-sweep-B{b}.log")
+        sreps = [d for d in sl if d.get("event") == "rep"]
+        if src != 0 or not sreps or not all(r["accepted"] for r in sreps):
+            raise SystemExit(f"sp1-committed: sweep point B={b} failed (rc {src})")
+        st = min(r["prove_seconds"] + r["save_seconds"] for r in sreps)
+        sc = min(r["commit_seconds"] for r in sreps)
+        sweep_points.append({"B": b, "reps": len(sreps), "t_total": st, "commit_seconds": sc, "e2e_seconds": st + sc, "per_second": b / (st + sc),
+                             "shards": sreps[0]["shards"]})
+    sweep_points.sort(key=lambda p: p["B"])
+    best = max(p["per_second"] for p in sweep_points)
+    sweep = {"variable": "B", "points": sweep_points, "measured_B": B, "plateau": len(sweep_points) > 1 and B / e2e >= 0.95 * best,
+             "rule": "the measured B's instances/s (end to end) is within 5% of the sweep's best; smaller points are the best of 2 warm reps"}
+    protocol = {"warm": warmup is not None, "runs": len(reps), "contended": False, "timed": "per rep: fresh commit, then prove + serialize",
+                "contention": "one research run on the pod, --exclusive"}
+
+    sha = source_sha() or os.environ.get("RESEARCH_SOURCE_COMMIT")
+    security = {"target": -SP1_SECURITY_BITS, "achieved_log2": round(SP1_PER_SHARD_LOG2 + math.log2(shards), 3),
+                "source": "kb/sp1-prover.md: soundcalc @2af5e7d on SP1's gen_soundcalc_toml configuration (lane sp1-128), 2^-99.0 per shard "
+                          "proof, additive; SP1_TARGET_BITS_OF_SECURITY = 100 is SP1's own constant (sp1-primitives 6.6.0 fri_params.rs)",
+                "union_bound": f"{shards} shard proofs in the core proof: {SP1_PER_SHARD_LOG2:g} + log2({shards})",
+                "statement_commitment": "SHA-256 collision resistance (sha256/row/v1 digests, frame-v3 trees)",
+                "flag": "algebraic hash inside SP1 (Poseidon2-KoalaBear Merkle trees and challenger): not for highest-stakes use"}
+    software = {"backend": {"name": backend_name, "version": SP1_VERSION, "commit": sha},
+                "toolchain": {"sp1-sdk": SP1_VERSION, "sp1-zkvm": SP1_VERSION, "sp1-primitives": "6.6.0", "sp1-gpu-server": "6.6.0 (release binary)",
+                              "guest toolchain": "succinct sp1up v6.4.0", "sha2": "sp1-patches RustCrypto-hashes patch-sha2-0.10.9-sp1-6.2.0 (SHA-256 precompile)",
+                              "python": sys.version.split()[0]},
+                "guest": {"elf_sha256": setup["elf_sha256"], "vk_hash": setup["vk_hash"], "features": setup["guest_features"]},
+                "host_binary_sha256": _sha256_file(host), "prover": "cuda", "prover_options": prover_env or "SP1 defaults",
+                "verifier": f"{host} committed-verify --expect-vk {vk}"}
+    stmt_doc = json.loads(statement.read_text())
+    fp = contract.fingerprint(
+        profile=target_name, domain=contract.DOMAIN, K=1536, B=B, proof_class="NON_ZK_PROOF", authentication="included-hash", zk_mode=contract.ZK_NONE,
+        security=security, hardware=contract.probe_hardware(), software=software,
+        preprocessing={"setup": "SP1 setup of the relation-committed ELF (proving and verifying keys), once per ELF, outside t.total",
+                       "setup_seconds": setup["setup_seconds"], "per_instance": "none"},
+        retention="retained", instances=instances,
+        workload="sp1-relation-committed", statement="relation-committed/v1", format=fmt, scheme="frame-v3/sha256",
+        leaf={"scheme": "frame-v3", "schema": "sha256/row/v1", "hash": "sha256", "binding_tag": stmt_doc["binding_tag"],
+              "word_schema": stmt_doc["trees"][2]["schema"]},
+        commitment={"statement_sha256": _sha256_file(statement), "roots": {t["name"]: t["root"] for t in stmt_doc["trees"]},
+                    "identity": stmt_doc["identity"]},
+        identity=setup["identity"], mode=a.mode, reps=len(reps), input_layout="chunks", vus_per_read=a.vus_per_read,
+        input_bytes=setup["input_bytes"], warmup={"vus": warmup["vus"], "prove_seconds": warmup["prove_seconds"]} if warmup else None,
+        fixtures=fixture_digests, protocol=protocol, sweep=sweep,
+        phases="the prove call is one joint stage (SP1 6 pipelines execution, event generation, trace generation, commitment and proving "
+               "across shards); t.serialization is the proof's bincode write; the commitment is commit.seconds (host, before the prove call)",
+        note=a.note or None,
+    )
+    verify_s = sorted(v["verify_seconds"] for v in verdicts)[len(verdicts) // 2]
+    meas = [
+        contract.measurement(contract.T_TOTAL, t_total), contract.measurement(SP1_PROVE_STAGE, rep["prove_seconds"]),
+        contract.measurement("t.serialization", rep["save_seconds"]), contract.measurement("t.zk_additional", 0.0),
+        contract.measurement("vu.count", B), contract.measurement("vu.seconds_per_vu", t_total / B), contract.measurement("vu.per_second", B / t_total),
+        contract.measurement("transcript.bytes", rep["proof_bytes"]), contract.measurement("verifier.seconds", verify_s),
+        contract.measurement("fixed.setup_seconds", setup["setup_seconds"]),
+        *contract.rate_measurements(t_total, B, 1536, target_name),
+        measurement("commit.seconds", commit_s, "s"), measurement("commit.cold_seconds", setup["commit_cold_seconds"], "s"),
+        measurement("commit.reps", len(reps), "count"), measurement("e2e.seconds", e2e, "s"),
+        measurement("commit.rows_seconds", statistics.median(r["commit_rows_seconds"] for r in reps), "s"),
+        measurement("commit.trees_seconds", statistics.median(r["commit_trees_seconds"] for r in reps), "s"),
+        measurement("commit.threads", setup["commit_threads"], "count"),
+        measurement("verifier.tree_check_seconds", sorted(v["tree_check_seconds"] for v in verdicts)[len(verdicts) // 2], "s"),
+        measurement("prove_seconds_reps", sum(r["prove_seconds"] for r in reps) / len(reps), "s"),
+        measurement("prove_seconds_min", min(r["prove_seconds"] for r in reps), "s"),
+        measurement("prove_seconds_max", max(r["prove_seconds"] for r in reps), "s"),
+        measurement("shards", shards, "count"), measurement("proof_bytes", rep["proof_bytes"], "B"),
+        measurement("public_values_bytes", rep["public_values_bytes"], "B"),
+        measurement("verify_process_wall", sorted(v["process_wall"] for v in verdicts)[len(verdicts) // 2], "s"),
+        measurement("host_verify_seconds", sorted(r["verify_seconds"] for r in reps)[len(reps) // 2], "s"),
+        measurement("soundness_bits", -security["achieved_log2"], "bits"),
+        measurement("proofs_verified_producer", sum(v["accepted"] for v in verdicts), "count"),
+        measurement("proof_negatives_rejected", sum(1 for x in proof_negatives if x.get("accepted") is False), "count"),
+    ]
+    if execute_doc:
+        meas += [measurement("total_cycles", execute_doc["total_cycles"], "cycles"), measurement("cycles_per_vu", execute_doc["total_cycles"] / B, "cycles"),
+                 measurement("guest_input_bytes", setup["input_bytes"], "B"), measurement("execute_wall", execute_doc["execute_seconds"], "s")]
+        if execute_doc.get("gas") is not None:
+            meas.append(measurement("gas", execute_doc["gas"], "count"))
+        meas += [measurement(f"cycles.{k}", v, "cycles") for k, v in sorted(execute_doc["cycle_tracker"].items())]
+        meas += [measurement(f"syscalls.{k}", v, "count") for k, v in sorted(execute_doc["syscalls"].items())]
+    if peak["mib"] is not None:
+        meas.append(contract.measurement("mem.peak_device_bytes", peak["mib"] << 20))
+    if len(timeline) == len(reps):
+        t = timeline[med]
+        meas += [measurement(f"sp1.{k}", t[k], "s") for k in ("until_first_gpu_shard_seconds", "gpu_phase_seconds") if t[k] is not None]
+        if t["executor_seconds"] is not None:
+            meas.append(measurement("sp1.executor_seconds", t["executor_seconds"], "s"))
+    if summary:
+        meas += [measurement("negatives_total", summary["negatives"], "count"), measurement("negatives_rejected", summary["rejected"], "count")]
+    meas.append(measurement("workload_wall", time.perf_counter() - started, "s"))
+    (out / "measurements.json").write_text(json.dumps(meas, indent=1) + "\n")
+    ok = all(v["accepted"] for v in verdicts) and len(verdicts) == a.reps and (summary is None or summary["ok"]) and neg_ok
+    detail = (f"{len(reps)} {a.mode} proofs of B={B} ({fmt}), each after a fresh frame-v3 commit: commit {[round(r['commit_seconds'], 3) for r in reps]} s, "
+              f"prove {[round(r['prove_seconds'], 3) for r in reps]} s, serialize {[round(r['save_seconds'], 4) for r in reps]} s, {shards} shards, "
+              f"{rep['proof_bytes']} B; committed-verify (SP1 under vk {vk}, then the three roots) in a fresh CPU process accepted "
+              f"{sum(v['accepted'] for v in verdicts)}/{len(verdicts)}; proof negatives rejected "
+              f"{sum(1 for x in proof_negatives if x.get('accepted') is False)}/{len(proof_negatives)}")
+    if summary:
+        detail += f"; executor negatives rejected {summary['rejected']}/{summary['negatives']} (control accepted: {summary['control_accepted']})"
+    result = {
+        "schema": RESULT_SCHEMA, "run_id": os.environ.get("RESEARCH_RUN_ID", "local"), "kind": "bench-result/v1", "workload_fingerprint": fp,
+        "protocol": protocol, "sweep": sweep,
+        "validation": {"status": "passed" if ok else "failed",
+                       "checker": "executor negatives + committed-verify (pinned vk, frame-v3 roots) on every dumped proof and proof negatives (producer)",
+                       "detail": detail, "evidence": {"reps": reps, "verify": verdicts, "proof_negatives": proof_negatives, "timeline": timeline,
+                                                      "negatives": summary}},
+        "measurements": meas, "measurement_files": ["measurements.json", "prove.json", "verify.json"] + (["negatives.json"] if summary else []),
+        "artifacts": [os.path.relpath(statement, out)] + [v["proof"] for v in verdicts],
+    }
+    problems = contract.validate(result)
+    from verity.verification.target import TARGETS
+    sp1 = next(c for c in tables.CANDIDATES if c.id == "SP1")
+    tgt = TARGETS.get(target_name)
+    try:
+        reasons = tables.reject_reasons(result, [], None, tgt, sp1, authentication="included-hash") if tgt else [f"unknown target {target_name!r}"]
+    except Exception as error:  # the legacy tables' opinion is evidence only; it must not cost the result
+        reasons = [f"tables.reject_reasons raised {error!r}"]
+    result["validation"]["evidence"]["table2_reasons_at_production"] = reasons
+    tmp = out / "result.json.tmp"
+    tmp.write_text(json.dumps(result, indent=1, sort_keys=True) + "\n")
+    os.replace(tmp, out / "result.json")
+    if problems:
+        print(f"contract: {len(problems)} problem(s): " + "; ".join(problems), file=sys.stderr)
+    print(json.dumps({"backend": "sp1-committed", "format": fmt, "B": B, "t_total": t_total, "commit_seconds": commit_s, "e2e_seconds": e2e,
+                      "prove": rep["prove_seconds"], "serialize": rep["save_seconds"], "shards": shards, "security_log2": security["achieved_log2"],
+                      "proof_bytes": rep["proof_bytes"], "cycles": execute_doc["total_cycles"] if execute_doc else None, "vk": vk,
+                      "verify_s": verify_s, "sweep": sweep_points, "plateau": sweep["plateau"], "validation": result["validation"]["status"],
+                      "contract": problems or "conforms"}, indent=1))
+    return 0 if ok and not problems else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--vector", help="vector name under fixtures/typed-obligation-v0 (without .json); not for sp1-bare")
     ap.add_argument("--backend", choices=BACKENDS, required=True)
     ap.add_argument("--mode", default="core", choices=("core", "compressed"), help="sp1-prove / sp1-bare: proof mode")
     bare = ap.add_argument_group("sp1-bare (the Table 2 bare statement over a frozen batch)")
-    bare.add_argument("--host", default=os.environ.get("VERITY_SP1_HOST", SP1_BARE_HOST), help="a relation-bare host binary")
-    bare.add_argument("--backend-name", default=SP1_BARE_BACKEND_NAME, help="software.backend.name (Candidate SP1 recognises 'sp1...')")
+    bare.add_argument("--host", default=None,
+                      help=f"a relation-bare host binary (default $VERITY_SP1_HOST or {SP1_BARE_HOST}); sp1-committed: {SP1_COMMITTED_HOST}")
+    bare.add_argument("--backend-name", default=None, help="software.backend.name (Candidate SP1 recognises 'sp1...')")
+    bare.add_argument("--expect-vk", default=None, help="sp1-committed: the pinned verifying-key hash; another embedded guest is refused")
+    bare.add_argument("--sweep-b", default=None, help="sp1-committed: comma-separated smaller B for the plateau sweep (2 warm reps each)")
     bare.add_argument("--variant", default=None,
                       help="JSON file naming a modified SP1 variant: {backend_name, label, toolchain, fork, verifier_name} (all optional)")
     bare.add_argument("--prover-env", action="append", default=[], metavar="KEY=VALUE",
@@ -767,10 +1087,10 @@ def main(argv: list[str] | None = None) -> int:
                     help="sp1, with --diagnostic: the host is the unsound-relation-only build; run the bare gate chain on the compact "
                          "input K || x || W built from the vector (statement_machinery excluded); the arithmetic baseline")
     a = ap.parse_args(argv)
-    if a.backend == "sp1-bare":
+    if a.backend in ("sp1-bare", "sp1-committed"):
         if not (a.instances or a.batch):
-            ap.error("sp1-bare needs --instances DIR or --batch FILE")
-        return run_sp1_bare(a)
+            ap.error(f"{a.backend} needs --instances DIR or --batch FILE")
+        return run_sp1_bare(a) if a.backend == "sp1-bare" else run_sp1_committed(a)
     if not a.vector:
         ap.error("--vector is required")
     if a.diagnostic and a.backend == "reference":
