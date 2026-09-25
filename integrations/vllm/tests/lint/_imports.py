@@ -40,9 +40,6 @@ LAYER = {
     "verity_vllm.collectives": "collectives",
     "verity_vllm.config": "config",
     "verity_vllm.target_family": "config",                     # -> config.py
-    "verity_vllm.query.boundary": "core",                      # -> verity.ir
-    "verity_vllm.query.partition": "core",                     # -> verity.ir
-    "verity_vllm.program.frontend.liveness": "core",           # -> verity.ir
     "verity_vllm.engine.hooks": "core",                        # the patch owner; imports nothing from verity_vllm
     "verity_vllm.engine.env": "core",                          # the vLLM env pins; imports nothing from verity_vllm
     "verity_vllm.commit.challenge": "core",                    # -> verity.randomness; imports nothing from verity_vllm
