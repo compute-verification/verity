@@ -5,7 +5,7 @@
 // for the O5 weights check).  Same bytes in -> same root out; equality with the host path is asserted by the tests on many sizes (tail
 // leaves shorter than a chunk included) and, in `device-checked` mode, at runtime on the real model.
 //
-//   pos_leaf(value)  = SHA-256("verity/pos-leaf/v0" || u64be(len(value)) || value)          (fasttree.leaf_digest with POS_LEAF_TAG)
+//   pos_leaf(value)  = SHA-256("verity/pos-leaf/v0" || u64be(len(value)) || value)          (scheme.pos_leaf)
 //   node(l, r)       = SHA-256(NODE_PREFIX || l || u64be(32) || r), lift(c) = SHA-256(LIFT_PREFIX || c)   (scheme.fold: odd trailing node)
 //
 // SHA-256 core and tree_level_kernel are VERBATIM native_tree.cu (R9 cmt-hidden, checked against hashlib there); only pos_leaves_kernel is new.

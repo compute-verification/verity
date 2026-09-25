@@ -25,7 +25,7 @@ import hashlib
 from collections.abc import Callable, Iterable, Iterator
 from typing import Any
 
-from verity_vllm.commit import fasttree as ft
+from tests.commit import fasttree as ft
 from verity_vllm.commit import scheme
 
 

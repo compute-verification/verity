@@ -18,7 +18,7 @@ from tests.commit.synthetic import build_toy_run
 
 from verity_vllm.commit import scheme
 from verity_vllm.commit.scheme import POS_LEAF_TAG, pos_leaf
-from verity_vllm.commit.semantic_layout import Layout, RowSpec, RUContext, StaticContext, Template, verify_position_opening
+from tests.commit.semantic_layout import Layout, RowSpec, RUContext, StaticContext, Template, verify_position_opening
 from tests.commit.stream_merkle import StreamingMerkle
 
 

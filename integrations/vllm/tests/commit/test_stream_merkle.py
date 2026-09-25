@@ -22,7 +22,7 @@ import pytest
 from verity_vllm.commit import identity
 from verity_vllm.commit.merkle import MerkleTree, Opening, verify_opening
 
-from verity_vllm.commit import fasttree as ft
+from tests.commit import fasttree as ft
 from verity_vllm.commit import scheme
 from tests.commit.stream_merkle import StreamingMerkle, replay_to_open, stream_in_tree_order, stream_root
 
