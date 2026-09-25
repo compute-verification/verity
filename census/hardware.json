@@ -1,6 +1,7 @@
 [
   {
     "id": "a100-sxm4-80gb/bf16",
+    "name": "A100 SXM4",
     "device": "NVIDIA A100 SXM4 80GB",
     "dtype": "bf16",
     "rate": "bf16 dense tensor-core peak, fp32 accumulate",
@@ -16,6 +17,7 @@
   },
   {
     "id": "h100-sxm5-80gb/bf16",
+    "name": "H100 SXM5",
     "device": "NVIDIA H100 SXM5 80GB",
     "dtype": "bf16",
     "rate": "bf16 dense tensor-core peak, fp32 accumulate",
@@ -31,6 +33,7 @@
   },
   {
     "id": "h100-sxm5-80gb/e4m3",
+    "name": "H100 SXM5",
     "device": "NVIDIA H100 SXM5 80GB",
     "dtype": "e4m3",
     "rate": "fp8 (e4m3) dense tensor-core peak, fp32 accumulate",
@@ -46,6 +49,7 @@
   },
   {
     "id": "rtx-4090/e4m3",
+    "name": "RTX 4090",
     "device": "NVIDIA GeForce RTX 4090",
     "dtype": "e4m3",
     "rate": "fp8 (e4m3) dense tensor-core peak, fp32 accumulate",
@@ -61,6 +65,7 @@
   },
   {
     "id": "rtx-5090/e2m1",
+    "name": "RTX 5090",
     "device": "NVIDIA GeForce RTX 5090",
     "dtype": "e2m1",
     "rate": "fp4 (e2m1, block-scaled) dense tensor-core peak, fp32 accumulate",

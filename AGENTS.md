@@ -45,7 +45,7 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
  The first is `protocols/sampled_proofs` (`verity_sampled_proofs`): the
  two-stage law, its beacon-keyed draws, and verification plans. See its
  `PROTOCOL.md`. Applications (vLLM) compose protocols.
-- `census/`: data only, meant to move to its own repository: `hardware.json`, `networks.json`,
+- `census/`: data only, meant to move to its own repository: `hardware.json`, `datatypes.json`, `networks.json`,
  `workloads.json`, `instance_sets.json` (stable ids, sources), a JSON Schema for each under `schemas/`,
  and a README with the id scheme and sourcing rules. Nothing imports it; the renderer and benchmarks
  read it with `verity_numerical.bench.census` (a few lines), the docs site reads the same files, and

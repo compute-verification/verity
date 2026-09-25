@@ -14,7 +14,7 @@ from verity_numerical.bench import census, contract
 
 jsonschema = pytest.importorskip("jsonschema")
 
-FILES = ("hardware", "networks", "workloads", "instance_sets")
+FILES = ("hardware", "datatypes", "networks", "workloads", "instance_sets")
 
 #: The ids renders cite.  Removing or renaming one breaks every consumer's history: add a new entry instead.
 PINNED = {
@@ -23,6 +23,9 @@ PINNED = {
     "networks": {"dc-1ms-100gbps": (0.001, 100e9), "rtt-20ms-100gbps": (0.020, 100e9), "rtt-100ms-100gbps": (0.100, 100e9),
                  "dc-1ms-10gbps": (0.001, 10e9)},
     "workloads": {"vu-k1536": (1536, 4096)},
+    "datatypes": {"bf16": "BF16", "e4m3": "FP8 (E4M3)", "e2m1": "FP4 (NVFP4, E2M1)"},
+    "names": {"a100-sxm4-80gb/bf16": "A100 SXM4", "h100-sxm5-80gb/bf16": "H100 SXM5", "h100-sxm5-80gb/e4m3": "H100 SXM5",
+              "rtx-4090/e4m3": "RTX 4090", "rtx-5090/e2m1": "RTX 5090"},
     "instance_sets": {"vu-k1536", "vu-k1536-fp8-ada", "vu-k1536-bf16-hopper", "vu-k1536-fp8-hopper", "vu-k1536-nvfp4-sm120"},
 }
 
@@ -47,6 +50,15 @@ def test_ids_are_pinned_with_their_values() -> None:
     assert {k: (n.rtt_s, n.bandwidth_bps) for k, n in census.NETWORKS.items()} == PINNED["networks"]
     assert {k: (w.K, w.batch) for k, w in census.WORKLOADS.items()} == PINNED["workloads"]
     assert set(census.INSTANCE_SETS) == PINNED["instance_sets"]
+    assert {k: d.display for k, d in census.DATATYPES.items()} == PINNED["datatypes"]
+    assert {k: h.name for k, h in census.HARDWARE.items()} == PINNED["names"]
+
+
+def test_a_datatype_displays_its_common_name_then_its_format_and_every_hardware_dtype_is_one() -> None:
+    for d in census.DATATYPES.values():
+        assert d.display == (d.common if d.format == d.common else f"{d.common} ({d.format})")
+    assert {h.dtype for h in census.HARDWARE.values()} <= set(census.DATATYPES)
+    assert all(h.name in h.device.replace("GeForce ", "") for h in census.HARDWARE.values())
 
 
 def test_hardware_lines_are_dense_fp32_accumulate_peaks_with_their_datasheet() -> None:
