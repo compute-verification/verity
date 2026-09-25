@@ -16,7 +16,7 @@ A commitment position ``i`` of an RU tree is derived by arithmetic from STATIC c
 
 so the runtime hashes ONLY packed values: leaf_i = SHA-256("verity/pos-leaf/v0" || u64 nbytes || value bytes) — no id text,
 no dtype/shape text (those are in the template digest, which is part of the static context).  The tree over the leaves uses
-the production pairing/lift rule (``fasttree.fold`` / ``StreamingMerkle``) and the published root is
+the production pairing/lift rule (``scheme.fold`` / ``StreamingMerkle``) and the published root is
 
     R = SHA-256("verity/semantic-root/v0" || program_digest || query_id || template_digest || ctx_digest || epoch || u64 N || merkle_root)
 
@@ -37,12 +37,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity_vllm.program import dtypes
-from verity_vllm.commit import identity
-
-from verity_vllm.commit import fasttree as ft
-
-POS_LEAF_TAG = b"verity/pos-leaf/v0"
-ROOT_TAG = b"verity/semantic-root/v0"
+from verity_vllm.commit import identity, scheme
 
 
 @dataclass(frozen=True, slots=True)
@@ -144,17 +139,6 @@ class Layout:
         return (t - self._positions[0]) * self._R + self._row_rank[key]
 
 
-# --- hashing -----------------------------------------------------------------------------------------------------
-
-
-def pos_leaf(value: bytes | memoryview, new=hashlib.sha256) -> bytes:
-    return ft.leaf_digest(POS_LEAF_TAG, value, new)
-
-
-def semantic_root(program_digest: bytes, query_id: bytes, template_digest: bytes, ctx_digest: bytes, epoch: int, n: int, merkle_root: bytes) -> bytes:
-    return hashlib.sha256(ROOT_TAG + program_digest + query_id + template_digest + ctx_digest + epoch.to_bytes(8, "big") + n.to_bytes(8, "big") + merkle_root).digest()
-
-
 @dataclass(frozen=True, slots=True)
 class StaticContext:
     program_digest: bytes
@@ -165,17 +149,15 @@ class StaticContext:
     n: int
 
     def root(self, merkle_root: bytes) -> bytes:
-        return semantic_root(self.program_digest, self.query_id, self.template.digest(), self.ctx.digest(), self.epoch, self.n, merkle_root)
+        return scheme.semantic_root(self.program_digest, self.query_id, self.template.digest(), self.ctx.digest(), self.epoch, self.n, merkle_root)
 
 
 def verify_position_opening(R: bytes, sc: StaticContext, index: int, value: bytes, path: Sequence[bytes | None]) -> tuple[bool, str | None]:
     """Authenticate ``value`` at ``index`` against the published ``R`` given the static context; returns (ok, canonical id)."""
-    from verity_vllm.commit.merkle import fold_path, path_shape
-
     if not 0 <= index < sc.n:
         return False, None
     try:
-        expected = path_shape(sc.n, index)
+        expected = scheme.path_shape(sc.n, index)
     except Exception:  # noqa: BLE001
         return False, None
     if len(path) != len(expected) or any((p is None) == has for p, has in zip(path, expected, strict=True)):
@@ -186,5 +168,5 @@ def verify_position_opening(R: bytes, sc: StaticContext, index: int, value: byte
     _t, row = layout.unrank(index)
     if len(value) != dtypes.expected_nbytes(row.dtype, row.shape):
         return False, None
-    merkle = fold_path(pos_leaf(value), index, path)
+    merkle = scheme.fold_path(scheme.pos_leaf(value), index, path)
     return sc.root(merkle) == R, layout.canonical_id(index)

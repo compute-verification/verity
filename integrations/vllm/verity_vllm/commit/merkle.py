@@ -31,7 +31,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.commit import hashing, identity
+from verity.commitments.leaves import fold_path
+from verity.errors import InvalidArtifact
+from verity_vllm.commit import hashing, identity, scheme
 from verity_vllm.observe.capture_v1 import COMMITMENTS_FILE, WEIGHTS_TREE_ID, CaptureError, CaptureReader, Value, _write_json, boundary_tree_id, ru_tree_id
 
 COMMITMENTS_SCHEMA = "verity-vllm/commitments/v1"
@@ -44,15 +46,10 @@ class CommitError(ValueError):
 def path_shape(leaf_count: int, index: int) -> list[bool]:
     """For each level from the leaves up: ``True`` when the node at that level has a sibling,
     ``False`` when it is the odd trailing node that gets lifted."""
-    if leaf_count <= 0 or index < 0 or index >= leaf_count:
-        raise CommitError(f"index {index} out of range for {leaf_count} leaves")
-    shape: list[bool] = []
-    width, cursor = leaf_count, index
-    while width > 1:
-        shape.append(not (cursor == width - 1 and width % 2 == 1))
-        width = (width + 1) // 2
-        cursor //= 2
-    return shape
+    try:
+        return scheme.path_shape(leaf_count, index)
+    except InvalidArtifact as error:
+        raise CommitError(str(error)) from error
 
 
 def tree_depth(leaf_count: int) -> int:
@@ -112,20 +109,6 @@ class Opening:
             )
         except (KeyError, TypeError, ValueError) as error:
             raise CommitError(f"malformed opening: {error}") from error
-
-
-def fold_path(leaf: bytes, index: int, path: Sequence[bytes | None]) -> bytes:
-    """Walk from a leaf hash to the root along ``path`` (sibling digests or ``None`` for lifts)."""
-    digest, cursor = leaf, index
-    for sibling in path:
-        if sibling is None:
-            digest = hashing.lift_hash(digest)
-        elif cursor % 2 == 0:
-            digest = hashing.node_hash(digest, sibling)
-        else:
-            digest = hashing.node_hash(sibling, digest)
-        cursor //= 2
-    return digest
 
 
 def verify_opening(root: bytes, leaf_count: int, opening: Opening) -> bool:
@@ -387,15 +370,7 @@ class MerkleTree:
         self.leaves = {cid: bytes(leaves[cid]) for cid in ids}
         self.leaf_count = len(ids)
         self._index = {cid: i for i, cid in enumerate(ids)}
-        level = [self.leaves[cid] for cid in ids]
-        levels = [level]
-        while len(level) > 1:
-            nxt = [hashing.node_hash(level[i], level[i + 1]) for i in range(0, len(level) - 1, 2)]
-            if len(level) % 2 == 1:
-                nxt.append(hashing.lift_hash(level[-1]))
-            level = nxt
-            levels.append(level)
-        self.levels = levels
+        self.levels = scheme.fold_levels([self.leaves[cid] for cid in ids])
 
     @classmethod
     def from_values(cls, values: Iterable[Value], tree_id: str = "") -> MerkleTree:

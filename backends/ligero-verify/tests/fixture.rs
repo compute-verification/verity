@@ -215,6 +215,37 @@ fn the_batch_union_bound_and_n_proofs_are_enforced() {
 }
 
 #[test]
+fn a_statement_without_a_proof_rejects_the_batch() {
+    // red-team-standard-hash R4, in the binary: three honest sub-batches that batch alone accepts, plus a fourth
+    // statement nobody proved -- the proofs all verify, the batch is refused and names the statement, on any --jobs
+    let dir = batch_dir("unproven", 3, |_| true);
+    let (c, js) = run_batch(&dir, "2", "1");
+    assert_eq!(c, 0, "the control: {js}");
+    std::fs::copy(dir.join("sub_00.stmt"), dir.join("sub_03.stmt")).unwrap();
+    for jobs in ["1", "3"] {
+        let (c, js) = run_batch(&dir, jobs, "1");
+        assert_eq!(c, 1, "{js}");
+        assert_eq!(field(&js, "\"n\":"), "3", "{js}");
+        assert_eq!(field(&js, "\"accepted\":"), "3", "every proof verifies; the batch is what fails: {js}");
+        assert_eq!(field(&js, "\"batch_accepted\":"), "false", "{js}");
+        assert_eq!(sfield(&js, "\"batch_reason\":"), "\"batch: 1 statement(s) without a proof (sub_03.stmt)\"", "{js}");
+    }
+    // a proof beside it answers it again
+    std::fs::copy(dir.join("sub_00.proof"), dir.join("sub_03.proof")).unwrap();
+    std::fs::copy(dir.join("sub_00.coins"), dir.join("sub_03.coins")).unwrap();
+    for i in 0..4 {
+        let p = dir.join(format!("sub_{i:02}.stmt"));
+        let mut st = std::fs::read(&p).unwrap();
+        st[N_PROOFS_OFF..N_PROOFS_OFF + 4].copy_from_slice(&4u32.to_le_bytes());
+        std::fs::write(&p, &st).unwrap();
+    }
+    let (c, js) = run_batch(&dir, "4", "1");
+    assert_eq!(c, 0, "{js}");
+    assert_eq!(field(&js, "\"accepted\":"), "4", "{js}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn a_corrupted_sub_batch_rejects_the_batch_with_the_same_error_on_any_jobs() {
     let dir = batch_dir("corrupt", 6, |_| true);
     // one flipped byte in sub_03's opened columns: its Merkle path fails, the other five are untouched

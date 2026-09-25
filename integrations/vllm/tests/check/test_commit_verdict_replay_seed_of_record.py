@@ -13,7 +13,8 @@ from __future__ import annotations
 
 import hashlib
 
-from verity_vllm.check.commit_verdict import _replay_seed_of_record, commit_verdict
+from verity_vllm.check.c2_rules import _replay_seed_of_record
+from verity_vllm.check.verdict import commit_verdict
 from verity_vllm.check.replay.sampled_replay import challenge_seed
 
 # the shape of rev M-0579's recomputed fact (qwen A100 int-3 pair 0: run_root 71f69377... -> sample.seed 8211913111514837969)

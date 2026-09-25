@@ -1,7 +1,7 @@
 """[R16 sys SYS-05] Device-side weight registration -- the SAME weights root as the host path, computed where the parameters live.
 
-`native_host.register_weights` hashes every parameter/buffer as CHUNK-byte position-identified leaves (`semantic.pos_leaf`) folded per
-tensor (`fasttree.fold`), and folds the per-tensor roots into the weights root.  With the GPU tree the chunk is 256 bytes: a 2.5 GB model
+`native_host.register_weights` hashes every parameter/buffer as CHUNK-byte position-identified leaves (`scheme.pos_leaf`) folded per
+tensor (`scheme.fold`), and folds the per-tensor roots into the weights root.  With the GPU tree the chunk is 256 bytes: a 2.5 GB model
 is 10 M Python `pos_leaf` calls (~0.9 us each) plus a Python fold -- 17-24 s measured on cp-sys, ~120 s for a 7B model -- and a Commit
 does it twice (before the workload; again at the C2 replay for the O5 'committed weights' check).  `native_leafhash.cu` computes the same
 leaves and the same tree on the device (SHA-256 core and tree kernel verbatim from native_tree.cu, one new pos_leaf kernel).
@@ -59,7 +59,7 @@ def flat_u8(p) -> Any:
 
 def tensor_root_device(p, chunk: int) -> bytes:
     """Subtree root of one tensor: pos_leaf over CHUNK-byte leaves of its bytes (last leaf shorter when the size is not a multiple), folded.
-    Bytes identical to `eng.ft.fold([eng.pos_leaf(mv[o:o+chunk]) ...])` on the host copy."""
+    Bytes identical to `scheme.fold([scheme.pos_leaf(mv[o:o+chunk]) ...])` on the host copy."""
     e = ext()
     flat = flat_u8(p)
     if not flat.is_cuda:
@@ -71,9 +71,9 @@ def tensor_root_device(p, chunk: int) -> bytes:
 
 def tensor_root_host(p, chunk: int) -> bytes:
     """The host path, verbatim (for the checked mode and the tests)."""
-    from verity_vllm.commit import hidden_engine as eng
+    from verity_vllm.commit import scheme
 
     flat = flat_u8(p)
     host = flat.cpu()
     mv = memoryview(host.numpy()).cast("B")
-    return eng.ft.fold([eng.pos_leaf(mv[o:o + chunk]) for o in range(0, len(mv), chunk)])
+    return scheme.fold([scheme.pos_leaf(mv[o:o + chunk]) for o in range(0, len(mv), chunk)])

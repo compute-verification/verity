@@ -36,7 +36,7 @@ from typing import Any
 
 import numpy as np
 
-from verity_vllm.commit import hidden_engine as E
+from verity_vllm.commit import scheme as E
 from tests.commit.stream_merkle import StreamingMerkle
 from .encoding import STAGE_WIDTH, Geometry, RowLayout, ValueId
 from .fixture import AttentionFixture, Context
@@ -237,14 +237,14 @@ class HierCommitment:
                 del words  # the row's values are not retained
             self.subtree_roots[(h, qb)] = [p.finish() for p in packers]
             del packers
-        self.root = E.bind_root(L.ctx.program_digest, L.ctx.digest(), L.geo.digest(), L.digest, L.n_words, self.merkle_root())
+        self.root = E.step_root(L.ctx.program_digest, L.ctx.digest(), L.geo.digest(), L.digest, L.n_words, self.merkle_root())
         return self.root
 
     def _upper_levels(self) -> tuple[dict[tuple[int, int], list[list[bytes]]], dict[int, list[list[bytes]]], list[list[bytes]]]:
         L = self.layout
-        tile_levels = {k: E.ft.fold_levels(list(v), self.new) for k, v in self.subtree_roots.items()}
-        head_levels = {h: E.ft.fold_levels([tile_levels[(h, qb)][-1][0] for qb in L.qblocks], self.new) for h in range(L.geo.NH)}
-        top = E.ft.fold_levels([head_levels[h][-1][0] for h in range(L.geo.NH)], self.new)
+        tile_levels = {k: E.fold_levels(list(v), self.new) for k, v in self.subtree_roots.items()}
+        head_levels = {h: E.fold_levels([tile_levels[(h, qb)][-1][0] for qb in L.qblocks], self.new) for h in range(L.geo.NH)}
+        top = E.fold_levels([head_levels[h][-1][0] for h in range(L.geo.NH)], self.new)
         return tile_levels, head_levels, top
 
     def merkle_root(self) -> bytes:
@@ -394,7 +394,7 @@ class PackedCommitment:
                 digests.append(d)
         self.merkle = sm.finish()
         self.chunk_digests = digests
-        self.root = E.bind_root(L.ctx.program_digest, L.ctx.digest(), L.geo.digest(), L.digest, L.n_words, self.merkle)
+        self.root = E.step_root(L.ctx.program_digest, L.ctx.digest(), L.geo.digest(), L.digest, L.n_words, self.merkle)
         return self.root
 
     def retained_bytes(self) -> int:
@@ -424,7 +424,7 @@ class PackedCommitment:
             buf, replayed = self._chunk_words(fx, j)
             if E.pos_leaf(buf.tobytes(), self.new) != self.chunk_digests[j]:
                 raise RuntimeError("replay did not reproduce the retained chunk digest")
-            levels = E.ft.fold_levels(list(self.chunk_digests), self.new)
+            levels = E.fold_levels(list(self.chunk_digests), self.new)
             path = E.path_in_levels(levels, j)
             n_leaves = len(self.chunk_digests)
         else:  # roots-only: replay the whole stream with a tracked path
@@ -496,6 +496,6 @@ def verify_value_opening(R: bytes, layout: HierLayout | PackedLayout, opening: V
         digest = E.pos_leaf(opening.leaf)
         for st in opening.stages:
             digest = E.fold_path(digest, st.index, st.path)
-        return E.bind_root(layout.ctx.program_digest, layout.ctx.digest(), layout.geo.digest(), layout.digest, layout.n_words, digest) == R
+        return E.step_root(layout.ctx.program_digest, layout.ctx.digest(), layout.geo.digest(), layout.digest, layout.n_words, digest) == R
     except (KeyError, IndexError, ValueError, TypeError):
         return False

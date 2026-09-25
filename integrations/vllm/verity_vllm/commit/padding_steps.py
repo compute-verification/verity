@@ -16,8 +16,8 @@ manifest requires of r at a step >= arrival + executed_prefix_len is ⊥ BY ENAB
 word is the canonical ⊥ of the lifted width, `1 || 0^w`, in the lifted representation (A11 / R17-6: the TRUE lifted width w+1, no split to
 fit 32 bits) -- a bf16 element (w = 16) is the u32 word 0x0001_0000, a 32-bit element (u32 / i32 / f32) the u64 word 1 << 32, a 64-bit
 element (i64 token id) the 16-byte word 1 << 64.  The synthesized stream of a padding step is tensor-major in the manifest's identity
-order, chunked into `chunk`-byte `pos_leaf` leaves and folded with the production rule (`fasttree.fold_levels`); the step root is
-`bind_root(program_digest, ctx_digest(run_id, step), geo_digest, layout_digest, N, merkle)` -- exactly the executed steps' rule, so a
+order, chunked into `chunk`-byte `pos_leaf` leaves and folded with the production rule (`scheme.fold_levels`); the step root is
+`scheme.step_root(program_digest, ctx_digest(run_id, step), geo_digest, layout_digest, N, merkle)` -- exactly the executed steps' rule, so a
 padding step is opened and verified by the production verifier like any other.  Nothing here reads the trace to decide what is
 inactive: the manifest (the Program's population) and the executed prefix of record decide.
 """
@@ -34,15 +34,10 @@ from typing import Any, Iterable
 
 from verity_vllm.commit.binding import HIDDEN_FAMILIES, coverage_check
 from verity_vllm.check.executed_prefix import executed_prefix_of_record, request_steps_of_record
-from verity_vllm.commit import hidden_stream as hs
-from verity_vllm.commit.hidden_engine import bind_root
-from verity_vllm.commit.merkle import fold_path
-from verity_vllm.commit import fasttree as ft
-from verity_vllm.commit.semantic_layout import pos_leaf
+from verity_vllm.commit import scheme
 
 PADDING_RULES_VERSION = "padded-v1"                 # LIFTING-SPEC v0.7 B8: the padded request Program's rules version
 PADDED_MAP_SCHEMA = "padded-binding-map/1"
-ROOT_TAG_RUN = b"verity/cmt-integ/run-root/v0"      # native_host's run-root tag (the same fold, over S = cap steps)
 CHUNK = 256                                         # chunk-leaf-v1 with the GPU tree
 
 # committed dtype -> (payload width w, lifted container bytes, lifted dtype label).  The lifted word is w+1 bits wide (A11), carried in
@@ -266,23 +261,23 @@ def leaf_digests(stream: bytes, *, step: int, chunk: int = CHUNK, layout: str = 
 
         class _L:                                   # duck-typed StreamLayout, as native_host._gpu_layout builds it (NB marks the block kind)
             HB, M, NB = step, words, block_kind
-        return [hs.chunk_leaf_digest(hs.chunk_header(_L, step, leaf_base + i, chunk // 4, 0), buf[i * chunk:(i + 1) * chunk]) for i in range(padded // chunk)]
-    return [pos_leaf(stream[o:o + chunk]) for o in range(0, len(stream), chunk)] or [pos_leaf(b"")]
+        return [scheme.chunk_leaf(scheme.chunk_header(_L, step, leaf_base + i, chunk // 4, 0), buf[i * chunk:(i + 1) * chunk]) for i in range(padded // chunk)]
+    return [scheme.pos_leaf(stream[o:o + chunk]) for o in range(0, len(stream), chunk)] or [scheme.pos_leaf(b"")]
 
 
 def padding_step_commit(step: int, identities: list[dict[str, Any]], *, program_digest: bytes, run_id: str, geo_digest: bytes,
                         chunk: int = CHUNK, leaf_base: int = 0, ordinal_base: int = 0, layout: str = "chunk-leaf-v1") -> PaddingStep:
-    """Synthesize + commit one padding step with the production rule: the record's leaf rule (`layout`) per chunk, fold_levels, bind_root.
+    """Synthesize + commit one padding step with the production rule: the record's leaf rule (`layout`) per chunk, fold_levels, step_root.
     `leaf_base` > 0 (a mixed step: other requests executed it): the padding leaves rank after the executed ones and `root` binds the
     padding SUBTREE (ctx `step=<s>/padding`) as the conversion's witness; the step's one root is `refold_step` on the pod."""
     metas, stream = padding_layout(identities, chunk=chunk, leaf_base=leaf_base, ordinal_base=ordinal_base)
     if layout.startswith("chunk-leaf-v") and stream:
         stream = stream + b"\0" * ((-len(stream)) % chunk)          # the GPU tree pads a block to a chunk multiple
     leaves = leaf_digests(stream, step=step, chunk=chunk, layout=layout, leaf_base=leaf_base)
-    levels = ft.fold_levels(list(leaves))
+    levels = scheme.fold_levels(list(leaves))
     merkle = levels[-1][0]
     ctx = ctx_digest(run_id, step) if leaf_base == 0 else hashlib.sha256(f"{run_id}/step={step}/padding".encode()).digest()
-    root = bind_root(program_digest, ctx, geo_digest, layout_digest(metas), len(leaves), merkle)
+    root = scheme.step_root(program_digest, ctx, geo_digest, layout_digest(metas), len(leaves), merkle)
     return PaddingStep(step=step, metas=metas, stream=stream, levels=levels, merkle_root=merkle, root=root, n_leaves=len(leaves),
                        n_bytes=len(stream), identities=list(identities), leaf_base=leaf_base, stream_base=leaf_base * chunk, appended=leaf_base > 0,
                        layout=layout)
@@ -296,26 +291,15 @@ def refold_step(executed_leaf_digests: list[bytes], executed_metas: list[Any], p
     if ps.leaf_base != len(executed_leaf_digests):
         raise ValueError(f"padding of step {ps.step} was laid out after {ps.leaf_base} leaves but the executed step has {len(executed_leaf_digests)}")
     leaves = list(executed_leaf_digests) + list(ps.levels[0])      # executed block (NB = 0, its M) then the padding block (NB = 1, its M)
-    levels = ft.fold_levels(leaves)
-    root = bind_root(program_digest, ctx_digest(run_id, ps.step), geo_digest, layout_digest(list(executed_metas) + ps.metas), len(leaves), levels[-1][0])
+    levels = scheme.fold_levels(leaves)
+    root = scheme.step_root(program_digest, ctx_digest(run_id, ps.step), geo_digest, layout_digest(list(executed_metas) + ps.metas), len(leaves), levels[-1][0])
     return levels, root
-
-
-def run_root_of(program_digest: bytes, geo_digest: bytes, step_roots: list[bytes]) -> bytes:
-    """`native_host.finalize`'s run root: SHA-256(tag || program || geo || u64 S || fold(R_0 .. R_{S-1})), over ALL S steps (executed + padding)."""
-    return hashlib.sha256(ROOT_TAG_RUN + program_digest + geo_digest + len(step_roots).to_bytes(8, "big") + ft.fold(list(step_roots))).digest()
 
 
 def opening(ps: PaddingStep, leaf_rank: int) -> tuple[bytes, list[bytes | None]]:
     """(leaf bytes, path) of leaf `leaf_rank` of a padding step, from the retained levels -- verified with `fold_path(pos_leaf(leaf), rank, path)`."""
     leaf = ps.stream[leaf_rank * ps.metas[0].chunk if ps.metas else 0:][: (ps.metas[0].chunk if ps.metas else 0)] if ps.stream else b""
-    path: list[bytes | None] = []
-    k = leaf_rank
-    for lvl in ps.levels[:-1]:
-        sib = k ^ 1
-        path.append(lvl[sib] if sib < len(lvl) else None)
-        k >>= 1
-    return leaf, path
+    return leaf, list(scheme.path_in_levels(ps.levels, leaf_rank))
 
 
 def leaf_digest_of(ps: PaddingStep, leaf: bytes, leaf_rank: int) -> bytes:
@@ -326,13 +310,13 @@ def leaf_digest_of(ps: PaddingStep, leaf: bytes, leaf_rank: int) -> bytes:
 
         class _L:
             HB, M, NB = ps.step, (0 if v2 else ps.n_bytes // 4), PADDING_BLOCK
-        return hs.chunk_leaf_digest(hs.chunk_header(_L, ps.step, ps.leaf_base + leaf_rank, chunk // 4, 0), leaf)
-    return pos_leaf(leaf)
+        return scheme.chunk_leaf(scheme.chunk_header(_L, ps.step, ps.leaf_base + leaf_rank, chunk // 4, 0), leaf)
+    return scheme.pos_leaf(leaf)
 
 
 def verify_opening(ps: PaddingStep, leaf_rank: int) -> bool:
     leaf, path = opening(ps, leaf_rank)
-    return fold_path(leaf_digest_of(ps, leaf, leaf_rank), leaf_rank, path) == ps.merkle_root
+    return scheme.fold_path(leaf_digest_of(ps, leaf, leaf_rank), leaf_rank, path) == ps.merkle_root
 
 
 def padding_entries(ps: PaddingStep, *, layout_version: str = "chunk-leaf-v1", step_root: bytes | None = None) -> list[dict[str, Any]]:
@@ -524,7 +508,7 @@ def padded_map_of_record(record_dir: str | Path, *, run_id: str | None = None, g
         return {"ok": False, "why": f"steps {sorted(steps)[:8]}.. are not the contiguous range of the padded Program", "executed_prefix": epr}
     run_root: bytes | None = None
     if not mixed_steps:
-        run_root = run_root_of(program_digest, geo, [steps[s].root for s in range(S)])   # type: ignore[union-attr]
+        run_root = scheme.run_root(program_digest, geo, [steps[s].root for s in range(S)])   # type: ignore[union-attr]
     pad_steps = {ps.step for ps in padding}
     # the padded map: the record's leaf entries verbatim (their step roots are the record's; per-request rows already split by the
     # record's own rule) + one synthesized entry per padding tensor (its identity is the manifest's, so a B>1 request's row is its own

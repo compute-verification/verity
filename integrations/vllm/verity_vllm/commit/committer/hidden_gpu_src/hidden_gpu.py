@@ -43,7 +43,7 @@ import numpy as np  # noqa: E402  -- identity is settled before anything heavy l
 import torch  # noqa: E402
 from torch.utils.cpp_extension import load  # noqa: E402
 from verity_vllm.commit import hidden_stream as hs  # noqa: E402
-from verity_vllm.commit.hidden_engine import fold_path  # noqa: E402
+from verity_vllm.commit import scheme  # noqa: E402
 
 _EXT = None
 
@@ -91,7 +91,7 @@ def gpu_commit(stream_cuda_i32, layout, launch_tag, src_mask, chunk_words=64, sy
         torch.cuda.synchronize()
         t = {'leaf_ms': ev[0].elapsed_time(ev[1]), 'tree_ms': ev[1].elapsed_time(ev[2]), 'levels': len(levels)}
     mr = levels[-1].cpu().numpy().astype(np.uint32).tobytes()
-    root = hs.bind_stream_root(layout, launch_tag, src_mask, chunk_words, leaves.shape[0], mr)
+    root = scheme.stream_root(layout.digest(), launch_tag, src_mask, chunk_words, leaves.shape[0], mr)
     return root, mr, levels, t
 
 

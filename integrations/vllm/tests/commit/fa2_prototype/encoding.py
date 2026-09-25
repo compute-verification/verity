@@ -1,6 +1,6 @@
 """Canonical encoding of in-kernel FlashAttention values (R8 lane B-commit, 2026-09-18).
 
-The commitment engine (C0, `verity_vllm/commit/semantic_layout.py`) hashes ONLY packed value bytes; the identity of
+The commitment engine (C0, `tests/commit/semantic_layout.py`) hashes ONLY packed value bytes; the identity of
 a leaf is its POSITION in a layout that is derived by arithmetic from static context.  This module fixes that layout for the
 interior values of `Attention_v3{T, NH, KVH, D, BN}` (`verity_vllm/program/registry/b1.py::AttnBlockV3 / AttentionHeadV3`).
 

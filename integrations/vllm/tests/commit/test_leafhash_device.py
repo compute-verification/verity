@@ -12,7 +12,7 @@ if not torch.cuda.is_available():
     pytest.skip("CUDA required for the device leaf hash", allow_module_level=True)
 
 from verity_vllm.commit.committer import leafhash as LH  # noqa: E402
-from verity_vllm.commit import hidden_engine as eng  # noqa: E402
+from verity_vllm.commit import scheme  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -42,17 +42,17 @@ def test_dtype_views_hash_like_the_host_path(ext, shape, dtype):
 
 
 @pytest.mark.parametrize("n", [1, 2, 3, 5, 8, 9, 1001])
-def test_tree_root_is_fasttree_fold(ext, n):
+def test_tree_root_is_the_scheme_fold(ext, n):
     leaves = [hashlib.sha256(bytes([i % 251]) * 40).digest() for i in range(n)]
     dev = ext.tree_root(torch.tensor(list(b"".join(leaves)), dtype=torch.uint8).reshape(n, 32).cuda())
-    assert bytes(dev.cpu().numpy().tobytes()) == eng.ft.fold(list(leaves))
+    assert bytes(dev.cpu().numpy().tobytes()) == scheme.fold(list(leaves))
 
 
 def test_pos_leaves_are_the_semantic_pos_leaf(ext):
     t = torch.randint(0, 256, (256 * 5 + 100,), dtype=torch.uint8).cuda()
     dev = ext.pos_leaves(t, 256).cpu().numpy().tobytes()
     mv = memoryview(t.cpu().numpy()).cast("B")
-    host = b"".join(eng.pos_leaf(mv[o:o + 256]) for o in range(0, len(mv), 256))
+    host = b"".join(scheme.pos_leaf(mv[o:o + 256]) for o in range(0, len(mv), 256))
     assert dev == host and len(dev) == 6 * 32
 
 

@@ -204,7 +204,7 @@ def test_a_request_with_a_declared_seed_and_no_committed_sampled_id_is_unlinked_
 
 
 def test_the_verdict_names_the_prescribed_input_through_the_boundary_linkage_path():
-    from verity_vllm.check.commit_verdict import commit_verdict
+    from verity_vllm.check.verdict import commit_verdict
     store, wreq = _world({"r0": (0, 4, 1077402498)}, seed_word={("r0", 2): 4242})
     lk = _lk(store, wreq, {"r0": {"derived": NSM}})
     base = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64},
