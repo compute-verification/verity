@@ -11,8 +11,6 @@ Checked today, against ``allowlists/p04_one_result.json``:
   gate-keyed dict or a reason prefix.  Keyed by the token, counted per function.
 * ``reason-prefix``: ``startswith``/``endswith``/``in`` tests on a reason, detail or message field: prose used as a
   code.  The result code is ``CheckResult.code``, a ``VerificationCode``.
-
-Once ``properties/record.py`` exists, add it to ``VERDICT_ALLOWED``.
 """
 from __future__ import annotations
 
@@ -25,7 +23,7 @@ from . import _ratchet as R
 
 NAME = "p04_one_result"
 RULE = "P4 (one result type, one verdict)"
-VERDICT_ALLOWED: tuple[str, ...] = ("verity_vllm.check.result",)
+VERDICT_ALLOWED: tuple[str, ...] = ("verity_vllm.check.result", "verity_vllm.properties.record")
 G_TOKEN = re.compile(r"(?<![A-Z0-9])G[1-8](?![0-9])")
 G_LEADING = re.compile(r"^\W*(G[1-8])(?![0-9])")
 REASONY = re.compile(r"(?i)(reason|\bwhy\b|detail|message|\bmsg\b|\bnote|explan|\bcause|diagnos)")

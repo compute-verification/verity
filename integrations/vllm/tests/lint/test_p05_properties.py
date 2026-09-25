@@ -5,8 +5,9 @@ The rule's import contract is "``check`` and ``pipeline`` import only ``properti
 (``_imports.PROPERTY_MODULES``) by a module in layer ``check|properties`` or ``pipeline`` (``properties`` itself
 excepted) is a violation, keyed by (importer, imported) module pair in ``allowlists/p05_properties.json``.
 
-The rule's registry test (every property the verdict names exists in ``properties.record.REGISTRY``) applies once
-the verdict cites records.  Once ``properties.check_properties`` exists, it joins ``ALLOWED_ENTRY_POINTS``.
+The rule's registry test (every property the verdict cites exists in ``properties.record.REGISTRY``, by a digest
+that recomputes) is ``tests/check/test_verdict.py``.  Once ``properties.check_properties`` exists, it joins
+``ALLOWED_ENTRY_POINTS``.
 """
 from __future__ import annotations
 
