@@ -259,7 +259,7 @@ def commitment_problems(pdir: Path, man: dict, pinned: str, reps: list[str], *, 
     orphans: list[str] = []
     for r in reps:
         stmts, proofs = ({f.stem for f in (pdir / r).glob(f"*.{s}")} for s in ("stmt", "proof"))
-        listed = [f for f in man.get("files", []) if str(f.get("proof") or f.get("stmt") or "").split("/", 1)[0] == r]
+        listed = [f for f in man.get("files", []) if isinstance(f, dict) and str(f.get("proof") or f.get("stmt") or "").split("/", 1)[0] == r]
         if stmts != proofs:
             orphans.append(f"{r}: {len(stmts - proofs)} statement(s) without a proof, {len(proofs - stmts)} proof(s) without a statement")
         if any(not f.get("proof") for f in listed):
@@ -273,6 +273,8 @@ def commitment_problems(pdir: Path, man: dict, pinned: str, reps: list[str], *, 
     for r in reps:
         for f in sorted((pdir / r).glob("*.stmt")):
             per_rep.setdefault(r, []).append((f.name, read_statement(f.read_bytes())))
+    if n_v6 := sum(bool(getattr(st, "v6", False)) for sts in per_rep.values() for _, st in sts):
+        return True, [f"commitment: {n_v6} row-sharing (v6) statement(s): shared-row layouts are not recomputed"]
     try:
         want = committed_trees(pinned, man, instances_root=instances_root)
     except ValueError as e:
