@@ -29,8 +29,9 @@ MEASURED = sorted((REPO / "docs/data/tc-total-2026-09-07").glob("*/cvt_special.j
 #: record was written at `e47be70` (v0 codec, pre-DC builder); DC's builder fix B.1 + v1 codec (the defaults since the DC
 #: merge) give the same program the digest `2d483c89d14d215f…`, certified equivalent by `fixtures/verity-ir/descriptor-profile/
 #: correspondence-B0-LP32-STEPS7-v0-v1.json` (descriptor-codec.md §2/§4). The L8 record keeps the digest it was written under.
+#: Citing core's `AmpereBF16TcDot16_v2` for the superseded `_v1` k16 step (the same function on every word) moves it to `e7be3165…`.
 B0_DIGEST = "03405bbdc7ec2825abd79aad723a2c75a417e8b3084567f89cf3341e31a5ab2d"
-B0_DIGEST_V1 = "2d483c89d14d215f49305ab3db7b1dd6370bdecc4449f56ca36bd8c6ac4aae30"
+B0_DIGEST_V1 = "e7be3165a1d377261e99734be5749ea6d5aacd772942eb100c7ec048e058c100"
 
 NAN_WORDS = [0x7FC00000, 0xFFC00000, 0x7FC00001, 0x7FFFFFFF, 0xFFFFFFFF, 0x7F800001, 0xFF800001, 0x7FBFFFFF,
              0xFFA00000, 0x7F808000, 0x7FC07FFF, 0x7FC08000]

@@ -167,7 +167,7 @@ def AttnBlock(q: Arr["D", BF16], k: Arr[BN, "D", BF16], v: Arr[BN, "D", BF16], m
             break  # all-masked k-step: P = 0 exactly, no accumulator change
         prow = torch.stack([(pb[k0 + j] if k0 + j < NVIS else zero16) for j in range(16)])
         vt = v[k0:k0 + 16].t()  # V column d over the 16 keys: a [D][16] strided view
-        o = batch(ops.AmpereBF16TcDot16, o, prow, vt, axes=(0, None, 0))
+        o = batch(ops["AmpereBF16TcDot16_v2"], o, prow, vt, axes=(0, None, 0))
     return (m_new, torch.stack(lanes), o)
 
 
@@ -359,7 +359,7 @@ def AttnBlockV3(q: Arr["D", BF16], k: Arr["BN", "D", BF16], v: Arr["BN", "D", BF
             break  # all-masked k-step: P = 0 exactly, no accumulator change
         prow = torch.stack([(pb[k0 + j] if k0 + j < NVIS else zero16) for j in range(16)])
         vt = v[k0:k0 + 16].t()  # V column d over the 16 keys: a [D][16] strided view
-        o = batch(ops.AmpereBF16TcDot16, o, prow, vt, axes=(0, None, 0))
+        o = batch(ops["AmpereBF16TcDot16_v2"], o, prow, vt, axes=(0, None, 0))
     return (m_new, torch.stack(lanes), o)
 
 
@@ -453,7 +453,7 @@ def ServeV4(prompt: Arr["LP", I32], weights: Dep(lambda S: b1.weights_type(S["C"
 # `DOT` (the k16 tensor-core step), `BN` (kBlockN), `INV` (the softmax epilogue inverse sum) and the serving-level
 # records `GEMM = {"DOT"}`, `ATTENTION = {"BN", "DOT", "INV"}`, `NORM = {"L0", "FUSED"}` are declared statics, so
 # they are part of each specialisation's identity (§8.3) and the Ampere and Hopper programs are two binding records
-# of one `Serve_v2`. Function-valued statics may be given as frontend callables (`ops.AmpereBF16TcDot16`, a `bind`
+# of one `Serve_v2`. Function-valued statics may be given as frontend callables (`ops["AmpereBF16TcDot16_v2"]`, a `bind`
 # of an authored norm) or as the registry's own definitions (`b1.GEMM_AMPERE`, `hopper.ATTENTION_FA3`,
 # `b1.norm_bundle(C)`): `_callable` accepts both.
 
@@ -470,13 +470,13 @@ def _callable(f):
     raise TypeError(f"{f!r} is not a function-valued static")
 
 
-GEMM_AMPERE = {"DOT": ops.AmpereBF16TcDot16}
-ATTENTION_FA2 = {"BN": BN, "DOT": ops.AmpereBF16TcDot16, "INV": ops.Fa2InvSum}  # the HEAD DIM 128 record (W11): Serve_v1's geometry
+GEMM_AMPERE = {"DOT": ops["AmpereBF16TcDot16_v2"]}
+ATTENTION_FA2 = {"BN": BN, "DOT": ops["AmpereBF16TcDot16_v2"], "INV": ops.Fa2InvSum}  # the HEAD DIM 128 record (W11): Serve_v1's geometry
 
 
 def attention_fa2(D: int) -> dict:
     """[E7 D54] The FA2 attention record at head dim `D` (`b1.attention_fa2`): `BN = b1.fa2_kblock_n(D)` -- Serve_v4's geometry."""
-    return {"BN": b1.fa2_kblock_n(D), "DOT": ops.AmpereBF16TcDot16, "INV": ops.Fa2InvSum}
+    return {"BN": b1.fa2_kblock_n(D), "DOT": ops["AmpereBF16TcDot16_v2"], "INV": ops.Fa2InvSum}
 
 
 def norm_bundle(C: dict) -> dict:

@@ -389,7 +389,7 @@ def test_tc_dot16_hopper_matches_the_registered_wgmma_prim_and_differs_from_ampe
         if ref is not None:
             assert step == ref[0].tc_dot_chain(ref[0].HOPPER_BF16_M16N8K16, 0, [int(v) for v in q[i]], [int(v) for v in k[i]]), i
     # the dispatch table and its refusal
-    assert D.TC_DOT16_BY_PRIM["HopperBF16WgmmaDot16_v1"] is D.tc_dot16_hopper and D.TC_DOT16_BY_PRIM["AmpereBF16TcDot16_v1"] is D.tc_dot16
+    assert D.TC_DOT16_BY_PRIM["HopperBF16WgmmaDot16_v1"] is D.tc_dot16_hopper and D.TC_DOT16_BY_PRIM["AmpereBF16TcDot16_v1"] is D.TC_DOT16_BY_PRIM["AmpereBF16TcDot16_v2"] is D.tc_dot16
     ah, _ = D.dot_bf16_for("HopperBF16WgmmaDot16_v1")(q, k)
     assert np.array_equal(ah, acc)
     with pytest.raises(KeyError, match="no vectorised k16 twin for DOT primitive 'BlackwellBF16TcDot16_v1'"):
@@ -502,7 +502,7 @@ def test_attention_rows_fa3_equals_the_registered_attention_v2_hopper_definition
     assert tuple(int(x) for x in out[:nh].ravel()) == tuple(ref)
     # the DOT / INV statics are load-bearing by construction (test_tc_dot16_hopper_...: the two adders differ on the same words); here
     # only the dispatch is checked -- the Ampere chain runs on the same shapes and refusals name the primitive
-    out_amp, nf_amp = D.attention_rows(q, kc, vc, BN, dot_prim="AmpereBF16TcDot16_v1", inv_prim="Fa2InvSum_v1")
+    out_amp, nf_amp = D.attention_rows(q, kc, vc, BN, dot_prim="AmpereBF16TcDot16_v2", inv_prim="Fa2InvSum_v1")
     assert out_amp.shape == out.shape and not nf_amp.any()
     with pytest.raises(KeyError, match="DOT primitive"):
         D.attention_rows(q, kc, vc, BN, dot_prim="Nope_v9")
