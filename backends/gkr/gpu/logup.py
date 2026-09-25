@@ -150,13 +150,10 @@ def build_leaves(t: Table, trows: torch.Tensor, values: list[torch.Tensor], m: t
     dev = trows.device
     size = 1 << n
     if out is None:
-        p = torch.zeros((size,), dtype=torch.int32, device=dev)
-        q = torch.zeros((size, DEG), dtype=torch.int32, device=dev)
+        p = torch.empty((size,), dtype=torch.int32, device=dev)
+        q = torch.empty((size, DEG), dtype=torch.int32, device=dev)
     else:
         p, q = out
-        p.zero_()
-        q.zero_()
-    q[:, 0] = 1
     betas = beta_powers(beta, t.cols, dev)
     zt = t_ext(z, dev)
     fast = _field._fast_leaf_q if dev.type == "cuda" else None
@@ -177,6 +174,10 @@ def build_leaves(t: Table, trows: torch.Tensor, values: list[torch.Tensor], m: t
         fast(trows, betas, zt, q[pos:pos + k])
     else:
         q[pos:pos + k] = ((zt - combine(trows, betas)) % P).to(torch.int32)
+    pos += k
+    p[pos:] = 0
+    q[pos:] = 0
+    q[pos:, 0] = 1
     return p, q
 
 
