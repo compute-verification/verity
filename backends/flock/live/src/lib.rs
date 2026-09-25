@@ -7,6 +7,11 @@
 //! * [`Server`] is the verifier's side of a session. It issues a coin only after it holds the round that precedes it,
 //!   draws coins from the OS, pins the session parameters (profile, reps, flavour, statement), refuses a rep-1 coin
 //!   unless rep 1 committed rep 0's root, and refuses every coin until the link context (root_F, points, y) arrived.
+//!   With a [`LinkSpec`] the link context is a real exchange (flock-link L1): `Commit` carries root_F, every table's
+//!   root_B and its public words; the server checks the public words against its statement, then draws the link
+//!   points from the OS as its own coin slot; `Link` carries y; only then are Flock's coins issued, and each rep's
+//!   first round must bind exactly the committed root_B. The replay hands the recorded points and y to the statement
+//!   verifier, which opens them in every rep (L2).
 //! * [`ReplayChallenger`] runs the ordinary Flock verifier over the recorded session: at every squeeze it checks that the
 //!   proof's absorbed bytes hash to the round the server recorded before it issued that coin, then returns that coin.
 //!   The session record ([`Server::record_json`]) is the evidence; a proof file alone verifies nothing.
@@ -99,6 +104,8 @@ fn child_stream(parent: &str, idx: u32) -> String {
 pub enum Req {
     Hello(String),
     Link(Vec<u8>),
+    /// flock-link L1: root_F (the prime side's first commitment), each table's root_B, each table's public words.
+    Commit { root_f: Vec<u8>, roots: Vec<(String, Vec<u8>)>, publics: Vec<(String, Vec<u8>)> },
     Open { stream: String, parent: String, label: Vec<u8>, at: u64 },
     Round { stream: String, content: Vec<u8>, n: u32 },
     Proof { table: String, rep: u32, bytes: Vec<u8> },
@@ -176,6 +183,17 @@ impl Req {
                 put_bytes(&mut w, bytes);
             }
             Req::Finish => w.push(6),
+            Req::Commit { root_f, roots, publics } => {
+                w.push(7);
+                put_bytes(&mut w, root_f);
+                for list in [roots, publics] {
+                    put_u32(&mut w, list.len() as u32);
+                    for (t, b) in list {
+                        put_bytes(&mut w, t.as_bytes());
+                        put_bytes(&mut w, b);
+                    }
+                }
+            }
         }
         w
     }
@@ -189,6 +207,21 @@ impl Req {
             4 => Req::Round { stream: c.string()?, content: c.bytes()?, n: c.u32()? },
             5 => Req::Proof { table: c.string()?, rep: c.u32()?, bytes: c.bytes()? },
             6 => Req::Finish,
+            7 => {
+                let root_f = c.bytes()?;
+                let mut lists = Vec::new();
+                for _ in 0..2 {
+                    let n = c.u32()? as usize;
+                    let mut l = Vec::new();
+                    for _ in 0..n.min(1 << 10) {
+                        l.push((c.string()?, c.bytes()?));
+                    }
+                    lists.push(l);
+                }
+                let publics = lists.pop().unwrap();
+                let roots = lists.pop().unwrap();
+                Req::Commit { root_f, roots, publics }
+            }
             t => return Err(format!("unknown request tag {t}")),
         })
     }
@@ -510,6 +543,22 @@ pub enum Binding {
     Mixed { registry_digest: [u8; 32], counts_le: Vec<u8> },
     /// `verify_ligerito` / the CUDA prover: label, statement digest, root.
     R1cs { statement_digest: [u8; 32] },
+    /// `UnionInstance::bind_statement_circuit`: the Mixed binding, then `flock-circuit-stmt-v2`, the circuit digest
+    /// and the digest of the public words (pinned from the committed public words, checked by the statement).
+    Circuit { registry_digest: [u8; 32], counts_le: Vec<u8>, circuit_digest: [u8; 32] },
+}
+
+pub const LABEL_CIRCUIT: &[u8] = b"flock-circuit-stmt-v2";
+
+/// flock-link: the link context the verifier requires before Flock's first coin.
+#[derive(Clone, Debug)]
+pub struct LinkSpec {
+    /// Σ, the link statement digest (scheme, Λ, N, m, the two sub-proof statements): recorded, and sent in `Hello`.
+    pub sigma: [u8; 32],
+    /// Coordinates per link point (the linked position space is `{0,1}^m`).
+    pub m: usize,
+    /// Independent GF(2^128) points (2: the Schwartz–Zippel term squares).
+    pub points: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -526,17 +575,30 @@ pub struct SessionConfig {
     pub flavor: String,
     pub tables: Vec<TableSpec>,
     pub require_link: bool,
+    /// `None`: the pre-flock-link stub (opaque `Link` bytes). `Some`: the real exchange.
+    pub link: Option<LinkSpec>,
 }
 
 impl SessionConfig {
     pub fn flock_128_r2(tables: Vec<TableSpec>) -> Self {
-        Self { profile: "fast100".into(), reps: 2, flavor: "rs".into(), tables, require_link: true }
+        Self { profile: "fast100".into(), reps: 2, flavor: "rs".into(), tables, require_link: true, link: None }
+    }
+
+    /// E0: a link exchange is only sound with the R5 gate (no coin before y), so `link: Some` implies `require_link`.
+    pub fn check(&self) -> Result<(), String> {
+        if self.link.is_some() && !self.require_link {
+            return Err("E0: a link exchange (link: Some) without the R5 gate (require_link: false) is refused: y could follow Flock's coins".into());
+        }
+        Ok(())
     }
 
     pub fn hello(&self) -> String {
-        json!({"profile": self.profile, "reps": self.reps, "flavor": self.flavor,
-               "tables": self.tables.iter().map(|t| t.name.clone()).collect::<Vec<_>>()})
-        .to_string()
+        let mut h = json!({"profile": self.profile, "reps": self.reps, "flavor": self.flavor,
+               "tables": self.tables.iter().map(|t| t.name.clone()).collect::<Vec<_>>()});
+        if let Some(l) = &self.link {
+            h["link"] = json!({"sigma": hex(&l.sigma), "m": l.m, "points": l.points});
+        }
+        h.to_string()
     }
 }
 
@@ -560,8 +622,30 @@ pub struct StreamRec {
 /// The statement-specific verifier: decode `proof`, pin the flavour and the PCS parameters from the session
 /// configuration, run the Flock verifier with `ch`, and return the flattened root the proof carries.
 pub trait StatementVerifier: Send {
-    fn verify(&self, table: &str, rep: usize, proof: &[u8], ch: &mut ReplayChallenger) -> Result<Vec<u8>, String>;
+    fn verify(&self, table: &str, rep: usize, proof: &[u8], ch: &mut ReplayChallenger, link: &LinkCtx<'_>)
+        -> Result<Vec<u8>, String>;
     fn domain(&self, table: &str, rep: usize) -> Vec<u8>;
+    /// Check a table's committed public words against the verifier's own statement (the endpoints: flock-link C4)
+    /// and return the public-words digest its first round must bind (`None`: the binding carries no public words).
+    fn statement_publics(&self, table: &str, publics: &[u8]) -> Result<Option<[u8; 32]>, String> {
+        if publics.is_empty() { Ok(None) } else { Err(format!("{table}: this statement takes no public words")) }
+    }
+}
+
+/// What the verifier's record holds for one table when its proofs are replayed: the link points it drew, the y the
+/// prover sent for this table (one per point), and the table's committed public words. Empty without a [`LinkSpec`].
+pub struct LinkCtx<'a> {
+    pub points: &'a [Vec<F128>],
+    pub y: &'a [F128],
+    pub publics: &'a [u8],
+}
+
+#[derive(Clone, Debug)]
+struct CommitRec {
+    root_f: Vec<u8>,
+    roots: BTreeMap<String, Vec<u8>>,
+    publics: BTreeMap<String, Vec<u8>>,
+    publics_digest: BTreeMap<String, Option<[u8; 32]>>,
 }
 
 pub struct Server {
@@ -569,6 +653,9 @@ pub struct Server {
     verifier: Box<dyn StatementVerifier>,
     hello: Option<String>,
     link: Option<Vec<u8>>,
+    commit: Option<CommitRec>,
+    points: Vec<Vec<F128>>,
+    y: Vec<F128>,
     streams: BTreeMap<String, StreamRec>,
     proofs: BTreeMap<(String, usize), Vec<u8>>,
     aborted: Option<String>,
@@ -589,19 +676,33 @@ fn parse_frame<'a>(c: &'a [u8], at: &mut usize, op: u8) -> Result<&'a [u8], Stri
 }
 
 impl Server {
+    /// Panics on a configuration [`SessionConfig::check`] refuses; [`Server::try_new`] returns the refusal.
     pub fn new(cfg: SessionConfig, verifier: Box<dyn StatementVerifier>) -> Self {
-        Self {
+        Self::try_new(cfg, verifier).unwrap_or_else(|e| panic!("{e}"))
+    }
+
+    pub fn try_new(cfg: SessionConfig, verifier: Box<dyn StatementVerifier>) -> Result<Self, String> {
+        cfg.check()?;
+        Ok(Self {
             cfg,
             verifier,
             hello: None,
             link: None,
+            commit: None,
+            points: Vec::new(),
+            y: Vec::new(),
             streams: BTreeMap::new(),
             proofs: BTreeMap::new(),
             aborted: None,
             verdict: None,
             urandom: File::open("/dev/urandom").expect("/dev/urandom"),
             t0: std::time::Instant::now(),
-        }
+        })
+    }
+
+    /// The proofs received, by (table, rep): kept beside the session record (E1).
+    pub fn proofs(&self) -> &BTreeMap<(String, usize), Vec<u8>> {
+        &self.proofs
     }
 
     fn refuse(&mut self, why: String) -> Resp {
@@ -627,7 +728,7 @@ impl Server {
         let mut at = 0;
         parse_frame(content, &mut at, OP_DOMAIN)?;
         let (label, digest) = match &table.binding {
-            Binding::Mixed { registry_digest, .. } => (LABEL_MIXED, registry_digest),
+            Binding::Mixed { registry_digest, .. } | Binding::Circuit { registry_digest, .. } => (LABEL_MIXED, registry_digest),
             Binding::R1cs { statement_digest } => (LABEL_R1CS, statement_digest),
         };
         if parse_frame(content, &mut at, OP_LABEL)? != label {
@@ -636,12 +737,25 @@ impl Server {
         if parse_frame(content, &mut at, OP_BYTES)? != digest {
             return Err("binding: statement digest differs from the configured statement".into());
         }
-        if let Binding::Mixed { counts_le, .. } = &table.binding
+        if let Binding::Mixed { counts_le, .. } | Binding::Circuit { counts_le, .. } = &table.binding
             && parse_frame(content, &mut at, OP_BYTES)? != counts_le.as_slice()
         {
             return Err("binding: table counts differ from the configured statement".into());
         }
-        Ok(parse_frame(content, &mut at, OP_BYTES)?.to_vec())
+        let cap = parse_frame(content, &mut at, OP_BYTES)?.to_vec();
+        if let Binding::Circuit { circuit_digest, .. } = &table.binding {
+            if parse_frame(content, &mut at, OP_LABEL)? != LABEL_CIRCUIT {
+                return Err("binding: no circuit statement after the root".into());
+            }
+            if parse_frame(content, &mut at, OP_BYTES)? != circuit_digest {
+                return Err("F2: circuit digest differs from the configured statement".into());
+            }
+            let want = self.commit.as_ref().and_then(|c| c.publics_digest.get(&table.name).cloned().flatten());
+            if Some(parse_frame(content, &mut at, OP_BYTES)?) != want.as_ref().map(|d| d.as_slice()) {
+                return Err("C4: public words bound in the proof differ from the committed, checked ones".into());
+            }
+        }
+        Ok(cap)
     }
 
     fn root_of(&self, stream: &str) -> Option<(TableSpec, usize)> {
@@ -667,8 +781,55 @@ impl Server {
                 if self.link.is_some() {
                     return self.refuse("link context sent twice".into());
                 }
+                if let Some(spec) = self.cfg.link.clone() {
+                    if self.points.is_empty() {
+                        return self.refuse("L1: y sent before root_F, root_B and the link points".into());
+                    }
+                    let want = 16 * spec.points * self.cfg.tables.len();
+                    if b.len() != want {
+                        return self.refuse(format!("L1: y is {} bytes, want {want}", b.len()));
+                    }
+                    self.y = b.chunks(16).map(|c| F128 {
+                        lo: u64::from_le_bytes(c[..8].try_into().unwrap()),
+                        hi: u64::from_le_bytes(c[8..].try_into().unwrap()),
+                    }).collect();
+                }
                 self.link = Some(b);
                 Resp::Ok
+            }
+            Req::Commit { root_f, roots, publics } => {
+                let Some(spec) = self.cfg.link.clone() else {
+                    return self.refuse("L1: this session has no link exchange".into());
+                };
+                if self.hello.is_none() {
+                    return self.refuse("R7: roots committed before the session parameters".into());
+                }
+                if self.commit.is_some() {
+                    return self.refuse("L1: roots committed twice (the link points are drawn once)".into());
+                }
+                if root_f.is_empty() {
+                    return self.refuse("L1/C2: no root_F: the points must follow both sides' roots".into());
+                }
+                let roots: BTreeMap<String, Vec<u8>> = roots.into_iter().collect();
+                let publics: BTreeMap<String, Vec<u8>> = publics.into_iter().collect();
+                let names: Vec<String> = self.cfg.tables.iter().map(|t| t.name.clone()).collect();
+                if roots.keys().cloned().collect::<Vec<_>>() != names || roots.values().any(|r| r.is_empty()) {
+                    return self.refuse(format!("L1/L3: root_B must be committed for exactly the tables {names:?}, together"));
+                }
+                if publics.keys().any(|k| !names.contains(k)) {
+                    return self.refuse("public words for a table outside the statement".into());
+                }
+                let mut pd = BTreeMap::new();
+                for n in &names {
+                    match self.verifier.statement_publics(n, publics.get(n).map(|v| v.as_slice()).unwrap_or(&[])) {
+                        Ok(d) => { pd.insert(n.clone(), d); }
+                        Err(e) => return self.refuse(e),
+                    }
+                }
+                self.commit = Some(CommitRec { root_f, roots, publics, publics_digest: pd });
+                let pts: Vec<Vec<F128>> = (0..spec.points).map(|_| self.coins(spec.m)).collect();
+                self.points = pts;
+                Resp::Coins(self.points.concat())
             }
             Req::Open { stream, parent, label, at } => {
                 if self.hello.is_none() {
@@ -694,6 +855,11 @@ impl Server {
                     let Some(p) = self.streams.get(&parent) else {
                         return self.refuse(format!("fork of unknown stream {parent}"));
                     };
+                    // F3: a fork follows at least one issued round of its parent, and its rep root's binding round.
+                    let root = parent.split('/').take(2).collect::<Vec<_>>().join("/");
+                    if at == 0 || self.streams.get(&root).and_then(|r| r.cap.as_ref()).is_none() {
+                        return self.refuse(format!("F3: fork {stream} opened at parent position {at}, before {root}'s binding round"));
+                    }
                     if p.rounds.len() as u64 != at {
                         return self.refuse(format!("R3: fork {stream} claims parent position {at}, parent has issued {}", p.rounds.len()));
                     }
@@ -707,7 +873,7 @@ impl Server {
                 Resp::Ok
             }
             Req::Round { stream, content, n } => {
-                if self.cfg.require_link && self.link.is_none() {
+                if (self.cfg.require_link || self.cfg.link.is_some()) && self.link.is_none() {
                     return self.refuse("R5: coin requested before root_F, the link points and y were received".into());
                 }
                 let Some(rec) = self.streams.get(&stream) else {
@@ -730,6 +896,12 @@ impl Server {
                                 hex(&sha256(&cap)[..8]),
                                 r0.map(|c| hex(&sha256(&c)[..8])).unwrap_or_default()
                             ));
+                        }
+                    }
+                    if self.cfg.link.is_some() {
+                        let rb = self.commit.as_ref().and_then(|c| c.roots.get(&table.name));
+                        if rb != Some(&cap) {
+                            return self.refuse(format!("L1: {stream} binds a root other than the committed root_B"));
                         }
                     }
                     self.streams.get_mut(&stream).unwrap().cap = Some(cap);
@@ -756,7 +928,10 @@ impl Server {
         let mut why = self.aborted.clone().unwrap_or_default();
         let t = std::time::Instant::now();
         let record = Arc::new(self.streams.clone());
-        for table in self.cfg.tables.clone() {
+        let n_pts = self.cfg.link.as_ref().map(|l| l.points).unwrap_or(0);
+        for (ti, table) in self.cfg.tables.clone().into_iter().enumerate() {
+            let publics = self.commit.as_ref().and_then(|c| c.publics.get(&table.name).cloned()).unwrap_or_default();
+            let y: Vec<F128> = self.y.get(ti * n_pts..(ti + 1) * n_pts).map(|s| s.to_vec()).unwrap_or_default();
             for rep in 0..self.cfg.reps {
                 let root = rep_stream(&table.name, rep);
                 let res: Result<(), String> = (|| {
@@ -765,7 +940,11 @@ impl Server {
                     let mut ch = ReplayChallenger::new(record.clone(), &root, &self.verifier.domain(&table.name, rep));
                     // A replay failure is the primary reason: the verifier's own error on a proof whose messages
                     // were not the committed ones is a consequence of it.
-                    let cap = self.verifier.verify(&table.name, rep, bytes, &mut ch).map_err(|e| match ch.first_failure() {
+                    if self.cfg.link.is_some() && (self.points.len() != n_pts || y.len() != n_pts) {
+                        return Err(format!("{root}: no complete link context in the session"));
+                    }
+                    let ctx = LinkCtx { points: &self.points, y: &y, publics: &publics };
+                    let cap = self.verifier.verify(&table.name, rep, bytes, &mut ch, &ctx).map_err(|e| match ch.first_failure() {
                         Some(r) => format!("{r} (then the verifier: {e})"),
                         None => e,
                     })?;
@@ -811,9 +990,31 @@ impl Server {
                 })
             })
             .collect();
+        let link = self.commit.as_ref().map(|c| json!({
+            "mode": "exchange",
+            "sigma": self.cfg.link.as_ref().map(|l| hex(&l.sigma)),
+            "root_f_sha256": hex(&sha256(&c.root_f)),
+            "root_b_sha256": c.roots.iter().map(|(t, r)| (t.clone(), json!(hex(&sha256(r))))).collect::<serde_json::Map<_, _>>(),
+            "publics_sha256": c.publics.iter().map(|(t, p)| (t.clone(), json!(hex(&sha256(p))))).collect::<serde_json::Map<_, _>>(),
+            "points": self.points.iter().map(|p| p.iter().map(f128_hex).collect::<Vec<_>>()).collect::<Vec<_>>(),
+            "y": self.y.iter().map(f128_hex).collect::<Vec<_>>(),
+        }));
+        // link_sha256 covers the whole exchange in exchange mode: root_F, every root_B, the points and y.
+        let link_sha = match (&self.commit, &self.link) {
+            (Some(c), Some(l)) => {
+                let mut b = c.root_f.clone();
+                for r in c.roots.values() { b.extend_from_slice(r); }
+                for p in self.points.iter().flatten() { push_f128(&mut b, *p); }
+                b.extend_from_slice(l);
+                Some(hex(&sha256(&b)))
+            }
+            (None, Some(l)) if self.cfg.link.is_none() => Some(hex(&sha256(l))),
+            _ => None,
+        };
         json!({
             "kind": "flock-live-session/v1",
-            "hello": self.hello, "link_sha256": self.link.as_ref().map(|l| hex(&sha256(l))),
+            "hello": self.hello, "link_sha256": link_sha, "link": link,
+            "link_mode": if self.cfg.link.is_some() { "exchange" } else { "stub" },
             "config": {"profile": self.cfg.profile, "reps": self.cfg.reps, "flavor": self.cfg.flavor,
                        "require_link": self.cfg.require_link,
                        "tables": self.cfg.tables.iter().map(|t| json!({"name": t.name, "binding": format!("{:?}", t.binding)})).collect::<Vec<_>>()},

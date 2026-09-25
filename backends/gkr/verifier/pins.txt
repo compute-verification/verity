@@ -20,3 +20,6 @@ fp8-ada 48 d7ba4f9658bca7db48159d9c4c2648614e5258c94c5661fa7187db76a31cca59 d7c8
 fp8-hopper 48 424e72560b1ea8c7f2bbc9adc336f55125be93ffadfb5e6bbab7c92ed0738fee 43aa11bb588b625accee2ac975865894d50082bd0e6d3db8df06252bdb160291 97142fd5818157f31e3e50b6b94a5a8a075b24ac1cb0d2b903bdc0becedd9ae2 python -m gpu.v2.export circuits --model hopper_e4m3_wgmma_k32 --no-merge
 # fp4-nvf4 (RTX 5090 NVFP4)
 fp4-nvf4 24 e091a4c0ade053545ea723571196cedf1d53de5ad5d8849c5d0744f471e20122 382b656744ef5857ad27f1167c30dfc35f85b492e79628fdbef31038f8e37397 ca52d7045e1b9646da0c0b15bcd406180ca55afcf27f50ad301bd704cee72d2a python -m gpu.nvf4.circuit export
+# bf16-ampere+blake3 (A100 BF16, operands committed under blake3-keyed/row/v2): the route (a) linked unit (the in-unit bits of
+# every operand word, tools/link_stub.extend_unit) with the digest-limb epilogue; verifies only with the session's link.txt
+bf16-ampere+blake3 96 c0a6809d777d274918fec6b174a07e2f3fe57c302f034af010243d7c8a14098b 187b9395a3a8d273e2bf3031a511806c2d08cf27b4d6523dd114f9cf30dd5a78 f09b30874ed5db322c063c674ca23673ec7245b619db93c9161bf25e9879c9d8 python -m tools.cell circuits

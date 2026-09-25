@@ -28,6 +28,7 @@ from verity_vllm.program.frontend.target_profile import ApplicabilityError, Arti
 
 B0_DIGEST = "59b35d80faf29438d21a0ea1c96c877ec69e2f21174f11b835ac1ef04c1ed496"  # A's cp-cba request_8_4 == CB-C2's cp-cbc sens/base
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+CORE_SRC = os.path.join(os.path.dirname(os.path.dirname(REPO)), "packages", "verity", "src")
 HF_HOME = os.environ.get("HF_HOME", "/workspace/hf")
 SNAP = os.path.join(HF_HOME, "hub", "models--HuggingFaceTB--SmolLM2-135M", "snapshots", "93efa2f097d58c2a74874c7e644dbc9b0cee75a2", "config.json")
 if not os.path.exists(SNAP):
@@ -61,7 +62,7 @@ _HOSTILE_EXPORT = textwrap.dedent("""
 
 
 def _env(extra=None, gpu_visible=False):
-    e = dict(os.environ, CUDA_VISIBLE_DEVICES="", HF_HUB_OFFLINE="1", HF_HOME=HF_HOME, PYTHONPATH=REPO, VLLM_BATCH_INVARIANT="1", OMP_NUM_THREADS="8")
+    e = dict(os.environ, CUDA_VISIBLE_DEVICES="", HF_HUB_OFFLINE="1", HF_HOME=HF_HOME, PYTHONPATH=os.pathsep.join([REPO, CORE_SRC]), VLLM_BATCH_INVARIANT="1", OMP_NUM_THREADS="8")
     if gpu_visible:  # a second "construction host": whatever GPU the pod has stays visible (the declared target must still win)
         e.pop("CUDA_VISIBLE_DEVICES", None)
     e.update(extra or {})

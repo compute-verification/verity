@@ -298,6 +298,16 @@ pub const PINS: &[Pin] = &[
         source: "backends/direct/ligero/relchain.py instances() seed 20260922 (python -m gpu.commit pin fp8-hopper --leaf blake3)",
     },
     Pin {
+        relation: "bf16-ampere+blake3", lo: 0, vus: 4096,
+        dataset: "bench-instances/v1", tier: "vu-k1536",
+        manifest_sha256: "059103cf9bd55ee83cbd4bb14ae6db2f60db2cb4ddf85cdc22b1cecee6e4eeea",
+        k: 1536, x_bits: 16, w_bits: 16, y_width: 2, n_y: 1,
+        a: "4867030e7e92eb5fcd1220660491bd0620888810e28888ab08401c6dcff547fa",
+        b: "67137b46a2979f734711c47244abb6375ea23a7f2bbd12add62c5c524be044fd",
+        y: "9fff0fdc3d33d27fd358d42111e3a62856f1cf56cc1a81e2a9efab19adf0a0f6",
+        source: "fixtures/bench-instances/v1/manifest.json tier vu-k1536 (python -m gpu.commit pin bf16-ampere --leaf blake3)",
+    },
+    Pin {
         relation: "bf16-ampere+vllm-v1", lo: 0, vus: 4096,
         dataset: "bench-instances/v1", tier: "vu-k1536",
         manifest_sha256: "059103cf9bd55ee83cbd4bb14ae6db2f60db2cb4ddf85cdc22b1cecee6e4eeea",

@@ -1,30 +1,36 @@
 //! The bit link's prime side in sigma form (PROTOCOL.md §17, `gpu/link.py`; the red team's S1, NON_ZK_PROOF only),
-//! re-derived here: after the GKR segments, with the Ligero root and the binary proof's root `root_b` absorbed,
+//! against the live Flock session of route (a) (flock-link, `backends/flock/live`): after the GKR segments,
 //!
-//!   r in GF(2^256)^m     `absorb(TAG || root_b)`, then m = log2ceil(n_pos) whole-digest coins (`challenge_bytes`)
-//!   y = z^(r)            the binary side's claim; here a STAND-IN computed from `x.bin` / `w.bin`, which must hash to
-//!                        the statement's public row digests (`sha256/row/v1`), until the binary proof is wired
-//!   sigma_t, t < 256     prover messages `(sigma_t, 0, 0, 0, 0, 0)`: 0 <= sigma_t <= n_cells, sigma_t = bit_t(y) mod 2
+//!   root_F               SHA-256(ROOT_F_TAG || transcript state || ctr): the prime proof's commitment (Ligero root and
+//!                        every GKR message) that the session's `Commit` carries; the record holds its SHA-256
+//!   r_0, r_1 in GF(2^128)^m, y_0, y_1   the session's two link points (the verifier's OS coins, drawn after root_F and
+//!                        root_B) and the binary side's claims y_k = z^(r_k), read from the session record (`link.txt`),
+//!                        absorbed as TAG || Σ || SHA-256(root_B) || points || y
+//!   sigma_t, t < 256     prover messages `(sigma_t, 0, 0, 0, 0, 0)`: plane t < 128 of point 0, t - 128 of point 1;
+//!                        0 <= sigma_t <= n_cells, sigma_t = bit_t(y_0 || y_1) mod 2
 //!   rho                  one extension challenge; `a[cell q] += sum_t rho^t bit_t(eq(r, pos(q)))`,
 //!                        `b += sum_t rho^t sigma_t`
 //!
-//! GF(2^256) = GF(2)[x] / (x^256 + x^10 + x^5 + x^2 + 1), bit t = the coefficient of x^t, little-endian bytes.
-//! `eq(r, i) = prod_j (i_j ? r_j : 1 + r_j)` with bit j of i against r_j, evaluated as eq_hi(i >> LO) eq_lo(i & mask).
-//! Lambda_F (`derive`) comes from the unit circuit's column names, booleanity and recomposition constraints and the
-//! checker-v2 layout, never from the statement, and is checked to be a bijection onto [0, n_pos).
+//! GF(2^128) is Flock's: GF(2)[x] / (x^128 + x^7 + x^2 + x + 1), bit t = the coefficient of x^t. A [`G`] holds the
+//! pair (point 0, point 1) as four limbs, so `eq(r, i) = prod_j (i_j ? r_j : 1 + r_j)` is taken limb pair by limb
+//! pair and its 256 bits are the 256 planes. Lambda_F (`derive`) comes from the unit circuit's column names,
+//! booleanity and recomposition constraints and the checker-v2 layout, never from the statement, and is checked to be a
+//! bijection onto [0, n_pos). Σ's preimage (`sigma.txt`) is checked against this statement: the scheme, the point
+//! choice, N, m, the SHA-256 of `commitment.txt` and of the leaf digests the public words carry.
 
 use crate::circuit::{log2ceil, Circuit, Wire};
-use crate::commitments::{from_limbs, sha256_row_digest, Spec as CommitSpec, LIMBS, ROLE_W, ROLE_X};
+use crate::commitments::{from_limbs, unhex32, RowHash, Spec as CommitSpec, LIMBS};
 use crate::field::{Ext, DEG, P, P64};
 use crate::sha256::Sha256;
 use crate::transcript::Transcript;
 use std::collections::{HashMap, HashSet};
 
-pub const TAG: &[u8] = b"verity-gkr/link/sigma-gf2_256/v1";
+pub const TAG: &[u8] = b"verity-gkr/link/sigma-2xgf2_128/v2";
+pub const ROOT_F_TAG: &[u8] = b"verity-gkr/link/root-f/v2";
 pub const PLANES: usize = 256;
 const LO: usize = 14;
 
-// ---- GF(2^256) --------------------------------------------------------------------------------------------------
+// ---- GF(2^128) x GF(2^128) -----------------------------------------------------------------------------------------
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub struct G(pub [u64; 4]);
@@ -53,7 +59,7 @@ fn clmul(a: u64, b: u64) -> (u64, u64) {
 }
 
 impl G {
-    pub const ONE: G = G([1, 0, 0, 0]);
+    pub const ONE: G = G([1, 0, 1, 0]);
     pub fn from_bytes(b: &[u8; 32]) -> G { G(std::array::from_fn(|i| u64::from_le_bytes(b[8 * i..8 * i + 8].try_into().unwrap()))) }
     pub fn to_bytes(self) -> [u8; 32] {
         let mut o = [0u8; 32];
@@ -64,29 +70,35 @@ impl G {
     pub fn xor(self, o: G) -> G { G(std::array::from_fn(|i| self.0[i] ^ o.0[i])) }
     #[inline(always)]
     pub fn bit(&self, t: usize) -> u64 { (self.0[t >> 6] >> (t & 63)) & 1 }
+    /// The pair product: limbs 0-1 (point 0) and 2-3 (point 1) each in GF(2^128).
     #[inline(always)]
     pub fn mul(self, o: G) -> G {
-        let mut r = [0u64; 8];
-        for i in 0..4 {
-            for j in 0..4 {
-                let (lo, hi) = clmul(self.0[i], o.0[j]);
-                r[i + j] ^= lo;
-                r[i + j + 1] ^= hi;
-            }
-        }
-        // x^256 = x^10 + x^5 + x^2 + 1: fold the high half H in as H (1 + x^2 + x^5 + x^10); the < 2^10 overflow of
-        // the shifted copies folds once more into the low limb
-        let h = [r[4], r[5], r[6], r[7]];
-        let mut o = [r[0] ^ h[0], r[1] ^ h[1], r[2] ^ h[2], r[3] ^ h[3]];
-        let mut ov = 0u64;
-        for s in [2u32, 5, 10] {
-            o[0] ^= h[0] << s;
-            for i in 1..4 { o[i] ^= (h[i] << s) | (h[i - 1] >> (64 - s)); }
-            ov ^= h[3] >> (64 - s);
-        }
-        o[0] ^= ov ^ (ov << 2) ^ (ov << 5) ^ (ov << 10);
-        G(o)
+        let (a, b) = (mul128([self.0[0], self.0[1]], [o.0[0], o.0[1]]), mul128([self.0[2], self.0[3]], [o.0[2], o.0[3]]));
+        G([a[0], a[1], b[0], b[1]])
     }
+}
+
+/// Flock's GF(2^128): x^128 = x^7 + x^2 + x + 1.
+#[inline(always)]
+pub fn mul128(a: [u64; 2], b: [u64; 2]) -> [u64; 2] {
+    let mut r = [0u64; 4];
+    for i in 0..2 {
+        for j in 0..2 {
+            let (lo, hi) = clmul(a[i], b[j]);
+            r[i + j] ^= lo;
+            r[i + j + 1] ^= hi;
+        }
+    }
+    let h = [r[2], r[3]];
+    let mut o = [r[0] ^ h[0], r[1] ^ h[1]];
+    let mut ov = 0u64;
+    for s in [1u32, 2, 7] {
+        o[0] ^= h[0] << s;
+        o[1] ^= (h[1] << s) | (h[0] >> (64 - s));
+        ov ^= h[1] >> (64 - s);
+    }
+    o[0] ^= ov ^ (ov << 1) ^ (ov << 2) ^ (ov << 7);
+    o
 }
 
 /// `eq(r, i)` for every `i < 2^len(r)`, bit j of i against `r[j]` (`gpu/link.py::eq_table`).
@@ -205,52 +217,83 @@ pub fn derive(circ: &Circuit, vus: usize, steps: usize, kk: usize, bits: usize) 
 
 // ---- the statement's link ------------------------------------------------------------------------------------------
 
-/// `link.txt` (`link sigma-gf2_256/v1`, `root_b <hex>`) with the derived layout and the stand-in operand words
-/// (x rows, then W columns, `vus x K` each, in position order).
-pub struct Spec { pub layout: Layout, pub root_b: [u8; 32], pub words: Vec<u16>, pub t_derive: f64 }
+/// The session's link context (`link.txt`, written from the Flock session record by `tools/cell_gate.py`):
+/// `link session-2xgf2_128/v2`, `sigma`, `root_f_sha256`, `root_b_sha256` (hex), two `point` lines of m GF(2^128)
+/// elements and one `y` line of two, each element 32 hex digits, the record's `{hi:016x}{lo:016x}`.
+pub struct Spec { pub layout: Layout, pub sigma: [u8; 32], pub root_f_sha256: [u8; 32], pub root_b_sha256: [u8; 32],
+                  pub points: Vec<G>, pub y: G, pub t_derive: f64 }
 
-/// The STAND-IN binary root until the binary proof is wired (`gpu/link.py::standin_root_b`).
-pub fn standin_root_b(commitment_text: &[u8]) -> [u8; 32] {
-    let mut h = Sha256::new();
-    h.update(TAG);
-    h.update(b"/root-b-standin/");
-    h.update(commitment_text);
-    h.finalize()
+fn f128(s: &str) -> Result<[u64; 2], String> {
+    if s.len() != 32 || !s.bytes().all(|c| c.is_ascii_hexdigit()) { return Err(format!("link.txt: {s:?} is not a GF(2^128) element")); }
+    let hi = u64::from_str_radix(&s[..16], 16).unwrap();
+    let lo = u64::from_str_radix(&s[16..], 16).unwrap();
+    Ok([lo, hi])
 }
 
-/// `link.txt`, `x.bin`, `w.bin` in `d` against the unit circuit, `commitment.txt` and the public words (per VU: the
+fn sigma_line<'a>(text: &'a str, key: &str) -> Result<&'a str, String> {
+    text.lines().find_map(|l| l.strip_prefix(key).and_then(|r| r.strip_prefix(' '))).ok_or_else(|| format!("sigma.txt: no {key} line"))
+}
+
+/// `link.txt` and `sigma.txt` in `d` against the unit circuit, `commitment.txt` and the public words (per VU: the
 /// `y` words, then the x row and W column digest limbs).
 pub fn load(d: &std::path::Path, text: &str, circ: &Circuit, steps: usize, vus: usize, commitment: &[u8], public: &[u32]) -> Result<Spec, String> {
     let mut lines = text.lines().map(str::trim).filter(|l| !l.is_empty());
-    if lines.next() != Some("link sigma-gf2_256/v1") { return Err("link.txt: not a sigma-gf2_256/v1 link".into()); }
-    let rb = lines.next().and_then(|l| l.strip_prefix("root_b ")).and_then(crate::commitments::unhex32).ok_or("link.txt: no root_b line")?;
-    if lines.next().is_some() { return Err("link.txt: trailing lines".into()); }
-    if rb != standin_root_b(commitment) { return Err("link.txt: root_b is not the stand-in root of commitment.txt".into()); }
+    if lines.next() != Some("link session-2xgf2_128/v2") { return Err("link.txt: not a session-2xgf2_128/v2 link".into()); }
+    let mut kv: HashMap<&str, Vec<&str>> = HashMap::new();
+    let mut pts: Vec<Vec<&str>> = Vec::new();
+    for l in lines {
+        let mut t = l.split_whitespace();
+        let k = t.next().unwrap();
+        if k == "point" { pts.push(t.collect()); } else if kv.insert(k, t.collect()).is_some() { return Err(format!("link.txt: {k} twice")); }
+    }
+    let one = |k: &str| -> Result<[u8; 32], String> {
+        kv.get(k).and_then(|v| (v.len() == 1).then(|| unhex32(v[0])).flatten()).ok_or_else(|| format!("link.txt: no {k} line"))
+    };
+    let (sigma, root_f_sha256, root_b_sha256) = (one("sigma")?, one("root_f_sha256")?, one("root_b_sha256")?);
     let cs = CommitSpec::parse(std::str::from_utf8(commitment).map_err(|_| "commitment.txt: not UTF-8")?)?;
+    if cs.hash != RowHash::Blake3 { return Err("link: the cell's scheme is blake3-keyed/row/v2 (Flock proves keyed BLAKE3 row leaves)".into()); }
     let (kk, bits) = (cs.k as usize, cs.x_bits as usize);
     if cs.w_bits as usize != bits { return Err("link: x and W word widths differ".into()); }
     let t0 = std::time::Instant::now();
     let layout = derive(circ, vus, steps, kk, bits)?;
     let t_derive = t0.elapsed().as_secs_f64();
+    let m = layout.m();
+    if pts.len() != 2 || pts.iter().any(|p| p.len() != m) { return Err(format!("link.txt: two points of {m} coordinates expected")); }
+    let coord = |j: usize| -> Result<G, String> { let (a, b) = (f128(pts[0][j])?, f128(pts[1][j])?); Ok(G([a[0], a[1], b[0], b[1]])) };
+    let points = (0..m).map(coord).collect::<Result<Vec<_>, _>>()?;
+    let yv = kv.get("y").filter(|v| v.len() == 2).ok_or("link.txt: y is two GF(2^128) elements")?;
+    let (y0, y1) = (f128(yv[0])?, f128(yv[1])?);
+    let y = G([y0[0], y0[1], y1[0], y1[1]]);
+    // Σ: its preimage hashes to the session's Σ, and every line this statement fixes agrees with it
+    let st = std::fs::read(d.join("sigma.txt")).map_err(|e| format!("sigma.txt: {e}"))?;
+    if Sha256::digest(&st) != sigma { return Err("link: sigma.txt does not hash to the session's Σ".into()); }
+    let st = std::str::from_utf8(&st).map_err(|_| "sigma.txt: not UTF-8")?;
     let per = cs.n_y + 2 * LIMBS;
     if public.len() != vus * per { return Err(format!("link: {} public words, {} per VU expected", public.len(), per)); }
-    let mut words = Vec::with_capacity(2 * vus * kk);
-    for (a, name, role) in [(0usize, "x.bin", ROLE_X), (1, "w.bin", ROLE_W)] {
-        let bytes = std::fs::read(d.join(name)).map_err(|e| format!("{name}: {e}"))?;
-        if bytes.len() != 2 * vus * kk { return Err(format!("{name}: {} bytes, {} expected", bytes.len(), 2 * vus * kk)); }
-        let ws: Vec<u16> = bytes.chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
-        if ws.iter().any(|&w| (w as usize) >> bits != 0) { return Err(format!("{name}: a word exceeds {bits} bits")); }
+    let mut cat = Vec::with_capacity(64 * vus);
+    for a in 0..2 {
         for v in 0..vus {
-            let row = &ws[v * kk..(v + 1) * kk];
-            let raw: Vec<u8> = if bits == 16 { row.iter().flat_map(|w| w.to_le_bytes()).collect() } else { row.iter().map(|&w| w as u8).collect() };
-            let got = sha256_row_digest(role, bits as u8, kk as u32, &raw);
             let lo = v * per + cs.n_y + a * LIMBS;
-            let want = from_limbs(&public[lo..lo + LIMBS]).ok_or("link: a public digest limb is not below 2^16")?;
-            if got != want { return Err(format!("link: {name} row {v} does not hash to the statement's digest")); }
+            cat.extend_from_slice(&from_limbs(&public[lo..lo + LIMBS]).ok_or("link: a public digest limb is not below 2^16")?);
         }
-        words.extend_from_slice(&ws);
     }
-    Ok(Spec { layout, root_b: rb, words, t_derive })
+    let want = [
+        ("verity/link-L/v2", String::new()),
+        ("scheme", RowHash::Blake3.schema().to_string()),
+        ("points", "2 gf2_128 x^128+x^7+x^2+x+1".to_string()),
+        ("vus", vus.to_string()),
+        ("k", kk.to_string()),
+        ("bits", bits.to_string()),
+        ("n", layout.n_pos().to_string()),
+        ("m", m.to_string()),
+        ("prime_commitment", Sha256::digest(commitment).iter().map(|b| format!("{b:02x}")).collect()),
+        ("leaf_digests", format!("{} {}", 2 * vus, Sha256::digest(&cat).iter().map(|b| format!("{b:02x}")).collect::<String>())),
+    ];
+    if st.lines().next() != Some(want[0].0) { return Err("sigma.txt: not a verity/link-L/v2 preimage".into()); }
+    for (k, v) in &want[1..] {
+        if sigma_line(st, k)? != v { return Err(format!("link: Σ names {k} {:?}, this statement {v:?}", sigma_line(st, k)?)); }
+    }
+    Ok(Spec { layout, sigma, root_f_sha256, root_b_sha256, points, y, t_derive })
 }
 
 // ---- the transcript part and the functional term -------------------------------------------------------------------
@@ -259,45 +302,39 @@ pub fn load(d: &std::path::Path, text: &str, circ: &Circuit, steps: usize, vus: 
 /// `tab[8 byte + v]` = `sum_{bit c of v} rho^(8 byte + c)`, padded to 8 lanes for the vector accumulate.
 pub struct Term { pub lay: Layout, hi: Vec<G>, lo: Vec<G>, tab: Vec<[u32; 8]>, pub b: Ext }
 
-fn stand_in_y(spec: &Spec, hi: &[G], lo: &[G], threads: usize) -> G {
-    let lay = &spec.layout;
-    let (n, bits) = (lay.n_pos(), lay.bits);
-    let nlo = lo.len();
-    let nh = n.div_ceil(nlo);
-    let th = threads.max(1);
-    let chunk = nh.div_ceil(th);
-    let parts: Vec<G> = std::thread::scope(|s| {
-        let hs: Vec<_> = (0..th).map(|t| s.spawn(move || {
-            let mut acc = G::default();
-            for h in t * chunk..((t + 1) * chunk).min(nh) {
-                let mut inner = G::default();
-                for l in 0..nlo.min(n - h * nlo) {
-                    let p = h * nlo + l;
-                    if (spec.words[p / bits] >> (p % bits)) & 1 == 1 { inner = inner.xor(lo[l]); }
-                }
-                acc = acc.xor(hi[h].mul(inner));
-            }
-            acc
-        })).collect();
-        hs.into_iter().map(|h| h.join().unwrap()).collect()
-    });
-    parts.into_iter().fold(G::default(), G::xor)
+/// The session's context as the prime transcript absorbs it (`gpu/link.py::context_bytes`).
+pub fn context_bytes(spec: &Spec) -> Vec<u8> {
+    let mut buf = TAG.to_vec();
+    buf.extend_from_slice(&spec.sigma);
+    buf.extend_from_slice(&spec.root_b_sha256);
+    for k in 0..2 {
+        for r in &spec.points {
+            buf.extend_from_slice(&r.0[2 * k].to_le_bytes());
+            buf.extend_from_slice(&r.0[2 * k + 1].to_le_bytes());
+        }
+    }
+    for k in 0..2 {
+        buf.extend_from_slice(&spec.y.0[2 * k].to_le_bytes());
+        buf.extend_from_slice(&spec.y.0[2 * k + 1].to_le_bytes());
+    }
+    buf
 }
 
-/// Points, the stand-in y, the sigma messages and their checks, rho (`gpu/link.py::verify`), then the term of `a`.
-pub fn verify(spec: &Spec, tr: &mut Transcript, sigma: &[Ext], threads: usize) -> Result<Term, String> {
+/// root_F against the record, the session's context, the sigma messages and their checks, rho (`gpu/link.py::verify`),
+/// then the term of `a`.
+pub fn verify(spec: &Spec, tr: &mut Transcript, sigma: &[Ext], _threads: usize) -> Result<Term, String> {
     let lay = spec.layout;
-    let mut buf = TAG.to_vec();
-    buf.extend_from_slice(&spec.root_b);
-    tr.absorb(&buf);
-    let r: Vec<G> = (0..lay.m()).map(|_| G::from_bytes(&tr.challenge_bytes())).collect();
+    let mut rf = ROOT_F_TAG.to_vec();
+    rf.extend_from_slice(&tr.root_f_input());
+    if Sha256::digest(&Sha256::digest(&rf)) != spec.root_f_sha256 {
+        return Err("link: root_F in the session is not this proof's commitment (Ligero root and GKR messages)".into());
+    }
+    tr.absorb(&context_bytes(spec));
+    let r = &spec.points;
     let lo_bits = LO.min(r.len());
     let lo = eq_table(&r[..lo_bits]);
     let hi = eq_table(&r[lo_bits..]);
-    let y = stand_in_y(spec, &hi, &lo, threads);
-    let mut yb = b"link/y".to_vec();
-    yb.extend_from_slice(&y.to_bytes());
-    tr.absorb(&yb);
+    let y = spec.y;
     if sigma.len() != PLANES { return Err("link: sigma count".into()); }
     for (t, s) in sigma.iter().enumerate() {
         if s.0[1..].iter().any(|&c| c != 0) || s.0[0] as usize > lay.n_cells() {
@@ -361,15 +398,14 @@ impl Term {
 mod tests {
     use super::*;
 
-    fn gmul_ref(a: &[u8; 32], b: &[u8; 32]) -> G {
-        // bit-serial shift-and-add, the reference `gpu/link.py::gmul`
-        let (mut x, y) = (G::from_bytes(a), G::from_bytes(b));
-        let mut r = G::default();
-        for t in 0..256 {
-            if y.bit(t) == 1 { r = r.xor(x); }
-            let top = x.0[3] >> 63;
-            x = G([x.0[0] << 1, (x.0[1] << 1) | (x.0[0] >> 63), (x.0[2] << 1) | (x.0[1] >> 63), (x.0[3] << 1) | (x.0[2] >> 63)]);
-            if top == 1 { x.0[0] ^= 0x425; }
+    fn gmul_ref(a: [u64; 2], b: [u64; 2]) -> [u64; 2] {
+        // bit-serial shift-and-add, the reference `gpu/link.py::gmul128` (x^128 = x^7 + x^2 + x + 1)
+        let (mut x, mut r) = (a, [0u64; 2]);
+        for t in 0..128 {
+            if (b[t >> 6] >> (t & 63)) & 1 == 1 { r = [r[0] ^ x[0], r[1] ^ x[1]]; }
+            let top = x[1] >> 63;
+            x = [x[0] << 1, (x[1] << 1) | (x[0] >> 63)];
+            if top == 1 { x[0] ^= 0x87; }
         }
         r
     }
@@ -382,10 +418,15 @@ mod tests {
             s[0] = it as u8;
             let b = Sha256::digest(&a);
             s = b;
-            assert_eq!(G::from_bytes(&a).mul(G::from_bytes(&b)), gmul_ref(&a, &b));
+            let (ga, gb) = (G::from_bytes(&a), G::from_bytes(&b));
+            let p = ga.mul(gb);
+            assert_eq!([p.0[0], p.0[1]], gmul_ref([ga.0[0], ga.0[1]], [gb.0[0], gb.0[1]]));
+            assert_eq!([p.0[2], p.0[3]], gmul_ref([ga.0[2], ga.0[3]], [gb.0[2], gb.0[3]]));
         }
-        let top = { let mut t = [0u8; 32]; t[31] = 0xff; t };
-        assert_eq!(G::from_bytes(&top).mul(G::from_bytes(&top)), gmul_ref(&top, &top));
+        let top = [u64::MAX, u64::MAX];
+        assert_eq!(mul128(top, top), gmul_ref(top, top));
+        // Flock's F128 (ghash): x^127 * x = x^7 + x^2 + x + 1
+        assert_eq!(mul128([0, 1 << 63], [2, 0]), [0x87, 0]);
     }
 
     #[test]
