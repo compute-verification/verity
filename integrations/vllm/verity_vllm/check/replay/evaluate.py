@@ -37,13 +37,22 @@ class _Operands:
         return np.concatenate(self.inputs[g]) if len(self.inputs[g]) > 1 else self.inputs[g][0]
 
 
+#: observers of every row evaluation, interior producers included: tap(family, statics, operands, outputs).  Empty on every record;
+#: the VU exporter (`verity_vllm.pipeline.vu_export`) installs one around its own serial evaluations and removes it after.
+EVALUATION_TAPS: list[Callable[[str, dict[str, Any], list[np.ndarray], dict[str, np.ndarray]], None]] = []
+
+
 def evaluate(family: str, statics: dict[str, Any], inputs: list[list[np.ndarray]], weights: list[np.ndarray | None]) -> dict[str, np.ndarray]:
     """F_V for the supported families: the family's row kernel (`verity_vllm.program.kernels.rows`) on the row's operands (`_Operands`).
     Returns {member: words}."""
     k = ROWS.get(family)
     if k is None:
         raise KeyError(family)
-    return k.fn(statics, _Operands(inputs, weights))
+    ops = _Operands(inputs, weights)
+    out = k.fn(statics, ops)
+    for tap in EVALUATION_TAPS:
+        tap(family, statics, [ops[g] for g in range(len(ops))], out)
+    return out
 
 
 #: an input of the VU is not available to the replay, or its row kernel declines the instance (partial, never PASS): the message
