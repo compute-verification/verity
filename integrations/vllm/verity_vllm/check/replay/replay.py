@@ -45,9 +45,9 @@ encodings (Python ints of the bit pattern) exactly as `compare_subcircuits` pass
 
 Evaluators (h4).  `--evaluator gates|twins|auto` (default `auto`) selects how tiers B and C evaluate an instance:
 `gates` is `evaluate_call` on the registered body; `twins` uses the vectorized twin of `verity_vllm.program.kernels.twins`
-(numpy / the numerics lane's C++ models, bit-exact re-implementations of the same bodies) wherever one exists; `auto`
-uses a twin only after its in-process self-check (>= 3 random instances against the gates, per specialization) passed,
-else the gates.  A twin that declines an operand (non-finite words outside its exact domain) falls back to the gates for
+(numpy / the numerics lane's C++ models, bit-exact re-implementations of the same bodies; core `verity.evaluation` kernels)
+wherever one claims the specialization; `auto` uses a twin only after its in-process self-check (>= 3 random instances
+against the reference by core `self_check`, per specialization) passed, else the gates.  A twin that declines an operand (non-finite words outside its exact domain) falls back to the gates for
 that instance.  Every per-instance entry records `evaluator` ("gates" | "twins") and `twin_id`; step reports carry
 `evaluators: {twins, gates, self_check}`.  Tier A always uses the gates (it is the body-exactness tier).  Pass/fail,
 `partial`/`skipped` and every other report field are unchanged by the choice of evaluator.
@@ -288,10 +288,10 @@ class Replayer:
         return np.array(got, dtype=np.uint64)
 
     def twin_of(self, k: int):
-        """The admitted twin (`verity_vllm.program.kernels.twins`) of root instance `k`'s specialization, or None (the gates), per
-        `self.evaluator`.  The first instance of a spec runs the twin's self-check (`self_check_n` random instances
-        against the gates) and records it in `self.self_checks`; `auto` falls back to the gates on a failed check,
-        `twins` raises for every instance of that spec (loud), `gates` never uses a twin."""
+        """The admitted twin (`verity_vllm.program.kernels.twins`) of root instance `k`'s specialization as (twin_id, its
+        instance form, the statics), or None (the gates), per `self.evaluator`.  The first instance of a spec runs the
+        twin's self-check (`twins.admit`) and records it in `self.self_checks`; `auto` falls back to the gates on a
+        failed check, `twins` raises for every instance of that spec (loud), `gates` never uses a twin."""
         if self.evaluator == "gates":
             return None
         m = self.by_node[k]
@@ -301,16 +301,16 @@ class Replayer:
             if isinstance(tw, str):
                 raise RuntimeError(tw)
             return tw
-        from verity_vllm.program.kernels.twins import self_check, twin_for
-        tw = twin_for(m["_spec"])
-        if tw is not None:
-            rec = self_check(tw, n=self.self_check_n, seed=self.seed)
+        from verity_vllm.program.kernels import kernel_registry as KR, twins
+        spec, tw = m["_spec"], None
+        if KR.covers(spec, twins.KERNEL) is None:
+            rec = twins.admit(spec, n=self.self_check_n, seed=self.seed)
             self.self_checks[sid] = rec
-            if rec["status"] != "pass":
-                if self.evaluator == "twins":
-                    self._twins[sid] = f"twin {tw.twin_id} of {sid} failed its self-check ({rec['status']}): {rec['mismatches'][:1]}"
-                    raise RuntimeError(self._twins[sid])
-                tw = None
+            if rec["status"] == "pass":
+                tw = (rec["twin_id"], KR.instance(spec, twins.KERNEL), dict(spec.statics))
+            elif self.evaluator == "twins":
+                self._twins[sid] = f"twin {rec['twin_id']} of {sid} failed its self-check ({rec['status']}): {rec['mismatches'][:1]}"
+                raise RuntimeError(self._twins[sid])
         self._twins[sid] = tw
         return tw
 
@@ -318,12 +318,12 @@ class Replayer:
         """`evaluate` from `operand_arrays` through the selected evaluator: the admitted twin when it exists and claims
         the operands, else the gates.  Returns (return encodings, {"evaluator": "twins"|"gates", "twin_id"[, "declined"]})."""
         tw = self.twin_of(k)
-        ev: dict[str, Any] = {"evaluator": "gates", "twin_id": tw.twin_id if tw is not None else None}
+        ev: dict[str, Any] = {"evaluator": "gates", "twin_id": tw[0] if tw is not None else None}
         if tw is not None:
-            from verity_vllm.program.kernels.twins import TwinDeclined
+            from verity_vllm.program.kernels.kernel_registry import Declined
             try:
-                got = np.asarray(tw(arrays), dtype=np.uint64)
-            except TwinDeclined as e:
+                got = np.asarray(tw[1](*arrays, **tw[2]), dtype=np.uint64)
+            except Declined as e:
                 ev["declined"] = str(e)
             else:
                 ev["evaluator"] = "twins"

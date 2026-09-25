@@ -3,10 +3,12 @@
 A *twin* re-implements one registered composite (`verity_vllm/program/registry/b1.py`) for speed — numpy over whole operands,
 or the numerics lane's C++ models through ctypes — and is admissible only where its output words are IDENTICAL to
 `verity.ir.evaluate.evaluate_call` on the registered body.  A twin never redefines a body: where it cannot be exact it
-declines the input (`TwinDeclined`, the gate path is the fallback) or is not offered (`twin_for` returns None).
+declines the input (`Declined`, the gate path is the fallback) or does not claim the specialisation (`covers`).  Twins
+are core `verity.evaluation` kernels (`KERNEL`) of their Definitions, checked against the reference by core `self_check`:
 
-    twin = twin_for(spec)                  # spec: a SpecializedDefinition (e.g. `Gemm_v1{K=576,N=960}`), or None
-    words = twin(args)                     # args: one unsigned-integer array per signature argument, in signature
+    covers(spec, KERNEL)                   # None when a twin claims spec (e.g. `Gemm_v1{K=576,N=960}`), else why not
+    words = instance(spec, KERNEL)(*args, **spec.statics)
+                                           # args: one unsigned-integer array per signature argument, in signature
                                            # order, holding the leaf encodings exactly as `Replayer.operand_words`
                                            # lists them (uint64; uint16/uint32 straight from a snapshot/checkpoint
                                            # carry the same values); returns the output encodings as uint64.
@@ -43,21 +45,19 @@ import time
 import zlib
 from collections import Counter
 from pathlib import Path
+from functools import partial
 from typing import Any, Callable
 
 import numpy as np
 
+from verity.evaluation import self_check
 from verity.ir.defs import SpecializedDefinition, bind
+from verity_vllm.program.kernels.kernel_registry import Declined, covers, instance, register
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import prims as P
 
 SCHEMA = "verity-gen/twins/v1"
 U16, U32, U64, F32, F64 = np.uint16, np.uint32, np.uint64, np.float32, np.float64
-
-
-class TwinDeclined(Exception):
-    """The twin does not claim this input (outside the domain it reproduces exactly); evaluate it with the gates."""
-
 
 # ---------------------------------------------------------------------------------------------------------
 # word helpers
@@ -184,7 +184,6 @@ SPECIAL_WORDS = np.array([0x0000, 0x8000, 0x7F80, 0xFF80, 0x7FFF, 0x7FC0, 0xFFC1
                           0x0080, 0x8080, 0x7F7F, 0xFF7F, 0x3F80, 0xBF80, 0x0100, 0x4000], dtype=U16)
 RANDOM_KINDS = ("gauss", "wide", "gauss", "mixed")
 EDGE_KINDS = ("special", "extreme", "subnormal", "boundary")
-ALL_KINDS = RANDOM_KINDS + EDGE_KINDS
 
 
 def rand_bf16(rng: np.random.Generator, n: int, kind: str) -> np.ndarray:
@@ -256,7 +255,7 @@ def tie_pairs_mul(rng: np.random.Generator, n: int) -> tuple[np.ndarray, np.ndar
 
 class Twin:
     """One specialization's vectorized evaluator.  `__call__(args)` takes one unsigned-integer array per signature
-    argument (leaf encodings in signature order) and returns the output encodings (uint64), or raises `TwinDeclined`."""
+    argument (leaf encodings in signature order) and returns the output encodings (uint64), or raises `Declined`."""
 
     twin_id: str = ""
     base_id: str = ""
@@ -267,7 +266,7 @@ class Twin:
             raise TypeError(f"{self.twin_id} covers {self.base_id}, not {spec.id}")
         why = self.accepts(spec.statics)
         if why:
-            raise ValueError(f"{self.twin_id} does not cover {spec.id}: {why}")
+            raise Declined(f"{self.twin_id} does not cover {spec.id}: {why}")
         self.spec = spec
         self.s = spec.S()
 
@@ -690,7 +689,7 @@ class AttentionTwin(Twin):
         if q.size != NH * D or kc.size != T * KVH * D or vc.size != T * KVH * D:
             raise ValueError(f"{self.spec.id}: operands {q.size}, {kc.size}, {vc.size} words")
         if _nonfinite16(q).any() or _nonfinite16(kc).any() or _nonfinite16(vc).any():
-            raise TwinDeclined("non-finite q/K/V words: the FA2 model saturates where the registered body follows its inf/NaN extension")
+            raise Declined("non-finite q/K/V words: the FA2 model saturates where the registered body follows its inf/NaN extension")
         fa2, tabs = _fa2()
         G = NH // KVH
         kvh = (np.arange(NH, dtype=np.int32) // G).astype(np.int32)
@@ -704,7 +703,7 @@ class AttentionTwin(Twin):
                            None, None, None, None, None, None, 0, 0, flags.ctypes.data)
         if flags.any():
             heads = np.nonzero(flags)[0].tolist()
-            raise TwinDeclined(f"non-finite intermediate (S/P/rescale/O/sum) in head(s) {heads[:8]}: outside the FA2 model's measured domain")
+            raise Declined(f"non-finite intermediate (S/P/rescale/O/sum) in head(s) {heads[:8]}: outside the FA2 model's measured domain")
         return out.astype(U64)
 
     @classmethod
@@ -737,41 +736,35 @@ DEFINITIONS = {"Gemm_v1": b1.Gemm, "BiasAdd_v1": b1.BiasAdd, "Embedding_v1": b1.
                "RMSNormFusedCuda_v2": b1.RMSNormFusedCuda, "Attention_v3": b1.AttentionV3}
 
 
-def twin_for(spec: SpecializedDefinition) -> Twin | None:
-    """The twin of `spec`, or None when no twin covers its definition or its statics (`why_no_twin` says which)."""
-    cls = FAMILIES.get(spec.base_id)
-    if cls is None or cls.accepts(spec.statics):
-        return None
-    return cls(spec)
-
-
-def why_no_twin(spec: SpecializedDefinition) -> str:
-    cls = FAMILIES.get(spec.base_id)
-    if cls is None:
-        return f"no twin registered for {spec.base_id}"
-    return cls.accepts(spec.statics) or ""
-
-
 # ---------------------------------------------------------------------------------------------------------
-# equivalence checks against the gate evaluator
+# the twins as core `verity.evaluation` kernels, checked against the reference by core `self_check`
 # ---------------------------------------------------------------------------------------------------------
 
-_PROGRAMS: dict[str, tuple] = {}
+KERNEL = "twin"
 
 
-def gate_words(spec: SpecializedDefinition, args: list[np.ndarray]) -> np.ndarray:
-    """The registered body on the same operands, gate by gate (`evaluate_call` on a one-call standalone program)."""
-    from verity.ir.evaluate import evaluate_call
-    from verity_vllm.program.registry.crosscheck import _standalone
-    pc = _PROGRAMS.get(spec.id)
-    if pc is None:
-        pc = _standalone(spec)
-        if len(_PROGRAMS) > 64:
-            _PROGRAMS.clear()
-        _PROGRAMS[spec.id] = pc
-    prog, call = pc
-    words = [int(v) for a in args for v in np.asarray(a).reshape(-1).tolist()]
-    return np.array(evaluate_call(prog.circuit, call, words), dtype=U64)
+def _instance(cls: type[Twin]) -> Callable[..., np.ndarray]:
+    def fn(*args: np.ndarray, **statics: Any) -> np.ndarray:
+        return cls(bind(DEFINITIONS[cls.base_id], **statics))([np.asarray(a).reshape(-1) for a in args])
+    return fn
+
+
+def _sampler(cls: type[Twin]) -> Callable[..., list[np.ndarray]]:
+    """Core's sampler form of `random_args`: one (n, leaves) array per parameter, the random kinds in turn."""
+    def sample(rng: np.random.Generator, n: int, params: Any, **statics: Any) -> list[np.ndarray]:
+        rows = [cls.random_args(statics, rng, RANDOM_KINDS[i % len(RANDOM_KINDS)]) for i in range(n)]
+        return [np.stack([np.asarray(r[j]).reshape(-1) for r in rows]) for j in range(len(params))]
+    return sample
+
+
+def check_targets(cls: type[Twin], rng: np.random.Generator, k: int = 3) -> list[SpecializedDefinition]:
+    """`k` small specialisations of the family (`small_statics`: block boundaries, partial warps, ...)."""
+    return [bind(DEFINITIONS[cls.base_id], **cls.small_statics(rng)) for _ in range(k)]
+
+
+for _cls in FAMILIES.values():
+    register(DEFINITIONS[_cls.base_id], _instance(_cls), kernel=KERNEL, domain=_cls.covers, sample=_sampler(_cls),
+             check_targets=partial(check_targets, _cls), covers=_cls.accepts)
 
 
 def _first_diff(got: np.ndarray, expect: np.ndarray) -> dict:
@@ -781,32 +774,38 @@ def _first_diff(got: np.ndarray, expect: np.ndarray) -> dict:
     return {"n_diff": int(neq.size), "first": [(int(i), int(got[i]), int(expect[i])) for i in neq[:4]]}
 
 
+def _mismatch(m: tuple) -> dict:
+    """One core `SelfCheck` mismatch: the twin's words against the reference's, or the reference's error."""
+    got, ref = np.asarray(m[2], dtype=U64).reshape(-1), m[3]
+    return {"n_diff": -1, "reason": ref} if isinstance(ref, str) else _first_diff(got, np.asarray(ref, dtype=U64).reshape(-1))
+
+
 def check_instances(cls: type[Twin], statics_of: Callable[[np.random.Generator], dict], rng: np.random.Generator, n: int,
                     kinds: tuple[str, ...]) -> dict:
-    """`n` random instances of twin class `cls` (statics drawn per instance) against the gate evaluator, bit for bit."""
+    """`n` random instances of twin family `cls` (statics drawn per instance, `kinds` in turn), each compared with the
+    reference by core `self_check`; an instance the twin declines is counted under its reason."""
     rep: dict[str, Any] = {"n": 0, "n_declined": 0, "statics": [], "kinds": Counter(), "mismatches": [], "words": 0}
     for i in range(n):
         kind = kinds[i % len(kinds)]
         st = statics_of(rng)
-        spec = bind(DEFINITIONS[cls.base_id], **st)
         why = cls.accepts(st)
         if why:
             raise ValueError(f"{cls.twin_id}: check statics {st} not accepted: {why}")
-        tw = cls(spec)
+        spec = bind(DEFINITIONS[cls.base_id], **st)
         args = cls.random_args(st, rng, kind)
-        expect = gate_words(spec, args)
         try:
-            got = tw(args)
-        except TwinDeclined as e:
+            instance(spec, KERNEL)(*args, **spec.statics)
+        except Declined as e:
             rep["n_declined"] += 1
             rep.setdefault("declined", Counter())[str(e).split(":")[0]] += 1
             continue
+        sc = self_check(spec, kernel=KERNEL, inputs=[np.asarray(a).reshape(1, -1) for a in args])
         rep["kinds"][kind] += 1
         if spec.id not in rep["statics"]:
             rep["statics"].append(spec.id)
-        rep["words"] += int(expect.size)
-        if got.shape != expect.shape or not np.array_equal(got, expect):
-            rep["mismatches"].append({"spec": spec.id, "kind": kind, **_first_diff(got, expect)})
+        rep["words"] += int(spec.signature()[1].leaves)
+        if sc.mismatches:
+            rep["mismatches"].append({"spec": spec.id, "kind": kind, **_mismatch(sc.mismatches[0])})
         else:
             rep["n"] += 1
     rep["kinds"] = dict(rep["kinds"])
@@ -816,14 +815,14 @@ def check_instances(cls: type[Twin], statics_of: Callable[[np.random.Generator],
     return rep
 
 
-def self_check(twin: Twin, n: int = 3, seed: int = 0) -> dict:
-    """The short in-process admission check the Replayer runs before first use: `n` random instances of the twin's spec
-    (its own statics, or the family's cheap variant of them) against the gate evaluator."""
+def admit(spec: SpecializedDefinition, n: int = 3, seed: int = 0) -> dict:
+    """The short in-process admission check the Replayer runs before a twin's first use on `spec`: `n` random instances
+    of the spec (its own statics, or the family's cheap variant of them) against the reference (`check_instances`)."""
     t0 = time.time()
-    rng = np.random.default_rng([seed, zlib.crc32(twin.spec.id.encode())])
-    cls = type(twin)
-    rep = check_instances(cls, lambda r: cls.check_statics(twin.spec.statics, r), rng, n, RANDOM_KINDS)
-    return {"twin_id": twin.twin_id, "status": rep["status"], "n_random": rep["n"], "n_declined": rep["n_declined"],
+    cls = FAMILIES[spec.base_id]
+    rng = np.random.default_rng([seed, zlib.crc32(spec.id.encode())])
+    rep = check_instances(cls, lambda r: cls.check_statics(spec.statics, r), rng, n, RANDOM_KINDS)
+    return {"twin_id": cls.twin_id, "status": rep["status"], "n_random": rep["n"], "n_declined": rep["n_declined"],
             "statics": rep["statics"], "mismatches": rep["mismatches"], "seconds": round(time.time() - t0, 3)}
 
 
@@ -839,13 +838,13 @@ def check_spec(spec: SpecializedDefinition, rng: np.random.Generator, *, n_rando
     t0 = time.time()
     entry: dict[str, Any] = {"base_id": spec.base_id, "twin_id": None, "n_random": 0, "n_captured": 0, "n_edge": 0,
                              "n_declined": 0, "status": "no_twin"}
-    tw = twin_for(spec)
-    if tw is None:
-        entry["reason"] = why_no_twin(spec)
+    why = covers(spec, KERNEL)
+    if why:
+        entry["reason"] = why
         entry["seconds"] = round(time.time() - t0, 3)
         return entry
-    cls = type(tw)
-    entry["twin_id"] = tw.twin_id
+    tw, cls = instance(spec, KERNEL), FAMILIES[spec.base_id]
+    entry["twin_id"] = cls.twin_id
     statics_of = lambda r: cls.check_statics(spec.statics, r)  # noqa: E731
     rnd = check_instances(cls, statics_of, rng, n_random, RANDOM_KINDS)
     edge = check_instances(cls, statics_of, rng, n_edge, EDGE_KINDS)
@@ -864,8 +863,8 @@ def check_spec(spec: SpecializedDefinition, rng: np.random.Generator, *, n_rando
             cap["skipped"][_skip_class(e)] += 1
             continue
         try:
-            got = tw(args)
-        except TwinDeclined as e:
+            got = tw(*args, **spec.statics)
+        except Declined as e:
             cap["n_declined"] += 1
             cap["skipped"][f"declined: {str(e)[:60]}"] += 1
             continue
