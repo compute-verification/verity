@@ -461,15 +461,15 @@ def result(a, cell: Path, meta: dict, rows: list[dict]) -> None:
         # interactive record (coordinator 1836Z): rounds, bytes each way, RTT and the wall split, median session
         meas += [br._m("session.rounds", md("rounds"), "count"), br._m("session.bytes_up", md("bytes_up"), "bytes"),
                  br._m("session.bytes_down", md("bytes_down"), "bytes"), br._m("net.rtt_in_session_ms", md("in_session_rtt_ms"), "ms"),
-                 br._m("t.flock_prover_compute", md("flock_prover_compute_s"), "s"), br._m("t.flock_network_wait", md("flock_wait_s"), "s"),
-                 br._m("t.flock_verifier_compute", md("verifier_compute_s"), "s"), br._m("session.flock_rounds", md("flock_rounds"), "count")]
+                 br._m("flock.prover_compute_seconds", md("flock_prover_compute_s"), "s"), br._m("flock.network_wait_seconds", md("flock_wait_s"), "s"),
+                 br._m("flock.verifier_compute_seconds", md("verifier_compute_s"), "s"), br._m("session.flock_rounds", md("flock_rounds"), "count")]
         if live:
             # the live prime coins' cost: their rounds and bytes, the prime prover's wait, and the part of it before root_F
             # (on the critical path: Flock's Commit, and so every Flock round, waits for root_F)
             meas += [br._m("session.prime_rounds", md("prime_rounds"), "count"),
                      br._m("session.prime_rounds_before_root_f", md("prime_rounds_before_root_f"), "count"),
                      br._m("session.prime_bytes_up", md("prime_bytes_up"), "bytes"), br._m("session.prime_bytes_down", md("prime_bytes_down"), "bytes"),
-                     br._m("t.prime_network_wait", md("prime_wait_s"), "s"), br._m("t.prime_wait_before_root_f", md("prime_wait_before_root_f_s"), "s")]
+                     br._m("prime.network_wait_seconds", md("prime_wait_s"), "s"), br._m("prime.wait_before_root_f_seconds", md("prime_wait_before_root_f_s"), "s")]
         if a.rtt_ms is not None:
             meas.append(br._m("net.rtt_probe_ms", a.rtt_ms, "ms"))
     if rust:

@@ -1304,7 +1304,7 @@ serves them, so the whole cell is the interactive object of §0 and the bound is
 * **Cost:** one RTT per prime round, sequential. Before root_F they are on the critical path (Flock's `Commit`, and so
   all of Flock's rounds, wait for root_F); after y they overlap Flock. Each round is 45 bytes up and 13 + 24 n down.
   `times.json` / the result record `session.prime_rounds`, `session.prime_rounds_before_root_f`, the prime bytes each
-  way, `t.prime_network_wait` and `t.prime_wait_before_root_f`; `session.rounds` counts both provers' rounds.
+  way, `prime.network_wait_seconds` and `prime.wait_before_root_f_seconds`; `session.rounds` counts both provers' rounds.
 * **G2 (offline Flock replay):** the record also keeps root_F, every root_B and the committed public words.
   `flock-link replay --session DIR` rebuilds the session from `session.json` under the verifier's own configuration
   and statement (`Server::from_record`: the hello, C4 on the public words, each rep's root against root_B, the link
