@@ -378,3 +378,20 @@ def test_replica_rows_are_confirmed_from_the_listing_not_a_head_per_blob(env, mo
     heads.clear()
     rep = PA.run(here.root, env / "fresh-2")
     assert rep["ok"] and heads and all(k.endswith("0") for k in heads if k.startswith("objects/"))
+
+
+def test_a_replica_head_that_fails_every_try_is_named_by_key(env, monkeypatch):
+    here = LocalStore()
+    art = here.put_artifact("fixture/v1", {"s": 1}, file=_file(env / "in", "s.bin", b"x"))
+    here.push(art)
+    monkeypatch.setattr(FsRemote, "list_meta", lambda self, prefix, progress=None, keep=None: {})     # nothing listed: every key goes to HEAD
+    real_head = FsRemote.head
+
+    def head(self, key):
+        if key.startswith("objects/"):
+            raise TimeoutError(f"HEAD {key}: no response within the 30s deadline on all 2 tries")
+        return real_head(self, key)
+    monkeypatch.setattr(FsRemote, "head", head)
+    rep = PA.run(here.root, env / "fresh")
+    why = rep["replicas"]["not_confirmed"][art]
+    assert not rep["ok"] and why.startswith("objects/sha256/") and "HEAD failed after its retries" in why

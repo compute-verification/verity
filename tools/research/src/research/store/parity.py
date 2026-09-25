@@ -246,14 +246,23 @@ def compare(store_root: Path, fresh: LocalStore, *, jobs: int = 32, render: bool
     if late:
         prog.phase("replicas: HEAD for keys the listing did not show", len(late))
 
+        head_errors: dict[str, str] = {}
+
         def head(k: str) -> tuple[str, tuple | None]:
             try:
                 hd = r.head(k)
+            except Exception as e:  # noqa: BLE001  (a check that exhausted its retries: named in the report, never a hang)
+                head_errors[k] = f"{type(e).__name__}: {e}"
+                return k, None
             finally:
                 prog.tick()
             return k, (hd["bytes"], hd.get("etag")) if hd else None
         with ThreadPoolExecutor(max_workers=max(1, jobs)) as ex:
             seen.update({k: v for k, v in ex.map(head, late) if v is not None})
+        for art, items in need.items():
+            bad = next((k for k, _, _ in items if k in head_errors), None)
+            if bad:
+                failed[art] = f"{bad}: HEAD failed after its retries ({head_errors[bad]})"
     local_blobs = sorted({k for items in need.values() for k, _, m in items
                           if m is None and k in seen and is_md5_etag(seen[k][1]) and (store_root / k).is_file()})
     prog.phase("replicas: local blobs' MD5 against the remote's ETag", len(local_blobs))
@@ -269,6 +278,8 @@ def compare(store_root: Path, fresh: LocalStore, *, jobs: int = 32, render: bool
         local_md5 = dict(ex.map(md5_of, local_blobs))
     counts = {"etag_verified": 0, "remote_only": 0}
     for art, items in need.items():
+        if art in failed:
+            continue
         for k, n, mmd5 in items:
             got = seen.get(k)
             if got is None:
@@ -362,6 +373,9 @@ def run(store_root: Path, fresh_dir: Path, *, jobs: int = 32, render: bool = Fal
         prog.stop()
     rep["build"] = built
     rep["unexplained"] = [f"remote key not fetched: {e}" for e in built["errors"]] + rep["unexplained"]
+    remote = getattr(fresh, "_remote", None)
+    rep["remote_requests"] = {"deadline_hits": list(getattr(remote, "deadline_hits", []) or []),
+                              "exhausted": list(getattr(remote, "exhausted", []) or [])}
     rep["ok"] = not rep["unexplained"]
     rep["seconds"] = round(time.monotonic() - t0, 1)
     return rep
@@ -397,6 +411,10 @@ def format_report(rep: dict) -> list[str]:
     if any(late.values()):
         lines.append(f"{'during run':<10} written to the store under test while parity ran (concurrency; not compared): {late['manifests']} "
                      f"manifests, {late['attempts']} attempts, {late['labels']} labels")
+    rr = rep.get("remote_requests") or {}
+    if rr.get("deadline_hits") or rr.get("exhausted"):
+        lines.append(f"{'requests':<10} {len(rr.get('deadline_hits') or [])} cut off by their deadline, {len(rr.get('exhausted') or [])} failed on "
+                     f"every try: " + ", ".join(f"{x['method']} {x['key']}" for x in (rr.get("exhausted") or rr.get("deadline_hits"))[:5]))
     for u in rep["unexplained"][:30]:
         lines.append(f"  UNEXPLAINED {u}")
     lines.append("PARITY OK: every difference is explained" if rep["ok"] else f"PARITY FAILED: {len(rep['unexplained'])} unexplained difference(s)")

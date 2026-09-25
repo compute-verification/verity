@@ -71,6 +71,7 @@ import io
 import os
 import socket
 import ssl
+import sys
 import threading
 import time
 import urllib.error
@@ -100,6 +101,8 @@ PARTS_SIDECAR_SCHEMA = "research/parts/v1"
 REQUEST_DEADLINE_S = 180.0       # a request's hard wall-clock deadline to its headers; a GET body then gets max(this, bytes / MIN_BODY_RATE)
 MIN_BODY_RATE = 64 * 1024        # bytes/s a GET body may not fall below on average before its deadline cuts it off
 MIN_UPLOAD_RATE = 8 * 1024       # the same for a request body (a PUT from the laptop's 25-220 KB/s uplink must still finish)
+HEAD_DEADLINE_S = 30.0           # a HEAD carries no body: a much shorter deadline, and HEAD_RETRIES tries after the first
+HEAD_RETRIES = 1
 RETRIES = 3                     # transient 5xx / 429 / connection errors: 4 tries, 1 s, 2 s, 4 s backoff (or the service's Retry-After)
 RETRY_BACKOFF_S = 1.0
 RETRY_AFTER_MAX_S = 30.0        # a Retry-After above this is capped (the try budget stays bounded)
@@ -456,6 +459,8 @@ class S3Remote:
         self._existed: deque[bool] = deque(maxlen=ADAPT_WINDOW)   # per small object: did its key exist already? (module docstring, ADAPTIVE)
         self.pool = _Pool(self.scheme, self.host, timeout, limit=max(1, int(max_pool_connections)))
         self.requests = 0                           # requests sent (a bench / test statistic; the pool counts connections opened)
+        self.deadline_hits: list[dict] = []         # {method, key, try, of, deadline_s} per request cut off by its deadline (logged too)
+        self.exhausted: list[dict] = []             # {method, key, error} per request that failed on every try
         self._stats_lock = threading.Lock()
 
     def describe(self) -> str:
@@ -499,13 +504,15 @@ class S3Remote:
             extra["content-length"], extra["content-type"] = str(size), "application/octet-stream"
         target = uri_encode(path, keep_slash=True) + (("?" + canonical_query(query)) if query else "")
         url = urllib.parse.urlunsplit((self.scheme, self.host, uri_encode(path, keep_slash=True), canonical_query(query), ""))
+        retries = HEAD_RETRIES if method == "HEAD" else RETRIES
+        deadline = HEAD_DEADLINE_S if method == "HEAD" else REQUEST_DEADLINE_S + size / MIN_UPLOAD_RATE
         try:
-            for attempt in range(RETRIES + 1):
+            for attempt in range(retries + 1):
                 if isinstance(body, Path):
                     data.seek(0)
                 signed = sign_headers(method, self.host, path, query, extra, payload_hash, self.access_key, self.secret_key, self.region, self._now())
                 conn = self.pool.acquire()
-                dog = _Watchdog(conn, REQUEST_DEADLINE_S + size / MIN_UPLOAD_RATE)
+                dog = _Watchdog(conn, deadline)
                 try:
                     with self._stats_lock:
                         self.requests += 1
@@ -515,9 +522,15 @@ class S3Remote:
                 except _RETRIABLE as e:
                     dog.cancel()
                     self.pool.discard(conn)
-                    if attempt == RETRIES:
+                    if dog.fired:
+                        self._deadline_hit(method, key, attempt + 1, retries + 1, deadline)
+                    if attempt == retries:
+                        err = (f"{method} {key}: no response within the {deadline:.0f}s deadline on all {retries + 1} tries" if dog.fired
+                               else f"{method} {key}: {type(e).__name__}: {e}")
+                        with self._stats_lock:
+                            self.exhausted.append({"method": method, "key": key, "error": err})
                         if dog.fired:
-                            raise TimeoutError(f"{method} {key}: no response within the {REQUEST_DEADLINE_S:.0f}s request deadline") from e
+                            raise TimeoutError(err) from e
                         raise
                     time.sleep(RETRY_BACKOFF_S * (2**attempt))
                     continue
@@ -534,6 +547,12 @@ class S3Remote:
             if isinstance(body, Path):
                 data.close()
         raise AssertionError("unreachable")
+
+    def _deadline_hit(self, method: str, key: str, n: int, of: int, deadline: float) -> None:
+        with self._stats_lock:
+            self.deadline_hits.append({"method": method, "key": key, "try": n, "of": of, "deadline_s": deadline})
+        print(f"research: {method} {key}: no response within {deadline:.0f}s (try {n} of {of})" + ("; retrying" if n < of else ""),
+              file=sys.stderr, flush=True)
 
     def head(self, key: str) -> dict | None:
         """`{"bytes": n, "etag": <hex without quotes, or None>}`, or None when absent."""
@@ -803,6 +822,7 @@ class S3Remote:
                         f.write(chunk)
                         n += len(chunk)
                     if r.watchdog is not None and r.watchdog.fired:
+                        self._deadline_hit("GET", key, attempt + 1, RETRIES + 1, REQUEST_DEADLINE_S)
                         raise TimeoutError(f"GET {key}: body not complete within its deadline ({n} bytes)")
                     if want is not None and n != int(want):
                         raise http.client.IncompleteRead(b"", int(want) - n)
@@ -813,9 +833,11 @@ class S3Remote:
                 if e.code == 404:
                     raise KeyError(key) from None
                 raise
-            except _RETRIABLE:
+            except _RETRIABLE as e:
                 tmp.unlink(missing_ok=True)
                 if attempt == RETRIES:
+                    with self._stats_lock:
+                        self.exhausted.append({"method": "GET", "key": key, "error": f"{type(e).__name__}: {e}"})
                     raise
                 time.sleep(RETRY_BACKOFF_S * (2**attempt))
             except BaseException:
