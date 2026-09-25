@@ -424,9 +424,11 @@ def reverify(st: Any, result: str, v: Verifier, *, by: str | None, jobs: int, wo
     d = work / result.removeprefix("art:")[:16]
     try:
         st.fetch(rep.run_files, d)
-        pdir = next((d / n for n in ("proofs", "dumps") if (d / n / "manifest.json").is_file()), None)
+        # a tree published as the proof dir itself (manifest.json + system.bin at its root) is read in place
+        pdir = next((d / n for n in ("proofs", "dumps") if (d / n / "manifest.json").is_file()), None) or \
+            (d if (d / "manifest.json").is_file() and (d / "system.bin").is_file() else None)
         if pdir is None:
-            rep.why = [f"{rep.run_files} has no proofs/ or dumps/ manifest.json"]
+            rep.why = [f"{rep.run_files} has no proofs/ or dumps/ manifest.json (nor manifest.json + system.bin at its root)"]
             return rep
         man = json.loads((pdir / "manifest.json").read_text())
         rep.mode = man.get("mode") or params.get("mode")
