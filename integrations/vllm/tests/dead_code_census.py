@@ -14,10 +14,10 @@ by name in the keep-list.
 
 STATIC REACHABILITY: an ast import graph over every `.py` under the integration root.  Edges: `import a.b`, `from a.b import c`
 (`c` as a submodule when it is one), relative imports, the parents of every imported dotted name (their `__init__`), string
-literals that name an integration module (`importlib.import_module("verity_vllm.input_provenance.analytic")`, dotted registry paths), f-string
+literals that name an integration module (`importlib.import_module("verity_vllm.program.model")`, dotted registry paths), f-string
 prefixes (`f"verity_vllm.program.registry.{m}"` + every short literal of the same file that completes to a module), path literals
-(`verity_vllm/acquire/hidden_gpu_src/hidden_gpu.py`) and unique `<name>.py` literals joined at runtime.  Anything reachable from a
-root is LIVE.  `verity_vllm/observe/profiles/**` is resolved by name at runtime: the whole package is reachable when any consumer is.
+(`verity_vllm/commit/committer/hidden_gpu_src/hidden_gpu.py`) and unique `<name>.py` literals joined at runtime.  Anything reachable from a
+root is LIVE.  `verity_vllm/engine/profiles/**` is resolved by name at runtime: the whole package is reachable when any consumer is.
 
 CLASSES (per module of the census packages):
     LIVE       static_reachable or dynamically_imported
@@ -57,17 +57,17 @@ PATH_LITERAL_RE = re.compile(rf"^(?:{_TOPS})(?:/[A-Za-z0-9_.-]+)+\.py$")
 
 #: Other lanes own these; the census reports them, the deletion plan never touches them (the keep-list names the non-live ones).
 PROTECTED = (
-    "verity_vllm/observe/profiles/",
+    "verity_vllm/engine/profiles/",
     "verity_vllm/query/",
     "verity_vllm/acquire/",
-    "verity_vllm/check/global_match.py",
+    "verity_vllm/check/match/global_match.py",
     "verity_vllm/correspondence/runtime.py",
 )
 
 #: row_pod.sh's Match runs run_config with `--skip census,...,golden,...`: the modules those stages would `-m` are statically reachable
 #: (run_config's stage table names them) but never run by the live launcher.  Reported, not deleted.
-RUN_CONFIG_SKIPPED_STAGE_MODULES = ("verity_vllm.check.census", "verity_vllm.check.noninterference", "verity_vllm.check.fold_compare",
-                                    "verity_vllm.input_provenance.root_policy", "verity_vllm.check.golden", "verity_vllm.check.operand_provenance")
+RUN_CONFIG_SKIPPED_STAGE_MODULES = ("verity_vllm.properties.census", "verity_vllm.properties.noninterference", "verity_vllm.check.fold_compare",
+                                    "verity_vllm.check.root_policy", "verity_vllm.properties.golden", "verity_vllm.check.operand_provenance")
 
 ARTIFACT_DELETE_SCOPES = ("verity_vllm/ops/fixtures/",)
 #: Unreferenced by name but read through a name pattern (file -> the reader).
@@ -205,7 +205,7 @@ class Graph:
             if not TOP_MODULE_RE.match(pkg) or not self.exists(pkg):
                 continue
             self.add(src_mod, pkg)
-            if pkg == "verity_vllm.observe.profiles":                     # resolved by name from the workload's case at runtime
+            if pkg == "verity_vllm.engine.profiles":                     # resolved by name from the workload's case at runtime
                 for m in self.file_of:
                     if m.startswith(pkg + "."):
                         self.add(src_mod, m)
@@ -435,12 +435,12 @@ def build(imported: set[str] | None, with_dates: bool, with_artifacts: bool) -> 
     roots = set(roots_by_mod)
     live = g.closure(roots)
     static = set(live)
-    profiles_mods = {m for m in g.file_of if m.startswith("verity_vllm.observe.profiles.")}
+    profiles_mods = {m for m in g.file_of if m.startswith("verity_vllm.engine.profiles.")}
     live_sans_profiles = g.closure(roots, skip=profiles_mods)
-    saved = set(g.edges["verity_vllm.harness.run_config"])
-    g.edges["verity_vllm.harness.run_config"] -= set(RUN_CONFIG_SKIPPED_STAGE_MODULES)
+    saved = set(g.edges["verity_vllm.pipeline.match"])
+    g.edges["verity_vllm.pipeline.match"] -= set(RUN_CONFIG_SKIPPED_STAGE_MODULES)
     skipped_only = {m for m in live - g.closure(roots) if not is_test_file(g.file_of[m])}
-    g.edges["verity_vllm.harness.run_config"] = saved
+    g.edges["verity_vllm.pipeline.match"] = saved
     if imported:
         live |= {m for m in imported if g.exists(m)}
     shell_refs = all_shell_refs(g)

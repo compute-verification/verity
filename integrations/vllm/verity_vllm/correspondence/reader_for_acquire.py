@@ -30,7 +30,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from verity_vllm.query.manifest.format import collector_path, split_name
-from verity_vllm.correspondence.runtime_tree import RUNNER_PATH, RUNTIME_TREE_SCHEMA, RuntimeTree, mro_names, runtime_tree_from_paths, runtime_tree_of
+from verity_vllm.observe.runtime_tree import RUNNER_PATH, RUNTIME_TREE_SCHEMA, RuntimeTree, mro_names, runtime_tree_from_paths, runtime_tree_of
 from verity_vllm.correspondence.runtime import NAMESPACE, SCHEMA, RuntimeCorrespondence, read_program_dir
 
 SOURCES = ("correspondence", "v1_annotations")

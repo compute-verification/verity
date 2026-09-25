@@ -549,7 +549,7 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
         prov["rules_applied"] = sorted({a["rule"] for a in ctx.applications})
         # runtime correspondence (`runtime-correspondence/v1`): per Call the owning module, the source occurrence and the return /
         # argument slots -- data beside the Program, under ONE annotation namespace, digested apart (annotations never enter program_digest)
-        from verity_vllm.correspondence.emit import NAMESPACE as _CORR, emit_correspondence
+        from verity_vllm.program.frontend.emit import NAMESPACE as _CORR, emit_correspondence
         from verity_vllm.correspondence.runtime import correspondence_digest
         corr_doc = emit_correspondence(ctx, flat_sd.body, rank=rank)
         corr_digest = correspondence_digest(corr_doc)

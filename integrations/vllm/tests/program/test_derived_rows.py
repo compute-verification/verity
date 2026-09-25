@@ -3,7 +3,7 @@ semantics, gate for gate: the scalar kernels match the primitives on random + ad
 row evaluators match `evaluate_call` transcripts of the composites on small shapes, **including the interior
 gates** a derived boundary would select (norm `inv`/`s`, per-block attention (m, l, o), silu `mid`).
 
-Needs the numerics lane's MUFU tables (`verity_vllm.program.numerics`, prebuilt .so probes not required —
+Needs the numerics lane's MUFU tables (`verity_vllm.program.kernels`, prebuilt .so probes not required —
 tables load from the committed sweep artifacts); skipped when unavailable."""
 
 from __future__ import annotations
@@ -243,7 +243,7 @@ def test_hopper_wgmma_port_total_rules_and_no_veritor_import_at_evaluation():
 def test_ampere_tc_dot16_port_equals_silicon_total_and_the_mma_finite_model_on_every_encoding():
     """[R17 dense, rev M-0287 / revb M-0290, int-3] `prims.AmpereBF16TcDot16` now evaluates through `tc_total.tc_dot_total(AMPERE_BF16_M16N8K16)`
     (pure Python, 3.11): == `silicon_total.tc_dot_total(AMPERE_BF16_DOT16_TOTAL)` word for word on EVERY encoding, and on finite lanes
-    == `verity_vllm.program.numerics.mma.tc_dot(AMPERE_BF16)` == `silicon.tc_dot(AMPERE_BF16_M16N8K16)` (the R15/R16 relation, unchanged).
+    == `verity_vllm.program.kernels.mma.tc_dot(AMPERE_BF16)` == `silicon.tc_dot(AMPERE_BF16_M16N8K16)` (the R15/R16 relation, unchanged).
     The two documented differences from the retired mma-based extension path are STATED here as facts about non-finite outcomes only:
     NaN word 0x7FFFFFFF (was 0x7FC00000) and a group's finite overflow counting as its infinity beside an infinite operand of the
     other sign (-> NaN; was that infinity)."""
@@ -293,13 +293,13 @@ def test_ampere_tc_dot16_port_equals_silicon_total_and_the_mma_finite_model_on_e
 
 def test_ampere_tc_dot16_total_rules_and_no_veritor_import_at_evaluation():
     """Runs on every interpreter (the pods' 3.11 included): the registered AmpereBF16TcDot16 evaluates without `veritor` or
-    `verity_vllm.program.numerics.mma` and follows silicon_total's rules: grouped (8, 8) truncating 25-bit accumulation; NaN / inf*0 /
+    `verity_vllm.program.kernels.mma` and follows silicon_total's rules: grouped (8, 8) truncating 25-bit accumulation; NaN / inf*0 /
     mixed infinities -> 0x7FFFFFFF; a one-signed infinity -> that infinity; group overflow is a sticky infinity; +0; subnormals."""
     import sys
     from verity_vllm.program.registry import prims as P
     one, two, z, inf, ninf, nan, big = 0x3F80, 0x4000, 0x0000, 0x7F80, 0xFF80, 0x7FC0, 0x7F7F
     ones = [one] * 16
-    saved = {k: sys.modules.get(k) for k in ("veritor", "veritor.core", "veritor.core.silicon", "verity_vllm.program.numerics", "verity_vllm.program.numerics.mma")}
+    saved = {k: sys.modules.get(k) for k in ("veritor", "veritor.core", "veritor.core.silicon", "verity_vllm.program.kernels", "verity_vllm.program.kernels.mma")}
     try:
         for k in saved:
             sys.modules[k] = None
@@ -470,10 +470,10 @@ def test_attention_rows_fa2_equals_the_registered_attention_v3_definition(T):
 def test_attention_rows_fa3_equals_the_registered_attention_v2_hopper_definition_and_the_cpp_fa3_model(T, geometry):
     """[R17 dense, BRIEF §4] `attention_rows(dot_prim=HopperBF16WgmmaDot16_v1, inv_prim=Fa3InvSum_v1)` == `Attention_v2{T, NH, KVH, D,
     BN, DOT=Hopper, INV=Fa3InvSum}` gate for gate (the sm_90 FA3 chain: wgmma 16:26:-133 step, the Program's kBlockN, `? 0 : rcp`) AND ==
-    the independent C++ model `verity_vllm.program.numerics.fa3_model.fa3_rows` (the arithmetic MEASURED exact on the H100 production
+    the independent C++ model `verity_vllm.program.kernels.fa3_model.fa3_rows` (the arithmetic MEASURED exact on the H100 production
     capture, hopper-profile.md) on Qwen2.5-1.5B geometry (NH=12, KVH=2, D=128, BN=128) and Llama-3.2-1B's (NH=32, KVH=8, D=64, BN=192
     -- the tile the H100 B8 1024/128 Program of record binds at T >= 2) -- two implementations, one word sequence."""
-    from verity_vllm.program.numerics import fa2_relation, fa3_model
+    from verity_vllm.program.kernels import fa2_relation, fa3_model
 
     from verity.ir.defs import bind
     from verity.ir.evaluate import evaluate_call

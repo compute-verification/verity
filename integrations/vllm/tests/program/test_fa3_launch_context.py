@@ -1,7 +1,7 @@
 """[R15 hopper HOP-03, M-0225] The FA3 tile rule reads the LAUNCH's max_seqlen_q, not the request's own rows.
 
 Torch-free: the registry helpers (`parse_launch_context`, `launch_seqlen_q`, `attention_geometry` on a cc 9.0 / cc 8.9 profile) and the
-workload-side derivation (`verity_vllm.harness.launch_context`).  The measured case: Llama-3.2-1B (NH 32, KVH 8, D 64: g = 4) -- an 8-token
+workload-side derivation (`verity_vllm.pipeline.launch_context`).  The measured case: Llama-3.2-1B (NH 32, KVH 8, D 64: g = 4) -- an 8-token
 prompt alone runs the 64 x 192 tile (kBlockN 192), the same prompt in a prefill launch with a 1024-token prompt runs 192 x 128 (kBlockN 128).
 """
 from __future__ import annotations
@@ -12,7 +12,7 @@ import pytest
 
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.registry import targets as TG
-from verity_vllm.harness import launch_context as LC
+from verity_vllm.pipeline import launch_context as LC
 
 def _prof(cc):
     return TargetProfile.default().with_overrides(compute_capability=tuple(cc))

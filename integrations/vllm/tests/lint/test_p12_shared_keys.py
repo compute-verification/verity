@@ -11,8 +11,8 @@ Checked today, against ``allowlists/p12_shared_keys.json``:
   how code identity gets defined outside the one ``code_identity()``.
 
 The owners, ``config.py`` (row-id grammar) and ``pipeline/identity.py`` (code identity), do not exist yet; the modules
-that become them (``harness/target_family.py`` into ``config.py``; ``harness/source_identity.py`` and
-``harness/release_json.py`` into ``identity``) are already exempt.  Not linted: the dtype vocabulary and ``RowSpec``
+that become them (``target_family.py`` into ``config.py``; ``pipeline/source_identity.py`` and
+``pipeline/release_json.py`` into ``identity``) are already exempt.  Not linted: the dtype vocabulary and ``RowSpec``
 (no single literal shape to scan for), and the rule's test that editing a core file in a temp tree changes the identity.
 """
 from __future__ import annotations
@@ -25,8 +25,8 @@ from . import _ratchet as R
 
 NAME = "p12_shared_keys"
 RULE = "P12 (each shared key has one owner)"
-OWNERS = frozenset({"verity_vllm/config.py", "verity_vllm/pipeline/identity.py", "verity_vllm/harness/target_family.py",
-                    "verity_vllm/harness/source_identity.py", "verity_vllm/harness/release_json.py"})
+OWNERS = frozenset({"verity_vllm/config.py", "verity_vllm/pipeline/identity.py", "verity_vllm/target_family.py",
+                    "verity_vllm/pipeline/source_identity.py", "verity_vllm/pipeline/release_json.py"})
 ROW_REGEX = re.compile(r"__\(?(?:\?:)?(?:tp|bi|b|i|o|c)?\(?\\d|__\[\^_\]|\[\^_\]\+__")
 CODE_ROOT = re.compile(r"^(?:\.\./)*(verity_vllm|verity|research|integrations/vllm|packages/verity|tools/research)(?:/|$)")
 
@@ -80,9 +80,9 @@ def test_detectors_on_examples() -> None:
         "    m = re.search(r'__b(\\d+)__', row)\n"
         "    return row.split('__')[4], ['git', 'status', '--', 'verity_vllm', '../../packages/verity/src/verity']\n"
     )
-    got = sorted((v.kind, v.detail) for v in file_violations(bad, "verity_vllm/harness/x.py"))
+    got = sorted((v.kind, v.detail) for v in file_violations(bad, "verity_vllm/pipeline/x.py"))
     assert got == [("root-list", "verity_vllm"), ("root-list", "verity_vllm, ../../packages/verity/src/verity"),
                    ("row-id-regex", "__b(\\d+)__"), ("row-id-regex", "__tp(\\d+)__"), ("row-id-split", "split('__')")], got
     good = "MODS = ('verity_vllm.program', 'verity_vllm.check')\nKEY = 'a__b'\nx = name.split('_')\n"
-    assert file_violations(good, "verity_vllm/harness/x.py") == []
-    assert file_violations(bad, "verity_vllm/harness/target_family.py") == []
+    assert file_violations(good, "verity_vllm/pipeline/x.py") == []
+    assert file_violations(bad, "verity_vllm/target_family.py") == []

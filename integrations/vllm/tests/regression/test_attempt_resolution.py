@@ -53,7 +53,7 @@ def _stage_run(tmp: Path, stage: str, *, params: dict, inputs: dict, files: dict
     job = json.loads((d / "job.json").read_text())
     job["run"]["id"] = rid
     job["ownership"]["job"] = rid
-    job["store"] = {"tool": {"name": f"vllm.{stage}", "version": "1", "spec": f"integrations.vllm.verity_vllm.harness.research_tools:VLLM_{stage.upper()}"},
+    job["store"] = {"tool": {"name": f"vllm.{stage}", "version": "1", "spec": f"integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_{stage.upper()}"},
                     "key_params": KEY_PARAMS + (["pairs"] if stage == "commit" else []), "key_conditions": ["hw.family"],
                     "params": params, "key_params_resolved": {k: params.get(k) for k in KEY_PARAMS}, "inputs": inputs, "closure": {},
                     "campaign": "test"}
@@ -249,7 +249,7 @@ def test_row_config_grammar_matches_the_tool_declaration():
     """The harness's copy of the row-id grammar agrees with research_tools.row_config (which key params the Attempt carries)."""
     sys.path.insert(0, str(RESEARCH_SRC))
     sys.path.insert(0, str(store_io.REPO_ROOT))
-    from integrations.vllm.verity_vllm.harness import research_tools as RT
+    from integrations.vllm.verity_vllm.pipeline import research_tools as RT
     for rid in (ROW, "mistral-7b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager", "gemma2-2b__bf16__h100__tp1__b1__i512__o64__burst__stochastic__bi-graph", "bad"):
         assert AP.row_config(rid) == RT.row_config(rid), rid
     assert AP.CONFIG_KEYS == ("row", "model", "revision", "query", *AP.ROW_FIELDS)

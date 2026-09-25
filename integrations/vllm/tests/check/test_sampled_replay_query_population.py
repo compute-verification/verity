@@ -20,7 +20,7 @@ import json
 import pytest
 
 from verity_vllm.check.commit_verdict import _query_population_scope, commit_verdict
-from verity_vllm.check import sampled_replay as SR
+from verity_vllm.check.replay import sampled_replay as SR
 from tests.check import test_sampled_replay as T
 from tests.check.test_sampled_replay import moe_world, world  # noqa: F401  -- fixtures
 

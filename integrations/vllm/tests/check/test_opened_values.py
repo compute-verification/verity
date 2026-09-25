@@ -15,7 +15,7 @@ import pytest
 from tests.check import test_oracle_compare as TOC
 from tests.check.opened import commit_host_steps, commit_steps, meta, retained_block
 from verity_vllm.check import oracle_compare as OC
-from verity_vllm.check import sampled_replay as SR
+from verity_vllm.check.replay import sampled_replay as SR
 
 QKV = (0, "model.layers.0.self_attn.qkv_proj/0")
 IDS = (0, "model.embed_tokens/in")
@@ -109,7 +109,7 @@ def _held_as_collected(com, kind: str, W: int = 512) -> None:
     inside it), whole (`block`) or on host as pinned windows (`_HostWindows`) or byte ranges (`_HostRanges`) over the same bytes."""
     import torch
 
-    from verity_vllm.acquire import native_collect as NC
+    from verity_vllm.commit.committer import native_collect as NC
 
     for s, (blk, used) in list(com._gpu_blocks.items()):
         n = blk.numel()

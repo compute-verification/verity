@@ -12,12 +12,12 @@ from dataclasses import dataclass
 
 import pytest
 
-from verity_vllm.observe import fold as fold_mod
+from verity_vllm.observe.fold import fold as fold_mod
 from verity_vllm.observe.events import (DispatchEnter, DispatchExit, Root, RunHeader, SampleEnd, StepEnd, StepLink, StepStart,
                                    StorageAlloc, TritonLaunch, ViewDesc)
-from verity_vllm.observe.fold import FoldError, fold, instance_nodes
-from verity_vllm.observe.memory import MemoryStats, Unresolved
-from verity_vllm.observe.resolver import Compute, Gather, GatherMany, Group, PerRow, Profile, Shared, Transparent
+from verity_vllm.observe.fold.fold import FoldError, fold, instance_nodes
+from verity_vllm.observe.fold.memory import MemoryStats, Unresolved
+from verity_vllm.observe.fold.resolver import Compute, Gather, GatherMany, Group, PerRow, Profile, Shared, Transparent
 from verity.ir.defs import bind
 from verity.ir.refs import Affine, Explicit, concat
 from verity_vllm.program.registry import b1
@@ -411,8 +411,8 @@ class StubMemory:
 
 def _real_memory_available() -> bool:
     try:
-        from verity_vllm.observe.memory import MemoryModel
-        from verity_vllm.observe.views import row_view
+        from verity_vllm.observe.fold.memory import MemoryModel
+        from verity_vllm.observe.fold.views import row_view
         MemoryModel()
         row_view(V(1, (2, 3)), 1)
         return True

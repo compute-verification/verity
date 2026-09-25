@@ -7,7 +7,7 @@ derived, and per sampled row (step, row, request, event, pos, served token, reco
 status) as a sha256; plus the snapshot steps the stochastic Match took (`match/run.json` `snapshot_steps`: EVERY engine step -- the value
 check is complete only when every sampled row is snapshotted).
 
-Recomputed: `verity_vllm.check.stoch_recompute.recompute_run` with the CURRENT code over the record's capture (`match/capture/
+Recomputed: `verity_vllm.check.replay.stoch_recompute.recompute_run` with the CURRENT code over the record's capture (`match/capture/
 log.jsonl.gz` + `snapshots.json` + the value files the sampler chain reads -- fixtures.toml pins exactly those, not the 870 MB of every
 snapshot), the in-repo workload manifest and the row's Build documents (`build_request*/result.json`: the Program's S;
 `build_workload/workload_program.json`: the stop rule); the snapshot steps are the steps the capture's `snapshots.json` dumped.  In
@@ -81,7 +81,7 @@ def actual(row: resolver.Row) -> dict:
         run_p = row.candidate("match/run.json")
         run = json.load(open(run_p)) if run_p is not None else {}
         return dict(lift(json.load(open(ms_p)), run.get("snapshot_steps")), source="candidate")
-    from verity_vllm.check import stoch_recompute as SR
+    from verity_vllm.check.replay import stoch_recompute as SR
     from verity_vllm.check.fold_compare import SnapshotStore
     capture = [rel for rel in row.files if rel.startswith("match/capture/")]
     if "match/capture/log.jsonl.gz" not in capture or "match/capture/snapshots.json" not in capture:

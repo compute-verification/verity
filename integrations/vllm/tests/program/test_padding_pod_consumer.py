@@ -12,7 +12,7 @@ import pytest
 
 from verity_vllm.commit import binding as B
 from verity_vllm.commit import padding_steps as PS
-from verity_vllm.acquire.native_host import NativeHostCommitter
+from verity_vllm.commit.committer.native_host import NativeHostCommitter
 from verity_vllm.commit.hidden_engine import bind_root
 from verity_vllm.commit import fasttree as ft
 

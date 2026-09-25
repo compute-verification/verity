@@ -13,14 +13,14 @@ import json
 
 from verity.verification.query import ValueRef as R
 from verity_vllm.check import oracle_compare as OC
-from verity_vllm.check.sampled_replay import form_b_families
+from verity_vllm.check.replay.sampled_replay import form_b_families
 from verity_vllm.query.manifest import format as MF
 from tests.check.test_oracle_compare import ROWS, U0, U1, H, _exploded_norm_match, make_match, reader
 from tests.check.test_oracle_compare_promoted_key import CONSUMER_OP, PRODUCER_OP, _add_promoted, _promoted_bmap
 from verity_vllm.query import program_view as pv
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView
-from verity_vllm.query.v1_bridge import request_manifest
+from verity_vllm.query.required import request_manifest
 
 NORM, MLP, LAYER = "model.layers.0.input_layernorm", "model.layers.0.mlp", "model.layers.0"
 EMBED_W, NORM_W, MLP_W = "model.embed_tokens.weight", f"{NORM}.weight", f"{MLP}.weight"

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import time
 
-from verity_vllm.check import program_compare as C
+from verity_vllm.check.match import program_compare as C
 
 
 def test_divergence_report_locates_the_first_divergence_in_full_coordinates():

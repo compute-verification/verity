@@ -1,4 +1,4 @@
-"""M2 torture suite for the versioned memory model (`verity_vllm.observe.memory`), fully synthetic.
+"""M2 torture suite for the versioned memory model (`verity_vllm.observe.fold.memory`), fully synthetic.
 
 Every scenario builds `ViewDesc`s by hand over pretend allocations and uses `verity.ir.refs` objects as the
 values the fold would hand the model (`Affine("n", k, 0, count)` = the whole output of body node k, `("p", i, j)`
@@ -11,8 +11,8 @@ from __future__ import annotations
 import pytest
 
 from verity_vllm.observe.events import StorageAlloc, ViewDesc
-from verity_vllm.observe.memory import MemoryModel, Unresolved, compact_refs, flat_parts
-from verity_vllm.observe.views import element_runs, row_view
+from verity_vllm.observe.fold.memory import MemoryModel, Unresolved, compact_refs, flat_parts
+from verity_vllm.observe.fold.views import element_runs, row_view
 from verity.ir.refs import Affine, Concat, Explicit, Refs, Strided, concat
 
 DEV = "cuda:0"

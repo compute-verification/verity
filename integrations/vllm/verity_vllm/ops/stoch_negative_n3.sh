@@ -31,7 +31,7 @@ MUT=${N3_MUTATION:-}
 # the mutated manifest + the declared schedules before/after (the negative is vacuous if r0's schedule does not change)
 $PY312 - "$WL" "$N/workload.json" "$MUT" "$N/schedules.json" <<'EOF'
 import json, sys
-from verity_vllm.harness.derive_step import declared_live_counts
+from verity_vllm.pipeline.build import declared_live_counts
 from verity_vllm.program.registry.topp_split import splits_for
 w = json.load(open(sys.argv[1])); w0 = json.loads(json.dumps(w))
 def sched(wl, i, nsm=142):
@@ -64,7 +64,7 @@ if [ "$NDIFF" = "0" ]; then
   log "N3: NEGATIVE-VACUOUS (mutation changes no S of r0) -> $N/verdict.json"; exit 3
 fi
 # r0's Program under the WRONG declared chronology (meta-device derivation; no serving)
-$PY -m verity_vllm.harness.derive_step --model "$REPO" --revision "$REV" --wrapper request --LP "$LP0" --T "$T0" \
+$PY -m verity_vllm.pipeline.build --model "$REPO" --revision "$REV" --wrapper request --LP "$LP0" --T "$T0" \
     --max-model-len "$MML" --workload "$N/workload.json" --out "$N/build_request_mut" > "$N/derive.log" 2>&1
 rc1=$?; log "N3: derive (mutated chronology) rc=$rc1 $(tail -n 1 "$N/derive.log" | cut -c1-200)"
 # the row's Match tool against the row's REAL fold: r0's shape -> the mutated Program; every other shape -> the row's Build
@@ -74,7 +74,7 @@ for dd in "$D"/build_request_LP*_T*; do
   [[ "$(basename "$dd")" == "build_request_LP${LP0}_T${T0}" ]] && continue
   DERIVED+=(--derived "$dd")
 done
-$PY312 -m verity_vllm.correspondence.batch_decomp --oracle "$D/match" "${DERIVED[@]}" --out "$N/match_decomp.json" > "$N/decomp.log" 2>&1
+$PY312 -m verity_vllm.check.match.batch_decomp --oracle "$D/match" "${DERIVED[@]}" --out "$N/match_decomp.json" > "$N/decomp.log" 2>&1
 rc2=$?; log "N3: batch_decomp rc=$rc2"
 $PY312 - "$N" "$rc1" "$rc2" <<'EOF' | tee -a "$OUT/negatives.log"
 import json, os, sys

@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity_vllm.program.numerics import sampling_rng as R
+from verity_vllm.program.kernels import sampling_rng as R
 
 PROFILES = Path(__file__).resolve().parents[2] / "workloads"
 WORKLOADS = ["workload_b0_sampling_temp07", "workload_b0_sampling_topk50_topp09", "workload_b0_sampling_n2", "workload_b0_sampling_2req_seeds"]
@@ -91,7 +91,7 @@ def test_sampled_token_paths():
 # --- the workloads + `load_workload`'s sampling block (the adapter imports torch; exec the pure function instead) ---
 
 def _adapter_fn(name: str):
-    src = (Path(__file__).resolve().parents[2] / "verity_vllm" / "observe" / "vllm_adapter.py").read_text()
+    src = (Path(__file__).resolve().parents[2] / "verity_vllm" / "engine" / "vllm_adapter.py").read_text()
     tree = ast.parse(src)
     ns: dict = {"json": json, "Path": Path, "hashlib": hashlib, "Any": object}
     for node in tree.body:

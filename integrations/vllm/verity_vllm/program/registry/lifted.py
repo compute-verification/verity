@@ -1435,7 +1435,7 @@ def _lag_rule(engine_block: Any) -> int | None:
     """The ONE implementation of the lag rule (R17-1 / SPEC v0.5 A2.2; coord M-0017 "by reference to moe's unit, not a second
     implementation"): GP-01's `eos_lag_rows_declared` on an engine block (`async_scheduling` True → 1, False → 0, anything else → None).
     When moe's `TargetProfile.lag()` lands, this is the one call that moves."""
-    from verity_vllm.program.global_program import eos_lag_rows_declared
+    from verity_vllm.pipeline.global_program import eos_lag_rows_declared
     return eos_lag_rows_declared(engine_block)
 
 

@@ -28,7 +28,7 @@ Two things live here:
    `verity-capture/prefix-linkage/v1`) beside tokens.json.  A slot with no writer in the log is state from outside the observed
    run (a warm server, a previous run): `unlinked`, the checker's hard blocker.
 
-    python -m verity_vllm.observe.prefix_cache gen --tokenizer <dir-or-tokenizer.json> [--out-dir verity_vllm/observe/profiles]
+    python -m verity_vllm.observe.prefix_cache gen --tokenizer <dir-or-tokenizer.json> [--out-dir verity_vllm/engine/profiles]
     python -m verity_vllm.observe.prefix_cache extract <run-dir | capture/log.jsonl.gz> [--out <path>] [--instances instances.jsonl]
 """
 from __future__ import annotations
@@ -89,7 +89,7 @@ def prefix_requests(tok: Any, *, case: str = "B0", seed: int = 0, prefix_tokens:
     seeded paragraph starts (numpy RNG like the generator), tokenized with the served model's tokenizer."""
     import numpy as np
 
-    from verity_vllm.harness import coverage_workloads as gw
+    from verity_vllm.pipeline import coverage_workloads as gw
 
     paras = gw.corpus_paragraphs()
     rng = np.random.default_rng([seed, 0xF1E, 0xC0DE])
@@ -114,7 +114,7 @@ def prefix_requests(tok: Any, *, case: str = "B0", seed: int = 0, prefix_tokens:
 def prefix_workload_docs(tok: Any, *, case: str = "B0", model: str = "HuggingFaceTB/SmolLM2-135M", tokenizer_revision: str | None = None,
                          seed: int = 0, block_size: int = BLOCK_SIZE_ASSUMED) -> dict[str, dict]:
     """{stem: doc} for the warm and the cold file (identical requests; only `engine_args_required` and the labels differ)."""
-    from verity_vllm.harness import coverage_workloads as gw
+    from verity_vllm.pipeline import coverage_workloads as gw
 
     reqs = prefix_requests(tok, case=case, seed=seed)
     sim = gw.simulate_schedule(reqs)
@@ -461,7 +461,7 @@ def evidence(warm_dir: Path, cold_dir: Path | None, *, out: Path | None = None) 
     wl_log = warm_dir / "capture" / "log.jsonl.gz"
     if wl_log.exists():
         rec, dst = extract_run(warm_dir)
-        from verity_vllm.observe import patterns_prefix as PP
+        from verity_vllm.observe.fold import patterns_prefix as PP
 
         doc["linkage_file"] = str(dst)
         doc["linkage_closure"] = rec.get("closure")
@@ -520,7 +520,7 @@ def main(argv: list[str] | None = None) -> int:
     g.add_argument("--case", default="B0")
     g.add_argument("--model", default="HuggingFaceTB/SmolLM2-135M")
     g.add_argument("--seed", type=int, default=0)
-    g.add_argument("--out-dir", default=str(Path(__file__).resolve().parent / "profiles"))
+    g.add_argument("--out-dir", default=str(Path(__file__).resolve().parents[1] / "engine" / "profiles"))
     e = sub.add_parser("extract", help="write capture/prefix_linkage.json for a run dir or a log")
     e.add_argument("run_or_log")
     e.add_argument("--out", default=None)
@@ -536,7 +536,7 @@ def main(argv: list[str] | None = None) -> int:
         print(evidence_text(doc))
         return 0
     if a.cmd == "gen":
-        from verity_vllm.harness import coverage_workloads as gw
+        from verity_vllm.pipeline import coverage_workloads as gw
 
         tok = gw.Tok(a.tokenizer)
         for p in write_workloads(tok, Path(a.out_dir), case=a.case, model=a.model, tokenizer_revision=a.tokenizer_revision, seed=a.seed):

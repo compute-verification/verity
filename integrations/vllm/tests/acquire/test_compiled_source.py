@@ -12,7 +12,7 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity_vllm.acquire import compiled_source as cs  # noqa: E402
+from verity_vllm.acquire.sources import compiled_source as cs  # noqa: E402
 
 cuda = pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 

@@ -30,7 +30,7 @@ Layout::
   optional ``shard``/``expert``), ``weight`` (``param``, optional ``shard``), ``token``
   (``which``: ``input`` | ``sampled``, from the boundary tree), ``boundary`` (``field``), and
   ``const`` (``value``; part of the description's digest, not a committed leaf).
-- ``relation`` is a registry id (:mod:`verity_vllm.check.relations`); ``origin`` is ``captured`` or
+- ``relation`` is a registry id (:mod:`verity_vllm.program.kernels.relations`); ``origin`` is ``captured`` or
   ``derived``; ``decompositions`` are the candidates of Table 2.
 
 :class:`Description` validates the document, resolves symbolic shapes, enumerates the node
@@ -212,7 +212,7 @@ class Node:
     output-linkage check unconditionally requires every authenticated output value of this node
     (and the boundary record leaf linked to it) to satisfy ``value >> declared_domain == 0`` —
     the high container bits are zero — on every audit, independent of both sampling draws
-    (:func:`verity_vllm.check.relations.check_output_linkage` / ``check_output_domains``)."""
+    (:func:`verity_vllm.program.kernels.relations.check_output_linkage` / ``check_output_domains``)."""
     extra: dict[str, Any] = field(default_factory=dict)
 
     def to_json(self) -> dict[str, Any]:

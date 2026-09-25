@@ -19,7 +19,7 @@ from typing import Any, Callable
 
 import torch
 
-from verity_vllm.acquire.native_host import _mro_names
+from verity_vllm.commit.committer.native_host import _mro_names
 from verity_vllm.commit.opened import OpenedReader, OpeningNotVerified
 
 REEXEC_CLASSES = ("Linear", "RMSNorm", "GemmaRMSNorm", "SiluAndMul", "GeluAndMul", "RotaryEmbedding")

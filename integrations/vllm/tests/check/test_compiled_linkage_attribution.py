@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import torch
 
-from verity_vllm.check.compiled_kernel_check import CompiledKernelCheck
+from verity_vllm.check.replay.compiled_kernel_check import CompiledKernelCheck
 
 V, H = 64, 8
 

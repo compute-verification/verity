@@ -18,7 +18,7 @@ import hashlib
 import os
 from typing import Any
 
-from verity_vllm.acquire.native_host import GPU_CHUNK_BYTES, NativeHostCommitter, TensorMeta
+from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, NativeHostCommitter, TensorMeta
 from verity_vllm.check import oracle_compare as OC
 
 PLACEHOLDER = ("placeholder", b"\0" * 4)

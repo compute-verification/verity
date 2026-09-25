@@ -135,7 +135,7 @@ def test_bind_splits_counts_readers_per_progression_exactly_as_the_record_counts
     """compare._bind_splits in compact mode consults the reader count of every candidate Const32 only: a progression over one node is
     `count` reads, a node-index progression (the gathers) is one read of every candidate it visits (bisection), so the binding decision
     (bound / shared / read by a gather) is the record's on the same instance sequence."""
-    from verity_vllm.check import program_compare as C
+    from verity_vllm.check.match import program_compare as C
     from tests.check.test_compare_splits_binding import _prog
 
     def raw(**kw) -> C.Prog:
@@ -183,13 +183,13 @@ def test_bind_splits_counts_readers_per_progression_exactly_as_the_record_counts
 
 
 def test_tp_rank_compare_in_compact_form_is_the_records(tmp_path, monkeypatch):
-    """[R17 D90 x mfast] tp's two-rank D90 fixture (tests/tp/test_tp2_d90_fixture.py) through compare with COMPACT operands:
+    """[R17 D90 x mfast] tp's two-rank D90 fixture (tests/check/test_tp2_d90_fixture.py) through compare with COMPACT operands:
     the PEER canonical source of every collective instance (a progression of reads of the request's peers node, field-relative) expands
     to the record's per-run list on both sides, the positive passes both ranks and every compare negative fails, exactly as in run form."""
     import pytest
-    from verity_vllm.check import program_compare as C
+    from verity_vllm.check.match import program_compare as C
     try:
-        from tests.tp import test_tp2_d90_fixture as T
+        from tests.check import test_tp2_d90_fixture as T
     except ImportError as e:   # pragma: no cover - the fixture needs the resolver/fold stack
         pytest.skip(f"tp2 D90 fixture unavailable: {e}")
 
@@ -228,8 +228,8 @@ def test_tp_rank_compare_in_compact_form_is_the_records(tmp_path, monkeypatch):
     # (rank_match.own_producers_from_record, the one consumer of NODE-space refs from the file) reads the same producers from either store,
     # and the cross-rank verdict over them is the same PASS; every negative above is a compare negative, this leg is the record reader's.
     import os
-    from verity_vllm.harness import run_config as RC
-    from verity_vllm.tp import rank_match as RM
+    from verity_vllm.pipeline import match as RC
+    from verity_vllm.check.match import rank_match as RM
     folds = {r: T.fold_rank(r) for r in (0, 1)}
     prod: dict[str, dict] = {}
     for form in ("runs", "progressions"):
@@ -261,10 +261,10 @@ def test_nothing_beside_the_files_of_record_is_read_a_forged_compact_sidecar_cha
     dir with this fold's true digest / byte sizes / sha256 pasted in -- and, harder, a sidecar carrying rows that would turn the verdict:
     both leave the fast document == the record document, and impl.config.fold_load names the record files and the stored form read."""
     import os
-    from verity_vllm.harness import run_config as RC
-    from verity_vllm.check import program_compare as C
-    from verity_vllm.check import global_match as gm
-    from verity_vllm.check import global_match_fast as GMF
+    from verity_vllm.pipeline import match as RC
+    from verity_vllm.check.match import program_compare as C
+    from verity_vllm.check.match import global_match as gm
+    from verity_vllm.check.match import global_match_fast as GMF
     from verity_vllm.program import instances_form as IF
     from tests.check import test_global_match as T
     gp, oracle = T.assemble([T.R0, T.R1_LATE], tmp_path)
@@ -310,9 +310,9 @@ def test_record_document_states_the_stored_form_it_loaded_like_the_fast_one(tmp_
     same capture are distinguishable BY CONTENT (before n1 both had impl.config absent -> indistinguishable).  Through main() (the CLI
     every row of record runs) on both stores, record and fast; the fast document keeps naming it under impl.config.fold_load too."""
     import os
-    from verity_vllm.harness import run_config as RC
-    from verity_vllm.check import global_match as gm
-    from verity_vllm.check import global_match_fast as GMF
+    from verity_vllm.pipeline import match as RC
+    from verity_vllm.check.match import global_match as gm
+    from verity_vllm.check.match import global_match_fast as GMF
     from tests.check import test_global_match as T
     monkeypatch.delenv(RC.INSTANCES_FORM_ENV, raising=False)
     gp1, o1 = T.assemble([T.R0, T.R1_LATE], tmp_path / "v1")
@@ -383,9 +383,9 @@ def test_persist_program_progressions_form_gives_the_same_prog_and_document_and_
     name the form."""
     import os
     import shutil
-    from verity_vllm.harness import run_config as RC
-    from verity_vllm.check import program_compare as C
-    from verity_vllm.check import global_match as gm
+    from verity_vllm.pipeline import match as RC
+    from verity_vllm.check.match import program_compare as C
+    from verity_vllm.check.match import global_match as gm
     from verity_vllm.program import instances_form as IF
     from tests.check import test_global_match as T
     monkeypatch.delenv(RC.INSTANCES_FORM_ENV, raising=False)
@@ -426,7 +426,7 @@ def test_persist_program_progressions_form_gives_the_same_prog_and_document_and_
         return [strip(v) for v in o] if isinstance(o, list) else o
     d1, d2 = gm.check(gp1, o1), gm.check(gp2, o2)
     assert d1["verdict"] == "PASS" and strip(d1) == strip(d2)
-    from verity_vllm.check import global_match_fast as GMF
+    from verity_vllm.check.match import global_match_fast as GMF
     monkeypatch.setenv(GMF.FLAG, "fast")
     f1, f2 = gm.check(gp1, o1), gm.check(gp2, o2)
     assert strip(f1) == strip(f2) == strip(d1)
@@ -444,10 +444,10 @@ def test_persist_program_writer_is_byte_identical_to_the_generic_conversion(tmp_
     import dataclasses
     import gzip
     import os
-    from verity_vllm.harness import run_config as RC
+    from verity_vllm.pipeline import match as RC
     from verity_vllm.program.compact import file_items_from_refs_json
     from tests.check import test_global_match as T
-    from verity_vllm.observe.fold import fold
+    from verity_vllm.observe.fold.fold import fold
     from verity.ir.refs import runs
     evs = T.batched_log([T.R0, T.R1_LATE, T.R2_LATE], wl_sha=None)
     res = fold(evs, T.profile(), strict=True)

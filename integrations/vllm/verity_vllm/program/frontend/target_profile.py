@@ -382,7 +382,7 @@ class TargetProfile:
 
     @classmethod
     def from_gpu_document(cls, doc) -> "TargetProfile | None":
-        """[X-01] The SAME device query as a capture recorded it (`RunHeader.profile["gpu"]` from `verity_vllm.observe.engine_profile.gpu_info`,
+        """[X-01] The SAME device query as a capture recorded it (`RunHeader.profile["gpu"]` from `verity_vllm.engine.engine_profile.gpu_info`,
         or `versions.gpu` of a bench run): `multi_processor_count` (or `sms`) and `compute_capability` (`[8, 9]` or `"8.9"`, or `cc`).
         The eager Match resolver reads the target from here — the record's own host, not a literal.  None when the document carries no
         SM count (synthetic / hand-built logs): callers then keep the default profile."""

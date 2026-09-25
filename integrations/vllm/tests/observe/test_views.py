@@ -1,4 +1,4 @@
-"""L2: physical view geometry (`verity_vllm.observe.views`) — shapes, transposes, column slices, expands, rank 0."""
+"""L2: physical view geometry (`verity_vllm.observe.fold.views`) — shapes, transposes, column slices, expands, rank 0."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import random
 import pytest
 
 from verity_vllm.observe.events import ViewDesc
-from verity_vllm.observe.views import (
+from verity_vllm.observe.fold.views import (
     byte_extent,
     collapsed_dims,
     element_runs,

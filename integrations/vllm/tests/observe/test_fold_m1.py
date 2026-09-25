@@ -26,10 +26,10 @@ def _available() -> str | None:
         return "full-size build: set CAPTURE_BIG=1 (DESIGN §11)"
     if not LOG.exists():
         return f"{LOG} missing (L1)"
-    if importlib.util.find_spec(f"verity_vllm.observe.profiles.{PROFILE}") is None:
+    if importlib.util.find_spec(f"verity_vllm.engine.profiles.{PROFILE}") is None:
         return f"profile {PROFILE} missing (L3)"
     try:
-        from verity_vllm.observe.memory import MemoryModel
+        from verity_vllm.observe.fold.memory import MemoryModel
         MemoryModel()
     except NotImplementedError:
         return "memory.py is a skeleton (L2)"

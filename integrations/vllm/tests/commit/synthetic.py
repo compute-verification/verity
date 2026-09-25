@@ -31,7 +31,7 @@ from verity_vllm.commit import merkle as commit, identity
 from verity_vllm.program import dtypes
 from verity_vllm.observe.capture_v1 import Boundary, CaptureReader, Entry, RunWriter, StepRecord
 from verity_vllm.check.poc_description import Description, NodeInstance
-from verity_vllm.check.relations import INDEPENDENT, Inputs, RelationError, need, register
+from verity_vllm.program.kernels.relations import INDEPENDENT, Inputs, RelationError, need, register
 from verity_vllm.check.poc_required_interface import freeze_required
 
 TOY_MANIFEST_BASE: dict[str, Any] = {

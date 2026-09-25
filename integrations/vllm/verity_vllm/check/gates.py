@@ -18,11 +18,11 @@ A *run directory* is what `bench/run_config.py` produces for one configuration (
     RUN_DIR/nonint/noninterference.json
     RUN_DIR/compare.json             `verity_vllm.check.fold_compare` (tokens, boundary, subcircuits, structure)
     RUN_DIR/wiring.json              `verity_vllm.check.operand_provenance` (G5: exhaustive operand provenance, D82)
-    RUN_DIR/replay_a.json            `verity_vllm.check.replay --tier a` (verifier-seeded stratified sample + served tokens)
-    RUN_DIR/replay_chain.json        `verity_vllm.check.replay --tier chain` (connected slices with computed intermediates)
-    RUN_DIR/replay_b_step<N>.json    `verity_vllm.check.replay --tier b --step N` — full replay, DIAGNOSTIC ONLY (never gating)
-    RUN_DIR/root_policy.json         `verity_vllm.input_provenance.root_policy` (integrator)
-    RUN_DIR/golden.json              `verity_vllm.check.golden --check` (integrator)
+    RUN_DIR/replay_a.json            `verity_vllm.check.replay.replay --tier a` (verifier-seeded stratified sample + served tokens)
+    RUN_DIR/replay_chain.json        `verity_vllm.check.replay.replay --tier chain` (connected slices with computed intermediates)
+    RUN_DIR/replay_b_step<N>.json    `verity_vllm.check.replay.replay --tier b --step N` — full replay, DIAGNOSTIC ONLY (never gating)
+    RUN_DIR/root_policy.json         `verity_vllm.check.root_policy` (integrator)
+    RUN_DIR/golden.json              `verity_vllm.properties.golden --check` (integrator)
     RUN_DIR/quarantine.json          differential tests of newly registered definitions (when the run uses any)
     RUN_DIR/holdouts.json            written by the ORCHESTRATOR: the same gates G1..G6 over holdout workloads
     RUN_DIR/provenance.json          the sealed verifier's record (`bench/verify_lane.sh`); card top section
@@ -401,8 +401,8 @@ class RunArtifacts:
 
 
 def load_profile_config(name: str) -> dict:
-    """`verity_vllm.observe.profiles.<name>.PROFILE.config` (torch-free import)."""
-    mod = importlib.import_module(name if "." in name else f"verity_vllm.observe.profiles.{name}")
+    """`verity_vllm.engine.profiles.<name>.PROFILE.config` (torch-free import)."""
+    mod = importlib.import_module(name if "." in name else f"verity_vllm.engine.profiles.{name}")
     prof = getattr(mod, "PROFILE", None) or getattr(mod, "profile", None)
     if prof is None:
         for attr in ("build_profile", "make_profile", "get_profile"):
@@ -918,7 +918,7 @@ def gate_G5(run: RunArtifacts) -> GateResult:
 @_gate("G6")
 def gate_G6(run: RunArtifacts) -> GateResult:
     """Canonicality + regression: two independent folds (separate processes) of the same log give one digest, and
-    `golden.json` (`verity_vllm.check.golden --check`) passes with every entry's digest and attribution sha as expected.
+    `golden.json` (`verity_vllm.properties.golden --check`) passes with every entry's digest and attribution sha as expected.
     Equal digests across two captures of one workload are NOT required (recorded as detail when available)."""
     a = run.need("fold_summary")
     b = run.need("fold_summary_2")
@@ -1353,7 +1353,7 @@ FOLD_SUMMARY_FIELDS: dict[str, str] = {
     "schema": f"`{FOLD_SUMMARY_SCHEMA}`",
     "utc": "UTC time the summary was written",
     "log": "path of the raw observation log folded",
-    "profile": "profile module name (`verity_vllm.observe.profiles.<name>`)",
+    "profile": "profile module name (`verity_vllm.engine.profiles.<name>`)",
     "profile_id": "`Profile.id` of that module",
     "with_program": "true when `Program()` and the digest were built (G6 needs it)",
     "digest": "`program_digest(Program(Captured_v1{PROFILE, WORKLOAD}))` — the structure digest G6 compares (empty without Program())",

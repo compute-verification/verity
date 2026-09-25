@@ -21,7 +21,7 @@ their Program digests do not move).  Every other combination binds the statics-l
 `Attention_v2{T,NH,KVH,D,BN,DOT,INV}` (`b1.GemmV2`, `b1.AttentionV2`: the same bodies with the step and the epilogue as declared
 statics).  Three consumers read this module for "which registered function does
 this launch compute on the declared target": the Bet A builder (`verity_vllm.program.frontend.rules.vllm_bindings`), the eager Match resolver
-(`verity_vllm.observe.patterns`) and, through the run header's recorded target, the collector.  The per-target correspondence (the row's Match
+(`verity_vllm.observe.fold.patterns`) and, through the run header's recorded target, the collector.  The per-target correspondence (the row's Match
 replay on the captured operands; lane ampere's `gemm_target_correspondence` driver) is checked bit for bit, never a tolerance.
 """
 from __future__ import annotations
@@ -185,7 +185,7 @@ def launch_seqlen_q(own_rows: int, step: int, launch: dict[str, Any] | None) -> 
     v = by.get(int(step))
     if v is None:
         raise LaunchContextInvalid(f"the declared launch context names steps {sorted(by)} but the request runs step {int(step)}: declare every "
-                                   f"step of the shape (row_pod: verity_vllm.harness.launch_context) -- a step without a context would silently "
+                                   f"step of the shape (row_pod: verity_vllm.pipeline.launch_context) -- a step without a context would silently "
                                    f"take its own rows ({own}) for a launch that may hold a longer prefill")
     if int(v) < own:
         raise LaunchContextInvalid(f"the declared launch context says max_seqlen_q {int(v)} at step {int(step)} but this request alone has {own} "

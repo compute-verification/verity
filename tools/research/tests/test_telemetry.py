@@ -636,7 +636,7 @@ def _v1_samples(tmp_path, monkeypatch, *, scope="shared_pod_cgroup", oom_kill=(0
             {"kind": "cgroup", "scope": scope, "t_mono": 104.0, "t_utc": "T104", "cgroup": s1}]
 
 
-KILLED_LINE = "bash: line 1:  4242 Killed                  python -m verity_vllm.harness.derive_step --row 3\n"
+KILLED_LINE = "bash: line 1:  4242 Killed                  python -m verity_vllm.pipeline.build --row 3\n"
 
 
 def test_v1_oom_control_increment_with_a_killed_line_behind_rc_1_is_cgroup_oom(tmp_path, monkeypatch):

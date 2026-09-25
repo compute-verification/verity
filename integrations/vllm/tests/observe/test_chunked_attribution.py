@@ -1,5 +1,5 @@
 """Chunked-prefill column (window 2026-09-17): the `--variant chunked=<N>` workload variant, its V1 schedule simulation, and the
-prefill-chunk / token-step attribution of `verity_vllm.correspondence.chunk_attribution` on stub engines with vLLM V1's shape (one-iteration
+prefill-chunk / token-step attribution of `verity_vllm.observe.chunks` on stub engines with vLLM V1's shape (one-iteration
 output lag, no output at a partial-prefill step, token budget shared running-first).  Torch-free."""
 from __future__ import annotations
 
@@ -9,10 +9,10 @@ from pathlib import Path
 
 import pytest
 
-from verity_vllm.observe import arrivals
-from verity_vllm.correspondence import chunk_attribution as CA
-from verity_vllm.harness import coverage_workloads as gw
-from tests.harness.test_coverage_workloads import _LaggedStubEngine, _Out
+from verity_vllm.engine import arrivals
+from verity_vllm.observe import chunks as CA
+from verity_vllm.pipeline import coverage_workloads as gw
+from tests.pipeline.test_coverage_workloads import _LaggedStubEngine, _Out
 
 REPO = Path(__file__).resolve().parents[2]
 PROF = REPO / "workloads"
@@ -354,7 +354,7 @@ def test_randomized_scheduler_ids_are_mapped_back_to_the_submitted_ids():
 def test_vllm_adapter_run_requests_carries_the_chunk_record():
     pytest.importorskip("torch")
     pytest.importorskip("vllm")
-    from verity_vllm.observe import vllm_adapter as va
+    from verity_vllm.engine import vllm_adapter as va
 
     eng = _ChunkedLaggedStubEngine(64)
     engine = types.SimpleNamespace(llm=types.SimpleNamespace(llm_engine=eng))

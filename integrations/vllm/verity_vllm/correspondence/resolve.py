@@ -39,7 +39,7 @@ from array import array
 from dataclasses import dataclass, field
 from typing import Any, Callable, Iterable, Iterator, Protocol
 
-from verity_vllm.correspondence import batch_decomp as BD
+from verity_vllm.check.match import batch_decomp as BD
 
 from verity_vllm.observe import contract as OB
 

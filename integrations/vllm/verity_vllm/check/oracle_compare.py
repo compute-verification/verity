@@ -3,7 +3,7 @@
 The Commit's C1 (coverage) and C3 (openings) cannot see a relabel, a same-name byte swap or a late read (rev-cb F-cb-02/03/04:
 every one of them got COMMIT PASS on rc3 with coverage 12943/12943 and 79/79 openings verified).  C2 asks: are the COMMITTED bytes of
 each identity the value the Program produced for that identity?  The reference here is the Match stage of the SAME attempt: the m1
-capture (`verity_vllm.observe.m1_capture`, a separate process and a separate acquisition path -- torch dispatcher observer + D2H
+capture (`verity_vllm.pipeline.m1_capture`, a separate process and a separate acquisition path -- torch dispatcher observer + D2H
 snapshots -- sharing nothing with the native collector) recorded, for every snapshotted engine step, the bytes of every dispatcher
 call's arguments and outputs (`capture/snapshots.json` + `capture/values/<step>/<sha>.bin`, spanned storage bytes, content-addressed),
 and the fold's runtime-correspondence record (`instances.jsonl`) says, per Program instance, WHICH event and WHICH storage view (alloc,
@@ -564,7 +564,7 @@ def producers_of(manifest: dict[str, Any] | None) -> dict[tuple[str, str], dict[
 
 def producers_of_programs(programs: dict[str, dict[str, Any]], aliases: dict[str, Any] | None = None) -> dict[tuple[str, str], dict[str, Any]]:
     """(op_path, output_member) -> {"spec", "operand", "consumers"} read from the Programs of record by dataflow, under the query a
-    `v2-query` manifest was built with (`v1_bridge.population`, the Correspondence `query.cli` reads) -- such a manifest carries no
+    `v2-query` manifest was built with (`required.population`, the Correspondence `query.cli` reads) -- such a manifest carries no
     producer annotations.  Per required `instance_outputs` Value of every producing Call: `spec` = the Call's family; `operand` = the
     family of the Call whose output its FIRST operand reads (the order-free selector among same-family instances of one module: a fused
     norm's two narrowings read AddWidenedBf16 -> `1` and MulVecF32 -> `0`); `consumers` = the modules of the Calls that read the Value
@@ -594,7 +594,7 @@ def producers_of_programs(programs: dict[str, dict[str, Any]], aliases: dict[str
 def program_producer_facts(P: Any, corr: Any, *, tp: dict[str, Any] | None = None, aliases: dict[str, Any] | None = None,
                            into: dict[tuple[str, str], dict[str, Any]] | None = None) -> dict[tuple[str, str], dict[str, Any]]:
     """`producers_of_programs` for one ProgramView + Correspondence, accumulated into `into` (the member's facts over every Program)."""
-    from verity_vllm.query.v1_bridge import population
+    from verity_vllm.query.required import population
 
     canon = {str(k): str(v[0]) for k, v in (aliases or {}).items() if isinstance(v, (list, tuple)) and v}
     out = {} if into is None else into
@@ -662,14 +662,14 @@ def merge_producers(declared: dict[tuple[str, str], dict[str, Any]], derived: di
 def promote_handed_down(manifest: dict[str, Any] | None, derived: dict[tuple[str, str], dict[str, Any]]) -> dict[str, Any]:
     """Mark, in place, the `instance_outputs` rows of a `v2-query` manifest whose Value the producer module's body hands DOWN: every module
     the Programs name as reading it (`derived[...]["consumers"]`, `producers_of_programs`) is inside the producer's module subtree
-    (`v1_bridge.under`), so it is no return of that module.  Such a row gets `promoted: true` + those `consumers` (Program order) and the
+    (`required.under`), so it is no return of that module.  Such a row gets `promoted: true` + those `consumers` (Program order) and the
     acquisition observes it at its first consumer's input (`manifest_format.PROMOTED_OBSERVATION_RULE`) instead of hooking the module's
     forward output: row #57's `model/out` is Gemma2's embed scale (the model body's `hidden *= normalizer`, read by `model.layers.0`)
     while `Gemma2Model` returns the final norm's output -- the two differ from element 0 (Commit r20260924-061950-2148, form (B): 432
-    mismatches, 159,408 equal).  A v2 manifest carries no `promoted` flag (`v1_bridge`: such a Value simply crosses the body boundary).
+    mismatches, 159,408 equal).  A v2 manifest carries no `promoted` flag (`required`: such a Value simply crosses the body boundary).
     Only rows whose family the Programs agree on (`spec` equal to the row's, no conflict) and that are not already promoted; a member
     read by any module outside the subtree is a return and stays a module output.  Returns {"members": {"op/member": consumers}, "rows": n}."""
-    from verity_vllm.query.v1_bridge import under
+    from verity_vllm.query.required import under
 
     picked: dict[tuple[str, str], list[str]] = {}
     for key, d in derived.items():

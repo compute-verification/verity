@@ -32,7 +32,7 @@ KINDS: dict[str, str] = {
                         "(schema verity/trust-dossier/v1: level, criteria with evidence ids, D-entries, references, missing items, invalidation "
                         "triggers, relitigation procedure); refs.cited = every artifact it rests on, refs.previous = earlier dossiers; payload null; "
                         "labels target, instruction, level, anchor",
-    # vLLM integration (integrations/vllm/verity_vllm/harness/research_tools.py; one Attempt per sweep stage).
+    # vLLM integration (integrations/vllm/verity_vllm/pipeline/research_tools.py; one Attempt per sweep stage).
     "vllm-build/v1": "one Build of a row's Program: payload tree = build_summary.json + required-value manifest + descriptor "
                      "files (never the instance set); meta {row, program_digest, correspondence_digest?, stage_status}",
     "vllm-match-record/v1": "one Match account: payload tree = instances.jsonl, control/tokens.json, capture/tokens.json, "

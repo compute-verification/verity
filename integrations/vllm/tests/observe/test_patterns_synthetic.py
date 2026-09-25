@@ -8,12 +8,12 @@ import pytest
 
 from verity_vllm.observe.events import (DispatchEnter, DispatchExit, Root, RunHeader, SampleEnd, StepEnd, StepStart,
                                    TritonLaunch, ViewDesc)
-from verity_vllm.observe.patterns import (ComputeGroup, GeometryError, TransparentGroup, as_slot_rows, as_weight_view, members,
+from verity_vllm.observe.fold.patterns import (ComputeGroup, GeometryError, TransparentGroup, as_slot_rows, as_weight_view, members,
                                      schema_param_names, split_heads)
-from verity_vllm.observe.profiles import vllm_d9105ea80_sm89_eager as PROF
-from verity_vllm.observe.resolver import (Compute, Gather, GatherMany, PerRow, ResolutionError, Shared, StepContext,
+from verity_vllm.engine.profiles import vllm_d9105ea80_sm89_eager as PROF
+from verity_vllm.observe.fold.resolver import (Compute, Gather, GatherMany, PerRow, ResolutionError, Shared, StepContext,
                                      Transparent, Unsupported, resolve_step)
-from verity_vllm.observe.tree import step_events
+from verity_vllm.observe.fold.tree import step_events
 
 C = PROF.C
 H, NH, KVH, D, I, V, QKV, GU = C["H"], C["NH"], C["KVH"], C["D"], C["I"], C["V"], C["QKV"], C["GU"]
@@ -361,7 +361,7 @@ def test_gemm_constexpr_mismatch_is_unsupported():
 
 def _context_on_host(start, sample, sms):
     """A StepContext whose run header carries the capture host's GPU document (`profile.gpu.multi_processor_count`), as
-    `verity_vllm.observe.engine_profile.gpu_info` records it; `sms=None` = no GPU document (synthetic log)."""
+    `verity_vllm.engine.engine_profile.gpu_info` records it; `sms=None` = no GPU document (synthetic log)."""
     ctx = context(start, sample)
     prof = dict(ctx.header.profile)
     if sms is not None:
@@ -374,7 +374,7 @@ def test_gemm_num_sms_is_pinned_to_the_record_target_and_recorded():
     """[X-01] The NUM_SMS pin is the record target's SM count — the device the capture host recorded in the header — so a launch
     showing 142 on a 142-SM host resolves like the profile's own launches on a 128-SM host; the pin choice is counted in the step
     scratch the fold / resolve_log report from.  The Compute is unchanged (digest semantics)."""
-    from verity_vllm.observe.patterns import X01_SCRATCH_KEY
+    from verity_vllm.observe.fold.patterns import X01_SCRATCH_KEY
     events, start = decode_step(num_sms=142)   # every persistent-GEMM launch of the step ran with the 142-CTA grid
     se = step_events(events)
     ctx = _context_on_host(start, se.sample, 142)
@@ -408,7 +408,7 @@ def test_gemm_target_profile_is_the_same_object_the_builder_pins():
     `TargetProfile.from_gpu_document(header.gpu).num_sms`, which is what `TargetProfile.from_device()` yields on that host and what
     Bet A's `gemm_pins_for` pins (`NUM_SMS == active TargetProfile.num_sms`, see tests/program/test_vllm_bindings_pins.py)."""
     from verity_vllm.program.frontend.target_profile import TargetProfile
-    from verity_vllm.observe.patterns import target_of
+    from verity_vllm.observe.fold.patterns import target_of
     events, start = decode_step(num_sms=142)
     se = step_events(events)
     ctx = _context_on_host(start, se.sample, 142)

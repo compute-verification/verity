@@ -230,7 +230,7 @@ def _plan_in_a_fresh_process(tmp_path, mode: str) -> dict:
 def test_default_tables_do_not_depend_on_torch(tmp_path):
     """The plan with its default lifetime tables (no `tables=`) where torch imports and where it does not: the same tables, residuals
     and digest, so a CPU gate without torch and the GPU stage evaluate one plan."""
-    from verity_vllm.acquire import flush_points
+    from verity_vllm.commit.committer import flush_points
 
     rows = base_rows() + [row("instance_outputs", "body.blocks.0.qkv_proj", "0", spec="Gemm_v1"), row("instance_outputs", "body.norm", "out", spec="Norm_v1")]
     (tmp_path / "manifest.json").write_text(json.dumps(manifest(rows)))
