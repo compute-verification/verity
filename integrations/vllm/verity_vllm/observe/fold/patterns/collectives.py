@@ -18,8 +18,10 @@ from __future__ import annotations
 from verity_vllm.program.registry import b1_tp2
 
 from verity_vllm.observe.events import ViewDesc
-from verity_vllm.observe.fold.patterns import PerRow, attribution_for, base_op, bound_args, hint_of, is_row_major, unsupported
-from verity_vllm.observe.fold.resolver import Collective, Compute, Resolution, StepContext
+from verity_vllm.observe.fold.patterns.geometry import is_row_major
+from verity_vllm.observe.fold.patterns.ops import base_op, bound_args
+from verity_vllm.observe.fold.patterns.resolutions import attribution_for, hint_of, unsupported
+from verity_vllm.observe.fold.resolver import Collective, Compute, PerRow, Resolution, StepContext
 from verity_vllm.observe.fold.tree import TreeNode
 
 ALL_REDUCE_OP = "vllm.all_reduce"

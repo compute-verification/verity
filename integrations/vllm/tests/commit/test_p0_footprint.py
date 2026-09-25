@@ -140,7 +140,7 @@ def test_the_declared_layout_reaches_only_a_committer_that_implements_it(monkeyp
 def test_e2e_windowed_roots(tmp_path: Path):
     """Same manifest, single-block path vs windowed path (256 MiB windows, host retention): identical run roots, both fail-closed PASS."""
     wl, case = os.environ["VERITY_E2E_WORKLOAD"], os.environ["VERITY_E2E_CASE"]
-    base = [sys.executable, "-m", "verity_vllm.pipeline.commit", "--case", case, "--workload", wl, "--committer", "native_collect_v2b", "--fast-copy",
+    base = [sys.executable, "-m", "verity_vllm.pipeline.cli", "commit", "--case", case, "--workload", wl, "--committer", "native_collect_v2b", "--fast-copy",
             "--gpu-tree", "--openings", "64", "--pairs", "1", "--warmup", "1", "--max-num-seqs", os.environ.get("VERITY_E2E_B", "1"),
             "--engine-arg", "gpu_memory_utilization=" + os.environ.get("VERITY_E2E_UTIL", "0.35"), "--retain", "host"]
     if os.environ.get("VERITY_E2E_HIDDEN_SO"):

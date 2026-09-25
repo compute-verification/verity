@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import re
 import struct
 
 import numpy as np
 import pytest
 
 from verity_vllm.check import weights_of_record as WR
+from verity_vllm.pipeline import cli
 
 H, I, HQ, HKV, D, V = 8, 12, 2, 1, 4, 20          # hidden, intermediate, heads, kv heads, head dim, vocab
 
@@ -649,7 +652,7 @@ def test_cli_writes_the_record_beside_the_program(checkpoint, tmp_path):
     with gzip.open(pd / "instances.json.gz", "wt") as f:
         json.dump(prog["instances"], f)
     json.dump(prog["result"], open(pd / "result.json", "w"))
-    rc = WR.main(["--program-dir", str(pd), "--checkpoint-dir", str(d), "--checkpoints", str(man)])
+    rc = cli.main(["weights-of-record", "--program-dir", str(pd), "--checkpoint-dir", str(d), "--checkpoints", str(man)])
     assert rc == 0
     rec = json.load(open(pd / "weights_of_record.json"))
     assert rec["complete"] is True and rec["program_digest"] == "d" * 64 and rec["wrapper_prefix"] == PREFIX
@@ -686,7 +689,7 @@ def test_of_record_set_is_stamped_from_every_component_and_checked_by_set_equali
               open(root / "manifest.json", "w"))
     # the CLI: derive from the first component, stamp the set, write beside the root
     out = tmp_path / "wor.json"
-    rc = WR.main(["--programs-root", str(root), "--checkpoint-dir", str(d), "--checkpoints", str(man), "--out", str(out)])
+    rc = cli.main(["weights-of-record", "--programs-root", str(root), "--checkpoint-dir", str(d), "--checkpoints", str(man), "--out", str(out)])
     rec = json.load(open(out))
     assert rc == 0 and rec["of_record"] is True and rec["program_digest"] == A and rec["program_dir"].endswith("build_request_LP4_T2")
     ors = rec["of_record_set"]
@@ -733,4 +736,56 @@ def test_of_record_set_is_stamped_from_every_component_and_checked_by_set_equali
     rec4 = WR.stamp_of_record_set(WR.build_record(str(r2 / "build_request"), str(d), checkpoints_manifest=str(man)), str(r2))
     assert rec4["of_record"] is False and "not full sha256" in rec4["of_record_why"] and "d" * 16 in rec4["of_record_why"]
     # a root without any component Program is refused by the CLI
-    assert WR.main(["--programs-root", str(tmp_path / "empty"), "--checkpoint-dir", str(d), "--checkpoints", str(man), "--out", str(tmp_path / "x.json")]) == 2
+    assert cli.main(["weights-of-record", "--programs-root", str(tmp_path / "empty"), "--checkpoint-dir", str(d), "--checkpoints", str(man), "--out", str(tmp_path / "x.json")]) == 2
+
+
+def test_cli_record_carries_its_derivation_provenance_and_names_what_it_supersedes(checkpoint, tmp_path, monkeypatch):
+    """[COORD R16 M-0038 (2)] a record the CLI writes carries `derived` = {tool, code (git HEAD or null), at, sources (Program files, checkpoint
+    dir, checkpoints.json), argv, supersedes}; check() ignores it (digests are the evidence).  argv is the command's own flags, as the
+    process `verity-vllm weights-of-record ...` sees them."""
+    from verity_vllm.pipeline import row_records as R
+
+    d, man, t = checkpoint
+    prog, fields = _program()
+    pdir = tmp_path / "build_request_LP9_T2"
+    _write_program(pdir, prog, "d" * 64, 9, 2)
+    stale = pdir / "weights_of_record.stale-20260920T042250Z.json"
+    stale.write_text(json.dumps({"schema": WR.SCHEMA_V1, "program_digest": "d" * 64, "complete": True, "unpinned": []}))
+    out = pdir / "weights_of_record.json"
+    argv = ["--program-dir", str(pdir), "--checkpoint-dir", str(d), "--checkpoints", str(man), "--out", str(out), f"--supersedes={stale}"]
+    monkeypatch.setattr("sys.argv", ["verity-vllm", "weights-of-record", *argv])
+    assert cli.main() == 0
+    rec = json.load(open(out))
+    dv = rec["derived"]
+    assert dv["tool"] == "verity_vllm.check.weights_of_record" and dv["supersedes"] == str(stale) and dv["argv"] == argv
+    assert dv["sources"]["program_dir"] == str(pdir) and dv["sources"]["program_files"] == ["instances.json.gz", "result.json"]
+    assert dv["sources"]["checkpoint_dir"] == str(d) and dv["sources"]["checkpoints_manifest"] == str(man)
+    assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", dv["at"]) and (dv["code"] is None or re.fullmatch(r"[0-9a-f]{40}", dv["code"]))
+    assert WR.check(rec, live_digests(_served(t, fields)), program_digests_of_record={"d" * 64})["result"] is True
+    # the row's reuse rule accepts the freshly derived record (current schema, this Program)
+    (pdir / "result.json").write_text(json.dumps({"ok": True, "program_digest": "d" * 64, "LP": 9, "T": 2}))
+    assert R.wor_stale(str(out), str(pdir / "result.json"), WR.SCHEMA) == ""
+
+
+def test_provenance_code_is_the_shipped_commit_on_a_pod_tree_and_git_head_in_a_git_tree(tmp_path):
+    """[COORD M-0038 (2)] derived.code names the code that ran the derivation.  The release tree on a pod has NO .git (ship.sh writes
+    EXPORT.json with the shipped commit): the int-1 wave-1 records carried code null (exec r16_0413).  Now: EXPORT.json's commit first
+    (code_source 'EXPORT.json', the dirty-patch digest named when present), git HEAD in a git tree, null only when neither exists."""
+    root = os.path.abspath(os.path.join(os.path.dirname(WR.__file__), "..", ".."))
+    exp = os.path.join(root, "EXPORT.json")
+    if os.path.exists(exp):
+        pytest.skip("this tree carries an EXPORT.json already (a shipped pod tree)")
+    dv = WR.derivation_provenance(str(tmp_path), str(tmp_path), None, ["x"])
+    if dv["code"] is not None:                                         # a git tree (the laptop): HEAD, source git
+        assert re.fullmatch(r"[0-9a-f]{40}", dv["code"]) and dv["code_source"] == "git"
+    try:
+        with open(exp, "w") as f:
+            json.dump({"commit": "a" * 40, "patch_sha256": "deadbeefcafe0000"}, f)
+        dv2 = WR.derivation_provenance(str(tmp_path), str(tmp_path), None, ["x"])
+        assert dv2["code"] == "a" * 40 and dv2["code_source"] == "EXPORT.json (dirty patch deadbeefcafe)"
+        with open(exp, "w") as f:
+            json.dump({"commit": "b" * 40}, f)
+        dv3 = WR.derivation_provenance(str(tmp_path), str(tmp_path), None, ["x"])
+        assert dv3["code"] == "b" * 40 and dv3["code_source"] == "EXPORT.json"
+    finally:
+        os.unlink(exp)

@@ -15,13 +15,15 @@ records it inert under FA2, whose tile does not read seqlen_q).  Chunked prefill
 `enable_chunked_prefill=False`; the row's expected_engine_steps assume no preemption) -- a scheduler that does either changes the launches
 and the Match would show it.
 
-    python -m verity_vllm.pipeline.launch_context <workload.json> [<LP> <T>]      -> the shape's JSON list (or 'conflict'); no shape: all shapes
+    verity-vllm launch-context <workload.json> [<LP> <T>]      -> the shape's JSON list (or 'conflict'); no shape: all shapes
 """
 from __future__ import annotations
 
 import json
-import sys
+from dataclasses import dataclass
 from typing import Any
+
+from verity_vllm.config import option
 
 
 def rows_at(req: dict[str, Any], e: int) -> int:
@@ -73,15 +75,18 @@ def spec_for(workload: dict[str, Any], LP: int, T: int) -> str:
     return v if isinstance(v, str) else json.dumps(v, separators=(",", ":"))
 
 
-def main(argv: list[str]) -> int:
-    w = json.load(open(argv[0]))
-    if len(argv) >= 3:
-        print(spec_for(w, int(argv[1]), int(argv[2])))
+@dataclass(frozen=True, kw_only=True)
+class Options:
+    workload: str = option("workload")
+    LP: int | None = option("LP", nargs="?", type=int, default=None)
+    T: int | None = option("T", nargs="?", type=int, default=None)
+
+
+def main(a: Options) -> int:
+    w = json.load(open(a.workload))
+    if a.LP is not None and a.T is not None:
+        print(spec_for(w, a.LP, a.T))
         return 0
     for (lp, t), v in sorted(shape_contexts(w).items()):
         print(f"LP{lp}_T{t} {v if isinstance(v, str) else json.dumps(v, separators=(',', ':'))}")
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main(sys.argv[1:]))

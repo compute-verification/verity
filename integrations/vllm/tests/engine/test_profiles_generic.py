@@ -2,7 +2,7 @@
 module, no role -> module table.  The per-role fixtures `profiles/expected/derived_<ROLE>[_tp<W>].json` pin the canonical form
 (`profiles.canonical`) the generic constructor produced when the hand-written modules were retired (they were shown equal to it, object by
 object, by the `test_profiles_generic_equals_hand.py` that left with those modules); a change here is a deliberate re-pin
-(`python -m verity_vllm.engine.profiles.canonical --write`, reviewed in the diff)."""
+(`verity-vllm canonical-profiles --write`, reviewed in the diff)."""
 from __future__ import annotations
 
 import dataclasses
@@ -20,7 +20,7 @@ from verity_vllm.engine.profiles import dense_generic as dg
 from verity_vllm.engine.profiles import family_facts as FF
 from verity_vllm.engine.profiles import generic as G
 from verity_vllm.engine.profiles import profile_for_case, profile_module_for_case
-from verity_vllm.observe.fold.collective_pattern import TpCollective
+from verity_vllm.observe.fold.patterns.collectives import TpCollective
 from verity_vllm.collectives.embedding_shard import EmbeddingShardCuda
 
 FIXTURES = sorted(K.EXPECTED_DIR.glob("derived_*.json"))
@@ -64,7 +64,7 @@ def test_generic_profile_equals_its_fixture(fixture):
     built = json.loads(K.dumps(K.canonical_of_role(role, world)))     # through JSON: the fixture's own value domain
     expected = json.loads(fixture.read_text())
     delta = _diff(expected, built)
-    assert not delta, f"{fixture.name}: {len(delta)} differences (a deliberate re-pin is `python -m verity_vllm.engine.profiles.canonical --write`):\n  " + "\n  ".join(delta[:40])
+    assert not delta, f"{fixture.name}: {len(delta)} differences (a deliberate re-pin is `verity-vllm canonical-profiles --write`):\n  " + "\n  ".join(delta[:40])
 
 
 def test_fixture_config_sha_is_the_manifest_bytes():

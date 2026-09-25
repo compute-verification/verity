@@ -38,9 +38,9 @@ EOF
     T0=$(date +%s)
     if [ "$B" -gt 1 ]; then
       WD=$($PY -c "import json,sys;d=json.load(open(sys.argv[1]));print(d.get('workload_digest') or d.get('program_digest') or d.get('digest') or '')" "$RD/build_workload/workload_program.json" 2>/dev/null || true)
-      $PY -m verity_vllm.pipeline.cli build-global --fixture "$WL" --programs-root "$RD" ${WD:+--workload-digest "$WD"} --out "$MAN" > "$O/manifest.log" 2>&1 || { echo "[pod_gate] $ROW: manifest build-global FAILED (see manifest.log)"; tail -n 5 "$O/manifest.log"; RC=1; continue; }
+      "${PY%/*}/verity-vllm" manifest build-global --fixture "$WL" --programs-root "$RD" ${WD:+--workload-digest "$WD"} --out "$MAN" > "$O/manifest.log" 2>&1 || { echo "[pod_gate] $ROW: manifest build-global FAILED (see manifest.log)"; tail -n 5 "$O/manifest.log"; RC=1; continue; }
     else
-      $PY -m verity_vllm.pipeline.cli build --program "$RD/build_request" --workload "$WL" --out "$MAN" > "$O/manifest.log" 2>&1 || { echo "[pod_gate] $ROW: manifest build FAILED (see manifest.log)"; tail -n 5 "$O/manifest.log"; RC=1; continue; }
+      "${PY%/*}/verity-vllm" manifest build --program "$RD/build_request" --workload "$WL" --out "$MAN" > "$O/manifest.log" 2>&1 || { echo "[pod_gate] $ROW: manifest build FAILED (see manifest.log)"; tail -n 5 "$O/manifest.log"; RC=1; continue; }
     fi
     echo "[pod_gate] $ROW: manifest built in $(( $(date +%s) - T0 )) s: $(tail -n 1 "$O/manifest.log" | cut -c1-200)"
   fi
@@ -56,7 +56,7 @@ EOF
   # 2. the runtime tree: the model instantiated on the meta device as Build does
   T0=$(date +%s)
   # (HF_HUB_OFFLINE=0: a row whose checkpoint is not pre-warmed on this pod needs its config.json fetched -- shapes only, no weights)
-  if HF_HUB_OFFLINE=${HF_HUB_OFFLINE:-0} $PY -m verity_vllm.observe.runtime_tree --model "$MODEL" --revision "$REV" --max-model-len "$MML" --out "$O/runtime_tree.json" > "$O/runtime_tree.log" 2>&1; then
+  if HF_HUB_OFFLINE=${HF_HUB_OFFLINE:-0} "${PY%/*}/verity-vllm" runtime-tree --model "$MODEL" --revision "$REV" --max-model-len "$MML" --out "$O/runtime_tree.json" > "$O/runtime_tree.log" 2>&1; then
     echo "[pod_gate] $ROW: runtime tree (meta) in $(( $(date +%s) - T0 )) s: $(tail -n 1 "$O/runtime_tree.log")"
   else
     echo "[pod_gate] $ROW: runtime tree (meta) FAILED (see runtime_tree.log)"; tail -n 8 "$O/runtime_tree.log"; RC=1; continue
@@ -66,7 +66,7 @@ EOF
   #    AGAINST=<dir of acquisition_plan.json per row>: compare this plan Value by Value with that run's -> plan_compare.json)
   T0=$(date +%s)
   AG=(); [ -n "${AGAINST:-}" ] && [ -f "$AGAINST/$ROW/acquisition_plan.json" ] && AG=(--against "$AGAINST/$ROW/acquisition_plan.json")
-  if $PY -m verity_vllm.acquire.gate --manifest "$MAN" --runtime "$O/runtime_tree.json" --out "$O" --row-id "$ROW" --programs-root "$RD" ${AG[@]+"${AG[@]}"} > "$O/gate.log" 2>&1; then
+  if "${PY%/*}/verity-vllm" gate --manifest "$MAN" --runtime "$O/runtime_tree.json" --out "$O" --row-id "$ROW" --programs-root "$RD" ${AG[@]+"${AG[@]}"} > "$O/gate.log" 2>&1; then
     echo "[pod_gate] $ROW: GATE PASS in $(( $(date +%s) - T0 )) s"
   else
     echo "[pod_gate] $ROW: GATE rc=$? in $(( $(date +%s) - T0 )) s"; RC=1

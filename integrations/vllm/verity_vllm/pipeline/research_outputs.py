@@ -1,7 +1,7 @@
 """The typed outputs of one sweep stage for the `research` store (`outputs.json`, schema research/outputs/v0.1).
 
-    python -m verity_vllm.pipeline.research_outputs <evidence-dir> <row-id> <stage> [--run-dir DIR] [--input build=art:...] [--input match=art:...]
-    python -m verity_vllm.pipeline.research_outputs digest <evidence-dir> <row-id>      # the Program digest of record (build_summary.json)
+    verity-vllm research-outputs write <evidence-dir> <row-id> <stage> [--run-dir DIR] [--input build=art:...] [--input match=art:...]
+    verity-vllm research-outputs digest <evidence-dir> <row-id>      # the Program digest of record (build_summary.json)
 
 `run_row_v2.sh` calls this on EXIT of a `stage` run (the runner set RESEARCH_RUN_DIR): the stage's small account files are copied
 from the evidence dir into `$RESEARCH_RUN_DIR/outputs/<name>/` and declared in `$RESEARCH_RUN_DIR/outputs.json`, which
@@ -34,15 +34,16 @@ Stdlib only; never raises out of `main` (an outputs.json that could not be writt
 """
 from __future__ import annotations
 
-import argparse
 import json
 import os
 import re
 import shutil
 import sys
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from verity_vllm.config import option
 from verity_vllm.query.manifest.format import tp_ranks_fold_digest
 
 SCHEMA = "research/outputs/v0.1"
@@ -248,21 +249,35 @@ def inputs_from_job(run_dir: Path) -> dict[str, str]:
     return {k: v for k, v in ins.items() if isinstance(v, str) and v.startswith("art:")}
 
 
-def main(argv: list[str] | None = None) -> int:
-    argv = list(sys.argv[1:] if argv is None else argv)
-    if argv[:1] == ["digest"]:                                   # `digest <evidence-dir> <row>`: the Program digest of record, or ""
-        if len(argv) != 3:
-            print("usage: research_outputs digest <evidence-dir> <row-id>", file=sys.stderr)
-            return 2
-        print(program_digest(Path(argv[1]), argv[2]).get("program_digest") or "")
+@dataclass(frozen=True, kw_only=True)
+class WriteOptions:
+    """Declare the stage's outputs in RUN_DIR/outputs.json."""
+
+    evidence_dir: str = option("evidence_dir")
+    row: str = option("row")
+    stage: str = option("stage", choices=sorted(KINDS))
+    run_dir: str | None = option("--run-dir", env="RESEARCH_RUN_DIR", default=None)
+    input: list[str] = option("--input", action="append", default=[], metavar="NAME=art:...",
+                              help="an input artifact (default: job.json store.inputs)")
+    cmd: str = field(default="write", init=False)
+
+
+@dataclass(frozen=True, kw_only=True)
+class DigestOptions:
+    """Print the Program digest of record (build_summary.json), or an empty line."""
+
+    evidence_dir: str = option("evidence_dir")
+    row: str = option("row")
+    cmd: str = field(default="digest", init=False)
+
+
+COMMANDS = {"write": WriteOptions, "digest": DigestOptions}
+
+
+def main(a: WriteOptions | DigestOptions) -> int:
+    if a.cmd == "digest":
+        print(program_digest(Path(a.evidence_dir), a.row).get("program_digest") or "")
         return 0
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("evidence_dir")
-    ap.add_argument("row")
-    ap.add_argument("stage", choices=sorted(KINDS))
-    ap.add_argument("--run-dir", default=os.environ.get("RESEARCH_RUN_DIR"))
-    ap.add_argument("--input", action="append", default=[], metavar="NAME=art:...", help="an input artifact (default: job.json store.inputs)")
-    a = ap.parse_args(argv)
     if not a.run_dir:
         print("research_outputs: RESEARCH_RUN_DIR not set; nothing written", file=sys.stderr)
         return 0
@@ -282,7 +297,3 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as e:  # noqa: BLE001 -- never mask the stage's own exit status
         print(f"research_outputs: FAILED to write outputs.json: {type(e).__name__}: {e}", file=sys.stderr)
     return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())

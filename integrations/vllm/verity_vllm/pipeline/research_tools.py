@@ -1,10 +1,10 @@
 """`research` Tool declarations for the vLLM integration sweep stages.
 
 Three Tools — ``vllm.build``, ``vllm.match``, ``vllm.commit`` — one per stage
-of ``verity_vllm/ops/row_pod.sh``.  Each stage runs as one ``research
-run --tool vllm.<stage>`` Attempt and publishes typed Artifacts (see
-``verity_vllm/ops/run_row_v2.sh`` for the wrapper that writes the
-``outputs.json`` the publisher consumes).
+of a sweep row.  Each stage runs as one ``research run --tool vllm.<stage>
+-- verity-vllm row stage <stage> ...`` Attempt and publishes typed Artifacts
+(``verity_vllm.pipeline.research`` writes the ``outputs.json`` the publisher
+consumes).
 
 Rules encoded here (Phase 5a of the v2 plan):
 
@@ -40,8 +40,9 @@ from research.store.tool import Tool
 DEFAULT_QUERY = "Q_module_body_v1"
 DEFAULT_PY = "/workspace/venv312/bin/python"
 
-WRAPPER = "integrations/vllm/verity_vllm/ops/run_row_v2.sh"
-_SCRIPTS = ("run_row_v2.sh", "row_pod.sh", "tp_stage.sh")   # tp_stage.sh: the WORLD=N tensor-parallel row runner, row_pod.sh's grammar
+COMMAND = ["verity-vllm", "row", "stage"]
+_CLI_MODULE = "verity_vllm.pipeline.cli"
+_SCRIPTS = ("run_row_v2.sh", "row_pod.sh", "tp_stage.sh")   # the shell runners of earlier records (same grammar as `row stage` / `row run`)
 
 CLOSURE = [
     "integrations/vllm/**",
@@ -75,7 +76,7 @@ ROW_KEY_PARAMS = [
 STAGE_KEY_FLAGS: dict[str, dict[str, Any]] = {
     "build": {},
     "match": {
-        "snapshot_steps": "row-default",  # row_pod.sh: "0,1" greedy / "all" stochastic
+        "snapshot_steps": "row-default",  # the row's default: "0,1" greedy / "all" stochastic
         "snapshot_max_bytes": None,
         "within_step": "dag",
     },
@@ -136,8 +137,12 @@ def row_config(row: str) -> dict[str, Any]:
 
 
 def _find_script(argv: list[str]) -> tuple[int, str] | None:
+    """Where the row's arguments start: after ``verity-vllm row`` / ``-m verity_vllm.pipeline.cli row`` (name ``row``) or
+    after one of the earlier shell runners (its file name)."""
     for i, tok in enumerate(argv):
         name = PurePosixPath(tok.replace("\\", "/")).name
+        if (name == "verity-vllm" or (tok == _CLI_MODULE and i > 0 and argv[i - 1] == "-m")) and argv[i + 1 : i + 2] == ["row"]:
+            return i + 1, "row"
         if name in _SCRIPTS:
             return i, name
     return None
@@ -168,13 +173,16 @@ def _parse_flags(toks: list[str]) -> dict[str, Any]:
 
 
 def parse(argv: list[str], *, stage: str) -> dict[str, Any]:
-    """Extract params from a wrapper / row_pod.sh argv.
+    """Extract params from a row argv.
 
-    Accepts either::
+    Accepts::
 
-        bash .../run_row_v2.sh stage <stage> <row> <ROLE> <hf-repo> <rev> [--flag v ...]
-        bash .../row_pod.sh <row> <ROLE> <hf-repo> <rev> [stages] [--flag v ...]
-        WORLD=N bash .../tp_stage.sh <row> <ROLE> <hf-repo> <rev> [stages]     (tensor-parallel rows; tp from the row id)
+        verity-vllm row stage <stage> <row> <ROLE> <hf-repo> <rev> [--flag v ...]
+        python -m verity_vllm.pipeline.cli row stage <stage> <row> <ROLE> <hf-repo> <rev> [--flag v ...]
+        verity-vllm row run <row> <ROLE> <hf-repo> <rev> [--stages S] [--flag v ...]
+
+    and the argv of the earlier shell runners (``run_row_v2.sh stage <stage> ...``, ``row_pod.sh <row> ... [stages]``,
+    ``tp_stage.sh <row> ... [stages]``), which records in the store carry.
     """
     found = _find_script(argv)
     if found is None:
@@ -184,7 +192,9 @@ def parse(argv: list[str], *, stage: str) -> dict[str, Any]:
         i, name = found
         rest = list(argv[i + 1 :])
         argv_stage = None
-        if name == "run_row_v2.sh":
+        if name == "row" and rest[:1] == ["run"]:
+            rest = rest[1:]
+        elif name in ("row", "run_row_v2.sh"):
             if rest[:1] == ["stage"] and len(rest) >= 2:
                 argv_stage = rest[1]
                 rest = rest[2:]
@@ -192,6 +202,8 @@ def parse(argv: list[str], *, stage: str) -> dict[str, Any]:
     while rest and not rest[0].startswith("--"):
         positional.append(rest.pop(0))
     flags = _parse_flags(rest)
+    if found is not None and found[1] == "row" and argv_stage is None:
+        argv_stage = flags.pop("stages", None)
 
     row = positional[0] if len(positional) > 0 else None
     role = positional[1] if len(positional) > 1 else None
@@ -216,7 +228,7 @@ def parse(argv: list[str], *, stage: str) -> dict[str, Any]:
     for k in NON_KEY_FLAGS:
         if k in flags:
             out[k] = flags.pop(k)
-    # Anything else the wrapper accepted is recorded verbatim (non-key).
+    # Anything else the row accepted is recorded verbatim (non-key).
     for k, v in flags.items():
         out.setdefault(k, v)
     return out
@@ -255,7 +267,7 @@ def _tool(stage: str) -> Tool:
     return Tool(
         name=name,
         version="1",
-        command=["bash", WRAPPER, "stage", stage],
+        command=[*COMMAND, stage],
         closure=CLOSURE,
         key_params=[*ROW_KEY_PARAMS, *STAGE_KEY_FLAGS[stage].keys()],
         key_conditions=["hw.family", f"tool.{name}.torch", f"tool.{name}.vllm"],
@@ -274,6 +286,7 @@ TOOLS = {t.name: t for t in (VLLM_BUILD, VLLM_MATCH, VLLM_COMMIT)}
 
 __all__ = [
     "CLOSURE",
+    "COMMAND",
     "DEFAULT_QUERY",
     "ROW_KEY_PARAMS",
     "STAGE_KEY_FLAGS",

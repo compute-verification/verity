@@ -9,11 +9,14 @@ FLASHATTENTION_DISABLE_{BACKWARD,DROPOUT,PYBIND}, USE_CUDA, TORCH_TARGET_VERSION
 gencode sm_80 real -- the installed _vllm_fa2_C.abi3.so ships sm_80 SASS only).
 
 Usage:
-  build_ext.py --tree /path/to/csrc --name verity_fa2_base --build-dir /path/build \
+  verity-vllm fa2-tap-build --tree /path/to/csrc --name verity_fa2_base --build-dir /path/build \
       [--define VERITY_TAP=1 ...] [--files split,split_align] [--extra-src file.cu ...]
 Writes <build-dir>/build_info.json and <build-dir>/resource_usage.txt.
 """
-import argparse, hashlib, json, os, subprocess, sys, time, glob
+import hashlib, json, os, subprocess, sys, time, glob
+from dataclasses import dataclass
+
+from verity_vllm.config import option
 
 def sha256(path):
     h = hashlib.sha256()
@@ -22,21 +25,23 @@ def sha256(path):
             h.update(chunk)
     return h.hexdigest()
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument('--tree', required=True, help='csrc root (contains flash_attn/, common/, cutlass/)')
-    ap.add_argument('--name', required=True)
-    ap.add_argument('--build-dir', required=True)
-    ap.add_argument('--src-dir', default=os.path.dirname(os.path.abspath(__file__)))
-    ap.add_argument('--define', action='append', default=[])
-    ap.add_argument('--files', default='split_causal,split_align_noncausal,split_noncausal,split_align_causal',
-                    help='comma list of kernel .cu groups to compile (per head dim)')
-    ap.add_argument('--hdims', default='64', help='R13 fa2 v8: comma list of bf16 head dims whose split-KV kernels are compiled (64,96,128,256)')
-    ap.add_argument('--arch', default='8.0')
-    ap.add_argument('--no-ptxas-v', action='store_true')
-    ap.add_argument('--tree-commit', default='')
-    args = ap.parse_args()
+@dataclass(frozen=True, kw_only=True)
+class Options:
+    tree: str = option('--tree', help='csrc root (contains flash_attn/, common/, cutlass/)')
+    name: str = option('--name')
+    build_dir: str = option('--build-dir')
+    src_dir: str = option('--src-dir', default=os.path.dirname(os.path.abspath(__file__)))
+    define: list[str] = option('--define', action='append', default=[])
+    files: str = option('--files', default='split_causal,split_align_noncausal,split_noncausal,split_align_causal',
+                        help='comma list of kernel .cu groups to compile (per head dim)')
+    hdims: str = option('--hdims', default='64',
+                        help='R13 fa2 v8: comma list of bf16 head dims whose split-KV kernels are compiled (64,96,128,256)')
+    arch: str = option('--arch', default='8.0')
+    no_ptxas_v: bool = option('--no-ptxas-v', default=False, action='store_true')
+    tree_commit: str = option('--tree-commit', default='')
 
+
+def main(args: Options):
     os.environ.setdefault('CUDA_HOME', '/usr/local/cuda-12.9')
     os.environ['TORCH_CUDA_ARCH_LIST'] = args.arch
     os.environ.setdefault('MAX_JOBS', '32')
@@ -112,6 +117,3 @@ def main():
     with open(os.path.join(args.build_dir, 'build_info.json'), 'w') as f:
         json.dump(info, f, indent=1)
     print('BUILD-OK', args.name, info['compile_seconds'], 's', so, ops)
-
-if __name__ == '__main__':
-    main()

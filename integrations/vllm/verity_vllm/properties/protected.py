@@ -1,7 +1,7 @@
 """verity_vllm/properties/protected.py — PROTECTED.  The frozen list of protected paths and the mechanical diff check the sealed
 verifier runs on a lane's candidate commit.
 
-    uv run python -m verity_vllm.properties.protected --base <core-commit> --head <lane-commit> --out provenance.json
+    uv run verity-vllm protected --base <core-commit> --head <lane-commit> --out provenance.json
 
 "What counts as evidence" is not lane-writable: a lane's mergeable diff may touch only its capability surface (config,
 weight-name maps, more-specific patterns, specializations, quarantined definitions, tests, workloads, notes).  This module
@@ -15,15 +15,16 @@ Also reports the informational rows: `new_patterns` (pattern names in head's pro
 """
 from __future__ import annotations
 
-import argparse
 import fnmatch
 import json
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from verity_vllm.config import ROOT as REPO
+from verity_vllm.config import option
 from verity_vllm.properties.record import seal
 
 #: Frozen.  Paths a lane may not touch at all (any diff status).  Globs are repo-relative; fnmatch `*` crosses `/`.
@@ -191,14 +192,17 @@ def provenance(base: str, head: str, *, cwd: Path = REPO, head_checkout: Path | 
     return seal(rows, rows["sealed"])
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--base", required=True, help="core commit / branch (lane/capture)")
-    ap.add_argument("--head", required=True, help="lane candidate commit / branch")
-    ap.add_argument("--repo", default=str(REPO))
-    ap.add_argument("--head-checkout", default=None, help="a checkout of --head (to import its profiles for the new-pattern count)")
-    ap.add_argument("--out", required=True)
-    a = ap.parse_args(argv)
+@dataclass(frozen=True, kw_only=True)
+class Options:
+    base: str = option("--base", help="core commit / branch (lane/capture)")
+    head: str = option("--head", help="lane candidate commit / branch")
+    repo: str = option("--repo", default=str(REPO))
+    head_checkout: str | None = option("--head-checkout", default=None,
+                                       help="a checkout of --head (to import its profiles for the new-pattern count)")
+    out: str = option("--out")
+
+
+def main(a: Options) -> int:
     rep = provenance(a.base, a.head, cwd=Path(a.repo), head_checkout=Path(a.head_checkout) if a.head_checkout else None)
     Path(a.out).parent.mkdir(parents=True, exist_ok=True)
     Path(a.out).write_text(json.dumps(rep, indent=1) + "\n")
@@ -209,7 +213,3 @@ def main(argv: list[str] | None = None) -> int:
     for p in rep["protected_files_modified"]:
         print(f"   protected: {p['status']} {p['path']}", file=sys.stderr)
     return 0 if rep["sealed"] else 1
-
-
-if __name__ == "__main__":
-    sys.exit(main())

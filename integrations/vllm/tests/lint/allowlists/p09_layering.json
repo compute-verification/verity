@@ -88,12 +88,12 @@
     {"file": "verity_vllm/engine/profiles/gen_ov_sampling_patterns.py", "kind": "layer", "symbol": "<module>", "detail": "engine.profiles.gen_ov_sampling_patterns -> observe.fold.resolver"},
     {"file": "verity_vllm/engine/profiles/gen_ov_sampling_patterns.py", "kind": "layer", "symbol": "<module>", "detail": "engine.profiles.gen_ov_sampling_patterns -> observe.fold.tree"},
     {"file": "verity_vllm/engine/profiles/generic.py", "kind": "layer", "symbol": "<module>", "detail": "engine.profiles.generic -> observe.events"},
-    {"file": "verity_vllm/engine/profiles/generic.py", "kind": "layer", "symbol": "<module>", "detail": "engine.profiles.generic -> observe.fold.collective_pattern"},
     {"file": "verity_vllm/engine/profiles/generic.py", "kind": "layer", "symbol": "<module>", "detail": "engine.profiles.generic -> observe.fold.patterns"},
+    {"file": "verity_vllm/engine/profiles/generic.py", "kind": "layer", "symbol": "<module>", "detail": "engine.profiles.generic -> observe.fold.patterns.collectives"},
     {"file": "verity_vllm/engine/profiles/generic.py", "kind": "layer", "symbol": "<module>", "detail": "engine.profiles.generic -> observe.fold.resolver"},
     {"file": "verity_vllm/engine/profiles/vllm_d9105ea80_sm89_eager.py", "kind": "layer", "symbol": "<module>", "detail": "engine.profiles.vllm_d9105ea80_sm89_eager -> observe.events"},
     {"file": "verity_vllm/engine/profiles/vllm_d9105ea80_sm89_eager.py", "kind": "layer", "symbol": "<module>", "detail": "engine.profiles.vllm_d9105ea80_sm89_eager -> observe.fold.patterns"},
-    {"file": "verity_vllm/engine/profiles/vllm_d9105ea80_sm89_eager.py", "kind": "layer", "symbol": "<module>", "detail": "engine.profiles.vllm_d9105ea80_sm89_eager -> observe.fold.patterns_fp8"},
+    {"file": "verity_vllm/engine/profiles/vllm_d9105ea80_sm89_eager.py", "kind": "layer", "symbol": "<module>", "detail": "engine.profiles.vllm_d9105ea80_sm89_eager -> observe.fold.patterns.fp8"},
     {"file": "verity_vllm/engine/profiles/vllm_d9105ea80_sm89_eager.py", "kind": "layer", "symbol": "<module>", "detail": "engine.profiles.vllm_d9105ea80_sm89_eager -> observe.fold.resolver"},
     {"file": "verity_vllm/engine/profiles/vllm_d9105ea80_sm89_eager.py", "kind": "layer", "symbol": "<module>", "detail": "engine.profiles.vllm_d9105ea80_sm89_eager -> properties.kernel_allowlist"},
     {"file": "verity_vllm/engine/rank_worker.py", "kind": "layer", "symbol": "<module>", "detail": "engine.rank_worker -> acquire.fa2_plane_classes"},
@@ -133,6 +133,6 @@
     {"file": "verity_vllm/program/kernels/twins.py", "kind": "layer", "symbol": "<module>", "detail": "program.kernels.twins -> check.fold_compare"},
     {"file": "verity_vllm/program/registry/lifted.py", "kind": "layer", "symbol": "<module>", "detail": "program.registry.lifted -> pipeline.global_program"},
     {"file": "verity_vllm/program/registry/lifted.py", "kind": "layer", "symbol": "<module>", "detail": "program.registry.lifted -> query.query_artifact"},
-    {"file": "verity_vllm/query/manifest/verify.py", "kind": "layer", "symbol": "<module>", "detail": "query.manifest.verify -> pipeline.cli"}
+    {"file": "verity_vllm/query/manifest/verify.py", "kind": "layer", "symbol": "<module>", "detail": "query.manifest.verify -> pipeline.manifest"}
   ]
 }

@@ -34,11 +34,12 @@ from verity_vllm.observe.events import (DispatchEnter, DispatchExit, Root, RunHe
 from verity_vllm.observe.fold.fold import FoldError, fold
 from verity_vllm.observe.fold.resolver import Compute, PerRow, Profile, Shared, Transparent, Gather
 from verity_vllm.check.match import rank_match as RM
-from verity_vllm.observe.fold.collective_pattern import TpCollective
+from verity_vllm.observe.fold.patterns.collectives import TpCollective
 from verity.ir.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.ir.program import Program
 from verity.ir.refs import Coll, array_of, concat, runs
 from verity_vllm.program.registry import b1, b1_tp2
+from verity_vllm.pipeline import cli
 from verity.ir.types import Array, Record, Value
 
 BF16, I32 = Value(16), Value(32)
@@ -739,7 +740,7 @@ def _e2e(tmp_path, monkeypatch, *, drop_rank1_log=False, rank1_mut=None, provena
         argv += ["--gprog-rank0", str(gp[0]), "--gprog-rank1", str(gp[1]), "--workload", str(wl)]
     if rank_workers:
         argv += ["--rank-workers", str(rank_workers)]
-    rc = FM.main(argv)
+    rc = cli.main(["tp-fold-match", *argv])
     return rc, json.loads((out / "tp2_fold_match.json").read_text()), out
 
 

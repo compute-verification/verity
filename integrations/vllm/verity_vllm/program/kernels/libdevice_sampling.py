@@ -15,19 +15,19 @@ With `gen_sampling_rng` (Philox4x32-10 + `uint_to_uniform_float`, already bit-ex
 `g(seed, pos)[v] = -logf(-log1pf(-max(u, 2^-31ish)))` a pure integer/fp32 function that the laptop reproduces bit for bit —
 the `rng` root class needs no tolerance and no margin certificate (verified against the GPU by `gen_ov_sampling_probe.py`).
 
-    python -m verity_vllm.program.kernels.libdevice_sampling --compare PROBE_DIR   # PROBE_DIR/g_<seed>_<pos>.npy from the pod probe
+    verity-vllm libdevice-sampling --compare PROBE_DIR   # PROBE_DIR/g_<seed>_<pos>.npy from the pod probe
 """
 
 from __future__ import annotations
 
-import argparse
 import json
 import struct
-import sys
 from pathlib import Path
 
 import numpy as np
+from dataclasses import dataclass
 
+from verity_vllm.config import option
 from verity_vllm.program.kernels import sampling_rng as R
 
 F32 = np.float32
@@ -190,18 +190,16 @@ def compare_dir(probe_dir: Path) -> dict:
     return out
 
 
-def main(argv=None) -> int:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--compare", required=True, help="directory with the pod probe's g_<seed>_<pos>_<V>.npy dumps")
-    ap.add_argument("--out", default=None)
-    a = ap.parse_args(argv)
+@dataclass(frozen=True, kw_only=True)
+class Options:
+    compare: str = option("--compare", help="directory with the pod probe's g_<seed>_<pos>_<V>.npy dumps")
+    out: str | None = option("--out", default=None)
+
+
+def main(a: Options) -> int:
     rep = compare_dir(Path(a.compare))
     txt = json.dumps(rep, indent=1)
     if a.out:
         Path(a.out).write_text(txt + "\n")
     print(txt)
     return 0 if rep["all_bit_exact"] else 1
-
-
-if __name__ == "__main__":
-    sys.exit(main())

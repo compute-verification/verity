@@ -21,14 +21,15 @@ peer-input operand class and a sharded weights Record — see tp-STATUS); a PASS
 
 from __future__ import annotations
 
-import argparse
 import hashlib
 import json
 import os
 import sys
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
+from verity_vllm.config import option
 from verity_vllm.pipeline.build import read_tp_links, same_module_path
 
 
@@ -307,7 +308,6 @@ def _build_dirs(args) -> list[str]:
     return [args.build_rank0, args.build_rank1]
 
 
-
 def _count(xs) -> dict:
     h: dict = {}
     for x in xs:
@@ -319,28 +319,28 @@ def _write(run: Path, res: dict) -> None:
     (run / "tp2_match.json").write_text(json.dumps(res, indent=1, default=str) + "\n")
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--arm", choices=("capture", "control", "check"), required=True)
-    ap.add_argument("--workload", default=None)
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--checkpoints", default="manifests/checkpoints.json")
-    ap.add_argument("--case", default=None)
-    ap.add_argument("--tp", type=int, default=2)
-    ap.add_argument("--engine-arg", action="append", default=[])
-    ap.add_argument("--max-num-seqs", type=int, default=8)
-    ap.add_argument("--no-warmup", action="store_true")
-    ap.add_argument("--store-steps", type=int, default=1 << 30, help="save the partial/received tensors of steps < N (all by default)")
-    ap.add_argument("--rpc-timeout", type=float, default=1800.0)
-    ap.add_argument("--build-rank0", default=None)
-    ap.add_argument("--build-rank1", default=None)
-    ap.add_argument("--build-rank", action="append", default=[], help="[lane vllm-tp-n] rank r's Build dir, repeated in rank order (world = count)")
-    args = ap.parse_args()
+@dataclass(frozen=True, kw_only=True)
+class Options:
+    arm: str = option("--arm", choices=("capture", "control", "check"))
+    workload: str | None = option("--workload", default=None)
+    out: str = option("--out")
+    checkpoints: str = option("--checkpoints", default="manifests/checkpoints.json")
+    case: str | None = option("--case", default=None)
+    tp: int = option("--tp", type=int, default=2)
+    engine_arg: list[str] = option("--engine-arg", action="append", default=[])
+    max_num_seqs: int = option("--max-num-seqs", type=int, default=8)
+    no_warmup: bool = option("--no-warmup", default=False, action="store_true")
+    store_steps: int = option("--store-steps", type=int, default=1 << 30,
+                              help="save the partial/received tensors of steps < N (all by default)")
+    rpc_timeout: float = option("--rpc-timeout", type=float, default=1800.0)
+    build_rank0: str | None = option("--build-rank0", default=None)
+    build_rank1: str | None = option("--build-rank1", default=None)
+    build_rank: list[str] = option("--build-rank", action="append", default=[],
+                                   help="[lane vllm-tp-n] rank r's Build dir, repeated in rank order (world = count)")
+
+
+def main(args: Options) -> int:
     if args.arm == "check":
         return _check_main(args)
     _engine_main(args)
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
