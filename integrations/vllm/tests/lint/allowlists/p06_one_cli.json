@@ -217,10 +217,6 @@
     {"file": "verity_vllm/query/manifest/verify.py", "kind": "argparse", "symbol": "<module>", "detail": "import argparse"},
     {"file": "verity_vllm/query/manifest/verify.py", "kind": "main-block", "symbol": "<module>", "detail": "if __name__ == \"__main__\""},
     {"file": "verity_vllm/target_family.py", "kind": "argparse", "symbol": "<module>", "detail": "import argparse"},
-    {"file": "verity_vllm/target_family.py", "kind": "main-block", "symbol": "<module>", "detail": "if __name__ == \"__main__\""},
-    {"file": "verity_vllm/tp/analyze.py", "kind": "argparse", "symbol": "<module>", "detail": "import argparse"},
-    {"file": "verity_vllm/tp/analyze.py", "kind": "main-block", "symbol": "<module>", "detail": "if __name__ == \"__main__\""},
-    {"file": "verity_vllm/tp/collective_link.py", "kind": "argparse", "symbol": "<module>", "detail": "import argparse"},
-    {"file": "verity_vllm/tp/collective_link.py", "kind": "main-block", "symbol": "<module>", "detail": "if __name__ == \"__main__\""}
+    {"file": "verity_vllm/target_family.py", "kind": "main-block", "symbol": "<module>", "detail": "if __name__ == \"__main__\""}
   ]
 }

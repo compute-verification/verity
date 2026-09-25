@@ -21,7 +21,7 @@ import time
 from typing import Any
 
 from verity_vllm.commit.opened import OpenedReader, OpeningNotVerified
-from verity_vllm.tp.collective_sites import MOE_COLLECTIVE_CLASSES as MOE_SITE_CLASSES, MOE_COLLECTIVE_MODULES
+from verity_vllm.collectives.collective_sites import MOE_COLLECTIVE_CLASSES as MOE_SITE_CLASSES, MOE_COLLECTIVE_MODULES
 
 SITES = (("vllm.model_executor.layers.linear", "tensor_model_parallel_all_reduce", "all_reduce"),
          ("vllm.model_executor.layers.vocab_parallel_embedding", "tensor_model_parallel_all_reduce", "all_reduce"),
@@ -142,7 +142,7 @@ class TPPartialSource:
         # (shared with the Match recorder); this source hooks the modules for attribution, patches their modules' collective names, binds
         # each call's rank-local input (`<module>/shard_rank<r>` | `/part_rank<r>`) AND received output (`<module>/out`; no layer module
         # hook binds it) -- the k-th call of the step is the binder's occurrence k = the manifest's invocation k (`collective_site_aliases`).
-        from verity_vllm.tp.collective_sites import mid_module_sites
+        from verity_vllm.collectives.collective_sites import mid_module_sites
         self.mid_sites: dict[str, dict[str, Any]] = {s["name"]: s for s in mid_module_sites(model, self.world)}
         self.sites += [(s["name"], s["cls"]) for s in self.mid_sites.values() if s["name"] not in {n for n, _c in self.sites}]
         self._occ: dict[tuple[int, str], int] = {}                       # (step, member) -> calls bound so far (mid-module sites commit a member twice)
@@ -238,7 +238,7 @@ class TPPartialSource:
             except Exception:  # noqa: BLE001
                 continue
         if self.mid_sites:
-            from verity_vllm.tp.collective_sites import patch_targets
+            from verity_vllm.collectives.collective_sites import patch_targets
             targets += patch_targets(list(self.mid_sites.values()))               # [R19 moe] the model classes' own imports of the names
         done: set[tuple[int, str]] = set()
         for mod, attr, kind in targets:

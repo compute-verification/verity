@@ -51,6 +51,9 @@
     {"file": "verity_vllm/check/value_check.py", "kind": "model", "symbol": "<module>", "detail": "gemma"},
     {"file": "verity_vllm/check/value_check.py", "kind": "model", "symbol": "_cls", "detail": "gemma"},
     {"file": "verity_vllm/check/verdict.py", "kind": "model", "symbol": "c2_rules", "detail": "mixtral"},
+    {"file": "verity_vllm/collectives/collective_sites.py", "kind": "layer-class", "symbol": "<module>", "detail": "FusedMoE"},
+    {"file": "verity_vllm/collectives/collective_sites.py", "kind": "layer-class", "symbol": "<module>", "detail": "MoERunner"},
+    {"file": "verity_vllm/collectives/collective_sites.py", "kind": "layer-class", "symbol": "<module>", "detail": "SharedFusedMoE"},
     {"file": "verity_vllm/commit/binding.py", "kind": "layer-class", "symbol": "<module>", "detail": "GeluAndMul"},
     {"file": "verity_vllm/commit/binding.py", "kind": "layer-class", "symbol": "<module>", "detail": "GemmaRMSNorm"},
     {"file": "verity_vllm/commit/binding.py", "kind": "layer-class", "symbol": "<module>", "detail": "LayerNorm"},
@@ -297,14 +300,6 @@
     {"file": "verity_vllm/target_family.py", "kind": "gpu", "symbol": "<module>", "detail": "l4"},
     {"file": "verity_vllm/target_family.py", "kind": "gpu", "symbol": "<module>", "detail": "l40"},
     {"file": "verity_vllm/target_family.py", "kind": "gpu", "symbol": "<module>", "detail": "l40s"},
-    {"file": "verity_vllm/target_family.py", "kind": "gpu", "symbol": "<module>", "detail": "rtx4090"},
-    {"file": "verity_vllm/tp/analyze.py", "kind": "layer-class", "symbol": "classify_shard", "detail": "ColumnParallelLinear"},
-    {"file": "verity_vllm/tp/analyze.py", "kind": "layer-class", "symbol": "classify_shard", "detail": "MergedColumnParallelLinear"},
-    {"file": "verity_vllm/tp/analyze.py", "kind": "layer-class", "symbol": "classify_shard", "detail": "QKVParallelLinear"},
-    {"file": "verity_vllm/tp/analyze.py", "kind": "layer-class", "symbol": "classify_shard", "detail": "RowParallelLinear"},
-    {"file": "verity_vllm/tp/analyze.py", "kind": "layer-class", "symbol": "classify_shard", "detail": "VocabParallelEmbedding"},
-    {"file": "verity_vllm/tp/collective_sites.py", "kind": "layer-class", "symbol": "<module>", "detail": "FusedMoE"},
-    {"file": "verity_vllm/tp/collective_sites.py", "kind": "layer-class", "symbol": "<module>", "detail": "MoERunner"},
-    {"file": "verity_vllm/tp/collective_sites.py", "kind": "layer-class", "symbol": "<module>", "detail": "SharedFusedMoE"}
+    {"file": "verity_vllm/target_family.py", "kind": "gpu", "symbol": "<module>", "detail": "rtx4090"}
   ]
 }

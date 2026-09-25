@@ -1,5 +1,5 @@
 """Lane tp2 (window 2026-09-17): the quarantine `AllReduceSumBf16{N,R}` definition and the collective linkage tool
-(`verity_vllm.tp.collective_link`) on the ov-tp2 evidence shards (`tests/fixtures/tp2/`, see its README)."""
+(`tests.collectives.collective_link`) on the ov-tp2 evidence shards (`tests/fixtures/tp2/`, see its README)."""
 
 from __future__ import annotations
 
@@ -12,8 +12,8 @@ import pytest
 
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StorageAlloc, StorageFree, TritonLaunch, ViewDesc
 from verity_vllm.properties.quarantine_lint import lint
-from verity_vllm.tp import collective_link as CL
-from verity_vllm.tp.collective_record import COLLECTIVE_KINDS, MISSING_IN_RECORD, SCHEMA_LINK, SCHEMA_SHARD, validate_launch
+from tests.collectives import collective_link as CL
+from verity_vllm.collectives.collective_record import COLLECTIVE_KINDS, MISSING_IN_RECORD, SCHEMA_LINK, SCHEMA_SHARD, validate_launch
 from verity.ir.codec import decode_program, encode_program, program_digest
 from verity.ir.defs import REGISTRY, bind
 from verity.ir.evaluate import evaluate_region
@@ -183,7 +183,7 @@ def test_r3_per_hop_rounding_and_order_dependence_exist():
 def test_r2_equals_the_wave1_body_checker_formula():
     """The 116/116 `body_ok` evidence (`tp2_body.summary.json`) was produced by `tp.analyze`'s numpy body
     `f32_to_bf16_rne(f32(x_0) + f32(x_1))`; the Definition computes the same words, so that evidence is evidence FOR this definition."""
-    from verity_vllm.tp import analyze as ta
+    from tests.collectives import analyze as ta
     rng = np.random.default_rng(7)
     N = 2048
     a = ta.f32_to_bf16_rne((rng.standard_normal(N) * rng.choice([0.01, 1.0, 300.0], N)).astype(np.float32))

@@ -38,7 +38,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-from verity_vllm.tp.collective_sites import MOE_COLLECTIVE_CLASSES, MOE_COLLECTIVE_MODULES
+from verity_vllm.collectives.collective_sites import MOE_COLLECTIVE_CLASSES, MOE_COLLECTIVE_MODULES
 
 
 def repo_modules_loaded() -> dict[str, Any]:
@@ -544,7 +544,7 @@ class TP2CaptureWorkerExtension:
         # from inside its forward (OlmoeAttention._apply_qk_norm: q and k all-gathered, twice per layer) is invisible to the wrappers
         # above -- R17 row #70 recorded 34 collectives per step against the Build's 66 links (structure FAIL).  The one finder shared
         # with the committer's TPPartialSource names the modules (hooked below for attribution) and the python modules to patch.
-        from verity_vllm.tp.collective_sites import mid_module_sites, patch_targets
+        from verity_vllm.collectives.collective_sites import mid_module_sites, patch_targets
         mid = mid_module_sites(model, world)
         st["mid_sites"] = {s["name"]: s for s in mid}
         sites += patch_targets(mid)

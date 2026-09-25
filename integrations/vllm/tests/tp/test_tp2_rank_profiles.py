@@ -29,7 +29,7 @@ def test_rank_profile_states_the_shard_configuration_and_the_rank_patterns(mod, 
 
 def test_qwen_rank_profile_shares_the_llama_rank_facts_not_a_copy():
     import importlib
-    from verity_vllm.tp.embedding_shard import EmbeddingShardCuda
+    from verity_vllm.collectives.embedding_shard import EmbeddingShardCuda
     llama = importlib.import_module("verity_vllm.engine.profiles.derived_LLAMA32_1B_tp2")
     qwen = importlib.import_module("verity_vllm.engine.profiles.derived_B1_tp2")
     assert type(qwen.PROFILE.patterns[0]) is type(llama.PROFILE.patterns[0]) is EmbeddingShardCuda   # one generic `world > 1` branch

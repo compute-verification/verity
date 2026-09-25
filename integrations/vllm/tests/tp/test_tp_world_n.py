@@ -194,7 +194,7 @@ def _rank_events(rank: int, world: int, *, ar_shape=(4, 8), steps=(0,)):
 
 
 def test_link_three_synthetic_ranks():
-    from verity_vllm.tp import collective_link as CL
+    from tests.collectives import collective_link as CL
     W = 3
     sh = {r: CL.extract_rank_shard(_rank_events(r, W), rank=r) for r in range(W)}
     for r in range(W):

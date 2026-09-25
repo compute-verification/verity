@@ -63,18 +63,13 @@ INTERIM_LAYER = {
     "verity_vllm.program": "program",                          # frontend/, registry/, workload; numerics/ -> program/kernels/
     "verity_vllm.pipeline.global_program": "pipeline",          # -> pipeline/build.py
     "verity_vllm.program.frontend.liveness": "core",
-    "verity_vllm.tp": "pipeline",                              # capture, commit, match, fold_match -> world-parametric pipeline/ drivers
-    "verity_vllm.tp.collective_record": "collectives",
-    "verity_vllm.tp.collective_sites": "collectives",
-    "verity_vllm.tp.embedding_shard": "collectives",
+    "verity_vllm.collectives": "collectives",
     "verity_vllm.engine.rank_worker": "engine",                         # -> engine/rank_worker.py
     "verity_vllm.acquire.sources.partial_source": "acquire",                # -> acquire/sources/
     "verity_vllm.program.frontend.export_ops": "program",                    # -> program/frontend/
     "verity_vllm.observe.fold.collective_pattern": "observe|commit",     # -> observe/fold/patterns/
     "verity_vllm.check.match.rank_match": "check|properties",           # -> check/match/
     "verity_vllm.check.match.xrank_collectives": "check|properties",    # -> check/match/
-    "verity_vllm.tp.analyze": "tests",
-    "verity_vllm.tp.collective_link": "tests",
 }
 
 #: The property harnesses.

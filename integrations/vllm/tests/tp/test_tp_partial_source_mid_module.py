@@ -1,6 +1,6 @@
 """[R19 moe F-r19-moe-1, row #70] the TP partial source at a MID-module collective site -- a model class (OlmoeAttention) that calls
 `tensor_model_parallel_all_gather` from its own module, twice per forward (q, then k).  The source finds the site from the class source
-(`verity_vllm.tp.collective_sites`), hooks the module, binds each call's rank-local INPUT as `<module>/shard_rank<r>` and RECEIVED output
+(`verity_vllm.collectives.collective_sites`), hooks the module, binds each call's rank-local INPUT as `<module>/shard_rank<r>` and RECEIVED output
 as `<module>/out` (occurrence k = the manifest's invocation k), declares 2 partials per step for identity_check, and pairs the Match oracle
 by (step, module, occurrence).  Torch-free (fake tensors / modules / committer), as test_tp_partial_source_moe."""
 from __future__ import annotations
@@ -12,7 +12,7 @@ import pytest
 pytest.importorskip("verity_vllm.acquire.sources.partial_source")
 from verity_vllm.acquire.sources import partial_source as tps  # noqa: E402
 from tests.tp.test_tp_partial_source_moe import _Committer, _Mod, _T, _make, _model  # noqa: E402
-from verity_vllm.tp import collective_sites as CS  # noqa: E402
+from verity_vllm.collectives import collective_sites as CS  # noqa: E402
 
 THIS = __name__
 
