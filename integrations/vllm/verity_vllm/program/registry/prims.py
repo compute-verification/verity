@@ -28,6 +28,7 @@ import numpy as np
 from verity.ir.defs import PrimitiveDefinition, primitive
 from verity.ir.types import Array, Value
 from verity.ml.prims import Bf16ToF32, F2fpBf16, F32ToBf16Rn
+from verity.ml.scalar import Bf16GtStrict, I32Add, I32Eq, I32Le, SelectBf16, SelectF32, SelectI32
 from verity.ml.tc.silicon import AMPERE_BF16_M16N8K16 as _AMPERE_BF16_M16N8K16
 from verity.ml.tc.total import tc_dot_total as _tc_dot_total
 
@@ -629,53 +630,6 @@ def MufuTanh(x: int) -> int:
     cov = mufu_tanh_coverage()
     raise MufuTanhUnmeasured(f"MufuTanh(0x{u:08X}) = tanh.approx.f32({f32_of(u)!r}): word outside the loaded tables "
                              f"{[(s['lo'], s['hi']) for s in cov['shards']]} and the established regions {cov['rules']}")
-
-
-# ---------------------------------------------------------------------------------------------------------
-# integer / selection
-# ---------------------------------------------------------------------------------------------------------
-
-
-@primitive("I32Le", 1, [("a", I32), ("b", I32)], BIT, conformance="exact-model-tested")
-def I32Le(a: int, b: int) -> int:
-    """Signed 32-bit a <= b."""
-    sa = a - (1 << 32) if a & 0x80000000 else a
-    sb = b - (1 << 32) if b & 0x80000000 else b
-    return 1 if sa <= sb else 0
-
-
-@primitive("I32Add", 1, [("a", I32), ("b", I32)], I32, conformance="exact-model-tested")
-def I32Add(a: int, b: int) -> int:
-    """Wrapping 32-bit add."""
-    return (a + b) & 0xFFFFFFFF
-
-
-@primitive("I32Eq", 1, [("a", I32), ("b", I32)], BIT, conformance="exact-model-tested")
-def I32Eq(a: int, b: int) -> int:
-    return 1 if (a & 0xFFFFFFFF) == (b & 0xFFFFFFFF) else 0
-
-
-@primitive("SelectF32", 1, [("c", BIT), ("a", F32), ("b", F32)], F32, conformance="exact-model-tested")
-def SelectF32(c: int, a: int, b: int) -> int:
-    """c ? a : b."""
-    return a if c & 1 else b
-
-
-@primitive("SelectBf16", 1, [("c", BIT), ("a", BF16), ("b", BF16)], BF16, conformance="exact-model-tested")
-def SelectBf16(c: int, a: int, b: int) -> int:
-    return a if c & 1 else b
-
-
-@primitive("SelectI32", 1, [("c", BIT), ("a", I32), ("b", I32)], I32, conformance="exact-model-tested")
-def SelectI32(c: int, a: int, b: int) -> int:
-    return a if c & 1 else b
-
-
-@primitive("Bf16GtStrict", 1, [("a", BF16), ("b", BF16)], BIT, conformance="exact-model-tested")
-def Bf16GtStrict(a: int, b: int) -> int:
-    """a > b on bf16 values (NaN compares false), used by greedy argmax (first index wins ties)."""
-    fa, fb = f32_of(bf16_to_f32_bits(a)), f32_of(bf16_to_f32_bits(b))
-    return 1 if fa > fb else 0
 
 
 # ---------------------------------------------------------------------------------------------------------

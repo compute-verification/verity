@@ -30,7 +30,7 @@ words and cross-checked against a CPU re-quantisation of the checkpoint; fp8.md 
 and the e4m3 activations are **computed** by `Fp8ActQuant` from the norm output — never Inputs.
 
 Registered functions (all `Name_v1`):
-  primitives  F32Fabs, F32Fmaxf, F32Fminf, F32ToE4m3Sat, HopperE4m3QgmmaDot32
+  primitives  F32ToE4m3Sat, HopperE4m3QgmmaDot32; core's: F32Fabs, F32Fmaxf, F32Fminf (`verity.ml.scalar`)
   composites  Fp8RowAbsMax{K}, Fp8RowScale, Fp8ActQuant{K}, DotE4m3{K}, ScaledMmFp8Coordinate{K,BIAS},
               ScaledMmFp8{K,N,BIAS} (the cutlass GEMM over the quantised row), QuantLinearFp8{K,N,BIAS} (= Fp8ActQuant
               + ScaledMmFp8, the linear as one function), LayerPreFp8{C,L0}, LayerPostFp8{C}, ServeFp8{C,LP,STEPS}
@@ -48,10 +48,11 @@ import numpy as np
 from verity.ir.defs import CompositeDefinition, PrimitiveDefinition, bind, composite, primitive
 from verity.ir.refs import Coll as _Coll, concat, tuple_of
 from verity.ir.types import Array, Record, Tuple, Value
+from verity.ml.scalar import F32Fabs, F32Fmaxf, F32Fminf
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import hopper as H
 from verity_vllm.program.registry import prims as P
-from verity_vllm.program.registry.prims import BF16, F32, I32, bits_of, f32_of, f32_is_nan
+from verity_vllm.program.registry.prims import BF16, F32, I32, bits_of, f32_of
 
 # ---------------------------------------------------------------------------------------------------------
 # types and constants
@@ -62,7 +63,6 @@ A32_8 = Array(32, E4M3)  # one k32 wgmma operand slice
 
 E4M3_MAX = 448.0
 E4M3_NAN = 0x7F
-FP32_CANONICAL_NAN = 0x7FFFFFFF
 
 C448 = b1.f32c(448.0)        # quant_type_max_v<fp8_e4m3fn> as float
 C_NEG448 = b1.f32c(-448.0)
@@ -78,46 +78,6 @@ WARP = 32
 # ---------------------------------------------------------------------------------------------------------
 # scalar primitives
 # ---------------------------------------------------------------------------------------------------------
-
-
-@primitive("F32Fabs", 1, [("x", F32)], F32, conformance="exact-model-tested")
-def F32Fabs(x: int) -> int:
-    """`fabsf`: clear the sign bit (NaN payloads kept)."""
-    return x & 0x7FFFFFFF
-
-
-def _fmaxmin(a: int, b: int, want_max: bool) -> int:
-    """CUDA `fmaxf`/`fminf` (IEEE maxNum/minNum, PTX `max.f32`/`min.f32`): a NaN operand yields the other operand,
-    two NaNs the canonical NaN; `+0` is treated as greater than `-0`."""
-    na, nb = f32_is_nan(a), f32_is_nan(b)
-    if na and nb:
-        return FP32_CANONICAL_NAN
-    if na:
-        return b
-    if nb:
-        return a
-    fa, fb = f32_of(a), f32_of(b)
-    if fa == fb:  # equal values: only ±0 can differ in encoding
-        if (a & 0x7FFFFFFF) == 0 and (b & 0x7FFFFFFF) == 0:
-            pos = 0 if (a == 0 or b == 0) else 0x80000000
-            neg = 0x80000000 if (a == 0x80000000 or b == 0x80000000) else 0
-            return pos if want_max else neg
-        return a
-    if want_max:
-        return a if fa > fb else b
-    return a if fa < fb else b
-
-
-@primitive("F32Fmaxf", 1, [("a", F32), ("b", F32)], F32, conformance="exact-model-tested")
-def F32Fmaxf(a: int, b: int) -> int:
-    """`fmaxf(a, b)` (PTX `max.f32`): the larger operand; NaN yields the other operand; `max(+0, -0) = +0`."""
-    return _fmaxmin(a, b, True)
-
-
-@primitive("F32Fminf", 1, [("a", F32), ("b", F32)], F32, conformance="exact-model-tested")
-def F32Fminf(a: int, b: int) -> int:
-    """`fminf(a, b)` (PTX `min.f32`): the smaller operand; NaN yields the other operand; `min(+0, -0) = -0`."""
-    return _fmaxmin(a, b, False)
 
 
 def f32_to_e4m3_sat_bits(u: int) -> int:

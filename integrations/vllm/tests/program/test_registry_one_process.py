@@ -12,19 +12,25 @@ import pytest
 
 import verity_vllm.program.registry as registry
 
-CORE = ("verity.ml.prims", "verity.ml.gemm", "verity.ml.kernels")
+CORE = ("verity.ml.prims", "verity.ml.scalar", "verity.ml.gemm", "verity.ml.kernels")
 
 CHECK = """
 import importlib, sys
 for m in sys.argv[1:]:
     importlib.import_module(m)
 from verity.ir.defs import REGISTRY
-from verity.ml import gemm as G, prims as C
-from verity_vllm.program.registry import b1, hopper as H, prims as P, targets as T
+from verity.ml import gemm as G, prims as C, scalar as S
+from verity_vllm.program.registry import b1, fp8, hopper as H, moe, pad_prims as PP, prims as P, sampling as SM, targets as T
 core = [C.Bf16ToF32, C.F32ToBf16Rn, C.F2fpBf16, C.HopperBF16WgmmaDot16, C.AmpereBF16TcDot16, C.ZERO32, G.DotBf16,
         G.GemmCoordinate, G.Gemm]
+core += [getattr(S, n) for n in S.__all__ if n not in ("BIT", "BF16", "F32", "I32")]
 assert all(REGISTRY[d.id] is d for d in core), [d.id for d in core if REGISTRY[d.id] is not d]
 assert (P.Bf16ToF32, P.F32ToBf16Rn, P.F2fpBf16) == (C.Bf16ToF32, C.F32ToBf16Rn, C.F2fpBf16)
+assert (P.I32Le, P.I32Add, P.I32Eq, P.SelectF32, P.SelectBf16, P.SelectI32, P.Bf16GtStrict) == (
+    S.I32Le, S.I32Add, S.I32Eq, S.SelectF32, S.SelectBf16, S.SelectI32, S.Bf16GtStrict)
+assert fp8.FP8_PRIMITIVES[:3] == [S.F32Fabs, S.F32Fmaxf, S.F32Fminf]
+assert (moe.F32Sat, moe.F32Neg, moe.F32BitsShl23, moe.F32IsFinite) == (S.F32Sat, S.F32Neg, S.F32BitsShl23, S.F32IsFinite)
+assert PP.ALL_NEW == [S.BitAnd, S.BitNot] and (SM.F32Eq, SM.BitOr, SM.BitNot) == (S.F32Eq, S.BitOr, S.BitNot)
 assert H.HopperBF16WgmmaDot16 is C.HopperBF16WgmmaDot16 is T.DOTS["HopperBF16WgmmaDot16"]
 assert (b1.DotBf16V2, b1.GemmCoordinateV2, b1.GemmV2) == (G.DotBf16, G.GemmCoordinate, G.Gemm)
 assert b1.const is C.const and b1.ZERO32 is C.ZERO32 and b1.const(16, 0) is C.const(16, 0)
