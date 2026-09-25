@@ -213,6 +213,58 @@ MERGED = "LK"
 TAG_SHIFT = 2**20
 
 
+def _table_rows(text: str, names: list[str]) -> dict[str, np.ndarray]:
+    """The ``(nrows, cols)`` int64 rows of the tables ``names`` of a circuit text, as ``gpu.circuit.Table.device_rows``
+    materialises them (row-listed, ``itable`` per ``gpu.circuit.materialise``, the implicit ``R<w>``), without torch:
+    ``pins.txt`` generators run in the torch-free test environment."""
+    out: dict[str, np.ndarray] = {}
+    listed: dict[str, list[list[int]]] = {}
+    cols: dict[str, int] = {}
+    cur = None
+    for line in text.splitlines():
+        toks = line.split()
+        if not toks:
+            continue
+        if toks[0] == "table":
+            cur = toks[1] if toks[1] in names else None
+            if cur is not None:
+                listed[cur], cols[cur] = [], int(toks[2])
+        elif toks[0] == "row":
+            if cur is not None:
+                listed[cur].append([int(v) % P for v in toks[1:]])
+        elif toks[0] == "itable" and toks[1] in names:
+            cur, rows, kind, params = None, int(toks[3]), toks[4], [int(v) for v in toks[5:]]
+            key = np.arange(rows, dtype=np.int64)
+            if kind == "shift":
+                bits, scale, R = params
+                if rows != (1 << bits) * R:
+                    raise ValueError("shift table row count")
+                x, rem = key // R, key % R
+                d, s = rem // 2, rem % 2
+                v = (x << scale) >> d
+                val = np.where(s == 1, (-v) % P, v % P)
+            elif kind == "tnorm":
+                vb, k_rows, k_lo = params
+                if rows != (1 << vb) * k_rows:
+                    raise ValueError("tnorm table row count")
+                koff, v = key >> vb, key & ((1 << vb) - 1)
+                k = koff + k_lo
+                val = np.where(k >= 0, v << np.maximum(k, 0), v >> np.maximum(-k, 0)) % P
+            else:
+                raise ValueError(f"unknown implicit table kind {kind}")
+            out[toks[1]] = np.stack([key, val], axis=1)
+        else:
+            cur = None
+    for t, rows in listed.items():
+        out[t] = np.asarray(rows, dtype=np.int64).reshape(len(rows), cols[t])
+    for t in names:
+        if t not in out and t.startswith("R") and t[1:].isdigit() and 1 <= int(t[1:]) <= 16:
+            out[t] = np.arange(1 << int(t[1:]), dtype=np.int64)[:, None]
+        if t not in out:
+            raise ValueError(f"query into undefined table {t}")
+    return out
+
+
 def merge_tables(text: str) -> str:
     """The circuit text with every table (row-listed, ``itable``, the implicit ``R<w>``) as one row-listed table ``LK``:
     source table ``i >= 1`` (by name) contributes the rows ``(i 2^20 + k, i, v_1(k), ..., 0...)``, a query ``(key, out...)``
@@ -220,13 +272,10 @@ def merge_tables(text: str) -> str:
     matches exactly the tuples it matched before; every source key is in ``[0, 2^20)``, which keeps the first column unique
     (``logup.multiplicities``).  The GKR prover's LogUp cost is mostly a per-round latency paid per table, so one tree of
     ``2^25`` leaves costs a fraction of ten of ``2^18..2^24``."""
-    from ..circuit import parse_circuit
-
-    circ = parse_circuit(text)
-    used = sorted({q.table for q in circ.queries})
+    used = sorted({line.split(maxsplit=2)[1] for line in text.splitlines() if line.startswith("query ")})
     if not used:
         return text
-    src = {t: circ.table(t).device_rows("cpu").numpy() % P for t in used}
+    src = {t: r % P for t, r in _table_rows(text, used).items()}
     width = 1 + max(r.shape[1] for r in src.values())
     blocks = []
     tag = {}
