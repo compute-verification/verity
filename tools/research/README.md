@@ -70,6 +70,7 @@ research status [--refresh] [--all] [--json]
 research inspect RUN [--json]
 research data SUBCOMMAND ...             # the store: put/show/fetch/select/... and lookup / pull / attempt publish
 research pods create|list|terminate|check-part ...                # RunPod lifecycle (pods/runpod.py, pods/part.py)
+research pods register|unregister|registry ...                    # the pod registry, one file per machine (pods/registry.py)
 research pods ssh TARGET [--print] [-- CMD...]                    # TARGET = machines.toml name | pod id | pod name (pods/connect.py)
 research pods sync TARGET [SRC] [--dest DIR] [--exclude G]...     # the worktree's git-visible files -> DIR (default /workspace/src)
 research tele SUBCOMMAND ...             # the harness's own surface
@@ -99,6 +100,17 @@ project = "verity"
 root = "/workspace/research"
 python = "python3"
 ~~~
+
+The pod registry (`pods/registry.py`) is the same table as one file per machine,
+`machines.d/<name>.toml` in the notes repo, so creating a pod never means
+hand-merging a shared file: `research pods create --name N ... --register
+--project P`, or `research pods register N --pod-id ID --project P` for an
+existing pod. `register` refuses a pod id the RunPod account doesn't know and
+a pod whose name isn't `N`. It is read where `$RESEARCH_MACHINES_D` points,
+or from `~/.research/notes/machines.d` on a machine without machines.toml.
+The two sources merge, and a name they bind to different pods is refused.
+`research pods registry` lists the merged table, and `registry import
+--apply` seeds `machines.d` from machines.toml.
 
 An unlisted or foreign machine is refused before anything is contacted. The
 tool ships as a content-addressed source snapshot under `<root>/tool/` and
