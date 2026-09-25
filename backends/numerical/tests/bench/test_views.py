@@ -157,7 +157,8 @@ def committed(store: LocalStore, leaf: str = "blake3", *, t_total: float = 0.4, 
         if name == "rtt_method":
             doc["interaction"] = {"rtt_method": value}
             continue
-        unit = {"rounds.sequential_depth": "count", "net.bytes_out": "B", "net.bytes_in": "B", "net.rtt_ms": "ms"}.get(name, "s")
+        unit = {"rounds.sequential_depth": "count", "rounds.protocol": "count", "net.bytes_out": "B", "net.bytes_in": "B", "net.rtt_ms": "ms",
+                "proof_bytes": "B", "relation.statement_bytes_total": "B"}.get(name, "s")
         doc["measurements"].append({"name": name, "value": value, "unit": unit})
     fp = doc["workload_fingerprint"]
     if B != 4096:
@@ -534,7 +535,7 @@ def test_the_cell_is_the_interaction_formula_at_the_reference_network(store: Loc
 
 
 @pytest.mark.parametrize(("over", "why"), [
-    ({"rounds.sequential_depth": None}, "rounds not recorded"),
+    ({"rounds.sequential_depth": None}, "a live-verifier result without its rounds"),
     ({"net.rtt_ms": None}, "no measured RTT"),
     ({"rtt_method": None}, "no how the RTT was measured"),
     ({"net.wait_seconds": None}, "no network wait"),
@@ -565,3 +566,24 @@ def test_flock_is_its_own_family_and_column(store: LocalStore) -> None:
     rows = dict((r[0], dict(zip(V.TABLE1_COLUMNS, r))) for _, r in V.table1_rows(views))
     assert rows["Flock (flock-128-r2, live coins)"]["Interaction model"].startswith("live verifier")
     assert rows["B-Ligero Fiat–Shamir (HVZK)"]["Interaction model"].startswith("non-interactive")
+
+
+def test_a_file_verified_result_derives_rounds_0_and_pays_its_bytes_over_the_reference_link(store: LocalStore) -> None:
+    """Every B-Ligero cell today is verified from its files: no measured RTT is needed. Its record is derived -- rounds = 0 whatever
+    the protocol's round count, bytes = proof + statement bytes, network time = bytes / 10 Gb/s -- and Table 3 keeps that transfer
+    as the interaction stage, footnoted."""
+    art = committed(store, t_total=0.4, commit=0.6, interaction={"rounds.sequential_depth": 3, "rounds.protocol": 3,
+                                                                 "proof_bytes": 1.25e9, "relation.statement_bytes_total": 5e6})
+    views = V.build(store)
+    cell = line(views)["cells"]["B-Ligero"]
+    assert cell is not None and cell.artifact == art
+    ix = cell.throughput["interaction"]
+    assert ix["derived"] and not ix["live"] and ix["rounds"] == 0 and ix["bytes_up"] == 1.255e9
+    assert cell.throughput["interaction_s"] == pytest.approx(1.255e9 * 8 / 10e9)
+    md = V.render_markdown(views)
+    share = 100 * V.stages(cell)["interaction"] / cell.overhead
+    assert f"Moving the proof alone is {share:.0f}–{share:.0f}% of those cells" in md and "0 (derived)" in md and "— (file-verified)" in md
+
+
+def test_flocks_declared_class_is_non_zk_proof() -> None:
+    assert V.FLOCK.proof_classes == ("NON_ZK_PROOF",) and "may change" in V.FLOCK_CONFIG.zk
