@@ -128,10 +128,15 @@ def prove(a) -> int:
         s.mkdir()
         fl = open(s / "flock.jsonl", "w")
         fe = open(s / "flock.stderr", "w")
-        t0 = time.perf_counter()
         fp = subprocess.Popen([a.flock, "cell-prove", "--verifier", a.verifier, "--vus", str(n), "--digests", str(cell / "leaf_digests.bin"),
                                "--prime-commitment", pc, "--operands", str(cell / "operands.bin"), "--root-f", str(s / "root_f.hex"),
-                               "--link-out", str(s / "link.json")], stdout=fl, stderr=fe)
+                               "--link-out", str(s / "link.json"), "--start", str(s / "start")], stdout=fl, stderr=fe)
+        while "READY" not in (s / "flock.stderr").read_text():   # the Flock statement is built (preprocessing, untimed)
+            if fp.poll() is not None:
+                raise SystemExit(f"flock-link cell-prove exited {fp.returncode}: {(s / 'flock.stderr').read_text()[-400:]}")
+            time.sleep(0.01)
+        t0 = time.perf_counter()
+        (s / "start").touch()
         tw = {}
 
         def exchange(root_f: bytes, s=s, tw=tw) -> LK.Context:

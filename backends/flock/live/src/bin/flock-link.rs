@@ -20,7 +20,7 @@
 //!   flock-link sigma      --vus V --digests FILE --prime-commitment HEX        print Σ's preimage (sigma.txt)
 //!   flock-link cell-serve --listen ADDR --out DIR --vus V --digests FILE --prime-commitment HEX --operator LANE [--sessions N]
 //!   flock-link cell-prove --verifier ADDR --vus V --digests FILE --prime-commitment HEX --operands FILE
-//!                         --root-f FILE --link-out FILE
+//!                         --root-f FILE --link-out FILE [--start FILE]
 //!   cell-prove waits for the prime prover's root_F (hex in --root-f), commits it with root_B, and writes the session's
 //!   points and y (and Σ, root_B) to --link-out for the prime prover to finish its proof against. cell-serve keeps each
 //!   session's proofs beside its record (E1).
@@ -921,6 +921,12 @@ fn main() {
                 link_out: Some(arg("--link-out", "")),
                 ..Plan::honest()
             };
+            // `--start FILE`: the statement is built; the session (and its clock) starts when FILE appears
+            eprintln!("READY");
+            let start = arg("--start", "");
+            while !start.is_empty() && !std::path::Path::new(&start).exists() {
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
             let t = shared(TcpTransport::connect(&arg("--verifier", "127.0.0.1:7200")).unwrap());
             let (v, _) = session(&ch, t, seed, &plan);
             println!("LIVE\t{v}");
