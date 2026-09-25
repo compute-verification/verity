@@ -248,61 +248,44 @@ def committed_trees(pinned: str, man: dict, *, instances_root: str | None = None
 
 
 def commitment_problems(pdir: Path, man: dict, pinned: str, reps: list[str], *, instances_root: str | None = None) -> tuple[bool, list[str]]:
-    """``(hashed, problems)``.  A hashed dump -- the pinned relation names a leaf scheme (``+blake3``: every statement must
-    carry a hash-authentication block), or some statement carries one -- passes only when every statement's three tree
-    references equal :func:`committed_trees` and each rep's statements' ``vu_index`` together cover ``[0, total_vus)``
-    exactly once (red-team-standard-hash R2).  The statements counted are the manifest's proof entries, and each rep dir must
-    hold exactly those ``.proof`` / ``.stmt`` pairs: ``batch --dir`` verifies proofs only, so a statement without a proof
-    must not count toward coverage (R4).  A dump that is not hashed is not checked here."""
+    """``(hashed, problems)``.  A dump whose statements carry a hash-authentication block (``included-hash``) passes only when
+    every statement's three tree references equal :func:`committed_trees` and each rep's statements' ``vu_index`` together
+    cover ``[0, total_vus)`` exactly once (red-team-standard-hash R2); a dump without one is not checked here.  A relation
+    named with a leaf (``+<leaf>``) is hashed: every statement must carry the block.  Coverage counts only what ``batch``
+    verifies, so in every dump each rep's ``.stmt`` stems must equal its ``.proof`` stems and the manifest's entries for it
+    (red-team-standard-hash R4: a statement without a proof claims VUs nobody proved)."""
     from .serialize import read_statement
 
-    entries: dict[str, list[str]] = {}
-    layout: list[str] = []
-    for f in man.get("files", []):
-        pf, sf = f.get("proof"), f.get("stmt")
-        if not pf:
-            if sf:
-                layout.append(f"manifest lists statement {sf} without a proof")
-            continue
-        r, stem = pf.split("/", 1)[0], Path(pf).stem
-        if sf != f"{r}/{stem}.stmt":
-            layout.append(f"manifest pairs proof {pf} with statement {sf}")
-        entries.setdefault(r, []).append(stem)
-    for r in sorted(set(reps) | set(entries)):
-        d = pdir / r
-        stmts = {f.stem for f in d.glob("*.stmt")} if d.is_dir() else set()
-        proofs = {f.stem for f in d.glob("*.proof")} if d.is_dir() else set()
-        listed = set(entries.get(r, []))
-        if not (stmts == proofs == listed) or len(listed) != len(entries.get(r, [])):
-            layout.append(f"{r}: {len(stmts)} statements, {len(proofs)} proofs, {len(entries.get(r, []))} manifest proof entries "
-                          f"(not the same files: {sorted(stmts ^ listed | proofs ^ listed)[:4]})")
-    def read(p: Path):
-        try:
-            return read_statement(p.read_bytes())
-        except Exception as e:  # noqa: BLE001  (the verifier rejects an unreadable statement; here it only cannot count)
-            layout.append(f"{p.parent.name}/{p.name}: unreadable statement ({type(e).__name__}: {e})")
-            return None
-
-    per_rep = {r: [(f"{s}.stmt", read(pdir / r / f"{s}.stmt")) for s in sorted(entries[r]) if (pdir / r / f"{s}.stmt").is_file()]
-               for r in entries}
-    hashed = "+" in pinned or any(getattr(st, "hash_auth", None) is not None for sts in per_rep.values() for _, st in sts)
-    if not hashed:
-        return False, []
-    if layout:
-        return True, layout[:8] + ([f"… {len(layout) - 8} more"] if len(layout) > 8 else [])
+    orphans: list[str] = []
+    for r in reps:
+        stmts, proofs = ({f.stem for f in (pdir / r).glob(f"*.{s}")} for s in ("stmt", "proof"))
+        listed = [f for f in man.get("files", []) if str(f.get("proof") or f.get("stmt") or "").split("/", 1)[0] == r]
+        if stmts != proofs:
+            orphans.append(f"{r}: {len(stmts - proofs)} statement(s) without a proof, {len(proofs - stmts)} proof(s) without a statement")
+        if any(not f.get("proof") for f in listed):
+            orphans.append(f"{r}: the manifest lists a statement without a proof")
+        if listed and {Path(f["proof"]).stem for f in listed if f.get("proof")} != proofs:
+            orphans.append(f"{r}: the manifest's proofs are not the rep's proofs")
+    per_rep: dict[str, list] = {}
+    for r in reps:
+        for f in sorted((pdir / r).glob("*.stmt")):
+            per_rep.setdefault(r, []).append((f.name, read_statement(f.read_bytes())))
+    hashed = "+" in (pinned or "") or any(getattr(st, "hash_auth", None) is not None for sts in per_rep.values() for _, st in sts)
+    if orphans or not hashed:
+        return hashed, orphans
     try:
         want = committed_trees(pinned, man, instances_root=instances_root)
     except ValueError as e:
         return True, [f"commitment: {e}"]
     total = want["y"][2]
     problems: list[str] = []
-    for r in sorted(set(reps) | set(per_rep)):
+    for r in reps:
         sts = per_rep.get(r, [])
         covered: list[int] = []
         for name, st in sts:
             ha = getattr(st, "hash_auth", None)
             if ha is None:
-                problems.append(f"{r}/{name}: no hash-authentication block in a hashed dump ({pinned})")
+                problems.append(f"{r}/{name}: no hash-authentication block beside hashed statements")
                 continue
             if sorted(t.name for t in ha.trees) != sorted(want):
                 problems.append(f"{r}/{name}: trees {sorted(t.name for t in ha.trees)}, the instance set commits {sorted(want)}")
@@ -375,8 +358,10 @@ def verify_tree(pdir: Path, man: dict, v: Verifier, rep: Report, *, jobs: int, p
             problems.append(f"{r}: {x['rejected']} proof(s) rejected")
         if x.get("python_disagree"):
             problems.append(f"{r}: Rust/Python disagree on {x['python_disagree']}")
-        if per_rep_n.get(r) not in ((x.get("n"),) if rep.hashed else (None, x.get("n"))):
-            problems.append(f"{r}: {x.get('n')} proofs verified, manifest lists {per_rep_n.get(r)}")
+        if per_rep_n.get(r) not in (None, x.get("n")):
+            problems.append(f"{r}: {x.get('n')} proofs verified, manifest lists {per_rep_n[r]}")
+        if x.get("n") != (n_stmt := len(list((pdir / r).glob("*.stmt")))):
+            problems.append(f"{r}: {x.get('n')} proofs verified, the rep holds {n_stmt} statements")
     rep.status, rep.why = ("FAIL", problems) if problems else ("PASS", [])
 
 
