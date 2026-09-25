@@ -82,16 +82,17 @@ def _draw(args):
     return xs, ws, accs
 
 
-def draw(name: str, total: int, procs: int = 1, cache: str | Path | None = None):
-    """``(x (total, K), w (total, K), accs (total, steps))`` of the set's first ``total`` VUs."""
+def draw(name: str, total: int, procs: int = 1, cache: str | Path | None = None, lo: int = 0, hi: int | None = None):
+    """``(x, w, accs)`` of the set's VUs ``[lo, hi)`` (default: the first ``total``)."""
     relation, _, _ = _ligero()
     rel = relation(name)
-    path = Path(cache) / f"flock-{name}-{rel.instance_seed}-{total}.npz" if cache else None
+    hi = total if hi is None else hi
+    path = Path(cache) / f"flock-{name}-{rel.instance_seed}-{lo}-{hi}.npz" if cache else None
     if path is not None and path.exists():
         with np.load(path) as z:
             return z["x"], z["w"], z["accs"]
-    step = max(1, total // max(1, 8 * procs))
-    jobs = [(name, rel.instance_seed, lo, min(total, lo + step)) for lo in range(0, total, step)]
+    step = max(1, (hi - lo) // max(1, 8 * procs))
+    jobs = [(name, rel.instance_seed, a, min(hi, a + step)) for a in range(lo, hi, step)]
     if procs > 1:
         with ProcessPoolExecutor(procs) as ex:
             parts = list(ex.map(_draw, jobs))
@@ -107,8 +108,9 @@ def draw(name: str, total: int, procs: int = 1, cache: str | Path | None = None)
     return x, w, accs
 
 
-def statement(name: str, x, w, accs) -> dict:
-    """The three frame-v3 roots (and their domains) over the set's first ``len(x)`` VUs."""
+def statement(name: str, x, w, accs, total: int | None = None, lo: int = 0) -> dict:
+    """The three frame-v3 roots (and their domains) over the set's VUs ``[lo, lo + len(x))`` of a ``total``-VU batch (one
+    sub-batch's trees, bound to that range)."""
     from verity.commitments.frame_v3 import FrameV3, Port, RowLeaf, WordLeaf
     from verity.commitments.indexed import RangeIndexedDomain
     from verity.commitments.merkle import CommitmentDomain
@@ -116,14 +118,15 @@ def statement(name: str, x, w, accs) -> dict:
 
     relation, hashauth, auth = _ligero()
     rel = relation(name)
-    total = len(x)
+    n = len(x)
+    total = n if total is None else total
     word_bits = 16 if rel.word_dtype == "<u2" else 8
     ysch, ybytes = hashauth.word_schema(rel.y_bits)
     manifest = instances_digest(name, total)
-    counts = {"a": total, "b": total, "y": total}
+    counts = {"a": n, "b": n, "y": n}
     schemas = {"a": "blake3-keyed/row/v2", "b": "blake3-keyed/row/v2", "y": ysch}
-    bind = {n: hashauth.binding_digest(dataset=rel.instances_dataset, tier=rel.instances_tier, manifest_sha256=manifest,
-                                       lo=0, hi=total, K=K, tree=n, schema=schemas[n]) for n in "aby"}
+    bind = {t: hashauth.binding_digest(dataset=rel.instances_dataset, tier=rel.instances_tier, manifest_sha256=manifest,
+                                       lo=lo, hi=lo + n, K=K, tree=t, schema=schemas[t]) for t in "aby"}
     dom = {n: CommitmentDomain(bind[n], auth.OWNER[n], RangeIndexedDomain(0, counts[n])) for n in "aby"}
     fv = FrameV3({"a": Port(dom["a"], RowLeaf("blake3", ROLE_X, word_bits, K)),
                   "b": Port(dom["b"], RowLeaf("blake3", ROLE_W, word_bits, K)), "y": Port(dom["y"], WordLeaf(ysch, ybytes))})
@@ -137,8 +140,8 @@ def statement(name: str, x, w, accs) -> dict:
         def digest(row, role):
             return blake3_row_digest(row, word_bits, role)
     y = [int(rel.y_public(int(a[-1]))) for a in accs]
-    leaves = {"a": [fv.tree_leaf("a", r, digest(x[r].tolist(), ROLE_X)) for r in range(total)],
-              "b": [fv.tree_leaf("b", r, digest(w[r].tolist(), ROLE_W)) for r in range(total)],
+    leaves = {"a": [fv.tree_leaf("a", r, digest(x[r].tolist(), ROLE_X)) for r in range(n)],
+              "b": [fv.tree_leaf("b", r, digest(w[r].tolist(), ROLE_W)) for r in range(n)],
               "y": [fv.tree_leaf("y", r, fv.leaf_layout("y", r).digest(v.to_bytes(ybytes, "big"))) for r, v in enumerate(y)]}
     return {"roots": {n: fv.root(n, leaves[n]).hex() for n in "aby"},
             "domain_ids": {n: dom[n].domain_id.hex() for n in "aby"},
@@ -146,18 +149,23 @@ def statement(name: str, x, w, accs) -> dict:
             "y_bytes": ybytes, "y": y}
 
 
-def write(path: str | Path, name: str, total: int, procs: int = 1, cache: str | Path | None = None) -> dict:
-    """Write the set's first ``total`` VUs and their statement as a ``flock-pure-instances/v1`` file; returns the header."""
+def write(path: str | Path, name: str, total: int, procs: int = 1, cache: str | Path | None = None, lo: int = 0,
+          hi: int | None = None) -> dict:
+    """Write VUs ``[lo, hi)`` (default all) of the set's first ``total`` and their statement as a ``flock-pure-instances/v1``
+    file; returns the header. A sub-batch's instance reference keeps the whole batch's manifest and names its own range."""
     from verity.ml.tc.cast import f32_to_bf16_word
 
     relation, _, _ = _ligero()
     rel = relation(name)
     pipe = PIPES[name]
-    x, w, accs = draw(name, total, procs, cache)
-    st = statement(name, x, w, accs)
+    hi = total if hi is None else hi
+    x, w, accs = draw(name, total, procs, cache, lo, hi)
+    st = statement(name, x, w, accs, total, lo)
     out = np.asarray([f32_to_bf16_word(int(a[-1])) if pipe.epilogue else int(a[-1]) for a in accs], dtype="<u4")
-    header = {"format": FORMAT, "relation": name, "vus": total, "k": K, "word_bits": pipe.word_bits, "units": rel.steps,
-              "row_bytes": K * pipe.word_bits // 8, "epilogue": pipe.epilogue, "instances": instances_ref(name, total),
+    ref = instances_ref(name, total)
+    ref["range"] = [lo, hi]
+    header = {"format": FORMAT, "relation": name, "vus": hi - lo, "k": K, "word_bits": pipe.word_bits, "units": rel.steps,
+              "row_bytes": K * pipe.word_bits // 8, "epilogue": pipe.epilogue, "instances": ref,
               **{k: v for k, v in st.items() if k != "y"}}
     with open(path, "wb") as f:
         f.write(json.dumps(header, sort_keys=True).encode() + b"\n")
