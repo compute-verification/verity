@@ -14,7 +14,7 @@ leaf digest is ``H(prefix || value || suffix)`` with H SHA-256 or BLAKE3 (``blak
 verifiers check the trees natively.
 
 These establish that the values supplied to a check are the values previously bound.  They say nothing about the
-relation between those values; that is a verification obligation (``verity.verification``) a backend establishes.
+relation between those values; that is a verification obligation (``verity.proofs``) a backend establishes.
 A proof system's own commitments (a STARK's trace or FRI commitments) are not here.
 
 Promoted from veritor (eb865ce2): ``protocol/merkle.py``, ``protocol/multiproof.py``, ``core/indexed.py``,

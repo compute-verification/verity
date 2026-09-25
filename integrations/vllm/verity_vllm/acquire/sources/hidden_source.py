@@ -26,6 +26,8 @@ from __future__ import annotations
 import time
 from typing import Any
 
+from verity_vllm.engine import hooks
+
 KBLOCK_N = 128          # hd 64 (legacy constant; use fa2_kblock_n)
 KBLOCK_M = 64           # every split-KV kernel (flash_fwd_launch_template.h: kBlockM = 64 fixed for all head dims)
 CHUNK_WORDS = 64
@@ -101,6 +103,7 @@ def stream_name(k: int, HB: int, M: int, NB: int, BN: int, D: int) -> str:
 
 class HiddenM1Source:
     INSTALLED_NS = "_vllm_fa2_C"
+    _tap: hooks.Patch | None = None
 
     def __init__(self, committer, so_path: str, ns: str = "verity_fa2_matAll") -> None:
         import torch
@@ -146,11 +149,13 @@ class HiddenM1Source:
             self.ns.verity_set_tap_tag(tag)
 
     def install(self) -> None:
-        setattr(self.installed_ns, "varlen_fwd", self._wrapper())
+        self._tap = hooks.patch(self.installed_ns, "varlen_fwd", self._wrapper())
         self.active = True
 
     def uninstall(self) -> None:
-        setattr(self.installed_ns, "varlen_fwd", self.orig_op)
+        if self._tap is not None:
+            self._tap.uninstall()
+            self._tap = None
         try:
             self.stats["skipped"] = int(self.ns.verity_tap_skipped())
         except Exception:  # noqa: BLE001
@@ -303,11 +308,13 @@ class HiddenM1SourceFA3(HiddenM1Source):
         self.ns.verity_set_tap_v9(3, buf, HB, M, NB, BN, D, tag)
 
     def install(self) -> None:
-        setattr(self.installed_ns, "fwd", self._wrapper())
+        self._tap = hooks.patch(self.installed_ns, "fwd", self._wrapper())
         self.active = True
 
     def uninstall(self) -> None:
-        setattr(self.installed_ns, "fwd", self.orig_op)
+        if self._tap is not None:
+            self._tap.uninstall()
+            self._tap = None
         try:
             self.stats["skipped"] = int(self.ns.verity_tap_skipped())
         except Exception:  # noqa: BLE001

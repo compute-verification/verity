@@ -1,7 +1,7 @@
 [project]
 name = "verity-sp1"
 version = "0.1.0"
-description = "SP1 backend driver: runs the veritor-zk-host binary over verity.verification statements and accepts proofs against the approved guest identity."
+description = "SP1 backend driver: runs the veritor-zk-host binary over verity.proofs statements and accepts proofs against the approved guest identity."
 requires-python = ">=3.12"
 dependencies = ["verity"]
 

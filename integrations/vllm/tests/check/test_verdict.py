@@ -17,7 +17,7 @@ import json
 
 import pytest
 
-from verity.verification.codes import VerificationCode as VC
+from verity.proofs.codes import VerificationCode as VC
 
 from verity_vllm.check.verdict import commit_verdict
 from verity_vllm.check import verdict as V

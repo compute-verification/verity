@@ -2,7 +2,7 @@
 
 ``InvalidArtifact`` is raised for an encoding outside a modelled domain or a malformed protocol object;
 ``ProtocolError`` for a misuse of a protocol API (not a verdict); ``ResourceLimit`` when a verification limit
-is exceeded. Verdict codes (``verity.verification.codes``) build on ``ProtocolError``.
+is exceeded. Verdict codes (``verity.proofs.codes``) build on ``ProtocolError``.
 """
 
 from __future__ import annotations

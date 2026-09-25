@@ -49,13 +49,15 @@ import collections
 import hashlib
 import os
 import re
-import random
 import time
 from collections import Counter
 from typing import Any, Callable, Iterable, Sequence
 
 import numpy as np
 
+from verity.randomness import Key
+
+from verity_vllm.commit import challenge as CH
 from verity_vllm.query.manifest import format as RM
 from verity_vllm.check.replay import replay_codes as RC
 from verity_vllm.check.oracle_compare import entry_read_name as _entry_read_name, same_name_invocations as _same_name_invocations
@@ -2042,25 +2044,24 @@ def _uncovered_mechanisms(all_vus: list[dict], not_ev_fam: Counter) -> list[dict
                                        "hidden_stream (the record's not_compared_by_family.hidden_stream is the count) -- Stage B (Q_fine_v1)"}]
 
 
-def sample(vus: list[dict], per_stratum: int, seed: int, *, targets: list[str] | None = None) -> tuple[list[dict], dict[str, dict[str, int]], dict]:
-    """Seeded stratified sample, emitted ROUND-ROBIN across strata (every stratum's first pick before any stratum's second) so that a
-    caller's cap keeps >= 1 VU per stratum.  `targets`: `<op_path>[@<step>]` -- every VU of that module (at that request-local step, if
-    given) is added to the sample and recorded as targeted (the negatives of record: a single-identity fault at a mid-phase step)."""
+def sample(vus: list[dict], per_stratum: int, seed: int, *, targets: list[str] | None = None,
+           key: Key | None = None) -> tuple[list[dict], dict[str, dict[str, int]], dict]:
+    """Stratified sample (`challenge.stratum_picks`: legacy from `seed`, or from `key`), emitted ROUND-ROBIN across strata (every stratum's
+    first pick before any stratum's second) so that a caller's cap keeps >= 1 VU per stratum.  `targets`: `<op_path>[@<step>]` -- every VU
+    of that module (at that request-local step, if given) is added to the sample and recorded as targeted (the negatives of record)."""
     by: dict[str, list[dict]] = {}
     for v in vus:
         by.setdefault(v["stratum"], []).append(v)
-    rng = random.Random(int(seed))
     rounds: list[list[dict]] = []
     strata = {}
-    for k in sorted(by):
-        pool = by[k]
-        n = min(int(per_stratum), len(pool))
-        chosen = rng.sample(pool, n) if n < len(pool) else list(pool)
+    names = sorted(by)
+    picks = CH.stratum_picks([by[k] for k in names], per_stratum, None if key is not None else seed, key)
+    for k, chosen in zip(names, picks):
         for j, c in enumerate(chosen):
             while len(rounds) <= j:
                 rounds.append([])
             rounds[j].append(c)
-        strata[k] = {"population": len(pool), "sampled": n}
+        strata[k] = {"population": len(by[k]), "sampled": len(chosen)}
     picked = [c for rnd in rounds for c in rnd]
     n_strat = len(picked)
     targeted: dict[str, int] = {}
@@ -2466,10 +2467,9 @@ def _parallel_replay(fn: Callable[[dict], tuple[dict, dict, float]], picked: lis
 def challenge_seed(challenge: str, run_root: bytes) -> tuple[int, str]:
     """[rev-cb M-0572, v2] the sample seed under a VERIFIER-ISSUED post-commitment challenge: sha256(challenge || run_root)[:8].  Binding the
     challenge to the root means a challenge issued before the root was fixed (or for another run) selects a different sample, and the
-    prover cannot grind the sample by recommitting (the root changes -> the verifier issues a fresh challenge).  Returns (seed, source)."""
-    import hashlib
-    h = hashlib.sha256(challenge.encode("utf-8") + b"|" + bytes(run_root)).digest()
-    return int.from_bytes(h[:8], "big"), RC.challenge_seed_source(challenge)
+    prover cannot grind the sample by recommitting (the root changes -> the verifier issues a fresh challenge).  Returns (seed, source).
+    Legacy (`challenge.LEGACY`); its successor is `challenge.replay_key`, a beacon-keyed draw passed as `challenge_key`."""
+    return CH.legacy_replay_seed(challenge, run_root), RC.challenge_seed_source(challenge)
 
 
 def _catch_probability(strata: dict[str, dict]) -> dict[str, Any]:
@@ -2547,8 +2547,8 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
                    weights_check: dict[str, Any] | None = None, targets: list[str] | None = None, workers: int | None = None,
                    ring_slots: int | None = None, retention: str | None = None, seed_challenge: str | None = None,
                    manifest: dict[str, Any] | None = None, executed_prefix: dict[str, dict] | None = None,
-                   program_dirs: dict[str, str] | None = None) -> dict[str, Any]:
-    """C2 of record.  `executed_prefix` [COORD R17-26]: request -> `executed_prefix_of_record(...)` from the Commit's own committed tokens;
+                   program_dirs: dict[str, str] | None = None, challenge_key: Key | None = None) -> dict[str, Any]:
+    """C2 of record.  `challenge_key` (off legacy, `challenge.replay_key`) draws the sample in place of `seed`.  `executed_prefix` [COORD R17-26]: request -> `executed_prefix_of_record(...)` from the Commit's own committed tokens;
     rows at request-relative steps >= n_exec leave the sampling pool into the named class `population.not_executed_by_rule` (never a
     stratum that grades 'not evaluated'); a request with prefix faults is not classified and fails `query_checks` by name.  `programs`: request label -> Program instances doc ({"rows", "params", ...}; requests sharing a shape share it).
     `manifest` [R17-3]: the row's required-value manifest (Q(P)) -- the population of record the replay's reach is reconciled against,
@@ -2587,7 +2587,7 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
         not_ev_fam.update(nef)
         indices[rid] = pi
     pool_vus, not_exec_vus = split_not_executed(all_vus, executed_prefix)          # [R17-26] classified out of the pool, counted below
-    picked_all, strata, tgt = sample(pool_vus, per_stratum, seed, targets=targets)
+    picked_all, strata, tgt = sample(pool_vus, per_stratum, seed, targets=targets, key=challenge_key)
     targeted, n_targeted, n_strat = tgt["hits"], int(tgt["added"]), int(tgt["stratified"])
     cap = max(int(max_evaluate), len(strata))                                     # never below one VU per stratum
     picked = picked_all[:min(cap, n_strat)] + picked_all[n_strat:]                # targeted VUs are outside the cap

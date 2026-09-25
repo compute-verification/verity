@@ -60,7 +60,7 @@ class Instruction:
     model: Model | None
     status: Status
     evidence: tuple[str, ...] = ()
-    #: The ``trust-dossier/v1`` artifact id (``art:...``) whose computed level this pin cites (``verity.verification.trust``).
+    #: The ``trust-dossier/v1`` artifact id (``art:...``) whose computed level this pin cites (``verity.proofs.trust``).
     dossier: str | None = None
 
     def __post_init__(self) -> None:
@@ -313,7 +313,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
             a_dtype="e2m1", b_dtype="e2m1", acc_dtype="f32", scale="ue4m3",
             model=BLACKWELL_SM120_NVF4,
             # Model BlockScaledAlignAdd (lane fp4-re) reproduces every word of 8.34M sweeps; lane fp4-proof's fresh-seed sweep
-            # (_PIN_FP4) supplied P2's missing 3.4M elements and verity.verification.trust computed PINNED (P1-P5) on 2026-09-23
+            # (_PIN_FP4) supplied P2's missing 3.4M elements and verity.proofs.trust computed PINNED (P1-P5) on 2026-09-23
             # before this flip (registry <= computed level, lane pin-bf16).  Re-published once lane fp4-proof's B-Ligero
             # relation supplied Tc (2,048 honest VUs / 3,131 negatives, art:098c184a...): still PINNED, Ta and Tc now PASS,
             # Td (hardware-in-the-loop replay of the frozen instance set) open.  Previous: art:de42d6cad7c63a387d64535efc...
@@ -349,7 +349,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
             shape=(128, 8, 64),
             a_dtype="e2m1", b_dtype="e2m1", acc_dtype="f32", scale="ue4m3",
             model=BLACKWELL_SM100_NVF4,
-            status="pinned",  # verity.verification.trust computed PINNED (P1-P5) from the store on 2026-09-23 before this flip
+            status="pinned",  # verity.proofs.trust computed PINNED (P1-P5) from the store on 2026-09-23 before this flip
             evidence=(_B200_TCGEN05, _B200_STAGE0,
                       "SASS UTCOMMA.4X, one per tile kernel; 0 mismatches over 16,461,824 elements: r20260923-001528-f5c5 (303,104), "
                       "r20260923-001759-d869 (6,463,488 + probe3 1,601/1,601), r20260923-001856-7d63 (1,134,592, K=128 chain), "
@@ -365,7 +365,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
             shape=(128, 8, 64),
             a_dtype="e2m1", b_dtype="e2m1", acc_dtype="f32", scale="ue8m0",
             model=BLACKWELL_SM100_MXF4,
-            status="pinned",  # verity.verification.trust computed PINNED (P1-P5) from the store on 2026-09-23 before this flip
+            status="pinned",  # verity.proofs.trust computed PINNED (P1-P5) from the store on 2026-09-23 before this flip
             evidence=(_B200_TCGEN05, _B200_STAGE0,
                       "SASS UTCOMMA, one per tile kernel; 0 mismatches over 12,898,304 elements: kind::mxf4 r20260923-001838-42a4 "
                       "(3,956,736) and r20260923-002320-6fbf (3,956,736), kind::mxf4nvf4 2X r20260923-001832-17dc (3,956,736) and "

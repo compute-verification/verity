@@ -13,7 +13,7 @@ artifacts; once registered, the registry's `evidence` pointers become artifact i
 
 `vectors/` holds the FP8 draft targets' reference vectors (`verity/tc-reference-vector/v0`: `fp8-{hopper-wgmma,ada-mma}-k{32,1536}`),
 model replays of `GemmAccumulator<K>` on `HOPPER_E4M3_K32` / `ADA_E4M3_M16N8K32` from a recorded seed and recipe -- not
-hardware captures; `packages/verity/tests/verification/test_fp8_targets.py` replays and regenerates them.
+hardware captures; `packages/verity/tests/proofs/test_fp8_targets.py` replays and regenerates them.
 
 Nothing here is a hardware capture taken by this repo: the raw words of the H100 run (143 MB of `.npz`) stayed on the
 pod, and autoproof's 1.57M dots exist only as the per-suite counts in its result files. `fixtures/discrepancy_log.json`

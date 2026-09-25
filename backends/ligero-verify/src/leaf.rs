@@ -569,6 +569,13 @@ pub static PINS: &[(&str, &str, &str, &str)] = &[
      "a655b6b8fe461a17ae2ff3e460e6ebe5088d980fab56657291f7d73ff6e92c2b"),
     ("fp8-ada-x4", "blake3-xob", "f90e7b41920155ae9f0e58d8985adf0d00b711aa369922d9054c1444ad3e3dc8",
      "6ecf18dabee9959687be6c2b71a3c932d94738f66f60ca16b43513edb7e921c9"),
+    // lane x4-hopper-blake3, schema `blake3-keyed/row/v2`: fp8-hopper-x4 (77,692 rows) gated 2048 VUs (7 honest
+    // sub-batches) + 86 negatives, bf16-hopper-x4 (76,751 rows) 2048 VUs (13) + 86, at cd963fd4 on vy-x4-hopper-blake3-h100,
+    // r20260925-174812-50ad, 2026-09-25 17:51Z
+    ("fp8-hopper-x4", "blake3", "3009b5fb01b69f2705e307469044a1659cbb1acfac3c178b55447928957ad533",
+     "5a9f049bd62745656e0f05e74c5d8631f6ab6719c6a911a2594a053229127087"),
+    ("bf16-hopper-x4", "blake3", "14b9ba1a0136c04894a6a7fb46b2c0244e5ff010e763492d164f2f10f75ac90b",
+     "978537834571eadb47e4f692f1db5cec150ea759e7c801e7d7c42133c6a00ab6"),
     // lane b-ligero-sha256, schema `sha256/row/v1`: `hashchain.compose(<rel>, "sha256")` (data blocks in-circuit, 18,128
     // rows per block), each gated 2048 VUs (7 honest sub-batches) + 86 negatives on vy-b-ligero-sha256 2026-09-25 09:05Z
     ("fp8-hopper-x4", "sha256", "6cf20505b38e142533dfa1011a65bd1fb36b3b4792854916dffaeaddfd7f7e9f",
@@ -578,6 +585,10 @@ pub static PINS: &[(&str, &str, &str, &str)] = &[
     // gated 2048 VUs (13 honest sub-batches) + 86 negatives at 98d878ca, r20260925-104053-b438, 2026-09-25 10:43Z
     ("bf16-hopper-x4", "sha256", "a02f283de13acd94d47be4e8c794a6c89b833cc2d9151b92393dd6ac37defe62",
      "1b879d1a3ec16e23f886f792900a089fcbc4b080dbddffe4d45a07d64551525a"),
+    // lane x4-sha256-fill: gated 2048 VUs (13 honest sub-batches) + 86 negatives at cd963fd4 on vy-x4-sha256-a100 (A100
+    // SXM4 80GB), r20260925-175055-0792, 2026-09-25 17:54Z; m = 90,165 rows/col
+    ("bf16-ampere-x4", "sha256", "a862f7a041678ab8feca6dbb6433c91528ed0fe8b63b806fd439c93f766d94e5",
+     "848a99cd6ff5b314d46229a2cb27abd4f39cc13f3729b31ad70e396ee6949326"),
 ];
 
 pub fn names() -> Vec<&'static str> {

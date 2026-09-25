@@ -450,7 +450,7 @@ def verify_transparent_word(tensor_descriptor: dict, code: Code, word_index: int
                             chunk_rows: Sequence[Sequence[int]] | None = None) -> int | None:
     """Re-encode a disclosed tableau row and check it against the chunk root through *all* n column leaves (needs
     the chunk's other rows' column values -- ``chunk_rows`` -- because a column leaf hashes the whole column).  Returns
-    the word or ``None``.  This is what a transparent checker (``verity.verification.transparent``) would do; it is
+    the word or ``None``.  This is what a transparent checker (``verity.proofs.transparent``) would do; it is
     exactly as non-private as ``leaf/v1``'s whole-leaf opening and exists for conformance, not for proofs."""
     pos = position_of_word(code, tensor_descriptor["shape"], word_index)
     cw = encode_row(code, payload_row, randomizers)

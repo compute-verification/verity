@@ -6,7 +6,7 @@
 
 The VU is ``check_vu``: ``K/16`` units chained through their FP32 words from ``c_0 = 0``, then the epilogue cast.
 An infinite intermediate word is rejected by the next unit's ``Fp32Decode`` (its exponent field is off the
-finite range) -- the obligation is outside the relation, exactly as ``verity.verification.families`` rejects it;
+finite range) -- the obligation is outside the relation, exactly as ``verity.proofs.families`` rejects it;
 an infinite *final* word is cast to the BF16 infinity, as the gate ``f32_to_bf16`` does.
 """
 from __future__ import annotations

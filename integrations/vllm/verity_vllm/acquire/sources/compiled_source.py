@@ -40,6 +40,8 @@ from typing import Any
 
 import torch
 
+from verity_vllm.engine import env as engine_env, hooks
+
 OP_NS = "verity"
 OP_NAME = "collect_c"
 INV_SHIFT = 20                    # id layout after renumbering: FLAG | (invocation << INV_SHIFT) | base_id
@@ -207,6 +209,7 @@ class CompiledGraphSource:
         self.model = None
         self.runner = None
         self.prepared = False
+        self._hooks = hooks.Hooks()
         self.stats: dict[str, Any] = {"capture_calls": 0, "eager_calls": 0, "direct_calls": 0, "direct_calls_outside_step": 0,
                                       "replay_drains": 0, "eager_drains": 0, "direct_steps": 0, "refused_capture_alloc": 0,
                                       "shape_mismatch": 0, "unwritten_skipped": 0, "oversize_in_capture": 0, "slot_bytes": 0,
@@ -222,7 +225,7 @@ class CompiledGraphSource:
         if self.prepared:
             return
         _SRC = self
-        os.environ["VLLM_DISABLE_COMPILE_CACHE"] = "1"
+        engine_env.disable_compile_cache()
         _register_op()
         me = self
 
@@ -239,7 +242,7 @@ class CompiledGraphSource:
                 return orig_call(self_, graph, example_inputs)
 
             call._verity_compiled = True      # type: ignore[attr-defined]
-            be.VllmBackend.__call__ = call
+            self._hooks.patch(be.VllmBackend, "__call__", call)
 
         patched = []
         for modname in ("vllm.v1.worker.gpu.model_runner", "vllm.v1.worker.gpu_model_runner"):
@@ -261,7 +264,7 @@ class CompiledGraphSource:
                     raise
 
             load_model._verity_compiled = True      # type: ignore[attr-defined]
-            cls.load_model = load_model
+            self._hooks.patch(cls, "load_model", load_model)
             patched.append(modname)
         self.stats["patched_runners"] = patched
         self.prepared = True
@@ -329,7 +332,7 @@ class CompiledGraphSource:
             nid_out = self._id(name) if out else -1
             nids_k = tuple(self._id(f"{name}/{k}") for k in range(8)) if out else ()
             nid_in = self._id(f"{name}/in") if pre else -1
-            m.forward = _make_fwd(m.forward, nid_out, nids_k, nid_in, op)
+            self._hooks.patch(m, "forward", _make_fwd(m.forward, nid_out, nids_k, nid_in, op))
             self.wrapped.append(name)
         self.stats["wrapped"] = len(self.wrapped)
         self.stats["omitted"] = list(self.omitted)
@@ -388,6 +391,11 @@ class CompiledGraphSource:
 
     def uninstall(self) -> None:
         pass
+
+    def remove_hooks(self) -> None:
+        """Undo `prepare` and `wrap_model`.  Graphs vLLM compiled meanwhile keep their record nodes."""
+        self._hooks.uninstall()
+        self.prepared = False
 
     def declaration_classes(self) -> list[dict]:
         # the drained tensors carry the committer's own module names -> they are declared by the committer's layout-derived classes

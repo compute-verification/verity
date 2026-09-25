@@ -5,7 +5,7 @@ a shared instance set each would benchmark on its own inputs -- the quiet non-co
 prevent.  This module owns the dataset's byte layout, its loader, the build that regenerates it from the recipe in
 :mod:`verity_numerical.bench.instances_gen`, its verification against the pinned digests in ``manifest.json``, and the
 sensitivity statistic of the negatives.  The relation is not restated here: expected words are ``silicon.tc_dot_chain``
-+ ``cast.f32_to_bf16_word`` (``verity.verification.target.FIRST``), cross-checked against ``hawkeye_close``.
++ ``cast.f32_to_bf16_word`` (``verity.proofs.target.FIRST``), cross-checked against ``hawkeye_close``.
 
 Tiers (``fixtures/bench-instances/v1/``; the byte layout is in that directory's ``README.md``)::
 
@@ -47,7 +47,7 @@ from typing import Any
 
 from verity.ml.tc import silicon as S
 from verity.ml.tc.errors import InvalidArtifact
-from verity.verification.target import FIRST
+from verity.proofs.target import FIRST
 
 from . import instances_gen as G
 

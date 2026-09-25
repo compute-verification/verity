@@ -85,7 +85,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from verity.verification.codes import VerificationCode as VC
+from verity.proofs.codes import VerificationCode as VC
 from verity_vllm.check.result import MISSING_INPUT, CheckResult
 from verity_vllm.check.verdict import match_verdict
 

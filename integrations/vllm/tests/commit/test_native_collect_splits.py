@@ -41,7 +41,7 @@ def test_launch_proxy_records_the_kernels_constexpr_s_and_launches_the_original(
     originals = {nm: getattr(mod, nm) for nm in NC.TOPP_SPLIT_KERNELS}
     sink: list = []
     orig = NC.install_split_kernel_proxies(sink)
-    assert orig == originals
+    assert {nm: p.original for nm, p in orig.items()} == originals
     assert all(isinstance(getattr(mod, nm), NC._SplitKernelProxy) for nm in NC.TOPP_SPLIT_KERNELS)
     # idempotent: a second install wraps nothing twice
     assert NC.install_split_kernel_proxies(sink) == {}
