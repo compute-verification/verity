@@ -1152,7 +1152,13 @@ columns of every unit ARE those operands (Table 2's "same full relation", user d
   words, little-endian, VU-major (for `vu-k1536` byte-identical to the tier's `.x.u16` / `.w.u16`).
 * The Rust verifier reads `x.bin` / `w.bin` itself and requires SHA-256 of both and of the public words (at the
   `y` width) to equal its pinned entry for (relation, lo, vus), whose model must be the manifest's (`instances.rs`;
-  `vu-k1536` = the committed frozen manifest, checked by a cargo test; the recipe sets by `python -m gpu.bind pin`).
+  `bf16-ampere+bound` = the committed frozen tier `vu-k1536`, checked by a cargo test; the recipe sets by
+  `python -m gpu.bind pin`).
+* A bound statement is its own relation, `R+bound` for a relation `R` of `verifier/pins.txt`: `verify --relation R+bound`
+  requires its circuit files to be a pinned set of `R` and `instances.txt` to name `R+bound`, whose entry pins the
+  instance files.  `--relation R` refuses a statement with a `bind.txt`, `--relation R+bound` one without.
+* Not the full relation (user, 2026-09-25): the verifier holds the operands.  The target statement commits x, W and y
+  (`verity.commitments` leaf/v2h) and binds the commitments in the proof; this section is its public-input intermediate.
 
 ### 16.2 Protocol **[implemented: `gpu/prover.py::add_bind`, `verify.rs` `bind_u` / `bind_mats`]**
 
