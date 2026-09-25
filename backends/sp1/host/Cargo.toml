@@ -37,6 +37,9 @@ unsound-relation-only = ["veritor-zk-common/unsound-relation-only"]
 # The Table 2 bare statement: build.rs forwards this to the guest, whose ELF then proves `bare`'s statement; the
 # `bare-*` subcommands build its input from a frozen tier, and `verify --statement` checks its public values.
 relation-bare = ["veritor-zk-common/relation-bare"]
+# The committed statement (not with `relation-bare`: each is its own guest): the `committed-*` subcommands commit a
+# frozen tier's rows to frame-v3 roots, prove, and verify the proof's public values against the roots.
+relation-committed = ["veritor-zk-common/relation-committed"]
 # Sound: build.rs forwards this to the guest so the sampling profiler can see
 # the interpreter's dispatch / operand assembly / arithmetic separately.
 attribution = ["veritor-zk-common/attribution"]

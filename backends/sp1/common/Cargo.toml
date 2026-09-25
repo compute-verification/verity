@@ -46,6 +46,9 @@ unsound-relation-only = []
 # rows as private input and commits sha256(statement bytes) || verdict over the public output words.  Sound for
 # that statement.  Only adds the module (declared last), so the checker's ELF is untouched.
 relation-bare = []
+# The committed statement (`committed`): the bare relation, and the guest hashes every x row and W column
+# (`sha256/row/v1`, SP1's SHA-256 precompile) and commits the digests, which the verifier checks against frame-v3 roots.
+relation-committed = ["relation-bare"]
 
 # The native oracle of the per-format arithmetic (the modules it checks exist only with the bare statement).
 [[example]]

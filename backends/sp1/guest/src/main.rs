@@ -51,7 +51,7 @@ sp1_zkvm::entrypoint!(main);
 
 use veritor_zk_common::DIAGNOSTIC_BANNER;
 
-#[cfg(not(any(feature = "unsound-relation-only", feature = "relation-bare")))] fn main() { // (same line: the sound ELF's panic locations stay put)
+#[cfg(not(any(feature = "unsound-relation-only", feature = "relation-bare", feature = "relation-committed")))] fn main() { // (same line: the sound ELF's panic locations stay put)
     if let Some(banner) = DIAGNOSTIC_BANNER {
         println!("{banner}");
     }
@@ -156,6 +156,59 @@ fn main() {
             }
             println!("cycle-tracker-report-end: bare.check");
             bare::public_values(&digest, ok)
+        }
+    };
+    sp1_zkvm::io::commit_slice(&public_values);
+    sp1_zkvm::syscalls::syscall_halt(0);
+}
+
+/// RELATION-COMMITTED BUILD (`--features relation-committed`): `veritor_zk_common::committed`.
+///
+/// Reads the bare header and the chunks (version 2 only), runs `bare::check_words` on each chunk in place, and hashes
+/// every VU's x row and W column with `sha256/row/v1` (the workspace's `sha2` is SP1's SHA-256 precompile; the prefix
+/// block is absorbed once and its midstate cloned per row).  Commits `head || y || dx || dw` on accept and the head
+/// alone on the first failing chunk; `committed::decide` is the native reference.  The verifier rebuilds the frame-v3
+/// trees from the committed digests, so the rows stay private and are bound to the statement's roots.
+#[cfg(all(feature = "relation-committed", not(feature = "unsound-relation-only"), not(feature = "relation-bare")))]
+fn main() {
+    use veritor_zk_common::{bare, committed};
+
+    fn words(buffer: &[u8]) -> Option<&[u64]> {
+        // SAFETY: every bit pattern is a u64; a misaligned head or a partial tail rejects
+        let (head, words, tail) = unsafe { buffer.align_to::<u64>() };
+        (head.is_empty() && tail.is_empty()).then_some(words)
+    }
+
+    let header = sp1_zkvm::io::read_vec();
+    let public_values = match bare::parse_header(&header) {
+        None => committed::head(0, &[0u8; 32], 0, 0, bare::VERDICT_REJECT),
+        Some(h) => {
+            let (b, per, yb) = (h.b as usize, h.vus_per_read as usize, h.format.y_bytes());
+            let mut ok = h.version == bare::VERSION && h.k as usize == bare::K && per > 0;
+            let hasher = committed::RowHasher::new(h.format);
+            let (mut dx, mut dw) = (Vec::with_capacity(32 * b), Vec::with_capacity(32 * b));
+            let mut i = 0;
+            while ok && i < b {
+                let n = per.min(b - i);
+                let chunk = sp1_zkvm::io::read_vec();
+                println!("cycle-tracker-report-start: committed.check");
+                ok = chunk.len() == 8 * n * h.format.vu_words()
+                    && words(&chunk).is_some_and(|chunk_words| bare::check_words(h.format, &chunk, chunk_words, &h.y_le[yb * i..yb * (i + n)]));
+                println!("cycle-tracker-report-end: committed.check");
+                if ok {
+                    println!("cycle-tracker-report-start: committed.hash");
+                    committed::digest_chunk(&hasher, h.format, &chunk, &mut dx, &mut dw);
+                    println!("cycle-tracker-report-end: committed.hash");
+                }
+                i += n;
+            }
+            let mut out = committed::head(h.format.id(), &h.id, h.k, h.b, if ok { bare::VERDICT_ACCEPT } else { bare::VERDICT_REJECT });
+            if ok {
+                out.extend_from_slice(h.y_le);
+                out.extend_from_slice(&dx);
+                out.extend_from_slice(&dw);
+            }
+            out
         }
     };
     sp1_zkvm::io::commit_slice(&public_values);

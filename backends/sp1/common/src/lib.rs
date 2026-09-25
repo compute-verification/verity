@@ -194,3 +194,6 @@ pub mod nvfp4;
 pub mod tc_fp8;
 #[cfg(any(feature = "relation-bare", test))]
 pub mod tc_hopper_bf16;
+/// `relation-committed/v1` (`relation-committed`): the bare relation with the operands bound to frame-v3 SHA-256 row trees.
+#[cfg(any(feature = "relation-committed", test))]
+pub mod committed;
