@@ -232,8 +232,9 @@ guard_trap() { trap 'rc=$?; guard_finish "chain exit rc=$rc"' EXIT; }
 #              probe, passed in as GUARD_WORK_RE / GUARD_NOT_WORK_RE / GUARD_SERVE_RE / GUARD_MARKS_RE)
 #   idle       none of that, for less than IDLE_MIN minutes since the last busy tick
 #   refuse     idle long enough, but some run dir under <root>/runs has no valid .fetched (written by `research fetch --all` once every
-#              file verified; invalid when any file in the run dir changed after the verification began) -> logged with the run ids,
-#              re-checked every tick
+#              file verified; invalid when any file in the run dir changed after the verification began) and no valid .custody
+#              (written by a --custody-r2 runner once the attempt and every run file were verified on the store's remote; invalid when
+#              a file was added or changed after it) -> logged with the run ids, re-checked every tick
 #   terminate  idle long enough and every run fetched -> guard_terminate_self (pod-scoped key only; the F7 preserve gate still applies)
 # <root>/guard/state.json (research/pod-guard/v0.1) carries the verdict, last activity, idle minutes and refusal reasons for the laptop.
 # Test seams: GUARD_PS (a command printing `ps -eo args=`), GUARD_NVSMI (for nvidia-smi), GUARD_NOW (epoch), GUARD_TERMINATE_CMD.
@@ -281,7 +282,9 @@ def alive(pid):
     except (ProcessLookupError, ValueError, TypeError, OverflowError):
         return False
 
-def fetched(d):
+MARKERS = (".fetched", ".fetched.tmp", ".custody", ".custody.tmp", "preserved.json")
+
+def _fetched(d):
     m = load(os.path.join(d, ".fetched"))
     if m is None:
         return "not fetched (no .fetched: run `research fetch --all`)"
@@ -299,6 +302,43 @@ def fetched(d):
             except OSError:
                 continue
     return None
+
+def _custody(d):
+    # --custody-r2 (research.store.custody.marker_problem): the runner wrote .custody once the attempt and every run file were verified
+    # on the store's remote; valid while every regular file is listed in it and none changed at or after verified_from
+    m = load(os.path.join(d, ".custody"))
+    if m is None:
+        return None
+    if m.get("schema") != "research/run-custody/v0.1" or not m.get("preserved"):
+        return f"custody not on the remote ({str(m.get('error') or '?')[:120]})"
+    try:
+        t0, listed = float(m["verified_from"]), set(m["files"])
+    except (KeyError, TypeError, ValueError):
+        return "unreadable .custody"
+    for base, dirs, files in os.walk(d):
+        for f in files:
+            p = os.path.join(base, f)
+            rel = os.path.relpath(p, d)
+            if rel in MARKERS or os.path.islink(p) or not os.path.isfile(p):
+                continue
+            if rel not in listed:
+                return f"{rel} added after its custody"
+            try:
+                if os.lstat(p).st_mtime >= t0:
+                    return f"{rel} changed after its custody"
+            except OSError:
+                continue
+    return ""
+
+def fetched(d):
+    """None when the run dir has custody: a valid .fetched (a verified copy on the launcher) or a valid .custody (on the remote)."""
+    why = _fetched(d)
+    if why is None:
+        return None
+    c = _custody(d)
+    if c == "":
+        return None
+    return why if c is None else f"{why}; {c}"
 
 prev = load(os.path.join(gdir, "state.json")) or {}
 runners, unfetched, nruns = [], [], 0

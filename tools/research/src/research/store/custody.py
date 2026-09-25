@@ -1,0 +1,372 @@
+"""Run custody on the remote (cloud migration step f): every file of a run dir -- stdout.log, stderr.log, launcher.log, job.json,
+status.json, the outputs -- goes to the store's remote as one `run-record/v1` tree that the attempt names (`outputs.run_record`),
+published on the machine that ran it with a minted key, so custody no longer depends on the launcher's disk or on it staying up.
+
+    research run --on M --custody-r2 [--custody-ttl 6h] ...
+        launcher (`mint_for_machine`): an action-scoped temporary key (`credentials.mint`; no DeleteObject / CopyObject) and a
+        secret-free store.toml, staged under <root>/requests/<run-id>/custody/ (mode 600; never in request.json, remote.json or
+        the workload's environment).  Minting needs the parent key here (the Cursor secrets, or ~/.config/verity/r2.env sourced):
+        without it the launch is refused, never silently downgraded.
+        runner (`runner_publish`, after the workload exits): publishes the attempt with its run record, pushes and verifies it
+        (`preserved.check`, head mode; up to PUSH_TRIES), deletes the key, and writes <run>/.custody.
+    research data custody RUN [--publish] [--runs-dir D] [--json]        verify a run's custody on the remote and (re)write .custody;
+                                                                          --publish first publishes it with a run record and pushes
+    research data custody --triage [--runs-dir D] [--verify] [--json]    every run under the runs root by custody state (F2)
+
+`.custody` (research/run-custody/v0.1) is written only when the attempt is PRESERVED on the remote, names a run record, and every
+file now in the run dir is in that record with the same size and sha256 (hashed after `verified_from`, the clock read before
+hashing).  A run dir has custody when its `.fetched` is valid (a verified copy on the launcher, `research fetch --all`) or its
+`.custody` is: every file in the dir is listed and none changed at or after `verified_from` (`marker_problem`; the pod guard,
+pods/sh/pod_guard.sh, applies the same rule without hashing).  Once the marker is written the runner writes nothing more into the
+run dir, so launcher.log in the record is the whole of it.
+
+A run's custody is a remote fact, so any machine can check it: `research data preserved <run id>` (head mode) and `research data
+custody RUN` answer the same everywhere.  Waivers and never-ran verdicts for the triage are labels on the run id:
+`research data label <run id> custody waived|never-ran --by <who>`.
+"""
+from __future__ import annotations
+
+import contextlib
+import json
+import os
+import secrets
+import shutil
+import sys
+import time
+from pathlib import Path
+from typing import Any, Callable, Iterator
+
+from ..telemetry.job import write_json_atomic
+
+MARKER = ".custody"
+SCHEMA = "research/run-custody/v0.1"
+KIND = "run-record/v1"
+EXCLUDED = frozenset({".fetched", ".fetched.tmp", MARKER, MARKER + ".tmp", "preserved.json"})   # markers about the dir, not of it
+DIR_NAME = "custody"                          # <root>/requests/<run-id>/custody/ on the machine
+CRED_FILE = "cred.json"
+STORE_TOML = "store.toml"
+DEFAULT_TTL = "6h"
+ACTIONS = ("HeadObject", "GetObject", "GetBucketLocation", "ListObjectsV1", "ListObjectsV2", "ListMultipartUploads", "ListParts",
+           "PutObject", "CreateMultipartUpload", "UploadPart", "CompleteMultipartUpload", "AbortMultipartUpload")
+PUSH_TRIES = 3
+PUSH_RETRY_S = 20.0
+TRIAGE_STATES = ("fetched", "r2", "attempt-no-record", "attempt-unpreserved", "no-custody", "running", "never-ran", "waived")
+
+
+# ---- the run dir ------------------------------------------------------------------------------------------------------------------------
+
+def run_files(run_dir: Path) -> list[str]:
+    """Every regular file under the run dir (relative posix paths, sorted), markers excluded; symlinks are not followed (as `fetch --all`)."""
+    d = Path(run_dir)
+    out = []
+    for base, dirs, files in os.walk(d):
+        dirs.sort()
+        for f in files:
+            p = Path(base) / f
+            rel = p.relative_to(d).as_posix()
+            if rel in EXCLUDED or p.is_symlink() or not p.is_file():
+                continue
+            out.append(rel)
+    return sorted(out)
+
+
+def run_id_of(run_dir: Path) -> str:
+    """The attempt id `attempt.publish` gives the run dir: job.json's run id, else the directory name."""
+    job = _read(Path(run_dir) / "job.json") or {}
+    return (job.get("run") or {}).get("id") or (job.get("ownership") or {}).get("job") or Path(run_dir).name
+
+
+def _sha256(p: Path) -> str:
+    import hashlib
+
+    with open(p, "rb") as f:
+        return hashlib.file_digest(f, "sha256").hexdigest()
+
+
+def stage(run_dir: Path, into: Path) -> list[str]:
+    """Hard-link (else copy) every run file under `into`; the store copies what it ingests, so a link never aliases a blob."""
+    rels = run_files(run_dir)
+    for rel in rels:
+        src, dst = Path(run_dir) / rel, Path(into) / rel
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            os.link(src, dst)
+        except OSError:
+            shutil.copy2(src, dst)
+    return rels
+
+
+def put_run_record(st: Any, run_dir: Path, run_id: str) -> str | None:
+    """The `run-record/v1` artifact of the whole run dir (None when it holds no file)."""
+    root = Path(getattr(st, "root", None) or Path(run_dir).parent) / "scratch"
+    tmp = root / f".custody-{run_id}-{secrets.token_hex(4)}"
+    tmp.mkdir(parents=True)
+    try:
+        rels = stage(Path(run_dir), tmp)
+        if not rels:
+            return None
+        size = sum((Path(run_dir) / r).stat().st_size for r in rels)
+        return st.put_artifact(KIND, {"run_id": run_id, "files": len(rels), "bytes": size}, tree=tmp)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def marker_problem(run_dir: Path) -> str | None:
+    """None when `.custody` vouches for the run dir as it is now; else why not (module docstring)."""
+    try:
+        m = json.loads((Path(run_dir) / MARKER).read_text())
+    except FileNotFoundError:
+        return "no .custody"
+    except (OSError, ValueError):
+        return "unreadable .custody"
+    if not isinstance(m, dict) or m.get("schema") != SCHEMA:
+        return f".custody is not {SCHEMA}"
+    if not m.get("preserved"):
+        return f".custody: not preserved ({m.get('error') or '?'})"
+    try:
+        t0, listed = float(m["verified_from"]), set(m["files"])
+    except (KeyError, TypeError, ValueError):
+        return "unreadable .custody"
+    for rel in run_files(Path(run_dir)):
+        if rel not in listed:
+            return f"{rel} is not in the run record (added after custody)"
+        try:
+            if os.lstat(Path(run_dir) / rel).st_mtime >= t0:
+                return f"{rel} changed after custody"
+        except OSError:
+            continue
+    return None
+
+
+def has_custody(run_dir: Path) -> tuple[bool, str]:
+    """(True, how) when `preserved.json` (a verified copy here) or a valid `.custody` covers the run dir."""
+    d = Path(run_dir)
+    if (d / "preserved.json").exists():
+        return True, "fetched (preserved.json)"
+    why = marker_problem(d)
+    return (True, "on the remote (.custody)") if why is None else (False, why)
+
+
+# ---- verify / push / mark -----------------------------------------------------------------------------------------------------------
+
+def push_run(st: Any, run_id: str) -> list[str]:
+    """Upload an attempt's artifacts (verified), its manifest and the assertions about it; the errors (empty = all went up)."""
+    from . import labels_sync as LS
+    from .preserved import attempt_artifacts
+
+    doc = st.get_attempt(run_id)
+    if doc is None:
+        return [f"attempt {run_id} is not in the store"]
+    errors = []
+    for name, art in attempt_artifacts(doc).items():
+        rep = st.push(art, preserve=True)
+        if not rep.get("preserved"):
+            errors.append(f"{name} {art[:16]}: {(rep.get('errors') or ['not preserved'])[0]}")
+    try:
+        st.push_attempt(run_id)
+        lrep = st.push_labels(LS.attempt_targets(doc))
+        errors += [f"label {x}" for x in lrep.get("failed") or []]
+    except Exception as e:  # noqa: BLE001
+        errors.append(f"{type(e).__name__}: {e}")
+    return errors
+
+
+def verify(st: Any, run_dir: Path, run_id: str | None = None, *, mark: bool = True) -> dict[str, Any]:
+    """The custody predicate for one run dir (module docstring); with `mark`, writes `.custody` when it holds."""
+    from . import preserved
+
+    d = Path(run_dir)
+    run_id = run_id or d.name
+    rep: dict[str, Any] = {"schema": SCHEMA, "run_id": run_id, "attempt": run_id, "run_record": None, "preserved": False, "error": None}
+    try:
+        doc = st.get_attempt(run_id)
+    except Exception as e:  # noqa: BLE001
+        doc, rep["error"] = None, f"{type(e).__name__}: {e}"
+    if doc is None:
+        rep["error"] = rep["error"] or f"attempt {run_id} is not in the store"
+        return rep
+    rep["run_record"] = rr = (doc.get("outputs") or {}).get("run_record")
+    if not rr:
+        rep["error"] = "the attempt names no run record (published without custody): only `research fetch --all` gives this run custody"
+        return rep
+    chk = preserved.check(st, [run_id], mode="head")
+    rep["remote"] = chk.get("remote")
+    if not chk["preserved"]:
+        why = [e for x in chk["not_preserved"] for e in x.get("errors") or []] or [chk.get("reason") or "?"]
+        rep["error"] = f"not preserved on the remote: {why[0]}"
+        return rep
+    want = {f.path: (f.bytes, f.sha256) for f in (st.get_manifest(rr).payload.files or [])}
+    t0 = time.time()
+    have: dict[str, list[Any]] = {}
+    for rel in run_files(d):
+        p = d / rel
+        have[rel] = [p.stat().st_size, _sha256(p)]
+    extra = sorted(set(have) - set(want))
+    changed = sorted(r for r in set(have) & set(want) if tuple(have[r]) != want[r])
+    if extra or changed:
+        rep["error"] = (f"{len(extra)} file(s) not in the run record, {len(changed)} changed since it was taken: "
+                        + ", ".join((extra + changed)[:4]))
+        return rep
+    rep.update(preserved=True, verified_from=t0, verified_utc=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), files=have,
+               gone=sorted(set(want) - set(have)), host=os.uname().nodename)
+    if mark:
+        write_json_atomic(d / MARKER, rep)
+    return rep
+
+
+# ---- the launcher: a minted, delete-free key for the machine ---------------------------------------------------------------------------
+
+def mint_for_machine(ttl: str | int = DEFAULT_TTL, *, environ: dict[str, str] | None = None) -> tuple[dict[str, Any], list[tuple[str, bytes]]]:
+    """(public facts for request.json, [(relative path, bytes)] to stage under <requests>/<id>/custody/).  MintError when this machine
+    cannot mint (no parent key, a temporary credential in the environment, no endpoint/bucket)."""
+    from . import credentials as C
+
+    cred = C.mint(via="auto", actions=list(ACTIONS), ttl_s=C.parse_ttl(ttl), environ=environ)
+    toml = ("# written by `research run --custody-r2`; the credential is in cred.json beside it (mode 600)\n[remote]\ntype = \"s3\"\n"
+            f"bucket = {json.dumps(cred['bucket'])}\nendpoint = {json.dumps(cred['endpoint'])}\nregion = \"auto\"\n"
+            "access_key_id_env = \"AWS_ACCESS_KEY_ID\"\nsecret_access_key_env = \"AWS_SECRET_ACCESS_KEY\"\nsession_token_env = \"AWS_SESSION_TOKEN\"\n")
+    secret = {"AWS_ACCESS_KEY_ID": cred["accessKeyId"], "AWS_SECRET_ACCESS_KEY": cred["secretAccessKey"], "AWS_SESSION_TOKEN": cred["sessionToken"],
+              "expires_utc": cred["expires_utc"]}
+    public = {"schema": SCHEMA, "expires_utc": cred["expires_utc"], "ttl_s": cred["ttl_s"], "via": cred["via"], "actions": list(ACTIONS)}
+    return public, [(f"{DIR_NAME}/{STORE_TOML}", toml.encode()), (f"{DIR_NAME}/{CRED_FILE}", (json.dumps(secret) + "\n").encode())]
+
+
+@contextlib.contextmanager
+def custody_env(custody_dir: Path) -> Iterator[None]:
+    """The store's remote for the duration: RESEARCH_STORE_CONFIG -> the staged store.toml, AWS_* from cred.json; restored after."""
+    d = Path(custody_dir)
+    cred = json.loads((d / CRED_FILE).read_text())
+    want = {"RESEARCH_STORE_CONFIG": str(d / STORE_TOML), **{k: cred[k] for k in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN")}}
+    saved = {k: os.environ.get(k) for k in want}
+    os.environ.update(want)
+    try:
+        yield
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+
+def forget_credential(custody_dir: Path) -> None:
+    with contextlib.suppress(FileNotFoundError):
+        (Path(custody_dir) / CRED_FILE).unlink()
+
+
+# ---- the runner -------------------------------------------------------------------------------------------------------------------------
+
+def runner_publish(run_dir: Path, custody_dir: Path, *, tool: Any = None, conditions: dict[str, Any] | None = None,
+                   store_root: str | None = None, sleep: Callable[[float], None] = time.sleep, tries: int = PUSH_TRIES) -> dict[str, Any]:
+    """What `research run --custody-dir` does after the workload: publish the attempt with its run record, push and verify it (retrying),
+    delete the key, and leave the verdict in <run>/.custody.  Never raises.  Prints only on failure: after the marker nothing may touch the
+    run dir, launcher.log included."""
+    from . import attempt as A
+    from .local import LocalStore
+
+    d = Path(run_dir)
+    sys.stdout.flush()
+    sys.stderr.flush()
+    rep: dict[str, Any] = {"schema": SCHEMA, "run_id": d.name, "preserved": False, "error": None}
+    try:
+        with custody_env(custody_dir):
+            st = LocalStore(A.store_root(store_root))
+            pub = A.publish(d, tool=tool, conditions=conditions, store=st, remote_push=False, run_record=True)
+            if not pub.get("published"):
+                rep["error"] = f"attempt not published: {pub.get('error')}"
+            else:
+                for n in range(max(1, tries)):
+                    errors = push_run(st, d.name)
+                    rep = verify(st, d, d.name, mark=False)
+                    if rep["preserved"]:
+                        break
+                    rep["error"] = f"{rep['error']}" + (f"; push: {errors[0]}" if errors else "")
+                    if n + 1 < tries:
+                        sleep(PUSH_RETRY_S * (n + 1))
+    except Exception as e:  # noqa: BLE001  the run's exit status is the workload's, never custody's
+        rep.update(preserved=False, error=f"{type(e).__name__}: {e}")
+    finally:
+        forget_credential(custody_dir)
+    if rep.get("preserved"):
+        write_json_atomic(d / MARKER, rep)                  # verified_from precedes it; nothing below writes into the run dir
+    else:
+        rep.setdefault("verified_utc", time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
+        write_json_atomic(d / MARKER, rep)
+        print(f"research: custody NOT on the remote: {rep['error']}  (`research data custody {d.name} --publish` with credentials, or "
+              f"`research fetch --all {d.name}` from the launcher)", file=sys.stderr)
+    return rep
+
+
+# ---- triage (F2) ------------------------------------------------------------------------------------------------------------------------
+
+def _label_verdict(st: Any, run_id: str) -> str | None:
+    try:
+        labs = st.labels(run_id, key="custody")
+    except Exception:  # noqa: BLE001
+        return None
+    return str(labs[-1].value) if labs and str(labs[-1].value) in ("waived", "never-ran") else None
+
+
+def triage_row(st: Any, run_dir: Path, *, verify_remote: bool = False) -> dict[str, Any]:
+    """One run dir's custody state (TRIAGE_STATES) with the reason and the next step."""
+    from . import preserved
+
+    d = Path(run_dir)
+    rid = d.name
+    row: dict[str, Any] = {"run": rid, "state": None, "why": None, "next": None, "bytes": sum((d / r).stat().st_size for r in run_files(d))}
+    rec = _read(d / "remote.json") or {}
+    status = _read(d / "status.json") or {}
+    if (d / "preserved.json").exists():
+        row.update(state="fetched", why="preserved.json (every file verified from the machine)")
+        return row
+    verdict = _label_verdict(st, rid)
+    if verdict:
+        row.update(state="waived" if verdict == "waived" else "never-ran", why=f"label custody={verdict}")
+        return row
+    from ..notes import NEVER_RAN
+
+    if rec and (rec.get("phase") in NEVER_RAN or (d / "refused.json").exists()):
+        row.update(state="never-ran", why=f"launch phase {rec.get('phase')}" + (" (refused)" if (d / "refused.json").exists() else ""))
+        return row
+    try:
+        doc = st.get_attempt(rid)
+    except Exception:  # noqa: BLE001
+        doc = None
+    if doc is None:
+        live = status.get("state") not in ("done", "failed", "cancelled") and rec.get("phase") == "launched"
+        row.update(state="running" if live and status else "no-custody",
+                   why=("still running as last observed" if live and status else
+                        "no attempt in the store" + ("" if status else ", and its records were never fetched")),
+                   next=(f"research fetch {rid}" if live and status else
+                         f"research fetch --all {rid} (pod alive), else research data custody {rid} --publish, or label custody waived"))
+        return row
+    rr = (doc.get("outputs") or {}).get("run_record")
+    chk = preserved.check(st, [rid], mode="head" if verify_remote else "recorded", head_fallback=verify_remote)
+    if not chk["preserved"]:
+        why = [e for x in chk["not_preserved"] for e in x.get("errors") or []] or [chk.get("reason") or "?"]
+        row.update(state="attempt-unpreserved", why=f"attempt not preserved: {why[0]}", next=f"research data push {rid}")
+    elif not rr:
+        row.update(state="attempt-no-record", why="attempt preserved, but its logs are only here (published without a run record)",
+                   next=f"research fetch --all {rid} (pod alive), else keep the local dir or label custody waived")
+    else:
+        row.update(state="r2", why="attempt and run record preserved on the remote")
+    return row
+
+
+def _read(p: Path) -> dict[str, Any] | None:
+    try:
+        d = json.loads(p.read_text())
+    except (OSError, ValueError):
+        return None
+    return d if isinstance(d, dict) else None
+
+
+def triage(st: Any, runs_dir: Path, *, verify_remote: bool = False) -> list[dict[str, Any]]:
+    root = Path(runs_dir)
+    dirs = sorted(p for p in root.iterdir() if p.is_dir() and not p.name.startswith(".")
+                  and ((p / "job.json").exists() or (p / "remote.json").exists())) if root.is_dir() else []
+    return [triage_row(st, d, verify_remote=verify_remote) for d in dirs]
+
+
+__all__ = ["ACTIONS", "EXCLUDED", "KIND", "MARKER", "SCHEMA", "custody_env", "has_custody", "marker_problem", "mint_for_machine", "push_run",
+           "put_run_record", "run_files", "runner_publish", "triage", "triage_row", "verify"]

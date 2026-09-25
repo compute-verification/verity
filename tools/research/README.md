@@ -65,6 +65,8 @@ uv run pytest                            # all tests
 research run [--project P] [--stage S] [--timeout T] [--expect K=V] [--require-result] [--env K=V] [--cwd DIR] [harness flags] -- CMD...
 research run [--tool NAME|module:NAME] [--scratch NAME]... [--campaign C] [...] -- CMD...      # evidence store, below
 research run --on MACHINE --project P [--source GITDIR] [--send FILE] [--env K=V] [--exclusive] [--mem-gb N [--mem-wait S]] [...] -- CMD...
+research run --on MACHINE --custody-r2 [--custody-ttl 6h] ...    # the machine puts the attempt + every run file on the store's remote (store README §10.1)
+research data custody RUN [--publish] | --triage                 # a run's custody on the remote, from any machine; the runs root by custody state
 research fetch RUN [--all]               # records only, or every file sha256-verified with preserved.json written last
 research status [--refresh] [--all] [--json]
 research inspect RUN [--json]

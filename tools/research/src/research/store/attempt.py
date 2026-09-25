@@ -319,7 +319,7 @@ def _existing_attempt(st: Any, run_id: str) -> tuple[dict[str, Any] | None, str 
 
 
 def _publish(run_dir: Path, *, tool: Any, store: Any, remote_push: bool | None, conditions: dict[str, Any] | None, force: bool,
-             build_kwargs: dict[str, Any]) -> dict[str, Any]:
+             build_kwargs: dict[str, Any], run_record: bool = False) -> dict[str, Any]:
     st = open_store(store)
     job = record.read_job(run_dir) or _read(run_dir / "job.json") or {}
     if not job:
@@ -352,6 +352,10 @@ def _publish(run_dir: Path, *, tool: Any, store: Any, remote_push: bool | None, 
         refs = {"run_files": outputs["run_files"]} if outputs["run_files"] else None
         outputs["result"] = st.put_artifact(kind, meta, refs)
     outputs.update(typed_outputs(run_dir, st, run_id))               # outputs.json: named, typed artifacts the workload declared
+    if run_record:                                                   # the whole run dir, logs included (store.custody)
+        from .custody import put_run_record
+
+        outputs["run_record"] = put_run_record(st, run_dir, run_id)
     telemetry: dict[str, str | None] = {"events": None, "resources": None}
     for name in ("events", "resources"):
         p = run_dir / f"{name}.jsonl"
@@ -390,11 +394,13 @@ def _publish(run_dir: Path, *, tool: Any, store: Any, remote_push: bool | None, 
 
 
 def publish(run_dir: Path | str, *, tool: Any = None, store: Any = None, remote_push: bool | None = None, conditions: dict[str, Any] | None = None,
-            force: bool = False, **build_kwargs: Any) -> dict[str, Any]:
-    """README §10 steps 1-3.  Never raises: a failure is recorded in <run_dir>/store_publish_error.json and returned."""
+            force: bool = False, run_record: bool = False, **build_kwargs: Any) -> dict[str, Any]:
+    """README §10 steps 1-3.  Never raises: a failure is recorded in <run_dir>/store_publish_error.json and returned.  `run_record`: the
+    attempt also names the whole run dir as `outputs.run_record` (`run-record/v1`, store.custody)."""
     d = Path(run_dir)
     try:
-        return _publish(d, tool=tool, store=store, remote_push=remote_push, conditions=conditions, force=force, build_kwargs=build_kwargs)
+        return _publish(d, tool=tool, store=store, remote_push=remote_push, conditions=conditions, force=force, build_kwargs=build_kwargs,
+                        run_record=run_record)
     except Exception as e:  # noqa: BLE001  the runner's exit status is the workload's, never the store's
         err = {"schema": PUBLISH_ERROR_SCHEMA, "at_utc": utc_now_ms(), "error": f"{type(e).__name__}: {e}", "traceback": traceback.format_exc()[-4000:]}
         try:
