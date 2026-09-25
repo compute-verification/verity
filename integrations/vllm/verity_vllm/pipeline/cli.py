@@ -194,7 +194,8 @@ def _parse(command: str, argv: list[str], environ: Mapping[str, str]) -> tuple[a
 
 
 def main(argv: list[str] | None = None) -> Any:
-    argv = sys.argv[1:] if argv is None else list(argv)
+    process = argv is None
+    argv = sys.argv[1:] if process else list(argv)
     if not argv or argv[0] in ("-h", "--help"):
         print(usage(), file=sys.stdout if argv else sys.stderr)
         return 0 if argv else 2
@@ -202,6 +203,9 @@ def main(argv: list[str] | None = None) -> Any:
         print(f"{PROG}: unknown command {argv[0]!r}\n\n{usage()}", file=sys.stderr)
         return 2
     parser, opts, mod = _parse(argv[0], argv[1:], os.environ)
+    if process:
+        # run records store sys.argv as the command's own command line, the one `python -m <module>` gave it
+        sys.argv[:] = [mod.__file__ or sys.argv[0], *argv[1:]]
     try:
         return mod.main(opts)
     except UsageError as e:
