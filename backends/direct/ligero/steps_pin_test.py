@@ -228,6 +228,14 @@ def test_an_honest_shared_pair_verifies(shared) -> None:
         assert js["accepted"] and js["system_pinned"], js
 
 
+def test_reverify_fails_a_shared_pair_closed(shared) -> None:
+    from .reverify import commitment_problems
+    root, honest, _, _ = shared
+    man = {"set": {"total_vus": 4, "instances": "0" * 64}}
+    assert commitment_problems(root, man, "fp8-ada+hash", [honest.name]) == (
+        True, ["commitment: 1 row-sharing (v6) statement(s): shared-row layouts are not recomputed"])
+
+
 SHARED_NEG = [
     ("steps32", [], _shape(32, 48), "G: statement: steps = 32 columns per VU, the fp8-ada relation's VU is 48 columns"),
     ("honest", [(STEPS_AT, 32)], _shape(32, 48), "G: statement: steps = 32 columns per VU, the fp8-ada relation's VU is 48 columns"),
