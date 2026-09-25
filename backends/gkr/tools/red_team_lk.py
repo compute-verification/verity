@@ -535,26 +535,32 @@ def forge_cases(relation: str, uc, pc, units, steps: int) -> dict:
         col = _solve(u, U, uc.queries[k].cols[0], target, one)
         assert int(lk[(lk[:, 0] == target)][0, 1]) == tag_of[b]
         cases[f"tag.{a}_as_{b}"] = (u, f"q{k} ({a}, tag {tag_of[a]}) first column = LK row ({key_b} + {tag_of[b]} 2^20, tag {tag_of[b]}) of {b}; col {col}")
-        # (1') if that column is read by other queries too, again with a column only one query reads, so the tag collision is
-        #      the forgery's only LK miss
-        use = Counter(i for q in uc.queries for i in {i for l in q.cols for i, _ in _var(l, one)})
+        # (1') if the forged column makes other queries miss LK too, search for one whose only LK miss is the tag collision
+        lkset, W = {tuple(r) for r in lk.tolist()}, lk.shape[1]
+        reads = [{i for l in q.cols for i, _ in l.terms} for q in uc.queries]
 
-        def excl(k):
-            return single(k) and use[_var(uc.queries[k].cols[0], one)[0][0]] == 1
+        def misses(row, col):
+            return [j for j, q in enumerate(uc.queries) if col in reads[j]
+                    and tuple(_lin_val(l, row) for l in q.cols) + (0,) * (W - len(q.cols)) not in lkset]
 
-        if not excl(k):
-            for a in (t for t in rng if _rw(t) < _rw(b)):
-                k = next((k for k in by_table[a] if excl(k)), None)
-                if k is None:
-                    continue
-                key_b = 2 ** _rw(a) + 1
+        def forged_row(k, target):
+            row = units[U].tolist()
+            col, coef = _var(uc.queries[k].cols[0], one)[0]
+            row[col] = (int(row[col]) + (target - _lin_val(uc.queries[k].cols[0], row)) * pow(coef, P - 2, P)) % P
+            return row, col
+
+        if misses(*forged_row(k, target)) != [k]:
+            hit = next(((a2, b2, k2, key) for b2 in reversed(rng) for a2 in rng if _rw(a2) < _rw(b2) for k2 in by_table[a2] if single(k2)
+                        for key in (2 ** _rw(a2), 2 ** _rw(a2) + 1, 2 ** _rw(b2) - 1)
+                        if misses(*forged_row(k2, (key + tag_of[b2] * TAG_SHIFT) % P)) == [k2]), None)
+            if hit is not None:
+                a, b, k, key_b = hit
                 target = (key_b + tag_of[b] * TAG_SHIFT) % P
                 u = units.clone()
                 col = _solve(u, U, uc.queries[k].cols[0], target, one)
                 assert int(lk[(lk[:, 0] == target)][0, 1]) == tag_of[b]
                 cases[f"tag.{a}_as_{b}.iso"] = (u, f"q{k} ({a}, tag {tag_of[a]}) first column = LK row ({key_b} + {tag_of[b]} 2^20, "
-                                                   f"tag {tag_of[b]}) of {b}; col {col}, read by no other query")
-                break
+                                                   f"tag {tag_of[b]}) of {b}; col {col}; its only LK miss")
     # (1b) the same for a row-listed lookup table query given another table's full row (key shifted, outputs copied)
     listed = [t for t in by_table if _rw(t) is None and not t.startswith("PR")]
     for a in listed:
