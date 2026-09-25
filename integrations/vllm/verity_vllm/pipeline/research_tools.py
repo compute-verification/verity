@@ -47,6 +47,7 @@ CLOSURE = [
     "integrations/vllm/**",
     "packages/verity/src/verity/*.py",
     "packages/verity/src/verity/commitments/**",
+    "packages/verity/src/verity/evaluation/**",
     "packages/verity/src/verity/ir/**",
     "packages/verity/src/verity/ml/**",
     "packages/verity/src/verity/verification/**",
