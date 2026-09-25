@@ -535,6 +535,26 @@ def forge_cases(relation: str, uc, pc, units, steps: int) -> dict:
         col = _solve(u, U, uc.queries[k].cols[0], target, one)
         assert int(lk[(lk[:, 0] == target)][0, 1]) == tag_of[b]
         cases[f"tag.{a}_as_{b}"] = (u, f"q{k} ({a}, tag {tag_of[a]}) first column = LK row ({key_b} + {tag_of[b]} 2^20, tag {tag_of[b]}) of {b}; col {col}")
+        # (1') if that column is read by other queries too, again with a column only one query reads, so the tag collision is
+        #      the forgery's only LK miss
+        use = Counter(i for q in uc.queries for i in {i for l in q.cols for i, _ in _var(l, one)})
+
+        def excl(k):
+            return single(k) and use[_var(uc.queries[k].cols[0], one)[0][0]] == 1
+
+        if not excl(k):
+            for a in (t for t in rng if _rw(t) < _rw(b)):
+                k = next((k for k in by_table[a] if excl(k)), None)
+                if k is None:
+                    continue
+                key_b = 2 ** _rw(a) + 1
+                target = (key_b + tag_of[b] * TAG_SHIFT) % P
+                u = units.clone()
+                col = _solve(u, U, uc.queries[k].cols[0], target, one)
+                assert int(lk[(lk[:, 0] == target)][0, 1]) == tag_of[b]
+                cases[f"tag.{a}_as_{b}.iso"] = (u, f"q{k} ({a}, tag {tag_of[a]}) first column = LK row ({key_b} + {tag_of[b]} 2^20, "
+                                                   f"tag {tag_of[b]}) of {b}; col {col}, read by no other query")
+                break
     # (1b) the same for a row-listed lookup table query given another table's full row (key shifted, outputs copied)
     listed = [t for t in by_table if _rw(t) is None and not t.startswith("PR")]
     for a in listed:
@@ -716,6 +736,47 @@ def forge(relation: str, vus: int, out: Path, verifier: str, threads: int, contr
     return res
 
 
+def _read_rows(path: Path) -> np.ndarray:
+    import struct
+
+    b = path.read_bytes()
+    n, w = struct.unpack("<QQ", b[:16])
+    return np.frombuffer(b[16:], dtype="<u4").reshape(n, w).astype(np.int64)
+
+
+def audit(out: Path) -> dict:
+    """per tag forgery of a forge --control run: the (query, unit) tuples it changed that are not LK rows, under the tagged
+    statement and the tag-stripped control statement (a non-empty tagless list means the control is confounded)"""
+    from gpu.circuit import parse_circuit
+
+    honest = _read_rows(out / "cases" / "honest" / "units.bin")
+    plain = parse_circuit((out / "plain" / "circuit.txt").read_text())
+    stmts = {}
+    for label, d in (("tagged", out / "stmt"), ("tagless", out / "control_stmt")):
+        c = parse_circuit((d / "circuit.txt").read_text())
+        stmts[label] = (c, {tuple(r) for r in _rows(c.table("LK")).tolist()}, c.table("LK").cols)
+    res = {"cases": {}}
+    for d in sorted((out / "cases").iterdir()):
+        if not d.name.startswith("tag."):
+            continue
+        u = _read_rows(d / "units.bin")
+        diff = [(int(a), int(b)) for a, b in np.argwhere(u != honest)]
+        case = {"changed_unit_col": diff}
+        for label, (c, rows, W) in stmts.items():
+            miss = []
+            for k, q in enumerate(c.queries):
+                cols = {i for l in q.cols for i, _ in l.terms}
+                for U in sorted({a for a, b in diff if b in cols}):
+                    t = tuple(_lin_val(l, u[U]) for l in q.cols) + (0,) * (W - len(q.cols))
+                    if t not in rows:
+                        miss.append({"q": k, "table": plain.queries[k].table, "unit": U, "tuple": list(t[:4])})
+            case[label] = miss
+        case["confounded"] = bool(case["tagless"])
+        res["cases"][d.name] = case
+    res["ok"] = bool(res["cases"]) and all(v["tagged"] for v in res["cases"].values())
+    return res
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="red_team_lk")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -735,6 +796,8 @@ def main(argv=None) -> int:
     c.add_argument("--verifier", required=True)
     c.add_argument("--threads", type=int, default=12)
     c.add_argument("--control", action="store_true", help="also run the tag forgeries against a tag-stripped LK (control)")
+    d = sub.add_parser("audit")
+    d.add_argument("--out", type=Path, required=True, help="a forge --control output dir")
     args = ap.parse_args(argv)
     if args.cmd == "static-merge":
         res = check_merge((args.plain / "circuit.txt").read_text(), (args.merged / "circuit.txt").read_text())
@@ -760,6 +823,8 @@ def main(argv=None) -> int:
             res = {"merge": selftest(C.export_circuit(u, merge=False).text, C.export_circuit(u, merge=True).text, pp, pt),
                    "systems": selftest_nvf4(args.paired)}
         res["ok"] = all(v["ok"] for v in res.values())
+    elif args.cmd == "audit":
+        res = audit(args.out)
     else:
         res = forge(args.relation, args.vus, args.out, args.verifier, args.threads, args.control)
     print(json.dumps(res, indent=1, default=str))
