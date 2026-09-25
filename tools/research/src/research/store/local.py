@@ -798,7 +798,8 @@ class LocalStore:
         return {"remote": r.describe(), "artifacts": arts, "attempts": [x for x in self.attempt_ids() if x not in attempts_remote],
                 "labels": [{"hash": h, "target": mine[h][1].target, "key": mine[h][1].key, "by": mine[h][1].by} for h in labels]}
 
-    def refresh(self, *, jobs: int = REFRESH_JOBS, log: Callable[[str], None] | None = None) -> dict:
+    def refresh(self, *, jobs: int = REFRESH_JOBS, log: Callable[[str], None] | None = None,
+                progress: Callable[[str, int, int], None] | None = None) -> dict:
         """Bring this store up to date from the remote without wiping anything: list `manifests/`, `attempts/` and `labels/`, fetch
         only what is missing (`jobs` concurrent GETs; each manifest re-hashed to its id, each attempt parsed and named by its id),
         and index just those.  The way a fresh machine builds its catalog from the remote alone."""
@@ -825,8 +826,11 @@ class LocalStore:
                 tmp.unlink(missing_ok=True)
 
         rmap = self.replica_map()
+        tick = progress or (lambda what, done, total: None)
         with ThreadPoolExecutor(max_workers=max(1, jobs)) as ex:
+            tick("manifests", 0, len(want_m))
             for key, data, err in ex.map(get, want_m):
+                tick("manifests", 1, len(want_m))
                 h = key[len("manifests/"):-len(".json")]
                 if err is None and canon.sha256_bytes(data) != h:
                     err = f"{key}: content hash does not match its name"
@@ -837,7 +841,9 @@ class LocalStore:
                 write_once(self.manifest_path(h), data)
                 self.index.index_artifact(m.to_doc(), "art:" + h, local=self._blobs_local(m), remote=True, repo_path=rmap.get("art:" + h))
                 rep["manifests"] += 1
+            tick("attempts", 0, len(want_a))
             for key, data, err in ex.map(get, want_a):
+                tick("attempts", 1, len(want_a))
                 rid = key[len("attempts/"):-len(".json")]
                 try:
                     doc = json.loads(data) if err is None else None
@@ -851,6 +857,7 @@ class LocalStore:
                 write_once(self.attempt_path(rid), data)
                 self.index.index_attempt(doc)
                 rep["attempts"] += 1
+        tick("labels", 0, 0)
         lrep = LS.sync(self, push=False, pull=True, jobs=jobs, log=log)
         rep["labels"], rep["errors"] = len(lrep["pulled"]), rep["errors"] + lrep["bad"]
         rep["seconds"] = round(time.monotonic() - t0, 1)
