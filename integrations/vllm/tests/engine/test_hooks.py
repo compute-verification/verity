@@ -160,6 +160,7 @@ def test_export_shims_restore_torch_and_vllm() -> None:
     assert vars(cls).get("get_device_capability", hooks.ABSENT) is cap
     assert [vars(m).get("num_compute_units", hooks.ABSENT) for m in mods] == cus
 
+    fm = pytest.importorskip("vllm.model_executor.layers.fused_moe.fused_moe")   # registers torch.ops.vllm.fused_experts
     ns = torch.ops.vllm
     try:
         getattr(ns, "fused_experts")                         # resolving caches the packet on the namespace
@@ -173,7 +174,8 @@ def test_export_shims_restore_torch_and_vllm() -> None:
     manager = vars(ws).get("_manager", hooks.ABSENT)
     live = hooks.live()
     with moe_ops_traced(None):
-        pass
+        inside = vars(ns).get("fused_experts", hooks.ABSENT)
+    assert fe is hooks.ABSENT or inside is fm.fused_experts_op
     assert vars(ns).get("fused_experts", hooks.ABSENT) is fe and vars(ws).get("_manager", hooks.ABSENT) is manager
     assert hooks.live() == live
 
