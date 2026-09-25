@@ -811,12 +811,16 @@ def prove(inst: Instance, pcs: bool = True, params: ligero.LigeroParams = ligero
     committed = None
     mults = []
     # the query tuples are needed again by the lookup pass; holding them across the commitment (~0.7 GiB at 4096 FP8
-    # VUs) only pays on parts with room to spare, the 24-32 GB cards recompute them
-    keep = dev.type == "cuda" and torch.cuda.get_device_properties(dev).total_memory >= 48 << 30
+    # VUs) only pays on parts with room to spare: >= 48 GB, or >= 30 GB when they are under 1/16 of the free memory
+    # (NVFP4 at 4096 VUs on the 5090: 0.9 GB against ~30 GB); the 24 GB cards recompute them
+    total = torch.cuda.get_device_properties(dev).total_memory if dev.type == "cuda" else 0
     kept = []
     for t in inst.tables:
         vals = [v for v in seg_query_values(inst, t.name) if v is not None]
         mults.append(logup.multiplicities(t, logup.table_rows(t, dev), vals))
+        nb = sum(v.numel() * v.element_size() for v in vals)
+        keep = total >= 48 << 30 or (total >= 30 << 30 and 16 * nb <= torch.cuda.mem_get_info(dev)[0]
+                                     + torch.cuda.memory_reserved(dev) - torch.cuda.memory_allocated(dev))
         kept.append(vals if keep else None)
     vals = None
     _sync(dev)
