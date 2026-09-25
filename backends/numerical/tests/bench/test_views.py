@@ -145,13 +145,21 @@ def test_parity_reports_a_difference(store: LocalStore) -> None:
 
 def committed(store: LocalStore, leaf: str = "blake3", *, t_total: float = 0.4, commit: float = 0.6, protocol: bool = True,
               custody: bool = True, security: dict | None = None, verified_by: str | None = VERIFIER, labels: list[tuple] = (),
-              B: int = 4096, manifest: str | None = None, setup: float | None = None) -> str:
+              B: int = 4096, manifest: str | None = None, setup: float | None = None, interaction: dict | None = None) -> str:
     """A B-Ligero in-proof-hash result on the 4090 line, measured under the protocol, with its commitment time and preserved dumps."""
 
     doc = hashed(leaf, t_total=t_total, security=security)
     doc["measurements"].append({"name": V.COMMIT, "value": commit, "unit": "s"})
     if setup is not None:
         doc["measurements"].append({"name": "fixed.setup_seconds", "value": setup, "unit": "s"})
+    ix = {"rounds.sequential_depth": 0} if interaction is None else interaction
+    for name, value in ix.items():
+        if name == "rtt_method":
+            doc["interaction"] = {"rtt_method": value}
+            continue
+        unit = {"rounds.sequential_depth": "count", "rounds.protocol": "count", "net.bytes_out": "B", "net.bytes_in": "B", "net.rtt_ms": "ms",
+                "proof_bytes": "B", "relation.statement_bytes_total": "B"}.get(name, "s")
+        doc["measurements"].append({"name": name, "value": value, "unit": unit})
     fp = doc["workload_fingerprint"]
     if B != 4096:
         fp.update(B=B, instances={**fp["instances"], "range": [0, B], "manifest_sha256": V.STREAMS[FP8_ADA_MMA.name](B)})
@@ -208,7 +216,7 @@ def test_a_full_relation_blake3_result_fills_its_family_cell_end_to_end(store: L
     assert f"{T.fmt_overhead(cell.overhead)} (prov.)" in md
     # Table 3: commitment and the proving buckets per instance, with shares of end to end
     rows = [r for r in md.splitlines() if r.startswith(f"| {FP8_ADA_MMA.name} · frame-v3 · keyed-BLAKE3 rows · B-Ligero")]
-    row3, drill = rows                                   # Table 3, then its seconds-per-instance drill-down
+    row3, drill, _ = rows                                # Table 3, its seconds-per-instance drill-down, the interaction drill-down
     serving, proving = V.overheads(cell)
     N = V.native(FP8_ADA_MMA)["instances_per_second"]
     assert serving == pytest.approx(N * 0.6 / 4096) and proving == pytest.approx(N * 0.4 / 4096)
@@ -217,7 +225,7 @@ def test_a_full_relation_blake3_result_fills_its_family_cell_end_to_end(store: L
     assert row3.startswith(f"| {FP8_ADA_MMA.name} · frame-v3 · keyed-BLAKE3 rows · B-Ligero | {T.fmt_overhead(serving)} (60%) |")
     assert f"| {T.fmt_overhead(cell.overhead)} (100%) | — |" in row3 and "µs" not in row3
     st = V.stages(cell)
-    assert st["commitment"] + sum(v for v in st["buckets"].values() if v) + st["other"] == pytest.approx(cell.overhead)
+    assert st["commitment"] + st["interaction"] + sum(v for v in st["buckets"].values() if v) + st["other"] == pytest.approx(cell.overhead)
     assert "146 µs (60%)" in drill and "244 µs (100%)" in drill
     assert "Encoding + witness commitment" in md and "Setup, one-time (not in the total)" in md and "seconds per instance" in md
 
@@ -367,14 +375,17 @@ def test_archived_and_unsupported_configurations(store: LocalStore) -> None:
 
 
 def test_table1_carries_the_security_properties(store: LocalStore) -> None:
-    assert {c.id for c in V.CONFIGURATIONS} == {v.id for v in V.D.VARIANTS}
+    assert {c.id for c in V.CONFIGURATIONS} == {v.id for v in V.D.VARIANTS} | {V.FLOCK_CONFIG.id}
     full = {c.id for c in V.CONFIGURATIONS if c.full_relation}
     assert full == {"B-Ligero + Poseidon2 per row", "B-Ligero + Poseidon2 shared 64x64 tile", "B-Ligero + BLAKE3 in circuit",
                     "B-Ligero + SHA-256 in circuit", "B-Ligero + Ajtai n=64", "B-Ligero + Ajtai n=128",
-                    "SP1 stock, committed (frame-v3 SHA-256 rows)", "SP1 stock, committed (vllm-v1 SHA-256 position leaves)"}
+                    "SP1 stock, committed (frame-v3 SHA-256 rows)", "SP1 stock, committed (vllm-v1 SHA-256 position leaves)",
+                    "Flock (flock-128-r2, live coins)"}
     assert [c.id for c in V.CONFIGURATIONS if c.full_relation and not c.scheme_problem()] == [
         "B-Ligero + Poseidon2 per row", "B-Ligero + BLAKE3 in circuit", "B-Ligero + SHA-256 in circuit",
-        "SP1 stock, committed (frame-v3 SHA-256 rows)", "SP1 stock, committed (vllm-v1 SHA-256 position leaves)"]
+        "SP1 stock, committed (frame-v3 SHA-256 rows)", "SP1 stock, committed (vllm-v1 SHA-256 position leaves)",
+        "Flock (flock-128-r2, live coins)"]
+    assert all(c.interaction for c in V.CONFIGURATIONS)
     assert all(x.basis.startswith(("proven", "conjectured")) for c in V.CONFIGURATIONS for x in c.proximity)
     assert all(c.proximity and c.hashes and c.dominant_term for c in V.CONFIGURATIONS)
     committed(store, t_total=0.4)
@@ -396,11 +407,11 @@ def test_cli_json_round_trips_and_parity_exit_codes(store: LocalStore, capsys: p
     put(store, result(t_total=4.0))
     assert V.main(["--root", str(store.root), "--format", "json"]) == 0
     js = json.loads(capsys.readouterr().out)
-    assert js["schema"] == "verity/tables-views/v1" and js["table2"]["columns"] == ["A-GKR", "B-Ligero", "SP1"]
+    assert js["schema"] == "verity/tables-views/v1" and js["table2"]["columns"] == ["A-GKR", "B-Ligero", "SP1", "Flock"]
     assert len(js["table3"]) == 1 and js["table3"][0]["scheme"] == BLAKE3_ROW
     assert [x["id"] for x in js["schemes"] if x["admissible"]] == ["frame-v3/sha256", BLAKE3_ROW, "vllm-v1", POSEIDON2_ROW]
     assert V.main(["--root", str(store.root), "--rules", "legacy", "--format", "json"]) == 0
-    assert json.loads(capsys.readouterr().out)["table2"]["columns"] == ["A-GKR", "B-Ligero", "SP1"]
+    assert json.loads(capsys.readouterr().out)["table2"]["columns"] == ["A-GKR", "B-Ligero", "SP1", "Flock"]
     assert V.main(["--root", str(store.root), "--parity"]) == 0
     assert capsys.readouterr().out.startswith("parity: ok")
     assert V.main(["--root", str(store.root), "--parity", "--snapshot", "tables-none"]) == 2
@@ -499,3 +510,80 @@ def test_setup_is_one_time_shown_beside_the_cell_amortized_over_the_batch(store:
     assert st["commitment"] + sum(v for v in st["buckets"].values() if v) + st["other"] == pytest.approx(cell.overhead)
     assert f"| 16 s · {T.fmt_overhead(16.0 * N / 4096)} over 4096 |" in V.render_markdown(views)
     assert V.render_json(views)["table3"][0]["stages_overhead"]["setup"]["seconds"] == 16.0
+
+
+LIVE = {"rounds.sequential_depth": 3, "net.bytes_out": 1.25e9, "net.bytes_in": 384.0, "net.rtt_ms": 1.0, "rtt_method": "ping median of 20, same pod pair",
+        "net.wait_seconds": 1.003}
+
+
+def test_the_cell_is_the_interaction_formula_at_the_reference_network(store: LocalStore) -> None:
+    """t = compute + rounds x RTT + bytes / bandwidth at 1 ms and 10 Gb/s; Table 3's interaction stage is that network time x N; the
+    drill-down gives the formula at 20 ms and 100 ms."""
+    committed(store, t_total=0.4, commit=0.6, interaction=LIVE)
+    views = V.build(store)
+    cell = line(views)["cells"]["B-Ligero"]
+    N = V.native(FP8_ADA_MMA)["instances_per_second"]
+    net = 3 * 0.001 + (1.25e9 + 384) * 8 / 10e9                                 # 1.003 s at the reference profile
+    assert cell.throughput["interaction_s"] == pytest.approx(net)
+    assert cell.overhead == pytest.approx(N * (0.6 + 0.4 + net) / 4096)
+    st = V.stages(cell)
+    assert st["interaction"] == pytest.approx(N * net / 4096)
+    assert st["commitment"] + st["interaction"] + sum(v for v in st["buckets"].values() if v) + st["other"] == pytest.approx(cell.overhead)
+    md = V.render_markdown(views)
+    at20 = N * (0.6 + 0.4 + 3 * 0.020 + (1.25e9 + 384) * 8 / 10e9) / 4096
+    assert "### Interaction drill-down" in md and T.fmt_overhead(at20) in md and "ping median of 20" in md
+
+
+@pytest.mark.parametrize(("over", "why"), [
+    ({"rounds.sequential_depth": None}, "a live-verifier result without its rounds"),
+    ({"net.rtt_ms": None}, "no measured RTT"),
+    ({"rtt_method": None}, "no how the RTT was measured"),
+    ({"net.wait_seconds": None}, "no network wait"),
+    ({"net.wait_seconds": 2.5}, "% from the reference profile's"),
+])
+def test_an_interactive_result_needs_its_record_and_the_tolerance(store: LocalStore, over: dict, why: str) -> None:
+    ix = {k: v for k, v in {**LIVE, **over}.items() if v is not None}
+    art = committed(store, t_total=0.4, commit=0.6, interaction=ix)
+    got = next(r for r in V.build(store).rejected if r["artifact"] == art)["codes"]
+    assert [k for k, _ in got] == ["M"] and why in got[0][1]
+    assert line(V.build(store, dataclasses.replace(V.SPEC, interaction_validated=False)))["cells"]["B-Ligero"].artifact == art
+
+
+def test_the_legacy_rules_ignore_interaction_so_parity_holds(store: LocalStore) -> None:
+    put(store, result(t_total=4.0))
+    assert V.parity(store) == []
+    assert all(c.throughput["interaction_s"] == 0.0 for c in V.build(store, V.LEGACY).cells)
+
+
+def test_flock_is_its_own_family_and_column(store: LocalStore) -> None:
+    assert V.candidate_for("flock union (backends/flock)") is V.FLOCK and V.candidate_for("verity-gkr gpu ... flock") .id == "A-GKR"
+    doc = hashed("blake3", t_total=0.4)
+    doc["workload_fingerprint"]["software"]["backend"]["name"] = "flock union, flock-128-r2 (backends/flock)"
+    doc["workload_fingerprint"]["proof_class"] = "NON_ZK_PROOF"
+    assert V.configuration_of(doc) is V.FLOCK_CONFIG
+    views = V.build(store)
+    assert V.render_json(views)["table2"]["columns"][-1] == "Flock" and line(views)["cells"]["Flock"] is None
+    rows = dict((r[0], dict(zip(V.TABLE1_COLUMNS, r))) for _, r in V.table1_rows(views))
+    assert rows["Flock (flock-128-r2, live coins)"]["Interaction model"].startswith("live verifier")
+    assert rows["B-Ligero Fiat–Shamir (HVZK)"]["Interaction model"].startswith("non-interactive")
+
+
+def test_a_file_verified_result_derives_rounds_0_and_pays_its_bytes_over_the_reference_link(store: LocalStore) -> None:
+    """Every B-Ligero cell today is verified from its files: no measured RTT is needed. Its record is derived -- rounds = 0 whatever
+    the protocol's round count, bytes = proof + statement bytes, network time = bytes / 10 Gb/s -- and Table 3 keeps that transfer
+    as the interaction stage, footnoted."""
+    art = committed(store, t_total=0.4, commit=0.6, interaction={"rounds.sequential_depth": 3, "rounds.protocol": 3,
+                                                                 "proof_bytes": 1.25e9, "relation.statement_bytes_total": 5e6})
+    views = V.build(store)
+    cell = line(views)["cells"]["B-Ligero"]
+    assert cell is not None and cell.artifact == art
+    ix = cell.throughput["interaction"]
+    assert ix["derived"] and not ix["live"] and ix["rounds"] == 0 and ix["bytes_up"] == 1.255e9
+    assert cell.throughput["interaction_s"] == pytest.approx(1.255e9 * 8 / 10e9)
+    md = V.render_markdown(views)
+    share = 100 * V.stages(cell)["interaction"] / cell.overhead
+    assert f"Moving the proof alone is {share:.0f}–{share:.0f}% of those cells" in md and "0 (derived)" in md and "— (file-verified)" in md
+
+
+def test_flocks_declared_class_is_non_zk_proof() -> None:
+    assert V.FLOCK.proof_classes == ("NON_ZK_PROOF",) and "may change" in V.FLOCK_CONFIG.zk
