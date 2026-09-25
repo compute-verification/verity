@@ -285,6 +285,11 @@ def tile_instances(rel: Relation, nx: int, nw: int, seed: int | None = None, pro
     return vus, x, w
 
 
+#: a dump manifest's ``set.tile``: the draw and layout names a verifier must know to recompute the tile
+TILE_DRAW = "relchain.tile_instances/v1"
+TILE_LAYOUT = "row-major: x = vu // nw, W = vu % nw"
+
+
 def tile_digest(rel: Relation, nx: int, nw: int, seed: int | None = None) -> str:
     """The manifest digest of :func:`tile_instances` (a synthetic draw of its own, for every relation: its VUs are not
     ``instances(rel, nx nw)``)."""
@@ -2118,6 +2123,11 @@ def bench_vu_rel(args, rel: Relation) -> int:
         dump_manifest["set"] = {"total_vus": total_vus, "batch": args.batch, "per_proof": per_proof, "n_proofs": n_proofs,
                                 "zk": args.zk, "mode": args.mode, "reps": args.reps, "dump_reps": dump_reps,
                                 "instances": inst_digest}
+        if tile is not None:
+            # what an independent verifier needs to recompute the committed tile (reverify.committed_trees): the draw is
+            # tile_instances(rel, nx, nw, seed), VU v is x row v // nw against W column v % nw
+            dump_manifest["set"]["tile"] = {"nx": tile[0], "nw": tile[1], "seed": rel.instance_seed,
+                                            "draw": TILE_DRAW, "layout": TILE_LAYOUT}
     target_bits = float(getattr(args, "target_bits", 128.0) or 128.0)   # the VERIFIER's parameter (PROTOCOL.md 8c)
     # --verifier tcp://host:port: the step-0 coins of every RECORDED rep come from a LIVE verifier on another machine
     # (live.py) and every prover message is sent to it as it is produced -- the protocol is unchanged (8c), only the coin
