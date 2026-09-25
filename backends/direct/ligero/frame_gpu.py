@@ -120,13 +120,23 @@ def blake3_rows(rows, *, word_bits: int, role: int, block_out: bool = False):
 def blake3_digests(cvs, role: int):
     """(N, n_chunks, 8) chunk CVs -> (N, DIGEST_ELEMS) int64 cupy: the scheme's published digests (``cvs_to_elems``)."""
     from .leaf import blake3 as b3
+    global _DIGESTS
     n, nch = int(cvs.shape[0]), int(cvs.shape[1])
     if nch > b3.N_CHUNKS_MAX:
         raise ValueError(f"{nch} chunks exceed the scheme's {b3.N_CHUNKS_MAX}")
-    out = cp.zeros((n, b3.DIGEST_ELEMS), dtype=cp.int64)
-    out[:, 0] = b3.header(nch, role)
-    out[:, 1:1 + 16 * nch] = _limbs(cvs).reshape(n, -1)
+    if _DIGESTS is None:
+        _DIGESTS = cp.ElementwiseKernel(
+            "raw uint32 cvs, int32 nch, int32 width, int64 header", "int64 out",
+            "long long r = i / width; int e = (int)(i % width), k = e - 1;"
+            "out = e == 0 ? header : (k / 16 >= nch ? 0ll"
+            " : (long long)((cvs[(r * nch + k / 16) * 8 + (k % 16) / 2] >> (16 * (k & 1))) & 0xFFFFu));",
+            "blake3_digest_elems")
+    out = cp.empty((n, b3.DIGEST_ELEMS), dtype=cp.int64)
+    _DIGESTS(cp.ascontiguousarray(cvs), np.int32(nch), np.int32(b3.DIGEST_ELEMS), np.int64(b3.header(nch, role)), out)
     return out
+
+
+_DIGESTS = None
 
 
 def row_tree(name: str, binding: bytes, rows, *, word_bits: int, role: int, scheme, expect=None):

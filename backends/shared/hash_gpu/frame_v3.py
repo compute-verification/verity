@@ -134,12 +134,9 @@ void fv3_pad(const u32* __restrict__ mid, u64 done, const u8* __restrict__ tail,
 }
 
 // node i of a level: head (with uint_part(level)) || uint_part(i) || u64be(32) || child 2i || u64be(32) || child 2i+1
-extern "C" __global__
-void fv3_node(const u32* __restrict__ mid, u64 done, const u8* __restrict__ tail, int tail_len, const u8* __restrict__ in,
-              long long n, u8* __restrict__ out)
+__device__ __forceinline__ void node_hash(const u32* mid, u64 done, const u8* tail, int tail_len, const u8* in, long long i,
+                                          u8* out)
 {
-    long long i = (long long)blockIdx.x * blockDim.x + threadIdx.x;
-    if (i >= n) return;
     Sha s; sha_init(s, mid, done);
     sha_bytes(s, tail, tail_len);
     sha_uint_part(s, (u64)i);
@@ -148,6 +145,33 @@ void fv3_node(const u32* __restrict__ mid, u64 done, const u8* __restrict__ tail
     sha_be(s, 32ull, 8);
     sha_bytes(s, in + i * 64 + 32, 32);
     sha_final(s, out + i * 32);
+}
+
+extern "C" __global__
+void fv3_node(const u32* __restrict__ mid, u64 done, const u8* __restrict__ tail, int tail_len, const u8* __restrict__ in,
+              long long n, u8* __restrict__ out)
+{
+    long long i = (long long)blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n) return;
+    node_hash(mid, done, tail, tail_len, in, i, out);
+}
+
+// the levels lv0 .. depth-1 of a tree in one block: level lv reads width >> lv nodes at dev + 32 off and writes its
+// width >> (lv + 1) right after them; head h0 + lv (mids / tails / nblk / tlen of heads()) is level lv's
+extern "C" __global__
+void fv3_top(const u32* __restrict__ mids, const u8* __restrict__ tails, const int* __restrict__ nblk,
+             const int* __restrict__ tlen, int h0, u8* dev, long long off, long long width, int lv0, int depth)
+{
+    for (int lv = lv0; lv < depth; ++lv) {
+        long long n_in = width >> lv, n = n_in >> 1;
+        int h = h0 + lv;
+        const u8* in = dev + 32 * off;
+        u8* out = dev + 32 * (off + n_in);
+        for (long long i = threadIdx.x; i < n; i += blockDim.x)
+            node_hash(mids + 8 * h, 64ull * (u64)nblk[h], tails + 64 * h, tlen[h], in, i, out);
+        __syncthreads();
+        off += n_in;
+    }
 }
 
 // vllm-v1 level (verity.commitments.leaves.levels): out i = H(node tag, in 2i, in 2i+1), or H(lift tag, in 2i) for an odd
@@ -382,13 +406,14 @@ def vllm_head(tag: bytes) -> bytes:
 
 
 class _Head:
-    """A launch's head on the device: the midstate, the byte count it covers, the tail bytes."""
+    """A launch's head on the device (pointers into its :class:`_Heads`): the midstate, the byte count it covers, the tail."""
 
-    __slots__ = ("mid", "done", "tail", "tail_len")
+    __slots__ = ("mid", "done", "tail", "tail_len", "_keep")
     _cache: dict = {}
 
-    def __init__(self, mid, done: int, tail, tail_len: int):
-        self.mid, self.done, self.tail, self.tail_len = mid, np.uint64(done), tail, np.int32(tail_len)
+    def __init__(self, mid: int, done: int, tail: int, tail_len: int, keep):
+        self.mid, self.done, self.tail, self.tail_len, self._keep = (np.uint64(mid), np.uint64(done), np.uint64(tail),
+                                                                     np.int32(tail_len), keep)
 
     @classmethod
     def of(cls, data: bytes) -> "_Head":
@@ -397,33 +422,54 @@ class _Head:
         if h is None:
             if len(cls._cache) > 4096:
                 cls._cache.clear()
-            h = cls._cache[data] = heads([data])[0][0]
+            h = cls._cache[data] = heads([data]).head(0)
         return h
 
 
-def heads(datas: list[bytes], extra: bytes = b"") -> tuple[list[_Head], object]:
-    """The heads ``datas`` on the device from one upload (their whole blocks, their tails, then ``extra``) and one
-    midstate launch; returns them and ``extra`` on the device."""
-    n = len(datas)
-    nblk = [len(d) // 64 for d in datas]
-    stride = 64 * max(1, max(nblk, default=1))
-    t_off = n * stride
-    b_off = t_off + 64 * n
-    e_off = b_off + 4 * n
-    buf = np.zeros(e_off + max(1, len(extra)), dtype=np.uint8)
-    for j, d in enumerate(datas):
-        k = 64 * nblk[j]
-        buf[j * stride:j * stride + k] = np.frombuffer(d[:k], dtype=np.uint8)
-        buf[t_off + 64 * j:t_off + 64 * j + len(d) - k] = np.frombuffer(d[k:], dtype=np.uint8)
-    buf[b_off:e_off] = np.asarray(nblk, dtype="<i4").view(np.uint8)
-    buf[e_off:e_off + len(extra)] = np.frombuffer(extra, dtype=np.uint8)
-    dev = cp.asarray(buf)
-    mids = cp.empty((n, 8), dtype=cp.uint32)
-    if n:
-        _fn("sha", "sha_mids")(_grid(n, 64), (64,), (dev, dev[b_off:e_off].view(cp.int32), np.int32(stride), np.int32(n), mids))
-    hs = [_Head(mids[j], 64 * nblk[j], dev[t_off + 64 * j:t_off + 64 * (j + 1)], len(d) - 64 * nblk[j])
-          for j, d in enumerate(datas)]
-    return hs, dev[e_off:e_off + len(extra)]
+class _Heads:
+    """Heads on the device from one upload (their whole blocks, tails, block counts, tail lengths, then ``extra``) and
+    one ``sha_mids`` launch; ``mids`` (n, 8) and the pointers ``tails`` (n x 64 B), ``nblk`` / ``tlen`` (n int32),
+    ``extra``."""
+
+    def __init__(self, datas: list[bytes], extra: bytes = b""):
+        n = self.n = len(datas)
+        self._nblk = [len(d) // 64 for d in datas]
+        self._tlen = [len(d) - 64 * k for d, k in zip(datas, self._nblk)]
+        stride = 64 * max(1, max(self._nblk, default=1))
+        t_off = n * stride
+        b_off = t_off + 64 * n
+        l_off = b_off + 4 * n
+        e_off = l_off + 4 * n
+        buf = np.zeros(e_off + max(1, len(extra)), dtype=np.uint8)
+        for j, d in enumerate(datas):
+            k = 64 * self._nblk[j]
+            buf[j * stride:j * stride + k] = np.frombuffer(d[:k], dtype=np.uint8)
+            buf[t_off + 64 * j:t_off + 64 * j + len(d) - k] = np.frombuffer(d[k:], dtype=np.uint8)
+        buf[b_off:l_off] = np.asarray(self._nblk, dtype="<i4").view(np.uint8)
+        buf[l_off:e_off] = np.asarray(self._tlen, dtype="<i4").view(np.uint8)
+        buf[e_off:e_off + len(extra)] = np.frombuffer(extra, dtype=np.uint8)
+        self.dev = cp.asarray(buf)
+        self.mids = cp.empty((max(1, n), 8), dtype=cp.uint32)
+        base = self.dev.data.ptr
+        self.tails, self.nblk, self.tlen, self.extra, self.extra_len = base + t_off, base + b_off, base + l_off, base + e_off, len(extra)
+        self._e_off = e_off
+        if n:
+            _fn("sha", "sha_mids")(_grid(n, 64), (64,), (self.dev, np.uint64(self.nblk), np.int32(stride), np.int32(n), self.mids))
+
+    def head(self, j: int) -> _Head:
+        return _Head(self.mids.data.ptr + 32 * j, 64 * self._nblk[j], self.tails + 64 * j, self._tlen[j], self)
+
+    def host(self, j: int) -> tuple[np.ndarray, int, bytes]:
+        """Head ``j`` as :func:`midstate` gives it (tests)."""
+        t = cp.asnumpy(self.dev[self.tails - self.dev.data.ptr + 64 * j:][:self._tlen[j]]).tobytes()
+        return cp.asnumpy(self.mids[j]), 64 * self._nblk[j], t
+
+    def extra_bytes(self) -> bytes:
+        return cp.asnumpy(self.dev[self._e_off:self._e_off + self.extra_len]).tobytes()
+
+
+def heads(datas: list[bytes], extra: bytes = b"") -> _Heads:
+    return _Heads(datas, extra)
 
 
 def _leaf_suffix(schema: str, vlen: int) -> bytes:
@@ -432,6 +478,11 @@ def _leaf_suffix(schema: str, vlen: int) -> bytes:
 
 def _grid(n: int, block: int) -> tuple[int]:
     return (max(1, (n + block - 1) // block),)
+
+
+def _p(a, byte_off: int = 0) -> np.uint64:
+    """A device pointer argument: ``a``'s data plus ``byte_off`` bytes."""
+    return np.uint64(a.data.ptr + byte_off)
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -447,45 +498,43 @@ def _value_len(vmode: int, vlen: int | None) -> int:
 
 
 def leaves_into(out, domain_id: bytes, schema: str, values, *, vmode: int = VALUE_BYTES, vlen: int | None = None,
-                start: int = 0, block: int = 256, _head=None) -> None:
+                start: int = 0, block: int = 256, _heads=None) -> None:
     """``out[i] = domain.leaf(start + i, start + i, schema, value_i)`` for the ``n = out.shape[0]`` values: ``values`` a
     device array of ``n`` rows of ``vlen`` bytes (``VALUE_BYTES``), or of ``n`` u16 / u32 words (``VALUE_U16`` /
-    ``VALUE_U32``: the value is the word's 2 / 4 big-endian bytes).  ``_head``: the leaf head and suffix already on the
-    device (:func:`_tree_heads`)."""
+    ``VALUE_U32``: the value is the word's 2 / 4 big-endian bytes).  ``_heads``: ``(heads, j)`` with the leaf head at
+    ``j`` and the suffix as ``extra`` (:func:`_tree_heads`)."""
     n = int(out.shape[0])
     if n == 0:
         return
     vlen = _value_len(vmode, vlen)
-    if _head is None:
-        (h,), suffix = heads([head(LEAF, domain_id)], _leaf_suffix(schema, vlen))
-    else:
-        h, suffix = _head
-    _fn("sha", "fv3_leaf")(_grid(n, block), (block,), (h.mid, h.done, h.tail, h.tail_len, suffix, np.int32(suffix.size),
-                                                          values, np.int32(vmode), np.int32(vlen), np.int64(start), np.int64(n), out))
+    H, j = _heads if _heads is not None else (heads([head(LEAF, domain_id)], _leaf_suffix(schema, vlen)), 0)
+    h = H.head(j)
+    _fn("sha", "fv3_leaf")(_grid(n, block), (block,), (h.mid, h.done, h.tail, h.tail_len, np.uint64(H.extra),
+                                                          np.int32(H.extra_len), values, np.int32(vmode), np.int32(vlen),
+                                                          np.int64(start), np.int64(n), out))
 
 
-def pads_into(out, domain_id: bytes, start: int, block: int = 256, _head=None) -> None:
+def pads_into(out, domain_id: bytes, start: int, block: int = 256) -> None:
     n = int(out.shape[0])
     if n == 0:
         return
-    h = _head if _head is not None else heads([head(PAD, domain_id)])[0][0]
+    h = heads([head(PAD, domain_id)]).head(0)
     _fn("sha", "fv3_pad")(_grid(n, block), (block,), (h.mid, h.done, h.tail, h.tail_len, np.int64(start), np.int64(n), out))
 
 
-def nodes_into(out, domain_id: bytes, level: int, children, block: int = 256, _head=None) -> None:
+def nodes_into(out, domain_id: bytes, level: int, children, block: int = 256) -> None:
     n = int(out.shape[0])
-    h = _head if _head is not None else heads([head(NODE, domain_id, uint(level))])[0][0]
+    h = heads([head(NODE, domain_id, uint(level))]).head(0)
     _fn("sha", "fv3_node")(_grid(n, block), (block,), (h.mid, h.done, h.tail, h.tail_len, children, np.int64(n), out))
 
 
-def _tree_heads(domain_id: bytes, depth: int, schema: str | None = None, vlen: int | None = None):
-    """A tree's heads in one upload: ``(pad, [node level 0 .. depth-1], (leaf, suffix) or None)``."""
+def _tree_heads(domain_id: bytes, depth: int, schema: str | None = None, vlen: int | None = None) -> _Heads:
+    """A tree's heads in one upload: 0 the pad, 1 + lv node level lv (lv < depth), depth + 1 the leaf (``schema`` given;
+    its suffix as ``extra``)."""
     datas = [head(PAD, domain_id)] + [head(NODE, domain_id, uint(lv)) for lv in range(depth)]
     if schema is None:
-        hs, _ = heads(datas)
-        return hs[0], hs[1:], None
-    hs, suffix = heads(datas + [head(LEAF, domain_id)], _leaf_suffix(schema, vlen))
-    return hs[0], hs[1:depth + 1], (hs[-1], suffix)
+        return heads(datas)
+    return heads(datas + [head(LEAF, domain_id)], _leaf_suffix(schema, vlen))
 
 
 class Tree:
@@ -524,12 +573,12 @@ class Tree:
 def build_tree(domain_id: bytes, count: int, schema: str, values, *, vmode: int = VALUE_BYTES, vlen: int | None = None,
                block: int = 256) -> Tree:
     """The frame-v3 tree of ``count`` leaves (ranks ``0..count``, positions = ranks) with pads to ``2^depth`` and the
-    nodes level by level, all on the device (one launch per level)."""
+    nodes level by level, all on the device."""
     depth = depth_of(count)
     dev = cp.empty((2 * (1 << depth) - 1, 32), dtype=cp.uint8)
-    pad, nodes, leaf = _tree_heads(domain_id, depth, schema, _value_len(vmode, vlen))
-    leaves_into(dev[:count], domain_id, schema, values, vmode=vmode, vlen=vlen, block=block, _head=leaf)
-    return _frame_levels(dev, domain_id, count, block, (pad, nodes))
+    H = _tree_heads(domain_id, depth, schema, _value_len(vmode, vlen))
+    leaves_into(dev[:count], domain_id, schema, values, vmode=vmode, vlen=vlen, block=block, _heads=(H, depth + 1))
+    return _frame_levels(dev, domain_id, count, block, H)
 
 
 def frame_tree(domain_id: bytes, leaves, block: int = 256) -> Tree:
@@ -540,17 +589,32 @@ def frame_tree(domain_id: bytes, leaves, block: int = 256) -> Tree:
     return _frame_levels(dev, domain_id, count, block)
 
 
-def _frame_levels(dev, domain_id: bytes, count: int, block: int, hs=None) -> Tree:
+def _top_threads() -> int:
+    return min(1024, int(_fn("sha", "fv3_top").max_threads_per_block)) // 32 * 32
+
+
+def _frame_levels(dev, domain_id: bytes, count: int, block: int, H: _Heads | None = None) -> Tree:
+    """Pads and nodes: one launch per level while a level has more than :func:`_top_threads` nodes, the levels above in
+    one single-block launch (``fv3_top``)."""
     depth = depth_of(count)
     width = 1 << depth
-    pad, nodes = hs if hs is not None else _tree_heads(domain_id, depth)[:2]
-    pads_into(dev[count:width], domain_id, count, block=block, _head=pad)
-    off = 0
-    for lv in range(depth):
+    H = H if H is not None else _tree_heads(domain_id, depth)
+    if width > count:
+        h = H.head(0)
+        _fn("sha", "fv3_pad")(_grid(width - count, block), (block,), (h.mid, h.done, h.tail, h.tail_len, np.int64(count),
+                                                                      np.int64(width - count), _p(dev, 32 * count)))
+    top = _top_threads()
+    off, lv = 0, 0
+    while lv < depth and (width >> (lv + 1)) > top:
         n = width >> (lv + 1)
-        nodes_into(dev[off + (width >> lv):off + (width >> lv) + n], domain_id, lv, dev[off:off + (width >> lv)], block=block,
-                   _head=nodes[lv])
+        h = H.head(1 + lv)
+        _fn("sha", "fv3_node")(_grid(n, block), (block,), (h.mid, h.done, h.tail, h.tail_len, _p(dev, 32 * off), np.int64(n),
+                                                           _p(dev, 32 * (off + (width >> lv)))))
         off += width >> lv
+        lv += 1
+    if lv < depth:
+        _fn("sha", "fv3_top")((1,), (top,), (H.mids, np.uint64(H.tails), np.uint64(H.nblk), np.uint64(H.tlen), np.int32(1), dev,
+                                             np.int64(off), np.int64(width), np.int32(lv), np.int32(depth)))
     return Tree(dev, [width >> lv for lv in range(depth + 1)])
 
 
@@ -570,8 +634,8 @@ def vllm_tree(leaves, block: int = 256) -> Tree:
     for lv in range(len(sizes) - 1):
         m = sizes[lv + 1]
         _fn("sha", "vllm_level")(_grid(m, block), (block,), (hn.mid, hn.done, hn.tail, hn.tail_len, hl.mid, hl.done, hl.tail,
-                                                             hl.tail_len, dev[off:off + sizes[lv]], np.int64(sizes[lv]),
-                                                             dev[off + sizes[lv]:off + sizes[lv] + m]))
+                                                             hl.tail_len, _p(dev, 32 * off), np.int64(sizes[lv]),
+                                                             _p(dev, 32 * (off + sizes[lv]))))
         off += sizes[lv]
     return Tree(dev, sizes)
 
@@ -579,6 +643,9 @@ def vllm_tree(leaves, block: int = 256) -> Tree:
 # ---------------------------------------------------------------------------------------------------------------------
 # Row digests (the values of row leaves)
 # ---------------------------------------------------------------------------------------------------------------------
+
+_KEYS: dict = {}
+
 
 def blake3_keyed_rows(rows, key: bytes, *, block_out: bool = False, block: int = 128):
     """Keyed BLAKE3 of every row of ``rows`` (N, nbytes) uint8 on the device: ``(cvs (N, n_chunks, 8) uint32 chunk
@@ -593,7 +660,9 @@ def blake3_keyed_rows(rows, key: bytes, *, block_out: bool = False, block: int =
     nch = max(1, -(-nbytes // 1024))
     if nch > 1 << 8:
         raise ValueError("rows of at most 256 chunks (the root fold's stack)")
-    kw = cp.asarray(np.frombuffer(key, dtype="<u4").astype(np.uint32))
+    kw = _KEYS.get(key)
+    if kw is None:
+        kw = _KEYS[key] = cp.asarray(np.frombuffer(key, dtype="<u4").astype(np.uint32))
     cvs = cp.empty((n, nch, 8), dtype=cp.uint32)
     bo = cp.empty((n, nbytes // 64, 8), dtype=cp.uint32) if block_out else None
     roots = cp.empty((n, 8), dtype=cp.uint32)
