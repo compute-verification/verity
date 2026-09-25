@@ -1,14 +1,17 @@
 """steps-pin (red-team-leaf-3 H1 / H2): the Python verifier binds a chain statement's VU shape to the relation.  steps
 (columns per VU) must be the relation's canonical value (``Relation.steps``, fp4 ``STEPS``, vu.py ``STEPS``) and never
-exceed the leaf's structural bound (Ajtai: the ring degree n); a v5 header's K must be K_VU = 1536 (what every hashed writer emits).  The twin
+exceed the leaf's structural bound (Ajtai: the ring degree n); a v5 / v6 header's K must be K_VU = 1536 (what every hashed writer emits).  The twin
 of ligero-verify's ``check_vu_shape`` (tests/relations.rs ``steps_pin_*`` / ``a_statement_whose_vu_shape_*``).
 
 Must-reject: the red-team collide pairs (n64 steps 96, n128 steps 192) and n64 steps 32; real steps = 32 proofs of the
 bare and the +hash fp8-ada relation (``redteam/steps_pin_forge.py``); header rewrites of every family's steps and a v5
-K.  Honest: every committed fixture still verifies."""
+K; a real steps = 32 +shared (v6) pair and v6 header rewrites, built on the CPU (through ``$LIGERO_VERIFY`` too when it
+is set).  Honest: every committed fixture still verifies."""
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -144,3 +147,102 @@ def test_relation_registry_steps_are_the_rust_pins() -> None:
     for name, steps in want.items():
         if name in RELATIONS:
             assert relation(name).steps == steps, name
+
+
+# ---- +shared (v6): both sides of the pair carry the relation's VU shape (SharedHashedRunner.hooks / .hooks_h; the Rust
+# pair verifier runs check_vu_shape on G and H).  fp8-ada, 2x2 tile, 4 VUs, Fiat-Shamir + ZK, on the CPU as
+# redteam/leaf2_share_pair.py builds them; the steps = 32 pair is the honest prover with K_VU bumped (steps_pin_forge.py).
+
+def _shared_pair(root: Path, name: str, steps: int | None = None) -> tuple[Path, object]:
+    from . import relations as RM
+    from . import relchain as RC
+    from .relchain import SharedHashedRunner, tile_instances
+    from .serialize import _statement_of, proof_bytes, statement_bytes, system_bytes
+    rel = relation("fp8-ada")
+    k_vu = RM.K_VU
+    try:
+        if steps is not None:
+            RM.K_VU = RC.K_VU = steps * rel.k
+        R = SharedHashedRunner(rel, "cpu", -128.0, zk=True, mode="fiat-shamir")
+        data, x_rows, w_cols = tile_instances(rel, 2, 2)
+        R.commit_vus(data, tile=(2, 2), x_rows=x_rows, w_cols=w_cols)
+        pf, pubs, lay = R.prove_vus(data[:4], check=False, vu_ids=range(4))
+        st = _statement_of(R, pubs, lay, R.cfg(lay.l), 1)
+        d = root / name
+        d.mkdir()
+        (d / "sub_00.stmt").write_bytes(statement_bytes(st))
+        (d / "sub_00.proof").write_bytes(proof_bytes(pf.g))
+        (d / "sub_00.hproof").write_bytes(proof_bytes(pf.h))
+        if steps is None:
+            (root / "system.bin").write_bytes(system_bytes(R.sys))
+            (root / "system_h.bin").write_bytes(system_bytes(R.sys_h))
+    finally:
+        RM.K_VU = RC.K_VU = k_vu
+    return d, R
+
+
+@pytest.fixture(scope="module")
+def shared(tmp_path_factory):
+    root = tmp_path_factory.mktemp("shared")
+    honest, R = _shared_pair(root, "honest")
+    forged, _ = _shared_pair(root, "steps32", steps=32)
+    return root, honest, forged, R
+
+
+def _rust_pair(root: Path, stmt: Path, d: Path) -> dict | None:
+    """``ligero-verify verify --system-h`` on the pinned (canonical) G / H systems; None without ``$LIGERO_VERIFY``."""
+    exe = os.environ.get("LIGERO_VERIFY")
+    if not exe or not Path(exe).is_file():
+        return None
+    r = subprocess.run([exe, "verify", "--system", str(root / "system.bin"), "--system-h", str(root / "system_h.bin"),
+                        "--statement", str(stmt), "--proof", str(d / "sub_00.proof"), "--proof-h", str(d / "sub_00.hproof"),
+                        "--soundness-bits", "100"], capture_output=True, text=True)
+    return json.loads(r.stdout.strip().splitlines()[-1])
+
+
+def _as_pair(root: Path, d: Path, edits: list[tuple[int, int]]) -> Path:
+    """The pair ``d`` with header words rewritten, as ``root/<name>/sub_00.{stmt,proof,hproof}`` (the hash-side proof is
+    found beside the statement)."""
+    out = root / f"{d.name}-{'-'.join(f'{a}_{v}' for a, v in edits)}"
+    out.mkdir(exist_ok=True)
+    raw = bytearray((d / "sub_00.stmt").read_bytes())
+    for at, v in edits:
+        raw[at:at + 4] = int(v).to_bytes(4, "little")
+    (out / "sub_00.stmt").write_bytes(bytes(raw))
+    for f in ("sub_00.proof", "sub_00.hproof"):
+        (out / f).write_bytes((d / f).read_bytes())
+    return out
+
+
+def test_the_shared_runner_carries_the_relations_vu_shape(shared) -> None:
+    *_, R = shared
+    assert R.hooks.steps == R.hooks_h.steps == relation("fp8-ada").steps == 48
+    assert R.hooks_for(None).steps == R.hooks_h_for(None).steps == 48
+
+
+def test_an_honest_shared_pair_verifies(shared) -> None:
+    root, honest, _, _ = shared
+    ok, why, _ = verify_files(honest / "sub_00.stmt", honest / "sub_00.proof", DEV)
+    assert ok, why
+    js = _rust_pair(root, honest / "sub_00.stmt", honest)
+    if js is not None:
+        assert js["accepted"] and js["system_pinned"], js
+
+
+SHARED_NEG = [
+    ("steps32", [], _shape(32, 48), "G: statement: steps = 32 columns per VU, the fp8-ada relation's VU is 48 columns"),
+    ("honest", [(STEPS_AT, 32)], _shape(32, 48), "G: statement: steps = 32 columns per VU, the fp8-ada relation's VU is 48 columns"),
+    ("honest", [(K_AT, 48 * 16)], "statement: K = 768 words per row, a hashed statement's row is K = 1536",
+     "G: statement: K = 768 words per row, a hashed statement's row is K = 1536"),
+]
+
+
+@pytest.mark.parametrize("which,edits,why,why_rust", SHARED_NEG, ids=["forged-steps32", "header-steps32", "header-K768"])
+def test_a_shared_pair_with_another_vu_shape_is_refused(shared, which, edits, why, why_rust) -> None:
+    root, honest, forged, _ = shared
+    d = _as_pair(root, forged if which == "steps32" else honest, edits)
+    ok, got, _ = verify_files(d / "sub_00.stmt", d / "sub_00.proof", DEV)
+    assert not ok and got.startswith(why), got
+    js = _rust_pair(root, d / "sub_00.stmt", d)
+    if js is not None:
+        assert not js["accepted"] and js["reason"].startswith(why_rust), js

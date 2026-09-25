@@ -816,9 +816,9 @@ class SharedHashedRunner(HashedRelationRunner):
         self.base_tag = hashchain.SHARED_TAG + rel.tag
         self.base_tag_h = hashchain.ROWS_TAG + rel.tag
         self.hooks = RelationHooks(hashchain.shared_public_vectors, word_dtype="<u4", y16_dtype=rel.y_dtype,
-                                   y16_bits=rel.y_bits, tag=self.base_tag)
+                                   y16_bits=rel.y_bits, tag=self.base_tag, steps=rel.steps)
         self.hooks_h = RelationHooks(hashchain.row_hash_public_vectors, word_dtype="<u4", y16_dtype=rel.y_dtype,
-                                     y16_bits=rel.y_bits, tag=self.base_tag_h)
+                                     y16_bits=rel.y_bits, tag=self.base_tag_h, steps=rel.steps)
         self.trees = None
         self.tile = None
         self.rows, self.sponges, self.sponge_seconds = None, None, 0.0
