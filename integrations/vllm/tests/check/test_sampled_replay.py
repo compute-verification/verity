@@ -9,6 +9,7 @@ import numpy as np
 import pytest
 
 from verity_vllm.check.replay import sampled_replay as SR
+from verity_vllm.program.kernels import rows as RK
 
 EPS = '{"f64":"0x1.4f8b588e368f1p-17"}'
 V, H, I, LP, T = 8, 16, 16, 2, 2          # vocab, hidden, intermediate, prompt len, decode steps (steps = LP-prefill + T decode = 1 + T)
@@ -531,9 +532,9 @@ def test_partial_replay_with_named_gaps_is_covered_by_a_complete_form_b_coord_m0
 
 def test_token_select_first_max_tie_rule():
     logits = np.asarray([0x3F80, 0x4000, 0x4000, 0x3F00], dtype=np.uint16)   # 1.0, 2.0, 2.0, 0.5 -> index 1
-    assert SR.token_select_first_max(logits) == 1
+    assert RK.token_select_first_max(logits) == 1
     nan = np.asarray([0x7FC0, 0x3F80], dtype=np.uint16)                         # NaN never wins
-    assert SR.token_select_first_max(nan) == 1
+    assert RK.token_select_first_max(nan) == 1
 
 
 def test_catch_probability_is_evaluated_over_population_per_stratum(world):
@@ -717,14 +718,14 @@ def test_hopper_gemm_v2_is_registered_and_dispatches_on_the_dot_static():
     from verity_vllm.program.kernels import derived_rows as D
     assert "Gemm_v2" in SR.EVALUATORS and "Gemm_v2" not in SR.NOT_YET and SR._FAMILY_LIBS["Gemm_v2"] == ()
     assert "dot_bf16_for" in SR.EVALUATORS["Gemm_v2"] and "HopperBF16WgmmaDot16_v1" in SR.EVALUATORS["Gemm_v2"]
-    assert SR.gemm_dot_prim({"K": 16, "N": 32, "DOT": '{"fn":"HopperBF16WgmmaDot16_v1"}'}) == "HopperBF16WgmmaDot16_v1"
-    assert SR.gemm_dot_prim({"DOT": "AmpereBF16TcDot16_v1"}) == "AmpereBF16TcDot16_v1"
+    assert RK.gemm_dot_prim({"K": 16, "N": 32, "DOT": '{"fn":"HopperBF16WgmmaDot16_v1"}'}) == "HopperBF16WgmmaDot16_v1"
+    assert RK.gemm_dot_prim({"DOT": "AmpereBF16TcDot16_v1"}) == "AmpereBF16TcDot16_v1"
     for bad in ({}, {"DOT": "k16"}, {"DOT": '{"fn":"Hopper; drop"}'}, {"DOT": 12}):
         with pytest.raises(SR._Unresolved, match="does not name a registered primitive"):
-            SR.gemm_dot_prim(bad)
+            RK.gemm_dot_prim(bad)
     # the spec text of a real Hopper row parses to the same statics the Build wrote (codec._spec_id form)
     st = SR.RM.spec_statics('Gemm_v2{K=2048,N=6144,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}')
-    assert st == {"K": 2048, "N": 6144, "DOT": '{"fn":"HopperBF16WgmmaDot16_v1"}'} and SR.gemm_dot_prim(st) == "HopperBF16WgmmaDot16_v1"
+    assert st == {"K": 2048, "N": 6144, "DOT": '{"fn":"HopperBF16WgmmaDot16_v1"}'} and RK.gemm_dot_prim(st) == "HopperBF16WgmmaDot16_v1"
     assert set(D.TC_DOT16_BY_PRIM) == {"AmpereBF16TcDot16_v1", "HopperBF16WgmmaDot16_v1"}
 
 
@@ -1675,7 +1676,7 @@ def test_padded_moe_block_twin_equals_the_moe01_composition_and_names_every_memb
     st = {"E": E, "TOPK": TOPK, "VPT": VPT, "H": H, "I": I}
     x, logits, w13, w2 = bf16((H,)), bf16((E,), 2.0), bf16((E, 2 * I, H), 0.3), bf16((E, H, I), 0.3)
     SR._PADDED_BLOCK_MEMO.clear()
-    got = SR.padded_moe_block(st, [x, logits, w13, w2], router_gemm=False)
+    got = RK.padded_moe_block(st, [x, logits, w13, w2], router_gemm=False)
     assert set(got) == {"out", "router_ids", "router_w"} | {f"slot{e}/{m}" for e in range(E) for m in ("up", "act", "down", "g")}
     # the MOE-01 composition through the SAME evaluate() entry the record's pair rows use
     r = SR.evaluate("MoeRouterTopK_v1", {"E": E, "TOPK": TOPK, "VPT": VPT}, [[logits]], [None])
@@ -1700,13 +1701,13 @@ def test_padded_moe_block_twin_equals_the_moe01_composition_and_names_every_memb
         assert int(got[f"slot{e}/g"][0]) == 0 and set(int(v) & 0x7FFF for v in got[f"slot{e}/down"]) == {0}
         assert got[f"slot{e}/up"].any()
     # the memo: the same (statics, x, logits) is one evaluation; a different logits word is another
-    assert SR.padded_moe_block(st, [x, logits, w13, w2], router_gemm=False) is got
+    assert RK.padded_moe_block(st, [x, logits, w13, w2], router_gemm=False) is got
     logits2 = logits.copy(); logits2[0] ^= 0x0080
-    assert SR.padded_moe_block(st, [x, logits2, w13, w2], router_gemm=False) is not got
+    assert RK.padded_moe_block(st, [x, logits2, w13, w2], router_gemm=False) is not got
     # MoeFfnFixed_v1: the router Gemm inside = Gemm_v1 on (x, wg) then the same block
     wg = bf16((E, H), 0.5)
     lg = SR.evaluate("Gemm_v1", {"K": H, "N": E}, [[x], [wg.reshape(-1)]], [None, None])["0"]
-    assert SR.padded_moe_block(st, [x, wg, w13, w2], router_gemm=True)["out"].tolist() == SR.padded_moe_block(st, [x, lg, w13, w2], router_gemm=False)["out"].tolist()
+    assert RK.padded_moe_block(st, [x, wg, w13, w2], router_gemm=True)["out"].tolist() == RK.padded_moe_block(st, [x, lg, w13, w2], router_gemm=False)["out"].tolist()
     assert "MoeFfnFixedL_v1" in SR.EVALUATORS and "MoeFfnFixed_v1" in SR.EVALUATORS
 
 

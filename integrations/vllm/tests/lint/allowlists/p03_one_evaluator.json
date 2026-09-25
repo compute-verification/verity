@@ -5,7 +5,6 @@
     {"file": "verity_vllm/check/replay/compiled_kernel_check.py", "kind": "rng", "symbol": "CompiledKernelCheck.run", "detail": "random.Random"},
     {"file": "verity_vllm/check/replay/replay.py", "kind": "rng", "symbol": "tier_a", "detail": "random.Random"},
     {"file": "verity_vllm/check/replay/replay.py", "kind": "rng", "symbol": "tier_chain", "detail": "random.Random"},
-    {"file": "verity_vllm/check/replay/sampled_replay.py", "kind": "if-ladder", "symbol": "evaluate", "detail": "family"},
     {"file": "verity_vllm/check/replay/sampled_replay.py", "kind": "if-ladder", "symbol": "moe_plane_kind", "detail": "family"},
     {"file": "verity_vllm/check/replay/sampled_replay.py", "kind": "rng", "symbol": "sample", "detail": "random.Random"},
     {"file": "verity_vllm/check/replay/stoch_recompute.py", "kind": "rng", "symbol": "recompute_run", "detail": "random.Random"},

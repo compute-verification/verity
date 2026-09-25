@@ -18,6 +18,7 @@ import numpy as np
 import pytest
 
 from verity_vllm.check.replay import sampled_replay as SR
+from verity_vllm.program.kernels import rows as RK
 
 V, H, T = 64, 8, 2          # vocab, hidden (the logits Gemm's K), decode steps after the arrival step
 
@@ -87,7 +88,7 @@ def _honest(arrive: int = 5, rid: str = "r0", seed: int = SEED, splits=S_OF_STEP
         blocks[(rid, arrive + s, lg_op, LG_MEMBER)] = lg
         blocks[(rid, arrive + s, SR.SAMPLER_OP, "seed")] = np.asarray([seed], dtype=np.uint64)
         blocks[(rid, arrive + s, SR.SAMPLER_OP, "splits")] = np.asarray([splits[s]], dtype=np.uint32)
-        tok = SR.gumbel_topp_token_select({"V": V}, [lg, np.asarray([_f32(TOP_P)], np.uint32), np.asarray([seed], np.uint64),
+        tok = RK.gumbel_topp_token_select({"V": V}, [lg, np.asarray([_f32(TOP_P)], np.uint32), np.asarray([seed], np.uint64),
                                                     np.asarray([100 + s], np.uint64), np.asarray([_f32(TEMP)], np.uint32),
                                                     np.asarray([splits[s]], np.uint32)])
         blocks[(rid, arrive + s, SR.SAMPLER_OP, SR.SAMPLED_MEMBER)] = np.asarray([tok], dtype=np.uint64)
@@ -112,9 +113,9 @@ def test_the_stochastic_selector_has_a_registered_evaluator_equal_to_the_registr
         assert list(got) == [SR.SAMPLED_MEMBER] and got[SR.SAMPLED_MEMBER].dtype == np.uint64
         assert int(got[SR.SAMPLED_MEMBER][0]) == int(ref[0]) & 0xFFFFFFFF
     with pytest.raises(ValueError, match="6 operands"):
-        SR.gumbel_topp_token_select({"V": V}, ops[:5])
+        RK.gumbel_topp_token_select({"V": V}, ops[:5])
     with pytest.raises(ValueError, match="operand logits"):
-        SR.gumbel_topp_token_select({"V": V}, [lg[:-1]] + ops[1:])
+        RK.gumbel_topp_token_select({"V": V}, [lg[:-1]] + ops[1:])
 
 
 def test_const_rows_read_from_the_program_text():
