@@ -116,7 +116,9 @@ def features(env: Mapping[str, Any], meta: Mapping[str, Any] | None = None) -> d
                          "proof_class": fp.get("proof_class"), "authentication": fp.get("authentication"), "leaf": None,
                          "sharing": fp.get("sharing") if isinstance(fp.get("sharing"), str) else ("row" if fp.get("row_sharing") else None),
                          "device": None, "tcdot": bool(re.search(r"tc[-_ ]?dot|modified sp1", name)),
-                         "sec_raised": "fri query count raised" in name}
+                         "sec_raised": "fri query count raised" in name,
+                         "sp1_committed": _s(fp.get("statement")).startswith("relation-committed/"),
+                         "sp1_committed_vllm": _s(fp.get("statement")).startswith("relation-committed-vllm/")}
     if f["candidate"] == "B-Ligero":
         m = _RELATION.match(name)
         fam = _FAMILY.search(m.group(1)) if m else None
@@ -313,7 +315,8 @@ VARIANTS: tuple[Variant, ...] = (
             "backends/gkr/gpu/README.md; backends/gkr/gpu/ligero.py; backends/gkr/gpu/sha512_cuda.py; backends/gkr/verifier; "
             "result envelopes' security (art:300a526a); Table 1 (A-GKR)"),
     Variant("SP1 stock (relation-only / bare guest)", "SP1", "software.backend.name 'sp1…' without tc-dot",
-            lambda f: f["candidate"] == "SP1" and not f["tcdot"] and not f.get("sec_raised"),
+            lambda f: f["candidate"] == "SP1" and not f["tcdot"] and not f.get("sec_raised") and not f.get("sp1_committed")
+            and not f.get("sp1_committed_vllm"),
             "unknown (SP1 6.4.0 core / compressed proofs; the README states no ZK property; Table 1: as configured)",
             "x, W are guest input; the 33 public bytes are h_O || h_L || 1 (sound guest) or sha256(K || x || W) || sha256(output "
             "word) || 0xEE (relation-only); hiding would need ZK: unknown",
@@ -334,6 +337,31 @@ VARIANTS: tuple[Variant, ...] = (
             "decoding) but the field-bound terms stay (LogUp-GKR 2^-100.3, commit rounds 2^-102.4, batching 2^-104.4, zerocheck "
             "2^-112.2, jagged reduction 2^-116.4; terms in security.parameters). " + _SP1_LIMIT,
             "No: security.achieved_log2 ~ -95.5 > -128; measures what the query phase alone costs", _SP1_SOUND_SRC),
+    Variant("SP1 stock, committed (frame-v3 SHA-256 rows)", "SP1",
+            "software.backend.name 'sp1…' with statement 'relation-committed/…' (backends/sp1, feature relation-committed)",
+            lambda f: f["candidate"] == "SP1" and not f["tcdot"] and not f.get("sec_raised") and bool(f.get("sp1_committed")),
+            "unknown (as SP1 stock)",
+            "x, W are private guest input; the guest publishes y and the sha256/row/v1 digest of every x row and W column, which "
+            "the verifier binds to the statement's frame-v3 roots (unsalted digests: a low-entropy row is preimage-searchable)",
+            "SP1 / STARK hash assumptions (Table 1), sp1-sdk =6.4.0 unmodified, the relation-committed guest (its own vk); the "
+            "row digests use SP1's SHA-256 precompile and the trees are checked natively by the verifier (SHA-256)",
+            "as SP1 stock: 2^-99.0 per shard proof plus log2(shards) over the core proof; the SHA-256 statement commitment adds "
+            "collision resistance of SHA-256. " + _SP1_LIMIT,
+            "Yes: SP1 column, full relation over frame-v3 · SHA-256 (algebraic Poseidon2-KoalaBear inside SP1: flagged); no "
+            "SP1 configuration reaches 2^-128", "backends/sp1/common/src/committed.rs; lane sp1-committed; " + _SP1_SOUND_SRC),
+    Variant("SP1 stock, committed (vllm-v1 SHA-256 position leaves)", "SP1",
+            "software.backend.name 'sp1…' with statement 'relation-committed-vllm/…' (backends/sp1, feature relation-committed-vllm)",
+            lambda f: f["candidate"] == "SP1" and not f["tcdot"] and not f.get("sec_raised") and bool(f.get("sp1_committed_vllm")),
+            "unknown (as SP1 stock)",
+            "x, W are private guest input; the guest publishes y and the vllm-v1 position-leaf digest of every x row and W column, "
+            "which the verifier folds into vllm-v1 trees and binds to the statement's step roots over verifier-derived domains "
+            "(unsalted leaves: a low-entropy row is preimage-searchable)",
+            "SP1 / STARK hash assumptions (Table 1), sp1-sdk =6.4.0 unmodified, the relation-committed-vllm guest (its own vk); "
+            "the position leaves use SP1's SHA-256 precompile and the trees are checked natively by the verifier (SHA-256)",
+            "as SP1 stock: 2^-99.0 per shard proof plus log2(shards) over the core proof; the SHA-256 statement commitment adds "
+            "collision resistance of SHA-256. " + _SP1_LIMIT,
+            "Yes: SP1 column, full relation over vllm-v1 · SHA-256 (algebraic Poseidon2-KoalaBear inside SP1: flagged); no "
+            "SP1 configuration reaches 2^-128", "backends/sp1/common/src/committed_vllm.rs; lane sp1-committed; " + _SP1_SOUND_SRC),
     Variant("SP1 precompile (TC_DOT chip)", "SP1", "software.backend.name 'sp1 tc-dot…' (tc-dot / tc_dot / modified sp1 in the name)",
             lambda f: f["candidate"] == "SP1" and f["tcdot"],
             "unknown (as SP1)", "unknown", "SP1 / STARK hash assumptions plus the TC_DOT chip's constraints (a modified prover)",

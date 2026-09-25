@@ -37,11 +37,13 @@ try:  # the label keys are pinned with the store (`research.store.vocab`, tools/
     from research.store import vocab as _vocab
 
     _CANDIDATE, _LABEL, _PROOF_CLASS, _LANE = _vocab.CANDIDATE, _vocab.LABEL, _vocab.PROOF_CLASS, _vocab.LANE
+    _FINDING = _vocab.FINDING
     _INDEPENDENTLY_VERIFIED, _VERIFIED, _VERIFIED_ACCEPTED = _vocab.INDEPENDENTLY_VERIFIED, _vocab.VERIFIED, _vocab.VERIFIED_ACCEPTED
     _VERIFIED_REJECTED = _vocab.VERIFIED_REJECTED
     _KEY_ALIASES, _VALUE_ALIASES = dict(_vocab.KEY_ALIASES), dict(_vocab.VALUE_ALIASES)
 except ImportError:  # pragma: no cover  -- the same spellings, so the predicate still imports where the store package is absent (tested equal)
     _CANDIDATE, _LABEL, _PROOF_CLASS, _LANE = "candidate", "label", "proof_class", "lane"
+    _FINDING = "finding"
     _INDEPENDENTLY_VERIFIED, _VERIFIED, _VERIFIED_ACCEPTED = "independently_verified", "verified", "accepted"
     _VERIFIED_REJECTED = "rejected"
     _KEY_ALIASES, _VALUE_ALIASES = {"notes": "note", "verify_note": "note", "batch": "B", "checker": "verifier"}, {("candidate", "A"): "A-GKR"}
@@ -97,6 +99,7 @@ __all__ = [
     "build",
     "candidate_for",
     "canonical_label",
+    "cell_finding",
     "cell_artifacts",
     "column_authentication",
     "dtype_of",
@@ -474,6 +477,31 @@ def _redteam_ceiling(labels: Sequence[_Label], self_: set[str], by_glob: str = R
     return str(top.value), top
 
 
+#: The research coordinator's cell marks (``lanes/coordinator/evidence/marked-cells.py``): the LATEST ``finding`` label on a
+#: result, by ts, decides.  ``UNDER RE-VERIFICATION ...`` marks its cell with a footnote while it stands; a later ``CLEARED ...``
+#: drops the mark; ``PULLED ...`` rejects the result like a red-team downgrade.  Any other latest finding changes nothing.
+FINDING_OPEN, FINDING_CLEARED, FINDING_PULLED = "UNDER RE-VERIFICATION", "CLEARED", "PULLED"
+UNDER_REVERIFICATION = "under re-verification"
+
+
+def cell_finding(labels: Iterable[Any]) -> tuple[str | None, _Label | None]:
+    """``("open" | "cleared" | "pulled" | None, the latest finding label)`` of a result (``(None, None)`` without one)."""
+
+    found = [lab for lab in _labels(labels) if lab.key == _FINDING]
+    if not found:
+        return None, None
+    latest = max(found, key=lambda lab: (lab.ts, str(lab.value)))
+    value = str(latest.value)
+    for state, prefix in (("open", FINDING_OPEN), ("cleared", FINDING_CLEARED), ("pulled", FINDING_PULLED)):
+        if value.startswith(prefix):
+            return state, latest
+    return None, latest
+
+
+def finding_note(lab: _Label) -> str:
+    return f"{lab.value} ({lab.by}, {lab.ts})"
+
+
 # --- the validity predicate -------------------------------------------------------------------------------------------------
 
 
@@ -538,7 +566,7 @@ def reject_codes(result: Mapping[str, Any], labels: Iterable[Any], attempt: Mapp
     ref, or re-packed with an accepted equivalence (:func:`instance_equivalence`); ``proof_class`` in the candidate's declared
     class(es); ``authentication`` the column's (``excluded``, or ``included-hash`` with Poseidon2-BabyBear per row and no sharing,
     :func:`in_proof_hash_codes`); the same-SKU invariant; independently verified (a :data:`VERIFIED_LABELS` label by a non-producer,
-    :func:`producers`); not downgraded by a ``red-team-*`` verdict."""
+    :func:`producers`); not downgraded by a ``red-team-*`` verdict; not pulled by a ``finding`` label (:func:`cell_finding`)."""
 
     p: list[tuple[str, str]] = []
     labs = _labels(labels)
@@ -603,6 +631,9 @@ def reject_codes(result: Mapping[str, Any], labels: Iterable[Any], attempt: Mapp
     ceiling, verdict = _redteam_ceiling(labs, self_)
     if verdict is not None and isinstance(pc, str) and RANK.get(ceiling or "", -1) < RANK.get(pc, -1):
         p.append(("Z", f"downgraded: {verdict.by} ({verdict.ref or 'no ref'}, {verdict.ts}) asserts proof_class={ceiling}, below {pc}"))
+    state, lab = cell_finding(labs)
+    if state == "pulled":
+        p.append(("Z", f"pulled: {finding_note(lab)}"))
     return p
 
 
@@ -808,6 +839,7 @@ class Cell:
     hash_name: str | None = None       #: ``included-hash``: the fingerprint's ``hash`` (e.g. poseidon2-babybear-w24)
     sharing: str | None = None         #: ``included-hash``: the fingerprint's ``sharing`` (none | tile64x64)
     instances_equiv: str | None = None  #: re-packed instances: the accepted ``instance-equiv/v1`` artifact that makes them the frozen set
+    finding: str | None = None         #: an open ``UNDER RE-VERIFICATION`` finding (:func:`cell_finding`): the cell carries a mark
 
     def to_json(self) -> dict[str, Any]:
         return asdict(self)
@@ -943,13 +975,15 @@ def build(store: Any) -> Tables:
         vb = independent_verification(meta, labels, attempt)
         verified_by = vb.by if vb is not None else None
         eq = instances_equiv_of(meta, labels, attempt, target, equivs)
+        state, flab = cell_finding(labels)
+        open_finding = finding_note(flab) if state == "open" else None
         if reasons:
             T.rejected.append({**entry, "reasons": reasons})
             for dc in cand.drilldown_classes:
                 if not reject_reasons(meta, labels, attempt, target, cand, proof_classes=(dc,), authentication=auth, equivs=equivs):
-                    drill.setdefault((target.name, cand.id, dc), []).append(_cell(meta, art_id, rid, target, cand, verified_by, eq))
+                    drill.setdefault((target.name, cand.id, dc), []).append(_cell(meta, art_id, rid, target, cand, verified_by, eq, open_finding))
             continue
-        valid.setdefault((target.name, cand.id, auth), []).append(_cell(meta, art_id, rid, target, cand, verified_by, eq))
+        valid.setdefault((target.name, cand.id, auth), []).append(_cell(meta, art_id, rid, target, cand, verified_by, eq, open_finding))
 
     for target in TARGETS.values():
         row: dict[str, Any] = {"target": target.name, "status": target.status, "device": target.native_peak.device, "dtype": dtype_of(target),
@@ -999,7 +1033,7 @@ def _mode_of(fp: Mapping[str, Any]) -> str | None:
 
 
 def _cell(meta: Mapping[str, Any], art_id: str, rid: str | None, target: Target, cand: Candidate, verified_by: str | None = None,
-          instances_equiv: str | None = None) -> Cell:
+          instances_equiv: str | None = None, finding: str | None = None) -> Cell:
     fp = meta["workload_fingerprint"]
     t_total = float(_measurements(meta)[contract.T_TOTAL])
     r = _rate(t_total)
@@ -1013,7 +1047,7 @@ def _cell(meta: Mapping[str, Any], art_id: str, rid: str | None, target: Target,
     return Cell(target=target.name, candidate=cand.id, artifact=art_id, attempt=rid, proof_class=fp["proof_class"], t_total=t_total, r_proved=r,
                 overhead=target.native_peak.flop_per_second / r, hardware=gpu.get("name"), phases=phases(meta), mode=mode, verified_by=verified_by,
                 host=host, authentication=auth, hash_name=fp.get("hash") if isinstance(fp.get("hash"), str) else None,
-                sharing=fp.get("sharing") if isinstance(fp.get("sharing"), str) else None, instances_equiv=instances_equiv)
+                sharing=fp.get("sharing") if isinstance(fp.get("sharing"), str) else None, instances_equiv=instances_equiv, finding=finding)
 
 
 def cell_artifacts(T: Tables) -> list[str]:
@@ -1106,7 +1140,8 @@ def caption_text() -> str:
             f"x, W private). Cell = best valid implementation of the "
             f"candidate in its declared proof class (min `t.total`), run on the row's device SKU, printed as R_native_spec / R_proved with "
             f"R_proved = 2KB / t.total. Native measured = `{NATIVE_PEAK_KIND}` ({NATIVE_PEAK_METHOD}), `{UNMEASURED}` when absent; "
-            f"`{EMPTY}` = no valid result.")
+            f"`{EMPTY}` = no valid result; `({UNDER_REVERIFICATION})` = the latest `finding` label on the cell's artifact is open "
+            f"(footnote), and a `PULLED` finding rejects the result.")
 
 
 def render_markdown(T: Tables) -> str:
@@ -1139,7 +1174,9 @@ def render_markdown(T: Tables) -> str:
                 extra = f"; authentication {c.authentication} (hash {c.hash_name or '?'}, sharing {c.sharing or '?'})"
             if c.instances_equiv:
                 extra += f"; {INSTANCE_EQUIV_NOTE} ({c.instances_equiv})"
-            return fmt_overhead(c.overhead) + " " + note(
+            if c.finding:
+                extra += f"; {c.finding}"
+            return fmt_overhead(c.overhead) + (f" ({UNDER_REVERIFICATION})" if c.finding else "") + " " + note(
                 f"{c.artifact} — {cand.id} {c.proof_class} on {c.hardware}" + (f" (host {c.host})" if c.host else "") +
                 f"; attempt {c.attempt or 'unknown'}; t.total {c.t_total:.4g} s; R_proved {c.r_proved:.4g} FLOP/s{extra}; {c.verification_note()}")
 
