@@ -70,7 +70,8 @@ pub fn flags_of(j: usize) -> u32 {
     KEYED_HASH | if j == 0 { CHUNK_START } else { 0 } | if j == SUBS - 1 { CHUNK_END } else { 0 }
 }
 
-fn comp() -> &'static BlockR1cs {
+/// Flock's BLAKE3 compression circuit (one 2^14 block), the sub-block of every chunk block.
+pub fn comp() -> &'static BlockR1cs {
     static C: OnceLock<BlockR1cs> = OnceLock::new();
     C.get_or_init(|| b3::build_block_r1cs(3))
 }

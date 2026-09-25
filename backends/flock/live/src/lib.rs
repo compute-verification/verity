@@ -17,6 +17,8 @@
 //!   The session record ([`Server::record_json`]) is the evidence; a proof file alone verifies nothing.
 
 pub mod chunk;
+#[cfg(feature = "gpu")]
+pub mod gpu;
 
 use std::{
     collections::BTreeMap,

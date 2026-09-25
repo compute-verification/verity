@@ -196,13 +196,15 @@ fn prove_cpu(st: &ChunkStmt, comps: &[Compression], lig: LigeritoProfile, hook: 
 }
 
 #[cfg(feature = "gpu")]
-fn prove_gpu(st: &ChunkStmt, comps: &[Compression], lig: LigeritoProfile, hook: Hook<'_>, ch: &mut LiveChallenger) -> Vec<u8> {
-    let (proof, commitment) = flock_live::gpu::prove_chunk(st, comps, &params(st.m, lig), hook, ch);
+fn prove_gpu(st: &ChunkStmt, comps: &[Compression], lig: LigeritoProfile, rep: usize, hook: Hook<'_>, ch: &mut LiveChallenger) -> Vec<u8> {
+    let (proof, commitment, phase) = flock_live::gpu::prove_chunk(st, comps, &params(st.m, lig), &domain(rep), hook, ch);
+    eprintln!("GPUPHASE\t{}", json!({"rep": rep, "m": st.m, "witness": phase[0], "commit": phase[1], "link": phase[2],
+        "zerocheck": phase[3], "lincheck": phase[4], "ring_switch": phase[5], "ligerito": phase[6], "total": phase[7]}));
     bincode::serialize(&(commitment, proof)).unwrap()
 }
 
 #[cfg(not(feature = "gpu"))]
-fn prove_gpu(_: &ChunkStmt, _: &[Compression], _: LigeritoProfile, _: Hook<'_>, _: &mut LiveChallenger) -> Vec<u8> {
+fn prove_gpu(_: &ChunkStmt, _: &[Compression], _: LigeritoProfile, _: usize, _: Hook<'_>, _: &mut LiveChallenger) -> Vec<u8> {
     panic!("built without the gpu feature")
 }
 
@@ -387,7 +389,7 @@ fn session(st: &ChunkStmt, t: SharedTransport, seed: u64, plan: &Plan) -> (Value
             let c = if rep == 0 { &comps } else { &comps1 };
             let lig = plan.profile[rep];
             let p = catch_unwind(AssertUnwindSafe(|| {
-                if plan.gpu { prove_gpu(st, c, lig, &mut hook, &mut lch) } else { prove_cpu(st, c, lig, &mut hook, &mut lch) }
+                if plan.gpu { prove_gpu(st, c, lig, rep, &mut hook, &mut lch) } else { prove_cpu(st, c, lig, &mut hook, &mut lch) }
             }))
             .map_err(panic_msg)?;
             prove_s.push(tp.elapsed().as_secs_f64());
