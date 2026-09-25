@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from verity.ml.tc.models import ADA_E4M3_M16N8K32, HOPPER_BF16_M16N8K16, HOPPER_E4M3_K32
-from verity.verification.target import BF16_HOPPER, FP8_ADA_MMA, FP8_HOPPER_WGMMA, Target
+from verity.proofs.target import BF16_HOPPER, FP8_ADA_MMA, FP8_HOPPER_WGMMA, Target
 
 from . import lowering
 
