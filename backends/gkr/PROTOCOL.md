@@ -1231,3 +1231,14 @@ mod p, and the 256 linear constraints fail.  rho batches them with error <= 255 
 the batched functional is the existing term.  Total added error <= m / 2^256 + 255 / p^6, far below Ligero's 2^-130.19.
 Not covered here: the binary proof (Flock's bound, C3), the chain glue between Flock blocks (C4), and the whole-proof
 accountant (C8).
+
+### 17.4 Recorded runs
+
+A100 80GB, 4,096 VUs, in-unit bits with and without the link, 1 warm-up + 3 reps, medians; the binary side is the
+stand-in, so these are drill-down figures (L). BF16 (bf16-ampere+sha256, r20260925-113047-d490, art:bd3d8b2c /
+art:fc687ece): prove 1.199 → 1.529 s (link 0.333 s: eq table 0.137, plane sums 0.062, term of a 0.124), Python verify
+1.261 → 1.564 s, Rust verify 3.414 → 4.70 s plus 0.436 s derivation at load. FP8 (fp8-hopper+sha256, unpinned
+commitment, r20260925-114925-2f5c, art:60cabb96): prove 0.607 → 0.778 s (link 0.178 s), Python verify 0.489 → 0.648 s,
+Rust verify 1.706 → 2.35 s plus 0.219 s. Proof +6,144 bytes on both. Every §17 negative (bit flip, non-boolean bit,
+altered operand with its own bits, sigma out of range, sigma off by 2, root_b changed, z differs, VU remap, duplicate
+link cell, dropped booleanity) is rejected by both verifiers.
