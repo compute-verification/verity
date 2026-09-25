@@ -47,7 +47,7 @@ from ..compile import Expr, LigeroCtx, P, Quadratic
 from .blake3 import _bits_raw, _const, _prod, row_bytes
 
 __all__ = ["BLOCK_LEN", "CARRY_ELEMS", "DIGEST_ELEMS", "IV", "K", "K_VU", "Sha256Leaf", "census", "compress_np", "header",
-           "leaf_bytes", "midstate", "row_blocks"]
+           "leaf_bytes", "leaf_bytes_many", "midstate", "row_blocks"]
 
 NAME = "sha256"
 ASSUMPTION = ("SHA-256 collision resistance (frame-v3 sha256/row/v1 row leaves: the data-block compressions in-circuit, "
@@ -196,6 +196,29 @@ def leaf_bytes(digest_row) -> bytes:
         return hashlib.sha256(MALFORMED_TAG + e.astype("<u4").tobytes()).digest()
     out = compress_np(h[:, None], _words_be(padding_block(n * wb // 8))[:, None])[:, 0]
     return out.astype(">u4").tobytes()
+
+
+def leaf_bytes_many(digests) -> list[bytes]:
+    """:func:`leaf_bytes` of every row of ``digests`` (R, DIGEST_ELEMS): one lockstep padding compression when every row is a
+    well-formed frame under one header (what :meth:`Sha256Leaf.native` returns); otherwise row by row."""
+    e = np.asarray(digests, dtype=np.int64)
+    if e.ndim != 2 or e.shape[1] != DIGEST_ELEMS:
+        raise ValueError(f"a SHA-256 leaf digest is {DIGEST_ELEMS} elements")
+    if e.shape[0] == 0:
+        return []
+    try:
+        if (e[:, 0] != e[0, 0]).any():
+            raise ValueError("mixed headers")
+        _role, wb, n = parse_header(int(e[0, 0]))
+    except ValueError:
+        return [leaf_bytes(r) for r in e]
+    body = e[:, 1:]
+    if ((body < 0) | (body >= 1 << 16)).any():
+        return [leaf_bytes(r) for r in e]
+    h = (body[:, 0::2] | (body[:, 1::2] << 16)).astype(np.uint32).T
+    pad = np.broadcast_to(_words_be(padding_block(n * wb // 8))[:, None], (16, e.shape[0]))
+    out = np.ascontiguousarray(compress_np(h, pad).T).astype(">u4")
+    return [bytes(r) for r in out]
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -378,6 +401,9 @@ class Sha256Leaf:
 
     def leaf_bytes(self, digest_row) -> bytes:
         return leaf_bytes(digest_row)
+
+    def leaf_bytes_many(self, digests) -> list[bytes]:
+        return leaf_bytes_many(digests)
 
     def reference_digest(self, rows: np.ndarray, *, word_bits: int, role: int) -> list[bytes]:
         """``verity.commitments.rowleaf.sha256_row_digest`` per row -- the core reference :meth:`leaf_bytes` of
