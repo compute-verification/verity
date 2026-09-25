@@ -191,39 +191,53 @@ def _kernels():
         tl.store(o + 3, tl.load(o + 3, mask=m, other=0) ^ l3, mask=m)
 
     @triton.jit
-    def cells(TB, B, SP, A, R8, WC, n, per_unit, steps, bits, k, vus, K, col0, ncols, off, p,
-              MODE: tl.constexpr, IDENT: tl.constexpr, BLOCK: tl.constexpr):
+    def cells(TW, Z, B, SP, A, R8, n, rs, per_unit, steps, bits, k, vus, K, col0, ncols, off, p,
+              MODE: tl.constexpr, HAS_B: tl.constexpr, BLOCK: tl.constexpr):
         pid = tl.program_id(0).to(tl.int64)
-        q = pid * BLOCK + tl.arange(0, BLOCK).to(tl.int64)
-        m = q < n
-        u = q // per_unit
-        jb = q % per_unit
-        if IDENT:
-            pos = q
-        else:
-            v = u // steps
-            s = u % steps
-            j = jb // bits
-            port = j // k
-            pos = ((port * vus + v) * K + k * s + j % k) * bits + jb % bits
-        t = tl.arange(0, 256)
-        byte = tl.load(TB + pos[:, None] * 32 + (t[None, :] // 8), mask=m[:, None], other=0).to(tl.int32)
-        e = ((byte >> (t[None, :] % 8)) & 1).to(tl.int8)
+        x = pid * BLOCK + tl.arange(0, BLOCK).to(tl.int64)
+        m = x < n
         if MODE == 0:
-            # row 0 of [b; 0] @ e: the block's 256 plane sums on the tensor cores (the prover's bits are 0 / 1)
-            bq = tl.load(B + q, mask=m, other=0).to(tl.int8)
-            r16 = tl.arange(0, 16)
-            bm = tl.where(r16[:, None] == 0, bq[None, :], tl.zeros([16, BLOCK], dtype=tl.int8))
-            tl.store(SP + pid * 256 + t, tl.sum(tl.dot(bm, e, out_dtype=tl.int32), 0))
+            # x is a position; the committed bit it links is cell (u, jb) = pos^-1(x), read from the unit matrix
+            pos = x
+            i = x % bits
+            wd = x // bits
+            word = wd % K
+            vv = wd // K
+            v = vv % vus
+            port = vv // vus
+            u = v * steps + word // k
+            jb = (port * k + word % k) * bits + i
+        else:
+            # x is a cell
+            u = x // per_unit
+            jb = x % per_unit
+            j = jb // bits
+            pos = ((j // k * vus + u // steps) * K + k * (u % steps) + j % k) * bits + jb % bits
+        t = tl.arange(0, 256)
+        words = tl.load(TW + pos[:, None] * 8 + tl.arange(0, 8)[None, :], mask=m[:, None], other=0)
+        e = tl.reshape((words[:, :, None] >> tl.arange(0, 32)[None, None, :]) & 1, (BLOCK, 256)).to(tl.int8)
+        r16 = tl.arange(0, 16)
+        if MODE == 0:
+            # rows 0 / 1 of [z; b; 0] @ e: the block's plane sums of z and of the committed bits, on the tensor cores
+            # (bits are 0 / 1)
+            zq = tl.load(Z + x, mask=m, other=0).to(tl.int8)
+            zero = tl.zeros([16, BLOCK], dtype=tl.int8)
+            if HAS_B:
+                bq = tl.load(B + u * rs + col0 + jb, mask=m, other=0).to(tl.int8)
+                bm = tl.where(r16[:, None] == 0, zq[None, :], tl.where(r16[:, None] == 1, bq[None, :], zero))
+            else:
+                bm = tl.where(r16[:, None] == 0, zq[None, :], zero)
+            s2 = tl.dot(bm, e, out_dtype=tl.int32)
+            tl.store(SP + pid * 512 + t, tl.sum(tl.where(r16[:, None] == 0, s2, 0), 0))
+            tl.store(SP + pid * 512 + 256 + t, tl.sum(tl.where(r16[:, None] == 1, s2, 0), 0))
         else:
             # coordinate d of sum_t rho^t e_t from the 7-bit limbs of rho^t: one [256, 16] int8 matrix per limb
-            c16 = tl.arange(0, 16)
             cd = tl.zeros([BLOCK, 16], dtype=tl.int64)
             for qq in tl.static_range(5):
-                r8 = tl.load(R8 + qq * 4096 + t[:, None] * 16 + c16[None, :])
+                r8 = tl.load(R8 + qq * 4096 + t[:, None] * 16 + r16[None, :])
                 cd += tl.dot(e, r8, out_dtype=tl.int32).to(tl.int64) << (7 * qq)
-            ptr = A + (off + u * ncols + col0 + jb)[:, None] * 6 + c16[None, :]
-            mk = m[:, None] & (c16[None, :] < 6)
+            ptr = A + (off + u * ncols + col0 + jb)[:, None] * 6 + r16[None, :]
+            mk = m[:, None] & (r16[None, :] < 6)
             old = tl.load(ptr, mask=mk, other=0).to(tl.int64)
             tl.store(ptr, ((old + cd) % p).to(A.dtype.element_ty), mask=mk)
 
@@ -263,16 +277,21 @@ def eq_value(T: torch.Tensor, i: int) -> int:
     return sum((int(x) & ((1 << 64) - 1)) << (64 * j) for j, x in enumerate(T[i].tolist()))
 
 
-def plane_sums(T: torch.Tensor, lay: Layout, b: torch.Tensor, ident: bool) -> list[int]:
-    """sum_q bit_t(eq(pos(q))) b_q for t < 256 (``ident``: q is the position itself)."""
+def plane_sums(T: torch.Tensor, lay: Layout, z: torch.Tensor, cols: torch.Tensor | None) -> tuple[list[int], list[int] | None]:
+    """``(sum_p bit_t(eq(p)) z_p, sum_q bit_t(eq(pos(q))) b_q)`` for t < 256 in one pass over the positions: ``z`` in
+    position order, the committed bits ``b`` read from the unit matrix ``cols`` (link columns ``col0 ..``) at pos^-1."""
     triton, _, cells = _kernels()
-    n = b.numel()
+    n = lay.n_pos
     nb = triton.cdiv(n, BLOCK)
-    sp = torch.empty((nb, PLANES), dtype=torch.int32, device=b.device)
-    tb = T.view(torch.uint8).view(-1, 32)
-    cells[(nb,)](tb, b, sp, sp, sp, sp, n, lay.per_unit, lay.steps, lay.bits, lay.k, lay.vus, lay.K, lay.col0, lay.ncols, 0, P,
-                 MODE=0, IDENT=ident, BLOCK=BLOCK)
-    return [int(v) for v in sp.sum(0, dtype=torch.int64).tolist()]
+    sp = torch.empty((nb, 2, PLANES), dtype=torch.int32, device=z.device)
+    tw = T.view(torch.int32).reshape(-1)
+    if cols is not None:
+        assert cols.stride(1) == 1 and cols.shape[1] == lay.ncols
+    cb = z if cols is None else cols
+    cells[(nb,)](tw, z, cb, sp, sp, sp, n, cb.stride(0) if cols is not None else 0, lay.per_unit, lay.steps, lay.bits, lay.k,
+                 lay.vus, lay.K, lay.col0, lay.ncols, 0, P, MODE=0, HAS_B=cols is not None, BLOCK=BLOCK)
+    s = sp.sum(0, dtype=torch.int64).tolist()
+    return [int(v) for v in s[0]], ([int(v) for v in s[1]] if cols is not None else None)
 
 
 def z_bits(link: Link, device) -> torch.Tensor:
@@ -287,8 +306,7 @@ def z_bits(link: Link, device) -> torch.Tensor:
     return torch.cat(out)
 
 
-def y_value(T: torch.Tensor, link: Link, device) -> int:
-    s = plane_sums(T, link.layout, z_bits(link, device), True)
+def parity(s: list[int]) -> int:
     return sum((v & 1) << t for t, v in enumerate(s))
 
 
@@ -301,15 +319,18 @@ def _msg(v: int) -> Ext:
     return (v % P,) + (0,) * (DEG - 1)
 
 
+def _cols(inst) -> torch.Tensor:
+    c = inst.segs[0].cols
+    return c if c.stride(1) == 1 else c.contiguous()
+
+
 def prove(inst, tr: Transcript, out: list[Ext]) -> Claim:
     link = inst.link
     lay = link.layout
     dev = inst.device
     T = eq_table(points(tr, link), dev)
-    tr.absorb(b"link/y" + y_value(T, link, dev).to_bytes(32, "little"))
-    b = inst.segs[0].cols[:, lay.col0:].reshape(-1).to(torch.int32).contiguous()
-    sigma = plane_sums(T, lay, b, False)
-    del b
+    sy, sigma = plane_sums(T, lay, z_bits(link, dev), _cols(inst))
+    tr.absorb(b"link/y" + parity(sy).to_bytes(32, "little"))
     msgs = [_msg(s) for s in sigma]
     out.extend(msgs)
     tr.absorb_exts(msgs)
@@ -321,7 +342,7 @@ def verify(inst, tr: Transcript, rd: Reader) -> Claim:
     lay = link.layout
     dev = inst.device
     T = eq_table(points(tr, link), dev)
-    y = y_value(T, link, dev)
+    y = parity(plane_sums(T, lay, z_bits(link, dev), None)[0])
     tr.absorb(b"link/y" + y.to_bytes(32, "little"))
     msgs = rd.take(PLANES)
     sigma = []
@@ -337,8 +358,7 @@ def verify(inst, tr: Transcript, rd: Reader) -> Claim:
 
 def check_clear(inst, claim: Claim) -> None:
     lay = inst.link.layout
-    b = inst.segs[0].cols[:, lay.col0:].reshape(-1).to(torch.int32).contiguous()
-    if plane_sums(claim.T, lay, b, False) != claim.sigma:
+    if plane_sums(claim.T, lay, z_bits(inst.link, inst.device), _cols(inst))[1] != claim.sigma:
         raise VerifyError("link: the committed bits' plane sums differ from sigma")
 
 
@@ -355,10 +375,10 @@ def add(acc, claim: Claim, lay: Layout, seg_off: int) -> None:
     for q in range(5):
         r8[q, :, :DEG] = (rh >> (7 * q)) & 127
     r8 = r8.to(torch.int8).to(dev)
-    tb = claim.T.view(torch.uint8).view(-1, 32)
+    tw = claim.T.view(torch.int32).reshape(-1)
     n = lay.n_cells
-    cells[(triton.cdiv(n, BLOCK),)](tb, r8, r8, acc.a, r8, r8, n, lay.per_unit, lay.steps, lay.bits, lay.k, lay.vus, lay.K, lay.col0,
-                                    lay.ncols, seg_off, P, MODE=1, IDENT=False, BLOCK=BLOCK)
+    cells[(triton.cdiv(n, BLOCK),)](tw, r8, r8, r8, acc.a, r8, n, 0, lay.per_unit, lay.steps, lay.bits, lay.k, lay.vus, lay.K, lay.col0,
+                                    lay.ncols, seg_off, P, MODE=1, HAS_B=False, BLOCK=BLOCK)
     for t in range(PLANES):
         acc.b = e_add(acc.b, e_scale(pw[t], claim.sigma[t] % P))
 
