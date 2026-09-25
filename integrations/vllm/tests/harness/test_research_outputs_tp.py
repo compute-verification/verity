@@ -5,7 +5,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from verity_vllm.harness import research_outputs as ro
+from verity_vllm.pipeline import research_outputs as ro
 
 ROW = "llama32-1b__bf16__l40s__tp4__b8__i256__o32__mixed__greedy__bi-eager"
 WDS = ["d" * 64, "a" * 64, "c" * 64, "b" * 64]

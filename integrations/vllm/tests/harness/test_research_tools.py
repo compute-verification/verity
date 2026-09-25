@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from research.store.tool import glob_re, list_source_files
 
-from verity_vllm.harness import research_tools
-from verity_vllm.harness.source_identity import TREE
+from verity_vllm.pipeline import research_tools
+from verity_vllm.pipeline.source_identity import TREE
 
 
 def test_closure_covers_every_core_file():

@@ -26,7 +26,7 @@ removes bytes; R17-1 LAG is declared -- pass the Program's lag); a prompt longer
 widths are those `step_bound_bytes` measured (a sizing record that predates the per-layer RoPE count is corrected here by name).
 The multiplier for the merkle levels (x1.25) is the one the F-dA-15 warning always used.
 
-CLI (torch-free, laptop):  python -m verity_vllm.harness.admission_bound --workload <manifest.json> --sizing <arena_sizing_*.json>
+CLI (torch-free, laptop):  python -m verity_vllm.pipeline.admission_bound --workload <manifest.json> --sizing <arena_sizing_*.json>
                                   [--cap-bytes N] [--lag 1] [--observed <steps.jsonl>]
 """
 

@@ -41,7 +41,7 @@ import pytest
 
 from verity_vllm.correspondence import batch_decomp as bd
 from verity_vllm.check import program_compare as C
-from verity_vllm.program import global_program as gp
+from verity_vllm.pipeline import global_program as gp
 from verity_vllm.program import workload as W
 from verity.ir.codec import canonical_json, encode_program, program_digest
 from verity.ir.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition

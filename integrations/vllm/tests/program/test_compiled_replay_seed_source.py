@@ -12,7 +12,7 @@ import json
 import pathlib
 import re
 
-SRC = pathlib.Path(__file__).resolve().parents[2] / "verity_vllm" / "harness" / "commit_delta.py"
+SRC = pathlib.Path(__file__).resolve().parents[2] / "verity_vllm" / "pipeline" / "commit.py"
 CKC = pathlib.Path(__file__).resolve().parents[2] / "verity_vllm" / "check" / "compiled_kernel_check.py"
 FORM = "run root (first 4 bytes, after commitment): int(run_root.hex()[:8], 16)"
 

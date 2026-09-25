@@ -13,7 +13,7 @@ import json
 import types
 from pathlib import Path
 
-from verity_vllm.tp import match as M
+from verity_vllm.pipeline.tp import match as M
 
 PROMPTS = [3, 5]                     # 2 requests, 8 prompt tokens
 SITES = [("model.layers.0.self_attn", "all_gather", 16), ("model.layers.0.self_attn.o_proj", "all_reduce", 32), ("lm_head", "all_gather", 8)]

@@ -11,7 +11,7 @@ import pytest
 
 from verity_vllm.observe import arrivals
 from verity_vllm.correspondence import chunk_attribution as CA
-from verity_vllm.harness import coverage_workloads as gw
+from verity_vllm.pipeline import coverage_workloads as gw
 from tests.harness.test_coverage_workloads import _LaggedStubEngine, _Out
 
 REPO = Path(__file__).resolve().parents[2]

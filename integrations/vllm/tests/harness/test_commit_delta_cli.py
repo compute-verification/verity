@@ -17,7 +17,7 @@ import ast
 from collections import Counter
 from pathlib import Path
 
-SRC = Path(__file__).resolve().parents[2] / "verity_vllm" / "harness" / "commit_delta.py"
+SRC = Path(__file__).resolve().parents[2] / "verity_vllm" / "pipeline" / "commit.py"
 
 
 def _add_argument_calls() -> list[ast.Call]:

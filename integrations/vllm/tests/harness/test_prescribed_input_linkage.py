@@ -345,12 +345,12 @@ def test_padrev_m0517_lag_1_negatives_name_the_eos_step_and_the_placeholder():
 
 def test_padrev_m0517_the_lag_is_read_through_gp01s_one_reader_of_the_attested_field():
     # commit_delta feeds boundary_linkage the resolved async_scheduling through global_program.eos_lag_rows_declared: one field, one reader
-    from verity_vllm.program import global_program as GP
+    from verity_vllm.pipeline import global_program as GP
     assert GP.eos_lag_rows_declared({"async_scheduling": True}) == 1 and GP.eos_lag_rows_declared({"async_scheduling": False}) == 0
     assert GP.eos_lag_rows_declared({"async_scheduling": "true"}) == 1
     assert GP.eos_lag_rows_declared({"async_scheduling": None}) is None and GP.eos_lag_rows_declared({}) is None and GP.eos_lag_rows_declared(None) is None
     from pathlib import Path
-    src = (Path(__file__).resolve().parents[2] / "verity_vllm" / "harness" / "commit_delta.py").read_text()      # torch-free: the wiring read as text
+    src = (Path(__file__).resolve().parents[2] / "verity_vllm" / "pipeline" / "commit.py").read_text()      # torch-free: the wiring read as text
     assert 'eos_lag_rows_declared({"async_scheduling": (versions.get("engine_kwargs") or {}).get("async_scheduling")})' in src
     assert "eos_lag_rows=_lag" in src
 
@@ -380,5 +380,5 @@ def test_arrivals_of_record_follow_the_observed_schedule_only_when_the_populatio
     assert SR.arrivals_of_record(decl, dict(obs_sched, observed_arrive_steps={"r0": 0, "r1": 3, "r9": 5})) == ({"r0": 0, "r1": 3}, True)   # unknown ids ignored
     # the commit_delta wiring: the replay/linkage _arr goes through this one rule, fed the binding record's schedule
     from pathlib import Path
-    src = (Path(__file__).resolve().parents[2] / "verity_vllm" / "harness" / "commit_delta.py").read_text()
+    src = (Path(__file__).resolve().parents[2] / "verity_vllm" / "pipeline" / "commit.py").read_text()
     assert '_arr, _moved = SR.arrivals_of_record(_arr, _sched_r)' in src and '.get("coverage") or {}).get("schedule")' in src

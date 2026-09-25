@@ -18,7 +18,7 @@ import json
 
 import pytest
 
-from verity_vllm.harness.run_config import persist_program
+from verity_vllm.pipeline.match import persist_program
 from verity_vllm.observe.events import (DispatchEnter, DispatchExit, Root, RunHeader, SampleEnd, StepEnd, StepLink, StepStart, StorageAlloc,
                                    TritonLaunch, ViewDesc)
 from verity_vllm.correspondence import batch_decomp as bd

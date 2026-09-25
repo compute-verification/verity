@@ -1,4 +1,4 @@
-"""verity_vllm.harness.gc_tuning: process-level cyclic-GC thresholds for the fold worker and the Match checkers.
+"""verity_vllm.pipeline.gc_tuning: process-level cyclic-GC thresholds for the fold worker and the Match checkers.
 
 The setting is content-neutral by construction (the collector only frees unreachable cycles); these tests pin
 (1) the env contract in fresh interpreters, (2) that "default" leaves the interpreter alone, (3) that the fold's
@@ -14,12 +14,12 @@ import sys
 
 import pytest
 
-from verity_vllm.harness import gc_tuning
+from verity_vllm.pipeline import gc_tuning
 from tests.observe.test_fold_synthetic import memory, toy_log, toy_profile  # noqa: F401  (memory: fixture)
 from verity_vllm.observe.fold import fold
 
 PROBE = ("import gc, json, sys\n"
-         "from verity_vllm.harness.gc_tuning import tune\n"
+         "from verity_vllm.pipeline.gc_tuning import tune\n"
          "before = gc.get_threshold(); r = tune(); after = gc.get_threshold()\n"
          "print(json.dumps({'before': before, 'ret': r, 'after': after}))\n")
 
@@ -85,7 +85,7 @@ def test_fold_content_is_identical_under_default_and_tuned_thresholds(memory, mo
 
 def test_the_three_entry_points_call_tune():
     import inspect
-    from verity_vllm.harness import run_config
+    from verity_vllm.pipeline import match as run_config
     from verity_vllm.correspondence import batch_decomp
     from verity_vllm.check import global_match
     assert "gc_tuning import tune" in inspect.getsource(run_config.fold_worker)

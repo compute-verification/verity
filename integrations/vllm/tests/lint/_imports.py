@@ -25,10 +25,10 @@ RANK = {name: len(LAYERS) - i for i, name in enumerate(LAYERS)}
 
 INTERIM_LAYER = {
     "verity_vllm": "pipeline",
-    "verity_vllm.build_paths": "pipeline",                     # -> pipeline/layout.py
+    "verity_vllm.pipeline.layout": "pipeline",                     # -> pipeline/layout.py
     "verity_vllm.config": "config",
-    "verity_vllm.harness": "pipeline",                         # derive_step, run_config, commit_delta, research_*, ...
-    "verity_vllm.harness.target_family": "config",             # -> config.py
+    "verity_vllm.pipeline": "pipeline",                         # derive_step, run_config, commit_delta, research_*, ...
+    "verity_vllm.target_family": "config",             # -> config.py
     "verity_vllm.check": "check|properties",                   # per-run checks, and the property harnesses -> properties/
     "verity_vllm.check.twins": "program",                      # -> program/backends/
     "verity_vllm.check.relations": "program",                  # -> program/backends/
@@ -47,10 +47,10 @@ INTERIM_LAYER = {
     "verity_vllm.observe.arrivals": "engine",
     "verity_vllm.observe.engine_driver": "engine",
     "verity_vllm.observe.profiles": "engine",                  # -> engine/profiles/
-    "verity_vllm.observe.m1_capture": "pipeline",              # -> the capture stage of pipeline/match.py
+    "verity_vllm.pipeline.m1_capture": "pipeline",              # -> the capture stage of pipeline/match.py
     "verity_vllm.commit": "observe|commit",
     "verity_vllm.query": "query|correspondence",
-    "verity_vllm.query.cli": "pipeline",                       # the one CLI is pipeline/cli.py (P6)
+    "verity_vllm.pipeline.cli": "pipeline",                       # the one CLI is pipeline/cli.py (P6)
     "verity_vllm.query.vu_query": "check|properties",          # -> check/replay/
     "verity_vllm.query.manifest.compiled": "acquire",
     "verity_vllm.query.boundary": "core",                      # -> verity.ir
@@ -61,7 +61,7 @@ INTERIM_LAYER = {
     "verity_vllm.correspondence.runtime_tree": "observe|commit",
     "verity_vllm.correspondence.chunk_attribution": "observe|commit",
     "verity_vllm.program": "program",                          # frontend/, registry/, workload; numerics/ -> program/backends/
-    "verity_vllm.program.global_program": "pipeline",          # -> pipeline/build.py
+    "verity_vllm.pipeline.global_program": "pipeline",          # -> pipeline/build.py
     "verity_vllm.program.frontend.liveness": "core",
     "verity_vllm.tp": "pipeline",                              # capture, commit, match, fold_match -> world-parametric pipeline/ drivers
     "verity_vllm.tp.collective_record": "collectives",

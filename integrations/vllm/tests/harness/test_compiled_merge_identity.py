@@ -38,7 +38,7 @@ def _arms(tmp: Path) -> tuple[Path, Path, Path, Path]:
 
 def _merge(tmp: Path, c: Path, t: Path, mc: Path, mt: Path) -> dict:
     out = tmp / "merged"
-    r = subprocess.run([sys.executable, str(ROOT / "verity_vllm" / "harness" / "compiled_merge.py"), "--control", str(c), "--treatment", str(t), "--out", str(out),
+    r = subprocess.run([sys.executable, str(ROOT / "verity_vllm" / "pipeline" / "compiled_merge.py"), "--control", str(c), "--treatment", str(t), "--out", str(out),
                         "--manifest-control", str(mc), "--manifest-treatment", str(mt)], capture_output=True, text=True, cwd=str(ROOT))
     assert (out / "summary.json").exists(), r.stderr[-2000:]
     return json.loads((out / "summary.json").read_text())

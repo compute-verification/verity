@@ -107,7 +107,7 @@ def test_the_construction_is_declared_and_selected_by_name_never_inferred(tmp_pa
     with pytest.raises(ValueError):
         ov_moe_patterns(C, gemm_constexprs={}, gemm_num_sms=1, moe_construction="fixed-slot")
     # run_config reads the declaration from the MANIFEST (target.moe_construction) and validates it by the frontend's table
-    from verity_vllm.harness.run_config import _workload_moe_construction
+    from verity_vllm.pipeline.match import _workload_moe_construction
     base = {"schema": "x", "requests": [], "sampling": {}}
     for name, target, want in (("none", None, None), ("pad", {"moe_construction": "padded"}, "padded"), ("ir", {"moe_construction": "indexed-read"}, "indexed-read")):
         p = tmp_path / f"{name}.json"
@@ -121,7 +121,7 @@ def test_the_construction_is_declared_and_selected_by_name_never_inferred(tmp_pa
 
 def test_fold_refuses_a_declared_construction_the_profile_cannot_fold():
     """A `padded` declaration on a profile without the hook FAILS by name before the log is read: the MOE-01 fold is never a silent stand-in."""
-    from verity_vllm.harness.run_config import fold_summary_result
+    from verity_vllm.pipeline.match import fold_summary_result
     fake = types.ModuleType("verity_vllm.observe.profiles._moe_test_nohook")
     fake.PROFILE = OV.PROFILE
     sys.modules["verity_vllm.observe.profiles._moe_test_nohook"] = fake

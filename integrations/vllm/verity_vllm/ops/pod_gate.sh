@@ -38,9 +38,9 @@ EOF
     T0=$(date +%s)
     if [ "$B" -gt 1 ]; then
       WD=$($PY -c "import json,sys;d=json.load(open(sys.argv[1]));print(d.get('workload_digest') or d.get('program_digest') or d.get('digest') or '')" "$RD/build_workload/workload_program.json" 2>/dev/null || true)
-      $PY -m verity_vllm.query.cli build-global --fixture "$WL" --programs-root "$RD" ${WD:+--workload-digest "$WD"} --out "$MAN" > "$O/manifest.log" 2>&1 || { echo "[pod_gate] $ROW: manifest build-global FAILED (see manifest.log)"; tail -n 5 "$O/manifest.log"; RC=1; continue; }
+      $PY -m verity_vllm.pipeline.cli build-global --fixture "$WL" --programs-root "$RD" ${WD:+--workload-digest "$WD"} --out "$MAN" > "$O/manifest.log" 2>&1 || { echo "[pod_gate] $ROW: manifest build-global FAILED (see manifest.log)"; tail -n 5 "$O/manifest.log"; RC=1; continue; }
     else
-      $PY -m verity_vllm.query.cli build --program "$RD/build_request" --workload "$WL" --out "$MAN" > "$O/manifest.log" 2>&1 || { echo "[pod_gate] $ROW: manifest build FAILED (see manifest.log)"; tail -n 5 "$O/manifest.log"; RC=1; continue; }
+      $PY -m verity_vllm.pipeline.cli build --program "$RD/build_request" --workload "$WL" --out "$MAN" > "$O/manifest.log" 2>&1 || { echo "[pod_gate] $ROW: manifest build FAILED (see manifest.log)"; tail -n 5 "$O/manifest.log"; RC=1; continue; }
     fi
     echo "[pod_gate] $ROW: manifest built in $(( $(date +%s) - T0 )) s: $(tail -n 1 "$O/manifest.log" | cut -c1-200)"
   fi

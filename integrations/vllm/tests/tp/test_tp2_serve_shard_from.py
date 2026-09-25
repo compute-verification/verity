@@ -10,7 +10,7 @@ import hashlib
 import numpy as np
 import pytest
 
-from verity_vllm.tp.commit import parse_serve_shard_from
+from verity_vllm.pipeline.tp.commit import parse_serve_shard_from
 from verity_vllm.input_provenance import weights_of_record as WR
 from tests.input_provenance.test_weights_of_record import PREFIX, _program, _served, checkpoint, live_digests  # noqa: F401  (fixture)
 
@@ -132,7 +132,7 @@ def test_ranged_swap_keeps_the_prefill_rows_and_exchanges_only_decode_labels():
 # ---- a negative that did not inject is an ERROR, never a PASS (measured b1_r16_tp12b 08:34Z: ':ulp' on a tree without parse_flip -> flipped 0 -> PASS)
 
 def test_negative_not_applied_is_named_not_passed():
-    from verity_vllm.tp.commit import negatives_applied
+    from verity_vllm.pipeline.tp.commit import negatives_applied
     made = [{"rank": 0, "swap_requests_applied": None, "tp_partial_source": {"omit_site": None}},
             {"rank": 1, "swap_requests_applied": None, "tp_partial_source": {"omit_site": None}}]
     xr = [{"dumps": [{"rank": 0, "flipped_collective_inputs": 0}, {"rank": 1, "flipped_collective_inputs": 0}]}]
@@ -149,7 +149,7 @@ def test_negative_not_applied_is_named_not_passed():
 
 
 def test_negative_applied_is_recognised():
-    from verity_vllm.tp.commit import negatives_applied
+    from verity_vllm.pipeline.tp.commit import negatives_applied
     made = [{"rank": 0, "swap_requests_applied": None, "tp_partial_source": {"omit_site": None}},
             {"rank": 1, "swap_requests_applied": ["r3", "r4", 1, 37], "tp_partial_source": {"omit_site": "layers.3.mlp.down_proj"}}]
     xr = [{"dumps": [{"rank": 0, "flipped_collective_inputs": 0}, {"rank": 1, "flipped_collective_inputs": 64}]}]

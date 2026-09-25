@@ -2,7 +2,7 @@
 
     HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 PYTHONPATH=. VLLM_BATCH_INVARIANT=1 VLLM_USE_V2_MODEL_RUNNER=1 \
     VLLM_ENABLE_V1_MULTIPROCESSING=0 VLLM_USE_FLASHINFER_SAMPLER=0 /workspace/venv-cu129/bin/python -m \
-    verity_vllm.observe.m1_capture --workload workloads/workload_32x16_1req.json --out /vol/cp/l1/m1 \
+    verity_vllm.pipeline.m1_capture --workload workloads/workload_32x16_1req.json --out /vol/cp/l1/m1 \
     [--snapshot-steps 0,1,8] [--no-observer] [--max-tokens 16]
 
 Writes DIR/log.jsonl.gz (the raw observation log), DIR/tokens.json (prompt ids, generated ids, per-step sampled
@@ -46,7 +46,7 @@ from verity_vllm.observe import engine_profile as prof  # noqa: F401  (apply_env
 prof.apply_env()
 
 from verity_vllm.observe import vllm_adapter as va  # noqa: E402
-from verity_vllm.harness.timeline import Timeline  # noqa: E402  (torch-free; VERITY_TIMELINE -> JSONL, else no-op)
+from verity_vllm.pipeline.timeline import Timeline  # noqa: E402  (torch-free; VERITY_TIMELINE -> JSONL, else no-op)
 
 ACCEPTED_TOKENS = va.ACCEPTED_TOKENS   # the B0 request's accepted tokens (kept for the older importers); prefer workload["accepted"]
 

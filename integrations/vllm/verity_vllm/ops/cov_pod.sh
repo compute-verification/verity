@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Coverage campaign 2026-09-17 (D87) — pod-side runner.  One configuration = one cell of out/gen/COVERAGE-20260917.md:
 # GPU phase (capture / control / census / nonint) then the CPU phase (resolve … tier A k=3 … gates + card) of
-# verity_vllm.harness.run_config, all on the pod's container disk (/workspace; /vol was over quota all through the last wave and the
+# verity_vllm.pipeline.match, all on the pod's container disk (/workspace; /vol was over quota all through the last wave and the
 # laptop must stay a thin client), then a SMALL bundle (json reports, cards, logs, tokens -- no snapshots, no instances.jsonl) at
 # /workspace/cp/cov/bundles/<run>.small.tgz for the laptop to pull.  The frozen candidate (program.json / instances.jsonl /
 # accesses.jsonl.gz) stays in the run dir on the pod (and is copied to /vol/cp/cov/<run>/ when the volume takes it).
@@ -29,7 +29,7 @@ K=${COV_K:-3}; PAR=${COV_PAR:-8}; SNAP_MB=${COV_SNAP_MB:-256}; SNAP_MB_MOE=${COV
 # (evidence rule from the 2026-09-17 window: a recheck of a copy must not publish over the original).
 VOL=${COV_VOL:-/vol/cp/cov}
 say() { echo "[cov_pod] $(date -u +%FT%TZ) $*"; }
-drv() { $PY312 -m verity_vllm.harness.run_config --python-gpu $PY311 --python-cpu $PY312 --cards-dir "$CARDS" "$@"; }
+drv() { $PY312 -m verity_vllm.pipeline.match --python-gpu $PY311 --python-cpu $PY312 --cards-dir "$CARDS" "$@"; }
 
 ckpt_dir() {  # <case> -> the seeded HF snapshot dir of the role (checkpoints.json local_path)
   $PY312 - "$1" <<'EOF'

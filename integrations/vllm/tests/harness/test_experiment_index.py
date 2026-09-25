@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from verity_vllm.harness import experiment as EXP
+from verity_vllm.pipeline import experiment as EXP
 
 REPO = Path(__file__).resolve().parents[2]
 WL = REPO / "workloads" / "workload_cov_b0_b8-mixed_c256.json"
@@ -84,7 +84,7 @@ def test_realized_consistency_names_the_phase_that_ignored_the_arrivals(tmp_path
     """Spec §5 of the campaign runner: the same spec digest does not prove every phase honoured the arrivals; the check compares each
     phase's own realized record with the capture's and names the phase + request that differ."""
     import json
-    from verity_vllm.harness import experiment as EXP
+    from verity_vllm.pipeline import experiment as EXP
     run = tmp_path / "run"
     (run / "capture").mkdir(parents=True); (run / "control").mkdir(); (run / "census").mkdir(); (run / "nonint" / "c_bare").mkdir(parents=True)
     reqs = {"r0": {"first_step": 0, "finish_step": 12, "n_generated": 13, "arrive_step_realized": 0},

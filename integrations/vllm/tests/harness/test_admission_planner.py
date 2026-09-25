@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from verity_vllm.harness import admission_planner as P
+from verity_vllm.pipeline import admission_planner as P
 
 HERE = Path(__file__).resolve().parent
 FIX = HERE / "fixtures" / "admission"

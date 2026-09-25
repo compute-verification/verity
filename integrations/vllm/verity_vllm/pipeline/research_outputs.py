@@ -1,7 +1,7 @@
 """The typed outputs of one sweep stage for the `research` store (`outputs.json`, schema research/outputs/v0.1).
 
-    python -m verity_vllm.harness.research_outputs <evidence-dir> <row-id> <stage> [--run-dir DIR] [--input build=art:...] [--input match=art:...]
-    python -m verity_vllm.harness.research_outputs digest <evidence-dir> <row-id>      # the Program digest of record (build_summary.json)
+    python -m verity_vllm.pipeline.research_outputs <evidence-dir> <row-id> <stage> [--run-dir DIR] [--input build=art:...] [--input match=art:...]
+    python -m verity_vllm.pipeline.research_outputs digest <evidence-dir> <row-id>      # the Program digest of record (build_summary.json)
 
 `run_row_v2.sh` calls this on EXIT of a `stage` run (the runner set RESEARCH_RUN_DIR): the stage's small account files are copied
 from the evidence dir into `$RESEARCH_RUN_DIR/outputs/<name>/` and declared in `$RESEARCH_RUN_DIR/outputs.json`, which

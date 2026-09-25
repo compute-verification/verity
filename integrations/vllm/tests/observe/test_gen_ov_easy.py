@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 
 from verity_vllm.input_provenance import analytic
-from verity_vllm.harness.card import workload_summary
+from verity_vllm.pipeline.report import workload_summary
 from verity_vllm.observe.events import RunHeader
 from verity_vllm.observe.patterns import GemmLaunch
 from verity_vllm.observe.profiles import gen_llama_patterns as GP
@@ -207,7 +207,7 @@ def test_workload_file():
 # --- the sealed driver resolves the case to the profile module; the engine arg reaches every GPU stage -----------------------
 
 def test_run_config_dry_run_resolves_b7_and_forwards_the_engine_arg():
-    out = subprocess.run([sys.executable, "-m", "verity_vllm.harness.run_config", "--case", "B7", "--workload", WORKLOAD, "--out", "/r/RUN",
+    out = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.match", "--case", "B7", "--workload", WORKLOAD, "--out", "/r/RUN",
                           "--cards-dir", "/r/cards", "--python-gpu", "/pod/py311", "--python-cpu", "/pod/py312", "--checkpoint-dir", "/ck/snap",
                           "--phase", "all", "--parallel", "8", "--engine-arg", "gpu_memory_utilization=0.95", "--seed", "7", "--dry-run"],
                          capture_output=True, text=True, cwd=REPO, check=True).stdout

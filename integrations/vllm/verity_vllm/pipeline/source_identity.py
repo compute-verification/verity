@@ -1,6 +1,6 @@
 """Verity source identity + precheck (F-r17-tp-06 fixed by construction; BRIEF R18 Phase 0, adapted to the Verity tree in R19).
 
-    python -m verity_vllm.harness.source_identity [--tree ROOT] [--sha SHA] [--out FILE] [--stage NAME]
+    python -m verity_vllm.pipeline.source_identity [--tree ROOT] [--sha SHA] [--out FILE] [--stage NAME]
         exit 0  every important package (verity, verity_vllm, hidden_gpu, research) resolves from ROOT
         exit 3  PRECHECK_FAIL_SOURCE_IDENTITY -- the first line of stderr names the class, the following lines each mismatch
 
@@ -38,7 +38,7 @@ from verity_vllm.config import ROOT as INTEGRATION
 try:
     from research.telemetry import source_identity as _sid
 except ImportError as _e:  # pragma: no cover - environment defect, reported by name
-    raise ImportError("verity_vllm.harness.source_identity needs the `research` package of the tree of record on sys.path "
+    raise ImportError("verity_vllm.pipeline.source_identity needs the `research` package of the tree of record on sys.path "
                       "(PYTHONPATH must include <repo>/tools/research/src; row_pod.sh exports it); nothing is appended here on purpose: "
                       f"{_e}") from _e
 
@@ -81,7 +81,7 @@ def code_identity(root: str | os.PathLike[str]) -> dict[str, Any]:
     `root` over `research_tools.CLOSURE` (the integration plus Verity core), the files the store records as the research Tools' closure.
     The one code identity: the hot Commit worker's key and the TP Commit's tree of record.  Raises FileNotFoundError when `root` holds
     no integration or no core file (not a repository root: an empty manifest would be a constant key)."""
-    from verity_vllm.harness.research_tools import VLLM_BUILD
+    from verity_vllm.pipeline.research_tools import VLLM_BUILD
 
     files = VLLM_BUILD.closure_manifest(root)
     for part in ("integrations/vllm/", "packages/verity/src/verity/"):

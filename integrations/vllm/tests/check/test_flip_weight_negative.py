@@ -24,7 +24,7 @@ from pathlib import Path
 from verity_vllm.check.commit_verdict import commit_verdict
 
 BENCH = Path(__file__).resolve().parents[2] / "verity_vllm" / "ops"
-DELTA = BENCH.parents[0] / "harness" / "commit_delta.py"
+DELTA = BENCH.parents[0] / "pipeline" / "commit.py"
 CANARY = BENCH / "canary.sh"
 
 

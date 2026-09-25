@@ -1,4 +1,4 @@
-"""verity_vllm/harness/card.py — the configuration card (`verity-gen/card/v1`): one JSON per configuration, torch-free.
+"""verity_vllm/pipeline/report.py — the configuration card (`verity-gen/card/v1`): one JSON per configuration, torch-free.
 
 A card summarises one run directory (`bench/run_config.py`) for one configuration `config_id =
 <model-slug>__<engine-args-slug>__<kappa-short>`: the model and its configuration record `C` with per-field provenance,

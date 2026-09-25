@@ -13,7 +13,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 
-from verity_vllm.tp.commit import _sampled_replay_components  # noqa: E402
+from verity_vllm.pipeline.tp.commit import _sampled_replay_components  # noqa: E402
 
 
 def _sr(result, grade, vus=10, evaluated=4, why=None, unrep=None):
@@ -116,7 +116,7 @@ if __name__ == "__main__":
 # ---- [MAN-09 per rank] the weights-pin fold ------------------------------------------------------------------------------------------
 
 def _rows_with_pins(p0, p1):
-    from verity_vllm.tp.commit import _weights_pin_component
+    from verity_vllm.pipeline.tp.commit import _weights_pin_component
     rows = [{"arm": "control"}, {"arm": "instrumented", "commit": {"per_rank": {"0": {"weights_pin": p0}, "1": {"weights_pin": p1}}}}]
     return _weights_pin_component(rows, {"weights_pin": {"checkpoint_dir": "/ck"}})
 

@@ -187,7 +187,7 @@ fi
 
 # ------------------------------------------------------------------ negatives on SmolLM2 (fast; the same commit_delta the rows use)
 WL=workloads/$SMOL.json
-BASE=($PY -m verity_vllm.harness.commit_delta --case B0 --workload "$WL" --committer native_collect_v2b --fast-copy --gpu-tree --openings 64
+BASE=($PY -m verity_vllm.pipeline.commit --case B0 --workload "$WL" --committer native_collect_v2b --fast-copy --gpu-tree --openings 64
       --pairs 1 --warmup 1 --max-num-seqs 1 --engine-arg max_model_len=288 --engine-arg "gpu_memory_utilization=$GPU_UTIL")
 negative() {   # <name> <expect: exit3|rootdiff> <reason-regex> <args...>
   local name=$1 expect=$2 rx=$3; shift 3
@@ -289,7 +289,7 @@ wl["note"] = "CANARY NEGATIVE wl_swapped: " + str(wl.get("note", ""))
 json.dump(wl, open(sys.argv[2], "w"), indent=1)
 EOF
     DER=(--derived "$RB/build_request"); for dd in "$RB"/build_request_LP*_T*; do [ -d "$dd" ] && DER+=(--derived "$dd"); done
-    timeout 1500 $PY312 -m verity_vllm.program.global_program --workload "$NW/wl_swapped.json" "${DER[@]}" --out "$NW/gp_swapped" > "$NW/gp_swapped.log" 2>&1; rcg=$?
+    timeout 1500 $PY312 -m verity_vllm.pipeline.global_program --workload "$NW/wl_swapped.json" "${DER[@]}" --out "$NW/gp_swapped" > "$NW/gp_swapped.log" 2>&1; rcg=$?
     timeout 1500 $PY312 -m verity_vllm.check.global_match --gprog "$NW/gp_swapped/workload_program.json" --workload "$NW/wl_swapped.json" --oracle "$RB/match" \
         --out "$NW/gm_swapped.json" --within-step "${WITHIN_STEP:-dag}" > "$NW/gm_swapped.log" 2>&1; rcm=$?
     verd=$(python3 -c "import json;g=json.load(open('$NW/gm_swapped.json'));print(g.get('verdict'), ','.join(g.get('failed_checks') or []))" 2>/dev/null)

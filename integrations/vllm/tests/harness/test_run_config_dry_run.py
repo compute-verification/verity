@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 from verity_vllm.check import gates as G
-from verity_vllm.harness import run_config as RC
+from verity_vllm.pipeline import match as RC
 
 ROOT = Path(__file__).resolve().parents[2]
 M1_LOG = ROOT / "data" / "logs" / "m1.jsonl.gz"
@@ -24,7 +24,7 @@ BASE = ["--config-id", "cid", "--profile", "prof_x", "--workload", "wl.json", "-
 
 
 def dry(*extra: str) -> dict[str, list[str]]:
-    out = subprocess.run([sys.executable, "-m", "verity_vllm.harness.run_config", *BASE, "--dry-run", *extra], capture_output=True, text=True,
+    out = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.match", *BASE, "--dry-run", *extra], capture_output=True, text=True,
                          cwd=ROOT, check=True).stdout
     cmds: dict[str, list[str]] = {}
     for ln in out.splitlines():
@@ -38,7 +38,7 @@ def test_dry_run_gpu_phase():
     c = dry("--phase", "gpu")
     assert list(c) == ["capture", "control", "census", "nonint", "gpu_done"]
     cap = c["capture"]
-    assert cap[:3] == ["/pod/py311", "-m", "verity_vllm.observe.m1_capture"]
+    assert cap[:3] == ["/pod/py311", "-m", "verity_vllm.pipeline.m1_capture"]
     assert cap[cap.index("--snapshot-steps") + 1] == "0,1,2,3"        # default, contiguous from 0
     assert cap[cap.index("--out") + 1] == "/r/RUN/capture" and cap[cap.index("--case") + 1] == "B1"
     assert cap[cap.index("--max-num-seqs") + 1] == "8" and "--workload" in cap
@@ -70,7 +70,7 @@ def test_dry_run_cpu_phase():
     assert cp[cp.index("--snapshots") + 1] == "/r/RUN/capture" and cp[cp.index("--safetensors") + 1] == "/ck/snap/model*.safetensors"
     for st, out in (("fold", "/r/RUN/fold_summary.json"), ("fold_2", "/r/RUN/fold_summary_2.json")):
         f = c[st]
-        assert f[1:5] == ["-m", "verity_vllm.harness.run_config", "--worker", "fold"] and f[f.index("--out") + 1] == out
+        assert f[1:5] == ["-m", "verity_vllm.pipeline.match", "--worker", "fold"] and f[f.index("--out") + 1] == out
     rp = c["root_policy"]
     assert rp[1:3] == ["-m", "verity_vllm.input_provenance.root_policy"] and rp[rp.index("--safetensors") + 1] == "/ck/snap/model*.safetensors"
     assert rp[rp.index("--out") + 1] == "/r/RUN/root_policy.json" and rp[rp.index("--snapshots") + 1] == "/r/RUN/capture"
@@ -103,7 +103,7 @@ def test_dry_run_no_laptop_no_tier_c_and_skip():
 
 
 def test_the_sampled_replay_stages_need_a_seed_and_the_others_do_not():
-    p = subprocess.run([sys.executable, "-m", "verity_vllm.harness.run_config", *BASE, "--dry-run", "--phase", "cpu"], capture_output=True, text=True,
+    p = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.match", *BASE, "--dry-run", "--phase", "cpu"], capture_output=True, text=True,
                        cwd=ROOT)
     assert p.returncode == 2 and "--seed is required to run replay_a and replay_chain" in p.stderr
     c = dry("--phase", "cpu", "--skip", "replay_a,replay_chain", "--tier-c")
@@ -145,7 +145,7 @@ def test_dry_run_existing_capture_paths():
 
 
 def test_dry_run_writes_nothing(tmp_path):
-    subprocess.run([sys.executable, "-m", "verity_vllm.harness.run_config", *BASE[:8], "--out", str(tmp_path / "RUN"), "--dry-run", "--seed", "7"],
+    subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.match", *BASE[:8], "--out", str(tmp_path / "RUN"), "--dry-run", "--seed", "7"],
                    capture_output=True, text=True, cwd=ROOT, check=True)
     assert not (tmp_path / "RUN").exists()
 
@@ -173,7 +173,7 @@ def test_run_stage_timeout(tmp_path):
 @pytest.mark.skipif(not (M1_LOG.exists() and M1_DIR.exists() and M1_CTL.exists()), reason="local m1 capture absent")
 def test_local_cpu_stages_on_m1(tmp_path):
     run = tmp_path / "RUN"
-    cmd = [sys.executable, "-m", "verity_vllm.harness.run_config", "--config-id", "m1-local", "--profile", "vllm_d9105ea80_sm89_eager",
+    cmd = [sys.executable, "-m", "verity_vllm.pipeline.match", "--config-id", "m1-local", "--profile", "vllm_d9105ea80_sm89_eager",
            "--workload", "workloads/workload_32x16_1req.json", "--case", "B0", "--out", str(run), "--phase", "cpu", "--laptop",
            "--log", str(M1_LOG), "--snapshots", str(M1_DIR), "--control-tokens", str(M1_CTL),
            "--skip", "replay,compare,census,nonint,root_policy,golden", "--cards-dir", str(tmp_path / "cards")]

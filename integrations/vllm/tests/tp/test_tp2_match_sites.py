@@ -12,7 +12,7 @@ import json
 import types
 from pathlib import Path
 
-from verity_vllm.tp import match as M
+from verity_vllm.pipeline.tp import match as M
 
 SITES = [("model.layers.0.self_attn.o_proj", "all_reduce", 64), ("model.layers.0.mlp.down_proj", "all_reduce", 64), ("lm_head", "all_gather", 32)]
 

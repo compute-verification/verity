@@ -221,7 +221,7 @@ class TP2CaptureWorkerExtension:
         import torch
 
         from verity_vllm.observe import vllm_adapter as va
-        from verity_vllm.observe.m1_capture import dump_cos_sin
+        from verity_vllm.pipeline.m1_capture import dump_cos_sin
 
         facts = _tp_facts(self)
         rank, world = int(facts["tp"]["rank"]), int(facts["tp"]["world_size"])
@@ -630,7 +630,7 @@ class TP2CaptureWorkerExtension:
         import argparse
         from types import SimpleNamespace
 
-        from verity_vllm.harness.commit_delta import baseline_state, make_committer
+        from verity_vllm.pipeline.commit import baseline_state, make_committer
 
         facts = _tp_facts(self)
         rank = int(facts["tp"]["rank"])
@@ -878,7 +878,7 @@ class TP2CaptureWorkerExtension:
 
     def tp2_commit_finalize(self) -> dict[str, Any]:
         """After the run: the rank's run root (fixed BEFORE any challenge), per-step leaf counts, coverage declaration."""
-        from verity_vllm.harness.commit_delta import assert_pristine, class_coverage
+        from verity_vllm.pipeline.commit import assert_pristine, class_coverage
 
         st = self._tp2_commit
         com = st["com"]
@@ -1453,7 +1453,7 @@ class TP2CaptureWorkerExtension:
         (R) re-execution, for the module outputs (ValueChecker) and for THIS rank's partials (TPPartialSource.compare).  PASS only if both
         pass on this rank."""
         from verity_vllm.check import oracle_compare as OC
-        from verity_vllm.harness.commit_delta import assert_pristine
+        from verity_vllm.pipeline.commit import assert_pristine
 
         st = self._tp2_commit
         com, vc, tps = st["com"], st.pop("vc", None), st.get("tps")

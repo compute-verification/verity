@@ -1,6 +1,6 @@
 """bench/gen_coverage_workloads.py — the coverage campaign's workloads (D87): serving profile × context class, seeded lengths.
 
-    python -m verity_vllm.harness.coverage_workloads --case B0 --tokenizer <dir-or-tokenizer.json> \\
+    python -m verity_vllm.pipeline.coverage_workloads --case B0 --tokenizer <dir-or-tokenizer.json> \\
         [--profiles B1,B8-static,B8-mixed] [--ctx C256,C1024] [--seed 0] [--out-dir workloads]
 
 Dimensions (out/gen/COVERAGE-20260917.md):

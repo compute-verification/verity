@@ -13,7 +13,7 @@ this module is the evidence half: for every important imported package record
 plus `sys_path0` = sys.path[0] of the resolving interpreter, and `check(...)` compares every repo_root with the REQUESTED tree: a
 mismatch is `PRECHECK_FAIL_SOURCE_IDENTITY` (the failure class the classifier reads from the precheck record), raised BEFORE any inference.
 
-The project half (which names, which root markers, the CLI) lives with the project (Verity: verity_vllm/harness/source_identity.py).
+The project half (which names, which root markers, the CLI) lives with the project (Verity: verity_vllm/pipeline/source_identity.py).
 """
 from __future__ import annotations
 

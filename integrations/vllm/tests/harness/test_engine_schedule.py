@@ -10,7 +10,7 @@ import sys
 import types
 
 # commit_delta imports torch/vllm at module import; lift engine_schedule out of the source without importing the module
-_SRC = pathlib.Path(__file__).resolve().parents[2] / "verity_vllm" / "harness" / "commit_delta.py"
+_SRC = pathlib.Path(__file__).resolve().parents[2] / "verity_vllm" / "pipeline" / "commit.py"
 
 
 def _engine_schedule():

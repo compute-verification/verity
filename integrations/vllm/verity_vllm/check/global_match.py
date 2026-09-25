@@ -187,7 +187,7 @@ def mock_global_program(workload_path: str, component_dirs: list[str], eos_token
                      "prompt_sha256": hashlib.sha256(json.dumps(r["prompt_token_ids"]).encode()).hexdigest()[:16],
                      "component": {"dir": comps.get((lp, T)), "LP": lp, "T": T},
                      "output_interface": {"unit": "engine_step", "max_events": cap, "event": "TokenSelect over the request's logits row"}})
-    from verity_vllm.program.global_program import MODELLED_ENGINE
+    from verity_vllm.pipeline.global_program import MODELLED_ENGINE
     engine = dict(MODELLED_ENGINE)
     stop_rule: dict = {"eos_token_ids": sorted(set(int(x) for x in eos_token_ids)) if eos_token_ids else None}
     lag_block = None
@@ -723,7 +723,7 @@ def record_engine_facts(header: dict, oracle_dir: str | None = None) -> dict:
     `RunHeader.profile.compilation` (vllm_adapter build_manifest); older/foreign headers put them at the top level; the run's
     `capture/versions.json` repeats the effective engine kwargs.  Returns {engine: {k: v}, compilation: {fact: v}, values: {k: [distinct v]},
     sources: {k: [locations]}, disagreements: {k: (a, b, src_a, src_b)}} -- the caller FAILS on any disagreement and when nothing is attested."""
-    from verity_vllm.program.global_program import compilation_facts
+    from verity_vllm.pipeline.global_program import compilation_facts
     header = header if isinstance(header, dict) else {}
     prof = header.get("profile") if isinstance(header.get("profile"), dict) else {}
     ek_top = header.get("engine_kwargs") if isinstance(header.get("engine_kwargs"), dict) else {}
@@ -949,7 +949,7 @@ def _check(gp: dict, oracle_dir: str, log_path: str | None, tokens_path: str | N
     # [compiled M-0153 (4a)] a Program modelling a COMPILED execution declares its compilation facts; the record must attest the same
     # (RunHeader.profile.compilation / .compilation / engine_kwargs.compilation_config); a compiled Program against a header without them
     # FAILS (fail closed).  An EAGER Program against a record whose compilation facts attest cudagraphs / torch.compile FAILS too.
-    from verity_vllm.program.global_program import compilation_facts
+    from verity_vllm.pipeline.global_program import compilation_facts
     decl_comp = (app.get("engine") or {}).get("compilation") if app.get("engine") else None
     if decl_comp is not None:
         decl = compilation_facts(decl_comp)
@@ -2070,7 +2070,7 @@ def impl_module(name: str | None = None):
     with compute-once memoisation, compact operand progressions and forked per-request legs -- the Match of record since R17
     (`sweep/row_pod.sh` exports it for every row) and the CLI's default) or `record` (this module's un-memoised single-process body:
     the audit checker the differential harness compares against).  Both expose `check(gp, oracle_dir, log_path, tokens_path, run_x09,
-    within_step, record_alternate)` with the same result schema; the differential harness (`verity_vllm.harness.match_diff`) runs
+    within_step, record_alternate)` with the same result schema; the differential harness (`verity_vllm.pipeline.match_diff`) runs
     both on the same artifacts and compares verdict, per-check outcomes, populations and mismatch locations.  An unknown name is an
     error, never a silent fallback to either implementation.
 
@@ -2129,7 +2129,7 @@ def impl_info(mod) -> dict:
 
 
 def main(argv=None) -> int:
-    from verity_vllm.harness.gc_tuning import tune as _gc_tune   # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
+    from verity_vllm.pipeline.gc_tuning import tune as _gc_tune   # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
     _gc_tune()
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--oracle", required=True, help="Match dir: program.json + instances.jsonl + capture/log.jsonl.gz")

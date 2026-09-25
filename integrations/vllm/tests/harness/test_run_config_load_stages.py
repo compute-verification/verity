@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 
-from verity_vllm.harness import run_config as RC
+from verity_vllm.pipeline import match as RC
 from verity_vllm.check import gates as G
 
 

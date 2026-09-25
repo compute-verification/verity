@@ -1,6 +1,6 @@
 """GP-01 driver: build the workload Program of a declared manifest from the derived request-wrapper Programs.
 
-    python -m verity_vllm.program.global_program --workload <manifest.json> --derived <dir> [--derived <dir> ...] --out <dir>
+    python -m verity_vllm.pipeline.global_program --workload <manifest.json> --derived <dir> [--derived <dir> ...] --out <dir>
 
 Inputs (pre-execution only): the request manifest (request ids, prompt lengths, caps, `arrive_step`, the row's declared `target`
 block) and derive_step request artifacts (`descriptor.json.gz` + `construction_manifest.json` / `instances.json.gz`) — one per
@@ -11,7 +11,7 @@ REQUIRED static of the workload Program (`Workload_v1{requests, shared, lag}`): 
 Writes: `workload_program.json` (artifact: digest, components, address map, chronology), `descriptor.json.gz` (the workload
 Program's descriptor, decodable with verity.ir.codec), `address_map.json`, `chronology.json`.
 
-Layout 1.1 (`verity_vllm.build_paths`): beside the absolute `inputs.manifest` / `inputs.derived` paths of the build machine, the
+Layout 1.1 (`verity_vllm.pipeline.layout`): beside the absolute `inputs.manifest` / `inputs.derived` paths of the build machine, the
 artifact carries a `layout` block with the same paths relative to the artifact root (`--artifact-root`, default the parent of
 `--out`, i.e. the row dir `build_workload/` sits in), so a Build fetched elsewhere resolves its components without being laid out
 at the original path.  Readers go through `build_paths.component_dir` / `manifest_path`.
@@ -29,7 +29,7 @@ import time
 
 from verity.ir.codec import canonical_json, descriptor_size
 from verity.ir.defs import REGISTRY
-from verity_vllm import build_paths
+from verity_vllm.pipeline import layout as build_paths
 from verity_vllm.program import workload as W
 # [R14 moe] the request descriptors decode through the SAME registry set `cb_a.compare._registry` loads: b1 + serve3 + pad_prims + moe
 # (the fused-MoE Definitions and the ref_prims they use, e.g. F32Sub_v1 -- an OLMoE component failed to decode without it) + hopper if present.

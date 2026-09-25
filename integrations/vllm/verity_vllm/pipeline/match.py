@@ -1,6 +1,6 @@
 """bench/run_config.py — one-shot driver: every stage of one configuration into one run directory, then gates + card.
 
-    python -m verity_vllm.harness.run_config --config-id ID --profile NAME --workload PATH --case B0|B1 --out RUN_DIR \\
+    python -m verity_vllm.pipeline.match --config-id ID --profile NAME --workload PATH --case B0|B1 --out RUN_DIR \\
         --phase gpu|cpu|all [--python-gpu PY] [--python-cpu PY] [--snapshot-steps 0,1,2,3] [--max-num-seqs 8] \\
         [--laptop] [--dry-run] [--tier-c] [--skip STAGES] [--checkpoints PATH] [--checkpoint-dir DIR_OR_GLOB] \\
         [--log LOG --snapshots DIR] [--control-tokens PATH] [--other-log LOG] [--cards-dir out/gen/cards] [--k 3] [--seed S]
@@ -59,7 +59,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.check import gates as G
-from verity_vllm.harness import experiment as EXP
+from verity_vllm.pipeline import experiment as EXP
 
 DEFAULT_SNAPSHOT_STEPS = "all"        # evidence for every specialization (h1: attention T at non-snapshot steps was uncovered)
 DEFAULT_TIER_B_STEPS = "0,1,2,3"       # --full-replay (diagnostic): prefill + three decode steps
@@ -187,12 +187,12 @@ class Plan:
             common_gpu += ["--max-tokens", str(a.max_tokens)]
         common_gpu += [f"--engine-arg={x}" for x in self.engine_args()]   # [GEN batch SHARED-CODE] scheduler/memory knobs -> build_engine
         if stage == "capture":
-            return [self.py_gpu, "-m", "verity_vllm.observe.m1_capture", *common_gpu, "--out", str(self.capture_dir),
+            return [self.py_gpu, "-m", "verity_vllm.pipeline.m1_capture", *common_gpu, "--out", str(self.capture_dir),
                     "--snapshot-steps", ",".join(map(str, self.steps))] + (["--verify-weights"] if self.verify_weights else []) + \
                    (["--snapshot-max-bytes", str(a.snapshot_max_bytes)] if a.snapshot_max_bytes is not None else []) + \
                    (["--snapshot-max-bytes-op", str(a.snapshot_max_bytes_op)] if a.snapshot_max_bytes_op is not None else [])   # D87
         if stage == "control":
-            return [self.py_gpu, "-m", "verity_vllm.observe.m1_capture", *common_gpu, "--out", str(self.control_dir), "--no-observer"]
+            return [self.py_gpu, "-m", "verity_vllm.pipeline.m1_capture", *common_gpu, "--out", str(self.control_dir), "--no-observer"]
         if stage == "census":
             return [self.py_gpu, "-m", "verity_vllm.check.census", *common_gpu, "--out", str(self.census_dir)] + ([] if a.keep_traces else ["--no-traces"])
         if stage == "nonint":
@@ -218,13 +218,13 @@ class Plan:
         mc = _workload_moe_construction(a.workload)
         MC = ["--moe-construction", mc] if mc else []
         if stage in ("fold", "fold_2"):
-            return [self.py_cpu, "-m", "verity_vllm.harness.run_config", "--worker", "fold", "--log", str(self.log), "--profile", a.profile,
+            return [self.py_cpu, "-m", "verity_vllm.pipeline.match", "--worker", "fold", "--log", str(self.log), "--profile", a.profile,
                     "--out", str(self.p("fold_summary" if stage == "fold" else "fold_summary_2"))] + MC + \
                    (["--persist-dir", str(run)] if stage == "fold" else [])      # D85: program.json / instances.jsonl / accesses.jsonl.gz
         if stage == "fold_other":
             if not a.other_log:
                 return None
-            return [self.py_cpu, "-m", "verity_vllm.harness.run_config", "--worker", "fold", "--log", a.other_log, "--profile", a.profile,
+            return [self.py_cpu, "-m", "verity_vllm.pipeline.match", "--worker", "fold", "--log", a.other_log, "--profile", a.profile,
                     "--out", str(self.p("fold_summary_other"))] + MC
         if stage == "root_policy":
             c = [self.py_cpu, "-m", "verity_vllm.input_provenance.root_policy", "--log", str(self.log), "--snapshots", str(self.snapshots), "--profile", a.profile,
@@ -322,7 +322,7 @@ def run_stage(stage: str, cmd: list[str], log_path: Path, *, max_rss_gb: float |
     # [R16 sys, BRIEF §5] the Match stage's sub-steps on the row timeline (VERITY_TIMELINE, else no-op): capture / control = one engine
     # process each (`work.*`), the CPU stages (fold, resolve, ...) are validation
     try:
-        from verity_vllm.harness.timeline import Timeline
+        from verity_vllm.pipeline.timeline import Timeline
         _tl = Timeline.from_env("run_config", hot=False)
     except Exception:  # noqa: BLE001
         _tl = None
@@ -411,7 +411,7 @@ def _engine_arg_dict(items: list[str]) -> dict:
 
 
 def write_manifest(plan: Plan, a: argparse.Namespace) -> dict:
-    from verity_vllm.harness.card import workload_summary
+    from verity_vllm.pipeline.report import workload_summary
     C = profile_config(a.profile)
     man = {
         "schema": "verity-gen/run/v1", "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "config_id": a.config_id,
@@ -463,7 +463,7 @@ def write_spec_for(plan: Plan, a: argparse.Namespace, man: dict) -> dict | None:
                               sampling={}, tp=int(getattr(a, "tp", 1) or 1), dtype=None, snapshot_steps=plan.steps,
                               snapshot_max_bytes=a.snapshot_max_bytes,
                               harness={"enforce_eager": _workload_enforce_eager(a.workload), "execution": _workload_execution(a.workload),   # [R15 EXEC-02]
-                                       "driver": "verity_vllm.harness.run_config", "python_gpu": a.python_gpu,
+                                       "driver": "verity_vllm.pipeline.match", "python_gpu": a.python_gpu,
                                        "family": getattr(a, "family", None)})
         if a.phase == "cpu" and not (plan.run / "spec.json").exists():
             spec["reconstructed_after_execution"] = True
@@ -558,7 +558,7 @@ def save_stages(run: Path, recs: list[dict]) -> None:
 
 def gates_stage(plan: Plan, a: argparse.Namespace) -> dict:
     """In-process: gates.json, card.json, CARD.md, <cards-dir>/<config_id>.json."""
-    from verity_vllm.harness import card as CARD
+    from verity_vllm.pipeline import report as CARD
     t0 = time.time()
     run = plan.run
     results = G.evaluate_gates(run)
@@ -1161,7 +1161,7 @@ def fold_worker(a: argparse.Namespace) -> int:
     for req in ("log", "profile", "out"):
         if getattr(a, req) is None:
             raise SystemExit(f"--worker fold needs --{req}")
-    from verity_vllm.harness.gc_tuning import tune as _gc_tune   # process-level; content-neutral (VERITY_GC_THRESHOLDS)
+    from verity_vllm.pipeline.gc_tuning import tune as _gc_tune   # process-level; content-neutral (VERITY_GC_THRESHOLDS)
     _gc_tune()
     doc, result = fold_summary_result(a.log, a.profile, with_program=not a.no_program, moe_construction=getattr(a, "moe_construction", None))
     out = Path(a.out)

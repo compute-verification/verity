@@ -1,4 +1,4 @@
-"""Phase 5a: the vLLM stage Tools (integrations/vllm/verity_vllm/harness/research_tools.py), typed outputs (`outputs.json`) and the
+"""Phase 5a: the vLLM stage Tools (integrations/vllm/verity_vllm/pipeline/research_tools.py), typed outputs (`outputs.json`) and the
 durability gate (`research data preserved`, store/preserved.py), against a LocalStore with the FsRemote."""
 from __future__ import annotations
 
@@ -41,7 +41,7 @@ def _drv(tool, argv: list[str], inputs: dict | None = None) -> str:
 def test_vllm_tools_are_registered_and_loadable_by_name():
     for stage in ("build", "match", "commit"):
         t = tools_registry.load(f"vllm.{stage}", REPO)
-        assert t.name == f"vllm.{stage}" and t.spec == f"integrations.vllm.verity_vllm.harness.research_tools:VLLM_{stage.upper()}"
+        assert t.name == f"vllm.{stage}" and t.spec == f"integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_{stage.upper()}"
         assert t.command == ["bash", WRAPPER, "stage", stage]
         assert t.key_conditions == ["hw.family", f"tool.vllm.{stage}.torch", f"tool.vllm.{stage}.vllm"]
         assert "integrations/vllm/**" in t.closure and "packages/verity/src/verity/verification/**" in t.closure
@@ -97,7 +97,7 @@ def test_stage_flags_that_change_outputs_are_key_with_explicit_defaults():
 def test_parse_accepts_row_pod_argv_too():
     if str(REPO) not in sys.path:
         sys.path.insert(0, str(REPO))         # the declaration module by dotted path (tools_registry falls back to loading it by file)
-    from integrations.vllm.verity_vllm.harness import research_tools as RT
+    from integrations.vllm.verity_vllm.pipeline import research_tools as RT
 
     p = RT.parse(["bash", "/workspace/src/integrations/vllm/verity_vllm/ops/row_pod.sh", ROW, "LLAMA32_1B", "repo", "rev", "build,match"], stage="build")
     assert p["stage"] == "build,match" and p["row"] == ROW and p["model"] == "repo" and p["batch"] == 1

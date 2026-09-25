@@ -20,7 +20,7 @@ per-step hashing time and backlog (steady state), root-ready delay, retained byt
 Outputs (DIR): runs.jsonl (one row per run), steps.jsonl (one row per step), summary.json, summary.md, declaration_<committer>.json,
 versions.json.  Every number is MEASURED unless the key says otherwise.
 
-    PYTHONPATH=. /workspace/venv-cu129/bin/python -m verity_vllm.harness.commit_delta \
+    PYTHONPATH=. /workspace/venv-cu129/bin/python -m verity_vllm.pipeline.commit \
         --workload workloads/workload_cov_b0_b1_c256.json --pairs 5 --committer native_host --out /workspace/cp/cmt3/b0_b1
 
 PROTOCOL SUMMARY (Commit stage entry: the instrumented runs + the fail-closed X-03 verdict)
@@ -69,7 +69,7 @@ prof.apply_env()
 import torch  # noqa: E402
 
 from verity_vllm.observe import vllm_adapter as va  # noqa: E402
-from verity_vllm.harness.timeline import Timeline  # noqa: E402  (torch-free; VERITY_TIMELINE -> append-only JSONL, else a no-op sink)
+from verity_vllm.pipeline.timeline import Timeline  # noqa: E402  (torch-free; VERITY_TIMELINE -> append-only JSONL, else a no-op sink)
 from verity_vllm.commit import opened as OV  # noqa: E402
 
 SCHEMA = "verity/commit-integ/delta/v1"
@@ -263,7 +263,7 @@ def stop_rule_of_record(eng, wl: dict, versions: dict) -> dict[str, Any]:
     trace.  `notes` names what was refused."""
     out: dict[str, Any] = {"eos": None, "lag": None, "declared_lag": None, "engine_lag": None, "notes": [], "srule": None}
     try:
-        from verity_vllm.program import global_program as _GP
+        from verity_vllm.pipeline import global_program as _GP
         _srule = _GP.stop_rule(eng.cp.get("local_path"), None, wl)
         out["srule"] = {k: _srule.get(k) for k in ("eos_token_ids", "source", "refusal") if k in _srule}
         out["eos"] = None if _srule.get("refusal") else _srule.get("eos_token_ids")
@@ -943,7 +943,7 @@ def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, 
     return res
 
 
-# [R16 sys, BRIEF §5] hot-engine reuse: `verity_vllm.harness.hot_commit serve` sets _HOT = {"jobs": n, "restart_reason": why} and calls
+# [R16 sys, BRIEF §5] hot-engine reuse: `verity_vllm.pipeline.hot serve` sets _HOT = {"jobs": n, "restart_reason": why} and calls
 # main(argv) once per Commit job.  The first job builds the engine and parks it here (with the exact kwargs set and the pristine baseline
 # taken BEFORE any committer); later jobs reuse it when `engine_kwargs_for` yields the same kwargs / env flags / checkpoint (else the job is
 # refused with HOT-KEY-MISMATCH and the worker restarts, reason recorded).  Every committer built in a job is registered in _HOT["coms"] so
@@ -1151,7 +1151,7 @@ def main(argv: list[str] | None = None) -> None:
                     help="[R15 COORD 5] the Build's Program digest of record (B=1: build_request's program_digest; B>=2: gprog's workload digest): the "
                          "required manifest's program_digest must equal it or the Commit fails closed as wrong-Program; also the binding map's key digest")
     ap.add_argument("--required-manifest", default=None,
-                    help="[R14 MAN-01] the Program/query-derived required-value manifest (verity_vllm.query.cli build ...): every "
+                    help="[R14 MAN-01] the Program/query-derived required-value manifest (verity_vllm.pipeline.cli build ...): every "
                          "identity it lists (step, invocation, op_path, output_member, element range, request, rank) must be covered by a committed "
                          "tensor of every instrumented run (coverage_check); replaces the REL-02 counts+classes source, which stays as the labelled fallback")
     ap.add_argument("--tensor-digests", action="store_true", help="diagnostic: per-tensor digests of the retained host bytes per instrumented run, diffed across pairs")
@@ -1179,7 +1179,7 @@ def main(argv: list[str] | None = None) -> None:
     # [R18 infra, F-r17-tp-06 / BRIEF Phase 0] source identity precheck BEFORE anything else runs: verity.ir, verity_vllm, vllm-poc,
     # hidden_gpu (and the telemetry package) must all resolve from THIS tree (the one commit_delta.py lives in; $VERITOR_REPO must agree).
     # A mismatch exits 3 with PRECHECK_FAIL_SOURCE_IDENTITY on stderr -- no engine, no inference; the record is written beside the out dir.
-    from verity_vllm.harness import source_identity as _sid
+    from verity_vllm.pipeline import source_identity as _sid
 
     _sid_out = (Path(args.out) / "source_identity.json") if getattr(args, "out", None) else None
     try:
@@ -1713,10 +1713,10 @@ def main(argv: list[str] | None = None) -> None:
             # against the cgroup.  A Commit predicted to exceed it is NOT launched: refused here by name before the engine runs a step
             # (rc 3 = COMMIT FAIL in row_pod; the record carries the numbers).  VERITY_ADMIT_OVER_BOUND=1 overrides -- named on the record.
             try:
-                from verity_vllm.harness import admission_bound as ADM
+                from verity_vllm.pipeline import admission_bound as ADM
                 _lag = 1
                 try:
-                    from verity_vllm.harness.workload import workload_target as _wt      # [moe R17-1] the declared LAG of the manifest target
+                    from verity_vllm.pipeline.workload import workload_target as _wt      # [moe R17-1] the declared LAG of the manifest target
                     _lag = int(_wt(wl).lag())
                 except Exception:  # noqa: BLE001  -- pre-R17-1 tree / no target block: async scheduling assumed (1 lag row, the sound side)
                     _lag = 1
@@ -1769,7 +1769,7 @@ def main(argv: list[str] | None = None) -> None:
             # its DOMINANT line, printed before the run; it does not refuse or admit tonight (the admission_of_record above governs); every
             # Commit thereby yields the per-term predicted-vs-measured line (calibrate on verdict.json / footprint.jsonl at the end)
             try:
-                from verity_vllm.harness.admission_planner import CALIBRATION as _cal_path, plan as _planner_plan
+                from verity_vllm.pipeline.admission_planner import CALIBRATION as _cal_path, plan as _planner_plan
                 _others = 0
                 with contextlib.suppress(Exception):          # co-tenants: the cgroup's ANON bytes minus this process (file cache is reclaimable)
                     for _ln in Path("/sys/fs/cgroup/memory.stat").read_text().splitlines():
@@ -1853,7 +1853,7 @@ def main(argv: list[str] | None = None) -> None:
                         WR.stamp_of_record_set(_wor_rec, args.programs_root, manifest=_man)
                     if hasattr(WR, "derivation_provenance"):      # [COORD R16 M-0038 (2)] the in-process derivation is a logged derivation too
                         _wor_rec["derived"] = WR.derivation_provenance(_pd, args.checkpoint_dir, args.checkpoints, None)
-                        _wor_rec["derived"]["tool"] = "verity_vllm.harness.commit_delta (in-process --checkpoint-dir fallback)"
+                        _wor_rec["derived"]["tool"] = "verity_vllm.pipeline.commit (in-process --checkpoint-dir fallback)"
                     (Path(args.out) / "weights_of_record.json").write_text(json.dumps(_wor_rec, indent=1) + "\n")
                 _live_wd = WR.live_param_digests(eng.model)
                 print(f"[delta] weights of record ({kind}): root {str(_wor_rec.get('root_of_record'))[:16]} fields {_wor_rec.get('n_pinned')}/{_wor_rec.get('n_fields')} pinned, "
@@ -2924,7 +2924,7 @@ def main(argv: list[str] | None = None) -> None:
     # Commit (VmHWM / footprint peaks / the peak step's staged bytes) -- exec collects these; the table in tests/fixtures/admission grows by name
     for _pp in sorted(out.glob("admission_planner_*.json")):
         try:
-            from verity_vllm.harness.admission_planner import calibrate as _planner_calibrate
+            from verity_vllm.pipeline.admission_planner import calibrate as _planner_calibrate
             _cal = _planner_calibrate(json.loads(_pp.read_text()), out, row=str(getattr(args, "row_id", None) or Path(args.out).name))
             (out / _pp.name.replace("admission_planner_", "planner_calibration_")).write_text(json.dumps(_cal, indent=1, default=str) + "\n")
             print(f"[delta] PLANNER CALIBRATION ({_pp.name}): measured {(_cal.get('measured_bytes') or 0) >> 20} MiB ({_cal.get('measured_by')}) / predicted "
@@ -3011,10 +3011,10 @@ def summarize(rows: list[dict], step_rows: list[dict], args: argparse.Namespace,
 
 if __name__ == "__main__":
     if os.environ.get("VERITY_HOT_SUBMIT") == "1" and _HOT is None:
-        # [R16 sys] route this invocation through the pod's hot Commit worker (verity_vllm/harness/hot_commit.py) -- lets an unchanged harness
+        # [R16 sys] route this invocation through the pod's hot Commit worker (verity_vllm/pipeline/hot.py) -- lets an unchanged harness
         # (the e2e negatives in tests/test_commit_fail_closed.py, ad-hoc timing pairs) exercise engine reuse; the worker refuses HOT-UNSAFE
         # jobs and the client falls back to a cold process with the reason on record, so nothing runs that would not run cold.
-        from verity_vllm.harness import hot_commit as _HC
+        from verity_vllm.pipeline import hot as _HC
 
         sys.exit(_HC.submit(sys.argv[1:], root=Path(os.environ.get("HOT_ROOT", "/workspace/cp/hot")), idle_s=float(os.environ.get("HOT_IDLE", "900")),
                             timeout_s=float(os.environ["HOT_TIMEOUT"]) if os.environ.get("HOT_TIMEOUT") else None))

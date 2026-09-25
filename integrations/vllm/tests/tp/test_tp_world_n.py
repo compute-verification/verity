@@ -143,7 +143,7 @@ def test_collective_bus_world_3_peer_layout_and_rank_order():
 # --- tp_links.json: v2 schema at world N, v1 files read as v2 ----------------------------------------------------------------
 
 def test_read_tp_links_upgrades_v1_and_accepts_v2(tmp_path):
-    from verity_vllm.harness.derive_step import read_tp_links
+    from verity_vllm.pipeline.build import read_tp_links
     v1 = {"schema": "cb-a/tp_links/v1", "world": 2, "rank": 0, "links": [{"k": 0, "kind": "all_reduce", "peer_input": "peers_0", "peer_rank": 1}]}
     (tmp_path / "v1.json").write_text(json.dumps(v1))
     d = read_tp_links(str(tmp_path / "v1.json"))
@@ -252,7 +252,7 @@ def test_cross_rank_check_world_3_passes_and_names_a_missing_rank():
 @pytest.mark.parametrize("world_args", [["--tp", "3"], ["--world", "4"]])
 def test_rank_commit_refuses_world_above_two_before_building_an_engine(world_args, monkeypatch, tmp_path, capsys):
     from verity_vllm.observe import engine_profile as prof
-    from verity_vllm.tp import commit as tpc
+    from verity_vllm.pipeline.tp import commit as tpc
     monkeypatch.setattr(prof, "apply_env", lambda: {})
     monkeypatch.setattr("sys.argv", ["tp.commit", "--workload", str(tmp_path / "wl.json"), "--out", str(tmp_path / "out"), *world_args])
     with pytest.raises(SystemExit) as refused:

@@ -13,7 +13,7 @@ import sys
 
 import pytest
 
-from verity_vllm.harness import run_config as RC
+from verity_vllm.pipeline import match as RC
 
 LLAMA_1B = {"H": 2048, "I": 8192, "GU": 16384, "QKV": 3072, "V": 128256}         # analytic.config_of keys
 QWEN_15B = {"H": 1536, "I": 8960, "GU": 17920, "QKV": 2048, "V": 151936}

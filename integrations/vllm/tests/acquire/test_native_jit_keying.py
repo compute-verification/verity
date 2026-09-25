@@ -99,7 +99,7 @@ def test_pod_release_fails_closed_on_a_stale_so_and_records_the_digest():
     s = open(os.path.join(HERE, "..", "sweep", "pod_release.sh")).read()
     assert "native_jit.missing_bindings(e, os.path.join(nc.HERE, 'native_collect.cpp'))" in s
     assert "assert not missing" in s and "'source_digest=' + nc.build_source_digest()" in s
-    from verity_vllm.harness import release_json as rj
+    from verity_vllm.pipeline import release_json as rj
 
     arts = rj.parse_artifacts("HIDDEN-GPU-OK 1111 /a.so sm_89", "FA2-TAP-OK 2222 /b.so arch=8.9",
                               "3333 /workspace/cp/nc_build/ab12cd34ef56/verity_native_collect.so source_digest=ab12cd34ef56ff bindings=48")

@@ -8,7 +8,7 @@
                    the Program's literals (Calls that read no Value: the descriptor's, never acquired)
     v1_bridge      required values under Q_module_body_v1 spelt as v1 IDENTITY_KEY rows (+ the named residuals)
     compare        identity-set comparison against a v1 manifest, every difference classified
-    cli            `python -m verity_vllm.query.cli build|build-global ... --out manifest.json`
+    cli            `python -m verity_vllm.pipeline.cli build|build-global ... --out manifest.json`
 
 Nothing in this package names a model or decides a member by a module-name or Definition-family table
 (`tests/program/test_lint.py` holds that): what a Call produces comes from its Definition's output signature, where it lives from the

@@ -1,6 +1,6 @@
 """sweep/workload.py — the ONE deterministic heterogeneous workload generator of the R12 sweep (BRIEF §12).
 
-    python -m verity_vllm.harness.workload --row-id <row-id> --hf-repo <repo> --revision <rev> --batch B --max-input I --max-output O \\
+    python -m verity_vllm.pipeline.workload --row-id <row-id> --hf-repo <repo> --revision <rev> --batch B --max-input I --max-output O \\
         [--sampling greedy|stoch-t0.8-p0.95] [--arrivals none|staggered] [--tokenizer <snapshot dir or tokenizer.json>] [--case <ROLE>] \\
         [--lengths-only] [--check] --out workloads/<row-id>.json
 

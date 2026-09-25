@@ -2,8 +2,8 @@
 d9105ea80 split top-p pipeline can launch (S = 1, 2, 4, 8, 16, 32) with constructed pivot ties -- and the CPU checker the committed
 test uses (F-stoch-01 follow-up: the model was fitted at S=32 only).
 
-  produce (pod, torch venv):   python -m verity_vllm.harness.topp_split_probe produce --out DIR [--record fstoch01_rows.npz]
-  check   (any venv, no torch): python -m verity_vllm.harness.topp_split_probe check --dir DIR [--record fstoch01_rows.npz]
+  produce (pod, torch venv):   python -m verity_vllm.pipeline.topp_split_probe produce --out DIR [--record fstoch01_rows.npz]
+  check   (any venv, no torch): python -m verity_vllm.pipeline.topp_split_probe check --dir DIR [--record fstoch01_rows.npz]
 
 Cases are REGENERATED on the CPU from the manifest (seed / V / kind / params), so the fixture ships only the kernel's outputs:
 `keep` bits (the masked row is `where(keep, x_in, -inf)` -- the mask kernel stores the loaded fp32 x for kept lanes), the stats

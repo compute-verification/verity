@@ -1,6 +1,6 @@
 """The sweep row's `result.json` for the `research` runner (schema research/result/v0.1, tools/research/src/research/result.py).
 
-    python -m verity_vllm.harness.research_result <evidence-dir> <row-id> <role> <stages> [--run-dir DIR] [--run-id ID]
+    python -m verity_vllm.pipeline.research_result <evidence-dir> <row-id> <role> <stages> [--run-dir DIR] [--run-id ID]
 
 `row_pod.sh` calls this on EXIT when the runner set `RESEARCH_RUN_DIR`: the run record then states, separately from the process
 exit, whether the workload's own checker (the per-stage verdicts of `stages.txt`) reported PASS for every requested stage, what

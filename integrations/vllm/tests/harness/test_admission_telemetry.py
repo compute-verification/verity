@@ -1,4 +1,4 @@
-"""verity_vllm.harness.telemetry.admission — synthetic-interval unit tests + the R17 comparison as a regression fixture."""
+"""verity_vllm.pipeline.telemetry.admission — synthetic-interval unit tests + the R17 comparison as a regression fixture."""
 from __future__ import annotations
 
 import json
@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from verity_vllm.harness.telemetry import admission as adm
+from verity_vllm.pipeline.telemetry import admission as adm
 
 FIXTURE = Path(__file__).resolve().parents[2] / "verity_vllm" / "observe" / "out" / "gen" / "sweep" / "evidence" / "admit" / "r17_fixture"
 MiB = adm.MiB

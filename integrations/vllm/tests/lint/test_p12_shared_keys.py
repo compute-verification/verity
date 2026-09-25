@@ -25,8 +25,8 @@ from . import _ratchet as R
 
 NAME = "p12_shared_keys"
 RULE = "P12 (each shared key has one owner)"
-OWNERS = frozenset({"verity_vllm/config.py", "verity_vllm/pipeline/identity.py", "verity_vllm/harness/target_family.py",
-                    "verity_vllm/harness/source_identity.py", "verity_vllm/harness/release_json.py"})
+OWNERS = frozenset({"verity_vllm/config.py", "verity_vllm/pipeline/identity.py", "verity_vllm/target_family.py",
+                    "verity_vllm/pipeline/source_identity.py", "verity_vllm/pipeline/release_json.py"})
 ROW_REGEX = re.compile(r"__\(?(?:\?:)?(?:tp|bi|b|i|o|c)?\(?\\d|__\[\^_\]|\[\^_\]\+__")
 CODE_ROOT = re.compile(r"^(?:\.\./)*(verity_vllm|verity|research|integrations/vllm|packages/verity|tools/research)(?:/|$)")
 
@@ -85,4 +85,4 @@ def test_detectors_on_examples() -> None:
                    ("row-id-regex", "__b(\\d+)__"), ("row-id-regex", "__tp(\\d+)__"), ("row-id-split", "split('__')")], got
     good = "MODS = ('verity_vllm.program', 'verity_vllm.check')\nKEY = 'a__b'\nx = name.split('_')\n"
     assert file_violations(good, "verity_vllm/harness/x.py") == []
-    assert file_violations(bad, "verity_vllm/harness/target_family.py") == []
+    assert file_violations(bad, "verity_vllm/target_family.py") == []

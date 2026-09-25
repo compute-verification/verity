@@ -52,7 +52,7 @@ except ImportError:                      # the offline core (tests, CPU cross-ch
 from verity_vllm.commit import hidden_engine as eng  # production engine pieces (imported, not forked)
 from verity_vllm.commit.native_ranges import NativeRangeOpenings
 from verity_vllm.acquire.committer_api import Opening, RunCommitment, StepCommitment, declaration
-from verity_vllm.harness.spans import Spans
+from verity_vllm.pipeline.spans import Spans
 
 GPU_CHUNK_BYTES = 256
 ROOT_TAG_RUN = b"verity/cmt-integ/run-root/v0"
@@ -1392,7 +1392,7 @@ class NativeHostCommitter(NativeRangeOpenings):
 
             # [R18 infra, F-r17-tp-06] the module that LOADED must be this tree's, and so must verity.ir / verity_vllm / vllm-poc as
             # this process resolves them: PRECHECK_FAIL_SOURCE_IDENTITY by name at the import site, before the extension is built or used
-            from verity_vllm.harness import source_identity as _sid
+            from verity_vllm.pipeline import source_identity as _sid
 
             _sid.assert_loaded_module_is_ours(HG, "hidden_gpu", _tree)
             # [R18 infra, r18-int-2; rev S-r18-1 n1] the document of THIS check (hidden_gpu loaded:true from its resolved path, plus

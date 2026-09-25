@@ -54,7 +54,7 @@ def _same_site(a: str | None, b: str | None) -> bool:
     """[lane vllm-tp-n] The derive's link module (`link.module`: module_path minus the derive's RECORDED model root -- data the derive wrote
     by object identity) vs the fold's / recorder's site: equal, or a dotted suffix of one another (a v1 tp_links without a recorded root
     spells the traced wrapper's path).  No vocabulary prefix is spelled here (`derive_step.same_module_path`)."""
-    from verity_vllm.harness.derive_step import same_module_path
+    from verity_vllm.pipeline.build import same_module_path
     return same_module_path(a, b)
 
 

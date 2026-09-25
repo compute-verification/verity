@@ -16,7 +16,7 @@ import os
 
 import pytest
 
-from verity_vllm.program import global_program as GP
+from verity_vllm.pipeline import global_program as GP
 
 MOE01 = {"Gemm_v1{K=2048,N=64}": 16, "MoeExpertGemm_v1{E=64,K=2048,N=2048}": 128, "MoeExpertGemmW_v1{E=64,K=1024,N=2048}": 128,
          "MoeRouterTopK_v1{E=64,TOPK=8}": 16, "MoeSum_v1{TOPK=8,H=2048}": 16, "RmsNorm_v1{H=2048}": 33}

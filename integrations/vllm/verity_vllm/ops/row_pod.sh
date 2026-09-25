@@ -11,7 +11,7 @@
 # integrations/vllm; the core (packages/verity/src) and the runner's telemetry (tools/research/src) sit beside it and go on
 # PYTHONPATH.  One Python 3.12 environment (verity_vllm/ops/pod_bootstrap.sh: /workspace/venv312 -- torch cu129, vLLM d9105ea80) serves the GPU and
 # the CPU halves (PY and PY312 default to it; the two-venv split of the 3.11 pods is gone).  When RESEARCH_RUN_DIR is set the row
-# writes $RESEARCH_RUN_DIR/result.json on exit (verity_vllm/harness/research_result.py) so `research inspect` reports the stage
+# writes $RESEARCH_RUN_DIR/result.json on exit (verity_vllm/pipeline/research_result.py) so `research inspect` reports the stage
 # verdicts separately from the exit code.
 #
 # Env: PY (venv312 python), PY312 (defaults to PY), HIDDEN_SO, GPU_UTIL (gpu_memory_utilization, default 0.5), PAIRS (3), LP/T (request wrapper shape;
@@ -19,7 +19,7 @@
 # (unset = run_config derives the per-tensor snapshot cap, D87; set = explicit cap in bytes, recorded in match/run.json snapshot_max_bytes),
 # BUILD_TIMEOUT / MATCH_TIMEOUT / COMPARE_TIMEOUT / COMMIT_TIMEOUT (s; Match ones default to B-scaled, REL-06), REQUIRED_CLASSES (REL-02: comma list passed to commit_delta --required-classes),
 # EXTRA_ENGINE_ARGS ("k=v k=v" appended to Commit).  [r18-int-3, admit] $D/admission.json = the ADVISORY host-memory plan written
-# before Build (verity_vllm/harness/telemetry/admission.py plan; per-stage reserved_bytes, named terms, verdict, short_by) -- never a stop.
+# before Build (verity_vllm/pipeline/telemetry/admission.py plan; per-stage reserved_bytes, named terms, verdict, short_by) -- never a stop.
 #
 # PROTOCOL SUMMARY (one row = precheck -> Build -> Match -> Commit; stop at the first FAIL; one verdict line per stage in stages.txt)
 #   Purpose: run ONE workload row (workloads/<row>.json) from the tree THIS script lives in and leave its evidence in
@@ -28,7 +28,7 @@
 #   Outputs: $D/stages.txt row.log timeline.jsonl source_identity*.json target_family*.json admission.json release.json tree.json;
 #     build_step/ build_request*/ build_workload/ build_summary.json; match/ match_decomp.json|match_compare.json global_match.json
 #     match_summary.json; manifest.json manifest.log (the required-value manifest of record, built at the Build stage by
-#     verity_vllm.query.cli) commit/ verdict.json (vllm-verdict/v1, the Commit's verdict of record as typed checks; its outcome IS the
+#     verity_vllm.pipeline.cli) commit/ verdict.json (vllm-verdict/v1, the Commit's verdict of record as typed checks; its outcome IS the
 #     stage decision -- commit_summary.json is no longer written, F-r19-int-21 / P5) weights_of_record.log; $RESEARCH_RUN_DIR/result.json on EXIT.
 #   Invariants: the source-identity and target-family prechecks run before any engine and fail by name PRECHECK_FAIL_* (exit 3);
 #     the Program digest handed to the Commit is read from build_summary.json, never from the required-value manifest; a Match verdict over a record
@@ -82,7 +82,7 @@ WL=workloads/$ROW.json
 [ -f "$WL" ] || { echo "no manifest $WL"; exit 2; }
 log() { echo "$(date -u +%FT%TZ) [row $ROW] $*" | tee -a "$D/row.log"; }
 # [R19] the research runner's result envelope, written once on exit from the stage verdicts (no-op without RESEARCH_RUN_DIR)
-_research_result() { [ -n "${RESEARCH_RUN_DIR:-}" ] && "$PY" -m verity_vllm.harness.research_result "$D" "$ROW" "$ROLE" "$STAGES" >> "$D/row.log" 2>&1 || true; }
+_research_result() { [ -n "${RESEARCH_RUN_DIR:-}" ] && "$PY" -m verity_vllm.pipeline.research_result "$D" "$ROW" "$ROLE" "$STAGES" >> "$D/row.log" 2>&1 || true; }
 trap _research_result EXIT
 # has_flag <--flag> <cmd...>: feature-detect a CLI flag from the command's --help.  The WHOLE help text is captured first; the former
 # `... --help 2>/dev/null | grep -q -- "--flag"` pipeline is unsound under `set -o pipefail`: grep -q exits at the first match (the usage line),
@@ -92,10 +92,10 @@ trap _research_result EXIT
 # whose command does not import (or has no such flag) still reads as absent -> the callers arm nothing, exactly as before (fail-closed).
 has_flag() { local _flag=$1; shift; local _h; _h=$("$@" --help 2>/dev/null) || true; [[ "$_h" == *"$_flag"* ]]; }
 verdict() { echo "$1 $2 $(date -u +%FT%TZ) $3" | tee -a "$D/stages.txt"; }
-# [R16 sys, BRIEF §5/§10] automatic stage telemetry: append-only $D/timeline.jsonl (schema verity-sweep/timeline/v1, verity_vllm/harness/timeline.py).
+# [R16 sys, BRIEF §5/§10] automatic stage telemetry: append-only $D/timeline.jsonl (schema verity-sweep/timeline/v1, verity_vllm/pipeline/timeline.py).
 # This shell marks every stage / sub-step with `date +%s.%N`; the python stages (commit_delta, m1_capture, run_config) append their own
 # events through VERITY_TIMELINE (engine build + reuse/restart reason, warm-up, arms, validation components).  Measured, never estimated;
-# `python3 -m verity_vllm.harness.timeline report $D/timeline.jsonl` folds it into the BRIEF §5 table (startup / preparation / workload /
+# `python3 -m verity_vllm.pipeline.timeline report $D/timeline.jsonl` folds it into the BRIEF §5 table (startup / preparation / workload /
 # validation / closure) and counts engine starts vs reuses.  Values that parse as numbers / true / false / null are written unquoted.
 export VERITY_TIMELINE=${VERITY_TIMELINE:-$D/timeline.jsonl}
 tl() {  # <stage> <start|end|mark> [k=v ...]   (+ $TL_EXTRA k=v words, e.g. par=true on concurrent spans -- SYS-06)
@@ -114,12 +114,12 @@ tl() {  # <stage> <start|end|mark> [k=v ...]   (+ $TL_EXTRA k=v words, e.g. par=
 # RELEASE.json applies only when it names THIS tree (its `tree` == realpath of cwd) and its commit + dirty-patch digest equal this tree's
 # EXPORT.json; otherwise the row is UNRELEASED with the tree's own commit/branch/dirty digest and path (the finalizer takes release_tag from here).
 TREE_HERE=$(realpath . 2>/dev/null || pwd)
-# [R17 rel, exec M-0477 / M-0709] the line comes from verity_vllm/harness/release_json.py: the TREE-LOCAL record (<tree>/RELEASE.json,
+# [R17 rel, exec M-0477 / M-0709] the line comes from verity_vllm/pipeline/release_json.py: the TREE-LOCAL record (<tree>/RELEASE.json,
 # written by the ship that installed this tree) first, the pod-wide /workspace/cp/RELEASE.json (the pod's LAST ship) second -- so a second
 # tree shipped beside this one never erases this tree's citation, and a record that names another tree never applies here.  The record
 # actually used is copied into the evidence (release.json), not the pod-wide file blindly.
 TAB=$'\t'
-REL_OUT=$(python3 verity_vllm/harness/release_json.py line "$TREE_HERE" 2>/dev/null) || REL_OUT="UNRELEASED|commit=unknown tree=$TREE_HERE (release_json.py failed; not installed here by pod_release.sh)${TAB}-"
+REL_OUT=$(python3 verity_vllm/pipeline/release_json.py line "$TREE_HERE" 2>/dev/null) || REL_OUT="UNRELEASED|commit=unknown tree=$TREE_HERE (release_json.py failed; not installed here by pod_release.sh)${TAB}-"
 REL_LINE=${REL_OUT%%"$TAB"*}; REL_SRC=${REL_OUT#*"$TAB"}
 if [ "${REL_LINE%%|*}" != UNRELEASED ] && [ -f "$REL_SRC" ]; then cp "$REL_SRC" "$D/release.json"; else rm -f "$D/release.json"; fi
 # [R17 rel] a released tree loads its collector from the dir the release built it in (RELEASE.json build_dirs.native_collect: per tree for an
@@ -139,7 +139,7 @@ SID_SHA=$(python3 -c "import json;print(json.load(open('EXPORT.json')).get('comm
 SID_RC=0
 for _py in "$PY" $([ "$PY312" != "$PY" ] && echo "$PY312"); do
   [ -x "$_py" ] || continue
-  if ! "$_py" -m verity_vllm.harness.source_identity --tree "$TREE_HERE" ${SID_SHA:+--sha "$SID_SHA"} --stage precheck --out "$D/source_identity.$(basename "$(dirname "$(dirname "$_py")")").json" >> "$D/row.log" 2>&1; then SID_RC=3; fi
+  if ! "$_py" -m verity_vllm.pipeline.source_identity --tree "$TREE_HERE" ${SID_SHA:+--sha "$SID_SHA"} --stage precheck --out "$D/source_identity.$(basename "$(dirname "$(dirname "$_py")")").json" >> "$D/row.log" 2>&1; then SID_RC=3; fi
 done
 if [ "$SID_RC" != 0 ]; then
   tl precheck end rc=3 fail_class=PRECHECK_FAIL_SOURCE_IDENTITY
@@ -217,9 +217,9 @@ CODE9=$(python3 -c "import json;print(json.load(open('EXPORT.json'))['commit'][:
 # record was a Hopper Program built on the H100 host for an L40S row.  Fails by name PRECHECK_FAIL_TARGET_FAMILY (rc 3, no Build);
 # $TARGET_FAMILY_WAIVER=<reason> (the release canary, whose __l40s__ base rows also run on the Hopper canary host) records
 # `precheck-target WAIVED <reason>` instead -- never silent, never on a row of record.  Record: $D/target_family.json.  Checked again
-# after Build against build_summary.json step.target (verity_vllm/harness/target_family.py).
+# after Build against build_summary.json step.target (verity_vllm/target_family.py).
 tl precheck-target start
-TF_LINE=$(python3 -m verity_vllm.harness.target_family --row "$ROW" --workload "$WL" --stages "$STAGES" --out "$D/target_family.json" 2>&1); TF_RC=$?
+TF_LINE=$(python3 -m verity_vllm.target_family --row "$ROW" --workload "$WL" --stages "$STAGES" --out "$D/target_family.json" 2>&1); TF_RC=$?
 echo "$TF_LINE" >> "$D/row.log"
 if [ $TF_RC -ne 0 ]; then
   tl precheck-target end rc=3 fail_class=PRECHECK_FAIL_TARGET_FAMILY
@@ -228,13 +228,13 @@ fi
 tl precheck-target end rc=0
 case "$TF_LINE" in TARGET-FAMILY-WAIVED*) verdict precheck-target WAIVED "$TF_LINE" >/dev/null ;; *) verdict precheck-target PASS "$TF_LINE" >/dev/null ;; esac
 # [R18 admit, F-r18-admit-1 / S-r18-3 C2; coord M-0061 (2), r18-int-3] ADVISORY host-memory admission plan before Build: the empirical
-# planner (verity_vllm/harness/telemetry/admission.py: base serving + simultaneously-live named Verity terms + two named constant margins,
+# planner (verity_vllm/pipeline/telemetry/admission.py: base serving + simultaneously-live named Verity terms + two named constant margins,
 # no multiplier) predicts each stage's peak from the workload file and this cgroup's memory.max and writes $D/admission.json (per stage
 # reserved_bytes, the named terms, verdict ADMIT / REFUSE / LOWER_BOUND, short_by) beside the attempt; one line in row.log; a WARN line
 # when a stage WOULD be refused.  ADVISORY ONLY: this never stops the row (no row of record is stopped by a day-old model -- coord M-0061;
 # enforcement is post-campaign, after the record half C2 on the R18 attempts).  `plan` exits 0 on every path, including its own failure.
 tl admission start
-ADM_LINE=$(python3 -m verity_vllm.harness.telemetry.admission plan --row "$ROW" --workload "$WL" --stages "$STAGES" --pairs "$PAIRS" \
+ADM_LINE=$(python3 -m verity_vllm.pipeline.telemetry.admission plan --row "$ROW" --workload "$WL" --stages "$STAGES" --pairs "$PAIRS" \
              --snapshot-steps "${MATCH_SNAP_STEPS:-$SNAP_DEF}" ${MATCH_SNAP_MAX_BYTES:+--snapshot-max-bytes "$MATCH_SNAP_MAX_BYTES"} \
              --out "$D/admission.json" 2>&1) || ADM_LINE="ADMISSION advisory unavailable rc=$? $ADM_LINE"
 log "$ADM_LINE"
@@ -299,7 +299,7 @@ gpu_exclusive() {  # <why>
   local root=${HOT_ROOT:-/workspace/cp/hot} t0 out
   ls "$root"/*/worker.json >/dev/null 2>&1 || return 0
   t0=$(date +%s.%N)
-  out=$($PY -m verity_vllm.harness.hot_commit stop --root "$root" 2>&1 | tail -3 | tr '\n' ' ' | cut -c1-300)
+  out=$($PY -m verity_vllm.pipeline.hot stop --root "$root" 2>&1 | tail -3 | tr '\n' ' ' | cut -c1-300)
   local s; s=$(python3 -c "print(round($(date +%s.%N) - $t0, 3))")
   case "$out" in *'"stopped": []'*|"") ;; *) log "hot worker(s) stopped before $1 (one engine per pod, ${s}s): $out";; esac
   tl hot.gpu_exclusive mark why="$1" s="$s" out="$out"
@@ -307,7 +307,7 @@ gpu_exclusive() {  # <why>
 
 # ---------------------------------------------------------------- the required-value manifest of record (one wiring, every stage)
 # [R14 MAN-01; v2 flip] $D/manifest.json = RequiredValues(P, Q_module_body_v1) over THIS row's Build (the request Programs + their runtime
-# correspondence), by `verity_vllm.query.cli` -- never from the collector, never from an observed step.  B=1: `build --program build_request
+# correspondence), by `verity_vllm.pipeline.cli` -- never from the collector, never from an observed step.  B=1: `build --program build_request
 # --workload WL` (the CAP-shape Program of record, R17-26/27); B>=2: `build-global --fixture WL --programs-root $D [--workload-digest <GP-01's
 # FULL workload digest>]` (one component Program per declared shape, request ids r<index>).  Built at the end of a PASS Build (the Build
 # artifact carries it; the Match stage's acquisition plan and the Commit read it), rebuilt at Commit only when absent.  Exit 3 =
@@ -318,9 +318,9 @@ required_manifest_build() {
   tl "$stage.required_manifest" start engine=v2-query
   if [ "${B:-1}" -gt 1 ] && ls -d "$D"/build_request_LP*_T* >/dev/null 2>&1; then
     wd=$($PY -c "import json,sys;d=json.load(open(sys.argv[1]));print(d.get('workload_digest') or d.get('program_digest') or d.get('digest') or '')" "$D/build_workload/workload_program.json" 2>/dev/null || true)   # [rel] GP-01 writes workload_digest
-    $PY -m verity_vllm.query.cli build-global --fixture "$WL" --programs-root "$D" ${wd:+--workload-digest "$wd"} --out "$D/manifest.json" > "$D/manifest.log" 2>&1; rc=$?
+    $PY -m verity_vllm.pipeline.cli build-global --fixture "$WL" --programs-root "$D" ${wd:+--workload-digest "$wd"} --out "$D/manifest.json" > "$D/manifest.log" 2>&1; rc=$?
   else
-    $PY -m verity_vllm.query.cli build --program "$D/build_request" --workload "$WL" --out "$D/manifest.json" > "$D/manifest.log" 2>&1; rc=$?
+    $PY -m verity_vllm.pipeline.cli build --program "$D/build_request" --workload "$WL" --out "$D/manifest.json" > "$D/manifest.log" 2>&1; rc=$?
   fi
   if [ "$rc" = 0 ]; then
     tl "$stage.required_manifest" end rc=0
@@ -346,9 +346,9 @@ if [[ ",$STAGES," == *,build,* ]]; then
   TO=${BUILD_TIMEOUT:-$(( 900 * ENV_SCALE > 14400 ? 14400 : 900 * ENV_SCALE ))}
   # [X-05] the manifest's sampling policy is a structural input of the construction (a stochastic row is refused, not built greedy);
   # [R13 hopper] the manifest's declared target (--target) is another
-  CMD_S=($PY -m verity_vllm.harness.derive_step --model "$REPO" --revision "$REV" --wrapper step --M "$B" --pos0 8 --max-model-len "$MML" --workload "$WL" --out "$D/build_step" "${TGT_ARGS[@]}")
+  CMD_S=($PY -m verity_vllm.pipeline.build --model "$REPO" --revision "$REV" --wrapper step --M "$B" --pos0 8 --max-model-len "$MML" --workload "$WL" --out "$D/build_step" "${TGT_ARGS[@]}")
   # [R15 hopper HOP-03, M-0225] B >= 2: every request Program is built under its LAUNCH CONTEXT (per request step the varlen launch's
-  # max_seqlen_q over the co-scheduled prompts, verity_vllm.harness.launch_context from the workload's arrivals/lengths/caps): FA3's tile
+  # max_seqlen_q over the co-scheduled prompts, verity_vllm.pipeline.launch_context from the workload's arrivals/lengths/caps): FA3's tile
   # rule reads the launch's value, not the request's own rows (an 8-token prompt batched with a 1024-token one runs the 192 x 128 tile).
   # B = 1 passes nothing (own rows = the launch: digests/identities unchanged).  A shape whose requests are co-scheduled differently gets
   # 'conflict' -> derive_step refuses under FA3 (fail closed), records it inert under FA2.
@@ -356,12 +356,12 @@ if [[ ",$STAGES," == *,build,* ]]; then
   # (which would build the H100 B >= 2 request Program as a batch of one).  The shape's derive is skipped, so its result.json is absent and
   # build_summary marks it FAIL; the module's stderr is kept beside the row log.
   launch_args() { local lc rc; [ "$B" -gt 1 ] || return 0
-    lc=$($PY -m verity_vllm.harness.launch_context "$WL" "$1" "$2" 2>"$D/launch_context_LP$1_T$2.err"); rc=$?
+    lc=$($PY -m verity_vllm.pipeline.launch_context "$WL" "$1" "$2" 2>"$D/launch_context_LP$1_T$2.err"); rc=$?
     if [ $rc -ne 0 ]; then log "Build FAIL shape LP$1 T$2: launch_context rc=$rc -- $(tr '\n' ' ' < "$D/launch_context_LP$1_T$2.err" | tail -c 300)"; return $rc; fi
     rm -f "$D/launch_context_LP$1_T$2.err"; [ -n "$lc" ] && printf -- '--launch-max-seqlen-q\n%s\n' "$lc"; return 0; }
   LCTX_R=(); lc_ok=0
   if lcr=$(launch_args "$LP" "$T"); then [ -n "$lcr" ] && mapfile -t LCTX_R <<< "$lcr"; else lc_ok=1; fi
-  CMD_R=($PY -m verity_vllm.harness.derive_step --model "$REPO" --revision "$REV" --wrapper request --LP "$LP" --T "$T" --max-model-len "$MML" --workload "$WL" --out "$D/build_request" "${TGT_ARGS[@]}" "${LCTX_R[@]}")
+  CMD_R=($PY -m verity_vllm.pipeline.build --model "$REPO" --revision "$REV" --wrapper request --LP "$LP" --T "$T" --max-model-len "$MML" --workload "$WL" --out "$D/build_request" "${TGT_ARGS[@]}" "${LCTX_R[@]}")
   t0=$(date +%s); tl stage.build start
   gpu_exclusive build
   # [R16 sys SYS-06] BUILD_JOBS: the derives are independent CPU-only processes (derive_step runs the model on the meta device -- GPU
@@ -423,7 +423,7 @@ EOF
       # extra shapes derived for vLLM's default kernel selection -> DeepGEMM custom op -> Build FAIL while the main shape passed)
       LCTX_X=()
       if lcx=$(launch_args "$lp" "$t"); then [ -n "$lcx" ] && mapfile -t LCTX_X <<< "$lcx"; else rc2=1; continue; fi
-      CMD_X=($PY -m verity_vllm.harness.derive_step --model "$REPO" --revision "$REV" --wrapper request --LP "$lp" --T "$t" --max-model-len "$MML" --workload "$WL" --out "$D/build_request_LP${lp}_T${t}" "${TGT_ARGS[@]}" "${LCTX_X[@]}")
+      CMD_X=($PY -m verity_vllm.pipeline.build --model "$REPO" --revision "$REV" --wrapper request --LP "$lp" --T "$t" --max-model-len "$MML" --workload "$WL" --out "$D/build_request_LP${lp}_T${t}" "${TGT_ARGS[@]}" "${LCTX_X[@]}")
       run_tl "build.derive_request_LP${lp}_T${t}" "$TO" "$D/build_request_LP${lp}_T${t}.log" "${CMD_X[@]}"; rcx=$?
       [ $rcx -eq 0 ] || rc2=$rcx
     done
@@ -445,7 +445,7 @@ EOF
       derived_ok "$D/build_request_LP${lp}_T${t}" && continue
       LCTX_X=()
       if lcx=$(launch_args "$lp" "$t"); then [ -n "$lcx" ] && mapfile -t LCTX_X <<< "$lcx"; else rc2x=1; continue; fi
-      CMD_X=($PY -m verity_vllm.harness.derive_step --model "$REPO" --revision "$REV" --wrapper request --LP "$lp" --T "$t" --max-model-len "$MML" --workload "$WL" --out "$D/build_request_LP${lp}_T${t}" "${TGT_ARGS[@]}" "${LCTX_X[@]}")
+      CMD_X=($PY -m verity_vllm.pipeline.build --model "$REPO" --revision "$REV" --wrapper request --LP "$lp" --T "$t" --max-model-len "$MML" --workload "$WL" --out "$D/build_request_LP${lp}_T${t}" "${TGT_ARGS[@]}" "${LCTX_X[@]}")
       launch "build.derive_request_LP${lp}_T${t}" "$D/build_request_LP${lp}_T${t}.log" "${CMD_X[@]}"; RCF+=("$D/build_request_LP${lp}_T${t}.log")
     done
     wait
@@ -487,7 +487,7 @@ EOF
     DER=(--derived "$D/build_request"); for dd in "$D"/build_request_LP*_T*; do [ -d "$dd" ] && DER+=(--derived "$dd"); done
     # [rev-pm F-pm-24] the pinned checkpoint's eos_token_id (config.json / generation_config.json) is the Program's declared STOP RULE;
     # GM-01 G6 verifies every request that stopped before its cap ended on one of these ids (fails closed without the declaration)
-    run_tl build.global_program "$TO" "$D/build_workload.log" $PY312 -m verity_vllm.program.global_program --workload "$WL" "${DER[@]}" --out "$D/build_workload" --checkpoint-dir "$CK"; rcw=$?
+    run_tl build.global_program "$TO" "$D/build_workload.log" $PY312 -m verity_vllm.pipeline.global_program --workload "$WL" "${DER[@]}" --out "$D/build_workload" --checkpoint-dir "$CK"; rcw=$?
     WL_DIGEST=$(python3 -c "import json;print(json.load(open('$D/build_workload/workload_program.json')).get('workload_digest') or '')" 2>/dev/null)
     [ $rcw -eq 0 ] && [ -n "$WL_DIGEST" ] || { ok=FAIL; log "workload Program compose failed rc=$rcw: $(python3 -c "import json;w=json.load(open('$D/build_workload/workload_program.json'));print(w.get('reason'),w.get('message') or '')" 2>/dev/null) (see build_workload.log)"; }
     python3 - "$D" "$WL_DIGEST" "$rcw" <<'EOF'
@@ -507,7 +507,7 @@ EOF
   # [R18 infra, r18-int-2] the Build that came out must be the row's family too (build_summary.json step.target.compute_capability):
   # a PASS Build for another target is a named FAIL (PRECHECK_FAIL_TARGET_FAMILY), or WAIVED by name under the canary's waiver.
   if [ "$ok" = PASS ]; then
-    TFB_LINE=$(python3 -m verity_vllm.harness.target_family --row "$ROW" --workload "$WL" --stages "$STAGES" --no-device --build-summary "$D/build_summary.json" --out "$D/target_family.build.json" 2>&1); TFB_RC=$?
+    TFB_LINE=$(python3 -m verity_vllm.target_family --row "$ROW" --workload "$WL" --stages "$STAGES" --no-device --build-summary "$D/build_summary.json" --out "$D/target_family.build.json" 2>&1); TFB_RC=$?
     echo "$TFB_LINE" >> "$D/row.log"
     if [ $TFB_RC -ne 0 ]; then ok=FAIL; verdict build-target FAIL "$TFB_LINE"; else case "$TFB_LINE" in TARGET-FAMILY-WAIVED*) verdict build-target WAIVED "$TFB_LINE" >/dev/null ;; esac; fi
   fi
@@ -561,7 +561,7 @@ if [[ ",$STAGES," == *,match,* ]]; then
     elif [ -n "$FB" ] && [ "$MATCH_SNAP_STEPS" != all ]; then log "WARN match: MATCH_SNAP_STEPS=$MATCH_SNAP_STEPS explicit while form (B) must be complete ($FB): the Commit's form (B) stays partial"
     fi
   fi
-  CMD_M=($PY312 -m verity_vllm.harness.run_config --case "$ROLE" --workload "$WL" --out "$D/match" --checkpoint-dir "$CK" --phase "$MATCH_PHASE"
+  CMD_M=($PY312 -m verity_vllm.pipeline.match --case "$ROLE" --workload "$WL" --out "$D/match" --checkpoint-dir "$CK" --phase "$MATCH_PHASE"
          --python-gpu "$PY" --python-cpu "$PY312" --max-num-seqs "$B" --snapshot-steps "${MATCH_SNAP_STEPS:-$SNAP_DEF}"
          ${MATCH_SNAP_MAX_BYTES:+--snapshot-max-bytes "$MATCH_SNAP_MAX_BYTES"} --skip "$SKIP"
          --engine-arg "gpu_memory_utilization=$GPU_UTIL" --cards-dir "$D/match/cards")
@@ -597,7 +597,7 @@ if [[ ",$STAGES," == *,match,* ]]; then
           for lpt in $($PY312 -c "import json;print(' '.join(f'{lp},{t}' for lp,t in json.load(open('$D/match_decomp.json'))['missing_derived']))"); do
             IFS=, read -r lp t <<< "$lpt"
             log "X-09 (inside GM-01): deriving request Program LP=$lp T=$t"
-            CMD_R=($PY -m verity_vllm.harness.derive_step --model "$REPO" --revision "$REV" --wrapper request --LP "$lp" --T "$t" --max-model-len "$MML" --workload "$WL" --out "$D/build_request_LP${lp}_T${t}" "${TGT_ARGS[@]}")
+            CMD_R=($PY -m verity_vllm.pipeline.build --model "$REPO" --revision "$REV" --wrapper request --LP "$lp" --T "$t" --max-model-len "$MML" --workload "$WL" --out "$D/build_request_LP${lp}_T${t}" "${TGT_ARGS[@]}")
             run_to "${BUILD_TIMEOUT:-900}" "$D/build_request_LP${lp}_T${t}.log" "${CMD_R[@]}"
             DERIVED+=(--derived "$D/build_request_LP${lp}_T${t}")
           done
@@ -613,7 +613,7 @@ if [[ ",$STAGES," == *,match,* ]]; then
         for lpt in $($PY312 -c "import json;print(' '.join(f'{lp},{t}' for lp,t in json.load(open('$D/match_decomp.json'))['missing_derived']))"); do
           IFS=, read -r lp t <<< "$lpt"
           log "X-09: deriving request Program LP=$lp T=$t"
-          CMD_R=($PY -m verity_vllm.harness.derive_step --model "$REPO" --revision "$REV" --wrapper request --LP "$lp" --T "$t" --max-model-len "$MML" --workload "$WL" --out "$D/build_request_LP${lp}_T${t}" "${TGT_ARGS[@]}")   # [R15 fp8] same declared target
+          CMD_R=($PY -m verity_vllm.pipeline.build --model "$REPO" --revision "$REV" --wrapper request --LP "$lp" --T "$t" --max-model-len "$MML" --workload "$WL" --out "$D/build_request_LP${lp}_T${t}" "${TGT_ARGS[@]}")   # [R15 fp8] same declared target
           run_to "${BUILD_TIMEOUT:-900}" "$D/build_request_LP${lp}_T${t}.log" "${CMD_R[@]}"
           DERIVED+=(--derived "$D/build_request_LP${lp}_T${t}")
         done
@@ -634,7 +634,7 @@ if [[ ",$STAGES," == *,match,* ]]; then
           log "early EOS: served T_r=$T_R != cap-1=$T -> deriving request Program LP=$LP T=$T_R"
           ENV_SCALE=$(( (LP < 256 ? 256 : LP) / 256 * ((T_R < 31 ? 31 : T_R) / 31) )); ENV_SCALE=$(( ENV_SCALE < 1 ? 1 : ENV_SCALE ))
           # (same --target as the Build derivation, HOP-01: the served-shape Program is the same construction at a shorter T)
-          CMD_R=($PY -m verity_vllm.harness.derive_step --model "$REPO" --revision "$REV" --wrapper request --LP "$LP" --T "$T_R" --max-model-len "$MML" --workload "$WL" --out "$REQ_DIR" "${TGT_ARGS[@]}")
+          CMD_R=($PY -m verity_vllm.pipeline.build --model "$REPO" --revision "$REV" --wrapper request --LP "$LP" --T "$T_R" --max-model-len "$MML" --workload "$WL" --out "$REQ_DIR" "${TGT_ARGS[@]}")
           run_to "${BUILD_TIMEOUT:-$(( 900 * ENV_SCALE > 14400 ? 14400 : 900 * ENV_SCALE ))}" "$REQ_DIR.log" "${CMD_R[@]}"
         fi
       fi
@@ -819,7 +819,7 @@ if [[ ",$STAGES," == *,commit,* ]]; then
   tl stage.commit start
   [ -f "$HIDDEN_SO" ] || { verdict commit FAIL "hidden .so missing: $HIDDEN_SO"; tl stage.commit end ok=false; tl row end ok=false stopped_at=commit; exit 12; }
   tl commit.prepare start
-  CMD_K=($PY -m verity_vllm.harness.commit_delta --case "$ROLE" --workload "$WL" --committer native_collect_v2b --fast-copy --gpu-tree
+  CMD_K=($PY -m verity_vllm.pipeline.commit --case "$ROLE" --workload "$WL" --committer native_collect_v2b --fast-copy --gpu-tree
          --hidden-so "$HIDDEN_SO" --openings 64 --pairs "$PAIRS" --warmup 2 --max-num-seqs "$B" --engine-arg "gpu_memory_utilization=$GPU_UTIL"
          --label "$ROW" --out "$D/commit")
   # [REL-11] the P0 collector is the default (COORD 10:22Z: "row_pod.sh's default Commit still fails C-COLLECTOR-FOOTPRINT -- the b4 1024/128 pass
@@ -882,7 +882,7 @@ if t > 0 and t != cap:
       log "B=1 EOS-stopped request ($SERVED_SHAPE, match_shape.json): Program of record at Commit = the CAP-shape build_request (R17-26/27, F-r17b-42 (a)); the positions past the executed prefix are classified not-executed by rule, not cut from the population (the R16 M-0402 served-shape rule is retired here; the Match-side served-shape comparison stands)"
     fi
   fi
-  # [v2 flip] THE MANIFEST OF RECORD = Q_module_body_v1 over the Build's request Programs + runtime correspondence (`verity_vllm.query.cli`
+  # [v2 flip] THE MANIFEST OF RECORD = Q_module_body_v1 over the Build's request Programs + runtime correspondence (`verity_vllm.pipeline.cli`
   # build | build-global, `required_manifest_build` above): built once at the end of the Build stage (the Build artifact carries it, the
   # Match stage's acquisition plan reads it), rebuilt here only when a Commit-only attempt finds none beside the Programs.  B=1: the CAP-shape
   # build_request x the workload; B>=2: the GLOBAL manifest over the declared request shapes (build_request_LP<prompt_len>_T<max_tokens-1>;
@@ -956,7 +956,7 @@ print(wd or (hashlib.sha256(("workload-components/" + ",".join(comps)).encode())
     fi
   fi
   # --- row_pod.commit-record-precheck end
-  if [ -d "$D/match" ] && [ -f "$D/match/instances.jsonl" ] && has_flag --match-dir $PY -m verity_vllm.harness.commit_delta; then
+  if [ -d "$D/match" ] && [ -f "$D/match/instances.jsonl" ] && has_flag --match-dir $PY -m verity_vllm.pipeline.commit; then
     # the step set OF THE RECORD (run.json snapshot_steps, the plan's expansion of --snapshot-steps: "all" -> 0..n-1), not this shell's
     # MATCH_SNAP_STEPS (unset on a --from commit re-run, "all" unexpanded): the line used to say "0,1" over an all-steps record
     SNAP_REC=$("$PY" -c 'import json,sys; s=json.load(open(sys.argv[1])).get("snapshot_steps") or []; print(",".join(map(str,s)) if s else "")' "$D/match/run.json" 2>/dev/null || true)
@@ -969,7 +969,7 @@ print(wd or (hashlib.sha256(("workload-components/" + ",".join(comps)).encode())
   # B=1 the request Program (`--program-dir $D/build_request`), B>=2 the per-request Programs under the row dir (`--programs-root $D`,
   # build-global's resolution: *LP<n>_T<t> else build_request*/result.json declaring (LP, T)).  Feature-detected on the flag name; a tree
   # without it runs unchanged.  REPLAY_ARGS: extra flags verbatim (--replay-per-stratum N --replay-seed S --replay-max M).
-  if [ -f "$PD_REQ/instances.json.gz" ] && has_flag --program-dir $PY -m verity_vllm.harness.commit_delta; then
+  if [ -f "$PD_REQ/instances.json.gz" ] && has_flag --program-dir $PY -m verity_vllm.pipeline.commit; then
     if [ "$B" -gt 1 ]; then CMD_K+=(--programs-root "$D"); else CMD_K+=(--program-dir "$PD_REQ"); fi
     for ra in ${REPLAY_ARGS:-}; do CMD_K+=("$ra"); done
     log "C2 of record armed: sampled exact VU replay + boundary linkage ($([ "$B" -gt 1 ] && echo "--programs-root $D" || echo "--program-dir $PD_REQ") ${REPLAY_ARGS:-})"
@@ -977,7 +977,7 @@ print(wd or (hashlib.sha256(("workload-components/" + ",".join(comps)).encode())
     # SHARDS (manifests/checkpoints.json sha256), not against the committer's own registration.  The record is derived CPU-side from the
     # Program of record x the checkpoint dir ($CK, the same snapshot Build/Match load) and written beside the Program once
     # (build_request/weights_of_record.json, reusable by Match); commit_delta compares every registered parameter with it by name.
-    if has_flag --weights-of-record $PY -m verity_vllm.harness.commit_delta; then
+    if has_flag --weights-of-record $PY -m verity_vllm.pipeline.commit; then
       # [R15 rel int-6, hopper BLOCKER M-0723 F-hopper-WOR] at B>1 the record must be derived from a Program dir that IS a component of the
       # workload Program: rev-cb W2 binds the record to the of-record set {--program-digest (workload digest)} + manifest component digests,
       # and the row default wrapper shape (build_request = longest prompt x largest cap - 1) is a component only when some request has
@@ -1085,18 +1085,18 @@ EOF
   t0=$(date +%s)
   if [ "${HOT_ENGINE:-0}" = "1" ]; then
     # [R16 sys, BRIEF §5] hot-engine reuse (default OFF): the same commit_delta ARGS run on the pod's hot worker for this engine key
-    # (verity_vllm/harness/hot_commit.py: key = code tree + native .so + env + engine args; state reset + pristine check between jobs;
+    # (verity_vllm/pipeline/hot.py: key = code tree + native .so + env + engine args; state reset + pristine check between jobs;
     # HOT-UNSAFE / key mismatch / dead worker -> automatic cold fallback with the reason in commit.log + timeline).  Same commit.log content,
     # same evidence files; versions.json `hot` and the timeline `engine.reuse` / `engine.build` events say which happened.
     log "HOT_ENGINE=1: Commit on the hot worker (root ${HOT_ROOT:-/workspace/cp/hot}, idle ${HOT_IDLE:-900}s)"
-    run_tl commit.commit_delta "$TO" "$D/commit.log" $PY -m verity_vllm.harness.hot_commit submit --root "${HOT_ROOT:-/workspace/cp/hot}" --idle "${HOT_IDLE:-900}" -- "${CMD_K[@]:3}"; rck=$?
+    run_tl commit.commit_delta "$TO" "$D/commit.log" $PY -m verity_vllm.pipeline.hot submit --root "${HOT_ROOT:-/workspace/cp/hot}" --idle "${HOT_IDLE:-900}" -- "${CMD_K[@]:3}"; rck=$?
   else
     gpu_exclusive commit-cold
     run_tl commit.commit_delta "$TO" "$D/commit.log" "${CMD_K[@]}"; rck=$?
   fi
   wall=$(( $(date +%s) - t0 ))
   # [R15 EXEC-05, manbind MAN-05 M-0340 (3) / rev-cb F-cb-11; v2 flip] MANIFEST OF RECORD: after the Commit, rebuild the required-value
-  # manifest from THIS attempt's Program x workload by the query path (`verity_vllm.query.manifest.verify` -> `verity_vllm.query.cli`,
+  # manifest from THIS attempt's Program x workload by the query path (`verity_vllm.query.manifest.verify` -> `verity_vllm.pipeline.cli`,
   # CPU) and record it at $D/commit/manifest_verify.json (verity-sweep/manifest-verify/v1: used_digest / used_program_digest /
   # used_identities / rebuilt_* / ok).  B=1: --program build_request --workload WL; B>=2: --fixture WL --programs-root $D --workload-digest
   # <GP-01's FULL workload digest from build_workload/workload_program.json> (a 16-hex prefix is NOT accepted: the rebuilt rows embed the
@@ -1143,5 +1143,5 @@ PYEOF
 fi
 tl row end ok=true
 # [R16 sys] the measured BRIEF §5 table of this attempt beside the evidence (timeline_report.md/json); never fails the row
-python3 -m verity_vllm.harness.timeline report "$VERITY_TIMELINE" --json "$D/timeline_report.json" --md "$D/timeline_report.md" --title "$ROW" >/dev/null 2>&1 || true
+python3 -m verity_vllm.pipeline.timeline report "$VERITY_TIMELINE" --json "$D/timeline_report.json" --md "$D/timeline_report.md" --title "$ROW" >/dev/null 2>&1 || true
 log "DONE"

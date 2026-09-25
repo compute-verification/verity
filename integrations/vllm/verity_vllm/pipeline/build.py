@@ -4,9 +4,9 @@ pos0), `request` (prefill LP + T decode steps, flat), `padded` (the fixed padded
 values). Writes the derive report (provenance: every rule application), the program's descriptor + digest, a per-spec histogram,
 the instance sequence (comparator input), and the inputs trace.
 
-    PYTHONPATH=. python -m verity_vllm.harness.derive_step --out /workspace/cp/cba/step_decode --wrapper step --M 1 --pos0 8
-    PYTHONPATH=. python -m verity_vllm.harness.derive_step --out /workspace/cp/cba/request_8_4 --wrapper request --LP 8 --T 4
-    PYTHONPATH=. python -m verity_vllm.harness.derive_step --out /workspace/cp/cba/padded_8_4 --wrapper padded --LP 8 --T 4 --eos 0
+    PYTHONPATH=. python -m verity_vllm.pipeline.build --out /workspace/cp/cba/step_decode --wrapper step --M 1 --pos0 8
+    PYTHONPATH=. python -m verity_vllm.pipeline.build --out /workspace/cp/cba/request_8_4 --wrapper request --LP 8 --T 4
+    PYTHONPATH=. python -m verity_vllm.pipeline.build --out /workspace/cp/cba/padded_8_4 --wrapper padded --LP 8 --T 4 --eos 0
 """
 
 from __future__ import annotations
@@ -50,7 +50,7 @@ def _instance_sequence(program) -> list[dict]:
 #: the builder's own sources (hashed into `construction_version`): the export shims, the meta instantiation / wrappers, this driver,
 #: the Triton interception, the vLLM bindings + vocabulary + derive core, and the applicability contract itself.
 _CONSTRUCTION_SOURCES = ("verity_vllm/program/frontend/export_compat.py", "verity_vllm/program/frontend/vllm_meta.py",
-                         "verity_vllm/harness/derive_step.py", "verity_vllm/program/frontend/triton_capture.py",
+                         "verity_vllm/pipeline/build.py", "verity_vllm/program/frontend/triton_capture.py",
                          "verity_vllm/program/frontend/rules/vllm_bindings.py", "verity_vllm/program/frontend/rules/vocab.py", "verity_vllm/program/frontend/rules/triton_iface.py",
                          "verity_vllm/program/frontend/rules/vllm_iface.py", "verity_vllm/program/frontend/derive.py", "verity_vllm/program/frontend/target_profile.py",
                          "verity_vllm/program/registry/targets.py",
@@ -697,7 +697,7 @@ def main() -> int:
                          "max_seqlen_q over every co-scheduled sequence, per request step -- int N (step 0 = a prefill launch whose longest prompt "
                          "has N rows), JSON list [n0, n1, ...] (per step), or 'conflict' (requests of this shape are co-scheduled differently: "
                          "refused under FA3, whose tile reads it; recorded and inert under FA2).  Omitted = own rows (a batch of one).  "
-                         "row_pod.sh derives it from the workload (verity_vllm.harness.launch_context) for B >= 2.")
+                         "row_pod.sh derives it from the workload (verity_vllm.pipeline.launch_context) for B >= 2.")
     a = ap.parse_args()
     try:
         from verity_vllm.program.frontend.target_profile import parse_target_arg

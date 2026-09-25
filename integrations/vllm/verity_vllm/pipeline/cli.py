@@ -1,4 +1,4 @@
-"""`python -m verity_vllm.query.cli` -- the v2 (Q_module_body_v1) required-value manifest, beside v1's `required_manifest`.
+"""`python -m verity_vllm.pipeline.cli` -- the v2 (Q_module_body_v1) required-value manifest, beside v1's `required_manifest`.
 
     build         --program <derive dir> [--workload wl.json] [--request-id r0] --out manifest.json
     build-global  --fixture wl.json --programs-root <row dir> [--workload-digest WD] --out manifest.json
@@ -21,10 +21,10 @@ import sys
 import time
 from typing import Any
 
-from .compare import compare, summarize
+from verity_vllm.query.compare import compare, summarize
 from verity_vllm.correspondence.reader_for_query import Correspondence
-from .program_view import from_instances
-from .v1_bridge import compose_global, merge_ranks, request_manifest
+from verity_vllm.query.program_view import from_instances
+from verity_vllm.query.v1_bridge import compose_global, merge_ranks, request_manifest
 
 __all__ = ["build", "build_global", "build_global_ranks", "main"]
 
@@ -112,7 +112,7 @@ def check_correspondence(program_dir: str, *, workload: dict[str, Any] | None = 
     """`Q_module_body_v1` under the record vs under the v1-annotation fallback on ONE Build dir that carries the record: the owning
     module per Call, the Call names the bridge reads, the partition (unit ids), the boundary Values and -- `manifest` -- the bridge's
     manifest digest, each equal or listed.  A Build without the record has nothing to check against (`applicable: False`)."""
-    from .module_body import Q_module_body_v1, literal_calls, module_body_boundary
+    from verity_vllm.query.module_body import Q_module_body_v1, literal_calls, module_body_boundary
     t0 = time.time()
     P = from_instances(os.path.join(program_dir, "instances.json.gz"))
     res = _load_json(os.path.join(program_dir, "result.json"))

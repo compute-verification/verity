@@ -28,11 +28,11 @@ from verity_vllm.config import ROOT as REPO
 #: Frozen.  Paths a lane may not touch at all (any diff status).  Globs are repo-relative; fnmatch `*` crosses `/`.
 PROTECTED: tuple[str, ...] = (
     # what counts as evidence
-    "verity_vllm/check/gates.py", "verity_vllm/harness/card.py", "verity_vllm/input_provenance/root_policy.py", "verity_vllm/check/golden.py",
+    "verity_vllm/check/gates.py", "verity_vllm/pipeline/report.py", "verity_vllm/input_provenance/root_policy.py", "verity_vllm/check/golden.py",
     "verity_vllm/check/golden/*", "verity_vllm/check/holdout.py", "verity_vllm/check/protected.py", "verity_vllm/check/kernel_allowlist.py",
     "verity_vllm/check/replay.py", "verity_vllm/check/operand_provenance.py", "verity_vllm/check/noninterference.py", "verity_vllm/check/census.py", "verity_vllm/check/fold_compare.py",
     "verity_vllm/input_provenance/analytic.py", "verity_vllm/check/difftest.py", "verity_vllm/check/quarantine_lint.py",
-    "verity_vllm/harness/run_config.py", "verity_vllm/ops/verify_lane.sh",
+    "verity_vllm/pipeline/match.py", "verity_vllm/ops/verify_lane.sh",
     # the derivation itself (observer, resolver core, existing matchers, memory, fold, program identity, engine adapter)
     "verity_vllm/observe/observer.py", "verity_vllm/observe/events.py", "verity_vllm/observe/log.py", "verity_vllm/observe/memory.py",
     "verity_vllm/observe/fold.py", "verity_vllm/observe/resolver.py", "verity_vllm/observe/patterns.py", "verity_vllm/observe/vllm_adapter.py",

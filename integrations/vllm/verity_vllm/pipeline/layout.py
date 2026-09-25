@@ -1,6 +1,6 @@
 """Where a Build's component dirs are, once the Build has moved (`vllm-build/v1` layout 1.1).
 
-`build_workload/workload_program.json` (GP-01, `verity_vllm.program.global_program`) records the request-wrapper
+`build_workload/workload_program.json` (GP-01, `verity_vllm.pipeline.global_program`) records the request-wrapper
 component dirs it composed under `inputs.derived["LP,T"]` and the manifest under `inputs.manifest` -- as the ABSOLUTE paths of the
 build machine (`/workspace/cp/<sweep>/<row>/build_request_LP*_T*`).  A Build fetched from the store (`research data fetch`) lands
 somewhere else, so those paths dangle unless the tree is symlinked back to the original path (r20 did that).

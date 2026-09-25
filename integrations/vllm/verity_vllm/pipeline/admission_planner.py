@@ -36,7 +36,7 @@ WARN when the mode has no calibration or an approximate over-record; ADMIT other
 record names it (`admission_of_record`), as revb M-0254 / S-r17b-03 (ii) require; a run whose VmHWM exceeds it is a finding against the
 derivation, never a slack adjustment.
 
-Torch-free.  CLI:  python -m verity_vllm.harness.admission_planner --workload <manifest.json> --sizing <arena_sizing_*.json>
+Torch-free.  CLI:  python -m verity_vllm.pipeline.admission_planner --workload <manifest.json> --sizing <arena_sizing_*.json>
                    [--bounded] [--retain host|none|sample] [--exclude fa3_hidden_m1] [--open-after-release] [--openings 64] [--pairs 3]
                    [--engine-rss-mb N] [--cap-bytes N] [--others-mb N] [--calibration <entries.jsonl>] [--record <commit dir>] [--json]
 """
@@ -50,12 +50,12 @@ from importlib import resources
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.harness.admission_bound import compare_observed, host_cap, observed_steps, scheduled_step_bytes
+from verity_vllm.pipeline.admission_bound import compare_observed, host_cap, observed_steps, scheduled_step_bytes
 from verity_vllm.acquire.hidden_source import CHUNK_WORDS, fa2_kblock_n, fa3_tile, mat_total_words
 
 SCHEMA = "verity-sweep/admission-planner/v1"
 #: The calibration entries of record (one JSON object per line), read by the Commit's record-only planner line.
-CALIBRATION = resources.files("verity_vllm.harness") / "planner_calibration.jsonl"
+CALIBRATION = resources.files("verity_vllm.pipeline") / "planner_calibration.jsonl"
 MiB = 1 << 20
 GiB = 1 << 30
 HOST_TERMS = ("host_staging", "hash_backlog", "opening_data", "headroom")

@@ -89,7 +89,7 @@ def prefix_requests(tok: Any, *, case: str = "B0", seed: int = 0, prefix_tokens:
     seeded paragraph starts (numpy RNG like the generator), tokenized with the served model's tokenizer."""
     import numpy as np
 
-    from verity_vllm.harness import coverage_workloads as gw
+    from verity_vllm.pipeline import coverage_workloads as gw
 
     paras = gw.corpus_paragraphs()
     rng = np.random.default_rng([seed, 0xF1E, 0xC0DE])
@@ -114,7 +114,7 @@ def prefix_requests(tok: Any, *, case: str = "B0", seed: int = 0, prefix_tokens:
 def prefix_workload_docs(tok: Any, *, case: str = "B0", model: str = "HuggingFaceTB/SmolLM2-135M", tokenizer_revision: str | None = None,
                          seed: int = 0, block_size: int = BLOCK_SIZE_ASSUMED) -> dict[str, dict]:
     """{stem: doc} for the warm and the cold file (identical requests; only `engine_args_required` and the labels differ)."""
-    from verity_vllm.harness import coverage_workloads as gw
+    from verity_vllm.pipeline import coverage_workloads as gw
 
     reqs = prefix_requests(tok, case=case, seed=seed)
     sim = gw.simulate_schedule(reqs)
@@ -536,7 +536,7 @@ def main(argv: list[str] | None = None) -> int:
         print(evidence_text(doc))
         return 0
     if a.cmd == "gen":
-        from verity_vllm.harness import coverage_workloads as gw
+        from verity_vllm.pipeline import coverage_workloads as gw
 
         tok = gw.Tok(a.tokenizer)
         for p in write_workloads(tok, Path(a.out_dir), case=a.case, model=a.model, tokenizer_revision=a.tokenizer_revision, seed=a.seed):

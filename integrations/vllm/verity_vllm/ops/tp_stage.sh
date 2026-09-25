@@ -3,7 +3,7 @@
 # the TP analogue of row_pod.sh (the TP1 harness: run_config Match, commit_delta Commit, no --tp/--rank).  Build (derive_step --tp N --rank r
 # per rank: step Program + one request Program per declared (prompt_len, cap-1) shape, GP-01 compose per rank) -> Match (tp.capture
 # observer+collective recorder, control arm, tp.match --arm check = collective-level structure/provenance/tokens over N ranks; then, for a
-# case with a TP RANK PROFILE, the D90 per-rank fold Match tp.fold_match) -> Commit (verity_vllm.query.cli build-global over the N ranks,
+# case with a TP RANK PROFILE, the D90 per-rank fold Match tp.fold_match) -> Commit (verity_vllm.pipeline.cli build-global over the N ranks,
 # tp.commit native_collect_v2b --value-check).  Early stop at the first failing stage.  Evidence under $SWEEP_DIR/<row-id>/ (build/rank<r>/,
 # match/, manifest.json, commit/); one verdict line per stage in stages.txt.
 #
@@ -59,7 +59,7 @@ GPU_UTIL=${GPU_UTIL:-$_GU}; COMMIT_GPU_UTIL=${COMMIT_GPU_UTIL:-${_CGU:-$GPU_UTIL
 D=${SWEEP_DIR:-/workspace/cp/sweep}/$ROW; B=$D/build; M=$D/match; mkdir -p "$D" "$B" "$M" "$NATIVE_COLLECT_BUILD"
 log() { echo "$(date -u +%FT%TZ) [row $ROW] $*" | tee -a "$D/row.log"; }
 # [R19] the research runner's result envelope, written once on exit from the stage verdicts (no-op without RESEARCH_RUN_DIR)
-_research_result() { [ -n "${RESEARCH_RUN_DIR:-}" ] && "$PY" -m verity_vllm.harness.research_result "$D" "$ROW" "$ROLE" "$STAGES" >> "$D/row.log" 2>&1 || true; }
+_research_result() { [ -n "${RESEARCH_RUN_DIR:-}" ] && "$PY" -m verity_vllm.pipeline.research_result "$D" "$ROW" "$ROLE" "$STAGES" >> "$D/row.log" 2>&1 || true; }
 trap _research_result EXIT
 verdict() { echo "$1 $2 $(date -u +%FT%TZ) $3" | tee -a "$D/stages.txt"; }
 export VERITY_TIMELINE=${VERITY_TIMELINE:-$D/timeline.jsonl}
@@ -75,17 +75,17 @@ derived_ok() { [ -f "$1/result.json" ] && [ "$(jq_ "$1/result.json" "bool(d.get(
 
 # ---------------------------------------------------------------- release line + PRECHECK (row_pod.sh's, verbatim in spirit)
 TREE_HERE=$(realpath . 2>/dev/null || pwd); TAB=$'\t'
-REL_OUT=$(python3 verity_vllm/harness/release_json.py line "$TREE_HERE" 2>/dev/null) || REL_OUT="UNRELEASED|commit=unknown tree=$TREE_HERE${TAB}-"
+REL_OUT=$(python3 verity_vllm/pipeline/release_json.py line "$TREE_HERE" 2>/dev/null) || REL_OUT="UNRELEASED|commit=unknown tree=$TREE_HERE${TAB}-"
 REL_LINE=${REL_OUT%%"$TAB"*}; verdict release "${REL_LINE%%|*}" "${REL_LINE#*|} tp=$WORLD" >/dev/null
 tl precheck start
 SID_SHA=$(python3 -c "import json;print(json.load(open('EXPORT.json')).get('commit') or '')" 2>/dev/null || true)
-if ! "$PY" -m verity_vllm.harness.source_identity --tree "$TREE_HERE" ${SID_SHA:+--sha "$SID_SHA"} --stage precheck --out "$D/source_identity.json" >> "$D/row.log" 2>&1; then
+if ! "$PY" -m verity_vllm.pipeline.source_identity --tree "$TREE_HERE" ${SID_SHA:+--sha "$SID_SHA"} --stage precheck --out "$D/source_identity.json" >> "$D/row.log" 2>&1; then
   tl precheck end rc=3 fail_class=PRECHECK_FAIL_SOURCE_IDENTITY
   verdict precheck FAIL "PRECHECK_FAIL_SOURCE_IDENTITY (see $D/source_identity.json and row.log)"; exit 3
 fi
 tl precheck end rc=0
 verdict precheck PASS "source identity == $TREE_HERE${SID_SHA:+ @ $SID_SHA} (verity verity_vllm hidden_gpu research)" >/dev/null
-TF_LINE=$(python3 -m verity_vllm.harness.target_family --row "$ROW" --workload "$WL" --stages "$STAGES" --out "$D/target_family.json" 2>&1); TF_RC=$?
+TF_LINE=$(python3 -m verity_vllm.target_family --row "$ROW" --workload "$WL" --stages "$STAGES" --out "$D/target_family.json" 2>&1); TF_RC=$?
 echo "$TF_LINE" >> "$D/row.log"
 [ $TF_RC -eq 0 ] || { verdict precheck-target FAIL "$TF_LINE"; exit 3; }
 verdict precheck-target PASS "$TF_LINE" >/dev/null
@@ -119,19 +119,19 @@ tl row start stages="$STAGES" B="$BATCH" tp="$WORLD" code="$CODE9" pod="$(hostna
 
 derive() {  # <rank> <out-dir> <wrapper args...>   (one CPU derive; the .rc beside the log carries the exit code for the parallel schedule)
   local r=$1 out=$2; shift 2
-  run_to "$TO_B" "$out.log" "$PY" -m verity_vllm.harness.derive_step --model "$REPO" --revision "$REV" --max-model-len "$MML" --workload "$WL" \
+  run_to "$TO_B" "$out.log" "$PY" -m verity_vllm.pipeline.build --model "$REPO" --revision "$REV" --max-model-len "$MML" --workload "$WL" \
          --tp "$WORLD" --rank "$r" --out "$out" "${TGT_ARGS[@]}" "$@"; echo $? > "$out.rc"; }
 launch() { while [ "$(jobs -rp | wc -l)" -ge "$BUILD_JOBS" ]; do wait -n 2>/dev/null || sleep 1; done; derive "$@" & }
 compose() {  # <rank>: GP-01 workload Program of the rank over its request Programs
   local r=$1 DER=() dd
   for dd in "$B/rank$r"/build_request_LP*_T*; do [ -f "$dd/result.json" ] && DER+=(--derived "$dd"); done
-  run_tl "build.global_program_r$r" "$TO_B" "$B/rank$r/build_workload.log" "$PY" -m verity_vllm.program.global_program --workload "$WL" "${DER[@]}" --out "$B/rank$r/build_workload" --checkpoint-dir "$CK"; }
+  run_tl "build.global_program_r$r" "$TO_B" "$B/rank$r/build_workload.log" "$PY" -m verity_vllm.pipeline.global_program --workload "$WL" "${DER[@]}" --out "$B/rank$r/build_workload" --checkpoint-dir "$CK"; }
 wd_of() { jq_ "$B/rank$1/build_workload/workload_program.json" "d.get('workload_digest') or ''"; }
 manifest_global() {  # <timeline stage> <timeout>: the v2 query (Q_module_body_v1 + TP-04) over the N rank Programs, merged by rank -> $D/manifest.json
   local st=$1 to=$2 r wd MANR=() WDS=()
   for r in $RANKS; do wd=$(wd_of "$r"); [ -n "$wd" ] || { log "manifest: GP-01 workload digest absent for rank $r"; return 4; }
     MANR+=(--programs-root "$B/rank$r" --rank "$r"); WDS+=(--workload-digest "$wd"); done
-  run_tl "$st" "$to" "$D/manifest.log" "$PY" -m verity_vllm.query.cli build-global --fixture "$WL" \
+  run_tl "$st" "$to" "$D/manifest.log" "$PY" -m verity_vllm.pipeline.cli build-global --fixture "$WL" \
          "${MANR[@]}" --ranks "$WORLD" "${WDS[@]}" --out "$D/manifest.json"; }
 man_line() { jq_ "$D/manifest.json" "' '.join(str(x) for x in ['complete',d.get('complete'),'identities',(d.get('populations') or {}).get('identities'),'tp_peer_binding_n_unbound',(d.get('tp_peer_binding') or {}).get('n_unbound'),'unmodelled',json.dumps(d.get('unmodelled'))[:300],'digest',(d.get('manifest_digest') or '')[:16]])"; }
 build_summary() {  # -> PASS|FAIL; writes $D/build_summary.json (per rank: step + request Programs + GP-01)
@@ -182,12 +182,12 @@ if [[ ",$STAGES," == *,match,* ]]; then
   TO_M=${MATCH_TIMEOUT:-3600}; TO_F=${FOLD_TIMEOUT:-7200}; TO_B=${BUILD_TIMEOUT:-7200}
   for r in $RANKS; do derived_ok "$B/rank$r/build_step" || { verdict match FAIL "no step Program for rank $r ($B/rank$r/build_step): Build first"; exit 11; }; done
   BR=(); for r in $RANKS; do BR+=(--build-rank "$B/rank$r/build_step"); done      # rank order = world
-  CAP=("$PY" -m verity_vllm.tp.capture --workload "$WL" --case "$ROLE" --tp "$WORLD" --max-num-seqs "$BATCH" --engine-arg "gpu_memory_utilization=$GPU_UTIL" "${ENGINE[@]}")
+  CAP=("$PY" -m verity_vllm.pipeline.tp.capture --workload "$WL" --case "$ROLE" --tp "$WORLD" --max-num-seqs "$BATCH" --engine-arg "gpu_memory_utilization=$GPU_UTIL" "${ENGINE[@]}")
   t0=$(date +%s); tl stage.match start
   run_tl match.capture "$TO_M" "$M/capture.log" "${CAP[@]}" --record-collectives --out "$M/capture"; rc_cap=$?
   log "match capture rc=$rc_cap $(grep -E '^\[tp2\] rank [0-9]+:' "$M/capture.log" | tr '\n' ' ' | cut -c1-300)"
   run_tl match.control "$TO_M" "$M/control.log" "${CAP[@]}" --no-observer --out "$M/control"; rc_ctl=$?
-  run_tl match.check "$TO_M" "$M/check.log" "$PY" -m verity_vllm.tp.match --arm check --out "$M" "${BR[@]}"; rc_chk=$?
+  run_tl match.check "$TO_M" "$M/check.log" "$PY" -m verity_vllm.pipeline.tp.match --arm check --out "$M" "${BR[@]}"; rc_chk=$?
   CHK=$(jq_ "$M/tp2_match.json" "' '.join(str(x) for x in ['pass',d['pass'],'structure',d['structure']['pass'],'n_coll_r0',d['structure']['per_rank']['0']['n_collectives'],'sig_len',d['structure']['per_rank']['0']['build_signature_len'],'steps',d['structure']['per_rank']['0']['n_steps'],'provenance',d['provenance']['pass'],d['provenance']['collectives_checked'],'mismatches',d['provenance']['n_mismatches'],'tokens',d['tokens'].get('pass')])")
   log "match check rc=$rc_chk: ${CHK:-no tp2_match.json}"
   # served shapes: a request that stopped before its cap (T_r = generated-1 != cap-1) is matched against its served-shape Program (MOE-05 / X-09)
@@ -207,7 +207,7 @@ if [[ ",$STAGES," == *,match,* ]]; then
       for dd in $(ls -d "$B/rank$r"/build_request_LP*_T* 2>/dev/null | sort); do [ -f "$dd/result.json" ] || continue
         if [ $first = 1 ]; then FARGS+=(--build-rank "$dd"); first=0; else FARGS+=(--derived-rank "$r=$dd"); fi; done
       [ -f "$B/rank$r/build_workload/workload_program.json" ] && FARGS+=(--gprog-rank "$r=$B/rank$r/build_workload/workload_program.json"); done
-    run_tl match.fold_match "$TO_F" "$M/fold_match.log" "$PY" -m verity_vllm.tp.fold_match --capture "$M/capture" --profile "$FOLD_PROFILE" "${FARGS[@]}" \
+    run_tl match.fold_match "$TO_F" "$M/fold_match.log" "$PY" -m verity_vllm.pipeline.tp.fold_match --capture "$M/capture" --profile "$FOLD_PROFILE" "${FARGS[@]}" \
            --workload "$WL" --tp2-match "$M/tp2_match.json" --within-step dag --rank-workers 0 --python "$PY" --timeout "$TO_F" --out "$M/fold_match"; rc_fold=$?
     FOLD="fold_match rc=$rc_fold $(jq_ "$M/fold_match/tp2_fold_match.json" "' '.join(['pass',str(d['pass']),'legs',json.dumps(d['legs']),'problems',json.dumps(d['problems'][:3])[:400]])")"
     log "match fold ($FOLD_PROFILE): $FOLD"
@@ -255,7 +255,7 @@ if [[ ",$STAGES," == *,commit,* ]]; then
   export VERITY_RETAIN=$RETAIN
   log "commit staging: window_mb=$WINDOW_MB slots=$WINDOW_SLOTS retain=$RETAIN"
   BRK=(); for r in $RANKS; do BRK+=(--build-rank "$B/rank$r"); done
-  CMD_K=("$PY" -m verity_vllm.tp.commit --workload "$WL" --case "$ROLE" --tp "$WORLD" --committer native_collect_v2b --hidden-so "$HIDDEN_SO" --openings 64
+  CMD_K=("$PY" -m verity_vllm.pipeline.tp.commit --workload "$WL" --case "$ROLE" --tp "$WORLD" --committer native_collect_v2b --hidden-so "$HIDDEN_SO" --openings 64
          --max-num-seqs "$BATCH" --engine-arg "gpu_memory_utilization=$COMMIT_GPU_UTIL" "${ENGINE[@]}" "${BRK[@]}"
          --required-manifest "$D/manifest.json" --match-dir "$M" --checkpoint-dir "$CK" --checkpoint-model "$REPO"
          --pairs "$PAIRS" --warmup 2 --value-check --replay-workers "$REPLAY_WORKERS" --label "$ROW" --out "$D/commit")
@@ -271,5 +271,5 @@ if [[ ",$STAGES," == *,commit,* ]]; then
   [ "$ok" = PASS ] || { log "COMMIT FAIL -> stop"; tl row end ok=false stopped_at=commit; exit 12; }
 fi
 tl row end ok=true
-python3 -m verity_vllm.harness.timeline report "$VERITY_TIMELINE" --json "$D/timeline_report.json" --md "$D/timeline_report.md" --title "$ROW" >/dev/null 2>&1 || true
+python3 -m verity_vllm.pipeline.timeline report "$VERITY_TIMELINE" --json "$D/timeline_report.json" --md "$D/timeline_report.md" --title "$ROW" >/dev/null 2>&1 || true
 log "DONE"

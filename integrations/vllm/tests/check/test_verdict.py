@@ -281,7 +281,7 @@ def _row_dir(tmp_path, commit: dict, *, commit_pass: bool, rc: int, manifest_ver
     (d / "commit" / "verdict.json").write_text(json.dumps({"commit_pass": commit_pass, "runs_instrumented": 1, "runs_failed": 0 if commit_pass else 1, "first_fail_reason": None if commit_pass else "x",
                                                             "required_classes": list(CLASSES), "required_manifest": {"program_digest": "ab" * 32, "manifest_digest": "cd" * 32, "query": {"query_id": "Q_module_v1"}}}))
     (d / "commit" / "summary.json").write_text(json.dumps({"committer": "native_collect_v2b", "delta_wall_mean": 0.5}))
-    (d / "commit.log").write_text("$ python -m verity_vllm.harness.commit_delta --openings 64 --pairs 1 --required-manifest m.json\n")
+    (d / "commit.log").write_text("$ python -m verity_vllm.pipeline.commit --openings 64 --pairs 1 --required-manifest m.json\n")
     if manifest_verify_ok is not None:
         (d / "commit" / "manifest_verify.json").write_text(json.dumps({"ok": manifest_verify_ok, "manifest_digest": "cd" * 32}))
     (d / "global_match.json").write_text(json.dumps({"verdict": "PASS"}))
@@ -310,7 +310,7 @@ def test_from_record_pre_p5_row_takes_rc_and_execution_from_its_commit_summary(t
     (d / "commit.log").unlink()
     (d / "commit_summary.json").write_text(json.dumps({"rc": 0, "pass": True, "committer": "native_collect_v2b", "collector_variant": "windowed",
                                                        "retention": "host", "engine_settings": {"openings": 64, "pairs": 1, "required_manifest": True},
-                                                       "cmd": "python -m verity_vllm.harness.commit_delta --openings 64", "deprecated": "F-r19-int-21; see verdict.json"}))
+                                                       "cmd": "python -m verity_vllm.pipeline.commit --openings 64", "deprecated": "F-r19-int-21; see verdict.json"}))
     v = V.from_record(d, stage_ok="PASS")
     assert v.outcome == V.PASS and v.compat["rc"] == 0 and v.compat["commit_summary_pass"] is True
     assert v.execution["committer"] == "native_collect_v2b" and v.execution["engine_settings"]["openings"] == 64

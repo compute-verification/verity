@@ -11,7 +11,7 @@ import pytest
 import torch
 
 import verity_vllm
-from verity_vllm.harness import derive_step as ds
+from verity_vllm.pipeline import build as ds
 
 INTEGRATION = os.path.dirname(os.path.dirname(os.path.abspath(verity_vllm.__file__)))
 

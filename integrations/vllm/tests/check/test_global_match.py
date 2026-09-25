@@ -13,7 +13,7 @@ import json
 
 import pytest
 
-from verity_vllm.harness.run_config import persist_program
+from verity_vllm.pipeline.match import persist_program
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, SampleEnd, StepEnd, StepLink, StepStart, StorageAlloc, TritonLaunch, ViewDesc
 from verity_vllm.check import global_match as gm
 from verity_vllm.check import global_match_fast as GMF
@@ -809,7 +809,7 @@ def test_mis_emitted_sampler_is_named_as_a_segmentation_disagreement_not_a_reseg
 
 def test_workload_applicability_refuses_a_row_the_components_do_not_model():
     # COORD M-0063 (1): the workload Program declares the execution profile + engine conditions it models and refuses other rows
-    from verity_vllm.program import global_program as G
+    from verity_vllm.pipeline import global_program as G
     comps = {(256, 31): {"execution": "bi-eager", "numerics_profile": "b1-eager-v3", "gemm_target": "ada"},
              (11, 1): {"execution": "bi-eager", "numerics_profile": "b1-eager-v3", "gemm_target": "ada"}}
     ok = G.workload_applicability({"sweep": {"row_id": "x__b2__i256__o32__mixed__greedy__bi-eager"}}, comps)
@@ -831,7 +831,7 @@ def test_workload_applicability_refuses_a_row_the_components_do_not_model():
 def test_gp01_component_provenance_refuses_a_descriptor_that_is_not_the_derived_program(tmp_path):
     # rev-pm M-0123 (E): a component descriptor edited after the derive composed silently to another workload digest -> now refused, named
     from verity.ir.codec import program_digest
-    from verity_vllm.program import global_program as G
+    from verity_vllm.pipeline import global_program as G
     desc = {"schema": "toy/descriptor", "program_fn": "Toy_v1", "definitions": {"Toy_v1": {"form": "composite", "body": {"nodes": [1, 2]}}},
             "root": "Toy_v1", "annotations": {"free": "text"}}
     d = tmp_path / "build_request_LP3_T2"
@@ -1010,7 +1010,7 @@ def test_from_gprog_reads_the_lag_static_where_the_codec_writes_it_and_refuses_a
 
 
 def test_record_engine_conditions_outside_the_declared_applicability_fail_g1(memory, tmp_path):
-    from verity_vllm.program import global_program as G
+    from verity_vllm.pipeline import global_program as G
     # [R17-1] this test rewrites headers WITHOUT async_scheduling to exercise G1's other engine facts; a lag-declaring Program would (rightly)
     # also fail G6 on every such header, so the Program here declares no lag (pre-R17-1 mock) and no request stops before its cap
     gp, oracle = assemble([R0, R1], tmp_path, lag=None)
@@ -1101,7 +1101,7 @@ def test_compiled_execution_is_modelled_only_from_components_that_declare_its_co
     # compiled M-0153 (4a) / M-0174: derive_step writes applicability.engine = profile.modelled_engine() (enforce_eager False +
     # compilation_mode/backend/cudagraph_mode/...) for a bi-compiled profile; GP-01 models the compiled execution iff every component
     # declares it with AGREEING facts; the workload engine block = enforce_eager False + the normalised facts. Eager rows untouched.
-    from verity_vllm.program import global_program as G
+    from verity_vllm.pipeline import global_program as G
     eng = {"enforce_eager": False, "compilation_mode": "VLLM_COMPILE", "backend": "inductor", "cudagraph_mode": "PIECEWISE",
            "attention": "splitting op executed outside the CUDA graphs", "program_derivation": "eager module-forward trace"}
     comps = {(256, 31): {"execution": "bi-compiled", "numerics_profile": "b1-eager-v3", "gemm_target": "ada", "engine": dict(eng), "compilation": "piecewise"},
@@ -1140,7 +1140,7 @@ def test_compiled_execution_is_modelled_only_from_components_that_declare_its_co
 
 
 def test_compiled_program_requires_the_record_to_attest_the_same_compilation_facts_g1(memory, tmp_path):
-    from verity_vllm.program import global_program as G
+    from verity_vllm.pipeline import global_program as G
     gp, oracle = assemble([R0, R1], tmp_path, lag=None)     # [R17-1] headers below omit async_scheduling: G1's compilation facts are the subject
     decl = {"mode": "VLLM_COMPILE", "backend": "inductor", "cudagraph_mode": "PIECEWISE"}
     gp["applicability"] = {"execution": "bi-compiled", "row_execution": "bi-compiled", "refusal": None,
@@ -1246,7 +1246,7 @@ def test_gp01_stop_rule_is_read_from_the_pinned_checkpoint_and_the_manifest(tmp_
     """[F-pm-24] the Program's declared EOS set = union of the checkpoint's config.json / generation_config.json `eos_token_id` (int or
     list, Llama-3.2-Instruct declares [128001, 128008, 128009]) and the manifest's sampling.stop_token_ids; ignore_eos declares the EMPTY
     set (every early stop fails); no source at all -> None (GM-01 fails closed on early stops)."""
-    from verity_vllm.program import global_program as gp
+    from verity_vllm.pipeline import global_program as gp
     ck = tmp_path / "ckpt"
     ck.mkdir()
     json.dump({"eos_token_id": 128001}, open(ck / "config.json", "w"))
@@ -1282,7 +1282,7 @@ def test_gp01_binds_a_per_request_sampler_schedule_component_only_to_its_declare
     """rev-pm M-0560 (1) on DECISION M-0529 (A): under a per-EVENT split schedule S (stochastic top-p) two requests with equal (LP, T) but
     different arrivals have different request Programs; a component that declares the arrival its schedule was computed for must not be
     reused for the other request, and a schedule computed against another manifest's chronology must not compose."""
-    from verity_vllm.program import global_program as G
+    from verity_vllm.pipeline import global_program as G
     reqs = [{"request_id": "r0", "index": 0, "prompt_len": 8, "cap": 4, "arrive_step": 0},
             {"request_id": "r1", "index": 1, "prompt_len": 8, "cap": 4, "arrive_step": 2},
             {"request_id": "r2", "index": 2, "prompt_len": 5, "cap": 2, "arrive_step": 1}]
@@ -1620,7 +1620,7 @@ def test_g6_consumes_the_programs_declared_lag_and_the_record_must_attest_the_sa
 
     # (8) a pre-R17-1 Program (no lag declared): an EOS stop FAILS by name -- the record's attestation is NOT read as the rule (True attested,
     # the lag row present: a ruling-21 reader would have passed it); with every request at its cap the record passes, labelled exercised=false
-    from verity_vllm.program import global_program as G
+    from verity_vllm.pipeline import global_program as G
     assert G.eos_lag_rows_declared({"async_scheduling": True}) == 1 and G.eos_lag_rows_declared({"async_scheduling": False}) == 0
     assert G.eos_lag_rows_declared({}) is None and G.eos_lag_rows_declared(None) is None and G.eos_lag_rows_declared({"async_scheduling": "maybe"}) is None
     gp8, oracle8 = assemble([R0, R1_LAG], tmp_path / "undeclared", lag=None)
@@ -1705,7 +1705,7 @@ def test_gp01_carries_manbind_weights_of_record_per_component_and_refuses_stale_
     """COORD M-0614 (1) / tp M-0632 / manbind MAN-09 (M-0638): the weights of record is ONE function (manbind's weights_of_record.py) of the
     pinned shards and the (rank) Program's weights struct; GP-01 carries each component's record into the workload Program -- per rank for
     TP -- and refuses a record that is not the component's (stale digest), incomplete, or a second checkpoint for the same rank."""
-    from verity_vllm.program import global_program as G
+    from verity_vllm.pipeline import global_program as G
     def comp(name, rec, digest="d" * 64):
         d = tmp_path / name
         d.mkdir()
@@ -1884,7 +1884,7 @@ def test_gp01_declares_the_sampler_geometry_for_a_stochastic_row_only():
     """GP-01 (M-0169 (2b)): a stochastic row's workload Program declares S_t = SplitsFor_v1(|live(t)|, num_SMs) with the components' agreed
     num_SMs and the declared schedule (every request to its cap); greedy rows declare nothing; a stochastic sampler without num_SMs is a
     named refusal (the relation cannot be evaluated)."""
-    from verity_vllm.program import global_program as G
+    from verity_vllm.pipeline import global_program as G
     reqs = [{"request_id": "r0", "prompt_len": 8, "cap": 4, "arrive_step": 0}, {"request_id": "r1", "prompt_len": 5, "cap": 2, "arrive_step": 1}]
     assert G.sampler_geometry({"components": {"sampler": {"kind": "greedy"}, "num_sms": 142}}, reqs) is None
     st = {"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 0, "seeded": True, "splits": "derived"}
@@ -2335,7 +2335,7 @@ def test_fold_encodes_its_program_once_and_program_json_carries_that_descriptor(
     a second digest at B8 1024/128).  Now the FoldResult carries the descriptor and program.json's `program` IS it: its digest (the
     codec's canonical bytes) equals the fold's, and a result without a descriptor (older producer) still encodes and cross-checks."""
     from verity.ir import codec
-    from verity_vllm.harness.run_config import persist_program as _persist
+    from verity_vllm.pipeline.match import persist_program as _persist
     evs = batched_log([R0, R1])
     r = fold(evs, profile(), strict=True)
     assert r.descriptor is not None and r.digest == codec.program_digest(r.descriptor)

@@ -891,7 +891,7 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
 
 
 def main(argv=None) -> int:
-    from verity_vllm.harness.gc_tuning import tune as _gc_tune   # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
+    from verity_vllm.pipeline.gc_tuning import tune as _gc_tune   # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
     _gc_tune()
     ap = argparse.ArgumentParser()
     ap.add_argument("--oracle", required=True, help="match dir: program.json + instances.jsonl (+ capture/log.jsonl.gz)")

@@ -9,7 +9,7 @@ Written from the contract BEFORE reading owner 8's implementation (`lane/r10-cb-
   5. the Program digest is NOT required to change when the circuit is genuinely unchanged (an identical digest across targets is
      not the bug; the bug is that construction assumptions, target declaration and cache identity can DISAGREE).
 
-Every "dynamic" test here drives A's real builder (`verity_vllm.harness.derive_step`, B0 `request 8/4`, GPU-free) in a
+Every "dynamic" test here drives A's real builder (`verity_vllm.pipeline.build`, B0 `request 8/4`, GPU-free) in a
 subprocess over a byte-copy of this tree with at most a one-fact mutation, exactly as the R9 validator did (`out/gen/r9/cb-c/validation/
 sens/mutations.patch`), and asserts on the ARTEFACTS (`result.json`, `construction_manifest.json`, any artifact/applicability file the
 fix writes). Nothing here imports owner 8's code; the only owner-8-specific knowledge allowed is the ADAPTER block (names taken from
@@ -40,7 +40,7 @@ from dataclasses import dataclass, field
 import pytest
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
-CB_A = tuple(REPO / f for f in ("verity_vllm/check/global_match.py", "verity_vllm/check/global_match_fast.py", "verity_vllm/check/program_compare.py", "verity_vllm/correspondence/batch_decomp.py", "verity_vllm/harness/derive_step.py", "verity_vllm/program/compact.py", "verity_vllm/program/global_program.py", "verity_vllm/program/instances_form.py", "verity_vllm/tp/export_ops.py"))   # cb_a dissolved: its modules outside frontend/
+CB_A = tuple(REPO / f for f in ("verity_vllm/check/global_match.py", "verity_vllm/check/global_match_fast.py", "verity_vllm/check/program_compare.py", "verity_vllm/correspondence/batch_decomp.py", "verity_vllm/pipeline/build.py", "verity_vllm/program/compact.py", "verity_vllm/pipeline/global_program.py", "verity_vllm/program/instances_form.py", "verity_vllm/tp/export_ops.py"))   # cb_a dissolved: its modules outside frontend/
 FRONTEND = REPO / "verity_vllm" / "program" / "frontend"
 #: the R9 baseline (A's `request_8_4` on cp-cba with a GPU, CB-C's `sens/base` on cp-cbc without one, owner 9's `repro_base` on cp-cb8)
 B0_REQUEST_8_4_DIGEST = "59b35d80faf29438d21a0ea1c96c877ec69e2f21174f11b835ac1ef04c1ed496"
@@ -72,7 +72,7 @@ ADAPTER: dict = {
         "verity_vllm.check.artifact",
         "verity_vllm.check.artifact_identity",
         "verity_vllm.check.applicability",
-        "verity_vllm.harness.derive_step",
+        "verity_vllm.pipeline.build",
         "verity_vllm.program.frontend.export_compat",
         "verity_vllm.program.frontend.vllm_meta",
     ),
@@ -81,7 +81,7 @@ ADAPTER: dict = {
         "verity_vllm.check.artifact:check_applicability",
         "verity_vllm.check.artifact:load_artifact",
         "verity_vllm.check.applicability:check",
-        "verity_vllm.harness.derive_step:check_applicability",
+        "verity_vllm.pipeline.build:check_applicability",
     ),
 }
 
@@ -291,7 +291,7 @@ class Harness:
             e.update(env)
         if gpu_visible:
             e.pop("CUDA_VISIBLE_DEVICES", None)
-        argv = ["verity_vllm.harness.derive_step", "--out", str(out), "--wrapper", "request", "--LP", "8", "--T", "4"]
+        argv = ["verity_vllm.pipeline.build", "--out", str(out), "--wrapper", "request", "--LP", "8", "--T", "4"]
         code = (preamble + "\nimport runpy, sys\nsys.argv = " + repr(argv) + "\nrunpy.run_module(sys.argv[0], run_name='__main__')\n")
         (self.work / name / "driver.py").write_text(code)
         t0 = time.time()
@@ -331,7 +331,7 @@ def _rewrite(tree: pathlib.Path, subs: list[tuple[re.Pattern, str]], only: str |
     done = []
     for p in sorted(tree.rglob("*.py")):
         rel = str(p.relative_to(tree))
-        if "tests" in p.parts or not (rel.startswith(("verity_vllm/check/global_match.py", "verity_vllm/check/global_match_fast.py", "verity_vllm/check/program_compare.py", "verity_vllm/correspondence/batch_decomp.py", "verity_vllm/harness/derive_step.py", "verity_vllm/program/compact.py", "verity_vllm/program/frontend/export_compat.py", "verity_vllm/program/frontend/inputs_trace.py", "verity_vllm/program/frontend/triton_capture.py", "verity_vllm/program/frontend/vllm_meta.py", "verity_vllm/program/global_program.py", "verity_vllm/program/instances_form.py", "verity_vllm/tp/export_ops.py")) or rel.startswith("verity.ir/frontend")):
+        if "tests" in p.parts or not (rel.startswith(("verity_vllm/check/global_match.py", "verity_vllm/check/global_match_fast.py", "verity_vllm/check/program_compare.py", "verity_vllm/correspondence/batch_decomp.py", "verity_vllm/pipeline/build.py", "verity_vllm/program/compact.py", "verity_vllm/program/frontend/export_compat.py", "verity_vllm/program/frontend/inputs_trace.py", "verity_vllm/program/frontend/triton_capture.py", "verity_vllm/program/frontend/vllm_meta.py", "verity_vllm/pipeline/global_program.py", "verity_vllm/program/instances_form.py", "verity_vllm/tp/export_ops.py")) or rel.startswith("verity.ir/frontend")):
             continue
         if only is not None and rel != only:
             continue

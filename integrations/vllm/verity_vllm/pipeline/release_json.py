@@ -16,9 +16,9 @@ first time the field was a constant; the second time an older tag's pod_release.
 
 Stdlib only at import time (row_pod calls it with the system python3); `write` imports torch/vllm lazily for the env identity.
 
-  python -m verity_vllm.harness.release_json write --tag <tag> --tree <tree> --hg "HIDDEN-GPU-OK ..." --tp "FA2-TAP-OK ..." --nc "<sha> <path>" [--tp3 "FA3-TAP-OK ..."] [--nc-build <dir>]
-  python3 verity_vllm/harness/release_json.py check --tree <tree> --tag <tag> --commit <sha>      -> RELEASE-TREE-OK ... | RELEASE-TREE-FAIL <why> (exit 1)
-  python3 verity_vllm/harness/release_json.py line <tree>                                          -> "<release line>\t<record path or ->"
+  python -m verity_vllm.pipeline.release_json write --tag <tag> --tree <tree> --hg "HIDDEN-GPU-OK ..." --tp "FA2-TAP-OK ..." --nc "<sha> <path>" [--tp3 "FA3-TAP-OK ..."] [--nc-build <dir>]
+  python3 verity_vllm/pipeline/release_json.py check --tree <tree> --tag <tag> --commit <sha>      -> RELEASE-TREE-OK ... | RELEASE-TREE-FAIL <why> (exit 1)
+  python3 verity_vllm/pipeline/release_json.py line <tree>                                          -> "<release line>\t<record path or ->"
 """
 from __future__ import annotations
 

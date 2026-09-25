@@ -26,7 +26,7 @@ Two data paths feed the planner:
 
 API: `predict(row_config) -> {stage: {"reserved_bytes", "terms": {...}, "margin", "peak_point", "admit"}}`,
 `compare(attempt_dir) -> per-stage predicted vs observed peak + residual`, `peak_overlap(intervals)`.
-CLI: `python -m verity_vllm.harness.telemetry.admission compare <attempt_dir>... [--md]` / `predict --model ... --requests ...`.
+CLI: `python -m verity_vllm.pipeline.telemetry.admission compare <attempt_dir>... [--md]` / `predict --model ... --requests ...`.
 """
 from __future__ import annotations
 
@@ -1108,7 +1108,7 @@ def plan_row(cfg: RowConfig, out_path: str | None, advisory: bool = True) -> dic
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="verity_vllm.harness.telemetry.admission")
+    ap = argparse.ArgumentParser(prog="verity_vllm.pipeline.telemetry.admission")
     sub = ap.add_subparsers(dest="cmd", required=True)
     r = sub.add_parser("plan", help="ADVISORY admission plan for a sweep row from its workload file (row_pod.sh hook): writes admission.json, prints one line, exit 0")
     r.add_argument("--workload", required=True)

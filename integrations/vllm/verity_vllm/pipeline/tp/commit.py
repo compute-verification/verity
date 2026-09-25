@@ -76,7 +76,7 @@ def tree_of_record(root: str | os.PathLike | None = None) -> dict:
     """The executing tree BY CONTENT beside git_head: `source_identity.code_identity` of the repository this module runs from (`root`
     overrides it) -- its import closure, the integration plus Verity core, the same identity the hot Commit worker keys on -- so a dirty
     tree cannot pass as the tagged commit by git_head alone."""
-    from verity_vllm.harness import research_tools, source_identity
+    from verity_vllm.pipeline import research_tools, source_identity
 
     root = Path(root) if root is not None else source_identity.TREE
     return {"source": "source_identity.code_identity", "root": str(root), "closure": list(research_tools.CLOSURE), **source_identity.code_identity(root)}
@@ -310,9 +310,9 @@ def main() -> int:
     from vllm import LLM
 
     from verity_vllm.observe import vllm_adapter as va
-    from verity_vllm.harness.commit_delta import git_head, run_workload
+    from verity_vllm.pipeline.commit import git_head, run_workload
     from verity_vllm.check.commit_verdict import REQUIRED_CLASSES_DEFAULT, commit_verdict
-    from verity_vllm.tp.capture import parse_engine_args
+    from verity_vllm.pipeline.tp.capture import parse_engine_args
     from verity_vllm.tp.worker import EXTENSION
     from verity_vllm.acquire.committer_api import challenge_positions
 
@@ -340,7 +340,7 @@ def main() -> int:
     ap.add_argument("--world", type=int, default=None, choices=(1, 2), help="alias of --tp (the communicator size)")
     ap.add_argument("--no-tp-partials", action="store_true", help="NEGATIVE (R14 TP-03): collect collective outputs only (the R13 state); the required class tp_rank_partials must fail the verdict")
     ap.add_argument("--omit-rank", type=int, default=None, help="NEGATIVE (brief §4 'omit one TP rank'): drop this rank's entry from the commitment vector before the verdict; must fail closed")
-    ap.add_argument("--required-manifest", default=None, help="[R15 TP-04] the merged TP manifest (verity_vllm.query.cli build-global --programs-root <rank r dir> --rank r ... --ranks W): the population of record per rank (rows with rank=r)")
+    ap.add_argument("--required-manifest", default=None, help="[R15 TP-04] the merged TP manifest (verity_vllm.pipeline.cli build-global --programs-root <rank r dir> --rank r ... --ranks W): the population of record per rank (rows with rank=r)")
     ap.add_argument("--relabel-rank", default=None, help="NEGATIVE (R15 TP-04 'relabel rank 0 as rank 1'): `<from>:<to>` -- rank <from> tags its partials part_rank<to>; coverage must FAIL naming rank <from>")
     ap.add_argument("--wrong-root-rank", type=int, default=None, help="NEGATIVE (R15 TP-04 'wrong root on one rank'): the commitment vector carries a wrong run root for this rank; its openings/context must FAIL")
     ap.add_argument("--xrank-per-stratum", type=int, default=2,

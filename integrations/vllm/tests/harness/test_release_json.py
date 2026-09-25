@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from verity_vllm.harness import release_json as rj
+from verity_vllm.pipeline import release_json as rj
 
 HERE = Path(__file__).resolve().parents[2] / "verity_vllm" / "ops"
 EXPORT = {"commit": "a2dabe49314ec6d85d1d62096551cf76751c7ea0", "branch": "lane/r16-int", "dirty_patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -147,7 +147,7 @@ def test_cli_check_and_line_with_system_python(tmp_path):
     own = _tree_with_export(tmp_path, "r16-int-3")
     pod = tmp_path / "RELEASE.json"
     rj.write_record(_rec(own), str(own), str(pod))
-    py = [sys.executable, str(HERE / ".." / "harness" / "release_json.py")]
+    py = [sys.executable, str(HERE / ".." / "pipeline" / "release_json.py")]
     r = subprocess.run(py + ["check", "--tree", str(own), "--tag", "r16-int-3", "--commit", "a2dabe493", "--pod-path", str(pod)], capture_output=True, text=True)
     assert r.returncode == 0 and r.stdout.startswith("RELEASE-TREE-OK r16-int-3 a2dabe493 tree=")
     r = subprocess.run(py + ["check", "--tree", str(own), "--tag", "r16-int-4", "--commit", "a2dabe493", "--pod-path", str(pod)], capture_output=True, text=True)
@@ -168,7 +168,7 @@ def test_pod_release_sh_writes_through_the_module_and_checks():
     assert re.search(r"release_json\.py check --tree '\$TREE' --tag '\$TAG' --commit '\$HEAD9'", s)
     assert "RELEASE-TREE-OK" in s and "RELEASE-FAIL $TAG $POD: RELEASE.json does not name the installed tree" in s
     assert re.search(r"flock -w \$\{RELEASE_LOCK_WAIT_S:-3600\} /workspace/cp/release\.lock bash -s", s)
-    assert re.search(r'NC_BUILD=\$\(python3 verity_vllm/harness/release_json\.py nc-build "\$TREE"\)', s)
+    assert re.search(r'NC_BUILD=\$\(python3 verity_vllm/pipeline/release_json\.py nc-build "\$TREE"\)', s)
     assert "NATIVE_COLLECT_BUILD=${NC_BUILD:-/workspace/cp/nc_build}" in s
     assert '--nc-build "$NATIVE_COLLECT_BUILD"' in s
     # the TREE the pod side sees is the REMOTE_TREE the laptop side resolved; readiness uses the same collector build dir
@@ -182,7 +182,7 @@ def test_row_pod_sh_reads_the_release_through_the_module():
     released tree takes the release's collector build dir unless the caller set NATIVE_COLLECT_BUILD."""
     s = (HERE / "row_pod.sh").read_text()
     assert 'json.load(open("/workspace/cp/RELEASE.json"))' not in s      # no direct pod-wide read any more
-    assert re.search(r'REL_OUT=\$\(python3 verity_vllm/harness/release_json\.py line "\$TREE_HERE"', s)
+    assert re.search(r'REL_OUT=\$\(python3 verity_vllm/pipeline/release_json\.py line "\$TREE_HERE"', s)
     assert 'cp "$REL_SRC" "$D/release.json"' in s and 'cp /workspace/cp/RELEASE.json "$D/release.json"' not in s
     assert "NCB_SET=${NATIVE_COLLECT_BUILD:-}" in s and "get('build_dirs') or {}).get('native_collect')" in s
     assert subprocess.run(["bash", "-n", str(HERE / "row_pod.sh")]).returncode == 0
@@ -198,11 +198,11 @@ def test_pod_release_busy_pattern_names_the_stage_processes_launched_outside_row
     pat = re.compile(m.group(1))
     row_like = [
         "bash verity_vllm/ops/row_pod.sh smollm2-135m__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager B0 wl.json /d build",
-        "/workspace/venv-py312/bin/python -m verity_vllm.harness.run_config --case MISTRAL7B --workload w.json --out /o/match --phase all",
-        "/workspace/venv-py312/bin/python -m verity_vllm.harness.run_config --worker fold --log /o/match/capture/log.jsonl.gz",
-        "/workspace/venv-cu129/bin/python -m verity_vllm.observe.m1_capture --case MISTRAL7B",
+        "/workspace/venv-py312/bin/python -m verity_vllm.pipeline.match --case MISTRAL7B --workload w.json --out /o/match --phase all",
+        "/workspace/venv-py312/bin/python -m verity_vllm.pipeline.match --worker fold --log /o/match/capture/log.jsonl.gz",
+        "/workspace/venv-cu129/bin/python -m verity_vllm.pipeline.m1_capture --case MISTRAL7B",
         "/workspace/venv-py312/bin/python -m verity_vllm.check.global_match --gprog p.json --workload w.json",
-        "/workspace/venv-cu129/bin/python -m verity_vllm.harness.commit_delta --case B0 --workload w.json",
+        "/workspace/venv-cu129/bin/python -m verity_vllm.pipeline.commit --case B0 --workload w.json",
     ]
     for cmd in row_like:
         assert pat.search(cmd), cmd

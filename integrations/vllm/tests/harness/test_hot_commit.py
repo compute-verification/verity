@@ -11,9 +11,9 @@ from pathlib import Path
 
 import pytest
 
-from verity_vllm.harness import hot_commit as hc
-from verity_vllm.harness import source_identity
-from verity_vllm.harness import timeline as tlm
+from verity_vllm.pipeline import hot as hc
+from verity_vllm.pipeline import source_identity
+from verity_vllm.pipeline import timeline as tlm
 
 CORE = Path("packages") / "verity" / "src" / "verity"
 
@@ -29,11 +29,11 @@ def _tree(tmp_path: Path) -> Path:
     (repo / "tools" / "research").mkdir(parents=True)
     (repo / "tools" / "research" / "cli.py").write_text("print('r')\n")
     t = repo / "integrations" / "vllm"
-    (t / "verity_vllm" / "harness").mkdir(parents=True)
+    (t / "verity_vllm" / "pipeline").mkdir(parents=True)
     (t / "verity_vllm" / "__init__.py").write_text("")
-    (t / "verity_vllm" / "harness" / "commit_delta.py").write_text("print('x')\n")
-    (t / "verity_vllm" / "harness" / "__pycache__").mkdir()
-    (t / "verity_vllm" / "harness" / "__pycache__" / "a.pyc").write_bytes(b"\0")
+    (t / "verity_vllm" / "pipeline" / "commit.py").write_text("print('x')\n")
+    (t / "verity_vllm" / "pipeline" / "__pycache__").mkdir()
+    (t / "verity_vllm" / "pipeline" / "__pycache__" / "a.pyc").write_bytes(b"\0")
     (t / "manifests").mkdir(parents=True)
     (t / "manifests" / "checkpoints.json").write_text('{"LLAMA32_1B": {"repo": "unsloth/Llama-3.2-1B"}}\n')
     (t / "EXPORT.json").write_text('{"commit": "abc"}\n')
@@ -48,10 +48,10 @@ def test_code_identity_is_the_closure_identity_of_the_repository(tmp_path):
     a = hc.code_identity(t)
     assert a["sha256"] == source_identity.code_identity(t.parents[1])["sha256"] == hc.code_identity(t.parents[1])["sha256"]
     assert a["commit"] == "abc" and a["release"] == "r16-int-9"
-    (t / "verity_vllm" / "harness" / "__pycache__" / "a.pyc").write_bytes(b"\1\2")
+    (t / "verity_vllm" / "pipeline" / "__pycache__" / "a.pyc").write_bytes(b"\1\2")
     (t.parents[1] / "tools" / "research" / "cli.py").write_text("print('s')\n")
     assert hc.code_identity(t)["sha256"] == a["sha256"], "caches and files outside the import closure are not executed code"
-    (t / "verity_vllm" / "harness" / "commit_delta.py").write_text("print('y')\n")
+    (t / "verity_vllm" / "pipeline" / "commit.py").write_text("print('y')\n")
     assert hc.code_identity(t)["sha256"] != a["sha256"], "an edited executing tree is a different key -- hot never runs stale code"
 
 
@@ -129,7 +129,7 @@ def test_submit_without_spawn_runs_cold_with_the_reason_on_the_timeline(tmp_path
     rc = hc.submit(["--case", "LLAMA32_1B", "--workload", "wl.json", "--out", "o"], root=tmp_path / "hot", idle_s=1, timeout_s=None, spawn=False, log=lambda *a, **k: None)
     assert rc == 0 and len(calls) == 1
     cmd, env = calls[0]
-    assert cmd[:3] == [sys.executable, "-m", "verity_vllm.harness.commit_delta"] and cmd[-2:] == ["--out", "o"]
+    assert cmd[:3] == [sys.executable, "-m", "verity_vllm.pipeline.commit"] and cmd[-2:] == ["--out", "o"]
     assert env["VERITY_HOT_RESTART_REASON"].startswith("no live hot worker")
     ev = tlm.read(tl_path)
     assert [e["stage"] for e in ev] == ["hot.key", "hot.fallback_cold"]
@@ -215,7 +215,7 @@ def test_collect_folds_timelines_and_derives_envelopes_from_stages_txt(tmp_path)
 ])
 def test_hot_unsafe_flags_are_refused_by_commit_delta(argv, unsafe, monkeypatch):
     torch = pytest.importorskip("torch")  # noqa: F841  commit_delta imports torch at module level
-    from verity_vllm.harness import commit_delta as cd
+    from verity_vllm.pipeline import commit as cd
 
     ap = cd.argparse.ArgumentParser()
     # the same parser main() builds: reuse it by parsing through main's namespace defaults

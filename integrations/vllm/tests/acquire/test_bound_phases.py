@@ -14,7 +14,7 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity_vllm.harness.commit_delta import c2_programs_forecast  # noqa: E402
+from verity_vllm.pipeline.commit import c2_programs_forecast  # noqa: E402
 from verity_vllm.acquire.native_host import bounded_host_bound, schedule_stream_bound  # noqa: E402
 
 MiB = 1 << 20
@@ -93,7 +93,7 @@ def test_c2_programs_forecast_counts_rows_across_chunk_boundaries_and_names_abse
 
 def test_row_counting_is_exact_when_the_needle_straddles_a_read_boundary(tmp_path, monkeypatch):
     """the streamed counter keeps a (len(needle) - 1)-byte tail between 64 MiB reads; force tiny reads to exercise the seam."""
-    import verity_vllm.harness.commit_delta as CD
+    import verity_vllm.pipeline.commit as CD
 
     d = tmp_path / "build_request_LP1_T1"
     d.mkdir()

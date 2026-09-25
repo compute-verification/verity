@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from verity_vllm.harness import admission_bound as ADM
+from verity_vllm.pipeline import admission_bound as ADM
 
 REPO = Path(__file__).resolve().parents[2]
 FIX = Path(__file__).resolve().parent / "fixtures" / "admission"
@@ -150,7 +150,7 @@ def test_cli_is_torch_free_and_reports_the_observed_check(tmp_path):
     sz = tmp_path / "sizing.json"; sz.write_text(json.dumps(sizing))
     st = tmp_path / "steps.jsonl"
     st.write_text("".join(json.dumps({"pair": 0, "arm": "instrumented", "step": s, "n_bytes": b}) + "\n" for s, b in obs.items()))
-    cmd = [sys.executable, "-c", "import sys; sys.modules['torch'] = None; from verity_vllm.harness import admission_bound as admission; sys.exit(admission.main(sys.argv[1:]))",
+    cmd = [sys.executable, "-c", "import sys; sys.modules['torch'] = None; from verity_vllm.pipeline import admission_bound as admission; sys.exit(admission.main(sys.argv[1:]))",
            "--workload", str(REPO / "workloads" / f"{wl['sweep']['row_id']}.json"), "--sizing", str(sz),
            "--cap-bytes", str(CAP_CP_BIG), "--observed", str(st)]
     p = subprocess.run(cmd, cwd=REPO, capture_output=True, text=True, env={"PYTHONPATH": f"{REPO}:{REPO / 'vllm-poc'}", "PATH": "/usr/bin:/bin"})
@@ -163,7 +163,7 @@ def test_cli_is_torch_free_and_reports_the_observed_check(tmp_path):
 
 def test_host_cap_names_its_source_and_a_bare_host_is_still_a_bound(monkeypatch, tmp_path):
     """[rev S-r17-09 n1] no visible cgroup limit -> MemTotal, named; a cgroup limit wins when present; the record carries a domain."""
-    import verity_vllm.harness.admission_bound as M
+    import verity_vllm.pipeline.admission_bound as M
     real = M.Path.read_text
 
     def fake(self, *a, **k):

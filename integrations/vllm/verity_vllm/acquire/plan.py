@@ -2,7 +2,7 @@
 
     acquisition_plan(required_value_manifest, correspondence) -> AcquisitionPlan       serialised as `acquisition-plan/v1`, digested
 
-Inputs are STRUCTURE only: the required-value manifest (`verity_vllm.query.cli`: one identity per required Value,
+Inputs are STRUCTURE only: the required-value manifest (`verity_vllm.pipeline.cli`: one identity per required Value,
 `op_path` / `output_member` / `family` / `promoted` / `consumers`) and the runtime correspondence (`correspondence.AcquireCorrespondence`:
 `owning_module`, `return_slot`, `arg_slot` over the `runtime-correspondence/v1` record when the Build carries it, else the manifest's
 v1-annotation reading -- `source` recorded in the plan's `correspondence` block + the runtime module tree).  Nothing here reads a module

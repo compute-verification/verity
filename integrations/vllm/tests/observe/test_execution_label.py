@@ -8,8 +8,8 @@ from __future__ import annotations
 import json
 import pytest
 
-pytest.importorskip("verity_vllm.harness.run_config")
-from verity_vllm.harness import run_config as rc  # noqa: E402
+pytest.importorskip("verity_vllm.pipeline.match")
+from verity_vllm.pipeline import match as rc  # noqa: E402
 
 EAGER_ROW = "llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager"
 COMPILED_ROW = "llama32-1b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-compiled"

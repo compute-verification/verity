@@ -1,11 +1,11 @@
 """Hot Commit worker (R16 BRIEF §5 / §8 #4, lane sys): one commit_delta process serves consecutive Commit jobs of the SAME engine key
 instead of building a fresh vLLM engine per invocation.  Not a distributed service: one worker per pod, files under one directory,
-the client is a drop-in for `python -m verity_vllm.harness.commit_delta ARGS` (row_pod.sh `HOT_ENGINE=1`).
+the client is a drop-in for `python -m verity_vllm.pipeline.commit ARGS` (row_pod.sh `HOT_ENGINE=1`).
 
-    python -m verity_vllm.harness.hot_commit submit [--root /workspace/cp/hot] [--idle 900] -- <commit_delta args...>
-    python -m verity_vllm.harness.hot_commit serve  <worker dir> --idle <s> --reason <why this worker started>
-    python -m verity_vllm.harness.hot_commit key    -- <commit_delta args...>        # print the key (diagnostics)
-    python -m verity_vllm.harness.hot_commit stop   [--root ...]                      # stop every worker under root
+    python -m verity_vllm.pipeline.hot submit [--root /workspace/cp/hot] [--idle 900] -- <commit_delta args...>
+    python -m verity_vllm.pipeline.hot serve  <worker dir> --idle <s> --reason <why this worker started>
+    python -m verity_vllm.pipeline.hot key    -- <commit_delta args...>        # print the key (diagnostics)
+    python -m verity_vllm.pipeline.hot stop   [--root ...]                      # stop every worker under root
 
 Key (what may share an engine) = sha256 of
   * CODE identity: `source_identity.code_identity` of the executing repository -- content hashes of its import closure (the integration
@@ -90,7 +90,7 @@ def sha256_file(p: str | os.PathLike, h: "hashlib._Hash | None" = None) -> str:
 def code_identity(tree: str | os.PathLike = ".") -> dict[str, Any]:
     """`source_identity.code_identity` of the repository `tree` belongs to (`tree` = its root or its integrations/vllm), plus the
     EXPORT.json commit and RELEASE.json tag of `tree`."""
-    from verity_vllm.harness import source_identity
+    from verity_vllm.pipeline import source_identity
 
     tree = Path(tree)
     ident = source_identity.code_identity(source_identity.normalise_tree(tree))
@@ -273,7 +273,7 @@ def stop_workers(root: Path, *, except_dir: Path | None = None, wait_s: float = 
 def submit(argv: list[str], *, root: Path, idle_s: float, timeout_s: float | None, spawn: bool = True, log=print) -> int:
     """Run commit_delta ARGS on the pod's hot worker for this key (start one if none is alive); stream its output; return the job's rc.
     Falls back to a fresh (cold) process when the worker refuses the job (HOT-UNSAFE / HOT-KEY-MISMATCH) or dies before finishing."""
-    from verity_vllm.harness.timeline import Timeline
+    from verity_vllm.pipeline.timeline import Timeline
 
     tl = Timeline.from_env("hot_commit", hot=True)
     hints = unsafe_hints(argv)
@@ -313,7 +313,7 @@ def submit(argv: list[str], *, root: Path, idle_s: float, timeout_s: float | Non
         if not spawn:
             log(f"[hot] no worker and spawning disabled: cold run ({reason})")
             return cold_run(argv, reason, log=log)
-        cmd = [sys.executable, "-m", "verity_vllm.harness.hot_commit", "serve", str(wdir), "--idle", str(idle_s), "--reason", reason]
+        cmd = [sys.executable, "-m", "verity_vllm.pipeline.hot", "serve", str(wdir), "--idle", str(idle_s), "--reason", reason]
         with open(wdir / "worker.log", "a") as wl:
             wl.write(f"$ {shlex.join(cmd)}  (cwd {os.getcwd()}, by pid {os.getpid()})\n")
             wl.flush()
@@ -377,12 +377,12 @@ def submit(argv: list[str], *, root: Path, idle_s: float, timeout_s: float | Non
 
 
 def cold_run(argv: list[str], reason: str, log=print) -> int:
-    from verity_vllm.harness.timeline import Timeline
+    from verity_vllm.pipeline.timeline import Timeline
 
     tl = Timeline.from_env("hot_commit", hot=False)
     tl.event("hot.fallback_cold", "mark", restart_reason=reason)
     log(f"[hot] COLD fallback: fresh commit_delta process ({reason})", flush=True)
-    cmd = [sys.executable, "-m", "verity_vllm.harness.commit_delta", *argv]
+    cmd = [sys.executable, "-m", "verity_vllm.pipeline.commit", *argv]
     env = dict(os.environ, VERITY_HOT_RESTART_REASON=reason)
     env.pop("VERITY_HOT_SUBMIT", None)          # the cold process must not route back through the worker (commit_delta.__main__ hook)
     sys.stdout.flush()
@@ -473,7 +473,7 @@ def serve(wdir: Path, *, idle_s: float, reason: str) -> int:
     log(f"serving {wdir} (key {str(key_doc.get('key'))[:16]}, reason: {reason}); importing commit_delta")
     t_imp = time.time()
     import torch  # noqa: E402
-    from verity_vllm.harness import commit_delta as cd  # noqa: E402
+    from verity_vllm.pipeline import commit as cd  # noqa: E402
 
     cd._HOT = {"jobs": 0, "restart_reason": reason}
     rel_sig0 = release_json_sig()

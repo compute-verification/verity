@@ -437,10 +437,10 @@ def build(imported: set[str] | None, with_dates: bool, with_artifacts: bool) -> 
     static = set(live)
     profiles_mods = {m for m in g.file_of if m.startswith("verity_vllm.observe.profiles.")}
     live_sans_profiles = g.closure(roots, skip=profiles_mods)
-    saved = set(g.edges["verity_vllm.harness.run_config"])
-    g.edges["verity_vllm.harness.run_config"] -= set(RUN_CONFIG_SKIPPED_STAGE_MODULES)
+    saved = set(g.edges["verity_vllm.pipeline.match"])
+    g.edges["verity_vllm.pipeline.match"] -= set(RUN_CONFIG_SKIPPED_STAGE_MODULES)
     skipped_only = {m for m in live - g.closure(roots) if not is_test_file(g.file_of[m])}
-    g.edges["verity_vllm.harness.run_config"] = saved
+    g.edges["verity_vllm.pipeline.match"] = saved
     if imported:
         live |= {m for m in imported if g.exists(m)}
     shell_refs = all_shell_refs(g)

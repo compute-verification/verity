@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from verity_vllm.harness import coverage_workloads as gw
+from verity_vllm.pipeline import coverage_workloads as gw
 
 REPO = Path(__file__).resolve().parents[2]
 

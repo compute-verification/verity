@@ -5,7 +5,7 @@ CROSS-RANK leg (`tp.rank_match`) over both folds + the collective recorder rows 
 + tp2_match's stored-step provenance.  CPU only.  The rank-local legs of the ranks run CONCURRENTLY (one subprocess chain per rank,
 --rank-workers, default all): they are independent until the cross-rank leg; the record is assembled in rank order.
 
-    python -m verity_vllm.tp.fold_match --capture <tp2_capture --record-collectives out> --profile derived_LLAMA32_1B_tp2 \\
+    python -m verity_vllm.pipeline.tp.fold_match --capture <tp2_capture --record-collectives out> --profile derived_LLAMA32_1B_tp2 \\
         --build-rank0 <build_request_r0> --build-rank1 <build_request_r1> [--gprog-rank0 <build_workload_r0/workload_program.json> --gprog-rank1 ...] \\
         [--derived-rank0 DIR ... --derived-rank1 DIR ...] --workload WL [--tp2-match <run>/tp2_match.json] --out <D/fold_match> [--python PY]
 
@@ -27,7 +27,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from ..tp import rank_match as RM
+from verity_vllm.tp import rank_match as RM
 
 SCHEMA = "verity/tp2/fold-match/v1"
 
@@ -55,7 +55,7 @@ def _load_links(p: Path) -> dict | None:
     """[lane vllm-tp-n] a rank's tp_links.json through `read_tp_links` (v1 -> v2 in memory; every link carries `peers` and `module`, the
     recorder-vocabulary module path from the derive's recorded model root)."""
     try:
-        from verity_vllm.harness.derive_step import read_tp_links
+        from verity_vllm.pipeline.build import read_tp_links
         return read_tp_links(str(p))
     except Exception:  # noqa: BLE001
         return None
@@ -71,7 +71,7 @@ def _link(dst: Path, src: Path) -> None:
 def fold_rank(py: str, log: Path, profile: str, out: Path, timeout: int | None) -> dict:
     out.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
-    rc = _run([py, "-m", "verity_vllm.harness.run_config", "--worker", "fold", "--log", str(log), "--profile", profile,
+    rc = _run([py, "-m", "verity_vllm.pipeline.match", "--worker", "fold", "--log", str(log), "--profile", profile,
                "--out", str(out / "fold_summary.json"), "--persist-dir", str(out)], out / "fold.log", timeout)
     fs = _load(out / "fold_summary.json") or {}
     ok = rc == 0 and (out / "program.json").exists() and (out / "instances.jsonl").exists() and int(fs.get("errors") or 0) == 0 and \

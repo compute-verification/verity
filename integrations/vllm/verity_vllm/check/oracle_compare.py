@@ -3,7 +3,7 @@
 The Commit's C1 (coverage) and C3 (openings) cannot see a relabel, a same-name byte swap or a late read (rev-cb F-cb-02/03/04:
 every one of them got COMMIT PASS on rc3 with coverage 12943/12943 and 79/79 openings verified).  C2 asks: are the COMMITTED bytes of
 each identity the value the Program produced for that identity?  The reference here is the Match stage of the SAME attempt: the m1
-capture (`verity_vllm.observe.m1_capture`, a separate process and a separate acquisition path -- torch dispatcher observer + D2H
+capture (`verity_vllm.pipeline.m1_capture`, a separate process and a separate acquisition path -- torch dispatcher observer + D2H
 snapshots -- sharing nothing with the native collector) recorded, for every snapshotted engine step, the bytes of every dispatcher
 call's arguments and outputs (`capture/snapshots.json` + `capture/values/<step>/<sha>.bin`, spanned storage bytes, content-addressed),
 and the fold's runtime-correspondence record (`instances.jsonl`) says, per Program instance, WHICH event and WHICH storage view (alloc,

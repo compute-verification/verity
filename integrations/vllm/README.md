@@ -41,7 +41,7 @@ VU policy, model-name tables (`registry/quarantine/` is the by-name residue and 
 `partition.py` (boundary values, VU partitions), `manifest/` (the required-value manifest: `format.py` the shared vocabulary,
 `compiled.py` for `Execution=compiled` rows, `verify.py` the rebuild-and-compare check of record), `query_artifact.py` (query
 artifact identities), `compare.py` (a v2 manifest against a v1 one), `v1_bridge.py` / `vu_query.py` (v1 `IDENTITY_KEY` rows, VU
-populations), `cli.py`.  Entrypoint: `python -m verity_vllm.query.cli`.  Never: execution data,
+populations), `cli.py`.  Entrypoint: `python -m verity_vllm.pipeline.cli`.  Never: execution data,
 hooks, model names, anything read from a run.
 
 **`correspondence/`** implements *runtime correspondence* as data: `runtime.py` (runtime-correspondence/v1), `emit.py` (the
@@ -53,7 +53,7 @@ policy, commitment positions, requiredness, verdicts.
 `log.py` / `tree.py` / `memory.py` / `views.py` / `storage.py`, `resolver.py`, `fold.py` (raw log -> Program), `patterns*.py`,
 `contract.py` (the one observation contract), the engine we attach to (`vllm_adapter.py`, `engine_driver.py`,
 `engine_profile.py`, `triton_adapter.py`), `m1_capture.py`, and `profiles/` (kappa: capture profiles and workload JSON; lane
-vllm-profiles-generic leaves one generic constructor + a facts table).  Entrypoint: `python -m verity_vllm.observe.m1_capture`.
+vllm-profiles-generic leaves one generic constructor + a facts table).  Entrypoint: `python -m verity_vllm.pipeline.m1_capture`.
 Never: commit, decide what is required, name a model.
 
 **`acquire/`** implements *value acquisition*: `plan.py` (required values + correspondence -> acquisition plan), `install.py`,
@@ -132,7 +132,7 @@ Program/source identity (`identity`).  Build / Match / Commit are development to
 Research terms (Tool, Derivation, Attempt, Artifact, Snapshot, Replica, Label) belong to `tools/research` and never name Verity semantics.
 
 **v2 is the integration** (since the flip on `lane/vllm-v2-default`, Draft 3.1 §12.3): the required-value manifest of record is
-`Q_module_body_v1` over the Program + runtime correspondence (`verity_vllm.query`: `python -m verity_vllm.query.cli build | build-global`,
+`Q_module_body_v1` over the Program + runtime correspondence (`verity_vllm.query`: `python -m verity_vllm.pipeline.cli build | build-global`,
 built at the end of a PASS Build by `row_pod.sh`); value acquisition follows the acquisition plan derived from it
 (`verity_vllm.acquire`; TP rank committers still select by `native_host`'s class tables); the verdict of record is `<row>/verdict.json`
 (`vllm-verdict/v1`, `verity_vllm.check.verdict`).  `commit_summary.json` and the `finalize.py` board are no longer written (P5).  The

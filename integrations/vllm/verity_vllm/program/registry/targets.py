@@ -185,7 +185,7 @@ def launch_seqlen_q(own_rows: int, step: int, launch: dict[str, Any] | None) -> 
     v = by.get(int(step))
     if v is None:
         raise LaunchContextInvalid(f"the declared launch context names steps {sorted(by)} but the request runs step {int(step)}: declare every "
-                                   f"step of the shape (row_pod: verity_vllm.harness.launch_context) -- a step without a context would silently "
+                                   f"step of the shape (row_pod: verity_vllm.pipeline.launch_context) -- a step without a context would silently "
                                    f"take its own rows ({own}) for a launch that may hold a longer prefill")
     if int(v) < own:
         raise LaunchContextInvalid(f"the declared launch context says max_seqlen_q {int(v)} at step {int(step)} but this request alone has {own} "

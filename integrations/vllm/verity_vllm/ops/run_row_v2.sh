@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # run_row_v2.sh -- the v2 wrapper that runs each sweep stage as ONE `research run --tool vllm.<stage>` Attempt (Phase 5a).  row_pod.sh (or
 # tp_stage.sh, for a `__tp<N>__` row with N >= 2) is untouched: it is called for one stage at a time; this script only maps flags to its env knobs, checks the cited inputs, and on exit
-# declares the stage's typed outputs (`outputs.json`, verity_vllm/harness/research_outputs.py) for the runner's publish step.
+# declares the stage's typed outputs (`outputs.json`, verity_vllm/pipeline/research_outputs.py) for the runner's publish step.
 #
 #   run_row_v2.sh stage <build|match|commit> <row-id> <ROLE> <hf-repo> <revision> [--flag value ...]
 #       The WORKLOAD of one Attempt.  Run it under the harness with the REPO ROOT as cwd (the Tool's source root; this script cds to
@@ -121,7 +121,7 @@ cmd_stage() {
   _v2_exit() {
     local rc=$?
     if [ -n "${RESEARCH_RUN_DIR:-}" ]; then
-      python3 -m verity_vllm.harness.research_outputs "$d" "$row" "$stage" ${build_in:+--input build=$build_in} ${match_in:+--input match=$match_in} >> "$d/row.log" 2>&1 || true
+      python3 -m verity_vllm.pipeline.research_outputs "$d" "$row" "$stage" ${build_in:+--input build=$build_in} ${match_in:+--input match=$match_in} >> "$d/row.log" 2>&1 || true
       if [ -n "${RESEARCH_RUN_ID:-}" ]; then
         mkdir -p "$(dirname "$GUARD_PRESERVE_FILE")" 2>/dev/null && { grep -qxF "$RESEARCH_RUN_ID" "$GUARD_PRESERVE_FILE" 2>/dev/null || echo "$RESEARCH_RUN_ID" >> "$GUARD_PRESERVE_FILE"; } 2>/dev/null || true
       fi
@@ -132,7 +132,7 @@ cmd_stage() {
   # input provenance: the Build this stage consumes IS the cited artifact (program_digest of record from build_summary.json, never the manifest)
   if [ "$stage" != build ] && [ -n "$build_in" ]; then
     local here cited
-    here=$(python3 -m verity_vllm.harness.research_outputs digest "$d" "$row" 2>/dev/null || true)
+    here=$(python3 -m verity_vllm.pipeline.research_outputs digest "$d" "$row" 2>/dev/null || true)
     if [ -z "$here" ]; then
       echo "precheck FAIL $(date -u +%FT%TZ) PRECHECK_FAIL_BUILD_INPUT_ABSENT (cited $build_in but $d has no Build; run the build stage on this pod first)" | tee -a "$d/stages.txt"; exit 3
     fi
@@ -149,7 +149,7 @@ cmd_stage() {
   [ "$(row_world "$row")" -gt 1 ] && runner=verity_vllm/ops/tp_stage.sh      # a `__tp<N>__` row: the WORLD=N runner
   bash "${ROW_POD:-$runner}" "$row" "$role" "$repo" "$rev" "$stage"; rc=$?     # ROW_POD: a stand-in stage for dry runs / tests
   # the Build artifact carries the required-value manifest of record: row_pod.sh / tp_stage.sh build it at the end of a PASS Build
-  # (verity_vllm.query.cli, Q_module_body_v1), so there is nothing to add here
+  # (verity_vllm.pipeline.cli, Q_module_body_v1), so there is nothing to add here
   exit "$rc"
 }
 

@@ -228,7 +228,7 @@ def test_tp_rank_compare_in_compact_form_is_the_records(tmp_path, monkeypatch):
     # (rank_match.own_producers_from_record, the one consumer of NODE-space refs from the file) reads the same producers from either store,
     # and the cross-rank verdict over them is the same PASS; every negative above is a compare negative, this leg is the record reader's.
     import os
-    from verity_vllm.harness import run_config as RC
+    from verity_vllm.pipeline import match as RC
     from verity_vllm.tp import rank_match as RM
     folds = {r: T.fold_rank(r) for r in (0, 1)}
     prod: dict[str, dict] = {}
@@ -261,7 +261,7 @@ def test_nothing_beside_the_files_of_record_is_read_a_forged_compact_sidecar_cha
     dir with this fold's true digest / byte sizes / sha256 pasted in -- and, harder, a sidecar carrying rows that would turn the verdict:
     both leave the fast document == the record document, and impl.config.fold_load names the record files and the stored form read."""
     import os
-    from verity_vllm.harness import run_config as RC
+    from verity_vllm.pipeline import match as RC
     from verity_vllm.check import program_compare as C
     from verity_vllm.check import global_match as gm
     from verity_vllm.check import global_match_fast as GMF
@@ -310,7 +310,7 @@ def test_record_document_states_the_stored_form_it_loaded_like_the_fast_one(tmp_
     same capture are distinguishable BY CONTENT (before n1 both had impl.config absent -> indistinguishable).  Through main() (the CLI
     every row of record runs) on both stores, record and fast; the fast document keeps naming it under impl.config.fold_load too."""
     import os
-    from verity_vllm.harness import run_config as RC
+    from verity_vllm.pipeline import match as RC
     from verity_vllm.check import global_match as gm
     from verity_vllm.check import global_match_fast as GMF
     from tests.check import test_global_match as T
@@ -383,7 +383,7 @@ def test_persist_program_progressions_form_gives_the_same_prog_and_document_and_
     name the form."""
     import os
     import shutil
-    from verity_vllm.harness import run_config as RC
+    from verity_vllm.pipeline import match as RC
     from verity_vllm.check import program_compare as C
     from verity_vllm.check import global_match as gm
     from verity_vllm.program import instances_form as IF
@@ -444,7 +444,7 @@ def test_persist_program_writer_is_byte_identical_to_the_generic_conversion(tmp_
     import dataclasses
     import gzip
     import os
-    from verity_vllm.harness import run_config as RC
+    from verity_vllm.pipeline import match as RC
     from verity_vllm.program.compact import file_items_from_refs_json
     from tests.check import test_global_match as T
     from verity_vllm.observe.fold import fold

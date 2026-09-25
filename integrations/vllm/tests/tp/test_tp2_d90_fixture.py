@@ -378,7 +378,7 @@ def write_derived(d, spec: SpecializedDefinition, rank: int, *, links_mut: dict 
 
 
 def persist_fold(result, d, rank: int):
-    from verity_vllm.harness.run_config import persist_program
+    from verity_vllm.pipeline.match import persist_program
     persist_program(result, d, profile_name="toy-tp2-rank", log_path=f"log.rank{rank}.jsonl.gz")
 
 
@@ -672,7 +672,7 @@ def test_swapped_rank_header_fails_the_compare(tmp_path):
 def _e2e(tmp_path, monkeypatch, *, drop_rank1_log=False, rank1_mut=None, provenance=True, links_mut=None, recorder_mut=None, gprog=True,
          provenance_of_other_run=False, provenance_digest_mismatch=False, rank_workers=0):
     import hashlib
-    from verity_vllm.tp import fold_match as FM
+    from verity_vllm.pipeline.tp import fold_match as FM
     from verity_vllm.check.fold_compare import summarize
     tmp_path = tmp_path / f"case{len(list(tmp_path.iterdir()))}"
     tmp_path.mkdir()

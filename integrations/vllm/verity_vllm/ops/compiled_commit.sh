@@ -48,7 +48,7 @@ for ea in ${EXTRA_ENGINE_ARGS:-}; do COMMON+=(--engine-arg "$ea"); done
 for ca in ${EXTRA_COMMIT_ARGS:-}; do COMMON+=("$ca"); done
 REQUIRED_MANIFEST=${REQUIRED_MANIFEST:-}
 if [ -z "$REQUIRED_MANIFEST" ] && [ "$TAPS" != kernels ] && [ -f "$D/build_request/instances.json.gz" ]; then
-  if $PY -m verity_vllm.query.cli build --program "$D/build_request" --workload "$WL" --out "$D/manifest.json" > "$D/manifest.log" 2>&1; then
+  if $PY -m verity_vllm.pipeline.cli build --program "$D/build_request" --workload "$WL" --out "$D/manifest.json" > "$D/manifest.log" 2>&1; then
     REQUIRED_MANIFEST="$D/manifest.json"; log "required-value manifest: $(tail -n 1 "$D/manifest.log")"
   fi
 fi
@@ -118,14 +118,14 @@ run_arm() {
   local arm=$1 taps=$2 od=$3 lf=$4 rc=1 attempt
   for attempt in 1 2 3; do
     rm -rf "$od"
-    ( echo "\$ $PY -m verity_vllm.harness.commit_delta ${COMMON[*]} --only-arm $arm --compiled-taps $taps --out $od   (attempt $attempt)"
+    ( echo "\$ $PY -m verity_vllm.pipeline.commit ${COMMON[*]} --only-arm $arm --compiled-taps $taps --out $od   (attempt $attempt)"
       # per-process Inductor cache dir + vLLM compile cache OFF in BOTH arms: the Inductor output code of every compiled piece is digested
       # from that dir into versions.json compilation.generated_kernels (coord M-0178 (2a)); a shared or vLLM-cached dir would hide it
       local -a extra=(); [ "$arm" = instrumented ] && extra=("${TRT_EXTRA[@]}")
       # + the vLLM compile cache dir per process (compilation_config.cache_dir): vLLM dumps the split graph (rank_0_0/backbone/computation_graph.py
       # = the piece wiring the manifest's dataflow needs, rev-pm M-0589) even with the compile cache disabled
       VERITY_FAULT=${FAULT:-} TORCHINDUCTOR_CACHE_DIR="$od/inductor_cache" VERITY_INDUCTOR_DIR_PER_PROCESS=1 VLLM_DISABLE_COMPILE_CACHE=1 \
-        timeout "$TO" $PY -m verity_vllm.harness.commit_delta "${COMMON[@]}" --only-arm "$arm" --compiled-taps "$taps" "${extra[@]}" \
+        timeout "$TO" $PY -m verity_vllm.pipeline.commit "${COMMON[@]}" --only-arm "$arm" --compiled-taps "$taps" "${extra[@]}" \
           --engine-arg "compilation_config={\"cudagraph_mode\":\"$CGM\",\"inductor_compile_config\":{\"emulate_precision_casts\":${EMULATE:-false}},\"cache_dir\":\"$od/vllm_compile_cache\"}" --out "$od" ) > "$lf" 2>&1; rc=$?
     if [ $rc -ne 0 ] && grep -q "No available memory for the cache blocks\|CUDA out of memory\|Error in memory profiling\|Free memory on device .* is less than desired" "$lf"; then
       log "$arm attempt $attempt: engine could not get its memory budget (shared GPU); retry in 90 s"; sleep 90; continue
@@ -169,7 +169,7 @@ if [ "$TAPS" = kernels ]; then
   [ -f "$D/compiled_manifest_treatment.json" ] || build_compiled_manifest "${TRT_DIRS[0]}" "$D/compiled_manifest_treatment.json"
   MERGE_EXTRA=(--manifest-control "$D/compiled_manifest.json" --manifest-treatment "$D/compiled_manifest_treatment.json")
 fi
-$PY -m verity_vllm.harness.compiled_merge $(printf -- "--control %s " "${CTRL_DIRS[@]}") $(printf -- "--treatment %s " "${TRT_DIRS[@]}") "${MERGE_EXTRA[@]}" --out "$D/commit" > "$D/commit_merge.log" 2>&1; rcm=$?
+$PY -m verity_vllm.pipeline.compiled_merge $(printf -- "--control %s " "${CTRL_DIRS[@]}") $(printf -- "--treatment %s " "${TRT_DIRS[@]}") "${MERGE_EXTRA[@]}" --out "$D/commit" > "$D/commit_merge.log" 2>&1; rcm=$?
 cat "$D/commit_merge.log"
 cat "$D"/commit_control_r*.log "$D"/commit_treatment_r*.log > "$D/commit.log"
 # [MAN-05 for compiled rows] the manifest the treatment USED (control-derived) vs the same derivation from the treatment's own output code

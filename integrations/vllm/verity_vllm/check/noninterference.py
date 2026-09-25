@@ -740,7 +740,7 @@ def orchestrate(args) -> int:
     runs = [
         ("a_observer", [py, "-m", "verity_vllm.check.noninterference", "--variant", "observer", "--out", str(out / "a_observer"), *common]),
         ("b_hooks", [py, "-m", "verity_vllm.check.noninterference", "--variant", "hooks", "--out", str(out / "b_hooks"), *common]),
-        ("c_bare", [py, "-m", "verity_vllm.observe.m1_capture", "--no-observer", "--out", str(out / "c_bare"), *common]),
+        ("c_bare", [py, "-m", "verity_vllm.pipeline.m1_capture", "--no-observer", "--out", str(out / "c_bare"), *common]),
     ]
     timings = {}
     for name, cmd in runs:
