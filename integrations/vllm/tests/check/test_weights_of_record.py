@@ -739,9 +739,10 @@ def test_of_record_set_is_stamped_from_every_component_and_checked_by_set_equali
     assert cli.main(["weights-of-record", "--programs-root", str(tmp_path / "empty"), "--checkpoint-dir", str(d), "--checkpoints", str(man), "--out", str(tmp_path / "x.json")]) == 2
 
 
-def test_cli_record_carries_its_derivation_provenance_and_names_what_it_supersedes(checkpoint, tmp_path):
+def test_cli_record_carries_its_derivation_provenance_and_names_what_it_supersedes(checkpoint, tmp_path, monkeypatch):
     """[COORD R16 M-0038 (2)] a record the CLI writes carries `derived` = {tool, code (git HEAD or null), at, sources (Program files, checkpoint
-    dir, checkpoints.json), argv, supersedes}; check() ignores it (digests are the evidence)."""
+    dir, checkpoints.json), argv, supersedes}; check() ignores it (digests are the evidence).  argv is the command's own flags, as the
+    process `verity-vllm weights-of-record ...` sees them."""
     from verity_vllm.pipeline import row_records as R
 
     d, man, t = checkpoint
@@ -752,10 +753,11 @@ def test_cli_record_carries_its_derivation_provenance_and_names_what_it_supersed
     stale.write_text(json.dumps({"schema": WR.SCHEMA_V1, "program_digest": "d" * 64, "complete": True, "unpinned": []}))
     out = pdir / "weights_of_record.json"
     argv = ["--program-dir", str(pdir), "--checkpoint-dir", str(d), "--checkpoints", str(man), "--out", str(out), f"--supersedes={stale}"]
-    assert cli.main(["weights-of-record", *argv]) == 0
+    monkeypatch.setattr("sys.argv", ["verity-vllm", "weights-of-record", *argv])
+    assert cli.main() == 0
     rec = json.load(open(out))
     dv = rec["derived"]
-    assert dv["tool"] == "verity_vllm.check.weights_of_record" and dv["supersedes"] == str(stale) and dv["argv"] == ["weights-of-record", *argv]
+    assert dv["tool"] == "verity_vllm.check.weights_of_record" and dv["supersedes"] == str(stale) and dv["argv"] == argv
     assert dv["sources"]["program_dir"] == str(pdir) and dv["sources"]["program_files"] == ["instances.json.gz", "result.json"]
     assert dv["sources"]["checkpoint_dir"] == str(d) and dv["sources"]["checkpoints_manifest"] == str(man)
     assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", dv["at"]) and (dv["code"] is None or re.fullmatch(r"[0-9a-f]{40}", dv["code"]))
