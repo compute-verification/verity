@@ -6,6 +6,7 @@
 set -uxo pipefail
 W=/workspace/flock-link; F=$W/flock; O=$RESEARCH_RUN_DIR/out; mkdir -p $O
 source $HOME/.cargo/env
+[ -x /usr/bin/time ] || { apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq time >/dev/null; }
 SRC=$(pwd)/backends/flock
 cd $F
 git checkout -q -- crates/flock-core crates/flock-prover && git apply $SRC/flock-link-b684b12.patch || exit 1
