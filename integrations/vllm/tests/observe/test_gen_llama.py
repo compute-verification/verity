@@ -16,7 +16,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity_vllm.input_provenance import analytic
+from verity_vllm.program import model as analytic
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepEnd, StepStart, TritonLaunch
 from verity_vllm.observe.patterns import GemmLaunch, members
 from verity_vllm.engine.profiles import gen_llama_patterns as GP

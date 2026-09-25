@@ -12,7 +12,7 @@ import json
 
 import pytest
 
-from verity_vllm.input_provenance import analytic
+from verity_vllm.program import model as analytic
 from verity_vllm.observe.events import RunHeader
 from verity_vllm.observe.patterns import TokenSelectArgmax
 from verity_vllm.engine.profiles import canonical as K

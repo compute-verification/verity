@@ -68,7 +68,7 @@ GEMM_NUM_STAGES = 3
 #: this value is only the profile's own default (the RTX 4090's 128 SMs) for headers that carry no device — one source.
 GEMM_NUM_SMS = DEFAULT_TARGET.num_sms
 
-#: `batch_invariant.py::_rms_norm_kernel` as `rms_norm_batch_invariant` launches it (W11's model, `verity_vllm/program/numerics/
+#: `batch_invariant.py::_rms_norm_kernel` as `rms_norm_batch_invariant` launches it (W11's model, `verity_vllm/program/backends/
 #: rms_triton_model.py`): one CTA of 4 warps per row, 8 columns per thread per 1024-column chunk, warp butterfly
 #: xor 16,8,4,2,1, CTA `(w0 + w2) + (w1 + w3)` — the reduction tree `RMSNormTriton_v1` writes out.
 RMS_CONSTEXPRS: dict[str, Any] = {"BLOCK_SIZE": 1024, "HAS_WEIGHT": True}

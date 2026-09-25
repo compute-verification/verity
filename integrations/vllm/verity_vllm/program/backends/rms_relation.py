@@ -29,8 +29,8 @@ from typing import Any
 
 import numpy as np
 
-from . import rms_triton_model as RM
-from .fa2_relation import GemmRelationError, _arg_cols, _const, _extra, _node_of, _words
+from verity_vllm.program.backends import rms_triton_model as RM
+from verity_vllm.program.backends.fa2_relation import GemmRelationError, _arg_cols, _const, _extra, _node_of, _words
 
 MODEL_VERSION = "rmsnorm-triton-sm89-bf16.v1"
 CUDA_MODEL_VERSION = "rmsnorm-cuda-sm89-bf16.v1"
@@ -164,7 +164,7 @@ RELATIONS: dict[str, Any] = {rid: fn for rid, (_, fn, _, _) in RELATION_IDS.item
 
 def register_with_w2(replace: bool = False) -> list[str]:
     try:
-        from verity_vllm.check import relations as R
+        from verity_vllm.program.backends import relations as R
     except ImportError:
         return []
     done = []

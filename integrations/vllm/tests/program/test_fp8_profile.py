@@ -11,7 +11,7 @@ import json
 
 import pytest
 
-from verity_vllm.input_provenance import analytic
+from verity_vllm.program import model as analytic
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepStart, ViewDesc
 from verity_vllm.observe.patterns import ALIAS_OPS, classify_transparent
 from verity_vllm.observe.patterns_fp8 import CutlassScaledMmFp8Block, PerTokenGroupFp8Quant

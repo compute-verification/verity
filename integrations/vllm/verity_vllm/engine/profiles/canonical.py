@@ -24,7 +24,7 @@ import re
 import types
 from typing import Any
 
-from verity_vllm.input_provenance import analytic
+from verity_vllm.program import model as analytic
 
 #: the names no map should bind (a probe of the maps' refusals), and the quantization / attention-scale placeholders the base map knows
 #: by shape rather than by family: the family and base vocabularies themselves are read off the maps (`probe_vocabulary`)

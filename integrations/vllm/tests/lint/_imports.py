@@ -30,10 +30,10 @@ INTERIM_LAYER = {
     "verity_vllm.pipeline": "pipeline",                         # derive_step, run_config, commit_delta, research_*, ...
     "verity_vllm.target_family": "config",             # -> config.py
     "verity_vllm.check": "check|properties",                   # per-run checks, and the property harnesses -> properties/
-    "verity_vllm.check.twins": "program",                      # -> program/backends/
-    "verity_vllm.check.relations": "program",                  # -> program/backends/
+    "verity_vllm.program.backends.twins": "program",                      # -> program/backends/
+    "verity_vllm.program.backends.relations": "program",                  # -> program/backends/
     "verity_vllm.input_provenance": "check|properties",        # weights_of_record, root_policy -> check/provenance.py
-    "verity_vllm.input_provenance.analytic": "program",        # -> program/model.py
+    "verity_vllm.program.model": "program",        # -> program/model.py
     "verity_vllm.acquire": "acquire",
     "verity_vllm.acquire.native_host": "observe|commit",       # the committer -> commit/committer/
     "verity_vllm.acquire.native_collect": "observe|commit",
@@ -56,7 +56,7 @@ INTERIM_LAYER = {
     "verity_vllm.query.boundary": "core",                      # -> verity.ir
     "verity_vllm.query.partition": "core",                     # -> verity.ir
     "verity_vllm.correspondence": "query|correspondence",
-    "verity_vllm.correspondence.emit": "program",              # -> program/frontend/
+    "verity_vllm.program.frontend.emit": "program",              # -> program/frontend/
     "verity_vllm.correspondence.batch_decomp": "check|properties",   # -> check/match/
     "verity_vllm.correspondence.runtime_tree": "observe|commit",
     "verity_vllm.correspondence.chunk_attribution": "observe|commit",
@@ -69,7 +69,7 @@ INTERIM_LAYER = {
     "verity_vllm.tp.embedding_shard": "collectives",
     "verity_vllm.engine.rank_worker": "engine",                         # -> engine/rank_worker.py
     "verity_vllm.tp.partial_source": "acquire",                # -> acquire/sources/
-    "verity_vllm.tp.export_ops": "program",                    # -> program/frontend/
+    "verity_vllm.program.frontend.export_ops": "program",                    # -> program/frontend/
     "verity_vllm.tp.collective_pattern": "observe|commit",     # -> observe/fold/patterns/
     "verity_vllm.tp.rank_match": "check|properties",           # -> check/match/
     "verity_vllm.tp.xrank_collectives": "check|properties",    # -> check/match/

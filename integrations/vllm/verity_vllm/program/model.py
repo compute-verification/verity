@@ -1,4 +1,4 @@
-"""verity_vllm/input_provenance/analytic.py — Phase 0 of the generalization sweep: what a configuration *is*, and the roots that are
+"""verity_vllm/program/model.py — Phase 0 of the generalization sweep: what a configuration *is*, and the roots that are
 functions of it.
 
     config_of(hf_config, model=..., revision=...)  -> (C, provenance)   static configuration from a checkpoint's config.json

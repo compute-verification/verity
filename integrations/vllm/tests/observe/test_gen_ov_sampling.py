@@ -138,7 +138,7 @@ def _evaluate_gumbel(V: int, seed: int, pos: int, words: list[int]) -> int:
 
 def _oracle(V: int, seed: int, pos: int, words: list[int]) -> int:
     import numpy as np
-    from verity_vllm.program.numerics.libdevice_sampling import gumbel_noise_exact
+    from verity_vllm.program.backends.libdevice_sampling import gumbel_noise_exact
     logits = (np.asarray(words, dtype=np.uint32) << 16).view(np.float32)
     y = logits + gumbel_noise_exact(seed, pos, V)      # f32 add, round-to-nearest (the kernel's `logits + gumbel`)
     return int(np.argmax(y))                            # lowest index on ties, like the kernel's block-max scan
@@ -165,7 +165,7 @@ def test_gumbel_lane_noise_is_bit_exact_against_the_gpu_probe():
     """The pod probe dumped `_gumbel_sample_kernel`'s noise (tl.rand -> log1pf/logf) for seeds/positions of the B1 runs;
     the lane's NumPy transcription and the Definition's per-lane primitive must reproduce every word."""
     import numpy as np
-    from verity_vllm.program.numerics.libdevice_sampling import gumbel_noise_exact
+    from verity_vllm.program.backends.libdevice_sampling import gumbel_noise_exact
     from verity_vllm.program.registry.quarantine.ov_sampling.gumbel import GumbelNoiseLane, GumbelStreamKey
     probe = Path(__file__).resolve().parents[2] / "out/gen/lanes/ov-sampling/runs/probe"
     cmp = probe / "compare.json"
@@ -312,7 +312,7 @@ def test_gumbel_argmax_temp_definition_matches_the_div_full_oracle():
     from verity.ir.evaluate import evaluate_region
     from verity_vllm.program.registry import prims as P
     from verity_vllm.program.registry.quarantine.ov_sampling.gumbel import GumbelArgmaxTempBf16
-    from verity_vllm.program.numerics.libdevice_sampling import gumbel_noise_exact
+    from verity_vllm.program.backends.libdevice_sampling import gumbel_noise_exact
     V, seed, pos = 80, 11, 5
     for T in (0.7, 1.3):
         tb = int(np.float32(T).view(np.uint32))

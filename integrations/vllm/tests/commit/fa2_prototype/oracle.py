@@ -34,7 +34,7 @@ from verity_vllm.program.registry import b1
 from .encoding import NLANES, RowLayout
 
 # The MUFU.EX2 / MUFU.RCP tables (2 x 2^23 u32 = 64 MB) are the pinned semantics of `MufuEx2Ftz` / `Fa2InvSum`.
-# `verity_vllm.program.numerics.fa2_model.MufuTables.load` reconstructs them through int64 temporaries (peak ~210 MB traced,
+# `verity_vllm.program.backends.fa2_model.MufuTables.load` reconstructs them through int64 temporaries (peak ~210 MB traced,
 # ~250 MB resident afterwards on macOS because the freed pages stay mapped).  The laptop's `~/.veritor/mem_guardian.py`
 # kills any lane python above 256 MiB while the data volume is below its 6-GB disk floor (it was at 1.7 GB free on
 # 2026-09-18), so this module fills the numerics lane's table cache with the SAME arrays reconstructed chunkwise
@@ -47,8 +47,8 @@ MUFU_TABLE_SHA256 = {
 
 
 def preload_mufu_tables_low_peak() -> None:
-    from verity_vllm.program.numerics import fa2_model as FA
-    from verity_vllm.program.numerics import fa2_relation
+    from verity_vllm.program.backends import fa2_model as FA
+    from verity_vllm.program.backends import fa2_relation
 
     d = fa2_relation.tables_dir()
     if d in fa2_relation._TABLES:

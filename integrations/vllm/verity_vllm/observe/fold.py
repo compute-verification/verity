@@ -103,7 +103,7 @@ from verity_vllm.program.registry import b1
 from verity.ir.types import Array, Record, Type, Value
 from verity.ir.types import Tuple as TupleT
 
-from verity_vllm.input_provenance import analytic
+from verity_vllm.program import model as analytic
 from .events import (
     DispatchEnter,
     DispatchExit,

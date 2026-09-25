@@ -17,7 +17,7 @@ import json
 
 import numpy as np
 
-from verity_vllm.input_provenance import analytic
+from verity_vllm.program import model as analytic
 from verity_vllm.input_provenance import weights_of_record as WR
 from tests.input_provenance.test_weights_of_record import PREFIX, _program, checkpoint  # noqa: F401  (fixture)
 

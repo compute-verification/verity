@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from verity_vllm.check.fold_compare import DEFAULT_COS_SIN as B0_FIXTURE
-from verity_vllm.input_provenance import analytic
+from verity_vllm.program import model as analytic
 from verity_vllm.program.registry import b1
 
 # the relevant keys of the checkpoints' config.json (HF hub, the pinned revisions)

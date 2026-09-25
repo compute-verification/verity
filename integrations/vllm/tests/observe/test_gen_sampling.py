@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity_vllm.program.numerics import sampling_rng as R
+from verity_vllm.program.backends import sampling_rng as R
 
 PROFILES = Path(__file__).resolve().parents[2] / "workloads"
 WORKLOADS = ["workload_b0_sampling_temp07", "workload_b0_sampling_topk50_topp09", "workload_b0_sampling_n2", "workload_b0_sampling_2req_seeds"]

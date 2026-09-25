@@ -311,7 +311,7 @@ def _f16_words_to_bf16(w: np.ndarray) -> np.ndarray:
     """[SHARED-CODE lane cov-ln] the bf16 word vLLM's loader produces from an fp16 checkpoint word: `param.data.copy_(loaded)`
     into a bf16 parameter on the GPU is `__float2bfloat16((float)half)` — fp16 -> f32 exact, f32 -> bf16 round-to-nearest-even
     (`analytic.f32_to_bf16_words`; NaN payloads are not preserved by the CUDA convert, but a checkpoint has no NaN words)."""
-    from verity_vllm.input_provenance.analytic import f32_to_bf16_words
+    from verity_vllm.program.model import f32_to_bf16_words
     return f32_to_bf16_words(np.ascontiguousarray(w, dtype=np.uint16).view(np.float16).astype(np.float32))
 
 
@@ -404,7 +404,7 @@ class WeightSource:
         elif name == "normalizer":
             # [ADAPTER lane cov-dense] Gemma-2's `model.normalizer` (analytic-table root, `analytic.weights_type`): one bf16 word,
             # bf16(sqrt(H)); H is the Record's own hidden width (the `norm` field's length), so no configuration is needed here.
-            from verity_vllm.input_provenance import analytic
+            from verity_vllm.program import model as analytic
             H = self.weights_type.fields[self.weights_type.index("norm")][1].n
             w = np.array([analytic.normalizer_word(int(H))], dtype=np.uint16)
         elif name in self._weight_fields:

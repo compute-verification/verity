@@ -31,7 +31,7 @@ def test_low_peak_tables_match_the_original_loader() -> None:
 
     from tests.commit.fa2_prototype.oracle import MUFU_TABLE_SHA256
 
-    code = ("import hashlib; from verity_vllm.program.numerics import fa2_relation, fa2_model as FA;"
+    code = ("import hashlib; from verity_vllm.program.backends import fa2_relation, fa2_model as FA;"
             "T = FA.MufuTables.load(fa2_relation.tables_dir());"
             "print(hashlib.sha256(T.ex2.tobytes()).hexdigest(), hashlib.sha256(T.rcp.tobytes()).hexdigest())")
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=120,

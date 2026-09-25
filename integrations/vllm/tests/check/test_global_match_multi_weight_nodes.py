@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import pytest
 
-from verity_vllm.input_provenance import analytic
+from verity_vllm.program import model as analytic
 from verity_vllm.observe import fold as fold_mod
 from verity_vllm.correspondence import batch_decomp as bd
 from verity_vllm.check import program_compare as C

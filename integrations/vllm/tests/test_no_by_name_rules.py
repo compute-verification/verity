@@ -46,7 +46,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[0]  # integrations/vllm
 SCAN = ("verity_vllm",)
-SKIP_DIRS = frozenset({"tests", "__pycache__", "numerics"}); SKIP_FILES = frozenset({"engine_profile.py"})   # relayout: program/numerics/ and observe/engine_profile.py come from the two packages SCAN never covered; 13 by-name rules -- decide (Draft 3.1 §12.4), do not just allowlist
+SKIP_DIRS = frozenset({"tests", "__pycache__", "backends"}); SKIP_FILES = frozenset({"engine_profile.py"})   # relayout: program/backends/ and engine/engine_profile.py come from the two packages SCAN never covered; 13 by-name rules -- decide (Draft 3.1 §12.4), do not just allowlist
 ALLOWLIST = HERE / "by_name_allowlist.json"
 KINDS = ("model-name", "path-predicate", "table")
 

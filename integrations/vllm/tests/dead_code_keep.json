@@ -4,7 +4,7 @@
  "modules": {
   "verity_vllm.program.instances_form": "reference of the progressions form; cb_a/tests/test_compact.py checks the LIVE fold's output against it",
   "verity_vllm.pipeline.coverage_workloads": "workload generator: test_chunked_attribution.py / test_coverage_workloads.py (LIVE chunk_attribution, arrivals, gates)",
-  "verity_vllm.program.numerics.libdevice_sampling": "libdevice transcription: test_gen_ov_sampling.py checks it against the LIVE resolver / gumbel definitions",
+  "verity_vllm.program.backends.libdevice_sampling": "libdevice transcription: test_gen_ov_sampling.py checks it against the LIVE resolver / gumbel definitions",
   "verity_vllm.pipeline.topp_split_probe": "CPU checker + GPU-truth fixture: tests/program/test_topp_split_geometry.py (LIVE registry.topp_split)",
   "verity_vllm.program.frontend.derive_examples": "source modules of the derivation tests (LIVE frontend.derive)",
   "verity_vllm.program.frontend.examples": "authored examples of the torch-frontend tests (LIVE frontend.torch_frontend / correspond)",
@@ -13,7 +13,7 @@
   "verity_vllm.program.profile_descriptor": "descriptor byte profile used by test_codec.py",
   "verity_vllm.program.registry.conformance": "conformance record read by test_nan_conversion.py (LIVE registry.b1 / prims)",
   "verity_vllm.check.poc_required_interface": "imported by tests/commit/synthetic.py",
-  "verity_vllm.program.numerics.fa3_model": "independent CPU FA3 model cross-checked by test_composition.py / test_derived_rows.py (LIVE crosscheck / derived_rows)",
+  "verity_vllm.program.backends.fa3_model": "independent CPU FA3 model cross-checked by test_composition.py / test_derived_rows.py (LIVE crosscheck / derived_rows)",
   "verity_vllm.tp.collective_link": "TP path (lane/vllm-tp-n extends it: world-N gather identity); tests/tp/test_tp_collective.py",
   "verity_vllm.tp.collective_record": "TP path (lane/vllm-tp-n); test_tp_collective.py",
   "verity_vllm.tp.analyze": "TP path (lane/vllm-tp-n); test_tp2_analyze.py / test_tp_collective.py",

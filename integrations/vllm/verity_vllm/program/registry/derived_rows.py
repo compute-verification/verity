@@ -195,13 +195,13 @@ def fma_sub_ftz(a, b, c):
 
 @lru_cache(maxsize=None)
 def _fa2_tables():
-    from verity_vllm.program.numerics import fa2_relation
+    from verity_vllm.program.backends import fa2_relation
     return fa2_relation.tables()
 
 
 @lru_cache(maxsize=None)
 def _rms_tables():
-    from verity_vllm.program.numerics import rms_relation
+    from verity_vllm.program.backends import rms_relation
     return rms_relation.tables("cuda")  # sqrt + rcp + rsq banks
 
 

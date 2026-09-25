@@ -24,7 +24,7 @@ from verity.ir.defs import bind
 from verity.ir.evaluate import evaluate_region
 from verity.ir.layout import resolve
 from verity.ir.program import Program
-from verity_vllm.input_provenance import analytic
+from verity_vllm.program import model as analytic
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepStart, TritonLaunch, ViewDesc
 from verity_vllm.observe.patterns import TokenSelectArgmax, TokenSelectGumbelTwoStage
 from verity_vllm.engine.profiles import profile_module_for_case

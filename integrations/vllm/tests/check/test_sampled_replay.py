@@ -1554,7 +1554,7 @@ def _jit_slow_compile(out):
 
 
 def _jit_worker(args):
-    from verity_vllm.program.numerics import _jit
+    from verity_vllm.program.backends import _jit
     lib, src = Path(args[0]), Path(args[1])
     p = _jit.atomic_build(lib, [src], _jit_slow_compile)
     return len(Path(p).read_bytes()) == 4 + 256 * 64     # a reader after publish always sees the whole library
@@ -1567,7 +1567,7 @@ def test_jit_twin_library_build_is_atomic_and_serialised_across_concurrent_first
     fresh library is not rebuilt.  The parent prewarms the evaluators' libraries before forking (`_prewarm_evaluators`)."""
     import multiprocessing as mp
     import time
-    from verity_vllm.program.numerics import _jit
+    from verity_vllm.program.backends import _jit
 
     lib = tmp_path / "libtwin.so"
     src = tmp_path / "twin.cpp"

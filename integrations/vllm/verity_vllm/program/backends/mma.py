@@ -133,7 +133,7 @@ AMPERE_F16 = TCModel(
     groups=(8, 8),
     width=25,
     zero_exponent=-132,
-    version="verity_vllm.program.numerics.mma.AMPERE_F16 v1 (Hawkeye Ampere FP16 product + BF16 group_sum)",
+    version="verity_vllm.program.backends.mma.AMPERE_F16 v1 (Hawkeye Ampere FP16 product + BF16 group_sum)",
 )
 
 MODELS: dict[str, TCModel] = {m.name: m for m in (AMPERE_BF16, AMPERE_F16)}

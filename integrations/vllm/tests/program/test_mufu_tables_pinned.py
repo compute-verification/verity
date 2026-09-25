@@ -8,9 +8,9 @@ import os
 import numpy as np
 import pytest
 
-from verity_vllm.program.numerics import fa2_model as FA
-from verity_vllm.program.numerics import fa2_relation, rms_relation
-from verity_vllm.program.numerics import rms_triton_model as RM
+from verity_vllm.program.backends import fa2_model as FA
+from verity_vllm.program.backends import fa2_relation, rms_relation
+from verity_vllm.program.backends import rms_triton_model as RM
 from verity_vllm.program.registry import prims as P
 
 TANH_TABLE_WORD = 0x3F000000  # tanh(0.5): between the identity and the saturation rule, so answered from the table

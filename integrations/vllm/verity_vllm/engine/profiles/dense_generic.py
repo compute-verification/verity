@@ -40,7 +40,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.config import CHECKPOINTS as MANIFEST
-from verity_vllm.input_provenance import analytic
+from verity_vllm.program import model as analytic
 from verity_vllm.observe.resolver import Profile
 from verity_vllm.engine.profiles.vllm_d9105ea80_sm89_eager import with_geometry
 

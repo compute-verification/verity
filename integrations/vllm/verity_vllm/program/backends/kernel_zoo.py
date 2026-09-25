@@ -19,8 +19,8 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from . import cpu_model as CM
-from .mma import AMPERE_BF16
+from verity_vllm.program.backends import cpu_model as CM
+from verity_vllm.program.backends.mma import AMPERE_BF16
 
 TRITON_KERNEL = "matmul_kernel_persistent"
 

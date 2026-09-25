@@ -7,7 +7,7 @@ the authenticated openings of its inputs, using nothing but the explicit numeric
 measured in this lane (``docs/vllm-poc/numerics.md``):
 
 * per instruction: Ampere ``mma.sync.m16n8k16`` BF16 x BF16 -> FP32 semantics
-  (``veritor.core.silicon.AMPERE_BF16_M16N8K16`` == ``verity_vllm.program.numerics.mma.AMPERE_BF16``;
+  (``veritor.core.silicon.AMPERE_BF16_M16N8K16`` == ``verity_vllm.program.backends.mma.AMPERE_BF16``;
   Ada's BF16 instruction is parameter-identical, ``docs/hardware-semantics.md``);
 * across K: one chain over the K/16 tiles in ascending k order from a zero FP32 accumulator
   (vLLM's batch-invariant ``matmul_kernel_persistent``) -- or the slice/split-K description the
@@ -20,7 +20,7 @@ The checker never runs the runtime; it is C++/OpenMP over the opened words (``cp
 pure Python for the scalar gate ``independent_gemm_coordinate`` (one output coordinate from the
 opened input row and one opened weight column).
 
-Interface.  With W2's harness importable (``verity_vllm.check.relations``) this module fills the
+Interface.  With W2's harness importable (``verity_vllm.program.backends.relations``) this module fills the
 registered slots ``gemm.bf16.v1`` and ``lm_head.bf16.v1`` at import time and adds
 ``gemm.bf16.coordinate.v1``; the checkers then receive a ``NodeInstance`` and a mapping of
 argument names to authenticated ``Value`` objects.  Without W2's package the same functions
@@ -46,7 +46,7 @@ is ``M = 1``: one opened input row -> the ``N`` BF16 words of one output row.
 
 A slice/split-K cuBLAS kernel is described by a ``const`` arg ``split_k`` (or ``attrs.split_k``)
 ``{"nsplit": S, "bounds": [...], "order": [...]|null, "reduce_mode": 0|1|2}`` in K/16-tile units,
-e.g. the ``sliced1x2`` 64x64 kernel = ``verity_vllm.program.numerics.gemm_production.sliced_k_spec(K, 2, 2, ...)``.
+e.g. the ``sliced1x2`` 64x64 kernel = ``verity_vllm.program.backends.gemm_production.sliced_k_spec(K, 2, 2, ...)``.
 A node whose kernel is unresolved must not carry this relation (checker ``none``).
 
 Coverage (what the checker claims).  ``independent_gemm`` predicts only on the families this
@@ -73,9 +73,9 @@ from typing import Any
 import numpy as np
 
 
-from . import cpu_model as CM
-from . import kernel_zoo as Z
-from .mma import AMPERE_BF16, TCModel, tc_dot_chain
+from verity_vllm.program.backends import cpu_model as CM
+from verity_vllm.program.backends import kernel_zoo as Z
+from verity_vllm.program.backends.mma import AMPERE_BF16, TCModel, tc_dot_chain
 
 
 def _f32_to_bf16(bits):
@@ -488,10 +488,10 @@ RELATIONS: dict[str, Any] = {rid: fn for rid, (_, fn, _) in RELATION_IDS.items()
 
 
 def register_with_w2(replace: bool = False) -> list[str]:
-    """Fill W2's slots (``verity_vllm.check.relations``); returns the ids registered, [] if W2 is absent."""
+    """Fill W2's slots (``verity_vllm.program.backends.relations``); returns the ids registered, [] if W2 is absent."""
 
     try:
-        from verity_vllm.check import relations as R
+        from verity_vllm.program.backends import relations as R
     except ImportError:
         return []
     done = []
@@ -525,4 +525,4 @@ REGISTERED_WITH_W2 = register_with_w2()
 
 # W11: the independent attention relation (FlashAttention-2 model) registers itself alongside the GEMM
 # relations when this module is imported; kept in its own module (fa2_relation.py).
-from . import fa2_relation as _fa2_relation  # noqa: E402,F401
+from verity_vllm.program.backends import fa2_relation as _fa2_relation  # noqa: E402,F401

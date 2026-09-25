@@ -25,7 +25,7 @@ Exactness budget (what is bit-exact and what is not):
     case the division result is *in the captured logits* and the argmax input is exact.
 
 CLI (laptop, CPU-only, needs the run's log + snapshots):
-    python -m verity_vllm.program.numerics.sampling_rng --run RUN_DIR [--out RUN_DIR/rng_check.json]
+    python -m verity_vllm.program.backends.sampling_rng --run RUN_DIR [--out RUN_DIR/rng_check.json]
 """
 
 from __future__ import annotations

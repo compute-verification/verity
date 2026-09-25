@@ -374,7 +374,7 @@ def _sha256_file(p: Path) -> str | None:
 def _hf_config_of(a: argparse.Namespace, C: dict | None) -> dict | None:
     """`analytic.config_of(<hf config.json>)` when the integrator's module and an HF config are available."""
     try:
-        an = importlib.import_module("verity_vllm.input_provenance.analytic")
+        an = importlib.import_module("verity_vllm.program.model")
     except ImportError:
         return None
     cfg = None

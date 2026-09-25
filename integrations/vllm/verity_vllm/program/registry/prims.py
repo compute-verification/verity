@@ -6,7 +6,7 @@ encodings map to ordinary outputs following the registered semantics stated in e
 
 Hardware-shaped primitives wrap the existing exact models, they do not re-derive them:
   * `TcDot16` — `veritor.core.silicon_total` (`mma.sync.m16n8k16` k-step, total on every encoding), evaluated through
-    `registry.tc_total` (the pure-Python 3.11 port the pods run; `veritor` / `verity_vllm.program.numerics.mma` are the test-only references);
+    `registry.tc_total` (the pure-Python 3.11 port the pods run; `veritor` / `verity_vllm.program.backends.mma` are the test-only references);
   * MUFU `Ex2`, `Rcp` (FA2, `--use_fast_math`, ftz) — `fa2_model.MufuTables` (sm_89 measured tables);
   * MUFU `Sqrt`, `Rcp` (Triton RMSNorm) and `Rsqrt` (CUDA RMSNorm, `rsqrt.approx.f32`) —
     `rms_triton_model.RmsTables`.
@@ -350,9 +350,9 @@ def RopeOutAdd(x: int, y: int, c: int, s: int) -> int:
 
 @lru_cache(maxsize=None)
 def _mma():
-    """The finite reference (`verity_vllm.program.numerics.mma` -> `verity.ml.tc.silicon`): used by the tests as one of the oracles
+    """The finite reference (`verity_vllm.program.backends.mma` -> `verity.ml.tc.silicon`): used by the tests as one of the oracles
     `_tc_dot16_total` is checked against; NOT used at evaluation time."""
-    from verity_vllm.program.numerics import mma  # noqa: WPS433
+    from verity_vllm.program.backends import mma  # noqa: WPS433
     return mma
 
 
@@ -363,7 +363,7 @@ def _tc_dot16_total(acc: int, a: tuple[int, ...], b: tuple[int, ...]) -> int:
     version 3, measured on the A100 and the RTX 4090): on finite operands = `silicon.tc_dot(AMPERE_BF16_M16N8K16)` (the R15/R16
     relation, unchanged); on every other encoding the MEASURED total rules -- any NaN operand / acc, inf * 0, or infinities of
     both signs (an overflowed group counts as its infinity) -> the canonical 0x7FFFFFFF; a one-signed infinity -> that infinity.
-    [R17 dense, int-3] Before this the prim evaluated through `verity_vllm.program.numerics.mma` (unimportable on the pods' 3.11) with a
+    [R17 dense, int-3] Before this the prim evaluated through `verity_vllm.program.backends.mma` (unimportable on the pods' 3.11) with a
     documented-not-measured extension path that gave 0x7FC00000 for NaN and ignored a group's finite overflow beside an infinite
     operand; both differences are on non-finite outcomes only, which the vectorised twin flags and the sampled replay never
     compares (tests/program/test_derived_rows.py states them)."""
@@ -387,13 +387,13 @@ def AmpereBF16TcDot16(acc: int, *ab: int) -> int:
 
 @lru_cache(maxsize=None)
 def _fa2():
-    from verity_vllm.program.numerics import fa2_model, fa2_relation
+    from verity_vllm.program.backends import fa2_model, fa2_relation
     return fa2_model, fa2_relation.tables()
 
 
 @lru_cache(maxsize=None)
 def _rms():
-    from verity_vllm.program.numerics import rms_relation, rms_triton_model
+    from verity_vllm.program.backends import rms_relation, rms_triton_model
     return rms_triton_model, rms_relation.tables("cuda")
 
 

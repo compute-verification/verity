@@ -20,7 +20,7 @@ import re
 from typing import Any
 
 from verity_vllm.query.manifest.format import SCHEMA, manifest_digest as _manifest_digest
-from verity_vllm.program.numerics.compiled_relations import OUTPUT_ROLES, kernel_key, pointer_arity, roles_of
+from verity_vllm.program.backends.compiled_relations import OUTPUT_ROLES, kernel_key, pointer_arity, roles_of
 
 # the consumer (binding.load_required_manifest, R15 manbind / rev-cb M-0108) admits ONE manifest schema and recomputes `manifest_digest`
 # over the rows with required_manifest.manifest_digest: the compiled manifest is that schema (its P_compiled-specific content lives under

@@ -32,7 +32,7 @@ from verity_vllm.program.registry import b1
 from verity_vllm.program.registry.prims import I32
 from verity.ir.types import Array
 
-from verity_vllm.input_provenance import analytic
+from verity_vllm.program import model as analytic
 
 
 def _signature(S):

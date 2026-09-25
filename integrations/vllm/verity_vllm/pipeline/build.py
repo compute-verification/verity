@@ -55,7 +55,7 @@ _CONSTRUCTION_SOURCES = ("verity_vllm/program/frontend/export_compat.py", "verit
                          "verity_vllm/program/frontend/rules/vllm_iface.py", "verity_vllm/program/frontend/derive.py", "verity_vllm/program/frontend/target_profile.py",
                          "verity_vllm/program/registry/targets.py",
                          # [R13 tp] the TP construction scaffolding (group stub, collective bus, verity_tp ops) and the TP2 Definitions
-                         "verity_vllm/tp/export_ops.py", "verity_vllm/program/registry/b1_tp2.py",
+                         "verity_vllm/program/frontend/export_ops.py", "verity_vllm/program/registry/b1_tp2.py",
                          # [R15 stoch] the stochastic token-select rule (the sampler Definitions are registry digests in the descriptor)
                          "verity_vllm/program/frontend/rules/vllm_sampling.py")
 
@@ -380,7 +380,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             bus = None
             if tp > 1:
                 # [R13 tp] rank `rank` of `tp`: vLLM's TP group := TPStub (shard sizes + collectives -> CollectiveBus) for instantiation, export and derive
-                from verity_vllm.tp.export_ops import CollectiveBus, bind_vocab_parallel_embeddings, tp_group_override
+                from verity_vllm.program.frontend.export_ops import CollectiveBus, bind_vocab_parallel_embeddings, tp_group_override
                 bus = CollectiveBus(rank=rank, world=tp)
                 tp_stack.enter_context(tp_group_override(rank, tp, bus))
                 res["tp"]["engine_args_required"] = {"tensor_parallel_size": tp, "disable_custom_all_reduce": bool(cfg.parallel_config.disable_custom_all_reduce)}

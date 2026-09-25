@@ -27,7 +27,7 @@ from typing import Any
 
 import torch
 
-from verity_vllm.program.numerics.compiled_relations import OUTPUT_ROLES, roles_of
+from verity_vllm.program.backends.compiled_relations import OUTPUT_ROLES, roles_of
 
 _INDUCTOR_DEBUG_LEVEL = "1"                                                     # torch._inductor IntermediateValueDebuggingLevel.SAVE_ONLY
 

@@ -1630,7 +1630,7 @@ class CachePadRule(StateRule):
 
 def _tp_op(name: str) -> set:
     try:
-        from verity_vllm.tp.export_ops import ensure_ops
+        from verity_vllm.program.frontend.export_ops import ensure_ops
         ensure_ops()
         return {getattr(torch.ops.verity_tp, name).default}
     except Exception:  # noqa: BLE001 — construction scaffolding not importable: the rule has no targets

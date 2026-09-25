@@ -28,7 +28,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import _jit
+from verity_vllm.program.backends import _jit
 
 HERE = Path(__file__).resolve().parent
 CPP_SRC = HERE / "cpp" / "rms_triton_model.cpp"

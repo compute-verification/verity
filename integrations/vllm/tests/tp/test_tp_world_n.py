@@ -119,7 +119,7 @@ def test_registry_derived_family_selectors():
 
 def test_collective_bus_world_3_peer_layout_and_rank_order():
     torch = pytest.importorskip("torch")
-    from verity_vllm.tp.export_ops import CollectiveBus, ensure_ops
+    from verity_vllm.program.frontend.export_ops import CollectiveBus, ensure_ops
     ensure_ops()
     W, rank = 3, 1
     probe = CollectiveBus(rank=rank, world=W, mode="probe")

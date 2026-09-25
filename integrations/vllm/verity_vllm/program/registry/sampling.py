@@ -160,7 +160,7 @@ def add_rz_ftz(a: int, b: int) -> int:
     The exact sum is s + e (TwoSum in double: exact for fp32 operands); r = RN32(s) is stepped ONE fp32 ulp toward zero when its
     magnitude exceeds the exact value (RN rounded away from zero, or RN landed on s while e pulls the exact value inside it); RZ never
     overflows to inf from a finite sum (it saturates at FLT_MAX); a zero sum keeps its sign.  The same rule the GPU-validated numpy
-    transcription `verity_vllm/program/numerics/libdevice_sampling.py::add_rz_f32` applies (np.nextafter on float32 = one f32 ulp)."""
+    transcription `verity_vllm/program/backends/libdevice_sampling.py::add_rz_f32` applies (np.nextafter on float32 = one f32 ulp)."""
     fa, fb = _f(_ftz(a)), _f(_ftz(b))
     s = fa + fb
     if s == 0.0 or math.isnan(s):

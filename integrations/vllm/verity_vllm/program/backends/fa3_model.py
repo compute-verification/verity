@@ -36,8 +36,8 @@ import ctypes
 
 import numpy as np
 
-from . import fa2_model as _fa2
-from .fa2_model import (  # noqa: F401  (the shared pieces: tables, scale, build)
+from verity_vllm.program.backends import fa2_model as _fa2
+from verity_vllm.program.backends.fa2_model import (  # noqa: F401  (the shared pieces: tables, scale, build)
     HEAD_DIM,
     M_LOG2E,
     MufuTables,

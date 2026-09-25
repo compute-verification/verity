@@ -40,7 +40,7 @@ from dataclasses import dataclass, field
 import pytest
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
-CB_A = tuple(REPO / f for f in ("verity_vllm/check/global_match.py", "verity_vllm/check/global_match_fast.py", "verity_vllm/check/program_compare.py", "verity_vllm/correspondence/batch_decomp.py", "verity_vllm/pipeline/build.py", "verity_vllm/program/compact.py", "verity_vllm/pipeline/global_program.py", "verity_vllm/program/instances_form.py", "verity_vllm/tp/export_ops.py"))   # cb_a dissolved: its modules outside frontend/
+CB_A = tuple(REPO / f for f in ("verity_vllm/check/global_match.py", "verity_vllm/check/global_match_fast.py", "verity_vllm/check/program_compare.py", "verity_vllm/correspondence/batch_decomp.py", "verity_vllm/pipeline/build.py", "verity_vllm/program/compact.py", "verity_vllm/pipeline/global_program.py", "verity_vllm/program/instances_form.py", "verity_vllm/program/frontend/export_ops.py"))   # cb_a dissolved: its modules outside frontend/
 FRONTEND = REPO / "verity_vllm" / "program" / "frontend"
 #: the R9 baseline (A's `request_8_4` on cp-cba with a GPU, CB-C's `sens/base` on cp-cbc without one, owner 9's `repro_base` on cp-cb8)
 B0_REQUEST_8_4_DIGEST = "59b35d80faf29438d21a0ea1c96c877ec69e2f21174f11b835ac1ef04c1ed496"
@@ -331,7 +331,7 @@ def _rewrite(tree: pathlib.Path, subs: list[tuple[re.Pattern, str]], only: str |
     done = []
     for p in sorted(tree.rglob("*.py")):
         rel = str(p.relative_to(tree))
-        if "tests" in p.parts or not (rel.startswith(("verity_vllm/check/global_match.py", "verity_vllm/check/global_match_fast.py", "verity_vllm/check/program_compare.py", "verity_vllm/correspondence/batch_decomp.py", "verity_vllm/pipeline/build.py", "verity_vllm/program/compact.py", "verity_vllm/program/frontend/export_compat.py", "verity_vllm/program/frontend/inputs_trace.py", "verity_vllm/program/frontend/triton_capture.py", "verity_vllm/program/frontend/vllm_meta.py", "verity_vllm/pipeline/global_program.py", "verity_vllm/program/instances_form.py", "verity_vllm/tp/export_ops.py")) or rel.startswith("verity.ir/frontend")):
+        if "tests" in p.parts or not (rel.startswith(("verity_vllm/check/global_match.py", "verity_vllm/check/global_match_fast.py", "verity_vllm/check/program_compare.py", "verity_vllm/correspondence/batch_decomp.py", "verity_vllm/pipeline/build.py", "verity_vllm/program/compact.py", "verity_vllm/program/frontend/export_compat.py", "verity_vllm/program/frontend/inputs_trace.py", "verity_vllm/program/frontend/triton_capture.py", "verity_vllm/program/frontend/vllm_meta.py", "verity_vllm/pipeline/global_program.py", "verity_vllm/program/instances_form.py", "verity_vllm/program/frontend/export_ops.py")) or rel.startswith("verity.ir/frontend")):
             continue
         if only is not None and rel != only:
             continue

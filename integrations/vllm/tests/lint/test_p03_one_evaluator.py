@@ -9,8 +9,7 @@ Checked today, against ``allowlists/p03_one_evaluator.json``:
 * ``rng``: constructing a random generator (``random.Random``, ``random.SystemRandom``, numpy's ``default_rng``,
   ``RandomState``, ``Generator``, ``torch.Generator``): challenge randomness comes from the one challenge module.
 
-``program/backends/`` does not exist yet; ``program/numerics/``, which moves there, is already exempt from
-``if-ladder``.  There is no challenge module yet, so every ``rng`` site is a violation today; once it exists, add it to
+``program/backends/`` is exempt from ``if-ladder``.  There is no challenge module yet, so every ``rng`` site is a violation today; once it exists, add it to
 ``RNG_OWNERS``.  The rule's parametrized self-check (every registered (backend, Definition) pair against the core
 reference on seeded random inputs) needs ``program/backends/`` and is not a lint.
 """
@@ -25,7 +24,7 @@ from . import _ratchet as R
 NAME = "p03_one_evaluator"
 RULE = "P3 (one evaluator interface, one challenge derivation)"
 LADDER_MIN = 4
-LADDER_HOMES = ("verity_vllm/program/numerics/", "verity_vllm/program/backends/")
+LADDER_HOMES = ("verity_vllm/program/backends/",)
 FAMILY = re.compile(r"^[A-Z][A-Za-z0-9]*(?:_v[0-9]+)?$")
 RNG_OWNERS: frozenset[str] = frozenset()
 RNG_CALLS = frozenset({"random.Random", "random.SystemRandom", "numpy.random.default_rng", "numpy.random.RandomState",
@@ -146,8 +145,8 @@ def test_detectors_on_examples() -> None:
     )
     got = {(v.kind, v.detail) for v in file_violations(bad, "verity_vllm/check/x.py")}
     assert got == {("if-ladder", "fam"), ("rng", "numpy.random.default_rng"), ("rng", "random.Random")}, got
-    assert file_violations(bad, "verity_vllm/program/numerics/x.py") == [
-        v for v in file_violations(bad, "verity_vllm/program/numerics/x.py") if v.kind == "rng"]
+    assert file_violations(bad, "verity_vllm/program/backends/x.py") == [
+        v for v in file_violations(bad, "verity_vllm/program/backends/x.py") if v.kind == "rng"]
     siblings = "def g(family):\n" + "".join(f"    if family == 'F{i}_v1':\n        return {i}\n" for i in range(LADDER_MIN))
     assert [(v.kind, v.symbol, v.detail) for v in file_violations(siblings, "verity_vllm/check/x.py")] == [
         ("if-ladder", "g", "family")]

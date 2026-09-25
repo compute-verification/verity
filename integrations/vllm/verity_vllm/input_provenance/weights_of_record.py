@@ -291,7 +291,7 @@ def compose(name: str, shape: list[int], bits: int, ck: CheckpointIndex, *, worl
         hidden = int(ck.config.get("hidden_size") or 0)
         if hidden <= 0:
             raise KeyError(f"{name}: config.json carries no hidden_size to derive the normalizer from")
-        from verity_vllm.input_provenance.analytic import normalizer_word
+        from verity_vllm.program.model import normalizer_word
         note["rule"] = f"config-derived: bf16(sqrt(hidden_size={hidden})) rounded once RNE (root_policy analytic-table 'normalizer', analytic.normalizer_word)"
         note["sources"].append("config.json:hidden_size")
         out = np.array(normalizer_word(hidden), dtype=np.uint16).reshape(shape)
@@ -446,7 +446,7 @@ def _engine_constant(field: str, live: str, shape: list[int], bits: int, ck: Che
                        "sources": [f"engine:Fp8KVCacheMethod.create_weights (KVCacheScaleParameter torch.tensor(-1.0) at the model dtype -> {wdt}), kv_cache_dtype=auto"],
                        "rule": f"engine constant: Fp8KVCacheMethod loader placeholder == {wdt} -1.0 sentinel in the declared width (no kv scale in the checkpoint; kv_cache_dtype auto -- read by no kernel; F-fp8-PIN1/PIN2)"}
     if ENGINE_ROTARY_RE.search(field):
-        from verity_vllm.input_provenance import analytic
+        from verity_vllm.program import model as analytic
         try:
             C, _prov = analytic.config_of(ck.config)
             inv = analytic._inv_freq(C)                      # raises NotImplementedError for a rope_scaling type without a table
@@ -631,7 +631,7 @@ def live_param_digests(model, *, include_buffers: bool = True, raw_for: "re.Patt
 
 def _check_analytic(f: dict[str, Any], raw: np.ndarray | None) -> dict[str, Any]:
     """[MAN-09c] the served rotary table against the frozen analytic table's bound (analytic.check_cos_sin)."""
-    from verity_vllm.input_provenance import analytic
+    from verity_vllm.program import model as analytic
     a = f.get("analytic") or {}
     rep: dict[str, Any] = {"field": f["field"], "served_name": f["served_name"], "table": a.get("table"), "expected_shape": a.get("expected_shape")}
     if raw is None:

@@ -202,7 +202,7 @@ def test_rotary_table_is_pinned_by_the_frozen_analytic_bound(checkpoint, tmp_pat
     """[MAN-09c, rev-cb W3] the served cos_sin_cache is compared against analytic.check_cos_sin (root_policy gate I9): the table vLLM
     builds from config.json passes; a table from another theta / a corrupted row fails by name; a declared shape that is not
     [MAX_POS, ROT] of config.json is unresolved (fail closed); a rope_scaling type without a table stays unpinned by name."""
-    from verity_vllm.input_provenance import analytic
+    from verity_vllm.program import model as analytic
     d, man, t = checkpoint
     cfg = json.load(open(d / "config.json"))
     cfg.update({"model_type": "llama", "num_hidden_layers": 1, "intermediate_size": 12, "vocab_size": 20, "rope_theta": 10000.0,
@@ -559,7 +559,7 @@ def test_gemma_normalizer_is_composed_from_config_and_compared_like_a_weight(che
     buffer torch.tensor(hidden_size ** 0.5) -- has no checkpoint tensor and was the ONE unresolved field (complete False -> every Gemma
     Commit would FAIL 'weights of record' closed).  Rule: composed from config.json's hidden_size by the frozen analytic rule
     (root_policy ANALYTIC_TABLES['normalizer'] / analytic.normalizer_word: sqrt(H) rounded once to bf16), pinned and compared."""
-    from verity_vllm.input_provenance.analytic import normalizer_word
+    from verity_vllm.program.model import normalizer_word
     assert normalizer_word(2304) == 0x4240                              # Gemma-2-2B: sqrt(2304) = 48.0 exactly, bf16 0x4240
     d, man, t = checkpoint
     prog, fields = _program()

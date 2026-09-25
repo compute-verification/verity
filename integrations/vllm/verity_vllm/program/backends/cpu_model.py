@@ -9,8 +9,8 @@ from dataclasses import asdict, dataclass, field
 
 import numpy as np
 
-from . import _jit
-from .mma import TCModel
+from verity_vllm.program.backends import _jit
+from verity_vllm.program.backends.mma import TCModel
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CPP_SRC = os.path.join(HERE, "cpp", "tc_model.cpp")

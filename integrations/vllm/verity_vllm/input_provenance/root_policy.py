@@ -38,7 +38,7 @@ import numpy as np
 
 from verity_vllm.program.frontend.rules.family import _field_intervals
 
-from verity_vllm.input_provenance import analytic
+from verity_vllm.program import model as analytic
 from verity_vllm.observe.events import DispatchEnter, Root, RunHeader, TritonLaunch, ViewDesc
 from verity_vllm.observe.log import read_log
 
