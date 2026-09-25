@@ -36,7 +36,7 @@ use flock_prover::r1cs_hashes::blake3 as b3;
 use rayon::prelude::*;
 use sha2::{Digest, Sha256};
 
-use crate::chunk::{flags_of, key_words, row_key, comp, log2ceil};
+use crate::chunk::{key_words, row_key, comp, log2ceil};
 
 pub const K_LOG: usize = 20;
 pub const UNIT_LOG: usize = 13;
@@ -49,6 +49,55 @@ pub const TAG: &[u8] = b"verity/flock-pure-block/v2";
 pub const PT_LOCAL: usize = 16;
 
 /// The `flock-unit-io/v1` lowered unit (flock-backend's `verity_flock.lowering`), read-only.
+/// The block shape of one relation family.
+/// - `Bf16` (16-bit rows, 3 chunks, 96 units): block (v, c) is chunk c of VU v; `k_log` 20; 16 + 16 compressions and 32 units.
+/// - `Fp8` (8-bit rows, 1.5 chunks, 48 units): block v is the whole VU; `k_log` 21; x chunk 0 (16) and chunk 1 (8), then W's,
+///   48 compressions and the 48 units at 2^13 positions 96..144. Key, counter, flags and block_len are all per-slot
+///   constants, the accumulator chain is inside the block (c_in of unit 0 forced to +0), and only the four chunk chaining
+///   values and the output word are public.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum Layout {
+    Bf16,
+    Fp8,
+}
+
+impl Layout {
+    pub fn of(row_bytes: usize, units: usize) -> Self {
+        match (row_bytes, units) {
+            (3072, 96) => Layout::Bf16,
+            (1536, 48) => Layout::Fp8,
+            _ => panic!("flock-pure-block covers 16-bit rows of 3 chunks (96 units) and 8-bit rows of 1.5 chunks (48 units)"),
+        }
+    }
+    pub fn k_log(self) -> usize { match self { Layout::Bf16 => 20, Layout::Fp8 => 21 } }
+    pub fn comp_slots(self) -> usize { match self { Layout::Bf16 => 32, Layout::Fp8 => 48 } }
+    pub fn per_role(self) -> usize { self.comp_slots() / 2 }
+    pub fn units(self) -> usize { match self { Layout::Bf16 => 32, Layout::Fp8 => 48 } }
+    pub fn unit_pos0(self) -> usize { 2 * self.comp_slots() }
+    pub fn blocks_per_vu(self) -> usize { match self { Layout::Bf16 => 3, Layout::Fp8 => 1 } }
+    /// Compressions per chunk of a block, in order.
+    pub fn chunks(self) -> &'static [usize] { match self { Layout::Bf16 => &[16], Layout::Fp8 => &[16, 8] } }
+    /// Chaining values per block (every chunk of both roles): x chunks, then W chunks.
+    pub fn n_cv(self) -> usize { 2 * self.chunks().len() }
+    /// (role, chunk in block, block in chunk) of compression slot s.
+    pub fn slot(self, s: usize) -> (usize, usize, usize) {
+        let (role, mut j) = (s / self.per_role(), s % self.per_role());
+        for (c, &nb) in self.chunks().iter().enumerate() {
+            if j < nb {
+                return (role, c, j);
+            }
+            j -= nb;
+        }
+        unreachable!()
+    }
+    /// The chunk's index in its row (the BLAKE3 counter) for block b, chunk c of the block.
+    pub fn chunk_index(self, b: usize, c: usize) -> usize { (b % self.blocks_per_vu()) * self.chunks().len() + c }
+}
+
+pub fn chunk_flags(j: usize, nb: usize) -> u32 {
+    crate::chunk::KEYED_HASH | if j == 0 { crate::chunk::CHUNK_START } else { 0 } | if j + 1 == nb { crate::chunk::CHUNK_END } else { 0 }
+}
+
 pub struct UnitNet {
     pub relation: String,
     pub useful: usize,
@@ -180,6 +229,8 @@ impl Instances {
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Region {
+    /// fp8: the chaining value of compression slot k (a chunk's last block).
+    CvSlot(usize),
     Key,
     Counter,
     Cv,
@@ -196,18 +247,19 @@ pub struct RegionShape {
     pub fixed: u32,
 }
 
-fn shape(region: Region, net: &UnitNet) -> RegionShape {
+fn shape(region: Region, net: &UnitNet, lay: Layout) -> RegionShape {
     let bits = |lo: usize, n: usize| (lo..lo + n).collect::<Vec<_>>();
     // (free bits, fixed value) in the 20 in-block bits
     let (free, fixed): (Vec<usize>, u32) = match region {
+        Region::CvSlot(k) => (bits(0, 8), (1 << 8) | ((k as u32) << b3::K_LOG)),
         Region::Key => ([bits(0, 8), vec![18]].concat(), 0),
         Region::Counter => ([bits(0, 6), bits(14, 5)].concat(), 1 << 10),
         Region::Cv => ([bits(0, 8), vec![18]].concat(), (1 << 8) | (0xF << 14)),
-        Region::AccIn => (bits(0, 5), (1 << 9) | ((UNIT_POS0 as u32) << UNIT_LOG)),
-        Region::AccOut => (bits(0, 5), ((net.out_cols[0] as u32) << 7) | (((UNIT_POS0 + UNITS - 1) as u32) << UNIT_LOG)),
-        Region::Y => (bits(0, 4), ((net.out_cols[1] as u32) << 7) | (((UNIT_POS0 + UNITS - 1) as u32) << UNIT_LOG)),
+        Region::AccIn => (bits(0, 5), (1 << 9) | ((lay.unit_pos0() as u32) << UNIT_LOG)),
+        Region::AccOut => (bits(0, 5), ((net.out_cols[0] as u32) << 7) | (((lay.unit_pos0() + lay.units() - 1) as u32) << UNIT_LOG)),
+        Region::Y => (bits(0, 4), ((net.out_cols[1] as u32) << 7) | (((lay.unit_pos0() + lay.units() - 1) as u32) << UNIT_LOG)),
     };
-    let mask = ((1u32 << K_LOG) - 1) & !free.iter().fold(0u32, |m, &b| m | (1 << b));
+    let mask = ((1u32 << lay.k_log()) - 1) & !free.iter().fold(0u32, |m, &b| m | (1 << b));
     assert_eq!(fixed & !mask, 0);
     RegionShape { region, free, mask, fixed }
 }
@@ -216,14 +268,15 @@ fn shape(region: Region, net: &UnitNet) -> RegionShape {
 /// accumulator (`c_out`). 72 bytes per block: CV_x (8 u32 LE), CV_w (8 u32), y16 (u32), acc_out (u32).
 #[derive(Clone)]
 pub struct Publics {
-    pub cv: Vec<[[u32; 8]; 2]>,
+    /// Per block: the chaining value of every chunk (x chunks, then W chunks).
+    pub cv: Vec<Vec<[u32; 8]>>,
     pub y16: Vec<u32>,
     pub acc: Vec<u32>,
 }
 
 impl Publics {
     pub fn bytes(&self) -> Vec<u8> {
-        let mut v = Vec::with_capacity(self.cv.len() * 72);
+        let mut v = Vec::new();
         for ((c, y), a) in self.cv.iter().zip(&self.y16).zip(&self.acc) {
             for w in c.iter().flatten() {
                 v.extend_from_slice(&w.to_le_bytes());
@@ -234,19 +287,21 @@ impl Publics {
         v
     }
 
-    pub fn parse(b: &[u8], blocks: usize) -> Result<Self, String> {
-        if b.len() != 72 * blocks {
-            return Err(format!("C4: {} bytes of publics, want {}", b.len(), 72 * blocks));
+    pub fn parse(b: &[u8], blocks: usize, n_cv: usize) -> Result<Self, String> {
+        let per = 8 * n_cv + 2;
+        if b.len() != 4 * per * blocks {
+            return Err(format!("C4: {} bytes of publics, want {}", b.len(), 4 * per * blocks));
         }
         let w = le_words(b);
-        let cv = (0..blocks).map(|i| from_fn(|r| from_fn(|k| w[18 * i + 8 * r + k]))).collect();
-        let y16 = (0..blocks).map(|i| w[18 * i + 16]).collect();
-        let acc = (0..blocks).map(|i| w[18 * i + 17]).collect();
+        let cv = (0..blocks).map(|i| (0..n_cv).map(|r| from_fn(|k| w[per * i + 8 * r + k])).collect()).collect();
+        let y16 = (0..blocks).map(|i| w[per * i + 8 * n_cv]).collect();
+        let acc = (0..blocks).map(|i| w[per * i + 8 * n_cv + 1]).collect();
         Ok(Publics { cv, y16, acc })
     }
 }
 
 pub struct PureCircuit {
+    pub lay: Layout,
     pub unit: SparseMatrixCircuit<'static>,
     pub da: Vec<(u32, u32)>,
     pub db: Vec<(u32, u32)>,
@@ -254,25 +309,26 @@ pub struct PureCircuit {
 
 impl LincheckCircuit for PureCircuit {
     fn n_cols(&self) -> usize {
-        1 << K_LOG
+        1 << self.lay.k_log()
     }
 
     fn fold_alpha_batched(&self, alpha: F128, eq: &[F128]) -> Vec<F128> {
         let (cs, us) = (1usize << b3::K_LOG, 1usize << UNIT_LOG);
-        assert_eq!(eq.len(), 1 << K_LOG);
+        let (kl, slots, units, p0) = (self.lay.k_log(), self.lay.comp_slots(), self.lay.units(), self.lay.unit_pos0());
+        assert_eq!(eq.len(), 1 << kl);
         let c0 = eq[..us].iter().position(|e| *e != F128::ZERO).expect("eq tensor vanishes on the first unit slot");
         let inv = eq[c0].inv();
         let base_c = comp().csc_lincheck_circuit().fold_alpha_batched(alpha, &eq[..cs]);
         let base_u = self.unit.fold_alpha_batched(alpha, &eq[..us]);
-        let mut out = vec![F128::ZERO; 1 << K_LOG];
+        let mut out = vec![F128::ZERO; 1 << kl];
         out.par_chunks_mut(us).enumerate().for_each(|(p, o)| {
-            if p < 2 * COMP_SLOTS {
+            if p < 2 * slots {
                 let s = eq[((p >> 1) << b3::K_LOG) | c0] * inv;
                 let half = (p & 1) * us;
                 for (x, y) in o.iter_mut().zip(&base_c[half..half + us]) {
                     *x = s * *y;
                 }
-            } else if (UNIT_POS0..UNIT_POS0 + UNITS).contains(&p) {
+            } else if (p0..p0 + units).contains(&p) {
                 let s = eq[(p << UNIT_LOG) | c0] * inv;
                 for (x, y) in o.iter_mut().zip(&base_u) {
                     *x = s * *y;
@@ -293,7 +349,7 @@ impl LincheckCircuit for PureCircuit {
     }
 }
 
-fn delta(net: &UnitNet) -> (Vec<(u32, u32)>, Vec<(u32, u32)>) {
+fn delta(net: &UnitNet, lay: Layout, keys: &[[u32; 8]; 2]) -> (Vec<(u32, u32)>, Vec<(u32, u32)>) {
     let c = comp();
     let (a, b) = (&c.a_0.rows, &c.b_0.rows);
     let z = b3::Z_CONST_POS;
@@ -305,8 +361,21 @@ fn delta(net: &UnitNet) -> (Vec<(u32, u32)>, Vec<(u32, u32)>) {
             d.push((i as u32, new as u32));
         }
     };
-    for s in 0..COMP_SLOTS {
-        let (j, g) = (s % 16, |col: usize| (s << b3::K_LOG) + col);
+    // a constant word: rows [base, base + 32) become A = [bit · Z_s]
+    let constant = |da: &mut Vec<(u32, u32)>, g: &dyn Fn(usize) -> usize, base: usize, val: u32| {
+        for bit in 0..32 {
+            let r = base + bit;
+            input(r);
+            da.push((g(r) as u32, g(r) as u32));
+            if (val >> bit) & 1 == 1 {
+                da.push((g(r) as u32, g(z) as u32));
+            }
+        }
+    };
+    for s in 0..lay.comp_slots() {
+        let (role, ch, j) = lay.slot(s);
+        let nb = lay.chunks()[ch];
+        let g = |col: usize| (s << b3::K_LOG) + col;
         if s > 0 {
             both(&mut da, &mut db, g(z), g(z), PIN);
         }
@@ -316,32 +385,38 @@ fn delta(net: &UnitNet) -> (Vec<(u32, u32)>, Vec<(u32, u32)>) {
                 da.push((g(b3::CV_BASE + r) as u32, g(b3::CV_BASE + r) as u32));
                 da.push((g(b3::CV_BASE + r) as u32, (((s - 1) << b3::K_LOG) + b3::OUT_LO_BASE + r) as u32));
             }
-        }
-        for (base, val) in [(b3::BLEN_BASE, 64u32), (b3::FLAGS_BASE, flags_of(j))] {
-            for bit in 0..32 {
-                let r = base + bit;
-                input(r);
-                da.push((g(r) as u32, g(r) as u32));
-                if (val >> bit) & 1 == 1 {
-                    da.push((g(r) as u32, g(z) as u32));
-                }
+        } else if lay == Layout::Fp8 {
+            for (w, &kw) in keys[role].iter().enumerate() {
+                constant(&mut da, &g, b3::CV_BASE + 32 * w, kw);
             }
         }
+        constant(&mut da, &g, b3::BLEN_BASE, 64);
+        constant(&mut da, &g, b3::FLAGS_BASE, chunk_flags(j, nb));
+        if lay == Layout::Fp8 {
+            constant(&mut da, &g, b3::T_LO_BASE, ch as u32);
+            constant(&mut da, &g, b3::T_HI_BASE, 0);
+        }
     }
-    for u in 0..UNITS {
-        let base = (UNIT_POS0 + u) << UNIT_LOG;
+    let p0 = lay.unit_pos0();
+    for u in 0..lay.units() {
+        let base = (p0 + u) << UNIT_LOG;
         both(&mut da, &mut db, base + net.const_pos, base + net.const_pos, PIN);
         for role in 0..2 {
-            let slot = 16 * role + u / 2;
+            let slot = role * lay.per_role() + u / 2;
             for t in 0..256 {
                 let msg = (slot << b3::K_LOG) + b3::M_BASE + (u % 2) * 256 + t;
                 both(&mut da, &mut db, base + 256 * role + t, base + 256 * role + t, msg);
             }
         }
         if u > 0 {
-            let prev = ((UNIT_POS0 + u - 1) << UNIT_LOG) + net.out_cols[0] * 128;
+            let prev = ((p0 + u - 1) << UNIT_LOG) + net.out_cols[0] * 128;
             for t in 0..32 {
                 both(&mut da, &mut db, base + 512 + t, base + 512 + t, prev + t);
+            }
+        } else if lay == Layout::Fp8 {
+            for t in 0..32 {
+                da.push(((base + 512 + t) as u32, (base + 512 + t) as u32));
+                db.push(((base + 512 + t) as u32, (base + 512 + t) as u32));
             }
         }
     }
@@ -349,6 +424,7 @@ fn delta(net: &UnitNet) -> (Vec<(u32, u32)>, Vec<(u32, u32)>) {
 }
 
 pub struct PureStmt {
+    pub lay: Layout,
     pub net: UnitNet,
     pub vus: usize,
     pub blocks_real: usize,
@@ -360,27 +436,47 @@ pub struct PureStmt {
     pub r1cs: BlockR1cs,
     pub digest: [u8; 32],
     pub keys: [[u32; 8]; 2],
-    pub dummy_cv: [u32; 8],
+    /// A dummy block's chunk chaining values (x chunks, then W chunks).
+    pub dummy_cv: Vec<[u32; 8]>,
     pub dummy_unit: (u32, u32),
 }
 
 impl PureStmt {
-    pub fn new(net: UnitNet, vus: usize) -> Self {
-        let blocks_real = 3 * vus;
+    pub fn new(net: UnitNet, vus: usize, lay: Layout) -> Self {
+        let blocks_real = lay.blocks_per_vu() * vus;
         let nbl = log2ceil(blocks_real).max(3);
-        let m = K_LOG + nbl;
-        let (da, db) = delta(&net);
-        let mut regions: Vec<RegionShape> = [Region::Key, Region::Counter, Region::Cv, Region::AccIn, Region::AccOut]
-            .into_iter()
-            .map(|r| shape(r, &net))
+        let (kl, slots, units, p0) = (lay.k_log(), lay.comp_slots(), lay.units(), lay.unit_pos0());
+        let m = kl + nbl;
+        let keys = [key_words(&row_key(b"x")), key_words(&row_key(b"w"))];
+        let (da, db) = delta(&net, lay, &keys);
+        let list: Vec<Region> = match lay {
+            Layout::Bf16 => {
+                let mut v = vec![Region::Key, Region::Counter, Region::Cv, Region::AccIn, Region::AccOut];
+                if net.epilogue() {
+                    v.push(Region::Y);
+                }
+                v
+            }
+            Layout::Fp8 => {
+                let mut v: Vec<Region> = (0..slots).filter(|&k| { let (_, c, j) = lay.slot(k); j + 1 == lay.chunks()[c] }).map(Region::CvSlot).collect();
+                v.push(Region::AccOut);
+                v
+            }
+        };
+        let regions: Vec<RegionShape> = list.into_iter().map(|r| shape(r, &net, lay)).collect();
+        // dummy blocks: zero messages; bf16 under a zero key and counter 0, fp8 under the per-slot constants
+        let dummy_cv: Vec<[u32; 8]> = (0..2)
+            .flat_map(|role| {
+                let keys = keys;
+                lay.chunks().iter().enumerate().map(move |(c, &nb)| {
+                    let (mut cv, ctr) = match lay { Layout::Bf16 => ([0u32; 8], 0u64), Layout::Fp8 => (keys[role], c as u64) };
+                    for j in 0..nb {
+                        cv = blake3_compress(&cv, &[0u32; 16], ctr, 64, chunk_flags(j, nb))[..8].try_into().unwrap();
+                    }
+                    cv
+                })
+            })
             .collect();
-        if net.epilogue() {
-            regions.push(shape(Region::Y, &net));
-        }
-        let mut cv = [0u32; 8];
-        for j in 0..16 {
-            cv = blake3_compress(&cv, &[0u32; 16], 0, 64, flags_of(j))[..8].try_into().unwrap();
-        }
         let (z, _, _) = net.eval64(|_| 0);
         let word = |col: usize, n: usize| (0..n).fold(0u32, |w, t| w | (((z[col * 128 + t] & 1) as u32) << t));
         let dummy_unit = (word(net.out_cols[0], 32), if net.epilogue() { word(net.out_cols[1], 16) } else { 0 });
@@ -388,8 +484,11 @@ impl PureStmt {
         h.update(TAG);
         h.update(comp().statement_digest());
         h.update(net.sha256);
-        for x in [vus, blocks_real, nbl, m, K_LOG, UNIT_LOG, COMP_SLOTS, UNITS, UNIT_POS0] {
+        for x in [vus, blocks_real, nbl, m, kl, UNIT_LOG, slots, units, p0] {
             h.update((x as u64).to_le_bytes());
+        }
+        if lay == Layout::Fp8 {
+            h.update(b"layout fp8: block = VU, chunks 16+8, per-slot key/counter constants, c_in(0) = 0");
         }
         for d in [&da, &db] {
             h.update((d.len() as u64).to_le_bytes());
@@ -399,11 +498,11 @@ impl PureStmt {
             }
         }
         let digest: [u8; 32] = h.finalize().into();
-        let kk = 1usize << K_LOG;
+        let kk = 1usize << kl;
         let empty = || SparseBinaryMatrix { num_rows: kk, num_cols: kk, rows: vec![Vec::new(); kk].into() };
         let r1cs = BlockR1cs {
             m,
-            k_log: K_LOG,
+            k_log: kl,
             k_skip: b3::K_SKIP,
             useful_bits: kk,
             a_0: empty(),
@@ -417,55 +516,68 @@ impl PureStmt {
         let (ua, ub) = net.matrices();
         let (ua, ub): (&'static SparseBinaryMatrix, &'static SparseBinaryMatrix) = (Box::leak(Box::new(ua)), Box::leak(Box::new(ub)));
         let unit = SparseMatrixCircuit::new(ua, ub);
-        let keys = [key_words(&row_key(b"x")), key_words(&row_key(b"w"))];
-        PureStmt { net, vus, blocks_real, nbl, m, m_pts: PT_LOCAL + nbl, regions, circuit: PureCircuit { unit, da, db }, r1cs, digest, keys,
-                   dummy_cv: cv, dummy_unit }
+        PureStmt { lay, net, vus, blocks_real, nbl, m, m_pts: PT_LOCAL + nbl, regions, circuit: PureCircuit { lay, unit, da, db }, r1cs, digest,
+                   keys, dummy_cv, dummy_unit }
     }
 
     pub fn blocks(&self) -> usize {
         1 << self.nbl
     }
 
-    /// Every compression, block-major (block b's 32: x chunk then W chunk), and the chunk chaining values per block.
-    pub fn compressions(&self, inst: &Instances) -> (Vec<b3::Compression>, Vec<[[u32; 8]; 2]>) {
-        let per: Vec<(Vec<b3::Compression>, [[u32; 8]; 2])> = (0..self.blocks())
+    /// VU and chunk-in-row of block b's chunk c (the row's bytes it hashes start at 1024 · chunk).
+    fn vu_chunk(&self, b: usize, c: usize) -> (usize, usize) {
+        (b / self.lay.blocks_per_vu(), self.lay.chunk_index(b, c))
+    }
+
+    /// Every compression, block-major (each block's `comp_slots`: x chunks then W chunks), and each real block's chunk
+    /// chaining values (x chunks, then W chunks).
+    pub fn compressions(&self, inst: &Instances) -> (Vec<b3::Compression>, Vec<Vec<[u32; 8]>>) {
+        let lay = self.lay;
+        let per: Vec<(Vec<b3::Compression>, Vec<[u32; 8]>)> = (0..self.blocks())
             .into_par_iter()
             .map(|b| {
                 let real = b < self.blocks_real;
-                let (v, c) = (b / 3, b % 3);
-                let mut out = Vec::with_capacity(COMP_SLOTS);
-                let mut cvs = [[0u32; 8]; 2];
+                let mut out = Vec::with_capacity(lay.comp_slots());
+                let mut cvs = Vec::with_capacity(lay.n_cv());
                 for role in 0..2 {
-                    let mut cv = if real { self.keys[role] } else { [0; 8] };
-                    let ctr = if real { c as u64 } else { 0 };
-                    for j in 0..16 {
-                        let msg: [u32; 16] = if real {
-                            let at = c * 1024 + 64 * j;
-                            let row = inst.row(role, v);
-                            from_fn(|i| u32::from_le_bytes(row[at + 4 * i..at + 4 * i + 4].try_into().unwrap()))
-                        } else {
-                            [0; 16]
+                    for (c, &nb) in lay.chunks().iter().enumerate() {
+                        let (v, ci) = self.vu_chunk(b, c);
+                        let (mut cv, ctr) = match (lay, real) {
+                            (_, true) => (self.keys[role], ci as u64),
+                            (Layout::Bf16, false) => ([0; 8], 0),
+                            (Layout::Fp8, false) => (self.keys[role], c as u64),
                         };
-                        out.push((cv, msg, ctr, 64, flags_of(j)));
-                        cv = blake3_compress(&cv, &msg, ctr, 64, flags_of(j))[..8].try_into().unwrap();
+                        for j in 0..nb {
+                            let msg: [u32; 16] = if real {
+                                let at = ci * 1024 + 64 * j;
+                                let row = inst.row(role, v);
+                                from_fn(|i| u32::from_le_bytes(row[at + 4 * i..at + 4 * i + 4].try_into().unwrap()))
+                            } else {
+                                [0; 16]
+                            };
+                            let f = chunk_flags(j, nb);
+                            out.push((cv, msg, ctr, 64, f));
+                            cv = blake3_compress(&cv, &msg, ctr, 64, f)[..8].try_into().unwrap();
+                        }
+                        cvs.push(cv);
                     }
-                    cvs[role] = cv;
                 }
                 (out, cvs)
             })
             .collect();
-        let cvs = per.iter().map(|p| p.1).take(self.blocks_real).collect();
+        let cvs = per.iter().map(|p| p.1.clone()).take(self.blocks_real).collect();
         (per.into_iter().flat_map(|p| p.0).collect(), cvs)
     }
 
     /// Unit (block b, u)'s 544 input bits: x bytes, W bytes (as the compressions hash them), accumulator in.
     pub fn unit_inputs(&self, comps: &[b3::Compression], b: usize, u: usize, c_in: u32) -> [F128; 5] {
+        let base = b * self.lay.comp_slots();
         let words = |slot: usize| -> [F128; 2] {
-            let m = &comps[b * COMP_SLOTS + slot].1;
+            let m = &comps[base + slot].1;
             let h = (u % 2) * 8;
             [crate::chunk::pack4(&m[h..h + 4]), crate::chunk::pack4(&m[h + 4..h + 8])]
         };
-        let (x, w) = (words(u / 2), words(16 + u / 2));
+        let (x, w) = (words(u / 2), words(self.lay.per_role() + u / 2));
         [x[0], x[1], w[0], w[1], F128::new(c_in as u64, 0)]
     }
 
@@ -474,33 +586,35 @@ impl PureStmt {
         if b >= self.blocks_real {
             return 0;
         }
-        let (v, j) = (b / 3, 32 * (b % 3) + u);
+        let bpv = self.lay.blocks_per_vu();
+        let (v, j) = (b / bpv, (b % bpv) * self.lay.units() + u);
         if j == 0 { 0 } else { inst.acc(v, j - 1) }
     }
 
     /// `(z, a, b, z_lincheck)` of the block witness: compressions, then units evaluated from `inputs(b, u)`.
     pub fn witness(&self, comps: &[b3::Compression], inputs: &(dyn Fn(usize, usize) -> [F128; 5] + Sync)) -> (Vec<F128>, Vec<F128>, Vec<F128>, Vec<u8>) {
+        let (kl, slots, units, p0) = (self.lay.k_log(), self.lay.comp_slots(), self.lay.units(), self.lay.unit_pos0());
         let n = 1usize << (self.m - 7);
-        let (cz, ca, cb) = b3::generate_witness_with_ab_packed(comps, self.nbl + 5);
+        let (cz, ca, cb) = b3::generate_witness_with_ab_packed(comps, log2ceil(comps.len()));
         let (mut z, mut a, mut b) = (vec![F128::ZERO; n], vec![F128::ZERO; n], vec![F128::ZERO; n]);
-        let wpb = 1usize << (K_LOG - 7);
+        let wpb = 1usize << (kl - 7);
         let cw = 1usize << (b3::K_LOG - 7);
         for (dst, src) in [(&mut z, &cz), (&mut a, &ca), (&mut b, &cb)] {
             dst.par_chunks_mut(wpb).enumerate().for_each(|(blk, d)| {
-                for s in 0..COMP_SLOTS {
-                    let ci = blk * COMP_SLOTS + s;
+                for s in 0..slots {
+                    let ci = blk * slots + s;
                     d[s * cw..(s + 1) * cw].copy_from_slice(&src[ci * cw..(ci + 1) * cw]);
                 }
             });
         }
         drop((cz, ca, cb));
         let uw = 1usize << (UNIT_LOG - 7);
-        let total = self.blocks() * UNITS;
+        let total = self.blocks() * units;
         let groups: Vec<Vec<(usize, Vec<F128>, Vec<F128>, Vec<F128>)>> = (0..total.div_ceil(64))
             .into_par_iter()
             .map(|g| {
                 let ids: Vec<usize> = (64 * g..(64 * g + 64).min(total)).collect();
-                let ins: Vec<[F128; 5]> = ids.iter().map(|&i| inputs(i / UNITS, i % UNITS)).collect();
+                let ins: Vec<[F128; 5]> = ids.iter().map(|&i| inputs(i / units, i % units)).collect();
                 let (zz, aa, bb) = self.net.eval64(|bit| {
                     let mut x = 0u64;
                     for (l, r) in ins.iter().enumerate() {
@@ -528,33 +642,44 @@ impl PureStmt {
             })
             .collect();
         for (i, uz, ua, ub) in groups.into_iter().flatten() {
-            let (blk, u) = (i / UNITS, i % UNITS);
-            let at = blk * wpb + (UNIT_POS0 + u) * uw;
+            let (blk, u) = (i / units, i % units);
+            let at = blk * wpb + (p0 + u) * uw;
             z[at..at + uw].copy_from_slice(&uz);
             a[at..at + uw].copy_from_slice(&ua);
             b[at..at + uw].copy_from_slice(&ub);
         }
-        let zl = pack_z_lincheck_from_packed(&z, self.m, K_LOG);
+        let zl = pack_z_lincheck_from_packed(&z, self.m, kl);
         (z, a, b, zl)
     }
 
     /// The value of every public region at every block: bit `f` of the region's free assignment.
     fn region_bits(&self, reg: &RegionShape, inst: &Instances, p: &Publics, b: usize) -> Vec<u8> {
         let real = b < self.blocks_real;
-        let (v, c) = (b / 3, b % 3);
+        let (v, c) = (b / self.lay.blocks_per_vu(), b % self.lay.blocks_per_vu());
         let le = |w: &[u32]| w.iter().flat_map(|x| x.to_le_bytes()).collect::<Vec<u8>>();
         match reg.region {
+            Region::CvSlot(k) => {
+                let (role, ch, _) = self.lay.slot(k);
+                let i = role * self.lay.chunks().len() + ch;
+                le(&if real { p.cv[b][i] } else { self.dummy_cv[i] })
+            }
             Region::Key => {
                 let k = |r: usize| if real { self.keys[r] } else { [0; 8] };
                 [le(&k(0)), le(&k(1))].concat()
             }
             Region::Counter => (if real { c as u64 } else { 0 }).to_le_bytes().repeat(COMP_SLOTS),
             Region::Cv => {
-                let cv = |r: usize| if real { p.cv[b][r] } else { self.dummy_cv };
+                let cv = |r: usize| if real { p.cv[b][r] } else { self.dummy_cv[r] };
                 [le(&cv(0)), le(&cv(1))].concat()
             }
             Region::AccIn => (if real && c > 0 { p.acc[b - 1] } else { 0 }).to_le_bytes().to_vec(),
-            Region::AccOut => (if real { p.acc[b] } else { self.dummy_unit.0 }).to_le_bytes().to_vec(),
+            Region::AccOut => (match (self.lay, real) {
+                (_, false) => self.dummy_unit.0,
+                (Layout::Fp8, true) => inst.out[v],
+                (Layout::Bf16, true) => p.acc[b],
+            })
+            .to_le_bytes()
+            .to_vec(),
             Region::Y => {
                 let y = if !real { self.dummy_unit.1 } else if c == 2 { inst.out[v] } else { p.y16[b] };
                 (y as u16).to_le_bytes().to_vec()
@@ -564,8 +689,9 @@ impl PureStmt {
 
     /// The region's claim point from verifier point `r` (m_pts coordinates).
     pub fn region_point(&self, reg: &RegionShape, r: &[F128]) -> Vec<F128> {
+        let kl = self.lay.k_log();
         let mut p = vec![F128::ZERO; self.m];
-        for j in 0..K_LOG {
+        for j in 0..kl {
             if (reg.mask >> j) & 1 == 1 && (reg.fixed >> j) & 1 == 1 {
                 p[j] = F128::ONE;
             }
@@ -573,7 +699,7 @@ impl PureStmt {
         for (t, &j) in reg.free.iter().enumerate() {
             p[j] = r[t];
         }
-        p[K_LOG..].copy_from_slice(&r[PT_LOCAL..PT_LOCAL + self.nbl]);
+        p[kl..].copy_from_slice(&r[PT_LOCAL..PT_LOCAL + self.nbl]);
         p
     }
 

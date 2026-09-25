@@ -147,8 +147,9 @@ impl StatementVerifier for PureVerifier {
         if table != TABLE {
             return Err(format!("C4: {table} is not in the statement"));
         }
-        let p = Publics::parse(publics, self.st.blocks_real)?;
-        if !self.st.net.epilogue() {
+        let (lay, st) = (self.st.lay, &self.st);
+        let p = Publics::parse(publics, st.blocks_real, lay.n_cv())?;
+        if lay == Layout::Bf16 && !st.net.epilogue() {
             for v in 0..self.inst.vus {
                 if p.acc[3 * v + 2] != self.inst.out[v] {
                     return Err(format!("C4: VU {v}'s committed final accumulator is not its output word"));
@@ -157,7 +158,8 @@ impl StatementVerifier for PureVerifier {
         }
         for v in 0..self.inst.vus {
             for r in 0..2 {
-                let cvs: Vec<[u32; 8]> = (0..3).map(|c| p.cv[3 * v + c][r]).collect();
+                let (bpv, nch) = (lay.blocks_per_vu(), lay.chunks().len());
+                let cvs: Vec<[u32; 8]> = (bpv * v..bpv * (v + 1)).flat_map(|b| (0..nch).map(move |c| (b, c))).map(|(b, c)| p.cv[b][r * nch + c]).collect();
                 if digest_of(&self.st.keys[r], &cvs) != self.digests[r][v] {
                     return Err(format!("C4: the chunk chaining values of VU {v} role {r} do not hash to its row digest"));
                 }
@@ -176,7 +178,7 @@ impl StatementVerifier for PureVerifier {
         if link.points.len() != 2 || link.y.iter().any(|y| *y != F128::ZERO) {
             return Err("session: two points and y = 0 expected (no cross-field link)".into());
         }
-        let p = Publics::parse(link.publics, st.blocks_real)?;
+        let p = Publics::parse(link.publics, st.blocks_real, st.lay.n_cv())?;
         let extra = st.extra_claims(link.points, &self.inst, &p);
         catch_unwind(AssertUnwindSafe(|| verify_ligerito_extra(&st.r1cs, &commitment, &proof, &st.circuit, &pcs, &extra, ch)))
             .map_err(|_| "verifier panicked".to_string())?
@@ -295,6 +297,9 @@ fn panic_msg(e: Box<dyn std::any::Any + Send>) -> String {
 
 /// Unit 31's y16 and c_out words of every real block (the prover's publics), from its own evaluation.
 fn unit31_words(st: &PureStmt, inputs: &(dyn Fn(usize, usize) -> [F128; 5] + Sync)) -> (Vec<u32>, Vec<u32>) {
+    if st.lay == Layout::Fp8 {
+        return (vec![0; st.blocks_real], vec![0; st.blocks_real]);
+    }
     let cols = st.net.out_cols.clone();
     (0..st.blocks_real)
         .into_par_iter()
@@ -371,7 +376,7 @@ fn session(st: &Arc<PureStmt>, inst: &Arc<Instances>, t: SharedTransport, plan: 
         p.bytes()
     };
     let host_publics = if device { None } else { Some(Publics { cv: cvs, y16, acc }) };
-    let wit = Wit { comps: comps.clone(), inputs: Box::new(inputs), flip_z: plan.unit_flip.then_some(700 + ((UNIT_POS0 + 5) << UNIT_LOG)) };
+    let wit = Wit { comps: comps.clone(), inputs: Box::new(inputs), flip_z: plan.unit_flip.then_some(700 + ((st.lay.unit_pos0() + 5) << UNIT_LOG)) };
     let wit1 = if plan.rep1_other_witness { Wit { comps: comps.clone(), inputs: Box::new(|_, _| [F128::ZERO; 5]), flip_z: None } } else { Wit { comps, inputs: Box::new({
         let st3 = st.clone(); let inst3 = inst.clone(); let c3 = wit.comps.clone();
         move |b, u| { let mut c_in = st3.c_in(&inst3, b, u); if acc_in_wrong && b == 1 && u == 0 { c_in ^= 1; } let mut r = st3.unit_inputs(&c3, b, u, c_in); if operand_flip && b == 0 && u == 3 { r[0].lo ^= 1 << 9; } r }
@@ -455,8 +460,8 @@ fn session(st: &Arc<PureStmt>, inst: &Arc<Instances>, t: SharedTransport, plan: 
     let hexs = |b: &[u8]| b.iter().map(|x| format!("{x:02x}")).collect::<String>();
     (
         json!({"accepted": v["accepted"], "why": v["why"], "verdict": v, "statement": "verity/flock-pure-block/v2", "prover": "flock-cuda-block",
-               "gpu": plan.gpu, "relation": inst.relation, "vus": inst.vus, "units": inst.units, "n_blake3": 2 * 16 * st.blocks_real,
-               "n_units": UNITS * st.blocks_real, "dense_m": st.m, "nbl": st.nbl, "e2e_s": e2e_s, "commit_s": commit_s, "rows_s": rows_s,
+               "gpu": plan.gpu, "relation": inst.relation, "vus": inst.vus, "units": inst.units, "n_blake3": st.lay.comp_slots() * st.blocks_real,
+               "n_units": st.lay.units() * st.blocks_real, "dense_m": st.m, "nbl": st.nbl, "e2e_s": e2e_s, "commit_s": commit_s, "rows_s": rows_s,
                "prove_s": prove_s, "prove_total_s": prove_s.iter().sum::<f64>(), "buckets": buckets, "wait_s": wait_s, "calls": calls,
                "wire_sent": ws, "wire_recv": wr, "rtt_ms": rtt_ms,
                "rtt_method": "the session's Hello request/response time (one round trip, the verifier's work is a string compare)", "proof_bytes": proofs.iter().map(|p| p.len()).collect::<Vec<_>>(),
@@ -535,6 +540,9 @@ fn selftest(st: &Arc<PureStmt>, inst: &Arc<Instances>, gpu: bool) {
     }
     let mut all = true;
     for &(name, want_accept, _) in CASES {
+        if st.lay == Layout::Fp8 && matches!(name, "y16_public_forged" | "committed_acc_differs_from_block_acc_out") {
+            continue;
+        }
         let v = if gpu {
             let out = std::process::Command::new(std::env::current_exe().unwrap())
                 .args(["selftest", "--gpu", "--instances", &arg("--instances", ""), "--netlist", &arg("--netlist", ""), "--only", name])
@@ -556,7 +564,7 @@ fn selftest(st: &Arc<PureStmt>, inst: &Arc<Instances>, gpu: bool) {
         all &= v["pass"] == true;
         println!("NEG\t{v}");
     }
-    println!("SELFTEST\t{}", json!({"statement": "verity/flock-pure-block/v2", "relation": inst.relation, "vus": inst.vus, "m": st.m,
+    println!("SELFTEST\t{}", json!({"statement": "verity/flock-pure-block/v2", "layout": format!("{:?}", st.lay), "relation": inst.relation, "vus": inst.vus, "m": st.m,
         "gpu": gpu, "all_pass": all}));
 }
 
@@ -571,8 +579,8 @@ fn main() {
         assert_eq!(got, pin, "the netlist's sha256 is not the pinned lowering");
     }
     assert_eq!(inst.relation, net.relation, "instances and netlist name different relations");
-    assert!(inst.row_bytes == 3072 && inst.units == 96, "flock-pure-block covers 16-bit rows of 3 chunks (96 units per VU)");
-    let st = Arc::new(PureStmt::new(net, inst.vus));
+    let lay = Layout::of(inst.row_bytes, inst.units);
+    let st = Arc::new(PureStmt::new(net, inst.vus, lay));
     eprintln!("statement {} vus={} blocks={} nbl={} m={} built in {:.2}s", inst.relation, inst.vus, st.blocks_real, st.nbl, st.m, tb.elapsed().as_secs_f64());
     match cmd.as_str() {
         "selftest" => selftest(&st, &inst, flag("--gpu")),
