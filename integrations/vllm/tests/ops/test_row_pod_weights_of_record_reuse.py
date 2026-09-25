@@ -17,7 +17,7 @@ import sys
 
 import pytest
 
-from tests.input_provenance.test_weights_of_record import checkpoint  # noqa: F401 (fixture)
+from tests.check.test_weights_of_record import checkpoint  # noqa: F401 (fixture)
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 ROW_POD = os.path.join(REPO, "verity_vllm", "ops", "row_pod.sh")
@@ -127,7 +127,7 @@ def test_cli_record_carries_its_derivation_provenance_and_names_what_it_supersed
     """[COORD R16 M-0038 (2)] a record the CLI writes carries `derived` = {tool, code (git HEAD or null), at, sources (Program files, checkpoint
     dir, checkpoints.json), argv, supersedes}; check() ignores it (digests are the evidence)."""
     from verity_vllm.check import weights_of_record as WR
-    from tests.input_provenance.test_weights_of_record import _program, _served, _write_program, live_digests
+    from tests.check.test_weights_of_record import _program, _served, _write_program, live_digests
 
     d, man, t = checkpoint
     prog, fields = _program()

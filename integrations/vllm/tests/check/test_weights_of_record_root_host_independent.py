@@ -19,7 +19,7 @@ import numpy as np
 
 from verity_vllm.program import model as analytic
 from verity_vllm.check import weights_of_record as WR
-from tests.input_provenance.test_weights_of_record import PREFIX, _program, checkpoint  # noqa: F401  (fixture)
+from tests.check.test_weights_of_record import PREFIX, _program, checkpoint  # noqa: F401  (fixture)
 
 FIELD = "model.model.layers.0.self_attn.rotary_emb.cos_sin_cache"
 
@@ -74,7 +74,7 @@ def test_the_root_moves_with_the_analytic_inputs_and_with_the_checkpoint_bytes(c
     key = hashlib.sha256(json.dumps({"table": "cos_sin", "expected_shape": e0["expected_shape"], "C": e0["C"]}, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     assert key == e0["inputs_sha256"]
     # a byte of the checkpoint (the norm) changed: the root moves through the field digest (unchanged v1 behaviour)
-    from tests.input_provenance.test_weights_of_record import write_safetensors
+    from tests.check.test_weights_of_record import write_safetensors
     t = dict(_t); w = t["model.norm.weight"][1].copy(); w[0] ^= 0x0001; t["model.norm.weight"] = ("BF16", w)
     write_safetensors(str(d / "model.safetensors"), t)
     man2 = d.parent / "checkpoints2.json"

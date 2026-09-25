@@ -12,7 +12,7 @@ import pytest
 from verity_vllm.engine import arrivals
 from verity_vllm.observe import chunks as CA
 from verity_vllm.pipeline import coverage_workloads as gw
-from tests.harness.test_coverage_workloads import _LaggedStubEngine, _Out
+from tests.pipeline.test_coverage_workloads import _LaggedStubEngine, _Out
 
 REPO = Path(__file__).resolve().parents[2]
 PROF = REPO / "workloads"

@@ -35,7 +35,7 @@ from verity_vllm.commit import binding as B
 from verity_vllm.check import weights_of_record as WR
 from tests.check.test_sampled_replay import _program as _wired_program
 from tests.check.test_sampled_replay import v2_manifest
-from tests.input_provenance.test_weights_of_record import (PREFIX, _program, _served, _write_program, checkpoint,  # noqa: F401 (fixture)
+from tests.check.test_weights_of_record import (PREFIX, _program, _served, _write_program, checkpoint,  # noqa: F401 (fixture)
                                                                 live_digests, write_safetensors)
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))

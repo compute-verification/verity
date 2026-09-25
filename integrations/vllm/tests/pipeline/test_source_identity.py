@@ -8,7 +8,7 @@ sha fallback (RESEARCH_SOURCE_SHA), and the runner-side refusals (row_pod.sh / c
 Layout under test (Verity): the tree of record is the REPO ROOT; `verity` from packages/verity/src, `verity_vllm` from integrations/vllm,
 `research` from tools/research/src.
 
-    cd integrations/vllm && PYTHONPATH=.:../../packages/verity/src:../../tools/research/src python -m pytest -q tests/harness/test_source_identity.py
+    cd integrations/vllm && PYTHONPATH=.:../../packages/verity/src:../../tools/research/src python -m pytest -q tests/pipeline/test_source_identity.py
 """
 from __future__ import annotations
 
@@ -226,7 +226,7 @@ def _shipped_tree(tmp_path: Path) -> Path:
     source_identity modules (generic + project, with the verity_vllm.config it locates the tree through) so the precheck under test runs
     from the shipped tree itself."""
     t = tmp_path / "src" / ("f" * 40)
-    for rel in ("packages/verity/src/verity", "integrations/vllm/verity_vllm", "integrations/vllm/verity_vllm/harness", "integrations/vllm/tests/harness",
+    for rel in ("packages/verity/src/verity", "integrations/vllm/verity_vllm", "integrations/vllm/verity_vllm/pipeline", "integrations/vllm/tests/pipeline",
                 "tools/research/src/research/telemetry"):
         (t / rel).mkdir(parents=True)
         (t / rel / "__init__.py").write_text("")
@@ -315,7 +315,8 @@ def test_hidden_gpu_resolves_repo_from_its_own_file_not_the_environment(tmp_path
     if r.returncode == 0:
         assert r.stdout.strip().endswith(str(a.resolve()))
     else:
-        assert "No module named" in r.stderr, r.stderr      # torch-free laptop: the identity step passed, the heavy imports did not
+        # torch-free laptop: the identity step passed, the heavy imports did not (the fake tree's verity_vllm.commit is a bare namespace)
+        assert "No module named" in r.stderr or "cannot import name 'hidden_stream'" in r.stderr, r.stderr
     # the environment agreeing with the file's tree is fine
     r = subprocess.run([PY, "-c", probe], env=_env(VERITOR_REPO=str(a)), capture_output=True, text=True, cwd=tmp_path)
     assert "PRECHECK_FAIL_SOURCE_IDENTITY" not in r.stderr

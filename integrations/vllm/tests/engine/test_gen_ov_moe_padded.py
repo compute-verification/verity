@@ -19,7 +19,7 @@ from verity_vllm.engine.profiles.gen_ov_moe_patterns import MOE_CONSTRUCTION_PAT
 
 OV = importlib.import_module("verity_vllm.engine.profiles.derived_OLMOE")
 from verity_vllm.observe.fold.resolver import Compute, Group, StepContext, Transparent, Unsupported, resolve_step
-from tests.observe.test_gen_ov_moe import C, E, H, I, TOPK, _ctx, _start, moe_scope_events
+from tests.engine.test_gen_ov_moe import C, E, H, I, TOPK, _ctx, _start, moe_scope_events
 from verity_vllm.observe.fold.tree import step_events
 from verity.ir.defs import bind
 from verity_vllm.program.registry import moe_pad as MP
@@ -91,7 +91,7 @@ def test_padded_scope_declines_exactly_as_the_pairwise_reading(kw, needle):
     res, _ = _resolve_padded(3, **kw)
     assert len(res) == 1 and isinstance(res[0], Unsupported), res
     assert needle in res[0].reason, res[0].reason
-    from tests.observe.test_gen_ov_moe import _resolve
+    from tests.engine.test_gen_ov_moe import _resolve
     pair, _ = _resolve(3, **kw)
     assert pair[0].reason == res[0].reason                                                                  # the same refusal, verbatim
 

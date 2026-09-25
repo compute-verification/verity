@@ -6,8 +6,8 @@ check follows the installed interface.  It lives under tests/ because it seeds a
 arguments, which library code may not do yet (lints P3, P9, P6).
 
     cd integrations/vllm; PY=/workspace/venv312/bin/python     # PYTHONPATH as gate (b)
-    $PY tests/check/fa_tap_exactness_gpu.py --so /workspace/cp/fa2/build/matReq/verity_fa2_matReq.so --out DIR          # FA2 (L40S)
-    $PY tests/check/fa_tap_exactness_gpu.py --so /workspace/cp/fa2/build/fa3_matReq/verity_fa3_matReq.so --out DIR      # FA3 (H100)
+    $PY tests/properties/fa_tap_exactness_gpu.py --so /workspace/cp/fa2/build/matReq/verity_fa2_matReq.so --out DIR          # FA2 (L40S)
+    $PY tests/properties/fa_tap_exactness_gpu.py --so /workspace/cp/fa2/build/fa3_matReq/verity_fa3_matReq.so --out DIR      # FA3 (H100)
 """
 from __future__ import annotations
 

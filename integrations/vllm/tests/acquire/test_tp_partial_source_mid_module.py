@@ -11,7 +11,7 @@ import pytest
 
 pytest.importorskip("verity_vllm.acquire.sources.partial_source")
 from verity_vllm.acquire.sources import partial_source as tps  # noqa: E402
-from tests.tp.test_tp_partial_source_moe import _Committer, _Mod, _T, _make, _model  # noqa: E402
+from tests.acquire.test_tp_partial_source_moe import _Committer, _Mod, _T, _make, _model  # noqa: E402
 from verity_vllm.collectives import collective_sites as CS  # noqa: E402
 
 THIS = __name__

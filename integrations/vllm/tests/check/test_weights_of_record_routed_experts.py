@@ -22,7 +22,7 @@ import numpy as np
 import pytest
 
 from verity_vllm.check import weights_of_record as WR
-from tests.input_provenance.test_weights_of_record import _bf16, live_digests, write_safetensors
+from tests.check.test_weights_of_record import _bf16, live_digests, write_safetensors
 
 H, I, E = 8, 6, 4          # hidden, intermediate, experts
 
