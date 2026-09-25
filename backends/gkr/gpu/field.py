@@ -156,14 +156,23 @@ def from_bytes(b: bytes) -> Ext:
 # Tensor arithmetic
 # ---------------------------------------------------------------------------------------------------------------------
 
+def _h2d(rows, dtype, device) -> torch.Tensor:
+    """A small host list on ``device``; on CUDA through pinned memory, non-blocking (a pageable copy first waits for
+    the stream to drain, which stalls the host behind the queued kernels)."""
+    t = torch.tensor(rows, dtype=dtype)
+    if torch.device(device).type == "cuda":
+        return t.pin_memory().to(device, non_blocking=True)
+    return t.to(device)
+
+
 def t_ext(x: Ext, device) -> torch.Tensor:
-    return torch.tensor([int(c) % P for c in x], dtype=torch.int64, device=device)
+    return _h2d([int(c) % P for c in x], torch.int64, device)
 
 
 def t_exts(xs: list[Ext], device) -> torch.Tensor:
     if not xs:
         return torch.zeros((0, DEG), dtype=torch.int64, device=device)
-    return torch.tensor([[int(c) % P for c in x] for x in xs], dtype=torch.int64, device=device)
+    return _h2d([[int(c) % P for c in x] for x in xs], torch.int64, device)
 
 
 def py_ext(t: torch.Tensor) -> Ext:
@@ -426,7 +435,7 @@ def eq_table(point: list[Ext], device, out_dtype=torch.int64) -> torch.Tensor:
     eq_vars = _eq_vars_kernel() if n and cuda and _fast_eq_outer is not None else None
     if eq_vars is not None:
         # one launch; the kernel's variable j is bit j (low bit first), so the point goes in reversed
-        pt = torch.tensor([[int(c) % P for c in r] for r in reversed(point)], dtype=torch.int32, device=device)
+        pt = _h2d([[int(c) % P for c in r] for r in reversed(point)], torch.int32, device)
         t = eq_vars(pt, 0, n)
         return t if out_dtype == torch.int32 else t.to(out_dtype)
     return _eq_table_doubling(point, device, out_dtype)
