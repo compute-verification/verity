@@ -1,5 +1,5 @@
 """red-team-standard-hash: mutate-and-recompute determinism scan of a leaf gadget (``leaf/blake3.py``, ``leaf/blake3_xob.py``,
-``leaf/sha256.py``).
+``leaf/sha256.py``, ``leaf/vllm_v1.py``).
 
 For each column shape (word bits, blocks per column), build the one-role column system of ``leaf/blake3_test.py`` and
 the honest inputs of one VU row (operand words + carried state: the relation's bit decode and the chain test bind those).
@@ -50,6 +50,23 @@ def _column(leaf_name: str, word_bits: int, nblk: float, seed: int):
         carry = [ctx.hint(f"carry[{i}]") for i in range(L.CARRY_ELEMS)]
         digest, _ = leaf.gadget(ctx, words, word_bits=word_bits, role=role, row_words=L.K_VU, carry_in=carry)
         rows, steps, _car, _pub, hints = _one_row_inputs(leaf, ctx.sys, word_bits, role, seed, nblk)
+        return leaf, ctx.sys, words, carry, digest, rows, steps, hints
+    if leaf_name == "vllm-v1":
+        from ..leaf import sha256 as S
+        from ..leaf.vllm_v1 import CARRY_ELEMS, VllmV1Leaf
+        from ..relations import FP8_ADA_RELATION
+        leaf = VllmV1Leaf()
+        ctx = LigeroCtx(FP8_ADA_RELATION.params)
+        ctx.scope = "t"
+        k = int(nblk * 8 * S.BLOCK_LEN) // word_bits
+        words = [ctx.hint(f"w[{i}]") for i in range(k)]
+        carry = [ctx.hint(f"carry[{i}]") for i in range(CARRY_ELEMS)]
+        digest, _ = leaf.gadget(ctx, words, word_bits=word_bits, role=role, row_words=S.K_VU, carry_in=carry)
+        steps = S.K_VU // k
+        rows = np.random.default_rng(seed).integers(0, 1 << word_bits, size=(1, S.K_VU), dtype=np.int64)
+        car = leaf.carry_values(rows, word_bits=word_bits, role=role, steps=steps)
+        hints = {f"w[{i}]": rows[0].reshape(steps, k)[:, i] for i in range(k)}
+        hints |= {f"carry[{i}]": car[0, :, i] for i in range(CARRY_ELEMS)}
         return leaf, ctx.sys, words, carry, digest, rows, steps, hints
     from ..leaf import sha256 as S
     from ..relations import FP8_ADA_RELATION
@@ -134,6 +151,8 @@ def scan(leaf_name: str, word_bits: int, nblk: float, width: int, seed: int = 7,
     if control:                                           # positive control: drop the median addition's low-limb decomposition
         suffix = ("a1.lo", "a2.lo", "c1.lo", "c2.lo") if leaf_name == "blake3-xob" else ("lo.decomp",)
         cands = [c.name for c in sys.linear if c.name.endswith(suffix)]
+        if isinstance(control, str):                      # a named family: the median constraint whose name contains it
+            cands = [c.name for c in sys.linear if control in c.name]
         dropped = cands[len(cands) // 2]
         sys.linear = [c for c in sys.linear if c.name != dropped]
     width = max(steps, width - width % steps)
@@ -173,13 +192,17 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--shapes", default="8:0.5,8:1,16:1,8:2", help="word_bits:blocks_per_column, comma-separated")
     ap.add_argument("--width", type=int, default=1536, help="columns per program run (mutations tested at once)")
-    ap.add_argument("--leaf", default="blake3", choices=("blake3", "blake3-xob", "sha256"))
+    ap.add_argument("--leaf", default="blake3", choices=("blake3", "blake3-xob", "sha256", "vllm-v1"))
+    ap.add_argument("--control-name", default=None, help="a second control: drop the median linear constraint whose name contains this")
     ap.add_argument("--control-shape", default="8:0.5", help="the positive control's word_bits:blocks_per_column")
     ap.add_argument("--out", default=None)
     a = ap.parse_args()
     shape = lambda t: (int(t.split(":")[0]), float(t.split(":")[1]) if "." in t.split(":")[1] else int(t.split(":")[1]))  # noqa: E731
     ctl = scan(a.leaf, *shape(a.control_shape), a.width, control=True)
     print("control", json.dumps({k: v for k, v in ctl.items() if k != "free"}), json.dumps(ctl["free"][:3]), flush=True)
+    ctl2 = scan(a.leaf, *shape(a.control_shape), a.width, control=a.control_name) if a.control_name else None
+    if ctl2 is not None:
+        print("control2", json.dumps({k: v for k, v in ctl2.items() if k != "free"}), json.dumps(ctl2["free"][:3]), flush=True)
     res = []
     for s in a.shapes.split(","):
         r = scan(a.leaf, *shape(s), a.width)
@@ -188,10 +211,10 @@ def main() -> int:
             print("  FREE", json.dumps(f), flush=True)
         res.append(r)
     ok = (all(r["honest_ok"] and r["digest_ok"] and r["n_free"] == 0 for r in res)
-          and ctl["n_free"] > 0 and ctl["honest_ok"])
+          and ctl["n_free"] > 0 and ctl["honest_ok"] and (ctl2 is None or (ctl2["n_free"] > 0 and ctl2["honest_ok"])))
     if a.out:
         Path(a.out).mkdir(parents=True, exist_ok=True)
-        (Path(a.out) / "free_rows.json").write_text(json.dumps({"ok": ok, "shapes": res, "control": ctl}, indent=1) + "\n")
+        (Path(a.out) / "free_rows.json").write_text(json.dumps({"ok": ok, "shapes": res, "control": ctl, "control2": ctl2}, indent=1) + "\n")
     print("no free row (control shows free rows)" if ok else "FREE ROWS FOUND, or the control found none, or an honest witness failed")
     return 0 if ok else 1
 
