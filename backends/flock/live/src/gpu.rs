@@ -28,6 +28,13 @@ use flock_prover::{
 
 use crate::{LiveChallenger, chunk::*};
 
+// The static CUDA library travels with this crate; naming it keeps it in the link.
+extern crate flock_cuda_ffi;
+
+pub fn device_count() -> i32 {
+    flock_cuda_ffi::gpu::device_count()
+}
+
 type LiveCb = unsafe extern "C" fn(*mut c_void, *const u8, usize, u32, *mut u64) -> i32;
 type LinkCb = unsafe extern "C" fn(*mut c_void, *const u8, usize, i32, *mut u64, i32) -> i32;
 

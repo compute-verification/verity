@@ -197,6 +197,7 @@ fn prove_cpu(st: &ChunkStmt, comps: &[Compression], lig: LigeritoProfile, hook: 
 
 #[cfg(feature = "gpu")]
 fn prove_gpu(st: &ChunkStmt, comps: &[Compression], lig: LigeritoProfile, rep: usize, hook: Hook<'_>, ch: &mut LiveChallenger) -> Vec<u8> {
+    assert!(flock_live::gpu::device_count() > 0, "no CUDA device");
     let (proof, commitment, phase) = flock_live::gpu::prove_chunk(st, comps, &params(st.m, lig), &domain(rep), hook, ch);
     eprintln!("GPUPHASE\t{}", json!({"rep": rep, "m": st.m, "witness": phase[0], "commit": phase[1], "link": phase[2],
         "zerocheck": phase[3], "lincheck": phase[4], "ring_switch": phase[5], "ligerito": phase[6], "total": phase[7]}));
