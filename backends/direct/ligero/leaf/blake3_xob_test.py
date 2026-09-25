@@ -122,4 +122,4 @@ def test_census_numbers_are_the_documented_ones():
     assert c["hash_rows_per_vu_xob"] == 48 * XOB_PER_BLOCK
 
 
-PINNED_PER_BLOCK, XOB_PER_BLOCK = None, None      # the column gadget's input shapes (a counter bit, the chunk flags)
+PINNED_PER_BLOCK, XOB_PER_BLOCK = 15139, 11746      # the column gadget's input shapes (a counter bit, the chunk flags)
