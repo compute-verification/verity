@@ -516,9 +516,12 @@ def session_measurements(contract, timed: list[dict], n: int, live: bool, rtt_ms
     return meas, med, tt, ix
 
 
-def rederive(src: Path, out: Path, supersedes: str | None) -> dict:
+def rederive(src: Path, out: Path, supersedes: str | None, protocol: dict | None = None, sweep: dict | None = None,
+             commit: str | None = None) -> dict:
     """A new envelope from an old one's embedded sessions (no pod): the measurements and the interaction block again, from
-    the same runs; the fingerprint, hardware and evidence are kept."""
+    the same runs; the fingerprint, hardware and evidence are kept.  ``protocol`` / ``sweep`` (JSON documents) become the
+    fingerprint's blocks of those names; ``commit`` names the committer whose time (the envelope's ``commit.serving_seconds``)
+    is reported as ``commit.seconds``, the commitment P counts."""
     for p in (HERE.parents[1] / "packages" / "verity" / "src", HERE.parents[1] / "backends" / "numerical" / "python"):
         sys.path.insert(0, str(p))
     from verity_numerical.bench import contract
@@ -538,6 +541,17 @@ def rederive(src: Path, out: Path, supersedes: str | None) -> dict:
     method = next((r["net"].get("rtt_probe_method") for r in timed if (r.get("net") or {}).get("rtt_probe_method")), None)
     meas, med, tt, ix = session_measurements(contract, timed, fp["B"], live, rtt, method, om["soundness_bits"], om.get("commit.serving_seconds", 0.0), rust)
     fp = dict(fp, interaction=ix)
+    if protocol is not None:
+        fp["protocol"] = protocol
+    if sweep is not None:
+        fp["sweep"] = sweep
+    if commit is not None:
+        cs = om.get("commit.serving_seconds")
+        if not isinstance(cs, (int, float)) or cs <= 0:
+            raise SystemExit("rederive --commit: the envelope has no commit.serving_seconds")
+        import bench_result as br
+        meas.append(br._m("commit.seconds", cs, "s"))
+        fp["commit"] = {"seconds": cs, "committer": commit, "in_t_total": False}
     new = dict(old, workload_fingerprint=fp, measurements=meas,
                derived_from={"artifact": supersedes, "run_id": old.get("run_id"), "tool": "backends/gkr/tools/cell.py rederive",
                              "why": "t.total without the network waits (t.total_live the wall), rounds.sequential_depth = the session's "
@@ -579,6 +593,9 @@ def main(argv=None) -> int:
     d.add_argument("--from", dest="src", required=True)
     d.add_argument("--result", required=True)
     d.add_argument("--supersedes", default=None, help="the old envelope's art: id")
+    d.add_argument("--protocol", default=None, help="JSON file: the fingerprint's protocol block (warm, runs, statistic, contended, contention)")
+    d.add_argument("--sweep", default=None, help="JSON file: the fingerprint's sweep block (id, point, plateau, points)")
+    d.add_argument("--commit", default=None, help="the committer whose time (commit.serving_seconds) is reported as commit.seconds")
     r = sub.add_parser("result", help="the bench-result/v1 envelope from CELL/sessions.json (on the prover pod: it probes the hardware)")
     r.add_argument("--cell", required=True)
     r.add_argument("--sessions-json", action="append", default=[], help="more sessions.json files (other runs of the same cell)")
@@ -588,7 +605,8 @@ def main(argv=None) -> int:
     r.add_argument("--rtt-method", default=None)
     a = ap.parse_args(argv)
     if a.cmd == "rederive":
-        rederive(Path(a.src), Path(a.result), a.supersedes)
+        rd = lambda f: json.loads(Path(f).read_text()) if f else None   # noqa: E731
+        rederive(Path(a.src), Path(a.result), a.supersedes, rd(a.protocol), rd(a.sweep), a.commit)
         return 0
     if a.cmd == "result":
         cell = Path(a.cell)
