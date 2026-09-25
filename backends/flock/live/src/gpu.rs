@@ -129,6 +129,12 @@ struct ChunkParams {
     pub_acc: *mut u32,
     u_out_acc: i32,
     u_out_y: i32,
+    per_role: i32,
+    chunks_per_block: i32,
+    chunk_nb0: i32,
+    chunk_nb1: i32,
+    blocks_per_vu: i32,
+    dummy_keyed: i32,
 }
 
 unsafe extern "C" {
@@ -385,7 +391,8 @@ impl ChunkParams {
             u_b_col_ptr: null(), u_b_rows: null(), u_b_nnz: 0, u_a_off: null(), u_a_col: null(), u_b_off: null(), u_b_col: null(),
             u_useful: 0, u_const: 0, u_n_in: 0, u_inputs: null(), rows_x: null(), rows_w: null(), accs: null(), vus: 0,
             row_bytes: 0, units_per_vu: 0, keys: null(), blocks_real: 0, unit_cache: 0, pub_cv: null_mut(), pub_y16: null_mut(),
-            pub_acc: null_mut(), u_out_acc: -1, u_out_y: -1,
+            pub_acc: null_mut(), u_out_acc: -1, u_out_y: -1, per_role: 0, chunks_per_block: 0, chunk_nb0: 0, chunk_nb1: 0,
+            blocks_per_vu: 0, dummy_keyed: 0,
         }
     }
 }
@@ -494,7 +501,7 @@ pub fn prove_pure(
     let s = statics_with(&st.circuit.da, &st.circuit.db);
     let (sc, cfg) = sched(pcs);
     let m = pcs.m;
-    let params = prove_params(s, &sc, &cfg, pcs, &st.digest, domain, pb::K_LOG, pb::PIN, ch);
+    let params = prove_params(s, &sc, &cfg, pcs, &st.digest, domain, st.lay.k_log(), pb::PIN, ch);
     static U: OnceLock<(Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>)> = OnceLock::new();
     let u = U.get_or_init(|| {
         let k = 1usize << pb::UNIT_LOG;
@@ -518,20 +525,22 @@ pub fn prove_pure(
         (ca.0, ca.1, cb.0, cb.1, ao, ac, bo, bc)
     });
     let blocks = st.blocks();
-    let n_units = blocks * pb::UNITS;
+    let lay = st.lay;
+    let (units, ncv) = (lay.units(), lay.n_cv());
+    let n_units = blocks * units;
     let (mut uin, mut cv, mut msg, mut ctr, mut blen, mut flags) = (Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new());
     let keys: Vec<u32> = st.keys.iter().flatten().copied().collect();
     let br = st.blocks_real;
-    let (mut pub_cv, mut pub_y16, mut pub_acc) = (vec![0u32; br * 16], vec![0u32; br], vec![0u32; br]);
+    let (mut pub_cv, mut pub_y16, mut pub_acc) = (vec![0u32; br * 8 * ncv], vec![0u32; br], vec![0u32; br]);
     let (dev, cache) = match &src {
         PureSrc::Host { comps, inputs } => {
-            uin = (0..n_units).into_par_iter().flat_map_iter(|i| inputs(i / pb::UNITS, i % pb::UNITS).into_iter().flat_map(|w| [w.lo, w.hi])).collect();
+            uin = (0..n_units).into_par_iter().flat_map_iter(|i| inputs(i / units, i % units).into_iter().flat_map(|w| [w.lo, w.hi])).collect();
             cv = comps.iter().flat_map(|c| c.0).collect();
             msg = comps.iter().flat_map(|c| c.1).collect();
             ctr = comps.iter().map(|c| c.2).collect();
             blen = comps.iter().map(|c| c.3).collect();
             flags = comps.iter().map(|c| c.4).collect();
-            assert_eq!(comps.len(), blocks * pb::COMP_SLOTS);
+            assert_eq!(comps.len(), blocks * lay.comp_slots());
             (None, 0)
         }
         PureSrc::Device { inst, cache } => (Some(*inst), *cache),
@@ -541,9 +550,9 @@ pub fn prove_pure(
         if dev.is_none() {
             return hook(root, None);
         }
-        let (c, y, a) = unsafe { (from_raw_parts(pcv, br * 16), from_raw_parts(py, br), from_raw_parts(pa, br)) };
+        let (c, y, a) = unsafe { (from_raw_parts(pcv, br * 8 * ncv), from_raw_parts(py, br), from_raw_parts(pa, br)) };
         let p = crate::pure_block::Publics {
-            cv: (0..br).map(|b| std::array::from_fn(|r| std::array::from_fn(|k| c[16 * b + 8 * r + k]))).collect(),
+            cv: (0..br).map(|b| (0..ncv).map(|r| std::array::from_fn(|k| c[8 * (ncv * b + r) + k])).collect()).collect(),
             y16: y.to_vec(),
             acc: a.to_vec(),
         };
@@ -570,10 +579,10 @@ pub fn prove_pure(
         gamma_bits: if n_claims > 1 { og.claim_batch_bits as i32 } else { 0 },
         phase_s: phase.as_mut_ptr(),
         mode: 1,
-        comp_slots: pb::COMP_SLOTS as i32,
-        units: pb::UNITS as i32,
+        comp_slots: lay.comp_slots() as i32,
+        units: units as i32,
         unit_log: pb::UNIT_LOG as i32,
-        unit_pos0: pb::UNIT_POS0 as i32,
+        unit_pos0: lay.unit_pos0() as i32,
         u_a_col_ptr: u.0.as_ptr(),
         u_a_rows: u.1.as_ptr(),
         u_a_nnz: u.1.len() as u32,
@@ -602,6 +611,12 @@ pub fn prove_pure(
         pub_acc: if dev.is_some() { pa } else { null_mut() },
         u_out_acc: st.net.out_cols[0] as i32,
         u_out_y: st.net.out_cols.get(1).map_or(-1, |&c| c as i32),
+        per_role: lay.per_role() as i32,
+        chunks_per_block: lay.chunks().len() as i32,
+        chunk_nb0: lay.chunks()[0] as i32,
+        chunk_nb1: lay.chunks().get(1).map_or(0, |&n| n as i32),
+        blocks_per_vu: lay.blocks_per_vu() as i32,
+        dummy_keyed: (lay == pb::Layout::Fp8) as i32,
     };
     let (proof, commitment) = run(&params, &chunk, pcs, m);
     (proof, commitment, phase)

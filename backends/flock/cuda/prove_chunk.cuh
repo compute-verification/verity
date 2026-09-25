@@ -193,42 +193,49 @@ __device__ void pb_compress(const uint32_t* cv, const uint32_t* m_in, uint64_t c
 // One thread per (block, role): the chunk's 16 compressions (chained from the role key, KEYED_HASH, counter = chunk index,
 // block_len 64, CHUNK_START / CHUNK_END) written as compression inputs, and the chunk's output chaining value.
 __global__ void pure_chain_inputs(const uint8_t* __restrict__ rx, const uint8_t* __restrict__ rw, int row_bytes, int blocks_real,
-                                  long long n_blocks, const uint32_t* __restrict__ keys, uint32_t* cvs, uint32_t* msgs, uint64_t* ctrs,
-                                  uint32_t* blens, uint32_t* flagss, uint32_t* cvout) {
+                                  long long n_blocks, const uint32_t* __restrict__ keys, int comp_slots, int per_role, int cpb, int nb0,
+                                  int nb1, int bpv, int dummy_keyed, uint32_t* cvs, uint32_t* msgs, uint64_t* ctrs, uint32_t* blens,
+                                  uint32_t* flagss, uint32_t* cvout) {
     long long t = (long long)blockIdx.x * blockDim.x + threadIdx.x;
     if (t >= 2 * n_blocks) return;
     long long b = t >> 1; int role = t & 1;
     bool real = b < blocks_real;
-    long long v = b / 3; int c = (int)(b % 3);
-    uint32_t cv[8];
-    for (int i = 0; i < 8; i++) cv[i] = real ? keys[8 * role + i] : 0;
-    uint64_t ctr = real ? (uint64_t)c : 0;
-    const uint8_t* row = (role ? rw : rx) + v * row_bytes + c * 1024;
-    for (int j = 0; j < 16; j++) {
-        long long ci = b * 32 + 16 * role + j;
-        uint32_t m[16];
-        for (int i = 0; i < 16; i++) m[i] = real ? *(const uint32_t*)(row + 64 * j + 4 * i) : 0;
-        uint32_t fl = 16u | (j == 0 ? 1u : 0u) | (j == 15 ? 2u : 0u);
-        for (int i = 0; i < 8; i++) cvs[ci * 8 + i] = cv[i];
-        for (int i = 0; i < 16; i++) msgs[ci * 16 + i] = m[i];
-        ctrs[ci] = ctr; blens[ci] = 64; flagss[ci] = fl;
-        uint32_t o[8];
-        pb_compress(cv, m, ctr, 64, fl, o);
-        for (int i = 0; i < 8; i++) cv[i] = o[i];
+    long long v = b / bpv;
+    int slot = role * per_role;
+    for (int c = 0; c < cpb; c++) {
+        int nb = c == 0 ? nb0 : nb1;
+        int chunk = (int)(b % bpv) * cpb + c;
+        bool keyed = real || dummy_keyed;
+        uint32_t cv[8];
+        for (int i = 0; i < 8; i++) cv[i] = keyed ? keys[8 * role + i] : 0;
+        uint64_t ctr = real ? (uint64_t)chunk : (dummy_keyed ? (uint64_t)c : 0);
+        const uint8_t* row = (role ? rw : rx) + v * row_bytes + chunk * 1024;
+        for (int j = 0; j < nb; j++, slot++) {
+            long long ci = b * comp_slots + slot;
+            uint32_t m[16];
+            for (int i = 0; i < 16; i++) m[i] = real ? *(const uint32_t*)(row + 64 * j + 4 * i) : 0;
+            uint32_t fl = 16u | (j == 0 ? 1u : 0u) | (j + 1 == nb ? 2u : 0u);
+            for (int i = 0; i < 8; i++) cvs[ci * 8 + i] = cv[i];
+            for (int i = 0; i < 16; i++) msgs[ci * 16 + i] = m[i];
+            ctrs[ci] = ctr; blens[ci] = 64; flagss[ci] = fl;
+            uint32_t o[8];
+            pb_compress(cv, m, ctr, 64, fl, o);
+            for (int i = 0; i < 8; i++) cv[i] = o[i];
+        }
+        for (int i = 0; i < 8; i++) cvout[((b * 2 + role) * cpb + c) * 8 + i] = cv[i];
     }
-    for (int i = 0; i < 8; i++) cvout[t * 8 + i] = cv[i];
 }
 
 // One thread per unit: its x and W words (the message words its compressions hash) and its accumulator input (the
 // recorded accumulator before it; +0 for the first unit of a VU and for dummy blocks), as 5 F128 (lo, hi).
 __global__ void pure_unit_inputs(const uint32_t* __restrict__ msgs, const uint32_t* __restrict__ accs, int units_per_vu,
-                                 int blocks_real, long long n_blocks, int units, uint64_t* out) {
+                                 int blocks_real, long long n_blocks, int units, int comp_slots, int per_role, int bpv, uint64_t* out) {
     long long id = (long long)blockIdx.x * blockDim.x + threadIdx.x;
     if (id >= n_blocks * units) return;
     long long b = id / units; int u = (int)(id % units);
     uint64_t* o = out + id * 10;
     for (int role = 0; role < 2; role++) {
-        const uint32_t* m = msgs + (b * 32 + 16 * role + u / 2) * 16 + (u % 2) * 8;
+        const uint32_t* m = msgs + (b * comp_slots + role * per_role + u / 2) * 16 + (u % 2) * 8;
         for (int w = 0; w < 2; w++) {
             o[4 * role + 2 * w] = (uint64_t)m[4 * w] | ((uint64_t)m[4 * w + 1] << 32);
             o[4 * role + 2 * w + 1] = (uint64_t)m[4 * w + 2] | ((uint64_t)m[4 * w + 3] << 32);
@@ -236,7 +243,7 @@ __global__ void pure_unit_inputs(const uint32_t* __restrict__ msgs, const uint32
     }
     uint32_t c_in = 0;
     if (b < blocks_real) {
-        long long v = b / 3; int j = 32 * (int)(b % 3) + u;
+        long long v = b / bpv; int j = (int)(b % bpv) * units + u;
         if (j > 0) c_in = accs[v * units_per_vu + j - 1];
     }
     o[8] = c_in; o[9] = 0;
@@ -315,6 +322,9 @@ typedef struct {
     int unit_cache;                 // 0 off, 1 store the unit region after witnessing, 2 load it instead of witnessing
     uint32_t* pub_cv; uint32_t* pub_y16; uint32_t* pub_acc;   // [blocks_real][2][8], [blocks_real], [blocks_real]
     int u_out_acc, u_out_y;         // unit output word columns (c_out, y16; -1 when absent)
+    // the block layout (flock_live::pure_block::Layout): compressions per role, chunks per block and their sizes, blocks
+    // per VU; dummy_keyed: dummy blocks keep the role keys and chunk counters (fp8, where they are per-slot constants)
+    int per_role, chunks_per_block, chunk_nb0, chunk_nb1, blocks_per_vu, dummy_keyed;
 } FlockChunkParams;
 
 int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams* C, uint8_t** out, size_t* out_len) {
@@ -332,10 +342,10 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
     const int m = P->m, k_log = P->k_log, k_skip = 6, sub_log = C->sub_log;
     const int log_n = m - 7;
     const long long len = 1LL << log_n;
-    const long long n_comp = 1LL << C->n_comp_log;
+    const long long n_comp = C->mode == 1 ? (1LL << (m - k_log)) * C->comp_slots : 1LL << C->n_comp_log;
     const bool pure = C->mode == 1;
     const int n_blocks_log = m - k_log;
-    if (pure ? (C->n_comp_log != n_blocks_log + 5 || C->comp_slots != 32 || k_log != 20)
+    if (pure ? (C->comp_slots > 64 || (k_log != 20 && k_log != 21))
              : (C->n_comp_log + 14 != m || k_log <= sub_log || k_log - sub_log > 8)) { printf("FFI chunk: bad shape\n"); return 201; }
     const size_t packed_witness_bytes = (size_t)len * sizeof(F128);
     const size_t arena_bytes = packed_witness_bytes / 2 * 29 + 2 * packed_witness_bytes + (64ull << 20);
@@ -358,14 +368,15 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
             const size_t rb = (size_t)C->vus * C->row_bytes;
             CK(ffi_malloc(&d_rx, rb)); CK(ffi_malloc(&d_rw, rb));
             CK(ffi_malloc(&d_accs, (size_t)C->vus * C->units_per_vu * 4)); CK(ffi_malloc(&d_keys, 64));
-            CK(ffi_malloc(&d_cvout, (size_t)n_blocks_p * 2 * 32));
+            CK(ffi_malloc(&d_cvout, (size_t)n_blocks_p * 2 * C->chunks_per_block * 32));
             CK(cudaMemcpy(d_rx, C->rows_x, rb, cudaMemcpyHostToDevice)); CK(cudaMemcpy(d_rw, C->rows_w, rb, cudaMemcpyHostToDevice));
             CK(cudaMemcpy(d_accs, C->accs, (size_t)C->vus * C->units_per_vu * 4, cudaMemcpyHostToDevice));
             CK(cudaMemcpy(d_keys, C->keys, 64, cudaMemcpyHostToDevice));
             pure_chain_inputs<<<(unsigned)((2 * n_blocks_p + 127) / 128), 128>>>(d_rx, d_rw, C->row_bytes, C->blocks_real, n_blocks_p, d_keys,
+                C->comp_slots, C->per_role, C->chunks_per_block, C->chunk_nb0, C->chunk_nb1, C->blocks_per_vu, C->dummy_keyed,
                 d_cv, d_m, (uint64_t*)d_ctr, d_blen, d_flags, d_cvout);
             CK(cudaGetLastError());
-            if (C->pub_cv) CK(cudaMemcpy(C->pub_cv, d_cvout, (size_t)C->blocks_real * 64, cudaMemcpyDeviceToHost));
+            if (C->pub_cv) CK(cudaMemcpy(C->pub_cv, d_cvout, (size_t)C->blocks_real * 2 * C->chunks_per_block * 32, cudaMemcpyDeviceToHost));
             ffi_free(d_rx); ffi_free(d_rw); ffi_free(d_keys); ffi_free(d_cvout);
         } else {
             CK(cudaMemcpy(d_cv, C->cv, (size_t)n_comp * 32, cudaMemcpyHostToDevice));
@@ -409,7 +420,7 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
             CK(ffi_malloc(&d_in, n_units * 10 * sizeof(uint64_t)));
             if (dev_in) {
                 pure_unit_inputs<<<(unsigned)((n_units + 255) / 256), 256>>>(d_m, d_accs, C->units_per_vu, C->blocks_real, 1LL << n_blocks_log,
-                                                                             C->units, d_in);
+                                                                             C->units, C->comp_slots, C->per_role, C->blocks_per_vu, d_in);
                 CK(cudaGetLastError());
                 ffi_free(d_accs);
             } else {
