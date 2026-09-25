@@ -114,17 +114,38 @@ def _runner():
     return relchain, RELATIONS, FROZEN_INSTANCES
 
 
+def declared(target: str, ref: Mapping[str, Any]) -> tuple[bool, str | None]:
+    """Whether a runner ref over [0, n) is ``target``'s declared set -- the frozen ref, a prefix of it, or a synthetic stream by
+    generator, seed and n (``views.instance_range``) -- with why not when it names the declared set but repeats it."""
+    from verity.verification.target import TARGETS
+    from verity_numerical.bench.tables import FROZEN_INSTANCES
+    from verity_numerical.bench.views import instance_range
+    if same_ref(ref, FROZEN_INSTANCES[target]):
+        return True, None
+    how, why = instance_range(TARGETS[target], ref)
+    return how is not None, why
+
+
 def frozen_relation(target: str, n: int, root=None):
-    """The registered relation of ``target`` whose runner ref over ``n`` VUs is the frozen ref (the set's own loader): the
-    unfolded, shortest-named one when several are (the bf16-ampere family all read the frozen ``vu-k1536``)."""
+    """The registered relation of ``target`` whose runner ref over ``n`` VUs is the declared set (the set's own loader), and
+    that ref: the unfolded, shortest-named one when several are (the bf16-ampere family all read the frozen ``vu-k1536``).
+    Past the frozen 4,096 the ref is the synthetic stream (generator, seed, n); a fixture with no stream (A100) refuses."""
     relchain, RELATIONS, FROZEN = _runner()
-    want = FROZEN.get(target)
-    if want is None:
+    if target not in FROZEN:
         raise SystemExit(f"{target}: no frozen instance set (tables.FROZEN_INSTANCES)")
-    hits = [r for r in RELATIONS.values() if r.target.name == target and same_ref(relchain.instances_ref(r, n, root=root), want)]
+    hits, whys = [], set()
+    for r in RELATIONS.values():
+        if r.target.name != target:
+            continue
+        ok, why = declared(target, relchain.instances_ref(r, n, root=root))
+        if ok:
+            hits.append(r)
+        elif why:
+            whys.add(why)
     if not hits:
-        raise SystemExit(f"{target}: no registered relation carries the frozen ref {want} at n = {n}")
-    return min(hits, key=lambda r: (r.fold, len(r.name), r.name)), want
+        raise SystemExit(f"{target}: " + ("; ".join(sorted(whys)) or f"no registered relation carries the declared set at n = {n}"))
+    base = min(hits, key=lambda r: (r.fold, len(r.name), r.name))
+    return base, relchain.instances_ref(base, n, root=root)
 
 
 class _Sets:
@@ -153,7 +174,8 @@ def derive(name: str, sets: _Sets) -> dict[str, Any]:
     if cand.word_dtype != base.word_dtype:
         raise SystemExit(f"{name}: operand words {cand.word_dtype}, the frozen set's are {base.word_dtype}")
     canonical = (f"each side decoded by its own loader: frozen = relchain.instances({base.name!r}, {sets.n}) (the registered relation "
-                 f"whose runner ref is FROZEN_INSTANCES[target]), candidate = relchain.instances({name!r}, {sets.n}); x = the a "
+                 f"whose runner ref is the target's declared set over [0, {sets.n}): FROZEN_INSTANCES[target], or its synthetic stream by "
+                 f"generator, seed and n), candidate = relchain.instances({name!r}, {sets.n}); x = the a "
                  f"operand words, W = the b operand words, as {np.dtype(base.word_dtype).str} bit words of the datatype "
                  f"({base.model_name}), little-endian; y = the chain-end FP32 accumulator word (the final recorded accumulator "
                  f"of the VU; the public claim is the relation's y_public of it), <u4 little-endian; index order VU-major, then K")
@@ -172,7 +194,7 @@ def _relation_of(doc: Mapping[str, Any], n: int, root=None) -> str:
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m verity_numerical.bench.instance_equiv", description=__doc__.split("\n\n")[0])
     ap.add_argument("--relation", action="append", default=[], help="a candidate relation (repeatable)")
-    ap.add_argument("--vus", type=int, default=4096, help="the range [0, VUS) of both refs (Table 2: B = 4096)")
+    ap.add_argument("--vus", type=int, default=4096, help="the range [0, VUS) of both refs (4096, or a sweep point on a synthetic stream)")
     ap.add_argument("--root", default=None, help="the frozen bench-instances/v1 root (frozen-tier relations; default the fixture)")
     ap.add_argument("--procs", type=int, default=int(os.environ.get("VY_CPU_THREADS", os.cpu_count() or 1)))
     ap.add_argument("--out", default=None, help="the JSON file (one --relation)")

@@ -701,8 +701,11 @@ def _equiv_content(doc: Mapping[str, Any], target: Target, inst: Mapping[str, An
         p.append(f"schema is {doc.get('schema')!r}")
     if doc.get("target") != target.name:
         p.append(f"target is {doc.get('target')!r}")
-    if _ref_key(doc.get("frozen")) != _ref_key(FROZEN_INSTANCES.get(target.name)):
-        p.append("frozen is not FROZEN_INSTANCES[target] field for field")
+    frozen = doc.get("frozen")
+    if target.name not in FROZEN_INSTANCES:
+        return p + ["the target has no frozen set"]
+    if not isinstance(frozen, Mapping) or instances_diff(frozen, FROZEN_INSTANCES[target.name]):
+        p.append("frozen is not FROZEN_INSTANCES[target] (dataset, tier, range, manifest_sha256)")
     if _ref_key(doc.get("candidate")) != _ref_key(inst):
         p.append("candidate is not the result's instances ref field for field")
     if doc.get("equal") is not True:

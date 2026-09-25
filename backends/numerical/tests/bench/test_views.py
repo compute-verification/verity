@@ -145,7 +145,7 @@ def test_parity_reports_a_difference(store: LocalStore) -> None:
 
 def committed(store: LocalStore, leaf: str = "blake3", *, t_total: float = 0.4, commit: float = 0.6, protocol: bool = True,
               custody: bool = True, security: dict | None = None, verified_by: str | None = VERIFIER, labels: list[tuple] = (),
-              B: int = 4096) -> str:
+              B: int = 4096, manifest: str | None = None) -> str:
     """A B-Ligero in-proof-hash result on the 4090 line, measured under the protocol, with its commitment time and preserved dumps."""
 
     doc = hashed(leaf, t_total=t_total, security=security)
@@ -154,6 +154,8 @@ def committed(store: LocalStore, leaf: str = "blake3", *, t_total: float = 0.4, 
     if B != 4096:
         fp.update(B=B, instances={**fp["instances"], "range": [0, B], "manifest_sha256": V.STREAMS[FP8_ADA_MMA.name](B)})
         doc["measurements"] = [m for m in doc["measurements"] if not m["name"].startswith(("rate.", "overhead.", "vu."))]
+    if manifest is not None:
+        fp["instances"] = {**fp["instances"], "manifest_sha256": manifest, "seed": 20260922, "recipe": "fp8-ada synthetic (x4 fold)"}
     if protocol:
         doc["protocol"], doc["sweep"] = dict(PROTOCOL), dict(SWEEP)
     if not custody:
@@ -411,3 +413,50 @@ def test_finding_labels_mark_or_pull_cells_in_both_renderers(store: LocalStore) 
     put(store, result(t_total=4.0), labels=[("finding", open_, "coordinator", "2026-09-25T07:45:00Z")])
     pulled = put(store, result(t_total=2.0), labels=[("finding", "PULLED R1/R2", "coordinator", "2026-09-25T09:00:00Z")])
     assert V.parity(store) == [] and pulled not in {c.artifact for c in V.build(store, V.LEGACY).cells}
+
+
+def _stream_ref(n: int, **over: Any) -> dict[str, Any]:
+    return {**T.FROZEN_INSTANCES[FP8_ADA_MMA.name], "range": [0, n], "manifest_sha256": V.STREAMS[FP8_ADA_MMA.name](n),
+            "seed": 20260922, "recipe": "fp8-ada synthetic (uniform finite E4M3 bytes, model-recorded accumulators)", **over}
+
+
+def test_an_equivalence_to_the_stream_admits_a_repacked_sweep_point(store: LocalStore) -> None:
+    """The x4 fold's 8,192 plateau: its manifest names the fold, so it counts only through an instance-equiv/v1 whose frozen
+    side is the declared set over [0, 8192) -- the synthetic stream by generator, seed and n, as the runner writes the ref."""
+
+    art = committed(store, t_total=1.5, commit=0.3, B=8192, manifest="ab" * 32)
+    cand = store.get_manifest(art).meta["workload_fingerprint"]["instances"]
+    views = V.build(store)
+    assert codes(views, art) == ["I"]
+    eq = put_equiv(store, equiv_doc(cand, frozen=_stream_ref(8192)))
+    views = V.build(store)
+    cell = line(views)["cells"]["B-Ligero"]
+    assert cell is not None and cell.artifact == art and cell.legacy.instances_equiv == eq
+    assert f"{T.INSTANCE_EQUIV_NOTE} ({eq})" in V.render_markdown(views)
+    # the frozen tables keep today's 4,096 rule
+    assert art in {r["artifact"] for r in T.build(store).rejected}
+
+
+@pytest.mark.parametrize(("frozen", "why"), [
+    (_stream_ref(8192, seed=1), "neither FROZEN_INSTANCES[target] nor the declared set's stream"),
+    (_stream_ref(8192, manifest_sha256=V.STREAMS[FP8_ADA_MMA.name](4096)), "neither FROZEN_INSTANCES[target] nor the declared set's stream"),
+    (dict(T.FROZEN_INSTANCES[FP8_ADA_MMA.name]), "do not hold the same number of instances"),
+])
+def test_a_stream_equivalence_must_name_the_declared_set_over_the_same_range(store: LocalStore, frozen: dict, why: str) -> None:
+    art = committed(store, t_total=1.5, commit=0.3, B=8192, manifest="ab" * 32)
+    cand = store.get_manifest(art).meta["workload_fingerprint"]["instances"]
+    put_equiv(store, equiv_doc(cand, frozen=frozen))
+    got = next(r for r in V.build(store).rejected if r["artifact"] == art)["codes"]
+    assert [k for k, _ in got] == ["I"] and why in got[0][1]
+
+
+def test_an_equivalence_cannot_launder_the_a100_fixtures_repeats(store: LocalStore) -> None:
+    ref = T.FROZEN_INSTANCES[FIRST.name]
+    cand = {**ref, "range": [0, 8192], "manifest_sha256": "cd" * 32}
+    doc = result(t_total=4.0)
+    doc["workload_fingerprint"].update(B=8192, instances=cand)
+    doc["measurements"] = [m for m in doc["measurements"] if not m["name"].startswith(("rate.", "overhead.", "vu."))]
+    art = put(store, doc)
+    put_equiv(store, equiv_doc(cand, target=FIRST, frozen={**ref, "range": [0, 8192]}))
+    got = next(r for r in V.build(store).rejected if r["artifact"] == art)["codes"]
+    assert ("I" in [k for k, _ in got]) and any("repeats instances" in w for k, w in got if k == "I")
