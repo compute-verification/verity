@@ -22,19 +22,21 @@ identity, the raw cubin hashes are reported as well. Wrappers get a ``norm_sha25
 
 CLI::
 
-    python -m verity_vllm.check.kernel_identity --inductor-dir D [--triton-dir T] --out kernels.json
-    python -m verity_vllm.check.kernel_identity --compare a.json b.json --out cmp.json
+    verity-vllm kernel-identity --inductor-dir D [--triton-dir T] --out kernels.json
+    verity-vllm kernel-identity --compare a.json b.json --out cmp.json
 """
 
 from __future__ import annotations
 
-import argparse
 import hashlib
 import json
 import os
 import re
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from verity_vllm.config import option
 
 _TRITON_SRC = re.compile(r"async_compile\.triton\('([^']+)', '''(.*?)''', device_str=", re.S)
 _AOT_ID = re.compile(r"^# AOT ID: \[(.*?)\]", re.M)
@@ -377,13 +379,15 @@ def compare(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--inductor-dir", default=None)
-    ap.add_argument("--triton-dir", default=None)
-    ap.add_argument("--compare", nargs=2, metavar=("A_JSON", "B_JSON"))
-    ap.add_argument("--out", required=True)
-    args = ap.parse_args()
+@dataclass(frozen=True, kw_only=True)
+class Options:
+    inductor_dir: str | None = option("--inductor-dir", default=None)
+    triton_dir: str | None = option("--triton-dir", default=None)
+    compare: list[str] | None = option("--compare", default=None, nargs=2, metavar=("A_JSON", "B_JSON"))
+    out: str = option("--out")
+
+
+def main(args: Options) -> None:
     if args.compare:
         a = json.loads(Path(args.compare[0]).read_text())
         b = json.loads(Path(args.compare[1]).read_text())
@@ -392,7 +396,3 @@ def main() -> None:
         doc = collect(args.inductor_dir or inductor_cache_dir(), args.triton_dir or triton_cache_dir())
     Path(args.out).write_text(json.dumps(doc, indent=1) + "\n")
     print(json.dumps(doc.get("summary", doc), indent=1))
-
-
-if __name__ == "__main__":
-    main()

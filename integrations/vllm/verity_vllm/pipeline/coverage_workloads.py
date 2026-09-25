@@ -1,6 +1,6 @@
 """bench/gen_coverage_workloads.py — the coverage campaign's workloads (D87): serving profile × context class, seeded lengths.
 
-    python -m verity_vllm.pipeline.coverage_workloads --case B0 --tokenizer <dir-or-tokenizer.json> \\
+    verity-vllm coverage-workloads --case B0 --tokenizer <dir-or-tokenizer.json> \\
         [--profiles B1,B8-static,B8-mixed] [--ctx C256,C1024] [--seed 0] [--out-dir workloads]
 
 Dimensions (out/gen/COVERAGE-20260917.md):
@@ -25,7 +25,6 @@ Writes <out-dir>/workload_cov_<case-lower>_<profile>_<ctx>[_r<r>][_t1][_ck<N>][_
 """
 from __future__ import annotations
 
-import argparse
 import hashlib
 import json
 import sys
@@ -34,8 +33,10 @@ from importlib import resources
 from pathlib import Path
 
 import numpy as np
+from dataclasses import dataclass
 
 from verity_vllm.config import CHECKPOINTS, WORKLOADS
+from verity_vllm.config import option
 
 CORPUS = resources.files("verity_vllm") / "engine" / "profiles" / "corpus_coverage.json"
 SCHEMA = "verity-vllm/workload/v1"
@@ -364,25 +365,30 @@ def workload_doc(*, case: str, model: str, tok: Tok, profile: str, ctx: str, see
             "requests": reqs, "note": note}
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--case", required=True, help="checkpoint role (B0, B1, LLAMA32_1B, ...)")
-    ap.add_argument("--model", default=None, help="HF repo of the served model (default: from checkpoints.json by role)")
-    ap.add_argument("--tokenizer", required=True, help="HF snapshot dir or tokenizer.json of the served model")
-    ap.add_argument("--tokenizer-revision", default=None)
-    ap.add_argument("--profiles", default=",".join(PROFILES))
-    ap.add_argument("--ctx", default=",".join(sorted(CTX)))
-    ap.add_argument("--seed", type=int, default=0, help="length seed (the draws depend on (profile, ctx, seed) only)")
-    ap.add_argument("--out-dir", default=str(WORKLOADS))
-    ap.add_argument("--checkpoints", default=str(CHECKPOINTS))
-    ap.add_argument("--replicate", type=int, default=0, help="r > 0: same length draws, prompts from prompt seed seed+1000r; file suffix _r<r>")
-    ap.add_argument("--variant", action="append", default=[],
-                    help="sampling variant ('greedy' | 't1' = temperature 1.0, file suffix _t1) and/or feature variants key=value, "
-                         f"known: {sorted(FEATURE_VARIANTS)} (e.g. 'chunked=64' -> suffix _ck64, 'dtype=float16' -> suffix _f16: "
-                         "engine_args_required.dtype = float16); comma-separated or repeated; see parse_variant")
-    ap.add_argument("--sampling-seed", type=int, default=20260917, help="per-request sampler seed for a non-greedy variant")
-    ap.add_argument("--dry-run", action="store_true", help="print the draws only")
-    a = ap.parse_args(argv)
+@dataclass(frozen=True, kw_only=True)
+class Options:
+    case: str = option("--case", help="checkpoint role (B0, B1, LLAMA32_1B, ...)")
+    model: str | None = option("--model", default=None,
+                               help="HF repo of the served model (default: from checkpoints.json by role)")
+    tokenizer: str = option("--tokenizer", help="HF snapshot dir or tokenizer.json of the served model")
+    tokenizer_revision: str | None = option("--tokenizer-revision", default=None)
+    profiles: str = option("--profiles", default=",".join(PROFILES))
+    ctx: str = option("--ctx", default=",".join(sorted(CTX)))
+    seed: int = option("--seed", type=int, default=0, help="length seed (the draws depend on (profile, ctx, seed) only)")
+    out_dir: str = option("--out-dir", default=str(WORKLOADS))
+    checkpoints: str = option("--checkpoints", default=str(CHECKPOINTS))
+    replicate: int = option("--replicate", type=int, default=0,
+                            help="r > 0: same length draws, prompts from prompt seed seed+1000r; file suffix _r<r>")
+    variant: list[str] = option("--variant", action="append", default=[],
+                                help="sampling variant ('greedy' | 't1' = temperature 1.0, file suffix _t1) and/or feature variants key=value, "
+                                f"known: {sorted(FEATURE_VARIANTS)} (e.g. 'chunked=64' -> suffix _ck64, 'dtype=float16' -> suffix _f16: "
+                                "engine_args_required.dtype = float16); comma-separated or repeated; see parse_variant")
+    sampling_seed: int = option("--sampling-seed", type=int, default=20260917,
+                                help="per-request sampler seed for a non-greedy variant")
+    dry_run: bool = option("--dry-run", default=False, action="store_true", help="print the draws only")
+
+
+def main(a: Options) -> int:
     # [chunked] one parse of --variant: the sampling variant name + the feature variants (fp16's dtype= lands in the same dict);
     # [integ] the flag is repeatable (fp16's calling style) -- the values are joined and parsed once
     samp_variant, feats = parse_variant(",".join(a.variant) if a.variant else "greedy")
@@ -420,7 +426,3 @@ def main(argv: list[str] | None = None) -> int:
             p.write_text(json.dumps(doc, indent=1, ensure_ascii=False) + "\n")
             print(f"{p.name}: {doc['note'][:200]}", file=sys.stderr)
     return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())

@@ -8,8 +8,8 @@ separate `verity_vllm.correspondence.capture_identities` tool.
 
 from __future__ import annotations
 
-import sys
 import time
+from dataclasses import dataclass
 
 import numpy as np
 
@@ -129,7 +129,12 @@ def check_silu_rope(rng):
     return out
 
 
-def main(argv=None):
+@dataclass(frozen=True, kw_only=True)
+class Options:
+    pass
+
+
+def main(a: Options):
     import json
     rng = np.random.default_rng(1)
     t = time.time()
@@ -141,8 +146,3 @@ def main(argv=None):
         rep["silu_rope_error"] = repr(e)
     rep["seconds"] = round(time.time() - t, 1)
     print(json.dumps(rep, indent=1))
-    return rep
-
-
-if __name__ == "__main__":
-    main(sys.argv[1:])

@@ -291,7 +291,7 @@ class Harness:
             e.update(env)
         if gpu_visible:
             e.pop("CUDA_VISIBLE_DEVICES", None)
-        argv = ["verity_vllm.pipeline.build", "--out", str(out), "--wrapper", "request", "--LP", "8", "--T", "4"]
+        argv = ["verity_vllm.pipeline.cli", "build", "--out", str(out), "--wrapper", "request", "--LP", "8", "--T", "4"]
         code = (preamble + "\nimport runpy, sys\nsys.argv = " + repr(argv) + "\nrunpy.run_module(sys.argv[0], run_name='__main__')\n")
         (self.work / name / "driver.py").write_text(code)
         t0 = time.time()

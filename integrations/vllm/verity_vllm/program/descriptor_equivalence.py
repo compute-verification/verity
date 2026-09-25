@@ -19,17 +19,17 @@ sequence of body-scoped references into maximal runs `(space, idx, base, stride,
 (the greedy leaf-level decomposition, computed run-by-run so a 7.8 M-part KV-cache concat costs O(parts), not
 O(leaves)). Two `Refs` denote the same sequence iff their canonical runs are equal.
 
-    PYTHONPATH=. python -m verity_vllm.program.descriptor_equivalence --old B0-v0.json --new B0-v1.json --out report.json
-    PYTHONPATH=. python -m verity_vllm.program.descriptor_equivalence --old B0-v0.json --build B0 32 7
+    PYTHONPATH=. verity-vllm descriptor-equivalence --old B0-v0.json --new B0-v1.json --out report.json
+    PYTHONPATH=. verity-vllm descriptor-equivalence --old B0-v0.json --build B0 32 7
 """
 
 from __future__ import annotations
 
-import argparse
 import json
 import random
 import sys
 import time
+from dataclasses import dataclass
 from typing import Any, Iterator
 
 from verity.ir.codec import decode_program, program_digest
@@ -37,6 +37,8 @@ from verity.ir.defs import PrimitiveDefinition, REGISTRY, SpecializedDefinition
 from verity.ir.evaluate import evaluate_call
 from verity.ir.layout import FunctionCall
 from verity.ir.refs import Affine, Concat, Explicit, Refs, Strided
+
+from verity_vllm.config import UsageError, option
 
 Run = tuple[str, int, int, int, int]  # (space, idx, base, stride, count); stride 0 = the same leaf repeated
 
@@ -394,17 +396,20 @@ def _load(path: str):
     return d, {"path": path, "schema": desc.get("schema"), "digest": program_digest(desc), "bytes": None, "seconds_decode": round(time.time() - t0, 1)}
 
 
-def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--old", required=True, help="descriptor JSON (the reference encoding)")
-    ap.add_argument("--new", help="descriptor JSON to compare against")
-    ap.add_argument("--build", nargs=3, metavar=("CONFIG", "LP", "STEPS"), help="or: build Serve{C,LP,STEPS} with the current library")
-    ap.add_argument("--gate-samples", type=int, default=2000)
-    ap.add_argument("--call-samples", type=int, default=24)
-    ap.add_argument("--eval-samples", type=int, default=4)
-    ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--out")
-    a = ap.parse_args(argv)
+@dataclass(frozen=True, kw_only=True)
+class Options:
+    old: str = option("--old", help="descriptor JSON (the reference encoding)")
+    new: str | None = option("--new", default=None, help="descriptor JSON to compare against")
+    build: list[str] | None = option("--build", default=None, nargs=3, metavar=("CONFIG", "LP", "STEPS"),
+                                     help="or: build Serve{C,LP,STEPS} with the current library")
+    gate_samples: int = option("--gate-samples", type=int, default=2000)
+    call_samples: int = option("--call-samples", type=int, default=24)
+    eval_samples: int = option("--eval-samples", type=int, default=4)
+    seed: int = option("--seed", type=int, default=0)
+    out: str | None = option("--out", default=None)
+
+
+def main(a: Options) -> int:
     import os
     A, ia = _load(a.old)
     ia["bytes"] = os.path.getsize(a.old)
@@ -423,7 +428,7 @@ def main(argv=None) -> int:
         ib = {"built": a.build, "schema": desc["schema"], "digest": program_digest(desc), "bytes": len(canonical_json({k: v for k, v in desc.items() if k != "annotations"})),
               "seconds_build_encode": round(time.time() - t0, 1)}
     else:
-        ap.error("--new or --build")
+        raise UsageError("--new or --build")
     print(f"[equiv] old {ia}", file=sys.stderr, flush=True)
     print(f"[equiv] new {ib}", file=sys.stderr, flush=True)
     try:
@@ -436,7 +441,3 @@ def main(argv=None) -> int:
         with open(a.out, "w") as f:
             json.dump(out, f, indent=1)
     return 0 if rep.get("verdict") == "equivalent" else 1
-
-
-if __name__ == "__main__":
-    sys.exit(main())

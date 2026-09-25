@@ -16,7 +16,7 @@ Imports point down the layer order `pipeline` > `check` | `properties` > `acquir
 
 ~~~text
 verity_vllm/
-  pipeline/           stage drivers      build.py match.py commit.py report.py hot.py layout.py cli.py research_tools.py admission_*.py tp/
+  pipeline/           stage drivers      build.py match.py commit.py row*.py report.py hot.py layout.py cli.py llm.py research_tools.py tp/
   engine/             the vLLM engine    build.py capture.py pinned.py run_facts.py code_identity.py vllm_adapter.py engine_driver.py engine_profile.py arrivals.py rank_worker.py profiles/
   program/            Program            registry/ frontend/ lifting/ kernels/ model.py workload.py compact.py dtypes.py
   query/              verification query module_body.py required.py program_view.py boundary.py partition.py manifest/ compare.py
@@ -28,18 +28,19 @@ verity_vllm/
   properties/         property harnesses noninterference.py census.py kernel_allowlist.py golden.py holdout.py admission.py ...
   collectives/        collectives        collective_record.py collective_sites.py embedding_shard.py
   config.py target_family.py             run-definition locations; the target-family preflight
-  ops/                pod operations     pod_bootstrap.sh row_pod.sh run_row_v2.sh pod_*_tap.sh canary.sh known_roots.json
+  ops/                pod operations     pod_bootstrap.sh pod_gate.sh pod_*_tap.sh canary.sh *_negatives.sh known_roots.json
 tests/<subpackage>/   mirrors the package; tests/regression = the R19 reference harness (opt in with VERITY_REGRESSION=1)
 workloads/ manifests/ fixtures/ data/ docs/    records of the qualification table; never rewritten by the tool
 ~~~
 
 **`pipeline/`** holds the stage drivers (Build / Match / Commit): `build.py`, `match.py`, `commit.py`, `hot.py`, `report.py`,
 `global_program.py` (the rooted workload Program of a Build), `m1_capture.py`, `layout.py` (Build / run directory layout),
-`cli.py` (the one CLI), `timeline.py` / `spans.py` / `telemetry/`, `admission_bound.py` / `admission_planner.py`,
+`cli.py` (the one CLI, `verity-vllm`), `row.py` / `row_*.py` (`verity-vllm row`: a sweep row's
+stages), `llm.py` (the public `verity_vllm.LLM`), `timeline.py` / `spans.py` / `telemetry/`, `admission_bound.py` / `admission_planner.py`,
 `research_outputs.py` / `research_result.py`, `source_identity.py`, `release_json.py`, `workload.py` /
 `coverage_workloads.py`, `experiment.py`, `research_tools.py` (the `vllm.build` / `vllm.match` / `vllm.commit` Tools of
 `tools/research`), and `tp/` (the rank-aware capture, commit, match and fold-match drivers).  Entrypoints:
-`python -m verity_vllm.pipeline.cli`, `python -m verity_vllm.pipeline.m1_capture`.  Never: Verity semantics -- a check that
+`verity-vllm <command>` (`python -m verity_vllm.pipeline.cli <command>`) and `verity_vllm.LLM`.  Never: Verity semantics -- a check that
 lives here is misfiled.
 
 **`engine/`** is the vLLM engine we attach to: `build.py` (the engine under κ and what it reads back), `capture.py` (the
@@ -69,7 +70,8 @@ verification policy, commitment positions, requiredness, verdicts.
 **`observe/`** implements *value observation* (the Match-side capture): `observer.py` (the TorchDispatchMode), `events.py` /
 `log.py` / `storage.py`, `contract.py` (the one observation contract), `triton_adapter.py`, `runtime_tree.py`, `chunks.py`
 (chunk attribution), and `fold/` (raw log -> Program: `fold.py`, `tree.py`, `memory.py`, `views.py`, `resolver.py`,
-`patterns*.py`, `collective_pattern.py`).  Never: commit, decide what is required, name a model.
+`patterns/` (one module per kernel family, the TP collectives included), `patterns_prefix.py`).  Never: commit, decide what is
+required, name a model.
 
 **`acquire/`** implements *value acquisition*: `plan.py` (required values + correspondence -> acquisition plan), `install.py`,
 `stage.py`, `compiled.py` (the manifest of `Execution=compiled` rows), `sources/` (`hidden_source.py` / `moe_source.py` /
@@ -96,8 +98,7 @@ runtime metadata in the identity tuple.
 **`collectives/`** holds the collective record (`collective_record.py`), the communicator hook sites (`collective_sites.py`)
 and the embedding shard layout (`embedding_shard.py`).
 
-**`ops/`** is pod operations: `pod_bootstrap.sh`, `row_pod.sh` / `row_pod_tp2.sh` / `run_row_v2.sh` / `tp_stage.sh` (the row
-runner and its stages), `pod_fa2_tap.sh` / `pod_fa3_tap.sh` / `pod_hidden_gpu.sh`, `canary.sh`, `compiled_commit.sh`, the
+**`ops/`** is pod operations: `pod_bootstrap.sh` (which also installs the `verity-vllm` launcher), `pod_fa2_tap.sh` / `pod_fa3_tap.sh` / `pod_hidden_gpu.sh`, `canary.sh`, `compiled_commit.sh`, the
 `*_negative*.sh` runs, `cov_pod.sh`, the gates (`pod_gate.sh`, `verify_lane.sh`), `known_roots.json`.  Never: Python that a layer
 above would import.
 
@@ -136,12 +137,12 @@ Integration (this tree):
 
 Checks (prose name → serialized name): runtime match (`global_match`, GM-01 G1..G8), local replay (`C2` / `sampled_replay`), boundary
 linkage (`linkage`), checkpoint binding (`weights_pin`), execution extent (`executed_prefix`), required-value coverage (`coverage`),
-Program/source identity (`identity`).  Build / Match / Commit are development tool names (the stages of `row_pod.sh`), not layers.
+Program/source identity (`identity`).  Build / Match / Commit are development tool names (the stages of `verity-vllm row`), not layers.
 Research terms (Tool, Derivation, Attempt, Artifact, Snapshot, Replica, Label) belong to `tools/research` and never name Verity semantics.
 
 **v2 is the integration** (since the flip on `lane/vllm-v2-default`, Draft 3.1 §12.3): the required-value manifest of record is
-`Q_module_body_v1` over the Program + runtime correspondence (`verity_vllm.query`: `python -m verity_vllm.pipeline.cli build | build-global`,
-built at the end of a PASS Build by `row_pod.sh`); value acquisition follows the acquisition plan derived from it
+`Q_module_body_v1` over the Program + runtime correspondence (`verity_vllm.query`: `verity-vllm manifest build | build-global`,
+built at the end of a PASS Build by `verity-vllm row`); value acquisition follows the acquisition plan derived from it
 (`verity_vllm.acquire`; TP rank committers still select by `native_host`'s class tables); the verdict of record is `<row>/verdict.json`
 (`vllm-verdict/v1`, `verity_vllm.check.verdict`).  `commit_summary.json` and the `finalize.py` board are no longer written (P5).  The
 v1 engine is deleted (recoverable at git tag `v1-reference`); the frozen R19 reference records on R2 that `tests/regression` compares
@@ -165,6 +166,38 @@ Layers and where they live (Draft 3 §12.1):
 regression: the current tree's checks against the frozen v1 records (`expected/<row>.json` re-baselined on v2; labelled decisions in
 `fixtures.toml` are the recorded reasons the two differ).
 
+## Python API
+
+`verity_vllm.LLM` is a pinned vLLM engine, constructed and called like `vllm.LLM`:
+
+~~~python
+from vllm import SamplingParams
+from verity_vllm import LLM
+
+llm = LLM("unsloth/Llama-3.2-1B", revision="9535bd9b1d1dea6acafbdc4813b728796aeb28da")
+outputs = llm.generate(["The capital of France is"], SamplingParams(temperature=0.0, max_tokens=16))
+~~~
+
+`model` and `revision` (the full commit sha) must be pinned in `manifests/checkpoints.json` with the snapshot on the host.
+The engine is built by `engine.vllm_adapter.build_engine` from that pin's engine profile, as every `verity-vllm` stage
+builds it: dtype, tokenizer and attention come from the profile, and prefix caching is off.  Supported keyword options:
+
+| option | default | sets |
+| --- | --- | --- |
+| `tensor_parallel_size` | 1 | GPUs the model is sharded over |
+| `max_num_seqs` | 8 | requests the scheduler runs together |
+| `max_num_batched_tokens` | vLLM's | tokens per scheduler step |
+| `max_model_len` | the pin's | context length |
+| `gpu_memory_utilization` | the profile's | fraction of device memory the engine may take |
+| `enforce_eager` | True | eager execution; False compiles with torch.compile and CUDA graphs |
+| `seed` | 0 | the engine seed |
+
+Any other option raises `TypeError` naming it and this list; an engine built elsewhere is not accepted.  `generate(prompts,
+sampling_params=None, use_tqdm=True)` returns vLLM's `RequestOutput` list unchanged and appends a `GenerateRecord` (sampling
+parameters, prompt and generated token ids per request) to `llm.records`; `llm.pin` is the resolved `EnginePin` and
+`llm.engine_record` the engine as built (the `vllm.LLM` keyword arguments, the profile's environment flags, the execution vLLM
+reports).
+
 ## Running
 
 ~~~sh
@@ -173,7 +206,8 @@ cd integrations/vllm
 uv run pytest tests/program verity_vllm        # the CPU oracle; tests that need CUDA / vLLM / a pod tree skip or fail by name
 ~~~
 
-Tests and tools read fixtures relative to this directory: run them from here.
+Tests and tools read fixtures relative to this directory: run them from here.  Every tool is a `verity-vllm` command
+(`verity-vllm --help`); a sweep row runs with `verity-vllm row run <row-id> <ROLE> <hf-repo> <revision>`.
 
 The pod runtime (Python 3.12, torch cu129, vLLM `d9105ea80`, native taps, `hidden_gpu`) is built by `verity_vllm/ops/pod_bootstrap.sh`
 and exercised through `research run --source <sha> --on <machine>`.  On a pod without a GPU (`nvidia-smi` absent, or `--cpu`)

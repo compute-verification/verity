@@ -28,12 +28,11 @@ Two things live here:
    `verity-capture/prefix-linkage/v1`) beside tokens.json.  A slot with no writer in the log is state from outside the observed
    run (a warm server, a previous run): `unlinked`, the checker's hard blocker.
 
-    python -m verity_vllm.observe.prefix_cache gen --tokenizer <dir-or-tokenizer.json> [--out-dir verity_vllm/engine/profiles]
-    python -m verity_vllm.observe.prefix_cache extract <run-dir | capture/log.jsonl.gz> [--out <path>] [--instances instances.jsonl]
+    verity-vllm prefix-cache gen --tokenizer <dir-or-tokenizer.json> [--out-dir verity_vllm/engine/profiles]
+    verity-vllm prefix-cache extract <run-dir | capture/log.jsonl.gz> [--out <path>] [--instances instances.jsonl]
 """
 from __future__ import annotations
 
-import argparse
 import gzip
 import json
 import re
@@ -45,6 +44,9 @@ from typing import Any, Iterable
 
 from .events import Event, RunHeader, StepStart
 from .log import read_log
+from dataclasses import dataclass, field
+
+from verity_vllm.config import option
 
 SCHEMA_LINKAGE = "verity-capture/prefix-linkage/v1"
 WORKLOAD_SCHEMA = "verity-vllm/workload/v1"
@@ -511,26 +513,44 @@ def evidence_text(doc: dict) -> str:
     return "\n".join(lines)
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter)
-    sub = ap.add_subparsers(dest="cmd", required=True)
-    g = sub.add_parser("gen", help="write the warm/cold workload pair")
-    g.add_argument("--tokenizer", required=True)
-    g.add_argument("--tokenizer-revision", default=None)
-    g.add_argument("--case", default="B0")
-    g.add_argument("--model", default="HuggingFaceTB/SmolLM2-135M")
-    g.add_argument("--seed", type=int, default=0)
-    g.add_argument("--out-dir", default=str(Path(__file__).resolve().parents[1] / "engine" / "profiles"))
-    e = sub.add_parser("extract", help="write capture/prefix_linkage.json for a run dir or a log")
-    e.add_argument("run_or_log")
-    e.add_argument("--out", default=None)
-    e.add_argument("--instances", default=None)
-    e.add_argument("--workload", default=None)
-    v = sub.add_parser("evidence", help="warm vs cold comparison from two run dirs -> <warm>/prefix_evidence.json + text")
-    v.add_argument("warm_dir")
-    v.add_argument("cold_dir", nargs="?", default=None)
-    v.add_argument("--out", default=None)
-    a = ap.parse_args(argv)
+@dataclass(frozen=True, kw_only=True)
+class GenOptions:
+    "write the warm/cold workload pair"
+
+    tokenizer: str = option("--tokenizer")
+    tokenizer_revision: str | None = option("--tokenizer-revision", default=None)
+    case: str = option("--case", default="B0")
+    model: str = option("--model", default="HuggingFaceTB/SmolLM2-135M")
+    seed: int = option("--seed", type=int, default=0)
+    out_dir: str = option("--out-dir", default=str(Path(__file__).resolve().parents[1] / "engine" / "profiles"))
+    cmd: str = field(default="gen", init=False)
+
+
+@dataclass(frozen=True, kw_only=True)
+class ExtractOptions:
+    "write capture/prefix_linkage.json for a run dir or a log"
+
+    run_or_log: str = option("run_or_log")
+    out: str | None = option("--out", default=None)
+    instances: str | None = option("--instances", default=None)
+    workload: str | None = option("--workload", default=None)
+    cmd: str = field(default="extract", init=False)
+
+
+@dataclass(frozen=True, kw_only=True)
+class EvidenceOptions:
+    "warm vs cold comparison from two run dirs -> <warm>/prefix_evidence.json + text"
+
+    warm_dir: str = option("warm_dir")
+    cold_dir: str | None = option("cold_dir", nargs="?", default=None)
+    out: str | None = option("--out", default=None)
+    cmd: str = field(default="evidence", init=False)
+
+
+COMMANDS = {"gen": GenOptions, "extract": ExtractOptions, "evidence": EvidenceOptions}
+
+
+def main(a: GenOptions | ExtractOptions | EvidenceOptions) -> int:
     if a.cmd == "evidence":
         doc = evidence(Path(a.warm_dir), Path(a.cold_dir) if a.cold_dir else None, out=Path(a.out) if a.out else None)
         print(evidence_text(doc))
@@ -548,7 +568,3 @@ def main(argv: list[str] | None = None) -> int:
     print(summarize(rec))
     print(f"-> {dst}")
     return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())
