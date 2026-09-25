@@ -1,13 +1,15 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "census/schemas/workloads.schema.json",
-  "title": "Census workloads: the unit a table row proves",
+  "$id": "census/schemas/subcircuits.schema.json",
+  "title": "Census subcircuits: the benchmark subcircuits a table row measures (kinds and sizes, never units)",
   "type": "array",
   "items": {
     "type": "object",
     "additionalProperties": false,
     "required": [
       "id",
+      "kind",
+      "name",
       "K",
       "batch",
       "description",
@@ -16,7 +18,15 @@
     "properties": {
       "id": {
         "type": "string",
+        "pattern": "^subcircuit/[a-z0-9]+(-[a-z0-9]+)*$"
+      },
+      "kind": {
+        "type": "string",
         "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+      },
+      "name": {
+        "type": "string",
+        "minLength": 1
       },
       "K": {
         "type": "integer",
@@ -24,7 +34,8 @@
       },
       "batch": {
         "type": "integer",
-        "minimum": 1
+        "minimum": 1,
+        "description": "the reference batch"
       },
       "description": {
         "type": "string",

@@ -28,11 +28,11 @@ def load(name: str) -> dict[str, Any]:
 HARDWARE = load("hardware")
 DATATYPES = load("datatypes")
 NETWORKS = load("networks")
-WORKLOADS = load("workloads")
+SUBCIRCUITS = load("subcircuits")
 INSTANCE_SETS = load("instance_sets")
 REFERENCE_NETWORK = next(n for n in NETWORKS.values() if n.role == "reference")
 SENSITIVITY_NETWORKS = tuple(n for n in NETWORKS.values() if n.role == "sensitivity")
-VU_K1536 = WORKLOADS["vu-k1536"]
+GEMM_COORDINATE_K1536 = SUBCIRCUITS["subcircuit/gemm-coordinate-k1536"]
 
 
 def source(entry: Any) -> str:
@@ -48,8 +48,8 @@ def line(device: str, dtype: str) -> Any:
     raise KeyError(f"no census hardware line for {device!r} / {dtype!r}")
 
 
-def seconds_per_vu(h: Any, K: int) -> float:
-    """Native wall seconds of one ``GemmCoordinate<K>`` (``2K`` FLOP) at a hardware line's peak."""
+def native_seconds_per_instance(h: Any, K: int) -> float:
+    """Native wall seconds of one ``GemmCoordinate<K>`` instance (``2K`` FLOP) at a hardware line's peak."""
     if not isinstance(K, int) or isinstance(K, bool) or K <= 0:
         raise ValueError(f"K must be a positive int, got {K!r}")
     return 2 * K / h.flop_per_second

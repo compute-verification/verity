@@ -8,6 +8,7 @@
     "additionalProperties": false,
     "required": [
       "id",
+      "subcircuit",
       "target",
       "dataset",
       "tier",
@@ -19,7 +20,12 @@
     "properties": {
       "id": {
         "type": "string",
-        "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+        "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+        "description": "the dataset, slugged"
+      },
+      "subcircuit": {
+        "type": "string",
+        "pattern": "^subcircuit/[a-z0-9]+(-[a-z0-9]+)*$"
       },
       "target": {
         "type": "string",
