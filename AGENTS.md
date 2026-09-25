@@ -25,9 +25,20 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
     mul/linear/lookup predicates and counts them (`census()`). Tests replay
     the A100 / RTX 4090 / H100 captures under `tests/ml/fixtures/` (see its
     README for provenance).
-  - `verity.commitments`, `verity.verification`, `verity.resource_accounting`:
-    created when code lands, not before.
-  - Tests live in `packages/verity/tests/<module>/`.
+ - `verity.randomness`: `derive(source, domain, context) -> Key`, the one
+ challenge derivation, with exact samplers (`uniform`, `bernoulli`, `subset`)
+ over counter-mode streams. Stdlib only, and it imports no other core module.
+ Its byte formats are pinned by `tests/randomness/vectors.json`.
+ - `verity.resource_accounting`: `IntegrityAllowance`, which carries the
+ two-stage law, with each consumer's worst case.
+ - `verity.commitments`, `verity.verification`: see their module docstrings.
+ Other modules are created when code lands, not before.
+ - Tests live in `packages/verity/tests/<module>/`.
+- `protocols/`: one distribution per protocol, and each imports only the
+ stdlib, `verity` and itself (`protocols/tests/test_protocol_boundaries.py`).
+ The first is `protocols/sampled_proofs` (`verity_sampled_proofs`): the
+ two-stage law, its beacon-keyed draws, and verification plans. See its
+ `PROTOCOL.md`. Applications (vLLM) compose protocols.
 - `tools/research/`: development infrastructure for running, observing, and
   coordinating recorded work (`research run | status | inspect | fetch |
   compare`). Separate distribution; must not import `verity`, and a test
