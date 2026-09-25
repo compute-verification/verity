@@ -76,6 +76,7 @@ workload's own names (``prove_seconds``, ``cycles.parse``) pass through untouche
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 from collections.abc import Iterable, Mapping, Sequence
@@ -420,6 +421,19 @@ def instances_ref(tier: str, lo: int, hi: int, manifest_sha256: str, dataset: st
     return ref
 
 
+ALLOCATOR_ENV = ("MALLOC_MMAP_MAX_", "MALLOC_TRIM_THRESHOLD_")
+
+
+def allocator_env(environ: Mapping[str, str] | None = None) -> dict[str, str]:
+    """The glibc malloc tunables this process started with, each its value or ``"unset"``.  Host time depends on them:
+    with glibc's defaults every large host buffer is a fresh mmap whose first touch page-faults (about 20 MB/s on some
+    pod classes), while ``MALLOC_MMAP_MAX_=0 MALLOC_TRIM_THRESHOLD_=1000000000000`` (the pod bootstrap's env.sh)
+    faults the heap in once and reuses it.  glibc reads them at startup, so the environment is what was in effect."""
+
+    env = os.environ if environ is None else environ
+    return {k: env.get(k) or "unset" for k in ALLOCATOR_ENV}
+
+
 def fingerprint(
     *,
     profile: str,
@@ -442,12 +456,15 @@ def fingerprint(
     """A conforming ``workload_fingerprint``: the required fields, then the workload's own ``extra`` entries.  Raises
     ``ValueError`` listing every problem rather than emitting a bad one.  ``N_subbatches`` is always written, so a
     batch chopped into several proofs is visible beside ``B``; so is ``instances`` (``null`` = not measured on the
-    shared instance set -- see :func:`instances_ref`)."""
+    shared instance set -- see :func:`instances_ref`); so is ``software.allocator`` (:func:`allocator_env`) unless the
+    caller gave one."""
 
+    software = dict(software)
+    software.setdefault("allocator", allocator_env())
     fp: dict[str, Any] = {
         "profile": profile, "domain": domain, "K": K, "B": B, "N_subbatches": N_subbatches, "proof_class": proof_class,
         "authentication": authentication,
-        "zk_mode": zk_mode, "security": dict(security), "hardware": dict(hardware), "software": dict(software),
+        "zk_mode": zk_mode, "security": dict(security), "hardware": dict(hardware), "software": software,
         "preprocessing": preprocessing if isinstance(preprocessing, str) else dict(preprocessing), "retention": retention,
         "instances": None if instances is None else dict(instances),
     }

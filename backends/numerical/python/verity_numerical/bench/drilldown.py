@@ -101,7 +101,7 @@ def features(env: Mapping[str, Any], meta: Mapping[str, Any] | None = None) -> d
     ``fold`` (4 for the x4 relations: ``…x4 relation``, ``folded: 4 instruction steps``, ``relation``/``model`` "4 steps per
     column"; else 1); ``fused`` (the fused device hint kernel: meta ``hints = fused`` or ``software.backend.hints`` saying so);
     ``l`` (``security.rs_l``, columns per proof); ``mode`` (``interactive`` | ``fiat-shamir``, :func:`tables._mode_of`);
-    ``proof_class``; ``authentication``; ``leaf`` (``poseidon2`` | ``blake3`` | ``ajtai-n<n>`` from ``hash`` / ``leaf.scheme`` /
+    ``proof_class``; ``authentication``; ``leaf`` (``poseidon2`` | ``blake3`` | ``sha256`` | ``ajtai-n<n>`` from ``hash`` / ``leaf.scheme`` /
     ``leaf.schema``); ``sharing`` (``sharing``, or ``row_sharing`` present); ``device`` (A-GKR's prover: ``gpu`` when the name,
     ``backend`` or toolchain says gpu / triton / torch / cuda, else ``cpu``); ``tcdot`` (the TC_DOT chip: ``tc-dot`` / ``tc_dot``
     / ``tcdot`` / ``modified sp1`` in the name); ``sec_raised`` (SP1 with its FRI query count raised: ``fri query count raised``
@@ -134,6 +134,8 @@ def features(env: Mapping[str, Any], meta: Mapping[str, Any] | None = None) -> d
         f["leaf"] = f"ajtai-n{n.group(1)}" if n else "ajtai"
     elif "blake3" in named:
         f["leaf"] = "blake3"
+    elif "sha256" in named:
+        f["leaf"] = "sha256"
     elif "poseidon2" in named or "poseidon2" in name:
         f["leaf"] = "poseidon2"
     if f["candidate"] == "A-GKR":
@@ -260,6 +262,12 @@ VARIANTS: tuple[Variant, ...] = (
             _H_ZK, "x, W committed; digests deterministic, not hiding (red-team-leaf-3)",
             "BLAKE3 collision resistance with role-keyed, n_chunks-framed leaves, plus SHA-256 collision resistance for the tagged "
             "malformed-frame domain (red-team-leaf-3)", _H_SOUND, "No: " + _KEEP_FROZEN, "red-team-leaf-3; blake3-leaf-3"),
+    Variant("B-Ligero + SHA-256 in circuit", "B-Ligero", "B-Ligero, authentication included-hash*, hash / leaf sha256 (sha256/row/v1)",
+            lambda f: _hashed(f, "sha256"),
+            _H_ZK, "x, W committed; digests deterministic, not hiding (as the BLAKE3 leaf)",
+            "SHA-256 collision resistance: frame-v3 sha256/row/v1 row leaves, the data-block compressions in-circuit, the chaining "
+            "value published and the padding block compressed by the verifier; a tagged SHA-256 domain for malformed frames",
+            _H_SOUND, "No: " + _KEEP_FROZEN, "b-ligero-sha256 (red-team-standard-hash pending)"),
     Variant("B-Ligero + Ajtai n=64", "B-Ligero", "B-Ligero, authentication included-hash*, hash / leaf ajtai…n64",
             lambda f: _hashed(f, "ajtai-n64"),
             _H_ZK, "No hiding: binding-only, a low-entropy row can be brute-forced from its public digest (red-team-leaf-3)",
