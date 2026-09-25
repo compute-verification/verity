@@ -570,10 +570,16 @@ if triton is not None:
 
 
     @triton.jit
-    def gate_eval_kernel(rows_ptr, ptr_ptr, idx_ptr, coef_ptr, out_ptr, copies, n_in, g_n, BLOCK: tl.constexpr, FK: tl.constexpr):
-        """``out[c, g] = Σ_{terms t of gate g} rows[c, idx_t] · coef_t`` (base field; CSR by gate, ``coef_ptr`` = ``coef R mod p``)."""
-        pb = tl.program_id(0)
-        g = tl.program_id(1)
+    def gate_eval_kernel(rows_ptr, ptr_ptr, idx_ptr, coef_ptr, out_ptr, copies, n_in, g_n, BLOCK: tl.constexpr, FK: tl.constexpr,
+                         GFAST: tl.constexpr = False):
+        """``out[c, g] = Σ_{terms t of gate g} rows[c, idx_t] · coef_t`` (base field; CSR by gate, ``coef_ptr`` = ``coef R mod p``).
+        ``GFAST``: grid ``(g_n, copies / BLOCK)``, gates fastest, so a copy block's rows stay in L2 across its gates."""
+        if GFAST:
+            g = tl.program_id(0)
+            pb = tl.program_id(1)
+        else:
+            pb = tl.program_id(0)
+            g = tl.program_id(1)
         lo = tl.load(ptr_ptr + g)
         hi = tl.load(ptr_ptr + g + 1)
         c = pb * BLOCK + tl.arange(0, BLOCK)
@@ -990,8 +996,11 @@ def gate_eval(rows: torch.Tensor, ptr: torch.Tensor, idx: torch.Tensor, coef_m: 
     if copies == 0 or g_n == 0:
         return out
     BLOCK = 128
-    grid = ((copies + BLOCK - 1) // BLOCK, g_n)
-    gate_eval_kernel[grid](rows.contiguous().view(-1), ptr, idx, coef_m, out.view(-1), copies, n_in, g_n, BLOCK=BLOCK, num_warps=4, FK=FIELD_KEY)
+    nb = (copies + BLOCK - 1) // BLOCK
+    gfast = nb < 65536
+    grid = (g_n, nb) if gfast else (nb, g_n)
+    gate_eval_kernel[grid](rows.contiguous().view(-1), ptr, idx, coef_m, out.view(-1), copies, n_in, g_n, BLOCK=BLOCK, num_warps=4, FK=FIELD_KEY,
+                           GFAST=gfast)
     return out
 
 
