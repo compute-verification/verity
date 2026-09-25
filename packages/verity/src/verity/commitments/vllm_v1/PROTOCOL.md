@@ -1,15 +1,16 @@
-# `vllm-production/v1`: vLLM's production commitment framing
+# `vllm-v1`: vLLM's production commitment framing
 
 This is the commitment framing vLLM's production Commit path emits, as a named scheme. It is permanent and sits
-beside frame-v3 (`verity.commitments.merkle`). Configured backends select one or the other, and both are
+beside frame-v3 (`verity.commitments.frame_v3`). Configured backends select one or the other, and both are
 benchmarked (`benchmarks/commitments/commit_cost.py`). This spec describes existing bytes: it changes no
 production root.
 
-- Reference: `verity.commitments.vllm_production` (plain `hashlib`). Its tree rule is `SCHEME`, behind
-  `verity.commitments.scheme.CommitmentScheme`; frame-v3's is `merkle.FrameV3(domain)`.
-- Vectors: `vectors.json`, written by `python -m verity.commitments.vllm_production.vectors`. `--check` exits
+- Reference: `verity.commitments.vllm_v1` (plain `hashlib`). `VllmV1(ports)` is the configured
+  `verity.commitments.scheme.CommitmentScheme`, with one verifier-held domain per port (§5). `TREE` is the bare
+  tree rule.
+- Vectors: `vectors.json`, written by `python -m verity.commitments.vllm_v1.vectors`. `--check` exits
   nonzero if the file is stale.
-- Conformance: `packages/verity/tests/commitments/test_vllm_production.py` checks the reference against the
+- Conformance: `packages/verity/tests/commitments/test_vllm_v1.py` checks the reference against the
   vectors. `integrations/vllm/tests/commit/test_production_vectors.py` checks vLLM's Python code against them.
 
 All hashes are SHA-256. `u32be`/`u64be` are big-endian unsigned integers of 4 and 8 bytes; `u32le` is little-endian;
@@ -59,6 +60,22 @@ Each `fa2h` header is sixteen `u32le` words:
 - **First bytes separate every preimage.** A node or lift preimage starts `00 00 00 13`, an id leaf the same
   followed by `verity-vllm/leaf`, a position leaf `verity/`, and an `fa2h` leaf `fa2h`. So no leaf preimage is a
   node preimage, and no two leaf rules share a preimage.
+
+### Leaf layouts: what a backend proves
+
+Every `vllm-v1` leaf is `digest = SHA-256(prefix ‖ value)` with no suffix. The digest *is* the tree leaf, so a backend
+proves it, publishes it, and the verifier checks the tree natively. `VllmV1.leaf_layout(port, position)` and the
+domains' `leaf_layout` methods return the layout below; the vectors' `layouts` section pins one of each.
+
+| leaf | prefix (public) | prefix length | value |
+|---|---|---|---|
+| position leaf | `"verity/pos-leaf/v0" ‖ u64be(len v)` | 26 bytes, not block-aligned, so the gadget absorbs from byte 26 | the position's bytes; the length comes from the template or layout (`value_nbytes`) |
+| `fa2h` chunk leaf | the 64-byte chunk header, index = the leaf's position | 64 bytes, one block, so the verifier precomputes its midstate | `4·chunk_words` stream bytes |
+| `fa2h` thread leaf | the 64-byte thread header derived from the claimed position | 64 bytes | the thread's register words |
+| id leaf | `u32be(19) ‖ "verity-vllm/leaf/v1" ‖ (u64be(len p) ‖ p)` for id, dtype and shape text, then `u64be(len v)` | varies | the tensor bytes |
+
+A thread port has no layout from its position alone: its header needs the geometry's row validity and
+`n_block_max`. Such a port takes `ThreadDomain.leaf_layout(n_words, **position)`, and `VllmV1.leaf_layout` refuses it.
 
 ## 3. Tree and openings
 

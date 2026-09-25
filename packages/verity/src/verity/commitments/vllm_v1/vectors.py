@@ -1,10 +1,10 @@
-"""Generate the ``vllm-production/v1`` conformance vectors (``vectors.json`` beside this file) from the reference.
+"""Generate the ``vllm-v1`` conformance vectors (``vectors.json`` beside this file) from the reference.
 
-    python -m verity.commitments.vllm_production.vectors          # rewrite vectors.json
-    python -m verity.commitments.vllm_production.vectors --check  # exit 1 if vectors.json is stale
+    python -m verity.commitments.vllm_v1.vectors          # rewrite vectors.json
+    python -m verity.commitments.vllm_v1.vectors --check  # exit 1 if vectors.json is stale
 
 Every input is derived from a fixed label by SHA-256 counter expansion, so the file is a pure function of this
-module and the reference; ``tests/commitments/test_vllm_production.py`` fails if they drift apart.
+module and the reference; ``tests/commitments/test_vllm_v1.py`` fails if they drift apart.
 """
 
 from __future__ import annotations
@@ -18,14 +18,16 @@ from typing import Any
 from .. import leaves as tagged
 from . import (
     NAME,
-    SCHEME,
+    TREE,
     SemanticDomain,
     StepDomain,
     StreamDomain,
     ThreadDomain,
     chunk_header,
     id_leaf,
+    id_leaf_layout,
     ids_digest,
+    pos_leaf_layout,
     chunk_leaf,
     pos_leaf,
     run_root,
@@ -123,15 +125,15 @@ def _thread_leaf_vectors() -> list[dict[str, Any]]:
 
 
 def _tree_vectors() -> list[dict[str, Any]]:
-    out: list[dict[str, Any]] = [{"leaf_count": 0, "leaves": [], "root": SCHEME.root([]).hex(), "paths": []}]
+    out: list[dict[str, Any]] = [{"leaf_count": 0, "leaves": [], "root": TREE.root([]).hex(), "paths": []}]
     for n in TREE_SIZES:
         leaves = tree_leaves(n)
         out.append(
             {
                 "leaf_count": n,
                 "leaves": [leaf.hex() for leaf in leaves],
-                "root": SCHEME.root(leaves).hex(),
-                "paths": [_hex_path(SCHEME.path(leaves, i)) for i in range(n)],
+                "root": TREE.root(leaves).hex(),
+                "paths": [_hex_path(TREE.path(leaves, i)) for i in range(n)],
             }
         )
     return out
@@ -139,7 +141,7 @@ def _tree_vectors() -> list[dict[str, Any]]:
 
 def _root_vectors() -> list[dict[str, Any]]:
     program, template, ctx, geo, layout, names = (digest_of(f"roots/{k}") for k in ("program", "template", "ctx", "geo", "layout", "names"))
-    tree = SCHEME.root(tree_leaves(5))
+    tree = TREE.root(tree_leaves(5))
     query_id = b"q-000017/request=cmpl-3f2a"
     steps = [digest_of(f"roots/step/{i}") for i in range(3)]
     tensors = [digest_of(f"roots/tensor/{i}") for i in range(4)]
@@ -176,13 +178,13 @@ def _rejection_vectors() -> list[dict[str, Any]]:
     """Openings a conforming verifier must reject (each tree-root check against the ``leaf_count``-leaf vector tree)."""
 
     def case(why: str, n: int, index: int, leaf: bytes, path: list[bytes | None]) -> dict[str, Any]:
-        return {"why": why, "root": SCHEME.root(tree_leaves(n)).hex(), "leaf_count": n, "index": index, "leaf": leaf.hex(),
+        return {"why": why, "root": TREE.root(tree_leaves(n)).hex(), "leaf_count": n, "index": index, "leaf": leaf.hex(),
                 "path": [None if p is None else p.hex() for p in path]}
 
     l3, l5, l8 = tree_leaves(3), tree_leaves(5), tree_leaves(8)
-    p3_2 = list(SCHEME.path(l3, 2))
-    p5_1 = list(SCHEME.path(l5, 1))
-    p8_0 = list(SCHEME.path(l8, 0))
+    p3_2 = list(TREE.path(l3, 2))
+    p5_1 = list(TREE.path(l5, 1))
+    p8_0 = list(TREE.path(l8, 0))
     value = expand("tree/3/value/0", 1)
     altered = bytes([value[0] ^ 1]) + value[1:]
     return [
@@ -194,7 +196,7 @@ def _rejection_vectors() -> list[dict[str, Any]]:
         case("index outside the tree", 5, 5, l5[1], p5_1),
         case("leaf of another position", 5, 1, l5[2], p5_1),
         case("sibling that is not 32 bytes", 5, 1, l5[1], [p5_1[0][:31], *p5_1[1:]]),
-        case("value altered by one bit", 3, 0, pos_leaf(altered), list(SCHEME.path(l3, 0))),
+        case("value altered by one bit", 3, 0, pos_leaf(altered), list(TREE.path(l3, 0))),
     ]
 
 
@@ -218,8 +220,8 @@ def _opening_vectors() -> list[dict[str, Any]]:
     def emit(kind: str, fields: dict[str, Any], domain: Any, values: list[bytes], index: int, extra: dict[str, Any] | None = None,
              leaves: list[bytes] | None = None) -> None:
         leaves = leaves or [domain.leaf(i, v) for i, v in enumerate(values)]
-        root = domain.bind(SCHEME.root(leaves))
-        path = _hex_path(SCHEME.path(leaves, index))
+        root = domain.bind(TREE.root(leaves))
+        path = _hex_path(TREE.path(leaves, index))
         for claimed, accept in ((index, True), (index + 1, False)):
             out.append({"kind": kind, "domain": fields, "index": claimed, "value": h(values[index]), "path": path, "root": h(root),
                         "accept": accept, **(extra or {})})
@@ -253,14 +255,38 @@ def _opening_vectors() -> list[dict[str, Any]]:
     for claimed, accept in ((tidx, True), (tidx + 1, False)):
         out.append({"kind": "thread", "domain": {"geo_digest": h(geo), "launch_tag": 4, "src_mask": 1, "HB": 1, "num_m_block": 1, "NB": 1},
                     "index": thread.index(0, 0, 0, claimed), "position": position(claimed), "value": h(messages[tidx]),
-                    "path": _hex_path(SCHEME.path(leaves, tidx)), "root": h(thread.bind(SCHEME.root(leaves))), "accept": accept})
+                    "path": _hex_path(TREE.path(leaves, tidx)), "root": h(thread.bind(TREE.root(leaves))), "accept": accept})
+    return out
+
+
+def _layout_vectors() -> list[dict[str, Any]]:
+    """Each leaf kind as ``digest = SHA-256(prefix || value)``: what a backend's gadget hashes."""
+
+    out = []
+    for n in (0, 1, 38, 256):
+        value = expand(f"layout/pos/{n}", n)
+        lay = pos_leaf_layout(n)
+        out.append({"leaf": "pos", "prefix": lay.prefix.hex(), "value": value.hex(), "digest": lay.digest(value).hex()})
+    stream = StreamDomain(digest_of("layout/layout"), 7, 63, 16, 5, 2, 8, 1)
+    value = expand("layout/chunk", 64)
+    lay = stream.leaf_layout(3)
+    out.append({"leaf": "fa2h-chunk", "chunk_index": 3, "prefix": lay.prefix.hex(), "value": value.hex(), "digest": lay.digest(value).hex()})
+    thread = ThreadDomain(digest_of("layout/geo"), 4, 1, HB=1, num_m_block=1, NB=1)
+    position = {"slab": 0, "m_block": 0, "n_block": 0, "tidx": 9, "seqlen_q": 40, "seqlen_k": 100, "n_block_max": 1, "ok0": True, "ok1": True}
+    value = expand("layout/thread", 256)
+    lay = thread.leaf_layout(64, **position)
+    out.append({"leaf": "fa2h-thread", "position": position, "prefix": lay.prefix.hex(), "value": value.hex(), "digest": lay.digest(value).hex()})
+    value = expand("layout/id", 12)
+    lay = id_leaf_layout("p=0123456789ab/r=cmpl-1/t=4/ph=decode/l=0/op=q_proj/port=0", "bfloat16", (2, 3), 12)
+    out.append({"leaf": "id", "canonical_id": "p=0123456789ab/r=cmpl-1/t=4/ph=decode/l=0/op=q_proj/port=0", "dtype": "bfloat16",
+                "shape": [2, 3], "prefix": lay.prefix.hex(), "value": value.hex(), "digest": lay.digest(value).hex()})
     return out
 
 
 def build() -> dict[str, Any]:
     return {
         "scheme": NAME,
-        "generator": "python -m verity.commitments.vllm_production.vectors",
+        "generator": "python -m verity.commitments.vllm_v1.vectors",
         "encoding": "every byte string is lowercase hex; a path entry null means the node is lifted at that level",
         "hash": _hash_vectors(),
         "id_leaf": _id_leaf_vectors(),
@@ -271,6 +297,7 @@ def build() -> dict[str, Any]:
         "roots": _root_vectors(),
         "rejections": _rejection_vectors(),
         "openings": _opening_vectors(),
+        "layouts": _layout_vectors(),
     }
 
 

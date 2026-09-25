@@ -1,14 +1,16 @@
-"""``vllm-production/v1``: the reference reproduces its conformance vectors, and its verifier accepts exactly the
+"""``vllm-v1``: the reference reproduces its conformance vectors, and its verifier accepts exactly the
 vector openings and rejects the rejection vectors.  That vLLM's own code produces the same bytes is checked in
 ``integrations/vllm/tests/commit/test_production_vectors.py``."""
 
 from __future__ import annotations
 
+import hashlib
+
 import pytest
 
-from verity.commitments import vllm_production as ref
+from verity.commitments import vllm_v1 as ref
 from verity.commitments.scheme import CommitmentScheme
-from verity.commitments.vllm_production import vectors as V
+from verity.commitments.vllm_v1 import vectors as V
 from verity.errors import InvalidArtifact
 
 VECTORS = V.load()
@@ -23,21 +25,59 @@ def _path(entries: list[str | None]) -> list[bytes | None]:
 
 
 def test_vectors_file_is_what_the_reference_generates() -> None:
-    assert V.main(["--check"]) == 0, "rerun `python -m verity.commitments.vllm_production.vectors`"
+    assert V.main(["--check"]) == 0, "rerun `python -m verity.commitments.vllm_v1.vectors`"
 
 
 def test_scheme_implements_the_interface() -> None:
-    assert isinstance(ref.SCHEME, CommitmentScheme)
-    assert ref.SCHEME.name == VECTORS["scheme"] == "vllm-production/v1"
+    scheme = ref.VllmV1({})
+    assert isinstance(scheme, CommitmentScheme)
+    assert scheme.name == ref.NAME == VECTORS["scheme"] == "vllm-v1"
+    assert scheme.hashes == ("sha256",)
+
+
+@pytest.mark.parametrize("case", VECTORS["layouts"], ids=lambda c: c["leaf"])
+def test_layout_vectors_are_the_leaf_rules(case: dict) -> None:
+    value = _b(case["value"])
+    assert hashlib.sha256(_b(case["prefix"]) + value).hexdigest() == case["digest"]
+    if case["leaf"] == "pos":
+        assert ref.pos_leaf(value).hex() == case["digest"] and len(_b(case["prefix"])) == 26
+    elif case["leaf"] == "fa2h-chunk":
+        assert len(_b(case["prefix"])) == 64
+    elif case["leaf"] == "fa2h-thread":
+        assert ref.thread_leaf(_b(case["prefix"]) + value).hex() == case["digest"]
+    else:
+        assert ref.id_leaf(case["canonical_id"], case["dtype"], tuple(case["shape"]), value).hex() == case["digest"]
+
+
+def test_configured_scheme_proves_digests_and_verifies_bound_roots() -> None:
+    values = [V.expand(f"cfg/{i}", 10 + i) for i in range(5)]
+    domain = ref.StepDomain(*(V.digest_of(k) for k in "pcgl"), 5)
+    stream = ref.StreamDomain(V.digest_of("sl"), 1, 3, 16, 3, 1, 4, 1)
+    scheme = ref.VllmV1({"host": domain, "m1": stream}, value_nbytes={"host": lambda i: 10 + i})
+    digests = [scheme.leaf_layout("host", i).digest(v) for i, v in enumerate(values)]
+    leaves = [scheme.tree_leaf("host", i, d) for i, d in enumerate(digests)]
+    assert leaves == [ref.pos_leaf(v) for v in values]
+    root = scheme.root("host", leaves)
+    assert root == domain.bind(ref.fold(leaves))
+    for i in range(5):
+        assert scheme.verify_path("host", root, 5, i, leaves[i], scheme.path("host", leaves, i))
+        assert not scheme.verify_path("host", root, 6, i, leaves[i], scheme.path("host", leaves, i))
+    chunks = [V.expand(f"cfg/m1/{i}", 64) for i in range(3)]
+    m1 = [scheme.tree_leaf("m1", i, scheme.leaf_layout("m1", i).digest(c)) for i, c in enumerate(chunks)]
+    assert m1 == [stream.leaf(i, c) for i, c in enumerate(chunks)]
+    with pytest.raises(InvalidArtifact):
+        scheme.leaf_layout("host", 5)
+    with pytest.raises(InvalidArtifact):
+        ref.VllmV1({"host": domain}).leaf_layout("host", 0)
 
 
 @pytest.mark.parametrize("case", VECTORS["trees"], ids=lambda c: f"n={c['leaf_count']}")
 def test_every_vector_opening_verifies(case: dict) -> None:
     leaves, root = [_b(x) for x in case["leaves"]], _b(case["root"])
     for index, path in enumerate(case["paths"]):
-        assert ref.SCHEME.verify_path(root, case["leaf_count"], index, leaves[index], _path(path))
+        assert ref.TREE.verify_path(root, case["leaf_count"], index, leaves[index], _path(path))
         if case["leaf_count"] > 1:
-            assert not ref.SCHEME.verify_path(root, case["leaf_count"], index, leaves[index - 1], _path(path))
+            assert not ref.TREE.verify_path(root, case["leaf_count"], index, leaves[index - 1], _path(path))
 
 
 @pytest.mark.parametrize("case", VECTORS["rejections"], ids=lambda c: c["why"])
@@ -93,10 +133,10 @@ def test_id_leaf_vectors() -> None:
 
 def test_binding_is_the_verifiers_not_the_provers() -> None:
     leaves = V.tree_leaves(5)
-    tree_root = ref.SCHEME.root(leaves)
+    tree_root = ref.TREE.root(leaves)
     program, ctx, geo, layout = (V.digest_of(k) for k in "pcgl")
     root = ref.step_root(program, ctx, geo, layout, 5, tree_root)
-    path = ref.SCHEME.path(leaves, 2)
+    path = ref.TREE.path(leaves, 2)
     assert ref.verify_opening(root, 5, 2, leaves[2], path, bind=lambda r: ref.step_root(program, ctx, geo, layout, 5, r))
     assert not ref.verify_opening(root, 5, 2, leaves[2], path, bind=lambda r: ref.step_root(program, geo, ctx, layout, 5, r))
     assert not ref.verify_opening(root, 5, 2, leaves[2], path)

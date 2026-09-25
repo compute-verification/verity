@@ -1,8 +1,8 @@
-"""``vllm-production/v1``: the commitment framing vLLM's production Commit path emits, as a named scheme.
+"""``vllm-v1``: the commitment framing vLLM's production Commit path emits, as a named scheme.
 
 A permanent scheme beside frame-v3 (:mod:`..merkle`), selectable by configured backends.  Spec: ``PROTOCOL.md``
 beside this file.  Conformance vectors: ``vectors.json`` beside it, written by
-``python -m verity.commitments.vllm_production.vectors``.  This module is the plain reference: stdlib ``hashlib``
+``python -m verity.commitments.vllm_v1.vectors``.  This module is the plain reference: stdlib ``hashlib``
 only, no fast paths; every byte below is what the integration and its CUDA kernels hash.
 
 The tree rule (pairs ``node``, an odd trailing child ``lift``, zero leaves ``empty``) and the id leaf are the ones
@@ -15,7 +15,7 @@ verifier must hold itself -- context, size, leaf rule, position arithmetic -- an
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 
 from verity.errors import InvalidArtifact
@@ -23,7 +23,8 @@ from verity.errors import InvalidArtifact
 from ..leaves import DIGEST_BYTES, empty_root, fold_path, levels, open_path, path_shape
 from ..leaves import ids_digest as ids_digest
 from ..leaves import leaf_hash as id_leaf
-from ..scheme import Path
+from ..leaves import LEAF_TAG, shape_text
+from ..scheme import LeafLayout, Path
 
 __all__ = [
     "FA2H_KIND_CHUNK",
@@ -32,7 +33,11 @@ __all__ = [
     "NAME",
     "POS_LEAF_TAG",
     "RUN_ROOT_TAG",
-    "SCHEME",
+    "TREE",
+    "Tree",
+    "VllmV1",
+    "id_leaf_layout",
+    "pos_leaf_layout",
     "SEMANTIC_ROOT_TAG",
     "SemanticDomain",
     "StepDomain",
@@ -47,7 +52,6 @@ __all__ = [
     "STREAM_ROOT_TAG",
     "THREAD_ROOT_TAG",
     "WEIGHTS_ROOT_TAG",
-    "VllmProduction",
     "chunk_header",
     "chunk_leaf",
     "fold",
@@ -65,7 +69,7 @@ __all__ = [
     "weights_root",
 ]
 
-NAME = "vllm-production/v1"
+NAME = "vllm-v1"
 
 POS_LEAF_TAG = b"verity/pos-leaf/v0"
 FA2H_TAG = 0x68326166  # b"fa2h" read as a little-endian u32
@@ -231,10 +235,8 @@ def verify_opening(
         return False
 
 
-class VllmProduction:
-    """The :class:`~verity.commitments.scheme.CommitmentScheme` of ``vllm-production/v1`` (tree rule only)."""
-
-    name = NAME
+class Tree:
+    """The tree rule alone, over leaf digests in tree order (no root binding): what :class:`VllmV1` folds with."""
 
     def root(self, leaves: Sequence[bytes]) -> bytes:
         return fold(leaves)
@@ -247,7 +249,7 @@ class VllmProduction:
         return verify_opening(root, leaf_count, index, leaf, path)
 
 
-SCHEME = VllmProduction()
+TREE = Tree()
 
 
 # --- root bindings -----------------------------------------------------------------------------------------------
@@ -366,6 +368,9 @@ class SemanticDomain:
     def leaf(self, index: int, value: bytes) -> bytes:
         return pos_leaf(value)
 
+    def leaf_layout(self, index: int, nbytes: int) -> LeafLayout:
+        return pos_leaf_layout(nbytes)
+
     def bind(self, tree_root: bytes) -> bytes:
         return semantic_root(self.program_digest, self.query_id, self.template_digest, self.ctx_digest, self.epoch, self.leaf_count, tree_root)
 
@@ -393,6 +398,15 @@ class StepDomain:
             raise InvalidArtifact("chunk leaf value must be 4 * chunk_words bytes")
         return chunk_leaf(chunk_header(chunk_index=index, **self.chunk), value)
 
+    def leaf_layout(self, index: int, nbytes: int | None = None) -> LeafLayout:
+        """``nbytes`` is the position leaf's value length (host path); the chunk rule fixes its own."""
+
+        if self.chunk is None:
+            if nbytes is None:
+                raise InvalidArtifact("a position leaf's layout needs its value length")
+            return pos_leaf_layout(nbytes)
+        return LeafLayout("sha256", chunk_header(chunk_index=index, **self.chunk), 4 * self.chunk["chunk_words"])
+
     def bind(self, tree_root: bytes) -> bytes:
         return step_root(self.program_digest, self.ctx_digest, self.geo_digest, self.layout_digest, self.leaf_count, tree_root)
 
@@ -418,6 +432,11 @@ class StreamDomain:
         header = chunk_header(launch_tag=self.launch_tag, chunk_index=index, chunk_words=self.chunk_words, src_mask=self.src_mask,
                               HB=self.HB, M=self.M, NB=self.NB, BN=self.BN, D=self.D)
         return chunk_leaf(header, value)
+
+    def leaf_layout(self, index: int) -> LeafLayout:
+        header = chunk_header(launch_tag=self.launch_tag, chunk_index=index, chunk_words=self.chunk_words, src_mask=self.src_mask,
+                              HB=self.HB, M=self.M, NB=self.NB, BN=self.BN, D=self.D)
+        return LeafLayout("sha256", header, 4 * self.chunk_words)
 
     def bind(self, tree_root: bytes) -> bytes:
         ctx = stream_ctx_digest(launch_tag=self.launch_tag, src_mask=self.src_mask, chunk_words=self.chunk_words, leaf_count=self.leaf_count)
@@ -467,6 +486,14 @@ class ThreadDomain:
             raise InvalidArtifact("thread message header is not the one derived from the claimed position")
         return thread_leaf(message)
 
+    def leaf_layout(self, n_words: int, *, slab: int, m_block: int, n_block: int, tidx: int, seqlen_q: int, seqlen_k: int,
+                    n_block_max: int, ok0: bool, ok1: bool) -> LeafLayout:
+        """The thread's header is the prefix; its ``n_words`` register words (fixed by ``src_mask``) are the value."""
+
+        header = thread_header(src_mask=self.src_mask, slab=slab, m_block=m_block, n_block=n_block, tidx=tidx, seqlen_q=seqlen_q,
+                               seqlen_k=seqlen_k, launch_tag=self.launch_tag, n_block_max=n_block_max, ok0=ok0, ok1=ok1)
+        return LeafLayout("sha256", header, 4 * n_words)
+
     def bind(self, tree_root: bytes) -> bytes:
         return thread_root(self.geo_digest, thread_ctx_digest(launch_tag=self.launch_tag, src_mask=self.src_mask), tree_root)
 
@@ -481,3 +508,79 @@ def verify(
     """Authenticate a recomputed ``leaf`` at ``index`` against ``root`` under the verifier's ``domain``."""
 
     return verify_opening(root, domain.leaf_count, index, leaf, path, domain.bind)
+
+
+# --- leaf layouts and the configured scheme ----------------------------------------------------------------------
+
+
+def pos_leaf_layout(nbytes: int) -> LeafLayout:
+    """``pos_leaf``: prefix ``"verity/pos-leaf/v0" || u64be(nbytes)`` (26 bytes, not block aligned), no suffix."""
+
+    return LeafLayout("sha256", POS_LEAF_TAG + _u64be(nbytes, "value length"), nbytes)
+
+
+def id_leaf_layout(canonical_id: str, dtype: str, shape: Sequence[int], nbytes: int) -> LeafLayout:
+    """The capture-v1 id leaf ``H(leaf/v1, id, dtype, shape text, value)``: everything before the value is public."""
+
+    tag = LEAF_TAG.encode("utf-8")
+    out = len(tag).to_bytes(4, "big") + tag
+    for part in (canonical_id.encode("utf-8"), dtype.encode("utf-8"), shape_text(shape).encode("utf-8")):
+        out += len(part).to_bytes(8, "big") + part
+    return LeafLayout("sha256", out + _u64be(nbytes, "value length"), nbytes)
+
+
+Domain = SemanticDomain | StepDomain | StreamDomain | ThreadDomain
+
+
+class VllmV1:
+    """``vllm-v1`` over a statement's ports, each a verifier-held domain; ``root`` is the published (bound) root.
+
+    Position-leaf ports need ``value_nbytes[port](position)``: the value length the layout (template or layout digest)
+    assigns to that position.  Thread ports have no position-only layout (their header needs the geometry's row
+    validity); use :meth:`ThreadDomain.leaf_layout`.  The tree leaf is the proven digest itself.
+    """
+
+    name = NAME
+    hashes = ("sha256",)
+
+    def __init__(self, ports: Mapping[str, Domain], value_nbytes: Mapping[str, Callable[[int], int]] | None = None) -> None:
+        self.ports = dict(ports)
+        self.value_nbytes = dict(value_nbytes or {})
+
+    def _domain(self, port: str) -> Domain:
+        try:
+            return self.ports[port]
+        except KeyError as error:
+            raise KeyError(f"{port!r} is not a port of this configuration") from error
+
+    def leaf_layout(self, port: str, position: int) -> LeafLayout:
+        domain = self._domain(port)
+        if not 0 <= position < domain.leaf_count:
+            raise InvalidArtifact(f"position {position} outside the {domain.leaf_count}-leaf tree of {port!r}")
+        if isinstance(domain, ThreadDomain):
+            raise InvalidArtifact("thread leaves need their geometry: use ThreadDomain.leaf_layout(n_words, **position)")
+        if isinstance(domain, StreamDomain) or (isinstance(domain, StepDomain) and domain.chunk is not None):
+            return domain.leaf_layout(position)
+        if port not in self.value_nbytes:
+            raise InvalidArtifact(f"{port!r} has position leaves: configure value_nbytes[{port!r}]")
+        return pos_leaf_layout(self.value_nbytes[port](position))
+
+    def tree_leaf(self, port: str, position: int, digest: bytes) -> bytes:
+        self._domain(port)
+        return _digest(bytes(digest), "leaf digest")
+
+    def root(self, port: str, leaves: Sequence[bytes]) -> bytes:
+        domain = self._domain(port)
+        if len(leaves) != domain.leaf_count:
+            raise InvalidArtifact(f"{port!r} has {domain.leaf_count} leaves, got {len(leaves)}")
+        return domain.bind(fold(leaves))
+
+    def path(self, port: str, leaves: Sequence[bytes], index: int) -> Path:
+        self._domain(port)
+        return TREE.path(leaves, index)
+
+    def verify_path(self, port: str, root: bytes, leaf_count: int, index: int, leaf: bytes, path: Sequence[bytes | None]) -> bool:
+        domain = self.ports.get(port)
+        if domain is None or leaf_count != domain.leaf_count:
+            return False
+        return verify(domain, root, index, leaf, path)
