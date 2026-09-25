@@ -69,6 +69,11 @@ def group(cls: type) -> Any:
     return field(default_factory=cls, metadata={"group": cls})
 
 
+def environ_snapshot() -> Any:
+    """The environment the CLI was started with, as a field: filled by ``pipeline/cli.py``, never by a flag."""
+    return field(default_factory=dict, metadata={"environ": True})
+
+
 # ---------------------------------------------------------------------------------------------------------------- what runs
 
 #: Row-id dtype token -> the checkpoint weight format the row serves.
@@ -216,6 +221,10 @@ class BuildConfig:
                                     help="concurrent derives: N, or auto (cgroup headroom / 20 GiB, 1..8); default 1 (TP: ranks x shapes)")
     build_timeout: int | None = option("--build-timeout", env="BUILD_TIMEOUT", type=int, default=None,
                                        help="seconds per derive; default scales with the envelope (TP: 7200)")
+    lp: int | None = option("--lp", env="LP", type=int, default=None,
+                            help="request wrapper prompt length (default: the longest prompt; a stochastic row: r0's)")
+    t: int | None = option("--t", env="T", type=int, default=None,
+                           help="request wrapper decode steps (default: the largest cap - 1; a stochastic row: r0's)")
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -279,25 +288,33 @@ class CommitConfig:
 
 @dataclass(frozen=True, kw_only=True)
 class RunEnv:
-    """Where a row runs.  Filled by ``pipeline/cli.py`` from flags and the environment, never hashed.
+    """Where a row runs: interpreters, caches and roots.  Filled by ``pipeline/cli.py`` from flags, the environment and
+    the pod layout's machine-path defaults (``cli.MACHINE``); recorded as telemetry, never hashed.
 
     ``environ`` is the environment the CLI was started with; child processes get it plus the pins the driver sets.
     """
 
-    py: str
-    py312: str | None = None
-    sweep_dir: str
-    hf_home: str
-    cuda_home: str
-    native_collect_build: str | None = None
-    hidden_gpu_build: str | None = None
-    hidden_so: str | None = None
-    hot_root: str
-    hot_idle: str = "900"
-    timeline: str | None = None
-    veritor_repo: str | None = None
-    research_run_dir: str | None = None
-    research_run_id: str | None = None
-    guard_preserve_file: str
-    pod_guards: tuple[str, ...] = ()
-    environ: Mapping[str, str] = field(default_factory=dict)
+    py: str = option("--py", env="PY", help="the stages' interpreter")
+    py312: str | None = option("--py312", env="PY312", default=None, help="the CPU stages' interpreter (default: --py)")
+    sweep_dir: str = option("--sweep-dir", env="SWEEP_DIR", help="rows live in <sweep-dir>/<row>")
+    hf_home: str = option("--hf-home", env="HF_HOME")
+    cuda_home: str = option("--cuda-home", env="CUDA_HOME")
+    cuda_bin: str = option("--cuda-bin", help="put on the stages' PATH after the interpreter's directory")
+    native_collect_build: str | None = option("--native-collect-build", env="NATIVE_COLLECT_BUILD", default=None,
+                                              help="collector build dir (default: the release's, else --native-collect-default)")
+    native_collect_default: str = option("--native-collect-default")
+    hidden_so: str | None = option("--hidden-so", env="HIDDEN_SO", default=None,
+                                   help="M1 tap .so (default: the one of the row's attention implementation)")
+    hidden_so_fa2: str = option("--hidden-so-fa2")
+    hidden_so_fa3: str = option("--hidden-so-fa3")
+    hot_root: str = option("--hot-root", env="HOT_ROOT")
+    hot_idle: str = option("--hot-idle", env="HOT_IDLE", default="900")
+    timeline: str | None = option("--timeline", env="VERITY_TIMELINE", default=None,
+                                  help="stage telemetry file (default: <row dir>/timeline.jsonl)")
+    veritor_repo: str | None = option("--veritor-repo", env="VERITOR_REPO", default=None,
+                                      help="must name the tree that runs when given (the mixed-tree refusal)")
+    research_run_dir: str | None = option("--research-run-dir", env="RESEARCH_RUN_DIR", default=None)
+    research_run_id: str | None = option("--research-run-id", env="RESEARCH_RUN_ID", default=None)
+    guard_preserve_file: str = option("--guard-preserve-file", env="GUARD_PRESERVE_FILE")
+    pod_guard: str = option("--pod-guard", help="the pod guard shell library (the tree's copy when absent)")
+    environ: Mapping[str, str] = environ_snapshot()
