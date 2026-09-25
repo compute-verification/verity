@@ -23,7 +23,7 @@ from test_tables import RTX4090, VERIFIER, cell, hashed, put, put_registered, re
 SEEDS = ("B-Ligero v1", "B-Ligero v3 (private selection)", "B-Ligero v3 fused hints", "B-Ligero v3x4 fused (l=4096)", "B-Ligero v1x4 (fold)",
          "B-Ligero v3x4 (fold)", "B-Ligero v2 (public selection)", "B-Ligero v2x4 (public selection)", "B-Ligero Fiat–Shamir (HVZK)",
          "B-Ligero + Poseidon2 per row", "B-Ligero + Poseidon2 shared 64x64 tile", "B-Ligero + BLAKE3 in circuit",
-         "B-Ligero + SHA-256 in circuit", "B-Ligero + Ajtai n=64", "B-Ligero + Ajtai n=128", "B-Ligero native external authentication",
+         "B-Ligero + SHA-256 in circuit", "B-Ligero + vllm-v1 SHA-256 in circuit", "B-Ligero + Ajtai n=64", "B-Ligero + Ajtai n=128", "B-Ligero native external authentication",
          "Ligerito", "A-GKR CPU (Rust)", "A-GKR GPU (torch/Triton)",
          "SP1 stock (relation-only / bare guest)", "SP1 stock, FRI query count raised (otherwise unmodified)",
          "SP1 stock, committed (frame-v3 SHA-256 rows)", "SP1 stock, committed (vllm-v1 SHA-256 position leaves)", "SP1 precompile (TC_DOT chip)")
@@ -66,6 +66,7 @@ CASES = [
     (env(FP8, auth="included-hash", sharing="tile64x64", **P2), {}, "B-Ligero + Poseidon2 shared 64x64 tile"),
     (env(FP8, auth="included-hash", sharing="none", **leaf("blake3", "blake3-keyed", "blake3-keyed/row/v2")), {}, "B-Ligero + BLAKE3 in circuit"),
     (env(FP8, auth="included-hash", sharing="none", **leaf("sha256", "sha256", "sha256/row/v1")), {}, "B-Ligero + SHA-256 in circuit"),
+    (env(FP8, auth="included-hash", sharing="none", **leaf("vllm-v1", "sha256", "vllm-v1/pos-leaf/v0")), {}, "B-Ligero + vllm-v1 SHA-256 in circuit"),
     (env(FP8, auth="included-hash", sharing="none", **leaf("ajtai-n64", "ajtai-babybear-n64-b1-r0/v1", "ajtai-babybear-n64-b1-r0/row/v1")), {},
      "B-Ligero + Ajtai n=64"),
     (env(FP8, auth="included-hash", sharing="none", **leaf("ajtai-n128", "ajtai-babybear-n128-b1-r0/v1", "ajtai-babybear-n128-b1-r0/row/v1")), {},

@@ -254,6 +254,11 @@ CONFIGURATIONS: tuple[Configuration, ...] = (
          "frame-v3 SHA-256 trees over sha256/row/v1 row digests (prefix block and padding block by the verifier)" + _IN_PROOF,
          (_SHA256_STMT, Hash("SHA-256", _STMT, _CR + " (row digests)"), *_B_HASHES), assumptions=_B_ASSUME,
          pin=_B_PIN + "; leaf schema sha256/row/v1", **_B_KW),
+    _cfg("B-Ligero + vllm-v1 SHA-256 in circuit", FULL, _H_PORTS, "vllm-v1",
+         "vllm-v1 SHA-256 trees over position leaves of every operand row (all compressions in-circuit), bound by step roots "
+         "over verifier-derived domains whose digests the statement absorbs" + _IN_PROOF,
+         (_SHA256_STMT, Hash("SHA-256", _STMT, _CR + " (position leaves)"), *_B_HASHES), assumptions=_B_ASSUME,
+         pin=_B_PIN + "; leaf schema vllm-v1/pos-leaf/v0, step-root domains", **_B_KW),
     _cfg("B-Ligero + Ajtai n=64", FULL, _H_PORTS + " (binding only, not hiding)", "frame-v3/ajtai-row",
          "SHA-256 trees over Ajtai (Ring-SIS, n = 64) row digests" + _IN_PROOF,
          (_SHA256_STMT, Hash("Ajtai n=64 (linear digest)", _STMT, "Ring-SIS binding", True), *_B_HASHES),
