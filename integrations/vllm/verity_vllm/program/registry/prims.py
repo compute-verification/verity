@@ -27,6 +27,7 @@ import numpy as np
 
 from verity.ir.defs import PrimitiveDefinition, primitive
 from verity.ir.types import Array, Value
+from verity.ml.prims import Bf16ToF32, F2fpBf16, F32ToBf16Rn
 from verity.ml.tc.silicon import AMPERE_BF16_M16N8K16 as _AMPERE_BF16_M16N8K16
 from verity.ml.tc.total import tc_dot_total as _tc_dot_total
 
@@ -168,38 +169,6 @@ def f32_max_bits(a: int, b: int) -> int:
 
 def f32_is_nan(u: int) -> bool:
     return (u & 0x7F800000) == 0x7F800000 and (u & 0x7FFFFF) != 0
-
-
-# ---------------------------------------------------------------------------------------------------------
-# conversions
-# ---------------------------------------------------------------------------------------------------------
-
-
-@primitive("Bf16ToF32", 1, [("a", BF16)], F32, conformance="exact-model-tested")
-def Bf16ToF32(a: int) -> int:
-    """Exact widening: bf16 encoding << 16."""
-    return bf16_to_f32_bits(a)
-
-
-@primitive("F32ToBf16Rn", 1, [("a", F32)], BF16,
-           conformance="exact-model-tested; not bound by B0/B1 (superseded in production by F2fpBf16_v1, the hardware "
-                       "NaN word; L8) -- the software canonicalisation of c10::BFloat16::round_to_nearest_even and of "
-                       "veritor.tc-ampere-bf16@1 / veritor.pinned.*@1 f32_to_bf16; equal to F2fpBf16_v1 on every non-NaN "
-                       "word (lean/VeritorSpec/TCBHw.lean castF32ToBf16Hw_eq_of_not_nan; exhaustive over 2^32 in Rust/Python)")
-def F32ToBf16Rn(a: int) -> int:
-    """aten / torch round-to-nearest-even f32 -> bf16; NaN -> 0x7FC0 (the software canonical word)."""
-    return f32_to_bf16_rn_bits(a, BF16_NAN_TORCH)
-
-
-@primitive("F2fpBf16", 1, [("a", F32)], BF16,
-           conformance="exact-model-tested; the production f32->bf16 conversion of B0/B1 (GemmCoordinate, RMSNorm* stores): "
-                       "NaN -> 0x7FFF is the word cvt.rn.bf16.f32 / F2FP.BF16.F32 produced on the A100 and the RTX 4090 for all "
-                       "84 measured NaN inputs (quiet/signalling, both signs, single-bit and random payloads; L6 "
-                       "docs/data/tc-total-2026-09-07/*/cvt_special.json, 4403 words per device, 0 model mismatches); the same "
-                       "function as veritor.tc-ampere-bf16@2 f32_to_bf16 (L8)")
-def F2fpBf16(a: int) -> int:
-    """SASS `F2FP.BF16.F32.PACK_AB` (`cvt.rn.bf16.f32`): RNE f32 -> bf16; every NaN -> 0x7FFF (measured, L6)."""
-    return f32_to_bf16_rn_bits(a, BF16_NAN_F2FP)
 
 
 # ---------------------------------------------------------------------------------------------------------

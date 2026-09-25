@@ -29,10 +29,11 @@ from __future__ import annotations
 from typing import Any
 
 from verity.ir.defs import bind
+from verity.ml.prims import HopperBF16WgmmaDot16
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.gemm_targets import UnregisteredGemmTarget
-from verity_vllm.program.registry.hopper import Fa3InvSum, HopperBF16WgmmaDot16
+from verity_vllm.program.registry.hopper import Fa3InvSum
 
 
 class UnregisteredTarget(ValueError):
