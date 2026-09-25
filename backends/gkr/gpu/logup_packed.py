@@ -310,18 +310,24 @@ if GRAPHS:
 
         def _tree_ops(self) -> None:
             n = self.n
-            np_, nq = logup._combine_level(self.p_leaf, self.q_leaf)
             pq = self.levels[n - 1]
-            pq[0] = _deinterleave(np_)
-            pq[1] = _deinterleave(nq)
+            fused = logup._field._fast_combine_level is not None and n >= 2
+            if fused:
+                from . import kernels as _gk
+                _gk.combine_leaves_into(self.p_leaf, self.q_leaf, pq, self.T4_big)
+            else:
+                np_, nq = logup._combine_level(self.p_leaf, self.q_leaf)
+                pq[0] = _deinterleave(np_)
+                pq[1] = _deinterleave(nq)
             for lv in range(n - 1, 0, -1):
                 src, dst = self.levels[lv], self.levels[lv - 1]
                 m = 1 << (lv - 1)
                 self.tk._tree_level_kernel[(-(-m // 256),)](src[0], src[1], dst[0], dst[1], m, R2=self.tk.R2_MOD_P, BLOCK=256, FK=self.tk.FIELD_KEY)
-            self.T4_big[0, :, 0] = self.p_leaf[0::2]
-            self.T4_big[1, :, 0] = self.p_leaf[1::2]
-            self.T4_big[2] = self.q_leaf[0::2]
-            self.T4_big[3] = self.q_leaf[1::2]
+            if not fused:
+                self.T4_big[0, :, 0] = self.p_leaf[0::2]
+                self.T4_big[1, :, 0] = self.p_leaf[1::2]
+                self.T4_big[2] = self.q_leaf[0::2]
+                self.T4_big[3] = self.q_leaf[1::2]
 
         def _level_ops(self, lv: int, i0: int, i1: int, tail: bool) -> None:
             self._big = False
