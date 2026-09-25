@@ -51,11 +51,13 @@ def test_bindings_are_hashauths():
 
 
 def test_blake3_roots_are_b_ligeros():
+    """B-Ligero's BLAKE3 leaf frames rows of more than one 1024-byte chunk only: the bench rows (K = 1536)."""
     hashauth = pytest.importorskip("backends.direct.ligero.hashauth")
-    x, w = _rows(1, 5, 8, 16), _rows(2, 5, 8, 16)
+    iset = CM.InstanceSet("synthetic", "dev", "ab" * 32, 1536, 16)
+    x, w = _rows(1, 5, 1536, 16), _rows(2, 5, 1536, 16)
     y = _rows(3, 5, 1, 16)
-    c = CM.commit("blake3", "bf16-hopper", ISET, 0, x, w, y, 2)
-    bindings = {n: CM.binding(ISET, 0, 5, n, "blake3-keyed/row/v2" if n != "y" else "u16") for n in "aby"}
+    c = CM.commit("blake3", "bf16-hopper", iset, 0, x, w, y, 2)
+    bindings = {n: CM.binding(iset, 0, 5, n, "blake3-keyed/row/v2" if n != "y" else "u16") for n in "aby"}
     trees, dig = hashauth.build_trees(x_rows=x, w_cols=w, y_words=y.reshape(-1), word_bits=16, y_bits=16, bindings=bindings, leaf="blake3")
     for n in "aby":
         assert trees[n].ref.root == c.roots[n], n
