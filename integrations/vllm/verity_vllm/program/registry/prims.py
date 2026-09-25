@@ -5,8 +5,8 @@ Encodings: bf16 = `Value<16>` (IEEE binary16-exponent bfloat16 bit pattern), f32
 encodings map to ordinary outputs following the registered semantics stated in each docstring.
 
 Hardware-shaped primitives wrap the existing exact models, they do not re-derive them:
-  * `TcDot16` — `veritor.core.silicon_total` (`mma.sync.m16n8k16` k-step, total on every encoding), evaluated through
-    `registry.tc_total` (the pure-Python 3.11 port the pods run; `veritor` / `verity_vllm.program.kernels.mma` are the test-only references);
+  * `AmpereBF16TcDot16` — core's `verity.ml.prims` v2 (`mma.sync.m16n8k16` k-step, total on every encoding); the integration's
+    `_v1` stays registered, superseded, so that recorded Programs decode (`verity_vllm.program.kernels.mma` is a test-only reference);
   * MUFU `Ex2`, `Rcp` (FA2, `--use_fast_math`, ftz) — `fa2_model.MufuTables` (sm_89 measured tables);
   * MUFU `Sqrt`, `Rcp` (Triton RMSNorm) and `Rsqrt` (CUDA RMSNorm, `rsqrt.approx.f32`) —
     `rms_triton_model.RmsTables`.
@@ -27,7 +27,7 @@ import numpy as np
 
 from verity.ir.defs import PrimitiveDefinition, primitive
 from verity.ir.types import Array, Value
-from verity.ml.prims import Bf16ToF32, F2fpBf16, F32ToBf16Rn
+from verity.ml.prims import AmpereBF16TcDot16, Bf16ToF32, F2fpBf16, F32ToBf16Rn
 from verity.ml.scalar import Bf16GtStrict, I32Add, I32Eq, I32Le, SelectBf16, SelectF32, SelectI32
 from verity.ml.tc.silicon import AMPERE_BF16_M16N8K16 as _AMPERE_BF16_M16N8K16
 from verity.ml.tc.total import tc_dot_total as _tc_dot_total
@@ -343,10 +343,17 @@ def _tc_dot16_total(acc: int, a: tuple[int, ...], b: tuple[int, ...]) -> int:
 A16 = Array(16, BF16)
 
 
-@primitive("AmpereBF16TcDot16", 1, [("acc", F32), ("a", A16), ("b", A16)], F32, conformance="exact-model-tested")
-def AmpereBF16TcDot16(acc: int, *ab: int) -> int:
-    """One accumulator-coordinate transition of `mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32`
-    (16 products into `acc`): `verity.ml.tc.total.tc_dot_total` on `AMPERE_BF16_M16N8K16` (see `_tc_dot16_total`)."""
+@primitive("AmpereBF16TcDot16", 1, [("acc", F32), ("a", A16), ("b", A16)], F32,
+           conformance="superseded by AmpereBF16TcDot16_v2 (verity.ml.prims), the id Programs cite: this id denoted two functions -- "
+                       "before its evaluator became `_tc_dot16_total` it extended the finite model by a documented, not measured, "
+                       "rule (NaN -> 0x7FC00000; a group's finite overflow beside an infinite operand ignored), after it the "
+                       "measured total function (= v2). Evidence recorded under this id before that change is superseded on "
+                       "non-finite outcomes; on finite operands both functions are v2's")
+def AmpereBF16TcDot16V1(acc: int, *ab: int) -> int:
+    """Superseded (kept registered so that the Programs recorded under this id remain decodable): one
+    accumulator-coordinate transition of `mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32` (16 products into `acc`):
+    `verity.ml.tc.total.tc_dot_total` on `AMPERE_BF16_M16N8K16` (see `_tc_dot16_total`), the function of
+    `AmpereBF16TcDot16_v2`."""
     return _tc_dot16_total(acc, tuple(ab[:16]), tuple(ab[16:32]))
 
 

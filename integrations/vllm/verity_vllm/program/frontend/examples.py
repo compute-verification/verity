@@ -28,7 +28,7 @@ def DotBf16(x: Arr["K", BF16], w: Arr["K", BF16], *, K) -> F32:
     """f32 accumulator after K/16 `AmpereBF16TcDot16` steps in ascending k from a zero accumulator."""
     acc = ops.const(32, 0)
     for s in range(K // 16):
-        acc = ops.AmpereBF16TcDot16(acc, x[16 * s:16 * s + 16], w[16 * s:16 * s + 16])
+        acc = ops["AmpereBF16TcDot16_v2"](acc, x[16 * s:16 * s + 16], w[16 * s:16 * s + 16])
     return acc
 
 
