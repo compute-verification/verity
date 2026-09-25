@@ -434,6 +434,7 @@ fn session(st: &Arc<PureStmt>, inst: &Arc<Instances>, t: SharedTransport, plan: 
     let mut proofs: Vec<Vec<u8>> = Vec::new();
     let mut cached: Option<Vec<Vec<F128>>> = None;
     let mut rtt_ms = 0.0;
+    let mut host_witness: Option<(Vec<F128>, Vec<F128>, Vec<F128>, Vec<u8>)> = None;
     let tp0 = Instant::now();
     let res: Result<(), String> = (|| {
         let th = Instant::now();
@@ -473,13 +474,16 @@ fn session(st: &Arc<PureStmt>, inst: &Arc<Instances>, t: SharedTransport, plan: 
             let lig = plan.profile[rep];
             let (p, bk) = catch_unwind(AssertUnwindSafe(|| {
                 if plan.gpu {
-                    let hw;
                     let src = if device {
                         PureSrc::Device { inst, cache: if rep == 0 { 1 } else { 2 } }
                     } else if let Comps::B3(c) = &*w.comps {
                         PureSrc::Host { comps: c, inputs: &*w.inputs }
                     } else {
-                        hw = st.witness(&w.comps, &*w.inputs);
+                        // the host witness is built once when both reps prove the same witness
+                        if rep == 0 || plan.rep1_other_witness || host_witness.is_none() {
+                            host_witness = Some(st.witness(&w.comps, &*w.inputs));
+                        }
+                        let hw = host_witness.as_ref().unwrap();
                         PureSrc::HostWitness { z: &hw.0, a: &hw.1, b: &hw.2 }
                     };
                     prove_gpu(st, src, lig, rep, &mut hook, &mut lch)
