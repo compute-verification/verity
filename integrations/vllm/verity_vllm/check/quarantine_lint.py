@@ -24,7 +24,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
-REPO = Path(__file__).resolve().parents[2]
+from verity_vllm.config import ROOT as REPO
+
 ROOT = REPO / "verity_vllm" / "program" / "registry" / "quarantine"
 FORBIDDEN_IMPORTS = ("os", "sys", "time", "datetime", "random", "secrets", "pathlib", "io", "json", "pickle", "subprocess", "socket",
                      "urllib", "requests", "torch", "triton", "numpy.random", "verity_vllm.observe", "verity_vllm.acquire", "verity_vllm.commit", "verity_vllm.check", "importlib", "ctypes", "threading",

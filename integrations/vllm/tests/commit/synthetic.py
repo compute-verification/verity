@@ -96,7 +96,7 @@ TOY_RELATIONS = ("gemm.toy.f32acc.v1",)
 
 
 def install() -> list[str]:
-    """Plugin entry point for the fresh verifier: ``--plugin verity_vllm.harness.synthetic:install``.
+    """Plugin entry point for the fresh verifier: ``--plugin tests.commit.synthetic:install``.
 
     The toy relation is registered when this module is imported; the verifier process imports
     nothing but the bundle, so it must be told to load this module to check a toy bundle.

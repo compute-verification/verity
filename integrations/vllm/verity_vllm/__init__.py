@@ -16,8 +16,6 @@ Module map (see ``docs/vllm-poc/capture-format.md`` for the on-disk format):
 - :mod:`verity_vllm.check.relations`   relation registry, the ``check`` runner, adjacent-VU helpers
 - :mod:`verity_vllm.relations_torch` optional torch ``same_runtime`` checkers (``install()``)
 - :mod:`verity_vllm.negatives`   targeted negative tests N01-N07, N13, N14
-- :mod:`verity_vllm.harness.synthetic`   the numpy toy model that proves the harness end to end
-- :mod:`verity_vllm.check.poc_rows`        Table 1-4 row dataclasses and the PASS derivation rule
 - :mod:`verity_vllm.render`      ``docs/fixtures/results.md`` renderer (``python -m``)
 - :mod:`verity_vllm.verify`      fresh-process bundle verifier (``python -m``, contract 15.1)
 """

@@ -794,10 +794,9 @@ def check(record: dict[str, Any], live: dict[str, Any], *, program_digests_of_re
 # ---------------------------------------------------------------------------------------------------------------------------- CLI
 
 def _default_manifest() -> str | None:
-    here = os.path.dirname(os.path.abspath(__file__))
-    for up in (os.path.join(here, "..", ".."), os.getcwd()):          # integrations/vllm/ (veritor: vllm-poc/), then the cwd
-        p = os.path.join(up, "manifests", "checkpoints.json")
-        if os.path.exists(p):
+    from verity_vllm.config import CHECKPOINTS
+    for p in (CHECKPOINTS, Path.cwd() / "manifests" / "checkpoints.json"):
+        if p.exists():
             return os.path.abspath(p)
     return None
 
@@ -909,9 +908,9 @@ def derivation_provenance(program_dir: str, checkpoint_dir: str, checkpoints_man
     try:
         # the release tree on a pod has no .git: ship.sh's EXPORT.json names the shipped commit (experiment.code_version reads it first,
         # then git); the int-1 wave-1 records carried code null for that reason (exec r16_0413 build_request/weights_of_record.json)
+        from verity_vllm.config import ROOT
         from verity_vllm.harness.experiment import code_version
-        root = Path(os.path.dirname(os.path.abspath(__file__))).parents[1]
-        cv = code_version(root)
+        cv = code_version(ROOT)
         code, code_source = cv.get("commit") or None, cv.get("source")
         if code and cv.get("dirty_patch_sha256"):
             code_source = f"{code_source} (dirty patch {str(cv['dirty_patch_sha256'])[:12]})"

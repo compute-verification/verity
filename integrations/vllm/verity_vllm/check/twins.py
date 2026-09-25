@@ -47,13 +47,9 @@ from typing import Any, Callable
 
 import numpy as np
 
-REPO = Path(__file__).resolve().parents[2]
-if str(REPO / "vllm-poc") not in sys.path:
-    sys.path.insert(0, str(REPO / "vllm-poc"))
-
-from verity.ir.defs import SpecializedDefinition, bind  # noqa: E402
-from verity_vllm.program.registry import b1  # noqa: E402
-from verity_vllm.program.registry import prims as P  # noqa: E402
+from verity.ir.defs import SpecializedDefinition, bind
+from verity_vllm.program.registry import b1
+from verity_vllm.program.registry import prims as P
 
 SCHEMA = "verity-gen/twins/v1"
 U16, U32, U64, F32, F64 = np.uint16, np.uint32, np.uint64, np.float32, np.float64

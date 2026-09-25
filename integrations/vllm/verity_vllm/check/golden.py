@@ -23,7 +23,8 @@ import time
 from pathlib import Path
 from typing import Any
 
-REPO = Path(__file__).resolve().parents[2]
+from verity_vllm.config import ROOT as REPO
+
 CORPUS = Path(__file__).resolve().parent / "golden" / "corpus.json"
 
 

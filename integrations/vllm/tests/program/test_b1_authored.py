@@ -1,4 +1,4 @@
-"""The torch-authored B1 composites (`verity_vllm.program.frontend.b1_authored`) against TA1's hand-built definitions
+"""The torch-authored B1 composites (`tests/program/b1_authored.py`) against TA1's hand-built definitions
 at test scale (a tiny configuration and the B0 head dimension). Digest equality where the encodings are the
 same; graph/reference correspondence where the broadcast encoding legitimately differs (§8.5). The full B0/B1
 `Serve` rows are `verity_vllm.program.frontend.b1_milestone` (pod). Needs torch."""
@@ -11,7 +11,7 @@ torch = pytest.importorskip("torch")
 
 from verity.ir import Program, bind, encode_program, program_digest  # noqa: E402
 from verity.ir.codec import descriptor_size  # noqa: E402
-from verity_vllm.program.frontend import b1_authored as A  # noqa: E402
+from tests.program import b1_authored as A  # noqa: E402
 from verity_vllm.program.frontend import export_report  # noqa: E402
 from verity_vllm.program.frontend.correspond import correspond  # noqa: E402
 from verity_vllm.program.registry import b1  # noqa: E402

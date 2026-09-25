@@ -452,13 +452,6 @@ def make_committer(kind: str, engine: va.Engine, args: argparse.Namespace, run_i
                                                       time.perf_counter(), job.backlog)
 
         return HooksOnly(engine, run_id=run_id, chunk=args.chunk, hash_threads=args.hash_threads, staging="direct")   # no arena: nothing is copied
-    if kind.startswith("cmt_ref"):
-        # CMT-1's engine behind our acquisition: cmt_ref_torch (device SHA-256) | cmt_ref_host (hashlib/leaf) | cmt_ref_torch_compiled
-        from verity_vllm.commit.reference_engine_adapter import CmtRefCommitter
-
-        backend = "host" if kind.endswith("host") else "torch"
-        return CmtRefCommitter(engine, backend=backend, compiled=kind.endswith("compiled"), run_id=run_id, hash_threads=args.hash_threads,
-                               arena_bytes=((args.arena_mb << 20) if args.arena_mb else None))
     if kind.startswith("plugin:"):
         # `plugin:<module>:<factory>` — a sibling lane's committer exposing the api.Committer interface: factory(engine, run_id=..., **kw)
         _, mod, fn = kind.split(":", 2)
@@ -1041,7 +1034,7 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--case", default=None)
     ap.add_argument("--out", required=True)
     ap.add_argument("--pairs", type=int, default=5)
-    ap.add_argument("--committer", default="native_host", help="native_host | native_host_direct | hooks_only | cmt_ref_torch | cmt_ref_host | cmt_ref_torch_compiled | plugin:<module>:<factory>")
+    ap.add_argument("--committer", default="native_host", help="native_host | native_host_direct | hooks_only | plugin:<module>:<factory>")
     ap.add_argument("--chunk", type=int, default=65536, help="native_host leaf = chunk bytes of the packed step stream (opening granularity); 4096 measured 3x slower on decode steps (per-leaf Python overhead)")
     ap.add_argument("--arena-unchecked", action="store_true", help="NEGATIVE TEST ONLY: skip the X-02 arm-time bound check for an explicit --arena-mb so a "
                     "too-small block reaches the collector (its refusal must then yield Commit FAIL under X-03)")
@@ -1775,7 +1768,7 @@ def main(argv: list[str] | None = None) -> None:
             # its DOMINANT line, printed before the run; it does not refuse or admit tonight (the admission_of_record above governs); every
             # Commit thereby yields the per-term predicted-vs-measured line (calibrate on verdict.json / footprint.jsonl at the end)
             try:
-                from verity_vllm.harness.admission_planner import plan as _planner_plan
+                from verity_vllm.harness.admission_planner import CALIBRATION as _cal_path, plan as _planner_plan
                 _others = 0
                 with contextlib.suppress(Exception):          # co-tenants: the cgroup's ANON bytes minus this process (file cache is reclaimable)
                     for _ln in Path("/sys/fs/cgroup/memory.stat").read_text().splitlines():
@@ -1790,8 +1783,7 @@ def main(argv: list[str] | None = None) -> None:
                          "chunk_bytes": int(getattr(com, "chunk", 256) or 256)}
                 _smp_max = int((sampling or {}).get("max_tokens") or 1)
                 _preqs = [{**r, "max_tokens": int(r.get("max_tokens") or _smp_max)} for r in reqs]
-                _cal_path = Path(__file__).resolve().parents[2] / "tests" / "harness" / "fixtures" / "admission" / "planner_calibration.jsonl"
-                _cal = [json.loads(_l) for _l in _cal_path.read_text().splitlines() if _l.strip()] if _cal_path.exists() else None
+                _cal = [json.loads(_l) for _l in _cal_path.read_text().splitlines() if _l.strip()]
                 _pl = _planner_plan(asz, _preqs, mode=_mode, engine_rss_bytes=int((rss_kb()[0] or 0) * 1024), host_cap_bytes=host_cap,
                                     host_cap_source=asz.get("host_memory_cap_source"), others_current_bytes=_others,
                                     max_num_batched_tokens=(asz.get("envelope") or {}).get("max_num_batched_tokens"), calibration=_cal)

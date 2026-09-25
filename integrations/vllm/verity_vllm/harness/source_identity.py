@@ -32,6 +32,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from verity_vllm.config import ROOT as INTEGRATION
+
 try:
     from research.telemetry import source_identity as _sid
 except ImportError as _e:  # pragma: no cover - environment defect, reported by name
@@ -39,10 +41,9 @@ except ImportError as _e:  # pragma: no cover - environment defect, reported by 
                       "(PYTHONPATH must include <repo>/tools/research/src; row_pod.sh exports it); nothing is appended here on purpose: "
                       f"{_e}") from _e
 
-# this file: <repo>/integrations/vllm/verity_vllm/harness/source_identity.py -> the repo root is parents[4]
-# (sweep -> verity_vllm -> integrations/vllm -> integrations -> repo); stated once, derived from __file__, never from env
-TREE = Path(__file__).resolve().parents[4]
 INTEGRATION_REL = Path("integrations") / "vllm"
+# INTEGRATION is <repo>/integrations/vllm; the repo root is derived from the package location, never from env
+TREE = INTEGRATION.parent.parent
 ROOT_MARKERS = ("pyproject.toml", "packages/verity/src/verity/__init__.py", "integrations/vllm/verity_vllm/__init__.py")
 
 FAIL_CLASS = _sid.FAIL_CLASS

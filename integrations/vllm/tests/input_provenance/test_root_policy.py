@@ -9,14 +9,13 @@ from pathlib import Path
 import pytest
 
 from verity_vllm.input_provenance import root_policy
-from verity_vllm.check.fold_compare import load_profile
+from verity_vllm.check.fold_compare import DEFAULT_COS_SIN as COS_SIN, load_profile
 from verity_vllm.observe.events import Root, RunHeader, ViewDesc
 from verity_vllm.observe.log import read_log
 
 REPO = Path(__file__).resolve().parents[2]
 LOG = REPO / "data" / "logs" / "m1.jsonl.gz"
 SNAPS = REPO / "data" / "logs" / "m1"
-COS_SIN = REPO / "fixtures" / "B0-divergence-20260907T1604Z" / "layers.0.self_attn.rotary_emb" / "cos_sin_cache.npy"
 
 pytestmark = pytest.mark.skipif(not (LOG.exists() and SNAPS.exists() and COS_SIN.exists()), reason="M1 capture / fixture not present")
 

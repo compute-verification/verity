@@ -37,7 +37,7 @@ def _wl(row):
 
 
 def _cal():
-    return [json.loads(l) for l in (FIX / "planner_calibration.jsonl").read_text().splitlines() if l.strip()]
+    return [json.loads(l) for l in P.CALIBRATION.read_text().splitlines() if l.strip()]
 
 
 def test_b8_fp8_bounded_plan_names_terms_and_dominant_contributor():

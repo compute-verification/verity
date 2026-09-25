@@ -43,7 +43,7 @@ INPUTS = ("manifest.json", "commit/manifest_verify.json", "build_summary.json", 
 
 def applies(row: resolver.Row) -> str | None:
     if row.spec.get("tp", 1) > 1:
-        return "TP row: rank Programs (build/rank*/) are merged by row_pod_tp2.sh, not by build/build-global"
+        return "TP row: rank Programs (build/rank*/) are merged by tp_stage.sh, not by build/build-global"
     if not row.has("commit/manifest_verify.json") and not row.has("manifest.json"):
         return "no manifest of record on this row (Commit never built one)"
     return None

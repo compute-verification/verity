@@ -11,8 +11,7 @@ One distribution (`verity-vllm`), one package (`verity_vllm`), one subpackage pe
 the package.  Naming (Draft 3.1): core Verity nouns get the shortest names (`program`, `query`, `commit`), integration concepts
 carry their qualifier (`input_provenance`, `runtime` correspondence), implementation artefacts have descriptive compound names
 (`native_collect`, `weights_of_record`, `poc_*` for v1 leftovers).  A subpackage exists because there is code for it, not because
-the layer table has a row; Build / Match / Commit are commands of the harness, not layers.  Every file arrived by
-`python tools/relayout.py apply` from `tools/move_map.txt` (the old -> new map of record; `check` reports coverage and drift).
+the layer table has a row; Build / Match / Commit are commands of the harness, not layers.
 
 ~~~text
 verity_vllm/

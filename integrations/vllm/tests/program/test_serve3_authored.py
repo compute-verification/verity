@@ -1,4 +1,4 @@
-"""Lane PAD-IMPL: the torch-frontend authoring of `Serve@3` (`verity_vllm/program/frontend/serve3_authored.py`)
+"""Lane PAD-IMPL: the torch-frontend authoring of `Serve@3` (`tests/program/serve3_authored.py`)
 against the registered definitions (`verity_vllm/program/registry/serve3.py`) — `check_identity` at export, and
 digest equality / graph-and-reference correspondence per program, exactly as `test_b1_authored.py` checks
 `Serve@1/@2`.  Needs torch; skips without it."""
@@ -17,7 +17,7 @@ torch = pytest.importorskip("torch")
 from verity.ir import Program, bind, program_digest  # noqa: E402
 from verity_vllm.program.frontend import export_report  # noqa: E402
 from verity_vllm.program.frontend.correspond import correspond  # noqa: E402
-from verity_vllm.program.frontend import serve3_authored as A  # noqa: E402
+from tests.program import serve3_authored as A  # noqa: E402
 from verity_vllm.program.registry import b1, serve3  # noqa: E402
 
 TINY = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,

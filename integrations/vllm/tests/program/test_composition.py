@@ -42,8 +42,6 @@ GEMM_FIX = FIX / "B1-b3eba618b1b5-20260907T1731Z"
 M1 = FIX / "M1-0c9af072e5a9-20260907T2128Z"
 B0_DIV = FIX / "B0-divergence-20260907T1604Z"
 TC_HOPPER = Path(os.environ.get("VERITY_HP_ARCHIVE", Path.home() / "veritor-artifacts" / "hp")) / "tc-hopper" / "r1"
-if (W11 / "mufu").exists():
-    os.environ.setdefault("VERITY_MUFU_TABLES", str(W11 / "mufu"))
 
 from verity.ir import Program, bind  # noqa: E402
 from verity.ir.evaluate import evaluate_call  # noqa: E402
@@ -302,7 +300,7 @@ def test_rmsnorm_compiled_profile_is_not_a_rebinding():
     on both sides) eager and compiled words differ on 1 word. Compiled RMSNorm is a different function, not a binding
     of `NORM` (compose vs extend: composition.md §1 row 2, §4)."""
     _need(B0_DIV / "index.json", "B0 divergence fixture")
-    from verity_vllm.program.numerics import inductor_models as IM
+    from tests.program import inductor_models as IM
     fused = B0_DIV / "layers.0.post_attention_layernorm_fused_add_rms_norm"
     w = np.load(fused / "weight.npy")
     cx, cr, cn = (np.load(fused / "compiled" / f) for f in ("in_x.npy", "in_residual.npy", "out_normed.npy"))
@@ -345,11 +343,12 @@ def test_attention_on_ampere_captured_calls(T, layer, heads, recorded_cross):
     2/4/5 FA2 blocks, the last-visited one partial; 1/2/3 FA3 blocks)."""
     _need(W11 / "natural" / "index.json", "W11 attention fixtures")
     from verity_vllm.program.numerics import fa2_model as FA2, fa3_model as FA3
+    from verity_vllm.program.numerics.fa2_relation import tables_dir
     try:
         FA3.lib()
     except Exception as e:  # noqa: BLE001
         pytest.skip(f"FA3 CPU model not buildable: {e}")
-    tables = FA2.MufuTables.load(W11 / "mufu")
+    tables = FA2.MufuTables.load(tables_dir())
     q, k, v, out = _attention_call(T, layer)
     cross = 0
     for h in heads:
@@ -436,7 +435,8 @@ def test_authored_v2_corresponds_to_registry_v2(label, name, statics):
     """`b1_authored` v2 functions take the same statics and elaborate to the registry's v2 bodies (digest-equal or
     same-references across the broadcast encodings, as FE2's v1 test). Needs torch (pod)."""
     pytest.importorskip("torch")
-    from verity_vllm.program.frontend import b1_authored as A, export_report
+    from tests.program import b1_authored as A
+    from verity_vllm.program.frontend import export_report
     rep = export_report(getattr(A, name), static=statics, dead_gates="ignore")
     P_t = Program(bind(getattr(b1, name), **statics))
     r = correspond(rep.program, P_t)

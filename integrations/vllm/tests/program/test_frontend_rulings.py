@@ -224,7 +224,7 @@ def test_r2_no_silent_padding_of_scan_or_attention():
         scans = [nd for nd in P.fn.body.nodes if nd.form == "scan"]
         assert len(scans) == 1 and scans[0].n == n - 1, n  # exactly the authored length, never a padded maximum
     # attention: per-T specialisations with the authored block structure (T=5: one partial block, T=70: 6 + 64)
-    from verity_vllm.program.frontend import b1_authored as A
+    from tests.program import b1_authored as A
     ids5 = set(encode_program(Program(A.AttentionHead.specialize(T=5, D=16))).get("definitions", {}))
     ids70 = set(encode_program(Program(A.AttentionHead.specialize(T=70, D=16))).get("definitions", {}))
     assert {k for k in ids5 if k.startswith("AttnBlock")} == {"AttnBlock_v1{D=16,NVIS=5,FIRST=true}"}
@@ -344,7 +344,7 @@ def test_r5_three_level_view_is_a_concat_of_strided_pieces():
 
 
 def test_r5_authored_attention_head_corresponds_to_ta1_with_smaller_encoding():
-    from verity_vllm.program.frontend import b1_authored as A
+    from tests.program import b1_authored as A
     P_a = Program(A.AttentionHead.specialize(T=70, D=16))
     P_t = Program(bind(b1.AttentionHead, T=70, D=16))
     r = correspond(P_a, P_t)

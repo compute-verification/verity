@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from verity_vllm.commit.fa2_prototype.derived import conv_bf16_to_f32, conv_f2fp_bf16
+from tests.commit.fa2_prototype.derived import conv_bf16_to_f32, conv_f2fp_bf16
 
 ALL_BF16 = np.arange(1 << 16, dtype=np.uint16)
 

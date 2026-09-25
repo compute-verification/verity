@@ -79,9 +79,13 @@ def max_model_len_for(cp: dict[str, Any]) -> int:
 
 
 def apply_env() -> dict[str, str]:
+    from verity_vllm.config import checkpoints_hf_home
+
     for k, v in DECLARED_ENV.items():
         os.environ.setdefault(k, v)
-    os.environ.setdefault("HF_HOME", "/workspace/hf")
+    hf_home = checkpoints_hf_home()
+    if hf_home:
+        os.environ.setdefault("HF_HOME", hf_home)
     os.environ.setdefault("HF_HUB_OFFLINE", "1")
     return {k: os.environ[k] for k in DECLARED_ENV}
 
@@ -249,10 +253,44 @@ def _tuned_gemm_arch_family(major: int, minor: int):
         return "<unavailable>"
 
 
-def software_info(wheel_sha256: str | None, vllm_commit: str | None) -> dict[str, Any]:
+def dist_identity(name: str) -> dict[str, Any]:
+    """Identity of an installed distribution: version, sha256 of its RECORD (every installed file with
+    its hash: an installation fingerprint), pip's ``direct_url.json`` and, when that names a local wheel
+    file that still exists, the wheel's sha256."""
     import importlib.metadata as md
 
-    from verity_vllm.check.poc_verify_bindings import dist_identity
+    try:
+        dist = md.distribution(name)
+    except md.PackageNotFoundError:
+        return {"installed": False}
+    out: dict[str, Any] = {"installed": True, "version": dist.version, "record_sha256": None, "direct_url": None, "wheel_sha256": None}
+    rec = dist.read_text("RECORD")
+    if rec:
+        out["record_sha256"] = hashlib.sha256(rec.encode()).hexdigest()
+    du = dist.read_text("direct_url.json")
+    if du:
+        try:
+            d = json.loads(du)
+        except ValueError:
+            d = {}
+        url = d.get("url")
+        out["direct_url"] = url
+        h = (d.get("archive_info") or {}).get("hash")
+        if isinstance(h, str) and h.startswith("sha256="):
+            out["wheel_sha256"] = h.split("=", 1)[1]
+        if out["wheel_sha256"] is None and isinstance(url, str) and url.startswith("file://"):
+            p = Path(url[len("file://"):])
+            if p.is_file():
+                hh = hashlib.sha256()
+                with p.open("rb") as f:
+                    for chunk in iter(lambda: f.read(1 << 22), b""):
+                        hh.update(chunk)
+                out["wheel_sha256"] = hh.hexdigest()
+    return out
+
+
+def software_info(wheel_sha256: str | None, vllm_commit: str | None) -> dict[str, Any]:
+    import importlib.metadata as md
 
     import torch
     import vllm
@@ -274,7 +312,7 @@ def software_info(wheel_sha256: str | None, vllm_commit: str | None) -> dict[str
             "xformers": ver("xformers"),
             "transformers": ver("transformers"),
         },
-        # W1cF F7: installation identities the verifier re-measures on its side (verify_bindings.dist_identity):
+        # W1cF F7: installation identities (dist_identity):
         # version, sha256 of the dist's RECORD (every installed file with its hash), pip's direct_url and, when
         # the installed wheel file is still present, its sha256 (the caller-supplied wheel_sha256 above is a claim).
         "dists": {name: dist_identity(name) for name in ("vllm", "torch", "triton")},

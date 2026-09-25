@@ -36,6 +36,7 @@ import sys
 import time
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
+from importlib import resources
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -54,8 +55,7 @@ from verity_vllm.observe.fold import FoldResult, fold, summarize
 from verity_vllm.observe.log import read_log
 from verity_vllm.observe.resolver import Profile
 
-REPO = Path(__file__).resolve().parents[2]
-DEFAULT_COS_SIN = REPO / "fixtures" / "B0-divergence-20260907T1604Z" / "layers.0.self_attn.rotary_emb" / "cos_sin_cache.npy"
+DEFAULT_COS_SIN = Path(str(resources.files(__package__) / "tables" / "B0-divergence-20260907T1604Z" / "cos_sin_cache.npy"))
 HF_GLOB = str(Path.home() / ".cache" / "huggingface" / "hub" / "models--HuggingFaceTB--SmolLM2-135M" / "snapshots" / "*" / "model.safetensors")
 
 
@@ -872,7 +872,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--log", required=True)
     ap.add_argument("--snapshots", default=None, help="directory with snapshots.json, values/, tokens.json")
     ap.add_argument("--profile", required=True)
-    ap.add_argument("--record", default=None, help="accepted record dir with adapter/*/ru/*/boundary.json (default: none, the record comparison is skipped)")
+    ap.add_argument("--record", default=None, help="accepted record dir with adapter/*/ru/*/boundary.json (default: none, no record comparison)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--strict", action="store_true")
     ap.add_argument("--no-program", action="store_true", help="skip Program() (comparison 3 is then skipped)")

@@ -48,7 +48,7 @@ def profile_module_for_case(case: str, world: int = 1) -> str:
     hit = dense_generic.find_hf_config(case)
     if hit is None:
         raise KeyError(f"no HF config.json is available for role {case!r} (profiles/hf_configs/{case}.config.json, the manifest entry's local_path, "
-                       f"$HF_HOME snapshot, or data/hf_configs): a configuration-derived profile needs the checkpoint's configuration")
+                       f"or the $HF_HOME snapshot): a configuration-derived profile needs the checkpoint's configuration")
     why = generic.structural_refusal(json.loads(hit[0].read_text()))
     if why:
         raise KeyError(f"role {case!r}: the configuration-derived profile refuses it: {why}")

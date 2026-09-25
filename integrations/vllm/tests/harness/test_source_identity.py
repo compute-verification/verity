@@ -23,6 +23,7 @@ from pathlib import Path
 import pytest
 
 from research.telemetry import source_identity as gsid
+from verity_vllm import config as vconfig
 from verity_vllm.harness import source_identity as sid
 
 INTEGRATION = Path(__file__).resolve().parents[2]  # <repo>/integrations/vllm
@@ -222,7 +223,8 @@ def test_repo_root_resolution_prefers_export_json_then_git_then_markers(tmp_path
 
 def _shipped_tree(tmp_path: Path) -> Path:
     """<root>/src/<sha>/ as `research run --source` lays it out: the repo root markers, stub packages at Verity's locations, and the REAL
-    source_identity modules (generic + project) so the precheck under test runs from the shipped tree itself."""
+    source_identity modules (generic + project, with the verity_vllm.config it locates the tree through) so the precheck under test runs
+    from the shipped tree itself."""
     t = tmp_path / "src" / ("f" * 40)
     for rel in ("packages/verity/src/verity", "integrations/vllm/verity_vllm", "integrations/vllm/verity_vllm/harness", "integrations/vllm/tests/harness",
                 "tools/research/src/research/telemetry"):
@@ -232,6 +234,7 @@ def _shipped_tree(tmp_path: Path) -> Path:
     (t / "pyproject.toml").write_text("[project]\nname='verity-shipped'\n")
     shutil.copy(gsid.__file__, t / "tools" / "research" / "src" / "research" / "telemetry" / "source_identity.py")
     shutil.copy(sid.__file__, t / "integrations" / "vllm" / "verity_vllm" / "harness" / "source_identity.py")
+    shutil.copy(vconfig.__file__, t / "integrations" / "vllm" / "verity_vllm" / "config.py")
     assert not (t / ".git").exists() and not (t / "EXPORT.json").exists()
     return t
 
