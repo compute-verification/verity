@@ -144,6 +144,8 @@ def features(env: Mapping[str, Any], meta: Mapping[str, Any] | None = None) -> d
         text = " ".join((name, _s(fp.get("backend")), _s(_get(fp, "software", "backend", "impl"))))
         tool = _get(fp, "software", "toolchain") if isinstance(_get(fp, "software", "toolchain"), Mapping) else {}
         f["device"] = "gpu" if re.search(r"gpu|triton|torch|cuda", text) or any(k in tool for k in ("torch", "triton")) else "cpu"
+        # route (a): the A-GKR prime side with Flock's keyed-BLAKE3 rows and the sigma link in one live session (PROTOCOL 17.5-17.6)
+        f["route_a"] = "route (a)" in name or ("flock" in name and "link" in name)
     return f
 
 
@@ -303,7 +305,7 @@ VARIANTS: tuple[Variant, ...] = (
             "2^-128 (PCS term 2^-128.017; sumcheck 184/|F| = 2^-177.9; live verify-session 2^-128.43)",
             "No: not a Table 1 candidate (no column)", "red-team-ligerito-3; ligerito-relation-3; ligerito-zk"),
     Variant("A-GKR CPU (Rust)", "A-GKR", "software.backend.name 'verity-gkr…' without a GPU marker (rustc toolchain)",
-            lambda f: f["candidate"] == "A-GKR" and f["device"] == "cpu",
+            lambda f: f["candidate"] == "A-GKR" and f["device"] == "cpu" and not f.get("route_a"),
             "No (no ZK masking anywhere yet)", "No: committed without masking (only the output words are public endpoints)",
             "SHA-256 Merkle over the RS columns and SHA-256 Fiat–Shamir (backends/gkr/src/transcript.rs; random oracle; the "
             "interactive object is not implemented); LogUp fractional-sum GKR. Table 1 names the GPU prover's SHA-512 Merkle",
@@ -312,7 +314,7 @@ VARIANTS: tuple[Variant, ...] = (
             "backends/gkr/README.md; backends/gkr/src/transcript.rs; Table 1 (A-GKR)"),
     Variant("A-GKR GPU (torch/Triton)", "A-GKR", "software.backend.name 'verity-gkr…' with gpu / triton / torch / cuda in the name, "
             "fingerprint backend or toolchain",
-            lambda f: f["candidate"] == "A-GKR" and f["device"] == "gpu",
+            lambda f: f["candidate"] == "A-GKR" and f["device"] == "gpu" and not f.get("route_a"),
             "No (no ZK masking)", "No: committed without masking",
             "collision resistance of SHA-512 (Merkle, gpu/sha512_cuda.py; generic q^2/2^512 at q = 2^64) and SHA-256 Fiat–Shamir "
             "coins (offline re-checking; the interactive object is not implemented); LogUp over BabyBear^6; as Table 1",
@@ -322,6 +324,15 @@ VARIANTS: tuple[Variant, ...] = (
             "(backends/gkr/verifier, BabyBear^6, SHA-512 Merkle) and the in-process Python replay",
             "backends/gkr/gpu/README.md; backends/gkr/gpu/ligero.py; backends/gkr/gpu/sha512_cuda.py; backends/gkr/verifier; "
             "result envelopes' security (art:300a526a); Table 1 (A-GKR)"),
+    Variant("A-GKR route (a): prime + Flock rows + sigma link", "A-GKR",
+            "software.backend.name 'verity-gkr…' naming route (a), or naming both Flock and the sigma link (backends/gkr/tools/cell.py)",
+            lambda f: f["candidate"] == "A-GKR" and bool(f.get("route_a")),
+            "No (NON_ZK_PROOF)", "Yes: x, W committed as keyed-BLAKE3 rows (blake3-keyed/row/v2) proved in Flock; y public",
+            "SHA-256 (transcript, root_F, frame-v3 trees), keyed BLAKE3 (row leaves in Flock), SHA-512 (Merkle on the A-GKR Ligero side); "
+            "collision resistance is a Table 1 assumption (decision 57)",
+            "2^-130.19 (A-GKR's interactive terms; Flock flock-128-r2 2^-195.5; sigma link 2^-243.9 / 2^-246.4), live coins",
+            "Yes: A-GKR column (NON_ZK_PROOF), full committed relation over frame-v3/blake3-row",
+            "backends/gkr/PROTOCOL.md 17.5-17.6; red-team-flock third to fifth audits (GRANTED WITH CONDITIONS at NON_ZK_PROOF 2^-130.19)"),
     Variant("SP1 stock (relation-only / bare guest)", "SP1", "software.backend.name 'sp1…' without tc-dot",
             lambda f: f["candidate"] == "SP1" and not f["tcdot"] and not f.get("sec_raised") and not f.get("sp1_committed")
             and not f.get("sp1_committed_vllm"),

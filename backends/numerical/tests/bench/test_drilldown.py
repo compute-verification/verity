@@ -24,7 +24,7 @@ SEEDS = ("B-Ligero v1", "B-Ligero v3 (private selection)", "B-Ligero v3 fused hi
          "B-Ligero v3x4 (fold)", "B-Ligero v2 (public selection)", "B-Ligero v2x4 (public selection)", "B-Ligero Fiat–Shamir (HVZK)",
          "B-Ligero + Poseidon2 per row", "B-Ligero + Poseidon2 shared 64x64 tile", "B-Ligero + BLAKE3 in circuit",
          "B-Ligero + SHA-256 in circuit", "B-Ligero + vllm-v1 SHA-256 in circuit", "B-Ligero + Ajtai n=64", "B-Ligero + Ajtai n=128", "B-Ligero native external authentication",
-         "Ligerito", "A-GKR CPU (Rust)", "A-GKR GPU (torch/Triton)",
+         "Ligerito", "A-GKR CPU (Rust)", "A-GKR GPU (torch/Triton)", "A-GKR route (a): prime + Flock rows + sigma link",
          "SP1 stock (relation-only / bare guest)", "SP1 stock, FRI query count raised (otherwise unmodified)",
          "SP1 stock, committed (frame-v3 SHA-256 rows)", "SP1 stock, committed (vllm-v1 SHA-256 position leaves)", "SP1 precompile (TC_DOT chip)")
 FOLDED = "b-ligero chain, fp8-ada relation (backends/direct/ligero/fp8); folded: 4 instruction steps per column at FP8Params.from_model(ada_e4m3_m16n8k32x4)"
