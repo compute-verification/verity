@@ -533,10 +533,11 @@ if triton is not None:
     @triton.jit
     def scatter_terms_kernel(e_ptr, v_ptr, ptr_ptr, tj_ptr, tc_ptr, units, q_t, ncols, BLOCK: tl.constexpr, FK: tl.constexpr):
         """``v[u, idx] += Σ_{terms t of column idx} e[u, j_t] · c_t`` for a block of units ``u`` and one column ``idx``
-        (grid ``(units / BLOCK, ncols)``; CSR ``ptr_ptr[idx]..ptr_ptr[idx+1]`` -> ``tj_ptr`` query index, ``tc_ptr`` the
-        coefficient ``c R mod p`` as 6 words).  ``e`` is ``(units, q_t, 6)``, ``v`` ``(units, ncols, 6)`` int64."""
-        pb = tl.program_id(0)
-        idx = tl.program_id(1)
+        (grid ``(ncols, units / BLOCK)``, columns fastest so a unit block's ``e`` rows stay in L2 across its columns; CSR
+        ``ptr_ptr[idx]..ptr_ptr[idx+1]`` -> ``tj_ptr`` query index, ``tc_ptr`` the coefficient ``c R mod p`` as 6 words).
+        ``e`` is ``(units, q_t, 6)``, ``v`` ``(units, ncols, 6)`` int64."""
+        idx = tl.program_id(0)
+        pb = tl.program_id(1)
         lo = tl.load(ptr_ptr + idx)
         hi = tl.load(ptr_ptr + idx + 1)
         if hi > lo:
@@ -1003,7 +1004,7 @@ def scatter_terms(e: torch.Tensor, v: torch.Tensor, ptr: torch.Tensor, tj: torch
     if units == 0 or tj.numel() == 0:
         return
     BLOCK = 128
-    grid = ((units + BLOCK - 1) // BLOCK, ncols)
+    grid = (ncols, (units + BLOCK - 1) // BLOCK)
     scatter_terms_kernel[grid](e.view(-1), v.view(-1), ptr, tj, _mont(tc).view(-1), units, q_t, ncols, BLOCK=BLOCK, num_warps=4, FK=FIELD_KEY)
 
 
