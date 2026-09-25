@@ -372,16 +372,24 @@ fn hex_of(bytes: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
-    //! The row leaf and trees against the core's own vectors (PR #15's `frame_v3/vectors.json`, sha256 entries, copied to
-    //! `fixtures/sp1-committed/frame-v3-sha256-vectors.json`), the statement's bindings and roots against the Python
-    //! reference (`verity_sp1.committed`, `fixtures/sp1-committed/committed-vectors.json`), and the public values.
+    //! The row leaf and trees against the core's own vectors (`verity.commitments.frame_v3/vectors.json`, its sha256
+    //! entries), the statement's bindings and roots against the Python reference (`verity_sp1.committed`,
+    //! `fixtures/sp1-committed/committed-vectors.json`), and the public values.
 
     use super::*;
     use serde_json::Value;
 
-    fn fixture(name: &str) -> Value {
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../fixtures/sp1-committed/").to_string() + name;
+    fn read_json(relative: &str) -> Value {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../").to_string() + relative;
         serde_json::from_str(&std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path}: {e}"))).unwrap()
+    }
+
+    fn fixture(name: &str) -> Value {
+        read_json(&format!("fixtures/sp1-committed/{name}"))
+    }
+
+    fn sha256_entries(v: &Value, key: &str) -> Vec<Value> {
+        v[key].as_array().unwrap().iter().filter(|e| e["hash"] == "sha256").cloned().collect()
     }
 
     fn unhex(s: &str) -> Vec<u8> {
@@ -394,17 +402,19 @@ mod tests {
 
     #[test]
     fn row_leaves_match_the_core_vectors() {
-        let v = fixture("frame-v3-sha256-vectors.json");
-        let rows = v["row_leaves"].as_array().unwrap();
+        let v = read_json("packages/verity/src/verity/commitments/frame_v3/vectors.json");
+        let rows = sha256_entries(&v, "row_leaves");
         assert!(rows.len() >= 12);
-        for r in rows {
+        for r in &rows {
             let (role, bits, n) = (r["role"].as_u64().unwrap() as u8, r["word_bits"].as_u64().unwrap() as u8, r["n_words"].as_u64().unwrap() as u32);
             assert_eq!(r["schema"], ROW_SCHEMA);
             assert_eq!(row_prefix(role, bits, n).to_vec(), unhex(r["prefix"].as_str().unwrap()));
             let bytes = unhex(r["row_bytes"].as_str().unwrap());
             assert_eq!(row_digest(role, bits, &bytes).to_vec(), unhex(r["digest"].as_str().unwrap()), "{r}");
         }
-        for t in v["row_trees"].as_array().unwrap() {
+        let trees = sha256_entries(&v, "row_trees");
+        assert!(trees.len() >= 3);
+        for t in &trees {
             let d = &t["domain"];
             let range = d["range"].as_array().unwrap();
             let count = range[1].as_u64().unwrap();
