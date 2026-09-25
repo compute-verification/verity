@@ -267,7 +267,7 @@ def result(a, p: dict, sweep: dict) -> dict:
         rtt_method="net.rtt_ms = (prover coin wait - verifier handling time) / round trips, per timed session, median",
         verifier={"placement": "loopback" if not a.verifier else a.verifier,
                                                                          "process": "flock-pure serve (separate process)"})
-    ms = [contract.measurement("t.total", t_prove), contract.measurement("vu.count", n),
+    ms = [contract.measurement("t.total", t_prove), contract.measurement("t.total_live", t_prove), contract.measurement("vu.count", n),
           contract.measurement("vu.seconds_per_vu", t_prove / n), contract.measurement("vu.per_second", n / t_prove),
           *contract.rate_measurements(t_prove, n, instances.K, profile),
           {"name": "commit.seconds", "value": t_commit, "unit": "s"},
@@ -301,14 +301,17 @@ def result(a, p: dict, sweep: dict) -> dict:
            "validation": {"status": "passed" if p["ok"] else "failed", "checker": "flock-pure serve (live verifier, R1-R8 replay)",
                           "detail": f"{sum(1 for r in p['live'] if r.get('accepted'))}/{len(p['live'])} sessions accepted",
                           "evidence": [f"{p['dir']}/sessions/index.jsonl"]},
-           "measurements": ms, "measurement_files": [f"{p['dir']}/prove.txt"], "artifacts": [],
+           "measurements": ms, "measurement_files": [], "artifacts": [],
            "sweep": sweep, "contention": p["contention"],
            "interaction": {"rtt_method": "net.rtt_ms = (the prover's coin wait - the verifier's round-handling time) / round trips, "
                                          "median over the timed sessions; verifier " + ("on loopback" if not a.verifier else a.verifier),
                            "hello_rtt_ms": statistics.median(x for r in timed for x in (r["rtt_ms"] if isinstance(r.get("rtt_ms"), list) else [r.get("rtt_ms")]) if x is not None)
                            if any(r.get("rtt_ms") is not None for r in timed) else None,
                            "hello_rtt_method": "the session's Hello request/response time (flock-pure-gpu rtt_ms), median",
-                           "verifier_operator": a.operator or None},
+                           "verifier_operator": a.operator or None,
+                           "t_total_includes_wait": True,
+                           "t_total_note": "live coins: t.total and the buckets include the prover's coin waits; prover compute alone "
+                                           "is live.prover_compute_seconds = t.total - net.wait_seconds"},
            "protocol": {"warm": True, "runs": len(timed), "statistic": "median", "contended": p["contention"].get("contended"),
                         "warm_rule": "one full untimed session (prove --warm 1) before the timed sessions, same process"},
            "runs": [{"e2e_s": r["e2e_s"], "commit_s": r["commit_s"], "prove_s": r["prove_s"], "wait_s": r["wait_s"],
@@ -405,7 +408,11 @@ def main(argv=None) -> int:
         doc = result(a, q, sweep)
         (out / q["dir"] / "result.json").write_text(json.dumps(doc, indent=1, default=str))
         if q is best and os.environ.get("RESEARCH_RUN_DIR"):
-            Path(os.environ["RESEARCH_RUN_DIR"], "result.json").write_text(json.dumps(doc, indent=1, default=str))
+            rd = Path(os.environ["RESEARCH_RUN_DIR"]).resolve()
+            pd = (out / q["dir"]).resolve()
+            if pd.is_relative_to(rd):
+                doc["artifacts"] = [str(pd.relative_to(rd))]
+            Path(rd, "result.json").write_text(json.dumps(doc, indent=1, default=str))
     summary = {"id": sid, "relation": a.relation, "rule": RULE, "stopped": stop, "plateau_total_vus": best["total"],
                "points": [{k: x.get(k) for k in ("total", "ok", "vu_per_second", "wall_s", "peak_rss", "dir", "err")} for x in points]}
     (out / "sweep.json").write_text(json.dumps(summary, indent=1))
