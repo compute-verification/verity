@@ -153,10 +153,12 @@ class Claim:
 # ---- device kernels ---------------------------------------------------------------------------------------------
 
 _K = None
+triton = tl = None
 
 
 def _kernels():
-    global _K
+    # the kernels resolve `tl` through the module globals
+    global _K, triton, tl
     if _K is not None:
         return _K
     import triton
