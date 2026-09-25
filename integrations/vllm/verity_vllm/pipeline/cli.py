@@ -7,7 +7,7 @@
 
 `build` / `build-global` take the same inputs as v1's (a derive_step output dir holds `instances.json.gz` + `result.json` [+ `artifact.json`];
 a row dir holds one such dir per request shape, `*LP<prompt_len>_T<max_tokens-1>`), and write a manifest of v1's schema whose identities
-are the bridge's (`v1_bridge.request_manifest` / `compose_global`; a TP row's rank manifests merged by `merge_ranks`).  `--no-return-slots`
+are the bridge's (`required.request_manifest` / `compose_global`; a TP row's rank manifests merged by `merge_ranks`).  `--no-return-slots`
 builds the pure-dataflow population (no RETURN-SLOT policy) for the record.  `compare` classifies every identity difference (`compare.summarize`).
 """
 
@@ -24,7 +24,7 @@ from typing import Any
 from verity_vllm.query.compare import compare, summarize
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.query.program_view import from_instances
-from verity_vllm.query.v1_bridge import compose_global, merge_ranks, request_manifest
+from verity_vllm.query.required import compose_global, merge_ranks, request_manifest
 
 __all__ = ["build", "build_global", "build_global_ranks", "main"]
 

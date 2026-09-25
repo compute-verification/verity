@@ -20,7 +20,7 @@ def v2_manifest(inst: dict, request_ids=("r0",), *, digest: str = "t" * 64) -> d
     the same Program, arriving together at engine step 0) their global composition, as `query.cli build-global` writes it."""
     from verity_vllm.correspondence.reader_for_query import Correspondence
     from verity_vllm.query.program_view import from_instances
-    from verity_vllm.query.v1_bridge import compose_global, request_manifest
+    from verity_vllm.query.required import compose_global, request_manifest
     res = {"program": {"digest": digest, "function": "Derived[vLLMRequest[Test]]"}, "wrapper": "request", "LP": LP, "T": T,
            "target": {"declared": {"compute_capability": [8, 9]}}}
     P = from_instances(inst)

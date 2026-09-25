@@ -105,7 +105,7 @@ def program_digest(d: Path, row: str = "") -> dict[str, Any]:
         ranks = s.get("ranks") if isinstance(s.get("ranks"), dict) else {}
         wds = [((ranks.get(f"rank{r}") or {}).get("workload") or {}).get("workload_digest") for r in range(world)]
         step = (ranks.get("rank0") or {}).get("build_step") or {}
-        # the TP manifest's header digest (`tp-ranks-fold`, v1_bridge.merge_ranks): the fold of the rank digests its identities are keyed by
+        # the TP manifest's header digest (`tp-ranks-fold`, required.merge_ranks): the fold of the rank digests its identities are keyed by
         of_record = tp_ranks_fold_digest(wds) if all(wds) else None
         return {"program_digest": of_record, "request_digest": None, "step_digest": step.get("program_digest"), "workload_digest": None,
                 "rank_workload_digests": wds, "tp": world}

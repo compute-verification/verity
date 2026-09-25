@@ -109,7 +109,7 @@ def test_registry_derived_family_selectors():
     assert TP2.cross_rank_families(2) == {"AllReduce2_v1", "AllGather2_v1", "EmbeddingShard_v1"}
     assert TP2.cross_rank_families(3) == {"AllReduce_v2", "AllGather_v1", "EmbeddingShard_v1"}
     from verity_vllm.tp import xrank_collectives as XC
-    from verity_vllm.query import v1_bridge
+    from verity_vllm.query import required as v1_bridge
     assert v1_bridge.collective_kind("AllGather_v1{WORLD=3,N=8}") == "all_gather"
     assert XC.collective_family("all_reduce", 2) == "AllReduce2_v1" and XC.collective_family("all_reduce", 3) == "AllReduce_v2"
     assert XC.collective_family("all_gather", 4) == "AllGather_v1"

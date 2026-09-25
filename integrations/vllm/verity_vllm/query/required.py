@@ -52,8 +52,8 @@ from verity_vllm.query.manifest import format as fmt
 from verity_vllm.program.sampling_event import SAMPLING_EVENT_FAMILIES
 
 from verity_vllm.correspondence.reader_for_query import CallName, Correspondence
-from .module_body import Q_MODULE_BODY_ID, Q_MODULE_BODY_TEXT, Q_module_body_v1, literal_calls, module_body_boundary
-from .program_view import CallView, InputView, Port, ProgramView, param_reads, reads_any_of
+from verity_vllm.query.module_body import Q_MODULE_BODY_ID, Q_MODULE_BODY_TEXT, Q_module_body_v1, literal_calls, module_body_boundary
+from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView, param_reads, reads_any_of
 
 __all__ = ["Residual", "NAMED_RESIDUALS", "SAMPLING_EVENTS", "STOCHASTIC_SAMPLING_EVENTS", "FLASH_ATTENTION_LAUNCHES", "collective_kind",
            "member_name", "shared_instances", "collective_sites", "request_manifest", "compose_global", "merge_ranks", "BridgeResult", "under",

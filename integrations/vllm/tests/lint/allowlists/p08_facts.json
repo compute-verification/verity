@@ -267,7 +267,7 @@
     {"file": "verity_vllm/program/registry/targets.py", "kind": "sm-arch", "symbol": "<module>", "detail": "sm_80"},
     {"file": "verity_vllm/program/registry/targets.py", "kind": "sm-arch", "symbol": "<module>", "detail": "sm_89"},
     {"file": "verity_vllm/program/registry/targets.py", "kind": "sm-arch", "symbol": "<module>", "detail": "sm_90"},
-    {"file": "verity_vllm/query/v1_bridge.py", "kind": "layer-class", "symbol": "<module>", "detail": "RotaryEmbedding"},
+    {"file": "verity_vllm/query/required.py", "kind": "layer-class", "symbol": "<module>", "detail": "RotaryEmbedding"},
     {"file": "verity_vllm/target_family.py", "kind": "gpu", "symbol": "<module>", "detail": "a10"},
     {"file": "verity_vllm/target_family.py", "kind": "gpu", "symbol": "<module>", "detail": "a100"},
     {"file": "verity_vllm/target_family.py", "kind": "gpu", "symbol": "<module>", "detail": "a10g"},

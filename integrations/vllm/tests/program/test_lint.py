@@ -1,4 +1,4 @@
-"""The new query path decides nothing by a name pattern: no `.startswith(` anywhere under `verity_vllm/query/` (v1's family / module
+"""The new query path decides nothing by a name pattern: no `.startswith(` anywhere under `verity_vllm/query/` or in its CLI (v1's family / module
 tables were all `family.startswith(...)` / `leaf in _LINEAR_LEAVES` checks), and no reference model family is named."""
 
 from __future__ import annotations
@@ -8,14 +8,15 @@ from pathlib import Path
 
 import pytest
 
-QUERY_DIR = Path(__file__).resolve().parents[2] / "verity_vllm" / "query"
+PKG = Path(__file__).resolve().parents[2] / "verity_vllm"
+QUERY_DIR = PKG / "query"
 MODEL_NAMES = ("llama", "qwen", "gemma", "olmoe", "mixtral", "smollm", "mistral", "deepseek")
-FILES = sorted(QUERY_DIR.glob("*.py"))
+FILES = sorted([*QUERY_DIR.glob("*.py"), PKG / "pipeline" / "cli.py"])
 
 
 def test_query_package_exists():
     assert FILES, f"no modules under {QUERY_DIR}"
-    assert {f.name for f in FILES} >= {"program_view.py", "module_body.py", "v1_bridge.py", "compare.py", "cli.py"}
+    assert {f.name for f in FILES} >= {"program_view.py", "module_body.py", "required.py", "compare.py", "cli.py"}
 
 
 @pytest.mark.parametrize("path", FILES, ids=lambda p: p.name)

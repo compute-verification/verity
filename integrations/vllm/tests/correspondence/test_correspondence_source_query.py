@@ -11,7 +11,7 @@ from verity_vllm.correspondence import runtime as RC
 from verity_vllm.correspondence.reader_for_query import CallName, Correspondence, call_name_of, parse_call_name
 from verity_vllm.query.module_body import Q_module_body_v1
 from verity_vllm.query.program_view import InputView, Port, ProgramView
-from verity_vllm.query.v1_bridge import merge_ranks, request_manifest
+from verity_vllm.query.required import merge_ranks, request_manifest
 
 from tests.query.test_module_body import W, _call, program
 

@@ -8,7 +8,7 @@ where `tau` reads the COMMITTED bytes of the Values the Program's dataflow names
 registered relation of the Call's Definition evaluated by the registry's own reference (`verity_vllm.program.registry.derived_rows`,
 the same numpy models the Match stage's fold checks use).  Nothing here reads the collector's emissions to decide WHAT is
 required or WHERE an input lives: the population is the Program (its Calls, the instances.json.gz rows), the addresses are the required-value
-manifest's Value rule -- the v2 query's population the manifest of record was built from (`v1_bridge.Population.members_of`) -- and the
+manifest's Value rule -- the v2 query's population the manifest of record was built from (`required.Population.members_of`) -- and the
 binding map fixed at finalize
 (occurrence resolution: a Call's Value -> its occurrence key -> committed bytes).
 
@@ -288,7 +288,7 @@ V2_QUERY = "v2-query"
 class ProgramIndex:
     """The Program's rows with their manifest addresses: (op_path, member, request-local step, request-local row) per output slice.
 
-    A row's members come from the v2 query's population of the SAME Program (`verity_vllm.query.v1_bridge.Population.members_of`: the
+    A row's members come from the v2 query's population of the SAME Program (`verity_vllm.query.required.Population.members_of`: the
     required Values a Call produces under `Q_module_body_v1` + the policy, the rows the manifest counts), read with the correspondence of
     its Build dir (`program_dir`; without one, the rows' recorded names)."""
 
@@ -306,7 +306,7 @@ class ProgramIndex:
         self._v2_fault: dict[int, str] = {}
         from verity_vllm.correspondence.reader_for_query import Correspondence
         from verity_vllm.query.program_view import from_instances
-        from verity_vllm.query.v1_bridge import population
+        from verity_vllm.query.required import population
         P = from_instances(inst)
         corr = Correspondence.of(P, program_dir, implementation_paths=attention_paths or ())
         pop = population(P, corr, tp=self.tp)
@@ -353,7 +353,7 @@ class ProgramIndex:
             i = int(r["i"])
             s = self.step_of(i)
             # the request-local ROW of a Call = its ordinal among the Calls producing the same (module, member) in its step, Program order --
-            # exactly the rows `v1_bridge.request_manifest` counts per identity; a Call whose members would sit at different rows is not one
+            # exactly the rows `required.request_manifest` counts per identity; a Call whose members would sit at different rows is not one
             # addressable row (named, never read at a guessed row)
             mem2 = self._v2.get(i)
             if mem2:

@@ -15,7 +15,7 @@ from verity_vllm.correspondence.reader_for_query import Correspondence, implemen
 from verity_vllm.query.module_body import Q_module_body_v1
 from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView
 from verity_vllm.query.manifest import format as fmt
-from verity_vllm.query.v1_bridge import NAMED_RESIDUALS, member_name, merge_ranks, request_manifest, shared_instances, under
+from verity_vllm.query.required import NAMED_RESIDUALS, member_name, merge_ranks, request_manifest, shared_instances, under
 
 W = "model.model"                                  # the export wrapper holds the served model under `model`
 EMBED_W, QKV_W = f"{W}.embed.weight", f"{W}.layers.0.self_attn.qkv_proj.weight"

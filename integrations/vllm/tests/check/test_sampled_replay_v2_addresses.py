@@ -1,4 +1,4 @@
-"""The replay's address rule: `ProgramIndex` names a row's members from the v2 query's population (`v1_bridge.Population.members_of`),
+"""The replay's address rule: `ProgramIndex` names a row's members from the v2 query's population (`required.Population.members_of`),
 the rows `request_manifest` counts.  An interior row whose output crosses a module boundary (F-r19-int-20) is addressed and the manifest's
 identity has its rows; every identity with Program rows is produced by the addressed rows, on a request Program and on a TP rank Program."""
 from __future__ import annotations
@@ -9,7 +9,7 @@ from verity_vllm.check import sampled_replay as SR
 from tests.check.test_sampled_replay import _program
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.query.program_view import from_instances
-from verity_vllm.query.v1_bridge import request_manifest
+from verity_vllm.query.required import request_manifest
 
 IMPL = ("model.layers.0.mlp.down_proj",)          # an observed implementation path: the Program's wrapper prefix is `model.`
 EPS = 'EPS={"f64":"0x1.4f8b588e368f1p-17"}'
