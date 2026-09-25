@@ -64,8 +64,8 @@ def construction_version(rules, root: str | None = None) -> dict:
     """Identity of the CONSTRUCTION (not of the target, not of the host): schema, the binding rules (id + version), and the sha256 of
     the builder's source files, read from the integration root `root` (default: the one `verity_vllm` is imported from). Two hosts
     running the same tree get the same value; an edited rule/shim gets another. A listed source that is not there raises."""
-    import verity_vllm
-    root = root or os.path.dirname(os.path.dirname(os.path.abspath(verity_vllm.__file__)))
+    from verity_vllm.config import ROOT
+    root = root or str(ROOT)
     h = hashlib.sha256()
     files = []
     for rel in _CONSTRUCTION_SOURCES:
