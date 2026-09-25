@@ -40,7 +40,7 @@ from typing import Any
 
 import torch
 
-from verity_vllm.engine import hooks
+from verity_vllm.engine import env as engine_env, hooks
 
 OP_NS = "verity"
 OP_NAME = "collect_c"
@@ -225,7 +225,7 @@ class CompiledGraphSource:
         if self.prepared:
             return
         _SRC = self
-        os.environ["VLLM_DISABLE_COMPILE_CACHE"] = "1"
+        engine_env.disable_compile_cache()
         _register_op()
         me = self
 

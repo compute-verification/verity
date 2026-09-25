@@ -25,16 +25,9 @@ import time
 from pathlib import Path
 from typing import Any
 
-DECLARED_ENV = {
-    "VLLM_BATCH_INVARIANT": "1",
-    "VLLM_USE_V2_MODEL_RUNNER": "1",
-    "VLLM_ENABLE_V1_MULTIPROCESSING": "0",
-    # The FlashInfer top-k/top-p sampler JIT-compiles at warm-up (needs ninja + nvcc matching the
-    # cu130 torch; the pod has neither). Inert for our workloads: the V2 sampler never uses it for
-    # greedy or explicitly seeded requests (sampler.py: any_greedy / any_explicit_seed), so the
-    # torch path (apply_top_k_top_p + gumbel_sample) that W3 re-derives is the one that runs.
-    "VLLM_USE_FLASHINFER_SAMPLER": "0",
-}
+from verity_vllm.engine import env
+
+DECLARED_ENV = env.ENGINE
 
 CASES = {
     "B0": {"repo": "HuggingFaceTB/SmolLM2-135M"},
@@ -81,13 +74,7 @@ def max_model_len_for(cp: dict[str, Any]) -> int:
 def apply_env() -> dict[str, str]:
     from verity_vllm.config import checkpoints_hf_home
 
-    for k, v in DECLARED_ENV.items():
-        os.environ.setdefault(k, v)
-    hf_home = checkpoints_hf_home()
-    if hf_home:
-        os.environ.setdefault("HF_HOME", hf_home)
-    os.environ.setdefault("HF_HUB_OFFLINE", "1")
-    return {k: os.environ[k] for k in DECLARED_ENV}
+    return env.apply_engine(checkpoints_hf_home())
 
 
 def load_checkpoints(path: str | Path) -> dict[str, dict[str, Any]]:
