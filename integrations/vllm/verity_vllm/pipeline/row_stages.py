@@ -149,7 +149,7 @@ class SingleRow(Row):
 
     def shape(self) -> None:
         s = R.row_shape(self.path(self.wl), self.path("manifests/checkpoints.json"), self.env.hf_home)
-        self.B, self.I, self.O, self.snap_def, self.ck = s["B"], s["I"], s["O"], s["snap"], s["ck"] or ""
+        self.B, self.I, self.O, self.snap_def, self.ck = s["B"], s["I"], s["O"], s["snap"], str(s["ck"])
         self.LP = self.cb.lp if self.cb.lp is not None else s["LP"]
         self.T = self.cb.t if self.cb.t is not None else s["T"]
         self.MML = self.I + self.O
