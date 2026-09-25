@@ -56,7 +56,7 @@ import numpy as np
 from ..compile import Expr, LigeroCtx, Linear, P, Quadratic
 
 __all__ = ["BLOCK_LEN", "CARRY_ELEMS", "CHUNK_LEN", "DIGEST_ELEMS", "IV", "KEYS", "KEY_LEN", "K_VU", "N_CHUNKS_MAX", "Blake3Leaf",
-           "census", "chunk_cvs_np", "compress_np", "digest_elems_for", "key_for", "leaf_bytes", "n_chunks", "root_from_cvs",
+           "census", "chunk_cvs_np", "compress_np", "digest_elems_for", "key_for", "leaf_bytes", "leaf_bytes_many", "n_chunks", "root_from_cvs",
            "row_bytes"]
 
 NAME = "blake3"
@@ -301,6 +301,28 @@ def leaf_bytes(digest_row) -> bytes:
     return root_from_cvs(cvs, role)[0].tobytes()
 
 
+def leaf_bytes_many(digests) -> list[bytes]:
+    """:func:`leaf_bytes` of every row of ``digests`` (R, DIGEST_ELEMS), the parent folds in lockstep when every row is a
+    well-formed frame under one header (what the committer's :meth:`Blake3Leaf.native` returns); otherwise row by row."""
+    e = np.asarray(digests, dtype=np.int64)
+    if e.ndim != 2 or e.shape[1] != DIGEST_ELEMS:
+        raise ValueError(f"a BLAKE3 leaf digest is {DIGEST_ELEMS} elements")
+    if e.shape[0] == 0:
+        return []
+    try:
+        if (e[:, 0] != e[0, 0]).any():
+            raise ValueError("mixed headers")
+        nch, role = parse_header(int(e[0, 0]))
+    except ValueError:
+        return [leaf_bytes(r) for r in e]
+    body, tail = e[:, 1:1 + 16 * nch], e[:, 1 + 16 * nch:]
+    if ((body < 0) | (body >= 1 << 16)).any() or tail.any():
+        return [leaf_bytes(r) for r in e]
+    lh = body.reshape(e.shape[0], nch, 8, 2)
+    roots = root_from_cvs((lh[..., 0] | (lh[..., 1] << 16)).astype(np.uint32), role)
+    return [bytes(r) for r in roots]
+
+
 # ---------------------------------------------------------------------------------------------------------------------
 # The gadget
 # ---------------------------------------------------------------------------------------------------------------------
@@ -495,6 +517,9 @@ class Blake3Leaf:
 
     def leaf_bytes(self, digest_row) -> bytes:
         return leaf_bytes(digest_row)
+
+    def leaf_bytes_many(self, digests) -> list[bytes]:
+        return leaf_bytes_many(digests)
 
     def reference_digest(self, rows: np.ndarray, *, word_bits: int, role: int) -> list[bytes]:
         """``blake3.blake3(row_bytes, key=key_for(role)).digest()`` per row -- the independent reference the conformance

@@ -587,8 +587,9 @@ class HashedRelationRunner(RelationChainRunner):
 
     def _committed_digests(self, rows_d: dict | None = None):
         """Host copies of the committed rows' digests (public: the leaves of the x / W trees) for the statement tables
-        of the pipelined prover, and device copies of the committed rows (the hash side gathers its witness from them)."""
-        self._marshal_cache = {}
+        of the pipelined prover, and device copies of the committed rows (the hash side gathers its witness from them).
+        Only the hashed statements depend on the commitment: the base marshal of the instance words stays cached."""
+        self._marshal_cache = {k: v for k, v in self._marshal_cache.items() if k[0] != "hashed"}
         self.dg_host = {nm: self.sponges[nm][1].cpu().numpy().astype(np.int64) for nm in self.sponges}
         self.rows_d = rows_d if rows_d is not None else {nm: _rows_to_device(self.rows[nm], self.device) for nm in self.rows}
 
@@ -2062,6 +2063,19 @@ def bench_vu_rel(args, rel: Relation) -> int:
     inst_digest = tile_digest(rel, *tile) if tile is not None else instances_digest(rel, total_vus, root=root)
     print(f"{total_vus} {'frozen ' + rel.frozen_tier if rel.frozen_tier else 'synthetic'} VUs (recorded accumulators) in {time.perf_counter() - t0:.1f}s")
     commit_seconds = 0.0
+    # --commit-per-rep: every rep (the warm-up included) commits its batch from scratch (no tree cache), timed apart from
+    # proving: the statement's commitments (trees + row digests) are the commitment bucket; the prover's precomputed row
+    # chains go to the witness bucket and rebuilding the hashed statements to serialization, both inside t.total
+    commit_per_rep = bool(getattr(args, "commit_per_rep", False))
+    if commit_per_rep and not (hashed and not shared and pipeline_depth > 1 and args.device.startswith("cuda")):
+        raise SystemExit("--commit-per-rep: --auth included-hash (unshared) with --pipeline >= 2 on CUDA only")
+    if commit_per_rep and int(getattr(args, "commit_reps", 0) or 0):
+        raise SystemExit("--commit-per-rep and --commit-reps are two timings of the commitment bucket: pick one")
+
+    def commit_batch(cache):
+        R.commit_vus(data, dataset=rel.instances_dataset, tier=rel.instances_tier, manifest_sha256=inst_digest,
+                     cache=cache, tile=tile, x_rows=x_rows, w_cols=w_cols)
+
     commit_runs: list[tuple[float, dict]] = []
     commit_ev = None
     if hashed:
@@ -2070,8 +2084,7 @@ def bench_vu_rel(args, rel: Relation) -> int:
         # (the per-batch cost of a committer that has run before), every call's evidence must be identical
         for ci in range(1 + max(0, int(getattr(args, "commit_reps", 0) or 0))):
             t0 = time.perf_counter()
-            R.commit_vus(data, dataset=rel.instances_dataset, tier=rel.instances_tier, manifest_sha256=inst_digest,
-                         cache=(getattr(args, "auth_cache", None) if ci == 0 else None), tile=tile, x_rows=x_rows, w_cols=w_cols)
+            commit_batch(None if commit_per_rep or ci > 0 else getattr(args, "auth_cache", None))
             commit_runs.append((time.perf_counter() - t0, dict(getattr(R, "commit_timings", {}))))
             ev = R.commit_evidence()
             assert commit_ev is None or ev["sha256"] == commit_ev["sha256"], "commitment differs between two builds of one set"
@@ -2133,6 +2146,21 @@ def bench_vu_rel(args, rel: Relation) -> int:
     for rep in range(args.reps + 1):
         agg: dict[str, float] = {}
         vsum = 0.0
+        if commit_per_rep:
+            R.sponges = R.rows_d = None
+            if rep > 0:
+                torch.cuda.synchronize()
+            t_c = time.perf_counter()
+            commit_batch(None)
+            agg["commitment"] = time.perf_counter() - t_c - R.sponge_seconds
+            assert {n: t.ref.to_json() for n, t in R.trees.items()} == {
+                n: {k: v for k, v in e.items() if k != "levels_sha256"} for n, e in commit_ev["trees"].items()}, \
+                f"rep {rep}: the recommitted trees differ from the first build's"
+            agg["hints_host"] = agg["row_chain"] = R.sponge_seconds
+            t_s = time.perf_counter()
+            for lo, hi in subs:
+                R.marshal_hashed(data[lo:hi], range(lo, hi), l)
+            agg["statement"] = agg["total"] = time.perf_counter() - t_s
         t_pass = time.perf_counter()
         # Prove every sub-batch of the rep first, then verify (and dump) them: the verifier's host work must not sit
         # between two timed prover sub-batches (vu.bench_vu since f28c13d; the same discipline here).
@@ -2238,11 +2266,15 @@ def bench_vu_rel(args, rel: Relation) -> int:
         wall = time.perf_counter() - t_pass
         if rep == 0:
             print("warm-up (one sub-batch, with the prover's self-check):", {k_: round(v_, 3) for k_, v_ in agg.items()})
+            commit_cold = agg.get("commitment")
             continue
         keys = agg.keys()
         runs.append((agg, vsum))
         print(f"rep {rep}: prover {agg['total']:.3f}s (+hints {agg['hints_host']:.3f}s) over {n_proofs} proofs; "
-              f"verifier {vsum:.3f}s; pass wall {wall:.3f}s ({(agg['total'] + agg['hints_host']) / total_vus * 1e3:.3f} ms/VU)")
+              f"verifier {vsum:.3f}s; pass wall {wall:.3f}s ({(agg['total'] + agg['hints_host']) / total_vus * 1e3:.3f} ms/VU)"
+              + (f"; commitment {agg['commitment']:.3f}s (+ row chains {agg['row_chain']:.3f}s in hints, statements "
+                 f"{agg['statement']:.3f}s in total); end to end {agg['commitment'] + agg['total'] + agg['hints_host']:.3f}s"
+                 if commit_per_rep else ""))
     dumps = None
     if dump_dir is not None:
         (dump_dir / "manifest.json").write_text(json.dumps(dump_manifest, indent=1, default=str))
@@ -2379,16 +2411,36 @@ def bench_vu_rel(args, rel: Relation) -> int:
                  contract.measurement("relation.hash.auth_openings_seconds", med.get("auth_openings", 0.0), "s"),
                  contract.measurement("relation.hash.committed_x_rows", R.trees["a"].count, "count"),
                  contract.measurement("relation.hash.committed_w_cols", R.trees["b"].count, "count")]
-        # the commitment-building bucket (kb/TABLES.md "Commitment time counts"): NOT a t.* bucket (outside t.total, which
-        # stays the prover's), reported on its own and end to end; the breakdown is the median call's
-        steady = commit_runs[1:] or commit_runs
-        c_med = sorted(steady, key=lambda r: r[0])[(len(steady) - 1) // 2]
-        meas += [contract.measurement("commit.seconds", c_med[0], "s"),
-                 contract.measurement("commit.cold_seconds", commit_runs[0][0], "s"),
-                 contract.measurement("commit.reps", len(steady), "count"),
-                 *(contract.measurement(f"commit.{k_}_seconds", v_, "s") for k_, v_ in c_med[1].items()),
-                 contract.measurement("e2e.seconds", c_med[0] + total, "s"),
-                 contract.measurement("e2e.cold_seconds", commit_runs[0][0] + total, "s")]
+        if not commit_per_rep:
+            # the commitment-building bucket (kb/TABLES.md "Commitment time counts"): NOT a t.* bucket (outside t.total, which
+            # stays the prover's), reported on its own and end to end; the breakdown is the median call's
+            steady = commit_runs[1:] or commit_runs
+            c_med = sorted(steady, key=lambda r: r[0])[(len(steady) - 1) // 2]
+            meas += [contract.measurement("commit.seconds", c_med[0], "s"),
+                     contract.measurement("commit.cold_seconds", commit_runs[0][0], "s"),
+                     contract.measurement("commit.reps", len(steady), "count"),
+                     *(contract.measurement(f"commit.{k_}_seconds", v_, "s") for k_, v_ in c_med[1].items()),
+                     contract.measurement("e2e.seconds", c_med[0] + total, "s"),
+                     contract.measurement("e2e.cold_seconds", commit_runs[0][0] + total, "s")]
+    if commit_per_rep:
+        c_med = statistics.median(r[0]["commitment"] for r in runs)
+        e2e = total + c_med
+        native = contract.native_reference(rel.target.name).flop_per_second
+        meas += [contract.measurement("commit.seconds", c_med, "s"),
+                 contract.measurement("commit.cold_seconds", commit_cold, "s"),
+                 contract.measurement("commit.reps", len(runs), "count"),
+                 contract.measurement("commit.row_chain_seconds", med["row_chain"], "s"),
+                 contract.measurement("commit.statement_seconds", med["statement"], "s"),
+                 contract.measurement("e2e.seconds", e2e, "s"),
+                 contract.measurement("e2e.vu_per_second", total_vus / e2e, "1/s"),
+                 contract.measurement("e2e.overhead_vs_native_peak", native * e2e / (2 * K_VU * total_vus), "ratio")]
+        fp["commitment"] = {
+            "per_rep": True, "scheme": "frame-v3", "leaf_schema": R.leaf.schema, "trees": ["x", "W", "y"],
+            "committer": "relchain.HashedRelationRunner.commit_vus (hashauth.load_or_build_trees, no cache)",
+            "timed": "--commit-per-rep: every rep commits its batch afresh before proving it; commit.seconds = the median over "
+                     "the timed reps of the x / W / y trees and their row digests (commit.cold_seconds = the warm-up rep's); the "
+                     "prover's row chains (commit.row_chain_seconds) are in t.witness and rebuilding the hashed statements "
+                     "(commit.statement_seconds) in t.serialization, both inside t.total; e2e.seconds = commit.seconds + t.total"}
     if shared:
         meas += [contract.measurement("relation.share.g_seconds", med.get("g_total", 0.0), "s"),
                  contract.measurement("relation.share.h_seconds", med.get("h_total", 0.0), "s"),
@@ -2419,8 +2471,12 @@ def bench_vu_rel(args, rel: Relation) -> int:
                 **({"commit": {"runs": [{"seconds": s_, **b_} for s_, b_ in commit_runs], "evidence": commit_ev,
                                "rule": "commit.seconds = median over calls 1..N of the full commitment built from scratch "
                                        "(--commit-reps N; call 0 = cold, relation.hash.commit_seconds); e2e.seconds = "
-                                       "commit.seconds + t.total"}} if hashed else {}),
-                "reps": [{"prover_total": r[0]["total"] + r[0]["hints_host"], "verifier": r[1]} for r in runs],
+                                       "commit.seconds + t.total"}} if hashed and not commit_per_rep else
+                   {"commit": {"evidence": commit_ev, "rule": "--commit-per-rep: every rep recommits the set; its tree "
+                                                              "references must equal this first build's"}} if commit_per_rep else {}),
+                "reps": [{"prover_total": r[0]["total"] + r[0]["hints_host"], "verifier": r[1],
+                          **({"commit": r[0]["commitment"], "e2e": r[0]["total"] + r[0]["hints_host"] + r[0]["commitment"]}
+                             if commit_per_rep else {})} for r in runs],
                 "phase_rep": {"index": med_rep, "rule": "t.total and the t.* buckets are this rep's (the median prover_total of "
                                                         "reps); verifier.seconds is the median over the reps"},
                 "verify_wall": "the live in-process Python verifier, median over the reps of the sum over the sub-batches (shares code "
