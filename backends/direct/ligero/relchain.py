@@ -2033,8 +2033,10 @@ def bench_vu_rel(args, rel: Relation) -> int:
             cfgs_seen.append(R.cfg(lay_i.l))
             if rep == 0:
                 if pipeline_depth > 1 and args.device.startswith("cuda"):
-                    # every pipeline slot once (its stream's hint graph capture, pinned buffers): untimed, like the warm-up
-                    warm = subs[:pipeline_depth] + (subs[-1:] if len(subs) > pipeline_depth else [])   # + the ragged last layout
+                    # a full pipelined pass, untimed, like the warm-up: the graphs are captured per (stream, layout) and
+                    # sub-batch i runs on slot i % depth (pipeline.FIXED_SLOTS), so the ragged last sub-batch must be met
+                    # on ITS slot -- warming subs[:depth] + subs[-1:] captured it on slot 0 and timed rep 1 paid ~0.25 s
+                    warm = list(subs)
                     passes = 1
                     if shared:
                         # the hash side's layout varies per sub-batch (70 / 71 row units at the 64x64 tile) and the tests

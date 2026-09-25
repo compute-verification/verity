@@ -97,6 +97,9 @@ MAX_PARTS = 10_000              # the service's limit on parts per upload: `choo
 PART_JOBS = 8                   # parts in flight at once (each is `part_size` bytes in memory) ...
 PART_MEM_BUDGET = 1 << 30       # ... but never more than this many bytes of parts in flight
 PARTS_SIDECAR_SCHEMA = "research/parts/v1"
+REQUEST_DEADLINE_S = 180.0       # a request's hard wall-clock deadline to its headers; a GET body then gets max(this, bytes / MIN_BODY_RATE)
+MIN_BODY_RATE = 64 * 1024        # bytes/s a GET body may not fall below on average before its deadline cuts it off
+MIN_UPLOAD_RATE = 8 * 1024       # the same for a request body (a PUT from the laptop's 25-220 KB/s uplink must still finish)
 RETRIES = 3                     # transient 5xx / 429 / connection errors: 4 tries, 1 s, 2 s, 4 s backoff (or the service's Retry-After)
 RETRY_BACKOFF_S = 1.0
 RETRY_AFTER_MAX_S = 30.0        # a Retry-After above this is capped (the try budget stays bounded)
@@ -345,6 +348,37 @@ class _Pool:
             return len(self._idle)
 
 
+class _Watchdog:
+    """A hard deadline on one request: when it passes, the connection's socket is shut down, so a read blocked in the kernel (a
+    stalled TLS stream that trickles, a peer that never answers) returns at once and the request fails as retriable.  The socket
+    timeout alone bounds each recv, not the request: a laptop parity run sat 65 min in such reads."""
+
+    def __init__(self, conn: http.client.HTTPConnection, seconds: float):
+        self.conn, self.fired, self.sock = conn, False, None     # `sock` is taken once the request is sent: http.client hands a
+                                                                  # closing connection's socket to the response and clears conn.sock
+        self._t: threading.Timer | None = None
+        self.extend(seconds)
+
+    def _fire(self) -> None:
+        self.fired = True
+        sock = self.sock or getattr(self.conn, "sock", None)
+        try:
+            if sock is not None:
+                sock.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
+
+    def extend(self, seconds: float) -> None:
+        self.cancel()
+        self._t = threading.Timer(seconds, self._fire)
+        self._t.daemon = True
+        self._t.start()
+
+    def cancel(self) -> None:
+        if self._t is not None:
+            self._t.cancel()
+
+
 class _Response:
     """What `_request` returns: the `http.client.HTTPResponse` (`.status`, `.headers`, `.read()`) bound to its pooled connection.
     Leaving the `with` block gives the connection back to the pool when the body was consumed whole (or is drained here when it
@@ -352,8 +386,8 @@ class _Response:
 
     DRAIN_MAX = 1 << 20
 
-    def __init__(self, pool: _Pool, conn: http.client.HTTPConnection, resp: http.client.HTTPResponse):
-        self._pool, self._conn, self.resp = pool, conn, resp
+    def __init__(self, pool: _Pool, conn: http.client.HTTPConnection, resp: http.client.HTTPResponse, watchdog: _Watchdog | None = None):
+        self._pool, self._conn, self.resp, self.watchdog = pool, conn, resp, watchdog
         self.status, self.headers = resp.status, resp.headers
 
     def read(self, n: int = -1) -> bytes:
@@ -363,6 +397,11 @@ class _Response:
         conn, self._conn = self._conn, None
         if conn is None:
             return
+        if self.watchdog is not None:
+            self.watchdog.cancel()
+            if self.watchdog.fired:
+                self._pool.discard(conn)
+                return
         try:
             if not self.resp.isclosed():
                 left = self.resp.length
@@ -466,18 +505,23 @@ class S3Remote:
                     data.seek(0)
                 signed = sign_headers(method, self.host, path, query, extra, payload_hash, self.access_key, self.secret_key, self.region, self._now())
                 conn = self.pool.acquire()
+                dog = _Watchdog(conn, REQUEST_DEADLINE_S + size / MIN_UPLOAD_RATE)
                 try:
                     with self._stats_lock:
                         self.requests += 1
                     conn.request(method, target, body=data, headers=signed)     # a file body streams in blocks (content-length is set above)
+                    dog.sock = getattr(conn, "sock", None)
                     resp = conn.getresponse()
-                except _RETRIABLE:
+                except _RETRIABLE as e:
+                    dog.cancel()
                     self.pool.discard(conn)
                     if attempt == RETRIES:
+                        if dog.fired:
+                            raise TimeoutError(f"{method} {key}: no response within the {REQUEST_DEADLINE_S:.0f}s request deadline") from e
                         raise
                     time.sleep(RETRY_BACKOFF_S * (2**attempt))
                     continue
-                out = _Response(self.pool, conn, resp)
+                out = _Response(self.pool, conn, resp, dog)
                 if resp.status < 400:
                     return out
                 with out:
@@ -748,19 +792,35 @@ class S3Remote:
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp = path.parent / f".tmp-{path.name}-{os.getpid()}-{threading.get_ident()}"
-        try:
-            with self._request("GET", key) as r, open(tmp, "wb") as f:
-                for chunk in iter(lambda: r.read(1 << 20), b""):
-                    f.write(chunk)
-            os.replace(tmp, path)
-        except urllib.error.HTTPError as e:
-            tmp.unlink(missing_ok=True)
-            if e.code == 404:
-                raise KeyError(key) from None
-            raise
-        except BaseException:
-            tmp.unlink(missing_ok=True)
-            raise
+        for attempt in range(RETRIES + 1):                   # the whole GET is retried: a body cut off by its deadline or the network
+            try:
+                with self._request("GET", key) as r, open(tmp, "wb") as f:
+                    want = r.headers.get("Content-Length")
+                    if r.watchdog is not None:
+                        r.watchdog.extend(max(REQUEST_DEADLINE_S, int(want or 0) / MIN_BODY_RATE))
+                    n = 0
+                    for chunk in iter(lambda: r.read(1 << 20), b""):
+                        f.write(chunk)
+                        n += len(chunk)
+                    if r.watchdog is not None and r.watchdog.fired:
+                        raise TimeoutError(f"GET {key}: body not complete within its deadline ({n} bytes)")
+                    if want is not None and n != int(want):
+                        raise http.client.IncompleteRead(b"", int(want) - n)
+                os.replace(tmp, path)
+                return
+            except urllib.error.HTTPError as e:
+                tmp.unlink(missing_ok=True)
+                if e.code == 404:
+                    raise KeyError(key) from None
+                raise
+            except _RETRIABLE:
+                tmp.unlink(missing_ok=True)
+                if attempt == RETRIES:
+                    raise
+                time.sleep(RETRY_BACKOFF_S * (2**attempt))
+            except BaseException:
+                tmp.unlink(missing_ok=True)
+                raise
 
     def list(self, prefix: str) -> list[str]:
         keys, token = [], None
