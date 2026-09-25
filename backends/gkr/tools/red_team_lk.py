@@ -551,7 +551,7 @@ def forge_cases(relation: str, uc, pc, units, steps: int) -> dict:
 
         if misses(*forged_row(k, target)) != [k]:
             hit = next(((a2, b2, k2, key) for b2 in reversed(rng) for a2 in rng if _rw(a2) < _rw(b2) for k2 in by_table[a2] if single(k2)
-                        for key in (2 ** _rw(a2), 2 ** _rw(a2) + 1, 2 ** _rw(b2) - 1)
+                        for key in range(2 ** _rw(a2), min(2 ** _rw(b2), 2 ** _rw(a2) + 256))
                         if misses(*forged_row(k2, (key + tag_of[b2] * TAG_SHIFT) % P)) == [k2]), None)
             if hit is not None:
                 a, b, k, key_b = hit
