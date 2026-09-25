@@ -39,6 +39,7 @@ from verity_vllm.program.frontend.target_profile import ApplicabilityError, Arti
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(verity.ir.__file__)))
 EVIDENCE = os.path.join(ROOT, "out", "gen", "r10", "cb-fix", "evidence", "fix")
 DERIVE_STEP = os.path.join(ROOT, "verity_vllm", "pipeline", "build.py")
+INTEGRATION = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # integrations/vllm
 
 RESULTS: list[dict] = []
 
@@ -214,9 +215,8 @@ def test_G4c_no_capability_or_sm_literal_outside_target_profile():
              *sorted(os.path.relpath(p, ROOT) for p in glob.glob(os.path.join(ROOT, "verity_vllm/program/frontend/rules/vllm_bindings/*.py")))]
     hits = []
     for rel in files:
-        p = os.path.join(ROOT, rel)
-        if not os.path.exists(p):
-            continue
+        p = os.path.join(INTEGRATION, rel)
+        assert os.path.exists(p), f"{rel} moved: point G4c at the file that now holds it"
         for i, line in enumerate(open(p).read().splitlines(), 1):
             # applied / declared VALUES only (the R10 literals): not prose that names the architecture in a docstring
             if re.search(r"DeviceCapability\(major=\d", line) or '"8.9 (sm_89' in line or re.search(r'"NUM_SMS":\s*\d', line) \
