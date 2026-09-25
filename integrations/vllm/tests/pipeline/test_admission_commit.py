@@ -188,3 +188,18 @@ def test_host_cap_names_its_source_and_a_bare_host_is_still_a_bound(monkeypatch,
 
     monkeypatch.setattr(M.Path, "read_text", fake2)
     assert M.host_cap() == (377000000000, "/sys/fs/cgroup/memory.max")
+
+
+def test_the_commit_admission_counts_the_declared_lag():
+    """The host admission's lag rows are the manifest target's declared LAG, not a hard-coded 1 (the import used to miss and fall back)."""
+    pytest.importorskip("torch")
+    import inspect
+
+    from verity_vllm.pipeline import commit as C
+    from verity_vllm.pipeline import global_program as GP
+
+    wl = json.loads((REPO / "workloads" / "olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed__greedy__bi-eager.json").read_text())
+    assert C.admission_lag(wl) == GP.workload_target(wl).lag()
+    for declared, lag in ((False, 0), (True, 1)):
+        assert C.admission_lag(dict(wl, target={**(wl.get("target") or {}), "async_scheduling": declared})) == lag
+    assert "lag=admission_lag(wl)" in inspect.getsource(C.main)
