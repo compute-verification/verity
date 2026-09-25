@@ -6,6 +6,8 @@
 #   serve     only a verifier for REL at SERVE_VUS on 0.0.0.0:7400 (a verifier pod; VERIFIER=host:port on the prover)
 #   replay    re-verify recorded sessions: REPLAY_DIR holds pN-*/ point dirs (instances regenerated here, not read)
 # env: REL=bf16-hopper MODE="selftest sweep" SELF_VUS="8 64" START=1024 MAX=65536 RUNS=5 VERIFIER= SERVE_VUS=4096 CUDA=
+# Settings also come as K=V arguments (the research Tool's key params: backends/flock/tool.py).
+for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 W=/workspace/flock-backend; F=$W/flock; O=${RESEARCH_RUN_DIR:-/tmp/flock-backend}/out; mkdir -p $W $O
 REPO=$(pwd); SRC=$REPO/backends/flock
