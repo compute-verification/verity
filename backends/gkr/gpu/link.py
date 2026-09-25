@@ -208,19 +208,24 @@ def _kernels():
             pos = ((port * vus + v) * K + k * s + j % k) * bits + jb % bits
         t = tl.arange(0, 256)
         byte = tl.load(TB + pos[:, None] * 32 + (t[None, :] // 8), mask=m[:, None], other=0).to(tl.int32)
-        e = (byte >> (t[None, :] % 8)) & 1
+        e = ((byte >> (t[None, :] % 8)) & 1).to(tl.int8)
         if MODE == 0:
-            bq = tl.load(B + q, mask=m, other=0).to(tl.int32)
-            tl.store(SP + pid * 256 + t, tl.sum(e * bq[:, None], 0))
+            # row 0 of [b; 0] @ e: the block's 256 plane sums on the tensor cores (the prover's bits are 0 / 1)
+            bq = tl.load(B + q, mask=m, other=0).to(tl.int8)
+            r16 = tl.arange(0, 16)
+            bm = tl.where(r16[:, None] == 0, bq[None, :], tl.zeros([16, BLOCK], dtype=tl.int8))
+            tl.store(SP + pid * 256 + t, tl.sum(tl.dot(bm, e, out_dtype=tl.int32), 0))
         else:
-            r8 = tl.load(R8 + t[:, None] * 32 + tl.arange(0, 32)[None, :])
-            lm = tl.dot(e.to(tl.int8), r8, out_dtype=tl.int32).to(tl.int64)
-            base = (off + u * ncols + col0 + jb) * 6
-            for d in tl.static_range(6):
-                w = tl.load(WC + d * 32 + tl.arange(0, 32))
-                cd = tl.sum(lm * w[None, :], 1) % p
-                old = tl.load(A + base + d, mask=m, other=0).to(tl.int64)
-                tl.store(A + base + d, ((old + cd) % p).to(A.dtype.element_ty), mask=m)
+            # coordinate d of sum_t rho^t e_t from the 7-bit limbs of rho^t: one [256, 16] int8 matrix per limb
+            c16 = tl.arange(0, 16)
+            cd = tl.zeros([BLOCK, 16], dtype=tl.int64)
+            for qq in tl.static_range(5):
+                r8 = tl.load(R8 + qq * 4096 + t[:, None] * 16 + c16[None, :])
+                cd += tl.dot(e, r8, out_dtype=tl.int32).to(tl.int64) << (7 * qq)
+            ptr = A + (off + u * ncols + col0 + jb)[:, None] * 6 + c16[None, :]
+            mk = m[:, None] & (c16[None, :] < 6)
+            old = tl.load(ptr, mask=mk, other=0).to(tl.int64)
+            tl.store(ptr, ((old + cd) % p).to(A.dtype.element_ty), mask=mk)
 
     _K = (triton, eq_level, cells)
     return _K
@@ -346,16 +351,13 @@ def add(acc, claim: Claim, lay: Layout, seg_off: int) -> None:
         pw.append(g)
         g = e_mul(g, claim.rho)
     rh = torch.tensor(pw, dtype=torch.int64)
-    r8 = torch.zeros((PLANES, 32), dtype=torch.int64)
-    wc = torch.zeros((DEG, 32), dtype=torch.int64)
-    for d in range(DEG):
-        for q in range(5):
-            r8[:, d * 5 + q] = (rh[:, d] >> (7 * q)) & 127
-            wc[d, d * 5 + q] = pow(128, q, P)
-    r8, wc = r8.to(torch.int8).to(dev), wc.to(dev)
+    r8 = torch.zeros((5, PLANES, 16), dtype=torch.int64)
+    for q in range(5):
+        r8[q, :, :DEG] = (rh >> (7 * q)) & 127
+    r8 = r8.to(torch.int8).to(dev)
     tb = claim.T.view(torch.uint8).view(-1, 32)
     n = lay.n_cells
-    cells[(triton.cdiv(n, BLOCK),)](tb, r8, r8, acc.a, r8, wc, n, lay.per_unit, lay.steps, lay.bits, lay.k, lay.vus, lay.K, lay.col0,
+    cells[(triton.cdiv(n, BLOCK),)](tb, r8, r8, acc.a, r8, r8, n, lay.per_unit, lay.steps, lay.bits, lay.k, lay.vus, lay.K, lay.col0,
                                     lay.ncols, seg_off, P, MODE=1, IDENT=False, BLOCK=BLOCK)
     for t in range(PLANES):
         acc.b = e_add(acc.b, e_scale(pw[t], claim.sigma[t] % P))
