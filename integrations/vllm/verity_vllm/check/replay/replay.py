@@ -44,13 +44,12 @@ Program 2.1 s / 0.19 GB, plus 0.51 GB once per process when the first RMSNorm ga
 encodings (Python ints of the bit pattern) exactly as `compare_subcircuits` passes them.
 
 Evaluators (h4).  `--evaluator gates|twins|auto` (default `auto`) selects how tiers B and C evaluate an instance:
-`gates` is `evaluate_call` on the registered body; `twins` uses the vectorized twin of `verity_vllm.program.kernels.twins`
-(numpy / the numerics lane's C++ models, bit-exact re-implementations of the same bodies; core `verity.evaluation` kernels)
-wherever one claims the specialization; `auto` uses a twin only after its in-process self-check (>= 3 random instances
-against the reference by core `self_check`, per specialization) passed, else the gates.  A twin that declines an operand (non-finite words outside its exact domain) falls back to the gates for
-that instance.  Every per-instance entry records `evaluator` ("gates" | "twins") and `twin_id`; step reports carry
-`evaluators: {twins, gates, self_check}`.  Tier A always uses the gates (it is the body-exactness tier).  Pass/fail,
-`partial`/`skipped` and every other report field are unchanged by the choice of evaluator.
+`gates` is `evaluate_call` on the registered body; `twins` uses the twin kernel of `verity_vllm.program.kernels.twins`
+wherever one claims the specialization; `auto` uses a twin only after core `self_check` passed on >= 3 random instances
+of the specialization, else the gates.  A twin that declines an operand (non-finite words outside its exact domain)
+falls back to the gates for that instance.  Every per-instance entry records `evaluator` ("gates" | "twins") and
+`twin_id`; step reports carry `evaluators: {twins, gates, self_check}`.  Tier A always uses the gates (it is the
+body-exactness tier).  Pass/fail, `partial`/`skipped` and every other report field are unchanged by the choice of evaluator.
 """
 from __future__ import annotations
 
@@ -74,6 +73,7 @@ from verity.ir.refs import runs
 
 from verity_vllm.check.fold_compare import SnapshotStore, Values, WeightSource, _attach_specs, _component_ranges, _jsonable, _max_rss_gb, fold_log, load_profile
 from verity_vllm.observe.fold.fold import FoldResult
+from verity_vllm.check.replay import challenge as CH
 
 TIER_STATUSES = ("pass", "fail", "skipped", "error")
 EVALUATORS = ("gates", "twins", "auto")
@@ -530,7 +530,7 @@ def tier_a(result: FoldResult, store: SnapshotStore, weights: WeightSource | Non
     label), evaluated bit-exactly against their output snapshots; oversize instances at a child unit.  See the module
     docstring for the pass rule."""
     t0 = time.time()
-    rng = random.Random(seed)
+    rng = CH.stream(seed)
     snap_steps = sorted(set(store.steps) if steps is None else set(store.steps) & set(int(s) for s in steps))
     report: dict[str, Any] = {"tier": "a", "status": "pass", "k": k, "seed": seed, "snapshot_steps": snap_steps,
                               "max_arg_leaves": max_arg_leaves, "coverage": {}, "instances": [], "uncovered_specs": []}
@@ -944,7 +944,7 @@ def tier_chain(result: FoldResult, store: SnapshotStore, weights: WeightSource |
     errors that per-instance evaluation from snapshots cannot see.  Pass iff every slice's members pass and every
     slice chained >= 1 producer->consumer edge."""
     t0 = time.time()
-    rng = random.Random(seed)
+    rng = CH.stream(seed)
     snap_steps = sorted(set(store.steps) if steps is None else set(store.steps) & set(int(s) for s in steps))
     report: dict[str, Any] = {"tier": "chain", "status": "pass", "n": n, "seed": seed, "depth": depth, "max_nodes": max_nodes,
                               "max_arg_leaves": max_arg_leaves, "snapshot_steps": snap_steps, "slices": []}

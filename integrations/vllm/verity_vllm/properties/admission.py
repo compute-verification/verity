@@ -29,13 +29,14 @@ from __future__ import annotations
 import argparse
 import importlib
 import json
-import random
 import sys
 import time
 from pathlib import Path
 from typing import Any
 
 import numpy as np
+
+from verity_vllm.check.replay import challenge as CH
 
 REQUIRED_EDGE_KINDS = ("zeros", "max", "subnormal", "alternating")
 DTYPE_BITS = {"bfloat16": 16, "float16": 16, "float32": 32, "int32": 32, "int64": 64, "uint8": 8, "int8": 8, "bool": 8}
@@ -91,7 +92,7 @@ def produce(adapter: str, n: int, seed: int, out: Path, device: str = "cuda") ->
     import torch
 
     mod = importlib.import_module(adapter)
-    rng_py = random.Random(seed)
+    rng_py = CH.stream(seed)
     out.mkdir(parents=True, exist_ok=True)
     manifest: dict[str, Any] = {"schema": "verity-gen/difftest-produce/v1", "adapter": adapter, "semantic_id": getattr(mod, "SEMANTIC_ID", None),
                                 "seed": seed, "n": n, "torch": torch.__version__, "device": torch.cuda.get_device_name(0) if device.startswith("cuda") else device,
@@ -100,7 +101,7 @@ def produce(adapter: str, n: int, seed: int, out: Path, device: str = "cuda") ->
             "uint8": torch.uint8, "int8": torch.int8, "bool": torch.bool}
     for i in range(n):
         case = mod.cases(rng_py, i)
-        rng = np.random.default_rng(seed * 1_000_003 + i)
+        rng = CH.generator(CH.case_seed(seed, i))
         cdir = out / f"case_{i}"
         cdir.mkdir(exist_ok=True)
         ins = []

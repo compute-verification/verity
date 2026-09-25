@@ -41,6 +41,7 @@ LAYER = {
     "verity_vllm.query.boundary": "core",                      # -> verity.ir
     "verity_vllm.query.partition": "core",                     # -> verity.ir
     "verity_vllm.program.frontend.liveness": "core",           # -> verity.ir
+    "verity_vllm.check.replay.challenge": "core",              # -> verity.verification
 }
 
 #: The property harnesses.
