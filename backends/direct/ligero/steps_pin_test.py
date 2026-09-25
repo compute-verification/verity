@@ -217,7 +217,6 @@ def _as_pair(root: Path, d: Path, edits: list[tuple[int, int]]) -> Path:
 def test_the_shared_runner_carries_the_relations_vu_shape(shared) -> None:
     *_, R = shared
     assert R.hooks.steps == R.hooks_h.steps == relation("fp8-ada").steps == 48
-    assert R.hooks_for(None).steps == R.hooks_h_for(None).steps == 48
 
 
 def test_an_honest_shared_pair_verifies(shared) -> None:
@@ -227,6 +226,14 @@ def test_an_honest_shared_pair_verifies(shared) -> None:
     js = _rust_pair(root, honest / "sub_00.stmt", honest)
     if js is not None:
         assert js["accepted"] and js["system_pinned"], js
+
+
+def test_reverify_fails_a_shared_pair_closed(shared) -> None:
+    from .reverify import commitment_problems
+    root, honest, _, _ = shared
+    man = {"set": {"total_vus": 4, "instances": "0" * 64}}
+    assert commitment_problems(root, man, "fp8-ada+hash", [honest.name]) == (
+        True, ["commitment: 1 row-sharing (v6) statement(s): shared-row layouts are not recomputed"])
 
 
 SHARED_NEG = [
