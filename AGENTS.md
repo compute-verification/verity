@@ -45,11 +45,11 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
  The first is `protocols/sampled_proofs` (`verity_sampled_proofs`): the
  two-stage law, its beacon-keyed draws, and verification plans. See its
  `PROTOCOL.md`. Applications (vLLM) compose protocols.
-- `census/`: the census (`verity_census`), its own distribution: JSON data files of hardware lines (device,
- dtype, dense peak), networks (the 1 ms / 100 Gb/s reference, sensitivity profiles), workloads and frozen
- instance sets, each with a stable id and sources, plus a thin typed loader. It will grow into the knowledge
- base of hardware, ML models and workloads. It imports nothing from Verity and core never imports it (both
- tested); the renderer, benchmarks and tools read it. Core takes such numbers as parameters.
+- `census/`: data only, meant to move to its own repository: `hardware.json`, `networks.json`,
+ `workloads.json`, `instance_sets.json` (stable ids, sources), a JSON Schema for each under `schemas/`,
+ and a README with the id scheme and sourcing rules. Nothing imports it; the renderer and benchmarks
+ read it with `verity_numerical.bench.census` (a few lines), the docs site reads the same files, and
+ core never reads it (`test_boundaries.py`): core takes such numbers as parameters.
 - `tools/research/`: development infrastructure for running, observing, and
   coordinating recorded work (`research run | status | inspect | fetch |
   compare`). Separate distribution; must not import `verity`, and a test

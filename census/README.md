@@ -1,11 +1,39 @@
 # Census
 
-The fixed quantities benchmarks are computed against, each with a stable id, its sources and its methodology: GPU
-hardware lines (device, dtype, dense peak), networks (the 1 ms / 100 Gb/s reference and the sensitivity profiles),
-workloads and frozen instance sets. It is meant to grow into the knowledge base of hardware, ML models and workloads.
+Data only: the fixed quantities benchmarks are computed against. It will grow into a knowledge base of hardware, ML
+models and workloads. The renderer and benchmark code read these files directly, and so does the docs website. Nothing
+imports them as code, so the directory can move to its own repository unchanged.
 
-- Data: `src/verity_census/data/*.json`, one file per registry. Every entry has an `id` and `sources`.
-- Loader: `verity_census` (typed, stdlib only), e.g. `from verity_census import HARDWARE, REFERENCE_NETWORK, line`.
-- Dependency direction: the census imports nothing from Verity, and Verity core never imports the census. The renderer,
-  benchmarks and tools read it. `tests/test_census_registry.py` and `packages/verity/tests/test_boundaries.py` enforce both.
-- A changed quantity is a new entry with a new id; ids already cited are never renamed.
+| File | Entries | Schema |
+| --- | --- | --- |
+| `hardware.json` | GPU lines: a device running one operand dtype, with its dense tensor-core peak at FP32 accumulate | `schemas/hardware.schema.json` |
+| `networks.json` | network profiles: the reference (same datacenter, 1 ms, 100 Gb/s) and the sensitivity profiles | `schemas/networks.schema.json` |
+| `workloads.json` | the unit a table row proves (`GemmCoordinate<K>` at the reference batch) | `schemas/workloads.schema.json` |
+| `instance_sets.json` | the frozen instance set of each target: dataset, tier, size, digest | `schemas/instance_sets.schema.json` |
+
+Each file is a JSON array of entries. Each entry validates against its file's JSON Schema (draft 2020-12). The tests
+in `backends/numerical/tests/bench/test_census_data.py` check that.
+
+## Ids
+
+- Every entry has an `id` that is unique within its file.
+- A hardware id is `<device slug>/<dtype>`, for example `a100-sxm4-80gb/bf16` or `rtx-4090/e4m3`. The dtype is named as
+  the instruction registry names operand dtypes (`bf16`, `e4m3`, `e2m1`).
+- Every other id is kebab-case, for example `dc-1ms-100gbps` or `vu-k1536`. An instance set's id is its tier.
+- Ids are stable. Renders cite them, and sites build history over them. A changed quantity gets a new entry with a new
+  id, and an id that has been cited is never renamed or reused.
+
+## Sourcing
+
+- Every entry has `sources`: a non-empty list of `{label, href?}`. The label names the document and the table or row
+  the value was read from.
+- Hardware lines also state their `methodology`. Peaks are datasheet **dense** figures at the accumulate width the
+  relations use (FP32). An FMA counts as two FLOP, and sparsity figures are never used.
+- A measured value (rather than a datasheet one) says how it was measured, and names the artifact that holds the
+  measurement.
+
+## Dependency direction
+
+- Verity core never reads `census/`. `packages/verity/tests/test_boundaries.py` enforces this.
+- Core takes such numbers as parameters: a target names only its `anchor_device`. The benchmark
+  (`verity_numerical.bench.census`) reads the peak of that device and dtype from `hardware.json`.

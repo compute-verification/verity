@@ -146,9 +146,9 @@ Native peak: what a target's overhead is measured against
 A target names its ``anchor_device``, the **conformance device of its instruction** -- the card the relation was pinned
 on (A100 for ``sm80.mma.m16n8k16.bf16``, H100 for ``sm90.wgmma.m64n8k32.e4m3``, RTX 4090 for ``sm89.mma.m16n8k32.e4m3``)
 -- not the machine a prover happens to run on (that is in the result's ``hardware`` fingerprint).  The number a
-benchmark's ``overhead.vs_native_peak`` divides by is outside core: the census (``verity_census``, its own distribution)
-line of that device and the target's operand dtype, the datasheet **dense** tensor-core peak at the relation's FP32
-accumulate width.  One VU of ``GemmCoordinate<K>`` is ``K`` multiply-accumulates = ``2K`` FLOP, so the native time of one
+benchmark's ``overhead.vs_native_peak`` divides by is outside core: the census entry (``census/hardware.json``, data read
+by the benchmarks) of that device and the target's operand dtype, the datasheet **dense** tensor-core peak at the
+relation's FP32 accumulate width.  One VU of ``GemmCoordinate<K>`` is ``K`` multiply-accumulates = ``2K`` FLOP, so the native time of one
 VU at a peak is ``2K / flop_per_second``.
 """
 

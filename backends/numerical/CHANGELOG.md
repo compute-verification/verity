@@ -10,10 +10,13 @@
     and assumption texts as lists. Its `claims` list each property (soundness with its bound, ZK, non-interactive or
     designated-verifier, transparent setup) with the assumptions it rests on, each a `verity.claims` id with its role as
     the code declares it (empty where it declares none) and its text. Text with no id yet is kept and flagged `unmapped`;
+  - `backends`: the primary shape of Table 1's claims. Each backend family has a `shared` block of the properties and
+    assumptions all its configurations have, then `variants`. Each variant is a configuration with its interaction
+    `mode` (interactive or non-interactive) and only what it adds;
   - `results`: one per Table 2 cell, configuration × circuit. Each has its overhead, the phases that sum to it, one-time
     setup kept apart, its state (provisional, algebraic, verified, under re-verification), the artifact and the render time;
   - `tables`: every Table 1, 2 and 3 cell's exact display string, its numeric value, its marks and its footnote text;
-  - `claims` and `census`: the registry entries cited;
+  - `claims`: the `verity.claims` entries cited; `census`: the `census/` entries as read at render time;
   - `provenance`: the render time and the verity commit.
 - Ids are stable across renders: circuits by target name, configurations by the slug of their name, results as
   `<configuration>@<circuit>`.
@@ -21,15 +24,23 @@
   (`table2_grid`, `table3_row`) that both renders use.
 - The steward's `published = "views"` entry also writes `<stamp>-tables.json` (the entities render).
 
-## 2026-09-25: peaks, networks and instance sets come from the census (`verity_census`)
+## 2026-09-25: peaks, networks and instance sets come from the census (`census/`, data only)
 
-- The renderers read the native peaks, the reference network (1 ms, 100 Gb/s), the interaction drill-down's sensitivity
-  profiles, K and B, and the frozen instance sets from `census/` (distribution `verity-census`: JSON data with sources, a
-  typed loader), where each has a stable id (`a100-sxm4-80gb/bf16`, `dc-1ms-100gbps`, `vu-k1536`, ...). No value changed:
-  renders are byte-identical and `--parity` is unchanged.
-- Core holds no peak: `verity.proofs.target.Target` names its `anchor_device` (`native_peak` and `NativePeak` are gone), and
-  `contract.native_peak_of(target)` is the census line of that device and the target's operand dtype.
-  `latency.pipeline` takes `native_s_per_vu` as a parameter (default: FIRST's census line).
+- The renderers read these values from `census/` at the repository root:
+  - the native peaks;
+  - the reference network (1 ms, 100 Gb/s) and the interaction drill-down's sensitivity profiles;
+  - K and B;
+  - the frozen instance sets.
+
+  `census/` is data only: four JSON files, each with a JSON Schema, and a README. Each entry has a stable id, such as
+  `a100-sxm4-80gb/bf16`, `dc-1ms-100gbps` or `vu-k1536`, and its sources.
+- `verity_numerical.bench.census` reads the files directly (`$VERITY_CENSUS` overrides the location), and
+  `tests/bench/test_census_data.py` validates them against their schemas.
+- No value changed. Renders are byte-identical, and `--parity` is unchanged.
+- Core holds no peak. `verity.proofs.target.Target` names only its `anchor_device`; `native_peak` and `NativePeak`
+  are gone.
+- `contract.native_peak_of(target)` returns the census line for the target's anchor device and operand dtype.
+- `latency.pipeline` takes `native_s_per_vu` as a parameter.
 
 ## 2026-09-25: route (a) is its own full-relation A-GKR configuration
 

@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 
 from verity.proofs.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, NVFP4_SM120, TARGETS
-from verity_numerical.bench import contract
+from verity_numerical.bench import census, contract
 from verity_numerical.bench import tables as T
 from verity_numerical.bench import views as V
 
@@ -205,7 +205,7 @@ def test_native_is_the_compute_bound_datasheet_estimate() -> None:
     for target in TARGETS.values():
         n = V.native(target)
         assert n["ops_per_instance"] == 3072 and n["steps"] == 96 and n["unit"] == "tensor cores"
-        assert n["instances_per_second"] == pytest.approx(1 / contract.native_peak_of(target).seconds_per_vu(T.K))
+        assert n["instances_per_second"] == pytest.approx(1 / census.seconds_per_vu(contract.native_peak_of(target), T.K))
     assert V._native_text(V.native(FIRST)) == "1.0e11/s · tensor cores, BF16 312 T"
 
 
@@ -898,3 +898,33 @@ def test_entities_table1_claims_are_properties_with_the_assumptions_they_rest_on
     assert not any(i.startswith("ro/") for e in cfgs.values() for i in e["assumptions"])
     retired = ("beacon", "auditor", "challenger")
     assert not any(r in i for i in ent["claims"] for r in retired)
+
+
+def test_entities_backends_are_trees_of_shared_claims_and_variants_by_interaction_mode() -> None:
+    ent = V.render_entities(V.Views(rules=V.SPEC), rendered_at="2026-09-25T23:00:00Z", commit="abc")
+    cfgs = {c["id"]: c for c in ent["configurations"]}
+    assert [b["family"] for b in ent["backends"]] == list(dict.fromkeys(c["family"] for c in ent["configurations"]))
+    for b in ent["backends"]:
+        assert {v["configuration"] for v in b["variants"]} == {c for c, e in cfgs.items() if e["family"] == b["family"]}
+        shared_p = {p["id"] or p["text"] for p in b["shared"]["properties"]}
+        shared_a = {a["id"] or a["text"] for a in b["shared"]["assumptions"]}
+        for v in b["variants"]:
+            e = cfgs[v["configuration"]]
+            assert v["mode"] == ("non-interactive" if "non-interactive" in e["properties"] else "interactive")
+            full_p = {c["property"]["id"] or c["property"]["text"] for c in e["claims"]}
+            full_a = {a["id"] or a["text"] for c in e["claims"] for a in c["assumptions"]}
+            assert shared_p | {p["id"] or p["text"] for p in v["properties"]} == full_p and not shared_p & {p["id"] or p["text"] for p in v["properties"]}
+            assert shared_a | {a["id"] or a["text"] for a in v["assumptions"]} == full_a and not shared_a & {a["id"] or a["text"] for a in v["assumptions"]}
+            assert v["params"] == e["params"]
+    lig = next(b for b in ent["backends"] if b["family"] == "B-Ligero")
+    assert [p["id"] for p in lig["shared"]["properties"]] == ["transparent-setup"]
+    assert {"cr/blake3", "rs-proximity-udr"} <= {a["id"] for a in lig["shared"]["assumptions"]}
+    b3 = next(a for a in lig["shared"]["assumptions"] if a["id"] == "cr/blake3")
+    assert "proof-internal commitment" in b3["roles"] and set(b3["for"]) == {"statistical-soundness", "computational-soundness"}
+    fs = next(v for v in lig["variants"] if v["variant"] == "B-Ligero Fiat–Shamir (HVZK)")
+    assert fs["mode"] == "non-interactive" and [p["id"] for p in fs["properties"]] == ["computational-soundness", "hvzk", "non-interactive"]
+    assert {a["id"] for a in fs["assumptions"]} == {"random-oracle", "honest-verifier"}
+    v1 = next(v for v in lig["variants"] if v["variant"] == "B-Ligero v1")
+    assert v1["mode"] == "interactive" and [p["id"] for p in v1["properties"]] == ["statistical-soundness", "malicious-verifier-zk", "designated-verifier"]
+    flock = next(b for b in ent["backends"] if b["family"] == "Flock")
+    assert len(flock["variants"]) == 1 and flock["variants"][0]["properties"] == [] and flock["variants"][0]["assumptions"] == []

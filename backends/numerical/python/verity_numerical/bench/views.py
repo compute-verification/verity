@@ -50,9 +50,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from verity import claims as claims_registry
-from verity_census import HARDWARE, INSTANCE_SETS, NETWORKS, REFERENCE_NETWORK, SENSITIVITY_NETWORKS, VU_K1536, WORKLOADS
 from verity.proofs.target import BF16_HOPPER, FP8_ADA_MMA, FP8_HOPPER_WGMMA, NVFP4_SM120, TARGETS, Target
-from verity_numerical.bench import contract
+from verity_numerical.bench import census, contract
 from verity_numerical.bench import drilldown as D
 from verity_numerical.bench import tables as T
 
@@ -410,7 +409,7 @@ def native(target: Target, K: int = T.K) -> dict[str, Any]:
     peak = contract.native_peak_of(target)
     return {"instances_per_second": peak.flop_per_second / flop, "unit": "tensor cores", "ops_per_instance": flop, "steps": steps,
             "dtype": (T.dtype_of(target) or "?").upper(), "peak_flop_per_second": peak.flop_per_second, "device": peak.device,
-            "source": peak.source, "work_model": WORK_MODEL}
+            "source": census.source(peak), "work_model": WORK_MODEL}
 
 
 # --- the view's rules -------------------------------------------------------------------------------------------------------------
@@ -458,9 +457,9 @@ def whole_proof_log2(fp: Mapping[str, Any]) -> float | None:
 
 # --- interaction: t = compute + rounds x RTT + bytes / bandwidth (reporting standard, Daniel 2026-09-25) --------------------------
 
-#: The reference network the Table 2 cell is evaluated at (``verity_census.REFERENCE_NETWORK``: same datacenter); the
-#: interaction drill-down adds ``verity_census.SENSITIVITY_NETWORKS``.
-REF_RTT_S, REF_BANDWIDTH_BPS = REFERENCE_NETWORK.rtt_s, REFERENCE_NETWORK.bandwidth_bps
+#: The reference network the Table 2 cell is evaluated at (``census.REFERENCE_NETWORK``, ``census/networks.json``: same datacenter); the
+#: interaction drill-down adds ``census.SENSITIVITY_NETWORKS``.
+REF_RTT_S, REF_BANDWIDTH_BPS = census.REFERENCE_NETWORK.rtt_s, census.REFERENCE_NETWORK.bandwidth_bps
 #: A measured interactive run must be within this fraction of the formula at the reference profile.
 INTERACTION_TOLERANCE = 0.10
 
@@ -1358,7 +1357,7 @@ def render_markdown(V: Views, published: bool = False) -> str:
             rowsi.append([_cell_name(c), rounds, D._bytes(ix["bytes_up"]),
                           D._bytes(ix["bytes_down"]), rtt, T.fmt_seconds(ix["prover_s"] or 0.0), T.fmt_seconds(ix["verifier_s"]),
                           T.fmt_seconds(ix["wait_s"]) if ix["wait_s"] is not None else T.UNMEASURED,
-                          *[T.fmt_overhead(at(n.rtt_s, n.bandwidth_bps)) for n in (REFERENCE_NETWORK, *SENSITIVITY_NETWORKS)]])
+                          *[T.fmt_overhead(at(n.rtt_s, n.bandwidth_bps)) for n in (census.REFERENCE_NETWORK, *census.SENSITIVITY_NETWORKS)]])
         out += ["### Interaction drill-down — the formula t = compute + rounds × RTT + bytes ÷ bandwidth", "",
                 T._md_table(("Cell", "Rounds", "Bytes up", "Bytes down", "Measured RTT (method)", "Prover compute", "Verifier compute (waited on)",
                              "Measured network wait", "Cell at 1 ms, 100 Gb/s (reference)", "At 20 ms, 100 Gb/s", "At 100 ms, 100 Gb/s",
@@ -1544,6 +1543,56 @@ def claims_of(cfg: Configuration, bits: float | None = None) -> list[dict[str, A
     return claims
 
 
+def _claim_items(claims: list[dict[str, Any]]) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+    """A configuration's properties and assumptions keyed by id (by text when unmapped); an assumption lists the properties it
+    supports (``for``) and its declared roles."""
+    props: dict[str, dict[str, Any]] = {}
+    rests: dict[str, dict[str, Any]] = {}
+    for c in claims:
+        p = c["property"]
+        props[p["id"] or p["text"]] = {"id": p["id"], "text": p["text"], "unmapped": p["unmapped"]}
+        for a in c["assumptions"]:
+            e = rests.setdefault(a["id"] or a["text"], {"id": a["id"], "text": a["text"], "unmapped": a["unmapped"], "roles": [], "for": []})
+            if a["role"] and a["role"] not in e["roles"]:
+                e["roles"].append(a["role"])
+            if (p["id"] or p["text"]) not in e["for"]:
+                e["for"].append(p["id"] or p["text"])
+    return props, rests
+
+
+def backend_trees(configurations: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Table 1's claims as one tree per backend family: ``shared``, the properties and assumptions every one of its
+    configurations has, then ``variants``, each configuration with its interaction ``mode`` (``interactive`` or
+    ``non-interactive``) and only the properties and assumptions it adds.  A shared item keeps the roles and supported
+    properties of all its configurations, and its text only when they all state it alike (else ``None``); a variant's
+    ``params`` are its own (the soundness bound at its cells)."""
+    out = []
+    for fam in dict.fromkeys(c["family"] for c in configurations):
+        cfgs = [c for c in configurations if c["family"] == fam]
+        items = [_claim_items(c["claims"]) for c in cfgs]
+        shared_p = [k for k in items[0][0] if all(k in i[0] for i in items)]
+        shared_a = [k for k in items[0][1] if all(k in i[1] for i in items)]
+
+        def merged(k: str) -> dict[str, Any]:
+            e = dict(items[0][1][k])
+            e["text"] = e["text"] if all(i[1][k]["text"] == e["text"] for i in items) else None
+            e["roles"] = list(dict.fromkeys(r for i in items for r in i[1][k]["roles"]))
+            e["for"] = list(dict.fromkeys(f for i in items for f in i[1][k]["for"]))
+            return e
+
+        out.append({
+            "family": fam,
+            "shared": {"properties": [{**items[0][0][k], "text": items[0][0][k]["text"] if all(i[0][k]["text"] == items[0][0][k]["text"] for i in items) else None}
+                                      for k in shared_p],
+                       "assumptions": [merged(k) for k in shared_a]},
+            "variants": [{"configuration": c["id"], "variant": c["variant"],
+                          "mode": "non-interactive" if c["transferability"].startswith("transferable") else "interactive",
+                          "properties": [v for k, v in i[0].items() if k not in shared_p],
+                          "assumptions": [v for k, v in i[1].items() if k not in shared_a], "params": c["params"]}
+                         for c, i in zip(cfgs, items)]})
+    return out
+
+
 def render_entities(V: Views, published: bool = False, rendered_at: str | None = None, commit: str | None = None) -> dict[str, Any]:
     """The render as entities a site can chart and follow across renders by id (schema :data:`ENTITIES_SCHEMA`):
 
@@ -1554,10 +1603,12 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
       flag, interaction and assumption texts as lists; ``claims`` (:func:`claims_of`): each property with the assumptions it
       rests on and their roles, as ``verity.claims`` ids beside their text; ``properties``, ``assumptions`` and ``models``
       as flat id lists, ``params``, and ``unmapped`` the texts with no id yet;
+    * ``backends`` -- the primary shape of Table 1's claims (:func:`backend_trees`): per family, what all its configurations
+      share, then each configuration by interaction mode with what it adds;
     * ``results`` -- one per Table 2 cell (configuration x circuit): overhead, the phases that sum to it, one-time setup apart,
       state (provisional, algebraic, verified, under re-verification), the artifact and the render time;
     * ``tables`` -- the printed layout: every Table 1 / 2 / 3 cell's exact display string, numeric value, marks and footnote;
-    * ``claims`` -- the ``verity.claims`` entries Table 1 cites (the site imports these); ``census`` -- the ``verity_census`` entries cited; ``provenance`` -- render time, verity commit, rules, banner.
+    * ``claims`` -- the ``verity.claims`` entries Table 1 cites (the site imports these); ``census`` -- the ``census/`` entries as read at render time; ``provenance`` -- render time, verity commit, rules, banner.
 
     Ids: circuits by target name, configurations by the slug of their name, results ``<configuration>@<circuit>``, census
     entries by their census id."""
@@ -1565,7 +1616,7 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
     rendered_at = rendered_at or _dt.datetime.now(_dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     grid = table2_grid(V)
     cfg_of = {c.id: c for c in V.configurations}
-    sets = {s.target: s.id for s in INSTANCE_SETS.values()}
+    sets = {s.target: s.id for s in census.INSTANCE_SETS.values()}
     cells_of: dict[str, list[ViewCell]] = {}
     for c in V.cells:
         cells_of.setdefault(c.configuration or "", []).append(c)
@@ -1575,7 +1626,7 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
         N = native(target)
         peak = contract.native_peak_of(target)
         circuits.append({"id": target.name, "hardware": peak.id, "device": peak.device, "dtype": peak.dtype, "instruction": target.instruction, "step": target.transition_unit, "status": target.status,
-                         "workload": VU_K1536.id, "instance_set": sets.get(target.name),
+                         "workload": census.VU_K1536.id, "instance_set": sets.get(target.name),
                          "native": {"value": N["instances_per_second"], "unit": "instances/s", "display": _native_text(N),
                                     "peak_flop_per_second": N["peak_flop_per_second"], "ops_per_instance": N["ops_per_instance"],
                                     "work_model": N["work_model"]}})
@@ -1636,7 +1687,7 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
             cfg = cfg_of.get(c.configuration or "")
             results.append({
                 "id": result_id(c), "configuration": slug(c.configuration) if c.configuration else None, "circuit": c.line, "scheme": c.scheme,
-                "family": col, "artifact": c.artifact, "rendered_at": rendered_at, "network": REFERENCE_NETWORK.id, "workload": VU_K1536.id,
+                "family": col, "artifact": c.artifact, "rendered_at": rendered_at, "network": census.REFERENCE_NETWORK.id, "workload": census.VU_K1536.id,
                 "overhead": {"value": c.overhead, "display": T.fmt_overhead(c.overhead)},
                 "phases": phases, "serving_overhead": overheads(c)[0], "proving_overhead": overheads(c)[1],
                 "setup": {"seconds": su["seconds"], "amortized_overhead": su["amortized"], "instances": su["instances"], "display": r3["setup"]} if su else None,
@@ -1649,7 +1700,7 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
                 "native": c.native, "batching": dict(c.batching), "instances": dict(c.instances),
                 "interaction": {"live": ix["live"], "rounds": ix["rounds"], "bytes_up": ix["bytes_up"], "bytes_down": ix["bytes_down"]},
                 "overhead_at": {n.id: c.native * (P["commit_s"] + interaction_time(ix, n.rtt_s, n.bandwidth_bps)) / P["instances"]
-                                for n in (REFERENCE_NETWORK, *SENSITIVITY_NETWORKS)} if not V.rules.legacy else None})
+                                for n in (census.REFERENCE_NETWORK, *census.SENSITIVITY_NETWORKS)} if not V.rules.legacy else None})
         table2_lines.append(line)
 
     families = [{**dataclasses.asdict(f), "declared_classes": list(f.declared_classes), "display": _family_text(f)} for f in FAMILIES]
@@ -1666,16 +1717,14 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
         "provenance": {"rendered_at": rendered_at, "verity_commit": commit if commit is not None else verity_commit(), "rules": dataclasses.asdict(V.rules),
                        "published": published, "banner": PUBLISHED if published else PREVIEW},
         "axes": {"circuits": [c["id"] for c in circuits], "schemes": [s.id for s in SCHEMES if s.admissible], "families": V.columns(),
-                 "phases": phase_cols, "networks": [n.id for n in (REFERENCE_NETWORK, *SENSITIVITY_NETWORKS)]},
-        "census": {"hardware": {h.id: dataclasses.asdict(h) for h in HARDWARE.values()},
-                   "networks": {n.id: dataclasses.asdict(n) for n in NETWORKS.values()},
-                   "workloads": {w.id: dataclasses.asdict(w) for w in WORKLOADS.values()},
-                   "instance_sets": {x.id: dataclasses.asdict(x) for x in INSTANCE_SETS.values()}},
+                 "phases": phase_cols, "networks": [n.id for n in (census.REFERENCE_NETWORK, *census.SENSITIVITY_NETWORKS)]},
+        "census": {name: {e["id"]: e for e in census.raw(name)} for name in ("hardware", "networks", "workloads", "instance_sets")},
         "claims": {i: dataclasses.asdict(claims_registry.get(i)) for i in sorted({i for c in configurations for k in ("properties", "assumptions", "models")
                                                                                    for i in c[k]})},
         "circuits": circuits,
         "schemes": [{**dataclasses.asdict(x), "admissible": x.admissible} for x in SCHEMES],
         "families": families,
+        "backends": backend_trees(configurations),
         "configurations": configurations,
         "results": results,
         "tables": {
