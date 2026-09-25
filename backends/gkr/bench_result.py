@@ -472,6 +472,8 @@ def main(argv: list[str] | None = None) -> int:
         accepted = (bool(doc and doc.get("accepted")) and pinned and r.returncode == 0
                     and (bind is None or (doc or {}).get("operands_bound") is True))
         error = (doc or {}).get("error") or (None if doc is None or pinned else
+                                             f"scaffold: no circuit set is pinned for {relation} until hash layers bind the "
+                                             f"digest columns" if commitment is not None else
                                              f"{vbin} does not pin circuit files (built before backends/gkr/verifier/pins.txt): rebuild it")
         cdoc = (doc or {}).get("commitment") or {}
         verdicts.append({"rep": row["rep"], "proof_sha256": row["proof_sha256"], "accepted": accepted, "rc": r.returncode,
