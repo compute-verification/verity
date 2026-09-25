@@ -13,6 +13,7 @@ Eight constructions run in parallel (~20 s on a 128-vCPU pod, ~1.9 GB RSS each);
 (iv)  reuse of an artifact under a mismatched profile / applicability is rejected with every differing field named;
 plus: the Program digest of B0 8/4 is unchanged by the patch; the dead env `VLLM_ATTENTION_BACKEND` is not a declared fact."""
 
+import glob
 import json
 import os
 import subprocess
@@ -274,7 +275,8 @@ def test_dead_env_var_is_recorded_as_ignored_not_declared(builds):
 
 
 def test_no_target_literal_remains_in_the_builder_sources():
-    for rel in ("verity_vllm/program/frontend/export_compat.py", "verity_vllm/program/frontend/rules/vllm_bindings.py", "verity_vllm/program/frontend/vllm_meta.py"):
+    bindings = sorted(os.path.relpath(p, REPO) for p in glob.glob(os.path.join(REPO, "verity_vllm/program/frontend/rules/vllm_bindings/*.py")))
+    for rel in ("verity_vllm/program/frontend/export_compat.py", *bindings, "verity_vllm/program/frontend/vllm_meta.py"):
         src = open(os.path.join(REPO, rel)).read()
         assert "DeviceCapability(major=8" not in src and "8.9 (sm_89, Ada)" not in src, rel
         assert 'os.environ.get("VLLM_ATTENTION_BACKEND")' not in src, rel

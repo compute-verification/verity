@@ -1,0 +1,166 @@
+"""Direct Triton launches: the batch-invariant RMSNorm and GEMM."""
+
+from __future__ import annotations
+
+from verity.ir.refs import Coll
+from verity_vllm.program.frontend.derive import Alloc
+from verity_vllm.program.frontend.torch_frontend import shape_of
+from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleInfo
+from verity_vllm.program.frontend.rules.common import from_rows, rows_of, shape
+from verity_vllm.program.frontend.rules.triton_iface import launch_meta, launch_tensor, triton_launch
+from verity_vllm.program.frontend.rules.vllm_bindings.operands import _row_value, _strides, _untransposed
+from verity_vllm.program.frontend.rules.vllm_bindings.pins import (GEMM_PINS, RMS_PINS, _pins_ok, _target_kinds, active_gemm_target, gemm_pins_for,
+                                                                   lookup_key)
+
+
+# -- direct Triton launches -----------------------------------------------------------------------------------------------
+
+
+class TritonRmsNormRule(InPlaceRule):
+    """`_rms_norm_kernel[grid](input_2d, weight, output, in_stride, out_stride, n_cols, eps, BLOCK_SIZE, HAS_WEIGHT)` launched by
+    `rms_norm_batch_invariant` -> `RMSNormTriton{N,EPS}` per row; `output` (an allocation) is rebound."""
+    modes = frozenset({"profile"})
+    info = RuleInfo("TritonRmsNorm[vllm-bi]", 1, "in-place-binding",
+                    applies_to="verity_cba::triton_launch of batch_invariant._rms_norm_kernel (kernel name + constexprs pinned)",
+                    preconditions=("kernel qualified name is the profile's `_rms_norm_kernel`", "BLOCK_SIZE=1024, HAS_WEIGHT=True (profile pins)",
+                                   "input is bf16 [R, N] with unit column stride (row stride = the launch's input_row_stride, >= N: a column slice of a wider "
+                                   "row is allowed), weight bf16 [N], output an unwritten allocation [R, N] (row stride = output_row_stride)",
+                                   "n_cols == N; eps is a static float; grid == (R,)"),
+                    evidence_domain="structural; numerics: RMSNormTriton_v1 (the same Triton kernel, W11 model)")
+
+    def targets(self):
+        return {triton_launch.default}
+
+    def applies(self, node, ctx):
+        meta = launch_meta(node)
+        if meta.get("kernel") != RMS_PINS["kernel"]:
+            return f"kernel {meta.get('kernel')} is not {RMS_PINS['kernel']}"
+        sc = meta.get("scalars", {})
+        bad = _pins_ok(meta, RMS_PINS)
+        if bad:
+            return bad
+        x, w, out = (launch_tensor(node, meta, n) for n in ("input_ptr", "weight_ptr", "output_ptr"))
+        if x is None or w is None or out is None:
+            return "tensor arguments input_ptr/weight_ptr/output_ptr not all present"
+        r = _row_value(ctx, x, "input") or _row_value(ctx, w, "weight")
+        if r:
+            return r
+        if not isinstance(ctx.val(out), (Alloc, Coll)):
+            return "output is not an allocation/value"
+        if str(ctx.dtype_of(out)) != RMS_PINS["dtype"]:
+            return f"numerics_unregistered: output dtype {ctx.dtype_of(out)}; RMSNormTriton_v1 is the bf16 kernel"
+        xs = shape(ctx, x)
+        if len(xs) != 2 or shape(ctx, w) != (xs[1],) or shape(ctx, out) != xs:
+            return f"shapes input {xs} weight {shape(ctx, w)} output {shape(ctx, out)}"
+        if sc.get("n_cols") != xs[1]:
+            return f"n_cols {sc.get('n_cols')} vs N={xs[1]}"
+        # [R13 MOE-01, R12 F-moe-01 B-QNORM-STRIDE] the kernel reads row r at `input_ptr + r*input_row_stride` (columns contiguous) and writes
+        # `output_ptr + r*output_row_stride`: the launch's strides must be the OPERANDS' row strides, which need not be N -- OLMoE's q_norm /
+        # k_norm normalise column slices of the fused qkv GEMM output ([M, 2048] rows of stride 6144).  The operand's value collection is the
+        # strided view's, so the emitted rows are exactly the rows the kernel reads; only the stride facts are checked here.
+        for nm, t, st_key in (("input", x, "input_row_stride"), ("output", out, "output_row_stride")):
+            st = _strides(t)
+            if st is None or len(st) != 2 or st[1] != 1:
+                return f"{nm} strides {st} are not (row_stride, 1)"
+            if sc.get(st_key) != st[0] or st[0] < xs[1]:
+                return f"{st_key}={sc.get(st_key)} vs the {nm} operand's row stride {st[0]} (N={xs[1]})"
+        if not isinstance(sc.get("eps"), float):
+            return "eps is not a static float"
+        if meta.get("grid") not in ([xs[0]], "<callable>"):
+            return f"grid {meta.get('grid')} is not (R,)"
+        return True
+
+    def emit(self, node, ctx):
+        meta = launch_meta(node)
+        sc = meta["scalars"]
+        x, w, out = (launch_tensor(node, meta, n) for n in ("input_ptr", "weight_ptr", "output_ptr"))
+        xc, wc = ctx.coll(x), ctx.coll(w)
+        rows, lead = rows_of(xc)
+        N, eps = rows[0].type.n, float(sc["eps"])
+        fn = ctx.kind("rmsnorm", node, N=N, EPS=eps)
+        outs = [ctx.call(fn, r, wc, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
+        ctx.rebind(out, from_rows(outs, lead), self, what="output")
+        ctx.bind_weight_role(w, self, "rmsnorm.weight", N=N, EPS=eps)
+        ctx.record(self, node, {"N": N, "EPS": eps, "rows": len(rows), "lookup_key": lookup_key(meta), "pins": RMS_PINS}, emitted=f"{fn.id} x{len(rows)}")
+
+
+class TritonGemmRule(InPlaceRule):
+    """`matmul_kernel_persistent[grid](a, b, c, bias, M, N, K, strides…, NUM_SMS, …constexprs)` launched by
+    `matmul_persistent` from vLLM's `aten::linear` batch-invariant override -> `Gemm{K,N}` per row of `a`; `c` is rebound.
+    `b` is `W.t()` (a view of the [N, K] parameter: stride_bk == 1, stride_bn == K); the kind takes W as [N, K]."""
+    modes = frozenset({"profile"})
+    info = RuleInfo("TritonGemm[vllm-bi]", 1, "in-place-binding",
+                    applies_to="verity_cba::triton_launch of batch_invariant.matmul_kernel_persistent (kernel name + constexprs pinned)",
+                    preconditions=("kernel qualified name is the profile's `matmul_kernel_persistent`; source sha256 pinned",
+                                   "the active TargetProfile's capability has a REGISTERED GEMM specialization (verity_vllm.program.registry.gemm_targets: ada cc 8.9 with "
+                                   "vLLM's tuned sm_89 table, ampere cc 8.0 default tiling only; anything else -> numerics_unregistered)",
+                                   "tiling = that target's launch geometry for (M, N, K) (GemmTarget.launch_config: the default 128/128/64, 8 warps, 3 stages, or the "
+                                   "M-bucket row of the target's pinned tuned table); GROUP_SIZE_M 8, *_LARGE False, HAS_BIAS False, "
+                                   "NUM_SMS = the active TargetProfile's num_sms (default 128)",
+                                   "a is bf16 [M, K] row-major (stride_am K, stride_ak 1); b is bf16 [K, N] with stride_bk 1, stride_bn K (= W[N,K].t())",
+                                   "c is an unwritten allocation [M, N] row-major; bias_ptr is None; M, N, K equal the shapes"),
+                    evidence_domain="structural; numerics: Gemm_v1{K,N} (the same Triton kernel; f32 accumulator over BLOCK_SIZE_K tiles)")
+
+    def targets(self):
+        return {triton_launch.default}
+
+    def applies(self, node, ctx):
+        meta = launch_meta(node)
+        if meta.get("kernel") != GEMM_PINS["kernel"]:
+            return f"kernel {meta.get('kernel')} is not {GEMM_PINS['kernel']}"
+        sc = meta.get("scalars", {})
+        from verity_vllm.program.registry.gemm_targets import UnregisteredGemmTarget
+        try:
+            pins, _src = gemm_pins_for(sc.get("M"), sc.get("N"), sc.get("K"))
+        except UnregisteredGemmTarget as e:   # fail closed: no registered Gemm Definition for the target, whatever tiling the launch shows
+            return str(e)
+        bad = _pins_ok(meta, pins)
+        if bad:
+            return bad
+        if sc.get("bias_ptr") is not None or launch_tensor(node, meta, "bias_ptr") is not None:
+            return "bias_ptr is set (the fused bias epilogue is a different numeric than Gemm + BiasAdd)"
+        a, b, c = (launch_tensor(node, meta, n) for n in ("a_ptr", "b_ptr", "c_ptr"))
+        if a is None or b is None or c is None:
+            return "tensor arguments a_ptr/b_ptr/c_ptr not all present"
+        r = _row_value(ctx, a, "a") or _row_value(ctx, b, "b")
+        if r:
+            return r
+        if not isinstance(ctx.val(c), (Alloc, Coll)):
+            return "c is not an allocation/value"
+        if str(ctx.dtype_of(c)) != GEMM_PINS["dtype"]:
+            return f"numerics_unregistered: c dtype {ctx.dtype_of(c)}; Gemm_v1 is the bf16 kernel"
+        as_, bs, cs = shape(ctx, a), shape(ctx, b), shape(ctx, c)
+        if len(as_) != 2 or len(bs) != 2 or len(cs) != 2:
+            return f"ranks a{as_} b{bs} c{cs}"
+        M, K = as_
+        K2, N = bs
+        if K != K2 or cs != (M, N) or (sc.get("M"), sc.get("N"), sc.get("K")) != (M, N, K):
+            return f"shapes a{as_} b{bs} c{cs} vs scalars M={sc.get('M')} N={sc.get('N')} K={sc.get('K')}"
+        if (sc.get("stride_am"), sc.get("stride_ak")) != (K, 1):
+            return f"a strides {sc.get('stride_am')},{sc.get('stride_ak')} are not row-major [M, K]"
+        if (sc.get("stride_bk"), sc.get("stride_bn")) != (1, K):
+            return f"b strides {sc.get('stride_bk')},{sc.get('stride_bn')} are not W[N, K].t()"
+        if (sc.get("stride_cm"), sc.get("stride_cn")) != (N, 1):
+            return f"c strides {sc.get('stride_cm')},{sc.get('stride_cn')} are not row-major [M, N]"
+        if K % 16:
+            return f"K={K} is not a multiple of the 16-wide k-step"
+        return True
+
+    def emit(self, node, ctx):
+        meta = launch_meta(node)
+        sc = meta["scalars"]
+        a, b, c = (launch_tensor(node, meta, n) for n in ("a_ptr", "b_ptr", "c_ptr"))
+        ac, bc = ctx.coll(a), ctx.coll(b)
+        rows, lead = rows_of(ac)
+        K, N = shape_of(bc.type)[0]
+        w_nk = _untransposed(ctx, b, K, N, ctx.hint_name(node) + "/W")  # b = W.t(): the kind's W is [N, K] — a reference rearrangement
+        accepted, dot = _target_kinds()   # [R13 hopper] the target's registered k16 step selects Gemm_v1 (accepted) or Gemm_v2{DOT}
+        fn = ctx.kind("gemm", node, K=K, N=N) if accepted else ctx.kind("gemm_dot", node, K=K, N=N, DOT=dot)
+        outs = [ctx.call(fn, r, w_nk, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
+        ctx.rebind(c, from_rows(outs, lead), self, what="c")
+        ctx.bind_weight_role(b, self, "linear.weight", K=K, N=N)
+        wl = ctx.weight_of(b)
+        pins, src = gemm_pins_for(sc.get("M"), sc.get("N"), sc.get("K"))
+        tgt = active_gemm_target()
+        ctx.record(self, node, {"K": K, "N": N, "rows": len(rows), "lookup_key": lookup_key(meta), "pins": pins, "pin_source": src,
+                                "gemm_target": tgt.key, "gemm_target_dot": tgt.dot, "W_is_parameter": wl.name if wl else None}, emitted=f"{fn.id} x{len(rows)}")
