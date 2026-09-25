@@ -218,6 +218,16 @@ def tile_shape(rel, tile: Any, total: int) -> tuple[int, int, int]:
     return nx, nw, seed
 
 
+def hashed_relation(base: str):
+    """The relation object a pinned ``<base>+<leaf>`` system was composed from: ``relations.RELATIONS``, and ``fp4-nvf4``
+    (``fp4/hashed.py`` ``FP4_HASHED``, what ``run.py --relation fp4-nvf4 --auth included-hash`` drives; its operand rows
+    are the VU's 24 steps of 68 words, committed through its ``hash_format``)."""
+    from .fp4.hashed import FP4_HASHED
+    from .relations import relation
+
+    return FP4_HASHED if base == FP4_HASHED.name else relation(base)
+
+
 def committed_trees(pinned: str, man: dict, *, instances_root: str | None = None, procs: int = 1) -> dict[str, TreeKey]:
     """The x / W / y tree references of the instance set the dump names, recomputed from the set itself: the pinned relation
     (``system-digest``) fixes the relation and leaf scheme, the manifest's ``set`` block the range ``[0, total_vus)`` and the
@@ -226,9 +236,10 @@ def committed_trees(pinned: str, man: dict, *, instances_root: str | None = None
     ``nx`` x rows, ``nw`` W columns, ``nx * nw`` y words, digest ``relchain.tile_digest``).  Bindings are
     ``hashauth.binding_digest`` of (dataset, tier, manifest digest, range, K, tree, schema), as the bench commits them;
     keyed-BLAKE3 row trees are framed by core ``frame-v3`` over digests of the raw rows (independent of the prover's leaf
-    code); other leaf schemes use the backend's reference tree builder.  ``ValueError`` when the set cannot be recomputed
-    (no ``set`` block, a ``set.tile`` other than the bench's, a sharing label without one, a digest mismatch, an operand
-    format with its own lanes)."""
+    code); other leaf schemes use the backend's reference tree builder, a relation with a ``hash_format`` (fp4-nvf4) the
+    Poseidon2 leaf over that format's lanes, as ``hashchain.compose`` builds it.  ``ValueError`` when the set cannot be
+    recomputed (no ``set`` block, a ``set.tile`` other than the bench's, a sharing label without one, a digest mismatch, a
+    lane format under a tile or another leaf)."""
     from verity.commitments import CommitmentDomain, RangeIndexedDomain
     from verity.commitments.frame_v3 import FrameV3, Port, RowLeaf, WordLeaf
     from verity.commitments.rowleaf import ROLE_W, ROLE_X
@@ -236,7 +247,6 @@ def committed_trees(pinned: str, man: dict, *, instances_root: str | None = None
     from . import hashauth
     from .auth import OWNER
     from .leaf import registry as leaf_registry
-    from .relations import relation
     from .relchain import instances, instances_digest, tile_digest, tile_instances
 
     base, leaf_name = leaf_registry.split_relation_name(pinned)
@@ -247,16 +257,24 @@ def committed_trees(pinned: str, man: dict, *, instances_root: str | None = None
     tile = s.get("tile")
     if tile is None and s.get("sharing") not in (None, "none"):
         raise ValueError(f"set sharing {s.get('sharing')!r} without a `set.tile` block: the shared-row layout is not recomputed")
-    rel = relation(base)
-    if getattr(rel, "hash_format", None) is not None or rel.word_dtype not in ("<u1", "<u2"):
-        raise ValueError(f"{rel.name}: operands of dtype {rel.word_dtype} / a lane format are not recomputed")
+    rel = hashed_relation(base)
+    hfmt = getattr(rel, "hash_format", None)
+    if rel.word_dtype not in ("<u1", "<u2"):
+        raise ValueError(f"{rel.name}: operands of dtype {rel.word_dtype} are not recomputed")
+    if hfmt is not None and (tile is not None or leaf_name != "poseidon2"):
+        raise ValueError(f"{rel.name}: its lane format ({type(hfmt).__name__}) is recomputed unshared under the poseidon2 leaf only, "
+                         f"not {leaf_name}{' as a tile' if tile is not None else ''}")
     if tile is None:
         digest = instances_digest(rel, total, root=instances_root)
         if digest != claimed:
             raise ValueError(f"the regenerated {rel.name} set of {total} VUs has manifest digest {digest[:16]}…, the dump claims {claimed[:16]}…")
         data = instances(rel, total, procs=procs, root=instances_root)
-        x_rows = [[int(w) for w in v[0]] for v in data]
-        w_cols = [[int(w) for w in v[1]] for v in data]
+        if hfmt is not None:
+            import numpy as np
+            x_rows, w_cols = (np.asarray([v[i] for v in data], dtype=np.int64) for i in (0, 1))
+        else:
+            x_rows = [[int(w) for w in v[0]] for v in data]
+            w_cols = [[int(w) for w in v[1]] for v in data]
     else:
         nx, nw, seed = tile_shape(rel, tile, total)
         digest = tile_digest(rel, nx, nw, seed)
@@ -267,11 +285,13 @@ def committed_trees(pinned: str, man: dict, *, instances_root: str | None = None
     word_bits = 16 if rel.word_dtype == "<u2" else 8
     K = int(getattr(rel, "vu_words", 1536))
     scheme = leaf_registry.get(leaf_name)
+    if hfmt is not None:
+        scheme, word_bits = scheme.with_lanes(hfmt), hfmt.elem_bits
     ysch, ybytes = hashauth.word_schema(rel.y_bits)
     y_words = [int(rel.y_public(int(v[3]))) for v in data]
     if len(y_words) != total:
         raise ValueError(f"{rel.name}: the regenerated set has {len(y_words)} VUs, not {total}")
-    if any(len(r) != K for r in x_rows + w_cols):
+    if any(len(r) != K for r in (*x_rows, *w_cols)):
         raise ValueError(f"{rel.name}: instance rows are not K = {K} words")
     counts = {"a": len(x_rows), "b": len(w_cols), "y": total}
     bindings = {n: hashauth.binding_digest(dataset=rel.instances_dataset, tier=rel.instances_tier, manifest_sha256=claimed, lo=0,
