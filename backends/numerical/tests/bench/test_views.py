@@ -393,3 +393,19 @@ def test_cli_json_round_trips_and_parity_exit_codes(store: LocalStore, capsys: p
     assert V.main(["--root", str(store.root), "--parity"]) == 0
     assert capsys.readouterr().out.startswith("parity: ok")
     assert V.main(["--root", str(store.root), "--parity", "--snapshot", "tables-none"]) == 2
+
+
+def test_finding_labels_mark_or_pull_cells_in_both_renderers(store: LocalStore) -> None:
+    open_ = "UNDER RE-VERIFICATION: soundness issue R1/R2"
+    art = committed(store, t_total=0.4, labels=[("finding", open_, "coordinator", "2026-09-25T07:45:00Z")])
+    views = V.build(store)
+    cell = line(views)["cells"]["B-Ligero"]
+    assert cell.artifact == art and cell.legacy.finding.startswith(open_)
+    assert "(under re-verification) [" in V.render_markdown(views)
+    store.add_label(art, "finding", "PULLED R1/R2", "coordinator", ts="2026-09-25T09:00:00Z")
+    views = V.build(store)
+    assert line(views)["cells"]["B-Ligero"] is None and codes(views, art)[-1] == "D"
+    # the legacy rules pull the same frozen cells, so parity holds with marks and pulls
+    put(store, result(t_total=4.0), labels=[("finding", open_, "coordinator", "2026-09-25T07:45:00Z")])
+    pulled = put(store, result(t_total=2.0), labels=[("finding", "PULLED R1/R2", "coordinator", "2026-09-25T09:00:00Z")])
+    assert V.parity(store) == [] and pulled not in {c.artifact for c in V.build(store, V.LEGACY).cells}
