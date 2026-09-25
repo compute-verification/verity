@@ -117,7 +117,7 @@ def test_readiness_cpu_mode_record(tmp_path: Path) -> None:
     assert checks["torch_cpu"]["value"]["cuda_available"] == rec["cuda_available"]
     assert not {"torch_cuda", "hidden_gpu_so", "fa2_tap_so", "fa3_tap_so"} & set(checks), "GPU checks must not appear in cpu mode"
     for name in ("python_3_12", "vllm_import", "vllm_commit_d9105ea80", "verity_from_tree", "verity_vllm_from_tree",
-                 "research_telemetry_from_tree", "sampled_proofs_from_tree", "numpy_import", "no_old_tree_on_path"):
+                 "research_telemetry_from_tree", "sampled_proofs_from_tree", "sampled_proofs_via_pth", "numpy_import", "no_old_tree_on_path"):
         assert name in checks, name
     for name in ("verity_from_tree", "verity_vllm_from_tree", "research_telemetry_from_tree", "sampled_proofs_from_tree", "numpy_import"):
         assert checks[name]["ok"], (name, checks[name])
@@ -129,6 +129,15 @@ def test_readiness_cpu_mode_record(tmp_path: Path) -> None:
     assert "total_bytes" in meas["memory"] and "cgroup_max_bytes" in meas["memory"]
     assert rec["identities"]["torch"] == checks["torch_cpu"]["value"] and rec["identities"]["native"] == {}
     assert rec["identities"]["tree"] == {"integration_root": str(root), "verity_core": str(core), "research": str(research)}
+
+
+def test_bootstrap_writes_the_sampled_proofs_pth_and_readiness_checks_it() -> None:
+    """Gate and row scripts set their own PYTHONPATH: the venv's site-packages carries a .pth for protocols/sampled_proofs, and
+    readiness imports verity_sampled_proofs with PYTHONPATH removed."""
+    text = SCRIPT.read_text()
+    assert 'echo "$SAMPLED" > "$SITE/verity-sampled-proofs.pth"' in text
+    assert text.index("verity-sampled-proofs.pth") < text.index("# ---- 5. readiness")
+    assert 'check("sampled_proofs_via_pth"' in _readiness_source()
 
 
 def test_gpu_mode_record_shape_is_unchanged() -> None:

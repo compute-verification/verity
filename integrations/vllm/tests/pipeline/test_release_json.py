@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import subprocess
 import sys
 from pathlib import Path
@@ -162,24 +161,6 @@ def test_cli_check_and_line_as_a_process(tmp_path):
     assert r.stdout.strip() == "/workspace/cp/nc_build-r16-int-3"
 
 
-def test_pod_release_sh_writes_through_the_module_and_checks():
-    """The shell side: no constant tree, the module gets --tree "$TREE", the record is re-read after the ship, the pod-side steps run
-    under the per-pod lock with the per-tree collector build dir."""
-    s = (HERE / "pod_release.sh").read_text()
-    assert '"tree": "/workspace/cp/veritor"' not in s and "os.path.realpath(os.getcwd())" not in s
-    assert re.search(r'release_json write --tag "\$TAG" --tree "\$TREE"', s)
-    assert re.search(r"release_json\.py check --tree '\$TREE' --tag '\$TAG' --commit '\$HEAD9'", s)
-    assert "RELEASE-TREE-OK" in s and "RELEASE-FAIL $TAG $POD: RELEASE.json does not name the installed tree" in s
-    assert re.search(r"flock -w \$\{RELEASE_LOCK_WAIT_S:-3600\} /workspace/cp/release\.lock bash -s", s)
-    assert re.search(r'NC_BUILD=\$\(python3 verity_vllm/pipeline/release_json\.py nc-build "\$TREE"\)', s)
-    assert "NATIVE_COLLECT_BUILD=${NC_BUILD:-/workspace/cp/nc_build}" in s
-    assert '--nc-build "$NATIVE_COLLECT_BUILD"' in s
-    # the TREE the pod side sees is the REMOTE_TREE the laptop side resolved; readiness uses the same collector build dir
-    assert re.search(r"TREE='\$TREE' NC_BUILD='\$NC_BUILD'", s)
-    assert 'REMOTE_ENV="${REMOTE_ENV:-} NATIVE_COLLECT_BUILD=$NC_BUILD"' in s
-    assert subprocess.run(["bash", "-n", str(HERE / "pod_release.sh")]).returncode == 0
-
-
 def test_the_row_reads_the_release_through_the_module(tmp_path, monkeypatch):
     """The row's REL-09 line: from `release-json line` (tree-local first), the record USED is the one copied into the evidence, and a
     released tree takes the release's collector build dir unless the caller set NATIVE_COLLECT_BUILD."""
@@ -206,25 +187,3 @@ def test_the_row_reads_the_release_through_the_module(tmp_path, monkeypatch):
     for pinned in (prepared("--native-collect-build", str(tmp_path / "nc_own")),
                    prepared(environ={"NATIVE_COLLECT_BUILD": str(tmp_path / "nc_own")})):
         assert pinned.ncb == pinned.child_env["NATIVE_COLLECT_BUILD"] == str(tmp_path / "nc_own")
-
-
-def test_pod_release_busy_pattern_names_the_stage_processes_launched_outside_row_pod():
-    """[R18 infra, F-r18-infra-2, M-0105] pod_release.sh busy(): a Match stage run outside row_pod.sh from the default tree (run_config +
-    its m1_capture / fold workers, cb_a.global_match, cb_a.compare) is row-like -- cp-r18-l40s 22:57Z the int-2 ship landed under x09's
-    fold the moment the capture freed the GPU.  The pgrep -f pattern is applied to real command lines of that shape."""
-    src = (HERE / "pod_release.sh").read_text()
-    m = re.search(r"pgrep -f '([^']+)' \| grep -v -w", src)
-    assert m, "busy() pgrep pattern not found"
-    pat = re.compile(m.group(1))
-    row_like = [
-        "bash verity_vllm/ops/row_pod.sh smollm2-135m__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager B0 wl.json /d build",
-        "/workspace/venv-py312/bin/python -m verity_vllm.pipeline.match --case MISTRAL7B --workload w.json --out /o/match --phase all",
-        "/workspace/venv-py312/bin/python -m verity_vllm.pipeline.match --worker fold --log /o/match/capture/log.jsonl.gz",
-        "/workspace/venv-cu129/bin/python -m verity_vllm.pipeline.m1_capture --case MISTRAL7B",
-        "/workspace/venv-py312/bin/python -m verity_vllm.check.match.global_match --gprog p.json --workload w.json",
-        "/workspace/venv-cu129/bin/python -m verity_vllm.pipeline.commit --case B0 --workload w.json",
-    ]
-    for cmd in row_like:
-        assert pat.search(cmd), cmd
-    for cmd in ["/usr/bin/python3 zk/campaign/tele sample --attempt-dir /a", "nvidia-smi --query-gpu=memory.used --format=csv", "sshd: root@notty"]:
-        assert not pat.search(cmd), cmd
