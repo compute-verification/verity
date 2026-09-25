@@ -278,6 +278,10 @@ def prove(a) -> int:
                                link=LK.Link(lay, exchange=exchange, x=X, w=Wn))
         try:
             proof, st = prover.prove(inst, True, transcript=tr)
+        except BaseException:
+            # cell-prove would wait for root_F (or for the prime socket) for an hour
+            fp.kill()
+            raise
         finally:
             if plink is not None:
                 plink.close()
