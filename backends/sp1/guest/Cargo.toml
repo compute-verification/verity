@@ -20,3 +20,5 @@ unsound-relation-only = ["veritor-zk-common/unsound-relation-only"]
 relation-bare = ["veritor-zk-common/relation-bare"]
 # The committed statement: the bare relation plus the SHA-256 row digests of the operands (src/main.rs, common/src/committed.rs).
 relation-committed = ["veritor-zk-common/relation-committed"]
+# The committed statement over vllm-v1 position-leaf trees (common/src/committed_vllm.rs): its own main and ELF.
+relation-committed-vllm = ["relation-committed", "veritor-zk-common/relation-committed-vllm"]

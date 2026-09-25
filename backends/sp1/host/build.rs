@@ -40,6 +40,7 @@ const GUEST_FEATURES: &[(&str, &str)] = &[
     ("CARGO_FEATURE_ATTRIBUTION", "attribution"),
     ("CARGO_FEATURE_RELATION_BARE", "relation-bare"),
     ("CARGO_FEATURE_RELATION_COMMITTED", "relation-committed"),
+    ("CARGO_FEATURE_RELATION_COMMITTED_VLLM", "relation-committed-vllm"),
 ];
 
 /// `--remap-path-prefix` flags for the two prefixes that differ between machines.

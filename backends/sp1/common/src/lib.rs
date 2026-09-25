@@ -197,3 +197,6 @@ pub mod tc_hopper_bf16;
 /// `relation-committed/v1` (`relation-committed`): the bare relation with the operands bound to frame-v3 SHA-256 row trees.
 #[cfg(any(feature = "relation-committed", test))]
 pub mod committed;
+/// `relation-committed-vllm/v1` (`relation-committed-vllm`): the same relation over vllm-v1 position-leaf trees.
+#[cfg(any(feature = "relation-committed-vllm", test))]
+pub mod committed_vllm;

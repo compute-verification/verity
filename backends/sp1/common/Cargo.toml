@@ -49,6 +49,8 @@ relation-bare = []
 # The committed statement (`committed`): the bare relation, and the guest hashes every x row and W column
 # (`sha256/row/v1`, SP1's SHA-256 precompile) and commits the digests, which the verifier checks against frame-v3 roots.
 relation-committed = ["relation-bare"]
+# The same statement over vllm-v1 trees (`committed_vllm`): the guest hashes each row as a vllm-v1 position leaf.
+relation-committed-vllm = ["relation-committed"]
 
 # The native oracle of the per-format arithmetic (the modules it checks exist only with the bare statement).
 [[example]]

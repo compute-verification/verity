@@ -40,6 +40,8 @@ relation-bare = ["veritor-zk-common/relation-bare"]
 # The committed statement (not with `relation-bare`: each is its own guest): the `committed-*` subcommands commit a
 # frozen tier's rows to frame-v3 roots, prove, and verify the proof's public values against the roots.
 relation-committed = ["veritor-zk-common/relation-committed"]
+# The same subcommands over vllm-v1 trees (`committed_vllm`; the guest's vllm main).
+relation-committed-vllm = ["relation-committed", "veritor-zk-common/relation-committed-vllm"]
 # Sound: build.rs forwards this to the guest so the sampling profiler can see
 # the interpreter's dispatch / operand assembly / arithmetic separately.
 attribution = ["veritor-zk-common/attribution"]

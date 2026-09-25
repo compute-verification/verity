@@ -20,7 +20,11 @@ use serde_json::{json, Value};
 use sp1_sdk::prelude::*;
 use sp1_sdk::{ProverClient, SP1Proof};
 use veritor_zk_common::bare::{self, Format};
-use veritor_zk_common::committed::{self, TreeRef, TREE_NAMES};
+use veritor_zk_common::committed::{self, TREE_NAMES};
+#[cfg(not(feature = "relation-committed-vllm"))]
+use veritor_zk_common::committed::{self as scheme, TreeRef};
+#[cfg(feature = "relation-committed-vllm")]
+use veritor_zk_common::committed_vllm::{self as scheme, TreeRef};
 use veritor_zk_common::sha256;
 
 use super::bare_cmd::{BareSet, Layout, Loaded};
@@ -40,10 +44,11 @@ struct Commitment {
     trees_seconds: f64,
 }
 
-/// The `sha256/row/v1` digests of rows `[lo, hi)` of a VU-major block, over `threads` threads.
+/// The row leaf digests (`sha256/row/v1`, or vllm-v1 position leaves) of rows `[lo, hi)` of a VU-major block, over
+/// `threads` threads.
 fn digest_rows(format: Format, block: &[u8], lo: usize, hi: usize, role: u8, threads: usize) -> Vec<u8> {
     let rb = format.row_bytes();
-    let hasher = committed::RowHasher::new(format);
+    let hasher = scheme::RowHasher::new(format);
     let rows = &block[lo * rb..hi * rb];
     let per = (hi - lo).div_ceil(threads.max(1)).max(1);
     let mut out = vec![0u8; 32 * (hi - lo)];
@@ -70,8 +75,7 @@ fn commit(bare_set: &BareSet, set: &Loaded) -> Result<Commitment> {
     let identity = bare_set.identity(set)?;
     let (abs_lo, abs_hi) = ((set.base + lo) as u64, (set.base + hi) as u64);
     let format = set.format;
-    let bindings = committed::bindings(format, &set.dataset, &set.tier, &set.manifest_sha256, abs_lo, abs_hi)
-        .ok_or_else(|| anyhow!("dataset / tier / manifest need a JSON escape; not a frozen set's names"))?;
+    let refs = tree_refs(format, &set.dataset, &set.tier, &set.manifest_sha256, abs_lo, abs_hi)?;
     let started = Instant::now();
     let n = threads();
     let dx = digest_rows(format, &set.x, lo, hi, committed::ROLE_X, n);
@@ -79,32 +83,81 @@ fn commit(bare_set: &BareSet, set: &Loaded) -> Result<Commitment> {
     let rows_seconds = started.elapsed().as_secs_f64();
     let started = Instant::now();
     let y_le = bare::encode_y(format, &set.y[lo..hi]).ok_or_else(|| anyhow!("a committed word does not fit {}", format.name()))?;
-    let trees = committed::roots(format, &bindings, &y_le, &dx, &dw);
+    let trees = scheme::roots(format, &refs, &y_le, &dx, &dw);
     let trees_seconds = started.elapsed().as_secs_f64();
     Ok(Commitment { format, id: bare::identity_digest(&identity), identity, lo: abs_lo, hi: abs_hi, trees, rows_seconds, trees_seconds })
 }
 
-fn statement_json(c: &Commitment, set: &Loaded) -> Value {
-    json!({
-        "schema": STATEMENT_SCHEMA, "scheme": "frame-v3", "row_schema": committed::ROW_SCHEMA, "binding_tag": committed::BINDING_TAG,
-        "format": c.format.name(), "K": bare::K, "B": c.hi - c.lo, "identity": c.identity, "id": hex::encode(c.id),
-        "instances": {"dataset": set.dataset, "tier": set.tier, "manifest_sha256": set.manifest_sha256, "lo": c.lo, "hi": c.hi},
-        "trees": (0..3).map(|i| json!({"name": TREE_NAMES[i], "schema": committed::tree_schema(c.format, TREE_NAMES[i]),
-            "binding": hex::encode(c.trees[i].binding), "owner": c.trees[i].owner, "count": c.trees[i].count,
-            "root": hex::encode(c.trees[i].root)})).collect::<Vec<_>>(),
-    })
+/// The verifier's own tree references of `[lo, hi)` of a frozen set: frame-v3 bindings or vllm-v1 step domains.
+#[cfg(not(feature = "relation-committed-vllm"))]
+fn tree_refs(format: Format, dataset: &str, tier: &str, manifest: &str, lo: u64, hi: u64) -> Result<[[u8; 32]; 3]> {
+    committed::bindings(format, dataset, tier, manifest, lo, hi).ok_or_else(|| anyhow!("dataset / tier / manifest need a JSON escape; not a frozen set's names"))
 }
 
-/// A statement as the verifier takes it: the format, the id and the tree references, every binding and the id
-/// re-derived from the instance range (the statement's own copies must agree).
+#[cfg(feature = "relation-committed-vllm")]
+fn tree_refs(format: Format, dataset: &str, tier: &str, manifest: &str, lo: u64, hi: u64) -> Result<[scheme::StepDomain; 3]> {
+    scheme::domains(format, dataset, tier, manifest, lo, hi).ok_or_else(|| anyhow!("dataset / tier / manifest need a JSON escape; not a frozen set's names"))
+}
+
+fn statement_json(c: &Commitment, set: &Loaded) -> Value {
+    let mut doc = json!({
+        "schema": STATEMENT_SCHEMA,
+        "format": c.format.name(), "K": bare::K, "B": c.hi - c.lo, "identity": c.identity, "id": hex::encode(c.id),
+        "instances": {"dataset": set.dataset, "tier": set.tier, "manifest_sha256": set.manifest_sha256, "lo": c.lo, "hi": c.hi},
+    });
+    let (fields, trees) = scheme_json(c);
+    for (k, v) in fields {
+        doc[k] = v;
+    }
+    doc["trees"] = Value::Array(trees);
+    doc
+}
+
+#[cfg(not(feature = "relation-committed-vllm"))]
+fn scheme_json(c: &Commitment) -> (Vec<(&'static str, Value)>, Vec<Value>) {
+    let fields = vec![("scheme", json!("frame-v3")), ("row_schema", json!(committed::ROW_SCHEMA)), ("binding_tag", json!(committed::BINDING_TAG))];
+    let trees = (0..3)
+        .map(|i| json!({"name": TREE_NAMES[i], "schema": committed::tree_schema(c.format, TREE_NAMES[i]),
+            "binding": hex::encode(c.trees[i].binding), "owner": c.trees[i].owner, "count": c.trees[i].count,
+            "root": hex::encode(c.trees[i].root)}))
+        .collect();
+    (fields, trees)
+}
+
+#[cfg(feature = "relation-committed-vllm")]
+fn domain_json(d: &scheme::StepDomain) -> Value {
+    json!({"kind": "step", "program_digest": hex::encode(d.program), "ctx_digest": hex::encode(d.ctx), "geo_digest": hex::encode(d.geo),
+        "layout_digest": hex::encode(d.layout), "leaf_count": d.leaf_count, "chunk": null})
+}
+
+#[cfg(feature = "relation-committed-vllm")]
+fn scheme_json(c: &Commitment) -> (Vec<(&'static str, Value)>, Vec<Value>) {
+    let fields = vec![("scheme", json!("vllm-v1")), ("statement", json!(scheme::STATEMENT)), ("leaf", json!("pos-leaf"))];
+    let trees = (0..3)
+        .map(|i| json!({"name": TREE_NAMES[i], "value": scheme::VALUES[i], "value_len": scheme::value_len(c.format, i),
+            "domain": domain_json(&c.trees[i].domain), "domain_digest": hex::encode(c.trees[i].domain.digest()),
+            "root": hex::encode(c.trees[i].root)}))
+        .collect();
+    (fields, trees)
+}
+
+fn text(v: &Value, key: &str) -> Result<String> {
+    v.get(key).and_then(Value::as_str).map(str::to_string).ok_or_else(|| anyhow!("statement: {key} missing"))
+}
+
+fn int(v: &Value, key: &str) -> Result<u64> {
+    v.get(key).and_then(Value::as_u64).ok_or_else(|| anyhow!("statement: {key} missing"))
+}
+
+fn root_of(t: &Value) -> Result<[u8; 32]> {
+    hex::decode(text(t, "root")?)?.try_into().map_err(|_| anyhow!("statement: a root is not 32 bytes"))
+}
+
+/// A statement as the verifier takes it: the format, the id and the tree references, every binding (or domain) and the
+/// id re-derived from the instance range (the statement's own copies must agree).
 fn parse_statement(doc: &Value) -> Result<(Format, [u8; 32], [TreeRef; 3])> {
-    let text = |v: &Value, key: &str| v.get(key).and_then(Value::as_str).map(str::to_string).ok_or_else(|| anyhow!("statement: {key} missing"));
-    let int = |v: &Value, key: &str| v.get(key).and_then(Value::as_u64).ok_or_else(|| anyhow!("statement: {key} missing"));
-    if doc.get("schema").and_then(Value::as_str) != Some(STATEMENT_SCHEMA)
-        || doc.get("scheme").and_then(Value::as_str) != Some("frame-v3")
-        || doc.get("row_schema").and_then(Value::as_str) != Some(committed::ROW_SCHEMA)
-    {
-        bail!("not a {STATEMENT_SCHEMA} frame-v3 {} statement", committed::ROW_SCHEMA);
+    if doc.get("schema").and_then(Value::as_str) != Some(STATEMENT_SCHEMA) {
+        bail!("not a {STATEMENT_SCHEMA} statement");
     }
     let format = Format::from_name(&text(doc, "format")?).ok_or_else(|| anyhow!("statement: unknown format"))?;
     let inst = doc.get("instances").ok_or_else(|| anyhow!("statement: instances missing"))?;
@@ -117,26 +170,55 @@ fn parse_statement(doc: &Value) -> Result<(Format, [u8; 32], [TreeRef; 3])> {
     if text(doc, "id")? != hex::encode(id) {
         bail!("statement: id is not sha256 of the instance range's identity");
     }
-    let bindings = committed::bindings(format, &dataset, &tier, &manifest, lo, hi).ok_or_else(|| anyhow!("statement: unescapable names"))?;
+    let refs = tree_refs(format, &dataset, &tier, &manifest, lo, hi)?;
     let trees = doc.get("trees").and_then(Value::as_array).ok_or_else(|| anyhow!("statement: trees missing"))?;
     if trees.len() != 3 {
         bail!("statement: {} trees, not a, b, y", trees.len());
     }
+    Ok((format, id, parse_trees(doc, format, &refs, trees, hi - lo)?))
+}
+
+#[cfg(not(feature = "relation-committed-vllm"))]
+fn parse_trees(doc: &Value, format: Format, bindings: &[[u8; 32]; 3], trees: &[Value], count: u64) -> Result<[TreeRef; 3]> {
+    if doc.get("scheme").and_then(Value::as_str) != Some("frame-v3") || doc.get("row_schema").and_then(Value::as_str) != Some(committed::ROW_SCHEMA) {
+        bail!("not a frame-v3 {} statement", committed::ROW_SCHEMA);
+    }
     let mut out = [TreeRef { binding: [0; 32], owner: 0, count: 0, root: [0; 32] }; 3];
     for (i, t) in trees.iter().enumerate() {
-        let root: [u8; 32] = hex::decode(text(t, "root")?)?.try_into().map_err(|_| anyhow!("statement: a root is not 32 bytes"))?;
         let owner = t.get("owner").and_then(Value::as_i64).ok_or_else(|| anyhow!("statement: owner missing"))?;
         if text(t, "name")? != TREE_NAMES[i]
             || text(t, "schema")? != committed::tree_schema(format, TREE_NAMES[i])
             || text(t, "binding")? != hex::encode(bindings[i])
             || owner != committed::OWNERS[i]
-            || int(t, "count")? != hi - lo
+            || int(t, "count")? != count
         {
             bail!("statement: tree {} does not match the instance range's binding / owner / count / schema", TREE_NAMES[i]);
         }
-        out[i] = TreeRef { binding: bindings[i], owner, count: hi - lo, root };
+        out[i] = TreeRef { binding: bindings[i], owner, count, root: root_of(t)? };
     }
-    Ok((format, id, out))
+    Ok(out)
+}
+
+#[cfg(feature = "relation-committed-vllm")]
+fn parse_trees(doc: &Value, format: Format, domains: &[scheme::StepDomain; 3], trees: &[Value], count: u64) -> Result<[TreeRef; 3]> {
+    if doc.get("scheme").and_then(Value::as_str) != Some("vllm-v1") || doc.get("statement").and_then(Value::as_str) != Some(scheme::STATEMENT) {
+        bail!("not a vllm-v1 {} statement", scheme::STATEMENT);
+    }
+    let mut out = [TreeRef { domain: domains[0], root: [0; 32] }; 3];
+    for (i, t) in trees.iter().enumerate() {
+        let d = &domains[i];
+        if text(t, "name")? != TREE_NAMES[i]
+            || text(t, "value")? != scheme::VALUES[i]
+            || int(t, "value_len")? != scheme::value_len(format, i) as u64
+            || t.get("domain") != Some(&domain_json(d))
+            || text(t, "domain_digest")? != hex::encode(d.digest())
+            || d.leaf_count != count
+        {
+            bail!("statement: tree {} does not match the instance range's step domain / value layout", TREE_NAMES[i]);
+        }
+        out[i] = TreeRef { domain: *d, root: root_of(t)? };
+    }
+    Ok(out)
 }
 
 /// The guest input of `[lo, hi)` claiming `claimed`, and what the guest must commit (`committed::decide`).
@@ -151,7 +233,7 @@ fn input(bare_set: &BareSet, set: &Loaded, id: &[u8; 32], claimed: &[u32]) -> Re
         .step_by(bare_set.vus_per_read)
         .map(|at| bare::encode_chunk(set.format, &set.x, &set.w, at, (at + bare_set.vus_per_read).min(hi)))
         .collect();
-    let expected = committed::decide(&header, &chunks);
+    let expected = scheme::decide(&header, &chunks);
     let bytes = header.len() + chunks.iter().map(Vec::len).sum::<usize>();
     let mut stdin = SP1Stdin::new();
     stdin.write_vec(header);
@@ -246,8 +328,8 @@ pub(crate) async fn cmd_execute(bare_set: BareSet, flip_y: Option<usize>, tamper
     };
     let (stdin, expected, input_bytes) = input(&bare_set, &set, &c.id, &claimed)?;
     let (public, report) = run_executor(&client, stdin).await?;
-    let parsed = committed::parse_public(&public).ok_or_else(|| anyhow!("the guest committed no relation-committed/v1 values"))?;
-    let reason = committed::check(&public, c.format, &c.id, &trees);
+    let parsed = scheme::parse_public(&public).ok_or_else(|| anyhow!("the guest committed no relation-committed/v1 values"))?;
+    let reason = scheme::check(&public, c.format, &c.id, &trees);
     let negative = flip_y.is_some() || tamper.is_some() || wrong.is_some();
     emit(&json!({"backend": BACKEND, "event": "committed-execute", "format": c.format.name(), "identity": c.identity,
         "lo": lo, "hi": hi, "vus_per_read": bare_set.vus_per_read, "input_bytes": input_bytes, "report": report,
@@ -294,7 +376,7 @@ pub(crate) async fn cmd_prove(
     let tampered = tamper.map(|j| tamper_x(&mut set, lo + j.min(hi - lo - 1)));
     let (stdin, expected, input_bytes) = input(&bare_set, &set, &cold.id, &claimed)?;
     let want_accept = tampered.is_none();
-    if committed::parse_public(&expected).map(|p| p.verdict) != Some(bare::VERDICT_ACCEPT) {
+    if scheme::parse_public(&expected).map(|p| p.verdict) != Some(bare::VERDICT_ACCEPT) {
         bail!("the range does not satisfy the relation natively (verdict 0): nothing to prove");
     }
     if !skip_execute {
@@ -302,7 +384,7 @@ pub(crate) async fn cmd_prove(
         if public != expected {
             bail!("the guest's public values differ from committed::decide");
         }
-        emit(&json!({"event": "execute", "report": report, "tree_check": committed::check(&public, cold.format, &cold.id, &cold.trees)}))?;
+        emit(&json!({"event": "execute", "report": report, "tree_check": scheme::check(&public, cold.format, &cold.id, &cold.trees)}))?;
     }
     let started = Instant::now();
     let pk = client.setup(ELF).await.map_err(|error| anyhow!("setup failed: {error}"))?;
@@ -357,7 +439,7 @@ pub(crate) async fn cmd_prove(
         let verify_seconds = started.elapsed().as_secs_f64();
         let public = proof.public_values.as_slice().to_vec();
         let started = Instant::now();
-        let reason = committed::check(&public, cold.format, &cold.id, &cold.trees);
+        let reason = scheme::check(&public, cold.format, &cold.id, &cold.trees);
         let check_seconds = started.elapsed().as_secs_f64();
         let accepted = sp1_ok && reason.is_none();
         let shards = match &proof.proof {
@@ -397,12 +479,12 @@ pub(crate) async fn cmd_verify(proof: PathBuf, statement: PathBuf, expect_vk: Op
     let reason = match parsed {
         Err(error) => Some(format!("{error:#}")),
         Ok((format, id, mut trees)) => match &wrong {
-            Some(name) => wrong_root(&mut trees, name).map_or_else(|e| Some(e.to_string()), |_| committed::check(public, format, &id, &trees)),
-            None => committed::check(public, format, &id, &trees),
+            Some(name) => wrong_root(&mut trees, name).map_or_else(|e| Some(e.to_string()), |_| scheme::check(public, format, &id, &trees)),
+            None => scheme::check(public, format, &id, &trees),
         },
     };
     let check_seconds = started.elapsed().as_secs_f64();
-    let verdict = committed::parse_public(public).map(|p| p.verdict);
+    let verdict = scheme::parse_public(public).map(|p| p.verdict);
     let ok = sp1_ok && vk_pinned != Some(false) && reason.is_none();
     emit(&json!({"backend": BACKEND, "event": "committed-verify", "ok": ok, "sp1_ok": sp1_ok, "vk_hash": vk,
         "expected_vk": expect_vk, "vk_pinned": vk_pinned, "verdict": verdict, "tree_check": reason, "wrong_root": wrong,
