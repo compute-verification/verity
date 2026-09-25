@@ -267,12 +267,20 @@ def commitment_problems(pdir: Path, man: dict, pinned: str, reps: list[str], *, 
         if listed and {Path(f["proof"]).stem for f in listed if f.get("proof")} != proofs:
             orphans.append(f"{r}: the manifest's proofs are not the rep's proofs")
     per_rep: dict[str, list] = {}
+    unreadable: list[str] = []
     for r in reps:
         for f in sorted((pdir / r).glob("*.stmt")):
-            per_rep.setdefault(r, []).append((f.name, read_statement(f.read_bytes())))
+            try:
+                st = read_statement(f.read_bytes())
+            except Exception as e:  # noqa: BLE001  (batch rejects such a statement; here it only cannot be counted)
+                unreadable.append(f"{r}/{f.name}: unreadable statement ({type(e).__name__}: {e})")
+                continue
+            per_rep.setdefault(r, []).append((f.name, st))
     hashed = "+" in (pinned or "") or any(getattr(st, "hash_auth", None) is not None for sts in per_rep.values() for _, st in sts)
     if orphans or not hashed:
         return hashed, orphans
+    if unreadable:
+        return True, unreadable[:8] + ([f"... {len(unreadable) - 8} more"] if len(unreadable) > 8 else [])
     try:
         want = committed_trees(pinned, man, instances_root=instances_root)
     except ValueError as e:
