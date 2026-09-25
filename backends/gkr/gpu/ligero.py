@@ -469,15 +469,14 @@ def open_w_qc_eval(cm: Committed, a: torch.Tensor, r: torch.Tensor) -> tuple[tor
         return open_w_qc(cm, a, r)
     import cupy as cp
 
-    int8 = use_int8(dev)
-    xr = Limbs8(cm.x_rows, "b") if int8 else cm.x_rows
-    w = _mm(r.T.contiguous(), xr).T.contiguous()                      # (k, 6)
-    del xr
+    w = kernels.eq_rows_dot(r, cm.x_rows)                             # (k, 6), one read of the rows
     l = a.shape[0]
     full = l // k
-    at = torch.zeros((rows, DEG, k), dtype=torch.int32, device=dev)   # at[i, d, j] = a[i k + j, d]
+    at = torch.empty((rows, DEG, k), dtype=torch.int32, device=dev)   # at[i, d, j] = a[i k + j, d]
     if full:
         at[:full] = a[: full * k].reshape(full, k, DEG).permute(0, 2, 1)
+    if full < rows:
+        at[full:].zero_()
     if l - full * k:
         at[full, :, : l - full * k] = a[full * k:].T
     at = at.view(rows * DEG, k)
