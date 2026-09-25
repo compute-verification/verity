@@ -129,8 +129,8 @@ __all__ = [
 # --- caption constants (frozen) -----------------------------------------------------------------------------------------
 
 FROZEN_ON = "2026-09-22"
-K = census.VU_K1536.K
-B = census.VU_K1536.batch
+K = census.GEMM_COORDINATE_K1536.K
+B = census.GEMM_COORDINATE_K1536.batch
 #: log2 of the soundness error: the target AND the achieved (union-bounded over sub-batches) must both be <= this.
 SOUNDNESS_LOG2 = -128
 AUTHENTICATION = "excluded"
@@ -163,7 +163,7 @@ NATIVE_PEAK_METHOD_CUBLAS = "cublas dense gemm 8192^3, median of 5"
 NATIVE_PEAK_METHOD = ("the best dense GEMM through the vendor library on the row's device x dtype, median of 5, the call and size in the "
                       "footnote; an instruction-level microbenchmark only when no GEMM measurement exists, and then said so")
 #: The BF16 frozen set: sha256 of ``fixtures/bench-instances/v1/manifest.json`` (``verity_numerical.bench.instances.manifest_sha256``).
-BF16_INSTANCES_MANIFEST_SHA256 = census.INSTANCE_SETS["vu-k1536"].manifest_sha256
+BF16_INSTANCES_MANIFEST_SHA256 = census.INSTANCE_SETS["bench-instances-v1"].manifest_sha256
 #: The frozen instance ref a valid result of each target must carry, ``instances`` field for field.  A target absent here
 #: has no frozen set yet: every result of it is rejected with that reason.  The synthetic sets (FP8 Ada, the two Hopper
 #: relations) are pinned by their recipe digest, the BF16 Ampere set by its fixture manifest (``census/instance_sets.json``).

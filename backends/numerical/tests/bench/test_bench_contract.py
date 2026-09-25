@@ -351,7 +351,7 @@ def test_fp8_targets_divide_by_their_own_anchor_peak() -> None:
     assert contract.native_seconds_per_vu(1536, FP8_HOPPER_WGMMA.name) == pytest.approx(2 * 1536 / 1978.9e12)
     assert contract.native_seconds_per_vu(1536, FP8_HOPPER_WGMMA.name) == pytest.approx(1.552e-12, rel=1e-3)
     for t in (FIRST, FP8_HOPPER_WGMMA, FP8_ADA_MMA):
-        assert census.seconds_per_vu(contract.native_peak_of(t), 1536) == contract.native_seconds_per_vu(1536, t.name)
+        assert census.native_seconds_per_instance(contract.native_peak_of(t), 1536) == contract.native_seconds_per_vu(1536, t.name)
         assert "sparsity" not in contract.native_peak_of(t).rate and "dense" in contract.native_peak_of(t).rate and census.source(contract.native_peak_of(t))
 
 

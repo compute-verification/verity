@@ -14,7 +14,7 @@ from verity_numerical.bench import census, contract
 
 jsonschema = pytest.importorskip("jsonschema")
 
-FILES = ("hardware", "datatypes", "networks", "workloads", "instance_sets")
+FILES = ("hardware", "datatypes", "networks", "subcircuits", "instance_sets")
 
 #: The ids renders cite.  Removing or renaming one breaks every consumer's history: add a new entry instead.
 PINNED = {
@@ -22,11 +22,12 @@ PINNED = {
                  "rtx-4090/e4m3": 330.3e12, "rtx-5090/e2m1": 1676e12},
     "networks": {"dc-1ms-100gbps": (0.001, 100e9), "rtt-20ms-100gbps": (0.020, 100e9), "rtt-100ms-100gbps": (0.100, 100e9),
                  "dc-1ms-10gbps": (0.001, 10e9)},
-    "workloads": {"vu-k1536": (1536, 4096)},
+    "subcircuits": {"subcircuit/gemm-coordinate-k1536": (1536, 4096)},
     "datatypes": {"bf16": "BF16", "e4m3": "FP8 (E4M3)", "e2m1": "FP4 (NVFP4, E2M1)"},
     "names": {"a100-sxm4-80gb/bf16": "A100 SXM4", "h100-sxm5-80gb/bf16": "H100 SXM5", "h100-sxm5-80gb/e4m3": "H100 SXM5",
               "rtx-4090/e4m3": "RTX 4090", "rtx-5090/e2m1": "RTX 5090"},
-    "instance_sets": {"vu-k1536", "vu-k1536-fp8-ada", "vu-k1536-bf16-hopper", "vu-k1536-fp8-hopper", "vu-k1536-nvfp4-sm120"},
+    "instance_sets": {"bench-instances-v1", "bench-instances-fp8-ada-v1", "bench-instances-bf16-hopper-v1", "bench-instances-fp8-hopper-v1",
+                      "bench-instances-nvfp4-sm120-v1"},
 }
 
 
@@ -40,6 +41,13 @@ def test_every_census_file_validates_against_its_schema_with_unique_ids(name: st
     assert len(ids) == len(set(ids))
 
 
+def test_the_census_encodes_no_units() -> None:
+    """The census holds workloads and subcircuits, never replay or verification units (docs: units design)."""
+    text = " ".join((census.ROOT / f"{n}.json").read_text(encoding="utf-8") for n in FILES)
+    ids = [e["id"] for n in FILES for e in census.raw(n)]
+    assert not [i for i in ids if re.search(r"(^|[-/])(vu|ru)([-/]|$)", i)] and "verification unit" not in text.lower()
+
+
 def test_the_census_is_data_only() -> None:
     files = sorted(p.relative_to(census.ROOT).as_posix() for p in census.ROOT.rglob("*") if p.is_file())
     assert files == sorted(["README.md", *(f"{n}.json" for n in FILES), *(f"schemas/{n}.schema.json" for n in FILES)])
@@ -48,7 +56,7 @@ def test_the_census_is_data_only() -> None:
 def test_ids_are_pinned_with_their_values() -> None:
     assert {k: h.flop_per_second for k, h in census.HARDWARE.items()} == PINNED["hardware"]
     assert {k: (n.rtt_s, n.bandwidth_bps) for k, n in census.NETWORKS.items()} == PINNED["networks"]
-    assert {k: (w.K, w.batch) for k, w in census.WORKLOADS.items()} == PINNED["workloads"]
+    assert {k: (w.K, w.batch) for k, w in census.SUBCIRCUITS.items()} == PINNED["subcircuits"]
     assert set(census.INSTANCE_SETS) == PINNED["instance_sets"]
     assert {k: d.display for k, d in census.DATATYPES.items()} == PINNED["datatypes"]
     assert {k: h.name for k, h in census.HARDWARE.items()} == PINNED["names"]
@@ -91,12 +99,12 @@ def test_every_target_resolves_its_census_line_and_every_line_is_a_targets() -> 
     assert {h.id for h in lines.values()} == set(census.HARDWARE)
     sets = [s.target for s in census.INSTANCE_SETS.values()]
     assert set(sets) <= set(TARGETS) and len(sets) == len(set(sets))
-    assert all(s.size == census.VU_K1536.batch and s.id == s.tier and re.fullmatch(r"[0-9a-f]{64}", s.manifest_sha256)
+    assert all(s.size == census.SUBCIRCUITS[s.subcircuit].batch and re.fullmatch(r"[0-9a-f]{64}", s.manifest_sha256)
                for s in census.INSTANCE_SETS.values())
 
 
-def test_seconds_per_vu() -> None:
+def test_native_seconds_per_instance() -> None:
     h = census.HARDWARE["a100-sxm4-80gb/bf16"]
-    assert census.seconds_per_vu(h, 1536) == 2 * 1536 / 312e12
+    assert census.native_seconds_per_instance(h, 1536) == 2 * 1536 / 312e12
     with pytest.raises(ValueError):
-        census.seconds_per_vu(h, 0)
+        census.native_seconds_per_instance(h, 0)
