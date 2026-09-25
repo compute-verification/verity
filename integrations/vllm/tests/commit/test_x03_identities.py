@@ -9,7 +9,7 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity_vllm.check.commit_verdict import commit_verdict  # noqa: E402
+from verity_vllm.check.verdict import commit_verdict  # noqa: E402
 from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, NativeHostCommitter, TensorMeta  # noqa: E402
 
 

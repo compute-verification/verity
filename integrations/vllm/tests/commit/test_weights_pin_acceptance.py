@@ -191,7 +191,7 @@ def test_shared_weights_are_one_registered_input_across_request_subcircuits(tmp_
 def test_wrong_registered_root_and_wrong_checkpoint_context_are_refused_by_name_and_the_verdict_names_the_pin(checkpoint, tmp_path):
     """[BRIEF §4A] wrong registered root (shard sha != checkpoints.json pin; no entry) and wrong checkpoint context (another repo / revision /
     Program) each FAIL by name with the honest served model; commit_verdict carries the pin's outcome into the row text (ok / missing / mismatch)."""
-    from verity_vllm.check.commit_verdict import commit_verdict
+    from verity_vllm.check.verdict import commit_verdict
 
     d, man, t = checkpoint
     prog, fields = _program()

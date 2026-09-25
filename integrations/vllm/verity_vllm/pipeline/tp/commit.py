@@ -196,7 +196,7 @@ def query_population_gate(sr: dict | None, *, rank: int, required: bool) -> tupl
       cannot say whether it reconciled does not PASS over that silence either;
     * without a required manifest (no Q(P) asked for) the absence is stated, not failed (there was nothing to reconcile against).
     `per_rank_identity_check_ok` is a different check (the binding map's identities vs the manifest) and is not touched."""
-    from verity_vllm.check.commit_verdict import _query_population_scope
+    from verity_vllm.check.c2_rules import _query_population_scope
 
     pop = (sr or {}).get("population") if isinstance((sr or {}).get("population"), dict) else {}
     chk = pop.get("query_checks") if isinstance(pop.get("query_checks"), dict) else None
@@ -311,7 +311,8 @@ def main() -> int:
 
     from verity_vllm.engine import vllm_adapter as va
     from verity_vllm.pipeline.commit import git_head, run_workload
-    from verity_vllm.check.commit_verdict import REQUIRED_CLASSES_DEFAULT, commit_verdict
+    from verity_vllm.check.commit_rules import REQUIRED_CLASSES_DEFAULT
+    from verity_vllm.check.verdict import commit_verdict
     from verity_vllm.pipeline.tp.capture import parse_engine_args
     from verity_vllm.engine.rank_worker import EXTENSION
     from verity_vllm.acquire.committer_api import challenge_positions

@@ -1,8 +1,8 @@
 {
   "rule": "P4 (one result type, one verdict)",
   "entries": [
-    {"file": "verity_vllm/check/commit_verdict.py", "kind": "verdict-import", "symbol": "<module>", "detail": "verity_vllm.check.commit_verdict -> verity_vllm.check.replay.replay_codes"},
-    {"file": "verity_vllm/check/commit_verdict.py", "kind": "verdict-import", "symbol": "<module>", "detail": "verity_vllm.check.commit_verdict -> verity_vllm.query.manifest.format"},
+    {"file": "verity_vllm/check/c2_rules.py", "kind": "verdict-import", "symbol": "<module>", "detail": "verity_vllm.check.c2_rules -> verity_vllm.check.replay.replay_codes"},
+    {"file": "verity_vllm/check/c2_rules.py", "kind": "verdict-import", "symbol": "<module>", "detail": "verity_vllm.check.c2_rules -> verity_vllm.query.manifest.format"},
     {"file": "verity_vllm/check/executed_prefix.py", "kind": "g-literal", "symbol": "executed_prefix_facts", "detail": "G6"},
     {"file": "verity_vllm/check/executed_prefix.py", "kind": "g-literal", "symbol": "link_to_match_account", "detail": "G6", "count": 5},
     {"file": "verity_vllm/check/gates.py", "kind": "g-identifier", "symbol": "<module>", "detail": "gate_G1"},
