@@ -589,6 +589,7 @@ def add_lookup_claim(acc: Acc, rho: Ext, inst: Instance, seg_offs: list[int], ta
     rl_t = t_ext(e_mul(rho, c.lam), dev)
     zt = t_ext(z, dev)
     konst = torch.zeros((DEG,), dtype=torch.int64, device=dev)
+    used = torch.zeros((DEG,), dtype=torch.int64, device=dev)       # Σ eq over the query leaves (fast path)
     base = 0
     for si, s in enumerate(inst.segs):
         plan = _lookup_plan(s.circ, table, dev)
@@ -603,6 +604,7 @@ def add_lookup_claim(acc: Acc, rho: Ext, inst: Instance, seg_offs: list[int], ta
         if _field._fast_scatter is not None and dev.type == "cuda":
             # konst += Σ_u Σ_j e[u, j] (1 + λ cst_j)   (p = 1 for every query leaf)
             S = e_all.sum(dim=0, dtype=torch.int64) % P                # (q_t, 6)
+            used = (used + S.sum(dim=0)) % P
             K = ext_mul(cst_t, lam_t)
             K[:, 0] = (K[:, 0] + 1) % P
             konst = (konst + ext_mul(S, K).sum(dim=0)) % P
@@ -625,7 +627,9 @@ def add_lookup_claim(acc: Acc, rho: Ext, inst: Instance, seg_offs: list[int], ta
             for lo in range(0, s.units, step):
                 hi = min(s.units, lo + step)
                 e = e_all[lo:hi].to(torch.int64)
-                konst = (konst + e.sum(dim=(0, 1))) % P                # p = 1
+                es = e.sum(dim=(0, 1)) % P
+                used = (used + es) % P
+                konst = (konst + es) % P                               # p = 1
                 le = ext_mul(e, lam_t)                                 # λ e        (chunk, q_t, 6)
                 konst = (konst + ext_mul(le, cst_t.unsqueeze(0)).sum(dim=(0, 1))) % P
                 del le
@@ -639,9 +643,12 @@ def add_lookup_claim(acc: Acc, rho: Ext, inst: Instance, seg_offs: list[int], ta
     trows = logup.table_rows(table, dev)
     comb = logup.combine(trows, bs)                                    # (rows, 6)
     konst = (konst + ext_mul(ext_mul(e_tab, lam_t), (zt - comb) % P).sum(dim=0)) % P
-    pad = eqt[base + rows:]
-    if pad.shape[0]:
-        konst = (konst + ext_mul(pad, lam_t).sum(dim=0)) % P
+    if base + rows < eqt.shape[0]:
+        # Σ_pad eq(c.rho, x) = 1 - Σ_used eq (the eq table sums to 1), so the pad term is λ (1 - Σ_used eq)
+        used = (used + e_tab.sum(dim=0, dtype=torch.int64)) % P
+        pad_sum = (-used) % P
+        pad_sum[0] = (pad_sum[0] + 1) % P
+        konst = (konst + ext_mul(pad_sum, lam_t)) % P
     acc.b = e_add(acc.b, e_mul(rho, e_sub(c.value, py_ext(konst))))
 
 
