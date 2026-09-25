@@ -35,6 +35,10 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
  it with their own utilities; their readers stay out of core. Its tests live
  in `tests/proofs/`.
  - `verity.commitments`: see its module docstring.
+ - `verity.census`: the registry of fixed quantities the tables cite by stable id: hardware lines
+ (device, dtype, dense peak, source), networks (the 1 ms / 100 Gb/s reference and the sensitivity
+ profiles), workloads and frozen instance sets. Stdlib only; imports no other core module. A
+ `Target.native_peak` is a census line; add an entry rather than hand-typing a peak.
  Other modules are created when code lands, not before.
  - Tests live in `packages/verity/tests/<module>/`.
 - `protocols/`: one distribution per protocol, and each imports only the

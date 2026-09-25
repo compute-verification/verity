@@ -1,5 +1,12 @@
 # Changelog: `verity_numerical` (the bench renderers and their rules)
 
+## 2026-09-25: peaks, networks and instance sets come from `verity.census`
+
+- The renderers read the native peaks, the reference network (1 ms, 100 Gb/s), the interaction drill-down's sensitivity
+  profiles, K and B, and the frozen instance sets from the core registry `verity.census`, where each has a stable id
+  (`a100-sxm4-80gb/bf16`, `dc-1ms-100gbps`, `vu-k1536`, ...). No value changed: renders are byte-identical and `--parity`
+  is unchanged. `verity.proofs.target.NativePeak` is gone; a target's `native_peak` is a `verity.census.Hardware`.
+
 ## 2026-09-25: route (a) is its own full-relation A-GKR configuration
 
 - Route (a) (A-GKR's prime proof, the operands as keyed-BLAKE3 rows proved in Flock flock-128-r2 with live coins, joined by the

@@ -12,7 +12,8 @@ from types import SimpleNamespace
 import pytest
 from conftest import REPO, VECTOR_RUN, conforming_result
 
-from verity.proofs.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, K16_VECTOR, NVFP4_SM120, NativePeak
+from verity.census import Hardware
+from verity.proofs.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, K16_VECTOR, NVFP4_SM120
 from verity_numerical.bench import contract
 
 FIXTURES = REPO / "fixtures" / "typed-obligation-v0"
@@ -318,7 +319,7 @@ def test_native_reference_is_the_targets_anchor_peak_and_the_bf16_default_is_unc
     (9.846 ps per K=1536 VU; 340 us/VU = 3.45e7x) is unchanged."""
 
     ref = contract.native_reference()
-    assert isinstance(ref, NativePeak) and ref is FIRST.native_peak and ref is contract.native_reference(FIRST.name)
+    assert isinstance(ref, Hardware) and ref is FIRST.native_peak and ref is contract.native_reference(FIRST.name)
     assert ref.flop_per_second == 312e12 and ref.accumulate == "fp32" and "A100" in ref.device
     assert contract.native_seconds_per_vu(1536) == pytest.approx(9.846e-12, rel=1e-3)
     assert contract.native_seconds_per_vu(1536) == contract.native_seconds_per_vu(1536, FIRST.name) == contract.native_seconds_per_vu(1536, contract.PROFILE)

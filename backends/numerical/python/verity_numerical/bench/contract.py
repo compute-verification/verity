@@ -84,7 +84,8 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-from verity.proofs.target import FIRST, TARGETS, NativePeak
+from verity.census import INSTANCE_SETS, Hardware
+from verity.proofs.target import FIRST, TARGETS
 
 __all__ = [
     "AUTHENTICATION",
@@ -184,7 +185,7 @@ REQUIRED_FIELDS = (
     "preprocessing", "retention", "instances",
 )
 #: The frozen instance set every K=1536 number is measured on (``fixtures/bench-instances/v1``, ``verity_numerical.bench.instances``).
-INSTANCES_DATASET = "bench-instances/v1"
+INSTANCES_DATASET = INSTANCE_SETS["vu-k1536"].dataset
 INSTANCES_FIELD = "instances"
 INSTANCES_TIERS = ("vu-k1536", "tu-k16", "vu-k1536-neg")
 #: The frozen FP8 Ada instance set (``fp8-ada-mma-draft/2026-09-22``): the synthetic VUs ``backends/direct/ligero/fp8/chain.py``
@@ -192,10 +193,9 @@ INSTANCES_TIERS = ("vu-k1536", "tu-k16", "vu-k1536-neg")
 #: :data:`FP8_ADA_INSTANCES_DIGEST` is ``chain.instances_digest(4096)`` = sha256 of
 #: ``"fp8-ada synthetic|seed=20260922|n=4096|K=1536"`` -- pinned here (frozen 2026-09-22) so the canonical tables
 #: (``verity_numerical.bench.tables``) recognise the set without importing the prover; a change to the recipe is a new tier.
-FP8_ADA_INSTANCES_DATASET = "bench-instances-fp8-ada/v1"
-FP8_ADA_INSTANCES_TIER = "vu-k1536-fp8-ada"
-FP8_ADA_INSTANCES_SEED = 20260922
-FP8_ADA_INSTANCES_DIGEST = "e66ff0f21c8e67d13b4b2d4cee2afa35b8345656b314da80e6b342ba051f078d"
+_FP8_ADA = INSTANCE_SETS["vu-k1536-fp8-ada"]
+FP8_ADA_INSTANCES_DATASET, FP8_ADA_INSTANCES_TIER = _FP8_ADA.dataset, _FP8_ADA.tier
+FP8_ADA_INSTANCES_SEED, FP8_ADA_INSTANCES_DIGEST = _FP8_ADA.seed, _FP8_ADA.manifest_sha256
 #: The frozen Hopper instance sets (``bf16-hopper-mma-draft/2026-09-22``, ``fp8-hopper-wgmma-draft/2026-09-22``): the synthetic
 #: VUs ``backends/direct/ligero/relchain.py`` draws for the ``bf16-hopper`` / ``fp8-hopper`` relations (``relations.py``; lane
 #: b-hopper) -- ``random_finite_bf16`` words resp. uniform finite E4M3 bytes from the same seed, model-recorded accumulators
@@ -203,24 +203,21 @@ FP8_ADA_INSTANCES_DIGEST = "e66ff0f21c8e67d13b4b2d4cee2afa35b8345656b314da80e6b3
 #: = sha256 of ``"<relation> synthetic|seed=20260922|n=4096|K=1536"`` -- pinned here (frozen 2026-09-23, lane b-merge-h100, after
 #: the rows with preserved proof dumps) so the canonical tables recognise the sets without importing the prover; a change to a
 #: recipe is a new tier.
-BF16_HOPPER_INSTANCES_DATASET = "bench-instances-bf16-hopper/v1"
-BF16_HOPPER_INSTANCES_TIER = "vu-k1536-bf16-hopper"
-BF16_HOPPER_INSTANCES_SEED = 20260922
-BF16_HOPPER_INSTANCES_DIGEST = "2a5babca16e82727611ae483a125b8d853e27e4c9deedda7c35927cc1e456869"
-FP8_HOPPER_INSTANCES_DATASET = "bench-instances-fp8-hopper/v1"
-FP8_HOPPER_INSTANCES_TIER = "vu-k1536-fp8-hopper"
-FP8_HOPPER_INSTANCES_SEED = 20260922
-FP8_HOPPER_INSTANCES_DIGEST = "0ff750026b8d8df0418d3ec360ed6ade683a33b8264d66973021cbfbff7945bc"
+_BF16_HOPPER = INSTANCE_SETS["vu-k1536-bf16-hopper"]
+BF16_HOPPER_INSTANCES_DATASET, BF16_HOPPER_INSTANCES_TIER = _BF16_HOPPER.dataset, _BF16_HOPPER.tier
+BF16_HOPPER_INSTANCES_SEED, BF16_HOPPER_INSTANCES_DIGEST = _BF16_HOPPER.seed, _BF16_HOPPER.manifest_sha256
+_FP8_HOPPER = INSTANCE_SETS["vu-k1536-fp8-hopper"]
+FP8_HOPPER_INSTANCES_DATASET, FP8_HOPPER_INSTANCES_TIER = _FP8_HOPPER.dataset, _FP8_HOPPER.tier
+FP8_HOPPER_INSTANCES_SEED, FP8_HOPPER_INSTANCES_DIGEST = _FP8_HOPPER.seed, _FP8_HOPPER.manifest_sha256
 #: The frozen NVFP4 sm_120 instance set (``nvfp4-sm120-mma-draft/2026-09-22``): the synthetic VUs
 #: ``backends/direct/ligero/fp4/chain.py`` draws (``instances_fp4``: VU ``i`` from edge family ``VU_FAMILIES[i % 14]`` --
 #: uniform / zero / subnormal / top / spanning scales, sparse / saturated codes, exact cancellation, per-step mixtures --
 #: from seed :data:`NVFP4_INSTANCES_SEED`, model-recorded accumulators).  :data:`NVFP4_INSTANCES_DIGEST` is
 #: ``chain.instances_digest(4096)`` = sha256 of ``"fp4-nvf4 synthetic|seed=20260922|n=4096|K=1536|families=<the 14>"``,
 #: pinned here (frozen 2026-09-22); a change to the recipe or the family list is a new tier.
-NVFP4_INSTANCES_DATASET = "bench-instances-nvfp4-sm120/v1"
-NVFP4_INSTANCES_TIER = "vu-k1536-nvfp4-sm120"
-NVFP4_INSTANCES_SEED = 20260922
-NVFP4_INSTANCES_DIGEST = "d2d65f6523b49e673847746d725fbce3282f2734b0b424637c01e88f188a240a"
+_NVFP4 = INSTANCE_SETS["vu-k1536-nvfp4-sm120"]
+NVFP4_INSTANCES_DATASET, NVFP4_INSTANCES_TIER = _NVFP4.dataset, _NVFP4.tier
+NVFP4_INSTANCES_SEED, NVFP4_INSTANCES_DIGEST = _NVFP4.seed, _NVFP4.manifest_sha256
 #: The recipe's family composition at the frozen tier size (4096 VUs; VU ``i`` is of family ``i % 14``): the corner families
 #: ``verity.proofs.trust`` criterion Tc asks the honest set to include (a contract-pinned set has no fixture manifest to
 #: carry them).  Every family but ``random`` is an edge family of ``BlockScaledAlignAdd``.
@@ -285,7 +282,7 @@ OVERHEAD = "overhead.vs_native_peak"
 RATE_TOLERANCE = 1e-6
 
 
-def native_reference(profile: str = PROFILE) -> NativePeak:
+def native_reference(profile: str = PROFILE) -> Hardware:
     """The native peak the headline overhead of a ``profile`` divides by: that target's ``Target.native_peak`` -- the
     datasheet dense tensor-core peak of the instruction's conformance anchor for the target's operand dtype at FP32
     accumulate, no sparsity (``verity.proofs.target``, "Native peak").  A GemmCoordinate<K> is K MACs = 2K FLOP,

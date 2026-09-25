@@ -29,6 +29,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
+from verity.census import INSTANCE_SETS, VU_K1536
 from verity.ml.tc.instructions import INSTRUCTIONS
 from verity.proofs.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, NVFP4_SM120, TARGETS, Target
 from verity_numerical.bench import contract
@@ -129,8 +130,8 @@ __all__ = [
 # --- caption constants (frozen) -----------------------------------------------------------------------------------------
 
 FROZEN_ON = "2026-09-22"
-K = 1536
-B = 4096
+K = VU_K1536.K
+B = VU_K1536.batch
 #: log2 of the soundness error: the target AND the achieved (union-bounded over sub-batches) must both be <= this.
 SOUNDNESS_LOG2 = -128
 AUTHENTICATION = "excluded"
@@ -163,21 +164,12 @@ NATIVE_PEAK_METHOD_CUBLAS = "cublas dense gemm 8192^3, median of 5"
 NATIVE_PEAK_METHOD = ("the best dense GEMM through the vendor library on the row's device x dtype, median of 5, the call and size in the "
                       "footnote; an instruction-level microbenchmark only when no GEMM measurement exists, and then said so")
 #: The BF16 frozen set: sha256 of ``fixtures/bench-instances/v1/manifest.json`` (``verity_numerical.bench.instances.manifest_sha256``).
-BF16_INSTANCES_MANIFEST_SHA256 = "059103cf9bd55ee83cbd4bb14ae6db2f60db2cb4ddf85cdc22b1cecee6e4eeea"
+BF16_INSTANCES_MANIFEST_SHA256 = INSTANCE_SETS["vu-k1536"].manifest_sha256
 #: The frozen instance ref a valid result of each target must carry, ``instances`` field for field.  A target absent here
 #: has no frozen set yet: every result of it is rejected with that reason.  The synthetic sets (FP8 Ada, the two Hopper
-#: relations) are pinned by their recipe digest (``contract.*_INSTANCES_DIGEST``), the BF16 Ampere set by its fixture manifest.
+#: relations) are pinned by their recipe digest, the BF16 Ampere set by its fixture manifest (``verity.census.INSTANCE_SETS``).
 FROZEN_INSTANCES: dict[str, dict[str, Any]] = {
-    FIRST.name: contract.instances_ref("vu-k1536", 0, B, BF16_INSTANCES_MANIFEST_SHA256),
-    FP8_ADA_MMA.name: contract.instances_ref(contract.FP8_ADA_INSTANCES_TIER, 0, B, contract.FP8_ADA_INSTANCES_DIGEST,
-                                             dataset=contract.FP8_ADA_INSTANCES_DATASET),
-    BF16_HOPPER.name: contract.instances_ref(contract.BF16_HOPPER_INSTANCES_TIER, 0, B, contract.BF16_HOPPER_INSTANCES_DIGEST,
-                                             dataset=contract.BF16_HOPPER_INSTANCES_DATASET),
-    FP8_HOPPER_WGMMA.name: contract.instances_ref(contract.FP8_HOPPER_INSTANCES_TIER, 0, B, contract.FP8_HOPPER_INSTANCES_DIGEST,
-                                                  dataset=contract.FP8_HOPPER_INSTANCES_DATASET),
-    NVFP4_SM120.name: contract.instances_ref(contract.NVFP4_INSTANCES_TIER, 0, B, contract.NVFP4_INSTANCES_DIGEST,
-                                             dataset=contract.NVFP4_INSTANCES_DATASET),
-}
+    s.target: contract.instances_ref(s.tier, 0, s.size, s.manifest_sha256, dataset=s.dataset) for s in INSTANCE_SETS.values()}
 
 #: Label keys whose asserter is the *producer* of a result (the lane's own row labels, ``ledger_to_store``); a verification
 #: label by any of them, or by the producing attempt's ``execution.campaign``, is a self-assertion and does not count.

@@ -48,6 +48,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
+from verity.census import REFERENCE_NETWORK, SENSITIVITY_NETWORKS
 from verity.proofs.target import BF16_HOPPER, FP8_ADA_MMA, FP8_HOPPER_WGMMA, NVFP4_SM120, TARGETS, Target
 from verity_numerical.bench import contract
 from verity_numerical.bench import drilldown as D
@@ -455,12 +456,9 @@ def whole_proof_log2(fp: Mapping[str, Any]) -> float | None:
 
 # --- interaction: t = compute + rounds x RTT + bytes / bandwidth (reporting standard, Daniel 2026-09-25) --------------------------
 
-#: The reference network the Table 2 cell is evaluated at: same datacenter.
-REF_RTT_S, REF_BANDWIDTH_BPS = 0.001, 100e9
-#: The drill-down's other network profiles (RTT, same bandwidth).
-DRILL_RTTS_S = (0.020, 0.100)
-#: The drill-down's other bandwidth (at the reference RTT).
-DRILL_BANDWIDTH_BPS = 10e9
+#: The reference network the Table 2 cell is evaluated at (``verity.census.REFERENCE_NETWORK``: same datacenter); the
+#: interaction drill-down adds ``verity.census.SENSITIVITY_NETWORKS``.
+REF_RTT_S, REF_BANDWIDTH_BPS = REFERENCE_NETWORK.rtt_s, REFERENCE_NETWORK.bandwidth_bps
 #: A measured interactive run must be within this fraction of the formula at the reference profile.
 INTERACTION_TOLERANCE = 0.10
 
@@ -1320,7 +1318,7 @@ def render_markdown(V: Views, published: bool = False) -> str:
             rowsi.append([_cell_name(c), rounds, D._bytes(ix["bytes_up"]),
                           D._bytes(ix["bytes_down"]), rtt, T.fmt_seconds(ix["prover_s"] or 0.0), T.fmt_seconds(ix["verifier_s"]),
                           T.fmt_seconds(ix["wait_s"]) if ix["wait_s"] is not None else T.UNMEASURED,
-                          *[T.fmt_overhead(at(r)) for r in (REF_RTT_S, *DRILL_RTTS_S)], T.fmt_overhead(at(REF_RTT_S, DRILL_BANDWIDTH_BPS))])
+                          *[T.fmt_overhead(at(n.rtt_s, n.bandwidth_bps)) for n in (REFERENCE_NETWORK, *SENSITIVITY_NETWORKS)]])
         out += ["### Interaction drill-down — the formula t = compute + rounds × RTT + bytes ÷ bandwidth", "",
                 T._md_table(("Cell", "Rounds", "Bytes up", "Bytes down", "Measured RTT (method)", "Prover compute", "Verifier compute (waited on)",
                              "Measured network wait", "Cell at 1 ms, 100 Gb/s (reference)", "At 20 ms, 100 Gb/s", "At 100 ms, 100 Gb/s",

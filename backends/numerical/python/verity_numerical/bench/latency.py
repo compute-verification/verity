@@ -46,6 +46,8 @@ from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any
 
+from verity.census import HARDWARE
+
 __all__ = [
     "BANDWIDTHS_GBPS",
     "CATALOG",
@@ -68,7 +70,7 @@ BANDWIDTHS_GBPS: tuple[float, ...] = (10.0, 25.0, 100.0)
 GIB = 1 << 30
 GB = 1e9
 MB = 1e6
-NATIVE_S_PER_VU = 2 * 1536 / 312e12  # contract.NATIVE_REFERENCE at K = 1536 (9.85 ps)
+NATIVE_S_PER_VU = HARDWARE["a100-sxm4-80gb/bf16"].seconds_per_vu(1536)  # FIRST's native peak at K = 1536 (9.85 ps)
 
 
 @dataclass(frozen=True)
