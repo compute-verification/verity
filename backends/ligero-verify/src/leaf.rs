@@ -624,6 +624,9 @@ pub static PINS: &[(&str, &str, &str, &str)] = &[
     // + 86 negatives, 0 failures, on vy-b-ligero-vllm-v1-4090 r20260925-180400-c457 2026-09-25 18:12Z
     ("fp8-ada-x4", "vllm-v1", "f7f316139a176eaed1c52a09869d748fc9fd54ef99e9425a9feae041919446d4",
      "8330132438e6c6adbb25a1371afb3d0dcf580af3d7a5ce53ecd141c983830479"),
+    // gated 2048 VUs (7 honest sub-batches) + 86 negatives, 0 failures, on vy-b-ligero-vllm-v1-h100 r20260925-181202-65f3
+    ("fp8-hopper-x4", "vllm-v1", "69054deb439010a356cb4de6873b2d8d7b0e9a27125119d51062c441238a2f36",
+     "23405e55ff9eadc12d638d9ab2555e59c6f049e9bcfa669dcc5cd953779da3d8"),
 ];
 
 pub fn names() -> Vec<&'static str> {
