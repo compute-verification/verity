@@ -1,7 +1,11 @@
 """The core dependency rules (README "Development") as import-boundary checks over the source tree.
 
-    ir <- ml,  ir <- commitments,  ir + ml + commitments <- verification;  nothing depends back on a later layer,
-    and no core module imports a backend, frontend, integration, or external runtime.
+    ir <- evaluation <- ml,  ir <- commitments,  ir + ml + commitments <- verification;  nothing depends back on a later
+    layer, and no core module imports a backend, frontend, integration, or external runtime.
+
+numpy is a core dependency (architecture decision: `verity.evaluation` batches over numpy arrays and kernels sit beside
+their Definitions in `verity.ml`).  The plain-integer references stay numpy-free on purpose, because they are the
+specification the Rust guest, the Lean vectors and the probes are checked against: `verity.ir` and `verity.ml.tc`.
 """
 
 from __future__ import annotations
@@ -16,13 +20,16 @@ SRC = Path(__file__).resolve().parents[1] / "src" / "verity"
 #: For each core module, the sibling core modules it may import.  ``errors`` is shared by all.
 ALLOWED = {
     "ir": set(),
-    "ml": {"ir"},
+    "evaluation": {"ir"},
+    "ml": {"ir", "evaluation"},
     "commitments": {"ir"},
     "verification": {"ir", "ml", "commitments"},
     "resource_accounting": {"ir", "verification", "commitments"},
 }
-FORBIDDEN_EXTERNAL = ("verity_sp1", "verity_vllm", "verity_torch", "sp1", "vllm", "torch", "jax", "onnx", "numpy",
+FORBIDDEN_EXTERNAL = ("verity_sp1", "verity_vllm", "verity_torch", "sp1", "vllm", "torch", "jax", "onnx",
                       "backends", "frontends", "integrations", "research", "veritor")
+#: Source subtrees that must stay stdlib-only: the scalar references.
+NUMPY_FREE = ("ir", "ml/tc")
 
 
 def _imports(path: Path) -> list[tuple[str, int]]:
@@ -56,4 +63,14 @@ def test_core_module_imports_only_inward(module: str) -> None:
                     continue
                 if target not in ALLOWED[module]:
                     offenders.append(f"{path.relative_to(SRC)}:{line}: {name}")
+    assert not offenders, "\n".join(offenders)
+
+
+@pytest.mark.parametrize("subtree", NUMPY_FREE)
+def test_scalar_references_are_stdlib_only(subtree: str) -> None:
+    offenders = [f"{path.relative_to(SRC)}:{line}: {name}"
+                 for path in (SRC / subtree).rglob("*.py")
+                 for name, line in _imports(path)
+                 if name.split(".")[0] == "numpy" or (subtree == "ml/tc" and name.split(".")[:2] != ["verity", "errors"]
+                                                      and name.startswith("verity."))]
     assert not offenders, "\n".join(offenders)

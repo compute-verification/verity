@@ -27,7 +27,7 @@ import shutil
 import threading
 import tomllib
 from pathlib import Path
-from typing import Protocol, runtime_checkable
+from typing import Callable, Protocol, runtime_checkable
 
 
 POD_CONFIG = Path(__file__).resolve().parents[3] / "store.pod.toml"   # names the store's bucket; the environment fallback must match it
@@ -106,6 +106,13 @@ class FsRemote:
     def head(self, key: str) -> dict | None:
         p = self._p(key)
         return {"bytes": p.stat().st_size, "etag": md5_file(p)} if p.is_file() else None
+
+    def list_meta(self, prefix: str, progress: Callable[[int], None] | None = None, keep: Callable[[str], bool] | None = None) -> dict[str, tuple]:
+        """`{key: (bytes, etag)}` under `prefix` that `keep` accepts (the S3 listing's shape; etag = MD5 hex)."""
+        out = {k: (self._p(k).stat().st_size, md5_file(self._p(k))) for k in self.list(prefix) if keep is None or keep(k)}
+        if progress:
+            progress(len(out))
+        return out
 
     def list(self, prefix: str) -> list[str]:
         base = self.root

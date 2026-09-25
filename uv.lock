@@ -995,6 +995,12 @@ wheels = [
 name = "verity"
 version = "0.1.0"
 source = { editable = "packages/verity" }
+dependencies = [
+    { name = "numpy" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "numpy", specifier = ">=1.26" }]
 
 [[package]]
 name = "verity-numerical"

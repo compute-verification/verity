@@ -70,6 +70,7 @@ import torch  # noqa: E402
 
 from verity_vllm.observe import vllm_adapter as va  # noqa: E402
 from verity_vllm.harness.timeline import Timeline  # noqa: E402  (torch-free; VERITY_TIMELINE -> append-only JSONL, else a no-op sink)
+from verity_vllm.commit import opened as OV  # noqa: E402
 
 SCHEMA = "verity/commit-integ/delta/v1"
 
@@ -1197,6 +1198,7 @@ def main(argv: list[str] | None = None) -> None:
             # the worker records this as the restart reason and the client re-runs the job in a fresh process; the engine stays untouched
             raise SystemExit("HOT-UNSAFE: " + "; ".join(_unsafe))
     compiled_src = None
+    fault = os.environ.get("VERITY_FAULT", "").strip()
     compiled_kernels = None
     if args.compiled_taps == "kernels":
         if args.only_arm == "control":
@@ -1209,8 +1211,7 @@ def main(argv: list[str] | None = None) -> None:
         from verity_vllm.acquire.compiled_kernel_source import CompiledKernelSource
 
         _prof.apply_env()
-        _f = os.environ.get("VERITY_FAULT", "").strip()
-        compiled_kernels = CompiledKernelSource(fault=_f if _f.startswith("compiled_") else None)
+        compiled_kernels = CompiledKernelSource(fault=fault if fault.startswith("compiled_") else None)
         compiled_kernels.install_hooks()                       # before vLLM compiles: the generated wrappers carry the hook lines
         print(f"[delta] COMPILED KERNEL TAPS (P_compiled): Inductor wrapper hooks {compiled_kernels.hooks_info}, fault {compiled_kernels.fault!r}", flush=True)
     if args.compiled_taps == "on":
@@ -1894,26 +1895,16 @@ def main(argv: list[str] | None = None) -> None:
 
     if args.value_check and com is not None and hasattr(com, "_layouts"):
         # VALUE-CORRECTNESS (VALUE-FIRST §5): one extra instrumented run with reference taps + re-execution of the registered relation
-        from verity_vllm.check.value_check import ValueChecker
+        from verity_vllm.check.value_check import run_value_check
 
-        com.reset()
-        com.install()
-        vc = ValueChecker(com)
-        vc.install()
-        r = run_workload(eng, reqs, sampling)
-        rc = com.finalize()
-        vres = vc.compare()
-        vc.uninstall()
-        com.uninstall()
-        com.reset()
-        assert_pristine(eng, base)
-        vres.update({"committer": com.name, "case": eng.case, "model": eng.cp["repo"], "gpu": torch.cuda.get_device_name(0), "label": "measured",
-                     "run_root": rc.run_root.hex(), "errors": rc.extra.get("errors")})
+        vres = run_value_check(com, lambda: run_workload(eng, reqs, sampling), lambda: assert_pristine(eng, base))
+        vres.update({"committer": com.name, "case": eng.case, "model": eng.cp["repo"], "gpu": torch.cuda.get_device_name(0), "label": "measured"})
         (out / "value_check.json").write_text(json.dumps(vres, indent=1, default=str) + "\n")
         print(f"[delta] VALUE CHECK {vres['verdict']}: {vres['tensors']} tensors, tap-equal {vres['tap_equal']}, tap-mismatch {vres['tap_mismatch_n']}; "
               f"re-exec {vres['reexec_equal']}/{vres['reexec_tensors']} equal, mismatch {vres['reexec_mismatch_n']}; repeated-call modules {vres['repeated_calls']}; "
-              f"missing {len(vres['missing_in_commit'])}; skipped {vres['reexec_skipped']}; by class {vres['by_class']}", flush=True)
-        del vc, vres
+              f"missing {len(vres['missing_in_commit'])}; not verified {vres['not_verified_n']}; skipped {vres['reexec_skipped']}; by class {vres['by_class']}; "
+              f"opened {vres['value_source']['reads']} reads / {vres['value_source']['bytes']} B in {vres['value_source']['seconds']} s", flush=True)
+        del vres
 
     rows: list[dict] = []
     step_rows: list[dict] = []
@@ -1990,6 +1981,9 @@ def main(argv: list[str] | None = None) -> None:
                 "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             }
             if rc is not None:
+                if fault.startswith("retained_flip"):
+                    row["fault_retained_flip"] = com.fault_retained_flip(fault)
+                    print(f"[delta] VERITY_FAULT retained_flip (negative test): {row['fault_retained_flip']}", flush=True)
                 # challenge derived from the PRECHALLENGE run root (the root is fixed before the positions exist)
                 from verity_vllm.acquire.committer_api import challenge_positions
 
@@ -2328,17 +2322,20 @@ def main(argv: list[str] | None = None) -> None:
                         if oracle_producers[0]:
                             _prod = OC.merge_producers(_prod, oracle_producers[0])
                         # [reqval F-moe-r17-06] the manifest's alias table: a shared module's invocation k is compared at ITS Program op
-                        oc = OC.oracle_compare(_oracle, _bm, OC.committed_reader(com), producers=_prod, workload=_wl,
+                        _ocr = OC.OpenedReader(com, rc)
+                        oc = OC.oracle_compare(_oracle, _bm, _ocr, producers=_prod, workload=_wl,
                                                aliases=(required_manifest.get("op_path_aliases") if isinstance(required_manifest, dict) else None),
                                                query_families=OC.query_families_of(required_manifest))   # [revb n-2.14-1] identities per Q(P) family
                         oc["producer_facts"] = oracle_producers[1]
+                        oc["value_source"] = _ocr.record()
+                        print(f"[delta] C2 ORACLE COMPARE opened values (pair {pair}): {OV.filed(row['commit'], 'oracle_compare', oc['value_source'])}", flush=True)
                     except Exception as e:  # noqa: BLE001  -- fail closed: an unreadable oracle is 'not checked', never PASS
                         oc = {"schema": OC.SCHEMA if "OC" in dir() else "verity-sweep/oracle-compare/v1", "method": "oracle-compare", "result": None,
                               "why": f"oracle compare not run: {e!r}"[:300], "compared": 0, "mismatch_n": 0, "error": repr(e)[:300]}
                     row["commit"]["oracle_compare"] = oc
                     vc = row["commit"]["value_correspondence"]
                     vc["method"] = ("oracle-compare" if oc.get("complete") else "oracle-compare(partial)") + " + " + vc["method"]
-                    vc["oracle_compare"] = {k: oc.get(k) for k in ("result", "why", "grade", "compared", "equal", "mismatch_n", "steps_compared", "steps_not_snapshotted", "complete", "attribution", "workload_check")}
+                    vc["oracle_compare"] = {k: oc.get(k) for k in ("result", "why", "grade", "compared", "equal", "mismatch_n", "steps_compared", "steps_not_snapshotted", "complete", "attribution", "workload_check", "value_source")}
                     vc["oracle_provenance"] = oc.get("oracle")
                     components["oracle_compare"] = dict(vc["oracle_compare"], reference="live Match oracle of this attempt (--match-dir)", provenance=oc.get("oracle"))
                     if oc.get("result") is False:
@@ -2429,7 +2426,7 @@ def main(argv: list[str] | None = None) -> None:
                         _k0 = next(iter(_progs))
                         _pi0 = SR.ProgramIndex(_progs[_k0], program_dir=_loaded[_k0].get("dir"))
                         _wp = SR.model_weights_provider(eng.model, _pi0.prefix)
-                        _rd = OC.committed_reader(com)
+                        _rd = OC.OpenedReader(com, rc)
                         # [O5] the weight slices the relations consume must be the COMMITTED weights: re-register the live parameters now and
                         # compare the root with the run's weights root (registered before the workload; a param swap after it is a named FAIL)
                         _wc: dict[str, Any]
@@ -2552,7 +2549,7 @@ def main(argv: list[str] | None = None) -> None:
                             # `inactive_by_enablement`, every entry read back == the bot word; the one-mechanism reconciliation compares the
                             # Commit's padding classification against that bucket family by family (kept, renamed, never dropped)
                             from verity_vllm.commit import padding_steps as _PSm
-                            _pp = _PSm.padded_population(sr, _bm, _rd, _epr_r)
+                            _pp = _PSm.padded_population(sr, _bm, _rd.or_none, _epr_r)
                             # [revb S-r17b-70 C3, M-1495] the two documents agree on one number: oracle_compare.padding (by family, pairs) == this stratum
                             _pp["oracle_c3"] = _PSm.padding_vs_oracle(_pp, row["commit"].get("oracle_compare"), _bm)
                             row["commit"]["inactive_by_enablement"] = _pp
@@ -2580,6 +2577,9 @@ def main(argv: list[str] | None = None) -> None:
                                 _cv = row["commit"].get("coverage")
                                 if isinstance(_cv, dict) and _cv.get("ok"):            # in place: row["commit"]["coverage"] and rc.extra["coverage"] alias one dict
                                     _cv["ok"], _cv["error"] = False, "R17-27 one mechanism: " + "; ".join(_recon["problems"][:3])
+                        sr["value_source"] = dict(_rd.record(), forked_children=sr.pop("value_reads_in_children", None))
+                        print(f"[delta] C2 SAMPLED REPLAY + LINKAGE opened values (pair {pair}): {OV.filed(row['commit'], 'replay_linkage', sr['value_source'])}",
+                              flush=True)
                         if _rc_key is not None and sr.get("result") is not None:
                             replay_cache[_rc_key] = {"pair": pair, "run_root": rc.run_root.hex(), "sr": sr, "lk": lk, "artifact": str(Path(args.out) / f"sampled_replay_p{pair}.json"),
                                                      "seed": (sr.get("sample") or {}).get("seed"), "code": versions.get("git_head")}

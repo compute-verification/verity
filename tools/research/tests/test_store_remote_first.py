@@ -356,3 +356,42 @@ def test_the_render_is_the_daily_renders_command_from_the_steward_source(tmp_pat
     text, err = PA._render(tmp_path / "store", 60, src.resolve())
     assert err is None and f"tables from {src.resolve()} ['--root', '{tmp_path / 'store'}', '--format', 'md']" in text
     assert "<!-- drilldowns -->" in text and "drilldown from" in text
+
+
+def test_replica_rows_are_confirmed_from_the_listing_not_a_head_per_blob(env, monkeypatch):
+    here = LocalStore()
+    tree = env / "big-tree"
+    for i in range(300):
+        _file(tree / f"d{i % 7}", f"f{i}.bin", f"blob {i}".encode())
+    art = here.put_artifact("fixture/v1", {"tree": True}, tree=tree)
+    assert here.push(art)["preserved"]
+    heads: list[str] = []
+    real_head = FsRemote.head
+    monkeypatch.setattr(FsRemote, "head", lambda self, key: heads.append(key) or real_head(self, key))
+    rep = PA.run(here.root, env / "fresh-1")
+    assert rep["ok"] and rep["replicas"]["confirmed"] == 1 and rep["replicas"]["blobs_etag_verified"] == 300
+    assert not [k for k in heads if k.startswith("objects/")], "a HEAD per blob: a 259k-blob tree takes hours that way"
+
+    real_list = FsRemote.list_meta
+    monkeypatch.setattr(FsRemote, "list_meta", lambda self, prefix, progress=None, keep=None:
+                        {k: v for k, v in real_list(self, prefix, progress, keep).items() if not k.endswith("0")})   # keys the listing missed
+    heads.clear()
+    rep = PA.run(here.root, env / "fresh-2")
+    assert rep["ok"] and heads and all(k.endswith("0") for k in heads if k.startswith("objects/"))
+
+
+def test_a_replica_head_that_fails_every_try_is_named_by_key(env, monkeypatch):
+    here = LocalStore()
+    art = here.put_artifact("fixture/v1", {"s": 1}, file=_file(env / "in", "s.bin", b"x"))
+    here.push(art)
+    monkeypatch.setattr(FsRemote, "list_meta", lambda self, prefix, progress=None, keep=None: {})     # nothing listed: every key goes to HEAD
+    real_head = FsRemote.head
+
+    def head(self, key):
+        if key.startswith("objects/"):
+            raise TimeoutError(f"HEAD {key}: no response within the 30s deadline on all 2 tries")
+        return real_head(self, key)
+    monkeypatch.setattr(FsRemote, "head", head)
+    rep = PA.run(here.root, env / "fresh")
+    why = rep["replicas"]["not_confirmed"][art]
+    assert not rep["ok"] and why.startswith("objects/sha256/") and "HEAD failed after its retries" in why

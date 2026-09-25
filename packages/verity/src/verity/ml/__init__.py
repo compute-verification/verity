@@ -3,6 +3,8 @@
     verity.ml.tc      the tensor-core accumulator step (stdlib only; no IR dependency)
     verity.ml.prims   IR primitives: AmpereBF16TcDot16, HopperBF16WgmmaDot16, Bf16ToF32, F32ToBf16Rn, F2fpBf16, const
     verity.ml.gemm    IR composites: DotBf16 / GemmCoordinate / Gemm parameterised by the step; GEMM_AMPERE, GEMM_HOPPER
+    verity.ml.kernels numpy batch forms of the steps and GEMM coordinates (BF16, FP8 E4M3, NVFP4 / MXFP4), registered with
+                      `verity.evaluation` and self-checked against `verity.ml.tc`
 """
 from __future__ import annotations
 

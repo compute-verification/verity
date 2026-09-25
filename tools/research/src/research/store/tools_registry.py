@@ -22,6 +22,7 @@ REGISTRY: dict[str, str] = {
     "bench_vu_fp8": "backends.direct.ligero.fp8.tool:BENCH_VU_FP8",
     "bench_vu_fp4": "backends.direct.ligero.fp4.tool:BENCH_VU_FP4",
     "native_peak": "tools.native_peak.tool:NATIVE_PEAK",
+    "commit_cost": "benchmarks.commitments.tool:COMMIT_COST",
     # vLLM integration sweep stages (integration-owned declarations).
     "vllm.build": "integrations.vllm.verity_vllm.harness.research_tools:VLLM_BUILD",
     "vllm.match": "integrations.vllm.verity_vllm.harness.research_tools:VLLM_MATCH",
