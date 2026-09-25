@@ -191,11 +191,12 @@ def test_compose_prove_verify_publishes_the_native_digests(name: str, runners) -
     # the committed trees open at those digests under the scheme's framing
     auth = pubs[3]
     ok, why = hashauth.verify_hash_auth(auth, pubs[4], digests=published, y_words=np.asarray(pubs[2])[ends],
-                                        y_bits=R.rel.y_bits, leaf=s)
+                                        y_bits=R.rel.y_bits, leaf=s, vshape=R.vshape)
     assert ok, why
     bad = published.copy()
     bad[1, s.digest_elems] ^= 1
-    ok, why = hashauth.verify_hash_auth(auth, pubs[4], digests=bad, y_words=np.asarray(pubs[2])[ends], y_bits=R.rel.y_bits, leaf=s)
+    ok, why = hashauth.verify_hash_auth(auth, pubs[4], digests=bad, y_words=np.asarray(pubs[2])[ends], y_bits=R.rel.y_bits, leaf=s,
+                                        vshape=R.vshape)
     assert not ok and why.startswith("auth: b:")
 
 

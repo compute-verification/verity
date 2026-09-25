@@ -619,6 +619,11 @@ pub static PINS: &[(&str, &str, &str, &str)] = &[
     // gated 2048 VUs (13 honest sub-batches) + 86 negatives at 98d878ca, r20260925-104053-b438, 2026-09-25 10:43Z
     ("bf16-hopper-x4", "sha256", "a02f283de13acd94d47be4e8c794a6c89b833cc2d9151b92393dd6ac37defe62",
      "1b879d1a3ec16e23f886f792900a089fcbc4b080dbddffe4d45a07d64551525a"),
+    // lane b-ligero-vllm-v1, schema `vllm-v1/pos-leaf/v0`: `hashchain.compose(<rel>, "vllm-v1")` (every position-leaf
+    // compression in-circuit, 3 per operand per x4 column; 127,536 rows per column), gated 2048 VUs (13 honest sub-batches)
+    // + 86 negatives, 0 failures, on vy-b-ligero-vllm-v1-4090 r20260925-180400-c457 2026-09-25 18:12Z
+    ("fp8-ada-x4", "vllm-v1", "f7f316139a176eaed1c52a09869d748fc9fd54ef99e9425a9feae041919446d4",
+     "8330132438e6c6adbb25a1371afb3d0dcf580af3d7a5ce53ecd141c983830479"),
 ];
 
 pub fn names() -> Vec<&'static str> {
