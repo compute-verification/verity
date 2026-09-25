@@ -196,7 +196,7 @@ fn server(st: &Arc<PureStmt>, inst: &Arc<Instances>) -> Server {
     Server::new(config(st, sigma(st, inst, &roots)), Box::new(PureVerifier { st: st.clone(), inst: inst.clone(), digests }))
 }
 
-type Hook<'a> = &'a mut dyn FnMut(&[u8]) -> Vec<Vec<F128>>;
+type PHook<'a> = &'a mut dyn FnMut(&[u8], Option<&Publics>) -> Vec<Vec<F128>>;
 
 /// A (possibly dishonest) prover's witness.
 struct Wit {
@@ -205,7 +205,7 @@ struct Wit {
     flip_z: Option<usize>,
 }
 
-fn prove_cpu(st: &PureStmt, w: &Wit, lig: LigeritoProfile, hook: Hook<'_>, ch: &mut LiveChallenger) -> (Vec<u8>, Value) {
+fn prove_cpu(st: &PureStmt, w: &Wit, lig: LigeritoProfile, hook: PHook<'_>, ch: &mut LiveChallenger) -> (Vec<u8>, Value) {
     let t = Instant::now();
     let (mut z, a, b, zl) = st.witness(&w.comps, &*w.inputs);
     if let Some(bit) = w.flip_z {
@@ -221,16 +221,15 @@ fn prove_cpu(st: &PureStmt, w: &Wit, lig: LigeritoProfile, hook: Hook<'_>, ch: &
         b,
         zl,
         &st.circuit,
-        &mut |cm: &Commitment| -> Vec<Vec<F128>> { hook(cm.cap.as_flattened()).into_iter().map(|p| p[6..].to_vec()).collect() },
+        &mut |cm: &Commitment| -> Vec<Vec<F128>> { hook(cm.cap.as_flattened(), None).into_iter().map(|p| p[6..].to_vec()).collect() },
         ch,
     );
     (bincode::serialize(&(commitment, proof)).unwrap(), json!({"t.witness": tw}))
 }
 
 #[cfg(feature = "gpu")]
-fn prove_gpu(st: &PureStmt, w: &Wit, lig: LigeritoProfile, rep: usize, hook: Hook<'_>, ch: &mut LiveChallenger) -> (Vec<u8>, Value) {
-    assert!(w.flip_z.is_none(), "witness tampering is a CPU-prover negative");
-    let (proof, commitment, ph) = flock_live::gpu::prove_pure(st, &w.comps, &*w.inputs, &params(st.m, lig), &domain(rep), hook, ch);
+fn prove_gpu(st: &PureStmt, src: PureSrc<'_>, lig: LigeritoProfile, rep: usize, hook: PHook<'_>, ch: &mut LiveChallenger) -> (Vec<u8>, Value) {
+    let (proof, commitment, ph) = flock_live::gpu::prove_pure(st, src, &params(st.m, lig), &domain(rep), hook, ch);
     let b = json!({"t.witness": ph[0], "t.encoding_commitment": ph[1], "t.link": ph[2], "t.zerocheck": ph[3], "t.lincheck": ph[4],
                    "t.ring_switch": ph[5], "t.ligerito": ph[6], "t.total": ph[7],
                    "t.arithmetic": ph[3] + ph[4] + ph[5] + ph[6]});
@@ -239,7 +238,17 @@ fn prove_gpu(st: &PureStmt, w: &Wit, lig: LigeritoProfile, rep: usize, hook: Hoo
 }
 
 #[cfg(not(feature = "gpu"))]
-fn prove_gpu(_: &PureStmt, _: &Wit, _: LigeritoProfile, _: usize, _: Hook<'_>, _: &mut LiveChallenger) -> (Vec<u8>, Value) {
+#[allow(dead_code)]
+enum PureSrc<'a> {
+    Host { comps: &'a [Compression], inputs: &'a (dyn Fn(usize, usize) -> [F128; 5] + Sync) },
+    Device { inst: &'a Instances, cache: i32 },
+}
+
+#[cfg(feature = "gpu")]
+use flock_live::gpu::PureSrc;
+
+#[cfg(not(feature = "gpu"))]
+fn prove_gpu(_: &PureStmt, _: PureSrc<'_>, _: LigeritoProfile, _: usize, _: PHook<'_>, _: &mut LiveChallenger) -> (Vec<u8>, Value) {
     panic!("built without the gpu feature")
 }
 
@@ -309,7 +318,10 @@ fn session(st: &Arc<PureStmt>, inst: &Arc<Instances>, t: SharedTransport, plan: 
     let sig = sigma(st, inst, &roots);
     let hello = config(st, sig).hello();
     let tr = Instant::now();
-    let (mut comps, mut cvs) = st.compressions(inst);
+    // Honest GPU witnesses are built on the device from the rows (publics read back); a tampered witness needs the host.
+    let device = plan.gpu && !(plan.forge_middle || plan.bad_params.is_some() || plan.key_substituted || plan.operand_flip
+        || plan.acc_in_wrong || plan.rep1_other_witness || plan.unit_flip);
+    let (mut comps, cvs) = if device { (Vec::new(), Vec::new()) } else { st.compressions(inst) };
     if plan.forge_middle {
         let c = &mut comps[5];
         c.1[2] ^= 1;
@@ -330,9 +342,6 @@ fn session(st: &Arc<PureStmt>, inst: &Arc<Instances>, t: SharedTransport, plan: 
             cv = flock_hash::blake3_compress(&c.0, &c.1, c.2, c.3, c.4)[..8].try_into().unwrap();
         }
     }
-    if plan.cv_flip {
-        cvs[1][0][3] ^= 1;
-    }
     let st2 = st.clone();
     let inst2 = inst.clone();
     let comps_in = comps.clone();
@@ -348,14 +357,20 @@ fn session(st: &Arc<PureStmt>, inst: &Arc<Instances>, t: SharedTransport, plan: 
         }
         r
     };
-    let (mut y16, mut acc) = unit31_words(st, &inputs);
-    if plan.y_flip {
-        y16[0] ^= 1;
-    }
-    if plan.acc_public_flip {
-        acc[0] ^= 1;
-    }
-    let publics = Publics { cv: cvs, y16, acc }.bytes();
+    let (y16, acc) = if device { (Vec::new(), Vec::new()) } else { unit31_words(st, &inputs) };
+    let tamper = |mut p: Publics| -> Vec<u8> {
+        if plan.cv_flip {
+            p.cv[1][0][3] ^= 1;
+        }
+        if plan.y_flip {
+            p.y16[0] ^= 1;
+        }
+        if plan.acc_public_flip {
+            p.acc[0] ^= 1;
+        }
+        p.bytes()
+    };
+    let host_publics = if device { None } else { Some(Publics { cv: cvs, y16, acc }) };
     let wit = Wit { comps: comps.clone(), inputs: Box::new(inputs), flip_z: plan.unit_flip.then_some(700 + ((UNIT_POS0 + 5) << UNIT_LOG)) };
     let wit1 = if plan.rep1_other_witness { Wit { comps: comps.clone(), inputs: Box::new(|_, _| [F128::ZERO; 5]), flip_z: None } } else { Wit { comps, inputs: Box::new({
         let st3 = st.clone(); let inst3 = inst.clone(); let c3 = wit.comps.clone();
@@ -378,10 +393,11 @@ fn session(st: &Arc<PureStmt>, inst: &Arc<Instances>, t: SharedTransport, plan: 
         for rep in 0..2 {
             let mut lch = LiveChallenger::new(t.clone(), TABLE, rep, &domain(rep))?;
             let tt = t.clone();
-            let mut hook = |root: &[u8]| -> Vec<Vec<F128>> {
+            let mut hook = |root: &[u8], dev_pub: Option<&Publics>| -> Vec<Vec<F128>> {
                 if let Some(c) = &cached {
                     return c.clone();
                 }
+                let publics = tamper(dev_pub.cloned().or_else(|| host_publics.clone()).expect("publics"));
                 let mut root_b = root.to_vec();
                 if plan.commit == CommitMode::OtherRootB {
                     root_b[0] ^= 1;
@@ -404,7 +420,12 @@ fn session(st: &Arc<PureStmt>, inst: &Arc<Instances>, t: SharedTransport, plan: 
             let w = if rep == 0 { &wit } else { &wit1 };
             let lig = plan.profile[rep];
             let (p, bk) = catch_unwind(AssertUnwindSafe(|| {
-                if plan.gpu { prove_gpu(st, w, lig, rep, &mut hook, &mut lch) } else { prove_cpu(st, w, lig, &mut hook, &mut lch) }
+                if plan.gpu {
+                    let src = if device { PureSrc::Device { inst, cache: if rep == 0 { 1 } else { 2 } } } else { PureSrc::Host { comps: &w.comps, inputs: &*w.inputs } };
+                    prove_gpu(st, src, lig, rep, &mut hook, &mut lch)
+                } else {
+                    prove_cpu(st, w, lig, &mut hook, &mut lch)
+                }
             }))
             .map_err(panic_msg)?;
             prove_s.push(tp.elapsed().as_secs_f64());

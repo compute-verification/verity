@@ -115,6 +115,20 @@ struct ChunkParams {
     u_const: i32,
     u_n_in: i32,
     u_inputs: *const u64,
+    rows_x: *const u8,
+    rows_w: *const u8,
+    accs: *const u32,
+    vus: i32,
+    row_bytes: i32,
+    units_per_vu: i32,
+    keys: *const u32,
+    blocks_real: i32,
+    unit_cache: i32,
+    pub_cv: *mut u32,
+    pub_y16: *mut u32,
+    pub_acc: *mut u32,
+    u_out_acc: i32,
+    u_out_y: i32,
 }
 
 unsafe extern "C" {
@@ -369,7 +383,9 @@ impl ChunkParams {
             delta_b: null(), n_delta_b: 0, sub_log: 0, link_cb: None, link_ctx: null_mut(), gamma_bits: 0, phase_s: null_mut(),
             mode: 0, comp_slots: 0, units: 0, unit_log: 0, unit_pos0: 0, u_a_col_ptr: null(), u_a_rows: null(), u_a_nnz: 0,
             u_b_col_ptr: null(), u_b_rows: null(), u_b_nnz: 0, u_a_off: null(), u_a_col: null(), u_b_off: null(), u_b_col: null(),
-            u_useful: 0, u_const: 0, u_n_in: 0, u_inputs: null(),
+            u_useful: 0, u_const: 0, u_n_in: 0, u_inputs: null(), rows_x: null(), rows_w: null(), accs: null(), vus: 0,
+            row_bytes: 0, units_per_vu: 0, keys: null(), blocks_real: 0, unit_cache: 0, pub_cv: null_mut(), pub_y16: null_mut(),
+            pub_acc: null_mut(), u_out_acc: -1, u_out_y: -1,
         }
     }
 }
@@ -453,14 +469,24 @@ fn prove_params(s: &Static, sc: &Sched, cfg: &flock_prover::pcs::ligerito::Prove
 
 /// verity/flock-pure-block/v1 on the GPU: compressions and units witnessed on the device, the two-circuit lincheck
 /// fold, the region claims (points from `hook`) in the sparse ring switch. Same return shape as [`prove_chunk`].
+/// Where a pure-block rep's witness inputs come from.
+pub enum PureSrc<'a> {
+    /// Host compression inputs and unit inputs (any, possibly dishonest, witness).
+    Host { comps: &'a [Compression], inputs: &'a (dyn Fn(usize, usize) -> [F128; 5] + Sync) },
+    /// The honest witness, built on the device from the instance rows and recorded accumulators; `cache` 1 stores the
+    /// unit region for the next rep, 2 reuses it.
+    Device { inst: &'a crate::pure_block::Instances, cache: i32 },
+}
+
+pub type PureHook<'a> = &'a mut dyn FnMut(&[u8], Option<&crate::pure_block::Publics>) -> Vec<Vec<F128>>;
+
 #[allow(clippy::too_many_arguments)]
 pub fn prove_pure(
     st: &crate::pure_block::PureStmt,
-    comps: &[Compression],
-    inputs: &(dyn Fn(usize, usize) -> [F128; 5] + Sync),
+    src: PureSrc<'_>,
     pcs: &PcsParams,
     domain: &[u8],
-    mut hook: Hook<'_>,
+    hook: PureHook<'_>,
     ch: &mut LiveChallenger,
 ) -> (R1csProofLigerito, Commitment, [f64; 8]) {
     use crate::pure_block as pb;
@@ -493,16 +519,37 @@ pub fn prove_pure(
     });
     let blocks = st.blocks();
     let n_units = blocks * pb::UNITS;
-    let uin: Vec<u64> = (0..n_units)
-        .into_par_iter()
-        .flat_map_iter(|i| inputs(i / pb::UNITS, i % pb::UNITS).into_iter().flat_map(|w| [w.lo, w.hi]))
-        .collect();
-    let cv: Vec<u32> = comps.iter().flat_map(|c| c.0).collect();
-    let msg: Vec<u32> = comps.iter().flat_map(|c| c.1).collect();
-    let ctr: Vec<u64> = comps.iter().map(|c| c.2).collect();
-    let blen: Vec<u32> = comps.iter().map(|c| c.3).collect();
-    let flags: Vec<u32> = comps.iter().map(|c| c.4).collect();
-    assert_eq!(comps.len(), blocks * pb::COMP_SLOTS);
+    let (mut uin, mut cv, mut msg, mut ctr, mut blen, mut flags) = (Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new());
+    let keys: Vec<u32> = st.keys.iter().flatten().copied().collect();
+    let br = st.blocks_real;
+    let (mut pub_cv, mut pub_y16, mut pub_acc) = (vec![0u32; br * 16], vec![0u32; br], vec![0u32; br]);
+    let (dev, cache) = match &src {
+        PureSrc::Host { comps, inputs } => {
+            uin = (0..n_units).into_par_iter().flat_map_iter(|i| inputs(i / pb::UNITS, i % pb::UNITS).into_iter().flat_map(|w| [w.lo, w.hi])).collect();
+            cv = comps.iter().flat_map(|c| c.0).collect();
+            msg = comps.iter().flat_map(|c| c.1).collect();
+            ctr = comps.iter().map(|c| c.2).collect();
+            blen = comps.iter().map(|c| c.3).collect();
+            flags = comps.iter().map(|c| c.4).collect();
+            assert_eq!(comps.len(), blocks * pb::COMP_SLOTS);
+            (None, 0)
+        }
+        PureSrc::Device { inst, cache } => (Some(*inst), *cache),
+    };
+    let (pcv, py, pa) = (pub_cv.as_mut_ptr(), pub_y16.as_mut_ptr(), pub_acc.as_mut_ptr());
+    let mut wrapped = move |root: &[u8]| -> Vec<Vec<F128>> {
+        if dev.is_none() {
+            return hook(root, None);
+        }
+        let (c, y, a) = unsafe { (from_raw_parts(pcv, br * 16), from_raw_parts(py, br), from_raw_parts(pa, br)) };
+        let p = crate::pure_block::Publics {
+            cv: (0..br).map(|b| std::array::from_fn(|r| std::array::from_fn(|k| c[16 * b + 8 * r + k]))).collect(),
+            y16: y.to_vec(),
+            acc: a.to_vec(),
+        };
+        hook(root, Some(&p))
+    };
+    let mut hook: Hook<'_> = &mut wrapped;
     let n_claims = 2 + 2 * st.regions.len();
     let og = pcs.opening_grinding();
     let mut phase = [0f64; 8];
@@ -540,7 +587,21 @@ pub fn prove_pure(
         u_useful: st.net.useful as i32,
         u_const: st.net.const_pos as i32,
         u_n_in: 544,
-        u_inputs: uin.as_ptr(),
+        u_inputs: if dev.is_some() { null() } else { uin.as_ptr() },
+        rows_x: dev.map_or(null(), |i| i.x.as_ptr()),
+        rows_w: dev.map_or(null(), |i| i.w.as_ptr()),
+        accs: dev.map_or(null(), |i| i.accs.as_ptr()),
+        vus: dev.map_or(0, |i| i.vus as i32),
+        row_bytes: dev.map_or(0, |i| i.row_bytes as i32),
+        units_per_vu: dev.map_or(0, |i| i.units as i32),
+        keys: keys.as_ptr(),
+        blocks_real: br as i32,
+        unit_cache: cache,
+        pub_cv: if dev.is_some() { pcv } else { null_mut() },
+        pub_y16: if dev.is_some() { py } else { null_mut() },
+        pub_acc: if dev.is_some() { pa } else { null_mut() },
+        u_out_acc: st.net.out_cols[0] as i32,
+        u_out_y: st.net.out_cols.get(1).map_or(-1, |&c| c as i32),
     };
     let (proof, commitment) = run(&params, &chunk, pcs, m);
     (proof, commitment, phase)
