@@ -1543,75 +1543,90 @@ def claims_of(cfg: Configuration, bits: float | None = None) -> list[dict[str, A
     return claims
 
 
-def _claim_items(claims: list[dict[str, Any]]) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
-    """A configuration's properties and assumptions keyed by id (by text when unmapped); an assumption lists the properties it
-    supports (``for``) and its declared roles."""
-    props: dict[str, dict[str, Any]] = {}
-    rests: dict[str, dict[str, Any]] = {}
-    for c in claims:
-        p = c["property"]
-        props[p["id"] or p["text"]] = {"id": p["id"], "text": p["text"], "unmapped": p["unmapped"]}
-        for a in c["assumptions"]:
-            e = rests.setdefault(a["id"] or a["text"], {"id": a["id"], "text": a["text"], "unmapped": a["unmapped"], "roles": [], "for": []})
-            if a["role"] and a["role"] not in e["roles"]:
-                e["roles"].append(a["role"])
-            if (p["id"] or p["text"]) not in e["for"]:
-                e["for"].append(p["id"] or p["text"])
-    return props, rests
+#: The families' names in the entities render (Daniel, 2026-09-25): a letter, then the family.  The markdown keeps its column
+#: headers (``FAMILIES``); each family entity carries its header as ``column``.
+FAMILY_NAMES = {"A-GKR": "A-GKR", "B-Ligero": "B-Ligero", "Flock": "C-Flock", "SP1": "D-SP1"}
 
 
-def backend_trees(configurations: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
-    """Table 1's claims as one tree per backend family: ``shared``, the properties and assumptions every one of its
-    configurations has, then ``variants``, each configuration with its interaction ``mode`` (``interactive`` or
-    ``non-interactive``) and only the properties and assumptions it adds.  A shared item keeps the roles and supported
-    properties of all its configurations, and its text only when they all state it alike (else ``None``); a variant's
-    ``params`` are its own (the soundness bound at its cells)."""
+def _fam(fid: str | None) -> str | None:
+    return FAMILY_NAMES.get(fid, fid) if fid else fid
+
+
+def mode_of(cfg: Mapping[str, Any]) -> str:
+    """``fs`` (Fiat–Shamir: non-interactive, transferable) or ``interactive``."""
+    return "fs" if cfg["transferability"].startswith("transferable") else "interactive"
+
+
+def instances(configurations: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Table 1 as instances: one per backend family and interaction mode, ``<letter>-interactive`` or ``<letter>-fs``
+    (``A-fs``: A-GKR under Fiat–Shamir), with its member configurations and its claims written out in full.  Each claim
+    slot (soundness, ZK, interaction, setup) holds the property its members share (``id`` ``None`` and ``unmapped`` when
+    they differ or have none; ``texts`` are theirs), resting on every assumption any member rests on for it, with the
+    roles the code declares and the members that cite it; the soundness ``param`` is the weakest of the members'."""
     out = []
-    for fam in dict.fromkeys(c["family"] for c in configurations):
-        cfgs = [c for c in configurations if c["family"] == fam]
-        items = [_claim_items(c["claims"]) for c in cfgs]
-        shared_p = [k for k in items[0][0] if all(k in i[0] for i in items)]
-        shared_a = [k for k in items[0][1] if all(k in i[1] for i in items)]
-
-        def merged(k: str) -> dict[str, Any]:
-            e = dict(items[0][1][k])
-            e["text"] = e["text"] if all(i[1][k]["text"] == e["text"] for i in items) else None
-            e["roles"] = list(dict.fromkeys(r for i in items for r in i[1][k]["roles"]))
-            e["for"] = list(dict.fromkeys(f for i in items for f in i[1][k]["for"]))
-            return e
-
-        out.append({
-            "family": fam,
-            "shared": {"properties": [{**items[0][0][k], "text": items[0][0][k]["text"] if all(i[0][k]["text"] == items[0][0][k]["text"] for i in items) else None}
-                                      for k in shared_p],
-                       "assumptions": [merged(k) for k in shared_a]},
-            "variants": [{"configuration": c["id"], "variant": c["variant"],
-                          "mode": "non-interactive" if c["transferability"].startswith("transferable") else "interactive",
-                          "properties": [v for k, v in i[0].items() if k not in shared_p],
-                          "assumptions": [v for k, v in i[1].items() if k not in shared_a], "params": c["params"]}
-                         for c, i in zip(cfgs, items)]})
+    for fam in FAMILY_NAMES.values():
+        for mode in ("interactive", "fs"):
+            members = [c for c in configurations if c["family"] == fam and mode_of(c) == mode]
+            if not members:
+                continue
+            claims = []
+            for slot in range(max(len(c["claims"]) for c in members)):
+                props = [c["claims"][slot]["property"] for c in members if slot < len(c["claims"])]
+                ids, texts = {p["id"] for p in props}, list(dict.fromkeys(p["text"] for p in props))
+                pid = next(iter(ids)) if len(ids) == 1 and len(props) == len(members) else None
+                params = [p["param"] for p in props if p.get("param")]
+                rests: dict[str, dict[str, Any]] = {}
+                for c in members:
+                    for a in (c["claims"][slot]["assumptions"] if slot < len(c["claims"]) else ()):
+                        e = rests.setdefault(a["id"] or a["text"], {"id": a["id"], "roles": [], "texts": [], "unmapped": a["unmapped"], "configurations": []})
+                        for key, v in (("roles", a["role"]), ("texts", a["text"]), ("configurations", c["id"])):
+                            if v and v not in e[key]:
+                                e[key].append(v)
+                claims.append({"property": {"id": pid, "param": max(params, key=lambda t: float(t[2:].strip("{}"))) if params else None,
+                                            "texts": texts, "unmapped": pid is None},
+                               "assumptions": list(rests.values())})
+            iid = f"{fam[0]}-{mode}"
+            out.append({"id": iid, "display": iid, "family": fam, "mode": mode, "configurations": [c["id"] for c in members], "claims": claims,
+                        "properties": [c["property"]["id"] for c in claims if c["property"]["id"]],
+                        "assumptions": list(dict.fromkeys(a["id"] for c in claims for a in c["assumptions"] if a["id"]))})
     return out
+
+
+def best_standard_hash(results: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Per family and circuit, the lowest-overhead cell whose commitment scheme is built on standard hashes only and whose
+    soundness argument uses no algebraic hash (ties to the lower artifact id)."""
+    best: dict[tuple[str, str], Mapping[str, Any]] = {}
+    for r in results:
+        sch = _SCHEME.get(r["scheme"] or "")
+        if sch is None or not sch.standard or r["state"]["algebraic"]:
+            continue
+        k = (r["family"], r["circuit"])
+        if k not in best or (r["overhead"]["value"], r["artifact"]) < (best[k]["overhead"]["value"], best[k]["artifact"]):
+            best[k] = r
+    return [{"family": r["family"], "circuit": r["circuit"], "result": r["id"], "instance": r["instance"], "configuration": r["configuration"],
+             "scheme": r["scheme"], "overhead": r["overhead"]} for r in sorted(best.values(), key=lambda r: (r["family"], r["circuit"]))]
 
 
 def render_entities(V: Views, published: bool = False, rendered_at: str | None = None, commit: str | None = None) -> dict[str, Any]:
     """The render as entities a site can chart and follow across renders by id (schema :data:`ENTITIES_SCHEMA`):
 
-    * ``circuits`` -- one per subcircuit (``Target``): its census hardware line, datatype, tensor-core step, workload, frozen
-      instance set and native N;
+    * ``circuits`` -- one per subcircuit (``Target``): its census hardware line (id, short name, full device, peak),
+      datatype (id and display: common name, then format), tensor-core step, workload, frozen instance set and native N;
     * ``families`` and ``configurations`` -- Table 1: family, variant, commitment scheme, statement, ZK class (short, with the
       text), soundness bits (the weakest whole-proof bound at its cells) and text, hashes with their class and the algebraic
       flag, interaction and assumption texts as lists; ``claims`` (:func:`claims_of`): each property with the assumptions it
       rests on and their roles, as ``verity.claims`` ids beside their text; ``properties``, ``assumptions`` and ``models``
       as flat id lists, ``params``, and ``unmapped`` the texts with no id yet;
-    * ``backends`` -- the primary shape of Table 1's claims (:func:`backend_trees`): per family, what all its configurations
-      share, then each configuration by interaction mode with what it adds;
+    * ``instances`` -- the primary shape of Table 1's claims (:func:`instances`): one per family and interaction mode
+      (``A-interactive``, ``A-fs``, ..., families A-GKR, B-Ligero, C-Flock, D-SP1), claims written out in full;
+    * ``best_standard_hash`` -- per family and circuit, the lowest-overhead cell on standard hashes only (:func:`best_standard_hash`);
     * ``results`` -- one per Table 2 cell (configuration x circuit): overhead, the phases that sum to it, one-time setup apart,
       state (provisional, algebraic, verified, under re-verification), the artifact and the render time;
     * ``tables`` -- the printed layout: every Table 1 / 2 / 3 cell's exact display string, numeric value, marks and footnote;
     * ``claims`` -- the ``verity.claims`` entries Table 1 cites (the site imports these); ``census`` -- the ``census/`` entries as read at render time; ``provenance`` -- render time, verity commit, rules, banner.
 
-    Ids: circuits by target name, configurations by the slug of their name, results ``<configuration>@<circuit>``, census
-    entries by their census id."""
+    Ids: circuits by target name, instances ``<letter>-<mode>``, configurations by the slug of their name, results
+    ``<configuration>@<circuit>``, census entries by their census id."""
 
     rendered_at = rendered_at or _dt.datetime.now(_dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     grid = table2_grid(V)
@@ -1625,7 +1640,11 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
     for target in TARGETS.values():
         N = native(target)
         peak = contract.native_peak_of(target)
-        circuits.append({"id": target.name, "hardware": peak.id, "device": peak.device, "dtype": peak.dtype, "instruction": target.instruction, "step": target.transition_unit, "status": target.status,
+        dt = census.DATATYPES[peak.dtype]
+        circuits.append({"id": target.name, "hardware": peak.id, "hardware_name": peak.name, "device": peak.device,
+                         "peak": {"value": peak.flop_per_second, "unit": "FLOP/s", "display": T._fmt_tflops(peak.flop_per_second)},
+                         "dtype": peak.dtype, "dtype_display": dt.display, "display": f"{peak.name} · {dt.display}",
+                         "instruction": target.instruction, "step": target.transition_unit, "status": target.status,
                          "workload": census.VU_K1536.id, "instance_set": sets.get(target.name),
                          "native": {"value": N["instances_per_second"], "unit": "instances/s", "display": _native_text(N),
                                     "peak_flop_per_second": N["peak_flop_per_second"], "ops_per_instance": N["ops_per_instance"],
@@ -1640,7 +1659,8 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
         fam = _FAMILY.get(cfg.family or "")
         claims = claims_of(cfg, min(bits) if bits else None)
         configurations.append({
-            "id": slug(cfg.id), "variant": cfg.id, "family": cfg.family, "scheme": cfg.scheme,
+            "id": slug(cfg.id), "variant": cfg.id, "family": _fam(cfg.family), "scheme": cfg.scheme,
+            "instance": f"{_fam(cfg.family)[0]}-{'fs' if cfg.transferability.startswith('transferable') else 'interactive'}" if cfg.family else None,
             "statement": {"full_relation": cfg.full_relation, "text": cfg.statement}, "ports": cfg.ports, "commitment": cfg.commitment,
             "zk": {"class": zk_class(cfg), "text": cfg.zk},
             "soundness": {"bits": min(bits) if bits else None, "text": cfg.soundness, "dominant_term": cfg.dominant_term},
@@ -1670,7 +1690,7 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
                 "cells": {}}
         for col, gc in g["cells"].items():
             c = gc["cell"]
-            line["cells"][col] = {"display": gc["display"], "value": c.overhead if c else None, "marks": gc["marks"], "state": gc["state"],
+            line["cells"][_fam(col)] = {"display": gc["display"], "value": c.overhead if c else None, "marks": gc["marks"], "state": gc["state"],
                                   "footnote": footnote(gc["note"]), "result": result_id(c) if c else None}
             if c is None:
                 continue
@@ -1687,7 +1707,8 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
             cfg = cfg_of.get(c.configuration or "")
             results.append({
                 "id": result_id(c), "configuration": slug(c.configuration) if c.configuration else None, "circuit": c.line, "scheme": c.scheme,
-                "family": col, "artifact": c.artifact, "rendered_at": rendered_at, "network": census.REFERENCE_NETWORK.id, "workload": census.VU_K1536.id,
+                "family": _fam(col), "instance": next((x["instance"] for x in configurations if x["variant"] == c.configuration), None),
+                "artifact": c.artifact, "rendered_at": rendered_at, "network": census.REFERENCE_NETWORK.id, "workload": census.VU_K1536.id,
                 "overhead": {"value": c.overhead, "display": T.fmt_overhead(c.overhead)},
                 "phases": phases, "serving_overhead": overheads(c)[0], "proving_overhead": overheads(c)[1],
                 "setup": {"seconds": su["seconds"], "amortized_overhead": su["amortized"], "instances": su["instances"], "display": r3["setup"]} if su else None,
@@ -1703,12 +1724,14 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
                                 for n in (census.REFERENCE_NETWORK, *census.SENSITIVITY_NETWORKS)} if not V.rules.legacy else None})
         table2_lines.append(line)
 
-    families = [{**dataclasses.asdict(f), "declared_classes": list(f.declared_classes), "display": _family_text(f)} for f in FAMILIES]
+    families = sorted(({**dataclasses.asdict(f), "id": _fam(f.id), "letter": _fam(f.id)[0], "column": f.id, "declared_classes": list(f.declared_classes),
+                        "display": _family_text(f)} for f in FAMILIES), key=lambda f: f["id"])
+    columns = sorted((_fam(c) for c in V.columns()), key=lambda c: (c.split(" ")[0], c))
     table1 = []
     fam_seen = None
     for (fid, row), cfg in zip(rows1, configurations):
         if fid != fam_seen:
-            table1.append({"kind": "family", "id": fid})
+            table1.append({"kind": "family", "id": _fam(fid) if fid in _FAMILY else fid})
             fam_seen = fid
         table1.append({"kind": "configuration", "id": cfg["id"], "cells": row})
     phase_cols = [pid for pid, _ in PHASES]
@@ -1716,7 +1739,7 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
         "schema": ENTITIES_SCHEMA,
         "provenance": {"rendered_at": rendered_at, "verity_commit": commit if commit is not None else verity_commit(), "rules": dataclasses.asdict(V.rules),
                        "published": published, "banner": PUBLISHED if published else PREVIEW},
-        "axes": {"circuits": [c["id"] for c in circuits], "schemes": [s.id for s in SCHEMES if s.admissible], "families": V.columns(),
+        "axes": {"circuits": [c["id"] for c in circuits], "schemes": [s.id for s in SCHEMES if s.admissible], "families": columns,
                  "phases": phase_cols, "networks": [n.id for n in (census.REFERENCE_NETWORK, *census.SENSITIVITY_NETWORKS)]},
         "census": {name: {e["id"]: e for e in census.raw(name)} for name in ("hardware", "networks", "workloads", "instance_sets")},
         "claims": {i: dataclasses.asdict(claims_registry.get(i)) for i in sorted({i for c in configurations for k in ("properties", "assumptions", "models")
@@ -1724,16 +1747,18 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
         "circuits": circuits,
         "schemes": [{**dataclasses.asdict(x), "admissible": x.admissible} for x in SCHEMES],
         "families": families,
-        "backends": backend_trees(configurations),
+        "instances": instances(configurations),
         "configurations": configurations,
         "results": results,
+        "best_standard_hash": best_standard_hash(results),
         "tables": {
             "table1": {"columns": list(TABLE1_COLUMNS), "rows": table1},
-            "table2": {"columns": ["native", *V.columns()], "lines": table2_lines, "footnotes": footnotes},
+            "table2": {"columns": ["native", *columns], "column_labels": {_fam(c): c for c in V.columns()}, "lines": table2_lines,
+                       "footnotes": footnotes},
             "table3": {"columns": [*phase_cols, "total", "setup"], "labels": dict(PHASES),
                        "rows": [{"result": result_id(c), "label": _cell_name(c), "cells": table3_row(c)} for c in V.cells]},
         },
-        "rejected": [{"artifact": r["artifact"], "configuration": slug(r["configuration"]) if r["configuration"] else None, "family": r["family"],
+        "rejected": [{"artifact": r["artifact"], "configuration": slug(r["configuration"]) if r["configuration"] else None, "family": _fam(r["family"]),
                       "circuit": r["line"], "scheme": r.get("scheme"), "reason": r["codes"][0][0], "text": r["codes"][0][1]} for r in V.rejected],
     }
 
