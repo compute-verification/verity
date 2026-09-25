@@ -17,9 +17,9 @@ Construction (one-stage, binding, position-identified):
   hashing       a worker thread waits on the event, then hashes CHUNK-byte position-identified leaves
                 leaf_i = SHA-256("verity/pos-leaf/v0" || u64 nbytes || bytes)   (C0 `pos_leaf`; the frame binds the length)
                 in tree order (tensor 0 chunks, tensor 1 chunks, …) with a thread pool (hashlib releases the GIL above 2 KB), then
-                folds with the production pairing/lift rule (`fasttree.fold_levels`, same shape rule as `MerkleTree`)
+                folds with the production pairing/lift rule (`scheme.fold_levels`, same shape rule as `MerkleTree`)
   root          step root R_s = SHA-256(ROOT_TAG || program_digest || ctx_digest(run, step) || geo_digest(model) || layout_digest(step)
-                || u64 N_s || merkle_root)   (`fa2_commit.engine.bind_root`); the layout digest pins (name, dtype, shape, nbytes, chunk)
+                || u64 N_s || merkle_root)   (`scheme.step_root`); the layout digest pins (name, dtype, shape, nbytes, chunk)
                 of every tensor in order, so a rank names exactly one (tensor, byte range); run root = fold(R_0 … R_{S-1}) bound with S
   openings      (step, rank, value, path) with the path read from the retained levels; verified with the production core
                 (`verity_vllm.commit.merkle.path_shape` / `fold_path`) against the ORIGINAL R_s and the run root
@@ -49,13 +49,12 @@ try:
 except ImportError:                      # the offline core (tests, CPU cross-checks) needs no torch
     torch = None  # type: ignore[assignment]
 
-from verity_vllm.commit import hidden_engine as eng  # production engine pieces (imported, not forked)
+from verity_vllm.commit import scheme
 from verity_vllm.commit.native_ranges import NativeRangeOpenings
 from verity_vllm.acquire.committer_api import Opening, RunCommitment, StepCommitment, declaration
 from verity_vllm.pipeline.spans import Spans
 
 GPU_CHUNK_BYTES = 256
-ROOT_TAG_RUN = b"verity/cmt-integ/run-root/v0"
 DEFAULT_CHUNK = 4096
 BLOCK_BYTES = 64 << 20
 
@@ -846,7 +845,7 @@ class NativeHostCommitter(NativeRangeOpenings):
         self.run_id = run_id
         self.program_digest = program_digest or hashlib.sha256(b"cmt-integ/no-program-digest/" + run_id.encode()).digest()
         self.acquire_classes = acquire_classes or ACQUIRE_CLASSES
-        self.spans = Spans()
+        self.spans = Spans(scheme.NAME)
         self.x03_expected = 0
         self.x03_committed = 0
         # [X-03 F-r19-int-22] the Program's per-layer attention Call statics (fa2_plane_classes.AttnLayerDecl, set by the driver from the
@@ -1198,7 +1197,7 @@ class NativeHostCommitter(NativeRangeOpenings):
                 host = flat.cpu()                    # blocking D2H, once
                 mv = memoryview(host.numpy()).cast("B")
                 leaves = self._hash_leaves(mv)
-                r = eng.ft.fold(leaves)
+                r = scheme.fold(leaves)
             else:
                 r = LH.tensor_root_device(flat, self.chunk)
                 if mode == "device-checked":
@@ -1210,9 +1209,7 @@ class NativeHostCommitter(NativeRangeOpenings):
             roots.append(r)
             n_bytes += nb
             names.append([name, _dtype_name(p), list(p.shape), nb])
-        names_digest = hashlib.sha256(json.dumps(names, separators=(",", ":")).encode()).digest()
-        root = hashlib.sha256(b"verity/cmt-integ/weights-root/v0" + self._geo_digest + names_digest + len(roots).to_bytes(8, "big")
-                              + eng.ft.fold(list(roots))).digest()
+        root = scheme.weights_root(self._geo_digest, scheme.names_digest(names), roots)
         self.weights = {"root": root.hex(), "tensors": len(roots), "bytes": n_bytes, "wall_s": time.perf_counter() - t0,
                         "label": "measured; once per process, excluded from steady state", "hash": mode, "chunk": self.chunk,
                         **({"device_checked_tensors": checked} if mode == "device-checked" else {})}
@@ -1315,7 +1312,7 @@ class NativeHostCommitter(NativeRangeOpenings):
         self._padding = {}
         self.padding_stats = None
         self._step_index = 0
-        self.spans = Spans()
+        self.spans = Spans(scheme.NAME)
         self.pool.reset()
         self.errors = []
 
@@ -1489,9 +1486,9 @@ class NativeHostCommitter(NativeRangeOpenings):
         n = int(leaves.shape[0])
         nbytes = sum(m.nbytes for m in job.metas)
         layout_dig = self.layout_digest(job.metas)
-        root = eng.bind_root(self.program_digest, self._ctx_digest(job.step), self._geo_digest, layout_dig, n, mr)
+        root = scheme.step_root(self.program_digest, self._ctx_digest(job.step), self._geo_digest, layout_dig, n, mr)
         t2 = time.perf_counter()
-        self.spans.add("hashing", t1 - t0, step=job.step, nbytes=nbytes)
+        self.spans.add("hashing", t1 - t0, step=job.step, nbytes=nbytes, leaves=n)
         self.spans.add("root_finalisation", t2 - t1, step=job.step)
         self._gpu_levels[job.step] = levels
         self._gpu_blocks[job.step] = (keep, used)
@@ -1504,15 +1501,13 @@ class NativeHostCommitter(NativeRangeOpenings):
         """CPU reference of the GPU chunk tree for ONE packed step block (tests; no CUDA): the same 256 B chunk leaves (CMT-2 header), the
         same production fold, the same retention policy (`retain`), the same per-step state the worker leaves behind, so `open()`,
         `release_staging()`, `verify()` and `finalize()` run unchanged on the result."""
-        from verity_vllm.commit import hidden_stream as hs
-
         chunk = self.chunk
         used = len(stream)
         padded = -(-used // chunk) * chunk
         buf = bytes(stream) + b"\0" * (padded - used)
         layout = self._gpu_layout(step, padded // 4)
-        leaves = [hs.chunk_leaf_digest(hs.chunk_header(layout, step, i, chunk // 4, self.GPU_TREE_SRC), buf[i * chunk:(i + 1) * chunk]) for i in range(padded // chunk)]
-        lv_bytes = eng.ft.fold_levels(leaves)
+        leaves = [scheme.chunk_leaf(scheme.chunk_header(layout, step, i, chunk // 4, self.GPU_TREE_SRC), buf[i * chunk:(i + 1) * chunk]) for i in range(padded // chunk)]
+        lv_bytes = scheme.fold_levels(leaves)
         levels = [torch.frombuffer(bytearray(b"".join(lv)), dtype=torch.int32).reshape(len(lv), 8).clone() for lv in lv_bytes]
         keep = torch.frombuffer(bytearray(buf), dtype=torch.uint8).clone() if self.retain != "none" else None
         if keep is not None and self.retain == "device":
@@ -1524,7 +1519,7 @@ class NativeHostCommitter(NativeRangeOpenings):
         n = len(leaves)
         nbytes = sum(m.nbytes for m in metas)
         layout_dig = self.layout_digest(metas)
-        root = eng.bind_root(self.program_digest, self._ctx_digest(step), self._geo_digest, layout_dig, n, mr)
+        root = scheme.step_root(self.program_digest, self._ctx_digest(step), self._geo_digest, layout_dig, n, mr)
         self._gpu_levels[step] = levels
         self._gpu_blocks[step] = (keep, used)
         self._layouts[step] = metas
@@ -1841,14 +1836,14 @@ class NativeHostCommitter(NativeRangeOpenings):
         chunk = self.chunk
         n = len(mv)
         if n <= 4 * chunk or self.hash_threads <= 1:
-            return [eng.pos_leaf(mv[o:o + chunk]) for o in range(0, n, chunk)]
+            return [scheme.pos_leaf(mv[o:o + chunk]) for o in range(0, n, chunk)]
         # split into contiguous chunk-aligned ranges for the pool (hashlib releases the GIL for >2 KB updates)
         per = max(chunk, ((n // self.hash_threads) // chunk) * chunk)
         ranges = [(o, min(o + per, n)) for o in range(0, n, per)]
 
         def part(r):
             lo, hi = r
-            return [eng.pos_leaf(mv[o:min(o + chunk, hi)]) for o in range(lo, hi, chunk)]
+            return [scheme.pos_leaf(mv[o:min(o + chunk, hi)]) for o in range(lo, hi, chunk)]
 
         out: list[bytes] = []
         for lst in self._pool_exec.map(part, ranges):
@@ -1941,14 +1936,14 @@ class NativeHostCommitter(NativeRangeOpenings):
         else:
             for m in job.metas:
                 leaves.extend(self._hash_leaves(m.host))
-        levels = eng.ft.fold_levels(leaves) if leaves else [[eng.ft.hashing.empty_root()]]
+        levels = scheme.fold_levels(leaves) if leaves else [[scheme.empty_root()]]
         t1 = time.perf_counter()
         n = len(leaves)
         nbytes = sum(m.nbytes for m in job.metas)
         layout_dig = self.layout_digest(job.metas)
-        root = eng.bind_root(self.program_digest, self._ctx_digest(job.step), self._geo_digest, layout_dig, n, levels[-1][0])
+        root = scheme.step_root(self.program_digest, self._ctx_digest(job.step), self._geo_digest, layout_dig, n, levels[-1][0])
         t2 = time.perf_counter()
-        self.spans.add("hashing", t1 - t0, step=job.step, nbytes=nbytes)
+        self.spans.add("hashing", t1 - t0, step=job.step, nbytes=nbytes, leaves=n)
         self.spans.add("root_finalisation", t2 - t1, step=job.step)
         self._levels[job.step] = levels
         self._layouts[job.step] = job.metas
@@ -1959,7 +1954,7 @@ class NativeHostCommitter(NativeRangeOpenings):
 
     def _hash_leaves_single(self, mv: memoryview) -> list[bytes]:
         chunk = self.chunk
-        return [eng.pos_leaf(mv[o:o + chunk]) for o in range(0, len(mv), chunk)]
+        return [scheme.pos_leaf(mv[o:o + chunk]) for o in range(0, len(mv), chunk)]
 
     # ------------------------------------------------------------------ [B9.1] padding steps -- the inactive rows of a padded Commit
     # (LIFTING-SPEC v0.7 B9.1; verity_vllm/commit/padding_steps.py: one rule, this committer and the laptop conversion are its two
@@ -2025,7 +2020,7 @@ class NativeHostCommitter(NativeRangeOpenings):
                 self._done[s] = sc
                 steps.append(sc)
                 self._step_index = s + 1
-            self.spans.add("padding", time.perf_counter() - t, step=s, nbytes=ps.n_bytes)
+            self.spans.add("padding", time.perf_counter() - t, step=s, nbytes=ps.n_bytes, leaves=ps.n_leaves)
         return steps
 
     def _padding_leaf(self, step: int, index: int):
@@ -2062,8 +2057,7 @@ class NativeHostCommitter(NativeRangeOpenings):
                 "hook_wall_s": t_hook - t1, "apply_wall_s": time.perf_counter() - t_hook,
                 "padding_bytes_over_executed": (sum(ps.n_bytes for ps in pads) / ex_bytes) if ex_bytes else None}
         step_roots = [s.root for s in steps]
-        run_root = hashlib.sha256(ROOT_TAG_RUN + self.program_digest + self._geo_digest + len(step_roots).to_bytes(8, "big")
-                                  + eng.ft.fold(list(step_roots))).digest()
+        run_root = scheme.run_root(self.program_digest, self._geo_digest, step_roots)
         t2 = time.perf_counter()
         self.spans.add("root_finalisation", t2 - t1)
         last_end = max((s.t_step_end for s in steps), default=t0)
@@ -2407,7 +2401,7 @@ class NativeHostCommitter(NativeRangeOpenings):
                 if ps is not None:                                   # [B9.1] a padding leaf: its bytes are the synthesized block's, path from the (re)folded levels
                     lo = (index - ps.leaf_base) * self.chunk
                     value = bytes(ps.stream[lo:lo + self.chunk])
-                    out.append(Opening(step, index, value, eng.path_in_levels(self._levels[step], index), ident))
+                    out.append(Opening(step, index, value, scheme.path_in_levels(self._levels[step], index), ident))
                     continue
                 if step in self._gpu_blocks:
                     blk, used = self._gpu_blocks[step]           # lazy D2H of the 256 B chunk (zero-padded past `used`) + level sibling path
@@ -2435,7 +2429,7 @@ class NativeHostCommitter(NativeRangeOpenings):
                 else:
                     m = metas[ident["tensor"]]
                     value = bytes(m.host[ident["byte_lo"]:ident["byte_hi"]])
-                path = eng.path_in_levels(self._levels[step], index)
+                path = scheme.path_in_levels(self._levels[step], index)
                 out.append(Opening(step, index, value, path, ident))
         return out
 
@@ -2449,7 +2443,7 @@ class NativeHostCommitter(NativeRangeOpenings):
         if not 0 <= opening.index < sc.n_leaves:
             return False
         try:
-            shape = eng.path_shape(sc.n_leaves, opening.index)
+            shape = scheme.path_shape(sc.n_leaves, opening.index)
         except Exception:  # noqa: BLE001
             return False
         if len(opening.path) != len(shape) or any((p is None) == has for p, has in zip(opening.path, shape, strict=True)):
@@ -2464,22 +2458,20 @@ class NativeHostCommitter(NativeRangeOpenings):
             if len(opening.value) != ident["byte_hi"] - ident["byte_lo"]:      # a chunk (the GPU tree's blocks are chunk multiples; a host tail may be short)
                 return False
             leaf = PSm.leaf_digest_of(ps, opening.value, opening.index - ps.leaf_base)
-            merkle = eng.fold_path(leaf, opening.index, list(opening.path))
+            merkle = scheme.fold_path(leaf, opening.index, list(opening.path))
         elif opening.step in self._gpu_blocks:
-            from verity_vllm.commit import hidden_stream as hs
-
             used = self._gpu_blocks[opening.step][1]
             if len(opening.value) != self.chunk:
                 return False
             padded = -(-used // self.chunk) * self.chunk
-            leaf = hs.chunk_leaf_digest(hs.chunk_header(self._gpu_layout(opening.step, padded // 4), opening.step, opening.index, self.chunk // 4,
+            leaf = scheme.chunk_leaf(scheme.chunk_header(self._gpu_layout(opening.step, padded // 4), opening.step, opening.index, self.chunk // 4,
                                                         self.GPU_TREE_SRC), opening.value)
-            merkle = eng.fold_path(leaf, opening.index, list(opening.path))
+            merkle = scheme.fold_path(leaf, opening.index, list(opening.path))
         else:
             if len(opening.value) != ident["byte_hi"] - ident["byte_lo"]:
                 return False
-            merkle = eng.fold_path(eng.pos_leaf(opening.value), opening.index, list(opening.path))
-        root = eng.bind_root(self.program_digest, self._ctx_digest(opening.step), self._geo_digest,
+            merkle = scheme.fold_path(scheme.pos_leaf(opening.value), opening.index, list(opening.path))
+        root = scheme.step_root(self.program_digest, self._ctx_digest(opening.step), self._geo_digest,
                              self.layout_digest(self._layouts[opening.step]), sc.n_leaves, merkle)
         if root != sc.root:
             return False

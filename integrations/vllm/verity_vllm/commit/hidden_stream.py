@@ -4,7 +4,7 @@ sums, PV accumulators, epilogue) as acquired from the pinned kernel by the v7 ta
 * **M1 stream** (`VERITY_TAP=3`): the kernel materialises the selected classes into one flat u32 buffer whose layout is
   arithmetic in (HB = b*h slabs, M = seqlen_q rows, NB = key-block cap) -- `StreamLayout` below mirrors
   `Verity_mat_layout` in `verity_tap.h`; every canonical (class, slab, row, col | block, lane | d) position is one word.
-  The commitment is a Merkle tree (production node/lift rule, `verity_vllm.commit.fasttree`) over
+  The commitment is a Merkle tree (production node/lift rule, `verity_vllm.commit.scheme`) over
   fixed-size chunks of that buffer; leaf = SHA-256(16-word header || chunk words) where the header carries the chunk
   index, the launch tag and the geometry, so a leaf is bound to its position, not to a multiset.
 * **H1 digests** (`VERITY_TAP=4`): every kernel thread hashes, per visited 128-key block, its own register words with a
@@ -29,11 +29,11 @@ from typing import Any
 
 import numpy as np
 
-from verity_vllm.commit.hidden_engine import ft, fold_path, path_in_levels, path_shape
+from verity_vllm.commit import scheme
 
-TAG = 0x68326166            # 'fa2h' as a little-endian u32
-VERSION = 7
-KIND_CHUNK = 1              # leaf over a chunk of the M1 stream
+TAG = scheme.FA2H_TAG
+VERSION = scheme.FA2H_VERSION
+KIND_CHUNK = scheme.FA2H_KIND_CHUNK
 KIND_THREAD = 2             # per-thread per-block leaf computed inside the kernel (H1)
 KBLOCK_N = 128
 KBLOCK_M = 64
@@ -141,23 +141,6 @@ def pack_words(words: list[int]) -> bytes:
     return struct.pack("<%dI" % len(words), *[w & 0xFFFFFFFF for w in words])
 
 
-def chunk_header(layout: StreamLayout, launch_tag: int, chunk_index: int, chunk_words: int, src_mask: int) -> bytes:
-    BN, D = (0, 0) if getattr(layout, "legacy_tile", True) else (layout.BN, layout.D)   # duck-typed layouts (native_host._L) = legacy
-    return pack_words([TAG, (VERSION << 16) | (KIND_CHUNK << 8) | (src_mask & 0xFF), launch_tag, chunk_index, chunk_words,
-                       layout.HB, layout.M, layout.NB, BN, D, 0, 0, 0, 0, 0, 0])
-
-
-def chunk_leaf_digest(header: bytes, chunk: bytes | memoryview) -> bytes:
-    return hashlib.sha256(header + bytes(chunk)).digest()
-
-
-def thread_header(src_mask: int, slab: int, m_block: int, n_block: int, tidx: int, seqlen_q: int, seqlen_k: int, launch_tag: int,
-                  n_block_max: int, ok0: bool, ok1: bool) -> bytes:
-    """The 16-word header the H1 kernel puts in front of every thread leaf (`Verity_sha_ctx::header`)."""
-    return pack_words([TAG, (VERSION << 16) | src_mask, 0, slab, m_block, n_block, tidx, seqlen_q, seqlen_k, launch_tag, n_block_max,
-                       (1 if ok0 else 0) | (2 if ok1 else 0), 0, 0, 0, 0])
-
-
 def thread_of(row: int, col_or_d: int) -> tuple[int, int, int]:
     """(tidx, row_slot mi, quad lane t) owning value (row, col) of a tile: rows 16w+g (+8), cols 8n+2t+{0,1}."""
     r = row % KBLOCK_M
@@ -199,12 +182,7 @@ class StreamCommitment:
         ci, off = divmod(word_index, self.chunk_words)
         chunk = stream[ci * self.chunk_words:(ci + 1) * self.chunk_words].astype(np.uint32).tobytes()
         assert self.levels is not None
-        return ChunkOpening(ci, off, chunk, path_in_levels(self.levels, ci))
-
-
-def bind_stream_root(layout: StreamLayout, launch_tag: int, src_mask: int, chunk_words: int, leaf_count: int, merkle_root: bytes) -> bytes:
-    ctx = json.dumps({"launch_tag": launch_tag, "src_mask": src_mask, "chunk_words": chunk_words, "leaf_count": leaf_count}, sort_keys=True).encode()
-    return hashlib.sha256(b"verity/fa2-hidden/root/v7" + layout.digest() + hashlib.sha256(ctx).digest() + merkle_root).digest()
+        return ChunkOpening(ci, off, chunk, scheme.path_in_levels(self.levels, ci))
 
 
 def commit_stream(stream: np.ndarray, layout: StreamLayout, launch_tag: int, src_mask: int, chunk_words: int = 64,
@@ -220,12 +198,12 @@ def commit_stream(stream: np.ndarray, layout: StreamLayout, launch_tag: int, src
     mv = memoryview(stream.tobytes())
     t0 = time.perf_counter()
     cb = 4 * chunk_words
-    leaves = [hashlib.sha256(chunk_header(layout, launch_tag, i, chunk_words, src_mask) + mv[i * cb:(i + 1) * cb]).digest() for i in range(n)]
+    leaves = [scheme.chunk_leaf(scheme.chunk_header(layout, launch_tag, i, chunk_words, src_mask), mv[i * cb:(i + 1) * cb]) for i in range(n)]
     t1 = time.perf_counter()
-    levels = ft.fold_levels(list(leaves))
+    levels = scheme.fold_levels(list(leaves))
     t2 = time.perf_counter()
     merkle_root = levels[-1][0]
-    root = bind_stream_root(layout, launch_tag, src_mask, chunk_words, n, merkle_root)
+    root = scheme.stream_root(layout.digest(), launch_tag, src_mask, chunk_words, n, merkle_root)
     return StreamCommitment(layout, launch_tag, src_mask, chunk_words, n, merkle_root, root, levels if retain_levels else None,
                             {"leaf_hash_s": t1 - t0, "tree_fold_s": t2 - t1, "leaf_count": n, "bytes": stream.size * 4})
 
@@ -236,11 +214,11 @@ def verify_chunk_opening(root: bytes, layout: StreamLayout, launch_tag: int, src
     ci, off = divmod(word_index, chunk_words)
     if opening.index != ci or opening.offset != off or len(opening.chunk) != 4 * chunk_words:
         return False
-    if len(opening.path) != len(path_shape(leaf_count, ci)):
+    if len(opening.path) != len(scheme.path_shape(leaf_count, ci)):
         return False
-    leaf = chunk_leaf_digest(chunk_header(layout, launch_tag, ci, chunk_words, src_mask), opening.chunk)
-    mr = fold_path(leaf, ci, opening.path)
-    return bind_stream_root(layout, launch_tag, src_mask, chunk_words, leaf_count, mr) == root
+    leaf = scheme.chunk_leaf(scheme.chunk_header(layout, launch_tag, ci, chunk_words, src_mask), opening.chunk)
+    mr = scheme.fold_path(leaf, ci, opening.path)
+    return scheme.stream_root(layout.digest(), launch_tag, src_mask, chunk_words, leaf_count, mr) == root
 
 
 # ------------------------------------------------------------------ H1 thread-leaf commitment
@@ -316,13 +294,8 @@ def thread_message(stream: np.ndarray, layout: StreamLayout, geo: ThreadGeometry
         dd = np.array([8 * (i >> 1) + 2 * t + (i & 1) for i in range(16)])
         for row, ok in ((r0, ok0), (r1, ok1)):
             words += stream[o["O"] + ((slab * layout.M + row) * layout.NB + n_block) * 64 + dd].tolist() if ok else [0] * 16
-    hdr = thread_header(src_mask, slab, m_block, n_block, tidx, sq, sk, launch_tag, geo.n_block_max(seq_idx, m_block), ok0, ok1)
+    hdr = scheme.thread_header(src_mask, slab, m_block, n_block, tidx, sq, sk, launch_tag, geo.n_block_max(seq_idx, m_block), ok0, ok1)
     return hdr + pack_words([int(x) for x in words])
-
-
-def bind_thread_root(geo: ThreadGeometry, launch_tag: int, src_mask: int, merkle_root: bytes) -> bytes:
-    ctx = json.dumps({"launch_tag": launch_tag, "src_mask": src_mask}, sort_keys=True).encode()
-    return hashlib.sha256(b"verity/fa2-hidden/thread-root/v7" + geo.digest() + hashlib.sha256(ctx).digest() + merkle_root).digest()
 
 
 @dataclass
@@ -344,15 +317,15 @@ class ThreadLeafCommitment:
         t0 = time.perf_counter()
         raw = d.tobytes()
         leaves = [raw[32 * i:32 * (i + 1)] for i in range(d.shape[0])]
-        levels = ft.fold_levels(leaves)
+        levels = scheme.fold_levels(leaves)
         t1 = time.perf_counter()
         mr = levels[-1][0]
-        return cls(geo, launch_tag, src_mask, mr, bind_thread_root(geo, launch_tag, src_mask, mr), levels if retain_levels else None,
+        return cls(geo, launch_tag, src_mask, mr, scheme.thread_root(geo.digest(), launch_tag, src_mask, mr), levels if retain_levels else None,
                    {"tree_fold_s": t1 - t0, "leaf_count": d.shape[0], "digest_bytes": raw.__len__()})
 
     def open(self, message: bytes, index: int) -> ThreadOpening:
         assert self.levels is not None
-        return ThreadOpening(index, message, path_in_levels(self.levels, index))
+        return ThreadOpening(index, message, scheme.path_in_levels(self.levels, index))
 
 
 def verify_thread_opening(root: bytes, geo: ThreadGeometry, launch_tag: int, src_mask: int, seq_idx: int, slab: int, m_block: int,
@@ -364,13 +337,12 @@ def verify_thread_opening(root: bytes, geo: ThreadGeometry, launch_tag: int, src
     w, lane = tidx // 32, tidx % 32
     r0 = m_block * KBLOCK_M + 16 * w + lane // 4
     sq, sk = geo.seqlens_q[seq_idx], geo.seqlens_k[seq_idx]
-    hdr = thread_header(src_mask, slab, m_block, n_block, tidx, sq, sk, launch_tag, geo.n_block_max(seq_idx, m_block), r0 < sq, r0 + 8 < sq)
+    hdr = scheme.thread_header(src_mask, slab, m_block, n_block, tidx, sq, sk, launch_tag, geo.n_block_max(seq_idx, m_block), r0 < sq, r0 + 8 < sq)
     if opening.message[:64] != hdr:
         return False
-    if len(opening.path) != len(path_shape(geo.leaf_count, idx)):
+    if len(opening.path) != len(scheme.path_shape(geo.leaf_count, idx)):
         return False
-    leaf = hashlib.sha256(opening.message).digest()
-    return bind_thread_root(geo, launch_tag, src_mask, fold_path(leaf, idx, opening.path)) == root
+    return scheme.thread_root(geo.digest(), launch_tag, src_mask, scheme.fold_path(scheme.thread_leaf(opening.message), idx, opening.path)) == root
 
 
 def thread_word_offset(src_mask: int, cls: str, mi: int, ni_or_i: int) -> int:

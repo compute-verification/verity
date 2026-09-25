@@ -21,7 +21,6 @@
     {"file": "verity_vllm", "kind": "package-cycle", "symbol": "<package>", "detail": "check <-> properties"},
     {"file": "verity_vllm", "kind": "package-cycle", "symbol": "<package>", "detail": "commit <-> observe"},
     {"file": "verity_vllm", "kind": "package-cycle", "symbol": "<package>", "detail": "commit <-> pipeline"},
-    {"file": "verity_vllm", "kind": "package-cycle", "symbol": "<package>", "detail": "commit <-> program"},
     {"file": "verity_vllm", "kind": "package-cycle", "symbol": "<package>", "detail": "correspondence <-> program"},
     {"file": "verity_vllm", "kind": "package-cycle", "symbol": "<package>", "detail": "correspondence <-> query"},
     {"file": "verity_vllm", "kind": "package-cycle", "symbol": "<package>", "detail": "engine <-> pipeline"},

@@ -10,6 +10,9 @@ Component names are fixed (`COMPONENTS`) so every committer reports the same bre
   root_finalisation  context binding of the per-step root, run-root fold
   opening_generation generating openings for sampled positions (after the run; never on the serving path)
   wait               time the SERVING thread spent blocked on the committer (backpressure) — must be ~0 in steady state
+
+`snapshot()["throughput"]` is the per-scheme view of the same accumulators: the commitment scheme the committer hashes with and, per
+stage that ran, its wall time, bytes, leaves and the two rates.  A device-side stage's wall time is the host's wait for it.
 """
 
 from __future__ import annotations
@@ -24,21 +27,25 @@ COMPONENTS = ("acquisition", "movement", "hashing", "root_finalisation", "openin
 
 
 class Spans:
-    """Thread-safe accumulators: per component total seconds and call counts, plus per-step buckets."""
+    """Thread-safe accumulators: per component total seconds, call counts, bytes and leaves, plus per-step buckets."""
 
-    def __init__(self) -> None:
+    def __init__(self, scheme: str | None = None) -> None:
         self._lock = threading.Lock()
+        self.scheme = scheme
         self.total: dict[str, float] = defaultdict(float)
         self.calls: dict[str, int] = defaultdict(int)
         self.per_step: dict[int, dict[str, float]] = defaultdict(lambda: defaultdict(float))
         self.bytes: dict[str, int] = defaultdict(int)
+        self.leaves: dict[str, int] = defaultdict(int)
 
-    def add(self, component: str, seconds: float, *, step: int | None = None, nbytes: int = 0) -> None:
+    def add(self, component: str, seconds: float, *, step: int | None = None, nbytes: int = 0, leaves: int = 0) -> None:
         with self._lock:
             self.total[component] += seconds
             self.calls[component] += 1
             if nbytes:
                 self.bytes[component] += nbytes
+            if leaves:
+                self.leaves[component] += leaves
             if step is not None:
                 self.per_step[step][component] += seconds
 
@@ -50,11 +57,26 @@ class Spans:
         finally:
             self.add(component, time.perf_counter() - t0, step=step, nbytes=nbytes)
 
+    def throughput(self) -> dict:
+        """Per stage that ran: ``wall_s``, ``bytes``, ``leaves``, ``bytes_per_s`` and ``leaves_per_s`` (``None`` without wall time)."""
+        with self._lock:
+            stages = {}
+            for c in [*COMPONENTS, *sorted(set(self.calls) - set(COMPONENTS))]:
+                if not self.calls.get(c):
+                    continue
+                wall, nb, nl = self.total.get(c, 0.0), self.bytes.get(c, 0), self.leaves.get(c, 0)
+                stages[c] = {"wall_s": wall, "bytes": nb, "leaves": nl, "bytes_per_s": nb / wall if wall > 0 else None,
+                             "leaves_per_s": nl / wall if wall > 0 else None}
+            return {"scheme": self.scheme, "stages": stages}
+
     def snapshot(self) -> dict:
+        throughput = self.throughput()
         with self._lock:
             return {
                 "total_s": {c: self.total.get(c, 0.0) for c in COMPONENTS},
                 "calls": {c: self.calls.get(c, 0) for c in COMPONENTS},
                 "bytes": dict(self.bytes),
+                "leaves": dict(self.leaves),
                 "per_step": {int(s): {c: v for c, v in d.items()} for s, d in sorted(self.per_step.items())},
+                "throughput": throughput,
             }

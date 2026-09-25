@@ -10,7 +10,7 @@ import sys
 from dataclasses import dataclass
 from typing import Any
 
-from verity_vllm.commit import hidden_engine as eng
+from verity_vllm.commit import scheme
 from verity_vllm.commit.merkle import fold_range, range_path_shape
 
 
@@ -48,9 +48,7 @@ class NativeRangeOpenings:
     """Range openings over the committer's retained copies (`_gpu_blocks`, `_streams`, per-tensor `host`, padding streams) and levels."""
 
     def _run_root(self, run: Any) -> bytes:
-        from verity_vllm.commit.padding_steps import run_root_of
-
-        return run_root_of(self.program_digest, self._geo_digest, [s.root for s in run.steps])
+        return scheme.run_root(self.program_digest, self._geo_digest, [s.root for s in run.steps])
 
     def leaf_span(self, step: int, m: Any, lo: int, hi: int) -> tuple[int, int, int]:
         """The leaves [a, b) of `step` that hold bytes [lo, hi) of tensor `m`, and the offset of byte `lo` in their concatenated bytes."""
@@ -135,13 +133,11 @@ class NativeRangeOpenings:
                 return None
             return [PSm.leaf_digest_of(ps, mv[k * C:min((k + 1) * C, end)], lo + k - ps.leaf_base) for k in range(hi - lo)]
         if step in self._gpu_blocks:
-            from verity_vllm.commit import hidden_stream as hs
-
             if len(value) != (hi - lo) * C:
                 return None
             padded = -(-self._gpu_blocks[step][1] // C) * C
             layout = self._gpu_layout(step, padded // 4)
-            return [hs.chunk_leaf_digest(hs.chunk_header(layout, step, lo + k, C // 4, self.GPU_TREE_SRC), mv[k * C:(k + 1) * C])
+            return [scheme.chunk_leaf(scheme.chunk_header(layout, step, lo + k, C // 4, self.GPU_TREE_SRC), mv[k * C:(k + 1) * C])
                     for k in range(hi - lo)]
         if step in self._streams:
             end = len(self._streams[step]) - lo * C
@@ -153,7 +149,7 @@ class NativeRangeOpenings:
             end = m.nbytes - (lo - m.first_leaf) * C
         if len(value) != min((hi - lo) * C, end):
             return None
-        return [eng.pos_leaf(mv[k * C:min((k + 1) * C, end)]) for k in range(hi - lo)]
+        return [scheme.pos_leaf(mv[k * C:min((k + 1) * C, end)]) for k in range(hi - lo)]
 
     def verify_range(self, run: Any, ro: RangeOpening, roots: dict[int, bytes] | None = None) -> bool:
         """`verify` for a range opening: every leaf digest recomputed from the opening's bytes, the run folded with its boundary siblings to
@@ -177,7 +173,7 @@ class NativeRangeOpenings:
             return False
         if roots is not None and ro.step in roots:
             return merkle == roots[ro.step]
-        root = eng.bind_root(self.program_digest, self._ctx_digest(ro.step), self._geo_digest,
+        root = scheme.step_root(self.program_digest, self._ctx_digest(ro.step), self._geo_digest,
                              self.layout_digest(self._layouts[ro.step]), sc.n_leaves, merkle)
         if root != sc.root or self._run_root(run) != run.run_root:
             return False

@@ -113,7 +113,6 @@
     {"file": "verity_vllm/program/kernels/twins.py", "kind": "environ", "symbol": "_tc_lib", "detail": "CXX"},
     {"file": "verity_vllm/program/kernels/twins.py", "kind": "seed-default", "symbol": "self_check", "detail": "seed"},
     {"file": "verity_vllm/check/verdict.py", "kind": "broad-except", "symbol": "execution_of_record", "detail": "except Exception"},
-    {"file": "verity_vllm/commit/semantic_layout.py", "kind": "broad-except", "symbol": "verify_position_opening", "detail": "except Exception"},
     {"file": "verity_vllm/check/match/batch_decomp.py", "kind": "broad-except", "symbol": "decompose", "detail": "except Exception"},
     {"file": "verity_vllm/check/match/batch_decomp.py", "kind": "environ", "symbol": "_profile_on", "detail": "os.environ.get"},
     {"file": "verity_vllm/check/match/batch_decomp.py", "kind": "environ", "symbol": "decompose", "detail": "os.environ"},
