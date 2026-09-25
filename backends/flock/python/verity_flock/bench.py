@@ -40,6 +40,22 @@ def _guard():
     return timing_guard
 
 
+_OURS: set[int] = set()
+
+
+def _sampler():
+    """The timing guard's sample with our own prover subprocess taken out: it holds the GPU context, not this process, and
+    NVML may list it under another pid namespace, so one listed process per running prover of ours is ours."""
+    s = _guard().sample()
+    if s.get("pids") is not None:
+        mine = [p for p in s["pids"] if int(p) in _OURS] if s["pids"] else []
+        rest = [p for p in s["pids"] if p not in mine]
+        drop = max(0, len(_OURS) - len(mine))
+        s["pids"] = rest[drop:]
+        s["n_other"] = len(s["pids"])
+    return s
+
+
 def _quota() -> int:
     try:
         q, p = Path("/sys/fs/cgroup/cpu.max").read_text().split()
@@ -157,7 +173,7 @@ def point(a, total: int, d: Path, net: Path) -> dict:
         headers.append(instances.write(d / f"instances-s{i}.bin", a.relation, total, a.procs, a.cache, lo, hi))
         gen_s += time.time() - t0
     tg = _guard()
-    guard = tg.Guard().start()
+    guard = tg.Guard(sampler=_sampler).start()
     t1 = time.time()
     parts, rcs, rss = [], [], None
     for i, _ in enumerate(subs):
@@ -173,10 +189,15 @@ def point(a, total: int, d: Path, net: Path) -> dict:
             _wait_serving(log, srv)
         try:
             timer = ["/usr/bin/time", "-v", "-o", str(d / f"prove-s{i}.time")] if Path("/usr/bin/time").exists() else []
-            rcs.append(subprocess.call([*timer, a.bin, "prove", "--verifier", addr, "--warm", "1", "--runs", str(a.runs),
-                                        "--dump", str(d / f"proofs-s{i}"), *a.prove_arg, *common],
-                                       stdout=open(d / f"prove-s{i}.txt", "w"), stderr=open(d / f"prove-s{i}.err", "w"),
-                                       env={**os.environ, "PCS_TRACE": "1"}))
+            pr = subprocess.Popen([*timer, a.bin, "prove", "--verifier", addr, "--warm", "1", "--runs", str(a.runs),
+                                   "--dump", str(d / f"proofs-s{i}"), *a.prove_arg, *common],
+                                  stdout=open(d / f"prove-s{i}.txt", "w"), stderr=open(d / f"prove-s{i}.err", "w"),
+                                  env={**os.environ, "PCS_TRACE": "1"})
+            _OURS.add(pr.pid)
+            try:
+                rcs.append(pr.wait())
+            finally:
+                _OURS.discard(pr.pid)
         finally:
             if srv is not None:
                 time.sleep(1)
