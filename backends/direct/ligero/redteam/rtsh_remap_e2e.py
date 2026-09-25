@@ -36,6 +36,7 @@ def main() -> int:
     ap.add_argument("--leaf", default="blake3")
     ap.add_argument("--vus", type=int, default=2)
     ap.add_argument("--min-l", type=int, default=256)
+    ap.add_argument("--target", type=float, default=-132.0, help="runner target log2 (l = 256 at -128 lands at 2^-127.88)")
     ap.add_argument("--mode", default="fiat-shamir")
     ap.add_argument("--zk", action="store_true")
     ap.add_argument("--device", default="cpu")
@@ -55,7 +56,7 @@ def main() -> int:
     assert y_true[0] != y_true[1], "pick another seed: VU 0 and VU 1 share an output"
 
     def runner():
-        return HashedRelationRunner(rel, args.device, -128.0, zk=args.zk, mode=args.mode, leaf=args.leaf)
+        return HashedRelationRunner(rel, args.device, args.target, zk=args.zk, mode=args.mode, leaf=args.leaf)
 
     R = runner()
     R.commit_vus(base)
