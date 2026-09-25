@@ -68,10 +68,17 @@ def _quota() -> int:
 
 
 def _lines(path: Path, tag: str) -> list[dict]:
+    """The tagged JSON lines. A LIVE record's ``wait_s`` is the transport's wait read after ``Finish``, so it includes the
+    verifier's end-of-session replay (``verdict.verify_s``), which ``e2e_s`` does not: that is taken out here (the raw figure
+    stays as ``wait_s_raw``)."""
     out = []
     for line in path.read_text().splitlines():
         if line.startswith(tag + "\t"):
-            out.append(json.loads(line.split("\t", 1)[1]))
+            r = json.loads(line.split("\t", 1)[1], strict=False)
+            if tag == "LIVE" and "wait_s" in r and isinstance(r.get("verdict"), dict) and r["verdict"].get("verify_s") is not None:
+                r["wait_s_raw"] = r["wait_s"]
+                r["wait_s"] = max(0.0, r["wait_s"] - r["verdict"]["verify_s"])
+            out.append(r)
     return out
 
 
@@ -180,7 +187,7 @@ def loopback_probe(a, q: dict, out: Path, net: Path) -> dict:
                 per.append(r["wait_s"] / r["calls"])
     return {"seconds_per_round": statistics.median(per) if per else None, "sessions": len(per),
             "method": f"loopback probe in this run: {len(per)} timed sessions ({a.runs} per sub-batch) of the plateau point's "
-                      f"instance files with the same binary against `serve` on 127.0.0.1, median per-round coin wait (wait_s / calls)"}
+                      f"instance files with the same binary against `serve` on 127.0.0.1, median per-round coin wait ((wait_s - verify_s) / calls)"}
 
 
 def _merge(parts: list[list[dict]]) -> list[dict]:
@@ -194,7 +201,7 @@ def _merge(parts: list[list[dict]]) -> list[dict]:
         m["prove_s"] = [sum(r["prove_s"][i] for r in runs) for i in range(2)]
         m["verdict"] = {k: sum(r["verdict"].get(k, 0) or 0 for r in runs) for k in ("rounds", "verify_s", "handle_s")}
         m["proof_bytes"] = [sum(r["proof_bytes"][i] for r in runs) for i in range(2)]
-        for k in ("roots", "sigma", "dense_m", "rtt_ms", "rtt_method", "statement", "statement_digest", "prover"):
+        for k in ("roots", "sigma", "dense_m", "rtt_ms", "rtt_method", "statement", "statement_digest", "prover", "open_rtt_ms"):
             m[k] = [r.get(k) for r in runs] if len(runs) > 1 else runs[0].get(k)
         m["units"] = runs[0].get("units")
         m["n_blake3"] = sum(r.get("n_blake3") or 0 for r in runs)
@@ -284,6 +291,9 @@ def result(a, p: dict, sweep: dict) -> dict:
     t_e2e, t_commit = statistics.median(e2e), med("commit_s")
     t_prove = t_e2e - t_commit
     net_wait = max(0.0, statistics.median(r["wait_s"] - r["verdict"].get("handle_s", 0.0) for r in timed))
+    rtts = [x for r in timed for x in (r["open_rtt_ms"] if isinstance(r.get("open_rtt_ms"), list) else [r.get("open_rtt_ms")])
+            if isinstance(x, (int, float)) and x == x]
+    open_rtt = statistics.median(rtts) if rtts else None
     n = p["total"]
     profile = PROFILES[a.relation]
     binary = Path(a.bin).name
@@ -331,7 +341,8 @@ def result(a, p: dict, sweep: dict) -> dict:
           {"name": "live.verifier_round_seconds", "value": statistics.median(r["verdict"].get("handle_s", 0.0) for r in timed), "unit": "s"},
           {"name": "live.network_wait_seconds", "value": net_wait, "unit": "s"},
           {"name": "live.coin_wait_per_round_ms", "value": 1e3 * net_wait / max(1, int(first["calls"])), "unit": "ms"},
-          *([contract.measurement("net.rtt_ms", a.tcp["median_ms"])] if getattr(a, "tcp", None) else []),
+          *([contract.measurement("net.rtt_ms", open_rtt)] if open_rtt is not None else []),
+          *([{"name": "live.tcp_connect_rtt_ms", "value": a.tcp["median_ms"], "unit": "ms"}] if getattr(a, "tcp", None) else []),
           *([{"name": "live.loopback_round_seconds", "value": p["loopback"]["seconds_per_round"], "unit": "s"}]
             if p.get("loopback", {}).get("seconds_per_round") else []),
           {"name": "live.prover_compute_seconds", "value": t_prove - med("wait_s"), "unit": "s"},
@@ -353,8 +364,11 @@ def result(a, p: dict, sweep: dict) -> dict:
                           "evidence": [f"{p['dir']}/sessions/index.jsonl"]},
            "measurements": ms, "measurement_files": [], "artifacts": [],
            "sweep": sweep, "contention": p["contention"],
-           "interaction": {"rtt_method": (f"net.rtt_ms = TCP connect time from the prover pod to the verifier pod ({a.tcp['target']}, its sshd), "
-                                          f"median of {a.tcp['n']}, measured in this run before the sweep") if getattr(a, "tcp", None) else None,
+           "interaction": {"rtt_method": ("net.rtt_ms = round trip of a 64-byte Ping request on the open session connection to the "
+                                          "verifier (answered Ok by the verifier's server, no session state), 30 probes right after "
+                                          "connecting and before Hello, in every timed session; median over all of them") if open_rtt is not None else None,
+                           "tcp_connect_method": (f"live.tcp_connect_rtt_ms = TCP connect time to the verifier pod's sshd ({a.tcp['target']}), "
+                                                  f"median of {a.tcp['n']}, before the sweep") if getattr(a, "tcp", None) else None,
                            "coin_wait_method": "live.coin_wait_per_round_ms = (the prover's coin wait - the verifier's round-handling time) / "
                                                "round trips, median over the timed sessions; verifier " + ("on loopback" if not a.verifier else a.verifier),
                            "loopback_method": p.get("loopback", {}).get("method"),
