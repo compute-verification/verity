@@ -30,17 +30,25 @@ REL = os.environ.get("VERITY_LEAF_CONFORMANCE_REL", "fp8-ada")
 SCHEMES = registry.names() + [n for n in os.environ.get("VERITY_LEAF_CONFORMANCE", "").split(",") if n]
 
 
+class _Runners(dict):
+    """Built on first use, so ``-k <scheme>`` on a relation another scheme cannot compose (Poseidon2 on an x4 fold) still runs."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.rel = relation(REL)
+        self.data = instances(self.rel, 4)
+
+    def __missing__(self, name: str) -> tuple:
+        R = HashedRelationRunner(self.rel, "cpu", -128.0, zk=False, mode="fiat-shamir", leaf=name)
+        R.commit_vus(self.data)
+        self[name] = (R, self.data)
+        return self[name]
+
+
 @pytest.fixture(scope="module")
 def runners() -> dict[str, tuple]:
     """One committed CPU runner per scheme (4 synthetic VUs)."""
-    out = {}
-    rel = relation(REL)
-    data = instances(rel, 4)
-    for name in SCHEMES:
-        R = HashedRelationRunner(rel, "cpu", -128.0, zk=False, mode="fiat-shamir", leaf=name)
-        R.commit_vus(data)
-        out[name] = (R, data)
-    return out
+    return _Runners()
 
 
 # ---------------------------------------------------------------------------------------------------------------------
