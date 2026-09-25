@@ -5,8 +5,8 @@ from __future__ import annotations
 
 from verity.ir import Program, bind
 from verity.ir.defs import Builder, CompositeDefinition, SpecializedDefinition
+from verity.ir.liveness import dead_gates
 from verity_vllm.program.frontend.correspond import compare_bodies, correspond
-from verity_vllm.program.frontend.liveness import dead_gates
 from verity_vllm.program.frontend.provenance import registry_version
 from verity.ir.refs import Coll, Concat, Strided, array_of
 from verity_vllm.program.registry import b1

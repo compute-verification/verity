@@ -38,9 +38,6 @@ LAYER = {
     "verity_vllm.collectives": "collectives",
     "verity_vllm.config": "config",
     "verity_vllm.target_family": "config",                     # -> config.py
-    "verity_vllm.query.boundary": "core",                      # -> verity.ir
-    "verity_vllm.query.partition": "core",                     # -> verity.ir
-    "verity_vllm.program.frontend.liveness": "core",           # -> verity.ir
 }
 
 #: The property harnesses.
@@ -50,8 +47,8 @@ PROPERTY_MODULES = ("verity_vllm.properties",)
 VALUE_CHECK_MODULES = tuple(f"verity_vllm.{m}" for m in (
     "check.replay", "check.value_check", "check.compiled_value_check", "check.oracle_compare"))
 
-#: The modules check.verdict absorbs (commit_verdict, gates) and today's check.verdict.
-VERDICT_MODULES = ("verity_vllm.check.verdict", "verity_vllm.check.commit_verdict", "verity_vllm.check.gates")
+#: The verdict and the rules it decides from (the per-run rules, the C2 rules, the Build gates).
+VERDICT_MODULES = ("verity_vllm.check.verdict", "verity_vllm.check.commit_rules", "verity_vllm.check.c2_rules", "verity_vllm.check.gates")
 
 
 def layer_of(module: str) -> str:

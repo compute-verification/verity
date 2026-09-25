@@ -15,6 +15,7 @@ import pytest
 
 from verity_vllm.check.replay import replay
 from verity_vllm.program.kernels import twins as TW
+from verity_vllm.pipeline import cli
 from tests.check.test_replay_synthetic import consistent_toy, snapshots  # noqa: F401 - fixtures
 from verity.ir.defs import bind
 
@@ -209,7 +210,7 @@ def test_replayer_rejects_unknown_evaluator(consistent_toy):  # noqa: F811
 
 def test_check_writes_the_evidence_schema(tmp_path):
     out = tmp_path / "twins.json"
-    assert TW.main(["--check", "--n-random", "4", "--n-edge", "4", "--seed", "7", "--out", str(out)]) == 0
+    assert cli.main(["twins", "--check", "--n-random", "4", "--n-edge", "4", "--seed", "7", "--out", str(out)]) == 0
     rep = json.loads(out.read_text())
     assert rep["schema"] == TW.SCHEMA == "verity-gen/twins/v1" and rep["status"] == "pass" and rep["log"] is None
     assert set(rep["families"]) == {cls.twin_id for cls in TW.FAMILIES.values()}
@@ -235,7 +236,7 @@ def test_m1_tier_b_step0_full_prefill_with_twins(tmp_path):
         pytest.skip(why)
     out = tmp_path / "replay_b0_twins.json"
     t0 = time.time()
-    cmd = [sys.executable, "-m", "verity_vllm.check.replay.replay", "--log", str(m1t.LOG), "--snapshots", str(m1t.SNAPS), "--profile", m1t.PROFILE,
+    cmd = [sys.executable, "-m", "verity_vllm.pipeline.cli", "replay", "--log", str(m1t.LOG), "--snapshots", str(m1t.SNAPS), "--profile", m1t.PROFILE,
            "--tier", "b", "--step", "0", "--evaluator", "twins", "--out", str(out)]
     proc = subprocess.run(cmd, cwd=str(m1t.REPO), capture_output=True, text=True, timeout=600)
     total = time.time() - t0

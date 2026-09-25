@@ -5,12 +5,11 @@
     Commitment positions -> physical authentication locations for those values,
                             not semantic components of gate outputs.
 
-`torch_frontend` (needs torch) is the PyTorch authoring frontend. `liveness` (dead gates), `correspond`
-(program correspondence across reference encodings) and `provenance` (export/derivation provenance records)
-are pure `verity.ir` and import without torch.
+`torch_frontend` (needs torch) is the PyTorch authoring frontend. `correspond` (program correspondence across
+reference encodings) and `provenance` (export/derivation provenance records) are pure `verity.ir` and import
+without torch. Dead gates are `verity.ir.liveness`.
 """
 
-from verity_vllm.program.frontend.liveness import DeadGateReport, dead_gates  # noqa: F401
 from verity_vllm.program.frontend.correspond import CorrespondenceReport, correspond  # noqa: F401
 from verity_vllm.program.frontend.provenance import DerivationRule, RuleApplication, registry_version  # noqa: F401
 

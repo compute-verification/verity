@@ -1,6 +1,6 @@
 """verity_vllm/check/root_policy.py — PROTECTED (gate G3, root closure).  Frozen root classes, each with an independent validator.
 
-    uv run python -m verity_vllm.check.root_policy --log LOG --snapshots DIR --profile NAME [--safetensors GLOB] [--cos-sin NPY] --out root_policy.json
+    uv run verity-vllm root-policy --log LOG --snapshots DIR --profile NAME [--safetensors GLOB] [--cos-sin NPY] --out root_policy.json
 
 A Program operand is either produced by another Program instance or is a *root*.  The fold already refuses reads with no
 producer (`Unresolved`); this module decides whether the roots the fold *did* accept are legitimate, using a source of
@@ -24,7 +24,6 @@ This module and the tables in it change only through an approved decision in `ou
 """
 from __future__ import annotations
 
-import argparse
 import glob
 import json
 import re
@@ -35,7 +34,9 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from dataclasses import dataclass
 
+from verity_vllm.config import option
 from verity_vllm.program.frontend.rules.family import _field_intervals
 
 from verity_vllm.program import model as analytic
@@ -349,18 +350,22 @@ def _check_prompt_root(r: Root, header: RunHeader | None) -> tuple[bool, str]:
     return True, ""
 
 
-def main(argv: list[str] | None = None) -> int:
+@dataclass(frozen=True, kw_only=True)
+class Options:
+    log: str = option("--log")
+    snapshots: str | None = option("--snapshots", default=None)
+    profile: str = option("--profile")
+    safetensors: str | None = option("--safetensors", default=None,
+                                     help="glob of the checkpoint's model*.safetensors (default: HF cache of the profile's model)")
+    cos_sin: str | None = option("--cos-sin", default=None)
+    no_weight_bytes: bool = option("--no-weight-bytes", default=False, action="store_true",
+                                   help="skip the snapshot-vs-checkpoint byte check (identity only)")
+    out: str = option("--out")
+
+
+def main(a: Options) -> int:
     from verity_vllm.check.fold_compare import load_profile
 
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--log", required=True)
-    ap.add_argument("--snapshots", default=None)
-    ap.add_argument("--profile", required=True)
-    ap.add_argument("--safetensors", default=None, help="glob of the checkpoint's model*.safetensors (default: HF cache of the profile's model)")
-    ap.add_argument("--cos-sin", default=None)
-    ap.add_argument("--no-weight-bytes", action="store_true", help="skip the snapshot-vs-checkpoint byte check (identity only)")
-    ap.add_argument("--out", required=True)
-    a = ap.parse_args(argv)
     profile = load_profile(a.profile)
     st = [Path(p) for p in sorted(glob.glob(a.safetensors))] if a.safetensors else None
     rep = evaluate(a.log, a.snapshots, profile, safetensors=st, cos_sin=Path(a.cos_sin) if a.cos_sin else None, weight_bytes=not a.no_weight_bytes)
@@ -372,7 +377,3 @@ def main(argv: list[str] | None = None) -> int:
           + (f"; new classes {rep['new_root_classes']}" if rep["new_root_classes"] else "")
           + (f"; problems {rep['problems'][:3]}" if rep["problems"] else ""), file=sys.stderr)
     return 0 if rep["status"] == "pass" else 1
-
-
-if __name__ == "__main__":
-    sys.exit(main())

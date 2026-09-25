@@ -17,8 +17,14 @@ import json
 
 import pytest
 
-from verity_vllm.check.commit_verdict import commit_verdict
+from verity.verification.codes import VerificationCode as VC
+
+from verity_vllm.check.verdict import commit_verdict
 from verity_vllm.check import verdict as V
+from verity_vllm.pipeline import cli
+from verity_vllm.check.commit_rules import REJECT
+from verity_vllm.check.result import MISSING_INPUT, CheckResult, code_of, outcome_of
+from verity_vllm.properties.record import REGISTRY, PropertyRecord, digest_of, seal
 
 RUN_ROOT = "71f69377" + "ab" * 28
 SEED_ROOT = int.from_bytes(bytes.fromhex(RUN_ROOT)[:8], "big")
@@ -97,10 +103,11 @@ def test_schema_round_trip_and_closed_vocabularies(tmp_path):
     assert v.groups() == {g: V.PASS for g in V.GROUPS}
     for c in v.checks:
         assert c.outcome in V.OUTCOMES and c.claim and c.compat and c.group in V.GROUPS
+    assert [c.code for c in back.checks] == [c.code for c in v.checks]
     with pytest.raises(ValueError):
-        V.CheckVerdict(name="runtime_match/x", claim="c", outcome="MAYBE")
+        CheckResult.from_dict({"name": "runtime_match/x", "claim": "c", "outcome": "MAYBE"})
     with pytest.raises(ValueError):
-        V.CheckVerdict(name="weights_pin/x", claim="c", outcome=V.PASS)          # the OLD name is not a group
+        V.Verdict(checks=[CheckResult(name="weights_pin/x", code=VC.ACCEPTED)], outcome=V.PASS)          # the OLD name is not a group
     with pytest.raises(ValueError):
         V.Verdict.from_dict({"schema": "something-else/v9", "checks": [], "outcome": V.PASS})
 
@@ -110,6 +117,17 @@ def test_worst_orders_fail_over_insufficient_over_not_run():
     assert V.worst([V.PASS, V.INSUFFICIENT]) == V.INSUFFICIENT
     assert V.worst([V.INSUFFICIENT, V.FAIL, V.PASS]) == V.FAIL
     assert V.worst([]) == V.NOT_RUN
+
+
+def test_the_code_is_the_outcome():
+    assert [outcome_of(c) for c in (VC.ACCEPTED, None, MISSING_INPUT, VC.COVERAGE_MISMATCH)] == [V.PASS, V.NOT_RUN, V.INSUFFICIENT, V.FAIL]
+    assert all(code_of(outcome_of(c), VC.COVERAGE_MISMATCH) is c for c in (VC.ACCEPTED, None, MISSING_INPUT, VC.COVERAGE_MISMATCH))
+    with pytest.raises(ValueError):
+        code_of(V.FAIL)
+    _, _, checks = _both(_base())
+    assert {c.name for c in checks} <= set(REJECT)
+    (ok, _), _, failed = _both(dict(_base(), fa2_zero_rows=3))
+    assert not ok and {c.name: c.code for c in failed if c.outcome == V.FAIL} == {"runtime_match/fa2_zero_rows": VC.INVALID_VALUE}
 
 
 # ---------------------------------------------------------------------------------------------------------------- (2) mapping
@@ -300,7 +318,7 @@ def test_from_record_pass_row_reads_its_own_execution_configuration(tmp_path):
     assert v.check("required_value_coverage/manifest_of_record_verified").outcome == V.PASS
     assert v.runs == {"instrumented": 1, "failed": 0, "control": 1, "not_pass_by_reconstruction": 0, "pairs": [0]}
     assert v.execution["engine_settings"]["openings"] == 64 and v.execution["committer"] == "native_collect_v2b"
-    out = V.main(["from-record", str(d), "--rc", "0", "--stage-ok", "PASS", "--quiet"])
+    out = cli.main(["verdict", "from-record", str(d), "--rc", "0", "--stage-ok", "PASS", "--quiet"])
     assert out == 0 and V.Verdict.load(d / "verdict.json").outcome == V.PASS
 
 
@@ -369,3 +387,34 @@ def test_correspondence_digest_is_the_builds_own_or_absent(tmp_path):
     assert v.correspondence_digest == step and v.correspondence_digest_source == "result.json:step" and v.correspondence_digests == {"request": req, "step": step}
     assert V.correspondence_of_build(None) == (None, "absent", {})
     assert V.correspondence_of_build({"request": {"correspondence_digest": req}}) == (req, "build_summary.json:request", {"request": req})
+
+
+# ---------------------------------------------------------------------------------------------------------------- (9) property citations
+
+def test_from_record_cites_property_records_by_digest(tmp_path):
+    """P5's registry test: every property the verdict cites is in REGISTRY, by a digest that recomputes from the cited file.  A record
+    that does not hold, was edited, or does not parse is a note, never a changed decision; a row without records has no `properties` key."""
+    d, _ = _row_dir(tmp_path, _base(), commit_pass=True, rc=0)
+    bare = V.from_record(d, rc=0, stage_ok="PASS")
+    assert bare.properties == [] and "properties" not in json.loads(bare.dumps())
+    held = PropertyRecord(seal({"schema": REGISTRY["noninterference"].schema, "world": 1, "run": "row"}, True))
+    broke = PropertyRecord(seal({"schema": REGISTRY["census"].schema, "steps": 3}, False))
+    held.write(d)
+    broke.write(d)
+    v = V.from_record(d, rc=0, stage_ok="PASS")
+    assert v.outcome == bare.outcome == V.PASS
+    assert [(c["name"], c["digest"], c["ok"], c["source"], c["problems"]) for c in v.properties] == [
+        ("census", broke.digest, False, "properties/census.json", []), ("noninterference", held.digest, True, "properties/noninterference.json", [])]
+    for c in v.properties:
+        assert c["name"] in REGISTRY and c["schema"] == REGISTRY[c["name"]].schema
+        assert digest_of(json.loads((d / c["source"]).read_text())) == c["digest"]
+    assert v.notes == ["property census (properties/census.json): does not hold"]
+    assert V.Verdict.from_dict(json.loads(v.dumps())).properties == v.properties
+    doc = json.loads((d / "properties" / "noninterference.json").read_text())
+    (d / "properties" / "noninterference.json").write_text(json.dumps({**doc, "world": 2}))
+    (d / "properties" / "junk.json").write_text("{not json")
+    v = V.from_record(d, rc=0, stage_ok="PASS")
+    by = {c["source"]: c for c in v.properties}
+    assert v.outcome == V.PASS and len(v.notes) == 3
+    assert by["properties/noninterference.json"]["problems"] == ["digest does not match the record"]
+    assert by["properties/junk.json"]["name"] is None and "no boolean ok" in by["properties/junk.json"]["problems"]

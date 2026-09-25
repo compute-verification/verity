@@ -1,6 +1,6 @@
-"""Partition and width validation of a query result *used* as a VU decomposition (query track, 2026-09-17 window).
+"""Partition and width validation of a query result *used* as a VU decomposition.
 
-Partitionhood is not a property of queries: a `Family` (an ordered sequence of `GateSet`s, `gateset.py`) may overlap or
+Partitionhood is not a property of queries: a `Family` (an ordered sequence of `GateSet`s, `query_ast`) may overlap or
 omit gates, and nothing in the query model forbids it.  It is a property checked here, when a family is used as the
 decomposition of a Program into verification units.  Three checks, one verdict each, composed by `validate_vu_partition`:
 
@@ -31,29 +31,30 @@ Codes (`PartitionVerdict.codes`, `WidthVerdict.detail["codes"]`):
     sweep-overlap / sweep-gap / limit-intervals / empty-set
     width: limit-members-exact, limit-members-bound, multi-part-exact, boundary-unsupported, limit-sets
 
-The tiling read by the fast path is the Query API owner's (`gateset.py`, INTERFACE NOTE of 21:20Z): `Tiling(root: plan
-key, bodies: Mapping[plan key, BodyTiling])`; `BodyTiling(spec, entries, n_nodes?, count?)`; `NodeTiling(node, kind,
-members, k, group, child)` with `kind` "atomic" (k adjacent members of each range -> one set, last block shorter),
+The tiling read by the fast path is `query_ast.Tiling`: `Tiling(root: plan key, bodies: Mapping[plan key,
+BodyTiling])`; `BodyTiling(spec, entries, n_nodes?, count?)`; `NodeTiling(node, kind, members, k, group, child)` with `kind` "atomic" (k adjacent members of each range -> one set, last block shorter),
 "whole" (one set per range), "zip" (member m of every node of the group; equal n, full ranges), "descend" (the members
 of the range are tiled by `bodies[child]`).  A node's ranges over all its entries must partition `[0, n)`; bodies are
 keyed by plan, not by specialization, so one specialization may be tiled differently in different contexts.  Several
 `descend` entries of one node may send the same members into different plans (`concat(A, rest())`): those plans form a
-*group* and the induction checks that the group's entries together tile the callee body (`_Tiling`).  Read duck-typed
+*group* and the induction checks that the group's entries together tile the callee body (`CheckedTiling`).  Read duck-typed
 (attributes or mapping keys).
 
-Nothing here touches `program_digest`; the artifact layer is `query_artifact.py`.
+Nothing here touches `program_digest`.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Iterator, Literal, Mapping
 
-from verity.ir.defs import PrimitiveDefinition, SpecializedDefinition
-from verity.ir.layout import Scope
-from verity.ir.parts import Limits, Part, Unsupported, n_members
+from . import boundary
+from .defs import PrimitiveDefinition, SpecializedDefinition
+from .layout import Scope
+from .parts import Limits, Part, Unsupported, n_members
+from .query_ast import GateSet, evaluate
 
 if TYPE_CHECKING:  # pragma: no cover
-    from verity.ir.program import Program
+    from .program import Program
 
 PartitionStatus = Literal["exact", "overlap", "gap", "unsupported"]
 
@@ -145,7 +146,7 @@ class VuVerdict:
 
 
 # ---------------------------------------------------------------------------------------------------------
-# reading a Family.tiling() (duck-typed; see the INTERFACE NOTE in out/gen/window/qpart.md)
+# reading a Family.tiling() (duck-typed: a `query_ast.Tiling`, or anything with its field names)
 # ---------------------------------------------------------------------------------------------------------
 
 
@@ -276,8 +277,8 @@ class _Plan:
     descends: dict[int, list[tuple[int, int, str]]] = field(default_factory=dict)  # node -> (a, b, child plan)
 
 
-class _Tiling:
-    """The interpreted `Family.tiling()` (the Query API owner's `Tiling`: `root` plan key, `bodies` plan key ->
+class CheckedTiling:
+    """The interpreted `Family.tiling()` (a `query_ast.Tiling`: `root` plan key, `bodies` plan key ->
     `BodyTiling(spec, entries)`, entries `NodeTiling(node, kind, members, k, group, child)`).
 
     Induction is per *plan group*: the plans whose entries together tile one body -- the root plan alone at the
@@ -494,7 +495,8 @@ class _Tiling:
 # ---------------------------------------------------------------------------------------------------------
 
 
-def _family_tiling(fam: Any) -> Any:
+def family_tiling(fam: Any) -> Any:
+    """`fam.tiling()` (or `fam.tiling`), or None when the family has no tiling or cannot produce one."""
     t = getattr(fam, "tiling", None)
     if t is None:
         return None
@@ -519,12 +521,12 @@ def validate_partition(program: "Program", fam, limits: Limits = Limits()) -> Pa
 
     Fast path from `fam.tiling()` by per-body induction; fallback interval sweep over materialised intervals up to
     `limits.max_intervals`; beyond that "unsupported" (never a verdict).  See the module docstring."""
-    tiling = _family_tiling(fam)
+    tiling = family_tiling(fam)
     fallback_codes: list[str] = []
     fallback_detail: dict = {}
     if tiling is not None:
         try:
-            t = _Tiling(program, tiling)
+            t = CheckedTiling(program, tiling)
         except _Malformed as e:
             fallback_codes.append("tiling-malformed")
             fallback_detail["tiling_malformed"] = str(e)
@@ -541,7 +543,7 @@ def validate_partition(program: "Program", fam, limits: Limits = Limits()) -> Pa
     return v
 
 
-def _count_mismatch(t: _Tiling, fam: Any) -> dict | None:
+def _count_mismatch(t: CheckedTiling, fam: Any) -> dict | None:
     """The tiling must describe the family: the structural count read here equals `Family.count()` and every
     `BodyTiling.count` the family declared.  A disagreement means the description is not of these sets."""
     per_body = t.declared_count_mismatch()
@@ -553,7 +555,7 @@ def _count_mismatch(t: _Tiling, fam: Any) -> dict | None:
     return None
 
 
-def _tiling_verdict(program: "Program", t: _Tiling, count: int) -> PartitionVerdict:
+def _tiling_verdict(program: "Program", t: CheckedTiling, count: int) -> PartitionVerdict:
     codes = tuple(sorted({code for code, _ in t.problems}))
     if "tiling-members-overlap" in codes:
         status: PartitionStatus = "overlap"
@@ -638,16 +640,12 @@ _BOUNDARY: Any = None  # tests inject a stub here (an object with `w_out_bound(p
 
 
 def _boundary() -> Any:
-    if _BOUNDARY is not None:
-        return _BOUNDARY
-    from verity_vllm.query import boundary  # the Boundary owner's module; absent until lane/q-boundary is merged
-    return boundary
+    return boundary if _BOUNDARY is None else _BOUNDARY
 
 
 def _family_index(fam: Any, part: Part) -> int | None:
-    """The family index of the set `{part}`, when the family can resolve it (needs `gateset.GateSet`)."""
+    """The family index of the set `{part}`, when the family can resolve it."""
     try:
-        from verity.ir.query_ast import GateSet
         return fam.index_of(GateSet((part,)))
     except Exception:  # noqa: BLE001
         return None
@@ -750,10 +748,10 @@ def validate_width(program: "Program", fam, w_max: int, limits: Limits = Limits(
     otherwise exact `boundary.w_out` per set within `limits.max_members_exact` exact evaluations.  A bound above
     `w_max` never proves a violation; `Unsupported` is reported separately, never counted as pass or fail."""
     run = _WidthRun(w_max, limits)
-    tiling = _family_tiling(fam)
+    tiling = family_tiling(fam)
     if tiling is not None:
         try:
-            t = _Tiling(program, tiling)
+            t = CheckedTiling(program, tiling)
         except _Malformed:
             t = None
         if t is not None and not t.problems and _count_mismatch(t, fam) is None:
@@ -777,7 +775,7 @@ def total_width(fn: Any, memo: dict[int, tuple[Any, int]] | None = None) -> int:
     return w
 
 
-def _width_by_classes(run: _WidthRun, t: _Tiling, fam: Any) -> WidthVerdict:
+def _width_by_classes(run: _WidthRun, t: CheckedTiling, fam: Any) -> WidthVerdict:
     """One representative instance per class.  Three tiers per class:
 
     1. structural: `sum w(g)` over one set of each shape (`_Class.shapes`) -- if `<= w_max`, every set of that shape
@@ -952,9 +950,8 @@ def validate_vu_family(program: "Program", fam, w_max: int = 32, limits: Limits 
 
 
 def validate_vu_partition(program: "Program", query, w_max: int = 32) -> VuVerdict:
-    """evaluate -> validate_partition + validate_width + readiness -> VuVerdict.  `query` is a `gateset.Query`
-    (or anything `gateset.evaluate` accepts)."""
-    from verity.ir.query_ast import evaluate  # the Query API owner's module
+    """evaluate -> validate_partition + validate_width + readiness -> VuVerdict.  `query` is a `query_ast.Query`
+    (or anything `query_ast.evaluate` accepts)."""
     fam = evaluate(program, query)
     return validate_vu_family(program, fam, w_max)
 

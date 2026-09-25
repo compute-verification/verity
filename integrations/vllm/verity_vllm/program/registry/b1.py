@@ -20,7 +20,9 @@ import numpy as np
 
 from verity.ir.defs import Coll, CompositeDefinition, PrimitiveDefinition, bind, composite
 from verity.ir.refs import Affine, Coll as _Coll, Explicit, array_of, concat, strided_view, tuple_of
-from verity.ir.types import Array, Record, Tuple, Value
+from verity.ir.types import Array, Record, Tuple
+from verity.ml.gemm import DotBf16 as DotBf16V2, Gemm as GemmV2, GemmCoordinate as GemmCoordinateV2
+from verity.ml.prims import ZERO32, const
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.prims import A16, BF16, BIT, F32, I32
 
@@ -94,22 +96,6 @@ QWEN05_CONFIG = {
 # constants are zero-arity gates
 # ---------------------------------------------------------------------------------------------------------
 
-_CONSTS: dict[tuple[int, int], PrimitiveDefinition] = {}
-
-
-def const(w: int, bits: int) -> PrimitiveDefinition:
-    """`Const<w>[0x..] : () -> Value<w>` — a gate with a fixed correct output (a constant of the program)."""
-    key = (w, bits)
-    p = _CONSTS.get(key)
-    if p is None:
-        p = PrimitiveDefinition(f"Const{w}[0x{bits:0{w // 4}x}]", 1, (), Value(w), (lambda _b=bits: _b),
-                                doc=f"constant {w}-bit encoding 0x{bits:0{w // 4}x}", conformance="exact-model-tested")
-        p.family = "Const"  # type: ignore[attr-defined]
-        _CONSTS[key] = p
-    return p
-
-
-ZERO32 = const(32, 0)
 ZERO16 = const(16, 0)
 NEG_INF32 = const(32, 0xFF800000)
 
@@ -1005,31 +991,6 @@ ALL_COMPOSITES = [DotBf16, GemmCoordinate, Gemm, BiasAdd, ResidualAdd, RMSNormTr
 # the FA2 lane ownership `_lane`, the four-lane epilogue order, `_scale_log2_bits`, GuardNegInfZero, the zero padding of
 # partial blocks, the RMSNorm reduction trees (RMSNormTriton's 128x8 / 1024-chunk, RMSNormFusedCuda's cub BlockReduce),
 # BiasAdd / RoPE / SiluMul / Embedding / TokenSelect.
-
-
-@composite("DotBf16", 2, ["K", "DOT"], lambda S: ((("x", Array(S.K, BF16)), ("w", Array(S.K, BF16))), F32),
-           conformance="exact-model-tested")
-def DotBf16V2(B, S, x, w):
-    """`DotBf16_v1` with the k16 accumulator step as the static `DOT`: f32 accumulator after K/16 `DOT` steps in
-    ascending k from a zero accumulator (the Triton `matmul_kernel_persistent` k-loop on either architecture)."""
-    acc = B.call(ZERO32)
-    for s in range(S.K // 16):
-        acc = B.call(S.DOT, acc, x[16 * s:16 * s + 16], w[16 * s:16 * s + 16])
-    return acc
-
-
-@composite("GemmCoordinate", 2, ["K", "DOT"], lambda S: ((("x", Array(S.K, BF16)), ("wrow", Array(S.K, BF16))), BF16),
-           conformance="exact-model-tested")
-def GemmCoordinateV2(B, S, x, wrow):
-    """`GemmCoordinate_v1` over `DotBf16_v2{K, DOT}`: bf16_rne(dot) (`cvt.rn.bf16.f32`, the same on sm_80/sm_90)."""
-    return B.call(P.F2fpBf16, B.call(bind(DotBf16V2, K=S.K, DOT=S.DOT), x, wrow))
-
-
-@composite("Gemm", 2, ["K", "N", "DOT"], lambda S: ((("x", Array(S.K, BF16)), ("w", Array(S.N, Array(S.K, BF16)))), Array(S.N, BF16)),
-           conformance="exact-model-tested")
-def GemmV2(B, S, x, w):
-    """`Gemm_v1` over `GemmCoordinate_v2{K, DOT}`: `x[K] @ W[N,K]^T -> [N]`, no epilogue."""
-    return B.batch(bind(GemmCoordinateV2, K=S.K, DOT=S.DOT), x, w, axes=(None, 0))
 
 
 @composite("AttnBlock", 2, ["D", "NVIS", "FIRST", "BN", "DOT"],

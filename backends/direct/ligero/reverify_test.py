@@ -49,8 +49,8 @@ def env(tmp_path, monkeypatch):
     return tmp_path
 
 
-def _dump(root: Path, *, n: int = 2, corrupt: bool = False) -> Path:
-    p = root / "proofs"
+def _dump(root: Path, *, n: int = 2, corrupt: bool = False, flat: bool = False) -> Path:
+    p = root if flat else root / "proofs"
     (p / "rep1").mkdir(parents=True)
     files = []
     for i in range(n):
@@ -126,6 +126,15 @@ def test_a_result_put_by_hand_with_the_benchs_own_run_id_is_reverified(env, caps
     assert "2/2, 2^-128.30 PASS -> verdict art:" in capsys.readouterr().out
 
 
+def test_a_tree_published_as_the_proof_dir_itself_is_reverified(env, capsys):
+    from research.store.local import LocalStore
+
+    st = LocalStore()
+    res = _result(st, env, "flat", flat=True)
+    assert _run(env, res, "--by", "tester") == 0
+    assert "custody 7/7, pinned=fp8-ada, 2/2, 2^-128.30 PASS -> verdict art:" in capsys.readouterr().out
+
+
 def test_a_dump_that_never_left_the_pod_is_an_error_not_a_rejection(env, capsys):
     from research.store.local import LocalStore
 
@@ -137,6 +146,115 @@ def test_a_dump_that_never_left_the_pod_is_an_error_not_a_rejection(env, capsys)
     res = st.put_artifact("bench-result/v1", {"run_id": RUN}, {"run_files": rf})
     assert _run(env, res, "--dry-run") == 1
     assert "ERROR: incomplete dump: 6 of 7 files" in capsys.readouterr().out
+
+
+# ---- fp4-nvf4+poseidon2 (fp4/hashed.py FP4_HASHED): the committed trees are recomputed through the relation's lane format (a
+# 2-VU dump proved on the CPU by the hashed runner the bench drives, trees bound to the relation's instance set) ----
+
+FP4_PIN = "fp4-nvf4+poseidon2"
+
+
+@pytest.fixture(scope="module")
+def fp4(tmp_path_factory):
+    """``(emit, man)``: ``emit(tag, committed, vus, xi, wi)`` writes a one-rep dump of ``vus`` proved against the trees of
+    ``committed`` (VU v on x row ``xi[v]``, W column ``wi[v]``); ``man`` is the manifest the bench writes for the honest set."""
+    pytest.importorskip("torch")
+    from backends.direct.ligero.fp4.hashed import FP4_HASHED as rel
+    from backends.direct.ligero.hashauth import HashAuth
+    from backends.direct.ligero.relchain import HashedRelationRunner, instances, instances_digest
+    from backends.direct.ligero.serialize import _statement_of, proof_bytes, statement_bytes, system_bytes
+
+    n = 2
+    base, digest = instances(rel, n), instances_digest(rel, n)
+    R = HashedRelationRunner(rel, "cpu", -132.0, zk=False, mode="fiat-shamir")
+    root = tmp_path_factory.mktemp("fp4")
+
+    def emit(tag, committed, vus, xi, wi):
+        R.commit_vus(committed, dataset=rel.instances_dataset, tier=rel.instances_tier, manifest_sha256=digest)
+        proof, pubs, lay = R.prove_vus(vus, check=False, vu_ids=list(range(n)), auth=HashAuth.for_vus(R.trees, list(range(n)), xi, wi),
+                                       coins=None, min_l=256)
+        d = root / tag / "proofs"
+        (d / "rep1").mkdir(parents=True, exist_ok=True)
+        blobs = {"system.bin": system_bytes(R.sys), "rep1/sub_00.stmt": statement_bytes(_statement_of(R, pubs, lay, R.cfg(lay.l), 1)),
+                 "rep1/sub_00.proof": proof_bytes(proof)}
+        for rel_path, b in blobs.items():
+            (d / rel_path).write_bytes(b)
+        man = {"relation": rel.name, "authentication": "included-hash", "mode": "fiat-shamir", "set": {"total_vus": n, "instances": digest},
+               "files": [{"rep": 1, "sub": 0, "proof": "rep1/sub_00.proof", "proof_sha256": _sha(blobs["rep1/sub_00.proof"]),
+                          "stmt": "rep1/sub_00.stmt", "stmt_bytes": len(blobs["rep1/sub_00.stmt"])}],
+               "system_file": {"path": "system.bin", "sha256": _sha(blobs["system.bin"]), "bytes": len(blobs["system.bin"])}}
+        (d / "manifest.json").write_text(json.dumps(man))
+        return d, man
+
+    return emit, base
+
+
+def test_fp4_committed_trees_are_the_producers(fp4):
+    emit, base = fp4
+    d, man = emit("honest", base, base, [0, 1], [0, 1])
+    assert R.commitment_problems(d, man, FP4_PIN, ["rep1"]) == (True, [])
+    assert R.hashed_relation("fp4-nvf4").hash_format is not None and R.hashed_relation("fp8-ada").name == "fp8-ada"
+
+
+def test_fp4_honest_dump_is_reverified(fp4, env, monkeypatch, capsys):
+    from research.store.local import LocalStore
+
+    emit, base = fp4
+    d, _ = emit("reverified", base, base, [0, 1], [0, 1])
+    monkeypatch.setenv("FAKE_PIN", FP4_PIN)
+    st = LocalStore()
+    rf = st.put_artifact("run-files/v1", {}, {}, tree=d.parent)
+    res = st.put_artifact("bench-result/v1", {"run_id": "b-ligero-fp4-nvf4-vu-1"}, {"run_files": rf})
+    assert _run(env, res, "--by", "tester") == 0
+    out = capsys.readouterr().out
+    assert f"pinned={FP4_PIN}, 1/1, 2^-128.30 PASS -> verdict art:" in out
+    vid = {lab.key: lab for lab in LocalStore().labels(res)}["verified"].ref
+    assert "hash commitments recomputed from the instance set" in LocalStore().get_manifest(vid).meta["detail"]
+
+
+def _flip(v, i=0):
+    a = list(v[0])
+    a[i] ^= 1
+    return (a, *v[1:])
+
+
+def test_fp4_a_flipped_instance_byte_is_refused(fp4):
+    emit, base = fp4
+    served = [_flip(base[0], 5), base[1]]        # the producer commits and proves a set other than the one it names
+    d, man = emit("flipped", served, served, [0, 1], [0, 1])
+    assert R.commitment_problems(d, man, FP4_PIN, ["rep1"]) == (True, ["rep1/sub_00.stmt: tree a root differ from the instance set's"])
+
+
+def test_fp4_a_remapped_vu_is_refused(fp4):
+    emit, base = fp4
+    served = [(base[0][0], base[0][1], base[0][2], base[1][3]), base[1]]
+    d, man = emit("remap", served, [base[1], base[1]], [1, 1], [1, 1])
+    assert R.commitment_problems(d, man, FP4_PIN, ["rep1"]) == (True, [
+        "rep1/sub_00.stmt: tree y root differ from the instance set's",
+        "rep1/sub_00.stmt: auth: a VU's x row / W column is not the one its index fixes in the committed layout"])
+
+
+@pytest.mark.parametrize("edit, why", [({"total_vus": 3}, "the regenerated fp4-nvf4 set of 3 VUs has manifest digest"),
+                                       ({"instances": "0" * 64}, "the dump claims 00000000"),
+                                       ({"tile": {"nx": 1, "nw": 2, "seed": 0}}, "commitment: fp4-nvf4: its lane format (FP4Format)")])
+def test_fp4_a_wrong_set_block_is_refused(fp4, edit, why):
+    emit, base = fp4
+    d, man = emit("set", base, base, [0, 1], [0, 1])
+    hashed, bad = R.commitment_problems(d, dict(man, set=dict(man["set"], **edit)), FP4_PIN, ["rep1"])
+    assert hashed and len(bad) == 1 and why in bad[0], bad
+
+
+def test_fp4_a_missing_proof_or_a_statement_without_one_is_refused(fp4, tmp_path):
+    import shutil
+
+    emit, base = fp4
+    d, man = emit("orphans", base, base, [0, 1], [0, 1])
+    e = shutil.copytree(d, tmp_path / "missing")
+    (e / "rep1/sub_00.proof").unlink()
+    assert R.commitment_problems(e, man, FP4_PIN, ["rep1"])[1] == [
+        "rep1: 1 statement(s) without a proof, 0 proof(s) without a statement", "rep1: the manifest's proofs are not the rep's proofs"]
+    listed = dict(man, files=[*man["files"], {"rep": 1, "sub": 1, "stmt": "rep1/sub_01.stmt"}])
+    assert R.commitment_problems(d, listed, FP4_PIN, ["rep1"])[1] == ["rep1: the manifest lists a statement without a proof"]
 
 
 def test_manifest_relation_as_name_or_block():

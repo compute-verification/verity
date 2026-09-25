@@ -1,14 +1,9 @@
 """Dead gates of a `Program`: hierarchical liveness over the typed IR (frontend rulings, §8.6).
 
-    Gate -> exactly one Value<w>.
-    Composite interfaces -> ordered collections of value references.
-    Commitment positions -> physical authentication locations for those values,
-                            not semantic components of gate outputs.
-
 A gate is *dead* when no other gate consumes its value and it is not protected (not a root output). Dead
 gates are legal in every mode; they are counted toward the described computation, they are **not** boundary
 values of any subcircuit by existence (`S.out` is the graph boundary — a value nobody reads is not on it), and
-the frontend reports them (count + ids) and warns in authoring mode.
+frontends report them (count + ids).
 
 The analysis never expands the circuit. It runs once per (specialised definition, set of live return leaves):
 walking a body backwards, the live output leaves of every node are accumulated as *interval sets* over the
@@ -21,7 +16,8 @@ carried state. `Input` gates nobody reads (the `cos_sin` rows beyond the served 
 separately from dead *computed* gates because the accounting treats prescribed inputs differently.
 
 `dead_gates(program)` returns the exact counts; ids are enumerated in canonical order up to a limit by
-descending only into activations whose subtree has dead gates.
+descending only into activations whose subtree has dead gates. A reference sequence with no compact interval
+form that is too large to enumerate raises `intervals.IntervalLimit`.
 """
 
 from __future__ import annotations
@@ -29,111 +25,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Iterator
 
-from verity.ir.defs import Body, Node, PrimitiveDefinition, SpecializedDefinition
-from verity.ir.refs import Affine, Concat, Explicit, Refs, Strided
-from verity.ir.types import Tuple as TupleT
+from .defs import Body, PrimitiveDefinition, SpecializedDefinition
+from .intervals import Intervals, complement, full, norm, ref_intervals, restrict, total
+from .refs import Refs
+from .types import Tuple as TupleT
 
-Intervals = tuple[tuple[int, int], ...]  # sorted, disjoint, non-empty half-open [lo, hi)
-
-_ENUM_LIMIT = 1 << 20  # a Strided with no interval structure is enumerated up to this many leaves
 _MEMBER_LIMIT = 1 << 22  # members × partial-read intervals above which a batch argument is over-approximated
-
-
-class LivenessLimit(Exception):
-    """A reference sequence has no compact interval form and is too large to enumerate."""
-
-
-def _norm(iv) -> Intervals:
-    iv = sorted(x for x in iv if x[1] > x[0])
-    out: list[tuple[int, int]] = []
-    for lo, hi in iv:
-        if out and lo <= out[-1][1]:
-            if hi > out[-1][1]:
-                out[-1] = (out[-1][0], hi)
-        else:
-            out.append((lo, hi))
-    return tuple(out)
-
-
-def _total(iv: Intervals) -> int:
-    return sum(hi - lo for lo, hi in iv)
-
-
-def _restrict(iv: Intervals, lo: int, hi: int) -> Intervals:
-    """`iv ∩ [lo, hi)` shifted by `-lo`."""
-    out = []
-    for a, b in iv:
-        if b <= lo:
-            continue
-        if a >= hi:
-            break
-        out.append((max(a, lo) - lo, min(b, hi) - lo))
-    return tuple(out)
-
-
-def _complement(iv: Intervals, n: int) -> Iterator[tuple[int, int]]:
-    pos = 0
-    for lo, hi in iv:
-        if lo > pos:
-            yield (pos, lo)
-        pos = hi
-    if pos < n:
-        yield (pos, n)
-
-
-def _strided_targets(r: Strided, add) -> None:
-    n, inner = r.count, r.inner
-    if n == 0:
-        return
-    os_, is_, base = r.outer_stride, r.inner_stride, r.base
-    outer = (n + inner - 1) // inner
-    last = n - (outer - 1) * inner  # leaves in the last (possibly partial) outer run
-    if os_ == 0 and is_ == 0:
-        add(base, base + 1)
-    elif is_ == 1:
-        if os_ == inner and last == inner:
-            add(base, base + n)  # a plain affine run written as a strided one
-        elif os_ == 0:
-            add(base, base + inner)  # every outer run is the same run: a broadcast
-        else:
-            for q in range(outer):
-                add(base + q * os_, base + q * os_ + (inner if q < outer - 1 else last))
-    elif os_ == 1 and is_ >= outer:
-        if is_ == outer and last == inner:
-            add(base, base + n)  # a transpose of a full block covers exactly the block
-        else:
-            for rr in range(inner):
-                rows = outer if rr < last else outer - 1
-                if rows:
-                    add(base + rr * is_, base + rr * is_ + rows)
-    elif is_ == 0:
-        for q in range(outer):
-            add(base + q * os_, base + q * os_ + 1)
-    elif n <= _ENUM_LIMIT:
-        for j in range(n):
-            leaf = r[j][2]
-            add(leaf, leaf + 1)
-    else:
-        raise LivenessLimit(f"{r!r} has no interval structure and {n} leaves")
-
-
-def _targets(r: Refs, out: dict[tuple[str, int], list]) -> None:
-    """Accumulate the leaf intervals referenced by `r`, grouped by (space, idx)."""
-    if isinstance(r, Affine):
-        if r.count:
-            out.setdefault((r.space, r.idx), []).append((r.base, r.base + r.count))
-    elif isinstance(r, Concat):
-        for p in r.parts:
-            _targets(p, out)
-    elif isinstance(r, Explicit):
-        for s, i, leaf in r.items:
-            out.setdefault((s, i), []).append((leaf, leaf + 1))
-    elif isinstance(r, Strided):
-        lst = out.setdefault((r.space, r.idx), [])
-        _strided_targets(r, lambda lo, hi: lst.append((lo, hi)))
-    else:  # pragma: no cover - unknown Refs subclass
-        for s, i, leaf in r:
-            out.setdefault((s, i), []).append((leaf, leaf + 1))
 
 
 def _members(lv: Intervals, n: int, R: int, include_dead: bool = False) -> tuple[list[tuple[int, int, Intervals]], int]:
@@ -142,7 +39,7 @@ def _members(lv: Intervals, n: int, R: int, include_dead: bool = False) -> tuple
     members with no live leaf at all."""
     groups: list[tuple[int, int, Intervals]] = []
     partial: dict[int, list[tuple[int, int]]] = {}
-    full = ((0, R),)
+    whole = ((0, R),)
     covered = 0
     for lo, hi in lv:
         m_lo, m_hi = lo // R, (hi - 1) // R
@@ -151,11 +48,11 @@ def _members(lv: Intervals, n: int, R: int, include_dead: bool = False) -> tuple
             continue
         partial.setdefault(m_lo, []).append((lo - m_lo * R, R))
         if m_hi > m_lo + 1:
-            groups.append((m_lo + 1, m_hi, full))
+            groups.append((m_lo + 1, m_hi, whole))
             covered += m_hi - m_lo - 1
         partial.setdefault(m_hi, []).append((0, hi - m_hi * R))
     for m, ivs in partial.items():
-        groups.append((m, m + 1, _norm(ivs)))
+        groups.append((m, m + 1, norm(ivs)))
     covered += len(partial)
     groups.sort(key=lambda g: g[0])
     if include_dead:  # the members with no live leaf, as groups with an empty live set
@@ -222,14 +119,14 @@ class Liveness:
 
         def mark(refs: Refs) -> None:
             t: dict[tuple[str, int], list] = {}
-            _targets(refs, t)
+            ref_intervals(refs, t)
             for (space, idx), ivs in t.items():
                 (live if space == "n" else pread)[idx].extend(ivs)
 
         def mark_subset(refs: Refs, sub: Intervals) -> None:
             if not sub:
                 return
-            if _total(sub) == refs.count:
+            if total(sub) == refs.count:
                 mark(refs)
                 return
             for lo, hi in sub:
@@ -242,9 +139,9 @@ class Liveness:
         for k in range(len(nodes) - 1, -1, -1):
             node = nodes[k]
             fn = node.fn
-            lv = _norm(live[k])
+            lv = norm(live[k])
             node_live[k] = lv
-            tot = _total(lv)
+            tot = total(lv)
             # what the node's arguments are marked with: its live outputs (transitive) or all of them (direct:
             # a consumer counts even when it is dead itself)
             use = lv if transitive else (((0, node.out.leaves),) if node.out.leaves else ())
@@ -272,9 +169,9 @@ class Liveness:
                         dead_i += n_dead
                     else:
                         dead_c += n_dead
-                    if _total(use) == 0:
+                    if total(use) == 0:
                         continue
-                    if _total(use) == node.n:
+                    if total(use) == node.n:
                         for a in node.args:
                             mark(a.refs)
                         continue
@@ -310,7 +207,7 @@ class Liveness:
                                 mark_subset(a.refs, rd)
                             elif ax == 0:
                                 Lp = a.type.elem.leaves
-                                if _total(rd) == Lp:
+                                if total(rd) == Lp:
                                     mark(a.refs.slice(m_lo * Lp, m_hi * Lp))
                                 elif cnt * len(rd) <= _MEMBER_LIMIT:
                                     for m in range(m_lo, m_hi):
@@ -326,8 +223,8 @@ class Liveness:
                 assert isinstance(node.out, TupleT)
                 c = node.out.fields[0].leaves
                 y = node.out.fields[1].elem.leaves
-                carry_live = _restrict(lv, 0, c)  # live leaves of the final carry
-                ys_groups, _ = _members(_restrict(lv, c, c + node.n * y), node.n, y) if y else ([], node.n)
+                carry_live = restrict(lv, 0, c)  # live leaves of the final carry
+                ys_groups, _ = _members(restrict(lv, c, c + node.n * y), node.n, y) if y else ([], node.n)
                 ys_live: dict[int, Intervals] = {}
                 for m_lo, m_hi, lr in ys_groups:
                     for m in range(m_lo, m_hi):
@@ -335,7 +232,7 @@ class Liveness:
                 shared_reads: list[list[tuple[int, int]]] = [[] for _ in range(len(node.args) - 1 - node.n_xs)]
                 runs: list[tuple[Intervals, int]] = []
                 for i in range(node.n - 1, -1, -1):
-                    lr = _norm(list(carry_live) + [(c + lo, c + hi) for lo, hi in ys_live.get(i, ())])
+                    lr = norm(list(carry_live) + [(c + lo, c + hi) for lo, hi in ys_live.get(i, ())])
                     if runs and runs[-1][0] == lr:
                         runs[-1] = (lr, runs[-1][1] + 1)
                     else:
@@ -355,9 +252,9 @@ class Liveness:
                     carry_live = reads[0]
                 mark_subset(node.args[0].refs, carry_live)  # the init feeds iteration 0
                 for j, rd in enumerate(shared_reads):
-                    mark_subset(node.args[1 + node.n_xs + j].refs, _norm(rd))
+                    mark_subset(node.args[1 + node.n_xs + j].refs, norm(rd))
                 scan_runs[k] = runs[::-1]  # iteration order
-        reads = tuple(_norm(p) for p in pread)
+        reads = tuple(norm(p) for p in pread)
         return BodyLiveness(reads, dead_c, dead_i, node_live, scan_runs, approx)
 
 
@@ -380,9 +277,8 @@ class DeadGateReport:
                 "approximate": self.approximate}
 
 
-def _full(sd: SpecializedDefinition) -> Intervals:
-    n = sd.body.ret_type.leaves
-    return ((0, n),) if n else ()
+def _live_all(sd: SpecializedDefinition) -> Intervals:
+    return full(sd.body.ret_type.leaves)
 
 
 def dead_gates(program, limit: int = 64, transitive: bool = False) -> DeadGateReport:
@@ -392,11 +288,11 @@ def dead_gates(program, limit: int = 64, transitive: bool = False) -> DeadGateRe
     a protected output (a superset)."""
     root = program.root
     lv = Liveness(transitive=transitive)
-    top = lv.analyse(root, _full(root))
+    top = lv.analyse(root, _live_all(root))
     ids: list[int] = []
     complete = True
     if limit > 0 and top.dead:
-        for g in _enumerate(lv, root, 0, _full(root)):
+        for g in _enumerate(lv, root, 0, _live_all(root)):
             ids.append(g)
             if len(ids) >= limit:
                 complete = False
@@ -422,12 +318,12 @@ def _enumerate(lv: Liveness, sd: SpecializedDefinition, offset: int, live_ret: I
             yield from _enumerate(lv, fn, node_off, lvk)
         elif node.form == "batch":
             if isinstance(fn, PrimitiveDefinition):
-                for lo, hi in _complement(lvk, node.n):
+                for lo, hi in complement(lvk, node.n):
                     yield from range(node_off + lo, node_off + hi)
             else:
                 R, g = fn.out_leaves, fn.gates
                 for m in range(node.n):
-                    lr = _restrict(lvk, m * R, (m + 1) * R)
+                    lr = restrict(lvk, m * R, (m + 1) * R)
                     if not lr and lv.transitive:
                         yield from range(node_off + m * g, node_off + (m + 1) * g)
                     else:
@@ -441,4 +337,4 @@ def _enumerate(lv: Liveness, sd: SpecializedDefinition, offset: int, live_ret: I
                     i += 1
 
 
-__all__ = ["Liveness", "BodyLiveness", "DeadGateReport", "dead_gates", "LivenessLimit"]
+__all__ = ["Liveness", "BodyLiveness", "DeadGateReport", "dead_gates"]

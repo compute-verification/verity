@@ -252,10 +252,9 @@ def test_cross_rank_check_world_3_passes_and_names_a_missing_rank():
 @pytest.mark.parametrize("world_args", [["--tp", "3"], ["--world", "4"]])
 def test_rank_commit_refuses_world_above_two_before_building_an_engine(world_args, monkeypatch, tmp_path, capsys):
     from verity_vllm.engine import engine_profile as prof
-    from verity_vllm.pipeline.tp import commit as tpc
+    from verity_vllm.pipeline import cli
     monkeypatch.setattr(prof, "apply_env", lambda: {})
-    monkeypatch.setattr("sys.argv", ["tp.commit", "--workload", str(tmp_path / "wl.json"), "--out", str(tmp_path / "out"), *world_args])
     with pytest.raises(SystemExit) as refused:
-        tpc.main()
+        cli.main(["tp-commit", "--workload", str(tmp_path / "wl.json"), "--out", str(tmp_path / "out"), *world_args])
     assert refused.value.code == 2 and re.search(r"argument --(tp|world): invalid choice: '?[34]'?", capsys.readouterr().err)
     assert not (tmp_path / "out").exists()

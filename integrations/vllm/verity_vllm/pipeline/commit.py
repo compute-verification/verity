@@ -20,7 +20,7 @@ per-step hashing time and backlog (steady state), root-ready delay, retained byt
 Outputs (DIR): runs.jsonl (one row per run), steps.jsonl (one row per step), summary.json, summary.md, declaration_<committer>.json,
 versions.json.  Every number is MEASURED unless the key says otherwise.
 
-    PYTHONPATH=. /workspace/venv-cu129/bin/python -m verity_vllm.pipeline.commit \
+    PYTHONPATH=. verity-vllm commit \
         --workload workloads/workload_cov_b0_b1_c256.json --pairs 5 --committer native_host --out /workspace/cp/cmt3/b0_b1
 
 PROTOCOL SUMMARY (Commit stage entry: the instrumented runs + the fail-closed X-03 verdict)
@@ -47,9 +47,9 @@ import time
 
 _T_PROCESS0 = time.time()      # [R16 sys] process start (before the torch / vLLM imports): startup.imports = engine.build start - this
 
-import argparse
 import contextlib
 import copy
+import dataclasses
 import gc
 import hashlib
 import inspect
@@ -62,6 +62,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from verity_vllm.config import option
 from verity_vllm.engine import engine_profile as prof  # noqa: F401
 
 prof.apply_env()
@@ -76,7 +77,6 @@ SCHEMA = "verity/commit-integ/delta/v1"
 
 # [R16 sys, BRIEF §5/§10] automatic stage telemetry of THIS process: hot/cold, engine built or reused (+ reason), warm-up, arms, validation
 TL = Timeline.from_env("commit_delta", hot=False)
-
 
 
 def _rid_of(order: dict, rid) -> str:
@@ -407,7 +407,7 @@ def cuda_residue(base: dict[int, tuple[int, str]], now: dict[int, tuple[int, str
     return {"count": len(new), "mib": round(sum(v[0] for v in new.values()) / 2**20, 1), "largest": holders}
 
 
-def make_committer(kind: str, engine: va.Engine, args: argparse.Namespace, run_id: str):
+def make_committer(kind: str, engine: va.Engine, args: Options, run_id: str):
     if (layout := getattr(args, "layout", "chunk-leaf-v1")) != "chunk-leaf-v1" and not kind.startswith("native_collect"):
         raise ValueError(f"leaf layout {layout} is implemented by the native_collect committers only, not {kind}")
     if kind in ("native_host", "native_host_direct"):
@@ -473,7 +473,8 @@ def bootstrap_ci(xs: list[float], n: int = 4000, seed: int = 0) -> tuple[float, 
     return means[int(0.025 * n)], means[int(0.975 * n) - 1]
 
 
-from verity_vllm.check.commit_verdict import REQUIRED_CLASSES_DEFAULT, class_coverage, commit_verdict  # noqa: E402  (X-03/REL-02 fail-closed verdict)
+from verity_vllm.check.commit_rules import REQUIRED_CLASSES_DEFAULT, class_coverage, required_classes_default  # noqa: E402
+from verity_vllm.check.verdict import commit_verdict  # noqa: E402  (X-03/REL-02 fail-closed verdict)
 
 
 def tensor_digests(com, out, pair: int, prev: dict) -> int:
@@ -958,7 +959,7 @@ class _ReplayReused(Exception):
 HOT_UNSAFE = ("compiled_taps", "arms", "only_arm", "late_read", "value_check", "arena_unchecked", "profile_hooks", "moe_source")
 
 
-def hot_unsafe_reasons(args: argparse.Namespace) -> list[str]:
+def hot_unsafe_reasons(args: Options) -> list[str]:
     """Why a job must run in a fresh (cold) process: flags that mutate module/process state beyond the committer's lifetime."""
     why = []
     if args.compiled_taps != "off":
@@ -984,7 +985,7 @@ def hot_unsafe_reasons(args: argparse.Namespace) -> list[str]:
     return why
 
 
-def oracle_producers_of_record(args: argparse.Namespace, required_manifest: dict[str, Any] | None, reqs: list[dict[str, Any]],
+def oracle_producers_of_record(args: Options, required_manifest: dict[str, Any] | None, reqs: list[dict[str, Any]],
                                sampling: dict[str, Any]) -> tuple[dict[tuple[str, str], dict[str, Any]] | None, dict[str, Any]]:
     """The oracle's producer facts from the Programs of record (`oracle_compare.producers_of_programs`) for a `v2-query` manifest, which
     carries none: (facts | None, record).  The Programs are the replay's (same lookup, same of-record digest check); None + the named
@@ -1023,159 +1024,89 @@ def oracle_producers_of_record(args: argparse.Namespace, required_manifest: dict
                              "reading modules outside the producer's module (oracle_compare.producers_of_programs)"}
 
 
-def main(argv: list[str] | None = None) -> None:
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class Options:
+    workload: str = option("--workload", default="workloads/workload_cov_b0_b1_c256.json")
+    checkpoints: str = option("--checkpoints", default="manifests/checkpoints.json")
+    case: str | None = option("--case", default=None)
+    out: str = option("--out")
+    pairs: int = option("--pairs", type=int, default=5)
+    committer: str = option("--committer", default="native_host", help="native_host | native_host_direct | hooks_only | plugin:<module>:<factory>")
+    chunk: int = option("--chunk", type=int, default=65536, help="native_host leaf = chunk bytes of the packed step stream (opening granularity); 4096 measured 3x slower on decode steps (per-leaf Python overhead)")
+    arena_unchecked: bool = option("--arena-unchecked", default=False, action="store_true", help="NEGATIVE TEST ONLY: skip the X-02 arm-time bound check for an explicit --arena-mb so a " "too-small block reaches the collector (its refusal must then yield Commit FAIL under X-03)")
+    arena_mb: int = option("--arena-mb", type=int, default=0, help="device staging block (MB); default 0 = X-02 auto: sized at arm time from the workload envelope " "(B, max prompt, max_num_batched_tokens, max_model_len; + FA2 hidden stream); 2 blocks preallocated, grown on demand (counted). " "An explicit value smaller than the step bound is refused before the run. Memory headroom for the arena comes from " "--engine-arg gpu_memory_utilization=<x> (0.5-0.6 on 48 GB for <=2B models at 1024-token prompts; 0.75 on 80 GB)")
+    weights_hash: str = option("--weights-hash", choices=("host", "device", "device-checked"), env="VERITY_WEIGHTS_HASH", default="host", help="[R16 sys SYS-05] where the weights registration hashes: host (default; Python pos_leaf per 256-B leaf, 17-24 s for " "a 1B model, ~120 s for 7B, twice per Commit), device (same leaves + tree on the GPU, verity_vllm.commit.committer.leafhash), " "device-checked (both, per-tensor equality asserted; validation runs).  Recorded in versions.json weights.hash")
+    hash_threads: int = option("--hash-threads", type=int, default=2, help="hashlib worker threads (pod CPU tune 17:30Z: 2 threads x 4 KB = 2.2 GB/s; 8 threads x 4 KB = 0.4 GB/s, GIL thrash)")
+    openings: int = option("--openings", type=int, default=64)
+    max_num_seqs: int = option("--max-num-seqs", type=int, default=8)
+    engine_arg: list[str] | None = option("--engine-arg", action="append", default=None)
+    target: str | None = option("--target", default=None, help="[R13 hopper] TargetProfile JSON overrides / path (default: the workload's `target` block over this device)")
+    warmup: int = option("--warmup", type=int, default=2)
+    label: str = option("--label", default="")
+    gpu_tree: bool = option("--gpu-tree", default=False, action="store_true", help="native_host: GPU-resident SHA-256 chunk tree (CMT-2 hidden_gpu_tree.cu) over the arena; no D2H, no hashlib")
+    regen_row4: bool = option("--regen-row4", default=False, action="store_true", help="native_host: row-4 BASELINE candidate — regenerate residual.float() and bind it (+4 B/elem)")
+    fast_copy: bool = option("--fast-copy", default=False, action="store_true", help="native_host: snapshot via cudaMemcpyAsync through ctypes (no torch ops on the serving thread)")
+    batch_copy: bool = option("--batch-copy", default=False, action="store_true", help="native_host: batch the D2D snapshots of not-overwritten tensors into one _foreach_copy_ per step")
+    hidden_so: str | None = option("--hidden-so", default=None, help="CMT-2 M1 tap FA2 extension (.so): bind the FA2 hidden stream (rows R5-R8) into the same run root")
+    hidden_ns: str | None = option("--hidden-ns", default=None, help="torch.ops namespace of the tapped .so (default verity_fa2_matAll; verity_fa2_matReq for the src-59 build)")
+    tap_cap_mb: int | None = option("--tap-cap-mb", type=int, default=None, help="[R18 tap, F-r17-23] cap (MiB) on the FA2 M1 tap's device buffer: a multi-sequence launch whose padded tap buffer exceeds it is " "split into sequence groups tapped one after another into ONE bounded buffer (names/bytes/roots unchanged); default 2048 " "(VERITY_FA2_TAP_CAP_MB); 0 = the unbounded per-geometry buffers (B64 llama 1024: 24.53 GiB, the r17_0738 OOM)")
+    value_check: bool = option("--value-check", default=False, action="store_true", help="one extra instrumented run with reference taps + re-execution (value_check.json)")
+    arms: str | None = option("--arms", default=None, help="R10: comma-separated committer kinds run as separate treatment arms in one process, interleaved with the control (order rotates per round)")
+    profile_hooks: bool = option("--profile-hooks", default=False, action="store_true", help="native_collect: time the hook bodies (perf_counter per call) -- profiling run, not a headline timing")
+    expect_root: str | None = option("--expect-root", default=None, help="fail if the instrumented run root (hex) differs from this reference root (R10 arm2/arm3 equality gate)")
+    late_read: str | None = option("--late-read", default=None, help="NEGATIVE TEST (R11 collector-meas): drop this leaf (e.g. qkv_proj) from the gather arm's flush points so the " "staged values are read after the in-place overwriter -> the run root MUST differ from arm 2 (roots_equal_across_arms=false)")
+    flip_weight: str | None = option("--flip-weight", default=None, help="NEGATIVE TEST ONLY (MAN-09 / rev-cb M-0610 flipweight; BRIEF R16 4A substituted weight input): " "<served param name>:<flat index>[:<value>] -- ONE element of that live parameter is changed in the instrumented process BEFORE " "register_weights, so the committer serves a model that is not the checkpoint the Program names; the weights pin MUST FAIL naming " "that field (served weight(s) differ from the checkpoint of record) and the Commit is FAIL rc 3.  Needs the pin armed " "(--weights-of-record / --checkpoint-dir + the Program).  Recorded in verdict.json negatives.flip_weight; never a row-procedure flag")
+    window_mb: int | None = option("--window-mb", type=int, default=None, help="P0 (R13): windowed staging -- lay the packed step stream over a ring of device windows of this size " "(MiB, multiple of 1) and absorb/release each window as soon as it is filled (sets VERITY_WINDOW_MB); 0/omitted = per-step blocks")
+    window_slots: int | None = option("--window-slots", type=int, default=None, help="P0: number of ring slots (default 8; raised automatically so the largest tensor fits)")
+    layout: str = option("--layout", default="chunk-leaf-v1", choices=["chunk-leaf-v1", "chunk-leaf-v2"], help="L1 leaf-header layout of the executed and padding " "leaves, recorded in the binding map; v2 = header M := 0 (coordinator decision; roots differ from v1; windowed native_collect_v2b only)")
+    retain: str | None = option("--retain", default=None, choices=["device", "host", "none"], help="R13 P0 retention policy for absorbed raw staging (sets VERITY_RETAIN): device = R9..R12 compact device copy per step " "(the collector footprint that OOMs Llama 1024/128 at B=2); host = copy to host memory, arena block recycled; none = keep " "only the authentication state (levels), openings by deterministic replay")
+    footprint: str | None = option("--footprint", default=None, help="R13 P0: write the per-step device-memory timeline (JSONL) to this path (sets VERITY_FOOTPRINT)")
+    bounded_staging: bool = option("--bounded-staging", default=False, action="store_true", help="[R17 fp8, F-fp8-B8MEM] bounded host staging (sets VERITY_STAGING_BOUNDED=1; windowed path only): a learning step's transient " "host copies are capped by --learn-budget-mb and returned right after the re-hash (over budget: the warm-up pass learns the " "plan and DISCARDS the windows, a record run FAILS by name); hit-plan steps take no hedge copy (a plan mismatch is a named " "FAIL); roots identical to the unbounded path (same headers, leaf order, padding). Flag until root parity is on record.")
+    learn_budget_mb: int = option("--learn-budget-mb", type=int, default=4096, help="bounded staging: transient pinned-host budget for a learning step (MiB; default 4096)")
+    retain_exclude: str | None = option("--retain-exclude", default=None, help="[R17 fp8, R17-5] with --bounded-staging --retain host: comma-separated value families (e.g. fa3_hidden_m1) whose chunk-aligned " "interior is NOT copied to host (sets VERITY_RETAIN_EXCLUDE): those leaves open by REPLAY against the original root in " "openings_after_release (needs --open-after-release); everything else opens from host as before")
+    host_admit: float | None = option("--host-admit", type=float, default=None, metavar="MARGIN", help="[R17-7.3] with --bounded-staging: REFUSE (rc 3, named) before any run when the host peak bound exceeds (1 - MARGIN) x the " "cgroup memory limit (e.g. 0.15); without it the bound is only printed / recorded (host_admission_<kind>.json)")
+    replay_openings: str = option("--replay-openings", default="auto", choices=["auto", "always"], help="openings-after-release: 'auto' replays only when a pick is not retained on host; 'always' replays every time and opens " "EVERY pick from the replay (regenerated values + regenerated authentication paths vs the ORIGINAL roots: R17-5 parity)")
+    open_after_release: bool = option("--open-after-release", default=False, action="store_true", help="R13 P0 acceptance: after each instrumented run, release every raw device copy, then open the 64 challenge positions " "(+ forced picks from the prefill step and the FA2 hidden rows) from the host copy or from a REPLAY run, and verify them " "against the ORIGINAL run's roots (recorded as commit.openings_after_release; a failure is a Commit FAIL)")
+    required_classes: str | None = option("--required-classes", default=None, help="REL-02 (R-14 interim): comma-separated class ids that MUST be declared with tensors > 0 by every " f"instrumented run (default {','.join(REQUIRED_CLASSES_DEFAULT)}; the FA2 hidden class is required because the harness has no other " "evidence the attention producer fired). Override only when the model's producers genuinely differ; the set is recorded in verdict.json")
+    match_dir: str | None = option("--match-dir", "--oracle", default=None, help="[R15 COORD M-0111 (2)] the Match stage's run dir of THIS attempt (<row>/match: capture/snapshots.json + values/, instances.jsonl, " "capture/log.jsonl.gz): live C2 -- every bound identity's committed bytes are compared with the Match record's value for that " "identity (oracle-compare); any mismatch = COMMIT FAIL naming the identity; steps the Match did not snapshot are reported partial")
+    program_dir: str | None = option("--program-dir", default=None, help="[DECISIONS-2 §4 C2 / M-0356 (1)] B=1: the Build's request Program dir (instances.json.gz + result.json) -- enables the C2 OF RECORD: " "sampled exact VU replay of the committed bytes through the registered relation evaluators (commit.sampled_replay) and the " "exhaustive ordered boundary linkage (commit.boundary_linkage); a mismatch / unlinked boundary = COMMIT FAIL naming the VU")
+    programs_root: str | None = option("--programs-root", default=None, help="B>=2: the directory holding the per-request Programs (build_request*/ or *LP<n>_T<t>; build-global's resolution) for the sampled replay")
+    replay_per_stratum: int = option("--replay-per-stratum", type=int, default=2, help="sampled replay: VUs per stratum (spec x request x phase); default 2")
+    replay_cache: bool = option("--replay-cache", default=False, action="store_true", help="[R16 sys, rev M-0051] reuse an earlier pair's C2 sampled-replay + boundary-linkage record within this Commit stage when the FULL key " "(run root, manifest digest, seed, binding map, weights root, sample parameters, code) is identical; the copy carries reused_from and " "evaluated_here=0 (default OFF until coord rules)")
+    replay_seed: int | None = option("--replay-seed", type=int, default=None, help="sampled replay: a TARGETED sampler seed (negatives / reproduction); default = derived from the run root after commitment (recorded with its source)")
+    replay_challenge: str | None = option("--replay-challenge", default=None, help="sampled replay: a VERIFIER-ISSUED post-commitment challenge (hex/string) -- the seed becomes sha256(challenge || run_root) so an " "adaptive prover cannot grind the sample by recommitting (rev-cb M-0572); default = the run root alone (honest-prover measurement)")
+    weights_of_record: str | None = option("--weights-of-record", default=None, metavar="JSON", help="[MAN-09, rev-cb M-0610] the weights of record: per-field digests of the served weights COMPOSED FROM THE PINNED CHECKPOINT SHARDS " "(verity_vllm.check.weights_of_record, written beside the Build's Program); every live parameter the committer registers is compared " "with it by name -- a served model that differs from the checkpoint in one element is a named COMMIT FAIL")
+    checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="[MAN-09] derive the weights of record in-process from this pinned checkpoint snapshot + the Program of record (--program-dir / " "--programs-root) when --weights-of-record is not given; the record is written to <out>/weights_of_record.json")
+    replay_max: int = option("--replay-max", type=int, default=2000, help="sampled replay: cap on the stratified sample per pair (never below one VU per stratum; recorded)")
+    replay_workers: int | None = option("--replay-workers", type=int, default=None, help="sampled replay: evaluator threads (default min(16, cpus/2); recorded)")
+    replay_target: list[str] | None = option("--replay-target", action="append", default=None, metavar="OP_PATH[@STEP]", help="sampled replay: add EVERY VU of a module (at a request-local step) to the sample, outside the cap -- the targeted negatives of record " "(a single-identity fault at a mid-phase step); repeatable; recorded under sample.targeted")
+    program_digest: str | None = option("--program-digest", default=None, help="[R15 COORD 5] the Build's Program digest of record (B=1: build_request's program_digest; B>=2: gprog's workload digest): the " "required manifest's program_digest must equal it or the Commit fails closed as wrong-Program; also the binding map's key digest")
+    required_manifest: str | None = option("--required-manifest", default=None, help="[R14 MAN-01] the Program/query-derived required-value manifest (verity_vllm.pipeline.cli build ...): every " "identity it lists (step, invocation, op_path, output_member, element range, request, rank) must be covered by a committed " "tensor of every instrumented run (coverage_check); replaces the REL-02 counts+classes source, which stays as the labelled fallback")
+    tensor_digests: bool = option("--tensor-digests", default=False, action="store_true", help="diagnostic: per-tensor digests of the retained host bytes per instrumented run, diffed across pairs")
+    padded_finalize: bool = option("--padded-finalize", default=False, action="store_true", help="[LIFTING-SPEC v0.7 B9.1; PADDED-TABLE #3/#4, lane pad] the padded Commit: at finalize, every identity the required manifest names " "for a request OUTSIDE its executed prefix of record (declared LAG + declared EOS + served tokens; never inferred) is MATERIALISED as the " "canonical bot of its lifted width -- a step nobody executed becomes a padding step, a mixed step (B>1) is refolded from the retained leaf " "digests + the padding leaves -- so the ONE run root is over S = cap steps and the map (padded-binding-map/1) binds the full cap " "population (activity active / bot-by-enablement).  Requires --required-manifest.  Off = today's executed-steps-only Commit")
+    moe_source: str = option("--moe-source", choices=["auto", "on", "off"], default="auto", help="[R13 MOE-03] attach the fused-MoE block source (router_w/ids, up, act, down, sum per MoE layer per step; class moe_block_stream, " "added to the required classes): auto = when the model has MoE-runner modules (the default), on = refuse if it has none, off = never")
+    compiled_taps: str = option("--compiled-taps", choices=["off", "on", "kernels"], default="off", help="[R15 compiled] kernels = P_compiled (DECISIONS-2 §7 S3): acquire every non-weight buffer of every Inductor kernel launch through Inductor's " "wrapper-level hook seam (kernels/fusion untouched; captured pieces copy into preallocated slots at graph capture, drained per step; " "verity_vllm/acquire/sources/compiled_kernel_source.py); requires --required-manifest from compiled_manifest.py. " "on = [WITHDRAWN as the row's path, M-0389] record ops compiled INTO the graphs (graph-replay-safe " "staging ring; verity_vllm/acquire/sources/compiled_source.py) for Execution=compiled rows (enforce_eager=false). " "The op nodes live in the graphs for the whole process, so the paired control must be a separate process with " "`--compiled-taps off --only-arm control` and the same engine args (verity_vllm/ops/compiled_commit.sh)")
+    compiled_ring_rows: int = option("--compiled-ring-rows", type=int, default=0, help="[R15 compiled] rows per staging slot; 0 = auto: the engine's largest CUDA graph capture size (larger, uncaptured steps use the direct path)")
+    only_arm: str | None = option("--only-arm", choices=["control", "instrumented"], default=None, help="[R15 compiled] run only this arm (`--pairs` runs of it); the paired summary is produced by compiled_commit.sh from both processes")
+
+
+def main(args: Options, argv: list[str] | None = None) -> None:
     global TL
+    if os.environ.get("VERITY_HOT_SUBMIT") == "1" and _HOT is None:
+        # [R16 sys] route this invocation through the pod's hot Commit worker (verity_vllm/pipeline/hot.py) -- lets an unchanged harness
+        # (the e2e negatives in tests/test_commit_fail_closed.py, ad-hoc timing pairs) exercise engine reuse; the worker refuses HOT-UNSAFE
+        # jobs and the client falls back to a cold process with the reason on record, so nothing runs that would not run cold.
+        from verity_vllm.pipeline import hot as _HC
+
+        sys.exit(_HC.submit(sys.argv[2:] if argv is None else list(argv), root=Path(os.environ.get("HOT_ROOT", "/workspace/cp/hot")),
+                            idle_s=float(os.environ.get("HOT_IDLE", "900")),
+                            timeout_s=float(os.environ["HOT_TIMEOUT"]) if os.environ.get("HOT_TIMEOUT") else None))
     TL = Timeline.from_env("commit_delta", hot=_HOT is not None)      # hot worker: the job's VERITY_TIMELINE (per row attempt), not the worker's
     if os.environ.get("VERITY_TRACEDUMP"):
         # diagnostics: dump every thread's Python stack to stderr every N seconds (hang isolation on pods without ptrace)
         import faulthandler
 
         faulthandler.dump_traceback_later(float(os.environ["VERITY_TRACEDUMP"]), repeat=True)
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--workload", default="workloads/workload_cov_b0_b1_c256.json")
-    ap.add_argument("--checkpoints", default="manifests/checkpoints.json")
-    ap.add_argument("--case", default=None)
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--pairs", type=int, default=5)
-    ap.add_argument("--committer", default="native_host", help="native_host | native_host_direct | hooks_only | plugin:<module>:<factory>")
-    ap.add_argument("--chunk", type=int, default=65536, help="native_host leaf = chunk bytes of the packed step stream (opening granularity); 4096 measured 3x slower on decode steps (per-leaf Python overhead)")
-    ap.add_argument("--arena-unchecked", action="store_true", help="NEGATIVE TEST ONLY: skip the X-02 arm-time bound check for an explicit --arena-mb so a "
-                    "too-small block reaches the collector (its refusal must then yield Commit FAIL under X-03)")
-    ap.add_argument("--arena-mb", type=int, default=0, help="device staging block (MB); default 0 = X-02 auto: sized at arm time from the workload envelope "
-                    "(B, max prompt, max_num_batched_tokens, max_model_len; + FA2 hidden stream); 2 blocks preallocated, grown on demand (counted). "
-                    "An explicit value smaller than the step bound is refused before the run. Memory headroom for the arena comes from "
-                    "--engine-arg gpu_memory_utilization=<x> (0.5-0.6 on 48 GB for <=2B models at 1024-token prompts; 0.75 on 80 GB)")
-    ap.add_argument("--weights-hash", choices=("host", "device", "device-checked"), default=os.environ.get("VERITY_WEIGHTS_HASH", "host"),
-                    help="[R16 sys SYS-05] where the weights registration hashes: host (default; Python pos_leaf per 256-B leaf, 17-24 s for "
-                         "a 1B model, ~120 s for 7B, twice per Commit), device (same leaves + tree on the GPU, verity_vllm.commit.committer.leafhash), "
-                         "device-checked (both, per-tensor equality asserted; validation runs).  Recorded in versions.json weights.hash")
-    ap.add_argument("--hash-threads", type=int, default=2, help="hashlib worker threads (pod CPU tune 17:30Z: 2 threads x 4 KB = 2.2 GB/s; 8 threads x 4 KB = 0.4 GB/s, GIL thrash)")
-    ap.add_argument("--openings", type=int, default=64)
-    ap.add_argument("--max-num-seqs", type=int, default=8)
-    ap.add_argument("--engine-arg", action="append", default=None)
-    ap.add_argument("--target", default=None, help="[R13 hopper] TargetProfile JSON overrides / path (default: the workload's `target` block over this device)")
-    ap.add_argument("--warmup", type=int, default=2)
-    ap.add_argument("--label", default="")
-    ap.add_argument("--gpu-tree", action="store_true", help="native_host: GPU-resident SHA-256 chunk tree (CMT-2 hidden_gpu_tree.cu) over the arena; no D2H, no hashlib")
-    ap.add_argument("--regen-row4", action="store_true", help="native_host: row-4 BASELINE candidate — regenerate residual.float() and bind it (+4 B/elem)")
-    ap.add_argument("--fast-copy", action="store_true", help="native_host: snapshot via cudaMemcpyAsync through ctypes (no torch ops on the serving thread)")
-    ap.add_argument("--batch-copy", action="store_true", help="native_host: batch the D2D snapshots of not-overwritten tensors into one _foreach_copy_ per step")
-    ap.add_argument("--hidden-so", default=None, help="CMT-2 M1 tap FA2 extension (.so): bind the FA2 hidden stream (rows R5-R8) into the same run root")
-    ap.add_argument("--hidden-ns", default=None, help="torch.ops namespace of the tapped .so (default verity_fa2_matAll; verity_fa2_matReq for the src-59 build)")
-    ap.add_argument("--tap-cap-mb", type=int, default=None,
-                    help="[R18 tap, F-r17-23] cap (MiB) on the FA2 M1 tap's device buffer: a multi-sequence launch whose padded tap buffer exceeds it is "
-                         "split into sequence groups tapped one after another into ONE bounded buffer (names/bytes/roots unchanged); default 2048 "
-                         "(VERITY_FA2_TAP_CAP_MB); 0 = the unbounded per-geometry buffers (B64 llama 1024: 24.53 GiB, the r17_0738 OOM)")
-    ap.add_argument("--value-check", action="store_true", help="one extra instrumented run with reference taps + re-execution (value_check.json)")
-    ap.add_argument("--arms", default=None, help="R10: comma-separated committer kinds run as separate treatment arms in one process, interleaved with the control (order rotates per round)")
-    ap.add_argument("--profile-hooks", action="store_true", help="native_collect: time the hook bodies (perf_counter per call) -- profiling run, not a headline timing")
-    ap.add_argument("--expect-root", default=None, help="fail if the instrumented run root (hex) differs from this reference root (R10 arm2/arm3 equality gate)")
-    ap.add_argument("--late-read", default=None, help="NEGATIVE TEST (R11 collector-meas): drop this leaf (e.g. qkv_proj) from the gather arm's flush points so the "
-                    "staged values are read after the in-place overwriter -> the run root MUST differ from arm 2 (roots_equal_across_arms=false)")
-    ap.add_argument("--flip-weight", default=None, help="NEGATIVE TEST ONLY (MAN-09 / rev-cb M-0610 flipweight; BRIEF R16 4A substituted weight input): "
-                    "<served param name>:<flat index>[:<value>] -- ONE element of that live parameter is changed in the instrumented process BEFORE "
-                    "register_weights, so the committer serves a model that is not the checkpoint the Program names; the weights pin MUST FAIL naming "
-                    "that field (served weight(s) differ from the checkpoint of record) and the Commit is FAIL rc 3.  Needs the pin armed "
-                    "(--weights-of-record / --checkpoint-dir + the Program).  Recorded in verdict.json negatives.flip_weight; never a row-procedure flag")
-    ap.add_argument("--window-mb", type=int, default=None, help="P0 (R13): windowed staging -- lay the packed step stream over a ring of device windows of this size "
-                    "(MiB, multiple of 1) and absorb/release each window as soon as it is filled (sets VERITY_WINDOW_MB); 0/omitted = per-step blocks")
-    ap.add_argument("--window-slots", type=int, default=None, help="P0: number of ring slots (default 8; raised automatically so the largest tensor fits)")
-    ap.add_argument("--layout", default="chunk-leaf-v1", choices=["chunk-leaf-v1", "chunk-leaf-v2"], help="L1 leaf-header layout of the executed and padding "
-                    "leaves, recorded in the binding map; v2 = header M := 0 (coordinator decision; roots differ from v1; windowed native_collect_v2b only)")
-    ap.add_argument("--retain", default=None, choices=["device", "host", "none"],
-                    help="R13 P0 retention policy for absorbed raw staging (sets VERITY_RETAIN): device = R9..R12 compact device copy per step "
-                         "(the collector footprint that OOMs Llama 1024/128 at B=2); host = copy to host memory, arena block recycled; none = keep "
-                         "only the authentication state (levels), openings by deterministic replay")
-    ap.add_argument("--footprint", default=None, help="R13 P0: write the per-step device-memory timeline (JSONL) to this path (sets VERITY_FOOTPRINT)")
-    ap.add_argument("--bounded-staging", action="store_true",
-                    help="[R17 fp8, F-fp8-B8MEM] bounded host staging (sets VERITY_STAGING_BOUNDED=1; windowed path only): a learning step's transient "
-                         "host copies are capped by --learn-budget-mb and returned right after the re-hash (over budget: the warm-up pass learns the "
-                         "plan and DISCARDS the windows, a record run FAILS by name); hit-plan steps take no hedge copy (a plan mismatch is a named "
-                         "FAIL); roots identical to the unbounded path (same headers, leaf order, padding). Flag until root parity is on record.")
-    ap.add_argument("--learn-budget-mb", type=int, default=4096, help="bounded staging: transient pinned-host budget for a learning step (MiB; default 4096)")
-    ap.add_argument("--retain-exclude", default=None,
-                    help="[R17 fp8, R17-5] with --bounded-staging --retain host: comma-separated value families (e.g. fa3_hidden_m1) whose chunk-aligned "
-                         "interior is NOT copied to host (sets VERITY_RETAIN_EXCLUDE): those leaves open by REPLAY against the original root in "
-                         "openings_after_release (needs --open-after-release); everything else opens from host as before")
-    ap.add_argument("--host-admit", type=float, default=None, metavar="MARGIN",
-                    help="[R17-7.3] with --bounded-staging: REFUSE (rc 3, named) before any run when the host peak bound exceeds (1 - MARGIN) x the "
-                         "cgroup memory limit (e.g. 0.15); without it the bound is only printed / recorded (host_admission_<kind>.json)")
-    ap.add_argument("--replay-openings", default="auto", choices=["auto", "always"],
-                    help="openings-after-release: 'auto' replays only when a pick is not retained on host; 'always' replays every time and opens "
-                         "EVERY pick from the replay (regenerated values + regenerated authentication paths vs the ORIGINAL roots: R17-5 parity)")
-    ap.add_argument("--open-after-release", action="store_true",
-                    help="R13 P0 acceptance: after each instrumented run, release every raw device copy, then open the 64 challenge positions "
-                         "(+ forced picks from the prefill step and the FA2 hidden rows) from the host copy or from a REPLAY run, and verify them "
-                         "against the ORIGINAL run's roots (recorded as commit.openings_after_release; a failure is a Commit FAIL)")
-    ap.add_argument("--required-classes", default=None, help="REL-02 (R-14 interim): comma-separated class ids that MUST be declared with tensors > 0 by every "
-                    f"instrumented run (default {','.join(REQUIRED_CLASSES_DEFAULT)}; the FA2 hidden class is required because the harness has no other "
-                    "evidence the attention producer fired). Override only when the model's producers genuinely differ; the set is recorded in verdict.json")
-    ap.add_argument("--match-dir", "--oracle", dest="match_dir", default=None,       # `--oracle`: exec's row_pod hunk name (rel M-0255 alias)
-                    help="[R15 COORD M-0111 (2)] the Match stage's run dir of THIS attempt (<row>/match: capture/snapshots.json + values/, instances.jsonl, "
-                         "capture/log.jsonl.gz): live C2 -- every bound identity's committed bytes are compared with the Match record's value for that "
-                         "identity (oracle-compare); any mismatch = COMMIT FAIL naming the identity; steps the Match did not snapshot are reported partial")
-    ap.add_argument("--program-dir", default=None,
-                    help="[DECISIONS-2 §4 C2 / M-0356 (1)] B=1: the Build's request Program dir (instances.json.gz + result.json) -- enables the C2 OF RECORD: "
-                         "sampled exact VU replay of the committed bytes through the registered relation evaluators (commit.sampled_replay) and the "
-                         "exhaustive ordered boundary linkage (commit.boundary_linkage); a mismatch / unlinked boundary = COMMIT FAIL naming the VU")
-    ap.add_argument("--programs-root", default=None,
-                    help="B>=2: the directory holding the per-request Programs (build_request*/ or *LP<n>_T<t>; build-global's resolution) for the sampled replay")
-    ap.add_argument("--replay-per-stratum", type=int, default=2, help="sampled replay: VUs per stratum (spec x request x phase); default 2")
-    ap.add_argument("--replay-cache", action="store_true",
-                    help="[R16 sys, rev M-0051] reuse an earlier pair's C2 sampled-replay + boundary-linkage record within this Commit stage when the FULL key "
-                         "(run root, manifest digest, seed, binding map, weights root, sample parameters, code) is identical; the copy carries reused_from and "
-                         "evaluated_here=0 (default OFF until coord rules)")
-    ap.add_argument("--replay-seed", type=int, default=None,
-                    help="sampled replay: a TARGETED sampler seed (negatives / reproduction); default = derived from the run root after commitment (recorded with its source)")
-    ap.add_argument("--replay-challenge", default=None,
-                    help="sampled replay: a VERIFIER-ISSUED post-commitment challenge (hex/string) -- the seed becomes sha256(challenge || run_root) so an "
-                         "adaptive prover cannot grind the sample by recommitting (rev-cb M-0572); default = the run root alone (honest-prover measurement)")
-    ap.add_argument("--weights-of-record", default=None, metavar="JSON",
-                    help="[MAN-09, rev-cb M-0610] the weights of record: per-field digests of the served weights COMPOSED FROM THE PINNED CHECKPOINT SHARDS "
-                         "(verity_vllm.check.weights_of_record, written beside the Build's Program); every live parameter the committer registers is compared "
-                         "with it by name -- a served model that differs from the checkpoint in one element is a named COMMIT FAIL")
-    ap.add_argument("--checkpoint-dir", default=None,
-                    help="[MAN-09] derive the weights of record in-process from this pinned checkpoint snapshot + the Program of record (--program-dir / "
-                         "--programs-root) when --weights-of-record is not given; the record is written to <out>/weights_of_record.json")
-    # [rel int-5 hotfix, rev-cb BLOCKER M-0662] MAN-09 8432f36ef re-declared --checkpoints here (argparse.ArgumentError: conflicting
-    # option string -> commit_delta died at parse time on EVERY invocation of the int-5 candidate 6227bde01 installed on cp-rev2).  The
-    # pre-existing --checkpoints (above, default manifests/checkpoints.json, consumed by va.build_engine) already carries the
-    # manifest path; the MAN-09 weights pin reads args.checkpoints as is.  Regression test: bench/tests/test_commit_delta_cli.py builds
-    # every add_argument of main() from the source (torch-free) and refuses duplicate option strings.
-    ap.add_argument("--replay-max", type=int, default=2000, help="sampled replay: cap on the stratified sample per pair (never below one VU per stratum; recorded)")
-    ap.add_argument("--replay-workers", type=int, default=None, help="sampled replay: evaluator threads (default min(16, cpus/2); recorded)")
-    ap.add_argument("--replay-target", action="append", default=None, metavar="OP_PATH[@STEP]",
-                    help="sampled replay: add EVERY VU of a module (at a request-local step) to the sample, outside the cap -- the targeted negatives of record "
-                         "(a single-identity fault at a mid-phase step); repeatable; recorded under sample.targeted")
-    ap.add_argument("--program-digest", default=None,
-                    help="[R15 COORD 5] the Build's Program digest of record (B=1: build_request's program_digest; B>=2: gprog's workload digest): the "
-                         "required manifest's program_digest must equal it or the Commit fails closed as wrong-Program; also the binding map's key digest")
-    ap.add_argument("--required-manifest", default=None,
-                    help="[R14 MAN-01] the Program/query-derived required-value manifest (verity_vllm.pipeline.cli build ...): every "
-                         "identity it lists (step, invocation, op_path, output_member, element range, request, rank) must be covered by a committed "
-                         "tensor of every instrumented run (coverage_check); replaces the REL-02 counts+classes source, which stays as the labelled fallback")
-    ap.add_argument("--tensor-digests", action="store_true", help="diagnostic: per-tensor digests of the retained host bytes per instrumented run, diffed across pairs")
-    ap.add_argument("--padded-finalize", action="store_true",
-                    help="[LIFTING-SPEC v0.7 B9.1; PADDED-TABLE #3/#4, lane pad] the padded Commit: at finalize, every identity the required manifest names "
-                         "for a request OUTSIDE its executed prefix of record (declared LAG + declared EOS + served tokens; never inferred) is MATERIALISED as the "
-                         "canonical bot of its lifted width -- a step nobody executed becomes a padding step, a mixed step (B>1) is refolded from the retained leaf "
-                         "digests + the padding leaves -- so the ONE run root is over S = cap steps and the map (padded-binding-map/1) binds the full cap "
-                         "population (activity active / bot-by-enablement).  Requires --required-manifest.  Off = today's executed-steps-only Commit")
-    ap.add_argument("--moe-source", choices=["auto", "on", "off"], default="auto",
-                    help="[R13 MOE-03] attach the fused-MoE block source (router_w/ids, up, act, down, sum per MoE layer per step; class moe_block_stream, "
-                         "added to the required classes): auto = when the model has MoE-runner modules (the default), on = refuse if it has none, off = never")
-    ap.add_argument("--compiled-taps", choices=["off", "on", "kernels"], default="off",
-                    help="[R15 compiled] kernels = P_compiled (DECISIONS-2 §7 S3): acquire every non-weight buffer of every Inductor kernel launch through Inductor's "
-                         "wrapper-level hook seam (kernels/fusion untouched; captured pieces copy into preallocated slots at graph capture, drained per step; "
-                         "verity_vllm/acquire/sources/compiled_kernel_source.py); requires --required-manifest from compiled_manifest.py. "
-                         "on = [WITHDRAWN as the row's path, M-0389] record ops compiled INTO the graphs (graph-replay-safe "
-                         "staging ring; verity_vllm/acquire/sources/compiled_source.py) for Execution=compiled rows (enforce_eager=false). "
-                         "The op nodes live in the graphs for the whole process, so the paired control must be a separate process with "
-                         "`--compiled-taps off --only-arm control` and the same engine args (verity_vllm/ops/compiled_commit.sh)")
-    ap.add_argument("--compiled-ring-rows", type=int, default=0, help="[R15 compiled] rows per staging slot; 0 = auto: the engine's largest CUDA graph capture size (larger, uncaptured steps use the direct path)")
-    ap.add_argument("--only-arm", choices=["control", "instrumented"], default=None,
-                    help="[R15 compiled] run only this arm (`--pairs` runs of it); the paired summary is produced by compiled_commit.sh from both processes")
-    args = ap.parse_args(argv)
     # [R18 infra, F-r17-tp-06 / BRIEF Phase 0] source identity precheck BEFORE anything else runs: verity.ir, verity_vllm, vllm-poc,
     # hidden_gpu (and the telemetry package) must all resolve from THIS tree (the one commit_delta.py lives in; $VERITOR_REPO must agree).
     # A mismatch exits 3 with PRECHECK_FAIL_SOURCE_IDENTITY on stderr -- no engine, no inference; the record is written beside the out dir.
@@ -1312,7 +1243,6 @@ def main(argv: list[str] | None = None) -> None:
     # R13 hopper: the attention implementation the engine executes (FA2 / FA3) -- selects the hidden class the verdict requires and the tap class
     fa_version = va.observed_flash_attn_version(eng.model)
     if not required_classes_cli:
-        from verity_vllm.check.commit_verdict import required_classes_default
         required_classes = required_classes_default(fa_version)
         if compiled_kernels is not None:
             # [R15 compiled S3] the execution's leaf class is P_compiled's kernel buffers, not the eager module outputs (never fired: not wrapped)
@@ -2841,7 +2771,7 @@ def main(argv: list[str] | None = None) -> None:
         for kind in kinds:
             sub = [dict(r, arm=("instrumented" if r["arm"] == kind else r["arm"])) for r in rows if r["arm"] in ("control", kind)]
             sub_steps = [dict(s, arm=("instrumented" if s["arm"] == kind else s["arm"])) for s in step_rows if s["arm"] in ("control", kind)]
-            a2 = argparse.Namespace(**{**vars(args), "committer": kind})
+            a2 = dataclasses.replace(args, committer=kind)
             summaries[kind] = summarize(sub, sub_steps, a2, versions, decls.get(kind))
             md.append(summaries[kind]["table_md"])
         roots_by_round: dict[int, dict[str, str]] = {}
@@ -2939,7 +2869,7 @@ def main(argv: list[str] | None = None) -> None:
     print(f"[delta] COMMIT PASS (fail-closed X-03): {verdict['runs_instrumented']} instrumented runs, manifest == bound, 0 errors, openings verified, tokens equal", flush=True)
 
 
-def summarize(rows: list[dict], step_rows: list[dict], args: argparse.Namespace, versions: dict, decl: dict | None) -> dict:
+def summarize(rows: list[dict], step_rows: list[dict], args: Options, versions: dict, decl: dict | None) -> dict:
     ctrl = {r["pair"]: r for r in rows if r["arm"] == "control"}
     inst = {r["pair"]: r for r in rows if r["arm"] == "instrumented"}
     pairs = sorted(set(ctrl) & set(inst))
@@ -3007,15 +2937,3 @@ def summarize(rows: list[dict], step_rows: list[dict], args: argparse.Namespace,
             "expected_tensors": [(r.get("commit") or {}).get("expected_tensors") for r in rows if r["arm"] != "control"],
             "committed_tensors": [(r.get("commit") or {}).get("committed_tensors") for r in rows if r["arm"] != "control"],
             "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
-
-
-if __name__ == "__main__":
-    if os.environ.get("VERITY_HOT_SUBMIT") == "1" and _HOT is None:
-        # [R16 sys] route this invocation through the pod's hot Commit worker (verity_vllm/pipeline/hot.py) -- lets an unchanged harness
-        # (the e2e negatives in tests/test_commit_fail_closed.py, ad-hoc timing pairs) exercise engine reuse; the worker refuses HOT-UNSAFE
-        # jobs and the client falls back to a cold process with the reason on record, so nothing runs that would not run cold.
-        from verity_vllm.pipeline import hot as _HC
-
-        sys.exit(_HC.submit(sys.argv[1:], root=Path(os.environ.get("HOT_ROOT", "/workspace/cp/hot")), idle_s=float(os.environ.get("HOT_IDLE", "900")),
-                            timeout_s=float(os.environ["HOT_TIMEOUT"]) if os.environ.get("HOT_TIMEOUT") else None))
-    main()

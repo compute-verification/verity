@@ -26,11 +26,10 @@ Two data paths feed the planner:
 
 API: `predict(row_config) -> {stage: {"reserved_bytes", "terms": {...}, "margin", "peak_point", "admit"}}`,
 `compare(attempt_dir) -> per-stage predicted vs observed peak + residual`, `peak_overlap(intervals)`.
-CLI: `python -m verity_vllm.pipeline.telemetry.admission compare <attempt_dir>... [--md]` / `predict --model ... --requests ...`.
+CLI: `verity-vllm telemetry-admission compare <attempt_dir>... [--md]` / `predict --model ... --requests ...`.
 """
 from __future__ import annotations
 
-import argparse
 import datetime as _dt
 import glob
 import gzip
@@ -1105,94 +1104,3 @@ def plan_row(cfg: RowConfig, out_path: str | None, advisory: bool = True) -> dic
     if out_path:
         Path(out_path).write_text(json.dumps(doc, indent=1, default=str) + "\n")
     return doc
-
-
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="verity_vllm.pipeline.telemetry.admission")
-    sub = ap.add_subparsers(dest="cmd", required=True)
-    r = sub.add_parser("plan", help="ADVISORY admission plan for a sweep row from its workload file (row_pod.sh hook): writes admission.json, prints one line, exit 0")
-    r.add_argument("--workload", required=True)
-    r.add_argument("--row")
-    r.add_argument("--out")
-    r.add_argument("--stages", default="build,match,commit")
-    r.add_argument("--pairs", type=int, default=3)
-    r.add_argument("--replay-workers", type=int)
-    r.add_argument("--snapshot-steps")
-    r.add_argument("--snapshot-max-bytes", type=int)
-    r.add_argument("--host-limit-bytes", type=int, help="default: this cgroup's memory.max")
-    r.add_argument("--largest-vu-in-parent", action="store_true")
-    r.add_argument("--retain", default=None, choices=["host", "device", "none", "sample"], help="the run's --retain (default: the workload's / host)")
-    r.add_argument("--bounded-staging", action="store_true", help="the run uses --bounded-staging (R19 admit fix (a) with --retain host --retain-exclude hidden_m1)")
-    r.add_argument("--retain-exclude", default=None, help="the run's --retain-exclude families (hidden_m1 = fa2_hidden_m1,fa3_hidden_m1)")
-    r.add_argument("--no-fork-gc-freeze", action="store_true", help="model the pre-R19 forked pool (no gc.freeze before the fork: two children may copy the C2 heap, F-r17-24)")
-    c = sub.add_parser("compare", help="predicted vs observed per stage for attempt dirs")
-    c.add_argument("attempt_dirs", nargs="+")
-    c.add_argument("--md", action="store_true")
-    c.add_argument("--points", action="store_true", help="also print the commit-point tables")
-    c.add_argument("--largest-vu-in-parent", action="store_true", help="predict with the FIX: the largest strata evaluated in the parent, forked workers are 250 MiB workers")
-    c.add_argument("--no-fork-gc-freeze", action="store_true", help="predict with the pre-R19 forked pool (the R17/R18 records were made without gc.freeze)")
-    c.add_argument("--json-out")
-    p = sub.add_parser("predict", help="reservation per stage for a row config")
-    p.add_argument("--model", required=True)
-    p.add_argument("--requests", type=int, default=1)
-    p.add_argument("--prompt-tokens", type=int, default=1024)
-    p.add_argument("--decode-rows", type=int, default=129)
-    p.add_argument("--steps", type=int, default=129)
-    p.add_argument("--max-context", type=int, default=1153)
-    p.add_argument("--pairs", type=int, default=3)
-    p.add_argument("--replay-workers", type=int)
-    p.add_argument("--host-limit-gib", type=float)
-    p.add_argument("--n-instances", type=int)
-    p.add_argument("--raw-bytes", type=int)
-    p.add_argument("--largest-vu-in-parent", action="store_true")
-    p.add_argument("--retain", default="host", choices=["host", "device", "none", "sample"])
-    p.add_argument("--bounded-staging", action="store_true")
-    p.add_argument("--retain-exclude", default=None)
-    p.add_argument("--no-fork-gc-freeze", action="store_true")
-    a = ap.parse_args(argv)
-    if a.cmd == "plan":
-        # advisory: never a non-zero exit, never an exception out of the hook -- the failure is written into the line instead
-        try:
-            limit = a.host_limit_bytes if a.host_limit_bytes is not None else cgroup_memory_max()
-            cfg = row_config_from_workload(a.workload, a.row, pairs=a.pairs, replay_workers=a.replay_workers, host_limit_bytes=limit,
-                                           snapshot_steps=a.snapshot_steps, snapshot_max_bytes=a.snapshot_max_bytes, stages=a.stages)
-            cfg.largest_vu_in_parent = a.largest_vu_in_parent
-            cfg.fork_gc_freeze = not a.no_fork_gc_freeze
-            cfg.bounded_staging = a.bounded_staging
-            cfg.retain_exclude = retain_exclude_families(a.retain_exclude)
-            if a.retain:
-                cfg.retain = a.retain
-            print(plan_row(cfg, a.out)["line"])
-        except Exception as e:  # noqa: BLE001 -- advisory hook: report, never stop the row
-            print(f"ADMISSION advisory unavailable: {type(e).__name__}: {e}")
-        return 0
-    if a.cmd == "predict":
-        cfg = RowConfig(model=a.model, requests=a.requests, prompt_tokens=a.prompt_tokens, decode_rows=a.decode_rows, steps=a.steps, max_context=a.max_context, pairs=a.pairs,
-                        replay_workers=a.replay_workers, host_limit_bytes=int(a.host_limit_gib * GiB) if a.host_limit_gib else None, n_instances=a.n_instances,
-                        scheduled_raw_bytes=a.raw_bytes, largest_vu_in_parent=a.largest_vu_in_parent, retain=a.retain,
-                        fork_gc_freeze=not a.no_fork_gc_freeze, bounded_staging=a.bounded_staging, retain_exclude=retain_exclude_families(a.retain_exclude))
-        print(json.dumps(predict(cfg), indent=1, default=str))
-        return 0
-    results = []
-    for d in a.attempt_dirs:
-        cfg = row_config_from_attempt(d)
-        if a.largest_vu_in_parent:
-            cfg.largest_vu_in_parent = True
-        cfg.fork_gc_freeze = not a.no_fork_gc_freeze
-        results.append(compare(d, cfg))
-    if a.json_out:
-        Path(a.json_out).write_text(json.dumps(results, indent=1, default=str))
-    if a.md:
-        print(render_compare_md(results))
-        if a.points:
-            for r in results:
-                if any(k.startswith("commit/") for k in r["points"]):
-                    print()
-                    print(render_points_md(r))
-    else:
-        print(json.dumps(results, indent=1, default=str))
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

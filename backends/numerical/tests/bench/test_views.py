@@ -145,11 +145,13 @@ def test_parity_reports_a_difference(store: LocalStore) -> None:
 
 def committed(store: LocalStore, leaf: str = "blake3", *, t_total: float = 0.4, commit: float = 0.6, protocol: bool = True,
               custody: bool = True, security: dict | None = None, verified_by: str | None = VERIFIER, labels: list[tuple] = (),
-              B: int = 4096, manifest: str | None = None) -> str:
+              B: int = 4096, manifest: str | None = None, setup: float | None = None) -> str:
     """A B-Ligero in-proof-hash result on the 4090 line, measured under the protocol, with its commitment time and preserved dumps."""
 
     doc = hashed(leaf, t_total=t_total, security=security)
     doc["measurements"].append({"name": V.COMMIT, "value": commit, "unit": "s"})
+    if setup is not None:
+        doc["measurements"].append({"name": "fixed.setup_seconds", "value": setup, "unit": "s"})
     fp = doc["workload_fingerprint"]
     if B != 4096:
         fp.update(B=B, instances={**fp["instances"], "range": [0, B], "manifest_sha256": V.STREAMS[FP8_ADA_MMA.name](B)})
@@ -205,14 +207,19 @@ def test_a_full_relation_blake3_result_fills_its_family_cell_end_to_end(store: L
     assert V.PREVIEW in md and "## Table 1" in md and "## Table 2" in md and "## Table 3" in md
     assert f"{T.fmt_overhead(cell.overhead)} (prov.)" in md
     # Table 3: commitment and the proving buckets per instance, with shares of end to end
-    row3 = next(r for r in md.splitlines() if r.startswith(f"| {FP8_ADA_MMA.name} · frame-v3 · keyed-BLAKE3 rows · B-Ligero"))
-    assert "146 µs (60%)" in row3 and "244 µs (100%)" in row3
-    assert "Encoding + witness commitment" in md and "Serving overhead" in md
+    rows = [r for r in md.splitlines() if r.startswith(f"| {FP8_ADA_MMA.name} · frame-v3 · keyed-BLAKE3 rows · B-Ligero")]
+    row3, drill = rows                                   # Table 3, then its seconds-per-instance drill-down
     serving, proving = V.overheads(cell)
     N = V.native(FP8_ADA_MMA)["instances_per_second"]
     assert serving == pytest.approx(N * 0.6 / 4096) and proving == pytest.approx(N * 0.4 / 4096)
     assert serving + proving == pytest.approx(cell.overhead)
-    assert f"| {T.fmt_overhead(serving)} | {T.fmt_overhead(proving)} |" in row3
+    # Table 3 in overhead units: each stage x N with its share; the stages sum to the cell
+    assert row3.startswith(f"| {FP8_ADA_MMA.name} · frame-v3 · keyed-BLAKE3 rows · B-Ligero | {T.fmt_overhead(serving)} (60%) |")
+    assert f"| {T.fmt_overhead(cell.overhead)} (100%) | — |" in row3 and "µs" not in row3
+    st = V.stages(cell)
+    assert st["commitment"] + sum(v for v in st["buckets"].values() if v) + st["other"] == pytest.approx(cell.overhead)
+    assert "146 µs (60%)" in drill and "244 µs (100%)" in drill
+    assert "Encoding + witness commitment" in md and "Setup, one-time (not in the total)" in md and "seconds per instance" in md
 
 
 def test_a_red_team_clearance_of_the_statement_lifts_the_marker(store: LocalStore) -> None:
@@ -477,3 +484,18 @@ def test_an_equivalence_whose_payload_is_not_local_is_reported_not_silently_read
     assert "Unreadable here (1;" in md and V.render_json(views)["unreadable"] == views.unreadable
     # the frozen tables name it too, instead of a bare-meta document with a null candidate
     assert T.instance_equivalence(cand, FP8_ADA_MMA, T.instance_equivs(store), set())[1].startswith(f"{eq}: payload not local")
+
+
+def test_setup_is_one_time_shown_beside_the_cell_amortized_over_the_batch(store: LocalStore) -> None:
+    """Setup and key generation (SP1 ~16 s) get their own Table 3 column: seconds, and x native amortized over the measured batch
+    (setup x N / instances); they never enter the Table 2 cell or the stage sum."""
+    committed(store, t_total=0.4, commit=0.6, setup=16.0)
+    views = V.build(store)
+    cell = line(views)["cells"]["B-Ligero"]
+    N = V.native(FP8_ADA_MMA)["instances_per_second"]
+    assert cell.setup_s == 16.0 and cell.overhead == pytest.approx(N * 1.0 / 4096)          # the cell is commitment + proving only
+    st = V.stages(cell)
+    assert st["setup"] == {"seconds": 16.0, "amortized": pytest.approx(16.0 * N / 4096), "instances": 4096}
+    assert st["commitment"] + sum(v for v in st["buckets"].values() if v) + st["other"] == pytest.approx(cell.overhead)
+    assert f"| 16 s · {T.fmt_overhead(16.0 * N / 4096)} over 4096 |" in V.render_markdown(views)
+    assert V.render_json(views)["table3"][0]["stages_overhead"]["setup"]["seconds"] == 16.0

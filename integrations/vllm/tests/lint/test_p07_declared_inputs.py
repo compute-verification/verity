@@ -13,9 +13,9 @@ Checked today, against ``allowlists/p07_declared_inputs.json``:
   fails quietly.
 * ``seed-default``: a parameter named ``seed``/``*_seed``/``seed_*`` with a default value.
 
-``pipeline/cli.py`` and ``engine/env.py`` (which writes vLLM's pins from config) do not exist yet, so every
-``environ`` use is a violation today; once they exist they are ``ENV_OWNERS``.  The rule's torch-stub test (the plan
-digest is the same with torch present and stubbed out) is not a lint.
+``ENV_OWNERS`` may read the environment and name machine paths: ``pipeline/cli.py`` turns both into declared inputs
+(option defaults, ``config.RunEnv``).  ``engine/env.py`` (which writes vLLM's pins from config) joins it once it exists.
+The rule's torch-stub test (the plan digest is the same with torch present and stubbed out) is not a lint.
 """
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ from . import _ratchet as R
 
 NAME = "p07_declared_inputs"
 RULE = "P7 (results depend only on declared inputs)"
-ENV_OWNERS: frozenset[str] = frozenset()      # verity_vllm/pipeline/cli.py, verity_vllm/engine/env.py
+ENV_OWNERS: frozenset[str] = frozenset({"verity_vllm/pipeline/cli.py"})
 ENV_NAMES = frozenset({"os.environ", "os.environb", "os.getenv", "os.putenv", "os.unsetenv", "os.getenvb"})
 CWD_CALLS = frozenset({"os.getcwd", "os.getcwdb", "pathlib.Path.cwd", "Path.cwd"})
 MACHINE_PATH = re.compile(r"^(/workspace|/root|/home|/Users|/tmp|/mnt|/opt|/usr/local|/data|/scratch|/dev/shm)(/|$)")
@@ -97,7 +97,8 @@ def file_violations(src: str, rel: str) -> list[R.Violation]:
             origin = aliases.resolve(node.func) or R.dotted(node.func)
             if origin in CWD_CALLS:
                 emit("cwd", node, symbol, origin)
-        if isinstance(node, ast.Constant) and isinstance(node.value, str) and id(node) not in docs:
+        if isinstance(node, ast.Constant) and isinstance(node.value, str) and id(node) not in docs \
+                and rel not in ENV_OWNERS:
             m = MACHINE_PATH.match(node.value)
             if m:
                 emit("machine-path", node, symbol, m.group(1))

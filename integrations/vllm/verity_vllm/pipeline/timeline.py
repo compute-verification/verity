@@ -10,8 +10,8 @@ One append-only JSONL file per row attempt (`<row>/timeline.jsonl`, path in `VER
 Fields every runner log must carry (BRIEF §10): hot/cold process (`hot`), engine reused or restarted (`engine_reused`) + reason
 (`restart_reason`), compile/warmup time (`prep.*` stages), workload/Commit time (`work.*`), offline validation time (`validate.*`).
 
-    python -m verity_vllm.pipeline.timeline report <timeline.jsonl> [--json out.json] [--md out.md]
-    python -m verity_vllm.pipeline.timeline mark <timeline.jsonl> <proc> <stage> <start|end|mark> [k=v ...]
+    verity-vllm timeline report <timeline.jsonl> [--json out.json] [--md out.md]
+    verity-vllm timeline mark <timeline.jsonl> <proc> <stage> <start|end|mark> [k=v ...]
 
 `report` folds the events into the BRIEF §5 table (process/model startup · preparation · workload · validation · closure) from the
 stage-name prefixes below, counts engine starts vs reuses and lists the restart reasons.  Overlapping spans are NOT summed into
@@ -26,8 +26,11 @@ import re
 import sys
 import time
 from contextlib import contextmanager
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterator
+
+from verity_vllm.config import option
 
 SCHEMA = "verity-sweep/timeline/v1"
 
@@ -353,20 +356,46 @@ def _kv(items: list[str]) -> dict[str, Any]:
     return out
 
 
-def main(argv: list[str] | None = None) -> int:
-    import argparse
+@dataclass(frozen=True, kw_only=True)
+class MarkOptions:
+    "append one event (bash callers)"
 
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    sub = ap.add_subparsers(dest="cmd", required=True)
-    m = sub.add_parser("mark", help="append one event (bash callers)")
-    m.add_argument("path"); m.add_argument("proc"); m.add_argument("stage"); m.add_argument("ev", choices=["start", "end", "mark"])
-    m.add_argument("kv", nargs="*", help="k=v fields (JSON values when parseable)")
-    r = sub.add_parser("report", help="fold a timeline into the BRIEF §5 table")
-    r.add_argument("path"); r.add_argument("--json", default=None); r.add_argument("--md", default=None); r.add_argument("--title", default="")
-    r.add_argument("--all", action="store_true", help="fold every attempt in the (append-only) file together; default: the last row attempt")
-    c = sub.add_parser("collect", help="one table over a sweep dir's rows (timelines where present, log-derived envelopes otherwise)")
-    c.add_argument("dirs", nargs="+"); c.add_argument("--json", default=None); c.add_argument("--md", default=None); c.add_argument("--title", default="")
-    a = ap.parse_args(argv)
+    path: str = option("path")
+    proc: str = option("proc")
+    stage: str = option("stage")
+    ev: str = option("ev", choices=["start", "end", "mark"])
+    kv: list[str] = option("kv", default=[], nargs="*", help="k=v fields (JSON values when parseable)")
+    cmd: str = field(default="mark", init=False)
+
+
+@dataclass(frozen=True, kw_only=True)
+class ReportOptions:
+    "fold a timeline into the BRIEF §5 table"
+
+    path: str = option("path")
+    json: str | None = option("--json", default=None)
+    md: str | None = option("--md", default=None)
+    title: str = option("--title", default="")
+    all: bool = option("--all", default=False, action="store_true",
+                       help="fold every attempt in the (append-only) file together; default: the last row attempt")
+    cmd: str = field(default="report", init=False)
+
+
+@dataclass(frozen=True, kw_only=True)
+class CollectOptions:
+    "one table over a sweep dir's rows (timelines where present, log-derived envelopes otherwise)"
+
+    dirs: list[str] = option("dirs", nargs="+")
+    json: str | None = option("--json", default=None)
+    md: str | None = option("--md", default=None)
+    title: str = option("--title", default="")
+    cmd: str = field(default="collect", init=False)
+
+
+COMMANDS = {"mark": MarkOptions, "report": ReportOptions, "collect": CollectOptions}
+
+
+def main(a: MarkOptions | ReportOptions | CollectOptions) -> int:
     if a.cmd == "mark":
         Timeline(a.path, proc=a.proc).event(a.stage, a.ev, **_kv(a.kv))
         return 0
@@ -387,7 +416,3 @@ def main(argv: list[str] | None = None) -> int:
         Path(a.md).write_text(md)
     sys.stdout.write(md)
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

@@ -3,7 +3,7 @@
 Two halves, one CLI:
 
   GPU pod (torch, vLLM):
-    python -m verity_vllm.properties.census --workload workloads/workload_32x16_1req.json --out DIR
+    verity-vllm census --workload workloads/workload_32x16_1req.json --out DIR
         Builds the engine exactly like `bench/m1_capture.py` (κ, `vllm_adapter.build_engine`), runs the uninstrumented
         throwaway warm-up (Triton JIT / cuBLAS / allocator / CUPTI), then runs the workload request with **no observer, no
         Triton hook, no module hooks**: every `engine.step()` is wrapped in its own `torch.profiler.profile(activities=
@@ -14,7 +14,7 @@ Two halves, one CLI:
         Steps that launch no device kernel (the engine's trailing bookkeeping step) are listed but not numbered.
 
   laptop (torch-free):
-    python -m verity_vllm.properties.census --reconcile DIR/census.json --log data/logs/m1.jsonl.gz \
+    verity-vllm census --reconcile DIR/census.json --log data/logs/m1.jsonl.gz \
         [--profile vllm_d9105ea80_sm89_eager] [--report out/capture/reports/census_m1]
         Resolves the M1 log with `bench/resolve_log.resolve_log` and, per step, collects the kernel names every resolution
         part declares (`Compute.kernels` / `Transparent.kernels` over `resolver.parts_of`) plus the profile's
@@ -34,17 +34,19 @@ profile's allowlist are short tokens; `KERNEL_MATCH` is the explicit bridge.
 
 from __future__ import annotations
 
-import argparse
 import gzip
 import hashlib
 import json
 import os
 import re
-import sys
 import time
 from collections import Counter, OrderedDict
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from verity_vllm.config import UsageError, option
+from verity_vllm.properties.record import seal
 
 # ---------------------------------------------------------------------------------------------------------
 # declared name -> regexes over the demangled kernel name (torch-free)
@@ -443,7 +445,7 @@ def reconcile(census: dict, log_path: str, profile_name: str, proposed_allowlist
         "proposed_allowlist": sorted(proposed_allowlist),
     }
     rep["residue_zero"] = rep["totals"]["residue_kernels"] == 0 and rep["steps_aligned"] and all("error" not in s for s in steps_out)
-    return rep
+    return seal(rep, rep["residue_zero"])
 
 
 def reconciliation_markdown(rep: dict) -> str:
@@ -535,24 +537,28 @@ def reconciliation_markdown(rep: dict) -> str:
 # ---------------------------------------------------------------------------------------------------------
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--workload", default=None, help="GPU half: run the profiled bare workload")
-    ap.add_argument("--out", default=None, help="GPU half: output directory (census.json, traces/)")
-    ap.add_argument("--checkpoints", default="manifests/checkpoints.json")
-    ap.add_argument("--max-tokens", type=int, default=None)
-    ap.add_argument("--no-warmup", action="store_true")
-    ap.add_argument("--max-num-seqs", type=int, default=8)
-    ap.add_argument("--case", default=None, help="checkpoint role (B0 / B1); default: the workload file's, else B0")
-    ap.add_argument("--no-traces", action="store_true", help="GPU half: do not keep the per-step Chrome traces")
-    ap.add_argument("--engine-arg", action="append", default=[], help="GPU half: LLM(**kw) override key=value (JSON value), repeatable")
-    ap.add_argument("--reconcile", default=None, help="laptop half: path to census.json")
-    ap.add_argument("--log", default="data/logs/m1.jsonl.gz")
-    ap.add_argument("--profile", default="vllm_d9105ea80_sm89_eager")
-    ap.add_argument("--report", default="out/capture/reports/census_m1", help="laptop half: report base path (.json/.md)")
-    ap.add_argument("--propose-allowlist", default="", help="laptop half: comma list of declared names to treat as allowlisted (what-if)")
-    args = ap.parse_args(argv)
+@dataclass(frozen=True, kw_only=True)
+class Options:
+    workload: str | None = option("--workload", default=None, help="GPU half: run the profiled bare workload")
+    out: str | None = option("--out", default=None, help="GPU half: output directory (census.json, traces/)")
+    checkpoints: str = option("--checkpoints", default="manifests/checkpoints.json")
+    max_tokens: int | None = option("--max-tokens", type=int, default=None)
+    no_warmup: bool = option("--no-warmup", default=False, action="store_true")
+    max_num_seqs: int = option("--max-num-seqs", type=int, default=8)
+    case: str | None = option("--case", default=None, help="checkpoint role (B0 / B1); default: the workload file's, else B0")
+    no_traces: bool = option("--no-traces", default=False, action="store_true",
+                             help="GPU half: do not keep the per-step Chrome traces")
+    engine_arg: list[str] = option("--engine-arg", action="append", default=[],
+                                   help="GPU half: LLM(**kw) override key=value (JSON value), repeatable")
+    reconcile: str | None = option("--reconcile", default=None, help="laptop half: path to census.json")
+    log: str = option("--log", default="data/logs/m1.jsonl.gz")
+    profile: str = option("--profile", default="vllm_d9105ea80_sm89_eager")
+    report: str = option("--report", default="out/capture/reports/census_m1", help="laptop half: report base path (.json/.md)")
+    propose_allowlist: str = option("--propose-allowlist", default="",
+                                    help="laptop half: comma list of declared names to treat as allowlisted (what-if)")
 
+
+def main(args: Options) -> int:
     if args.reconcile:
         census = json.loads(Path(args.reconcile).read_text())
         rep = reconcile(census, args.log, args.profile, tuple(x for x in args.propose_allowlist.split(",") if x))
@@ -571,7 +577,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"wrote {base}.json and {base}.md")
         return 0 if rep["residue_zero"] else 1
     if not args.workload or not args.out:
-        ap.error("either --reconcile CENSUS.json or --workload W --out DIR")
+        raise UsageError("either --reconcile CENSUS.json or --workload W --out DIR")
     run_census(args.workload, args.out, args.checkpoints, max_tokens=args.max_tokens, warmup=not args.no_warmup,
                max_num_seqs=args.max_num_seqs, keep_traces=not args.no_traces, case=args.case, engine_args=_engine_args(args.engine_arg))
     return 0
@@ -580,7 +586,3 @@ def main(argv: list[str] | None = None) -> int:
 def _engine_args(items: list[str]) -> dict:
     from verity_vllm.engine import vllm_adapter as va  # torch import only on the GPU half
     return va.parse_engine_args(items)
-
-
-if __name__ == "__main__":
-    sys.exit(main())

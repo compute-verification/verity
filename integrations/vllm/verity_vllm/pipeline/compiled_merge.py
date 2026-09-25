@@ -7,11 +7,13 @@ CUDAGraphMode, capture sizes, enforce_eager) or when the generated tokens differ
 a compiled treatment (and vice versa)."""
 from __future__ import annotations
 
-import argparse
 import json
 import statistics
 import sys
+from dataclasses import dataclass
 from pathlib import Path
+
+from verity_vllm.config import option
 
 
 def _rows(p: Path) -> list[dict]:
@@ -38,14 +40,19 @@ COMPILE_KEYS = ("compilation_mode", "cudagraph_mode", "cudagraph_capture_sizes",
                 "inductor_compile_config")
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--control", action="append", required=True, help="control-process output dir (repeatable: one per round, in run order)")
-    ap.add_argument("--treatment", action="append", required=True, help="treatment-process output dir (repeatable)")
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--manifest-control", default=None, help="P_compiled manifest built from the CONTROL process's Inductor output code (taps=kernels)")
-    ap.add_argument("--manifest-treatment", default=None, help="the same derivation from the TREATMENT process's output code (must agree on program_digest)")
-    a = ap.parse_args()
+@dataclass(frozen=True, kw_only=True)
+class Options:
+    control: list[str] = option("--control", action="append",
+                                help="control-process output dir (repeatable: one per round, in run order)")
+    treatment: list[str] = option("--treatment", action="append", help="treatment-process output dir (repeatable)")
+    out: str = option("--out")
+    manifest_control: str | None = option("--manifest-control", default=None,
+                                          help="P_compiled manifest built from the CONTROL process's Inductor output code (taps=kernels)")
+    manifest_treatment: str | None = option("--manifest-treatment", default=None,
+                                            help="the same derivation from the TREATMENT process's output code (must agree on program_digest)")
+
+
+def main(a: Options) -> None:
     Cs, Ts, out = [Path(x) for x in a.control], [Path(x) for x in a.treatment], Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     ctl = [r for C in Cs for r in _rows(C)]
@@ -442,7 +449,3 @@ def main() -> None:
     (out / "verdict.json").write_text(json.dumps(verdict, indent=1, default=str) + "\n")
     print(summary["table_md"])
     sys.exit(0 if commit_pass else 3)
-
-
-if __name__ == "__main__":
-    main()
