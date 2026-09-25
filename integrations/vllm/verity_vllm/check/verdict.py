@@ -10,7 +10,7 @@ names being the field names they grew under -- `weights_pin`, `linkage`, `covera
 `pass` degenerated to `rc == 0 and tokens_equal` once `openings` / `coverage` stopped being carried on runs.jsonl (F-r19-int-21).  The
 verdict of record was `commit/verdict.json` + `commit/sampled_replay_p*.json`, read together by whoever knew to.
 
-WHAT.  A `Verdict` = the seven named checks (groups) and the R*/X* rules under them, each a `CheckVerdict`:
+WHAT.  A `Verdict` = the seven named checks (groups) and the R*/X* rules under them, each a `CheckResult`:
 
     name        `<group>` for the group, `<group>/<rule>` for a rule                    (human names: see GROUPS)
     claim       one sentence: what PASS establishes
@@ -50,12 +50,12 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Mapping
 
+from verity.verification.codes import VerificationCode as VC
+
 from verity_vllm.check import commit_verdict as CV
+from verity_vllm.check.result import FAIL, INSUFFICIENT, NOT_RUN, OUTCOMES, PASS, CheckResult, code_of, worst
 
 SCHEMA = "vllm-verdict/v1"
-PASS, FAIL, INSUFFICIENT, NOT_RUN = "PASS", "FAIL", "INSUFFICIENT_EVIDENCE", "NOT_RUN"
-OUTCOMES = (PASS, FAIL, INSUFFICIENT, NOT_RUN)
-_SEVERITY = {FAIL: 3, INSUFFICIENT: 2, PASS: 1, NOT_RUN: 0}
 
 #: the seven named checks (groups), their claims, and the v1 names they were read under
 GROUPS: dict[str, dict[str, Any]] = {
@@ -164,41 +164,37 @@ MEASUREMENT_FIELDS = frozenset({
 })
 
 
+#: what a FAIL of each rule finds against its claim; a group's code is its first failing rule's
+REJECT: dict[str, VC] = {name: code for code, names in (
+    (VC.PUBLIC_IO_MISMATCH, ("runtime_match/tokens_equal", "boundary_linkage/ordered_linkage")),
+    (VC.INVALID_VALUE, ("runtime_match/fa2_zero_rows",)),
+    (VC.INVALID_COMMITMENT, ("runtime_match/collector_errors", "runtime_match/bounded_staging", "program_source_identity/binding_context")),
+    (VC.INVALID_OPENING, ("runtime_match/openings", "runtime_match/openings_after_release", "runtime_match/openings_population")),
+    (VC.CHECK_MISMATCH, ("runtime_match/oracle_compare",)),
+    (VC.INVALID_COMPILED_RESULT, ("runtime_match/compiled_check",)),
+    (VC.RELATION_REJECTED, ("local_replay/sampled_replay",)),
+    (VC.CHALLENGE_MISMATCH, ("local_replay/seed_of_record",)),
+    (VC.COVERAGE_MISMATCH, ("runtime_match/reference_integrity", "local_replay/population_gaps", "local_replay/population_scope", "local_replay/attribution",
+                            "execution_extent/rows_past_the_stop", "required_value_coverage/identity_coverage", "required_value_coverage/manifest_coverage",
+                            "required_value_coverage/required_classes")),
+    (VC.EXPECTATION_MISMATCH, ("checkpoint_binding/weights_of_record", "execution_extent/executed_prefix_of_record", "execution_extent/match_account_link",
+                               "required_value_coverage/manifest_of_record_verified", "program_source_identity/identity_layout")),
+) for name in names}
+
+
+def reject_of(d: Mapping[str, Any]) -> VC | None:
+    """The code a FAIL of the check document `d` stands for: its rule's, or on a group its first failing rule's."""
+    name = str(d.get("name"))
+    if "/" not in name:
+        name = next((r for r, o in _d(_d(d.get("scope")).get("rules")).items() if o == FAIL), name)
+    return REJECT.get(name)
+
+
 # ---------------------------------------------------------------------------------------------------------------------- the records
 
 @dataclass
-class CheckVerdict:
-    name: str
-    claim: str
-    inputs: dict[str, Any] = field(default_factory=dict)
-    scope: dict[str, Any] = field(default_factory=dict)
-    outcome: str = NOT_RUN
-    differences: list[dict[str, Any]] = field(default_factory=list)
-    compat: list[str] = field(default_factory=list)
-    group: str | None = None
-    rule: str | None = None
-    notes: list[str] = field(default_factory=list)
-    reason: str | None = None
-
-    def __post_init__(self) -> None:
-        if self.outcome not in OUTCOMES:
-            raise ValueError(f"{self.name}: outcome {self.outcome!r} not in {OUTCOMES}")
-        if self.group is None:
-            self.group = self.name.split("/", 1)[0]
-        if self.group not in GROUPS:
-            raise ValueError(f"{self.name}: group {self.group!r} not one of {tuple(GROUPS)}")
-
-    def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
-
-    @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "CheckVerdict":
-        return cls(**{k: d.get(k) for k in cls.__dataclass_fields__ if k in d})  # type: ignore[arg-type]
-
-
-@dataclass
 class Verdict:
-    checks: list[CheckVerdict]
+    checks: list[CheckResult]
     outcome: str
     program_digest: str | None = None
     manifest_digest: str | None = None
@@ -218,8 +214,11 @@ class Verdict:
     def __post_init__(self) -> None:
         if self.outcome not in OUTCOMES:
             raise ValueError(f"verdict outcome {self.outcome!r} not in {OUTCOMES}")
+        for c in self.checks:
+            if c.group not in GROUPS:
+                raise ValueError(f"{c.name}: group {c.group!r} not one of {tuple(GROUPS)}")
 
-    def check(self, name: str) -> CheckVerdict | None:
+    def check(self, name: str) -> CheckResult | None:
         return next((c for c in self.checks if c.name == name), None)
 
     def groups(self) -> dict[str, str]:
@@ -235,7 +234,7 @@ class Verdict:
         if d.get("schema") not in (None, SCHEMA):
             raise ValueError(f"not a {SCHEMA} document: schema {d.get('schema')!r}")
         kw = {k: d.get(k) for k in cls.__dataclass_fields__ if k in d and k != "checks"}
-        return cls(checks=[CheckVerdict.from_dict(c) for c in d.get("checks") or []], **kw)  # type: ignore[arg-type]
+        return cls(checks=[CheckResult.from_dict(c, reject_of(c)) for c in d.get("checks") or []], **kw)  # type: ignore[arg-type]
 
     def dumps(self) -> str:
         return json.dumps(self.to_dict(), indent=1, sort_keys=False, default=str) + "\n"
@@ -249,13 +248,6 @@ class Verdict:
     def load(cls, path: str | os.PathLike) -> "Verdict":
         with open(path) as f:
             return cls.from_dict(json.load(f))
-
-
-def worst(outcomes: list[str]) -> str:
-    """FAIL > INSUFFICIENT_EVIDENCE > PASS > NOT_RUN; an empty list is NOT_RUN."""
-    if not outcomes:
-        return NOT_RUN
-    return max(outcomes, key=lambda o: _SEVERITY[o])
 
 
 # ---------------------------------------------------------------------------------------------------------------------- helpers
@@ -337,13 +329,14 @@ def _leak(table: str, why: str) -> str:
 # Every function mirrors ONE predicate of commit_verdict.commit_verdict (cited by its line's comment tag); none adds a condition.  `ctx`
 # carries the record-level facts a rule needs beyond the run's commit block (program / manifest digests, file digests, manifest_verify).
 
-def _mk(name: str, rule: str, claim: str, compat: list[str], commit: dict, ctx: dict, **kw: Any) -> CheckVerdict:
+def _mk(name: str, rule: str, claim: str, compat: list[str], commit: dict, ctx: dict, **kw: Any) -> CheckResult:
     inputs = dict(_base_inputs(commit, ctx))
     inputs.update(kw.pop("inputs", {}) or {})
-    return CheckVerdict(name=name, claim=claim, inputs=inputs, compat=compat, rule=rule, **kw)
+    code = code_of(kw.pop("outcome", NOT_RUN), REJECT[name])
+    return CheckResult(name=name, code=code, claim=claim, inputs=inputs, compat=compat, rule=rule, **kw)
 
 
-def rule_tokens_equal(commit: dict, tokens_equal: Any, ctx: dict) -> CheckVerdict:
+def rule_tokens_equal(commit: dict, tokens_equal: Any, ctx: dict) -> CheckResult:
     """v1: `if tokens_equal is not True: FAIL 'control vs instrumented tokens differ'`."""
     if tokens_equal is True:
         out, diffs, reason = PASS, [], None
@@ -356,7 +349,7 @@ def rule_tokens_equal(commit: dict, tokens_equal: Any, ctx: dict) -> CheckVerdic
                scope={"tokens_equal": tokens_equal})
 
 
-def rule_reference_integrity(commit: dict, ctx: dict) -> CheckVerdict:
+def rule_reference_integrity(commit: dict, ctx: dict) -> CheckResult:
     """v1: counters missing -> FAIL; expected <= 0 -> FAIL; expected != committed -> FAIL."""
     ex = _d(commit.get("extra"))
     n_exp, n_com = ex.get("expected_tensors"), ex.get("committed_tensors")
@@ -376,7 +369,7 @@ def rule_reference_integrity(commit: dict, ctx: dict) -> CheckVerdict:
                scope={"attempted": n_exp, "committed": n_com})
 
 
-def rule_fa2_zero_rows(commit: dict, ctx: dict) -> CheckVerdict:
+def rule_fa2_zero_rows(commit: dict, ctx: dict) -> CheckResult:
     z = commit.get("fa2_zero_rows")
     if z is None:
         out, diffs, reason = NOT_RUN, [], None
@@ -388,7 +381,7 @@ def rule_fa2_zero_rows(commit: dict, ctx: dict) -> CheckVerdict:
                ["fa2_zero_rows"], commit, ctx, outcome=out, differences=diffs, reason=reason, scope={"rows_checked": z is not None})
 
 
-def rule_collector_errors(commit: dict, ctx: dict) -> CheckVerdict:
+def rule_collector_errors(commit: dict, ctx: dict) -> CheckResult:
     ex = _d(commit.get("extra"))
     errs_n = ex.get("errors_n")
     if errs_n is None:
@@ -404,7 +397,7 @@ def rule_collector_errors(commit: dict, ctx: dict) -> CheckVerdict:
                ["extra.errors_n", "extra.errors"], commit, ctx, outcome=out, differences=diffs, reason=reason, scope={"errors_n": _int(errs_n)})
 
 
-def rule_bounded_staging(commit: dict, ctx: dict) -> CheckVerdict:
+def rule_bounded_staging(commit: dict, ctx: dict) -> CheckResult:
     bs = _d(commit.get("extra")).get("bounded_staging")
     if not isinstance(bs, dict):
         return _mk("runtime_match/bounded_staging", "R17 fp8 bounded staging", "A bounded-staging record run carries no learned-only step and was not finalized in learn-only mode.",
@@ -422,7 +415,7 @@ def rule_bounded_staging(commit: dict, ctx: dict) -> CheckVerdict:
                ["extra.bounded_staging"], commit, ctx, outcome=PASS, scope={k: bs.get(k) for k in ("learn_only", "learned_only_steps", "mode") if k in bs})
 
 
-def rule_openings(commit: dict, ctx: dict, min_openings: int) -> CheckVerdict:
+def rule_openings(commit: dict, ctx: dict, min_openings: int) -> CheckResult:
     """v1: skipped and no after-release record -> FAIL; not skipped: n < min -> FAIL, verified != n -> FAIL; skipped (host share): verified != n -> FAIL."""
     ops = _d(commit.get("openings"))
     oar = commit.get("openings_after_release")
@@ -450,7 +443,7 @@ def rule_openings(commit: dict, ctx: dict, min_openings: int) -> CheckVerdict:
     return _mk("runtime_match/openings", "C3 openings", claim, compat, commit, ctx, outcome=PASS, scope=scope)
 
 
-def rule_openings_after_release(commit: dict, ctx: dict, min_openings: int) -> CheckVerdict:
+def rule_openings_after_release(commit: dict, ctx: dict, min_openings: int) -> CheckResult:
     """v1's `if oar is not None:` block + the `elif deferred picks and no record` FAIL."""
     ops = _d(commit.get("openings"))
     oar = commit.get("openings_after_release")
@@ -472,7 +465,7 @@ def rule_openings_after_release(commit: dict, ctx: dict, min_openings: int) -> C
     scope = {"sample_size": n_a, "verified": ok_a, "source": oar.get("source"), "replay_root_equal": oar.get("replay_root_equal"),
              "retained_device_after": oar.get("retained_device_after"), "deferred_received_n": oar.get("deferred_received_n"), "forced_n": oar.get("forced_n")}
 
-    def fail(diff: dict, reason: str) -> CheckVerdict:
+    def fail(diff: dict, reason: str) -> CheckResult:
         return _mk(name, rule, claim, compat, commit, ctx, outcome=FAIL, differences=[diff], reason=reason, scope=scope)
 
     if n_a < min_openings:
@@ -511,7 +504,7 @@ def rule_openings_after_release(commit: dict, ctx: dict, min_openings: int) -> C
     return _mk(name, rule, claim, compat, commit, ctx, outcome=PASS, scope=scope)
 
 
-def rule_oracle_compare(commit: dict, ctx: dict) -> CheckVerdict:
+def rule_oracle_compare(commit: dict, ctx: dict) -> CheckResult:
     """v1: value_correspondence.result False -> FAIL (the failing component's own cause); oracle_compare.result False -> FAIL."""
     vc = commit.get("value_correspondence")
     oc = commit.get("oracle_compare") if isinstance(commit.get("oracle_compare"), dict) else None
@@ -553,7 +546,7 @@ def rule_oracle_compare(commit: dict, ctx: dict) -> CheckVerdict:
     return _mk(name, rule, claim, compat, commit, ctx, outcome=PASS, scope=scope, notes=notes)
 
 
-def rule_compiled_check(commit: dict, ctx: dict) -> CheckVerdict:
+def rule_compiled_check(commit: dict, ctx: dict) -> CheckResult:
     """commit_delta's two post-verdict compiled conditions (R15 compiled S3): kernel replay exact; ring refused nothing."""
     vc = _d(commit.get("value_correspondence"))
     ckc = vc.get("compiled_check")
@@ -574,7 +567,7 @@ def rule_compiled_check(commit: dict, ctx: dict) -> CheckVerdict:
     return _mk(name, rule, claim, compat, commit, ctx, outcome=PASS, scope={**{k: ckc.get(k) for k in ("launches_exact", "launches_checked") if isinstance(ckc, dict)}, **cs})
 
 
-def rule_binding_context(commit: dict, ctx: dict) -> CheckVerdict:
+def rule_binding_context(commit: dict, ctx: dict) -> CheckResult:
     """binding_check (1): the map was built (no error) and its context (roots, layout) is the run's."""
     bnd = commit.get("binding")
     claim = "The binding map was built for this run: its Program digest, layout and roots are the run's own (BIND-01 (1))."
@@ -595,7 +588,7 @@ def rule_binding_context(commit: dict, ctx: dict) -> CheckVerdict:
     return _mk(name, rule, claim, compat, commit, ctx, outcome=PASS, scope=scope, inputs=inputs)
 
 
-def rule_identity_coverage(commit: dict, ctx: dict) -> CheckVerdict:
+def rule_identity_coverage(commit: dict, ctx: dict) -> CheckResult:
     """binding_check (2): identity coverage of the expected population (error -> MAN-02 refusal; missing; ambiguous)."""
     bnd = commit.get("binding")
     claim = "Every identity of the required-value population has exactly one committed binding (a duplicate never covers a missing one; BIND-01 (2) / MAN-02)."
@@ -635,7 +628,7 @@ def rule_identity_coverage(commit: dict, ctx: dict) -> CheckVerdict:
     return _mk(name, rule, claim, compat, commit, ctx, outcome=PASS, scope=scope, notes=notes)
 
 
-def rule_openings_population(commit: dict, ctx: dict, min_openings: int) -> CheckVerdict:
+def rule_openings_population(commit: dict, ctx: dict, min_openings: int) -> CheckResult:
     """binding_check (3): openings drawn from the EXPECTED population all had a binding and all verified."""
     bnd = commit.get("binding")
     claim = "Every opening drawn from the required-value population had a binding and verified (BIND-01 (3); retain=none: the deferred share opens by replay)."
@@ -669,7 +662,7 @@ def rule_openings_population(commit: dict, ctx: dict, min_openings: int) -> Chec
     return _mk(name, rule, claim, compat, commit, ctx, outcome=PASS, scope=scope)
 
 
-def rule_manifest_coverage(commit: dict, ctx: dict) -> CheckVerdict:
+def rule_manifest_coverage(commit: dict, ctx: dict) -> CheckResult:
     """v1: `cov = ex.coverage or commit.coverage; if cov is not None and not cov.ok: FAIL` (R14 MAN-01)."""
     ex = _d(commit.get("extra"))
     cov = ex.get("coverage") or commit.get("coverage")
@@ -702,7 +695,7 @@ def rule_manifest_coverage(commit: dict, ctx: dict) -> CheckVerdict:
     return _mk(name, rule, claim, compat, commit, ctx, outcome=PASS, scope=scope, inputs=inputs, notes=notes)
 
 
-def rule_identity_layout(commit: dict, ctx: dict) -> CheckVerdict:
+def rule_identity_layout(commit: dict, ctx: dict) -> CheckResult:
     """v1: `idc = ex.identity_check; if idc is not None and not idc.ok: FAIL` (X-03 on identities, R13).  The rule body is native_host's
     (`NativeHostCommitter.identity_check`, owned by lane/vllm-x03); this only names its findings."""
     idc = _d(commit.get("extra")).get("identity_check")
@@ -736,7 +729,7 @@ def rule_identity_layout(commit: dict, ctx: dict) -> CheckVerdict:
     return _mk(name, rule, claim, compat, commit, ctx, outcome=PASS, scope=scope, notes=notes)
 
 
-def rule_required_classes(commit: dict, ctx: dict, declaration: dict | None, required_classes: Any) -> CheckVerdict:
+def rule_required_classes(commit: dict, ctx: dict, declaration: dict | None, required_classes: Any) -> CheckResult:
     """v1: `if declaration is not None or required_classes is not None: required_classes_check(declaration, required or DEFAULT)` (REL-02 / R-14)."""
     claim = "Every required value class is declared by the committer and every declared leaf-binding class bound > 0 tensors (REL-02: an omitted producer cannot pass)."
     compat = ["required_classes", "required_classes_source", "classes", "declaration_*.json"]
@@ -760,7 +753,7 @@ def rule_required_classes(commit: dict, ctx: dict, declaration: dict | None, req
     return _mk(name, rule, claim, compat, commit, ctx, outcome=PASS, scope=scope, inputs=inputs, notes=notes)
 
 
-def rule_manifest_verified(commit: dict, ctx: dict) -> CheckVerdict:
+def rule_manifest_verified(commit: dict, ctx: dict) -> CheckResult:
     """row_pod.sh EXEC-05 / MAN-05: `required_manifest verify` rebuilt the manifest from this attempt's Program x workload == the one used."""
     mv = ctx.get("manifest_verify")
     claim = "The required-value manifest the Commit used is byte-identical (rows digest) to the one rebuilt from this attempt's Program x workload (EXEC-05 / MAN-05)."
@@ -805,7 +798,7 @@ def _replay_inputs(sr: dict | None, ctx: dict) -> dict[str, Any]:
     return {k: v for k, v in out.items() if v is not None}
 
 
-def c2_rules(commit: dict, ctx: dict) -> list[CheckVerdict]:
+def c2_rules(commit: dict, ctx: dict) -> list[CheckResult]:
     """The C2-of-record block of commit_verdict (DECISIONS-2 §4; lines `sr = commit.get("sampled_replay")` .. `_scope`), evaluated rule by rule with
     the SAME nesting (a branch v1 never took is not taken here), emitting: local_replay/sampled_replay, /seed_of_record, /population_gaps,
     /population_scope, /attribution; boundary_linkage/ordered_linkage; checkpoint_binding/weights_of_record."""
@@ -834,7 +827,7 @@ def c2_rules(commit: dict, ctx: dict) -> list[CheckVerdict]:
     C_WP = ("checkpoint_binding/weights_of_record", "MAN-09 / rev-cb M-0610",
             "Every served parameter the Program names equals by digest the checkpoint-composed tensor of record; every shard is pinned by its manifest sha256.",
             ["weights_pin.result", "weights_pin.why", "weights_pin.compared", "weights_pin.mismatched", "weights_pin.missing", "weights_pin.shards"])
-    out: dict[str, CheckVerdict] = {}
+    out: dict[str, CheckResult] = {}
     sr_scope, sr_inputs = _replay_scope(sr), _replay_inputs(sr, ctx)
     sr_notes = [_leak("sampled_replay.EVALUATORS / NOT_YET", "which families the replay can evaluate is a table by family name (the stated applicability domain)")]
     rc = ctx.get("replay_cache")
@@ -966,7 +959,7 @@ def c2_rules(commit: dict, ctx: dict) -> list[CheckVerdict]:
     return [out[n] for n in order]
 
 
-def execution_extent_rules(commit: dict, ctx: dict) -> list[CheckVerdict]:
+def execution_extent_rules(commit: dict, ctx: dict) -> list[CheckResult]:
     """The executed prefix of record + its Match-account link + rows past the stop, read from binding.coverage (executed_prefix.py's outputs).
     v1 gated these THROUGH the coverage / replay results (a faulted class fails the replay's population scope by name); here each is its own
     check, and a MISSING ACCOUNT LEG (F-r19-int-19: tokens.json / global_match.json not beside the Commit) is INSUFFICIENT_EVIDENCE, not FAIL."""
@@ -1046,7 +1039,7 @@ def execution_extent_rules(commit: dict, ctx: dict) -> list[CheckVerdict]:
 
 
 def run_checks(commit: dict, tokens_equal: Any, *, min_openings: int = 64, declaration: dict | None = None, required_classes: Any = None,
-               ctx: dict | None = None) -> list[CheckVerdict]:
+               ctx: dict | None = None) -> list[CheckResult]:
     """Every rule of `commit_verdict.commit_verdict` (+ commit_delta's compiled conditions, row_pod's manifest verify) for ONE instrumented run,
     each with its own outcome.  `ctx`: record-level facts (program_digest, manifest_digest, required_classes_source, manifest_verify, file_digests,
     replay_cache)."""
@@ -1061,17 +1054,17 @@ def run_checks(commit: dict, tokens_equal: Any, *, min_openings: int = 64, decla
     return checks
 
 
-def run_outcome(checks: list[CheckVerdict]) -> str:
+def run_outcome(checks: list[CheckResult]) -> str:
     """The outcome of one run's rule set (= v1's commit_pass when no rule is FAIL / INSUFFICIENT_EVIDENCE)."""
     return worst([c.outcome for c in checks if c.outcome != NOT_RUN]) if any(c.outcome != NOT_RUN for c in checks) else NOT_RUN
 
 
 # ---------------------------------------------------------------------------------------------------------------------- aggregation
 
-def aggregate_runs(per_run: list[tuple[int | None, list[CheckVerdict]]]) -> list[CheckVerdict]:
+def aggregate_runs(per_run: list[tuple[int | None, list[CheckResult]]]) -> list[CheckResult]:
     """Rule-level checks across the instrumented runs: the worst outcome; scope from the first run + `runs`; differences tagged by `pair`
     from the worst runs; inputs = the first run's (+ every distinct run root)."""
-    by_name: dict[str, list[tuple[int | None, CheckVerdict]]] = {}
+    by_name: dict[str, list[tuple[int | None, CheckResult]]] = {}
     for pair, checks in per_run:
         for c in checks:
             by_name.setdefault(c.name, []).append((pair, c))
@@ -1098,13 +1091,13 @@ def aggregate_runs(per_run: list[tuple[int | None, list[CheckVerdict]]]) -> list
         scope["runs"] = [p for p, _ in items]
         scope["outcome_by_run"] = {str(p): c.outcome for p, c in items}
         reason = next((c.reason for _, c in worst_items if c.reason), None)
-        out.append(CheckVerdict(name=name, claim=first.claim, inputs=inputs, scope=scope, outcome=o, differences=diffs, compat=list(first.compat),
-                                group=first.group, rule=first.rule, notes=notes, reason=reason))
+        out.append(CheckResult(name=name, code=worst_items[0][1].code, claim=first.claim, inputs=inputs, scope=scope, differences=diffs,
+                               compat=list(first.compat), group=first.group, rule=first.rule, notes=notes, reason=reason))
     return out
 
 
-def group_checks(rules: list[CheckVerdict]) -> list[CheckVerdict]:
-    """One CheckVerdict per group, aggregating its rules (the worst outcome; NOT_RUN only when every rule is NOT_RUN)."""
+def group_checks(rules: list[CheckResult]) -> list[CheckResult]:
+    """One CheckResult per group, aggregating its rules (the worst outcome; NOT_RUN only when every rule is NOT_RUN)."""
     out = []
     for g, spec in GROUPS.items():
         mine = [r for r in rules if r.group == g]
@@ -1123,8 +1116,9 @@ def group_checks(rules: list[CheckVerdict]) -> list[CheckVerdict]:
         notes = [n for r in mine for n in r.notes if n.startswith("structural_leak")]
         notes = list(dict.fromkeys(notes))
         reasons = [r.reason for r in mine if r.outcome == o and r.reason and o in (FAIL, INSUFFICIENT)]
-        out.append(CheckVerdict(name=g, claim=spec["claim"], inputs=inputs, scope={"rules": {r.name: r.outcome for r in mine}}, outcome=o, differences=diffs,
-                                compat=compat, group=g, rule=None, notes=notes, reason=(reasons[0] if reasons else None)))
+        out.append(CheckResult(name=g, code=next((r.code for r in mine if r.outcome == o), None), claim=spec["claim"], inputs=inputs,
+                               scope={"rules": {r.name: r.outcome for r in mine}}, differences=diffs, compat=compat, group=g, rule=None, notes=notes,
+                               reason=(reasons[0] if reasons else None)))
     return out
 
 
@@ -1250,7 +1244,7 @@ def build(rows: list[dict], verdict_doc: dict | None, *, summary: dict | None = 
     ctx = {"program_digest": program_digest, "manifest_digest": manifest_digest, "required_classes_source": vd.get("required_classes_source"),
            "manifest_verify": manifest_verify, "file_digests": dict(file_digests or {}), "replay_cache": vd.get("replay_cache")}
     required_classes = vd.get("required_classes")
-    per_run: list[tuple[int | None, list[CheckVerdict]]] = []
+    per_run: list[tuple[int | None, list[CheckResult]]] = []
     recorded: list[tuple[int | None, bool | None, str | None]] = []
     mismatches = []
     for r in treatment:
