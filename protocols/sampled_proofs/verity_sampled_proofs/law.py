@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 
 from verity.randomness import Key, Part, derive
-from verity.resource_accounting import IntegrityAllowance
+from verity.resource_accounting import IntegrityProfile
 
 RU_DOMAIN = "verity/sampled-proofs/ru-sample/v1"
 VU_DOMAIN = "verity/sampled-proofs/vu-sample/v1"
@@ -58,10 +58,11 @@ class TwoStageLaw:
         except KeyError:
             raise KeyError(f"the law has no stage for replay-unit class {cls!r}") from None
 
-    def allowance(self, cls: str, *, n_r: int, n_v: int, delta: float) -> IntegrityAllowance:
-        """The allowance an accepted transcript leaves over `n_r` RUs of class `cls`, each holding `n_v` VUs."""
+    def profile(self, cls: str, *, n_r: int, n_v: int, delta: float, covered: Iterable[str] = ()) -> IntegrityProfile:
+        """The profile an accepted transcript leaves over `n_r` RUs of class `cls`, each holding `n_v` VUs, with the
+        `covered` families proved on every audit."""
         stage = self.stage(cls)
-        return IntegrityAllowance(n_r=n_r, n_v=n_v, p=Fraction(stage.p), k=stage.checked(n_v), delta=delta)
+        return IntegrityProfile(n_r=n_r, n_v=n_v, p=Fraction(stage.p), k=stage.checked(n_v), delta=delta, covered=frozenset(covered))
 
     def to_json(self) -> dict:
         return {name: stage.to_json() for name, stage in sorted(self.stages.items())}

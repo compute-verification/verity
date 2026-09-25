@@ -13,8 +13,10 @@ Spot-checks a committed transcript of a Verity Program, and says what an accepte
    exactly `k` of its verification units (VUs) are checked (`select_verification_units`), or all of them when it
    holds fewer.
 5. Each checked VU is established on its authenticated boundary values.
-6. An accepted audit emits `verity.resource_accounting.IntegrityAllowance(n_r, n_v, p, k, delta)` per RU class
-   (`TwoStageLaw.allowance`). Each consumer takes its own worst case over it.
+6. An accepted audit emits a `verity.resource_accounting.IntegrityProfile` per RU class (`TwoStageLaw.profile`).
+   The profile holds the covered families (proved on every audit, `VerificationPlan.covered`), the law
+   (`n_r, n_v, p, k`) and `delta`. Each consumer reads what it needs off the profile, through
+   `resource_accounting`'s worst-case readers or its own.
 
 ## Randomness
 
@@ -30,7 +32,7 @@ where every unit is its own RU with `k = 1` (`TwoStageLaw.bernoulli`). A gate-le
 case: every gate is its own RU.
 
 An RU with `m` incorrect VUs out of `n_v` passes with probability
-`1 - p + p * C(n_v - m, k) / C(n_v, k)` (`IntegrityAllowance.accept`). `tests/test_law.py` checks the sampler
+`1 - p + p * C(n_v - m, k) / C(n_v, k)` (`IntegrityProfile.accept`). `tests/test_law.py` checks the sampler
 against this exactly.
 
 ## Boundaries

@@ -13,7 +13,7 @@ from verity.ir import query
 from verity.ir.codec import program_digest
 from verity.ir.layout import FunctionCall
 from verity_sampled_proofs.law import Stage, ru_key, select_replay_units
-from verity_sampled_proofs.plan import DEFAULT_CLASS, Obligation, VerificationPlan, weight_binding_plan
+from verity_sampled_proofs.plan import DEFAULT_CLASS, Obligation, UnconditionalObligation, VerificationPlan, weight_binding_plan
 
 RUNNING_EXAMPLE = Path(__file__).resolve().parents[3] / "packages" / "verity" / "tests" / "ir" / "test_running_example.py"
 
@@ -59,6 +59,15 @@ def test_a_gate_level_plan_samples_through_the_law():
     assert set(range(4, 14)) <= picked                 # every weight Input gate, at p = 1
     assert picked == {u.index for u in select_replay_units(ru_key(b"round", {"program": program_digest(P)}), plan.law, units)}
     assert plan.to_json()["classes"][0]["stage"] == {"p": "1", "k": 1} and plan.to_json()["default"] == {"p": "1/4", "k": 1}
+
+
+def test_unconditional_obligations_are_the_covered_families():
+    P = _running_example().make_program()
+    wb = weight_binding_plan(P, [1], other_rate=Fraction(1, 4))
+    weights = wb.classes[0][0]
+    plan = VerificationPlan(wb.classes, wb.default, unconditional=(UnconditionalObligation(weights, "weights of record"),))
+    assert plan.covered() == frozenset({weights.name}) and wb.covered() == frozenset()
+    assert plan.law.profile(DEFAULT_CLASS, n_r=44, n_v=1, delta=0.01, covered=plan.covered()).covered == {weights.name}
 
 
 def test_class_names_are_distinct():

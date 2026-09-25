@@ -1,4 +1,4 @@
-"""The two-stage law: exact stages, beacon-keyed draws addressed by replay-unit index, and the allowance it implies."""
+"""The two-stage law: exact stages, beacon-keyed draws addressed by replay-unit index, and the integrity profile it implies."""
 
 from __future__ import annotations
 
@@ -70,10 +70,10 @@ def test_indices_must_be_distinct_and_classes_known():
         select_replay_units(key, LAW, [ReplayUnit(0, "nope", 2)])
 
 
-def test_detection_matches_the_allowance_law():
-    """Empirically, an RU with m incorrect VUs escapes both stages at the rate IntegrityAllowance.accept(m) states."""
+def test_detection_matches_the_profile_law():
+    """Empirically, an RU with m incorrect VUs escapes both stages at the rate IntegrityProfile.accept(m) states."""
     law = TwoStageLaw({"u": Stage(Fraction(1, 2), 2)})
-    allowance = law.allowance("u", n_r=1, n_v=4, delta=0.01)
+    profile = law.profile("u", n_r=1, n_v=4, delta=0.01)
     unit = [ReplayUnit(0, "u", 4)]
     trials = 4000
     for m in range(5):
@@ -84,7 +84,7 @@ def test_detection_matches_the_allowance_law():
                 escaped += 1
             elif not set(select_verification_units(vu_key(b"vu", bind), law, unit)[0]) & set(range(m)):
                 escaped += 1
-        a = float(allowance.accept(m))
+        a = float(profile.accept(m))
         assert abs(escaped / trials - a) < 5 * (a * (1 - a) / trials) ** 0.5 + 1e-9
 
 
@@ -93,12 +93,12 @@ def test_bernoulli_is_the_single_unit_law():
     assert law.stage("x") == Stage(Fraction(1, 10), 1)
     assert check_probability(law, "x", 1) == Fraction(1, 10)
     assert check_probability(LAW, "decode", 6) == Fraction(1, 4) * Fraction(2, 6)
-    a = law.allowance("x", n_r=100, n_v=1, delta=0.01)
+    a = law.profile("x", n_r=100, n_v=1, delta=0.01)
     assert (a.n_v, a.k, a.p) == (1, 1, Fraction(1, 10))
 
 
-def test_allowance_carries_the_class_law():
-    a = LAW.allowance("decode", n_r=512, n_v=6, delta=0.01)
-    assert (a.n_r, a.n_v, a.p, a.k, a.delta) == (512, 6, Fraction(1, 4), 2, 0.01)
-    assert LAW.allowance("prefill", n_r=3, n_v=5, delta=0.01).k == 5
+def test_profile_carries_the_class_law_and_covered_families():
+    a = LAW.profile("decode", n_r=512, n_v=6, delta=0.01, covered=["Input"])
+    assert (a.n_r, a.n_v, a.p, a.k, a.delta, a.covered) == (512, 6, Fraction(1, 4), 2, 0.01, frozenset({"Input"}))
+    assert LAW.profile("prefill", n_r=3, n_v=5, delta=0.01).k == 5
     assert LAW.to_json()["decode"] == {"p": "1/4", "k": 2}
