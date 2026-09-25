@@ -133,6 +133,7 @@ def _walk(lp, levels: dict, n: int, tr: Transcript, out: list[Ext], big) -> Leaf
         vals = py_exts(T4[:, 0].to(torch.int64))
         out.extend(vals)
         tr.absorb_exts(vals)
+        tr.reserve(2)
         mu = coins.next()
         lam = coins.next()
         rho = [mu] + rs

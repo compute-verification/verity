@@ -1273,3 +1273,41 @@ session as this proof; the red-team-flock third audit's P1-P3 and E0-E1 are what
 * **Soundness:** `soundness.py` adds 255/p^6 (the sigma batching) and (m/2^128)^2 (Schwartz-Zippel over the two
   session points); the Flock side's terms are its own (red-team-flock third audit: about 2^-195.5 for the two reps,
   2^-243.9 for the link claims' reduction). The composed bound is set by A-GKR's Ligero queries, 2^-130.19.
+
+### 17.6 Live prime coins (lane route-a-live; the red-team-flock fourth audit's class condition and G2)
+
+Under 17.5 the prime half drew every challenge from its own SHA-256 transcript: runner-derived Fiat–Shamir coins, so
+the cell was NON_ZK_PROOF_DIAGNOSTIC (under the campaign's ×2^60 rule that half is 2^-70.2). Here the same live session
+serves them, so the whole cell is the interactive object of §0 and the bound is the interactive one, 2^-130.19.
+
+* **Round (R2's discipline):** the prime transcript keeps its absorb chain (`state <- SHA-256(state || msg)`). A challenge
+  with an absorb since the previous round opens a round: the prover sends `Prime{state, n}` (the state commits every
+  message absorbed so far and every earlier coin), and the verifier answers with `6 n` OS-drawn words below p, the
+  round's n BabyBear^6 challenges; both sides then chain `state <- SHA-256(state || "verity-gkr/live-coins/v1" || words
+  LE)`. A challenge with no absorb since takes the round's next unused coin; an absorb discards the rest. `reserve(n)`
+  makes one round of n known-consecutive challenges, at four places mirrored by prover, Python verifier and Rust
+  verifier: the transcript start (every table's z, beta and every segment's z0, gamma), each LogUp level's (mu, lam),
+  the link's rho with the batching coins after it (`open_coins`: the functionals, geo, the bind pair, Ligero's row
+  coefficient), and the Ligero query set (t + 8). Nothing is derived under live coins: `challenge_bytes` is refused, and
+  the graphed LogUp tree (device-side Fiat–Shamir) is off.
+* **Order (server, `backends/flock/live`):** `Prime` is refused before `Hello`, and between `Commit` and y (R5 for the
+  prime half: rho and the Ligero queries follow the points and y); `Commit` is refused before any prime round (root_F
+  must follow live GKR coins); `Hello` pins `prime: live-coins/v1` (R7). No coin follows the verdict. The record keeps
+  every round (state, n, words) and `before_commit`; the verdict requires at least one round on each side of `Commit`.
+* **Replay (the prime verifier):** `prime_coins.txt` (from the record, `tools/cell_gate.py`) beside `link.txt`; the
+  verifier's transcript must reproduce each recorded state before it takes that round's words, draw exactly the
+  recorded counts, compute root_F after exactly `before_commit` rounds, and consume every round
+  (`verifier/src/transcript.rs`, `gpu/transcript.py::ReplayTranscript`). `--require-live-coins` refuses a linked proof
+  without them.
+* **Transport:** one connection per session. `cell-prove --prime-sock` forwards the prime prover's `Prime` frames on the
+  session's connection after `Hello`, and sends the proofs and `Finish` only after the prime prover closed its socket.
+* **Cost:** one RTT per prime round, sequential. Before root_F they are on the critical path (Flock's `Commit`, and so
+  all of Flock's rounds, wait for root_F); after y they overlap Flock. Each round is 45 bytes up and 13 + 24 n down.
+  `times.json` / the result record `session.prime_rounds`, `session.prime_rounds_before_root_f`, the prime bytes each
+  way, `t.prime_network_wait` and `t.prime_wait_before_root_f`; `session.rounds` counts both provers' rounds.
+* **G2 (offline Flock replay):** the record also keeps root_F, every root_B and the committed public words.
+  `flock-link replay --session DIR` rebuilds the session from `session.json` under the verifier's own configuration
+  and statement (`Server::from_record`: the hello, C4 on the public words, each rep's root against root_B, the link
+  context's shape, the prime order, the proofs' hashes, `link_sha256`), then re-runs the verdict without using the
+  recorded one. `tools/cell_gate.py --flock` adds it as the `flock_replay` check. The record is evidence only under the
+  verifier's custody; nothing in it authenticates its writer.

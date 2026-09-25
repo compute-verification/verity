@@ -7,10 +7,13 @@
         CELL/statement/ (circuit files, public.bin, commitment.txt, sigma.txt), CELL/leaf_digests.bin (x rows then W
         columns, 32 bytes each: what the Flock verifier is configured with), CELL/operands.bin (the prover's rows)
     python tools/cell.py prove --cell CELL --flock BIN --verifier HOST:PORT [--sessions 3] [--warmup 1] [--rust VB]
+                               [--prime-coins live|fs]
         per session: the prime prover runs to its link, hands root_F to ``flock-link cell-prove`` (which commits it with
         root_B, gets the verifier's two points, sends y and proves both Flock reps), takes the session's context and
-        finishes; CELL/s<i>/ holds proof.bin, link.txt, flock.jsonl, times.json; the Python verifier (and the Rust one
-        with --rust) checks proof.bin against link.txt
+        finishes; CELL/s<i>/ holds proof.bin, link.txt, prime_coins.txt, flock.jsonl, times.json; the Python verifier
+        (and the Rust one with --rust) checks proof.bin against link.txt and the prime rounds.  With live prime coins
+        (the default, PROTOCOL 17.6) every prime challenge is a round with the same session's verifier, forwarded by
+        cell-prove from CELL/s<i>/prime.sock; ``--prime-coins fs`` is the earlier Fiat-Shamir prime half (diagnostic)
 
 A session's evidence is the verifier's record, not these files: ``tools/cell_gate.py`` admits it (E1) and writes the
 link.txt the prime verifier checks the proof against.
@@ -91,12 +94,74 @@ def statement(cell: Path, instances: Path, n: int, flock: str) -> None:
     print(f"statement {C.relation} vus {n} prime_commitment {pc} sigma {hashlib.sha256(sig.encode()).hexdigest()}", flush=True)
 
 
+class PrimeLink:
+    """The prime prover's end of the live session: ``Prime`` frames (``backends/flock/live``: tag 8, the state and
+    the count; the answer tag 5, the words) on cell-prove's Unix socket, which forwards them on the session."""
+
+    def __init__(self, path: Path) -> None:
+        self.path, self.sock, self.rounds, self.bytes_up, self.bytes_down = path, None, 0, 0, 0
+
+    def _connect(self):
+        import socket
+        t = time.perf_counter()
+        while True:
+            try:
+                s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                s.connect(str(self.path))
+                return s
+            except (FileNotFoundError, ConnectionRefusedError):
+                s.close()
+                if time.perf_counter() - t > 120:
+                    raise
+                time.sleep(0.001)
+
+    def _read(self, n: int) -> bytes:
+        b = b""
+        while len(b) < n:
+            c = self.sock.recv(n - len(b))
+            if not c:
+                raise ConnectionError("cell-prove closed the prime socket")
+            b += c
+        return b
+
+    def __call__(self, state: bytes, n: int) -> list[int]:
+        import struct
+
+        from gpu.transcript import CoinError
+        if self.sock is None:
+            self.sock = self._connect()
+        req = bytes([8]) + struct.pack("<I", len(state)) + state + struct.pack("<I", n)
+        self.sock.sendall(struct.pack("<I", len(req)) + req)
+        (ln,) = struct.unpack("<I", self._read(4))
+        resp = self._read(ln)
+        self.rounds += 1
+        self.bytes_up += 4 + len(req)
+        self.bytes_down += 4 + ln
+        if resp[0] == 5:
+            (k,) = struct.unpack_from("<I", resp, 1)
+            return list(struct.unpack_from(f"<{k}I", resp, 5))
+        if resp[0] == 3:
+            (k,) = struct.unpack_from("<I", resp, 1)
+            raise CoinError("live prime round refused: " + resp[5:5 + k].decode(errors="replace"))
+        raise CoinError(f"live prime round: unexpected response tag {resp[0]}")
+
+    def close(self) -> None:
+        if self.sock is None:
+            # the session waits for the prime prover to close its end before Finish
+            try:
+                self.sock = self._connect()
+            except OSError:
+                return
+        self.sock.close()
+
+
 def prove(a) -> int:
     import numpy as np
     import torch
 
     from gpu import link as LK
     from gpu import prover
+    from gpu.transcript import LiveTranscript, ReplayTranscript, coins_text
     from gpu.circuit import layers, parse_circuit
     from gpu.run import read_chain
     from gpu.v2.witness import Generator, Ops
@@ -144,9 +209,12 @@ def prove(a) -> int:
         fl = open(s / "flock.jsonl", "w")
         fe = open(s / "flock.stderr", "w")
         addr = a.warmup_verifier if (i < a.warmup and a.warmup_verifier) else a.verifier
+        live = a.prime_coins == "live"
+        plink = PrimeLink(s / "prime.sock") if live else None
         fp = subprocess.Popen([a.flock, "cell-prove", "--verifier", addr, "--vus", str(n), "--digests", str(cell / "leaf_digests.bin"),
                                "--prime-commitment", pc, "--operands", str(cell / "operands.bin"), "--root-f", str(s / "root_f.hex"),
-                               "--link-out", str(s / "link.json"), "--start", str(s / "start")], stdout=fl, stderr=fe)
+                               "--link-out", str(s / "link.json"), "--start", str(s / "start")]
+                              + (["--prime-sock", str(s / "prime.sock")] if live else []), stdout=fl, stderr=fe)
         while "READY" not in (s / "flock.stderr").read_text():   # the Flock statement is built (preprocessing, untimed)
             if fp.poll() is not None:
                 raise SystemExit(f"flock-link cell-prove exited {fp.returncode}: {(s / 'flock.stderr').read_text()[-400:]}")
@@ -155,8 +223,13 @@ def prove(a) -> int:
         (s / "start").touch()
         tw = {}
 
-        def exchange(root_f: bytes, s=s, tw=tw) -> LK.Context:
+        tr = LiveTranscript(plink) if live else None
+
+        def exchange(root_f: bytes, s=s, tw=tw, tr=tr) -> LK.Context:
             tx = time.perf_counter()
+            if tr is not None:
+                tw["prime_rounds_before_root_f"] = len(tr.rounds)
+                tw["prime_wait_before_root_f_s"] = tr.wait_s
             (s / "root_f.tmp").write_text(root_f.hex())
             os.replace(s / "root_f.tmp", s / "root_f.hex")
             while not (s / "link.json").exists():
@@ -177,7 +250,11 @@ def prove(a) -> int:
         t_wit = time.perf_counter() - tp
         inst = prover.Instance([prover.Segment("unit", uc, ul, units, uc.hash), prover.Segment("epilogue", ec, el, epi, ec.hash)], ch,
                                link=LK.Link(lay, exchange=exchange, x=X, w=Wn))
-        proof, st = prover.prove(inst, True)
+        try:
+            proof, st = prover.prove(inst, True, transcript=tr)
+        finally:
+            if plink is not None:
+                plink.close()
         tb = time.perf_counter()
         data = proof.to_bytes()
         t_bytes = time.perf_counter() - tb
@@ -190,55 +267,76 @@ def prove(a) -> int:
         ctx = inst.link.context
         (s / "proof.bin").write_bytes(data)
         (s / "link.txt").write_text(ctx.text())
-        live = [json.loads(ln.split("\t", 1)[1]) for ln in (s / "flock.jsonl").read_text().splitlines() if ln.startswith("LIVE\t")]
+        before = tw.get("prime_rounds_before_root_f", 0)
+        if tr is not None:
+            # the prover's view of the rounds (the evidence is the verifier's record: tools/cell_gate.py writes it from there)
+            (s / "prime_coins.txt").write_text(coins_text(tr.rounds, before))
+        flive = [json.loads(ln.split("\t", 1)[1]) for ln in (s / "flock.jsonl").read_text().splitlines() if ln.startswith("LIVE\t")]
         vinst = prover.Instance([prover.Segment("unit", uc, ul, units, uc.hash), prover.Segment("epilogue", ec, el, epi, ec.hash)], ch,
                                 link=LK.Link(lay, context=LK.parse_context((s / "link.txt").read_text())))
         tv = time.perf_counter()
         try:
-            prover.verify(vinst, proof, True)
+            prover.verify(vinst, proof, True, transcript=ReplayTranscript(tr.rounds, before) if tr is not None else None)
             py = "accept"
         except prover.VerifyError as e:
             py = f"reject ({str(e)[:160]})"
         t_py = time.perf_counter() - tv
-        fls = live[0] if live else {}
+        fls = flive[0] if flive else {}
         # the prover's time: both provers run at once from the start signal; the Flock prover's includes its live-coin
         # round trips (wait_s), the prime prover's the wait for the session's points (exchange_wait_s)
         t_flock = float(fls.get("prove_total_s", 0.0)) + float(fls.get("y_s", 0.0))
+        # one connection carries both provers' rounds: its counters are the session's; the proxy's are the prime part
         calls, wait = int(fls.get("calls", 0) or 0), float(fls.get("wait_s", 0.0) or 0.0)
+        px = fls.get("prime") or {}
+        p_rounds, p_wait_px = int(px.get("rounds") or 0), float(px.get("wait_s") or 0.0)
         vv = (fls.get("verdict") or {})
         net = {"rounds": calls, "bytes_up": fls.get("wire_sent"), "bytes_down": fls.get("wire_recv"),
-               "flock_wait_s": wait, "in_session_rtt_ms": 1e3 * wait / calls if calls else None,
+               "flock_rounds": calls - p_rounds, "flock_wait_s": wait - p_wait_px, "in_session_rtt_ms": 1e3 * wait / calls if calls else None,
                "rtt_probe_ms": a.rtt_ms, "rtt_probe_method": a.rtt_method,
-               "flock_prover_compute_s": float(fls.get("prove_total_s", 0.0)) - wait,
+               "flock_prover_compute_s": float(fls.get("prove_total_s", 0.0)) - (wait - p_wait_px),
                "verifier_compute_s": vv.get("verify_s"),
-               "session_wall_s": fls.get("session_wall_s")}
+               "session_wall_s": fls.get("session_wall_s"),
+               "prime_coins": a.prime_coins, "prime_rounds": p_rounds, "prime_challenges": px.get("challenges"),
+               "prime_rounds_before_root_f": tw.get("prime_rounds_before_root_f"),
+               "prime_bytes_up": px.get("bytes_up"), "prime_bytes_down": px.get("bytes_down"),
+               # the prime prover's time blocked on its rounds (socket + forward + RTT), and the part before root_F: that
+               # part delays root_F, so Flock's Commit and every Flock round after it (the critical path)
+               "prime_wait_s": tr.wait_s if tr is not None else 0.0, "prime_wait_before_root_f_s": tw.get("prime_wait_before_root_f_s", 0.0),
+               "prime_forward_wait_s": p_wait_px, "prime_refused": px.get("refused"),
+               "recorded_prime_rounds": vv.get("prime_rounds"), "recorded_prime_before_commit": vv.get("prime_before_commit")}
         row = {"session": i, "warmup": i < a.warmup, "verifier": addr, "t_total": max(t_prime, t_flock), "t_cell_s": t_cell, "t_prime_prove_s": t_prime,
                "t_flock_prove_s": t_flock, "t_link_s": st.t_link, "net": net,
                "buckets": {"t.witness": t_wit + st.t_witness_wires, "t.encoding_commitment": st.t_commit,
                            "t.arithmetic": st.t_arith + st.t_open_acc + st.t_open_wq, "t.lookup": st.t_mults + st.t_lookup,
                            "t.zk_additional": 0.0, "t.serialization": st.t_open_cols + t_bytes},
                "prime": {"ligero_rows": st.ligero_rows, "linkage_constraints": st.linkage_constraints, "committed_elements": st.committed_elements,
-                         "sequential_depth": st.sequential_depth(True), "peak_mem_bytes": st.peak_mem},
-               "flock_rc": rc, "flock": live[0] if live else None, "python_verify": py, "python_verify_s": t_py,
+                         "sequential_depth": st.sequential_depth(True), "live_rounds": st.live_rounds, "slots": st.slots,
+                         "peak_mem_bytes": st.peak_mem},
+               "flock_rc": rc, "flock": flive[0] if flive else None, "python_verify": py, "python_verify_s": t_py,
                "proof_bytes": len(data), "proof_sha256": hashlib.sha256(data).hexdigest(), **tw}
         if a.rust:
             vd = s / "verify"
             shutil.copytree(sd, vd, dirs_exist_ok=True)
             shutil.copyfile(s / "link.txt", vd / "link.txt")
+            (vd / "prime_coins.txt").unlink(missing_ok=True)
+            if tr is not None:
+                shutil.copyfile(s / "prime_coins.txt", vd / "prime_coins.txt")
             r = subprocess.run([a.rust, "verify", "--dir", str(vd), "--proof", str(s / "proof.bin"), "--vus", str(n), "--threads", str(a.threads),
                                 "--relation", meta["relation"], "--json", str(s / "rust.json")]
+                               + (["--require-live-coins"] if tr is not None else [])
                                + (["--allow-unpinned-commitment"] if n != 4096 else []), capture_output=True, text=True)
             doc = json.loads((s / "rust.json").read_text()) if (s / "rust.json").is_file() else {"error": r.stderr[-300:]}
-            row["rust"] = {k: doc.get(k) for k in ("accepted", "error", "verify_seconds", "t_link", "circuit_pinned", "operands_committed")}
+            row["rust"] = {k: doc.get(k) for k in ("accepted", "error", "verify_seconds", "t_link", "circuit_pinned", "operands_committed",
+                                                   "prime_coins", "prime_rounds", "prime_before_commit")}
         (s / "times.json").write_text(json.dumps(row, indent=1))
-        fl_ok = bool(live and live[0].get("accepted"))
+        fl_ok = bool(flive and flive[0].get("accepted"))
         print(f"session {i}{' (warm-up)' if i < a.warmup else ''}: cell {t_cell:.3f} s, prime prove {t_prime:.3f} s (link {st.t_link:.3f}, "
-              f"wait {tw.get('exchange_wait_s', 0):.3f}), flock {live[0]['prove_total_s'] if live else None} s accepted {fl_ok}, "
+              f"wait {tw.get('exchange_wait_s', 0):.3f}), flock {flive[0]['prove_total_s'] if flive else None} s accepted {fl_ok}, "
               f"python {py}" + (f", rust {row['rust']}" if a.rust else ""), flush=True)
         if i == a.warmup:
             from gpu.circuit import Circuit  # noqa: F401
             import soundness
-            budget = soundness.summary(soundness.budget(inst, st.ligero_rows, st.linkage_constraints, K=1536))
+            budget = soundness.summary(soundness.budget(inst, st.ligero_rows, st.linkage_constraints, K=1536), live=tr is not None)
             (cell / "prime_soundness.json").write_text(json.dumps(budget, indent=1, default=str))
         out.append(row)
         del inst, vinst, proof
@@ -280,8 +378,16 @@ def result(a, cell: Path, meta: dict, rows: list[dict]) -> None:
              for r in timed)
     rust = [r["rust"]["verify_seconds"] for r in timed if (r.get("rust") or {}).get("verify_seconds") is not None]
     flock_bytes = sum((med["flock"] or {}).get("proof_bytes", []))
+    # NON_ZK_PROOF only when every timed session's prime coins were the live verifier's and were replayed as such
+    live = all((r.get("net") or {}).get("prime_coins") == "live" and (r.get("rust") or {}).get("prime_coins") == "live" for r in timed)
+    mode = ("interactive (one live session: every A-GKR challenge -- the GKR and LogUp coins, the sigma batching rho, the "
+            "functional and Ligero row coefficients and the Ligero query indices -- is the live verifier's, issued after the prime "
+            "transcript state that commits the messages before it; Flock: live verifier coins; the link points: the live verifier's OS "
+            "coins after root_F and root_B)") if live else (
+            "prime half Fiat-Shamir (the prover's own SHA-256 transcript: runner-derived coins, not transferable); Flock: live verifier "
+            "coins; the link points: the live verifier's OS coins after root_F and root_B")
     security = {"target": -128, "achieved_log2": ach, "achieved_bits": -ach, "field": "BabyBear^6 (prime side); GF(2^128) (Flock, the link)",
-                "mode": "interactive (Flock: live verifier coins; the link points: the live verifier's OS coins after root_F and root_B)",
+                "mode": mode, "prime_coins": "live" if live else "fiat-shamir",
                 "composed_terms_log2": terms, "prime_by_component_log2": prime.get("by_component_log2"),
                 "hash_assumption": "collision resistance of SHA-512 (A-GKR Merkle), SHA-256 (Flock, transcripts), BLAKE3 (row leaves)",
                 "union_over": 1, "source": "backends/gkr/soundness.py (prime) + red-team-flock third audit (Flock terms)"}
@@ -290,7 +396,8 @@ def result(a, cell: Path, meta: dict, rows: list[dict]) -> None:
                       "version": "route (a): gpu/link.py session-2xgf2_128/v2, flock-link Σ verity/link-L/v2"},
           "toolchain": {"python": platform.python_version(), "torch": torch.__version__, "triton": triton.__version__, "numpy": np.__version__}}
     fp = contract.fingerprint(
-        profile=contract.PROFILE, domain=contract.DOMAIN, K=1536, B=n, N_subbatches=1, proof_class="NON_ZK_PROOF",
+        profile=contract.PROFILE, domain=contract.DOMAIN, K=1536, B=n, N_subbatches=1,
+        proof_class="NON_ZK_PROOF" if live else "NON_ZK_PROOF_DIAGNOSTIC",
         authentication="included-hash", zk_mode=contract.ZK_NONE, security=security, hardware=contract.probe_hardware(), software=sw,
         preprocessing=("circuit files, GKR layers, Lambda_F derivation, the Flock statement shape (untimed; the Flock prover starts on a "
                        "signal once built); Triton compilation in the untimed warm-up session"),
@@ -300,7 +407,9 @@ def result(a, cell: Path, meta: dict, rows: list[dict]) -> None:
         scope="vu", candidate="A-GKR", checker="v2", field=br.FIELD, variant="A-GKR route (a): A-GKR + Flock + link",
         leaf="blake3", sharing=None, sessions=len(timed), warmup=a.warmup,
         verifier={"flock": "flock-link cell-serve (live coins; the session record is the evidence, admitted by tools/cell_gate.py)",
-                  "prime": "verity-gkr-verify --relation bf16-ampere+blake3 against the record's link.txt (pinned circuit set, pinned commitment)"},
+                  "prime": "verity-gkr-verify --relation bf16-ampere+blake3 --require-live-coins against the record's link.txt and prime "
+                           "rounds (pinned circuit set, pinned commitment)" if live else
+                           "verity-gkr-verify --relation bf16-ampere+blake3 against the record's link.txt (pinned circuit set, pinned commitment)"},
         note=(f"one A-GKR proof of all {n} VUs (bf16-ampere, operands committed under frame-v3 blake3-keyed/row/v2) linked to one Flock "
               f"flock-128-r2 session proving the keyed-BLAKE3 row leaves; both provers run at once on the prover pod (A-GKR on the GPU, "
               f"Flock on the host CPU), t.total = max of the two from the start signal; the prime buckets are the median session's, "
@@ -323,7 +432,14 @@ def result(a, cell: Path, meta: dict, rows: list[dict]) -> None:
         meas += [br._m("session.rounds", md("rounds"), "count"), br._m("session.bytes_up", md("bytes_up"), "bytes"),
                  br._m("session.bytes_down", md("bytes_down"), "bytes"), br._m("net.rtt_in_session_ms", md("in_session_rtt_ms"), "ms"),
                  br._m("t.flock_prover_compute", md("flock_prover_compute_s"), "s"), br._m("t.flock_network_wait", md("flock_wait_s"), "s"),
-                 br._m("t.flock_verifier_compute", md("verifier_compute_s"), "s")]
+                 br._m("t.flock_verifier_compute", md("verifier_compute_s"), "s"), br._m("session.flock_rounds", md("flock_rounds"), "count")]
+        if live:
+            # the live prime coins' cost: their rounds and bytes, the prime prover's wait, and the part of it before root_F
+            # (on the critical path: Flock's Commit, and so every Flock round, waits for root_F)
+            meas += [br._m("session.prime_rounds", md("prime_rounds"), "count"),
+                     br._m("session.prime_rounds_before_root_f", md("prime_rounds_before_root_f"), "count"),
+                     br._m("session.prime_bytes_up", md("prime_bytes_up"), "bytes"), br._m("session.prime_bytes_down", md("prime_bytes_down"), "bytes"),
+                     br._m("t.prime_network_wait", md("prime_wait_s"), "s"), br._m("t.prime_wait_before_root_f", md("prime_wait_before_root_f_s"), "s")]
         if a.rtt_ms is not None:
             meas.append(br._m("net.rtt_probe_ms", a.rtt_ms, "ms"))
     if rust:
@@ -361,6 +477,8 @@ def main(argv=None) -> int:
     p.add_argument("--result", default=None, help="write the bench-result/v1 envelope here")
     p.add_argument("--rtt-ms", type=float, default=None, help="the prover-to-verifier RTT measured before the sessions")
     p.add_argument("--rtt-method", default=None)
+    p.add_argument("--prime-coins", choices=("live", "fs"), default="live",
+                   help="live: the session's verifier issues every prime challenge (NON_ZK_PROOF); fs: the prime half's own Fiat-Shamir (diagnostic)")
     r = sub.add_parser("result", help="the bench-result/v1 envelope from CELL/sessions.json (on the prover pod: it probes the hardware)")
     r.add_argument("--cell", required=True)
     r.add_argument("--sessions-json", action="append", default=[], help="more sessions.json files (other runs of the same cell)")
