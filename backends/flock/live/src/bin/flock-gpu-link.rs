@@ -447,10 +447,77 @@ fn neg(st: &Arc<ChunkStmt>, name: &str, maps_to: &str, plan: &Plan, want_accept:
     (acc == want_accept, rec)
 }
 
+/// Every selftest case: (name, honest should be accepted, both reps must reject on their own).
+const CASES: &[(&str, bool, bool)] = &[
+    ("honest_linked_session", true, false),
+    ("honest_linked_session_again", true, false),
+    ("root_b_other_than_bound_root", false, false),
+    ("roots_committed_twice", false, false),
+    ("no_root_f", false, false),
+    ("y_before_points", false, false),
+    ("coins_before_y", false, false),
+    ("y1_tampered", false, true),
+    ("y2_tampered", false, true),
+    ("y1_y2_tampered_same_delta", false, true),
+    ("z_bit_differs_from_y_source", false, true),
+    ("forged_middle_block_honest_endpoints", false, true),
+    ("chunk_end_flag_dropped", false, true),
+    ("wrong_counter", false, true),
+    ("wrong_block_len", false, true),
+    ("key_substituted", false, true),
+    ("dummy_chunk_message_nonzero", false, true),
+    ("public_chunk_value_forged", false, false),
+    ("reps_with_different_witness", false, false),
+    ("fast_profile_proofs", false, false),
+    ("cross_session_replay_both_reps", false, false),
+];
+
+/// The GPU selftest runs every case in its own process: Flock-CUDA's live hook aborts the process when the verifier
+/// refuses a coin (flock-live R6), which for a negative is the verifier rejecting it.
+fn selftest_children(st: &ChunkStmt) {
+    let exe = std::env::current_exe().unwrap();
+    let mut all = true;
+    for &(name, want_accept, want_both) in CASES {
+        let out = std::process::Command::new(&exe)
+            .args(["selftest", "--gpu", "--vus", &st.vus.to_string(), "--k", &st.k.to_string(), "--only", name])
+            .output()
+            .expect("spawn a selftest case");
+        let text = String::from_utf8_lossy(&out.stdout);
+        let line = text.lines().find(|l| l.starts_with("NEG\t") && l.contains(&format!("\"case\":\"{name}\"")));
+        let (pass, v) = match line {
+            Some(l) => {
+                let v: Value = serde_json::from_str(&l[4..]).unwrap();
+                let both = v["reps_ok"].as_array().map(|a| a.len() == 2 && a.iter().all(|r| r[1] == false)).unwrap_or(false);
+                (v["pass"] == true && (!want_both || both), v)
+            }
+            None => {
+                let err = String::from_utf8_lossy(&out.stderr);
+                let refused = err.contains("the verifier refused a coin") || err.contains("LIVE-REFUSED");
+                (!want_accept && refused, json!({"case": name, "gpu": true, "expect": "reject", "accepted": false,
+                    "prover_aborted": err.lines().filter(|l| l.contains("LIVE-REFUSED") || l.contains("refused")).collect::<Vec<_>>().join(" | ")}))
+            }
+        };
+        all &= pass;
+        let mut v = v;
+        v["pass"] = json!(pass);
+        v["both_reps_required"] = json!(want_both);
+        println!("NEG\t{v}");
+    }
+    println!("SELFTEST\t{}", json!({"vus": st.vus, "k": st.k, "chunks": st.chunks, "m": st.m, "m_link": st.m_link, "gpu": true,
+        "mode": "one process per case", "all_pass": all}));
+}
+
 fn selftest(st: Arc<ChunkStmt>, gpu: bool) {
+    let only = arg("--only", "");
+    if gpu && only.is_empty() {
+        return selftest_children(&st);
+    }
     let h = || Plan { gpu, ..Plan::honest() };
     let all = std::cell::Cell::new(true);
     let t = |name: &str, maps: &str, p: Plan, acc: bool| -> Value {
+        if !only.is_empty() && name != only {
+            return Value::Null;
+        }
         let (ok, rec) = neg(&st, name, maps, &p, acc);
         all.set(all.get() && ok);
         rec
@@ -460,6 +527,38 @@ fn selftest(st: Arc<ChunkStmt>, gpu: bool) {
     };
     let honest = t("honest_linked_session", "honest", h(), true);
     let honest2 = t("honest_linked_session_again", "honest (fresh points)", h(), true);
+    if !only.is_empty() {
+        let replay = only == "cross_session_replay_both_reps";
+        if replay {
+            let (sb, _, _) = instance(&st, 0xA, &h());
+            let (_, other) = session(&st, inproc(&st, &sb).0, 0xA, &h());
+            t("cross_session_replay_both_reps", "link neg 15", Plan { substitute: Some(other), ..h() }, false);
+        }
+        let _ = (honest, honest2);
+        for (name, maps, p, acc) in [
+            ("root_b_other_than_bound_root", "L1", Plan { commit: CommitMode::OtherRootB, ..h() }, false),
+            ("roots_committed_twice", "L1", Plan { commit: CommitMode::Twice, ..h() }, false),
+            ("no_root_f", "L1 / C2", Plan { commit: CommitMode::NoRootF, ..h() }, false),
+            ("y_before_points", "L1 order", Plan { commit: CommitMode::YBeforePoints, ..h() }, false),
+            ("coins_before_y", "L1 / R5", Plan { commit: CommitMode::NoY, ..h() }, false),
+            ("y1_tampered", "L2", Plan { y_delta: [1, 0], ..h() }, false),
+            ("y2_tampered", "L2", Plan { y_delta: [0, 1 << 63], ..h() }, false),
+            ("y1_y2_tampered_same_delta", "L2", Plan { y_delta: [1 << 40, 1 << 40], ..h() }, false),
+            ("z_bit_differs_from_y_source", "link neg 2", Plan { flip_z_bit: true, ..h() }, false),
+            ("forged_middle_block_honest_endpoints", "L4 chain", Plan { forge_middle: true, ..h() }, false),
+            ("chunk_end_flag_dropped", "L4 flags", Plan { bad_params: Some(0), ..h() }, false),
+            ("wrong_counter", "L4 counter", Plan { bad_params: Some(1), ..h() }, false),
+            ("wrong_block_len", "L4 block_len", Plan { bad_params: Some(2), ..h() }, false),
+            ("key_substituted", "L4 key", Plan { key_substituted: true, ..h() }, false),
+            ("dummy_chunk_message_nonzero", "L4 dummy", Plan { dummy_message: true, ..h() }, false),
+            ("public_chunk_value_forged", "C4", Plan { publics_flip: true, ..h() }, false),
+            ("reps_with_different_witness", "R1", Plan { rep1_other_witness: true, ..h() }, false),
+            ("fast_profile_proofs", "R7 / F2", Plan { profile: [LigeritoProfile::Fast; 2], ..h() }, false),
+        ] {
+            t(name, maps, p, acc);
+        }
+        return;
+    }
     let fresh = honest["link"]["points"] != honest2["link"]["points"];
     println!("NEG\t{}", json!({"case": "points_fresh_per_session_same_roots", "maps_to": "link neg 11", "pass": fresh,
         "same_roots": honest["link"]["root_b_sha256"] == honest2["link"]["root_b_sha256"]}));
