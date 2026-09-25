@@ -26,7 +26,7 @@ the *pipeline parameters* (groups, adder width, exponent floor -- in particular 
 accumulator, which Hawkeye did not validate and which every k32 step after the first of a K=1536..8960 chain
 exercises) are what the campaign under ``gpu/tc-fp8/`` measured on the device (record:
 ``docs/data/tc-fp8-2026-09-08/``).  The registry primitive that wraps it
-(``verity_vllm.program.registry.fp8.HopperE4m3QgmmaDot32``) carries the campaign's outcome in its conformance status.
+(``verity.ml.prims.HopperE4m3QgmmaDot32``) carries the campaign's outcome in its conformance status.
 
 Promoted verbatim from ``veritor`` ``src/veritor/core/silicon_total_fp8.py`` (commit 0903f60d6, release
 ``r18-int-3``); only the import paths changed.

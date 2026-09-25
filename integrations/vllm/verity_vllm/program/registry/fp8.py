@@ -30,7 +30,7 @@ words and cross-checked against a CPU re-quantisation of the checkpoint; fp8.md 
 and the e4m3 activations are **computed** by `Fp8ActQuant` from the norm output — never Inputs.
 
 Registered functions (all `Name_v1`):
-  primitives  F32ToE4m3Sat, HopperE4m3QgmmaDot32; core's: F32Fabs, F32Fmaxf, F32Fminf (`verity.ml.scalar`)
+  primitives  core's: F32Fabs, F32Fmaxf, F32Fminf (`verity.ml.scalar`), F32ToE4m3Sat, HopperE4m3QgmmaDot32 (`verity.ml.prims`)
   composites  Fp8RowAbsMax{K}, Fp8RowScale, Fp8ActQuant{K}, DotE4m3{K}, ScaledMmFp8Coordinate{K,BIAS},
               ScaledMmFp8{K,N,BIAS} (the cutlass GEMM over the quantised row), QuantLinearFp8{K,N,BIAS} (= Fp8ActQuant
               + ScaledMmFp8, the linear as one function), LayerPreFp8{C,L0}, LayerPostFp8{C}, ServeFp8{C,LP,STEPS}
@@ -41,13 +41,13 @@ AttentionFA3, SiluMul, Embedding, GemmHopper for lm_head, TokenSelect) are reuse
 from __future__ import annotations
 
 import types
-from fractions import Fraction
 
 import numpy as np
 
-from verity.ir.defs import CompositeDefinition, PrimitiveDefinition, bind, composite, primitive
+from verity.ir.defs import CompositeDefinition, bind, composite
 from verity.ir.refs import Coll as _Coll, concat, tuple_of
 from verity.ir.types import Array, Record, Tuple, Value
+from verity.ml.prims import F32ToE4m3Sat, HopperE4m3QgmmaDot32
 from verity.ml.scalar import F32Fabs, F32Fmaxf, F32Fminf
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import hopper as H
@@ -73,86 +73,6 @@ C_MIN_SCALE = b1.const(32, MIN_SCALE_BITS)
 QUANT_THREADS = 256       # dynamic_per_token_scaled_fp8_quant: block(min(hidden, 256)); every B1 K is >= 256
 QUANT_VEC = 8             # vectorize_read_with_alignment<16> on bf16: 8 elements per vector
 WARP = 32
-
-
-# ---------------------------------------------------------------------------------------------------------
-# scalar primitives
-# ---------------------------------------------------------------------------------------------------------
-
-
-def f32_to_e4m3_sat_bits(u: int) -> int:
-    """`cvt.rn.satfinite.e4m3x2.f32` (one lane; `__nv_cvt_float_to_fp8(x, __NV_SATFINITE, __NV_E4M3)`), the model
-    pinned by the exhaustive sweep of every f32 word on the H100 (fp8.md §2, docs/data/tc-fp8-2026-09-08/cvt_e4m3):
-    NaN -> 0x7F (positive canonical NaN, the sign dropped); ±inf and every |x| that would round beyond 448 ->
-    ±0x7E (448, the sign kept); otherwise round-to-nearest-even onto the E4M3 grid (normal binades 2^-6..2^8 with
-    three fraction bits, subnormals in multiples of 2^-9); |x| < 2^-10 and the 2^-10 tie round to a signed zero."""
-    u &= 0xFFFFFFFF
-    sign = 0x80 if u >> 31 else 0
-    exp = (u >> 23) & 0xFF
-    mant = u & 0x7FFFFF
-    if exp == 0xFF:
-        return E4M3_NAN if mant else (sign | 0x7E)
-    if exp == 0 and mant == 0:
-        return sign
-    # exact magnitude as a Fraction
-    if exp == 0:
-        mag = Fraction(mant, 1 << 149)
-    else:
-        mag = Fraction((1 << 23) | mant, 1) / Fraction(1 << (150 - exp)) if exp < 150 else Fraction(((1 << 23) | mant) << (exp - 150))
-    if mag >= Fraction(464):  # >= the 448|480 tie: 480 is not encodable -> saturate
-        return sign | 0x7E
-    # grid step: 2^(e-3) for 2^e <= mag < 2^(e+1), e >= -6; 2^-9 below 2^-6
-    e = mag.numerator.bit_length() - mag.denominator.bit_length()
-    if Fraction(2) ** e > mag:
-        e -= 1
-    step_exp = e - 3 if e >= -6 else -9
-    q = mag / (Fraction(2) ** step_exp)
-    n = q.numerator // q.denominator
-    r = q - n
-    if r > Fraction(1, 2) or (r == Fraction(1, 2) and n & 1):
-        n += 1
-    val = n * (Fraction(2) ** step_exp)
-    if val == 0:
-        return sign
-    if val >= Fraction(464):
-        return sign | 0x7E
-    if val < Fraction(2) ** -6:  # subnormal: mantissa n in units of 2^-9 (n <= 7)
-        return sign | int(val / (Fraction(2) ** -9))
-    e2 = val.numerator.bit_length() - val.denominator.bit_length()
-    if Fraction(2) ** e2 > val:
-        e2 -= 1
-    m3 = int((val / (Fraction(2) ** e2) - 1) * 8)
-    return sign | ((e2 + 7) << 3) | m3
-
-
-@primitive("F32ToE4m3Sat", 1, [("x", F32)], E4M3,
-           conformance="exact-model-tested; every f32 word (2^32) through cvt.rn.satfinite.e4m3x2.f32 on the H100 (2026-09-08, gpu/tc-fp8/vllm_fp8_kernels_probe.py --cvt): 0 mismatches; NaN of either sign -> 0x7F")
-def F32ToE4m3Sat(x: int) -> int:
-    """`cvt.rn.satfinite.e4m3x2.f32` (SASS `F2FP.E4M3.F32.PACK_AB` with SATFINITE), one lane: see `f32_to_e4m3_sat_bits`."""
-    return f32_to_e4m3_sat_bits(x)
-
-
-def _fp8_total():
-    # verity.ml.tc.total_fp8: veritor's core/silicon_total_fp8.py promoted verbatim (the same lineage as the BF16 total step)
-    from verity.ml.tc.total_fp8 import HOPPER_E4M3_WGMMA_K32, tc_dot_total_e4m3
-
-    return HOPPER_E4M3_WGMMA_K32, tc_dot_total_e4m3
-
-
-@primitive("HopperE4m3QgmmaDot32", 1, [("acc", F32), ("a", A32_8), ("b", A32_8)], F32,
-           conformance="exact-model-tested; H100 80GB 2026-09-08 gpu/tc-fp8 campaign: 16 families, 35,289 tiles x3, "
-                       "144,543,744 words, 0 mismatches (docs/data/tc-fp8-2026-09-08/)")
-def HopperE4m3QgmmaDot32(acc: int, *ab: int) -> int:
-    """One accumulator-coordinate transition of `wgmma.mma_async.sync.aligned.m64n64k32.f32.e4m3.e4m3` (SASS
-    `QGMMA.64x64x32.F32.E4M3.E4M3`; 32 exact E4M3 products into `acc`): `veritor.tensor-core.hopper_e4m3_wgmma_k32@1`
-    — one group of 32 + acc through a 14-bit truncating adder, exponent floor -139 (pinned: groups and width unique
-    in the fit grid; the floor is only bounded to [-152, -126], every value in that range computes the same word on
-    E4M3 operands), L6's total rules on every encoding (NaN -> 0x7FFFFFFF, sticky/saturating infinities, zero always
-    +0).  NOTE: the accumulator itself passes through the 14-bit adder — `acc + 0 != acc` for most f32 words
-    (measured: gpu/tc-fp8 `accid` family, 261,900 / 262,144 random finite accumulators changed)."""
-    pipe, f = _fp8_total()
-    return f(pipe, acc, list(ab[:32]), list(ab[32:64]))
-
 
 FP8_PRIMITIVES = [F32Fabs, F32Fmaxf, F32Fminf, F32ToE4m3Sat, HopperE4m3QgmmaDot32]
 
@@ -489,7 +409,7 @@ CALL_NAMES: dict[str, str] = {**H.CALL_NAMES, "LayerPre": "LayerPreFp8", "LayerP
 
 def set_conformance(status: dict[str, str]) -> None:
     """Set conformance statuses from evidence (the port's expectations / conformance run / the tc-fp8 pin)."""
-    by_name = {d.name: d for d in FP8_COMPOSITES + FP8_PRIMITIVES}
+    by_name = {d.name: d for d in FP8_COMPOSITES}  # the FP8 primitives' conformance is core's
     for name, st in status.items():
         by_name[name].conformance = st
 
@@ -500,7 +420,7 @@ def set_conformance(status: dict[str, str]) -> None:
 
 
 def np_f32_to_e4m3_sat(x: np.ndarray) -> np.ndarray:
-    """Vectorised `f32_to_e4m3_sat_bits` over an f32 array (the same function, for whole tensors)."""
+    """Vectorised `F32ToE4m3Sat` over an f32 array (the same function, for whole tensors)."""
     x = np.asarray(x, dtype=np.float32)
     u = x.view(np.uint32)
     sign = ((u >> 31) << 7).astype(np.uint8)

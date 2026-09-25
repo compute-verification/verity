@@ -251,8 +251,6 @@
     {"file": "verity_vllm/program/registry/dense.py", "kind": "sm-arch", "symbol": "AttentionSoftcap", "detail": "sm_89"},
     {"file": "verity_vllm/program/registry/dense.py", "kind": "sm-arch", "symbol": "AttnBlockSoftcap", "detail": "sm_89"},
     {"file": "verity_vllm/program/registry/fp8.py", "kind": "gpu", "symbol": "<module>", "detail": "h100", "count": 2},
-    {"file": "verity_vllm/program/registry/fp8.py", "kind": "gpu", "symbol": "F32ToE4m3Sat", "detail": "h100"},
-    {"file": "verity_vllm/program/registry/fp8.py", "kind": "gpu", "symbol": "HopperE4m3QgmmaDot32", "detail": "h100"},
     {"file": "verity_vllm/program/registry/fp8.py", "kind": "model", "symbol": "<module>", "detail": "qwen"},
     {"file": "verity_vllm/program/registry/gemm_targets.py", "kind": "gpu", "symbol": "<module>", "detail": "a100"},
     {"file": "verity_vllm/program/registry/gemm_targets.py", "kind": "gpu", "symbol": "<module>", "detail": "h100"},
