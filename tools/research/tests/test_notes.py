@@ -790,6 +790,8 @@ def test_scheduled_renders_run_once_per_utc_day_at_or_after_their_time(tmp_path)
     calls = []
 
     def run(cmd, env, cwd, timeout):
+        if cmd[2] == "research":                      # the store refresh before the render (its own test below)
+            return 0, "", ""
         calls.append((cmd[1:], env["PYTHONPATH"], cwd, timeout))
         if cmd[2].endswith("tables"):
             return 0, "# tables\n", ""
@@ -809,7 +811,8 @@ def test_scheduled_renders_run_once_per_utc_day_at_or_after_their_time(tmp_path)
     assert all(0 < c[3] <= notes.RENDER_TIMEOUT_S for c in calls)
     assert notes.render_lines(tmp_path, NOW + dt.timedelta(minutes=50), state, run=run) == [] and len(calls) == 2   # once a day
     lines = notes.render_lines(tmp_path, NOW + dt.timedelta(minutes=60), state, run=lambda *a: (None, "", "timeout after 600s"))
-    assert lines == ["22:00Z RENDER-FAILED later@22:00Z (tables): timeout after 600s", "22:00Z RENDER-FAILED later@22:00Z (drilldown): timeout after 600s"]
+    assert lines == ["22:00Z RENDER-REFRESH-FAILED later@22:00Z: timeout after 600s",
+                     "22:00Z RENDER-FAILED later@22:00Z (tables): timeout after 600s", "22:00Z RENDER-FAILED later@22:00Z (drilldown): timeout after 600s"]
     assert len(notes.render_lines(tmp_path, NOW + dt.timedelta(hours=24), state, run=run)) == 2                    # the next day
     (tmp_path / "steward.toml").write_text("[[render]\n")
     assert notes.render_lines(tmp_path, NOW, state, run=run)[0].startswith("21:00Z RENDER-FAILED steward.toml: ")
@@ -827,11 +830,32 @@ def test_a_render_entry_opts_into_the_tables_preview(tmp_path):
         return 0, f"# {cmd[2]}\n", ""
 
     lines = notes.render_lines(tmp_path, NOW, {}, run=run)
-    assert calls == ["verity_numerical.bench.tables", "verity_numerical.bench.drilldown", "verity_numerical.bench.views",
-                     "verity_numerical.bench.tables", "verity_numerical.bench.drilldown"]
+    assert calls == ["research", "verity_numerical.bench.tables", "verity_numerical.bench.drilldown", "verity_numerical.bench.views",
+                     "research", "verity_numerical.bench.tables", "verity_numerical.bench.drilldown"]
     preview = tmp_path / "r" / "20260923T2100Z-tables-preview.md"
     assert f"21:00Z RENDERED {preview}" in lines and preview.read_text() == "# verity_numerical.bench.views\n"
     assert not (tmp_path / "plain" / "20260923T2100Z-tables-preview.md").exists()
+
+
+def test_a_render_refreshes_its_store_with_the_payloads_its_readers_parse(tmp_path):
+    (tmp_path / "steward.toml").write_text('[[render]]\nat = "20:30Z"\nsource = "/src"\nout = "a"\nstore = "/s"\n\n'
+                                           '[[render]]\nat = "20:30Z"\nsource = "/src"\nout = "b"\nstore = "/s"\npayloads = ["x/v1"]\n\n'
+                                           '[[render]]\nat = "20:30Z"\nsource = "/src"\nout = "c"\nrefresh = false\n')
+    calls = []
+
+    def run(cmd, env, cwd, timeout):
+        calls.append(cmd[1:])
+        if cmd[2] == "research" and "x/v1" in cmd:
+            return 1, "", "research data refresh: no remote configured"
+        return 0, "# md\n", ""
+
+    lines = notes.render_lines(tmp_path, NOW, {}, run=run)
+    refreshes = [c for c in calls if c[1] == "research"]
+    assert refreshes == [["-m", "research", "data", "refresh", "--store", "/s", "--payloads", *notes.RENDER_PAYLOAD_KINDS],
+                         ["-m", "research", "data", "refresh", "--store", "/s", "--payloads", "x/v1"]]
+    assert "instance-equiv/v1" in notes.RENDER_PAYLOAD_KINDS
+    assert "21:00Z RENDER-REFRESH-FAILED b@20:30Z: research data refresh: no remote configured" in lines
+    assert sum(1 for x in lines if " RENDERED " in x) == 6                   # a failed refresh never blocks the render
 
 
 def test_guardian_kills_go_to_the_owning_lanes_inbox_by_machine_pod_hint_or_cwd(tmp_path):

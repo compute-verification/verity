@@ -545,10 +545,10 @@ def stream_equivalence(inst: Mapping[str, Any], target: Target, equivs: Sequence
 
     pool = [e for e in equivs or () if e.doc.get("target") == target.name and T._ref_key(e.doc.get("candidate")) == T._ref_key(inst)]
     if not pool:
-        return None, None
+        return None, T.unreadable_equivs(equivs, target)
     judged = []
     for e in pool:
-        problems = [x for x in T._equiv_content(e.doc, target, inst) if not x.startswith("frozen is not FROZEN_INSTANCES")]
+        problems = [x for x in T._equiv_content(e.doc, target, inst, e.unreadable) if not x.startswith("frozen is not FROZEN_INSTANCES")]
         side = _declared_side(target, e.doc.get("frozen"), inst)
         judged.append((e, problems + ([side] if side else []), T._equiv_verdict(e, result_producers)))
     contra = [e for e, _, v in judged if v is None and e.doc.get("equal") is not True]
@@ -707,6 +707,7 @@ class Views:
     rejected: list[dict[str, Any]] = field(default_factory=list)
     not_families: dict[str, list[str]] = field(default_factory=dict)
     configurations: tuple[Configuration, ...] = CONFIGURATIONS
+    unreadable: list[str] = field(default_factory=list)   #: artifacts the views could not read here (payload not local, ...)
 
     def columns(self) -> list[str]:
         if not self.rules.legacy:
@@ -727,6 +728,7 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
     V = Views(rules=rules, configurations=tuple(configurations))
     cfgs = {c.id: c for c in configurations}
     equivs = T.instance_equivs(store)
+    V.unreadable = [f"{e.artifact}: {e.unreadable}" for e in equivs if e.unreadable]
     entries: list[Ctx] = []
     for art, meta in T._artifacts(store, T.RESULT_KIND):
         fp = meta.get("workload_fingerprint") if isinstance(meta.get("workload_fingerprint"), Mapping) else {}
@@ -1046,6 +1048,9 @@ def render_markdown(V: Views) -> str:
         how = f"{COMMIT} {pre['commit_s']:.3g} s" if pre and pre["commit_warm"] else f"{COMMIT_V1} {pre['commit_s']:.3g} s, once before the timed runs" if pre else ""
         extra = f" [end to end with its commitment ({how}): {T.fmt_overhead(pre['overhead'])}]" if pre else ""
         out.append(f"- {r['artifact']} ({r['configuration'] or r['family']} / {r['line'] or '?'}) → {k}: {why}{extra}")
+    if V.unreadable:
+        out += ["", f"Unreadable here ({len(V.unreadable)}; the render cannot use them until their payloads are fetched):",
+                *[f"- {u}" for u in V.unreadable]]
     if V.not_families:
         n = sum(len(v) for v in V.not_families.values())
         out += ["", f"Not a backend family's result ({n}; by software.backend.name): "
@@ -1070,6 +1075,7 @@ def render_json(V: Views) -> dict[str, Any]:
                     "serving_overhead": overheads(c)[0], "proving_overhead": overheads(c)[1], **c.legacy.phases} for c in V.cells],
         "rejected": [{**r, "codes": [list(x) for x in r["codes"]]} for r in V.rejected],
         "not_families": V.not_families,
+        "unreadable": V.unreadable,
     }
 
 

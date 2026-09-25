@@ -35,7 +35,9 @@
                                                    re-register every fixtures/artifacts.json entry whose bytes changed; old id kept under `previous`
   research data doctor [--clean] [--runs-dir D]    stale store_publish_error.json files (run is an attempt here) vs real failures; --clean deletes the stale
   research data reindex [--remote]                 rebuild the catalog (built aside, swapped in complete); --remote first pulls what the remote has
-  research data refresh [--jobs N] [--json]        incremental: fetch and index only the manifests/attempts/labels the remote has and we lack
+  research data refresh [--jobs N] [--json] [--payloads KIND ...] [--payload-max-bytes N]
+                                                   incremental: fetch and index only the manifests/attempts/labels the remote has and we lack;
+                                                   --payloads also makes local the small file payloads of those kinds (what a render reads)
   research data pending [--json]                   the write-through queue: what this store holds that the remote lacks (exit 1 if any)
   research data reconcile-attempts (RUN... | --all) [--apply] [--json]
                                                    local attempts that differ from the remote's write-once copy; --apply supersedes them (audited)
@@ -65,7 +67,7 @@ from typing import Callable
 
 from . import ids, vocab
 from .index import IGNORE_VERSION_ENV, CatalogVersionError
-from .local import LocalStore, StoreError, store_root
+from .local import REFRESH_PAYLOAD_MAX, LocalStore, StoreError, store_root
 from .remote import ConfigError, RemoteConflict
 
 
@@ -602,15 +604,19 @@ def cmd_refresh(argv: list[str]) -> int:
     ap = _ap("refresh")
     ap.add_argument("--jobs", type=int, default=32, metavar="N")
     ap.add_argument("--json", action="store_true")
+    ap.add_argument("--payloads", nargs="+", default=[], metavar="KIND", help="also fetch the file payloads of artifacts of these kinds")
+    ap.add_argument("--payload-max-bytes", type=int, default=REFRESH_PAYLOAD_MAX, metavar="N", help="skip payloads larger than this")
     ns = ap.parse_args(argv)
     st = LocalStore(ns.store)
-    rep = st.refresh(jobs=max(1, ns.jobs), log=None if ns.json else (lambda m: print(m, file=sys.stderr)))
+    rep = st.refresh(jobs=max(1, ns.jobs), log=None if ns.json else (lambda m: print(m, file=sys.stderr)),
+                     payload_kinds=ns.payloads, payload_max_bytes=ns.payload_max_bytes)
     if ns.json:
         _dump(rep)
     else:
         for e in rep["errors"][:20]:
             print(f"research data refresh: {e}", file=sys.stderr)
-        print(f"refreshed {st.root} from {rep['remote']}: +{rep['manifests']} manifests, +{rep['attempts']} attempts, +{rep['labels']} labels "
+        print(f"refreshed {st.root} from {rep['remote']}: +{rep['manifests']} manifests, +{rep['attempts']} attempts, +{rep['labels']} labels"
+              + (f", +{rep['payloads']} payloads" if "payloads" in rep else "") + " "
               f"in {rep['seconds']}s" + (f"; {len(rep['errors'])} error(s)" if rep["errors"] else ""))
     return 1 if rep["errors"] else 0
 

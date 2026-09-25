@@ -933,6 +933,10 @@ GUARDIAN_LOG = Path.home() / ".veritor" / "mem_guardian.log"
 REAP_RETRY_S = 30 * 60
 OVERDUE_GRACE_MIN = 30
 RENDER_TIMEOUT_S = 600
+RENDER_REFRESH_TIMEOUT_S = 600
+#: The artifact kinds whose payloads the render's readers parse (instance-equiv/v1 documents; payload-only bench-result/v1
+#: envelopes): a render entry's store refresh makes them local unless the entry names its own `payloads`.
+RENDER_PAYLOAD_KINDS = ("instance-equiv/v1", "bench-result/v1")
 NEVER_RAN = ("refused", "resolving", "shipping")        # remote.json phases of a launch that never reached the machine's runner
 BUDGET_RE = re.compile(r"\$\s*(\d+(?:\.\d+)?)")
 HHMMZ_RE = re.compile(r"(\d{1,2}):(\d{2})Z")
@@ -1191,7 +1195,11 @@ def render_lines(root: Path, now: dt.datetime, state: dict, config: Path | None 
     at or after `at`, `python -m verity_numerical.bench.tables` and `.drilldown --root STORE --format md` run with the source on
     PYTHONPATH into <out>/<stamp>-tables.md / -drilldowns.md: `RENDERED <path>`, or `RENDER-FAILED <entry>: <stderr tail>` (both
     within 10 min).  An entry with `preview = true` also renders `.views` (the approved spec's tables, a labelled preview that is
-    never the published numbers) into <stamp>-tables-preview.md.  The snapshot commits them."""
+    never the published numbers) into <stamp>-tables-preview.md.  Before rendering, the entry's store is caught up from the remote
+    with `research data refresh --payloads <kinds>` (`payloads`, default :data:`RENDER_PAYLOAD_KINDS`), so a render on a machine
+    that did not write the records (the control pod) reads what the pods published, payloads included; `refresh = false` skips it,
+    and a failed refresh is `RENDER-REFRESH-FAILED <entry>: ...` while the render still runs on the store as it is.  The snapshot
+    commits them."""
     path = config or root / STEWARD_TOML
     if not path.exists():
         return []
@@ -1219,6 +1227,12 @@ def render_lines(root: Path, now: dt.datetime, state: dict, config: Path | None 
         src = Path(str(e["source"])).expanduser()
         store = Path(str(e.get("store") or "~/.research/store")).expanduser()
         env = {**os.environ, "PYTHONPATH": os.pathsep.join(str(src / s) for s in ("backends/numerical/python", "tools/research/src", "."))}
+        if e.get("refresh", True) is not False:
+            kinds = e.get("payloads") if isinstance(e.get("payloads"), list) else list(RENDER_PAYLOAD_KINDS)
+            cmd = [sys.executable, "-m", "research", "data", "refresh", "--store", str(store), *(["--payloads", *map(str, kinds)] if kinds else [])]
+            rc, stdout, stderr = run(cmd, env, src, RENDER_REFRESH_TIMEOUT_S)
+            if rc != 0:
+                lines.append(f"{now:%H:%MZ} RENDER-REFRESH-FAILED {key}: {' '.join((stderr or stdout).split())[-200:] or f'rc {rc}'}")
         deadline = time.monotonic() + timeout_s
         mods = [("tables", "tables"), ("drilldown", "drilldowns")] + ([("views", "tables-preview")] if e.get("preview") is True else [])
         for mod, suffix in mods:
