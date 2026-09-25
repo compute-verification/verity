@@ -578,6 +578,10 @@ pub static PINS: &[(&str, &str, &str, &str)] = &[
     // gated 2048 VUs (13 honest sub-batches) + 86 negatives at 98d878ca, r20260925-104053-b438, 2026-09-25 10:43Z
     ("bf16-hopper-x4", "sha256", "a02f283de13acd94d47be4e8c794a6c89b833cc2d9151b92393dd6ac37defe62",
      "1b879d1a3ec16e23f886f792900a089fcbc4b080dbddffe4d45a07d64551525a"),
+    // lane x4-sha256-fill: gated 2048 VUs (13 honest sub-batches) + 86 negatives at cd963fd4 on vy-x4-sha256-a100 (A100
+    // SXM4 80GB), r20260925-175055-0792, 2026-09-25 17:54Z; m = 90,165 rows/col
+    ("bf16-ampere-x4", "sha256", "a862f7a041678ab8feca6dbb6433c91528ed0fe8b63b806fd439c93f766d94e5",
+     "848a99cd6ff5b314d46229a2cb27abd4f39cc13f3729b31ad70e396ee6949326"),
 ];
 
 pub fn names() -> Vec<&'static str> {
