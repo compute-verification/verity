@@ -43,6 +43,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from . import ids
+from ..pythonpath import tree_pythonpath
 from . import labels_sync as LS
 from .local import LocalStore, attempt_key, manifest_key, object_key
 from .model import ArtifactManifest
@@ -160,7 +161,7 @@ def _render(root: Path, timeout: float, source: Path | None = None) -> tuple[str
     """The daily render's own invocation (`notes.render_lines`): each of `verity_numerical.bench.tables` / `.drilldown --root ROOT
     --format md` with the source tree on PYTHONPATH and as the cwd; the outputs joined.  -> (text, None) or (None, why)."""
     src = source or render_source()[0]
-    env = {**os.environ, "PYTHONPATH": os.pathsep.join(str(src / s) for s in ("backends/numerical/python", "tools/research/src", "."))}
+    env = {**os.environ, "PYTHONPATH": tree_pythonpath(src)}
     parts = []
     for mod, suffix in RENDER_MODULES:
         try:

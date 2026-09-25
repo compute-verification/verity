@@ -94,6 +94,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable
 
+from .pythonpath import tree_pythonpath
 from .pods import POD_SUFFIXES, strip_pod_suffix
 from .pods.workproc import FIND_PRUNE, NOT_WORK_RE, WORK_RE
 
@@ -1192,8 +1193,8 @@ def render_lines(root: Path, now: dt.datetime, state: dict, config: Path | None 
                  timeout_s: float = RENDER_TIMEOUT_S) -> list[str]:
     """Scheduled renders, from `[[render]]` entries of <root>/steward.toml (re-read every pass): `at` (HH:MMZ, daily), `source` (a tree
     with backends/numerical and tools/research), `out` (under the notes root), `store` (default ~/.research/store).  Once per UTC day
-    at or after `at`, `python -m verity_numerical.bench.tables` and `.drilldown --root STORE --format md` run with the source on
-    PYTHONPATH into <out>/<stamp>-tables.md / -drilldowns.md: `RENDERED <path>`, or `RENDER-FAILED <entry>: <stderr tail>` (both
+    at or after `at`, `python -m verity_numerical.bench.tables` and `.drilldown --root STORE --format md` run with the source tree's
+    workspace import roots and root on PYTHONPATH (`research env --source`, `pythonpath.tree_pythonpath`) into <out>/<stamp>-tables.md / -drilldowns.md: `RENDERED <path>`, or `RENDER-FAILED <entry>: <stderr tail>` (both
     within 10 min).  An entry with `preview = true` also renders `.views` (the approved spec's tables, a labelled preview that is
     never the published numbers) into <stamp>-tables-preview.md.  Before rendering, the entry's store is caught up from the remote
     with `research data refresh --payloads <kinds>` (`payloads`, default :data:`RENDER_PAYLOAD_KINDS`), so a render on a machine
@@ -1226,7 +1227,7 @@ def render_lines(root: Path, now: dt.datetime, state: dict, config: Path | None 
         done[key] = today
         src = Path(str(e["source"])).expanduser()
         store = Path(str(e.get("store") or "~/.research/store")).expanduser()
-        env = {**os.environ, "PYTHONPATH": os.pathsep.join(str(src / s) for s in ("backends/numerical/python", "tools/research/src", "."))}
+        env = {**os.environ, "PYTHONPATH": tree_pythonpath(src)}
         if e.get("refresh", True) is not False:
             kinds = e.get("payloads") if isinstance(e.get("payloads"), list) else list(RENDER_PAYLOAD_KINDS)
             cmd = [sys.executable, "-m", "research", "data", "refresh", "--store", str(store), *(["--payloads", *map(str, kinds)] if kinds else [])]
