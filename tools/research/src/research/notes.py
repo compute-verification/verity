@@ -1190,7 +1190,8 @@ def render_lines(root: Path, now: dt.datetime, state: dict, config: Path | None 
     with backends/numerical and tools/research), `out` (under the notes root), `store` (default ~/.research/store).  Once per UTC day
     at or after `at`, `python -m verity_numerical.bench.tables` and `.drilldown --root STORE --format md` run with the source on
     PYTHONPATH into <out>/<stamp>-tables.md / -drilldowns.md: `RENDERED <path>`, or `RENDER-FAILED <entry>: <stderr tail>` (both
-    within 10 min).  The snapshot commits them."""
+    within 10 min).  An entry with `preview = true` also renders `.views` (the approved spec's tables, a labelled preview that is
+    never the published numbers) into <stamp>-tables-preview.md.  The snapshot commits them."""
     path = config or root / STEWARD_TOML
     if not path.exists():
         return []
@@ -1219,7 +1220,8 @@ def render_lines(root: Path, now: dt.datetime, state: dict, config: Path | None 
         store = Path(str(e.get("store") or "~/.research/store")).expanduser()
         env = {**os.environ, "PYTHONPATH": os.pathsep.join(str(src / s) for s in ("backends/numerical/python", "tools/research/src", "."))}
         deadline = time.monotonic() + timeout_s
-        for mod, suffix in (("tables", "tables"), ("drilldown", "drilldowns")):
+        mods = [("tables", "tables"), ("drilldown", "drilldowns")] + ([("views", "tables-preview")] if e.get("preview") is True else [])
+        for mod, suffix in mods:
             left = deadline - time.monotonic()
             cmd = [sys.executable, "-m", f"verity_numerical.bench.{mod}", "--root", str(store), "--format", "md"]
             rc, stdout, stderr = run(cmd, env, src, left) if left > 0 else (None, "", f"timeout after {timeout_s:.0f}s")

@@ -817,6 +817,23 @@ def test_scheduled_renders_run_once_per_utc_day_at_or_after_their_time(tmp_path)
     assert notes.render_lines(tmp_path / "nowhere", NOW, {}, run=run) == []
 
 
+def test_a_render_entry_opts_into_the_tables_preview(tmp_path):
+    (tmp_path / "steward.toml").write_text('[[render]]\nat = "20:30Z"\nsource = "/src"\nout = "r"\npreview = true\n\n'
+                                           '[[render]]\nat = "20:30Z"\nsource = "/src"\nout = "plain"\npreview = "yes"\n')
+    calls = []
+
+    def run(cmd, env, cwd, timeout):
+        calls.append(cmd[2])
+        return 0, f"# {cmd[2]}\n", ""
+
+    lines = notes.render_lines(tmp_path, NOW, {}, run=run)
+    assert calls == ["verity_numerical.bench.tables", "verity_numerical.bench.drilldown", "verity_numerical.bench.views",
+                     "verity_numerical.bench.tables", "verity_numerical.bench.drilldown"]
+    preview = tmp_path / "r" / "20260923T2100Z-tables-preview.md"
+    assert f"21:00Z RENDERED {preview}" in lines and preview.read_text() == "# verity_numerical.bench.views\n"
+    assert not (tmp_path / "plain" / "20260923T2100Z-tables-preview.md").exists()
+
+
 def test_guardian_kills_go_to_the_owning_lanes_inbox_by_machine_pod_hint_or_cwd(tmp_path):
     root, log, wt = tmp_path / "notes", tmp_path / "mem_guardian.log", tmp_path / "wt" / "tables-fix"
     for lane in ("sp1-formats", "agkr-table", "tables-fix", "tables-fix-2"):
