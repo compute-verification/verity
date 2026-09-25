@@ -4,7 +4,7 @@ UNCHANGED must fail the oracle-compare.
 The two identity->value paths (code provenance, rg on the release tree):
   collector   native_collect._record_step_rows (InputBatch.req_ids x scheduler_output.num_scheduled_tokens -> step_rows) -> commit_delta
               .binding_record._logical (engine id -> r<i>) -> binding.build_binding_map (request_rows split of every batched member ->
-              entries with identity + element_offset + stream offsets) -> the committed bytes (committed_reader).
+              entries with identity + element_offset + stream offsets) -> the committed bytes (oracle_compare.OpenedReader; a dict here).
   observer    vllm_adapter recorder (dispatcher observer: snapshots.json + values/<step>/*.bin, log.jsonl.gz StepStart rows / SampleEnd,
               tokens.json) + fold.py (instances.jsonl: which event/storage view is which Program instance for which request/position)
               -> oracle_compare.MatchOracle.member_bytes / ids_bytes / sampled_id.

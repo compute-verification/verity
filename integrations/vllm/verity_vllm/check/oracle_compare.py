@@ -12,8 +12,10 @@ offset, shape, dtype) is its output, attributed to a request and a token positio
 its output view from the snapshot of its producing event.  That is the Program-evaluated value of record for the Match verdict, read
 from the record -- the collector's own bytes never enter the expected side.
 
-    compared identity  : committed bytes (the collector's retained copy of the member, sliced at the binding-map entry's element
-                         offset + the identity's request-local range) == oracle bytes            -> equal | MISMATCH (named)
+    compared identity  : committed bytes (opened from the collector's retained copy of the member and verified against the run root,
+                         `OpenedReader`, sliced at the binding-map entry's element offset + the identity's request-local range) == oracle
+                         bytes                                                                    -> equal | MISMATCH (named; an opening
+                         that does not verify is a mismatch)
     sampled_token_ids  : the committed id == the capture's SampleEnd id for that request at that step (every step, no snapshot needed)
     not compared       : identities of a step the Match did not snapshot (row_pod MATCH_SNAP_STEPS, default 0,1), of a family the
                          Match has no value for (the FA2/FA3 M1 kernel-interior stream: its C2 is the tap's own bit-exact xcheck,
@@ -33,6 +35,9 @@ import json
 import os
 from collections import Counter, defaultdict
 from typing import Any, Callable
+
+# re-exported: the engine-layer tp worker may import this module but not commit/ (tests/lint P9)
+from verity_vllm.commit.opened import ORDINAL_SEP, OPENED_METHOD, OpenedReader, OpeningNotVerified, meta_by_name  # noqa: F401  -- re-exported
 
 SCHEMA = "verity-sweep/oracle-compare/v1"
 METHOD = "oracle-compare (Match capture of the same attempt: snapshots at the fold's instance output views + SampleEnd ids)"
@@ -687,12 +692,34 @@ def promote_handed_down(manifest: dict[str, Any] | None, derived: dict[tuple[str
     return {"members": members, "rows": rows}
 
 
+def _foreign_oracle(oracle: MatchOracle, bmap: dict[str, Any], wcheck: dict[str, Any]) -> dict[str, Any]:
+    """The result of a Match record whose request table is not this workload's: False, nothing compared."""
+    why = "foreign oracle: the Match record is not this workload's -- " + "; ".join(wcheck["problems"][:4])
+    return {"schema": SCHEMA, "method": "oracle-compare (Match capture of the same attempt: snapshots + fold + capture log + tokens.json)",
+            "result": False, "grade": "foreign-oracle", "why": why, "complete": False, "compared": 0, "equal": 0, "mismatch_n": 0, "mismatch": [],
+            "compared_by_family": {}, "not_compared": {"foreign oracle": len(bmap.get("entries") or [])}, "steps_compared": [], "steps_not_snapshotted": [],
+            "attribution": {"complete": False, "pairs": 0, "unverified_n": 0, "ambiguous_steps": []}, "workload_check": wcheck, "oracle": oracle.provenance()}
+
+
+def _ambiguous_steps(pairs_seen: set[tuple[int, str]], attrib: dict[tuple[int, str], dict[str, Any]], snapshot_steps: Any) -> list[int]:
+    """Steps not snapshotted where two requests carry the same ids AND the same sampled id: a swap there is not attributable."""
+    ambiguous: list[int] = []
+    for s in sorted({s for s, _ in pairs_seen}):
+        if s in snapshot_steps:
+            continue
+        sig = Counter((attrib.get((s, r), {}).get("ids_sha"), attrib.get((s, r), {}).get("sampled_value")) for ss, r in pairs_seen if ss == s)
+        if any(n > 1 for n in sig.values()):
+            ambiguous.append(s)
+    return ambiguous
+
+
 def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callable[[int, str, int, int], bytes | None], *,
                    max_report: int = 12, producers: dict[tuple[str, str], dict[str, Any]] | None = None,
                    workload: dict[str, Any] | None = None, aliases: dict[str, Any] | None = None,
                    query_families: dict[str, int] | None = None) -> dict[str, Any]:
     """Compare every binding-map entry's committed bytes with the Match oracle.  `committed(step, name, byte_lo, byte_hi)` returns the
-    collector's retained bytes of member `name` at `step` in [byte_lo, byte_hi) (None if not retained).  `producers` (producers_of(manifest))
+    bytes of member `name` at `step` in [byte_lo, byte_hi) (None if not retained) -- in the Commit an `OpenedReader`, whose
+    `OpeningNotVerified` makes the entry a mismatch.  `producers` (producers_of(manifest))
     names each member's producing Program op so exploded-module folds are read at the producer's instances.  `workload` (the run's declared
     requests) is checked against the oracle's request table BY NAME first: a foreign Match record is result False 'foreign oracle' with
     nothing compared [rev-cb M-0301 R3].
@@ -706,11 +733,7 @@ def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callabl
     inv_alias = {(str(v[0]), int(v[1])): str(k) for k, v in (aliases or {}).items()}       # (canonical op, invocation) -> Program op_path
     wcheck = oracle.workload_check(workload)
     if wcheck.get("ok") is False:
-        why = "foreign oracle: the Match record is not this workload's -- " + "; ".join(wcheck["problems"][:4])
-        return {"schema": SCHEMA, "method": "oracle-compare (Match capture of the same attempt: snapshots + fold + capture log + tokens.json)",
-                "result": False, "grade": "foreign-oracle", "why": why, "complete": False, "compared": 0, "equal": 0, "mismatch_n": 0, "mismatch": [],
-                "compared_by_family": {}, "not_compared": {"foreign oracle": len(bmap.get("entries") or [])}, "steps_compared": [], "steps_not_snapshotted": [],
-                "attribution": {"complete": False, "pairs": 0, "unverified_n": 0, "ambiguous_steps": []}, "workload_check": wcheck, "oracle": oracle.provenance()}
+        return _foreign_oracle(oracle, bmap, wcheck)
     compared = equal = 0
     mism: list[dict] = []
     not_cmp: Counter = Counter()
@@ -767,7 +790,14 @@ def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callabl
             continue
         eo = int(e.get("element_offset") or 0)
         blo, bhi = (eo + int(lo)) * isz, (eo + int(hi)) * isz
-        got = committed(step, entry_read_name(e, name_inv.get((step, str(e.get("name"))), 1)), blo, bhi)     # [moe F-moe-r17-06] exact invocation
+        try:
+            got = committed(step, entry_read_name(e, name_inv.get((step, str(e.get("name"))), 1)), blo, bhi)   # [moe F-moe-r17-06] exact invocation
+        except OpeningNotVerified as exc:
+            compared += 1
+            by_fam_cmp[fam] += 1
+            steps_cmp.add(step)
+            mism.append({"identity": ident, "family": fam, "name": e.get("name"), "why": f"opened value not verified: {exc}"})
+            continue
         if got is None:
             not_cmp["committed bytes not retained on host (retain=none, or an excluded family under retain=host + exclude)"] += 1
             not_cmp_fam[fam] += 1
@@ -833,13 +863,7 @@ def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callabl
     # attribution: every (step, request) the map binds has BOTH id families compared and equal; steps where two requests carry the same
     # ids AND the same sampled id are ambiguous for a swap unless the step's values were snapshotted (then instance_outputs decide)
     attrib_missing = sorted(k for k in pairs_seen if not (attrib.get(k, {}).get("ids") and attrib.get(k, {}).get("sampled")))
-    ambiguous: list[int] = []
-    for s in sorted({s for s, _ in pairs_seen}):
-        if s in oracle.snapshot_steps:
-            continue
-        sig = Counter((attrib.get((s, r), {}).get("ids_sha"), attrib.get((s, r), {}).get("sampled_value")) for ss, r in pairs_seen if ss == s)
-        if any(n > 1 for n in sig.values()):
-            ambiguous.append(s)
+    ambiguous = _ambiguous_steps(pairs_seen, attrib, oracle.snapshot_steps)
     attribution_complete = compared > 0 and not mism and not attrib_missing and not ambiguous
     grade = ("mismatch" if mism else "complete" if complete else "attribution-complete" if attribution_complete else "partial")
     why = None
@@ -887,9 +911,6 @@ def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callabl
             "workload_check": wcheck, "oracle": oracle.provenance()}
 
 
-ORDINAL_SEP = "#ord"      # [moe F-moe-r17-06] `<member name>#ord<tensor_ordinal>`: the reader's exact meta of a shared module's k-th invocation
-
-
 def same_name_invocations(bmap: dict[str, Any]) -> dict[tuple[int, str], int]:
     """(step, member name) -> the number of DISTINCT invocations bound under that name at that step (> 1 = a shared module's metas)."""
     inv: dict[tuple[int, str], set[int]] = {}
@@ -909,45 +930,3 @@ def entry_read_name(e: dict[str, Any], same_name_invocations: int) -> str:
     if same_name_invocations > 1 and e.get("tensor_ordinal") is not None and ORDINAL_SEP not in name:
         return f"{name}{ORDINAL_SEP}{int(e['tensor_ordinal'])}"
     return name
-
-
-def committed_reader(com) -> Callable[[int, str, int, int], bytes | None]:
-    """The collector's retained bytes (host copy / retained device block / host windows) of member `name` at `step`, sliced [lo, hi)."""
-    def read(step: int, name: str, lo: int, hi: int) -> bytes | None:
-        metas = (getattr(com, "_layouts", None) or {}).get(step)
-        if not metas:
-            return None
-        # [moe F-moe-r17-06] a SHARED module (vLLM's one RotaryEmbedding, called once per layer) publishes one meta per INVOCATION under the
-        # SAME member name; the binding map binds each as its own identity (invocation k, tensor_ordinal = that meta's ordinal).  A reader
-        # asked by name alone can only return the FIRST meta's bytes (layer 0's words for every layer: the OLMoE mixedstop record, layers 1..15
-        # RoPE_v1 / Attention_v3 rows all unequal, layer 0 equal).  `<name>#ord<ordinal>` selects the meta EXACTLY; a bare name keeps the
-        # first-meta read (every non-shared member has one meta per step).
-        base, _sep, ordinal = name.partition(ORDINAL_SEP)
-        if _sep:
-            m = next((x for x in metas if x.name == base and int(getattr(x, "ordinal", -1)) == int(ordinal)), None)
-        else:
-            # [revb S-r17b-19 n3] a BARE name that has more than one meta at the step is a shared member asked without its ordinal: there is
-            # no first-meta answer to give (that read IS the alias class) -- None by name, so a third caller cannot regress silently
-            same = [x for x in metas if x.name == base]
-            m = same[0] if len(same) == 1 else None
-        if m is None:
-            return None
-        blocks = getattr(com, "_gpu_blocks", None) or {}
-        # [B9.1] a padding meta (bot by enablement, appended to a mixed step) is host-only: `dev_off -1`, its bytes in `host`; the step's
-        # device block holds the EXECUTED members only -- slicing it at offset 0 for a padding read would return another request's words
-        if step in blocks and blocks[step][0] is not None and int(getattr(m, "dev_off", 0)) >= 0:
-            blk = blocks[step][0]                                   # contiguous keep tensor (device | host) or host windows: both slice by bytes
-            holds = getattr(blk, "holds", None)                     # [R17 fp8] sparse host retention (retain=sample / retain=host + exclude):
-            if holds is not None and not holds(m.dev_off + lo, m.dev_off + hi):   # a member whose bytes were not kept is 'not committed
-                return None                                                         # on host' (opens by replay), never a raise mid-compare
-            seg = blk[m.dev_off + lo:m.dev_off + hi]
-            return bytes((seg.cpu() if getattr(seg, "is_cuda", False) else seg).numpy().tobytes())
-        host = getattr(m, "host", None)
-        if host is not None:
-            if hasattr(host, "numpy"):                                  # slice FIRST (never tobytes() of the whole retained block per read)
-                import numpy as np
-                a = host.numpy()
-                return bytes(a.reshape(-1).view(np.uint8)[lo:hi].tobytes()) if a.flags.c_contiguous else bytes(a.tobytes()[lo:hi])
-            return bytes(memoryview(host)[lo:hi])
-        return None
-    return read

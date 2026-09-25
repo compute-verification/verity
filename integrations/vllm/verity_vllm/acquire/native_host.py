@@ -50,6 +50,7 @@ except ImportError:                      # the offline core (tests, CPU cross-ch
     torch = None  # type: ignore[assignment]
 
 from verity_vllm.commit import hidden_engine as eng  # production engine pieces (imported, not forked)
+from verity_vllm.commit.native_ranges import NativeRangeOpenings
 from verity_vllm.acquire.committer_api import Opening, RunCommitment, StepCommitment, declaration
 from verity_vllm.harness.spans import Spans
 
@@ -828,7 +829,7 @@ def memtrace(where: str, step: int | None = None) -> None:
           f"device-used {(total - free) / 2**30:6.2f} GiB", flush=True)
 
 
-class NativeHostCommitter:
+class NativeHostCommitter(NativeRangeOpenings):
     name = "native_host"
 
     def __init__(self, engine: Any, *, program_digest: bytes | None = None, run_id: str = "run", chunk: int = DEFAULT_CHUNK,
@@ -1043,9 +1044,9 @@ class NativeHostCommitter:
 
     # ------------------------------------------------------------------ offline core (tests; no engine, no CUDA)
 
-    def commit_offline(self, steps: list[list[tuple[str, bytes]]], *, padding: list | None = None) -> RunCommitment:
-        """Commit the given per-step tensors (name, raw bytes) synchronously — the exact hashing / layout / root code the online
-        path runs on the worker thread, minus hooks and D2H.  Used by the security tests and for CPU cross-checks.
+    def commit_offline(self, steps: list[list[tuple]], *, padding: list | None = None) -> RunCommitment:
+        """Commit the given per-step tensors (name, raw bytes[, dtype, shape]; default uint8 of the byte length) synchronously — the exact
+        hashing / layout / root code the online path runs on the worker thread, minus hooks and D2H -- for the security tests and CPU cross-checks.
         `padding`: [B9.1] PaddingSteps -- or a callable(committer) -> PaddingSteps run after the steps are committed -- registered
         before `finalize()` (see `add_padding_steps`)."""
         class _Ev:
@@ -1056,10 +1057,11 @@ class NativeHostCommitter:
         for tensors in steps:
             job = _StepJob(self._step_index, [], _Ev())
             self._step_index += 1
-            for name, raw in tensors:
+            for name, raw, *typed in tensors:
                 first_leaf = (job.metas[-1].first_leaf + job.metas[-1].n_leaves) if job.metas else 0
                 n_leaves = (len(raw) + self.chunk - 1) // self.chunk
-                m = TensorMeta(len(job.metas), name, "uint8", (len(raw),), len(raw), self.chunk, first_leaf, n_leaves)
+                dtype, shape = (str(typed[0]), tuple(typed[1])) if typed else ("uint8", (len(raw),))
+                m = TensorMeta(len(job.metas), name, dtype, shape, len(raw), self.chunk, first_leaf, n_leaves)
                 m.host = memoryview(raw)
                 job.metas.append(m)
             job.t_step_end = time.perf_counter()
@@ -1986,7 +1988,7 @@ class NativeHostCommitter:
         for s in sorted(self._padding):
             ps = self._padding[s]
             # host-only metas: `dev_off -1` -- a padding tensor has no bytes in the step's device block (a GPU-tree mixed step keeps one),
-            # so `oracle_compare.committed_reader` must read its `host` view, never slice the executed block at offset 0
+            # so a reader of its bytes (`commit.opened.OpenedReader`: `leaf_span` on `stream_off`) opens the padding leaves, never the executed block at offset 0
             pad_metas = [TensorMeta(m.ordinal, m.name, m.dtype, tuple(m.shape), m.nbytes, m.chunk, m.first_leaf, m.n_leaves,
                                     host=memoryview(ps.stream)[m.stream_off - ps.stream_base:m.stream_off - ps.stream_base + m.nbytes],
                                     stream_off=m.stream_off, dev_off=-1) for m in ps.metas]
@@ -2481,9 +2483,7 @@ class NativeHostCommitter:
                              self.layout_digest(self._layouts[opening.step]), sc.n_leaves, merkle)
         if root != sc.root:
             return False
-        run_root = hashlib.sha256(ROOT_TAG_RUN + self.program_digest + self._geo_digest + len(run.steps).to_bytes(8, "big")
-                                  + eng.ft.fold([s.root for s in run.steps])).digest()
-        return run_root == run.run_root
+        return self._run_root(run) == run.run_root
 
     # ------------------------------------------------------------------ coverage
 

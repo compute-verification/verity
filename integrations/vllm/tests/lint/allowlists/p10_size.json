@@ -12,15 +12,15 @@
     {"file": "verity_vllm/check/global_match.py", "kind": "function", "symbol": "_check.leg", "detail": "lines", "count": 174},
     {"file": "verity_vllm/check/global_match.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 2206},
     {"file": "verity_vllm/check/noninterference.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 803},
-    {"file": "verity_vllm/check/oracle_compare.py", "kind": "function", "symbol": "oracle_compare", "detail": "lines", "count": 198},
-    {"file": "verity_vllm/check/oracle_compare.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 953},
+    {"file": "verity_vllm/check/oracle_compare.py", "kind": "function", "symbol": "oracle_compare", "detail": "lines", "count": 196},
+    {"file": "verity_vllm/check/oracle_compare.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 932},
     {"file": "verity_vllm/check/program_compare.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 906},
     {"file": "verity_vllm/check/relations.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1344},
     {"file": "verity_vllm/check/replay.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1178},
     {"file": "verity_vllm/check/sampled_replay.py", "kind": "function", "symbol": "evaluate", "detail": "lines", "count": 178},
     {"file": "verity_vllm/check/sampled_replay.py", "kind": "function", "symbol": "query_population", "detail": "lines", "count": 373},
-    {"file": "verity_vllm/check/sampled_replay.py", "kind": "function", "symbol": "sampled_replay", "detail": "lines", "count": 257},
-    {"file": "verity_vllm/check/sampled_replay.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 3117},
+    {"file": "verity_vllm/check/sampled_replay.py", "kind": "function", "symbol": "sampled_replay", "detail": "lines", "count": 247},
+    {"file": "verity_vllm/check/sampled_replay.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 3099},
     {"file": "verity_vllm/check/stoch_recompute.py", "kind": "function", "symbol": "recompute_run", "detail": "lines", "count": 310},
     {"file": "verity_vllm/check/twins.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1050},
     {"file": "verity_vllm/check/verdict.py", "kind": "function", "symbol": "c2_rules", "detail": "lines", "count": 159},
@@ -34,7 +34,7 @@
     {"file": "verity_vllm/correspondence/emit.py", "kind": "function", "symbol": "emit_correspondence", "detail": "lines", "count": 217},
     {"file": "verity_vllm/harness/admission_planner.py", "kind": "function", "symbol": "plan", "detail": "lines", "count": 180},
     {"file": "verity_vllm/harness/commit_delta.py", "kind": "function", "symbol": "binding_record", "detail": "lines", "count": 210},
-    {"file": "verity_vllm/harness/commit_delta.py", "kind": "function", "symbol": "main", "detail": "lines", "count": 1915},
+    {"file": "verity_vllm/harness/commit_delta.py", "kind": "function", "symbol": "main", "detail": "lines", "count": 1914},
     {"file": "verity_vllm/harness/commit_delta.py", "kind": "function", "symbol": "openings_after_release", "detail": "lines", "count": 179},
     {"file": "verity_vllm/harness/commit_delta.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 3021},
     {"file": "verity_vllm/harness/compiled_merge.py", "kind": "function", "symbol": "main", "detail": "lines", "count": 404},
@@ -76,6 +76,6 @@
     {"file": "verity_vllm/tp/match.py", "kind": "function", "symbol": "_check_main", "detail": "lines", "count": 208},
     {"file": "verity_vllm/tp/rank_match.py", "kind": "function", "symbol": "cross_rank_check", "detail": "lines", "count": 267},
     {"file": "verity_vllm/tp/worker.py", "kind": "function", "symbol": "TP2CaptureWorkerExtension.tp2_commit_make", "detail": "lines", "count": 254},
-    {"file": "verity_vllm/tp/worker.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1573}
+    {"file": "verity_vllm/tp/worker.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1558}
   ]
 }
