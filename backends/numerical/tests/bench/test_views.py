@@ -460,3 +460,20 @@ def test_an_equivalence_cannot_launder_the_a100_fixtures_repeats(store: LocalSto
     put_equiv(store, equiv_doc(cand, target=FIRST, frozen={**ref, "range": [0, 8192]}))
     got = next(r for r in V.build(store).rejected if r["artifact"] == art)["codes"]
     assert ("I" in [k for k, _ in got]) and any("repeats instances" in w for k, w in got if k == "I")
+
+
+def test_an_equivalence_whose_payload_is_not_local_is_reported_not_silently_read(store: LocalStore, tmp_path) -> None:
+    art = committed(store, t_total=1.5, commit=0.3, B=8192, manifest="ab" * 32)
+    cand = store.get_manifest(art).meta["workload_fingerprint"]["instances"]
+    eq = put_equiv(store, equiv_doc(cand, frozen=_stream_ref(8192)), payload=tmp_path / "equiv.json")
+    assert line(V.build(store))["cells"]["B-Ligero"].artifact == art           # readable: it counts
+    store.object_path(store.get_manifest(eq).payload.sha256).unlink()
+    views = V.build(store)
+    assert views.unreadable == [f"{eq}: payload not local (blob {store.get_manifest(eq).payload.sha256[:12]}… is not in this store: "
+                                "`research data fetch`)"]
+    got = next(r for r in views.rejected if r["artifact"] == art)["codes"]
+    assert got[0][0] == "I" and "payload not local" in got[0][1]
+    md = V.render_markdown(views)
+    assert "Unreadable here (1;" in md and V.render_json(views)["unreadable"] == views.unreadable
+    # the frozen tables name it too, instead of a bare-meta document with a null candidate
+    assert T.instance_equivalence(cand, FP8_ADA_MMA, T.instance_equivs(store), set())[1].startswith(f"{eq}: payload not local")
