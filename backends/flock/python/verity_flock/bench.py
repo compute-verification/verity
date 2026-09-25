@@ -26,7 +26,7 @@ import time
 from pathlib import Path
 
 from . import instances, lowering
-from .backend import FLOCK_FRAME_V3_BLAKE3, lowering_version
+from .backend import FLOCK_BLOCK, FLOCK_FRAME_V3_BLAKE3, lowering_version
 
 RULE = ("double total VUs from start at fixed per-proof settings until two successive doublings together raise the median "
         "throughput by < 2 % or a point fails; plateau = the point with the highest median throughput (kb/TABLES.md)")
@@ -220,7 +220,8 @@ def result(a, p: dict, sweep: dict) -> dict:
     net_wait = max(0.0, statistics.median(r["wait_s"] - r["verdict"].get("handle_s", 0.0) for r in timed))
     n = p["total"]
     profile = PROFILES[a.relation]
-    rec = FLOCK_FRAME_V3_BLAKE3.record()
+    binary = Path(a.bin).name
+    rec = (FLOCK_BLOCK if binary == FLOCK_BLOCK.binary else FLOCK_FRAME_V3_BLAKE3).record()
     first = timed[0]
     hw = contract.probe_hardware()
     fp = contract.fingerprint(
@@ -229,7 +230,9 @@ def result(a, p: dict, sweep: dict) -> dict:
         security={"target": -128, "achieved_log2": -195.5, "profile": "flock-128-r2", "reps": 2, "per_rep_log2": -97.8,
                   "coins": "live verifier (flock-live R1-R8)", "accountant": rec["soundness"]["accountant"]},
         hardware=hw,
-        software={"backend": {"name": "flock-pure", "configuration": rec["configuration"], "commit": a.commit,
+        software={"backend": {"name": binary, "configuration": rec["configuration"], "commit": a.commit,
+                              "statement": first.get("statement") or "verity/flock-pure/v1", "prover": first.get("prover") or "cpu-union",
+                              "prove_args": a.prove_arg,
                               "lowering_sha256": lowering.PINS[a.relation], "lowering_version": lowering_version(),
                               "flock": "succinctlabs/flock b684b12 + backends/flock/flock-link-b684b12.patch"},
                   "toolchain": {"rustc": a.rustc, "python": platform.python_version()}},
@@ -237,7 +240,7 @@ def result(a, p: dict, sweep: dict) -> dict:
                       "timed session commits its batch and builds its rows afresh",
         retention="retained", instances=p["header"]["instances"], N_subbatches=len(p["subbatches"]),
         batching={"total": n, "per_proof": a.per_proof, "in_flight": 1, "subbatches": [list(x) for x in p["subbatches"]]},
-        scheme="frame-v3/blake3-keyed/row/v2", statement="verity/flock-pure/v1", relation=a.relation,
+        scheme="frame-v3/blake3-keyed/row/v2", statement=first.get("statement") or "verity/flock-pure/v1", relation=a.relation,
         roots=first["roots"], sigma=first["sigma"], dense_m=first["dense_m"], units_per_vu=first["units"],
         n_blake3=first["n_blake3"], n_units=first["n_units"],
         rtt_method="net.rtt_ms = (prover coin wait - verifier handling time) / round trips, per timed session, median",
@@ -280,7 +283,11 @@ def result(a, p: dict, sweep: dict) -> dict:
            "measurements": ms, "measurement_files": [f"{p['dir']}/prove.txt"], "artifacts": [],
            "sweep": sweep, "contention": p["contention"],
            "interaction": {"rtt_method": "net.rtt_ms = (the prover's coin wait - the verifier's round-handling time) / round trips, "
-                                         "median over the timed sessions; verifier " + ("on loopback" if not a.verifier else a.verifier)},
+                                         "median over the timed sessions; verifier " + ("on loopback" if not a.verifier else a.verifier),
+                           "hello_rtt_ms": statistics.median(x for r in timed for x in (r["rtt_ms"] if isinstance(r.get("rtt_ms"), list) else [r.get("rtt_ms")]) if x is not None)
+                           if any(r.get("rtt_ms") is not None for r in timed) else None,
+                           "hello_rtt_method": "the session's Hello request/response time (flock-pure-gpu rtt_ms), median",
+                           "verifier_operator": a.operator or None},
            "protocol": {"warm": True, "runs": len(timed), "statistic": "median", "contended": p["contention"].get("contended"),
                         "warm_rule": "one full untimed session (prove --warm 1) before the timed sessions, same process"},
            "runs": [{"e2e_s": r["e2e_s"], "commit_s": r["commit_s"], "prove_s": r["prove_s"], "wait_s": r["wait_s"],
