@@ -101,7 +101,10 @@ campaign, an asserter of the result's own `candidate`/`label` labels, the lane
 a `lane` label or its meta (`lane`, `by`, `registered_by`, `constructed_by`)
 names; an attempt-less result naming none is never verified; **not
 downgraded** -- the latest `red-team-*` `proof_class` verdict on the artifact
-is not below the fingerprint's class. A candidate is recognised from
+is not below the fingerprint's class; **not pulled** -- the latest `finding`
+label on the artifact does not start `PULLED` (one starting `UNDER
+RE-VERIFICATION` keeps the cell, marked `(under re-verification)` with the
+finding in its footnote, until a later `CLEARED` label). A candidate is recognised from
 `software.backend.name` (`verity-gkr`, `b-ligero chain…`, `sp1`); component
 benchmarks (`verity-direct`, `backends/gkr/...`, `b-encode`) are none. The
 renderer lists every rejected candidate result with its first reason.

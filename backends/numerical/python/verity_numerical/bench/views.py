@@ -539,6 +539,9 @@ def reject_codes(store: Any, ctx: Ctx, rules: Rules, equivs: Sequence[T.Instance
     ceiling, verdict = T._redteam_ceiling(verdicts, self_)
     if verdict is not None and isinstance(pc, str) and T.RANK.get(ceiling or "", -1) < T.RANK.get(pc, -1):
         p.append(("D", f"capped: {verdict.by} ({verdict.ref or 'no ref'}, {verdict.ts}) asserts proof_class={ceiling}, below {pc}"))
+    state, flab = T.cell_finding(ctx.labels)
+    if state == "pulled":
+        p.append(("D", f"pulled: {T.finding_note(flab)}"))
     return sorted(p, key=lambda x: _ORDER[x[0]])
 
 
@@ -689,7 +692,8 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
                                 bound_log2=whole_proof_log2(c.meta["workload_fingerprint"]),
                                 provisional=None if rules.legacy else provisional(c),
                                 legacy=T._cell(c.meta, c.art, T._attempt_of(store, c.art)[0], target, _CANDIDATE[c.family.id],
-                                               vb.by if vb else None, T.instances_equiv_of(c.meta, c.labels, c.attempt, target, equivs)),
+                                               vb.by if vb else None, T.instances_equiv_of(c.meta, c.labels, c.attempt, target, equivs),
+                                               _open_finding(c.labels)),
                                 batching=_batching(c.meta["workload_fingerprint"]), scheme=scheme,
                                 algebraic=[h.text() for h in (c.config.algebraic() if c.config else ())])
                 alt = best(pools.get(key, []) + unfiltered.get(key, []))
@@ -699,6 +703,11 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
                 V.cells.append(cell)
             V.lines.append(line)
     return V
+
+
+def _open_finding(labels: Sequence[Any]) -> str | None:
+    state, lab = T.cell_finding(labels)
+    return T.finding_note(lab) if state == "open" else None
 
 
 def _empty_reason(rejected: Sequence[Mapping[str, Any]], target: Target, scheme: str | None, line_schemes: Sequence[str | None],
@@ -834,6 +843,7 @@ def render_markdown(V: Views) -> str:
             "N = compute-bound datasheet estimate, instances/s (busiest unit, peak entry); P = instances/s end to end "
             f"(committing the batch, `{COMMIT}`, then proving){'; legacy: proving only' if rules.legacy else ''}; cell = N / P of the "
             "family's best admissible configuration (highest P). `(prov.)` = no red-team clearance of the statement yet; "
+            f"`({T.UNDER_REVERIFICATION})` = the latest `finding` label on the result is open (a `PULLED` one rejects it, D); "
             f"`(alg.)` = its soundness argument uses an algebraic hash: {ALGEBRAIC_FLAG} (Table 1's flag); "
             f"`{T.EMPTY}` = no admissible result; `n/s` = declared unsupported.", ""]
     notes: list[str] = []
@@ -865,13 +875,16 @@ def render_markdown(V: Views) -> str:
                 text += f"; {T.INSTANCE_EQUIV_NOTE} ({c.legacy.instances_equiv})"
             if c.provisional:
                 text += f"; provisional: {c.provisional}"
+            if c.legacy.finding:
+                text += f"; {c.legacy.finding}"
             if c.algebraic:
                 text += f"; {ALGEBRAIC_FLAG} (Table 1, {c.configuration}: {'; '.join(c.algebraic)})"
             if c.unfiltered:
                 u = c.unfiltered
                 text += (f"; unfiltered pick: {u['configuration']} {u['artifact']}, bound {_fmt_bound(u['bound_log2'])}, hashes "
                          f"{'; '.join(u['hashes'])}, {T.fmt_overhead(u['overhead'])}")
-            row.append(T.fmt_overhead(c.overhead) + (" (prov.)" if c.provisional else "") + (" (alg.)" if c.algebraic else "") + " " + note(text))
+            row.append(T.fmt_overhead(c.overhead) + (" (prov.)" if c.provisional else "") + (" (alg.)" if c.algebraic else "")
+                       + (f" ({T.UNDER_REVERIFICATION})" if c.legacy.finding else "") + " " + note(text))
         rows2.append(row)
     out += [T._md_table(("Subcircuit · hardware · scheme", "Native N", *cols), rows2), ""]
 
