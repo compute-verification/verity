@@ -229,10 +229,10 @@ POSEIDON2_ROW = "frame-v3/poseidon2-row"
 
 def test_table2_has_one_line_per_subcircuit_hardware_and_admissible_scheme(store: LocalStore) -> None:
     views = V.build(store)
-    order = ["frame-v3/sha256", BLAKE3_ROW, POSEIDON2_ROW]
-    assert {ln["scheme"] for ln in views.lines} == set(order) and len(views.lines) == 3 * len(TARGETS)
-    assert [ln["scheme"] for ln in views.lines[:3]] == order                    # one subcircuit's schemes sit together
-    assert not V._SCHEME["vllm-v1"].admissible and not V._SCHEME["frame-v3/ajtai-row"].admissible
+    order = ["frame-v3/sha256", BLAKE3_ROW, "vllm-v1", POSEIDON2_ROW]
+    assert {ln["scheme"] for ln in views.lines} == set(order) and len(views.lines) == 4 * len(TARGETS)
+    assert [ln["scheme"] for ln in views.lines[:4]] == order                    # one subcircuit's schemes sit together
+    assert V._SCHEME["vllm-v1"].admissible and V._SCHEME["vllm-v1"].standard and not V._SCHEME["frame-v3/ajtai-row"].admissible
     assert V._SCHEME[POSEIDON2_ROW].admissible and not V._SCHEME[POSEIDON2_ROW].standard      # core-defined, algebraic
     assert {ln["scheme"] for ln in V.build(store, V.LEGACY).lines} == {None}
 
@@ -361,9 +361,11 @@ def test_table1_carries_the_security_properties(store: LocalStore) -> None:
     assert {c.id for c in V.CONFIGURATIONS} == {v.id for v in V.D.VARIANTS}
     full = {c.id for c in V.CONFIGURATIONS if c.full_relation}
     assert full == {"B-Ligero + Poseidon2 per row", "B-Ligero + Poseidon2 shared 64x64 tile", "B-Ligero + BLAKE3 in circuit",
-                    "B-Ligero + Ajtai n=64", "B-Ligero + Ajtai n=128", "SP1 stock, committed (frame-v3 SHA-256 rows)"}
+                    "B-Ligero + Ajtai n=64", "B-Ligero + Ajtai n=128", "SP1 stock, committed (frame-v3 SHA-256 rows)",
+                    "SP1 stock, committed (vllm-v1 SHA-256 position leaves)"}
     assert [c.id for c in V.CONFIGURATIONS if c.full_relation and not c.scheme_problem()] == [
-        "B-Ligero + Poseidon2 per row", "B-Ligero + BLAKE3 in circuit", "SP1 stock, committed (frame-v3 SHA-256 rows)"]
+        "B-Ligero + Poseidon2 per row", "B-Ligero + BLAKE3 in circuit", "SP1 stock, committed (frame-v3 SHA-256 rows)",
+        "SP1 stock, committed (vllm-v1 SHA-256 position leaves)"]
     assert all(x.basis.startswith(("proven", "conjectured")) for c in V.CONFIGURATIONS for x in c.proximity)
     assert all(c.proximity and c.hashes and c.dominant_term for c in V.CONFIGURATIONS)
     committed(store, t_total=0.4)
@@ -387,7 +389,7 @@ def test_cli_json_round_trips_and_parity_exit_codes(store: LocalStore, capsys: p
     js = json.loads(capsys.readouterr().out)
     assert js["schema"] == "verity/tables-views/v1" and js["table2"]["columns"] == ["A-GKR", "B-Ligero", "SP1"]
     assert len(js["table3"]) == 1 and js["table3"][0]["scheme"] == BLAKE3_ROW
-    assert [x["id"] for x in js["schemes"] if x["admissible"]] == ["frame-v3/sha256", BLAKE3_ROW, POSEIDON2_ROW]
+    assert [x["id"] for x in js["schemes"] if x["admissible"]] == ["frame-v3/sha256", BLAKE3_ROW, "vllm-v1", POSEIDON2_ROW]
     assert V.main(["--root", str(store.root), "--rules", "legacy", "--format", "json"]) == 0
     assert json.loads(capsys.readouterr().out)["table2"]["columns"] == ["A-GKR", "B-Ligero", "SP1"]
     assert V.main(["--root", str(store.root), "--parity"]) == 0
