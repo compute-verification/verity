@@ -607,8 +607,8 @@ def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = No
     ref_check: dict = {"evaluator": evaluator, "reference_evaluator": None, "rows_requested": 0, "rows_checked": 0, "disagreements": [],
                        "seconds": 0.0}
     if evaluator != "lane" and reference_rows and pending:
-        import random
-        pick = sorted(random.Random(int(sampled_rows_total) * 7919 + len(pending)).sample(range(len(pending)), min(int(reference_rows), len(pending))))
+        from verity_vllm.commit import challenge as CH
+        pick = sorted(CH.stream(CH.reference_rows_seed(sampled_rows_total, len(pending))).sample(range(len(pending)), min(int(reference_rows), len(pending))))
         t_ref = time.time()
         ref_results = _evaluate_all([pending[k][1] for k in pick], jobs, "lane")
         ref_check.update(reference_evaluator="lane", rows_requested=int(reference_rows), rows_checked=len(pick), seconds=round(time.time() - t_ref, 1),

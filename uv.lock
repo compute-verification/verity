@@ -8,6 +8,7 @@ members = [
     "verity",
     "verity-flock",
     "verity-numerical",
+    "verity-sampled-proofs",
     "verity-sp1",
     "verity-vllm",
     "verity-workspace",
@@ -1100,6 +1101,17 @@ requires-dist = [
 ]
 
 [[package]]
+name = "verity-sampled-proofs"
+version = "0.1.0"
+source = { editable = "protocols/sampled_proofs" }
+dependencies = [
+    { name = "verity" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity", editable = "packages/verity" }]
+
+[[package]]
 name = "verity-sp1"
 version = "0.1.0"
 source = { editable = "backends/sp1" }
@@ -1117,6 +1129,7 @@ source = { editable = "integrations/vllm" }
 dependencies = [
     { name = "numpy" },
     { name = "verity" },
+    { name = "verity-sampled-proofs" },
 ]
 
 [package.optional-dependencies]
@@ -1129,6 +1142,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=1.26" },
     { name = "torch", marker = "extra == 'torch'", specifier = ">=2.4" },
     { name = "verity", editable = "packages/verity" },
+    { name = "verity-sampled-proofs", editable = "protocols/sampled_proofs" },
 ]
 provides-extras = ["torch"]
 
@@ -1141,6 +1155,7 @@ dependencies = [
     { name = "verity" },
     { name = "verity-flock" },
     { name = "verity-numerical" },
+    { name = "verity-sampled-proofs" },
     { name = "verity-sp1" },
     { name = "verity-vllm" },
 ]
@@ -1156,6 +1171,7 @@ requires-dist = [
     { name = "verity", editable = "packages/verity" },
     { name = "verity-flock", editable = "backends/flock" },
     { name = "verity-numerical", editable = "backends/numerical" },
+    { name = "verity-sampled-proofs", editable = "protocols/sampled_proofs" },
     { name = "verity-sp1", editable = "backends/sp1" },
     { name = "verity-vllm", editable = "integrations/vllm" },
 ]

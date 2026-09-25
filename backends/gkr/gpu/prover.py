@@ -56,7 +56,7 @@ from .field import (
 )
 from .gkr import LayerClaim, Reader, VerifyError
 from .logup import LeafClaim
-from .transcript import Transcript
+from .transcript import CoinError, ReplayTranscript, Transcript
 
 DOMAIN = b"verity-gkr/candidate-a/v1/babybear6"
 
@@ -287,6 +287,8 @@ class Stats:
     t_link: float = 0.0             # the bit link (link.py): points, sigma, and its term of a (inside t_open_acc)
     proof_elems: int = 0
     slots: int = 0
+    live_rounds: int = 0
+    live_wait_s: float = 0.0
     depth_circuit: int = 0
     depth_lookup_max: int = 0
     lookup_dims: list = field(default_factory=list)
@@ -510,8 +512,9 @@ def hypercube_dim(inst: Instance, name: str, table: Table) -> int:
     return log2ceil(n_wit + table.nrows)
 
 
-def start_transcript(inst: Instance, pcs: bool, root: bytes):
-    tr = Transcript(DOMAIN)
+def start_transcript(inst: Instance, pcs: bool, root: bytes, tr: Transcript | None = None):
+    """``tr``: a fresh transcript to run on (a live one for route (a)); Fiat-Shamir by default."""
+    tr = Transcript(DOMAIN) if tr is None else tr
     for s in inst.segs:
         tr.absorb(s.hash)
         tr.absorb(s.units.to_bytes(8, "little"))
@@ -533,6 +536,7 @@ def start_transcript(inst: Instance, pcs: bool, root: bytes):
         if inst.chain.commit_digest is not None:
             tr.absorb(inst.chain.commit_digest)
     chs = []
+    tr.reserve(sum(2 if t.cols > 1 else 1 for t in inst.tables) + sum(s.layers[0].s_out + log2ceil(s.units) for s in inst.segs))
     for t in inst.tables:
         z = tr.challenge()
         beta = tr.challenge() if t.cols > 1 else ONE
@@ -559,6 +563,12 @@ def x_layout(inst: Instance):
 
 def n_functionals(inst: Instance) -> int:
     return 2 * len(inst.segs) + len(inst.tables) + (1 if inst.chain else 0)
+
+
+def open_coins(inst: Instance) -> int:
+    """The challenges drawn after the link's rho with no absorb between (one live round with it): the functional
+    coefficients, geo, the bind pair, and Ligero's row coefficient."""
+    return n_functionals(inst) + 1 + (2 if inst.chain and inst.chain.bind is not None else 0) + 1
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -920,7 +930,10 @@ def prove_segment(seg: Segment, z0: list[Ext], gamma: list[Ext], tr: Transcript,
     return finals
 
 
-def prove(inst: Instance, pcs: bool = True, params: ligero.LigeroParams = ligero.DEFAULT) -> tuple[Proof, Stats]:
+def prove(inst: Instance, pcs: bool = True, params: ligero.LigeroParams = ligero.DEFAULT,
+          transcript: Transcript | None = None) -> tuple[Proof, Stats]:
+    """``transcript``: a fresh :class:`~gpu.transcript.LiveTranscript` for live coins (route (a)); the device-side
+    Fiat-Shamir of the graphed LogUp tree is then off (every coin is a host round with the verifier)."""
     dev = inst.device
     st = Stats()
     out: list[Ext] = []
@@ -958,10 +971,10 @@ def prove(inst: Instance, pcs: bool = True, params: ligero.LigeroParams = ligero
     _sync(dev)
     st.t_commit = time.perf_counter() - tc
     t0 = time.perf_counter()
-    tr, chs, pts = start_transcript(inst, pcs, root)
+    tr, chs, pts = start_transcript(inst, pcs, root, transcript)
     lookup_claims = []
     packed = use_packed_logup(dev)
-    graphs = packed and logup_packed.use_graphs(dev)
+    graphs = packed and logup_packed.use_graphs(dev) and not tr.live
     for ti, t in enumerate(inst.tables):
         n = hypercube_dim(inst, t.name, t)
         vals = kept[ti] if kept[ti] is not None else [v for v in seg_query_values(inst, t.name) if v is not None]
@@ -1001,7 +1014,7 @@ def prove(inst: Instance, pcs: bool = True, params: ligero.LigeroParams = ligero
     lclaim = None
     if inst.link is not None:
         tl0 = time.perf_counter()
-        lclaim = link_mod.prove(inst, tr, out)
+        lclaim = link_mod.prove(inst, tr, out, open_coins(inst) if pcs else 0)
         _sync(dev)
         st.t_link = time.perf_counter() - tl0
     opening = None
@@ -1043,6 +1056,8 @@ def prove(inst: Instance, pcs: bool = True, params: ligero.LigeroParams = ligero
         st.ligero_rows = committed.rows
     st.proof_elems = len(out)
     st.slots = tr.slots
+    st.live_rounds = len(tr.rounds) if tr.live else 0
+    st.live_wait_s = tr.wait_s if tr.live else 0.0
     st.committed_elements = l
     if dev.type == "cuda":
         st.peak_mem = torch.cuda.max_memory_allocated(dev)
@@ -1053,11 +1068,20 @@ def prove(inst: Instance, pcs: bool = True, params: ligero.LigeroParams = ligero
 # Verifier
 # ---------------------------------------------------------------------------------------------------------------------
 
-def verify(inst: Instance, proof: Proof, pcs: bool = True, params: ligero.LigeroParams = ligero.DEFAULT) -> None:
+def verify(inst: Instance, proof: Proof, pcs: bool = True, params: ligero.LigeroParams = ligero.DEFAULT,
+           transcript: Transcript | None = None) -> None:
     """Raises ``VerifyError`` on rejection.  In ``pcs`` mode the segments' columns are never read (only their
-    shapes); in ``clear`` mode the verifier evaluates the columns itself."""
+    shapes); in ``clear`` mode the verifier evaluates the columns itself.  ``transcript``: a
+    :class:`~gpu.transcript.ReplayTranscript` over the session's prime rounds (live coins)."""
+    try:
+        _verify(inst, proof, pcs, params, transcript)
+    except CoinError as e:
+        raise VerifyError(str(e)) from None
+
+
+def _verify(inst: Instance, proof: Proof, pcs: bool, params: ligero.LigeroParams, transcript: Transcript | None) -> None:
     dev = inst.device
-    tr, chs, pts = start_transcript(inst, pcs, proof.root)
+    tr, chs, pts = start_transcript(inst, pcs, proof.root, transcript)
     rd = Reader(proof.msgs)
     seg_offs, offs, l = x_layout(inst)
     lookup_claims = []
@@ -1097,7 +1121,7 @@ def verify(inst: Instance, proof: Proof, pcs: bool = True, params: ligero.Ligero
                     if gkr.eval_columns(s.cols, s_c, r_star, c_star) != vr:
                         raise VerifyError(f"{s.name}: input layer: right evaluation mismatch")
             claim = nxt
-    lclaim = link_mod.verify(inst, tr, rd) if inst.link is not None else None
+    lclaim = link_mod.verify(inst, tr, rd, open_coins(inst) if pcs else 0) if inst.link is not None else None
     if not pcs:
         if inst.chain:
             check_chain_clear(inst)
@@ -1132,3 +1156,5 @@ def verify(inst: Instance, proof: Proof, pcs: bool = True, params: ligero.Ligero
         ligero.verify_open(proof.root, params, l, acc.a, acc.b, proof.opening, tr, dev)
     if rd.pos != len(proof.msgs):
         raise VerifyError("trailing proof data")
+    if isinstance(tr, ReplayTranscript):
+        tr.finish()

@@ -108,7 +108,7 @@ are range-checked once by the unit) then gives y = tc_dot(x).  Per gadget:
 
 The VU.  ``check_vu`` chains K/16 units from c_0 = 0 through their output words and ends with ``Epilogue``.  An
 infinite intermediate word has the all-ones exponent field and is rejected by the next unit's ``Fp32Decode``, as
-``verity.verification.families`` rejects it (``tc_dot_chain`` raises); an infinite final word is cast to the BF16
+``verity.proofs.families`` rejects it (``tc_dot_chain`` raises); an infinite final word is cast to the BF16
 infinity.  Soundness of the chain is soundness of the units by induction on the chunk index.
 
 Evidence (see ``search.py`` and the tests).  Exhaustive enumeration of every input x every joint hint assignment

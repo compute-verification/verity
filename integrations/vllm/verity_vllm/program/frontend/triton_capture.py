@@ -22,6 +22,7 @@ from typing import Any
 
 import torch
 
+from verity_vllm.engine import hooks
 from verity_vllm.program.frontend.rules.triton_iface import triton_launch as op  # the op definition lives with the rules that bind it
 
 try:
@@ -103,16 +104,15 @@ def intercept_triton_launches(log: TritonLaunchLog | None = None):
     """Patch `triton.runtime.jit.JITFunction.run` for the duration of an export."""
     log = log if log is not None else TritonLaunchLog()
     try:
-        from triton.runtime.jit import JITFunction
+        import triton.runtime.jit  # noqa: F401
     except Exception:  # noqa: BLE001 — no triton: nothing to intercept
         yield log
         return
-    orig = JITFunction.run
-    JITFunction.run = _make_run(orig, log)
+    p = hooks.triton_launch(lambda orig: _make_run(orig, log))
     try:
         yield log
     finally:
-        JITFunction.run = orig
+        p.uninstall()
 
 
 __all__ = ["op", "intercept_triton_launches", "TritonLaunchLog"]

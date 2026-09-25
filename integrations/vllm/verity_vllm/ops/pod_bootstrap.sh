@@ -31,9 +31,10 @@ set -uo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P); cd "$ROOT" || exit 3
 CORE=$(cd "$ROOT/../../packages/verity/src" 2>/dev/null && pwd -P) || { echo "BOOTSTRAP_FAIL_TREE: no packages/verity/src beside $ROOT (run from the shipped Verity tree)" >&2; exit 3; }
 RESEARCH=$(cd "$ROOT/../../tools/research/src" 2>/dev/null && pwd -P) || { echo "BOOTSTRAP_FAIL_TREE: no tools/research/src beside $ROOT" >&2; exit 3; }
+SAMPLED=$(cd "$ROOT/../../protocols/sampled_proofs" 2>/dev/null && pwd -P) || { echo "BOOTSTRAP_FAIL_TREE: no protocols/sampled_proofs beside $ROOT" >&2; exit 3; }
 WORK=${WORK:-/workspace}; VENV=${VENV:-$WORK/venv312}; PY=$VENV/bin/python
 export HF_HOME=${HF_HOME:-$WORK/hf}
-export PYTHONPATH=$ROOT:$CORE:$RESEARCH${PYTHONPATH:+:$PYTHONPATH}
+export PYTHONPATH=$ROOT:$CORE:$RESEARCH:$SAMPLED${PYTHONPATH:+:$PYTHONPATH}
 export VERITOR_REPO=$ROOT
 CASES=B0; OUT=$ROOT/out/bootstrap; MODE=auto; DRY_RUN=0
 while [ $# -gt 0 ]; do case "$1" in --cases) CASES=$2; shift 2;; --out) OUT=$2; shift 2;; --cpu) MODE=cpu; shift;; --gpu) MODE=gpu; shift;; --dry-run) DRY_RUN=1; shift;; *) echo "unknown arg $1" >&2; exit 2;; esac; done
@@ -134,9 +135,9 @@ fi
 
 # ---- 5. readiness: prove the environment mechanically and record the identities --------------------------------------------------
 HG_SO=$(echo "$HG_LINE" | awk '{print $3}')
-$PY - "$ROOT" "$CORE" "$OUT/readiness.json" "$HG_SO" "$CC" "$RESEARCH" "$MODE" <<'EOF' || fail READINESS "see $OUT/readiness.json"
+$PY - "$ROOT" "$CORE" "$OUT/readiness.json" "$HG_SO" "$CC" "$RESEARCH" "$MODE" "$SAMPLED" <<'EOF' || fail READINESS "see $OUT/readiness.json"
 import hashlib, importlib, json, os, platform, subprocess, sys
-root, core, out, hg_so, cc, research, mode = sys.argv[1:8]
+root, core, out, hg_so, cc, research, mode, sampled = sys.argv[1:9]
 gpu = mode == "gpu"
 r = {"schema": "verity-vllm/readiness/v1", "checks": {}, "identities": {}}
 if not gpu:
@@ -164,6 +165,7 @@ check("vllm_commit_d9105ea80", lambda: ("d9105ea80" in __import__("vllm").__vers
 check("verity_from_tree", lambda: under("verity.ir", core))
 check("verity_vllm_from_tree", lambda: under("verity_vllm.program.registry", root))
 check("research_telemetry_from_tree", lambda: under("research.telemetry", research))
+check("sampled_proofs_from_tree", lambda: under("verity_sampled_proofs.law", sampled))   # verity_vllm.commit.challenge imports it
 check("numpy_import", lambda: __import__("numpy").__version__)
 check("no_old_tree_on_path", lambda: [p for p in sys.path if "/workspace/cp/veritor" in p or p.endswith("/vllm-poc")] == [] or (_ for _ in ()).throw(RuntimeError(str(sys.path))))
 if gpu:

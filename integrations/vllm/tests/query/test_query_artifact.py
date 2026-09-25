@@ -12,7 +12,7 @@ from verity.ir import codec
 from verity_vllm.query import query_artifact as QA
 from verity.ir.codec import canonical_json
 from verity.ir.defs import bind
-from verity_vllm.query.partition import PartitionVerdict, ReadinessReport, VuVerdict, WidthVerdict
+from verity.ir.partition import PartitionVerdict, ReadinessReport, VuVerdict, WidthVerdict
 from verity.ir.program import Program
 from verity_vllm.program.registry import b1
 

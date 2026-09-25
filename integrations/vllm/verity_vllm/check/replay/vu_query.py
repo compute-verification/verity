@@ -42,7 +42,6 @@ Torch-free; the only heavy objects it touches are the ones `Replayer` already bu
 from __future__ import annotations
 
 import bisect
-import random
 import time
 import weakref
 from dataclasses import dataclass
@@ -58,6 +57,7 @@ from verity.ir.refs import Affine, Concat, Refs, Strided, runs
 from verity_vllm.check.fold_compare import SnapshotStore, WeightSource
 from verity_vllm.observe.fold.fold import FoldResult
 from verity_vllm.check.replay.replay import Replayer, Skipped, _diff
+from verity_vllm.commit import challenge as CH
 
 DEFAULT_DEPTH = 3
 Intervals = tuple[tuple[int, int], ...]        # sorted, disjoint, non-adjacent [lo, hi) pairs
@@ -809,5 +809,5 @@ def production_sample(result: FoldResult, *, seed: int, n: int, max_arg_leaves: 
     ix = index(result, max_arg_leaves=max_arg_leaves, depth=depth)
     if ix.count == 0:
         raise ValueError("the VU population is empty")
-    rng = random.Random(seed)
+    rng = CH.stream(seed)
     return [ix.by_index(rng.randrange(ix.count)) for _ in range(int(n))]

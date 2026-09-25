@@ -296,8 +296,13 @@ class Opening:
         return b
 
 
+# live coins: one round for the query set (a duplicate index is redrawn; spare coins are discarded)
+OPEN_SET_SPARE = 8
+
+
 def open_set(tr: Transcript, n: int, t: int) -> list[int]:
     s: list[int] = []
+    tr.reserve(t + OPEN_SET_SPARE)
     while len(s) < t:
         j = tr.challenge()[0] % n
         if j not in s:

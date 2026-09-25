@@ -47,7 +47,7 @@ from verity.ir import Program, bind  # noqa: E402
 from verity.ir.evaluate import evaluate_call  # noqa: E402
 from verity_vllm.program.frontend.correspond import correspond, correspond_rebound  # noqa: E402
 from verity_vllm.program.registry import b1, hopper as H, prims as P  # noqa: E402
-from verity_vllm.program.registry.crosscheck import _standalone  # noqa: E402
+from tests.program.crosscheck import _standalone  # noqa: E402
 
 TINY = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,
         "QKV": 64, "GU": 64, "EPS": 1e-5, "ROPE_THETA": 1e4, "MAX_POS": 8, "BIAS": True, "tie_word_embeddings": True, "profile": {}}

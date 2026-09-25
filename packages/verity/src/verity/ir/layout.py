@@ -16,7 +16,7 @@ Three classes (IR §D.1/§D.2), not synonyms:
   distinct gates inside S with a wire to a gate outside S, or designated root outputs). Boundaries are sets of
   *gates* — a producer counts once regardless of fan-out; there is no `distinct()` operation. Canonical
   boundary order: ascending root-scoped producing-gate index. These explicit computations are the oracle for
-  the compact per-part analysis in `boundary` (with the vLLM integration until promoted) (`in_gates` / `out_gates` / `w_out`).
+  the compact per-part analysis in `verity.ir.boundary` (`in_gates` / `out_gates` / `w_out`).
 * `Region` — the contiguous special case `C[i:j]`, efficiently addressable.
 * `FunctionCall` — a hierarchy-defined subcircuit (always a region in this layout) **plus** the declared interface
   `call.args` / `call.returns`, which keep signature order and repeated references. `F(v, v)` returning
@@ -65,25 +65,63 @@ class Scope:
 
 def resolve(scope: Scope, ref: Ref) -> int:
     """Root-scoped gate index of the value denoted by body-scoped `ref` in `scope`."""
+    return resolve_gate(scope, ref)[0]
+
+
+def param_leaf(scope: Scope, pi: int, leaf: int) -> int:
+    """Gate index bound to leaf `leaf` of parameter `pi` of the activation `scope`."""
+    return resolve_gate(scope, ("p", pi, leaf))[0]
+
+
+def resolve_gate(scope: Scope, ref: Ref) -> tuple[int, PrimitiveDefinition]:
+    """Root-scoped gate index and producing primitive of the value denoted by body-scoped `ref` in `scope`: one walk
+    up through parameters (to the argument the parent passed) and down through returns (to the producing node)."""
     space, idx, leaf = ref
     while True:
         if space == "p":
-            return param_leaf(scope, idx, leaf)
+            parent = scope.parent
+            if parent is None:
+                raise ValueError("the root has no parameters (prescribed inputs are Input gates)")
+            node = parent.spec.body.nodes[scope.node_idx]
+            if node.form == "call":
+                space, idx, leaf = node.args[idx].refs[leaf]
+            elif node.form == "batch":
+                ax, a = node.axes[idx], node.args[idx]
+                if ax is None:
+                    space, idx, leaf = a.refs[leaf]
+                elif ax == 0:
+                    space, idx, leaf = a.refs[scope.member * a.type.elem.leaves + leaf]
+                else:
+                    space, idx, leaf = a.take(ax, scope.member).refs[leaf]
+            else:  # scan: params are (carry, xs..., shared...)
+                if idx == 0:
+                    if scope.member == 0:
+                        space, idx, leaf = node.args[0].refs[leaf]
+                    else:  # the previous iteration's returned carry
+                        scope = Scope(scope.spec, scope.offset - scope.spec.gates, parent, scope.node_idx, scope.member - 1)
+                        space, idx, leaf = scope.spec.body.ret[leaf]
+                        continue
+                elif idx <= node.n_xs:
+                    a = node.args[idx]
+                    space, idx, leaf = a.refs[scope.member * a.type.elem.leaves + leaf]
+                else:
+                    space, idx, leaf = node.args[idx].refs[leaf]
+            scope = parent
+            continue
         body = scope.spec.body
         node = body.nodes[idx]
         node_off = scope.offset + body.offsets[idx]
-        if node.form == "primitive":
-            return node_off
         fn = node.fn
+        if node.form == "primitive":
+            return node_off, fn
         if node.form == "call":
             scope = Scope(fn, node_off, scope, idx, 0)
             space, idx, leaf = fn.body.ret[leaf]
             continue
         if node.form == "batch":
-            L = fn.out_leaves
-            m, j = divmod(leaf, L)
+            m, j = divmod(leaf, fn.out_leaves)
             if isinstance(fn, PrimitiveDefinition):
-                return node_off + m
+                return node_off + m, fn
             scope = Scope(fn, node_off + m * fn.gates, scope, idx, m)
             space, idx, leaf = fn.body.ret[j]
             continue
@@ -97,36 +135,6 @@ def resolve(scope: Scope, ref: Ref) -> int:
             j = c + r
         scope = Scope(fn, node_off + m * fn.gates, scope, idx, m)
         space, idx, leaf = fn.body.ret[j]
-
-
-def param_leaf(scope: Scope, pi: int, leaf: int) -> int:
-    """Gate index bound to leaf `leaf` of parameter `pi` of the activation `scope`."""
-    parent = scope.parent
-    if parent is None:
-        raise ValueError("the root has no parameters (prescribed inputs are Input gates)")
-    node = parent.spec.body.nodes[scope.node_idx]
-    if node.form == "call":
-        return resolve(parent, node.args[pi].refs[leaf])
-    if node.form == "batch":
-        ax = node.axes[pi]
-        a = node.args[pi]
-        if ax is None:
-            return resolve(parent, a.refs[leaf])
-        if ax == 0:
-            L = a.type.elem.leaves
-            return resolve(parent, a.refs[scope.member * L + leaf])
-        return resolve(parent, a.take(ax, scope.member).refs[leaf])
-    # scan: params are (carry, xs..., shared...)
-    if pi == 0:
-        if scope.member == 0:
-            return resolve(parent, node.args[0].refs[leaf])
-        prev = Scope(scope.spec, scope.offset - scope.spec.gates, parent, scope.node_idx, scope.member - 1)
-        return resolve(prev, scope.spec.body.ret[leaf])
-    if pi <= node.n_xs:
-        a = node.args[pi]
-        L = a.type.elem.leaves
-        return resolve(parent, a.refs[scope.member * L + leaf])
-    return resolve(parent, node.args[pi].refs[leaf])
 
 
 class LazyOperands(Sequence):

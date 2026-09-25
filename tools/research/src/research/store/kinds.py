@@ -16,6 +16,9 @@ KINDS: dict[str, str] = {
     "tc-evidence/v1": "one tensor-core probe capture: meta {instruction, arch, sku, families, counts, model, model_agrees, first_mismatches, "
                       "seed, n}; payload tree = probe_results.json, capture_sample.json, tiles_*.npz",
     "dataset-snapshot/v1": "meta {name, note, query?}; refs.members = [art:...]; payload null",
+    "tables-parity/v1": "the switch's parity render (verity_numerical.bench.views --parity --record): meta {schema, rules, ok, differences, "
+                        "snapshot, tables_cells, cells: [{line, column, artifact, views_overhead, tables_overhead, printed}]}; refs.snapshot "
+                        "(the tables --snapshot compared with), refs.cells; payload null",
     "verification-verdict/v1": "meta {result: PASS|FAIL, verifier, detail}; refs.proof, refs.verifier_attempt",
     "proof/v1": "payload = proof bytes; meta {statement_digest, backend, params}",
     "fixture/v1": "a repo-replicated input (golden records, instances); payload file/tree",
@@ -28,7 +31,7 @@ KINDS: dict[str, str] = {
     "redteam-findings/v1": "meta {findings: [...]}; refs.target",
     "ledger-row/v1": "one frozen overhead-ledger row (backends/numerical/reports/ledger/<lane>.jsonl) whose run is not an attempt here; "
                      "meta = the row as written (schema ledger/v1); payload null; the lane's claims are labels on it",
-    "trust-dossier/v1": "the computed trust level of one numerical target (verity.verification.trust): meta = the TrustReport "
+    "trust-dossier/v1": "the computed trust level of one numerical target (verity.proofs.trust): meta = the TrustReport "
                         "(schema verity/trust-dossier/v1: level, criteria with evidence ids, D-entries, references, missing items, invalidation "
                         "triggers, relitigation procedure); refs.cited = every artifact it rests on, refs.previous = earlier dossiers; payload null; "
                         "labels target, instruction, level, anchor",

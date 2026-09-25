@@ -72,6 +72,7 @@ import torch  # noqa: E402
 from verity_vllm.engine import vllm_adapter as va  # noqa: E402
 from verity_vllm.pipeline.timeline import Timeline  # noqa: E402  (torch-free; VERITY_TIMELINE -> append-only JSONL, else a no-op sink)
 from verity_vllm.commit import opened as OV  # noqa: E402
+from verity_vllm.commit import challenge as CH  # noqa: E402
 
 SCHEMA = "verity/commit-integ/delta/v1"
 
@@ -771,7 +772,7 @@ def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, 
     makes the replay byte-identical, which the ORIGINAL roots check (a differing byte fails to open).  Nothing here changes what was bound."""
     import copy
 
-    from verity_vllm.acquire.committer_api import challenge_positions
+    from verity_vllm.commit.challenge import challenge_positions
     from verity_vllm.commit.committer.native_host import value_family
 
     frozen = copy.copy(com)                     # shallow: keeps THIS run's per-step dicts (reset() rebinds the live committer's, never mutates them)
@@ -991,7 +992,7 @@ def oracle_producers_of_record(args: Options, required_manifest: dict[str, Any] 
     carries none: (facts | None, record).  The Programs are the replay's (same lookup, same of-record digest check); None + the named
     reason when the manifest is not v2, no Program dir is given or a Program is not of record."""
     from verity_vllm.check import oracle_compare as OC
-    from verity_vllm.check.replay import sampled_replay as SR
+    from verity_vllm.check.replay import driver as SR
     from verity_vllm.query.manifest import format as MF
     q = required_manifest.get("query") if isinstance(required_manifest, dict) else None
     if not (isinstance(q, dict) and q.get("engine") == SR.V2_QUERY):
@@ -1879,10 +1880,10 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 if getattr(args, "padded_finalize", False):
                     # [B9.1] the padding hook runs INSIDE finalize (after the worker drained: every executed step's leaf count / layout is
                     # known, before the run-root fold); the served tokens of THIS run + stop_rule_of_record place the executed prefix
+                    from functools import partial
                     from verity_vllm.commit import padding_steps as PS
-                    _served = r["tokens"]
-                    com.padding_hook = lambda c, _t=_served: PS.padding_for_committer(c, manifest=required_manifest, requests=reqs, sampling=sampling,
-                                                                                      served_tokens=_t, stop=stop_of_record)
+                    com.padding_hook = partial(PS.padding_for_committer, manifest=required_manifest, requests=reqs, sampling=sampling,
+                                               served_tokens=r["tokens"], stop=stop_of_record)
                 rc = com.finalize()
                 t_ready = time.perf_counter()
                 com.uninstall()
@@ -1915,7 +1916,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                     row["fault_retained_flip"] = com.fault_retained_flip(fault)
                     print(f"[delta] VERITY_FAULT retained_flip (negative test): {row['fault_retained_flip']}", flush=True)
                 # challenge derived from the PRECHALLENGE run root (the root is fixed before the positions exist)
-                from verity_vllm.acquire.committer_api import challenge_positions
+                from verity_vllm.commit.challenge import challenge_positions
 
                 sample = challenge_positions(rc.run_root, [s.n_leaves for s in rc.steps], args.openings, salt=str(pair).encode())
                 TL.start("validate.openings", pair=pair)
@@ -2140,7 +2141,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                     if _sched["use"] == "observed":
                         _arr = {**_arr, **{k: int(v) for k, v in _sched["observed_arrive_steps"].items() if k in _arr}}
                     try:
-                        ckc = CompiledKernelCheck(com, eng.model, _toks, seed=int(rc.run_root.hex()[:8], 16), request_rows=_rows, arrivals=_arr,
+                        ckc = CompiledKernelCheck(com, eng.model, _toks, seed=CH.kernel_check_seed(rc.run_root), request_rows=_rows, arrivals=_arr,
                                                   prompts=_prompts, seed_source=COMPILED_REPLAY_SEED_SOURCE).run(required_manifest)
                     except Exception as e:  # noqa: BLE001
                         import traceback as _tb
@@ -2281,7 +2282,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 if getattr(args, "program_dir", None) or getattr(args, "programs_root", None):
                     # [DECISIONS-2 §4 C2 / M-0356 (1), manbind M-0394] C2 OF RECORD: sampled exact VU replay -- for a seeded stratified sample of
                     # Program instance rows (spec x request x phase), read the COMMITTED bytes of the row's inputs (the Program's dataflow -> the
-                    # manifest's member rule -> the binding map), evaluate the registered relation (verity_vllm.program.registry.derived_rows), compare with the
+                    # manifest's member rule -> the binding map), evaluate the registered relation (verity_vllm.program.kernels.derived_rows), compare with the
                     # COMMITTED output bytes bit-for-bit.  Plus the exhaustive ordered boundary linkage (declared prompt -> input ids; sampled
                     # id[s-1] -> input id[s]) over every (engine step, request).  Needs no Match record; the oracle-compare above is a diagnostic.
                     # [R16 sys M-0043 / rev M-0051] REPLAY CACHE (--replay-cache, default OFF): sampled_replay is a pure function of (committed
@@ -2291,13 +2292,12 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                     _rc_key: str | None = None
                     if getattr(args, "replay_cache", False):
                         try:
-                            from verity_vllm.check.replay import sampled_replay as _SRk
                             if getattr(args, "replay_seed", None) is not None:
                                 _ks: Any = int(args.replay_seed)
                             elif getattr(args, "replay_challenge", None):
-                                _ks = _SRk.challenge_seed(str(args.replay_challenge), rc.run_root)[0]
+                                _ks = CH.challenge_seed(str(args.replay_challenge), rc.run_root)
                             else:
-                                _ks = int.from_bytes(rc.run_root[:8], "big")
+                                _ks = CH.root_seed(rc.run_root)
                             _w_ref_k = (rc.weight_registration or {}).get("root") if isinstance(rc.weight_registration, dict) else None
                             _rc_key = json.dumps({"run_root": rc.run_root.hex(), "manifest_digest": (required_manifest or {}).get("manifest_digest") if isinstance(required_manifest, dict) else None,
                                                   "program_digest": getattr(args, "program_digest", None), "seed": _ks,
@@ -2314,7 +2314,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                         print(f"[delta] replay cache: pair {pair} key differs from pair {_v0['pair']}'s in {_d0}: own replay (root {rc.run_root.hex()[:16]} vs {_v0['run_root'][:16]})", flush=True)
                     TL.start("validate.sampled_replay", pair=pair, cached=_cached is not None)
                     try:
-                        from verity_vllm.check import executed_prefix as EPX, oracle_compare as OC; from verity_vllm.check.replay import replay_codes as RC, sampled_replay as SR
+                        from verity_vllm.check import executed_prefix as EPX, oracle_compare as OC; from verity_vllm.check.replay import replay_codes as RC, driver as SR
                         from verity_vllm.query.manifest import format as MF
                         if _cached is not None:
                             raise _ReplayReused()
@@ -2380,7 +2380,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                             (_seed, _seed_src), _seed_form = SR.challenge_seed(str(args.replay_challenge), rc.run_root), "challenge"
                             _seed_chal = str(args.replay_challenge)            # [rev M-0600] the full challenge goes on the record (sample.challenge)
                         else:
-                            _seed, _seed_src, _seed_form = int.from_bytes(rc.run_root[:8], "big"), RC.ROOT_SEED_SOURCE, "run-root"
+                            _seed, _seed_src, _seed_form = CH.root_seed(rc.run_root), RC.ROOT_SEED_SOURCE, "run-root"
                         # [rev-cb F-cb-44] the committed store's retention decides the evaluator: DEVICE-retained blocks cannot be read by
                         # forked children (CUDA after fork) -> sampled_replay runs serial in this process; named in the replay record
                         _blocks = getattr(com, "_gpu_blocks", None) or {}
@@ -2577,7 +2577,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                                                     "strata_unevaluated": sr.get("strata_unevaluated"), "seed": _smp.get("seed"), "seed_source": _smp.get("seed_source"),
                                                     "unreplayable": sr.get("unreplayable"), "weights": sr.get("weights"), "programs": sr.get("programs"),
                                                     "evaluators": sr.get("evaluators"), "artifact": str(_art),
-                                                    "reference": "registered relation evaluators (verity_vllm.program.registry.derived_rows) on the COMMITTED input bytes (C2 of record, DECISIONS-2 §4)"}
+                                                    "reference": "registered relation evaluators (verity_vllm.program.kernels.derived_rows) on the COMMITTED input bytes (C2 of record, DECISIONS-2 §4)"}
                     components["boundary_linkage"] = {"result": lk.get("result"), "method": lk.get("method"), "checked": lk.get("pairs"), "linked": lk.get("linked"),
                                                       "unlinked_n": lk.get("unlinked_n"), "unlinked": lk.get("unlinked"), "why": lk.get("why"),
                                                       "prescribed": lk.get("prescribed"),      # [R16 pin, ruling 36] seed / splits linkage record

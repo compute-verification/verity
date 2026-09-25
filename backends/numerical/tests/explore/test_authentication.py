@@ -7,7 +7,7 @@ import json
 
 import pytest
 from verity.commitments.leaves import DIGEST_BYTES, leaf_hash, path_shape, tree_depth
-from verity.verification.packed import decode_packed_witness
+from verity.proofs.packed import decode_packed_witness
 from verity_numerical.explore import authentication as auth
 
 OPENINGS = auth.read_openings()

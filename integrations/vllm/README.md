@@ -17,9 +17,9 @@ Imports point down the layer order `pipeline` > `check` | `properties` > `acquir
 ~~~text
 verity_vllm/
   pipeline/           stage drivers      build.py match.py commit.py row*.py report.py hot.py layout.py cli.py llm.py research_tools.py tp/
-  engine/             the vLLM engine    vllm_adapter.py engine_driver.py engine_profile.py arrivals.py rank_worker.py profiles/
+  engine/             the vLLM engine    build.py capture.py pinned.py run_facts.py code_identity.py vllm_adapter.py engine_driver.py engine_profile.py arrivals.py rank_worker.py profiles/
   program/            Program            registry/ frontend/ lifting/ kernels/ model.py workload.py compact.py dtypes.py
-  query/              verification query module_body.py required.py program_view.py boundary.py partition.py manifest/ compare.py
+  query/              verification query module_body.py required.py program_view.py manifest/ compare.py
   correspondence/     runtime corresp.   runtime.py reader_for_*.py resolve*.py capture_identities.py
   observe/            value observation  observer.py events.py log.py storage.py contract.py runtime_tree.py chunks.py fold/
   acquire/            value acquisition  plan.py install.py stage.py gate.py compiled.py sources/ *_tap_src/
@@ -43,8 +43,10 @@ stages), `llm.py` (the public `verity_vllm.LLM`), `timeline.py` / `spans.py` / `
 `verity-vllm <command>` (`python -m verity_vllm.pipeline.cli <command>`) and `verity_vllm.LLM`.  Never: Verity semantics -- a check that
 lives here is misfiled.
 
-**`engine/`** is the vLLM engine we attach to: `vllm_adapter.py`, `engine_driver.py`, `engine_profile.py`, `arrivals.py`,
-`rank_worker.py` (the TP rank worker extension), and `profiles/` (kappa: capture profiles and workload JSON; one generic
+**`engine/`** is the vLLM engine we attach to: `build.py` (the engine under κ and what it reads back), `capture.py` (the
+step observer and run header; `pinned.py` its host buffers), `run_facts.py` (profile manifest, versions), `code_identity.py` (executed code objects),
+`vllm_adapter.py` (workloads and request driving; the stages import the engine's names from it), `engine_driver.py`,
+`engine_profile.py`, `arrivals.py`, `rank_worker.py` (the TP rank worker extension), and `profiles/` (kappa: capture profiles and workload JSON; one generic
 constructor + a facts table).  Never: commit, decide what is required.
 
 **`program/`** implements *Program*: Definitions (`registry/`, the registered library; importing it registers the on-demand
@@ -55,11 +57,11 @@ and `kernels/`, the independent kernel models the Definitions wrap (numpy / C++ 
 their tables).  Entrypoints: `program.frontend.derive`, `program.registry`.  Never: module paths as identity, hook sets,
 VU policy, model-name tables (`registry/quarantine/` is the by-name residue and only shrinks).
 
-**`query/`** implements the *verification query*: `module_body.py` (Q_module_body_v1), `program_view.py`, `boundary.py` /
-`partition.py` (boundary values, VU partitions), `manifest/` (the required-value manifest: `format.py` the shared vocabulary,
-`verify.py` the rebuild-and-compare check of record), `query_artifact.py` (query artifact identities), `compare.py` (a v2
-manifest against a v1 one), `required.py` (v1 `IDENTITY_KEY` rows).  Never: execution data, hooks, model names, anything read
-from a run.
+**`query/`** implements the *verification query*: `module_body.py` (Q_module_body_v1), `program_view.py`, `manifest/` (the
+required-value manifest: `format.py` the shared vocabulary, `verify.py` the rebuild-and-compare check of record),
+`query_artifact.py` (query artifact identities), `compare.py` (a v2 manifest against a v1 one), `required.py` (v1
+`IDENTITY_KEY` rows).  Boundary values, VU partitions and dead gates are core's `verity.ir.boundary`, `verity.ir.partition`
+and `verity.ir.liveness`.  Never: execution data, hooks, model names, anything read from a run.
 
 **`correspondence/`** implements *runtime correspondence* as data: `runtime.py` (runtime-correspondence/v1),
 `reader_for_query.py` / `reader_for_acquire.py`; and *occurrence resolution*: `resolve.py`, `resolve_decomp.py`.  Never:
@@ -101,7 +103,7 @@ and the embedding shard layout (`embedding_shard.py`).
 above would import.
 
 The stdlib-only core of `verity_ir` (`types refs defs program layout evaluate query codec parts query_codec`, `gateset`
-as `query_ast`, `plan`) is `verity.ir` / `verity.verification.plan` in `packages/verity`; the on-demand primitive families
+as `query_ast`, `plan`) is `verity.ir` / `verity.proofs.plan` in `packages/verity`; the on-demand primitive families
 veritor hardcoded in `codec.py` are registered by `verity_vllm/program/registry/__init__.py` through `verity.ir.codec.register_lazy_family`.
 
 ## Vocabulary (frozen; Notion "vLLM integration v2 — Draft 3" §12)

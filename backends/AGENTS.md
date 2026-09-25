@@ -5,7 +5,7 @@ backend and by the campaign-side numerical work under `backends/numerical/`.
 
 ## What is fixed
 
-- The target is `verity.verification.target.FIRST`. Lanes do not change it.
+- The target is `verity.proofs.target.FIRST`. Lanes do not change it.
   The backend transition unit is one 16-product update with arbitrary finite
   `c`; the Verity VU is `GemmCoordinate<K>` from `c_0 = 0` plus the epilogue.
 - Candidates must agree on profile, input/output bitstrings, supported domain,
@@ -15,7 +15,7 @@ backend and by the campaign-side numerical work under `backends/numerical/`.
   implementation resolves nothing by itself.
 - Proof gadgets (selectors, quotient/remainder, leading-bit, lookup layouts,
   auxiliary columns) live with the backend or in `backends/numerical/`, not in
-  `verity.verification`, unless one proves to be a durable backend-independent
+  `verity.proofs`, unless one proves to be a durable backend-independent
   obligation representation.
 
 ## Labels every number carries
@@ -62,7 +62,7 @@ Table 1  Candidate proof systems (definitional: no performance, no status)
          Candidate | Description | ZK | Verifier model | Soundness | Setup | Interaction | Security assumptions
          rows = tables.CANDIDATES: A-GKR (NON_ZK_PROOF), B-Ligero (COMPLETE_ZK_BACKEND; COMPLETE_HVZK_BACKEND
          as drill-down), SP1 (any sound class); ZK is No | HVZK | Malicious-verifier ZK (two variants allowed)
-Table 2  Headline proving overhead by target (one row per verity.verification.target.TARGETS)
+Table 2  Headline proving overhead by target (one row per verity.proofs.target.TARGETS)
          Device | Datatype / target | Native dense peak, spec | Native dense peak, measured | A-GKR | B-Ligero | SP1
 Table 3  Prover phase decomposition (one row per populated Table 2 cell, the same artifact)
          Device / target | Candidate | Total prover time | Witness | Encoding + commitment | Arithmetic | Lookup | ZK additional | Serialization | Other
@@ -130,8 +130,13 @@ algebraic-hash configurations flagged and marked `(alg.)`, Table 3 with
 serving and proving overhead) render as a labelled preview with
 `python -m verity_numerical.bench.views --root <store> [--rules spec|unfiltered|legacy]`;
 `--parity` checks that the legacy-rules views select exactly today's cells
-(the switch's gate). The steward renders it only for a `[[render]]` entry with
-`preview = true`. It replaces the canonical tables only at the labelled switch.
+(the switch's gate; `--take-snapshot --record` stores the check as a
+`tables-parity/v1` artifact). The steward renders it as a preview for a
+`[[render]]` entry with `preview = true`. It replaces the canonical tables only
+at the labelled switch: an entry with `published = "views"` publishes
+`views --published` as `<stamp>-tables.md` and the frozen tables as the
+drill-down `<stamp>-tables-frozen.md`; `python -m verity_numerical.bench.switch`
+renders the switch digest (`backends/numerical/CHANGELOG.md`).
 
 ## Proof model: interactive is fine, transferability is not required
 
@@ -217,7 +222,7 @@ first-class consumer is the **tensor core**, not the SIMT core. Consequences:
 
 Decided 2026-09-22 (lane `trust`). For every numerical target (one exact
 tensor-core relation on one architecture) "do we trust this circuit, and why"
-is **computed from evidence, never asserted**: `verity.verification.trust.assess`
+is **computed from evidence, never asserted**: `verity.proofs.trust.assess`
 evaluates predicates over store artifacts (ids + labels) and repo fixtures and
 returns a level with the exact evidence that satisfies or fails each criterion;
 `Instruction.status` is reported next to it so the two can disagree visibly.
@@ -256,7 +261,7 @@ automatically (an open D-entry blocks TRUSTED, a mismatch on the anchor blocks
 PINNED; nobody edits a level) -> resolve with hardware as arbiter, the tile
 joins `REGRESSION_TILES`, close with `trust_downgrade=resolved:<D-id>`.
 
-Dossier: `python -m verity.verification.trust <target|instruction|--all>
+Dossier: `python -m verity.proofs.trust <target|instruction|--all>
 [--root STORE] [--format md|json] [--publish]` renders the criteria table with
 evidence ids, D-entries, references, SASS/lowering, the missing items to the
 next level, the triggers and the procedure; `--publish` writes a

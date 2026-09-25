@@ -11,7 +11,7 @@ import gzip
 import json
 
 import pytest
-from verity.verification.query import ValueRef, boundary, partition_by
+from verity.proofs.query import ValueRef, boundary, partition_by
 from verity_vllm.query import program_view as pv
 from verity_vllm.query.program_view import CallView, ProgramView, from_instances, param_reads, reads_any_of
 

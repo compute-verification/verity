@@ -93,7 +93,12 @@ def test_native_shape_range_determinism_and_roles(name: str) -> None:
     for d in (dx, dw):
         assert d.shape == (6, s.digest_elems) and d.dtype == np.int64 and (0 <= d).all() and (d < protocol.P).all()
     assert np.array_equal(dx, s.native(rows, word_bits=nb, role=hashchain.ROLES[0][2]))
-    assert not np.array_equal(dx, dw), "the x and W roles must hash differently (domain separation)"
+    if getattr(s, "tree", "frame-v3") == "vllm-v1":
+        # vllm-v1 position leaves carry no role: x rows and W columns are separated by their ports' trees and domains
+        # (vllm-v1 PROTOCOL.md section 9.7), which the statement binds; the leaf rule itself must be role-free
+        assert np.array_equal(dx, dw), "a vllm-v1 position leaf does not depend on the role"
+    else:
+        assert not np.array_equal(dx, dw), "the x and W roles must hash differently (domain separation)"
     assert len({tuple(r) for r in dx}) == 6, "distinct rows, distinct digests"
     rows2 = rows.copy()
     rows2[2, K // 2] ^= 1
@@ -186,11 +191,12 @@ def test_compose_prove_verify_publishes_the_native_digests(name: str, runners) -
     # the committed trees open at those digests under the scheme's framing
     auth = pubs[3]
     ok, why = hashauth.verify_hash_auth(auth, pubs[4], digests=published, y_words=np.asarray(pubs[2])[ends],
-                                        y_bits=R.rel.y_bits, leaf=s)
+                                        y_bits=R.rel.y_bits, leaf=s, vshape=R.vshape)
     assert ok, why
     bad = published.copy()
     bad[1, s.digest_elems] ^= 1
-    ok, why = hashauth.verify_hash_auth(auth, pubs[4], digests=bad, y_words=np.asarray(pubs[2])[ends], y_bits=R.rel.y_bits, leaf=s)
+    ok, why = hashauth.verify_hash_auth(auth, pubs[4], digests=bad, y_words=np.asarray(pubs[2])[ends], y_bits=R.rel.y_bits, leaf=s,
+                                        vshape=R.vshape)
     assert not ok and why.startswith("auth: b:")
 
 

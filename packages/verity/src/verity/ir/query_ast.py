@@ -43,6 +43,7 @@ from functools import cached_property
 from typing import TYPE_CHECKING, Iterator, Mapping, Protocol
 
 from .defs import PrimitiveDefinition, SpecializedDefinition, _fmt_static
+from .intervals import complement, norm, total
 from .layout import Scope
 from .parts import Item, Part, n_members
 
@@ -60,18 +61,6 @@ class QueryError(ValueError):
 # ---------------------------------------------------------------------------------------------------------
 # GateSet
 # ---------------------------------------------------------------------------------------------------------
-
-
-def _merge_intervals(ivs: list[tuple[int, int]]) -> list[tuple[int, int]]:
-    ivs = sorted(iv for iv in ivs if iv[1] > iv[0])
-    out: list[tuple[int, int]] = []
-    for lo, hi in ivs:
-        if out and lo <= out[-1][1]:
-            if hi > out[-1][1]:
-                out[-1] = (out[-1][0], hi)
-        else:
-            out.append((lo, hi))
-    return out
 
 
 def _scope_key(s: Scope) -> tuple[int, int]:
@@ -165,7 +154,7 @@ class GateSet:
         ivs: list[tuple[int, int]] = []
         for p in self.parts:
             ivs.extend(p.intervals())
-        return tuple(_merge_intervals(ivs))
+        return norm(ivs)
 
     def intervals(self) -> list[tuple[int, int]]:
         """Half-open root gate intervals, ascending, merged."""
@@ -700,21 +689,6 @@ def _as_query(x) -> Query:
 # ---------------------------------------------------------------------------------------------------------
 
 
-def _range_len(rs: tuple[tuple[int, int], ...]) -> int:
-    return sum(hi - lo for lo, hi in rs)
-
-
-def _complement_ranges(rs: list[tuple[int, int]], n: int) -> tuple[tuple[int, int], ...]:
-    out, pos = [], 0
-    for lo, hi in _merge_intervals(rs):
-        if lo > pos:
-            out.append((pos, lo))
-        pos = max(pos, hi)
-    if pos < n:
-        out.append((pos, n))
-    return tuple(out)
-
-
 class Entry:
     """One plan entry.  `atomic`: k adjacent members of node j per set; `whole`: node j (all members) as one set;
     `zip`: member m of every node in `nodes` as one set; `descend`: each covered member of j is refined by `sub`."""
@@ -728,12 +702,12 @@ class Entry:
             self._groups = tuple(-(-(hi - lo) // k) for lo, hi in members)
             self.count = sum(self._groups)
         elif kind == "whole":
-            self.count = 1 if _range_len(members) else 0
+            self.count = 1 if total(members) else 0
         elif kind == "zip":
-            self.count = _range_len(members)
+            self.count = total(members)
         else:
             assert sub is not None
-            self.count = _range_len(members) * sub.total
+            self.count = total(members) * sub.total
 
     # -- members ---------------------------------------------------------------------------------------------
     def covers(self, m: int) -> bool:
@@ -1055,7 +1029,7 @@ class _Evaluator:
                 if n:
                     entries.append(Entry(j, "atomic", ((0, n),)))
                 continue
-            gaps = _complement_ranges(rs, n)
+            gaps = tuple(complement(norm(rs), n))
             if gaps:
                 entries.append(Entry(j, "atomic", gaps))
             for e in descends.get(j, ()):
@@ -1321,7 +1295,7 @@ class PlanFamily:
             mult = acts[plan.key]
             for e in plan.entries:
                 if e.kind == "descend":
-                    acts[e.sub.key] += mult * _range_len(e.members)
+                    acts[e.sub.key] += mult * total(e.members)
         out: list[SetClass] = []
         for plan in reversed(order):
             scope = first[plan.key][0]

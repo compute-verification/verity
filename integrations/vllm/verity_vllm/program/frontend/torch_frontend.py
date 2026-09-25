@@ -41,10 +41,10 @@ from verity.ir.defs import (REGISTRY, Builder, CompositeDefinition, FunctionDefi
 from verity.ir.defs import bind as ir_bind
 from verity.ir.program import Program
 from verity.ir.refs import Affine, Coll, Concat, Explicit, Ref, Refs, Strided, array_of, concat
+from verity.ir.liveness import DeadGateReport
+from verity.ir.liveness import dead_gates as _dead_gates
 from verity.ir.types import Array, Record, Tuple as TupleT, Type, Value
 from verity_vllm.program.frontend.correspond import compare_bodies
-from verity_vllm.program.frontend.liveness import DeadGateReport
-from verity_vllm.program.frontend.liveness import dead_gates as _dead_gates
 from verity_vllm.program.frontend.provenance import MODULE_WEIGHTS_RULE, RuleApplication, registry_version
 
 FRONTEND_VERSION = "verity_vllm.program.frontend.torch_frontend/2026-09-07.fe2"

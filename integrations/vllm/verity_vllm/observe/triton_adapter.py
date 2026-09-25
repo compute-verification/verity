@@ -19,10 +19,12 @@ from __future__ import annotations
 import hashlib
 from typing import Any
 
+from verity_vllm.engine import hooks
+
 from .events import TritonLaunch
 from .observer import Recorder, encode_arg
 
-_STATE: dict[str, Any] = {"orig_run": None, "rec": None, "installed": False}
+_STATE: dict[str, Any] = {"orig_run": None, "rec": None, "patch": None}
 _SRC_SHA: dict[int, str] = {}
 _CONSTEXPR_NAMES: dict[int, frozenset[str]] = {}
 
@@ -30,12 +32,9 @@ _CONSTEXPR_NAMES: dict[int, frozenset[str]] = {}
 def install(rec: Recorder | None) -> None:
     """Wrap `JITFunction.run` once (idempotent) and bind the recorder; `rec=None` keeps the wrapper but disables
     recording (pass-through)."""
-    from triton.runtime.jit import JITFunction
-
-    if not _STATE["installed"]:
-        _STATE["orig_run"] = JITFunction.run
-        JITFunction.run = _run
-        _STATE["installed"] = True
+    if _STATE["patch"] is None:
+        _STATE["patch"] = hooks.triton_launch(lambda orig: _run)
+        _STATE["orig_run"] = _STATE["patch"].original
     _STATE["rec"] = rec
 
 
@@ -44,16 +43,14 @@ def set_recorder(rec: Recorder | None) -> None:
 
 
 def uninstall() -> None:
-    if _STATE["installed"]:
-        from triton.runtime.jit import JITFunction
-
-        JITFunction.run = _STATE["orig_run"]
-        _STATE["installed"] = False
+    if _STATE["patch"] is not None:
+        _STATE["patch"].uninstall()
+        _STATE["patch"] = None
     _STATE["rec"] = None
 
 
 def is_installed() -> bool:
-    return bool(_STATE["installed"])
+    return _STATE["patch"] is not None
 
 
 def src_sha(jit_fn: Any) -> str:

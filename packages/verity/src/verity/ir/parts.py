@@ -14,8 +14,8 @@ a wire; an unread nested return is not automatically an escaping value.
 This module is the only thing the four query-track modules share by import:
 
     verity/ir/query_ast.py  GateSet, Family, Query AST, evaluate       (Query API owner)
-    boundary.py             compact in/out/w_out over Parts            (Boundary owner; with the vLLM integration until promoted)
-    partition.py            partition + width validation, verdicts     (Partition owner; likewise)
+    verity/ir/boundary.py   compact in/out/w_out over Parts            (Boundary owner)
+    verity/ir/partition.py  partition + width validation, verdicts     (Partition owner)
     tests/…                 oracle suite, fixtures, canonical queries  (Query-test owner)
 
 Add to it only by agreement of the owners; never remove or rename.

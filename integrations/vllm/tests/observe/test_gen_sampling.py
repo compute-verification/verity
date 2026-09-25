@@ -98,7 +98,7 @@ def _adapter_fn(name: str):
         if isinstance(node, ast.AnnAssign) and getattr(node.target, "id", "") == "ACCEPTED_TOKENS":
             exec(compile(ast.Module([node], []), "vllm_adapter", "exec"), ns)
     for node in tree.body:
-        if isinstance(node, ast.FunctionDef) and node.name == name:
+        if isinstance(node, ast.FunctionDef) and node.name in (name, "execution_of_workload"):
             exec(compile(ast.Module([node], []), "vllm_adapter", "exec"), ns)
     return ns[name]
 
