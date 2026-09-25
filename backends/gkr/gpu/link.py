@@ -165,9 +165,9 @@ def _kernels():
     import triton.language as tl
 
     @triton.jit
-    def eq_level(T, TB, TAB, h, BLOCK: tl.constexpr):
+    def eq_level(T, TB, TAB, h, lim, BLOCK: tl.constexpr):
         i = tl.program_id(0).to(tl.int64) * BLOCK + tl.arange(0, BLOCK).to(tl.int64)
-        m = i < h
+        m = (i < h) & (i < lim)
         l0 = tl.zeros([BLOCK], dtype=tl.int64)
         l1 = tl.zeros([BLOCK], dtype=tl.int64)
         l2 = tl.zeros([BLOCK], dtype=tl.int64)
@@ -179,11 +179,12 @@ def _kernels():
             l1 ^= tl.load(q + 1, mask=m, other=0)
             l2 ^= tl.load(q + 2, mask=m, other=0)
             l3 ^= tl.load(q + 3, mask=m, other=0)
+        mo = m & (i + h < lim)
         o = T + (i + h) * 4
-        tl.store(o, l0, mask=m)
-        tl.store(o + 1, l1, mask=m)
-        tl.store(o + 2, l2, mask=m)
-        tl.store(o + 3, l3, mask=m)
+        tl.store(o, l0, mask=mo)
+        tl.store(o + 1, l1, mask=mo)
+        tl.store(o + 2, l2, mask=mo)
+        tl.store(o + 3, l3, mask=mo)
         o = T + i * 4
         tl.store(o, tl.load(o, mask=m, other=0) ^ l0, mask=m)
         tl.store(o + 1, tl.load(o + 1, mask=m, other=0) ^ l1, mask=m)
@@ -249,8 +250,8 @@ def _split(v: int) -> list[int]:
     return [(x - (1 << 64)) if x >> 63 else x for x in ((v >> (64 * i)) & ((1 << 64) - 1) for i in range(4))]
 
 
-def eq_table(r: list[int], device) -> torch.Tensor:
-    """``(2^m, 4)`` int64: eq(r, i) for every i < 2^m (bit j of i against r_j)."""
+def eq_table(r: list[int], device, n: int | None = None) -> torch.Tensor:
+    """``(n, 4)`` int64: eq(r, i) for every i < n <= 2^m (bit j of i against r_j)."""
     triton, eq_level, _ = _kernels()
     m = len(r)
     sel = ((np.arange(256)[:, None] >> np.arange(8)[None, :]) & 1).astype(bool)
@@ -264,12 +265,14 @@ def eq_table(r: list[int], device) -> torch.Tensor:
         for q in range(8):
             tabs[j] ^= np.where(sel[None, :, q, None], basis[:, None, q, :], 0)
     tabs = torch.from_numpy(tabs).to(device)
-    T = torch.zeros((1 << m, 4), dtype=torch.int64, device=device)
+    n = 1 << m if n is None else n
+    assert 0 < n <= 1 << m
+    T = torch.zeros((n, 4), dtype=torch.int64, device=device)
     T[0, 0] = 1
-    tb = T.view(torch.uint8).view(1 << m, 32)
+    tb = T.view(torch.uint8).view(n, 32)
     for j in range(m):
         h = 1 << j
-        eq_level[(triton.cdiv(h, 1024),)](T, tb, tabs[j], h, BLOCK=1024)
+        eq_level[(triton.cdiv(min(h, n), 1024),)](T, tb, tabs[j], h, n, BLOCK=1024)
     return T
 
 
@@ -328,7 +331,7 @@ def prove(inst, tr: Transcript, out: list[Ext]) -> Claim:
     link = inst.link
     lay = link.layout
     dev = inst.device
-    T = eq_table(points(tr, link), dev)
+    T = eq_table(points(tr, link), dev, lay.n_pos)
     sy, sigma = plane_sums(T, lay, z_bits(link, dev), _cols(inst))
     tr.absorb(b"link/y" + parity(sy).to_bytes(32, "little"))
     msgs = [_msg(s) for s in sigma]
@@ -341,7 +344,7 @@ def verify(inst, tr: Transcript, rd: Reader) -> Claim:
     link = inst.link
     lay = link.layout
     dev = inst.device
-    T = eq_table(points(tr, link), dev)
+    T = eq_table(points(tr, link), dev, lay.n_pos)
     y = parity(plane_sums(T, lay, z_bits(link, dev), None)[0])
     tr.absorb(b"link/y" + y.to_bytes(32, "little"))
     msgs = rd.take(PLANES)
