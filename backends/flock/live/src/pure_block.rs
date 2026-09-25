@@ -17,7 +17,8 @@
 //! Public regions, each opened at two verifier points drawn after the commitment (both reps):
 //! the key (slot 0 and 16 chaining inputs), the counter (all 32 compressions: `c`), the chunk chaining values (slot 15
 //! and 31 `out_lo`, sent in `Commit` and checked natively against the leaf digests), unit 0's accumulator input and
-//! unit 31's `c_out` (the instance file's recorded accumulators: 0, then `accs[32c + 31]`), and unit 31's `y16` (the
+//! unit 31's `c_out` (a prover-committed public word per block: block (v, c)'s AccOut and block (v, c + 1)'s AccIn open
+//! the same word; AccIn of chunk 0 is +0; the verifier never sees the recorded accumulators), and unit 31's `y16` (the
 //! output word at c = 2, prover-committed at c < 2). Dummy blocks (the block count is a power of two) are chunks of zero
 //! messages under a zero key and zero-input units.
 
@@ -43,7 +44,7 @@ pub const COMP_SLOTS: usize = 32;
 pub const UNITS: usize = 32;
 pub const UNIT_POS0: usize = 64;
 pub const PIN: usize = b3::Z_CONST_POS;
-pub const TAG: &[u8] = b"verity/flock-pure-block/v1";
+pub const TAG: &[u8] = b"verity/flock-pure-block/v2";
 /// Coordinates per verifier point: the regions' free in-block bits come from `r[..16]`, block bits from `r[16..]`.
 pub const PT_LOCAL: usize = 16;
 
@@ -211,33 +212,37 @@ fn shape(region: Region, net: &UnitNet) -> RegionShape {
     RegionShape { region, free, mask, fixed }
 }
 
-/// The prover's per-block publics: each real block's x and W chunk chaining values and its unit 31 `y16` word.
+/// The prover's per-block publics: each real block's x and W chunk chaining values, its unit 31 `y16` word and its unit 31
+/// accumulator (`c_out`). 72 bytes per block: CV_x (8 u32 LE), CV_w (8 u32), y16 (u32), acc_out (u32).
 #[derive(Clone)]
 pub struct Publics {
     pub cv: Vec<[[u32; 8]; 2]>,
     pub y16: Vec<u32>,
+    pub acc: Vec<u32>,
 }
 
 impl Publics {
     pub fn bytes(&self) -> Vec<u8> {
-        let mut v = Vec::with_capacity(self.cv.len() * 68);
-        for (c, y) in self.cv.iter().zip(&self.y16) {
+        let mut v = Vec::with_capacity(self.cv.len() * 72);
+        for ((c, y), a) in self.cv.iter().zip(&self.y16).zip(&self.acc) {
             for w in c.iter().flatten() {
                 v.extend_from_slice(&w.to_le_bytes());
             }
             v.extend_from_slice(&y.to_le_bytes());
+            v.extend_from_slice(&a.to_le_bytes());
         }
         v
     }
 
     pub fn parse(b: &[u8], blocks: usize) -> Result<Self, String> {
-        if b.len() != 68 * blocks {
-            return Err(format!("C4: {} bytes of publics, want {}", b.len(), 68 * blocks));
+        if b.len() != 72 * blocks {
+            return Err(format!("C4: {} bytes of publics, want {}", b.len(), 72 * blocks));
         }
         let w = le_words(b);
-        let cv = (0..blocks).map(|i| from_fn(|r| from_fn(|k| w[17 * i + 8 * r + k]))).collect();
-        let y16 = (0..blocks).map(|i| w[17 * i + 16]).collect();
-        Ok(Publics { cv, y16 })
+        let cv = (0..blocks).map(|i| from_fn(|r| from_fn(|k| w[18 * i + 8 * r + k]))).collect();
+        let y16 = (0..blocks).map(|i| w[18 * i + 16]).collect();
+        let acc = (0..blocks).map(|i| w[18 * i + 17]).collect();
+        Ok(Publics { cv, y16, acc })
     }
 }
 
@@ -548,8 +553,8 @@ impl PureStmt {
                 let cv = |r: usize| if real { p.cv[b][r] } else { self.dummy_cv };
                 [le(&cv(0)), le(&cv(1))].concat()
             }
-            Region::AccIn => self.c_in(inst, b, 0).to_le_bytes().to_vec(),
-            Region::AccOut => (if real { inst.acc(v, 32 * c + 31) } else { self.dummy_unit.0 }).to_le_bytes().to_vec(),
+            Region::AccIn => (if real && c > 0 { p.acc[b - 1] } else { 0 }).to_le_bytes().to_vec(),
+            Region::AccOut => (if real { p.acc[b] } else { self.dummy_unit.0 }).to_le_bytes().to_vec(),
             Region::Y => {
                 let y = if !real { self.dummy_unit.1 } else if c == 2 { inst.out[v] } else { p.y16[b] };
                 (y as u16).to_le_bytes().to_vec()
