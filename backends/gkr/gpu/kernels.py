@@ -587,16 +587,38 @@ if triton is not None:
 
 
     @triton.jit
-    def combine_level_kernel(p_ptr, q_ptr, np_ptr, nq_ptr, n, PBASE: tl.constexpr, BLOCK: tl.constexpr, FK: tl.constexpr):
+    def combine_level_kernel(p_ptr, q_ptr, np_ptr, nq_ptr, t4_ptr, n, t4_stride, PBASE: tl.constexpr, BLOCK: tl.constexpr,
+                             FK: tl.constexpr, DEINT: tl.constexpr = False, T4OUT: tl.constexpr = False):
         """LogUp tree level: ``np[i] = p[2i] q[2i+1] + p[2i+1] q[2i]``, ``nq[i] = q[2i] q[2i+1]`` (int32 in/out, canonical;
-        ``PBASE``: ``p`` is base-field and ``np`` is extension)."""
+        ``PBASE``: ``p`` is base-field and ``np`` is extension).  ``DEINT``: parents written de-interleaved (``i`` even ->
+        row ``i / 2``, odd -> ``n / 2 + i / 2``); ``T4OUT`` (with ``PBASE``): the children also copied to the four
+        ``(n, 6)`` tables at ``t4_ptr + j t4_stride`` = ``p[2i], p[2i+1]`` (coordinate 0 only), ``q[2i], q[2i+1]``."""
         pid = tl.program_id(0)
         i = pid * BLOCK + tl.arange(0, BLOCK)
         m = i < n
         q0_0, q0_1, q0_2, q0_3, q0_4, q0_5 = load6(q_ptr, i * 12, m)
         q1_0, q1_1, q1_2, q1_3, q1_4, q1_5 = load6(q_ptr, i * 12 + 6, m)
         r0, r1, r2, r3, r4, r5 = ext_mmul(q0_0, q0_1, q0_2, q0_3, q0_4, q0_5, q1_0, q1_1, q1_2, q1_3, q1_4, q1_5)
-        ob = i * 6
+        if DEINT:
+            ob = (i // 2 + (i % 2) * (n // 2)) * 6
+        else:
+            ob = i * 6
+        if T4OUT:
+            tb = t4_ptr + i.to(tl.int64) * 6
+            tq0 = tb + 2 * t4_stride
+            tq1 = tb + 3 * t4_stride
+            tl.store(tq0 + 0, q0_0, mask=m)
+            tl.store(tq0 + 1, q0_1, mask=m)
+            tl.store(tq0 + 2, q0_2, mask=m)
+            tl.store(tq0 + 3, q0_3, mask=m)
+            tl.store(tq0 + 4, q0_4, mask=m)
+            tl.store(tq0 + 5, q0_5, mask=m)
+            tl.store(tq1 + 0, q1_0, mask=m)
+            tl.store(tq1 + 1, q1_1, mask=m)
+            tl.store(tq1 + 2, q1_2, mask=m)
+            tl.store(tq1 + 3, q1_3, mask=m)
+            tl.store(tq1 + 4, q1_4, mask=m)
+            tl.store(tq1 + 5, q1_5, mask=m)
         tl.store(nq_ptr + ob + 0, mmul(r0, R2_C), mask=m)
         tl.store(nq_ptr + ob + 1, mmul(r1, R2_C), mask=m)
         tl.store(nq_ptr + ob + 2, mmul(r2, R2_C), mask=m)
@@ -606,6 +628,9 @@ if triton is not None:
         if PBASE:
             a = tl.load(p_ptr + i * 2, mask=m, other=0).to(tl.int32)
             b = tl.load(p_ptr + i * 2 + 1, mask=m, other=0).to(tl.int32)
+            if T4OUT:
+                tl.store(tb, a, mask=m)
+                tl.store(tb + t4_stride, b, mask=m)
             s0 = madd(mmul(a, q1_0), mmul(b, q0_0))
             s1 = madd(mmul(a, q1_1), mmul(b, q0_1))
             s2 = madd(mmul(a, q1_2), mmul(b, q0_2))
@@ -938,9 +963,23 @@ def combine_level(p: torch.Tensor, q: torch.Tensor) -> tuple[torch.Tensor, torch
         return np_, nq
     BLOCK = 256
     grid = ((n + BLOCK - 1) // BLOCK,)
-    combine_level_kernel[grid](p.contiguous().view(-1), q.contiguous().view(-1), np_.view(-1), nq.view(-1), n,
+    combine_level_kernel[grid](p.contiguous().view(-1), q.contiguous().view(-1), np_.view(-1), nq.view(-1), nq, n, 0,
                                PBASE=pbase, BLOCK=BLOCK, num_warps=4, FK=FIELD_KEY)
     return np_, nq
+
+
+def combine_leaves_into(p: torch.Tensor, q: torch.Tensor, pq: torch.Tensor, T4: torch.Tensor) -> None:
+    """The leaf level of a LogUp tree in one pass: base ``p (2n,)`` and ``q (2n, 6)`` int32 -> the parents de-interleaved
+    into ``pq (2, n, 6)`` (``pq[0]`` = p, ``pq[1]`` = q) and the children into ``T4 (4, n, 6)`` = ``p even, p odd, q even,
+    q odd`` (``T4[0:2, :, 1:]`` is left as it is)."""
+    n = q.shape[0] // 2
+    if p.ndim != 1 or n % 2 or tuple(pq.shape) != (2, n, DEG) or tuple(T4.shape) != (4, n, DEG) or not (
+            pq.is_contiguous() and T4.is_contiguous() and p.is_contiguous() and q.is_contiguous()):
+        raise ValueError("combine_leaves_into: base p, even n, contiguous (2, n, 6) / (4, n, 6) outputs")
+    BLOCK = 256
+    grid = ((n + BLOCK - 1) // BLOCK,)
+    combine_level_kernel[grid](p, q, pq[0], pq[1], T4, n, n * DEG, PBASE=True, BLOCK=BLOCK, num_warps=4, FK=FIELD_KEY,
+                               DEINT=True, T4OUT=True)
 
 
 def gate_eval(rows: torch.Tensor, ptr: torch.Tensor, idx: torch.Tensor, coef_m: torch.Tensor, g_n: int) -> torch.Tensor:
