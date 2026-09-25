@@ -75,6 +75,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "resolve-log": ("verity_vllm.observe.fold.resolve_log", "resolve an observation log against a profile"),
     "rmsnorm-fused-sweep": ("verity_vllm.program.registry.rmsnorm_fused_sweep", "fused rms-norm summation-tree sweep"),
     "root-policy": ("verity_vllm.check.root_policy", "root closure check"),
+    "row": ("verity_vllm.pipeline.row", "run a sweep row's stages: Build, Match, Commit (run, stage, chain, shed)"),
     "runtime-tree": ("verity_vllm.observe.runtime_tree", "the runtime's module tree"),
     "sampling-rng": ("verity_vllm.program.kernels.sampling_rng", "sampler noise recomputation"),
     "source-identity": ("verity_vllm.pipeline.source_identity", "source identity and precheck"),
@@ -94,6 +95,23 @@ COMMANDS: dict[str, tuple[str, str]] = {
 }
 
 
+#: The pod layout's machine paths: the default of an option (``Class.field``) that neither its flag nor its
+#: environment variable sets.
+MACHINE: dict[str, str] = {
+    "RunEnv.py": "/workspace/venv312/bin/python",
+    "RunEnv.sweep_dir": "/workspace/cp/sweep",
+    "RunEnv.hf_home": "/workspace/hf",
+    "RunEnv.cuda_home": "/usr/local/cuda",
+    "RunEnv.cuda_bin": "/usr/local/cuda/bin",
+    "RunEnv.native_collect_default": "/workspace/cp/nc_build",
+    "RunEnv.hidden_so_fa2": "/workspace/cp/fa2/build/matReq/verity_fa2_matReq.so",
+    "RunEnv.hidden_so_fa3": "/workspace/cp/fa2/build/fa3_matReq/verity_fa3_matReq.so",
+    "RunEnv.hot_root": "/workspace/cp/hot",
+    "RunEnv.guard_preserve_file": "/root/dm/guard.preserve",
+    "RunEnv.pod_guard": "/root/dm/pod_guard.sh",
+}
+
+
 def usage() -> str:
     w = max(map(len, COMMANDS))
     lines = [f"usage: {PROG} COMMAND [SUBCOMMAND] [options]", "", "commands:"]
@@ -108,7 +126,7 @@ def _doc(cls: type) -> str | None:
 
 def _add_options(parser: argparse.ArgumentParser, cls: type, environ: Mapping[str, str]) -> None:
     for f in dataclasses.fields(cls):
-        if not f.init:
+        if not f.init or "environ" in f.metadata:
             continue
         if "group" in f.metadata:
             _add_options(parser, f.metadata["group"], environ)
@@ -117,6 +135,8 @@ def _add_options(parser: argparse.ArgumentParser, cls: type, environ: Mapping[st
             raise TypeError(f"{cls.__name__}.{f.name} is not a config.option")
         flags, kw, env = f.metadata["flags"], dict(f.metadata["kw"]), f.metadata["env"]
         positional = not flags[0].startswith("-")
+        if f"{cls.__name__}.{f.name}" in MACHINE:
+            kw["default"] = MACHINE[f"{cls.__name__}.{f.name}"]
         if env is not None:
             value = environ.get(env)
             if value is not None and (value != "" or f.metadata["env_empty"]):
@@ -130,11 +150,17 @@ def _add_options(parser: argparse.ArgumentParser, cls: type, environ: Mapping[st
         parser.add_argument(*flags, **kw)
 
 
-def _options(cls: type, ns: argparse.Namespace) -> Any:
-    kw = {}
+def _options(cls: type, ns: argparse.Namespace, environ: Mapping[str, str]) -> Any:
+    kw: dict[str, Any] = {}
     for f in dataclasses.fields(cls):
-        if f.init:
-            kw[f.name] = _options(f.metadata["group"], ns) if "group" in f.metadata else getattr(ns, f.name)
+        if not f.init:
+            continue
+        if "environ" in f.metadata:
+            kw[f.name] = dict(environ)
+        elif "group" in f.metadata:
+            kw[f.name] = _options(f.metadata["group"], ns, environ)
+        else:
+            kw[f.name] = getattr(ns, f.name)
     return cls(**kw)
 
 
@@ -154,7 +180,7 @@ def _parse(command: str, argv: list[str], environ: Mapping[str, str]) -> tuple[a
     if subs is None:
         parser = _parser(prog, _doc(mod.Options) or mod.__doc__)
         _add_options(parser, mod.Options, environ)
-        return parser, _options(mod.Options, parser.parse_args(argv)), mod
+        return parser, _options(mod.Options, parser.parse_args(argv), environ), mod
     parser = _parser(prog, mod.__doc__)
     sp = parser.add_subparsers(dest="_sub", required=True, metavar="SUBCOMMAND")
     by_name = {}
@@ -164,7 +190,7 @@ def _parse(command: str, argv: list[str], environ: Mapping[str, str]) -> tuple[a
                                       formatter_class=argparse.RawDescriptionHelpFormatter)
         _add_options(by_name[name], cls, environ)
     ns = parser.parse_args(argv)
-    return by_name[ns._sub], _options(subs[ns._sub], ns), mod
+    return by_name[ns._sub], _options(subs[ns._sub], ns, environ), mod
 
 
 def main(argv: list[str] | None = None) -> Any:
