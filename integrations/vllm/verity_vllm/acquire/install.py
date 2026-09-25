@@ -21,6 +21,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping
 
+from verity_vllm.engine import hooks as engine_hooks
 from verity_vllm.observe.runtime_tree import RUNNER_PATH
 from verity_vllm.acquire.plan import HOOK_KINDS, AcquisitionPlan, Site, hooks_of_doc
 
@@ -66,8 +67,7 @@ class Installation:
     missing: list[Site] = field(default_factory=list)        # hook sites whose module is not in the built tree (fail: the plan was made for another runtime)
     handles: list = field(default_factory=list)
     _runner: Any = None
-    _orig_sample: Any = None
-    _had_sample: bool = False
+    _sample_patch: Any = None
 
     def keys(self) -> list[tuple[str, str, str]]:
         return sorted(s.key() for s in self.installed)
@@ -76,15 +76,9 @@ class Installation:
         for h in self.handles:
             h.remove()
         self.handles = []
-        if self._runner is not None and self._orig_sample is not None:
-            if self._had_sample:
-                setattr(self._runner, "sample", self._orig_sample)
-            else:
-                try:
-                    delattr(self._runner, "sample")
-                except AttributeError:
-                    pass
-            self._runner, self._orig_sample = None, None
+        if self._sample_patch is not None:
+            self._sample_patch.uninstall()
+            self._runner, self._sample_patch = None, None
 
 
 class OccurrenceSink:
@@ -157,11 +151,9 @@ def install_from_plan(plan: AcquisitionPlan | Mapping[str, Any], model: Any, run
                 continue
             if inst._runner is None:
                 inst._runner = runner
-                inst._had_sample = "sample" in getattr(runner, "__dict__", {})
-                inst._orig_sample = runner.sample
                 attrs: list[tuple[tuple[str, str, str], str]] = []
 
-                def sample(*a, _orig=inst._orig_sample, _attrs=attrs, **kw):
+                def sample(*a, _orig=runner.sample, _attrs=attrs, **kw):
                     res = _orig(*a, **kw)
                     so = res[0] if isinstance(res, tuple) else res
                     for k, attr in _attrs:
@@ -170,7 +162,7 @@ def install_from_plan(plan: AcquisitionPlan | Mapping[str, Any], model: Any, run
                             sink(k, t)
                     return res
 
-                runner.sample = sample
+                inst._sample_patch = engine_hooks.patch(runner, "sample", sample)
                 inst._attrs = attrs  # type: ignore[attr-defined]
             inst._attrs.append((key, s.slot.lstrip(".")))  # type: ignore[attr-defined]
             inst.installed.append(s)

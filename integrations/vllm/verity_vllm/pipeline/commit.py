@@ -1949,10 +1949,10 @@ def main(argv: list[str] | None = None) -> None:
                 if getattr(args, "padded_finalize", False):
                     # [B9.1] the padding hook runs INSIDE finalize (after the worker drained: every executed step's leaf count / layout is
                     # known, before the run-root fold); the served tokens of THIS run + stop_rule_of_record place the executed prefix
+                    from functools import partial
                     from verity_vllm.commit import padding_steps as PS
-                    _served = r["tokens"]
-                    com.padding_hook = lambda c, _t=_served: PS.padding_for_committer(c, manifest=required_manifest, requests=reqs, sampling=sampling,
-                                                                                      served_tokens=_t, stop=stop_of_record)
+                    com.padding_hook = partial(PS.padding_for_committer, manifest=required_manifest, requests=reqs, sampling=sampling,
+                                               served_tokens=r["tokens"], stop=stop_of_record)
                 rc = com.finalize()
                 t_ready = time.perf_counter()
                 com.uninstall()
