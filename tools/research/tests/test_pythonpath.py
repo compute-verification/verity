@@ -19,7 +19,8 @@ from research.cli import main
 REPO = Path(__file__).resolve().parents[3]
 SRC = str(Path(remote.__file__).resolve().parents[1])
 PY = sys.executable
-REAL_ROOTS = ["tools/research/src", "packages/verity/src", "backends/sp1/python", "backends/numerical/python", "integrations/vllm"]
+REAL_ROOTS = ["tools/research/src", "packages/verity/src", "backends/sp1/python", "backends/numerical/python", "integrations/vllm",
+              "protocols/sampled_proofs"]
 
 
 def test_this_repository_resolves_every_workspace_package_inside_the_tree(tmp_path):
