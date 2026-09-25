@@ -801,14 +801,18 @@ def prove(inst: Instance, pcs: bool = True, params: ligero.LigeroParams = ligero
     tm = time.perf_counter()
     committed = None
     mults = []
-    # the query tuples are needed again by the lookup pass; holding them across the commitment (~0.7 GiB at 4096 FP8
-    # VUs) only pays on parts with room to spare, the 24-32 GB cards recompute them
-    keep = dev.type == "cuda" and torch.cuda.get_device_properties(dev).total_memory >= 48 << 30
+    # the query tuples are needed again by the lookup pass; they are held across the commitment on >= 48 GB parts, and
+    # on smaller ones while they total at most a tenth of the device (1.8 GiB for the merged FP8 table at 4096 VUs)
+    mem = torch.cuda.get_device_properties(dev).total_memory if dev.type == "cuda" else 0
+    held = 0
     kept = []
     for t in inst.tables:
         vals = [v for v in seg_query_values(inst, t.name) if v is not None]
         mults.append(logup.multiplicities(t, logup.table_rows(t, dev), vals))
-        kept.append(vals if keep else None)
+        size = sum(v.numel() * v.element_size() for v in vals)
+        keep = mem >= 48 << 30 or held + size <= mem // 10
+        held += size if keep else 0
+        kept.append(vals if keep and mem else None)
     vals = None
     _sync(dev)
     st.t_mults = time.perf_counter() - tm
