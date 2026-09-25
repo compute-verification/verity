@@ -69,6 +69,8 @@ class Limits:
     heads_per_row: int = 4                   # attention / RoPE heads taken from one row
     max_instances_per_set: int = 8192
     max_row_words: int = 1 << 22             # a generic row whose operands exceed this is counted, not written
+    max_seconds: float = 900.0               # evaluation budget: the draw stops (named, per family) once it is spent
+    workers: int = 1                         # > 1: a forked pool (the Commit's host-retained store; never a device-retained one)
 
     @classmethod
     def from_dir(cls, out_dir: str | Path) -> "Limits":
@@ -107,20 +109,24 @@ class _Picker:
 
 def select(pool: list[dict], limits: Limits, key: Key) -> list[dict]:
     """Per family: `limits.for_family` VUs, drawn per stratum (`challenge.stratum_picks` under the family's shard of `key`) and emitted
-    round-robin across the family's strata, so a small cap still reaches every stratum it can."""
+    round-robin across the family's strata, so a small cap still reaches every stratum it can.  The families are interleaved (one VU
+    of each in turn), so a spent time budget truncates every family alike."""
     by_fam: dict[str, dict[str, list[dict]]] = {}
     for v in pool:
         if v["family"] in NOT_EXPORTED:
             continue
         by_fam.setdefault(v["family"], {}).setdefault(v["stratum"], []).append(v)
-    out: list[dict] = []
+    per: list[list[dict]] = []
     for fam in sorted(by_fam):
         cap = limits.for_family(fam)
         names = sorted(by_fam[fam])
         picks = CH.stratum_picks([by_fam[fam][k] for k in names], cap, None, key.shard(("family", fam)))
-        rr = [c for j in range(max((len(p) for p in picks), default=0)) for p in picks if j < len(p) for c in (p[j],)]
-        out.extend(rr[:cap])
-    return out
+        per.append(_round_robin(picks)[:cap])
+    return _round_robin(per)
+
+
+def _round_robin(lists: list[list[dict]]) -> list[dict]:
+    return [ls[j] for j in range(max((len(ls) for ls in lists), default=0)) for ls in lists if j < len(ls)]
 
 
 def _unsigned(a: np.ndarray) -> np.ndarray:
@@ -326,6 +332,55 @@ class _SetWriter:
                 "relation": self.relation.get("subcircuit")}
 
 
+_FORK: dict[str, Any] = {}          # the per-VU context the forked workers read (set in the parent right before the fork)
+
+
+def _one_vu(k: int) -> tuple[dict[str, Any], list[tuple[Instance, str]], float]:
+    """Evaluate VU `k` of the draw and decompose every row it evaluated: (log entry, [(instance, source)], seconds)."""
+    c = _FORK
+    vu, tv = c["picked"][k], time.perf_counter()
+    rid = vu["request_id"]
+    rec, evals = capture(c["indices"][rid], c["store"], c["weights"], vu, arrive=int(c["arrivals"].get(rid, 0)))
+    entry = {"vu": k, "request": rid, "i": vu["i"], "family": vu["family"], "spec": vu["spec"], "stratum": vu["stratum"],
+             "engine_step": rec.get("engine_step"), "op_path": rec.get("op_path"), "row": rec.get("row"), "phase": vu["phase"],
+             "result": rec.get("result"), "why": rec.get("why"), "inputs": rec.get("inputs")}
+    insts: list[tuple[Instance, str]] = []
+    if rec.get("result") is True:
+        try:
+            for j, (efam, est, ops, eout) in enumerate(evals):
+                pick = _Picker(c["key"], ("row", str(rid), int(vu["i"]), j))
+                insts += [(inst, "committed" if j == len(evals) - 1 else "interior") for inst in decompose(efam, est, ops, eout, pick, c["limits"])]
+        except DecompositionMismatch as e:
+            entry["decomposition_error"], insts = str(e), []
+    return entry, insts, time.perf_counter() - tv
+
+
+def _run_draw(n: int, workers: int, budget_s: float, t0: float) -> Iterator[tuple[dict[str, Any], list[tuple[Instance, str]], float] | None]:
+    """The draw's results in order; None for a VU the spent time budget left undrawn.  `workers` > 1: a forked pool in chunks (the
+    replay's pattern: weights and twin libraries pre-warmed in the parent, the heap frozen before the fork, children never touch CUDA)."""
+    if workers <= 1:
+        for k in range(n):
+            yield None if time.perf_counter() - t0 > budget_s else _one_vu(k)
+        return
+    import gc
+    import multiprocessing as mp
+    from verity_vllm.check.replay import driver as SR
+    SR._prewarm_weights(_FORK["indices"], _FORK["picked"], _FORK["weights"])
+    SR._prewarm_evaluators(_FORK["picked"])
+    gc.collect()
+    gc.freeze()
+    try:
+        with mp.get_context("fork").Pool(processes=workers) as pool:
+            chunk = workers * 4
+            for lo in range(0, n, chunk):
+                if time.perf_counter() - t0 > budget_s:
+                    yield from (None for _ in range(lo, n))
+                    return
+                yield from pool.map(_one_vu, range(lo, min(n, lo + chunk)))
+    finally:
+        gc.unfreeze()
+
+
 def export_vus(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], committed: Callable, weights: Callable, *, out_dir: str | Path,
                run_root: bytes, arrivals: dict[str, int] | None = None, manifest: dict[str, Any] | None = None,
                executed_prefix: dict[str, dict] | None = None, program_dirs: dict[str, str] | None = None,
@@ -336,7 +391,6 @@ def export_vus(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], commit
     arrivals = arrivals or {}
     out = Path(out_dir)
     (out / "sets").mkdir(parents=True, exist_ok=True)
-    store = CommittedStore.of_record(bmap, committed, manifest)
     indices: dict[str, ProgramIndex] = {}
     by_inst: dict[int, ProgramIndex] = {}
     all_vus: list[dict] = []
@@ -349,40 +403,42 @@ def export_vus(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], commit
     pool, _not_exec = split_not_executed(all_vus, executed_prefix)
     key = selection_key(run_root)
     picked = select(pool, limits, key)
+    _FORK.update(picked=picked, indices=indices, store=CommittedStore.of_record(bmap, committed, manifest), weights=weights,
+                 arrivals=arrivals, key=key, limits=limits)
     writers: dict[str, _SetWriter] = {}
     fam_stats: dict[str, Counter] = {}
     fam_time: Counter = Counter()
     vus_log = []
-    for k, vu in enumerate(picked):
-        fam = vu["family"]
-        st = fam_stats.setdefault(fam, Counter())
-        st["drawn"] += 1
-        tv = time.perf_counter()
-        rid = vu["request_id"]
-        rec, evals = capture(indices[rid], store, weights, vu, arrive=int(arrivals.get(rid, 0)))
-        entry = {"vu": k, "request": rid, "i": vu["i"], "spec": vu["spec"], "stratum": vu["stratum"], "engine_step": rec.get("engine_step"),
-                 "op_path": rec.get("op_path"), "row": rec.get("row"), "phase": vu["phase"], "result": rec.get("result"),
-                 "why": rec.get("why"), "inputs": rec.get("inputs"), "instances": Counter()}
-        if rec.get("result") is True:
-            st["replayed_equal"] += 1
-            for j, (efam, est, ops, eout) in enumerate(evals):
-                source = "committed" if j == len(evals) - 1 else "interior"
-                pick = _Picker(key, ("row", str(rid), int(vu["i"]), j))
-                for inst in decompose(efam, est, ops, eout, pick, limits):
-                    w = writers.get(inst.set_name)
-                    if w is None:
-                        w = writers[inst.set_name] = _SetWriter(inst.set_name, inst.relation)
-                    if len(w.index) >= limits.max_instances_per_set:
-                        st["instances_over_cap"] += 1
-                        continue
-                    w.add(inst, [k, rid, rec.get("engine_step"), rec.get("op_path"), rec.get("row"), vu["phase"], source])
-                    entry["instances"][inst.set_name] += 1
-                    st["instances"] += 1
-        else:
-            st["not_exported_" + ("mismatch" if rec.get("result") is False else "not_evaluated")] += 1
-        fam_time[fam] += time.perf_counter() - tv
-        entry["instances"] = dict(entry["instances"])
-        vus_log.append(entry)
+    try:
+        for k, res in enumerate(_run_draw(len(picked), int(limits.workers), float(limits.max_seconds), t0)):
+            st = fam_stats.setdefault(picked[k]["family"], Counter())
+            if res is None:
+                st["not_drawn_time_budget"] += 1
+                continue
+            entry, insts, dt = res
+            st["drawn"] += 1
+            fam_time[entry["family"]] += dt
+            if entry.get("decomposition_error"):
+                st["decomposition_error"] += 1
+            if entry["result"] is True:
+                st["replayed_equal"] += 1
+            else:
+                st["not_exported_" + ("mismatch" if entry["result"] is False else "not_evaluated")] += 1
+            got: Counter = Counter()
+            for inst, source in insts:
+                w = writers.get(inst.set_name) or writers.setdefault(inst.set_name, _SetWriter(inst.set_name, inst.relation))
+                if len(w.index) >= limits.max_instances_per_set:
+                    st["instances_over_cap"] += 1
+                    continue
+                w.add(inst, [k, entry["request"], entry["engine_step"], entry["op_path"], entry["row"], entry["phase"], source])
+                got[inst.set_name] += 1
+                st["instances"] += 1
+            vus_log.append(dict(entry, instances=dict(got)))
+            if k % 100 == 0:
+                print(f"[vu-export] {k}/{len(picked)} VUs, {sum(len(x.index) for x in writers.values())} instances, "
+                      f"{time.perf_counter() - t0:.0f} s", flush=True)
+    finally:
+        _FORK.clear()
     prov = dict(provenance or {}, run_root=bytes(run_root).hex(),
                 selection=f"verity.randomness.derive({SELECTION_SOURCE!r}, {SELECTION_DOMAIN!r}, {{run_root}}); per family key.shard(('family', "
                           "family)) through challenge.stratum_picks; sub-indices key.subset(k, n, ('row', request, i, evaluation))")

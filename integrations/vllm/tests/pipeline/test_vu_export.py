@@ -145,3 +145,26 @@ def test_after_replay_exports_only_a_passing_pair_zero(attn_world, tmp_path):
     p = s["provenance"]
     assert p["row"] == 101 and p["research_run"] == "r-test" and p["model"] == "tiny/model" and p["versions"] == {"git_head": "f00"}
     assert all(c["drawn"] <= 3 for c in s["by_family"].values()) and VX.verify(tmp_path)["ok"]
+
+
+def test_a_spent_time_budget_stops_the_draw_by_name(attn_world, tmp_path):
+    s = _export(attn_world, tmp_path, limits=VX.Limits(per_family=64, max_seconds=0.0))
+    assert s["sets"] == [] and s["by_family"]
+    assert all(c.get("drawn", 0) == 0 and c["not_drawn_time_budget"] > 0 for c in s["by_family"].values())
+
+
+def test_families_are_interleaved_in_the_draw(attn_world):
+    bmap, committed = attn_world.bmap_and_reader()
+    from verity_vllm.check.replay.index import ProgramIndex
+    from verity_vllm.check.replay.population import population
+    pi = ProgramIndex(attn_world.inst)
+    pool = population(pi, "r0")[0]
+    fams = [v["family"] for v in VX.select(pool, VX.Limits(per_family=64), VX.selection_key(ROOT))]
+    n = len(set(fams))
+    assert len(set(fams[:n])) == n                         # the first round holds one VU of every family
+
+
+def test_the_forked_pool_writes_the_serial_sets(attn_world, tmp_path):
+    a = _export(attn_world, tmp_path / "serial")
+    b = _export(attn_world, tmp_path / "forked", limits=VX.Limits(per_family=64, workers=2))
+    assert [(x["set"], x["n"], x["content_digest"]) for x in a["sets"]] == [(x["set"], x["n"], x["content_digest"]) for x in b["sets"]]
