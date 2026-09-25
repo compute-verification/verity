@@ -119,6 +119,31 @@ def test_domain_openings(case: dict) -> None:
     assert _opening_accepted(case) is case["accept"]
 
 
+@pytest.mark.parametrize("case", [c for c in VECTORS["openings"] if c["accept"]], ids=lambda c: c["kind"])
+def test_lowering_trace_is_hash_by_hash(case: dict) -> None:
+    domain = _domain(case)
+    message = _b(case["leaf_message"])
+    assert message.startswith(_b(case["leaf_prefix"])) and hashlib.sha256(message).hexdigest() == case["leaf"]
+    digest = _b(case["leaf"])
+    for step, sibling in zip(case["trace"], _path(case["path"]), strict=True):
+        msg = _b(step["message"])
+        assert (step["rule"] == "lift") == (sibling is None)
+        assert digest in msg and (sibling is None or sibling in msg)
+        digest = hashlib.sha256(msg).digest()
+        assert digest.hex() == step["digest"]
+    assert digest.hex() == case["tree_root"]
+    preimage = _b(case["binding_preimage"])
+    assert preimage == domain.binding_preimage(digest) and hashlib.sha256(preimage).hexdigest() == case["root"]
+    assert ref.domain_digest(domain).hex() == case["domain_digest"]
+
+
+def test_domain_digest_separates_domains_over_one_tree() -> None:
+    a = ref.StepDomain(*(V.digest_of(k) for k in "pcgl"), 5)
+    b = ref.StepDomain(*(V.digest_of(k) for k in "pcgl"), 5, {"launch_tag": 0, "chunk_words": 16, "src_mask": 0, "HB": 0, "M": 0, "NB": 0})
+    c = ref.SemanticDomain(V.digest_of("p"), b"", V.digest_of("c"), V.digest_of("g"), 0, 5)
+    assert len({ref.domain_digest(d) for d in (a, b, c)}) == 3
+
+
 def test_every_domain_kind_has_a_positive_and_a_moved_negative() -> None:
     seen = {(c["kind"], c["accept"]) for c in VECTORS["openings"]}
     assert seen == {(k, a) for k in ("semantic", "step", "stream", "thread") for a in (True, False)}

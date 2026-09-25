@@ -5,7 +5,7 @@ beside frame-v3 (`verity.commitments.frame_v3`). Configured backends select one 
 benchmarked (`benchmarks/commitments/commit_cost.py`). This spec describes existing bytes: it changes no
 production root.
 
-- Reference: `verity.commitments.vllm_v1` (plain `hashlib`). `VllmV1(ports)` is the configured
+- Reference: `verity.commitments.vllm_v1` (plain `hashlib`); backends lower it by §8 and bind §9 in their statements. `VllmV1(ports)` is the configured
   `verity.commitments.scheme.CommitmentScheme`, with one verifier-held domain per port (§5). `TREE` is the bare
   tree rule.
 - Vectors: `vectors.json`, written by `python -m verity.commitments.vllm_v1.vectors`. `--check` exits
@@ -197,3 +197,97 @@ fixed in the bytes. Fixing any of them in the bytes would change roots:
    word 1. The spec and the reference now bound it; the integration and the CUDA still rely on masks being at
    most 63.
 4. **Injectivity of the `/`-joined context digests depends on field formats** that the integration owns (§4).
+
+## 8. Lowering into a proof backend
+
+Every hash in `vllm-v1` is SHA-256 (FIPS 180-4). Each message is padded with `0x80`, then zeros, then its
+bit length as a u64be, to a multiple of 64 bytes. There are no other hashes, keys or algebraic steps, and no tree
+padding.
+
+### 8.1 Messages, byte offsets and SHA-256 blocks
+
+| hash | message bytes (offsets are 0-based) | length | blocks |
+|---|---|---|---|
+| node | `[0,4)` `00 00 00 13` · `[4,23)` `verity-vllm/node/v1` · `[23,31)` u64be 32 · `[31,63)` left · `[63,71)` u64be 32 · `[71,103)` right | 103 | 2 |
+| lift | `[0,4)` `00 00 00 13` · `[4,23)` `verity-vllm/lift/v1` · `[23,31)` u64be 32 · `[31,63)` child | 63 | 2 (the second block is constant) |
+| empty | `00 00 00 14` · `verity-vllm/empty/v1` | 24 | 1 |
+| position leaf | `[0,18)` `verity/pos-leaf/v0` · `[18,26)` u64be n · `[26,26+n)` value | 26 + n | ⌈(35 + n)/64⌉ |
+| `fa2h` chunk leaf | `[0,64)` header (§2) · `[64,64+4C)` chunk | 64 + 4C | 2 + 4C/64 when 4C is a multiple of 64 (6 for C = 64) |
+| `fa2h` thread leaf | `[0,64)` header · the thread's words | 64 + 4w | ⌈(73 + 4w)/64⌉ |
+| id leaf | §2's `H(leaf/v1, …)` | varies | ⌈(len + 9)/64⌉ |
+| semantic root | `verity/semantic-root/v0` (23) · program · query_id (q) · template · ctx · u64be epoch · u64be N · tree_root | 167 + q | ⌈(176 + q)/64⌉ |
+| step root | `verity/fa2c/root/v0` (19) · program · ctx · geo · layout · u64be N · tree_root | 187 | 4 |
+| run root | `verity/cmt-integ/run-root/v0` (28) · program · geo · u64be S · fold(step roots) | 132 | 3 |
+| weights root | `verity/cmt-integ/weights-root/v0` (32) · geo · names · u64be T · fold(tensor roots) | 168 | 3 |
+| stream root | `verity/fa2-hidden/root/v7` (25) · layout · stream_ctx · tree_root | 121 | 3 |
+| thread root | `verity/fa2-hidden/thread-root/v7` (32) · geo · thread_ctx · tree_root | 128 | 3 |
+
+- **Where blocks are public.** A block made only of public bytes (a header, a tag, a root-binding prefix) can be
+  compressed outside the circuit, and its midstate handed in.
+- **Offset absorption.** A position leaf's value starts at byte 26 and a node's left child at byte 31, so the
+  gadget must absorb values at an arbitrary byte offset.
+- **Digest byte order.** A digest enters the next message as its 32 SHA-256 output bytes, big-endian words as
+  FIPS 180-4 emits them. `fa2h` stream words enter as `u32le` memory words, so the CUDA copies byte-swap them into
+  SHA-256's big-endian message words.
+
+### 8.2 Tree shape
+
+- **No padding.** Level widths go N, ⌈N/2⌉, … down to 1. At each level where the width is odd, the last node is
+  lifted: one `lift` hash, and no sibling.
+- **Depth.** ⌈log₂ N⌉ levels. A level is either `node(left, right)` or `lift(child)`, as `shape(N, i)` of §3 says.
+- **Public index.** The lift pattern is a function of (N, i). When the index is public, the circuit is specialised
+  to it or given the pattern as public bits.
+- **Private index.** The circuit must derive the pattern from i's bits and N: at each level, `is_lift = (i_level ==
+  width_level − 1) ∧ (width_level odd)`, and the direction bit is the low bit of `i_level`.
+- **No multiproof format.** vLLM opens single paths (§3) and contiguous ranges (the capture-v2 weights, not in this
+  scheme). A backend opening many leaves proves one path per leaf, or shares siblings under its own
+  statement-defined rule. There is no core `vllm-v1` multiproof encoding.
+
+### 8.3 What the vectors give a circuit author
+
+Everything is lowercase hex:
+
+- **`hash`**: every tree tag's full SHA-256 `message` and `digest`.
+- **`trees`**: N ∈ {0–9, 16, 17}, with every leaf, the root, and every opening path. `null` marks a lift.
+- **`openings`**: one accepted opening per domain kind, with its moved negative. Each accepted opening carries:
+  - `leaf_prefix`, `leaf_message` and `leaf`;
+  - `trace`, which gives per level the rule, the full message and its digest, ending at `tree_root`;
+  - `binding_preimage`, whose SHA-256 is `root`;
+  - `domain_digest`, as described in §9.
+- **`layouts`**: one leaf layout per leaf kind.
+- **`rejections`**: openings the circuit or verifier must reject.
+
+## 9. What a backend statement must bind externally
+
+frame-v3 binds its domain inside every leaf and node, so a frame-v3 root already names its session, phase, owner
+and positions. `vllm-v1` does not. A backend statement over `vllm-v1` openings must supply, outside the hashes:
+
+1. **The domain.** The statement names the verifier-held domain of each port (§5), with every context field and N,
+   and absorbs `domain_digest(domain)` into its statement digest and Fiat–Shamir transcript.
+
+   `domain_digest(domain)` is `identity_digest("verity/vllm-v1/domain/v1", {kind, leaf_count, <fields>})`, with byte
+   fields in hex. The verifier builds the domain from its own Program, instance set and range, never from the
+   proof.
+
+   This is the external stand-in for frame-v3's verifier-derived `domain_id`. Without it, two statements over the
+   same bound root could differ in what they claim the positions mean.
+2. **The bound root, never the bare tree root.** The statement's public root is the §4 binding. The verifier
+   recomputes it from the domain and the tree root, natively or in the circuit from `binding_preimage`. A bare
+   `vllm-v1` tree root is bound to nothing.
+3. **The leaf rule of each port.** This is the layout kind (position, `fa2h` chunk, thread or id), fixed by the
+   statement's scheme configuration, because no root binds it (§7, finding 1).
+4. **Each position's value length and interpretation.** A position leaf carries no id, dtype or shape. The
+   statement fixes `value_len` per position from the template or layout, and the gadget constrains the value to
+   exactly that many bytes, so the length prefix is public, not prover-chosen.
+5. **Positions derived by the verifier.** The statement's positions come from its own subcircuit, instance range
+   and port. For `fa2h` leaves, the header fields are derived from the claimed position. The prover's path must
+   match `shape(N, i)`.
+6. **Thread trees.** The geometry fields (HB, num_m_block, NB, sequence lengths, causal) are in the statement,
+   because N and every header derive from them and the root binds them only through `geo`. Unvisited slots, the
+   zero leaves, are never opened.
+7. **One tree per opening.** Nodes carry no domain, level or index. A statement must never combine siblings from
+   different trees, or reuse a subtree root as a leaf. Every leaf comes from a `leaf_layout` digest of its own
+   port.
+
+With 1–7 in place, a `vllm-v1` opening in a backend statement means what a frame-v3 opening does: this value, at
+this verifier-derived position, of this verifier-derived commitment. §5's injectivity argument carries over unchanged.

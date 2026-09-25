@@ -24,6 +24,7 @@ from . import (
     StreamDomain,
     ThreadDomain,
     chunk_header,
+    domain_digest,
     id_leaf,
     id_leaf_layout,
     ids_digest,
@@ -80,7 +81,31 @@ def _hash_vectors() -> list[dict[str, Any]]:
         (tagged.EMPTY_TAG, []),
         (tagged.LEAF_TAG, [b"l=0/op=q_proj/port=0", b"bfloat16", b"[2,3]", expand("hash/leaf-value", 12)]),
     ]
-    return [{"tag": tag, "parts": [p.hex() for p in parts], "digest": tagged.H(tag, *parts).hex()} for tag, parts in cases]
+    return [{"tag": tag, "parts": [p.hex() for p in parts], "message": h_message(tag, *parts).hex(), "digest": tagged.H(tag, *parts).hex()}
+            for tag, parts in cases]
+
+
+def h_message(tag: str, *parts: bytes) -> bytes:
+    """The exact bytes ``H`` feeds SHA-256."""
+
+    t = tag.encode("utf-8")
+    return len(t).to_bytes(4, "big") + t + b"".join(len(p).to_bytes(8, "big") + p for p in parts)
+
+
+def fold_trace(leaf: bytes, index: int, path: list[bytes | None]) -> list[dict[str, str]]:
+    """Every hash from the leaf to the tree root: per level the rule, the SHA-256 message and its digest."""
+
+    out, digest = [], leaf
+    for sibling in path:
+        if sibling is None:
+            rule, message = "lift", h_message(tagged.LIFT_TAG, digest)
+        else:
+            rule = "node"
+            message = h_message(tagged.NODE_TAG, digest, sibling) if index % 2 == 0 else h_message(tagged.NODE_TAG, sibling, digest)
+        digest = hashlib.sha256(message).digest()
+        out.append({"rule": rule, "message": message.hex(), "digest": digest.hex()})
+        index //= 2
+    return out
 
 
 def _pos_leaf_vectors() -> list[dict[str, Any]]:
@@ -220,11 +245,18 @@ def _opening_vectors() -> list[dict[str, Any]]:
     def emit(kind: str, fields: dict[str, Any], domain: Any, values: list[bytes], index: int, extra: dict[str, Any] | None = None,
              leaves: list[bytes] | None = None) -> None:
         leaves = leaves or [domain.leaf(i, v) for i, v in enumerate(values)]
-        root = domain.bind(TREE.root(leaves))
-        path = _hex_path(TREE.path(leaves, index))
+        tree_root = TREE.root(leaves)
+        root = domain.bind(tree_root)
+        raw_path = list(TREE.path(leaves, index))
+        path = _hex_path(tuple(raw_path))
+        layout = domain.leaf_layout(index, len(values[index])) if isinstance(domain, SemanticDomain) else (
+            domain.leaf_layout(index, None if domain.chunk else len(values[index])) if isinstance(domain, StepDomain) else domain.leaf_layout(index))
         for claimed, accept in ((index, True), (index + 1, False)):
-            out.append({"kind": kind, "domain": fields, "index": claimed, "value": h(values[index]), "path": path, "root": h(root),
-                        "accept": accept, **(extra or {})})
+            case = {"kind": kind, "domain": fields, "index": claimed, "value": h(values[index]), "path": path, "root": h(root),
+                    "accept": accept, **(extra or {})}
+            if accept:
+                case.update(_lowering(domain, layout, values[index], leaves[index], index, raw_path, tree_root))
+            out.append(case)
 
     sem = SemanticDomain(program, b"q-7", template, ctx, 2, 5)
     emit("semantic", {"program_digest": h(program), "query_id": h(b"q-7"), "template_digest": h(template), "ctx_digest": h(ctx), "epoch": 2,
@@ -252,11 +284,28 @@ def _opening_vectors() -> list[dict[str, Any]]:
     messages = [thread_header(src_mask=1, launch_tag=4, **position(t)) + expand(f"openings/thread/{t}", 256) for t in range(thread.leaf_count)]
     leaves = [thread.leaf(m, **position(t)) for t, m in enumerate(messages)]
     tidx = 77
+    raw_path = list(TREE.path(leaves, tidx))
+    layout = thread.leaf_layout(64, **position(tidx))
     for claimed, accept in ((tidx, True), (tidx + 1, False)):
-        out.append({"kind": "thread", "domain": {"geo_digest": h(geo), "launch_tag": 4, "src_mask": 1, "HB": 1, "num_m_block": 1, "NB": 1},
-                    "index": thread.index(0, 0, 0, claimed), "position": position(claimed), "value": h(messages[tidx]),
-                    "path": _hex_path(TREE.path(leaves, tidx)), "root": h(thread.bind(TREE.root(leaves))), "accept": accept})
+        case = {"kind": "thread", "domain": {"geo_digest": h(geo), "launch_tag": 4, "src_mask": 1, "HB": 1, "num_m_block": 1, "NB": 1},
+                "index": thread.index(0, 0, 0, claimed), "position": position(claimed), "value": h(messages[tidx]),
+                "path": _hex_path(tuple(raw_path)), "root": h(thread.bind(TREE.root(leaves))), "accept": accept}
+        if accept:
+            case.update(_lowering(thread, layout, messages[tidx][64:], leaves[tidx], tidx, raw_path, TREE.root(leaves)))
+        out.append(case)
     return out
+
+
+def _lowering(domain: Any, layout: Any, value: bytes, leaf: bytes, index: int, path: list[bytes | None], tree_root: bytes) -> dict[str, Any]:
+    """What a circuit recomputes for one accepted opening, hash by hash."""
+
+    message = layout.prefix + value + layout.suffix
+    assert hashlib.sha256(message).digest() == leaf
+    trace = fold_trace(leaf, index, path)
+    assert bytes.fromhex(trace[-1]["digest"] if trace else leaf.hex()) == tree_root
+    preimage = domain.binding_preimage(tree_root)
+    return {"leaf_prefix": layout.prefix.hex(), "leaf_message": message.hex(), "leaf": leaf.hex(), "trace": trace, "tree_root": tree_root.hex(),
+            "binding_preimage": preimage.hex(), "domain_digest": domain_digest(domain).hex()}
 
 
 def _layout_vectors() -> list[dict[str, Any]]:

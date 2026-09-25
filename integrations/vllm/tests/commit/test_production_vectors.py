@@ -196,6 +196,19 @@ def test_domain_openings(case: dict) -> None:
     assert _integration_opening(case) is case["accept"]
 
 
+@pytest.mark.parametrize("case", [c for c in VECTORS["openings"] if c["accept"]], ids=lambda c: c["kind"])
+def test_lowering_trace_matches_the_integration_hashes(case: dict) -> None:
+    digest, cursor = _b(case["leaf"]), case["index"]
+    for step, sibling in zip(case["trace"], _path(case["path"]), strict=True):
+        if sibling is None:
+            digest = hashing.lift_hash(digest)
+        else:
+            digest = hashing.node_hash(digest, sibling) if cursor % 2 == 0 else hashing.node_hash(sibling, digest)
+        assert digest.hex() == step["digest"]
+        cursor //= 2
+    assert digest.hex() == case["tree_root"]
+
+
 # --- whole production commits, recomputed with the reference -------------------------------------------------------
 
 _IDENTITIES = [

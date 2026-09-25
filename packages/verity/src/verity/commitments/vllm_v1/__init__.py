@@ -23,6 +23,7 @@ from verity.errors import InvalidArtifact
 from ..leaves import DIGEST_BYTES, empty_root, fold_path, levels, open_path, path_shape
 from ..leaves import ids_digest as ids_digest
 from ..leaves import leaf_hash as id_leaf
+from ..identity import identity_digest
 from ..leaves import LEAF_TAG, shape_text
 from ..scheme import LeafLayout, Path
 
@@ -36,6 +37,7 @@ __all__ = [
     "TREE",
     "Tree",
     "VllmV1",
+    "domain_digest",
     "id_leaf_layout",
     "pos_leaf_layout",
     "SEMANTIC_ROOT_TAG",
@@ -371,8 +373,13 @@ class SemanticDomain:
     def leaf_layout(self, index: int, nbytes: int) -> LeafLayout:
         return pos_leaf_layout(nbytes)
 
+    def binding_preimage(self, tree_root: bytes) -> bytes:
+        return (SEMANTIC_ROOT_TAG + _digest(self.program_digest, "program_digest") + bytes(self.query_id)
+                + _digest(self.template_digest, "template_digest") + _digest(self.ctx_digest, "ctx_digest") + _u64be(self.epoch, "epoch")
+                + _u64be(self.leaf_count, "N") + _digest(tree_root, "tree_root"))
+
     def bind(self, tree_root: bytes) -> bytes:
-        return semantic_root(self.program_digest, self.query_id, self.template_digest, self.ctx_digest, self.epoch, self.leaf_count, tree_root)
+        return hashlib.sha256(self.binding_preimage(tree_root)).digest()
 
 
 @dataclass(frozen=True, slots=True)
@@ -407,8 +414,13 @@ class StepDomain:
             return pos_leaf_layout(nbytes)
         return LeafLayout("sha256", chunk_header(chunk_index=index, **self.chunk), 4 * self.chunk["chunk_words"])
 
+    def binding_preimage(self, tree_root: bytes) -> bytes:
+        return (STEP_ROOT_TAG + _digest(self.program_digest, "program_digest") + _digest(self.ctx_digest, "ctx_digest")
+                + _digest(self.geo_digest, "geo_digest") + _digest(self.layout_digest, "layout_digest") + _u64be(self.leaf_count, "N")
+                + _digest(tree_root, "tree_root"))
+
     def bind(self, tree_root: bytes) -> bytes:
-        return step_root(self.program_digest, self.ctx_digest, self.geo_digest, self.layout_digest, self.leaf_count, tree_root)
+        return hashlib.sha256(self.binding_preimage(tree_root)).digest()
 
 
 @dataclass(frozen=True, slots=True)
@@ -438,9 +450,12 @@ class StreamDomain:
                               HB=self.HB, M=self.M, NB=self.NB, BN=self.BN, D=self.D)
         return LeafLayout("sha256", header, 4 * self.chunk_words)
 
-    def bind(self, tree_root: bytes) -> bytes:
+    def binding_preimage(self, tree_root: bytes) -> bytes:
         ctx = stream_ctx_digest(launch_tag=self.launch_tag, src_mask=self.src_mask, chunk_words=self.chunk_words, leaf_count=self.leaf_count)
-        return stream_root(self.layout_digest, ctx, tree_root)
+        return STREAM_ROOT_TAG + _digest(self.layout_digest, "layout_digest") + ctx + _digest(tree_root, "tree_root")
+
+    def bind(self, tree_root: bytes) -> bytes:
+        return hashlib.sha256(self.binding_preimage(tree_root)).digest()
 
 
 def thread_leaf_index(slab: int, m_block: int, n_block: int, tidx: int, *, num_m_block: int, NB: int) -> int:
@@ -494,8 +509,12 @@ class ThreadDomain:
                                seqlen_k=seqlen_k, launch_tag=self.launch_tag, n_block_max=n_block_max, ok0=ok0, ok1=ok1)
         return LeafLayout("sha256", header, 4 * n_words)
 
+    def binding_preimage(self, tree_root: bytes) -> bytes:
+        ctx = thread_ctx_digest(launch_tag=self.launch_tag, src_mask=self.src_mask)
+        return THREAD_ROOT_TAG + _digest(self.geo_digest, "geo_digest") + ctx + _digest(tree_root, "tree_root")
+
     def bind(self, tree_root: bytes) -> bytes:
-        return thread_root(self.geo_digest, thread_ctx_digest(launch_tag=self.launch_tag, src_mask=self.src_mask), tree_root)
+        return hashlib.sha256(self.binding_preimage(tree_root)).digest()
 
 
 def verify(
@@ -530,6 +549,24 @@ def id_leaf_layout(canonical_id: str, dtype: str, shape: Sequence[int], nbytes: 
 
 
 Domain = SemanticDomain | StepDomain | StreamDomain | ThreadDomain
+
+DOMAIN_DIGEST_TAG = "verity/vllm-v1/domain/v1"
+_DOMAIN_KIND = {SemanticDomain: "semantic", StepDomain: "step", StreamDomain: "stream", ThreadDomain: "thread"}
+
+
+def domain_digest(domain: Domain) -> bytes:
+    """The identity of a verifier-held domain, for a statement to absorb: ``identity_digest(DOMAIN_DIGEST_TAG, doc)``
+    over ``{"kind": ..., <every field>}`` with byte fields as lowercase hex and ``leaf_count`` included.
+
+    vllm-v1 hashes bind no domain inside leaves or nodes, so a backend statement that names a vllm-v1 root must also
+    name this digest; two statements over the same root and different domains then differ.
+    """
+
+    doc: dict = {"kind": _DOMAIN_KIND[type(domain)], "leaf_count": domain.leaf_count}
+    for name in type(domain).__dataclass_fields__:
+        value = getattr(domain, name)
+        doc[name] = value.hex() if isinstance(value, bytes) else value
+    return bytes.fromhex(identity_digest(DOMAIN_DIGEST_TAG, doc))
 
 
 class VllmV1:
