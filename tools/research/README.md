@@ -122,7 +122,22 @@ partial directory and the run is refused (`SourceNotReady`); the machine
 refuses to execute from a source directory without a `READY.json` naming the
 requested identity (the legacy `.complete` marker is verified per file once,
 then adopted or quarantined). The attempt records `execution.remote.source_sha`
-and `source_archive_sha256`. The shipped tree is the runner's source root, not
+and `source_archive_sha256`.
+
+The commit travels as git objects when it can: the launcher `git push`es it
+into the machine's bare repository `<root>/git/verity.git` through its own ssh
+argv (`remote.git_push_url`, an `ext::` URL; no credential anywhere), so only
+the objects the machine lacks cross the uplink (the first push to a new pod
+carries the history). The machine checks the commit's tree hash, extracts
+`git archive` of it, and lists every file's sha256, which must equal the
+launcher's archive manifest (`READY.json` `verified:
+git-push+tree+file-sha256`, `transport: git`; job.json
+`run.remote.source_transport`). A machine without git, or any failure of that
+path, prints one line and ships the archive stream as above; nothing is ever
+marked READY by a failed git ship. `RESEARCH_SHIP=stream` skips git. Measured
+from a cloud VM to the control pod: first ship 30 s, a one-commit delta 1.9 s
+of push (15.6 s end to end, mostly ssh handshakes), against about 28 s for the
+stream. The shipped tree is the runner's source root, not
 the workload's cwd: the workload runs in its own run directory, as locally,
 because every run of one commit shares `<root>/src/<sha>/` and relative outputs
 used to race there. `--cwd source` (or `source/SUB`) is the explicit opt-in to
