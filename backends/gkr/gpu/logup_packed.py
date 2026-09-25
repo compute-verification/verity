@@ -341,8 +341,10 @@ if GRAPHS:
         def prove_fs_ext(self, p_leaf: torch.Tensor, q_leaf: torch.Tensor, n: int, tr: Transcript, out: list[Ext]) -> LeafClaim:
             if not self.built or self.n != n:
                 self.build_ext(n)
-            self.p_leaf.copy_(p_leaf)
-            self.q_leaf.copy_(q_leaf)
+            if p_leaf.data_ptr() != self.p_leaf.data_ptr():
+                self.p_leaf.copy_(p_leaf)
+            if q_leaf.data_ptr() != self.q_leaf.data_ptr():
+                self.q_leaf.copy_(q_leaf)
             self.g_tree.replay()
             return self._walk_fs(tr, out)
 
@@ -443,8 +445,10 @@ if GRAPHS:
         def prove_fs_ext(self, p_leaf: torch.Tensor, q_leaf: torch.Tensor, n: int, tr: Transcript, out: list[Ext]) -> LeafClaim:
             if not self.built or self.n != n:
                 self.build_ext(n)
-            self.p_leaf.copy_(p_leaf)
-            self.q_leaf.copy_(q_leaf)
+            if p_leaf.data_ptr() != self.p_leaf.data_ptr():
+                self.p_leaf.copy_(p_leaf)
+            if q_leaf.data_ptr() != self.q_leaf.data_ptr():
+                self.q_leaf.copy_(q_leaf)
             return self._replay_fs(tr, out)
 
     _GRAPHS: dict = {}
@@ -468,6 +472,13 @@ if GRAPHS:
             _GRAPHS[key] = _FSGraphExtDev(device) if dev_fs else _FSGraphExt(device)
         return _GRAPHS[key]
 
+    def leaf_buffers(device, n: int) -> tuple[torch.Tensor, torch.Tensor]:
+        """The static leaf buffers of the ``n`` ext-table graph (``build_leaves(out=...)`` fills them in place)."""
+        g = graph_ext(device, n)
+        if not g.built or g.n != n:
+            g.build_ext(n)
+        return g.p_leaf, g.q_leaf
+
 
 def use_graphs(device) -> bool:
     import os
@@ -490,4 +501,4 @@ def prove_ext_table_graphed(p_leaf: torch.Tensor, q_leaf: torch.Tensor, n: int, 
 
 
 __all__ = ["AVAILABLE", "GRAPHS", "prove_range_table", "prove_ext_table", "prove_range_table_graphed",
-           "prove_ext_table_graphed", "use_graphs", "FSCoins", "DEG"]
+           "prove_ext_table_graphed", "use_graphs", "leaf_buffers", "FSCoins", "DEG"]
