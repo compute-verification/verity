@@ -119,7 +119,10 @@ def recompose(z: torch.Tensor, deg_out: int, pow2_row: torch.Tensor) -> torch.Te
 
 
 def to_dev(v: ref.Ext | list, device) -> torch.Tensor:
-    return torch.tensor(np.asarray(v, dtype=np.int64), dtype=torch.int32, device=device)
+    t = torch.from_numpy(np.asarray(v, dtype=np.int64).astype(np.int32))
+    if torch.device(device).type == "cuda":                  # a pageable copy would wait for the stream
+        return t.pin_memory().to(device, non_blocking=True)
+    return t.to(device)
 
 
 def eq_table_dev(gammas: list[ref.Ext], device) -> torch.Tensor:
