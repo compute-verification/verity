@@ -239,7 +239,9 @@ def simt_encoder(k: int, n: int):
                 from backends.direct.encode.encode_ntt_simt import RSEncoderSIMT
             if bb.P != P or bb.root_of_unity(n) != root_of_unity(n):
                 raise ImportError("encoder field / root mismatch")
-            _ENC[key] = (RSEncoderSIMT(k, n), torch.from_numpy(bb.coset_to_natural(n, k).astype("int64")))
+            # radix-4 stages with two CTAs per SM: 5.1 -> 3.6 ms for the opening's 70k-row encode on the 5090, same words
+            enc = RSEncoderSIMT(k, n, radix4=k >= 4 * 512, min_blocks_per_sm=2)
+            _ENC[key] = (enc, torch.from_numpy(bb.coset_to_natural(n, k).astype("int64")))
         except Exception:  # noqa: BLE001 -- no cupy / NVRTC: the torch NTT path
             _ENC[key] = None
     return _ENC[key]
@@ -482,7 +484,7 @@ def open_w_qc_eval(cm: Committed, a: torch.Tensor, r: torch.Tensor) -> tuple[tor
     at = at.view(rows * DEG, k)
     ev = cp.empty((rows * DEG, 3 * k), dtype=cp.int32)
     enc[0](cp.asarray(at).view(cp.uint32), ev.view(cp.uint32), write_systematic=False)
-    q_eval = kernels.row_code_dot(at, torch.as_tensor(ev, device=dev), cm.code)
+    q_eval = kernels.row_code_dot(at, torch.as_tensor(ev, device=dev), cm.code, split=64)
     del at, ev
     q = ntt(q_eval, inverse=True)                                     # (6, n) coefficients
     if bool(q[:, 2 * k - 1:].any()):
