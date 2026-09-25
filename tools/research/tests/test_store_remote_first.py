@@ -368,6 +368,8 @@ def test_the_render_is_the_daily_renders_command_from_the_steward_source(tmp_pat
         (d.parent / "__init__.py").write_text("")
         (d / "__init__.py").write_text("")
         (d / f"{mod}.py").write_text(f"import os, sys\nprint('{mod} from', os.getcwd(), sys.argv[1:])\n")
+    (src / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["backends/numerical"]\n')
+    (src / "backends" / "numerical" / "pyproject.toml").write_text('[tool.hatch.build.targets.wheel]\npackages = ["python/verity_numerical"]\n')
     notes = tmp_path / "notes"
     notes.mkdir()
     (notes / "steward.toml").write_text(f'[[render]]\nat = "13:00Z"\nsource = "{src}"\nout = "renders/daily"\n')

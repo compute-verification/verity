@@ -24,6 +24,9 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+from verity_vllm.check.gates import HOLDOUT_GATES
+from verity_vllm.properties.record import seal
+
 #: prompt lengths that straddle the kernel-specialization boundaries of the pinned profile (FA2 kBlockN 64 / 128, the
 #: persistent matmul's 64/128-row tiles) plus a short and a long one; the generator draws from this pool.
 LENGTH_POOL = (7, 31, 33, 63, 64, 65, 96, 127, 128, 129, 200)
@@ -83,12 +86,12 @@ def assemble(holdouts_dir: Path) -> dict[str, Any]:
             gates = doc.get("gates", doc)
             if isinstance(gates, list):
                 gates = {x["id"]: x for x in gates}
-            ent["gates"] = {k: (v.get("status") if isinstance(v, dict) else v) for k, v in gates.items() if k in ("G1", "G2", "G3", "G4", "G5", "G6")}
-            ent["status"] = "pass" if ent["gates"] and all(v == "pass" for v in ent["gates"].values()) and len(ent["gates"]) == 6 else "fail"
+            ent["gates"] = {k: (v.get("status") if isinstance(v, dict) else v) for k, v in gates.items() if k in HOLDOUT_GATES}
+            ent["status"] = "pass" if ent["gates"] and all(v == "pass" for v in ent["gates"].values()) and len(ent["gates"]) == len(HOLDOUT_GATES) else "fail"
         out["holdouts"].append(ent)
     out["n"] = len(out["holdouts"])
     out["status"] = "pass" if out["holdouts"] and all(h["status"] == "pass" for h in out["holdouts"]) else "fail"
-    return out
+    return seal(out, out["status"] == "pass")
 
 
 def main(argv: list[str] | None = None) -> int:

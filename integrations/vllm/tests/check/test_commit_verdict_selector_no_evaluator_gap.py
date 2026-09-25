@@ -18,7 +18,8 @@ from __future__ import annotations
 
 import pytest
 
-from verity_vllm.check.commit_verdict import _complete_replay_population_gap, _form_b_selector_coverage, commit_verdict
+from verity_vllm.check.c2_rules import _complete_replay_population_gap, _form_b_selector_coverage
+from verity_vllm.check.verdict import commit_verdict
 from verity_vllm.check.replay.sampled_replay import EVALUATORS, NOT_YET, why_class
 
 

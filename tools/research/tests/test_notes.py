@@ -409,18 +409,61 @@ def test_runway_alerts_under_the_threshold_then_each_half_hour_shorter():
 
 
 def test_the_reaper_takes_only_pods_of_final_lanes_past_the_grace_that_are_not_kept(tmp_path):
-    pod = {"id": "p1", "name": "vy-done", "usd_h": 0.74}
+    pod = {"id": "p1", "name": "vy-done", "usd_h": 0.74, "started_ts": NOW.timestamp() - 3600}
     rows = [{"lane": "done", "state": "final", "done_ts": NOW.timestamp() - 900, "pods": [pod]},
             {"lane": "fresh", "state": "final", "done_ts": NOW.timestamp() - 300, "pods": [{**pod, "id": "p2"}]},
             {"lane": "kept", "state": "final", "done_ts": NOW.timestamp() - 900, "keep_pod": "live verifier", "pods": [{**pod, "id": "p3"}]},
             {"lane": "busy", "state": "open", "pods": [{**pod, "id": "p4"}]}]
-    noted, killed = set(), []
+    noted, killed, asked = set(), [], []
     lines = notes.reap_lines(tmp_path, rows, NOW, 10, noted)
     assert lines == ["21:00Z FINAL-POD done vy-done p1 $0.74/h (final 15m ago): --reap terminates it, checkpoint --keep-pod WHY keeps it"]
     assert notes.reap_lines(tmp_path, rows, NOW, 10, noted) == [] and killed == []     # said once; nothing terminated
-    lines = notes.reap_lines(tmp_path, rows, NOW, 10, noted, reap=True, terminate=killed.append)
-    assert killed == ["p1"] and lines == ["21:00Z REAPED done vy-done p1 $0.74/h (final 15m ago)"]
+    ok = lambda lane, p: asked.append((lane, p["id"])) or (True, "2 cited art(s) preserved")
+    lines = notes.reap_lines(tmp_path, rows, NOW, 10, noted, reap=True, terminate=killed.append, custody=ok)
+    assert killed == ["p1"] and asked == [("done", "p1")]      # custody asked only for the reapable pod; kept/fresh/open untouched
+    assert lines == ["21:00Z REAPED done vy-done p1 $0.74/h (final 15m ago); custody: 2 cited art(s) preserved"]
     assert (tmp_path / "reaper.log").read_text() == lines[0] + "\n"
+
+
+def test_the_reaper_leaves_a_pod_started_after_the_final_it_means_the_lane_was_reopened(tmp_path):
+    done = NOW.timestamp() - 64 * 60
+    pods = [{"id": "fzs8", "name": "vy-red-team-flock", "usd_h": 0.48, "started_ts": NOW.timestamp() - 120},
+            {"id": "nots", "name": "vy-red-team-flock", "usd_h": 0.48}]                     # no start time in the listing: same
+    rows = [{"lane": "red-team-flock", "state": "final", "done_ts": done, "pods": pods}]
+    noted, killed, state = set(), [], {}
+    never = lambda lane, p: pytest.fail("no custody check for a resumed pod")
+    lines = notes.reap_lines(tmp_path, rows, NOW, 10, noted, reap=True, terminate=killed.append, custody=never, state=state)
+    assert killed == [] and lines == [
+        "21:00Z RESUMED-POD red-team-flock vy-red-team-flock fzs8 (created 20:58Z, after FINAL 19:56Z): not reaped",
+        "21:00Z RESUMED-POD red-team-flock vy-red-team-flock nots (created unknown, after FINAL 19:56Z): not reaped"]
+    assert notes.reap_lines(tmp_path, rows, NOW, 10, noted, reap=True, terminate=killed.append, custody=never, state=state) == []
+    assert killed == [] and not (tmp_path / "reaper.log").exists()
+
+
+def test_the_reaper_blocks_a_final_lanes_pod_that_fails_custody_and_rechecks_after_30_min(tmp_path):
+    pod = {"id": "p1", "name": "vy-done", "usd_h": 0.74, "started_ts": NOW.timestamp() - 3600}
+    rows = [{"lane": "done", "state": "final", "done_ts": NOW.timestamp() - 900, "pods": [pod]}]
+    noted, killed, state = set(), [], {}
+    blocked = lambda lane, p: (False, "art:deadbeef not preserved: 404")
+    lines = notes.reap_lines(tmp_path, rows, NOW, 10, noted, reap=True, terminate=killed.append, custody=blocked, state=state)
+    assert killed == [] and lines == ["21:00Z REAP-BLOCKED done vy-done: art:deadbeef not preserved: 404"]
+    assert (tmp_path / "reaper.log").read_text() == lines[0] + "\n"
+    soon = NOW + dt.timedelta(minutes=29)
+    assert notes.reap_lines(tmp_path, rows, soon, 10, noted, reap=True, terminate=killed.append, custody=blocked, state=state) == []
+    later = NOW + dt.timedelta(minutes=31)
+    lines = notes.reap_lines(tmp_path, rows, later, 10, noted, reap=True, terminate=killed.append,
+                             custody=lambda lane, p: (True, "ok"), state=state)
+    assert killed == ["p1"] and lines == ["21:31Z REAPED done vy-done p1 $0.74/h (final 46m ago); custody: ok"]
+    boom = lambda lane, p: 1 / 0
+    rows[0]["pods"] = [{**pod, "id": "p2"}]
+    assert notes.reap_lines(tmp_path, rows, later, 10, noted, reap=True, terminate=killed.append, custody=boom, state=state) == [
+        "21:31Z REAP-BLOCKED done vy-done: custody not checked (ZeroDivisionError: division by zero)"] and killed == ["p1"]
+
+
+def test_pod_view_takes_the_later_of_created_and_last_started():
+    p = {**_pod("x", "vy-x", started_min_ago=5), "createdAt": "2026-09-23T19:00:00Z"}
+    assert notes.pod_view(p, None, NOW)["started_ts"] == (NOW - dt.timedelta(minutes=5)).timestamp()
+    assert "started_ts" not in notes.pod_view({"id": "x", "name": "vy-x"}, None, NOW)
 
 
 def test_cli_keep_pod_is_recorded_for_the_reaper_and_the_finish_check(tmp_path, capsys):
@@ -807,7 +850,7 @@ def test_scheduled_renders_run_once_per_utc_day_at_or_after_their_time(tmp_path)
     assert out.read_text() == "# tables\n" and not out.with_name("20260923T2100Z-drilldowns.md").exists()
     assert [c[0] for c in calls] == [["-m", "verity_numerical.bench.tables", "--root", "/tmp/store", "--format", "md"],
                                      ["-m", "verity_numerical.bench.drilldown", "--root", "/tmp/store", "--format", "md"]]
-    assert calls[0][1:3] == (f"{home}/src/backends/numerical/python:{home}/src/tools/research/src:{home}/src", home / "src")
+    assert calls[0][1:3] == (f"{home}/src", home / "src")          # no workspace declared in a missing tree: just its root
     assert all(0 < c[3] <= notes.RENDER_TIMEOUT_S for c in calls)
     assert notes.render_lines(tmp_path, NOW + dt.timedelta(minutes=50), state, run=run) == [] and len(calls) == 2   # once a day
     lines = notes.render_lines(tmp_path, NOW + dt.timedelta(minutes=60), state, run=lambda *a: (None, "", "timeout after 600s"))
@@ -856,6 +899,27 @@ def test_a_render_refreshes_its_store_with_the_payloads_its_readers_parse(tmp_pa
     assert "instance-equiv/v1" in notes.RENDER_PAYLOAD_KINDS
     assert "21:00Z RENDER-REFRESH-FAILED b@20:30Z: research data refresh: no remote configured" in lines
     assert sum(1 for x in lines if " RENDERED " in x) == 6                   # a failed refresh never blocks the render
+
+
+def test_the_render_imports_every_workspace_package_of_its_source_tree(tmp_path):
+    """The control pod's render died with `ModuleNotFoundError: verity` (a hand-kept PYTHONPATH without packages/verity/src): the render
+    command's environment is the source tree's workspace roots (`research env --source`) plus the tree root."""
+    from research.pythonpath import import_roots_dir, pythonpath
+
+    repo = Path(__file__).resolve().parents[3]
+    (tmp_path / "steward.toml").write_text(f'[[render]]\nat = "20:30Z"\nsource = "{repo}"\nout = "r"\nrefresh = false\n')
+    envs = []
+
+    def run(cmd, env, cwd, timeout):
+        envs.append(env["PYTHONPATH"])
+        return 0, "# md\n", ""
+
+    notes.render_lines(tmp_path, NOW, {}, run=run)
+    parts = envs[0].split(":")
+    assert envs and all(e == envs[0] for e in envs)
+    assert str(repo / "packages" / "verity" / "src") in parts and str(repo / "backends" / "numerical" / "python") in parts
+    assert str(repo / "tools" / "research" / "src") in parts and parts[-1] == str(repo)
+    assert envs[0] == pythonpath(str(repo), import_roots_dir(repo), extra=str(repo))
 
 
 def test_guardian_kills_go_to_the_owning_lanes_inbox_by_machine_pod_hint_or_cwd(tmp_path):
@@ -935,6 +999,8 @@ def test_cli_watch_pass_runs_the_steward_rules_on_a_temp_root(tmp_path, capsys):
     for f in (bench.parent / "__init__.py", bench / "__init__.py"):
         f.write_text("")
     (bench / "tables.py").write_text("import sys\nprint('# tables', *sys.argv[1:])\n")
+    (src / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["backends/numerical"]\n')
+    (src / "backends" / "numerical" / "pyproject.toml").write_text('[tool.hatch.build.targets.wheel]\npackages = ["python/verity_numerical"]\n')
     (root / "steward.toml").write_text(f'[[render]]\nat = "00:00Z"\nsource = "{src}"\nout = "render"\nstore = "{tmp_path / "store"}"\n')
     log.write_text(f"2026-09-24T10:00:00+00:00 KILLED pid=7 mem=1.1GB reason=per-proc cap 1.0GB cwd={wt} cmd=python -m pytest\n")
     notes.save_state(root, {"guardian": {"path": str(log), "offset": 0, "ino": log.stat().st_ino}})

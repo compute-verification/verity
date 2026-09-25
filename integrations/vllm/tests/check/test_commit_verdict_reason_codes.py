@@ -4,7 +4,8 @@ a record written before the codes grades from its texts' decoding as it always d
 from __future__ import annotations
 
 from verity_vllm.check.replay import replay_codes as RC
-from verity_vllm.check.commit_verdict import _replay_seed_of_record, commit_verdict
+from verity_vllm.check.c2_rules import _replay_seed_of_record
+from verity_vllm.check.verdict import commit_verdict
 
 from .test_commit_verdict_hopper_no_evaluator_gap import BASE, K_GEMM2, OC_COMPLETE, SR_HOPPER, _bnd
 
