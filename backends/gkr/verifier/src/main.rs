@@ -2,6 +2,7 @@
 //!
 //!   verity-gkr-verify verify    --dir D --proof P (--relation R | --allow-any-circuit) [--vus N] [--threads T] [--json OUT] [--trace-logup]
 //!                               [--require-bound] [--allow-unpinned-instances] [--require-commitment] [--allow-unpinned-commitment]
+//!                               [--require-live-coins]   (route (a): D/prime_coins.txt, the session's live prime rounds, must be present)
 //!                                                                                        accept / reject one proof (the flag prints every LogUp level's operands)
 //!   verity-gkr-verify negatives --dir D --proofs PD [--threads T] [--json OUT]           every PD/<id>.bin (D/neg/<id>) must be rejected
 //!   verity-gkr-verify mutate    --dir D --proof P [--vus N] [--threads T] [--sample K] [--json OUT]
@@ -367,6 +368,10 @@ fn cmd_verify(args: &[String]) -> i32 {
     if pinned.is_some() && stmt.link.is_none() && unit.circ.col_names.iter().any(|n| n.starts_with("link.")) {
         return refuse("link: this circuit set is the route (a) linked statement: it verifies only with the session's link.txt".into());
     }
+    // NON_ZK_PROOF for route (a): every prime coin is the live verifier's (prime_coins.txt from the session record)
+    if args.iter().any(|a| a == "--require-live-coins") && stmt.link.as_ref().and_then(|l| l.live.as_ref()).is_none() {
+        return refuse("link: --require-live-coins: no prime_coins.txt (the prime proof's coins would be its own Fiat-Shamir)".into());
+    }
     let bytes = std::fs::read(arg(args, "--proof").expect("--proof")).expect("proof file");
     let th = threads(args);
     if args.iter().any(|a| a == "--trace-logup") { verify::TRACE_LOGUP.store(true, std::sync::atomic::Ordering::Relaxed); }
@@ -398,7 +403,11 @@ fn cmd_verify(args: &[String]) -> i32 {
         Some(e) => (Err(e), verify::Stats { threads: th, ..Default::default() }),
         None => verify::verify(&stmt, &bytes, &LIGERO, th),
     };
-    let extra = format!(", \"vus\": {}, \"units\": {}, \"steps\": {}{pin}, \"operands_bound\": {}, \"instances\": {}, \"operands_committed\": {}, \"commitment\": {}",
+    let coins = match stmt.link.as_ref().and_then(|l| l.live.as_ref()) {
+        Some(lc) => format!("\"live\", \"prime_rounds\": {}, \"prime_before_commit\": {}", lc.rounds.len(), lc.before_commit),
+        None => "\"fiat-shamir\"".into(),
+    };
+    let extra = format!(", \"prime_coins\": {coins}, \"vus\": {}, \"units\": {}, \"steps\": {}{pin}, \"operands_bound\": {}, \"instances\": {}, \"operands_committed\": {}, \"commitment\": {}",
         stmt.vus(), stmt.segs[0].units, stmt.chain.steps, info.is_some() && res.is_ok(),
         info.as_ref().map(|i| i.json()).unwrap_or("null".into()), committed.is_some() && res.is_ok(),
         committed.as_ref().map(|c| c.json()).unwrap_or("null".into()));
