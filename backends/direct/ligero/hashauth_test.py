@@ -119,7 +119,7 @@ def test_reverify_recomputes_the_trees_and_the_cover(remap, tmp_path) -> None:
     from .reverify import commitment_problems
     out, man = remap
     hashed, bad = commitment_problems(out["forgery"][0], man, "fp8-ada+blake3", ["rep0"])
-    assert hashed and bad == ["rep0/sub_00.stmt: tree y root differ from the instance set's"], bad
+    assert hashed and bad == ["rep0/sub_00.stmt: tree y root differ from the instance set's", f"rep0/sub_00.stmt: {LAYOUT}"], bad
     twice = shutil.copytree(out["honest"][0], tmp_path / "twice")
     shutil.copy(twice / "rep0" / "sub_00.stmt", twice / "rep0" / "sub_01.stmt")
     assert commitment_problems(twice, man, "fp8-ada+blake3", ["rep0"])[1] == [
