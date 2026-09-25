@@ -183,9 +183,9 @@ class Proof:
             return bytes(out)
         out += struct.pack("<Q", 1)
         out += struct.pack("<Q", len(op.w))
-        out += _field.exts_to_bytes(op.w)
+        out += op.raw[0] if op.raw is not None else _field.exts_to_bytes(op.w)
         out += struct.pack("<Q", len(op.qc))
-        out += _field.exts_to_bytes(op.qc)
+        out += op.raw[1] if op.raw is not None else _field.exts_to_bytes(op.qc)
         # a-gpu2: ``columns`` is an ``(t, rows)`` ``<u4`` array and the Merkle paths live in ``paths``
         import numpy as np
 

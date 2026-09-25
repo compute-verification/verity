@@ -134,10 +134,14 @@ def to_bytes(x: Ext) -> bytes:
 
 def exts_to_bytes(xs) -> bytes:
     """``b"".join(to_bytes(x) for x in xs)`` in one numpy pass; anything not a clean (n, DEG) u32 array takes the slow path."""
+    import numpy as np
+
+    if isinstance(xs, np.ndarray) and xs.ndim == 2 and xs.shape[1] == DEG and xs.dtype.kind in "iu" and (
+            xs.size == 0 or (int(xs.min()) >= 0 and int(xs.max()) < 1 << 32)):
+        return xs.astype("<u4").tobytes()
     xs = list(xs)
     if len(xs) < 8:
         return b"".join(to_bytes(x) for x in xs)
-    import numpy as np
 
     try:
         a = np.asarray(xs, dtype=np.int64)
