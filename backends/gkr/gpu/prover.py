@@ -123,6 +123,7 @@ class Chain:
     # len(epi_pub) words per VU, VU-major (fp4-nvf4: the FP32 word's sign, exponent field and fraction)
     epi_pub: list[int] | None = None
     bind: Bind | None = None
+    commit_digest: bytes | None = None  # sha256 of commitment.txt (gpu/commit.py), absorbed after the binding digests
 
     @property
     def limbs(self) -> int:
@@ -526,6 +527,8 @@ def start_transcript(inst: Instance, pcs: bool, root: bytes):
         if inst.chain.bind is not None:
             for h in inst.chain.bind.digests:
                 tr.absorb(h)
+        if inst.chain.commit_digest is not None:
+            tr.absorb(inst.chain.commit_digest)
     chs = []
     for t in inst.tables:
         z = tr.challenge()

@@ -21,6 +21,7 @@
 //! y u16|u32 <words per VU>
 //! ```
 //!
+//! Its SHA-256 is absorbed into the transcript after the binding digests (`verify::Statement::commit`).
 //! Each VU's public words are its `y` words, then 16 limbs of its x row digest, then 16 of its W column digest
 //! (limb `i` = digest bytes `2i, 2i+1` big-endian).  VU `v` is rank `v` of trees `a` (x rows, owner -1) and `b`
 //! (W columns, owner -2); its `y` words are ranks `n_y v ..` of tree `y` (owner -1, `u16`/`u32` big-endian leaves).

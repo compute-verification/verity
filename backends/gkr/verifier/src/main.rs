@@ -217,10 +217,14 @@ fn read_bind(d: &Path, root: &Path, uc: &Circuit, steps: usize, vus: usize, publ
     Ok(Some((verify::Bind { cols, terms, arrs, words, digests: dig }, info)))
 }
 
-/// `commitment.txt` (in `d`, else the export root) and the tree check of the public words (commitments.rs).
+/// `commitment.txt`: in `d`, else the export root.
+fn commitment_file(d: &Path, root: &Path) -> Option<PathBuf> {
+    [d.join("commitment.txt"), root.join("commitment.txt")].into_iter().find(|p| p.is_file())
+}
+
+/// `commitment.txt` and the tree check of the public words (commitments.rs).
 fn read_commitment(d: &Path, root: &Path, public: &[u32]) -> Result<Option<commitments::Checked>, String> {
-    let p = if d.join("commitment.txt").is_file() { d.join("commitment.txt") } else { root.join("commitment.txt") };
-    if !p.is_file() { return Ok(None); }
+    let Some(p) = commitment_file(d, root) else { return Ok(None) };
     let spec = commitments::Spec::parse(&std::fs::read_to_string(&p).map_err(|e| format!("commitment.txt: {e}"))?)?;
     commitments::check(spec, public).map(Some)
 }
@@ -259,6 +263,10 @@ fn statement_bound<'a>(unit: &'a Loaded, epi: &'a Loaded, d: &Path, vus: Option<
     };
     let bound = read_bind(d, &root, uc, steps, b, &chain.public_y16)?;
     let (bind, info) = match bound { Some((bd, info)) => (Some(bd), Some(info)), None => (None, None) };
+    let commit = match commitment_file(d, &root) {
+        Some(p) => Some(sha256::Sha256::digest(&std::fs::read(&p).map_err(|e| format!("commitment.txt: {e}"))?)),
+        None => None,
+    };
     Ok((Statement {
         segs: vec![
             Segment { name: "unit".into(), circ: uc, layers: &unit.layers, units: b * steps },
@@ -266,6 +274,7 @@ fn statement_bound<'a>(unit: &'a Loaded, epi: &'a Loaded, d: &Path, vus: Option<
         ],
         chain,
         bind,
+        commit,
     }, info))
 }
 

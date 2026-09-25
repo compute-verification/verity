@@ -6,7 +6,8 @@ and W column, and the verifier checks them natively against the commitment schem
 Statement files (beside the Params-only files and ``public.bin``):
 
   commitment.txt  scheme, leaf, relation, the instance set (dataset, tier, manifest digest), lo, vus, K, the row
-                  word widths, the y word schema and count per VU (format: ``commitments.rs``)
+                  word widths, the y word schema and count per VU (format: ``commitments.rs``); its SHA-256 is
+                  absorbed into the transcript after the binding digests (``prover.Chain.commit_digest``)
   epilogue.txt    the export's epilogue with 32 more columns ``dx0..dx15 dw0..dw15``: the x and W digests as 16-bit
                   limbs (limb ``i`` = digest bytes ``2i, 2i+1`` big-endian)
   chain.txt       its ``public`` line extended by those 32 columns, so each VU's public words are its y words then

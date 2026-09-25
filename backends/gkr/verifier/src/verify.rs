@@ -80,7 +80,8 @@ impl Bind {
     }
 }
 
-pub struct Statement<'a> { pub segs: Vec<Segment<'a>>, pub chain: Chain, pub bind: Option<Bind> }
+/// `commit`: SHA-256 of an operands-committed statement's `commitment.txt`, absorbed after the binding digests.
+pub struct Statement<'a> { pub segs: Vec<Segment<'a>>, pub chain: Chain, pub bind: Option<Bind>, pub commit: Option<[u8; 32]> }
 impl<'a> Statement<'a> {
     /// Every table any segment queries: segment 0's in order, then the later segments' new ones
     /// (`gpu/prover.py::union_tables`; a v1 statement's epilogue adds none).
@@ -166,6 +167,7 @@ fn start_transcript(stmt: &Statement, root: &Digest) -> (Transcript, Vec<TableCh
     tr.absorb(&buf);
     if let Some(h) = &stmt.chain.spec_hash { tr.absorb(h); }
     if let Some(bd) = &stmt.bind { for h in &bd.digests { tr.absorb(h); } }
+    if let Some(h) = &stmt.commit { tr.absorb(h); }
     let mut chs = Vec::new();
     for t in stmt.tables() {
         let z = tr.challenge();

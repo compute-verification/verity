@@ -382,6 +382,7 @@ def main(argv: list[str] | None = None) -> int:
         gen_peak = torch.cuda.max_memory_allocated(dev)
         chain = read_chain(chain_path, ucirc, ecirc_s, steps, public_s)
         chain.bind = bind
+        chain.commit_digest = None if commitment is None else hashlib.sha256(commitment.text().encode()).digest()
         inst = prover.Instance([prover.Segment("unit", ucirc, ulayers, rows.units, ucirc.hash),
                                 prover.Segment("epilogue", ecirc_s, elayers_s, epi_cols, ecirc_s.hash)], chain)
         proof, st = prover.prove(inst, True)
@@ -601,7 +602,7 @@ def main(argv: list[str] | None = None) -> int:
               f"(--relation {relation})"
               + (f"; commitment scaffold (--allow-any-circuit): {sum(bool(v['commitment_checked']) for v in verdicts)}/{len(verdicts)} "
                  f"tree checks passed, roots match {all(v['commitment_roots_match'] for v in verdicts)}" if commitment else "")
-              f"{'' if same_proof else '; the reps produced DIFFERENT proofs'}; reps t.total "
+              + f"{'' if same_proof else '; the reps produced DIFFERENT proofs'}; reps t.total "
               f"{['%.3f' % r['t_total'] for r in rows]} s, rust verify {['%.3f' % v for v in rust_reps]} s")
     result = {"schema": contract.RESULT_SCHEMA, "run_id": run_id, "kind": "bench-result/v1", "workload_fingerprint": fp,
               "validation": {"status": "passed" if ok else "failed",
