@@ -144,6 +144,148 @@ pub fn sha_pad_block(row_bytes: usize) -> [u32; 16] {
     be_words16(&b)
 }
 
+/// The SHA-256 compression circuit as a straight-line program for the device witness: CSR rows of A and B over the
+/// useful columns, and every non-input column in an order where its A and B rows read only inputs, the pin and
+/// earlier columns.
+pub struct ShaProg {
+    pub useful: usize,
+    pub order: Vec<u32>,
+    pub a_off: Vec<u32>,
+    pub a_col: Vec<u32>,
+    pub b_off: Vec<u32>,
+    pub b_col: Vec<u32>,
+}
+
+pub fn sha_program() -> &'static ShaProg {
+    static P: OnceLock<ShaProg> = OnceLock::new();
+    P.get_or_init(|| {
+        let c = Layout::ShaFp8.comp();
+        let (a, b, n) = (&c.a_0.rows, &c.b_0.rows, sha2c::USEFUL_BITS);
+        let input = |i: usize| (sha2c::H_BASE..sha2c::H_BASE + 256).contains(&i) || (sha2c::M_BASE..sha2c::M_BASE + 512).contains(&i) || i == sha2c::Z_CONST_POS;
+        assert!(a[n..].iter().chain(&b[n..]).all(|r| r.is_empty()), "SHA-256 rows past the useful bits");
+        let mut indeg = vec![0u32; n];
+        let mut users: Vec<Vec<u32>> = vec![Vec::new(); n];
+        for i in (0..n).filter(|&i| !input(i)) {
+            for &d in a[i].iter().chain(&b[i]) {
+                assert!(d < n && d != i, "SHA-256 row {i} reads column {d}");
+                if !input(d) {
+                    indeg[i] += 1;
+                    users[d].push(i as u32);
+                }
+            }
+        }
+        let mut order: Vec<u32> = (0..n).filter(|&i| !input(i) && indeg[i] == 0).map(|i| i as u32).collect();
+        let mut k = 0;
+        while k < order.len() {
+            for &u in &users[order[k] as usize] {
+                indeg[u as usize] -= 1;
+                if indeg[u as usize] == 0 {
+                    order.push(u);
+                }
+            }
+            k += 1;
+        }
+        assert_eq!(order.len(), n - 769, "the SHA-256 circuit is not acyclic");
+        let csr = |rows: &[Vec<usize>]| {
+            let mut off = vec![0u32];
+            let mut col = Vec::new();
+            for r in &rows[..n] {
+                col.extend(r.iter().map(|&c| c as u32));
+                off.push(col.len() as u32);
+            }
+            (off, col)
+        };
+        let ((a_off, a_col), (b_off, b_col)) = (csr(a), csr(b));
+        ShaProg { useful: n, order, a_off, a_col, b_off, b_col }
+    })
+}
+
+/// The device witness algorithm on the host, for up to 32 compressions: bit l of word `col` is compression l's
+/// `(z, a, b)` at that column.
+pub fn sha_eval32(p: &ShaProg, comps: &[([u32; 8], [u32; 16])]) -> (Vec<u32>, Vec<u32>, Vec<u32>) {
+    let n = p.useful;
+    let (mut z, mut a, mut b) = (vec![0u32; n], vec![0u32; n], vec![0u32; n]);
+    for (l, (h, m)) in comps.iter().enumerate() {
+        for bit in 0..256 {
+            z[sha2c::H_BASE + bit] |= ((h[bit / 32] >> (bit % 32)) & 1) << l;
+        }
+        for bit in 0..512 {
+            z[sha2c::M_BASE + bit] |= ((m[bit / 32] >> (bit % 32)) & 1) << l;
+        }
+    }
+    z[sha2c::Z_CONST_POS] = u32::MAX;
+    let dot = |z: &[u32], off: &[u32], col: &[u32], i: usize| col[off[i] as usize..off[i + 1] as usize].iter().fold(0, |x, &c| x ^ z[c as usize]);
+    for &i in &p.order {
+        let i = i as usize;
+        z[i] = dot(&z, &p.a_off, &p.a_col, i) & dot(&z, &p.b_off, &p.b_col, i);
+    }
+    for i in 0..n {
+        a[i] = dot(&z, &p.a_off, &p.a_col, i);
+        b[i] = dot(&z, &p.b_off, &p.b_col, i);
+    }
+    (z, a, b)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sha_eval32_matches_the_host_witness() {
+        let p = sha_program();
+        eprintln!("order {} nnz A {} B {}", p.order.len(), p.a_col.len(), p.b_col.len());
+        let mut s = 0x9E3779B97F4A7C15u64;
+        let mut r = || {
+            s ^= s << 13;
+            s ^= s >> 7;
+            s ^= s << 17;
+            s as u32
+        };
+        let comps: Vec<([u32; 8], [u32; 16])> = (0..32).map(|_| (from_fn(|_| r()), from_fn(|_| r()))).collect();
+        let (z, a, b) = sha_eval32(p, &comps);
+        let (hz, ha, hb, _) = sha2c::generate_witness_with_ab_packed_and_lincheck(&comps, 5);
+        let bit = |v: &[F128], i: usize| ((if i % 128 < 64 { v[i / 128].lo >> (i % 128) } else { v[i / 128].hi >> (i % 128 - 64) }) & 1) as u32;
+        for l in 0..32 {
+            for col in 0..1usize << sha2c::K_LOG {
+                let at = (l << sha2c::K_LOG) + col;
+                let g = |w: &[u32]| if col < p.useful { (w[col] >> l) & 1 } else { 0 };
+                assert_eq!((g(&z), g(&a), g(&b)), (bit(&hz, at), bit(&ha, at), bit(&hb, at)), "compression {l} column {col}");
+            }
+        }
+    }
+
+    /// `cuda/sha_witness.cuh` (built as `cuda/sha_witness_host.cpp`, named by PSH_HARNESS) against the Rust witness.
+    #[test]
+    fn sha_witness_cuh() {
+        let Ok(bin) = std::env::var("PSH_HARNESS") else { return };
+        let mut s = 0x2545F4914F6CDD1Du64;
+        let mut r = || {
+            s ^= s << 13;
+            s ^= s >> 7;
+            s ^= s << 17;
+            s as u32
+        };
+        let mut comps: Vec<([u32; 8], [u32; 16])> = (0..62).map(|_| (from_fn(|_| r()), from_fn(|_| r()))).collect();
+        comps.push(([0; 8], [0; 16]));
+        comps.push(([u32::MAX; 8], [u32::MAX; 16]));
+        let input: Vec<u8> = comps.iter().flat_map(|(h, m)| h.iter().chain(m).flat_map(|w| w.to_le_bytes())).collect();
+        let mut child = std::process::Command::new(bin).stdin(std::process::Stdio::piped()).stdout(std::process::Stdio::piped()).spawn().unwrap();
+        std::io::Write::write_all(&mut child.stdin.take().unwrap(), &input).unwrap();
+        let out = child.wait_with_output().unwrap().stdout;
+        let (hz, ha, hb, _) = sha2c::generate_witness_with_ab_packed_and_lincheck(&comps, 6);
+        let words = |v: &[F128], c: usize| -> Vec<u32> {
+            v[c * 256..(c + 1) * 256].iter().flat_map(|f| [f.lo as u32, (f.lo >> 32) as u32, f.hi as u32, (f.hi >> 32) as u32]).collect()
+        };
+        for c in 0..comps.len() {
+            for (k, h) in [&hz, &ha, &hb].into_iter().enumerate() {
+                let at = (3 * c + k) * 4096;
+                let got: Vec<u32> = out[at..at + 4096].chunks(4).map(|b| u32::from_le_bytes(b.try_into().unwrap())).collect();
+                assert_eq!(got, words(h, c), "compression {c} buffer {k}");
+            }
+        }
+    }
+}
+
 pub fn chunk_flags(j: usize, nb: usize) -> u32 {
     crate::chunk::KEYED_HASH | if j == 0 { crate::chunk::CHUNK_START } else { 0 } | if j + 1 == nb { crate::chunk::CHUNK_END } else { 0 }
 }

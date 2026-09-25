@@ -138,6 +138,9 @@ struct ChunkParams {
     host_z: *const F128,
     host_a: *const F128,
     host_b: *const F128,
+    sha: i32,
+    sha_mid: *const u32,
+    sha_pad: *const u32,
 }
 
 unsafe extern "C" {
@@ -394,7 +397,7 @@ impl ChunkParams {
             u_useful: 0, u_const: 0, u_n_in: 0, u_inputs: null(), rows_x: null(), rows_w: null(), accs: null(), vus: 0,
             row_bytes: 0, units_per_vu: 0, keys: null(), blocks_real: 0, unit_cache: 0, pub_cv: null_mut(), pub_y16: null_mut(),
             pub_acc: null_mut(), u_out_acc: -1, u_out_y: -1, per_role: 0, chunks_per_block: 0, chunk_nb0: 0, chunk_nb1: 0,
-            blocks_per_vu: 0, dummy_keyed: 0, host_z: null(), host_a: null(), host_b: null(),
+            blocks_per_vu: 0, dummy_keyed: 0, host_z: null(), host_a: null(), host_b: null(), sha: 0, sha_mid: null(), sha_pad: null(),
         }
     }
 }
@@ -555,6 +558,8 @@ pub fn prove_pure(
         _ => (null(), null(), null()),
     };
     let (pcv, py, pa) = (pub_cv.as_mut_ptr(), pub_y16.as_mut_ptr(), pub_acc.as_mut_ptr());
+    let sha_mid: Vec<u32> = (0..2).flat_map(|r| pb::sha_midstate(r, lay.row_bytes())).collect();
+    let sha_pad = pb::sha_pad_block(lay.row_bytes());
     let mut wrapped = move |root: &[u8]| -> Vec<Vec<F128>> {
         if dev.is_none() {
             return hook(root, None);
@@ -629,6 +634,9 @@ pub fn prove_pure(
         host_z: hz,
         host_a: ha,
         host_b: hb,
+        sha: lay.is_sha() as i32,
+        sha_mid: sha_mid.as_ptr(),
+        sha_pad: sha_pad.as_ptr(),
     };
     let (proof, commitment) = run(&params, &chunk, pcs, m);
     (proof, commitment, phase)

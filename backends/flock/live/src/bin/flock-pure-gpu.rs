@@ -342,9 +342,8 @@ fn session(st: &Arc<PureStmt>, inst: &Arc<Instances>, t: SharedTransport, plan: 
     let hello = config(st, sig).hello();
     let tr = Instant::now();
     // Honest GPU witnesses are built on the device from the rows (publics read back); a tampered witness needs the host.
-    // The SHA layouts build every witness on the host (no device SHA-256 witness kernel yet).
     let sha = st.lay.is_sha();
-    let device = plan.gpu && !sha && !(plan.forge_middle || plan.bad_params.is_some() || plan.key_substituted || plan.operand_flip
+    let device = plan.gpu && !(plan.forge_middle || plan.bad_params.is_some() || plan.key_substituted || plan.operand_flip
         || plan.acc_in_wrong || plan.rep1_other_witness || plan.unit_flip);
     let (mut comps, cvs) = if device {
         (Comps::B3(Vec::new()), Vec::new())
