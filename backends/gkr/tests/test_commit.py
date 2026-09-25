@@ -89,6 +89,29 @@ def test_changed_operand_changes_its_root_only():
     assert c2.roots["a"] != c.roots["a"] and c2.roots["b"] == c.roots["b"] and c2.roots["y"] == c.roots["y"]
 
 
+def test_vllm_v1_commitment_is_the_reference_schemes():
+    from verity.commitments.vllm_v1 import VllmV1, domain_digest, pos_leaf
+
+    x, w, y = _rows(10, 5, 8, 16), _rows(11, 5, 8, 16), _rows(12, 5, 1, 16)
+    c = CM.commit("vllm-v1", "bf16-ampere", ISET, 0, x, w, y, 2)
+    t = c.text().splitlines()
+    assert t[:3] == ["scheme vllm-v1", "leaf pos", "relation bf16-ampere+vllm-v1"]
+    doms = {p: CM.vllm_domain("bf16-ampere", ISET, 0, 5, 1, 2, p) for p in CM.PORTS}
+    assert t[-3:] == [f"domain_{p} {domain_digest(doms[p]).hex()}" for p in CM.PORTS]
+    ref = VllmV1(doms, {"a": lambda _i: 16, "b": lambda _i: 16, "y": lambda _i: 2})
+    for n, rows in (("a", x), ("b", w)):
+        leaves = [ref.tree_leaf(n, i, ref.leaf_layout(n, i).digest(CM.row_bytes(rows[i:i + 1], 16)[0].tobytes())) for i in range(5)]
+        assert leaves == c.digests[n] == [pos_leaf(CM.row_bytes(rows[i:i + 1], 16)[0].tobytes()) for i in range(5)]
+        assert ref.root(n, leaves) == c.roots[n], n
+    assert ref.root("y", [pos_leaf(int(v).to_bytes(2, "little")) for v in y.reshape(-1)]) == c.roots["y"]
+    assert len({domain_digest(d) for d in doms.values()}) == 3
+    x2 = x.copy()
+    x2[4, 0] ^= 1
+    c2 = CM.commit("vllm-v1", "bf16-ampere", ISET, 0, x2, w, y, 2)
+    assert c2.roots["a"] != c.roots["a"] and c2.roots["b"] == c.roots["b"] and c2.roots["y"] == c.roots["y"]
+    assert CM.commit("vllm-v1", "bf16-ampere", ISET, 1, x, w, y, 2).roots["a"] != c.roots["a"]   # the range is in the domain
+
+
 EPI = "ncols 3\nnwires 4\none 0\ncol 0 one\ncol 1 y16\ncol 2 t\nprod 3 1 1 1 1 0 1 2 1 0\nassert a 1 3 1 0\n"
 
 

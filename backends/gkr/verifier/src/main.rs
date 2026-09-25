@@ -39,6 +39,7 @@ mod sha256;
 mod sha512;
 mod transcript;
 mod verify;
+mod vllm_v1;
 
 use circuit::{layers, read_rows, Circuit, Layer};
 use std::path::{Path, PathBuf};

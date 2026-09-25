@@ -19,7 +19,12 @@ are B-Ligero's.  Until the hash layers bind the digest columns to the operand co
 constrains them: the relation names have no circuit pin and the statement verifies only under
 ``--allow-any-circuit`` (an altered operand with honest digests is accepted: the gap the hash layers close).
 
-    python -m gpu.commit pin RELATION --leaf sha256|blake3 [--lo 0] [--vus 4096] [--instances DIR]
+Scheme ``vllm-v1`` (``--leaf vllm-v1``, claimed as ``R+vllm-v1``; ``verifier/src/vllm_v1.rs``): the published digests
+are ``pos_leaf(row bytes)``, which are the tree leaves themselves; each port's root is a ``StepDomain(chunk=None)``
+binding of the unpadded fold, and ``commitment.txt`` names each port's ``domain_digest``.  The program / ctx / geo /
+layout digests of those domains (``vllm_domain``) are this backend's provisional mapping; the integration owns them.
+
+    python -m gpu.commit pin RELATION --leaf sha256|blake3|vllm-v1 [--lo 0] [--vus 4096] [--instances DIR]
 """
 from __future__ import annotations
 
@@ -31,9 +36,12 @@ from pathlib import Path
 import numpy as np
 
 SCHEME = "frame-v3"
+VLLM = "vllm-v1"
 LIMBS = 16
-LEAVES = ("sha256", "blake3")
-SUFFIX = {"sha256": "+sha256", "blake3": "+blake3"}
+LEAVES = ("sha256", "blake3", VLLM)
+SUFFIX = {"sha256": "+sha256", "blake3": "+blake3", VLLM: "+vllm-v1"}
+VLLM_MAP_TAG = "verity/gkr-commit/vllm-v1"      # vllm_v1.rs MAP_TAG
+PORTS = ("a", "b", "y")
 DIGEST_COLS = [f"dx{i}" for i in range(LIMBS)] + [f"dw{i}" for i in range(LIMBS)]
 OWNER = {"a": -1, "b": -2, "y": -1}
 BINDING_TAG = "verity/ligero-b/auth-binding/v2h"   # hashauth.BINDING_TAG
@@ -110,6 +118,25 @@ def limbs(digest: bytes) -> list[int]:
     return [int.from_bytes(digest[2 * i:2 * i + 2], "big") for i in range(LIMBS)]
 
 
+def vllm_domain(base_relation: str, iset: InstanceSet, lo: int, vus: int, n_y: int, y_width: int, port: str):
+    """``vllm_v1.rs operand_domain``: the provisional step domain of port ``a`` / ``b`` / ``y``."""
+    from verity.commitments import identity_digest
+    from verity.commitments.vllm_v1 import StepDomain
+
+    def d(kind: str, doc: dict) -> bytes:
+        return bytes.fromhex(identity_digest(f"{VLLM_MAP_TAG}/{kind}/v0", doc))
+
+    value, bits, words, count = {"a": ("x-row", iset.word_bits, iset.K, vus), "b": ("w-column", iset.word_bits, iset.K, vus),
+                                 "y": ("y-word", 8 * y_width, 1, vus * n_y)}[port]
+    return StepDomain(
+        program_digest=d("program", {"relation": base_relation}),
+        ctx_digest=d("ctx", {"dataset": iset.dataset, "tier": iset.tier, "manifest_sha256": iset.manifest_sha256, "lo": int(lo),
+                             "hi": int(lo + vus), "port": port}),
+        geo_digest=d("geo", {"vus": int(vus), "K": int(iset.K), "n_y": int(n_y)}),
+        layout_digest=d("layout", {"port": port, "value": value, "word_bits": int(bits), "words": int(words), "byte_order": "little"}),
+        leaf_count=int(count))
+
+
 @dataclass
 class Commitment:
     leaf: str
@@ -121,11 +148,20 @@ class Commitment:
     n_y: int
     digests: dict            # "a" / "b": per-VU row digests
     roots: dict              # "a" / "b" / "y": bytes
+    domains: dict | None = None   # vllm-v1: "a" / "b" / "y" domain_digest
+
+    @property
+    def scheme(self) -> str:
+        return VLLM if self.leaf == VLLM else SCHEME
 
     def text(self) -> str:
         i = self.iset
-        return (f"scheme {SCHEME}\nleaf {self.leaf}\nrelation {self.relation}\ninstances {i.dataset} {i.tier} {i.manifest_sha256}\n"
-                f"lo {self.lo}\nvus {self.vus}\nK {i.K}\nx {i.word_bits}\nw {i.word_bits}\ny {word_schema(self.y_width)} {self.n_y}\n")
+        leaf = "pos" if self.leaf == VLLM else self.leaf
+        out = (f"scheme {self.scheme}\nleaf {leaf}\nrelation {self.relation}\ninstances {i.dataset} {i.tier} {i.manifest_sha256}\n"
+               f"lo {self.lo}\nvus {self.vus}\nK {i.K}\nx {i.word_bits}\nw {i.word_bits}\ny {word_schema(self.y_width)} {self.n_y}\n")
+        if self.domains:
+            out += "".join(f"domain_{p} {self.domains[p].hex()}\n" for p in PORTS)
+        return out
 
     def limb_columns(self) -> np.ndarray:
         """``(vus, 32)``: each VU's x then W digest limbs (the columns ``dx0 .. dw15``)."""
@@ -136,10 +172,11 @@ class Commitment:
         return np.concatenate([np.asarray(y, dtype=np.int64).reshape(self.vus, self.n_y), self.limb_columns()], 1)
 
     def info(self) -> dict:
-        return {"scheme": SCHEME, "leaf": self.leaf, "relation": self.relation, "lo": self.lo, "vus": self.vus, "K": self.iset.K,
+        return {"scheme": self.scheme, "leaf": self.leaf, "relation": self.relation, "lo": self.lo, "vus": self.vus, "K": self.iset.K,
                 "word_bits": self.iset.word_bits, "dataset": self.iset.dataset, "tier": self.iset.tier,
                 "manifest_sha256": self.iset.manifest_sha256, "y": [word_schema(self.y_width), self.n_y],
-                **{f"root_{n}": r.hex() for n, r in self.roots.items()}}
+                **{f"root_{n}": r.hex() for n, r in self.roots.items()},
+                **({f"domain_{p}": d.hex() for p, d in self.domains.items()} if self.domains else {})}
 
 
 def commit(leaf: str, base_relation: str, iset: InstanceSet, lo: int, x: np.ndarray, w: np.ndarray, y: np.ndarray,
@@ -160,6 +197,16 @@ def commit(leaf: str, base_relation: str, iset: InstanceSet, lo: int, x: np.ndar
     n_y = y.shape[1]
     if y.min(initial=0) < 0 or y.max(initial=0) >> (8 * y_width):
         raise ValueError(f"commit: a y word exceeds {word_schema(y_width)}")
+    if leaf == VLLM:
+        from verity.commitments.vllm_v1 import domain_digest, fold, pos_leaf
+
+        doms = {p: vllm_domain(base_relation, iset, lo, vus, n_y, y_width, p) for p in PORTS}
+        dig = {"a": [pos_leaf(r.tobytes()) for r in row_bytes(x, iset.word_bits)],
+               "b": [pos_leaf(r.tobytes()) for r in row_bytes(w, iset.word_bits)]}
+        yleaves = [pos_leaf(int(v).to_bytes(y_width, "little")) for v in y.reshape(-1).tolist()]
+        roots = {"a": doms["a"].bind(fold(dig["a"])), "b": doms["b"].bind(fold(dig["b"])), "y": doms["y"].bind(fold(yleaves))}
+        return Commitment(leaf, base_relation + SUFFIX[leaf], iset, lo, vus, y_width, n_y, dig, roots,
+                          {p: domain_digest(d) for p, d in doms.items()})
     rs = RowLeaf(leaf, ROLE_X, iset.word_bits, K).schema
     dom = {n: CommitmentDomain(binding(iset, lo, lo + vus, n, rs if n != "y" else word_schema(y_width)), OWNER[n],
                                RangeIndexedDomain(0, vus * (n_y if n == "y" else 1))) for n in ("a", "b", "y")}

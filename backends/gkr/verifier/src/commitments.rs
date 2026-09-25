@@ -4,14 +4,15 @@
 //! as public words; this module rebuilds the tree leaves from them (and the `y` word leaves from the output words),
 //! the three roots, and compares them with the pinned roots of the frozen instance set.  The domains are derived here
 //! from pinned fields only (B-Ligero's `hashauth.binding_digest`, so the roots are B-Ligero's for the same set and
-//! leaf schema); nothing the prover sends names a domain.  One module per scheme: `vllm-v1` goes beside it.
+//! leaf schema); nothing the prover sends names a domain.  One module per scheme: `vllm_v1.rs` (`R+vllm-v1`) is the
+//! other, dispatched from `check`.
 //!
 //! `commitment.txt` (in the statement directory):
 //!
 //! ```text
-//! scheme frame-v3
-//! leaf sha256|blake3                       row leaf schema sha256/row/v1 | blake3-keyed/row/v2
-//! relation R+sha256|R+blake3
+//! scheme frame-v3|vllm-v1
+//! leaf sha256|blake3|pos                   sha256/row/v1 | blake3-keyed/row/v2 (frame-v3); pos_leaf (vllm-v1)
+//! relation R+sha256|R+blake3|R+vllm-v1
 //! instances <dataset> <tier> <manifest_sha256>
 //! lo L
 //! vus N
@@ -19,6 +20,7 @@
 //! x <word bits>
 //! w <word bits>
 //! y u16|u32 <words per VU>
+//! domain_a|domain_b|domain_y <hex>         vllm-v1 only: each port's domain_digest, which must be the derived one
 //! ```
 //!
 //! Its SHA-256 is absorbed into the transcript after the binding digests (`verify::Statement::commit`).
@@ -43,7 +45,7 @@ const OWNER_B: i64 = -2;
 const OWNER_Y: i64 = -1;
 
 /// A value of a flat identity manifest (`identity.canonical_json` over string / integer fields).
-pub enum Json<'a> { Int(u64), Str(&'a str) }
+pub enum Json<'a> { Int(u64), Str(&'a str), Null }
 
 fn json_str(s: &str, out: &mut String) {
     out.push('"');
@@ -72,7 +74,7 @@ pub fn canonical_json(fields: &[(&str, Json)]) -> String {
         if i > 0 { out.push(','); }
         json_str(k, &mut out);
         out.push(':');
-        match v { Json::Int(n) => out.push_str(&n.to_string()), Json::Str(s) => json_str(s, &mut out) }
+        match v { Json::Int(n) => out.push_str(&n.to_string()), Json::Str(s) => json_str(s, &mut out), Json::Null => out.push_str("null") }
     }
     out.push('}');
     out
@@ -170,21 +172,27 @@ impl Domain {
     }
 }
 
+/// The row leaf rule: frame-v3's two row schemas, or vllm-v1's position leaf (`vllm_v1.rs`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum RowHash { Sha256, Blake3 }
+pub enum RowHash { Sha256, Blake3, VllmPos }
 
 impl RowHash {
-    pub fn parse(s: &str) -> Option<RowHash> { match s { "sha256" => Some(RowHash::Sha256), "blake3" => Some(RowHash::Blake3), _ => None } }
-    pub fn name(self) -> &'static str { match self { RowHash::Sha256 => "sha256", RowHash::Blake3 => "blake3" } }
-    /// `rowleaf.SCHEMA_SHA256_ROW` / `SCHEMA_BLAKE3_ROW`
-    pub fn schema(self) -> &'static str { match self { RowHash::Sha256 => "sha256/row/v1", RowHash::Blake3 => "blake3-keyed/row/v2" } }
+    pub fn parse(s: &str) -> Option<RowHash> {
+        match s { "sha256" => Some(RowHash::Sha256), "blake3" => Some(RowHash::Blake3), "pos" => Some(RowHash::VllmPos), _ => None }
+    }
+    pub fn name(self) -> &'static str { match self { RowHash::Sha256 => "sha256", RowHash::Blake3 => "blake3", RowHash::VllmPos => "pos" } }
+    /// `rowleaf.SCHEMA_SHA256_ROW` / `SCHEMA_BLAKE3_ROW`; vllm-v1 leaves carry no schema (a label only)
+    pub fn schema(self) -> &'static str {
+        match self { RowHash::Sha256 => "sha256/row/v1", RowHash::Blake3 => "blake3-keyed/row/v2", RowHash::VllmPos => "vllm-v1/pos-leaf/v0" }
+    }
     /// The relation suffix naming a statement committed under this leaf.
-    pub fn suffix(self) -> &'static str { match self { RowHash::Sha256 => "+sha256", RowHash::Blake3 => "+blake3" } }
+    pub fn suffix(self) -> &'static str { match self { RowHash::Sha256 => "+sha256", RowHash::Blake3 => "+blake3", RowHash::VllmPos => "+vllm-v1" } }
+    pub fn scheme(self) -> &'static str { if self == RowHash::VllmPos { crate::vllm_v1::SCHEME } else { SCHEME } }
 }
 
 /// The relation suffix of a committed-operands relation name, if any.
 pub fn relation_hash(relation: &str) -> Option<RowHash> {
-    [RowHash::Sha256, RowHash::Blake3].into_iter().find(|h| relation.ends_with(h.suffix()))
+    [RowHash::Sha256, RowHash::Blake3, RowHash::VllmPos].into_iter().find(|h| relation.ends_with(h.suffix()))
 }
 
 /// `rowleaf.sha256_row_prefix`: `"verity/sha256-row/v1\0" || role || word_bits || u32be(n_words)`, zero-padded to 64.
@@ -310,6 +318,8 @@ pub struct Spec {
     pub w_bits: u8,
     pub y_width: usize,
     pub n_y: usize,
+    /// vllm-v1 only: the statement's `domain_a` / `domain_b` / `domain_y` digests (`vllm_v1::StepDomain::digest`)
+    pub domains: Option<[Digest; 3]>,
 }
 
 impl Spec {
@@ -320,13 +330,23 @@ impl Spec {
             let Some((k, v)) = t.split_first() else { continue };
             if kv.insert(k, v.to_vec()).is_some() { return Err(format!("commitment.txt: {k} twice")); }
         }
+        const DOMAINS: [&str; 3] = ["domain_a", "domain_b", "domain_y"];
         let expect = ["scheme", "leaf", "relation", "instances", "lo", "vus", "K", "x", "w", "y"];
-        if let Some(k) = kv.keys().find(|k| !expect.contains(k)) { return Err(format!("commitment.txt: unknown line {k}")); }
+        if let Some(k) = kv.keys().find(|k| !expect.contains(k) && !DOMAINS.contains(k)) { return Err(format!("commitment.txt: unknown line {k}")); }
         let get = |k: &str, i: usize| -> Result<&str, String> { kv.get(k).and_then(|v| v.get(i).copied()).ok_or_else(|| format!("commitment.txt: {k}")) };
         let num = |k: &str, i: usize| -> Result<u64, String> { get(k, i)?.parse().map_err(|_| format!("commitment.txt: {k} {:?}", get(k, i))) };
         let bits = |k: &str| -> Result<u8, String> { match num(k, 0)? { b @ (8 | 16) => Ok(b as u8), b => Err(format!("commitment.txt: {k} words of {b} bits")) } };
-        if get("scheme", 0)? != SCHEME { return Err(format!("commitment.txt: scheme {}, this verifier checks {SCHEME}", get("scheme", 0)?)); }
         let hash = RowHash::parse(get("leaf", 0)?).ok_or_else(|| format!("commitment.txt: leaf {}", get("leaf", 0).unwrap_or("")))?;
+        if get("scheme", 0)? != hash.scheme() {
+            return Err(format!("commitment.txt: scheme {}, leaf {} is a {} leaf", get("scheme", 0)?, hash.name(), hash.scheme()));
+        }
+        let domains = if hash == RowHash::VllmPos {
+            let d = |k: &str| get(k, 0).ok().and_then(unhex32).ok_or_else(|| format!("commitment.txt: {k} (a vllm-v1 statement names each port's domain)"));
+            Some([d(DOMAINS[0])?, d(DOMAINS[1])?, d(DOMAINS[2])?])
+        } else {
+            if let Some(k) = DOMAINS.iter().find(|k| kv.contains_key(*k)) { return Err(format!("commitment.txt: {k} in a {SCHEME} statement")); }
+            None
+        };
         let relation = get("relation", 0)?.to_string();
         if relation_hash(&relation) != Some(hash) { return Err(format!("commitment.txt: relation {relation} is not a {} relation", hash.suffix())); }
         let y_width = match get("y", 0)? { "u16" => 2, "u32" => 4, s => return Err(format!("commitment.txt: y {s}")) };
@@ -335,6 +355,7 @@ impl Spec {
         let s = Spec {
             hash, relation, dataset: get("instances", 0)?.to_string(), tier: get("instances", 1)?.to_string(), manifest_sha256,
             lo: num("lo", 0)?, vus: num("vus", 0)?, k: num("K", 0)?, x_bits: bits("x")?, w_bits: bits("w")?, y_width, n_y: num("y", 1)? as usize,
+            domains,
         };
         if s.vus == 0 || s.k == 0 || s.n_y == 0 { return Err("commitment.txt: vus, K and the y words per VU must be positive".into()); }
         Ok(s)
@@ -373,10 +394,33 @@ impl Checked {
     }
     pub fn pinned(&self) -> bool { self.pin.is_some() && self.problem(false).is_none() }
     pub fn json(&self) -> String {
-        format!("{{\"scheme\": \"{SCHEME}\", \"leaf\": \"{}\", \"relation\": \"{}\", \"lo\": {}, \"vus\": {}, \"root_a\": \"{}\", \"root_b\": \"{}\", \"root_y\": \"{}\", \"pinned\": {}, \"pin_source\": {}}}",
-                self.spec.hash.schema(), self.spec.relation, self.spec.lo, self.spec.vus, hex(&self.roots[0]), hex(&self.roots[1]), hex(&self.roots[2]),
-                self.pinned(), self.pin.map(|p| format!("\"{}\"", p.source)).unwrap_or("null".into()))
+        let domains = self.spec.domains.map(|d| format!(", \"domain_a\": \"{}\", \"domain_b\": \"{}\", \"domain_y\": \"{}\"", hex(&d[0]), hex(&d[1]), hex(&d[2])))
+            .unwrap_or_default();
+        format!("{{\"scheme\": \"{}\", \"leaf\": \"{}\", \"relation\": \"{}\", \"lo\": {}, \"vus\": {}, \"root_a\": \"{}\", \"root_b\": \"{}\", \"root_y\": \"{}\"{domains}, \"pinned\": {}, \"pin_source\": {}}}",
+                self.spec.hash.scheme(), self.spec.hash.schema(), self.spec.relation, self.spec.lo, self.spec.vus, hex(&self.roots[0]), hex(&self.roots[1]),
+                hex(&self.roots[2]), self.pinned(), self.pin.map(|p| format!("\"{}\"", p.source)).unwrap_or("null".into()))
     }
+}
+
+/// vllm-v1: the digests are the tree leaves, each root is its verifier-derived step domain's binding.
+fn check_vllm(spec: &Spec, public: &[u32]) -> Result<[Digest; 3], String> {
+    use crate::vllm_v1 as V;
+    let doms: Vec<V::StepDomain> = V::PORTS.iter().map(|p| V::operand_domain(spec, p)).collect();
+    let named = spec.domains.ok_or("commitment: a vllm-v1 statement without its domains")?;
+    for ((port, dom), want) in V::PORTS.iter().zip(&doms).zip(&named) {
+        if &dom.digest() != want { return Err(format!("commitment: domain_{port} {} is not this instance set's {}", hex(want), hex(&dom.digest()))); }
+    }
+    let m = spec.words_per_vu();
+    let (mut la, mut lb, mut ly) = (Vec::new(), Vec::new(), Vec::new());
+    for (v, words) in public.chunks_exact(m).enumerate() {
+        for &y in &words[..spec.n_y] {
+            if spec.y_width < 4 && y >> (8 * spec.y_width) != 0 { return Err(format!("commitment: VU {v}: a y word exceeds {}", word_schema(spec.y_width))); }
+            ly.push(V::word_leaf(spec.y_width, y));
+        }
+        la.push(from_limbs(&words[spec.n_y..spec.n_y + LIMBS]).ok_or_else(|| format!("commitment: VU {v}: an x digest limb is not below 2^16"))?);
+        lb.push(from_limbs(&words[spec.n_y + LIMBS..]).ok_or_else(|| format!("commitment: VU {v}: a W digest limb is not below 2^16"))?);
+    }
+    Ok([doms[0].root(&la)?, doms[1].root(&lb)?, doms[2].root(&ly)?])
 }
 
 /// The three roots of the statement's public words (`words_per_vu` per VU, VU-major).  An error is a malformed
@@ -385,6 +429,11 @@ pub fn check(spec: Spec, public: &[u32]) -> Result<Checked, String> {
     let m = spec.words_per_vu();
     if public.len() as u64 != spec.vus * m as u64 {
         return Err(format!("commitment: {} public words, {} VUs of {m} expected", public.len(), spec.vus));
+    }
+    if spec.hash == RowHash::VllmPos {
+        let roots = check_vllm(&spec, public)?;
+        let pin = find(&spec.relation, spec.lo, spec.vus);
+        return Ok(Checked { spec, roots, pin });
     }
     let [ba, bb, by] = spec.bindings();
     let (da, db) = (Domain::range(&ba, OWNER_A, spec.vus), Domain::range(&bb, OWNER_B, spec.vus));
@@ -406,21 +455,23 @@ pub fn check(spec: Spec, public: &[u32]) -> Result<Checked, String> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
-    /// Just enough JSON for `vectors.json` (objects, arrays, strings without escapes, integers, null).
+    /// Just enough JSON for `vectors.json` (objects, arrays, strings without escapes, integers, booleans, null).
     #[derive(Debug)]
-    enum J { O(Vec<(String, J)>), A(Vec<J>), S(String), N(i64), Null }
+    pub enum J { O(Vec<(String, J)>), A(Vec<J>), S(String), N(i64), B(bool), Null }
 
     impl J {
-        fn get(&self, k: &str) -> &J { match self { J::O(f) => &f.iter().find(|(n, _)| n == k).unwrap_or_else(|| panic!("no key {k}")).1, _ => panic!("not an object") } }
-        fn arr(&self) -> &[J] { match self { J::A(v) => v, _ => panic!("not an array") } }
-        fn s(&self) -> &str { match self { J::S(s) => s, _ => panic!("not a string") } }
-        fn n(&self) -> i64 { match self { J::N(n) => *n, _ => panic!("not a number") } }
-        fn bytes(&self) -> Vec<u8> { let s = self.s(); (0..s.len() / 2).map(|i| u8::from_str_radix(&s[2 * i..2 * i + 2], 16).unwrap()).collect() }
-        fn d32(&self) -> Digest { unhex32(self.s()).unwrap() }
+        pub fn get(&self, k: &str) -> &J { match self { J::O(f) => &f.iter().find(|(n, _)| n == k).unwrap_or_else(|| panic!("no key {k}")).1, _ => panic!("not an object") } }
+        pub fn arr(&self) -> &[J] { match self { J::A(v) => v, _ => panic!("not an array") } }
+        pub fn s(&self) -> &str { match self { J::S(s) => s, _ => panic!("not a string") } }
+        pub fn n(&self) -> i64 { match self { J::N(n) => *n, _ => panic!("not a number") } }
+        pub fn bytes(&self) -> Vec<u8> { let s = self.s(); (0..s.len() / 2).map(|i| u8::from_str_radix(&s[2 * i..2 * i + 2], 16).unwrap()).collect() }
+        pub fn d32(&self) -> Digest { unhex32(self.s()).unwrap() }
     }
+
+    pub fn parse_json(text: &str) -> J { parse(text.as_bytes(), &mut 0) }
 
     fn parse(s: &[u8], i: &mut usize) -> J {
         while s[*i].is_ascii_whitespace() { *i += 1; }
@@ -454,6 +505,8 @@ mod tests {
                 J::S(out)
             }
             b'n' => { *i += 4; J::Null }
+            b't' => { *i += 4; J::B(true) }
+            b'f' => { *i += 5; J::B(false) }
             _ => {
                 let st = *i;
                 while s[*i] == b'-' || s[*i].is_ascii_digit() { *i += 1; }
@@ -521,6 +574,7 @@ mod tests {
                     sha += 1;
                 }
                 RowHash::Blake3 => assert_eq!(hex(&blake3_row_key(role)), c.get("key").s()),
+                RowHash::VllmPos => unreachable!(),
             }
         }
         assert!(sha >= 14);
@@ -559,6 +613,50 @@ mod tests {
     }
 
     fn limbs(d: &Digest) -> Vec<u32> { d.chunks(2).map(|c| u16::from_be_bytes([c[0], c[1]]) as u32).collect() }
+
+    const VLLM_BASE: &str = "scheme vllm-v1\nleaf pos\nrelation bf16-ampere+vllm-v1\ninstances synthetic dev {m}\nlo 0\nvus 3\nK 4\nx 16\nw 16\ny u16 1\n";
+
+    /// A vllm-v1 `commitment.txt` naming its own derived domains.
+    pub fn vllm_spec_text() -> String {
+        let base = VLLM_BASE.replace("{m}", &"ab".repeat(32));
+        let mut s = Spec::parse(&format!("{base}domain_a {z}\ndomain_b {z}\ndomain_y {z}\n", z = "00".repeat(32))).unwrap();
+        s.domains = None;
+        let d: Vec<String> = crate::vllm_v1::PORTS.iter().map(|p| hex(&crate::vllm_v1::operand_domain(&s, p).digest())).collect();
+        format!("{base}domain_a {}\ndomain_b {}\ndomain_y {}\n", d[0], d[1], d[2])
+    }
+
+    #[test]
+    fn vllm_statement_check_rebuilds_the_roots() {
+        use crate::vllm_v1 as V;
+        let text = vllm_spec_text();
+        let s = Spec::parse(&text).unwrap();
+        let rows: Vec<Vec<u8>> = (0..3u8).map(|v| vec![v; 8]).collect();
+        let mut public = Vec::new();
+        for (v, r) in rows.iter().enumerate() {
+            public.push(100 + v as u32);
+            public.extend(limbs(&V::pos_leaf(r)));
+            public.extend(limbs(&V::pos_leaf(&[r.as_slice(), &[9]].concat())));
+        }
+        let c = check(s.clone(), &public).unwrap();
+        assert!(c.pin.is_none() && c.problem(true).is_none());
+        let da = V::operand_domain(&s, "a");
+        assert_eq!(c.roots[0], da.bind(&V::fold(&rows.iter().map(|r| V::pos_leaf(r)).collect::<Vec<_>>())));
+        let dy = V::operand_domain(&s, "y");
+        assert_eq!(c.roots[2], dy.bind(&V::fold(&(0..3).map(|v| V::pos_leaf(&(100u16 + v).to_le_bytes())).collect::<Vec<_>>())));
+        assert!(c.json().contains("\"scheme\": \"vllm-v1\""));
+        // a domain line that is not the derived one, a missing one, a frame-v3 statement naming domains
+        let a_line = text.lines().find(|l| l.starts_with("domain_a")).unwrap().to_string();
+        let bad = text.replace(&a_line, &format!("domain_a {}", "11".repeat(32)));
+        assert!(check(Spec::parse(&bad).unwrap(), &public).is_err());
+        assert!(Spec::parse(&text.replace(&format!("{a_line}\n"), "")).is_err());
+        let fv3 = text.replace("scheme vllm-v1\nleaf pos", "scheme frame-v3\nleaf sha256").replace("+vllm-v1", "+sha256");
+        assert!(Spec::parse(&fv3).is_err());
+        assert!(Spec::parse(&text.replace("scheme vllm-v1", "scheme frame-v3")).is_err());
+        let mut p2 = public.clone();
+        p2[1 + 16] ^= 1;
+        let c2 = check(s, &p2).unwrap();
+        assert!(c2.roots[1] != c.roots[1] && c2.roots[0] == c.roots[0]);
+    }
 
     #[test]
     fn statement_check_rebuilds_the_roots() {

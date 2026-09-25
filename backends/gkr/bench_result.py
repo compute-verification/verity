@@ -185,9 +185,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--target", type=int, default=-128)
     ap.add_argument("--bind", action="store_true",
                     help="the operands-bound statement (gpu/bind.py): bind.txt + the frozen x.bin / w.bin, checked by both verifiers")
-    ap.add_argument("--commit", choices=("sha256", "blake3"), default=None,
+    ap.add_argument("--commit", choices=("sha256", "blake3", "vllm-v1"), default=None,
                     help="the operands-committed statement (gpu/commit.py): per-VU row digests as public words, checked against "
-                         "the frame-v3 trees by the Rust verifier")
+                         "the frame-v3 (sha256, blake3) or vllm-v1 trees by the Rust verifier")
     args = ap.parse_args(argv)
     if args.bind and args.commit:
         raise SystemExit("bench_result.py: --bind and --commit are two statements; pick one")
@@ -342,8 +342,8 @@ def main(argv: list[str] | None = None) -> int:
         commit_info = {**commitment.info(), "serving_commit_seconds": t_commit_serving, "digest_columns": len(CM.DIGEST_COLS),
                        "circuit_binds_digests": False,
                        "spec": "gpu/commit.py: per VU the x row / W column row digests as 16-bit limbs after the y words; the Rust "
-                               "verifier rebuilds the frame-v3 trees and compares the roots (commitments.rs).  SCAFFOLD: no hash "
-                               "layer constrains the digest columns yet"}
+                               f"verifier rebuilds the {commitment.scheme} trees and compares the roots (commitments.rs, "
+                               "vllm_v1.rs).  SCAFFOLD: no hash layer constrains the digest columns yet"}
     if args.bind:
         from gpu import bind as BD
         from gpu.field import P as FP
@@ -560,7 +560,7 @@ def main(argv: list[str] | None = None) -> int:
              + (f"; operands bound: every unit's operand columns equal the frozen x, W the verifier reads "
                 f"({bind_info['constraints']} constraints)" if bind else "")
              + (f"; operands committed ({commit_info['relation']}, SCAFFOLD): each VU's x / W row digests are public words the "
-                f"verifier checks against the frame-v3 roots, but no circuit layer constrains them yet (serving-side commit "
+                f"verifier checks against the {commit_info['scheme']} roots, but no circuit layer constrains them yet (serving-side commit "
                 f"{commit_info['serving_commit_seconds']:.2f}s, outside t.total)" if commitment else "")
              + f"; buckets of the median rep (rep {med['rep']}) by t.total",
         **({"variant": "A-GKR, operands bound", "operand_binding": bind_info} if bind else {}),
