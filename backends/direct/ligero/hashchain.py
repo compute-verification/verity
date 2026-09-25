@@ -582,7 +582,10 @@ def row_chain(hr: HashedRelation, rows, role: int, device) -> tuple:
     committed set (``HashedRelationRunner.commit``) and gathers per sub-batch instead of re-running 2 x steps chains per
     proof.  The third item is present only when the scheme's ``chain_witness`` returns extra hint rows."""
     import torch
-    rows = torch.as_tensor(np.asarray(rows, dtype=np.int64), device=device)
+    if isinstance(rows, torch.Tensor):
+        rows = rows.to(device=device, dtype=torch.int64)
+    else:
+        rows = torch.as_tensor(np.asarray(rows, dtype=np.int64), device=device)
     n, steps, k = rows.shape[0], hr.steps, hr.k
     words = rows.reshape(n * steps, k)
     fast = getattr(hr.leaf, "row_sponges", None) if ROW_SPONGE_KERNEL else None
