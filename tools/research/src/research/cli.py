@@ -125,6 +125,10 @@ def cmd_run(argv: list[str]) -> int:
     ap.add_argument("--cost-json", default=None, help=argparse.SUPPRESS)
     ap.add_argument("--remote-json", default=None, help=argparse.SUPPRESS)
     ap.add_argument("--exclusive-lock", default=None, help=argparse.SUPPRESS)
+    ap.add_argument("--custody-dir", default=None, help=argparse.SUPPRESS)   # machine side: the minted key + store.toml (store.custody)
+    ap.add_argument("--custody-r2", action="store_true", help="with --on: the machine publishes the attempt and every run file (logs included) to the "
+                                                               "store's remote with a key minted here, so custody does not depend on this machine (store.custody)")
+    ap.add_argument("--custody-ttl", default=None, metavar="TTL", help="with --custody-r2: the minted key's lifetime (default 6h; it must outlast the run)")
     ap.add_argument("--expect", action="append", default=[], metavar="K=V", help="expected workload fingerprint entry (recorded separately from what the workload observes)")
     ap.add_argument("--require-result", action="store_true", help="a zero exit without a valid result.json exits 65")
     ap.add_argument("--stage", default="run", help="stage name recorded in the job (default: run)")
@@ -140,6 +144,10 @@ def cmd_run(argv: list[str]) -> int:
     mem_reservation = os.environ.pop("RESEARCH_MEM_RESERVATION", None) if ns.claimed else None    # research.mem: this runner's, not the workload's
     if ns.mem_gb is not None and not ns.on:
         print("research run: --mem-gb admits a run on a shared machine (--on MACHINE); a local run has no reservation to take", file=sys.stderr)
+        return 2
+    if (ns.custody_r2 or ns.custody_ttl) and not ns.on:
+        print("research run: --custody-r2 / --custody-ttl are for --on MACHINE (a local run's records are already on this disk: "
+              "`research data custody RUN --publish` puts them on the remote)", file=sys.stderr)
         return 2
     if ns.project:
         harness_opts = ["--project", ns.project, *harness_opts]
@@ -227,7 +235,8 @@ def cmd_run(argv: list[str]) -> int:
             from .mem import release
 
             release(mem_reservation, run_id)
-    _publish_attempt(run_dir, prep)
+    if not ns.custody_dir:
+        _publish_attempt(run_dir, prep)
     s = R.summarize(run_dir)
     line = f"research: run {run_id} {s['state']} rc={s['rc']} class={s['class'] or '-'} result={s['result']}"
     if s["result"] == "absent":
@@ -235,10 +244,22 @@ def cmd_run(argv: list[str]) -> int:
     if s["validation"]:
         line += f" validation={s['validation']}"
     print(line + f"  (research inspect {run_id})", file=sys.stderr)
+    out = rc
     if ns.require_result and rc == 0 and not s["result_valid"]:
         print(f"research: --require-result: the workload exited 0 but result.json is {s['result']}; exiting {EX_DATAERR}", file=sys.stderr)
-        return EX_DATAERR
-    return rc
+        out = EX_DATAERR
+    if ns.custody_dir:                  # last: once .custody is written nothing more goes into the run dir (launcher.log included)
+        from .store import custody as CU
+
+        conds = prep.get("conditions")
+        if conds is not None:
+            from . import env as E
+
+            conds["exec.load_end"] = E.load_now()
+        print(f"research: custody: publishing the attempt and every run file to the store's remote; the verdict goes to {run_dir / CU.MARKER} "
+              f"(`research data custody {run_id}` from any machine)", file=sys.stderr)
+        CU.runner_publish(run_dir, Path(ns.custody_dir), tool=prep.get("tool"), conditions=conds)
+    return out
 
 
 CWD_SOURCE = "source"
@@ -455,7 +476,8 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
     try:
         rec = remote.launch(run_id=run_id, local_dir=run_dir, machine_name=ns.on, project=ns.project, command=command, harness_args=harness_args,
                             source=Path(ns.source).expanduser() if ns.source else None, sends=[Path(s).expanduser() for s in ns.send],
-                            cwd=None, env=env, exclusive=ns.exclusive, mem_gb=ns.mem_gb, mem_wait_s=ns.mem_wait)
+                            cwd=None, env=env, exclusive=ns.exclusive, mem_gb=ns.mem_gb, mem_wait_s=ns.mem_wait,
+                            custody_ttl=(ns.custody_ttl or "6h") if ns.custody_r2 else None)
     except remote.Refused as e:
         print(f"research run --on {ns.on}: refused: {e}", file=sys.stderr)
         return 3

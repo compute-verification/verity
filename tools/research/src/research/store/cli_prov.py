@@ -3,6 +3,7 @@
     research data lookup --tool NAME [--param k=v]... [--input name=art:...]... [--condition k=v]... [--source-tree SHA] [--any-source] [-- ARGV...]
     research data pull --from MACHINE RUN --project P            copy an attempt + its outputs' manifests and blobs from a machine's store (ssh)
     research data attempt publish RUN_DIR|RUN_ID [--tool SPEC] [--force] | --all [--runs-dir D]
+    research data custody RUN_DIR|RUN_ID [--publish] | --triage [--verify] [--runs-dir D]   run custody on the remote (store.custody)
 
 `research.store.cli` (lane store-core) owns the `research data` dispatcher and merges COMMANDS into its table; `main` here is the
 same dispatch for tests and for `python -m research.store.cli_prov`.
@@ -416,7 +417,62 @@ def publish_counts(results: list[dict[str, Any]]) -> dict[str, Any]:
     return c
 
 
-COMMANDS = {"lookup": cmd_lookup, "pull": cmd_pull, "attempt": cmd_attempt}
+def cmd_custody(argv: list[str]) -> int:
+    """`research data custody RUN [--publish]` | `--triage` (store.custody)."""
+    from . import custody as CU
+
+    ap = argparse.ArgumentParser(prog="research data custody", description="a run's custody on the store's remote: the attempt and every run file "
+                                                                           "(logs included) preserved there; answers the same on every machine")
+    ap.add_argument("run", nargs="?", metavar="RUN_DIR|RUN_ID", help="run directory, id, or unique prefix under --runs-dir")
+    ap.add_argument("--publish", action="store_true", help="publish the attempt with its run record first (when not yet in the store) and push it")
+    ap.add_argument("--triage", action="store_true", help="every run under --runs-dir by custody state; exit 1 while any needs action")
+    ap.add_argument("--verify", action="store_true", help="--triage: check preservation on the remote (default: the catalog's recorded replicas)")
+    ap.add_argument("--runs-dir", default=None)
+    ap.add_argument("--store", default=None)
+    ap.add_argument("--json", action="store_true")
+    ns = ap.parse_args(argv)
+    if bool(ns.run) == bool(ns.triage):
+        ap.error("RUN or --triage")
+    st = A.open_store(None, ns.store)
+    root = R.runs_root(ns.runs_dir)
+    if ns.triage:
+        rows = CU.triage(st, root, verify_remote=ns.verify)
+        todo = [r for r in rows if r["state"] in ("no-custody", "attempt-unpreserved", "attempt-no-record")]
+        if ns.json:
+            print(json.dumps({"runs_root": str(root), "rows": rows, "needs_action": len(todo)}, indent=2, sort_keys=True))
+        else:
+            counts = {s: sum(1 for r in rows if r["state"] == s) for s in CU.TRIAGE_STATES}
+            print(f"{len(rows)} run(s) under {root}: " + ", ".join(f"{n} {s}" for s, n in counts.items() if n))
+            for r in todo:
+                print(f"  {r['run']}  {r['state']:<20} {r['bytes'] / 2**20:8.1f} MB  {r['why']}  -> {r['next']}")
+            print(f"{len(todo)} need action (publish, fetch, or `research data label RUN custody waived|never-ran --by WHO`)" if todo
+                  else "nothing needs action")
+        return 1 if todo else 0
+    try:
+        d = R.resolve(root, ns.run) if not Path(ns.run).is_dir() else Path(ns.run)
+    except (FileNotFoundError, LookupError) as e:
+        print(f"research data custody: {e}", file=sys.stderr)
+        return 1
+    pushed: list[str] | None = None
+    if ns.publish:
+        out = A.publish(d, store=st, remote_push=False, run_record=True)
+        if not out.get("published"):
+            print(f"research data custody: {d.name}: attempt not published: {out.get('error')}", file=sys.stderr)
+            return 1
+        pushed = CU.push_run(st, CU.run_id_of(d))
+    rep = CU.verify(st, d)
+    if pushed:
+        rep["push_errors"] = pushed
+    if ns.json:
+        print(json.dumps(rep, indent=2, sort_keys=True, default=str))
+    elif rep["preserved"]:
+        print(f"{rep['run_id']}: custody on {rep.get('remote')}: attempt + run record {rep['run_record']} ({len(rep['files'])} file(s)); .custody written")
+    else:
+        print(f"{rep['run_id']}: NO custody on the remote: {rep['error']}")
+    return 0 if rep["preserved"] else 1
+
+
+COMMANDS = {"lookup": cmd_lookup, "pull": cmd_pull, "attempt": cmd_attempt, "custody": cmd_custody}
 
 
 def main(argv: list[str] | None = None) -> int:

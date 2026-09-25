@@ -1010,6 +1010,17 @@ def run_custody(pod_id: str, runs_dir: Path | None = None, registered: Callable[
     return True, f"{n} run(s) on it fetched or registered"
 
 
+def run_custody_r2(pod_id: str) -> tuple[bool, str]:
+    """Custody (b) from any machine (`watch --custody-r2`): `pods.drain.pod_custody` -- the catalog refreshed from the store's remote,
+    every attempt tied to the pod preserved there, and the pod guard's verdict that every run dir on it has custody (.fetched or
+    .custody).  Needs neither ~/.research/runs nor the machine that launched the runs."""
+    from .pods.drain import pod_custody  # noqa: PLC0415
+    from .store.local import LocalStore  # noqa: PLC0415
+
+    ok, why, _ = pod_custody(LocalStore(None), pod_id, refresh=True, probe=False)
+    return ok, why
+
+
 def reap_custody(root: Path, lane: str, pod_id: str, arts: Callable[[list[str]], tuple[bool, str]] = art_custody,
                  runs: Callable[[str], tuple[bool, str]] = run_custody) -> tuple[bool, str]:
     """Both custody legs for terminating a stale lane's pod: (a) the art: ids the lane's newest report cites, (b) the runs on the pod."""
@@ -1623,6 +1634,8 @@ def _main(argv: list[str]) -> int:
                                                         "and idle pods of STALE lanes once custody passes")
     wa.add_argument("--reap-grace-min", type=float, default=10)
     wa.add_argument("--reap-stale-min", type=float, default=30, help="--reap: a STALE lane's pod idle this long is terminated (custody permitting)")
+    wa.add_argument("--custody-r2", action="store_true", help="--reap: a pod's run custody comes from the store's remote and the pod guard "
+                                                              "(run_custody_r2), not from ~/.research/runs on this machine")
     wa.add_argument("--guardian-log", default=str(GUARDIAN_LOG), help="the laptop guardian's log, whose KILLED lines go to the owning "
                                                                         "lane's inbox ('none': off)")
     gc = sub.add_parser("gc-worktrees", help="clean worktrees of finished lanes whose branch tip is on origin: list, or --apply to remove")
@@ -1735,7 +1748,8 @@ def _main(argv: list[str]) -> int:
             line, runway = account_line(fleet, acct, now)
             alert, runway_last = runway_alert(runway, ns.runway_h, runway_last, now)
             more += [line, *alert, *reap_lines(root, rows, now, ns.reap_grace_min, pods_noted, reap=ns.reap),
-                     *steward_rule("reap-stale", stale_reap_lines, root, rows, now, ns.reap_stale_min, state, reap=ns.reap),
+                     *steward_rule("reap-stale", stale_reap_lines, root, rows, now, ns.reap_stale_min, state, reap=ns.reap,
+                                   custody=(lambda lane, pod: reap_custody(root, lane, pod["id"], runs=run_custody_r2)) if ns.custody_r2 else None),
                      *steward_rule("budget", budget_lines, root, fleet, now, state)]
         more += steward_rule("overdue", overdue_lines, root, rows, now, state)
         more += steward_rule("guardian", guardian_lines, root, rows, fleet, now, state, guardian)

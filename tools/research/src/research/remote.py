@@ -57,7 +57,11 @@
                     verifier) never gets one.  launch-request then makes sure ONE guard daemon runs on the pod (ensure_guard ->
                     pods/sh/pod_guard.sh `daemon`, flock/pidfile <root>/guard/guard.pid): no live runner, no work process, no live verifier,
                     no GPU use (research.pods.workproc, the watcher's definition) for N minutes -> the pod terminates itself, except while
-                    any <root>/runs/* lacks a valid .fetched (refused, run ids logged, re-checked every minute).  It terminates with the
+                    any <root>/runs/* lacks a valid .fetched or a valid .custody (refused, run ids logged, re-checked every minute).
+    custody         --custody-r2: the launcher mints a delete-free R2 key (store.custody.mint_for_machine) and stages it with a secret-free
+                    store.toml in <root>/requests/<run-id>/custody/ (mode 600, never in request.json or the workload's environment);
+                    launch-request passes --custody-dir to the runner, which after the workload publishes the attempt with every run file
+                    (outputs.run_record), verifies it on the remote, deletes the key and writes <run>/.custody (store.custody).  It terminates with the
                     pod's OWN key (RUNPOD_API_KEY in /proc/1/environ); without one it is not installed and the launch says so.  The account
                     key is never sent.  <root>/guard/state.json: verdict, last activity, idle minutes, refusal reasons.
 """
@@ -97,6 +101,7 @@ SMALL_FILES = ("job.json", "status.json", "failure.json", "result.json", "launch
 TERMINAL = ("done", "failed", "cancelled")
 FETCHED_FILE = ".fetched"                     # <run>/.fetched on the machine: written by `fetch --all` once every file verified
 FETCHED_SCHEMA = "research/fetched/v0.1"
+CUSTODY_DIR = "custody"                       # <root>/requests/<run-id>/custody/: --custody-r2's minted key + store.toml (store.custody)
 GUARD_IDLE_MIN_DEFAULT = 90
 GUARD_ENVIRON = "/proc/1/environ"             # RunPod injects RUNPOD_POD_ID and the pod-scoped RUNPOD_API_KEY into the container's first process
 GUARD_SCRIPT = Path(__file__).resolve().parent / "pods" / "sh" / "pod_guard.sh"
@@ -336,6 +341,13 @@ def knows_version_check(pkg: Path | None) -> bool:
         return "def tool_identity" in (Path(pkg) / "remote.py").read_text()
     except OSError:
         return False
+
+
+def knows_custody(pkg: Path | None) -> bool:
+    """Whether the research package that will run on the machine (a --source tree's, else this launcher's) publishes --custody-r2."""
+    if pkg is None:
+        return True
+    return (Path(pkg) / "store" / "custody.py").is_file() and "CUSTODY_DIR" in (Path(pkg) / "remote.py").read_text()
 
 
 def check_tool(expected: str | None) -> dict[str, str]:
@@ -659,8 +671,10 @@ def ship_source(ssh: list[str], root: str, git_dir: Path) -> tuple[str, str, dic
     return sha, dest, have
 
 
-def stage_request(ssh: list[str], root: str, run_id: str, request: dict[str, Any], sends: list[Path]) -> str:
-    """Write request.json and any --send files under <root>/requests/<run-id>/ (unique per id; no claim involved)."""
+def stage_request(ssh: list[str], root: str, run_id: str, request: dict[str, Any], sends: list[Path],
+                  private: list[tuple[str, bytes]] | None = None) -> str:
+    """Write request.json and any --send files under <root>/requests/<run-id>/ (unique per id; no claim involved).  `private` files
+    (the --custody-r2 key) are extracted under umask 077 and chmod 600: readable by the machine's user only."""
     stage_dir = f"{root}/requests/{run_id}"
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w") as tf:
@@ -672,7 +686,15 @@ def stage_request(ssh: list[str], root: str, run_id: str, request: dict[str, Any
             if not p.is_file():
                 raise Refused(f"--send {p}: not a file")
             tf.add(str(p), arcname=f"inputs/{p.name}")
-    r = ssh_run(ssh, ["sh", "-c", f"mkdir -p {shlex.quote(stage_dir)} && tar -xf - -C {shlex.quote(stage_dir)}"], stdin=buf.getvalue(), timeout=600)
+        for name, data in private or []:
+            ti = tarfile.TarInfo(name)
+            ti.size, ti.mode = len(data), 0o600
+            tf.addfile(ti, io.BytesIO(data))
+    q = shlex.quote(stage_dir)
+    cmd = f"mkdir -p {q} && tar -xf - -C {q}"
+    if private:
+        cmd = f"umask 077 && {cmd} && chmod 600 " + " ".join(shlex.quote(f"{stage_dir}/{n}") for n, _ in private)
+    r = ssh_run(ssh, ["sh", "-c", cmd], stdin=buf.getvalue(), timeout=600)
     if r.returncode != 0:
         raise Refused(f"staging the request failed: {r.stderr.decode(errors='replace')[-400:]}")
     return f"{stage_dir}/request.json"
@@ -883,6 +905,8 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
         if remote_sec.get("source_sha"):          # a shipped tree executes only from a directory verified READY for the requested identity
             src_dir = remote_sec.get("source_dir") or str(runs_root.parent / "src" / str(remote_sec["source_sha"]))
             require_ready_source(src_dir, str(remote_sec["source_sha"]))
+        if req.get("custody") and not (request_path.parent / CUSTODY_DIR / "cred.json").is_file():
+            raise Refused(f"--custody-r2: no staged key under {request_path.parent / CUSTODY_DIR}; the run could not publish its custody")
         holder = exclusive_holder(runs_root)
         if holder and holder != run_id:
             raise Refused(f"machine is exclusively held by run {holder} (still live); not starting {run_id}")
@@ -899,6 +923,8 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
     except Refused as e:
         if mem_rec:
             M.release(mem_rec["reservation"], run_id)
+        if req.get("custody"):                    # nothing will publish: the key goes now, not at its expiry
+            (request_path.parent / CUSTODY_DIR / "cred.json").unlink(missing_ok=True)
         write_json_atomic(run_dir / "refused.json", {"run_id": run_id, "reason": str(e), "fault": type(e).__name__, "at_utc": utc_now_ms()})
         return {"claimed": True, "run_id": run_id, "run_dir": str(run_dir), "started": False, "refused": str(e), "fault": type(e).__name__}
     staged_inputs = request_path.parent / "inputs"
@@ -932,6 +958,8 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
             "--cost-json", json.dumps(cost), "--remote-json", json.dumps(remote)]
     if req.get("exclusive"):
         argv += ["--exclusive-lock", str(runs_root / ".exclusive.lock")]
+    if req.get("custody"):
+        argv += ["--custody-dir", str(request_path.parent / CUSTODY_DIR)]
     argv += [*(req.get("harness_args") or []), "--", *req["command"]]
     log = open(run_dir / "launcher.log", "ab")
     try:
@@ -977,7 +1005,8 @@ def workload_cwd(harness_args: list[str], tool_pkg: Path | None) -> str:
 
 def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, command: list[str], harness_args: list[str],
            source: Path | None, sends: list[Path], cwd: str | None, env: dict[str, str], exclusive: bool,
-           mem_gb: float | None = None, mem_wait_s: float = 0.0) -> dict[str, Any]:
+           mem_gb: float | None = None, mem_wait_s: float = 0.0, custody_ttl: str | None = None) -> dict[str, Any]:
+    """`custody_ttl` (--custody-r2): mint a delete-free key for that long and stage it for the machine's runner (store.custody)."""
     local_dir.mkdir(parents=True, exist_ok=False)
     rec: dict[str, Any] = {"schema": "research/remote/v0.1", "run_id": run_id, "machine": machine_name, "project": project, "phase": "resolving",
                            "created_utc": utc_now_ms(), "observed_utc": None, "last_observed": None, "command": command, "launch_args": harness_args}
@@ -985,6 +1014,20 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
     try:
         m = resolve_machine(machine_name, project)
         guard_min = guard_idle_min(m)
+        custody_pub: dict[str, Any] | None = None
+        custody_files: list[tuple[str, bytes]] = []
+        if custody_ttl:
+            if not knows_custody(source_tool_package(source)):
+                raise Refused(f"--custody-r2: the research package in {source} predates run custody (no research/store/custody.py); "
+                              f"the machine would not publish it.  Commit a tree that has it, or drop --custody-r2")
+            from .store import credentials as C
+            from .store import custody as CU
+
+            try:
+                custody_pub, custody_files = CU.mint_for_machine(custody_ttl)
+            except C.MintError as e:
+                raise Refused(f"--custody-r2: cannot mint the machine's key here: {e}") from None
+            rec["custody"] = custody_pub
         tgt = pod_target(m)
         ssh = ssh_argv(tgt["host"], tgt["port"])
         rec.update(pod_id=m["pod_id"], host=tgt["host"], port=tgt["port"], root=m["root"], phase="shipping")
@@ -1016,6 +1059,7 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
                    "cwd": remote_cwd, "env": env, "harness_args": harness_args, "command": command, "exclusive": exclusive,
                    "mem_gb": mem_gb, "mem_wait_s": mem_wait_s, "ramlock_dir": m.get("ramlock"),
                    "guard": {"idle_min": guard_min} if guard_min else None,
+                   **({"custody": custody_pub} if custody_pub else {}),
                    "cost": {"provider": "runpod", "pod_id": m["pod_id"], "machine": machine_name, "currency": "USD",
                             "rate_usd_per_hour": tgt["cost_per_hr"], "rate_observed_utc": tgt["rate_observed_utc"], "reason": None},
                    "remote": {"machine": machine_name, "pod_id": m["pod_id"], "pod_name": tgt["pod_name"], "host": tgt["host"], "port": tgt["port"],
@@ -1023,7 +1067,7 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
                               "source_sha": tree_sha, "source_dir": src_dir,
                               "source_archive_sha256": ready.get("archive_sha256"), "source_files": ready.get("files"),
                               "source_verified": ready.get("verified"), "launched_from": os.uname().nodename}}
-        req_path = stage_request(ssh, m["root"], run_id, request, sends)
+        req_path = stage_request(ssh, m["root"], run_id, request, sends, private=custody_files or None)
         rec.update(phase="launching", request=req_path, remote_run_dir=f"{m['root']}/runs/{run_id}", tool=tool_dir, source_sha=tree_sha,
                    source_archive_sha256=ready.get("archive_sha256"), rate_usd_per_hour=tgt["cost_per_hr"])
         write_json_atomic(local_dir / "remote.json", rec)
