@@ -19,6 +19,7 @@
 
 use std::{
     array::from_fn,
+    collections::BTreeMap,
     panic::{AssertUnwindSafe, catch_unwind},
     sync::{Arc, Mutex},
     time::Instant,
@@ -188,8 +189,12 @@ impl Chain {
     }
 
     fn spec(&self) -> TableSpec {
+        self.spec_named(TABLE)
+    }
+
+    fn spec_named(&self, name: &str) -> TableSpec {
         let counts_le = self.shape.counts.iter().flat_map(|&n| (n as u64).to_le_bytes()).collect();
-        TableSpec { name: TABLE.into(), binding: Binding::Circuit { registry_digest: self.shape.registry.digest(), counts_le, circuit_digest: self.shape.circuit.digest() } }
+        TableSpec { name: name.into(), binding: Binding::Circuit { registry_digest: self.shape.registry.digest(), counts_le, circuit_digest: self.shape.circuit.digest() } }
     }
 
     /// Σ: the scheme, Λ (positions = operand words LSB first; row/block/bit map above), N, m, the Flock statement and
@@ -325,7 +330,7 @@ fn domain(rep: usize) -> Vec<u8> {
 
 struct ChainVerifier {
     ch: Arc<Chain>,
-    digests: Vec<[u8; 32]>,
+    digests: BTreeMap<String, Vec<[u8; 32]>>,
 }
 
 impl ChainVerifier {
@@ -343,11 +348,14 @@ impl StatementVerifier for ChainVerifier {
 
     fn statement_publics(&self, table: &str, publics: &[u8]) -> Result<Option<[u8; 32]>, String> {
         let c = &self.ch;
-        if table != TABLE || publics.len() != 16 * 2 * c.chunks * c.leaves {
+        let Some(digests) = self.digests.get(table) else {
+            return Err(format!("C4: {table} is not in the statement"));
+        };
+        if publics.len() != 16 * 2 * c.chunks * c.leaves {
             return Err(format!("C4: {table}: {} bytes of public words, want {}", publics.len(), 32 * c.chunks * c.leaves));
         }
         let w = bytes_f128(publics);
-        for (l, want) in self.digests.iter().enumerate() {
+        for (l, want) in digests.iter().enumerate() {
             let cvs: Vec<[u32; 8]> = (0..c.chunks).map(|j| unpack8(w[2 * (l * c.chunks + j)], w[2 * (l * c.chunks + j) + 1])).collect();
             if digest_of(&cvs) != *want {
                 return Err(format!("C4: the public chunk values of leaf {l} do not hash to its digest"));
@@ -381,9 +389,15 @@ impl StatementVerifier for ChainVerifier {
 }
 
 fn server(ch: &Arc<Chain>, digests: Vec<[u8; 32]>) -> Server {
-    let mut cfg = SessionConfig::flock_128_r2(vec![ch.spec()]);
-    cfg.link = Some(LinkSpec { sigma: ch.sigma(&digests), m: ch.m_link, points: 2 });
-    Server::new(cfg, Box::new(ChainVerifier { ch: ch.clone(), digests }))
+    server_tables(ch, vec![(TABLE.to_string(), digests)])
+}
+
+/// One session over several chain tables (L3): one Σ over all of them, one `Commit` carrying every root_B before the
+/// link points, one y per table and point.
+fn server_tables(ch: &Arc<Chain>, tables: Vec<(String, Vec<[u8; 32]>)>) -> Server {
+    let mut cfg = SessionConfig::flock_128_r2(tables.iter().map(|(n, _)| ch.spec_named(n)).collect());
+    cfg.link = Some(LinkSpec { sigma: ch.sigma(&tables.iter().flat_map(|(_, d)| d.clone()).collect::<Vec<_>>()), m: ch.m_link, points: 2 });
+    Server::new(cfg, Box::new(ChainVerifier { ch: ch.clone(), digests: tables.into_iter().collect() }))
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -578,6 +592,109 @@ fn session(ch: &Chain, t: SharedTransport, seed: u64, plan: &Plan) -> (Value, Ve
     )
 }
 
+#[derive(Clone, Copy, PartialEq)]
+enum L3Case {
+    Honest,
+    OneRootOnly,
+    SecondRootOther,
+    SecondYTampered,
+    ProofsSwapped,
+}
+
+/// Two chain tables in ONE session (L3): the second table's root is computed first (its prove runs up to the
+/// binding, where the hook stops it: the commit is deterministic), so the single `Commit` carries both roots before
+/// the link points are drawn; each table opens its own y at the shared points in both reps.
+fn session_l3(ch: &Arc<Chain>, case: L3Case) -> Value {
+    let names = ["chain0", "chain1"];
+    let data: Vec<Vec<u8>> = (0..2).map(|i| words(0xA + 0x100 * i as u64, ch.leaves * ch.k * 2)).collect();
+    let tables: Vec<(String, Vec<[u8; 32]>)> = (0..2).map(|i| (names[i].to_string(), leaf_digests(ch, &data[i]))).collect();
+    let s = Arc::new(Mutex::new(server_tables(ch, tables)));
+    let t = shared(InProc(s.clone()));
+    let runs: Vec<(Vec<Compression>, Vec<F128>)> = data.iter().map(|d| ch.run(d)).collect();
+    let root1: Vec<u8> = {
+        let mut got = None;
+        let mut stop = |cm: &Commitment| -> Vec<LinkClaim> {
+            got = Some(cm.cap.as_flattened().to_vec());
+            panic!("commit-only");
+        };
+        let _ = catch_unwind(AssertUnwindSafe(|| {
+            let mut fs = flock_prover::challenger::FsChallenger::with_hash(&domain(0), Default::default());
+            let circ = ch.r1cs.csc_lincheck_circuit();
+            let nu = ch.nu;
+            let rows = &runs[1].0;
+            let slots = vec![UnionSlotProverInput::in_place(move |dst| generate_witness_batch_major_partial_into(rows, nu, dst), circ)];
+            prove_fast_ligerito_union_circuit_linked(&ch.union(), &ch.shape.circuit, &runs[1].1, &ch.params(LigeritoProfile::Fast100), slots, Vec::new(), &mut stop, &mut fs)
+        }));
+        got.expect("commit-only pass reached the binding")
+    };
+    let mut cached: Option<(Vec<Vec<F128>>, Vec<F128>)> = None;
+    let res: Result<(), String> = (|| {
+        let hello = s.lock().unwrap().cfg.hello();
+        call(&t, Req::Hello(hello))?;
+        let mut proofs = vec![Vec::new(), Vec::new()];
+        for (ti, name) in names.iter().enumerate() {
+            for rep in 0..2 {
+                let mut lch = LiveChallenger::new(t.clone(), name, rep, &domain(rep))?;
+                let tt = t.clone();
+                let mut hook = |cm: &Commitment| -> Vec<LinkClaim> {
+                    if cached.is_none() {
+                        let mut r1 = root1.clone();
+                        if case == L3Case::SecondRootOther {
+                            r1[3] ^= 1;
+                        }
+                        let mut roots = vec![(names[0].to_string(), cm.cap.as_flattened().to_vec())];
+                        if case != L3Case::OneRootOnly {
+                            roots.push((names[1].to_string(), r1));
+                        }
+                        let publics = (0..2).map(|i| (names[i].to_string(), f128_bytes(&runs[i].1[ch.n_fixed..]))).collect();
+                        let root_f = sha256(b"flock-link/root-f-standin/v1/l3").to_vec();
+                        let pts = match call(&tt, Req::Commit { root_f, roots, publics }) {
+                            Ok(Resp::Coins(c)) => c.chunks(ch.m_link).map(|r| r.to_vec()).collect::<Vec<_>>(),
+                            other => panic!("LIVE-REFUSED commit: {other:?}"),
+                        };
+                        let mut ys = Vec::new();
+                        for (i, d) in data.iter().enumerate() {
+                            for r in &pts {
+                                let mut y = link_eval(d, r);
+                                if i == 1 && case == L3Case::SecondYTampered {
+                                    y.hi ^= 1;
+                                }
+                                ys.push(y);
+                            }
+                        }
+                        match call(&tt, Req::Link(f128_bytes(&ys))) {
+                            Ok(Resp::Ok) => {}
+                            other => panic!("LIVE-REFUSED y: {other:?}"),
+                        }
+                        cached = Some((pts, ys));
+                    }
+                    let (pts, ys) = cached.as_ref().unwrap();
+                    pts.iter().zip(&ys[2 * ti..2 * ti + 2]).map(|(r, y)| LinkClaim { point: ch.embed(r), value: *y }).collect()
+                };
+                let (rows, public) = &runs[ti];
+                let p = catch_unwind(AssertUnwindSafe(|| ch.prove(rows, public, LigeritoProfile::Fast100, &mut hook, &mut lch))).map_err(panic_msg)?;
+                proofs[ti].push(p);
+            }
+        }
+        if case == L3Case::ProofsSwapped {
+            proofs.swap(0, 1);
+        }
+        for (ti, name) in names.iter().enumerate() {
+            for rep in 0..2 {
+                call(&t, Req::Proof { table: name.to_string(), rep: rep as u32, bytes: proofs[ti][rep].clone() })?;
+            }
+        }
+        Ok(())
+    })();
+    let v: Value = match call(&t, Req::Finish) {
+        Ok(Resp::Verdict(v)) => serde_json::from_str(&v).unwrap(),
+        other => json!({"accepted": false, "why": format!("{other:?}")}),
+    };
+    let rec = s.lock().unwrap().record_json();
+    json!({"accepted": v["accepted"], "why": v["why"], "prover_stopped": res.err(), "reps": v["reps"],
+           "tables": rec["config"]["tables"].as_array().map(|a| a.len()), "link": rec["link"]["root_b_sha256"]})
+}
+
 fn inproc(ch: &Arc<Chain>, statement: &[u8]) -> (SharedTransport, Arc<Mutex<Server>>) {
     let s = Arc::new(Mutex::new(server(ch, leaf_digests(ch, statement))));
     (shared(InProc(s.clone())), s)
@@ -648,6 +765,19 @@ fn selftest(ch: Arc<Chain>) {
     let (st, _, _) = instance(&ch, 0xA, &h());
     let (_, other) = session(&ch, inproc(&ch, &st).0, 0xA, &h());
     t("cross_session_replay_both_reps", "link neg 15", Plan { substitute: Some(other), ..h() }, false);
+    for (case, name, want) in [
+        (L3Case::Honest, "l3_two_tables_one_session", true),
+        (L3Case::OneRootOnly, "l3_points_before_second_root", false),
+        (L3Case::SecondRootOther, "l3_second_table_binds_other_root", false),
+        (L3Case::SecondYTampered, "l3_second_table_y_tampered", false),
+        (L3Case::ProofsSwapped, "l3_tables_proofs_swapped", false),
+    ] {
+        let v = session_l3(&ch, case);
+        let acc = v["accepted"].as_bool().unwrap_or(false);
+        all.set(all.get() && acc == want);
+        println!("NEG\t{}", json!({"case": name, "maps_to": "L3", "expect": if want {"accept"} else {"reject"}, "accepted": acc,
+            "pass": acc == want, "why": v["why"], "prover_stopped": v["prover_stopped"], "reps": v["reps"], "roots": v["link"]}));
+    }
     println!("SELFTEST\t{}", json!({"vus": ch.vus, "k": ch.k, "rows": ch.rows, "m_link": ch.m_link, "all_pass": all.get()}));
 }
 
