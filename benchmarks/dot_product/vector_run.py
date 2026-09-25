@@ -753,6 +753,17 @@ def run_sp1_bare(a) -> int:
 
 SP1_COMMITTED_HOST = "/workspace/bin/veritor-zk-host-cuda-relation-committed"
 SP1_COMMITTED_BACKEND_NAME = "sp1 relation-committed/v1 (stock SP1 6.4.0, frame-v3 SHA-256 rows; core STARK, CUDA prover)"
+#: ``--committed-scheme``: the host build, guest feature, statement and Table 2 scheme of each commitment scheme.
+SP1_COMMITTED_SCHEMES = {
+    "frame-v3": {"host": SP1_COMMITTED_HOST, "backend_name": SP1_COMMITTED_BACKEND_NAME, "feature": "relation-committed",
+                 "statement": "relation-committed/v1", "scheme": "frame-v3/sha256", "workload": "sp1-relation-committed",
+                 "commitment": "SHA-256 collision resistance (sha256/row/v1 digests, frame-v3 trees)"},
+    "vllm-v1": {"host": "/workspace/bin/veritor-zk-host-cuda-relation-committed-vllm",
+                "backend_name": "sp1 relation-committed-vllm/v1 (stock SP1 6.4.0, vllm-v1 SHA-256 position leaves; core STARK, CUDA prover)",
+                "feature": "relation-committed-vllm", "statement": "relation-committed-vllm/v1", "scheme": "vllm-v1",
+                "workload": "sp1-relation-committed-vllm",
+                "commitment": "SHA-256 collision resistance (vllm-v1 position leaves, node/lift tree, step-root bindings over verifier-derived domains)"},
+}
 #: soundcalc on SP1's own configuration, per shard proof, additive (kb/sp1-prover.md; lane sp1-128)
 SP1_PER_SHARD_LOG2 = -99.0
 
@@ -787,8 +798,9 @@ def run_sp1_committed(a) -> int:
     out = Path(a.out or os.environ.get("RESEARCH_RUN_DIR") or ".").resolve()
     out.mkdir(parents=True, exist_ok=True)
     proofs_dir, log, prove_log = out / "proofs", out / "host.log", out / "prover.log"
-    host = Path(a.host or SP1_COMMITTED_HOST)
-    backend_name = a.backend_name or SP1_COMMITTED_BACKEND_NAME
+    sc = SP1_COMMITTED_SCHEMES[a.committed_scheme]
+    host = Path(a.host or sc["host"])
+    backend_name = a.backend_name or sc["backend_name"]
     prover_env = dict(kv.split("=", 1) for kv in a.prover_env)
     cpu_env = {**os.environ, "SP1_PROVER": "cpu", "RUST_LOG": "error"}
     gpu_env = {**os.environ, **prover_env, "SP1_PROVER": "cuda", "RUST_LOG": "debug"}
@@ -810,12 +822,13 @@ def run_sp1_committed(a) -> int:
     base = ref["range"][0]
     instances = contract.instances_ref(ref["tier"], base + lo, base + hi, ref["manifest_sha256"], dataset=ref["dataset"])
     per_read = ["--vus-per-read", str(a.vus_per_read)]
-    print(f"sp1-committed: {fmt} {instances} on {host}", flush=True)
+    print(f"sp1-committed: {a.committed_scheme} {fmt} {instances} on {host}", flush=True)
 
     rc, text, _ = _run_logged([str(host), "info"], cpu_env, log, 900)
     info = (_json_lines(text) or [{}])[-1]
-    if rc != 0 or "relation-committed" not in info.get("guest_features", []):
-        raise SystemExit(f"sp1-committed: {host} is not a relation-committed build: rc {rc} {info}")
+    features = info.get("guest_features", [])
+    if rc != 0 or "relation-committed" not in features or (("relation-committed-vllm" in features) != (a.committed_scheme == "vllm-v1")):
+        raise SystemExit(f"sp1-committed: {host} is not a {sc['feature']} build: rc {rc} {info}")
     vk = info["vk_hash"]
     if a.expect_vk and a.expect_vk.lower() != vk.lower():
         raise SystemExit(f"sp1-committed: the host's vk {vk} is not the pinned {a.expect_vk}")
@@ -940,7 +953,7 @@ def run_sp1_committed(a) -> int:
                 "source": "kb/sp1-prover.md: soundcalc @2af5e7d on SP1's gen_soundcalc_toml configuration (lane sp1-128), 2^-99.0 per shard "
                           "proof, additive; SP1_TARGET_BITS_OF_SECURITY = 100 is SP1's own constant (sp1-primitives 6.6.0 fri_params.rs)",
                 "union_bound": f"{shards} shard proofs in the core proof: {SP1_PER_SHARD_LOG2:g} + log2({shards})",
-                "statement_commitment": "SHA-256 collision resistance (sha256/row/v1 digests, frame-v3 trees)",
+                "statement_commitment": sc["commitment"],
                 "flag": "algebraic hash inside SP1 (Poseidon2-KoalaBear Merkle trees and challenger): not for highest-stakes use"}
     software = {"backend": {"name": backend_name, "version": SP1_VERSION, "commit": sha},
                 "toolchain": {"sp1-sdk": SP1_VERSION, "sp1-zkvm": SP1_VERSION, "sp1-primitives": "6.6.0", "sp1-gpu-server": "6.6.0 (release binary)",
@@ -953,14 +966,17 @@ def run_sp1_committed(a) -> int:
     fp = contract.fingerprint(
         profile=target_name, domain=contract.DOMAIN, K=1536, B=B, proof_class="NON_ZK_PROOF", authentication="included-hash", zk_mode=contract.ZK_NONE,
         security=security, hardware=contract.probe_hardware(), software=software,
-        preprocessing={"setup": "SP1 setup of the relation-committed ELF (proving and verifying keys), once per ELF, outside t.total",
+        preprocessing={"setup": f"SP1 setup of the {sc['feature']} ELF (proving and verifying keys), once per ELF, outside t.total",
                        "setup_seconds": setup["setup_seconds"], "per_instance": "none"},
         retention="retained", instances=instances,
-        workload="sp1-relation-committed", statement="relation-committed/v1", format=fmt, scheme="frame-v3/sha256",
-        leaf={"scheme": "frame-v3", "schema": "sha256/row/v1", "hash": "sha256", "binding_tag": stmt_doc["binding_tag"],
-              "word_schema": stmt_doc["trees"][2]["schema"]},
+        workload=sc["workload"], statement=sc["statement"], format=fmt, scheme=sc["scheme"],
+        leaf=({"scheme": "frame-v3", "schema": "sha256/row/v1", "hash": "sha256", "binding_tag": stmt_doc["binding_tag"],
+               "word_schema": stmt_doc["trees"][2]["schema"]} if a.committed_scheme == "frame-v3" else
+              {"scheme": "vllm-v1", "leaf": "pos-leaf", "hash": "sha256", "root_binding": "step (host path)",
+               "values": {t["name"]: [t["value"], t["value_len"]] for t in stmt_doc["trees"]}}),
         commitment={"statement_sha256": _sha256_file(statement), "roots": {t["name"]: t["root"] for t in stmt_doc["trees"]},
-                    "identity": stmt_doc["identity"]},
+                    "identity": stmt_doc["identity"],
+                    **({"domain_digests": {t["name"]: t["domain_digest"] for t in stmt_doc["trees"]}} if a.committed_scheme == "vllm-v1" else {})},
         identity=setup["identity"], mode=a.mode, reps=len(reps), input_layout="chunks", vus_per_read=a.vus_per_read,
         input_bytes=setup["input_bytes"], warmup={"vus": warmup["vus"], "prove_seconds": warmup["prove_seconds"]} if warmup else None,
         fixtures=fixture_digests, protocol=protocol, sweep=sweep,
@@ -1012,7 +1028,7 @@ def run_sp1_committed(a) -> int:
     meas.append(measurement("workload_wall", time.perf_counter() - started, "s"))
     (out / "measurements.json").write_text(json.dumps(meas, indent=1) + "\n")
     ok = all(v["accepted"] for v in verdicts) and len(verdicts) == a.reps and (summary is None or summary["ok"]) and neg_ok
-    detail = (f"{len(reps)} {a.mode} proofs of B={B} ({fmt}), each after a fresh frame-v3 commit: commit {[round(r['commit_seconds'], 3) for r in reps]} s, "
+    detail = (f"{len(reps)} {a.mode} proofs of B={B} ({fmt}), each after a fresh {a.committed_scheme} commit: commit {[round(r['commit_seconds'], 3) for r in reps]} s, "
               f"prove {[round(r['prove_seconds'], 3) for r in reps]} s, serialize {[round(r['save_seconds'], 4) for r in reps]} s, {shards} shards, "
               f"{rep['proof_bytes']} B; committed-verify (SP1 under vk {vk}, then the three roots) in a fresh CPU process accepted "
               f"{sum(v['accepted'] for v in verdicts)}/{len(verdicts)}; proof negatives rejected "
@@ -1023,7 +1039,7 @@ def run_sp1_committed(a) -> int:
         "schema": RESULT_SCHEMA, "run_id": os.environ.get("RESEARCH_RUN_ID", "local"), "kind": "bench-result/v1", "workload_fingerprint": fp,
         "protocol": protocol, "sweep": sweep,
         "validation": {"status": "passed" if ok else "failed",
-                       "checker": "executor negatives + committed-verify (pinned vk, frame-v3 roots) on every dumped proof and proof negatives (producer)",
+                       "checker": f"executor negatives + committed-verify (pinned vk, {a.committed_scheme} roots) on every dumped proof and proof negatives (producer)",
                        "detail": detail, "evidence": {"reps": reps, "verify": verdicts, "proof_negatives": proof_negatives, "timeline": timeline,
                                                       "negatives": summary}},
         "measurements": meas, "measurement_files": ["measurements.json", "prove.json", "verify.json"] + (["negatives.json"] if summary else []),
@@ -1043,7 +1059,7 @@ def run_sp1_committed(a) -> int:
     os.replace(tmp, out / "result.json")
     if problems:
         print(f"contract: {len(problems)} problem(s): " + "; ".join(problems), file=sys.stderr)
-    print(json.dumps({"backend": "sp1-committed", "format": fmt, "B": B, "t_total": t_total, "commit_seconds": commit_s, "e2e_seconds": e2e,
+    print(json.dumps({"backend": "sp1-committed", "scheme": a.committed_scheme, "format": fmt, "B": B, "t_total": t_total, "commit_seconds": commit_s, "e2e_seconds": e2e,
                       "prove": rep["prove_seconds"], "serialize": rep["save_seconds"], "shards": shards, "security_log2": security["achieved_log2"],
                       "proof_bytes": rep["proof_bytes"], "cycles": execute_doc["total_cycles"] if execute_doc else None, "vk": vk,
                       "verify_s": verify_s, "sweep": sweep_points, "plateau": sweep["plateau"], "validation": result["validation"]["status"],
@@ -1061,6 +1077,8 @@ def main(argv: list[str] | None = None) -> int:
                       help=f"a relation-bare host binary (default $VERITY_SP1_HOST or {SP1_BARE_HOST}); sp1-committed: {SP1_COMMITTED_HOST}")
     bare.add_argument("--backend-name", default=None, help="software.backend.name (Candidate SP1 recognises 'sp1...')")
     bare.add_argument("--expect-vk", default=None, help="sp1-committed: the pinned verifying-key hash; another embedded guest is refused")
+    bare.add_argument("--committed-scheme", default="frame-v3", choices=sorted(SP1_COMMITTED_SCHEMES),
+                      help="sp1-committed: the commitment scheme (its own host build and guest ELF)")
     bare.add_argument("--sweep-b", default=None, help="sp1-committed: comma-separated smaller B for the plateau sweep (2 warm reps each)")
     bare.add_argument("--variant", default=None,
                       help="JSON file naming a modified SP1 variant: {backend_name, label, toolchain, fork, verifier_name} (all optional)")
