@@ -209,6 +209,8 @@ def test_pipelined_prover_publishes_the_sequential_statement(name: str, runners)
         assert proof.timings["auth_openings"] >= 0 and proof.timings["total"] + proof.timings.get("hints_host", 0.0) > 0
 
 
+# sha256 is 47 full proofs: ~15 min on 4 idle vCPUs (art:020560e1), past a runner-wide 1800 s on a loaded host
+@pytest.mark.timeout(3600)
 @pytest.mark.parametrize("name", SCHEMES)
 def test_committed_operand_negatives_rejected(name: str, runners) -> None:
     R, data = runners[name]
