@@ -2122,6 +2122,7 @@ def bench_vu_rel(args, rel: Relation) -> int:
         wall = time.perf_counter() - t_pass
         if rep == 0:
             print("warm-up (one sub-batch, with the prover's self-check):", {k_: round(v_, 3) for k_, v_ in agg.items()})
+            commit_cold = agg.get("commitment")
             continue
         keys = agg.keys()
         runs.append((agg, vsum))
@@ -2136,12 +2137,7 @@ def bench_vu_rel(args, rel: Relation) -> int:
         print(f"dumped {len(dump_manifest['files'])} proofs to {dump_dir}", flush=True)
         dumps = _verify_dumps(dump_dir, dump_manifest, R, args.device, target_bits)
     # t.total and every bucket come from one rep (phases.median_rep); the per-key medians are printed as diagnostics only
-    if commit_per_rep:
-        # the reported rep is the one with the median END-TO-END time (commitment + proving), which is what P divides
-        e2e_of = [phases.prover_seconds(r[0]) + r[0]["commitment"] for r in runs]
-        med_rep = sorted(range(len(runs)), key=lambda i: e2e_of[i])[len(runs) // 2]
-    else:
-        med_rep = phases.median_rep(runs)
+    med_rep = phases.median_rep(runs)
     med = dict(runs[med_rep][0])
     per_key_med = {k_: statistics.median(r[0][k_] for r in runs) for k_ in keys}
     vmed = statistics.median(r[1] for r in runs)
@@ -2272,21 +2268,24 @@ def bench_vu_rel(args, rel: Relation) -> int:
                  contract.measurement("relation.hash.committed_x_rows", R.trees["a"].count, "count"),
                  contract.measurement("relation.hash.committed_w_cols", R.trees["b"].count, "count")]
     if commit_per_rep:
-        e2e = total + med["commitment"]
+        c_med = statistics.median(r[0]["commitment"] for r in runs)
+        e2e = total + c_med
         native = contract.native_reference(rel.target.name).flop_per_second
-        meas += [contract.measurement("commitment.seconds", med["commitment"], "s"),
-                 contract.measurement("commitment.row_chain_seconds", med["row_chain"], "s"),
-                 contract.measurement("commitment.statement_seconds", med["statement"], "s"),
-                 contract.measurement("end_to_end.seconds", e2e, "s"),
-                 contract.measurement("end_to_end.vu_per_second", total_vus / e2e, "1/s"),
-                 contract.measurement("end_to_end.overhead_vs_native_peak", native * e2e / (2 * K_VU * total_vus), "ratio")]
+        meas += [contract.measurement("commit.seconds", c_med, "s"),
+                 contract.measurement("commit.cold_seconds", commit_cold, "s"),
+                 contract.measurement("commit.reps", len(runs), "count"),
+                 contract.measurement("commit.row_chain_seconds", med["row_chain"], "s"),
+                 contract.measurement("commit.statement_seconds", med["statement"], "s"),
+                 contract.measurement("e2e.seconds", e2e, "s"),
+                 contract.measurement("e2e.vu_per_second", total_vus / e2e, "1/s"),
+                 contract.measurement("e2e.overhead_vs_native_peak", native * e2e / (2 * K_VU * total_vus), "ratio")]
         fp["commitment"] = {
             "per_rep": True, "scheme": "frame-v3", "leaf_schema": R.leaf.schema, "trees": ["x", "W", "y"],
             "committer": "relchain.HashedRelationRunner.commit_vus (hashauth.load_or_build_trees, no cache)",
-            "timed": "commitment.seconds = the x / W / y trees and their row digests, per rep; the prover's row chains "
-                     "(commitment.row_chain_seconds) are in t.witness and rebuilding the hashed statements "
-                     "(commitment.statement_seconds) in t.serialization, both inside t.total; end_to_end.seconds = "
-                     "commitment.seconds + t.total, from the rep with the median end-to-end time"}
+            "timed": "--commit-per-rep: every rep commits its batch afresh before proving it; commit.seconds = the median over "
+                     "the timed reps of the x / W / y trees and their row digests (commit.cold_seconds = the warm-up rep's); the "
+                     "prover's row chains (commit.row_chain_seconds) are in t.witness and rebuilding the hashed statements "
+                     "(commit.statement_seconds) in t.serialization, both inside t.total; e2e.seconds = commit.seconds + t.total"}
     if shared:
         meas += [contract.measurement("relation.share.g_seconds", med.get("g_total", 0.0), "s"),
                  contract.measurement("relation.share.h_seconds", med.get("h_total", 0.0), "s"),
@@ -2315,7 +2314,7 @@ def bench_vu_rel(args, rel: Relation) -> int:
     status = "passed"
     evidence = {"soundness": snd, "batch": batch,
                 "reps": [{"prover_total": r[0]["total"] + r[0]["hints_host"], "verifier": r[1],
-                          **({"commitment": r[0]["commitment"], "end_to_end": r[0]["total"] + r[0]["hints_host"] + r[0]["commitment"]}
+                          **({"commit": r[0]["commitment"], "e2e": r[0]["total"] + r[0]["hints_host"] + r[0]["commitment"]}
                              if commit_per_rep else {})} for r in runs],
                 "phase_rep": {"index": med_rep, "rule": "t.total and the t.* buckets are this rep's (the median prover_total of "
                                                         "reps); verifier.seconds is the median over the reps"},
