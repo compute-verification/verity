@@ -340,7 +340,9 @@ def prove(a) -> int:
                            "t.arithmetic": st.t_arith + st.t_open_acc + st.t_open_wq, "t.lookup": st.t_mults + st.t_lookup,
                            "t.zk_additional": 0.0, "t.serialization": st.t_open_cols + t_bytes},
                "prime": {"ligero_rows": st.ligero_rows, "linkage_constraints": st.linkage_constraints, "committed_elements": st.committed_elements,
-                         "sequential_depth": st.sequential_depth(True), "live_rounds": st.live_rounds, "slots": st.slots,
+                         # live coins serialise the whole transcript: every round is sequential (the parallel depth is the FS figure)
+                         "sequential_depth": st.live_rounds if tr is not None else st.sequential_depth(True), "parallel_depth": st.sequential_depth(True),
+                         "live_rounds": st.live_rounds, "slots": st.slots,
                          "peak_mem_bytes": st.peak_mem},
                "flock_rc": rc, "flock": flive[0] if flive else None, "python_verify": py, "python_verify_s": t_py,
                "proof_bytes": len(data), "proof_sha256": hashlib.sha256(data).hexdigest(), **tw}
@@ -398,7 +400,6 @@ def result(a, cell: Path, meta: dict, rows: list[dict]) -> None:
     import bench_result as br
 
     timed = [r for r in rows if not r["warmup"]]
-    med = sorted(timed, key=lambda r: r["t_total"])[len(timed) // 2]
     n = meta["vus"]
     prime = json.loads((cell / "prime_soundness.json").read_text())
     terms = {"A-GKR prime proof (incl. the link's sigma batching and Schwartz-Zippel over two GF(2^128) points)": prime["achieved_log2"],
@@ -407,7 +408,6 @@ def result(a, cell: Path, meta: dict, rows: list[dict]) -> None:
     ok = all(r["python_verify"] == "accept" and r["flock"] and r["flock"].get("accepted") and (r.get("rust") or {}).get("accepted")
              for r in timed)
     rust = [r["rust"]["verify_seconds"] for r in timed if (r.get("rust") or {}).get("verify_seconds") is not None]
-    flock_bytes = sum((med["flock"] or {}).get("proof_bytes", []))
     # NON_ZK_PROOF only when every timed session's prime coins were the live verifier's and were replayed as such
     live = all((r.get("net") or {}).get("prime_coins") == "live" and (r.get("rust") or {}).get("prime_coins") == "live" for r in timed)
     mode = ("interactive (one live session: every A-GKR challenge -- the GKR and LogUp coins, the sigma batching rho, the "
@@ -446,34 +446,8 @@ def result(a, cell: Path, meta: dict, rows: list[dict]) -> None:
               f"the Flock prover's time is in Other when it is the longer; serving commit {meta.get('serving_commit_seconds', 0):.2f} s "
               f"(CPU reference committer) outside t.total"),
     )
-    tt = med["t_total"]
-    meas = [contract.measurement(k, v) for k, v in med["buckets"].items()]
-    meas += [contract.measurement("t.total", tt), contract.measurement("transcript.bytes", med["proof_bytes"] + flock_bytes),
-             contract.measurement("vu.count", n), contract.measurement("vu.seconds_per_vu", tt / n), contract.measurement("vu.per_second", n / tt),
-             *contract.rate_measurements(tt, n, 1536, contract.PROFILE),
-             br._m("t_total_min", min(r["t_total"] for r in timed), "s"), br._m("t_total_max", max(r["t_total"] for r in timed), "s"),
-             br._m("t_prime_seconds", med["t_prime_prove_s"], "s"), br._m("t_flock_seconds", med["t_flock_prove_s"], "s"),
-             br._m("t_session_wall_seconds", med["t_cell_s"], "s"), br._m("soundness_bits", -ach, "bits"),
-             br._m("commit.serving_seconds", meta.get("serving_commit_seconds", 0.0), "s")]
-    nets = [r["net"] for r in timed if r.get("net")]
-    md = lambda k: statistics.median(float(x[k]) for x in nets if x.get(k) is not None)   # noqa: E731
-    if nets:
-        # interactive record (coordinator 1836Z): rounds, bytes each way, RTT and the wall split, median session
-        meas += [br._m("session.rounds", md("rounds"), "count"), br._m("session.bytes_up", md("bytes_up"), "bytes"),
-                 br._m("session.bytes_down", md("bytes_down"), "bytes"), br._m("net.rtt_in_session_ms", md("in_session_rtt_ms"), "ms"),
-                 br._m("flock.prover_compute_seconds", md("flock_prover_compute_s"), "s"), br._m("flock.network_wait_seconds", md("flock_wait_s"), "s"),
-                 br._m("flock.verifier_compute_seconds", md("verifier_compute_s"), "s"), br._m("session.flock_rounds", md("flock_rounds"), "count")]
-        if live:
-            # the live prime coins' cost: their rounds and bytes, the prime prover's wait, and the part of it before root_F
-            # (on the critical path: Flock's Commit, and so every Flock round, waits for root_F)
-            meas += [br._m("session.prime_rounds", md("prime_rounds"), "count"),
-                     br._m("session.prime_rounds_before_root_f", md("prime_rounds_before_root_f"), "count"),
-                     br._m("session.prime_bytes_up", md("prime_bytes_up"), "bytes"), br._m("session.prime_bytes_down", md("prime_bytes_down"), "bytes"),
-                     br._m("prime.network_wait_seconds", md("prime_wait_s"), "s"), br._m("prime.wait_before_root_f_seconds", md("prime_wait_before_root_f_s"), "s")]
-        if a.rtt_ms is not None:
-            meas.append(br._m("net.rtt_probe_ms", a.rtt_ms, "ms"))
-    if rust:
-        meas.append(contract.measurement("verifier.seconds", statistics.median(rust)))
+    meas, med, tt, ix = session_measurements(contract, timed, n, live, a.rtt_ms, a.rtt_method, -ach, meta.get("serving_commit_seconds", 0.0), rust)
+    fp["interaction"] = ix
     res = {"schema": contract.RESULT_SCHEMA, "run_id": os.environ.get("RESEARCH_RUN_ID"), "kind": "bench-result/v1", "workload_fingerprint": fp,
            "validation": {"status": "passed" if ok else "failed",
                           "checker": "per session: the live Flock verifier's verdict, gpu.prover.verify and verity-gkr-verify against the session's link",
@@ -483,6 +457,96 @@ def result(a, cell: Path, meta: dict, rows: list[dict]) -> None:
     res["contract_problems"] = contract.validate(res)
     Path(a.result).write_text(json.dumps(res, indent=1, default=str))
     print(f"result {a.result}: t.total {tt:.3f} s, bound 2^{ach:.1f}, problems {res['contract_problems']}", flush=True)
+
+
+def critical_wait(r: dict) -> float:
+    """The network wait on a session's critical path.  Flock is the longer prover: its Commit waits for root_F, so the
+    prime rounds before root_F are on its path, then its own rounds; else the prime prover's own rounds."""
+    n = r.get("net") or {}
+    if r["t_flock_prove_s"] >= r["t_prime_prove_s"]:
+        return float(n.get("prime_wait_before_root_f_s") or 0.0) + float(n.get("flock_wait_s") or 0.0)
+    return float(n.get("prime_wait_s") or 0.0)
+
+
+def session_measurements(contract, timed: list[dict], n: int, live: bool, rtt_ms, rtt_method, soundness_bits: float,
+                         serving_s: float, rust: list[float]):
+    """The envelope's measurements from the timed sessions.  The contract's ``t.total`` is the prover without its network
+    waits and ``t.total_live`` the wall with them; the median session is the median ``t.total``.  ``rounds.sequential_depth``
+    is every round of the session (one connection; the live prime transcript is sequential, and Flock's rounds follow
+    root_F), ``net.*`` the session's.  Returns (measurements, the median session, its t.total, the interaction block)."""
+    import statistics
+
+    import bench_result as br
+
+    comp = lambda r: r["t_total"] - critical_wait(r)   # noqa: E731
+    med = sorted(timed, key=comp)[len(timed) // 2]
+    tt, nm = comp(med), med.get("net") or {}
+    flock_bytes = sum((med["flock"] or {}).get("proof_bytes", []))
+    meas = [contract.measurement(k, v) for k, v in med["buckets"].items()]
+    meas += [contract.measurement("t.total", tt), contract.measurement("t.total_live", med["t_total"]),
+             contract.measurement("transcript.bytes", med["proof_bytes"] + flock_bytes),
+             contract.measurement("vu.count", n), contract.measurement("vu.seconds_per_vu", tt / n), contract.measurement("vu.per_second", n / tt),
+             *contract.rate_measurements(tt, n, 1536, contract.PROFILE),
+             br._m("t_total_min", min(comp(r) for r in timed), "s"), br._m("t_total_max", max(comp(r) for r in timed), "s"),
+             br._m("t_total_live_min", min(r["t_total"] for r in timed), "s"), br._m("t_total_live_max", max(r["t_total"] for r in timed), "s"),
+             br._m("t_prime_seconds", med["t_prime_prove_s"], "s"), br._m("t_flock_seconds", med["t_flock_prove_s"], "s"),
+             br._m("t_session_wall_seconds", med["t_cell_s"], "s"), br._m("soundness_bits", soundness_bits, "bits"),
+             br._m("commit.serving_seconds", serving_s, "s")]
+    ix = None
+    if nm:
+        meas += [contract.measurement("rounds.sequential_depth", nm["rounds"]), contract.measurement("rounds.protocol", nm["rounds"]),
+                 contract.measurement("net.messages", nm["rounds"]), contract.measurement("net.wait_seconds", critical_wait(med)),
+                 contract.measurement("net.bytes_out", nm["bytes_up"]), contract.measurement("net.bytes_in", nm["bytes_down"]),
+                 br._m("session.flock_rounds", nm["flock_rounds"], "count"), br._m("net.rtt_in_session_ms", nm["in_session_rtt_ms"], "ms"),
+                 br._m("flock.prover_compute_seconds", nm["flock_prover_compute_s"], "s"), br._m("flock.network_wait_seconds", nm["flock_wait_s"], "s"),
+                 br._m("flock.verifier_compute_seconds", nm["verifier_compute_s"], "s")]
+        if live:
+            meas += [br._m("session.prime_rounds", nm["prime_rounds"], "count"),
+                     br._m("session.prime_rounds_before_root_f", nm["prime_rounds_before_root_f"], "count"),
+                     br._m("session.prime_bytes_up", nm["prime_bytes_up"], "bytes"), br._m("session.prime_bytes_down", nm["prime_bytes_down"], "bytes"),
+                     br._m("prime.network_wait_seconds", nm["prime_wait_s"], "s"), br._m("prime.wait_before_root_f_seconds", nm["prime_wait_before_root_f_s"], "s")]
+        if rtt_ms is not None:
+            meas.append(contract.measurement("net.rtt_ms", rtt_ms))
+        ix = {"rtt_method": rtt_method, "rounds": (f"{nm['rounds']} = {nm.get('prime_rounds', 0)} prime ({nm.get('prime_rounds_before_root_f', 0)} before "
+                                                   f"root_F) + {nm['flock_rounds']} Flock, one connection, all sequential"),
+              "wait": "prime rounds before root_F + Flock's rounds (Flock is the longer prover and its Commit waits for root_F)",
+              "t_total": "t.total_live (wall from the start signal) - net.wait_seconds"}
+    if rust:
+        meas.append(contract.measurement("verifier.seconds", statistics.median(rust)))
+    return meas, med, tt, ix
+
+
+def rederive(src: Path, out: Path, supersedes: str | None) -> dict:
+    """A new envelope from an old one's embedded sessions (no pod): the measurements and the interaction block again, from
+    the same runs; the fingerprint, hardware and evidence are kept."""
+    for p in (HERE.parents[1] / "packages" / "verity" / "src", HERE.parents[1] / "backends" / "numerical" / "python"):
+        sys.path.insert(0, str(p))
+    from verity_numerical.bench import contract
+
+    old = json.loads(src.read_text())
+    timed = old["validation"]["evidence"]["sessions"]
+    for r in timed:
+        pr = r.get("prime") or {}
+        if (r.get("net") or {}).get("prime_coins") == "live" and pr.get("live_rounds"):
+            pr.setdefault("parallel_depth", pr.get("sequential_depth"))
+            pr["sequential_depth"] = pr["live_rounds"]
+    om = {m["name"]: m["value"] for m in old["measurements"]}
+    fp = old["workload_fingerprint"]
+    live = fp.get("security", {}).get("prime_coins") == "live"
+    rust = [r["rust"]["verify_seconds"] for r in timed if (r.get("rust") or {}).get("verify_seconds") is not None]
+    rtt = om.get("net.rtt_ms", om.get("net.rtt_probe_ms"))
+    method = next((r["net"].get("rtt_probe_method") for r in timed if (r.get("net") or {}).get("rtt_probe_method")), None)
+    meas, med, tt, ix = session_measurements(contract, timed, fp["B"], live, rtt, method, om["soundness_bits"], om.get("commit.serving_seconds", 0.0), rust)
+    fp = dict(fp, interaction=ix)
+    new = dict(old, workload_fingerprint=fp, measurements=meas,
+               derived_from={"artifact": supersedes, "run_id": old.get("run_id"), "tool": "backends/gkr/tools/cell.py rederive",
+                             "why": "t.total without the network waits (t.total_live the wall), rounds.sequential_depth = the session's "
+                                    "rounds (the prime half's live transcript is sequential: 328 was its parallel Fiat-Shamir depth), net.*"})
+    new["contract_problems"] = contract.validate(new)
+    out.write_text(json.dumps(new, indent=1, default=str))
+    print(f"rederived {out}: t.total {tt:.3f} s (t.total_live {med['t_total']:.3f} s), rounds {(med.get('net') or {}).get('rounds')}, "
+          f"problems {new['contract_problems']}", flush=True)
+    return new
 
 
 def main(argv=None) -> int:
@@ -511,6 +575,10 @@ def main(argv=None) -> int:
                    help="negative: commit a stale prime state at this round (the session record then fails replay)")
     p.add_argument("--prime-coins", choices=("live", "fs"), default="live",
                    help="live: the session's verifier issues every prime challenge (NON_ZK_PROOF); fs: the prime half's own Fiat-Shamir (diagnostic)")
+    d = sub.add_parser("rederive", help="a new envelope from an old one's embedded sessions (no pod)")
+    d.add_argument("--from", dest="src", required=True)
+    d.add_argument("--result", required=True)
+    d.add_argument("--supersedes", default=None, help="the old envelope's art: id")
     r = sub.add_parser("result", help="the bench-result/v1 envelope from CELL/sessions.json (on the prover pod: it probes the hardware)")
     r.add_argument("--cell", required=True)
     r.add_argument("--sessions-json", action="append", default=[], help="more sessions.json files (other runs of the same cell)")
@@ -519,6 +587,9 @@ def main(argv=None) -> int:
     r.add_argument("--rtt-ms", type=float, default=None)
     r.add_argument("--rtt-method", default=None)
     a = ap.parse_args(argv)
+    if a.cmd == "rederive":
+        rederive(Path(a.src), Path(a.result), a.supersedes)
+        return 0
     if a.cmd == "result":
         cell = Path(a.cell)
         rows = [r for f in [cell / "sessions.json", *map(Path, a.sessions_json)] for r in json.loads(Path(f).read_text())]

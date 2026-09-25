@@ -654,16 +654,24 @@ fn verify_path(root: &Digest, j: usize, col: &Column) -> bool {
 
 /// Live coins: the query set is one round (`gpu/ligero.py::OPEN_SET_SPARE`).
 const OPEN_SET_SPARE: usize = 8;
+/// Draws before the query set is refused as incomplete (t distinct of n: ~t (1 + t / 2n) draws expected).
+const OPEN_SET_MAX_DRAWS: usize = 64;
 
-fn open_set(tr: &mut Transcript, n: usize, t: usize) -> Vec<usize> {
+/// A replayed round that is missing or short fills the query coins with zeros, so every index repeats: stop at the
+/// transcript's first replay failure, and after a bounded number of draws in any case.
+fn open_set(tr: &mut Transcript, n: usize, t: usize) -> Result<Vec<usize>, String> {
     let mut set = Vec::with_capacity(t);
     tr.reserve(t + OPEN_SET_SPARE);
+    let mut draws = 0;
     while set.len() < t {
+        if let Some(f) = tr.live_failure() { return Err(f); }
+        if draws >= OPEN_SET_MAX_DRAWS * t.max(1) { return Err(format!("ligero: query set incomplete after {draws} draws ({} of {t})", set.len())); }
+        draws += 1;
         let c = tr.challenge();
         let j = (c.0[0] as u64 % n as u64) as usize;
         if !set.contains(&j) { set.push(j); }
     }
-    set
+    Ok(set)
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -713,6 +721,7 @@ fn verify_inner(stmt: &Statement, proof_bytes: &[u8], p: &Params, threads: usize
         let lc = verify_table(n, &mut tr, &mut rd, &t.name)?;
         lookup_claims.push((n, lc));
     }
+    if let Some(f) = tr.live_failure() { return Err(f); }
     let mut finals: Vec<(FinalClaims, Vec<Ext>)> = Vec::new();
     for (si, seg) in stmt.segs.iter().enumerate() {
         let b = log2ceil(seg.units);
@@ -725,6 +734,7 @@ fn verify_inner(stmt: &Statement, proof_bytes: &[u8], p: &Params, threads: usize
             claim = next;
         }
     }
+    if let Some(f) = tr.live_failure() { return Err(f); }
     let link_term = match &stmt.link {
         Some(ls) => {
             if ls.layout.ncols != stmt.segs[0].ncols() || ls.layout.vus * ls.layout.steps != stmt.segs[0].units { return Err("link: layout disagrees with the unit segment".into()); }
@@ -739,6 +749,7 @@ fn verify_inner(stmt: &Statement, proof_bytes: &[u8], p: &Params, threads: usize
         None => None,
     };
     if rd.pos != proof.msgs.len() { return Err("trailing proof data".into()); }
+    if let Some(f) = tr.live_failure() { return Err(f); }
     let rhos = tr.challenges(n_functionals(stmt));
     let geo = tr.challenge();
     let (rho_b, geo_b) = if stmt.bind.is_some() { (tr.challenge(), tr.challenge()) } else { (Ext::ZERO, Ext::ZERO) };
@@ -871,7 +882,7 @@ fn verify_inner(stmt: &Statement, proof_bytes: &[u8], p: &Params, threads: usize
     tr.absorb_exts(&op.w);
     tr.absorb_exts(&op.qc);
     if (op.qc[0] + op.qc[p.k]).scale((p.k as u64 % P64) as u32) != b { return Err("ligero: linear functional value mismatch".into()); }
-    let set = open_set(&mut tr, p.n, p.t);
+    let set = open_set(&mut tr, p.n, p.t)?;
     tr.live_finish()?;
     st.slots = tr.slots;
     st.live_rounds = tr.live_rounds();
@@ -990,5 +1001,72 @@ fn verify_inner(stmt: &Statement, proof_bytes: &[u8], p: &Params, threads: usize
     match (res, tr.live_failure()) {
         (Err(e), Some(f)) if e != f => Err(format!("{f} (then the verifier: {e})")),
         (res, _) => res,
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::transcript::{LiveCoins, Round, LIVE_TAG};
+    use crate::sha256::Sha256;
+
+    /// The record a live prover leaves for: absorb, then one query round of `t + OPEN_SET_SPARE` coins.
+    fn query_round(t: usize, n: usize) -> LiveCoins {
+        let mut tr = Transcript::new(b"q");
+        tr.absorb(b"w, qc");
+        let state: [u8; 32] = {
+            let mut s = Sha256::new();
+            s.update(&Sha256::digest(b"q"));
+            s.update(b"w, qc");
+            s.finalize()
+        };
+        let k = t + OPEN_SET_SPARE;
+        let words: Vec<u32> = (0..DEG * k).map(|i| ((i / DEG) * 7919 % n) as u32).collect();
+        let _ = LIVE_TAG;
+        LiveCoins { rounds: vec![Round { state, n: k, words }], before_commit: 0 }
+    }
+
+    fn run(rec: LiveCoins, t: usize, n: usize) -> Result<Vec<usize>, String> {
+        let mut tr = Transcript::replay(b"q", rec);
+        tr.absorb(b"w, qc");
+        open_set(&mut tr, n, t)
+    }
+
+    #[test]
+    fn query_set_replays() {
+        assert_eq!(run(query_round(8, 1 << 10), 8, 1 << 10).unwrap().len(), 8);
+    }
+
+    #[test]
+    fn dropped_last_round_fails_fast() {
+        // the case that spun for 35 minutes: the record lost its last (query) round, so every coin was zero
+        let mut rec = query_round(192, 1 << 14);
+        rec.rounds.pop();
+        let t0 = std::time::Instant::now();
+        let e = run(rec, 192, 1 << 14).unwrap_err();
+        assert!(e.contains("no such coin"), "{e}");
+        assert!(t0.elapsed().as_millis() < 1000);
+    }
+
+    #[test]
+    fn short_round_fails_fast() {
+        // a round with fewer coins than the verifier draws: the replay refuses the count before any index
+        let mut rec = query_round(192, 1 << 14);
+        rec.rounds[0].n = 100;
+        rec.rounds[0].words.truncate(DEG * 100);
+        let e = run(rec, 192, 1 << 14).unwrap_err();
+        assert!(e.contains("challenges drawn"), "{e}");
+    }
+
+    #[test]
+    fn repeating_coins_fail_fast() {
+        // well-formed but degenerate coins (every index the same): refused after the draw cap, not an endless loop
+        let mut rec = query_round(4, 16);
+        for w in &mut rec.rounds[0].words { *w = 0; }
+        let t0 = std::time::Instant::now();
+        let e = run(rec, 4, 16).unwrap_err();
+        assert!(e.contains("query set incomplete") || e.contains("no such coin"), "{e}");
+        assert!(t0.elapsed().as_millis() < 1000);
     }
 }
