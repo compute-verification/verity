@@ -17,9 +17,9 @@ Until the switch (a labelled 6 PM PT digest) the published tables stay :mod:`ver
   backend family (:data:`FAMILIES`).  ``N`` is the
   compute-bound datasheet estimate (:func:`native`); ``P`` is instances per second end to end, committing the batch's values and
   then proving (:func:`throughput`).  A cell is the family's best admissible configuration (highest ``P``, ties to the lower
-  artifact id) that proves the full relation over an admissible scheme and passes the view's filters (:class:`Rules`: by
-  default a whole-proof bound of 2^-128 and no algebraic hash in the soundness argument), marked ``(prov.)`` while its
-  configuration's statement has no red-team clearance on that subcircuit.
+  artifact id) that proves the full relation over a core-defined scheme and passes the view's filters (:class:`Rules`: by
+  default a whole-proof bound of 2^-128), marked ``(prov.)`` while its configuration's statement has no red-team clearance on
+  that subcircuit and ``(alg.)`` when its soundness argument uses an algebraic hash (flagged in Table 1).
 * **Table 3** -- where the time goes: seconds per instance of commitment and of each proving bucket, with shares of end to end,
   and the cell split into serving overhead (commitment x N) and proving overhead (proving x N).
 
@@ -64,10 +64,13 @@ COMMIT = "commit.seconds"
 #: v1 in-proof-hash results record their commitment once, before the timed runs (possibly a tree cache load): shown, never counted.
 COMMIT_V1 = "relation.hash.commit_seconds"
 MIN_RUNS = 5
+#: How Table 1 flags a configuration whose soundness argument uses an algebraic hash; its Table 2 cells carry ``(alg.)``.
+ALGEBRAIC_FLAG = "algebraic hash, not for highest-stakes use"
+
 #: The spec's reject reasons, in the order they are checked; ``B`` exists only under the legacy rules (today's batch and K).
 REASON_LETTERS: dict[str, str] = {
     "R": "weaker statement than the full relation", "Z": "not the family's declared class",
-    "S": "commitments on an inadmissible scheme", "L": "fails the view's security filter (the bound, or an algebraic hash)",
+    "S": "commitments on a scheme verity.commitments does not define", "L": "fails the view's security filter",
     "U": "not independently verified", "F": "proof files not preserved", "I": "another instance set", "K": "prover not on the line's GPU",
     "P": "phase-sum", "M": "protocol not met", "D": "capped by a red-team verdict", "X": "other", "B": "legacy: batch != 4096 or K != 1536"}
 _ORDER = {k: i for i, k in enumerate(REASON_LETTERS)}
@@ -79,7 +82,8 @@ _ORDER = {k: i for i, k in enumerate(REASON_LETTERS)}
 @dataclass(frozen=True)
 class Scheme:
     """A commitment scheme with the hash of its leaves (one Table 2 line per subcircuit, hardware class and admissible scheme).
-    ``core`` is where ``verity.commitments`` defines it (``None``: not defined there); ``standard``: built only on SHA-256 or BLAKE3."""
+    ``core`` is where ``verity.commitments`` defines it (``None``: not defined there, so inadmissible); ``standard``: built only on
+    standard hashes (SHA-256, BLAKE3) -- an algebraic scheme is admissible and flagged (:data:`ALGEBRAIC_FLAG`)."""
 
     id: str
     label: str
@@ -88,7 +92,7 @@ class Scheme:
 
     @property
     def admissible(self) -> bool:
-        return self.core is not None and self.standard
+        return self.core is not None
 
 
 SCHEMES: tuple[Scheme, ...] = (
@@ -207,8 +211,6 @@ class Configuration:
         s = _SCHEME.get(self.scheme) if self.scheme else None
         if s is None:
             return f"{self.id} binds no scheme of verity.commitments"
-        if not s.standard:
-            return f"{self.id} commits with {s.label}: Table 2 commitments are built only on SHA-256 or BLAKE3"
         if s.core is None:
             return f"{self.id} commits with {s.label}, which verity.commitments does not define yet"
         return None
@@ -282,7 +284,7 @@ CONFIGURATIONS: tuple[Configuration, ...] = (
 _CONFIG = {c.id: c for c in CONFIGURATIONS}
 assert set(_CONFIG) == set(D._BY_ID), "every drilldown.VARIANTS entry is a declared configuration"
 
-TABLE1_COLUMNS = ("Configuration", "Statement", "x, W, y", "Commitment scheme", "Hashes (role; property; class)", "ZK and verifier model",
+TABLE1_COLUMNS = ("Configuration", "Flag", "Statement", "x, W, y", "Commitment scheme", "Hashes (role; property; class)", "ZK and verifier model",
                   "Soundness (whole-proof bound at its cells; dominant term)", "Proximity bounds", "Transferability", "Assumptions",
                   "Pin", "Archived", "Cells")
 
@@ -318,21 +320,22 @@ def native(target: Target, K: int = T.K) -> dict[str, Any]:
 
 @dataclass(frozen=True)
 class Rules:
-    """A view's parameters.  ``security_log2``: the whole-proof bound filter (``None`` = unfiltered); ``standard_hashes``: the
-    published view's second filter, no algebraic hash anywhere in the soundness argument.  ``legacy``: today's
+    """A view's parameters.  ``security_log2``: the whole-proof bound filter (``None`` = unfiltered); ``standard_hashes``: an
+    optional filter (off in the published view) dropping configurations with an algebraic hash anywhere in the soundness
+    argument.  ``legacy``: today's
     parameters (the parity render): B = 4096 and K = 1536, the frozen range, security.target also <= the filter, the bare and
     ``+ in-proof hash`` columns instead of the full relation, proving time only, no custody or protocol check."""
 
     name: str
     security_log2: float | None = -128
-    standard_hashes: bool = True
+    standard_hashes: bool = False
     legacy: bool = False
     include_archived: bool = False
 
 
 SPEC = Rules("spec")
-UNFILTERED = Rules("unfiltered", security_log2=None, standard_hashes=False)
-LEGACY = Rules("legacy", legacy=True, standard_hashes=False)
+UNFILTERED = Rules("unfiltered", security_log2=None)
+LEGACY = Rules("legacy", legacy=True)
 RULES = {r.name: r for r in (SPEC, UNFILTERED, LEGACY)}
 
 
@@ -394,7 +397,7 @@ def _column(ctx: Ctx, rules: Rules) -> str:
 
 def _custody(store: Any, ctx: Ctx) -> str | None:
     """Why the result's proof files are not shown preserved in the catalog, or ``None``: a proof or run-files artifact referenced
-    by the result or its producing attempt, each with a remote replica recorded.  (``research data preserved`` is the full check.)"""
+    by the result or its producing attempt, each on the remote as the catalog records it.  (``research data preserved`` is the full check.)"""
     try:
         refs = store.get_manifest(ctx.art).to_doc().get("refs") or {}
     except Exception:  # noqa: BLE001
@@ -403,8 +406,12 @@ def _custody(store: Any, ctx: Ctx) -> str | None:
     files = [v for v in (refs.get("proof"), refs.get("run_files"), outs.get("run_files"), outs.get("run_record")) if isinstance(v, str)]
     if not files:
         return "no proof files: neither the result (refs.proof / refs.run_files) nor its attempt names a dump"
+    def on_remote(a: str) -> bool:
+        row = store.index.artifact(a)
+        return bool(row and row.get("remote")) or "remote" in store.index.replicas(a)
+
     try:
-        missing = [a for a in files if "remote" not in store.index.replicas(a)]
+        missing = [a for a in files if not on_remote(a)]
     except Exception:  # noqa: BLE001  (a store without a catalog)
         return "proof files unknown to the catalog"
     return f"proof files {', '.join(missing)} have no remote replica recorded (`research data preserved`)" if missing else None
@@ -563,6 +570,7 @@ class ViewCell:
     batching: dict[str, Any]
     scheme: str | None = None
     unfiltered: dict[str, Any] | None = None
+    algebraic: list[str] = field(default_factory=list)   #: the algebraic hashes of its soundness argument (Table 1's flag)
 
     def to_json(self) -> dict[str, Any]:
         d = dataclasses.asdict(self)
@@ -682,7 +690,8 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
                                 provisional=None if rules.legacy else provisional(c),
                                 legacy=T._cell(c.meta, c.art, T._attempt_of(store, c.art)[0], target, _CANDIDATE[c.family.id],
                                                vb.by if vb else None, T.instances_equiv_of(c.meta, c.labels, c.attempt, target, equivs)),
-                                batching=_batching(c.meta["workload_fingerprint"]), scheme=scheme)
+                                batching=_batching(c.meta["workload_fingerprint"]), scheme=scheme,
+                                algebraic=[h.text() for h in (c.config.algebraic() if c.config else ())])
                 alt = best(pools.get(key, []) + unfiltered.get(key, []))
                 if alt is not None and alt[0].art != c.art:
                     cell.unfiltered = pick(*alt, N["instances_per_second"])
@@ -695,7 +704,7 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
 def _empty_reason(rejected: Sequence[Mapping[str, Any]], target: Target, scheme: str | None, line_schemes: Sequence[str | None],
                   col: str, configurations: Sequence[Configuration]) -> dict[str, Any]:
     """Why a cell is empty: ``n/s`` when every configuration of the family declares the subcircuit unsupported, else what its
-    results lack (weaker statements or inadmissible schemes only, or the first reasons that apply).  A result on no line's
+    results lack (weaker statements or undefined schemes only, or the first reasons that apply).  A result on no line's
     scheme counts on every scheme line of its subcircuit and hardware class."""
     fam = [c for c in configurations if c.family == col]
     if fam and all(target.name in c.unsupported for c in fam):
@@ -707,7 +716,7 @@ def _empty_reason(rejected: Sequence[Mapping[str, Any]], target: Target, scheme:
     if all(r["codes"][0][0] in ("R", "S") for r in mine):
         weak = sorted({str(r["configuration"]) for r in mine if r["codes"][0][0] == "R"})
         bad = sorted({str(r["configuration"]) for r in mine if r["codes"][0][0] == "S"})
-        parts = ([f"a weaker statement ({', '.join(weak)})"] if weak else []) + ([f"an inadmissible scheme ({', '.join(bad)})"] if bad else [])
+        parts = ([f"a weaker statement ({', '.join(weak)})"] if weak else []) + ([f"a scheme verity.commitments does not define ({', '.join(bad)})"] if bad else [])
         return {"state": "weaker", "text": "results only for " + " or ".join(parts)}
     firsts: dict[str, int] = {}
     for r in mine:
@@ -782,7 +791,8 @@ def table1_rows(V: Views) -> list[tuple[str, list[str]]]:
             sch = _SCHEME.get(cfg.scheme) if cfg.scheme else None
             scheme = (f"{sch.label} ({sch.id}; {'admissible' if sch.admissible else 'inadmissible'}): " if sch else "none: ") + cfg.commitment
             soundness = (bounds + " — " if bounds else "") + cfg.soundness + "; dominant term: " + cfg.dominant_term
-            out.append((fid or "(no Table 2 family)", [cfg.id, cfg.statement, cfg.ports, scheme, "; ".join(h.text() for h in cfg.hashes),
+            flag = f"**{ALGEBRAIC_FLAG}** ({', '.join(sorted({h.name for h in cfg.algebraic()}))})" if cfg.algebraic() else ""
+            out.append((fid or "(no Table 2 family)", [cfg.id, flag, cfg.statement, cfg.ports, scheme, "; ".join(h.text() for h in cfg.hashes),
                                                         cfg.zk, soundness, "; ".join(x.text() for x in cfg.proximity), cfg.transferability,
                                                         cfg.assumptions, cfg.pin, "yes" if cfg.archived else "no",
                                                         ", ".join(w for w, _ in cells) or T.EMPTY]))
@@ -812,17 +822,19 @@ def render_markdown(V: Views) -> str:
         if fid != fam_seen:
             fam = _FAMILY.get(fid)
             desc = f"{fam.description}; declared class {' | '.join(fam.declared_classes)}; setup {fam.setup}; {fam.interaction}" if fam else "not a Table 2 column"
-            rows1.append([f"**{fid}**", desc, *([""] * (len(TABLE1_COLUMNS) - 2))])
+            rows1.append([f"**{fid}**", "", desc, *([""] * (len(TABLE1_COLUMNS) - 3))])
             fam_seen = fid
         rows1.append(row)
     out += [T._md_table(TABLE1_COLUMNS, rows1), "",
             "Statement: the full relation commits x, W and y with the configuration's scheme and proves y = S(x, W) over the committed "
-            "values; its scheme must be defined in verity.commitments and built only on SHA-256 or BLAKE3 (reason S otherwise). Bounds "
+            "values; its scheme must be defined in verity.commitments (reason S otherwise). A configuration whose soundness argument "
+            f"uses an algebraic hash (Poseidon2 and the like) is admissible and flagged: {ALGEBRAIC_FLAG}. Bounds "
             "are the accountant's whole-proof figures at each cell's batching (`security.achieved_log2`), from proven proximity bounds only.", "",
             "## Table 2 — End-to-end overhead per subcircuit, hardware class and commitment scheme", "",
             "N = compute-bound datasheet estimate, instances/s (busiest unit, peak entry); P = instances/s end to end "
             f"(committing the batch, `{COMMIT}`, then proving){'; legacy: proving only' if rules.legacy else ''}; cell = N / P of the "
             "family's best admissible configuration (highest P). `(prov.)` = no red-team clearance of the statement yet; "
+            f"`(alg.)` = its soundness argument uses an algebraic hash: {ALGEBRAIC_FLAG} (Table 1's flag); "
             f"`{T.EMPTY}` = no admissible result; `n/s` = declared unsupported.", ""]
     notes: list[str] = []
 
@@ -853,11 +865,13 @@ def render_markdown(V: Views) -> str:
                 text += f"; {T.INSTANCE_EQUIV_NOTE} ({c.legacy.instances_equiv})"
             if c.provisional:
                 text += f"; provisional: {c.provisional}"
+            if c.algebraic:
+                text += f"; {ALGEBRAIC_FLAG} (Table 1, {c.configuration}: {'; '.join(c.algebraic)})"
             if c.unfiltered:
                 u = c.unfiltered
                 text += (f"; unfiltered pick: {u['configuration']} {u['artifact']}, bound {_fmt_bound(u['bound_log2'])}, hashes "
                          f"{'; '.join(u['hashes'])}, {T.fmt_overhead(u['overhead'])}")
-            row.append(T.fmt_overhead(c.overhead) + (" (prov.)" if c.provisional else "") + " " + note(text))
+            row.append(T.fmt_overhead(c.overhead) + (" (prov.)" if c.provisional else "") + (" (alg.)" if c.algebraic else "") + " " + note(text))
         rows2.append(row)
     out += [T._md_table(("Subcircuit · hardware · scheme", "Native N", *cols), rows2), ""]
 
@@ -929,6 +943,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--rules", choices=tuple(RULES), default=SPEC.name)
     ap.add_argument("--security-bits", type=float, default=None, metavar="N", help="filter to a whole-proof bound of 2^-N or better")
     ap.add_argument("--include-archived", action="store_true")
+    ap.add_argument("--standard-hashes-only", action="store_true", help="drop configurations with an algebraic hash in the soundness argument")
     ap.add_argument("--parity", action="store_true", help="compare the legacy-rules views with a fresh `tables` build; exit 1 on a difference")
     ap.add_argument("--snapshot", default=None, metavar="NAME", help="with --parity: also compare with this `tables --snapshot`'s members")
     ns = ap.parse_args(argv)
@@ -954,6 +969,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         rules = dataclasses.replace(rules, name=f"{rules.name}@{ns.security_bits:g}", security_log2=-ns.security_bits)
     if ns.include_archived:
         rules = dataclasses.replace(rules, include_archived=True)
+    if ns.standard_hashes_only:
+        rules = dataclasses.replace(rules, name=f"{rules.name}+standard-hashes", standard_hashes=True)
     V = build(st, rules)
     if ns.format == "json":
         print(json.dumps(render_json(V), indent=2, sort_keys=True, default=str))
