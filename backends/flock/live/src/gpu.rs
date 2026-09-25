@@ -505,7 +505,7 @@ pub fn prove_pure(
     let s = statics_with(st.lay.comp(), &st.circuit.da, &st.circuit.db);
     let (sc, cfg) = sched(pcs);
     let m = pcs.m;
-    let params = prove_params(s, &sc, &cfg, pcs, &st.digest, domain, st.lay.k_log(), pb::PIN, ch);
+    let params = prove_params(s, &sc, &cfg, pcs, &st.digest, domain, st.lay.k_log(), st.lay.pin(), ch);
     static U: OnceLock<(Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>)> = OnceLock::new();
     let u = U.get_or_init(|| {
         let k = 1usize << pb::UNIT_LOG;
