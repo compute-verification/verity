@@ -752,7 +752,12 @@ impl Server {
                     let bytes = self.proofs.get(&(table.name.clone(), rep)).ok_or(format!("R7: no proof for {root} (lone rep)"))?;
                     let rec = record.get(&root).ok_or(format!("no live session stream for {root}"))?;
                     let mut ch = ReplayChallenger::new(record.clone(), &root, &self.verifier.domain(&table.name, rep));
-                    let cap = self.verifier.verify(&table.name, rep, bytes, &mut ch)?;
+                    // A replay failure is the primary reason: the verifier's own error on a proof whose messages
+                    // were not the committed ones is a consequence of it.
+                    let cap = self.verifier.verify(&table.name, rep, bytes, &mut ch).map_err(|e| match ch.finish() {
+                        Err(r) => format!("{r} (then the verifier: {e})"),
+                        Ok(()) => e,
+                    })?;
                     ch.finish()?;
                     if rec.cap.as_ref() != Some(&cap) {
                         return Err(format!("{root}: proof root differs from the root committed in the session"));
