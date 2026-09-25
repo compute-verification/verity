@@ -3,13 +3,13 @@ name = "verity-workspace"
 version = "0.0.0"
 description = "Verity monorepo root; a uv workspace, not a package."
 requires-python = ">=3.12"
-dependencies = ["research", "verity", "verity-sp1", "verity-numerical", "verity-vllm"]
+dependencies = ["research", "verity", "verity-sp1", "verity-numerical", "verity-vllm", "verity-sampled-proofs", "verity-pouw", "verity-pous"]
 
 [tool.uv]
 package = false
 
 [tool.uv.workspace]
-members = ["tools/research", "packages/verity", "backends/sp1", "backends/numerical", "integrations/vllm"]
+members = ["tools/research", "packages/verity", "backends/sp1", "backends/numerical", "integrations/vllm", "protocols/sampled_proofs", "protocols/pouw", "protocols/pous"]
 
 [tool.uv.sources]
 research = { workspace = true }
@@ -17,10 +17,13 @@ verity = { workspace = true }
 verity-sp1 = { workspace = true }
 verity-numerical = { workspace = true }
 verity-vllm = { workspace = true }
+verity-sampled-proofs = { workspace = true }
+verity-pouw = { workspace = true }
+verity-pous = { workspace = true }
 
 [dependency-groups]
 dev = ["pytest>=8"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "tools/research/tests", "tools/native_peak/tests", "packages/verity/tests", "backends/sp1/tests", "backends/numerical/tests", "backends/gkr/tests"]
+testpaths = ["tests", "tools/research/tests", "tools/native_peak/tests", "packages/verity/tests", "backends/sp1/tests", "backends/numerical/tests", "backends/gkr/tests", "protocols"]
 markers = ["slow: full rechecks that take minutes (bench-instances full recheck); opt in with `--slow`"]

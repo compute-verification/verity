@@ -1,0 +1,16 @@
+[project]
+name = "verity-sampled-proofs"
+version = "0.0.0"
+description = "Sampled proofs: commit, sample replay and verification units from a beacon, replay them, emit an integrity allowance (prototype)."
+requires-python = ">=3.12"
+dependencies = ["verity"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["verity_sampled_proofs"]
+
+[tool.uv.sources]
+verity = { workspace = true }

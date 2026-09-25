@@ -25,11 +25,12 @@ ALLOWED = {
     "commitments": {"ir"},
     "verification": {"ir", "ml", "commitments"},
     "resource_accounting": {"ir", "verification", "commitments"},
+    "randomness": set(),
 }
 FORBIDDEN_EXTERNAL = ("verity_sp1", "verity_vllm", "verity_torch", "sp1", "vllm", "torch", "jax", "onnx",
                       "backends", "frontends", "integrations", "research", "veritor")
 #: Source subtrees that must stay stdlib-only: the scalar references.
-NUMPY_FREE = ("ir", "ml/tc")
+NUMPY_FREE = ("ir", "ml/tc", "randomness")
 
 
 def _imports(path: Path) -> list[tuple[str, int]]:
