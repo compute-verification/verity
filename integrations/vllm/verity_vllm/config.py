@@ -186,11 +186,13 @@ class EnginePin:
         if not entries:
             pinned = sorted({str(c.get("repo")) for c in checkpoint_entries(checkpoints)})
             raise ValueError(f"model {model!r} is not pinned in {Path(checkpoints).name} (pinned: {', '.join(pinned)})")
-        hit = next((c for c in entries if str(c.get("revision", "")) == str(revision)), None)
-        if hit is None:
+        hits = [c for c in entries if str(c.get("revision", "")) == str(revision)]
+        if not hits:
             revs = sorted({str(c.get("revision")) for c in entries})
             raise ValueError(f"model {model!r} revision {revision!r} is not the pinned revision ({', '.join(revs)}); "
                              f"pass the full commit sha")
+        # a repo can be pinned under several roles; the downloaded one is the engine's
+        hit = next((c for c in hits if c.get("downloaded") and c.get("local_path")), hits[0])
         return cls(model=model, revision=str(hit["revision"]), case=str(hit.get("role")), local_path=hit.get("local_path"),
                    world=int(world))
 
