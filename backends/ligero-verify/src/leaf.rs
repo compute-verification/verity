@@ -494,6 +494,12 @@ pub static PINS: &[(&str, &str, &str, &str)] = &[
     // the x4 fold: 2 compressions per role per column
     ("fp8-ada-x4", "blake3", "1168788f2cf6ab7deaa0974f17ddd981ae972aedccd5c851c99017ae957b705b",
      "43e0eea0e07a9a9de151867609aef4ae4a99b8b7ff26a5394f59bac67cecd6f1"),
+    // lane b-ligero-standard-hash, same schema: bf16-ampere gated 2048 VUs (49 honest sub-batches) + 86 negatives on
+    // vy-b-ligero-sh 2026-09-25 06:51Z; fp8-hopper likewise
+    ("bf16-ampere", "blake3", "5b7620546f5cfda0391974239efd78988fe41556e23f6c07d98bd4513c952d44",
+     "f67ab8174346973350e673f0b1164a3a824e5c9f4f8ae48d136eabdfd970f374"),
+    ("fp8-hopper", "blake3", "433bdfc37ef7ce64dcac32cdfd9b99e43b33f0df848112e96fd01601531a3bd1",
+     "a27af32fe5ef8b8995b5cc4d874bcbac3a7f5196600e5cce062537ab7d1a55d8"),
 ];
 
 pub fn names() -> Vec<&'static str> {
