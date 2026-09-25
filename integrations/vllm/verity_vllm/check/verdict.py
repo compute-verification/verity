@@ -52,7 +52,7 @@ from typing import Any, Mapping
 
 from verity_vllm.check import c2_rules as C2
 from verity_vllm.check import commit_rules as CR
-from verity_vllm.check.commit_rules import _d, _int
+from verity_vllm.check.commit_rules import REQUIRED_CLASSES_DEFAULT, _d, _int
 from verity_vllm.check.result import FAIL, INSUFFICIENT, NOT_RUN, OUTCOMES, PASS, CheckResult, worst
 from verity_vllm.properties.record import citations
 
@@ -315,7 +315,7 @@ def _c1_verdict(commit: dict, tokens_equal: bool | None, min_openings: int, decl
         first = (ex.get("errors") or ["?"])[0]
         return False, f"{errs_n} collector error(s): {str(first)[:160]}"
     if declaration is not None or required_classes is not None:
-        ok, why = CR.required_classes_check(declaration, required_classes if required_classes is not None else CR.REQUIRED_CLASSES_DEFAULT)
+        ok, why = CR.required_classes_check(declaration, required_classes if required_classes is not None else REQUIRED_CLASSES_DEFAULT)
         if not ok:
             return False, why
     oar = commit.get("openings_after_release")

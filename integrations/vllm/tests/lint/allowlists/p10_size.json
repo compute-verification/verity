@@ -40,7 +40,7 @@
     {"file": "verity_vllm/pipeline/admission_planner.py", "kind": "function", "symbol": "plan", "detail": "lines", "count": 180},
     {"file": "verity_vllm/pipeline/build.py", "kind": "function", "symbol": "_construct", "detail": "lines", "count": 160},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "function", "symbol": "binding_record", "detail": "lines", "count": 210},
-    {"file": "verity_vllm/pipeline/commit.py", "kind": "function", "symbol": "main", "detail": "lines", "count": 1914},
+    {"file": "verity_vllm/pipeline/commit.py", "kind": "function", "symbol": "main", "detail": "lines", "count": 1913},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "function", "symbol": "openings_after_release", "detail": "lines", "count": 179},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 3021},
     {"file": "verity_vllm/pipeline/compiled_merge.py", "kind": "function", "symbol": "main", "detail": "lines", "count": 404},
