@@ -2,7 +2,7 @@
 
     PYTHONPATH=. pytest -q tests/commit/test_stream_merkle.py
 
-1. streaming root == batch ``fasttree.fold`` root == production ``MerkleTree`` root for every leaf count 0..130
+1. streaming root == batch ``scheme.fold`` root == production ``MerkleTree`` root for every leaf count 0..130
    (leaves streamed in production tree order);
 2. commit a deterministic value stream, retain ONLY (root, leaf_count), re-run the producer, regenerate an opening
    for a chosen leaf and verify it with the PRODUCTION ``verify_opening``; a producer that deviates in one byte
@@ -23,6 +23,7 @@ from verity_vllm.commit import identity
 from verity_vllm.commit.merkle import MerkleTree, Opening, verify_opening
 
 from verity_vllm.commit import fasttree as ft
+from verity_vllm.commit import scheme
 from tests.commit.stream_merkle import StreamingMerkle, replay_to_open, stream_in_tree_order, stream_root
 
 PROFILE = "ec44fc6dd686"
@@ -54,7 +55,7 @@ def test_streaming_root_matches_batch_and_production(n: int) -> None:
     ids, gen = _producer(n)
     leaves = list(gen())
     root_stream, count, _ = stream_root(leaves)
-    root_batch = ft.fold([ft.leaf_digest(h, v) for h, v in leaves])
+    root_batch = scheme.fold([ft.leaf_digest(h, v) for h, v in leaves])
     assert count == n
     assert root_stream == root_batch
     if n:

@@ -1,5 +1,8 @@
 """The one hash function of the POC and its tags.
 
+``H``, the leaf/node/lift/ids/empty tags and their rules are core's (:mod:`verity.commitments.leaves`); :func:`ids_digest`
+here hashes the ids in the order given (callers pass them already in tree order).
+
 Byte layout of ``H(tag, *parts)`` (SHA-256 over a single stream)::
 
     u32be(len(tag)) || tag || for each part: u64be(len(part)) || part
@@ -44,90 +47,39 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable
 from typing import Any
 
-LEAF_TAG = "verity-vllm/leaf/v1"
-NODE_TAG = "verity-vllm/node/v1"
-LIFT_TAG = "verity-vllm/lift/v1"
-IDS_TAG = "verity-vllm/ids/v1"
-EMPTY_TAG = "verity-vllm/empty/v1"
+from verity.commitments.leaves import (
+    DIGEST_BYTES,
+    EMPTY_TAG,
+    IDS_TAG,
+    LEAF_TAG,
+    LIFT_TAG,
+    NODE_TAG,
+    H,
+    empty_root,
+    leaf_hash,
+    lift_hash,
+    node_hash,
+    parse_shape_text,
+    shape_text,
+)
+
+__all__ = ["CHALLENGE_TAG", "DIGEST_BYTES", "EMPTY_TAG", "FRAME_DESCRIPTION", "IDS_TAG", "JSON_TAG", "LEAF_TAG", "LIFT_TAG", "NODE_TAG", "H",
+           "canonical_json_bytes", "empty_root", "ids_digest", "json_digest", "leaf_hash", "lift_hash", "node_hash", "parse_shape_text",
+           "profile_id", "sha256_hex", "shape_text"]
+
 JSON_TAG = "verity-vllm/json/v1"
 CHALLENGE_TAG = "verity-vllm/challenge/v1"
 
-DIGEST_BYTES = 32
-
 FRAME_DESCRIPTION = "sha256(u32be(len(tag)) || tag || (u64be(len(part)) || part)*)"
-
-
-def H(tag: str, *parts: bytes) -> bytes:  # noqa: N802 - the contract names it H
-    """SHA-256 over the tag and the length-prefixed parts (layout in the module docstring)."""
-    digest = hashlib.sha256()
-    encoded_tag = tag.encode("utf-8")
-    digest.update(len(encoded_tag).to_bytes(4, "big"))
-    digest.update(encoded_tag)
-    for part in parts:
-        if not isinstance(part, bytes | bytearray | memoryview):
-            raise TypeError(f"hash parts must be bytes, got {type(part).__name__}")
-        digest.update(len(part).to_bytes(8, "big"))
-        digest.update(part)
-    return digest.digest()
-
-
-def shape_text(shape: Sequence[int]) -> str:
-    """The canonical textual shape used inside the leaf hash: ``[4,8]``, scalar ``[]``."""
-    dims = []
-    for dim in shape:
-        if isinstance(dim, bool) or not isinstance(dim, int) or dim < 0:
-            raise ValueError(f"shape dims must be non-negative ints, got {shape!r}")
-        dims.append(str(dim))
-    return "[" + ",".join(dims) + "]"
-
-
-def parse_shape_text(text: str) -> tuple[int, ...]:
-    if not (text.startswith("[") and text.endswith("]")):
-        raise ValueError(f"malformed shape text {text!r}")
-    inner = text[1:-1]
-    if inner == "":
-        return ()
-    dims = []
-    for piece in inner.split(","):
-        if not piece.isdigit() or (len(piece) > 1 and piece[0] == "0"):
-            raise ValueError(f"malformed shape text {text!r}")
-        dims.append(int(piece))
-    return tuple(dims)
-
-
-def leaf_hash(canonical_id: str, dtype: str, shape: Sequence[int], value: bytes) -> bytes:
-    """``H("verity-vllm/leaf/v1", canonical_id, dtype, shape, raw little-endian bytes)``."""
-    return H(
-        LEAF_TAG,
-        canonical_id.encode("utf-8"),
-        dtype.encode("utf-8"),
-        shape_text(shape).encode("utf-8"),
-        value,
-    )
-
-
-def node_hash(left: bytes, right: bytes) -> bytes:
-    _check_digest(left, "left")
-    _check_digest(right, "right")
-    return H(NODE_TAG, left, right)
-
-
-def lift_hash(child: bytes) -> bytes:
-    _check_digest(child, "child")
-    return H(LIFT_TAG, child)
 
 
 def ids_digest(sorted_ids: Iterable[str]) -> bytes:
     """Digest of a tree's canonical ids in tree (code-point) order, so an opening cannot be
     replayed under another tree with the same root width."""
     return H(IDS_TAG, *(cid.encode("utf-8") for cid in sorted_ids))
-
-
-def empty_root() -> bytes:
-    return H(EMPTY_TAG)
 
 
 def canonical_json_bytes(document: Any) -> bytes:
@@ -154,8 +106,3 @@ def profile_id(manifest: Any) -> str:
 
 def sha256_hex(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
-
-
-def _check_digest(value: bytes, name: str) -> None:
-    if not isinstance(value, bytes | bytearray | memoryview) or len(value) != DIGEST_BYTES:
-        raise ValueError(f"{name} must be a 32-byte digest")

@@ -26,6 +26,7 @@ from collections.abc import Callable, Iterable, Iterator
 from typing import Any
 
 from verity_vllm.commit import fasttree as ft
+from verity_vllm.commit import scheme
 
 
 class StreamingMerkle:
@@ -85,7 +86,7 @@ class StreamingMerkle:
             self.path.append(node if t == idx - 1 else left)
             self.track_pos.append(idx // 2)
         self.pending[level] = None
-        self._push(level + 1, self.new(ft.NODE_PREFIX + left + ft.U64_32 + node).digest())
+        self._push(level + 1, self.new(scheme.NODE_PREFIX + left + scheme.U64_32 + node).digest())
 
     def finish(self) -> bytes:
         """Apply the lifts for the odd tails, bottom-up, exactly as the batch fold does; returns the root."""
@@ -93,7 +94,7 @@ class StreamingMerkle:
             raise RuntimeError("finished")
         self._done = True
         if self.leaf_count == 0:
-            return ft.hashing.empty_root()
+            return scheme.empty_root()
         carry: bytes | None = None
         level = 0
         top = len(self.pending) + 2
@@ -109,7 +110,7 @@ class StreamingMerkle:
                     if t is not None and t in (idx - 1, idx):
                         self.path.append(carry if t == idx - 1 else pend)
                         self.track_pos.append(idx // 2)
-                    node = self.new(ft.NODE_PREFIX + pend + ft.U64_32 + carry).digest()
+                    node = self.new(scheme.NODE_PREFIX + pend + scheme.U64_32 + carry).digest()
                     self.pending[level] = None
                     carry = node
                     level += 1
@@ -125,7 +126,7 @@ class StreamingMerkle:
             if t is not None and t == self.count[level] - 1:
                 self.path.append(None)
                 self.track_pos.append(t // 2)
-            carry = self.new(ft.LIFT_PREFIX + pend).digest()
+            carry = self.new(scheme.LIFT_PREFIX + pend).digest()
             self.pending[level] = None
             level += 1
         raise RuntimeError("no root")  # pragma: no cover

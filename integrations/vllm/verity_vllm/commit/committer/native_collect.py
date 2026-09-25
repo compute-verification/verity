@@ -1356,7 +1356,7 @@ class NativeCollectCommitter(NativeHostCommitter):
         step's padded length is already known (hit plan, or layout v2), hand the slot back.  After the step ended: (v1 learning step) re-upload
         the host windows one at a time through the scratch window and hash them with the now-known length; tree over all leaves; bind the
         root.  The logical stream, chunk indices, headers and tree are exactly those of the single-block path -> identical roots."""
-        from verity_vllm.commit import hidden_engine as eng
+        from verity_vllm.commit import scheme
         from verity_vllm.acquire.committer_api import StepCommitment
 
         self._gpu_ext_load()
@@ -1746,7 +1746,7 @@ class NativeCollectCommitter(NativeHostCommitter):
             nbytes = self._nbytes_cache[id(metas)] = sum(m.nbytes for m in metas)
         n = padded // C
         layout_dig = self.layout_digest(metas)
-        root = eng.bind_root(self.program_digest, self._ctx_digest(job.step), self._geo_digest, layout_dig, n, mr)
+        root = scheme.step_root(self.program_digest, self._ctx_digest(job.step), self._geo_digest, layout_dig, n, mr)
         t2 = time.perf_counter()
         self.spans.add("hashing", t1 - t0, step=job.step, nbytes=nbytes)
         self.spans.add("root_finalisation", t2 - t1, step=job.step)
@@ -1759,7 +1759,7 @@ class NativeCollectCommitter(NativeHostCommitter):
     def _commit_step_native(self, job: _StepJob) -> None:
         """Candidate B worker step: `StepHasher.commit` (C++, GIL released) does wait-event, zero pad, chunk leaves, tree levels, retained
         copy, root D2H and the done-synchronisation -- the same sequence as `_commit_step_gpu`; Python only binds the root."""
-        from verity_vllm.commit import hidden_engine as eng
+        from verity_vllm.commit import scheme
         from verity_vllm.acquire.committer_api import StepCommitment
 
         self._gpu_ext_load()                                       # openings use HG.gpu_open on the levels (loaded once)
@@ -1802,7 +1802,7 @@ class NativeCollectCommitter(NativeHostCommitter):
             nbytes = self._nbytes_cache[id(metas)] = sum(m.nbytes for m in metas)
         n = int(levels[0].shape[0])
         layout_dig = self.layout_digest(metas)
-        root = eng.bind_root(self.program_digest, self._ctx_digest(job.step), self._geo_digest, layout_dig, n, mr)
+        root = scheme.step_root(self.program_digest, self._ctx_digest(job.step), self._geo_digest, layout_dig, n, mr)
         t2 = time.perf_counter()
         self.spans.add("hashing", t1 - t0, step=job.step, nbytes=nbytes)
         self.spans.add("root_finalisation", t2 - t1, step=job.step)
@@ -1845,13 +1845,13 @@ class NativeCollectCommitter(NativeHostCommitter):
             torch.cuda.current_stream().synchronize()
         mr = mr_t.numpy().astype("uint32").tobytes()
         t1 = time.perf_counter()
-        from verity_vllm.commit import hidden_engine as eng
+        from verity_vllm.commit import scheme
         from verity_vllm.acquire.committer_api import StepCommitment
 
         n = int(leaves.shape[0])
         nbytes = sum(m.nbytes for m in job.metas)
         layout_dig = self.layout_digest(job.metas)
-        root = eng.bind_root(self.program_digest, self._ctx_digest(job.step), self._geo_digest, layout_dig, n, mr)
+        root = scheme.step_root(self.program_digest, self._ctx_digest(job.step), self._geo_digest, layout_dig, n, mr)
         t2 = time.perf_counter()
         self.spans.add("hashing", t1 - t0, step=job.step, nbytes=nbytes)
         self.spans.add("root_finalisation", t2 - t1, step=job.step)
