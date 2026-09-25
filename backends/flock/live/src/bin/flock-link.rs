@@ -1,11 +1,12 @@
 //! flock-link: flock-128-r2 live sessions whose statement is linkable to a prime-field relation proof.
 //!
 //! The statement (flock-link C4): `2 vus` operand rows of `k` 16-bit words (the x rows, then the W columns, word k
-//! LSB first: position `(row k_total + k) 16 + i`), each hashed with plain BLAKE3 (`blake3(row bytes, LE words)`).
-//! Flock proves every chunk's 16 compressions as ONE circuit: the chaining values are wired row to row, the chunk's
-//! start value is the public IV, every params word (counter, block_len, flags) is wired to a public constant, and each
-//! chunk's output chaining value is public. The verifier checks those public chunk values against the leaf digests
-//! natively (the parent compressions), so no middle block, counter, flag or length is free.
+//! LSB first: position `(row k_total + k) 16 + i`), each hashed as the core row leaf `blake3-keyed/row/v2`
+//! (`BLAKE3(row bytes, key = the x or w row key)`). Flock proves every chunk's 16 compressions as ONE circuit: the
+//! chaining values are wired row to row, the chunk's start value is the public key of its role, every params word
+//! (counter, block_len, flags with KEYED_HASH) is wired to a public constant, and each chunk's output chaining value is
+//! public. The verifier checks those public chunk values against the leaf digests natively (the keyed parent
+//! compressions), so no middle block, counter, flag, length or key is free.
 //!
 //! The link (L1, L2): after `Commit(root_F, root_B, public words)` the verifier draws two GF(2^128) points over the
 //! linked positions, the prover sends `y_k = z^(r_k)`, and both reps open `z^(r_k) = y_k` in their merged opening
@@ -14,6 +15,15 @@
 //!   flock-link serve    --listen ADDR --out DIR --vus V [--k K] --seed S   verifier (statement = the seed's rows)
 //!   flock-link prove    --verifier ADDR --vus V [--k K] --seed S          prover, one session
 //!   flock-link selftest --vus V [--k K]                                    negatives against an in-process verifier
+//!
+//! The route (a) cell (the statement is the prime proof's: its leaf digests, x rows then W columns, 32 bytes each):
+//!   flock-link sigma      --vus V --digests FILE --prime-commitment HEX        print Σ's preimage (sigma.txt)
+//!   flock-link cell-serve --listen ADDR --out DIR --vus V --digests FILE --prime-commitment HEX --operator LANE
+//!   flock-link cell-prove --verifier ADDR --vus V --digests FILE --prime-commitment HEX --operands FILE
+//!                         --root-f FILE --link-out FILE
+//!   cell-prove waits for the prime prover's root_F (hex in --root-f), commits it with root_B, and writes the session's
+//!   points and y (and Σ, root_B) to --link-out for the prime prover to finish its proof against. cell-serve keeps each
+//!   session's proofs beside its record (E1).
 //!
 //! Output lines are `LIVE\t{json}` / `NEG\t{json}` / `SELFTEST\t{json}`.
 
@@ -52,7 +62,27 @@ const CHUNK_START: u32 = 1;
 const CHUNK_END: u32 = 2;
 const PARENT: u32 = 4;
 const ROOT: u32 = 8;
-const IV: [u32; 8] = [0x6A09_E667, 0xBB67_AE85, 0x3C6E_F372, 0xA54F_F53A, 0x510E_527F, 0x9B05_688C, 0x1F83_D9AB, 0x5BE0_CD19];
+const KEYED_HASH: u32 = 16;
+/// The core row leaf `blake3-keyed/row/v2` (`verity.commitments.rowleaf`): `BLAKE3(row bytes, key = "verity/blake3-leaf/v1/"
+/// + "x" | "w", zero padded to 32 bytes)`.
+const SCHEME: &str = "blake3-keyed/row/v2";
+const KEY_PREFIX: &[u8] = b"verity/blake3-leaf/v1/";
+
+fn row_key(role: &[u8]) -> [u8; 32] {
+    let mut k = [0u8; 32];
+    k[..KEY_PREFIX.len()].copy_from_slice(KEY_PREFIX);
+    k[KEY_PREFIX.len()..KEY_PREFIX.len() + role.len()].copy_from_slice(role);
+    k
+}
+
+fn key_words(k: &[u8; 32]) -> [u32; 8] {
+    from_fn(|i| u32::from_le_bytes(k[4 * i..4 * i + 4].try_into().unwrap()))
+}
+
+/// Leaf `l`'s key: x rows are leaves `0..vus`, W columns `vus..2 vus`.
+fn leaf_key(vus: usize, l: usize) -> [u8; 32] {
+    row_key(if l < vus { b"x" } else { b"w" })
+}
 
 fn arg(k: &str, d: &str) -> String {
     let a: Vec<String> = std::env::args().collect();
@@ -81,6 +111,25 @@ fn f128_bytes(v: &[F128]) -> Vec<u8> {
 fn bytes_f128(b: &[u8]) -> Vec<F128> {
     b.chunks(16).map(|c| F128::new(u64::from_le_bytes(c[..8].try_into().unwrap()), u64::from_le_bytes(c[8..16].try_into().unwrap()))).collect()
 }
+fn f128_hex(v: &F128) -> String {
+    format!("{:016x}{:016x}", v.hi, v.lo)
+}
+
+/// The prime prover's root_F: `file` holds its hex once the prime proof reached the link (written atomically).
+fn wait_root_f(file: &str) -> Vec<u8> {
+    let t = Instant::now();
+    loop {
+        if let Ok(s) = std::fs::read_to_string(file) {
+            let s = s.trim();
+            if s.len() == 64 {
+                return (0..32).map(|i| u8::from_str_radix(&s[2 * i..2 * i + 2], 16).unwrap()).collect();
+            }
+        }
+        assert!(t.elapsed().as_secs() < 600, "no root_F in {file} after 600 s");
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+}
+
 fn log2ceil(n: usize) -> usize {
     n.next_power_of_two().trailing_zeros() as usize
 }
@@ -128,6 +177,8 @@ struct Chain {
     shape: CircuitShape,
     slot: SlotId,
     r1cs: BlockR1cs,
+    /// The prime statement Σ names (`prime_commitment`: SHA-256 of its `commitment.txt`).
+    prime: String,
 }
 
 impl Chain {
@@ -140,17 +191,20 @@ impl Chain {
         let nu = log2ceil(rows).max(8);
         let mut b = ShapeBuilder::new(nu);
         let slot = b.slot(Blake3Gate { nu });
-        let ivw = pack8(&IV);
-        let iv = [b.fixed_public_input(ivw[0]), b.fixed_public_input(ivw[1])];
-        let params: Vec<[Wire; 3]> = (0..chunks)
-            .map(|c| [CHUNK_START, 0, CHUNK_END].map(|f| b.fixed_public_input(pack_params(c as u64, 64, f))))
+        let keys: Vec<[Wire; 2]> = [b"x", b"w"]
+            .iter()
+            .map(|r| pack8(&key_words(&row_key(*r))).map(|w| b.fixed_public_input(w)))
             .collect();
-        let n_fixed = 2 + 3 * chunks;
+        let params: Vec<[Wire; 3]> = (0..chunks)
+            .map(|c| [CHUNK_START, 0, CHUNK_END].map(|f| b.fixed_public_input(pack_params(c as u64, 64, f | KEYED_HASH))))
+            .collect();
+        let n_fixed = 4 + 3 * chunks;
         // No independence islands: the online phase gives each island a value buffer over every wire, which is
         // quadratic in the leaf count; the sequential run is a few hundred ms at 4,096 VUs.
-        for _ in 0..leaves {
+        for l in 0..leaves {
+            let key = keys[usize::from(l >= vus)];
             for pc in &params {
-                let mut cv = iv;
+                let mut cv = key;
                 for blk in 0..16 {
                     let m: [Wire; 4] = from_fn(|_| b.input());
                     let p = pc[if blk == 0 { 0 } else if blk == 15 { 2 } else { 1 }];
@@ -163,7 +217,7 @@ impl Chain {
         }
         let shape = b.finish().expect("chain circuit");
         assert_eq!(shape.counts, vec![rows]);
-        Chain { vus, k, leaves, chunks, rows, nu, m_link: 9 + log2ceil(rows), n_fixed, shape, slot, r1cs: build_block_r1cs(nu) }
+        Chain { vus, k, leaves, chunks, rows, nu, m_link: 9 + log2ceil(rows), n_fixed, shape, slot, r1cs: build_block_r1cs(nu), prime: "selftest".into() }
     }
 
     fn union(&self) -> UnionInstance<'_> {
@@ -178,11 +232,10 @@ impl Chain {
     }
 
     fn fixed(&self) -> Vec<F128> {
-        let ivw = pack8(&IV);
-        let mut v = vec![ivw[0], ivw[1]];
+        let mut v: Vec<F128> = [b"x", b"w"].iter().flat_map(|r| pack8(&key_words(&row_key(*r)))).collect();
         for c in 0..self.chunks {
             for f in [CHUNK_START, 0, CHUNK_END] {
-                v.push(pack_params(c as u64, 64, f));
+                v.push(pack_params(c as u64, 64, f | KEYED_HASH));
             }
         }
         v
@@ -197,19 +250,30 @@ impl Chain {
         TableSpec { name: name.into(), binding: Binding::Circuit { registry_digest: self.shape.registry.digest(), counts_le, circuit_digest: self.shape.circuit.digest() } }
     }
 
-    /// Σ: the scheme, Λ (positions = operand words LSB first; row/block/bit map above), N, m, the Flock statement and
-    /// the leaf digests.
+    /// Σ's preimage (`sigma.txt`): the scheme, Λ on both sides, N, m, the point choice (P2), the Flock statement, the
+    /// prime statement (the SHA-256 of its `commitment.txt`) and the leaf digests (x rows, then W columns). The prime
+    /// verifier (`backends/gkr/verifier/src/link.rs`) checks every line it can derive from its own statement.
+    fn sigma_text(&self, digests: &[[u8; 32]], prime_commitment: &str) -> String {
+        let cat: Vec<u8> = digests.iter().flatten().copied().collect();
+        format!(
+            "verity/link-L/v2\nscheme {SCHEME}\nlambda_f pos=((port*vus+v)*K+word)*bits+i\n\
+             lambda_b pos=row*512+u->((4+u/128)<<nu|row)*128+u%128\npoints 2 gf2_128 x^128+x^7+x^2+x+1\n\
+             vus {}\nk {}\nbits 16\nn {}\nm {}\nflock_nu {}\nflock_circuit {}\nflock_registry {}\n\
+             flock_profile fast100 reps 2\nprime_commitment {prime_commitment}\nleaf_digests {} {}\n",
+            self.vus,
+            self.k,
+            self.leaves * self.k * 16,
+            self.m_link,
+            self.nu,
+            hex(&self.shape.circuit.digest()),
+            hex(&self.shape.registry.digest()),
+            digests.len(),
+            hex(&sha256(&cat)),
+        )
+    }
+
     fn sigma(&self, digests: &[[u8; 32]]) -> [u8; 32] {
-        let mut b = b"verity/link-L/v1\0flock-link/blake3-row/v1\0lambda:row*512+u->((4+u/128)<<nu|row)*128+u%128\0".to_vec();
-        for x in [self.vus, self.k, self.leaves * self.k * 16, self.m_link, self.nu] {
-            b.extend_from_slice(&(x as u64).to_le_bytes());
-        }
-        b.extend_from_slice(&self.shape.circuit.digest());
-        b.extend_from_slice(&self.shape.registry.digest());
-        for d in digests {
-            b.extend_from_slice(d);
-        }
-        sha256(&b)
+        sha256(self.sigma_text(digests, &self.prime).as_bytes())
     }
 
     fn inputs(&self, bytes: &[u8]) -> Vec<F128> {
@@ -291,25 +355,25 @@ fn link_eval(bytes: &[u8], r: &[F128]) -> F128 {
         .reduce(|| F128::ZERO, |a, b| a + b)
 }
 
-fn parent_cv(l: &[u32; 8], r: &[u32; 8], root: bool) -> [u32; 8] {
+fn parent_cv(key: &[u32; 8], l: &[u32; 8], r: &[u32; 8], root: bool) -> [u32; 8] {
     let mut m = [0u32; 16];
     m[..8].copy_from_slice(l);
     m[8..].copy_from_slice(r);
-    blake3_compress(&IV, &m, 0, 64, PARENT | if root { ROOT } else { 0 })[..8].try_into().unwrap()
+    blake3_compress(key, &m, 0, 64, PARENT | KEYED_HASH | if root { ROOT } else { 0 })[..8].try_into().unwrap()
 }
 
-/// BLAKE3's tree over at least two chunk chaining values.
-fn tree(cvs: &[[u32; 8]], root: bool) -> [u32; 8] {
+/// BLAKE3's keyed tree over at least two chunk chaining values.
+fn tree(key: &[u32; 8], cvs: &[[u32; 8]], root: bool) -> [u32; 8] {
     if cvs.len() == 1 {
         return cvs[0];
     }
     let left = 1usize << (usize::BITS - 1 - (cvs.len() - 1).leading_zeros());
-    parent_cv(&tree(&cvs[..left], false), &tree(&cvs[left..], false), root)
+    parent_cv(key, &tree(key, &cvs[..left], false), &tree(key, &cvs[left..], false), root)
 }
 
-fn digest_of(cvs: &[[u32; 8]]) -> [u8; 32] {
+fn digest_of(key: &[u8; 32], cvs: &[[u32; 8]]) -> [u8; 32] {
     let mut d = [0u8; 32];
-    for (i, w) in tree(cvs, true).iter().enumerate() {
+    for (i, w) in tree(&key_words(key), cvs, true).iter().enumerate() {
         d[4 * i..4 * i + 4].copy_from_slice(&w.to_le_bytes());
     }
     d
@@ -321,7 +385,7 @@ fn words(seed: u64, n: usize) -> Vec<u8> {
 }
 
 fn leaf_digests(ch: &Chain, bytes: &[u8]) -> Vec<[u8; 32]> {
-    bytes.chunks(2 * ch.k).map(|l| *blake3::hash(l).as_bytes()).collect()
+    bytes.chunks(2 * ch.k).enumerate().map(|(i, l)| *blake3::keyed_hash(&leaf_key(ch.vus, i), l).as_bytes()).collect()
 }
 
 fn domain(rep: usize) -> Vec<u8> {
@@ -357,7 +421,7 @@ impl StatementVerifier for ChainVerifier {
         let w = bytes_f128(publics);
         for (l, want) in digests.iter().enumerate() {
             let cvs: Vec<[u32; 8]> = (0..c.chunks).map(|j| unpack8(w[2 * (l * c.chunks + j)], w[2 * (l * c.chunks + j) + 1])).collect();
-            if digest_of(&cvs) != *want {
+            if digest_of(&leaf_key(c.vus, l), &cvs) != *want {
                 return Err(format!("C4: the public chunk values of leaf {l} do not hash to its digest"));
             }
         }
@@ -424,6 +488,11 @@ struct Plan {
     rep1_other_witness: bool,
     profile: [LigeritoProfile; 2],
     substitute: Option<Vec<Vec<u8>>>,
+    /// The route (a) cell: the operand rows (x then W, LE words) instead of the seed's, root_F read from this file
+    /// (hex, written by the prime prover) and the session's link context written to `link_out`.
+    operands: Option<Arc<Vec<u8>>>,
+    root_f_file: Option<String>,
+    link_out: Option<String>,
 }
 
 impl Plan {
@@ -439,6 +508,9 @@ impl Plan {
             rep1_other_witness: false,
             profile: [LigeritoProfile::Fast100; 2],
             substitute: None,
+            operands: None,
+            root_f_file: None,
+            link_out: None,
         }
     }
 }
@@ -454,7 +526,7 @@ fn panic_msg(e: Box<dyn std::any::Any + Send>) -> String {
 /// The instance the plan proves: (statement bytes the verifier's digests come from, z bytes Flock commits, b bytes y
 /// comes from).
 fn instance(ch: &Chain, seed: u64, plan: &Plan) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
-    let b = words(seed, ch.leaves * ch.k * 2);
+    let b = plan.operands.as_ref().map(|o| o.to_vec()).unwrap_or_else(|| words(seed, ch.leaves * ch.k * 2));
     let mut z = b.clone();
     if plan.flip_z_bit {
         z[ch.k * 2 + 77] ^= 0x10;
@@ -464,11 +536,12 @@ fn instance(ch: &Chain, seed: u64, plan: &Plan) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
 }
 
 fn session(ch: &Chain, t: SharedTransport, seed: u64, plan: &Plan) -> (Value, Vec<Vec<u8>>) {
-    let hello = {
+    let (hello, sigma) = {
         let (st, _, _) = instance(ch, seed, plan);
         let mut cfg = SessionConfig::flock_128_r2(vec![ch.spec()]);
-        cfg.link = Some(LinkSpec { sigma: ch.sigma(&leaf_digests(ch, &st)), m: ch.m_link, points: 2 });
-        cfg.hello()
+        let sigma = ch.sigma(&leaf_digests(ch, &st));
+        cfg.link = Some(LinkSpec { sigma, m: ch.m_link, points: 2 });
+        (cfg.hello(), sigma)
     };
     let (_, z, b) = instance(ch, seed, plan);
     let t0 = Instant::now();
@@ -525,7 +598,13 @@ fn session(ch: &Chain, t: SharedTransport, seed: u64, plan: &Plan) -> (Value, Ve
                 if plan.commit == CommitMode::OtherRootB {
                     root_b[0] ^= 1;
                 }
-                let root_f = if plan.commit == CommitMode::NoRootF { Vec::new() } else { sha256(&[b"flock-link/root-f-standin/v1".as_slice(), &seed.to_le_bytes()].concat()).to_vec() };
+                let root_f = if plan.commit == CommitMode::NoRootF {
+                    Vec::new()
+                } else if let Some(f) = &plan.root_f_file {
+                    wait_root_f(f)
+                } else {
+                    sha256(&[b"flock-link/root-f-standin/v1".as_slice(), &seed.to_le_bytes()].concat()).to_vec()
+                };
                 let req = || Req::Commit { root_f: root_f.clone(), roots: vec![(TABLE.into(), root_b.clone())], publics: vec![(TABLE.into(), chunk_bytes.clone())] };
                 let pts = match call(&tt, req()) {
                     Ok(Resp::Coins(c)) if c.len() == 2 * ch.m_link => c,
@@ -553,6 +632,14 @@ fn session(ch: &Chain, t: SharedTransport, seed: u64, plan: &Plan) -> (Value, Ve
                         Ok(Resp::Ok) => {}
                         other => panic!("LIVE-REFUSED y: {other:?}"),
                     }
+                }
+                if let Some(out) = &plan.link_out {
+                    let pts: Vec<Vec<String>> = pts.chunks(ch.m_link).map(|r| r.iter().map(f128_hex).collect()).collect();
+                    let doc = json!({"kind": "flock-link-context/v1", "sigma": hex(&sigma), "root_f_sha256": hex(&sha256(&root_f)),
+                                     "root_b_sha256": hex(&sha256(&root_b)), "points": pts,
+                                     "y": claims.iter().map(|c| f128_hex(&c.value)).collect::<Vec<_>>()});
+                    std::fs::write(format!("{out}.tmp"), doc.to_string()).unwrap();
+                    std::fs::rename(format!("{out}.tmp"), out).unwrap();
                 }
                 cached = Some(claims.clone());
                 claims
@@ -728,6 +815,15 @@ fn selftest(ch: Arc<Chain>) {
     let both = |rec: &Value| -> bool {
         rec["verdict"]["reps"].as_array().map(|a| a.len() == 2 && a.iter().all(|r| r["ok"] == false)).unwrap_or(false)
     };
+    let e0 = {
+        let mut cfg = SessionConfig::flock_128_r2(vec![ch.spec()]);
+        cfg.link = Some(LinkSpec { sigma: [0; 32], m: ch.m_link, points: 2 });
+        cfg.require_link = false;
+        Server::try_new(cfg, Box::new(ChainVerifier { ch: ch.clone(), digests: BTreeMap::new() })).err()
+    };
+    println!("NEG\t{}", json!({"case": "ungated_exchange_config_refused", "maps_to": "E0", "expect": "reject",
+        "pass": e0.is_some(), "why": e0}));
+    all.set(all.get() && e0.is_some());
     let honest = t("honest_linked_session", "honest", h(), true);
     let pts_a = honest["link"]["points"].clone();
     let honest2 = t("honest_linked_session_again", "honest (fresh points)", h(), true);
@@ -787,7 +883,12 @@ fn main() {
     let k: usize = arg("--k", "1536").parse().unwrap();
     let seed: u64 = arg("--seed", "10").parse().unwrap();
     let tb = Instant::now();
-    let ch = Arc::new(Chain::new(vus, k));
+    let mut chain = Chain::new(vus, k);
+    if cmd.starts_with("cell") || cmd == "sigma" {
+        chain.prime = arg("--prime-commitment", "");
+        assert!(chain.prime.len() == 64, "--prime-commitment: the SHA-256 (hex) of the prime statement's commitment.txt");
+    }
+    let ch = Arc::new(chain);
     eprintln!("statement vus={vus} k={k} rows={} nu={} m_link={} built in {:.2}s", ch.rows, ch.nu, ch.m_link, tb.elapsed().as_secs_f64());
     match cmd.as_str() {
         "selftest" => selftest(ch),
@@ -805,8 +906,34 @@ fn main() {
                 println!("LIVE\t{v}");
             }
         }
-        _ => eprintln!("usage: flock-link serve|prove|selftest [--vus V] [--k K] [--seed S] ..."),
+        "sigma" => print!("{}", ch.sigma_text(&read_digests(&ch), &ch.prime)),
+        "cell-serve" => {
+            let d = read_digests(&ch);
+            serve_loop(move || server(&ch, d.clone()));
+        }
+        "cell-prove" => {
+            let d = read_digests(&ch);
+            let ops = std::fs::read(arg("--operands", "")).expect("--operands: the x rows then the W columns, LE 16-bit words");
+            assert_eq!(leaf_digests(&ch, &ops), d, "the operands do not hash to the statement's leaf digests");
+            let plan = Plan {
+                operands: Some(Arc::new(ops)),
+                root_f_file: Some(arg("--root-f", "")),
+                link_out: Some(arg("--link-out", "")),
+                ..Plan::honest()
+            };
+            let t = shared(TcpTransport::connect(&arg("--verifier", "127.0.0.1:7200")).unwrap());
+            let (v, _) = session(&ch, t, seed, &plan);
+            println!("LIVE\t{v}");
+        }
+        _ => eprintln!("usage: flock-link serve|prove|selftest|sigma|cell-serve|cell-prove [--vus V] [--k K] [--seed S] ..."),
     }
+}
+
+/// `--digests`: the prime statement's leaf digests, x rows then W columns, 32 bytes each.
+fn read_digests(ch: &Chain) -> Vec<[u8; 32]> {
+    let b = std::fs::read(arg("--digests", "")).expect("--digests");
+    assert_eq!(b.len(), 32 * ch.leaves, "--digests: {} leaves of 32 bytes", ch.leaves);
+    b.chunks(32).map(|c| c.try_into().unwrap()).collect()
 }
 
 fn serve_loop(make: impl Fn() -> Server) {
@@ -838,6 +965,13 @@ fn serve_loop(make: impl Fn() -> Server) {
         let d = out.join(&id);
         std::fs::create_dir_all(&d).unwrap();
         std::fs::write(d.join("session.json"), serde_json::to_string_pretty(&rec).unwrap()).unwrap();
+        for ((t, r), b) in s.proofs() {
+            std::fs::write(d.join(format!("{}.bin", rep_stream(t, *r).replace('/', "."))), b).unwrap();
+        }
+        let host = std::fs::read_to_string("/etc/hostname").unwrap_or_default();
+        std::fs::write(d.join("verifier.json"), json!({"operator": arg("--operator", ""), "host": host.trim(),
+            "runpod_pod_id": std::env::var("RUNPOD_POD_ID").ok(), "research_run": std::env::var("RESEARCH_RUN_ID").ok(),
+            "listen": listen}).to_string()).unwrap();
         let line = json!({"session": id, "accepted": rec["verdict"]["accepted"], "why": rec["verdict"]["why"], "aborted": rec["aborted"],
                           "link_mode": rec["link_mode"], "link_sha256": rec["link_sha256"], "require_link": rec["config"]["require_link"],
                           "verify_s": rec["verdict"]["verify_s"], "rounds": rec["verdict"]["rounds"]});

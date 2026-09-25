@@ -584,6 +584,14 @@ impl SessionConfig {
         Self { profile: "fast100".into(), reps: 2, flavor: "rs".into(), tables, require_link: true, link: None }
     }
 
+    /// E0: a link exchange is only sound with the R5 gate (no coin before y), so `link: Some` implies `require_link`.
+    pub fn check(&self) -> Result<(), String> {
+        if self.link.is_some() && !self.require_link {
+            return Err("E0: a link exchange (link: Some) without the R5 gate (require_link: false) is refused: y could follow Flock's coins".into());
+        }
+        Ok(())
+    }
+
     pub fn hello(&self) -> String {
         let mut h = json!({"profile": self.profile, "reps": self.reps, "flavor": self.flavor,
                "tables": self.tables.iter().map(|t| t.name.clone()).collect::<Vec<_>>()});
@@ -668,8 +676,14 @@ fn parse_frame<'a>(c: &'a [u8], at: &mut usize, op: u8) -> Result<&'a [u8], Stri
 }
 
 impl Server {
+    /// Panics on a configuration [`SessionConfig::check`] refuses; [`Server::try_new`] returns the refusal.
     pub fn new(cfg: SessionConfig, verifier: Box<dyn StatementVerifier>) -> Self {
-        Self {
+        Self::try_new(cfg, verifier).unwrap_or_else(|e| panic!("{e}"))
+    }
+
+    pub fn try_new(cfg: SessionConfig, verifier: Box<dyn StatementVerifier>) -> Result<Self, String> {
+        cfg.check()?;
+        Ok(Self {
             cfg,
             verifier,
             hello: None,
@@ -683,7 +697,12 @@ impl Server {
             verdict: None,
             urandom: File::open("/dev/urandom").expect("/dev/urandom"),
             t0: std::time::Instant::now(),
-        }
+        })
+    }
+
+    /// The proofs received, by (table, rep): kept beside the session record (E1).
+    pub fn proofs(&self) -> &BTreeMap<(String, usize), Vec<u8>> {
+        &self.proofs
     }
 
     fn refuse(&mut self, why: String) -> Resp {
@@ -854,7 +873,7 @@ impl Server {
                 Resp::Ok
             }
             Req::Round { stream, content, n } => {
-                if self.cfg.require_link && self.link.is_none() {
+                if (self.cfg.require_link || self.cfg.link.is_some()) && self.link.is_none() {
                     return self.refuse("R5: coin requested before root_F, the link points and y were received".into());
                 }
                 let Some(rec) = self.streams.get(&stream) else {
