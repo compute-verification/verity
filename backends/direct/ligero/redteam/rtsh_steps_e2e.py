@@ -25,6 +25,8 @@ def main() -> int:
     ap.add_argument("--vus", type=int, default=1)
     ap.add_argument("--min-l", type=int, default=256)
     ap.add_argument("--target", type=float, default=-132.0)
+    ap.add_argument("--synthetic", action="store_true",
+                    help="draw the VUs from the relation's operand recipe and model (a frozen-tier relation's set has fixed length)")
     args = ap.parse_args()
 
     from .. import protocol
@@ -39,7 +41,18 @@ def main() -> int:
     RM.K_VU = RC.K_VU = args.steps * rel.k
     R = HashedRelationRunner(rel, "cpu", args.target, zk=False, mode="fiat-shamir", leaf=args.leaf)
     sys_forged = protocol.system_id(R.sys).hex()
-    data = instances(rel, args.vus)
+    if args.synthetic:
+        import numpy as np
+        rng, data = np.random.default_rng(7), []
+        for _ in range(args.vus):
+            a, b = (np.asarray(rel.operands(rng, (args.steps * rel.k,)), dtype=np.int64) for _ in range(2))
+            accs, c = [], 0
+            for s in range(args.steps):
+                c = rel.model.step(c, a[s * rel.k:(s + 1) * rel.k].tolist(), b[s * rel.k:(s + 1) * rel.k].tolist())
+                accs.append(int(c))
+            data.append((a.tolist(), b.tolist(), accs, accs[-1]))
+    else:
+        data = instances(rel, args.vus)
     R.commit_vus(data)
     proof, pubs, lay = R.prove_vus(data, check=False, vu_ids=list(range(args.vus)), min_l=args.min_l)
     out = Path(args.out)
