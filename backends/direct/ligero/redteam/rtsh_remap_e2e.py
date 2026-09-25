@@ -40,12 +40,14 @@ def main() -> int:
     ap.add_argument("--mode", default="fiat-shamir")
     ap.add_argument("--zk", action="store_true")
     ap.add_argument("--device", default="cpu")
+    ap.add_argument("--set-binding", action="store_true",
+                    help="bind the trees to the relation's instance set (dataset, tier, instances_digest) as a producer does")
     args = ap.parse_args()
 
     from .. import protocol
     from ..hashauth import HashAuth
     from ..relations import relation
-    from ..relchain import HashedRelationRunner, instances
+    from ..relchain import HashedRelationRunner, instances, instances_digest
     from ..serialize import _statement_of, proof_bytes, statement_bytes, system_bytes
     from .. import reverify as RV
 
@@ -58,14 +60,16 @@ def main() -> int:
     def runner():
         return HashedRelationRunner(rel, args.device, args.target, zk=args.zk, mode=args.mode, leaf=args.leaf)
 
+    bkw = ({"dataset": rel.instances_dataset, "tier": rel.instances_tier, "manifest_sha256": instances_digest(rel, n)}
+           if args.set_binding else {})
     R = runner()
-    R.commit_vus(base)
+    R.commit_vus(base, **bkw)
     h_roots = {nm: R.trees[nm].ref.root.hex() for nm in "aby"}
     h_bind = {nm: R.trees[nm].ref.binding.hex() for nm in "aby"}
 
     served = list(base)
     served[0] = (base[0][0], base[0][1], base[0][2], base[1][3])      # VU 0's committed output: VU 1's true output
-    R.commit_vus(served)
+    R.commit_vus(served, **bkw)
     roots = {nm: R.trees[nm].ref.root.hex() for nm in "aby"}
     binds = {nm: R.trees[nm].ref.binding.hex() for nm in "aby"}
 
