@@ -201,7 +201,7 @@ def test_pod_release_busy_pattern_names_the_stage_processes_launched_outside_row
         "/workspace/venv-py312/bin/python -m verity_vllm.pipeline.match --case MISTRAL7B --workload w.json --out /o/match --phase all",
         "/workspace/venv-py312/bin/python -m verity_vllm.pipeline.match --worker fold --log /o/match/capture/log.jsonl.gz",
         "/workspace/venv-cu129/bin/python -m verity_vllm.pipeline.m1_capture --case MISTRAL7B",
-        "/workspace/venv-py312/bin/python -m verity_vllm.check.global_match --gprog p.json --workload w.json",
+        "/workspace/venv-py312/bin/python -m verity_vllm.check.match.global_match --gprog p.json --workload w.json",
         "/workspace/venv-cu129/bin/python -m verity_vllm.pipeline.commit --case B0 --workload w.json",
     ]
     for cmd in row_like:

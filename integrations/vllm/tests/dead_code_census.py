@@ -60,14 +60,14 @@ PROTECTED = (
     "verity_vllm/engine/profiles/",
     "verity_vllm/query/",
     "verity_vllm/acquire/",
-    "verity_vllm/check/global_match.py",
+    "verity_vllm/check/match/global_match.py",
     "verity_vllm/correspondence/runtime.py",
 )
 
 #: row_pod.sh's Match runs run_config with `--skip census,...,golden,...`: the modules those stages would `-m` are statically reachable
 #: (run_config's stage table names them) but never run by the live launcher.  Reported, not deleted.
 RUN_CONFIG_SKIPPED_STAGE_MODULES = ("verity_vllm.check.census", "verity_vllm.check.noninterference", "verity_vllm.check.fold_compare",
-                                    "verity_vllm.input_provenance.root_policy", "verity_vllm.check.golden", "verity_vllm.check.operand_provenance")
+                                    "verity_vllm.check.root_policy", "verity_vllm.check.golden", "verity_vllm.check.operand_provenance")
 
 ARTIFACT_DELETE_SCOPES = ("verity_vllm/ops/fixtures/",)
 #: Unreferenced by name but read through a name pattern (file -> the reader).

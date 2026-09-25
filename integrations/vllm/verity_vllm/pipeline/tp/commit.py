@@ -824,7 +824,7 @@ def main() -> int:
                         try:
                             import torch as _torch
 
-                            from verity_vllm.tp import xrank_collectives as XC
+                            from verity_vllm.check.match import xrank_collectives as XC
                             xd = llm.collective_rpc("tp2_commit_xrank_dump", timeout=args.rpc_timeout,
                                                     kwargs={"out_dir": str(out), "seed_hex": root.hex(), "pair": pair, "per_stratum": args.xrank_per_stratum})
                             dumps = {int(d_["rank"]): _torch.load(d_["file"], weights_only=False) for d_ in xd}
@@ -1012,7 +1012,7 @@ def main() -> int:
     # components.boundary_linkage (per rank, AND-ed), the value_correspondence result AND-ed with them, the method naming the grade
     sr_comp, lk_comp = _sampled_replay_components(rows, versions)
     wp_comp = _weights_pin_component(rows, versions)
-    from verity_vllm.tp import xrank_collectives as _XC
+    from verity_vllm.check.match import xrank_collectives as _XC
     xr_comp = _XC.fold_pairs(xrank_pairs) if xrank_pairs else {"result": None, "pairs": 0, "why": "no instrumented pair"}
     xr_comp["per_pair_artifacts"] = [str(out / f"xrank_pair{p}.json") for p in range(len(xrank_pairs)) if (out / f"xrank_pair{p}.json").exists()]
     (out / "xrank_collectives.json").write_text(json.dumps({"schema": "verity/tp2/xrank-collectives-fold/v1", "tp": args.tp} | xr_comp, indent=1, default=str) + "\n")
@@ -1020,7 +1020,7 @@ def main() -> int:
     # [R17 tp D90, rev M-0026 R1 at Commit] the peer-input BINDER: the fold Match's peer_binding digests (fold peers_r[s,k] leaf == recorder
     # partial of rank 1-r at (s,k)) against the recorder rows the match oracle compared the COMMITTED partials to (bit-exact) -- by value,
     # both directions, every (step, k) of every rank.  False -> FAIL named; absent -> None (◐) unless --require-fold-match (then FAIL named)
-    from verity_vllm.tp import rank_match as _RM
+    from verity_vllm.check.match import rank_match as _RM
     fb_comp = (_RM.commit_binding(args.match_dir, world=world, require=args.require_fold_match,
                                   match_oracle=(None if match_capture_dir is None else {str(r_): (c.get("match_oracle") or {}) for r_, c in _last_per_rank(rows).items()}))
                if args.match_dir else {"result": (False if args.require_fold_match else None), "why": "no --match-dir: no fold Match record to bind the peer inputs to" + (" -- REQUIRED" if args.require_fold_match else "")})

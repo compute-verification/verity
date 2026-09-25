@@ -21,8 +21,8 @@ import pytest
 from verity_vllm.pipeline.match import persist_program
 from verity_vllm.observe.events import (DispatchEnter, DispatchExit, Root, RunHeader, SampleEnd, StepEnd, StepLink, StepStart, StorageAlloc,
                                    TritonLaunch, ViewDesc)
-from verity_vllm.correspondence import batch_decomp as bd
-from verity_vllm.check.program_compare import compare_steps, load_oracle
+from verity_vllm.check.match import batch_decomp as bd
+from verity_vllm.check.match.program_compare import compare_steps, load_oracle
 from verity_vllm.observe.log import dumps as log_dumps
 from verity_vllm.observe.fold.fold import fold
 from verity_vllm.observe.fold.resolver import Compute, Gather, GatherMany, Group, Profile

@@ -86,8 +86,8 @@ def test_fold_content_is_identical_under_default_and_tuned_thresholds(memory, mo
 def test_the_three_entry_points_call_tune():
     import inspect
     from verity_vllm.pipeline import match as run_config
-    from verity_vllm.correspondence import batch_decomp
-    from verity_vllm.check import global_match
+    from verity_vllm.check.match import batch_decomp
+    from verity_vllm.check.match import global_match
     assert "gc_tuning import tune" in inspect.getsource(run_config.fold_worker)
     assert "gc_tuning import tune" in inspect.getsource(global_match.main)
     assert "gc_tuning import tune" in inspect.getsource(batch_decomp.main)

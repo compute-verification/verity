@@ -5,7 +5,7 @@ overlap or omit gates; nothing here assumes partitions and Definitions know noth
 (`Scope`, `Body.offsets`, specialization sharing) is used as a compact *index*: a family is a per-body **plan** (one
 entry per body node it touches; entries are memoised per specialization, so every activation of a body shares them),
 counts are structural (`n` x callee count, prefix sums), `by_index` is mixed-radix over the prefix sums -- the
-`verity_vllm.query.vu_query._Planner` method.  The root body of a folded Program has one node per runtime instance, so a
+`verity_vllm.check.replay.vu_query._Planner` method.  The root body of a folded Program has one node per runtime instance, so a
 top-level plan costs O(root nodes) once; gates are never expanded.
 
 Values

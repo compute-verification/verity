@@ -58,7 +58,7 @@ def dump_cos_sin(engine: "va.Engine", out: Path) -> Path | None:
     import numpy as np
     import torch
 
-    from verity_vllm.input_provenance.root_policy import analytic_table_of_buffer   # the one by-name recognition of the two analytic-table buffers
+    from verity_vllm.check.root_policy import analytic_table_of_buffer   # the one by-name recognition of the two analytic-table buffers
 
     buf = None
     for name, b in engine.model.named_buffers():
@@ -98,7 +98,7 @@ def dump_normalizer(engine: "va.Engine", out: Path) -> Path | None:
     import numpy as np
     import torch
 
-    from verity_vllm.input_provenance.root_policy import analytic_table_of_buffer
+    from verity_vllm.check.root_policy import analytic_table_of_buffer
 
     for name, b in engine.model.named_buffers():
         if analytic_table_of_buffer(name) == "normalizer":

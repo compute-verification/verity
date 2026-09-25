@@ -1,6 +1,6 @@
-"""verity_vllm/input_provenance/root_policy.py — PROTECTED (gate G3, root closure).  Frozen root classes, each with an independent validator.
+"""verity_vllm/check/root_policy.py — PROTECTED (gate G3, root closure).  Frozen root classes, each with an independent validator.
 
-    uv run python -m verity_vllm.input_provenance.root_policy --log LOG --snapshots DIR --profile NAME [--safetensors GLOB] [--cos-sin NPY] --out root_policy.json
+    uv run python -m verity_vllm.check.root_policy --log LOG --snapshots DIR --profile NAME [--safetensors GLOB] [--cos-sin NPY] --out root_policy.json
 
 A Program operand is either produced by another Program instance or is a *root*.  The fold already refuses reads with no
 producer (`Unresolved`); this module decides whether the roots the fold *did* accept are legitimate, using a source of

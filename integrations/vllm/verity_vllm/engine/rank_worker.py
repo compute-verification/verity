@@ -720,7 +720,7 @@ class TP2CaptureWorkerExtension:
             import hashlib
             import torch
             import numpy as _np
-            from verity_vllm.input_provenance import weights_of_record as WR
+            from verity_vllm.check import weights_of_record as WR
             pmap = dict(model.named_parameters())
             ck = WR.CheckpointIndex(str(weights_pin["checkpoint_dir"]), checkpoints_manifest=weights_pin.get("checkpoints_manifest"),
                                     model=weights_pin.get("model"), verify_shards=False)
@@ -756,7 +756,7 @@ class TP2CaptureWorkerExtension:
         res["weights_pin"] = {"rank": rank, "result": None, "why": "weights unpinned (MAN-09): no checkpoint of record given to this rank"}
         if isinstance(weights_pin, dict) and weights_pin.get("checkpoint_dir"):
             try:
-                from verity_vllm.input_provenance import weights_of_record as WR
+                from verity_vllm.check import weights_of_record as WR
                 pdir = (weights_pin.get("program_dirs") or {}).get(str(rank))
                 if not pdir:
                     raise RuntimeError(f"rank {rank}: no rank Program dir for the weights of record")
@@ -1116,7 +1116,7 @@ class TP2CaptureWorkerExtension:
             return {"error": repr(e)[:400], "trace": traceback.format_exc()[-1200:]}
 
     def _tp2_sampled_replay(self, rc: Any) -> dict[str, Any]:
-        """[TP-08; manbind MAN-06 (`verity_vllm.check.sampled_replay`, taken verbatim), coord M-0451 form (A), interface note M-0523]
+        """[TP-08; manbind MAN-06 (`verity_vllm.check.replay.sampled_replay`, taken verbatim), coord M-0451 form (A), interface note M-0523]
         The C2 OF RECORD on THIS rank: a seeded stratified sample of the rank Program's rows is re-evaluated from the rank's COMMITTED
         input members + the rank's registered weight SHARDS (the rank Program's weights params ARE the shards this worker holds) and
         compared bit-for-bit with the rank's committed output members; plus the exhaustive boundary linkage (committed input ids at
@@ -1140,7 +1140,7 @@ class TP2CaptureWorkerExtension:
         try:
             from verity_vllm.check import oracle_compare as OC
             from verity_vllm.query.manifest import format as RM
-            from verity_vllm.check import sampled_replay as SR
+            from verity_vllm.check.replay import sampled_replay as SR
             from verity_vllm.program.registry import b1_tp2 as _TP2
 
             com = st["com"]
@@ -1260,7 +1260,7 @@ class TP2CaptureWorkerExtension:
         import torch
 
         from verity_vllm.check import oracle_compare as OC
-        from verity_vllm.tp import xrank_collectives as XC
+        from verity_vllm.check.match import xrank_collectives as XC
         from verity_vllm.acquire.sources.partial_source import _committed
 
         st = self._tp2_commit

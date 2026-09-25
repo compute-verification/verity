@@ -1,11 +1,11 @@
-"""verity_vllm/check/replay.py — the derived Program as its own oracle.
+"""verity_vllm/check/replay/replay.py — the derived Program as its own oracle.
 
 The fold produces an *executable* Program (every instance has an exact body), so its correctness is checked by
 replaying it against the evidence L1 snapshotted, in three tiers.  Each tier returns a JSON-able dict with a
 tier-level `status` in {"pass", "fail", "skipped", "error"}; per-instance entries carry the same four statuses plus
 "computed" (evaluated, but no snapshot of the output exists to compare with — normal in tiers B/C).
 
-    uv run python -m verity_vllm.check.replay --log data/logs/m1.jsonl.gz --snapshots data/logs/m1 \
+    uv run python -m verity_vllm.check.replay.replay --log data/logs/m1.jsonl.gz --snapshots data/logs/m1 \
         --profile vllm_d9105ea80_sm89_eager --tier a --k 3 --seed S --out out/capture/reports/replay_a.json
     ... --tier b --step 1 --max-arg-leaves 4000000 [--layers 0,1,2] [--max-instances N] [--evaluator gates|twins|auto]
     ... --tier c                                     # pod only: hours for a real model
@@ -647,7 +647,7 @@ def vu_population(result: FoldResult, rep: Replayer, max_arg_leaves: int | None,
     never raised."""
     t0 = time.time()
     try:
-        from verity_vllm.query import vu_query as vq
+        from verity_vllm.check.replay import vu_query as vq
         budget = int(max_arg_leaves) if max_arg_leaves else 1 << 62
         ix = vq.index(result, max_arg_leaves=budget, depth=depth)
         summ = ix.summary()

@@ -42,9 +42,9 @@ EOF
   $PY312 -m verity_vllm.pipeline.match --worker fold --log "$N/match/capture/log.jsonl.gz" --profile "$PROFILE" \
       --out "$N/match/fold_summary.json" --persist-dir "$N/match" > "$N/fold.log" 2>&1
   rc2=$?; log "$1: fold rc=$rc2"
-  $PY312 -m verity_vllm.check.program_compare --a "$D/build_request" --b "$N/match" --out "$N/match_compare.json" > "$N/compare.log" 2>&1
+  $PY312 -m verity_vllm.check.match.program_compare --a "$D/build_request" --b "$N/match" --out "$N/match_compare.json" > "$N/compare.log" 2>&1
   rc3=$?; log "$1: compare rc=$rc3"
-  $PY312 -m verity_vllm.check.stoch_recompute --run "$N/match" --workload "$WL" --out "$N/match_stoch.json" > "$N/recompute.log" 2>&1
+  $PY312 -m verity_vllm.check.replay.stoch_recompute --run "$N/match" --workload "$WL" --out "$N/match_stoch.json" > "$N/recompute.log" 2>&1
   rc4=$?; log "$1: recompute rc=$rc4"
   $PY312 - "$N" "$1" "$rc1" "$rc2" "$rc3" "$rc4" <<'EOF' | tee -a "$OUT/negatives.log"
 import json, os, sys

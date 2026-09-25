@@ -424,7 +424,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--no-facts", action="store_true", help="skip the raw-log stream/schema pass")
     a = ap.parse_args(argv)
-    from .replay import fold_log, load_profile
+    from verity_vllm.check.replay.replay import fold_log, load_profile
     t0 = time.time()
     profile = load_profile(a.profile)
     result = fold_log(a.log, profile, with_program=True)

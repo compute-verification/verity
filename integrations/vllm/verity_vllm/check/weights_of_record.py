@@ -355,7 +355,7 @@ def compose(name: str, shape: list[int], bits: int, ck: CheckpointIndex, *, worl
 
 def program_weight_fields(inst: dict[str, Any]) -> list[tuple[str, list[int], int]]:
     """(field, shape, value bits) for every field of the Program's `weights` struct parameter, in declaration order."""
-    from verity_vllm.check.sampled_replay import parse_struct
+    from verity_vllm.check.replay.sampled_replay import parse_struct
     wparam = next((t for n, t in inst.get("params", []) if n == "weights"), None)
     if not wparam or not str(wparam).startswith("{"):
         return []
@@ -922,7 +922,7 @@ def derivation_provenance(program_dir: str, checkpoint_dir: str, checkpoints_man
             code_source = "git" if code else None
         except Exception:  # noqa: BLE001
             code = None
-    return {"tool": "verity_vllm.input_provenance.weights_of_record", "code": code, "code_source": code_source, "at": _t.strftime("%Y-%m-%dT%H:%M:%SZ", _t.gmtime()),
+    return {"tool": "verity_vllm.check.weights_of_record", "code": code, "code_source": code_source, "at": _t.strftime("%Y-%m-%dT%H:%M:%SZ", _t.gmtime()),
             "sources": {"program_dir": os.path.abspath(program_dir), "program_files": ["instances.json.gz", "result.json"],
                         "checkpoint_dir": os.path.abspath(checkpoint_dir), "checkpoints_manifest": os.path.abspath(checkpoints_manifest) if checkpoints_manifest else "repo default"},
             "argv": list(argv) if argv is not None else sys.argv[1:], "supersedes": os.path.abspath(supersedes) if supersedes else None}

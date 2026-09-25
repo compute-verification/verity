@@ -74,7 +74,7 @@ for dd in "$D"/build_request_LP*_T*; do
   [[ "$(basename "$dd")" == "build_request_LP${LP0}_T${T0}" ]] && continue
   DERIVED+=(--derived "$dd")
 done
-$PY312 -m verity_vllm.correspondence.batch_decomp --oracle "$D/match" "${DERIVED[@]}" --out "$N/match_decomp.json" > "$N/decomp.log" 2>&1
+$PY312 -m verity_vllm.check.match.batch_decomp --oracle "$D/match" "${DERIVED[@]}" --out "$N/match_decomp.json" > "$N/decomp.log" 2>&1
 rc2=$?; log "N3: batch_decomp rc=$rc2"
 $PY312 - "$N" "$rc1" "$rc2" <<'EOF' | tee -a "$OUT/negatives.log"
 import json, os, sys

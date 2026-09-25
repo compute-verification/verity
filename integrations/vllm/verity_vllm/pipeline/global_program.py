@@ -49,7 +49,7 @@ try:  # [R17-42 route A (3)] the PADDED MoE construction's Definitions (MoeFfnFi
 except Exception as _e:  # noqa: BLE001
     print(f"[global_program] moe_pad registry unavailable ({_e!r}): padded-construction components will not decode", file=sys.stderr)
 
-from verity_vllm.correspondence.batch_decomp import derived_shape
+from verity_vllm.check.match.batch_decomp import derived_shape
 
 
 def load_desc(d: str) -> dict:

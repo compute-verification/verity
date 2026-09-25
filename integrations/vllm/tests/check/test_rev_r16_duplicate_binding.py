@@ -17,7 +17,7 @@ from __future__ import annotations
 import pytest
 
 from verity_vllm.commit.binding import coverage_check, identity, identity_dict
-from verity_vllm.check.sampled_replay import CommittedStore
+from verity_vllm.check.replay.sampled_replay import CommittedStore
 
 PD = "ab" * 32
 

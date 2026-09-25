@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import pytest
 
-from verity_vllm.check import sampled_replay as SR
+from verity_vllm.check.replay import sampled_replay as SR
 from tests.check.test_sampled_replay import _program
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.query.program_view import from_instances

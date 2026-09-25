@@ -12,8 +12,9 @@ from __future__ import annotations
 
 import pytest
 
-from verity_vllm.check import census, gates, operand_provenance as provenance, replay
-from verity_vllm.query import vu_query as vq
+from verity_vllm.check import census, gates, operand_provenance as provenance
+from verity_vllm.check.replay import replay
+from verity_vllm.check.replay import vu_query as vq
 from tests.check import adversarial as G
 from verity_vllm.observe.fold.resolver import Compute, Transparent, spec_module
 

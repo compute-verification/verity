@@ -33,7 +33,7 @@ from verity_vllm.observe.events import (DispatchEnter, DispatchExit, Root, RunHe
                                    StorageAlloc, TritonLaunch, ViewDesc)
 from verity_vllm.observe.fold.fold import FoldError, fold
 from verity_vllm.observe.fold.resolver import Compute, PerRow, Profile, Shared, Transparent, Gather
-from verity_vllm.tp import rank_match as RM
+from verity_vllm.check.match import rank_match as RM
 from verity_vllm.observe.fold.collective_pattern import TpCollective
 from verity.ir.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.ir.program import Program
@@ -383,7 +383,7 @@ def persist_fold(result, d, rank: int):
 
 
 def compare_rank(tmp_path, rank: int, result, spec: SpecializedDefinition, *, links_mut: dict | None = None, compact: bool = False):
-    from verity_vllm.check import program_compare as CMP
+    from verity_vllm.check.match import program_compare as CMP
     fd, dd = tmp_path / f"fold_r{rank}", tmp_path / f"build_r{rank}"
     fd.mkdir(exist_ok=True)
     dd.mkdir(exist_ok=True)
@@ -905,7 +905,7 @@ def _segments(r):
 
 
 def _decompose_b2(tmp_path, rank: int, r, *, tag: str):
-    from verity_vllm.correspondence import batch_decomp as BD
+    from verity_vllm.check.match import batch_decomp as BD
     from verity_vllm.observe.log import dumps as dump_events
     od, dd = tmp_path / f"oracle_{tag}_r{rank}", tmp_path / f"derived_{tag}_r{rank}"
     (od / "capture").mkdir(parents=True)

@@ -1,4 +1,4 @@
-"""Query / sampler conformance (D82 §4, lane h4b): `verity_vllm.query.vu_query` over the synthetic toy Program, whose VU
+"""Query / sampler conformance (D82 §4, lane h4b): `verity_vllm.check.replay.vu_query` over the synthetic toy Program, whose VU
 population is small enough to enumerate by brute force.
 
 Configurations: (a) the default budget (every instance fits: instance granularity), (b) `max_arg_leaves=100` (the
@@ -19,8 +19,8 @@ from collections import Counter
 import pytest
 
 from verity_vllm.check import fold_compare as cmp
-from verity_vllm.check import replay
-from verity_vllm.query import vu_query as vq
+from verity_vllm.check.replay import replay
+from verity_vllm.check.replay import vu_query as vq
 from verity_vllm.observe.fold.fold import fold
 from tests.observe import test_fold_synthetic as tfs
 from tests.check.test_compare_synthetic import ToyWeights, _evaluate_program, _write_snapshots

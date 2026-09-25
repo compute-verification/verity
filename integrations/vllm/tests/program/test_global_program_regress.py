@@ -39,8 +39,8 @@ import os
 
 import pytest
 
-from verity_vllm.correspondence import batch_decomp as bd
-from verity_vllm.check import program_compare as C
+from verity_vllm.check.match import batch_decomp as bd
+from verity_vllm.check.match import program_compare as C
 from verity_vllm.pipeline import global_program as gp
 from verity_vllm.program import workload as W
 from verity.ir.codec import canonical_json, encode_program, program_digest
@@ -261,7 +261,7 @@ def test_gp01_build_to_from_gprog_carries_the_declared_lag_static_end_to_end(tmp
     """[R17-1, F-r17-02 (rev M-0062) / coord M-0070] GP-01 `build` -> GM-01 `from_gprog` on ITS OWN artifact + descriptor: the Program's
     `lag` static is read where the codec writes it (program_fn / root spec ids inside the verified digest) and equals the artifact's
     lag.value; LAG 0 and LAG 1 are two Programs (two digests); an edited lag block over an intact Program is refused by name."""
-    from verity_vllm.check import global_match as gm
+    from verity_vllm.check.match import global_match as gm
     reqs = [{"LP": 3, "cap": 3}, {"LP": 5, "cap": 1, "arrive": 1}]
     derived = [_derived_dir(tmp_path, 3, 2), _derived_dir(tmp_path, 5, 0)]
     outs = {}
@@ -595,7 +595,7 @@ def test_single_weights_input_node_baseline_still_passes(tmp_path):
 # GM-01's own e2e fixtures (test_global_match: toy fold + batched record with declared arrivals / caps / an EOS stop) are the record of
 # reference here; `memory` is their fold fixture.  R1_EOS: cap 4, stops on the declared EOS 11 after 2 events -> a_r = n_r = 2.
 
-from verity_vllm.check import global_match as gm  # noqa: E402
+from verity_vllm.check.match import global_match as gm  # noqa: E402
 from tests.check import test_global_match as TGM  # noqa: E402
 from tests.check.test_global_match import memory  # noqa: E402,F401 - the fold fixture
 from verity_vllm.program.registry.topp_split import splits_for  # noqa: E402

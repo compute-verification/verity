@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import pytest
 
-from verity_vllm.query import vu_query as vq
+from verity_vllm.check.replay import vu_query as vq
 from verity_vllm.observe.fold.fold import FoldResult, _replayer
 from verity.ir.defs import Builder, CompositeDefinition, bind
 from verity.ir.program import Program

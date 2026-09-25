@@ -20,9 +20,9 @@ import pytest
 
 from verity_vllm.program import model as analytic
 from verity_vllm.observe.fold import fold as fold_mod
-from verity_vllm.correspondence import batch_decomp as bd
-from verity_vllm.check import program_compare as C
-from verity_vllm.check import global_match as gm
+from verity_vllm.check.match import batch_decomp as bd
+from verity_vllm.check.match import program_compare as C
+from verity_vllm.check.match import global_match as gm
 from tests.check import test_global_match as T
 from tests.observe.test_fold_synthetic import memory  # noqa: F401 - fixture
 from verity.ir.types import Array, Record, Value

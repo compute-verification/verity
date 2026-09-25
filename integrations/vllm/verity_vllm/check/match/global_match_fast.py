@@ -32,8 +32,8 @@ import json
 import os
 from collections.abc import Callable
 
-from verity_vllm.correspondence import batch_decomp as BD
-from verity_vllm.check import program_compare as C
+from verity_vllm.check.match import batch_decomp as BD
+from verity_vllm.check.match import program_compare as C
 from verity_vllm.check.program_ops import Ops
 
 FLAG = "MATCH_IMPL"
@@ -689,7 +689,7 @@ def check(gp: dict, oracle_dir: str, log_path: str | None = None, tokens_path: s
     [rel r17-int-2] `tokens_optional` (stoch F-r17-01, CLI --tokens-optional) forwarded unchanged so the CLI's `mod.check(...)` call has one
     signature for both implementations."""
     global _force
-    from verity_vllm.check import global_match as _record  # deferred: global_match imports this module at load
+    from verity_vllm.check.match import global_match as _record  # deferred: global_match imports this module at load
     prev = _force
     _force = True
     try:

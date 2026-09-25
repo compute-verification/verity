@@ -18,7 +18,7 @@ import json
 import numpy as np
 
 from verity_vllm.program import model as analytic
-from verity_vllm.input_provenance import weights_of_record as WR
+from verity_vllm.check import weights_of_record as WR
 from tests.input_provenance.test_weights_of_record import PREFIX, _program, checkpoint  # noqa: F401  (fixture)
 
 FIELD = "model.model.layers.0.self_attn.rotary_emb.cos_sin_cache"

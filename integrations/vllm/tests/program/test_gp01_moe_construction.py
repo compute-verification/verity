@@ -113,7 +113,7 @@ def test_gm01_carries_the_block_from_the_artifact_and_labels_a_pre_r17_42_artifa
     """[route A (4) fix, found on the first padded GM-01 run] `global_match.from_gprog` must carry GP-01's `moe_construction` block into the
     checker's Program dict (the block GM-01 REPORTS beside the verdict; never compared with the record).  Before this fix the block was dropped
     on the way and a padded Program was labelled "pre-R17-42 Build" by GM-01 -- the row's population label would have been the wrong one."""
-    from verity_vllm.check import global_match as GM
+    from verity_vllm.check.match import global_match as GM
     block = {"schema": "verity/workload-program/v1/moe_construction", "value": "padded", "declared_explicitly": True, "attested": False,
              "moe_block_present": True, "population_label": "ACTUAL population |Q(Lift(P_fixed-slot))|"}
     art = {"schema": "verity/workload-program/v1", "ok": True, "workload_digest": "00" * 32, "workload_fn": "Workload_v1",

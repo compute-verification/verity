@@ -340,7 +340,7 @@ def sites_of(v: ValuePlan, corr: AcquireCorrespondence) -> tuple[list[Site], lis
             legal.append(Site("registered_input", module, "weight", "n/a", "a weight of record: hashed once at registration"))
         else:
             refuse("registered_input", module, "weight", f"neither the weight's owning module {owner!r} nor a buffer of that name is in the runtime tree")
-        from verity_vllm.input_provenance.root_policy import analytic_table_of_buffer
+        from verity_vllm.check.root_policy import analytic_table_of_buffer
 
         table = analytic_table_of_buffer(module)
         if table is not None:
@@ -396,7 +396,7 @@ def residuals_of(values: list[ValuePlan], rt: RuntimeTree, tables: Mapping[str, 
         if hits and t[table]:
             out.append(Residual(table, "*", "*", f"the gather collector flushes staged bytes at these module boundaries ({table}); the flush points are lifetime facts "
                                 "the structure does not carry yet", values=[v.value_id for v in hits]))
-    from verity_vllm.input_provenance.root_policy import analytic_table_of_buffer
+    from verity_vllm.check.root_policy import analytic_table_of_buffer
 
     for b in sorted(rt.buffers):
         table = analytic_table_of_buffer(b)

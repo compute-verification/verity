@@ -26,7 +26,7 @@ reusable across requests and rows. The verdict is PASS iff every request is cano
 resolved AND no XREQ AND every needed derivation is present. Missing derivations are listed (`missing_derived`) and
 exit 4 so the driver (`row_pod.sh`) can derive them and rerun; refusal/mismatch exits 3.
 
-    python -m verity_vllm.correspondence.batch_decomp --oracle <match dir: program.json + instances.jsonl + capture/log.jsonl.gz>
+    python -m verity_vllm.check.match.batch_decomp --oracle <match dir: program.json + instances.jsonl + capture/log.jsonl.gz>
         --derived <dir with descriptor.json.gz + derive-report.json + artifact.json> [--derived <dir> ...] --out decomp.json
 
 PROTOCOL SUMMARY (Match stage, B>1: the per-request decomposition of the batched fold -- X-09; occurrence resolution at B>1)
@@ -55,7 +55,7 @@ import re
 import sys
 import time
 
-from verity_vllm.check import program_compare as C
+from verity_vllm.check.match import program_compare as C
 from verity_vllm.check.program_ops import Ops
 from verity_vllm.program.sampling_event import is_sampling_event as _is_sampling_event  # [R15 stoch]
 
@@ -462,7 +462,7 @@ def _profile_on() -> bool:
 
 
 def _fast_stats():
-    m = sys.modules.get("verity_vllm.check.global_match_fast")
+    m = sys.modules.get("verity_vllm.check.match.global_match_fast")
     return getattr(m, "stats", None) if m is not None else None
 
 

@@ -24,7 +24,7 @@ ROW_POD = os.path.join(REPO, "verity_vllm", "ops", "row_pod.sh")
 D = "38f7b397917d7951016a28d9a38df848f66557e0da4d1dd7d4155ad64ed9dbdf"
 D2 = "9699b09e" + "0" * 56
 
-from verity_vllm.input_provenance.weights_of_record import SCHEMA, SCHEMA_V1
+from verity_vllm.check.weights_of_record import SCHEMA, SCHEMA_V1
 
 CURRENT = {"schema": SCHEMA, "program_digest": D, "complete": True, "n_pinned": 163, "n_fields": 163,
            "unpinned": [], "unresolved": [], "engine_assumptions": {"kv_cache_dtype": "auto"}, "root_of_record": "2303f39a" + "0" * 56}
@@ -37,7 +37,7 @@ def _source() -> str:
     m = re.search(r'WOR_STALE=\$\(python3 - "\$WOR" "\$PD_WOR/result.json" "\$\{WOR_SCHEMA:-\}" <<\'EOF\'\n(.*?)\nEOF\n\)', src, re.S)
     assert m, "row_pod.sh: the weights-of-record reuse heredoc (WOR_STALE=$(python3 - \"$WOR\" \"$PD_WOR/result.json\" \"${WOR_SCHEMA:-}\" <<'EOF') is not where it was"
     # the tree's schema is asked of the module (never a literal in the script)
-    assert 'WOR_SCHEMA=$($PY -c "from verity_vllm.input_provenance.weights_of_record import SCHEMA; print(SCHEMA)"' in src
+    assert 'WOR_SCHEMA=$($PY -c "from verity_vllm.check.weights_of_record import SCHEMA; print(SCHEMA)"' in src
     assert "'" not in m.group(1), "no apostrophes in the heredoc (bash 3.2 laptop gate)"
     return m.group(1)
 
@@ -126,7 +126,7 @@ def test_unreadable_record_is_named_and_no_result_json_falls_back_to_the_schema_
 def test_cli_record_carries_its_derivation_provenance_and_names_what_it_supersedes(checkpoint, tmp_path):
     """[COORD R16 M-0038 (2)] a record the CLI writes carries `derived` = {tool, code (git HEAD or null), at, sources (Program files, checkpoint
     dir, checkpoints.json), argv, supersedes}; check() ignores it (digests are the evidence)."""
-    from verity_vllm.input_provenance import weights_of_record as WR
+    from verity_vllm.check import weights_of_record as WR
     from tests.input_provenance.test_weights_of_record import _program, _served, _write_program, live_digests
 
     d, man, t = checkpoint
@@ -140,7 +140,7 @@ def test_cli_record_carries_its_derivation_provenance_and_names_what_it_supersed
     assert WR.main(argv) == 0
     rec = json.load(open(out))
     dv = rec["derived"]
-    assert dv["tool"] == "verity_vllm.input_provenance.weights_of_record" and dv["supersedes"] == str(stale) and dv["argv"] == argv
+    assert dv["tool"] == "verity_vllm.check.weights_of_record" and dv["supersedes"] == str(stale) and dv["argv"] == argv
     assert dv["sources"]["program_dir"] == str(pdir) and dv["sources"]["program_files"] == ["instances.json.gz", "result.json"]
     assert dv["sources"]["checkpoint_dir"] == str(d) and dv["sources"]["checkpoints_manifest"] == str(man)
     assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", dv["at"]) and (dv["code"] is None or re.fullmatch(r"[0-9a-f]{40}", dv["code"]))
@@ -195,7 +195,7 @@ def test_provenance_code_is_the_shipped_commit_on_a_pod_tree_and_git_head_in_a_g
     """[COORD M-0038 (2)] derived.code names the code that ran the derivation.  The release tree on a pod has NO .git (ship.sh writes
     EXPORT.json with the shipped commit): the int-1 wave-1 records carried code null (exec r16_0413).  Now: EXPORT.json's commit first
     (code_source 'EXPORT.json', the dirty-patch digest named when present), git HEAD in a git tree, null only when neither exists."""
-    from verity_vllm.input_provenance import weights_of_record as WR
+    from verity_vllm.check import weights_of_record as WR
     root = os.path.abspath(os.path.join(os.path.dirname(WR.__file__), "..", ".."))
     exp = os.path.join(root, "EXPORT.json")
     if os.path.exists(exp):

@@ -19,7 +19,7 @@ import numpy as np
 import pytest
 
 from verity_vllm.commit.committer import native_collect as NC
-from verity_vllm.check import sampled_replay as SR
+from verity_vllm.check.replay import sampled_replay as SR
 
 # the sampled-replay world / helpers of test_sampled_replay (one fixture set, not a copy)
 from tests.check import test_sampled_replay as TSR

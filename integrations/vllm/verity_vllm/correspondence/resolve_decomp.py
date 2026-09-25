@@ -19,8 +19,8 @@ import os
 import time
 from typing import Any
 
-from verity_vllm.correspondence import batch_decomp as BD
-from verity_vllm.check import program_compare as C
+from verity_vllm.check.match import batch_decomp as BD
+from verity_vllm.check.match import program_compare as C
 
 from verity_vllm.observe import contract as OB
 from verity_vllm.correspondence import resolve as RS

@@ -47,5 +47,5 @@ def test_allowlist_has_no_stale_entries() -> None:
 def test_contract_modules_exist() -> None:
     known = I.modules()
     assert [m for m in I.PROPERTY_MODULES if m not in known] == []
-    assert importer("verity_vllm.pipeline.commit") and importer("verity_vllm.check.global_match")
+    assert importer("verity_vllm.pipeline.commit") and importer("verity_vllm.check.match.global_match")
     assert not importer("verity_vllm.check.census") and not importer("verity_vllm.commit.binding")

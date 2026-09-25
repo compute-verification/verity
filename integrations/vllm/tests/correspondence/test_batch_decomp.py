@@ -8,7 +8,7 @@ import json
 
 import pytest
 
-from verity_vllm.correspondence import batch_decomp as bd
+from verity_vllm.check.match import batch_decomp as bd
 
 R0, R1 = "req-0", "req-1"
 

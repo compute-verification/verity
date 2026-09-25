@@ -990,7 +990,7 @@ def oracle_producers_of_record(args: argparse.Namespace, required_manifest: dict
     carries none: (facts | None, record).  The Programs are the replay's (same lookup, same of-record digest check); None + the named
     reason when the manifest is not v2, no Program dir is given or a Program is not of record."""
     from verity_vllm.check import oracle_compare as OC
-    from verity_vllm.check import sampled_replay as SR
+    from verity_vllm.check.replay import sampled_replay as SR
     from verity_vllm.query.manifest import format as MF
     q = required_manifest.get("query") if isinstance(required_manifest, dict) else None
     if not (isinstance(q, dict) and q.get("engine") == SR.V2_QUERY):
@@ -1132,7 +1132,7 @@ def main(argv: list[str] | None = None) -> None:
                          "adaptive prover cannot grind the sample by recommitting (rev-cb M-0572); default = the run root alone (honest-prover measurement)")
     ap.add_argument("--weights-of-record", default=None, metavar="JSON",
                     help="[MAN-09, rev-cb M-0610] the weights of record: per-field digests of the served weights COMPOSED FROM THE PINNED CHECKPOINT SHARDS "
-                         "(verity_vllm.input_provenance.weights_of_record, written beside the Build's Program); every live parameter the committer registers is compared "
+                         "(verity_vllm.check.weights_of_record, written beside the Build's Program); every live parameter the committer registers is compared "
                          "with it by name -- a served model that differs from the checkpoint in one element is a named COMMIT FAIL")
     ap.add_argument("--checkpoint-dir", default=None,
                     help="[MAN-09] derive the weights of record in-process from this pinned checkpoint snapshot + the Program of record (--program-dir / "
@@ -1827,7 +1827,7 @@ def main(argv: list[str] | None = None) -> None:
         _live_wd: dict[str, Any] | None = None
         _wor_rec: dict[str, Any] | None = None
         if getattr(args, "weights_of_record", None) or getattr(args, "checkpoint_dir", None):
-            from verity_vllm.input_provenance import weights_of_record as WR
+            from verity_vllm.check import weights_of_record as WR
             TL.start("validate.weights_of_record_digests", kind=kind)
             try:
                 if getattr(args, "weights_of_record", None):
@@ -2195,7 +2195,7 @@ def main(argv: list[str] | None = None) -> None:
                 if compiled_kernels is not None:
                     # [R15 compiled S3] C2 of record (DECISIONS-2 (1)): stratified sampled exact replay of P_compiled's kernel relations from the
                     # committed bytes + ordered boundary linkage (ids(s) == token(s-1); argmax lm_head(hidden_s) == token(s)); seed from the run root
-                    from verity_vllm.check.compiled_kernel_check import CompiledKernelCheck
+                    from verity_vllm.check.replay.compiled_kernel_check import CompiledKernelCheck
 
                     row["commit"]["compiled_source"] = compiled_kernels.summary()
                     row["commit"]["compilation"] = versions["compilation"]
@@ -2361,7 +2361,7 @@ def main(argv: list[str] | None = None) -> None:
                     _rc_key: str | None = None
                     if getattr(args, "replay_cache", False):
                         try:
-                            from verity_vllm.check import sampled_replay as _SRk
+                            from verity_vllm.check.replay import sampled_replay as _SRk
                             if getattr(args, "replay_seed", None) is not None:
                                 _ks: Any = int(args.replay_seed)
                             elif getattr(args, "replay_challenge", None):
@@ -2384,7 +2384,7 @@ def main(argv: list[str] | None = None) -> None:
                         print(f"[delta] replay cache: pair {pair} key differs from pair {_v0['pair']}'s in {_d0}: own replay (root {rc.run_root.hex()[:16]} vs {_v0['run_root'][:16]})", flush=True)
                     TL.start("validate.sampled_replay", pair=pair, cached=_cached is not None)
                     try:
-                        from verity_vllm.check import executed_prefix as EPX, oracle_compare as OC, replay_codes as RC, sampled_replay as SR
+                        from verity_vllm.check import executed_prefix as EPX, oracle_compare as OC; from verity_vllm.check.replay import replay_codes as RC, sampled_replay as SR
                         from verity_vllm.query.manifest import format as MF
                         if _cached is not None:
                             raise _ReplayReused()
@@ -2680,7 +2680,7 @@ def main(argv: list[str] | None = None) -> None:
                               f"{(' (read errors ' + str(_ac.get('read_errors_n')) + ')') if _ac.get('read_errors_n') else ''}", flush=True)
                 if _wor_rec is not None or _live_wd is not None:
                     # [MAN-09] WEIGHTS PIN: the served parameters the committer registered == the checkpoint of record, field by field
-                    from verity_vllm.input_provenance import weights_of_record as WR
+                    from verity_vllm.check import weights_of_record as WR
                     TL.start("validate.weights_pin", pair=pair)
                     if _wor_rec is None or _live_wd is None or _wor_rec.get("error"):
                         _wp = {"result": None, "why": (_wor_rec or {}).get("why") or "live parameter digests not taken", "method": "MAN-09 weights pin (not evaluated)"}

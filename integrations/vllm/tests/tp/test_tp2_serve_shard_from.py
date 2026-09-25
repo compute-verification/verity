@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 
 from verity_vllm.pipeline.tp.commit import parse_serve_shard_from
-from verity_vllm.input_provenance import weights_of_record as WR
+from verity_vllm.check import weights_of_record as WR
 from tests.input_provenance.test_weights_of_record import PREFIX, _program, _served, checkpoint, live_digests  # noqa: F401  (fixture)
 
 
@@ -81,10 +81,10 @@ def test_a_replicated_parameter_has_no_other_ranks_shard(checkpoint):
 def test_repo_modules_loaded_names_this_process_imports_relative_to_the_repo():
     """[TP-11, rev F-r16-19] the import path of record is written from the RUNNING process (sys.modules), not a static closure."""
     from verity_vllm.engine.rank_worker import repo_modules_loaded
-    from verity_vllm.input_provenance import weights_of_record  # noqa: F401  -- imported here == must be listed
+    from verity_vllm.check import weights_of_record  # noqa: F401  -- imported here == must be listed
     r = repo_modules_loaded()
     assert r["method"].startswith("runtime:") and r["n"] == len(r["files"]) == len(set(r["files"]))
-    assert "verity_vllm/engine/rank_worker.py" in r["files"] and "verity_vllm/input_provenance/weights_of_record.py" in r["files"]
+    assert "verity_vllm/engine/rank_worker.py" in r["files"] and "verity_vllm/check/weights_of_record.py" in r["files"]
     assert all(not f.startswith("/") and not f.endswith(".pyc") for f in r["files"])
     assert r["native_collect_jit_sources"] == [] or all(f.endswith((".cpp", ".cu")) for f in r["native_collect_jit_sources"])
 

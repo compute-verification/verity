@@ -32,7 +32,7 @@ import numpy as np
 import pytest
 
 from verity_vllm.commit import binding as B
-from verity_vllm.input_provenance import weights_of_record as WR
+from verity_vllm.check import weights_of_record as WR
 from tests.check.test_sampled_replay import _program as _wired_program
 from tests.check.test_sampled_replay import v2_manifest
 from tests.input_provenance.test_weights_of_record import (PREFIX, _program, _served, _write_program, checkpoint,  # noqa: F401 (fixture)

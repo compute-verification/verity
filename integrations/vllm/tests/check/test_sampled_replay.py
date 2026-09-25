@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity_vllm.check import sampled_replay as SR
+from verity_vllm.check.replay import sampled_replay as SR
 
 EPS = '{"f64":"0x1.4f8b588e368f1p-17"}'
 V, H, I, LP, T = 8, 16, 16, 2, 2          # vocab, hidden, intermediate, prompt len, decode steps (steps = LP-prefill + T decode = 1 + T)
@@ -1769,7 +1769,7 @@ def test_population_stamps_on_every_reason_the_code_its_text_decodes_to(moe_worl
     and a record of record grade alike."""
     from collections import Counter
 
-    from verity_vllm.check import replay_codes as RC
+    from verity_vllm.check.replay import replay_codes as RC
 
     monkeypatch.delitem(SR.EVALUATORS, "RMSNormFusedCuda_v2")                  # direct no-evaluator gaps
     monkeypatch.delitem(SR.EVALUATORS, "MoeRouterTopK_v1")                     # a plane producer without an evaluator (MAN-06f)

@@ -18,10 +18,10 @@ A *run directory* is what `bench/run_config.py` produces for one configuration (
     RUN_DIR/nonint/noninterference.json
     RUN_DIR/compare.json             `verity_vllm.check.fold_compare` (tokens, boundary, subcircuits, structure)
     RUN_DIR/wiring.json              `verity_vllm.check.operand_provenance` (G5: exhaustive operand provenance, D82)
-    RUN_DIR/replay_a.json            `verity_vllm.check.replay --tier a` (verifier-seeded stratified sample + served tokens)
-    RUN_DIR/replay_chain.json        `verity_vllm.check.replay --tier chain` (connected slices with computed intermediates)
-    RUN_DIR/replay_b_step<N>.json    `verity_vllm.check.replay --tier b --step N` — full replay, DIAGNOSTIC ONLY (never gating)
-    RUN_DIR/root_policy.json         `verity_vllm.input_provenance.root_policy` (integrator)
+    RUN_DIR/replay_a.json            `verity_vllm.check.replay.replay --tier a` (verifier-seeded stratified sample + served tokens)
+    RUN_DIR/replay_chain.json        `verity_vllm.check.replay.replay --tier chain` (connected slices with computed intermediates)
+    RUN_DIR/replay_b_step<N>.json    `verity_vllm.check.replay.replay --tier b --step N` — full replay, DIAGNOSTIC ONLY (never gating)
+    RUN_DIR/root_policy.json         `verity_vllm.check.root_policy` (integrator)
     RUN_DIR/golden.json              `verity_vllm.check.golden --check` (integrator)
     RUN_DIR/quarantine.json          differential tests of newly registered definitions (when the run uses any)
     RUN_DIR/holdouts.json            written by the ORCHESTRATOR: the same gates G1..G6 over holdout workloads

@@ -72,11 +72,11 @@ def test_dry_run_cpu_phase():
         f = c[st]
         assert f[1:5] == ["-m", "verity_vllm.pipeline.match", "--worker", "fold"] and f[f.index("--out") + 1] == out
     rp = c["root_policy"]
-    assert rp[1:3] == ["-m", "verity_vllm.input_provenance.root_policy"] and rp[rp.index("--safetensors") + 1] == "/ck/snap/model*.safetensors"
+    assert rp[1:3] == ["-m", "verity_vllm.check.root_policy"] and rp[rp.index("--safetensors") + 1] == "/ck/snap/model*.safetensors"
     assert rp[rp.index("--out") + 1] == "/r/RUN/root_policy.json" and rp[rp.index("--snapshots") + 1] == "/r/RUN/capture"
     assert c["golden"][1:5] == ["-m", "verity_vllm.check.golden", "--check", "--out"] and c["golden"][-1] == "/r/RUN/golden.json"
     ra = c["replay_a"]
-    assert ra[1:3] == ["-m", "verity_vllm.check.replay"] and ra[ra.index("--tier") + 1] == "a" and ra[ra.index("--k") + 1] == str(RC.DEFAULT_K)
+    assert ra[1:3] == ["-m", "verity_vllm.check.replay.replay"] and ra[ra.index("--tier") + 1] == "a" and ra[ra.index("--k") + 1] == str(RC.DEFAULT_K)
     assert ra[ra.index("--max-arg-leaves") + 1] == "4000000" and ra[ra.index("--out") + 1] == "/r/RUN/replay_a.json"
     assert ra[ra.index("--seed") + 1] == "12345"                      # the verifier's seed reaches the sampler
     w = c["wiring"]

@@ -1,4 +1,4 @@
-"""verity_vllm/query/vu_query.py — the local verification units (VUs) of a folded Program as an enumerable population.
+"""verity_vllm/check/replay/vu_query.py — the local verification units (VUs) of a folded Program as an enumerable population.
 
 Gate G5 (D82) evaluates *local verification units*: a root instance of the flat Program when its argument leaves fit
 `max_arg_leaves`, else a child unit reached by descending through the call hierarchy (`Replayer.plan_child` /
@@ -57,7 +57,7 @@ from verity.ir.refs import Affine, Concat, Refs, Strided, runs
 
 from verity_vllm.check.fold_compare import SnapshotStore, WeightSource
 from verity_vllm.observe.fold.fold import FoldResult
-from verity_vllm.check.replay import Replayer, Skipped, _diff
+from verity_vllm.check.replay.replay import Replayer, Skipped, _diff
 
 DEFAULT_DEPTH = 3
 Intervals = tuple[tuple[int, int], ...]        # sorted, disjoint, non-adjacent [lo, hi) pairs

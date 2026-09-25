@@ -18,7 +18,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity_vllm.check import sampled_replay as SR
+from verity_vllm.check.replay import sampled_replay as SR
 from verity_vllm.program.registry.topp_split import splits_for_v1
 
 EMB = "model.embed_tokens"

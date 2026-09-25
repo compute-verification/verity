@@ -14,7 +14,7 @@ import numpy as np
 import pytest
 
 from verity_vllm.check import fold_compare as cmp
-from verity_vllm.check import replay
+from verity_vllm.check.replay import replay
 from verity_vllm.observe.fold.fold import fold
 from tests.observe import test_fold_synthetic as tfs
 from tests.check.test_compare_synthetic import ToyWeights, _evaluate_program, _write_snapshots

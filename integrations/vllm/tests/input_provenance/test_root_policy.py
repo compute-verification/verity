@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from verity_vllm.input_provenance import root_policy
+from verity_vllm.check import root_policy
 from verity_vllm.check.fold_compare import DEFAULT_COS_SIN as COS_SIN, load_profile
 from verity_vllm.observe.events import Root, RunHeader, ViewDesc
 from verity_vllm.observe.log import read_log

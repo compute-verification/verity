@@ -57,10 +57,10 @@ from typing import Any, Callable, Iterable, Sequence
 import numpy as np
 
 from verity_vllm.query.manifest import format as RM
-from verity_vllm.check import replay_codes as RC
+from verity_vllm.check.replay import replay_codes as RC
 from verity_vllm.check.oracle_compare import entry_read_name as _entry_read_name, same_name_invocations as _same_name_invocations
-from verity_vllm.check.replay_codes import NOT_YET, WHY_CLASSES_BY_NAME, WHY_CLASSES_FAULT, why_class  # noqa: F401  (this module's record vocabulary)
-from verity_vllm.check.replay_dump import dump_row_words
+from verity_vllm.check.replay.replay_codes import NOT_YET, WHY_CLASSES_BY_NAME, WHY_CLASSES_FAULT, why_class  # noqa: F401  (this module's record vocabulary)
+from verity_vllm.check.replay.replay_dump import dump_row_words
 from verity_vllm.commit.opened import OpeningNotVerified, UnverifiedUnlinked, opened_check, opened_in_children
 
 SCHEMA = "verity-sweep/sampled-replay/v1"

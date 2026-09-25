@@ -373,7 +373,7 @@ def test_real_capture_resolves_without_unsupported(name, steps):
 def test_real_capture_folds_and_every_moe_gemm_instance_has_coordinate_units():
     """The fold binds the whole 3-token prefill (no unresolved read); under the 8M-leaf budget every oversize pair-GEMM
     instance decomposes into N coordinate units that tile its returns — the VU coverage line of REPORT.md."""
-    from verity_vllm.query import vu_query as vq
+    from verity_vllm.check.replay import vu_query as vq
     from verity_vllm.pipeline.match import fold_summary_result
     summ, result = fold_summary_result(_w1_log("olmoe_3x1_1req"), "gen_ov_moe_olmoe", with_program=True)
     assert summ["unsupported"] == 0 and summ["unresolved"] == 0 and summ["errors"] == 0 and summ["n_instances"] == 1736

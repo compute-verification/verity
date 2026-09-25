@@ -6,7 +6,7 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity_vllm.tp import xrank_collectives as XC  # noqa: E402
+from verity_vllm.check.match import xrank_collectives as XC  # noqa: E402
 
 SITES = ["model.layers.0.self_attn.o_proj", "model.layers.0.mlp.down_proj", "model.embed_tokens"]
 

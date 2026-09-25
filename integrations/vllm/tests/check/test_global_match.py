@@ -15,8 +15,8 @@ import pytest
 
 from verity_vllm.pipeline.match import persist_program
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, SampleEnd, StepEnd, StepLink, StepStart, StorageAlloc, TritonLaunch, ViewDesc
-from verity_vllm.check import global_match as gm
-from verity_vllm.check import global_match_fast as GMF
+from verity_vllm.check.match import global_match as gm
+from verity_vllm.check.match import global_match_fast as GMF
 from tests.correspondence import test_batch_decomp_e2e as e2e
 from tests.correspondence.test_batch_decomp_e2e import (A_DOWN_W, A_EMBED, A_GU_W, A_IDS, A_LN1, A_LN2, A_NORM, A_O_W, A_POS, A_QKV_W, BF,
                                                                             BS, I32D, I64D, W_COS, W_DOWN, W_EMBED, W_GU, W_LN1, W_LN2, W_NORM,
@@ -404,7 +404,7 @@ def test_fast_path_releases_its_caches_when_the_outermost_check_returns(memory, 
     """[R17 mprof unit 4, rev F-r17-06] MATCH_IMPL=fast memoises per Prog / Projection for the duration of ONE check() -- including its
     nested alternate-criterion run -- and holds nothing afterwards, so a process that checks several records does not grow by one
     record's caches per record.  The document is the checker of record's, field for field."""
-    from verity_vllm.check import global_match_fast as GMF
+    from verity_vllm.check.match import global_match_fast as GMF
     gp, oracle = assemble([R0, R1_LATE], tmp_path)
     ref = gm.check(gp, oracle)
     monkeypatch.setenv(GMF.FLAG, "fast")
@@ -446,9 +446,9 @@ def test_fast_path_passes_its_operations_and_rebinds_nothing(memory, tmp_path, m
     check() in the same process still loads the record's Programs and writes the same document."""
     import verity.ir.codec as codec
     import verity.ir.refs as refs
-    from verity_vllm.correspondence import batch_decomp as BD
-    from verity_vllm.check import program_compare as C
-    from verity_vllm.check import global_match_fast as GMF
+    from verity_vllm.check.match import batch_decomp as BD
+    from verity_vllm.check.match import program_compare as C
+    from verity_vllm.check.match import global_match_fast as GMF
     names = [(codec, "_spec_id"), (refs, "runs"), (C, "compare_steps"), (C, "_canonical_hash"), (C, "_canon_step_relative"),
              (C, "load_oracle"), (C, "load_derived"), (BD, "dag_hashes"), (BD, "live_cone"), (BD, "Projection")]
     before = [getattr(m, n) for m, n in names]
@@ -2067,8 +2067,8 @@ def test_fast_path_dag_hash_ids_are_per_process_and_a_foreign_dict_is_refused(me
     """[rev F-r17-07] The compact Merkle payload names producers by small per-process ids; a dag_hashes dict computed in one process
     (a forked worker) must never be matched against one computed in another.  The memo refuses a seeded foreign dict by name."""
     import os
-    from verity_vllm.check import program_compare as C
-    from verity_vllm.check import global_match_fast as GMF
+    from verity_vllm.check.match import program_compare as C
+    from verity_vllm.check.match import global_match_fast as GMF
     gp, oracle = assemble([R0, R1], tmp_path)
     B = C.load_oracle(oracle, "oracle")
     dag_hashes = GMF.ops().dag_hashes
@@ -2093,7 +2093,7 @@ def test_fast_runs_equals_refs_runs_on_every_descriptor_shape():
     fusing neighbours) and falls back to the original on every other shape (Strided, Explicit, nested Concat)."""
     import random
     from verity.ir.refs import Affine, Concat, Explicit, Strided, runs
-    from verity_vllm.check import global_match_fast as GMF
+    from verity_vllm.check.match import global_match_fast as GMF
     rng = random.Random(7)
     def affine():
         return Affine(rng.choice("np"), rng.randrange(6), rng.randrange(8) * 4, rng.choice([0, 1, 4, 4, 8]))
@@ -2111,9 +2111,9 @@ def test_fast_producer_chronology_and_dep_order_scan_equal_the_records_loops(mem
     """[unit 5 (b)(c)] On a real-shaped fixture (staggered arrivals, a co-scheduled prefill, T-grouped emission = a cross-step
     producer, and the consumer-before-producer negative) the helpers return exactly what the record's loops compute."""
     import collections
-    from verity_vllm.correspondence import batch_decomp as BD
-    from verity_vllm.check import program_compare as C
-    from verity_vllm.check import global_match_fast as GMF
+    from verity_vllm.check.match import batch_decomp as BD
+    from verity_vllm.check.match import program_compare as C
+    from verity_vllm.check.match import global_match_fast as GMF
     seen_viol = 0
     for n, (reqs, kw) in enumerate((([R0, R1_LATE, R2_LATE], {}), ([R0, R1_LATE, R2_LATE], {"tgrouped": True}), ([R0, R1], {"leak": True}),
                                     ([R0, R1], {"tgrouped": True, "_swap": True}))):
@@ -2173,8 +2173,8 @@ def test_fast_dag_hash_interning_induces_exactly_the_records_merkle_partition(me
     their own id) instead of sha256(json).  Spy every dag_hashes call check() makes -- components, projections, live cones, the
     permutation fixture's per-step matching, the consumer-before-producer forward refs -- and require ONE bijection between the
     record's digests and the ids across all of them (so A-vs-P comparisons decide exactly as the record's do), under both operand forms."""
-    from verity_vllm.check import global_match_fast as GMF
-    from verity_vllm.correspondence import batch_decomp as BD
+    from verity_vllm.check.match import global_match_fast as GMF
+    from verity_vllm.check.match import batch_decomp as BD
     monkeypatch.setenv(GMF.FLAG, "fast")
     monkeypatch.setenv(GMF.COMPACT_ENV, compact)
     monkeypatch.setenv("MATCH_WORKERS", "1")
@@ -2219,8 +2219,8 @@ def test_fast_dag_hash_progression_memo_does_not_carry_a_forward_ref_marker_to_a
     fast A == B where record A != B, so the fast document put the resolved readers in the marker class.  Both shapes rev posted:
     count 2 (M-0338: two producers) and the ordinary count-1 progression (M-0383: one producer, its other readers after it)."""
     import inspect
-    from verity_vllm.correspondence import batch_decomp as BD
-    from verity_vllm.check import global_match_fast as GMF
+    from verity_vllm.check.match import batch_decomp as BD
+    from verity_vllm.check.match import global_match_fast as GMF
     if "compact" not in inspect.getsource(BD.dag_hashes):
         pytest.skip("the compact (progression-form) operand is mfast's tree; here no Prog is compact and the memo branch is not reached")
 
@@ -2261,8 +2261,8 @@ def test_cli_decomp_out_is_the_standalone_batch_decomp_document(memory, tmp_path
     again inside check() (the x09 block) -- 365 s twice at B8 1024/128.  `--decomp-out` writes the document GM-01's own X-09 run
     produced, in batch_decomp's CLI schema: key for key what a standalone decompose() over the same fold and components returns
     (utc / seconds aside), under both implementations; exit 4 when X-09 names missing derived shapes (row_pod's derive-and-rerun)."""
-    from verity_vllm.correspondence import batch_decomp as BD
-    from verity_vllm.check import global_match_fast as GMF
+    from verity_vllm.check.match import batch_decomp as BD
+    from verity_vllm.check.match import global_match_fast as GMF
     monkeypatch.setenv(GMF.FLAG, impl)
     monkeypatch.setenv("MATCH_WORKERS", workers)   # mfast's forked X-09 legs return the per-request entries: the document must not depend on W
     gp, oracle = assemble([R0, R1_LATE, R2_LATE], tmp_path)
@@ -2301,7 +2301,7 @@ def test_cli_decomp_out_is_the_standalone_batch_decomp_document(memory, tmp_path
         import subprocess, sys as _sys
         dout2 = tmp_path / "decomp_m.json"
         env = dict(os.environ, MATCH_IMPL=impl, MATCH_WORKERS=workers, PYTHONPATH=os.pathsep.join(p for p in _sys.path if p))
-        p = subprocess.run([_sys.executable, "-m", "verity_vllm.check.global_match", "--global-program", str(gpp), "--oracle", str(oracle),
+        p = subprocess.run([_sys.executable, "-m", "verity_vllm.check.match.global_match", "--global-program", str(gpp), "--oracle", str(oracle),
                             "--out", str(tmp_path / "gm_m.json"), "--decomp-out", str(dout2), "--within-step", "dag"], env=env, capture_output=True, text=True)
         assert p.returncode == 0, p.stderr[-800:]
         assert json.dumps(strip(json.loads(dout2.read_text())), sort_keys=True, default=str) == json.dumps(strip(ref), sort_keys=True, default=str)

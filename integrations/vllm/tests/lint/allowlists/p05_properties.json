@@ -1,7 +1,7 @@
 {
   "rule": "P5 (property logic lives in properties/)",
   "entries": [
-    {"file": "verity_vllm/check/sampled_replay.py", "kind": "import", "symbol": "<module>", "detail": "verity_vllm.check.sampled_replay -> verity_vllm.check.difftest"},
-    {"file": "verity_vllm/check/stoch_recompute.py", "kind": "import", "symbol": "<module>", "detail": "verity_vllm.check.stoch_recompute -> verity_vllm.check.difftest"}
+    {"file": "verity_vllm/check/replay/sampled_replay.py", "kind": "import", "symbol": "<module>", "detail": "verity_vllm.check.replay.sampled_replay -> verity_vllm.check.difftest"},
+    {"file": "verity_vllm/check/replay/stoch_recompute.py", "kind": "import", "symbol": "<module>", "detail": "verity_vllm.check.replay.stoch_recompute -> verity_vllm.check.difftest"}
   ]
 }

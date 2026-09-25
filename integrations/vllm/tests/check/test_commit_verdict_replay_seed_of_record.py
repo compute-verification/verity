@@ -14,7 +14,7 @@ from __future__ import annotations
 import hashlib
 
 from verity_vllm.check.commit_verdict import _replay_seed_of_record, commit_verdict
-from verity_vllm.check.sampled_replay import challenge_seed
+from verity_vllm.check.replay.sampled_replay import challenge_seed
 
 # the shape of rev M-0579's recomputed fact (qwen A100 int-3 pair 0: run_root 71f69377... -> sample.seed 8211913111514837969)
 RUN_ROOT = "71f69377" + "ab" * 28
@@ -82,7 +82,7 @@ def test_the_verifier_challenge_form_is_recomputed_from_the_recorded_challenge_a
     assert _replay_seed_of_record(_sr_chal(seed, src, "audit-2026-09-20"), None)[0] is False   # no run root to recompute from
     # the record shape: sampled_replay writes sample.challenge ONLY under the challenge form (root-form records are byte-identical)
     import inspect
-    from verity_vllm.check import sampled_replay as SRm
+    from verity_vllm.check.replay import sampled_replay as SRm
     assert "seed_challenge" in inspect.signature(SRm.sampled_replay).parameters
     src_txt = inspect.getsource(SRm.sampled_replay)
     assert '**({"challenge": str(seed_challenge)} if seed_challenge is not None else {})' in src_txt

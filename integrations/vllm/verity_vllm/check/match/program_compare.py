@@ -18,7 +18,7 @@ runs), segmented into engine steps at `TokenSelect` boundaries (one sampling eve
 
 Every difference is reported with counts and examples; nothing is dropped silently.
 
-    python -m verity_vllm.check.program_compare --a <dir with descriptor.json.gz + derive-report.json> \\
+    python -m verity_vllm.check.match.program_compare --a <dir with descriptor.json.gz + derive-report.json> \\
         --b <oracle dir with program.json + instances.jsonl | derived dir> --out compare.json [--unfold-a]
 """
 

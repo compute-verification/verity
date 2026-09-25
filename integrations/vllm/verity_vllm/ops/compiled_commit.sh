@@ -54,7 +54,7 @@ if [ -z "$REQUIRED_MANIFEST" ] && [ "$TAPS" != kernels ] && [ -f "$D/build_reque
 fi
 [ -n "$REQUIRED_MANIFEST" ] && [ -f "$REQUIRED_MANIFEST" ] && COMMON+=(--required-manifest "$REQUIRED_MANIFEST")
 # [MAN-09, coord M-0614 (1)] WEIGHTS OF RECORD: the served parameters are authenticated against the pinned checkpoint shards (an engine-free
-# record, verity_vllm/input_provenance/weights_of_record.py, built from the model's Program weights struct x the pinned safetensors).  P_compiled
+# record, verity_vllm/check/weights_of_record.py, built from the model's Program weights struct x the pinned safetensors).  P_compiled
 # reads the SAME served parameters as the eager Program (the compiled GEMM/norm/RoPE kernels take the module weights as arguments -- their
 # C2 relations replay bit-for-bit with them), so the model's weights-of-record record applies to the compiled rows verbatim.
 WEIGHTS_OF_RECORD=${WEIGHTS_OF_RECORD:-}

@@ -83,10 +83,10 @@ import re
 import sys
 import time
 
-from verity_vllm.correspondence import batch_decomp as BD
+from verity_vllm.check.match import batch_decomp as BD
 from verity_vllm.program.compact import n_max_producer as _n_max_producer, n_producers as _n_producers  # [R17 mfast]
-from verity_vllm.check import program_compare as C
-from verity_vllm.check import global_match_fast as GMF  # [R17 mprof] MATCH_IMPL=fast: compute-once memo of the pure per-request work; inert without the flag
+from verity_vllm.check.match import program_compare as C
+from verity_vllm.check.match import global_match_fast as GMF  # [R17 mprof] MATCH_IMPL=fast: compute-once memo of the pure per-request work; inert without the flag
 from verity_vllm.program.sampling_event import is_sampling_event as _is_sampling_event  # [R15 stoch]
 
 COMPARATOR = "cb_a.global_match/v1"
@@ -410,7 +410,7 @@ def top_p_split_count(spec: str, B=None, inst: dict | None = None) -> int | None
             if len(run) == 4 and run[0] == "n" and (run[2], run[3]) == (0, 1):
                 j = (getattr(B, "k2i", None) or {}).get(run[1])
                 if j is not None:
-                    from verity_vllm.check.program_compare import const_value
+                    from verity_vllm.check.match.program_compare import const_value
                     cv = const_value(B.inst[j]["spec"])
                     if cv is not None and cv[0] == 32:
                         return int(cv[1])
@@ -2082,7 +2082,7 @@ def impl_module(name: str | None = None):
         import sys
         return sys.modules[__name__]
     if name == "fast":
-        from verity_vllm.check import global_match_fast
+        from verity_vllm.check.match import global_match_fast
         return global_match_fast
     raise ValueError(f"{IMPL_ENV}={name!r}: not one of {IMPLS}")
 

@@ -4,7 +4,7 @@ full-size builds are gated like `test_fold_m1.py`; run `CAPTURE_BIG=1 pytest tes
 
 Laptop budget (DESIGN §11 / the 2026-09-16 kernel panic): every test here stays under 1.5 GB and well under 3 minutes;
 the reference evaluator costs ~40 us per gate, so a full decode step (7.8M gates) is ~5.3 min and the 32-row prefill
-~3 h — those run on the pod (`python -m verity_vllm.check.replay --tier b --step N` without `--layers`).  Here tier B is
+~3 h — those run on the pod (`python -m verity_vllm.check.replay.replay --tier b --step N` without `--layers`).  Here tier B is
 exercised on a layer subset of the decode step and on a prefix of the prefill; measured 2026-09-16: tier A k=2 30 s /
 1.0 GB, tier B step 1 layers {0, 29} 23 s / 0.85 GB, tier B step 0 first 80 instances 26 s / 0.85 GB."""
 from __future__ import annotations
@@ -72,7 +72,7 @@ def _under_budget(rep: dict, seconds: float) -> None:
 
 
 def test_tier_a_k2_covers_every_reachable_spec(m1):
-    from verity_vllm.check import replay
+    from verity_vllm.check.replay import replay
     r, store, weights = m1
     a = replay.tier_a(r, store, weights, k=2, seed=0)
     print(replay.summary_line(a))
@@ -111,7 +111,7 @@ def test_tier_b_decode_step_layers_subset(m1):
     """Step 1 (decode, T=33) on layers 0 and 29 plus the non-layer instances under the laptop budget: 0 divergences;
     Embedding and lm_head Gemm (28M leaves) skipped under `max_arg_leaves`, their consumers `partial` (fed from the
     snapshot), the sampled token reproduced."""
-    from verity_vllm.check import replay
+    from verity_vllm.check.replay import replay
     r, store, weights = m1
     b = replay.tier_b(r, store, weights, step=1, max_arg_leaves=4_000_000, layers=[0, 29])
     print(replay.summary_line(b))
@@ -150,7 +150,7 @@ def test_tier_b_decode_step_layers_subset(m1):
 def test_tier_b_prefill_prefix(m1):
     """Step 0 (prefill, 32 rows) is ~3 h on the laptop; the first 80 instances (32 Embedding rows skipped under the
     budget, 32 layer-0 input norms, 16 qkv Gemm rows) chain with 0 divergences in ~30 s."""
-    from verity_vllm.check import replay
+    from verity_vllm.check.replay import replay
     r, store, weights = m1
     b = replay.tier_b(r, store, weights, step=0, max_arg_leaves=4_000_000, max_instances=80)
     print(replay.summary_line(b))

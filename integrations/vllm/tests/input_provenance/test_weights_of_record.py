@@ -9,7 +9,7 @@ import struct
 import numpy as np
 import pytest
 
-from verity_vllm.input_provenance import weights_of_record as WR
+from verity_vllm.check import weights_of_record as WR
 
 H, I, HQ, HKV, D, V = 8, 12, 2, 1, 4, 20          # hidden, intermediate, heads, kv heads, head dim, vocab
 

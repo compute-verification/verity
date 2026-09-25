@@ -1,14 +1,13 @@
 """P2: value checks read opened values only.
 
-The rule's import contract is "``check.replay`` may not import ``acquire`` or ``commit.committer``".  ``check/replay/``
-does not exist yet, so today it applies to the modules bound for ``check/replay/`` and the determinism value checks (``_imports.VALUE_CHECK_MODULES``: ``check.replay``, ``sampled_replay``, ``stoch_recompute``,
-``compiled_kernel_check``, ``query.vu_query``, ``value_check``, ``compiled_value_check``, ``oracle_compare``), and it
-forbids ``verity_vllm.acquire``, ``verity_vllm.commit.committer`` and the other modules whose interim layer is
-``acquire``.  Violations are keyed by (importer, imported)
-module pair in ``allowlists/p02_value_checks.json``.
+The rule's import contract is "``check.replay`` may not import ``acquire`` or ``commit.committer``".  It applies to
+``check/replay/`` and, until they are one determinism module, the determinism value checks
+(``_imports.VALUE_CHECK_MODULES``: ``check.replay``, ``check.value_check``, ``check.compiled_value_check``,
+``check.oracle_compare``), and it forbids ``verity_vllm.acquire``, ``verity_vllm.commit.committer`` and the other
+modules whose interim layer is ``acquire``.  Violations are keyed by (importer, imported) module pair in
+``allowlists/p02_value_checks.json``.
 
-Once ``check/replay/`` exists, the importer set is ``verity_vllm.check.replay`` and the
-forbidden set is ``verity_vllm.acquire`` plus ``verity_vllm.commit.committer``.  A committer object passed in at run
+A committer object passed in at run
 time (``committed_reader(com)``) is invisible to an import contract; a pod negative test (mutate the retained buffer
 after commit, and the value check must FAIL) covers that half.
 """

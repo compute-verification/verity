@@ -108,7 +108,7 @@ def test_registry_derived_family_selectors():
     assert TP2.collective_kind("Gemm_v1{K=1,N=2}") is None and TP2.collective_kind("") is None
     assert TP2.cross_rank_families(2) == {"AllReduce2_v1", "AllGather2_v1", "EmbeddingShard_v1"}
     assert TP2.cross_rank_families(3) == {"AllReduce_v2", "AllGather_v1", "EmbeddingShard_v1"}
-    from verity_vllm.tp import xrank_collectives as XC
+    from verity_vllm.check.match import xrank_collectives as XC
     from verity_vllm.query import required as v1_bridge
     assert v1_bridge.collective_kind("AllGather_v1{WORLD=3,N=8}") == "all_gather"
     assert XC.collective_family("all_reduce", 2) == "AllReduce2_v1" and XC.collective_family("all_reduce", 3) == "AllReduce_v2"
@@ -230,7 +230,7 @@ def _colls(rank: int, world: int, *, N: int = 8, steps: int = 2):
 
 
 def test_cross_rank_check_world_3_passes_and_names_a_missing_rank():
-    from verity_vllm.tp import rank_match as RMx
+    from verity_vllm.check.match import rank_match as RMx
     W = 3
     res = RMx.cross_rank_check({r: _colls(r, W) for r in range(W)})
     assert res["world"] == 3 and res["ranks"] == [0, 1, 2]

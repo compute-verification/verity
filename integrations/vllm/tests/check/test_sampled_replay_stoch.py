@@ -17,7 +17,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity_vllm.check import sampled_replay as SR
+from verity_vllm.check.replay import sampled_replay as SR
 
 V, H, T = 64, 8, 2          # vocab, hidden (the logits Gemm's K), decode steps after the arrival step
 

@@ -162,7 +162,7 @@ def _program_json_layout(path: str, digest: str | None) -> tuple[int | None, lis
 def read_steps(record_dir: str) -> tuple[dict, dict[int, dict]]:
     """(RunHeader, {engine step: {rows, logits_rows, logits_indices}}) of the record's capture log -- `batch_decomp.read_steps`, the
     fold's own chronology (the row-count rule reads it)."""
-    from verity_vllm.correspondence import batch_decomp as BD
+    from verity_vllm.check.match import batch_decomp as BD
     d = match_dir(record_dir)
     log = os.path.join(d, "capture", "log.jsonl.gz")
     if not os.path.isfile(log):

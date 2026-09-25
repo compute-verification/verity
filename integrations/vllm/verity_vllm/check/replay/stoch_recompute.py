@@ -23,7 +23,7 @@ A wrong declared seed (manifest vs run) fails here by name: the kernel consumed 
 recomputed token differs (mismatch, with probability ~1).  A mutated sampler chain (another kernel / another noise / another mask)
 fails the masked-row or token comparison.  Fail closed: no snapshotted sampled row -> exit 2 (nothing was checked).
 
-    PYTHONPATH=. python -m verity_vllm.check.stoch_recompute --run <match dir> [--out <json>]
+    PYTHONPATH=. python -m verity_vllm.check.replay.stoch_recompute --run <match dir> [--out <json>]
     exit 0 PASS, 1 FAIL (named reasons in the report), 2 nothing checked
 
 Implementation variant this checks against (recorded in the report): vLLM d9105ea80 V2 sampler with an explicit `SamplingParams.seed`

@@ -189,7 +189,7 @@ def test_root_policy_validates_the_normalizer_buffer_against_the_analytic_word(t
     """A synthetic capture with the one Gemma root the D82 policy called 'unknown': a 0-d bf16 buffer `model.normalizer` whose
     2-byte snapshot is bf16(48) -> class analytic-table, validator check_normalizer, pass; a wrong word or no snapshot fails;
     nothing else about the policy changes (the root is still counted, never silently accepted)."""
-    from verity_vllm.input_provenance import root_policy
+    from verity_vllm.check import root_policy
     from verity_vllm.observe.events import Root, RunHeader, ViewDesc
 
     view = ViewDesc(alloc=211, offset=0, shape=(), strides=(), dtype="bfloat16", device="cuda:0")
@@ -229,7 +229,7 @@ def test_root_policy_reads_the_captured_normalizer_npy_like_cos_sin(tmp_path):
     """The real capture does not snapshot buffers (weights validate by checkpoint identity), so `m1_capture.dump_normalizer`
     writes the runtime word to capture/normalizer.npy the way `dump_cos_sin` writes the rotary table; root_policy reads it
     first (0-d uint16 as saved), the snapshot store second, and a wrong captured word is still a fail."""
-    from verity_vllm.input_provenance import root_policy
+    from verity_vllm.check import root_policy
     from verity_vllm.observe.events import Root, RunHeader, ViewDesc
 
     view = ViewDesc(alloc=211, offset=0, shape=(), strides=(), dtype="bfloat16", device="cuda:0")

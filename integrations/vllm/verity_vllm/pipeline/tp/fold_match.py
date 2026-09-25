@@ -27,7 +27,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.tp import rank_match as RM
+from verity_vllm.check.match import rank_match as RM
 
 SCHEMA = "verity/tp2/fold-match/v1"
 
@@ -87,7 +87,7 @@ def compare_rank(py: str, rank_dir: Path, build: Path, derived: list[str], withi
     """The TP1 verdict rule of row_pod.sh: B1 cb_a.compare (canonical-equal, same steps, no differing operand); B>1 batch_decomp X-09."""
     t0 = time.time()
     if derived:
-        cmd = [py, "-m", "verity_vllm.correspondence.batch_decomp", "--oracle", str(rank_dir), "--out", str(rank_dir / "match_decomp.json"),
+        cmd = [py, "-m", "verity_vllm.check.match.batch_decomp", "--oracle", str(rank_dir), "--out", str(rank_dir / "match_decomp.json"),
                "--within-step", within]
         for d in [str(build)] + list(derived):
             cmd += ["--derived", d]
@@ -101,7 +101,7 @@ def compare_rank(py: str, rank_dir: Path, build: Path, derived: list[str], withi
                 "unattributed": (dec.get("attribution") or {}).get("unattributed"), "xreq": dec.get("xreq_total"), "missing_derived": dec.get("missing_derived"),
                 "per_request": [{"request_id": r.get("request_id"), "LP": r.get("LP"), "T": r.get("T"), "derived": r.get("derived"),
                                  "canonical_equal": r.get("canonical_equal"), "steps": r.get("steps")} for r in reqs]}
-    rc = _run([py, "-m", "verity_vllm.check.program_compare", "--a", str(build), "--b", str(rank_dir), "--out", str(rank_dir / "match_compare.json")],
+    rc = _run([py, "-m", "verity_vllm.check.match.program_compare", "--a", str(build), "--b", str(rank_dir), "--out", str(rank_dir / "match_compare.json")],
               rank_dir / "match_compare.log", timeout)
     doc = _load(rank_dir / "match_compare.json") or {}
     cmp = doc.get("compare") or {}            # cb-a/compare/v1: the step comparison sits under `compare` (row_pod reads the same field)
@@ -116,7 +116,7 @@ def compare_rank(py: str, rank_dir: Path, build: Path, derived: list[str], withi
 
 def global_match_rank(py: str, rank_dir: Path, gprog: Path, workload: Path, within: str, timeout: int | None) -> dict:
     t0 = time.time()
-    rc = _run([py, "-m", "verity_vllm.check.global_match", "--gprog", str(gprog), "--workload", str(workload), "--oracle", str(rank_dir),
+    rc = _run([py, "-m", "verity_vllm.check.match.global_match", "--gprog", str(gprog), "--workload", str(workload), "--oracle", str(rank_dir),
                "--out", str(rank_dir / "global_match.json"), "--within-step", within], rank_dir / "global_match.log", timeout)
     G = _load(rank_dir / "global_match.json") or {}
     return {"rc": rc, "seconds": round(time.time() - t0, 1), "verdict": G.get("verdict") if G else {124: "TIMEOUT"}.get(rc, f"rc={rc}"),

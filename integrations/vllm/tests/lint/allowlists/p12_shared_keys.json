@@ -1,7 +1,7 @@
 {
   "rule": "P12 (each shared key has one owner)",
   "entries": [
-    {"file": "verity_vllm/check/protected.py", "kind": "root-list", "symbol": "<module>", "detail": "verity_vllm/check/gates.py, verity_vllm/pipeline/report.py, verity_vllm/input_provenance/root_policy.py, verity_vllm/che"},
+    {"file": "verity_vllm/check/protected.py", "kind": "root-list", "symbol": "<module>", "detail": "verity_vllm/check/gates.py, verity_vllm/pipeline/report.py, verity_vllm/check/root_policy.py, verity_vllm/check/golden.p"},
     {"file": "verity_vllm/check/protected.py", "kind": "root-list", "symbol": "<module>", "detail": "verity_vllm/engine/profiles/*, verity_vllm/ops/*, verity_vllm/observe/*.py, verity_vllm/observe/*"},
     {"file": "verity_vllm/engine/vllm_adapter.py", "kind": "row-id-split", "symbol": "execution_of_workload", "detail": "rsplit('__')"},
     {"file": "verity_vllm/pipeline/build.py", "kind": "root-list", "symbol": "<module>", "detail": "verity_vllm/program/frontend/export_compat.py, verity_vllm/program/frontend/vllm_meta.py, verity_vllm/pipeline/build.py,"},

@@ -21,13 +21,13 @@ CPU phase (Python 3.12, torch-free; pod or laptop):
     compare           verity_vllm.check.fold_compare -> RUN_DIR/compare.json (tokens, boundary, subcircuits, structure)
     fold, fold_2      this module's fold worker in two separate processes -> RUN_DIR/fold_summary.json, fold_summary_2.json
     fold_other        (with --other-log) a second capture's digest -> RUN_DIR/fold_summary_other.json (G6 detail only)
-    root_policy       verity_vllm.input_provenance.root_policy -> RUN_DIR/root_policy.json
+    root_policy       verity_vllm.check.root_policy -> RUN_DIR/root_policy.json
     golden            verity_vllm.check.golden --check -> RUN_DIR/golden.json
     wiring            verity_vllm.check.operand_provenance -> RUN_DIR/wiring.json (G5: exhaustive operand provenance, D82)
-    replay_a          verity_vllm.check.replay --tier a --k 10 -> RUN_DIR/replay_a.json (G4 bodies; G5 sampled VUs + served tokens)
-    replay_chain      verity_vllm.check.replay --tier chain -> RUN_DIR/replay_chain.json (G5 chaining smoke test)
-    replay_b_step<N>  (with --full-replay) verity_vllm.check.replay --tier b --step N -> replay_b_step<N>.json (diagnostic only)
-    replay_c          (with --tier-c) verity_vllm.check.replay --tier c -> RUN_DIR/replay_c.json (diagnostic only)
+    replay_a          verity_vllm.check.replay.replay --tier a --k 10 -> RUN_DIR/replay_a.json (G4 bodies; G5 sampled VUs + served tokens)
+    replay_chain      verity_vllm.check.replay.replay --tier chain -> RUN_DIR/replay_chain.json (G5 chaining smoke test)
+    replay_b_step<N>  (with --full-replay) verity_vllm.check.replay.replay --tier b --step N -> replay_b_step<N>.json (diagnostic only)
+    replay_c          (with --tier-c) verity_vllm.check.replay.replay --tier c -> RUN_DIR/replay_c.json (diagnostic only)
     gates             in-process: gates.evaluate_gates -> RUN_DIR/gates.json; card -> RUN_DIR/card.json, RUN_DIR/CARD.md,
                       <cards-dir>/<config_id>.json
 
@@ -84,8 +84,8 @@ SKIP_GROUPS = {
 }
 #: Stages whose module may be missing in a worktree (a sibling lane's / the integrator's); a missing module is recorded
 #: as `missing_module`, not run.
-OPTIONAL_MODULES = {"root_policy": "verity_vllm.input_provenance.root_policy", "golden": "verity_vllm.check.golden", "replay_a": "verity_vllm.check.replay",
-                    "replay_chain": "verity_vllm.check.replay", "replay_b": "verity_vllm.check.replay", "replay_c": "verity_vllm.check.replay",
+OPTIONAL_MODULES = {"root_policy": "verity_vllm.check.root_policy", "golden": "verity_vllm.check.golden", "replay_a": "verity_vllm.check.replay.replay",
+                    "replay_chain": "verity_vllm.check.replay.replay", "replay_b": "verity_vllm.check.replay.replay", "replay_c": "verity_vllm.check.replay.replay",
                     "wiring": "verity_vllm.check.operand_provenance"}
 
 
@@ -227,7 +227,7 @@ class Plan:
             return [self.py_cpu, "-m", "verity_vllm.pipeline.match", "--worker", "fold", "--log", a.other_log, "--profile", a.profile,
                     "--out", str(self.p("fold_summary_other"))] + MC
         if stage == "root_policy":
-            c = [self.py_cpu, "-m", "verity_vllm.input_provenance.root_policy", "--log", str(self.log), "--snapshots", str(self.snapshots), "--profile", a.profile,
+            c = [self.py_cpu, "-m", "verity_vllm.check.root_policy", "--log", str(self.log), "--snapshots", str(self.snapshots), "--profile", a.profile,
                  "--out", str(self.p("root_policy"))]
             g = self.safetensors_glob()
             if g:
@@ -252,7 +252,7 @@ class Plan:
         return None
 
     def _replay(self, tier: list[str], out: Path) -> list[str]:
-        c = [self.py_cpu, "-m", "verity_vllm.check.replay", "--log", str(self.log), "--snapshots", str(self.snapshots), "--profile", self.a.profile, *tier]
+        c = [self.py_cpu, "-m", "verity_vllm.check.replay.replay", "--log", str(self.log), "--snapshots", str(self.snapshots), "--profile", self.a.profile, *tier]
         budget = self.a.replay_budget_leaves if self.a.replay_budget_leaves is not None else (LAPTOP_MAX_ARG_LEAVES if self.laptop else None)
         if budget is not None:
             c += ["--max-arg-leaves", str(budget)]

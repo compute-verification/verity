@@ -32,7 +32,6 @@ INTERIM_LAYER = {
     "verity_vllm.check": "check|properties",                   # per-run checks, and the property harnesses -> properties/
     "verity_vllm.program.kernels.twins": "program",                      # -> program/kernels/
     "verity_vllm.program.kernels.relations": "program",                  # -> program/kernels/
-    "verity_vllm.input_provenance": "check|properties",        # weights_of_record, root_policy -> check/provenance.py
     "verity_vllm.program.model": "program",        # -> program/model.py
     "verity_vllm.acquire": "acquire",
     "verity_vllm.commit.committer.native_host": "observe|commit",       # the committer -> commit/committer/
@@ -51,13 +50,13 @@ INTERIM_LAYER = {
     "verity_vllm.commit": "observe|commit",
     "verity_vllm.query": "query|correspondence",
     "verity_vllm.pipeline.cli": "pipeline",                       # the one CLI is pipeline/cli.py (P6)
-    "verity_vllm.query.vu_query": "check|properties",          # -> check/replay/
+    "verity_vllm.check.replay.vu_query": "check|properties",          # -> check/replay/
     "verity_vllm.acquire.compiled": "acquire",
     "verity_vllm.query.boundary": "core",                      # -> verity.ir
     "verity_vllm.query.partition": "core",                     # -> verity.ir
     "verity_vllm.correspondence": "query|correspondence",
     "verity_vllm.program.frontend.emit": "program",              # -> program/frontend/
-    "verity_vllm.correspondence.batch_decomp": "check|properties",   # -> check/match/
+    "verity_vllm.check.match.batch_decomp": "check|properties",   # -> check/match/
     "verity_vllm.observe.runtime_tree": "observe|commit",
     "verity_vllm.observe.chunks": "observe|commit",
     "verity_vllm.program": "program",                          # frontend/, registry/, workload; numerics/ -> program/kernels/
@@ -71,8 +70,8 @@ INTERIM_LAYER = {
     "verity_vllm.acquire.sources.partial_source": "acquire",                # -> acquire/sources/
     "verity_vllm.program.frontend.export_ops": "program",                    # -> program/frontend/
     "verity_vllm.observe.fold.collective_pattern": "observe|commit",     # -> observe/fold/patterns/
-    "verity_vllm.tp.rank_match": "check|properties",           # -> check/match/
-    "verity_vllm.tp.xrank_collectives": "check|properties",    # -> check/match/
+    "verity_vllm.check.match.rank_match": "check|properties",           # -> check/match/
+    "verity_vllm.check.match.xrank_collectives": "check|properties",    # -> check/match/
     "verity_vllm.tp.analyze": "tests",
     "verity_vllm.tp.collective_link": "tests",
 }
@@ -81,10 +80,9 @@ INTERIM_LAYER = {
 PROPERTY_MODULES = tuple(f"verity_vllm.check.{m}" for m in (
     "noninterference", "census", "kernel_allowlist", "golden", "holdout", "difftest", "quarantine_lint", "protected"))
 
-#: The replay drivers (-> check/replay/) and the determinism value checks.
+#: The replay drivers (check/replay/) and the determinism value checks.
 VALUE_CHECK_MODULES = tuple(f"verity_vllm.{m}" for m in (
-    "check.replay", "check.sampled_replay", "check.stoch_recompute", "check.compiled_kernel_check", "query.vu_query",
-    "check.value_check", "check.compiled_value_check", "check.oracle_compare"))
+    "check.replay", "check.value_check", "check.compiled_value_check", "check.oracle_compare"))
 
 #: The modules check.verdict absorbs (commit_verdict, gates) and today's check.verdict.
 VERDICT_MODULES = ("verity_vllm.check.verdict", "verity_vllm.check.commit_verdict", "verity_vllm.check.gates")

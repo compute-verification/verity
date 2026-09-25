@@ -555,7 +555,7 @@ if [[ ",$STAGES," == *,match,* ]]; then
   # complete only over EVERY step, so the row default becomes `all` for them (sampled_replay.form_b_families; a Match over 0,1 made #57's
   # Commit fail 'steps not snapshotted').  An explicit MATCH_SNAP_STEPS stands, named; a MATCH_PHASE=cpu resume keeps its capture's steps.
   if [ "$MATCH_PHASE" = all ] && [ "$SNAP_DEF" != all ] && [ -f "$D/manifest.json" ]; then
-    FB=$($PY -c 'import json,sys; from verity_vllm.check.sampled_replay import form_b_families; f=form_b_families(json.load(open(sys.argv[1]))); print(" ".join(f"{k}x{v}" for k, v in sorted(f.items())))' "$D/manifest.json" 2>>"$D/row.log"); FB_RC=$?
+    FB=$($PY -c 'import json,sys; from verity_vllm.check.replay.sampled_replay import form_b_families; f=form_b_families(json.load(open(sys.argv[1]))); print(" ".join(f"{k}x{v}" for k, v in sorted(f.items())))' "$D/manifest.json" 2>>"$D/row.log"); FB_RC=$?
     if [ "$FB_RC" -ne 0 ]; then log "WARN match: form (B) families not derived (rc=$FB_RC, see row.log): snapshot steps stay ${MATCH_SNAP_STEPS:-$SNAP_DEF}"
     elif [ -n "$FB" ] && [ -z "${MATCH_SNAP_STEPS:-}" ]; then SNAP_DEF=all; log "match: snapshot steps = all (the Commit's form (B) must be complete: required values with no replay evaluator: $FB)"
     elif [ -n "$FB" ] && [ "$MATCH_SNAP_STEPS" != all ]; then log "WARN match: MATCH_SNAP_STEPS=$MATCH_SNAP_STEPS explicit while form (B) must be complete ($FB): the Commit's form (B) stays partial"
@@ -590,7 +590,7 @@ if [[ ",$STAGES," == *,match,* ]]; then
         # the same --derived list batch_decomp got (build_request + every build_request_LP*_T*, + the shapes derived here after an exit 4):
         # X-09 inside GM-01 may use them beside the global Program's components, so match_decomp.json is the document of record key for key
         for pass in 1 2; do
-          CMD_G=($PY312 -m verity_vllm.check.global_match --gprog "$D/build_workload/workload_program.json" --workload "$WL" --oracle "$D/match"
+          CMD_G=($PY312 -m verity_vllm.check.match.global_match --gprog "$D/build_workload/workload_program.json" --workload "$WL" --oracle "$D/match"
                  --out "$D/global_match.json" --within-step "${WITHIN_STEP:-dag}" --decomp-out "$D/match_decomp.json" "${DERIVED[@]}")
           run_tl match.global_match "$TO_C" "$D/global_match.log" "${CMD_G[@]}"; GM_RC=$?
           [ $GM_RC -eq 4 ] && [ $pass -eq 1 ] || break
@@ -607,7 +607,7 @@ if [[ ",$STAGES," == *,match,* ]]; then
         echo "\$ (shared, R17-28 P1) X-09 document written by cb_a.global_match --decomp-out; see global_match.log" > "$D/match_compare.log"
       else
       for pass in 1 2; do
-        CMD_C=($PY312 -m verity_vllm.correspondence.batch_decomp --oracle "$D/match" "${DERIVED[@]}" --out "$D/match_decomp.json" --within-step "${WITHIN_STEP:-dag}")
+        CMD_C=($PY312 -m verity_vllm.check.match.batch_decomp --oracle "$D/match" "${DERIVED[@]}" --out "$D/match_decomp.json" --within-step "${WITHIN_STEP:-dag}")
         run_to "$TO_C" "$D/match_compare.log" "${CMD_C[@]}"; rcc=$?
         [ $rcc -eq 4 ] && [ $pass -eq 1 ] || break
         for lpt in $($PY312 -c "import json;print(' '.join(f'{lp},{t}' for lp,t in json.load(open('$D/match_decomp.json'))['missing_derived']))"); do
@@ -639,7 +639,7 @@ if [[ ",$STAGES," == *,match,* ]]; then
         fi
       fi
       echo "{\"LP\": $LP, \"T\": $T_R, \"cap_T\": $T, \"derived\": \"$REQ_DIR\"}" > "$D/match_shape.json"
-      CMD_C=($PY312 -m verity_vllm.check.program_compare --a "$REQ_DIR" --b "$D/match" --out "$D/match_compare.json")
+      CMD_C=($PY312 -m verity_vllm.check.match.program_compare --a "$REQ_DIR" --b "$D/match" --out "$D/match_compare.json")
       run_to "$TO_C" "$D/match_compare.log" "${CMD_C[@]}"; rcc=$?
     fi
     # [R15 GM-01 on the integrated path] TABLE-RULES Match = the applicable GLOBAL Program corresponds to the execution (all requests and
@@ -654,7 +654,7 @@ if [[ ",$STAGES," == *,match,* ]]; then
     GM_RC=""
     tl match.compare end rc="${rcc:-}"
     if [ -f "$D/build_workload/workload_program.json" ]; then
-      CMD_G=($PY312 -m verity_vllm.check.global_match --gprog "$D/build_workload/workload_program.json" --workload "$WL" --oracle "$D/match"
+      CMD_G=($PY312 -m verity_vllm.check.match.global_match --gprog "$D/build_workload/workload_program.json" --workload "$WL" --oracle "$D/match"
              --out "$D/global_match.json" --within-step "${WITHIN_STEP:-dag}")
       run_tl match.global_match "$TO_C" "$D/global_match.log" "${CMD_G[@]}"; GM_RC=$?
     else
@@ -678,7 +678,7 @@ p = (w.get("variants") or {}).get(v) or {"temperature": 0.0}
 sys.exit(0 if float(p.get("temperature", 0.0)) > 0.0 else 1)
 EOF
   then
-    run_tl match.stoch_recompute "$TO_C" "$D/match_stoch.log" $PY312 -m verity_vllm.check.stoch_recompute --run "$D/match" --workload "$WL" --build "$D" --out "$D/match_stoch.json"; rcs=$?
+    run_tl match.stoch_recompute "$TO_C" "$D/match_stoch.log" $PY312 -m verity_vllm.check.replay.stoch_recompute --run "$D/match" --workload "$WL" --build "$D" --out "$D/match_stoch.json"; rcs=$?
     log "stoch value check rc=$rcs: $(tail -n 1 "$D/match_stoch.log" 2>/dev/null | cut -c1-300)"
   fi
   wall=$(( $(date +%s) - t0 ))
@@ -1023,7 +1023,7 @@ EOF
       if [ -f "$WOR" ] && [ -n "${CK:-}" ] && [ -d "$CK" ]; then
         # [R16 pin, schema v2] a record of an older schema is re-derived too: v1 roots are keyed by the deriving host's fp32 inv_freq
         # (two roots for one model across cp-r1 / cp-a100, exec M-0178); the tree's schema is asked of the module, never assumed
-        WOR_SCHEMA=$($PY -c "from verity_vllm.input_provenance.weights_of_record import SCHEMA; print(SCHEMA)" 2>/dev/null || true)
+        WOR_SCHEMA=$($PY -c "from verity_vllm.check.weights_of_record import SCHEMA; print(SCHEMA)" 2>/dev/null || true)
         WOR_STALE=$(python3 - "$WOR" "$PD_WOR/result.json" "${WOR_SCHEMA:-}" <<'EOF'
 import json, os, sys
 try:
@@ -1062,9 +1062,9 @@ EOF
       fi
       if [ ! -f "$WOR" ] && [ -n "${CK:-}" ] && [ -d "$CK" ]; then
         WOR_SUP=""    # a scalar, not an array: set -u + an empty array breaks bash 3.2; the path carries no spaces (the row dir is ours)
-        if [ -n "${WOR_PREV:-}" ] && has_flag --supersedes $PY -m verity_vllm.input_provenance.weights_of_record; then WOR_SUP="--supersedes=$WOR_PREV"; fi
+        if [ -n "${WOR_PREV:-}" ] && has_flag --supersedes $PY -m verity_vllm.check.weights_of_record; then WOR_SUP="--supersedes=$WOR_PREV"; fi
         tl commit.weights_of_record start
-        $PY -m verity_vllm.input_provenance.weights_of_record --program-dir "$PD_WOR" --checkpoint-dir "$CK" --out "$WOR" ${WOR_SUP:+"$WOR_SUP"} > "$D/weights_of_record.log" 2>&1 \
+        $PY -m verity_vllm.check.weights_of_record --program-dir "$PD_WOR" --checkpoint-dir "$CK" --out "$WOR" ${WOR_SUP:+"$WOR_SUP"} > "$D/weights_of_record.log" 2>&1 \
           && { tl commit.weights_of_record end rc=0; log "weights of record: $(tail -n 1 "$D/weights_of_record.log")"; } \
           || { tl commit.weights_of_record end rc=1; log "WARNING weights of record not derived (see weights_of_record.log): $(tail -n 1 "$D/weights_of_record.log")"; }
       elif [ ! -f "$WOR" ]; then

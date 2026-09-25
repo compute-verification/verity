@@ -12,7 +12,7 @@ import pytest
 from tests.commit.test_binding_negatives import B8_CAP, B8_LP, PD, b8_engine_rows, b8_manifest, b8_stream, commit
 from verity_vllm.commit import binding as B
 from verity_vllm.check import executed_prefix as EP
-from verity_vllm.check.sampled_replay import linkage_horizon
+from verity_vllm.check.replay.sampled_replay import linkage_horizon
 
 EOS = 50279
 
@@ -285,7 +285,7 @@ def test_a_missing_match_account_leg_is_named_on_the_facts_and_faults_first(tmp_
     the Commit was queued; tokens.json went with it, a_r fell to the G6 leg and the class faulted 'a_r is not linked' / 'LAG rule not
     attested' after 47 min -- a missing INPUT read as a verdict.  The facts name the missing leg(s) (a_r_source suffix + account_missing),
     and reqval's normaliser puts that fault FIRST, before (a) and (b), still fail-closed."""
-    import verity_vllm.check.sampled_replay as SR
+    import verity_vllm.check.replay.sampled_replay as SR
     e = _mixed_epr()
     # tokens.json absent, global_match.json present: exactly #39's record after the move
     acct = EP.load_match_account(_match_account(tmp_path, write_tokens=False))

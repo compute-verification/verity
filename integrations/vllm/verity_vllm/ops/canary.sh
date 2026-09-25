@@ -290,7 +290,7 @@ json.dump(wl, open(sys.argv[2], "w"), indent=1)
 EOF
     DER=(--derived "$RB/build_request"); for dd in "$RB"/build_request_LP*_T*; do [ -d "$dd" ] && DER+=(--derived "$dd"); done
     timeout 1500 $PY312 -m verity_vllm.pipeline.global_program --workload "$NW/wl_swapped.json" "${DER[@]}" --out "$NW/gp_swapped" > "$NW/gp_swapped.log" 2>&1; rcg=$?
-    timeout 1500 $PY312 -m verity_vllm.check.global_match --gprog "$NW/gp_swapped/workload_program.json" --workload "$NW/wl_swapped.json" --oracle "$RB/match" \
+    timeout 1500 $PY312 -m verity_vllm.check.match.global_match --gprog "$NW/gp_swapped/workload_program.json" --workload "$NW/wl_swapped.json" --oracle "$RB/match" \
         --out "$NW/gm_swapped.json" --within-step "${WITHIN_STEP:-dag}" > "$NW/gm_swapped.log" 2>&1; rcm=$?
     verd=$(python3 -c "import json;g=json.load(open('$NW/gm_swapped.json'));print(g.get('verdict'), ','.join(g.get('failed_checks') or []))" 2>/dev/null)
     if [ $rcg -ne 0 ]; then rec neg_wl_swapped FAIL "GP-01 compose of the swapped manifest failed rc=$rcg (the negative needs a composed Program): $(grep -m1 -E 'Error|Traceback' "$NW/gp_swapped.log" | cut -c1-120)"
