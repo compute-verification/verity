@@ -8,6 +8,7 @@
     "additionalProperties": false,
     "required": [
       "id",
+      "name",
       "device",
       "dtype",
       "rate",
@@ -23,6 +24,11 @@
         "pattern": "^[a-z0-9]+(-[a-z0-9]+)*/[a-z0-9]+$",
         "description": "<device slug>/<dtype>"
       },
+      "name": {
+        "type": "string",
+        "minLength": 1,
+        "description": "short display name, e.g. 'H100 SXM5'"
+      },
       "device": {
         "type": "string",
         "minLength": 1,
@@ -31,7 +37,7 @@
       "dtype": {
         "type": "string",
         "pattern": "^[a-z0-9]+$",
-        "description": "operand dtype as the instruction registry names it (bf16, e4m3, e2m1)"
+        "description": "a census/datatypes.json id (bf16, e4m3, e2m1)"
       },
       "rate": {
         "type": "string",

@@ -26,6 +26,7 @@ def load(name: str) -> dict[str, Any]:
 
 
 HARDWARE = load("hardware")
+DATATYPES = load("datatypes")
 NETWORKS = load("networks")
 WORKLOADS = load("workloads")
 INSTANCE_SETS = load("instance_sets")
