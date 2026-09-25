@@ -57,6 +57,7 @@ PIPES = {
     "bf16-hopper": Pipe("bf16-hopper", U.BF16, (16,), 26, -133, True, "HOPPER_BF16_M16N8K16"),
     "fp8-ada": Pipe("fp8-ada", U.E4M3, (16, 16), 14, -139, False, "ADA_E4M3_M16N8K32"),
     "fp8-hopper": Pipe("fp8-hopper", U.E4M3, (32,), 14, -139, False, "HOPPER_E4M3_K32"),
+    "bf16-ampere": Pipe("bf16-ampere", U.BF16, (8, 8), 25, -132, True, "AMPERE_BF16_M16N8K16"),
 }
 
 #: sha256 of :func:`netlist` per relation: the lowering version the verifier re-derives and compares.
@@ -64,6 +65,7 @@ PINS = {
     "bf16-hopper": "da1bbe2cdbf02971f0d7f12f6d5a3caabefb658af95afeeff44d001ff30dddba",
     "fp8-ada": "e66262a08816f03d7dba67860c68b3993adc9ca83f1746d15137b0b757599a7c",
     "fp8-hopper": "904ca664958e3144ec0af862eea3d2124898289f23ea1d065271a27a00539654",
+    "bf16-ampere": "e97ecb9ef01d653b550ebe947cc12d92c60392613457b560246b99aff4922247",
 }
 
 
