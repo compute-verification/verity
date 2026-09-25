@@ -127,5 +127,13 @@ def test_reverify_recomputes_the_trees_and_the_cover(remap, tmp_path) -> None:
         "rep0: statements cover 2 distinct VUs of [0, 2) (2 claimed twice)"]
     listed = dict(man, files=[{"proof": "rep0/sub_00.proof", "stmt": "rep0/sub_00.stmt"}, {"stmt": "rep0/sub_01.stmt"}])
     assert "rep0: the manifest lists a statement without a proof" in commitment_problems(twice, listed, "fp8-ada+blake3", ["rep0"])[1]
+    e = {i: {"proof": f"rep0/sub_0{i}.proof", "stmt": f"rep0/sub_0{i}.stmt"} for i in (0, 1)}
+    crossed = dict(man, files=[{**e[0], "stmt": e[1]["stmt"]}, {**e[1], "stmt": e[0]["stmt"]}])
+    assert commitment_problems(twice, crossed, "fp8-ada+blake3", ["rep0"])[1] == [
+        "rep0: the manifest pairs a proof with another sub-batch's statement"]
+    assert commitment_problems(twice, dict(man, files=[e[0], e[0], e[1]]), "fp8-ada+blake3", ["rep0"])[1] == [
+        "rep0: the manifest's proofs are not the rep's proofs"]
+    (twice / "rep0" / "sub_01.stmt").write_bytes(b"stmt-1")
+    assert commitment_problems(twice, man, "fp8-ada+blake3", ["rep0"])[1][0].startswith("rep0/sub_01.stmt: unreadable statement")
     other = dict(man, set={"total_vus": 3, "instances": man["set"]["instances"]})
     assert "manifest digest" in commitment_problems(out["honest"][0], other, "fp8-ada+blake3", ["rep0"])[1][0]
