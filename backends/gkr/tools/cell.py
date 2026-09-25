@@ -155,6 +155,32 @@ class PrimeLink:
         self.sock.close()
 
 
+def stale_live(call, k: int):
+    """Negative (a coin before its commitment): at round ``k`` the prime prover sends the verifier the state from before
+    its last message, then keeps that message in its proof, so the message follows the coin.  Its own view of the rounds
+    (``tr.rounds``) is the honest chain; the verifier's record holds the stale state, and a replay of the record rejects."""
+    from gpu.transcript import LiveTranscript
+
+    class Stale(LiveTranscript):
+        prev = None
+
+        def absorb(self, data: bytes) -> None:
+            self.prev = self.state
+            super().absorb(data)
+
+        def _round(self) -> None:
+            if len(self.rounds) == k and self.prev is not None:
+                real = self.call
+                self.call = lambda state, n: real(self.prev, n)
+                try:
+                    super()._round()
+                finally:
+                    self.call = real
+            else:
+                super()._round()
+    return Stale(call)
+
+
 def prove(a) -> int:
     import numpy as np
     import torch
@@ -223,7 +249,7 @@ def prove(a) -> int:
         (s / "start").touch()
         tw = {}
 
-        tr = LiveTranscript(plink) if live else None
+        tr = None if not live else stale_live(plink, a.neg_stale_round) if a.neg_stale_round is not None else LiveTranscript(plink)
 
         def exchange(root_f: bytes, s=s, tw=tw, tr=tr) -> LK.Context:
             tx = time.perf_counter()
@@ -477,6 +503,8 @@ def main(argv=None) -> int:
     p.add_argument("--result", default=None, help="write the bench-result/v1 envelope here")
     p.add_argument("--rtt-ms", type=float, default=None, help="the prover-to-verifier RTT measured before the sessions")
     p.add_argument("--rtt-method", default=None)
+    p.add_argument("--neg-stale-round", type=int, default=None,
+                   help="negative: commit a stale prime state at this round (the session record then fails replay)")
     p.add_argument("--prime-coins", choices=("live", "fs"), default="live",
                    help="live: the session's verifier issues every prime challenge (NON_ZK_PROOF); fs: the prime half's own Fiat-Shamir (diagnostic)")
     r = sub.add_parser("result", help="the bench-result/v1 envelope from CELL/sessions.json (on the prover pod: it probes the hardware)")

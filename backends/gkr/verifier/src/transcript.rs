@@ -141,6 +141,8 @@ impl Transcript {
         Ok(())
     }
     pub fn live_rounds(&self) -> usize { self.live.as_ref().map(|l| l.k).unwrap_or(0) }
+    /// The first replay mismatch so far, if any.
+    pub fn live_failure(&self) -> Option<String> { self.live.as_ref().and_then(|l| l.failure.clone()) }
 }
 
 /// `prime_coins.txt` (`tools/cell_gate.py` writes it from the session record; `gpu/transcript.py::coins_text`).

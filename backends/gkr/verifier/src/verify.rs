@@ -704,6 +704,8 @@ fn verify_inner(stmt: &Statement, proof_bytes: &[u8], p: &Params, threads: usize
     // ---- transcript replay: LogUp, GKR
     let t1 = Instant::now();
     let (mut tr, chs, pts) = start_transcript(stmt, &proof.root);
+    // a replay mismatch is the primary reason: the verifier's own error on messages that were not the committed ones follows from it
+    let res = (|| -> Result<(), String> {
     let mut rd = Reader { msgs: &proof.msgs, pos: 0 };
     let mut lookup_claims: Vec<(usize, LeafClaim)> = Vec::new();
     for t in stmt.tables() {
@@ -984,4 +986,9 @@ fn verify_inner(stmt: &Statement, proof_bytes: &[u8], p: &Params, threads: usize
     st.t_rows = t4.elapsed().as_secs_f64();
     let _ = (mul, sub, eval_lin);
     Ok(())
+    })();
+    match (res, tr.live_failure()) {
+        (Err(e), Some(f)) if e != f => Err(format!("{f} (then the verifier: {e})")),
+        (res, _) => res,
+    }
 }
