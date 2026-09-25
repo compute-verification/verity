@@ -87,7 +87,7 @@ pub(crate) struct Loaded {
 }
 
 impl Loaded {
-    fn n(&self) -> usize {
+    pub(crate) fn n(&self) -> usize {
         self.y.len()
     }
 }

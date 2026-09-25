@@ -275,6 +275,47 @@ fn wrong_root(trees: &mut [TreeRef; 3], name: &str) -> Result<()> {
     Ok(())
 }
 
+/// The trees rebuilt from what the proof publishes under the statement's own references: a statement whose roots the
+/// prover chose to fit its proof (only the instance check can reject it).
+fn published_trees(public: &[u8], format: Format, trees: &[TreeRef; 3]) -> Option<[TreeRef; 3]> {
+    let p = scheme::parse_public(public)?;
+    #[cfg(not(feature = "relation-committed-vllm"))]
+    let refs = trees.map(|t| t.binding);
+    #[cfg(feature = "relation-committed-vllm")]
+    let refs = trees.map(|t| t.domain);
+    Some(scheme::roots(format, &refs, p.y_le, p.dx, p.dw))
+}
+
+/// Why the statement's roots are not those of its instance range of the frozen set in `batch` (recomputed natively
+/// from the set's rows and committed words), or `None` when they are.
+fn instance_check(doc: &Value, batch: &Path, trees: &[TreeRef; 3]) -> Result<Option<String>> {
+    let inst = doc.get("instances").ok_or_else(|| anyhow!("statement: instances missing"))?;
+    let bare_set = BareSet {
+        instances: None,
+        tier: text(inst, "tier")?,
+        dataset: text(inst, "dataset")?,
+        manifest_sha256: None,
+        batch: Some(batch.to_path_buf()),
+        lo: 0,
+        hi: None,
+        vus_per_read: 64,
+        layout: Layout::Chunks,
+    };
+    let set = bare_set.load()?;
+    if (set.dataset.as_str(), set.tier.as_str(), set.manifest_sha256.as_str()) != (bare_set.dataset.as_str(), bare_set.tier.as_str(), text(inst, "manifest_sha256")?.as_str()) {
+        return Ok(Some(format!("{} holds {} / {} / {}, not the statement's set", batch.display(), set.dataset, set.tier, set.manifest_sha256)));
+    }
+    let (lo, hi) = (int(inst, "lo")? as usize, int(inst, "hi")? as usize);
+    if lo < set.base || hi > set.base + set.n() {
+        return Ok(Some(format!("[{lo}, {hi}) is not inside {}'s ids [{}, {})", batch.display(), set.base, set.base + set.n())));
+    }
+    let c = commit(&BareSet { lo: lo - set.base, hi: Some(hi - set.base), ..bare_set }, &set)?;
+    Ok((0..3)
+        .find(|&i| c.trees[i].root != trees[i].root)
+        .map(|i| format!("tree {}: the statement's root {} is not the frozen set's {} (recomputed from {})", TREE_NAMES[i],
+            hex::encode(trees[i].root), hex::encode(c.trees[i].root), batch.display())))
+}
+
 async fn run_executor<P: Prover>(client: &P, stdin: SP1Stdin) -> Result<(Vec<u8>, Value)> {
     let started = Instant::now();
     let (public_values, report) = client.execute(ELF, stdin).await.map_err(|error| anyhow!("execution failed: {error}"))?;
@@ -461,7 +502,14 @@ pub(crate) async fn cmd_prove(
     Ok(())
 }
 
-pub(crate) async fn cmd_verify(proof: PathBuf, statement: PathBuf, expect_vk: Option<String>, wrong: Option<String>) -> Result<()> {
+pub(crate) async fn cmd_verify(
+    proof: PathBuf,
+    statement: PathBuf,
+    expect_vk: Option<String>,
+    wrong: Option<String>,
+    batch: Option<PathBuf>,
+    adopt_published_roots: bool,
+) -> Result<()> {
     let doc: Value = serde_json::from_slice(&fs::read(&statement).with_context(|| format!("reading {}", statement.display()))?)?;
     let parsed = parse_statement(&doc);
     let started = Instant::now();
@@ -476,20 +524,35 @@ pub(crate) async fn cmd_verify(proof: PathBuf, statement: PathBuf, expect_vk: Op
     let verify_seconds = started.elapsed().as_secs_f64();
     let public = proof.public_values.as_slice();
     let started = Instant::now();
-    let reason = match parsed {
+    let trees = parsed.and_then(|(format, id, mut trees)| {
+        if adopt_published_roots {
+            trees = published_trees(public, format, &trees).ok_or_else(|| anyhow!("--adopt-published-roots: the public values are not {}", String::from_utf8_lossy(scheme::TAG)))?;
+        }
+        if let Some(name) = &wrong {
+            wrong_root(&mut trees, name)?;
+        }
+        Ok((format, id, trees))
+    });
+    let reason = match &trees {
         Err(error) => Some(format!("{error:#}")),
-        Ok((format, id, mut trees)) => match &wrong {
-            Some(name) => wrong_root(&mut trees, name).map_or_else(|e| Some(e.to_string()), |_| scheme::check(public, format, &id, &trees)),
-            None => scheme::check(public, format, &id, &trees),
-        },
+        Ok((format, id, trees)) => scheme::check(public, *format, id, trees),
     };
     let check_seconds = started.elapsed().as_secs_f64();
+    let started = Instant::now();
+    let instance_reason = match (&batch, &trees) {
+        (None, _) | (_, Err(_)) => None,
+        (Some(path), Ok((_, _, trees))) => Some(instance_check(&doc, path, trees).unwrap_or_else(|e| Some(format!("{e:#}")))),
+    };
+    let instance_seconds = started.elapsed().as_secs_f64();
     let verdict = scheme::parse_public(public).map(|p| p.verdict);
-    let ok = sp1_ok && vk_pinned != Some(false) && reason.is_none();
+    let instance_roots = instance_reason.as_ref().map(Option::is_none);
+    let ok = sp1_ok && vk_pinned != Some(false) && reason.is_none() && instance_roots != Some(false);
     emit(&json!({"backend": BACKEND, "event": "committed-verify", "ok": ok, "sp1_ok": sp1_ok, "vk_hash": vk,
         "expected_vk": expect_vk, "vk_pinned": vk_pinned, "verdict": verdict, "tree_check": reason, "wrong_root": wrong,
+        "adopt_published_roots": adopt_published_roots, "instances_batch": batch.as_ref().map(|p| p.display().to_string()),
+        "instance_roots": instance_roots, "instance_check": instance_reason.flatten(),
         "public_values_sha256": hex::encode(sha256(public)), "setup_seconds": setup_seconds, "verify_seconds": verify_seconds,
-        "tree_check_seconds": check_seconds}))?;
+        "tree_check_seconds": check_seconds, "instance_check_seconds": instance_seconds}))?;
     if !ok {
         std::process::exit(1);
     }

@@ -269,6 +269,14 @@ enum Command {
         /// Check against the statement with the root of tree a, b or y altered (a negative).
         #[arg(long)]
         wrong_root: Option<String>,
+        /// The frozen set (`sp1-format-instances/v1`) the statement names: its roots must equal the range's, recomputed
+        /// natively from the set's rows (without it the roots are whatever the statement says).
+        #[arg(long)]
+        batch: Option<PathBuf>,
+        /// Replace the statement's roots with those rebuilt from the proof's own published digests (the prover-chosen
+        /// roots negative: only `--batch` rejects it).
+        #[arg(long)]
+        adopt_published_roots: bool,
     },
 }
 
@@ -975,8 +983,8 @@ async fn main() -> Result<()> {
             committed_cmd::cmd_prove(set, out_dir, mode, reps, warmup_vus, skip_execute, tamper_x).await
         }
         #[cfg(feature = "relation-committed")]
-        Command::CommittedVerify { proof, statement, expect_vk, wrong_root } => {
-            committed_cmd::cmd_verify(proof, statement, expect_vk, wrong_root).await
+        Command::CommittedVerify { proof, statement, expect_vk, wrong_root, batch, adopt_published_roots } => {
+            committed_cmd::cmd_verify(proof, statement, expect_vk, wrong_root, batch, adopt_published_roots).await
         }
     }
 }

@@ -744,8 +744,10 @@ def run_sp1_bare(a) -> int:
 # a wrong operand word with the honest y -- by preference the sign of an exact zero, which keeps the relation so only tree a can
 # reject --, a wrong root of each tree, and an honest control); ``committed-prove`` (executor pass, cold commit, setup, warm-up,
 # then per rep: commit the range afresh, prove, save, verify in process); a real-proof negative (a small range proved over a
-# tampered x row, rejected against the honest statement); ``committed-verify --expect-vk`` on every proof in a fresh CPU process
-# and a wrong-root verify; an optional B sweep (``--sweep-b``) for the plateau.
+# tampered x row, rejected against the honest statement); ``committed-verify --expect-vk --batch`` on every proof in a fresh CPU
+# process (``--batch``: the statement's roots must equal the range's recomputed from the frozen set, else the roots are the
+# prover's), a wrong-root verify, and the prover-chosen-roots negative (the tampered proof against roots rebuilt from its own
+# digests: SP1 and the tree check accept, only the instance check rejects); an optional B sweep (``--sweep-b``) for the plateau.
 #
 # Buckets: ``t.total`` = prove + serialization (the contract has no commitment bucket and the views add it:
 # end to end = ``t.total`` + ``commit.seconds``, ``bench.views.throughput``); ``commit.seconds`` is the warm median of the reps'
@@ -890,13 +892,18 @@ def run_sp1_committed(a) -> int:
     timeline = sp1_timeline(prove_log.read_text(errors="replace"))[-a.reps:]
     statement = proofs_dir / "statement.json"
 
-    def verify(proof: str, stmt: Path, extra: list[str]) -> dict:
+    instance_args = ["--batch", str(batch)] if a.batch else []
+
+    def verify(proof: str, stmt: Path, extra: list[str], instances: bool = True) -> dict:
+        extra = [*extra, *(instance_args if instances else [])]
         rc, text, wall = _run_logged([str(host), "committed-verify", "--proof", proof, "--statement", str(stmt), "--expect-vk", vk, *extra],
                                      cpu_env, log, 1800)
         doc = next((d for d in _json_lines(text) if d.get("event") == "committed-verify"), {})
         return {"proof": os.path.relpath(proof, out), "rc": rc, "accepted": rc == 0 and doc.get("ok") is True, "sp1_ok": doc.get("sp1_ok"),
-                "vk_pinned": doc.get("vk_pinned"), "tree_check": doc.get("tree_check"), "verify_seconds": doc.get("verify_seconds"),
-                "tree_check_seconds": doc.get("tree_check_seconds"), "process_wall": wall, "args": extra}
+                "vk_pinned": doc.get("vk_pinned"), "tree_check": doc.get("tree_check"), "instance_roots": doc.get("instance_roots"),
+                "instance_check": doc.get("instance_check"), "verify_seconds": doc.get("verify_seconds"),
+                "tree_check_seconds": doc.get("tree_check_seconds"), "instance_check_seconds": doc.get("instance_check_seconds"),
+                "process_wall": wall, "args": extra}
 
     verdicts = []
     for r in reps:
@@ -915,12 +922,20 @@ def run_sp1_committed(a) -> int:
         if nrep:
             entry.update(verify(nrep["proof_path"], neg_dir / "statement.json", []))
         proof_negatives.append(entry)
-    (out / "verify.json").write_text(json.dumps({"verifier": f"{host} committed-verify --expect-vk {vk}, SP1_PROVER=cpu (the producer's binary: not independent)",
+        if nrep and instance_args:
+            # the prover-chosen roots: the statement's roots rebuilt from the tampered proof's own digests
+            chosen = {"kind": "prover-chosen-roots", **verify(nrep["proof_path"], neg_dir / "statement.json", ["--adopt-published-roots"])}
+            chosen["without_instances"] = verify(nrep["proof_path"], neg_dir / "statement.json", ["--adopt-published-roots"], instances=False)
+            proof_negatives.append(chosen)
+    (out / "verify.json").write_text(json.dumps({"verifier": f"{host} committed-verify --expect-vk {vk} {' '.join(instance_args)}, SP1_PROVER=cpu "
+                                                             "(the roots recomputed from the frozen set; the producer's binary: not independent)",
                                                  "items": verdicts, "negatives": proof_negatives}, indent=1))
     neg_ok = all(x.get("rc") == 1 and x.get("accepted") is False for x in proof_negatives)
-    if proof_negatives and proof_negatives[-1]["kind"] == "proof-over-tampered-x":
-        pn = proof_negatives[-1]
-        neg_ok = neg_ok and pn["prove_rc"] == 0 and pn.get("sp1_ok") is True
+    for pn in proof_negatives:
+        if pn["kind"] == "proof-over-tampered-x":
+            neg_ok = neg_ok and pn["prove_rc"] == 0 and pn.get("sp1_ok") is True
+        if pn["kind"] == "prover-chosen-roots":
+            neg_ok = neg_ok and pn.get("sp1_ok") is True and pn.get("tree_check") is None and pn.get("instance_roots") is False
 
     totals = [r["prove_seconds"] + r["save_seconds"] for r in reps]
     med = sorted(range(len(reps)), key=totals.__getitem__)[len(reps) // 2]
@@ -998,6 +1013,7 @@ def run_sp1_committed(a) -> int:
         measurement("commit.trees_seconds", statistics.median(r["commit_trees_seconds"] for r in reps), "s"),
         measurement("commit.threads", setup["commit_threads"], "count"),
         measurement("tree_check_seconds", sorted(v["tree_check_seconds"] for v in verdicts)[len(verdicts) // 2], "s"),
+        *([measurement("instance_check_seconds", sorted(v["instance_check_seconds"] for v in verdicts)[len(verdicts) // 2], "s")] if instance_args else []),
         measurement("prove_seconds_reps", sum(r["prove_seconds"] for r in reps) / len(reps), "s"),
         measurement("prove_seconds_min", min(r["prove_seconds"] for r in reps), "s"),
         measurement("prove_seconds_max", max(r["prove_seconds"] for r in reps), "s"),
@@ -1028,10 +1044,12 @@ def run_sp1_committed(a) -> int:
         meas += [measurement("negatives_total", summary["negatives"], "count"), measurement("negatives_rejected", summary["rejected"], "count")]
     meas.append(measurement("workload_wall", time.perf_counter() - started, "s"))
     (out / "measurements.json").write_text(json.dumps(meas, indent=1) + "\n")
-    ok = all(v["accepted"] for v in verdicts) and len(verdicts) == a.reps and (summary is None or summary["ok"]) and neg_ok
+    ok = (all(v["accepted"] and (v["instance_roots"] is True or not instance_args) for v in verdicts) and len(verdicts) == a.reps
+          and (summary is None or summary["ok"]) and neg_ok)
     detail = (f"{len(reps)} {a.mode} proofs of B={B} ({fmt}), each after a fresh {a.committed_scheme} commit: commit {[round(r['commit_seconds'], 3) for r in reps]} s, "
               f"prove {[round(r['prove_seconds'], 3) for r in reps]} s, serialize {[round(r['save_seconds'], 4) for r in reps]} s, {shards} shards, "
-              f"{rep['proof_bytes']} B; committed-verify (SP1 under vk {vk}, then the three roots) in a fresh CPU process accepted "
+              f"{rep['proof_bytes']} B; committed-verify (SP1 under vk {vk}, the three roots, "
+              f"{'the roots recomputed from the frozen set' if instance_args else 'no instance-root check'}) in a fresh CPU process accepted "
               f"{sum(v['accepted'] for v in verdicts)}/{len(verdicts)}; proof negatives rejected "
               f"{sum(1 for x in proof_negatives if x.get('accepted') is False)}/{len(proof_negatives)}")
     if summary:
@@ -1040,7 +1058,8 @@ def run_sp1_committed(a) -> int:
         "schema": RESULT_SCHEMA, "run_id": os.environ.get("RESEARCH_RUN_ID", "local"), "kind": "bench-result/v1", "workload_fingerprint": fp,
         "protocol": protocol, "sweep": sweep,
         "validation": {"status": "passed" if ok else "failed",
-                       "checker": f"executor negatives + committed-verify (pinned vk, {a.committed_scheme} roots) on every dumped proof and proof negatives (producer)",
+                       "checker": f"executor negatives + committed-verify (pinned vk, {a.committed_scheme} roots"
+                                  f"{', roots recomputed from the frozen set' if instance_args else ''}) on every dumped proof and proof negatives (producer)",
                        "detail": detail, "evidence": {"reps": reps, "verify": verdicts, "proof_negatives": proof_negatives, "timeline": timeline,
                                                       "negatives": summary}},
         "measurements": meas, "measurement_files": ["measurements.json", "prove.json", "verify.json"] + (["negatives.json"] if summary else []),
