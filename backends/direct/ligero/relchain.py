@@ -481,6 +481,28 @@ class RelationChainRunner:
         return {**self.batch_bound(cfgs, claimed, target_bits, names), "items": verdicts}
 
 
+def hashauth_vshape(rel: Relation, hr, leaf) -> tuple[int, int, int] | None:
+    """The ``(K, word_bits, y_bytes)`` a ``vllm-v1`` statement's port domains are derived from (``hashauth.vllm_shape``);
+    ``None`` under frame-v3 trees."""
+    from . import hashauth
+    if not hashauth.is_vllm(leaf):
+        return None
+    return hashauth.vllm_shape(rel.steps * hr.k, hr.word_bits, rel.y_bits)
+
+
+def commit_bindings(rel: Relation, leaf, *, dataset: str, tier: str, manifest_sha256: str, lo: int, hi: int) -> dict[str, bytes]:
+    """Each tree's ``binding``: the frame-v3 binding digest (instance set, range, K, leaf schema), or under ``vllm-v1`` the
+    port's ctx digest (``vllm_tree.ctx_digest``: instance set and range; the rest of the domain is the verifier's)."""
+    from . import hashauth, vllm_tree
+    if hashauth.is_vllm(leaf):
+        return {n: vllm_tree.ctx_digest(dataset=dataset, tier=tier, manifest_sha256=manifest_sha256, lo=lo, hi=hi, tree=n)
+                for n in ("a", "b", "y")}
+    ysch, _ = hashauth.word_schema(rel.y_bits)
+    return {n: hashauth.binding_digest(dataset=dataset, tier=tier, manifest_sha256=manifest_sha256, lo=lo, hi=hi,
+                                       K=getattr(rel, "vu_words", K_VU), tree=n, schema=(leaf.schema if n != "y" else ysch))
+            for n in ("a", "b", "y")}
+
+
 class HashedRelationRunner(RelationChainRunner):
     """``authentication = included-hash`` (``hashchain.py``, ``hashauth.py``): the relation's chain system composed with
     private operands and the two operand-row gadgets of a pluggable leaf scheme (``leaf/``; Poseidon2 sponges by
@@ -519,6 +541,7 @@ class HashedRelationRunner(RelationChainRunner):
                                    word_dtype="<u4", y16_dtype=rel.y_dtype, y16_bits=rel.y_bits, tag=self.base_tag,
                                    steps=rel.steps, max_steps=getattr(self.leaf, "max_steps", None))
         self.trees = None
+        self.vshape = hashauth_vshape(rel, self.hr, self.leaf)   # vllm-v1 ports: (K, word_bits, y_bytes); None for frame-v3
         self.tile = None                    # (nx, nw) of the tile workload, None for the worst case
         self.rows, self.sponges, self.sponge_seconds = None, None, 0.0
         self._marshal_cache = {}
@@ -532,7 +555,7 @@ class HashedRelationRunner(RelationChainRunner):
 
     def hooks_for(self, auth):
         from . import hashauth
-        return dataclasses.replace(self.hooks, tag=self.base_tag + hashauth.digest_bytes(auth, leaf=self.leaf))
+        return dataclasses.replace(self.hooks, tag=self.base_tag + hashauth.digest_bytes(auth, leaf=self.leaf, vshape=self.vshape))
 
     def commit(self, *, x_rows, w_cols, y_words, bindings, cache=None, tile=None):
         """Build (or load) the three trees of the committed set; ``tile = (nx, nw)`` records the sharing layout."""
@@ -720,10 +743,7 @@ class HashedRelationRunner(RelationChainRunner):
         y = [self.rel.y_public(int(v[3])) for v in data]
         if tile is None and (x_rows is None or w_cols is None):
             x_rows, w_cols = self.committed_rows(data)
-        ysch, _ = hashauth.word_schema(self.rel.y_bits)
-        bindings = {n: hashauth.binding_digest(dataset=dataset, tier=tier, manifest_sha256=manifest_sha256, lo=0, hi=len(data),
-                                               K=getattr(self.rel, "vu_words", K_VU), tree=n,
-                                               schema=(self.leaf.schema if n != "y" else ysch)) for n in ("a", "b", "y")}
+        bindings = commit_bindings(self.rel, self.leaf, dataset=dataset, tier=tier, manifest_sha256=manifest_sha256, lo=0, hi=len(data))
         return self.commit(x_rows=x_rows, w_cols=w_cols, y_words=y, bindings=bindings, cache=cache, tile=tile)
 
     def auth_for(self, vu_ids: list[int]):
@@ -845,7 +865,7 @@ class HashedRelationRunner(RelationChainRunner):
             return False, "public table: is_end / digests off the chain ends"
         y_words = np.asarray(ypub, dtype=np.int64)[ends]
         ok, why = hashauth.verify_hash_auth(auth, sibs, digests=tab[ends, 1:1 + 2 * self.leaf.digest_elems], y_words=y_words,
-                                            y_bits=self.rel.y_bits, leaf=self.leaf)
+                                            y_bits=self.rel.y_bits, leaf=self.leaf, vshape=self.vshape)
         if auth_timing is not None:
             auth_timing["seconds"] = auth_timing.get("seconds", 0.0) + (time.perf_counter() - t0)
         return ok, why
@@ -925,6 +945,7 @@ class SharedHashedRunner(HashedRelationRunner):
         self.hr = hashchain.compose_shared(rel, self.fp_coords)
         self.leaf = self.hr.leaf
         self.leaf_name = leaf_registry.suffix_of(self.leaf)
+        self.vshape = None                  # Poseidon2 frame-v3 only: no vllm-v1 ports
         self.sys = self.hr.sys
         self.tb = tables(self.sys, self.device)
         self.rh = hashchain.row_hash_system(rel, self.fp_coords)

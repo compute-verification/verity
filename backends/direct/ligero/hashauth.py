@@ -133,6 +133,9 @@ def build_trees(*, x_rows: np.ndarray, w_cols: np.ndarray, y_words: np.ndarray, 
     "b"}`` the rows on the device."""
     scheme = _leaf(leaf)
     digests, rows_dev = digests or {}, rows_dev or {}
+    if is_vllm(scheme):
+        return _vllm_trees(x_rows=x_rows, w_cols=w_cols, y_words=y_words, word_bits=word_bits, y_bits=y_bits, bindings=bindings,
+                           scheme=scheme, digests=digests, rows_dev=rows_dev)
     ta, da = build_row_tree("a", bindings["a"], x_rows, word_bits, h2.ROLE_X, scheme, digests=digests.get("a"),
                             rows_dev=rows_dev.get("a"))
     tb, db = build_row_tree("b", bindings["b"], w_cols, word_bits, h2.ROLE_W, scheme, digests=digests.get("b"),
@@ -143,6 +146,8 @@ def build_trees(*, x_rows: np.ndarray, w_cols: np.ndarray, y_words: np.ndarray, 
 
 def load_or_build_trees(cache: Path | None, **kw) -> tuple[dict[str, WordTree], dict[str, np.ndarray], bool]:
     bindings = kw["bindings"]
+    if is_vllm(_leaf(kw.get("leaf"))):
+        cache = None                    # vllm-v1 trees are always built (their levels are not WordTree files)
     if cache is not None:
         cache = Path(cache)
         try:
@@ -160,6 +165,76 @@ def load_or_build_trees(cache: Path | None, **kw) -> tuple[dict[str, WordTree], 
         for n in ("a", "b"):
             np.save(cache / f"{n}.digests.npy", dig[n])
     return trees, dig, False
+
+
+def is_vllm(scheme) -> bool:
+    """Whether the scheme's statements commit under ``vllm-v1`` trees (``vllm_tree.py``) instead of frame-v3 indexed trees."""
+    return getattr(scheme, "tree", "frame-v3") == "vllm-v1"
+
+
+def vllm_shape(K: int, word_bits: int, y_bits: int) -> tuple[int, int, int]:
+    """``(K, word_bits, y_bytes)``: what a vllm-v1 port's program / geo / layout digests are derived from."""
+    from . import vllm_tree
+    return int(K), int(word_bits), vllm_tree.y_bytes_of(y_bits)
+
+
+def vllm_domain(name: str, ref, vshape: tuple[int, int, int]):
+    """The verifier's step domain of tree reference ``ref``: its own program / geo / layout, the ref's ctx and count."""
+    from . import vllm_tree
+    K, wb, yb = vshape
+    return vllm_tree.domain(name, ref.binding, ref.count, K=K, word_bits=wb, y_bytes=yb)
+
+
+def _vllm_trees(*, x_rows, w_cols, y_words, word_bits: int, y_bits: int, bindings: Mapping[str, bytes], scheme, digests, rows_dev):
+    """The three ``vllm-v1`` port trees: x rows / W columns as position leaves (the published digests), output words as
+    position leaves of their ``y_bytes`` little-endian bytes; each root the step-root binding of its domain."""
+    from . import vllm_tree
+    from .leaf import vllm_v1 as lv
+    K = int(np.shape(x_rows)[1])
+    vshape = vllm_shape(K, word_bits, y_bits)
+    trees, out = {}, {}
+    gpu = frame_gpu.available()
+    for name, rows, role in (("a", x_rows, h2.ROLE_X), ("b", w_cols, h2.ROLE_W)):
+        count = int(np.shape(rows)[0])
+        LIMITS.enforce("max_positions", count)
+        dom = vllm_tree.domain(name, bindings[name], count, K=K, word_bits=word_bits, y_bytes=vshape[2])
+        if gpu:
+            cp = frame_gpu.cp
+            with frame_gpu._torch_stream():
+                rb = frame_gpu.row_bytes(rows if rows_dev.get(name) is None else rows_dev[name], word_bits)
+                leaves = frame_gpu.fv3.sha256_rows(rb, lv.prefix(int(rb.shape[1])))
+                words = leaves.reshape(count, 8, 4).astype(cp.int64)
+                be = (words[:, :, 0] << 24) | (words[:, :, 1] << 16) | (words[:, :, 2] << 8) | words[:, :, 3]
+                dg = cp.stack([be & 0xFFFF, be >> 16], -1).reshape(count, 16)
+                if digests.get(name) is not None:
+                    e = cp.asarray(digests[name]).astype(cp.int64, copy=False)
+                    if e.shape != dg.shape or not bool((e == dg).all()):
+                        raise ValueError(f"leaf {scheme.name}: the chain digests are not the committed rows' position leaves")
+                trees[name] = vllm_tree.build(name, bindings[name], leaves, dom)
+                out[name] = dg.get()
+        else:
+            dg = digests.get(name)
+            dg = scheme.native(np.ascontiguousarray(rows, dtype=np.int64), word_bits=word_bits, role=role) if dg is None else np.asarray(dg, dtype=np.int64)
+            if dg.shape != (count, scheme.digest_elems):
+                raise ValueError(f"leaf {scheme.name}: native() must return (count, {scheme.digest_elems})")
+            leaves = np.frombuffer(b"".join(scheme.leaf_bytes_many(dg)), dtype=np.uint8).reshape(count, 32)
+            trees[name] = vllm_tree.build(name, bindings[name], leaves, dom)
+            out[name] = dg
+    yb = vshape[2]
+    yw = np.ascontiguousarray(np.asarray(y_words, dtype=np.int64).ravel())
+    count = int(yw.shape[0])
+    LIMITS.enforce("max_positions", count)
+    ybytes = yw.astype({2: "<u2", 4: "<u4"}[yb]).view(np.uint8).reshape(count, yb)
+    dom = vllm_tree.domain("y", bindings["y"], count, K=K, word_bits=word_bits, y_bytes=yb)
+    if gpu:
+        with frame_gpu._torch_stream():
+            leaves = frame_gpu.fv3.sha256_rows(frame_gpu.cp.asarray(ybytes), lv.prefix(yb))
+            trees["y"] = vllm_tree.build("y", bindings["y"], leaves, dom)
+    else:
+        from verity.commitments.vllm_v1 import pos_leaf
+        leaves = np.frombuffer(b"".join(pos_leaf(bytes(r)) for r in ybytes), dtype=np.uint8).reshape(count, 32)
+        trees["y"] = vllm_tree.build("y", bindings["y"], leaves, dom)
+    return trees, out
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -208,7 +283,7 @@ class HashAuth:
     @classmethod
     def for_vus(cls, trees: Mapping[str, WordTree | TreeRef], vu_index: Iterable[int], x_index: Iterable[int],
                 w_index: Iterable[int]) -> HashAuth:
-        refs = tuple(trees[n].ref if isinstance(trees[n], WordTree) else trees[n] for n in TREE_NAMES)
+        refs = tuple(trees[n].ref if hasattr(trees[n], "ref") else trees[n] for n in TREE_NAMES)
         return cls(tuple(int(v) for v in vu_index), tuple(int(v) for v in x_index), tuple(int(v) for v in w_index), refs)
 
     def indices(self) -> np.ndarray:
@@ -216,7 +291,7 @@ class HashAuth:
         return np.stack([np.asarray(self.vu_index), np.asarray(self.x_index), np.asarray(self.w_index)], 1).astype(np.int64)
 
 
-def digest_bytes(auth: HashAuth, leaf=None) -> bytes:
+def digest_bytes(auth: HashAuth, leaf=None, vshape: tuple[int, int, int] | None = None) -> bytes:
     """What the statement digest absorbs (through the relation hooks' tag): version, the scheme's leaf schema and
     parameters digest, the index rows, the tree references.  (The ``|p2=`` label predates the registry and stays: the
     Rust verifier's ``hash_digest_bytes`` mirrors these bytes for every scheme.)"""
@@ -227,6 +302,12 @@ def digest_bytes(auth: HashAuth, leaf=None) -> bytes:
     for t in auth.trees:
         out += b"|" + t.name.encode() + b":binding=" + t.binding + b"|owner=" + str(t.owner).encode()
         out += b"|count=" + str(t.count).encode() + b"|root=" + t.root
+        if is_vllm(scheme):
+            # PROTOCOL.md (vllm-v1) section 9.1: the verifier-held domain of every port, beside its bound root
+            if vshape is None:
+                raise ValueError("a vllm-v1 statement's digest needs the relation's (K, word_bits, y_bytes)")
+            from verity.commitments.vllm_v1 import domain_digest
+            out += b"|domain=" + domain_digest(vllm_domain(t.name, t, vshape))
     return bytes(out)
 
 
@@ -258,11 +339,13 @@ def _ranks(auth: HashAuth) -> dict[str, np.ndarray]:
 def open_trees(trees: Mapping[str, WordTree], auth: HashAuth) -> list[list[bytes]]:
     """The prover's three multiproofs (in TREE_NAMES order): the distinct x rows, the distinct W columns, the y words."""
     r = _ranks(auth)
-    return [multiproof_siblings(trees[n], r[n]) for n in TREE_NAMES]
+    from . import vllm_tree
+    return [vllm_tree.multiproof(trees[n], r[n]) if isinstance(trees[n], vllm_tree.VllmTree) else multiproof_siblings(trees[n], r[n])
+            for n in TREE_NAMES]
 
 
 def verify_hash_auth(auth: HashAuth, siblings: Sequence[Sequence[bytes]], *, digests: np.ndarray, y_words: np.ndarray,
-                     y_bits: int, leaf=None) -> tuple[bool, str]:
+                     y_bits: int, leaf=None, vshape: tuple[int, int, int] | None = None) -> tuple[bool, str]:
     """``digests`` (n_vus, 2 x digest_elems): the x digest elements then the W digest elements every VU published (the
     relation proved them); ``y_words`` (n_vus,).  Every VU's leaves must open under the roots (framed by the scheme's
     ``leaf_bytes`` under its ``schema``); two VUs claiming the same leaf must have published the same digest.  Every
@@ -283,6 +366,8 @@ def verify_hash_auth(auth: HashAuth, siblings: Sequence[Sequence[bytes]], *, dig
     yschema, ybytes = word_schema(y_bits)
     if ((y_words < 0) | (y_words >= 2**y_bits)).any():
         return False, "auth: y word out of range"
+    if is_vllm(scheme):
+        return _verify_vllm(auth, siblings, digests=digests, y_words=y_words, y_bits=y_bits, scheme=scheme, vshape=vshape)
     per_vu = {"a": (np.asarray(auth.x_index, dtype=np.int64), digests[:, :de]),
               "b": (np.asarray(auth.w_index, dtype=np.int64), digests[:, de:])}
     for name, sibs in zip(TREE_NAMES, siblings):
@@ -320,3 +405,52 @@ def verify_hash_auth(auth: HashAuth, siblings: Sequence[Sequence[bytes]], *, dig
         if not verify_multiproof(ref.root, ref.count, domain.domain_id, leaves, [bytes(s) for s in sibs]):
             return False, f"auth: {name}: multiproof rejected"
     return True, ""
+
+
+def _verify_vllm(auth: HashAuth, siblings, *, digests, y_words, y_bits: int, scheme, vshape) -> tuple[bool, str]:
+    """``verify_hash_auth`` under ``vllm-v1`` (PROTOCOL.md section 9): per port, the leaves at the verifier-fixed positions
+    (the published digests for x / W, ``pos_leaf`` of each output word's little-endian bytes for y) fold through the
+    port's own multiproof to a tree root whose step-root binding under the verifier's domain is the statement's root."""
+    from verity.commitments.vllm_v1 import pos_leaf
+
+    from . import vllm_tree
+    if vshape is None:
+        return False, "auth: a vllm-v1 statement needs the relation's (K, word_bits, y_bytes)"
+    de, n = scheme.digest_elems, auth.n_vus
+    yb = vshape[2]
+    if yb != ybytes_of(y_bits):
+        return False, "auth: y value length is not the relation's"
+    per_vu = {"a": (np.asarray(auth.x_index, dtype=np.int64), digests[:, :de]),
+              "b": (np.asarray(auth.w_index, dtype=np.int64), digests[:, de:])}
+    for name, sibs in zip(TREE_NAMES, siblings):
+        ref = auth.tree(name)
+        leaves: dict[int, bytes] = {}
+        if name == "y":
+            for r, w in zip(np.asarray(auth.vu_index, dtype=np.int64).tolist(), y_words.tolist()):
+                leaves[int(r)] = pos_leaf(int(w).to_bytes(yb, "little"))
+        else:
+            ranks, dg = per_vu[name]
+            for v in range(n):
+                val = scheme.leaf_bytes(dg[v])
+                if leaves.setdefault(int(ranks[v]), val) != val:
+                    return False, f"auth: {name}: VUs claiming leaf {int(ranks[v])} published different digests"
+        try:
+            LIMITS.enforce("max_positions", int(ref.count))
+            LIMITS.enforce("max_openings", len(leaves))
+            LIMITS.enforce("max_proof_bytes", 32 * len(sibs))
+        except ResourceLimit as e:
+            return False, f"auth: {name}: {e}"
+        if leaves and max(leaves) >= ref.count:
+            return False, f"auth: {name}: leaf index out of range"
+        try:
+            tree_root = vllm_tree.fold_multiproof(int(ref.count), leaves, [bytes(s) for s in sibs])
+            dom = vllm_domain(name, ref, vshape)
+        except ValueError as e:
+            return False, f"auth: {name}: multiproof rejected ({e})"
+        if dom.bind(tree_root) != ref.root:
+            return False, f"auth: {name}: multiproof rejected (step root mismatch)"
+    return True, ""
+
+
+def ybytes_of(y_bits: int) -> int:
+    return word_schema(y_bits)[1]

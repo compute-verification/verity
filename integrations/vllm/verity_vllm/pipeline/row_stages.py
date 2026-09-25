@@ -475,7 +475,7 @@ class SingleRow(Row):
     def form_b(self) -> None:
         """Required values the replay has no evaluator for are value-checked by form (B) alone, complete only over EVERY
         step: the row default snapshot steps become ``all`` for them (an explicit ``--snapshot-steps`` stands, named)."""
-        from verity_vllm.check.replay.sampled_replay import form_b_families
+        from verity_vllm.check.replay.coverage import form_b_families
         try:
             f = form_b_families(json.load(open(f"{self.d}/manifest.json")))
             fb, rc = " ".join(f"{k}x{v}" for k, v in sorted(f.items())), 0

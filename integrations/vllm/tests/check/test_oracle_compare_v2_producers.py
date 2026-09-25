@@ -13,7 +13,7 @@ import json
 
 from verity.proofs.query import ValueRef as R
 from verity_vllm.check import oracle_compare as OC
-from verity_vllm.check.replay.sampled_replay import form_b_families
+from verity_vllm.check.replay.coverage import form_b_families
 from verity_vllm.query.manifest import format as MF
 from tests.check.test_oracle_compare import ROWS, U0, U1, H, _exploded_norm_match, make_match, reader
 from tests.check.test_oracle_compare_promoted_key import CONSUMER_OP, PRODUCER_OP, _add_promoted, _promoted_bmap

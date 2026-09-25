@@ -20,10 +20,14 @@
 //!   flock-link sigma      --vus V --digests FILE --prime-commitment HEX        print Σ's preimage (sigma.txt)
 //!   flock-link cell-serve --listen ADDR --out DIR --vus V --digests FILE --prime-commitment HEX --operator LANE [--sessions N]
 //!   flock-link cell-prove --verifier ADDR --vus V --digests FILE --prime-commitment HEX --operands FILE
-//!                         --root-f FILE --link-out FILE [--start FILE]
+//!                         --root-f FILE --link-out FILE [--start FILE] [--prime-sock PATH]
+//!   flock-link replay     --session DIR --vus V --digests FILE --prime-commitment HEX [--json OUT]
+//!                         G2: re-verify the Flock side of a finished session from DIR/session.json and the proofs kept
+//!                         beside it (DIR/chain.rep{0,1}.bin), with no live verifier; exit 0 iff accepted
 //!   cell-prove waits for the prime prover's root_F (hex in --root-f), commits it with root_B, and writes the session's
 //!   points and y (and Σ, root_B) to --link-out for the prime prover to finish its proof against. cell-serve keeps each
-//!   session's proofs beside its record (E1).
+//!   session's proofs beside its record (E1). cell-serve serves the prime proof's coins too (`Prime` rounds, the
+//!   library's live prime coins); cell-prove forwards them from --prime-sock on the session's connection.
 //!
 //! Output lines are `LIVE\t{json}` / `NEG\t{json}` / `SELFTEST\t{json}`.
 
@@ -452,16 +456,98 @@ impl StatementVerifier for ChainVerifier {
     }
 }
 
-fn server(ch: &Arc<Chain>, digests: Vec<[u8; 32]>) -> Server {
-    server_tables(ch, vec![(TABLE.to_string(), digests)])
+fn server(ch: &Arc<Chain>, digests: Vec<[u8; 32]>, prime_live: bool) -> Server {
+    let (cfg, v) = server_cfg(ch, vec![(TABLE.to_string(), digests)], prime_live);
+    Server::new(cfg, v)
 }
 
 /// One session over several chain tables (L3): one Σ over all of them, one `Commit` carrying every root_B before the
 /// link points, one y per table and point.
 fn server_tables(ch: &Arc<Chain>, tables: Vec<(String, Vec<[u8; 32]>)>) -> Server {
+    let (cfg, v) = server_cfg(ch, tables, false);
+    Server::new(cfg, v)
+}
+
+/// The verifier's configuration and statement verifier; `prime_live`: the route (a) cell's prime coins are served too.
+fn server_cfg(ch: &Arc<Chain>, tables: Vec<(String, Vec<[u8; 32]>)>, prime_live: bool) -> (SessionConfig, Box<dyn StatementVerifier>) {
     let mut cfg = SessionConfig::flock_128_r2(tables.iter().map(|(n, _)| ch.spec_named(n)).collect());
     cfg.link = Some(LinkSpec { sigma: ch.sigma(&tables.iter().flat_map(|(_, d)| d.clone()).collect::<Vec<_>>()), m: ch.m_link, points: 2 });
-    Server::new(cfg, Box::new(ChainVerifier { ch: ch.clone(), digests: tables.into_iter().collect() }))
+    cfg.prime_live = prime_live;
+    (cfg, Box::new(ChainVerifier { ch: ch.clone(), digests: tables.into_iter().collect() }))
+}
+
+/// G2: re-verify a finished single-table session from its record and the two proofs kept beside it.
+fn replay(ch: &Arc<Chain>, digests: Vec<[u8; 32]>, rec: &Value, proofs: [Vec<u8>; 2]) -> Value {
+    let prime_live = rec["config"]["prime_live"] == true;
+    let (cfg, v) = server_cfg(ch, vec![(TABLE.to_string(), digests)], prime_live);
+    let proofs: BTreeMap<(String, usize), Vec<u8>> = proofs.into_iter().enumerate().map(|(r, b)| ((TABLE.to_string(), r), b)).collect();
+    match Server::from_record(cfg, v, rec, proofs) {
+        Ok(mut s) => {
+            let v = s.finish();
+            json!({"accepted": v["accepted"], "why": v["why"], "verdict": v, "prime_live": prime_live,
+                   "recorded_verdict_accepted": rec["verdict"]["accepted"]})
+        }
+        Err(e) => json!({"accepted": false, "why": e, "prime_live": prime_live, "recorded_verdict_accepted": rec["verdict"]["accepted"]}),
+    }
+}
+
+/// The route (a) cell's prime prover reaches the session through `cell-prove`: `Prime` frames on a Unix socket are
+/// forwarded on the session's own connection (one session, one record), after `Hello`; the session's proofs and
+/// `Finish` wait until the prime prover closes the socket, so no prime round can follow the verdict.
+struct PrimeProxy {
+    hello: std::sync::atomic::AtomicBool,
+    done: Mutex<Option<std::thread::JoinHandle<Value>>>,
+}
+
+impl PrimeProxy {
+    fn start(path: &str, t: SharedTransport) -> Arc<Self> {
+        use std::io::{BufReader, BufWriter};
+        use std::sync::atomic::Ordering;
+        let _ = std::fs::remove_file(path);
+        let l = std::os::unix::net::UnixListener::bind(path).expect("--prime-sock");
+        let px = Arc::new(PrimeProxy { hello: false.into(), done: Mutex::new(None) });
+        let p2 = px.clone();
+        let h = std::thread::spawn(move || {
+            let Ok((conn, _)) = l.accept() else { return json!({"error": "no prime connection"}) };
+            let mut r = BufReader::new(conn.try_clone().unwrap());
+            let mut w = BufWriter::new(conn);
+            let (mut rounds, mut coins, mut up, mut down, mut wait, mut refused) = (0u64, 0u64, 0u64, 0u64, 0f64, None);
+            while let Ok(b) = read_frame(&mut r) {
+                while !p2.hello.load(Ordering::Acquire) {
+                    std::thread::sleep(std::time::Duration::from_micros(50));
+                }
+                let resp = match Req::decode(&b) {
+                    Ok(req @ Req::Prime { .. }) => {
+                        let tw = Instant::now();
+                        let res = t.lock().unwrap().call(req).unwrap_or_else(Resp::Refused);
+                        wait += tw.elapsed().as_secs_f64();
+                        res
+                    }
+                    Ok(_) => Resp::Refused("the prime proxy forwards Prime rounds only".into()),
+                    Err(e) => Resp::Refused(e),
+                };
+                let enc = resp.encode();
+                rounds += 1;
+                up += b.len() as u64 + 4;
+                down += enc.len() as u64 + 4;
+                match &resp {
+                    Resp::Words(v) => coins += (v.len() / PRIME_DEG) as u64,
+                    Resp::Refused(e) => { refused.get_or_insert(e.clone()); }
+                    _ => {}
+                }
+                if write_frame(&mut w, &enc).is_err() {
+                    break;
+                }
+            }
+            json!({"rounds": rounds, "challenges": coins, "bytes_up": up, "bytes_down": down, "wait_s": wait, "refused": refused})
+        });
+        *px.done.lock().unwrap() = Some(h);
+        px
+    }
+
+    fn join(&self) -> Value {
+        self.done.lock().unwrap().take().map(|h| h.join().unwrap_or_else(|_| json!({"error": "prime proxy panicked"}))).unwrap_or(Value::Null)
+    }
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -493,9 +579,35 @@ struct Plan {
     operands: Option<Arc<Vec<u8>>>,
     root_f_file: Option<String>,
     link_out: Option<String>,
+    /// The cell: the real prime prover's rounds, through `cell-prove --prime-sock`.
+    proxy: Option<Arc<PrimeProxy>>,
+    /// The selftest's stand-in prime prover (states are arbitrary: only the server's order is exercised here; the
+    /// prime verifier's replay is tested in backends/gkr).
+    prime: PrimeSim,
+    /// Override the server's `prime_live` (default: the plan's).
+    server_prime: Option<bool>,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum PrimeSim {
+    Off,
+    /// Two rounds after `Hello`, one after y.
+    Honest,
+    /// A prime coin before `Hello`.
+    BeforeHello,
+    /// A prime coin between `Commit` (root_F) and y.
+    AfterRootFBeforeY,
+    /// `Commit` with no prime round before it (the prime proof's GKR coins were not live).
+    NoneBeforeRootF,
+    /// No prime round after y.
+    NoneAfterY,
 }
 
 impl Plan {
+    fn prime_live(&self) -> bool {
+        self.proxy.is_some() || self.prime != PrimeSim::Off
+    }
+
     fn honest() -> Self {
         Plan {
             commit: CommitMode::Honest,
@@ -511,7 +623,52 @@ impl Plan {
             operands: None,
             root_f_file: None,
             link_out: None,
+            proxy: None,
+            prime: PrimeSim::Off,
+            server_prime: None,
         }
+    }
+}
+
+impl Plan {
+    /// The server's configuration disagrees with the prover's about live prime coins.
+    fn with_server_prime(mut self, on: bool) -> Self {
+        self.server_prime = Some(on);
+        self
+    }
+}
+
+/// A forger's `link_sha256` over an edited record (root_F, every root_B, the points, y), as `record_json` computes it.
+fn reseal(r: &mut Value) {
+    let hb = |v: &Value| -> Vec<u8> {
+        let s = v.as_str().unwrap();
+        (0..s.len() / 2).map(|i| u8::from_str_radix(&s[2 * i..2 * i + 2], 16).unwrap()).collect()
+    };
+    let le = |v: &Value| -> Vec<u8> {
+        let b = hb(v);
+        b[8..].iter().rev().chain(b[..8].iter().rev()).copied().collect()
+    };
+    let l = &r["link"];
+    let mut b = hb(&l["root_f"]);
+    for v in l["root_b"].as_object().unwrap().values() {
+        b.extend(hb(v));
+    }
+    for p in l["points"].as_array().unwrap() {
+        for c in p.as_array().unwrap() {
+            b.extend(le(c));
+        }
+    }
+    for y in l["y"].as_array().unwrap() {
+        b.extend(le(y));
+    }
+    r["link_sha256"] = json!(hex(&sha256(&b)));
+}
+
+/// The stand-in prime prover's round `k` (see [`PrimeSim`]).
+fn sim_prime(t: &SharedTransport, k: u8) -> Result<(), String> {
+    match call(t, Req::Prime { state: sha256(&[b"flock-link/selftest/prime-state".as_slice(), &[k]].concat()).to_vec(), n: 3 })? {
+        Resp::Words(w) if w.len() == 3 * PRIME_DEG && w.iter().all(|&x| x < BABYBEAR_P) => Ok(()),
+        r => Err(format!("prime round {k}: {r:?}")),
     }
 }
 
@@ -541,6 +698,7 @@ fn session(ch: &Chain, t: SharedTransport, seed: u64, plan: &Plan) -> (Value, Ve
         let mut cfg = SessionConfig::flock_128_r2(vec![ch.spec()]);
         let sigma = ch.sigma(&leaf_digests(ch, &st));
         cfg.link = Some(LinkSpec { sigma, m: ch.m_link, points: 2 });
+        cfg.prime_live = plan.prime_live();
         (cfg.hello(), sigma)
     };
     let (_, z, b) = instance(ch, seed, plan);
@@ -573,9 +731,20 @@ fn session(ch: &Chain, t: SharedTransport, seed: u64, plan: &Plan) -> (Value, Ve
     let mut proofs: Vec<Vec<u8>> = Vec::new();
     let mut cached: Option<Vec<LinkClaim>> = None;
     let res: Result<(), String> = (|| {
-        match call(&t, Req::Hello(hello))? {
+        if plan.prime == PrimeSim::BeforeHello {
+            sim_prime(&t, 0)?;
+        }
+        let hr = call(&t, Req::Hello(hello));
+        if let Some(px) = &plan.proxy {
+            px.hello.store(true, std::sync::atomic::Ordering::Release);
+        }
+        match hr? {
             Resp::Ok => {}
             r => return Err(format!("hello: {r:?}")),
+        }
+        if matches!(plan.prime, PrimeSim::Honest | PrimeSim::AfterRootFBeforeY | PrimeSim::NoneAfterY) {
+            sim_prime(&t, 1)?;
+            sim_prime(&t, 2)?;
         }
         if plan.commit == CommitMode::YBeforePoints {
             match call(&t, Req::Link(vec![0u8; 32]))? {
@@ -616,6 +785,9 @@ fn session(ch: &Chain, t: SharedTransport, seed: u64, plan: &Plan) -> (Value, Ve
                         other => panic!("LIVE-REFUSED commit twice: {other:?}"),
                     }
                 }
+                if plan.prime == PrimeSim::AfterRootFBeforeY {
+                    sim_prime(&tt, 3).unwrap_or_else(|e| panic!("LIVE-REFUSED {e}"));
+                }
                 let ty = Instant::now();
                 let claims: Vec<LinkClaim> = pts
                     .chunks(ch.m_link)
@@ -632,6 +804,9 @@ fn session(ch: &Chain, t: SharedTransport, seed: u64, plan: &Plan) -> (Value, Ve
                         Ok(Resp::Ok) => {}
                         other => panic!("LIVE-REFUSED y: {other:?}"),
                     }
+                }
+                if plan.prime == PrimeSim::Honest {
+                    sim_prime(&tt, 4).unwrap_or_else(|e| panic!("LIVE-REFUSED {e}"));
                 }
                 if let Some(out) = &plan.link_out {
                     let pts: Vec<Vec<String>> = pts.chunks(ch.m_link).map(|r| r.iter().map(f128_hex).collect()).collect();
@@ -659,6 +834,8 @@ fn session(ch: &Chain, t: SharedTransport, seed: u64, plan: &Plan) -> (Value, Ve
         };
         return (json!({"accepted": v["accepted"], "why": v["why"], "verdict": v, "prover_stopped": e.chars().take(200).collect::<String>()}), proofs);
     }
+    let flock_done_s = t0.elapsed().as_secs_f64();
+    let prime = plan.proxy.as_ref().map(|px| px.join());
     let sent = plan.substitute.clone().unwrap_or_else(|| proofs.clone());
     for (rep, p) in sent.iter().enumerate() {
         call(&t, Req::Proof { table: TABLE.into(), rep: rep as u32, bytes: p.clone() }).unwrap();
@@ -674,7 +851,7 @@ fn session(ch: &Chain, t: SharedTransport, seed: u64, plan: &Plan) -> (Value, Ve
                "m_link": ch.m_link, "dense_m": ch.params(LigeritoProfile::Fast100).m, "prove_s": prove_s,
                "prove_total_s": prove_s.iter().sum::<f64>(), "y_s": y_s, "session_wall_s": t0.elapsed().as_secs_f64(),
                "proof_bytes": proofs.iter().map(|p| p.len()).collect::<Vec<_>>(), "wire_sent": ws, "wire_recv": wr,
-               "calls": calls, "wait_s": wait_s}),
+               "calls": calls, "wait_s": wait_s, "flock_done_s": flock_done_s, "prime": prime}),
         proofs,
     )
 }
@@ -782,15 +959,20 @@ fn session_l3(ch: &Arc<Chain>, case: L3Case) -> Value {
            "tables": rec["config"]["tables"].as_array().map(|a| a.len()), "link": rec["link"]["root_b_sha256"]})
 }
 
-fn inproc(ch: &Arc<Chain>, statement: &[u8]) -> (SharedTransport, Arc<Mutex<Server>>) {
-    let s = Arc::new(Mutex::new(server(ch, leaf_digests(ch, statement))));
+fn inproc(ch: &Arc<Chain>, statement: &[u8], prime_live: bool) -> (SharedTransport, Arc<Mutex<Server>>) {
+    let s = Arc::new(Mutex::new(server(ch, leaf_digests(ch, statement), prime_live)));
     (shared(InProc(s.clone())), s)
 }
 
 fn neg(ch: &Arc<Chain>, name: &str, maps_to: &str, plan: &Plan, want_accept: bool) -> (bool, Value) {
+    let (ok, rec, _) = neg_proofs(ch, name, maps_to, plan, want_accept);
+    (ok, rec)
+}
+
+fn neg_proofs(ch: &Arc<Chain>, name: &str, maps_to: &str, plan: &Plan, want_accept: bool) -> (bool, Value, Vec<Vec<u8>>) {
     let (st, _, _) = instance(ch, 0xA, plan);
-    let (t, s) = inproc(ch, &st);
-    let (v, _) = session(ch, t, 0xA, plan);
+    let (t, s) = inproc(ch, &st, plan.server_prime.unwrap_or(plan.prime_live()));
+    let (v, proofs) = session(ch, t, 0xA, plan);
     let acc = v["accepted"].as_bool().unwrap_or(false);
     let rec = s.lock().unwrap().record_json();
     let reps: Vec<Value> = rec["verdict"]["reps"].as_array().cloned().unwrap_or_default().iter().map(|r| json!([r["stream"], r["ok"]])).collect();
@@ -800,7 +982,7 @@ fn neg(ch: &Arc<Chain>, name: &str, maps_to: &str, plan: &Plan, want_accept: boo
                "accepted": acc, "pass": acc == want_accept, "why": v["why"], "prover_stopped": v["prover_stopped"],
                "reps_ok": reps, "aborted": rec["aborted"], "link_mode": rec["link_mode"], "link_sha256": rec["link_sha256"]})
     );
-    (acc == want_accept, rec)
+    (acc == want_accept, rec, proofs)
 }
 
 fn selftest(ch: Arc<Chain>) {
@@ -859,8 +1041,83 @@ fn selftest(ch: Arc<Chain>) {
     t("reps_with_different_witness", "R1", Plan { rep1_other_witness: true, ..h() }, false);
     t("fast_profile_proofs", "R7 / F2", Plan { profile: [LigeritoProfile::Fast; 2], ..h() }, false);
     let (st, _, _) = instance(&ch, 0xA, &h());
-    let (_, other) = session(&ch, inproc(&ch, &st).0, 0xA, &h());
+    let (_, other) = session(&ch, inproc(&ch, &st, false).0, 0xA, &h());
     t("cross_session_replay_both_reps", "link neg 15", Plan { substitute: Some(other), ..h() }, false);
+    // live prime coins: the server's order (the prime verifier's replay of the rounds is backends/gkr's tests)
+    let prime = |p: PrimeSim| Plan { prime: p, ..h() };
+    let (ok, prec, pproofs) = neg_proofs(&ch, "prime_live_honest", "P-live honest", &prime(PrimeSim::Honest), true);
+    all.set(all.get() && ok);
+    let shape = prec["prime"]["before_commit"] == 2 && prec["prime"]["rounds"].as_array().map(|a| a.len()) == Some(3)
+        && prec["hello"].as_str().is_some_and(|x| x.contains(PRIME_MODE));
+    println!("NEG\t{}", json!({"case": "prime_live_record_shape", "maps_to": "P-live / G2", "pass": shape}));
+    all.set(all.get() && shape);
+    t("prime_coin_before_hello", "P-live coins before commitments (R7)", prime(PrimeSim::BeforeHello), false);
+    t("prime_coin_after_root_f_before_y", "P-live coins before commitments (R5)", prime(PrimeSim::AfterRootFBeforeY), false);
+    t("root_f_without_live_prime_coins", "P-live (the GKR coins were not live)", prime(PrimeSim::NoneBeforeRootF), false);
+    t("no_prime_coin_after_y", "P-live (rho and the queries were not live)", prime(PrimeSim::NoneAfterY), false);
+    t("prime_rounds_to_a_flock_only_session", "P-live (R7: the configuration pins prime_live)",
+      Plan { prime: PrimeSim::Honest, ..h() }.with_server_prime(false), false);
+    // G2: the offline replay from the record alone, and tampered records
+    let d = leaf_digests(&ch, &st);
+    let pp: [Vec<u8>; 2] = [pproofs[0].clone(), pproofs[1].clone()];
+    let rp = |name: &str, maps: &str, rec: &Value, proofs: &[Vec<u8>; 2], want: bool| {
+        let v = replay(&ch, d.clone(), rec, proofs.clone());
+        let acc = v["accepted"] == true;
+        all.set(all.get() && acc == want);
+        println!("NEG\t{}", json!({"case": name, "maps_to": maps, "expect": if want {"accept"} else {"reject"}, "accepted": acc,
+            "pass": acc == want, "why": v["why"]}));
+    };
+    rp("replay_honest_record", "G2 honest", &prec, &pp, true);
+    let edit = |f: &dyn Fn(&mut Value)| { let mut r = prec.clone(); f(&mut r); r };
+    let flip_hex = |s: &Value| -> Value {
+        let mut b = s.as_str().unwrap().to_string().into_bytes();
+        let i = b.len() - 1;
+        b[i] = if b[i] == b'0' { b'1' } else { b'0' };
+        json!(String::from_utf8(b).unwrap())
+    };
+    let rep0 = |r: &Value| r["streams"].as_array().unwrap().iter().position(|s| s["stream"] == "chain/rep0").unwrap();
+    rp("replay_tampered_flock_coin", "G2 tampered record (a coin)", &edit(&|r| {
+        let i = rep0(r);
+        let c = &mut r["streams"][i]["rounds"][3]["coins"][0];
+        *c = flip_hex(c);
+    }), &pp, false);
+    rp("replay_tampered_msg_sha", "G2 tampered record (a committed round)", &edit(&|r| {
+        let i = rep0(r);
+        let c = &mut r["streams"][i]["rounds"][5]["msg_sha256"];
+        *c = flip_hex(c);
+    }), &pp, false);
+    rp("replay_tampered_publics_resealed", "G2 tampered record (a public word, sha256 recomputed)", &edit(&|r| {
+        let p = flip_hex(&r["link"]["publics"][TABLE]);
+        let b: Vec<u8> = (0..p.as_str().unwrap().len() / 2).map(|i| u8::from_str_radix(&p.as_str().unwrap()[2 * i..2 * i + 2], 16).unwrap()).collect();
+        r["link"]["publics_sha256"][TABLE] = json!(hex(&sha256(&b)));
+        r["link"]["publics"][TABLE] = p;
+    }), &pp, false);
+    rp("replay_tampered_y_unsealed", "G2 tampered record (y; link_sha256 left)", &edit(&|r| {
+        let y = flip_hex(&r["link"]["y"][0]);
+        r["link"]["y"][0] = y;
+    }), &pp, false);
+    rp("replay_tampered_y_resealed", "G2 tampered record (y; link_sha256 recomputed)", &edit(&|r| {
+        let y = flip_hex(&r["link"]["y"][0]);
+        r["link"]["y"][0] = y;
+        reseal(r);
+    }), &pp, false);
+    rp("replay_tampered_point_resealed", "G2 tampered record (a link point; link_sha256 recomputed)", &edit(&|r| {
+        let c = flip_hex(&r["link"]["points"][1][4]);
+        r["link"]["points"][1][4] = c;
+        reseal(r);
+    }), &pp, false);
+    rp("replay_prime_before_commit_zeroed", "G2 tampered record (prime order)", &edit(&|r| r["prime"]["before_commit"] = json!(0)), &pp, false);
+    rp("replay_prime_rounds_dropped", "G2 tampered record (prime rounds)", &edit(&|r| r["prime"] = Value::Null), &pp, false);
+    rp("replay_hello_edited", "G2 tampered record (session parameters)", &edit(&|r| {
+        r["hello"] = json!(r["hello"].as_str().unwrap().replace("\"reps\":2", "\"reps\":1"));
+    }), &pp, false);
+    rp("replay_proof_swapped", "G2 (the proofs beside the record)", &prec, &[pp[1].clone(), pp[0].clone()], false);
+    let (_, bad, bproofs) = neg_proofs(&ch, "prime_live_y1_tampered", "L2 (for the replay below)", &Plan { y_delta: [1, 0], ..prime(PrimeSim::Honest) }, false);
+    rp("replay_rejected_session_verdict_edited", "G2 (the replay recomputes the verdict)", &{
+        let mut r = bad.clone();
+        r["verdict"]["accepted"] = json!(true);
+        r
+    }, &[bproofs[0].clone(), bproofs[1].clone()], false);
     for (case, name, want) in [
         (L3Case::Honest, "l3_two_tables_one_session", true),
         (L3Case::OneRootOnly, "l3_points_before_second_root", false),
@@ -884,7 +1141,7 @@ fn main() {
     let seed: u64 = arg("--seed", "10").parse().unwrap();
     let tb = Instant::now();
     let mut chain = Chain::new(vus, k);
-    if cmd.starts_with("cell") || cmd == "sigma" {
+    if cmd.starts_with("cell") || cmd == "sigma" || cmd == "replay" {
         chain.prime = arg("--prime-commitment", "");
         assert!(chain.prime.len() == 64, "--prime-commitment: the SHA-256 (hex) of the prime statement's commitment.txt");
     }
@@ -895,7 +1152,7 @@ fn main() {
         "serve" => {
             let st = words(seed, ch.leaves * ch.k * 2);
             let d = leaf_digests(&ch, &st);
-            serve_loop(move || server(&ch, d.clone()));
+            serve_loop(move || server(&ch, d.clone(), false));
         }
         "prove" => {
             let runs: usize = arg("--runs", "1").parse().unwrap();
@@ -909,7 +1166,22 @@ fn main() {
         "sigma" => print!("{}", ch.sigma_text(&read_digests(&ch), &ch.prime)),
         "cell-serve" => {
             let d = read_digests(&ch);
-            serve_loop(move || server(&ch, d.clone()));
+            serve_loop(move || server(&ch, d.clone(), true));
+        }
+        "replay" => {
+            let dir = std::path::PathBuf::from(arg("--session", ""));
+            let rec: Value = serde_json::from_str(&std::fs::read_to_string(dir.join("session.json")).expect("--session DIR/session.json"))
+                .expect("session.json");
+            let proof = |r: usize| std::fs::read(dir.join(format!("{TABLE}.rep{r}.bin"))).unwrap_or_default();
+            let tr = Instant::now();
+            let mut v = replay(&ch, read_digests(&ch), &rec, [proof(0), proof(1)]);
+            v["replay_s"] = json!(tr.elapsed().as_secs_f64());
+            v["session"] = json!(dir.display().to_string());
+            println!("REPLAY\t{v}");
+            if let Some(out) = std::env::args().position(|a| a == "--json").and_then(|i| std::env::args().nth(i + 1)) {
+                std::fs::write(out, serde_json::to_string_pretty(&v).unwrap()).unwrap();
+            }
+            std::process::exit(if v["accepted"] == true { 0 } else { 1 });
         }
         "cell-prove" => {
             let d = read_digests(&ch);
@@ -927,11 +1199,23 @@ fn main() {
             while !start.is_empty() && !std::path::Path::new(&start).exists() {
                 std::thread::sleep(std::time::Duration::from_millis(1));
             }
-            let t = shared(TcpTransport::connect(&arg("--verifier", "127.0.0.1:7200")).unwrap());
+            // the verifier may be re-binding its port between the sweep's sizes
+            let addr = arg("--verifier", "127.0.0.1:7200");
+            let tc = Instant::now();
+            let conn = loop {
+                match TcpTransport::connect(&addr) {
+                    Ok(c) => break c,
+                    Err(e) if tc.elapsed().as_secs() < 60 => { eprintln!("connect {addr}: {e}; retrying"); std::thread::sleep(std::time::Duration::from_millis(500)) }
+                    Err(e) => panic!("connect {addr}: {e}"),
+                }
+            };
+            let t = shared(conn);
+            let sock = arg("--prime-sock", "");
+            let plan = Plan { proxy: (!sock.is_empty()).then(|| PrimeProxy::start(&sock, t.clone())), ..plan };
             let (v, _) = session(&ch, t, seed, &plan);
             println!("LIVE\t{v}");
         }
-        _ => eprintln!("usage: flock-link serve|prove|selftest|sigma|cell-serve|cell-prove [--vus V] [--k K] [--seed S] ..."),
+        _ => eprintln!("usage: flock-link serve|prove|selftest|sigma|cell-serve|cell-prove|replay [--vus V] [--k K] [--seed S] ..."),
     }
 }
 

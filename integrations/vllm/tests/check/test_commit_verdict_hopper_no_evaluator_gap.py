@@ -1,6 +1,6 @@
 """[R16 pin F-r16-20b / M-0431; the Hopper instance of rev's F-r16-20 class] On a cc 9.0 step `verity_vllm.program.registry.targets.gemm_spec` /
 `attention_spec` bind `Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1}` and `Attention_v2{...}` (only an Ampere-family step under FA2 binds the
-accepted Gemm_v1 / Attention_v3).  `sampled_replay.EVALUATORS` has Gemm_v1 and not Gemm_v2, so `sampled_replay.population()` excluded
+accepted Gemm_v1 / Attention_v3).  `rows.EVALUATORS` has Gemm_v1 and not Gemm_v2, so `population.population()` excluded
 EVERY Hopper GEMM output VU (every linear + lm_head) as `no registered evaluator for Gemm_v2` -- why-class 'no-evaluator', the applicability
 domain's label, a text NOT in NOT_YET -- and the replay graded COMPLETE over what is left (RMSNorm, SiluMul, Embedding, TokenSelect).
 Attention_v2 is the SAME state-linked limit as Attention_v3 under the Hopper name and enters NOT_YET BY NAME with the identical text
@@ -20,7 +20,8 @@ import pytest
 
 from verity_vllm.check.c2_rules import _complete_replay_population_gap, _no_evaluator_gaps
 from verity_vllm.check.verdict import commit_verdict
-from verity_vllm.check.replay.sampled_replay import EVALUATORS, NOT_YET, why_class
+from verity_vllm.check.replay.replay_codes import NOT_YET, why_class
+from verity_vllm.program.kernels.rows import EVALUATORS
 from verity_vllm.program.registry import targets as T
 
 
@@ -77,8 +78,8 @@ def test_the_mechanism_is_in_the_registry_and_the_evaluator_table():
     sel, other = _no_evaluator_gaps(SR_HOPPER["population"]["not_evaluable"])
     assert sel == {} and other == {"Gemm_v2": 3616}                             # an R16 record's text: Attention_v2 is domain; Gemm_v2 was the gap
     # a record produced by THIS version names no Gemm_v2 gap: the population's not_evaluable text never carries K_GEMM2 (the family evaluates)
-    from verity_vllm.check.replay import sampled_replay as SR
-    assert SR.gemm_dot_prim({"DOT": '{"fn":"HopperBF16WgmmaDot16_v1"}'}) == "HopperBF16WgmmaDot16_v1"
+    from verity_vllm.program.kernels import rows as RK
+    assert RK.gemm_dot_prim({"DOT": '{"fn":"HopperBF16WgmmaDot16_v1"}'}) == "HopperBF16WgmmaDot16_v1"
 
 
 def test_hopper_commit_only_without_form_b_fails_by_name():

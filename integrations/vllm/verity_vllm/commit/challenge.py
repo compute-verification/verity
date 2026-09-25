@@ -9,6 +9,10 @@ run root was registered, or an auditor key, with the run root and the draw's oth
 * opening identities from the expected population (`identity_picker`): `verity/vllm-commit/opening-identities/v1`;
 * the replay sample: sampled proofs' verification-unit draw (`replay_key`), each stratum a replay unit selected with
   p = 1 and `per_stratum` of its units checked (`stratum_picks`).
+
+The legacy seeds of the other drivers (replay's tiers, the compiled-kernel check, recompute's reference rows,
+difftest, the relation checkers) are here too (`root_seed` .. `case_seed`), with the only generator constructors
+(`stream`, `generator`): changing one moves every sample drawn from it.
 """
 from __future__ import annotations
 
@@ -18,7 +22,9 @@ from bisect import bisect_right
 from collections.abc import Callable, Sequence
 from fractions import Fraction
 from itertools import accumulate
-from typing import TypeVar
+from typing import Any, TypeVar
+
+import numpy as np
 
 from verity.randomness import Key, derive
 from verity_sampled_proofs.law import ReplayUnit, Stage, TwoStageLaw, select_verification_units, vu_key
@@ -115,3 +121,39 @@ def stratum_picks(pools: Sequence[Sequence[T]], per_stratum: int, seed: int | No
         n = min(int(per_stratum), len(pool))
         out.append(rng.sample(list(pool), n) if n < len(pool) else list(pool))
     return out
+
+
+def root_seed(run_root: bytes) -> int:
+    """The legacy seed with no verifier challenge, drawn after commitment: the run root's first 8 bytes, big-endian."""
+    return int.from_bytes(bytes(run_root)[:8], "big")
+
+
+def challenge_seed(challenge: str, run_root: bytes) -> int:
+    """The legacy seed under a verifier-issued challenge (`legacy_replay_seed`): bound to the root, so a challenge issued
+    before the root was fixed, or for another run, selects another sample."""
+    return legacy_replay_seed(challenge, run_root)
+
+
+def kernel_check_seed(run_root: bytes) -> int:
+    """The compiled-kernel check's step seed: the run root's first 4 bytes, ``int(run_root.hex()[:8], 16)``."""
+    return int(bytes(run_root).hex()[:8], 16)
+
+
+def reference_rows_seed(rows_total: int, rows_pending: int) -> int:
+    """Recompute's reference-row seed: rows sampled in total x 7919 + rows pending a value check."""
+    return int(rows_total) * 7919 + int(rows_pending)
+
+
+def case_seed(seed: int, i: int) -> int:
+    """Difftest's seed for the inputs of case ``i``."""
+    return int(seed) * 1_000_003 + int(i)
+
+
+def stream(seed: Any) -> random.Random:
+    """A ``random.Random`` over ``seed``, as given."""
+    return random.Random(seed)
+
+
+def generator(seed: Any) -> np.random.Generator:
+    """A numpy ``Generator`` over ``seed``, as given."""
+    return np.random.default_rng(seed)

@@ -847,7 +847,7 @@ def np_roundtrip(x: np.ndarray, DT: str) -> np.ndarray:
 
 
 def _np_fma(a, b, c):
-    from verity_vllm.program.registry.derived_rows import fma_rn
+    from verity_vllm.program.kernels.derived_rows import fma_rn
     return _np_f32(fma_rn(_np_u32(np.broadcast_to(a, np.broadcast_shapes(np.shape(a), np.shape(b), np.shape(c)))),
                           _np_u32(np.broadcast_to(b, np.broadcast_shapes(np.shape(a), np.shape(b), np.shape(c)))),
                           _np_u32(np.broadcast_to(c, np.broadcast_shapes(np.shape(a), np.shape(b), np.shape(c))))))

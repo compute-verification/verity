@@ -33,7 +33,7 @@ def _numerics():
 
 
 def _standalone(spec):
-    from verity_vllm.program.registry.crosscheck import _standalone
+    from tests.program.crosscheck import _standalone
     return _standalone(spec)
 
 

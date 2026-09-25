@@ -18,7 +18,8 @@ import json
 import numpy as np
 import pytest
 
-from verity_vllm.check.replay import sampled_replay as SR
+from verity_vllm.check.replay import driver as SR, index as IX, opening as OP
+from verity_vllm.program.kernels import rows as RK
 from tests.check.test_sampled_replay import Honest, _bf16, _program, _programs, _weights
 
 # the rope / attention Program is dense's (ruling R17-9 / R17-11 units, on the int line); a tree without it cannot run this end to end
@@ -32,7 +33,7 @@ ALIAS = "model.layers.1.self_attn.rotary_emb"
 def _aliased_world():
     """The rope (+ attention where registered) Program with its rotary rows named under LAYER 1's module path; the committed identities of
     those rows are re-addressed to the canonical path at invocation 1, exactly as the required manifest binds a shared module."""
-    attn = "Attention_v3" in SR.EVALUATORS
+    attn = "Attention_v3" in RK.EVALUATORS
     inst, woff = _program(attn=True) if attn else _program(rope=True)
     inst = copy.deepcopy(inst)
     n_ren = 0
@@ -57,7 +58,7 @@ def _aliased_world():
             n_re += 1
     assert n_re > 0 and not any(e["identity"]["op_path"] == ALIAS for e in bmap["entries"])
     fam_of = lambda e: ("input_token_ids" if e["identity"]["output_member"] == "in" else                                     # noqa: E731
-                        ("sampled_token_ids" if e["identity"]["op_path"] == SR.SAMPLER_OP else e["family"]))
+                        ("sampled_token_ids" if e["identity"]["op_path"] == IX.SAMPLER_OP else e["family"]))
     ids = [{"family": fam_of(e), "request_id": e["identity"]["request_id"], "step": e["identity"]["step"], "op_path": e["identity"]["op_path"],
             "output_member": e["identity"]["output_member"], "invocation": e["identity"]["invocation"], "element_range": e["identity"]["element_range"],
             "rank": 0} for e in bmap["entries"]]
@@ -123,7 +124,7 @@ def test_a_wrong_invocation_in_the_alias_table_never_reads_a_neighbours_words():
     rep2 = SR.sampled_replay(_programs(world), bmap2, committed2, _weights(world), per_stratum=8, seed=5, manifest=man2)
     assert rep2["result"] is True and rep2["sample"]["mismatch_n"] == 0, json.dumps(rep2, indent=1, default=str)[:2000]
     # and the store, asked for invocation 0 through a layer-0 path, gets the OTHER words (never layer 1's)
-    st = SR.CommittedStore.of_record(bmap2, committed2, man2)
+    st = OP.CommittedStore.of_record(bmap2, committed2, man2)
     w1, _ = st.words("r0", 0, ALIAS, "0", 0, 4)
     w0, _ = st.words("r0", 0, CANON, "0", 0, 4)
     assert w1 is not None and w0 is not None and w1.tolist() != w0.tolist()

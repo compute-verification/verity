@@ -220,8 +220,9 @@ pub fn derive(circ: &Circuit, vus: usize, steps: usize, kk: usize, bits: usize) 
 /// The session's link context (`link.txt`, written from the Flock session record by `tools/cell_gate.py`):
 /// `link session-2xgf2_128/v2`, `sigma`, `root_f_sha256`, `root_b_sha256` (hex), two `point` lines of m GF(2^128)
 /// elements and one `y` line of two, each element 32 hex digits, the record's `{hi:016x}{lo:016x}`.
+/// `live`: the session's prime rounds (`prime_coins.txt` beside `link.txt`), when the prime coins were live.
 pub struct Spec { pub layout: Layout, pub sigma: [u8; 32], pub root_f_sha256: [u8; 32], pub root_b_sha256: [u8; 32],
-                  pub points: Vec<G>, pub y: G, pub t_derive: f64 }
+                  pub points: Vec<G>, pub y: G, pub t_derive: f64, pub live: Option<crate::transcript::LiveCoins> }
 
 fn f128(s: &str) -> Result<[u64; 2], String> {
     if s.len() != 32 || !s.bytes().all(|c| c.is_ascii_hexdigit()) { return Err(format!("link.txt: {s:?} is not a GF(2^128) element")); }
@@ -293,7 +294,12 @@ pub fn load(d: &std::path::Path, text: &str, circ: &Circuit, steps: usize, vus: 
     for (k, v) in &want[1..] {
         if sigma_line(st, k)? != v { return Err(format!("link: Σ names {k} {:?}, this statement {v:?}", sigma_line(st, k)?)); }
     }
-    Ok(Spec { layout, sigma, root_f_sha256, root_b_sha256, points, y, t_derive })
+    let live = match std::fs::read_to_string(d.join("prime_coins.txt")) {
+        Ok(t) => Some(crate::transcript::parse_coins(&t)?),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(e) => return Err(format!("prime_coins.txt: {e}")),
+    };
+    Ok(Spec { layout, sigma, root_f_sha256, root_b_sha256, points, y, t_derive, live })
 }
 
 // ---- the transcript part and the functional term -------------------------------------------------------------------
@@ -321,9 +327,10 @@ pub fn context_bytes(spec: &Spec) -> Vec<u8> {
 }
 
 /// root_F against the record, the session's context, the sigma messages and their checks, rho (`gpu/link.py::verify`),
-/// then the term of `a`.
-pub fn verify(spec: &Spec, tr: &mut Transcript, sigma: &[Ext], _threads: usize) -> Result<Term, String> {
+/// then the term of `a`. `spare`: the challenges after rho with no absorb between (`verify.rs::open_coins`).
+pub fn verify(spec: &Spec, tr: &mut Transcript, sigma: &[Ext], spare: usize, _threads: usize) -> Result<Term, String> {
     let lay = spec.layout;
+    tr.live_at_root_f()?;
     let mut rf = ROOT_F_TAG.to_vec();
     rf.extend_from_slice(&tr.root_f_input());
     if Sha256::digest(&Sha256::digest(&rf)) != spec.root_f_sha256 {
@@ -343,6 +350,7 @@ pub fn verify(spec: &Spec, tr: &mut Transcript, sigma: &[Ext], _threads: usize) 
         if (s.0[0] as u64 & 1) != y.bit(t) { return Err(format!("link: sigma_{t} parity disagrees with the binary side's y")); }
     }
     tr.absorb_exts(sigma);
+    tr.reserve(1 + spare);
     let rho = tr.challenge();
     let mut pw = Vec::with_capacity(PLANES);
     let mut g = Ext::ONE;

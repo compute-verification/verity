@@ -184,6 +184,8 @@ class Proximity:
 
 
 FULL = "full relation"
+#: Route (a): A-GKR's prime proof with Flock's keyed-BLAKE3 rows and the sigma link (drilldown's variant of the same id).
+ROUTE_A = "A-GKR route (a): prime + Flock rows + sigma link"
 _WEAK_PUBLIC = "weaker: operands public, no commitment (the verifier could recompute y)"
 _WEAK_PRIVATE = "weaker: operands private and bound to nothing"
 _WEAK_REHASH = "weaker: operands published for the verifier to re-hash (it could recompute y)"
@@ -282,6 +284,11 @@ CONFIGURATIONS: tuple[Configuration, ...] = (
          "frame-v3 SHA-256 trees over sha256/row/v1 row digests (prefix block and padding block by the verifier)" + _IN_PROOF,
          (_SHA256_STMT, Hash("SHA-256", _STMT, _CR + " (row digests)"), *_B_HASHES), assumptions=_B_ASSUME,
          pin=_B_PIN + "; leaf schema sha256/row/v1", **_B_KW),
+    _cfg("B-Ligero + vllm-v1 SHA-256 in circuit", FULL, _H_PORTS, "vllm-v1",
+         "vllm-v1 SHA-256 trees over position leaves of every operand row (all compressions in-circuit), bound by step roots "
+         "over verifier-derived domains whose digests the statement absorbs" + _IN_PROOF,
+         (_SHA256_STMT, Hash("SHA-256", _STMT, _CR + " (position leaves)"), *_B_HASHES), assumptions=_B_ASSUME,
+         pin=_B_PIN + "; leaf schema vllm-v1/pos-leaf/v0, step-root domains", **_B_KW),
     _cfg("B-Ligero + Ajtai n=64", FULL, _H_PORTS + " (binding only, not hiding)", "frame-v3/ajtai-row",
          "SHA-256 trees over Ajtai (Ring-SIS, n = 64) row digests" + _IN_PROOF,
          (_SHA256_STMT, Hash("Ajtai n=64 (linear digest)", _STMT, "Ring-SIS binding", True), *_B_HASHES),
@@ -306,6 +313,16 @@ CONFIGURATIONS: tuple[Configuration, ...] = (
          (Hash("SHA-512", _INTERNAL, _CR), Hash("SHA-256", _COINS, _RO + " (Fiat–Shamir coins)")), _AGKR_DOMINANT, _AGKR_PROX,
          "transferable (SHA-256 Fiat–Shamir coins)", "BabyBear^6; LogUp fractional-sum soundness",
          "verity-gkr-verify refuses a circuit set its pins.txt does not list (PR #13)"),
+    _cfg(ROUTE_A, FULL, "x, W committed (private) as keyed-BLAKE3 rows proved in Flock; y public", "frame-v3/blake3-row",
+         "A-GKR prime proof of the relation, with the operands committed as keyed-BLAKE3 rows (blake3-keyed/row/v2) proved in Flock "
+         "(flock-128-r2, live coins) and joined to the prime side by the sigma link (two GF(2^128) points); frame-v3 SHA-256 trees",
+         (_SHA256_STMT, Hash("BLAKE3 (keyed)", _STMT, _CR + " (row leaves, proved in Flock)"), Hash("SHA-256", _COINS, "live transcript and root_F binding"),
+          Hash("SHA-512", _INTERNAL, _CR + " (Merkle on the A-GKR Ligero side)")),
+         "A-GKR's interactive terms (2^-130.19 whole proof); Flock flock-128-r2 2^-195.5 and the sigma link 2^-243.9 / 2^-246.4 do not bind",
+         (*_AGKR_PROX, Proximity("Ligerito PCS in Flock (binary field)", "Johnson regime (list decoding)", "proven (Haböck ePrint 2025/2110; BCHKS25 MCA)")),
+         "interactive: live-verifier-only (live prime and Flock coins in one session)",
+         "collision resistance of SHA-256, keyed BLAKE3 and SHA-512 is a Table 1 assumption (decision 57); BabyBear^6 and GF(2^128) fields",
+         "verity-gkr-verify pins (PR #13) plus the Flock profile params and the link version (session-2xgf2_128/v2, verity/link-L/v2)"),
     _cfg("SP1 stock (relation-only / bare guest)", _WEAK_PRIVATE, "x, W guest input (unbound)", None, "none for the operands",
          _SP1_HASHES, _SP1_DOMINANT, _SP1_PROX, "transferable (STARK, Fiat–Shamir)", _SP1_ASSUME,
          "verifying key (guest ELF digest), sp1-sdk =6.4.0"),
@@ -336,6 +353,8 @@ _INTERACTION = {
     "Ligerito": "live verify session: the verifier is online for the session's rounds",
     "A-GKR CPU (Rust)": "non-interactive (SHA-256 Fiat–Shamir): rounds = 0; the interactive object is not implemented",
     "A-GKR GPU (torch/Triton)": "non-interactive (SHA-256 Fiat–Shamir coins): rounds = 0; the interactive object is not implemented",
+    ROUTE_A: "live verifier: the prime side's coins and Flock's coins in one session (PROTOCOL 17.6); the verifier must be online for "
+             "the whole proof",
     **{c.id: "non-interactive (Fiat–Shamir STARK): rounds = 0, no one online" for c in CONFIGURATIONS if c.family == "SP1"},
 }
 FLOCK_CONFIG = Configuration(
@@ -458,7 +477,11 @@ def interaction(meta: Mapping[str, Any]) -> dict[str, Any]:
     ``rounds.protocol``), ``bytes_up`` (``net.bytes_out``, else the proof bytes), ``bytes_down`` (``net.bytes_in``, the coins),
     ``rtt_ms`` (``net.rtt_ms``) with ``rtt_method`` (the ``interaction`` block's, or the live-verifier evidence's), and the wall
     split: ``prover_s`` (``t.total``), ``verifier_s`` (verifier compute the prover waited on: ``verify.critical_s``, else 0 -- the
-    measured wait includes it) and ``wait_s`` (``net.wait_seconds``, else ``t.total_live - t.total``).
+    measured wait includes it) and ``wait_s`` (``net.wait_seconds``, else ``t.total_live - t.total``).  A record whose ``interaction``
+    block says ``t_total_includes_wait`` (Flock's live coins) has its prover compute in ``live.prover_compute_seconds`` (else
+    ``t.total`` minus the wait).  The prover's own per-round live-coin handling, measured on loopback
+    (``live.loopback_round_seconds``), is prover compute: rounds x that (at most the measured wait) moves from the wait into
+    ``prover_s``, and only the excess over loopback counts as network wait (``loopback_s`` records the amount moved).
 
     Any other result (a proof verified from its files: the Fiat–Shamir or file-replayed transcript every B-Ligero cell has today)
     is **non-interactive** for this purpose and its record is derived (``derived``): rounds = 0 whatever the protocol's round
@@ -478,17 +501,26 @@ def interaction(meta: Mapping[str, Any]) -> dict[str, Any]:
         stmt = next((v for v in (num(k) for k in STATEMENT_BYTES) if v is not None), 0.0)
         return {"live": False, "derived": True, "rounds": 0.0, "bytes_up": (proof or 0.0) + stmt, "bytes_down": 0.0,
                 "proof_bytes": proof, "statement_bytes": stmt, "rtt_ms": None, "rtt_method": None,
-                "prover_s": num(contract.T_TOTAL), "verifier_s": 0.0, "wait_s": None}
+                "prover_s": num(contract.T_TOTAL), "verifier_s": 0.0, "wait_s": None, "loopback_s": 0.0,
+                "loopback_round_s": None, "loopback_method": None}
     rounds = num("rounds.sequential_depth")
     rounds = num("rounds.protocol") if rounds is None else rounds
     up = next((v for v in (num("net.bytes_out"), proof) if v is not None), None)
     wait = num("net.wait_seconds")
     if wait is None and num(contract.T_TOTAL_LIVE) is not None and num(contract.T_TOTAL) is not None:
         wait = max(0.0, num(contract.T_TOTAL_LIVE) - num(contract.T_TOTAL))
+    compute = num(contract.T_TOTAL)
+    if block.get("t_total_includes_wait") is True and compute is not None and wait is not None:
+        compute = next((v for v in (num("live.prover_compute_seconds"),) if v is not None), compute - wait)
+    loop, moved = num("live.loopback_round_seconds"), 0.0
+    if loop is not None and rounds and wait is not None and compute is not None:
+        moved = min(wait, rounds * loop)
+        compute, wait = compute + moved, wait - moved
     return {"live": True, "derived": False, "rounds": rounds, "bytes_up": up or 0.0, "bytes_down": num("net.bytes_in") or 0.0,
             "proof_bytes": proof, "statement_bytes": None, "rtt_ms": num("net.rtt_ms"),
-            "rtt_method": block.get("rtt_method") or lv.get("rtt_method"), "prover_s": num(contract.T_TOTAL),
-            "verifier_s": num("verify.critical_s") or 0.0, "wait_s": wait}
+            "rtt_method": block.get("rtt_method") or lv.get("rtt_method"), "bandwidth_bps": num("net.bandwidth_bps"), "prover_s": compute,
+            "verifier_s": num("verify.critical_s") or 0.0, "wait_s": wait, "loopback_s": moved,
+            "loopback_round_s": loop if moved else None, "loopback_method": block.get("loopback_method") if moved else None}
 
 
 def interaction_time(ix: Mapping[str, Any], rtt_s: float = REF_RTT_S, bandwidth_bps: float = REF_BANDWIDTH_BPS) -> float:
@@ -500,8 +532,9 @@ def interaction_time(ix: Mapping[str, Any], rtt_s: float = REF_RTT_S, bandwidth_
 def interaction_problem(ix: Mapping[str, Any]) -> str | None:
     """Why a result does not meet the interaction standard, or ``None``.  A non-interactive (file-verified) result's record is derived
     and always meets it.  A live-verifier result records its rounds, its measured RTT with how it was measured and its network wait,
-    and its measured wall time (prover compute + network wait) is within :data:`INTERACTION_TOLERANCE` of the formula at the
-    reference profile."""
+    and its measured wall time (prover compute + network wait) is within :data:`INTERACTION_TOLERANCE` of the formula evaluated at
+    the run's own measured RTT (``net.rtt_ms``) and bandwidth (``net.bandwidth_bps``, else the reference's): the check validates
+    the model against the run itself; the published figure is the formula at the reference profile (root's ruling 2026-09-25)."""
     if not ix["live"]:
         return None
     if ix["rounds"] is None:
@@ -510,11 +543,13 @@ def interaction_problem(ix: Mapping[str, Any]) -> str | None:
                                ("network wait (net.wait_seconds or t.total_live)", ix["wait_s"] is not None)) if not ok]
     if missing:
         return f"interaction: {ix['rounds']:.0f} rounds but no {', no '.join(missing)}"
-    ref = interaction_time(ix)
+    bw = ix.get("bandwidth_bps") or REF_BANDWIDTH_BPS
+    model = interaction_time(ix, ix["rtt_ms"] / 1e3, bw)
     measured = (ix["prover_s"] or 0.0) + ix["wait_s"]
-    if ref > 0 and abs(measured - ref) > INTERACTION_TOLERANCE * ref:
-        return (f"interaction: measured {measured:.3g} s is {100 * (measured - ref) / ref:+.0f}% from the reference profile's {ref:.3g} s "
-                f"(1 ms RTT, 100 Gb/s; tolerance ±{100 * INTERACTION_TOLERANCE:.0f}%; measured RTT {ix['rtt_ms']:.3g} ms)")
+    if model > 0 and abs(measured - model) > INTERACTION_TOLERANCE * model:
+        return (f"interaction: measured {measured:.3g} s is {100 * (measured - model) / model:+.0f}% from the model's {model:.3g} s at the run's "
+                f"own network ({ix['rtt_ms']:.3g} ms RTT, {bw / 1e9:.3g} Gb/s{'' if ix.get('bandwidth_bps') else ' (reference; not measured)'}; "
+                f"tolerance ±{100 * INTERACTION_TOLERANCE:.0f}%)")
     return None
 
 
@@ -876,6 +911,22 @@ def _batching(fp: Mapping[str, Any]) -> dict[str, Any]:
             "in_flight": _get(fp, "software", "backend", "pipeline"), "columns_per_proof": _get(fp, "security", "rs_l")}
 
 
+def _results(store: Any, rules: Rules) -> list[tuple[str, Mapping[str, Any]]]:
+    """Every ``bench-result/v1`` as ``(art, envelope)``.  The spec rules also read a result registered with a lane summary as its
+    meta and the result envelope as its JSON payload (the drill-down's ``_envelope``; route (a)'s cell art:4b52879f is one); the
+    legacy rules read the meta only, as the frozen tables do."""
+    out = []
+    for row in store.index.select_artifacts(kind=T.RESULT_KIND):
+        doc = D._doc(store, row)
+        meta = doc.get("meta") or {}
+        if not rules.legacy and not isinstance(meta.get("workload_fingerprint"), Mapping):
+            env, _, payload = D._envelope(store, row["id"], doc)
+            if env is not None and payload:
+                meta = env
+        out.append((row["id"], meta))
+    return out
+
+
 def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuration] = CONFIGURATIONS) -> Views:
     """Read the store, apply :func:`reject_codes` under ``rules`` and assemble Tables 1-3 (rendering is separate)."""
 
@@ -884,7 +935,7 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
     equivs = T.instance_equivs(store)
     V.unreadable = [f"{e.artifact}: {e.unreadable}" for e in equivs if e.unreadable]
     entries: list[Ctx] = []
-    for art, meta in T._artifacts(store, T.RESULT_KIND):
+    for art, meta in _results(store, rules):
         fp = meta.get("workload_fingerprint") if isinstance(meta.get("workload_fingerprint"), Mapping) else {}
         backend = _get(fp, "software", "backend", "name")
         cand = candidate_for(backend)
@@ -1196,6 +1247,10 @@ def render_markdown(V: Views, published: bool = False) -> str:
                     f"{_instances_text(c.legacy.target, c.instances)}; whole-proof bound {_fmt_bound(c.bound_log2)}; host {c.legacy.host or '?'}; {c.legacy.verification_note()}")
             if c.legacy.instances_equiv:
                 text += f"; {T.INSTANCE_EQUIV_NOTE} ({c.legacy.instances_equiv})"
+            ixl = P.get("interaction") or {}
+            if ixl.get("loopback_s"):
+                text += (f"; live-coin handling {1e3 * ixl['loopback_round_s']:.3g} ms per round, measured on loopback, counted as prover compute "
+                         f"({ixl['loopback_method'] or 'method not recorded'})")
             if c.provisional:
                 text += f"; provisional: {c.provisional}"
             if c.legacy.finding:

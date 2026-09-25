@@ -24,6 +24,7 @@ tests/program/test_harden_guards.py`; `HARDEN_OUT=<dir>` writes `guards_results.
 """
 from __future__ import annotations
 
+import glob
 import json
 import os
 import re
@@ -211,7 +212,7 @@ def test_G4b_mechanism_string_has_one_source():
 def test_G4c_no_capability_or_sm_literal_outside_target_profile():
     """The R10 fix's invariant, re-checked on this tree: the declared capability / SM count have one authoritative site."""
     files = ["verity_vllm/program/frontend/export_compat.py", "verity_vllm/program/frontend/vllm_meta.py", "verity_vllm/pipeline/build.py",
-             "verity_vllm/program/frontend/rules/vllm_bindings.py"]
+             *sorted(os.path.relpath(p, ROOT) for p in glob.glob(os.path.join(ROOT, "verity_vllm/program/frontend/rules/vllm_bindings/*.py")))]
     hits = []
     for rel in files:
         p = os.path.join(INTEGRATION, rel)

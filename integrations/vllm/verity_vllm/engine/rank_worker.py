@@ -1135,7 +1135,7 @@ class TP2CaptureWorkerExtension:
         try:
             from verity_vllm.check import oracle_compare as OC
             from verity_vllm.query.manifest import format as RM
-            from verity_vllm.check.replay import sampled_replay as SR
+            from verity_vllm.check.replay import driver as SR
             from verity_vllm.program.registry import b1_tp2 as _TP2
 
             com = st["com"]

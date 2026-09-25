@@ -32,6 +32,7 @@ mod hash;
 mod leaf;
 mod relation;
 mod verify;
+mod vllm_v1;
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};

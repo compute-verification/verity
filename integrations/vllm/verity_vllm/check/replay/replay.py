@@ -44,13 +44,12 @@ Program 2.1 s / 0.19 GB, plus 0.51 GB once per process when the first RMSNorm ga
 encodings (Python ints of the bit pattern) exactly as `compare_subcircuits` passes them.
 
 Evaluators (h4).  `--evaluator gates|twins|auto` (default `auto`) selects how tiers B and C evaluate an instance:
-`gates` is `evaluate_call` on the registered body; `twins` uses the vectorized twin of `verity_vllm.program.kernels.twins`
-(numpy / the numerics lane's C++ models, bit-exact re-implementations of the same bodies) wherever one exists; `auto`
-uses a twin only after its in-process self-check (>= 3 random instances against the gates, per specialization) passed,
-else the gates.  A twin that declines an operand (non-finite words outside its exact domain) falls back to the gates for
-that instance.  Every per-instance entry records `evaluator` ("gates" | "twins") and `twin_id`; step reports carry
-`evaluators: {twins, gates, self_check}`.  Tier A always uses the gates (it is the body-exactness tier).  Pass/fail,
-`partial`/`skipped` and every other report field are unchanged by the choice of evaluator.
+`gates` is `evaluate_call` on the registered body; `twins` uses the twin kernel of `verity_vllm.program.kernels.twins`
+wherever one claims the specialization; `auto` uses a twin only after core `self_check` passed on >= 3 random instances
+of the specialization, else the gates.  A twin that declines an operand (non-finite words outside its exact domain)
+falls back to the gates for that instance.  Every per-instance entry records `evaluator` ("gates" | "twins") and
+`twin_id`; step reports carry `evaluators: {twins, gates, self_check}`.  Tier A always uses the gates (it is the
+body-exactness tier).  Pass/fail, `partial`/`skipped` and every other report field are unchanged by the choice of evaluator.
 """
 from __future__ import annotations
 
@@ -75,6 +74,7 @@ from verity.ir.refs import runs
 
 from verity_vllm.check.fold_compare import SnapshotStore, Values, WeightSource, _attach_specs, _component_ranges, _jsonable, _max_rss_gb, fold_log, load_profile
 from verity_vllm.observe.fold.fold import FoldResult
+from verity_vllm.commit import challenge as CH
 
 TIER_STATUSES = ("pass", "fail", "skipped", "error")
 EVALUATORS = ("gates", "twins", "auto")
@@ -289,10 +289,10 @@ class Replayer:
         return np.array(got, dtype=np.uint64)
 
     def twin_of(self, k: int):
-        """The admitted twin (`verity_vllm.program.kernels.twins`) of root instance `k`'s specialization, or None (the gates), per
-        `self.evaluator`.  The first instance of a spec runs the twin's self-check (`self_check_n` random instances
-        against the gates) and records it in `self.self_checks`; `auto` falls back to the gates on a failed check,
-        `twins` raises for every instance of that spec (loud), `gates` never uses a twin."""
+        """The admitted twin (`verity_vllm.program.kernels.twins`) of root instance `k`'s specialization as (twin_id, its
+        instance form, the statics), or None (the gates), per `self.evaluator`.  The first instance of a spec runs the
+        twin's self-check (`twins.admit`) and records it in `self.self_checks`; `auto` falls back to the gates on a
+        failed check, `twins` raises for every instance of that spec (loud), `gates` never uses a twin."""
         if self.evaluator == "gates":
             return None
         m = self.by_node[k]
@@ -302,16 +302,16 @@ class Replayer:
             if isinstance(tw, str):
                 raise RuntimeError(tw)
             return tw
-        from verity_vllm.program.kernels.twins import self_check, twin_for
-        tw = twin_for(m["_spec"])
-        if tw is not None:
-            rec = self_check(tw, n=self.self_check_n, seed=self.seed)
+        from verity_vllm.program.kernels import kernel_registry as KR, twins
+        spec, tw = m["_spec"], None
+        if KR.covers(spec, twins.KERNEL) is None:
+            rec = twins.admit(spec, n=self.self_check_n, seed=self.seed)
             self.self_checks[sid] = rec
-            if rec["status"] != "pass":
-                if self.evaluator == "twins":
-                    self._twins[sid] = f"twin {tw.twin_id} of {sid} failed its self-check ({rec['status']}): {rec['mismatches'][:1]}"
-                    raise RuntimeError(self._twins[sid])
-                tw = None
+            if rec["status"] == "pass":
+                tw = (rec["twin_id"], KR.instance(spec, twins.KERNEL), dict(spec.statics))
+            elif self.evaluator == "twins":
+                self._twins[sid] = f"twin {rec['twin_id']} of {sid} failed its self-check ({rec['status']}): {rec['mismatches'][:1]}"
+                raise RuntimeError(self._twins[sid])
         self._twins[sid] = tw
         return tw
 
@@ -319,12 +319,12 @@ class Replayer:
         """`evaluate` from `operand_arrays` through the selected evaluator: the admitted twin when it exists and claims
         the operands, else the gates.  Returns (return encodings, {"evaluator": "twins"|"gates", "twin_id"[, "declined"]})."""
         tw = self.twin_of(k)
-        ev: dict[str, Any] = {"evaluator": "gates", "twin_id": tw.twin_id if tw is not None else None}
+        ev: dict[str, Any] = {"evaluator": "gates", "twin_id": tw[0] if tw is not None else None}
         if tw is not None:
-            from verity_vllm.program.kernels.twins import TwinDeclined
+            from verity_vllm.program.kernels.kernel_registry import Declined
             try:
-                got = np.asarray(tw(arrays), dtype=np.uint64)
-            except TwinDeclined as e:
+                got = np.asarray(tw[1](*arrays, **tw[2]), dtype=np.uint64)
+            except Declined as e:
                 ev["declined"] = str(e)
             else:
                 ev["evaluator"] = "twins"
@@ -531,7 +531,7 @@ def tier_a(result: FoldResult, store: SnapshotStore, weights: WeightSource | Non
     label), evaluated bit-exactly against their output snapshots; oversize instances at a child unit.  See the module
     docstring for the pass rule."""
     t0 = time.time()
-    rng = random.Random(seed)
+    rng = CH.stream(seed)
     snap_steps = sorted(set(store.steps) if steps is None else set(store.steps) & set(int(s) for s in steps))
     report: dict[str, Any] = {"tier": "a", "status": "pass", "k": k, "seed": seed, "snapshot_steps": snap_steps,
                               "max_arg_leaves": max_arg_leaves, "coverage": {}, "instances": [], "uncovered_specs": []}
@@ -945,7 +945,7 @@ def tier_chain(result: FoldResult, store: SnapshotStore, weights: WeightSource |
     errors that per-instance evaluation from snapshots cannot see.  Pass iff every slice's members pass and every
     slice chained >= 1 producer->consumer edge."""
     t0 = time.time()
-    rng = random.Random(seed)
+    rng = CH.stream(seed)
     snap_steps = sorted(set(store.steps) if steps is None else set(store.steps) & set(int(s) for s in steps))
     report: dict[str, Any] = {"tier": "chain", "status": "pass", "n": n, "seed": seed, "depth": depth, "max_nodes": max_nodes,
                               "max_arg_leaves": max_arg_leaves, "snapshot_steps": snap_steps, "slices": []}

@@ -38,7 +38,7 @@ import torch
 from .circuit import Circuit, log2ceil
 from .field import DEG, P, Ext, e_add, e_mul, e_scale
 from .gkr import Reader, VerifyError
-from .transcript import Transcript
+from .transcript import ReplayTranscript, Transcript
 
 TAG = b"verity-gkr/link/sigma-2xgf2_128/v2"
 ROOT_F_TAG = b"verity-gkr/link/root-f/v2"
@@ -390,7 +390,8 @@ def _cols(inst) -> torch.Tensor:
     return c if c.stride(1) == 1 else c.contiguous()
 
 
-def prove(inst, tr: Transcript, out: list[Ext]) -> Claim:
+def prove(inst, tr: Transcript, out: list[Ext], spare: int = 0) -> Claim:
+    """``spare``: the challenges that follow rho with no absorb between (``prover.open_coins``), one live round with it."""
     link = inst.link
     lay = link.layout
     dev = inst.device
@@ -404,14 +405,17 @@ def prove(inst, tr: Transcript, out: list[Ext]) -> Claim:
     msgs = [_msg(s) for s in sigma]
     out.extend(msgs)
     tr.absorb_exts(msgs)
+    tr.reserve(1 + spare)
     return Claim(T, tr.challenge(), sigma)
 
 
-def verify(inst, tr: Transcript, rd: Reader) -> Claim:
+def verify(inst, tr: Transcript, rd: Reader, spare: int = 0) -> Claim:
     link = inst.link
     lay = link.layout
     dev = inst.device
     ctx = link.context
+    if isinstance(tr, ReplayTranscript):
+        tr.at_root_f()
     if hashlib.sha256(root_f(tr)).digest() != ctx.root_f_sha256:
         raise VerifyError("link: root_F in the session is not this proof's commitment (Ligero root and GKR messages)")
     _enter(tr, ctx, lay)
@@ -426,6 +430,7 @@ def verify(inst, tr: Transcript, rd: Reader) -> Claim:
             raise VerifyError(f"link: sigma_{t} parity disagrees with the binary side's y")
         sigma.append(s[0])
     tr.absorb_exts(msgs)
+    tr.reserve(1 + spare)
     return Claim(T, tr.challenge(), sigma)
 
 

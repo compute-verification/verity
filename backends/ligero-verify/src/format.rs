@@ -584,7 +584,7 @@ fn read_hash_auth_block(r: &mut Rd, n_vus: usize, digests: Vec<u32>, leaf: &'sta
         }
         multiproofs.push(sibs);
     }
-    Ok(HashAuthBlock { leaf, vu_index, x_index, w_index, trees, digests, multiproofs })
+    Ok(HashAuthBlock { leaf, vu_index, x_index, w_index, trees, digests, multiproofs, vllm: None })
 }
 
 impl Statement {
@@ -715,7 +715,12 @@ impl Statement {
             return Err(format!("v{version} statement names an authentication other than included-hash"));
         }
         // "<rel>" (Poseidon2) or "<rel>+<leaf>": the leaf scheme fixes the digest table's width and the block's framing
-        let (_, leaf) = crate::leaf::split_relation(&rel)?;
+        let (base, leaf) = crate::leaf::split_relation(&rel)?;
+        let vllm = if crate::leaf::is_vllm(leaf) {
+            Some(crate::vllm_v1::shape_for(base).ok_or_else(|| format!("relation {rel:?}: vllm-v1 covers no relation {base:?}"))?)
+        } else {
+            None
+        };
         let nd = 2 * leaf.digest_elems;
         let digests = r.fe_vec(n_vus * nd)?;
         let y16 = if version == 6 {
@@ -728,7 +733,7 @@ impl Statement {
         } else {
             r.words(l, yb)?
         };
-        let hash_auth = read_hash_auth_block(&mut r, n_vus, digests, leaf)?;
+        let hash_auth = HashAuthBlock { vllm, ..read_hash_auth_block(&mut r, n_vus, digests, leaf)? };
         r.done()?;
         // the public table: is_end = 1 and the lanes at every VU's last column, 0 elsewhere (hashchain.public_table)
         let cols = hash_table_cols(leaf);

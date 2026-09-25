@@ -155,8 +155,8 @@ def committed(store: LocalStore, leaf: str = "blake3", *, t_total: float = 0.4, 
         doc["measurements"].append({"name": "fixed.setup_seconds", "value": setup, "unit": "s"})
     ix = {"rounds.sequential_depth": 0} if interaction is None else interaction
     for name, value in ix.items():
-        if name == "rtt_method":
-            doc["interaction"] = {"rtt_method": value}
+        if name in ("rtt_method", "t_total_includes_wait", "loopback_method"):
+            doc.setdefault("interaction", {})[name] = value
             continue
         unit = {"rounds.sequential_depth": "count", "rounds.protocol": "count", "net.bytes_out": "B", "net.bytes_in": "B", "net.rtt_ms": "ms",
                 "proof_bytes": "B", "relation.statement_bytes_total": "B"}.get(name, "s")
@@ -385,13 +385,13 @@ def test_table1_carries_the_security_properties(store: LocalStore) -> None:
     assert {c.id for c in V.CONFIGURATIONS} == {v.id for v in V.D.VARIANTS} | {V.FLOCK_CONFIG.id}
     full = {c.id for c in V.CONFIGURATIONS if c.full_relation}
     assert full == {"B-Ligero + Poseidon2 per row", "B-Ligero + Poseidon2 shared 64x64 tile", "B-Ligero + BLAKE3 in circuit",
-                    "B-Ligero + SHA-256 in circuit", "B-Ligero + Ajtai n=64", "B-Ligero + Ajtai n=128",
-                    "SP1 stock, committed (frame-v3 SHA-256 rows)", "SP1 stock, committed (vllm-v1 SHA-256 position leaves)",
-                    "Flock (flock-128-r2, live coins)"}
+                    "B-Ligero + SHA-256 in circuit", "B-Ligero + vllm-v1 SHA-256 in circuit", "B-Ligero + Ajtai n=64",
+                    "B-Ligero + Ajtai n=128", "SP1 stock, committed (frame-v3 SHA-256 rows)",
+                    "SP1 stock, committed (vllm-v1 SHA-256 position leaves)", "Flock (flock-128-r2, live coins)", V.ROUTE_A}
     assert [c.id for c in V.CONFIGURATIONS if c.full_relation and not c.scheme_problem()] == [
         "B-Ligero + Poseidon2 per row", "B-Ligero + BLAKE3 in circuit", "B-Ligero + SHA-256 in circuit",
-        "SP1 stock, committed (frame-v3 SHA-256 rows)", "SP1 stock, committed (vllm-v1 SHA-256 position leaves)",
-        "Flock (flock-128-r2, live coins)"]
+        "B-Ligero + vllm-v1 SHA-256 in circuit", V.ROUTE_A, "SP1 stock, committed (frame-v3 SHA-256 rows)",
+        "SP1 stock, committed (vllm-v1 SHA-256 position leaves)", "Flock (flock-128-r2, live coins)"]
     assert all(c.interaction for c in V.CONFIGURATIONS)
     assert all(x.basis.startswith(("proven", "conjectured")) for c in V.CONFIGURATIONS for x in c.proximity)
     assert all(c.proximity and c.hashes and c.dominant_term for c in V.CONFIGURATIONS)
@@ -579,12 +579,54 @@ def test_the_cell_is_the_interaction_formula_at_the_reference_network(store: Loc
     assert "At 1 ms, 10 Gb/s" in md and T.fmt_overhead(at10g) in md and V.REF_BANDWIDTH_BPS == 100e9
 
 
+def test_a_record_whose_t_total_includes_the_wait_counts_its_compute_once(store: LocalStore) -> None:
+    """Flock's live records time the coin waits inside t.total (``interaction.t_total_includes_wait``): the cell takes prover compute
+    from live.prover_compute_seconds (else t.total minus the wait) and adds the reference network once, not on top of the wait."""
+    committed(store, t_total=0.4 + 0.103, commit=0.6, interaction={**LIVE, "t_total_includes_wait": True})
+    cell = line(V.build(store))["cells"]["B-Ligero"]
+    N = V.native(FP8_ADA_MMA)["instances_per_second"]
+    net = 3 * 0.001 + (1.25e9 + 384) * 8 / 100e9
+    assert cell.overhead == pytest.approx(N * (0.6 + 0.4 + net) / 4096)
+
+
+def test_live_coin_handling_measured_on_loopback_is_prover_compute_not_network(store: LocalStore) -> None:
+    """rounds x live.loopback_round_seconds (at most the measured wait) moves from the network wait into prover compute; the
+    reference network (1 ms per round) is then added on top of it, and the tolerance check compares against that."""
+    art = committed(store, t_total=0.4, commit=0.6, interaction={**LIVE, "live.loopback_round_seconds": 0.01})
+    cell = line(V.build(store))["cells"]["B-Ligero"]
+    N = V.native(FP8_ADA_MMA)["instances_per_second"]
+    net = 3 * 0.001 + (1.25e9 + 384) * 8 / 100e9
+    assert cell.artifact == art and cell.overhead == pytest.approx(N * (0.6 + 0.4 + 3 * 0.01 + net) / 4096)
+    ix = V.interaction(store.get_manifest(art).meta)
+    assert ix["loopback_s"] == pytest.approx(0.03) and ix["wait_s"] == pytest.approx(0.103 - 0.03)
+    assert ix["prover_s"] == pytest.approx(0.43)
+
+
+def test_the_tolerance_check_uses_the_runs_own_rtt_but_the_cell_uses_the_reference(store: LocalStore) -> None:
+    """A same-DC session at 0.2 ms RTT: measured wall = compute + rounds x 0.2 ms + bytes; that passes the check (it matches the
+    run), and the published cell is still the formula at 1 ms / 100 Gb/s."""
+    rounds, rtt = 400, 0.0002
+    wait = rounds * rtt + (1.25e9 + 384) * 8 / 100e9
+    art = committed(store, t_total=0.4, commit=0.6, interaction={**LIVE, "rounds.sequential_depth": rounds, "net.rtt_ms": rtt * 1e3,
+                                                                 "net.wait_seconds": wait})
+    cell = line(V.build(store))["cells"]["B-Ligero"]
+    N = V.native(FP8_ADA_MMA)["instances_per_second"]
+    assert cell.artifact == art and cell.overhead == pytest.approx(N * (0.6 + 0.4 + rounds * 0.001 + (1.25e9 + 384) * 8 / 100e9) / 4096)
+
+
+def test_a_borrowed_loopback_figure_is_named_in_the_cell_footnote(store: LocalStore) -> None:
+    committed(store, t_total=0.4, commit=0.6, interaction={**LIVE, "live.loopback_round_seconds": 0.01,
+                                                           "loopback_method": "BORROWED from r20260925-000000-0000"})
+    md = V.render_markdown(V.build(store))
+    assert "live-coin handling 10 ms per round, measured on loopback, counted as prover compute (BORROWED from r20260925-000000-0000)" in md
+
+
 @pytest.mark.parametrize(("over", "why"), [
     ({"rounds.sequential_depth": None}, "a live-verifier result without its rounds"),
     ({"net.rtt_ms": None}, "no measured RTT"),
     ({"rtt_method": None}, "no how the RTT was measured"),
     ({"net.wait_seconds": None}, "no network wait"),
-    ({"net.wait_seconds": 2.5}, "% from the reference profile's"),
+    ({"net.wait_seconds": 2.5}, "% from the model's"),
 ])
 def test_an_interactive_result_needs_its_record_and_the_tolerance(store: LocalStore, over: dict, why: str) -> None:
     ix = {k: v for k, v in {**LIVE, **over}.items() if v is not None}
@@ -657,3 +699,60 @@ def test_a_file_verified_result_derives_rounds_0_and_pays_its_bytes_over_the_ref
 
 def test_flocks_declared_class_is_non_zk_proof() -> None:
     assert V.FLOCK.proof_classes == ("NON_ZK_PROOF",) and "may change" in V.FLOCK_CONFIG.zk
+
+
+ROUTE_A_NAME = ("verity-gkr gpu (backends/gkr/gpu: checker v2 + LogUp + Ligero over BabyBear^6, SHA-512 Merkle; torch/Triton) + Flock "
+                "flock-128-r2 (backends/flock/live flock-link, CPU) + the sigma link (route (a))")
+PLAIN_GKR_GPU = "verity-gkr gpu (backends/gkr/gpu: checker v2 + LogUp + Ligero over BabyBear^6, SHA-512 Merkle; torch/Triton)"
+ROUTE_A_LIVE = {"rounds.sequential_depth": 4076, "net.bytes_out": 2_058_029.0, "net.bytes_in": 165_825.0, "net.rtt_ms": 0.356,
+                "rtt_method": "median of 20 TCP connects to the verifier pod", "net.wait_seconds": 4076 * 0.000356 + (2_058_029 + 165_825) * 8 / 100e9}
+
+
+def test_route_a_is_a_full_relation_a_gkr_configuration_and_plain_a_gkr_gpu_stays_weaker(store: LocalStore) -> None:
+    """Route (a) -- A-GKR's prime proof, the operands as keyed-BLAKE3 rows proved in Flock, the sigma link -- has its own Table 1
+    configuration (full relation, frame-v3/blake3-row, NON_ZK_PROOF, 2^-130.19) and fills the A-GKR column of its line; a plain
+    A-GKR GPU result on the same line still reads "weaker statement"."""
+    assert V.D.classify(V.D.features({"workload_fingerprint": {"software": {"backend": {"name": ROUTE_A_NAME}}}})).id == V.ROUTE_A
+    assert V.D.classify(V.D.features({"workload_fingerprint": {"software": {"backend": {"name": PLAIN_GKR_GPU}}}})).id == "A-GKR GPU (torch/Triton)"
+    cfg = V._CONFIG[V.ROUTE_A]
+    assert cfg.family == "A-GKR" and cfg.full_relation and cfg.scheme == "frame-v3/blake3-row" and cfg.scheme_problem() is None
+    assert "2^-130.19" in cfg.soundness and "decision 57" in cfg.assumptions and cfg.interaction.startswith("live verifier")
+    plain = committed(store, t_total=0.5, commit=0.6, backend=PLAIN_GKR_GPU, proof_class="NON_ZK_PROOF")
+    views = V.build(store)
+    assert codes(views, plain)[0] == "R" and line(views)["cells"]["A-GKR"] is None
+    assert line(views)["empty"]["A-GKR"]["text"] == "results only for a weaker statement (A-GKR GPU (torch/Triton))"
+    art = committed(store, t_total=0.4, commit=0.6, backend=ROUTE_A_NAME, proof_class="NON_ZK_PROOF", interaction=ROUTE_A_LIVE,
+                    security={"target": -128, "achieved_log2": -130.19})
+    views = V.build(store)
+    cell = line(views)["cells"]["A-GKR"]
+    assert cell is not None and cell.artifact == art and cell.configuration == V.ROUTE_A and cell.bound_log2 == -130.19
+    assert line(views)["cells"]["B-Ligero"] is None and codes(views, plain)[0] == "R"
+    rows = dict((r[0], dict(zip(V.TABLE1_COLUMNS, r))) for _, r in V.table1_rows(views))
+    assert rows[V.ROUTE_A]["Cells"].endswith("keyed-BLAKE3 rows · A-GKR")
+
+
+def test_a_result_registered_with_its_envelope_as_payload_counts_in_the_spec_views(store: LocalStore, tmp_path) -> None:
+    """Route (a)'s cell art:4b52879f is registered like cell.py rederive writes it: a lane summary as meta, the result envelope as
+    the JSON payload.  The spec views read the envelope (as the drill-down does); the legacy rules read the meta only."""
+    doc = hashed("blake3", t_total=0.4, security={"target": -128, "achieved_log2": -130.19})
+    fp = doc["workload_fingerprint"]
+    fp["software"]["backend"]["name"], fp["proof_class"], fp["zk_mode"] = ROUTE_A_NAME, "NON_ZK_PROOF", "none"
+    doc["measurements"].append({"name": V.COMMIT, "value": 0.6, "unit": "s"})
+    for name, value in ROUTE_A_LIVE.items():
+        if name == "rtt_method":
+            doc["interaction"] = {"rtt_method": value}
+        else:
+            doc["measurements"].append({"name": name, "value": value, "unit": {"rounds.sequential_depth": "count", "net.rtt_ms": "ms"}.get(
+                name, "B" if name.startswith("net.bytes") else "s")})
+    doc["protocol"], doc["sweep"] = dict(PROTOCOL), dict(SWEEP)
+    files = store.put_artifact("run-files/v1", {"run_id": doc["run_id"], "dump": "proofs"})
+    store.index.set_replica(files, "remote", "2026-09-25T00:00:00Z")
+    (tmp_path / "result.json").write_text(json.dumps(doc))
+    art = store.put_artifact(T.RESULT_KIND, {"lane": "route-a-live", "derived_by": "backends/gkr/tools/cell.py rederive"},
+                             refs={"run_files": files}, file=tmp_path / "result.json")
+    store.add_label(art, "independently_verified", True, VERIFIER, ts="2026-09-25T10:01:00Z")
+    views = V.build(store)
+    cell = line(views)["cells"]["A-GKR"]
+    assert cell is not None, next((r["codes"] for r in views.rejected if r["artifact"] == art), "not seen")
+    assert cell.artifact == art and cell.configuration == V.ROUTE_A
+    assert art not in {c.artifact for c in V.build(store, V.LEGACY).cells} and V.parity(store) == []

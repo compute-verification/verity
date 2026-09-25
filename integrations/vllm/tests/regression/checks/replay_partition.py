@@ -1,7 +1,7 @@
 """(e') [T1] The sampled-replay PARTITION reproduces: `commit/sampled_replay_p<k>.json`'s population (every Program row classified: the VUs
 by family, the not-evaluable rows by name, the strata and their sizes, the window-lifetime split), its R17-1 `not_executed_by_rule` split,
 the seeded stratified draw (the per-stratum sample counts, the round-robin cap, the picks per (request, request-relative step)) and the
-per-request phase anchors -- recomputed with `verity_vllm.check.replay.sampled_replay`'s own pure functions (`ProgramIndex`, `population`,
+per-request phase anchors -- recomputed with `verity_vllm.check.replay`'s own pure functions (`ProgramIndex`, `population`,
 `executed_prefix_of_record`, `phase_anchor`, `split_not_executed`, `sample`) over the row's request Programs under the v2 query's address
 rule + the facts the record states (seed, per-stratum count, cap, targets, ring depth, arrivals, the executed-prefix facts of record).
 STRONG: a row classified into another family / stratum, a moved phase boundary, a different draw -- each moves a count.
@@ -85,7 +85,7 @@ def recompute(sr: dict, programs: dict[str, dict], program_dirs: dict[str, str] 
     correspondence the manifest is built with).  A record that predates the v2 rule (no `addresses.rule`: every reference record) was
     addressed by the retired v1 rule; its partition is recomputed under v2 here (decision `retire-v1` where that moves a count).  Returns a
     `sampled_replay`-shaped document (`lift` reads it)."""
-    from verity_vllm.check.replay import sampled_replay as SR
+    from verity_vllm.check.replay import index as IX, population as POP, sample as SM
     smp, sk = sr.get("sample") or {}, sr.get("strata_keys") or {}
     seed, per_stratum = int(smp["seed"]), int(smp.get("per_stratum") or 2)
     max_evaluate = int(smp.get("max_evaluate") or 2000)
@@ -94,21 +94,21 @@ def recompute(sr: dict, programs: dict[str, dict], program_dirs: dict[str, str] 
     arrivals = {str(r): int(a) for r, a in (smp.get("picks_by_request_arrival") or {}).items()}
     ranks = [int(r) for r in (sr.get("applicability") or {}).get("ranks") or [0]]
     facts = ((sr.get("executed_prefix_of_record") or {}).get("facts_of_record") or {})
-    executed_prefix = {rid: SR.executed_prefix_of_record(rid, **{k: v for k, v in f.items() if k in FACT_KEYS}) for rid, f in facts.items() if isinstance(f, dict)} or None
+    executed_prefix = {rid: POP.executed_prefix_of_record(rid, **{k: v for k, v in f.items() if k in FACT_KEYS}) for rid, f in facts.items() if isinstance(f, dict)} or None
     all_vus, not_ev, not_ev_fam, indices, anchors = [], Counter(), Counter(), {}, {}
     for rid, inst in programs.items():
         pi = indices.get(id(inst))
         if pi is None:
-            pi = SR.ProgramIndex(inst, program_dir=(program_dirs or {}).get(rid))
+            pi = IX.ProgramIndex(inst, program_dir=(program_dirs or {}).get(rid))
             indices[id(inst)] = pi
-        anchors[rid] = SR.phase_anchor(pi.n_steps, (executed_prefix or {}).get(str(rid)))
-        vus, ne, nef = SR.population(pi, rid, rank=(ranks[0] if len(ranks) == 1 else 0), arrive=arrivals.get(rid, 0), ring_slots=ring_slots,
+        anchors[rid] = POP.phase_anchor(pi.n_steps, (executed_prefix or {}).get(str(rid)))
+        vus, ne, nef = POP.population(pi, rid, rank=(ranks[0] if len(ranks) == 1 else 0), arrive=arrivals.get(rid, 0), ring_slots=ring_slots,
                                      addresses=None, last_step=int(anchors[rid]["last_step"]))
         all_vus.extend(vus)
         not_ev.update(ne)
         not_ev_fam.update(nef)
-    pool, not_exec = SR.split_not_executed(all_vus, executed_prefix)
-    picked_all, strata, tgt = SR.sample(pool, per_stratum, seed, targets=targets)
+    pool, not_exec = POP.split_not_executed(all_vus, executed_prefix)
+    picked_all, strata, tgt = SM.sample(pool, per_stratum, seed, targets=targets)
     n_strat = int(tgt["stratified"])
     cap = max(max_evaluate, len(strata))
     picked = picked_all[:min(cap, n_strat)] + picked_all[n_strat:]

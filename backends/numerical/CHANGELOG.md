@@ -1,5 +1,30 @@
 # Changelog: `verity_numerical` (the bench renderers and their rules)
 
+## 2026-09-25: route (a) is its own full-relation A-GKR configuration
+
+- Route (a) (A-GKR's prime proof, the operands as keyed-BLAKE3 rows proved in Flock flock-128-r2 with live coins, joined by the
+  sigma link; PROTOCOL 17.5–17.6) gets a drill-down variant and a Table 1 configuration: full committed relation over
+  `frame-v3/blake3-row`, NON_ZK_PROOF, 2^-130.19 (red-team-flock's fifth audit), live coins, collision resistance a Table 1
+  assumption (decision 57). Its results fill the A-GKR column; plain A-GKR GPU results still read "weaker statement".
+- The spec views read a result registered with a lane summary as its meta and the envelope as its JSON payload (as
+  `cell.py rederive` registers art:4b52879f), as the drill-down already did. The legacy rules still read the meta only, so
+  `--parity` is unchanged (15/15).
+
+## 2026-09-25: live cells count prover compute once, and loopback coin handling as compute
+
+- A live result whose `interaction` block says `t_total_includes_wait` (Flock's live coins) takes its prover compute from
+  `live.prover_compute_seconds` (else `t.total` minus the wait). Before this, the network time was counted twice: once
+  inside `t.total` and again as rounds × RTT.
+- The prover's own per-round live-coin handling, measured on loopback (`live.loopback_round_seconds`), is prover compute:
+  rounds × that, at most the measured wait, moves out of the network wait. Only the excess over loopback counts as
+  network wait, and the ±10% tolerance check compares the measured wall against compute + rounds × 1 ms + bytes ÷ 100 Gb/s.
+  Applies to every live cell (route (a), Flock). The tolerance is unchanged (root's ruling).
+- The ±10% check validates the model against the run itself: the formula is evaluated at the run's measured RTT
+  (`net.rtt_ms`, which must be the network round trip, not a figure derived from the prover's coin waits) and measured
+  bandwidth (`net.bandwidth_bps`, else 100 Gb/s), and compared with the measured wall time. The published cell is still
+  the formula at the 1 ms / 100 Gb/s reference. A cell's footnote names any loopback coin-handling figure counted as
+  prover compute and how it was measured (`interaction.loopback_method`; a figure from another run says BORROWED).
+
 ## 2026-09-25: the switch to the approved tables spec (a change of method)
 
 From the 6:00 PM PT digest on 2026-09-25, the published tables are the approved spec's views (`kb/TABLES.md`),
