@@ -240,6 +240,7 @@ def point(a, total: int, d: Path, net: Path) -> dict:
             _OURS.add(pr.pid)
             try:
                 rcs.append(pr.wait())
+                time.sleep(2)  # NVML lists an exited context for a moment: still ours
             finally:
                 _OURS.discard(pr.pid)
         finally:
@@ -453,7 +454,8 @@ def main(argv=None) -> int:
     ok = [q for q in points if q["vu_per_second"]]
     if not ok:
         return 1
-    best = max(ok, key=lambda q: (q["vu_per_second"], -q["total"]))
+    clean = [q for q in ok if not q["contention"].get("contended")] or ok
+    best = max(clean, key=lambda q: (q["vu_per_second"], -q["total"]))  # a contended point is never the plateau
     tps = [q["vu_per_second"] for q in ok]
     done_at = next((i for i in range(2, len(tps)) if tps[i] < 1.02 * tps[i - 2]), None)
     stop = "a point failed" if points[-1]["vu_per_second"] is None else (
