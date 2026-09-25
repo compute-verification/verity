@@ -5,7 +5,7 @@ For a sampled VU `V` (one Call of the Program) the check is
     F_V( tau(in(V)) ) == tau(out(V))      bit-for-bit,
 
 where `tau` reads the COMMITTED bytes of the Values the Program's dataflow names (the Call's `args`), and `F_V` is the
-registered relation of the Call's Definition evaluated by the registry's own reference (`verity_vllm.program.registry.derived_rows`,
+registered relation of the Call's Definition evaluated by the registry's own reference (`verity_vllm.program.kernels.derived_rows`,
 the same numpy models the Match stage's fold checks use).  Nothing here reads the collector's emissions to decide WHAT is
 required or WHERE an input lives: the population is the Program (its Calls, the instances.json.gz rows), the addresses are the required-value
 manifest's Value rule -- the v2 query's population the manifest of record was built from (`required.Population.members_of`) -- and the
@@ -75,7 +75,7 @@ _NPDTYPE = {2: np.uint16, 4: np.uint32, 8: np.uint64}
 
 #: spec family -> the registry reference that evaluates its relation (recorded in every report)
 EVALUATORS = {
-    "Gemm_v1": "verity_vllm.program.registry.derived_rows.dot_bf16 (DotBf16_v1: ascending k16 AmpereBF16TcDot16 chain from 0) + f2fp_bf16 (GemmCoordinate_v1); "
+    "Gemm_v1": "verity_vllm.program.kernels.derived_rows.dot_bf16 (DotBf16_v1: ascending k16 AmpereBF16TcDot16 chain from 0) + f2fp_bf16 (GemmCoordinate_v1); "
                # [revb M-0461] the k16 step's measured total family is named on the record, not only by the tree commit
                # (literals, held equal to registry.tc_total's constants by test_sampled_replay)
                "k16 step = registry.tc_total ampere_bf16_m16n8k16 total family v3",
@@ -86,13 +86,13 @@ EVALUATORS = {
     # AmpereBF16TcDot16_v1 -> dot_bf16.  A DOT with no registered twin is refused BY NAME (`_Unresolved`), never another adder.
     # The ascending-from-0 chain is the cuBLASLt-without-split-K GEMM of a VLLM_BATCH_INVARIANT=1 step on cc 9.0 (vLLM keeps cuBLASLt there,
     # split-K off by workspace config), pinned word for word on the H100 at every Qwen2.5-1.5B shape x M (0 / 27.2M words; derived_rows).
-    "Gemm_v2": "verity_vllm.program.registry.derived_rows.dot_bf16_for(DOT) (DotBf16_v2{K,DOT}: ascending k16 chain of the DOT static's step from 0 -- "
+    "Gemm_v2": "verity_vllm.program.kernels.derived_rows.dot_bf16_for(DOT) (DotBf16_v2{K,DOT}: ascending k16 chain of the DOT static's step from 0 -- "
                "HopperBF16WgmmaDot16_v1 = tc_dot16_hopper (16:26:-133, silicon_total.HOPPER_BF16_WGMMA_K16; cuBLASLt split-K off = the "
                "batch-invariant Linear of record), AmpereBF16TcDot16_v1 = tc_dot16) + f2fp_bf16 (GemmCoordinate_v2); "
                "k16 steps = registry.tc_total hopper_bf16_wgmma_k16 family v1 / ampere_bf16_m16n8k16 total family v3",
     # [R17 dense, ruling R17-9] the NeoX rotation of one token row's q / k heads with ONE bf16 cos/sin cache row (a `weights` field slice
     # the Program's args name by position): b1.RoPE{NHEADS,D} = NHEADS x RoPEHead{D} = prims.RopeOut / RopeOutAdd per coordinate.
-    "RoPE_v1": "verity_vllm.program.registry.derived_rows.rope_rows (RoPE_v1{NHEADS,D}: out[i] = bf16_rn(RN32(x[i]*c[i] - x[i+R]*s[i])), "
+    "RoPE_v1": "verity_vllm.program.kernels.derived_rows.rope_rows (RoPE_v1{NHEADS,D}: out[i] = bf16_rn(RN32(x[i]*c[i] - x[i+R]*s[i])), "
                "out[i+R] = bf16_rn(RN32(x[i+R]*c[i] + x[i]*s[i])), R = D/2, cs = cos_sin_cache[pos] -- prims.RopeOut / RopeOutAdd); "
                # [revb F-r17b-14 / M-0122] the qualification that travels with every evaluated RoPE_v1 row
                "verified against the SERVED cos_sin table, pinned by the MAN-09c analytic bound (<= 1-2 bf16 ulp on ~1-2.5 % of words), "
@@ -101,10 +101,10 @@ EVALUATORS = {
     # one attention row from the committed q + the T committed K/V members the Program names by ref (every earlier step's committed word,
     # read by the resolver at the producer's step -- 'state-linked' was never a resolver gap) to the committed output: the registered
     # Definitions b1.AttentionV3 (FA2) / b1.AttentionV2 (FA3 on sm_90, DOT / INV statics resolved by name) evaluated gate for gate.
-    "Attention_v3": "verity_vllm.program.registry.derived_rows.attention_rows (Attention_v3{T,NH,KVH,D,BN}: FA2 -- GQA over AttentionHead_v3, one query "
+    "Attention_v3": "verity_vllm.program.kernels.derived_rows.attention_rows (Attention_v3{T,NH,KVH,D,BN}: FA2 -- GQA over AttentionHead_v3, one query "
                     "at position T-1 over the T committed K/V rows the Program names, ceil(T/BN) blocks last -> first, tc_dot16 step, Fa2InvSum); "
                     "k16 step = registry.tc_total ampere_bf16_m16n8k16 total family v3",
-    "Attention_v2": "verity_vllm.program.registry.derived_rows.attention_rows (Attention_v2{T,NH,KVH,D,BN,DOT,INV}: the DOT / INV statics resolved by name "
+    "Attention_v2": "verity_vllm.program.kernels.derived_rows.attention_rows (Attention_v2{T,NH,KVH,D,BN,DOT,INV}: the DOT / INV statics resolved by name "
                     "-- HopperBF16WgmmaDot16_v1 + Fa3InvSum_v1 = FA3 on sm_90 (== verity_vllm.program.kernels.fa3_model.fa3_rows); "
                     "AmpereBF16TcDot16_v1 + Fa2InvSum_v1 = FA2 under the lifted name); "
                     # [revb M-0148 (5) / rev] the silicon envelope of the FA3 relation, stated with the evaluator
@@ -112,9 +112,9 @@ EVALUATORS = {
                     "hopper-profile.md s1b); rows beyond it (1024/128, hdim 64 / kBlockN 192) are measured BY THE COMMIT -- a chain "
                     "mismatch FAILs by name, never a silent word; "
                     "k16 steps = registry.tc_total hopper_bf16_wgmma_k16 family v1 / ampere_bf16_m16n8k16 total family v3",
-    "RMSNormTriton_v1": "verity_vllm.program.registry.derived_rows.rmsnorm_triton_rows",
-    "RMSNormFusedCuda_v2": "verity_vllm.program.registry.derived_rows.rmsnorm_fused_v2_rows",
-    "SiluMul_v1": "verity_vllm.program.registry.derived_rows.silu_mul_rows",
+    "RMSNormTriton_v1": "verity_vllm.program.kernels.derived_rows.rmsnorm_triton_rows",
+    "RMSNormFusedCuda_v2": "verity_vllm.program.kernels.derived_rows.rmsnorm_fused_v2_rows",
+    "SiluMul_v1": "verity_vllm.program.kernels.derived_rows.silu_mul_rows",
     "Embedding_v1": "row gather of the registered embedding field (Embedding_v1)",
     "BiasAdd_v1": "Bf16Add on the composed interior Gemm output + the registered bias slice (one f32 add, RNE; biased linears, MAN-07)",
     "TokenSelect_v1": "first-max argmax over the bf16 logits (TokenSelect_v1: Bf16GtStrict scan, lowest index on ties)",
@@ -126,8 +126,8 @@ EVALUATORS = {
                                 "TopPMask_v1 (S = the committed `splits` operand) -> GumbelSelectF32 on the committed seed + Const64 pos)",
     # [R16 fp8] the block-scaled FP8 linear (Qwen3-4B-FP8, CutlassFp8BlockScaledMMKernel): the quant is INTERIOR (members [], composed
     # from the committed bf16 row), the GEMM row is the VU -- registered e4m3 weight + f32 `weight_scale_inv` slices (8- and 32-bit fields)
-    "Fp8GroupQuant_v1": "verity_vllm.program.registry.derived_rows.fp8_group_quant_row (per-token-group(128) e4m3 quant: exact fmaxf fold from eps, div.rn, cvt.rn.satfinite.e4m3)",
-    "ScaledMmFp8Block_v1": "verity_vllm.program.registry.derived_rows.scaled_mm_fp8_block_row (ascending k: G/32 HopperE4m3QgmmaDot32 steps from +0 per 128-block, "
+    "Fp8GroupQuant_v1": "verity_vllm.program.kernels.derived_rows.fp8_group_quant_row (per-token-group(128) e4m3 quant: exact fmaxf fold from eps, div.rn, cvt.rn.satfinite.e4m3)",
+    "ScaledMmFp8Block_v1": "verity_vllm.program.kernels.derived_rows.scaled_mm_fp8_block_row (ascending k: G/32 HopperE4m3QgmmaDot32 steps from +0 per 128-block, "
                            "FFMA(temp, FMUL(sx, sw), acc), cvt.rn.bf16.f32) on the composed Fp8GroupQuant output + the registered e4m3 / f32 weight slices",
     # [MAN-06f v3 unit 2, moe R16] the fused-MoE block relations (verity_vllm.program.registry.moe bodies; R13 moe_kernel_xcheck = the reference against
     # the real kernels): every plane word is PRODUCED by an evaluated relation over committed plane words + registered expert weights
@@ -136,7 +136,7 @@ EVALUATORS = {
                         "masked to -10000.f) -> router_w f32 + router_ids i32",
     "MoeRouterTopKNorm_v1": "MoeRouterTopK then the renormalising epilogue (selected sum ascending from 0.f, denom = sum > 0 ? sum : 1, one F32Div, "
                             "one F32Mul per slot; MOE-04) -> router_w f32 + router_ids i32",
-    "MoeExpertGemm_v1": "verity_vllm.program.registry.derived_rows.dot_bf16 (DotBf16_v1 k16 chain from 0) over the expert row W13[e] gathered by the committed "
+    "MoeExpertGemm_v1": "verity_vllm.program.kernels.derived_rows.dot_bf16 (DotBf16_v1 k16 chain from 0) over the expert row W13[e] gathered by the committed "
                         "router_ids word + f2fp_bf16 (MoeExpertCoordinate_v1: the w13 launch, MUL_ROUTED_WEIGHT=False) -> up",
     "MoeExpertGemmW_v1": "dot_bf16 over W2[e] gathered by the committed router_ids word, the committed routed weight multiplied into the f32 "
                          "accumulator (one F32Mul) before the single f2fp_bf16 (MoeExpertCoordinateW_v1: the w2 launch, MUL_ROUTED_WEIGHT=True) -> down",
@@ -157,7 +157,7 @@ EVALUATORS = {
     # own word helpers (derived_rows: bf16_to_f32_words = Bf16ToF32, mul_rn = F32Mul, f2fp_bf16 = F2fpBf16), node for node the Definition's body.
     # When the Program's dataflow reads its output from another module it is a boundary Value of the v2 query (`model/out`) and the replay
     # evaluates it as a VU against the committed member.
-    "Bf16MulScalarTensor_v1": "verity_vllm.program.registry.derived_rows bf16_to_f32_words (Bf16ToF32) on x[N] and on the one-word scalar s, mul_rn (F32Mul: "
+    "Bf16MulScalarTensor_v1": "verity_vllm.program.kernels.derived_rows bf16_to_f32_words (Bf16ToF32) on x[N] and on the one-word scalar s, mul_rn (F32Mul: "
                               "one RN multiply), f2fp_bf16 (F2fpBf16 = cvt.rn.bf16.f32, NaN -> 0x7FFF) -- b1.Bf16MulScalarTensor{N} node for node -> out",
 }
 #: [R16 fp8] a `weights` field's leaf width (its `Value<b>`) -> the word dtype the registered slice is read as (bf16 -> u16, e4m3 -> u8, f32 -> u32)
@@ -737,7 +737,7 @@ def gumbel_topp_token_select(statics: dict[str, Any], operands: list[np.ndarray]
 def evaluate(family: str, statics: dict[str, Any], inputs: list[list[np.ndarray]], weights: list[np.ndarray | None]) -> dict[str, np.ndarray]:
     """F_V for the supported families.  `inputs[g]` = the committed words of arg group g (one array per slice, concatenated in order);
     `weights[g]` = the registered slice when arg group g is a `weights` slice.  Returns {member: words}."""
-    from verity_vllm.program.registry import derived_rows as D
+    from verity_vllm.program.kernels import derived_rows as D
 
     def arg(g: int) -> np.ndarray:
         if weights[g] is not None:
@@ -1011,7 +1011,7 @@ def padded_moe_block(statics: dict[str, Any], args: list[np.ndarray], *, router_
     row: `out` [H] bf16, `router_ids` [TOPK] i32, `router_w` [TOPK] f32, and per slot e `slot<e>/up` [2I] bf16, `slot<e>/act` [I] bf16,
     `slot<e>/down` [H] bf16, `slot<e>/g` [1] f32 (0.0f where the router did not pick e; the body is evaluated for EVERY slot, as the
     construction computes it).  Memoised on (statics, x, logits/wg) so the picks of one token row share one 64-body evaluation."""
-    from verity_vllm.program.registry import derived_rows as D
+    from verity_vllm.program.kernels import derived_rows as D
 
     E, TOPK, VPT, H, I = int(statics["E"]), int(statics["TOPK"]), int(statics.get("VPT", 8)), int(statics["H"]), int(statics["I"])
     if len(args) != 4:

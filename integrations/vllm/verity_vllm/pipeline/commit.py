@@ -2351,7 +2351,7 @@ def main(argv: list[str] | None = None) -> None:
                 if getattr(args, "program_dir", None) or getattr(args, "programs_root", None):
                     # [DECISIONS-2 §4 C2 / M-0356 (1), manbind M-0394] C2 OF RECORD: sampled exact VU replay -- for a seeded stratified sample of
                     # Program instance rows (spec x request x phase), read the COMMITTED bytes of the row's inputs (the Program's dataflow -> the
-                    # manifest's member rule -> the binding map), evaluate the registered relation (verity_vllm.program.registry.derived_rows), compare with the
+                    # manifest's member rule -> the binding map), evaluate the registered relation (verity_vllm.program.kernels.derived_rows), compare with the
                     # COMMITTED output bytes bit-for-bit.  Plus the exhaustive ordered boundary linkage (declared prompt -> input ids; sampled
                     # id[s-1] -> input id[s]) over every (engine step, request).  Needs no Match record; the oracle-compare above is a diagnostic.
                     # [R16 sys M-0043 / rev M-0051] REPLAY CACHE (--replay-cache, default OFF): sampled_replay is a pure function of (committed
@@ -2647,7 +2647,7 @@ def main(argv: list[str] | None = None) -> None:
                                                     "strata_unevaluated": sr.get("strata_unevaluated"), "seed": _smp.get("seed"), "seed_source": _smp.get("seed_source"),
                                                     "unreplayable": sr.get("unreplayable"), "weights": sr.get("weights"), "programs": sr.get("programs"),
                                                     "evaluators": sr.get("evaluators"), "artifact": str(_art),
-                                                    "reference": "registered relation evaluators (verity_vllm.program.registry.derived_rows) on the COMMITTED input bytes (C2 of record, DECISIONS-2 §4)"}
+                                                    "reference": "registered relation evaluators (verity_vllm.program.kernels.derived_rows) on the COMMITTED input bytes (C2 of record, DECISIONS-2 §4)"}
                     components["boundary_linkage"] = {"result": lk.get("result"), "method": lk.get("method"), "checked": lk.get("pairs"), "linked": lk.get("linked"),
                                                       "unlinked_n": lk.get("unlinked_n"), "unlinked": lk.get("unlinked"), "why": lk.get("why"),
                                                       "prescribed": lk.get("prescribed"),      # [R16 pin, ruling 36] seed / splits linkage record

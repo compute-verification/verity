@@ -199,8 +199,8 @@ def test_honest_fp8_program_replays_bit_exactly_the_gemm_rows_are_vus_the_quant_
     gemm_strata = {k: v for k, v in rep["strata"].items() if k.startswith("ScaledMmFp8Block")}
     assert gemm_strata and all(v["evaluated"] >= 1 for v in gemm_strata.values())
     assert {k.split("|")[4].rsplit(".", 1)[-1] for k in gemm_strata} == {"gate_up_proj", "down_proj"}
-    assert rep["evaluators"]["ScaledMmFp8Block_v1"].startswith("verity_vllm.program.registry.derived_rows.scaled_mm_fp8_block_row")
-    assert rep["evaluators"]["Fp8GroupQuant_v1"].startswith("verity_vllm.program.registry.derived_rows.fp8_group_quant_row")
+    assert rep["evaluators"]["ScaledMmFp8Block_v1"].startswith("verity_vllm.program.kernels.derived_rows.scaled_mm_fp8_block_row")
+    assert rep["evaluators"]["Fp8GroupQuant_v1"].startswith("verity_vllm.program.kernels.derived_rows.fp8_group_quant_row")
     # [rev M-0100] the twins name what pinned them: fixture sha256 (the file in the tree), kernels, device, date, tests
     import hashlib
     from pathlib import Path
