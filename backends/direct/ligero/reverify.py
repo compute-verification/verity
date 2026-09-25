@@ -250,16 +250,29 @@ def committed_trees(pinned: str, man: dict, *, instances_root: str | None = None
 def commitment_problems(pdir: Path, man: dict, pinned: str, reps: list[str], *, instances_root: str | None = None) -> tuple[bool, list[str]]:
     """``(hashed, problems)``.  A dump whose statements carry a hash-authentication block (``included-hash``) passes only when
     every statement's three tree references equal :func:`committed_trees` and each rep's statements' ``vu_index`` together
-    cover ``[0, total_vus)`` exactly once (red-team-standard-hash R2); a dump without one is not checked here."""
+    cover ``[0, total_vus)`` exactly once (red-team-standard-hash R2); a dump without one is not checked here.  A relation
+    named with a leaf (``+<leaf>``) is hashed: every statement must carry the block.  Coverage counts only what ``batch``
+    verifies, so in every dump each rep's ``.stmt`` stems must equal its ``.proof`` stems and the manifest's entries for it
+    (red-team-standard-hash R4: a statement without a proof claims VUs nobody proved)."""
     from .serialize import read_statement
 
+    orphans: list[str] = []
+    for r in reps:
+        stmts, proofs = ({f.stem for f in (pdir / r).glob(f"*.{s}")} for s in ("stmt", "proof"))
+        listed = [f for f in man.get("files", []) if str(f.get("proof") or f.get("stmt") or "").split("/", 1)[0] == r]
+        if stmts != proofs:
+            orphans.append(f"{r}: {len(stmts - proofs)} statement(s) without a proof, {len(proofs - stmts)} proof(s) without a statement")
+        if any(not f.get("proof") for f in listed):
+            orphans.append(f"{r}: the manifest lists a statement without a proof")
+        if listed and {Path(f["proof"]).stem for f in listed if f.get("proof")} != proofs:
+            orphans.append(f"{r}: the manifest's proofs are not the rep's proofs")
     per_rep: dict[str, list] = {}
     for r in reps:
         for f in sorted((pdir / r).glob("*.stmt")):
             per_rep.setdefault(r, []).append((f.name, read_statement(f.read_bytes())))
-    hashed = any(getattr(st, "hash_auth", None) is not None for sts in per_rep.values() for _, st in sts)
-    if not hashed:
-        return False, []
+    hashed = "+" in (pinned or "") or any(getattr(st, "hash_auth", None) is not None for sts in per_rep.values() for _, st in sts)
+    if orphans or not hashed:
+        return hashed, orphans
     try:
         want = committed_trees(pinned, man, instances_root=instances_root)
     except ValueError as e:
@@ -347,6 +360,8 @@ def verify_tree(pdir: Path, man: dict, v: Verifier, rep: Report, *, jobs: int, p
             problems.append(f"{r}: Rust/Python disagree on {x['python_disagree']}")
         if per_rep_n.get(r) not in (None, x.get("n")):
             problems.append(f"{r}: {x.get('n')} proofs verified, manifest lists {per_rep_n[r]}")
+        if x.get("n") != (n_stmt := len(list((pdir / r).glob("*.stmt")))):
+            problems.append(f"{r}: {x.get('n')} proofs verified, the rep holds {n_stmt} statements")
     rep.status, rep.why = ("FAIL", problems) if problems else ("PASS", [])
 
 

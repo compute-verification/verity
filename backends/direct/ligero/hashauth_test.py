@@ -2,7 +2,8 @@
 R1), the same rule as ligero-verify's ``auth::layout_error``.  End to end (the red-team's ``rtsh_remap_e2e`` 2-VU fixture,
 fp8-ada+blake3 on the CPU): VU 0's committed output is VU 1's under honest x / W roots and the statement claims VU 0 on
 (x row 1, W column 1) -- refused by Python and ``$LIGERO_VERIFY`` (when set); ``reverify.commitment_problems`` (R2) flags
-its y root against the recomputed instance set and a rep that claims a VU twice; the honest dump passes all three.
+its y root against the recomputed instance set, a statement without a proof (R4) and a rep that claims a VU twice; the
+honest dump passes all three.
 
     uv run pytest backends/direct/ligero/hashauth_test.py
 """
@@ -120,6 +121,11 @@ def test_reverify_recomputes_the_trees_and_the_cover(remap, tmp_path) -> None:
     twice = shutil.copytree(out["honest"][0], tmp_path / "twice")
     shutil.copy(twice / "rep0" / "sub_00.stmt", twice / "rep0" / "sub_01.stmt")
     assert commitment_problems(twice, man, "fp8-ada+blake3", ["rep0"])[1] == [
+        "rep0: 1 statement(s) without a proof, 0 proof(s) without a statement"]
+    shutil.copy(twice / "rep0" / "sub_00.proof", twice / "rep0" / "sub_01.proof")
+    assert commitment_problems(twice, man, "fp8-ada+blake3", ["rep0"])[1] == [
         "rep0: statements cover 2 distinct VUs of [0, 2) (2 claimed twice)"]
+    listed = dict(man, files=[{"proof": "rep0/sub_00.proof", "stmt": "rep0/sub_00.stmt"}, {"stmt": "rep0/sub_01.stmt"}])
+    assert "rep0: the manifest lists a statement without a proof" in commitment_problems(twice, listed, "fp8-ada+blake3", ["rep0"])[1]
     other = dict(man, set={"total_vus": 3, "instances": man["set"]["instances"]})
     assert "manifest digest" in commitment_problems(out["honest"][0], other, "fp8-ada+blake3", ["rep0"])[1][0]
