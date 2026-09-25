@@ -188,7 +188,6 @@
     {"file": "verity_vllm/program/frontend/rules/vocab.py", "kind": "model", "symbol": "<module>", "detail": "qwen"},
     {"file": "verity_vllm/program/frontend/vllm_meta.py", "kind": "layer-class", "symbol": "export_facts", "detail": "RMSNorm"},
     {"file": "verity_vllm/program/frontend/vllm_meta.py", "kind": "model", "symbol": "<module>", "detail": "smollm"},
-    {"file": "verity_vllm/program/kernels/beyond_gemm.py", "kind": "model", "symbol": "load_norm_weights", "detail": "qwen"},
     {"file": "verity_vllm/program/kernels/compiled_relations.py", "kind": "layer-class", "symbol": "rms_eps_of", "detail": "RMSNorm", "count": 2},
     {"file": "verity_vllm/program/kernels/fa2_model.py", "kind": "gpu", "symbol": "arch_of", "detail": "4090"},
     {"file": "verity_vllm/program/kernels/fa2_model.py", "kind": "gpu", "symbol": "arch_of", "detail": "l4"},
