@@ -13,6 +13,7 @@ Bagad-Domb-Thaler), the rest on ``(t / 8, 6)`` extension tables; the round messa
 """
 from __future__ import annotations
 
+import numpy as np
 import torch
 
 from .field import DEG, ONE, P, ZERO, Ext, e_inv, e_mul, e_sub, ext_mul, py_exts, t_ext
@@ -120,16 +121,22 @@ def _inputs(kern, gammas: list[Ext], rs: list[Ext], i: int, k: int, kappa: int, 
     m = t >> i
     K1 = 1 << kappa
     K2 = m // K1
-    e_lo = eqs.suffix(i, kappa).to(torch.int32)                                # (K1, 6)
-    eq_c = eqs.suffix(i + kappa, b - i - kappa)                                # (2^(b-i-κ), 6)
-    e_hi = ext_mul(wgt[:, None, :], eq_c[None, :, :]).reshape(K2, DEG).to(torch.int32)
     gm = gammas[i - 1]
-    eq_x = _sp.to_dev([_ref.eval_at(_ref.sub(_ref.ONE, gm), gm, x) for x in range(4)], dev)
-    prefix = _sp.to_dev(_ref.eq_points(gammas[:i - 1], rs) if pfx is None else pfx, dev)
-    coeff = None
+    # every host-side operand of the round in one pinned, non-blocking copy (each pageable copy waits for the stream)
+    host = [e_mul(eqs.invpref[i], eqs.invsuf[i + kappa]), e_mul(eqs.invpref[i + kappa], eqs.invsuf[b])]
+    host += [_ref.eval_at(_ref.sub(_ref.ONE, gm), gm, x) for x in range(4)]
+    host.append(_ref.eq_points(gammas[:i - 1], rs) if pfx is None else pfx)
     if i <= k:
         eq_r = _ref.eq_table(rs)
-        coeff = _sp.to_dev([_ref.mul(x, y) for x in eq_r for y in eq_r], dev)
+        host += [_ref.mul(x, y) for x in eq_r for y in eq_r]
+    hb = torch.from_numpy(np.asarray(host, dtype=np.int64))
+    buf = (hb.pin_memory().to(dev, non_blocking=True) if dev.type == "cuda" else hb.to(dev))
+    e_lo = ext_mul(eqs.E[:: 1 << i][:K1], buf[0]).to(torch.int32)                           # (K1, 6)
+    eq_c = ext_mul(eqs.E[:: 1 << (i + kappa)][: 1 << (b - i - kappa)], buf[1])              # (2^(b-i-κ), 6)
+    e_hi = ext_mul(wgt[:, None, :], eq_c[None, :, :]).reshape(K2, DEG).to(torch.int32)
+    small = buf[2:].to(torch.int32)
+    eq_x, prefix = small[:4], small[4]
+    coeff = small[5:] if i <= k else None
     if kern._tk is not None:      # Montgomery Hadamards: the weight limbs carry the compensating R
         e_lo = _sp.pre_scale(e_lo)
     return _sp.RoundInputs(_sp.decompose(e_lo), e_hi, eq_x, prefix, coeff, None)
