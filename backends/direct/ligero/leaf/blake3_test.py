@@ -67,6 +67,7 @@ def test_native_is_blake3_of_the_row_bytes(word_bits, role):
     ref = leaf.reference_digest(rows, word_bits=word_bits, role=role)
     for r in range(6):
         assert leaf.leaf_bytes(d[r]) == ref[r] and len(ref[r]) == 32
+    assert leaf.leaf_bytes_many(d) == ref
     # the role is in the key (red-team-leaf NIT): the other role's digest and leaf differ
     other = 3 - role
     d2 = leaf.native(rows, word_bits=word_bits, role=other)
@@ -94,6 +95,12 @@ def test_leaf_bytes_is_total_on_field_rows_and_tags_malformed_frames():
     assert len(seen) == len(malformed)
     good = L.Blake3Leaf().native(np.zeros((1, L.K_VU), dtype=np.int64), word_bits=8, role=1)[0]
     assert L.leaf_bytes(good) not in seen and L.elems_to_cvs(good)[1] == 1
+    for m in malformed:                                                # a malformed row sends the batch row by row
+        rows = np.asarray([good, m, good], dtype=np.int64)
+        assert L.leaf_bytes_many(rows) == [L.leaf_bytes(r) for r in rows]
+    assert L.leaf_bytes_many(np.zeros((0, L.DIGEST_ELEMS), dtype=np.int64)) == []
+    with pytest.raises(ValueError):
+        L.leaf_bytes_many([[6] + [0] * 32])
     with pytest.raises(ValueError):
         L.leaf_bytes([6] + [0] * 32)                                   # wrong length
     with pytest.raises(ValueError):

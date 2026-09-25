@@ -346,7 +346,7 @@ class Statement:
     shared: "SharedSide | None" = None   # v6 (authentication = included-hash-shared): the hash side; ``a`` is then the
     #                                      (l, 1) table [is_end] and ``b`` the (n_vus, 3) index rows
     trimmed: bool = False            # hashed statement written as v6 (chain-end words only) instead of v5 (the l-vector)
-    row_words: int | None = None     # v5 as read: the header's K (``_K_of`` = K_VU; not in the statement digest, so
+    row_words: int | None = None     # v5 / v6 as read: the header's K (``_K_of`` = K_VU; not in the statement digest, so
     #                                  ``verify_files`` compares it with K_VU)
 
     @property
@@ -660,7 +660,7 @@ def _read_v6(r: _R, l, n, D, t, target, zk, t_pad, mode_code, n_proofs, n_vus, s
     is_end[np.arange(n_vus) * steps + steps - 1, 0] = 1
     shared = SharedSide(l_h, n_h, D_h, t_h, t_pad_h, coords, units, rows[:, 1:])
     return Statement(l, n, D, t, target, zk, t_pad, MODE_NAMES[mode_code], n_proofs, n_vus, steps, is_end, auth.indices(), y16,
-                     None, relation, 4, yb, auth, sibs, shared)
+                     None, relation, 4, yb, auth, sibs, shared, row_words=K)
 
 
 def _read_v5(r: _R, l, n, D, t, target, zk, t_pad, mode_code, n_proofs, n_vus, steps, K, trimmed: bool = False) -> Statement:
@@ -884,7 +884,7 @@ def verify_files(stmt_path: Path, proof_path: Path, device: str = "cpu", runner=
     coins = own_coins if (st.interactive and own_coins is not None) else pf.coins if (st.interactive and pf.coins is not None) else None
     if st.interactive and coins is None:
         return False, "interactive transcript carries no coins", 0.0
-    if st.v5 and st.row_words is not None:
+    if (st.v5 or st.v6) and st.row_words is not None:
         from .chain import Layout
         # the VU shape first (protocol.layout_error, as protocol.verify would), then the header K, which is not in the
         # statement digest: every hashed writer emits K_VU (``_K_of``; for fp4-nvf4 24 x 64 codes, not steps x WORDS)
