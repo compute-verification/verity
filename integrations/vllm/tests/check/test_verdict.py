@@ -17,8 +17,11 @@ import json
 
 import pytest
 
+from verity.verification.codes import VerificationCode as VC
+
 from verity_vllm.check.commit_verdict import commit_verdict
 from verity_vllm.check import verdict as V
+from verity_vllm.check.result import MISSING_INPUT, CheckResult, code_of, outcome_of
 
 RUN_ROOT = "71f69377" + "ab" * 28
 SEED_ROOT = int.from_bytes(bytes.fromhex(RUN_ROOT)[:8], "big")
@@ -97,10 +100,11 @@ def test_schema_round_trip_and_closed_vocabularies(tmp_path):
     assert v.groups() == {g: V.PASS for g in V.GROUPS}
     for c in v.checks:
         assert c.outcome in V.OUTCOMES and c.claim and c.compat and c.group in V.GROUPS
+    assert [c.code for c in back.checks] == [c.code for c in v.checks]
     with pytest.raises(ValueError):
-        V.CheckVerdict(name="runtime_match/x", claim="c", outcome="MAYBE")
+        CheckResult.from_dict({"name": "runtime_match/x", "claim": "c", "outcome": "MAYBE"})
     with pytest.raises(ValueError):
-        V.CheckVerdict(name="weights_pin/x", claim="c", outcome=V.PASS)          # the OLD name is not a group
+        V.Verdict(checks=[CheckResult(name="weights_pin/x", code=VC.ACCEPTED)], outcome=V.PASS)          # the OLD name is not a group
     with pytest.raises(ValueError):
         V.Verdict.from_dict({"schema": "something-else/v9", "checks": [], "outcome": V.PASS})
 
@@ -110,6 +114,17 @@ def test_worst_orders_fail_over_insufficient_over_not_run():
     assert V.worst([V.PASS, V.INSUFFICIENT]) == V.INSUFFICIENT
     assert V.worst([V.INSUFFICIENT, V.FAIL, V.PASS]) == V.FAIL
     assert V.worst([]) == V.NOT_RUN
+
+
+def test_the_code_is_the_outcome():
+    assert [outcome_of(c) for c in (VC.ACCEPTED, None, MISSING_INPUT, VC.COVERAGE_MISMATCH)] == [V.PASS, V.NOT_RUN, V.INSUFFICIENT, V.FAIL]
+    assert all(code_of(outcome_of(c), VC.COVERAGE_MISMATCH) is c for c in (VC.ACCEPTED, None, MISSING_INPUT, VC.COVERAGE_MISMATCH))
+    with pytest.raises(ValueError):
+        code_of(V.FAIL)
+    _, _, checks = _both(_base())
+    assert {c.name for c in checks} <= set(V.REJECT)
+    (ok, _), _, failed = _both(dict(_base(), fa2_zero_rows=3))
+    assert not ok and {c.name: c.code for c in failed if c.outcome == V.FAIL} == {"runtime_match/fa2_zero_rows": VC.INVALID_VALUE}
 
 
 # ---------------------------------------------------------------------------------------------------------------- (2) mapping
