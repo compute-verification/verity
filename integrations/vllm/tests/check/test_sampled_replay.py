@@ -298,7 +298,7 @@ def test_honest_program_replays_bit_exactly_across_all_strata(world):
     assert rep["sample"]["seed_source"] == "caller"
     rep2 = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=2, seed=3)
     assert rep2["strata"] == rep["strata"] and rep2["sample"] == rep["sample"]
-    assert rep["evaluators"]["Gemm_v1"].startswith("verity_vllm.program.registry.derived_rows.dot_bf16")
+    assert rep["evaluators"]["Gemm_v1"].startswith("verity_vllm.program.kernels.derived_rows.dot_bf16")
 
 
 def test_flipped_committed_output_byte_fails_named_at_the_request_and_row(world):
@@ -714,7 +714,7 @@ def hopper_worlds():
 
 
 def test_hopper_gemm_v2_is_registered_and_dispatches_on_the_dot_static():
-    from verity_vllm.program.registry import derived_rows as D
+    from verity_vllm.program.kernels import derived_rows as D
     assert "Gemm_v2" in SR.EVALUATORS and "Gemm_v2" not in SR.NOT_YET and SR._FAMILY_LIBS["Gemm_v2"] == ()
     assert "dot_bf16_for" in SR.EVALUATORS["Gemm_v2"] and "HopperBF16WgmmaDot16_v1" in SR.EVALUATORS["Gemm_v2"]
     assert SR.gemm_dot_prim({"K": 16, "N": 32, "DOT": '{"fn":"HopperBF16WgmmaDot16_v1"}'}) == "HopperBF16WgmmaDot16_v1"
@@ -732,7 +732,7 @@ def test_hopper_gemm_v2_evaluator_is_the_registered_wgmma_chain_not_the_ampere_o
     """Word for word against the registered scalar primitive (`hopper.HopperBF16WgmmaDot16`, pinned on the H100) on random finite lanes,
     and on an adversarial lane where the 26-bit and 25-bit adders round to DIFFERENT bf16 words: evaluate('Gemm_v2', Hopper DOT) returns
     the wgmma word, evaluate('Gemm_v1') / ('Gemm_v2', Ampere DOT) the mma.sync word."""
-    from verity_vllm.program.registry import derived_rows as D
+    from verity_vllm.program.kernels import derived_rows as D
     from verity_vllm.program.registry.hopper import HopperBF16WgmmaDot16
     rng = np.random.default_rng(1701)
     K, N = 64, 8
@@ -782,7 +782,7 @@ def test_hopper_honest_program_replays_bit_exactly_gemm_v2_in_the_population(hop
     assert fams == {"Embedding_v1", "RMSNormTriton_v1", "Gemm_v2", "SiluMul_v1", "RMSNormFusedCuda_v2", "TokenSelect_v1"}
     assert "Gemm_v1" not in fams and rep["population"]["not_evaluable"] == {} and rep["unreplayable"] == []
     assert rep["timing"]["per_family_n"]["Gemm_v2"] == 2 * (2 * (LP + T) + (1 + T))        # gate_up + down per token row, logits per step, x2 requests
-    assert rep["evaluators"]["Gemm_v2"].startswith("verity_vllm.program.registry.derived_rows.dot_bf16_for(DOT)")
+    assert rep["evaluators"]["Gemm_v2"].startswith("verity_vllm.program.kernels.derived_rows.dot_bf16_for(DOT)")
     assert "Gemm_v2" not in rep["applicability"]["families_not_yet"]
     # a Gemm_v2 VU's recorded inputs are ONE committed identity (the norm output row) + ONE registered weight slice: explicit, resolvable (R17-3)
     pi = SR.ProgramIndex(plain.inst)
@@ -846,7 +846,7 @@ def test_hopper_program_over_ampere_committed_bytes_is_told_apart_where_the_adde
     progs = {rid: _hopper_program(world.inst) for rid in world.prompts}
     bmap, committed = world.bmap_and_reader()
     rep = SR.sampled_replay(progs, bmap, committed, _weights(world), per_stratum=8, seed=1, workers=0)
-    assert rep["evaluators"]["Gemm_v2"].startswith("verity_vllm.program.registry.derived_rows.dot_bf16_for(DOT)")
+    assert rep["evaluators"]["Gemm_v2"].startswith("verity_vllm.program.kernels.derived_rows.dot_bf16_for(DOT)")
     if rep["result"] is False:
         assert rep["grade"] == "mismatch" and all(x["spec"].startswith(("Gemm_v2{", "SiluMul", "RMSNormFusedCuda", "TokenSelect")) for x in rep["mismatch"])
     else:
@@ -908,7 +908,7 @@ def test_model_weights_provider_reads_buffers_as_well_as_parameters_the_set_the_
 # --- [R17 dense, ruling R17-9] RoPE_v1: an evaluator, not a NOT_YET label -----------------------------------------------------------------
 
 def test_rope_v1_is_registered_and_the_rows_are_in_the_population_not_named_away(rope_world):
-    assert "RoPE_v1" in SR.EVALUATORS and "RoPE_v1" not in SR.NOT_YET and SR.EVALUATORS["RoPE_v1"].startswith("verity_vllm.program.registry.derived_rows.rope_rows")
+    assert "RoPE_v1" in SR.EVALUATORS and "RoPE_v1" not in SR.NOT_YET and SR.EVALUATORS["RoPE_v1"].startswith("verity_vllm.program.kernels.derived_rows.rope_rows")
     pi = rope_world.pi
     vus, ne, nef = SR.population(pi, "r0")
     ropes = [v for v in vus if v["spec"].startswith("RoPE_v1")]
@@ -929,7 +929,7 @@ def test_rope_v1_honest_program_replays_bit_exactly_with_the_cache_row_read_from
     rs = {k: v for k, v in rep["strata"].items() if k.startswith("RoPE_v1")}
     assert rs and all(v["evaluated"] >= 1 and v["evaluated"] == v["sampled"] for v in rs.values()), rs
     assert not any(k.startswith("RoPE_v1") for k in rep.get("strata_unevaluated") or {}) and not rep["mismatch"]
-    assert rep["evaluators"]["RoPE_v1"].startswith("verity_vllm.program.registry.derived_rows.rope_rows")
+    assert rep["evaluators"]["RoPE_v1"].startswith("verity_vllm.program.kernels.derived_rows.rope_rows")
 
 
 def test_rope_v1_flipped_committed_output_word_fails_named_at_the_rope_row(rope_world):
@@ -1004,7 +1004,7 @@ def test_attention_rows_are_registered_units_of_the_population_and_the_interior_
     """[ruling R17-11] Attention_v3 / Attention_v2 are EVALUATORS (the row is the Q_module_v1 unit), not NOT_YET labels: every attention row
     is a VU of the population; the record names the AttnBlock-interior mechanism (Q_fine_v1 units) the replay does not read, with the count."""
     assert all(f in SR.EVALUATORS and f not in SR.NOT_YET for f in ("Attention_v3", "Attention_v2"))
-    assert SR.EVALUATORS["Attention_v2"].startswith("verity_vllm.program.registry.derived_rows.attention_rows") and "Fa3InvSum_v1" in SR.EVALUATORS["Attention_v2"]
+    assert SR.EVALUATORS["Attention_v2"].startswith("verity_vllm.program.kernels.derived_rows.attention_rows") and "Fa3InvSum_v1" in SR.EVALUATORS["Attention_v2"]
     assert "MAN-09c" in SR.EVALUATORS["RoPE_v1"]                                    # [revb F-r17b-14] the cos_sin bound travels with the row
     n_att = sum(1 for r in attn_world.pi.rows if r["spec"].startswith("Attention_v3"))
     assert n_att == LP + T
@@ -1031,7 +1031,7 @@ def test_attention_v3_honest_program_replays_bit_exactly_from_the_committed_kv_h
     assert any(k.startswith("Attention_v3{NB=1,last=partial,") and "|last|" in k for k in at), sorted(at)
     assert not any("{T=" in k for k in at) and {k.split("|")[3] for k in at} == {"prefill", "first-decode", "last"}, sorted(at)
     assert not any(k.startswith("Attention_v3") for k in rep.get("strata_unevaluated") or {}) and not rep["mismatch"]
-    assert rep["evaluators"]["Attention_v3"].startswith("verity_vllm.program.registry.derived_rows.attention_rows")
+    assert rep["evaluators"]["Attention_v3"].startswith("verity_vllm.program.kernels.derived_rows.attention_rows")
 
 
 def test_attention_stratum_key_keeps_the_block_count_and_the_full_or_partial_last_block_apart_and_nothing_else():
@@ -1147,7 +1147,7 @@ def test_attention_v2_statics_resolve_the_hopper_twins_by_name_and_an_unknown_id
     assert np.array_equal(v3, attn_world.values[("r0", r["i"])])
     st = dict(d["statics"], DOT='{"fn":"AmpereBF16TcDot16_v1"}', INV='{"fn":"Fa2InvSum_v1"}')
     assert np.array_equal(SR.evaluate("Attention_v2", st, inputs, [None] * 3)["out"], v3)
-    from verity_vllm.program.registry import derived_rows as D
+    from verity_vllm.program.kernels import derived_rows as D
     st = dict(d["statics"], DOT='{"fn":"HopperBF16WgmmaDot16_v1"}', INV='{"fn":"Fa3InvSum_v1"}')
     got = SR.evaluate("Attention_v2", st, inputs, [None] * 3)["out"]
     q = np.asarray(inputs[0][0], dtype=np.uint16).reshape(NH, DH)
