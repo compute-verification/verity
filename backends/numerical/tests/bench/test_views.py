@@ -170,8 +170,11 @@ def committed(store: LocalStore, leaf: str = "blake3", *, t_total: float = 0.4, 
     return art
 
 
-def line(views: V.Views, target=FP8_ADA_MMA) -> dict[str, Any]:
-    return next(ln for ln in views.lines if ln["line"] == target.name)
+BLAKE3_ROW = "frame-v3/blake3-row"
+
+
+def line(views: V.Views, target=FP8_ADA_MMA, scheme: str | None = BLAKE3_ROW) -> dict[str, Any]:
+    return next(ln for ln in views.lines if ln["line"] == target.name and ln["scheme"] == scheme)
 
 
 def codes(views: V.Views, art: str) -> list[str]:
@@ -200,9 +203,14 @@ def test_a_full_relation_blake3_result_fills_its_family_cell_end_to_end(store: L
     assert V.PREVIEW in md and "## Table 1" in md and "## Table 2" in md and "## Table 3" in md
     assert f"{T.fmt_overhead(cell.overhead)} (prov.)" in md
     # Table 3: commitment and the proving buckets per instance, with shares of end to end
-    row3 = next(r for r in md.splitlines() if r.startswith(f"| {FP8_ADA_MMA.name} · B-Ligero"))
+    row3 = next(r for r in md.splitlines() if r.startswith(f"| {FP8_ADA_MMA.name} · frame-v3 · keyed-BLAKE3 rows · B-Ligero"))
     assert "146 µs (60%)" in row3 and "244 µs (100%)" in row3
-    assert "Encoding + witness commitment" in md
+    assert "Encoding + witness commitment" in md and "Serving overhead" in md
+    serving, proving = V.overheads(cell)
+    N = V.native(FP8_ADA_MMA)["instances_per_second"]
+    assert serving == pytest.approx(N * 0.6 / 4096) and proving == pytest.approx(N * 0.4 / 4096)
+    assert serving + proving == pytest.approx(cell.overhead)
+    assert f"| {T.fmt_overhead(serving)} | {T.fmt_overhead(proving)} |" in row3
 
 
 def test_a_red_team_clearance_of_the_statement_lifts_the_marker(store: LocalStore) -> None:
@@ -216,16 +224,38 @@ def test_a_red_team_clearance_of_the_statement_lifts_the_marker(store: LocalStor
     assert line(views)["cells"]["B-Ligero"] is None and codes(views, a) == ["D"]
 
 
+def test_table2_has_one_line_per_subcircuit_hardware_and_admissible_scheme(store: LocalStore) -> None:
+    views = V.build(store)
+    schemes = {ln["scheme"] for ln in views.lines}
+    assert schemes == {"frame-v3/sha256", BLAKE3_ROW} and len(views.lines) == 2 * len(TARGETS)
+    assert [ln["scheme"] for ln in views.lines[:2]] == ["frame-v3/sha256", BLAKE3_ROW]     # one subcircuit's schemes sit together
+    assert not V._SCHEME["vllm-v1"].admissible and not V._SCHEME["frame-v3/poseidon2-row"].admissible
+    assert {ln["scheme"] for ln in V.build(store, V.LEGACY).lines} == {None}
+
+
+def test_an_algebraic_hash_inside_the_proof_system_fails_the_published_filter(store: LocalStore) -> None:
+    art = committed(store, t_total=0.4)
+    sp1ish = tuple(dataclasses.replace(c, hashes=c.hashes + V._SP1_HASHES) if c.id == "B-Ligero + BLAKE3 in circuit" else c
+                   for c in V.CONFIGURATIONS)
+    views = V.build(store, configurations=sp1ish)
+    assert codes(views, art) == ["L"] and "Poseidon2-KoalaBear" in next(r for r in views.rejected if r["artifact"] == art)["codes"][0][1]
+    e = line(views)["empty"]["B-Ligero"]
+    assert e["state"] == "below-filter" and "algebraic" in e["text"]
+    assert line(V.build(store, V.UNFILTERED, sp1ish))["cells"]["B-Ligero"].artifact == art
+
+
 def test_algebraic_commitments_and_weaker_statements_leave_table2(store: LocalStore) -> None:
     pos = committed(store, "poseidon2", t_total=0.1)
     ajtai = committed(store, "ajtai-n64", t_total=0.1)
     bare = put(store, result(candidate="B-Ligero", target=FP8_ADA_MMA, gpu=RTX4090, proof_class="COMPLETE_ZK_BACKEND", t_total=0.05))
     agkr = put(store, result(target=FP8_ADA_MMA, gpu=RTX4090, t_total=0.05))
     views = V.build(store)
-    assert codes(views, pos)[0] == "R" and "poseidon2-babybear" in next(r for r in views.rejected if r["artifact"] == pos)["codes"][0][1]
-    assert codes(views, ajtai)[0] == "R" and codes(views, bare)[0] == "R" and codes(views, agkr)[0] == "R"
+    assert codes(views, pos)[0] == "S" and "Poseidon2 rows" in next(r for r in views.rejected if r["artifact"] == pos)["codes"][0][1]
+    assert codes(views, pos)[:2] == ["S", "L"]                        # the published filter also sees the algebraic leaf
+    assert codes(views, ajtai)[0] == "S" and codes(views, bare)[0] == "R" and codes(views, agkr)[0] == "R"
     ln = line(views)
     assert ln["cells"]["B-Ligero"] is None and ln["empty"]["B-Ligero"]["state"] == "weaker"
+    assert "an inadmissible scheme (B-Ligero + Ajtai n=64, B-Ligero + Poseidon2 per row)" in ln["empty"]["B-Ligero"]["text"]
     assert ln["empty"]["A-GKR"]["text"] == "results only for a weaker statement (A-GKR CPU (Rust))"
     # the rejected list previews what such a result costs end to end
     pre = next(r for r in views.rejected if r["artifact"] == pos)["end_to_end_preview"]
@@ -281,14 +311,21 @@ def test_table1_carries_the_security_properties(store: LocalStore) -> None:
     full = {c.id for c in V.CONFIGURATIONS if c.full_relation}
     assert full == {"B-Ligero + Poseidon2 per row", "B-Ligero + Poseidon2 shared 64x64 tile", "B-Ligero + BLAKE3 in circuit",
                     "B-Ligero + Ajtai n=64", "B-Ligero + Ajtai n=128"}
-    assert [c.id for c in V.CONFIGURATIONS if c.full_relation and not c.algebraic()] == ["B-Ligero + BLAKE3 in circuit"]
-    assert all(c.bound_basis.startswith(("proven", "conjectured")) for c in V.CONFIGURATIONS)
+    assert [c.id for c in V.CONFIGURATIONS if c.full_relation and not c.scheme_problem()] == ["B-Ligero + BLAKE3 in circuit"]
+    assert all(x.basis.startswith(("proven", "conjectured")) for c in V.CONFIGURATIONS for x in c.proximity)
+    assert all(c.proximity and c.hashes and c.dominant_term for c in V.CONFIGURATIONS)
     committed(store, t_total=0.4)
     rows = dict((r[0], r) for _, r in V.table1_rows(V.build(store)))
-    blake = rows["B-Ligero + BLAKE3 in circuit"]
-    assert blake[V.TABLE1_COLUMNS.index("Soundness (whole-proof bound at its cells)")].startswith(f"2^-128.3 at {FP8_ADA_MMA.name} · B-Ligero")
-    assert "SHA-256 collision resistance" in blake[V.TABLE1_COLUMNS.index("Hash assumption")]
-    assert blake[V.TABLE1_COLUMNS.index("Cells")] == f"{FP8_ADA_MMA.name} · B-Ligero"
+    blake = dict(zip(V.TABLE1_COLUMNS, rows["B-Ligero + BLAKE3 in circuit"]))
+    where = f"{FP8_ADA_MMA.name} · frame-v3 · keyed-BLAKE3 rows · B-Ligero"
+    assert blake["Soundness (whole-proof bound at its cells; dominant term)"].startswith(f"2^-128.3 at {where}")
+    assert "dominant term: proximity-gap term n/|F|" in blake["Soundness (whole-proof bound at its cells; dominant term)"]
+    assert "BLAKE3 (keyed) (statement commitment; collision resistance (row digests); standard)" in blake["Hashes (role; property; class)"]
+    assert blake["Commitment scheme"].startswith("frame-v3 · keyed-BLAKE3 rows (frame-v3/blake3-row; admissible)")
+    assert blake["Proximity bounds"].startswith("Ligero column tests") and "unique decoding, proven" in blake["Proximity bounds"]
+    assert blake["Cells"] == where
+    sp1 = dict(zip(V.TABLE1_COLUMNS, rows["SP1 stock (relation-only / bare guest)"]))
+    assert "Poseidon2-KoalaBear (proof-internal commitment; collision resistance (Merkle trees); algebraic)" in sp1["Hashes (role; property; class)"]
 
 
 def test_cli_json_round_trips_and_parity_exit_codes(store: LocalStore, capsys: pytest.CaptureFixture[str]) -> None:
@@ -297,7 +334,8 @@ def test_cli_json_round_trips_and_parity_exit_codes(store: LocalStore, capsys: p
     assert V.main(["--root", str(store.root), "--format", "json"]) == 0
     js = json.loads(capsys.readouterr().out)
     assert js["schema"] == "verity/tables-views/v1" and js["table2"]["columns"] == ["A-GKR", "B-Ligero", "SP1"]
-    assert len(js["table3"]) == 1 and js["commitment_hashes"] == ["blake3", "sha256"]
+    assert len(js["table3"]) == 1 and js["table3"][0]["scheme"] == BLAKE3_ROW
+    assert [x["id"] for x in js["schemes"] if x["admissible"]] == ["frame-v3/sha256", BLAKE3_ROW]
     assert V.main(["--root", str(store.root), "--rules", "legacy", "--format", "json"]) == 0
     assert json.loads(capsys.readouterr().out)["table2"]["columns"] == ["A-GKR", "B-Ligero", "SP1"]
     assert V.main(["--root", str(store.root), "--parity"]) == 0

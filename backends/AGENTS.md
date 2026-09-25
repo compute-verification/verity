@@ -121,8 +121,9 @@ Table 2 cell, read only from the cell's result envelope (`…` where absent).
 Non-canonical; layout fixed 2026-09-24 (campaign morning-tables BRIEF §1).
 
 The approved spec's tables (`kb/TABLES.md`: Table 1 configurations and their
-security, Table 2 end-to-end N ÷ P per family over the full committed
-relation, Table 3 with commitment) render as a labelled preview with
+security, Table 2 end-to-end N ÷ P per subcircuit, hardware class and
+commitment scheme over the full committed relation on SHA-256/BLAKE3 schemes,
+Table 3 with serving and proving overhead) render as a labelled preview with
 `python -m verity_numerical.bench.views --root <store> [--rules spec|unfiltered|legacy]`;
 `--parity` checks that the legacy-rules views select exactly today's cells
 (the switch's gate). The steward renders it only for a `[[render]]` entry with

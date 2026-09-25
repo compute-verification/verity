@@ -9,16 +9,19 @@ Until the switch (a labelled 6 PM PT digest) the published tables stay :mod:`ver
 
 * **Table 1** -- backend configurations and their security, one entry per backend family followed by its configurations
   (:data:`CONFIGURATIONS`): the statement (the full committed relation or a weaker one) and what the verifier sees of x, W and
-  y; the commitment scheme and leaf; the hash assumption; ZK class and verifier model; soundness, proven or conjectured, with the
-  whole-proof bound at the batching of each cell the configuration holds; setup, interaction and transferability; the pin;
-  ``archived``; the cells it holds (computed).
-* **Table 2** -- end-to-end overhead ``N / P`` per subcircuit and hardware class (one line per
-  ``verity.verification.target.TARGETS`` entry), a native column, one column per backend family (:data:`FAMILIES`).  ``N`` is the
+  y; the commitment scheme (:data:`SCHEMES`); every hash of the soundness argument with its role, property and class; ZK class
+  and verifier model; soundness with the whole-proof bound at the batching of each cell it holds and the dominant term; the
+  proximity bounds (regime, proven or conjectured); transferability; assumptions; the pin; ``archived``; its cells (computed).
+* **Table 2** -- end-to-end overhead ``N / P`` per subcircuit, hardware class and admissible commitment scheme (one line per
+  ``verity.verification.target.TARGETS`` entry and scheme some configuration declares), a native column, one column per
+  backend family (:data:`FAMILIES`).  ``N`` is the
   compute-bound datasheet estimate (:func:`native`); ``P`` is instances per second end to end, committing the batch's values and
   then proving (:func:`throughput`).  A cell is the family's best admissible configuration (highest ``P``, ties to the lower
-  artifact id) that proves the full relation and passes the view's filters (:class:`Rules`), marked ``(prov.)`` while its
+  artifact id) that proves the full relation over an admissible scheme and passes the view's filters (:class:`Rules`: by
+  default a whole-proof bound of 2^-128 and no algebraic hash in the soundness argument), marked ``(prov.)`` while its
   configuration's statement has no red-team clearance on that subcircuit.
-* **Table 3** -- where the time goes: seconds per instance of commitment and of each proving bucket, with shares of end to end.
+* **Table 3** -- where the time goes: seconds per instance of commitment and of each proving bucket, with shares of end to end,
+  and the cell split into serving overhead (commitment x N) and proving overhead (proving x N).
 
 Every rejected result is listed with its first reason (:data:`REASON_LETTERS`, the spec's order); ``--format json`` has them all.
 
@@ -61,17 +64,43 @@ COMMIT = "commit.seconds"
 #: v1 in-proof-hash results record their commitment once, before the timed runs (possibly a tree cache load): shown, never counted.
 COMMIT_V1 = "relation.hash.commit_seconds"
 MIN_RUNS = 5
-#: Hash functions a Table 2 commitment may use: SHA-256 and BLAKE3 only, no algebraic hash (user decision, 2026-09-25).
-COMMITMENT_HASHES = frozenset({"sha256", "blake3"})
-ALGEBRAIC_HASHES = frozenset({"poseidon2-babybear", "ajtai-ring-sis"})
-
 #: The spec's reject reasons, in the order they are checked; ``B`` exists only under the legacy rules (today's batch and K).
 REASON_LETTERS: dict[str, str] = {
     "R": "weaker statement than the full relation", "Z": "not the family's declared class",
-    "S": "in-proof hashing other than the headline's", "L": "below the view's security filter", "U": "not independently verified",
-    "F": "proof files not preserved", "I": "another instance set", "K": "prover not on the line's GPU", "P": "phase-sum",
-    "M": "protocol not met", "D": "capped by a red-team verdict", "X": "other", "B": "legacy: batch != 4096 or K != 1536"}
+    "S": "commitments on an inadmissible scheme", "L": "fails the view's security filter (the bound, or an algebraic hash)",
+    "U": "not independently verified", "F": "proof files not preserved", "I": "another instance set", "K": "prover not on the line's GPU",
+    "P": "phase-sum", "M": "protocol not met", "D": "capped by a red-team verdict", "X": "other", "B": "legacy: batch != 4096 or K != 1536"}
 _ORDER = {k: i for i, k in enumerate(REASON_LETTERS)}
+
+
+# --- commitment schemes -----------------------------------------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Scheme:
+    """A commitment scheme with the hash of its leaves (one Table 2 line per subcircuit, hardware class and admissible scheme).
+    ``core`` is where ``verity.commitments`` defines it (``None``: not defined there); ``standard``: built only on SHA-256 or BLAKE3."""
+
+    id: str
+    label: str
+    core: str | None
+    standard: bool
+
+    @property
+    def admissible(self) -> bool:
+        return self.core is not None and self.standard
+
+
+SCHEMES: tuple[Scheme, ...] = (
+    Scheme("frame-v3/sha256", "frame-v3 · SHA-256", "verity.commitments.merkle (frame-v3 word leaves; the SHA-256 row leaf is core-schemes')", True),
+    Scheme("frame-v3/blake3-row", "frame-v3 · keyed-BLAKE3 rows",
+           "verity.commitments.merkle trees; the keyed-BLAKE3 row-leaf schema is promoted from backends/direct/ligero/leaf/blake3.py (core-schemes)", True),
+    Scheme("vllm-v1", "vllm-v1 · SHA-256", None, True),
+    Scheme("frame-v3/poseidon2-row", "frame-v3 · Poseidon2 rows", "verity.commitments.rowleaf (leaf/v2h)", False),
+    Scheme("frame-v3/poseidon2-tile", "frame-v3 · Poseidon2 64x64 tiles", None, False),
+    Scheme("frame-v3/ajtai-row", "frame-v3 · Ajtai rows", None, False),
+)
+_SCHEME = {s.id: s for s in SCHEMES}
 
 
 # --- Table 1: families and configurations ------------------------------------------------------------------------------------------
@@ -92,32 +121,76 @@ FAMILIES: tuple[Family, ...] = tuple(Family(c.id, c.proof_classes, c.description
 _FAMILY = {f.id: f for f in FAMILIES}
 _CANDIDATE = {c.id: c for c in T.CANDIDATES}
 
+
+@dataclass(frozen=True)
+class Hash:
+    """One hash the soundness argument relies on: its role (statement commitment, proof-internal commitment, Fiat–Shamir and
+    coins), the property assumed (collision resistance, random oracle) and whether it is algebraic."""
+
+    name: str
+    role: str
+    prop: str
+    algebraic: bool = False
+
+    def text(self) -> str:
+        return f"{self.name} ({self.role}; {self.prop}; {'algebraic' if self.algebraic else 'standard'})"
+
+
+@dataclass(frozen=True)
+class Proximity:
+    """One code-based component's proximity bound: the decoding regime its terms use and whether the bound is proven (with its
+    theorem) or conjectured."""
+
+    component: str
+    regime: str
+    basis: str
+
+    def text(self) -> str:
+        return f"{self.component}: {self.regime}, {self.basis}"
+
+
 FULL = "full relation"
 _WEAK_PUBLIC = "weaker: operands public, no commitment (the verifier could recompute y)"
 _WEAK_PRIVATE = "weaker: operands private and bound to nothing"
 _WEAK_REHASH = "weaker: operands published for the verifier to re-hash (it could recompute y)"
-_UDR = "proven: unique-decoding proximity bound (BCIKS20, AHIV22 App. C), union-bounded over sub-batch proofs"
-_UDR_SP1 = "proven: soundcalc's unique-decoding terms, union-bounded over shard proofs"
-_FS = "; the Fiat–Shamir variant adds the random-oracle query term"
+_STMT, _INTERNAL, _COINS = "statement commitment", "proof-internal commitment", "Fiat–Shamir / coins"
+_CR, _RO = "collision resistance", "random oracle"
+_B_HASHES = (Hash("BLAKE3", _INTERNAL, _CR), Hash("BLAKE2b", _COINS, _CR + " (coin commitments)"), Hash("SHAKE-256", _COINS, "PRG of the verifier's coins"))
+_B_FS_HASHES = (Hash("BLAKE3", _INTERNAL, _CR), Hash("BLAKE3 / BLAKE2b", _COINS, _RO + " (Fiat–Shamir)"), Hash("SHAKE-256", _COINS, _RO))
+_SHA256_STMT = Hash("SHA-256", _STMT, _CR + " (frame-v3 trees)")
+_LIGERO_UDR = (Proximity("Ligero column tests (interleaved RS, rate 1/4)", "unique decoding", "proven (AHIV22 App. C; BCIKS20 Thm 1.2)"),)
+_B_DOMINANT = ("proximity-gap term n/|F| per sub-batch proof (n = code length); the whole-proof bound adds log2(proofs), so it grows "
+               "with the batch through the number of proofs")
+_B_ASSUME = "BabyBear with its extension for challenges; interactive: statistical given the committed coins (HM96)"
+_SP1_HASHES = (Hash("Poseidon2-KoalaBear", _INTERNAL, _CR + " (Merkle trees)", True), Hash("Poseidon2-KoalaBear", _COINS, _RO + " (challenger)", True))
+_SP1_PROX = (Proximity("FRI", "unique decoding", "proven (soundcalc UDR terms; BCIKS20)"),)
+_SP1_DOMINANT = ("field-bound terms over KoalaBear^4 (|F| = 2^123.95), LogUp-GKR 2^-100.3 per shard; the whole-proof bound adds "
+                 "log2(shards), and shards grow with the batch")
+_SP1_ASSUME = "KoalaBear^4 challenges; zerocheck and jagged-reduction lemmas as SP1 states them"
+_AGKR_PROX = (Proximity("Ligero IRS polynomial commitment", "unique decoding", "proven (BCIKS20 Thm 1.2, n/|F|^sigma)"),)
+_AGKR_DOMINANT = "IRS query term (2^-130.2 at t = 192) and the LogUp identity term; the (n+1)/|F|^sigma term grows with the committed length n"
 
 
 @dataclass(frozen=True)
 class Configuration:
-    """One Table 1 row.  ``id`` is the ``drilldown.VARIANTS`` entry it adapts (v1 results carry no configuration id); the
-    ZK, binding and soundness words are that entry's, and ``hashes`` are the hash functions the *statement's* commitments use
-    (empty when the statement commits nothing).  ``unsupported`` maps a target name to the backend's declared reason (``n/s``)."""
+    """One Table 1 row.  ``id`` is the ``drilldown.VARIANTS`` entry it adapts (v1 results carry no configuration id); the ZK and
+    per-proof soundness words are that entry's.  ``scheme`` is the :data:`SCHEMES` id its statements bind (``None``: the statement
+    commits nothing); ``hashes`` is every hash the soundness argument relies on.  ``unsupported`` maps a target name to the
+    backend's declared reason (``n/s``)."""
 
     id: str
     family: str | None
     statement: str
     ports: str
+    scheme: str | None
     commitment: str
-    hashes: tuple[str, ...]
-    hash_assumption: str
+    hashes: tuple[Hash, ...]
     zk: str
     soundness: str
-    bound_basis: str
+    dominant_term: str
+    proximity: tuple[Proximity, ...]
     transferability: str
+    assumptions: str
     pin: str
     archived: bool = False
     unsupported: Mapping[str, str] = field(default_factory=dict)
@@ -126,64 +199,92 @@ class Configuration:
     def full_relation(self) -> bool:
         return self.statement == FULL
 
-    def algebraic(self) -> tuple[str, ...]:
-        return tuple(h for h in self.hashes if h not in COMMITMENT_HASHES)
+    def algebraic(self) -> tuple[Hash, ...]:
+        return tuple(h for h in self.hashes if h.algebraic)
+
+    def scheme_problem(self) -> str | None:
+        """Why the statement's commitments are on an inadmissible scheme (reason S), or ``None``."""
+        s = _SCHEME.get(self.scheme) if self.scheme else None
+        if s is None:
+            return f"{self.id} binds no scheme of verity.commitments"
+        if not s.standard:
+            return f"{self.id} commits with {s.label}: Table 2 commitments are built only on SHA-256 or BLAKE3"
+        if s.core is None:
+            return f"{self.id} commits with {s.label}, which verity.commitments does not define yet"
+        return None
 
 
-def _cfg(vid: str, statement: str, ports: str, commitment: str, hashes: tuple[str, ...], bound_basis: str, transferability: str,
-         pin: str, **kw: Any) -> Configuration:
+def _cfg(vid: str, statement: str, ports: str, scheme: str | None, commitment: str, hashes: tuple[Hash, ...], dominant: str,
+         proximity: tuple[Proximity, ...], transferability: str, assumptions: str, pin: str, **kw: Any) -> Configuration:
     v = D._BY_ID[vid]
-    return Configuration(vid, v.candidate, statement, ports, commitment, hashes, v.binding, v.zk, v.soundness, bound_basis,
-                         transferability, pin, **kw)
+    return Configuration(vid, v.candidate, statement, ports, scheme, commitment, hashes, v.zk, v.soundness, dominant, proximity,
+                         transferability, assumptions, pin, **kw)
 
 
 _B_PIN = "ligero-verify's per-relation system pin (src/relation.rs) and statement digest"
 _B_LIVE = "interactive: live-verifier-only (a file replay of the runner's coins is not transferable, D7)"
-_B_BARE = ("x, W, y public", "none: the statement publishes the operands; the witness is under BLAKE3 Merkle trees")
+_B_BARE = ("x, W, y public", None, "none: the statement publishes the operands; the witness is under BLAKE3 Merkle trees")
 _H_PORTS = "x, W committed (private); y committed"
+_IN_PROOF = "; the proof computes the row digests and publishes them, the verifier checks them against the trees natively"
+_B_KW = dict(dominant=_B_DOMINANT, proximity=_LIGERO_UDR, transferability=_B_LIVE)
 CONFIGURATIONS: tuple[Configuration, ...] = (
-    *(_cfg(vid, _WEAK_PUBLIC, *_B_BARE, (), _UDR, _B_LIVE, _B_PIN) for vid in (
+    *(_cfg(vid, _WEAK_PUBLIC, *_B_BARE, _B_HASHES, assumptions=_B_ASSUME, pin=_B_PIN, **_B_KW) for vid in (
         "B-Ligero v1", "B-Ligero v3 (private selection)", "B-Ligero v3 fused hints", "B-Ligero v3x4 fused (l=4096)",
         "B-Ligero v1x4 (fold)", "B-Ligero v3x4 (fold)", "B-Ligero v2 (public selection)", "B-Ligero v2x4 (public selection)")),
-    _cfg("B-Ligero Fiat–Shamir (HVZK)", _WEAK_PUBLIC, *_B_BARE, (), _UDR + _FS, "transferable (Fiat–Shamir)", _B_PIN),
-    _cfg("B-Ligero + Poseidon2 per row", FULL, _H_PORTS,
-         "SHA-256 Merkle trees over Poseidon2-BabyBear (w24) row digests, one per operand row, no sharing; hashed inside the proof",
-         ("sha256", "poseidon2-babybear"), _UDR, _B_LIVE, _B_PIN + "; leaf schema poseidon2-babybear-w24/*"),
+    _cfg("B-Ligero Fiat–Shamir (HVZK)", _WEAK_PUBLIC, *_B_BARE, _B_FS_HASHES, _B_DOMINANT + "; plus the Fiat–Shamir query term",
+         _LIGERO_UDR, "transferable (Fiat–Shamir)", "BabyBear with its extension for challenges", _B_PIN),
+    _cfg("B-Ligero + Poseidon2 per row", FULL, _H_PORTS, "frame-v3/poseidon2-row",
+         "frame-v3 SHA-256 trees over Poseidon2-BabyBear (w24) row digests (leaf/v2h), one per operand row" + _IN_PROOF,
+         (_SHA256_STMT, Hash("Poseidon2-BabyBear", _STMT, _CR + " (row digests)", True), *_B_HASHES), assumptions=_B_ASSUME,
+         pin=_B_PIN + "; leaf schema poseidon2-babybear-w24/row/v2h", **_B_KW),
     _cfg("B-Ligero + Poseidon2 shared 64x64 tile", FULL, _H_PORTS + " (a fingerprint discloses linear information, F8)",
-         "SHA-256 Merkle trees over Poseidon2-BabyBear digests of 64x64 shared tiles; hashed inside the proof",
-         ("sha256", "poseidon2-babybear"), _UDR, _B_LIVE, _B_PIN),
-    _cfg("B-Ligero + BLAKE3 in circuit", FULL, _H_PORTS,
-         "SHA-256 Merkle trees over role-keyed, n_chunks-framed BLAKE3 leaves; BLAKE3 evaluated inside the proof",
-         ("sha256", "blake3"), _UDR, _B_LIVE, _B_PIN + "; leaf schema blake3/*"),
-    _cfg("B-Ligero + Ajtai n=64", FULL, _H_PORTS + " (binding only, not hiding)",
-         "SHA-256 Merkle trees over Ajtai (Ring-SIS, n = 64) row digests; hashed inside the proof", ("sha256", "ajtai-ring-sis"),
-         _UDR, _B_LIVE, _B_PIN + "; steps <= n enforced (steps-pin)"),
-    _cfg("B-Ligero + Ajtai n=128", FULL, _H_PORTS + " (binding only, not hiding)",
-         "SHA-256 Merkle trees over Ajtai (Ring-SIS, n = 128) row digests; hashed inside the proof", ("sha256", "ajtai-ring-sis"),
-         _UDR, _B_LIVE, _B_PIN + "; steps <= n enforced (steps-pin)"),
-    _cfg("B-Ligero native external authentication", _WEAK_REHASH, "x, W, y public",
-         "SHA-256 Merkle roots of x, W, y, recomputed by the verifier from the published words", ("sha256",), _UDR, _B_LIVE, _B_PIN),
-    _cfg("Ligerito", "weaker: the a/b words are statement rows (public)", "x, W public", "none (BLAKE3 Merkle over the witness)", (),
-         "proven: PCS term per level (Ligerito paper (17)) plus field terms", "interactive (live verify session)", "unknown"),
-    _cfg("A-GKR CPU (Rust)", _WEAK_PRIVATE, "x, W private (unbound); y public endpoints",
-         "none for the operands (SHA-256 Merkle over the RS columns is proof-internal)", (), _UDR + " (Goldilocks^3 or BabyBear^6)",
-         "transferable (SHA-256 Fiat–Shamir)", "unknown"),
-    _cfg("A-GKR GPU (torch/Triton)", _WEAK_PRIVATE, "x, W private (unbound); y public endpoints",
-         "none for the operands (SHA-512 Merkle over the RS columns is proof-internal)", (), _UDR + " (BabyBear^6)",
-         "transferable (SHA-256 Fiat–Shamir coins)", "verity-gkr-verify refuses a circuit set its pins.txt does not list (PR #13)"),
-    _cfg("SP1 stock (relation-only / bare guest)", _WEAK_PRIVATE, "x, W guest input (unbound)", "none for the operands", (), _UDR_SP1,
-         "transferable (STARK, Fiat–Shamir)", "verifying key (guest ELF digest), sp1-sdk =6.4.0"),
-    _cfg("SP1 stock, FRI query count raised (otherwise unmodified)", _WEAK_PRIVATE, "x, W guest input (unbound)",
-         "none for the operands", (), _UDR_SP1 + "; FRI query term proven at 2^-134.7", "transferable (STARK, Fiat–Shamir)",
-         "verifying key (guest ELF digest), sp1 6.6.0 with core FRI queries 175"),
-    _cfg("SP1 precompile (TC_DOT chip)", _WEAK_PRIVATE, "x, W guest input (unbound)", "none for the operands", (), _UDR_SP1,
-         "transferable (STARK, Fiat–Shamir)", "verifying key plus the TC_DOT fork commit"),
+         "frame-v3/poseidon2-tile", "SHA-256 trees over Poseidon2-BabyBear digests of 64x64 shared tiles" + _IN_PROOF,
+         (_SHA256_STMT, Hash("Poseidon2-BabyBear", _STMT, _CR + " (tile digests)", True), *_B_HASHES),
+         assumptions=_B_ASSUME + "; the fingerprint-collision bound (F7)", pin=_B_PIN, **_B_KW),
+    _cfg("B-Ligero + BLAKE3 in circuit", FULL, _H_PORTS, "frame-v3/blake3-row",
+         "frame-v3 SHA-256 trees over role-keyed, n_chunks-framed keyed-BLAKE3 row digests" + _IN_PROOF,
+         (_SHA256_STMT, Hash("BLAKE3 (keyed)", _STMT, _CR + " (row digests)"), *_B_HASHES), assumptions=_B_ASSUME,
+         pin=_B_PIN + "; leaf schema blake3-keyed/row/*", **_B_KW),
+    _cfg("B-Ligero + Ajtai n=64", FULL, _H_PORTS + " (binding only, not hiding)", "frame-v3/ajtai-row",
+         "SHA-256 trees over Ajtai (Ring-SIS, n = 64) row digests" + _IN_PROOF,
+         (_SHA256_STMT, Hash("Ajtai n=64 (linear digest)", _STMT, "Ring-SIS binding", True), *_B_HASHES),
+         assumptions=_B_ASSUME + "; Ring-SIS over F_p[X]/(X^64 + 1); rows of <= 64 columns (steps-pin)", pin=_B_PIN + "; steps <= n", **_B_KW),
+    _cfg("B-Ligero + Ajtai n=128", FULL, _H_PORTS + " (binding only, not hiding)", "frame-v3/ajtai-row",
+         "SHA-256 trees over Ajtai (Ring-SIS, n = 128) row digests" + _IN_PROOF,
+         (_SHA256_STMT, Hash("Ajtai n=128 (linear digest)", _STMT, "Ring-SIS binding", True), *_B_HASHES),
+         assumptions=_B_ASSUME + "; Ring-SIS over F_p[X]/(X^128 + 1); rows of <= 128 columns (steps-pin)", pin=_B_PIN + "; steps <= n", **_B_KW),
+    _cfg("B-Ligero native external authentication", _WEAK_REHASH, "x, W, y public", "frame-v3/sha256",
+         "frame-v3 SHA-256 trees over the words of x, W, y, recomputed by the verifier from the published words",
+         (_SHA256_STMT, *_B_HASHES), assumptions=_B_ASSUME, pin=_B_PIN, **_B_KW),
+    _cfg("Ligerito", "weaker: the a/b words are statement rows (public)", "x, W public", None, "none (BLAKE3 Merkle over the witness)",
+         _B_HASHES, "PCS term per level (Ligerito (17)) plus field terms; sumcheck 184/|F|",
+         (Proximity("Ligerito PCS", "unique decoding", "proven (Ligerito paper eq. (17), sampling base ((1+rho)/2)^|S|)"),),
+         "interactive (live verify session)", "binary extension field; the PCS ZK gap is open (red-team-ligerito-3)", "unknown"),
+    _cfg("A-GKR CPU (Rust)", _WEAK_PRIVATE, "x, W private (unbound); y public endpoints", None,
+         "none for the operands (SHA-256 Merkle over the RS columns is proof-internal)",
+         (Hash("SHA-256", _INTERNAL, _CR), Hash("SHA-256", _COINS, _RO + " (Fiat–Shamir)")), _AGKR_DOMINANT, _AGKR_PROX,
+         "transferable (SHA-256 Fiat–Shamir)", "Goldilocks^3 (or BabyBear^6); LogUp fractional-sum soundness", "unknown"),
+    _cfg("A-GKR GPU (torch/Triton)", _WEAK_PRIVATE, "x, W private (unbound); y public endpoints", None,
+         "none for the operands (SHA-512 Merkle over the RS columns is proof-internal)",
+         (Hash("SHA-512", _INTERNAL, _CR), Hash("SHA-256", _COINS, _RO + " (Fiat–Shamir coins)")), _AGKR_DOMINANT, _AGKR_PROX,
+         "transferable (SHA-256 Fiat–Shamir coins)", "BabyBear^6; LogUp fractional-sum soundness",
+         "verity-gkr-verify refuses a circuit set its pins.txt does not list (PR #13)"),
+    _cfg("SP1 stock (relation-only / bare guest)", _WEAK_PRIVATE, "x, W guest input (unbound)", None, "none for the operands",
+         _SP1_HASHES, _SP1_DOMINANT, _SP1_PROX, "transferable (STARK, Fiat–Shamir)", _SP1_ASSUME,
+         "verifying key (guest ELF digest), sp1-sdk =6.4.0"),
+    _cfg("SP1 stock, FRI query count raised (otherwise unmodified)", _WEAK_PRIVATE, "x, W guest input (unbound)", None,
+         "none for the operands", _SP1_HASHES, _SP1_DOMINANT + "; the FRI query term is 2^-134.7", _SP1_PROX,
+         "transferable (STARK, Fiat–Shamir)", _SP1_ASSUME, "verifying key (guest ELF digest), sp1 6.6.0 with core FRI queries 175"),
+    _cfg("SP1 precompile (TC_DOT chip)", _WEAK_PRIVATE, "x, W guest input (unbound)", None, "none for the operands", _SP1_HASHES,
+         _SP1_DOMINANT, _SP1_PROX, "transferable (STARK, Fiat–Shamir)", _SP1_ASSUME + "; the TC_DOT chip's constraints",
+         "verifying key plus the TC_DOT fork commit"),
 )
 _CONFIG = {c.id: c for c in CONFIGURATIONS}
 assert set(_CONFIG) == set(D._BY_ID), "every drilldown.VARIANTS entry is a declared configuration"
 
-TABLE1_COLUMNS = ("Configuration", "Statement", "x, W, y", "Commitment scheme and leaf", "Hash assumption", "ZK and verifier model",
-                  "Soundness (whole-proof bound at its cells)", "Bound", "Transferability", "Pin", "Archived", "Cells")
+TABLE1_COLUMNS = ("Configuration", "Statement", "x, W, y", "Commitment scheme", "Hashes (role; property; class)", "ZK and verifier model",
+                  "Soundness (whole-proof bound at its cells; dominant term)", "Proximity bounds", "Transferability", "Assumptions",
+                  "Pin", "Archived", "Cells")
 
 
 def configuration_of(meta: Mapping[str, Any], configurations: Mapping[str, Configuration] | None = None) -> Configuration | None:
@@ -217,19 +318,21 @@ def native(target: Target, K: int = T.K) -> dict[str, Any]:
 
 @dataclass(frozen=True)
 class Rules:
-    """A view's parameters.  ``security_log2``: the whole-proof bound filter (``None`` = unfiltered).  ``legacy``: today's
+    """A view's parameters.  ``security_log2``: the whole-proof bound filter (``None`` = unfiltered); ``standard_hashes``: the
+    published view's second filter, no algebraic hash anywhere in the soundness argument.  ``legacy``: today's
     parameters (the parity render): B = 4096 and K = 1536, the frozen range, security.target also <= the filter, the bare and
     ``+ in-proof hash`` columns instead of the full relation, proving time only, no custody or protocol check."""
 
     name: str
     security_log2: float | None = -128
+    standard_hashes: bool = True
     legacy: bool = False
     include_archived: bool = False
 
 
 SPEC = Rules("spec")
-UNFILTERED = Rules("unfiltered", security_log2=None)
-LEGACY = Rules("legacy", legacy=True)
+UNFILTERED = Rules("unfiltered", security_log2=None, standard_hashes=False)
+LEGACY = Rules("legacy", legacy=True, standard_hashes=False)
 RULES = {r.name: r for r in (SPEC, UNFILTERED, LEGACY)}
 
 
@@ -325,9 +428,12 @@ def _protocol(meta: Mapping[str, Any], config: Configuration | None) -> str | No
     return None
 
 
-def _security(fp: Mapping[str, Any], rules: Rules) -> list[tuple[str, str]]:
+def _security(fp: Mapping[str, Any], rules: Rules, config: Configuration | None) -> list[tuple[str, str]]:
+    out = []
+    if rules.standard_hashes and config is not None and config.algebraic():
+        out.append(("L", "an algebraic hash in the soundness argument: " + "; ".join(h.text() for h in config.algebraic())))
     if rules.security_log2 is None:
-        return []
+        return out
     if rules.legacy:
         out = []
         tgt, ach = _get(fp, "security", "target"), _get(fp, "security", "achieved_log2")
@@ -338,8 +444,8 @@ def _security(fp: Mapping[str, Any], rules: Rules) -> list[tuple[str, str]]:
         return out
     bound = whole_proof_log2(fp)
     if bound is None or bound > rules.security_log2:
-        return [("L", f"whole-proof bound {_fmt_bound(bound)} is below the filter 2^{rules.security_log2:g}")]
-    return []
+        out.append(("L", f"whole-proof bound {_fmt_bound(bound)} is below the filter 2^{rules.security_log2:g}"))
+    return out
 
 
 def _instances(ctx: Ctx, rules: Rules, equivs: Sequence[T.InstanceEquiv], self_: set[str]) -> list[tuple[str, str]]:
@@ -385,14 +491,14 @@ def reject_codes(store: Any, ctx: Ctx, rules: Rules, equivs: Sequence[T.Instance
     else:
         if not ctx.config.full_relation:
             p.append(("R", f"{ctx.config.id}: {ctx.config.statement}"))
-        elif ctx.config.algebraic():
-            p.append(("R", f"{ctx.config.id} commits with {', '.join(ctx.config.algebraic())}: Table 2 commitments are SHA-256 / BLAKE3 only"))
+        elif ctx.config.scheme_problem():
+            p.append(("S", ctx.config.scheme_problem()))
         if ctx.config.archived and not rules.include_archived:
             p.append(("X", f"{ctx.config.id} is archived (hidden by default)"))
     # Z: the family's declared class (diagnostic modes never enter)
     if pc not in ctx.family.declared_classes:
         p.append(("Z", f"proof_class {pc!r} is not {ctx.family.id}'s declared class {' | '.join(ctx.family.declared_classes)}"))
-    p += _security(fp, rules)
+    p += _security(fp, rules, ctx.config)
     if ctx.attempt is None and not self_:
         p.append(("U", "not independently verified: no attempt and no named producer"))
     elif T._verified_by(labs, self_) is None:
@@ -455,6 +561,7 @@ class ViewCell:
     provisional: str | None
     legacy: T.Cell
     batching: dict[str, Any]
+    scheme: str | None = None
     unfiltered: dict[str, Any] | None = None
 
     def to_json(self) -> dict[str, Any]:
@@ -513,20 +620,27 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
     for c in entries:
         c.statement_labels = by_statement[(c.config.id if c.config else None, c.target.name)] if c.config else c.labels
 
-    pools: dict[tuple[str, str], list[tuple[Ctx, dict[str, Any]]]] = {}
-    unfiltered: dict[tuple[str, str], list[tuple[Ctx, dict[str, Any]]]] = {}
+    line_schemes: list[str | None] = [None] if rules.legacy else [
+        s.id for s in SCHEMES if s.admissible and any(c.scheme == s.id for c in configurations)]
+
+    def scheme_of(c: Ctx) -> str | None:
+        return c.config.scheme if not rules.legacy and c.config is not None and c.config.scheme in line_schemes else None
+
+    Key = tuple[str, str | None, str]
+    pools: dict[Key, list[tuple[Ctx, dict[str, Any]]]] = {}
+    unfiltered: dict[Key, list[tuple[Ctx, dict[str, Any]]]] = {}
     for c in entries:
         codes = reject_codes(store, c, rules, equivs)
         P = throughput(c.meta, rules)
-        key = (c.target.name, _column(c, rules))
+        key = (c.target.name, scheme_of(c), _column(c, rules))
         if not codes and P is not None:
             pools.setdefault(key, []).append((c, P))
             continue
-        if rules.security_log2 is not None and all(k == "L" for k, _ in codes) and P is not None:
+        if (rules.security_log2 is not None or rules.standard_hashes) and all(k == "L" for k, _ in codes) and P is not None:
             unfiltered.setdefault(key, []).append((c, P))
         rid, _ = T._attempt_of(store, c.art)
         entry = {"artifact": c.art, "family": c.family.id, "configuration": c.config.id if c.config else None, "line": c.target.name,
-                 "column": key[1], "attempt": rid, "codes": codes or [("X", "no positive t.total and batch")]}
+                 "scheme": key[1], "column": key[2], "attempt": rid, "codes": codes or [("X", "no positive t.total and batch")]}
         if P is not None and not rules.legacy and c.config is not None and c.config.full_relation:
             commit = P["commit_s"] or P["commit_v1_s"] or 0.0
             n = native(c.target)["instances_per_second"]
@@ -537,59 +651,64 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
     def best(pool: list[tuple[Ctx, dict[str, Any]]]) -> tuple[Ctx, dict[str, Any]] | None:
         return min(pool, key=lambda cp: (-cp[1]["instances_per_second"], cp[0].art)) if pool else None
 
+    def pick(c: Ctx, P: Mapping[str, Any], N: float) -> dict[str, Any]:
+        return {"artifact": c.art, "configuration": c.config.id if c.config else None, "bound_log2": whole_proof_log2(c.meta["workload_fingerprint"]),
+                "hashes": [h.text() for h in (c.config.hashes if c.config else ())], "overhead": N / P["instances_per_second"]}
+
+    columns = [f.id for f in FAMILIES] + ([f.id + T.AUTH_COLUMN_SUFFIX["included-hash"] for f in FAMILIES] if rules.legacy else [])
     for target in TARGETS.values():
         N = native(target)
-        line: dict[str, Any] = {"line": target.name, "status": target.status, "device": target.native_peak.device, "native": N,
-                                "instruction": target.instruction, "cells": {}, "empty": {}}
-        columns = [f.id for f in FAMILIES]
-        if rules.legacy:
-            columns += [f.id + T.AUTH_COLUMN_SUFFIX["included-hash"] for f in FAMILIES]
-        for col in columns:
-            hit = best(pools.get((target.name, col), []))
-            if hit is None:
-                line["cells"][col] = None
-                line["empty"][col] = _empty_reason(V.rejected, target, col, configurations)
-                continue
-            c, P = hit
-            vb = T.independent_verification(c.meta, c.labels, c.attempt)
-            cell = ViewCell(line=target.name, column=col, artifact=c.art, configuration=c.config.id if c.config else None,
-                            native=N["instances_per_second"], throughput=P, overhead=N["instances_per_second"] / P["instances_per_second"],
-                            bound_log2=whole_proof_log2(c.meta["workload_fingerprint"]),
-                            provisional=None if rules.legacy else provisional(c),
-                            legacy=T._cell(c.meta, c.art, T._attempt_of(store, c.art)[0], target, _CANDIDATE[c.family.id],
-                                           vb.by if vb else None, T.instances_equiv_of(c.meta, c.labels, c.attempt, target, equivs)),
-                            batching=_batching(c.meta["workload_fingerprint"]))
-            alt = best(pools.get((target.name, col), []) + unfiltered.get((target.name, col), []))
-            if alt is not None and alt[0].art != c.art:
-                ac, aP = alt
-                cell.unfiltered = {"artifact": ac.art, "configuration": ac.config.id if ac.config else None,
-                                   "bound_log2": whole_proof_log2(ac.meta["workload_fingerprint"]),
-                                   "overhead": N["instances_per_second"] / aP["instances_per_second"]}
-            line["cells"][col] = cell
-            V.cells.append(cell)
-        if rules.security_log2 is not None:
+        for scheme in line_schemes:
+            line: dict[str, Any] = {"line": target.name, "scheme": scheme, "scheme_label": _SCHEME[scheme].label if scheme else None,
+                                    "status": target.status, "device": target.native_peak.device, "native": N,
+                                    "instruction": target.instruction, "cells": {}, "empty": {}}
             for col in columns:
-                if line["cells"][col] is None and unfiltered.get((target.name, col)):
-                    ac, aP = best(unfiltered[(target.name, col)])
-                    line["empty"][col] = {"state": "below-filter", "text": (
-                        f"only below the filter: unfiltered pick {ac.config.id if ac.config else ac.family.id} {ac.art}, bound "
-                        f"{_fmt_bound(whole_proof_log2(ac.meta['workload_fingerprint']))}, {T.fmt_overhead(N['instances_per_second'] / aP['instances_per_second'])}")}
-        V.lines.append(line)
+                key = (target.name, scheme, col)
+                hit = best(pools.get(key, []))
+                if hit is None:
+                    line["cells"][col] = None
+                    line["empty"][col] = _empty_reason(V.rejected, target, scheme, line_schemes, col, configurations)
+                    if unfiltered.get(key):
+                        u = pick(*best(unfiltered[key]), N["instances_per_second"])
+                        line["empty"][col] = {"state": "below-filter", "unfiltered": u, "text": (
+                            f"only below the filter: unfiltered pick {u['configuration']} {u['artifact']}, bound {_fmt_bound(u['bound_log2'])}, "
+                            f"hashes {'; '.join(u['hashes'])}, {T.fmt_overhead(u['overhead'])}")}
+                    continue
+                c, P = hit
+                vb = T.independent_verification(c.meta, c.labels, c.attempt)
+                cell = ViewCell(line=target.name, column=col, artifact=c.art, configuration=c.config.id if c.config else None,
+                                native=N["instances_per_second"], throughput=P, overhead=N["instances_per_second"] / P["instances_per_second"],
+                                bound_log2=whole_proof_log2(c.meta["workload_fingerprint"]),
+                                provisional=None if rules.legacy else provisional(c),
+                                legacy=T._cell(c.meta, c.art, T._attempt_of(store, c.art)[0], target, _CANDIDATE[c.family.id],
+                                               vb.by if vb else None, T.instances_equiv_of(c.meta, c.labels, c.attempt, target, equivs)),
+                                batching=_batching(c.meta["workload_fingerprint"]), scheme=scheme)
+                alt = best(pools.get(key, []) + unfiltered.get(key, []))
+                if alt is not None and alt[0].art != c.art:
+                    cell.unfiltered = pick(*alt, N["instances_per_second"])
+                line["cells"][col] = cell
+                V.cells.append(cell)
+            V.lines.append(line)
     return V
 
 
-def _empty_reason(rejected: Sequence[Mapping[str, Any]], target: Target, col: str, configurations: Sequence[Configuration]) -> dict[str, Any]:
+def _empty_reason(rejected: Sequence[Mapping[str, Any]], target: Target, scheme: str | None, line_schemes: Sequence[str | None],
+                  col: str, configurations: Sequence[Configuration]) -> dict[str, Any]:
     """Why a cell is empty: ``n/s`` when every configuration of the family declares the subcircuit unsupported, else what its
-    results lack (weaker statements only, or the first reasons that apply)."""
+    results lack (weaker statements or inadmissible schemes only, or the first reasons that apply).  A result on no line's
+    scheme counts on every scheme line of its subcircuit and hardware class."""
     fam = [c for c in configurations if c.family == col]
     if fam and all(target.name in c.unsupported for c in fam):
         return {"state": "n/s", "text": "; ".join(sorted({c.unsupported[target.name] for c in fam}))}
-    mine = [r for r in rejected if r.get("line") == target.name and r.get("column") == col]
+    mine = [r for r in rejected if r.get("line") == target.name and r.get("column") == col
+            and (r.get("scheme") == scheme or r.get("scheme") not in line_schemes)]
     if not mine:
         return {"state": "none", "text": "no result"}
-    if all(r["codes"][0][0] == "R" for r in mine):
-        cfgs = sorted({str(r["configuration"]) for r in mine})
-        return {"state": "weaker", "text": f"results only for a weaker statement ({', '.join(cfgs)})"}
+    if all(r["codes"][0][0] in ("R", "S") for r in mine):
+        weak = sorted({str(r["configuration"]) for r in mine if r["codes"][0][0] == "R"})
+        bad = sorted({str(r["configuration"]) for r in mine if r["codes"][0][0] == "S"})
+        parts = ([f"a weaker statement ({', '.join(weak)})"] if weak else []) + ([f"an inadmissible scheme ({', '.join(bad)})"] if bad else [])
+        return {"state": "weaker", "text": "results only for " + " or ".join(parts)}
     firsts: dict[str, int] = {}
     for r in mine:
         firsts[r["codes"][0][0]] = firsts.get(r["codes"][0][0], 0) + 1
@@ -653,23 +772,38 @@ def table1_rows(V: Views) -> list[tuple[str, list[str]]]:
     held: dict[str, list[tuple[str, float | None]]] = {}
     for c in V.cells:
         if c.configuration:
-            held.setdefault(c.configuration, []).append((f"{c.line} · {c.column}", c.bound_log2))
+            held.setdefault(c.configuration, []).append((_cell_name(c), c.bound_log2))
     out: list[tuple[str, list[str]]] = []
     for fam in [*FAMILIES, None]:
         fid = fam.id if fam else None
         for cfg in (c for c in V.configurations if c.family == fid or (fam is None and c.family not in _FAMILY)):
             cells = held.get(cfg.id, [])
             bounds = "; ".join(f"{_fmt_bound(b)} at {where}" for where, b in cells)
-            out.append((fid or "(no Table 2 family)", [cfg.id, cfg.statement, cfg.ports, cfg.commitment, cfg.hash_assumption, cfg.zk,
-                                                        (bounds + " — " if bounds else "") + cfg.soundness, cfg.bound_basis,
-                                                        cfg.transferability, cfg.pin, "yes" if cfg.archived else "no",
+            sch = _SCHEME.get(cfg.scheme) if cfg.scheme else None
+            scheme = (f"{sch.label} ({sch.id}; {'admissible' if sch.admissible else 'inadmissible'}): " if sch else "none: ") + cfg.commitment
+            soundness = (bounds + " — " if bounds else "") + cfg.soundness + "; dominant term: " + cfg.dominant_term
+            out.append((fid or "(no Table 2 family)", [cfg.id, cfg.statement, cfg.ports, scheme, "; ".join(h.text() for h in cfg.hashes),
+                                                        cfg.zk, soundness, "; ".join(x.text() for x in cfg.proximity), cfg.transferability,
+                                                        cfg.assumptions, cfg.pin, "yes" if cfg.archived else "no",
                                                         ", ".join(w for w, _ in cells) or T.EMPTY]))
     return out
 
 
+def _cell_name(c: ViewCell) -> str:
+    return f"{c.line}{' · ' + _SCHEME[c.scheme].label if c.scheme else ''} · {c.column}"
+
+
+def overheads(c: ViewCell) -> tuple[float, float]:
+    """``(serving overhead, proving overhead)`` of a cell: commitment and proving seconds per instance, each times N; they sum
+    to the cell's ``N / P``."""
+    P = c.throughput
+    return c.native * P["commit_s"] / P["instances"], c.native * P["proving_s"] / P["instances"]
+
+
 def render_markdown(V: Views) -> str:
     rules = V.rules
-    filt = "unfiltered" if rules.security_log2 is None else f"whole-proof bound 2^{rules.security_log2:g} or better"
+    filt = ", ".join(([f"whole-proof bound 2^{rules.security_log2:g} or better"] if rules.security_log2 is not None else [])
+                     + (["no algebraic hash in the soundness argument"] if rules.standard_hashes else [])) or "unfiltered"
     out = [f"> {PREVIEW}", "", f"Rules: `{rules.name}` ({filt}" + ("; legacy parameters: B = 4096, K = 1536, bare and + in-proof hash "
                                                                  "columns, proving time only" if rules.legacy else "") + ").", "",
            "## Table 1 — Backend configurations and their security", ""]
@@ -683,9 +817,9 @@ def render_markdown(V: Views) -> str:
         rows1.append(row)
     out += [T._md_table(TABLE1_COLUMNS, rows1), "",
             "Statement: the full relation commits x, W and y with the configuration's scheme and proves y = S(x, W) over the committed "
-            "values; Table 2 commitments use SHA-256 or BLAKE3 only (no algebraic hash). Bounds are the accountant's whole-proof "
-            "figures at each cell's batching (`security.achieved_log2`).", "",
-            "## Table 2 — End-to-end overhead per subcircuit and hardware class", "",
+            "values; its scheme must be defined in verity.commitments and built only on SHA-256 or BLAKE3 (reason S otherwise). Bounds "
+            "are the accountant's whole-proof figures at each cell's batching (`security.achieved_log2`), from proven proximity bounds only.", "",
+            "## Table 2 — End-to-end overhead per subcircuit, hardware class and commitment scheme", "",
             "N = compute-bound datasheet estimate, instances/s (busiest unit, peak entry); P = instances/s end to end "
             f"(committing the batch, `{COMMIT}`, then proving){'; legacy: proving only' if rules.legacy else ''}; cell = N / P of the "
             "family's best admissible configuration (highest P). `(prov.)` = no red-team clearance of the statement yet; "
@@ -700,17 +834,18 @@ def render_markdown(V: Views) -> str:
     rows2 = []
     for ln in V.lines:
         N = ln["native"]
-        row = [f"{N['device']} · {N['dtype']} · {ln['line']}",
+        row = [f"{N['device']} · {N['dtype']} · {ln['line']}" + (f" · {ln['scheme_label']}" if ln["scheme"] else ""),
                _native_text(N) + " " + note(f"{ln['line']}: {N['work_model']}; {N['ops_per_instance']} tensor-core FLOP per instance "
                                             f"({N['steps']} steps); peak {N['peak_flop_per_second']:.4g} FLOP/s, {N['source']}")]
         for col in cols:
             c = ln["cells"].get(col)
             if c is None:
                 e = ln["empty"].get(col) or {"state": "none", "text": "no result"}
-                row.append(("n/s " if e["state"] == "n/s" else f"{T.EMPTY} ") + note(f"{ln['line']} · {col}: {e['text']}"))
+                where = f"{ln['line']}{' · ' + ln['scheme_label'] if ln['scheme'] else ''} · {col}"
+                row.append(("n/s " if e["state"] == "n/s" else f"{T.EMPTY} ") + note(f"{where}: {e['text']}"))
                 continue
             P, b = c.throughput, c.batching
-            text = (f"{c.artifact} — {c.configuration or col}; P {fmt_rate(P['instances_per_second'])} ({P['instances']} instances in "
+            text = (f"{c.artifact} — {c.configuration or col}{', scheme ' + c.scheme if c.scheme else ''}; P {fmt_rate(P['instances_per_second'])} ({P['instances']} instances in "
                     f"{fmt_per_instance(P['end_to_end_s'])}: commitment {fmt_per_instance(P['commit_s'])}, proving {fmt_per_instance(P['proving_s'])}); "
                     f"batching total {b['total']}, per proof {b['per_proof'] or '?'}, proofs {b['proofs'] or '?'}, in flight {b['in_flight'] or '?'}; "
                     f"whole-proof bound {_fmt_bound(c.bound_log2)}; host {c.legacy.host or '?'}; {c.legacy.verification_note()}")
@@ -720,14 +855,16 @@ def render_markdown(V: Views) -> str:
                 text += f"; provisional: {c.provisional}"
             if c.unfiltered:
                 u = c.unfiltered
-                text += f"; unfiltered pick: {u['configuration']} {u['artifact']}, bound {_fmt_bound(u['bound_log2'])}, {T.fmt_overhead(u['overhead'])}"
+                text += (f"; unfiltered pick: {u['configuration']} {u['artifact']}, bound {_fmt_bound(u['bound_log2'])}, hashes "
+                         f"{'; '.join(u['hashes'])}, {T.fmt_overhead(u['overhead'])}")
             row.append(T.fmt_overhead(c.overhead) + (" (prov.)" if c.provisional else "") + " " + note(text))
         rows2.append(row)
-    out += [T._md_table(("Subcircuit · hardware", "Native N", *cols), rows2), ""]
+    out += [T._md_table(("Subcircuit · hardware · scheme", "Native N", *cols), rows2), ""]
 
     out += ["## Table 3 — Where the time goes (per instance, share of end to end)", "",
             "Commitment = computing the commitments the statement names; proving = the six buckets and Other (proving total − Σ buckets − "
-            f"Σ joints); end to end = commitment + proving. A fused stage prints once in its first column, `{T.JOINT_CONTINUATION}` in the others.", ""]
+            f"Σ joints); end to end = commitment + proving. A fused stage prints once in its first column, `{T.JOINT_CONTINUATION}` in the others. "
+            "Serving overhead = commitment time × N, proving overhead = proving time × N; they add up to the Table 2 cell.", ""]
     rows3 = []
     for c in V.cells:
         P, ph = c.throughput, c.legacy.phases
@@ -738,10 +875,13 @@ def render_markdown(V: Views) -> str:
             first, *rest = j["covers"]
             cells[first] = f"{'+'.join(j['covers'])}: {pct(j['seconds'])}"
             cells.update({b: T.JOINT_CONTINUATION for b in rest})
-        rows3.append([f"{c.line} · {c.column}", pct(P["commit_s"]), *[cells.get(b, T.EMPTY) for b in contract.BUCKETS],
-                      pct(ph["other"]) if _num(ph["other"]) else T.EMPTY, f"{fmt_per_instance(total / n)} (100%)"])
+        serving, proving = overheads(c)
+        rows3.append([_cell_name(c), pct(P["commit_s"]), *[cells.get(b, T.EMPTY) for b in contract.BUCKETS],
+                      pct(ph["other"]) if _num(ph["other"]) else T.EMPTY, f"{fmt_per_instance(total / n)} (100%)",
+                      T.fmt_overhead(serving) if serving > 0 else "0×", T.fmt_overhead(proving)])
     out += [T._md_table(("Cell", "Commitment", "Witness", "Encoding + witness commitment", "Arithmetic", "Lookup", "ZK additional",
-                         "Serialization", "Other", "End to end"), rows3) if rows3 else f"(no Table 2 cell {T.EMPTY} nothing to decompose)", ""]
+                         "Serialization", "Other", "End to end", "Serving overhead", "Proving overhead"), rows3)
+            if rows3 else f"(no Table 2 cell {T.EMPTY} nothing to decompose)", ""]
     if notes:
         out += ["Footnotes:", *[f"[{i}] {n}" for i, n in enumerate(notes, 1)], ""]
     out.append(f"Rejected ({len(V.rejected)} result{'s' if len(V.rejected) != 1 else ''}; artifact → first reason; letters: "
@@ -762,7 +902,8 @@ def render_markdown(V: Views) -> str:
 def render_json(V: Views) -> dict[str, Any]:
     return {
         "schema": "verity/tables-views/v1", "preview": PREVIEW, "rules": dataclasses.asdict(V.rules),
-        "reason_letters": REASON_LETTERS, "commitment_hashes": sorted(COMMITMENT_HASHES), "work_model": WORK_MODEL,
+        "reason_letters": REASON_LETTERS, "schemes": [{**dataclasses.asdict(x), "admissible": x.admissible} for x in SCHEMES],
+        "work_model": WORK_MODEL,
         "table1": {"columns": list(TABLE1_COLUMNS), "families": [dataclasses.asdict(f) for f in FAMILIES],
                    "configurations": [{**dataclasses.asdict(c), "unsupported": dict(c.unsupported), "full_relation": c.full_relation}
                                       for c in V.configurations],
@@ -770,8 +911,9 @@ def render_json(V: Views) -> dict[str, Any]:
         "table2": {"columns": V.columns(), "lines": [{**{k: v for k, v in ln.items() if k != "cells"},
                                                      "cells": {k: (c.to_json() if c else None) for k, c in ln["cells"].items()}}
                                                     for ln in V.lines]},
-        "table3": [{"cell": f"{c.line} · {c.column}", "artifact": c.artifact, "instances": c.throughput["instances"],
-                    "commit_s": c.throughput["commit_s"], "end_to_end_s": c.throughput["end_to_end_s"], **c.legacy.phases} for c in V.cells],
+        "table3": [{"cell": _cell_name(c), "artifact": c.artifact, "scheme": c.scheme, "instances": c.throughput["instances"],
+                    "commit_s": c.throughput["commit_s"], "end_to_end_s": c.throughput["end_to_end_s"],
+                    "serving_overhead": overheads(c)[0], "proving_overhead": overheads(c)[1], **c.legacy.phases} for c in V.cells],
         "rejected": [{**r, "codes": [list(x) for x in r["codes"]]} for r in V.rejected],
         "not_families": V.not_families,
     }
