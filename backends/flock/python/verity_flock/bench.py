@@ -99,57 +99,113 @@ def trace_buckets(err: Path) -> list[dict[str, float]]:
     return out
 
 
+def subbatches(total: int, per: int) -> list[tuple[int, int]]:
+    return [(lo, min(total, lo + per)) for lo in range(0, total, per)]
+
+
+def _probe(addr: str, timeout: float = 1800) -> None:
+    """Wait until the verifier for the next statement listens, then use up the one connection its `--sessions` count
+    reserves for this probe (the previous server may still hold the port for a moment after its last session)."""
+    import socket
+    time.sleep(3)
+    host, port = addr.rsplit(":", 1)
+    t = time.time()
+    while time.time() - t < timeout:
+        try:
+            socket.create_connection((host, int(port)), timeout=5).close()
+            return
+        except OSError:
+            time.sleep(0.5)
+    raise RuntimeError(f"no verifier at {addr}")
+
+
+def _rtt(addr: str, n: int = 20) -> dict | None:
+    return None
+
+
+def _merge(parts: list[list[dict]]) -> list[dict]:
+    """One record per run over the sub-batches (sequential proofs, one in flight): times, rounds and bytes add up."""
+    out = []
+    for runs in zip(*parts):
+        m = {"accepted": all(r.get("accepted") is True for r in runs), "warm": runs[0].get("warm"), "run": runs[0].get("run"),
+             "subbatches": len(runs)}
+        for k in ("e2e_s", "commit_s", "rows_s", "wait_s", "calls", "wire_sent", "wire_recv"):
+            m[k] = sum(r[k] for r in runs)
+        m["prove_s"] = [sum(r["prove_s"][i] for r in runs) for i in range(2)]
+        m["verdict"] = {k: sum(r["verdict"].get(k, 0) or 0 for r in runs) for k in ("rounds", "verify_s", "handle_s")}
+        m["proof_bytes"] = [sum(r["proof_bytes"][i] for r in runs) for i in range(2)]
+        for k in ("roots", "sigma", "dense_m", "rtt_ms", "rtt_method", "statement", "statement_digest", "prover"):
+            m[k] = [r.get(k) for r in runs] if len(runs) > 1 else runs[0].get(k)
+        m["units"] = runs[0].get("units")
+        m["n_blake3"] = sum(r.get("n_blake3") or 0 for r in runs)
+        m["n_units"] = sum(r.get("n_units") or 0 for r in runs)
+        if all(isinstance(r.get("buckets"), list) for r in runs):
+            m["buckets"] = {b: sum(rep.get(b, 0.0) for r in runs for rep in r["buckets"]) for b in ("t.witness", "t.encoding_commitment", "t.arithmetic")}
+        elif all(isinstance(r.get("buckets"), dict) for r in runs):
+            m["buckets"] = {b: sum(r["buckets"].get(b, 0.0) for r in runs) for b in ("t.witness", "t.encoding_commitment", "t.arithmetic")}
+        out.append(m)
+    return out
+
+
 def point(a, total: int, d: Path, net: Path) -> dict:
     d.mkdir(parents=True, exist_ok=True)
-    t0 = time.time()
-    h = instances.write(d / "instances.bin", a.relation, total, a.procs, a.cache)
-    gen_s = time.time() - t0
     pin = lowering.PINS[a.relation]
-    common = ["--instances", str(d / "instances.bin"), "--netlist", str(net)]
-    srv = None
-    addr = a.verifier
-    if not addr:
-        addr = "127.0.0.1:%d" % (7400 + total.bit_length())
-        log = d / "serve.log"
-        srv = subprocess.Popen(["nice", "-n", "5", a.bin, "serve", "--listen", addr, "--out", str(d / "sessions"), "--pin", pin, *common],
-                               stdout=open(log, "w"), stderr=subprocess.STDOUT)
-        _wait_serving(log, srv)
-    try:
-        return _prove(a, total, d, common, addr, srv, h, gen_s)
-    finally:
-        if srv is not None and srv.poll() is None:
-            srv.terminate()
-            srv.wait()
-
-
-def _prove(a, total, d, common, addr, srv, h, gen_s) -> dict:
+    subs = subbatches(total, a.per_proof)
+    headers, gen_s = [], 0.0
+    for i, (lo, hi) in enumerate(subs):
+        t0 = time.time()
+        headers.append(instances.write(d / f"instances-s{i}.bin", a.relation, total, a.procs, a.cache, lo, hi))
+        gen_s += time.time() - t0
     tg = _guard()
     guard = tg.Guard().start()
     t1 = time.time()
-    timer = ["/usr/bin/time", "-v", "-o", str(d / "prove.time")] if Path("/usr/bin/time").exists() else []
-    rc = subprocess.call([*timer, a.bin, "prove", "--verifier", addr, "--warm", "1",
-                          "--runs", str(a.runs), "--dump", str(d / "proofs"), *common],
-                         stdout=open(d / "prove.txt", "w"), stderr=open(d / "prove.err", "w"), env={**os.environ, "PCS_TRACE": "1"})
+    parts, rcs, rss = [], [], None
+    for i, _ in enumerate(subs):
+        common = ["--instances", str(d / f"instances-s{i}.bin"), "--netlist", str(net)]
+        srv, addr = None, a.verifier
+        if addr:
+            _probe(addr)
+        else:
+            addr = "127.0.0.1:%d" % (7400 + total.bit_length())
+            log = d / f"serve-s{i}.log"
+            srv = subprocess.Popen(["nice", "-n", "5", a.bin, "serve", "--listen", addr, "--out", str(d / f"sessions-s{i}"), "--pin", pin,
+                                    *common], stdout=open(log, "w"), stderr=subprocess.STDOUT)
+            _wait_serving(log, srv)
+        try:
+            timer = ["/usr/bin/time", "-v", "-o", str(d / f"prove-s{i}.time")] if Path("/usr/bin/time").exists() else []
+            rcs.append(subprocess.call([*timer, a.bin, "prove", "--verifier", addr, "--warm", "1", "--runs", str(a.runs),
+                                        "--dump", str(d / f"proofs-s{i}"), *a.prove_arg, *common],
+                                       stdout=open(d / f"prove-s{i}.txt", "w"), stderr=open(d / f"prove-s{i}.err", "w"),
+                                       env={**os.environ, "PCS_TRACE": "1"}))
+        finally:
+            if srv is not None:
+                time.sleep(1)
+                srv.terminate()
+                srv.wait()
+        live = _lines(d / f"prove-s{i}.txt", "LIVE") if (d / f"prove-s{i}.txt").exists() else []
+        if not any("buckets" in r for r in live):
+            tr = trace_buckets(d / f"prove-s{i}.err") if (d / f"prove-s{i}.err").exists() else []
+            if len(tr) == 2 * len(live):
+                for j, r in enumerate(live):
+                    r["buckets"] = {b: tr[2 * j].get(b, 0.0) + tr[2 * j + 1].get(b, 0.0) for b in set(_PHASES.values())}
+        parts.append(live)
+        if (d / f"prove-s{i}.time").exists():
+            for line in (d / f"prove-s{i}.time").read_text().splitlines():
+                if "Maximum resident set size" in line:
+                    rss = max(rss or 0, int(line.split(":")[1]) * 1024)
+        if rcs[-1] != 0 or len(live) != a.runs + 1:
+            break
     wall = time.time() - t1
     contention = guard.stop()
-    if srv is not None:
-        time.sleep(1)
-        srv.terminate()
-        srv.wait()
-    live = _lines(d / "prove.txt", "LIVE") if (d / "prove.txt").exists() else []
+    ok = (len(parts) == len(subs) and all(rc == 0 for rc in rcs) and all(len(x) == a.runs + 1 for x in parts)
+          and all(r.get("accepted") is True and "e2e_s" in r for x in parts for r in x))
+    live = _merge(parts) if ok else []
     timed = [r for r in live if not r.get("warm")]
-    ok = rc == 0 and len(timed) == a.runs and all(r.get("accepted") is True for r in live)
-    rss = None
-    if (d / "prove.time").exists():
-        for line in (d / "prove.time").read_text().splitlines():
-            if "Maximum resident set size" in line:
-                rss = int(line.split(":")[1]) * 1024
-    tr = trace_buckets(d / "prove.err") if (d / "prove.err").exists() else []
-    if len(tr) == 2 * len(live):
-        for i, r in enumerate(live):
-            r["buckets"] = {b: tr[2 * i].get(b, 0.0) + tr[2 * i + 1].get(b, 0.0) for b in set(_PHASES.values())}
-    return {"total": total, "rc": rc, "ok": ok, "live": live, "timed": timed, "header": h, "gen_s": gen_s, "wall_s": wall,
-            "contention": contention, "peak_rss": rss, "dir": d.name}
+    ok = ok and len(timed) == a.runs and all(r["accepted"] for r in live)
+    h = dict(headers[0])
+    h["instances"] = dict(h["instances"], range=[0, total])
+    return {"total": total, "rc": max(rcs) if rcs else None, "ok": ok, "live": live, "timed": timed, "header": h, "gen_s": gen_s,
+            "wall_s": wall, "contention": contention, "peak_rss": rss, "dir": d.name, "subbatches": subs}
 
 
 def result(a, p: dict, sweep: dict) -> dict:
@@ -179,7 +235,8 @@ def result(a, p: dict, sweep: dict) -> dict:
                   "toolchain": {"rustc": a.rustc, "python": platform.python_version()}},
         preprocessing="none: the circuit shape and the unit netlist are built once per process (fixed.setup_seconds); every "
                       "timed session commits its batch and builds its rows afresh",
-        retention="retained", instances=p["header"]["instances"],
+        retention="retained", instances=p["header"]["instances"], N_subbatches=len(p["subbatches"]),
+        batching={"total": n, "per_proof": a.per_proof, "in_flight": 1, "subbatches": [list(x) for x in p["subbatches"]]},
         scheme="frame-v3/blake3-keyed/row/v2", statement="verity/flock-pure/v1", relation=a.relation,
         roots=first["roots"], sigma=first["sigma"], dense_m=first["dense_m"], units_per_vu=first["units"],
         n_blake3=first["n_blake3"], n_units=first["n_units"],
@@ -208,9 +265,11 @@ def result(a, p: dict, sweep: dict) -> dict:
           contract.measurement("verify.wall_s", statistics.median(r["verdict"]["verify_s"] for r in timed)),
           {"name": "proof.bytes", "value": sum(first["proof_bytes"]), "unit": "B"},
           contract.measurement("fixed.setup_seconds", p["gen_s"])]
-    if all("buckets" in r for r in timed):
-        for b in sorted(set(_PHASES.values())):
-            v = statistics.median(r["buckets"][b] + (r["rows_s"] if b == "t.witness" else 0.0) for r in timed)
+    if all(isinstance(r.get("buckets"), dict) for r in timed):
+        bk = {b: statistics.median(r["buckets"].get(b, 0.0) for r in timed) for b in ("t.witness", "t.encoding_commitment", "t.arithmetic")}
+        if sum(bk.values()) + med("rows_s") <= t_prove:
+            bk["t.witness"] += med("rows_s")
+        for b, v in bk.items():
             ms.append(contract.measurement(b, v))
     if p["peak_rss"]:
         ms.append(contract.measurement("mem.peak_host_bytes", p["peak_rss"]))
@@ -231,6 +290,26 @@ def result(a, p: dict, sweep: dict) -> dict:
     return doc
 
 
+def serve_plan(a, plan: list[int], out: Path, net: Path) -> int:
+    """The verifier pod's side of a remote sweep: its own instance files for every point and sub-batch (regenerated here,
+    never the prover's), then one `serve --sessions` per sub-batch in the prover's order (probe + warm + runs)."""
+    pin = lowering.PINS[a.relation]
+    jobs = []
+    for i, total in enumerate(plan):
+        d = out / f"p{i}-{total}"
+        d.mkdir(parents=True, exist_ok=True)
+        for j, (lo, hi) in enumerate(subbatches(total, a.per_proof)):
+            instances.write(d / f"instances-s{j}.bin", a.relation, total, a.procs, a.cache, lo, hi)
+            jobs.append((d, j))
+    print(f"PLAN\t{json.dumps({'points': plan, 'servers': len(jobs)})}", flush=True)
+    for d, j in jobs:
+        rc = subprocess.call([a.bin, "serve", "--listen", a.listen, "--out", str(d / f"sessions-s{j}"), "--pin", pin,
+                              "--instances", str(d / f"instances-s{j}.bin"), "--netlist", str(net), "--sessions", str(a.runs + 2),
+                              "--operator", a.operator], stdout=open(d / f"serve-s{j}.log", "w"), stderr=subprocess.STDOUT)
+        print(f"SERVED\t{d.name}/s{j} rc={rc}", flush=True)
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="verity_flock.bench")
     ap.add_argument("--relation", required=True, choices=sorted(lowering.PIPES))
@@ -243,6 +322,12 @@ def main(argv=None) -> int:
     ap.add_argument("--procs", type=int, default=_quota())
     ap.add_argument("--cache", default=None)
     ap.add_argument("--commit", default=os.environ.get("RESEARCH_SOURCE_COMMIT", "unknown"))
+    ap.add_argument("--per-proof", type=int, default=8192, help="VUs per proof; larger batches are sequential sub-batches")
+    ap.add_argument("--prove-arg", action="append", default=[], help="extra argument for `prove` (e.g. --gpu)")
+    ap.add_argument("--points", default="", help="explicit batch sizes (both sides of a remote verifier must agree)")
+    ap.add_argument("--serve-plan", action="store_true", help="verifier side: serve every point's sub-batches in order")
+    ap.add_argument("--listen", default="0.0.0.0:7400")
+    ap.add_argument("--operator", default="")
     a = ap.parse_args(argv)
     a.rustc = subprocess.run(["rustc", "--version"], capture_output=True, text=True).stdout.strip()
     out = Path(a.out_dir)
@@ -252,9 +337,12 @@ def main(argv=None) -> int:
     if hashlib.sha256(net.read_bytes()).hexdigest() != lowering.PINS[a.relation]:
         print("the lowering is not the pinned one", file=sys.stderr)
         return 2
+    plan = [int(x) for x in a.points.split()] if a.points else None
+    if a.serve_plan:
+        return serve_plan(a, plan, out, net)
     sid = "sweep-" + hashlib.sha256(json.dumps([a.relation, a.start, a.runs, time.time()]).encode()).hexdigest()[:12]
     points = []
-    total = a.start
+    total = plan[0] if plan else a.start
     while total <= a.max:
         print(f"=== {time.strftime('%H:%M:%SZ', time.gmtime())} point {len(points)} total {total}", flush=True)
         try:
@@ -267,16 +355,22 @@ def main(argv=None) -> int:
         print(f"    ok={p['ok']} rc={p.get('rc')} vu/s={tp} wall={p.get('wall_s')} contended={p.get('contention', {}).get('contended')} "
               f"rss={p.get('peak_rss')} err={p.get('err')}", flush=True)
         tps = [q["vu_per_second"] for q in points if q["vu_per_second"]]
-        if tp is None or (len(tps) >= 3 and tps[-1] < 1.02 * tps[-3]):
+        if tp is None or (not plan and len(tps) >= 3 and tps[-1] < 1.02 * tps[-3]):
             break
-        total *= 2
+        if plan:
+            if len(points) == len(plan):
+                break
+            total = plan[len(points)]
+        else:
+            total *= 2
     ok = [q for q in points if q["vu_per_second"]]
     if not ok:
         return 1
     best = max(ok, key=lambda q: (q["vu_per_second"], -q["total"]))
     tps = [q["vu_per_second"] for q in ok]
+    done_at = next((i for i in range(2, len(tps)) if tps[i] < 1.02 * tps[i - 2]), None)
     stop = "a point failed" if points[-1]["vu_per_second"] is None else (
-        "< 2 % over two doublings" if len(tps) >= 3 and tps[-1] < 1.02 * tps[-3] else "reached --max")
+        f"< 2 % over two doublings at {ok[done_at]['total']}" if done_at is not None else "reached the last planned point / --max")
     for q in ok:
         sweep = {"id": sid, "point": points.index(q), "plateau": q is best, "total_vus": q["total"], "rule": RULE, "stopped": stop,
                  "points": [[x["total"], x["vu_per_second"]] for x in points]}
