@@ -432,6 +432,8 @@ impl VllmStmt {
         let (kl, slots, units, p0) = (self.lay.k_log(), self.lay.comp_slots(), self.lay.units, self.lay.unit_pos0());
         let n = 1usize << (self.m - 7);
         assert_eq!(comps.len(), self.blocks() * slots);
+        let trace = std::env::var_os("FLOCK_VLLM_TRACE").is_some();
+        let t0 = std::time::Instant::now();
         let (cz, ca, cb, _) = sh::generate_witness_with_ab_packed_and_lincheck(comps, log2ceil(comps.len()));
         let (mut z, mut a, mut b) = (vec![F128::ZERO; n], vec![F128::ZERO; n], vec![F128::ZERO; n]);
         let wpb = 1usize << (kl - 7);
@@ -443,6 +445,7 @@ impl VllmStmt {
             });
         }
         drop((cz, ca, cb));
+        let t1 = t0.elapsed().as_secs_f64();
         let uw = 1usize << (UNIT_LOG - 7);
         let total = self.blocks() * units;
         let groups: Vec<Vec<(usize, Vec<F128>, Vec<F128>, Vec<F128>)>> = (0..total.div_ceil(64))
@@ -483,7 +486,11 @@ impl VllmStmt {
             a[at..at + uw].copy_from_slice(&ua);
             b[at..at + uw].copy_from_slice(&ub);
         }
+        let t2 = t0.elapsed().as_secs_f64();
         let zl = pack_z_lincheck_from_packed(&z, self.m, kl);
+        if trace {
+            eprintln!("WITNESS\tsha256+scatter {t1:.3}s units {:.3}s zlin {:.3}s", t2 - t1, t0.elapsed().as_secs_f64() - t2);
+        }
         (z, a, b, zl)
     }
 
@@ -746,6 +753,32 @@ mod tests {
             let leaves: Vec<[u8; 32]> = t["leaves"].as_array().unwrap().iter().map(|x| h(x.as_str().unwrap())).collect();
             assert_eq!(hex(&fold(&leaves)), t["root"].as_str().unwrap(), "N = {}", leaves.len());
         }
+    }
+
+    /// `FLOCK_SHA_DUMP=path`: write 64 compressions' inputs and Flock's packed (z, a, b) for them, for the host harness
+    /// that runs `pure_sha256_witness` (prove_chunk.cuh) as C++ and compares word for word.
+    #[test]
+    fn dump_sha256_witness_for_the_device_kernel_check() {
+        let Some(path) = std::env::var_os("FLOCK_SHA_DUMP") else { return };
+        let row: Vec<u8> = (0..1536).map(|i| (i * 131 + 7) as u8).collect();
+        let msg = pos_leaf_message(&row);
+        let mut comps: Vec<sh::Compression> = Vec::new();
+        let mut hh = sh::SHA256_IV;
+        for k in 0..64 {
+            let blk = &msg[64 * (k % 25)..64 * (k % 25) + 64];
+            let m = be_words(blk);
+            comps.push((hh, m));
+            hh = if k % 25 == 24 { sh::SHA256_IV } else { sh::sha256_compress(&hh, &m) };
+        }
+        comps[63] = ([0xFFFF_FFFF; 8], [0xFFFF_FFFF; 16]);
+        let (z, a, b, _) = sh::generate_witness_with_ab_packed_and_lincheck(&comps, 6);
+        let mut out = (comps.len() as u64).to_le_bytes().to_vec();
+        out.extend(comps.iter().flat_map(|c| c.0).flat_map(|w| w.to_le_bytes()));
+        out.extend(comps.iter().flat_map(|c| c.1).flat_map(|w| w.to_le_bytes()));
+        for v in [&z, &a, &b] {
+            out.extend(v.iter().flat_map(|x| x.lo.to_le_bytes().into_iter().chain(x.hi.to_le_bytes())));
+        }
+        std::fs::write(path, out).unwrap();
     }
 
     #[test]

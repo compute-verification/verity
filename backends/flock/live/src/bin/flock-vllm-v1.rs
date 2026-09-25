@@ -234,9 +234,21 @@ fn prove_cpu(st: &VllmStmt, w: &Built, lig: LigeritoProfile, hook: PHook<'_>, ch
     (bincode::serialize(&(commitment, proof)).unwrap(), json!({}))
 }
 
+/// What a GPU rep proves: the host's whole packed witness, or the compression and unit inputs the device witnesses.
+#[cfg_attr(not(feature = "gpu"), allow(dead_code))]
+enum GpuWit<'a> {
+    Host(&'a Built),
+    Device(&'a [sh::Compression], &'a [F128]),
+}
+
 #[cfg(feature = "gpu")]
-fn prove_gpu(st: &VllmStmt, w: &Built, lig: LigeritoProfile, rep: usize, hook: PHook<'_>, ch: &mut LiveChallenger) -> (Vec<u8>, Value) {
-    let (proof, commitment, ph) = flock_live::gpu::prove_vllm(st, &w.0, &w.1, &w.2, &params(st.m, lig), &domain(rep), hook, ch);
+fn prove_gpu(st: &VllmStmt, w: GpuWit<'_>, lig: LigeritoProfile, rep: usize, hook: PHook<'_>, ch: &mut LiveChallenger) -> (Vec<u8>, Value) {
+    use flock_live::gpu::VllmSrc;
+    let src = match w {
+        GpuWit::Host(b) => VllmSrc::Host { z: &b.0, a: &b.1, b: &b.2 },
+        GpuWit::Device(comps, units) => VllmSrc::Device { comps, units },
+    };
+    let (proof, commitment, ph) = flock_live::gpu::prove_vllm(st, src, &params(st.m, lig), &domain(rep), hook, ch);
     let bk = json!({"t.witness": ph[0], "t.encoding_commitment": ph[1], "t.link": ph[2], "t.zerocheck": ph[3],
                     "t.lincheck": ph[4], "t.ring_switch": ph[5], "t.ligerito": ph[6], "t.total": ph[7],
                     "t.arithmetic": ph[3] + ph[4] + ph[5] + ph[6]});
@@ -245,7 +257,7 @@ fn prove_gpu(st: &VllmStmt, w: &Built, lig: LigeritoProfile, rep: usize, hook: P
 }
 
 #[cfg(not(feature = "gpu"))]
-fn prove_gpu(_: &VllmStmt, _: &Built, _: LigeritoProfile, _: usize, _: PHook<'_>, _: &mut LiveChallenger) -> (Vec<u8>, Value) {
+fn prove_gpu(_: &VllmStmt, _: GpuWit<'_>, _: LigeritoProfile, _: usize, _: PHook<'_>, _: &mut LiveChallenger) -> (Vec<u8>, Value) {
     panic!("built without the gpu feature")
 }
 
@@ -372,10 +384,19 @@ fn session(st: &Arc<VllmStmt>, inst: &Arc<Instances>, t: SharedTransport, plan: 
     } else {
         Wit { comps: comps.clone(), inputs: mk_inputs(comps), flip_z }
     };
-    // The host builds the packed witness once; rep 1 proves the same one unless the plan gives it another.
+    // CPU (and a GPU witness with a flipped z bit): the host builds the packed witness once, and rep 1 proves the same one
+    // unless the plan gives it another. GPU otherwise: the host sends the compressions and the units' input words.
     let tw = Instant::now();
-    let built0 = build(st, &wit);
-    let built1 = plan.rep1_other_witness.then(|| build(st, &wit1));
+    let host = !plan.gpu || plan.unit_flip;
+    let empty: Built = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+    let built0 = if host { build(st, &wit) } else { empty.clone() };
+    let built1 = (host && plan.rep1_other_witness).then(|| build(st, &wit1));
+    let unit_words = |w: &Wit| -> Vec<F128> {
+        let units = st.lay.units;
+        (0..st.blocks() * units).into_par_iter().flat_map_iter(|i| (w.inputs)(i / units, i % units)).collect()
+    };
+    let units0 = if host { Vec::new() } else { unit_words(&wit) };
+    let units1 = (!host && plan.rep1_other_witness).then(|| unit_words(&wit1));
     let host_witness_s = tw.elapsed().as_secs_f64();
     let rows_s = tr.elapsed().as_secs_f64();
     let mut prove_s = Vec::new();
@@ -420,8 +441,13 @@ fn session(st: &Arc<VllmStmt>, inst: &Arc<Instances>, t: SharedTransport, plan: 
             };
             let tp = Instant::now();
             let w = if rep == 0 { &built0 } else { built1.as_ref().unwrap_or(&built0) };
+            let gw = if host {
+                GpuWit::Host(w)
+            } else {
+                GpuWit::Device(if rep == 0 { &wit.comps } else { &wit1.comps }, if rep == 0 { &units0 } else { units1.as_ref().unwrap_or(&units0) })
+            };
             let (p, bk) = catch_unwind(AssertUnwindSafe(|| {
-                if plan.gpu { prove_gpu(st, w, lig, rep, &mut hook, &mut lch) } else { prove_cpu(st, w, lig, &mut hook, &mut lch) }
+                if plan.gpu { prove_gpu(st, gw, lig, rep, &mut hook, &mut lch) } else { prove_cpu(st, w, lig, &mut hook, &mut lch) }
             }))
             .map_err(panic_msg)?;
             prove_s.push(tp.elapsed().as_secs_f64());
