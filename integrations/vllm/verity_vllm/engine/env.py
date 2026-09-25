@@ -65,7 +65,7 @@ def disable_compile_cache() -> None:
 
 
 def prepare_compiled_process_cache() -> dict[str, Any]:
-    """[R15 compiled, rev-pm M-0266 (b)] Before a COMPILED engine is built: make this process's Inductor output code identifiable.  (1) A fresh,
+    """Before a COMPILED engine is built: make this process's Inductor output code identifiable.  (1) A fresh,
     empty TORCHINDUCTOR_CACHE_DIR unless the caller already exported one it marks as per-process (compiled_commit.sh) -- torch's default
     /tmp/torchinductor_<user> is shared by every process on the pod, so a pin read from it would digest other rows' kernels; (2)
     VLLM_DISABLE_COMPILE_CACHE=1 -- a vLLM compile-cache hit replays another process's artifacts and emits no output code here (the pin
