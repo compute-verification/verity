@@ -276,8 +276,15 @@ def commitment_problems(pdir: Path, man: dict, pinned: str, reps: list[str], *, 
         if not (stmts == proofs == listed) or len(listed) != len(entries.get(r, [])):
             layout.append(f"{r}: {len(stmts)} statements, {len(proofs)} proofs, {len(entries.get(r, []))} manifest proof entries "
                           f"(not the same files: {sorted(stmts ^ listed | proofs ^ listed)[:4]})")
-    per_rep = {r: [(f"{s}.stmt", read_statement((pdir / r / f"{s}.stmt").read_bytes())) for s in sorted(entries[r])
-                   if (pdir / r / f"{s}.stmt").is_file()] for r in entries}
+    def read(p: Path):
+        try:
+            return read_statement(p.read_bytes())
+        except Exception as e:  # noqa: BLE001  (the verifier rejects an unreadable statement; here it only cannot count)
+            layout.append(f"{p.parent.name}/{p.name}: unreadable statement ({type(e).__name__}: {e})")
+            return None
+
+    per_rep = {r: [(f"{s}.stmt", read(pdir / r / f"{s}.stmt")) for s in sorted(entries[r]) if (pdir / r / f"{s}.stmt").is_file()]
+               for r in entries}
     hashed = "+" in pinned or any(getattr(st, "hash_auth", None) is not None for sts in per_rep.values() for _, st in sts)
     if not hashed:
         return False, []
