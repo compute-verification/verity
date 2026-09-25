@@ -60,3 +60,14 @@ def test_same_ref_compares_the_tables_keys():
     f = FROZEN_INSTANCES["fp8-ada-mma-draft/2026-09-22"]
     assert ie.same_ref(dict(f, seed=1, recipe="x"), f)
     assert not ie.same_ref(dict(f, range=[0, 4095]), f)
+
+
+def test_declared_accepts_the_frozen_ref_and_synthetic_streams_but_not_fixture_repeats():
+    from verity_numerical.bench.views import STREAMS
+    ada, a100 = "fp8-ada-mma-draft/2026-09-22", "first-campaign-target/2026-09-21"
+    assert ie.declared(ada, dict(FROZEN_INSTANCES[ada], seed=20260922, recipe="r")) == (True, None)
+    stream = dict(FROZEN_INSTANCES[ada], range=[0, 8192], manifest_sha256=STREAMS[ada](8192), seed=20260922)
+    assert ie.declared(ada, stream) == (True, None)
+    assert ie.declared(ada, dict(stream, manifest_sha256=STREAMS[ada](4096)))[0] is False
+    ok, why = ie.declared(a100, dict(FROZEN_INSTANCES[a100], range=[0, 8192]))
+    assert ok is False and "repeats instances" in why
