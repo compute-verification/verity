@@ -146,8 +146,9 @@ impl Chain {
             .map(|c| [CHUNK_START, 0, CHUNK_END].map(|f| b.fixed_public_input(pack_params(c as u64, 64, f))))
             .collect();
         let n_fixed = 2 + 3 * chunks;
+        // No independence islands: the online phase gives each island a value buffer over every wire, which is
+        // quadratic in the leaf count; the sequential run is a few hundred ms at 4,096 VUs.
         for _ in 0..leaves {
-            let isl = b.begin_island();
             for pc in &params {
                 let mut cv = iv;
                 for blk in 0..16 {
@@ -159,7 +160,6 @@ impl Chain {
                 b.publish(cv[0]);
                 b.publish(cv[1]);
             }
-            b.end_island(isl);
         }
         let shape = b.finish().expect("chain circuit");
         assert_eq!(shape.counts, vec![rows]);
