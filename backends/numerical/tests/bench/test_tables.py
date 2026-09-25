@@ -860,3 +860,42 @@ def test_a_rememoried_board_of_the_same_name_is_not_a_cell(store: LocalStore) ->
     assert T.device_variant({"name": A100, "memory_total_bytes": 0}, FIRST) is None
     assert FIRST.native_peak.memory_bytes == 80 * 2**30 and FP8_ADA_MMA.native_peak.memory_bytes == 24 * 2**30
     assert "device_variant" in T.CAPTION
+
+
+# --- the coordinator's cell marks: the latest `finding` label (lanes/coordinator/evidence/marked-cells.py) ---------------------------
+
+
+OPEN = "UNDER RE-VERIFICATION: soundness issue R1/R2 (red-team-standard-hash): the verifier lets the prover choose the leaf pairing"
+
+
+def test_an_open_finding_marks_the_cell_and_cleared_drops_it(store: LocalStore) -> None:
+    art = put(store, result(t_total=4.0), labels=[("finding", OPEN, "coordinator", "2026-09-25T07:45:04Z")])
+    tab = T.build(store)
+    c = cell(tab)
+    assert c.artifact == art and c.finding == f"{OPEN} (coordinator, 2026-09-25T07:45:04Z)"
+    md = T.render_markdown(tab)
+    assert f"{T.fmt_overhead(c.overhead)} (under re-verification) [" in md and f"; {OPEN} (coordinator" in md
+    assert re.search(r"^\[\d+\] art:[0-9a-f]{64} — ", md, re.M)          # marked-cells.py still finds the footnote
+    store.add_label(art, "finding", "CLEARED R1/R2: fixed verifier re-accepts", "coordinator", ts="2026-09-25T09:00:00Z")
+    assert cell(T.build(store)).finding is None and "(under re-verification) [" not in T.render_markdown(T.build(store))
+
+
+def test_a_pulled_finding_rejects_the_result_like_a_downgrade(store: LocalStore) -> None:
+    fast = put(store, result(t_total=2.0), labels=[("finding", OPEN, "coordinator", "2026-09-25T07:45:04Z"),
+                                                   ("finding", "PULLED R1/R2: forged pairing accepted", "coordinator", "2026-09-25T09:00:00Z")])
+    slow = put(store, result(t_total=3.0))
+    tab = T.build(store)
+    assert cell(tab).artifact == slow
+    (reason,) = rejected(tab, fast)
+    assert reason == "pulled: PULLED R1/R2: forged pairing accepted (coordinator, 2026-09-25T09:00:00Z)"
+    codes = T.reject_codes(store.get_manifest(fast).meta, store.labels(fast), store.index.attempt(store.get_manifest(fast).meta["run_id"]),
+                           FIRST, T.CANDIDATES[0])
+    assert [k for k, _ in codes] == ["Z"]
+
+
+def test_other_findings_change_nothing(store: LocalStore) -> None:
+    art = put(store, result(t_total=4.0), labels=[("finding", OPEN, "coordinator", "2026-09-25T07:45:04Z"),
+                                                  ("finding", "HOLDS (red-team-lk): equivalent", "red-team-lk", "2026-09-25T08:00:00Z")])
+    c = cell(T.build(store))
+    assert c.artifact == art and c.finding is None
+    assert T.cell_finding([]) == (None, None)

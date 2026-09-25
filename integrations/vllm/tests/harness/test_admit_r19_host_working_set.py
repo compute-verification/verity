@@ -147,41 +147,44 @@ def test_oracle_compare_classifies_the_hidden_family_out_before_any_read(tmp_pat
     assert seen == []
 
 
-def test_committed_reader_answers_none_for_an_excluded_interior_and_bytes_for_the_kept_boundary():
+def test_the_opened_reader_answers_none_for_an_excluded_interior_and_verified_bytes_for_the_kept_boundary():
     """The collector-side contract the exclusion rests on: `_HostRanges.holds` routes a read inside the excluded interior to None (opens by
-    replay), a read of the kept ranges answers bytes; `_excluded_chunk_ranges` excludes the chunk-aligned INTERIOR of the family only."""
+    replay), a read of the kept ranges answers bytes -- opened from the kept leaves and verified against the run root (`OpenedReader`);
+    `_excluded_chunk_ranges` excludes the chunk-aligned INTERIOR of the family only."""
     torch = pytest.importorskip("torch")
-    from verity_vllm.acquire.native_host import TensorMeta
+    from tests.check.opened import commit_steps
+    from verity_vllm.check.oracle_compare import OpenedReader
     C = NC.GPU_CHUNK_BYTES
     # step stream: [qkv 300 B][fa2.m1 plane 4 chunks + 100 B][o_proj 200 B]
     spec = [("model.layers.0.self_attn.qkv_proj/0", 300, "bfloat16"), ("fa2.m1/L0/s0/g32x8x1/S", 4 * C + 100, "int32"), ("model.layers.0.self_attn.o_proj/0", 200, "bfloat16")]
-    metas, off = [], 0
+    used = sum(nb for _name, nb, _dt in spec)
+    stream = torch.arange(used, dtype=torch.int64).to(torch.uint8)             # distinguishable bytes
+    tensors, off = [], 0
     for i, (name, nb, dt) in enumerate(spec):
-        metas.append(TensorMeta(ordinal=i, name=name, dtype=dt, shape=(nb // 2,), nbytes=nb, chunk=C, first_leaf=0, n_leaves=1, dev_off=off))
+        tensors.append((name, bytes(stream[off:off + nb].numpy()), i, dt, (nb // 2,)))
         off += nb
-    used = off
+    com, run = commit_steps({0: tensors})                                      # the GPU-tree step block, retain=host
+    metas = com._layouts[0]
+    assert [m.dev_off for m in metas] == [0, 300, 300 + 4 * C + 100]
     excl = NC._excluded_chunk_ranges(metas, {"fa2_hidden_m1"}, C)
     assert len(excl) == 1 and excl[0][2] == "fa2_hidden_m1"
     lo, hi = excl[0][0], excl[0][1]
     assert lo == C * (-(-300 // C)) and hi == ((300 + 4 * C + 100) // C) * C and lo % C == 0 and hi % C == 0
     assert lo >= 300 and hi <= 300 + 4 * C + 100                              # interior only: the boundary chunks stay on host
-    stream = torch.arange(used, dtype=torch.int64).to(torch.uint8)             # distinguishable bytes
     n = -(-used // C) * C
-    ranges = [(0, lo, stream[0:lo]), (hi, used, stream[hi:used])]
+    blk = com._gpu_blocks[0][0]
+    ranges = [(0, lo, blk[0:lo]), (hi, n, blk[hi:n])]                         # the collector keeps whole chunk-padded windows outside the interior
     hr = NC._HostRanges(ranges, used, excluded={"fa2_hidden_m1": hi - lo})
-    assert hr.retained_bytes == used - (hi - lo) and hr.numel() == n
+    assert hr.retained_bytes == n - (hi - lo) and hr.numel() == n
     assert hr.holds(0, 300) and hr.holds(metas[2].dev_off, metas[2].dev_off + 200) and not hr.holds(lo, lo + C) and not hr.holds(300, 300 + C)
     assert bytes(hr[0:300].numpy()) == bytes(stream[0:300].numpy())
     with pytest.raises(KeyError):
         hr[lo:lo + C]
-
-    class Com:  # the committed_reader's view of a collector: layouts + host blocks
-        _layouts = {0: metas}
-        _gpu_blocks = {0: (hr, used)}
-
-    from verity_vllm.check.oracle_compare import committed_reader
-    rd = committed_reader(Com())
+    com._gpu_blocks[0] = (hr, used)
+    rd = OpenedReader(com, run)
     assert rd(0, "model.layers.0.self_attn.qkv_proj/0", 0, 300) == bytes(stream[0:300].numpy())
     assert rd(0, "model.layers.0.self_attn.o_proj/0", 0, 200) == bytes(stream[metas[2].dev_off:metas[2].dev_off + 200].numpy())
+    assert rd(0, "fa2.m1/L0/s0/g32x8x1/S", 0, lo - 300) == bytes(stream[300:lo].numpy())   # the excluded tensor's kept boundary chunk
     assert rd(0, "fa2.m1/L0/s0/g32x8x1/S", C, 2 * C) is None                   # the excluded interior: 'not committed on host', opens by replay
     assert np.frombuffer(rd(0, "model.layers.0.self_attn.qkv_proj/0", 0, 300), dtype=np.uint8).size == 300
+    assert rd.stats["reads"] == 4 and rd.stats["not_retained"] == 1 and rd.stats["failed"] == 0

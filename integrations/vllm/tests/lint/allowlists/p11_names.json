@@ -703,7 +703,7 @@
     {"file": "verity_vllm/tp/worker.py", "kind": "def-name", "symbol": "TP2CaptureWorkerExtension", "detail": "tp2_repo_modules"},
     {"file": "verity_vllm/tp/worker.py", "kind": "def-name", "symbol": "TP2CaptureWorkerExtension", "detail": "tp2_sem_close"},
     {"file": "verity_vllm/tp/worker.py", "kind": "def-name", "symbol": "TP2CaptureWorkerExtension", "detail": "tp2_sem_install"},
-    {"file": "verity_vllm/tp/worker.py", "kind": "doc-board-id", "symbol": "TP2CaptureWorkerExtension._t6_4_check", "detail": "M-nnnn", "count": 2},
+    {"file": "verity_vllm/tp/partial_source.py", "kind": "doc-board-id", "symbol": "late_read_check", "detail": "M-nnnn", "count": 2},
     {"file": "verity_vllm/tp/worker.py", "kind": "doc-board-id", "symbol": "TP2CaptureWorkerExtension._tp2_attribution", "detail": "M-nnnn"},
     {"file": "verity_vllm/tp/worker.py", "kind": "doc-board-id", "symbol": "TP2CaptureWorkerExtension._tp2_sampled_replay", "detail": "M-nnnn", "count": 3},
     {"file": "verity_vllm/tp/worker.py", "kind": "doc-board-id", "symbol": "TP2CaptureWorkerExtension.tp2_commit_xrank_dump", "detail": "F-rN"},

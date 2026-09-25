@@ -101,7 +101,10 @@ campaign, an asserter of the result's own `candidate`/`label` labels, the lane
 a `lane` label or its meta (`lane`, `by`, `registered_by`, `constructed_by`)
 names; an attempt-less result naming none is never verified; **not
 downgraded** -- the latest `red-team-*` `proof_class` verdict on the artifact
-is not below the fingerprint's class. A candidate is recognised from
+is not below the fingerprint's class; **not pulled** -- the latest `finding`
+label on the artifact does not start `PULLED` (one starting `UNDER
+RE-VERIFICATION` keeps the cell, marked `(under re-verification)` with the
+finding in its footnote, until a later `CLEARED` label). A candidate is recognised from
 `software.backend.name` (`verity-gkr`, `b-ligero chain…`, `sp1`); component
 benchmarks (`verity-direct`, `backends/gkr/...`, `b-encode`) are none. The
 renderer lists every rejected candidate result with its first reason.
@@ -119,6 +122,16 @@ D2 fastest measured `t.total` per variant × target, marked ✓ or with the firs
 reason letter of `tables.reject_codes`; D3 communication and verifier cost per
 Table 2 cell, read only from the cell's result envelope (`…` where absent).
 Non-canonical; layout fixed 2026-09-24 (campaign morning-tables BRIEF §1).
+
+The approved spec's tables (`kb/TABLES.md`: Table 1 configurations and their
+security, Table 2 end-to-end N ÷ P per subcircuit, hardware class and
+commitment scheme over the full committed relation on a core-defined scheme,
+algebraic-hash configurations flagged and marked `(alg.)`, Table 3 with
+serving and proving overhead) render as a labelled preview with
+`python -m verity_numerical.bench.views --root <store> [--rules spec|unfiltered|legacy]`;
+`--parity` checks that the legacy-rules views select exactly today's cells
+(the switch's gate). The steward renders it only for a `[[render]]` entry with
+`preview = true`. It replaces the canonical tables only at the labelled switch.
 
 ## Proof model: interactive is fine, transferability is not required
 
