@@ -18,7 +18,7 @@
 //!
 //! The route (a) cell (the statement is the prime proof's: its leaf digests, x rows then W columns, 32 bytes each):
 //!   flock-link sigma      --vus V --digests FILE --prime-commitment HEX        print Σ's preimage (sigma.txt)
-//!   flock-link cell-serve --listen ADDR --out DIR --vus V --digests FILE --prime-commitment HEX --operator LANE
+//!   flock-link cell-serve --listen ADDR --out DIR --vus V --digests FILE --prime-commitment HEX --operator LANE [--sessions N]
 //!   flock-link cell-prove --verifier ADDR --vus V --digests FILE --prime-commitment HEX --operands FILE
 //!                         --root-f FILE --link-out FILE
 //!   cell-prove waits for the prime prover's root_F (hex in --root-f), commits it with root_B, and writes the session's
@@ -942,6 +942,7 @@ fn serve_loop(make: impl Fn() -> Server) {
     let out = std::path::PathBuf::from(arg("--out", "sessions"));
     std::fs::create_dir_all(&out).unwrap();
     let l = std::net::TcpListener::bind(&listen).unwrap();
+    let max: Option<usize> = arg("--sessions", "").parse().ok();
     println!("SERVING {listen}");
     for (i, conn) in l.incoming().enumerate() {
         let conn = conn.unwrap();
@@ -978,5 +979,8 @@ fn serve_loop(make: impl Fn() -> Server) {
         let mut idx = std::fs::OpenOptions::new().create(true).append(true).open(out.join("index.jsonl")).unwrap();
         writeln!(idx, "{line}").unwrap();
         println!("SESSION\t{line}");
+        if Some(i + 1) == max {
+            break;
+        }
     }
 }
