@@ -514,6 +514,14 @@ class Poseidon2Leaf:
     def leaf_bytes(self, digest_row) -> bytes:
         return row_leaf_value(digest_row)
 
+    def leaf_bytes_many(self, digests: np.ndarray) -> list[bytes]:
+        """:meth:`leaf_bytes` of every row of ``digests`` (count, 8) in [0, p)."""
+        d = np.asarray(digests, dtype=np.int64)
+        if d.ndim != 2 or d.shape[1] != h2.OUT or ((d < 0) | (d >= h2.P)).any():
+            raise ValueError("a row digest is 8 BabyBear lanes")
+        b = d.astype(">u4").tobytes()
+        return [b[32 * i:32 * i + 32] for i in range(d.shape[0])]
+
     # --- gadget --------------------------------------------------------------------------------------------------------
     def gadget(self, ctx: LigeroCtx, words: Sequence[Expr], *, word_bits: int, role: int, row_words: int,
                carry_in: Sequence[Expr], first: bool = False, last: bool = True) -> tuple[list[Expr], list[Expr]]:

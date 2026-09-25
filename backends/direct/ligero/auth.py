@@ -33,6 +33,7 @@ only per call; the per-leaf framing is the Python-level cost) and cached on disk
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from collections.abc import Iterable, Mapping, Sequence
@@ -50,8 +51,10 @@ from verity.commitments import (
     verify_multiproof,
 )
 from verity.commitments.merkle import (  # the pad-leaf frame has no public wrapper; pinned by tests
+    _FRAME,
+    _LEAF,
+    _NODE,
     _PAD,
-    _hash,
     _uint,
 )
 from verity.errors import ResourceLimit
@@ -118,31 +121,61 @@ def domain_for(binding: bytes, owner: int, count: int) -> CommitmentDomain:
     return CommitmentDomain(bytes(binding), int(owner), RangeIndexedDomain(0, int(count)))
 
 
+# Batch forms of CommitmentDomain.leaf / .node and the pad leaf (verity.commitments.merkle): the frame, tag and domain id
+# are one hashed prefix copied per hash, the parts one update -- the same bytes into SHA-256 (pinned by hashchain_test.py).
+_L32 = (32).to_bytes(8, "big")
+
+
+def _part(b: bytes) -> bytes:
+    return len(b).to_bytes(8, "big") + b
+
+
+def _uint_part(v: int) -> bytes:
+    return _part(_uint(v))
+
+
+def _prefix(tag: bytes, domain_id: bytes):
+    h = hashlib.sha256(_FRAME)
+    h.update(len(tag).to_bytes(4, "big") + tag + _part(domain_id))
+    return h
+
+
+def leaf_hashes(domain_id: bytes, start: int, schema: str, values: Sequence[bytes]) -> bytes:
+    """``domain.leaf(r, r, schema, values[r - start])`` for consecutive ranks from ``start``, concatenated."""
+    h0, sp = _prefix(_LEAF, domain_id), _part(schema.encode("utf-8"))
+    out = bytearray()
+    for i, v in enumerate(values):
+        r = _uint_part(start + i)
+        h = h0.copy()
+        h.update(r + r + sp + _part(v))
+        out += h.digest()
+    return bytes(out)
+
+
 def _leaf_chunk(args) -> bytes:
     domain, start, words = args
-    leaf = domain.leaf
-    out = bytearray()
-    for i, w in enumerate(words.tolist()):
-        r = start + i
-        out += leaf(r, r, SCHEMA, w.to_bytes(2, "big"))
-    return bytes(out)
+    return leaf_hashes(domain.domain_id, start, SCHEMA, [w.to_bytes(2, "big") for w in words.tolist()])
 
 
 def _pad_chunk(args) -> bytes:
     domain_id, start, stop = args
+    h0 = _prefix(_PAD, domain_id)
     out = bytearray()
     for r in range(start, stop):
-        out += _hash(_PAD, domain_id, _uint(r))
+        h = h0.copy()
+        h.update(_uint_part(r))
+        out += h.digest()
     return bytes(out)
 
 
 def _node_chunk(args) -> bytes:
     domain, level, start, pairs = args
-    node = domain.node
+    h0, lv, buf = _prefix(_NODE, domain.domain_id), _uint_part(level), np.ascontiguousarray(pairs).tobytes()
     out = bytearray()
-    for i in range(pairs.shape[0]):
-        p = pairs[i]
-        out += node(level, start + i, p[:32].tobytes(), p[32:].tobytes())
+    for i in range(len(buf) // 64):
+        h = h0.copy()
+        h.update(lv + _uint_part(start + i) + _L32 + buf[64 * i:64 * i + 32] + _L32 + buf[64 * i + 32:64 * i + 64])
+        out += h.digest()
     return bytes(out)
 
 

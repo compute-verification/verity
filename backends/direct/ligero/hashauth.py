@@ -27,7 +27,8 @@ from verity.commitments import identity_digest, verify_multiproof
 from verity.commitments.rowleaf import SCHEMA_ROW
 
 from . import poseidon2 as h2
-from .auth import LIMITS, OWNER, TREE_NAMES, TreeRef, WordTree, _chunks, _node_chunk, _pad_chunk, domain_for, multiproof_siblings
+from .auth import (LIMITS, OWNER, TREE_NAMES, TreeRef, WordTree, _chunks, _node_chunk, _pad_chunk, domain_for, leaf_hashes,
+                   multiproof_siblings)
 from .auth import build_word_tree as _build_word_tree_u16
 from .leaf import registry as leaf_registry
 from verity.errors import ResourceLimit
@@ -96,8 +97,9 @@ def build_row_tree(name: str, binding: bytes, rows: np.ndarray, word_bits: int, 
     digests = np.asarray(digests, dtype=np.int64)
     if digests.shape != (count, scheme.digest_elems) or ((digests < 0) | (digests >= h2.P)).any():
         raise ValueError(f"leaf {scheme.name}: native() must return (count, {scheme.digest_elems}) elements in [0, p)")
-    leaves = [domain.leaf(r, r, scheme.schema, scheme.leaf_bytes(digests[r])) for r in range(count)]
-    levels = _levels(domain, leaves, count)
+    many = getattr(scheme, "leaf_bytes_many", None)
+    values = many(digests) if many is not None else [scheme.leaf_bytes(digests[r]) for r in range(count)]
+    levels = _levels(domain, [leaf_hashes(domain.domain_id, 0, scheme.schema, values)], count)
     ref = TreeRef(name, bytes(binding), OWNER[name], count, levels[-1][0].tobytes())
     return WordTree(ref, levels), digests
 
@@ -110,8 +112,8 @@ def build_word_tree(name: str, binding: bytes, words: np.ndarray, y_bits: int) -
     words = np.ascontiguousarray(words, dtype=np.int64).ravel()
     count = int(words.shape[0])
     domain = domain_for(binding, OWNER[name], count)
-    leaves = [domain.leaf(r, r, schema, int(w).to_bytes(nbytes, "big")) for r, w in enumerate(words.tolist())]
-    levels = _levels(domain, leaves, count)
+    values = [int(w).to_bytes(nbytes, "big") for w in words.tolist()]
+    levels = _levels(domain, [leaf_hashes(domain.domain_id, 0, schema, values)], count)
     return WordTree(TreeRef(name, bytes(binding), OWNER[name], count, levels[-1][0].tobytes()), levels)
 
 

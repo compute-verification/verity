@@ -273,6 +273,54 @@ def test_row_sponge_kernel_permute_is_the_permutation() -> None:
     assert [out[i] for i in range(h2.WIDTH)] == list(exp)
 
 
+def test_batch_merkle_framing_is_the_domain_framing() -> None:
+    """``auth.leaf_hashes`` / ``_node_chunk`` / ``_pad_chunk`` (one hashed prefix per domain) hash the bytes
+    ``CommitmentDomain.leaf`` / ``.node`` and the pad leaf do; ``leaf_bytes_many`` is ``row_leaf_value`` per row."""
+    from verity.commitments.merkle import _PAD, _hash, _uint
+    from verity.commitments.rowleaf import row_leaf_value
+
+    from . import auth
+    from .leaf.poseidon2 import Poseidon2Leaf
+    rng = np.random.default_rng(9)
+    for count in (1, 5, 300):
+        dom = auth.domain_for(bytes(range(32)), 1, count)
+        vals = [rng.integers(0, 256, int(rng.integers(0, 40)), dtype=np.uint8).tobytes() for _ in range(count)]
+        for start in (0, 255, 70000):
+            want = b"".join(dom.leaf(start + i, start + i, "sch", v) for i, v in enumerate(vals))
+            assert auth.leaf_hashes(dom.domain_id, start, "sch", vals) == want
+        pairs = rng.integers(0, 256, (count, 64), dtype=np.uint8)
+        for lv, start in ((0, 0), (3, 255), (11, 1 << 20)):
+            want = b"".join(dom.node(lv, start + i, pairs[i, :32].tobytes(), pairs[i, 32:].tobytes()) for i in range(count))
+            assert auth._node_chunk((dom, lv, start, pairs)) == want
+        want = b"".join(_hash(_PAD, dom.domain_id, _uint(r)) for r in range(250, 260))
+        assert auth._pad_chunk((dom.domain_id, 250, 260)) == want
+    d = rng.integers(0, P, (7, 8))
+    assert Poseidon2Leaf().leaf_bytes_many(d) == [row_leaf_value(r) for r in d]
+    with pytest.raises(ValueError):
+        Poseidon2Leaf().leaf_bytes_many(np.full((1, 8), P))
+
+
+def test_frozen_rows_are_the_vu_words() -> None:
+    """``frozen_instances``' ``x_rows`` / ``w_cols`` (what ``commit_vus`` commits) are the VUs' own ``a`` / ``b`` words,
+    past the tier's end too (recycled ``i mod n``)."""
+    from verity_numerical.bench import instances as frozen
+
+    from .relchain import frozen_instances
+    rel = relation("fp8-ada")
+    if not rel.frozen_tier:
+        pytest.skip("no frozen tier")
+    try:
+        n_tier = frozen.load(rel.frozen_tier, frozen.DEFAULT_ROOT).n
+    except FileNotFoundError:
+        pytest.skip("frozen instances not built")
+    data = frozen_instances(rel, n_tier + 2)
+    assert data.x_rows.shape == data.w_cols.shape == (n_tier + 2, len(data[0][0]))
+    for i in (0, 1, n_tier - 1, n_tier, n_tier + 1):
+        assert data.x_rows[i].tolist() == list(data[i][0]) and data.w_cols[i].tolist() == list(data[i][1])
+    small = frozen_instances(rel, 3)
+    assert np.array_equal(small.x_rows, data.x_rows[:3]) and np.array_equal(small.w_cols, data.w_cols[:3])
+
+
 def _fp4_rows(rng, n: int, steps: int) -> np.ndarray:
     from .fp4.hashed import FP4Format
     k = FP4Format().k
