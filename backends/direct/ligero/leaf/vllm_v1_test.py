@@ -118,3 +118,15 @@ def test_wrong_value_length_is_another_leaf() -> None:
     assert V.prefix(1536) != V.prefix(1535)
     with pytest.raises(ValueError):
         V._column_shape(100, 8, 1536)
+
+
+@pytest.mark.parametrize("word_bits,steps", ((8, 12), (16, 12)))
+def test_row_sponges_are_carry_values_and_native(word_bits: int, steps: int) -> None:
+    torch = pytest.importorskip("torch", exc_type=ImportError)
+    if not torch.cuda.is_available():
+        pytest.skip("no CUDA device")
+    rows = np.random.default_rng(steps).integers(0, 1 << word_bits, size=(37, V.K_VU))
+    words = torch.as_tensor(rows, device="cuda").reshape(37 * steps, V.K_VU // steps)
+    car, dg = L.row_sponges(words, word_bits=word_bits, role=1, row_words=V.K_VU, n=37, steps=steps)
+    assert np.array_equal(car.cpu().numpy(), L.carry_values(rows, word_bits=word_bits, role=1, steps=steps))
+    assert np.array_equal(dg.cpu().numpy(), L.native(rows, word_bits=word_bits, role=1))

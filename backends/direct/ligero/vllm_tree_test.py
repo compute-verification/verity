@@ -184,3 +184,18 @@ def test_wrong_value_length_is_rejected(committed) -> None:
     assert not _verify(scheme, auth, sibs, bad, yw)[0]
     # the output words committed as 2-byte values when the relation's are 4
     assert not _verify(scheme, auth, sibs, digests, yw, vshape=(K, WB, 2))[0]
+
+
+def test_device_trees_equal_the_host_trees(committed, monkeypatch) -> None:
+    from . import frame_gpu
+    if not frame_gpu.available():
+        pytest.skip("no GPU committer")
+    x, w, y, scheme, trees, dig = committed
+    bindings = {n: trees[n].ref.binding for n in "aby"}
+    dev, ddig = hashauth.build_trees(x_rows=x, w_cols=w, y_words=y, word_bits=WB, y_bits=22, bindings=bindings, leaf=scheme)
+    monkeypatch.setattr(frame_gpu, "ENABLED", False)
+    host, hdig = hashauth.build_trees(x_rows=x, w_cols=w, y_words=y, word_bits=WB, y_bits=22, bindings=bindings, leaf=scheme)
+    for n in "aby":
+        assert dev[n].ref == host[n].ref and all(np.array_equal(a, b) for a, b in zip(dev[n].levels, host[n].levels))
+    for n in "ab":
+        assert np.array_equal(ddig[n], hdig[n])
