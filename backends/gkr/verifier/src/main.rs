@@ -392,8 +392,8 @@ fn cmd_mutate(args: &[String]) -> i32 {
         let b = rng.below(8 * D);
         muts.push(("merkle_sibling", cols_at + oi * per_col + 4 * rows + D * di + b / 8, (b % 8) as u8));
     }
-    let n_total = muts.len() + 2 + 2;
-    println!("mutations: {} bit flips + 2 count mutations + 2 statement mutations = {n_total}", muts.len());
+    let n_stmt = if stmt.bind.is_some() { 3 } else { 2 };
+    println!("mutations: {} bit flips + 2 count mutations + {n_stmt} statement mutations = {}", muts.len(), muts.len() + 2 + n_stmt);
     let counter = std::sync::atomic::AtomicUsize::new(0);
     let results: Vec<Vec<(usize, bool, String, f64)>> = std::thread::scope(|s| {
         let hs: Vec<_> = (0..parallel).map(|_| s.spawn(|| {
@@ -453,8 +453,11 @@ fn cmd_mutate(args: &[String]) -> i32 {
         if r.is_err() { stmt_ok += 1; } else { accepted_list.push("public_word".into()); }
         *errors.entry(r.err().unwrap_or_default().split(|c: char| c.is_ascii_digit()).next().unwrap_or("").trim().to_string()).or_insert(0) += 1;
         if stmt.vus() > 1 {
-            let s3 = statement(&unit, &epi, &dir, Some(stmt.vus() - 1)).unwrap();
-            let (r, _) = verify::verify(&s3, &bytes, &LIGERO, th);
+            // an operands-bound statement names its VU count: fewer VUs is already not the statement
+            let r = match statement(&unit, &epi, &dir, Some(stmt.vus() - 1)) {
+                Ok(s3) => verify::verify(&s3, &bytes, &LIGERO, th).0,
+                Err(e) => Err(e),
+            };
             if r.is_err() { stmt_ok += 1; } else { accepted_list.push("vu_count".into()); }
             *errors.entry(r.err().unwrap_or_default().split(|c: char| c.is_ascii_digit()).next().unwrap_or("").trim().to_string()).or_insert(0) += 1;
         } else { stmt_ok += 1; }
