@@ -945,6 +945,7 @@ class SharedHashedRunner(HashedRelationRunner):
         self.hr = hashchain.compose_shared(rel, self.fp_coords)
         self.leaf = self.hr.leaf
         self.leaf_name = leaf_registry.suffix_of(self.leaf)
+        self.vshape = None                  # Poseidon2 frame-v3 only: no vllm-v1 ports
         self.sys = self.hr.sys
         self.tb = tables(self.sys, self.device)
         self.rh = hashchain.row_hash_system(rel, self.fp_coords)
