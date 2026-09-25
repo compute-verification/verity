@@ -25,6 +25,7 @@ import torch
 
 from . import field as _field
 from . import gkr, ligero, logup, logup_packed
+from . import link as link_mod
 from .circuit import (
     Circuit,
     Layer,
@@ -157,6 +158,7 @@ class Instance:
     segs: list[Segment]
     chain: Chain | None = None
     _tables: list[Table] | None = None
+    link: "link_mod.Link | None" = None       # the bit link's prime side (link.py, PROTOCOL §17)
 
     @property
     def tables(self) -> list[Table]:
@@ -282,6 +284,7 @@ class Stats:
     t_open_acc: float = 0.0         # the linear functional a (input / lookup / chain claims)
     t_open_wq: float = 0.0          # Ligero w = Σ r_i X_i and q = Σ a_i U_i (the proximity / linear tests)
     t_open_cols: float = 0.0        # the opened columns + their Merkle paths
+    t_link: float = 0.0             # the bit link (link.py): points, sigma, and its term of a (inside t_open_acc)
     proof_elems: int = 0
     slots: int = 0
     depth_circuit: int = 0
@@ -995,6 +998,12 @@ def prove(inst: Instance, pcs: bool = True, params: ligero.LigeroParams = ligero
     finals = [prove_segment(s, pts[si][0], pts[si][1], tr, out, st) for si, s in enumerate(inst.segs)]
     _sync(dev)
     st.t_arith = time.perf_counter() - t2 - st.t_witness_wires
+    lclaim = None
+    if inst.link is not None:
+        tl0 = time.perf_counter()
+        lclaim = link_mod.prove(inst, tr, out)
+        _sync(dev)
+        st.t_link = time.perf_counter() - tl0
     opening = None
     if pcs:
         t3 = time.perf_counter()
@@ -1016,6 +1025,13 @@ def prove(inst: Instance, pcs: bool = True, params: ligero.LigeroParams = ligero
             if inst.chain.bind is not None:
                 rho_b, geo_b = tr.challenge(), tr.challenge()
                 st.bind_constraints = add_bind(acc, rho_b, geo_b, inst, seg_offs, False)
+        if lclaim is not None:
+            _sync(dev)
+            tl0 = time.perf_counter()
+            link_mod.add(acc, lclaim, inst.link.layout, seg_offs[0])
+            lclaim = None
+            _sync(dev)
+            st.t_link += time.perf_counter() - tl0
         _sync(dev)
         st.t_open_acc = time.perf_counter() - t3
         timers: dict = {}
@@ -1081,11 +1097,14 @@ def verify(inst: Instance, proof: Proof, pcs: bool = True, params: ligero.Ligero
                     if gkr.eval_columns(s.cols, s_c, r_star, c_star) != vr:
                         raise VerifyError(f"{s.name}: input layer: right evaluation mismatch")
             claim = nxt
+    lclaim = link_mod.verify(inst, tr, rd) if inst.link is not None else None
     if not pcs:
         if inst.chain:
             check_chain_clear(inst)
             if inst.chain.bind is not None:
                 check_bind_clear(inst)
+        if lclaim is not None:
+            link_mod.check_clear(inst, lclaim)
     else:
         rhos = tr.challenges(n_functionals(inst))
         geo = tr.challenge() if inst.chain else ZERO
@@ -1105,6 +1124,9 @@ def verify(inst: Instance, proof: Proof, pcs: bool = True, params: ligero.Ligero
             if inst.chain.bind is not None:
                 rho_b, geo_b = tr.challenge(), tr.challenge()
                 add_bind(acc, rho_b, geo_b, inst, seg_offs, True)
+        if lclaim is not None:
+            link_mod.add(acc, lclaim, inst.link.layout, seg_offs[0])
+            lclaim = None
         if proof.opening is None:
             raise VerifyError("missing opening")
         ligero.verify_open(proof.root, params, l, acc.a, acc.b, proof.opening, tr, dev)

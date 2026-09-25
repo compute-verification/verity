@@ -1,0 +1,364 @@
+"""The bit link's prime side in sigma form (PROTOCOL.md §17; the red team's S1, NON_ZK_PROOF only).
+
+The unit commits the bits of every operand word it consumes (``tools/link_stub.extend_unit``: booleanity and
+recomposition per bit).  After the GKR layers, with the Ligero root and the binary proof's root ``root_b`` absorbed:
+
+  r in GF(2^256)^m        one challenge point (m = log2ceil of the linked positions), a coin slot of its own
+  y = z^(r)               the binary side's claim about the hashed message bits z (here a STAND-IN: the verifier's own
+                          copy of the operand words, until the binary proof is wired)
+  sigma_t, t < 256        prover messages: sigma_t = sum over the linked cells q of bit_t(eq(r, pos(q))) b_q, integers;
+                          the verifier requires 0 <= sigma_t <= n_cells and sigma_t = bit_t(y) mod 2
+  rho                     one BabyBear^6 challenge; the 256 dense constraints sum_q C(t, q) b_q = sigma_t enter the
+                          batched Ligero functional as a[q] += sum_t rho^t bit_t(eq(r, pos(q))), b += sum_t rho^t sigma_t
+
+Both sides lie in [0, p - 1] (n_cells <= p - 1), so each constraint holds over the integers, and the parities give
+b^(r) = y.  GF(2^256) is GF(2)[x] / (x^256 + x^10 + x^5 + x^2 + 1), polynomial basis, bit t = the coefficient of x^t,
+elements little-endian in 32 bytes.
+
+The map pos (Lambda_F) is derived here from the unit circuit and the checker-v2 layout, never read from a statement:
+unit u = v * steps + s consumes words k s .. k s + k - 1 of x row v (columns 5 .. 5 + k) and of W column v (the next
+k); link column col0 + j * bits + i is bit i of operand column 5 + j, and it goes to
+pos = ((port * vus + v) * K + k s + j mod k) * bits + i, port = j // k.  ``derive`` checks the names, the booleanity
+and recomposition constraints of every link column, and that pos is a bijection onto [0, 2 vus K bits).
+"""
+from __future__ import annotations
+
+import hashlib
+from dataclasses import dataclass
+
+import numpy as np
+import torch
+
+from .circuit import Circuit, log2ceil
+from .field import DEG, P, Ext, e_add, e_mul, e_scale
+from .gkr import Reader, VerifyError
+from .transcript import Transcript
+
+TAG = b"verity-gkr/link/sigma-gf2_256/v1"
+RED = (1 << 10) | (1 << 5) | (1 << 2) | 1
+MASK = (1 << 256) - 1
+PLANES = 256
+BLOCK = 128
+
+
+def gmul(a: int, b: int) -> int:
+    r = 0
+    while b:
+        if b & 1:
+            r ^= a
+        b >>= 1
+        a <<= 1
+        if a >> 256:
+            a = (a & MASK) ^ RED
+    return r
+
+
+@dataclass(frozen=True)
+class Layout:
+    vus: int
+    steps: int
+    K: int
+    k: int
+    bits: int
+    col0: int
+    ncols: int
+
+    @property
+    def per_unit(self) -> int:
+        return 2 * self.k * self.bits
+
+    @property
+    def n_cells(self) -> int:
+        return self.vus * self.steps * self.per_unit
+
+    @property
+    def n_pos(self) -> int:
+        return 2 * self.vus * self.K * self.bits
+
+    @property
+    def m(self) -> int:
+        return log2ceil(self.n_pos)
+
+    def pos(self, q: np.ndarray) -> np.ndarray:
+        u, jb = np.divmod(q, self.per_unit)
+        v, s = np.divmod(u, self.steps)
+        j, i = np.divmod(jb, self.bits)
+        port, jj = np.divmod(j, self.k)
+        return ((port * self.vus + v) * self.K + self.k * s + jj) * self.bits + i
+
+
+def derive(circ: Circuit, vus: int, steps: int, K: int, bits: int) -> Layout:
+    """Lambda_F of a checker-v2 unit circuit extended by ``extend_unit``; raises ``VerifyError`` on any mismatch."""
+    names = circ.col_names
+    if "y.s" not in names:
+        raise VerifyError("link: not a checker-v2 unit (no y.s column)")
+    k = (names.index("y.s") - 5) // 2
+    if k <= 0 or steps * k != K or bits not in (8, 16):
+        raise VerifyError(f"link: layout k = {k}, steps = {steps}, K = {K}, bits = {bits}")
+    nb = 2 * k * bits
+    col0 = circ.ncols - nb
+    want = [f"link.b{5 + j}.{i}" for j in range(2 * k) for i in range(bits)]
+    if names[col0:] != want or any(n.startswith("link.") for n in names[:col0]):
+        raise VerifyError("link: the link columns are not the last 2 k bits columns, in operand-column order")
+    colwire = {w[1]: wi for wi, w in enumerate(circ.wires) if w[0] == "in"}
+    sq: dict[int, list[int]] = {}
+    for wi, w in enumerate(circ.wires):
+        if w[0] == "prod" and len(w[2].terms) == 1 and tuple(w[2].terms[0]) == (w[2].terms[0][0], 1) and w[2].konst == 0:
+            x = w[2].terms[0][0]
+            if [tuple(t) for t in w[3].terms] == [(x, 1)] and w[3].konst == P - 1:
+                sq.setdefault(x, []).append(wi)
+    zero = {(tuple(sorted(tuple(t) for t in l.terms)), l.konst) for _n, l in circ.asserts}
+    for j in range(2 * k):
+        rec = [(colwire[5 + j], 1)]
+        for i in range(bits):
+            bw = colwire[col0 + j * bits + i]
+            if not any((((pw, 1),), 0) in zero for pw in sq.get(bw, [])):
+                raise VerifyError(f"link: no booleanity constraint on link.b{5 + j}.{i}")
+            rec.append((bw, (P - (1 << i)) % P))
+        if (tuple(sorted(rec)), 0) not in zero:
+            raise VerifyError(f"link: no recomposition constraint for operand column {5 + j}")
+    lay = Layout(vus, steps, K, k, bits, col0, circ.ncols)
+    if lay.n_cells != lay.n_pos or lay.n_cells > P - 1:
+        raise VerifyError(f"link: {lay.n_cells} cells for {lay.n_pos} positions (p - 1 = {P - 1})")
+    seen = np.zeros(lay.n_pos, dtype=bool)
+    step = 1 << 24
+    for lo in range(0, lay.n_cells, step):
+        ps = lay.pos(np.arange(lo, min(lay.n_cells, lo + step), dtype=np.int64))
+        if ps.min() < 0 or ps.max() >= lay.n_pos:
+            raise VerifyError("link: Lambda_F leaves the linked positions")
+        seen[ps] = True
+    # n_cells == n_pos cells landing on n_cells distinct positions: injective and onto
+    if int(np.count_nonzero(seen)) != lay.n_cells:
+        raise VerifyError("link: Lambda_F is not injective")
+    return lay
+
+
+@dataclass
+class Link:
+    """What an instance links: the layout, the binary proof's root, and (STAND-IN for the binary proof) the operand
+    words z is made of, ``x`` rows and ``w`` columns ``(vus, K)``."""
+    layout: Layout
+    root_b: bytes
+    x: np.ndarray
+    w: np.ndarray
+
+
+@dataclass
+class Claim:
+    T: torch.Tensor
+    rho: Ext
+    sigma: list[int]
+
+
+# ---- device kernels ---------------------------------------------------------------------------------------------
+
+_K = None
+
+
+def _kernels():
+    global _K
+    if _K is not None:
+        return _K
+    import triton
+    import triton.language as tl
+
+    @triton.jit
+    def eq_level(T, TB, TAB, h, BLOCK: tl.constexpr):
+        i = tl.program_id(0).to(tl.int64) * BLOCK + tl.arange(0, BLOCK).to(tl.int64)
+        m = i < h
+        l0 = tl.zeros([BLOCK], dtype=tl.int64)
+        l1 = tl.zeros([BLOCK], dtype=tl.int64)
+        l2 = tl.zeros([BLOCK], dtype=tl.int64)
+        l3 = tl.zeros([BLOCK], dtype=tl.int64)
+        for kk in tl.static_range(32):
+            b = tl.load(TB + i * 32 + kk, mask=m, other=0).to(tl.int64)
+            q = TAB + (kk * 256 + b) * 4
+            l0 ^= tl.load(q, mask=m, other=0)
+            l1 ^= tl.load(q + 1, mask=m, other=0)
+            l2 ^= tl.load(q + 2, mask=m, other=0)
+            l3 ^= tl.load(q + 3, mask=m, other=0)
+        o = T + (i + h) * 4
+        tl.store(o, l0, mask=m)
+        tl.store(o + 1, l1, mask=m)
+        tl.store(o + 2, l2, mask=m)
+        tl.store(o + 3, l3, mask=m)
+        o = T + i * 4
+        tl.store(o, tl.load(o, mask=m, other=0) ^ l0, mask=m)
+        tl.store(o + 1, tl.load(o + 1, mask=m, other=0) ^ l1, mask=m)
+        tl.store(o + 2, tl.load(o + 2, mask=m, other=0) ^ l2, mask=m)
+        tl.store(o + 3, tl.load(o + 3, mask=m, other=0) ^ l3, mask=m)
+
+    @triton.jit
+    def cells(TB, B, SP, A, R8, WC, n, per_unit, steps, bits, k, vus, K, col0, ncols, off, p,
+              MODE: tl.constexpr, IDENT: tl.constexpr, BLOCK: tl.constexpr):
+        pid = tl.program_id(0).to(tl.int64)
+        q = pid * BLOCK + tl.arange(0, BLOCK).to(tl.int64)
+        m = q < n
+        u = q // per_unit
+        jb = q % per_unit
+        if IDENT:
+            pos = q
+        else:
+            v = u // steps
+            s = u % steps
+            j = jb // bits
+            port = j // k
+            pos = ((port * vus + v) * K + k * s + j % k) * bits + jb % bits
+        t = tl.arange(0, 256)
+        byte = tl.load(TB + pos[:, None] * 32 + (t[None, :] // 8), mask=m[:, None], other=0).to(tl.int32)
+        e = (byte >> (t[None, :] % 8)) & 1
+        if MODE == 0:
+            bq = tl.load(B + q, mask=m, other=0).to(tl.int32)
+            tl.store(SP + pid * 256 + t, tl.sum(e * bq[:, None], 0))
+        else:
+            r8 = tl.load(R8 + t[:, None] * 32 + tl.arange(0, 32)[None, :])
+            lm = tl.dot(e.to(tl.int8), r8, out_dtype=tl.int32).to(tl.int64)
+            base = (off + u * ncols + col0 + jb) * 6
+            for d in tl.static_range(6):
+                w = tl.load(WC + d * 32 + tl.arange(0, 32))
+                cd = tl.sum(lm * w[None, :], 1) % p
+                old = tl.load(A + base + d, mask=m, other=0).to(tl.int64)
+                tl.store(A + base + d, ((old + cd) % p).to(A.dtype.element_ty), mask=m)
+
+    _K = (triton, eq_level, cells)
+    return _K
+
+
+def _split(v: int) -> list[int]:
+    return [(x - (1 << 64)) if x >> 63 else x for x in ((v >> (64 * i)) & ((1 << 64) - 1) for i in range(4))]
+
+
+def eq_table(r: list[int], device) -> torch.Tensor:
+    """``(2^m, 4)`` int64: eq(r, i) for every i < 2^m (bit j of i against r_j)."""
+    triton, eq_level, _ = _kernels()
+    m = len(r)
+    sel = ((np.arange(256)[:, None] >> np.arange(8)[None, :]) & 1).astype(bool)
+    tabs = np.zeros((m, 32, 256, 4), dtype=np.int64)
+    for j in range(m):
+        basis, v = np.zeros((256, 4), dtype=np.int64), r[j]
+        for s in range(256):
+            basis[s] = _split(v)
+            v = ((v << 1) & MASK) ^ (RED if v >> 255 else 0)
+        basis = basis.reshape(32, 8, 4)
+        for q in range(8):
+            tabs[j] ^= np.where(sel[None, :, q, None], basis[:, None, q, :], 0)
+    tabs = torch.from_numpy(tabs).to(device)
+    T = torch.zeros((1 << m, 4), dtype=torch.int64, device=device)
+    T[0, 0] = 1
+    tb = T.view(torch.uint8).view(1 << m, 32)
+    for j in range(m):
+        h = 1 << j
+        eq_level[(triton.cdiv(h, 1024),)](T, tb, tabs[j], h, BLOCK=1024)
+    return T
+
+
+def eq_value(T: torch.Tensor, i: int) -> int:
+    return sum((int(x) & ((1 << 64) - 1)) << (64 * j) for j, x in enumerate(T[i].tolist()))
+
+
+def plane_sums(T: torch.Tensor, lay: Layout, b: torch.Tensor, ident: bool) -> list[int]:
+    """sum_q bit_t(eq(pos(q))) b_q for t < 256 (``ident``: q is the position itself)."""
+    triton, _, cells = _kernels()
+    n = b.numel()
+    nb = triton.cdiv(n, BLOCK)
+    sp = torch.empty((nb, PLANES), dtype=torch.int32, device=b.device)
+    tb = T.view(torch.uint8).view(-1, 32)
+    cells[(nb,)](tb, b, sp, sp, sp, sp, n, lay.per_unit, lay.steps, lay.bits, lay.k, lay.vus, lay.K, lay.col0, lay.ncols, 0, P,
+                 MODE=0, IDENT=ident, BLOCK=BLOCK)
+    return [int(v) for v in sp.sum(0, dtype=torch.int64).tolist()]
+
+
+def z_bits(link: Link, device) -> torch.Tensor:
+    """STAND-IN for the binary proof: the hashed message bits in position order (x rows, then W columns, words
+    little-endian)."""
+    bits = link.layout.bits
+    sh = torch.arange(bits, device=device, dtype=torch.int32)
+    out = []
+    for arr in (link.x, link.w):
+        a = torch.from_numpy(np.ascontiguousarray(arr, dtype=np.int32)).to(device)
+        out.append(((a[:, :, None] >> sh) & 1).reshape(-1).to(torch.int32))
+    return torch.cat(out)
+
+
+def y_value(T: torch.Tensor, link: Link, device) -> int:
+    s = plane_sums(T, link.layout, z_bits(link, device), True)
+    return sum((v & 1) << t for t, v in enumerate(s))
+
+
+def points(tr: Transcript, link: Link) -> list[int]:
+    tr.absorb(TAG + link.root_b)
+    return [int.from_bytes(tr.challenge_bytes(), "little") for _ in range(link.layout.m)]
+
+
+def _msg(v: int) -> Ext:
+    return (v % P,) + (0,) * (DEG - 1)
+
+
+def prove(inst, tr: Transcript, out: list[Ext]) -> Claim:
+    link = inst.link
+    lay = link.layout
+    dev = inst.device
+    T = eq_table(points(tr, link), dev)
+    tr.absorb(b"link/y" + y_value(T, link, dev).to_bytes(32, "little"))
+    b = inst.segs[0].cols[:, lay.col0:].reshape(-1).to(torch.int32).contiguous()
+    sigma = plane_sums(T, lay, b, False)
+    del b
+    msgs = [_msg(s) for s in sigma]
+    out.extend(msgs)
+    tr.absorb_exts(msgs)
+    return Claim(T, tr.challenge(), sigma)
+
+
+def verify(inst, tr: Transcript, rd: Reader) -> Claim:
+    link = inst.link
+    lay = link.layout
+    dev = inst.device
+    T = eq_table(points(tr, link), dev)
+    y = y_value(T, link, dev)
+    tr.absorb(b"link/y" + y.to_bytes(32, "little"))
+    msgs = rd.take(PLANES)
+    sigma = []
+    for t, s in enumerate(msgs):
+        if any(s[1:]) or not 0 <= s[0] <= lay.n_cells:
+            raise VerifyError(f"link: sigma_{t} is not a canonical integer in [0, {lay.n_cells}]")
+        if (s[0] & 1) != (y >> t) & 1:
+            raise VerifyError(f"link: sigma_{t} parity disagrees with the binary side's y")
+        sigma.append(s[0])
+    tr.absorb_exts(msgs)
+    return Claim(T, tr.challenge(), sigma)
+
+
+def check_clear(inst, claim: Claim) -> None:
+    lay = inst.link.layout
+    b = inst.segs[0].cols[:, lay.col0:].reshape(-1).to(torch.int32).contiguous()
+    if plane_sums(claim.T, lay, b, False) != claim.sigma:
+        raise VerifyError("link: the committed bits' plane sums differ from sigma")
+
+
+def add(acc, claim: Claim, lay: Layout, seg_off: int) -> None:
+    """a[q] += sum_t rho^t bit_t(eq(pos(q))) over the link cells of segment 0; b += sum_t rho^t sigma_t."""
+    triton, _, cells = _kernels()
+    dev = acc.a.device
+    pw, g = [], (1,) + (0,) * (DEG - 1)
+    for _ in range(PLANES):
+        pw.append(g)
+        g = e_mul(g, claim.rho)
+    rh = torch.tensor(pw, dtype=torch.int64)
+    r8 = torch.zeros((PLANES, 32), dtype=torch.int64)
+    wc = torch.zeros((DEG, 32), dtype=torch.int64)
+    for d in range(DEG):
+        for q in range(5):
+            r8[:, d * 5 + q] = (rh[:, d] >> (7 * q)) & 127
+            wc[d, d * 5 + q] = pow(128, q, P)
+    r8, wc = r8.to(torch.int8).to(dev), wc.to(dev)
+    tb = claim.T.view(torch.uint8).view(-1, 32)
+    n = lay.n_cells
+    cells[(triton.cdiv(n, BLOCK),)](tb, r8, r8, acc.a, r8, wc, n, lay.per_unit, lay.steps, lay.bits, lay.k, lay.vus, lay.K, lay.col0,
+                                    lay.ncols, seg_off, P, MODE=1, IDENT=False, BLOCK=BLOCK)
+    for t in range(PLANES):
+        acc.b = e_add(acc.b, e_scale(pw[t], claim.sigma[t] % P))
+
+
+def standin_root_b(commitment_text: bytes) -> bytes:
+    """The STAND-IN binary root until the binary proof is wired: SHA-256 of a tag and the statement's commitment."""
+    return hashlib.sha256(TAG + b"/root-b-standin/" + commitment_text).digest()
