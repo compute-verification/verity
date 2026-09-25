@@ -311,8 +311,7 @@ def main() -> int:
 
     from verity_vllm.engine import vllm_adapter as va
     from verity_vllm.pipeline.commit import git_head, run_workload
-    from verity_vllm.check.commit_rules import REQUIRED_CLASSES_DEFAULT
-    from verity_vllm.check.verdict import commit_verdict
+    from verity_vllm.check.verdict import REQUIRED_CLASSES_DEFAULT, commit_verdict
     from verity_vllm.pipeline.tp.capture import parse_engine_args
     from verity_vllm.engine.rank_worker import EXTENSION
     from verity_vllm.acquire.committer_api import challenge_positions
