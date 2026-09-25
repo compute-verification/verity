@@ -70,6 +70,10 @@ class Flock:
     scheme: str = "frame-v3/blake3-keyed/row/v2"
     profile: str = "flock-128-r2"
     binary: str = "flock-pure"
+    #: ``union-wiring``: flock-pure's union circuit with Flock's wiring argument (CPU only; drill-down). ``block``:
+    #: flock-gpu-link's ``flock-pure-block`` (one block R1CS per VU chunk, operand equality and the chain as in-block copy
+    #: rows; Flock-CUDA and CPU), the configuration Table 2 cells come from.
+    statement: str = "union-wiring"
     security: dict = field(default_factory=dict, compare=False, hash=False)
 
     def supports(self, sub: GemmSub):
@@ -107,7 +111,7 @@ class Flock:
         """The Table 1 entry: what this configuration guarantees."""
         return {
             "family": "Flock",
-            "configuration": f"Flock(scheme={self.scheme}, profile={self.profile})",
+            "configuration": f"Flock(scheme={self.scheme}, profile={self.profile}, statement={self.statement})",
             "statement": ("full relation: x rows, W columns and outputs committed under frame-v3 (trees a, b over "
                           "blake3-keyed/row/v2 row digests, tree y over word leaves); the verifier sees the chunk "
                           "chaining values of every row and the output words, never the operands"),
@@ -138,4 +142,5 @@ class Flock:
 
 
 FLOCK_FRAME_V3_BLAKE3 = Flock()
-BACKENDS = (FLOCK_FRAME_V3_BLAKE3,)
+FLOCK_BLOCK = Flock(binary="flock-pure-gpu", statement="block")
+BACKENDS = (FLOCK_FRAME_V3_BLAKE3, FLOCK_BLOCK)

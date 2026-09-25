@@ -220,6 +220,8 @@ def result(a, p: dict, sweep: dict) -> dict:
                           "evidence": [f"{p['dir']}/sessions/index.jsonl"]},
            "measurements": ms, "measurement_files": [f"{p['dir']}/prove.txt"], "artifacts": [],
            "sweep": sweep, "contention": p["contention"],
+           "interaction": {"rtt_method": "net.rtt_ms = (the prover's coin wait - the verifier's round-handling time) / round trips, "
+                                         "median over the timed sessions; verifier " + ("on loopback" if not a.verifier else a.verifier)},
            "protocol": {"warm": True, "runs": len(timed), "statistic": "median", "contended": p["contention"].get("contended"),
                         "warm_rule": "one full untimed session (prove --warm 1) before the timed sessions, same process"},
            "runs": [{"e2e_s": r["e2e_s"], "commit_s": r["commit_s"], "prove_s": r["prove_s"], "wait_s": r["wait_s"],
