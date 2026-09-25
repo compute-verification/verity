@@ -213,9 +213,24 @@ def tile_shape(rel, tile: Any, total: int) -> tuple[int, int, int]:
     if tile.get("draw") != TILE_DRAW or tile.get("layout") != TILE_LAYOUT:
         raise ValueError(f"manifest `set.tile` names draw {tile.get('draw')!r} / layout {tile.get('layout')!r}; this verifier "
                          f"recomputes {TILE_DRAW!r} / {TILE_LAYOUT!r} only")
-    if seed != rel.instance_seed or isinstance(seed, bool):
+    if not (isinstance(seed, int) and not isinstance(seed, bool) and seed == rel.instance_seed):
         raise ValueError(f"manifest `set.tile` seed {seed!r} is not the {rel.name} instance seed {rel.instance_seed}")
     return nx, nw, seed
+
+
+def hashed_relation(base: str):
+    """The relation object a pinned ``<base>+<leaf>`` system was composed from: ``relations.RELATIONS``, and ``fp4-nvf4``
+    (``fp4/hashed.py`` ``FP4_HASHED``, what ``run.py --relation fp4-nvf4 --auth included-hash`` drives; its operand rows
+    are the VU's 24 steps of 68 words, committed through its ``hash_format``)."""
+    from .fp4.hashed import FP4_HASHED
+    from .relations import relation
+
+    return FP4_HASHED if base == FP4_HASHED.name else relation(base)
+
+
+def sharing_label(tile: Any) -> str:
+    """The ``sharing`` label a dump with this manifest ``set.tile`` must carry (``relchain``'s ``tile<nx>x<nw>`` / ``none``)."""
+    return "none" if tile is None else f"tile{tile['nx']}x{tile['nw']}"
 
 
 def committed_trees(pinned: str, man: dict, *, instances_root: str | None = None, procs: int = 1) -> dict[str, TreeKey]:
@@ -226,9 +241,10 @@ def committed_trees(pinned: str, man: dict, *, instances_root: str | None = None
     ``nx`` x rows, ``nw`` W columns, ``nx * nw`` y words, digest ``relchain.tile_digest``).  Bindings are
     ``hashauth.binding_digest`` of (dataset, tier, manifest digest, range, K, tree, schema), as the bench commits them;
     keyed-BLAKE3 row trees are framed by core ``frame-v3`` over digests of the raw rows (independent of the prover's leaf
-    code); other leaf schemes use the backend's reference tree builder.  ``ValueError`` when the set cannot be recomputed
-    (no ``set`` block, a ``set.tile`` other than the bench's, a sharing label without one, a digest mismatch, an operand
-    format with its own lanes)."""
+    code); other leaf schemes use the backend's reference tree builder, a relation with a ``hash_format`` (fp4-nvf4) the
+    Poseidon2 leaf over that format's lanes, as ``hashchain.compose`` builds it.  ``ValueError`` when the set cannot be
+    recomputed (no ``set`` block, a ``set.tile`` other than the bench's, a sharing label without one, a digest mismatch, a
+    lane format under a tile or another leaf)."""
     from verity.commitments import CommitmentDomain, RangeIndexedDomain
     from verity.commitments.frame_v3 import FrameV3, Port, RowLeaf, WordLeaf
     from verity.commitments.rowleaf import ROLE_W, ROLE_X
@@ -236,7 +252,6 @@ def committed_trees(pinned: str, man: dict, *, instances_root: str | None = None
     from . import hashauth
     from .auth import OWNER
     from .leaf import registry as leaf_registry
-    from .relations import relation
     from .relchain import instances, instances_digest, tile_digest, tile_instances
 
     base, leaf_name = leaf_registry.split_relation_name(pinned)
@@ -247,18 +262,28 @@ def committed_trees(pinned: str, man: dict, *, instances_root: str | None = None
     tile = s.get("tile")
     if tile is None and s.get("sharing") not in (None, "none"):
         raise ValueError(f"set sharing {s.get('sharing')!r} without a `set.tile` block: the shared-row layout is not recomputed")
-    rel = relation(base)
-    if getattr(rel, "hash_format", None) is not None or rel.word_dtype not in ("<u1", "<u2"):
-        raise ValueError(f"{rel.name}: operands of dtype {rel.word_dtype} / a lane format are not recomputed")
+    rel = hashed_relation(base)
+    hfmt = getattr(rel, "hash_format", None)
+    if rel.word_dtype not in ("<u1", "<u2"):
+        raise ValueError(f"{rel.name}: operands of dtype {rel.word_dtype} are not recomputed")
+    if hfmt is not None and (tile is not None or leaf_name != "poseidon2"):
+        raise ValueError(f"{rel.name}: its lane format ({type(hfmt).__name__}) is recomputed unshared under the poseidon2 leaf only, "
+                         f"not {leaf_name}{' as a tile' if tile is not None else ''}")
     if tile is None:
         digest = instances_digest(rel, total, root=instances_root)
         if digest != claimed:
             raise ValueError(f"the regenerated {rel.name} set of {total} VUs has manifest digest {digest[:16]}…, the dump claims {claimed[:16]}…")
         data = instances(rel, total, procs=procs, root=instances_root)
-        x_rows = [[int(w) for w in v[0]] for v in data]
-        w_cols = [[int(w) for w in v[1]] for v in data]
+        if hfmt is not None:
+            import numpy as np
+            x_rows, w_cols = (np.asarray([v[i] for v in data], dtype=np.int64) for i in (0, 1))
+        else:
+            x_rows = [[int(w) for w in v[0]] for v in data]
+            w_cols = [[int(w) for w in v[1]] for v in data]
     else:
         nx, nw, seed = tile_shape(rel, tile, total)
+        if s.get("sharing") is not None and s["sharing"] != sharing_label(tile):
+            raise ValueError(f"set sharing {s['sharing']!r} is not the {nx}x{nw} `set.tile` ({sharing_label(tile)!r})")
         digest = tile_digest(rel, nx, nw, seed)
         if digest != claimed:
             raise ValueError(f"the {rel.name} {nx}x{nw} tile (seed {seed}) has manifest digest {digest[:16]}…, the dump claims {claimed[:16]}…")
@@ -267,11 +292,13 @@ def committed_trees(pinned: str, man: dict, *, instances_root: str | None = None
     word_bits = 16 if rel.word_dtype == "<u2" else 8
     K = int(getattr(rel, "vu_words", 1536))
     scheme = leaf_registry.get(leaf_name)
+    if hfmt is not None:
+        scheme, word_bits = scheme.with_lanes(hfmt), hfmt.elem_bits
     ysch, ybytes = hashauth.word_schema(rel.y_bits)
     y_words = [int(rel.y_public(int(v[3]))) for v in data]
     if len(y_words) != total:
         raise ValueError(f"{rel.name}: the regenerated set has {len(y_words)} VUs, not {total}")
-    if any(len(r) != K for r in x_rows + w_cols):
+    if any(len(r) != K for r in (*x_rows, *w_cols)):
         raise ValueError(f"{rel.name}: instance rows are not K = {K} words")
     counts = {"a": len(x_rows), "b": len(w_cols), "y": total}
     bindings = {n: hashauth.binding_digest(dataset=rel.instances_dataset, tier=rel.instances_tier, manifest_sha256=claimed, lo=0,
@@ -304,11 +331,14 @@ def commitment_problems(pdir: Path, man: dict, pinned: str, reps: list[str], *, 
     from .serialize import read_statement
 
     orphans: list[str] = []
+    pair = isinstance(man.get("system_h_file"), dict)
     for r in reps:
-        stmts, proofs = ({f.stem for f in (pdir / r).glob(f"*.{s}")} for s in ("stmt", "proof"))
+        stmts, proofs, hproofs = ({f.stem for f in (pdir / r).glob(f"*.{s}")} for s in ("stmt", "proof", "hproof"))
         listed = [f for f in man.get("files", []) if isinstance(f, dict) and str(f.get("proof") or f.get("stmt") or "").split("/", 1)[0] == r]
         if stmts != proofs:
             orphans.append(f"{r}: {len(stmts - proofs)} statement(s) without a proof, {len(proofs - stmts)} proof(s) without a statement")
+        if (pair or hproofs) and hproofs != proofs:
+            orphans.append(f"{r}: {len(proofs - hproofs)} row-sharing proof(s) without a hash-side .hproof, {len(hproofs - proofs)} .hproof(s) without a proof")
         if any(not f.get("proof") for f in listed):
             orphans.append(f"{r}: the manifest lists a statement without a proof")
         listed_proofs = [Path(f["proof"]).stem for f in listed if f.get("proof")]
@@ -364,7 +394,8 @@ def commitment_problems(pdir: Path, man: dict, pinned: str, reps: list[str], *, 
 
 
 def verify_tree(pdir: Path, man: dict, v: Verifier, rep: Report, *, jobs: int, params: dict, asserted: str | None, out_dir: Path,
-                instances_root: str | None = None) -> None:
+                instances_root: str | None = None, fingerprint: dict | None = None) -> None:
+    """``fingerprint``: the result's ``workload_fingerprint``; its ``sharing`` label (what the tables show) must be the dump's."""
     n, bad, missing = custody(pdir, man)
     rep.custody = {"files": n, "mismatched": len(bad), "missing": len(missing)}
     if bad:
@@ -405,6 +436,10 @@ def verify_tree(pdir: Path, man: dict, v: Verifier, rep: Report, *, jobs: int, p
         return
     if rep.hashed and isinstance(t := (man.get("set") or {}).get("tile"), dict):
         rep.tile = f"{t['nx']}x{t['nw']}"
+    label = (fingerprint or {}).get("sharing")
+    if rep.hashed and label is not None and label != sharing_label((man.get("set") or {}).get("tile")):
+        rep.status, rep.why = "FAIL", [f"the result's sharing {label!r} is not the dump's ({sharing_label((man.get('set') or {}).get('tile'))!r})"]
+        return
     sysh = man.get("system_h_file")
     pair = ["--system-h", sysh.get("path", "system_h.bin")] if isinstance(sysh, dict) else []
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -490,7 +525,9 @@ def reverify(st: Any, result: str, v: Verifier, *, by: str | None, jobs: int, wo
         man = json.loads((pdir / "manifest.json").read_text())
         rep.mode = man.get("mode") or params.get("mode")
         per_rep = work / f"{d.name}.reps"
-        verify_tree(pdir, man, v, rep, jobs=jobs, params=params, asserted=asserted, out_dir=per_rep, instances_root=instances_root)
+        fp = (m.meta or {}).get("workload_fingerprint")
+        verify_tree(pdir, man, v, rep, jobs=jobs, params=params, asserted=asserted, out_dir=per_rep, instances_root=instances_root,
+                    fingerprint=fp if isinstance(fp, dict) else None)
         if rep.status != "PASS":
             if per_rep.is_dir():
                 print(f"reverify: {result}: per-rep verifier JSON kept in {per_rep}", file=sys.stderr)
