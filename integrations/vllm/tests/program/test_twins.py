@@ -14,14 +14,16 @@ import numpy as np
 import pytest
 
 from verity_vllm.check.replay import replay
+from verity_vllm.program.kernels import kernel_registry as KR
 from verity_vllm.program.kernels import twins as TW
 from tests.check.test_replay_synthetic import consistent_toy, snapshots  # noqa: F401 - fixtures
+from verity.evaluation import evaluate
 from verity.ir.defs import bind
 
 FAMILIES = sorted(TW.FAMILIES)
 
 # every specialization present in the two logs the sweep covers (resolve_log `by_spec`): SmolLM2-135M (M1) and
-# Qwen2.5-1.5B (M6) — `twin_for` must offer a twin for each (the CAPTURE_BIG test below evaluates M1's for real)
+# Qwen2.5-1.5B (M6) — a twin must claim each (the CAPTURE_BIG test below evaluates M1's for real)
 M1_STATICS = {
     "Gemm_v1": [{"K": 576, "N": 960}, {"K": 576, "N": 576}, {"K": 576, "N": 3072}, {"K": 1536, "N": 576}, {"K": 576, "N": 49152}],
     "RMSNormTriton_v1": [{"N": 576, "EPS": 1e-05}], "RMSNormFusedCuda_v2": [{"N": 576, "EPS": 1e-05}],
@@ -60,28 +62,27 @@ def test_twin_matches_gates_on_random_small_statics(base):
 
 
 @pytest.mark.parametrize("model,statics", [("m1", M1_STATICS), ("m6", M6_STATICS)])
-def test_twin_for_covers_every_logged_specialization(model, statics):
+def test_twins_cover_every_logged_specialization(model, statics):
     seen = set()
     for base, lst in statics.items():
         for st in lst:
             spec = bind(TW.DEFINITIONS[base], **st)
-            tw = TW.twin_for(spec)
-            assert tw is not None, (spec.id, TW.why_no_twin(spec))
-            assert tw.base_id == base and tw.twin_id and tw.spec is spec
-            seen.add(tw.twin_id)
+            assert KR.covers(spec, TW.KERNEL) is None, (spec.id, KR.covers(spec, TW.KERNEL))
+            assert spec.base_id == base and TW.FAMILIES[base].twin_id
+            seen.add(TW.FAMILIES[base].twin_id)
     assert seen == {TW.FAMILIES[b].twin_id for b in statics}
 
 
-def test_twin_for_declines_statics_outside_the_body():
-    assert TW.twin_for(bind(TW.DEFINITIONS["Gemm_v1"], K=24, N=2)) is None      # K not a multiple of 16
-    assert "K=24" in TW.why_no_twin(bind(TW.DEFINITIONS["Gemm_v1"], K=24, N=2))
+def test_twins_decline_statics_outside_the_body():
+    assert "K=24" in KR.covers(bind(TW.DEFINITIONS["Gemm_v1"], K=24, N=2), TW.KERNEL)      # K not a multiple of 16
+    assert KR.covers(bind(TW.DEFINITIONS["Gemm_v1"], K=32, N=2), TW.KERNEL) is None
 
 
 def test_gemm_twin_falls_back_to_the_primitives_on_non_finite_words():
     """`tc_model.cpp` has no inf/NaN extension: coordinates with a non-finite operand or result take the registered
     primitives' path and still equal the gates."""
     spec = bind(TW.DEFINITIONS["Gemm_v1"], K=32, N=3)
-    tw = TW.twin_for(spec)
+    tw = KR.instance(spec, TW.KERNEL)
     rng = np.random.default_rng(1)
     x = TW.rand_bf16(rng, 32, "gauss")
     w = TW.rand_bf16(rng, 3 * 32, "gauss").reshape(3, 32)
@@ -89,20 +90,20 @@ def test_gemm_twin_falls_back_to_the_primitives_on_non_finite_words():
     w[1, 7] = 0x7FC1                    # NaN payload in coordinate 1
     w[2, :] = 0x7F00                    # huge finite words in coordinate 2 (the chain may or may not overflow)
     args = [x.astype(np.uint64), w.reshape(-1).astype(np.uint64)]
-    got, expect = tw(args), TW.gate_words(spec, args)
+    got, expect = tw(*args, **spec.statics), np.array(evaluate(spec, *(a.tolist() for a in args)), dtype=np.uint64)
     assert np.array_equal(got, expect), (got, expect)
     assert TW._nonfinite16(got.astype(np.uint16))[:2].all()
 
 
 def test_attention_twin_declines_non_finite_operands():
     spec = bind(TW.DEFINITIONS["Attention_v3"], T=3, NH=1, KVH=1, D=16, BN=128)
-    tw = TW.twin_for(spec)
+    tw = KR.instance(spec, TW.KERNEL)
     rng = np.random.default_rng(2)
     args = TW.AttentionTwin.random_args(spec.statics, rng, "gauss")
-    tw(args)                                                              # finite: claimed
+    tw(*args, **spec.statics)                                             # finite: claimed
     args[1][0] = 0x7FC0                                                   # a NaN key word
-    with pytest.raises(TW.TwinDeclined):
-        tw(args)
+    with pytest.raises(KR.Declined):
+        tw(*args, **spec.statics)
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -115,7 +116,7 @@ def _twinned(r) -> set[int]:
     """Nodes of the toy whose specialization has a twin."""
     from verity_vllm.check.fold_compare import _attach_specs
     _attach_specs(r)
-    return {m["node"] for m in r.instances if TW.twin_for(m["_spec"]) is not None}
+    return {m["node"] for m in r.instances if KR.covers(m["_spec"], TW.KERNEL) is None}
 
 
 def test_tier_b_evaluators_agree_and_are_reported(consistent_toy, snapshots):  # noqa: F811
@@ -175,15 +176,15 @@ def test_tier_c_with_twins_reproduces_the_tokens(consistent_toy):  # noqa: F811
 
 def test_failed_self_check_falls_back_in_auto_and_errors_in_twins(consistent_toy, snapshots, monkeypatch):  # noqa: F811
     r, weights, _, _ = consistent_toy
-    real = TW.self_check
+    real = TW.admit
 
-    def rigged(twin, n=3, seed=0):
-        rep = real(twin, n=n, seed=seed)
-        if twin.base_id == "SiluMul_v1":
-            rep = {**rep, "status": "fail", "mismatches": [{"spec": twin.spec.id, "kind": "rigged", "n_diff": 1}]}
+    def rigged(spec, n=3, seed=0):
+        rep = real(spec, n=n, seed=seed)
+        if spec.base_id == "SiluMul_v1":
+            rep = {**rep, "status": "fail", "mismatches": [{"spec": spec.id, "kind": "rigged", "n_diff": 1}]}
         return rep
 
-    monkeypatch.setattr(TW, "self_check", rigged)
+    monkeypatch.setattr(TW, "admit", rigged)
     b = replay.tier_b(r, snapshots, weights, step=0, evaluator="auto")
     assert b["status"] == "pass" and b["n_diverged"] == 0
     silu = [e for e in b["instances"] if e["spec"].startswith("SiluMul")]

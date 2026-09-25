@@ -703,7 +703,7 @@ def _check_targets() -> dict[str, list]:
 def _row(family: str, fn: Callable, returns: tuple[str, ...], sample: Callable | None = None) -> None:
     k = ROWS[family] = RowKernel(family, fn, returns)
     register(family, _instance(k), kernel=KERNEL, domain=DOMAIN, sample=sample or _sample(),
-             check_targets=lambda: _check_targets()[family])
+             check_targets=lambda rng: _check_targets()[family])
 
 
 _row("Gemm_v1", gemm, ("0",))
