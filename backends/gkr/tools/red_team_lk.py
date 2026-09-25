@@ -124,12 +124,15 @@ def _check_merge(pc, mc, merged_name: str, bad: list[str]) -> dict:
         same = got.shape == want.shape and np.array_equal(_sorted_rows(got), _sorted_rows(want))
         if not same:
             bad.append(f"{name}: LK rows of tag {i} != plain rows ({got.shape} vs {want.shape})")
+        if len(want) and not (0 <= int(want[:, 0].min()) and int(want[:, 0].max()) < TAG_SHIFT):
+            bad.append(f"{name}: source keys outside [0, 2^20)")
         per_tag[name] = {"tag": i, "rows": int(len(sel)), "width": n, "max_key": int(want[:, 0].max())}
     if seen != len(rows):
         bad.append(f"LK has {len(rows) - seen} rows with an unused tag")
     # LogUp needs char p > number of lookups (Hab22 Lemma 5); report the per-unit count for the caller's bound
     return {"ok": not bad, "problems": bad[:40], "queries_per_unit": len(mc.queries), "lk_rows": int(len(rows)),
-            "lk_width": W, "tables": per_tag, "plain_tables_used": sorted(tag)}
+            "lk_width": W, "tables": per_tag, "plain_tables_used": sorted(tag),
+            "lk_first_column_unique": bool(len(np.unique(rows[:, 0])) == len(rows))}
 
 
 def check_paired(plain_text: str, paired_text: str, widths=(3, 5, 6, 7)) -> dict:
