@@ -39,6 +39,18 @@ def world():
 
 
 # ------------------------------------------------------------------------------------------------------ (c) gc.freeze before the fork
+@pytest.fixture(autouse=True)
+def _heap_not_frozen_by_an_earlier_test():
+    """vLLM's `EngineCore.__init__` calls `freeze_gc_heap()` and never unfreezes, so an in-process engine built earlier in the same worker
+    leaves a permanent generation these tests would read as their own; it is frozen again afterwards."""
+    frozen = gc.get_freeze_count()
+    if frozen:
+        gc.unfreeze()
+    yield
+    if frozen:
+        gc.freeze()
+
+
 def _child_probe(vu: dict) -> tuple[dict, dict, float]:
     """The per-VU closure of a forked child: reports the child's gc state (frozen count, pid) as its record."""
     return vu, {"result": True, "frozen": gc.get_freeze_count(), "pid": os.getpid(), "i": vu["i"]}, 0.0
