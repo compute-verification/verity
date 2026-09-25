@@ -60,6 +60,17 @@ def test_midstate_is_sha256_prefix_state():
             assert b"".join(x.to_bytes(4, "big") for x in fv3._compress(st, pad)) == hashlib.sha256(data[:done]).digest()
 
 
+@gpu
+def test_device_heads_are_the_host_midstates():
+    datas = [bytes((7 * i + n) % 256 for i in range(n)) for n in (0, 1, 63, 64, 65, 97, 128, 200, 300)]
+    hs, extra = fv3.heads(datas, b"xyz")
+    assert extra.get().tobytes() == b"xyz"
+    for d, h in zip(datas, hs):
+        mid, done, tail = fv3.midstate(d)
+        assert np.array_equal(h.mid.get(), mid) and int(h.done) == done and int(h.tail_len) == len(tail)
+        assert h.tail.get()[:len(tail)].tobytes() == tail
+
+
 def test_head_is_the_domain_framing():
     from verity.commitments.merkle import _FRAME, _NODE
     d = _domain(5)

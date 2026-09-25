@@ -120,6 +120,18 @@ def _word_rows(rows) -> np.ndarray:
     return np.asarray(rows, dtype=np.int64)
 
 
+def narrow_rows(rows, word_bits: int) -> np.ndarray:
+    """Committed rows (:func:`_word_rows`) in their words' own dtype, as a committed set is stored: uint8 / uint16 for
+    8- / 16-bit words (range-checked), any other width as it is."""
+    r = _word_rows(rows)
+    dt = {8: np.uint8, 16: np.uint16}.get(int(word_bits))
+    if dt is None or r.dtype == dt:
+        return r
+    if r.size and (int(r.min()) < 0 or int(r.max()) >= 1 << int(word_bits)):
+        raise ValueError(f"committed words out of range for {word_bits} bits")
+    return np.ascontiguousarray(r.astype(dt))
+
+
 def _rows_to_device(rows: np.ndarray, device, narrow: dict | None = None, name: str | None = None):
     """``rows`` as an int64 torch tensor on ``device``, copied in its narrow dtype and widened there.  ``narrow``: records
     ``narrow[name]`` = the copied tensor when it holds the rows' bytes (uint8 words, or uint16 words as int16)."""
@@ -527,7 +539,10 @@ class HashedRelationRunner(RelationChainRunner):
         self.sponge_seconds = t2 - t1
         chain_digests = None
         if hashchain.ROW_SPONGE_KERNEL and getattr(self.leaf, "row_sponges", None) is not None and str(self.device).startswith("cuda"):
-            chain_digests = {nm: self.sponges[nm][1].cpu().numpy().astype(np.int64) for nm in self.sponges}
+            from . import frame_gpu
+            on_dev = frame_gpu.available() and self.leaf.name in frame_gpu.ROW_SCHEMES      # compared on the device
+            chain_digests = {nm: self.sponges[nm][1] if on_dev else self.sponges[nm][1].cpu().numpy().astype(np.int64)
+                             for nm in self.sponges}
         self.trees, self.digests, cached = hashauth.load_or_build_trees(
             cache, x_rows=x_rows, w_cols=w_cols,
             y_words=np.asarray(y_words, dtype=np.int64), word_bits=self.hr.word_bits, y_bits=self.rel.y_bits, bindings=bindings,
@@ -671,17 +686,22 @@ class HashedRelationRunner(RelationChainRunner):
         return [(coins_of[i], pf, (bd["table"], bd["idx"], bd["ypub"], bd["auth"], sibs[i]), bd["lay"])
                 for i, (pf, bd) in enumerate(zip(proofs, bundles))], wall
 
+    def committed_rows(self, data) -> tuple:
+        """The worst-case committed set of an instance list (every VU its own x row and W column) as stored: ``(x_rows,
+        w_cols)`` in the words' dtype (:func:`narrow_rows`)."""
+        x_rows, w_cols = getattr(data, "x_rows", None), getattr(data, "w_cols", None)
+        if x_rows is None or w_cols is None:
+            x_rows, w_cols = [v[0] for v in data], [v[1] for v in data]
+        return narrow_rows(x_rows, self.hr.word_bits), narrow_rows(w_cols, self.hr.word_bits)
+
     def commit_vus(self, data: list, dataset: str = "synthetic", tier: str = "dev", manifest_sha256: str = "", cache=None, tile=None,
                    x_rows=None, w_cols=None):
         """Commit an instance list: the worst case (every VU its own x row and W column: ``x_rows = a``, ``w_cols = b``) or a
         tile (``x_rows`` / ``w_cols`` given, ``tile = (nx, nw)``)."""
         from . import hashauth
         y = [self.rel.y_public(int(v[3])) for v in data]
-        if tile is None:
-            x_rows, w_cols = getattr(data, "x_rows", None), getattr(data, "w_cols", None)
-            if x_rows is None or w_cols is None:
-                x_rows = [v[0] for v in data]
-                w_cols = [v[1] for v in data]
+        if tile is None and (x_rows is None or w_cols is None):
+            x_rows, w_cols = self.committed_rows(data)
         ysch, _ = hashauth.word_schema(self.rel.y_bits)
         bindings = {n: hashauth.binding_digest(dataset=dataset, tier=tier, manifest_sha256=manifest_sha256, lo=0, hi=len(data),
                                                K=getattr(self.rel, "vu_words", K_VU), tree=n,

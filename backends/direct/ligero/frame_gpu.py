@@ -129,9 +129,10 @@ def blake3_digests(cvs, role: int):
     return out
 
 
-def row_tree(name: str, binding: bytes, rows, *, word_bits: int, role: int, scheme):
+def row_tree(name: str, binding: bytes, rows, *, word_bits: int, role: int, scheme, expect=None):
     """The ``hashauth.build_row_tree`` of a keyed-BLAKE3 row scheme on the device: (tree, digests (count, DIGEST_ELEMS)
-    int64 host) from ``rows`` (N, n_words) words (device or host)."""
+    int64 host) from ``rows`` (N, n_words) words (device or host).  ``expect``: digests (host or device) that must be
+    these."""
     from .auth import LIMITS, OWNER, TreeRef, WordTree, domain_for
     if scheme.name != "blake3":
         raise ValueError(f"no GPU row digest for leaf scheme {scheme.name!r}")
@@ -141,7 +142,12 @@ def row_tree(name: str, binding: bytes, rows, *, word_bits: int, role: int, sche
         LIMITS.enforce("max_positions", count)
         domain = domain_for(binding, OWNER[name], count)
         t = fv3.build_tree(domain.domain_id, count, scheme.schema, roots.view(cp.uint8).reshape(count, 32), vlen=32)
-        dg = blake3_digests(cvs, role).get()
+        dg = blake3_digests(cvs, role)
+        if expect is not None:
+            e = _dev(expect)
+            if e.shape != dg.shape or not bool((e.astype(cp.int64, copy=False) == dg).all()):
+                raise ValueError(f"leaf {scheme.name}: the chain digests are not the committed rows' digests")
+        dg = dg.get()
     return WordTree.on_device(TreeRef(name, bytes(binding), OWNER[name], count, t.root), t), dg
 
 

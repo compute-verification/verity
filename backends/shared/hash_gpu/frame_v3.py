@@ -6,8 +6,8 @@ Framing (``verity.commitments.merkle._hash``): ``SHA-256(FRAME || u32be(len tag)
 leaf parts ``domain_id, uint(rank), uint(position), schema, value``, node parts ``domain_id, uint(level), uint(index),
 left, right``, pad parts ``domain_id, uint(rank)`` for the ranks ``[count, width)``; ``uint`` is the minimal big-endian
 encoding (at least one byte).  One thread per hash.  The constant head of every message (frame, tag, domain id; the
-level of a node launch) is hashed once on the host: its whole 64-byte blocks as a midstate, the rest as a byte tail
-the kernel feeds before the per-thread parts.
+level of a node launch) is hashed once per launch: its whole 64-byte blocks as a midstate (all of a tree's heads in one
+upload and one ``sha_mids`` launch, :func:`heads`), the rest as a byte tail the kernel feeds before the per-thread parts.
 
 Trees are built level by level on the device into one buffer (``Tree.dev``, all levels, leaves first); the host copy
 (``Tree.levels``) is made once, eagerly for small trees and on first use for large ones (openings index it).
@@ -75,6 +75,25 @@ __device__ __forceinline__ void sha_final(Sha& s, u8* out) {
         u32 h = s.st[j];
         out[4*j] = (u8)(h >> 24); out[4*j+1] = (u8)(h >> 16); out[4*j+2] = (u8)(h >> 8); out[4*j+3] = (u8)h;
     }
+}
+
+// head j: the SHA-256 state after the nblk[j] whole blocks at heads + j * stride
+extern "C" __global__
+void sha_mids(const u8* __restrict__ heads, const int* __restrict__ nblk, int stride, int n, u32* __restrict__ mids)
+{
+    int j = blockIdx.x * blockDim.x + threadIdx.x;
+    if (j >= n) return;
+    u32 st[8] = {0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19};
+    const u8* p = heads + (long long)j * stride;
+    for (int b = 0; b < nblk[j]; ++b, p += 64) {
+        u32 w[16];
+        #pragma unroll
+        for (int q = 0; q < 16; ++q)
+            w[q] = ((u32)p[4*q] << 24) | ((u32)p[4*q+1] << 16) | ((u32)p[4*q+2] << 8) | (u32)p[4*q+3];
+        sha256_compress(st, w);
+    }
+    #pragma unroll
+    for (int q = 0; q < 8; ++q) mids[8 * j + q] = st[q];
 }
 
 // leaf i: head || uint_part(start + i) twice (rank == position) || suffix (schema part, u64be(len value)) || value i
@@ -365,23 +384,50 @@ def vllm_head(tag: bytes) -> bytes:
 class _Head:
     """A launch's head on the device: the midstate, the byte count it covers, the tail bytes."""
 
+    __slots__ = ("mid", "done", "tail", "tail_len")
     _cache: dict = {}
 
-    def __init__(self, data: bytes):
-        mid, done, tail = midstate(data)
-        self.mid = cp.asarray(mid)
-        self.done = np.uint64(done)
-        self.tail = cp.asarray(np.frombuffer(tail or b"\0", dtype=np.uint8))
-        self.tail_len = np.int32(len(tail))
+    def __init__(self, mid, done: int, tail, tail_len: int):
+        self.mid, self.done, self.tail, self.tail_len = mid, np.uint64(done), tail, np.int32(tail_len)
 
     @classmethod
     def of(cls, data: bytes) -> "_Head":
+        """A constant head (a tag, a row prefix), kept on the device."""
         h = cls._cache.get(data)
         if h is None:
             if len(cls._cache) > 4096:
                 cls._cache.clear()
-            h = cls._cache[data] = cls(data)
+            h = cls._cache[data] = heads([data])[0][0]
         return h
+
+
+def heads(datas: list[bytes], extra: bytes = b"") -> tuple[list[_Head], object]:
+    """The heads ``datas`` on the device from one upload (their whole blocks, their tails, then ``extra``) and one
+    midstate launch; returns them and ``extra`` on the device."""
+    n = len(datas)
+    nblk = [len(d) // 64 for d in datas]
+    stride = 64 * max(1, max(nblk, default=1))
+    t_off = n * stride
+    b_off = t_off + 64 * n
+    e_off = b_off + 4 * n
+    buf = np.zeros(e_off + max(1, len(extra)), dtype=np.uint8)
+    for j, d in enumerate(datas):
+        k = 64 * nblk[j]
+        buf[j * stride:j * stride + k] = np.frombuffer(d[:k], dtype=np.uint8)
+        buf[t_off + 64 * j:t_off + 64 * j + len(d) - k] = np.frombuffer(d[k:], dtype=np.uint8)
+    buf[b_off:e_off] = np.asarray(nblk, dtype="<i4").view(np.uint8)
+    buf[e_off:e_off + len(extra)] = np.frombuffer(extra, dtype=np.uint8)
+    dev = cp.asarray(buf)
+    mids = cp.empty((n, 8), dtype=cp.uint32)
+    if n:
+        _fn("sha", "sha_mids")(_grid(n, 64), (64,), (dev, dev[b_off:e_off].view(cp.int32), np.int32(stride), np.int32(n), mids))
+    hs = [_Head(mids[j], 64 * nblk[j], dev[t_off + 64 * j:t_off + 64 * (j + 1)], len(d) - 64 * nblk[j])
+          for j, d in enumerate(datas)]
+    return hs, dev[e_off:e_off + len(extra)]
+
+
+def _leaf_suffix(schema: str, vlen: int) -> bytes:
+    return part(schema.encode("utf-8")) + int(vlen).to_bytes(8, "big")
 
 
 def _grid(n: int, block: int) -> tuple[int]:
@@ -396,36 +442,50 @@ def depth_of(count: int) -> int:
     return max(0, (int(count) - 1).bit_length())
 
 
+def _value_len(vmode: int, vlen: int | None) -> int:
+    return 2 if vmode == VALUE_U16 else 4 if vmode == VALUE_U32 else int(vlen)
+
+
 def leaves_into(out, domain_id: bytes, schema: str, values, *, vmode: int = VALUE_BYTES, vlen: int | None = None,
-                start: int = 0, block: int = 256) -> None:
+                start: int = 0, block: int = 256, _head=None) -> None:
     """``out[i] = domain.leaf(start + i, start + i, schema, value_i)`` for the ``n = out.shape[0]`` values: ``values`` a
     device array of ``n`` rows of ``vlen`` bytes (``VALUE_BYTES``), or of ``n`` u16 / u32 words (``VALUE_U16`` /
-    ``VALUE_U32``: the value is the word's 2 / 4 big-endian bytes)."""
+    ``VALUE_U32``: the value is the word's 2 / 4 big-endian bytes).  ``_head``: the leaf head and suffix already on the
+    device (:func:`_tree_heads`)."""
     n = int(out.shape[0])
     if n == 0:
         return
-    if vmode == VALUE_U16:
-        vlen = 2
-    elif vmode == VALUE_U32:
-        vlen = 4
-    h = _Head.of(head(LEAF, domain_id))
-    suffix = cp.asarray(np.frombuffer(part(schema.encode("utf-8")) + int(vlen).to_bytes(8, "big"), dtype=np.uint8))
+    vlen = _value_len(vmode, vlen)
+    if _head is None:
+        (h,), suffix = heads([head(LEAF, domain_id)], _leaf_suffix(schema, vlen))
+    else:
+        h, suffix = _head
     _fn("sha", "fv3_leaf")(_grid(n, block), (block,), (h.mid, h.done, h.tail, h.tail_len, suffix, np.int32(suffix.size),
                                                           values, np.int32(vmode), np.int32(vlen), np.int64(start), np.int64(n), out))
 
 
-def pads_into(out, domain_id: bytes, start: int, block: int = 256) -> None:
+def pads_into(out, domain_id: bytes, start: int, block: int = 256, _head=None) -> None:
     n = int(out.shape[0])
     if n == 0:
         return
-    h = _Head.of(head(PAD, domain_id))
+    h = _head if _head is not None else heads([head(PAD, domain_id)])[0][0]
     _fn("sha", "fv3_pad")(_grid(n, block), (block,), (h.mid, h.done, h.tail, h.tail_len, np.int64(start), np.int64(n), out))
 
 
-def nodes_into(out, domain_id: bytes, level: int, children, block: int = 256) -> None:
+def nodes_into(out, domain_id: bytes, level: int, children, block: int = 256, _head=None) -> None:
     n = int(out.shape[0])
-    h = _Head.of(head(NODE, domain_id, uint(level)))
+    h = _head if _head is not None else heads([head(NODE, domain_id, uint(level))])[0][0]
     _fn("sha", "fv3_node")(_grid(n, block), (block,), (h.mid, h.done, h.tail, h.tail_len, children, np.int64(n), out))
+
+
+def _tree_heads(domain_id: bytes, depth: int, schema: str | None = None, vlen: int | None = None):
+    """A tree's heads in one upload: ``(pad, [node level 0 .. depth-1], (leaf, suffix) or None)``."""
+    datas = [head(PAD, domain_id)] + [head(NODE, domain_id, uint(lv)) for lv in range(depth)]
+    if schema is None:
+        hs, _ = heads(datas)
+        return hs[0], hs[1:], None
+    hs, suffix = heads(datas + [head(LEAF, domain_id)], _leaf_suffix(schema, vlen))
+    return hs[0], hs[1:depth + 1], (hs[-1], suffix)
 
 
 class Tree:
@@ -465,9 +525,11 @@ def build_tree(domain_id: bytes, count: int, schema: str, values, *, vmode: int 
                block: int = 256) -> Tree:
     """The frame-v3 tree of ``count`` leaves (ranks ``0..count``, positions = ranks) with pads to ``2^depth`` and the
     nodes level by level, all on the device (one launch per level)."""
-    dev = cp.empty((2 * (1 << depth_of(count)) - 1, 32), dtype=cp.uint8)
-    leaves_into(dev[:count], domain_id, schema, values, vmode=vmode, vlen=vlen, block=block)
-    return _frame_levels(dev, domain_id, count, block)
+    depth = depth_of(count)
+    dev = cp.empty((2 * (1 << depth) - 1, 32), dtype=cp.uint8)
+    pad, nodes, leaf = _tree_heads(domain_id, depth, schema, _value_len(vmode, vlen))
+    leaves_into(dev[:count], domain_id, schema, values, vmode=vmode, vlen=vlen, block=block, _head=leaf)
+    return _frame_levels(dev, domain_id, count, block, (pad, nodes))
 
 
 def frame_tree(domain_id: bytes, leaves, block: int = 256) -> Tree:
@@ -478,14 +540,16 @@ def frame_tree(domain_id: bytes, leaves, block: int = 256) -> Tree:
     return _frame_levels(dev, domain_id, count, block)
 
 
-def _frame_levels(dev, domain_id: bytes, count: int, block: int) -> Tree:
+def _frame_levels(dev, domain_id: bytes, count: int, block: int, hs=None) -> Tree:
     depth = depth_of(count)
     width = 1 << depth
-    pads_into(dev[count:width], domain_id, count, block=block)
+    pad, nodes = hs if hs is not None else _tree_heads(domain_id, depth)[:2]
+    pads_into(dev[count:width], domain_id, count, block=block, _head=pad)
     off = 0
     for lv in range(depth):
         n = width >> (lv + 1)
-        nodes_into(dev[off + (width >> lv):off + (width >> lv) + n], domain_id, lv, dev[off:off + (width >> lv)], block=block)
+        nodes_into(dev[off + (width >> lv):off + (width >> lv) + n], domain_id, lv, dev[off:off + (width >> lv)], block=block,
+                   _head=nodes[lv])
         off += width >> lv
     return Tree(dev, [width >> lv for lv in range(depth + 1)])
 

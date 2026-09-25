@@ -90,16 +90,13 @@ def build_row_tree(name: str, binding: bytes, rows: np.ndarray, word_bits: int, 
     (count, digest_elems).  ``digests``: the rows' ``scheme.native`` digests already computed (the committer's device
     sponges, ``relchain.HashedRelationRunner.commit``) instead of hashing ``rows`` here.  A scheme with a GPU row digest
     (``frame_gpu.ROW_SCHEMES``) is committed on the device from ``rows_dev`` (the rows already there) or ``rows``, and
-    ``digests`` must then equal the device's."""
+    ``digests`` (host or device) must then equal the device's."""
     scheme = _leaf(leaf)
     count = int(np.shape(rows)[0])
     LIMITS.enforce("max_positions", count)
     if frame_gpu.available() and scheme.name in frame_gpu.ROW_SCHEMES:
-        tree, dg = frame_gpu.row_tree(name, binding, rows if rows_dev is None else rows_dev, word_bits=word_bits, role=role,
-                                      scheme=scheme)
-        if digests is not None and not np.array_equal(np.asarray(digests, dtype=np.int64), dg):
-            raise ValueError(f"leaf {scheme.name}: the chain digests are not the committed rows' digests")
-        return tree, dg
+        return frame_gpu.row_tree(name, binding, rows if rows_dev is None else rows_dev, word_bits=word_bits, role=role,
+                                  scheme=scheme, expect=digests)
     domain = domain_for(binding, OWNER[name], count)
     if digests is None:
         digests = scheme.native(np.ascontiguousarray(rows, dtype=np.int64), word_bits=word_bits, role=role)
