@@ -50,6 +50,7 @@ AMPERE_MODEL = "ampere_bf16_m16n8k16"   # the frozen vu-k1536 tier's model (Para
 K_VU = 1536
 BACKEND = "verity-gkr gpu (backends/gkr/gpu: checker v2 + LogUp + Ligero over BabyBear^6, SHA-512 Merkle; torch/Triton)"
 STATEMENT_FILES = ("circuit.txt", "epilogue.txt", "chain.txt", "manifest.json")
+BIND_FILES = ("bind.txt", "instances.txt", "x.bin", "w.bin")
 
 
 def _m(name: str, value, unit: str) -> dict:
@@ -179,6 +180,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--verifier", default=None, help="verity-gkr-verify binary (independent Rust verifier)")
     ap.add_argument("--threads", type=int, default=16)
     ap.add_argument("--target", type=int, default=-128)
+    ap.add_argument("--bind", action="store_true",
+                    help="the operands-bound statement (gpu/bind.py): bind.txt + the frozen x.bin / w.bin, checked by both verifiers")
     args = ap.parse_args(argv)
 
     if args.path == "torch":
@@ -299,9 +302,27 @@ def main(argv: list[str] | None = None) -> int:
             if g is not None:
                 return g.run(x16, w16, y16)
             return gen.run(ops.asarray(x), ops.asarray(w), ops.asarray(y))
+    write_statement(d, run_dir / "statement", y)
+    bind = bind_info = None
+    if args.bind:
+        from gpu import bind as BD
+        from gpu.field import P as FP
+
+        sd = run_dir / "statement"
+        (sd / "bind.txt").write_text(BD.spec_text(BD.derive(ucirc, man)))
+        spec = BD.read_spec(sd / "bind.txt", ucirc)
+        if nvf4:
+            ox, ow, xdt, ydt = A8.reshape(n_vus, -1), B8.reshape(n_vus, -1), "u8", "u32"
+        else:
+            ox, ow, xdt, ydt = x, w, "u16", ("u32" if y.dtype == np.uint32 else "u16")
+        bind_info = BD.write_instances(sd, args.relation or args.tier, args.lo, ox, ow, np.asarray(public, dtype=np.int64), xdt, ydt)
+        bind = prover.Bind(spec.cols, BD.digests(sd), torch.from_numpy(BD.values(spec, ox, ow, steps, FP)).to(dev))
+        bind_info.update({"bind_sha256": hashlib.sha256(spec.text.encode()).hexdigest(), "bound_columns": len(spec.cols),
+                          "constraints": n_vus * steps * len(spec.cols),
+                          "spec": "gpu/bind.py: X[(v,i), col] = sum coef * ARR[v, stride*i + off] per bind.txt line; "
+                                  "the verifier reads x.bin / w.bin and checks them and the public words against its pinned table"})
     torch.cuda.synchronize(dev)
     t_prep = time.perf_counter() - tp0
-    write_statement(d, run_dir / "statement", y)
     encoder = "SIMT (backends/direct/encode)" if ligero.simt_encoder(ligero.DEFAULT.k, ligero.DEFAULT.n) is not None else "torch NTT"
 
     def one_rep():
@@ -318,9 +339,10 @@ def main(argv: list[str] | None = None) -> int:
         if bad:
             raise SystemExit(f"bench_result.py: {bad} VUs rejected at witness generation (the frozen positives are all valid)")
         gen_peak = torch.cuda.max_memory_allocated(dev)
+        chain = read_chain(d / man.get("chain_file", "chain.txt"), ucirc, ecirc, steps, public)
+        chain.bind = bind
         inst = prover.Instance([prover.Segment("unit", ucirc, ulayers, rows.units, ucirc.hash),
-                                prover.Segment("epilogue", ecirc, elayers, rows.epilogue, ecirc.hash)],
-                               read_chain(d / man.get("chain_file", "chain.txt"), ucirc, ecirc, steps, public))
+                                prover.Segment("epilogue", ecirc, elayers, rows.epilogue, ecirc.hash)], chain)
         proof, st = prover.prove(inst, True)
         torch.cuda.synchronize(dev)
         t2 = time.perf_counter()
@@ -357,7 +379,8 @@ def main(argv: list[str] | None = None) -> int:
         inst, proof, st, data, tm = one_rep()
         err, tv = verify_py(inst, proof)
         if budget is None:
-            budget = soundness.summary(soundness.budget(inst, st.ligero_rows, st.linkage_constraints, K=K_VU))
+            budget = soundness.summary(soundness.budget(inst, st.ligero_rows, st.linkage_constraints, K=K_VU,
+                                                        bind_constraints=st.bind_constraints))
         pf = proofs_dir / f"rep{rep}.bin"
         pf.write_bytes(data)
         row = {"rep": rep, "vus": inst.vus(), "units": inst.segs[0].units, "t_total": tm["total"], "witness_gen": tm["witness_gen"],
@@ -390,7 +413,7 @@ def main(argv: list[str] | None = None) -> int:
             break
         out_json = run_dir / f"verify_rep{row['rep']}.json"
         cmd = [str(vbin), "verify", "--dir", str(run_dir / "statement"), "--proof", str(run_dir / row["proof_file"]),
-               "--vus", str(row["vus"]), "--threads", str(args.threads), "--json", str(out_json)]
+               "--vus", str(row["vus"]), "--threads", str(args.threads), "--json", str(out_json)] + (["--require-bound"] if bind else [])
         t1 = time.perf_counter()
         r = subprocess.run(cmd, capture_output=True, text=True)
         wall = time.perf_counter() - t1
@@ -398,7 +421,7 @@ def main(argv: list[str] | None = None) -> int:
             doc = json.loads(out_json.read_text()) if out_json.is_file() else None
         except json.JSONDecodeError:
             doc = None
-        accepted = bool(doc and doc.get("accepted")) and r.returncode == 0
+        accepted = bool(doc and doc.get("accepted")) and r.returncode == 0 and (bind is None or bool(doc.get("operands_bound")))
         verdicts.append({"rep": row["rep"], "proof_sha256": row["proof_sha256"], "accepted": accepted, "rc": r.returncode,
                          "error": (doc or {}).get("error"), "verify_seconds": (doc or {}).get("verify_seconds"), "process_wall": wall,
                          "threads": (doc or {}).get("threads"), "cpu": (doc or {}).get("cpu"), "json": out_json.name,
@@ -429,7 +452,8 @@ def main(argv: list[str] | None = None) -> int:
         cupy_v = cupy.__version__
     except ImportError:
         cupy_v = None
-    sw = {"backend": {"name": BACKEND, "commit": source_commit(), "version": f"checker v2 ({epi_name}), proof.bin v2",
+    sw = {"backend": {"name": BACKEND, "commit": source_commit(),
+                      "version": f"checker v2 ({epi_name}), proof.bin v2" + ("; operands bound (bind.txt, x.bin, w.bin)" if bind else ""),
                       "model": f"{model_name} ({params_src})", "relation": args.relation or args.tier,
                       "path": args.path, "encoder": encoder, "opening": ligero.opening_path(dev),
                       "witness": ("gpu/nvf4/witness.py (device generator: B-Ligero's fp4/hints_device chain + the unit's program)"
@@ -454,6 +478,8 @@ def main(argv: list[str] | None = None) -> int:
                        + (f"generating the {args.relation} recipe instances ({t_load:.2f}s, relchain.instances on "
                           f"{args.threads} processes)" if args.relation else
                           f"loading the frozen operands from disk ({t_load:.2f}s incl. the sha256 check of every tier file)")
+                       + ("; the operands-bound statement files (bind.txt, instances.txt, x.bin, w.bin, their digests) and "
+                          "the verifier's bound values" if bind else "")
                        + f"; {t_prep:.2f}s in all.  Triton / CUDA-graph / "
                        f"NVRTC compilation happens in {args.warmup} untimed warm-up rep(s) ({', '.join('%.1fs' % v for v in warm)}), "
                        f"then gc.freeze() of the preprocessing objects"),
@@ -468,8 +494,11 @@ def main(argv: list[str] | None = None) -> int:
         verifier={"name": "verity-gkr-verify (backends/gkr/verifier, Rust, shares no code with the prover)", "path": str(vbin),
                   "sha256": vsha, "threads": args.threads, "cpu": next((v["cpu"] for v in verdicts if v.get("cpu")), None)},
         python_verifier="gpu.prover.verify (shares field / transcript / LogUp helpers with the prover)",
-        note=f"one proof of all {Bn} VUs ({steps} chained units each + the {epi_name}); buckets of the median rep "
-             f"(rep {med['rep']}) by t.total",
+        note=f"one proof of all {Bn} VUs ({steps} chained units each + the {epi_name})"
+             + (f"; operands bound: every unit's operand columns equal the frozen x, W the verifier reads "
+                f"({bind_info['constraints']} constraints)" if bind else "")
+             + f"; buckets of the median rep (rep {med['rep']}) by t.total",
+        **({"variant": "A-GKR, operands bound", "operand_binding": bind_info} if bind else {}),
     )
     b = med["buckets"]
     meas = [contract.measurement(name, b[name]) for name in contract.BUCKET_NAMES]
@@ -515,7 +544,8 @@ def main(argv: list[str] | None = None) -> int:
                                           "soundness": budget}},
               "measurements": meas,
               "measurement_files": ["prove_reps.json", "verify_independent.json"] + [v["json"] for v in verdicts],
-              "artifacts": [r["proof_file"] for r in rows] + [f"statement/{n}" for n in (*STATEMENT_FILES, "public.bin")]}
+              "artifacts": [r["proof_file"] for r in rows] + [f"statement/{n}" for n in (*STATEMENT_FILES, "public.bin")]
+                           + ([f"statement/{n}" for n in BIND_FILES] if bind else [])}
     problems = contract.validate(result)
     result["contract_problems"] = problems
     tmp = run_dir / "result.json.tmp"

@@ -1134,3 +1134,38 @@ binary, box and instances. **CPU verdict: a wash** — union / per-table total 0
 (two-run mean; lookup bucket 0.90× / 1.11×), bytes 0.95× / 0.995×, coins 2525 → 642 / 3393 → 761, depth +23 / +51.
 The one \(2^{26}\) tree does 1.25× the leaf work of the twelve padded per-table trees at B = 4096; the union's case
 is the GPU's per-instance latency, to be measured by the GPU lanes (`note:r20-proof/a-logup-union/20260922T1033Z-handoff-handoff-union`).
+
+## 16. Operands bound (implemented 2026-09-25, lane agkr-bound; `bench_result.py --bind`)
+
+Without it the GPU statement is the circuits plus the public words: an accepted proof shows that SOME operands give
+each `y`.  Operands bound, the statement also holds the frozen operands, and the proof shows that the committed operand
+columns of every unit ARE those operands (Table 2's "same full relation", user decision 2026-09-24).
+
+### 16.1 Statement **[implemented: `gpu/bind.py`, `verifier/src/main.rs::read_bind`, `verifier/src/instances.rs`]**
+
+* `bind.txt` (Params-only): `bind <col> <arr>:<stride>:<off>:<coef> ...` per bound unit column, meaning
+  \(X[(v,i),\mathrm{col}] = \sum \mathrm{coef}\cdot \mathrm{ARR}[v, \mathrm{stride}\cdot i + \mathrm{off}]\) for every VU \(v\) and step
+  \(i\).  Checker v2 (BF16, E4M3): the \(k\) x and \(k\) w word columns of the unit (\(k\) = 16 / 32).  fp4-nvf4:
+  `x.p{i}` \(= 16a + b\) (64 E2M1 code pairs) and `x.s{g}` \(= 128a + b\) (4 UE4M3 scale pairs) of the 68-byte step.  The
+  Rust verifier re-derives this text from the unit circuit's column layout and rejects any other `bind.txt`.
+* `instances.txt` (`relation`, `lo`, `vus`, the word widths) names the frozen set; `x.bin`, `w.bin` hold its operand
+  words, little-endian, VU-major (for `vu-k1536` byte-identical to the tier's `.x.u16` / `.w.u16`).
+* The Rust verifier reads `x.bin` / `w.bin` itself and requires SHA-256 of both and of the public words (at the
+  `y` width) to equal its pinned entry for (relation, lo, vus), whose model must be the manifest's (`instances.rs`;
+  `vu-k1536` = the committed frozen manifest, checked by a cargo test; the recipe sets by `python -m gpu.bind pin`).
+
+### 16.2 Protocol **[implemented: `gpu/prover.py::add_bind`, `verify.rs` `bind_u` / `bind_mats`]**
+
+The transcript absorbs SHA-256 of `bind.txt`, `instances.txt`, `x.bin`, `w.bin` after `chain.txt`'s.  After the chain
+challenge `geo` it draws \(\rho_b, g_b\); with \(n_b\) bound columns the functional gains
+\(\rho_b g_b^{u n_b + j}\) on unit \(u\)'s bound column \(j\) and \(b\) gains
+\(\sum_u \rho_b g_b^{u n_b} \sum_j g_b^j\,\mathrm{val}(u,j)\), computed by the verifier from `x.bin` / `w.bin`.  The
+prover's side is one rank-1 update of segment 0 (\(\rho_b (g_b^{n_b})^u \otimes g_b^j\)); it never reads the values.
+Nothing is committed beyond the unbound statement, so the Ligero rows and every other term are unchanged.
+
+### 16.3 Soundness **[derivation: `soundness.py` "operand binding"]**
+
+If any bound column differs from its value, \(\rho_b \sum_c g_b^c r_c\) is a nonzero polynomial of degree
+\(\le N_b = U n_b\) in \((\rho_b, g_b)\), both drawn after the commitment root and every message: error
+\(\le N_b / |F|\), \(|F| = p^6\) (\(2^{-161.9}\) at \(U n_b = 393216 \cdot 32 = 196608 \cdot 64\), BF16 / E4M3; \(2^{-162.8}\) for fp4-nvf4), far below the
+Ligero query term (\(2^{-130.19}\)), so the achieved bound is unchanged at 2 decimals.

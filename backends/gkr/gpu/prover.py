@@ -10,6 +10,7 @@ Instance = segments (data-parallel circuits over ``units`` rows of committed col
   per table: LogUp fractional-sum GKR                          -> leaf claim
   per segment: GKR layers from the assertions down to the columns  -> two input claims
   ρ_1..ρ_m, ρ_geo: every residual claim as one linear functional ⟨a, X⟩ = b (input claims, LogUp leaves, chain)
+  (operands bound: ρ_bind, geo_bind and the operand-binding constraints, ``add_bind``)
   Ligero opening of ⟨a, X⟩
 
 ``mode`` ``pcs`` is the proof; ``clear`` is the ARITHMETIC_DIAGNOSTIC verifier reading the columns (no commitment).
@@ -95,6 +96,16 @@ class Link:
 
 
 @dataclass
+class Bind:
+    """Operand binding (``gpu/bind.py``, PROTOCOL §16): ``X[u, cols[j]] = vals[u, j]`` for every unit ``u`` of segment 0.
+    ``digests`` (bind.txt, instances.txt, x.bin, w.bin) are absorbed after the chain spec; ``vals`` ``(units, nb)`` int64
+    on the device is the verifier's (the prover never reads it)."""
+    cols: list[int]
+    digests: list[bytes]
+    vals: torch.Tensor | None = None
+
+
+@dataclass
 class Chain:
     """The VU chain.  v1: the word chain on limbed words, ``col_c[j]`` ↔ ``col_y[j]`` ↔ ``epi_y32[j]`` per limb ``j``
     (PROTOCOL §12 with the FP32 word as two 16-bit limbs, rule LIMB16); ``links`` is None and the functional is
@@ -111,6 +122,7 @@ class Chain:
     # v2 with a `public` line in chain.txt: the epilogue columns bound to the public words, `public_y16` then holds
     # len(epi_pub) words per VU, VU-major (fp4-nvf4: the FP32 word's sign, exponent field and fraction)
     epi_pub: list[int] | None = None
+    bind: Bind | None = None
 
     @property
     def limbs(self) -> int:
@@ -277,6 +289,7 @@ class Stats:
     committed_elements: int = 0
     ligero_rows: int = 0
     linkage_constraints: int = 0
+    bind_constraints: int = 0
     peak_mem: int = 0
 
     def sequential_depth(self, pcs: bool) -> int:
@@ -510,6 +523,9 @@ def start_transcript(inst: Instance, pcs: bool, root: bytes):
         tr.absorb(b"".join(int(y).to_bytes(4, "little") for y in inst.chain.public_y16))
         if inst.chain.spec_hash is not None:
             tr.absorb(inst.chain.spec_hash)
+        if inst.chain.bind is not None:
+            for h in inst.chain.bind.digests:
+                tr.absorb(h)
     chs = []
     for t in inst.tables:
         z = tr.challenge()
@@ -828,6 +844,42 @@ def check_chain_links_clear(inst: Instance) -> None:
         raise VerifyError("chain: output word differs from the public word")
 
 
+def add_bind(acc: Acc, rho: Ext, geo: Ext, inst: Instance, seg_offs: list[int], value: bool) -> int:
+    """Operand binding (PROTOCOL §16): the coefficient ``ρ·geo^(u·nb + j)`` on unit ``u``'s bound column ``j``, one
+    rank-1 update ``ρ (geo^nb)^u ⊗ geo^j`` of segment 0 (zero off the bound columns).  With ``value`` (the verifier):
+    ``b += Σ_u ρ (geo^nb)^u Σ_j geo^j vals[u, j]``."""
+    from .field import e_pow, geometric
+
+    bd = inst.chain.bind
+    dev = acc.device
+    seg = inst.segs[0]
+    nb = len(bd.cols)
+    gu = geometric(rho, e_pow(geo, nb), seg.units, dev)                     # (units, 6)
+    ex = torch.zeros((seg.ncols, DEG), dtype=torch.int64, device=dev)
+    ex[bd.cols] = geometric(ONE, geo, nb, dev)
+    v = acc.seg_view(seg_offs[0], seg.units, seg.ncols)
+    if _field._fast_rank1_add is not None and dev.type == "cuda":
+        _field._fast_rank1_add(v, gu, ex)
+    else:
+        step = max(1, (1 << 21) // seg.ncols)
+        for lo in range(0, seg.units, step):
+            hi = min(seg.units, lo + step)
+            v[lo:hi] = (v[lo:hi] + ext_mul(gu[lo:hi].unsqueeze(1), ex.unsqueeze(0))) % P
+    if value:
+        gj = ex[bd.cols]
+        inner = torch.zeros((seg.units, DEG), dtype=torch.int64, device=dev)
+        for j in range(nb):
+            inner = (inner + ext_scale(gj[j].unsqueeze(0), bd.vals[:, j])) % P
+        acc.b = e_add(acc.b, py_ext(ext_mul(gu, inner).sum(dim=0) % P))
+    return seg.units * nb
+
+
+def check_bind_clear(inst: Instance) -> None:
+    bd = inst.chain.bind
+    if bool((inst.segs[0].cols[:, bd.cols] != bd.vals).any()):
+        raise VerifyError("bind: an operand column differs from the statement's frozen operands")
+
+
 # ---------------------------------------------------------------------------------------------------------------------
 # Prover
 # ---------------------------------------------------------------------------------------------------------------------
@@ -958,6 +1010,9 @@ def prove(inst: Instance, pcs: bool = True, params: ligero.LigeroParams = ligero
             ri += 1
         if inst.chain:
             st.linkage_constraints = add_chain(acc, rhos[ri], geo, inst, seg_offs)
+            if inst.chain.bind is not None:
+                rho_b, geo_b = tr.challenge(), tr.challenge()
+                st.bind_constraints = add_bind(acc, rho_b, geo_b, inst, seg_offs, False)
         _sync(dev)
         st.t_open_acc = time.perf_counter() - t3
         timers: dict = {}
@@ -1026,6 +1081,8 @@ def verify(inst: Instance, proof: Proof, pcs: bool = True, params: ligero.Ligero
     if not pcs:
         if inst.chain:
             check_chain_clear(inst)
+            if inst.chain.bind is not None:
+                check_bind_clear(inst)
     else:
         rhos = tr.challenges(n_functionals(inst))
         geo = tr.challenge() if inst.chain else ZERO
@@ -1042,6 +1099,9 @@ def verify(inst: Instance, proof: Proof, pcs: bool = True, params: ligero.Ligero
             ri += 1
         if inst.chain:
             add_chain(acc, rhos[ri], geo, inst, seg_offs)
+            if inst.chain.bind is not None:
+                rho_b, geo_b = tr.challenge(), tr.challenge()
+                add_bind(acc, rho_b, geo_b, inst, seg_offs, True)
         if proof.opening is None:
             raise VerifyError("missing opening")
         ligero.verify_open(proof.root, params, l, acc.a, acc.b, proof.opening, tr, dev)

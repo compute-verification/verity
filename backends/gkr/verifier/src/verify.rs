@@ -60,7 +60,27 @@ impl Chain {
     }
 }
 
-pub struct Statement<'a> { pub segs: Vec<Segment<'a>>, pub chain: Chain }
+/// Operand binding (`gpu/bind.py`, PROTOCOL 16): `X[(v,i), cols[j]] = sum_t coef_t * ARR_t[v, stride_t * i + off_t]`
+/// for every unit `(v, i)` of segment 0, `ARR` 0 = x.bin, 1 = w.bin (`words` canonical words per VU, read by this
+/// verifier); `digests` (bind.txt, instances.txt, x.bin, w.bin) are absorbed after the chain spec.
+pub struct Bind {
+    pub cols: Vec<usize>,
+    /// per bound column: (array, stride, offset, coefficient mod p)
+    pub terms: Vec<Vec<(usize, usize, usize, u32)>>,
+    pub arrs: [Vec<u32>; 2],
+    pub words: usize,
+    pub digests: Vec<[u8; 32]>,
+}
+impl Bind {
+    pub fn value(&self, u: usize, steps: usize, j: usize) -> u32 {
+        let (v, i) = (u / steps, u % steps);
+        let mut s = 0u32;
+        for &(a, st, off, c) in &self.terms[j] { s = add(s, mul(c, self.arrs[a][v * self.words + st * i + off])); }
+        s
+    }
+}
+
+pub struct Statement<'a> { pub segs: Vec<Segment<'a>>, pub chain: Chain, pub bind: Option<Bind> }
 impl<'a> Statement<'a> {
     /// Every table any segment queries: segment 0's in order, then the later segments' new ones
     /// (`gpu/prover.py::union_tables`; a v1 statement's epilogue adds none).
@@ -145,6 +165,7 @@ fn start_transcript(stmt: &Statement, root: &Digest) -> (Transcript, Vec<TableCh
     for y in &stmt.chain.public_y16 { buf.extend_from_slice(&y.to_le_bytes()); }
     tr.absorb(&buf);
     if let Some(h) = &stmt.chain.spec_hash { tr.absorb(h); }
+    if let Some(bd) = &stmt.bind { for h in &bd.digests { tr.absorb(h); } }
     let mut chs = Vec::new();
     for t in stmt.tables() {
         let z = tr.challenge();
@@ -342,6 +363,9 @@ struct Functional<'a> {
     chain_v: Vec<Ext>,
     chain_k: Vec<Ext>,
     per_vu: usize,
+    /// operand binding: rho_bind * geo_bind^(u * nb) per unit of segment 0, and the planar matrices of geo_bind^j
+    bind_u: Vec<Ext>,
+    bind_mats: Option<PlanarMats>,
 }
 
 /// The R16-style flush: `out[touched[r]] += (rl * hi[block]) * acc[r]` for every touched column, as one planar
@@ -426,6 +450,14 @@ impl<'a> Functional<'a> {
                     for (idx, m) in &ls.terms_mat[j] { out[*idx] += mat_apply(&e, m); }
                 }
                 lap(prof, 2);
+            }
+        }
+        // operand binding (gpu/prover.py::add_bind): out[cols[j]] += rho_bind geo_bind^(u nb) * geo_bind^j
+        if si == 0 {
+            if let (Some(bd), Some(bm)) = (&self.stmt.bind, &self.bind_mats) {
+                let nb = bd.cols.len();
+                bm.matvec(&self.bind_u[u], &mut planar[..DEG * nb]);
+                for (j, &c) in bd.cols.iter().enumerate() { out[c] += Ext(std::array::from_fn(|d| planar[d * nb + j])); }
             }
         }
         // chain (gpu/prover.py::add_chain ordering: k = i * L + j for the incoming-word constraints, then
@@ -678,6 +710,7 @@ fn verify_inner(stmt: &Statement, proof_bytes: &[u8], p: &Params, threads: usize
     if rd.pos != proof.msgs.len() { return Err("trailing proof data".into()); }
     let rhos = tr.challenges(n_functionals(stmt));
     let geo = tr.challenge();
+    let (rho_b, geo_b) = if stmt.bind.is_some() { (tr.challenge(), tr.challenge()) } else { (Ext::ZERO, Ext::ZERO) };
     st.t_transcript = t1.elapsed().as_secs_f64();
 
     // ---- the functional's structure and its value b
@@ -760,8 +793,45 @@ fn verify_inner(stmt: &Statement, proof_bytes: &[u8], p: &Params, threads: usize
             o += lk.constraints_per_vu(ch.steps);
         }
     }
+    // operand binding: b += sum_u rho_b geo_b^(u nb) sum_j geo_b^j val(u, j), val read from x.bin / w.bin
+    let (bind_u, bind_mats) = match &stmt.bind {
+        None => (Vec::new(), None),
+        Some(bd) => {
+            let (units, ncols, nb) = (stmt.segs[0].units, stmt.segs[0].ncols(), bd.cols.len());
+            if nb == 0 || bd.terms.len() != nb || bd.cols.iter().any(|&c| c >= ncols)
+                || bd.arrs.iter().any(|a| a.len() != stmt.vus() * bd.words)
+                || bd.terms.iter().flatten().any(|&(a, s, o, _)| a > 1 || s * (ch.steps - 1) + o >= bd.words) {
+                return Err("statement: operand binding shape".into());
+            }
+            let mut gj = Vec::with_capacity(nb);
+            let mut g = Ext::ONE;
+            for _ in 0..nb { gj.push(g); g = g * geo_b; }
+            let mut gu = Vec::with_capacity(units);
+            let mut cur = rho_b;
+            for _ in 0..units { gu.push(cur); cur = cur * g; }
+            let th = threads.max(1);
+            let chunk = units.div_ceil(th);
+            let parts: Vec<Ext> = std::thread::scope(|s| {
+                let hs: Vec<_> = (0..th).map(|t| {
+                    let (gu, gj, steps) = (&gu, &gj, ch.steps);
+                    s.spawn(move || {
+                        let mut acc = Ext::ZERO;
+                        for u in t * chunk..((t + 1) * chunk).min(units) {
+                            let mut inner = Ext::ZERO;
+                            for (j, g) in gj.iter().enumerate() { inner += g.scale(bd.value(u, steps, j)); }
+                            acc += gu[u] * inner;
+                        }
+                        acc
+                    })
+                }).collect();
+                hs.into_iter().map(|h| h.join().unwrap()).collect()
+            });
+            for p in parts { b += p; }
+            (gu, Some(PlanarMats::new(&gj)))
+        }
+    };
     let v_mats: Vec<PlanarMats> = v_col.iter().map(|v| PlanarMats::new(v)).collect();
-    let func = Functional { stmt, tables: stmt.tables(), seg_offs, table_offs, l, eq_c, v_col, v_mats, lookups, chain_v, chain_k, per_vu };
+    let func = Functional { stmt, tables: stmt.tables(), seg_offs, table_offs, l, eq_c, v_col, v_mats, lookups, chain_v, chain_k, per_vu, bind_u, bind_mats };
     st.t_konst = t2.elapsed().as_secs_f64();
 
     // ---- Ligero: r, w, qc, the functional value, the opened set

@@ -28,7 +28,7 @@ HASH_QUERIES = 2**64
 
 
 def budget(inst, ligero_rows: int, linkage_constraints: int, n: int = 16384, k: int = 4096, t: int = 192,
-           K: int | None = None):
+           K: int | None = None, bind_constraints: int = 0):
     """``K``: the VU's reduction length (default 16 products per unit)."""
     from verity_numerical.security import accounting as acc
 
@@ -63,6 +63,11 @@ def budget(inst, ligero_rows: int, linkage_constraints: int, n: int = 16384, k: 
             B.add("sumcheck", f"{s.name} layer {j}: {e['rounds']} rounds", e["sumcheck"])
     B.add("batching", f"chain linkage: {linkage_constraints} constraints folded by powers of one challenge",
           Fraction(max(0, linkage_constraints - 1), Fc.size))
+    if bind_constraints:
+        # rho_bind * sum_c geo_bind^c r_c: a nonzero residual vector leaves a nonzero polynomial of degree <= N in
+        # (rho_bind, geo_bind), both drawn after every message the residuals depend on
+        B.add("batching", f"operand binding: {bind_constraints} constraints, fresh rho_bind times powers of fresh geo_bind",
+              Fraction(bind_constraints, Fc.size))
     return B
 
 
