@@ -12,6 +12,7 @@ from typing import Any
 import pytest
 
 from verity.proofs.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, NVFP4_SM120, TARGETS
+from verity_numerical.bench import contract
 from verity_numerical.bench import tables as T
 from verity_numerical.bench import views as V
 
@@ -204,7 +205,7 @@ def test_native_is_the_compute_bound_datasheet_estimate() -> None:
     for target in TARGETS.values():
         n = V.native(target)
         assert n["ops_per_instance"] == 3072 and n["steps"] == 96 and n["unit"] == "tensor cores"
-        assert n["instances_per_second"] == pytest.approx(1 / target.native_peak.seconds_per_vu(T.K))
+        assert n["instances_per_second"] == pytest.approx(1 / contract.native_peak_of(target).seconds_per_vu(T.K))
     assert V._native_text(V.native(FIRST)) == "1.0e11/s · tensor cores, BF16 312 T"
 
 

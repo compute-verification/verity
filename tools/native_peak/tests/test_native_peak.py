@@ -138,7 +138,7 @@ def test_measure_bf16_small_on_cuda(tmp_path, monkeypatch):
 
 def test_spec_peaks_agree_with_every_census_line():
     """The pod-side table stays standalone (no verity import on a pod); it must quote the census's peak for every line."""
-    from verity.census import HARDWARE
+    from verity_census import HARDWARE
 
     m = _measure()
     smi = {"NVIDIA A100 SXM4 80GB": "NVIDIA A100-SXM4-80GB", "NVIDIA H100 SXM5 80GB": "NVIDIA H100 80GB HBM3"}

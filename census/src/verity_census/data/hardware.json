@@ -1,0 +1,77 @@
+[
+  {
+    "id": "a100-sxm4-80gb/bf16",
+    "device": "NVIDIA A100 SXM4 80GB",
+    "dtype": "bf16",
+    "rate": "bf16 dense tensor-core peak, fp32 accumulate",
+    "flop_per_second": 312e12,
+    "accumulate": "fp32",
+    "memory_bytes": 85899345920,
+    "sources": [
+      {
+        "label": "NVIDIA A100 datasheet / Ampere whitepaper"
+      }
+    ],
+    "methodology": "datasheet dense tensor-core peak at FP32 accumulate; an FMA counts as two FLOP; sparsity figures never used"
+  },
+  {
+    "id": "h100-sxm5-80gb/bf16",
+    "device": "NVIDIA H100 SXM5 80GB",
+    "dtype": "bf16",
+    "rate": "bf16 dense tensor-core peak, fp32 accumulate",
+    "flop_per_second": 989.4e12,
+    "accumulate": "fp32",
+    "memory_bytes": 85899345920,
+    "sources": [
+      {
+        "label": "NVIDIA Hopper whitepaper (BF16 1978.9 TFLOPS with sparsity)"
+      }
+    ],
+    "methodology": "datasheet dense tensor-core peak at FP32 accumulate; an FMA counts as two FLOP; sparsity figures never used"
+  },
+  {
+    "id": "h100-sxm5-80gb/e4m3",
+    "device": "NVIDIA H100 SXM5 80GB",
+    "dtype": "e4m3",
+    "rate": "fp8 (e4m3) dense tensor-core peak, fp32 accumulate",
+    "flop_per_second": 1978.9e12,
+    "accumulate": "fp32",
+    "memory_bytes": 85899345920,
+    "sources": [
+      {
+        "label": "NVIDIA Hopper whitepaper (FP8 3957.8 TFLOPS with sparsity; FP32 accumulate at full rate on Hopper)"
+      }
+    ],
+    "methodology": "datasheet dense tensor-core peak at FP32 accumulate; an FMA counts as two FLOP; sparsity figures never used"
+  },
+  {
+    "id": "rtx-4090/e4m3",
+    "device": "NVIDIA GeForce RTX 4090",
+    "dtype": "e4m3",
+    "rate": "fp8 (e4m3) dense tensor-core peak, fp32 accumulate",
+    "flop_per_second": 330.3e12,
+    "accumulate": "fp32",
+    "memory_bytes": 25769803776,
+    "sources": [
+      {
+        "label": "NVIDIA Ada whitepaper (FP8 with FP32 accumulate 330.3 / 660.6 sparse TFLOPS; FP16 accumulate is 660.6 -- Ada halves FP8 throughput with FP32 accumulate)"
+      }
+    ],
+    "methodology": "datasheet dense tensor-core peak at FP32 accumulate; an FMA counts as two FLOP; sparsity figures never used"
+  },
+  {
+    "id": "rtx-5090/e2m1",
+    "device": "NVIDIA GeForce RTX 5090",
+    "dtype": "e2m1",
+    "rate": "fp4 (e2m1, block-scaled) dense tensor-core peak, fp32 accumulate",
+    "flop_per_second": 1676e12,
+    "accumulate": "fp32",
+    "memory_bytes": null,
+    "sources": [
+      {
+        "label": "NVIDIA RTX Blackwell GPU Architecture whitepaper, Appendix A, table 'GeForce RTX 5090 vs RTX 4090 vs RTX 3090', row 'Peak FP4 Tensor TFLOPS with FP32 Accumulate (FP4 AI TOPS)': 1676 dense / 3352 with the 2:4 sparsity feature (footnote 2); footnote 1: peak rates at the GPU boost clock (2407 MHz).  The card's headline '3352 AI TOPS' is the sparse figure; dense is used here.  4x the FP8-with-FP32-accumulate rate (419 dense)"
+      }
+    ],
+    "methodology": "datasheet dense tensor-core peak at FP32 accumulate; an FMA counts as two FLOP; sparsity figures never used"
+  }
+]

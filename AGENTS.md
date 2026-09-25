@@ -35,10 +35,6 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
  it with their own utilities; their readers stay out of core. Its tests live
  in `tests/proofs/`.
  - `verity.commitments`: see its module docstring.
- - `verity.census`: the registry of fixed quantities the tables cite by stable id: hardware lines
- (device, dtype, dense peak, source), networks (the 1 ms / 100 Gb/s reference and the sensitivity
- profiles), workloads and frozen instance sets. Stdlib only; imports no other core module. A
- `Target.native_peak` is a census line; add an entry rather than hand-typing a peak.
  Other modules are created when code lands, not before.
  - Tests live in `packages/verity/tests/<module>/`.
 - `protocols/`: one distribution per protocol, and each imports only the
@@ -46,6 +42,11 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
  The first is `protocols/sampled_proofs` (`verity_sampled_proofs`): the
  two-stage law, its beacon-keyed draws, and verification plans. See its
  `PROTOCOL.md`. Applications (vLLM) compose protocols.
+- `census/`: the census (`verity_census`), its own distribution: JSON data files of hardware lines (device,
+ dtype, dense peak), networks (the 1 ms / 100 Gb/s reference, sensitivity profiles), workloads and frozen
+ instance sets, each with a stable id and sources, plus a thin typed loader. It will grow into the knowledge
+ base of hardware, ML models and workloads. It imports nothing from Verity and core never imports it (both
+ tested); the renderer, benchmarks and tools read it. Core takes such numbers as parameters.
 - `tools/research/`: development infrastructure for running, observing, and
   coordinating recorded work (`research run | status | inspect | fetch |
   compare`). Separate distribution; must not import `verity`, and a test

@@ -12,7 +12,7 @@ from types import SimpleNamespace
 import pytest
 from conftest import REPO, VECTOR_RUN, conforming_result
 
-from verity.census import Hardware
+from verity_census import Hardware
 from verity.proofs.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, K16_VECTOR, NVFP4_SM120
 from verity_numerical.bench import contract
 
@@ -319,7 +319,7 @@ def test_native_reference_is_the_targets_anchor_peak_and_the_bf16_default_is_unc
     (9.846 ps per K=1536 VU; 340 us/VU = 3.45e7x) is unchanged."""
 
     ref = contract.native_reference()
-    assert isinstance(ref, Hardware) and ref is FIRST.native_peak and ref is contract.native_reference(FIRST.name)
+    assert isinstance(ref, Hardware) and ref is contract.native_peak_of(FIRST) and ref is contract.native_reference(FIRST.name)
     assert ref.flop_per_second == 312e12 and ref.accumulate == "fp32" and "A100" in ref.device
     assert contract.native_seconds_per_vu(1536) == pytest.approx(9.846e-12, rel=1e-3)
     assert contract.native_seconds_per_vu(1536) == contract.native_seconds_per_vu(1536, FIRST.name) == contract.native_seconds_per_vu(1536, contract.PROFILE)
@@ -342,18 +342,18 @@ def test_fp8_targets_divide_by_their_own_anchor_peak() -> None:
     the BF16 constant would give.  FP8 Hopper: the H100's 1978.9 TFLOPS dense FP8 peak, 1.55 ps per VU."""
 
     ada = contract.native_reference(FP8_ADA_MMA.name)
-    assert ada is FP8_ADA_MMA.native_peak and ada.flop_per_second == 330.3e12 and ada.accumulate == "fp32" and "4090" in ada.device
+    assert ada is contract.native_peak_of(FP8_ADA_MMA) and ada.flop_per_second == 330.3e12 and ada.accumulate == "fp32" and "4090" in ada.device
     assert contract.native_seconds_per_vu(1536, FP8_ADA_MMA.name) == pytest.approx(9.30e-12, rel=1e-3)
     assert contract.native_seconds_per_vu(1536, FP8_ADA_MMA.name) == pytest.approx(2 * 1536 / 330.3e12)
     assert contract.overhead(401e-6, 1536, FP8_ADA_MMA.name) == pytest.approx(4.31e7, rel=1e-2)
     assert contract.overhead(401e-6, 1536, FP8_ADA_MMA.name) != pytest.approx(contract.overhead(401e-6, 1536), rel=1e-2)
     hopper = contract.native_reference(FP8_HOPPER_WGMMA.name)
-    assert hopper is FP8_HOPPER_WGMMA.native_peak and hopper.flop_per_second == 1978.9e12 and hopper.accumulate == "fp32" and "H100" in hopper.device
+    assert hopper is contract.native_peak_of(FP8_HOPPER_WGMMA) and hopper.flop_per_second == 1978.9e12 and hopper.accumulate == "fp32" and "H100" in hopper.device
     assert contract.native_seconds_per_vu(1536, FP8_HOPPER_WGMMA.name) == pytest.approx(2 * 1536 / 1978.9e12)
     assert contract.native_seconds_per_vu(1536, FP8_HOPPER_WGMMA.name) == pytest.approx(1.552e-12, rel=1e-3)
     for t in (FIRST, FP8_HOPPER_WGMMA, FP8_ADA_MMA):
-        assert t.native_peak.seconds_per_vu(1536) == contract.native_seconds_per_vu(1536, t.name)
-        assert "sparsity" not in t.native_peak.rate and "dense" in t.native_peak.rate and t.native_peak.source
+        assert contract.native_peak_of(t).seconds_per_vu(1536) == contract.native_seconds_per_vu(1536, t.name)
+        assert "sparsity" not in contract.native_peak_of(t).rate and "dense" in contract.native_peak_of(t).rate and contract.native_peak_of(t).source
 
 
 def test_every_target_is_a_valid_profile_and_an_unknown_one_is_not(conforming: dict) -> None:
@@ -608,3 +608,17 @@ def test_compare_instances_conflicts_and_warnings(conforming: dict) -> None:
     assert conflict is None and warnings == ["candidate instances is null: not measured on the shared instance set"]
     conflict, warnings = contract.compare_instances({k: v for k, v in a.items() if k != "instances"}, {**b, "instances": None})
     assert conflict is None and len(warnings) == 2 and warnings[0].startswith("baseline does not record instances")
+
+
+def test_every_target_resolves_its_census_line_and_every_line_is_a_targets() -> None:
+    """The overhead denominator: the census line of the target's anchor device and operand dtype (core names only the device)."""
+    import verity_census
+    from verity.ml.tc.instructions import INSTRUCTIONS
+    from verity.proofs.target import TARGETS
+
+    lines = {t.name: contract.native_peak_of(t) for t in TARGETS.values()}
+    for name, h in lines.items():
+        t = TARGETS[name]
+        assert h.device == t.anchor_device and h.dtype == INSTRUCTIONS[t.instruction].a_dtype and h is contract.native_reference(name)
+    assert {h.id for h in lines.values()} == set(verity_census.HARDWARE)
+    assert {s.target for s in verity_census.INSTANCE_SETS.values()} <= set(TARGETS)

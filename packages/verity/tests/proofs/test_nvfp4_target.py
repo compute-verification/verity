@@ -44,14 +44,8 @@ def test_the_target_is_a_draft_over_the_pinned_nvfp4_instruction() -> None:
     assert "+0" in t.transition_unit and "-174" in t.transition_unit and "36-bit" not in t.transition_unit
 
 
-def test_the_native_peak_is_the_dense_fp4_fp32_accumulate_rate_of_the_rtx_5090() -> None:
-    p = NVFP4_SM120.native_peak
-    assert "5090" in p.device and p.flop_per_second == 1676e12 and p.accumulate == "fp32"
-    assert "dense" in p.rate and "fp32 accumulate" in p.rate and "fp4" in p.rate
-    assert "3352" in p.source and "sparsity" in p.source.lower() and "Appendix A" in p.source
-    assert p.seconds_per_vu(1536) == 2 * 1536 / 1676e12
-    # 4x Ada's FP8-with-FP32-accumulate rate ... on a different card; the ratio to the RTX 4090 FP8 peak is what the tables show
-    assert p.flop_per_second / FP8_ADA_MMA.native_peak.flop_per_second == pytest.approx(1676 / 330.3)
+def test_the_anchor_is_the_rtx_5090() -> None:
+    assert NVFP4_SM120.anchor_device == "NVIDIA GeForce RTX 5090"
 
 
 def test_the_family_is_the_cast_free_tensor_core_gate_set_with_scale_bytes() -> None:

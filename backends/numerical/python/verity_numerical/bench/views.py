@@ -48,7 +48,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from verity.census import REFERENCE_NETWORK, SENSITIVITY_NETWORKS
+from verity_census import REFERENCE_NETWORK, SENSITIVITY_NETWORKS
 from verity.proofs.target import BF16_HOPPER, FP8_ADA_MMA, FP8_HOPPER_WGMMA, NVFP4_SM120, TARGETS, Target
 from verity_numerical.bench import contract
 from verity_numerical.bench import drilldown as D
@@ -396,7 +396,7 @@ def configuration_of(meta: Mapping[str, Any], configurations: Mapping[str, Confi
 # --- native throughput N ----------------------------------------------------------------------------------------------------------
 
 #: The work model until ``verity.silicon`` declares per-primitive costs: a GemmCoordinate<K> is K/16 tensor-core steps of 16
-#: multiply-adds (32 FLOP each) plus one FP32 -> operand-dtype conversion, which never binds; the peaks are ``Target.native_peak``.
+#: multiply-adds (32 FLOP each) plus one FP32 -> operand-dtype conversion, which never binds; the peaks are ``contract.native_peak_of``.
 WORK_MODEL = "work-model/v0: K/16 tensor-core steps x 32 FLOP (+1 conversion, not binding); peaks Target.native_peak"
 
 
@@ -405,7 +405,7 @@ def native(target: Target, K: int = T.K) -> dict[str, Any]:
     tensor cores being the busiest unit of a GEMM coordinate; with the busiest unit, the peak entry and the work model."""
 
     steps, flop = K // 16, (K // 16) * 32
-    peak = target.native_peak
+    peak = contract.native_peak_of(target)
     return {"instances_per_second": peak.flop_per_second / flop, "unit": "tensor cores", "ops_per_instance": flop, "steps": steps,
             "dtype": (T.dtype_of(target) or "?").upper(), "peak_flop_per_second": peak.flop_per_second, "device": peak.device,
             "source": peak.source, "work_model": WORK_MODEL}
@@ -456,8 +456,8 @@ def whole_proof_log2(fp: Mapping[str, Any]) -> float | None:
 
 # --- interaction: t = compute + rounds x RTT + bytes / bandwidth (reporting standard, Daniel 2026-09-25) --------------------------
 
-#: The reference network the Table 2 cell is evaluated at (``verity.census.REFERENCE_NETWORK``: same datacenter); the
-#: interaction drill-down adds ``verity.census.SENSITIVITY_NETWORKS``.
+#: The reference network the Table 2 cell is evaluated at (``verity_census.REFERENCE_NETWORK``: same datacenter); the
+#: interaction drill-down adds ``verity_census.SENSITIVITY_NETWORKS``.
 REF_RTT_S, REF_BANDWIDTH_BPS = REFERENCE_NETWORK.rtt_s, REFERENCE_NETWORK.bandwidth_bps
 #: A measured interactive run must be within this fraction of the formula at the reference profile.
 INTERACTION_TOLERANCE = 0.10
@@ -816,8 +816,8 @@ def reject_codes(store: Any, ctx: Ctx, rules: Rules, equivs: Sequence[T.Instance
             p.append(("F", why))
     p += _instances(ctx, rules, equivs, self_)
     gpu = _get(fp, "hardware", "gpu") if isinstance(_get(fp, "hardware", "gpu"), Mapping) else None
-    if not T.same_sku(gpu.get("name") if gpu else None, ctx.target.native_peak.device):
-        p.append(("K", f"same-SKU: prover ran on {(gpu or {}).get('name')!r}, the line's device is {ctx.target.native_peak.device!r}"))
+    if not T.same_sku(gpu.get("name") if gpu else None, contract.native_peak_of(ctx.target).device):
+        p.append(("K", f"same-SKU: prover ran on {(gpu or {}).get('name')!r}, the line's device is {contract.native_peak_of(ctx.target).device!r}"))
     variant = T.device_variant(gpu, ctx.target)
     if variant:
         p.append(("K", variant))
@@ -994,7 +994,7 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
         N = native(target)
         for scheme in line_schemes:
             line: dict[str, Any] = {"line": target.name, "scheme": scheme, "scheme_label": _SCHEME[scheme].label if scheme else None,
-                                    "status": target.status, "device": target.native_peak.device, "native": N,
+                                    "status": target.status, "device": contract.native_peak_of(target).device, "native": N,
                                     "instruction": target.instruction, "cells": {}, "empty": {}}
             for col in columns:
                 key = (target.name, scheme, col)

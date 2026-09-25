@@ -1,11 +1,14 @@
 # Changelog: `verity_numerical` (the bench renderers and their rules)
 
-## 2026-09-25: peaks, networks and instance sets come from `verity.census`
+## 2026-09-25: peaks, networks and instance sets come from the census (`verity_census`)
 
 - The renderers read the native peaks, the reference network (1 ms, 100 Gb/s), the interaction drill-down's sensitivity
-  profiles, K and B, and the frozen instance sets from the core registry `verity.census`, where each has a stable id
-  (`a100-sxm4-80gb/bf16`, `dc-1ms-100gbps`, `vu-k1536`, ...). No value changed: renders are byte-identical and `--parity`
-  is unchanged. `verity.proofs.target.NativePeak` is gone; a target's `native_peak` is a `verity.census.Hardware`.
+  profiles, K and B, and the frozen instance sets from `census/` (distribution `verity-census`: JSON data with sources, a
+  typed loader), where each has a stable id (`a100-sxm4-80gb/bf16`, `dc-1ms-100gbps`, `vu-k1536`, ...). No value changed:
+  renders are byte-identical and `--parity` is unchanged.
+- Core holds no peak: `verity.proofs.target.Target` names its `anchor_device` (`native_peak` and `NativePeak` are gone), and
+  `contract.native_peak_of(target)` is the census line of that device and the target's operand dtype.
+  `latency.pipeline` takes `native_s_per_vu` as a parameter (default: FIRST's census line).
 
 ## 2026-09-25: route (a) is its own full-relation A-GKR configuration
 

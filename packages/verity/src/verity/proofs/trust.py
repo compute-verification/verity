@@ -106,7 +106,7 @@ SKU_FAMILY: tuple[tuple[str, str], ...] = (
     (r"\bRTX\s*4090\b", "rtx4090"), (r"\bRTX\s*5090\b", "rtx5090"),
 )
 
-#: The anchor SKU of an architecture when no Target names one (a Target's anchor is its ``native_peak.device``).
+#: The anchor SKU of an architecture when no Target names one (a Target's anchor is its ``anchor_device``).
 ANCHOR_SKU: dict[str, str] = {
     "sm_80": "NVIDIA A100 SXM4 80GB", "sm_89": "NVIDIA GeForce RTX 4090", "sm_90": "NVIDIA H100 SXM5 80GB",
     "sm_100": "NVIDIA B200", "sm_120": "NVIDIA GeForce RTX 5090",
@@ -381,7 +381,7 @@ def subjects(name: str) -> Subject:
         model = INSTRUCTIONS[t.instruction].model if t.instruction in INSTRUCTIONS else None
         if model is None and hasattr(t.pipeline, "step"):
             model = t.pipeline  # a Target whose pipeline is itself a Model and whose instruction the registry does not model yet
-        return Subject(name=t.name, instruction=t.instruction, model=model, anchor_sku=t.native_peak.device, target=t)
+        return Subject(name=t.name, instruction=t.instruction, model=model, anchor_sku=t.anchor_device, target=t)
     if name in INSTRUCTIONS:
         ins = INSTRUCTIONS[name]
         wrapped = [t for t in TARGETS.values() if t.instruction == name]

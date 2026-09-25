@@ -1,0 +1,13 @@
+[
+  {
+    "id": "vu-k1536",
+    "K": 1536,
+    "batch": 4096,
+    "description": "GemmCoordinate<1536>: one K = 1536 verification unit, batch 4096 (frozen 2026-09-22)",
+    "sources": [
+      {
+        "label": "backends/AGENTS.md: the decision workload, B = 4096 K = 1536 VUs (frozen 2026-09-22)"
+      }
+    ]
+  }
+]

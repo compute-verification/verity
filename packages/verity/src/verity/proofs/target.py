@@ -143,17 +143,13 @@ much hardware stands behind the model the target computes with.
 Native peak: what a target's overhead is measured against
 =========================================================
 
-Every target carries a ``verity.census`` :class:`~verity.census.Hardware` line, the reference rate the campaign's headline ``overhead.vs_native_peak``
-(``verity_numerical.bench.contract``) divides by.  The anchor ``device`` is the **conformance device of the target's
-instruction** -- the card the relation was pinned on (A100 for ``sm80.mma.m16n8k16.bf16``, H100 for
-``sm90.wgmma.m64n8k32.e4m3``, RTX 4090 for ``sm89.mma.m16n8k32.e4m3``) -- not the machine a prover happens to run
-on (that is in the result's ``hardware`` fingerprint).  The ``rate`` is the vendor datasheet's **dense** tensor-core
-peak for the target's operand dtype **at the relation's accumulate width**: our relations accumulate in FP32, so
-where a part halves its FP8 throughput under FP32 accumulate (Ada: 330.3 TFLOPS, against 660.6 with FP16
-accumulate) the halved number is the reference; sparsity figures are never used.  One VU of ``GemmCoordinate<K>``
-is ``K`` multiply-accumulates = ``2K`` FLOP (NVIDIA counts an FMA as two FLOP); block scales, epilogue casts and the
-proof's own arithmetic are not counted.  So the native time of one VU at peak is ``2K / flop_per_second`` and the
-overhead of a prover that establishes ``B`` VUs in ``t`` seconds is ``flop_per_second / (2KB / t)``.
+A target names its ``anchor_device``, the **conformance device of its instruction** -- the card the relation was pinned
+on (A100 for ``sm80.mma.m16n8k16.bf16``, H100 for ``sm90.wgmma.m64n8k32.e4m3``, RTX 4090 for ``sm89.mma.m16n8k32.e4m3``)
+-- not the machine a prover happens to run on (that is in the result's ``hardware`` fingerprint).  The number a
+benchmark's ``overhead.vs_native_peak`` divides by is outside core: the census (``verity_census``, its own distribution)
+line of that device and the target's operand dtype, the datasheet **dense** tensor-core peak at the relation's FP32
+accumulate width.  One VU of ``GemmCoordinate<K>`` is ``K`` multiply-accumulates = ``2K`` FLOP, so the native time of one
+VU at a peak is ``2K / flop_per_second``.
 """
 
 from __future__ import annotations
@@ -161,7 +157,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from verity.census import HARDWARE, Hardware
 from verity.ml.tc.models import ADA_E4M3_M16N8K32, BLACKWELL_SM120_NVF4, HOPPER_BF16_M16N8K16, HOPPER_E4M3_K32, BlockScaledAlignAdd
 from verity.ml.tc.silicon import AMPERE_BF16_M16N8K16, Pipeline
 
@@ -216,8 +211,8 @@ Status = Literal["frozen", "draft"]
 
 @dataclass(frozen=True, slots=True)
 class Target:
-    """One target: the family, the pipeline the steps are computed on, the program, the reference sizes, the native
-    peak its overhead is measured against -- and its ``status`` (``frozen``: every backend proves it; ``draft``: stated
+    """One target: the family, the pipeline the steps are computed on, the program, the reference sizes, the
+    conformance device its overhead is measured against -- and its ``status`` (``frozen``: every backend proves it; ``draft``: stated
     and vectorised, bound to nothing yet) with the id of the instruction class it is a relation over
     (``verity.ml.tc.instructions.INSTRUCTIONS``)."""
 
@@ -231,7 +226,8 @@ class Target:
     domain: str
     epilogue: str
     reference_vectors: tuple[str, ...]
-    native_peak: Hardware
+    #: The conformance device of the instruction: the card the relation was pinned on (module docstring, "Native peak").
+    anchor_device: str
     status: Status = "frozen"
     instruction: str | None = None
     #: The ``trust-dossier/v1`` artifact id whose computed trust level this target cites (``verity.proofs.trust``).
@@ -251,7 +247,7 @@ FIRST = Target(
     domain="finite BF16 operands and finite FP32 accumulators at every step; anything else is rejected, not computed",
     epilogue="f32_to_bf16: RN-even, overflow -> +-inf, NaN -> 0x7FC0 (software canonical word; @2 has the hardware 0x7FFF)",
     reference_vectors=(K16_VECTOR, K1536_VECTOR),
-    native_peak=HARDWARE["a100-sxm4-80gb/bf16"],
+    anchor_device="NVIDIA A100 SXM4 80GB",
     status="frozen",
     instruction="sm80.mma.m16n8k16.bf16",
     dossier="art:997eefe82d733c30d689801236cd682a47844b52dfcfe1d4ea61d44d99c837cc",
@@ -275,7 +271,7 @@ BF16_HOPPER = Target(
         "Hopper BF16 store is the same cvt as Ampere's, so nothing pipeline-specific is pinned for the epilogue"
     ),
     reference_vectors=("bf16-hopper-mma-k16", "bf16-hopper-mma-k1536"),
-    native_peak=HARDWARE["h100-sxm5-80gb/bf16"],
+    anchor_device="NVIDIA H100 SXM5 80GB",
     status="draft",
     instruction="sm90.mma.m16n8k16.bf16",
 )
@@ -304,7 +300,7 @@ FP8_HOPPER_WGMMA = Target(
     domain=_FP8_DOMAIN,
     epilogue=_FP8_EPILOGUE,
     reference_vectors=("fp8-hopper-wgmma-k32", "fp8-hopper-wgmma-k1536"),
-    native_peak=HARDWARE["h100-sxm5-80gb/e4m3"],
+    anchor_device="NVIDIA H100 SXM5 80GB",
     status="draft",
     instruction="sm90.wgmma.m64n8k32.e4m3",
     dossier="art:f5e282ad4fe3a7d8ab2777cced6a1b0e8692375529fd031f99d24b3c98035755",
@@ -324,7 +320,7 @@ FP8_ADA_MMA = Target(
     domain=_FP8_DOMAIN,
     epilogue=_FP8_EPILOGUE,
     reference_vectors=("fp8-ada-mma-k32", "fp8-ada-mma-k1536"),
-    native_peak=HARDWARE["rtx-4090/e4m3"],
+    anchor_device="NVIDIA GeForce RTX 4090",
     status="draft",
     instruction="sm89.mma.m16n8k32.e4m3",
     dossier="art:2acd0d37dc729e36570bffdee35e6445d4e095d9be9f39bcd11222c439e8197c",
@@ -358,7 +354,7 @@ NVFP4_SM120 = Target(
     domain=_NVFP4_DOMAIN,
     epilogue=_NVFP4_EPILOGUE,
     reference_vectors=("nvfp4-sm120-mma-k64", "nvfp4-sm120-mma-k1536"),
-    native_peak=HARDWARE["rtx-5090/e2m1"],
+    anchor_device="NVIDIA GeForce RTX 5090",
     status="draft",
     instruction="sm120.mma.m16n8k64.e2m1.nvf4",
 )

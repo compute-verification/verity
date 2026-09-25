@@ -56,7 +56,7 @@ The headline is throughput, ``vu.per_second``, and better its inverse relative t
 
 ``R_proved`` is intrinsic to the prover (one VU of GemmCoordinate<K> is K MACs = 2K FLOP).  ``R_native`` depends on
 the target named by the fingerprint's ``profile``: the datasheet dense tensor-core peak of the target's conformance
-anchor for its operand dtype at FP32 accumulate (``Target.native_peak``, ``verity.proofs.target``; A100 BF16
+anchor for its operand dtype at FP32 accumulate (the census line of ``Target.anchor_device``, :func:`native_peak_of`; A100 BF16
 312 TFLOPS for FIRST, RTX 4090 FP8 330.3 TFLOPS for FP8_ADA_MMA, H100 FP8 1978.9 TFLOPS for FP8_HOPPER_WGMMA).  The
 identity ``overhead.vs_native_peak == rate.native_peak_flop_per_second / rate.proved_flop_per_second`` holds by
 construction (:func:`rate_measurements`); :func:`validate` recomputes each of the three from ``t.total``,
@@ -84,8 +84,10 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-from verity.census import INSTANCE_SETS, Hardware
-from verity.proofs.target import FIRST, TARGETS
+from verity.ml.tc.instructions import INSTRUCTIONS
+from verity.proofs.target import FIRST, TARGETS, Target
+from verity_census import INSTANCE_SETS, Hardware
+from verity_census import line as census_line
 
 __all__ = [
     "AUTHENTICATION",
@@ -137,6 +139,7 @@ __all__ = [
     "joint",
     "measurement",
     "NATIVE_REFERENCE",
+    "native_peak_of",
     "native_reference",
     "native_seconds_per_vu",
     "overhead",
@@ -283,9 +286,9 @@ RATE_TOLERANCE = 1e-6
 
 
 def native_reference(profile: str = PROFILE) -> Hardware:
-    """The native peak the headline overhead of a ``profile`` divides by: that target's ``Target.native_peak`` -- the
+    """The native peak the headline overhead of a ``profile`` divides by: :func:`native_peak_of` its target -- the
     datasheet dense tensor-core peak of the instruction's conformance anchor for the target's operand dtype at FP32
-    accumulate, no sparsity (``verity.proofs.target``, "Native peak").  A GemmCoordinate<K> is K MACs = 2K FLOP,
+    accumulate, no sparsity (``verity.proofs.target``, "Native peak"; the census line).  A GemmCoordinate<K> is K MACs = 2K FLOP,
     so the native time of one VU at peak is 2K / rate: 9.85 ps at K=1536 for FIRST (A100 BF16, ~1.0e11 VU/s).  Peak is
     the conservative choice (a real decode step runs below peak, so the true overhead is *lower* than this number); it
     is also the only reference every result can share without a runtime capture.  The prover's own hardware is in the
@@ -295,7 +298,12 @@ def native_reference(profile: str = PROFILE) -> Hardware:
     target = TARGETS.get(profile) if isinstance(profile, str) else None
     if target is None:
         raise ValueError(f"profile must be one of {PROFILES}, got {profile!r}")
-    return target.native_peak
+    return native_peak_of(target)
+
+
+def native_peak_of(target: Target) -> Hardware:
+    """The census hardware line a target's overhead divides by: its ``anchor_device`` running its instruction's operand dtype."""
+    return census_line(target.anchor_device, INSTRUCTIONS[target.instruction].a_dtype)
 
 
 #: The campaign target's native reference as a plain (JSON-serialisable) mapping, for the callers that predate
