@@ -183,13 +183,13 @@ def test_bind_splits_counts_readers_per_progression_exactly_as_the_record_counts
 
 
 def test_tp_rank_compare_in_compact_form_is_the_records(tmp_path, monkeypatch):
-    """[R17 D90 x mfast] tp's two-rank D90 fixture (tests/tp/test_tp2_d90_fixture.py) through compare with COMPACT operands:
+    """[R17 D90 x mfast] tp's two-rank D90 fixture (tests/check/test_tp2_d90_fixture.py) through compare with COMPACT operands:
     the PEER canonical source of every collective instance (a progression of reads of the request's peers node, field-relative) expands
     to the record's per-run list on both sides, the positive passes both ranks and every compare negative fails, exactly as in run form."""
     import pytest
     from verity_vllm.check.match import program_compare as C
     try:
-        from tests.tp import test_tp2_d90_fixture as T
+        from tests.check import test_tp2_d90_fixture as T
     except ImportError as e:   # pragma: no cover - the fixture needs the resolver/fold stack
         pytest.skip(f"tp2 D90 fixture unavailable: {e}")
 

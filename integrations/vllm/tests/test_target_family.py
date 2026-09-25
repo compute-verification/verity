@@ -11,7 +11,7 @@ import pytest
 
 from verity_vllm import target_family as tf
 
-TREE = Path(__file__).resolve().parents[2]
+TREE = Path(__file__).resolve().parents[1]
 ROW_L40S = "mistral-7b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager"
 ROW_H100 = "qwen3-4b-fp8__fp8__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager"
 

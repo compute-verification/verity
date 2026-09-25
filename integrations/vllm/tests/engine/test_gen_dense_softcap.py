@@ -17,7 +17,7 @@ from verity_vllm.engine.profiles.gen_dense_softcap_patterns import AttentionScop
 
 gemma = importlib.import_module("verity_vllm.engine.profiles.derived_GEMMA2_2B")
 from verity_vllm.observe.fold.resolver import Compute, Unsupported, resolve_step
-from tests.observe.test_gen_dense2 import FA2, SCOPE, _fa2_edit
+from tests.engine.test_gen_dense2 import FA2, SCOPE, _fa2_edit
 from tests.observe.test_patterns_synthetic import by_spec, context, decode_step
 from verity_vllm.observe.fold.tree import step_events
 from verity_vllm.program.registry.quarantine.dense import softcap as SC

@@ -262,7 +262,7 @@ fi
 if [[ ",$NEG," == *,lateflush,* ]]; then
   d=$CD/neg_lateflush; rm -rf "$d"; mkdir -p "$d"
   NATIVE_COLLECT_BUILD=${NATIVE_COLLECT_BUILD:-/workspace/cp/nc_build} timeout 900 $PY -m pytest -q -p no:cacheprovider \
-      tests/acquire/test_native_collect_flush.py > "$d/pytest.log" 2>&1; rc=$?
+      tests/commit/test_native_collect_flush.py > "$d/pytest.log" 2>&1; rc=$?
   summ=$(grep -E "^[0-9]+ (passed|failed|skipped|error)|^[0-9]+ passed" "$d/pytest.log" | tail -1); summ=${summ:-$(tail -1 "$d/pytest.log")}
   npass=$(echo "$summ" | sed -nE 's/.*\b([0-9]+) passed.*/\1/p'); npass=${npass:-0}
   if [ $rc -eq 0 ] && [ "$npass" -ge 4 ] && [[ "$summ" != *skipped* ]] && [[ "$summ" != *failed* ]]; then

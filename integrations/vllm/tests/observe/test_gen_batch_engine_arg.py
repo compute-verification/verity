@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from verity_vllm.pipeline import match as RC
-from tests.harness.test_run_config_dry_run import dry
+from tests.pipeline.test_run_config_dry_run import dry
 
 
 def test_engine_arg_reaches_every_gpu_stage():

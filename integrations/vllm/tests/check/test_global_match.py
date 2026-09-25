@@ -17,8 +17,8 @@ from verity_vllm.pipeline.match import persist_program
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, SampleEnd, StepEnd, StepLink, StepStart, StorageAlloc, TritonLaunch, ViewDesc
 from verity_vllm.check.match import global_match as gm
 from verity_vllm.check.match import global_match_fast as GMF
-from tests.correspondence import test_batch_decomp_e2e as e2e
-from tests.correspondence.test_batch_decomp_e2e import (A_DOWN_W, A_EMBED, A_GU_W, A_IDS, A_LN1, A_LN2, A_NORM, A_O_W, A_POS, A_QKV_W, BF,
+from tests.check import test_batch_decomp_e2e as e2e
+from tests.check.test_batch_decomp_e2e import (A_DOWN_W, A_EMBED, A_GU_W, A_IDS, A_LN1, A_LN2, A_NORM, A_O_W, A_POS, A_QKV_W, BF,
                                                                             BS, I32D, I64D, W_COS, W_DOWN, W_EMBED, W_GU, W_LN1, W_LN2, W_NORM,
                                                                             W_O, W_QKV, Ids, V, profile)
 from tests.observe.test_fold_synthetic import A_COS, C, memory  # noqa: F401 - `memory` is the fixture
@@ -1999,7 +1999,7 @@ def test_scheduled_state_on_the_r15_b8_record_reproduces_the_kernel_s_flips():
     the scheduled state from (arrival, cap, length stop) alone equals the recorded live count at every step and its S transitions are the
     kernel's flips (0,1,32) -> (32,5,16) -> (101,4,32)."""
     from verity_vllm.program.registry.topp_split import splits_for
-    p = os.path.join(os.path.dirname(gm.__file__), "..", "..", "tests", "program", "data", "topp_split_fixture", "b8_s_schedule_r15_attempt2.json")
+    p = os.path.join(os.path.dirname(gm.__file__), "..", "..", "..", "tests", "program", "data", "topp_split_fixture", "b8_s_schedule_r15_attempt2.json")
     d = json.load(open(p))
     reqs = [_req(rid, v["arrive"], v["served"], cap=v["cap"]) for rid, v in d["served_vs_cap"].items()]
     present: dict = {}

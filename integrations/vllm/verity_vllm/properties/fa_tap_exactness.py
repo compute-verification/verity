@@ -19,7 +19,7 @@ This module is the property and its record: the cases and negatives, the geometr
 negative results, `ok`) whose `digest` is the sha256 of the canonical JSON of every other field; runs cite the record by that digest.
 `verify_record` re-derives the digest and the verdict without a GPU.
 
-The GPU run is `tests/check/fa_tap_exactness_gpu.py`: it seeds the inputs, records the launch arguments `flash_attn_varlen_func`
+The GPU run is `tests/properties/fa_tap_exactness_gpu.py`: it seeds the inputs, records the launch arguments `flash_attn_varlen_func`
 passes to the installed op and parses its arguments, which library code may not do until the challenge module, `engine/hooks.py` and
 `pipeline/cli.py` exist (lints P3, P9, P6).
 """

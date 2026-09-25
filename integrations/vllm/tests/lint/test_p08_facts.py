@@ -4,7 +4,7 @@ The rule's literal scan: a string literal in code (docstrings excepted) naming a
 (``layer-class``), a GPU (``gpu``) or an ``sm_8x``/``sm_9x``/``sm_10x``/``sm_12x`` architecture (``sm-arch``), outside
 the two homes.  Keyed by the normalized token, counted per function, in ``allowlists/p08_facts.json``.
 
-The scan lives here rather than in ``tests/check/test_quarantine_lint.py``, which tests the quarantine lint itself.
+The scan lives here rather than in ``tests/properties/test_quarantine_lint.py``, which tests the quarantine lint itself.
 """
 from __future__ import annotations
 
