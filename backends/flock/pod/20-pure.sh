@@ -22,7 +22,7 @@ source $HOME/.cargo/env
 export PATH=$W/py/bin:$PATH; python3 --version
 export PYTHONPATH=$REPO/packages/verity/src:$REPO/backends/numerical/python:$REPO/backends/flock/python
 cd $W; [ -d flock ] || git clone -q https://github.com/succinctlabs/flock.git
-cd $F && git checkout -q b684b12 && git checkout -q -- . && git clean -qfd crates && git apply $SRC/flock-link-b684b12.patch || exit 1
+cd $F && git checkout -q b684b12 && git checkout -q -- . && git clean -qfd crates && git apply $SRC/flock-link-b684b12.patch && git apply $SRC/flock-gpu-link-b684b12.patch || exit 1
 rm -rf crates/flock-live && cp -r $SRC/live crates/flock-live
 grep -q '"crates/flock-live"' Cargo.toml || sed -i 's|    "crates/flock-transcript",|    "crates/flock-transcript",\n    "crates/flock-live",|' Cargo.toml
 cp $SRC/verity_unit.rs crates/flock-prover/src/r1cs_hashes/verity_unit.rs
