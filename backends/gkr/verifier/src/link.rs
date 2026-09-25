@@ -123,6 +123,21 @@ impl Layout {
         let (port, jj) = (j / self.k, j % self.k);
         ((port * self.vus + v) * self.kk + self.k * s + jj) * self.bits + i
     }
+    /// `f(jb, pos(u, jb))` for `jb` in order, without the divisions of `pos`.
+    #[inline(always)]
+    pub fn unit_positions(&self, u: usize, mut f: impl FnMut(usize, usize)) {
+        let (v, s) = (u / self.steps, u % self.steps);
+        let mut jb = 0;
+        for port in 0..2 {
+            for jj in 0..self.k {
+                let base = ((port * self.vus + v) * self.kk + self.k * s + jj) * self.bits;
+                for i in 0..self.bits {
+                    f(jb, base + i);
+                    jb += 1;
+                }
+            }
+        }
+    }
 }
 
 /// Lambda_F of a checker-v2 unit circuit extended by `tools/link_stub.extend_unit` (`gpu/link.py::derive`).
@@ -174,14 +189,14 @@ pub fn derive(circ: &Circuit, vus: usize, steps: usize, kk: usize, bits: usize) 
     }
     let n = lay.n_pos();
     let mut seen = vec![0u64; n.div_ceil(64)];
-    let mut hit = 0usize;
+    let (mut hit, mut out) = (0usize, false);
     for u in 0..vus * steps {
-        for jb in 0..lay.per_unit() {
-            let p = lay.pos(u, jb);
-            if p >= n { return Err("link: Lambda_F leaves the linked positions".into()); }
+        lay.unit_positions(u, |_, p| {
+            if p >= n { out = true; return; }
             let (w, b) = (p >> 6, 1u64 << (p & 63));
             if seen[w] & b == 0 { seen[w] |= b; hit += 1; }
-        }
+        });
+        if out { return Err("link: Lambda_F leaves the linked positions".into()); }
     }
     // n_cells == n_pos cells on `hit` distinct positions
     if hit != lay.n_cells() { return Err("link: Lambda_F is not injective".into()); }
@@ -241,7 +256,8 @@ pub fn load(d: &std::path::Path, text: &str, circ: &Circuit, steps: usize, vus: 
 // ---- the transcript part and the functional term -------------------------------------------------------------------
 
 /// What the functional needs: the split eq tables, the byte tables of `rho^t`, and the value side `b`.
-pub struct Term { pub lay: Layout, hi: Vec<G>, lo: Vec<G>, tab: Vec<[u32; DEG]>, pub b: Ext }
+/// `tab[8 byte + v]` = `sum_{bit c of v} rho^(8 byte + c)`, padded to 8 lanes for the vector accumulate.
+pub struct Term { pub lay: Layout, hi: Vec<G>, lo: Vec<G>, tab: Vec<[u32; 8]>, pub b: Ext }
 
 fn stand_in_y(spec: &Spec, hi: &[G], lo: &[G], threads: usize) -> G {
     let lay = &spec.layout;
@@ -296,35 +312,48 @@ pub fn verify(spec: &Spec, tr: &mut Transcript, sigma: &[Ext], threads: usize) -
     for _ in 0..PLANES { pw.push(g); g = g * rho; }
     let mut b = Ext::ZERO;
     for t in 0..PLANES { b += pw[t].scale(sigma[t].0[0]); }
-    let mut tab = vec![[0u32; DEG]; 32 * 256];
+    let mut tab = vec![[0u32; 8]; 32 * 256];
     for byte in 0..32 {
         for v in 1..256usize {
             let low = v & v.wrapping_neg();
-            let e = tab[byte * 256 + (v ^ low)];
-            let add = pw[8 * byte + low.trailing_zeros() as usize];
-            tab[byte * 256 + v] = (Ext(e) + add).0;
+            let e = Ext(std::array::from_fn(|d| tab[byte * 256 + (v ^ low)][d]));
+            let x = e + pw[8 * byte + low.trailing_zeros() as usize];
+            tab[byte * 256 + v][..DEG].copy_from_slice(&x.0);
         }
     }
     Ok(Term { lay, hi, lo, tab, b })
 }
 
 impl Term {
+    /// `sum_t rho^t bit_t(e)` (lanes `DEG..8` stay 0), canonical.
+    #[inline(always)]
+    fn dot(&self, e: &G) -> [u32; 8] {
+        let mut acc = [0u32; 8];
+        for (li, &limb) in e.0.iter().enumerate() {
+            let mut x = limb;
+            for bi in 0..8 {
+                let t = &self.tab[(li * 8 + bi) * 256 + (x & 255) as usize];
+                for d in 0..8 {
+                    let s = acc[d] + t[d];
+                    acc[d] = s.min(s.wrapping_sub(P));
+                }
+                x >>= 8;
+            }
+        }
+        acc
+    }
+
     /// `out[col0 + jb] += sum_t rho^t bit_t(eq(r, pos(u, jb)))` for unit `u` of segment 0.
     #[inline]
     pub fn add_row(&self, u: usize, out: &mut [Ext]) {
         let lay = &self.lay;
         let mask = self.lo.len() - 1;
         let lo_bits = self.lo.len().trailing_zeros();
-        for jb in 0..lay.per_unit() {
-            let p = lay.pos(u, jb);
-            let e = self.hi[p >> lo_bits].mul(self.lo[p & mask]).to_bytes();
-            let mut acc = [0u64; DEG];
-            for (byte, &v) in e.iter().enumerate() {
-                let t = &self.tab[byte * 256 + v as usize];
-                for d in 0..DEG { acc[d] += t[d] as u64; }
-            }
-            out[lay.col0 + jb] += Ext(std::array::from_fn(|d| (acc[d] % P64) as u32));
-        }
+        let dst = &mut out[lay.col0..lay.col0 + lay.per_unit()];
+        lay.unit_positions(u, |jb, p| {
+            let acc = self.dot(&self.hi[p >> lo_bits].mul(self.lo[p & mask]));
+            dst[jb] += Ext(std::array::from_fn(|d| acc[d]));
+        });
     }
 }
 
@@ -357,6 +386,18 @@ mod tests {
         }
         let top = { let mut t = [0u8; 32]; t[31] = 0xff; t };
         assert_eq!(G::from_bytes(&top).mul(G::from_bytes(&top)), gmul_ref(&top, &top));
+    }
+
+    #[test]
+    fn unit_positions_is_pos() {
+        for (k, bits, steps, vus) in [(16usize, 16usize, 3usize, 5usize), (32, 8, 2, 3)] {
+            let lay = Layout { vus, steps, kk: k * steps, k, bits, col0: 0, ncols: 0 };
+            for u in 0..vus * steps {
+                let mut n = 0;
+                lay.unit_positions(u, |jb, p| { assert_eq!(p, lay.pos(u, jb)); assert_eq!(jb, n); n += 1; });
+                assert_eq!(n, lay.per_unit());
+            }
+        }
     }
 
     #[test]
