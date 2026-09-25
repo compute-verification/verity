@@ -348,7 +348,8 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
     if (pure ? (C->comp_slots > 64 || (k_log != 20 && k_log != 21))
              : (C->n_comp_log + 14 != m || k_log <= sub_log || k_log - sub_log > 8)) { printf("FFI chunk: bad shape\n"); return 201; }
     const size_t packed_witness_bytes = (size_t)len * sizeof(F128);
-    const size_t arena_bytes = packed_witness_bytes / 2 * 29 + 2 * packed_witness_bytes + (64ull << 20);
+    // + the lincheck's K-length vectors, which dominate at small m (k_log 21: 2^21 words each)
+    const size_t arena_bytes = packed_witness_bytes / 2 * 29 + 2 * packed_witness_bytes + ((size_t)12 << k_log) * sizeof(F128) + (64ull << 20);
     CK(device_arena.begin(arena_bytes));
     // ================= witness: host-given compression inputs ================
     F128 *df, *d_a, *d_b; uint8_t* d_zlin;
