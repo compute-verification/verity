@@ -143,6 +143,59 @@ def test_roots() -> None:
     assert kinds == {"semantic", "step", "run", "stream", "thread", "weights"}
 
 
+def test_id_leaf() -> None:
+    *leaves, ids = VECTORS["id_leaf"]
+    for case in leaves:
+        assert hashing.leaf_hash(case["canonical_id"], case["dtype"], tuple(case["shape"]), _b(case["value"])).hex() == case["leaf"]
+    assert hashing.ids_digest(sorted(ids["ids"])).hex() == ids["ids_digest"]
+
+
+class _Geometry(hs.ThreadGeometry):
+    """A real ``ThreadGeometry`` (the integration derives headers and indices from it) with the vector's digest."""
+
+    vector_digest = b""
+
+    def digest(self) -> bytes:
+        return self.vector_digest
+
+
+def _integration_opening(case: dict) -> bool:
+    """The integration's own verifier for each domain kind, fed the vector's domain."""
+    d, index, value, path = case["domain"], case["index"], _b(case["value"]), _path(case["path"])
+    root = _b(case["root"])
+    if case["kind"] == "stream":
+        layout = _Digest(_b(d["layout_digest"]), HB=d["HB"], M=d["M"], NB=d["NB"], legacy_tile=True)
+        return hs.verify_chunk_opening(root, layout, d["launch_tag"], d["src_mask"], d["chunk_words"], d["leaf_count"], index * d["chunk_words"],
+                                       hs.ChunkOpening(index, 0, value, tuple(path)))
+    if case["kind"] == "thread":
+        p = case["position"]
+        _Geometry.vector_digest = _b(d["geo_digest"])
+        geo = _Geometry(HB=d["HB"], b=1, h=d["HB"], M=64 * d["num_m_block"], NB=d["NB"], num_m_block=d["num_m_block"],
+                        seqlens_q=(p["seqlen_q"],), seqlens_k=(p["seqlen_k"],), causal=False)
+        assert geo.leaf_index(p["slab"], p["m_block"], p["n_block"], p["tidx"]) == index
+        return hs.verify_thread_opening(root, geo, d["launch_tag"], d["src_mask"], 0, p["slab"], p["m_block"], p["n_block"], p["tidx"],
+                                        hs.ThreadOpening(index, value, tuple(path)))
+    if [p is not None for p in path] != path_shape(d["leaf_count"], index):
+        return False
+    if case["kind"] == "step" and d["chunk"] is not None:
+        c = d["chunk"]
+        layout = _Digest(b"", HB=c["HB"], M=c["M"], NB=c["NB"])
+        leaf = hs.chunk_leaf_digest(hs.chunk_header(layout, c["launch_tag"], index, c["chunk_words"], c["src_mask"]), value)
+    else:
+        leaf = pos_leaf(value)
+    tree_root = fold_path(leaf, index, path)
+    if case["kind"] == "semantic":
+        return semantic_root(_b(d["program_digest"]), _b(d["query_id"]), _b(d["template_digest"]), _b(d["ctx_digest"]), d["epoch"],
+                             d["leaf_count"], tree_root) == root
+    return eng.bind_root(_b(d["program_digest"]), _b(d["ctx_digest"]), _b(d["geo_digest"]), _b(d["layout_digest"]), d["leaf_count"],
+                         tree_root) == root
+
+
+@pytest.mark.parametrize("case", VECTORS["openings"], ids=lambda c: f"{c['kind']}-{c['index']}-{'accept' if c['accept'] else 'reject'}")
+def test_domain_openings(case: dict) -> None:
+    assert _integration_opening(case) is case["accept"]
+
+
 # --- whole production commits, recomputed with the reference -------------------------------------------------------
 
 _IDENTITIES = [

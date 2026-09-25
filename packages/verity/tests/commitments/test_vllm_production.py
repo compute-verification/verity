@@ -45,6 +45,52 @@ def test_rejection_vectors_are_rejected(case: dict) -> None:
     assert not ref.verify_opening(_b(case["root"]), case["leaf_count"], case["index"], _b(case["leaf"]), _path(case["path"]))
 
 
+def _domain(case: dict):
+    d = dict(case["domain"])
+    for key in [k for k in d if k.endswith("_digest") or k == "query_id"]:
+        d[key] = _b(d[key])
+    kind = case["kind"]
+    if kind == "semantic":
+        return ref.SemanticDomain(**d)
+    if kind == "step":
+        return ref.StepDomain(**d)
+    if kind == "stream":
+        return ref.StreamDomain(**d)
+    return ref.ThreadDomain(**d)
+
+
+def _opening_accepted(case: dict) -> bool:
+    domain = _domain(case)
+    try:
+        if case["kind"] == "thread":
+            p = case["position"]
+            index = domain.index(p["slab"], p["m_block"], p["n_block"], p["tidx"])
+            leaf = domain.leaf(_b(case["value"]), **p)
+        else:
+            index = case["index"]
+            leaf = domain.leaf(index, _b(case["value"]))
+    except InvalidArtifact:
+        return False
+    return index == case["index"] and ref.verify(domain, _b(case["root"]), index, leaf, _path(case["path"]))
+
+
+@pytest.mark.parametrize("case", VECTORS["openings"], ids=lambda c: f"{c['kind']}-{c['index']}-{'accept' if c['accept'] else 'reject'}")
+def test_domain_openings(case: dict) -> None:
+    assert _opening_accepted(case) is case["accept"]
+
+
+def test_every_domain_kind_has_a_positive_and_a_moved_negative() -> None:
+    seen = {(c["kind"], c["accept"]) for c in VECTORS["openings"]}
+    assert seen == {(k, a) for k in ("semantic", "step", "stream", "thread") for a in (True, False)}
+
+
+def test_id_leaf_vectors() -> None:
+    *leaves, ids = VECTORS["id_leaf"]
+    for case in leaves:
+        assert ref.id_leaf(case["canonical_id"], case["dtype"], tuple(case["shape"]), _b(case["value"])).hex() == case["leaf"]
+    assert ref.ids_digest(ids["ids"]).hex() == ids["ids_digest"]
+
+
 def test_binding_is_the_verifiers_not_the_provers() -> None:
     leaves = V.tree_leaves(5)
     tree_root = ref.SCHEME.root(leaves)
@@ -63,7 +109,7 @@ def test_headers_refuse_fields_that_would_alias() -> None:
     with pytest.raises(InvalidArtifact):
         ref.chunk_header(src_mask=0, **{**fields, "chunk_index": 1 << 32})
     with pytest.raises(InvalidArtifact):
-        ref.thread_header(src_mask=1 << 16, slab=0, m_block=0, n_block=0, tidx=0, seqlen_q=1, seqlen_k=1, launch_tag=0, n_block_max=1,
+        ref.thread_header(src_mask=1 << 8, slab=0, m_block=0, n_block=0, tidx=0, seqlen_q=1, seqlen_k=1, launch_tag=0, n_block_max=1,
                           ok0=True, ok1=True)
     with pytest.raises(InvalidArtifact):
         ref.step_root(b"\0" * 31, *(b"\0" * 32,) * 3, 1, b"\0" * 32)

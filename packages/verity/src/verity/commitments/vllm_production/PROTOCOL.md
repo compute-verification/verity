@@ -1,10 +1,12 @@
 # `vllm-production/v1`: vLLM's production commitment framing
 
-This is the commitment framing vLLM's production Commit path emits today, written down as a named scheme. It
-describes existing bytes and changes no root. Proof backends do not implement it: frame-v3
-(`verity.commitments.merkle`) is still the only framing a backend proves over.
+This is the commitment framing vLLM's production Commit path emits, as a named scheme. It is permanent and sits
+beside frame-v3 (`verity.commitments.merkle`). Configured backends select one or the other, and both are
+benchmarked (`benchmarks/commitments/commit_cost.py`). This spec describes existing bytes: it changes no
+production root.
 
-- Reference: `verity.commitments.vllm_production` (plain `hashlib`, behind `verity.commitments.scheme.CommitmentScheme`).
+- Reference: `verity.commitments.vllm_production` (plain `hashlib`). Its tree rule is `SCHEME`, behind
+  `verity.commitments.scheme.CommitmentScheme`; frame-v3's is `merkle.FrameV3(domain)`.
 - Vectors: `vectors.json`, written by `python -m verity.commitments.vllm_production.vectors`. `--check` exits
   nonzero if the file is stale.
 - Conformance: `packages/verity/tests/commitments/test_vllm_production.py` checks the reference against the
@@ -19,26 +21,30 @@ All hashes are SHA-256. `u32be`/`u64be` are big-endian unsigned integers of 4 an
 H(tag, p_1 … p_k) = SHA-256( u32be(len tag) ‖ tag ‖ (u64be(len p_i) ‖ p_i)* )
 ~~~
 
-`tag` is the UTF-8 bytes of one of `verity-vllm/{leaf,node,lift,ids,empty,json,challenge}/v1`. The tree rule uses
-`node`, `lift` and `empty`. The id-carrying `leaf/v1` and `ids/v1` belong to `verity.commitments.leaves` (capture
-format v1), and `json`/`challenge` are document digests; this scheme does not use those four.
+`tag` is the UTF-8 bytes of one of `verity-vllm/{leaf,node,lift,ids,empty,json,challenge}/v1`. `json` and
+`challenge` digest documents and are not part of the tree framing.
 
 ## 2. Leaves
 
-| leaf | preimage | length |
+Every vLLM leaf rule is one of these four:
+
+| leaf | preimage | where |
 |---|---|---|
-| position leaf `pos_leaf(v)` | `"verity/pos-leaf/v0" ‖ u64be(len v) ‖ v` (raw tag, no length prefix) | any `v`, including empty |
-| `fa2h` chunk leaf | `chunk_header ‖ chunk`, chunk = `4·chunk_words` bytes of `u32le` stream words | 64 + 4·`chunk_words` |
-| `fa2h` thread leaf | `thread_header ‖ words`, the thread's `u32le` register words | 64 + 4·(words) |
+| id leaf | `H(leaf/v1, canonical_id, dtype, shape_text, value)`; `shape_text` = `[d0,d1,…]`, `[]` for a scalar | capture format v1 trees (`ru/…`, `boundary/…`, `weights`) |
+| position leaf `pos_leaf(v)` | `SHA-256("verity/pos-leaf/v0" ‖ u64be(len v) ‖ v)`: raw tag, no length prefix; `v` may be empty | C0 semantic trees; native-host host-path steps; weights subtrees |
+| `fa2h` chunk leaf | `SHA-256(chunk_header ‖ chunk)`, chunk = `4·chunk_words` bytes of `u32le` words | M1 stream trees; native-host GPU-tree steps |
+| `fa2h` thread leaf | `SHA-256(thread_header ‖ words)` | H1 thread trees (hashed inside the FA2 kernel) |
+
+The capture-v1 tree's domain is `ids = H(ids/v1, id_0 … id_{n−1})`, taken over the sorted ids.
 
 Each `fa2h` header is sixteen `u32le` words:
 
 | word | chunk header | thread header |
 |---|---|---|
 | 0 | `0x68326166` (`"fa2h"`) | `0x68326166` |
-| 1 | `7<<16 \| 1<<8 \| src_mask` (`src_mask` < 2⁸) | `7<<16 \| src_mask` (`src_mask` < 2¹⁶; no kind byte) |
+| 1 | `7<<16 \| 1<<8 \| src_mask` | `7<<16 \| src_mask` (kind byte 0) |
 | 2 | `launch_tag` | 0 |
-| 3 | `chunk_index` | `slab` |
+| 3 | `chunk_index`, the leaf's tree index | `slab` |
 | 4 | `chunk_words` | `m_block` |
 | 5, 6, 7 | `HB`, `M`, `NB` | `n_block`, `tidx`, `seqlen_q` |
 | 8, 9 | `BN`, `D`: 0, 0 for the legacy (128, 64) tile, else the kernel tile | `seqlen_k`, `launch_tag` |
@@ -46,26 +52,28 @@ Each `fa2h` header is sixteen `u32le` words:
 | 11 | 0 | `ok0 \| ok1<<1` (row validity) |
 | 12–15 | 0 | 0 |
 
-The reference rejects any field that doesn't fit its word. The integration masks `src_mask` silently instead;
-the two agree on every valid input.
-
-A position leaf carries no id and no index. Its position comes from its authentication path, whose shape is a
-function of (index, N), and its meaning (id, dtype, shape) comes from the template or layout digest bound in the root (§4).
+- **`src_mask` is below 2⁸ in both headers.** Word 1's byte 1 is therefore a kind byte (1 for chunk, 0 for
+  thread), so no thread header equals a chunk header. The reference rejects any field that doesn't fit its word.
+  The integration masks the chunk `src_mask` silently and doesn't bound the thread one. Every production mask is at
+  most 63, so the two agree on every root recorded so far.
+- **First bytes separate every preimage.** A node or lift preimage starts `00 00 00 13`, an id leaf the same
+  followed by `verity-vllm/leaf`, a position leaf `verity/`, and an `fa2h` leaf `fa2h`. So no leaf preimage is a
+  node preimage, and no two leaf rules share a preimage.
 
 ## 3. Tree and openings
 
 - **Level 0** is the leaf digests in tree order.
 - **Pairs.** While a level has more than one node, neighbours (0,1), (2,3), … become `H(node/v1, left, right)`.
-- **Odd tail.** An odd trailing node becomes `H(lift/v1, child)`. Nothing is ever duplicated.
+- **Odd tail.** An odd trailing node becomes `H(lift/v1, child)`. Nothing is ever duplicated or padded.
 - **Empty tree.** A tree with zero leaves has root `H(empty/v1)`.
-- **No position in nodes.** Nodes carry no level and no index. For these fixed-size trees, both follow from N and the path.
+- **No position in nodes.** Nodes carry no domain, level or index; §5 says what binds them instead.
 
 In packed form, a node is `SHA-256(u32be(19) ‖ "verity-vllm/node/v1" ‖ u64be(32) ‖ left ‖ u64be(32) ‖ right)` and a
 lift is `SHA-256(u32be(19) ‖ "verity-vllm/lift/v1" ‖ u64be(32) ‖ child)`. These are the 31-byte `NODE_PREFIX` /
 `LIFT_PREFIX` the CUDA copies hold as constants.
 
 An opening of leaf `i` in an N-leaf tree has one path entry per level, going up from the leaves. Each entry is
-either a 32-byte sibling or `null` where the node was lifted. The verifier computes the expected shape itself:
+either a 32-byte sibling or `null` where the node was lifted.
 
 ~~~text
 shape(N, i): while width > 1: emit (i ≠ width−1 or width even); width ← ⌈width/2⌉; i ← ⌊i/2⌋
@@ -76,49 +84,72 @@ fold(d, i, path): for each entry: null → d ← lift(d); i even → d ← node(
 
 A published root is a raw SHA-256 over a tag and fixed-width fields, and wraps the tree root.
 
-| root | preimage | size bound by |
-|---|---|---|
-| semantic (C0) | `"verity/semantic-root/v0" ‖ program ‖ query_id ‖ template ‖ ctx ‖ u64be epoch ‖ u64be N ‖ tree_root` | N |
-| step | `"verity/fa2c/root/v0" ‖ program ‖ ctx ‖ geo ‖ layout ‖ u64be N ‖ tree_root` | N |
-| run | `"verity/cmt-integ/run-root/v0" ‖ program ‖ geo ‖ u64be S ‖ fold(step_root_0 … step_root_{S−1})` | S |
-| weights | `"verity/cmt-integ/weights-root/v0" ‖ geo ‖ names ‖ u64be T ‖ fold(tensor_root_0 … tensor_root_{T−1})` | T |
-| `fa2h` stream | `"verity/fa2-hidden/root/v7" ‖ layout ‖ stream_ctx ‖ tree_root` | N, inside `stream_ctx` |
-| `fa2h` thread | `"verity/fa2-hidden/thread-root/v7" ‖ geo ‖ thread_ctx ‖ tree_root` | N = f(geo) |
+| root | preimage |
+|---|---|
+| semantic (C0) | `"verity/semantic-root/v0" ‖ program ‖ query_id ‖ template ‖ ctx ‖ u64be epoch ‖ u64be N ‖ tree_root` |
+| step | `"verity/fa2c/root/v0" ‖ program ‖ ctx ‖ geo ‖ layout ‖ u64be N ‖ tree_root` |
+| run | `"verity/cmt-integ/run-root/v0" ‖ program ‖ geo ‖ u64be S ‖ fold(step_root_0 … step_root_{S−1})` |
+| weights | `"verity/cmt-integ/weights-root/v0" ‖ geo ‖ names ‖ u64be T ‖ fold(tensor_root_0 … tensor_root_{T−1})` |
+| `fa2h` stream | `"verity/fa2-hidden/root/v7" ‖ layout ‖ stream_ctx ‖ tree_root` |
+| `fa2h` thread | `"verity/fa2-hidden/thread-root/v7" ‖ geo ‖ thread_ctx ‖ tree_root` |
 
 - **Field widths.** Every named digest is 32 bytes. `query_id` is the only variable-length field, and because
   it is the only one, the preimage still parses one way.
-- **Folds.** `fold` is §3's tree rule over the listed roots, so `fold` of none is `H(empty/v1)`.
+- **Folds.** `fold` is §3's tree rule, so `fold` of none is `H(empty/v1)`.
 - **Stream and thread contexts.** `stream_ctx` is SHA-256 of the ASCII text
   `{"chunk_words": C, "launch_tag": T, "leaf_count": N, "src_mask": S}`, and `thread_ctx` is SHA-256 of
   `{"launch_tag": T, "src_mask": S}`. The integers are decimal, and the spacing is exactly as shown.
-- **Opaque digests.** `program`, `ctx`, `geo`, `layout`, `template` and `names` are opaque to this scheme. The
-  integration derives them from its own JSON (`native_host.layout_digest`, `_ctx_digest`, `StreamLayout.digest`,
-  `ThreadGeometry.digest`, `Template.digest`, `RUContext.digest`).
+- **Integration-owned digests.** `program`, `ctx`, `geo`, `layout`, `template` and `names` are opaque here; the
+  integration derives them. Two of them are `/`-joined text: `RUContext.digest`
+  (`profile/request/prompt_len/step`) and native-host `_ctx_digest` (`run_id/step=s`). Both are injective only
+  because their trailing fields are decimal integers and the profile id is fixed-width hex, so the integration
+  must keep those fields that way.
 
-## 5. What a verifier must do
+## 5. Domain and position binding
 
-The scheme is only sound if the verifier does all of the following:
+A leaf's hash carries no domain, and a node's carries no level or index. Everything that makes an opening mean
+"this value, at this position, in this commitment" is either in the root binding or held by the verifier. The
+reference makes that explicit as one domain type per tree kind, built only from the verifier's own data.
+`verify(domain, root, index, leaf, path)` takes the domain; the caller computes `leaf` with `domain.leaf(…)`.
 
-1. **Derive the path shape** from (index, N) as in §3, and reject a path of any other shape before hashing.
-2. **Recompute the leaf** from the opened bytes. For an `fa2h` leaf, derive the header from the claimed position
-   and require it as the message prefix.
-3. **Rebuild the root binding (§4) from its own copies** of every context field: program, query, template, ctx,
-   epoch, geometry, layout and N. The prover supplies these fields and nothing in the scheme binds them to the
-   session. A verifier that trusts the prover's copies is not verifying anything.
-4. **Check a step root against the run root** by re-folding every step root with S bound.
+| tree kind | domain type | leaf rule | position bound by | N bound by | context bound by |
+|---|---|---|---|---|---|
+| C0 semantic | `SemanticDomain` | position leaf | path shape from (N, i); meaning = `unrank(i)` of the template | root (`u64 N`) | program, query_id, template, ctx, epoch |
+| native-host step, host path | `StepDomain(chunk=None)` | position leaf | path shape from (N, i); meaning from the layout digest | root (`u64 N`) | program, ctx (run, step), geo, layout |
+| native-host step, GPU tree | `StepDomain(chunk=…)` | chunk leaf | chunk header's `chunk_index` = i, and the path | root (`u64 N`) | as above, plus the header fields |
+| `fa2h` stream | `StreamDomain` | chunk leaf | `chunk_index` = i, and the path | `stream_ctx` | layout, `launch_tag`, `src_mask`, `chunk_words` |
+| `fa2h` thread | `ThreadDomain` | thread leaf | header (slab, m_block, n_block, tidx) and i = `((slab·num_m_block + m_block)·NB + n_block)·128 + tidx` | `geo` only: N = HB·num_m_block·NB·128 | geo, `launch_tag`, `src_mask` |
+| run | none (re-fold every step root) | step roots | fold order | root (`u64 S`) | program, geo |
+| weights | none (re-fold every tensor root) | tensor subtree roots (position leaves) | names digest (name, dtype, shape, nbytes, in order) | root (`u64 T`) | geo, names |
+| capture v1 | `leaves.LeafTree` record | id leaf | the id inside the leaf | `commitments.json` `leaf_count` | the id (profile, request, step), and `ids` |
 
-For one tree, `verify_opening(root, N, index, leaf, path, bind)` does step 1 and the fold. The caller computes
-the leaf (step 2), and its `bind` closure supplies step 3.
+**Why unbound nodes are enough.** Suppose every preimage encoding is injective, and no leaf preimage is a node
+or lift preimage (§2). Then a root determines the whole tree structure, down to which digests are leaves.
+So one root fixes N and every leaf's position, as long as the verifier recomputes each leaf from bytes and derives
+the path shape itself. No two values at the same verifier-derived position can both verify. The same argument
+covers a parameter the verifier gets wrong, such as N, the chunk size or the leaf rule: the honest opening fails
+(a liveness failure), but no forged opening passes.
+
+**What a verifier must do.** The argument above holds only if the verifier:
+
+1. derives the path shape from (index, N) and rejects any other shape before hashing;
+2. recomputes the leaf from the opened bytes through the domain, never accepting a leaf digest from the prover.
+   For `fa2h` leaves that means deriving the header from the claimed position;
+3. fixes the leaf rule from its own configuration of the committer path, never from a prover-side label (see §7);
+4. builds the root binding from its own copies of every context field and N;
+5. checks a step root against the run root by re-folding all S step roots;
+6. for thread trees, derives the visited slots from the geometry (`n_block_max`) and never opens an unvisited
+   one. Unvisited slots hold 32 zero bytes, which no message hashes to, so such an opening can't succeed anyway.
 
 ## 6. Implementations that must pass the vectors
 
 **Python** (the integration test checks all but the weights root):
 
-- `verity_vllm/commit/hashing.py`: H, node, lift, empty.
+- `verity_vllm/commit/hashing.py`: H, id leaf, ids, node, lift, empty.
 - `verity_vllm/commit/fasttree.py`: the packed prefixes and the fold.
-- `verity_vllm/commit/semantic_layout.py`: `pos_leaf` and `semantic_root`.
+- `verity_vllm/commit/semantic_layout.py`: `pos_leaf`, `semantic_root` and `verify_position_opening`.
 - `verity_vllm/commit/hidden_engine.py`: the step `bind_root` and `path_in_levels`.
-- `verity_vllm/commit/hidden_stream.py`: the `fa2h` headers and the stream and thread roots.
+- `verity_vllm/commit/hidden_stream.py`: the `fa2h` headers, the stream and thread roots, and both opening verifiers.
 - `verity_vllm/commit/padding_steps.py`: `run_root_of` and the padding chunk leaves.
 - `verity_vllm/acquire/native_host.py`: the run root (inline twice) and the weights root (inline in
   `register_weights`). The weights root is untested, because it needs a live model.
@@ -134,11 +165,18 @@ the leaf (step 2), and its `bind` closure supplies step 3.
 
 The FA3 tap (`fa3_tap_src/verity_tap_fa3.h`) only materialises the stream and does no hashing.
 
-## 7. Known issues
+## 7. Findings
 
-These are recorded here and left unfixed, because fixing either one changes digests:
+I found no soundness gap, so no production root changes. Four ambiguities are pinned by this spec instead of
+fixed in the bytes. Fixing any of them in the bytes would change roots:
 
-- **Mismatched label.** Host (non-GPU-tree) committers label their binding map `chunk-leaf-v1`, but their leaves
-  are position leaves. A verifier must choose the leaf rule from the committer path, not from the label.
-- **Framing styles.** Three styles coexist: tagged `H`, the raw-prefix `pos_leaf`, and the binary `fa2h` header.
-  Each is unambiguous, because the first bytes differ (a u32 length, `verity/`, and `fa2h`).
+1. **No root binds the leaf rule.** A step tree of position leaves and one of chunk leaves bind the same fields.
+   Host committers also label their binding map `chunk-leaf-v1` over position leaves. Under §5 this cannot yield
+   a forgery, but it does make "which rule?" the verifier's job (§5, step 3). The reference's `StepDomain.chunk`
+   is that choice.
+2. **The thread tree doesn't bind N in its root.** It is bound through `geo` alone. `ThreadDomain` derives N from
+   the same geometry fields.
+3. **The `src_mask` range was implicit.** A thread `src_mask` of 2⁸ or more would put a nonzero kind byte in
+   word 1. The spec and the reference now bound it; the integration and the CUDA still rely on masks being at
+   most 63.
+4. **Injectivity of the `/`-joined context digests depends on field formats** that the integration owns (§4).

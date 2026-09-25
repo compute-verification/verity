@@ -19,7 +19,13 @@ from .. import leaves as tagged
 from . import (
     NAME,
     SCHEME,
+    SemanticDomain,
+    StepDomain,
+    StreamDomain,
+    ThreadDomain,
     chunk_header,
+    id_leaf,
+    ids_digest,
     chunk_leaf,
     pos_leaf,
     run_root,
@@ -192,18 +198,79 @@ def _rejection_vectors() -> list[dict[str, Any]]:
     ]
 
 
+def _id_leaf_vectors() -> list[dict[str, Any]]:
+    cases = [("p=0123456789ab/r=cmpl-1/t=4/ph=decode/l=0/op=q_proj/port=0", "bfloat16", (2, 3), 12), ("w=lm_head.weight/c=0", "float8_e4m3fn", (4,), 4),
+             ("boundary/r0/seed", "int64", (), 8)]
+    out = [{"canonical_id": c, "dtype": d, "shape": list(s), "value": expand(f"id-leaf/{c}", n).hex(),
+            "leaf": id_leaf(c, d, s, expand(f"id-leaf/{c}", n)).hex()} for c, d, s, n in cases]
+    ids = sorted(c for c, _, _, _ in cases)
+    out.append({"ids": ids, "ids_digest": ids_digest(ids).hex()})
+    return out
+
+
+def _opening_vectors() -> list[dict[str, Any]]:
+    """One opening per domain kind, the verifier's domain spelled out, plus the same bytes claimed one position over."""
+
+    program, template, ctx, geo, layout = (digest_of(f"openings/{k}") for k in ("program", "template", "ctx", "geo", "layout"))
+    h = bytes.hex
+    out: list[dict[str, Any]] = []
+
+    def emit(kind: str, fields: dict[str, Any], domain: Any, values: list[bytes], index: int, extra: dict[str, Any] | None = None,
+             leaves: list[bytes] | None = None) -> None:
+        leaves = leaves or [domain.leaf(i, v) for i, v in enumerate(values)]
+        root = domain.bind(SCHEME.root(leaves))
+        path = _hex_path(SCHEME.path(leaves, index))
+        for claimed, accept in ((index, True), (index + 1, False)):
+            out.append({"kind": kind, "domain": fields, "index": claimed, "value": h(values[index]), "path": path, "root": h(root),
+                        "accept": accept, **(extra or {})})
+
+    sem = SemanticDomain(program, b"q-7", template, ctx, 2, 5)
+    emit("semantic", {"program_digest": h(program), "query_id": h(b"q-7"), "template_digest": h(template), "ctx_digest": h(ctx), "epoch": 2,
+                      "leaf_count": 5}, sem, [expand(f"openings/sem/{i}", 24) for i in range(5)], 3)
+    step = StepDomain(program, ctx, geo, layout, 6)
+    emit("step", {"program_digest": h(program), "ctx_digest": h(ctx), "geo_digest": h(geo), "layout_digest": h(layout), "leaf_count": 6,
+                  "chunk": None}, step, [expand(f"openings/step/{i}", 40) for i in range(6)], 4)
+    chunk = {"launch_tag": 3, "chunk_words": 16, "src_mask": 0, "HB": 3, "M": 96, "NB": 1}
+    step_chunk = StepDomain(program, ctx, geo, layout, 6, chunk)
+    emit("step", {"program_digest": h(program), "ctx_digest": h(ctx), "geo_digest": h(geo), "layout_digest": h(layout), "leaf_count": 6,
+                  "chunk": chunk}, step_chunk, [expand(f"openings/step-chunk/{i}", 64) for i in range(6)], 2)
+    stream_fields = {"layout_digest": h(layout), "launch_tag": 7, "src_mask": 63, "chunk_words": 16, "leaf_count": 5, "HB": 2, "M": 8, "NB": 1,
+                     "BN": 0, "D": 0}
+    stream = StreamDomain(layout, 7, 63, 16, 5, 2, 8, 1)
+    emit("stream", stream_fields, stream, [expand(f"openings/stream/{i}", 64) for i in range(5)], 1)
+
+    thread = ThreadDomain(geo, 4, 1, HB=1, num_m_block=1, NB=1)
+    seqlen_q, seqlen_k = 40, 100
+
+    def position(tidx: int) -> dict[str, Any]:
+        r0 = 16 * (tidx // 32) + (tidx % 32) // 4
+        return {"slab": 0, "m_block": 0, "n_block": 0, "tidx": tidx, "seqlen_q": seqlen_q, "seqlen_k": seqlen_k, "n_block_max": 1,
+                "ok0": r0 < seqlen_q, "ok1": r0 + 8 < seqlen_q}
+
+    messages = [thread_header(src_mask=1, launch_tag=4, **position(t)) + expand(f"openings/thread/{t}", 256) for t in range(thread.leaf_count)]
+    leaves = [thread.leaf(m, **position(t)) for t, m in enumerate(messages)]
+    tidx = 77
+    for claimed, accept in ((tidx, True), (tidx + 1, False)):
+        out.append({"kind": "thread", "domain": {"geo_digest": h(geo), "launch_tag": 4, "src_mask": 1, "HB": 1, "num_m_block": 1, "NB": 1},
+                    "index": thread.index(0, 0, 0, claimed), "position": position(claimed), "value": h(messages[tidx]),
+                    "path": _hex_path(SCHEME.path(leaves, tidx)), "root": h(thread.bind(SCHEME.root(leaves))), "accept": accept})
+    return out
+
+
 def build() -> dict[str, Any]:
     return {
         "scheme": NAME,
         "generator": "python -m verity.commitments.vllm_production.vectors",
         "encoding": "every byte string is lowercase hex; a path entry null means the node is lifted at that level",
         "hash": _hash_vectors(),
+        "id_leaf": _id_leaf_vectors(),
         "pos_leaf": _pos_leaf_vectors(),
         "chunk_leaf": _chunk_leaf_vectors(),
         "thread_leaf": _thread_leaf_vectors(),
         "trees": _tree_vectors(),
         "roots": _root_vectors(),
         "rejections": _rejection_vectors(),
+        "openings": _opening_vectors(),
     }
 
 
