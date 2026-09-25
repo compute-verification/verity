@@ -30,6 +30,7 @@ from .field import (
     P,
     e_add,
     e_scale,
+    exts_to_bytes,
     geometric,
     inv_mod,
     mm_mod_int8,
@@ -283,6 +284,7 @@ class Opening:
     qc: list[Ext]               # 2k - 1
     columns: np.ndarray         # (t, rows) '<u4': the opened columns' values
     paths: list[list[bytes]]    # per opened column its Merkle path (depth siblings)
+    raw: tuple[bytes, bytes] | None = None    # the prover's serialized (w, qc), as absorbed
 
     def nbytes(self) -> int:
         b = (len(self.w) + len(self.qc)) * 4 * DEG
@@ -521,14 +523,20 @@ def prove_open(cm: Committed, a: torch.Tensor, tr: Transcript, timers: dict | No
     r = row_coeffs(tr, rows, dev)                                     # (rows, 6)
     code = cm.code
     w, qc = open_w_qc_eval(cm, a, r)
-    w_py, qc_py = py_exts(w), py_exts(qc)
+    h = torch.cat([w, qc]).to(torch.int64).cpu().numpy()
+    w_np, qc_np = h[: w.shape[0]], h[w.shape[0]:]
+    w_py, qc_py = list(map(tuple, w_np.tolist())), list(map(tuple, qc_np.tolist()))
     if timers is not None:
         timers["wq"] = time.perf_counter() - t0
-    tr.absorb_exts(w_py)
-    tr.absorb_exts(qc_py)
+    raw = (exts_to_bytes(w_np), exts_to_bytes(qc_np))
+    tr.absorb(raw[0])
+    tr.absorb(raw[1])
     js = open_set(tr, n, p.t)
-    code_cols = np.ascontiguousarray(code[:, torch.tensor(js, dtype=torch.int64, device=dev)].T.contiguous().cpu().numpy().view("<u4"))
-    return Opening(w_py, qc_py, code_cols, [cm.merkle.path(j) for j in js])
+    sel = code[:, torch.tensor(js, dtype=torch.int64, device=dev)].T.contiguous()
+    host = torch.empty(sel.shape, dtype=sel.dtype, pin_memory=dev.type == "cuda")
+    host.copy_(sel)
+    code_cols = np.ascontiguousarray(host.numpy().view("<u4"))
+    return Opening(w_py, qc_py, code_cols, [cm.merkle.path(j) for j in js], raw)
 
 
 def verify_open(root: bytes, params: LigeroParams, length: int, a: torch.Tensor, b: Ext, op: Opening, tr: Transcript, device) -> None:
