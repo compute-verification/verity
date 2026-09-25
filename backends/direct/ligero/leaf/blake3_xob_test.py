@@ -123,3 +123,72 @@ def test_census_numbers_are_the_documented_ones():
 
 
 PINNED_PER_BLOCK, XOB_PER_BLOCK = 15139, 11746      # the column gadget's input shapes (a counter bit, the chunk flags)
+
+
+def _xadd_system():
+    """Two chained additions: ``e1 = d ^ (a + b + c)``, then ``e2 = rotr(e1, 16) ^ (s1 + b)`` (the second op reads the
+    first's output rows as its XOR partner)."""
+    ctx = L._fresh_ctx()
+    a, b, c = (_word(ctx, n, False) for n in "abc")
+    s1, e1 = X._add_xor(ctx, (a, b, c), _word(ctx, "d", True), "t1")
+    X._add_xor(ctx, (s1, b), L._W32(e1).rotr(16), "t2")
+    return ctx.sys
+
+
+def test_xadd_in_every_witness_generator():
+    """The xadd op in the torch program and in the register, table, sequential and level-scheduled CUDA kernels: value
+    for value the numpy interpreter above, on a witness that satisfies every constraint."""
+    torch = pytest.importorskip("torch")
+    if not torch.cuda.is_available():
+        pytest.skip("CUDA")
+    from .. import witness as WM
+    from .. import witness_device as D
+    sys, l = _xadd_system(), 300
+    rng = np.random.default_rng(11)
+    hints: dict = {}
+    for w in "abcd":
+        x = rng.integers(0, 1 << 32, size=l, dtype=np.uint64).astype(np.int64)
+        hints[f"{w}.lo"], hints[f"{w}.hi"] = x & 0xFFFF, x >> 16
+        for i in range(32):
+            hints[f"{w}.b{i}"] = (x >> i) & 1
+    hints = {n: hints[n] for _, n in sys.hints}
+    ref = run_program_np(sys, hints)
+    assert failing_constraints(sys, ref, {}) == [] and any(op[0] == "xadd" for op in sys.program)
+    H = torch.as_tensor(np.stack([hints[n] for _, n in sys.hints]), device="cuda")
+    pub = torch.zeros((len(sys.pins), l), dtype=torch.int64, device="cuda")
+    W = torch.zeros((sys.m, l), dtype=torch.int64, device="cuda")
+    WM._run_program(sys, W, pub, H, torch.device("cuda"))
+    got = {"torch": W}
+    big = 1 << 30
+    old = D.INTERP_OPS, D.INTERP_LEVELS, D.TAB_THRESHOLD
+    try:
+        for mode, (ops, levels, tab) in {"regs": (big, True, big), "tab": (big, True, 0), "interp": (0, False, 0),
+                                         "levels": (0, True, 0)}.items():
+            D.INTERP_OPS, D.INTERP_LEVELS, D.TAB_THRESHOLD = ops, levels, tab
+            f = D.FusedWitness(sys, "cuda")
+            assert f.interp == (ops == 0) and bool(f.levels) == (ops == 0 and levels), mode
+            assert (f.tables is not None) == (mode != "regs"), mode
+            got[mode] = f.run(pub, H)
+    finally:
+        D.INTERP_OPS, D.INTERP_LEVELS, D.TAB_THRESHOLD = old
+    for mode, Wg in got.items():
+        assert np.array_equal(Wg.to(torch.int64).cpu().numpy(), ref), mode
+
+
+def test_scheme_is_the_blake3_leaf_with_fewer_rows():
+    from . import registry
+    x, b = registry.get("blake3-xob"), registry.get("blake3")
+    assert isinstance(x, X.Blake3XobLeaf) and registry.split_relation_name("fp8-ada+blake3-xob") == ("fp8-ada", "blake3-xob")
+    assert (x.schema, x.params_sha256, x.digest_elems, x.carry_elems) == (b.schema, b.params_sha256, b.digest_elems, b.carry_elems)
+    assert registry.by_schema(x.schema).name == "blake3"
+
+    def rows(s):
+        ctx = L._fresh_ctx()
+        words = [ctx.hint(f"w{i}") for i in range(32)]
+        carry = [ctx.hint(f"c{i}") for i in range(s.carry_elems)]
+        m0 = ctx.sys.m
+        s.gadget(ctx, words, word_bits=8, role=1, carry_in=carry)
+        return ctx.sys.m - m0
+
+    rx, rb = rows(x), rows(b)
+    assert rb - rx == PINNED_PER_BLOCK - XOB_PER_BLOCK, (rb, rx)
