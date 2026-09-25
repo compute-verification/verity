@@ -862,13 +862,14 @@ def generated_kernels_of_this_process(inductor_dir: str | None = None) -> dict[s
 
 def profile_manifest(engine: Engine, *, adapter_revision: str, wheel_sha256: str | None, vllm_commit: str | None,
                      sampling: dict) -> tuple[dict, str, dict]:
-    """(manifest, profile_id, notes) via `profile.build_manifest` exactly like the production recorder; falls back
-    to a sha256 of the engine kwargs + versions when build_manifest cannot run (and says so in the notes)."""
+    """(manifest, profile_id, notes) via `profile.build_manifest` exactly like the production recorder; raises when
+    build_manifest cannot run (there is no fallback id)."""
     from verity_vllm.engine import engine_profile as prof
 
     case = engine.case
     acc = ACCEPTED.get(case, {})
-    notes: dict[str, Any] = {"case": case, "accepted_profile_id": acc.get("profile_id"), "accepted_record": acc.get("record")}
+    notes: dict[str, Any] = {"case": case, "accepted_profile_id": acc.get("profile_id"), "accepted_record": acc.get("record"),
+                             "pod": os.environ.get("RUNPOD_POD_ID", os.uname().nodename)}
     # [GEN sampling] the manifest records the sampling actually requested (a non-greedy variant is another profile id by construction)
     sampling_desc = {"greedy": bool(sampling.get("greedy", True)), "temperature": float(sampling.get("temperature", 0.0)),
                      "top_p": float(sampling.get("top_p", 1.0)), "top_k": int(sampling.get("top_k", 0)),
@@ -950,17 +951,9 @@ def profile_manifest(engine: Engine, *, adapter_revision: str, wheel_sha256: str
         notes["profile_id_method"] = "profile.profile_id_of(profile.build_manifest(...)) as production.py; differs from the accepted " \
                                      "record's id by construction: gpu.pod, gpu.driver, adapter.revision, sampling.logprobs=None (D62), " \
                                      "engine_kwargs.enable_prefix_caching/max_num_seqs, generated_kernels placeholders"
-    except Exception as e:  # noqa: BLE001
-        import vllm
-        import triton
-        manifest = {"schema": "verity-capture/profile-fallback/v1", "case": case, "engine_kwargs": {k: v for k, v in engine.kwargs.items()
-                    if k not in ("model", "tokenizer")}, "engine_flags": dict(engine.env_flags),
-                    "python": {"torch": torch.__version__, "cuda": torch.version.cuda, "triton": triton.__version__},
-                    "vllm": {"version": vllm.__version__, "wheel_sha256": wheel_sha256, "commit": vllm_commit},
-                    "model": {"repo": engine.cp["repo"], "revision": engine.cp["revision"], "weights_sha256": dict(engine.cp["safetensors_sha256"])},
-                    "sampling": sampling_desc}
-        pid = hashlib.sha256(json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode()).hexdigest()[:12]
-        notes["profile_id_method"] = f"FALLBACK sha256(engine kwargs + versions): build_manifest failed: {e!r}"[:400]
+    except Exception as e:
+        # the profile id prefixes every leaf id: a substitute id would silently change the record's identity
+        raise RuntimeError(f"profile manifest failed for {case!r}: {e!r}") from e
     return manifest, pid, notes
 
 

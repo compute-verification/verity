@@ -218,7 +218,8 @@ def gpu_info() -> dict[str, Any]:
         "count": torch.cuda.device_count(),
         "driver": drv,
         "compute_capability": f"{props.major}.{props.minor}",
-        "pod": os.environ.get("RUNPOD_POD_ID", os.uname().nodename),
+        # the pod id / nodename is telemetry (vllm_adapter.profile_manifest puts it in the header notes): the profile id prefixes
+        # every leaf id, so nothing host-named is hashed into it
         "total_memory_gb": round(props.total_memory / 2**30, 2),
         # W1cF F7/F10: the batch-invariant GEMM specialises on the SM count (NUM_SMS); a verifier on a
         # different device reports `specialised: NUM_SMS` for its PTX rather than a mismatch.
