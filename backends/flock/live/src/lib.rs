@@ -26,6 +26,7 @@
 
 pub mod chunk;
 pub mod pure_block;
+pub mod vllm_block;
 #[cfg(feature = "gpu")]
 pub mod gpu;
 
