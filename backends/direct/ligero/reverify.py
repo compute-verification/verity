@@ -264,15 +264,24 @@ def commitment_problems(pdir: Path, man: dict, pinned: str, reps: list[str], *, 
             orphans.append(f"{r}: {len(stmts - proofs)} statement(s) without a proof, {len(proofs - stmts)} proof(s) without a statement")
         if any(not f.get("proof") for f in listed):
             orphans.append(f"{r}: the manifest lists a statement without a proof")
-        if listed and {Path(f["proof"]).stem for f in listed if f.get("proof")} != proofs:
+        listed_proofs = [Path(f["proof"]).stem for f in listed if f.get("proof")]
+        if listed and (set(listed_proofs) != proofs or len(listed_proofs) != len(set(listed_proofs))):
             orphans.append(f"{r}: the manifest's proofs are not the rep's proofs")
+        if any(f.get("stmt") and Path(f["stmt"]).stem != Path(f["proof"]).stem for f in listed if f.get("proof")):
+            orphans.append(f"{r}: the manifest pairs a proof with another sub-batch's statement")
     hashed = "+" in (pinned or "")
     if orphans or not hashed:
         return hashed, orphans
     per_rep: dict[str, list] = {}
+    unreadable: list[str] = []
     for r in reps:
         for f in sorted((pdir / r).glob("*.stmt")):
-            per_rep.setdefault(r, []).append((f.name, read_statement(f.read_bytes())))
+            try:
+                per_rep.setdefault(r, []).append((f.name, read_statement(f.read_bytes())))
+            except Exception as e:  # noqa: BLE001  (a statement batch would reject cannot be counted either)
+                unreadable.append(f"{r}/{f.name}: unreadable statement ({type(e).__name__}: {e})")
+    if unreadable:
+        return True, unreadable[:8] + ([f"… {len(unreadable) - 8} more"] if len(unreadable) > 8 else [])
     if n_v6 := sum(bool(getattr(st, "v6", False)) for sts in per_rep.values() for _, st in sts):
         return True, [f"commitment: {n_v6} row-sharing (v6) statement(s): shared-row layouts are not recomputed"]
     try:
