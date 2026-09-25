@@ -301,11 +301,12 @@ fn session_p(st: &Stmt, t: SharedTransport, plan: &Plan) -> (Value, Vec<Vec<u8>>
         other => json!({"accepted": false, "why": format!("{other:?}")}),
     };
     let (sent, recv, calls) = t.lock().unwrap().stats();
+    let wait_s = t.lock().unwrap().wait_s();
     let out = json!({
         "accepted": v["accepted"], "why": v["why"], "verdict": v, "prove_s": prove_s,
         "prove_total_s": prove_s.iter().sum::<f64>(), "session_wall_s": t0.elapsed().as_secs_f64(),
         "proof_bytes": proofs.iter().map(|p| p.len()).collect::<Vec<_>>(),
-        "wire_sent": sent, "wire_recv": recv, "calls": calls,
+        "wire_sent": sent, "wire_recv": recv, "calls": calls, "wait_s": wait_s,
     });
     (out, proofs)
 }
@@ -497,7 +498,7 @@ fn bench(st: Arc<Stmt>) {
             "transport": if addr.is_empty() {"inproc"} else {"tcp"}, "verifier": addr,
             "fs_fast100x2_s": fs_s, "fs_fastx1_s": fsx1_s, "live_fast100x2_s": v["prove_total_s"],
             "live_over_fs": v["prove_total_s"].as_f64().unwrap_or(0.0) / fs_s, "accepted": v["accepted"],
-            "calls": v["calls"], "wire_sent": v["wire_sent"], "wire_recv": v["wire_recv"],
+            "calls": v["calls"], "wait_s": v["wait_s"], "empty_rounds": v["verdict"]["rounds_without_prover_message"], "wire_sent": v["wire_sent"], "wire_recv": v["wire_recv"],
             "verify_s": v["verdict"]["verify_s"], "rounds": v["verdict"]["rounds"]}));
     }
 }

@@ -196,8 +196,9 @@ fn live_finish(t: &flock_live::SharedTransport, reps: &[GpuArtifacts], edit: &dy
         run_secs.push(last.iter().map(|g| g.prove_secs).sum());
         if let Some(t) = &sess {
             let (sent, recv, calls) = t.lock().unwrap().stats();
+            let wait_s = t.lock().unwrap().wait_s();
             let v = live_finish(t, &last, &|_, _| None);
-            println!("G128LIVE {{\\"m\\":{},\\"netlist\\":\\"{}\\",\\"prove_s\\":{:.4},\\"calls\\":{calls},\\"wire_sent\\":{sent},\\"wire_recv\\":{recv},\\"verdict\\":{v}}}",
+            println!("G128LIVE {{\\"m\\":{},\\"netlist\\":\\"{}\\",\\"prove_s\\":{:.4},\\"wait_s\\":{wait_s:.4},\\"calls\\":{calls},\\"wire_sent\\":{sent},\\"wire_recv\\":{recv},\\"verdict\\":{v}}}",
                      last[0].r1cs.m, live_table(), run_secs.last().unwrap());
             verdicts.push(v);
         }

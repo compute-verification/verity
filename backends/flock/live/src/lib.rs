@@ -260,6 +260,10 @@ pub trait Transport: Send {
     fn stats(&self) -> (u64, u64, u64) {
         (0, 0, 0)
     }
+    /// Seconds the prover spent waiting inside `call` (the latency live coins add).
+    fn wait_s(&self) -> f64 {
+        0.0
+    }
 }
 
 pub struct TcpTransport {
@@ -268,28 +272,34 @@ pub struct TcpTransport {
     sent: u64,
     recv: u64,
     calls: u64,
+    wait: std::time::Duration,
 }
 
 impl TcpTransport {
     pub fn connect(addr: &str) -> std::io::Result<Self> {
         let s = TcpStream::connect(addr)?;
         s.set_nodelay(true)?;
-        Ok(Self { r: BufReader::new(s.try_clone()?), w: BufWriter::new(s), sent: 0, recv: 0, calls: 0 })
+        Ok(Self { r: BufReader::new(s.try_clone()?), w: BufWriter::new(s), sent: 0, recv: 0, calls: 0, wait: Default::default() })
     }
 }
 
 impl Transport for TcpTransport {
     fn call(&mut self, req: Req) -> Result<Resp, String> {
+        let t = std::time::Instant::now();
         let b = req.encode();
         self.sent += b.len() as u64 + 4;
         self.calls += 1;
         write_frame(&mut self.w, &b).map_err(|e| format!("send: {e}"))?;
         let r = read_frame(&mut self.r).map_err(|e| format!("recv: {e}"))?;
         self.recv += r.len() as u64 + 4;
+        self.wait += t.elapsed();
         Resp::decode(&r)
     }
     fn stats(&self) -> (u64, u64, u64) {
         (self.sent, self.recv, self.calls)
+    }
+    fn wait_s(&self) -> f64 {
+        self.wait.as_secs_f64()
     }
 }
 
@@ -533,6 +543,7 @@ impl SessionConfig {
 #[derive(Clone, Debug)]
 pub struct RoundRec {
     pub sha: [u8; 32],
+    pub len: usize,
     pub n: u32,
     pub coins: Vec<F128>,
 }
@@ -724,7 +735,7 @@ impl Server {
                     self.streams.get_mut(&stream).unwrap().cap = Some(cap);
                 }
                 let coins = self.coins(n as usize);
-                self.streams.get_mut(&stream).unwrap().rounds.push(RoundRec { sha: sha256(&content), n, coins: coins.clone() });
+                self.streams.get_mut(&stream).unwrap().rounds.push(RoundRec { sha: sha256(&content), len: content.len(), n, coins: coins.clone() });
                 Resp::Coins(coins)
             }
             Req::Proof { table, rep, bytes } => {
@@ -754,9 +765,9 @@ impl Server {
                     let mut ch = ReplayChallenger::new(record.clone(), &root, &self.verifier.domain(&table.name, rep));
                     // A replay failure is the primary reason: the verifier's own error on a proof whose messages
                     // were not the committed ones is a consequence of it.
-                    let cap = self.verifier.verify(&table.name, rep, bytes, &mut ch).map_err(|e| match ch.finish() {
-                        Err(r) => format!("{r} (then the verifier: {e})"),
-                        Ok(()) => e,
+                    let cap = self.verifier.verify(&table.name, rep, bytes, &mut ch).map_err(|e| match ch.first_failure() {
+                        Some(r) => format!("{r} (then the verifier: {e})"),
+                        None => e,
                     })?;
                     ch.finish()?;
                     if rec.cap.as_ref() != Some(&cap) {
@@ -774,8 +785,10 @@ impl Server {
             }
         }
         let rounds: usize = self.streams.values().map(|s| s.rounds.len()).sum();
+        let empty: usize = self.streams.values().map(|s| s.rounds.iter().filter(|r| r.len <= 16).count()).sum();
         let v = json!({
             "accepted": ok, "why": why, "reps": reps_out, "streams": self.streams.len(), "rounds": rounds,
+            "rounds_without_prover_message": empty,
             "verify_s": t.elapsed().as_secs_f64(), "session_s": self.t0.elapsed().as_secs_f64(),
         });
         self.verdict = Some(v.clone());
@@ -792,7 +805,7 @@ impl Server {
                     "stream": name, "parent": s.parent, "label": String::from_utf8_lossy(&s.label), "at": s.at,
                     "root_sha256": s.cap.as_ref().map(|c| hex(&sha256(c))),
                     "rounds": s.rounds.iter().enumerate().map(|(k, r)| json!({
-                        "k": k, "n": r.n, "msg_sha256": hex(&r.sha),
+                        "k": k, "n": r.n, "msg_len": r.len, "msg_sha256": hex(&r.sha),
                         "coins": r.coins.iter().map(f128_hex).collect::<Vec<_>>(),
                     })).collect::<Vec<_>>(),
                 })
@@ -878,6 +891,10 @@ impl ReplayChallenger {
                 c
             }
         }
+    }
+
+    pub fn first_failure(&self) -> Option<String> {
+        self.st.lock().unwrap().failures.first().cloned()
     }
 
     /// After the Flock verifier returns: no replay failure, and every recorded round of this rep's streams consumed.
