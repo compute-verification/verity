@@ -1524,9 +1524,9 @@ def test_moe_evaluators_equal_the_registered_definitions():
         lg = _bf16(rng, E, 2.0)
         if trial == 2:
             lg[5] = lg[7]
-        w, ids = SR.moe_router_topk(lg, E=E, TOPK=K_, VPT=V_)
+        w, ids = RK.moe_router_topk(lg, E=E, TOPK=K_, VPT=V_)
         assert [int(x) for x in w] + [int(x) for x in ids] == ref(bind(R.MoeRouterTopK, E=E, TOPK=K_, VPT=V_), [[int(v) for v in lg]])
-        wn, idn = SR.moe_router_topk(lg, E=E, TOPK=K_, VPT=V_, renormalize=True)
+        wn, idn = RK.moe_router_topk(lg, E=E, TOPK=K_, VPT=V_, renormalize=True)
         assert [int(x) for x in wn] + [int(x) for x in idn] == ref(bind(R.MoeRouterTopKNorm, E=E, TOPK=K_, VPT=V_), [[int(v) for v in lg]])
     y = _bf16(rng, K_ * 16, 3.0)
     assert [int(v) for v in SR.evaluate("MoeSum_v1", {"TOPK": K_, "H": 16}, [[y]], [None])["sum"]] == ref(bind(R.MoeSum, TOPK=K_, H=16), [[int(v) for v in y]])
@@ -1675,7 +1675,7 @@ def test_padded_moe_block_twin_equals_the_moe01_composition_and_names_every_memb
     E, TOPK, VPT, H, I = 8, 2, 4, 32, 16
     st = {"E": E, "TOPK": TOPK, "VPT": VPT, "H": H, "I": I}
     x, logits, w13, w2 = bf16((H,)), bf16((E,), 2.0), bf16((E, 2 * I, H), 0.3), bf16((E, H, I), 0.3)
-    SR._PADDED_BLOCK_MEMO.clear()
+    RK._PADDED_BLOCK_MEMO.clear()
     got = RK.padded_moe_block(st, [x, logits, w13, w2], router_gemm=False)
     assert set(got) == {"out", "router_ids", "router_w"} | {f"slot{e}/{m}" for e in range(E) for m in ("up", "act", "down", "g")}
     # the MOE-01 composition through the SAME evaluate() entry the record's pair rows use
