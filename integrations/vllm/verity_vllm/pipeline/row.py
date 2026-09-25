@@ -11,7 +11,6 @@ A row id with ``__tp<N>__``, N >= 2, runs the tensor-parallel stages (``row_tp``
 """
 from __future__ import annotations
 
-import argparse
 import json
 import sys
 from dataclasses import dataclass
@@ -30,7 +29,8 @@ class _Row:
     repo: str = option("repo", help="HF repo")
     rev: str = option("rev", help="revision")
     gpu_util: str | None = option("--gpu-util", env="GPU_UTIL", default=None,
-                                  help="gpu_memory_utilization (default 0.5; TP: the role's, else 0.6)")
+                                  help="gpu_memory_utilization (default 0.5; TP 0.6: a rank shard above 0.6 of the device memory "
+                                       "needs more, e.g. 0.92 with --commit-gpu-util 0.80 for a 30B MoE at TP2 on 48 GB)")
     world: int | None = option("--world", env="WORLD", type=int, default=None, help="TP: ranks (default: the manifest's sweep.tp)")
     nccl_p2p_disable: str = option("--nccl-p2p-disable", env="NCCL_P2P_DISABLE", default="1", help="TP: NCCL_P2P_DISABLE of the stages")
     query: str = option("--query", env="VERITY_QUERY_ID", default="Q_module_body_v1", help="verification query id (recorded)")
@@ -74,7 +74,7 @@ class Chain(_Research):
     stages: str = option("--stages", default=STAGES)
     campaign: str | None = option("--campaign", env="RESEARCH_CAMPAIGN", default=None)
     project: str = option("--project", env="RESEARCH_PROJECT", default="verity")
-    flags: list[str] = option("flags", nargs=argparse.REMAINDER, default=[], help="stage flags, passed to every stage")
+    flags: list[str] = option("flags", nargs="...", default=[], help="stage flags, passed to every stage")
     env: RunEnv = group(RunEnv)
 
 
@@ -125,7 +125,7 @@ def fa_version(workload: str) -> int:
 
 def main(o: Any) -> int:
     if isinstance(o, Stage):
-        return research.stage(o)
+        return research.stage(o, run_row)
     if isinstance(o, Run):
         return run_row(o, o.stages)
     if isinstance(o, Chain):

@@ -24,7 +24,7 @@ import shutil
 import subprocess
 import sys
 import time
-from typing import Any
+from typing import Any, Callable
 
 from verity_vllm.config import ROOT
 from verity_vllm.pipeline.row_driver import CLI, utc
@@ -100,13 +100,8 @@ def _tee(path: str, line: str) -> None:
         f.write(line + "\n")
 
 
-def _run_row(o: Any, stage: str) -> int:
-    from verity_vllm.pipeline import row
-    return row.run_row(o, stage)
-
-
-def stage(o: Any) -> int:
-    """One stage of the row as the workload of one research Attempt."""
+def stage(o: Any, run: Callable[[Any, str], int]) -> int:
+    """One stage of the row as the workload of one research Attempt; ``run(o, stage)`` runs the row's stage."""
     env = o.env
     d = f"{env.sweep_dir}/{o.row}"
     os.makedirs(d, exist_ok=True)
@@ -129,7 +124,7 @@ def stage(o: Any) -> int:
                 return 3
             _tee(f"{d}/row.log", f"{utc()} [row {o.row}] v2 {o.stage}: consumes Build {build_in} (program_digest {here[:16]} verified)"
                                  f"{', Match ' + match_in if match_in else ''}")
-        return _run_row(o, o.stage)
+        return run(o, o.stage)
     finally:
         if env.research_run_dir:
             inputs = [*(["--input", f"build={build_in}"] if build_in else []), *(["--input", f"match={match_in}"] if match_in else [])]

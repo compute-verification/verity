@@ -267,8 +267,9 @@ def match_summary(d: str, rcm: int, rcc: int, rcg: int, t0: int, rcs: int, resum
           "served_output_lens": {e.get("request_id"): e.get("served_output_len") for e in (G.get("requests") or []) if "served_output_len" in e} or None,
           "executed_prefix_lens": {e.get("request_id"): e.get("executed_prefix_len") for e in (G.get("requests") or []) if "executed_prefix_len" in e} or None,
           "lag": G.get("lag"), "alerts": G.get("alerts"),
-          # the declared stop rule (set + source) beside every verdict with an early stop: outside the digest
-          "stop_rule": (next((c.get("stop_rule") for c in (G.get("checks") or []) if c.get("id") == "G6"), None)
+          # the declared stop rule (set + source) beside every verdict with an early stop: outside the digest; the chronology
+          # check is the one global-match check that records it
+          "stop_rule": (next((c.get("stop_rule") for c in (G.get("checks") or []) if "stop_rule" in c), None)
                         if G.get("eos_truncated_requests") else None),
           "seconds": G.get("seconds"), "artifact": "global_match.json"}
     # the sampler value check (stochastic rows only; rcs == -1 -> a greedy row, not applicable)

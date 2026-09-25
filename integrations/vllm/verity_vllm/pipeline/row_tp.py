@@ -28,10 +28,7 @@ from verity_vllm.config import BuildConfig, CommitConfig, MatchConfig, RunEnv
 from verity_vllm.pipeline import row_records as R
 from verity_vllm.pipeline.row_driver import Row, Stop, stage_on
 
-#: gpu_memory_utilization (capture, Commit) per role: the ~30 GB Qwen3-30B-A3B shard needs > 0.6 x 44 GiB to load, and
-#: 0.92 runs the instrumented Commit out of memory
-GPU_UTIL = {"QWEN3_30B_A3B": ("0.92", "0.80")}
-TP_UTIL = ("0.6", "")
+TP_UTIL = "0.6"
 
 
 def _tail_bytes(path: str, n: int = 200) -> str:
@@ -54,10 +51,9 @@ class TpRow(Row):
     def __init__(self, *, row: str, role: str, repo: str, rev: str, stages: str, env: RunEnv, world: int, gpu_util: str | None,
                  nccl_p2p_disable: str, build: BuildConfig, match: MatchConfig, commit: CommitConfig):
         super().__init__(row=row, role=role, repo=repo, rev=rev, stages=stages, env=env, proc="tp_stage")
-        gu, cgu = GPU_UTIL.get(role, TP_UTIL)
         self.W, self.nccl = world, nccl_p2p_disable
-        self.gpu_util = gpu_util or gu
-        self.commit_util = commit.commit_gpu_util or cgu or self.gpu_util
+        self.gpu_util = gpu_util or TP_UTIL
+        self.commit_util = commit.commit_gpu_util or self.gpu_util
         self.cb, self.cm, self.ck_ = build, match, commit
         self.trap = False
 
