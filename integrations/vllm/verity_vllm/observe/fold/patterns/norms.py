@@ -1,0 +1,97 @@
+"""RMSNorm patterns: the residual-free Triton norm launch and the fused residual-add norm."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any
+
+from verity.ir.defs import bind
+from verity_vllm.program.registry import b1
+
+from verity_vllm.observe.events import ViewDesc
+from verity_vllm.observe.fold.patterns.geometry import is_row_major
+from verity_vllm.observe.fold.patterns.ops import as_float, bound_args, first, op_name, triton_name
+from verity_vllm.observe.fold.patterns.resolutions import _check_pins, _fmt, attribution_for, hint_of, unsupported
+from verity_vllm.observe.fold.resolver import Compute, PerRow, Resolution, Shared, StepContext
+from verity_vllm.observe.fold.tree import TreeNode
+
+
+@dataclass
+class RMSNormTritonLaunch:
+    """`TritonLaunch …batch_invariant._rms_norm_kernel` (vLLM `rms_norm_batch_invariant`, the residual-free norm:
+    layer 0's input norm) → `Compute(RMSNormTriton_v1{N,EPS}, rows=M, (PerRow(x), Shared(w)), (PerRow(out),))`.
+    Pins: `BLOCK_SIZE=1024`, `HAS_WEIGHT=True`, `num_warps=4` (the reduction tree the registered body writes out);
+    `eps` must equal the profile's `EPS`."""
+
+    constexprs: dict[str, Any]
+    num_warps: int | None = None
+    eps: float | None = None
+    name: str = "rmsnorm.triton_rms_norm_kernel"
+    kernel: str = "_rms_norm_kernel"
+
+    def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
+        if not node.is_triton or triton_name(node) != self.kernel:
+            return None
+        a = bound_args(node)
+        consts = dict(node.enter.constexprs)
+        got = {k: first(consts.get(k), a.get(k)) for k in self.constexprs}
+        bad = _check_pins(node, got, self.constexprs)
+        if bad is not None:
+            return bad
+        if self.num_warps is not None:
+            bad = _check_pins(node, {"num_warps": node.enter.num_warps}, {"num_warps": self.num_warps})
+            if bad is not None:
+                return bad
+        x, w, out = a.get("input_ptr"), a.get("weight_ptr"), a.get("output_ptr")
+        n_cols, eps = a.get("n_cols"), as_float(a.get("eps"))
+        if not all(isinstance(v, ViewDesc) for v in (x, w, out)) or not isinstance(n_cols, int) or eps is None:
+            return unsupported(node, "rms_norm launch arguments not bound as expected", args={k: _fmt(v) for k, v in a.items()})
+        if x.rank != 2 or x.shape[1] != n_cols or not is_row_major(x) or out.shape != x.shape or not is_row_major(out):
+            return unsupported(node, "input/output are not row-major [M,N] views", x=repr(x), out=repr(out), n_cols=n_cols)
+        if w.shape != (n_cols,) or w.strides != (1,):
+            return unsupported(node, "weight is not a contiguous [N] view", w=repr(w))
+        if not (x.dtype == w.dtype == out.dtype == "bfloat16"):
+            return unsupported(node, "RMSNormTriton_v1 is bf16", dtypes=[x.dtype, w.dtype, out.dtype])
+        if self.eps is not None and eps != self.eps:
+            return unsupported(node, "eps differs from the profile's EPS", eps=eps, pinned=self.eps)
+        M = x.shape[0]
+        if node.enter.grid and node.enter.grid[0] != M:
+            return unsupported(node, "grid does not launch one program per row", grid=node.enter.grid, M=M)
+        roots = ctx.roots_of(w)
+        return Compute(bind(b1.RMSNormTriton, N=n_cols, EPS=self.eps if self.eps is not None else eps), M,
+                       (PerRow(x), Shared(w)), (PerRow(out),), (node.id,), hint=hint_of(node, roots[0].name if roots else "rms_norm"),
+                       kernels=(self.kernel,), attribution=attribution_for(ctx, M, node.phase), pattern=self.name)
+
+
+@dataclass
+class FusedAddRMSNorm:
+    """`_C.fused_add_rms_norm(input!, residual!, weight, epsilon)` (in place: input ← norm(input+residual),
+    residual ← input+residual) → `Compute(RMSNormFusedCuda_v2{N,EPS}, rows=M, (PerRow(x), PerRow(res), Shared(w)),
+    (PerRow(x), PerRow(res)))`.  The fold reads all operands before writing (the outputs alias the inputs)."""
+
+    eps: float | None = None
+    name: str = "rmsnorm.fused_add_rms_norm"
+
+    def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
+        if node.is_triton or op_name(node.op) != "fused_add_rms_norm":
+            return None
+        a = bound_args(node)
+        x, res, w = a.get("input", a.get("arg0")), a.get("residual", a.get("arg1")), a.get("weight", a.get("arg2"))
+        eps = as_float(first(a.get("epsilon"), a.get("eps"), a.get("arg3")))
+        if not all(isinstance(v, ViewDesc) for v in (x, res, w)) or eps is None:
+            return unsupported(node, "fused_add_rms_norm arguments not bound as expected", args={k: _fmt(v) for k, v in a.items()})
+        if x.rank != 2 or not is_row_major(x) or res.shape != x.shape or not is_row_major(res):
+            return unsupported(node, "input/residual are not row-major [M,N] views of one shape", x=repr(x), res=repr(res))
+        N = x.shape[1]
+        if w.shape != (N,) or w.strides != (1,):
+            return unsupported(node, "weight is not a contiguous [N] view", w=repr(w), N=N)
+        if not (x.dtype == res.dtype == w.dtype == "bfloat16"):
+            return unsupported(node, "RMSNormFusedCuda_v2 is bf16", dtypes=[x.dtype, res.dtype, w.dtype])
+        if self.eps is not None and eps != self.eps:
+            return unsupported(node, "epsilon differs from the profile's EPS", eps=eps, pinned=self.eps)
+        M = x.shape[0]
+        roots = ctx.roots_of(w)
+        return Compute(bind(b1.RMSNormFusedCuda, N=N, EPS=self.eps if self.eps is not None else eps), M,
+                       (PerRow(x), PerRow(res), Shared(w)), (PerRow(x), PerRow(res)), (node.id,),
+                       hint=hint_of(node, roots[0].name if roots else "fused_add_rms_norm"), kernels=("fused_add_rms_norm_kernel",),
+                       attribution=attribution_for(ctx, M, node.phase), pattern=self.name)
