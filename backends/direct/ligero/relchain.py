@@ -480,7 +480,6 @@ class HashedRelationRunner(RelationChainRunner):
     def commit_evidence(self) -> dict:
         """What the committed set IS, byte for byte: the three tree references (bindings, counts, roots), the sha256 of every
         tree level, of the published row digests and of the prover's precomputed chain states (``<i8`` bytes)."""
-        import hashlib
         sha = lambda a: hashlib.sha256(np.ascontiguousarray(np.asarray(a, dtype=np.int64)).astype("<i8").tobytes()).hexdigest()  # noqa: E731
         out = {"trees": {n: {**t.ref.to_json(), "levels_sha256": hashlib.sha256(b"".join(np.ascontiguousarray(lv).tobytes()
                                                                                           for lv in t.levels)).hexdigest()}
