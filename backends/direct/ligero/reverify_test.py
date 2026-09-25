@@ -49,8 +49,8 @@ def env(tmp_path, monkeypatch):
     return tmp_path
 
 
-def _dump(root: Path, *, n: int = 2, corrupt: bool = False) -> Path:
-    p = root / "proofs"
+def _dump(root: Path, *, n: int = 2, corrupt: bool = False, flat: bool = False) -> Path:
+    p = root if flat else root / "proofs"
     (p / "rep1").mkdir(parents=True)
     files = []
     for i in range(n):
@@ -124,6 +124,15 @@ def test_a_result_put_by_hand_with_the_benchs_own_run_id_is_reverified(env, caps
     res = st.put_artifact("bench-result/v1", {"run_id": "b-ligero-fp8-ada-vu-1790219342"}, {"run_files": rf})
     assert _run(env, res, "--by", "tester") == 0
     assert "2/2, 2^-128.30 PASS -> verdict art:" in capsys.readouterr().out
+
+
+def test_a_tree_published_as_the_proof_dir_itself_is_reverified(env, capsys):
+    from research.store.local import LocalStore
+
+    st = LocalStore()
+    res = _result(st, env, "flat", flat=True)
+    assert _run(env, res, "--by", "tester") == 0
+    assert "custody 7/7, pinned=fp8-ada, 2/2, 2^-128.30 PASS -> verdict art:" in capsys.readouterr().out
 
 
 def test_a_dump_that_never_left_the_pod_is_an_error_not_a_rejection(env, capsys):
