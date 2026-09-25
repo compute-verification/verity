@@ -95,7 +95,17 @@ def lincomb2_case(D, R, R1, R2, cols, xmode, g, dev, strided_view=True):
             C1 = _extreme_matrix(D, R1, g, dev)
         C2 = _extreme_matrix(D, R2, g, dev) if R2 else torch.zeros((D, 0), dtype=torch.int64, device=dev)
         ok_path = f.lincomb2_ok(C1, C2, X)
-        w, v = f.lincomb2(C1, C2, X)
+        try:
+            w, v = f.lincomb2(C1, C2, X)
+            torch.cuda.synchronize()
+        except Exception as e:  # noqa: BLE001 -- record whether the replaced kernels take the same inputs
+            try:
+                f.lincomb(C1[:, :R] % P, X), f.lincomb(C2 % P, X[:R2]) if R2 else None
+                torch.cuda.synchronize()
+                old = "old two-lincomb path OK on the same inputs"
+            except Exception as e2:  # noqa: BLE001
+                old = f"old path fails too: {type(e2).__name__}"
+            raise RuntimeError(f"{type(e).__name__}: {e} [smem {2 * D * min(1024, -(-R // max(1, -(-R // 1024)))) * 4} B max; {old}]") from e
         rw = _ref_combine(C1[:, :R], X)
         rv = _ref_combine(C2, X[:R2]) if R2 else torch.zeros((D, cols), dtype=torch.int64, device=dev)
         mw, mv = _mismatch(w, rw), _mismatch(v, rv)
@@ -104,8 +114,8 @@ def lincomb2_case(D, R, R1, R2, cols, xmode, g, dev, strided_view=True):
             detail["w"] = mw
         if mv:
             detail["v"] = mv
-        if xmode != "noncanon" and R2 and C1.shape[1] == R:   # the kernel it replaces (two lincomb calls) on the same inputs
-            ow, ov = f.lincomb(C1 % P, X), f.lincomb(C2 % P, X[:R2])
+        if xmode != "noncanon" and R2:   # the kernels it replaces (two lincomb calls) on the same inputs
+            ow, ov = f.lincomb(C1[:, :R] % P, X), f.lincomb(C2 % P, X[:R2])
             detail["old_equal"] = bool(torch.equal(ow, w) and torch.equal(ov, v))
         return (ok_path and mw is None and mv is None), detail
     return fn
@@ -142,10 +152,16 @@ def quad_case(D, Q, R, cols, hi, mode, g, dev, splits=None):
         try:
             tests_fused.QUAD_V4, tests_fused.REDUCE_KERNEL = False, False
             old = f.quad_general(rho, X, csr)
+            torch.cuda.synchronize()
             tests_fused.QUAD_V4, tests_fused.REDUCE_KERNEL = True, True
             if splits:
                 tests_fused.QUAD_SPLITS = splits
-            new = f.quad_general(rho, X, dict(csr))
+            try:
+                new = f.quad_general(rho, X, dict(csr))
+                torch.cuda.synchronize()
+            except Exception as e:  # noqa: BLE001 -- the scalar kernel (old) has just run on the same inputs
+                chunk = -(-Q // max(1, min(Q, splits or tests_fused.QUAD_SPLITS)))
+                raise RuntimeError(f"{type(e).__name__}: {e} [quad_v4 shared {D * chunk * 4} B; the scalar quad kernel ran OK on the same inputs]") from e
         finally:
             tests_fused.QUAD_V4, tests_fused.REDUCE_KERNEL, tests_fused.QUAD_SPLITS = saved
         Xl = X.to(torch.int64)
