@@ -467,6 +467,21 @@ fn selftest(st: Arc<Stmt>) {
     t("cross_session_replay_both_reps", "neg9 (link neg 15)",
       Plan { substitute: BTreeMap::from([(0, Subst::Other(other[0].clone())), (1, Subst::Other(other[1].clone()))]), ..h() }, true, false, &mut all);
     t("witness_bit_flip_both_reps", "neg8", Plan { witness_flip: true, ..h() }, true, false, &mut all);
+    // F3: child streams opened at parent position 0, or before the rep root's binding round, are refused.
+    for (case, at, rounds) in [("fork_at_parent_position_0", 0u64, 0usize), ("fork_before_root_binding", 1, 0)] {
+        let s = Arc::new(Mutex::new(server(&st, true)));
+        let t = shared(InProc(s.clone()));
+        let _ = call(&t, Req::Hello(SessionConfig::flock_128_r2(vec![st.spec()]).hello()));
+        let _ = call(&t, Req::Link(link_context(7)));
+        let _ = call(&t, Req::Open { stream: rep_stream(TABLE, 0), parent: String::new(), label: domain(0), at: 0 });
+        for _ in 0..rounds {
+            let _ = call(&t, Req::Round { stream: rep_stream(TABLE, 0), content: vec![0; 16], n: 1 });
+        }
+        let r = call(&t, Req::Open { stream: format!("{}/f0", rep_stream(TABLE, 0)), parent: rep_stream(TABLE, 0), label: b"x".to_vec(), at });
+        let ok = matches!(r, Ok(Resp::Refused(_)));
+        all &= ok;
+        println!("NEG\t{}", json!({"case": case, "maps_to": "F3", "expect": "reject", "pass": ok, "why": format!("{r:?}")}));
+    }
     let np = st.n - st.n / 4;
     all &= neg(&Arc::new(Stmt::new(np)), "honest_live_session_with_padding_rows", "neg10 (padding benign)", &h(), true, true);
     println!("SELFTEST\t{}", json!({"n": st.n, "all_pass": all}));

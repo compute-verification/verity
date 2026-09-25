@@ -4,7 +4,9 @@
 # against a verifier PROCESS (loopback, or VERIFIER=host:port for a verifier on another pod).
 # F2 (the pinned census-unit + BLAKE3 union verifier and the GPU unit-table verifier): verity_unit.rs goes into
 # flock-prover, the unit netlists are exported with export_unit.py, and `flock-live selftest-f2` runs when F2=1.
-# env: SELF_VUS="8 64"  BENCH_VUS="4096"  RUNS=2  VERIFIER=  SERVE_ONLY=  SKIP_BENCH=  F2=
+# LEGACY=1 also runs flock-live's own selftest (stub link, F3 cases) and its BLAKE3-union bench at LEGACY_N compressions
+# (the same-host baseline: no circuit, no link claims).
+# env: SELF_VUS="8 64"  BENCH_VUS="4096"  RUNS=2  VERIFIER=  SERVE_ONLY=  SKIP_BENCH=  F2=  LEGACY=  LEGACY_N=393216
 set -uxo pipefail
 W=/workspace/flock-link; F=$W/flock; O=$RESEARCH_RUN_DIR/out; mkdir -p $O
 source $HOME/.cargo/env
@@ -24,6 +26,10 @@ export RAYON_NUM_THREADS=$TH
 cargo build --release -p flock-live --features verity-unit -j $TH 2>&1 | grep -E '^error|-->|Finished' | head -40
 B=$F/target/release/flock-link; [ -x $B ] || exit 1
 git -C $F diff --stat | tail -1 > $O/patch-stat.txt
+if [ -n "${LEGACY:-}" ]; then
+  $F/target/release/flock-live selftest --n 4096 2>&1 | tee $O/selftest-legacy.txt | grep -E '^(NEG|SELFTEST)' | cut -c1-300
+  $F/target/release/flock-live bench --n ${LEGACY_N:-393216} --runs 3 2>&1 | tee $O/bench-legacy.txt | grep BENCH | cut -c1-600
+fi
 if [ -n "${F2:-}" ]; then
   $F/target/release/flock-live selftest-f2 --netlist $N/net-hopper_bf16.txt --netlist-other $N/net-hopper_e4m3.txt \
     --n ${F2_N:-4096} --units ${F2_UNITS:-4096} --nbl ${F2_NBL:-14} 2>&1 | tee $O/selftest-f2.txt | grep -E '^(NEG|SELFTEST)' | cut -c1-300

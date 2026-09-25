@@ -836,6 +836,11 @@ impl Server {
                     let Some(p) = self.streams.get(&parent) else {
                         return self.refuse(format!("fork of unknown stream {parent}"));
                     };
+                    // F3: a fork follows at least one issued round of its parent, and its rep root's binding round.
+                    let root = parent.split('/').take(2).collect::<Vec<_>>().join("/");
+                    if at == 0 || self.streams.get(&root).and_then(|r| r.cap.as_ref()).is_none() {
+                        return self.refuse(format!("F3: fork {stream} opened at parent position {at}, before {root}'s binding round"));
+                    }
                     if p.rounds.len() as u64 != at {
                         return self.refuse(format!("R3: fork {stream} claims parent position {at}, parent has issued {}", p.rounds.len()));
                     }
