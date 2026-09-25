@@ -261,7 +261,7 @@ class CommitConfig:
 
     pairs: int = option("--pairs", env="PAIRS", type=int, default=3, help="instrumented/control pairs")
     commit_gpu_util: str | None = option("--commit-gpu-util", env="COMMIT_GPU_UTIL", default=None,
-                                         help="TP: gpu_memory_utilization of the Commit engine (default: the role's, else --gpu-util)")
+                                         help="TP: gpu_memory_utilization of the Commit engine (default --gpu-util)")
     window_mb: int = option("--window-mb", env="WINDOW_MB", type=int, default=256, help="device staging window (0 = per-step blocks)")
     window_slots: int = option("--window-slots", env="WINDOW_SLOTS", type=int, default=8)
     retain: str = option("--retain", env="RETAIN", default="host", help="where raw copies are retained: host, device or gpu")
