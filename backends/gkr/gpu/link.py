@@ -1,25 +1,31 @@
-"""The bit link's prime side in sigma form (PROTOCOL.md §17; the red team's S1, NON_ZK_PROOF only).
+"""The bit link's prime side in sigma form (PROTOCOL.md §17; the red team's S1, NON_ZK_PROOF only), against the live
+Flock session of route (a) (``backends/flock/live``, ``flock-link cell-prove``).
 
 The unit commits the bits of every operand word it consumes (``tools/link_stub.extend_unit``: booleanity and
-recomposition per bit).  After the GKR layers, with the Ligero root and the binary proof's root ``root_b`` absorbed:
+recomposition per bit).  After the GKR layers:
 
-  r in GF(2^256)^m        one challenge point (m = log2ceil of the linked positions), a coin slot of its own
-  y = z^(r)               the binary side's claim about the hashed message bits z (here a STAND-IN: the verifier's own
-                          copy of the operand words, until the binary proof is wired)
-  sigma_t, t < 256        prover messages: sigma_t = sum over the linked cells q of bit_t(eq(r, pos(q))) b_q, integers;
-                          the verifier requires 0 <= sigma_t <= n_cells and sigma_t = bit_t(y) mod 2
+  root_F                  SHA-256(ROOT_F_TAG || state || ctr) of the transcript: this proof's commitment (the Ligero root
+                          and every GKR message), handed to the session's ``Commit`` (``Link.exchange``)
+  r_0, r_1 in GF(2^128)^m the session's two link points (the verifier's OS coins, drawn after root_F and root_B) and
+  y_0, y_1                the binary side's claims y_k = z^(r_k), both from the session record (``Context``), absorbed as
+                          TAG || Σ || SHA-256(root_B) || points || y
+  sigma_t, t < 256        prover messages: sigma_t = sum over the linked cells q of bit_t(eq(r, pos(q))) b_q, integers,
+                          planes t < 128 of point 0 and t - 128 of point 1; the verifier requires 0 <= sigma_t <= n_cells
+                          and sigma_t = bit_t(y_0 || y_1) mod 2
   rho                     one BabyBear^6 challenge; the 256 dense constraints sum_q C(t, q) b_q = sigma_t enter the
                           batched Ligero functional as a[q] += sum_t rho^t bit_t(eq(r, pos(q))), b += sum_t rho^t sigma_t
 
 Both sides lie in [0, p - 1] (n_cells <= p - 1), so each constraint holds over the integers, and the parities give
-b^(r) = y.  GF(2^256) is GF(2)[x] / (x^256 + x^10 + x^5 + x^2 + 1), polynomial basis, bit t = the coefficient of x^t,
-elements little-endian in 32 bytes.
+b^(r_k) = y_k.  GF(2^128) is Flock's, GF(2)[x] / (x^128 + x^7 + x^2 + x + 1), bit t = the coefficient of x^t.  A pair
+(point 0, point 1) is one 256-bit value (point 0 in the low half), four int64 limbs on the device, so eq(r, i) is the pair
+of both points' eq values and its 256 bits are the 256 planes.
 
 The map pos (Lambda_F) is derived here from the unit circuit and the checker-v2 layout, never read from a statement:
 unit u = v * steps + s consumes words k s .. k s + k - 1 of x row v (columns 5 .. 5 + k) and of W column v (the next
 k); link column col0 + j * bits + i is bit i of operand column 5 + j, and it goes to
 pos = ((port * vus + v) * K + k s + j mod k) * bits + i, port = j // k.  ``derive`` checks the names, the booleanity
-and recomposition constraints of every link column, and that pos is a bijection onto [0, 2 vus K bits).
+and recomposition constraints of every link column, and that pos is a bijection onto [0, 2 vus K bits).  That is
+Flock's linked position order (flock-link: bit i of word k of operand row l at (l K + k) 16 + i).
 """
 from __future__ import annotations
 
@@ -34,23 +40,66 @@ from .field import DEG, P, Ext, e_add, e_mul, e_scale
 from .gkr import Reader, VerifyError
 from .transcript import Transcript
 
-TAG = b"verity-gkr/link/sigma-gf2_256/v1"
-RED = (1 << 10) | (1 << 5) | (1 << 2) | 1
-MASK = (1 << 256) - 1
+TAG = b"verity-gkr/link/sigma-2xgf2_128/v2"
+ROOT_F_TAG = b"verity-gkr/link/root-f/v2"
+LINK_TXT = "link session-2xgf2_128/v2"
+RED = (1 << 7) | (1 << 2) | (1 << 1) | 1
+MASK = (1 << 128) - 1
 PLANES = 256
 BLOCK = 128
 
 
-def gmul(a: int, b: int) -> int:
+def gmul128(a: int, b: int) -> int:
+    """Flock's GF(2^128) product (the reference)."""
     r = 0
     while b:
         if b & 1:
             r ^= a
         b >>= 1
         a <<= 1
-        if a >> 256:
+        if a >> 128:
             a = (a & MASK) ^ RED
     return r
+
+
+def pair(a: int, b: int) -> int:
+    return a | (b << 128)
+
+
+@dataclass(frozen=True)
+class Context:
+    """The session's link context, from the Flock verifier's record (``link.txt``)."""
+    sigma: bytes
+    root_f_sha256: bytes
+    root_b_sha256: bytes
+    points: tuple[tuple[int, ...], tuple[int, ...]]
+    y: tuple[int, int]
+
+    def text(self) -> str:
+        f = lambda v: f"{v:032x}"                                   # noqa: E731  the record's {hi:016x}{lo:016x}
+        return (f"{LINK_TXT}\nsigma {self.sigma.hex()}\nroot_f_sha256 {self.root_f_sha256.hex()}\n"
+                f"root_b_sha256 {self.root_b_sha256.hex()}\n"
+                + "".join(f"point {' '.join(f(c) for c in p)}\n" for p in self.points) + f"y {f(self.y[0])} {f(self.y[1])}\n")
+
+    def absorbed(self) -> bytes:
+        le = lambda v: v.to_bytes(16, "little")                     # noqa: E731  lo then hi, Flock's coin bytes
+        return TAG + self.sigma + self.root_b_sha256 + b"".join(le(c) for p in self.points for c in p) + le(self.y[0]) + le(self.y[1])
+
+
+def parse_context(text: str) -> Context:
+    lines = [ln.split() for ln in text.splitlines() if ln.strip()]
+    if not lines or " ".join(lines[0]) != LINK_TXT:
+        raise VerifyError(f"link.txt: not a {LINK_TXT} link")
+    kv = {t[0]: t[1:] for t in lines[1:] if t[0] != "point"}
+    pts = tuple(tuple(int(c, 16) for c in t[1:]) for t in lines[1:] if t[0] == "point")
+    if len(pts) != 2 or len(kv.get("y", ())) != 2:
+        raise VerifyError("link.txt: two points and two y values expected")
+    return Context(bytes.fromhex(kv["sigma"][0]), bytes.fromhex(kv["root_f_sha256"][0]), bytes.fromhex(kv["root_b_sha256"][0]),
+                   pts, (int(kv["y"][0], 16), int(kv["y"][1], 16)))
+
+
+def root_f(tr: Transcript) -> bytes:
+    return hashlib.sha256(ROOT_F_TAG + tr.state + tr.ctr.to_bytes(8, "little")).digest()
 
 
 @dataclass(frozen=True)
@@ -135,12 +184,14 @@ def derive(circ: Circuit, vus: int, steps: int, K: int, bits: int) -> Layout:
 
 @dataclass
 class Link:
-    """What an instance links: the layout, the binary proof's root, and (STAND-IN for the binary proof) the operand
-    words z is made of, ``x`` rows and ``w`` columns ``(vus, K)``."""
+    """What an instance links: the layout, and either the session's ``context`` (the verifier) or ``exchange``, which
+    takes root_F to the live session and returns its ``Context`` (the prover).  The prover's operand words ``x`` rows
+    and ``w`` columns ``(vus, K)`` give its own y, which must equal the session's."""
     layout: Layout
-    root_b: bytes
-    x: np.ndarray
-    w: np.ndarray
+    context: Context | None = None
+    exchange: object = None
+    x: np.ndarray | None = None
+    w: np.ndarray | None = None
 
 
 @dataclass
@@ -253,16 +304,20 @@ def _split(v: int) -> list[int]:
 
 
 def eq_table(r: list[int], device, n: int | None = None) -> torch.Tensor:
-    """``(n, 4)`` int64: eq(r, i) for every i < n <= 2^m (bit j of i against r_j)."""
+    """``(n, 4)`` int64: the pair (eq(r_0, i), eq(r_1, i)) for every i < n <= 2^m (bit j of i against coordinate j);
+    ``r[j]`` is the pair of both points' coordinate j."""
     triton, eq_level, _ = _kernels()
     m = len(r)
     sel = ((np.arange(16)[:, None] >> np.arange(4)[None, :]) & 1).astype(bool)
     tabs = np.zeros((m, 64, 16, 4), dtype=np.int64)
     for j in range(m):
-        basis, v = np.zeros((256, 4), dtype=np.int64), r[j]
-        for s in range(256):
-            basis[s] = _split(v)
-            v = ((v << 1) & MASK) ^ (RED if v >> 255 else 0)
+        # multiplication by r[j] is GF(2)-linear and block diagonal: the images of the 256 basis vectors
+        basis = np.zeros((256, 4), dtype=np.int64)
+        for half in range(2):
+            v = (r[j] >> (128 * half)) & MASK
+            for s in range(128):
+                basis[128 * half + s] = _split(v << (128 * half))
+                v = ((v << 1) & MASK) ^ (RED if v >> 127 else 0)
         basis = basis.reshape(64, 4, 4)
         for c in range(4):
             tabs[j] ^= np.where(sel[None, :, c, None], basis[:, None, c, :], 0)
@@ -271,6 +326,7 @@ def eq_table(r: list[int], device, n: int | None = None) -> torch.Tensor:
     assert 0 < n <= 1 << m
     T = torch.zeros((n, 4), dtype=torch.int64, device=device)
     T[0, 0] = 1
+    T[0, 2] = 1
     tw = T.view(torch.int32)
     for j in range(m):
         h = 1 << j
@@ -300,8 +356,7 @@ def plane_sums(T: torch.Tensor, lay: Layout, z: torch.Tensor, cols: torch.Tensor
 
 
 def z_bits(link: Link, device) -> torch.Tensor:
-    """STAND-IN for the binary proof: the hashed message bits in position order (x rows, then W columns, words
-    little-endian)."""
+    """The prover's operand bits in position order (x rows, then W columns, words little-endian): its own y."""
     bits = link.layout.bits
     sh = torch.arange(bits, device=device, dtype=torch.int32)
     out = []
@@ -315,9 +370,15 @@ def parity(s: list[int]) -> int:
     return sum((v & 1) << t for t, v in enumerate(s))
 
 
-def points(tr: Transcript, link: Link) -> list[int]:
-    tr.absorb(TAG + link.root_b)
-    return [int.from_bytes(tr.challenge_bytes(), "little") for _ in range(link.layout.m)]
+def points(ctx: Context) -> list[int]:
+    """The coordinate pairs of the session's two points."""
+    return [pair(a, b) for a, b in zip(*ctx.points)]
+
+
+def _enter(tr: Transcript, ctx: Context, lay: Layout) -> None:
+    if len(ctx.points[0]) != lay.m or len(ctx.points[1]) != lay.m:
+        raise VerifyError(f"link: the session's points are not two of {lay.m} coordinates")
+    tr.absorb(ctx.absorbed())
 
 
 def _msg(v: int) -> Ext:
@@ -333,9 +394,13 @@ def prove(inst, tr: Transcript, out: list[Ext]) -> Claim:
     link = inst.link
     lay = link.layout
     dev = inst.device
-    T = eq_table(points(tr, link), dev, lay.n_pos)
+    ctx = link.exchange(root_f(tr)) if link.exchange is not None else link.context
+    link.context = ctx
+    _enter(tr, ctx, lay)
+    T = eq_table(points(ctx), dev, lay.n_pos)
     sy, sigma = plane_sums(T, lay, z_bits(link, dev), _cols(inst))
-    tr.absorb(b"link/y" + parity(sy).to_bytes(32, "little"))
+    if parity(sy) != pair(*ctx.y):
+        raise VerifyError("link: the session's y is not these operands' (the binary side opened other bits)")
     msgs = [_msg(s) for s in sigma]
     out.extend(msgs)
     tr.absorb_exts(msgs)
@@ -346,9 +411,12 @@ def verify(inst, tr: Transcript, rd: Reader) -> Claim:
     link = inst.link
     lay = link.layout
     dev = inst.device
-    T = eq_table(points(tr, link), dev, lay.n_pos)
-    y = parity(plane_sums(T, lay, z_bits(link, dev), None)[0])
-    tr.absorb(b"link/y" + y.to_bytes(32, "little"))
+    ctx = link.context
+    if hashlib.sha256(root_f(tr)).digest() != ctx.root_f_sha256:
+        raise VerifyError("link: root_F in the session is not this proof's commitment (Ligero root and GKR messages)")
+    _enter(tr, ctx, lay)
+    T = eq_table(points(ctx), dev, lay.n_pos)
+    y = pair(*ctx.y)
     msgs = rd.take(PLANES)
     sigma = []
     for t, s in enumerate(msgs):
@@ -363,7 +431,8 @@ def verify(inst, tr: Transcript, rd: Reader) -> Claim:
 
 def check_clear(inst, claim: Claim) -> None:
     lay = inst.link.layout
-    if plane_sums(claim.T, lay, z_bits(inst.link, inst.device), _cols(inst))[1] != claim.sigma:
+    z = torch.zeros(lay.n_pos, dtype=torch.int32, device=inst.device)
+    if plane_sums(claim.T, lay, z, _cols(inst))[1] != claim.sigma:
         raise VerifyError("link: the committed bits' plane sums differ from sigma")
 
 
@@ -386,8 +455,3 @@ def add(acc, claim: Claim, lay: Layout, seg_off: int) -> None:
                                     lay.ncols, seg_off, P, MODE=1, HAS_B=False, BLOCK=BLOCK)
     for t in range(PLANES):
         acc.b = e_add(acc.b, e_scale(pw[t], claim.sigma[t] % P))
-
-
-def standin_root_b(commitment_text: bytes) -> bytes:
-    """The STAND-IN binary root until the binary proof is wired: SHA-256 of a tag and the statement's commitment."""
-    return hashlib.sha256(TAG + b"/root-b-standin/" + commitment_text).digest()

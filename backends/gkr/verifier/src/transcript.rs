@@ -50,7 +50,9 @@ impl Transcript {
         Ext(c)
     }
     pub fn challenges(&mut self, n: usize) -> Vec<Ext> { (0..n).map(|_| self.challenge()).collect() }
-    /// One whole digest (a GF(2^256) coin of the bit link, `gpu/transcript.py::challenge_bytes`).
+    /// `state || ctr_LE64`: what root_F (the bit link's commitment of this proof, link.rs) hashes.
+    pub fn root_f_input(&self) -> Vec<u8> { [self.state.as_slice(), &self.ctr.to_le_bytes()].concat() }
+    /// One whole digest (`gpu/transcript.py::challenge_bytes`).
     pub fn challenge_bytes(&mut self) -> [u8; 32] {
         self.slots += 1;
         self.digest()
