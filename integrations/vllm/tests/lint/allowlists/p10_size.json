@@ -63,7 +63,7 @@
     {"file": "verity_vllm/program/kernels/compiled_norm_literal.py", "kind": "function", "symbol": "_build", "detail": "lines", "count": 206},
     {"file": "verity_vllm/program/kernels/relations.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1344},
     {"file": "verity_vllm/program/kernels/twins.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1050},
-    {"file": "verity_vllm/program/registry/b1.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1285},
+    {"file": "verity_vllm/program/registry/b1.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1246},
     {"file": "verity_vllm/program/registry/derived_rows.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 944},
     {"file": "verity_vllm/program/registry/lifted.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 2368},
     {"file": "verity_vllm/program/registry/quarantine/ln/gelu_erf_table.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1203},
