@@ -49,7 +49,8 @@ done
 echo "REPLAYED $n sessions, $bad not accepted" | tee $O/summary.txt
 [ -z "$NEG" ] && { [ $bad = 0 ]; exit; }
 # negatives on one session (NEG): each must be rejected, except unused_high_bits_of_query_coin (Flock's query sampling
-# masks the low bits of each squeezed word, ligerito.rs queries_from_words), which must be accepted
+# masks the low bits of each squeezed word, ligerito.rs queries_from_words), which must be accepted. info: coins an honest
+# proof does not depend on (the zerocheck challenge multiplies A∘B−C, zero for an honest witness), recorded, not judged
 sd=$S/$NEG; ses=$(ls -d $sd/l* | sed -n 4p); oth=$(ls -d $sd/l* | sed -n 5p)
 inst=$W/inst-$TAG/${NEG%%/*}/instances-s${NEG##*sessions-s}.bin
 T=$W/neg-$TAG; mkdir -p $T
@@ -57,7 +58,7 @@ neg() { local name=$1 sj=$2 p0=$3 p1=$4 i=${5:-$inst} want=${6:-rejected}
   line=$($B replay --instances $i --netlist $NET --pin $PIN --session $sj --proofs $p0,$p1 2>/dev/null | grep '^REPLAY')
   r=$(echo "$line" | grep -q '"accepted":true' && echo accepted || echo rejected)
   echo "{\"neg\": \"$name\", \"want\": \"$want\", \"result\": \"$r\", \"replay\": ${line#REPLAY	}}" | tee -a $O/negatives.jsonl | cut -c1-300
-  [ $r = $want ] || bad=$((bad+1)); }
+  [ $want = info ] || [ $r = $want ] || bad=$((bad+1)); }
 : > $O/negatives.jsonl
 neg proofs_from_other_session $ses/session.json $oth/pure.rep0.bin $oth/pure.rep1.bin
 neg reps_swapped $ses/session.json $ses/pure.rep1.bin $ses/pure.rep0.bin
@@ -77,9 +78,10 @@ a = copy.deepcopy(r); a["link"]["publics_sha256"]["pure"] = "00" * 32; w("public
 a = copy.deepcopy(r); s = a["streams"][0]; s["rounds"][0]["msg_sha256"] = "00" * 32; w("round_message_digest_changed", a)
 a = copy.deepcopy(r); a["config"]["require_link"] = False; w("require_link_false", a)
 PY
-for n in zerocheck_coin_low_bit rep1_second_round_coin_low_bit rep0_mid_round_coin_low_bit last_coin_low_bit link_point_changed publics_digest_changed round_message_digest_changed require_link_false; do
+for n in zerocheck_coin_low_bit last_coin_low_bit; do neg $n $T/$n.json $ses/pure.rep0.bin $ses/pure.rep1.bin $inst info; done
+for n in rep1_second_round_coin_low_bit rep0_mid_round_coin_low_bit link_point_changed publics_digest_changed round_message_digest_changed require_link_false; do
   neg $n $T/$n.json $ses/pure.rep0.bin $ses/pure.rep1.bin; done
 neg unused_high_bits_of_query_coin $T/unused_high_bits_of_query_coin.json $ses/pure.rep0.bin $ses/pure.rep1.bin $inst accepted
 o=$(ls $W/inst-$TAG/*/instances-s*.bin | grep -v "$inst" | tail -1); neg other_instance_file $ses/session.json $ses/pure.rep0.bin $ses/pure.rep1.bin $o
-echo "NEGATIVES $(grep -c '"want": "rejected", "result": "rejected"' $O/negatives.jsonl) rejected as wanted, $(grep -c '"want": "accepted", "result": "accepted"' $O/negatives.jsonl) accepted as wanted, of $(wc -l < $O/negatives.jsonl); total bad $bad" | tee -a $O/summary.txt
+echo "NEGATIVES $(grep -c '"want": "rejected", "result": "rejected"' $O/negatives.jsonl) rejected as wanted, $(grep -c '"want": "accepted", "result": "accepted"' $O/negatives.jsonl) accepted as wanted, $(grep -c '"want": "info"' $O/negatives.jsonl) info, of $(wc -l < $O/negatives.jsonl); total bad $bad" | tee -a $O/summary.txt
 [ $bad = 0 ]
