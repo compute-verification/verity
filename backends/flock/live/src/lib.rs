@@ -17,6 +17,7 @@
 //!   The session record ([`Server::record_json`]) is the evidence; a proof file alone verifies nothing.
 
 pub mod chunk;
+pub mod pure_block;
 #[cfg(feature = "gpu")]
 pub mod gpu;
 
