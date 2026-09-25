@@ -22,5 +22,5 @@ verity-vllm = { workspace = true }
 dev = ["pytest>=8"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "tools/research/tests", "tools/native_peak/tests", "packages/verity/tests", "backends/sp1/tests", "backends/numerical/tests"]
+testpaths = ["tests", "tools/research/tests", "tools/native_peak/tests", "packages/verity/tests", "backends/sp1/tests", "backends/numerical/tests", "backends/gkr/tests"]
 markers = ["slow: full rechecks that take minutes (bench-instances full recheck); opt in with `--slow`"]

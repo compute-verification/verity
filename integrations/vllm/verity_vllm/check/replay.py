@@ -6,7 +6,7 @@ tier-level `status` in {"pass", "fail", "skipped", "error"}; per-instance entrie
 "computed" (evaluated, but no snapshot of the output exists to compare with — normal in tiers B/C).
 
     uv run python -m verity_vllm.check.replay --log data/logs/m1.jsonl.gz --snapshots data/logs/m1 \
-        --profile vllm_d9105ea80_sm89_eager --tier a --k 3 --out out/capture/reports/replay_a.json
+        --profile vllm_d9105ea80_sm89_eager --tier a --k 3 --seed S --out out/capture/reports/replay_a.json
     ... --tier b --step 1 --max-arg-leaves 4000000 [--layers 0,1,2] [--max-instances N] [--evaluator gates|twins|auto]
     ... --tier c                                     # pod only: hours for a real model
 
@@ -524,7 +524,7 @@ class Replayer:
 # ---------------------------------------------------------------------------------------------------------
 
 
-def tier_a(result: FoldResult, store: SnapshotStore, weights: WeightSource | None, *, k: int = 3, seed: int = 0,
+def tier_a(result: FoldResult, store: SnapshotStore, weights: WeightSource | None, *, k: int = 3, seed: int,
            max_arg_leaves: int = 4_000_000, steps: Iterable[int] | None = None) -> dict:
     """Body exactness: up to `k` seeded-random instances per specialization (stratified by the full specialization
     label), evaluated bit-exactly against their output snapshots; oversize instances at a child unit.  See the module
@@ -673,7 +673,6 @@ def vu_population(result: FoldResult, rep: Replayer, max_arg_leaves: int | None,
                 "partial_tiling_specs": sorted(s for s, t in tiling.items() if t["partial"]), "seconds": round(time.time() - t0, 3)}
     except Exception as e:  # noqa: BLE001 - informational
         return {"status": "error", "error": f"{type(e).__name__}: {e}", "seconds": round(time.time() - t0, 3)}
-
 
 
 def _regime(m: dict) -> str:
@@ -937,7 +936,7 @@ def plan_chains(result: FoldResult, snap_steps: list[int], *, n: int, rng: rando
     return slices
 
 
-def tier_chain(result: FoldResult, store: SnapshotStore, weights: WeightSource | None, *, n: int = 3, seed: int = 0, depth: int = 3,
+def tier_chain(result: FoldResult, store: SnapshotStore, weights: WeightSource | None, *, n: int = 3, seed: int, depth: int = 3,
                max_nodes: int = 8, max_arg_leaves: int | None = 4_000_000, steps: Iterable[int] | None = None) -> dict:
     """Chaining smoke test (D82): `n` small connected subgraphs replayed with *computed* intermediate values — a
     consumer inside a slice takes its operand from the producer's computed output, never from the snapshot — and
@@ -1104,7 +1103,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--chain-max-nodes", type=int, default=8)
     ap.add_argument("--step", type=int, default=None, help="tier b: the step to replay; tier c: replay steps 0..STEP")
     ap.add_argument("--k", type=int, default=3)
-    ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--seed", type=int, default=None, help="tiers a, chain: the sample's seed (required); tiers b, c: the twin self-check's (default 0)")
     ap.add_argument("--max-arg-leaves", type=int, default=None, help="tier a default 4000000; tiers b/c default unlimited")
     ap.add_argument("--max-instances", type=int, default=None, help="tier b: replay only this prefix of the step's instances")
     ap.add_argument("--layers", default=None, help="tier b: comma-separated layers to replay (non-layer instances always)")
@@ -1120,6 +1119,8 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     if a.self_check_n < 3:
         ap.error("--self-check-n must be >= 3")
+    if a.seed is None and a.tier in ("a", "chain"):
+        ap.error(f"--seed is required for tier {a.tier}: its sample is drawn from it")
 
     t0 = time.time()
     if a.evaluator != "gates" and a.tier in ("b", "c"):
@@ -1156,12 +1157,11 @@ def main(argv: list[str] | None = None) -> int:
         else:
             layers = [int(x) for x in a.layers.split(",") if x.strip()] if a.layers else None
             rep = tier_b(result, store, weights, step=a.step, max_arg_leaves=a.max_arg_leaves, compare_outputs=not a.no_compare,
-                         max_instances=a.max_instances, layers=layers, progress=prog, evaluator=a.evaluator,
-                         self_check_n=a.self_check_n, seed=a.seed)
+                         max_instances=a.max_instances, layers=layers, progress=prog, evaluator=a.evaluator, self_check_n=a.self_check_n, seed=a.seed or 0)
     else:
         steps = [s["step"] for s in result.steps if a.step is None or s["step"] <= a.step]
         rep = tier_c(result, weights, steps=steps, max_arg_leaves=a.max_arg_leaves, progress=prog, evaluator=a.evaluator,
-                     self_check_n=a.self_check_n, seed=a.seed)
+                     self_check_n=a.self_check_n, seed=a.seed or 0)
     rep = {"log": a.log, "profile": a.profile, "model": repo, "digest": result.digest, "fold_seconds": fold_s,
            "weights_available": weights.available(), **rep}
     rep["total_seconds"] = round(time.time() - t0, 3)

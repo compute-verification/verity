@@ -1,23 +1,31 @@
 //! Independent verifier for Candidate A's GPU proofs (`backends/gkr/gpu`, BabyBear^6 / X^6 - 22).
 //!
-//!   verity-gkr-verify verify    --dir D --proof P [--vus N] [--threads T] [--json OUT] [--trace-logup]
+//!   verity-gkr-verify verify    --dir D --proof P (--relation R | --allow-any-circuit) [--vus N] [--threads T] [--json OUT] [--trace-logup]
 //!                               [--require-bound] [--allow-unpinned-instances]
 //!                                                                                        accept / reject one proof (the flag prints every LogUp level's operands)
 //!   verity-gkr-verify negatives --dir D --proofs PD [--threads T] [--json OUT]           every PD/<id>.bin (D/neg/<id>) must be rejected
 //!   verity-gkr-verify mutate    --dir D --proof P [--vus N] [--threads T] [--sample K] [--json OUT]
 //!                                                                                        bit-flip / statement mutations of an accepted proof
+//!   verity-gkr-verify circuit-digest --dir D                                             D's circuit set and the relation it is pinned for
 //!
 //! `D` is a `gpu.bb_export` directory.  The verifier reads `circuit.txt`, `epilogue.txt`, `manifest.json` (the
-//! `steps` count) and `public.bin` -- never `units.bin` / `epilogue.bin` (the witness).  With a `bind.txt` the statement
-//! is operands-bound (PROTOCOL 16): it also reads `instances.txt`, `x.bin`, `w.bin`, requires `bind.txt` to be the unit
-//! circuit's operand columns and the files to be a pinned frozen set (`instances.rs`; `--allow-unpinned-instances`
-//! skips only the pin), and batches the binding into the functional.  `--require-bound` rejects a statement without one.
+//! `steps` count) and `public.bin` -- never `units.bin` / `epilogue.bin` (the witness).  `verify` refuses circuit files
+//! that are not a pinned circuit set of the relation `R` the proof is claimed for (pins.rs); `--allow-any-circuit`
+//! lifts the pin and the verdict then reports `circuit_pinned = false`.
+//!
+//! With a `bind.txt` the statement is operands-bound (PROTOCOL 16): it also reads `instances.txt`, `x.bin`, `w.bin`,
+//! requires `bind.txt` to be the unit circuit's operand columns, and batches the binding into the functional.  A bound
+//! statement is claimed as `R+bound`: the circuit files must be a pinned set of `R` and the instance files the
+//! `R+bound` pin of `instances.rs`; `--relation R` refuses a bound statement and `--relation R+bound` an unbound one.
+//! Under `--allow-any-circuit` only, `--require-bound` refuses an unbound statement and `--allow-unpinned-instances`
+//! skips the instance pin.
 
 mod circuit;
 mod field;
 mod instances;
 mod lanes;
 mod ntt;
+mod pins;
 mod proof;
 mod sha256;
 mod sha512;
@@ -280,30 +288,76 @@ fn stats_json(res: &Result<(), String>, st: &verify::Stats, extra: &str) -> Stri
 fn cmd_verify(args: &[String]) -> i32 {
     let dir = PathBuf::from(arg(args, "--dir").expect("--dir"));
     let root = if dir.join("circuit.txt").is_file() { dir.clone() } else { dir.parent().unwrap().parent().unwrap().to_path_buf() };
+    let relation = arg(args, "--relation");
+    let allow_any = args.iter().any(|a| a == "--allow-any-circuit");
+    if relation.is_none() && !allow_any {
+        eprintln!("verify: --relation {} (the relation the proof is claimed for), or --allow-any-circuit (the verdict then reports circuit_pinned = false)",
+                  pins::relations().join("|"));
+        return 2;
+    }
+    let pin = format!(", \"relation\": {}, \"circuit_pinned\": {}",
+                      relation.as_deref().map_or("null".to_string(), |r| format!("\"{}\"", r.replace(['"', '\\'], "'"))), !allow_any);
+    let refuse = |e: String| {
+        let json = stats_json(&Err(e), &verify::Stats::default(), &pin);
+        println!("{json}");
+        if let Some(out) = arg(args, "--json") { std::fs::write(out, json + "\n").expect("write json"); }
+        1
+    };
+    // `Some(true)`: claimed for a bound relation R+bound, whose circuit files are R's
+    let bound_claim = relation.as_deref().filter(|_| !allow_any).map(|r| r.ends_with(instances::BOUND));
+    // checked on the raw files, before any of them is parsed
+    let pinned = match (relation.as_deref(), allow_any) {
+        (Some(r), false) => {
+            let c = pins::Circuits::read(&root, manifest_steps(&root), manifest_is_v2(&root)).unwrap_or_else(|e| { eprintln!("{e}"); std::process::exit(2) });
+            if let Err(e) = pins::check(&c, r.strip_suffix(instances::BOUND).unwrap_or(r)) { return refuse(e); }
+            Some(c)
+        }
+        _ => None,
+    };
     let unit = load_circuit(&root.join("circuit.txt"));
     let epi = load_circuit(&root.join("epilogue.txt"));
     let vus: Option<usize> = arg(args, "--vus").map(|s| s.parse().unwrap());
     let (stmt, info) = statement_bound(&unit, &epi, &dir, vus).unwrap_or_else(|e| { eprintln!("{e}"); std::process::exit(2) });
+    // statement() finds manifest.json and chain.txt by its own rule: what the transcript absorbs must be the set checked
+    if let Some(c) = &pinned {
+        let absorbed = pins::Circuits::of(&unit.circ.hash, &epi.circ.hash, stmt.chain.spec_hash.as_ref(), stmt.chain.steps);
+        if absorbed != *c {
+            return refuse(format!("the statement built from {} is not the circuit set checked in {} (it has steps {}, chain.txt sha256 {}...)",
+                                  dir.display(), root.display(), absorbed.steps, absorbed.chain.as_deref().map_or("none", |h| &h[..16])));
+        }
+    }
     let bytes = std::fs::read(arg(args, "--proof").expect("--proof")).expect("proof file");
     let th = threads(args);
     if args.iter().any(|a| a == "--trace-logup") { verify::TRACE_LOGUP.store(true, std::sync::atomic::Ordering::Relaxed); }
-    let allow_unpinned = args.iter().any(|a| a == "--allow-unpinned-instances");
-    let problem = match &info {
-        None if args.iter().any(|a| a == "--require-bound") => Some("statement: not operands-bound (no bind.txt)".to_string()),
-        None => None,
-        Some(bi) => bi.problem(allow_unpinned),
+    let problem = match (&info, bound_claim) {
+        (None, Some(true)) => Some(format!("statement: not operands-bound (no bind.txt), the proof is claimed for {}", relation.as_deref().unwrap_or(""))),
+        (Some(_), Some(false)) => Some(format!("statement: operands-bound (bind.txt); claim it as {}{}", relation.as_deref().unwrap_or(""), instances::BOUND)),
+        (Some(bi), Some(true)) => bi.problem(false).or_else(|| (Some(bi.relation.as_str()) != relation.as_deref())
+            .then(|| format!("instances: instances.txt names {}, the proof is claimed for {}", bi.relation, relation.as_deref().unwrap_or("")))),
+        (None, _) if args.iter().any(|a| a == "--require-bound") => Some("statement: not operands-bound (no bind.txt)".to_string()),
+        (None, _) => None,
+        (Some(bi), None) => bi.problem(args.iter().any(|a| a == "--allow-unpinned-instances")),
     };
     let (res, st) = match problem {
         Some(e) => (Err(e), verify::Stats { threads: th, ..Default::default() }),
         None => verify::verify(&stmt, &bytes, &LIGERO, th),
     };
-    let extra = format!(", \"vus\": {}, \"units\": {}, \"steps\": {}, \"operands_bound\": {}, \"instances\": {}",
+    let extra = format!(", \"vus\": {}, \"units\": {}, \"steps\": {}{pin}, \"operands_bound\": {}, \"instances\": {}",
         stmt.vus(), stmt.segs[0].units, stmt.chain.steps, info.is_some() && res.is_ok(),
         info.as_ref().map(|i| i.json()).unwrap_or("null".into()));
     let json = stats_json(&res, &st, &extra);
     println!("{json}");
     if let Some(out) = arg(args, "--json") { std::fs::write(out, json + "\n").expect("write json"); }
     if res.is_ok() { 0 } else { 1 }
+}
+
+/// The circuit set of a statement directory (steps and the three files' SHA-256) and the relation it is pinned for.
+fn cmd_circuit_digest(args: &[String]) -> i32 {
+    let dir = PathBuf::from(arg(args, "--dir").expect("--dir"));
+    match pins::Circuits::read(&dir, manifest_steps(&dir), manifest_is_v2(&dir)) {
+        Ok(c) => { println!("{}", c.json()); 0 }
+        Err(e) => { eprintln!("{e}"); 2 }
+    }
 }
 
 fn cmd_negatives(args: &[String]) -> i32 {
@@ -490,11 +544,12 @@ fn cmd_mutate(args: &[String]) -> i32 {
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    if args.len() < 2 { eprintln!("usage: verify|negatives|mutate ..."); std::process::exit(2); }
+    if args.len() < 2 { eprintln!("usage: verify|negatives|mutate|circuit-digest ..."); std::process::exit(2); }
     let code = match args[1].as_str() {
         "verify" => cmd_verify(&args),
         "negatives" => cmd_negatives(&args),
         "mutate" => cmd_mutate(&args),
+        "circuit-digest" => cmd_circuit_digest(&args),
         _ => { eprintln!("unknown command"); 2 }
     };
     std::process::exit(code);

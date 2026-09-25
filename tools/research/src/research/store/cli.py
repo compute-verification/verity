@@ -37,6 +37,8 @@
   research data reindex [--remote]                 rebuild the catalog (built aside, swapped in complete); --remote first pulls what the remote has
   research data refresh [--jobs N] [--json]        incremental: fetch and index only the manifests/attempts/labels the remote has and we lack
   research data pending [--json]                   the write-through queue: what this store holds that the remote lacks (exit 1 if any)
+  research data reconcile-attempts (RUN... | --all) [--apply] [--json]
+                                                   local attempts that differ from the remote's write-once copy; --apply supersedes them (audited)
   research data parity --fresh DIR [--render] [--json-out FILE]
                                                    content parity against a store built from the remote alone (parity.py); exit 0 iff explained
   research data catalog [--json]                   catalog schema version vs the code's (older catalogs migrate forward on open; a newer one is
@@ -620,13 +622,14 @@ def cmd_parity(argv: list[str]) -> int:
 
     ap = _ap("parity")
     ap.add_argument("--fresh", required=True, metavar="DIR", help="where to build the store from the remote alone (a new directory)")
-    ap.add_argument("--render", action="store_true", help="also compare `verity_numerical.bench.tables --format md` on both stores")
+    ap.add_argument("--render", action="store_true", help="also compare the daily render (tables + drilldowns) over the same records")
+    ap.add_argument("--render-source", default=None, metavar="TREE", help="the tree to render with (default: steward.toml [[render]] source)")
     ap.add_argument("--jobs", type=int, default=32, metavar="N")
     ap.add_argument("--json-out", metavar="FILE", help="write the full report (every difference and its cause) here")
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
     rep = PA.run(store_root(ns.store), Path(ns.fresh), jobs=max(1, ns.jobs), render=ns.render,
-                 log=None if ns.json else (lambda m: print(m, file=sys.stderr)))
+                 log=None if ns.json else (lambda m: print(m, file=sys.stderr)), source=Path(ns.render_source) if ns.render_source else None)
     if ns.json_out:
         Path(ns.json_out).write_text(json.dumps(rep, indent=1, sort_keys=True, default=str))
     if ns.json:
@@ -635,6 +638,40 @@ def cmd_parity(argv: list[str]) -> int:
         for line in PA.format_report(rep):
             print(line)
     return 0 if rep["ok"] else 1
+
+
+def cmd_reconcile_attempts(argv: list[str]) -> int:
+    """Local attempt documents that differ from the remote's copy of the same write-once key (`reconcile.py`): listed (dry run), or
+    with `--apply` superseded by the remote's copy, the local one kept under attempts/.superseded/ and each change logged in
+    <store>/reconcile.log.  Exit 1 when divergent attempts remain (dry run) or one could not be reconciled."""
+    from . import reconcile as RC  # noqa: PLC0415
+
+    ap = _ap("reconcile-attempts")
+    ap.add_argument("runs", nargs="*", help="run ids (default with --all: every local attempt the remote also holds)")
+    ap.add_argument("--all", action="store_true")
+    ap.add_argument("--apply", action="store_true", help="replace each divergent local copy with the remote's (audited)")
+    ap.add_argument("--json", action="store_true")
+    ns = ap.parse_args(argv)
+    if not ns.runs and not ns.all:
+        print("research data reconcile-attempts: give run ids or --all", file=sys.stderr)
+        return 2
+    st = LocalStore(ns.store)
+    found = RC.diverged(st, ns.runs or None)
+    done = RC.apply(st, found) if ns.apply else []
+    if ns.json:
+        _dump({"divergent": [{k: v for k, v in f.items() if not k.startswith("_")} for f in found], "applied": done})
+    else:
+        for f in found:
+            if f.get("error"):
+                print(f"{f['run']}  ERROR {f['error']}")
+                continue
+            print(f"{f['run']}  local {f['local_sha256'][:12]} != remote {f['remote_sha256'][:12]} (remote written {f['remote_last_modified']})  "
+                  f"differs: {', '.join(f['differs'][:6]) or '-'}; remote only: {', '.join(f['remote_only'][:6]) or '-'}; "
+                  f"local only: {', '.join(f['local_only'][:6]) or '-'}" + ("  -> SUPERSEDED by the remote's copy" if ns.apply else ""))
+        print(f"{len(found)} divergent attempt(s)" + (f"; {len(done)} reconciled, logged in {st.root / RC.LOG}" if ns.apply
+                                                      else ("; `--apply` replaces the local copies (kept under attempts/.superseded/)" if found else "")),
+              file=sys.stderr)
+    return 1 if any(f.get("error") for f in found) or (found and not ns.apply) else 0
 
 
 def cmd_catalog(argv: list[str]) -> int:
@@ -981,7 +1018,7 @@ COMMANDS: dict[str, Callable[[list[str]], int]] = {
     "labels": cmd_labels, "label": cmd_label, "reindex": cmd_reindex, "sql": cmd_sql, "push": cmd_push, "mint-credential": cmd_mint_credential,
     "vocab": cmd_vocab, "refresh-fixtures": cmd_refresh_fixtures, "doctor": cmd_doctor, "evict": cmd_evict, "labels-sync": cmd_labels_sync,
     "catalog": cmd_catalog, "vocab-check": cmd_vocab_check, "pending": cmd_pending, "refresh": cmd_refresh,
-    "parity": cmd_parity,
+    "parity": cmd_parity, "reconcile-attempts": cmd_reconcile_attempts,
 }
 
 

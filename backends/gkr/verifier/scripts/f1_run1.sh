@@ -27,9 +27,9 @@ for cfg in "synth2:" "pos4096:--vus 64"; do
   echo "=== kernel path $D $A"
   $P -m gpu.run prove $D $A --device cuda --reps 2 --json $R/run_${tag}_kernel.json --proof-out $R/proof_${tag}_kernel.bin || echo "PYTHON VERIFY FAILED (kernel, $tag)"
   echo "--- rust verify"
-  $V verify --dir $D --proof $R/proof_${tag}_kernel.bin $A --threads 16 --json $R/rv_${tag}_kernel.json || echo "RUST REJECTED (kernel, $tag)"
+  $V verify --allow-any-circuit --dir $D --proof $R/proof_${tag}_kernel.bin $A --threads 16 --json $R/rv_${tag}_kernel.json || echo "RUST REJECTED (kernel, $tag)"
   echo "=== torch path $D $A"
   VERITY_GPU_TORCH_ONLY=1 $P -m gpu.run prove $D $A --device cuda --reps 1 --json $R/run_${tag}_torch.json --proof-out $R/proof_${tag}_torch.bin || echo "PYTHON VERIFY FAILED (torch, $tag)"
-  $V verify --dir $D --proof $R/proof_${tag}_torch.bin $A --threads 16 --json $R/rv_${tag}_torch.json || echo "RUST REJECTED (torch, $tag)"
+  $V verify --allow-any-circuit --dir $D --proof $R/proof_${tag}_torch.bin $A --threads 16 --json $R/rv_${tag}_torch.json || echo "RUST REJECTED (torch, $tag)"
 done
 echo "triton cache entries after: $(ls ~/.triton/cache | wc -l)"

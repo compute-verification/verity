@@ -37,6 +37,7 @@ INTERIM_LAYER = {
     "verity_vllm.acquire": "acquire",
     "verity_vllm.acquire.native_host": "observe|commit",       # the committer -> commit/committer/
     "verity_vllm.acquire.native_collect": "observe|commit",
+    "verity_vllm.acquire.flush_points": "observe|commit",
     "verity_vllm.acquire.native_jit": "observe|commit",
     "verity_vllm.acquire.leafhash": "observe|commit",
     "verity_vllm.acquire.hidden_gpu_src": "observe|commit",

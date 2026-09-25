@@ -20,11 +20,11 @@ for mode in $MODES; do
     for rep in $(seq 1 $REPS); do
       if [ "$mode" = "-" ]; then env_=""; else env_="$mode"; fi
       echo "=== mode=$mode threads=$th rep=$rep B=4096"
-      env $env_ $V verify --dir $S --proof $P4096 --threads $th --json $R/v4096_${mode//=/_}_t${th}_r${rep}.json | cut -c1-400
+      env $env_ $V verify --allow-any-circuit --dir $S --proof $P4096 --threads $th --json $R/v4096_${mode//=/_}_t${th}_r${rep}.json | cut -c1-400
       [ "$th" = "1" ] && [ "$rep" != "1" ] && continue
     done
     echo "=== mode=$mode threads=$th B=64"
-    env $env_ $V verify --dir $S --proof $P64 --vus 64 --threads $th --json $R/v64_${mode//=/_}_t${th}.json | cut -c1-300
+    env $env_ $V verify --allow-any-circuit --dir $S --proof $P64 --vus 64 --threads $th --json $R/v64_${mode//=/_}_t${th}.json | cut -c1-300
   done
 done
 if [ -n "$NEG" ]; then

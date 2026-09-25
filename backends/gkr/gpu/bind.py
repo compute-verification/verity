@@ -7,11 +7,13 @@ Statement files (beside the four Params-only files and ``public.bin``):
                      bind <col> <arr>:<stride>:<off>:<coef> [<arr>:<stride>:<off>:<coef> ...]
                  meaning ``X[(v,i), col] = Σ coef · ARR[v, stride·i + off] (mod p)`` for every VU ``v`` and step ``i``,
                  ``ARR`` one of ``x`` / ``w`` (the VU's operand words, VU-major)
-  instances.txt  which frozen set: ``relation R``, ``lo L``, ``vus N``, ``x <u8|u16> <words per VU>``, ``w ...``,
+  instances.txt  which frozen set: ``relation R+bound``, ``lo L``, ``vus N``, ``x <u8|u16> <words per VU>``, ``w ...``,
                  ``y <u16|u32>`` (the width the public words are hashed at)
   x.bin, w.bin   the operand words, little-endian, ``vus`` rows of ``words per VU`` (the vu-k1536 tier's are its own
                  ``vu-k1536.x.u16`` / ``.w.u16`` files byte for byte)
 
+A bound statement is claimed as ``R+bound`` (``verify --relation R+bound``) for a relation ``R`` of
+``verifier/pins.txt``: its circuit files are a pinned set of ``R``; ``R`` itself never names a bound statement.
 The verifier reads ``x.bin`` / ``w.bin`` itself, evaluates the bound values, and checks the SHA-256 of both files and of
 the public words against a pinned table (``verifier/src/instances.rs``).  The transcript absorbs SHA-256 of bind.txt,
 instances.txt, x.bin, w.bin after chain.txt's; after the chain challenge ``geo`` it draws ``rho_bind, geo_bind`` and the
@@ -102,7 +104,7 @@ def write_instances(out: Path, relation: str, lo: int, x: np.ndarray, w: np.ndar
     ys = np.ascontiguousarray(y).reshape(-1).astype(DTYPES[ydt])
     txt = (f"relation {relation}\nlo {lo}\nvus {xs.shape[0]}\nx {xdt} {xs.shape[1]}\nw {xdt} {ws.shape[1]}\ny {ydt}\n")
     (out / "instances.txt").write_text(txt)
-    return {"relation": relation, "lo": lo, "vus": xs.shape[0], "words_per_vu": xs.shape[1], "word": xdt,
+    return {"relation": relation + BOUND, "lo": lo, "vus": xs.shape[0], "words_per_vu": xs.shape[1], "word": xdt,
             "x_sha256": hashlib.sha256(xs.tobytes()).hexdigest(), "w_sha256": hashlib.sha256(ws.tobytes()).hexdigest(),
             "y_sha256": hashlib.sha256(ys.tobytes()).hexdigest(), "y_word": ydt,
             "instances_txt_sha256": hashlib.sha256(txt.encode()).hexdigest()}
@@ -138,8 +140,12 @@ def values(spec: Spec, x: np.ndarray, w: np.ndarray, steps: int, P: int) -> np.n
     return out % P
 
 
+BOUND = "+bound"
+
+
 def pin(relation: str, lo: int, vus: int, instances: Path | None, procs: int) -> dict:
-    """The pinned-table entry (``verifier/src/instances.rs``) of a frozen set, from its own generator."""
+    """The pinned-table entry (``verifier/src/instances.rs``) of the frozen set of ``relation`` (a ``pins.txt``
+    relation; the entry is named ``relation + BOUND``), from its own generator."""
     import bench_result as br
 
     src = Path(br.__file__).resolve().parents[2]
@@ -153,10 +159,10 @@ def pin(relation: str, lo: int, vus: int, instances: Path | None, procs: int) ->
         x, w, xdt = A.reshape(vus, -1), B.reshape(vus, -1), "u8"
         y, ydt = public_words(torch.from_numpy(Y)).numpy().reshape(-1), "u32"
         source = f"{chk['generator']} seed {chk['seed']} (python -m gpu.bind pin fp4-nvf4)"
-    elif relation == "vu-k1536":
+    elif relation == br.AMPERE_RELATION:
         if instances is None:
-            raise SystemExit("gpu.bind pin vu-k1536: --instances (the tier's data directory)")
-        x, w, y, _ = br.load_frozen(instances, src / "fixtures" / "bench-instances" / "v1" / "manifest.json", relation, lo, vus)
+            raise SystemExit(f"gpu.bind pin {relation}: --instances (the {br.TIER} tier's data directory)")
+        x, w, y, _ = br.load_frozen(instances, src / "fixtures" / "bench-instances" / "v1" / "manifest.json", br.TIER, lo, vus)
         xdt, ydt, model = "u16", "u16", br.AMPERE_MODEL
         source = "fixtures/bench-instances/v1/manifest.json tier vu-k1536 (.x.u16, .w.u16, .y.u16)"
     else:
@@ -165,7 +171,7 @@ def pin(relation: str, lo: int, vus: int, instances: Path | None, procs: int) ->
         source = f"backends/direct/ligero/relchain.py instances() seed {rel.instance_seed} (python -m gpu.bind pin {relation})"
     h = {a: hashlib.sha256(_words(v, xdt).tobytes()).hexdigest() for a, v in (("x", x), ("w", w))}
     h["y"] = hashlib.sha256(np.ascontiguousarray(y).reshape(-1).astype(DTYPES[ydt]).tobytes()).hexdigest()
-    return {"relation": relation, "lo": lo, "vus": vus, "model": model, **h, "source": source}
+    return {"relation": relation + BOUND, "lo": lo, "vus": vus, "model": model, **h, "source": source}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -176,7 +182,7 @@ def main(argv: list[str] | None = None) -> int:
     s = sub.add_parser("spec", help="write DIR/bind.txt from DIR's unit circuit")
     s.add_argument("dir", type=Path)
     pn = sub.add_parser("pin", help="a frozen set's pinned-table entry (verifier/src/instances.rs), as a Rust literal")
-    pn.add_argument("relation", help="vu-k1536 | bf16-hopper | fp8-ada | fp8-hopper | fp4-nvf4")
+    pn.add_argument("relation", help="bf16-ampere | bf16-hopper | fp8-ada | fp8-hopper | fp4-nvf4")
     pn.add_argument("--lo", type=int, default=0)
     pn.add_argument("--vus", type=int, default=4096)
     pn.add_argument("--instances", type=Path, default=None)

@@ -125,9 +125,9 @@ per opened column (t of them, in `open_set` order): rows x u32 values, then dept
 The counts make the file self-delimiting; a verifier takes `k, n, t`, `rows = ceil(l / k)`, `depth = log2 n`, the
 message count and the column indices from the circuit/config and its own transcript and **rejects** a file whose
 counts differ -- nothing read from the proof sizes anything (`note:r20-proof/red-team-vu/20260922T1042Z-report-redteam-vu` F1-F3).  The independent Rust
-verifier for this format is `../verifier/` (`verity-gkr-verify verify --dir D --proof proof.bin [--vus N]`); it
-reads `circuit.txt`, `epilogue.txt`, `manifest.json` (steps, chain columns) and `public.bin` only -- never the
-witness files.
+verifier for this format is `../verifier/` (`verity-gkr-verify verify --dir D --proof proof.bin --relation R [--vus N]`);
+it reads `circuit.txt`, `epilogue.txt`, `manifest.json` (steps, chain columns) and `public.bin` only -- never the
+witness files -- and refuses circuit files that are not a pinned circuit set of `R` (`../verifier/pins.txt`).
 
 `VERITY_GPU_TORCH_ONLY=1` disables every Triton kernel (the torch path is the bit-exact reference the kernels are
 tested against; `--clear` skips the commitment and opening for a clear-mode diagnostic).
