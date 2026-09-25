@@ -87,3 +87,17 @@ def test_device_tree_levels_come_to_the_host_once():
     root = t.root
     sib = auth.multiproof_siblings(t, np.arange(100, 300))
     assert t._levels is not None and t.root == root and len(sib) > 0
+
+
+@pytest.mark.parametrize("word_bits,dt", [(8, np.uint8), (16, np.uint16)])
+def test_committed_rows_pinned_reach_the_device_intact(word_bits, dt):
+    import torch
+    from .relchain import _rows_to_device, narrow_rows
+    rows = [np.random.default_rng(r).integers(0, 1 << word_bits, 96) for r in range(40)]
+    host = narrow_rows(rows, word_bits, pin=True)
+    assert host.dtype == dt and torch.from_numpy(host.view(np.uint8)).is_pinned()
+    narrow: dict = {}
+    wide = _rows_to_device(host, "cuda", narrow, "a")
+    assert np.array_equal(wide.cpu().numpy(), np.stack(rows)) and "a" in narrow
+    with pytest.raises(ValueError, match="out of range"):
+        narrow_rows([np.array([0, 1 << word_bits])], word_bits)

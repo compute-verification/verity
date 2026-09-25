@@ -120,29 +120,40 @@ def _word_rows(rows) -> np.ndarray:
     return np.asarray(rows, dtype=np.int64)
 
 
-def narrow_rows(rows, word_bits: int) -> np.ndarray:
+def narrow_rows(rows, word_bits: int, pin: bool = False) -> np.ndarray:
     """Committed rows (:func:`_word_rows`) in their words' own dtype, as a committed set is stored: uint8 / uint16 for
-    8- / 16-bit words (range-checked), any other width as it is."""
+    8- / 16-bit words (range-checked), any other width as it is.  ``pin``: in page-locked host memory (a serving stack's
+    staging buffer; the copy to the device is then a DMA without host staging)."""
     r = _word_rows(rows)
     dt = {8: np.uint8, 16: np.uint16}.get(int(word_bits))
-    if dt is None or r.dtype == dt:
-        return r
-    if r.size and (int(r.min()) < 0 or int(r.max()) >= 1 << int(word_bits)):
-        raise ValueError(f"committed words out of range for {word_bits} bits")
-    return np.ascontiguousarray(r.astype(dt))
+    if dt is not None and r.dtype != dt:
+        if r.size and (int(r.min()) < 0 or int(r.max()) >= 1 << int(word_bits)):
+            raise ValueError(f"committed words out of range for {word_bits} bits")
+        r = r.astype(dt)
+    if pin and torch.cuda.is_available():
+        buf = torch.empty(r.nbytes, dtype=torch.uint8, pin_memory=True).numpy().view(r.dtype).reshape(r.shape)
+        buf[...] = r
+        return buf
+    return np.ascontiguousarray(r)
+
+
+def _h2d(a: np.ndarray, device) -> torch.Tensor:
+    """``a`` on ``device``: from page-locked memory without blocking the host (the stream orders its readers)."""
+    t = torch.from_numpy(a)
+    return t.to(device, non_blocking=str(device).startswith("cuda") and t.is_pinned())
 
 
 def _rows_to_device(rows: np.ndarray, device, narrow: dict | None = None, name: str | None = None):
     """``rows`` as an int64 torch tensor on ``device``, copied in its narrow dtype and widened there.  ``narrow``: records
     ``narrow[name]`` = the copied tensor when it holds the rows' bytes (uint8 words, or uint16 words as int16)."""
     if rows.dtype == np.uint16:
-        t = torch.from_numpy(np.ascontiguousarray(rows).view(np.int16)).to(device)
+        t = _h2d(np.ascontiguousarray(rows).view(np.int16), device)
         if narrow is not None:
             narrow[name] = t
         return t.to(torch.int64) & 0xFFFF
     if rows.dtype not in (np.uint8, np.int8, np.int16, np.int32, np.int64):
         rows = rows.astype(np.int32 if rows.dtype.itemsize <= 2 else np.int64)
-    t = torch.from_numpy(np.ascontiguousarray(rows)).to(device)
+    t = _h2d(np.ascontiguousarray(rows), device)
     if narrow is not None and rows.dtype == np.uint8:
         narrow[name] = t
     return t.to(torch.int64)
@@ -688,11 +699,12 @@ class HashedRelationRunner(RelationChainRunner):
 
     def committed_rows(self, data) -> tuple:
         """The worst-case committed set of an instance list (every VU its own x row and W column) as stored: ``(x_rows,
-        w_cols)`` in the words' dtype (:func:`narrow_rows`)."""
+        w_cols)`` in the words' dtype, page-locked for a CUDA runner (:func:`narrow_rows`)."""
         x_rows, w_cols = getattr(data, "x_rows", None), getattr(data, "w_cols", None)
         if x_rows is None or w_cols is None:
             x_rows, w_cols = [v[0] for v in data], [v[1] for v in data]
-        return narrow_rows(x_rows, self.hr.word_bits), narrow_rows(w_cols, self.hr.word_bits)
+        pin = str(self.device).startswith("cuda")
+        return narrow_rows(x_rows, self.hr.word_bits, pin), narrow_rows(w_cols, self.hr.word_bits, pin)
 
     def commit_vus(self, data: list, dataset: str = "synthetic", tier: str = "dev", manifest_sha256: str = "", cache=None, tile=None,
                    x_rows=None, w_cols=None):
