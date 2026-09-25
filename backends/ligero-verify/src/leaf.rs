@@ -576,6 +576,12 @@ pub static PINS: &[(&str, &str, &str, &str)] = &[
      "5a9f049bd62745656e0f05e74c5d8631f6ab6719c6a911a2594a053229127087"),
     ("bf16-hopper-x4", "blake3", "14b9ba1a0136c04894a6a7fb46b2c0244e5ff010e763492d164f2f10f75ac90b",
      "978537834571eadb47e4f692f1db5cec150ea759e7c801e7d7c42133c6a00ab6"),
+    // the same under blake3-xob: fp8-hopper-x4 64,120 rows, bf16-hopper-x4 63,179, each gated 2048 VUs + 86 negatives at
+    // 9a78cd68, r20260925-211046-ede9, 2026-09-25 21:12Z
+    ("fp8-hopper-x4", "blake3-xob", "be64f3a50a676405661dbd3d30e75161446a907decba582a634dda62205f8f80",
+     "98db3f37149cd7d002194f5a3e4f6bced4ee93b000d267031c848b36573790a7"),
+    ("bf16-hopper-x4", "blake3-xob", "e456b36ac97a570c8a8ea3fa44eb41d9b7db21c76b95d64be238c4eb55ab93d2",
+     "bbc8d0b634c502a9d38fc979631ad40f6d898b5fe6a2fa8ef17f83fd0d94c585"),
     // lane b-ligero-sha256, schema `sha256/row/v1`: `hashchain.compose(<rel>, "sha256")` (data blocks in-circuit, 18,128
     // rows per block), each gated 2048 VUs (7 honest sub-batches) + 86 negatives on vy-b-ligero-sha256 2026-09-25 09:05Z
     ("fp8-hopper-x4", "sha256", "6cf20505b38e142533dfa1011a65bd1fb36b3b4792854916dffaeaddfd7f7e9f",
