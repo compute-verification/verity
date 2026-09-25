@@ -8,8 +8,8 @@ the client is a drop-in for `python -m verity_vllm.harness.commit_delta ARGS` (r
     python -m verity_vllm.harness.hot_commit stop   [--root ...]                      # stop every worker under root
 
 Key (what may share an engine) = sha256 of
-  * CODE identity: every file of the executing tree's code roots (verity_vllm, verity_vllm*, verity.ir, src, cb_a, verifier_v2,
-    record_v5, scripts; not tests / out / __pycache__) -- content hashes, so an edited pod tree is a different key ("hot" never executes stale code),
+  * CODE identity: `source_identity.code_identity` of the executing repository -- content hashes of its import closure (the integration
+    plus Verity core, `research_tools.CLOSURE`), so an edited pod tree is a different key ("hot" never executes stale code),
   * the native extensions the job would load (`--hidden-so`, $NATIVE_COLLECT_BUILD/*.so, the hidden_gpu_tree torch extension) by sha256,
   * the interpreter (`sys.executable`) and the process environment that shapes the engine / collector (PYTHONPATH, VLLM_*, VERITY_* except
     the per-job VERITY_TIMELINE / VERITY_FOOTPRINT, CUDA_*, HF_*),
@@ -48,10 +48,6 @@ from pathlib import Path
 from typing import Any
 
 SCHEMA = "verity-sweep/hot-commit/v1"
-CODE_ROOTS = ("verity_vllm", "verity_vllm_sampler",
-              "e2e", "record_v5", "scripts", "manifests")
-CODE_SKIP_DIRS = {"__pycache__", ".git", "tests", "test", ".pytest_cache", "target", "node_modules"}
-CODE_SKIP_SUFFIX = (".pyc", ".pyo", ".log", ".md", ".jsonl", ".png")
 # PATH / LD_LIBRARY_PATH are part of the identity: they decide which nvcc / ninja / CUDA libs a JIT build in the worker would use (a worker
 # spawned from a shell without the venv on PATH cannot build the native collector -- hotval4 e2e 05:36Z), so a client with a different
 # toolchain view must not inherit that engine
@@ -92,24 +88,12 @@ def sha256_file(p: str | os.PathLike, h: "hashlib._Hash | None" = None) -> str:
 
 
 def code_identity(tree: str | os.PathLike = ".") -> dict[str, Any]:
-    """sha256 over (relative path, content sha256) of every code file under CODE_ROOTS of `tree`."""
+    """`source_identity.code_identity` of the repository `tree` belongs to (`tree` = its root or its integrations/vllm), plus the
+    EXPORT.json commit and RELEASE.json tag of `tree`."""
+    from verity_vllm.harness import source_identity
+
     tree = Path(tree)
-    h = hashlib.sha256()
-    n = 0
-    for root in CODE_ROOTS:
-        base = tree / root
-        if not base.exists():
-            continue
-        files = [base] if base.is_file() else sorted(p for p in base.rglob("*") if p.is_file())
-        for p in files:
-            rel = p.relative_to(tree).as_posix()
-            if any(part in CODE_SKIP_DIRS for part in p.relative_to(tree).parts[:-1]) or rel.endswith(CODE_SKIP_SUFFIX):
-                continue
-            h.update(rel.encode())
-            h.update(b"\0")
-            h.update(sha256_file(p).encode())
-            h.update(b"\n")
-            n += 1
+    ident = source_identity.code_identity(source_identity.normalise_tree(tree))
     export = {}
     for name, cands in (("EXPORT.json", (tree / "EXPORT.json",)), ("RELEASE.json", (tree / "RELEASE.json", RELEASE_JSON))):
         for f in cands:                                        # RELEASE.json lives beside the tree (/workspace/cp/RELEASE.json), not in it
@@ -117,7 +101,7 @@ def code_identity(tree: str | os.PathLike = ".") -> dict[str, Any]:
                 with contextlib.suppress(Exception):
                     export[name] = json.loads(f.read_text())
                 break
-    return {"sha256": h.hexdigest(), "files": n, "tree": str(tree.resolve()),
+    return {"sha256": ident["sha256"], "files": ident["files"], "tree": str(tree.resolve()),
             "commit": (export.get("EXPORT.json") or {}).get("commit"), "release": (export.get("RELEASE.json") or {}).get("tag")}
 
 

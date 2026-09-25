@@ -1,12 +1,8 @@
 {
   "rule": "P1 (use core's abstractions; never copy or patch them)",
   "entries": [
-    {"file": "verity_vllm/check/global_match_fast.py", "kind": "core-patch", "symbol": "install", "detail": "verity.ir.codec._spec_id"},
-    {"file": "verity_vllm/check/global_match_fast.py", "kind": "core-patch", "symbol": "install", "detail": "verity.ir.refs.runs"},
-    {"file": "verity_vllm/check/global_match_fast.py", "kind": "core-patch", "symbol": "uninstall", "detail": "verity.ir.codec._spec_id"},
-    {"file": "verity_vllm/check/global_match_fast.py", "kind": "core-patch", "symbol": "uninstall", "detail": "verity.ir.refs.runs"},
-    {"file": "verity_vllm/check/global_match_fast.py", "kind": "core-private", "symbol": "install", "detail": "verity.ir.codec._spec_id"},
-    {"file": "verity_vllm/check/program_compare.py", "kind": "core-private", "symbol": "Prog.__init__", "detail": "verity.ir.codec._spec_id"},
+    {"file": "verity_vllm/check/global_match_fast.py", "kind": "core-private", "symbol": "_spec_id_memo", "detail": "verity.ir.codec._spec_id"},
+    {"file": "verity_vllm/check/program_compare.py", "kind": "core-private", "symbol": "Prog._node_functions", "detail": "verity.ir.codec._spec_id"},
     {"file": "verity_vllm/harness/derive_step.py", "kind": "core-private", "symbol": "_instance_sequence", "detail": "verity.ir.codec._spec_id"},
     {"file": "verity_vllm/harness/derive_step.py", "kind": "core-private", "symbol": "_spec_histogram", "detail": "verity.ir.codec._spec_id"},
     {"file": "verity_vllm/program/compact.py", "kind": "core-private", "symbol": "lean_root", "detail": "verity.ir.codec._decode_refs"},

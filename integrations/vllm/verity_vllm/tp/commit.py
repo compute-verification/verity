@@ -72,31 +72,14 @@ def negatives_applied(flip_partial: str | None, swap_requests: str | None, omit_
     return applied
 
 
-def tree_of_record() -> dict:
-    """[rev M-0430] the executing tree BY CONTENT beside git_head: on a pod export, EXPORT.json's commit + dirty-patch digest/bytes + untracked
-    (record_v5/ship.sh writes them; a shipped dirty worktree is named as such); in a git worktree, HEAD + sha256 of `git diff HEAD` over the
-    runtime roots + untracked count -- so a dirty tree cannot pass as the tagged commit by git_head alone."""
-    import hashlib as _hl
-    import subprocess as _sp
+def tree_of_record(root: str | os.PathLike | None = None) -> dict:
+    """The executing tree BY CONTENT beside git_head: `source_identity.code_identity` of the repository this module runs from (`root`
+    overrides it) -- its import closure, the integration plus Verity core, the same identity the hot Commit worker keys on -- so a dirty
+    tree cannot pass as the tagged commit by git_head alone."""
+    from verity_vllm.harness import research_tools, source_identity
 
-    exp = Path.cwd() / "EXPORT.json"
-    if exp.exists():
-        try:
-            e = json.loads(exp.read_text())
-            return {"source": "EXPORT.json (record_v5/ship.sh export)", "commit": e.get("commit"), "dirty_patch_sha256": e.get("dirty_patch_sha256"),
-                    "dirty_patch_bytes": e.get("dirty_patch_bytes"), "untracked": e.get("untracked"), "exported_utc": e.get("exported_utc"),
-                    "dirty": bool(e.get("dirty_patch_bytes")) or bool(e.get("untracked"))}
-        except Exception as ex:  # noqa: BLE001
-            return {"source": "EXPORT.json", "error": repr(ex)[:200]}
-    try:
-        roots = ["verity_vllm", "record_v5", "e2e", "verity_vllm", "verity_vllm"]
-        head = _sp.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, timeout=10).stdout.strip() or None
-        diff = _sp.run(["git", "diff", "HEAD", "--"] + roots, capture_output=True, timeout=30).stdout
-        unt = [l for l in _sp.run(["git", "ls-files", "--others", "--exclude-standard", "--"] + roots, capture_output=True, text=True, timeout=30).stdout.splitlines() if l.strip()]
-        return {"source": "git worktree", "commit": head, "dirty_patch_sha256": _hl.sha256(diff).hexdigest(), "dirty_patch_bytes": len(diff), "untracked": unt[:50],
-                "untracked_n": len(unt), "dirty": bool(diff) or bool(unt)}
-    except Exception as ex:  # noqa: BLE001
-        return {"source": "none", "error": repr(ex)[:200]}
+    root = Path(root) if root is not None else source_identity.TREE
+    return {"source": "source_identity.code_identity", "root": str(root), "closure": list(research_tools.CLOSURE), **source_identity.code_identity(root)}
 
 
 def parse_serve_shard_from(specs: list[str] | None, world: int) -> dict[str, list[dict]] | None:

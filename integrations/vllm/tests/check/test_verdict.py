@@ -214,13 +214,17 @@ def test_account_missing_is_insufficient_evidence_not_fail():
              "and re-run the Commit; not a verdict on the Program)")
     c["binding"]["coverage"]["match_account_link"] = _link(ok=False, required=True, problems=["tokens.json: not beside the Commit"])
     c["sampled_replay"]["executed_prefix_of_record"] = {"facts_of_record": {"r0": {"executed_prefix_len": 6, "cap": 8, "linked": False, "account_missing": ["tokens.json"]}}}
-    c["sampled_replay"]["population"]["query_checks"] = {"ok": False, "executed_prefix_rule": {"applied": True, "faults": [fault]}}
+    c["sampled_replay"]["population"]["query_checks"] = {"ok": False, "executed_prefix_rule": {"applied": True, "faults": [{"request_id": "r0", "faults": [fault]}]}}
     (ok, why), out, checks = _both(c)
     assert ok is False and "executed-prefix rule faults" in why            # v1: a named FAIL through the replay's population scope
     by = {c_.name: c_ for c_ in checks}
     link = by["execution_extent/match_account_link"]
     assert link.outcome == V.INSUFFICIENT and link.differences[0] == {"name": "account_missing", "legs": ["tokens.json"]}
-    assert out != V.PASS
+    assert by["local_replay/population_scope"].outcome == V.INSUFFICIENT and out != V.PASS
+    # the cause is read from the facts of record (`account_missing`), never the fault's text: a reworded fault grades the same
+    c["sampled_replay"]["population"]["query_checks"]["executed_prefix_rule"]["faults"][0]["faults"] = ["the tokens.json leg is gone"]
+    reworded = {c_.name: c_.outcome for c_ in _both(c)[2]}
+    assert reworded == {c_.name: c_.outcome for c_ in checks}
     groups = V.group_checks(V.aggregate_runs([(0, checks)]))
     g = {x.name: x.outcome for x in groups}
     assert g["execution_extent"] == V.INSUFFICIENT, g

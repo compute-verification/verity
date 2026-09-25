@@ -416,10 +416,7 @@ def test_fast_path_releases_its_caches_when_the_outermost_check_returns(memory, 
         seen.setdefault("memo_at_leave", []).append(len(GMF._dag_memo) + len(GMF._chash_memo) + len(GMF._proj_registry))
         orig_leave()
     monkeypatch.setattr(GMF, "leave", spy_leave)
-    try:
-        res = gm.check(gp, oracle)
-    finally:
-        GMF.uninstall()
+    res = gm.check(gp, oracle)
     assert seen["depth_before_leave"] == [2, 1]              # the alternate run's leave (keeps the memo), then the outermost one
     assert seen["memo_at_leave"][0] > 0                       # populated while the outermost check() is still running
     assert GMF._depth == 0
@@ -441,6 +438,42 @@ def test_fast_path_releases_its_caches_when_the_outermost_check_returns(memory, 
             return {k: strip(v) for k, v in o.items() if k not in ("seconds", "impl", "phases", "utc")}
         return [strip(v) for v in o] if isinstance(o, list) else o
     assert json.dumps(strip(res), sort_keys=True, default=str) == json.dumps(strip(ref), sort_keys=True, default=str)
+
+
+def test_fast_path_passes_its_operations_and_rebinds_nothing(memory, tmp_path, monkeypatch):
+    """MATCH_IMPL=fast hands GM-01 and its X-09 run `global_match_fast.ops()` explicitly: after a fast check() every Verity core and
+    checker-of-record function is the object it was before, the fast run's Programs are its own (MemoProg, progressions), and a record
+    check() in the same process still loads the record's Programs and writes the same document."""
+    import verity.ir.codec as codec
+    import verity.ir.refs as refs
+    from verity_vllm.correspondence import batch_decomp as BD
+    from verity_vllm.check import program_compare as C
+    from verity_vllm.check import global_match_fast as GMF
+    names = [(codec, "_spec_id"), (refs, "runs"), (C, "compare_steps"), (C, "_canonical_hash"), (C, "_canon_step_relative"),
+             (C, "load_oracle"), (C, "load_derived"), (BD, "dag_hashes"), (BD, "live_cone"), (BD, "Projection")]
+    before = [getattr(m, n) for m, n in names]
+    canon = C.Prog.__dict__["canon"]
+    gp, oracle = assemble([R0, R1_LATE], tmp_path)
+    ref = gm.check(gp, oracle)
+    monkeypatch.setenv(GMF.FLAG, "fast")
+    monkeypatch.delenv(GMF.COMPACT_ENV, raising=False)
+    loaded_fast: dict = {}
+    fast = gm.check(gp, oracle, _loaded=loaded_fast)
+    assert all(getattr(m, n) is b for (m, n), b in zip(names, before)) and C.Prog.__dict__["canon"] is canon
+    assert type(loaded_fast["oracle"]) is GMF.MemoProg and loaded_fast["oracle"].compact
+    assert all(type(A) is GMF.MemoProg for A in loaded_fast["components"].values())
+    monkeypatch.delenv(GMF.FLAG)
+    loaded_rec: dict = {}
+    again = gm.check(gp, oracle, _loaded=loaded_rec)
+    assert type(loaded_rec["oracle"]) is C.Prog and not loaded_rec["oracle"].compact
+    assert all(type(A) is C.Prog for A in loaded_rec["components"].values())
+
+    def strip(o):
+        if isinstance(o, dict):
+            return {k: strip(v) for k, v in o.items() if k not in ("seconds", "impl", "phases", "utc")}
+        return [strip(v) for v in o] if isinstance(o, list) else o
+    assert json.dumps(strip(fast), sort_keys=True, default=str) == json.dumps(strip(ref), sort_keys=True, default=str) \
+        == json.dumps(strip(again), sort_keys=True, default=str)
 
 
 def test_staggered_arrivals_pass_with_mixed_step_and_declared_chronology(memory, tmp_path):
@@ -2034,26 +2067,25 @@ def test_fast_path_dag_hash_ids_are_per_process_and_a_foreign_dict_is_refused(me
     """[rev F-r17-07] The compact Merkle payload names producers by small per-process ids; a dag_hashes dict computed in one process
     (a forked worker) must never be matched against one computed in another.  The memo refuses a seeded foreign dict by name."""
     import os
-    from verity_vllm.correspondence import batch_decomp as BD
     from verity_vllm.check import program_compare as C
     from verity_vllm.check import global_match_fast as GMF
     gp, oracle = assemble([R0, R1], tmp_path)
     B = C.load_oracle(oracle, "oracle")
-    GMF.install()
+    dag_hashes = GMF.ops().dag_hashes
     try:
-        h = BD.dag_hashes(B)
+        h = dag_hashes(B)
         assert isinstance(h, GMF._Hashes) and h.pid == os.getpid()
-        assert BD.dag_hashes(B) is h                      # memo hit, own process: fine
+        assert dag_hashes(B) is h                         # memo hit, own process: fine
         foreign = GMF._Hashes(h)
         foreign.pid = os.getpid() + 100_003                # a dict from some other process, seeded into this memo
         GMF._dag_memo[(id(B), None)] = (B, None, foreign)
         with pytest.raises(RuntimeError, match="per process"):
-            BD.dag_hashes(B)
+            dag_hashes(B)
         GMF._dag_memo[(id(B), None)] = (B, None, dict(h))   # [F-r17-08] a pid-less plain dict is refused too
         with pytest.raises(RuntimeError, match="without an origin"):
-            BD.dag_hashes(B)
+            dag_hashes(B)
     finally:
-        GMF.uninstall()
+        GMF.reset()
 
 
 def test_fast_runs_equals_refs_runs_on_every_descriptor_shape():
@@ -2062,7 +2094,6 @@ def test_fast_runs_equals_refs_runs_on_every_descriptor_shape():
     import random
     from verity.ir.refs import Affine, Concat, Explicit, Strided, runs
     from verity_vllm.check import global_match_fast as GMF
-    GMF._orig["runs"] = runs
     rng = random.Random(7)
     def affine():
         return Affine(rng.choice("np"), rng.randrange(6), rng.randrange(8) * 4, rng.choice([0, 1, 4, 4, 8]))
@@ -2154,7 +2185,7 @@ def test_fast_dag_hash_interning_induces_exactly_the_records_merkle_partition(me
 
     def spy(P, only=None):
         mine = intern(P, only)
-        rec = GMF._orig["dag_hashes"](P, only)      # the checker of record's function on the same Prog / cone
+        rec = BD.dag_hashes(P, only)                # the checker of record's function on the same Prog / cone
         assert set(mine) == set(rec)
         for i, hid in mine.items():
             assert rec_of_id.setdefault(hid, rec[i]) == rec[i], ("two digests share an id", i, P.label)
@@ -2177,7 +2208,6 @@ def test_fast_dag_hash_interning_induces_exactly_the_records_merkle_partition(me
                 assert res["verdict"] == "FAIL" and "G8" in res["failed_checks"]
             assert len(rec_of_id) == len(id_of_rec) >= 20
     assert seen["calls"] >= 8 and seen["instances"] > 500
-    GMF.uninstall()
 
 
 @pytest.mark.parametrize("count", [1, 2])
@@ -2232,7 +2262,6 @@ def test_cli_decomp_out_is_the_standalone_batch_decomp_document(memory, tmp_path
     produced, in batch_decomp's CLI schema: key for key what a standalone decompose() over the same fold and components returns
     (utc / seconds aside), under both implementations; exit 4 when X-09 names missing derived shapes (row_pod's derive-and-rerun)."""
     from verity_vllm.correspondence import batch_decomp as BD
-    from verity_vllm.check import program_compare as C
     from verity_vllm.check import global_match_fast as GMF
     monkeypatch.setenv(GMF.FLAG, impl)
     monkeypatch.setenv("MATCH_WORKERS", workers)   # mfast's forked X-09 legs return the per-request entries: the document must not depend on W
@@ -2240,19 +2269,13 @@ def test_cli_decomp_out_is_the_standalone_batch_decomp_document(memory, tmp_path
     gpp = tmp_path / "gp.json"
     gpp.write_text(json.dumps(gp))
     out, dout = tmp_path / "gm.json", tmp_path / "decomp.json"
-    try:
-        rc = gm.main(["--global-program", str(gpp), "--oracle", str(oracle), "--out", str(out), "--decomp-out", str(dout), "--within-step", "dag"])
-    finally:
-        GMF.uninstall()
+    rc = gm.main(["--global-program", str(gpp), "--oracle", str(oracle), "--out", str(out), "--decomp-out", str(dout), "--within-step", "dag"])
     assert rc == 0
     doc = json.loads(dout.read_text())
     comp_dirs = [g["component"]["dir"] for g in gp["requests"] if (g.get("component") or {}).get("dir")]
-    orig = C.load_derived
-    C.load_derived = gm._load_component        # the fixtures' components are fold records (as check() reads them)
-    try:
-        ref = BD.decompose(str(oracle), comp_dirs, None, within_step="dag")   # the standalone stage: its own fold + component decode
-    finally:
-        C.load_derived = orig
+    # the standalone stage: its own fold + component decode, the record's operations (the fixtures' components are fold records, as
+    # check() reads them)
+    ref = BD.decompose(str(oracle), comp_dirs, None, within_step="dag", ops=gm.match_ops(fast=False))
     def strip(o):
         if isinstance(o, dict):
             return {k: strip(v) for k, v in o.items() if k not in ("utc", "seconds")}
@@ -2269,10 +2292,7 @@ def test_cli_decomp_out_is_the_standalone_batch_decomp_document(memory, tmp_path
     # byte for byte -- match_diff's drift rule on check() and the CLI alike)
     out_rec = tmp_path / "gm_recflow.json"
     monkeypatch.setenv(GMF.FLAG, impl)
-    try:
-        assert gm.main(["--global-program", str(gpp), "--oracle", str(oracle), "--out", str(out_rec), "--within-step", "dag"]) == 0
-    finally:
-        GMF.uninstall()
+    assert gm.main(["--global-program", str(gpp), "--oracle", str(oracle), "--out", str(out_rec), "--within-step", "dag"]) == 0
     recflow = json.loads(out_rec.read_text())
     assert not ({"derived_available", "missing_derived", "extra_derived", "pipeline"} & set(recflow["x09"]))
     assert {k: v for k, v in recflow["x09"].items() if k != "seconds"} == {k: v for k, v in gmdoc["x09"].items()
@@ -2293,19 +2313,13 @@ def test_cli_decomp_out_is_the_standalone_batch_decomp_document(memory, tmp_path
             r["component"]["dir"] = None
     gpp.write_text(json.dumps(gp2))
     monkeypatch.setenv(GMF.FLAG, impl)
-    try:
-        rc = gm.main(["--global-program", str(gpp), "--oracle", str(oracle), "--out", str(out), "--decomp-out", str(dout), "--within-step", "dag"])
-    finally:
-        GMF.uninstall()
+    rc = gm.main(["--global-program", str(gpp), "--oracle", str(oracle), "--out", str(out), "--decomp-out", str(dout), "--within-step", "dag"])
     doc = json.loads(dout.read_text())
     assert rc == 4 and doc["verdict"] == "MISSING_DERIVED" and doc["missing_derived"]
     # row_pod derives the named shape and reruns with --derived: the same global Program (G1-G8 unchanged), X-09 complete again
     monkeypatch.setenv(GMF.FLAG, impl)
-    try:
-        rc = gm.main(["--global-program", str(gpp), "--oracle", str(oracle), "--out", str(out), "--decomp-out", str(dout), "--within-step", "dag",
-                      "--derived", dropped])
-    finally:
-        GMF.uninstall()
+    rc = gm.main(["--global-program", str(gpp), "--oracle", str(oracle), "--out", str(out), "--decomp-out", str(dout), "--within-step", "dag",
+                  "--derived", dropped])
     doc = json.loads(dout.read_text())
     assert doc["verdict"] == "PASS" and not doc["missing_derived"]
     assert json.dumps(strip(doc), sort_keys=True, default=str) == json.dumps(strip(ref), sort_keys=True, default=str)

@@ -1,7 +1,7 @@
 {
   "rule": "P4 (one result type, one verdict)",
   "entries": [
-    {"file": "verity_vllm/check/commit_verdict.py", "kind": "verdict-import", "symbol": "<module>", "detail": "verity_vllm.check.commit_verdict -> verity_vllm.check.sampled_replay"},
+    {"file": "verity_vllm/check/commit_verdict.py", "kind": "verdict-import", "symbol": "<module>", "detail": "verity_vllm.check.commit_verdict -> verity_vllm.check.replay_codes"},
     {"file": "verity_vllm/check/commit_verdict.py", "kind": "verdict-import", "symbol": "<module>", "detail": "verity_vllm.check.commit_verdict -> verity_vllm.query.manifest.format"},
     {"file": "verity_vllm/check/executed_prefix.py", "kind": "g-literal", "symbol": "executed_prefix_facts", "detail": "G6"},
     {"file": "verity_vllm/check/executed_prefix.py", "kind": "g-literal", "symbol": "link_to_match_account", "detail": "G6", "count": 5},
@@ -47,11 +47,10 @@
     {"file": "verity_vllm/check/holdout.py", "kind": "g-literal", "symbol": "assemble", "detail": "G5"},
     {"file": "verity_vllm/check/holdout.py", "kind": "g-literal", "symbol": "assemble", "detail": "G6"},
     {"file": "verity_vllm/check/replay.py", "kind": "reason-prefix", "symbol": "_reason_class", "detail": "'...' in reason", "count": 3},
+    {"file": "verity_vllm/check/replay_codes.py", "kind": "reason-prefix", "symbol": "not_evaluable_codes", "detail": "why.startswith"},
     {"file": "verity_vllm/check/sampled_replay.py", "kind": "reason-prefix", "symbol": "_fork_worker", "detail": "why.startswith"},
     {"file": "verity_vllm/check/stoch_recompute.py", "kind": "reason-prefix", "symbol": "recompute_run", "detail": "'...' in str(r.get('why'))"},
     {"file": "verity_vllm/check/twins.py", "kind": "reason-prefix", "symbol": "_skip_class", "detail": "'...' in msg", "count": 3},
-    {"file": "verity_vllm/check/verdict.py", "kind": "reason-prefix", "symbol": "c2_rules", "detail": "'...' in str(why)"},
-    {"file": "verity_vllm/check/verdict.py", "kind": "reason-prefix", "symbol": "execution_extent_rules", "detail": "'...' in str(sr.get('why') or '')"},
     {"file": "verity_vllm/harness/card.py", "kind": "g-literal", "symbol": "build_card", "detail": "G4"},
     {"file": "verity_vllm/harness/card.py", "kind": "g-literal", "symbol": "build_card", "detail": "G5"},
     {"file": "verity_vllm/harness/card.py", "kind": "g-literal", "symbol": "counts_of", "detail": "G1"},

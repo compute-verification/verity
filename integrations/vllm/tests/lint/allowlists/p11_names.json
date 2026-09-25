@@ -651,7 +651,6 @@
     {"file": "verity_vllm/tp/commit.py", "kind": "doc-board-id", "symbol": "_sampled_replay_components", "detail": "M-nnnn"},
     {"file": "verity_vllm/tp/commit.py", "kind": "doc-board-id", "symbol": "_weights_pin_component", "detail": "M-nnnn"},
     {"file": "verity_vllm/tp/commit.py", "kind": "doc-board-id", "symbol": "query_population_gate", "detail": "F-rN"},
-    {"file": "verity_vllm/tp/commit.py", "kind": "doc-board-id", "symbol": "tree_of_record", "detail": "M-nnnn"},
     {"file": "verity_vllm/tp/commit.py", "kind": "doc-lane", "symbol": "_build_dirs", "detail": "[lane"},
     {"file": "verity_vllm/tp/commit.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N"},
     {"file": "verity_vllm/tp/commit.py", "kind": "doc-round", "symbol": "parse_serve_shard_from", "detail": "R1N"},

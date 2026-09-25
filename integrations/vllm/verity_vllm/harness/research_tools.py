@@ -17,8 +17,10 @@ Rules encoded here (Phase 5a of the v2 plan):
 * ``key_conditions`` is ``hw.family`` plus the torch and vllm pins of the
   workload interpreter (``$PY``, default ``/workspace/venv312/bin/python``),
   probed via ``importlib.metadata`` so nothing heavy is imported.
-* ``closure`` is ``integrations/vllm/**`` plus the ``verity`` IR / ML /
-  verification packages.
+* ``closure`` is the integration's import closure: ``integrations/vllm/**``
+  plus Verity core (``packages/verity/src/verity``).
+  ``source_identity.code_identity`` is the one code identity over it (the
+  hot Commit worker's key, the TP Commit's tree of record).
 
 This module imports nothing beyond the standard library and
 ``research.store.tool`` so it is loadable from any interpreter that can see
@@ -43,6 +45,8 @@ _SCRIPTS = ("run_row_v2.sh", "row_pod.sh", "tp_stage.sh")   # tp_stage.sh: the W
 
 CLOSURE = [
     "integrations/vllm/**",
+    "packages/verity/src/verity/*.py",
+    "packages/verity/src/verity/commitments/**",
     "packages/verity/src/verity/ir/**",
     "packages/verity/src/verity/ml/**",
     "packages/verity/src/verity/verification/**",
@@ -269,6 +273,7 @@ VLLM_COMMIT = _tool("commit")
 TOOLS = {t.name: t for t in (VLLM_BUILD, VLLM_MATCH, VLLM_COMMIT)}
 
 __all__ = [
+    "CLOSURE",
     "DEFAULT_QUERY",
     "ROW_KEY_PARAMS",
     "STAGE_KEY_FLAGS",

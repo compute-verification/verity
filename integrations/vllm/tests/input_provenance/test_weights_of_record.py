@@ -535,14 +535,15 @@ def test_f_r16_21_a_kv_scale_the_checkpoint_ships_under_a_remapped_name_is_pinne
 
 def test_w2_record_is_bound_to_the_program_and_checkpoint_of_record(checkpoint):
     """[rev-cb M-0655 W2] a record built for another Program (or with edited digests) or another checkpoint entry is refused by name;
-    the Program of record may be given full-width or as the manifest's 16-hex prefix."""
+    Program digests are compared whole: a prefix of the digest of record, on either side, is refused by name."""
     d, man, t = checkpoint
     prog, fields = _program()
     rec = WR.weights_of_record(prog, WR.CheckpointIndex(str(d), checkpoints_manifest=str(man)), prefix=PREFIX)
     live = live_digests(_served(t, fields))
     ok = WR.check(rec, live, program_digests_of_record={"d" * 64}, checkpoint_of_record={"repo": "test/tiny", "revision": "abc"})
     assert ok["result"] is True and ok["program_of_record"] is True and ok["checkpoint_entry_of_record"] is True
-    assert WR.check(rec, live, program_digests_of_record={"d" * 16})["result"] is True             # 16-hex prefix of record
+    for short in (WR.check(rec, live, program_digests_of_record={"d" * 16}), WR.check(dict(rec, program_digest="d" * 16), live, program_digests_of_record={"d" * 64})):
+        assert short["result"] is False and short["program_of_record"] is False and "not full sha256" in short["why"] and "d" * 16 in short["why"]
     bad = WR.check(rec, live, program_digests_of_record={"e" * 64})
     assert bad["result"] is False and bad["program_of_record"] is False and "!= Program of record" in bad["why"]
     edited = dict(rec, program_digest="e" * 64)
@@ -674,7 +675,7 @@ def test_of_record_set_is_stamped_from_every_component_and_checked_by_set_equali
     struct), or an un-stamped record built for a non-component all FAIL by name; the un-stamped single-digest rule still holds."""
     d, man, t = checkpoint
     prog, fields = _program()
-    A, B, W = "a" * 64, "b" * 64, "w" * 64
+    A, B, W = "a" * 64, "b" * 64, "f" * 64
     root = tmp_path / "row"
     _write_program(root / "build_request_LP4_T2", prog, A, 4, 2)
     _write_program(root / "build_request_LP9_T1", prog, B, 9, 1)
@@ -697,8 +698,9 @@ def test_of_record_set_is_stamped_from_every_component_and_checked_by_set_equali
     run_set = {W, A, B}                                    # commit_delta's: --program-digest (workload) + the manifest's component digests
     ok = WR.check(rec, live, program_digests_of_record=run_set)
     assert ok["result"] is True and ok["program_of_record"] is True and ok["of_record_set"] == sorted(run_set)
-    # prefix-truncated run digests (16 chars, as a manifest may carry) still match
-    assert WR.check(rec, live, program_digests_of_record={x[:16] for x in run_set})["result"] is True
+    # prefix-truncated run digests name no Program: refused by name, never matched to the stamp's full ones
+    short = WR.check(rec, live, program_digests_of_record={x[:16] for x in run_set})
+    assert short["result"] is False and short["program_of_record"] is False and "not full sha256" in short["why"]
     # the run's set differs: a component missing from the run, or a run digest the record never saw -> FAIL by name
     bad = WR.check(rec, live, program_digests_of_record={W, A})
     assert bad["result"] is False and "record's of-record set != the run's" in bad["why"] and B[:16] in bad["why"]
@@ -724,5 +726,11 @@ def test_of_record_set_is_stamped_from_every_component_and_checked_by_set_equali
     bad = WR.check(rec3, live, program_digests_of_record={W, A, B})
     assert bad["result"] is False and bad["why"].startswith("record built for Program dddddddddddddddd != Program of record")
     assert WR.check(rec3, live, program_digests_of_record={W, A, B, "d" * 64})["result"] is True
+    # a manifest carrying a truncated Program digest: the stamp is not of record, by name
+    r2 = tmp_path / "row_short"
+    _write_program(r2 / "build_request", prog, "d" * 64, 9, 2)
+    json.dump({"program_digest": "d" * 16}, open(r2 / "manifest.json", "w"))
+    rec4 = WR.stamp_of_record_set(WR.build_record(str(r2 / "build_request"), str(d), checkpoints_manifest=str(man)), str(r2))
+    assert rec4["of_record"] is False and "not full sha256" in rec4["of_record_why"] and "d" * 16 in rec4["of_record_why"]
     # a root without any component Program is refused by the CLI
     assert WR.main(["--programs-root", str(tmp_path / "empty"), "--checkpoint-dir", str(d), "--checkpoints", str(man), "--out", str(tmp_path / "x.json")]) == 2
