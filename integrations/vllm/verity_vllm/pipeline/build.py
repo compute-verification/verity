@@ -20,6 +20,7 @@ import sys
 import time
 import traceback
 
+from verity_vllm.engine import hooks
 from verity_vllm.program.frontend.inputs_trace import InputsTrace
 
 
@@ -392,7 +393,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             # pinned checkpoint's bytes, so the Program has the served model's one shared root (see `vm.retie_lm_head_as_the_loader_does`)
             res["lm_head_tying"] = vm.retie_lm_head_as_the_loader_does(model, cfg)
             if tp > 1:
-                res["tp"]["embedding_shards"] = bind_vocab_parallel_embeddings(model)
+                res["tp"]["embedding_shards"] = bind_vocab_parallel_embeddings(model, tp_stack.enter_context(hooks.Hooks()))
                 res["tp"]["sharded_params"] = _sharded_param_summary(model)
             res["model_class"] = f"{type(model).__module__}.{type(model).__qualname__}"
             res["hf_config"] = {k: v for k, v in cfg.model_config.hf_config.to_dict().items()

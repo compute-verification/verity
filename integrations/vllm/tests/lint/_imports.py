@@ -7,7 +7,8 @@ resolves to the submodule ``pkg.name`` when that module exists, else to ``pkg``.
 ``LAYER`` places every module in the layer of its top-level package (longest prefix wins).  The order, top to bottom,
 is ``pipeline``, ``check|properties``, ``acquire``, ``observe|commit``, ``engine``, ``query|correspondence``,
 ``program``, ``collectives``, ``config``, core, with ``tests`` above ``pipeline``.  The modules bound for core sit in
-``core``, and ``target_family`` (bound for ``config.py``) sits in ``config``.  Peers in one layer
+``core``, and ``target_family`` (bound for ``config.py``) sits in ``config``.  ``engine.hooks``, the one owner of
+runtime patches, imports nothing from the package and sits in ``core`` so every layer may call it.  Peers in one layer
 (``check|properties``, ``observe|commit``, ``query|correspondence``) may import each other; P5 is the only rule that
 restricts a peer edge.
 """
@@ -38,6 +39,7 @@ LAYER = {
     "verity_vllm.collectives": "collectives",
     "verity_vllm.config": "config",
     "verity_vllm.target_family": "config",                     # -> config.py
+    "verity_vllm.engine.hooks": "core",                        # the patch owner; imports nothing from verity_vllm
     "verity_vllm.query.boundary": "core",                      # -> verity.ir
     "verity_vllm.query.partition": "core",                     # -> verity.ir
     "verity_vllm.program.frontend.liveness": "core",           # -> verity.ir
