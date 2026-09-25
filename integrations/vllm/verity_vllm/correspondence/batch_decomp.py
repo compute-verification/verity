@@ -48,7 +48,6 @@ from __future__ import annotations
 
 import argparse
 import collections
-
 import gzip
 import json
 import os
@@ -57,6 +56,7 @@ import sys
 import time
 
 from verity_vllm.check import program_compare as C
+from verity_vllm.check.program_ops import Ops
 from verity_vllm.program.sampling_event import is_sampling_event as _is_sampling_event  # [R15 stoch]
 
 XREQ = "XREQ"
@@ -446,10 +446,6 @@ def derived_shape(d: str) -> tuple[int, int] | None:
 WITHIN_STEP_CRITERIA = ("sequence", "dag")
 DEFAULT_WITHIN_STEP = "dag"
 
-# [R17 mfast] decompose's per-request legs: None = in this process, in order (the record); the fast path installs
-# global_match_fast._x09_legs (forked workers, results in item order).  Signature: fn(items, leg, weight) -> [leg(item) ...].
-X09_LEGS = None
-
 # [R18 x09, F-r18-x09-1] PHASE ACCOUNTING of the per-request leg.  `X09_PROFILE_OUT=<path>` writes one JSON sidecar beside the document
 # (never into it: the X-09 document's bytes are the record's) with, per request, wall seconds and counters for every phase of the leg --
 # projection build, shape, component load, compare_steps (sequence criterion), and the DAG diagnostic (live_cone A / P, dag_hashes A / P,
@@ -538,10 +534,15 @@ def _n_runs_of(arg) -> int:
     return len(arg)
 
 
+def record_ops() -> Ops:   # the checker of record's operations: X-09's default, GM-01's unless MATCH_IMPL=fast
+    return Ops("record", C.load_oracle, C.load_derived, Projection, C.compare_steps, dag_hashes, live_cone)
+
+
 def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = None, within_step: str = DEFAULT_WITHIN_STEP,
-              oracle: "C.Prog | None" = None, components: "dict[str, C.Prog] | None" = None) -> dict:
+              oracle: "C.Prog | None" = None, components: "dict[str, C.Prog] | None" = None, ops: Ops | None = None) -> dict:
     if within_step not in WITHIN_STEP_CRITERIA:
         raise ValueError(f"within_step must be one of {WITHIN_STEP_CRITERIA}, got {within_step!r}")
+    ops = ops or record_ops()
     t0 = time.time()
     profiling = _profile_on()
     force_dag = os.environ.get(FORCE_DAG_ENV, "").strip() == "1"
@@ -556,7 +557,7 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
     # after load_oracle and at B16 1024/128 it is ~40 GB of Python objects -- decoding it a second time in the same process doubled
     # GM-01's peak RSS (87 GB on cp-dev1) for nothing
     with _Phase(run_prof, "fold_load") if profiling else _NoPhase():
-        B = oracle if oracle is not None else C.load_oracle(oracle_dir, "oracle")
+        B = oracle if oracle is not None else ops.load_oracle(oracle_dir, "oracle")
     if profiling:
         run_prof["fold_preloaded"] = oracle is not None
         run_prof["fold_instances"] = len(B.inst)
@@ -728,8 +729,8 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
             return ent, None
         LP = len(reqs[pidx]["prompt_token_ids"])
         with _Phase(prof, "projection_build") if prof is not None else _NoPhase():
-            P = Projection(B, f"oracle[{rid}]", idxs, tok_node=pidx, weights_node=weights_nodes, seed_node=seed_node_of.get(parent_of.get(rid, rid)),
-                           peer_node=peer_node_of.get(parent_of.get(rid, rid)))
+            P = ops.projection(B, f"oracle[{rid}]", idxs, tok_node=pidx, weights_node=weights_nodes, seed_node=seed_node_of.get(parent_of.get(rid, rid)),
+                               peer_node=peer_node_of.get(parent_of.get(rid, rid)))
             P._all_seed_nodes = set(seed_node_of.values())
         with _Phase(prof, "shape") if prof is not None else _NoPhase():
             n_ts = sum(1 for r in P.inst if _is_sampling_event(r["spec"]))
@@ -757,13 +758,13 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
             if A is None:
                 A = components.get(d)
                 if A is None:
-                    A = components[d] = C.load_derived(d, f"derived[LP{LP}_T{T}]")
+                    A = components[d] = ops.load_derived(d, f"derived[LP{LP}_T{T}]")
                 A_cache[(LP, T)] = A
         if prof is not None:
             prof.update({"a_instances": len(A.inst), "a_steps": len(A.steps),
                          "a_runs_total": sum(_n_runs_of(a) for r in A.inst for a in r["args"]) if len(A.inst) <= 2_000_000 else None})
         with _Phase(prof, "compare_steps") if prof is not None else _NoPhase():
-            cmp = C.compare_steps(A, P, unfold_a=False)
+            cmp = ops.compare_steps(A, P, unfold_a=False)
         ent["derived"] = d
         ent["derived_digest"] = A.digest
         ent["xreq"] = {"counts": dict(P.xreq), "examples": P.xreq_examples}
@@ -780,13 +781,13 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
             # request whose prefill the engine chunked: the fold is then chunk-major and carries one discarded sample per partial
             # chunk, so the sequence criterion cannot hold by construction. Otherwise it is reported as a diagnostic only.
             with _Phase(prof, "live_cone_A") if prof is not None else _NoPhase():
-                la = live_cone(A)
+                la = ops.live_cone(A)
             with _Phase(prof, "live_cone_P") if prof is not None else _NoPhase():
-                lb = live_cone(P)
+                lb = ops.live_cone(P)
             with _Phase(prof, "dag_hashes_A") if prof is not None else _NoPhase():
-                ha = dag_hashes(A, la)
+                ha = ops.dag_hashes(A, la)
             with _Phase(prof, "dag_hashes_P") if prof is not None else _NoPhase():
-                hb = dag_hashes(P, lb)
+                hb = ops.dag_hashes(P, lb)
             with _Phase(prof, "multiset_diff") if prof is not None else _NoPhase():
                 ma, mb = collections.Counter(ha.values()), collections.Counter(hb.values())
                 only_a, only_b = ma - mb, mb - ma
@@ -824,7 +825,7 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
         items = list(shared_legs(per_req, shared_idx, steps).items())
     else:
         items = list(per_req.items())
-    if X09_LEGS is not None:
+    if ops.legs is not None:
         # [R17 mfast, BRIEF §5 step 3] the per-request comparisons are separable once attribution is done (above, single and exact): the
         # fast path runs the legs on forked workers over the SAME fold / components (copy-on-write) -- every component is loaded here
         # first so no worker loads its own copy; the aggregation below is the record's loop, in request order
@@ -838,10 +839,9 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
             # the components are built on the workers too, one per leg (2 s to build vs 0.1 s to pickle a component back: the build is
             # the descriptor walk), then held by the parent so the legs below share them copy-on-write; a build failure raises, as the
             # record's load in the loop does
-            for (d, _), A in zip(to_load, X09_LEGS(to_load, lambda it: C.load_derived(*it), lambda it: 1)):
-                components[d] = A
+            components.update(zip((d for d, _ in to_load), ops.legs(to_load, lambda it: ops.load_derived(*it), lambda it: 1)))
         with _Phase(run_prof, "legs") if profiling else _NoPhase():
-            outs = X09_LEGS(items, leg, lambda it: len(it[1]))
+            outs = ops.legs(items, leg, lambda it: len(it[1]))
     else:
         with _Phase(run_prof, "legs") if profiling else _NoPhase():
             outs = [leg(it) for it in items]
@@ -874,7 +874,7 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
     if profiling:
         run_prof["seconds"] = res["seconds"]
         run_prof["verdict"] = res["verdict"]
-        run_prof["x09_legs"] = "forked" if X09_LEGS is not None else "inline"
+        run_prof["x09_legs"] = "forked" if ops.legs is not None else "inline"
         st = _fast_stats()
         if st is not None:
             run_prof["fast_stats_final"] = {k: int(v) for k, v in sorted(st.items())}

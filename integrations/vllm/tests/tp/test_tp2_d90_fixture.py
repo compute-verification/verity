@@ -382,14 +382,14 @@ def persist_fold(result, d, rank: int):
     persist_program(result, d, profile_name="toy-tp2-rank", log_path=f"log.rank{rank}.jsonl.gz")
 
 
-def compare_rank(tmp_path, rank: int, result, spec: SpecializedDefinition, *, links_mut: dict | None = None):
+def compare_rank(tmp_path, rank: int, result, spec: SpecializedDefinition, *, links_mut: dict | None = None, compact: bool = False):
     from verity_vllm.check import program_compare as CMP
     fd, dd = tmp_path / f"fold_r{rank}", tmp_path / f"build_r{rank}"
     fd.mkdir(exist_ok=True)
     dd.mkdir(exist_ok=True)
     persist_fold(result, fd, rank)
     write_derived(dd, spec, rank, links_mut=links_mut)
-    A, B = CMP.load_oracle(str(fd), "oracle"), CMP.load_derived(str(dd), "derived")
+    A, B = CMP.load_oracle(str(fd), "oracle", compact=compact), CMP.load_derived(str(dd), "derived", compact=compact)
     res = CMP.compare_steps(A, B)
     # the record's verdict rule (sweep/row_pod.sh): canonical instance sequences equal, same step count, no differing operand
     res["ok"] = bool(res["canonical_sha256"]["equal"]) and res["a"]["steps"] == res["b"]["steps"] and int(res["totals"].get("operands_different", 0)) == 0

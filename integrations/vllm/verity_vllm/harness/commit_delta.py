@@ -2387,10 +2387,8 @@ def main(argv: list[str] | None = None) -> None:
                         print(f"[delta] replay cache: pair {pair} key differs from pair {_v0['pair']}'s in {_d0}: own replay (root {rc.run_root.hex()[:16]} vs {_v0['run_root'][:16]})", flush=True)
                     TL.start("validate.sampled_replay", pair=pair, cached=_cached is not None)
                     try:
-                        from verity_vllm.check import executed_prefix as EPX
-                        from verity_vllm.check import oracle_compare as OC
+                        from verity_vllm.check import executed_prefix as EPX, oracle_compare as OC, replay_codes as RC, sampled_replay as SR
                         from verity_vllm.query.manifest import format as MF
-                        from verity_vllm.check import sampled_replay as SR
                         if _cached is not None:
                             raise _ReplayReused()
                         _bm = json.loads((Path(args.out) / f"binding_map_p{pair}.json").read_text())
@@ -2450,12 +2448,12 @@ def main(argv: list[str] | None = None) -> None:
                         # [O6] the seed is not prover-choosable in advance: derived from the run root AFTER commitment unless a targeted seed is given
                         _seed_chal = None
                         if getattr(args, "replay_seed", None) is not None:
-                            _seed, _seed_src = int(args.replay_seed), "--replay-seed (targeted)"
+                            _seed, _seed_src, _seed_form = int(args.replay_seed), RC.PROVER_SEED_SOURCE, "prover-chosen"
                         elif getattr(args, "replay_challenge", None):
-                            _seed, _seed_src = SR.challenge_seed(str(args.replay_challenge), rc.run_root)
+                            (_seed, _seed_src), _seed_form = SR.challenge_seed(str(args.replay_challenge), rc.run_root), "challenge"
                             _seed_chal = str(args.replay_challenge)            # [rev M-0600] the full challenge goes on the record (sample.challenge)
                         else:
-                            _seed, _seed_src = int.from_bytes(rc.run_root[:8], "big"), "run root (first 8 bytes, after commitment)"
+                            _seed, _seed_src, _seed_form = int.from_bytes(rc.run_root[:8], "big"), RC.ROOT_SEED_SOURCE, "run-root"
                         # [rev-cb F-cb-44] the committed store's retention decides the evaluator: DEVICE-retained blocks cannot be read by
                         # forked children (CUDA after fork) -> sampled_replay runs serial in this process; named in the replay record
                         _blocks = getattr(com, "_gpu_blocks", None) or {}
@@ -2540,6 +2538,7 @@ def main(argv: list[str] | None = None) -> None:
                                                manifest=(required_manifest if isinstance(required_manifest, dict) else None),
                                                program_dirs={_k: _v["dir"] for _k, _v in _loaded.items() if _v.get("dir")},
                                                **_sr_kw)
+                        sr["sample"]["seed_form"] = _seed_form            # replay_codes.SEED_FORMS: the verdict reads the form, never the source text
                         sr["programs"] = {k: {"dir": _loaded[k].get("dir"), "program_digest": _digs[k]} for k in _loaded}
                         sr["executed_prefix_of_record"] = {k: {kk: vv for kk, vv in v.items() if kk in ("served_output_len", "executed_prefix_len", "cap", "cap_exhausted", "eos_stop")}
                                                            for k, v in _epr_r["requests"].items()} | {"lag": _epr_r["lag"], "ok": _epr_r["ok"], "problems": _epr_r["problems"][:3],

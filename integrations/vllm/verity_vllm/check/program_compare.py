@@ -44,12 +44,6 @@ _T_RE = re.compile(r"\{T=\d+,")
 # sides; the constant's VALUE is kept (`Prog.splits_values`, by select node) for GM-01's per-engine-step relation check
 # (`global_match.sampler_geometry_check`: S_t == SplitsFor_v1(|live(t)|, num_SMs)).  Nothing about S is a static of the Definition.
 _CONST_RE = re.compile(r"^Const(\d+)\[0x([0-9a-fA-F]+)\]_v1$")
-
-# [R17 mfast, BRIEF §5 step 2] operand representation of every Prog built from here on: False = the record's maximal runs
-# `(space, idx, lo, hi)` (verity.ir.refs.runs); True = run progressions `(space, idx, lo0, ln, stride, count)` (cb_a.compact: the same
-# run list, run-length-encoded; equality of operands, canonical sources and hashes is the record's -- see compact.py).  Set by
-# global_match_fast.install() under MATCH_IMPL=fast; the checker of record never sets it.
-COMPACT_ARGS = False
 SPLITS_OPERAND = 5
 _TOPP_SELECT = "GumbelTopPTokenSelect_v1"
 
@@ -87,10 +81,10 @@ class Prog:
     compact = False   # operand representation: runs (record) | run progressions ([R17 mfast] cb_a.compact); set per instance in __init__
 
     def __init__(self, label: str, desc: dict, weight_fields: dict[int, str], tok_node: int, oracle_rows: list[dict] | None = None,
-                 compact: bool | None = None):
+                 compact: bool = False):
         from verity.ir.codec import program_digest
         self.label = label
-        self.compact = COMPACT_ARGS if compact is None else bool(compact)
+        self.compact = bool(compact)
         self.digest = desc.get("digest") or program_digest(desc)
         self.inputs: dict[int, tuple[str, int]] = {}
         self.inst: list[dict] = []  # k, spec, form, args=[runs | progressions], out
@@ -109,8 +103,8 @@ class Prog:
             self.param_names = lr["params"]
             del lr
         else:
-            from verity.ir.codec import _spec_id, decode_program
-            from verity.ir.refs import runs
+            from verity.ir.codec import decode_program
+            _spec_id, runs = self._node_functions()
             dec = decode_program(desc, _registry())
             root = dec.root
             body = root.body if hasattr(root, "body") else root.defn.body
@@ -151,6 +145,10 @@ class Prog:
         self.oracle_rows = oracle_rows
         self._bind_splits()
         self._segment()
+
+    def _node_functions(self):   # the run-form decode's per-node spec id and operand runs; a subclass may return functions equal to these
+        from verity.ir import codec, refs
+        return codec._spec_id, refs.runs
 
     def _peer_src(self, idx: int, lo: int, hi: int):
         """("PEER", k, lo', hi') for a read of leaf range [lo, hi) of peers Input node `idx`; None when the range is not inside one field."""
@@ -439,7 +437,7 @@ class Prog:
         return sp.startswith("SelectI32_v1") or sp.startswith("SelectBf16_v1")
 
 
-def load_derived(d: str, label: str) -> Prog:
+def load_derived(d: str, label: str, cls: type[Prog] = Prog, compact: bool = False) -> Prog:
     desc = json.load(gzip.open(os.path.join(d, "descriptor.json.gz")))
     rep = json.load(open(os.path.join(d, "derive-report.json")))
     prov = rep.get("provenance", rep)
@@ -449,7 +447,7 @@ def load_derived(d: str, label: str) -> Prog:
     user_inputs = src.get("example_inputs") or src.get("inputs") or [[0]]
     n_user = max(1, len(user_inputs))
     fields = {n_user + w["field"]: w["name"] for w in prov["weights"]}  # derive: user inputs first, then one Input batch per field
-    P = Prog(label, desc, fields, tok_node=0)
+    P = cls(label, desc, fields, tok_node=0, compact=compact)
     # [R17 D90] a TP rank Program (derive_step --tp): `tp_links.json` names the user inputs in order (`prompt`, `peers_0`, ... = the k-th
     # collective's peer partial, issue order); each `peers_<k>` is its own Input node (one field at offset 0).  Refused by name when the
     # link table and the report disagree on how many user inputs there are.
@@ -469,7 +467,7 @@ def load_derived(d: str, label: str) -> Prog:
     return P
 
 
-def load_oracle(d: str, label: str) -> Prog:
+def load_oracle(d: str, label: str, cls: type[Prog] = Prog, compact: bool = False) -> Prog:
     # [R17 mfast, rev F-r17-12] the checker reads the FILES OF RECORD and nothing beside them: a compact copy written into the fold dir by
     # the record's producer (unit 7's sidecars, withdrawn) is prover input whose content nothing the checker owns authenticates -- a forged
     # sidecar with the sources' true digests/sizes/sha256 pasted in was accepted (M-0497).  `instances.jsonl` itself may be stored in either
@@ -513,13 +511,13 @@ def load_oracle(d: str, label: str) -> Prog:
     if d not in LOAD_NOTES:     # a pre-header instances.jsonl (no schema line): the form is the default, the digests are still stated
         LOAD_NOTES[d] = {"source": "record files", "instances_schema": None, "operand_refs_form": "runs", "program_sha256": program_sha}
     LOAD_NOTES[d]["instances_sha256"] = ih.hexdigest()
-    return _finish_oracle(d, label, pj, desc, rows)
+    return _finish_oracle(d, label, pj, desc, rows, cls, compact)
 
 
 LOAD_NOTES: dict[str, dict] = {}   # fold dir -> {"source": "record files", "instances_schema": <header schema>, "operand_refs_form": runs|progressions}
 
 
-def _finish_oracle(d: str, label: str, pj: dict, desc: dict, rows: list[dict]) -> Prog:
+def _finish_oracle(d: str, label: str, pj: dict, desc: dict, rows: list[dict], cls: type[Prog] = Prog, compact: bool = False) -> Prog:
     """The rest of load_oracle over the retained rows."""
     # weight layout: the WEIGHTS parameter's offset ranges -> weight name from the hints ("module/param.name"). The fold lays
     # out one prompt parameter per request followed by the weights (`fold._header`): weights = param n_input_nodes-1 (== 1
@@ -539,7 +537,7 @@ def _finish_oracle(d: str, label: str, pj: dict, desc: dict, rows: list[dict]) -
         if p_idx and max(p_idx) != len(names) - 1:
             raise ValueError(f"{d}: instances read parameter {max(p_idx)} as the largest, program.json puts `weights` at {len(names) - 1}")
         w_param = len(names) - 1
-    p = Prog(label, desc, {}, tok_node=0, oracle_rows=rows)
+    p = cls(label, desc, {}, tok_node=0, oracle_rows=rows, compact=compact)
     # [R17 D90] a tensor-parallel rank fold: one homogeneous `peers_<i>` Record per request = ONE Input node at the parameter's index (every
     # parameter before the weights is homogeneous, one node each); its fields (issue order, leaf offsets) come from `peers_layout`.  The k of a
     # field is its ordinal among the REQUEST's fields = the rank Program's `peers_<k>` for that request.
@@ -676,8 +674,9 @@ def _divergence_report(a: list, b: list) -> dict:
     return out
 
 
-def compare_steps(A: Prog, B: Prog, unfold_a: bool = False) -> dict:
+def compare_steps(A: Prog, B: Prog, unfold_a: bool = False, *, canon_step_relative=None, canonical_hash=None) -> dict:
     """Spec sequences + wiring per step. `unfold_a`: drop A's pad-kind instances and follow muxes (padded vs flat)."""
+    canon_step_relative, canonical_hash = canon_step_relative or _canon_step_relative, canonical_hash or _canonical_hash
     def seq(P: Prog, unfold: bool):
         out = []
         for idxs in P.steps:
@@ -727,8 +726,8 @@ def compare_steps(A: Prog, B: Prog, unfold_a: bool = False) -> dict:
             kv_cross = 0
             for j, (i, k) in enumerate(zip(ia, ib)):
                 # remap producer indices through the (possibly filtered) sequences
-                cA = _canon_step_relative(A, i, sa, unfold_a)
-                cB = _canon_step_relative(B, k, sb, False)
+                cA = canon_step_relative(A, i, sa, unfold_a)
+                cB = canon_step_relative(B, k, sb, False)
                 for ai, (x, y) in enumerate(zip(cA, cB)):
                     if x == y:
                         same += 1
@@ -751,21 +750,22 @@ def compare_steps(A: Prog, B: Prog, unfold_a: bool = False) -> dict:
             res["totals"]["operands_equal"] += st["wiring"]["operands_equal"]
             res["totals"]["operands_different"] += st["wiring"]["operands_different"]
     res["totals"] = dict(res["totals"])
-    res["canonical_sha256"] = {"a": _canonical_hash(A, sa, unfold_a), "b": _canonical_hash(B, sb, False)}
+    res["canonical_sha256"] = {"a": canonical_hash(A, sa, unfold_a), "b": canonical_hash(B, sb, False)}
     res["canonical_sha256"]["equal"] = res["canonical_sha256"]["a"] == res["canonical_sha256"]["b"]
     return res
 
 
-def _canonical_hash(P: Prog, seqs: list[list[int]], unfold: bool) -> str:
+def _canonical_hash(P: Prog, seqs: list[list[int]], unfold: bool, canon_step_relative=None) -> str:
     """sha256 of the expanded instance sequence in canonical form: (spec, form, canonical operand sources, out type) per
     instance, producers as (step, index-within-step) — independent of input layout, node numbering and root naming."""
     import hashlib
+    canon_step_relative = canon_step_relative or _canon_step_relative
     h = hashlib.sha256()
     compact = getattr(P, "compact", False)
     for idxs in seqs:
         for i in idxs:
             r = P.inst[i]
-            cs = _canon_step_relative(P, i, seqs, unfold)
+            cs = canon_step_relative(P, i, seqs, unfold)
             if compact:   # [R17 mfast] the record's BYTES: the run-per-tuple serialisation (canonical_sha256 is on X-09's record)
                 cs = [_expand_mixed(c) for c in cs]
             h.update(json.dumps([r["spec"], r["form"], [list(map(list, c)) for c in cs], r["out"]],

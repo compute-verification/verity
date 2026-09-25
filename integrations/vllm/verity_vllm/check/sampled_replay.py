@@ -57,7 +57,9 @@ from typing import Any, Callable, Iterable, Sequence
 import numpy as np
 
 from verity_vllm.query.manifest import format as RM
+from verity_vllm.check import replay_codes as RC
 from verity_vllm.check.oracle_compare import entry_read_name as _entry_read_name, same_name_invocations as _same_name_invocations
+from verity_vllm.check.replay_codes import NOT_YET, WHY_CLASSES_BY_NAME, WHY_CLASSES_FAULT, why_class  # noqa: F401  (this module's record vocabulary)
 
 SCHEMA = "verity-sweep/sampled-replay/v1"
 LINKAGE_SCHEMA = "verity-sweep/boundary-linkage/v1"
@@ -181,16 +183,6 @@ _FP8_TWIN_PROVENANCE = {
 }
 #: family -> provenance of its evaluator when it is a fitted twin (a family absent here is evaluated by the registry's own derived rows)
 EVALUATOR_PROVENANCE: dict[str, dict] = {"Fp8GroupQuant_v1": _FP8_TWIN_PROVENANCE, "ScaledMmFp8Block_v1": _FP8_TWIN_PROVENANCE}
-#: families the Program names that this version cannot replay yet -- counted, never skipped silently
-NOT_YET = {
-    # RoPE_v1 left this list in R17 (dense, ruling R17-9): EVALUATORS["RoPE_v1"] above.  Attention_v3 / Attention_v2 left it in R17 (dense,
-    # ruling R17-11): EVALUATORS above -- the row IS the unit under the query of record Q_module_v1 (R17-10).  Older records carry the
-    # labels by name ("consumes the request's K/V history across steps (state-linked replay, v2)"; commit_verdict reads them as the replay
-    # version of record's stated domain, why_class 'state-linked').  Gemm_v2 (the Hopper GEMM) is NOT here either: since R17 (ruling R17-3)
-    # it HAS a registered evaluator; before that its VUs were a form-(B)-required gap (commit_verdict._no_evaluator_gaps), by name.
-    # [ruling R17-3] NOT_YET is a LABEL on the record, never evidence: a family here is an engineering gap of this replay version.
-    "AttentionHead_v1": "consumes the request's K/V history across steps (state-linked replay, v2)",
-}
 #: [R17 dense, ruling R17-11] the attention families whose ROW the replay evaluates; their block interiors are Q_fine_v1 units (R17-10 (3))
 ATTENTION_ROW_FAMILIES = ("Attention_v3", "Attention_v2")
 #: named in population() whenever a Program carries attention rows: what the row relation does not read (a Q_fine_v1 research item, not a
@@ -1320,7 +1312,8 @@ def _interior_feeders_without_evaluator(pi: ProgramIndex, r: dict, *, depth: int
 
 
 def population(pi: ProgramIndex, rid: str, *, rank: int = 0, arrive: int = 0, ring_slots: int | None = None,
-               addresses: dict[tuple, dict] | None = None, last_step: int | None = None) -> tuple[list[dict], Counter, Counter]:
+               addresses: dict[tuple, dict] | None = None, last_step: int | None = None,
+               codes: dict[str, dict] | None = None) -> tuple[list[dict], Counter, Counter]:
     """Every Program row of one request is in the population: the evaluable VUs [{i, spec, family, phase, stratum}], the not-evaluable
     count by reason, and the not-evaluable count BY FAMILY (rev-cb M-0411 O4: strata of the record by name, never dropped).
     `ring_slots`: the collector's window ring depth -- an identity committed at ENGINE step >= ring_slots lives in storage the ring
@@ -1331,9 +1324,15 @@ def population(pi: ProgramIndex, rid: str, *, rank: int = 0, arrive: int = 0, ri
     structure, interior -- produces no identity and is not recorded).
     `last_step` [revb F-r17b-39]: the request's last EXECUTED step (`phase_anchor(...)["last_step"]`: n_exec - 1 under an executed prefix,
     the lag step of an EOS-stopped request); None = the cap's last step.  The POPULATION is the same either way (every row is enumerated);
-    only the phase label of the stratum key moves."""
+    only the phase label of the stratum key moves.
+    `codes`: an accumulator, not-evaluable reason -> its structured code (`replay_codes.reason_code`), what the verdict reads."""
     vus, not_ev, not_ev_fam = [], Counter(), Counter()
     last = pi.n_steps - 1 if last_step is None else int(last_step)
+
+    def _not_ev(why: str, cls: str, fam: str, *, domain: bool = False, tags: tuple[str, ...] = ()) -> None:
+        not_ev[why] += 1
+        if codes is not None:
+            codes[why] = RC.reason_code(cls, fam, domain=domain, tags=tags)
 
     def _addr(d: dict | None, fam: str, spec: str, cls: str, why: str | None) -> None:
         if addresses is None or d is None:
@@ -1359,7 +1358,7 @@ def population(pi: ProgramIndex, rid: str, *, rank: int = 0, arrive: int = 0, ri
     for r in pi.rows:
         fam = RM.spec_family(r["spec"])
         if fam in NOT_YET:
-            not_ev[NOT_YET[fam]] += 1
+            _not_ev(NOT_YET[fam], why_class(NOT_YET[fam]), fam, domain=True)
             not_ev_fam[fam] += 1
             if addresses is not None:
                 try:
@@ -1372,12 +1371,12 @@ def population(pi: ProgramIndex, rid: str, *, rank: int = 0, arrive: int = 0, ri
             # [MAN-06f v3] a fused-MoE block row whose row -> plane slice mapping the Program does not support (inconsistent geometry, an
             # ordinal outside the plane, a name index that disagrees with Program order): NAMED, class `mapping` -- a fault of the record's
             # Program shape, never a guess at another pair's words and never carried on a PASS.
-            not_ev[f"MoE plane row -> plane slice mapping failed: {d['plane_error']}"] += 1
+            _not_ev(f"MoE plane row -> plane slice mapping failed: {d['plane_error']}", "mapping", fam)
             not_ev_fam[f"{fam} (plane mapping failed)"] += 1
             continue
         if fam not in EVALUATORS:
             if d is None:
-                not_ev[f"unmodelled family {fam} (manifest incomplete -- coverage fails closed)"] += 1
+                _not_ev(f"unmodelled family {fam} (manifest incomplete -- coverage fails closed)", "mapping", fam)
                 not_ev_fam[fam] += 1
             elif not d["members"]:
                 not_ev_fam[f"{fam} (structure / interior: no identity)"] += 1        # Const*, BiasAdd, ...: counted, no relation to replay
@@ -1388,17 +1387,17 @@ def population(pi: ProgramIndex, rid: str, *, rank: int = 0, arrive: int = 0, ri
                 # population-gap rule keeps gating it until the evaluator lands (unit 2), never a silent 'no evaluator' domain exclusion.
                 w = (f"no registered evaluator for {fam}: moe_block_stream plane producer ({d['plane']} plane read as its consumers' committed input; "
                      f"evaluator = MAN-06f v3 unit 2)")
-                not_ev[w] += 1
+                _not_ev(w, "plane-fed", fam, tags=("MAN-06f",))
                 not_ev_fam[f"{fam} (moe_block_stream plane producer: no evaluator)"] += 1
                 _addr(d, fam, r["spec"], "plane-fed", w)
             else:
                 w = f"no registered evaluator for {fam}"
-                not_ev[w] += 1
+                _not_ev(w, "no-evaluator", fam)
                 not_ev_fam[fam] += 1
                 _addr(d, fam, r["spec"], "no-evaluator", w)
             continue
         if d is None:
-            not_ev[f"unmodelled family {fam}"] += 1
+            _not_ev(f"unmodelled family {fam}", "mapping", fam)
             not_ev_fam[fam] += 1
             continue
         if not d["members"]:                                                     # [MAN-07 / R15 dense] an evaluable family whose row has no
@@ -1413,7 +1412,7 @@ def population(pi: ProgramIndex, rid: str, *, rank: int = 0, arrive: int = 0, ri
             # sampled as a stratum that stays 'not evaluated' (partial = FAIL closed on every biased-linear row).  The values ARE required
             # and covered by coverage + the C2 oracle-compare; the composed evaluator F(x, W, b) is the v2 follow-up.
             w = f"fed by interior producer(s) without an evaluator ({', '.join(sorted(ife))}): composition not possible in this replay (MAN-06g, v2)"
-            not_ev[w] += 1
+            _not_ev(w, "interior-composed-v2", fam, tags=("MAN-06g",))
             not_ev_fam[f"{fam} (fed by interior {', '.join(sorted(x.split(' (')[0] for x in ife))}: composed evaluator, v2)"] += 1
             _addr(d, fam, r["spec"], "interior-composed-v2", w)
             continue
@@ -2081,37 +2080,6 @@ class _Unresolved(Exception):
     """An input of the VU is not available to the replay (partial, never PASS): the message names the slice."""
 
 
-#: [rev-cb M-0740 G2] the classes of a 'not evaluated' reason.  BY-NAME classes (a gap of this replay version, stated on the record) may be
-#: carried on a PASS by the verdict's named-gap rule when form (B) covers the values; FAULT classes (the evaluator or the row->member mapping
-#: failed at run time) never: a fault is a run that did not evaluate, not a gap on the record.
-WHY_CLASSES_BY_NAME = ("no-evaluator", "state-linked", "plane-fed", "interior-composed-v2")
-WHY_CLASSES_FAULT = ("evaluator-error", "mapping", "missing-input", "device", "other")
-
-
-def why_class(why: str | None) -> str:
-    w = str(why or "")
-    if "plane slice mapping failed" in w:
-        return "mapping"                                                         # [MAN-06f v3] a Program shape the plane mapping refuses: a fault
-    if "moe_block_stream" in w:
-        return "plane-fed"
-    if "interior producer" in w or "composition not possible" in w or "composed evaluator" in w:
-        return "interior-composed-v2"
-    if "K/V history" in w or "state-linked" in w:
-        return "state-linked"
-    if "no registered evaluator" in w or "no derived_rows evaluator" in w or w.startswith("no evaluator"):
-        return "no-evaluator"
-    if "CUDA" in w or "AcceleratorError" in w or "hit the device" in w:
-        return "device"
-    if w.startswith("evaluator error") or "Error" in w.split(":")[0]:
-        return "evaluator-error"
-    if "not inside one committed member" in w or "exceeds the interior" in w or "spans fields" in w or "chain deeper" in w or "unmodelled" in w:
-        return "mapping"
-    if "not available" in w or "not committed" in w or "absent" in w or "missing" in w or "no committed" in w or "not retained" in w \
-            or "ambiguous binding" in w:                 # [F-r16-13 / F-r16-08] bytes not retained, two bindings of one identity: faults, named
-        return "missing-input"
-    return "other"
-
-
 def form_b_families(manifest: dict[str, Any] | None) -> dict[str, int]:
     """Producer family -> the manifest's required `instance_outputs` identities this replay has no registered evaluator for (outside
     NOT_YET, not a token selector).  The Commit value-checks those by form (B) only, which is complete only over a Match that snapshotted
@@ -2525,7 +2493,7 @@ def challenge_seed(challenge: str, run_root: bytes) -> tuple[int, str]:
     prover cannot grind the sample by recommitting (the root changes -> the verifier issues a fresh challenge).  Returns (seed, source)."""
     import hashlib
     h = hashlib.sha256(challenge.encode("utf-8") + b"|" + bytes(run_root)).digest()
-    return int.from_bytes(h[:8], "big"), f"verifier challenge {challenge[:16]!r} bound to the run root (sha256(challenge|root)[:8], post-commitment)"
+    return int.from_bytes(h[:8], "big"), RC.challenge_seed_source(challenge)
 
 
 def _catch_probability(strata: dict[str, dict]) -> dict[str, Any]:
@@ -2606,7 +2574,7 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
     store = CommittedStore.of_record(bmap, committed, manifest)                 # [rel M-0367] reads through the manifest's alias table
     arrivals = arrivals or {}
     ranks = sorted({int((e.get("identity") or {}).get("rank", 0) or 0) for e in (bmap.get("entries") or [])}) or [0]
-    all_vus, not_ev, not_ev_fam, indices = [], Counter(), Counter(), {}
+    all_vus, not_ev, not_ev_fam, indices, codes = [], Counter(), Counter(), {}, {}   # codes: not-evaluable reason -> its structured code
     addresses: dict[tuple, dict] = {}                                             # [R17-3] manifest address -> class of the rows producing it
     anchors: dict[str, dict] = {}                                                 # [F-r17b-39] per request: the step `last` is anchored to, named
     addr_rec: dict[str, Any] = {"rule": V2_QUERY, "correspondence": {}}
@@ -2622,7 +2590,7 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
         # lag step of an EOS-stopped request), not to the cap: the EOS-stopped request has a `last` stratum too, sampled deterministically
         anchors[rid] = phase_anchor(pi.n_steps, (executed_prefix or {}).get(str(rid)))
         vus, ne, nef = population(pi, rid, rank=(ranks[0] if len(ranks) == 1 else 0), arrive=int(arrivals.get(rid, 0)), ring_slots=ring_slots,
-                                  addresses=addresses, last_step=int(anchors[rid]["last_step"]))
+                                  addresses=addresses, last_step=int(anchors[rid]["last_step"]), codes=codes)
         all_vus.extend(vus)
         not_ev.update(ne)
         not_ev_fam.update(nef)
@@ -2758,8 +2726,8 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
                             controller_rows=controller_rows_of(programs, indices))   # [R4 c2] the replay's own guard-row count per request
     return {"schema": SCHEMA, "method": "sampled-exact-replay", "result": result, "grade": grade, "why": why, "catch_probability": catch,
             "population": {"vus": len(all_vus), "source": "Program instances.json.gz rows (every row; evaluable = families with a registered evaluator)",
-                           "requests": sorted(programs), "by_family": dict(Counter(v["family"] for v in all_vus)),
-                           "not_evaluable_by_family": dict(not_ev_fam), "not_evaluable": dict(not_ev), "strata_n": len(strata),
+                           "requests": sorted(programs), "by_family": dict(Counter(v["family"] for v in all_vus)), "not_evaluable_by_family": dict(not_ev_fam),
+                           "not_evaluable": dict(not_ev), "not_evaluable_codes": {k: codes.get(k) or RC.reason_code("other") for k in not_ev}, "strata_n": len(strata),
                            "authority": "Q(P) -- the required manifest (R17-3); `vus` above is the replay's enumeration of the Program rows, reconciled below",
                            "query_total": qpop["query_total"], "sampled_strata": qpop["sampled_strata"], "uncovered_by_name": qpop["uncovered_by_name"],
                            "not_executed_by_family": qpop["not_executed_by_family"], "not_executed_rule": qpop["not_executed_rule"],
