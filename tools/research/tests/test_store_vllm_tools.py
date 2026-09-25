@@ -22,13 +22,13 @@ REPO = HERE.parents[2]
 RUN_FIXTURE = HERE / "fixtures" / "run_v0.2"
 RUN_ID = "r20260922-120000-abcd"
 ROW = "llama32-1b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager"
-WRAPPER = "integrations/vllm/verity_vllm/ops/run_row_v2.sh"
+CMD = ["verity-vllm", "row", "stage"]
 CONDS = {"hw.family": "l40s", "tool.vllm.build.torch": "2.9.0", "tool.vllm.build.vllm": "0.11.0",
          "tool.vllm.match.torch": "2.9.0", "tool.vllm.match.vllm": "0.11.0", "tool.vllm.commit.torch": "2.9.0", "tool.vllm.commit.vllm": "0.11.0"}
 
 
 def _argv(stage: str, *flags: str, row: str = ROW) -> list[str]:
-    return ["bash", WRAPPER, "stage", stage, row, "LLAMA32_1B", "meta-llama/Llama-3.2-1B", "4e20da8c", *flags]
+    return [*CMD, stage, row, "LLAMA32_1B", "meta-llama/Llama-3.2-1B", "4e20da8c", *flags]
 
 
 def _drv(tool, argv: list[str], inputs: dict | None = None) -> str:
@@ -42,7 +42,7 @@ def test_vllm_tools_are_registered_and_loadable_by_name():
     for stage in ("build", "match", "commit"):
         t = tools_registry.load(f"vllm.{stage}", REPO)
         assert t.name == f"vllm.{stage}" and t.spec == f"integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_{stage.upper()}"
-        assert t.command == ["bash", WRAPPER, "stage", stage]
+        assert t.command == [*CMD, stage]
         assert t.key_conditions == ["hw.family", f"tool.vllm.{stage}.torch", f"tool.vllm.{stage}.vllm"]
         assert "integrations/vllm/**" in t.closure and "packages/verity/src/verity/verification/**" in t.closure
         for k in t.produces:
@@ -61,7 +61,7 @@ def test_row_configuration_is_the_key_and_retain_is_not():
     assert (key["arrivals"], key["sampling"], key["exec"], key["query"]) == ("mixed", "greedy", "bi-eager", "Q_module_body_v1")
     assert "retain" not in key and "build_jobs" not in key, "footprint / schedule knobs are not key params"
     assert params["retain"] == "host" and params["build_jobs"] == "4", "...but they are recorded"
-    assert params["argv"][1] == WRAPPER
+    assert params["argv"][:3] == CMD
 
 
 def test_derivation_stable_under_retain_changes_under_batch():
@@ -72,7 +72,7 @@ def test_derivation_stable_under_retain_changes_under_batch():
     assert base != _drv(t, _argv("build", row=ROW.replace("__b1__", "__b8__"))), "batch is part of the row configuration"
     assert base != _drv(t, _argv("build", row=ROW.replace("__i4096__", "__i2048__")))
     assert base != _drv(t, _argv("build", "--query", "Q_other"))
-    assert base != _drv(t, ["bash", WRAPPER, "stage", "build", ROW, "LLAMA32_1B", "meta-llama/Llama-3.2-1B", "otherrev"]), "the revision pins the checkpoint"
+    assert base != _drv(t, [*CMD, "build", ROW, "LLAMA32_1B", "meta-llama/Llama-3.2-1B", "otherrev"]), "the revision pins the checkpoint"
     other = dict(CONDS, **{"hw.family": "h100"})
     _, key = t.resolve_params(_argv("build"), REPO)
     assert base != D.derivation_id(t.identity(), {}, key, other, t.key_conditions), "hw.family is a key condition"
@@ -94,14 +94,21 @@ def test_stage_flags_that_change_outputs_are_key_with_explicit_defaults():
     assert _drv(m, _argv("match")) != _drv(c, _argv("commit")), "different tools, different derivations"
 
 
-def test_parse_accepts_row_pod_argv_too():
+def test_parse_accepts_the_module_form_row_run_and_the_earlier_runner_argvs():
     if str(REPO) not in sys.path:
         sys.path.insert(0, str(REPO))         # the declaration module by dotted path (tools_registry falls back to loading it by file)
     from integrations.vllm.verity_vllm.pipeline import research_tools as RT
 
+    m = RT.parse(["/workspace/venv312/bin/python", "-m", "verity_vllm.pipeline.cli", "row", "stage", "commit", ROW, "R", "repo", "rev",
+                  "--pairs", "4"], stage="commit")
+    assert m["stage"] == "commit" and m["row"] == ROW and m["pairs"] == "4"
+    r = RT.parse(["verity-vllm", "row", "run", ROW, "LLAMA32_1B", "repo", "rev", "--stages", "build,match"], stage="build")
+    assert r["stage"] == "build,match" and r["row"] == ROW and r["model"] == "repo" and "stages" not in r
+    # the earlier shell runners, as records in the store carry them
     p = RT.parse(["bash", "/workspace/src/integrations/vllm/verity_vllm/ops/row_pod.sh", ROW, "LLAMA32_1B", "repo", "rev", "build,match"], stage="build")
     assert p["stage"] == "build,match" and p["row"] == ROW and p["model"] == "repo" and p["batch"] == 1
-    q = RT.parse(["bash", WRAPPER, "stage", "commit", ROW, "R", "repo", "rev", "--pairs=4", "--required-classes", "module_out"], stage="commit")
+    q = RT.parse(["bash", "integrations/vllm/verity_vllm/ops/run_row_v2.sh", "stage", "commit", ROW, "R", "repo", "rev", "--pairs=4",
+                  "--required-classes", "module_out"], stage="commit")
     assert q["pairs"] == "4" and q["required_classes"] == "module_out" and q["replay_args"] is None
     # a value that is itself a flag list is a value (the R19 admit fix (a) commit flags), not a bare `--commit-args` switch
     c = RT.parse(_argv("commit", "--commit-args", "--bounded-staging --retain-exclude hidden_m1", "--pairs", "3"), stage="commit")

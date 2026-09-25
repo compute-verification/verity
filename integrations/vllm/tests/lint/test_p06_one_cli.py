@@ -9,8 +9,8 @@ Checked today, against ``allowlists/p06_one_cli.json``:
 * ``heredoc``: a ``<<`` heredoc in a shell script (keyed by the command it feeds).
 
 Shell checks cover every ``*.sh`` under ``verity_vllm/`` (``ops/`` and the tap build scripts); counts are per script.
-``pipeline/cli.py`` does not exist yet, so every ``main-block`` and ``argparse`` is a violation today; once it exists,
-it is the one file in ``CLI_OWNERS``.  Not checked: the ``[project.scripts]`` entry that installs the CLI.
+``pipeline/cli.py``, the one parser, is the one file in ``CLI_OWNERS``.  Not checked: the ``[project.scripts]`` entry
+that installs the CLI.
 """
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ from . import _ratchet as R
 
 NAME = "p06_one_cli"
 RULE = "P6 (one CLI; no __main__, heredocs or python -c)"
-CLI_OWNERS: frozenset[str] = frozenset()      # verity_vllm/pipeline/cli.py, once it exists
+CLI_OWNERS: frozenset[str] = frozenset({"verity_vllm/pipeline/cli.py"})
 PY = r"""(?:\bpython[0-9.]*|\$\{?PY[A-Z0-9_]*\}?|"\$\{?PY[A-Z0-9_]*\}?")"""
 PYTHON_M = re.compile(PY + r"""\s+(?:-[A-Za-z]+\s+)*-m\s+(verity_vllm[\w.]*)""")
 PYTHON_C = re.compile(PY + r"""\s+(?:-[A-Za-z]+\s+)*-c\b""")

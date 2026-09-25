@@ -1,6 +1,6 @@
 """Resolve a raw observation log against a pinned profile (lane L3; torch-free).
 
-    uv run python -m verity_vllm.observe.fold.resolve_log data/logs/m1.jsonl.gz \
+    uv run verity-vllm resolve-log data/logs/m1.jsonl.gz \
         [--profile vllm_d9105ea80_sm89_eager] [--step N] [--dump-trees] [--max-depth 6] [--out PATH] [--strict]
 
 Per step: `StepContext` (header, StepStart, SampleEnd, StepLinks, Roots by allocation — the weight/buffer Roots of the
@@ -15,16 +15,17 @@ rotation of RoPE, the v move of the KV update), then writes `<out>.json` and `<o
 
 from __future__ import annotations
 
-import argparse
 import dataclasses
 import importlib
 import json
 import sys
 import time
 from collections import Counter, OrderedDict
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterator
 
+from verity_vllm.config import option
 from verity_vllm.observe.events import Event, Note, Root, RunHeader, StepLink
 from verity_vllm.observe.log import read_log, split_steps
 from verity_vllm.observe.fold.patterns import GEMM_TARGET_SCRATCH_KEY, X01_SCRATCH_KEY, label, members
@@ -362,18 +363,19 @@ def report_markdown(rep: dict) -> str:
 # ---------------------------------------------------------------------------------------------------------
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("log")
-    ap.add_argument("--profile", default=DEFAULT_PROFILE)
-    ap.add_argument("--step", type=int, default=None, help="resolve (and dump) only this step")
-    ap.add_argument("--dump-trees", action="store_true")
-    ap.add_argument("--max-depth", type=int, default=6)
-    ap.add_argument("--out", default=None, help="report base path (default out/capture/reports/resolution_<stem>)")
-    ap.add_argument("--strict", action="store_true", help="exit 1 on any Unsupported / ResolutionError")
-    ap.add_argument("--quiet", action="store_true")
-    args = ap.parse_args(argv)
+@dataclass(frozen=True, kw_only=True)
+class Options:
+    log: str = option("log")
+    profile: str = option("--profile", default=DEFAULT_PROFILE)
+    step: int | None = option("--step", type=int, default=None, help="resolve (and dump) only this step")
+    dump_trees: bool = option("--dump-trees", default=False, action="store_true")
+    max_depth: int = option("--max-depth", type=int, default=6)
+    out: str | None = option("--out", default=None, help="report base path (default out/capture/reports/resolution_<stem>)")
+    strict: bool = option("--strict", default=False, action="store_true", help="exit 1 on any Unsupported / ResolutionError")
+    quiet: bool = option("--quiet", default=False, action="store_true")
 
+
+def main(args: Options) -> int:
     profile, prof_mod = load_profile(args.profile)
     hist: dict[str, Counter] = OrderedDict()
     dump_step = args.step if args.step is not None else 0
@@ -421,7 +423,3 @@ def main(argv: list[str] | None = None) -> int:
         print(f"\nwrote {base}.json and {base}.md")
     bad = rep["totals"]["unsupported"] or rep["totals"]["errors"]
     return 1 if (args.strict and bad) else 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())

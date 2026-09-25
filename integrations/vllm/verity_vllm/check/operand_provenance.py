@@ -1,6 +1,6 @@
 """Exhaustive operand provenance check (G5, D82) -- PROTECTED.
 
-    uv run python -m verity_vllm.check.operand_provenance --log data/logs/m1.jsonl.gz \\
+    uv run verity-vllm operand-provenance --log data/logs/m1.jsonl.gz \\
         --profile vllm_d9105ea80_sm89_eager --out out/capture/reports/wiring.json
 
 What this establishes
@@ -40,16 +40,16 @@ Output `wiring.json`: {"status": "pass"|"fail", "reads", "writes", "mismatches":
 
 from __future__ import annotations
 
-import argparse
 import bisect
 import json
 import re
-import sys
 import time
 from collections import Counter
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from verity_vllm.config import option
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, TritonLaunch, ViewDesc
 from verity_vllm.observe.log import read_log
 from verity_vllm.observe.fold.views import byte_extent, collapsed_dims, element_runs, row_view
@@ -417,13 +417,15 @@ def check(result, log_path: str | Path | None = None) -> dict:
     return rep
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--log", required=True)
-    ap.add_argument("--profile", required=True)
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--no-facts", action="store_true", help="skip the raw-log stream/schema pass")
-    a = ap.parse_args(argv)
+@dataclass(frozen=True, kw_only=True)
+class Options:
+    log: str = option("--log")
+    profile: str = option("--profile")
+    out: str = option("--out")
+    no_facts: bool = option("--no-facts", default=False, action="store_true", help="skip the raw-log stream/schema pass")
+
+
+def main(a: Options) -> int:
     from verity_vllm.check.replay.replay import fold_log, load_profile
     t0 = time.time()
     profile = load_profile(a.profile)
@@ -438,7 +440,3 @@ def main(argv: list[str] | None = None) -> int:
           f"uncovered={rep['uncovered']}, streams={rep.get('streams', {}).get('distinct_streams')}, "
           f"schema={ {k: v for k, v in rep.get('schema', {}).items() if not k.endswith('examples') and not k.endswith('_by_op') and k != 'roots_without_schema_regions'} } ({rep['seconds']}s) -> {out}")
     return 0 if rep["status"] == "pass" else 1
-
-
-if __name__ == "__main__":
-    sys.exit(main())

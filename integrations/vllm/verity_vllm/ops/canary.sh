@@ -4,7 +4,7 @@
 #   cd /workspace/cp/veritor && bash verity_vllm/ops/canary.sh <candidate-tag> [positives=smollm2,llama[,llama_b2,llama_b2_bm,phi3,qwen,olmoe,stoch]] [negatives=arena,omitted,lateread[,drop1dup0,nopd,nosr,flipweight,lateflush,wl_swapped]]
 #   -> evidence under /workspace/cp/canary/<tag>/, summary canary.json; last line  CANARY-GREEN <tag>  or  CANARY-RED <tag> <first failing check>
 #
-# Positives (the two base canaries, through the SAME row procedure the sweep uses -- verity_vllm/ops/row_pod.sh, PAIRS=1):
+# Positives (the two base canaries, through the SAME row procedure the sweep uses -- `verity-vllm row run`, PAIRS=1):
 #   SmolLM2-135M B1 256/32 and Llama-3.2-1B B1 256/32 on this GPU: Build (Bet A step + request, --T = O-1 per REL-01) -> Match (eager
 #   capture + fold -> cb_a.compare canonical-equal, same step count, tokens equal) -> fail-closed Commit (X-03 + REL-02, 64 openings, 1 pair)
 #   AND the run root must equal the known-good root pinned for this compute capability in verity_vllm/ops/known_roots.json
@@ -16,7 +16,7 @@
 #             [R15 hopper] on a Hopper pod (cc 9.x, FlashAttention-3 engine) the class is 'fa3_hidden_m1_stream' and the tap fa3_matReq
 #   lateread  --late-read qkv_proj (R11 regression)      -> the run root MUST differ from the known-good root (openings still verify: binding
 #             is not correctness -- the harness must never take a verifying root as evidence the right buffer was read)
-# Env: everything row_pod.sh takes (PY, PY312, HIDDEN_SO, GPU_UTIL, timeouts); CANARY_DIR (/workspace/cp/canary).
+# Env: everything `verity-vllm row` takes (PY, PY312, HIDDEN_SO, GPU_UTIL, timeouts); CANARY_DIR (/workspace/cp/canary).
 set -uo pipefail
 TAG=${1:?candidate tag, e.g. r13-rel0}; POS=${2:-smollm2,llama}; NEG=${3:-arena,omitted,lateread}
 # [R17 rel, COORD R17-19 (4)] the canary runs from the tree it is given (VERITOR_REPO, default the pod's live tree): a second canary GPU
@@ -32,7 +32,7 @@ fi
 export VERITOR_REPO=$TREE_SELF
 cd "$VERITOR_REPO" || exit 1
 # [R18 infra, r18-int-2] the canary's base rows are `__l40s__` ids and the canary also runs on the Hopper host: the target-family
-# preflight (row_pod.sh, PRECHECK_FAIL_TARGET_FAMILY) is WAIVED BY NAME here -- `precheck-target WAIVED canary <tag>` in stages.txt,
+# preflight (`verity-vllm row`, PRECHECK_FAIL_TARGET_FAMILY) is WAIVED BY NAME here -- `precheck-target WAIVED canary <tag>` in stages.txt,
 # never on a row of record.  On an L40S the same rows PASS the check unwaived (the waiver only names a would-be failure).
 export TARGET_FAMILY_WAIVER=${TARGET_FAMILY_WAIVER:-"canary $TAG"}
 export PYTHONPATH=. HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 VLLM_BATCH_INVARIANT=1 TOKENIZERS_PARALLELISM=false CUDA_HOME=${CUDA_HOME:-/usr/local/cuda}
@@ -94,7 +94,7 @@ log "start commit=$COMMIT cc=$CC flash_attn=$FA_VER hidden_so=$HIDDEN_SO hidden_
 positive() {   # <name> <row-id> <ROLE> <repo> <revision>
   local name=$1 row=$2 role=$3 repo=$4 rev=$5 t0=$(date +%s)
   local exp; exp=$(known_root "$row")
-  PAIRS=1 bash verity_vllm/ops/row_pod.sh "$row" "$role" "$repo" "$rev" build,match,commit > "$CD/$name.row.log" 2>&1; local rc=$?
+  PAIRS=1 "${PY%/*}/verity-vllm" row run "$row" "$role" "$repo" "$rev" --stages build,match,commit > "$CD/$name.row.log" 2>&1; local rc=$?
   local stages; stages=$(tr '\n' ';' < "$CD/$row/stages.txt" 2>/dev/null | cut -c1-400)
   if [ $rc -ne 0 ]; then rec "$name" FAIL "row_pod rc=$rc stages: $stages"; return; fi
   local root; root=$(root_of "$CD/$row/commit/verdict.json")
@@ -123,7 +123,7 @@ STOCH=llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-ea
 # coverage (global M-0097) until manbind's B>=2 manifest lands -- then positives=...,llama_b2 (full row + root pin) replaces this one.
 positive_bm() {   # <name> <row-id> <ROLE> <repo> <revision>   Build+Match positive; PASS = row_pod rc 0 + match_summary.pass + global_match PASS
   local name=$1 row=$2 role=$3 repo=$4 rev=$5 t0=$(date +%s)
-  PAIRS=1 bash verity_vllm/ops/row_pod.sh "$row" "$role" "$repo" "$rev" build,match > "$CD/$name.row.log" 2>&1; local rc=$?
+  PAIRS=1 "${PY%/*}/verity-vllm" row run "$row" "$role" "$repo" "$rev" --stages build,match > "$CD/$name.row.log" 2>&1; local rc=$?
   local stages; stages=$(tr '\n' ';' < "$CD/$row/stages.txt" 2>/dev/null | cut -c1-400)
   if [ $rc -ne 0 ]; then rec "$name" FAIL "row_pod rc=$rc stages: $stages"; return; fi
   local gm; gm=$(python3 - "$CD/$row" <<'EOF'
@@ -158,7 +158,7 @@ EOF
 positive_named() {   # <name> <row-id> <ROLE> <repo> <revision> <required first_fail_reason, grep -E pattern>
   local name=$1 row=$2 role=$3 repo=$4 rev=$5 want=$6 t0=$(date +%s)
   local exp; exp=$(known_root "$row")
-  PAIRS=1 bash verity_vllm/ops/row_pod.sh "$row" "$role" "$repo" "$rev" build,match,commit > "$CD/$name.row.log" 2>&1; local rc=$?
+  PAIRS=1 "${PY%/*}/verity-vllm" row run "$row" "$role" "$repo" "$rev" --stages build,match,commit > "$CD/$name.row.log" 2>&1; local rc=$?
   local stages; stages=$(tr '\n' ';' < "$CD/$row/stages.txt" 2>/dev/null | cut -c1-400)
   [ -f "$CD/$row/commit/verdict.json" ] || { rec "$name" FAIL "no commit/verdict.json (row_pod rc=$rc: Build or Match did not reach Commit); stages: $stages"; return; }
   local root reason; root=$(root_of "$CD/$row/commit/verdict.json"); reason=$(reason_of "$CD/$row/commit/verdict.json")
@@ -187,7 +187,7 @@ fi
 
 # ------------------------------------------------------------------ negatives on SmolLM2 (fast; the same commit_delta the rows use)
 WL=workloads/$SMOL.json
-BASE=($PY -m verity_vllm.pipeline.commit --case B0 --workload "$WL" --committer native_collect_v2b --fast-copy --gpu-tree --openings 64
+BASE=("${PY%/*}/verity-vllm" commit --case B0 --workload "$WL" --committer native_collect_v2b --fast-copy --gpu-tree --openings 64
       --pairs 1 --warmup 1 --max-num-seqs 1 --engine-arg max_model_len=288 --engine-arg "gpu_memory_utilization=$GPU_UTIL")
 negative() {   # <name> <expect: exit3|rootdiff> <reason-regex> <args...>
   local name=$1 expect=$2 rx=$3; shift 3
@@ -289,8 +289,8 @@ wl["note"] = "CANARY NEGATIVE wl_swapped: " + str(wl.get("note", ""))
 json.dump(wl, open(sys.argv[2], "w"), indent=1)
 EOF
     DER=(--derived "$RB/build_request"); for dd in "$RB"/build_request_LP*_T*; do [ -d "$dd" ] && DER+=(--derived "$dd"); done
-    timeout 1500 $PY312 -m verity_vllm.pipeline.global_program --workload "$NW/wl_swapped.json" "${DER[@]}" --out "$NW/gp_swapped" > "$NW/gp_swapped.log" 2>&1; rcg=$?
-    timeout 1500 $PY312 -m verity_vllm.check.match.global_match --gprog "$NW/gp_swapped/workload_program.json" --workload "$NW/wl_swapped.json" --oracle "$RB/match" \
+    timeout 1500 "${PY312%/*}/verity-vllm" global-program --workload "$NW/wl_swapped.json" "${DER[@]}" --out "$NW/gp_swapped" > "$NW/gp_swapped.log" 2>&1; rcg=$?
+    timeout 1500 "${PY312%/*}/verity-vllm" global-match --gprog "$NW/gp_swapped/workload_program.json" --workload "$NW/wl_swapped.json" --oracle "$RB/match" \
         --out "$NW/gm_swapped.json" --within-step "${WITHIN_STEP:-dag}" > "$NW/gm_swapped.log" 2>&1; rcm=$?
     verd=$(python3 -c "import json;g=json.load(open('$NW/gm_swapped.json'));print(g.get('verdict'), ','.join(g.get('failed_checks') or []))" 2>/dev/null)
     if [ $rcg -ne 0 ]; then rec neg_wl_swapped FAIL "GP-01 compose of the swapped manifest failed rc=$rcg (the negative needs a composed Program): $(grep -m1 -E 'Error|Traceback' "$NW/gp_swapped.log" | cut -c1-120)"

@@ -1,240 +1,215 @@
-"""`python -m verity_vllm.pipeline.cli` -- the v2 (Q_module_body_v1) required-value manifest, beside v1's `required_manifest`.
+"""`verity-vllm` -- the one command line of the vLLM integration.
 
-    build         --program <derive dir> [--workload wl.json] [--request-id r0] --out manifest.json
-    build-global  --fixture wl.json --programs-root <row dir> [--workload-digest WD] --out manifest.json
-                  TP row: --programs-root <rank r dir> --rank r [--workload-digest WD_r], once per rank, --ranks W
-    compare       --v1 manifest.json --v2 manifest.json [--out report.json]
+    verity-vllm COMMAND [SUBCOMMAND] [options]          verity-vllm COMMAND --help for its options
 
-`build` / `build-global` take the same inputs as v1's (a derive_step output dir holds `instances.json.gz` + `result.json` [+ `artifact.json`];
-a row dir holds one such dir per request shape, `*LP<prompt_len>_T<max_tokens-1>`), and write a manifest of v1's schema whose identities
-are the bridge's (`required.request_manifest` / `compose_global`; a TP row's rank manifests merged by `merge_ranks`).  `--no-return-slots`
-builds the pure-dataflow population (no RETURN-SLOT policy) for the record.  `compare` classifies every identity difference (`compare.summarize`).
+A command is a library module with an options dataclass -- `Options`, or `COMMANDS = {name: <options class>}` for a
+command with subcommands -- whose fields are `config.option`s, and `main(options)`.  This module is the only place that
+parses a command line: it builds the parser from the dataclass fields, takes the environment defaults the fields name
+(`option(env=...)`), and reports a `config.UsageError` as a usage error (exit 2).  `python -m verity_vllm.pipeline.cli`
+is the same program, for interpreters without the `verity-vllm` launcher.
 """
 
 from __future__ import annotations
 
 import argparse
-import glob
-import json
+import dataclasses
+import importlib
 import os
 import sys
-import time
+from collections.abc import Mapping
 from typing import Any
 
-from verity_vllm.query.compare import compare, summarize
-from verity_vllm.correspondence.reader_for_query import Correspondence
-from verity_vllm.query.program_view import from_instances
-from verity_vllm.query.required import compose_global, merge_ranks, request_manifest
+from verity_vllm.config import UsageError
 
-__all__ = ["build", "build_global", "build_global_ranks", "main"]
+PROG = "verity-vllm"
 
-
-def _load_json(p: str) -> Any:
-    with open(p) as f:
-        return json.load(f)
-
-
-def build(program_dir: str, *, workload: dict[str, Any] | None = None, request_id: str | None = None, rank: int = 0, ranks: int = 1,
-          profile: str | None = None, return_slots: bool = True, log=None) -> dict[str, Any]:
-    t0 = time.time()
-    P = from_instances(os.path.join(program_dir, "instances.json.gz"))
-    res = _load_json(os.path.join(program_dir, "result.json"))
-    art_p = os.path.join(program_dir, "artifact.json")
-    art = _load_json(art_p) if os.path.exists(art_p) else None
-    corr = Correspondence.of(P, program_dir, implementation_paths=Correspondence.implementation_paths_of(res))   # the record when the Build carries it, else v1 annotations
-    r = request_manifest(P, corr, res, request_id=request_id, workload=workload, artifact=art, program_dir=program_dir, rank=rank, ranks=ranks,
-                         profile=profile, return_slots=return_slots)
-    if log:
-        pop = r.manifest["populations"]
-        log(f"  {os.path.basename(program_dir)}: {len(P.calls)} calls -> {pop['identities']} identities ({pop['steps']} steps, {pop['units']} units, "
-            f"{pop['boundary_values']} boundary values) complete={r.manifest['complete']} correspondence={corr.source} in {time.time() - t0:.1f}s")
-    return r.manifest
-
-
-def _program_dirs_for(fx: dict[str, Any], programs_root: str) -> dict[str, str]:
-    """v1's lookup (`required_manifest._program_dirs_for`): `*LP<prompt_len>_T<max_tokens-1>` under the root, else a `build_request*`
-    whose result.json declares exactly (LP, T)."""
-    progs: dict[str, str] = {}
-    for r in fx["requests"]:
-        lp, t = int(r["prompt_len"]), int(r["max_tokens"]) - 1
-        hits = sorted(glob.glob(os.path.join(programs_root, f"*LP{lp}_T{t}")))
-        if not hits:
-            for cand in sorted(glob.glob(os.path.join(programs_root, "build_request*"))):
-                rj = os.path.join(cand, "result.json")
-                if os.path.isdir(cand) and os.path.exists(rj):
-                    try:
-                        res = _load_json(rj)
-                    except Exception:  # noqa: BLE001
-                        continue
-                    if res.get("ok") and int(res.get("LP", -1)) == lp and int(res.get("T", -1)) == t:
-                        hits = [cand]
-                        break
-        if not hits:
-            raise SystemExit(f"no request Program for {r['request_id']} (LP={lp} T={t}) under {programs_root}")
-        progs[str(r["request_id"])] = hits[0]
-    return progs
-
-
-def build_global(fixture: dict[str, Any], programs_root: str, *, workload_digest: str | None = None, rank: int = 0, ranks: int = 1,
-                 profile: str | None = None, return_slots: bool = True, log=None) -> dict[str, Any]:
-    declared = [dict(r, index=int(r.get("index", i))) for i, r in enumerate(fixture["requests"])]
-    if len({r["index"] for r in declared}) != len(declared):
-        raise ValueError("workload declaration: duplicate request index")
-    reqs = []
-    for r in sorted(declared, key=lambda r: (int(r.get("arrive_step", 0)), r["index"])):
-        reqs.append(dict(r, workload_request_id=r.get("request_id"), request_id=f"r{r['index']}"))
-    dirs = _program_dirs_for(fixture, programs_root)
-    parts: dict[str, dict[str, Any]] = {}
-    for r in reqs:
-        rid = r["request_id"]
-        d = dirs[str(r["workload_request_id"])]
-        wl = {"sweep": {"arrive_steps": [int(r.get("arrive_step", 0))], "row_id": fixture.get("fixture"), "batch": len(reqs)}}
-        parts[rid] = build(d, workload=wl, request_id=rid, rank=rank, ranks=ranks, profile=profile, return_slots=return_slots, log=log)
-        if len(parts[rid]["steps"]) != int(r["max_tokens"]):
-            raise ValueError(f"request {rid}: Program has {len(parts[rid]['steps'])} steps, the declaration caps {r['max_tokens']} tokens: wrong component")
-    return compose_global(fixture, parts, reqs, workload_digest=workload_digest, rank=rank, ranks=ranks)
-
-
-def build_global_ranks(fixture: dict[str, Any], roots: list[str], ranks: list[int], world: int, *, workload_digests: list[str | None] | None = None,
-                       profile: str | None = None, return_slots: bool = True, log=None) -> dict[str, Any]:
-    """One global manifest per rank Program set (`roots[i]` is rank `ranks[i]`'s), merged by `merge_ranks` when the row is TP."""
-    wds = list(workload_digests or [None] * len(roots))
-    if len(ranks) != len(roots) or len(wds) != len(roots):
-        raise ValueError(f"build-global: {len(roots)} --programs-root, {len(ranks)} --rank, {len(wds)} --workload-digest: give one per rank")
-    if world > 1 and sorted(ranks) != list(range(world)):
-        raise ValueError(f"build-global: TP world {world} needs one --programs-root per rank 0..{world - 1} (got ranks {ranks})")
-    parts = [build_global(fixture, root, workload_digest=wd, rank=r, ranks=world, profile=profile, return_slots=return_slots, log=log)
-             for root, r, wd in zip(roots, ranks, wds)]
-    return merge_ranks(parts) if world > 1 else parts[0]
+#: command -> (module, one-line help).  Modules are imported only when their command runs.
+COMMANDS: dict[str, tuple[str, str]] = {
+    "admission-bound": ("verity_vllm.pipeline.admission_bound", "host-retention bound of a --retain host Commit"),
+    "admission-planner": ("verity_vllm.pipeline.admission_planner", "resource plan of a Commit launch"),
+    "batch-decomp": ("verity_vllm.check.match.batch_decomp", "B>1 Match by per-request decomposition"),
+    "beyond-gemm": ("verity_vllm.program.kernels.beyond_gemm", "element-wise kernel reproduction probe (GPU)"),
+    "build": ("verity_vllm.pipeline.build", "derive one request wrapper's Program (Build step)"),
+    "canonical-profiles": ("verity_vllm.engine.profiles.canonical", "check or rewrite the canonical profile pins"),
+    "capture-identities": ("verity_vllm.correspondence.capture_identities", "capture identities vs the canonical B1 circuit"),
+    "census": ("verity_vllm.properties.census", "kernel census of a bare run"),
+    "commit": ("verity_vllm.pipeline.commit", "Commit stage: pairs protocol, commitment root and overhead"),
+    "compiled": ("verity_vllm.acquire.compiled", "required-value manifest of an Execution=compiled row"),
+    "compiled-merge": ("verity_vllm.pipeline.compiled_merge", "merge control/treatment outputs of a compiled row"),
+    "conformance": ("verity_vllm.program.registry.conformance", "conformance record of the registered library"),
+    "coverage-workloads": ("verity_vllm.pipeline.coverage_workloads", "coverage campaign workloads"),
+    "crosscheck": ("verity_vllm.program.registry.crosscheck", "registered composites vs the numerics models"),
+    "descriptor-equivalence": ("verity_vllm.program.descriptor_equivalence", "correspondence of two encodings of one program"),
+    "fa2-tap-build": ("verity_vllm.acquire.fa2_tap_src.build_ext", "build one FA2 forward variant extension"),
+    "fa3-tap-build": ("verity_vllm.acquire.fa3_tap_src.build_fa3_ext", "build the FA3 forward extension"),
+    "fold-compare": ("verity_vllm.check.fold_compare", "folded observation log vs evidence"),
+    "gate": ("verity_vllm.acquire.gate", "CPU acquisition gate of one row"),
+    "global-match": ("verity_vllm.check.match.global_match", "global Match of a batched execution"),
+    "global-program": ("verity_vllm.pipeline.global_program", "workload Program from the derived request Programs"),
+    "golden": ("verity_vllm.properties.golden", "golden corpus check"),
+    "hidden-gpu": ("verity_vllm.commit.committer.hidden_gpu_src.hidden_gpu", "GPU commitment tree: check, bench, commit"),
+    "holdout": ("verity_vllm.properties.holdout", "holdout workload generator and assembler"),
+    "hot": ("verity_vllm.pipeline.hot", "hot Commit worker"),
+    "instances-form": ("verity_vllm.program.instances_form", "stored form of instances.jsonl operand references"),
+    "kernel-identity": ("verity_vllm.check.kernel_identity", "generated-kernel identity"),
+    "launch-context": ("verity_vllm.pipeline.launch_context", "launch context of a workload's request shapes"),
+    "libdevice-sampling": ("verity_vllm.program.kernels.libdevice_sampling", "libdevice sampler transcription check"),
+    "m1-capture": ("verity_vllm.pipeline.m1_capture", "capture the observation log under the observer"),
+    "manifest": ("verity_vllm.pipeline.manifest", "the required-value manifest (build, build-global, compare)"),
+    "manifest-verify": ("verity_vllm.query.manifest.verify", "is manifest.json the manifest of record"),
+    "match": ("verity_vllm.pipeline.match", "Match stage driver of one configuration"),
+    "noninterference": ("verity_vllm.properties.noninterference", "observer non-interference check"),
+    "operand-provenance": ("verity_vllm.check.operand_provenance", "exhaustive operand provenance check"),
+    "padding-steps": ("verity_vllm.commit.padding_steps", "inactive rows of a padded Commit"),
+    "prefix-cache": ("verity_vllm.observe.prefix_cache", "prefix-cache linkage tools"),
+    "profile-descriptor": ("verity_vllm.program.profile_descriptor", "where a serialised descriptor's bytes go"),
+    "program-compare": ("verity_vllm.check.match.program_compare", "structural comparison of two Programs"),
+    "properties-admission": ("verity_vllm.properties.admission", "quarantine admission differential tests"),
+    "protected": ("verity_vllm.properties.protected", "protected-path diff check"),
+    "quarantine-lint": ("verity_vllm.properties.quarantine_lint", "quarantine registry lint"),
+    "release-json": ("verity_vllm.pipeline.release_json", "RELEASE.json writer, reader and release line"),
+    "replay": ("verity_vllm.check.replay.replay", "the derived Program as its own oracle"),
+    "research-outputs": ("verity_vllm.pipeline.research_outputs", "typed outputs of a sweep stage"),
+    "research-result": ("verity_vllm.pipeline.research_result", "a sweep row's result.json"),
+    "resolve-decomp": ("verity_vllm.correspondence.resolve_decomp", "X-09 decomposition of a fold record"),
+    "resolve-log": ("verity_vllm.observe.fold.resolve_log", "resolve an observation log against a profile"),
+    "rmsnorm-fused-sweep": ("verity_vllm.program.registry.rmsnorm_fused_sweep", "fused rms-norm summation-tree sweep"),
+    "root-policy": ("verity_vllm.check.root_policy", "root closure check"),
+    "row": ("verity_vllm.pipeline.row", "run a sweep row's stages: Build, Match, Commit (run, stage, chain, shed)"),
+    "runtime-tree": ("verity_vllm.observe.runtime_tree", "the runtime's module tree"),
+    "sampling-rng": ("verity_vllm.program.kernels.sampling_rng", "sampler noise recomputation"),
+    "source-identity": ("verity_vllm.pipeline.source_identity", "source identity and precheck"),
+    "stoch-recompute": ("verity_vllm.check.replay.stoch_recompute", "value check of a stochastic row"),
+    "target-family": ("verity_vllm.target_family", "target-family preflight"),
+    "telemetry-admission": ("verity_vllm.pipeline.telemetry.admission_commands", "empirical admission planner"),
+    "timeline": ("verity_vllm.pipeline.timeline", "stage telemetry (mark, report, collect)"),
+    "topp-split-probe": ("verity_vllm.pipeline.topp_split_probe", "top-p split fixture"),
+    "tp-capture": ("verity_vllm.pipeline.tp.capture", "tensor-parallel M1 capture"),
+    "tp-commit": ("verity_vllm.pipeline.tp.commit", "tensor-parallel Commit"),
+    "tp-fold-match": ("verity_vllm.pipeline.tp.fold_match", "per-rank fold Match of a tensor-parallel row"),
+    "tp-match": ("verity_vllm.pipeline.tp.match", "tensor-parallel Match at the collective level"),
+    "twins": ("verity_vllm.program.kernels.twins", "vectorized twins of the registered bodies"),
+    "verdict": ("verity_vllm.pipeline.verdict_record", "a row's Commit verdict record, rebuilt from its evidence"),
+    "weights-of-record": ("verity_vllm.check.weights_of_record", "the weights of record"),
+    "workload": ("verity_vllm.pipeline.workload", "the deterministic sweep workload generator"),
+}
 
 
-def check_correspondence(program_dir: str, *, workload: dict[str, Any] | None = None, request_id: str | None = None, manifest: bool = True, log=None) -> dict[str, Any]:
-    """`Q_module_body_v1` under the record vs under the v1-annotation fallback on ONE Build dir that carries the record: the owning
-    module per Call, the Call names the bridge reads, the partition (unit ids), the boundary Values and -- `manifest` -- the bridge's
-    manifest digest, each equal or listed.  A Build without the record has nothing to check against (`applicable: False`)."""
-    from verity_vllm.query.module_body import Q_module_body_v1, literal_calls, module_body_boundary
-    t0 = time.time()
-    P = from_instances(os.path.join(program_dir, "instances.json.gz"))
-    res = _load_json(os.path.join(program_dir, "result.json"))
-    impl = Correspondence.implementation_paths_of(res)
-    canon = Correspondence.of(P, program_dir, implementation_paths=impl)
-    out: dict[str, Any] = {"schema": "vllm-v2/query-correspondence-check/v1", "program_dir": program_dir, "wrapper": res.get("wrapper"), "calls": len(P.calls),
-                           "program_digest": (res.get("program") or {}).get("digest"), "correspondence_digest": canon.digest, "source": canon.source, "problem": canon.problem}
-    if canon.source != "correspondence":
-        out.update(applicable=False, why="the Build carries no runtime-correspondence/v1 record: only the fallback reads it")
-        return out
-    fallback = Correspondence(P, implementation_paths=impl)
-    module_diffs = [{"call": c.id, "record": canon.module_of(c.id), "v1_annotations": fallback.module_of(c.id), "name": c.name} for c in P.calls if canon.module_of(c.id) != fallback.module_of(c.id)]
-    name_diffs = [{"call": c.id, "record": str(canon.name(c.id)), "v1_annotations": str(fallback.name(c.id)), "name": c.name} for c in P.calls if canon.name(c.id) != fallback.name(c.id)]
-    Qa, Qb = Q_module_body_v1(P, canon), Q_module_body_v1(P, fallback)
-    units_a = {u.id: u.calls for u in Qa(P)}
-    units_b = {u.id: u.calls for u in Qb(P)}
-    literals = literal_calls(P)
-    sa, sb = set(module_body_boundary(P, canon, literals).values), set(module_body_boundary(P, fallback, literals).values)
-    out.update(applicable=True, module_paths={"record": len(canon.modules), "v1_annotations": len(fallback.modules)}, implementation_prefix={"record": canon.prefix, "v1_annotations": fallback.prefix},
-               module_diffs_n=len(module_diffs), module_diffs=module_diffs[:50], name_diffs_n=len(name_diffs), name_diffs=name_diffs[:50],
-               partition_equal=(units_a == units_b), units={"record": len(units_a), "v1_annotations": len(units_b)},
-               boundary_values={"record": len(sa), "v1_annotations": len(sb), "equal": sa == sb, "only_record": len(sa - sb), "only_v1_annotations": len(sb - sa)})
-    if manifest:
-        try:
-            art_p = os.path.join(program_dir, "artifact.json")
-            art = _load_json(art_p) if os.path.exists(art_p) else None
-            tp = res.get("tp") if isinstance(res.get("tp"), dict) else {}
-            rk = dict(rank=int(tp.get("rank") or 0), ranks=int(tp.get("world") or 1))          # a rank Program's manifest is its rank's
-            ma = request_manifest(P, canon, res, request_id=request_id, workload=workload, artifact=art, program_dir=program_dir, **rk).manifest
-            mb = request_manifest(P, fallback, res, request_id=request_id, workload=workload, artifact=art, program_dir=program_dir, **rk).manifest
-            out["manifest"] = {"record": {"digest": ma["manifest_digest"], "identities": ma["populations"]["identities"], "complete": ma["complete"], "correspondence": ma["correspondence"]},
-                               "v1_annotations": {"digest": mb["manifest_digest"], "identities": mb["populations"]["identities"], "complete": mb["complete"], "correspondence": mb["correspondence"]},
-                               "digest_equal": ma["manifest_digest"] == mb["manifest_digest"], "wrapper_prefix": [ma["wrapper_prefix"], mb["wrapper_prefix"]]}
-        except Exception as e:  # noqa: BLE001  -- a step wrapper is not a request Program; the partition comparison above still stands
-            out["manifest"] = {"error": f"{type(e).__name__}: {str(e)[:300]}"}
-    out["identical"] = not module_diffs and not name_diffs and out["partition_equal"] and out["boundary_values"]["equal"] and (out.get("manifest", {}).get("digest_equal", True) is True)
-    out["seconds"] = round(time.time() - t0, 1)
-    if log:
-        log(f"  {os.path.basename(program_dir)} ({res.get('wrapper')}): {len(P.calls)} calls, module diffs {len(module_diffs)}, name diffs {len(name_diffs)}, partition_equal {out['partition_equal']}, "
-            f"boundary equal {out['boundary_values']['equal']}, manifest {out.get('manifest', {}).get('digest_equal', out.get('manifest'))} in {out['seconds']}s")
-    return out
+#: The pod layout's machine paths: the default of an option (``Class.field``) that neither its flag nor its
+#: environment variable sets.
+MACHINE: dict[str, str] = {
+    "RunEnv.py": "/workspace/venv312/bin/python",
+    "RunEnv.sweep_dir": "/workspace/cp/sweep",
+    "RunEnv.hf_home": "/workspace/hf",
+    "RunEnv.cuda_home": "/usr/local/cuda",
+    "RunEnv.cuda_bin": "/usr/local/cuda/bin",
+    "RunEnv.native_collect_default": "/workspace/cp/nc_build",
+    "RunEnv.hidden_so_fa2": "/workspace/cp/fa2/build/matReq/verity_fa2_matReq.so",
+    "RunEnv.hidden_so_fa3": "/workspace/cp/fa2/build/fa3_matReq/verity_fa3_matReq.so",
+    "RunEnv.hot_root": "/workspace/cp/hot",
+    "RunEnv.guard_preserve_file": "/root/dm/guard.preserve",
+    "RunEnv.pod_guard": "/root/dm/pod_guard.sh",
+}
 
 
-def _write(man: dict[str, Any], out: str) -> None:
-    os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
-    with open(out, "w") as f:
-        json.dump(man, f, separators=(",", ":"))
+def usage() -> str:
+    w = max(map(len, COMMANDS))
+    lines = [f"usage: {PROG} COMMAND [SUBCOMMAND] [options]", "", "commands:"]
+    lines += [f"  {name:{w}s}  {help_}" for name, (_, help_) in COMMANDS.items()]
+    return "\n".join(lines)
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    sub = ap.add_subparsers(dest="cmd", required=True)
-    b = sub.add_parser("build")
-    b.add_argument("--program", required=True)
-    b.add_argument("--workload", default=None)
-    b.add_argument("--request-id", default=None)
-    b.add_argument("--profile", default=None)
-    b.add_argument("--rank", type=int, default=0)
-    b.add_argument("--ranks", type=int, default=1)
-    b.add_argument("--no-return-slots", action="store_true")
-    b.add_argument("--out", required=True)
-    g = sub.add_parser("build-global")
-    g.add_argument("--fixture", required=True)
-    g.add_argument("--programs-root", action="append", required=True, help="TP row: repeat per rank, with --rank r at the same position")
-    g.add_argument("--workload-digest", action="append", default=None, help="TP row: repeat per rank")
-    g.add_argument("--profile", default=None)
-    g.add_argument("--rank", type=int, action="append", default=None, help="the TP rank of the --programs-root at the same position (default 0)")
-    g.add_argument("--ranks", type=int, default=1)
-    g.add_argument("--no-return-slots", action="store_true")
-    g.add_argument("--out", required=True)
-    c = sub.add_parser("compare")
-    c.add_argument("--v1", required=True)
-    c.add_argument("--v2", required=True)
-    c.add_argument("--ignore-program-digest", action="store_true")
-    c.add_argument("--out", default=None)
-    k = sub.add_parser("check-correspondence", help="Q_module_body_v1 under the runtime-correspondence/v1 record vs under the v1-annotation fallback on one Build dir")
-    k.add_argument("--program", required=True)
-    k.add_argument("--workload", default=None)
-    k.add_argument("--request-id", default=None)
-    k.add_argument("--no-manifest", action="store_true")
-    k.add_argument("--out", default=None)
-    a = ap.parse_args(argv)
-    log = lambda s: print(s, file=sys.stderr, flush=True)  # noqa: E731
-    if a.cmd == "check-correspondence":
-        wl = _load_json(a.workload) if a.workload else None
-        r = check_correspondence(a.program, workload=wl, request_id=a.request_id, manifest=not a.no_manifest, log=log)
-        if a.out:
-            _write(r, a.out)
-        print(json.dumps({kk: r.get(kk) for kk in ("wrapper", "calls", "source", "applicable", "module_diffs_n", "name_diffs_n", "partition_equal", "boundary_values", "identical", "correspondence_digest")}
-                         | {"manifest_digest_equal": (r.get("manifest") or {}).get("digest_equal"), "manifest_digests": [(r.get("manifest") or {}).get(s, {}).get("digest") for s in ("record", "v1_annotations")]}))
-        return 0 if (r.get("identical") or not r.get("applicable")) else 1
-    if a.cmd == "build":
-        wl = _load_json(a.workload) if a.workload else None
-        man = build(a.program, workload=wl, request_id=a.request_id, rank=a.rank, ranks=a.ranks, profile=a.profile, return_slots=not a.no_return_slots, log=log)
-        _write(man, a.out)
-        print(json.dumps({"identities": man["populations"]["identities"], "manifest_digest": man["manifest_digest"], "complete": man["complete"], "out": a.out}))
-        return 0
-    if a.cmd == "build-global":
-        fx = _load_json(a.fixture)
-        man = build_global_ranks(fx, a.programs_root, a.rank or [0] * len(a.programs_root), a.ranks, workload_digests=a.workload_digest,
-                                 profile=a.profile, return_slots=not a.no_return_slots, log=log)
-        _write(man, a.out)
-        print(json.dumps({"identities": man["populations"]["identities"], "manifest_digest": man["manifest_digest"], "program_digest": man["program_digest"],
-                          "complete": man["complete"], "by_family": man["populations"]["by_family"],
-                          "tp_peer_binding_n_unbound": (man.get("tp_peer_binding") or {}).get("n_unbound"), "out": a.out}))
-        return 0
-    if a.cmd == "compare":
-        m1, m2 = _load_json(a.v1), _load_json(a.v2)
-        cmp = compare(m1["identities"], m2["identities"], ignore_program_digest=a.ignore_program_digest)
-        s = summarize(cmp)
-        s["v1_manifest_digest"], s["v2_manifest_digest"] = m1.get("manifest_digest"), m2.get("manifest_digest")
-        s["v1_program_digest"], s["v2_program_digest"] = m1.get("program_digest"), m2.get("program_digest")
-        if a.out:
-            _write(s, a.out)
-        print(json.dumps({k: s[k] for k in ("v1_identities", "v2_identities", "common", "v1_rows", "v2_rows", "multiplicity_diff_n", "only_v1_n", "only_v2_n")}))
-        for k in ("member_rename", "range", "only_v1", "only_v2"):
-            for line in s[k]:
-                print(f"  {k:14s} n={line['n']:6d} {line.get('op_path')}/{line.get('member')} spec={line.get('spec')} :: {line['reason'][:120]}")
-        for m in s["multiplicity"][:10]:
-            print(f"  multiplicity   v1_rows={m['v1_rows']} v2_rows={m['v2_rows']} {m['key'][:160]}")
-        return 0
-    return 2
+def _doc(cls: type) -> str | None:
+    doc = cls.__doc__
+    return None if not doc or doc.startswith(f"{cls.__name__}(") else doc
+
+
+def _add_options(parser: argparse.ArgumentParser, cls: type, environ: Mapping[str, str]) -> None:
+    for f in dataclasses.fields(cls):
+        if not f.init or "environ" in f.metadata:
+            continue
+        if "group" in f.metadata:
+            _add_options(parser, f.metadata["group"], environ)
+            continue
+        if "flags" not in f.metadata:
+            raise TypeError(f"{cls.__name__}.{f.name} is not a config.option")
+        flags, kw, env = f.metadata["flags"], dict(f.metadata["kw"]), f.metadata["env"]
+        positional = not flags[0].startswith("-")
+        if f"{cls.__name__}.{f.name}" in MACHINE:
+            kw["default"] = MACHINE[f"{cls.__name__}.{f.name}"]
+        if env is not None:
+            value = environ.get(env)
+            if value is not None and (value != "" or f.metadata["env_empty"]):
+                kw["default"] = value
+                if positional:
+                    kw.setdefault("nargs", "?")
+        if not positional:
+            kw["dest"] = f.name
+            if "default" not in kw:
+                kw["required"] = True
+        parser.add_argument(*flags, **kw)
+
+
+def _options(cls: type, ns: argparse.Namespace, environ: Mapping[str, str]) -> Any:
+    kw: dict[str, Any] = {}
+    for f in dataclasses.fields(cls):
+        if not f.init:
+            continue
+        if "environ" in f.metadata:
+            kw[f.name] = dict(environ)
+        elif "group" in f.metadata:
+            kw[f.name] = _options(f.metadata["group"], ns, environ)
+        else:
+            kw[f.name] = getattr(ns, f.name)
+    return cls(**kw)
+
+
+def _parser(prog: str, description: str | None) -> argparse.ArgumentParser:
+    return argparse.ArgumentParser(prog=prog, description=description, formatter_class=argparse.RawDescriptionHelpFormatter)
+
+
+def parse(command: str, argv: list[str], environ: Mapping[str, str] | None = None) -> Any:
+    """The options object of ``verity-vllm COMMAND ARGV...`` (exits 2 on a usage error, like any command line)."""
+    return _parse(command, argv, os.environ if environ is None else environ)[1]
+
+
+def _parse(command: str, argv: list[str], environ: Mapping[str, str]) -> tuple[argparse.ArgumentParser, Any, Any]:
+    mod = importlib.import_module(COMMANDS[command][0])
+    prog = f"{PROG} {command}"
+    subs = getattr(mod, "COMMANDS", None)
+    if subs is None:
+        parser = _parser(prog, _doc(mod.Options) or mod.__doc__)
+        _add_options(parser, mod.Options, environ)
+        return parser, _options(mod.Options, parser.parse_args(argv), environ), mod
+    parser = _parser(prog, mod.__doc__)
+    sp = parser.add_subparsers(dest="_sub", required=True, metavar="SUBCOMMAND")
+    by_name = {}
+    for name, cls in subs.items():
+        doc = _doc(cls)
+        by_name[name] = sp.add_parser(name, help=(doc or "").split("\n")[0], description=doc,
+                                      formatter_class=argparse.RawDescriptionHelpFormatter)
+        _add_options(by_name[name], cls, environ)
+    ns = parser.parse_args(argv)
+    return by_name[ns._sub], _options(subs[ns._sub], ns, environ), mod
+
+
+def main(argv: list[str] | None = None) -> Any:
+    process = argv is None
+    argv = sys.argv[1:] if process else list(argv)
+    if not argv or argv[0] in ("-h", "--help"):
+        print(usage(), file=sys.stdout if argv else sys.stderr)
+        return 0 if argv else 2
+    if argv[0] not in COMMANDS:
+        print(f"{PROG}: unknown command {argv[0]!r}\n\n{usage()}", file=sys.stderr)
+        return 2
+    parser, opts, mod = _parse(argv[0], argv[1:], os.environ)
+    if process:
+        # run records store sys.argv as the command's own command line, the one `python -m <module>` gave it
+        sys.argv[:] = [mod.__file__ or sys.argv[0], *argv[1:]]
+    try:
+        return mod.main(opts)
+    except UsageError as e:
+        parser.error(str(e))
 
 
 if __name__ == "__main__":

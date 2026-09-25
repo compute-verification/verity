@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from verity_vllm.pipeline import admission_planner as P
+from verity_vllm.pipeline import cli
 
 HERE = Path(__file__).resolve().parent
 FIX = HERE / "fixtures" / "admission"
@@ -158,7 +159,7 @@ def test_r17_35_record_says_kind_scope_overlaps_and_the_gap_accounting_names_whe
     assert c["gpu"]["observed_device_delta_since_admission_bytes"] == 1300 * MiB and 0 < c["gpu"]["ratio_device_delta_over_staging"] < 1 and 0 < c["gpu"]["ratio_device"] <= 1.05
     # the CLI prints it (the pod's one-command answer to 'where is the bound loose?')
     wlp = WL / f"{B1}.json"
-    rc = P.main(["--workload", str(wlp), "--sizing", str(FIX / "fp8_b1_sizing.json"), "--bounded", "--exclude", "fa3_hidden_m1", "--open-after-release",
+    rc = cli.main(["admission-planner", "--workload", str(wlp), "--sizing", str(FIX / "fp8_b1_sizing.json"), "--bounded", "--exclude", "fa3_hidden_m1", "--open-after-release",
                  "--engine-rss-mb", "2189", "--cap-bytes", str(CGROUP_H100), "--record", str(d), "--json"])
     assert rc == 0
 

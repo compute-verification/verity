@@ -76,7 +76,7 @@ NOT_PATHY_RE = re.compile(r"(?i)(url|http|dirname|fname|filename|\bfn\b|line|tex
 NON_NAME_PREFIXES = (".", "/", "_", "-", "#", "|", "=", "[", "(", "{", "<")
 
 MESSAGE_FUNCS = frozenset({"print", "warn", "warning", "info", "debug", "error", "exception", "log", "format", "write", "fail", "skip",
-                           "note", "add_argument", "join", "critical", "echo", "msg", "hint", "explain", "describe", "report",
+                           "note", "add_argument", "option", "join", "critical", "echo", "msg", "hint", "explain", "describe", "report",
                            "summarise", "summarize"})
 MESSAGE_KEYS = frozenset({"help", "description", "hint", "why", "note", "reason", "detail", "msg", "message", "notes", "explanation",
                           "summary", "text", "doc", "comment", "title", "label", "caption", "what", "how", "problem", "problems",

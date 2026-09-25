@@ -262,7 +262,7 @@ def test_G5_live_constructions_differing_in_M_are_distinct_but_not_distinguishab
         if not os.path.exists(os.path.join(d, "artifact.json")):
             env = {**os.environ, "CUDA_VISIBLE_DEVICES": "", "PYTHONPATH": f"{ROOT}:{ROOT}/vllm-poc:{ROOT}/src", "HF_HUB_OFFLINE": "1"}
             env.setdefault("HF_HOME", "/workspace/hf" if os.path.isdir("/workspace/hf") else os.path.expanduser("~/.cache/huggingface"))
-            r = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.build", "--out", d, "--wrapper", "step", "--M", str(M), "--pos0", "8"],
+            r = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "build", "--out", d, "--wrapper", "step", "--M", str(M), "--pos0", "8"],
                                cwd=ROOT, env=env, capture_output=True, text=True, timeout=900)
             assert r.returncode == 0, r.stdout[-1500:] + r.stderr[-1500:]
         arts[M] = json.load(open(os.path.join(d, "artifact.json")))

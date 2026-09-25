@@ -5,8 +5,8 @@ so every invocation of the r15-int-5 candidate 6227bde01 (positives, negatives, 
 `argparse.ArgumentError: conflicting option string: --checkpoints` before any engine work.  The unit suites never build that parser
 (main() constructs it inline and the module imports vllm/torch lazily but heavily), so the defect was only found live (same class as M-0236).
 
-This test builds the parser from the SOURCE, torch-free: it extracts every `ap.add_argument(...)` call of main() with `ast`, replays them
-on a fresh argparse.ArgumentParser and asserts that (a) it builds, (b) no option string is declared twice, (c) the MAN-09 flags and the
+This test builds the parser from the SOURCE, torch-free: it extracts every `option(...)` field of the Commit's `Options` with `ast`, replays
+them on a fresh argparse.ArgumentParser and asserts that (a) it builds, (b) no option string is declared twice, (c) the MAN-09 flags and the
 pre-existing --checkpoints are all present exactly once.  Constant-only arguments are replayed verbatim; keyword values that reference
 names (type=int, default=SOME_CONST, ...) are replaced by placeholders -- only the option strings and their multiplicity are under test.
 """
@@ -22,13 +22,8 @@ SRC = Path(__file__).resolve().parents[2] / "verity_vllm" / "pipeline" / "commit
 
 def _add_argument_calls() -> list[ast.Call]:
     tree = ast.parse(SRC.read_text())
-    main = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "main")
-    calls: list[ast.Call] = []
-    for node in ast.walk(main):
-        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "add_argument"
-                and isinstance(node.func.value, ast.Name) and node.func.value.id == "ap"):
-            calls.append(node)
-    return calls
+    opts = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "Options")
+    return [node for node in ast.walk(opts) if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "option"]
 
 
 def _option_strings(call: ast.Call) -> list[str]:
@@ -41,7 +36,7 @@ def _option_strings(call: ast.Call) -> list[str]:
 
 def test_commit_delta_parser_builds_and_declares_every_option_once():
     calls = _add_argument_calls()
-    assert len(calls) > 20, "commit_delta.main() add_argument calls not found -- did the parser move?"
+    assert len(calls) > 20, "the Commit's Options option(...) fields not found -- did the options move?"
     ap = argparse.ArgumentParser(prog="commit_delta", allow_abbrev=False)
     seen: Counter[str] = Counter()
     for c in calls:

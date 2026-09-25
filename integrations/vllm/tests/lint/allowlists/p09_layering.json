@@ -176,6 +176,6 @@
     {"file": "verity_vllm/program/registry/lifted.py", "kind": "runtime-patch", "symbol": "l_fixed_select", "detail": "<object>.evaluate_lazy"},
     {"file": "verity_vllm/program/registry/prims.py", "kind": "runtime-patch", "symbol": "gather_bf16", "detail": "<object>.evaluate_lazy"},
     {"file": "verity_vllm/program/registry/ref_prims.py", "kind": "runtime-patch", "symbol": "gather_f32", "detail": "<object>.evaluate_lazy"},
-    {"file": "verity_vllm/query/manifest/verify.py", "kind": "layer", "symbol": "<module>", "detail": "query.manifest.verify -> pipeline.cli"}
+    {"file": "verity_vllm/query/manifest/verify.py", "kind": "layer", "symbol": "<module>", "detail": "query.manifest.verify -> pipeline.manifest"}
   ]
 }

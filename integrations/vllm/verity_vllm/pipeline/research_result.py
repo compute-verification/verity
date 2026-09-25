@@ -1,6 +1,6 @@
 """The sweep row's `result.json` for the `research` runner (schema research/result/v0.1, tools/research/src/research/result.py).
 
-    python -m verity_vllm.pipeline.research_result <evidence-dir> <row-id> <role> <stages> [--run-dir DIR] [--run-id ID]
+    verity-vllm research-result <evidence-dir> <row-id> <role> <stages> [--run-dir DIR] [--run-id ID]
 
 `row_pod.sh` calls this on EXIT when the runner set `RESEARCH_RUN_DIR`: the run record then states, separately from the process
 exit, whether the workload's own checker (the per-stage verdicts of `stages.txt`) reported PASS for every requested stage, what
@@ -10,13 +10,15 @@ Stdlib only; never raises out of `main` (a broken result file would hide the row
 """
 from __future__ import annotations
 
-import argparse
 import json
 import os
 import re
 import shutil
 import sys
+from dataclasses import dataclass
 from pathlib import Path
+
+from verity_vllm.config import option
 
 RECORDS = ("stages.txt", "row.log", "source_identity.json", "admission.json", "verdict.json", "timeline_report.json",
            "manifest_verify.log", "build_request/digest.txt", "commit/versions.json", "match/run.json", "match_compare.json",
@@ -86,15 +88,17 @@ def build_result(d: Path, row: str, role: str, stages: list[str], run_id: str | 
     }
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("evidence_dir")
-    ap.add_argument("row")
-    ap.add_argument("role")
-    ap.add_argument("stages", help="comma list, as passed to row_pod.sh")
-    ap.add_argument("--run-dir", default=os.environ.get("RESEARCH_RUN_DIR"))
-    ap.add_argument("--run-id", default=os.environ.get("RESEARCH_RUN_ID"))
-    a = ap.parse_args(argv)
+@dataclass(frozen=True, kw_only=True)
+class Options:
+    evidence_dir: str = option("evidence_dir")
+    row: str = option("row")
+    role: str = option("role")
+    stages: str = option("stages", help="comma list, as passed to row_pod.sh")
+    run_dir: str | None = option("--run-dir", env="RESEARCH_RUN_DIR", default=None)
+    run_id: str | None = option("--run-id", env="RESEARCH_RUN_ID", default=None)
+
+
+def main(a: Options) -> int:
     if not a.run_dir:
         print("research_result: RESEARCH_RUN_DIR not set; nothing written", file=sys.stderr)
         return 0
@@ -108,7 +112,3 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as e:  # noqa: BLE001 -- never mask the row's own verdicts
         print(f"research_result: FAILED to write result.json: {type(e).__name__}: {e}", file=sys.stderr)
     return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())
