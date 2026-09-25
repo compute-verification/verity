@@ -141,6 +141,15 @@ class CommitmentDomain:
             value,
         )
 
+    def leaf_prefix(self, rank: int, position: int, schema: str, value_len: int) -> bytes:
+        """Every byte of :meth:`leaf`'s SHA-256 message before the value: ``leaf == SHA-256(prefix || value)``."""
+
+        parts = (self.domain_id, _uint(rank), _uint(position), schema.encode("utf-8"))
+        out = _FRAME + len(_LEAF).to_bytes(4, "big") + _LEAF
+        for part in parts:
+            out += len(part).to_bytes(8, "big") + part
+        return out + value_len.to_bytes(8, "big")
+
     def node(self, level: int, index: int, left: bytes, right: bytes) -> bytes:
         return _hash(_NODE, self.domain_id, _uint(level), _uint(index), left, right)
 
@@ -164,43 +173,6 @@ def tree_levels(domain: CommitmentDomain, leaves: Sequence[bytes]) -> tuple[tupl
         levels.append(tuple(level))
         depth += 1
     return tuple(levels)
-
-
-class FrameV3:
-    """frame-v3's tree rule over one verifier-derived domain, as a :class:`~verity.commitments.scheme.CommitmentScheme`.
-
-    Leaves are ``domain.leaf(rank, position, schema, value)``; every node is bound to the domain, level and index.
-    """
-
-    name = "frame-v3"
-
-    def __init__(self, domain: CommitmentDomain) -> None:
-        self.domain = domain
-
-    def root(self, leaves: Sequence[bytes]) -> bytes:
-        levels = tree_levels(self.domain, leaves)
-        return levels[-1][0] if levels else self.domain.empty_root()
-
-    def path(self, leaves: Sequence[bytes], index: int) -> tuple[bytes, ...]:
-        if not 0 <= index < len(leaves):
-            raise ProtocolError(f"index {index} out of range for {len(leaves)} leaves")
-        out = []
-        for level in tree_levels(self.domain, leaves)[:-1]:
-            out.append(level[index ^ 1])
-            index >>= 1
-        return tuple(out)
-
-    def verify_path(self, root: bytes, leaf_count: int, index: int, leaf: bytes, path: Sequence[bytes | None]) -> bool:
-        if leaf_count != self.domain.count or not 0 <= index < leaf_count or len(path) != merkle_depth(leaf_count):
-            return False
-        if any(type(s) is not bytes or len(s) != 32 for s in path):
-            return False
-        digest, cursor = leaf, index
-        for level, sibling in enumerate(path):
-            pair = (digest, sibling) if cursor % 2 == 0 else (sibling, digest)
-            digest = self.domain.node(level, cursor >> 1, *pair)
-            cursor >>= 1
-        return digest == root
 
 
 class MerkleTree:
