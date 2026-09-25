@@ -48,7 +48,6 @@ import bisect
 import hashlib
 import os
 import re
-import random
 import time
 from collections import Counter
 from typing import Any, Callable, Iterable, Sequence
@@ -56,7 +55,7 @@ from typing import Any, Callable, Iterable, Sequence
 import numpy as np
 
 from verity_vllm.query.manifest import format as RM
-from verity_vllm.check.replay import replay_codes as RC
+from verity_vllm.check.replay import challenge as CH, replay_codes as RC
 from verity_vllm.check.oracle_compare import entry_read_name as _entry_read_name, same_name_invocations as _same_name_invocations
 from verity_vllm.check.replay.replay_codes import NOT_YET, WHY_CLASSES_BY_NAME, WHY_CLASSES_FAULT, why_class  # noqa: F401  (this module's record vocabulary)
 from verity_vllm.check.replay.replay_dump import dump_row_words
@@ -1563,7 +1562,7 @@ def sample(vus: list[dict], per_stratum: int, seed: int, *, targets: list[str] |
     by: dict[str, list[dict]] = {}
     for v in vus:
         by.setdefault(v["stratum"], []).append(v)
-    rng = random.Random(int(seed))
+    rng = CH.stream(int(seed))
     rounds: list[list[dict]] = []
     strata = {}
     for k in sorted(by):
@@ -1982,9 +1981,7 @@ def challenge_seed(challenge: str, run_root: bytes) -> tuple[int, str]:
     """[rev-cb M-0572, v2] the sample seed under a VERIFIER-ISSUED post-commitment challenge: sha256(challenge || run_root)[:8].  Binding the
     challenge to the root means a challenge issued before the root was fixed (or for another run) selects a different sample, and the
     prover cannot grind the sample by recommitting (the root changes -> the verifier issues a fresh challenge).  Returns (seed, source)."""
-    import hashlib
-    h = hashlib.sha256(challenge.encode("utf-8") + b"|" + bytes(run_root)).digest()
-    return int.from_bytes(h[:8], "big"), RC.challenge_seed_source(challenge)
+    return CH.challenge_seed(challenge, run_root), RC.challenge_seed_source(challenge)
 
 
 def _catch_probability(strata: dict[str, dict]) -> dict[str, Any]:

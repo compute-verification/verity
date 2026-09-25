@@ -71,6 +71,7 @@ import torch  # noqa: E402
 from verity_vllm.engine import vllm_adapter as va  # noqa: E402
 from verity_vllm.pipeline.timeline import Timeline  # noqa: E402  (torch-free; VERITY_TIMELINE -> append-only JSONL, else a no-op sink)
 from verity_vllm.commit import opened as OV  # noqa: E402
+from verity_vllm.check.replay import challenge as CH  # noqa: E402
 
 SCHEMA = "verity/commit-integ/delta/v1"
 
@@ -2210,7 +2211,7 @@ def main(argv: list[str] | None = None) -> None:
                     if _sched["use"] == "observed":
                         _arr = {**_arr, **{k: int(v) for k, v in _sched["observed_arrive_steps"].items() if k in _arr}}
                     try:
-                        ckc = CompiledKernelCheck(com, eng.model, _toks, seed=int(rc.run_root.hex()[:8], 16), request_rows=_rows, arrivals=_arr,
+                        ckc = CompiledKernelCheck(com, eng.model, _toks, seed=CH.kernel_check_seed(rc.run_root), request_rows=_rows, arrivals=_arr,
                                                   prompts=_prompts, seed_source=COMPILED_REPLAY_SEED_SOURCE).run(required_manifest)
                     except Exception as e:  # noqa: BLE001
                         import traceback as _tb
@@ -2361,13 +2362,12 @@ def main(argv: list[str] | None = None) -> None:
                     _rc_key: str | None = None
                     if getattr(args, "replay_cache", False):
                         try:
-                            from verity_vllm.check.replay import sampled_replay as _SRk
                             if getattr(args, "replay_seed", None) is not None:
                                 _ks: Any = int(args.replay_seed)
                             elif getattr(args, "replay_challenge", None):
-                                _ks = _SRk.challenge_seed(str(args.replay_challenge), rc.run_root)[0]
+                                _ks = CH.challenge_seed(str(args.replay_challenge), rc.run_root)
                             else:
-                                _ks = int.from_bytes(rc.run_root[:8], "big")
+                                _ks = CH.root_seed(rc.run_root)
                             _w_ref_k = (rc.weight_registration or {}).get("root") if isinstance(rc.weight_registration, dict) else None
                             _rc_key = json.dumps({"run_root": rc.run_root.hex(), "manifest_digest": (required_manifest or {}).get("manifest_digest") if isinstance(required_manifest, dict) else None,
                                                   "program_digest": getattr(args, "program_digest", None), "seed": _ks,
@@ -2450,7 +2450,7 @@ def main(argv: list[str] | None = None) -> None:
                             (_seed, _seed_src), _seed_form = SR.challenge_seed(str(args.replay_challenge), rc.run_root), "challenge"
                             _seed_chal = str(args.replay_challenge)            # [rev M-0600] the full challenge goes on the record (sample.challenge)
                         else:
-                            _seed, _seed_src, _seed_form = int.from_bytes(rc.run_root[:8], "big"), RC.ROOT_SEED_SOURCE, "run-root"
+                            _seed, _seed_src, _seed_form = CH.root_seed(rc.run_root), RC.ROOT_SEED_SOURCE, "run-root"
                         # [rev-cb F-cb-44] the committed store's retention decides the evaluator: DEVICE-retained blocks cannot be read by
                         # forked children (CUDA after fork) -> sampled_replay runs serial in this process; named in the replay record
                         _blocks = getattr(com, "_gpu_blocks", None) or {}
