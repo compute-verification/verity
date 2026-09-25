@@ -18,9 +18,9 @@ from __future__ import annotations
 from verity_vllm.program.registry import b1_tp2
 
 from verity_vllm.observe.events import ViewDesc
-from verity_vllm.observe.patterns import PerRow, attribution_for, base_op, bound_args, hint_of, is_row_major, unsupported
-from verity_vllm.observe.resolver import Collective, Compute, Resolution, StepContext
-from verity_vllm.observe.tree import TreeNode
+from verity_vllm.observe.fold.patterns import PerRow, attribution_for, base_op, bound_args, hint_of, is_row_major, unsupported
+from verity_vllm.observe.fold.resolver import Collective, Compute, Resolution, StepContext
+from verity_vllm.observe.fold.tree import TreeNode
 
 ALL_REDUCE_OP = "vllm.all_reduce"
 ALL_GATHER_OP = "vllm.all_gather"

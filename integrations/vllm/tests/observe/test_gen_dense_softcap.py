@@ -10,16 +10,16 @@ import math
 
 import pytest
 
-from verity_vllm.observe.patterns import AttentionScope
+from verity_vllm.observe.fold.patterns import AttentionScope
 from verity_vllm.engine.profiles import vllm_d9105ea80_sm89_eager as B1PROF
 from verity_vllm.engine.profiles.gen_dense2_patterns import AttentionScopeInertWindow, with_dense2_patterns
 from verity_vllm.engine.profiles.gen_dense_softcap_patterns import AttentionScopeSoftcap, with_softcap_patterns
 
 gemma = importlib.import_module("verity_vllm.engine.profiles.derived_GEMMA2_2B")
-from verity_vllm.observe.resolver import Compute, Unsupported, resolve_step
+from verity_vllm.observe.fold.resolver import Compute, Unsupported, resolve_step
 from tests.observe.test_gen_dense2 import FA2, SCOPE, _fa2_edit
 from tests.observe.test_patterns_synthetic import by_spec, context, decode_step
-from verity_vllm.observe.tree import step_events
+from verity_vllm.observe.fold.tree import step_events
 from verity_vllm.program.registry.quarantine.dense import softcap as SC
 
 BASE = "Attention_v3{T=33,NH=9,KVH=3,D=64,BN=128}"

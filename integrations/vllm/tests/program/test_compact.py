@@ -447,7 +447,7 @@ def test_persist_program_writer_is_byte_identical_to_the_generic_conversion(tmp_
     from verity_vllm.pipeline import match as RC
     from verity_vllm.program.compact import file_items_from_refs_json
     from tests.check import test_global_match as T
-    from verity_vllm.observe.fold import fold
+    from verity_vllm.observe.fold.fold import fold
     from verity.ir.refs import runs
     evs = T.batched_log([T.R0, T.R1_LATE, T.R2_LATE], wl_sha=None)
     res = fold(evs, T.profile(), strict=True)

@@ -26,15 +26,15 @@ from verity.ir.layout import resolve
 from verity.ir.program import Program
 from verity_vllm.program import model as analytic
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepStart, TritonLaunch, ViewDesc
-from verity_vllm.observe.patterns import TokenSelectArgmax, TokenSelectGumbelTwoStage
+from verity_vllm.observe.fold.patterns import TokenSelectArgmax, TokenSelectGumbelTwoStage
 from verity_vllm.engine.profiles import profile_module_for_case
 from verity_vllm.engine.profiles.gen_ov_moe_patterns import FUSED_MOE_PINS, MoEFusedExperts
 from verity_vllm.tp.embedding_shard import EmbeddingShardCuda
 
 Q3 = importlib.import_module("verity_vllm.engine.profiles.derived_QWEN3_30B_A3B_tp2")
-from verity_vllm.observe.resolver import Compute, Group, StepContext, Transparent, Unsupported, resolve_step
-from verity_vllm.tp.collective_pattern import TpCollective
-from verity_vllm.observe.tree import step_events
+from verity_vllm.observe.fold.resolver import Compute, Group, StepContext, Transparent, Unsupported, resolve_step
+from verity_vllm.observe.fold.collective_pattern import TpCollective
+from verity_vllm.observe.fold.tree import step_events
 from verity_vllm.program.registry import moe as MOE
 from verity_vllm.program.registry import prims as P
 

@@ -108,7 +108,7 @@ def _field_name(path: tuple) -> str:
 def evaluate(log_path: str | Path, snapshots: str | Path | None, profile, *, safetensors: list[Path] | None = None,
              cos_sin: Path | None = None, weight_bytes: bool = True) -> dict[str, Any]:
     from verity_vllm.check.fold_compare import SnapshotStore, WeightSource, _extent
-    from verity_vllm.observe.fold import config_for_weights
+    from verity_vllm.observe.fold.fold import config_for_weights
 
     t0 = time.time()
     events = list(log_path) if isinstance(log_path, list) else list(read_log(log_path))

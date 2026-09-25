@@ -13,7 +13,7 @@ import pytest
 
 from verity_vllm.config import ROOT
 from verity_vllm.observe.events import RunHeader
-from verity_vllm.observe.patterns import GemmLaunch
+from verity_vllm.observe.fold.patterns import GemmLaunch
 from verity_vllm.engine.profiles import dense_generic as dg
 from verity_vllm.engine.profiles import profile_for_case, profile_module_for_case
 from verity_vllm.engine.profiles.gen_llama_patterns import ADA_TUNED_GEMM, GemmLaunchTuned

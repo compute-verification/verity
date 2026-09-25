@@ -27,11 +27,11 @@ from typing import Any
 from verity.ir.defs import bind
 from verity_vllm.program.registry import fp8
 
-from .events import ViewDesc
-from .patterns import (GeometryError, _fmt, as_float, as_weight_view, attribution_for, bound_args, first, hint_of, is_row_major,
+from verity_vllm.observe.events import ViewDesc
+from verity_vllm.observe.fold.patterns import (GeometryError, _fmt, as_float, as_weight_view, attribution_for, bound_args, first, hint_of, is_row_major,
                        op_name, target_of, unsupported)
-from .resolver import Compute, PerRow, Resolution, Shared, StepContext
-from .tree import TreeNode
+from verity_vllm.observe.fold.resolver import Compute, PerRow, Resolution, Shared, StepContext
+from verity_vllm.observe.fold.tree import TreeNode
 
 QUANT_EPS = 1e-10
 FP8_MAX = 448.0

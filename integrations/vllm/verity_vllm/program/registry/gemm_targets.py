@@ -4,7 +4,7 @@
 
 One record per registered target arch family, read by every consumer through the `TargetProfile`
 (`TargetProfile.gemm_target()`): Bet A's construction (`verity_vllm.program.frontend.rules.vllm_bindings.gemm_pins_for` — the launch a
-GEMM node must show), the eager Match resolver (`verity_vllm.observe.patterns.GemmLaunch` / `gen_llama_patterns.GemmLaunchTuned` —
+GEMM node must show), the eager Match resolver (`verity_vllm.observe.fold.patterns.GemmLaunch` / `gen_llama_patterns.GemmLaunchTuned` —
 the launch a captured GEMM must show), and the applicability manifest (`cb_a.derive_step.applicability_conditions` — the
 target facts the artifact requires).  There is no second table anywhere: the profiles / rules hold no tiling literal of
 their own any more.

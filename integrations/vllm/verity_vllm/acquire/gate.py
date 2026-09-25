@@ -6,7 +6,7 @@ plan-vs-plan comparison.
     python -m verity_vllm.acquire.gate compare-plans <a.json> <b.json> [--out plan_compare.json]
 
 `--runtime` is a `RuntimeTree` document: written by the GPU stage (`m1_capture` -> DIR/runtime_tree.json) or by
-`python -m verity_vllm.correspondence.runtime_tree` from a model instantiated on the meta device as Build does (pod: needs vLLM).  `--programs-root`
+`python -m verity_vllm.observe.runtime_tree` from a model instantiated on the meta device as Build does (pod: needs vLLM).  `--programs-root`
 / `--program` name the Build's request Program dirs (`build_request*/`): the owning modules are read off their `runtime-correspondence/v1`
 record when they carry it (`correspondence.source = correspondence`), else off the manifest's v1 annotations -- the source is recorded in
 the plan.  Writes `acquisition_plan.json` (and `plan_compare.json` against another plan: every Value whose chosen site differs, listed);

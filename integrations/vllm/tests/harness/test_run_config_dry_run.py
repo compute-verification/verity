@@ -60,7 +60,7 @@ def test_dry_run_cpu_phase():
                        "replay_chain", "replay_b_step0", "replay_b_step1", "replay_b_step2", "replay_b_step3", "replay_c", "gates"]
     log = "/r/RUN/capture/log.jsonl.gz"
     r = c["resolve"]
-    assert r[:4] == ["/pod/py312", "-m", "verity_vllm.observe.resolve_log", log] and r[r.index("--out") + 1] == "/r/RUN/resolution" and "--strict" not in r
+    assert r[:4] == ["/pod/py312", "-m", "verity_vllm.observe.fold.resolve_log", log] and r[r.index("--out") + 1] == "/r/RUN/resolution" and "--strict" not in r
     cr = c["census_reconcile"]
     assert cr[cr.index("--reconcile") + 1] == "/r/RUN/census/census.json" and cr[cr.index("--report") + 1] == "/r/RUN/census_reconcile"
     nc = c["nonint_compare"]

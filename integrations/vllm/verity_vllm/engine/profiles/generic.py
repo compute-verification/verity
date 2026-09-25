@@ -36,9 +36,9 @@ from typing import Any, Callable
 
 from verity_vllm.program import model as analytic
 from verity_vllm.observe.events import RunHeader
-from verity_vllm.observe.patterns import TokenSelectArgmax, TokenSelectGumbelTopP, TokenSelectGumbelTwoStage
-from verity_vllm.observe.resolver import Profile
-from verity_vllm.tp.collective_pattern import TpCollective
+from verity_vllm.observe.fold.patterns import TokenSelectArgmax, TokenSelectGumbelTopP, TokenSelectGumbelTwoStage
+from verity_vllm.observe.fold.resolver import Profile
+from verity_vllm.observe.fold.collective_pattern import TpCollective
 from verity_vllm.tp.embedding_shard import EmbeddingShardCuda
 from verity_vllm.engine.profiles import dense_generic as _dg
 from verity_vllm.engine.profiles import family_facts as FF

@@ -461,7 +461,7 @@ def evidence(warm_dir: Path, cold_dir: Path | None, *, out: Path | None = None) 
     wl_log = warm_dir / "capture" / "log.jsonl.gz"
     if wl_log.exists():
         rec, dst = extract_run(warm_dir)
-        from verity_vllm.observe import patterns_prefix as PP
+        from verity_vllm.observe.fold import patterns_prefix as PP
 
         doc["linkage_file"] = str(dst)
         doc["linkage_closure"] = rec.get("closure")
@@ -520,7 +520,7 @@ def main(argv: list[str] | None = None) -> int:
     g.add_argument("--case", default="B0")
     g.add_argument("--model", default="HuggingFaceTB/SmolLM2-135M")
     g.add_argument("--seed", type=int, default=0)
-    g.add_argument("--out-dir", default=str(Path(__file__).resolve().parent / "profiles"))
+    g.add_argument("--out-dir", default=str(Path(__file__).resolve().parents[1] / "engine" / "profiles"))
     e = sub.add_parser("extract", help="write capture/prefix_linkage.json for a run dir or a log")
     e.add_argument("run_or_log")
     e.add_argument("--out", default=None)

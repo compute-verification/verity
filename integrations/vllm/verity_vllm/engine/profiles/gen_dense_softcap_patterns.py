@@ -31,10 +31,10 @@ from typing import Any
 from verity.ir.defs import bind
 from verity_vllm.program.registry.quarantine.dense import softcap as _softcap
 
-from verity_vllm.observe.patterns import FA2_OP_NAMES, AttentionScope, ComputeGroup, as_float, bound_args, find_descendants, op_name, unsupported
+from verity_vllm.observe.fold.patterns import FA2_OP_NAMES, AttentionScope, ComputeGroup, as_float, bound_args, find_descendants, op_name, unsupported
 from verity_vllm.engine.profiles.gen_dense2_patterns import AttentionScopeInertWindow, _annotate, _replace_descendant, _rewrite_args
-from verity_vllm.observe.resolver import Compute, Resolution, StepContext, Unsupported
-from verity_vllm.observe.tree import TreeNode
+from verity_vllm.observe.fold.resolver import Compute, Resolution, StepContext, Unsupported
+from verity_vllm.observe.fold.tree import TreeNode
 
 #: the base body's fully qualified name the softcap pattern re-binds (every other spec inside the group is left alone)
 BASE_ATTENTION_ID = "Attention_v3"

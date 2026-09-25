@@ -52,7 +52,7 @@ from typing import Any
 
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, TritonLaunch, ViewDesc
 from verity_vllm.observe.log import read_log
-from verity_vllm.observe.views import byte_extent, collapsed_dims, element_runs, row_view
+from verity_vllm.observe.fold.views import byte_extent, collapsed_dims, element_runs, row_view
 
 Run = tuple[str, int, int, int]      # (space, idx, lo, hi) — the same runs `verity.ir.refs.runs` yields
 

@@ -25,9 +25,9 @@ import dataclasses
 from dataclasses import dataclass
 from typing import Any
 
-from verity_vllm.observe.patterns import FA2_OP_NAMES, AttentionScope, bound_args, find_descendants, op_name, schema_param_names, unsupported
-from verity_vllm.observe.resolver import Resolution, StepContext
-from verity_vllm.observe.tree import TreeNode
+from verity_vllm.observe.fold.patterns import FA2_OP_NAMES, AttentionScope, bound_args, find_descendants, op_name, schema_param_names, unsupported
+from verity_vllm.observe.fold.resolver import Resolution, StepContext
+from verity_vllm.observe.fold.tree import TreeNode
 
 
 def _rewrite_args(fa: TreeNode, updates: dict[str, Any]) -> TreeNode:

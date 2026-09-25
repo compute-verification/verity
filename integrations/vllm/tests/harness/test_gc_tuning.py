@@ -16,7 +16,7 @@ import pytest
 
 from verity_vllm.pipeline import gc_tuning
 from tests.observe.test_fold_synthetic import memory, toy_log, toy_profile  # noqa: F401  (memory: fixture)
-from verity_vllm.observe.fold import fold
+from verity_vllm.observe.fold.fold import fold
 
 PROBE = ("import gc, json, sys\n"
          "from verity_vllm.pipeline.gc_tuning import tune\n"

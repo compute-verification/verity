@@ -45,8 +45,8 @@ from verity.ir.types import Array
 from verity_vllm.check import operand_provenance as provenance, replay
 from verity_vllm.query import vu_query as vq
 from verity_vllm.observe.events import ViewDesc
-from verity_vllm.observe.fold import FoldResult, fold
-from verity_vllm.observe.resolver import Compute, Gather, GatherMany, Group, PerRow, Profile, Shared, Transparent, Unsupported, parts_of
+from verity_vllm.observe.fold.fold import FoldResult, fold
+from verity_vllm.observe.fold.resolver import Compute, Gather, GatherMany, Group, PerRow, Profile, Shared, Transparent, Unsupported, parts_of
 
 REPO = Path(__file__).resolve().parents[2]
 BF16 = P.BF16
@@ -572,7 +572,7 @@ class M1Record:
         if not M1_CENSUS.exists():
             return None
         from verity_vllm.check import census
-        from verity_vllm.observe import resolve_log
+        from verity_vllm.observe.fold import resolve_log
 
         def run() -> dict:
             orig = resolve_log.load_profile

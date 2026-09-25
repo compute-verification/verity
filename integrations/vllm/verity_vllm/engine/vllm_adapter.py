@@ -63,7 +63,7 @@ from verity_vllm.observe.storage import StorageAdapter, dtype_name
 from verity_vllm.observe import triton_adapter
 
 from verity_vllm.engine.arrivals import run_requests_arrivals  # [coverage D87] step-indexed arrivals (torch-free module, unit-tested)
-from verity_vllm.correspondence import chunk_attribution as _chunks  # [chunked 2026-09-17] prefill-chunk / token-step attribution (torch-free, unit-tested)
+from verity_vllm.observe import chunks as _chunks  # [chunked 2026-09-17] prefill-chunk / token-step attribution (torch-free, unit-tested)
 
 SCHEMA = "verity-capture/log/v1"
 CASE = "B0"                       # default checkpoint role (SmolLM2-135M); [M6] `build_engine(case="B1")` serves Qwen2.5-1.5B
@@ -1036,7 +1036,7 @@ def run_requests(engine: Engine, requests: list[dict], sampling: dict) -> tuple[
     step_no = [0]
     # [chunked 2026-09-17, additive] prefill-chunk attribution: the in-process scheduler's per-request `num_computed_tokens` is read
     # after every step() (pure reads; nothing patched, nothing on the device), the returned tokens are counted per iteration; after
-    # the run `chunk_attribution.attribute` adds prefill_steps / prefill_chunks / partial_prefill_steps / first_token_step /
+    # the run `chunks.attribute` adds prefill_steps / prefill_chunks / partial_prefill_steps / first_token_step /
     # token_steps to every `timing["requests"][rid]` and `timing["chunk_attribution"]` run-wide.  Every existing key is unchanged.
     chunks = _chunks.Collector(_chunks.scheduler_of(engine.llm))
 

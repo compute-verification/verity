@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import pytest
 
-from verity_vllm.observe.patterns import TokenSelectArgmax, TokenSelectGumbelTwoStage
+from verity_vllm.observe.fold.patterns import TokenSelectArgmax, TokenSelectGumbelTwoStage
 
 
 @pytest.mark.parametrize("mod, shard, full_vocab, qkv, gu, bias", [

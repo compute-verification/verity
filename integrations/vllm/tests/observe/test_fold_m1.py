@@ -29,7 +29,7 @@ def _available() -> str | None:
     if importlib.util.find_spec(f"verity_vllm.engine.profiles.{PROFILE}") is None:
         return f"profile {PROFILE} missing (L3)"
     try:
-        from verity_vllm.observe.memory import MemoryModel
+        from verity_vllm.observe.fold.memory import MemoryModel
         MemoryModel()
     except NotImplementedError:
         return "memory.py is a skeleton (L2)"

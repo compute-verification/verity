@@ -56,7 +56,7 @@ EOF
   # 2. the runtime tree: the model instantiated on the meta device as Build does
   T0=$(date +%s)
   # (HF_HUB_OFFLINE=0: a row whose checkpoint is not pre-warmed on this pod needs its config.json fetched -- shapes only, no weights)
-  if HF_HUB_OFFLINE=${HF_HUB_OFFLINE:-0} $PY -m verity_vllm.correspondence.runtime_tree --model "$MODEL" --revision "$REV" --max-model-len "$MML" --out "$O/runtime_tree.json" > "$O/runtime_tree.log" 2>&1; then
+  if HF_HUB_OFFLINE=${HF_HUB_OFFLINE:-0} $PY -m verity_vllm.observe.runtime_tree --model "$MODEL" --revision "$REV" --max-model-len "$MML" --out "$O/runtime_tree.json" > "$O/runtime_tree.log" 2>&1; then
     echo "[pod_gate] $ROW: runtime tree (meta) in $(( $(date +%s) - T0 )) s: $(tail -n 1 "$O/runtime_tree.log")"
   else
     echo "[pod_gate] $ROW: runtime tree (meta) FAILED (see runtime_tree.log)"; tail -n 8 "$O/runtime_tree.log"; RC=1; continue

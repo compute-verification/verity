@@ -145,7 +145,7 @@ def evaluate_spec(spec, operand_words: list[np.ndarray]) -> list[int]:
     from verity.ir.program import Program
     from verity.ir.refs import Affine, Coll
 
-    from verity_vllm.observe.fold import _replayer
+    from verity_vllm.observe.fold.fold import _replayer
 
     params, ret = spec.signature()
     if len(params) != len(operand_words):

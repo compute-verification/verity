@@ -22,7 +22,7 @@ from tests.correspondence.test_batch_decomp_e2e import (A_DOWN_W, A_EMBED, A_GU_
                                                                             BS, I32D, I64D, W_COS, W_DOWN, W_EMBED, W_GU, W_LN1, W_LN2, W_NORM,
                                                                             W_O, W_QKV, Ids, V, profile)
 from tests.observe.test_fold_synthetic import A_COS, C, memory  # noqa: F401 - `memory` is the fixture
-from verity_vllm.observe.fold import fold
+from verity_vllm.observe.fold.fold import fold
 from verity_vllm.observe.log import dumps as log_dumps
 
 KC = V(e2e.A_KC, (8, BS, 1, 8))   # 8 KV blocks: two private blocks per request for up to 4 requests
@@ -210,7 +210,7 @@ def p_attention_tgrouped(node, ctx):
     in one group, created when the decode row is seen). The toy default (`p_attention`) emits per row in row order and therefore
     never shows M-ARRIVAL-ORDER; this variant reproduces it on CPU with the same fold code path (`fold._compute_emit` per group)."""
     from tests.observe.test_fold_synthetic import _kv_flat, _slot
-    from verity_vllm.observe.resolver import Compute, Gather, GatherMany, Group
+    from verity_vllm.observe.fold.resolver import Compute, Gather, GatherMany, Group
     from verity.ir.defs import bind
     from verity_vllm.program.registry import b1
     BN = e2e.BN
@@ -231,7 +231,7 @@ def p_attention_tgrouped(node, ctx):
 
 
 def profile_tgrouped(leak=False):
-    from verity_vllm.observe.resolver import Profile
+    from verity_vllm.observe.fold.resolver import Profile
     from tests.observe import test_fold_synthetic as toy
     pats = [p for p in toy.PATTERNS if p.name != "attention"]
     pats.append(toy.Pat("attention_leak" if leak else "attention_tgrouped", e2e.p_attention_leak if leak else p_attention_tgrouped))

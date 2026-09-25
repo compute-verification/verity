@@ -39,8 +39,8 @@ from verity.ir.defs import bind
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
 from verity_vllm.program.registry import b1
 
-from .events import ViewDesc
-from .resolver import (
+from verity_vllm.observe.events import ViewDesc
+from verity_vllm.observe.fold.resolver import (
     Compute,
     Const,
     Gather,
@@ -56,7 +56,7 @@ from .resolver import (
     Unsupported,
     parts_of,
 )
-from .tree import TreeNode
+from verity_vllm.observe.fold.tree import TreeNode
 
 # ---------------------------------------------------------------------------------------------------------
 # grouped resolutions (lane-local extension; see module docstring)

@@ -73,7 +73,7 @@ from verity.ir.layout import FunctionCall
 from verity.ir.refs import runs
 
 from verity_vllm.check.fold_compare import SnapshotStore, Values, WeightSource, _attach_specs, _component_ranges, _jsonable, _max_rss_gb, fold_log, load_profile
-from verity_vllm.observe.fold import FoldResult
+from verity_vllm.observe.fold.fold import FoldResult
 
 TIER_STATUSES = ("pass", "fail", "skipped", "error")
 EVALUATORS = ("gates", "twins", "auto")

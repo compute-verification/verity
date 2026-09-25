@@ -1,6 +1,6 @@
 """Resolve a raw observation log against a pinned profile (lane L3; torch-free).
 
-    uv run python -m verity_vllm.observe.resolve_log data/logs/m1.jsonl.gz \
+    uv run python -m verity_vllm.observe.fold.resolve_log data/logs/m1.jsonl.gz \
         [--profile vllm_d9105ea80_sm89_eager] [--step N] [--dump-trees] [--max-depth 6] [--out PATH] [--strict]
 
 Per step: `StepContext` (header, StepStart, SampleEnd, StepLinks, Roots by allocation — the weight/buffer Roots of the
@@ -27,9 +27,9 @@ from typing import Any, Iterator
 
 from verity_vllm.observe.events import Event, Note, Root, RunHeader, StepLink
 from verity_vllm.observe.log import read_log, split_steps
-from verity_vllm.observe.patterns import GEMM_TARGET_SCRATCH_KEY, X01_SCRATCH_KEY, label, members
-from verity_vllm.observe.resolver import Compute, Group, Profile, Resolution, ResolutionError, ResolutionReport, StepContext, Transparent, spec_module, Unsupported, resolve_step
-from verity_vllm.observe.tree import StepEvents, TreeNode, step_events
+from verity_vllm.observe.fold.patterns import GEMM_TARGET_SCRATCH_KEY, X01_SCRATCH_KEY, label, members
+from verity_vllm.observe.fold.resolver import Compute, Group, Profile, Resolution, ResolutionError, ResolutionReport, StepContext, Transparent, spec_module, Unsupported, resolve_step
+from verity_vllm.observe.fold.tree import StepEvents, TreeNode, step_events
 
 DEFAULT_PROFILE = "vllm_d9105ea80_sm89_eager"
 

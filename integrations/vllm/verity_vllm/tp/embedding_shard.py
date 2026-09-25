@@ -12,9 +12,9 @@ from verity.ir.defs import bind
 from verity_vllm.program.registry import b1_tp2
 
 from verity_vllm.observe.events import ViewDesc
-from verity_vllm.observe.patterns import Embedding, PerRow, Shared, attribution_for, base_op, bound_args, hint_of, is_int, is_row_major, unsupported
-from verity_vllm.observe.resolver import Compute, Resolution, StepContext
-from verity_vllm.observe.tree import TreeNode
+from verity_vllm.observe.fold.patterns import Embedding, PerRow, Shared, attribution_for, base_op, bound_args, hint_of, is_int, is_row_major, unsupported
+from verity_vllm.observe.fold.resolver import Compute, Resolution, StepContext
+from verity_vllm.observe.fold.tree import TreeNode
 
 
 class EmbeddingShardCuda:

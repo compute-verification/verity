@@ -193,7 +193,7 @@ def test_gumbel_lane_noise_is_bit_exact_against_the_gpu_probe():
 
 def _lane_ctx(events, start, sampling, seed=None, sample=None):
     import dataclasses
-    from verity_vllm.observe.resolver import StepContext
+    from verity_vllm.observe.fold.resolver import StepContext
     from tests.observe import test_patterns_synthetic as S
     from verity_vllm.engine.profiles.gen_ov_sampling_patterns import ov_sampling_patterns
     hdr = S.header(sampling)
@@ -210,9 +210,9 @@ SAMPLED = {"greedy": False, "temperature": 1.0, "top_p": 1.0, "top_k": 0, "logpr
 
 
 def test_seeded_gumbel_row_is_one_gumbel_argmax_compute():
-    from verity_vllm.observe.resolver import Compute, PerRow, Unsupported, resolve_step
+    from verity_vllm.observe.fold.resolver import Compute, PerRow, Unsupported, resolve_step
     from tests.observe import test_patterns_synthetic as S
-    from verity_vllm.observe.tree import step_events
+    from verity_vllm.observe.fold.tree import step_events
     events, start = S.decode_step(sampler="gumbel")
     se = step_events(events)
     res = resolve_step(se, _lane_ctx(events, start, SAMPLED, seed=4242))
@@ -231,9 +231,9 @@ def test_seeded_gumbel_row_is_one_gumbel_argmax_compute():
 
 
 def test_greedy_rows_are_left_to_the_pinned_token_select():
-    from verity_vllm.observe.resolver import Unsupported, resolve_step
+    from verity_vllm.observe.fold.resolver import Unsupported, resolve_step
     from tests.observe import test_patterns_synthetic as S
-    from verity_vllm.observe.tree import step_events
+    from verity_vllm.observe.fold.tree import step_events
     events, start = S.decode_step(sampler="gumbel")
     se = step_events(events)
     res = resolve_step(se, _lane_ctx(events, start, S.GREEDY, sample=se.sample))
@@ -243,9 +243,9 @@ def test_greedy_rows_are_left_to_the_pinned_token_select():
 
 
 def test_unseeded_sampled_row_is_unsupported_not_a_constant():
-    from verity_vllm.observe.resolver import Unsupported, resolve_step
+    from verity_vllm.observe.fold.resolver import Unsupported, resolve_step
     from tests.observe import test_patterns_synthetic as S
-    from verity_vllm.observe.tree import step_events
+    from verity_vllm.observe.fold.tree import step_events
     events, start = S.decode_step(sampler="gumbel")
     se = step_events(events)
     res = resolve_step(se, _lane_ctx(events, start, SAMPLED, seed=None))
@@ -260,9 +260,9 @@ def test_unseeded_sampled_row_is_unsupported_not_a_constant():
     ({**SAMPLED, "top_p": 0.9}, "top_k/top_p"),
 ])
 def test_filtered_or_tempered_rows_are_unsupported(sampling, needle):
-    from verity_vllm.observe.resolver import Unsupported, resolve_step
+    from verity_vllm.observe.fold.resolver import Unsupported, resolve_step
     from tests.observe import test_patterns_synthetic as S
-    from verity_vllm.observe.tree import step_events
+    from verity_vllm.observe.fold.tree import step_events
     events, start = S.decode_step(sampler="gumbel")
     se = step_events(events)
     res = resolve_step(se, _lane_ctx(events, start, sampling, seed=1))
@@ -276,9 +276,9 @@ def test_tempered_row_is_gumbel_argmax_temp_over_the_bf16_source():
     the sampled row is `GumbelArgmaxTempBf16_v1{V,SEED,POS,T}` over the bf16 logits (T = the request's temperature, fp32 bits)."""
     import numpy as np
     from verity_vllm.observe.events import TritonLaunch
-    from verity_vllm.observe.resolver import Compute, PerRow, Unsupported, resolve_step
+    from verity_vllm.observe.fold.resolver import Compute, PerRow, Unsupported, resolve_step
     from tests.observe import test_patterns_synthetic as S
-    from verity_vllm.observe.tree import step_events
+    from verity_vllm.observe.fold.tree import step_events
     events, start = S.decode_step(sampler="gumbel", f32_logits=True)
     k = next(i for i, e in enumerate(events) if isinstance(e, TritonLaunch) and e.fn.endswith("_gumbel_sample_kernel"))
     g = events[k]

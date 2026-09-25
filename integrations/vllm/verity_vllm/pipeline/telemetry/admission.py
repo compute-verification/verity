@@ -155,7 +155,7 @@ INVENTORY: dict[str, dict[str, str]] = {
     "match.capture.instance_records": {"stage": "match", "where": "m1_capture observer, per matched instance", "freed": "capture end (written to match/)", "scales": "instances"},
     "match.capture.token_values": {"stage": "match", "where": "m1_capture observer value snapshots", "freed": "capture end", "scales": "tokens x declaration widths"},
     "match.capture.hidden_values": {"stage": "match", "where": "m1_capture observer M1 hidden-stream snapshot", "freed": "capture end", "scales": "prompt tokens x K x heads"},
-    "match.fold.instance_state": {"stage": "match", "where": "fold (verity_vllm.observe.fold) instance dicts", "freed": "fold end", "scales": "instances"},
+    "match.fold.instance_state": {"stage": "match", "where": "fold (verity_vllm.observe.fold.fold) instance dicts", "freed": "fold end", "scales": "instances"},
     "match.fold.attention_operands": {"stage": "match", "where": "fold per-step attention operand rows", "freed": "fold end", "scales": "steps x context x layers"},
     "commit.pinned_pool": {"stage": "commit", "where": "bounded warm-up / first instrumented run (torch pinned host allocator)", "freed": "commit_delta exit (--retain host); per-pair release only under --retain none", "scales": "raw committed bytes x 1.25"},
     "commit.run_record.leaf_digests": {"stage": "commit", "where": "instrumented run per-step leaf table", "freed": "commit_delta exit", "scales": "raw bytes / 268 x 32 B"},

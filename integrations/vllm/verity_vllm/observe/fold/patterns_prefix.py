@@ -1,4 +1,4 @@
-"""verity_vllm/observe/patterns_prefix.py — the Program-level reading of a prefix-linkage record (coverage row M1).  Torch-free.
+"""verity_vllm/observe/fold/patterns_prefix.py — the Program-level reading of a prefix-linkage record (coverage row M1).  Torch-free.
 
 This module does NOT construct Program parts (fold.py / patterns.py are frozen for the window).  It states, from
 `prefix_cache.extract_linkage`'s record, what the Program must contain for a run with prefix caching to be *closed*, and

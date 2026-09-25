@@ -34,8 +34,8 @@ PROTECTED: tuple[str, ...] = (
     "verity_vllm/program/model.py", "verity_vllm/check/difftest.py", "verity_vllm/check/quarantine_lint.py",
     "verity_vllm/pipeline/match.py", "verity_vllm/ops/verify_lane.sh",
     # the derivation itself (observer, resolver core, existing matchers, memory, fold, program identity, engine adapter)
-    "verity_vllm/observe/observer.py", "verity_vllm/observe/events.py", "verity_vllm/observe/log.py", "verity_vllm/observe/memory.py",
-    "verity_vllm/observe/fold.py", "verity_vllm/observe/resolver.py", "verity_vllm/observe/patterns.py", "verity_vllm/engine/vllm_adapter.py",
+    "verity_vllm/observe/observer.py", "verity_vllm/observe/events.py", "verity_vllm/observe/log.py", "verity_vllm/observe/fold/memory.py",
+    "verity_vllm/observe/fold/fold.py", "verity_vllm/observe/fold/resolver.py", "verity_vllm/observe/fold/patterns.py", "verity_vllm/engine/vllm_adapter.py",
     # the two base profiles (a lane derives its own profile module from `build_profile`; it does not edit these)
     "verity_vllm/engine/profiles/vllm_d9105ea80_sm89_eager.py", "verity_vllm/engine/profiles/vllm_d9105ea80_sm89_eager_qwen15.py",
     # existing registered semantics and the IR

@@ -24,6 +24,6 @@
   "verity_vllm.check.protected": "next candidate, sealed-verifier cluster: verify_lane.sh (bench/, not a root) runs it",
   "verity_vllm.check.holdout": "next candidate, sealed-verifier cluster: verify_lane.sh / cov_pod.sh (bench/, not roots) run it",
   "verity_vllm.observe.prefix_cache": "generator of workloads/workload_cov_b0_prefix_c256{,_cold}.json (`depends_on: constants of verity_vllm.observe.prefix_cache`; coverage row M1), read by test_prefix_cache.py",
-  "verity_vllm.observe.patterns_prefix": "the Program-level reading of prefix_cache's linkage record; test_prefix_cache.py"
+  "verity_vllm.observe.fold.patterns_prefix": "the Program-level reading of prefix_cache's linkage record; test_prefix_cache.py"
  }
 }

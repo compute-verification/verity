@@ -12,15 +12,15 @@ import numpy as np
 import pytest
 
 from verity_vllm.observe.events import StepEnd, ViewDesc
-from verity_vllm.observe.patterns import BiasAdd, TransparentAten
+from verity_vllm.observe.fold.patterns import BiasAdd, TransparentAten
 from verity_vllm.engine.profiles import vllm_d9105ea80_sm89_eager as B1PROF
 from verity_vllm.engine.profiles.gen_dense_gemma2_patterns import (Bf16ScalarChain, MeanDimTriton, NarrowToBf16, gemma2_patterns,
                                                                 with_gemma2_patterns)
 
 gemma = importlib.import_module("verity_vllm.engine.profiles.derived_GEMMA2_2B")
-from verity_vllm.observe.resolver import Compute, PerRow, Shared, Unsupported, resolve_step, spec_module
+from verity_vllm.observe.fold.resolver import Compute, PerRow, Shared, Unsupported, resolve_step, spec_module
 from tests.observe.test_patterns_synthetic import CUDA, Builder, bf, by_spec, context, decode_step, i64
-from verity_vllm.observe.tree import step_events
+from verity_vllm.observe.fold.tree import step_events
 from verity_vllm.program.registry.quarantine.dense import ALL_DEFINITIONS, ALL_PRIMITIVES
 
 M, H, I, V = 2, 8, 4, 16

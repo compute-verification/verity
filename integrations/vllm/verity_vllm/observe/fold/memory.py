@@ -71,8 +71,8 @@ from dataclasses import dataclass, field
 
 from verity.ir.refs import Affine, Concat, Explicit, Refs, Strided, broadcast, concat
 
-from .events import StorageAlloc, ViewDesc
-from .views import byte_extent, collapsed_dims, element_runs, row_view
+from verity_vllm.observe.events import StorageAlloc, ViewDesc
+from verity_vllm.observe.fold.views import byte_extent, collapsed_dims, element_runs, row_view
 
 
 class Unresolved(Exception):

@@ -18,9 +18,9 @@ import pytest
 from verity_vllm.engine.profiles.gen_ov_moe_patterns import MOE_CONSTRUCTION_PATTERNS, MoEFusedExperts, MoEFusedExpertsPadded, ov_moe_patterns
 
 OV = importlib.import_module("verity_vllm.engine.profiles.derived_OLMOE")
-from verity_vllm.observe.resolver import Compute, Group, StepContext, Transparent, Unsupported, resolve_step
+from verity_vllm.observe.fold.resolver import Compute, Group, StepContext, Transparent, Unsupported, resolve_step
 from tests.observe.test_gen_ov_moe import C, E, H, I, TOPK, _ctx, _start, moe_scope_events
-from verity_vllm.observe.tree import step_events
+from verity_vllm.observe.fold.tree import step_events
 from verity.ir.defs import bind
 from verity_vllm.program.registry import moe_pad as MP
 

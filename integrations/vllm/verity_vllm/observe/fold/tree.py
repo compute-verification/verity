@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Iterator
 
-from .events import (DispatchEnter, DispatchExit, Event, SampleEnd, StepEnd, StepLink, StepStart, TritonLaunch,
+from verity_vllm.observe.events import (DispatchEnter, DispatchExit, Event, SampleEnd, StepEnd, StepLink, StepStart, TritonLaunch,
                      ViewDesc, views_in)
 
 

@@ -21,7 +21,7 @@ their Program digests do not move).  Every other combination binds the statics-l
 `Attention_v2{T,NH,KVH,D,BN,DOT,INV}` (`b1.GemmV2`, `b1.AttentionV2`: the same bodies with the step and the epilogue as declared
 statics).  Three consumers read this module for "which registered function does
 this launch compute on the declared target": the Bet A builder (`verity_vllm.program.frontend.rules.vllm_bindings`), the eager Match resolver
-(`verity_vllm.observe.patterns`) and, through the run header's recorded target, the collector.  The per-target correspondence (the row's Match
+(`verity_vllm.observe.fold.patterns`) and, through the run header's recorded target, the collector.  The per-target correspondence (the row's Match
 replay on the captured operands; lane ampere's `gemm_target_correspondence` driver) is checked bit for bit, never a tolerance.
 """
 from __future__ import annotations

@@ -17,8 +17,8 @@ from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHea
 from verity_vllm.engine.profiles.gen_ov_moe_patterns import FUSED_MOE_PINS, MoEFusedExperts
 
 OV = importlib.import_module("verity_vllm.engine.profiles.derived_OLMOE")
-from verity_vllm.observe.resolver import Compute, Group, StepContext, Transparent, Unsupported, resolve_step
-from verity_vllm.observe.tree import step_events
+from verity_vllm.observe.fold.resolver import Compute, Group, StepContext, Transparent, Unsupported, resolve_step
+from verity_vllm.observe.fold.tree import step_events
 from verity.ir.defs import bind
 from verity.ir.evaluate import evaluate_region
 from verity.ir.layout import resolve
@@ -358,8 +358,8 @@ def _w1_log(name: str) -> Path:
 
 @pytest.mark.parametrize("name,steps", [("olmoe_3x1_1req", 1), ("olmoe_1x1_1req", 1)])
 def test_real_capture_resolves_without_unsupported(name, steps):
-    from verity_vllm.observe.resolve_log import resolve_log
-    from verity_vllm.observe.resolver import parts_of
+    from verity_vllm.observe.fold.resolve_log import resolve_log
+    from verity_vllm.observe.fold.resolver import parts_of
     _, results, _, _ = resolve_log(_w1_log(name), OV.PROFILE)
     assert len(results) == steps
     for sr in results:

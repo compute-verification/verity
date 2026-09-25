@@ -15,7 +15,7 @@ import pytest
 from verity_vllm.check import census, gates, operand_provenance as provenance, replay
 from verity_vllm.query import vu_query as vq
 from tests.check import adversarial as G
-from verity_vllm.observe.resolver import Compute, Transparent, spec_module
+from verity_vllm.observe.fold.resolver import Compute, Transparent, spec_module
 
 K_ALL = 8   # >= every toy stratum: tier a evaluates EVERY instance (no sampling luck in the assertions)
 

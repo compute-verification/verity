@@ -58,8 +58,8 @@ INTERIM_LAYER = {
     "verity_vllm.correspondence": "query|correspondence",
     "verity_vllm.program.frontend.emit": "program",              # -> program/frontend/
     "verity_vllm.correspondence.batch_decomp": "check|properties",   # -> check/match/
-    "verity_vllm.correspondence.runtime_tree": "observe|commit",
-    "verity_vllm.correspondence.chunk_attribution": "observe|commit",
+    "verity_vllm.observe.runtime_tree": "observe|commit",
+    "verity_vllm.observe.chunks": "observe|commit",
     "verity_vllm.program": "program",                          # frontend/, registry/, workload; numerics/ -> program/backends/
     "verity_vllm.pipeline.global_program": "pipeline",          # -> pipeline/build.py
     "verity_vllm.program.frontend.liveness": "core",
@@ -70,7 +70,7 @@ INTERIM_LAYER = {
     "verity_vllm.engine.rank_worker": "engine",                         # -> engine/rank_worker.py
     "verity_vllm.tp.partial_source": "acquire",                # -> acquire/sources/
     "verity_vllm.program.frontend.export_ops": "program",                    # -> program/frontend/
-    "verity_vllm.tp.collective_pattern": "observe|commit",     # -> observe/fold/patterns/
+    "verity_vllm.observe.fold.collective_pattern": "observe|commit",     # -> observe/fold/patterns/
     "verity_vllm.tp.rank_match": "check|properties",           # -> check/match/
     "verity_vllm.tp.xrank_collectives": "check|properties",    # -> check/match/
     "verity_vllm.tp.analyze": "tests",

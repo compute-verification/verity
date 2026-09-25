@@ -334,7 +334,7 @@ def run_census(workload_path: str, out_dir: str, checkpoints: str, *, max_tokens
 def declared_kernels_of_step(resolutions: list, roots: list) -> tuple[dict[str, set[str]], dict[str, set[int]], dict[str, int]]:
     """From one step's resolutions: declared kernel -> {pattern names}, declared kernel -> {root event ids that declare it},
     declared kernel -> number of parts declaring it."""
-    from verity_vllm.observe.resolver import Compute, Transparent, parts_of
+    from verity_vllm.observe.fold.resolver import Compute, Transparent, parts_of
 
     pats: dict[str, set[str]] = {}
     events: dict[str, set[int]] = {}
@@ -354,7 +354,7 @@ def declared_kernels_of_step(resolutions: list, roots: list) -> tuple[dict[str, 
 def reconcile(census: dict, log_path: str, profile_name: str, proposed_allowlist: tuple[str, ...] = ()) -> dict:
     """`proposed_allowlist`: extra declared names treated as allowlisted (what-if; L5 may not edit the profile).  The
     report records them separately (`proposed_allowlist`) so the measured residue against the pinned profile stays visible."""
-    from verity_vllm.observe.resolve_log import load_profile, resolve_log
+    from verity_vllm.observe.fold.resolve_log import load_profile, resolve_log
 
     profile, prof_mod = load_profile(profile_name)
     from verity_vllm.check.kernel_allowlist import KERNEL_ALLOWLIST as FROZEN_ALLOWLIST  # protected: a profile cannot allowlist kernels by itself

@@ -42,7 +42,7 @@ def _available() -> str | None:
     if not glob.glob(hf_safetensors_glob(REPO_ID)):
         return f"{REPO_ID} safetensors not in the HF cache"
     try:
-        from verity_vllm.observe.memory import MemoryModel
+        from verity_vllm.observe.fold.memory import MemoryModel
         MemoryModel()
     except NotImplementedError:
         return "memory.py is a skeleton (L2)"

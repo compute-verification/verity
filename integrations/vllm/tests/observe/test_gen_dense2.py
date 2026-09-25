@@ -332,12 +332,12 @@ def test_workloads_mirror_the_b1_one_request_workload(name, case, model, V):
 import dataclasses
 
 from verity_vllm.observe.events import DispatchEnter
-from verity_vllm.observe.patterns import AttentionScope
+from verity_vllm.observe.fold.patterns import AttentionScope
 from verity_vllm.engine.profiles import vllm_d9105ea80_sm89_eager as B1PROF
 from verity_vllm.engine.profiles.gen_dense2_patterns import AttentionScopeInertWindow, with_dense2_patterns
-from verity_vllm.observe.resolver import Compute, Unsupported, resolve_step
+from verity_vllm.observe.fold.resolver import Compute, Unsupported, resolve_step
 from tests.observe.test_patterns_synthetic import by_spec, context, decode_step
-from verity_vllm.observe.tree import step_events
+from verity_vllm.observe.fold.tree import step_events
 
 FA2 = "_vllm_fa2_C.varlen_fwd.default"
 SCOPE = "vllm.unified_attention_with_output.default"
@@ -345,7 +345,7 @@ SCOPE = "vllm.unified_attention_with_output.default"
 
 def _fa2_edit(events, **updates):
     """The synthetic decode step with the named FA2 schema arguments replaced (positional binding, as vLLM emits them)."""
-    from verity_vllm.observe.patterns import schema_param_names
+    from verity_vllm.observe.fold.patterns import schema_param_names
     for i, e in enumerate(events):
         if isinstance(e, DispatchEnter) and e.op == FA2:
             names = schema_param_names(e.schema)
@@ -389,7 +389,7 @@ def test_base_scope_alone_reports_the_phi3_window_as_unsupported():
 def test_inert_window_resolves_to_the_same_attention_computes_as_the_windowless_launch(left):
     events, start = decode_step()
     fa = next(e for e in events if isinstance(e, DispatchEnter) and e.op == FA2)
-    from verity_vllm.observe.patterns import schema_param_names
+    from verity_vllm.observe.fold.patterns import schema_param_names
     assert fa.args[schema_param_names(fa.schema).index("max_seqlen_k")] == 33 and left >= 33
     se0 = step_events(list(events))
     base = resolve_step(se0, context(start, se0.sample))

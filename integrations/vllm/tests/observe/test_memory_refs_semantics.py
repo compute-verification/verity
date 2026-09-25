@@ -14,8 +14,8 @@ import random
 import pytest
 
 from verity_vllm.observe.events import DTYPE_BYTES, StorageAlloc, ViewDesc
-from verity_vllm.observe.memory import MemoryModel, Unresolved
-from verity_vllm.observe.views import row_view
+from verity_vllm.observe.fold.memory import MemoryModel, Unresolved
+from verity_vllm.observe.fold.views import row_view
 from verity.ir.refs import Affine, Explicit, Refs, Strided
 
 DEV = "cuda:0"

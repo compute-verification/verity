@@ -171,7 +171,7 @@ def test_producer_instances_from_instances_jsonl(tmp_path: Path):
     assert PC.KV_PRODUCER_RE.search("model.layers.3.self_attn.qkv_proj/model.layers.3.self_attn.qkv_proj.weight")
     assert PC.KV_PRODUCER_RE.search("model.layers.3.self_attn.rotary_emb/rope.k") and not PC.KV_PRODUCER_RE.search("model.layers.3.self_attn.rotary_emb/rope.q")
     assert all(n < 18 * 5 for n in pi["nodes"])
-    from verity_vllm.observe import patterns_prefix as PP
+    from verity_vllm.observe.fold import patterns_prefix as PP
 
     e = PP.obligations(rec)["requests"][B]["state_edges"][3]
     assert e["producer_instances"] == [15, 16, 17]                     # row 3's k_proj, v_proj, rotary nodes (5 per row, q/mlp skipped)
@@ -253,7 +253,7 @@ def test_evidence_compares_warm_and_cold_run_dirs(tmp_path: Path):
 
 
 def test_obligations_closed_warm_run():
-    from verity_vllm.observe import patterns_prefix as PP
+    from verity_vllm.observe.fold import patterns_prefix as PP
 
     ob = PP.obligations(PC.extract_linkage(_warm_log()))
     assert ob["run"]["status"] == "closed" and PP.closure(PC.extract_linkage(_warm_log())) == "closed"
@@ -271,7 +271,7 @@ def test_obligations_closed_warm_run():
 
 
 def test_obligations_external_state_and_alias_violation():
-    from verity_vllm.observe import patterns_prefix as PP
+    from verity_vllm.observe.fold import patterns_prefix as PP
 
     ev = [_header({A: P + X, B: P + Y})]
     ev += [_step(0, [(A, 0, 18, [0, 1], P + X)]), StepEnd(0)]
@@ -289,7 +289,7 @@ def test_obligations_external_state_and_alias_violation():
 
 
 def test_obligations_cold_run_has_nothing_to_close():
-    from verity_vllm.observe import patterns_prefix as PP
+    from verity_vllm.observe.fold import patterns_prefix as PP
 
     ev = [_header({A: P + X}, pc=False), _step(0, [(A, 0, 18, [0, 1], P + X)]), StepEnd(0)]
     lk = PC.extract_linkage(ev)

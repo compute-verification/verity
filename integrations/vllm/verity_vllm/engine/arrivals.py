@@ -24,7 +24,7 @@ forwards went uncounted (15 for 17).  The loop now derives forwards in this orde
 
   1. `output_lag_source = "scheduler"` -- the in-process V1 scheduler is reachable (`llm_engine.engine_core[.engine_core].scheduler`
      with a `requests` dict, or `scheduler=` given): after every `step()` the per-request `num_computed_tokens` is read (a pure read,
-     as the chunked owner's `chunk_attribution.Collector`); an iteration whose schedule advanced some request ran a forward, and the
+     as the chunked owner's `chunks.Collector`); an iteration whose schedule advanced some request ran a forward, and the
      lag is (finish iteration - last advancing iteration) of each request, which must agree across requests.  Exact, including
      chunks, waiting requests and idle iterations (an idle iteration is neither a forward nor a drain: `iterations - forwards` is
      NOT the lag when arrivals leave gaps).

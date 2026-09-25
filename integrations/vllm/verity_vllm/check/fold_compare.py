@@ -51,9 +51,9 @@ from verity_vllm.program.registry import b1
 from verity.ir.types import Array, Tuple as TupleT, Type
 
 from verity_vllm.observe.events import ViewDesc
-from verity_vllm.observe.fold import FoldResult, fold, summarize
+from verity_vllm.observe.fold.fold import FoldResult, fold, summarize
 from verity_vllm.observe.log import read_log
-from verity_vllm.observe.resolver import Profile
+from verity_vllm.observe.fold.resolver import Profile
 
 DEFAULT_COS_SIN = Path(str(resources.files(__package__) / "tables" / "B0-divergence-20260907T1604Z" / "cos_sin_cache.npy"))
 HF_GLOB = str(Path.home() / ".cache" / "huggingface" / "hub" / "models--HuggingFaceTB--SmolLM2-135M" / "snapshots" / "*" / "model.safetensors")

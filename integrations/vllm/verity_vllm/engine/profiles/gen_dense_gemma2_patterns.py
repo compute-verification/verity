@@ -50,10 +50,10 @@ from verity_vllm.program.registry.quarantine.dense import (add_scalar_bf16, add_
                                                 square_bf16, square_f32)
 
 from verity_vllm.observe.events import ViewDesc
-from verity_vllm.observe.patterns import (BiasAdd, _check_pins, as_float, attribution_for, base_op, bound_args, hint_of, is_row_major,
+from verity_vllm.observe.fold.patterns import (BiasAdd, _check_pins, as_float, attribution_for, base_op, bound_args, hint_of, is_row_major,
                                      op_name, triton_name, unsupported, widened_source)
-from verity_vllm.observe.resolver import Compute, PerRow, Resolution, Shared, StepContext
-from verity_vllm.observe.tree import TreeNode
+from verity_vllm.observe.fold.resolver import Compute, PerRow, Resolution, Shared, StepContext
+from verity_vllm.observe.fold.tree import TreeNode
 
 KERNELS_ELEMENTWISE = ("vectorized_elementwise_kernel", "elementwise_kernel", "unrolled_elementwise_kernel")
 

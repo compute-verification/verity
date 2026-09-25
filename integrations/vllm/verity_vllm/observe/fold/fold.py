@@ -104,7 +104,7 @@ from verity.ir.types import Array, Record, Type, Value
 from verity.ir.types import Tuple as TupleT
 
 from verity_vllm.program import model as analytic
-from .events import (
+from verity_vllm.observe.events import (
     DispatchEnter,
     DispatchExit,
     Event,
@@ -121,10 +121,10 @@ from .events import (
     TritonLaunch,
     ViewDesc,
 )
-from .log import split_steps
-from .memory import MemoryModel, Unresolved
-from .patterns import GEMM_TARGET_SCRATCH_KEY, X01_SCRATCH_KEY
-from .resolver import (
+from verity_vllm.observe.log import split_steps
+from verity_vllm.observe.fold.memory import MemoryModel, Unresolved
+from verity_vllm.observe.fold.patterns import GEMM_TARGET_SCRATCH_KEY, X01_SCRATCH_KEY
+from verity_vllm.observe.fold.resolver import (
     Collective,
     Compute,
     Const,
@@ -144,8 +144,8 @@ from .resolver import (
     resolve_step,
     spec_label,
 )
-from .tree import StepEvents, TreeNode, step_events
-from .views import row_view, rows_view
+from verity_vllm.observe.fold.tree import StepEvents, TreeNode, step_events
+from verity_vllm.observe.fold.views import row_view, rows_view
 
 I32 = Value(32)
 

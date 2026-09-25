@@ -24,8 +24,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
 
-from .events import Root, RunHeader, SampleEnd, StepLink, StepStart, ViewDesc
-from .tree import StepEvents, TreeNode
+from verity_vllm.observe.events import Root, RunHeader, SampleEnd, StepLink, StepStart, ViewDesc
+from verity_vllm.observe.fold.tree import StepEvents, TreeNode
 
 # ---------------------------------------------------------------------------------------------------------
 # operands: how row i of an instance reads / writes physical views

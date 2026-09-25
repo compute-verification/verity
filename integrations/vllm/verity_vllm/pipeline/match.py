@@ -199,7 +199,7 @@ class Plan:
             return [self.py_gpu, "-m", "verity_vllm.check.noninterference", *common_gpu, "--out", str(self.nonint_dir), "--python", self.py_gpu,
                     "--accepted-ctl", str(self.control_tokens_path())]
         if stage == "resolve":
-            return [self.py_cpu, "-m", "verity_vllm.observe.resolve_log", str(self.log), "--profile", a.profile, "--out", str(run / "resolution"), "--quiet"]
+            return [self.py_cpu, "-m", "verity_vllm.observe.fold.resolve_log", str(self.log), "--profile", a.profile, "--out", str(run / "resolution"), "--quiet"]
         if stage == "census_reconcile":
             return [self.py_cpu, "-m", "verity_vllm.check.census", "--reconcile", str(self.census_dir / "census.json"), "--log", str(self.log),
                     "--profile", a.profile, "--report", str(run / "census_reconcile")]
@@ -948,7 +948,7 @@ def fold_summary_result(log_path: str | Path, profile_name: str, *, with_program
     silently under a `padded` declaration)."""
     from verity_vllm.check.fold_compare import load_profile, summarize
     from verity_vllm.observe.events import Root, RunHeader
-    from verity_vllm.observe.fold import fold
+    from verity_vllm.observe.fold.fold import fold
     from verity_vllm.observe.log import read_log
 
     t0 = time.time()

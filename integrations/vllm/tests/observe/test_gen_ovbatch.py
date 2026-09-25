@@ -1,4 +1,4 @@
-"""`verity_vllm/observe/fold.py`: served vs discarded samples under chunked prefill — the fold classifies each SampleEnd row by vLLM's
+"""`verity_vllm/observe/fold/fold.py`: served vs discarded samples under chunked prefill — the fold classifies each SampleEnd row by vLLM's
 own rule `StepStart.seq_lens[r] >= prompt_len_r`; the toy log of test_fold_synthetic prefilled in two chunks is the reproducer
 (b0_chunked_200p: 15 sampled, 12 served, 3 discarded at steps 0-2)."""
 from __future__ import annotations
@@ -6,7 +6,7 @@ from __future__ import annotations
 import dataclasses
 
 from verity_vllm.observe.events import StepLink, StepStart
-from verity_vllm.observe.fold import fold, instance_nodes
+from verity_vllm.observe.fold.fold import fold, instance_nodes
 from tests.observe import test_fold_synthetic as TFS
 from verity.ir.types import Array, Value
 

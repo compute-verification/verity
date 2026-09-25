@@ -1,4 +1,4 @@
-"""verity_vllm/correspondence/chunk_attribution.py — which engine steps were a request's prefill chunks, and which step produced each served token.
+"""verity_vllm/observe/chunks.py — which engine steps were a request's prefill chunks, and which step produced each served token.
 Torch-free (coverage campaign, chunked-prefill column, window 2026-09-17).
 
 vLLM V1 prefills a prompt in chunks when `max_num_batched_tokens` is smaller than the prompt: each chunk is one engine step (a

@@ -34,7 +34,7 @@ Conventions (L2):
 
 from __future__ import annotations
 
-from .events import ViewDesc
+from verity_vllm.observe.events import ViewDesc
 
 
 def _check(v: ViewDesc) -> None:

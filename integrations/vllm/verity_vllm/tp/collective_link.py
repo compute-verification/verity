@@ -27,7 +27,7 @@ from typing import Any, Iterable
 
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Event, Root, RunHeader, StepStart, StorageAlloc, StorageFree, TritonLaunch, ViewDesc, views_in
 from verity_vllm.observe.log import read_log
-from verity_vllm.observe.views import byte_extent
+from verity_vllm.observe.fold.views import byte_extent
 from .collective_record import COLLECTIVE_KINDS, COMMUNICATOR_KINDS, MISSING_IN_RECORD, SCHEMA_LINK, SCHEMA_SHARD, validate_launch
 
 GROUP_NAME_RE = re.compile(r"^[a-z_]+:\d+$")   # vLLM GroupCoordinator.unique_name, e.g. "tp:0"

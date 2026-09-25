@@ -11,8 +11,8 @@ pre-existing pattern still stamps `root.id` — checked here on the toy profile 
 
 from __future__ import annotations
 
-from verity_vllm.observe.fold import fold
-from verity_vllm.observe.resolver import Compute, Gather, GatherMany, Group, Profile
+from verity_vllm.observe.fold.fold import fold
+from verity_vllm.observe.fold.resolver import Compute, Gather, GatherMany, Group, Profile
 from tests.observe import test_fold_synthetic as T
 from tests.observe.test_fold_synthetic import memory  # noqa: F401  (the real memory model, or the stub while it is a skeleton)
 from verity.ir.defs import bind
@@ -49,7 +49,7 @@ def _attention_events(result):
 def _launch_and_root(log):
     """(root op id, nested launch id) of every `unified_attention_with_output` in the toy log, in order."""
     from verity_vllm.observe.log import split_steps
-    from verity_vllm.observe.tree import step_events
+    from verity_vllm.observe.fold.tree import step_events
     out = []
     for se in (step_events(s) for _pre, s in split_steps(log) if s):
         for r in se.roots:

@@ -9,7 +9,7 @@ import pytest
 
 from verity_vllm.check import operand_provenance as P
 from verity_vllm.observe.events import ViewDesc
-from verity_vllm.observe.fold import fold
+from verity_vllm.observe.fold.fold import fold
 from tests.observe import test_fold_synthetic as tfs
 
 M1 = Path(__file__).resolve().parents[2] / "data" / "logs" / "m1.jsonl.gz"

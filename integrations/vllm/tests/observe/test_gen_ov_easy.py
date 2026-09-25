@@ -19,7 +19,7 @@ import pytest
 from verity_vllm.program import model as analytic
 from verity_vllm.pipeline.report import workload_summary
 from verity_vllm.observe.events import RunHeader
-from verity_vllm.observe.patterns import GemmLaunch
+from verity_vllm.observe.fold.patterns import GemmLaunch
 from verity_vllm.engine.profiles import gen_llama_patterns as GP
 from verity_vllm.engine.profiles import profile_for_case, profile_module_for_case
 from verity_vllm.engine.profiles import vllm_d9105ea80_sm89_eager as BASE

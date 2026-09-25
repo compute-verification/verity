@@ -8,10 +8,10 @@ import dataclasses
 import pytest
 
 from verity_vllm.observe.events import StepStart, from_json, to_json
-from verity_vllm.observe.patterns import GeometryError, kv_group_of, kv_slots
-from verity_vllm.observe.resolver import Compute, Gather, GatherMany, Transparent, Unsupported, resolve_step
+from verity_vllm.observe.fold.patterns import GeometryError, kv_group_of, kv_slots
+from verity_vllm.observe.fold.resolver import Compute, Gather, GatherMany, Transparent, Unsupported, resolve_step
 from tests.observe.test_patterns_synthetic import BS, by_spec, context, decode_step
-from verity_vllm.observe.tree import step_events
+from verity_vllm.observe.fold.tree import step_events
 
 LAYER = "model.layers.0.self_attn.attn"
 OTHER = "model.layers.1.self_attn.attn"
@@ -131,7 +131,7 @@ def test_layer_of_no_group_is_unsupported_not_guessed():
 
 
 def test_kv_layer_of_prefers_the_string_argument_then_the_module_hint():
-    from verity_vllm.observe.patterns import kv_layer_of
+    from verity_vllm.observe.fold.patterns import kv_layer_of
     events, start = decode_step()
     se = step_events(events)
     att = next(n for n in se.roots if n.op.startswith("vllm.unified_attention_with_output"))
@@ -146,7 +146,7 @@ def test_kv_layer_of_prefers_the_string_argument_then_the_module_hint():
 
 def test_bare_reshape_and_cache_flash_uses_the_module_hint_for_its_group():
     """This vLLM issues `reshape_and_cache_flash` bare (no `unified_kv_cache_update` parent): the module hint keys the group."""
-    from verity_vllm.observe.patterns import KVCacheUpdate
+    from verity_vllm.observe.fold.patterns import KVCacheUpdate
     events, start = decode_step()
     se = step_events(events)
     rc = next(n for n in se.roots for n in n.walk() if n.op.startswith("_C_cache_ops.reshape_and_cache_flash"))
