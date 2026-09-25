@@ -1041,6 +1041,7 @@ def test_width_with_the_real_boundary_agrees_with_the_oracle(gemm, synth, monkey
                 key = (P_.root.id, w_max, with_tiling)
                 assert (real.status, real.violators, real.unsupported) == (oracle.status, oracle.violators, oracle.unsupported), key
                 assert real.max_seen >= oracle.max_seen, key
+    monkeypatch.setattr(partition, "_BOUNDARY", None)
     assert partition._boundary() is boundary
 
 

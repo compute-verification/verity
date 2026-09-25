@@ -73,7 +73,7 @@ def restrict(iv: Intervals, lo: int, hi: int) -> Intervals:
 
 
 def complement(iv: Intervals, n: int) -> Iterator[tuple[int, int]]:
-    """The runs of `[0, n)` outside `iv`, ascending."""
+    """The runs of `[0, n)` outside `iv`, ascending; `iv` must lie within `[0, n)`."""
     pos = 0
     for lo, hi in iv:
         if lo > pos:
