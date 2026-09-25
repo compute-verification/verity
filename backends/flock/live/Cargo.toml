@@ -20,6 +20,9 @@ flock-field = { workspace = true }
 sha2 = { workspace = true }
 serde_json = { workspace = true }
 bincode = { workspace = true }
+flock-hash = { workspace = true }
+blake3 = { workspace = true }
+rayon = { workspace = true }
 
 [lints]
 workspace = true
