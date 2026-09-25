@@ -5,7 +5,7 @@ CROSS-RANK leg (`tp.rank_match`) over both folds + the collective recorder rows 
 + tp2_match's stored-step provenance.  CPU only.  The rank-local legs of the ranks run CONCURRENTLY (one subprocess chain per rank,
 --rank-workers, default all): they are independent until the cross-rank leg; the record is assembled in rank order.
 
-    python -m verity_vllm.pipeline.tp.fold_match --capture <tp2_capture --record-collectives out> --profile derived_LLAMA32_1B_tp2 \\
+    verity-vllm tp-fold-match --capture <tp2_capture --record-collectives out> --profile derived_LLAMA32_1B_tp2 \\
         --build-rank0 <build_request_r0> --build-rank1 <build_request_r1> [--gprog-rank0 <build_workload_r0/workload_program.json> --gprog-rank1 ...] \\
         [--derived-rank0 DIR ... --derived-rank1 DIR ...] --workload WL [--tp2-match <run>/tp2_match.json] --out <D/fold_match> [--python PY]
 
@@ -16,7 +16,6 @@ parameter as a free input a rank-local Match alone would be trivially satisfiabl
 """
 from __future__ import annotations
 
-import argparse
 import hashlib
 from concurrent.futures import ThreadPoolExecutor
 import json
@@ -24,10 +23,12 @@ import os
 import subprocess
 import sys
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from verity_vllm.check.match import rank_match as RM
+from verity_vllm.config import UsageError, option
 
 SCHEMA = "verity/tp2/fold-match/v1"
 
@@ -71,7 +72,7 @@ def _link(dst: Path, src: Path) -> None:
 def fold_rank(py: str, log: Path, profile: str, out: Path, timeout: int | None) -> dict:
     out.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
-    rc = _run([py, "-m", "verity_vllm.pipeline.match", "--worker", "fold", "--log", str(log), "--profile", profile,
+    rc = _run([py, "-m", "verity_vllm.pipeline.cli", "match", "--worker", "fold", "--log", str(log), "--profile", profile,
                "--out", str(out / "fold_summary.json"), "--persist-dir", str(out)], out / "fold.log", timeout)
     fs = _load(out / "fold_summary.json") or {}
     ok = rc == 0 and (out / "program.json").exists() and (out / "instances.jsonl").exists() and int(fs.get("errors") or 0) == 0 and \
@@ -87,7 +88,7 @@ def compare_rank(py: str, rank_dir: Path, build: Path, derived: list[str], withi
     """The TP1 verdict rule of row_pod.sh: B1 cb_a.compare (canonical-equal, same steps, no differing operand); B>1 batch_decomp X-09."""
     t0 = time.time()
     if derived:
-        cmd = [py, "-m", "verity_vllm.check.match.batch_decomp", "--oracle", str(rank_dir), "--out", str(rank_dir / "match_decomp.json"),
+        cmd = [py, "-m", "verity_vllm.pipeline.cli", "batch-decomp", "--oracle", str(rank_dir), "--out", str(rank_dir / "match_decomp.json"),
                "--within-step", within]
         for d in [str(build)] + list(derived):
             cmd += ["--derived", d]
@@ -101,7 +102,7 @@ def compare_rank(py: str, rank_dir: Path, build: Path, derived: list[str], withi
                 "unattributed": (dec.get("attribution") or {}).get("unattributed"), "xreq": dec.get("xreq_total"), "missing_derived": dec.get("missing_derived"),
                 "per_request": [{"request_id": r.get("request_id"), "LP": r.get("LP"), "T": r.get("T"), "derived": r.get("derived"),
                                  "canonical_equal": r.get("canonical_equal"), "steps": r.get("steps")} for r in reqs]}
-    rc = _run([py, "-m", "verity_vllm.check.match.program_compare", "--a", str(build), "--b", str(rank_dir), "--out", str(rank_dir / "match_compare.json")],
+    rc = _run([py, "-m", "verity_vllm.pipeline.cli", "program-compare", "--a", str(build), "--b", str(rank_dir), "--out", str(rank_dir / "match_compare.json")],
               rank_dir / "match_compare.log", timeout)
     doc = _load(rank_dir / "match_compare.json") or {}
     cmp = doc.get("compare") or {}            # cb-a/compare/v1: the step comparison sits under `compare` (row_pod reads the same field)
@@ -116,7 +117,7 @@ def compare_rank(py: str, rank_dir: Path, build: Path, derived: list[str], withi
 
 def global_match_rank(py: str, rank_dir: Path, gprog: Path, workload: Path, within: str, timeout: int | None) -> dict:
     t0 = time.time()
-    rc = _run([py, "-m", "verity_vllm.check.match.global_match", "--gprog", str(gprog), "--workload", str(workload), "--oracle", str(rank_dir),
+    rc = _run([py, "-m", "verity_vllm.pipeline.cli", "global-match", "--gprog", str(gprog), "--workload", str(workload), "--oracle", str(rank_dir),
                "--out", str(rank_dir / "global_match.json"), "--within-step", within], rank_dir / "global_match.log", timeout)
     G = _load(rank_dir / "global_match.json") or {}
     return {"rc": rc, "seconds": round(time.time() - t0, 1), "verdict": G.get("verdict") if G else {124: "TIMEOUT"}.get(rc, f"rc={rc}"),
@@ -144,37 +145,46 @@ def links_for_rank(rank: int, build: Path, compare: dict, derived: list[str]) ->
     return out or None
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--capture", required=True, help="tp2_capture --record-collectives run dir: log.rank<r>.jsonl.gz, tokens.json, coll.rank<r>.jsonl")
-    ap.add_argument("--profile", required=True, help="rank profile module (verity_vllm.engine.profiles.<name>), e.g. derived_LLAMA32_1B_tp2 (profiles.generic, world = W)")
-    ap.add_argument("--build-rank0", default=None)
-    ap.add_argument("--build-rank1", default=None)
-    ap.add_argument("--derived-rank0", action="append", default=[], help="B>1: further request Programs of rank 0 (per served (LP, T))")
-    ap.add_argument("--derived-rank1", action="append", default=[])
-    ap.add_argument("--gprog-rank0", default=None, help="rank 0's GP-01 workload_program.json (GM-01 leg)")
-    ap.add_argument("--gprog-rank1", default=None)
-    # [lane vllm-tp-n] the world-generic spelling: --build-rank DIR repeated in rank order (world = count), --derived-rank R=DIR, --gprog-rank R=PATH
-    ap.add_argument("--build-rank", action="append", default=[], help="rank r's Build dir (first request Program), repeated in rank order; world = count")
-    ap.add_argument("--derived-rank", action="append", default=[], help="R=DIR: a further request Program of rank R (B>1)")
-    ap.add_argument("--gprog-rank", action="append", default=[], help="R=PATH: rank R's GP-01 workload_program.json")
-    ap.add_argument("--workload", default=None)
-    ap.add_argument("--tp2-match", default=None, help="tp2_match.json of the same run (its `provenance` = the stored-step value leg); REQUIRED for PASS")
-    ap.add_argument("--coll-dir", default=None, help="dir of coll.rank<r>.jsonl (default: --capture)")
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--python", default=sys.executable, help="interpreter for the fold / compare subprocesses (row_pod's PY312)")
-    ap.add_argument("--within-step", default="dag")
-    ap.add_argument("--timeout", type=int, default=None, help="per subprocess, seconds")
-    ap.add_argument("--world", type=int, default=2)
-    ap.add_argument("--rank-workers", type=int, default=0, help="ranks whose fold/compare/GM-01 legs run concurrently (0 = all ranks; each leg is its own subprocess: B8 1024/128 fold 26 GB + GM-01 14 GB per rank)")
-    a = ap.parse_args(argv)
+@dataclass(kw_only=True)
+class Options:
+    capture: str = option("--capture",
+                          help="tp2_capture --record-collectives run dir: log.rank<r>.jsonl.gz, tokens.json, coll.rank<r>.jsonl")
+    profile: str = option("--profile",
+                          help="rank profile module (verity_vllm.engine.profiles.<name>), e.g. derived_LLAMA32_1B_tp2 (profiles.generic, world = W)")
+    build_rank0: str | None = option("--build-rank0", default=None)
+    build_rank1: str | None = option("--build-rank1", default=None)
+    derived_rank0: list[str] = option("--derived-rank0", action="append", default=[],
+                                      help="B>1: further request Programs of rank 0 (per served (LP, T))")
+    derived_rank1: list[str] = option("--derived-rank1", action="append", default=[])
+    gprog_rank0: str | None = option("--gprog-rank0", default=None, help="rank 0's GP-01 workload_program.json (GM-01 leg)")
+    gprog_rank1: str | None = option("--gprog-rank1", default=None)
+    build_rank: list[str] = option("--build-rank", action="append", default=[],
+                                   help="rank r's Build dir (first request Program), repeated in rank order; world = count")
+    derived_rank: list[str] = option("--derived-rank", action="append", default=[],
+                                     help="R=DIR: a further request Program of rank R (B>1)")
+    gprog_rank: list[str] = option("--gprog-rank", action="append", default=[],
+                                   help="R=PATH: rank R's GP-01 workload_program.json")
+    workload: str | None = option("--workload", default=None)
+    tp2_match: str | None = option("--tp2-match", default=None,
+                                   help="tp2_match.json of the same run (its `provenance` = the stored-step value leg); REQUIRED for PASS")
+    coll_dir: str | None = option("--coll-dir", default=None, help="dir of coll.rank<r>.jsonl (default: --capture)")
+    out: str = option("--out")
+    python: str = option("--python", default=sys.executable,
+                         help="interpreter for the fold / compare subprocesses (row_pod's PY312)")
+    within_step: str = option("--within-step", default="dag")
+    timeout: int | None = option("--timeout", type=int, default=None, help="per subprocess, seconds")
+    world: int = option("--world", type=int, default=2)
+    rank_workers: int = option("--rank-workers", type=int, default=0,
+                               help="ranks whose fold/compare/GM-01 legs run concurrently (0 = all ranks; each leg is its own subprocess: B8 1024/128 fold 26 GB + GM-01 14 GB per rank)")
 
+
+def main(a: Options) -> int:
     cap, out = Path(a.capture), Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     coll_dir = Path(a.coll_dir) if a.coll_dir else cap
     if a.build_rank:
         if a.build_rank0 or a.build_rank1:
-            ap.error("give either --build-rank DIR (repeated, rank order) or --build-rank0/--build-rank1, not both")
+            raise UsageError("give either --build-rank DIR (repeated, rank order) or --build-rank0/--build-rank1, not both")
         a.world = len(a.build_rank)
         builds = {r: Path(d) for r, d in enumerate(a.build_rank)}
         derived = {r: [] for r in builds}
@@ -187,12 +197,12 @@ def main(argv: list[str] | None = None) -> int:
             gprog[int(r)] = g
     else:
         if not (a.build_rank0 and a.build_rank1):
-            ap.error("--build-rank DIR (repeated, rank order) or --build-rank0 and --build-rank1 required")
+            raise UsageError("--build-rank DIR (repeated, rank order) or --build-rank0 and --build-rank1 required")
         builds = {0: Path(a.build_rank0), 1: Path(a.build_rank1)}
         derived = {0: a.derived_rank0, 1: a.derived_rank1}
         gprog = {0: a.gprog_rank0, 1: a.gprog_rank1}
     if a.world < 2 or a.world != len(builds):
-        ap.error(f"world {a.world} vs {len(builds)} rank Builds")
+        raise UsageError(f"world {a.world} vs {len(builds)} rank Builds")
     t_start = time.time()
     res: dict[str, Any] = {"schema": SCHEMA, "capture": str(cap), "profile": a.profile, "world": a.world, "per_rank": {}, "problems": []}
 
@@ -319,7 +329,3 @@ def main(argv: list[str] | None = None) -> int:
     (out / "tp2_fold_match.json").write_text(json.dumps(res, indent=1, default=str) + "\n")
     print(f"[tp2foldmatch] {'PASS' if res['pass'] else 'FAIL'} legs={res['legs']} problems={res['problems'][:4]} {res['seconds']}s -> {out / 'tp2_fold_match.json'}", flush=True)
     return 0 if res["pass"] else 1
-
-
-if __name__ == "__main__":
-    sys.exit(main())

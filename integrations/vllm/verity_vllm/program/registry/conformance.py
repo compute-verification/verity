@@ -1,6 +1,6 @@
 """The conformance record of the registered library, as data.
 
-    python -m verity_vllm.program.registry.conformance [--out record.json]
+    verity-vllm conformance [--out record.json]
 
 One entry per registered definition (`Name_vN`): its status (`exact-model-tested` | `model-untested` |
 `not-yet-established` | `superseded`), the free-text qualification attached to the status, and — for the
@@ -13,11 +13,11 @@ The record is what typed-b1.md §3 states in prose; the two must agree (`tests/p
 
 from __future__ import annotations
 
-import argparse
 import json
-import sys
+from dataclasses import dataclass
 
 from verity.ir.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition
+from verity_vllm.config import option
 from verity_vllm.program.registry import b1, prims  # noqa: F401  (registration)
 
 STATUSES = ("exact-model-tested", "model-untested", "not-yet-established", "superseded",
@@ -111,10 +111,12 @@ def record() -> dict:
                 + [f"divergence recorded on {fid}" for fid in DIVERGENCES if any('captured' in x for x in DIVERGENCES[fid])]))}
 
 
-def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--out", default=None)
-    a = ap.parse_args(argv)
+@dataclass(frozen=True, kw_only=True)
+class Options:
+    out: str | None = option("--out", default=None)
+
+
+def main(a: Options) -> int:
     rec = record()
     text = json.dumps(rec, indent=1)
     if a.out:
@@ -122,7 +124,3 @@ def main(argv=None) -> int:
     else:
         print(text)
     return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())

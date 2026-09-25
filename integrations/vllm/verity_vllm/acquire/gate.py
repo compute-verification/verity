@@ -1,12 +1,12 @@
 """The CPU gate: the acquisition plan of one row, off-pod (the runtime tree read off the meta-instantiated model or a live engine), and
 plan-vs-plan comparison.
 
-    python -m verity_vllm.acquire.gate --manifest <manifest.json> --runtime <runtime_tree.json> --out <dir> [--row-id ID]
-                                       [--programs-root <row dir> | --program <derive dir> ...] [--against <acquisition_plan.json>]
-    python -m verity_vllm.acquire.gate compare-plans <a.json> <b.json> [--out plan_compare.json]
+    verity-vllm gate plan --manifest <manifest.json> --runtime <runtime_tree.json> --out <dir> [--row-id ID]
+                                            [--programs-root <row dir> | --program <derive dir> ...] [--against <acquisition_plan.json>]
+    verity-vllm gate compare-plans <a.json> <b.json> [--out plan_compare.json]
 
 `--runtime` is a `RuntimeTree` document: written by the GPU stage (`m1_capture` -> DIR/runtime_tree.json) or by
-`python -m verity_vllm.observe.runtime_tree` from a model instantiated on the meta device as Build does (pod: needs vLLM).  `--programs-root`
+`verity-vllm runtime-tree` from a model instantiated on the meta device as Build does (pod: needs vLLM).  `--programs-root`
 / `--program` name the Build's request Program dirs (`build_request*/`): the owning modules are read off their `runtime-correspondence/v1`
 record when they carry it (`correspondence.source = correspondence`), else off the manifest's v1 annotations -- the source is recorded in
 the plan.  Writes `acquisition_plan.json` (and `plan_compare.json` against another plan: every Value whose chosen site differs, listed);
@@ -14,14 +14,14 @@ exit 0 when the plan is complete (and identical to `--against`), 1 otherwise.
 """
 from __future__ import annotations
 
-import argparse
 import glob
 import json
 import os
-import sys
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
+from verity_vllm.config import option
 from verity_vllm.correspondence.reader_for_acquire import AcquireCorrespondence, RuntimeTree
 from verity_vllm.acquire.plan import AcquisitionPlan, acquisition_plan
 
@@ -69,14 +69,39 @@ def compare_plans(a: Mapping[str, Any], b: Mapping[str, Any]) -> dict[str, Any]:
             "identical": a.get("plan_digest") == b.get("plan_digest") and not differing and set(va) == set(vb)}
 
 
-def _main(argv: list[str] | None = None) -> int:
-    argv = sys.argv[1:] if argv is None else list(argv)
-    if argv[:1] == ["compare-plans"]:
-        ap = argparse.ArgumentParser(prog="verity_vllm.acquire.gate compare-plans")
-        ap.add_argument("a")
-        ap.add_argument("b")
-        ap.add_argument("--out", default=None)
-        c = ap.parse_args(argv[1:])
+@dataclass(frozen=True, kw_only=True)
+class PlanOptions:
+    """The acquisition plan of one row."""
+
+    manifest: str = option("--manifest", help="the row's required-value manifest (manifest.json)")
+    runtime: str = option("--runtime", help="the runtime tree document (runtime_tree.json)")
+    out: str = option("--out")
+    row_id: str | None = option("--row-id", default=None)
+    programs_root: str | None = option("--programs-root", default=None,
+                                       help="the row dir: its build_request*/ Programs' correspondence records are read (else the v1 annotations)")
+    program: list[str] = option("--program", action="append", default=[],
+                                help="a request Program dir (repeatable); alternative to --programs-root")
+    against: str | None = option("--against", default=None,
+                                 help="another acquisition_plan.json to compare Value by Value (-> plan_compare.json)")
+    cmd: str = field(default="plan", init=False)
+
+
+@dataclass(frozen=True, kw_only=True)
+class ComparePlansOptions:
+    """Plan-vs-plan comparison of two acquisition_plan.json documents."""
+
+    a: str = option("a")
+    b: str = option("b")
+    out: str | None = option("--out", default=None)
+    cmd: str = field(default="compare-plans", init=False)
+
+
+COMMANDS = {"plan": PlanOptions, "compare-plans": ComparePlansOptions}
+
+
+def main(a: PlanOptions | ComparePlansOptions) -> int:
+    if a.cmd == "compare-plans":
+        c = a
         cmp = compare_plans(json.loads(Path(c.a).read_text()), json.loads(Path(c.b).read_text()))
         if c.out:
             Path(c.out).write_text(json.dumps(cmp, indent=1) + "\n")
@@ -85,15 +110,6 @@ def _main(argv: list[str] | None = None) -> int:
         for dv in cmp["differing"][:40]:
             print(f"[gate]   {dv['value']}: a {dv['a']['chosen']} b {dv['b']['chosen']}", flush=True)
         return 0 if cmp["identical"] else 1
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--manifest", required=True, help="the row's required-value manifest (manifest.json)")
-    ap.add_argument("--runtime", required=True, help="the runtime tree document (runtime_tree.json)")
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--row-id", default=None)
-    ap.add_argument("--programs-root", default=None, help="the row dir: its build_request*/ Programs' correspondence records are read (else the v1 annotations)")
-    ap.add_argument("--program", action="append", default=[], help="a request Program dir (repeatable); alternative to --programs-root")
-    ap.add_argument("--against", default=None, help="another acquisition_plan.json to compare Value by Value (-> plan_compare.json)")
-    a = ap.parse_args(argv)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     man = json.loads(Path(a.manifest).read_text())
@@ -124,6 +140,3 @@ def _main(argv: list[str] | None = None) -> int:
             rc = 1
     return rc
 
-
-if __name__ == "__main__":
-    sys.exit(_main())

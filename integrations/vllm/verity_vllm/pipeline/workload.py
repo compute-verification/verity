@@ -1,6 +1,6 @@
 """sweep/workload.py — the ONE deterministic heterogeneous workload generator of the R12 sweep (BRIEF §12).
 
-    python -m verity_vllm.pipeline.workload --row-id <row-id> --hf-repo <repo> --revision <rev> --batch B --max-input I --max-output O \\
+    verity-vllm workload --row-id <row-id> --hf-repo <repo> --revision <rev> --batch B --max-input I --max-output O \\
         [--sampling greedy|stoch-t0.8-p0.95] [--arrivals none|staggered] [--tokenizer <snapshot dir or tokenizer.json>] [--case <ROLE>] \\
         [--lengths-only] [--check] --out workloads/<row-id>.json
 
@@ -26,7 +26,6 @@ others at seeded offsets over the first ~60 % of a full-length run; stored as `a
 """
 from __future__ import annotations
 
-import argparse
 import hashlib
 import json
 import re
@@ -37,8 +36,10 @@ from importlib import resources
 from pathlib import Path
 
 import numpy as np
+from dataclasses import dataclass
 
 from verity_vllm.config import CHECKPOINTS, WORKLOADS
+from verity_vllm.config import option
 
 CORPUS = resources.files("verity_vllm") / "engine" / "profiles" / "corpus_coverage.json"
 SCHEMA = "verity-vllm/workload/v1"
@@ -368,27 +369,32 @@ def case_for(hf_repo: str, revision: str, explicit: str | None) -> str | None:
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--row-id", required=True)
-    ap.add_argument("--hf-repo", required=True)
-    ap.add_argument("--revision", required=True)
-    ap.add_argument("--batch", type=int, required=True)
-    ap.add_argument("--max-input", type=int, required=True)
-    ap.add_argument("--max-output", type=int, required=True)
-    ap.add_argument("--sampling", default="greedy", choices=sorted(SAMPLING))
-    ap.add_argument("--arrivals", default="none", choices=["none", "staggered"])
-    ap.add_argument("--case", default=None, help="checkpoint registry role written to `case` (default: looked up by repo in checkpoints.json)")
-    ap.add_argument("--tokenizer", default=None, help="snapshot dir or tokenizer.json (default: HF_HOME/hub/models--<repo>/snapshots/<revision>)")
-    ap.add_argument("--lengths-only", action="store_true", help="emit the shape plan without text / token ids (no tokenizer needed)")
-    ap.add_argument("--check", action="store_true", help="run the §12 self-check on the plan; exit 1 on a violation")
-    ap.add_argument("--out", default=None, help="default workloads/<row-id>.json (relative to the repo)")
-    ap.add_argument("--target", default=None,
-                    help="[R13 hopper] TargetProfile overrides of the row as JSON (e.g. '{\"flash_attn_version\": 2}' for an `…__bi-eager-fa2` row): written "
-                         "to the manifest's `target` block (every GPU stage builds its engine for it; `TargetProfile.engine_args()` is merged into "
-                         "`engine_args_required`) and `sweep.execution` = the profile's execution label")
-    a = ap.parse_args(argv)
+@dataclass(frozen=True, kw_only=True)
+class Options:
+    row_id: str = option("--row-id")
+    hf_repo: str = option("--hf-repo")
+    revision: str = option("--revision")
+    batch: int = option("--batch", type=int)
+    max_input: int = option("--max-input", type=int)
+    max_output: int = option("--max-output", type=int)
+    sampling: str = option("--sampling", default="greedy", choices=sorted(SAMPLING))
+    arrivals: str = option("--arrivals", default="none", choices=["none", "staggered"])
+    case: str | None = option("--case", default=None,
+                              help="checkpoint registry role written to `case` (default: looked up by repo in checkpoints.json)")
+    tokenizer: str | None = option("--tokenizer", default=None,
+                                   help="snapshot dir or tokenizer.json (default: HF_HOME/hub/models--<repo>/snapshots/<revision>)")
+    lengths_only: bool = option("--lengths-only", default=False, action="store_true",
+                                help="emit the shape plan without text / token ids (no tokenizer needed)")
+    check: bool = option("--check", default=False, action="store_true",
+                         help="run the §12 self-check on the plan; exit 1 on a violation")
+    out: str | None = option("--out", default=None, help="default workloads/<row-id>.json (relative to the repo)")
+    target: str | None = option("--target", default=None,
+                                help="[R13 hopper] TargetProfile overrides of the row as JSON (e.g. '{\"flash_attn_version\": 2}' for an `…__bi-eager-fa2` row): written "
+                                "to the manifest's `target` block (every GPU stage builds its engine for it; `TargetProfile.engine_args()` is merged into "
+                                "`engine_args_required`) and `sweep.execution` = the profile's execution label")
 
+
+def main(a: Options) -> int:
     p = plan(a.row_id, a.batch, a.max_input, a.max_output, sampling=a.sampling, arrivals=a.arrivals)
     bad = check_plan(p)
     if a.check:
@@ -429,7 +435,3 @@ def main(argv: list[str] | None = None) -> int:
     out.write_text(json.dumps(doc, indent=1, ensure_ascii=False) + "\n")
     print(f"{out}: {doc['note'][:220]}", file=sys.stderr)
     return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())

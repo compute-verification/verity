@@ -18,15 +18,17 @@ fold dir by the record's producer and read by the fast loader after checking the
 authenticated the sidecar's content, and a forged sidecar with the true source hashes was accepted (M-0497).  Withdrawn; no reader of a
 sidecar exists.  The compact form here is the file of record itself.
 
-    python -m verity_vllm.program.instances_form convert --form progressions|runs SRC DST
-    python -m verity_vllm.program.instances_form form FILE...
+    verity-vllm instances-form convert --form progressions|runs SRC DST
+    verity-vllm instances-form form FILE...
 """
 from __future__ import annotations
 
 import hashlib
 import json
 import os
-import sys
+from dataclasses import dataclass, field
+
+from verity_vllm.config import option
 
 INSTANCES_FORMS = ("runs", "progressions")
 SCHEMA_V1 = "verity-gen/instances/v1"
@@ -92,18 +94,29 @@ def instances_form_of(path: str) -> str:
     return "runs"
 
 
-def main(argv: list[str] | None = None) -> int:
-    import argparse
+@dataclass(frozen=True, kw_only=True)
+class ConvertOptions:
+    "rewrite SRC instances.jsonl as DST in --form runs|progressions (lossless)"
+
+    form: str = option("--form", choices=INSTANCES_FORMS)
+    src: str = option("src")
+    dst: str = option("dst")
+    cmd: str = field(default="convert", init=False)
+
+
+@dataclass(frozen=True, kw_only=True)
+class FormOptions:
+    "print the stored form each FILE's header declares"
+
+    file: list[str] = option("file", nargs="+")
+    cmd: str = field(default="form", init=False)
+
+
+COMMANDS = {"convert": ConvertOptions, "form": FormOptions}
+
+
+def main(a: ConvertOptions | FormOptions) -> int:
     import time
-    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    sub = ap.add_subparsers(dest="cmd", required=True)
-    cv = sub.add_parser("convert", help="rewrite SRC instances.jsonl as DST in --form runs|progressions (lossless)")
-    cv.add_argument("--form", choices=INSTANCES_FORMS, required=True)
-    cv.add_argument("src")
-    cv.add_argument("dst")
-    fm = sub.add_parser("form", help="print the stored form each FILE's header declares")
-    fm.add_argument("file", nargs="+")
-    a = ap.parse_args(argv)
     if a.cmd == "convert":
         t0 = time.time()
         res = convert_instances(a.src, a.dst, a.form)
@@ -113,7 +126,3 @@ def main(argv: list[str] | None = None) -> int:
     for p in a.file:
         print(json.dumps({"file": p, "operand_refs_form": instances_form_of(p), "bytes": os.path.getsize(p)}))
     return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())
