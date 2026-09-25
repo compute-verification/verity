@@ -58,6 +58,11 @@ K, GROUP, GROUPS, RADIX, POSITIONS = R.K, R.GROUP, R.GROUPS, R.RADIX, R.POSITION
 STEPS = R.STEPS
 MODEL = "blackwell_sm120_nvf4"
 RANGE_MAX = 16               # the GKR prover's implicit range tables R1 .. R16
+#: The LogUp tree has 2^ceil(log2(units . queries + table rows)) leaves; at K = 1536 (98304 units) 226 queries per unit need 2^25,
+#: <= 169 fit 2^24 (half the LogUp GKR).  Bits as ``b b = b`` product wires instead of R1 queries (46 per unit), and pairs of
+#: narrow range queries as one query ``(x + 2^b y, x, y)`` into a ``2^2b``-row table ``PR<b>`` (14 per unit): 166 queries.
+BOOL_QUADRATIC = True
+PAIRED: tuple[int, ...] = (3, 5, 6, 7)
 
 
 def _pair_prod(k: int) -> tuple[int, int]:
@@ -162,8 +167,12 @@ class GkrCtx(LigeroCtx):
             raise CompileError(f"{self.scope}.{name}: query interval {iv} vs table [{lo}, {hi}) spans p")
 
     def _range(self, name: str, e: Expr, b: int) -> None:
-        """``e`` in ``[0, 2^b)`` by lookups."""
+        """``e`` in ``[0, 2^b)`` by lookups (``b = 1``: ``e e = e``, a product wire, when ``BOOL_QUADRATIC``)."""
         self._define(e, 0, 2**b)
+        if b == 1 and BOOL_QUADRATIC:
+            self.sys.quadratic.append(Quadratic(f"{self.scope}.{name}", e, e, e))
+            self._learn(e, 0, 2)
+            return
         self._audit_query(name, e, 0, 2**b)
         if b <= RANGE_MAX:
             self.ranges.append((b, self._colform(e, name)))
@@ -654,6 +663,16 @@ def export_circuit(ctx: GkrCtx, merge: bool = True) -> Exported:
         qs.append((f"R{b}", [e]))
     listed: dict[str, list[tuple[int, ...]]] = {
         t: [(k, *(vals[i] for vals, _ in rec.cols)) for i, k in enumerate(rec.keys)] for t, rec in tables.items()}
+    for b in PAIRED:
+        # (x + 2^b y, x, y) is a row of PR<b> iff x, y in [0, 2^b): the key column is unique, as logup.multiplicities needs
+        at = [i for i, (t, _) in enumerate(qs) if t == f"R{b}"]
+        for i, j in zip(at[0::2], at[1::2]):
+            x, y = qs[i][1][0], qs[j][1][0]
+            qs[i] = (f"PR{b}", [x + y * 2**b, x, y])
+            qs[j] = None
+        if len(at) > 1:
+            listed[f"PR{b}"] = [(x + y * 2**b, x, y) for y in range(2**b) for x in range(2**b)]
+        qs = [q for q in qs if q is not None]
     if merge:
         qs, listed = _merge_tables(ctx, qs, listed)
     lines = [f"ncols {ncols}", f"nwires {nw}", "one 0"] + [f"col {i} {n}" for i, n in enumerate(names)]
