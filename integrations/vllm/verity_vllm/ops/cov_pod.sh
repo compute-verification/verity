@@ -29,7 +29,7 @@ K=${COV_K:-3}; PAR=${COV_PAR:-8}; SNAP_MB=${COV_SNAP_MB:-256}; SNAP_MB_MOE=${COV
 # (evidence rule from the 2026-09-17 window: a recheck of a copy must not publish over the original).
 VOL=${COV_VOL:-/vol/cp/cov}
 say() { echo "[cov_pod] $(date -u +%FT%TZ) $*"; }
-drv() { $PY312 -m verity_vllm.pipeline.match --python-gpu $PY311 --python-cpu $PY312 --cards-dir "$CARDS" "$@"; }
+drv() { "${PY312%/*}/verity-vllm" match --python-gpu $PY311 --python-cpu $PY312 --cards-dir "$CARDS" "$@"; }
 
 ckpt_dir() {  # <case> -> the seeded HF snapshot dir of the role (checkpoints.json local_path)
   $PY312 - "$1" <<'EOF'
@@ -163,7 +163,7 @@ holdouts() {  # <primary-run> <holdout-run>...: the replicate runs' gates.json a
     [ -f "$OUT/$h/gates.json" ] || { say "holdouts $n: $h has no gates.json"; return 1; }
     ln -sfn "$OUT/$h" "$hd/$h"
   done
-  $PY312 -m verity_vllm.properties.holdout --assemble "$hd" --out "$OUT/$n/holdouts.json" > "$LOGS/$n.holdouts.log" 2>&1 || say "holdouts $n: assemble rc=$?"
+  "${PY312%/*}/verity-vllm" holdout --assemble "$hd" --out "$OUT/$n/holdouts.json" > "$LOGS/$n.holdouts.log" 2>&1 || say "holdouts $n: assemble rc=$?"
   drv --run-dir "$OUT/$n" --phase cpu --skip resolve,census_reconcile,nonint_compare,compare,fold,fold_2,fold_other,root_policy,golden,wiring,replay \
       >> "$LOGS/$n.holdouts.log" 2>&1
   local rc=$?
