@@ -145,7 +145,8 @@ def test_parity_reports_a_difference(store: LocalStore) -> None:
 
 def committed(store: LocalStore, leaf: str = "blake3", *, t_total: float = 0.4, commit: float = 0.6, protocol: bool = True,
               custody: bool = True, security: dict | None = None, verified_by: str | None = VERIFIER, labels: list[tuple] = (),
-              B: int = 4096, manifest: str | None = None, setup: float | None = None, interaction: dict | None = None) -> str:
+              B: int = 4096, manifest: str | None = None, setup: float | None = None, interaction: dict | None = None,
+              backend: str | None = None, proof_class: str | None = None) -> str:
     """A B-Ligero in-proof-hash result on the 4090 line, measured under the protocol, with its commitment time and preserved dumps."""
 
     doc = hashed(leaf, t_total=t_total, security=security)
@@ -160,6 +161,12 @@ def committed(store: LocalStore, leaf: str = "blake3", *, t_total: float = 0.4, 
         unit = {"rounds.sequential_depth": "count", "net.bytes_out": "B", "net.bytes_in": "B", "net.rtt_ms": "ms"}.get(name, "s")
         doc["measurements"].append({"name": name, "value": value, "unit": unit})
     fp = doc["workload_fingerprint"]
+    if backend is not None:
+        fp["software"]["backend"]["name"] = backend
+    if proof_class is not None:
+        fp["proof_class"] = proof_class
+        if proof_class.startswith("NON_ZK"):
+            fp["zk_mode"] = "none"
     if B != 4096:
         fp.update(B=B, instances={**fp["instances"], "range": [0, B], "manifest_sha256": V.STREAMS[FP8_ADA_MMA.name](B)})
         doc["measurements"] = [m for m in doc["measurements"] if not m["name"].startswith(("rate.", "overhead.", "vu."))]
@@ -609,3 +616,20 @@ def test_route_a_stays_in_the_a_gkr_column_with_a_note() -> None:
     assert V.candidate_for(route_a).id == "A-GKR"
     md = V.render_markdown(V.Views(rules=V.SPEC))
     assert f"| **A-GKR** |  | " in md and V.FAMILY_NOTES["A-GKR"] in md and V.FAMILY_NOTES["Flock"] in md
+
+
+FLOCK_LIVE = {"rounds.sequential_depth": 1070, "net.bytes_out": 922_000.0, "net.bytes_in": 34_240.0, "net.rtt_ms": 0.9,
+              "rtt_method": "median of the session's coin round trips (same datacenter)", "net.wait_seconds": 1.071}
+
+
+def test_a_pure_flock_record_fills_the_flock_column_without_renderer_changes(store: LocalStore) -> None:
+    """The record contract agreed with lane flock-backend: backend name starting ``flock``, a complete class, the line's GPU SKU,
+    whole-proof bound, protocol + plateau sweep, commitment timed, the interaction record, preserved dumps, a non-producer's
+    verification label.  It lands in the Flock column on the keyed-BLAKE3 row line, provisional until red-team-flock grants it."""
+    art = committed(store, t_total=0.4, commit=0.6, interaction=FLOCK_LIVE, backend="flock union, flock-128-r2 (backends/flock)",
+                    proof_class="NON_ZK_PROOF", security={"target": -128, "achieved_log2": -195.5})
+    views = V.build(store)
+    cell = line(views)["cells"]["Flock"]
+    assert cell is not None and cell.artifact == art and cell.configuration == V.FLOCK_CONFIG.id and cell.provisional
+    assert line(views)["cells"]["B-Ligero"] is None
+    assert cell.throughput["interaction_s"] == pytest.approx(1070 * 0.001 + (922_000 + 34_240) * 8 / 10e9)
