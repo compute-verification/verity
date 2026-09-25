@@ -457,21 +457,37 @@ class HashedRelationRunner(RelationChainRunner):
     def commit(self, *, x_rows, w_cols, y_words, bindings, cache=None, tile=None):
         """Build (or load) the three trees of the committed set; ``tile = (nx, nw)`` records the sharing layout."""
         from . import hashauth, hashchain
+        t0 = time.perf_counter()
         x_rows, w_cols = np.asarray(x_rows, dtype=np.int64), np.asarray(w_cols, dtype=np.int64)
+        t1 = time.perf_counter()
         self.trees, self.digests, cached = hashauth.load_or_build_trees(
             cache, x_rows=x_rows, w_cols=w_cols,
             y_words=np.asarray(y_words, dtype=np.int64), word_bits=self.hr.word_bits, y_bits=self.rel.y_bits, bindings=bindings,
             leaf=self.leaf)
         self.tile = tile
         # the chain states of every committed row, once (the prover's cost of hashing; gathered per sub-batch in prove_vus)
-        t0 = time.perf_counter()
+        t2 = time.perf_counter()
         self.rows = {"a": x_rows, "b": w_cols}
         self.sponges = {nm: hashchain.row_chain(self.hr, self.rows[nm], role, self.device) for _, nm, role in hashchain.ROLES}
         if str(self.device).startswith("cuda"):
             torch.cuda.synchronize()
-        self.sponge_seconds = time.perf_counter() - t0
+        t3 = time.perf_counter()
+        self.sponge_seconds = t3 - t2
         self._committed_digests()
+        self.commit_timings = {"rows": t1 - t0, "trees": t2 - t1, "chain": t3 - t2, "host": time.perf_counter() - t3}
         return cached
+
+    def commit_evidence(self) -> dict:
+        """What the committed set IS, byte for byte: the three tree references (bindings, counts, roots), the sha256 of every
+        tree level, of the published row digests and of the prover's precomputed chain states (``<i8`` bytes)."""
+        sha = lambda a: hashlib.sha256(np.ascontiguousarray(np.asarray(a, dtype=np.int64)).astype("<i8").tobytes()).hexdigest()  # noqa: E731
+        out = {"trees": {n: {**t.ref.to_json(), "levels_sha256": hashlib.sha256(b"".join(np.ascontiguousarray(lv).tobytes()
+                                                                                          for lv in t.levels)).hexdigest()}
+                         for n, t in self.trees.items()},
+               "digests_sha256": {n: sha(d) for n, d in self.digests.items()},
+               "chain_sha256": {nm: [sha(x.cpu().numpy()) for x in sp[:2]] for nm, sp in self.sponges.items()}}
+        out["sha256"] = hashlib.sha256(json.dumps(out, sort_keys=True).encode()).hexdigest()
+        return out
 
     def _committed_digests(self):
         """Host copies of the committed rows' digests (public: the leaves of the x / W trees) for the statement tables
@@ -1941,14 +1957,27 @@ def bench_vu_rel(args, rel: Relation) -> int:
     inst_digest = tile_digest(rel, *tile) if tile is not None else instances_digest(rel, total_vus, root=root)
     print(f"{total_vus} {'frozen ' + rel.frozen_tier if rel.frozen_tier else 'synthetic'} VUs (recorded accumulators) in {time.perf_counter() - t0:.1f}s")
     commit_seconds = 0.0
+    commit_runs: list[tuple[float, dict]] = []
+    commit_ev = None
     if hashed:
-        t0 = time.perf_counter()
-        R.commit_vus(data, dataset=rel.instances_dataset, tier=rel.instances_tier, manifest_sha256=inst_digest,
-                     cache=getattr(args, "auth_cache", None), tile=tile, x_rows=x_rows, w_cols=w_cols)
-        commit_seconds = time.perf_counter() - t0
+        # --commit-reps N: the whole commitment (row digests, the three trees, the prover's chain states) built from scratch
+        # 1 + N times; the first call (cold) stays relation.hash.commit_seconds, commit.seconds is the median of the N
+        # (the per-batch cost of a committer that has run before), every call's evidence must be identical
+        for ci in range(1 + max(0, int(getattr(args, "commit_reps", 0) or 0))):
+            t0 = time.perf_counter()
+            R.commit_vus(data, dataset=rel.instances_dataset, tier=rel.instances_tier, manifest_sha256=inst_digest,
+                         cache=(getattr(args, "auth_cache", None) if ci == 0 else None), tile=tile, x_rows=x_rows, w_cols=w_cols)
+            commit_runs.append((time.perf_counter() - t0, dict(getattr(R, "commit_timings", {}))))
+            ev = R.commit_evidence()
+            assert commit_ev is None or ev["sha256"] == commit_ev["sha256"], "commitment differs between two builds of one set"
+            commit_ev = ev
+            print(f"commit {ci}: {commit_runs[-1][0]:.3f}s {json.dumps({k_: round(v_, 4) for k_, v_ in commit_runs[-1][1].items()})}")
+        commit_seconds = commit_runs[0][0]
         print(f"committed: x tree {R.trees['a'].count} rows, W tree {R.trees['b'].count} columns, y tree {R.trees['y'].count} words "
               f"({R.leaf.schema} + SHA-256) in {commit_seconds:.1f}s (row digests on {args.device}: {R.sponge_seconds:.2f}s); "
-              f"roots a={R.trees['a'].root.hex()[:16]} b={R.trees['b'].root.hex()[:16]}")
+              f"roots a={R.trees['a'].root.hex()[:16]} b={R.trees['b'].root.hex()[:16]}; evidence sha256 {commit_ev['sha256']}")
+        if getattr(args, "commit_evidence", None):
+            Path(os.path.expandvars(args.commit_evidence)).write_text(json.dumps(commit_ev, indent=1, sort_keys=True))
     lay = R.layout(per_proof)
     l = lay.l
     cfg = R.cfg(l)
@@ -2240,6 +2269,16 @@ def bench_vu_rel(args, rel: Relation) -> int:
                  contract.measurement("relation.hash.auth_openings_seconds", med.get("auth_openings", 0.0), "s"),
                  contract.measurement("relation.hash.committed_x_rows", R.trees["a"].count, "count"),
                  contract.measurement("relation.hash.committed_w_cols", R.trees["b"].count, "count")]
+        # the commitment-building bucket (kb/TABLES.md "Commitment time counts"): NOT a t.* bucket (outside t.total, which
+        # stays the prover's), reported on its own and end to end; the breakdown is the median call's
+        steady = commit_runs[1:] or commit_runs
+        c_med = sorted(steady, key=lambda r: r[0])[(len(steady) - 1) // 2]
+        meas += [contract.measurement("commit.seconds", c_med[0], "s"),
+                 contract.measurement("commit.cold_seconds", commit_runs[0][0], "s"),
+                 contract.measurement("commit.reps", len(steady), "count"),
+                 *(contract.measurement(f"commit.{k_}_seconds", v_, "s") for k_, v_ in c_med[1].items()),
+                 contract.measurement("e2e.seconds", c_med[0] + total, "s"),
+                 contract.measurement("e2e.cold_seconds", commit_runs[0][0] + total, "s")]
     if shared:
         meas += [contract.measurement("relation.share.g_seconds", med.get("g_total", 0.0), "s"),
                  contract.measurement("relation.share.h_seconds", med.get("h_total", 0.0), "s"),
@@ -2267,6 +2306,10 @@ def bench_vu_rel(args, rel: Relation) -> int:
                "warm-up sub-batch")
     status = "passed"
     evidence = {"soundness": snd, "batch": batch,
+                **({"commit": {"runs": [{"seconds": s_, **b_} for s_, b_ in commit_runs], "evidence": commit_ev,
+                               "rule": "commit.seconds = median over calls 1..N of the full commitment built from scratch "
+                                       "(--commit-reps N; call 0 = cold, relation.hash.commit_seconds); e2e.seconds = "
+                                       "commit.seconds + t.total"}} if hashed else {}),
                 "reps": [{"prover_total": r[0]["total"] + r[0]["hints_host"], "verifier": r[1]} for r in runs],
                 "phase_rep": {"index": med_rep, "rule": "t.total and the t.* buckets are this rep's (the median prover_total of "
                                                         "reps); verifier.seconds is the median over the reps"},
