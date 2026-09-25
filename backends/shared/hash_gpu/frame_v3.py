@@ -131,6 +131,32 @@ void fv3_node(const u32* __restrict__ mid, u64 done, const u8* __restrict__ tail
     sha_final(s, out + i * 32);
 }
 
+// vllm-v1 level (verity.commitments.leaves.levels): out i = H(node tag, in 2i, in 2i+1), or H(lift tag, in 2i) for an odd
+// trailing child; H = SHA-256(u32be(len tag) || tag || (u64be(len p) || p)*), the heads carry u32be(len tag) || tag
+extern "C" __global__
+void vllm_level(const u32* __restrict__ nmid, u64 ndone, const u8* __restrict__ ntail, int ntail_len,
+                const u32* __restrict__ lmid, u64 ldone, const u8* __restrict__ ltail, int ltail_len,
+                const u8* __restrict__ in, long long n_in, u8* __restrict__ out)
+{
+    long long i = (long long)blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= (n_in + 1) / 2) return;
+    Sha s;
+    if (2 * i + 1 < n_in) {
+        sha_init(s, nmid, ndone);
+        sha_bytes(s, ntail, ntail_len);
+        sha_be(s, 32ull, 8);
+        sha_bytes(s, in + i * 64, 32);
+        sha_be(s, 32ull, 8);
+        sha_bytes(s, in + i * 64 + 32, 32);
+    } else {
+        sha_init(s, lmid, ldone);
+        sha_bytes(s, ltail, ltail_len);
+        sha_be(s, 32ull, 8);
+        sha_bytes(s, in + i * 64, 32);
+    }
+    sha_final(s, out + i * 32);
+}
+
 // row i: SHA-256(prefix || row bytes); the head / tail carry the prefix, rows are nbytes each
 extern "C" __global__
 void sha256_rows(const u32* __restrict__ mid, u64 done, const u8* __restrict__ tail, int tail_len, const u8* __restrict__ rows,
@@ -162,8 +188,9 @@ void sha256_rows(const u32* __restrict__ mid, u64 done, const u8* __restrict__ t
 _B3_SRC = blake3_cuda.SRC.split('// thread (x, y)')[0] + r"""
 #define KEYED_HASH 16u
 
-// thread (row r, chunk c): the keyed chunk chaining value of rows (N, nbytes) bytes (nbytes a multiple of 64);
-// block_out (N, nb, 8) optional: the chaining value after every block (the chain witness of leaf/blake3.py)
+// thread (row r, chunk c): the keyed chunk chaining value of rows (N, nbytes) bytes; a one-chunk row is finished here
+// (ROOT on its last block, the CV is the digest).  block_out (N, nb, 8) optional, nbytes a multiple of 64: the chaining
+// value after every block (the chain witness of leaf/blake3.py)
 extern "C" __global__
 void b3k_chunks(const unsigned char* __restrict__ rows, long long nbytes, int nch, const u32* __restrict__ key, long long n,
                 u32* __restrict__ cvs, u32* __restrict__ block_out)
@@ -171,19 +198,30 @@ void b3k_chunks(const unsigned char* __restrict__ rows, long long nbytes, int nc
     long long t = (long long)blockIdx.x * blockDim.x + threadIdx.x;
     if (t >= n * nch) return;
     long long r = t / nch; int c = (int)(t % nch);
-    long long lo = (long long)c * 1024, hi = lo + 1024 < nbytes ? lo + 1024 : nbytes;
-    int nblk = (int)((hi - lo) / 64);
+    long long lo = (long long)c * 1024, len = nbytes - lo < 1024 ? nbytes - lo : 1024;
+    int nblk = len > 0 ? (int)((len + 63) / 64) : 1;
     u32 cv[8];
     #pragma unroll
     for (int j = 0; j < 8; ++j) cv[j] = key[j];
-    const uint4* p = (const uint4*)(rows + r * nbytes + lo);
+    const unsigned char* base = rows + r * nbytes + lo;
+    const uint4* p = (const uint4*)base;
+    bool aligned = (((unsigned long long)base) & 15ull) == 0ull;
     long long nb = nbytes / 64;
     for (int b = 0; b < nblk; ++b) {
+        long long rem = len - 64ll * b;
+        u32 blen = rem >= 64 ? 64u : (rem > 0 ? (u32)rem : 0u);
         u32 m[16];
-        #pragma unroll
-        for (int q = 0; q < 4; ++q) { uint4 v = p[4 * b + q]; m[4*q] = v.x; m[4*q+1] = v.y; m[4*q+2] = v.z; m[4*q+3] = v.w; }
-        u32 fl = KEYED_HASH | (b == 0 ? CHUNK_START : 0u) | (b == nblk - 1 ? CHUNK_END : 0u);
-        compress(cv, m, (u64)c, 64u, fl);
+        if (blen == 64u && aligned) {
+            #pragma unroll
+            for (int q = 0; q < 4; ++q) { uint4 v = p[4 * b + q]; m[4*q] = v.x; m[4*q+1] = v.y; m[4*q+2] = v.z; m[4*q+3] = v.w; }
+        } else {
+            #pragma unroll
+            for (int q = 0; q < 16; ++q) m[q] = 0u;
+            for (u32 k = 0; k < blen; ++k) m[k >> 2] |= ((u32)base[64 * b + k]) << (8 * (k & 3));
+        }
+        u32 fl = KEYED_HASH | (b == 0 ? CHUNK_START : 0u) | (b == nblk - 1 ? CHUNK_END : 0u)
+                 | (nch == 1 && b == nblk - 1 ? ROOT : 0u);
+        compress(cv, m, (u64)c, blen, fl);
         if (block_out) {
             u32* o = block_out + (r * nb + (long long)c * 16 + b) * 8;
             #pragma unroll
@@ -201,6 +239,11 @@ void b3k_root(const u32* __restrict__ cvs, int nch, const u32* __restrict__ key,
 {
     long long r = (long long)blockIdx.x * blockDim.x + threadIdx.x;
     if (r >= n) return;
+    if (nch == 1) {
+        #pragma unroll
+        for (int j = 0; j < 8; ++j) root[r * 8 + j] = cvs[r * 8 + j];
+        return;
+    }
     u32 st[8][8];                  // a stack of pending subtree CVs (BLAKE3's incremental fold), nch <= 2^7
     int sp = 0;
     for (int c = 0; c < nch; ++c) {
@@ -311,6 +354,14 @@ def head(tag: bytes, domain_id: bytes, *parts: bytes) -> bytes:
     return FRAME + len(tag).to_bytes(4, "big") + tag + part(domain_id) + b"".join(part(p) for p in parts)
 
 
+VLLM_NODE_TAG, VLLM_LIFT_TAG = b"verity-vllm/node/v1", b"verity-vllm/lift/v1"
+
+
+def vllm_head(tag: bytes) -> bytes:
+    """``verity.commitments.leaves.H``'s head: ``u32be(len tag) || tag`` (no frame)."""
+    return len(tag).to_bytes(4, "big") + tag
+
+
 class _Head:
     """A launch's head on the device: the midstate, the byte count it covers, the tail bytes."""
 
@@ -378,16 +429,16 @@ def nodes_into(out, domain_id: bytes, level: int, children, block: int = 256) ->
 
 
 class Tree:
-    """A frame-v3 tree on the device: ``dev`` (2 width - 1, 32) uint8, level ``l`` at ``offsets[l]`` (leaves first)."""
+    """A tree on the device: ``dev`` (sum of ``sizes``, 32) uint8, level ``l`` (``sizes[l]`` nodes) at ``offsets[l]``,
+    leaves first, the root last."""
 
     EAGER_BYTES = 1 << 22          # copy to the host at build time up to this size (row / output trees), else on first use
 
-    def __init__(self, dev, depth: int):
-        self.dev, self.depth = dev, depth
-        width = 1 << depth
+    def __init__(self, dev, sizes: list[int]):
+        self.dev, self.sizes, self.depth = dev, list(sizes), len(sizes) - 1
         self.offsets = [0]
-        for lv in range(depth):
-            self.offsets.append(self.offsets[-1] + (width >> lv))
+        for s in self.sizes[:-1]:
+            self.offsets.append(self.offsets[-1] + s)
         self._host = None
         if dev.nbytes <= self.EAGER_BYTES:
             self.host()
@@ -397,7 +448,7 @@ class Tree:
         return (self._host[-1] if self._host is not None else cp.asnumpy(self.dev[-1])).tobytes()
 
     def level_dev(self, lv: int):
-        return self.dev[self.offsets[lv]:self.offsets[lv] + ((1 << self.depth) >> lv)]
+        return self.dev[self.offsets[lv]:self.offsets[lv] + self.sizes[lv]]
 
     def host(self) -> np.ndarray:
         if self._host is None:
@@ -407,24 +458,58 @@ class Tree:
     @property
     def levels(self) -> list[np.ndarray]:
         h = self.host()
-        return [h[self.offsets[lv]:self.offsets[lv] + ((1 << self.depth) >> lv)] for lv in range(self.depth + 1)]
+        return [h[o:o + s] for o, s in zip(self.offsets, self.sizes)]
 
 
 def build_tree(domain_id: bytes, count: int, schema: str, values, *, vmode: int = VALUE_BYTES, vlen: int | None = None,
                block: int = 256) -> Tree:
     """The frame-v3 tree of ``count`` leaves (ranks ``0..count``, positions = ranks) with pads to ``2^depth`` and the
     nodes level by level, all on the device (one launch per level)."""
+    dev = cp.empty((2 * (1 << depth_of(count)) - 1, 32), dtype=cp.uint8)
+    leaves_into(dev[:count], domain_id, schema, values, vmode=vmode, vlen=vlen, block=block)
+    return _frame_levels(dev, domain_id, count, block)
+
+
+def frame_tree(domain_id: bytes, leaves, block: int = 256) -> Tree:
+    """The frame-v3 tree over given leaf digests ``leaves`` (count, 32) uint8 on the device (rank order)."""
+    count = int(leaves.shape[0])
+    dev = cp.empty((2 * (1 << depth_of(count)) - 1, 32), dtype=cp.uint8)
+    dev[:count] = leaves
+    return _frame_levels(dev, domain_id, count, block)
+
+
+def _frame_levels(dev, domain_id: bytes, count: int, block: int) -> Tree:
     depth = depth_of(count)
     width = 1 << depth
-    dev = cp.empty((2 * width - 1, 32), dtype=cp.uint8)
-    leaves_into(dev[:count], domain_id, schema, values, vmode=vmode, vlen=vlen, block=block)
     pads_into(dev[count:width], domain_id, count, block=block)
     off = 0
     for lv in range(depth):
         n = width >> (lv + 1)
         nodes_into(dev[off + (width >> lv):off + (width >> lv) + n], domain_id, lv, dev[off:off + (width >> lv)], block=block)
         off += width >> lv
-    return Tree(dev, depth)
+    return Tree(dev, [width >> lv for lv in range(depth + 1)])
+
+
+def vllm_tree(leaves, block: int = 256) -> Tree:
+    """The ``vllm-v1`` tree (``verity.commitments.leaves.levels``: pairs hashed with the node tag, an odd trailing child
+    lifted, no padding) over ``leaves`` (n >= 1, 32) uint8 leaf digests on the device, level by level."""
+    n = int(leaves.shape[0])
+    if n == 0:
+        raise ValueError("an empty vllm-v1 tree is its empty root, not a tree")
+    sizes = [n]
+    while sizes[-1] > 1:
+        sizes.append((sizes[-1] + 1) // 2)
+    dev = cp.empty((sum(sizes), 32), dtype=cp.uint8)
+    dev[:n] = leaves
+    hn, hl = _Head.of(vllm_head(VLLM_NODE_TAG)), _Head.of(vllm_head(VLLM_LIFT_TAG))
+    off = 0
+    for lv in range(len(sizes) - 1):
+        m = sizes[lv + 1]
+        _fn("sha", "vllm_level")(_grid(m, block), (block,), (hn.mid, hn.done, hn.tail, hn.tail_len, hl.mid, hl.done, hl.tail,
+                                                             hl.tail_len, dev[off:off + sizes[lv]], np.int64(sizes[lv]),
+                                                             dev[off + sizes[lv]:off + sizes[lv] + m]))
+        off += sizes[lv]
+    return Tree(dev, sizes)
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -432,16 +517,18 @@ def build_tree(domain_id: bytes, count: int, schema: str, values, *, vmode: int 
 # ---------------------------------------------------------------------------------------------------------------------
 
 def blake3_keyed_rows(rows, key: bytes, *, block_out: bool = False, block: int = 128):
-    """Keyed BLAKE3 of every row of ``rows`` (N, nbytes) uint8 on the device (nbytes a multiple of 64, at least 2 chunks):
-    ``(cvs (N, n_chunks, 8) uint32 chunk chaining values, roots (N, 8) uint32 little-endian words = the 32-byte digest
-    [, block_out (N, n_blocks, 8) the chaining value after every block])``."""
+    """Keyed BLAKE3 of every row of ``rows`` (N, nbytes) uint8 on the device: ``(cvs (N, n_chunks, 8) uint32 chunk
+    chaining values (one chunk: the digest), roots (N, 8) uint32 little-endian words = the 32-byte digest [, block_out
+    (N, n_blocks, 8) the chaining value after every block, for rows of whole blocks])``."""
     rows = cp.ascontiguousarray(rows)
     if rows.dtype != cp.uint8:
         rows = rows.view(cp.uint8)
     n, nbytes = int(rows.shape[0]), int(rows.shape[1])
-    if nbytes % 64 or nbytes <= 1024:
-        raise ValueError("rows of whole blocks and more than one chunk")
-    nch = -(-nbytes // 1024)
+    if block_out and (nbytes % 64 or nbytes == 0):
+        raise ValueError("per-block chaining values need rows of whole blocks")
+    nch = max(1, -(-nbytes // 1024))
+    if nch > 1 << 8:
+        raise ValueError("rows of at most 256 chunks (the root fold's stack)")
     kw = cp.asarray(np.frombuffer(key, dtype="<u4").astype(np.uint32))
     cvs = cp.empty((n, nch, 8), dtype=cp.uint32)
     bo = cp.empty((n, nbytes // 64, 8), dtype=cp.uint32) if block_out else None

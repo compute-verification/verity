@@ -130,13 +130,93 @@ def test_sha256_rows_is_hashlib(prefix_len, nbytes):
 
 @gpu
 @pytest.mark.skipif(not HAVE_BLAKE3, reason="needs the blake3 package")
-@pytest.mark.parametrize("nbytes", [1536, 2048, 3072, 4096, 5120, 8192 + 64])
+@pytest.mark.parametrize("nbytes", [0, 1, 2, 63, 64, 65, 1000, 1024, 1025, 1536, 2048, 3072, 4096, 5120, 8192 + 64, 9000])
 def test_keyed_blake3_rows_is_the_package(nbytes):
     rng = np.random.default_rng(nbytes)
     rows = rng.integers(0, 256, (41, nbytes), dtype=np.uint8)
     key = b"verity/blake3-leaf/v1/x".ljust(32, b"\0")
-    cvs, roots, bo = fv3.blake3_keyed_rows(cp.asarray(rows), key, block_out=True)
-    roots = cp.asnumpy(roots).astype("<u4")
-    assert cvs.shape == (41, -(-nbytes // 1024), 8) and bo.shape == (41, nbytes // 64, 8)
+    whole = nbytes and nbytes % 64 == 0
+    out = fv3.blake3_keyed_rows(cp.asarray(rows), key, block_out=bool(whole))
+    cvs, roots = out[0], cp.asnumpy(out[1]).astype("<u4")
+    assert cvs.shape == (41, max(1, -(-nbytes // 1024)), 8)
+    if whole:
+        assert out[2].shape == (41, nbytes // 64, 8)
     for r in range(rows.shape[0]):
         assert roots[r].tobytes() == blake3.blake3(rows[r].tobytes(), key=key).digest()
+
+
+def _core_vectors(name: str) -> dict:
+    import json
+
+    import verity.commitments as vc
+    return json.loads((Path(vc.__file__).parent / name / "vectors.json").read_text())
+
+
+@gpu
+def test_frame_v3_row_leaf_vectors():
+    for v in _core_vectors("frame_v3")["row_leaves"]:
+        row = cp.asarray(np.frombuffer(bytes.fromhex(v["row_bytes"]), dtype=np.uint8)[None, :])
+        if v["hash"] == "sha256":
+            got = cp.asnumpy(fv3.sha256_rows(row, bytes.fromhex(v["prefix"])))[0].tobytes()
+        else:
+            got = cp.asnumpy(fv3.blake3_keyed_rows(row, bytes.fromhex(v["key"]))[1]).astype("<u4")[0].tobytes()
+        assert got.hex() == v["digest"], v
+
+
+@gpu
+def test_frame_v3_blake3_vectors():
+    for v in _core_vectors("frame_v3")["blake3"]:
+        msg = bytes(i % 251 for i in range(v["len"]))
+        row = cp.asarray(np.frombuffer(msg, dtype=np.uint8).reshape(1, -1))
+        got = cp.asnumpy(fv3.blake3_keyed_rows(row, bytes.fromhex(v["key"]))[1]).astype("<u4")[0].tobytes()
+        assert got.hex() == v["keyed_hash"], v["len"]
+
+
+@gpu
+def test_frame_v3_row_tree_and_word_leaf_vectors():
+    d = _core_vectors("frame_v3")
+    for v in d["row_trees"]:
+        dom = bytes.fromhex(v["domain"]["domain_id"])
+        rows = np.stack([np.frombuffer(bytes.fromhex(r), dtype=np.uint8) for r in v["rows"]])
+        if v["hash"] == "sha256":
+            from verity.commitments.rowleaf import sha256_row_prefix
+            dg = fv3.sha256_rows(cp.asarray(rows), sha256_row_prefix(v["role"], v["word_bits"], v["n_words"]))
+        else:
+            from verity.commitments.rowleaf import blake3_row_key
+            dg = fv3.blake3_keyed_rows(cp.asarray(rows), blake3_row_key(v["role"]))[1].view(cp.uint8).reshape(-1, 32)
+        assert [bytes(x).hex() for x in cp.asnumpy(dg)] == v["digests"]
+        t = fv3.build_tree(dom, len(v["rows"]), v["schema"], dg, vlen=32)
+        assert [x.tobytes().hex() for x in t.levels[0][:len(v["rows"])]] == v["leaves"]
+        assert t.root.hex() == v["root"]
+    for v in d["word_leaves"]:
+        out = cp.empty((1, 32), dtype=cp.uint8)
+        val = bytes.fromhex(v["value"])
+        fv3.leaves_into(out, bytes.fromhex(v["domain"]["domain_id"]), v["schema"],
+                        cp.asarray(np.frombuffer(val, dtype=np.uint8).reshape(1, -1)), vlen=len(val), start=v["position"])
+        assert cp.asnumpy(out)[0].tobytes().hex() == v["leaf"]
+
+
+@gpu
+@pytest.mark.parametrize("n", [1, 2, 3, 5, 7, 8, 9, 1000, 4097])
+def test_vllm_tree_is_the_reference(n):
+    from verity.commitments import leaves as L
+    from verity.commitments import vllm_v1
+    rng = np.random.default_rng(n)
+    vals = rng.integers(0, 256, (n, 24), dtype=np.uint8)
+    lay = vllm_v1.pos_leaf_layout(24)
+    lv = cp.asnumpy(fv3.sha256_rows(cp.asarray(vals), lay.prefix))
+    ref_leaves = [vllm_v1.pos_leaf(v.tobytes()) for v in vals]
+    assert [x.tobytes() for x in lv] == ref_leaves
+    t = fv3.vllm_tree(cp.asarray(lv))
+    ref = L.levels(ref_leaves)
+    assert [[x.tobytes() for x in g] for g in t.levels] == ref
+    assert t.root == vllm_v1.fold(ref_leaves)
+
+
+@gpu
+def test_vllm_pos_leaf_vectors():
+    from verity.commitments import vllm_v1
+    for v in _core_vectors("vllm_v1")["pos_leaf"]:
+        val = bytes.fromhex(v["value"])
+        row = cp.asarray(np.frombuffer(val, dtype=np.uint8).reshape(1, -1))
+        assert cp.asnumpy(fv3.sha256_rows(row, vllm_v1.pos_leaf_layout(len(val)).prefix))[0].tobytes().hex() == v["leaf"]
