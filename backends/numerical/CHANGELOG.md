@@ -1,5 +1,15 @@
 # Changelog: `verity_numerical` (the bench renderers and their rules)
 
+## 2026-09-25: live cells count prover compute once, and loopback coin handling as compute
+
+- A live result whose `interaction` block says `t_total_includes_wait` (Flock's live coins) takes its prover compute from
+  `live.prover_compute_seconds` (else `t.total` minus the wait). Before this, the network time was counted twice: once
+  inside `t.total` and again as rounds × RTT.
+- The prover's own per-round live-coin handling, measured on loopback (`live.loopback_round_seconds`), is prover compute:
+  rounds × that, at most the measured wait, moves out of the network wait. Only the excess over loopback counts as
+  network wait, and the ±10% tolerance check compares the measured wall against compute + rounds × 1 ms + bytes ÷ 100 Gb/s.
+  Applies to every live cell (route (a), Flock). The tolerance is unchanged (root's ruling).
+
 ## 2026-09-25: the switch to the approved tables spec (a change of method)
 
 From the 6:00 PM PT digest on 2026-09-25, the published tables are the approved spec's views (`kb/TABLES.md`),

@@ -463,7 +463,11 @@ def interaction(meta: Mapping[str, Any]) -> dict[str, Any]:
     ``rounds.protocol``), ``bytes_up`` (``net.bytes_out``, else the proof bytes), ``bytes_down`` (``net.bytes_in``, the coins),
     ``rtt_ms`` (``net.rtt_ms``) with ``rtt_method`` (the ``interaction`` block's, or the live-verifier evidence's), and the wall
     split: ``prover_s`` (``t.total``), ``verifier_s`` (verifier compute the prover waited on: ``verify.critical_s``, else 0 -- the
-    measured wait includes it) and ``wait_s`` (``net.wait_seconds``, else ``t.total_live - t.total``).
+    measured wait includes it) and ``wait_s`` (``net.wait_seconds``, else ``t.total_live - t.total``).  A record whose ``interaction``
+    block says ``t_total_includes_wait`` (Flock's live coins) has its prover compute in ``live.prover_compute_seconds`` (else
+    ``t.total`` minus the wait).  The prover's own per-round live-coin handling, measured on loopback
+    (``live.loopback_round_seconds``), is prover compute: rounds x that (at most the measured wait) moves from the wait into
+    ``prover_s``, and only the excess over loopback counts as network wait (``loopback_s`` records the amount moved).
 
     Any other result (a proof verified from its files: the Fiat–Shamir or file-replayed transcript every B-Ligero cell has today)
     is **non-interactive** for this purpose and its record is derived (``derived``): rounds = 0 whatever the protocol's round
@@ -483,17 +487,24 @@ def interaction(meta: Mapping[str, Any]) -> dict[str, Any]:
         stmt = next((v for v in (num(k) for k in STATEMENT_BYTES) if v is not None), 0.0)
         return {"live": False, "derived": True, "rounds": 0.0, "bytes_up": (proof or 0.0) + stmt, "bytes_down": 0.0,
                 "proof_bytes": proof, "statement_bytes": stmt, "rtt_ms": None, "rtt_method": None,
-                "prover_s": num(contract.T_TOTAL), "verifier_s": 0.0, "wait_s": None}
+                "prover_s": num(contract.T_TOTAL), "verifier_s": 0.0, "wait_s": None, "loopback_s": 0.0}
     rounds = num("rounds.sequential_depth")
     rounds = num("rounds.protocol") if rounds is None else rounds
     up = next((v for v in (num("net.bytes_out"), proof) if v is not None), None)
     wait = num("net.wait_seconds")
     if wait is None and num(contract.T_TOTAL_LIVE) is not None and num(contract.T_TOTAL) is not None:
         wait = max(0.0, num(contract.T_TOTAL_LIVE) - num(contract.T_TOTAL))
+    compute = num(contract.T_TOTAL)
+    if block.get("t_total_includes_wait") is True and compute is not None and wait is not None:
+        compute = next((v for v in (num("live.prover_compute_seconds"),) if v is not None), compute - wait)
+    loop, moved = num("live.loopback_round_seconds"), 0.0
+    if loop is not None and rounds and wait is not None and compute is not None:
+        moved = min(wait, rounds * loop)
+        compute, wait = compute + moved, wait - moved
     return {"live": True, "derived": False, "rounds": rounds, "bytes_up": up or 0.0, "bytes_down": num("net.bytes_in") or 0.0,
             "proof_bytes": proof, "statement_bytes": None, "rtt_ms": num("net.rtt_ms"),
-            "rtt_method": block.get("rtt_method") or lv.get("rtt_method"), "prover_s": num(contract.T_TOTAL),
-            "verifier_s": num("verify.critical_s") or 0.0, "wait_s": wait}
+            "rtt_method": block.get("rtt_method") or lv.get("rtt_method"), "prover_s": compute,
+            "verifier_s": num("verify.critical_s") or 0.0, "wait_s": wait, "loopback_s": moved}
 
 
 def interaction_time(ix: Mapping[str, Any], rtt_s: float = REF_RTT_S, bandwidth_bps: float = REF_BANDWIDTH_BPS) -> float:

@@ -155,8 +155,8 @@ def committed(store: LocalStore, leaf: str = "blake3", *, t_total: float = 0.4, 
         doc["measurements"].append({"name": "fixed.setup_seconds", "value": setup, "unit": "s"})
     ix = {"rounds.sequential_depth": 0} if interaction is None else interaction
     for name, value in ix.items():
-        if name == "rtt_method":
-            doc["interaction"] = {"rtt_method": value}
+        if name in ("rtt_method", "t_total_includes_wait"):
+            doc.setdefault("interaction", {})[name] = value
             continue
         unit = {"rounds.sequential_depth": "count", "rounds.protocol": "count", "net.bytes_out": "B", "net.bytes_in": "B", "net.rtt_ms": "ms",
                 "proof_bytes": "B", "relation.statement_bytes_total": "B"}.get(name, "s")
@@ -577,6 +577,29 @@ def test_the_cell_is_the_interaction_formula_at_the_reference_network(store: Loc
     at10g = N * (0.6 + 0.4 + 3 * 0.001 + (1.25e9 + 384) * 8 / 10e9) / 4096
     assert "### Interaction drill-down" in md and T.fmt_overhead(at20) in md and "ping median of 20" in md
     assert "At 1 ms, 10 Gb/s" in md and T.fmt_overhead(at10g) in md and V.REF_BANDWIDTH_BPS == 100e9
+
+
+def test_a_record_whose_t_total_includes_the_wait_counts_its_compute_once(store: LocalStore) -> None:
+    """Flock's live records time the coin waits inside t.total (``interaction.t_total_includes_wait``): the cell takes prover compute
+    from live.prover_compute_seconds (else t.total minus the wait) and adds the reference network once, not on top of the wait."""
+    committed(store, t_total=0.4 + 0.103, commit=0.6, interaction={**LIVE, "t_total_includes_wait": True})
+    cell = line(V.build(store))["cells"]["B-Ligero"]
+    N = V.native(FP8_ADA_MMA)["instances_per_second"]
+    net = 3 * 0.001 + (1.25e9 + 384) * 8 / 100e9
+    assert cell.overhead == pytest.approx(N * (0.6 + 0.4 + net) / 4096)
+
+
+def test_live_coin_handling_measured_on_loopback_is_prover_compute_not_network(store: LocalStore) -> None:
+    """rounds x live.loopback_round_seconds (at most the measured wait) moves from the network wait into prover compute; the
+    reference network (1 ms per round) is then added on top of it, and the tolerance check compares against that."""
+    art = committed(store, t_total=0.4, commit=0.6, interaction={**LIVE, "live.loopback_round_seconds": 0.01})
+    cell = line(V.build(store))["cells"]["B-Ligero"]
+    N = V.native(FP8_ADA_MMA)["instances_per_second"]
+    net = 3 * 0.001 + (1.25e9 + 384) * 8 / 100e9
+    assert cell.artifact == art and cell.overhead == pytest.approx(N * (0.6 + 0.4 + 3 * 0.01 + net) / 4096)
+    ix = V.interaction(store.get_manifest(art).meta)
+    assert ix["loopback_s"] == pytest.approx(0.03) and ix["wait_s"] == pytest.approx(0.103 - 0.03)
+    assert ix["prover_s"] == pytest.approx(0.43)
 
 
 @pytest.mark.parametrize(("over", "why"), [
