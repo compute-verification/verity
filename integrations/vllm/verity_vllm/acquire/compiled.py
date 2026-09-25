@@ -6,19 +6,20 @@ non-weight argument role) in the vocabulary of required_manifest.py / binding.py
 role, element_range = the member's whole extent for the step's token count).  Nothing here reads a checkpoint: the manifest is the
 artifact x the workload's steps.  program_digest = sha256(kernel_set_sha256 || the composed launch table || widths).
 
-    python -m verity_vllm.acquire.compiled build --inductor-dir <control process cache> --pieces 17 --steps 32 \
+    verity-vllm compiled build --inductor-dir <control process cache> --pieces 17 --steps 32 \
         --prefill-tokens 256 --request r0 --out manifest.json
 """
 from __future__ import annotations
 
-import argparse
 import glob
 import hashlib
 import json
 import os
 import re
+from dataclasses import dataclass, field
 from typing import Any
 
+from verity_vllm.config import UsageError, option
 from verity_vllm.query.manifest.format import SCHEMA, manifest_digest as _manifest_digest
 from verity_vllm.program.kernels.compiled_relations import OUTPUT_ROLES, kernel_key, pointer_arity, roles_of
 
@@ -593,29 +594,45 @@ def build(inductor_dir: str, *, pieces: int, steps: int, prefill_tokens: int, re
             "complete": not unknown and undefined == 0, "unmodelled": unknown, "manifest_digest": _manifest_digest(identities), "identities": identities}
 
 
-def _main() -> int:
-    ap = argparse.ArgumentParser()
-    sub = ap.add_subparsers(dest="cmd", required=True)
-    b = sub.add_parser("build")
-    b.add_argument("--inductor-dir", required=True)
-    b.add_argument("--pieces", type=int, required=True)
-    b.add_argument("--steps", type=int, default=None, help="engine steps (default: the workload's expected_engine_steps)")
-    b.add_argument("--prefill-tokens", type=int, default=None, help="single-request form (no --workload): the prompt length")
-    b.add_argument("--workload", default=None, help="sweep workload json: the request schedule (B>=2: r<i> arrive_step / prompt / max_tokens)")
-    b.add_argument("--request", default="r0")
-    b.add_argument("--kernel-set", required=True, help="the run's inductor_kernels.json kernel_set_sha256 (the Program identity's kernel sources)")
-    b.add_argument("--split-graph", default=None, help="vLLM's computation_graph.py (compilation_config.cache_dir/rank_0_0/backbone): the piece wiring")
-    b.add_argument("--weights-program-digest", default=None,
-                   help="the eager Program of record whose served-parameter fields the compiled kernels read (the row's bi-eager counterpart's "
-                        "Build digest): named as components.weights_struct for the MAN-09 weights pin")
-    b.add_argument("--digest-v1", action="store_true", help="reproduce the v1 program_digest (weight routing NOT in the digest; records built on <= 2b6573893)")
-    b.add_argument("--out", required=True)
-    v = sub.add_parser("verify", help="[MAN-05 for compiled rows] the manifest the treatment USED (built from the control arm's Inductor output "
-                                       "code) vs the same derivation REBUILT from the treatment's own output code: digests of rows + Program")
-    v.add_argument("--manifest", required=True, help="the manifest the treatment ran with (compiled_manifest.json, control-derived)")
-    v.add_argument("--rebuilt", required=True, help="compiled_manifest.json derived from the TREATMENT process's own output code")
-    v.add_argument("--out", required=True)
-    a = ap.parse_args()
+@dataclass(frozen=True, kw_only=True)
+class BuildOptions:
+    inductor_dir: str = option("--inductor-dir")
+    pieces: int = option("--pieces", type=int)
+    steps: int | None = option("--steps", type=int, default=None,
+                               help="engine steps (default: the workload's expected_engine_steps)")
+    prefill_tokens: int | None = option("--prefill-tokens", type=int, default=None,
+                                        help="single-request form (no --workload): the prompt length")
+    workload: str | None = option("--workload", default=None,
+                                  help="sweep workload json: the request schedule (B>=2: r<i> arrive_step / prompt / max_tokens)")
+    request: str = option("--request", default="r0")
+    kernel_set: str = option("--kernel-set",
+                             help="the run's inductor_kernels.json kernel_set_sha256 (the Program identity's kernel sources)")
+    split_graph: str | None = option("--split-graph", default=None,
+                                     help="vLLM's computation_graph.py (compilation_config.cache_dir/rank_0_0/backbone): the piece wiring")
+    weights_program_digest: str | None = option("--weights-program-digest", default=None,
+                                                help="the eager Program of record whose served-parameter fields the compiled kernels read (the row's bi-eager counterpart's "
+                                                     "Build digest): named as components.weights_struct for the MAN-09 weights pin")
+    digest_v1: bool = option("--digest-v1", default=False, action="store_true",
+                             help="reproduce the v1 program_digest (weight routing NOT in the digest; records built on <= 2b6573893)")
+    out: str = option("--out")
+    cmd: str = field(default="build", init=False)
+
+
+@dataclass(frozen=True, kw_only=True)
+class VerifyOptions:
+    """[MAN-05 for compiled rows] the manifest the treatment USED (built from the control arm's Inductor output code) vs the
+    same derivation REBUILT from the treatment's own output code: digests of rows + Program"""
+
+    manifest: str = option("--manifest", help="the manifest the treatment ran with (compiled_manifest.json, control-derived)")
+    rebuilt: str = option("--rebuilt", help="compiled_manifest.json derived from the TREATMENT process's own output code")
+    out: str = option("--out")
+    cmd: str = field(default="verify", init=False)
+
+
+COMMANDS = {"build": BuildOptions, "verify": VerifyOptions}
+
+
+def main(a: BuildOptions | VerifyOptions) -> int:
     if a.cmd == "verify":
         used, rebuilt = json.load(open(a.manifest)), json.load(open(a.rebuilt))
         rows_digest = _manifest_digest(used.get("identities") or [])
@@ -654,7 +671,7 @@ def _main() -> int:
         steps = steps or int(wl["expected_engine_steps"])
         prefill = prefill or schedule[0]["prompt_tokens"]
     if steps is None or prefill is None:
-        ap.error("--steps and --prefill-tokens (or --workload) are required")
+        raise UsageError("--steps and --prefill-tokens (or --workload) are required")
     m = build(a.inductor_dir, pieces=a.pieces, steps=steps, prefill_tokens=prefill, request_id=a.request, kernel_set_sha256=a.kernel_set, schedule=schedule,
               split_graph=a.split_graph, weights_program_digest=a.weights_program_digest, weights_in_dataflow=not a.digest_v1)
     with open(a.out, "w") as f:
@@ -664,7 +681,3 @@ def _main() -> int:
           f"dataflow edges {df['n_edges']} (launch->launch {df['n_launch_edges']}, undefined {df['n_undefined']}, wiring "
           f"{'declared' if df['wiring_declared'] else 'NOT declared'}) program {m['program_digest'][:16]} manifest {m['manifest_digest'][:16]} -> {a.out}")
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(_main())

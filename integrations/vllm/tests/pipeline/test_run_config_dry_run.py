@@ -24,7 +24,7 @@ BASE = ["--config-id", "cid", "--profile", "prof_x", "--workload", "wl.json", "-
 
 
 def dry(*extra: str) -> dict[str, list[str]]:
-    out = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.match", *BASE, "--dry-run", *extra], capture_output=True, text=True,
+    out = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "match", *BASE, "--dry-run", *extra], capture_output=True, text=True,
                          cwd=ROOT, check=True).stdout
     cmds: dict[str, list[str]] = {}
     for ln in out.splitlines():
@@ -38,16 +38,16 @@ def test_dry_run_gpu_phase():
     c = dry("--phase", "gpu")
     assert list(c) == ["capture", "control", "census", "nonint", "gpu_done"]
     cap = c["capture"]
-    assert cap[:3] == ["/pod/py311", "-m", "verity_vllm.pipeline.m1_capture"]
+    assert cap[:4] == ["/pod/py311", "-m", "verity_vllm.pipeline.cli", "m1-capture"]
     assert cap[cap.index("--snapshot-steps") + 1] == "0,1,2,3"        # default, contiguous from 0
     assert cap[cap.index("--out") + 1] == "/r/RUN/capture" and cap[cap.index("--case") + 1] == "B1"
     assert cap[cap.index("--max-num-seqs") + 1] == "8" and "--workload" in cap
     ctl = c["control"]
     assert "--no-observer" in ctl and ctl[ctl.index("--out") + 1] == "/r/RUN/control" and "--snapshot-steps" not in ctl
     cen = c["census"]
-    assert cen[1:3] == ["-m", "verity_vllm.properties.census"] and cen[cen.index("--out") + 1] == "/r/RUN/census" and "--no-traces" in cen
+    assert cen[1:4] == ["-m", "verity_vllm.pipeline.cli", "census"] and cen[cen.index("--out") + 1] == "/r/RUN/census" and "--no-traces" in cen
     ni = c["nonint"]
-    assert ni[1:3] == ["-m", "verity_vllm.properties.noninterference"] and ni[ni.index("--out") + 1] == "/r/RUN/nonint"
+    assert ni[1:4] == ["-m", "verity_vllm.pipeline.cli", "noninterference"] and ni[ni.index("--out") + 1] == "/r/RUN/nonint"
     assert ni[ni.index("--case") + 1] == "B1"                        # expected_layers resolves from the case
     assert ni[ni.index("--accepted-ctl") + 1] == "/r/RUN/control/tokens.json"   # the control run, never a workload list
     assert not any("accepted" in a and "control" not in a for a in ni if not a.startswith("--"))   # no workload-authored list anywhere
@@ -60,27 +60,27 @@ def test_dry_run_cpu_phase():
                        "replay_chain", "replay_b_step0", "replay_b_step1", "replay_b_step2", "replay_b_step3", "replay_c", "gates"]
     log = "/r/RUN/capture/log.jsonl.gz"
     r = c["resolve"]
-    assert r[:4] == ["/pod/py312", "-m", "verity_vllm.observe.fold.resolve_log", log] and r[r.index("--out") + 1] == "/r/RUN/resolution" and "--strict" not in r
+    assert r[:5] == ["/pod/py312", "-m", "verity_vllm.pipeline.cli", "resolve-log", log] and r[r.index("--out") + 1] == "/r/RUN/resolution" and "--strict" not in r
     cr = c["census_reconcile"]
     assert cr[cr.index("--reconcile") + 1] == "/r/RUN/census/census.json" and cr[cr.index("--report") + 1] == "/r/RUN/census_reconcile"
     nc = c["nonint_compare"]
     assert "--compare" in nc and nc[nc.index("--case") + 1] == "B1" and nc[nc.index("--accepted-ctl") + 1] == "/r/RUN/control/tokens.json"
     cp = c["compare"]
-    assert cp[1:3] == ["-m", "verity_vllm.check.fold_compare"] and cp[cp.index("--out") + 1] == "/r/RUN/compare.json"
+    assert cp[1:4] == ["-m", "verity_vllm.pipeline.cli", "fold-compare"] and cp[cp.index("--out") + 1] == "/r/RUN/compare.json"
     assert cp[cp.index("--snapshots") + 1] == "/r/RUN/capture" and cp[cp.index("--safetensors") + 1] == "/ck/snap/model*.safetensors"
     for st, out in (("fold", "/r/RUN/fold_summary.json"), ("fold_2", "/r/RUN/fold_summary_2.json")):
         f = c[st]
-        assert f[1:5] == ["-m", "verity_vllm.pipeline.match", "--worker", "fold"] and f[f.index("--out") + 1] == out
+        assert f[1:6] == ["-m", "verity_vllm.pipeline.cli", "match", "--worker", "fold"] and f[f.index("--out") + 1] == out
     rp = c["root_policy"]
-    assert rp[1:3] == ["-m", "verity_vllm.check.root_policy"] and rp[rp.index("--safetensors") + 1] == "/ck/snap/model*.safetensors"
+    assert rp[1:4] == ["-m", "verity_vllm.pipeline.cli", "root-policy"] and rp[rp.index("--safetensors") + 1] == "/ck/snap/model*.safetensors"
     assert rp[rp.index("--out") + 1] == "/r/RUN/root_policy.json" and rp[rp.index("--snapshots") + 1] == "/r/RUN/capture"
-    assert c["golden"][1:5] == ["-m", "verity_vllm.properties.golden", "--check", "--out"] and c["golden"][-1] == "/r/RUN/golden.json"
+    assert c["golden"][1:6] == ["-m", "verity_vllm.pipeline.cli", "golden", "--check", "--out"] and c["golden"][-1] == "/r/RUN/golden.json"
     ra = c["replay_a"]
-    assert ra[1:3] == ["-m", "verity_vllm.check.replay.replay"] and ra[ra.index("--tier") + 1] == "a" and ra[ra.index("--k") + 1] == str(RC.DEFAULT_K)
+    assert ra[1:4] == ["-m", "verity_vllm.pipeline.cli", "replay"] and ra[ra.index("--tier") + 1] == "a" and ra[ra.index("--k") + 1] == str(RC.DEFAULT_K)
     assert ra[ra.index("--max-arg-leaves") + 1] == "4000000" and ra[ra.index("--out") + 1] == "/r/RUN/replay_a.json"
     assert ra[ra.index("--seed") + 1] == "12345"                      # the verifier's seed reaches the sampler
     w = c["wiring"]
-    assert w[1:3] == ["-m", "verity_vllm.check.operand_provenance"] and w[w.index("--log") + 1] == log and w[w.index("--out") + 1] == "/r/RUN/wiring.json"
+    assert w[1:4] == ["-m", "verity_vllm.pipeline.cli", "operand-provenance"] and w[w.index("--log") + 1] == log and w[w.index("--out") + 1] == "/r/RUN/wiring.json"
     ch = c["replay_chain"]
     assert ch[ch.index("--tier") + 1] == "chain" and ch[ch.index("--chains") + 1] == str(RC.DEFAULT_CHAINS) and ch[ch.index("--seed") + 1] == "12345"
     assert ch[ch.index("--out") + 1] == "/r/RUN/replay_chain.json"
@@ -103,7 +103,7 @@ def test_dry_run_no_laptop_no_tier_c_and_skip():
 
 
 def test_the_sampled_replay_stages_need_a_seed_and_the_others_do_not():
-    p = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.match", *BASE, "--dry-run", "--phase", "cpu"], capture_output=True, text=True,
+    p = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "match", *BASE, "--dry-run", "--phase", "cpu"], capture_output=True, text=True,
                        cwd=ROOT)
     assert p.returncode == 2 and "--seed is required to run replay_a and replay_chain" in p.stderr
     c = dry("--phase", "cpu", "--skip", "replay_a,replay_chain", "--tier-c")
@@ -145,7 +145,7 @@ def test_dry_run_existing_capture_paths():
 
 
 def test_dry_run_writes_nothing(tmp_path):
-    subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.match", *BASE[:8], "--out", str(tmp_path / "RUN"), "--dry-run", "--seed", "7"],
+    subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "match", *BASE[:8], "--out", str(tmp_path / "RUN"), "--dry-run", "--seed", "7"],
                    capture_output=True, text=True, cwd=ROOT, check=True)
     assert not (tmp_path / "RUN").exists()
 
@@ -173,7 +173,7 @@ def test_run_stage_timeout(tmp_path):
 @pytest.mark.skipif(not (M1_LOG.exists() and M1_DIR.exists() and M1_CTL.exists()), reason="local m1 capture absent")
 def test_local_cpu_stages_on_m1(tmp_path):
     run = tmp_path / "RUN"
-    cmd = [sys.executable, "-m", "verity_vllm.pipeline.match", "--config-id", "m1-local", "--profile", "vllm_d9105ea80_sm89_eager",
+    cmd = [sys.executable, "-m", "verity_vllm.pipeline.cli", "match", "--config-id", "m1-local", "--profile", "vllm_d9105ea80_sm89_eager",
            "--workload", "workloads/workload_32x16_1req.json", "--case", "B0", "--out", str(run), "--phase", "cpu", "--laptop",
            "--log", str(M1_LOG), "--snapshots", str(M1_DIR), "--control-tokens", str(M1_CTL),
            "--skip", "replay,compare,census,nonint,root_policy,golden", "--cards-dir", str(tmp_path / "cards")]

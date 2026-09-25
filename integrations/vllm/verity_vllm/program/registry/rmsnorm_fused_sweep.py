@@ -20,7 +20,7 @@ IR evaluation in `tests/program/test_rmsnorm_fused.py`):
 
 Both share the epilogue `s = rsqrtf(var / N + eps)` (MUFU.RSQ), `out = bf16((z * s) * w)`.
 
-    PYTHONPATH=. python -m verity_vllm.program.registry.rmsnorm_fused_sweep [--bundle PATH] [--out sweep.json]
+    PYTHONPATH=. verity-vllm rmsnorm-fused-sweep [--bundle PATH] [--out sweep.json]
 
 Result (2026-09-07, this machine): v1 exact on 2,327/2,340 rows (1,347,826/1,347,840 words); v2 exact on
 2,340/2,340 rows; the variance differs between the trees in 1,218 rows, `s` in 689, the bf16 output in 13 —
@@ -29,18 +29,18 @@ every one of those 13 words is what production committed under v2.
 
 from __future__ import annotations
 
-import argparse
 import hashlib
 import json
 import os
-import sys
 import tarfile
 import tempfile
 from pathlib import Path
 
 import numpy as np
+from dataclasses import dataclass
 
 from verity_vllm.config import ROOT as REPO
+from verity_vllm.config import option
 from verity_vllm.program.registry.b1 import B0_CONFIG, FUSED_RMS_BLOCK
 
 BUNDLE = REPO / "vllm-poc/bundles/B0-358bb6d66805-ta1eager-commit.tar.xz"
@@ -238,12 +238,15 @@ def sweep(commit: Path, C: dict = B0_CONFIG) -> dict:
     return report
 
 
-def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--bundle", type=Path, default=BUNDLE)
-    ap.add_argument("--commit", type=Path, default=None, help="an already extracted commit store (skips the bundle)")
-    ap.add_argument("--out", type=Path, default=None)
-    a = ap.parse_args(argv)
+@dataclass(frozen=True, kw_only=True)
+class Options:
+    bundle: Path = option("--bundle", type=Path, default=BUNDLE)
+    commit: Path | None = option("--commit", type=Path, default=None,
+                                 help="an already extracted commit store (skips the bundle)")
+    out: Path | None = option("--out", type=Path, default=None)
+
+
+def main(a: Options) -> int:
     with tempfile.TemporaryDirectory() as td:
         commit = a.commit or extract_bundle(a.bundle, Path(td))
         rep = sweep(commit)
@@ -257,7 +260,3 @@ def main(argv=None) -> int:
     if a.out:
         a.out.write_text(json.dumps(rep, indent=1))
     return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())

@@ -14,7 +14,7 @@ What is checked, per program (`Serve{TINY}` as the control, `ServeHopper{TINY}`,
    (definition sets differ), and so is `ServeTP2` vs `Serve`;
 4. a *fresh* process that imports only `verity.ir` (not `verity_vllm.program.registry.hopper`) can or cannot decode the Hopper
    descriptor -- the descriptor carries every composite body but only *names* its primitives, and the CLI
-   `python -m verity_vllm.program.descriptor_equivalence` loads with the process's `REGISTRY` (`_load`).
+   `verity-vllm descriptor-equivalence` loads with the process's `REGISTRY` (`_load`).
 """
 from __future__ import annotations
 
@@ -91,7 +91,7 @@ def _fresh_decode(path: Path, imports: str) -> subprocess.CompletedProcess:
 def test_hopper_descriptor_decodes_in_a_fresh_process_only_if_the_binding_module_is_imported(tmp_path):
     """The descriptor names `HopperBF16WgmmaDot16` / `Fa3InvSum` as primitives; they exist in `REGISTRY` only after
     `verity_vllm.program.registry.hopper` is imported. `verity.ir` itself imports neither `registry.b1` nor `registry.hopper`,
-    so `python -m verity_vllm.program.descriptor_equivalence --old <hopper descriptor>` depends on what the process imported."""
+    so `verity-vllm descriptor-equivalence --old <hopper descriptor>` depends on what the process imported."""
     P = Program(PROGRAMS["ServeHopper{TINY}"]())
     desc = encode_program(P)
     path = tmp_path / "hopper-tiny.json"

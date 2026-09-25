@@ -1,14 +1,15 @@
 #!/usr/bin/env python
 """R9 cmt-hidden: GPU-resident commitment path (option (c)) over the M1 stream and the H1 digests.
 
-  hidden_gpu.py check  --out J          root of the GPU chunk tree == hidden_stream.commit_stream (hashlib) on random streams;
+  verity-vllm hidden-gpu check  --out J          root of the GPU chunk tree == hidden_stream.commit_stream (hashlib) on random streams;
                                         tree_levels over synthetic H1 digests == ThreadLeafCommitment; openings served from the
                                         GPU levels verify against the host verifier
-  hidden_gpu.py bench  --out J          leaf kernel / tree time (CUDA events, n reps) for the accepted shapes' streams and 1024^2 /
+  verity-vllm hidden-gpu bench  --out J          leaf kernel / tree time (CUDA events, n reps) for the accepted shapes' streams and 1024^2 /
                                         4096^2 streams, vs the host path (D2H + hashlib leaves + fold) on the same data
-  hidden_gpu.py commit --npz S --out J  commit a saved M1 stream (hidden_tap.py stream) on the GPU and on the host; roots equal?
+  verity-vllm hidden-gpu commit --npz S --out J  commit a saved M1 stream (hidden_tap.py stream) on the GPU and on the host; roots equal?
 """
-import argparse, json, os, sys, time
+import json, os, sys, time
+from dataclasses import dataclass, field
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -44,6 +45,7 @@ import torch  # noqa: E402
 from torch.utils.cpp_extension import load  # noqa: E402
 from verity_vllm.commit import hidden_stream as hs  # noqa: E402
 from verity_vllm.commit.hidden_engine import fold_path  # noqa: E402
+from verity_vllm.config import option  # noqa: E402
 
 _EXT = None
 
@@ -211,15 +213,31 @@ def cmd_commit(args):
     print(json.dumps(r)); json.dump(r, open(args.out, 'w'), indent=1)
 
 
-def main():
-    ap = argparse.ArgumentParser(); sub = ap.add_subparsers(dest='cmd', required=True)
-    c = sub.add_parser('check'); c.add_argument('--out', default='gpu_check.json')
-    b = sub.add_parser('bench'); b.add_argument('--out', default='gpu_bench.json'); b.add_argument('--reps', type=int, default=20)
-    b.add_argument('--max-bytes', type=int, default=6 * 2**30); b.add_argument('--host-max-bytes', type=int, default=600 * 2**20)
-    m = sub.add_parser('commit'); m.add_argument('--npz', required=True); m.add_argument('--out', default='gpu_commit.json'); m.add_argument('--src', type=int, default=63)
-    a = ap.parse_args()
+@dataclass(frozen=True, kw_only=True)
+class CheckOptions:
+    out: str = option('--out', default='gpu_check.json')
+    cmd: str = field(default="check", init=False)
+
+
+@dataclass(frozen=True, kw_only=True)
+class BenchOptions:
+    out: str = option('--out', default='gpu_bench.json')
+    reps: int = option('--reps', type=int, default=20)
+    max_bytes: int = option('--max-bytes', type=int, default=6 * 2**30)
+    host_max_bytes: int = option('--host-max-bytes', type=int, default=600 * 2**20)
+    cmd: str = field(default="bench", init=False)
+
+
+@dataclass(frozen=True, kw_only=True)
+class CommitOptions:
+    npz: str = option('--npz')
+    out: str = option('--out', default='gpu_commit.json')
+    src: int = option('--src', type=int, default=63)
+    cmd: str = field(default="commit", init=False)
+
+
+COMMANDS = {"check": CheckOptions, "bench": BenchOptions, "commit": CommitOptions}
+
+
+def main(a: CheckOptions | BenchOptions | CommitOptions):
     {'check': cmd_check, 'bench': cmd_bench, 'commit': cmd_commit}[a.cmd](a)
-
-
-if __name__ == '__main__':
-    main()

@@ -123,10 +123,11 @@ def test_unreadable_record_is_named_and_no_result_json_falls_back_to_the_schema_
     assert _verdict(tmp_path, LEGACY_INT6, None).startswith("predates MAN-09c")
 
 
-def test_cli_record_carries_its_derivation_provenance_and_names_what_it_supersedes(checkpoint, tmp_path):
+def test_cli_record_carries_its_derivation_provenance_and_names_what_it_supersedes(checkpoint, tmp_path, monkeypatch):
     """[COORD R16 M-0038 (2)] a record the CLI writes carries `derived` = {tool, code (git HEAD or null), at, sources (Program files, checkpoint
     dir, checkpoints.json), argv, supersedes}; check() ignores it (digests are the evidence)."""
     from verity_vllm.check import weights_of_record as WR
+    from verity_vllm.pipeline import cli
     from tests.check.test_weights_of_record import _program, _served, _write_program, live_digests
 
     d, man, t = checkpoint
@@ -137,10 +138,11 @@ def test_cli_record_carries_its_derivation_provenance_and_names_what_it_supersed
     stale.write_text(json.dumps(LEGACY_INT6))
     out = pdir / "weights_of_record.json"
     argv = ["--program-dir", str(pdir), "--checkpoint-dir", str(d), "--checkpoints", str(man), "--out", str(out), f"--supersedes={stale}"]
-    assert WR.main(argv) == 0
+    monkeypatch.setattr(sys, "argv", ["verity-vllm", "weights-of-record", *argv])
+    assert cli.main(sys.argv[1:]) == 0
     rec = json.load(open(out))
     dv = rec["derived"]
-    assert dv["tool"] == "verity_vllm.check.weights_of_record" and dv["supersedes"] == str(stale) and dv["argv"] == argv
+    assert dv["tool"] == "verity_vllm.check.weights_of_record" and dv["supersedes"] == str(stale) and dv["argv"] == ["weights-of-record", *argv]
     assert dv["sources"]["program_dir"] == str(pdir) and dv["sources"]["program_files"] == ["instances.json.gz", "result.json"]
     assert dv["sources"]["checkpoint_dir"] == str(d) and dv["sources"]["checkpoints_manifest"] == str(man)
     assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", dv["at"]) and (dv["code"] is None or re.fullmatch(r"[0-9a-f]{40}", dv["code"]))

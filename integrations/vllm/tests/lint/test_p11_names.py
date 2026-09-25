@@ -3,9 +3,10 @@
 Checked today, against ``allowlists/p11_names.json``:
 
 * ``module-name`` / ``package-name`` / ``def-name`` / ``class-name`` / ``flag-name`` / ``env-name``: a file, directory,
-  function, class, ``add_argument`` flag or environment-variable name with a version or lab token: ``v1``/``v2b``,
-  ``fast``, ``poc``, ``m1``, ``b1``, ``tp2`` or ``G1`` as a whole ``_``/``-``/CamelCase-separated token.  Functions
-  decorated with a Definition decorator (``@primitive(...)``) are exempt: their name is the hashed Definition name.
+  function, class, flag or environment-variable name (``add_argument``, ``config.option`` and its ``env``) with a
+  version or lab token: ``v1``/``v2b``, ``fast``, ``poc``, ``m1``, ``b1``, ``tp2`` or ``G1`` as a whole
+  ``_``/``-``/CamelCase-separated token.  Functions decorated with a Definition decorator (``@primitive(...)``) are
+  exempt: their name is the hashed Definition name.
 * ``doc-board-id`` (``M-1234``, ``F-r16``), ``doc-lane`` (``[lane ``), ``doc-round`` (``R10``..``R19``) and
   ``doc-date`` (``2026-09-17``) in module, class and function docstrings.  Counted per docstring and pattern.
 
@@ -30,6 +31,7 @@ DOC_PATTERNS = (("doc-board-id", "M-nnnn", re.compile(r"\bM-\d{4}\b")),
                 ("doc-round", "R1N", re.compile(r"\bR1\d\b")),
                 ("doc-date", "date", re.compile(r"\b20\d\d-[01]\d-[0-3]\d\b")))
 ENV_CALLS = frozenset({"os.environ.get", "os.getenv", "os.environ.setdefault", "os.environ.pop", "os.putenv"})
+OPTION = "verity_vllm.config.option"
 
 
 def name_tokens(name: str) -> list[str]:
@@ -70,11 +72,15 @@ def file_violations(src: str, rel: str) -> list[R.Violation]:
             emit("class-name", node, symbol, node.name)
         elif isinstance(node, ast.Call):
             fn = node.func.attr if isinstance(node.func, ast.Attribute) else ""
-            if fn == "add_argument":
+            origin = aliases.resolve(node.func)
+            if fn == "add_argument" or origin == OPTION:
                 for a in node.args:
                     if R.is_str(a) and a.value.startswith("-") and bad_name(a.value.lstrip("-")):
                         emit("flag-name", node, symbol, a.value)
-            origin = aliases.resolve(node.func)
+            if origin == OPTION:
+                for k in node.keywords:
+                    if k.arg == "env" and R.is_str(k.value) and bad_name(k.value.value):
+                        emit("env-name", node, symbol, k.value.value)
             if origin in ENV_CALLS and node.args and R.is_str(node.args[0]) and bad_name(node.args[0].value):
                 emit("env-name", node, symbol, node.args[0].value)
         elif isinstance(node, ast.Subscript) and aliases.resolve(node.value) == "os.environ" and R.is_str(node.slice) \
@@ -125,8 +131,12 @@ def test_detectors_on_examples() -> None:
         "def Gemm_v1(a): return a\n"
         "def build_v2(p, fast=False): return os.environ.get('VERITY_TP2_MODE')\n"
         "class PocRunner: pass\n"
+        "from verity_vllm.config import option\n"
+        "class Options:\n"
+        "    fast_copy: bool = option('--fast-copy', env='VERITY_M1_DIR', action='store_true', default=False)\n"
     )
     got = sorted((v.kind, v.detail) for v in file_violations(src, "verity_vllm/tp/m1_capture.py"))
     assert got == [("class-name", "PocRunner"), ("def-name", "build_v2"), ("doc-board-id", "F-rN"),
                    ("doc-board-id", "M-nnnn"), ("doc-date", "date"), ("doc-lane", "[lane"), ("doc-round", "R1N"),
-                   ("env-name", "VERITY_TP2_MODE"), ("module-name", "m1_capture")], got
+                   ("env-name", "VERITY_M1_DIR"), ("env-name", "VERITY_TP2_MODE"), ("flag-name", "--fast-copy"),
+                   ("module-name", "m1_capture")], got

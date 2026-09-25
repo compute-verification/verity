@@ -45,7 +45,6 @@ Writes DIR/noninterference.json and DIR/noninterference.md; exit status 1 on any
 
 from __future__ import annotations
 
-import argparse
 import gzip
 import hashlib
 import json
@@ -55,8 +54,11 @@ import subprocess
 import sys
 import time
 from collections import OrderedDict
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from verity_vllm.config import option
 
 # [SHARED-CODE lane cov-ln] the decoder-layer module and the final norm under their family's vLLM names: Llama-style
 # `model.layers.N` / `model.norm` (SmolLM2, Qwen, Gemma-2, Phi-3, the MoE lanes) and GPT-NeoX `gpt_neox.layers.N` /
@@ -738,9 +740,9 @@ def orchestrate(args) -> int:
         common += ["--max-tokens", str(args.max_tokens)]
     common += [f"--engine-arg={x}" for x in args.engine_arg]
     runs = [
-        ("a_observer", [py, "-m", "verity_vllm.properties.noninterference", "--variant", "observer", "--out", str(out / "a_observer"), *common]),
-        ("b_hooks", [py, "-m", "verity_vllm.properties.noninterference", "--variant", "hooks", "--out", str(out / "b_hooks"), *common]),
-        ("c_bare", [py, "-m", "verity_vllm.pipeline.m1_capture", "--no-observer", "--out", str(out / "c_bare"), *common]),
+        ("a_observer", [py, "-m", "verity_vllm.pipeline.cli", "noninterference", "--variant", "observer", "--out", str(out / "a_observer"), *common]),
+        ("b_hooks", [py, "-m", "verity_vllm.pipeline.cli", "noninterference", "--variant", "hooks", "--out", str(out / "b_hooks"), *common]),
+        ("c_bare", [py, "-m", "verity_vllm.pipeline.cli", "m1-capture", "--no-observer", "--out", str(out / "c_bare"), *common]),
     ]
     timings = {}
     for name, cmd in runs:
@@ -763,23 +765,25 @@ def orchestrate(args) -> int:
     return 0 if rep["PASS"] else 1
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--workload", default="workloads/workload_32x16_1req.json")
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--checkpoints", default="manifests/checkpoints.json")
-    ap.add_argument("--max-tokens", type=int, default=None)
-    ap.add_argument("--max-num-seqs", type=int, default=8)
-    ap.add_argument("--no-warmup", action="store_true")
-    ap.add_argument("--variant", choices=["observer", "hooks"], default=None, help="(internal) run one variant in this process")
-    ap.add_argument("--compare", action="store_true", help="torch-free: compare the three variants' outputs under --out")
-    ap.add_argument("--only", default=None, help="orchestrator: comma list of a_observer,b_hooks,c_bare to (re)run")
-    ap.add_argument("--python", default=None)
-    ap.add_argument("--accepted-ctl", default="data/logs/m1_ctl_tokens.json")
-    ap.add_argument("--case", default=None, help="checkpoint role (B0 / B1); default: the workload file's, else B0")
-    ap.add_argument("--expected-layers", type=int, default=None, help="gate I3: decoder layers per step (default: the --case profile's C[\"NL\"])")
-    ap.add_argument("--engine-arg", action="append", default=[], help="LLM(**kw) override key=value (JSON value), repeatable; forwarded to all three variants")
-    args = ap.parse_args(argv)
+@dataclass(frozen=True, kw_only=True)
+class Options:
+    workload: str = option("--workload", default="workloads/workload_32x16_1req.json")
+    out: str = option("--out")
+    checkpoints: str = option("--checkpoints", default="manifests/checkpoints.json")
+    max_tokens: int | None = option("--max-tokens", type=int, default=None)
+    max_num_seqs: int = option("--max-num-seqs", type=int, default=8)
+    no_warmup: bool = option("--no-warmup", default=False, action="store_true")
+    variant: str | None = option("--variant", choices=["observer", "hooks"], default=None, help="(internal) run one variant in this process")
+    compare: bool = option("--compare", default=False, action="store_true", help="torch-free: compare the three variants' outputs under --out")
+    only: str | None = option("--only", default=None, help="orchestrator: comma list of a_observer,b_hooks,c_bare to (re)run")
+    python: str | None = option("--python", default=None)
+    accepted_ctl: str = option("--accepted-ctl", default="data/logs/m1_ctl_tokens.json")
+    case: str | None = option("--case", default=None, help="checkpoint role (B0 / B1); default: the workload file's, else B0")
+    expected_layers: int | None = option("--expected-layers", type=int, default=None, help="gate I3: decoder layers per step (default: the --case profile's C[\"NL\"])")
+    engine_arg: list[str] = option("--engine-arg", action="append", default=[], help="LLM(**kw) override key=value (JSON value), repeatable; forwarded to all three variants")
+
+
+def main(args: Options) -> int:
     if args.variant == "observer":
         run_observer_variant(args.workload, args.out, args.checkpoints, max_tokens=args.max_tokens, max_num_seqs=args.max_num_seqs,
                              warmup=not args.no_warmup, case=args.case, engine_args=_engine_args(args.engine_arg))
@@ -797,7 +801,3 @@ def main(argv: list[str] | None = None) -> int:
               f"problems {rep['problems'][:5]}")
         return 0 if rep["PASS"] else 1
     return orchestrate(args)
-
-
-if __name__ == "__main__":
-    sys.exit(main())

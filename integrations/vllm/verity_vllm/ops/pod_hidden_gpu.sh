@@ -69,8 +69,7 @@ import hidden_gpu as HG
 e = HG.ext()
 assert hasattr(e, "chunk_leaves") and hasattr(e, "tree_levels"), dir(e)
 out = os.path.join(tempfile.gettempdir(), "hidden_gpu_check.json")
-sys.argv = ["hidden_gpu.py", "check", "--out", out]      # R9 self-check: GPU chunk-tree root/levels/openings == host hashlib reference
-HG.main()
+HG.main(HG.CheckOptions(out=out))      # R9 self-check: GPU chunk-tree root/levels/openings == host hashlib reference
 r = json.load(open(out))
 if not r.get("_all_ok"):
     raise SystemExit(f"GPU tree != host reference: {[c for c in r['cases'] if not (c['root_equal'] and c['levels_equal'] and c['openings_ok'])]}")
