@@ -35,7 +35,7 @@ __all__ = ["KEYS", "SCHEMA", "arrays", "document", "main", "tool_id"]
 SCHEMA = "instance-equiv/v1"
 #: the instances fields the tables compare (``tables._candidate_problems``)
 KEYS = ("dataset", "tier", "range", "manifest_sha256")
-REPO = Path(__file__).resolve().parents[4]
+REPO = Path(__file__).resolve().parents[5]
 
 
 def tool_id() -> str:
