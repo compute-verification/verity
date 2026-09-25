@@ -50,6 +50,8 @@ class Poseidon2Torch:
                     b[4 * W + i * 4 + l, 4 * W + j * 4 + l] = me[j][i]
         self.b_int8 = b
         self.pow256 = torch.tensor([1, 256, 65536, 1 << 24], dtype=torch.int64, device=d)
+        # sm_90's cuBLASLt INT8 GEMM (torch 2.6 / cu124) takes only row counts that are multiples of 32
+        self.int_mm_rows = 32 if d.type == "cuda" and torch.cuda.get_device_capability(d)[0] >= 9 else 1
 
     # -- layers ------------------------------------------------------------------------------------------------
     @staticmethod
@@ -98,6 +100,9 @@ class Poseidon2Torch:
         return torch.remainder(total + s * self.diag, P)
 
     def _permute_chunk(self, s: torch.Tensor) -> torch.Tensor:
+        pad = -s.shape[0] % self.int_mm_rows if self.mds == "int8" else 0
+        if pad:
+            return self._permute_chunk(torch.cat((s, s.new_zeros((pad, s.shape[1])))))[:-pad]
         s = self._mds(s)
         for rc in self.ext_init:
             s = self._mds(self._sbox(torch.remainder(s + rc, P)))

@@ -248,10 +248,10 @@ def committed_trees(pinned: str, man: dict, *, instances_root: str | None = None
 
 
 def commitment_problems(pdir: Path, man: dict, pinned: str, reps: list[str], *, instances_root: str | None = None) -> tuple[bool, list[str]]:
-    """``(hashed, problems)``.  A dump whose statements carry a hash-authentication block (``included-hash``) passes only when
-    every statement's three tree references equal :func:`committed_trees` and each rep's statements' ``vu_index`` together
-    cover ``[0, total_vus)`` exactly once (red-team-standard-hash R2); a dump without one is not checked here.  A relation
-    named with a leaf (``+<leaf>``) is hashed: every statement must carry the block.  Coverage counts only what ``batch``
+    """``(hashed, problems)``.  A dump whose pinned relation names a leaf (``+hash``, ``+blake3``, ...: the systems that take a
+    hash-authentication block) passes only when every statement carries the block, its three tree references equal
+    :func:`committed_trees` and each rep's statements' ``vu_index`` together cover ``[0, total_vus)`` exactly once
+    (red-team-standard-hash R2); a bare relation's statements are not read here.  Coverage counts only what ``batch``
     verifies, so in every dump each rep's ``.stmt`` stems must equal its ``.proof`` stems and the manifest's entries for it
     (red-team-standard-hash R4: a statement without a proof claims VUs nobody proved)."""
     from .serialize import read_statement
@@ -259,28 +259,31 @@ def commitment_problems(pdir: Path, man: dict, pinned: str, reps: list[str], *, 
     orphans: list[str] = []
     for r in reps:
         stmts, proofs = ({f.stem for f in (pdir / r).glob(f"*.{s}")} for s in ("stmt", "proof"))
-        listed = [f for f in man.get("files", []) if str(f.get("proof") or f.get("stmt") or "").split("/", 1)[0] == r]
+        listed = [f for f in man.get("files", []) if isinstance(f, dict) and str(f.get("proof") or f.get("stmt") or "").split("/", 1)[0] == r]
         if stmts != proofs:
             orphans.append(f"{r}: {len(stmts - proofs)} statement(s) without a proof, {len(proofs - stmts)} proof(s) without a statement")
         if any(not f.get("proof") for f in listed):
             orphans.append(f"{r}: the manifest lists a statement without a proof")
-        if listed and {Path(f["proof"]).stem for f in listed if f.get("proof")} != proofs:
+        listed_proofs = [Path(f["proof"]).stem for f in listed if f.get("proof")]
+        if listed and (set(listed_proofs) != proofs or len(listed_proofs) != len(set(listed_proofs))):
             orphans.append(f"{r}: the manifest's proofs are not the rep's proofs")
+        if any(f.get("stmt") and Path(f["stmt"]).stem != Path(f["proof"]).stem for f in listed if f.get("proof")):
+            orphans.append(f"{r}: the manifest pairs a proof with another sub-batch's statement")
+    hashed = "+" in (pinned or "")
+    if orphans or not hashed:
+        return hashed, orphans
     per_rep: dict[str, list] = {}
     unreadable: list[str] = []
     for r in reps:
         for f in sorted((pdir / r).glob("*.stmt")):
             try:
-                st = read_statement(f.read_bytes())
-            except Exception as e:  # noqa: BLE001  (batch rejects such a statement; here it only cannot be counted)
+                per_rep.setdefault(r, []).append((f.name, read_statement(f.read_bytes())))
+            except Exception as e:  # noqa: BLE001  (a statement batch would reject cannot be counted either)
                 unreadable.append(f"{r}/{f.name}: unreadable statement ({type(e).__name__}: {e})")
-                continue
-            per_rep.setdefault(r, []).append((f.name, st))
-    hashed = "+" in (pinned or "") or any(getattr(st, "hash_auth", None) is not None for sts in per_rep.values() for _, st in sts)
-    if orphans or not hashed:
-        return hashed, orphans
     if unreadable:
-        return True, unreadable[:8] + ([f"... {len(unreadable) - 8} more"] if len(unreadable) > 8 else [])
+        return True, unreadable[:8] + ([f"… {len(unreadable) - 8} more"] if len(unreadable) > 8 else [])
+    if n_v6 := sum(bool(getattr(st, "v6", False)) for sts in per_rep.values() for _, st in sts):
+        return True, [f"commitment: {n_v6} row-sharing (v6) statement(s): shared-row layouts are not recomputed"]
     try:
         want = committed_trees(pinned, man, instances_root=instances_root)
     except ValueError as e:
