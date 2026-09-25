@@ -244,6 +244,28 @@ def test_fingerprint_builder_emits_conforming_and_refuses_bad(conforming: dict) 
         contract.fingerprint(**{k: v for k, v in fields.items() if k != "hardware"})  # a required field cannot be left out
 
 
+def test_fingerprint_records_the_malloc_tunables(conforming: dict, monkeypatch: pytest.MonkeyPatch) -> None:
+    fields = dict(conforming["workload_fingerprint"])
+    fields["software"] = {k: v for k, v in fields["software"].items() if k != "allocator"}
+    monkeypatch.delenv("MALLOC_MMAP_MAX_", raising=False)
+    monkeypatch.delenv("MALLOC_TRIM_THRESHOLD_", raising=False)
+    assert contract.fingerprint(**fields)["software"]["allocator"] == {"MALLOC_MMAP_MAX_": "unset", "MALLOC_TRIM_THRESHOLD_": "unset"}
+    monkeypatch.setenv("MALLOC_MMAP_MAX_", "0")
+    monkeypatch.setenv("MALLOC_TRIM_THRESHOLD_", "1000000000000")
+    fp = contract.fingerprint(**fields)
+    assert fp["software"]["allocator"] == {"MALLOC_MMAP_MAX_": "0", "MALLOC_TRIM_THRESHOLD_": "1000000000000"}
+    assert "allocator" not in fields["software"] and contract.validate_fingerprint(fp) == []
+    given = {"MALLOC_MMAP_MAX_": "unset", "MALLOC_TRIM_THRESHOLD_": "unset"}
+    assert contract.fingerprint(**{**fields, "software": {**fields["software"], "allocator": given}})["software"]["allocator"] == given
+
+
+def test_pod_env_sets_the_malloc_tunables() -> None:
+    text = (REPO / "backends" / "direct" / "ligero" / "pod_bootstrap.sh").read_text()
+    env_sh = text.split("cat > $W/env.sh <<EOF", 1)[1].split("\nEOF", 1)[0]
+    assert r"MALLOC_MMAP_MAX_=\${MALLOC_MMAP_MAX_:-0}" in env_sh
+    assert r"MALLOC_TRIM_THRESHOLD_=\${MALLOC_TRIM_THRESHOLD_:-1000000000000}" in env_sh
+
+
 def test_probe_hardware_shape() -> None:
     hw = contract.probe_hardware()
     assert set(hw) == {"gpu", "cpu"}
