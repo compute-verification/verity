@@ -370,8 +370,63 @@ def _wire_plan(circ: Circuit, dev: torch.device):
     return _WIRE_PLANS[key]
 
 
+def _lin_csr(lins: list, konst_at: int | None, device):
+    """``gate_eval`` CSR of linear forms over wires (the constant on wire ``konst_at``); None if a constant has no wire."""
+    ptr, idx, coef = [0], [], []
+    for lin in lins:
+        acc: dict[int, int] = {}
+        for i, c in lin.terms:
+            acc[i] = (acc.get(i, 0) + c) % P
+        if lin.konst % P:
+            if konst_at is None:
+                return None
+            acc[konst_at] = (acc.get(konst_at, 0) + lin.konst) % P
+        for i, c in sorted(acc.items()):
+            if c:
+                idx.append(i)
+                coef.append(c * (1 << 32) % P)
+        ptr.append(len(idx))
+    return (torch.tensor(ptr, dtype=torch.int32, device=device), torch.tensor(idx, dtype=torch.int32, device=device),
+            torch.tensor(coef, dtype=torch.int64, device=device))
+
+
+def _wire_csr(circ: Circuit, dev: torch.device):
+    """``_wire_plan`` with each depth's ``a`` / ``b`` forms as ``gate_eval`` CSRs (one launch per side and depth); None
+    when there is no depth plan or a wire is neither an input nor a product."""
+    key = ("csr", circ.hash, dev.type, dev.index)
+    if key not in _WIRE_PLANS:
+        plan = _wire_plan(circ, dev)
+        out = None
+        if plan is not None:
+            w_in, c_in, levels = plan
+            one = [w for w, c in zip(w_in.tolist(), c_in.tolist()) if c == circ.one_col]
+            one_w = one[0] if one else None
+            lv = []
+            for ws, _, _ in levels:
+                wl = ws.tolist()
+                ca = _lin_csr([circ.wires[w][2] for w in wl], one_w, dev)
+                cb = _lin_csr([circ.wires[w][3] for w in wl], one_w, dev)
+                if ca is None or cb is None:
+                    lv = None
+                    break
+                lv.append((ws, ca, cb))
+            if lv is not None and w_in.shape[0] + sum(ws.shape[0] for ws, _, _ in lv) == circ.nwires:
+                out = (w_in, c_in, lv)
+        _WIRE_PLANS[key] = out
+    return _WIRE_PLANS[key]
+
+
 def _eval_wires(circ: Circuit, cols: torch.Tensor) -> torch.Tensor:
     """``circuit.eval_wires`` (the same ``(units, nwires)`` int32) with one batch of launches per product depth."""
+    csr = _wire_csr(circ, cols.device) if cols.is_cuda and _field._fast_gate_eval is not None else None
+    if csr is not None:
+        w_in, c_in, levels = csr
+        wires = torch.empty((cols.shape[0], circ.nwires), dtype=torch.int32, device=cols.device)
+        wires[:, w_in] = cols[:, c_in].to(torch.int32)
+        for ws, ca, cb in levels:
+            n = ws.shape[0]
+            wires[:, ws] = (_field._fast_gate_eval(wires, *ca, n) * _field._fast_gate_eval(wires, *cb, n) % P).to(torch.int32)
+        return wires
     plan = _wire_plan(circ, cols.device) if cols.is_cuda and cols.dtype == torch.int64 else None
     if plan is None:
         return eval_wires(circ, cols)
