@@ -132,6 +132,11 @@ def multiplicities(t: Table, trows: torch.Tensor, values: list[torch.Tensor]) ->
         return m
     keys = trows[:, 0]
     kmap = _key_map(t, keys)
+    if kmap is not None and dev.type == "cuda" and _field._fast_lookup_mults is not None:
+        m, bad = _field._fast_lookup_mults(values, kmap, trows)
+        if bad:
+            raise ValueError(f"query tuple not in table {t.name}")
+        return m
     if kmap is not None:
         for v in values:
             key = v[:, 0]

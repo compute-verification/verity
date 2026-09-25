@@ -118,10 +118,10 @@ FIELD_KEY = int(hashlib.sha256(f"babybear6:{P}:{W}:{R_MONT}".encode()).hexdigest
 _HEADER = f"""
 import triton
 import triton.language as tl
-P: tl.constexpr = {P}
-W: tl.constexpr = {W}
-MU_I32: tl.constexpr = {MU_I32}
-WR: tl.constexpr = {WR}
+P = tl.constexpr({P})
+W = tl.constexpr({W})
+MU_I32 = tl.constexpr({MU_I32})
+WR = tl.constexpr({WR})
 
 @triton.jit
 def _limbs(v):
@@ -634,7 +634,7 @@ def _finish_round_source() -> str:
     ``R = 1`` with ``coeff = 1`` for the extension rounds), ``Q(3) = 3 Q(2) - 3 Q(1) + Q(0)``.  One program, int32
     Montgomery products (the right operand lifted to ``b R`` by ``mmul(b, R^2)``, so ``_ext_mmul6`` returns the plain
     product); every output is canonical, as with plain arithmetic."""
-    L = [f"R2F: tl.constexpr = {R2_MOD_P}", "", "@triton.jit",
+    L = [f"R2F = tl.constexpr({R2_MOD_P})", "", "@triton.jit",
          "def finish_round(t_ptr, c_ptr, pre_ptr, eqx_ptr, s_ptr, R, BLOCK_R: tl.constexpr):",
          "    r = tl.arange(0, BLOCK_R)", "    m = r < R"]
     for d in range(6):

@@ -108,15 +108,22 @@ class Chain:
     public_y16: list[int]
     links: list[Link] | None = None
     spec_hash: bytes | None = None      # v2: sha256 of chain.txt, absorbed in the preamble (the links are public data)
+    # v2 with a `public` line in chain.txt: the epilogue columns bound to the public words, `public_y16` then holds
+    # len(epi_pub) words per VU, VU-major (fp4-nvf4: the FP32 word's sign, exponent field and fraction)
+    epi_pub: list[int] | None = None
 
     @property
     def limbs(self) -> int:
         return len(self.col_c)
 
+    @property
+    def pub_cols(self) -> list[int]:
+        return self.epi_pub if self.epi_pub is not None else [self.epi_y16]
+
     def constraints_per_vu(self) -> int:
         if self.links is None:
             return (self.steps + 1) * self.limbs + 1
-        return 1 + sum(lk.constraints_per_vu(self.steps) for lk in self.links)
+        return len(self.pub_cols) + sum(lk.constraints_per_vu(self.steps) for lk in self.links)
 
 
 def union_tables(segs: list[Segment]) -> list[Table]:
@@ -363,8 +370,63 @@ def _wire_plan(circ: Circuit, dev: torch.device):
     return _WIRE_PLANS[key]
 
 
+def _lin_csr(lins: list, konst_at: int | None, device):
+    """``gate_eval`` CSR of linear forms over wires (the constant on wire ``konst_at``); None if a constant has no wire."""
+    ptr, idx, coef = [0], [], []
+    for lin in lins:
+        acc: dict[int, int] = {}
+        for i, c in lin.terms:
+            acc[i] = (acc.get(i, 0) + c) % P
+        if lin.konst % P:
+            if konst_at is None:
+                return None
+            acc[konst_at] = (acc.get(konst_at, 0) + lin.konst) % P
+        for i, c in sorted(acc.items()):
+            if c:
+                idx.append(i)
+                coef.append(c * (1 << 32) % P)
+        ptr.append(len(idx))
+    return (torch.tensor(ptr, dtype=torch.int32, device=device), torch.tensor(idx, dtype=torch.int32, device=device),
+            torch.tensor(coef, dtype=torch.int64, device=device))
+
+
+def _wire_csr(circ: Circuit, dev: torch.device):
+    """``_wire_plan`` with each depth's ``a`` / ``b`` forms as ``gate_eval`` CSRs (one launch per side and depth); None
+    when there is no depth plan or a wire is neither an input nor a product."""
+    key = ("csr", circ.hash, dev.type, dev.index)
+    if key not in _WIRE_PLANS:
+        plan = _wire_plan(circ, dev)
+        out = None
+        if plan is not None:
+            w_in, c_in, levels = plan
+            one = [w for w, c in zip(w_in.tolist(), c_in.tolist()) if c == circ.one_col]
+            one_w = one[0] if one else None
+            lv = []
+            for ws, _, _ in levels:
+                wl = ws.tolist()
+                ca = _lin_csr([circ.wires[w][2] for w in wl], one_w, dev)
+                cb = _lin_csr([circ.wires[w][3] for w in wl], one_w, dev)
+                if ca is None or cb is None:
+                    lv = None
+                    break
+                lv.append((ws, ca, cb))
+            if lv is not None and w_in.shape[0] + sum(ws.shape[0] for ws, _, _ in lv) == circ.nwires:
+                out = (w_in, c_in, lv)
+        _WIRE_PLANS[key] = out
+    return _WIRE_PLANS[key]
+
+
 def _eval_wires(circ: Circuit, cols: torch.Tensor) -> torch.Tensor:
     """``circuit.eval_wires`` (the same ``(units, nwires)`` int32) with one batch of launches per product depth."""
+    csr = _wire_csr(circ, cols.device) if cols.is_cuda and _field._fast_gate_eval is not None else None
+    if csr is not None:
+        w_in, c_in, levels = csr
+        wires = torch.empty((cols.shape[0], circ.nwires), dtype=torch.int32, device=cols.device)
+        wires[:, w_in] = cols[:, c_in].to(torch.int32)
+        for ws, ca, cb in levels:
+            n = ws.shape[0]
+            wires[:, ws] = (_field._fast_gate_eval(wires, *ca, n) * _field._fast_gate_eval(wires, *cb, n) % P).to(torch.int32)
+        return wires
     plan = _wire_plan(circ, cols.device) if cols.is_cuda and cols.dtype == torch.int64 else None
     if plan is None:
         return eval_wires(circ, cols)
@@ -713,12 +775,14 @@ def add_chain_links(acc: Acc, rho: Ext, geo: Ext, inst: Instance, seg_offs: list
         ve[:, lk.epi] = (ve[:, lk.epi] + pw[:, o]) % P
         vu[:, -1, lk.col_y] = (vu[:, -1, lk.col_y] - pw[:, o]) % P
         o += 1
-    last = pw[:, o]
-    ve[:, ch.epi_y16] = (ve[:, ch.epi_y16] + last) % P
-    y16 = torch.tensor([int(y) % P for y in ch.public_y16], dtype=torch.int64, device=dev)
-    b_acc = (b_acc + ext_scale(last, y16).sum(dim=0)) % P
+    npub = len(ch.pub_cols)
+    ys = torch.tensor([int(y) % P for y in ch.public_y16], dtype=torch.int64, device=dev).view(vus, npub)
+    for j, col in enumerate(ch.pub_cols):
+        last = pw[:, o + j]
+        ve[:, col] = (ve[:, col] + last) % P
+        b_acc = (b_acc + ext_scale(last, ys[:, j]).sum(dim=0)) % P
     acc.b = e_add(acc.b, py_ext(b_acc))
-    assert o + 1 == per_vu
+    assert o + npub == per_vu
     return vus * per_vu
 
 
@@ -759,8 +823,8 @@ def check_chain_links_clear(inst: Instance) -> None:
             raise VerifyError(f"chain: column {lk.col_y} must be 0 before the last unit")
         if bool((ec[:, lk.epi] != uc[:, -1, lk.col_y]).any()):
             raise VerifyError(f"chain: epilogue input (column {lk.epi}) differs from the last unit's value")
-    y16 = torch.tensor([int(y) % P for y in ch.public_y16], dtype=torch.int64, device=ec.device)
-    if bool((ec[:, ch.epi_y16] != y16).any()):
+    ys = torch.tensor([int(y) % P for y in ch.public_y16], dtype=torch.int64, device=ec.device).view(vus, len(ch.pub_cols))
+    if bool((ec[:, ch.pub_cols] != ys).any()):
         raise VerifyError("chain: output word differs from the public word")
 
 
