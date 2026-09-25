@@ -1,4 +1,4 @@
-"""verity_vllm/program/backends/twins.py — every twin against the gate evaluator on synthetic small statics (laptop-fast), the
+"""verity_vllm/program/kernels/twins.py — every twin against the gate evaluator on synthetic small statics (laptop-fast), the
 Replayer's `--evaluator` switch on the synthetic toy (gates / twins / auto agree word for word), the `--check`
 evidence file, and — behind `CAPTURE_BIG=1` like `test_replay_m1.py` — tier b step 0 of M1 (the whole 32-row
 SmolLM2 prefill, 9666 instances) with `--evaluator twins`: 0 divergences, `partial == False`, < 3 min, < 1.5 GB."""
@@ -14,7 +14,7 @@ import numpy as np
 import pytest
 
 from verity_vllm.check import replay
-from verity_vllm.program.backends import twins as TW
+from verity_vllm.program.kernels import twins as TW
 from tests.check.test_replay_synthetic import consistent_toy, snapshots  # noqa: F401 - fixtures
 from verity.ir.defs import bind
 

@@ -9,8 +9,8 @@ from __future__ import annotations
 import pytest
 import torch
 
-from verity_vllm.program.backends import compiled_norm_literal as lit
-from verity_vllm.program.backends.compiled_relations import relation
+from verity_vllm.program.kernels import compiled_norm_literal as lit
+from verity_vllm.program.kernels.compiled_relations import relation
 
 cuda = pytest.mark.skipif(not torch.cuda.is_available(), reason="literal Triton kernels need CUDA")
 

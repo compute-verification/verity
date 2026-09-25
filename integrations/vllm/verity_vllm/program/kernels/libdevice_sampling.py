@@ -15,7 +15,7 @@ With `gen_sampling_rng` (Philox4x32-10 + `uint_to_uniform_float`, already bit-ex
 `g(seed, pos)[v] = -logf(-log1pf(-max(u, 2^-31ish)))` a pure integer/fp32 function that the laptop reproduces bit for bit —
 the `rng` root class needs no tolerance and no margin certificate (verified against the GPU by `gen_ov_sampling_probe.py`).
 
-    python -m verity_vllm.program.backends.libdevice_sampling --compare PROBE_DIR   # PROBE_DIR/g_<seed>_<pos>.npy from the pod probe
+    python -m verity_vllm.program.kernels.libdevice_sampling --compare PROBE_DIR   # PROBE_DIR/g_<seed>_<pos>.npy from the pod probe
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ from pathlib import Path
 
 import numpy as np
 
-from verity_vllm.program.backends import sampling_rng as R
+from verity_vllm.program.kernels import sampling_rng as R
 
 F32 = np.float32
 FLT_MIN = np.float32(1.1754943508222875e-38)          # 2**-126, IR constant 0x3810000000000000

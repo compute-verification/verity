@@ -21,7 +21,7 @@ from typing import Any
 import torch
 
 from verity_vllm.check import compiled_autotune
-from verity_vllm.program.backends.compiled_relations import OUTPUT_ROLES, relation, roles_of, rms_eps_of
+from verity_vllm.program.kernels.compiled_relations import OUTPUT_ROLES, relation, roles_of, rms_eps_of
 
 _DT = {"bfloat16": torch.bfloat16, "float16": torch.float16, "float32": torch.float32, "int64": torch.int64, "int32": torch.int32,
        "uint8": torch.uint8, "int8": torch.int8}

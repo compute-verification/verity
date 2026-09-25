@@ -18,7 +18,7 @@ the wrapper `call()` signatures of the same artifacts.
 """
 from __future__ import annotations
 
-from verity_vllm.program.backends.compiled_norm_literal import literal_variants
+from verity_vllm.program.kernels.compiled_norm_literal import literal_variants
 
 # hook/wrapper argument index -> committed member name (roles), per kernel-name prefix; registered weights are not committed.
 # [R16 compiled, Qwen row] a kernel NAME does not fix its argument list: Inductor names pointwise kernels `triton_poi_fused_<n>` in both the

@@ -14,7 +14,7 @@ import os
 import pytest
 
 from verity_vllm.query.manifest import compiled as CM
-from verity_vllm.program.backends.compiled_relations import OUTPUT_ROLES, roles_of
+from verity_vllm.program.kernels.compiled_relations import OUTPUT_ROLES, roles_of
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 ROW = "llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-compiled"
@@ -52,7 +52,7 @@ def test_f_pm_29_weight_routing_is_in_the_v2_program_digest(tmp_path):
     assert v1["populations"] == v2["populations"]                              # the required-value population is the same (identities carry
     assert [{k: r[k] for k in r if k != "program_digest"} for r in v1["identities"]] == [{k: r[k] for k in r if k != "program_digest"} for r in v2["identities"]]   # the Program, so manifest_digest differs)
     # the mutant: swap the two norm launches' WEIGHT arguments (the positions compiled_relations declares as weights) in every wrapper
-    from verity_vllm.program.backends.compiled_relations import roles_of
+    from verity_vllm.program.kernels.compiled_relations import roles_of
     k0, k2 = "triton_red_fused_fused_add_rms_norm_t_0", "triton_red_fused_fused_add_rms_norm_t_2"
     (w0pos,), (w2pos,) = sorted(roles_of(k0)[1]), sorted(roles_of(k2)[1])
     mut = tmp_path / "code"; shutil.copytree(CODE, mut)

@@ -1,4 +1,4 @@
-// CPU twin of veritor.core.silicon / verity_vllm.program.backends.mma (integer-exact tensor-core
+// CPU twin of veritor.core.silicon / verity_vllm.program.kernels.mma (integer-exact tensor-core
 // semantics) plus a parametrised full-GEMM model: per-output-element chains of
 // ``tc_dot`` steps over K-tiles, optional split-K with an FP32 reduction of the
 // partial chains, and the bias / output-rounding epilogue.  OpenMP over outputs.

@@ -1,4 +1,4 @@
-"""verity_vllm/program/backends/twins.py — vectorized twins of the registered numerical bodies, bit-exact against the gate evaluator.
+"""verity_vllm/program/kernels/twins.py — vectorized twins of the registered numerical bodies, bit-exact against the gate evaluator.
 
 A *twin* re-implements one registered composite (`verity_vllm/program/registry/b1.py`) for speed — numpy over whole operands,
 or the numerics lane's C++ models through ctypes — and is admissible only where its output words are IDENTICAL to
@@ -10,7 +10,7 @@ declines the input (`TwinDeclined`, the gate path is the fallback) or is not off
                                            # order, holding the leaf encodings exactly as `Replayer.operand_words`
                                            # lists them (uint64; uint16/uint32 straight from a snapshot/checkpoint
                                            # carry the same values); returns the output encodings as uint64.
-    uv run python -m verity_vllm.program.backends.twins --check --log LOG --snapshots DIR --profile P --seed S --out twins.json
+    uv run python -m verity_vllm.program.kernels.twins --check --log LOG --snapshots DIR --profile P --seed S --out twins.json
 
 Twins (twin_id -> registered body it reproduces; see `out/capture/reports/h4_twins.md` for the reduction orders):
     gemm.bf16.tc_chain.v1        Gemm_v1              tc_model.cpp `gemm_model` (one ascending k16 chain per coordinate,
@@ -131,10 +131,10 @@ def _tc_lib() -> ctypes.CDLL:
     compiler lacks OpenMP (the model is integer arithmetic on exact terms: exact either way, only slower)."""
     global _TC_LIB
     if _TC_LIB is None:
-        from verity_vllm.program.backends import cpu_model
+        from verity_vllm.program.kernels import cpu_model
         src, lib = Path(cpu_model.CPP_SRC), Path(cpu_model.LIB)
         if not lib.exists() or lib.stat().st_mtime < src.stat().st_mtime:
-            from verity_vllm.program.backends import _jit                       # atomic publish + builder lock (no half-written .so)
+            from verity_vllm.program.kernels import _jit                       # atomic publish + builder lock (no half-written .so)
             cxx = os.environ.get("CXX", "g++")
             omp = _cxx_has_openmp()
 

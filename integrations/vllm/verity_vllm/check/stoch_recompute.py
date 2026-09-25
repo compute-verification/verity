@@ -400,7 +400,7 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
 def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = None, workload: str | Path | None = None,
                   jobs: int | None = None, build_dir: str | Path | None = None, evaluator: str = "lane",
                   reference_rows: int = 0) -> dict:
-    from verity_vllm.program.backends import sampling_rng as R
+    from verity_vllm.program.kernels import sampling_rng as R
     from verity_vllm.check.fold_compare import SnapshotStore
     from verity_vllm.check.difftest import evaluate_spec
     from verity_vllm.observe.events import SampleEnd, StepStart, TritonLaunch, ViewDesc

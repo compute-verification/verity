@@ -105,7 +105,7 @@ EVALUATORS = {
                     "at position T-1 over the T committed K/V rows the Program names, ceil(T/BN) blocks last -> first, tc_dot16 step, Fa2InvSum); "
                     "k16 step = registry.tc_total ampere_bf16_m16n8k16 total family v3",
     "Attention_v2": "verity_vllm.program.registry.derived_rows.attention_rows (Attention_v2{T,NH,KVH,D,BN,DOT,INV}: the DOT / INV statics resolved by name "
-                    "-- HopperBF16WgmmaDot16_v1 + Fa3InvSum_v1 = FA3 on sm_90 (== verity_vllm.program.backends.fa3_model.fa3_rows); "
+                    "-- HopperBF16WgmmaDot16_v1 + Fa3InvSum_v1 = FA3 on sm_90 (== verity_vllm.program.kernels.fa3_model.fa3_rows); "
                     "AmpereBF16TcDot16_v1 + Fa2InvSum_v1 = FA2 under the lifted name); "
                     # [revb M-0148 (5) / rev] the silicon envelope of the FA3 relation, stated with the evaluator
                     "FA3 envelope MEASURED exact on the H100 production capture at hdim 128 / kBlockN 128, T = 1..527 (39 leaves, "
@@ -2390,7 +2390,7 @@ _FAMILY_LIBS = {"RMSNormTriton_v1": ("rms",), "RMSNormFusedCuda_v2": ("rms",), "
 def _prewarm_evaluators(picked: list[dict]) -> dict[str, str]:
     """[rev-cb F-cb-44 second finding; MAN-06g] Build + dlopen every twin library the sample's families need in the PARENT before the fork:
     the children inherit the mapping and never race a first-use JIT build (a sibling used to dlopen the half-written .so -> 'file too
-    short' -> a stratum 'not evaluated').  The build itself is atomic + locked (`verity_vllm.program.backends._jit`); this makes the fast path
+    short' -> a stratum 'not evaluated').  The build itself is atomic + locked (`verity_vllm.program.kernels._jit`); this makes the fast path
     the only path.  Returns {library: path} for the record; a failure here is reported, not fatal (the children fall back to their own
     locked build)."""
     fams = {str(vu.get("spec") or "").split("{", 1)[0] for vu in picked}

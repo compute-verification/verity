@@ -8,7 +8,7 @@ RNE bf16.  Emits every online-state version the kernel holds in registers (mappi
 
 Run:  cd <veritor>; PYTHONPATH=. python out/gen/r8/fa2-sem/verity_attn_ref.py --case p0b --out /tmp/p0b_ref.json
       PYTHONPATH=. python out/gen/r8/fa2-sem/verity_attn_ref.py --compare /tmp/p0b_ref.json /tmp/p0b_dump.json
-Needs the MUFU tables (verity_vllm/program/backends/tables/W11-40f0cebeb670-20260907T1800Z).
+Needs the MUFU tables (verity_vllm/program/kernels/tables/W11-40f0cebeb670-20260907T1800Z).
 Deterministic: inputs come from numpy PCG64(seed); no torch, no GPU.  All words are hex in the JSON (f32: 8 digits,
 bf16: 4 digits); ints `n_block`, `nvis`, `M`, `T`, `D`, `BN` are decimal.
 """

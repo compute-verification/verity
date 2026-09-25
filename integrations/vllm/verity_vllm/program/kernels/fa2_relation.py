@@ -29,10 +29,10 @@ from typing import Any
 
 import numpy as np
 
-from verity_vllm.program.backends import fa2_model as FA
+from verity_vllm.program.kernels import fa2_model as FA
 
 try:  # share W4b's node adaptation + error base when its module imports (it needs veritor.core.silicon, Python >= 3.12)
-    from verity_vllm.program.backends import gemm_relation as _R4
+    from verity_vllm.program.kernels import gemm_relation as _R4
 
     GemmRelationError = _R4.GemmRelationError
     _words, _node_of, _extra, _const, _arg_cols = _R4._words, _R4._node_of, _R4._extra, _R4._const, _R4._arg_cols
@@ -248,7 +248,7 @@ RELATIONS: dict[str, Any] = {rid: fn for rid, (_, fn, _) in RELATION_IDS.items()
 
 def register_with_w2(replace: bool = False) -> list[str]:
     try:
-        from verity_vllm.program.backends import relations as R
+        from verity_vllm.program.kernels import relations as R
     except ImportError:
         return []
     done = []

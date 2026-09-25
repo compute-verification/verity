@@ -3,7 +3,7 @@
 as Triton 3.7.1 + ptxas lower it on sm_89 (num_warps=8, F=8 pivots, 5 rounds, BLOCK 2048 / 8192).
 
 Every fp32 op is one IEEE RN-even step (numpy float32).  `tl.exp` = MUFU.EX2(x * log2e) with ptxas' non-ftz `t < -126` path
-(measured table, `verity_vllm.program.backends.fa2_model`); `/` = div.full.f32 = MUFU.RCP(range-scaled b) * a (`rms_triton_model`);
+(measured table, `verity_vllm.program.kernels.fa2_model`); `/` = div.full.f32 = MUFU.RCP(range-scaled b) * a (`rms_triton_model`);
 `tl.log` = libdevice `__nv_logf` (`sampling.nv_logf`).  Reduction trees are explicit (`Cfg`, defaults = the fitted lowering):
 
   * stats `tl.sum` over the [8192] block: sizePerThread spt = `spt_for(V, S)` (4 / 2 / 1 -- Triton's coalescing pass decides it
@@ -86,15 +86,15 @@ def splits_for_v1(n_live: int, num_sms: int) -> int:
 
 @lru_cache(maxsize=None)
 def _fa():
-    from verity_vllm.program.backends import fa2_model as FA
-    from verity_vllm.program.backends import fa2_relation as FAR
+    from verity_vllm.program.kernels import fa2_model as FA
+    from verity_vllm.program.kernels import fa2_relation as FAR
     return FA, FAR.tables()
 
 
 @lru_cache(maxsize=None)
 def _rm():
-    from verity_vllm.program.backends import rms_relation as RR
-    from verity_vllm.program.backends import rms_triton_model as RM
+    from verity_vllm.program.kernels import rms_relation as RR
+    from verity_vllm.program.kernels import rms_triton_model as RM
     return RM, RR.tables("cuda")
 
 f32 = np.float32

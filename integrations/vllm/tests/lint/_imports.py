@@ -30,8 +30,8 @@ INTERIM_LAYER = {
     "verity_vllm.pipeline": "pipeline",                         # derive_step, run_config, commit_delta, research_*, ...
     "verity_vllm.target_family": "config",             # -> config.py
     "verity_vllm.check": "check|properties",                   # per-run checks, and the property harnesses -> properties/
-    "verity_vllm.program.backends.twins": "program",                      # -> program/backends/
-    "verity_vllm.program.backends.relations": "program",                  # -> program/backends/
+    "verity_vllm.program.kernels.twins": "program",                      # -> program/kernels/
+    "verity_vllm.program.kernels.relations": "program",                  # -> program/kernels/
     "verity_vllm.input_provenance": "check|properties",        # weights_of_record, root_policy -> check/provenance.py
     "verity_vllm.program.model": "program",        # -> program/model.py
     "verity_vllm.acquire": "acquire",
@@ -60,7 +60,7 @@ INTERIM_LAYER = {
     "verity_vllm.correspondence.batch_decomp": "check|properties",   # -> check/match/
     "verity_vllm.observe.runtime_tree": "observe|commit",
     "verity_vllm.observe.chunks": "observe|commit",
-    "verity_vllm.program": "program",                          # frontend/, registry/, workload; numerics/ -> program/backends/
+    "verity_vllm.program": "program",                          # frontend/, registry/, workload; numerics/ -> program/kernels/
     "verity_vllm.pipeline.global_program": "pipeline",          # -> pipeline/build.py
     "verity_vllm.program.frontend.liveness": "core",
     "verity_vllm.tp": "pipeline",                              # capture, commit, match, fold_match -> world-parametric pipeline/ drivers

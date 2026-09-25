@@ -59,11 +59,11 @@
     {"file": "verity_vllm/pipeline/report.py", "kind": "g-literal", "symbol": "counts_of", "detail": "G5"},
     {"file": "verity_vllm/pipeline/report.py", "kind": "g-literal", "symbol": "top_section", "detail": "G7"},
     {"file": "verity_vllm/pipeline/report.py", "kind": "g-literal", "symbol": "vu_partition_text", "detail": "G8"},
-    {"file": "verity_vllm/program/backends/twins.py", "kind": "reason-prefix", "symbol": "_skip_class", "detail": "'...' in msg", "count": 3},
     {"file": "verity_vllm/program/frontend/derive.py", "kind": "reason-prefix", "symbol": "_export", "detail": "'...' in msg", "count": 2},
     {"file": "verity_vllm/program/frontend/derive.py", "kind": "reason-prefix", "symbol": "_no_rule", "detail": "msg.startswith"},
     {"file": "verity_vllm/program/frontend/rules/vocab.py", "kind": "reason-prefix", "symbol": "Vocabulary.to_json", "detail": "'...' in self.notes"},
     {"file": "verity_vllm/program/frontend/torch_frontend.py", "kind": "reason-prefix", "symbol": "_classify", "detail": "'...' in msg", "count": 3},
-    {"file": "verity_vllm/program/frontend/torch_frontend.py", "kind": "reason-prefix", "symbol": "_classify", "detail": "'...' in msg.lower()"}
+    {"file": "verity_vllm/program/frontend/torch_frontend.py", "kind": "reason-prefix", "symbol": "_classify", "detail": "'...' in msg.lower()"},
+    {"file": "verity_vllm/program/kernels/twins.py", "kind": "reason-prefix", "symbol": "_skip_class", "detail": "'...' in msg", "count": 3}
   ]
 }

@@ -26,7 +26,7 @@ from pathlib import Path
 
 import numpy as np
 
-from verity_vllm.program.backends import _jit
+from verity_vllm.program.kernels import _jit
 
 HERE = Path(__file__).resolve().parent
 CPP_SRC = HERE / "cpp" / "fa2_model.cpp"

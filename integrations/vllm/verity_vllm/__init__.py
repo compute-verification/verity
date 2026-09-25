@@ -2,7 +2,7 @@
 
 Pure Python + numpy.  Nothing here imports torch at module level; the
 ``same_runtime`` relation checkers that need torch live behind optional
-imports inside :mod:`verity_vllm.program.backends.relations`.
+imports inside :mod:`verity_vllm.program.kernels.relations`.
 
 Module map (see ``docs/vllm-poc/capture-format.md`` for the on-disk format):
 
@@ -13,7 +13,7 @@ Module map (see ``docs/vllm-poc/capture-format.md`` for the on-disk format):
 - :mod:`verity_vllm.commit.merkle`      Merkle trees, openings, ``commitments.json``
 - :mod:`verity_vllm.check.poc_description` ``description.json`` schema and validation
 - :mod:`verity_vllm.check.poc_required_interface`    ``required.json`` derivation and freeze
-- :mod:`verity_vllm.program.backends.relations`   relation registry, the ``check`` runner, adjacent-VU helpers
+- :mod:`verity_vllm.program.kernels.relations`   relation registry, the ``check`` runner, adjacent-VU helpers
 - :mod:`verity_vllm.relations_torch` optional torch ``same_runtime`` checkers (``install()``)
 - :mod:`verity_vllm.negatives`   targeted negative tests N01-N07, N13, N14
 - :mod:`verity_vllm.render`      ``docs/fixtures/results.md`` renderer (``python -m``)
