@@ -134,17 +134,27 @@ def machines_path() -> Path:
 
 
 def load_machines(path: Path | None = None) -> dict[str, dict[str, Any]]:
+    """machines.toml's `[machines.*]`; without an explicit `path`, merged with the pod registry (research.pods.registry)."""
     p = path or machines_path()
-    if not p.exists():
-        return {}
-    return tomllib.loads(p.read_text()).get("machines", {})
+    ms = tomllib.loads(p.read_text()).get("machines", {}) if p.exists() else {}
+    if path is None:
+        from .pods import registry
+
+        ms = registry.merged(ms, p)
+    return ms
 
 
 def resolve_machine(name: str, project: str | None, machines: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
     ms = load_machines() if machines is None else machines
     m = ms.get(name)
     if m is None:
-        raise Refused(f"machine {name!r} is not in {machines_path()}; only listed machines may be used")
+        from .pods import registry
+
+        if why := registry.problems.get(name):
+            raise Refused(f"machine {name!r} refused: {why}")
+        d = registry.registry_dir(machines_path())
+        where = f"{machines_path()}" + (f" or {d}" if d else "")
+        raise Refused(f"machine {name!r} is not in {where}; only listed machines may be used (research pods register)")
     if not project:
         raise Refused("--project is required for a remote run (the machine is bound to a project)")
     allowed = m.get("projects") or ([m["project"]] if m.get("project") else [])

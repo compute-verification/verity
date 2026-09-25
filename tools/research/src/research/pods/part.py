@@ -27,8 +27,11 @@ PROBE = ("sh", "-c", "nvidia-smi --query-gpu=name,memory.total --format=csv,nohe
 
 
 def load_families(path: Path | None = None) -> dict[str, dict[str, Any]]:
-    p = path or remote.machines_path()
-    return tomllib.loads(p.read_text()).get("families", {}) if p.exists() else {}
+    if path is None:
+        from .registry import families
+
+        return families(remote.machines_path())
+    return tomllib.loads(path.read_text()).get("families", {}) if path.exists() else {}
 
 
 def verdict(sku: str | None, vram_mb: int | None, families: dict[str, dict[str, Any]], tolerance: float = TOLERANCE) -> dict[str, Any]:
@@ -119,13 +122,30 @@ def main(argv: list[str]) -> int:
             return 1
         print(json.dumps(rep, indent=2, sort_keys=True) if ns.json else render(rep))
         return 0 if rep.get("reference") else 3
+    if argv[:1] in (["register"], ["unregister"], ["registry"]):
+        from .registry import main as registry_main           # one file per machine (registry.py)
+
+        return registry_main(argv)
     if argv[:1] == ["create"]:
         ap = argparse.ArgumentParser(prog="research pods create")
         runpod.create_args(ap)
         ap.add_argument("--require-reference-part", action="store_true", help="exit 3 (pod left running) unless the board is the reference part")
+        ap.add_argument("--register", action="store_true", help="register the pod under --name once sshd answers (research pods register)")
+        ap.add_argument("--project", default=None, help="--register: the project the machine is bound to")
+        ap.add_argument("--guard", default=None, metavar="N|true", help="--register: opt the pod into the idle guard")
         ns = ap.parse_args(argv[1:])
+        if ns.register and not ns.project:
+            ap.error("--register needs --project")
         pod = runpod.create(ns)
         runpod.wait_ssh(pod["id"])
+        if ns.register:
+            from .registry import main as registry_main
+
+            rc = registry_main(["register", ns.name, "--pod-id", pod["id"], "--project", ns.project,
+                                *(["--guard", ns.guard] if ns.guard else [])])
+            if rc:
+                print(f"research pods create: pod {pod['id']} is up but not registered", file=sys.stderr)
+                return rc
         rep = check_pod(pod["id"])
         print(render(rep))
         if ns.require_reference_part and not rep.get("reference"):
