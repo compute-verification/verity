@@ -1,0 +1,14 @@
+# The circuit files verity-gkr-verify accepts, per relation (README "Pinned circuits"; compiled in by src/pins.rs).
+# One approved circuit set per line:
+#
+#   relation  steps  sha256(circuit.txt)  sha256(epilogue.txt)  sha256(chain.txt)  generator
+#
+# `verify --relation R` refuses a statement directory whose manifest `steps` and three files are not one of R's lines.
+# `generator`, run from backends/gkr with the repo root on the path and `--out DIR` appended, writes the three files byte
+# for byte on this tree, without torch (backends/gkr/tests/test_circuit_pins.py regenerates every line in
+# `uv run pytest`).  A statement rewrite is a new line; deleting a line un-approves its statement.
+
+# first-campaign-target (A100 BF16): the statement of r20260924-062624-27e2, -065721-3ac3, -071929-6745, -073947-78c1
+bf16-ampere 96 afefd92fc17282ae280eef80b1b331b49340ffbbed88a1d8a7f3dac3cc45f1c7 90001e98ad752110e825f9f8a938a2731fea597727921f9af4acc6cd4561359c 08025221bde2efaf108dd32f6d5bf1b4a977695716d39466d6ed3e6d1fa42a47 python -m gpu.v2.export circuits --model ampere_bf16_m16n8k16
+# bf16-hopper-mma-draft (H100 BF16): the statement of r20260924-080613-6000
+bf16-hopper 96 77fbfab94f67eea73e887c2367b248a1079f5240aceefd0b6812d1ba9d22c9f6 94676af16bac77a35f8630c72071bead8a60d6ba26e8abef0d162bf285c5d119 30516d6164617754c311e7408b41a9c4afe612e1cf04ab105f32a4bee3dbab77 python -m gpu.v2.export circuits --model hopper_bf16_m16n8k16

@@ -8,7 +8,9 @@ Before it, no implementation other than the a-gpu lane's own Python port had acc
 
 ~~~text
 cargo build --release
-verity-gkr-verify verify    --dir D --proof proof.bin [--vus N] [--threads T] [--json out.json]
+verity-gkr-verify verify    --dir D --proof proof.bin --relation R [--vus N] [--threads T] [--json out.json]
+verity-gkr-verify verify    --dir D --proof proof.bin --allow-any-circuit ...      # unpinned: the verdict says circuit_pinned = false
+verity-gkr-verify circuit-digest --dir D                                           # D's circuit set and the relation it is pinned for
 verity-gkr-verify negatives --dir D --proofs DIR  [--threads T] [--json out.json]     # every DIR/<id>.bin (D/neg/<id>) must be rejected
 verity-gkr-verify mutate    --dir D --proof proof.bin [--vus N] [--threads T] [--parallel P] [--sample K] [--json out.json]
 python -m verifier.e2e --prover run.json --verifier out.json --out envelope.json         # A-GPU e2e with this verifier
@@ -16,6 +18,25 @@ python -m verifier.e2e --prover run.json --verifier out.json --out envelope.json
 
 `D` is a `gpu.bb_export` directory.  The verifier reads **only** `circuit.txt`, `epilogue.txt`, `manifest.json`
 (`steps`) and `public.bin` (the words; `--vus N` = the first N).  It never opens `units.bin` / `epilogue.bin`.
+
+## Pinned circuits
+
+The circuit files are the statement's arithmetisation, and a proof binds whichever files it was made for (their SHA-256
+enter the transcript preamble).  So `verify` takes the relation the proof is claimed for, `--relation R`, and refuses
+before parsing anything unless `D`'s circuit set is one `pins.txt` approves for `R`: the manifest's `steps` (the circuits
+are uniform in the unit count, so the files alone do not fix K) and the SHA-256 of `circuit.txt`, `epilogue.txt` and
+`chain.txt`.  The refusal is a rejection (exit 1, `"accepted": false`) naming what differs; bf16-hopper circuits claimed
+as bf16-ampere are refused as such.  `--allow-any-circuit` lifts the pin, and every verdict then carries
+`"circuit_pinned": false` (`ligero-verify`'s `--allow-any-system`); `negatives` and `mutate` test rejections and are not
+pinned.  Relation names are the ones `ligero-verify` pins (`backends/direct/ligero/relations.py`, `fp4-nvf4`).
+
+`pins.txt` is compiled in, so the binary's identity (its sha256, the last commit touching this directory) covers the
+approved circuits.  Each line names the generator that writes its files (run from `backends/gkr` with the repo root on
+the path, `--out DIR` appended; it must not need torch); `backends/gkr/tests/test_circuit_pins.py` (in `uv run pytest`)
+regenerates every line and prints the new line when a generator's output moves.  A statement rewrite is therefore one new line in the same commit, reviewed like any
+change of relation; a line stays while its generator can still write it, and deleting it un-approves its statement.
+Pinned today: `bf16-ampere` and `bf16-hopper` (`gpu.v2.export circuits`), the statements of every verified A100 and
+H100 BF16 result.
 
 ## What it checks, and what it takes from where
 
@@ -79,6 +100,9 @@ src/ntt.rs         radix-2 NTT (Montgomery twiddles), 48-lane batched DIF/pruned
 src/lanes.rs       AVX-512 lane kernels (butterflies, 6-lane accumulate), runtime-detected, scalar fallback
 src/proof.rs       proof.bin parser (statement-bounded)
 src/verify.rs      the verifier: transcript replay, LogUp, GKR, the functional, Ligero
-src/main.rs        verify / negatives / mutate
+src/pins.rs        the circuit pin: pins.txt parsed, a statement directory's circuit set checked against the claimed relation
+src/main.rs        verify / negatives / mutate / circuit-digest
+pins.txt           the approved circuit sets, one per line: relation, steps, three SHA-256, the generator
+tests/cli.rs       the pin at the command line (refusal before the proof is read, exit codes, circuit-digest)
 e2e.py             the A-GPU envelope with this verifier for benchmarks/latency_compare.py
 ~~~
