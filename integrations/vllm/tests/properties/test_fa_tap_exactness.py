@@ -9,6 +9,7 @@ import pytest
 
 from verity_vllm.acquire.sources.hidden_source import fa3_tile
 from verity_vllm.properties import fa_tap_exactness as X
+from verity_vllm.properties.record import digest_of
 from verity_vllm.commit.hidden_stream import SRC_BITS, StreamLayout
 from tests.properties import fa_tap_exactness_gpu as G
 
@@ -28,7 +29,7 @@ def test_sealed_record_verifies_and_every_edit_is_named():
     edited["cases"][0]["out_lse_eq_installed"] = False
     stale_ok = ["cases prefill_short hd64: ok=True but its fields say False", "ok=True but the entries say False"]
     assert X.verify_record(edited) == ["digest does not match the record", *stale_ok]
-    assert X.verify_record({**edited, "digest": X._digest(edited)}) == stale_ok
+    assert X.verify_record({**edited, "digest": digest_of(edited)}) == stale_ok
     assert X.seal(edited)["ok"] is False
 
 

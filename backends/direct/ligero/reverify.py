@@ -14,7 +14,9 @@ RESULT is a bench-result/v1 artifact id (abbreviated ids welcome).  For each one
      the rep holds as many proofs as the manifest lists for it;
      before it, a dump whose statements carry hash authentication (included-hash) must commit to the claimed instance set: the
      a/b/y bindings and roots are recomputed from the set (--instances-root, default $BENCH_INSTANCES) and every statement's
-     trees must equal them, and each rep's statements must cover every VU of [0, total) exactly once;
+     trees must equal them, and each rep's statements must cover every VU of [0, total) exactly once; a row-sharing (v6) dump
+     is recomputed as the GEMM tile its manifest's `set.tile` names (x = vu // nw, W = vu % nw) and fails without one;
+     a row-sharing pair is verified with `--system-h` (the manifest's `system_h_file`);
   5. PASS -> a PRESERVED verification-verdict/v1 artifact (refs proof=<run-files>, result=RESULT; the per-rep batch JSON as its
      payload) and labels on RESULT by --by: verified=accepted, verifier, verifier_seconds, note (pushed with the labels sync).
      FAIL (custody / pin / verifier rejection) -> nothing is written; the per-rep JSON stays in --work, exit 1.
@@ -129,6 +131,7 @@ class Report:
     verdict: str | None = None
     labels: list[str] = field(default_factory=list)
     hashed: bool = False                    # included-hash statements: trees recomputed from the instance set
+    tile: str | None = None                 # the recomputed set is the manifest's `set.tile` (nx x nw), not one row per VU
 
     def line(self) -> str:
         acc = sum(v.get("accepted", 0) for v in self.reps.values())
@@ -147,8 +150,12 @@ def custody(pdir: Path, man: dict) -> tuple[int, list[str], list[str]]:
     missing: list[str] = []
     n = 0
     sysf = man.get("system_file") or {}
-    listed = [(rel, f.get(f"{key}_sha256"), f.get(f"{key}_bytes")) for f in man.get("files", []) for key in ("proof", "coins", "stmt") if (rel := f.get(key))]
-    for rel, sha, size in [*listed, (sysf.get("path", "system.bin"), sysf.get("sha256"), sysf.get("bytes"))]:
+    listed = [(rel, f.get(f"{key}_sha256"), f.get(f"{key}_bytes")) for f in man.get("files", []) if isinstance(f, dict)
+              for key in ("proof", "coins", "stmt", "proof_h", "coins_h") if (rel := f.get(key))]
+    systems = [(sysf.get("path", "system.bin"), sysf.get("sha256"), sysf.get("bytes"))]
+    if isinstance(sysh := man.get("system_h_file"), dict):            # a row-sharing pair's hash side
+        systems.append((sysh.get("path", "system_h.bin"), sysh.get("sha256"), sysh.get("bytes")))
+    for rel, sha, size in [*listed, *systems]:
         n += 1
         p = pdir / rel
         if not p.is_file():
@@ -190,14 +197,38 @@ def _row_digests(rows, word_bits: int, role: int) -> list[bytes]:
     return [blake3.blake3(rowleaf.row_bytes(r, word_bits), key=key).digest() for r in rows]
 
 
-def committed_trees(pinned: str, man: dict, *, instances_root: str | None = None) -> dict[str, TreeKey]:
+def tile_shape(rel, tile: Any, total: int) -> tuple[int, int, int]:
+    """``(nx, nw, seed)`` of a manifest's ``set.tile`` block, which must name the bench's own draw and layout
+    (``relchain.TILE_DRAW`` / ``TILE_LAYOUT``), ``nx * nw = total_vus`` and the relation's instance seed.  ``ValueError``
+    on anything else (the tile is then not recomputed)."""
+    from .relchain import TILE_DRAW, TILE_LAYOUT
+
+    if not isinstance(tile, dict):
+        raise ValueError(f"manifest `set.tile` is not an object: {tile!r}")
+    nx, nw, seed = tile.get("nx"), tile.get("nw"), tile.get("seed")
+    if not all(isinstance(v, int) and not isinstance(v, bool) and v > 0 for v in (nx, nw)):
+        raise ValueError(f"manifest `set.tile`: nx = {nx!r}, nw = {nw!r} are not positive integers")
+    if nx * nw != total:
+        raise ValueError(f"manifest `set.tile` is {nx}x{nw} = {nx * nw} VUs, the set has total_vus = {total}")
+    if tile.get("draw") != TILE_DRAW or tile.get("layout") != TILE_LAYOUT:
+        raise ValueError(f"manifest `set.tile` names draw {tile.get('draw')!r} / layout {tile.get('layout')!r}; this verifier "
+                         f"recomputes {TILE_DRAW!r} / {TILE_LAYOUT!r} only")
+    if seed != rel.instance_seed or isinstance(seed, bool):
+        raise ValueError(f"manifest `set.tile` seed {seed!r} is not the {rel.name} instance seed {rel.instance_seed}")
+    return nx, nw, seed
+
+
+def committed_trees(pinned: str, man: dict, *, instances_root: str | None = None, procs: int = 1) -> dict[str, TreeKey]:
     """The x / W / y tree references of the instance set the dump names, recomputed from the set itself: the pinned relation
     (``system-digest``) fixes the relation and leaf scheme, the manifest's ``set`` block the range ``[0, total_vus)`` and the
-    set's manifest digest, which the regenerated set must reproduce.  Bindings are ``hashauth.binding_digest`` of (dataset,
-    tier, manifest digest, range, K, tree, schema); keyed-BLAKE3 row trees are framed by core ``frame-v3`` over digests of the
-    raw rows (independent of the prover's leaf code); other leaf schemes use the backend's reference tree builder.
-    ``ValueError`` when the set cannot be recomputed (no ``set`` block, a tile, a digest mismatch, an operand format with
-    its own lanes)."""
+    set's manifest digest, which the regenerated set must reproduce.  Without ``set.tile`` the set is ``relchain.instances``
+    (one x row and W column per VU); with it, the GEMM tile ``relchain.tile_instances(rel, nx, nw, seed)`` (:func:`tile_shape`:
+    ``nx`` x rows, ``nw`` W columns, ``nx * nw`` y words, digest ``relchain.tile_digest``).  Bindings are
+    ``hashauth.binding_digest`` of (dataset, tier, manifest digest, range, K, tree, schema), as the bench commits them;
+    keyed-BLAKE3 row trees are framed by core ``frame-v3`` over digests of the raw rows (independent of the prover's leaf
+    code); other leaf schemes use the backend's reference tree builder.  ``ValueError`` when the set cannot be recomputed
+    (no ``set`` block, a ``set.tile`` other than the bench's, a sharing label without one, a digest mismatch, an operand
+    format with its own lanes)."""
     from verity.commitments import CommitmentDomain, RangeIndexedDomain
     from verity.commitments.frame_v3 import FrameV3, Port, RowLeaf, WordLeaf
     from verity.commitments.rowleaf import ROLE_W, ROLE_X
@@ -206,54 +237,70 @@ def committed_trees(pinned: str, man: dict, *, instances_root: str | None = None
     from .auth import OWNER
     from .leaf import registry as leaf_registry
     from .relations import relation
-    from .relchain import instances, instances_digest
+    from .relchain import instances, instances_digest, tile_digest, tile_instances
 
     base, leaf_name = leaf_registry.split_relation_name(pinned)
     s = man.get("set") or {}
     total, claimed = s.get("total_vus"), s.get("instances")
     if not isinstance(total, int) or total <= 0 or not isinstance(claimed, str):
         raise ValueError("the dump names no instance set (manifest `set`: total_vus, instances): the commitments cannot be recomputed")
-    if s.get("tile") or s.get("sharing") not in (None, "none"):
-        raise ValueError(f"shared-row layouts (set {s.get('tile') or s.get('sharing')}) are not recomputed")
+    tile = s.get("tile")
+    if tile is None and s.get("sharing") not in (None, "none"):
+        raise ValueError(f"set sharing {s.get('sharing')!r} without a `set.tile` block: the shared-row layout is not recomputed")
     rel = relation(base)
     if getattr(rel, "hash_format", None) is not None or rel.word_dtype not in ("<u1", "<u2"):
         raise ValueError(f"{rel.name}: operands of dtype {rel.word_dtype} / a lane format are not recomputed")
-    digest = instances_digest(rel, total, root=instances_root)
-    if digest != claimed:
-        raise ValueError(f"the regenerated {rel.name} set of {total} VUs has manifest digest {digest[:16]}…, the dump claims {claimed[:16]}…")
-    data = instances(rel, total, root=instances_root)
+    if tile is None:
+        digest = instances_digest(rel, total, root=instances_root)
+        if digest != claimed:
+            raise ValueError(f"the regenerated {rel.name} set of {total} VUs has manifest digest {digest[:16]}…, the dump claims {claimed[:16]}…")
+        data = instances(rel, total, procs=procs, root=instances_root)
+        x_rows = [[int(w) for w in v[0]] for v in data]
+        w_cols = [[int(w) for w in v[1]] for v in data]
+    else:
+        nx, nw, seed = tile_shape(rel, tile, total)
+        digest = tile_digest(rel, nx, nw, seed)
+        if digest != claimed:
+            raise ValueError(f"the {rel.name} {nx}x{nw} tile (seed {seed}) has manifest digest {digest[:16]}…, the dump claims {claimed[:16]}…")
+        data, x, w = tile_instances(rel, nx, nw, seed=seed, procs=procs)
+        x_rows, w_cols = [[int(v) for v in r] for r in x], [[int(v) for v in r] for r in w]
     word_bits = 16 if rel.word_dtype == "<u2" else 8
     K = int(getattr(rel, "vu_words", 1536))
     scheme = leaf_registry.get(leaf_name)
     ysch, ybytes = hashauth.word_schema(rel.y_bits)
-    x_rows = [[int(w) for w in v[0]] for v in data]
-    w_cols = [[int(w) for w in v[1]] for v in data]
     y_words = [int(rel.y_public(int(v[3]))) for v in data]
+    if len(y_words) != total:
+        raise ValueError(f"{rel.name}: the regenerated set has {len(y_words)} VUs, not {total}")
     if any(len(r) != K for r in x_rows + w_cols):
         raise ValueError(f"{rel.name}: instance rows are not K = {K} words")
+    counts = {"a": len(x_rows), "b": len(w_cols), "y": total}
     bindings = {n: hashauth.binding_digest(dataset=rel.instances_dataset, tier=rel.instances_tier, manifest_sha256=claimed, lo=0,
                                            hi=total, K=K, tree=n, schema=(scheme.schema if n != "y" else ysch)) for n in ("a", "b", "y")}
     if scheme.schema == "blake3-keyed/row/v2":
-        dom = {n: CommitmentDomain(bindings[n], OWNER[n], RangeIndexedDomain(0, total)) for n in ("a", "b", "y")}
+        dom = {n: CommitmentDomain(bindings[n], OWNER[n], RangeIndexedDomain(0, counts[n])) for n in ("a", "b", "y")}
         fv = FrameV3({"a": Port(dom["a"], RowLeaf("blake3", ROLE_X, word_bits, K)), "b": Port(dom["b"], RowLeaf("blake3", ROLE_W, word_bits, K)),
                       "y": Port(dom["y"], WordLeaf(ysch, ybytes))})
         leaves = {"a": [fv.tree_leaf("a", r, d) for r, d in enumerate(_row_digests(x_rows, word_bits, ROLE_X))],
                   "b": [fv.tree_leaf("b", r, d) for r, d in enumerate(_row_digests(w_cols, word_bits, ROLE_W))],
                   "y": [fv.tree_leaf("y", r, fv.leaf_layout("y", r).digest(w.to_bytes(ybytes, "big"))) for r, w in enumerate(y_words)]}
-        return {n: (bindings[n], OWNER[n], total, fv.root(n, leaves[n])) for n in ("a", "b", "y")}
+        return {n: (bindings[n], OWNER[n], counts[n], fv.root(n, leaves[n])) for n in ("a", "b", "y")}
     import numpy as np
     trees, _ = hashauth.build_trees(x_rows=np.asarray(x_rows), w_cols=np.asarray(w_cols), y_words=np.asarray(y_words),
                                     word_bits=word_bits, y_bits=rel.y_bits, bindings=bindings, leaf=scheme)
     return {n: (t.ref.binding, t.ref.owner, t.ref.count, t.ref.root) for n, t in trees.items()}
 
 
-def commitment_problems(pdir: Path, man: dict, pinned: str, reps: list[str], *, instances_root: str | None = None) -> tuple[bool, list[str]]:
+def commitment_problems(pdir: Path, man: dict, pinned: str, reps: list[str], *, instances_root: str | None = None,
+                        procs: int = 1) -> tuple[bool, list[str]]:
     """``(hashed, problems)``.  A dump whose pinned relation names a leaf (``+hash``, ``+blake3``, ...: the systems that take a
     hash-authentication block) passes only when every statement carries the block, its three tree references equal
-    :func:`committed_trees` and each rep's statements' ``vu_index`` together cover ``[0, total_vus)`` exactly once
-    (red-team-standard-hash R2); a bare relation's statements are not read here.  Coverage counts only what ``batch``
-    verifies, so in every dump each rep's ``.stmt`` stems must equal its ``.proof`` stems and the manifest's entries for it
-    (red-team-standard-hash R4: a statement without a proof claims VUs nobody proved)."""
+    :func:`committed_trees`, each VU's x row and W column are the ones its index fixes in that layout
+    (``hashauth.layout_error``, red-team-standard-hash R1) and each rep's statements' ``vu_index`` together cover
+    ``[0, total_vus)`` exactly once (R2); a bare relation's statements are not read here.  A row-sharing (v6) dump is
+    recomputed as the tile its manifest's ``set.tile`` names and fails closed without one.  Coverage counts only what
+    ``batch`` verifies, so in every dump each rep's ``.stmt`` stems must equal its ``.proof`` stems and the manifest's
+    entries for it (R4: a statement without a proof claims VUs nobody proved)."""
+    from .hashauth import layout_error
     from .serialize import read_statement
 
     orphans: list[str] = []
@@ -282,10 +329,11 @@ def commitment_problems(pdir: Path, man: dict, pinned: str, reps: list[str], *, 
                 unreadable.append(f"{r}/{f.name}: unreadable statement ({type(e).__name__}: {e})")
     if unreadable:
         return True, unreadable[:8] + ([f"… {len(unreadable) - 8} more"] if len(unreadable) > 8 else [])
-    if n_v6 := sum(bool(getattr(st, "v6", False)) for sts in per_rep.values() for _, st in sts):
-        return True, [f"commitment: {n_v6} row-sharing (v6) statement(s): shared-row layouts are not recomputed"]
+    n_v6 = sum(bool(getattr(st, "v6", False)) for sts in per_rep.values() for _, st in sts)
+    if n_v6 and (man.get("set") or {}).get("tile") is None:
+        return True, [f"commitment: {n_v6} row-sharing (v6) statement(s) and no manifest `set.tile`: the shared-row layout is not recomputed"]
     try:
-        want = committed_trees(pinned, man, instances_root=instances_root)
+        want = committed_trees(pinned, man, instances_root=instances_root, procs=procs)
     except ValueError as e:
         return True, [f"commitment: {e}"]
     total = want["y"][2]
@@ -306,6 +354,8 @@ def commitment_problems(pdir: Path, man: dict, pinned: str, reps: list[str], *, 
                 if got != want[t.name]:
                     what = [k for k, a, b in zip(("binding", "owner", "count", "root"), got, want[t.name]) if a != b]
                     problems.append(f"{r}/{name}: tree {t.name} {'/'.join(what)} differ from the instance set's")
+            if (why := layout_error(ha)) is not None:
+                problems.append(f"{r}/{name}: {why}")
             covered += list(ha.vu_index)
         if sorted(covered) != list(range(total)):
             dup = len(covered) - len(set(covered))
@@ -349,14 +399,19 @@ def verify_tree(pdir: Path, man: dict, v: Verifier, rep: Report, *, jobs: int, p
     if not reps:
         rep.status, rep.why = "FAIL", ["no rep*/ directory in the dump"]
         return
-    rep.hashed, bad = commitment_problems(pdir, man, rep.relation, reps, instances_root=instances_root)
+    rep.hashed, bad = commitment_problems(pdir, man, rep.relation, reps, instances_root=instances_root, procs=jobs)
     if bad:
         rep.status, rep.why = "FAIL", bad
         return
+    if rep.hashed and isinstance(t := (man.get("set") or {}).get("tile"), dict):
+        rep.tile = f"{t['nx']}x{t['nw']}"
+    sysh = man.get("system_h_file")
+    pair = ["--system-h", sysh.get("path", "system_h.bin")] if isinstance(sysh, dict) else []
     out_dir.mkdir(parents=True, exist_ok=True)
     for r in reps:
         out = out_dir / f"{r}.json"
-        b = v.run(["batch", "--system", sysrel, "--dir", r, "--jobs", str(jobs), "--threads", "1", "--target-bits", str(TARGET_BITS), "--json", str(out)], pdir)
+        b = v.run(["batch", "--system", sysrel, *pair, "--dir", r, "--jobs", str(jobs), "--threads", "1", "--target-bits", str(TARGET_BITS),
+                   "--json", str(out)], pdir)
         if not out.is_file():
             rep.status, rep.why = "ERROR", [f"{r}: verifier wrote no JSON (rc {b.returncode}): {b.stderr.strip()[-300:]}"]
             return
@@ -386,6 +441,8 @@ def detail(rep: Report, v: Verifier) -> str:
          f"host {os.uname().nodename}, 1 thread per proof; mode={rep.mode}")
     if rep.hashed:
         s += "; hash commitments recomputed from the instance set (a/b/y bindings + roots equal, every VU covered once per rep)"
+        if rep.tile:
+            s += f" as the {rep.tile} GEMM tile of the manifest's set.tile (x = vu // nw, W = vu % nw)"
     if rep.mode == "interactive":
         s += (" -- each sub-batch verified against its recorded step-0 coins (the live verifier's session coins): consistency with that "
               "session, not transferable evidence (D7)")

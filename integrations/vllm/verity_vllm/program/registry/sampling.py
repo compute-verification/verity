@@ -33,8 +33,9 @@ from __future__ import annotations
 import math
 import struct
 
-from verity.ir.defs import PrimitiveDefinition, bind, composite, primitive
+from verity.ir.defs import PrimitiveDefinition, bind, composite
 from verity.ir.refs import tuple_of
+from verity.ml.scalar import BitNot, BitOr, F32Eq
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry import ref_prims as RP
 from verity_vllm.program.registry.b1 import const
@@ -307,22 +308,6 @@ GumbelNoiseLane = PrimitiveDefinition(
         "vocabulary index v; libdevice bodies transcribed from libdevice.10.bc (log1pf's __fadd_rz a true toward-zero add, "
         "F-stoch-r17-01: the word map of this primitive is unchanged by it, exhaustively).",
     conformance="exact-model-tested")
-
-
-@primitive("F32Eq", 1, [("a", F32), ("b", F32)], BIT, conformance="exact-model-tested")
-def F32Eq(a: int, b: int) -> int:
-    """IEEE fp32 `a == b` (+0 == -0; NaN unequal to everything)."""
-    return 1 if _f(a) == _f(b) else 0
-
-
-@primitive("BitOr", 1, [("a", BIT), ("b", BIT)], BIT, conformance="exact-model-tested")
-def BitOr(a: int, b: int) -> int:
-    return (a | b) & 1
-
-
-# `BitNot_v1` is the pad-serve protocol gate (`pad_prims.BitNot`, `(a ^ 1) & 1`): one registered definition, reused here — a
-# second `BitNot_v1` would clash in the registry when both modules are imported (the frontend vocabulary imports pad_prims).
-from verity_vllm.program.registry.pad_prims import BitNot  # noqa: E402
 
 
 # ---------------------------------------------------------------------------------------------------------
