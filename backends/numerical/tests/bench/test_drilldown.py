@@ -22,8 +22,8 @@ from test_tables import RTX4090, VERIFIER, cell, hashed, put, put_registered, re
 
 SEEDS = ("B-Ligero v1", "B-Ligero v3 (private selection)", "B-Ligero v3 fused hints", "B-Ligero v3x4 fused (l=4096)", "B-Ligero v1x4 (fold)",
          "B-Ligero v3x4 (fold)", "B-Ligero v2 (public selection)", "B-Ligero v2x4 (public selection)", "B-Ligero Fiat–Shamir (HVZK)",
-         "B-Ligero + Poseidon2 per row", "B-Ligero + Poseidon2 shared 64x64 tile", "B-Ligero + BLAKE3 in circuit", "B-Ligero + Ajtai n=64",
-         "B-Ligero + Ajtai n=128", "B-Ligero native external authentication", "Ligerito", "A-GKR CPU (Rust)", "A-GKR GPU (torch/Triton)",
+         "B-Ligero + Poseidon2 per row", "B-Ligero + Poseidon2 shared 64x64 tile", "B-Ligero + BLAKE3 in circuit",
+         "B-Ligero + SHA-256 in circuit", "B-Ligero + Ajtai n=64", "B-Ligero + Ajtai n=128", "B-Ligero native external authentication", "Ligerito", "A-GKR CPU (Rust)", "A-GKR GPU (torch/Triton)",
          "SP1 stock (relation-only / bare guest)", "SP1 stock, FRI query count raised (otherwise unmodified)", "SP1 precompile (TC_DOT chip)")
 FOLDED = "b-ligero chain, fp8-ada relation (backends/direct/ligero/fp8); folded: 4 instruction steps per column at FP8Params.from_model(ada_e4m3_m16n8k32x4)"
 V3 = "b-ligero chain, bf16-ampere-v3 relation (backends/direct/ligero/privsel/relation.py at params.from_model(ampere_bf16_m16n8k16))"
@@ -63,6 +63,7 @@ CASES = [
     (env(FP8, auth="included-hash-shared", sharing="tile64x64", **P2), {}, "B-Ligero + Poseidon2 shared 64x64 tile"),
     (env(FP8, auth="included-hash", sharing="tile64x64", **P2), {}, "B-Ligero + Poseidon2 shared 64x64 tile"),
     (env(FP8, auth="included-hash", sharing="none", **leaf("blake3", "blake3-keyed", "blake3-keyed/row/v2")), {}, "B-Ligero + BLAKE3 in circuit"),
+    (env(FP8, auth="included-hash", sharing="none", **leaf("sha256", "sha256", "sha256/row/v1")), {}, "B-Ligero + SHA-256 in circuit"),
     (env(FP8, auth="included-hash", sharing="none", **leaf("ajtai-n64", "ajtai-babybear-n64-b1-r0/v1", "ajtai-babybear-n64-b1-r0/row/v1")), {},
      "B-Ligero + Ajtai n=64"),
     (env(FP8, auth="included-hash", sharing="none", **leaf("ajtai-n128", "ajtai-babybear-n128-b1-r0/v1", "ajtai-babybear-n128-b1-r0/row/v1")), {},

@@ -327,9 +327,9 @@ def test_table1_carries_the_security_properties(store: LocalStore) -> None:
     assert {c.id for c in V.CONFIGURATIONS} == {v.id for v in V.D.VARIANTS}
     full = {c.id for c in V.CONFIGURATIONS if c.full_relation}
     assert full == {"B-Ligero + Poseidon2 per row", "B-Ligero + Poseidon2 shared 64x64 tile", "B-Ligero + BLAKE3 in circuit",
-                    "B-Ligero + Ajtai n=64", "B-Ligero + Ajtai n=128"}
+                    "B-Ligero + SHA-256 in circuit", "B-Ligero + Ajtai n=64", "B-Ligero + Ajtai n=128"}
     assert [c.id for c in V.CONFIGURATIONS if c.full_relation and not c.scheme_problem()] == [
-        "B-Ligero + Poseidon2 per row", "B-Ligero + BLAKE3 in circuit"]
+        "B-Ligero + Poseidon2 per row", "B-Ligero + BLAKE3 in circuit", "B-Ligero + SHA-256 in circuit"]
     assert all(x.basis.startswith(("proven", "conjectured")) for c in V.CONFIGURATIONS for x in c.proximity)
     assert all(c.proximity and c.hashes and c.dominant_term for c in V.CONFIGURATIONS)
     committed(store, t_total=0.4)
