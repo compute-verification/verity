@@ -1,7 +1,7 @@
 //! Independent verifier for Candidate A's GPU proofs (`backends/gkr/gpu`, BabyBear^6 / X^6 - 22).
 //!
 //!   verity-gkr-verify verify    --dir D --proof P (--relation R | --allow-any-circuit) [--vus N] [--threads T] [--json OUT] [--trace-logup]
-//!                               [--require-bound] [--allow-unpinned-instances]
+//!                               [--require-bound] [--allow-unpinned-instances] [--require-commitment] [--allow-unpinned-commitment]
 //!                                                                                        accept / reject one proof (the flag prints every LogUp level's operands)
 //!   verity-gkr-verify negatives --dir D --proofs PD [--threads T] [--json OUT]           every PD/<id>.bin (D/neg/<id>) must be rejected
 //!   verity-gkr-verify mutate    --dir D --proof P [--vus N] [--threads T] [--sample K] [--json OUT]
@@ -19,8 +19,16 @@
 //! `R+bound` pin of `instances.rs`; `--relation R` refuses a bound statement and `--relation R+bound` an unbound one.
 //! Under `--allow-any-circuit` only, `--require-bound` refuses an unbound statement and `--allow-unpinned-instances`
 //! skips the instance pin.
+//!
+//! With a `commitment.txt` the statement is operands-committed (commitments.rs): its public words carry each VU's
+//! x row and W column digests after the `y` words, and the verifier rebuilds the scheme's trees from them and compares
+//! the roots with the pinned roots of the instance set.  It is claimed as `R+sha256` / `R+blake3`, whose circuit set
+//! (the hash layers binding the digests to the operand columns) is pinned under that name.  Under
+//! `--allow-any-circuit` only, `--require-commitment` refuses an uncommitted statement and `--allow-unpinned-commitment`
+//! skips the root pin.
 
 mod circuit;
+mod commitments;
 mod field;
 mod instances;
 mod lanes;
@@ -209,6 +217,14 @@ fn read_bind(d: &Path, root: &Path, uc: &Circuit, steps: usize, vus: usize, publ
     Ok(Some((verify::Bind { cols, terms, arrs, words, digests: dig }, info)))
 }
 
+/// `commitment.txt` (in `d`, else the export root) and the tree check of the public words (commitments.rs).
+fn read_commitment(d: &Path, root: &Path, public: &[u32]) -> Result<Option<commitments::Checked>, String> {
+    let p = if d.join("commitment.txt").is_file() { d.join("commitment.txt") } else { root.join("commitment.txt") };
+    if !p.is_file() { return Ok(None); }
+    let spec = commitments::Spec::parse(&std::fs::read_to_string(&p).map_err(|e| format!("commitment.txt: {e}"))?)?;
+    commitments::check(spec, public).map(Some)
+}
+
 /// The statement of a batch directory: circuits, `vus` (prefix of the public words), steps.  `d` may be a
 /// `neg/<id>` subdirectory sharing its parent's manifest and circuits.
 fn statement<'a>(unit: &'a Loaded, epi: &'a Loaded, d: &Path, vus: Option<usize>) -> Result<Statement<'a>, String> {
@@ -338,13 +354,29 @@ fn cmd_verify(args: &[String]) -> i32 {
         (None, _) => None,
         (Some(bi), None) => bi.problem(args.iter().any(|a| a == "--allow-unpinned-instances")),
     };
+    let committed = match read_commitment(&dir, &root, &stmt.chain.public_y16) {
+        Ok(c) => c,
+        Err(e) => return refuse(e),
+    };
+    let commit_claim = relation.as_deref().filter(|_| !allow_any).and_then(commitments::relation_hash);
+    let problem = problem.or_else(|| match (&committed, commit_claim) {
+        (Some(_), _) if info.is_some() => Some("statement: both operands-bound (bind.txt) and operands-committed (commitment.txt)".into()),
+        (None, Some(h)) => Some(format!("statement: not operands-committed (no commitment.txt), the proof is claimed for a {} relation", h.suffix())),
+        (Some(c), None) if !allow_any => Some(format!("statement: operands-committed (commitment.txt); claim it as {}", c.spec.relation)),
+        (Some(c), Some(_)) => c.problem(false).or_else(|| (Some(c.spec.relation.as_str()) != relation.as_deref())
+            .then(|| format!("commitment: commitment.txt names {}, the proof is claimed for {}", c.spec.relation, relation.as_deref().unwrap_or("")))),
+        (None, None) if allow_any && args.iter().any(|a| a == "--require-commitment") => Some("statement: not operands-committed (no commitment.txt)".into()),
+        (None, None) => None,
+        (Some(c), None) => c.problem(args.iter().any(|a| a == "--allow-unpinned-commitment")),
+    });
     let (res, st) = match problem {
         Some(e) => (Err(e), verify::Stats { threads: th, ..Default::default() }),
         None => verify::verify(&stmt, &bytes, &LIGERO, th),
     };
-    let extra = format!(", \"vus\": {}, \"units\": {}, \"steps\": {}{pin}, \"operands_bound\": {}, \"instances\": {}",
+    let extra = format!(", \"vus\": {}, \"units\": {}, \"steps\": {}{pin}, \"operands_bound\": {}, \"instances\": {}, \"operands_committed\": {}, \"commitment\": {}",
         stmt.vus(), stmt.segs[0].units, stmt.chain.steps, info.is_some() && res.is_ok(),
-        info.as_ref().map(|i| i.json()).unwrap_or("null".into()));
+        info.as_ref().map(|i| i.json()).unwrap_or("null".into()), committed.is_some() && res.is_ok(),
+        committed.as_ref().map(|c| c.json()).unwrap_or("null".into()));
     let json = stats_json(&res, &st, &extra);
     println!("{json}");
     if let Some(out) = arg(args, "--json") { std::fs::write(out, json + "\n").expect("write json"); }
