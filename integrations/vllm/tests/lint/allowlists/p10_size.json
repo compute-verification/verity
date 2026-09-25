@@ -61,7 +61,6 @@
     {"file": "verity_vllm/program/frontend/emit.py", "kind": "function", "symbol": "emit_correspondence", "detail": "lines", "count": 217},
     {"file": "verity_vllm/program/frontend/rules/family.py", "kind": "function", "symbol": "match_program", "detail": "lines", "count": 197},
     {"file": "verity_vllm/program/frontend/rules/reference.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 879},
-    {"file": "verity_vllm/program/frontend/rules/vllm_bindings.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1905},
     {"file": "verity_vllm/program/frontend/rules/vllm_moe.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 865},
     {"file": "verity_vllm/program/frontend/torch_frontend.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1340},
     {"file": "verity_vllm/program/kernels/compiled_norm_literal.py", "kind": "function", "symbol": "_build", "detail": "lines", "count": 206},
