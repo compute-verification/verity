@@ -586,8 +586,8 @@ def test_scopes_of_enumerates_every_activation():
     coord_t = whole_body(coord, key="coord")
     g = whole_body(gemm_spec, {0: ("descend", coord_t)}, key="gemm")
     t = tiling(whole_body(P_.root, {2: ("descend", g), 3: ("descend", g)}))
-    from verity.ir.partition import _Tiling
-    T = _Tiling(P_, t)
+    from verity.ir.partition import CheckedTiling
+    T = CheckedTiling(P_, t)
     assert T.instances == {(t.root,): 1, ("gemm",): 2, ("coord",): 64}
     scopes = list(T.scopes_of(("coord",)))
     assert len(scopes) == 64 and len({sc.offset for sc in scopes}) == 64
