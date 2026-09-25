@@ -12,7 +12,9 @@ DIR holds the statement's Params-only files of a checker-v2 export (circuit.txt,
 operands and public words come from --instances after every file of the tier is checked against the committed frozen
 manifest (--manifest, default fixtures/bench-instances/v1/manifest.json of the source tree: its sha256 is the
 `instances.manifest_sha256` Table 2 requires).  The run directory gets `statement/` (DIR's four files + public.bin written
-from the frozen words) and `proofs/rep<i>.bin`: `verity-gkr-verify verify --dir statement --proof proofs/rep0.bin --vus 4096`.
+from the frozen words) and `proofs/rep<i>.bin`: `verity-gkr-verify verify --dir statement --proof proofs/rep0.bin --vus 4096
+--relation bf16-ampere`.  The verifier refuses circuit files that are not a pinned circuit set of the relation the result
+claims (`backends/gkr/verifier/pins.txt`), so a rep counts as verified only with `circuit_pinned` in its verdict.
 
 Per timed rep (wall clock; the device is synchronised at every boundary; the buckets sum to t.total up to the Python
 between the timers, which tables.phases shows as Other):
@@ -47,6 +49,7 @@ from pathlib import Path
 FIELD = "babybear6"          # F_p[X]/(X^6 - 22), p = 2^31 - 2^27 + 1 (gpu/field.py)
 TIER = "vu-k1536"
 AMPERE_MODEL = "ampere_bf16_m16n8k16"   # the frozen vu-k1536 tier's model (Params REAL)
+AMPERE_RELATION = "bf16-ampere"         # its relation: the name its circuit files are pinned under in the verifier
 K_VU = 1536
 BACKEND = "verity-gkr gpu (backends/gkr/gpu: checker v2 + LogUp + Ligero over BabyBear^6, SHA-512 Merkle; torch/Triton)"
 STATEMENT_FILES = ("circuit.txt", "epilogue.txt", "chain.txt", "manifest.json")
@@ -310,6 +313,7 @@ def main(argv: list[str] | None = None) -> int:
         del inst, proof, st, data
 
     # ---- the independent verifier on every recorded proof ------------------------------------------------------------
+    relation = args.relation or AMPERE_RELATION
     vbin = Path(args.verifier) if args.verifier else None
     verdicts = []
     for row in rows:
@@ -318,7 +322,7 @@ def main(argv: list[str] | None = None) -> int:
             break
         out_json = run_dir / f"verify_rep{row['rep']}.json"
         cmd = [str(vbin), "verify", "--dir", str(run_dir / "statement"), "--proof", str(run_dir / row["proof_file"]),
-               "--vus", str(row["vus"]), "--threads", str(args.threads), "--json", str(out_json)]
+               "--vus", str(row["vus"]), "--relation", relation, "--threads", str(args.threads), "--json", str(out_json)]
         t1 = time.perf_counter()
         r = subprocess.run(cmd, capture_output=True, text=True)
         wall = time.perf_counter() - t1
@@ -326,12 +330,17 @@ def main(argv: list[str] | None = None) -> int:
             doc = json.loads(out_json.read_text()) if out_json.is_file() else None
         except json.JSONDecodeError:
             doc = None
-        accepted = bool(doc and doc.get("accepted")) and r.returncode == 0
+        # a binary built before the pins ignores --relation and verifies whatever circuit files it is given
+        pinned = (doc or {}).get("circuit_pinned") is True
+        accepted = bool(doc and doc.get("accepted")) and pinned and r.returncode == 0
+        error = (doc or {}).get("error") or (None if doc is None or pinned else
+                                             f"{vbin} does not pin circuit files (built before backends/gkr/verifier/pins.txt): rebuild it")
         verdicts.append({"rep": row["rep"], "proof_sha256": row["proof_sha256"], "accepted": accepted, "rc": r.returncode,
-                         "error": (doc or {}).get("error"), "verify_seconds": (doc or {}).get("verify_seconds"), "process_wall": wall,
+                         "error": error, "verify_seconds": (doc or {}).get("verify_seconds"), "process_wall": wall,
+                         "relation": (doc or {}).get("relation"), "circuit_pinned": pinned,
                          "threads": (doc or {}).get("threads"), "cpu": (doc or {}).get("cpu"), "json": out_json.name,
                          "command": " ".join(cmd), "stderr_tail": r.stderr[-300:]})
-        print(f"verify rep{row['rep']}: {'accept' if accepted else 'REJECT'} {wall:.3f}s ({(doc or {}).get('error')})", flush=True)
+        print(f"verify rep{row['rep']}: {'accept' if accepted else 'REJECT'} {wall:.3f}s ({error})", flush=True)
     vsha = _sha256(vbin) if vbin and vbin.is_file() else None
     (run_dir / "verify_independent.json").write_text(json.dumps({"verifier": str(vbin), "verifier_sha256": vsha, "threads": args.threads,
                                                                  "items": verdicts}, indent=1))
@@ -392,7 +401,8 @@ def main(argv: list[str] | None = None) -> int:
         omitted="ZK masking",
         steps=steps, units=med["units"], reps=args.reps, warmup=args.warmup,
         verifier={"name": "verity-gkr-verify (backends/gkr/verifier, Rust, shares no code with the prover)", "path": str(vbin),
-                  "sha256": vsha, "threads": args.threads, "cpu": next((v["cpu"] for v in verdicts if v.get("cpu")), None)},
+                  "sha256": vsha, "threads": args.threads, "cpu": next((v["cpu"] for v in verdicts if v.get("cpu")), None),
+                  "relation": relation, "circuit_pinned": bool(verdicts) and all(v["circuit_pinned"] for v in verdicts)},
         python_verifier="gpu.prover.verify (shares field / transcript / LogUp helpers with the prover)",
         note=f"one proof of all {Bn} VUs (96 chained units each + the limb epilogue); buckets of the median rep "
              f"(rep {med['rep']}) by t.total",
@@ -428,16 +438,19 @@ def main(argv: list[str] | None = None) -> int:
         if med[key] is not None:
             meas.append(_m(f"split.{key}_seconds", med[key], "s"))
     ok = python_ok and rust_ok and same_proof
-    detail = (f"python: {sum(r['python_verified'] for r in rows)}/{len(rows)}; rust: {n_acc}/{len(verdicts)} accepted"
+    detail = (f"python: {sum(r['python_verified'] for r in rows)}/{len(rows)}; rust: {n_acc}/{len(verdicts)} accepted "
+              f"(--relation {relation})"
               f"{'' if same_proof else '; the reps produced DIFFERENT proofs'}; reps t.total "
               f"{['%.3f' % r['t_total'] for r in rows]} s, rust verify {['%.3f' % v for v in rust_reps]} s")
     result = {"schema": contract.RESULT_SCHEMA, "run_id": run_id, "kind": "bench-result/v1", "workload_fingerprint": fp,
               "validation": {"status": "passed" if ok else "failed",
-                             "checker": "backends/gkr/verifier `verify` (independent Rust) on every recorded rep's proof + gpu.prover.verify per rep",
+                             "checker": "backends/gkr/verifier `verify --relation` (independent Rust; circuit files pinned) on every "
+                                        "recorded rep's proof + gpu.prover.verify per rep",
                              "detail": detail,
                              "evidence": {"reps": [{"t_total": r["t_total"], "buckets": r["buckets"], "python_verifier": r["python_verifier_s"],
                                                     "proof_sha256": r["proof_sha256"]} for r in rows],
-                                          "rust": [{k: v[k] for k in ("rep", "accepted", "verify_seconds", "error", "command")} for v in verdicts],
+                                          "rust": [{k: v[k] for k in ("rep", "accepted", "circuit_pinned", "verify_seconds", "error", "command")}
+                                                   for v in verdicts],
                                           "soundness": budget}},
               "measurements": meas,
               "measurement_files": ["prove_reps.json", "verify_independent.json"] + [v["json"] for v in verdicts],
