@@ -13,9 +13,10 @@
                 where the blob is held locally its ETag equal to the local MD5 (`etag-verified`), else `remote-only, size-verified`
                 (an evicted blob is never re-fetched);
      render     with `--render`: `python -m verity_numerical.bench.tables --root <store> --format md` prints the same on both.  The
-                store under test is rendered through a view (its manifests, attempts and labels, a catalog built from them beside
-                the fresh store, and the fresh store's blob cache), so each blob the render reads is downloaded at most once and
-                the store under test is never written.
+                store under test is rendered through a view (its manifests, attempts and labels plus the records only the
+                remote has, a catalog built from them beside the fresh store, and the fresh store's blob cache): both renders read
+                the same records unless the store under test holds something the remote lacks, each blob is downloaded at most
+                once, and the store under test is never written.
 3. Every difference gets its cause: `pending here` (the remote lacks it: the store under test never pushed it), `not pulled` (only
    the remote has it: a pod or another machine wrote it and the store under test never pulled it), `uploaded during the run`
    (absent from the listing, present at the re-check).  Unexplained: a content mismatch, a remote key that failed to fetch or hash,
@@ -72,7 +73,8 @@ class Progress:
 
     def line(self) -> str:
         with self._lock:
-            return f"parity: {self.name} {self.done}" + (f"/{self.total}" if self.total else "") + f" ({time.monotonic() - self.t0:.0f}s)"
+            count = f"{self.done}/{self.total}" if self.total else (str(self.done) if self.done else "running")
+            return f"parity: {self.name} {count} ({time.monotonic() - self.t0:.0f}s)"
 
     def _loop(self) -> None:
         while not self._stop.wait(self.every):
@@ -105,18 +107,32 @@ def _md5(p: Path) -> str:
     return h.hexdigest()
 
 
-def render_view(store_root: Path, fresh_root: Path) -> Path:
-    """A store that reads the store under test's manifests, attempts and labels (symlinks) with its own catalog, built from them
-    here, and the fresh store's blob cache: rendering it downloads nothing the fresh render did not, and writes nothing under
-    `store_root`."""
+def render_view(store_root: Path, fresh_root: Path, extra: list[Path] | None = None) -> Path:
+    """A store of per-file symlinks: the store under test's manifests, attempts and labels, plus `extra` record files from the
+    fresh store (what the remote holds that the store under test never pulled, so both renders read the same records), with its
+    own catalog built here and the fresh store's blob cache.  Rendering it downloads nothing the fresh render did not, and writes
+    nothing under `store_root`."""
+    import shutil  # noqa: PLC0415
+
     view = fresh_root / ".view-of-store-under-test"
-    view.mkdir(exist_ok=True)
-    for sub in ("manifests", "attempts", "labels"):
-        link = view / sub
-        if not link.is_symlink():
-            link.symlink_to(store_root / sub, target_is_directory=True)
-    if not (view / "objects").is_symlink():
-        (view / "objects").symlink_to(fresh_root / "objects", target_is_directory=True)
+    if view.exists():
+        shutil.rmtree(view)
+    view.mkdir()
+    for sub in ("manifests", "attempts"):
+        (view / sub).mkdir()
+        for p in sorted((store_root / sub).glob("*.json")):
+            (view / sub / p.name).symlink_to(p)
+    for p in sorted((store_root / "labels").glob("*/*.json")):
+        (view / "labels" / p.parent.name).mkdir(parents=True, exist_ok=True)
+        (view / "labels" / p.parent.name / p.name).symlink_to(p)
+    for p in extra or []:
+        rel = p.relative_to(fresh_root)
+        dst = view / rel
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        if dst.exists() or dst.is_symlink():
+            dst = dst.with_name(f"{dst.stem}~remote{dst.suffix}")
+        dst.symlink_to(p)
+    (view / "objects").symlink_to(fresh_root / "objects", target_is_directory=True)
     st = LocalStore(view)
     st.reindex()
     st.close()
@@ -213,8 +229,11 @@ def compare(store_root: Path, fresh: LocalStore, *, jobs: int = 32, render: bool
     if render:
         prog.phase("render: the fresh store (downloads the blobs the tables read, once)")
         b, eb = _render(fresh.root, RENDER_TIMEOUT_S)
-        prog.phase("render: the store under test, through a view (its records, the fresh blob cache)")
-        a, ea = (None, eb) if eb else _render(render_view(store_root, fresh.root), RENDER_TIMEOUT_S)
+        prog.phase("render: the store under test, through a view (its records + the remote-only ones, the fresh blob cache)")
+        extra = [mb[h] for h in rep["artifacts"]["not_pulled"]] + [ab[k] for k in rep["attempts"]["not_pulled"]] + \
+                [lb[h][0] for h in rep["labels"]["not_pulled"]]
+        rep["render_view_remote_records"] = len(extra)
+        a, ea = (None, eb) if eb else _render(render_view(store_root, fresh.root, extra), RENDER_TIMEOUT_S)
         if ea or eb:
             rep["render"] = {"identical": None, "error": ea or eb}
             rep["unexplained"].append(f"render failed: {ea or eb}")
@@ -268,7 +287,8 @@ def format_report(rep: dict) -> list[str]:
     if "render" in rep:
         rd = rep["render"]
         lines.append(f"{'render':<10} " + ("identical" if rd.get("identical") else f"FAILED: {rd['error']}" if rd.get("error")
-                                           else f"DIFFERENT ({len(rd['diff'])} lines)"))
+                                           else f"DIFFERENT ({len(rd['diff'])} lines)")
+                     + f" (the store under test + {rep.get('render_view_remote_records', 0)} remote-only records)")
     for u in rep["unexplained"][:30]:
         lines.append(f"  UNEXPLAINED {u}")
     lines.append("PARITY OK: every difference is explained" if rep["ok"] else f"PARITY FAILED: {len(rep['unexplained'])} unexplained difference(s)")

@@ -268,3 +268,22 @@ def test_progress_lines_come_on_schedule(capsys):
     _t.sleep(0.2)
     prog.stop()
     assert lines[0].startswith("parity: replicas (10) at ") and any(x.startswith("parity: replicas 3/10 (") for x in lines[1:])
+
+
+def test_the_render_sees_remote_only_records_on_both_sides(env, monkeypatch):
+    here = LocalStore()
+    here.push(here.put_artifact("fixture/v1", {"s": 1}, file=_file(env / "in", "s.bin", b"mine")))
+    pod = LocalStore(env / "pod-store")
+    art = pod.put_artifact("fixture/v1", {"s": 2}, file=_file(env / "pod", "p.bin", b"pods"))
+    pod.add_label(art, "verified", "accepted", "red-team-1")
+    pod.push(art)
+    pod.push_labels([art])
+
+    def fake_render(root, timeout):                                   # catalog rows and labels: what a table is built from
+        st = LocalStore(root)
+        return "\n".join(f"{a['id']} {[(l['key'], l['value']) for l in st.index.labels(a['id'])]}" for a in st.index.artifacts()), None
+
+    monkeypatch.setattr(PA, "_render", fake_render)
+    rep = PA.run(here.root, env / "fresh", render=True)
+    assert rep["artifacts"]["not_pulled"] == [art[4:]] and rep["labels"]["not_pulled"]
+    assert rep["ok"] and rep["render"]["identical"] and rep["render_view_remote_records"] == 2, rep["unexplained"]
