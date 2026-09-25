@@ -409,18 +409,61 @@ def test_runway_alerts_under_the_threshold_then_each_half_hour_shorter():
 
 
 def test_the_reaper_takes_only_pods_of_final_lanes_past_the_grace_that_are_not_kept(tmp_path):
-    pod = {"id": "p1", "name": "vy-done", "usd_h": 0.74}
+    pod = {"id": "p1", "name": "vy-done", "usd_h": 0.74, "started_ts": NOW.timestamp() - 3600}
     rows = [{"lane": "done", "state": "final", "done_ts": NOW.timestamp() - 900, "pods": [pod]},
             {"lane": "fresh", "state": "final", "done_ts": NOW.timestamp() - 300, "pods": [{**pod, "id": "p2"}]},
             {"lane": "kept", "state": "final", "done_ts": NOW.timestamp() - 900, "keep_pod": "live verifier", "pods": [{**pod, "id": "p3"}]},
             {"lane": "busy", "state": "open", "pods": [{**pod, "id": "p4"}]}]
-    noted, killed = set(), []
+    noted, killed, asked = set(), [], []
     lines = notes.reap_lines(tmp_path, rows, NOW, 10, noted)
     assert lines == ["21:00Z FINAL-POD done vy-done p1 $0.74/h (final 15m ago): --reap terminates it, checkpoint --keep-pod WHY keeps it"]
     assert notes.reap_lines(tmp_path, rows, NOW, 10, noted) == [] and killed == []     # said once; nothing terminated
-    lines = notes.reap_lines(tmp_path, rows, NOW, 10, noted, reap=True, terminate=killed.append)
-    assert killed == ["p1"] and lines == ["21:00Z REAPED done vy-done p1 $0.74/h (final 15m ago)"]
+    ok = lambda lane, p: asked.append((lane, p["id"])) or (True, "2 cited art(s) preserved")
+    lines = notes.reap_lines(tmp_path, rows, NOW, 10, noted, reap=True, terminate=killed.append, custody=ok)
+    assert killed == ["p1"] and asked == [("done", "p1")]      # custody asked only for the reapable pod; kept/fresh/open untouched
+    assert lines == ["21:00Z REAPED done vy-done p1 $0.74/h (final 15m ago); custody: 2 cited art(s) preserved"]
     assert (tmp_path / "reaper.log").read_text() == lines[0] + "\n"
+
+
+def test_the_reaper_leaves_a_pod_started_after_the_final_it_means_the_lane_was_reopened(tmp_path):
+    done = NOW.timestamp() - 64 * 60
+    pods = [{"id": "fzs8", "name": "vy-red-team-flock", "usd_h": 0.48, "started_ts": NOW.timestamp() - 120},
+            {"id": "nots", "name": "vy-red-team-flock", "usd_h": 0.48}]                     # no start time in the listing: same
+    rows = [{"lane": "red-team-flock", "state": "final", "done_ts": done, "pods": pods}]
+    noted, killed, state = set(), [], {}
+    never = lambda lane, p: pytest.fail("no custody check for a resumed pod")
+    lines = notes.reap_lines(tmp_path, rows, NOW, 10, noted, reap=True, terminate=killed.append, custody=never, state=state)
+    assert killed == [] and lines == [
+        "21:00Z RESUMED-POD red-team-flock vy-red-team-flock fzs8 (created 20:58Z, after FINAL 19:56Z): not reaped",
+        "21:00Z RESUMED-POD red-team-flock vy-red-team-flock nots (created unknown, after FINAL 19:56Z): not reaped"]
+    assert notes.reap_lines(tmp_path, rows, NOW, 10, noted, reap=True, terminate=killed.append, custody=never, state=state) == []
+    assert killed == [] and not (tmp_path / "reaper.log").exists()
+
+
+def test_the_reaper_blocks_a_final_lanes_pod_that_fails_custody_and_rechecks_after_30_min(tmp_path):
+    pod = {"id": "p1", "name": "vy-done", "usd_h": 0.74, "started_ts": NOW.timestamp() - 3600}
+    rows = [{"lane": "done", "state": "final", "done_ts": NOW.timestamp() - 900, "pods": [pod]}]
+    noted, killed, state = set(), [], {}
+    blocked = lambda lane, p: (False, "art:deadbeef not preserved: 404")
+    lines = notes.reap_lines(tmp_path, rows, NOW, 10, noted, reap=True, terminate=killed.append, custody=blocked, state=state)
+    assert killed == [] and lines == ["21:00Z REAP-BLOCKED done vy-done: art:deadbeef not preserved: 404"]
+    assert (tmp_path / "reaper.log").read_text() == lines[0] + "\n"
+    soon = NOW + dt.timedelta(minutes=29)
+    assert notes.reap_lines(tmp_path, rows, soon, 10, noted, reap=True, terminate=killed.append, custody=blocked, state=state) == []
+    later = NOW + dt.timedelta(minutes=31)
+    lines = notes.reap_lines(tmp_path, rows, later, 10, noted, reap=True, terminate=killed.append,
+                             custody=lambda lane, p: (True, "ok"), state=state)
+    assert killed == ["p1"] and lines == ["21:31Z REAPED done vy-done p1 $0.74/h (final 46m ago); custody: ok"]
+    boom = lambda lane, p: 1 / 0
+    rows[0]["pods"] = [{**pod, "id": "p2"}]
+    assert notes.reap_lines(tmp_path, rows, later, 10, noted, reap=True, terminate=killed.append, custody=boom, state=state) == [
+        "21:31Z REAP-BLOCKED done vy-done: custody not checked (ZeroDivisionError: division by zero)"] and killed == ["p1"]
+
+
+def test_pod_view_takes_the_later_of_created_and_last_started():
+    p = {**_pod("x", "vy-x", started_min_ago=5), "createdAt": "2026-09-23T19:00:00Z"}
+    assert notes.pod_view(p, None, NOW)["started_ts"] == (NOW - dt.timedelta(minutes=5)).timestamp()
+    assert "started_ts" not in notes.pod_view({"id": "x", "name": "vy-x"}, None, NOW)
 
 
 def test_cli_keep_pod_is_recorded_for_the_reaper_and_the_finish_check(tmp_path, capsys):

@@ -51,7 +51,9 @@ how long an idle pod has been idle (newest /workspace file, capped at its uptime
 a finished lane nobody will read; not on the first pass, never for a superseded lane), and with `--pods`: `IDLE-POD` (an open
 lane's pod idle >= `--idle-min`: the earliest sign the lane died), one `ACCOUNT` line per pass (balance, $/h, runway, lane pods
 vs other pods), `RUNWAY` (under `--runway-h` hours), `FINAL-POD` (a finished lane with no open successor still has a pod after
-the grace) or, with `--reap`, `REAPED` (that pod terminated, logged in `<root>/reaper.log`; `checkpoint ... --keep-pod WHY` keeps it).
+the grace) or, with `--reap`, `REAPED` (that pod terminated once the same custody as a stale lane's passes, else `REAP-BLOCKED`;
+logged in `<root>/reaper.log`; `checkpoint ... --keep-pod WHY` keeps it), and `RESUMED-POD` once for such a pod started after the
+FINAL (a reopened lane whose checkpoint has not arrived yet): never reaped.
 
 The steward rules act without an agent; their memory is `<root>/steward-state.json` (the snapshot leaves it out).  With `--pods
 --reap`, a STALE lane's pod idle (the probe) for `--reap-stale-min` is terminated once custody passes -- every `art:` id its newest
@@ -543,8 +545,12 @@ def _started(p: dict) -> dt.datetime | None:
 def pod_view(p: dict, probe: dict | None, now: dt.datetime) -> dict:
     """A lane's pod as status shows it: name (no campaign suffix), id, $/h, its probe, and `idle` when the probe saw no work
     process, no live verifier, no GPU compute app and 0 % GPU; `idle_min` is since its newest /workspace file, capped at uptime."""
+    from .pods.guard import parse_time  # noqa: PLC0415
+
     v = {"name": strip_pod_suffix(p.get("name") or ""), "id": p.get("id"), "usd_h": float(p.get("costPerHr") or 0.0),
          **(probe or {})}
+    if ts := [t for t in (parse_time(p.get("createdAt")), parse_time(p.get("lastStartedAt"))) if t is not None]:
+        v["started_ts"] = max(ts)
     if probe and not probe.get("error"):
         v["idle"] = not (probe.get("busy") or probe.get("serve") or probe.get("gpu_apps") or probe.get("gpu_util"))
         started = _started(p)
@@ -900,28 +906,54 @@ def terminate_pod(pod_id: str) -> None:
 
 
 def reap_lines(root: Path, rows: list[dict], now: dt.datetime, grace_min: float, noted: set[str], reap: bool = False,
-               terminate: Callable[[str], None] = terminate_pod) -> list[str]:
+               terminate: Callable[[str], None] = terminate_pod, custody: Callable[[str, dict], tuple[bool, str]] | None = None,
+               state: dict | None = None) -> list[str]:
     """Pods of a FINAL lane (rows are latest attempts: no open successor) done for >= grace_min, not kept (--keep-pod): FINAL-POD
-    once per pod, or with `reap` terminate them (REAPED, appended to <root>/reaper.log).  Pods no lane owns are never in rows."""
-    lines = []
+    once per pod, or with `reap` terminate them once custody passes (`reap_custody`): REAPED, else `REAP-BLOCKED <lane> <pod>: <why>`
+    (re-checked after 30 min); both go to <root>/reaper.log.  A pod started after the FINAL (or with no start time in the listing)
+    means the lane was reopened: `RESUMED-POD` once, never terminated -- its reopening checkpoint may not have reached these notes
+    yet.  Pods no lane owns are never in rows."""
+    custody = custody or (lambda lane, pod: reap_custody(root, lane, pod["id"]))
+    tried = (state if state is not None else {}).setdefault("reap_final", {})
+    t, lines = now.timestamp(), []
     for r in rows:
-        if r["state"] != "final" or r.get("keep_pod") or not r.get("done_ts") or now.timestamp() - r["done_ts"] < grace_min * 60:
+        if r["state"] != "final" or r.get("keep_pod") or not r.get("done_ts") or t - r["done_ts"] < grace_min * 60:
             continue
         for p in r.get("pods", []):
-            what = f"{r['lane']} {p['name']} {p['id']} ${p['usd_h']:.2f}/h (final {(now.timestamp() - r['done_ts']) / 60:.0f}m ago)"
+            started = p.get("started_ts")
+            if started is None or started > r["done_ts"]:
+                if f"resumed:{p['id']}" not in noted:
+                    at = f"{dt.datetime.fromtimestamp(started, dt.timezone.utc):%H:%MZ}" if started is not None else "unknown"
+                    lines.append(f"{now:%H:%MZ} RESUMED-POD {r['lane']} {p['name']} {p['id']} (created {at}, after FINAL "
+                                 f"{dt.datetime.fromtimestamp(r['done_ts'], dt.timezone.utc):%H:%MZ}): not reaped")
+                    noted.add(f"resumed:{p['id']}")
+                continue
+            what = f"{r['lane']} {p['name']} {p['id']} ${p['usd_h']:.2f}/h (final {(t - r['done_ts']) / 60:.0f}m ago)"
             if not reap:
                 line = f"{now:%H:%MZ} FINAL-POD {what}: --reap terminates it, checkpoint --keep-pod WHY keeps it"
             else:
+                if t - tried.get(p["id"], 0.0) < REAP_RETRY_S:
+                    continue
+                tried[p["id"]] = t
                 try:
-                    terminate(p["id"])
-                    line = f"{now:%H:%MZ} REAPED {what}"
+                    ok, why = custody(r["lane"], p)
                 except Exception as e:  # noqa: BLE001
-                    line = f"{now:%H:%MZ} REAP-FAILED {what}: {str(e)[:100]}"
+                    ok, why = False, f"custody not checked ({type(e).__name__}: {str(e)[:80]})"
+                if not ok:
+                    line = f"{now:%H:%MZ} REAP-BLOCKED {r['lane']} {p['name']}: {why}"
+                else:
+                    try:
+                        terminate(p["id"])
+                        line = f"{now:%H:%MZ} REAPED {what}; custody: {why}"
+                    except Exception as e:  # noqa: BLE001
+                        line = f"{now:%H:%MZ} REAP-FAILED {what}: {str(e)[:100]}"
                 with (root / "reaper.log").open("a") as f:
                     f.write(line + "\n")
-            if line.split()[1] == "REAPED" or p["id"] not in noted:
+            if reap or p["id"] not in noted:
                 lines.append(line)
             noted.add(p["id"])
+    for k in [k for k, v in tried.items() if t - v > 86400]:
+        del tried[k]
     return lines
 
 
@@ -1886,11 +1918,12 @@ def _watch(ns: argparse.Namespace, root: Path, repo: Path | None, run: Callable[
                 acct = None
             line, runway = account_line(fleet, acct, now)
             alert, runway_last = runway_alert(runway, ns.runway_h, runway_last, now)
-            more += [line, *alert, *reap_lines(root, rows, now, ns.reap_grace_min, pods_noted, reap=ns.reap and acting)]
+            custody = (lambda lane, pod: reap_custody(root, lane, pod["id"], runs=run_custody_r2)) if ns.custody_r2 else None
+            more += [line, *alert, *reap_lines(root, rows, now, ns.reap_grace_min, pods_noted, reap=ns.reap and acting,
+                                               custody=custody, state=state)]
             if acting:
                 more += [*steward_rule("reap-stale", stale_reap_lines, root, rows, now, ns.reap_stale_min, state, reap=ns.reap,
-                                       custody=(lambda lane, pod: reap_custody(root, lane, pod["id"], runs=run_custody_r2))
-                                       if ns.custody_r2 else None),
+                                       custody=custody),
                          *steward_rule("budget", budget_lines, root, fleet, now, state)]
         if acting:
             more += steward_rule("overdue", overdue_lines, root, rows, now, state)
