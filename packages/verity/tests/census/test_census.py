@@ -5,8 +5,16 @@ from __future__ import annotations
 import dataclasses
 
 import pytest
-
-from verity.census import HARDWARE, INSTANCE_SETS, NETWORKS, REFERENCE_NETWORK, SENSITIVITY_NETWORKS, VU_K1536, WORKLOADS, Hardware
+from verity.census import (
+    HARDWARE,
+    INSTANCE_SETS,
+    NETWORKS,
+    REFERENCE_NETWORK,
+    SENSITIVITY_NETWORKS,
+    VU_K1536,
+    WORKLOADS,
+    Hardware,
+)
 from verity.ml.tc.instructions import INSTRUCTIONS
 from verity.proofs.target import TARGETS
 
