@@ -504,7 +504,7 @@ def interaction(meta: Mapping[str, Any]) -> dict[str, Any]:
         compute, wait = compute + moved, wait - moved
     return {"live": True, "derived": False, "rounds": rounds, "bytes_up": up or 0.0, "bytes_down": num("net.bytes_in") or 0.0,
             "proof_bytes": proof, "statement_bytes": None, "rtt_ms": num("net.rtt_ms"),
-            "rtt_method": block.get("rtt_method") or lv.get("rtt_method"), "prover_s": compute,
+            "rtt_method": block.get("rtt_method") or lv.get("rtt_method"), "bandwidth_bps": num("net.bandwidth_bps"), "prover_s": compute,
             "verifier_s": num("verify.critical_s") or 0.0, "wait_s": wait, "loopback_s": moved,
             "loopback_round_s": loop if moved else None, "loopback_method": block.get("loopback_method") if moved else None}
 
@@ -518,8 +518,9 @@ def interaction_time(ix: Mapping[str, Any], rtt_s: float = REF_RTT_S, bandwidth_
 def interaction_problem(ix: Mapping[str, Any]) -> str | None:
     """Why a result does not meet the interaction standard, or ``None``.  A non-interactive (file-verified) result's record is derived
     and always meets it.  A live-verifier result records its rounds, its measured RTT with how it was measured and its network wait,
-    and its measured wall time (prover compute + network wait) is within :data:`INTERACTION_TOLERANCE` of the formula at the
-    reference profile."""
+    and its measured wall time (prover compute + network wait) is within :data:`INTERACTION_TOLERANCE` of the formula evaluated at
+    the run's own measured RTT (``net.rtt_ms``) and bandwidth (``net.bandwidth_bps``, else the reference's): the check validates
+    the model against the run itself; the published figure is the formula at the reference profile (root's ruling 2026-09-25)."""
     if not ix["live"]:
         return None
     if ix["rounds"] is None:
@@ -528,11 +529,13 @@ def interaction_problem(ix: Mapping[str, Any]) -> str | None:
                                ("network wait (net.wait_seconds or t.total_live)", ix["wait_s"] is not None)) if not ok]
     if missing:
         return f"interaction: {ix['rounds']:.0f} rounds but no {', no '.join(missing)}"
-    ref = interaction_time(ix)
+    bw = ix.get("bandwidth_bps") or REF_BANDWIDTH_BPS
+    model = interaction_time(ix, ix["rtt_ms"] / 1e3, bw)
     measured = (ix["prover_s"] or 0.0) + ix["wait_s"]
-    if ref > 0 and abs(measured - ref) > INTERACTION_TOLERANCE * ref:
-        return (f"interaction: measured {measured:.3g} s is {100 * (measured - ref) / ref:+.0f}% from the reference profile's {ref:.3g} s "
-                f"(1 ms RTT, 100 Gb/s; tolerance ±{100 * INTERACTION_TOLERANCE:.0f}%; measured RTT {ix['rtt_ms']:.3g} ms)")
+    if model > 0 and abs(measured - model) > INTERACTION_TOLERANCE * model:
+        return (f"interaction: measured {measured:.3g} s is {100 * (measured - model) / model:+.0f}% from the model's {model:.3g} s at the run's "
+                f"own network ({ix['rtt_ms']:.3g} ms RTT, {bw / 1e9:.3g} Gb/s{'' if ix.get('bandwidth_bps') else ' (reference; not measured)'}; "
+                f"tolerance ±{100 * INTERACTION_TOLERANCE:.0f}%)")
     return None
 
 

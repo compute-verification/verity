@@ -602,6 +602,18 @@ def test_live_coin_handling_measured_on_loopback_is_prover_compute_not_network(s
     assert ix["prover_s"] == pytest.approx(0.43)
 
 
+def test_the_tolerance_check_uses_the_runs_own_rtt_but_the_cell_uses_the_reference(store: LocalStore) -> None:
+    """A same-DC session at 0.2 ms RTT: measured wall = compute + rounds x 0.2 ms + bytes; that passes the check (it matches the
+    run), and the published cell is still the formula at 1 ms / 100 Gb/s."""
+    rounds, rtt = 400, 0.0002
+    wait = rounds * rtt + (1.25e9 + 384) * 8 / 100e9
+    art = committed(store, t_total=0.4, commit=0.6, interaction={**LIVE, "rounds.sequential_depth": rounds, "net.rtt_ms": rtt * 1e3,
+                                                                 "net.wait_seconds": wait})
+    cell = line(V.build(store))["cells"]["B-Ligero"]
+    N = V.native(FP8_ADA_MMA)["instances_per_second"]
+    assert cell.artifact == art and cell.overhead == pytest.approx(N * (0.6 + 0.4 + rounds * 0.001 + (1.25e9 + 384) * 8 / 100e9) / 4096)
+
+
 def test_a_borrowed_loopback_figure_is_named_in_the_cell_footnote(store: LocalStore) -> None:
     committed(store, t_total=0.4, commit=0.6, interaction={**LIVE, "live.loopback_round_seconds": 0.01,
                                                            "loopback_method": "BORROWED from r20260925-000000-0000"})
@@ -614,7 +626,7 @@ def test_a_borrowed_loopback_figure_is_named_in_the_cell_footnote(store: LocalSt
     ({"net.rtt_ms": None}, "no measured RTT"),
     ({"rtt_method": None}, "no how the RTT was measured"),
     ({"net.wait_seconds": None}, "no network wait"),
-    ({"net.wait_seconds": 2.5}, "% from the reference profile's"),
+    ({"net.wait_seconds": 2.5}, "% from the model's"),
 ])
 def test_an_interactive_result_needs_its_record_and_the_tolerance(store: LocalStore, over: dict, why: str) -> None:
     ix = {k: v for k, v in {**LIVE, **over}.items() if v is not None}

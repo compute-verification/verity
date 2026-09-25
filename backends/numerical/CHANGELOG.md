@@ -9,6 +9,11 @@
   rounds × that, at most the measured wait, moves out of the network wait. Only the excess over loopback counts as
   network wait, and the ±10% tolerance check compares the measured wall against compute + rounds × 1 ms + bytes ÷ 100 Gb/s.
   Applies to every live cell (route (a), Flock). The tolerance is unchanged (root's ruling).
+- The ±10% check validates the model against the run itself: the formula is evaluated at the run's measured RTT
+  (`net.rtt_ms`, which must be the network round trip, not a figure derived from the prover's coin waits) and measured
+  bandwidth (`net.bandwidth_bps`, else 100 Gb/s), and compared with the measured wall time. The published cell is still
+  the formula at the 1 ms / 100 Gb/s reference. A cell's footnote names any loopback coin-handling figure counted as
+  prover compute and how it was measured (`interaction.loopback_method`; a figure from another run says BORROWED).
 
 ## 2026-09-25: the switch to the approved tables spec (a change of method)
 
