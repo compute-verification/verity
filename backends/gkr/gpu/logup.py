@@ -170,12 +170,19 @@ def beta_powers(beta: Ext, w: int, device) -> torch.Tensor:
     return t_exts(pw, device)
 
 
-def build_leaves(t: Table, trows: torch.Tensor, values: list[torch.Tensor], m: torch.Tensor, z: Ext, beta: Ext, n: int):
-    """``(p_leaf (2^n,) int32 base, q_leaf (2^n, 6) int32)`` in the order [seg0 queries, seg1 queries, table, padding]."""
+def build_leaves(t: Table, trows: torch.Tensor, values: list[torch.Tensor], m: torch.Tensor, z: Ext, beta: Ext, n: int,
+                 out: tuple[torch.Tensor, torch.Tensor] | None = None):
+    """``(p_leaf (2^n,) int32 base, q_leaf (2^n, 6) int32)`` in the order [seg0 queries, seg1 queries, table, padding]
+    (written into ``out`` when given)."""
     dev = trows.device
     size = 1 << n
-    p = torch.zeros((size,), dtype=torch.int32, device=dev)
-    q = torch.zeros((size, DEG), dtype=torch.int32, device=dev)
+    if out is None:
+        p = torch.zeros((size,), dtype=torch.int32, device=dev)
+        q = torch.zeros((size, DEG), dtype=torch.int32, device=dev)
+    else:
+        p, q = out
+        p.zero_()
+        q.zero_()
     q[:, 0] = 1
     betas = beta_powers(beta, t.cols, dev)
     zt = t_ext(z, dev)

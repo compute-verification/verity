@@ -850,7 +850,8 @@ def prove(inst: Instance, pcs: bool = True, params: ligero.LigeroParams = ligero
                 lc = logup_packed.prove_range_table(w, tab, mults[ti], chs[ti][0], n, tr, out)
             del w
         else:
-            p_leaf, q_leaf = logup.build_leaves(t, trows, vals, mults[ti], chs[ti][0], chs[ti][1], n)
+            bufs = logup_packed.leaf_buffers(dev, n) if graphs else None
+            p_leaf, q_leaf = logup.build_leaves(t, trows, vals, mults[ti], chs[ti][0], chs[ti][1], n, out=bufs)
             del vals
             if graphs:
                 lc = logup_packed.prove_ext_table_graphed(p_leaf, q_leaf, n, tr, out)
