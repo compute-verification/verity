@@ -6,6 +6,10 @@ tree at once), and trees over whole runtime tensor leaves under the ``verity-vll
 the scheme the packed-word obligations of the serving path authenticate against.  ``indexed`` holds the domains,
 ``identity`` the canonical-manifest digests every identity here is built from, ``limits`` the verifier's limits.
 
+``vllm_production`` names the framing vLLM's production Commit path emits (position and ``fa2h`` leaves, raw-SHA
+root bindings) with its spec and conformance vectors; no backend proves over it.  ``scheme`` holds the
+``CommitmentScheme`` interface a named scheme implements.
+
 These establish that the values supplied to a check are the values previously bound.  They say nothing about the
 relation between those values; that is a verification obligation (``verity.verification``) a backend establishes.
 A proof system's own commitments (a STARK's trace or FRI commitments) are not here.
