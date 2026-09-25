@@ -1,6 +1,7 @@
-"""BLAKE3's compression with committed XOR-output bits (hash-proving survey §3.2): a census prototype beside the pinned
-gadget of ``blake3.py``.  Not a registered scheme and in no pinned system; the witness op it adds (``xadd``) exists only in
-the numpy interpreter of ``blake3_xob_test.py`` and in :func:`run_xadd`.
+"""BLAKE3's compression with committed XOR-output bits (hash-proving survey §3.2), and the leaf scheme ``blake3-xob`` that
+proves the ``blake3`` leaf with it: the same committed object (schema ``blake3-keyed/row/v2``, keys, framing, digest and
+carry layout -- every committer / verifier method is ``Blake3Leaf``'s), another circuit, so other system pins.  The witness
+op it adds, ``xadd``, runs in every witness interpreter (``witness.py``, ``witness_device.py``).
 
 The pinned gadget commits every addition's output bits (32 + carry rows) and pays one product row per XOR bit: 268 rows
 per G.  Here a G commits the bits of its four XOR outputs instead, and no addition output:
@@ -28,10 +29,12 @@ from collections.abc import Sequence
 import numpy as np
 
 from ..compile import Expr, LigeroCtx, Linear, P, Quadratic
-from .blake3 import (BLOCK_LEN, IV, KEYED_HASH, K_VU, MSG_PERMUTATION, ROUNDS, _W32, _const, _fresh_ctx, _prod,
-                     compress_gadget)
+from .blake3 import (BLOCK_LEN, IV, KEYED_HASH, K_VU, MSG_PERMUTATION, ROUNDS, Blake3Leaf, _W32, _const, _fresh_ctx,
+                     _prod, compress_gadget)
 
-__all__ = ["R2", "U", "compress_xob", "census", "run_xadd"]
+__all__ = ["NAME", "R2", "U", "Blake3XobLeaf", "compress_xob", "census", "run_xadd"]
+
+NAME = "blake3-xob"
 
 
 def _sqrt(a: int) -> int:
@@ -245,6 +248,29 @@ def census(word_bits: int = 8) -> dict:
             "per_block_xob": new, "per_block_xob_kinds": new_kinds, "ratio": round(new / old, 4),
             "blocks_per_vu": blocks_per_vu, "hash_rows_per_vu_pinned": blocks_per_vu * old,
             "hash_rows_per_vu_xob": blocks_per_vu * new, "keyed_flag": KEYED_HASH}
+
+
+class Blake3XobLeaf(Blake3Leaf):
+    """``Blake3Leaf`` with :func:`compress_xob` as the column's compression (204 rows per G against 268)."""
+
+    name = NAME
+
+    def _compress(self, ctx: LigeroCtx, cv: list[_W32], msg: list[_W32], counter: _W32, block_len: _W32, flags: _W32,
+                  scope: str):
+        h = compress_xob(ctx, cv, msg, counter, block_len, flags, scope)
+        return lambda w: h[w]
+
+    def census(self) -> dict:
+        c = census(8)
+        return {"blake3_compression_rows_per_block": c["per_block_xob"], "blake3_compression": "xor-output bits (xadd)",
+                "blake3_framing": "chunk CVs in-circuit, parent fold by the verifier", "same_leaf_as": "blake3"}
+
+
+try:
+    from . import registry as _registry
+    _registry.register(Blake3XobLeaf)
+except ImportError:                                           # pragma: no cover
+    pass
 
 
 if __name__ == "__main__":

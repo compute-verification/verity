@@ -525,8 +525,19 @@ pub static SHA256: LeafScheme = LeafScheme {
     leaf_bytes: sha256_leaf_bytes,
 };
 
+/// `leaf.blake3_xob.Blake3XobLeaf` (lane b-ligero-standard-hash): the `blake3` leaf -- schema, keys, framing, digest
+/// layout -- proved by the XOR-output-bits compression circuit, so only its `PINS` differ from `BLAKE3`'s.
+pub static BLAKE3_XOB: LeafScheme = LeafScheme {
+    name: "blake3-xob",
+    display: "BLAKE3 (xob circuit)",
+    schema: "blake3-keyed/row/v2",
+    params_sha256: "6654cdb9680d9f9c782092d0cb7cf0820bcba2612b28742c2b48cdd8957785a6",
+    digest_elems: BLAKE3_DIGEST_ELEMS,
+    leaf_bytes: blake3_leaf_bytes,
+};
+
 /// Every scheme this build knows.
-pub static SCHEMES: &[&LeafScheme] = &[&POSEIDON2, &BLAKE3, &SHA256, &AJTAI_N64, &AJTAI_N128];
+pub static SCHEMES: &[&LeafScheme] = &[&POSEIDON2, &BLAKE3, &BLAKE3_XOB, &SHA256, &AJTAI_N64, &AJTAI_N128];
 
 /// `leaf.registry.DEFAULT` / `ALIASES`: a relation string without a suffix, or with `+hash`, names Poseidon2.
 pub const DEFAULT: &str = "poseidon2";
