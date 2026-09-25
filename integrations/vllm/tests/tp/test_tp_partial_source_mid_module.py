@@ -140,7 +140,7 @@ def test_reference_keys_and_nth_meta_pair_the_second_call_with_the_second_commit
 
 def test_identity_check_requires_the_declared_count_per_site():
     """native_host.identity_check: a mid-module site with 2 declared partials per step is fine at 2 and named at 1 or 3."""
-    nh = pytest.importorskip("verity_vllm.acquire.native_host")
+    nh = pytest.importorskip("verity_vllm.commit.committer.native_host")
     src = types.SimpleNamespace(short_name="tp_partial", rank=0, site_names=lambda: ["model.layers.0.self_attn", "model.layers.0.self_attn.o_proj"],
                                 received_site_names=lambda: ["model.layers.0.self_attn"], site_counts=lambda: {"model.layers.0.self_attn": 2, "model.layers.0.self_attn.o_proj": 1})
     self = types.SimpleNamespace(_modules=[("model.layers.0.self_attn.o_proj", _make("RowParallelLinear"))], runner=None, sources=[src])

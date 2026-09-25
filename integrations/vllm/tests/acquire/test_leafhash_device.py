@@ -11,7 +11,7 @@ torch = pytest.importorskip("torch")
 if not torch.cuda.is_available():
     pytest.skip("CUDA required for the device leaf hash", allow_module_level=True)
 
-from verity_vllm.acquire import leafhash as LH  # noqa: E402
+from verity_vllm.commit.committer import leafhash as LH  # noqa: E402
 from verity_vllm.commit import hidden_engine as eng  # noqa: E402
 
 

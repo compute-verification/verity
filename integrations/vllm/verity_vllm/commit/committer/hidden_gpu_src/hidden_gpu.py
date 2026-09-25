@@ -17,7 +17,7 @@ def _repo_of_this_file():
     """[R18 infra, F-r17-tp-06] the tree THIS FILE lives in -- never $VERITOR_REPO, never a default path.  The former
     `REPO = os.environ.get('VERITOR_REPO', '/workspace/cp/veritor')` made a Commit under --gpu-tree without VERITOR_REPO import verity.ir
     from the pod's DEFAULT tree while verity_vllm ran the release (tp M-1830).  This file is shipped at
-    <tree>/verity_vllm/acquire/hidden_gpu_src/ and materialised at <tree>/out/gen/r9/cmt-hidden/src/ (pod_hidden_gpu.sh), so the tree
+    <tree>/verity_vllm/commit/committer/hidden_gpu_src/ and materialised at <tree>/out/gen/r9/cmt-hidden/src/ (pod_hidden_gpu.sh), so the tree
     is found by walking up to the first ancestor holding verity_vllm/ -- the same answer from either copy."""
     p = os.path.realpath(HERE)
     while True:

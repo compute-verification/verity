@@ -109,7 +109,7 @@ def _held_as_collected(com, kind: str, W: int = 512) -> None:
     inside it), whole (`block`) or on host as pinned windows (`_HostWindows`) or byte ranges (`_HostRanges`) over the same bytes."""
     import torch
 
-    from verity_vllm.acquire import native_collect as NC
+    from verity_vllm.commit.committer import native_collect as NC
 
     for s, (blk, used) in list(com._gpu_blocks.items()):
         n = blk.numel()

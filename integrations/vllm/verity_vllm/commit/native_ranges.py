@@ -1,6 +1,6 @@
 """Range openings of the native host committer's step trees.
 
-`NativeRangeOpenings` is a mixin of `acquire.native_host.NativeHostCommitter`: a run of leaves of a step is opened from the retained copy
+`NativeRangeOpenings` is a mixin of `commit.committer.native_host.NativeHostCommitter`: a run of leaves of a step is opened from the retained copy
 with the boundary siblings of its tree (`open_range`) and verified against the run commitment (`verify_range`); `leaf_span` maps a tensor's
 bytes to the leaves that hold them.  `fault_retained_flip` is the negative test of that path.
 """

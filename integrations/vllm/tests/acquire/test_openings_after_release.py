@@ -23,7 +23,7 @@ torch = pytest.importorskip("torch")
 
 from verity_vllm.check.commit_verdict import commit_verdict  # noqa: E402
 from verity_vllm.acquire.committer_api import challenge_positions  # noqa: E402
-from verity_vllm.acquire.native_host import GPU_CHUNK_BYTES, NativeHostCommitter, TensorMeta, value_family  # noqa: E402
+from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, NativeHostCommitter, TensorMeta, value_family  # noqa: E402
 
 
 def _metas(step: int, seed: int) -> tuple[list[TensorMeta], bytes]:
@@ -168,7 +168,7 @@ def test_verdict_fails_closed_on_openings_after_release():
 def _sparse(com: NativeHostCommitter, exclude: set[str]) -> dict[int, int]:
     """Turn the CPU fixture's contiguous host blocks into `_HostRanges` that omit the excluded families' interiors (what the bounded
     windowed worker builds); returns the excluded bytes per step."""
-    from verity_vllm.acquire.native_collect import _HostRanges, _excluded_chunk_ranges
+    from verity_vllm.commit.committer.native_collect import _HostRanges, _excluded_chunk_ranges
 
     out = {}
     for step, (blk, used) in list(com._gpu_blocks.items()):
@@ -186,7 +186,7 @@ def _sparse(com: NativeHostCommitter, exclude: set[str]) -> dict[int, int]:
 
 
 def test_excluded_chunk_ranges_are_the_chunk_aligned_interior():
-    from verity_vllm.acquire.native_collect import _excluded_chunk_ranges
+    from verity_vllm.commit.committer.native_collect import _excluded_chunk_ranges
 
     metas, _ = _metas(0, 1)
     fa2 = next(m for m in metas if m.name.startswith("fa2.m1/"))
@@ -200,7 +200,7 @@ def test_excluded_chunk_ranges_are_the_chunk_aligned_interior():
 
 
 def test_sparse_host_ranges_hold_exactly_the_retained_bytes():
-    from verity_vllm.acquire.native_collect import _HostRanges
+    from verity_vllm.commit.committer.native_collect import _HostRanges
 
     com = _committer("host")
     rc = _run(com)
@@ -275,7 +275,7 @@ def test_schedule_stream_bound_reproduces_the_sizing_on_the_measured_b1_row():
     """[F-dA-15 bounded admission] the declared-schedule stream model, fed the B1 1024/128 sizing record measured on cp-h100 (R17 fp8 16:47Z):
     its single prefill step must equal the sizing's prefill_step_bytes (same widths, same FA3 launch geometry), its decode steps the sizing's
     decode at the growing kv length, and the run total must sit under the measured run (25,075,721,724 B) by the factor the admission carries."""
-    from verity_vllm.acquire.native_host import schedule_stream_bound
+    from verity_vllm.commit.committer.native_host import schedule_stream_bound
     asz = {"per_token_bytes": 2900996, "per_seq_bytes": 607744, "per_step_bytes": 93184,
            "model": {"hidden": 2560, "heads": 32, "kv_heads": 8, "head_dim": 128, "layers": 36, "hidden_m1": True, "attn_backend": "fa3"},
            "prefill_step_bytes": 20203618816, "prefill_hidden_bytes": 17232297984, "decode_step_bytes": 22531588, "decode_hidden_bytes": 18929664,
@@ -302,7 +302,7 @@ def test_bounded_host_bound_term_by_term_covers_every_measured_b1_arm_and_admits
     RSS peak measured on cp-h100 for the B1 1024/128 bounded arms (FP8-STAGING.md §3, rss_timeline 2 s samples) -- including the three runs
     that beat the earlier formulas -- while the per-component factors are the ones measured on the same row (hidden exact -> 1.05; other
     x1.59 -> 2.0).  The B8 row (declared schedule: one 3,537-token prefill) must be admitted under the 239,372 MiB cgroup with margin."""
-    from verity_vllm.acquire.native_host import bounded_host_bound, schedule_stream_bound
+    from verity_vllm.commit.committer.native_host import bounded_host_bound, schedule_stream_bound
     asz = {"per_token_bytes": 2900996, "per_seq_bytes": 607744, "per_step_bytes": 93184,
            "model": {"hidden": 2560, "heads": 32, "kv_heads": 8, "head_dim": 128, "layers": 36, "hidden_m1": True, "attn_backend": "fa3"},
            "prefill_step_bytes": 20203618816, "prefill_hidden_bytes": 17232297984, "decode_step_bytes": 22531588, "decode_hidden_bytes": 18929664,

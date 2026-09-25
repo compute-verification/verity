@@ -35,12 +35,12 @@ INTERIM_LAYER = {
     "verity_vllm.input_provenance": "check|properties",        # weights_of_record, root_policy -> check/provenance.py
     "verity_vllm.program.model": "program",        # -> program/model.py
     "verity_vllm.acquire": "acquire",
-    "verity_vllm.acquire.native_host": "observe|commit",       # the committer -> commit/committer/
-    "verity_vllm.acquire.native_collect": "observe|commit",
-    "verity_vllm.acquire.flush_points": "observe|commit",
-    "verity_vllm.acquire.native_jit": "observe|commit",
-    "verity_vllm.acquire.leafhash": "observe|commit",
-    "verity_vllm.acquire.hidden_gpu_src": "observe|commit",
+    "verity_vllm.commit.committer.native_host": "observe|commit",       # the committer -> commit/committer/
+    "verity_vllm.commit.committer.native_collect": "observe|commit",
+    "verity_vllm.commit.committer.flush_points": "observe|commit",
+    "verity_vllm.commit.committer.native_jit": "observe|commit",
+    "verity_vllm.commit.committer.leafhash": "observe|commit",
+    "verity_vllm.commit.committer.hidden_gpu_src": "observe|commit",
     "verity_vllm.observe": "observe|commit",                   # observer, triton adapter, storage, events; fold/tree/... -> observe/fold/
     "verity_vllm.engine.vllm_adapter": "engine",
     "verity_vllm.engine.engine_profile": "engine",

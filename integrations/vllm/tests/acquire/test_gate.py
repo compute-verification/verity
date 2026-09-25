@@ -11,7 +11,7 @@ nn = torch.nn
 
 from verity_vllm.query.manifest import format as MF  # noqa: E402
 from verity_vllm.query.manifest import format as RM  # noqa: E402
-from verity_vllm.acquire.native_host import NativeHostCommitter, SkipRefused  # noqa: E402
+from verity_vllm.commit.committer.native_host import NativeHostCommitter, SkipRefused  # noqa: E402
 from verity_vllm.acquire import gate as G  # noqa: E402
 from verity_vllm.correspondence.reader_for_acquire import RUNNER_PATH, AnnotationCorrespondence, runtime_tree_of  # noqa: E402
 from verity_vllm.acquire.install import apply_plan_to_committer  # noqa: E402

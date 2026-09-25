@@ -1,9 +1,6 @@
 {
   "rule": "P10 (size ratchet)",
   "entries": [
-    {"file": "verity_vllm/acquire/native_collect.py", "kind": "function", "symbol": "NativeCollectCommitter._commit_step_windowed", "detail": "lines", "count": 405},
-    {"file": "verity_vllm/acquire/native_collect.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1931},
-    {"file": "verity_vllm/acquire/native_host.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 2587},
     {"file": "verity_vllm/check/commit_verdict.py", "kind": "function", "symbol": "commit_verdict", "detail": "lines", "count": 225},
     {"file": "verity_vllm/check/compiled_kernel_check.py", "kind": "function", "symbol": "CompiledKernelCheck.run", "detail": "lines", "count": 215},
     {"file": "verity_vllm/check/fold_compare.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 922},
@@ -23,6 +20,9 @@
     {"file": "verity_vllm/check/stoch_recompute.py", "kind": "function", "symbol": "recompute_run", "detail": "lines", "count": 310},
     {"file": "verity_vllm/check/verdict.py", "kind": "function", "symbol": "c2_rules", "detail": "lines", "count": 159},
     {"file": "verity_vllm/check/verdict.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1407},
+    {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "function", "symbol": "NativeCollectCommitter._commit_step_windowed", "detail": "lines", "count": 405},
+    {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1931},
+    {"file": "verity_vllm/commit/committer/native_host.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 2587},
     {"file": "verity_vllm/commit/padding_steps.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 930},
     {"file": "verity_vllm/correspondence/batch_decomp.py", "kind": "function", "symbol": "decompose", "detail": "lines", "count": 350},
     {"file": "verity_vllm/correspondence/batch_decomp.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 916},

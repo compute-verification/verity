@@ -195,7 +195,7 @@ def test_in_process_check_and_loaded_module_guard(tmp_path):
     with pytest.raises(gsid.SourceIdentityError, match="hidden_gpu"):
         sid.assert_loaded_module_is_ours(fake, "hidden_gpu", str(INTEGRATION))
     ours = types.ModuleType("hidden_gpu")
-    ours.__file__ = str(INTEGRATION / "verity_vllm" / "acquire" / "hidden_gpu_src" / "hidden_gpu.py")
+    ours.__file__ = str(INTEGRATION / "verity_vllm" / "commit" / "committer" / "hidden_gpu_src" / "hidden_gpu.py")
     rec = sid.assert_loaded_module_is_ours(ours, "hidden_gpu", str(INTEGRATION))
     assert rec["repo_root"] == os.path.realpath(REPO)
 
@@ -290,16 +290,16 @@ def test_shipped_tree_still_refuses_a_foreign_package(tmp_path):
 def _fake_tree_with_hidden_gpu(tmp_path: Path, name: str) -> Path:
     """An integration-root-shaped tree (hidden_gpu.py walks up to the first ancestor holding verity_vllm/)."""
     t = tmp_path / name
-    for d in ("verity_vllm/acquire/hidden_gpu_src", "out/gen/r9/cmt-hidden/src", "verity_vllm"):
+    for d in ("verity_vllm/commit/committer/hidden_gpu_src", "out/gen/r9/cmt-hidden/src", "verity_vllm"):
         (t / d).mkdir(parents=True, exist_ok=True)
     (t / "verity_vllm" / "__init__.py").write_text("")
-    src = (INTEGRATION / "verity_vllm" / "acquire" / "hidden_gpu_src" / "hidden_gpu.py").read_text()
-    (t / "verity_vllm" / "acquire" / "hidden_gpu_src" / "hidden_gpu.py").write_text(src)
+    src = (INTEGRATION / "verity_vllm" / "commit" / "committer" / "hidden_gpu_src" / "hidden_gpu.py").read_text()
+    (t / "verity_vllm" / "commit" / "committer" / "hidden_gpu_src" / "hidden_gpu.py").write_text(src)
     (t / "out" / "gen" / "r9" / "cmt-hidden" / "src" / "hidden_gpu.py").write_text(src)
     return t
 
 
-@pytest.mark.parametrize("copy", ["verity_vllm/acquire/hidden_gpu_src", "out/gen/r9/cmt-hidden/src"])
+@pytest.mark.parametrize("copy", ["verity_vllm/commit/committer/hidden_gpu_src", "out/gen/r9/cmt-hidden/src"])
 def test_hidden_gpu_resolves_repo_from_its_own_file_not_the_environment(tmp_path, copy):
     """Both copies (the shipped one, and the r9 path native_host inserts) find the SAME tree by walking up from __file__; a foreign
     $VERITOR_REPO is refused BEFORE torch/numpy load (so this runs torch-free); an agreeing one gets past the identity step."""
@@ -331,7 +331,7 @@ def test_hidden_gpu_refuses_a_verity_vllm_already_imported_from_another_tree(tmp
 
 
 def test_shipped_and_r9_copies_of_hidden_gpu_are_identical():
-    a = (INTEGRATION / "verity_vllm" / "acquire" / "hidden_gpu_src" / "hidden_gpu.py").read_bytes()
+    a = (INTEGRATION / "verity_vllm" / "commit" / "committer" / "hidden_gpu_src" / "hidden_gpu.py").read_bytes()
     r9 = INTEGRATION / "out" / "gen" / "r9" / "cmt-hidden" / "src" / "hidden_gpu.py"
     if not r9.exists():
         pytest.skip("out/gen/r9 is not part of the Verity tree (materialised on the pod by pod_hidden_gpu.sh)")

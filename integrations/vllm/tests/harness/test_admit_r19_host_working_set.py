@@ -18,7 +18,7 @@ import os
 import numpy as np
 import pytest
 
-from verity_vllm.acquire import native_collect as NC
+from verity_vllm.commit.committer import native_collect as NC
 from verity_vllm.check import sampled_replay as SR
 
 # the sampled-replay world / helpers of test_sampled_replay (one fixture set, not a copy)
@@ -100,7 +100,7 @@ def test_retain_exclude_alias_names_both_tap_families():
     assert NC.retain_exclude_families("fa2_hidden_m1_stream, gemm_qkv") == {"fa2_hidden_m1", "gemm_qkv"}
     assert NC.retain_exclude_families("") == set() and NC.retain_exclude_families(None) == set()
     # the alias names exactly the FAMILY_RULES families of the two taps (value_family of a tap plane name)
-    from verity_vllm.acquire.native_host import value_family
+    from verity_vllm.commit.committer.native_host import value_family
     assert {value_family("fa2.m1/L0/s0/g32x8x1/S"), value_family("fa3.m1/L3/s0/g8x8x1/P")} == NC.HIDDEN_M1_FAMILIES
 
 

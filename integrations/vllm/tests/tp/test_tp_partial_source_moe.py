@@ -172,7 +172,7 @@ def test_nested_moe_runner_is_one_site_at_the_program_path_and_nested_linear_kee
 def test_expected_manifest_lists_the_received_sites_as_modules():
     """native_host.expected_manifest adds the TP source's received sites to the expected module set (identity_check would otherwise
     flag `mlp.experts` as a module outside the manifest)."""
-    nh = pytest.importorskip("verity_vllm.acquire.native_host")
+    nh = pytest.importorskip("verity_vllm.commit.committer.native_host")
     src = types.SimpleNamespace(short_name="tp_partial", rank=0, site_names=lambda: ["model.layers.0.mlp.experts", "model.layers.0.self_attn.o_proj"],
                                 received_site_names=lambda: ["model.layers.0.mlp.experts"])
     self = types.SimpleNamespace(_modules=[("model.layers.0.self_attn.o_proj", _make("RowParallelLinear"))], runner=None, sources=[src])

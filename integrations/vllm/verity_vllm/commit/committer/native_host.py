@@ -1172,14 +1172,14 @@ class NativeHostCommitter(NativeRangeOpenings):
         Timed and reported apart from steady state (BRIEF §3 denominator rule)."""
         t0 = time.perf_counter()
         # [R16 sys SYS-05] host (default, the path below) | device | device-checked: the same leaves (pos_leaf over self.chunk-byte pieces of
-        # the tensor's bytes) and the same per-tensor fold on the GPU (verity_vllm.acquire.leafhash / native_leafhash.cu); the root
+        # the tensor's bytes) and the same per-tensor fold on the GPU (verity_vllm.commit.committer.leafhash / native_leafhash.cu); the root
         # construction below is untouched.  device-checked computes both and refuses a mismatch (validation runs record the equality).
         mode = os.environ.get("VERITY_WEIGHTS_HASH", "host")
         if mode not in ("host", "device", "device-checked"):
             raise ValueError(f"VERITY_WEIGHTS_HASH must be host | device | device-checked, got {mode!r}")
         LH = None
         if mode != "host":
-            from verity_vllm.acquire import leafhash as LH  # noqa: N812
+            from verity_vllm.commit.committer import leafhash as LH  # noqa: N812
             LH.ext()                                          # JIT once; a build failure here fails the registration by name, not silently host
         roots: list[bytes] = []
         n_bytes = 0
@@ -1380,12 +1380,12 @@ class NativeHostCommitter(NativeRangeOpenings):
         if self._gpu_ext is None:
             import sys as _sys
 
-            _tree = os.path.realpath(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+            _tree = os.path.realpath(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
             src_dir = os.path.join(_tree, "out", "gen", "r9", "cmt-hidden", "src")
             if not os.path.isfile(os.path.join(src_dir, "hidden_gpu.py")):
                 # [R18 infra] a tree whose r9 copy was never materialised (pod_hidden_gpu.sh not run) imports the SHIPPED copy of the same
                 # tree -- never another tree's, never a default path
-                src_dir = os.path.join(_tree, "verity_vllm", "acquire", "hidden_gpu_src")
+                src_dir = os.path.join(_tree, "verity_vllm", "commit", "committer", "hidden_gpu_src")
             if src_dir not in _sys.path:
                 _sys.path.insert(0, src_dir)
             import hidden_gpu as HG  # CMT-2 driver: JIT-builds hidden_gpu_tree.cu on first use
@@ -1408,7 +1408,7 @@ class NativeHostCommitter(NativeRangeOpenings):
                     json.dump(_sid_doc, _f, indent=1, default=str)
 
             bd = os.environ.get("HIDDEN_GPU_BUILD")
-            from verity_vllm.acquire.native_collect import _clear_stale_jit_lock
+            from verity_vllm.commit.committer.native_collect import _clear_stale_jit_lock
 
             if bd:
                 _clear_stale_jit_lock(bd)      # a killed build's `lock` makes cpp_extension.load() wait forever (R13 07:24Z: 3 runs 'hung' here)

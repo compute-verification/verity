@@ -6,10 +6,10 @@ from __future__ import annotations
 import os
 import types
 
-from verity_vllm.acquire import native_jit as nj
+from verity_vllm.commit.committer import native_jit as nj
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-CPP = os.path.join(HERE, "..", "..", "verity_vllm", "acquire", "native_collect.cpp")
+CPP = os.path.join(HERE, "..", "..", "verity_vllm", "commit", "committer", "native_collect.cpp")
 
 
 def _write(tmp_path, name, data: bytes):
@@ -111,7 +111,7 @@ def test_pod_release_fails_closed_on_a_stale_so_and_records_the_digest():
 
 
 def test_ext_keys_its_build_dir_by_the_digest_and_refuses_a_stale_load():
-    src = open(os.path.join(HERE, "..", "..", "verity_vllm", "acquire", "native_collect.py")).read()
+    src = open(os.path.join(HERE, "..", "..", "verity_vllm", "commit", "committer", "native_collect.py")).read()
     assert "bd = native_jit.keyed_build_dir(parent, digest)" in src
     assert "missing = native_jit.missing_bindings(_EXT, os.path.join(HERE, \"native_collect.cpp\"))" in src
     assert "raise RuntimeError" in src.split("missing = native_jit.missing_bindings")[1][:400]

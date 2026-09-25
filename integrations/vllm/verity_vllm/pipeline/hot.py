@@ -136,7 +136,7 @@ def so_identity(argv: list[str]) -> dict[str, str | None]:
         # name that one when the digest is computable here, else every .so one level down (plus the flat legacy location)
         keyed: list[str] = []
         try:
-            from verity_vllm.acquire import native_collect as _nc, native_jit as _nj
+            from verity_vllm.commit.committer import native_collect as _nc, native_jit as _nj
 
             keyed = sorted(glob.glob(os.path.join(_nj.keyed_build_dir(ncb, _nc.build_source_digest()), "*.so")))
         except Exception:  # noqa: BLE001 -- no torch / no sources here: fall back to the directory listing

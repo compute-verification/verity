@@ -16,7 +16,7 @@ STATIC REACHABILITY: an ast import graph over every `.py` under the integration 
 (`c` as a submodule when it is one), relative imports, the parents of every imported dotted name (their `__init__`), string
 literals that name an integration module (`importlib.import_module("verity_vllm.program.model")`, dotted registry paths), f-string
 prefixes (`f"verity_vllm.program.registry.{m}"` + every short literal of the same file that completes to a module), path literals
-(`verity_vllm/acquire/hidden_gpu_src/hidden_gpu.py`) and unique `<name>.py` literals joined at runtime.  Anything reachable from a
+(`verity_vllm/commit/committer/hidden_gpu_src/hidden_gpu.py`) and unique `<name>.py` literals joined at runtime.  Anything reachable from a
 root is LIVE.  `verity_vllm/engine/profiles/**` is resolved by name at runtime: the whole package is reachable when any consumer is.
 
 CLASSES (per module of the census packages):

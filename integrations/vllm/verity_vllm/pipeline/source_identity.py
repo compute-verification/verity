@@ -51,8 +51,8 @@ FAIL_CLASS = _sid.FAIL_CLASS
 SourceIdentityError = _sid.SourceIdentityError
 
 # hidden_gpu is imported by native_host._gpu_ext_load from <integration>/out/gen/r9/cmt-hidden/src (materialised by pod_hidden_gpu.sh from
-# the shipped copy verity_vllm/acquire/hidden_gpu_src); both are candidates, the r9 path first because that is what native_host inserts
-HIDDEN_GPU_CANDIDATES = ("integrations/vllm/out/gen/r9/cmt-hidden/src/hidden_gpu.py", "integrations/vllm/verity_vllm/acquire/hidden_gpu_src/hidden_gpu.py")
+# the shipped copy verity_vllm/commit/committer/hidden_gpu_src); both are candidates, the r9 path first because that is what native_host inserts
+HIDDEN_GPU_CANDIDATES = ("integrations/vllm/out/gen/r9/cmt-hidden/src/hidden_gpu.py", "integrations/vllm/verity_vllm/commit/committer/hidden_gpu_src/hidden_gpu.py")
 # package name -> (import name, the sys.path entry it must resolve from, relative to the repo root)
 PACKAGE_ROOTS = {
     "verity": ("verity", "packages/verity/src"),                       # core: verity.ir, verity.ml.tc, verity.verification

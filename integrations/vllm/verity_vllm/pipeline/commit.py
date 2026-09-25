@@ -411,7 +411,7 @@ def make_committer(kind: str, engine: va.Engine, args: argparse.Namespace, run_i
     if (layout := getattr(args, "layout", "chunk-leaf-v1")) != "chunk-leaf-v1" and not kind.startswith("native_collect"):
         raise ValueError(f"leaf layout {layout} is implemented by the native_collect committers only, not {kind}")
     if kind in ("native_host", "native_host_direct"):
-        from verity_vllm.acquire.native_host import NativeHostCommitter
+        from verity_vllm.commit.committer.native_host import NativeHostCommitter
 
         return NativeHostCommitter(engine, run_id=run_id, chunk=args.chunk, hash_threads=args.hash_threads,
                                    staging="arena" if kind == "native_host" else "direct", arena_bytes=((args.arena_mb << 20) if args.arena_mb else None),
@@ -424,7 +424,7 @@ def make_committer(kind: str, engine: va.Engine, args: argparse.Namespace, run_i
         # `native_collect_gather` = secondary bet: staged copies + one gather launch per legal collection point (owner 2's windows).
         # R11 `native_collect_v2`: gather windows (32 blocks/descriptor) + C++ hook bodies + C++ FA2 tap glue (no Python per producer);
         # `native_collect_v2_memcpy` = the same native hooks with one memcpy per tensor (ablation of the windows).
-        from verity_vllm.acquire.native_collect import NativeCollectCommitter
+        from verity_vllm.commit.committer.native_collect import NativeCollectCommitter
 
         # `native_collect_v2b` (candidate B) = v2 + size-adaptive gather blocks + native worker step (GIL-free GPU tree); VERITY_HI_PRIO=1 adds
         # the high-priority serving stream variant (labelled `_hp`)
@@ -435,7 +435,7 @@ def make_committer(kind: str, engine: va.Engine, args: argparse.Namespace, run_i
                                       native_worker=(kind == "native_collect_v2b"), layout=layout,
                                       profile=bool(getattr(args, "profile_hooks", False)) and not v2)
     if kind == "hooks_only":
-        from verity_vllm.acquire.native_host import NativeHostCommitter
+        from verity_vllm.commit.committer.native_host import NativeHostCommitter
 
         class HooksOnly(NativeHostCommitter):        # ablation: acquisition hooks fire, nothing is copied or hashed (NOT a commitment)
             name = "hooks_only"
@@ -771,7 +771,7 @@ def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, 
     import copy
 
     from verity_vllm.acquire.committer_api import challenge_positions
-    from verity_vllm.acquire.native_host import value_family
+    from verity_vllm.commit.committer.native_host import value_family
 
     frozen = copy.copy(com)                     # shallow: keeps THIS run's per-step dicts (reset() rebinds the live committer's, never mutates them)
     frozen.installed = True                     # guard: never install()/uninstall() the frozen view
@@ -1047,7 +1047,7 @@ def main(argv: list[str] | None = None) -> None:
                     "--engine-arg gpu_memory_utilization=<x> (0.5-0.6 on 48 GB for <=2B models at 1024-token prompts; 0.75 on 80 GB)")
     ap.add_argument("--weights-hash", choices=("host", "device", "device-checked"), default=os.environ.get("VERITY_WEIGHTS_HASH", "host"),
                     help="[R16 sys SYS-05] where the weights registration hashes: host (default; Python pos_leaf per 256-B leaf, 17-24 s for "
-                         "a 1B model, ~120 s for 7B, twice per Commit), device (same leaves + tree on the GPU, verity_vllm.acquire.leafhash), "
+                         "a 1B model, ~120 s for 7B, twice per Commit), device (same leaves + tree on the GPU, verity_vllm.commit.committer.leafhash), "
                          "device-checked (both, per-tensor equality asserted; validation runs).  Recorded in versions.json weights.hash")
     ap.add_argument("--hash-threads", type=int, default=2, help="hashlib worker threads (pod CPU tune 17:30Z: 2 threads x 4 KB = 2.2 GB/s; 8 threads x 4 KB = 0.4 GB/s, GIL thrash)")
     ap.add_argument("--openings", type=int, default=64)
@@ -1262,7 +1262,7 @@ def main(argv: list[str] | None = None) -> None:
         Path(args.footprint).parent.mkdir(parents=True, exist_ok=True)
     if args.late_read:
         # deliberate late read: the P0 flush after qkv_proj is deferred to the next legal point (past RoPE's in-place q/k rewrite)
-        import verity_vllm.acquire.native_collect as _nc
+        import verity_vllm.commit.committer.native_collect as _nc
 
         _nc.GATHER_FLUSH_LEAVES = frozenset(_nc.GATHER_FLUSH_LEAVES - {args.late_read})
         print(f"[delta] LATE-READ NEGATIVE TEST: gather flush points {sorted(_nc.GATHER_FLUSH_LEAVES)} (dropped {args.late_read!r}); roots must NOT match arm 2", flush=True)
@@ -1629,11 +1629,11 @@ def main(argv: list[str] | None = None) -> None:
                 # the run's stream under the workload's DECLARED schedule (per step; the hidden family's share), not the envelope's
                 # any-packing worst case (`retained_bytes_bound` = ceil(B x max_prompt / T_prefill) prefills of the worst step: 3x for the
                 # B8 1024/128 row whose 8 prompts prefill in ONE step) -- both are on the record
-                from verity_vllm.acquire.native_host import schedule_stream_bound
+                from verity_vllm.commit.committer.native_host import schedule_stream_bound
                 _ssb = schedule_stream_bound(asz, reqs, sampling)
                 asz["schedule_stream_bound"] = _ssb
                 _excl = set(getattr(com, "retain_exclude", ()) or ())
-                from verity_vllm.acquire.native_host import bounded_host_bound
+                from verity_vllm.commit.committer.native_host import bounded_host_bound
                 # [R17 fp8, F-fp8-C2PROG] the C2 sampled replay's Programs of record become Python objects in THIS process (B8: 70,300 MiB,
                 # the peak of attempt 1); forecast them BEFORE the run from the instance files the replay will load (streamed count, ~17 s
                 # for the B8 row's 4.9 GB of json; nothing is built), so the bound printed here names them as a term of their own

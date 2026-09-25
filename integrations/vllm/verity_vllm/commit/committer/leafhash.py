@@ -38,7 +38,7 @@ def ext(build_dir: str | None = None, verbose: bool = False):
         bd = build_dir or os.environ.get("VERITY_LEAFHASH_BUILD")
         if bd:
             os.makedirs(bd, exist_ok=True)
-            from verity_vllm.acquire.native_collect import _clear_stale_jit_lock
+            from verity_vllm.commit.committer.native_collect import _clear_stale_jit_lock
 
             _clear_stale_jit_lock(bd)
         t0 = time.perf_counter()

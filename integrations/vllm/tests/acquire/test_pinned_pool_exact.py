@@ -11,7 +11,7 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity_vllm.acquire.native_host import _PinnedPool  # noqa: E402
+from verity_vllm.commit.committer.native_host import _PinnedPool  # noqa: E402
 
 GPU = torch.cuda.is_available()
 

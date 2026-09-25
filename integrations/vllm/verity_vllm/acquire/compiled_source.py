@@ -297,7 +297,7 @@ class CompiledGraphSource:
         (`install.plan_selection`: producer_output modules record their outputs, consumer_input modules their first argument; `plan`,
         else derived from the `use_plan` manifest, else refused by name).  A VERITY_SKIP class's outputs are not recorded (the
         committer's `apply_skip`); the sampler is acquired by the committer's runner.sample wrapper, outside the compiled region."""
-        from verity_vllm.acquire.native_host import _mro_names, skip_classes_of_env
+        from verity_vllm.commit.committer.native_host import _mro_names, skip_classes_of_env
 
         self.model, self.runner = model, runner
         if self.rows <= 0:

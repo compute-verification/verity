@@ -13,7 +13,7 @@ torch = pytest.importorskip("torch")
 if not torch.cuda.is_available():  # pragma: no cover
     pytest.skip("CUDA device required", allow_module_level=True)
 
-from verity_vllm.acquire.native_collect import ext  # noqa: E402
+from verity_vllm.commit.committer.native_collect import ext  # noqa: E402
 
 
 @pytest.fixture(scope="module")

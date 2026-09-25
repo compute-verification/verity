@@ -1,13 +1,13 @@
 """P2: value checks read opened values only.
 
-The rule's import contract is "``check.replay`` may not import ``acquire`` or ``commit.committer``".  Neither package
-split exists yet, so today it applies to the modules bound for ``check/replay/`` and the determinism value checks (``_imports.VALUE_CHECK_MODULES``: ``check.replay``, ``sampled_replay``, ``stoch_recompute``,
+The rule's import contract is "``check.replay`` may not import ``acquire`` or ``commit.committer``".  ``check/replay/``
+does not exist yet, so today it applies to the modules bound for ``check/replay/`` and the determinism value checks (``_imports.VALUE_CHECK_MODULES``: ``check.replay``, ``sampled_replay``, ``stoch_recompute``,
 ``compiled_kernel_check``, ``query.vu_query``, ``value_check``, ``compiled_value_check``, ``oracle_compare``), and it
-forbids every module that will be ``acquire/`` or ``commit/committer/``: today's ``acquire`` package (which still holds
-the committer) and the other modules whose interim layer is ``acquire``.  Violations are keyed by (importer, imported)
+forbids ``verity_vllm.acquire``, ``verity_vllm.commit.committer`` and the other modules whose interim layer is
+``acquire``.  Violations are keyed by (importer, imported)
 module pair in ``allowlists/p02_value_checks.json``.
 
-Once ``check/replay/`` and ``commit/committer/`` exist, the importer set is ``verity_vllm.check.replay`` and the
+Once ``check/replay/`` exists, the importer set is ``verity_vllm.check.replay`` and the
 forbidden set is ``verity_vllm.acquire`` plus ``verity_vllm.commit.committer``.  A committer object passed in at run
 time (``committed_reader(com)``) is invisible to an import contract; a pod negative test (mutate the retained buffer
 after commit, and the value check must FAIL) covers that half.
@@ -24,7 +24,7 @@ RULE = "P2 (value checks read opened values only)"
 
 
 def forbidden(dst: str) -> bool:
-    return I.in_group(dst, ("verity_vllm.acquire",)) or I.layer_of(dst) == "acquire"
+    return I.in_group(dst, ("verity_vllm.acquire", "verity_vllm.commit.committer")) or I.layer_of(dst) == "acquire"
 
 
 @lru_cache(maxsize=None)
@@ -46,5 +46,5 @@ def test_allowlist_has_no_stale_entries() -> None:
 def test_contract_modules_exist() -> None:
     known = I.modules()
     assert [m for m in I.VALUE_CHECK_MODULES if m not in known] == []
-    assert forbidden("verity_vllm.acquire.native_host") and forbidden("verity_vllm.tp.partial_source")
+    assert forbidden("verity_vllm.commit.committer.native_host") and forbidden("verity_vllm.tp.partial_source")
     assert not forbidden("verity_vllm.commit.binding")

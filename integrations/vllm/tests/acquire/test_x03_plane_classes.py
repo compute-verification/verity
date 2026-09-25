@@ -281,7 +281,7 @@ def test_attention_impls_of_record_reads_the_build_result(tmp_path):
 
 torch = pytest.importorskip("torch")
 
-from verity_vllm.acquire.native_host import GPU_CHUNK_BYTES, NativeHostCommitter, TensorMeta  # noqa: E402
+from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, NativeHostCommitter, TensorMeta  # noqa: E402
 
 
 class Attention:  # class names are what `_mro_names` sees

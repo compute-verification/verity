@@ -369,14 +369,14 @@ def choose(sites: list[Site], v: ValuePlan) -> tuple[Site | None, str]:
 # ---------------------------------------------------------------------------------------------------------------------------------
 
 def _lifetime_tables() -> dict[str, Any]:
-    from verity_vllm.acquire.native_host import NativeHostCommitter
-    from verity_vllm.acquire.flush_points import GATHER_FLUSH_LEAVES, PRE_FLUSH_LEAVES
+    from verity_vllm.commit.committer.native_host import NativeHostCommitter
+    from verity_vllm.commit.committer.flush_points import GATHER_FLUSH_LEAVES, PRE_FLUSH_LEAVES
     return {"HAZARD_LEAVES": set(NativeHostCommitter.HAZARD_LEAVES), "GATHER_FLUSH_LEAVES": set(GATHER_FLUSH_LEAVES), "PRE_FLUSH_LEAVES": set(PRE_FLUSH_LEAVES)}
 
 
 def hazard_by_table(module: str, slot: str, hazard_leaves: set[str]) -> bool:
     """The committer's `_hazard` decision for a module-output site (the in-place facts the table encodes) -- its own function, not a restatement."""
-    from verity_vllm.acquire.native_host import hazard_of_record
+    from verity_vllm.commit.committer.native_host import hazard_of_record
 
     return hazard_of_record(f"{module}/{slot}", hazard_leaves)
 

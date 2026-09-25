@@ -64,10 +64,10 @@ def repo_modules_loaded() -> dict[str, Any]:
                 continue
             files.add(str(Path("vllm-poc") / rel) if r != root else str(rel))
             break
-    nc = _sys.modules.get("verity_vllm.acquire.native_collect")
+    nc = _sys.modules.get("verity_vllm.commit.committer.native_collect")
     jit = []
     if nc is not None and getattr(nc, "_EXT", None) is not None:
-        here = Path(getattr(nc, "HERE", str(root / "verity_vllm" / "commit")))
+        here = Path(getattr(nc, "HERE", str(root / "verity_vllm" / "commit" / "committer")))
         jit = [str(Path(here, n).resolve().relative_to(root)) for n in ("native_collect.cpp", "native_gather.cu", "native_tree.cu") if Path(here, n).exists()]
         files.update(jit)
     return {"method": "runtime: sys.modules of this process filtered to the repo root + vllm-poc, plus native_collect's cpp_extension sources when loaded (TP-11)",

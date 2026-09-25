@@ -14,7 +14,7 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity_vllm.acquire import native_collect as NC  # noqa: E402
+from verity_vllm.commit.committer import native_collect as NC  # noqa: E402
 
 
 def _bare(fault: str = "", *, gather: bool = True, nc=None) -> NC.NativeCollectCommitter:

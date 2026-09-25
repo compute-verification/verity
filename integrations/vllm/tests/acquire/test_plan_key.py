@@ -12,7 +12,7 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity_vllm.acquire.native_collect import plan_key_of  # noqa: E402
+from verity_vllm.commit.committer.native_collect import plan_key_of  # noqa: E402
 
 
 def _sched(reqs: list[tuple[str, int, int]], cached_from: int = 0):

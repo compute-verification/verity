@@ -56,7 +56,7 @@ from typing import Any
 
 import torch
 
-from verity_vllm.acquire.flush_points import GATHER_FLUSH_LEAVES, PRE_FLUSH_LEAVES
+from verity_vllm.commit.committer.flush_points import GATHER_FLUSH_LEAVES, PRE_FLUSH_LEAVES
 from verity_vllm.acquire.hidden_source import (
     HiddenM1Source,
     HiddenM1SourceFA3,
@@ -66,7 +66,7 @@ from verity_vllm.acquire.hidden_source import (
     fa2_tap_words_per_seq,
     plan_fa2_tap_groups,
 )
-from verity_vllm.acquire.native_host import (
+from verity_vllm.commit.committer.native_host import (
     GPU_CHUNK_BYTES,
     NativeHostCommitter,
     TensorMeta,
@@ -136,7 +136,7 @@ def _clear_stale_jit_lock(bd, max_age_s=600.0):
 
 def build_source_digest() -> str:
     """The source-set digest of THIS tree's collector (native_jit.source_set_digest with the toolchain versions) -- the key of its JIT dir."""
-    from verity_vllm.acquire import native_jit
+    from verity_vllm.commit.committer import native_jit
 
     return native_jit.source_set_digest(torch_version=str(torch.__version__), cuda_version=str(torch.version.cuda))
 
@@ -150,7 +150,7 @@ def ext(build_dir: str | None = None, verbose: bool = False):
     if _EXT is None:
         from torch.utils.cpp_extension import load
 
-        from verity_vllm.acquire import native_jit
+        from verity_vllm.commit.committer import native_jit
 
         digest = build_source_digest()
         parent = build_dir or os.environ.get("NATIVE_COLLECT_BUILD")
@@ -576,7 +576,7 @@ def _excluded_chunk_ranges(metas: list, exclude: set[str], chunk: int = GPU_CHUN
     """The chunk-aligned INTERIOR [lo, hi) of every tensor of an excluded value family in step-stream order (merged when adjacent): the
     bytes retain=host + exclude does not copy off the staging window.  Boundary chunks shared with a neighbouring tensor are retained
     (the neighbour opens from host); a tensor shorter than one chunk contributes nothing."""
-    from verity_vllm.acquire.native_host import value_family
+    from verity_vllm.commit.committer.native_host import value_family
     out: list[tuple[int, int, str]] = []
     for m in metas:
         fam = value_family(m.name)

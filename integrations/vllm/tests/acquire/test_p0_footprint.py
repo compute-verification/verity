@@ -25,7 +25,7 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity_vllm.acquire import native_host as nh  # noqa: E402
+from verity_vllm.commit.committer import native_host as nh  # noqa: E402
 
 
 class _FakeBlk:
@@ -84,7 +84,7 @@ def test_take_timeout_is_an_error(monkeypatch):
 
 
 def test_host_windows_slices_like_a_tensor():
-    from verity_vllm.acquire.native_collect import _HostWindows
+    from verity_vllm.commit.committer.native_collect import _HostWindows
 
     W = 512
     raw = torch.arange(0, 1200, dtype=torch.int32).to(torch.uint8)         # 1200 used bytes -> padded 1280 (256-multiple)
@@ -121,7 +121,7 @@ def test_window_leaf_count_bookkeeping():
 def test_the_declared_layout_reaches_only_a_committer_that_implements_it(monkeypatch):
     """The leaf layout is the collector's constructor argument (`commit_delta --layout`): an unknown value, or chunk-leaf-v2 off the
     windowed path, is refused before the extension is built; a committer without v2 refuses a declared v2."""
-    from verity_vllm.acquire import native_collect as NC
+    from verity_vllm.commit.committer import native_collect as NC
     from verity_vllm.pipeline import commit as CD
 
     monkeypatch.delenv("VERITY_WINDOW_MB", raising=False)
@@ -193,7 +193,7 @@ def test_tree_window_equals_whole_tree(n_leaves: int, j: int):
     (`StepHasher.tree`): same root AND the same nodes at every level (the levels are what openings read).  Covers: a single collapsed
     window (n < 2^j, height < j), exact multiples, a partial last window that collapses below the window level (the lift chain), and
     steps with many windows."""
-    from verity_vllm.acquire.native_collect import ext
+    from verity_vllm.commit.committer.native_collect import ext
 
     H = ext(os.environ["NATIVE_COLLECT_BUILD"]).StepHasher()
     side = torch.cuda.Stream()

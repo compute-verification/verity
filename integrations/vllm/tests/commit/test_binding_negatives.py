@@ -19,7 +19,7 @@ import random
 import pytest
 
 from verity_vllm.commit import binding as B
-from verity_vllm.acquire.native_host import NativeHostCommitter
+from verity_vllm.commit.committer.native_host import NativeHostCommitter
 
 CHUNK = 64
 PD = hashlib.sha256(b"program").hexdigest()
