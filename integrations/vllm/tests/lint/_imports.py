@@ -1,15 +1,15 @@
-"""The integration's internal import graph and the interim layer map, for the P2/P4/P5/P9 lints.
+"""The integration's internal import graph and the layer map, for the P2/P4/P5/P9 lints.
 
 An edge is one import statement in a library module that names another ``verity_vllm`` module: module-level and
 function-level (lazy) imports alike, plus ``importlib.import_module`` with a literal name.  ``from pkg import name``
 resolves to the submodule ``pkg.name`` when that module exists, else to ``pkg``.
 
-``INTERIM_LAYER`` places every module of today's layout in the layer of the package it moves to in the target layout
-(longest prefix wins).  The target order, top to bottom, is ``pipeline``, ``check|properties``, ``acquire``,
-``observe|commit``, ``engine``, ``query|correspondence``, ``program``, ``collectives``, ``config``, core.  Modules bound
-for core sit in ``core``, and modules bound for tests sit in ``tests`` above ``pipeline``: they may import anything,
-and library code importing them is a wrong-direction edge.  Peers in one layer (``check|properties``,
-``observe|commit``, ``query|correspondence``) may import each other; P5 is the only rule that restricts a peer edge.
+``LAYER`` places every module in the layer of its top-level package (longest prefix wins).  The order, top to bottom,
+is ``pipeline``, ``check|properties``, ``acquire``, ``observe|commit``, ``engine``, ``query|correspondence``,
+``program``, ``collectives``, ``config``, core, with ``tests`` above ``pipeline``.  The modules bound for core sit in
+``core``, and ``target_family`` (bound for ``config.py``) sits in ``config``.  Peers in one layer
+(``check|properties``, ``observe|commit``, ``query|correspondence``) may import each other; P5 is the only rule that
+restricts a peer edge.
 """
 from __future__ import annotations
 
@@ -23,53 +23,24 @@ LAYERS = ("tests", "pipeline", "check|properties", "acquire", "observe|commit", 
           "program", "collectives", "config", "core")
 RANK = {name: len(LAYERS) - i for i, name in enumerate(LAYERS)}
 
-INTERIM_LAYER = {
+LAYER = {
     "verity_vllm": "pipeline",
-    "verity_vllm.pipeline.layout": "pipeline",                     # -> pipeline/layout.py
-    "verity_vllm.config": "config",
-    "verity_vllm.pipeline": "pipeline",                         # derive_step, run_config, commit_delta, research_*, ...
-    "verity_vllm.target_family": "config",             # -> config.py
-    "verity_vllm.check": "check|properties",                   # per-run checks
+    "verity_vllm.pipeline": "pipeline",
+    "verity_vllm.check": "check|properties",
     "verity_vllm.properties": "check|properties",
-    "verity_vllm.program.kernels.twins": "program",                      # -> program/kernels/
-    "verity_vllm.program.kernels.relations": "program",                  # -> program/kernels/
-    "verity_vllm.program.model": "program",        # -> program/model.py
     "verity_vllm.acquire": "acquire",
-    "verity_vllm.commit.committer.native_host": "observe|commit",       # the committer -> commit/committer/
-    "verity_vllm.commit.committer.native_collect": "observe|commit",
-    "verity_vllm.commit.committer.flush_points": "observe|commit",
-    "verity_vllm.commit.committer.native_jit": "observe|commit",
-    "verity_vllm.commit.committer.leafhash": "observe|commit",
-    "verity_vllm.commit.committer.hidden_gpu_src": "observe|commit",
-    "verity_vllm.observe": "observe|commit",                   # observer, triton adapter, storage, events; fold/tree/... -> observe/fold/
-    "verity_vllm.engine.vllm_adapter": "engine",
-    "verity_vllm.engine.engine_profile": "engine",
-    "verity_vllm.engine.arrivals": "engine",
-    "verity_vllm.engine.engine_driver": "engine",
-    "verity_vllm.engine.profiles": "engine",                  # -> engine/profiles/
-    "verity_vllm.pipeline.m1_capture": "pipeline",              # -> the capture stage of pipeline/match.py
+    "verity_vllm.observe": "observe|commit",
     "verity_vllm.commit": "observe|commit",
+    "verity_vllm.engine": "engine",
     "verity_vllm.query": "query|correspondence",
-    "verity_vllm.pipeline.cli": "pipeline",                       # the one CLI is pipeline/cli.py (P6)
-    "verity_vllm.check.replay.vu_query": "check|properties",          # -> check/replay/
-    "verity_vllm.acquire.compiled": "acquire",
+    "verity_vllm.correspondence": "query|correspondence",
+    "verity_vllm.program": "program",
+    "verity_vllm.collectives": "collectives",
+    "verity_vllm.config": "config",
+    "verity_vllm.target_family": "config",                     # -> config.py
     "verity_vllm.query.boundary": "core",                      # -> verity.ir
     "verity_vllm.query.partition": "core",                     # -> verity.ir
-    "verity_vllm.correspondence": "query|correspondence",
-    "verity_vllm.program.frontend.emit": "program",              # -> program/frontend/
-    "verity_vllm.check.match.batch_decomp": "check|properties",   # -> check/match/
-    "verity_vllm.observe.runtime_tree": "observe|commit",
-    "verity_vllm.observe.chunks": "observe|commit",
-    "verity_vllm.program": "program",                          # frontend/, registry/, workload; numerics/ -> program/kernels/
-    "verity_vllm.pipeline.global_program": "pipeline",          # -> pipeline/build.py
-    "verity_vllm.program.frontend.liveness": "core",
-    "verity_vllm.collectives": "collectives",
-    "verity_vllm.engine.rank_worker": "engine",                         # -> engine/rank_worker.py
-    "verity_vllm.acquire.sources.partial_source": "acquire",                # -> acquire/sources/
-    "verity_vllm.program.frontend.export_ops": "program",                    # -> program/frontend/
-    "verity_vllm.observe.fold.collective_pattern": "observe|commit",     # -> observe/fold/patterns/
-    "verity_vllm.check.match.rank_match": "check|properties",           # -> check/match/
-    "verity_vllm.check.match.xrank_collectives": "check|properties",    # -> check/match/
+    "verity_vllm.program.frontend.liveness": "core",           # -> verity.ir
 }
 
 #: The property harnesses.
@@ -86,7 +57,7 @@ VERDICT_MODULES = ("verity_vllm.check.verdict", "verity_vllm.check.commit_verdic
 def layer_of(module: str) -> str:
     parts = module.split(".")
     for i in range(len(parts), 0, -1):
-        hit = INTERIM_LAYER.get(".".join(parts[:i]))
+        hit = LAYER.get(".".join(parts[:i]))
         if hit:
             return hit
     raise KeyError(module)
