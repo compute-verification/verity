@@ -14,8 +14,8 @@ rendered by `python -m verity_numerical.bench.views --published`. The frozen 202
   rule. The fixed B = 4096 and K = 1536 checks give way to the plateau of a recorded batch sweep. Algebraic hashes
   are admitted and flagged `(alg.)`.
 - **Old numbers.** None of the 15 frozen cells meets the new rules as it stands. The A-GKR and bare B-Ligero
-  cells prove a weaker statement (reason R). The B-Ligero + in-proof hash cells have no recorded protocol, plateau
-  sweep or preserved proof files (reasons M and F). The switch digest (`python -m verity_numerical.bench.switch`)
+  cells prove a weaker statement (reason R). The B-Ligero + in-proof hash cells have no recorded protocol or plateau
+  sweep (reason M). The switch digest (`python -m verity_numerical.bench.switch`)
   shows each old number beside its replacement, or beside the reason it left.
 - **Parity.** Under today's parameters (`--rules legacy`), the new views select exactly the frozen cells, with the
   same artifacts and ratios. `views --parity --take-snapshot --record` checks this against a fresh
