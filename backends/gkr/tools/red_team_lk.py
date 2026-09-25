@@ -613,7 +613,33 @@ def forge_cases(relation: str, uc, pc, units, steps: int) -> dict:
     return cases
 
 
-def forge(relation: str, vus: int, out: Path, verifier: str, threads: int) -> dict:
+def strip_tag(text: str) -> str:
+    """CONTROL ONLY (an unsound statement): LK without its tag column (rows and queries lose column 1)"""
+    lines = []
+    for line in text.splitlines():
+        t = line.split()
+        if t and t[0] == "table" and t[1] == "LK":
+            lines.append(f"table LK {int(t[2]) - 1} {t[3]}")
+            live = True
+        elif t and t[0] == "table":
+            live = False
+            lines.append(line)
+        elif t and t[0] == "row" and live:
+            lines.append(" ".join([t[0], t[1]] + t[3:]))
+        elif t and t[0] == "query" and t[1] == "LK":
+            n, pos, lins = int(t[2]), 3, []
+            for _ in range(n):
+                k = int(t[pos])
+                lins.append(t[pos:pos + 2 * k + 2])
+                pos += 2 * k + 2
+            del lins[1]
+            lines.append(f"query LK {n - 1} " + " ".join(" ".join(l) for l in lins))
+        else:
+            lines.append(line)
+    return "\n".join(lines) + "\n"
+
+
+def forge(relation: str, vus: int, out: Path, verifier: str, threads: int, control: bool = False) -> dict:
     import subprocess
 
     import torch
@@ -670,6 +696,22 @@ def forge(relation: str, vus: int, out: Path, verifier: str, threads: int) -> di
     h = res["results"][0]
     res["ok"] = (h.get("python") == "accept" and h.get("rust") == "accept" and bool(forged)
                  and all(r.get("rust", "").startswith("reject") and not r.get("python", "").startswith("accept") for r in forged))
+    if control:
+        # the same tag forgeries against LK with its tag column stripped: LogUp should now pass, so a rejection must come from
+        # elsewhere (the forged column's other constraints) -- shows the tag column is what the LogUp rejection above rests on
+        ctl = out / "control_stmt"
+        ctl.mkdir(parents=True, exist_ok=True)
+        for f in STATEMENT_FILES:
+            shutil.copyfile(stmt / f, ctl / f)
+        (ctl / "circuit.txt").write_text(strip_tag((stmt / "circuit.txt").read_text()))
+        stmt, uc = ctl, load_circuit(ctl / "circuit.txt")
+        ul = layers(uc)
+        chain = read_chain(ctl / "chain.txt", uc, ec, steps, [int(v) for v in pub.reshape(-1)])
+        res["control"] = []
+        for name, (u, what) in forge_cases(relation, load_circuit(out / "stmt" / "circuit.txt"), pc, units, steps).items():
+            if name.startswith("tag."):
+                res["control"].append(run("control." + name, u, "TAGLESS CONTROL STATEMENT: " + what))
+                print(json.dumps(res["control"][-1]), flush=True)
     (out / "forge.json").write_text(json.dumps(res, indent=1) + "\n")
     return res
 
@@ -692,6 +734,7 @@ def main(argv=None) -> int:
     c.add_argument("--out", type=Path, required=True)
     c.add_argument("--verifier", required=True)
     c.add_argument("--threads", type=int, default=12)
+    c.add_argument("--control", action="store_true", help="also run the tag forgeries against a tag-stripped LK (control)")
     args = ap.parse_args(argv)
     if args.cmd == "static-merge":
         res = check_merge((args.plain / "circuit.txt").read_text(), (args.merged / "circuit.txt").read_text())
@@ -718,7 +761,7 @@ def main(argv=None) -> int:
                    "systems": selftest_nvf4(args.paired)}
         res["ok"] = all(v["ok"] for v in res.values())
     else:
-        res = forge(args.relation, args.vus, args.out, args.verifier, args.threads)
+        res = forge(args.relation, args.vus, args.out, args.verifier, args.threads, args.control)
     print(json.dumps(res, indent=1, default=str))
     return 0 if res.get("ok") else 1
 
