@@ -1,0 +1,127 @@
+[coarse] bound symbols: {'upper_coarse': True, 'lower_coarse': True}; versions {'upper': 'eab50c6955', 'lower': 'ac6c3bb0e3', 'coarse': 'f4baa2d7be', 'adw': 'cf4205165a', 'extract': '332385d416'}
+[coarse] shard 1/8: 1 graphs
+[coarse] 49 cells, 268 existing rows, 14 cells to run on 1 graphs; RSS cap 160000 MB (~/.veritor/mem_guardian.py kills >2.5 GB processes; cells above that are recorded as oom-guard)
+[coarse] graph llama3-8b forward-nonfixed tokens=1048576 seq=8192 K=1: 4 policy points, stages ['lower', 'upper']
+  [child] llama3-8b forward-nonfixed tokens=1048576 seq=8192 K=1: 483 ops extracted in 0.6s; all_macs=1.012e+16 credited=1.012e+16
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+[coarse]   external SIGKILL at peak 1437 MB (machine swap pressure?): retrying once in 30 s
+[coarse] bound symbols: {'upper_coarse': True, 'lower_coarse': True}; versions {'upper': 'eab50c6955', 'lower': 'ac6c3bb0e3', 'coarse': 'f4baa2d7be', 'adw': 'cf4205165a', 'extract': '332385d416'}
+[coarse] shard 1/8: 1 graphs
+[coarse] 49 cells, 268 existing rows, 14 cells to run on 1 graphs; RSS cap 160000 MB (~/.veritor/mem_guardian.py kills >2.5 GB processes; cells above that are recorded as oom-guard)
+[coarse] graph llama3-8b forward-nonfixed tokens=1048576 seq=8192 K=1: 4 policy points, stages ['lower', 'upper']
+  [child] llama3-8b forward-nonfixed tokens=1048576 seq=8192 K=1: 483 ops extracted in 0.5s; all_macs=1.012e+16 credited=1.012e+16
+  [child]   F_hat=3 G_hat=4: U=130864398336 L=88863346632 (1.25e+05 / 8.47e+04 B/tok)  
+  [child]   F_hat=10 G_hat=4: U=130864398336 L=88863346632 (1.25e+05 / 8.47e+04 B/tok)  
+  [child]   F_hat=1.5 G_hat=10: U=83283410944 L=54104220698 (7.94e+04 / 5.16e+04 B/tok)  
+  [child]   F_hat=1.5 G_hat=1000: U=16064716800 L=16064716800 (1.53e+04 / 1.53e+04 B/tok)  
+  [2287 HiGHS incumbent lines suppressed]
+[coarse]   ok: 4 rows, peak RSS 1555 MB, 1448s

@@ -1,0 +1,14 @@
+{
+  "pod_id": "sdpvmxuebruyhg",
+  "name": "acc-sweep-veritor-campaign",
+  "created": "2026-09-16T17:30:15Z",
+  "cost_per_hr": 2.08,
+  "vcpu": 32,
+  "shards": 8,
+  "host": "213.173.111.79",
+  "port": 24609,
+  "mem_gb": 755,
+  "nproc": 32,
+  "launched": "2026-09-16T20:52:42Z",
+  "cgroup_limit_gb": 256.0
+}

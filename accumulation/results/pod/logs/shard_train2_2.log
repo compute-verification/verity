@@ -1,0 +1,24 @@
+[coarse] bound symbols: {'upper_coarse': True, 'lower_coarse': True, 'wp_coarse': True}; versions {'upper': 'eab50c6955', 'lower': 'ac6c3bb0e3', 'coarse': 'f4baa2d7be', 'adw': 'cf4205165a', 'extract': '332385d416', 'wp': 'ba12ab8bf8'}
+[coarse] shard 2/8: 3 graphs
+[coarse] 73 cells, 287 existing rows, 60 cells to run on 3 graphs; RSS cap 60000 MB (~/.veritor/mem_guardian.py kills >2.5 GB processes; cells above that are recorded as oom-guard)
+[coarse] graph llama3-8b local-sgd tokens=98304 seq=8192 K=12: 1 policy points, stages ['wp']
+  [child] llama3-8b local-sgd tokens=98304 seq=8192 K=12: 27396 ops extracted in 35.1s; all_macs=3.665e+15 credited=2.952e+15
+  [child]   F_hat=1.5 G_hat=4: U=None L=76776210432 L_wp=76775424000 (- / 7.81e+05 B/tok)   
+[coarse]   ok: 1 rows, peak RSS 2815 MB, 37s
+[coarse] graph llama3-8b local-sgd tokens=393216 seq=8192 K=3: 5 policy points, stages ['lower', 'upper']
+  [child] llama3-8b local-sgd tokens=393216 seq=8192 K=3: 6849 ops extracted in 44.9s; all_macs=1.466e+16 credited=1.181e+16
+  [child]   F_hat=1.5 G_hat=1: U=492305031564 L=47974834283 (1.25e+06 / 1.22e+05 B/tok)   
+  [child]   F_hat=1.5 G_hat=10: U=312119230860 L=29767902341 (7.94e+05 / 7.57e+04 B/tok)   
+  [child]   F_hat=1.5 G_hat=100: U=308898005388 L=16063668228 (7.86e+05 / 4.09e+04 B/tok)   
+  [child]   F_hat=1.5 G_hat=1000: U=308898005388 L=16063668228 (7.86e+05 / 4.09e+04 B/tok)   
+  [child]   F_hat=1.5 G_hat=4: U=318561681804 L=30390033270 (8.1e+05 / 7.73e+04 B/tok)   
+  [493 HiGHS incumbent lines suppressed]
+[coarse]   ok: 5 rows, peak RSS 1891 MB, 16891s
+[coarse] graph llama3-8b local-sgd tokens=3145728 seq=8192 K=3: 4 policy points, stages ['lower', 'upper', 'wp']
+[guard] > 32400s wall clock (peak RSS 6202 MB): killing 516854
+  [child] llama3-8b local-sgd tokens=3145728 seq=8192 K=3: 6849 ops extracted in 124.2s; all_macs=1.173e+17 credited=9.447e+16
+  [child]   F_hat=1.5 G_hat=1: U=4173044121996 L=547929058880 L_wp=27045888000 (1.33e+06 / 1.74e+05 B/tok)   
+  [child]   F_hat=1.5 G_hat=10: U=2813126222220 L=43131576320 L_wp=27045888000 (8.94e+05 / 1.37e+04 B/tok)   
+  [child]   F_hat=1.5 G_hat=100: U=2639247679884 L=43131576320 L_wp=27045888000 (8.39e+05 / 1.37e+04 B/tok)   
+  [141 HiGHS incumbent lines suppressed]
+[coarse]   child timeout: > 32400s wall clock (peak RSS 6202 MB) (peak RSS 6202 MB, 32401s)

@@ -1,0 +1,627 @@
+[
+ {
+  "alg": "pretrain-dense",
+  "model": "llama3-1b",
+  "tokens": 4096,
+  "seq": 4096,
+  "sequences_per_forward": 1,
+  "status": "ok",
+  "t_extract": 0.862,
+  "ops": 1147,
+  "peak_rss_mb": 31.0,
+  "elapsed_s": 1.02,
+  "detail": "",
+  "ts": 1789487906.857391,
+  "rss_trace": [
+   [
+    0.0,
+    0.8
+   ]
+  ],
+  "t_build": 0.011,
+  "tensors": 1163
+ },
+ {
+  "alg": "pretrain-dense",
+  "model": "llama3-8b",
+  "tokens": 4096,
+  "seq": 4096,
+  "sequences_per_forward": 1,
+  "status": "ok",
+  "t_extract": 1.875,
+  "ops": 2283,
+  "peak_rss_mb": 32.7,
+  "elapsed_s": 2.03,
+  "detail": "",
+  "ts": 1789487907.874957,
+  "rss_trace": [
+   [
+    0.0,
+    0.3
+   ]
+  ],
+  "t_build": 0.012,
+  "tensors": 2299
+ },
+ {
+  "alg": "pretrain-dense",
+  "model": "llama3-70b",
+  "tokens": 4096,
+  "seq": 4096,
+  "sequences_per_forward": 1,
+  "status": "ok",
+  "t_extract": 5.258,
+  "ops": 5691,
+  "peak_rss_mb": 38.7,
+  "elapsed_s": 5.57,
+  "detail": "",
+  "ts": 1789487909.907489,
+  "rss_trace": [
+   [
+    0.0,
+    1.3
+   ],
+   [
+    5.1,
+    38.7
+   ]
+  ],
+  "t_build": 0.016,
+  "tensors": 5707
+ },
+ {
+  "alg": "pretrain-dense",
+  "model": "llama3-405b",
+  "tokens": 4096,
+  "seq": 4096,
+  "sequences_per_forward": 1,
+  "status": "ok",
+  "t_extract": 9.985,
+  "ops": 8957,
+  "peak_rss_mb": 45.0,
+  "elapsed_s": 10.13,
+  "detail": "",
+  "ts": 1789487915.473762,
+  "rss_trace": [
+   [
+    0.0,
+    1.8
+   ],
+   [
+    5.1,
+    41.5
+   ]
+  ],
+  "t_build": 0.021,
+  "tensors": 8973
+ },
+ {
+  "alg": "pretrain-moe",
+  "model": "mixtral-8x7b",
+  "tokens": 4096,
+  "seq": 4096,
+  "sequences_per_forward": 1,
+  "status": "ok",
+  "t_extract": 0.183,
+  "ops": 649,
+  "peak_rss_mb": 2.8,
+  "elapsed_s": 0.51,
+  "detail": "",
+  "ts": 1789487925.602988,
+  "rss_trace": [
+   [
+    0.0,
+    2.8
+   ]
+  ],
+  "t_build": 0.005,
+  "tensors": 665
+ },
+ {
+  "alg": "pretrain-moe",
+  "model": "deepseek-v3",
+  "tokens": 4096,
+  "seq": 4096,
+  "sequences_per_forward": 1,
+  "status": "ok",
+  "t_extract": 0.937,
+  "ops": 2200,
+  "peak_rss_mb": 30.0,
+  "elapsed_s": 1.01,
+  "detail": "",
+  "ts": 1789487926.109477,
+  "rss_trace": [
+   [
+    0.0,
+    0.5
+   ]
+  ],
+  "t_build": 0.012,
+  "tensors": 2222
+ },
+ {
+  "alg": "pretrain-moe",
+  "model": "qwen3-235b-a22b",
+  "tokens": 4096,
+  "seq": 4096,
+  "sequences_per_forward": 1,
+  "status": "ok",
+  "t_extract": 1.05,
+  "ops": 3017,
+  "peak_rss_mb": 31.8,
+  "elapsed_s": 1.52,
+  "detail": "",
+  "ts": 1789487927.121938,
+  "rss_trace": [
+   [
+    0.0,
+    0.3
+   ]
+  ],
+  "t_build": 0.011,
+  "tensors": 3033
+ },
+ {
+  "alg": "pretrain-dense",
+  "model": "llama3-8b",
+  "tokens": 512,
+  "seq": 512,
+  "sequences_per_forward": 1,
+  "status": "ok",
+  "t_extract": 0.441,
+  "ops": 2283,
+  "peak_rss_mb": 0.3,
+  "elapsed_s": 0.5,
+  "detail": "",
+  "ts": 1789487928.646892,
+  "rss_trace": [
+   [
+    0.0,
+    0.3
+   ]
+  ],
+  "t_build": 0.007,
+  "tensors": 2299
+ },
+ {
+  "alg": "pretrain-dense",
+  "model": "llama3-8b",
+  "tokens": 1024,
+  "seq": 512,
+  "sequences_per_forward": 2,
+  "status": "ok",
+  "t_extract": 154.809,
+  "ops": 2283,
+  "peak_rss_mb": 1709.0,
+  "elapsed_s": 156.58,
+  "detail": "",
+  "ts": 1789487929.151853,
+  "rss_trace": [
+   [
+    0.0,
+    0.3
+   ],
+   [
+    5.1,
+    906.4
+   ],
+   [
+    10.1,
+    1002.6
+   ],
+   [
+    15.2,
+    1098.8
+   ],
+   [
+    20.3,
+    1195.0
+   ],
+   [
+    25.3,
+    1291.2
+   ],
+   [
+    30.4,
+    1387.3
+   ],
+   [
+    35.5,
+    1419.2
+   ],
+   [
+    40.5,
+    1692.3
+   ],
+   [
+    45.6,
+    1643.4
+   ],
+   [
+    50.7,
+    1709.0
+   ],
+   [
+    55.7,
+    1377.8
+   ],
+   [
+    60.8,
+    1549.3
+   ],
+   [
+    65.9,
+    1325.3
+   ],
+   [
+    70.9,
+    1421.4
+   ],
+   [
+    76.0,
+    1261.5
+   ],
+   [
+    81.1,
+    1357.6
+   ],
+   [
+    86.1,
+    1277.6
+   ],
+   [
+    91.2,
+    1373.7
+   ],
+   [
+    96.3,
+    1277.9
+   ],
+   [
+    101.3,
+    1374.0
+   ],
+   [
+    106.4,
+    1278.1
+   ],
+   [
+    111.5,
+    1244.3
+   ],
+   [
+    116.5,
+    1121.3
+   ],
+   [
+    121.6,
+    1221.3
+   ],
+   [
+    126.7,
+    1080.3
+   ],
+   [
+    131.8,
+    1180.3
+   ],
+   [
+    136.8,
+    1072.3
+   ],
+   [
+    141.9,
+    1222.2
+   ],
+   [
+    147.0,
+    1168.3
+   ],
+   [
+    152.0,
+    1435.2
+   ]
+  ],
+  "t_build": 1.286,
+  "tensors": 2299
+ },
+ {
+  "alg": "pretrain-dense",
+  "model": "llama3-8b",
+  "tokens": 2048,
+  "seq": 512,
+  "sequences_per_forward": 4,
+  "status": "oom-guard",
+  "t_extract": null,
+  "ops": null,
+  "peak_rss_mb": 2150.8,
+  "elapsed_s": 6.11,
+  "detail": "RSS 2151 MB > 2048 MB after 6.1s",
+  "ts": 1789488085.731968,
+  "rss_trace": [
+   [
+    0.0,
+    0.3
+   ],
+   [
+    5.1,
+    1836.9
+   ]
+  ]
+ },
+ {
+  "alg": "pretrain-dense",
+  "model": "llama3-8b",
+  "tokens": 4096,
+  "seq": 512,
+  "sequences_per_forward": 8,
+  "status": "oom-guard",
+  "t_extract": null,
+  "ops": null,
+  "peak_rss_mb": 2187.5,
+  "elapsed_s": 4.6,
+  "detail": "RSS 2187 MB > 2048 MB after 4.6s",
+  "ts": 1789488091.8465269,
+  "rss_trace": [
+   [
+    0.0,
+    0.4
+   ]
+  ]
+ },
+ {
+  "alg": "pretrain-dense",
+  "model": "llama3-8b",
+  "tokens": 8192,
+  "seq": 512,
+  "sequences_per_forward": 16,
+  "status": "oom-guard",
+  "t_extract": null,
+  "ops": null,
+  "peak_rss_mb": 2068.3,
+  "elapsed_s": 4.6,
+  "detail": "RSS 2068 MB > 2048 MB after 4.6s",
+  "ts": 1789488096.4518201,
+  "rss_trace": [
+   [
+    0.0,
+    0.3
+   ]
+  ]
+ },
+ {
+  "alg": "pretrain-dense",
+  "model": "llama3-8b",
+  "tokens": 1024,
+  "seq": 1024,
+  "sequences_per_forward": 1,
+  "status": "ok",
+  "t_extract": 0.649,
+  "ops": 2283,
+  "peak_rss_mb": 29.6,
+  "elapsed_s": 1.01,
+  "detail": "",
+  "ts": 1789488101.0500128,
+  "rss_trace": [
+   [
+    0.0,
+    0.5
+   ]
+  ],
+  "t_build": 0.007,
+  "tensors": 2299
+ },
+ {
+  "alg": "pretrain-dense",
+  "model": "llama3-8b",
+  "tokens": 2048,
+  "seq": 1024,
+  "sequences_per_forward": 2,
+  "status": "oom-guard",
+  "t_extract": null,
+  "ops": null,
+  "peak_rss_mb": 2109.1,
+  "elapsed_s": 3.59,
+  "detail": "RSS 2109 MB > 2048 MB after 3.5s",
+  "ts": 1789488102.065207,
+  "rss_trace": [
+   [
+    0.0,
+    0.6
+   ]
+  ]
+ },
+ {
+  "alg": "pretrain-dense",
+  "model": "llama3-8b",
+  "tokens": 4096,
+  "seq": 1024,
+  "sequences_per_forward": 4,
+  "status": "oom-guard",
+  "t_extract": null,
+  "ops": null,
+  "peak_rss_mb": 2196.1,
+  "elapsed_s": 4.6,
+  "detail": "RSS 2196 MB > 2048 MB after 4.6s",
+  "ts": 1789488105.654346,
+  "rss_trace": [
+   [
+    0.0,
+    0.3
+   ]
+  ]
+ },
+ {
+  "alg": "pretrain-dense",
+  "model": "llama3-8b",
+  "tokens": 2048,
+  "seq": 2048,
+  "sequences_per_forward": 1,
+  "status": "ok",
+  "t_extract": 1.04,
+  "ops": 2283,
+  "peak_rss_mb": 31.1,
+  "elapsed_s": 1.52,
+  "detail": "",
+  "ts": 1789488110.2572238,
+  "rss_trace": [
+   [
+    0.0,
+    0.7
+   ]
+  ],
+  "t_build": 0.009,
+  "tensors": 2299
+ },
+ {
+  "alg": "pretrain-dense",
+  "model": "llama3-8b",
+  "tokens": 4096,
+  "seq": 2048,
+  "sequences_per_forward": 2,
+  "status": "oom-guard",
+  "t_extract": null,
+  "ops": null,
+  "peak_rss_mb": 2249.4,
+  "elapsed_s": 4.6,
+  "detail": "RSS 2249 MB > 2048 MB after 4.6s",
+  "ts": 1789488111.7793448,
+  "rss_trace": [
+   [
+    0.0,
+    0.4
+   ]
+  ]
+ },
+ {
+  "alg": "pretrain-dense",
+  "model": "llama3-1b",
+  "tokens": 8192,
+  "seq": 4096,
+  "sequences_per_forward": 2,
+  "status": "oom-guard",
+  "t_extract": null,
+  "ops": null,
+  "peak_rss_mb": 2161.1,
+  "elapsed_s": 4.61,
+  "detail": "RSS 2161 MB > 2048 MB after 4.6s",
+  "ts": 1789488116.3826208,
+  "rss_trace": [
+   [
+    0.0,
+    0.4
+   ]
+  ]
+ },
+ {
+  "alg": "inference-dense",
+  "model": "llama3-8b",
+  "tokens": 8192,
+  "seq": 4096,
+  "sequences_per_forward": 2,
+  "status": "ok",
+  "t_extract": 0.361,
+  "ops": 483,
+  "peak_rss_mb": 0.6,
+  "elapsed_s": 0.51,
+  "detail": "",
+  "ts": 1789488120.990227,
+  "rss_trace": [
+   [
+    0.0,
+    0.6
+   ]
+  ],
+  "t_build": 0.003,
+  "tensors": 497
+ },
+ {
+  "alg": "pretrain-dense",
+  "model": "llama3-8b",
+  "tokens": 8192,
+  "seq": 4096,
+  "sequences_per_forward": 2,
+  "status": "oom-guard",
+  "t_extract": null,
+  "ops": null,
+  "peak_rss_mb": 2170.9,
+  "elapsed_s": 4.6,
+  "detail": "RSS 2171 MB > 2048 MB after 4.6s",
+  "ts": 1789488121.499603,
+  "rss_trace": [
+   [
+    0.0,
+    0.4
+   ]
+  ]
+ },
+ {
+  "alg": "es",
+  "model": "llama3-8b",
+  "tokens": 8192,
+  "seq": 4096,
+  "population": 2,
+  "sequences_per_forward": 1,
+  "status": "ok",
+  "t_extract": 0.369,
+  "ops": 1010,
+  "peak_rss_mb": 0.8,
+  "elapsed_s": 0.51,
+  "detail": "",
+  "ts": 1789488126.10132,
+  "rss_trace": [
+   [
+    0.0,
+    0.8
+   ]
+  ],
+  "t_build": 0.004,
+  "tensors": 1035
+ },
+ {
+  "alg": "es",
+  "model": "llama3-8b",
+  "tokens": 8192,
+  "seq": 1024,
+  "population": 8,
+  "sequences_per_forward": 1,
+  "status": "ok",
+  "t_extract": 0.397,
+  "ops": 4040,
+  "peak_rss_mb": 1.2,
+  "elapsed_s": 0.51,
+  "detail": "",
+  "ts": 1789488126.6107929,
+  "rss_trace": [
+   [
+    0.0,
+    1.2
+   ]
+  ],
+  "t_build": 0.005,
+  "tensors": 4065
+ },
+ {
+  "alg": "local-sgd",
+  "model": "llama3-8b",
+  "tokens": 8192,
+  "seq": 4096,
+  "local_steps": 2,
+  "sequences_per_forward": 1,
+  "status": "ok",
+  "t_extract": 3.73,
+  "ops": 4566,
+  "peak_rss_mb": 36.4,
+  "elapsed_s": 4.05,
+  "detail": "",
+  "ts": 1789488127.119324,
+  "rss_trace": [
+   [
+    0.0,
+    0.6
+   ]
+  ],
+  "t_build": 0.018,
+  "tensors": 4582
+ }
+]

@@ -1,0 +1,29 @@
+[coarse] bound symbols: {'upper_coarse': True, 'lower_coarse': True, 'wp_coarse': True}; versions {'upper': 'eab50c6955', 'lower': 'ac6c3bb0e3', 'coarse': 'f4baa2d7be', 'adw': 'cf4205165a', 'extract': '332385d416', 'wp': 'ba12ab8bf8'}
+[coarse] shard 0/8: 4 graphs
+[coarse] 73 cells, 287 existing rows, 60 cells to run on 4 graphs; RSS cap 60000 MB (~/.veritor/mem_guardian.py kills >2.5 GB processes; cells above that are recorded as oom-guard)
+[coarse] graph llama3-8b local-sgd tokens=65536 seq=8192 K=2: 5 policy points, stages ['lower', 'upper']
+  [child] llama3-8b local-sgd tokens=65536 seq=8192 K=2: 4566 ops extracted in 9.5s; all_macs=2.443e+15 credited=1.968e+15
+  [child]   F_hat=1.5 G_hat=1: U=87443390600 L=24249371749 (1.33e+06 / 3.7e+05 B/tok)   
+  [child]   F_hat=1.5 G_hat=10: U=77645430840 L=17097254755 (1.18e+06 / 2.61e+05 B/tok)   
+  [child]   F_hat=1.5 G_hat=100: U=77645430840 L=16475205435 (1.18e+06 / 2.51e+05 B/tok)   
+  [child]   F_hat=1.5 G_hat=1000: U=77645430840 L=16462932161 (1.18e+06 / 2.51e+05 B/tok)   
+  [child]   F_hat=1.5 G_hat=4: U=77645430840 L=18907798637 (1.18e+06 / 2.89e+05 B/tok)   
+  [702 HiGHS incumbent lines suppressed]
+[coarse]   ok: 5 rows, peak RSS 1409 MB, 21406s
+[coarse] graph llama3-8b local-sgd tokens=262144 seq=8192 K=32: 1 policy points, stages ['upper', 'wp']
+  [child] llama3-8b local-sgd tokens=262144 seq=8192 K=32: 73056 ops extracted in 95.4s; all_macs=9.772e+15 credited=7.872e+15
+  [child]   F_hat=1.5 G_hat=4: U=809943433472 L=216369201152 L_wp=216367104000 (3.09e+06 / 8.25e+05 B/tok)   
+[coarse]   ok: 1 rows, peak RSS 7549 MB, 207s
+[coarse] graph llama3-8b local-sgd tokens=2097152 seq=8192 K=2: 4 policy points, stages ['lower', 'upper']
+  [child] llama3-8b local-sgd tokens=2097152 seq=8192 K=2: 4566 ops extracted in 82.5s; all_macs=7.818e+16 credited=6.298e+16
+  [child]   F_hat=1.5 G_hat=1: U=2782029414664 L=297749161796 (1.33e+06 / 1.42e+05 B/tok)   
+  [child]   F_hat=1.5 G_hat=10: U=1875417481480 L=112398861808 (8.94e+05 / 5.36e+04 B/tok)   
+  [child]   F_hat=1.5 G_hat=100: U=1759498453256 L=48155370335 (8.39e+05 / 2.3e+04 B/tok)   
+  [child]   F_hat=1.5 G_hat=1000: U=1742318584072 L=16077299716 (8.31e+05 / 7.67e+03 B/tok)   
+  [1920 HiGHS incumbent lines suppressed]
+[coarse]   ok: 4 rows, peak RSS 5989 MB, 30413s
+[coarse] graph llama3-405b local-sgd tokens=262144 seq=8192 K=2: 1 policy points, stages ['lower', 'upper', 'wp']
+  [child] llama3-405b local-sgd tokens=262144 seq=8192 K=2: 17914 ops extracted in 111.4s; all_macs=4.339e+17 credited=3.486e+17
+  [child]   F_hat=1.5 G_hat=4: U=4480256114864 L=1583133196288 L_wp=771424321536 (1.71e+07 / 6.04e+06 B/tok)   
+  [26 HiGHS incumbent lines suppressed]
+[coarse]   ok: 1 rows, peak RSS 6338 MB, 9524s

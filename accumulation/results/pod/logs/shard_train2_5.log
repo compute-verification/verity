@@ -1,0 +1,17 @@
+[coarse] bound symbols: {'upper_coarse': True, 'lower_coarse': True, 'wp_coarse': True}; versions {'upper': 'eab50c6955', 'lower': 'ac6c3bb0e3', 'coarse': 'f4baa2d7be', 'adw': 'cf4205165a', 'extract': '332385d416', 'wp': 'ba12ab8bf8'}
+[coarse] shard 5/8: 3 graphs
+[coarse] 73 cells, 287 existing rows, 60 cells to run on 3 graphs; RSS cap 60000 MB (~/.veritor/mem_guardian.py kills >2.5 GB processes; cells above that are recorded as oom-guard)
+[coarse] graph llama3-8b local-sgd tokens=131072 seq=8192 K=4: 1 policy points, stages ['lower', 'upper']
+  [child] llama3-8b local-sgd tokens=131072 seq=8192 K=4: 9132 ops extracted in 19.3s; all_macs=4.886e+15 credited=3.936e+15
+  [child]   F_hat=1.5 G_hat=4: U=154240188528 L=17705981688 (1.18e+06 / 1.35e+05 B/tok)   
+  [84 HiGHS incumbent lines suppressed]
+[coarse]   ok: 1 rows, peak RSS 1375 MB, 5155s
+[coarse] graph mixtral-8x7b pretrain-moe tokens=131072 seq=8192 K=1: 1 policy points, stages ['upper', 'wp']
+  [child] mixtral-8x7b pretrain-moe tokens=131072 seq=8192 K=1: 2891 ops extracted in 12.4s; all_macs=7.933e+15 credited=5.998e+15
+  [child]   F_hat=1.5 G_hat=4: U=259302367364 L=None L_wp=0 (1.98e+06 / - B/tok)   
+[coarse]   ok: 1 rows, peak RSS 945 MB, 267s
+[coarse] graph llama3-8b local-sgd tokens=8388608 seq=8192 K=2: 4 policy points, stages ['lower', 'upper', 'wp']
+[guard] RSS 61194 MB > 60000 MB after 5936.1s: killing 353947
+  [child] llama3-8b local-sgd tokens=8388608 seq=8192 K=2: 4566 ops extracted in 331.1s; all_macs=3.127e+17 credited=2.519e+17
+[coarse]   child oom-guard: RSS 61194 MB > 60000 MB after 5936.1s (peak RSS 61194 MB, 5938s)
+[coarse]   *** RSS cap hit on ('llama3-8b', 'local-sgd', 8388608, 8192, 2) (peak 61194 MB): graph abandoned, report to user ***

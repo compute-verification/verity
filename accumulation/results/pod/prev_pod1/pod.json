@@ -1,0 +1,13 @@
+{
+  "pod_id": "90halel4m5ntqh",
+  "name": "acc-sweep-veritor-campaign",
+  "created": "2026-09-15T22:56:55Z",
+  "cost_per_hr": 1.76,
+  "vcpu": 32,
+  "shards": 6,
+  "host": "213.173.105.104",
+  "port": 14098,
+  "mem_gb": 755,
+  "nproc": 32,
+  "launched": "2026-09-16T15:32:51Z"
+}

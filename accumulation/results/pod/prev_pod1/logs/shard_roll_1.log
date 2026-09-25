@@ -1,0 +1,32 @@
+[coarse] bound symbols: {'upper_coarse': True, 'lower_coarse': True}; versions {'upper': 'eab50c6955', 'lower': '08d17eaed3', 'coarse': '808b3e3763', 'adw': 'cf4205165a', 'extract': '49c4de9e0d'}
+[coarse] shard 1/3: 6 graphs
+[coarse] 24 cells, 192 existing rows, 24 cells to run on 6 graphs; RSS cap 120000 MB (~/.veritor/mem_guardian.py kills >2.5 GB processes; cells above that are recorded as oom-guard)
+[coarse] graph llama3-1b forward-nonfixed tokens=32768 seq=8192 K=1: 1 policy points, stages ['lower', 'upper']
+  [child] llama3-1b forward-nonfixed tokens=32768 seq=8192 K=1: 243 ops extracted in 0.5s; all_macs=5.809e+13 credited=5.809e+13
+  [child]   F_hat=1.5 G_hat=4: U=3533967360 L=None (1.08e+05 / - B/tok)  ModuleNotFoundError: No module named 'scipy'
+[coarse]   ok: 1 rows, peak RSS 244 MB, 3s
+[coarse] graph llama3-8b forward-nonfixed tokens=32768 seq=8192 K=1: 1 policy points, stages ['lower', 'upper']
+  [child] llama3-8b forward-nonfixed tokens=32768 seq=8192 K=1: 483 ops extracted in 1.0s; all_macs=3.163e+14 credited=3.163e+14
+  [child]   F_hat=1.5 G_hat=4: U=17134395392 L=None (5.23e+05 / - B/tok)  ModuleNotFoundError: No module named 'scipy'
+[coarse]   ok: 1 rows, peak RSS 471 MB, 6s
+[coarse] graph llama3-8b forward-nonfixed tokens=131072 seq=8192 K=1: 6 policy points, stages ['lower', 'upper']
+  [child] llama3-8b forward-nonfixed tokens=131072 seq=8192 K=1: 483 ops extracted in 2.1s; all_macs=1.265e+15 credited=1.265e+15
+  [child]   F_hat=30 G_hat=4: U=21429755904 L=None (1.63e+05 / - B/tok)  ModuleNotFoundError: No module named 'scipy'
+  [child]   F_hat=1.5 G_hat=4: U=28945948672 L=None (2.21e+05 / - B/tok)  ModuleNotFoundError: No module named 'scipy'
+  [child]   F_hat=10 G_hat=4: U=21429755904 L=None (1.63e+05 / - B/tok)  ModuleNotFoundError: No module named 'scipy'
+  [child]   F_hat=100 G_hat=4: U=21429755904 L=None (1.63e+05 / - B/tok)  ModuleNotFoundError: No module named 'scipy'
+  [child]   F_hat=1 G_hat=4: U=34314657792 L=None (2.62e+05 / - B/tok)  ModuleNotFoundError: No module named 'scipy'
+  [child]   F_hat=3 G_hat=4: U=23577239552 L=None (1.8e+05 / - B/tok)  ModuleNotFoundError: No module named 'scipy'
+[coarse]   ok: 6 rows, peak RSS 1365 MB, 182s
+[coarse] graph llama3-1b forward-nonfixed tokens=1048576 seq=8192 K=1: 1 policy points, stages ['lower', 'upper']
+  [child] llama3-1b forward-nonfixed tokens=1048576 seq=8192 K=1: 243 ops extracted in 0.4s; all_macs=1.859e+15 credited=1.859e+15
+  [child]   F_hat=1.5 G_hat=4: U=68564340736 L=None (6.54e+04 / - B/tok)  ModuleNotFoundError: No module named 'scipy'
+[coarse]   ok: 1 rows, peak RSS 1390 MB, 123s
+[coarse] graph llama3-8b forward-nonfixed tokens=1048576 seq=8192 K=1: 1 policy points, stages ['lower', 'upper']
+  [child] llama3-8b forward-nonfixed tokens=1048576 seq=8192 K=1: 483 ops extracted in 0.8s; all_macs=1.012e+16 credited=1.012e+16
+  [child]   F_hat=1.5 G_hat=4: U=222111514624 L=None (2.12e+05 / - B/tok)  ModuleNotFoundError: No module named 'scipy'
+[coarse]   ok: 1 rows, peak RSS 1415 MB, 253s
+[coarse] graph llama3-405b forward-nonfixed tokens=131072 seq=8192 K=1: 1 policy points, stages ['lower', 'upper']
+  [child] llama3-405b forward-nonfixed tokens=131072 seq=8192 K=1: 1893 ops extracted in 8.4s; all_macs=5.735e+16 credited=5.735e+16
+  [child]   F_hat=1.5 G_hat=4: U=871836844032 L=None (6.65e+06 / - B/tok)  ModuleNotFoundError: No module named 'scipy'
+[coarse]   ok: 1 rows, peak RSS 1355 MB, 146s

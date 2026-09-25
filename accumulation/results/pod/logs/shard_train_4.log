@@ -1,0 +1,50 @@
+[coarse] bound symbols: {'upper_coarse': True, 'lower_coarse': True}; versions {'upper': 'eab50c6955', 'lower': 'ac6c3bb0e3', 'coarse': 'f4baa2d7be', 'adw': 'cf4205165a', 'extract': '332385d416'}
+[coarse] shard 4/6: 4 graphs
+[coarse] 73 cells, 268 existing rows, 66 cells to run on 4 graphs; RSS cap 160000 MB (~/.veritor/mem_guardian.py kills >2.5 GB processes; cells above that are recorded as oom-guard)
+[coarse] graph llama3-8b local-sgd tokens=98304 seq=8192 K=3: 5 policy points, stages ['lower', 'upper']
+  [child] llama3-8b local-sgd tokens=98304 seq=8192 K=3: 6849 ops extracted in 16.4s; all_macs=3.665e+15 credited=2.952e+15
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+  HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+[coarse]   external SIGKILL at peak 1174 MB (machine swap pressure?): retrying once in 30 s
+[coarse] bound symbols: {'upper_coarse': True, 'lower_coarse': True}; versions {'upper': 'eab50c6955', 'lower': 'ac6c3bb0e3', 'coarse': 'f4baa2d7be', 'adw': 'cf4205165a', 'extract': '332385d416'}
+[coarse] shard 4/6: 4 graphs
+[coarse] 73 cells, 268 existing rows, 66 cells to run on 4 graphs; RSS cap 160000 MB (~/.veritor/mem_guardian.py kills >2.5 GB processes; cells above that are recorded as oom-guard)
+[coarse] graph llama3-8b local-sgd tokens=98304 seq=8192 K=3: 5 policy points, stages ['lower', 'upper']

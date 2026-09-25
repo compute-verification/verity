@@ -1,0 +1,269 @@
+{
+ "planner": "48ee653bf3",
+ "rows": {
+  "deepseek-v3|forward-nonfixed-moe|8192|1.5|4.0|1048576|1|8192": {
+   "U_per_token": 347018659.1816406,
+   "coarse": "48ee653bf3",
+   "family": "fine",
+   "provisional": "planner fallback: fine"
+  },
+  "deepseek-v3|forward-nonfixed-moe|8192|1.5|4.0|131072|1|8192": {
+   "U_per_token": 10696129.453125,
+   "coarse": "48ee653bf3",
+   "family": "bands",
+   "provisional": "planner fallback: bands"
+  },
+  "deepseek-v3|forward-nonfixed-moe|8192|1.5|4.0|32768|1|8192": {
+   "U_per_token": 41268985.8125,
+   "coarse": "48ee653bf3",
+   "family": "bands",
+   "provisional": "planner fallback: bands"
+  },
+  "deepseek-v3|forward-nonfixed-moe|8192|1.5|4.0|4194304|1|8192": {
+   "U_per_token": 346053971.29541016,
+   "coarse": "48ee653bf3",
+   "family": "fine",
+   "provisional": "planner fallback: fine"
+  },
+  "llama3-1b|forward-nonfixed|8192|1.5|4.0|1048576|1|8192": {
+   "U_per_token": 65388.05078125,
+   "coarse": "48ee653bf3",
+   "family": "block",
+   "provisional": null
+  },
+  "llama3-1b|forward-nonfixed|8192|1.5|4.0|131072|1|8192": {
+   "U_per_token": 70398.0625,
+   "coarse": "48ee653bf3",
+   "family": "block",
+   "provisional": null
+  },
+  "llama3-1b|forward-nonfixed|8192|1.5|4.0|32768|1|8192": {
+   "U_per_token": 107848.125,
+   "coarse": "48ee653bf3",
+   "family": "block",
+   "provisional": null
+  },
+  "llama3-1b|forward-nonfixed|8192|1.5|4.0|4194304|1|8192": {
+   "U_per_token": 63459.64453125,
+   "coarse": "48ee653bf3",
+   "family": "convex-block",
+   "provisional": null
+  },
+  "llama3-1b|forward-nonfixed|8192|1.5|4.0|8192|1|8192": {
+   "U_per_token": 365844.5,
+   "coarse": "48ee653bf3",
+   "family": "single",
+   "provisional": null
+  },
+  "llama3-405b|forward-nonfixed|8192|1.5|4.0|1048576|1|8192": {
+   "U_per_token": 3637347.78125,
+   "coarse": "48ee653bf3",
+   "family": "block",
+   "provisional": null
+  },
+  "llama3-405b|forward-nonfixed|8192|1.5|4.0|131072|1|8192": {
+   "U_per_token": 6651587.25,
+   "coarse": "48ee653bf3",
+   "family": "block",
+   "provisional": null
+  },
+  "llama3-405b|forward-nonfixed|8192|1.5|4.0|32768|1|8192": {
+   "U_per_token": 24902401.0,
+   "coarse": "48ee653bf3",
+   "family": "block",
+   "provisional": null
+  },
+  "llama3-405b|forward-nonfixed|8192|1.5|4.0|8192|1|8192": {
+   "U_per_token": 99085304.0,
+   "coarse": "48ee653bf3",
+   "family": "single",
+   "provisional": null
+  },
+  "llama3-70b|forward-nonfixed|8192|1.5|4.0|1048576|1|8192": {
+   "U_per_token": 987018.03125,
+   "coarse": "48ee653bf3",
+   "family": "block",
+   "provisional": null
+  },
+  "llama3-70b|forward-nonfixed|8192|1.5|4.0|131072|1|8192": {
+   "U_per_token": 1322328.125,
+   "coarse": "48ee653bf3",
+   "family": "block",
+   "provisional": null
+  },
+  "llama3-70b|forward-nonfixed|8192|1.5|4.0|32768|1|8192": {
+   "U_per_token": 4388180.5,
+   "coarse": "48ee653bf3",
+   "family": "block",
+   "provisional": null
+  },
+  "llama3-70b|forward-nonfixed|8192|1.5|4.0|4194304|1|8192": {
+   "U_per_token": 984513.0234375,
+   "coarse": "48ee653bf3",
+   "family": "convex-block",
+   "provisional": null
+  },
+  "llama3-70b|forward-nonfixed|8192|1.5|4.0|8192|1|8192": {
+   "U_per_token": 17225030.0,
+   "coarse": "48ee653bf3",
+   "family": "single",
+   "provisional": null
+  },
+  "llama3-8b|forward-nonfixed|131072|1.5|4.0|1048576|1|131072": {
+   "U_per_token": 61401.0078125,
+   "coarse": "48ee653bf3",
+   "family": "convex-block",
+   "provisional": null
+  },
+  "llama3-8b|forward-nonfixed|2048|1.5|4.0|1048576|1|2048": {
+   "U_per_token": 443831.703125,
+   "coarse": "48ee653bf3",
+   "family": "convex-block",
+   "provisional": null
+  },
+  "llama3-8b|forward-nonfixed|2048|1.5|4.0|131072|1|2048": {
+   "U_per_token": 498848.25,
+   "coarse": "48ee653bf3",
+   "family": "convex-block",
+   "provisional": null
+  },
+  "llama3-8b|forward-nonfixed|8192|1.0|4.0|131072|1|8192": {
+   "U_per_token": 261800.0625,
+   "coarse": "48ee653bf3",
+   "family": "block",
+   "provisional": null
+  },
+  "llama3-8b|forward-nonfixed|8192|1.5|10.0|1048576|1|8192": {
+   "U_per_token": 211822.046875,
+   "coarse": "48ee653bf3",
+   "family": "convex-block",
+   "provisional": null
+  },
+  "llama3-8b|forward-nonfixed|8192|1.5|1000.0|1048576|1|8192": {
+   "U_per_token": 211822.046875,
+   "coarse": "48ee653bf3",
+   "family": "convex-block",
+   "provisional": null
+  },
+  "llama3-8b|forward-nonfixed|8192|1.5|4.0|1048576|1|8192": {
+   "U_per_token": 211822.046875,
+   "coarse": "48ee653bf3",
+   "family": "block",
+   "provisional": null
+  },
+  "llama3-8b|forward-nonfixed|8192|1.5|4.0|131072|1|8192": {
+   "U_per_token": 220840.0625,
+   "coarse": "48ee653bf3",
+   "family": "block",
+   "provisional": null
+  },
+  "llama3-8b|forward-nonfixed|8192|1.5|4.0|32768|1|8192": {
+   "U_per_token": 522900.25,
+   "coarse": "48ee653bf3",
+   "family": "block",
+   "provisional": null
+  },
+  "llama3-8b|forward-nonfixed|8192|1.5|4.0|4194304|1|8192": {
+   "U_per_token": 210569.54296875,
+   "coarse": "48ee653bf3",
+   "family": "convex-block",
+   "provisional": null
+  },
+  "llama3-8b|forward-nonfixed|8192|1.5|4.0|8192|1|8192": {
+   "U_per_token": 1960517.0,
+   "coarse": "48ee653bf3",
+   "family": "single",
+   "provisional": null
+  },
+  "llama3-8b|forward-nonfixed|8192|10.0|4.0|1048576|1|8192": {
+   "U_per_token": 129988.015625,
+   "coarse": "48ee653bf3",
+   "family": "convex-block",
+   "provisional": null
+  },
+  "llama3-8b|forward-nonfixed|8192|10.0|4.0|131072|1|8192": {
+   "U_per_token": 163496.0625,
+   "coarse": "48ee653bf3",
+   "family": "block",
+   "provisional": null
+  },
+  "llama3-8b|forward-nonfixed|8192|100.0|4.0|131072|1|8192": {
+   "U_per_token": 163496.0625,
+   "coarse": "48ee653bf3",
+   "family": "block",
+   "provisional": null
+  },
+  "llama3-8b|forward-nonfixed|8192|3.0|4.0|1048576|1|8192": {
+   "U_per_token": 155566.0234375,
+   "coarse": "48ee653bf3",
+   "family": "convex-block",
+   "provisional": null
+  },
+  "llama3-8b|forward-nonfixed|8192|3.0|4.0|131072|1|8192": {
+   "U_per_token": 179880.0625,
+   "coarse": "48ee653bf3",
+   "family": "block",
+   "provisional": null
+  },
+  "llama3-8b|forward-nonfixed|8192|30.0|4.0|131072|1|8192": {
+   "U_per_token": 163496.0625,
+   "coarse": "48ee653bf3",
+   "family": "block",
+   "provisional": null
+  },
+  "mixtral-8x7b|forward-nonfixed-moe|8192|1.5|4.0|1048576|1|8192": {
+   "U_per_token": 44540410.5078125,
+   "coarse": "48ee653bf3",
+   "family": "fine",
+   "provisional": "planner fallback: fine"
+  },
+  "mixtral-8x7b|forward-nonfixed-moe|8192|1.5|4.0|131072|1|8192": {
+   "U_per_token": 794552.0625,
+   "coarse": "48ee653bf3",
+   "family": "bands",
+   "provisional": "planner fallback: bands"
+  },
+  "mixtral-8x7b|forward-nonfixed-moe|8192|1.5|4.0|32768|1|8192": {
+   "U_per_token": 2866900.25,
+   "coarse": "48ee653bf3",
+   "family": "bands",
+   "provisional": "planner fallback: bands"
+  },
+  "mixtral-8x7b|forward-nonfixed-moe|8192|1.5|4.0|4194304|1|8192": {
+   "U_per_token": 44998014.626953125,
+   "coarse": "48ee653bf3",
+   "family": "fine",
+   "provisional": "planner fallback: fine"
+  },
+  "qwen3-235b-a22b|forward-nonfixed-moe|8192|1.5|4.0|1048576|1|8192": {
+   "U_per_token": 277322300.4765625,
+   "coarse": "48ee653bf3",
+   "family": "fine",
+   "provisional": "planner fallback: fine"
+  },
+  "qwen3-235b-a22b|forward-nonfixed-moe|8192|1.5|4.0|131072|1|8192": {
+   "U_per_token": 3868847.8125,
+   "coarse": "48ee653bf3",
+   "family": "bands",
+   "provisional": "planner fallback: bands"
+  },
+  "qwen3-235b-a22b|forward-nonfixed-moe|8192|1.5|4.0|32768|1|8192": {
+   "U_per_token": 14481075.25,
+   "coarse": "48ee653bf3",
+   "family": "bands",
+   "provisional": "planner fallback: bands"
+  },
+  "qwen3-235b-a22b|forward-nonfixed-moe|8192|1.5|4.0|4194304|1|8192": {
+   "U_per_token": 276986589.8691406,
+   "coarse": "48ee653bf3",
+   "family": "fine",
+   "provisional": "planner fallback: fine"
+  },
+  "qwen3-235b-a22b|forward-nonfixed-moe|8192|1.5|4.0|8192|1|8192": {
+   "U_per_token": 57395905.0,
+   "coarse": "48ee653bf3",
+   "family": "single",
+   "provisional": null
+  }
+ }
+}

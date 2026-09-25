@@ -1,0 +1,137 @@
+[coarse] bound symbols: {'upper_coarse': True, 'lower_coarse': True}; versions {'upper': 'eab50c6955', 'lower': '4360a8f36e', 'coarse': '48ee653bf3', 'adw': 'cf4205165a', 'extract': '49c4de9e0d'}
+[coarse] shard 0/2: 24 graphs
+[coarse] 132 cells, 236 existing rows, 129 cells to run on 24 graphs; RSS cap 120000 MB (~/.veritor/mem_guardian.py kills >2.5 GB processes; cells above that are recorded as oom-guard)
+[coarse] graph llama3-1b inference-dense tokens=2048 seq=2048 K=None: 1 policy points, stages ['lower']
+  [child] llama3-1b inference-dense tokens=2048 seq=2048 K=None: 243 ops extracted in 0.1s; all_macs=2.806e+12 credited=0.000e+00
+  [child]   F_hat=1.5 G_hat=4: U=None L=8192 (- / 4 B/tok)  
+[coarse]   ok: 1 rows, peak RSS 73 MB, 1s
+[coarse] graph syn-attn inference-dense tokens=8192 seq=8192 K=None: 1 policy points, stages ['lower']
+  [child] syn-attn inference-dense tokens=8192 seq=8192 K=None: 243 ops extracted in 0.4s; all_macs=2.158e+13 credited=0.000e+00
+  [child]   F_hat=1.5 G_hat=4: U=None L=32768 (- / 4 B/tok)  
+[coarse]   ok: 1 rows, peak RSS 60 MB, 1s
+[coarse] graph syn-deep inference-dense tokens=8192 seq=8192 K=None: 1 policy points, stages ['lower']
+  [child] syn-deep inference-dense tokens=8192 seq=8192 K=None: 963 ops extracted in 1.5s; all_macs=1.766e+13 credited=0.000e+00
+  [child]   F_hat=1.5 G_hat=4: U=None L=32768 (- / 4 B/tok)  
+[coarse]   ok: 1 rows, peak RSS 105 MB, 2s
+[coarse] graph syn-manyheads inference-dense tokens=8192 seq=8192 K=None: 1 policy points, stages ['lower']
+  [child] syn-manyheads inference-dense tokens=8192 seq=8192 K=None: 243 ops extracted in 0.4s; all_macs=1.333e+13 credited=0.000e+00
+  [child]   F_hat=1.5 G_hat=4: U=None L=32768 (- / 4 B/tok)  
+[coarse]   ok: 1 rows, peak RSS 60 MB, 1s
+[coarse] graph syn-manyheads inference-session tokens=8192 seq=8192 K=None: 1 policy points, stages ['lower']
+  [child] syn-manyheads inference-session tokens=8192 seq=8192 K=None: 486 ops extracted in 41.2s; all_macs=1.278e+13 credited=0.000e+00
+  [child]   F_hat=1.5 G_hat=4: U=None L=32768 (- / 4 B/tok)  
+[coarse]   ok: 1 rows, peak RSS 1565 MB, 42s
+[coarse] graph syn-ffn inference-dense tokens=8192 seq=8192 K=None: 1 policy points, stages ['lower']
+  [child] syn-ffn inference-dense tokens=8192 seq=8192 K=None: 123 ops extracted in 0.2s; all_macs=1.127e+13 credited=0.000e+00
+  [child]   F_hat=1.5 G_hat=4: U=None L=32768 (- / 4 B/tok)  
+[coarse]   ok: 1 rows, peak RSS 52 MB, 1s
+[coarse] graph syn-wide inference-session tokens=8192 seq=8192 K=None: 1 policy points, stages ['lower']
+  [child] syn-wide inference-session tokens=8192 seq=8192 K=None: 126 ops extracted in 4.1s; all_macs=1.100e+13 credited=0.000e+00
+  [child]   F_hat=1.5 G_hat=4: U=None L=32768 (- / 4 B/tok)  
+[coarse]   ok: 1 rows, peak RSS 220 MB, 5s
+[coarse] graph llama3-1b inference-dense tokens=8192 seq=8192 K=None: 5 policy points, stages ['lower']
+  [child] llama3-1b inference-dense tokens=8192 seq=8192 K=None: 243 ops extracted in 0.4s; all_macs=1.452e+13 credited=0.000e+00
+  [child]   F_hat=1.5 G_hat=1000: U=None L=32768 (- / 4 B/tok)  
+  [child]   F_hat=1.5 G_hat=10: U=None L=32768 (- / 4 B/tok)  
+  [child]   F_hat=1.5 G_hat=100: U=None L=32768 (- / 4 B/tok)  
+  [child]   F_hat=1.5 G_hat=1: U=None L=32768 (- / 4 B/tok)  
+  [child]   F_hat=1.5 G_hat=4: U=None L=32768 (- / 4 B/tok)  
+[coarse]   ok: 5 rows, peak RSS 55 MB, 1s
+[coarse] graph llama3-8b inference-dense tokens=2048 seq=2048 K=None: 1 policy points, stages ['lower']
+  [child] llama3-8b inference-dense tokens=2048 seq=2048 K=None: 483 ops extracted in 0.2s; all_macs=1.647e+13 credited=0.000e+00
+  [child]   F_hat=1.5 G_hat=4: U=None L=8192 (- / 4 B/tok)  
+[coarse]   ok: 1 rows, peak RSS 54 MB, 1s
+[coarse] graph llama3-1b inference-session tokens=32768 seq=32768 K=None: 1 policy points, stages ['lower']
+  [child] llama3-1b inference-session tokens=32768 seq=32768 K=None: 486 ops extracted in 27.3s; all_macs=1.021e+14 credited=0.000e+00
+  [child]   F_hat=1.5 G_hat=4: U=None L=131072 (- / 4 B/tok)  
+[coarse]   ok: 1 rows, peak RSS 875 MB, 28s
+[coarse] graph llama3-8b inference-dense tokens=8192 seq=8192 K=None: 35 policy points, stages ['lower']
+  [child] llama3-8b inference-dense tokens=8192 seq=8192 K=None: 483 ops extracted in 0.7s; all_macs=7.907e+13 credited=0.000e+00
+  [child]   F_hat=100 G_hat=10: U=None L=32768 (- / 4 B/tok)  
+  [child]   F_hat=1.5 G_hat=100: U=None L=32768 (- / 4 B/tok)  
+  [child]   F_hat=30 G_hat=1000: U=None L=32768 (- / 4 B/tok)  
+  [child]   F_hat=300 G_hat=10: U=None L=32768 (- / 4 B/tok)  
+  [child]   F_hat=100 G_hat=1: U=None L=32768 (- / 4 B/tok)  
+  [child]   F_hat=100 G_hat=1000: U=None L=32768 (- / 4 B/tok)  
+  [child]   F_hat=1000 G_hat=10: U=None L=32768 (- / 4 B/tok)  
+  [child]   F_hat=30 G_hat=100: U=None L=32768 (- / 4 B/tok)  
+  [child]   F_hat=1 G_hat=100: U=None L=32768 (- / 4 B/tok)  
+  [child]   F_hat=100 G_hat=100: U=None L=32768 (- / 4 B/tok)  
+  [child]   F_hat=10 G_hat=1000: U=None L=32768 (- / 4 B/tok)  
+  [child]   F_hat=10 G_hat=10: U=None L=32768 (- / 4 B/tok)  
+  [child]   F_hat=1.5 G_hat=1000: U=None L=32768 (- / 4 B/tok)  
+  [child]   F_hat=1.5 G_hat=3: U=None L=32768 (- / 4 B/tok)  
+  [child]   F_hat=300 G_hat=100: U=None L=32768 (- / 4 B/tok)  
+  [child]   F_hat=3 G_hat=100: U=None L=32768 (- / 4 B/tok)  
+  [child]   F_hat=3 G_hat=10: U=None L=32768 (- / 4 B/tok)  
+  [child]   F_hat=30 G_hat=10: U=None L=32768 (- / 4 B/tok)  
+  [child]   F_hat=3 G_hat=1000: U=None L=32768 (- / 4 B/tok)  
+  [child]   F_hat=1.5 G_hat=10: U=None L=32768 (- / 4 B/tok)  
+  [child]   F_hat=1 G_hat=1000: U=None L=32768 (- / 4 B/tok)  
+  [child]   F_hat=10 G_hat=1: U=None L=32768 (- / 4 B/tok)  
+  [child]   F_hat=30 G_hat=1: U=None L=32768 (- / 4 B/tok)  
+  [child]   F_hat=300 G_hat=1: U=None L=32768 (- / 4 B/tok)  
+  [child]   F_hat=1 G_hat=1: U=None L=32768 (- / 4 B/tok)  
+  [child]   F_hat=300 G_hat=1000: U=None L=32768 (- / 4 B/tok)  
+  [child]   F_hat=1.5 G_hat=4: U=None L=32768 (- / 4 B/tok)  
+  [child]   F_hat=1.5 G_hat=1: U=None L=32768 (- / 4 B/tok)  
+  [child]   F_hat=1000 G_hat=1: U=None L=32768 (- / 4 B/tok)  
+  [child]   F_hat=1.5 G_hat=30: U=None L=32768 (- / 4 B/tok)  
+  [child]   F_hat=1000 G_hat=100: U=None L=32768 (- / 4 B/tok)  
+  [child]   F_hat=3 G_hat=1: U=None L=32768 (- / 4 B/tok)  
+  [child]   F_hat=1000 G_hat=1000: U=None L=32768 (- / 4 B/tok)  
+  [child]   F_hat=10 G_hat=100: U=None L=32768 (- / 4 B/tok)  
+  [child]   F_hat=1 G_hat=10: U=None L=32768 (- / 4 B/tok)  
+[coarse]   ok: 35 rows, peak RSS 79 MB, 2s
+[coarse] graph llama3-1b inference-session tokens=131072 seq=131072 K=None: 1 policy points, stages ['lower']
+  [child] llama3-1b inference-session tokens=131072 seq=131072 K=None: 486 ops extracted in 5.9s; all_macs=1.147e+15 credited=0.000e+00
+  [child]   F_hat=1.5 G_hat=4: U=None L=524288 (- / 4 B/tok)  
+[coarse]   ok: 1 rows, peak RSS 424 MB, 13s
+[coarse] graph llama3-8b inference-session tokens=32768 seq=32768 K=None: 1 policy points, stages ['lower']
+  [child] llama3-8b inference-session tokens=32768 seq=32768 K=None: 966 ops extracted in 61.1s; all_macs=4.922e+14 credited=0.000e+00
+  [child]   F_hat=1.5 G_hat=4: U=None L=131072 (- / 4 B/tok)  
+[coarse]   ok: 1 rows, peak RSS 1741 MB, 62s
+[coarse] graph llama3-70b inference-session tokens=8192 seq=8192 K=None: 1 policy points, stages ['lower']
+  [child] llama3-70b inference-session tokens=8192 seq=8192 K=None: 2406 ops extracted in 43.5s; all_macs=6.463e+14 credited=0.000e+00
+  [child]   F_hat=1.5 G_hat=4: U=None L=32768 (- / 4 B/tok)  
+[coarse]   ok: 1 rows, peak RSS 1099 MB, 44s
+[coarse] graph llama3-1b forward-nonfixed tokens=131072 seq=8192 K=1: 1 policy points, stages ['lower']
+  [child] llama3-1b forward-nonfixed tokens=131072 seq=8192 K=1: 243 ops extracted in 1.0s; all_macs=2.323e+14 credited=2.323e+14
+  [child]   F_hat=1.5 G_hat=4: U=None L=2997489664 (- / 2.29e+04 B/tok)  
+[coarse]   ok: 1 rows, peak RSS 76 MB, 2s
+[coarse] graph llama3-8b inference-dense tokens=131072 seq=131072 K=None: 1 policy points, stages ['lower']
+  [child] llama3-8b inference-dense tokens=131072 seq=131072 K=None: 483 ops extracted in 11.6s; all_macs=5.487e+15 credited=0.000e+00
+  [child]   F_hat=1.5 G_hat=4: U=None L=524288 (- / 4 B/tok)  
+[coarse]   ok: 1 rows, peak RSS 768 MB, 13s
+[coarse] graph llama3-70b forward-nonfixed tokens=8192 seq=8192 K=1: 1 policy points, stages ['lower']
+  [child] llama3-70b forward-nonfixed tokens=8192 seq=8192 K=1: 1203 ops extracted in 1.9s; all_macs=6.573e+14 credited=6.573e+14
+  [child]   F_hat=1.5 G_hat=4: U=None L=141107445760 (- / 1.72e+07 B/tok)  
+[coarse]   ok: 1 rows, peak RSS 174 MB, 4s
+[coarse] graph llama3-8b forward-nonfixed tokens=131072 seq=32768 K=1: 1 policy points, stages ['lower']
+  [child] llama3-8b forward-nonfixed tokens=131072 seq=32768 K=1: 483 ops extracted in 3.9s; all_macs=2.110e+15 credited=2.110e+15
+  [child]   F_hat=1.5 G_hat=4: U=None L=16061046784 (- / 1.23e+05 B/tok)  
+[coarse]   ok: 1 rows, peak RSS 196 MB, 5s
+[coarse] graph llama3-8b forward-nonfixed tokens=131072 seq=131072 K=1: 1 policy points, stages ['lower']
+  [child] llama3-8b forward-nonfixed tokens=131072 seq=131072 K=1: 483 ops extracted in 11.6s; all_macs=5.487e+15 credited=5.487e+15
+  [child]   F_hat=1.5 G_hat=4: U=None L=16061046784 (- / 1.23e+05 B/tok)  
+[coarse]   ok: 1 rows, peak RSS 772 MB, 24s
+[coarse] graph llama3-405b inference-dense tokens=8192 seq=8192 K=None: 1 policy points, stages ['lower']
+  [child] llama3-405b inference-dense tokens=8192 seq=8192 K=None: 1893 ops extracted in 3.1s; all_macs=3.585e+15 credited=0.000e+00
+  [child]   F_hat=1.5 G_hat=4: U=None L=32768 (- / 4 B/tok)  
+[coarse]   ok: 1 rows, peak RSS 203 MB, 4s
+[coarse] graph llama3-70b forward-nonfixed tokens=32768 seq=8192 K=1: 1 policy points, stages ['lower']
+  [child] llama3-70b forward-nonfixed tokens=32768 seq=8192 K=1: 1203 ops extracted in 2.5s; all_macs=2.629e+15 credited=2.629e+15
+  [child]   F_hat=1.5 G_hat=4: U=None L=141107544064 (- / 4.31e+06 B/tok)  
+[coarse]   ok: 1 rows, peak RSS 170 MB, 4s
+[coarse] graph llama3-8b forward-nonfixed tokens=1048576 seq=8192 K=1: 1 policy points, stages ['lower']
+  [child] llama3-8b forward-nonfixed tokens=1048576 seq=8192 K=1: 483 ops extracted in 0.8s; all_macs=1.012e+16 credited=1.012e+16
+  [child]   F_hat=1.5 G_hat=4: U=None L=58609186439 (- / 5.59e+04 B/tok)  
+[coarse]   ok: 1 rows, peak RSS 109 MB, 11s
+[coarse] graph llama3-405b forward-nonfixed tokens=32768 seq=8192 K=1: 1 policy points, stages ['lower']
+  [child] llama3-405b forward-nonfixed tokens=32768 seq=8192 K=1: 1893 ops extracted in 4.2s; all_macs=1.434e+16 credited=1.434e+16
+  [child]   F_hat=1.5 G_hat=4: U=None L=811706908672 (- / 2.48e+07 B/tok)  
+[coarse]   ok: 1 rows, peak RSS 238 MB, 7s
+[coarse] graph llama3-70b forward-nonfixed tokens=1048576 seq=8192 K=1: 1 policy points, stages ['lower']
+  [child] llama3-70b forward-nonfixed tokens=1048576 seq=8192 K=1: 1203 ops extracted in 2.1s; all_macs=8.414e+16 credited=8.414e+16
+  [child]   F_hat=1.5 G_hat=4: U=None L=302924072813 (- / 2.89e+05 B/tok)  
+[coarse]   ok: 1 rows, peak RSS 183 MB, 73s

@@ -1,0 +1,90 @@
+[
+ {
+  "circuit": "draft's M_{L,T} as written: 93 square 7168x7168 layers, a^0 = d-wide novel input",
+  "widths": "bf16",
+  "U_bits": 115457.10255968983,
+  "LB_bits": 115457.10255968983,
+  "m": 93,
+  "positions_per_IU": 99406473.62145463,
+  "gates_per_position": 9556721664,
+  "s_U": 79283.17494085434,
+  "s_LB": 79283.17494085434
+ },
+ {
+  "circuit": "draft's M_{L,T} as written: 93 square 7168x7168 layers, a^0 = d-wide novel input",
+  "widths": "MXFP4 weights, bf16 cut",
+  "U_bits": 114892.29286741761,
+  "LB_bits": 114892.29286741761,
+  "m": 93,
+  "positions_per_IU": 99406473.62145463,
+  "gates_per_position": 9556721664,
+  "s_U": 78895.3260805596,
+  "s_LB": 78895.3260805596
+ },
+ {
+  "circuit": "same, a^0 derived from the 32-bit token",
+  "widths": "bf16",
+  "U_bits": 801.1025596898268,
+  "LB_bits": 784.651643567413,
+  "m": 93,
+  "positions_per_IU": 99406473.62145463,
+  "gates_per_position": 9556721664,
+  "s_U": 550.10868086369,
+  "s_LB": 538.8120102219132
+ },
+ {
+  "circuit": "same, a^0 derived from the 32-bit token",
+  "widths": "MXFP4 weights, bf16 cut",
+  "U_bits": 236.29286741761024,
+  "LB_bits": 231.92309282258793,
+  "m": 93,
+  "positions_per_IU": 99406473.62145463,
+  "gates_per_position": 9556721664,
+  "s_U": 162.25982056895313,
+  "s_LB": 159.25914242972698
+ },
+ {
+  "circuit": "Kimi-K3 matmul weights, routing fully clusterable (rho = 1: IU holds only active weights)",
+  "widths": "bf16",
+  "U_bits": 300744.16842105263,
+  "LB_bits": 294009.93947111996,
+  "m": 47,
+  "positions_per_IU": 8943701.751082659,
+  "gates_per_position": 210180000000.0,
+  "s_U": 9390.206514716709,
+  "s_LB": 9179.942086683914
+ },
+ {
+  "circuit": "Kimi-K3 matmul weights, routing fully clusterable (rho = 1: IU holds only active weights)",
+  "widths": "MXFP4 weights, bf16 cut",
+  "U_bits": 98845.91457894737,
+  "LB_bits": 96732.30905263161,
+  "m": 93,
+  "positions_per_IU": 4519935.293557903,
+  "gates_per_position": 210180000000.0,
+  "s_U": 3086.2894396438396,
+  "s_LB": 3020.2958328951136
+ },
+ {
+  "circuit": "Kimi-K3 matmul weights, balanced routing (rho = 26.7: IU holds all experts of its layers)",
+  "widths": "bf16",
+  "U_bits": 2054661.5242105264,
+  "LB_bits": 1998018.9961619987,
+  "m": 12,
+  "positions_per_IU": 35029498.525073744,
+  "gates_per_position": 210180000000.0,
+  "s_U": 64153.184187989245,
+  "s_LB": 62384.621097693016
+ },
+ {
+  "circuit": "Kimi-K3 matmul weights, balanced routing (rho = 26.7: IU holds all experts of its layers)",
+  "widths": "MXFP4 weights, bf16 cut",
+  "U_bits": 987934.5715789474,
+  "LB_bits": 974191.7702221633,
+  "m": 19,
+  "positions_per_IU": 22123893.805309735,
+  "gates_per_position": 210180000000.0,
+  "s_U": 30846.51549142089,
+  "s_LB": 30417.42074451873
+ }
+]

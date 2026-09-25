@@ -1,0 +1,936 @@
+{
+ "versions": {
+  "upper": "eab50c6955",
+  "lower": "ac6c3bb0e3",
+  "coarse": "f4baa2d7be",
+  "adw": "cf4205165a",
+  "extract": "332385d416",
+  "wp": "ba12ab8bf8"
+ },
+ "table1": [
+  {
+   "model": "llama3-1b",
+   "workload": "inference",
+   "M_tok": 1705508864.0,
+   "U_b": 4.0,
+   "L_b": 4.0,
+   "one_ru": true,
+   "status": "measured"
+  },
+  {
+   "model": "llama3-8b",
+   "workload": "inference",
+   "M_tok": 9383706624.0,
+   "U_b": 4.0,
+   "L_b": 4.0,
+   "one_ru": true,
+   "status": "measured"
+  },
+  {
+   "model": "llama3-70b",
+   "workload": "inference",
+   "M_tok": 78896955392.0,
+   "U_b": 4.0,
+   "L_b": 4.0,
+   "one_ru": true,
+   "status": "measured"
+  },
+  {
+   "model": "llama3-405b",
+   "workload": "inference",
+   "M_tok": 433342906368.0,
+   "U_b": 4.0,
+   "L_b": 4.0,
+   "one_ru": true,
+   "status": "measured"
+  },
+  {
+   "model": "llama3-1b",
+   "workload": "rollout",
+   "Q_roll": 1048576,
+   "L_b": 19569.750791549683,
+   "U_b": 38249.78515625,
+   "c_inf": 2.345341079388257e-09,
+   "c_L": 1.1474435111203082e-05,
+   "c_U": 2.2427198101182076e-05,
+   "cert": 4892.437697887421,
+   "ach": 9562.4462890625,
+   "status": "measured",
+   "U_provisional": null,
+   "L_provisional": false,
+   "L_hash": "ac6c3bb0e3",
+   "row_key": {
+    "Q_inf": 8192,
+    "F_hat": 1.5,
+    "G_hat": 4.0,
+    "Q_step": 1048576,
+    "K": 1,
+    "seq": 8192
+   }
+  },
+  {
+   "model": "llama3-8b",
+   "workload": "rollout",
+   "Q_roll": 1048576,
+   "L_b": 84746.69135284424,
+   "U_b": 124802.015625,
+   "c_inf": 4.2627078619119457e-10,
+   "c_L": 9.031259687519856e-06,
+   "c_U": 1.3299863329678625e-05,
+   "cert": 21186.67283821106,
+   "ach": 31200.50390625,
+   "status": "measured",
+   "U_provisional": null,
+   "L_provisional": false,
+   "L_hash": "ac6c3bb0e3",
+   "row_key": {
+    "Q_inf": 8192,
+    "F_hat": 1.5,
+    "G_hat": 4.0,
+    "Q_step": 1048576,
+    "K": 1,
+    "seq": 8192
+   }
+  },
+  {
+   "model": "llama3-70b",
+   "workload": "rollout",
+   "Q_roll": 1048576,
+   "L_b": 314651.131064415,
+   "U_b": 525069.203125,
+   "c_inf": 5.0699041301733075e-11,
+   "c_L": 3.988127672367951e-06,
+   "c_U": 6.655126303875612e-06,
+   "cert": 78662.78276610374,
+   "ach": 131267.30078125,
+   "status": "measured",
+   "U_provisional": null,
+   "L_provisional": false,
+   "L_hash": "ac6c3bb0e3",
+   "row_key": {
+    "Q_inf": 8192,
+    "F_hat": 1.5,
+    "G_hat": 4.0,
+    "Q_step": 1048576,
+    "K": 1,
+    "seq": 8192
+   }
+  },
+  {
+   "model": "llama3-405b",
+   "workload": "rollout",
+   "Q_roll": 1048576,
+   "L_b": 1501264.6558551788,
+   "U_b": 2105267.8125,
+   "c_inf": 9.23056531264216e-12,
+   "c_L": 3.4643803643581206e-06,
+   "c_U": 4.858203010971134e-06,
+   "cert": 375316.16396379465,
+   "ach": 526316.953125,
+   "status": "measured",
+   "U_provisional": null,
+   "L_provisional": false,
+   "L_hash": "ac6c3bb0e3",
+   "row_key": {
+    "Q_inf": 8192,
+    "F_hat": 1.5,
+    "G_hat": 4.0,
+    "Q_step": 1048576,
+    "K": 1,
+    "seq": 8192
+   }
+  },
+  {
+   "model": "mixtral-8x7b",
+   "workload": "rollout",
+   "Q_roll": 1048576,
+   "L_b": 133674.682888031,
+   "U_b": 225979.546875,
+   "c_inf": 2.685271903157117e-10,
+   "c_L": 8.973821753066678e-06,
+   "c_U": 1.5170413197790354e-05,
+   "cert": 33418.67072200775,
+   "ach": 56494.88671875,
+   "status": "measured",
+   "U_provisional": null,
+   "L_provisional": false,
+   "L_hash": "ac6c3bb0e3",
+   "row_key": {
+    "Q_inf": 8192,
+    "F_hat": 1.5,
+    "G_hat": 4.0,
+    "Q_step": 1048576,
+    "K": 1,
+    "seq": 8192
+   }
+  },
+  {
+   "model": "qwen3-235b-a22b",
+   "workload": "rollout",
+   "Q_roll": 1048576,
+   "L_b": 25645.0,
+   "U_b": 277322300.4765625,
+   "c_inf": 1.1701345886182726e-10,
+   "c_L": 7.502025381278901e-07,
+   "c_U": 0.008112610399570386,
+   "cert": 6411.250000000001,
+   "ach": 69330575.11914062,
+   "status": "measured; **U provisional** (planner fallback: fine: legal partition, not an attack); **L provisional** (L < P; floor P+tokens = 448 KB/tok (112,102x inf))",
+   "U_provisional": "planner fallback: fine",
+   "L_provisional": true,
+   "L_hash": "7ecc3524cc",
+   "row_key": {
+    "Q_inf": 8192,
+    "F_hat": 1.5,
+    "G_hat": 4.0,
+    "Q_step": 1048576,
+    "K": 1,
+    "seq": 8192
+   }
+  },
+  {
+   "model": "deepseek-v3",
+   "workload": "rollout",
+   "Q_roll": 1048576,
+   "L_b": 57050.5,
+   "U_b": 347018659.1816406,
+   "c_inf": 7.061213950706408e-11,
+   "c_L": 1.00711446623694e-06,
+   "c_U": 0.006125932493422083,
+   "cert": 14262.625,
+   "ach": 86754664.79541016,
+   "status": "measured; **U provisional** (planner fallback: fine: legal partition, not an attack); **L provisional** (L < P; floor P+tokens = 1.3 MB/tok (321,711x inf))",
+   "U_provisional": "planner fallback: fine",
+   "L_provisional": true,
+   "L_hash": "7ecc3524cc",
+   "row_key": {
+    "Q_inf": 8192,
+    "F_hat": 1.5,
+    "G_hat": 4.0,
+    "Q_step": 1048576,
+    "K": 1,
+    "seq": 8192
+   }
+  },
+  {
+   "model": "llama3-1b",
+   "workload": "pretraining",
+   "mode": "K marginal (3 - 2) at Q_step = 131072",
+   "L_mode": "wp certificate at K = 3: (L_wp/(K-1) + token bytes per step)/Q_step",
+   "L_diff_b": -16866.16000366211,
+   "L_wp_per_boundary": 1824645120.0,
+   "Q_step": 131072,
+   "K_pair": [
+    2,
+    3
+   ],
+   "L_b": 13928.9375,
+   "U_b": 265797.3130187988,
+   "U_superseded_b": null,
+   "M_tok": 5586288640.0,
+   "c_inf": 2.345341079388257e-09,
+   "c_L": 2.4934152883299635e-06,
+   "c_U": 4.758030423197016e-05,
+   "cert": 1063.1354689699672,
+   "ach": 20287.157654860453,
+   "status": "measured",
+   "L_hash": "ac6c3bb0e3",
+   "last_row": {
+    "Q_inf": 8192,
+    "F_hat": 1.5,
+    "G_hat": 4.0,
+    "Q_step": 131072,
+    "K": 3,
+    "seq": 8192
+   }
+  },
+  {
+   "model": "llama3-8b",
+   "workload": "pretraining",
+   "mode": "K marginal (3 - 2) at Q_step = 131072",
+   "L_mode": "wp certificate at K = 3: (L_wp/(K-1) + token bytes per step)/Q_step",
+   "L_diff_b": 36656.279945373535,
+   "L_wp_per_boundary": 13522944000.0,
+   "Q_step": 131072,
+   "K_pair": [
+    2,
+    3
+   ],
+   "L_b": 103179.875,
+   "U_b": 810144.2510070801,
+   "U_superseded_b": null,
+   "M_tok": 30030168064.0,
+   "c_inf": 4.2627078619119457e-10,
+   "c_L": 3.4358740443977555e-06,
+   "c_U": 2.697767955478999e-05,
+   "cert": 8060.308507411221,
+   "ach": 63287.657584608045,
+   "status": "measured",
+   "L_hash": "ac6c3bb0e3",
+   "last_row": {
+    "Q_inf": 8192,
+    "F_hat": 1.5,
+    "G_hat": 4.0,
+    "Q_step": 131072,
+    "K": 3,
+    "seq": 8192
+   }
+  },
+  {
+   "model": "llama3-70b",
+   "workload": "pretraining",
+   "mode": "K marginal (3 - 2) at Q_step = 131072",
+   "L_mode": "wp certificate at K = 3: (L_wp/(K-1) + token bytes per step)/Q_step",
+   "L_diff_b": 1005339.25,
+   "L_wp_per_boundary": 131770777600.0,
+   "Q_step": 131072,
+   "K_pair": [
+    2,
+    3
+   ],
+   "L_b": 1005339.25,
+   "U_b": 3910255.875854492,
+   "U_superseded_b": null,
+   "M_tok": 246086107136.0,
+   "c_inf": 5.0699041301733075e-11,
+   "c_L": 4.085314939962853e-06,
+   "c_U": 1.588978720238555e-05,
+   "cert": 80579.72764513009,
+   "ach": 313413.95802374627,
+   "status": "measured",
+   "L_hash": null,
+   "last_row": {
+    "Q_inf": 8192,
+    "F_hat": 1.5,
+    "G_hat": 4.0,
+    "Q_step": 131072,
+    "K": 3,
+    "seq": 8192
+   }
+  },
+  {
+   "model": "llama3-405b",
+   "workload": "pretraining",
+   "mode": "K marginal (3 - 2) at Q_step = 131072 -- may be pre-knee (predicted knee K ~ 3.7)",
+   "L_mode": "wp certificate at K = 3: (L_wp/(K-1) + token bytes per step)/Q_step",
+   "L_diff_b": -307322.75,
+   "L_wp_per_boundary": 771424321536.0,
+   "Q_step": 131072,
+   "K_pair": [
+    2,
+    3
+   ],
+   "L_b": 5885508.5,
+   "U_b": 17090820.750671387,
+   "U_superseded_b": null,
+   "M_tok": 1329623728128.0,
+   "c_inf": 9.23056531264216e-12,
+   "c_L": 4.426446652156477e-06,
+   "c_U": 1.2853877671643123e-05,
+   "cert": 479542.31428209785,
+   "ach": 1392534.1770821428,
+   "status": "measured",
+   "L_hash": null,
+   "last_row": {
+    "Q_inf": 8192,
+    "F_hat": 1.5,
+    "G_hat": 4.0,
+    "Q_step": 131072,
+    "K": 3,
+    "seq": 8192
+   }
+  },
+  {
+   "model": "mixtral-8x7b",
+   "workload": "pretraining (single step)",
+   "L_b": null,
+   "U_b": 1978320.06350708,
+   "M_tok": 45760118784.0,
+   "c_inf": 2.685271903157117e-10,
+   "c_L": null,
+   "c_U": 4.323240664748446e-05,
+   "cert": null,
+   "ach": 160998.24601246315,
+   "status": "measured U (L error)"
+  },
+  {
+   "model": "qwen3-235b-a22b",
+   "workload": "pretraining (single step)",
+   "L_b": null,
+   "U_b": 8231655.4384765625,
+   "M_tok": 108765052928.0,
+   "c_inf": 1.1701345886182726e-10,
+   "c_L": null,
+   "c_U": 7.568290748615488e-05,
+   "cert": null,
+   "ach": 646788.0551716991,
+   "status": "measured U (L error)"
+  },
+  {
+   "model": "deepseek-v3",
+   "workload": "pretraining (single step)",
+   "L_b": 10294725.453155518,
+   "U_b": 21846670.579071045,
+   "M_tok": 177920196608.0,
+   "c_inf": 7.061213950706408e-11,
+   "c_L": 5.786147750183312e-05,
+   "c_U": 0.00012278915488838174,
+   "cert": 819426.7714554183,
+   "ach": 1738924.15306433,
+   "status": "pod"
+  }
+ ],
+ "table2": {
+  "K": {
+   "8192": {
+    "U": {
+     "a": 1050673152.0001221,
+     "s": 25277898760.0,
+     "b_per_token": 3085681.0009765625,
+     "n": 9,
+     "resid_rel_max": 2.365407107102005e-15,
+     "Ks": [
+      2,
+      4,
+      8,
+      12,
+      16,
+      24,
+      32,
+      48,
+      64
+     ],
+     "knee_K": null,
+     "segment": "all K (no knee seen: transient or steady throughout)",
+     "transient_b_per_token": null,
+     "marginals": {
+      "4-2": 3085681.0009765625,
+      "8-4": 3085681.0009765625,
+      "12-8": 3085681.0009765625,
+      "16-12": 3085681.0009765625,
+      "24-16": 3085681.0009765625,
+      "32-24": 3085681.0009765625,
+      "48-32": 3085681.0009765625,
+      "64-48": 3085681.0009765625
+     }
+    },
+    "L": {
+     "a": -6979583999.9999695,
+     "s": 6979649536.0,
+     "b_per_token": 852008.0,
+     "n": 9,
+     "resid_rel_max": 4.3723243442164395e-15,
+     "Ks": [
+      2,
+      4,
+      8,
+      12,
+      16,
+      24,
+      32,
+      48,
+      64
+     ],
+     "knee_K": null,
+     "segment": "all K (no knee seen: transient or steady throughout)",
+     "transient_b_per_token": null,
+     "marginals": {
+      "4-2": 852008.0,
+      "8-4": 852008.0,
+      "12-8": 852008.0,
+      "16-12": 852008.0,
+      "24-16": 852008.0,
+      "32-24": 852008.0,
+      "48-32": 852008.0,
+      "64-48": 852008.0
+     }
+    },
+    "L_coarse_diag": {
+     "a": 7282494570.6666565,
+     "s": 6827289668.571429,
+     "b_per_token": 833409.3833705358,
+     "n": 9,
+     "resid_rel_max": 0.09128220375259992,
+     "Ks": [
+      2,
+      4,
+      8,
+      12,
+      16,
+      24,
+      32,
+      48,
+      64
+     ],
+     "knee_K": null,
+     "segment": "all K (no knee seen: transient or steady throughout)",
+     "transient_b_per_token": null,
+     "marginals": {
+      "4-2": 852008.0,
+      "8-4": 852008.0,
+      "12-8": 852008.0,
+      "16-12": 852008.0,
+      "24-16": 606943.875,
+      "32-24": 852008.0,
+      "48-32": 852008.0,
+      "64-48": 974540.0625
+     }
+    },
+    "M": {
+     "a": 1.0,
+     "s": 246007136780288.0,
+     "b_per_token": 30030168064.0,
+     "n": 9,
+     "resid_rel_max": 2.032461360852942e-15,
+     "Ks": [
+      2,
+      4,
+      8,
+      12,
+      16,
+      24,
+      32,
+      48,
+      64
+     ],
+     "knee_K": null,
+     "segment": "all K (no knee seen: transient or steady throughout)",
+     "transient_b_per_token": null,
+     "marginals": {
+      "4-2": 30030168064.0,
+      "8-4": 30030168064.0,
+      "12-8": 30030168064.0,
+      "16-12": 30030168064.0,
+      "24-16": 30030168064.0,
+      "32-24": 30030168064.0,
+      "48-32": 30030168064.0,
+      "64-48": 30030168064.0
+     }
+    },
+    "knee_pred": 15.576274705214612,
+    "knee_m2_pred": 9.33145847833776,
+    "b_steady_pred": 437576.50165862776,
+    "Ks_measured": [
+     2,
+     4,
+     8,
+     12,
+     16,
+     24,
+     32,
+     48,
+     64
+    ]
+   },
+   "32768": {
+    "U": {
+     "a": 1050673152.0,
+     "s": 38297378844.0,
+     "b_per_token": 1168743.2508544922,
+     "n": 5,
+     "resid_rel_max": 0.0,
+     "Ks": [
+      2,
+      3,
+      4,
+      6,
+      8
+     ],
+     "knee_K": null,
+     "segment": "all K (no knee seen: transient or steady throughout)",
+     "transient_b_per_token": null,
+     "marginals": {
+      "3-2": 1168743.2508544922,
+      "4-3": 1168743.2508544922,
+      "6-4": 1168743.2508544922,
+      "8-6": 1168743.2508544922
+     }
+    },
+    "L": {
+     "a": -12214271999.999992,
+     "s": 12214534144.0,
+     "b_per_token": 372758.0,
+     "n": 5,
+     "resid_rel_max": 6.246026827926089e-16,
+     "Ks": [
+      2,
+      3,
+      4,
+      6,
+      8
+     ],
+     "knee_K": null,
+     "segment": "all K (no knee seen: transient or steady throughout)",
+     "transient_b_per_token": null,
+     "marginals": {
+      "3-2": 372758.0,
+      "4-3": 372758.0,
+      "6-4": 372758.0,
+      "8-6": 372758.0
+     }
+    },
+    "L_coarse_diag": {
+     "a": 3846250496.0000076,
+     "s": 12214534144.0,
+     "b_per_token": 372758.0,
+     "n": 5,
+     "resid_rel_max": 2.698252348464133e-16,
+     "Ks": [
+      2,
+      3,
+      4,
+      6,
+      8
+     ],
+     "knee_K": null,
+     "segment": "all K (no knee seen: transient or steady throughout)",
+     "transient_b_per_token": null,
+     "marginals": {
+      "3-2": 372758.0,
+      "4-3": 372758.0,
+      "6-4": 372758.0,
+      "8-6": 372758.0
+     }
+    },
+    "M": {
+     "a": 1.0,
+     "s": 984028547121151.9,
+     "b_per_token": 30030168063.999996,
+     "n": 5,
+     "resid_rel_max": 3.8108650515992664e-16,
+     "Ks": [
+      2,
+      3,
+      4,
+      6,
+      8
+     ],
+     "knee_K": null,
+     "segment": "all K (no knee seen: transient or steady throughout)",
+     "transient_b_per_token": null,
+     "marginals": {
+      "3-2": 30030168064.0,
+      "4-3": 30030168064.0,
+      "6-4": 30030168064.0,
+      "8-6": 30030168064.0
+     }
+    },
+    "knee_pred": 3.894068676303653,
+    "knee_m2_pred": 2.33286461958444,
+    "b_steady_pred": 437576.50165862776,
+    "Ks_measured": [
+     2,
+     3,
+     4,
+     6,
+     8
+    ]
+   }
+  },
+  "axes": {
+   "Q_roll": {
+    "exp_U": {
+     "exponent": -0.5661407417273934,
+     "r2": 0.859229493833563,
+     "n": 4
+    },
+    "exp_L": {
+     "exponent": -0.6503620376320336,
+     "r2": 0.9076977657623432,
+     "n": 4
+    },
+    "n": 4
+   },
+   "Q_step": {
+    "exp_U": null,
+    "exp_L": null,
+    "n": 0
+   },
+   "Q_inf": {
+    "exp_U": null,
+    "exp_L": null,
+    "n": 1
+   },
+   "F_hat": {
+    "exp_U": null,
+    "exp_L": null,
+    "n": 1
+   },
+   "G_hat": {
+    "exp_U": {
+     "exponent": -0.049305383835997946,
+     "r2": 0.4361263488673681,
+     "n": 5
+    },
+    "exp_L": {
+     "exponent": 0.0,
+     "r2": 1.0,
+     "n": 5
+    },
+    "n": 5
+   },
+   "d": {
+    "exp_U": {
+     "exponent": 2.029126635166409,
+     "r2": 0.9951605200321986,
+     "n": 4
+    },
+    "exp_L": {
+     "exponent": 2.9453263041712625,
+     "r2": 0.9978671481620989,
+     "n": 4
+    },
+    "n": 4
+   }
+  }
+ },
+ "rollout": {
+  "p0": [
+   {
+    "model": "llama3-1b",
+    "family": "Dense",
+    "L_b": 19569.750791549683,
+    "U_b": 38249.78515625,
+    "cert": 4892.437697887421,
+    "att": 9562.4462890625,
+    "mac_per_token": 1772617728.0,
+    "L_stale": false,
+    "status": "measured; inference 4 B/tok one RU",
+    "inference_one_ru": true,
+    "U_provisional": null,
+    "L_provisional": false,
+    "L_floor_b": null,
+    "new_planner": true,
+    "U_prev_b": 65388.05078125
+   },
+   {
+    "model": "llama3-8b",
+    "family": "Dense",
+    "L_b": 84746.69135284424,
+    "U_b": 124802.015625,
+    "cert": 21186.67283821106,
+    "att": 31200.50390625,
+    "mac_per_token": 9652142080.0,
+    "L_stale": false,
+    "status": "measured; inference 4 B/tok one RU",
+    "inference_one_ru": true,
+    "U_provisional": null,
+    "L_provisional": false,
+    "L_floor_b": null,
+    "new_planner": true,
+    "U_prev_b": 211822.046875
+   },
+   {
+    "model": "llama3-70b",
+    "family": "Dense",
+    "L_b": 314651.131064415,
+    "U_b": 525069.203125,
+    "cert": 78662.78276610374,
+    "att": 131267.30078125,
+    "mac_per_token": 80239132672.0,
+    "L_stale": false,
+    "status": "measured; inference 4 B/tok one RU",
+    "inference_one_ru": true,
+    "U_provisional": null,
+    "L_provisional": false,
+    "L_floor_b": null,
+    "new_planner": true,
+    "U_prev_b": 987018.03125
+   },
+   {
+    "model": "llama3-405b",
+    "family": "Dense",
+    "L_b": 1501264.6558551788,
+    "U_b": 2105267.8125,
+    "cert": 375316.1639637947,
+    "att": 526316.953125,
+    "mac_per_token": 437570764800.0,
+    "L_stale": false,
+    "status": "measured; inference 4 B/tok one RU",
+    "inference_one_ru": true,
+    "U_provisional": null,
+    "L_provisional": false,
+    "L_floor_b": null,
+    "new_planner": true,
+    "U_prev_b": 3637347.78125
+   },
+   {
+    "model": "mixtral-8x7b",
+    "family": "MoE",
+    "L_b": 133674.682888031,
+    "U_b": 225979.546875,
+    "cert": 33418.67072200775,
+    "att": 56494.88671875,
+    "mac_per_token": 14896070656.0,
+    "L_stale": false,
+    "status": "measured; inference 4 B/tok one RU",
+    "inference_one_ru": true,
+    "U_provisional": null,
+    "L_provisional": false,
+    "L_floor_b": null,
+    "new_planner": true,
+    "U_prev_b": 44540410.5078125
+   },
+   {
+    "model": "qwen3-235b-a22b",
+    "family": "MoE",
+    "L_b": 25645.0,
+    "U_b": 277322300.4765625,
+    "cert": 6411.25,
+    "att": 69330575.11914062,
+    "mac_per_token": 34184101888.0,
+    "L_stale": true,
+    "status": "measured (L stale); **U provisional** (planner fallback: fine: legal partition, not an attack); **L provisional** (certificate below the P + tokens floor); inference 4 B/tok one RU; U at previous planner (redo at `f4baa2d7be` pending)",
+    "inference_one_ru": true,
+    "U_provisional": "planner fallback: fine",
+    "L_provisional": true,
+    "L_floor_b": 448409.4765625,
+    "new_planner": false,
+    "U_prev_b": 277322300.4765625
+   },
+   {
+    "model": "deepseek-v3",
+    "family": "MoE",
+    "L_b": 57050.5,
+    "U_b": 347018659.1816406,
+    "cert": 14262.625,
+    "att": 86754664.79541016,
+    "mac_per_token": 56647483392.0,
+    "L_stale": true,
+    "status": "measured (L stale); **U provisional** (planner fallback: fine: legal partition, not an attack); **L provisional** (certificate below the P + tokens floor); inference 4 B/tok one RU; U at previous planner (redo at `f4baa2d7be` pending)",
+    "inference_one_ru": true,
+    "U_provisional": "planner fallback: fine",
+    "L_provisional": true,
+    "L_floor_b": 1286843.681640625,
+    "new_planner": false,
+    "U_prev_b": 347018659.1816406
+   }
+  ],
+  "fits": {
+   "llama3-1b": {
+    "L": {
+     "r": 18541.803742364256,
+     "I0": 1144136461.3713722,
+     "n": 3,
+     "Qs": [
+      131072,
+      1048576,
+      4194304
+     ],
+     "r2": 0.9999976798204759
+    },
+    "U": {
+     "r": 36639.900673865064,
+     "I0": 929669551.2938309,
+     "n": 3,
+     "Qs": [
+      131072,
+      1048576,
+      4194304
+     ],
+     "r2": 0.9999221512972294
+    }
+   },
+   "llama3-8b": {
+    "L": {
+     "r": 81895.98729042929,
+     "I0": 5160732503.541016,
+     "n": 3,
+     "Qs": [
+      131072,
+      1048576,
+      4194304
+     ],
+     "r2": 0.9998722567356009
+    },
+    "U": {
+     "r": 124071.1973518285,
+     "I0": 2641782202.9155273,
+     "n": 3,
+     "Qs": [
+      131072,
+      1048576,
+      4194304
+     ],
+     "r2": 0.9999584821015518
+    }
+   },
+   "llama3-70b": {
+    "L": {
+     "r": 404660.259111479,
+     "I0": 10595576480.783203,
+     "n": 3,
+     "Qs": [
+      131072,
+      1048576,
+      4194304
+     ],
+     "r2": 0.9879189018163884
+    },
+    "U": {
+     "r": 507465.4435687263,
+     "I0": 54939951155.6521,
+     "n": 3,
+     "Qs": [
+      131072,
+      1048576,
+      4194304
+     ],
+     "r2": 0.9990618061288498
+    }
+   },
+   "llama3-405b": {
+    "L": {
+     "r": 821752.4500612532,
+     "I0": 712520190702.5714,
+     "n": 2,
+     "Qs": [
+      131072,
+      1048576
+     ],
+     "r2": 1.0
+    },
+    "U": {
+     "r": 1502605.0357142857,
+     "I0": 631937723830.8572,
+     "n": 2,
+     "Qs": [
+      131072,
+      1048576
+     ],
+     "r2": 1.0
+    }
+   },
+   "mixtral-8x7b": {
+    "L": {
+     "r": 50157.82244219099,
+     "I0": 87573775458.85715,
+     "n": 2,
+     "Qs": [
+      131072,
+      1048576
+     ],
+     "r2": 1.0
+    },
+    "U": {
+     "r": 151776.61607142858,
+     "I0": 77807412370.2857,
+     "n": 2,
+     "Qs": [
+      131072,
+      1048576
+     ],
+     "r2": 1.0
+    }
+   },
+   "qwen3-235b-a22b": {
+    "L": null,
+    "U": null
+   },
+   "deepseek-v3": {
+    "L": null,
+    "U": null
+   }
+  }
+ }
+}

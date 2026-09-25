@@ -1,0 +1,16 @@
+{"kind": "measured", "model": "llama3-1b", "Q_roll": 8192, "U_b": 365844.5, "L_b": 365844.5, "P_over_Q": 365840.5, "status": "measured"}
+{"kind": "measured", "model": "llama3-1b", "Q_roll": 32768, "U_b": 91464.125, "L_b": 91464.125, "P_over_Q": 91460.125, "status": "measured"}
+{"kind": "measured", "model": "llama3-1b", "Q_roll": 131072, "U_b": 39253.03125, "L_b": 27662.220901489258, "P_over_Q": 22865.03125, "status": "measured"}
+{"kind": "measured", "model": "llama3-1b", "Q_roll": 1048576, "U_b": 38249.78515625, "L_b": 19569.750791549683, "P_over_Q": 2858.12890625, "status": "measured"}
+{"kind": "measured", "model": "llama3-8b", "Q_roll": 8192, "U_b": 1960517.0, "L_b": 1960517.0, "P_over_Q": 1960513.0, "status": "measured"}
+{"kind": "measured", "model": "llama3-8b", "Q_roll": 32768, "U_b": 490132.25, "L_b": 490132.25, "P_over_Q": 490128.25, "status": "measured"}
+{"kind": "measured", "model": "llama3-8b", "Q_roll": 131072, "U_b": 155304.0625, "L_b": 134095.80531311035, "P_over_Q": 122532.0625, "status": "measured"}
+{"kind": "measured", "model": "llama3-8b", "Q_roll": 1048576, "U_b": 124802.015625, "L_b": 84746.69135284424, "P_over_Q": 15316.5078125, "status": "measured"}
+{"kind": "measured", "model": "llama3-70b", "Q_roll": 8192, "U_b": 17225030.0, "L_b": 17225030.0, "P_over_Q": 17225026.0, "status": "measured"}
+{"kind": "measured", "model": "llama3-70b", "Q_roll": 32768, "U_b": 4306260.5, "L_b": 4306260.5, "P_over_Q": 4306256.5, "status": "measured"}
+{"kind": "measured", "model": "llama3-70b", "Q_roll": 131072, "U_b": 1142104.125, "L_b": 1105558.1111831665, "P_over_Q": 1076564.125, "status": "measured"}
+{"kind": "measured", "model": "llama3-70b", "Q_roll": 1048576, "U_b": 525069.203125, "L_b": 314651.131064415, "P_over_Q": 134570.515625, "status": "measured"}
+{"kind": "measured", "model": "llama3-405b", "Q_roll": 8192, "U_b": 99085304.0, "L_b": 99085304.0, "P_over_Q": 99085300.0, "status": "measured"}
+{"kind": "measured", "model": "llama3-405b", "Q_roll": 32768, "U_b": 24771329.0, "L_b": 24771329.0, "P_over_Q": 24771325.0, "status": "measured"}
+{"kind": "measured", "model": "llama3-405b", "Q_roll": 131072, "U_b": 6323907.25, "L_b": 6257850.096412659, "P_over_Q": 6192831.25, "status": "measured"}
+{"kind": "measured", "model": "llama3-405b", "Q_roll": 1048576, "U_b": 2105267.8125, "L_b": 1501264.6558551788, "P_over_Q": 774103.90625, "status": "measured"}

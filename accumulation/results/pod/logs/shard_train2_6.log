@@ -1,0 +1,20 @@
+[coarse] bound symbols: {'upper_coarse': True, 'lower_coarse': True, 'wp_coarse': True}; versions {'upper': 'eab50c6955', 'lower': 'ac6c3bb0e3', 'coarse': 'f4baa2d7be', 'adw': 'cf4205165a', 'extract': '332385d416', 'wp': 'ba12ab8bf8'}
+[coarse] shard 6/8: 3 graphs
+[coarse] 73 cells, 287 existing rows, 60 cells to run on 3 graphs; RSS cap 60000 MB (~/.veritor/mem_guardian.py kills >2.5 GB processes; cells above that are recorded as oom-guard)
+[coarse] graph llama3-8b local-sgd tokens=196608 seq=8192 K=24: 1 policy points, stages ['upper', 'wp']
+  [child] llama3-8b local-sgd tokens=196608 seq=8192 K=24: 54792 ops extracted in 72.1s; all_macs=7.329e+15 credited=5.904e+15
+  [child]   F_hat=1.5 G_hat=4: U=607720243392 L=160532004864 L_wp=160530432000 (3.09e+06 / 8.17e+05 B/tok)   
+[coarse]   ok: 1 rows, peak RSS 5661 MB, 157s
+[coarse] graph llama3-8b local-sgd tokens=1048576 seq=8192 K=2: 4 policy points, stages ['lower', 'upper']
+  [child] llama3-8b local-sgd tokens=1048576 seq=8192 K=2: 4566 ops extracted in 86.4s; all_macs=3.909e+16 credited=3.149e+16
+  [child]   F_hat=1.5 G_hat=1: U=1402872512776 L=157594527945 (1.34e+06 / 1.5e+05 B/tok)   
+  [child]   F_hat=1.5 G_hat=10: U=952718590216 L=69561590020 (9.09e+05 / 6.63e+04 B/tok)   
+  [child]   F_hat=1.5 G_hat=100: U=901178982664 L=25187323678 (8.59e+05 / 2.4e+04 B/tok)   
+  [child]   F_hat=1.5 G_hat=1000: U=901178982664 L=16068911108 (8.59e+05 / 1.53e+04 B/tok)   
+  [361 HiGHS incumbent lines suppressed]
+[coarse]   ok: 4 rows, peak RSS 2490 MB, 14918s
+[coarse] graph deepseek-v3 pretrain-moe tokens=131072 seq=8192 K=1: 1 policy points, stages ['lower', 'upper', 'wp']
+  [child] deepseek-v3 pretrain-moe tokens=131072 seq=8192 K=1: 8112 ops extracted in 35.0s; all_macs=3.062e+16 credited=2.332e+16
+  [child]   F_hat=1.5 G_hat=4: U=2863486806140 L=1349350254596 L_wp=0 (2.18e+07 / 1.03e+07 B/tok)   
+  [394 HiGHS incumbent lines suppressed]
+[coarse]   ok: 1 rows, peak RSS 1217 MB, 4868s

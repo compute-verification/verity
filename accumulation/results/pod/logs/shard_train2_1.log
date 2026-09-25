@@ -1,0 +1,21 @@
+[coarse] bound symbols: {'upper_coarse': True, 'lower_coarse': True, 'wp_coarse': True}; versions {'upper': 'eab50c6955', 'lower': 'ac6c3bb0e3', 'coarse': 'f4baa2d7be', 'adw': 'cf4205165a', 'extract': '332385d416', 'wp': 'ba12ab8bf8'}
+[coarse] shard 1/8: 4 graphs
+[coarse] 73 cells, 287 existing rows, 60 cells to run on 4 graphs; RSS cap 60000 MB (~/.veritor/mem_guardian.py kills >2.5 GB processes; cells above that are recorded as oom-guard)
+[coarse] graph llama3-8b local-sgd tokens=65536 seq=8192 K=8: 1 policy points, stages ['lower', 'upper']
+  [child] llama3-8b local-sgd tokens=65536 seq=8192 K=8: 18264 ops extracted in 36.1s; all_macs=2.443e+15 credited=1.968e+15
+  [child]   F_hat=1.5 G_hat=4: U=203273863232 L=16061046788 (3.1e+06 / 2.45e+05 B/tok)   
+  [178 HiGHS incumbent lines suppressed]
+[coarse]   ok: 1 rows, peak RSS 3006 MB, 14111s
+[coarse] graph llama3-8b local-sgd tokens=262144 seq=8192 K=8: 1 policy points, stages ['lower', 'upper']
+  [child] llama3-8b local-sgd tokens=262144 seq=8192 K=8: 18264 ops extracted in 38.8s; all_macs=9.772e+15 credited=7.872e+15
+  [child]   F_hat=1.5 G_hat=4: U=307429703904 L=16062619652 (1.17e+06 / 6.13e+04 B/tok)   
+  [45 HiGHS incumbent lines suppressed]
+[coarse]   ok: 1 rows, peak RSS 2650 MB, 2394s
+[coarse] graph llama3-70b local-sgd tokens=262144 seq=8192 K=2: 1 policy points, stages ['upper', 'wp']
+  [child] llama3-70b local-sgd tokens=262144 seq=8192 K=2: 11382 ops extracted in 64.4s; all_macs=8.034e+16 credited=6.451e+16
+  [child]   F_hat=1.5 G_hat=4: U=1025050116320 L=131772874752 L_wp=131770777600 (3.91e+06 / 5.03e+05 B/tok)   
+[coarse]   ok: 1 rows, peak RSS 1525 MB, 1638s
+[coarse] graph llama3-405b local-sgd tokens=393216 seq=8192 K=3: 1 policy points, stages ['upper', 'wp']
+  [child] llama3-405b local-sgd tokens=393216 seq=8192 K=3: 26871 ops extracted in 164.8s; all_macs=6.508e+17 credited=5.228e+17
+  [child]   F_hat=1.5 G_hat=4: U=6720384172296 L=1542851788800 L_wp=1542848643072 (1.71e+07 / 3.92e+06 B/tok)   
+[coarse]   ok: 1 rows, peak RSS 3772 MB, 9066s
