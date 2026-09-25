@@ -176,7 +176,7 @@ def test_research_must_import_as_research_telemetry_not_be_repaired(tmp_path):
                        env=_env(PYTHONPATH=f"{INTEGRATION}{os.pathsep}{REPO / 'packages' / 'verity' / 'src'}"), capture_output=True, text=True)
     if r.returncode == 0:
         pytest.skip("`research` is importable from site-packages in this interpreter; the missing-package path cannot be exercised here")
-    assert "tools/research/src" in r.stderr and "row_pod.sh" in r.stderr, r.stderr
+    assert "tools/research/src" in r.stderr and "verity-vllm row" in r.stderr, r.stderr
     assert "sys.path.append" not in Path(sid.__file__).read_text() and "sys.path.insert" not in Path(sid.__file__).read_text()
 
 
@@ -343,22 +343,18 @@ def test_shipped_and_r9_copies_of_hidden_gpu_are_identical():
 
 # ---- runners set VERITOR_REPO from their own tree -------------------------------------------------------------------------------------------------
 
-@pytest.mark.parametrize("script,args", [("verity_vllm/ops/row_pod.sh", ["some-row", "ROLE", "org/repo", "rev"]),
-                                         ("verity_vllm/ops/canary.sh", ["r18-test"])])
-def test_runners_refuse_a_foreign_veritor_repo_before_doing_anything(tmp_path, script, args):
+@pytest.mark.parametrize("argv", [[PY, "-m", "verity_vllm.pipeline.cli", "row", "run", "some-row", "ROLE", "org/repo", "rev"],
+                                  ["bash", "verity_vllm/ops/canary.sh", "r18-test"]])
+def test_runners_refuse_a_foreign_veritor_repo_before_doing_anything(tmp_path, argv):
     other = tmp_path / "other"
     other.mkdir()
-    r = subprocess.run(["bash", str(INTEGRATION / script), *args], cwd=INTEGRATION, env=_env(VERITOR_REPO=str(other), PATH=os.environ.get("PATH", "")),
+    r = subprocess.run(argv, cwd=INTEGRATION, env=_env(VERITOR_REPO=str(other), PATH=os.environ.get("PATH", ""), PYTHONPATH=PP),
                        capture_output=True, text=True, timeout=60)
     assert r.returncode == 3, (r.stdout, r.stderr)
     assert "PRECHECK_FAIL_SOURCE_IDENTITY" in r.stderr and str(other) in r.stderr
     assert not list(tmp_path.glob("**/stages.txt"))
 
 
-def test_row_pod_exports_veritor_repo_from_its_own_tree_and_ignores_the_default_path():
-    src = (INTEGRATION / "verity_vllm" / "ops" / "row_pod.sh").read_text()
-    assert 'cd "${VERITOR_REPO:-/workspace/cp/veritor}"' not in src
-    assert 'export VERITOR_REPO=$TREE_SELF' in src
-    assert "verity_vllm.pipeline.source_identity" in src and "PRECHECK_FAIL_SOURCE_IDENTITY" in src
+def test_canary_exports_veritor_repo_from_its_own_tree_and_ignores_the_default_path():
     can = (INTEGRATION / "verity_vllm" / "ops" / "canary.sh").read_text()
     assert 'cd "${VERITOR_REPO:-/workspace/cp/veritor}"' not in can and 'export VERITOR_REPO=$TREE_SELF' in can

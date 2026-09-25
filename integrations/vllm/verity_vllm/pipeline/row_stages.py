@@ -418,11 +418,7 @@ class SingleRow(Row):
             self.log(f"acquisition manifest for the capture: {d}/manifest.json (ACQUIRE_ENGINE={self.env.environ.get('ACQUIRE_ENGINE') or 'v2'})")
         if cm.match_phase == "all" and self.snap_def != "all" and os.path.isfile(f"{d}/manifest.json"):
             self.form_b()
-        snapmax = ["--snapshot-max-bytes", cm.snapshot_max_bytes] if cm.snapshot_max_bytes else []
-        cmd_m = self.cli("match", "--case", self.role, "--workload", self.wl, "--out", f"{d}/match", "--checkpoint-dir", self.ck,
-                         "--phase", cm.match_phase, "--python-gpu", self.py, "--python-cpu", self.py312, "--max-num-seqs", str(self.B),
-                         "--snapshot-steps", self.snap_steps or self.snap_def, *snapmax, "--skip", SKIP,
-                         "--engine-arg", f"gpu_memory_utilization={self.gpu_util}", "--cards-dir", f"{d}/match/cards", py=self.py312)
+        cmd_m = self.match_cmd()
         t0 = int(time.time())
         self.tl("stage.match", "start")
         self.gpu_exclusive("match")
@@ -461,6 +457,14 @@ class SingleRow(Row):
             self.log("MATCH FAIL -> stop")
             self.tl("row", "end", ("ok", "false"), ("stopped_at", "match"))
             raise Stop(11)
+
+    def match_cmd(self) -> list[str]:
+        d, cm = self.d, self.cm
+        snapmax = ["--snapshot-max-bytes", cm.snapshot_max_bytes] if cm.snapshot_max_bytes else []
+        return self.cli("match", "--case", self.role, "--workload", self.wl, "--out", f"{d}/match", "--checkpoint-dir", self.ck,
+                        "--phase", cm.match_phase, "--python-gpu", self.py, "--python-cpu", self.py312, "--max-num-seqs", str(self.B),
+                        "--snapshot-steps", self.snap_steps or self.snap_def, *snapmax, "--skip", SKIP,
+                        "--engine-arg", f"gpu_memory_utilization={self.gpu_util}", "--cards-dir", f"{d}/match/cards", py=self.py312)
 
     def stochastic(self) -> bool:
         try:

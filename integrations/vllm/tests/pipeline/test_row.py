@@ -38,7 +38,8 @@ _GNU_TIMEOUT = shutil.which("timeout") is not None and b"GNU" in subprocess.run(
 
 
 def _opts(tmp: Path, *argv: str, environ: dict[str, str] | None = None, row: str = ROW):
-    env = {k: v for k, v in os.environ.items() if k not in ("MATCH_IMPL", "MATCH_PIPELINE", "MATCH_PHASE", "VERITOR_REPO")}
+    env = {k: v for k, v in os.environ.items()
+           if k not in ("MATCH_IMPL", "MATCH_PIPELINE", "MATCH_PHASE", "VERITOR_REPO", "RESEARCH_RUN_DIR", "RESEARCH_RUN_ID")}
     env.update(environ or {})
     return cli.parse("row", ["run", row, "LLAMA32_1B", "unsloth/Llama-3.2-1B", "9535bd9b", "--sweep-dir", str(tmp), "--py", sys.executable,
                              *argv], env)

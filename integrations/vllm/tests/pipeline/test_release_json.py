@@ -177,15 +177,32 @@ def test_pod_release_sh_writes_through_the_module_and_checks():
     assert subprocess.run(["bash", "-n", str(HERE / "pod_release.sh")]).returncode == 0
 
 
-def test_row_pod_sh_reads_the_release_through_the_module():
-    """row_pod's REL-09 line: from release_json.py (tree-local first), the record USED is the one copied into the evidence, and a
+def test_the_row_reads_the_release_through_the_module(tmp_path, monkeypatch):
+    """The row's REL-09 line: from `release-json line` (tree-local first), the record USED is the one copied into the evidence, and a
     released tree takes the release's collector build dir unless the caller set NATIVE_COLLECT_BUILD."""
-    s = (HERE / "row_pod.sh").read_text()
-    assert 'json.load(open("/workspace/cp/RELEASE.json"))' not in s      # no direct pod-wide read any more
-    assert re.search(r'REL_OUT=\$\(python3 verity_vllm/pipeline/release_json\.py line "\$TREE_HERE"', s)
-    assert 'cp "$REL_SRC" "$D/release.json"' in s and 'cp /workspace/cp/RELEASE.json "$D/release.json"' not in s
-    assert "NCB_SET=${NATIVE_COLLECT_BUILD:-}" in s and "get('build_dirs') or {}).get('native_collect')" in s
-    assert subprocess.run(["bash", "-n", str(HERE / "row_pod.sh")]).returncode == 0
+    from tests.pipeline.test_row import _row
+    rel = tmp_path / "RELEASE.json"
+    rel.write_text(json.dumps({"tag": "r16-int-3", "build_dirs": {"native_collect": str(tmp_path / "nc_rel")}}))
+
+    def prepared(*flags, environ=None):
+        r = _row(tmp_path / "sweep", "--native-collect-default", str(tmp_path / "nc_default"), *flags, environ=environ)
+        monkeypatch.setattr(r, "release_line", lambda fallback: (f"r16-int-3|commit=a2dabe493 tree={r.tree}", str(rel)))
+        for step in ("precheck_identity", "precheck_target", "admission", "install_signal_forwarding"):
+            monkeypatch.setattr(r, step, lambda: None)
+
+        def shape():
+            r.B = r.I = r.O = r.LP = r.T = 1
+            r.ck = r.tgt = r.hidden_so = r.code9 = ""
+        monkeypatch.setattr(r, "shape", shape)
+        r.prepare()
+        return r
+    r = prepared()
+    assert json.loads((Path(r.d) / "release.json").read_text()) == json.loads(rel.read_text())
+    assert r.ncb == r.child_env["NATIVE_COLLECT_BUILD"] == str(tmp_path / "nc_rel")
+    assert json.loads((Path(r.d) / "tree.json").read_text())["release_line"].startswith("r16-int-3|commit=a2dabe493 ")
+    for pinned in (prepared("--native-collect-build", str(tmp_path / "nc_own")),
+                   prepared(environ={"NATIVE_COLLECT_BUILD": str(tmp_path / "nc_own")})):
+        assert pinned.ncb == pinned.child_env["NATIVE_COLLECT_BUILD"] == str(tmp_path / "nc_own")
 
 
 def test_pod_release_busy_pattern_names_the_stage_processes_launched_outside_row_pod():

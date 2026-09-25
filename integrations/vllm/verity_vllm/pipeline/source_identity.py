@@ -40,7 +40,7 @@ try:
     from research.telemetry import source_identity as _sid
 except ImportError as _e:  # pragma: no cover - environment defect, reported by name
     raise ImportError("verity_vllm.pipeline.source_identity needs the `research` package of the tree of record on sys.path "
-                      "(PYTHONPATH must include <repo>/tools/research/src; row_pod.sh exports it); nothing is appended here on purpose: "
+                      "(PYTHONPATH must include <repo>/tools/research/src; verity-vllm row exports it); nothing is appended here on purpose: "
                       f"{_e}") from _e
 
 INTEGRATION_REL = Path("integrations") / "vllm"

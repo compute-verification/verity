@@ -106,32 +106,32 @@ def test_cli_fails_by_name_with_rc_3_and_writes_the_record(tmp_path):
     assert json.loads(out.read_text())["verdict"] == "WAIVED"
 
 
-def test_row_pod_runs_the_preflight_before_build_and_canary_waives_by_name():
-    rp = (TREE / "verity_vllm" / "ops" / "row_pod.sh").read_text()
-    i_tf = rp.index("verity_vllm.target_family --row")
-    i_build = rp.index("tl stage.build start") if "tl stage.build start" in rp else rp.index("# ------------------------------------------------------------------------------- Build")
-    assert i_tf < i_build, "target-family preflight must precede the Build stage"
-    assert "PRECHECK_FAIL_TARGET_FAMILY" in rp and "--build-summary" in rp
+def test_the_row_runs_the_preflight_before_build_and_canary_waives_by_name(tmp_path, monkeypatch):
+    from tests.pipeline.test_row import _row
+    r = _row(tmp_path, "--stages", "build,match")
+    seen = []
+    for step in ("precheck_identity", "shape", "admission", "build", "match"):
+        monkeypatch.setattr(r, step, lambda step=step: seen.append(step))
+    monkeypatch.setattr(r, "target_family", lambda *a, out: seen.append(("target_family", r.stages, a)) or
+                        (3, "PRECHECK_FAIL_TARGET_FAMILY: Build target 9.0 != row family 8.9"))
+    assert r.run() == 3
+    assert seen == ["precheck_identity", "shape", ("target_family", "build,match", ())]
+    assert "precheck-target FAIL" in (tmp_path / r.row / "stages.txt").read_text()
     can = (TREE / "verity_vllm" / "ops" / "canary.sh").read_text()
     assert 'TARGET_FAMILY_WAIVER=${TARGET_FAMILY_WAIVER:-"canary $TAG"}' in can
 
 
-def test_row_pod_match_argv_carries_the_explicit_snapshot_cap_only_when_set():
-    """[r18-int-2; cheap M-0082, F-r18-cheap-2] MATCH_SNAP_MAX_BYTES -> --snapshot-max-bytes N; unset -> byte-identical argv to int-1."""
-    probe = r'''
-    PY312=python3; ROLE=B0; WL=w.json; D=/tmp/d; CK=/tmp/ck; B=1; SNAP_DEF=0,1; SKIP=x; GPU_UTIL=0.5; PY=python3
-    CMD_M=(verity-vllm match --case "$ROLE" --workload "$WL" --out "$D/match" --checkpoint-dir "$CK" --phase all
-         --python-gpu "$PY" --python-cpu "$PY312" --max-num-seqs "$B" --snapshot-steps "${MATCH_SNAP_STEPS:-$SNAP_DEF}"
-         ${MATCH_SNAP_MAX_BYTES:+--snapshot-max-bytes "$MATCH_SNAP_MAX_BYTES"} --skip "$SKIP"
-         --engine-arg "gpu_memory_utilization=$GPU_UTIL" --cards-dir "$D/match/cards")
-    printf '%s\n' "${CMD_M[@]}"
-    '''
-    src = (TREE / "verity_vllm" / "ops" / "row_pod.sh").read_text()
-    assert '${MATCH_SNAP_MAX_BYTES:+--snapshot-max-bytes "$MATCH_SNAP_MAX_BYTES"}' in src
-    env = {k: v for k, v in os.environ.items() if k != "MATCH_SNAP_MAX_BYTES"}
-    unset = subprocess.run(["bash", "-c", probe], capture_output=True, text=True, env=env, check=True).stdout.split("\n")
+def test_the_row_match_argv_carries_the_explicit_snapshot_cap_only_when_set(tmp_path):
+    """[r18-int-2; cheap M-0082, F-r18-cheap-2] --snapshot-max-bytes N (MATCH_SNAP_MAX_BYTES) arms the Match's cap; unset -> the argv without it."""
+    from tests.pipeline.test_row import _row
+
+    def argv(*flags, environ=None):
+        r = _row(tmp_path, *flags, environ=environ)
+        r.B, r.ck, r.snap_def, r.snap_steps = 1, "/tmp/ck", "0,1", None
+        return r.match_cmd()
+    unset = argv()
     assert "--snapshot-max-bytes" not in unset
-    st = subprocess.run(["bash", "-c", probe], capture_output=True, text=True, env={**env, "MATCH_SNAP_MAX_BYTES": "33554432"}, check=True).stdout.split("\n")
-    i = st.index("--snapshot-max-bytes")
-    assert st[i + 1] == "33554432" and st[i - 1] == "0,1" and st[i + 2] == "--skip"
-    assert [x for x in st if x != "--snapshot-max-bytes" and x != "33554432"] == unset
+    for st in (argv("--snapshot-max-bytes", "33554432"), argv(environ={"MATCH_SNAP_MAX_BYTES": "33554432"})):
+        i = st.index("--snapshot-max-bytes")
+        assert st[i + 1] == "33554432" and st[i - 1] == "0,1" and st[i + 2] == "--skip"
+        assert [x for x in st if x != "--snapshot-max-bytes" and x != "33554432"] == unset
