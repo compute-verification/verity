@@ -152,7 +152,7 @@ def committed(store: LocalStore, leaf: str = "blake3", *, t_total: float = 0.4, 
     doc["measurements"].append({"name": V.COMMIT, "value": commit, "unit": "s"})
     fp = doc["workload_fingerprint"]
     if B != 4096:
-        fp.update(B=B, instances={**fp["instances"], "range": [0, B]})
+        fp.update(B=B, instances={**fp["instances"], "range": [0, B], "manifest_sha256": V.STREAMS[FP8_ADA_MMA.name](B)})
         doc["measurements"] = [m for m in doc["measurements"] if not m["name"].startswith(("rate.", "overhead.", "vu."))]
     if protocol:
         doc["protocol"], doc["sweep"] = dict(PROTOCOL), dict(SWEEP)
@@ -303,6 +303,40 @@ def test_the_batch_is_the_backends_and_the_best_p_wins(store: LocalStore) -> Non
     faster = committed(store, t_total=1.5, commit=0.3, B=16384)                                   # 9.1e3/s: the larger batch wins
     cell = line(V.build(store))["cells"]["B-Ligero"]
     assert cell.artifact == faster and cell.throughput["instances"] == 16384 and cell.batching["total"] == 16384
+
+
+def test_synthetic_sets_are_streams_identified_by_generator_seed_and_n(store: LocalStore) -> None:
+    """A sweep point above 4,096 counts when its instances are a prefix-consistent extension of the declared synthetic set: the
+    same generator and seed over [0, n) (the digest hashes n, instance i does not depend on it)."""
+
+    for name, recipe in V.STREAMS.items():
+        assert recipe(4096) == T.FROZEN_INSTANCES[name]["manifest_sha256"], name
+    big = committed(store, t_total=1.5, commit=0.3, B=16384)
+    cell = line(V.build(store))["cells"]["B-Ligero"]
+    assert cell.artifact == big and "instances [0, 16384) of vu-k1536-fp8-ada (a prefix-consistent extension" in V.render_markdown(V.build(store))
+    ref = {**T.FROZEN_INSTANCES[FP8_ADA_MMA.name], "range": [0, 16384]}
+    assert V.instance_range(FP8_ADA_MMA, {**ref, "manifest_sha256": V.STREAMS[FP8_ADA_MMA.name](16384)}) == ("stream", None)
+    assert V.instance_range(FP8_ADA_MMA, {**ref, "manifest_sha256": V.STREAMS[FP8_ADA_MMA.name](16384), "seed": 1}) == (None, None)
+    assert V.instance_range(FP8_ADA_MMA, {**ref, "manifest_sha256": V.STREAMS[FP8_ADA_MMA.name](8192)}) == (None, None)
+    assert V.instance_range(FP8_ADA_MMA, {**ref, "range": [0, 2048], "manifest_sha256": V.STREAMS[FP8_ADA_MMA.name](2048)}) == ("prefix", None)
+    assert V.instance_range(NVFP4_SM120, {**T.FROZEN_INSTANCES[NVFP4_SM120.name], "range": [0, 65536],
+                                          "manifest_sha256": V.STREAMS[NVFP4_SM120.name](65536)}) == ("stream", None)
+    # the legacy (parity) rules keep today's frozen range
+    assert V.build(store, V.LEGACY).cells == []
+
+
+def test_the_a100_fixture_has_no_stream_so_a_larger_batch_repeats_instances(store: LocalStore) -> None:
+    ref = T.FROZEN_INSTANCES[FIRST.name]
+    how, why = V.instance_range(FIRST, {**ref, "range": [0, 16384]})
+    assert how is None and "repeats instances" in why and "4096 instances" in why
+    assert V.instance_range(FIRST, {**ref, "range": [0, 64]}) == ("prefix", None)
+    doc = result(t_total=4.0)
+    doc["workload_fingerprint"].update(B=16384, instances={**ref, "range": [0, 16384]})
+    doc["measurements"] = [m for m in doc["measurements"] if not m["name"].startswith(("rate.", "overhead.", "vu."))]
+    art = put(store, doc)
+    views = V.build(store)
+    got = next(r for r in views.rejected if r["artifact"] == art)["codes"]
+    assert ("I", why) in got
 
 
 def test_reasons_come_in_the_specs_order(store: LocalStore) -> None:
