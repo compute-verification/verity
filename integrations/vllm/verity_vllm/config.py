@@ -284,6 +284,8 @@ class CommitConfig:
     hot_engine: str = option("--hot-engine", env="HOT_ENGINE", default="0", help="1 = run the Commit on the pod's hot worker")
     commit_timeout: int | None = option("--commit-timeout", env="COMMIT_TIMEOUT", type=int, default=None,
                                         help="seconds (default scales with B and the envelope; TP: 7200)")
+    vu_export: str = option("--vu-export", env="VU_EXPORT", default="1",
+                            help="0 opts out: the Commit exports a sample of the row's VUs as instance sets (verity_vllm.pipeline.vu_export)")
 
 
 # ---------------------------------------------------------------------------------------------------------------- where it runs

@@ -45,6 +45,11 @@ KINDS: dict[str, str] = {
                        "sampled_replay_p*.json + commit_summary.json (compat); meta {row, verdict, ...}; refs.build, refs.match",
     "execution-evidence/v1": "application evidence of one stage's execution (timeline.jsonl, schedule / arrival facts) — not "
                              "telemetry; meta {row, stage}",
+    "vllm-vu-set/v1": "one subcircuit's instance set exported from a passing row's sampled VUs (verity_vllm.pipeline.vu_export): payload "
+                      "tree = manifest.json + index.json + flat port arrays; meta {set, relation, n, content_digest, row, model, run, "
+                      "run_root, program_digest, manifest_digest, source, epoch}; refs.run_record",
+    "vllm-vu-export/v1": "one row's VU export: payload = export.json (draw, per-family counts, sets); meta {row, model, run, run_root}; "
+                         "refs.sets = the vllm-vu-set/v1 artifacts, refs.run_record",
 }
 
 

@@ -1,14 +1,33 @@
 # Changelog: `verity_numerical` (the bench renderers and their rules)
 
-## 2026-09-26: Table 2's columns are headed A-GKR, B-Ligero, C-Flock and D-SP1 (labelled change to published renders)
+## 2026-09-26: the family columns are named A-GKR, B-Ligero, C-Flock and D-SP1 (labelled change to the published entities)
 
-- The views' markdown prints each family column under its Glossary name: `SP1` is now `D-SP1` and `Flock` is now `C-Flock`,
-  in Table 2's header, Table 3's cell labels and Table 1's family rows. A-GKR and B-Ligero are unchanged.
-- The entities render follows: `table2.column_labels` maps each family to the same name, and `backend_families[].column`
-  is that header.
+- The published entities render names each family column by its Glossary name: `table2.column_labels` maps every family
+  to it, and `backend_families[].column` is that name (`SP1` is now `D-SP1`, `Flock` is now `C-Flock`; A-GKR and B-Ligero
+  are unchanged).
+- The markdown developer render prints the same names in Table 2's header, Table 3's cell labels and Table 1's family rows.
 - Column ids stay `SP1` and `Flock`: they key the cells, `--format json`'s `table2.columns` and the parity gate against
-  the frozen tables (`tables.py`, whose own headers are unchanged). The first published render after this change differs
-  from the previous one only in those headers and labels; re-record the parity baseline with it.
+  the frozen tables (`tables.py`, whose own headers are unchanged), so `views --parity` is unaffected. The first published
+  entities render after this change differs from the previous one only in those two fields.
+
+## 2026-09-26: the markdown tables are retired; backend profiles match main
+
+- The docs site replaces the markdown Tables 1–3 and the table digests for reading (Daniel, 2026-09-26). The steward's
+  `[[render]]` entry is now `published = "entities"`: it renders only the entities JSON as `<stamp>-tables.json`, and runs
+  `views --parity` as an internal gate that publishes nothing (a difference is a `RENDER-FAILED` line). The markdown
+  renderers stay as developer tools.
+- Entities backend profiles, following the docs site's gaps note of 20260926T0210Z:
+  - the SHA-256 binding the live transcript (and route (a)'s `root_F`) maps to `cr/sha-256`;
+  - Flock's Ligerito Merkle trees are a proof-internal hash: BLAKE3 in the CPU prover, SHA-256 in Flock-CUDA
+    (`cr/blake3`, `cr/sha-256`);
+  - B-Ligero's malicious-verifier ZK also rests on `random-oracle`, because its Merkle leaves are unsalted
+    (ligero PROTOCOL.md, red-team-zk-2 G3);
+  - an `unknown` ZK text (SP1) maps to `no-zk`: Verity claims no ZK for it;
+  - B-fs's `honest-verifier` has the role "zero knowledge only (soundness does not rest on it)";
+  - a backend's claims and `implementations` cover only its configurations with a result in the render, when any has one;
+    the others are listed as `declared_without_results`, such as SP1's committed guests, which aren't on main yet.
+- Poseidon2 row leaves are admissible, flagged as algebraic, and never count toward a standard-hash claim. The render
+  already did this; `verity.commitments.rowleaf`'s wording now matches.
 
 ## 2026-09-26: the README Glossary's terms in docstrings and help
 

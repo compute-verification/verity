@@ -137,7 +137,12 @@ serving and proving overhead) render as a labelled preview with
 at the labelled switch: an entry with `published = "views"` publishes
 `views --published` as `<stamp>-tables.md` and the frozen tables as the
 drill-down `<stamp>-tables-frozen.md`; `python -m verity_numerical.bench.switch`
-renders the switch digest (`backends/numerical/CHANGELOG.md`).
+renders the switch digest (`backends/numerical/CHANGELOG.md`). Since
+2026-09-26 the docs site replaces the markdown tables for reading (Daniel):
+the steward's entry is `published = "entities"`, which renders only the
+entities JSON `<stamp>-tables.json` (the site's input, mirrored to the
+Project store's `internal/tables-render/latest.json`) and runs `--parity` as an
+internal correctness gate that publishes nothing.
 
 ## Proof model: interactive is fine, transferability is not required
 

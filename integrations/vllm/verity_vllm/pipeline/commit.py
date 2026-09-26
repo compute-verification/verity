@@ -1080,6 +1080,7 @@ class Options:
     checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="[MAN-09] derive the weights of record in-process from this pinned checkpoint snapshot + the Program of record (--program-dir / " "--programs-root) when --weights-of-record is not given; the record is written to <out>/weights_of_record.json")
     replay_max: int = option("--replay-max", type=int, default=2000, help="sampled replay: cap on the stratified sample per pair (never below one VU per stratum; recorded)")
     replay_workers: int | None = option("--replay-workers", type=int, default=None, help="sampled replay: evaluator threads (default min(16, cpus/2); recorded)")
+    vu_export_dir: str | None = option("--vu-export-dir", env="VERITY_VU_EXPORT_DIR", default=None, help="opt-in, not on the record: after pair 0's replay PASSes, export a stratified sample of its VUs as benchmark instance sets into this directory (verity_vllm.pipeline.vu_export; limits.json / provenance.json there are read)")
     replay_target: list[str] | None = option("--replay-target", action="append", default=None, metavar="OP_PATH[@STEP]", help="sampled replay: add EVERY VU of a module (at a request-local step) to the sample, outside the cap -- the targeted negatives of record " "(a single-identity fault at a mid-phase step); repeatable; recorded under sample.targeted")
     program_digest: str | None = option("--program-digest", default=None, help="[R15 COORD 5] the Build's Program digest of record (B=1: build_request's program_digest; B>=2: gprog's workload digest): the " "required manifest's program_digest must equal it or the Commit fails closed as wrong-Program; also the binding map's key digest")
     required_manifest: str | None = option("--required-manifest", default=None, help="[R14 MAN-01] the Program/query-derived required-value manifest (verity_vllm.pipeline.cli build ...): every " "identity it lists (step, invocation, op_path, output_member, element range, request, rank) must be covered by a committed " "tensor of every instrumented run (coverage_check); replaces the REL-02 counts+classes source, which stays as the labelled fallback")
@@ -2314,7 +2315,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                         print(f"[delta] replay cache: pair {pair} key differs from pair {_v0['pair']}'s in {_d0}: own replay (root {rc.run_root.hex()[:16]} vs {_v0['run_root'][:16]})", flush=True)
                     TL.start("validate.sampled_replay", pair=pair, cached=_cached is not None)
                     try:
-                        from verity_vllm.check import executed_prefix as EPX, oracle_compare as OC; from verity_vllm.check.replay import replay_codes as RC, driver as SR
+                        from verity_vllm.check import executed_prefix as EPX, oracle_compare as OC; from verity_vllm.check.replay import replay_codes as RC, driver as SR; from verity_vllm.pipeline import vu_export as VUX
                         from verity_vllm.query.manifest import format as MF
                         if _cached is not None:
                             raise _ReplayReused()
@@ -2508,8 +2509,8 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                                 if isinstance(_cv, dict) and _cv.get("ok"):            # in place: row["commit"]["coverage"] and rc.extra["coverage"] alias one dict
                                     _cv["ok"], _cv["error"] = False, "R17-27 one mechanism: " + "; ".join(_recon["problems"][:3])
                         sr["value_source"] = dict(_rd.record(), forked_children=sr.pop("value_reads_in_children", None))
-                        print(f"[delta] C2 SAMPLED REPLAY + LINKAGE opened values (pair {pair}): {OV.filed(row['commit'], 'replay_linkage', sr['value_source'])}",
-                              flush=True)
+                        print(f"[delta] C2 SAMPLED REPLAY + LINKAGE opened values (pair {pair}): {OV.filed(row['commit'], 'replay_linkage', sr['value_source'])}", flush=True)
+                        VUX.after_replay(args.vu_export_dir, sr, pair, rc.run_root, _progs, _bm, _rd, _wp, _arr, required_manifest, _sr_kw, _loaded, _digs, versions, eng)
                         if _rc_key is not None and sr.get("result") is not None:
                             replay_cache[_rc_key] = {"pair": pair, "run_root": rc.run_root.hex(), "sr": sr, "lk": lk, "artifact": str(Path(args.out) / f"sampled_replay_p{pair}.json"),
                                                      "seed": (sr.get("sample") or {}).get("seed"), "code": versions.get("git_head")}
@@ -2914,8 +2915,7 @@ def summarize(rows: list[dict], step_rows: list[dict], args: Options, versions: 
                   f"| generated tokens/s | {ct:.1f} | {itk:.1f} | {(itk / ct - 1) * 100:+.2f} % | |",
                   f"| peak GPU alloc (GB) | {statistics.fmean(ctrl[p]['gpu_mem']['torch_max_allocated_gb'] for p in pairs):.3f} | {statistics.fmean(inst[p]['gpu_mem']['torch_max_allocated_gb'] for p in pairs):.3f} | | |",
                   f"| host RSS after run (MB) | {statistics.fmean(ctrl[p]['host_mem_kb']['rss_after'] or 0 for p in pairs) / 1024:.0f} | {statistics.fmean(inst[p]['host_mem_kb']['rss_after'] or 0 for p in pairs) / 1024:.0f} | | |",
-                  "", f"tokens identical across all runs/arms: **{tokens_eq}** (BI=1)", "",
-                  "| component (instrumented, per run, mean) | ms | bytes | note |", "|---|---:|---:|---|"]
+                  "", f"tokens identical across all runs/arms: **{tokens_eq}** (BI=1)", "", "| component (instrumented, per run, mean) | ms | bytes | note |", "|---|---:|---:|---|"]
         sb = inst[pairs[0]]["commit"]["spans_bytes"]
         for k in sp_keys:
             lines.append(f"| {k} | {spans[k] * 1e3:.2f} | {sb.get(k, '')} | host wall of the component (hashing/root on the worker thread, overlapped) |")
