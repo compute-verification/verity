@@ -1,5 +1,19 @@
 # Changelog: `verity_numerical` (the bench renderers and their rules)
 
+## 2026-09-26: FP8 GEMM coordinate input sets (fp8-ada, fp8-hopper)
+
+- `gemm-coordinate` generates the two FP8 lines, `sm89.mma.m16n8k32.e4m3` (RTX 4090) and `sm90.wgmma.m64n8k32.e4m3` (H100), at any
+  K that is a multiple of 32.
+  - Ports: `x` and `w` are E4M3 bytes (`u8`), uniform over the 254 finite codes; `y` is the FP32 accumulator word (`u32`). There is
+    no epilogue, as the backends' fp8 relations take it.
+  - The relation's `definition` is `GemmAccumulatorE4m3`, and its `dot` names the IR reference.
+  - Outputs come from `verity.ml.kernels.HOPPER_E4M3_DOT` and from the new `ADA_E4M3_DOT` (sm_89's step, finite domain, over
+    `models.ADA_E4M3_M16N8K32`). Both equal the `verity.ml.tc` chains the backends use.
+  - A scalar reference's provenance entry is `templates.reference_digest`: the sha256 of its id, bindings and core sources.
+- `generate --suite fp8` covers both lines at K = 2048 and 8192, at the captured #101 sizes (6,272 and 1,920) and at the RTX 4090's
+  largest batches (16,384 and 8,192). Each smaller set is the larger one's prefix.
+- `generate --suite` writes each set under `<out>/n<n>/sets/<name>/`, so a suite can hold one subcircuit at several sizes.
+
 ## 2026-09-26: the family columns are named A-GKR, B-Ligero, C-Flock and D-SP1 (labelled change to the published entities)
 
 - The published entities render names each family column by its Glossary name: `table2.column_labels` maps every family

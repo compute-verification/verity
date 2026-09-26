@@ -230,15 +230,38 @@ class Subcircuit:
         return ok
 
     def program_digests(self, instance_statics: Sequence[Mapping[str, int]] = ({},)) -> dict[str, str]:
-        """``{definition id: verity.ir.codec.program_digest}`` of the subcircuit's own Definition at each instance-statics binding."""
+        """``{definition id: verity.ir.codec.program_digest}`` of the subcircuit's own Definition at each instance-statics binding.
+        A ``ScalarReference`` (a silicon function no core Definition wraps yet) has no Program: its entry is
+        :func:`reference_digest`."""
+        from verity.evaluation import ScalarReference
         from verity.ir.codec import program_digest
         from verity.ir.program import Program
 
         out = {}
         for st in {tuple(sorted(s.items())): s for s in instance_statics}.values():
             d = self.definition(**st)
-            out[d.id] = program_digest(Program(d))
+            if isinstance(d, ScalarReference):
+                out[f"{d.id}{json.dumps(d.bindings, sort_keys=True, separators=(',', ':'))}"] = reference_digest(d)
+            else:
+                out[d.id] = program_digest(Program(d))
         return out
+
+
+#: The core sources a ``ScalarReference``'s function is defined by (its model, its total rules, the reference itself).
+REFERENCE_SOURCES = ("ml/kernels.py", "ml/tc/models.py", "ml/tc/total_fp8.py", "ml/tc/term.py")
+
+
+def reference_digest(ref: Any) -> str:
+    """sha256 of the reference's id, its bindings and the :data:`REFERENCE_SOURCES` of ``verity``, in that order."""
+    from pathlib import Path
+
+    import verity
+
+    root = Path(verity.__file__).resolve().parent
+    h = hashlib.sha256(f"{ref.id}|{json.dumps(ref.bindings, sort_keys=True)}".encode())
+    for rel in REFERENCE_SOURCES:
+        h.update(b"|" + rel.encode() + b"|" + (root / rel).read_bytes())
+    return h.hexdigest()
 
 
 @dataclass(frozen=True)
@@ -275,11 +298,27 @@ GEMM_SEMANTICS = {s.semantics: s for s in (
     _GemmSemantics("sm90.wgmma.m64n8k16.bf16", "sm90-wgmma-bf16", "sm90 wgmma · BF16", ("HopperBF16WgmmaDot16_v1",),
                    "HopperBF16WgmmaDot16_v1", "Gemm_v2", "hopper-bf16-wgmma", "HopperBF16WgmmaDot16"),
 )}
-#: Census GEMM semantics with a ``verity.ml.tc`` model but no IR Definition here: a subcircuit binds, it cannot be generated.
+@dataclass(frozen=True)
+class _Fp8Semantics:
+    semantics: str
+    slug: str
+    display: str
+    reference: str               # the ScalarReference in verity.ml.kernels: K/32 E4M3 steps from +0
+    set_slug: str
+    model: str                   # its verity.ml.tc.models GroupSum (what backends chain with)
+
+
+#: FP8 lines: the output is the FP32 accumulator word itself (no epilogue), as the backends' fp8 relations take it.
+GEMM_FP8 = {s.semantics: s for s in (
+    _Fp8Semantics("sm89.mma.m16n8k32.e4m3", "sm89-mma-e4m3", "sm89 mma · FP8 (E4M3)", "ADA_E4M3_DOT", "ada-e4m3", "ADA_E4M3_M16N8K32"),
+    _Fp8Semantics("sm90.wgmma.m64n8k32.e4m3", "sm90-wgmma-e4m3", "sm90 wgmma · FP8 (E4M3)", "HOPPER_E4M3_DOT", "hopper-e4m3-wgmma",
+                  "HOPPER_E4M3_K32"),
+)}
+FP8_DEFINITION = "GemmAccumulatorE4m3"
+FP8_RULE = "y = the FP32 accumulator of K/32 ascending DOT steps over (x, w) from +0 (no epilogue)"
+#: Census GEMM semantics with a ``verity.ml.tc`` model but no IR target here: a subcircuit binds, it cannot be generated.
 GEMM_MODEL_ONLY = {
     "sm90.mma.m16n8k16.bf16": ("sm90-mma-bf16", "sm90 mma · BF16", "bf16"),
-    "sm89.mma.m16n8k32.e4m3": ("sm89-mma-e4m3", "sm89 mma · FP8 (E4M3)", "e4m3"),
-    "sm90.wgmma.m64n8k32.e4m3": ("sm90-wgmma-e4m3", "sm90 wgmma · FP8 (E4M3)", "e4m3"),
     "sm120.mma.m16n8k64.e2m1.nvf4": ("sm120-mma-e2m1-nvf4", "sm120 mma · FP4 (NVFP4, E2M1)", "e2m1"),
 }
 GEMM_RULE = "y = f2fp_bf16(ascending k16 chain of DOT over (x, w) from +0)"
@@ -294,11 +333,54 @@ def _gemm_sample(sub: Subcircuit, key: Key, j: int) -> Draw:
     return Draw({"x": x, "w": w}, {}, {"tile": t, "hx": hx, "hw": hw})
 
 
+def e4m3_finite_words(r: np.ndarray) -> np.ndarray:
+    """E4M3 bytes uniform over the 254 finite codes from 32 random bits each: ``v = r mod 254``, the byte ``v + (v >= 127)``
+    (skipping the NaN codes 0x7F and 0xFF)."""
+    v = np.asarray(r, dtype=np.uint32) % np.uint32(254)
+    return (v + (v >= 127)).astype(np.uint8)
+
+
+E4M3_RECIPE = "E4M3 bytes uniform over the 254 finite codes: v = r mod 254 for a 32-bit stream word r, byte v + (v >= 127)"
+
+
+def _fp8_sample(sub: Subcircuit, key: Key, j: int) -> Draw:
+    K, tile = sub.params["K"], int(sub.recipe.get("tile", 32))
+    t = j // tile
+    return Draw({"x": e4m3_finite_words(stream_u32(key, ("x", t), K)), "w": e4m3_finite_words(stream_u32(key, ("w", j), K))},
+                {}, {"tile": t})
+
+
+def _finite_f32(outs: Mapping[str, Sequence[np.ndarray]]) -> np.ndarray:
+    return np.array([(int(np.asarray(y).reshape(-1)[0]) & 0x7F800000) != 0x7F800000 for y in outs["y"]], dtype=bool)
+
+
+def _fp8_coordinate(K: int, s: _Fp8Semantics, tile: int) -> Subcircuit:
+    if K % 32:
+        raise ValueError(f"gemm-coordinate {s.semantics}: K = {K} is not a multiple of 32")
+
+    def target(**_st: int) -> Any:
+        from verity.ml import kernels
+
+        return getattr(kernels, s.reference).bind(K=K)
+
+    ref_id = target().id
+    rel = {"subcircuit": f"GemmCoordinate<{K}>", "definition": FP8_DEFINITION, "dot": ref_id, "model": s.model, "statics": {"K": K},
+           "rule": FP8_RULE}
+    return Subcircuit(TEMPLATES["gemm-coordinate"], {"K": K, "datatype": "e4m3", "semantics": s.semantics}, f"gemm-coordinate/k{K}/{s.slug}",
+                      f"GemmCoordinate<{K}> · {s.display}", f"gemm-coordinate-{s.set_slug}-k{K}", rel,
+                      (Port("x", "u8", K), Port("w", "u8", K)), (Port("y", "u32", 1),), target, target, sampler=_fp8_sample,
+                      admit=_finite_f32, recipe={"tile": int(tile), "x": E4M3_RECIPE + "; one row per tile of `tile` draws", "w": E4M3_RECIPE})
+
+
 def gemm_coordinate(K: int, semantics: str = "sm80.mma.m16n8k16.bf16", datatype: str | None = None, tile: int = 32) -> Subcircuit:
     K = int(K)
     if K <= 0 or K % 16:
         raise ValueError(f"gemm-coordinate: K = {K} is not a positive multiple of 16")
     ports_in, ports_out = (Port("x", "u16", K), Port("w", "u16", K)), (Port("y", "u16", 1),)
+    if semantics in GEMM_FP8:
+        if datatype not in (None, "e4m3"):
+            raise ValueError(f"gemm-coordinate {semantics}: datatype is e4m3, not {datatype!r}")
+        return _fp8_coordinate(K, GEMM_FP8[semantics], tile)
     if semantics in GEMM_MODEL_ONLY:
         slug, disp, dt = GEMM_MODEL_ONLY[semantics]
 
@@ -308,7 +390,8 @@ def gemm_coordinate(K: int, semantics: str = "sm80.mma.m16n8k16.bf16", datatype:
         return Subcircuit(TEMPLATES["gemm-coordinate"], {"K": K, "datatype": dt, "semantics": semantics}, f"gemm-coordinate/k{K}/{slug}",
                           f"GemmCoordinate<{K}> · {disp}", f"gemm-coordinate-{slug}-k{K}", {}, ports_in, ports_out, none, none)
     if semantics not in GEMM_SEMANTICS:
-        raise ValueError(f"gemm-coordinate: unknown semantics {semantics!r} (one of {sorted(GEMM_SEMANTICS) + sorted(GEMM_MODEL_ONLY)})")
+        raise ValueError(f"gemm-coordinate: unknown semantics {semantics!r} "
+                         f"(one of {sorted(GEMM_SEMANTICS) + sorted(GEMM_FP8) + sorted(GEMM_MODEL_ONLY)})")
     s = GEMM_SEMANTICS[semantics]
     if datatype not in (None, "bf16"):
         raise ValueError(f"gemm-coordinate {semantics}: datatype is bf16, not {datatype!r}")
@@ -327,6 +410,13 @@ def gemm_coordinate(K: int, semantics: str = "sm80.mma.m16n8k16.bf16", datatype:
 
 
 def _gemm_identify(rel: Mapping[str, Any]) -> Subcircuit | None:
+    if rel.get("definition") == FP8_DEFINITION:
+        K = int(rel["statics"]["K"])
+        for s in GEMM_FP8.values():
+            sub = _fp8_coordinate(K, s, 32)
+            if rel.get("dot") == sub.relation["dot"]:
+                return sub
+        raise KeyError(f"gemm-coordinate: no FP8 semantics for DOT {rel.get('dot')!r}")
     if rel.get("definition") not in ("Gemm_v1", "Gemm_v2"):
         return None
     for s in GEMM_SEMANTICS.values():
@@ -619,7 +709,7 @@ def parse_subcircuit_id(sid: str) -> Subcircuit:
     params, _, sem = rest.partition("/")
     if tid == "gemm-coordinate":
         K = int(params.lstrip("k"))
-        for s, g in GEMM_SEMANTICS.items():
+        for s, g in [*GEMM_SEMANTICS.items(), *GEMM_FP8.items()]:
             if g.slug == sem:
                 return gemm_coordinate(K, s)
         for s, (slug, _d, _t) in GEMM_MODEL_ONLY.items():
