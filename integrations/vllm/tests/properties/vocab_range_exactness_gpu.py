@@ -6,7 +6,11 @@ record's digest and verdict without a GPU.
 It lives under tests/ because it seeds random generators and sets the engine's environment for its own process (lints P3, P7).  In the
 pod venv on a two-GPU pod, with the tree on PYTHONPATH as for gate (b):
 
-    $PY tests/properties/vocab_range_exactness_gpu.py --case B0 --out DIR
+    $PY tests/properties/vocab_range_exactness_gpu.py [--case tiny | ROLE] --out DIR
+
+`--case tiny` (the default) serves a tiny random-weight Llama-architecture model with the B0 checkpoint's tokenizer (4 heads, so it shards
+over two ranks; B0's vocabulary splits into unpadded halves): vLLM's own `VocabParallelEmbedding`, no checkpoint download.  A checkpoint
+role serves that checkpoint.
 """
 from __future__ import annotations
 
@@ -146,6 +150,25 @@ def _w_live_result(worker) -> dict[str, Any]:
             "names": sorted({nm for nm, _t in acquired}), "errors": len(st["rec"].errors), "error_msgs": st["rec"].errors[:4]}
 
 
+def make_tiny(tok_dir: str, out_dir: str, seed: int) -> dict[str, Any]:
+    import shutil
+
+    import torch
+    import transformers
+
+    base = json.loads(Path(tok_dir, "config.json").read_text())
+    cfg = transformers.LlamaConfig(vocab_size=int(base["vocab_size"]), hidden_size=128, intermediate_size=256, num_hidden_layers=2, num_attention_heads=4,
+                                   num_key_value_heads=2, max_position_embeddings=2048, tie_word_embeddings=False,
+                                   **{k: base.get(k) for k in ("bos_token_id", "eos_token_id", "pad_token_id")})
+    torch.manual_seed(seed)
+    transformers.AutoModelForCausalLM.from_config(cfg, torch_dtype=torch.bfloat16).save_pretrained(out_dir, safe_serialization=True)
+    for f in Path(tok_dir).iterdir():
+        if f.is_file() and f.name != "config.json" and f.suffix in (".json", ".txt", ".model") and not f.name.endswith(".index.json"):
+            shutil.copy(f, Path(out_dir, f.name))
+    return {"model": "tiny random-weight LlamaForCausalLM", "vocab": cfg.vocab_size, "heads": 4, "kv_heads": 2, "layers": 2, "hidden": 128, "seed": seed,
+            "tokenizer": tok_dir}
+
+
 def run(case: str, out: str, max_tokens: int = 8) -> dict[str, Any]:
     from verity_vllm.engine import engine_profile as prof
 
@@ -153,17 +176,24 @@ def run(case: str, out: str, max_tokens: int = 8) -> dict[str, Any]:
     import torch
     from vllm import LLM, SamplingParams
 
-    cp = prof.checkpoint_for(case, "manifests/checkpoints.json")
-    kw = prof.engine_kwargs(cp, replay=False, enforce_eager=True, tensor_parallel_size=X.WORLD)
+    if case == "tiny":
+        tok = prof.checkpoint_for("B0", "manifests/checkpoints.json")["local_path"]
+        d = str(Path(out, "tiny-llama"))
+        cp = {**make_tiny(tok, d, 20260926), "repo": "tiny", "revision": None}
+        kw = {"model": d, "tokenizer": d, "dtype": "bfloat16", "seed": 0, "max_model_len": 512, "gpu_memory_utilization": 0.5,
+              "tensor_parallel_size": X.WORLD, "enforce_eager": True}
+    else:
+        cp = prof.checkpoint_for(case, "manifests/checkpoints.json")
+        kw = prof.engine_kwargs(cp, replay=False, enforce_eager=True, tensor_parallel_size=X.WORLD)
     kw.update(enable_prefix_caching=False, max_num_seqs=4)
     doc: dict[str, Any] = {"schema": X.SCHEMA, "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "argv": sys.argv, "case": case,
-                           "model": cp.get("repo"), "revision": cp.get("revision"), "env_flags": env_flags,
+                           "model": cp.get("repo") if case != "tiny" else cp, "revision": cp.get("revision"), "env_flags": env_flags,
                            "environment": {"python": platform.python_version(), "torch": torch.__version__, "cuda": torch.version.cuda,
                                            "devices": [torch.cuda.get_device_name(i) for i in range(torch.cuda.device_count())],
                                            "vllm": __import__("vllm").__version__},
                            "engine_kwargs": {k: v for k, v in kw.items() if k not in ("model", "tokenizer")}}
     llm = LLM(**kw)
-    sp = SamplingParams(temperature=0.0, max_tokens=max_tokens)
+    sp = SamplingParams(temperature=0.0, max_tokens=max_tokens, ignore_eos=True)
     try:
         bare = [list(o.outputs[0].token_ids) for o in llm.generate(list(PROMPTS), sp, use_tqdm=False)]
         installed = llm.collective_rpc(_w_install)
@@ -199,7 +229,8 @@ def run(case: str, out: str, max_tokens: int = 8) -> dict[str, Any]:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="vocabulary-range exactness on a TP2 engine: the committed range values are the IR's, per rank")
-    ap.add_argument("--case", default="B0", help="checkpoint role (manifests/checkpoints.json); its vocabulary must split into unpadded halves")
+    ap.add_argument("--case", default="tiny", help="`tiny` (a random-weight model, B0's tokenizer) or a checkpoint role whose heads and vocabulary "
+                    "split over two ranks, the vocabulary into unpadded halves")
     ap.add_argument("--out", help=f"directory for {X.RECORD}")
     ap.add_argument("--verify", metavar="RECORD", help="check a record's digest and verdict (no GPU)")
     a = ap.parse_args(argv)
