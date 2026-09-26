@@ -180,12 +180,14 @@ def lower_call(
     session: str,
     compiled: str,
     instance_label: Callable[[int], str] = lambda unit: f"u{unit:06d}",
+    oracle: bool = True,
 ) -> Lowered:
     """The obligations of ``instances`` of ``spec`` (see the module docstring), the format-3 statement and witness.
 
     ``session`` and ``compiled`` (32-byte hex) are the binding every obligation carries.  Raises ``KeyError`` for a
     primitive with no guest gate, and ``ValueError`` when an instance's claimed returns are not what the IR oracle
-    computes (the guest would reject it) or when two table gates of one instance read one row.
+    computes (the guest would reject it; ``oracle=False`` commits them anyway, for negatives) or when two table
+    gates of one instance read one row.
     """
 
     prog, call = standalone_call(spec)
@@ -246,7 +248,7 @@ def lower_call(
         label = instance_label(inst.unit)
         transcript = {}
         values = evaluate_call(circuit, call, inst.args, transcript)
-        if list(values) != list(inst.returns):
+        if oracle and list(values) != list(inst.returns):
             raise ValueError(f"instance {inst.unit}: the claimed returns are not the IR oracle's")
         in_refs: list[str] = []
         start = 0
