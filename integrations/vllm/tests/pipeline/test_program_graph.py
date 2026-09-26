@@ -142,8 +142,11 @@ def test_catalog_deduplicates_specializations_across_rows(tmp_path):
     assert len(shards) == len({e["digest"] for e in ix.values()})
     assert all(PG.definition_digest(v["definition"]) == h for h, v in shards.items())
     ops = json.loads((tmp_path / "graphs" / "rowA.ops.json").read_text())["ops"]
-    attn = next(o for o in ops if o["definition"] == "Attention_v3")
-    assert attn["specs_enumerated"] == attn["varying"]["T"][1] - attn["varying"]["T"][0] + 1
+    for o in ops:                                          # a varying group: every value of its range; else its one spec
+        want = 1
+        for lo, hi in o["varying"].values():
+            want *= hi - lo + 1
+        assert o["specs_enumerated"] == want == len(o["definitions"])
     assert all(d["digest"] in shards for o in ops for d in o["definitions"] if d["id"])
     again = json.loads((tmp_path / "graphs" / "rowA.program.json").read_text())
     assert "definitions" not in again and again["definitions_index"]
