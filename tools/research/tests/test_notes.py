@@ -36,6 +36,36 @@ def test_checkpoint_goes_under_the_front_matter_newest_first_and_sets_status(tmp
     assert (row["state"], row["commit"], row["checkpoint_at"], row["text"]) == ("blocked", "abc1234", "21:00Z", "waiting on the pod")
 
 
+def test_checkpoint_survives_the_store_mounts_eagain_without_doubling_its_line(tmp_path, monkeypatch):
+    # the Project store's mount answers EAGAIN on rewrites of a recently written file, sometimes after the write landed
+    p = _report(tmp_path, "lane-e", "# lane-e\n", 5)
+    real, calls = Path.write_text, []
+
+    def flaky(self, data, *a, **kw):
+        calls.append(self.name)
+        if len(calls) == 1:
+            real(self, data, *a, **kw)
+            raise BlockingIOError(11, "Resource temporarily unavailable")
+        return real(self, data, *a, **kw)
+    monkeypatch.setattr(Path, "write_text", flaky)
+    monkeypatch.setattr(notes.time, "sleep", lambda s: None)
+    notes.checkpoint(tmp_path, "lane-e", "open", "after eagain", commit="abc1234", now=NOW)
+    assert len(calls) == 2 and p.read_text().count("after eagain") == 1
+
+
+@pytest.mark.parametrize("text, delay", [
+    ("WAIT moe67 r20260925-175229-a415 check-back 21:45Z agent bc-1: #4 Match", 45 * 60),
+    ("WAITING r1 on pod, check after 22:30Z; agent bc-1; next: fetch", 90 * 60),
+    ("WAIT a check-back 23:00Z, b check-back 21:20Z", 20 * 60),
+    ("WAIT r1 check-back 00:15Z", (3 * 60 + 15) * 60),
+    ("WAIT r1 check-back 20:50Z", 60),
+])
+def test_a_wait_checkpoint_names_the_one_shot_timer_that_wakes_the_lane(text, delay):
+    hint = notes.wake_hint(text, NOW)
+    assert f"subscribe_timer once=true delaySeconds={delay})" in hint and "not a cron timer" in hint
+    assert notes.wake_hint("done #101, next #4 check-back 21:45Z", NOW) is None and notes.wake_hint("WAIT r1, no time", NOW) is None
+
+
 def test_checkpoint_creates_the_report_for_a_new_lane(tmp_path):
     p = notes.checkpoint(tmp_path, "fresh", "open", "started", commit="none", now=NOW)
     assert p.name == "20260923T2100Z-report-fresh.md"

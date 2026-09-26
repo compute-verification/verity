@@ -2,7 +2,8 @@
 
   research run [--project P] [--stage S] [--timeout T] [--expect K=V ...] [--require-result] [--runs-dir D] [harness flags] -- CMD...
   research run [--tool NAME|module:NAME] [--scratch NAME ...] [--campaign C] [...] -- CMD...   # evidence store: derivation before, attempt after
-  research run --on MACHINE --project P [--source GITDIR] [--send FILE ...] [--env K=V ...] [--exclusive] [--mem-gb N [--mem-wait S]] [...] -- CMD...
+  research run --on MACHINE --project P [--source GITDIR] [--send FILE ...] [--env K=V ...] [--exclusive] [--mem-gb N [--mem-wait S]]
+               [--custody-ttl 6h | --no-custody-r2] [...] -- CMD...   # run custody on the store's remote is the default with --on
   research fetch <run-id> [--all]                # copy the machine's records (or every file, verified) into the local run dir
   research status [--runs-dir D] [--refresh] [--balance] [--all] [--json]
   research inspect <run-id|prefix|path> [--runs-dir D] [--json]
@@ -126,9 +127,13 @@ def cmd_run(argv: list[str]) -> int:
     ap.add_argument("--remote-json", default=None, help=argparse.SUPPRESS)
     ap.add_argument("--exclusive-lock", default=None, help=argparse.SUPPRESS)
     ap.add_argument("--custody-dir", default=None, help=argparse.SUPPRESS)   # machine side: the minted key + store.toml (store.custody)
-    ap.add_argument("--custody-r2", action="store_true", help="with --on: the machine publishes the attempt and every run file (logs included) to the "
-                                                               "store's remote with a key minted here, so custody does not depend on this machine (store.custody)")
-    ap.add_argument("--custody-ttl", default=None, metavar="TTL", help="with --custody-r2: the minted key's lifetime (default 6h; it must outlast the run)")
+    ap.add_argument("--custody-r2", dest="custody_r2", action="store_true", default=None,
+                    help="with --on (the default there): the machine publishes the attempt and every run file (logs included) to the "
+                         "store's remote with a key minted here, so custody does not depend on this machine (store.custody)")
+    ap.add_argument("--no-custody-r2", dest="custody_r2", action="store_false",
+                    help="with --on: no run custody on the remote; the records stay on the machine until `research fetch --all`")
+    ap.add_argument("--custody-ttl", default=None, metavar="TTL", help="with --custody-r2: the minted key's lifetime (default 6h; it must outlast the run "
+                                                                       "and its upload)")
     ap.add_argument("--expect", action="append", default=[], metavar="K=V", help="expected workload fingerprint entry (recorded separately from what the workload observes)")
     ap.add_argument("--require-result", action="store_true", help="a zero exit without a valid result.json exits 65")
     ap.add_argument("--stage", default="run", help="stage name recorded in the job (default: run)")
@@ -141,6 +146,8 @@ def cmd_run(argv: list[str]) -> int:
     ap.add_argument("--campaign", default=os.environ.get("RESEARCH_CAMPAIGN"), help="campaign recorded in the attempt's conditions (default $RESEARCH_CAMPAIGN)")
     ap.add_argument("--source-identity", default=None, help=argparse.SUPPRESS)   # machine side: JSON {commit, tree, dirty} of the shipped source
     ns, harness_opts = ap.parse_known_args(opts)
+    if ns.claimed:
+        _survive_stray_signals()
     mem_reservation = os.environ.pop("RESEARCH_MEM_RESERVATION", None) if ns.claimed else None    # research.mem: this runner's, not the workload's
     if ns.mem_gb is not None and not ns.on:
         print("research run: --mem-gb admits a run on a shared machine (--on MACHINE); a local run has no reservation to take", file=sys.stderr)
@@ -148,6 +155,9 @@ def cmd_run(argv: list[str]) -> int:
     if (ns.custody_r2 or ns.custody_ttl) and not ns.on:
         print("research run: --custody-r2 / --custody-ttl are for --on MACHINE (a local run's records are already on this disk: "
               "`research data custody RUN --publish` puts them on the remote)", file=sys.stderr)
+        return 2
+    if ns.custody_r2 is False and ns.custody_ttl:
+        print("research run: --custody-ttl is the lifetime of the --custody-r2 key; --no-custody-r2 mints none", file=sys.stderr)
         return 2
     if ns.project:
         harness_opts = ["--project", ns.project, *harness_opts]
@@ -260,6 +270,22 @@ def cmd_run(argv: list[str]) -> int:
               f"(`research data custody {run_id}` from any machine)", file=sys.stderr)
         CU.runner_publish(run_dir, Path(ns.custody_dir), tool=prep.get("tool"), conditions=conds)
     return out
+
+
+def _survive_stray_signals() -> None:
+    """Machine side: the runner's argv carries the workload's command, so `pkill -f <pattern>` aimed at the workload also hits the runner,
+    which then died without recording or publishing the run.  SIGTERM and SIGHUP are logged and otherwise ignored: the runner keeps
+    supervising and publishes when the workload exits.  A run is stopped through its workload's process group (status.json `pgid`);
+    SIGKILL still ends the runner.  A Python handler, not SIG_IGN, so the workload it spawns gets the default disposition back at exec."""
+    import signal
+    import time
+
+    def note(signum: int, _frame: object) -> None:
+        print(f"research: runner got {signal.Signals(signum).name} at {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}, ignored: it records "
+              f"and publishes the run when the workload exits; stop the workload with `kill -TERM -<pgid>` (status.json)", file=sys.stderr, flush=True)
+
+    for s in (signal.SIGTERM, signal.SIGHUP):
+        signal.signal(s, note)
 
 
 CWD_SOURCE = "source"
@@ -473,11 +499,15 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
         hint = _source_identity_hint(Path(ns.source).expanduser())   # a shipped `git archive` has no .git: the machine gets what git knew here
         if hint:
             harness_args += ["--source-identity", json.dumps(hint, sort_keys=True)]
+    custody = ns.custody_r2 is not False
+    if not custody:
+        print(f"research run --on {ns.on}: --no-custody-r2: this run's records stay on the machine until `research fetch --all {run_id}`",
+              file=sys.stderr)
     try:
         rec = remote.launch(run_id=run_id, local_dir=run_dir, machine_name=ns.on, project=ns.project, command=command, harness_args=harness_args,
                             source=Path(ns.source).expanduser() if ns.source else None, sends=[Path(s).expanduser() for s in ns.send],
                             cwd=None, env=env, exclusive=ns.exclusive, mem_gb=ns.mem_gb, mem_wait_s=ns.mem_wait,
-                            custody_ttl=(ns.custody_ttl or "6h") if ns.custody_r2 else None)
+                            custody_ttl=(ns.custody_ttl or "6h") if custody else None)
     except remote.Refused as e:
         print(f"research run --on {ns.on}: refused: {e}", file=sys.stderr)
         return 3
