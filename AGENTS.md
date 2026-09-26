@@ -31,7 +31,8 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
  Its byte formats are pinned by `tests/randomness/vectors.json`.
  - `verity.proofs`: single statements and how a backend is judged on them,
  plus `proofs.profile.IntegrityProfile`, which records what verification
- established: the exhaustive facts, the two-stage law and δ. Consumers read
+ established: the exhaustive facts, a verifier's law over named levels of a
+ partition hierarchy (`verity.ir.partition.Level`) and δ. Consumers read
  it with their own utilities; their readers stay out of core. Its tests live
  in `tests/proofs/`.
  - `verity.commitments`: see its module docstring.
