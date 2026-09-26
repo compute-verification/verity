@@ -4,16 +4,18 @@
 # same datacenter.  Runs from the shipped tree (research run --source . --cwd source); KEY=VALUE arguments become the environment.
 #
 #   ROLE=verifier  REL=<rel>+blake3 [SET=<set tarball under inputs/>] [POINTS="1024 2048 4096"] [RUNS=5] [PORT=7200]
-#                  [FIRST_SIZE_TIMEOUT=5400] [PER_SIZE_TIMEOUT=1800] [OPERATOR=<lane>]
+#                  [ECHO_PORT=7201] [FIRST_SIZE_TIMEOUT=5400] [PER_SIZE_TIMEOUT=1800] [OPERATOR=<lane>]
 #       flock b684b12 + both Flock patches + this tree's live crate (release) and the flock-link selftest at 8 VUs of the set's K;
-#       then, size by size in POINTS order (capped at the set), the verifier's own statement of that size (leaf digests and prime
+#       then an echo on ECHO_PORT for the prover's RTT probe, and size by size in POINTS order (capped at the set), the verifier's own
+#       statement of that size (leaf digests and prime
 #       commitment from the set: tools/cell.py statement --verifier-side) and one `flock-link cell-serve` on PORT serving RUNS
 #       sessions (it serves the prime coins too).  A size that ends short of RUNS sessions ends the run (the prover stopped).
-#   ROLE=prover    REL=<rel>+blake3 VERIFIER=host:port RTT_TARGET=host:sshport [SET=...] [POINTS=...] [RUNS=5] [GATE=1]
-#                  [LOOPBACK=1] [OPERATOR=<lane>]
+#   ROLE=prover    REL=<rel>+blake3 VERIFIER=host:port RTT_TARGET=host:echoport [SET=...] [POINTS=...] [RUNS=5] [GATE=1]
+#                  [LOOPBACK=1] [RTT_WAIT=1800] [OPERATOR=<lane>]
 #       pod_bootstrap.sh, flock-link and verity-gkr-verify built from this tree, their tests; with GATE=1 the correctness gate at
 #       the first size (loopback verifier: honest accepted and admitted by tools/cell_gate.py except non_producer, a stale prime
-#       state and a Fiat-Shamir prime prover refused, the statement claimed as another relation refused); the RTT probe; then per
+#       state and a Fiat-Shamir prime prover refused, the statement claimed as another relation refused); the RTT probe (it waits
+#       up to RTT_WAIT s for the verifier's echo); then per
 #       size in POINTS (capped at the set): the statement (the serving commit timed), one warm-up session against a verifier on
 #       127.0.0.1 (the loopback probe), RUNS timed sessions against VERIFIER; the sweep stops when two doublings add < 2 % or a size
 #       fails.  result.json = the plateau (tools/cell.py finish), outputs.json = the other sizes.
@@ -71,7 +73,8 @@ if [ "$ROLE" = verifier ]; then
   $B selftest --vus 8 --k $K > $O/selftest-8.txt 2>&1
   echo "flock-link selftest (8 VUs, K=$K): $(grep -c '"pass":true' $O/selftest-8.txt) passed, $(grep -c '"pass":false' $O/selftest-8.txt) failed; $(grep SELFTEST $O/selftest-8.txt | cut -c1-200)"
   [ -n "$SET_DIR" ] || { echo "the verifier builds its own statement from an input set (SET=); the frozen set needs its bench-instances build"; exit 2; }
-  # an echo on ECHO_PORT for the prover's open-connection RTT probe (a TCP connect over RunPod's global network costs ~4x a round trip)
+  # an echo on ECHO_PORT for the prover's open-connection RTT probe (a TCP connect over RunPod's global network costs ~4x a round
+  # trip).  It starts once setup is done: the prover's probe waits for it, so its sessions (a 60 s connect retry) find the verifier up
   python3 -c "
 import socket, threading
 s = socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1); s.bind(('0.0.0.0', ${ECHO_PORT:-7201})); s.listen(16)
@@ -182,7 +185,8 @@ fi
 
 say "RTT probe to $RTT_TARGET"
 # RTT_TARGET: the verifier's echo (ECHO_PORT) gives the round trip on one open connection, the way the session's rounds travel; else
-# (e.g. its sshd) the median of 20 TCP connects, a failed one retried (a first connect over global networking can time out)
+# (e.g. its sshd) the median of 20 TCP connects, a failed one retried (a first connect over global networking can time out).  The
+# echo is up once the verifier's setup is done, so a refused or timed-out connect is retried for RTT_WAIT s (default 1800)
 read -r RTT RTT_KIND < <($PY -c "
 import socket, statistics as S, sys, time
 h, p = '$RTT_TARGET'.rsplit(':', 1); p = int(p); MAGIC = b'verity-rtt-probe\\n'
@@ -201,13 +205,15 @@ def open_rtt():
                 r += c.recv(8 - len(r))
             t.append((time.perf_counter() - a) * 1e3)
         return t
-t = None
-for _ in range(3):
+t = None; end = time.monotonic() + ${RTT_WAIT:-1800}
+while True:
     try:
         t = open_rtt()
         break
     except OSError:
-        time.sleep(1)
+        if time.monotonic() > end:
+            break
+        time.sleep(2)
 if t:
     print(round(S.median(t), 3), 'open'); sys.exit()
 t = []
