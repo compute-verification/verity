@@ -130,6 +130,13 @@ class Family:
     setup: str
     interaction: str
     note: str = ""
+    development: str = "active"
+
+
+#: Backend families kept in the repo and the tables but frozen (Daniel, 2026-09-26): tests keep passing and cells stay; no new
+#: features, no cells for new subcircuits, re-run only when a shared change would break their tests.  B-Ligero stays the ZK comparison.
+FROZEN = ("A-GKR", "B-Ligero", "SP1")
+NOT_ACTIVE = "not actively developed"
 
 
 #: Which composed backends a family column holds (Table 1's family row): route (a) stays A-GKR's (brief tables-switch).
@@ -149,8 +156,8 @@ FLOCK = T.Candidate(
     proof_classes=("NON_ZK_PROOF",), drilldown_classes=(),
     backend_names=("flock",))
 CANDIDATES = (*T.CANDIDATES, FLOCK)
-FAMILIES: tuple[Family, ...] = tuple(Family(c.id, c.proof_classes, c.description, c.setup, c.interaction, FAMILY_NOTES.get(c.id, ""))
-                                     for c in CANDIDATES)
+FAMILIES: tuple[Family, ...] = tuple(Family(c.id, c.proof_classes, c.description, c.setup, c.interaction, FAMILY_NOTES.get(c.id, ""),
+                                            NOT_ACTIVE if c.id in FROZEN else "active") for c in CANDIDATES)
 _FAMILY = {f.id: f for f in FAMILIES}
 _CANDIDATE = {c.id: c for c in CANDIDATES}
 
@@ -455,12 +462,13 @@ class Rules:
     headline_any_hardware: bool = False
     #: a fourth preview: the headline counts a cell whose ``omitted`` label names verifier-evaluated parts (top-p sampling)
     headline_count_omitted: bool = False
-    #: a fifth preview (Daniel's standing rule, 2026-09-26): a cell whose verifier evaluates any part (attention's softmax, the
-    #: RMSNorms' row tail, sampling's keep word and noise) does not cover its subcircuit; overrides ``headline_count_omitted``
+    #: Daniel's standing rule (2026-09-26), published: a cell whose verifier evaluates any part (attention's softmax, the RMSNorms'
+    #: row tail, sampling's keep word and noise: the census's ``verifier_evaluated``) does not cover its subcircuit; overrides
+    #: ``headline_count_omitted``
     headline_strict_verifier: bool = False
 
 
-SPEC = Rules("spec")
+SPEC = Rules("spec", headline_strict_verifier=True)
 UNFILTERED = Rules("unfiltered", security_log2=None)
 LEGACY = Rules("legacy", legacy=True)
 RULES = {r.name: r for r in (SPEC, UNFILTERED, LEGACY)}
@@ -2559,8 +2567,12 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
     def labels(ids: Sequence[str]) -> str:
         return ", ".join(claims_registry.get(i).label for i in ids)
 
-    table1 = [{"backend": b["id"], "backend_family": b["backend_family"], "mode": b["mode"],
-               "cells": {"Backend": b["display"], "Backend family": b["backend_family"], "Mode": b["mode"], "Guarantees": labels(b["properties"]),
+    development = {_fam(f.id): f.development for f in FAMILIES}
+    for b in backend_list:
+        b["development"] = development.get(b["backend_family"], "active")
+    table1 = [{"backend": b["id"], "backend_family": b["backend_family"], "mode": b["mode"], "development": b["development"],
+               "cells": {"Backend": b["display"], "Backend family": b["backend_family"], "Mode": b["mode"], "Development": b["development"],
+                         "Guarantees": labels(b["properties"]),
                          "Assumptions": labels(b["assumptions"]),
                          "Unmapped": "; ".join(t for c in b["claims"] for x in (c["property"], *c["assumptions"]) if x["unmapped"] for t in x["texts"])}}
               for b in backend_list]
