@@ -9,7 +9,7 @@ imports them as code, so the directory can move to its own repository unchanged.
 | `hardware.json` | GPU lines: a device (full `device` and short `name`, e.g. "H100 SXM5") running one operand dtype, with its dense tensor-core peak at FP32 accumulate | `schemas/hardware.schema.json` |
 | `datatypes.json` | operand formats, displayed as the common name first, then the precise format: `BF16`, `FP8 (E4M3)`, `FP4 (NVFP4, E2M1)` | `schemas/datatypes.schema.json` |
 | `networks.json` | network profiles: the reference (same datacenter, 1 ms, 100 Gb/s) and the sensitivity profiles | `schemas/networks.schema.json` |
-| `subcircuits.json` | subcircuit templates, each with typed parameters (e.g. `gemm_coordinate` with `K` and `semantics`, the exact instruction), and under each the subcircuits: fully bound templates such as `gemm_coordinate/k1536/sm90.wgmma.m64n8k32.e4m3` | `schemas/subcircuits.schema.json` |
+| `subcircuits.json` | subcircuit templates, each with typed parameters (e.g. `gemm_coordinate` with `K`, `datatype` and `semantics`, the exact instruction), and under each the subcircuits: fully bound templates such as `gemm_coordinate/k1536/sm90.wgmma.m64n8k32.e4m3` | `schemas/subcircuits.schema.json` |
 | `instance_sets.json` | the frozen instance set of each subcircuit: dataset, tier, size, digest, and the subcircuit its instances are of | `schemas/instance_sets.schema.json` |
 
 Each file is a JSON array of entries. Each entry validates against its file's JSON Schema (draft 2020-12). The tests

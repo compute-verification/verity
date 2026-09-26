@@ -22,7 +22,7 @@ PINNED = {
                  "rtx-4090/e4m3": 330.3e12, "rtx-5090/e2m1": 1676e12},
     "networks": {"dc-1ms-100gbps": (0.001, 100e9), "rtt-20ms-100gbps": (0.020, 100e9), "rtt-100ms-100gbps": (0.100, 100e9),
                  "dc-1ms-10gbps": (0.001, 10e9)},
-    "subcircuit_templates": {"gemm_coordinate": ("K", "semantics")},
+    "subcircuit_templates": {"gemm_coordinate": ("K", "datatype", "semantics")},
     "datatypes": {"bf16": "BF16", "e4m3": "FP8 (E4M3)", "e2m1": "FP4 (NVFP4, E2M1)"},
     "names": {"a100-sxm4-80gb/bf16": "A100 SXM4", "h100-sxm5-80gb/bf16": "H100 SXM5", "h100-sxm5-80gb/e4m3": "H100 SXM5",
               "rtx-4090/e4m3": "RTX 4090", "rtx-5090/e2m1": "RTX 5090"},
@@ -109,7 +109,8 @@ def test_every_target_is_a_subcircuit_bound_to_its_exact_instruction() -> None:
     """A subcircuit is a fully bound template: gemm_coordinate with K and semantics (the exact instruction) for each target."""
     for t in TARGETS.values():
         s = census.subcircuit_of(t.name)
-        assert s.template == "gemm_coordinate" and vars(s.parameters) == {"K": 1536, "semantics": t.instruction}
+        assert s.template == "gemm_coordinate" and vars(s.parameters) == {"K": 1536, "datatype": INSTRUCTIONS[t.instruction].a_dtype, "semantics": t.instruction}
+        assert s.parameters.datatype in census.DATATYPES
         assert s.id == f"gemm_coordinate/k1536/{t.instruction}" and set(vars(s.parameters)) == set(vars(census.GEMM_COORDINATE.parameters))
     assert len(census.SUBCIRCUITS) == len(TARGETS)
 
