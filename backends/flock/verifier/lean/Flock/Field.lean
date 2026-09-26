@@ -22,18 +22,17 @@ instance : OfNat F128 1 := ⟨one⟩
 
 @[inline] def isZero (a : F128) : Bool := a.lo == 0 && a.hi == 0
 
+/-- Bits `i, i + 1, …` of the carry-less product: for each set bit of `bb` (bit `i` of the multiplier) the 128-bit value
+`a · x^i` is added into `(lo, hi)`. -/
+def clmulGo (a : UInt64) : Nat → Nat → UInt64 → UInt64 → UInt64 → UInt64 × UInt64
+  | 0, _, _, lo, hi => (lo, hi)
+  | fuel + 1, i, bb, lo, hi =>
+    if bb &&& 1 = 1 then
+      clmulGo a fuel (i + 1) (bb >>> 1) (lo ^^^ (a <<< i.toUInt64)) (if i = 0 then hi else hi ^^^ (a >>> (64 - i).toUInt64))
+    else clmulGo a fuel (i + 1) (bb >>> 1) lo hi
+
 /-- Carry-less product of two 64-bit words, as (low word, high word). -/
-def clmul (a b : UInt64) : UInt64 × UInt64 := Id.run do
-  let mut lo : UInt64 := 0
-  let mut hi : UInt64 := 0
-  let mut bb := b
-  for i in [0:64] do
-    if bb &&& 1 == 1 then
-      lo := lo ^^^ (a <<< i.toUInt64)
-      if i != 0 then
-        hi := hi ^^^ (a >>> (64 - i).toUInt64)
-    bb := bb >>> 1
-  return (lo, hi)
+def clmul (a b : UInt64) : UInt64 × UInt64 := clmulGo a 64 0 b 0 0
 
 /-- Reduce the 256-bit carry-less product `r3·2^192 + r2·2^128 + r1·2^64 + r0` modulo the GHASH polynomial. -/
 @[inline] def reduce (r0 r1 r2 r3 : UInt64) : F128 :=
