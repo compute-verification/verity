@@ -125,7 +125,7 @@ __global__ void pure_comp_scatter(const F128* __restrict__ src, long long n_comp
 
 // One thread per unit: evaluate the lowered rows (inputs, then rows in order; the constant is 1), then write z and the
 // honest a = A z, b = B z of its 2^unit_log bits. Rows past `useful` are zero.
-#define PURE_UW 256
+#define PURE_UW 512   // 2^14 bits: a unit of up to 2^14 rows (pure_block::UNIT_LOG_MAX)
 __global__ void pure_unit_witness(const uint64_t* __restrict__ inputs, long long n_units, int units, int unit_log, int unit_pos0,
                                   int k_log, const uint32_t* __restrict__ a_off, const uint32_t* __restrict__ a_col,
                                   const uint32_t* __restrict__ b_off, const uint32_t* __restrict__ b_col, int useful, int cpos, int n_in,
