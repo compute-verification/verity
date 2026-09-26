@@ -161,7 +161,11 @@ runner and the workload get the tree's `PYTHONPATH` derived from its root
 records it (`run.remote.pythonpath`). `research env --source TREE` prints the
 same line for a local checkout. The machine claims the run directory by run id and
 starts the runner detached; re-delivering a launch after an ssh drop finds
-the claim and reports state. `--exclusive` refuses if any run is live, and
+the claim and reports state. The runner's argv carries the workload's command, so a
+`pkill -f` aimed at the workload matches it too: it logs SIGTERM / SIGHUP to
+launcher.log and keeps supervising, so the run still records its end and
+publishes. Stop a run through its workload's process group (`kill -TERM
+-<pgid>`, status.json `pgid`). `--exclusive` refuses if any run is live, and
 any launch refuses if an exclusive holder is live.
 
 The shipped tree is extracted with extraction mtimes (`tar -m`), not the commit time `git archive` stamps: a build dir shared
