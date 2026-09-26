@@ -54,6 +54,28 @@ def loopback_round_seconds(doc: dict[str, Any]) -> tuple[float, int]:
     return float(wait) / per_session, per_session
 
 
+def session_bytes(doc: dict[str, Any]) -> None:
+    """``net.bytes_out`` / ``net.bytes_in`` of one timed run: the median rep's session (``per_rep``), else the sum over the
+    sessions ``live.net_measurements`` recorded divided by their count.  Once per document (``interaction.bytes_rule``)."""
+    inter = doc.setdefault("interaction", {})
+    if inter.get("bytes_rule"):
+        return
+    m = _meas(doc)
+    ev = (doc.get("validation") or {}).get("evidence") or {}
+    lv = ev.get("live_verifier") or {}
+    per_rep = lv.get("per_rep") or []
+    idx = int((ev.get("phase_rep") or {}).get("index") or 0)
+    rep = per_rep[idx] if 0 <= idx < len(per_rep) else {}
+    sessions = max(1, int(lv.get("sessions") or len(per_rep) or 1))
+    for k in ("bytes_out", "bytes_in"):
+        total = m.get(f"net.{k}") or 0
+        _set(doc, f"net.{k}", rep[k] if rep.get(k) is not None else total / sessions, "B")
+        _set(doc, f"net.{k}_all_sessions", total, "B")
+    inter["bytes_rule"] = ("net.bytes_* = the median rep's session" if rep.get("bytes_out") is not None else
+                           f"net.bytes_* = the sum over the run's {sessions} live sessions / {sessions} (every session carries the same statements "
+                           f"and proofs); the sums are net.bytes_*_all_sessions")
+
+
 def finish(sweep_dir: Path, probe: dict[str, Any], loopback: dict[str, Any] | None, verifier: str, run_dir: Path,
            operator: str | None = None) -> dict[str, Any]:
     sw, p, pdir = plateau(sweep_dir)
@@ -70,9 +92,7 @@ def finish(sweep_dir: Path, probe: dict[str, Any], loopback: dict[str, Any] | No
     sessions = max(1, int(lv.get("sessions") or len(per_rep) or 1))
     # the bytes of ONE timed run (net_measurements sums every session), and the wait until the verifier holds every proof:
     # the pass's own blocking plus the transfer tail after it (ProverSession.drain_seconds; the pass does not time it)
-    for k in ("bytes_out", "bytes_in"):
-        v = rep.get(k) if rep.get(k) is not None else (m.get(f"net.{k}") or 0) / sessions
-        _set(doc, f"net.{k}", v, "B")
+    session_bytes(doc)
     tail = rep.get("drain_s")
     if isinstance(tail, (int, float)):
         _set(doc, "net.pass_wait_seconds", m["net.wait_seconds"], "s")
@@ -111,7 +131,7 @@ def finish(sweep_dir: Path, probe: dict[str, Any], loopback: dict[str, Any] | No
         inter["loopback_method"] = (f"same-run loopback probe: one bench-vu of the plateau's {int(lm.get('vu.count') or 0)} VUs against a "
                                     f"live verifier on 127.0.0.1 in this prover pod, its median rep's network wait "
                                     f"{float(lm['net.wait_seconds']):.4f} s over the session's {per_session} openings")
-    doc["interaction"] = inter
+    doc["interaction"] = {**inter, "bytes_rule": doc.get("interaction", {}).get("bytes_rule")}
     fp["verifier"] = {"placement": verifier, "process": "live verifier (backends.direct.ligero.live serve, Rust ligero-verify) on a "
                                                        "separate pod; it draws the coins", "operator": operator}
     # the plateau's dump (bench-vu wrote its artifacts relative to $RESEARCH_RUN_DIR): the run-files of this result
@@ -131,6 +151,7 @@ def _tree_sha(run: Path) -> str | None:
 def register(prover_run: Path, verifier_run: Path | None, lane: str) -> dict[str, Any]:
     doc = json.loads((prover_run / "result.json").read_text())
     doc["lane"] = doc["registered_by"] = lane
+    session_bytes(doc)
     # a tree shipped by `research run --source` has no git: its commit is the runner's record of what it shipped
     fp, sha = doc.get("workload_fingerprint") or {}, _tree_sha(prover_run)
     if sha:

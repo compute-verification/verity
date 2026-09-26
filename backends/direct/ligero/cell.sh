@@ -40,9 +40,13 @@ if [ "$ROLE" = verifier ]; then
   wait $B || { cat $RD/build.log; echo "BUILD FAILED"; exit 1; }
   sha256sum $W/bin/ligero-verify | tee $RD/ligero_verify.sha256
   say "live serve on :$PORT (idle exit ${IDLE:-1800}s)"
+  # a finished session's statements and proofs (GBs per cell) leave the disk once its verdict is written; the verdicts stay
+  ( while sleep 60; do for d in $RD/sessions/s*/; do [ -f "$d/verdict.json" ] && rm -f "$d"/*.proof "$d"/*.hproof "$d"/*.stmt; done; done ) &
+  CLEAN=$!
   "$PY" -m backends.direct.ligero.live serve --listen 0.0.0.0:$PORT --out $RD/sessions --ligero-verify $W/bin/ligero-verify \
       --jobs ${JOBS:-$NT} --threads 1 --target-bits 128 --idle-exit ${IDLE:-1800} > $RD/serve.out 2>&1
   rc=$?
+  kill $CLEAN 2>/dev/null
   tail -3 $RD/serve.out
   "$PY" - "$RD" <<'EOF'
 import json, sys
