@@ -203,7 +203,7 @@ def _toy(H: int, D: int, eps: float):
 
 def check_source(so: str, seed: int) -> dict[str, Any]:
     import torch
-    from vllm.config import VllmConfig, set_current_vllm_config
+    from vllm.config import CompilationConfig, VllmConfig, set_current_vllm_config
     from vllm.model_executor.determinism import batch_invariant as BI
 
     from verity_vllm.acquire.sources.norm_scale_source import NormScaleSource
@@ -214,7 +214,8 @@ def check_source(so: str, seed: int) -> dict[str, Any]:
     prev = torch.get_default_dtype()
     torch.set_default_dtype(torch.bfloat16)
     try:
-        with set_current_vllm_config(VllmConfig()):
+        # custom ops on, as the eager engine runs them (a bare VllmConfig() turns them off: RMSNorm would take forward_native)
+        with set_current_vllm_config(VllmConfig(compilation_config=CompilationConfig(custom_ops=["all"]))):
             toy = _toy(H, D, eps).cuda()
     finally:
         torch.set_default_dtype(prev)
@@ -227,7 +228,8 @@ def check_source(so: str, seed: int) -> dict[str, Any]:
     res = (torch.randn(T, H, device="cuda", generator=g) * 2).to(torch.bfloat16)
     families = {"input_layernorm": "RMSNormTriton_v1", "post_attention_layernorm": "RMSNormFusedCuda_v2", "q_norm": "RMSNormTriton_v1",
                 "gemma_norm": "RsqrtF32_v1"}
-    rec: dict[str, Any] = {"T": T, "H": H, "D": D, "eps": eps, "modules": families}
+    rec: dict[str, Any] = {"T": T, "H": H, "D": D, "eps": eps, "modules": families,
+                           "forward": {n: getattr(getattr(toy, n), "_forward_method", None).__name__ for n in families}}
     with torch.no_grad():
         ref = toy(x, res)
     sites = (torch.ops._C.fused_add_rms_norm, BI._rms_norm_kernel, torch.rsqrt)
