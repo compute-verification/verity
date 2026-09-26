@@ -21,7 +21,7 @@ Q=$(cat /sys/fs/cgroup/cpu/cpu.cfs_quota_us 2>/dev/null || echo -1); PER=$(cat /
 if [ -r /sys/fs/cgroup/cpu.max ]; then read -r Q PER < /sys/fs/cgroup/cpu.max; [ "$Q" = max ] && Q=-1; fi
 NT=$(( Q > 0 ? Q / PER : $(nproc) )); [ "$NT" -lt 1 ] && NT=1
 export PYTHONPATH="$REPO/packages/verity/src:$REPO/backends/numerical/python:$REPO/tools/research/src:$REPO"
-export RESEARCH_GIT_COMMIT=${RESEARCH_SOURCE_COMMIT:-$(python3 -c "import json;print(json.load(open('.research-source.json')).get('commit',''))" 2>/dev/null)}
+export RESEARCH_GIT_COMMIT=${RESEARCH_SOURCE_SHA:-$(python3 -c "import json;print(json.load(open('.research-source.json')).get('commit',''))" 2>/dev/null)}
 
 if [ "$ROLE" = verifier ]; then
   PY=$W/venv312/bin/python; PORT=${PORT:-7000}

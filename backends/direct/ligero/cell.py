@@ -100,9 +100,24 @@ def finish(sweep_dir: Path, probe: dict[str, Any], loopback: dict[str, Any] | No
     return doc
 
 
+def _tree_sha(run: Path) -> str | None:
+    try:
+        return (json.loads((run / "job.json").read_text()).get("computation") or {}).get("tree_sha")
+    except (OSError, ValueError):
+        return None
+
+
 def register(prover_run: Path, verifier_run: Path | None, lane: str) -> dict[str, Any]:
     doc = json.loads((prover_run / "result.json").read_text())
     doc["lane"] = doc["registered_by"] = lane
+    # a tree shipped by `research run --source` has no git: its commit is the runner's record of what it shipped
+    fp, sha = doc.get("workload_fingerprint") or {}, _tree_sha(prover_run)
+    if sha:
+        if not fp.get("commit"):
+            fp["commit"] = sha
+        be = (fp.get("software") or {}).get("backend")
+        if isinstance(be, dict) and not be.get("commit"):
+            be["commit"] = sha
     if verifier_run is not None:
         sessions = []
         for f in sorted(verifier_run.rglob("index.jsonl")):
@@ -113,7 +128,8 @@ def register(prover_run: Path, verifier_run: Path | None, lane: str) -> dict[str
                     continue
         mine = [x for x in sessions if x.get("run_id") == prover_run.name]
         doc.setdefault("validation", {}).setdefault("evidence", {})["verifier_run"] = {
-            "run": verifier_run.name, "sessions": len(mine), "accepted": sum(1 for x in mine if x.get("accepted")),
+            "run": verifier_run.name, "tree_sha": _tree_sha(verifier_run), "sessions": len(mine),
+            "accepted": sum(1 for x in mine if x.get("accepted")),
             "note": "the verifier pod's own session index (backends.direct.ligero.live serve --out), recorded by its research run"}
     return doc
 
