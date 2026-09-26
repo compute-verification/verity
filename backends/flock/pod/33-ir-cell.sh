@@ -17,8 +17,9 @@ source $HOME/.cargo/env; C13=/usr/local/cuda-13.3; export PATH=$C13/bin:$PATH NV
 read -r Q PER_ < /sys/fs/cgroup/cpu.max 2>/dev/null || { Q=max; PER_=100000; }
 TH=$([ "$Q" = max ] && nproc || echo $(( Q / PER_ ))); export RAYON_NUM_THREADS=$TH
 F=/workspace/flock-gpu-link/flock; FEAT=; [ $G = 1 ] && FEAT="--features gpu"
-(cd $F && cargo build --release -p flock-live $FEAT --bin flock-ir-frame -j $TH) > $O/build-ir.txt 2>&1 || { tail -40 $O/build-ir.txt; exit 1; }
-B=$F/target/release/flock-ir-frame; sha256sum $B | tee $O/binary.sha256
+BIN=flock-ir-frame; [ "$TEMPLATE" = gumbel-top-p-token-select ] && BIN=flock-ir-sampling   # verity/flock-ir-sampling/v1's own binary
+(cd $F && cargo build --release -p flock-live $FEAT --bin $BIN -j $TH) > $O/build-ir.txt 2>&1 || { tail -40 $O/build-ir.txt; exit 1; }
+B=$F/target/release/$BIN; sha256sum $B | tee $O/binary.sha256
 [ -x $HOME/.local/bin/uv ] || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
 [ -x $W/py/bin/python ] || { $HOME/.local/bin/uv venv -q --python 3.12 $W/py && $HOME/.local/bin/uv pip install -q --python $W/py/bin/python numpy blake3; }
 export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO/packages/verity/src:$REPO/backends/numerical/python:$REPO/backends/flock/python:$REPO/integrations/vllm

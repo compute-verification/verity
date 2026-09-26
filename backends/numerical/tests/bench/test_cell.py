@@ -49,7 +49,7 @@ def test_plan_wraps_the_flock_cell_script():
 
 
 @pytest.mark.parametrize("kw,why", [
-    (dict(statement="gumbel-top-p-token-select/v128256/fp32+frame-v3/blake3-keyed"), "no lowering of GumbelTopPTokenSelect_v1"),
+    (dict(statement="gumbel-top-p-token-select/v128256/fp32+vllm-v1"), "binding its rows under vllm-v1 is not wired yet"),
     (dict(statement="gemm-coordinate/k512/sm90-mma-bf16+frame-v3/blake3-keyed"), "CN3"),
     (dict(statement="gemm-coordinate/k1536/sm90-mma-bf16+frame-v3/sha-256"), "keyed-BLAKE3"),
     (dict(input_set="bench-instances-fp8-ada-v1"), "is of gemm-coordinate/k1536/sm89-mma-e4m3"),

@@ -45,14 +45,20 @@ def _lowering(template: str, input_set):
     return mod.frame_lowering(input_set.subcircuit)
 
 
-def stage_point(a, low, input_set, total: int, d: Path) -> tuple[list[tuple[int, int]], float]:
-    from . import ir_frame
+def frame_module(template: str):
+    """The statement's staging module: ``ir_sampling`` (``verity/flock-ir-sampling/v1``) for the sampling template, else
+    ``ir_frame``. Each has ``STATEMENT``, ``stage(low, input_set, lo, hi, dir)`` and ``serve_args(path)``."""
+    from . import ir_frame, ir_sampling
 
+    return ir_sampling if template == ir_sampling.TEMPLATE else ir_frame
+
+
+def stage_point(a, low, input_set, total: int, d: Path) -> tuple[list[tuple[int, int]], float]:
     d.mkdir(parents=True, exist_ok=True)
     subs = subbatches(total, a.per_proof)
     t0 = time.time()
     for i, (lo, hi) in enumerate(subs):
-        p = ir_frame.stage(low, input_set, lo, hi, d / f"stage-s{i}")
+        p = frame_module(a.template).stage(low, input_set, lo, hi, d / f"stage-s{i}")
         os.replace(p, d / f"instances-s{i}.bin")
     return subs, time.time() - t0
 
@@ -105,7 +111,8 @@ def point(a, low, input_set, total: int, d: Path, net: Path, pin: str) -> dict:
             addr = "127.0.0.1:%d" % (7400 + total.bit_length())
             log = d / f"serve-s{i}.log"
             srv = subprocess.Popen(["nice", "-n", "5", a.bin, "serve", "--listen", addr, "--out", str(d / f"sessions-s{i}"), "--pin", pin,
-                                    *common, *a.tables], stdout=open(log, "w"), stderr=subprocess.STDOUT)
+                                    *common, *a.tables, *frame_module(a.template).serve_args(d / f"instances-s{i}.bin")],
+                                   stdout=open(log, "w"), stderr=subprocess.STDOUT)
             _wait_serving(log, srv)
         try:
             timer = ["/usr/bin/time", "-v", "-o", str(d / f"prove-s{i}.time")] if Path("/usr/bin/time").exists() else []
@@ -149,7 +156,8 @@ def loopback_probe(a, q: dict, out: Path, net: Path, pin: str) -> dict:
         common = ["--instances", str(d / f"instances-s{i}.bin"), "--netlist", str(net)]
         log = d / f"loopback-serve-s{i}.log"
         srv = subprocess.Popen([a.bin, "serve", "--listen", "127.0.0.1:7391", "--out", str(d / f"loopback-sessions-s{i}"), "--pin", pin,
-                                *common, *a.tables], stdout=open(log, "w"), stderr=subprocess.STDOUT)
+                                *common, *a.tables, *frame_module(a.template).serve_args(d / f"instances-s{i}.bin")],
+                               stdout=open(log, "w"), stderr=subprocess.STDOUT)
         try:
             _wait_serving(log, srv)
             subprocess.call([a.bin, "prove", "--verifier", "127.0.0.1:7391", "--warm", "1", "--runs", str(a.runs), *a.prove_arg, *common, *a.tables],
@@ -179,25 +187,26 @@ def result(a, input_set, low, p: dict, sweep: dict, pin: str) -> dict:
     n = p["total"]
     first = timed[0]
     sub = input_set.subcircuit
+    statement = frame_module(a.template).STATEMENT
     fp = contract.fingerprint(
         profile=None, domain="finite", K=None, B=n, proof_class="NON_ZK_PROOF", authentication="included-hash", zk_mode="none",
         security={"target": -128, "achieved_log2": PER_PROOF_LOG2 + math.log2(len(p["subbatches"])), "per_proof_log2": PER_PROOF_LOG2,
                   "proofs": len(p["subbatches"]), "union": "union bound over the batch's sequential sub-batch proofs",
                   "profile": "flock-128-r2", "reps": 2, "per_rep_log2": -97.8, "coins": "live verifier (flock-live R1-R8)"},
         hardware=contract.probe_hardware(),
-        software={"backend": {"name": Path(a.bin).name, "configuration": "C-interactive/flock-ir-frame", "commit": a.commit,
-                              "statement": STATEMENT, "prover": first.get("prover"), "prove_args": a.prove_arg, "lowering_sha256": pin,
+        software={"backend": {"name": Path(a.bin).name, "configuration": f"C-interactive/{Path(a.bin).name}", "commit": a.commit,
+                              "statement": statement, "prover": first.get("prover"), "prove_args": a.prove_arg, "lowering_sha256": pin,
                               "unit": low.name, "flock": "succinctlabs/flock b684b12 + backends/flock/flock-link-b684b12.patch"},
                   "toolchain": {"rustc": a.rustc, "python": platform.python_version()}},
         preprocessing="none: the circuit shape and the unit netlist are built once per process (fixed.setup_seconds: staging); every "
                       "timed session hashes its batch's rows afresh (commit.seconds) before proving",
         retention="retained", instances=input_set.ref(0, n, a.art), N_subbatches=len(p["subbatches"]),
         batching={"total": n, "per_proof": a.per_proof, "in_flight": 1, "subbatches": [list(x) for x in p["subbatches"]]},
-        scheme=SCHEME, statement=STATEMENT, relation=relation(a.template), subcircuit=sub.id, subcircuit_template=sub.template.id,
+        scheme=SCHEME, statement=statement, relation=relation(a.template), subcircuit=sub.id, subcircuit_template=sub.template.id,
         roots=first["roots"], sigma=first["sigma"], dense_m=first["dense_m"], units_per_instance=low.units.n,
         n_blake3=first["n_blake3"], n_units=first["n_units"],
         rtt_method="net.rtt_ms = 64-byte Ping round trips on the open session connection before Hello, per timed session, median",
-        verifier={"placement": "loopback" if not a.verifier else a.verifier, "process": "flock-ir-frame serve (separate process)"})
+        verifier={"placement": "loopback" if not a.verifier else a.verifier, "process": f"{Path(a.bin).name} serve (separate process)"})
     ms = [contract.measurement("t.total", t_e2e), contract.measurement("t.total_live", t_e2e), contract.measurement("vu.count", n),
           contract.measurement("vu.seconds_per_vu", t_e2e / n), contract.measurement("vu.per_second", n / t_e2e),
           {"name": "commit.seconds", "value": med("rows_s"), "unit": "s"},
@@ -227,7 +236,7 @@ def result(a, input_set, low, p: dict, sweep: dict, pin: str) -> dict:
     if p["peak_rss"]:
         ms.append(contract.measurement("mem.peak_host_bytes", p["peak_rss"]))
     doc = {"schema": contract.RESULT_SCHEMA, "run_id": os.environ.get("RESEARCH_RUN_ID"), "workload_fingerprint": fp,
-           "validation": {"status": "passed" if p["ok"] else "failed", "checker": "flock-ir-frame serve (live verifier, R1-R8 replay)",
+           "validation": {"status": "passed" if p["ok"] else "failed", "checker": f"{Path(a.bin).name} serve (live verifier, R1-R8 replay)",
                           "detail": f"{sum(1 for r in p['live'] if r.get('accepted'))}/{len(p['live'])} sessions accepted",
                           "evidence": [f"{p['dir']}/sessions/index.jsonl"]},
            "measurements": ms, "measurement_files": [], "artifacts": [], "sweep": sweep, "contention": p["contention"],
@@ -261,7 +270,8 @@ def serve_plan(a, low, input_set, plan: list[int], out: Path, net: Path, pin: st
     for d, j in jobs:
         rc = subprocess.call([a.bin, "serve", "--listen", a.listen, "--out", str(d / f"sessions-s{j}"), "--pin", pin,
                               "--instances", str(d / f"instances-s{j}.bin"), "--netlist", str(net), "--sessions", str(a.runs + 2),
-                              "--operator", a.operator, *a.tables], stdout=open(d / f"serve-s{j}.log", "w"), stderr=subprocess.STDOUT)
+                              "--operator", a.operator, *a.tables, *frame_module(a.template).serve_args(d / f"instances-s{j}.bin")],
+                             stdout=open(d / f"serve-s{j}.log", "w"), stderr=subprocess.STDOUT)
         print(f"SERVED\t{d.name}/s{j} rc={rc}", flush=True)
     return 0
 
@@ -300,7 +310,7 @@ def main(argv=None) -> int:
     net.write_text(low.text)
     pin = hashlib.sha256(net.read_bytes()).hexdigest()
     a.tables = []
-    if low.units.cut:
+    if low.units.cut:  # the cut templates' tails, and the sampling statement's native DivFullRcp
         from . import ir_lower
 
         ir_lower.write_tables(out / "tables")
