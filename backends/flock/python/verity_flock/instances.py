@@ -344,6 +344,8 @@ def write_set(path: str | Path, relation: str, set_dir: str | Path, lo: int = 0,
     ref = {"dataset": dataset, "tier": tier, "range": [lo, hi], "manifest_sha256": digest, "set_schema": man.get("schema"),
            "source": (man.get("provenance") or {}).get("source") or ("captured" if man.get("schema") == "vllm-vu-set/v1" else None),
            **({"y": {"source": f"{relation} model chain", "differ_from_set": bad}} if y_model else {})}
+    if y_model:
+        ref["source"] = f"{ref['source'] or 'set'} inputs, model y"
     header = {"format": FORMAT, "relation": relation, "vus": hi - lo, "k": K_, "word_bits": 16, "units": accs.shape[1],
               "row_bytes": 2 * K_, "epilogue": pipe.epilogue, "instances": ref, **{k: v for k, v in st.items() if k != "y"}}
     return _write_file(path, header, np.ascontiguousarray(x).tobytes(), np.ascontiguousarray(w).tobytes(), accs, final, st["y"])
