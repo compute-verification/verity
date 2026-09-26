@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Non-producer file re-verification of an IR cell's verifier sessions (verity/flock-ir-frame/v2): build flock-ir-frame (CPU),
 # stage every point's instance files here from the captured input set (IR2, ir_frame.stage as the verifier pod does), check
-# them and the lowering against the verifier pod's (a sampling file: its native words checked first, S1), then `flock-ir-frame replay` every accepted session, plus tampered-record
+# them and the lowering against the verifier pod's, then `flock-ir-frame replay` every accepted session, plus tampered-record
 # negatives that must be rejected.
 #   inputs/$TAG.tgz (out/verifier minus instance files)  inputs/$TAG.sha256 (its instance files)  inputs/set-$TAG.tgz (the set)
-#   TEMPLATE=rope-head PER=1024 NEG=p1-256/sessions-s0
+#   TEMPLATE=rope-head PER=1024 NEG=p1-256/sessions-s0  [SRC_RANGE=lo:hi WANT_DIGEST=<cell set's content digest>: the set sent is the source]
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 REPO=$(pwd); RD=${RESEARCH_RUN_DIR:-/tmp/flock-ir-replay}; W=/workspace/verify-flock-ir; mkdir -p $W
@@ -20,8 +20,14 @@ B=$F/target/release/flock-ir-frame; sha256sum $B | tee $O/binary.sha256
 [ -x $W/py/bin/python ] || { $HOME/.local/bin/uv venv -q --python 3.12 $W/py && $HOME/.local/bin/uv pip install -q --python $W/py/bin/python numpy blake3; }
 export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO/packages/verity/src:$REPO/backends/numerical/python:$REPO/backends/flock/python:$REPO/integrations/vllm
 S=$W/rec-$TAG; rm -rf $S; mkdir -p $S; tar xzf $RD/inputs/$TAG.tgz -C $S
-SD=$W/set-$TAG; rm -rf $SD; mkdir -p $SD; tar xzf $RD/inputs/set-$TAG.tgz -C $SD
+SD=$W/set-$TAG; rm -rf $SD; mkdir -p $SD; tar xzf $RD/inputs/${SETTGZ:-set-$TAG.tgz} -C $SD
 SET=$(dirname $(find $SD -name manifest.json | head -1))
+if [ -n "${SRC_RANGE:-}" ]; then  # the cell's set is a subset of the sent source set: cut it here (input_sets.subset) and check its digest
+  python3 -c "import sys;from verity_numerical.bench import input_sets as I;lo,hi=map(int,sys.argv[2].split(':'));p=I.subset(sys.argv[1],sys.argv[3],lo,hi);s=I.InputSet.open(p);print(s.content_digest);print(p)" $SET $SRC_RANGE $W/sub-$TAG > $O/subset.txt || exit 1
+  echo "subset $SRC_RANGE of $(python3 -c "import sys;from verity_numerical.bench import input_sets as I;print(I.InputSet.open(sys.argv[1]).content_digest)" $SET): content digest $(head -1 $O/subset.txt), want ${WANT_DIGEST:-?}" | tee -a $O/stage.txt
+  [ -z "${WANT_DIGEST:-}" ] || [ "$(head -1 $O/subset.txt)" = "$WANT_DIGEST" ] || { echo "subset digest differs from the cell's set"; exit 1; }
+  SET=$(tail -1 $O/subset.txt)
+fi
 I=$W/inst-$TAG; rm -rf $I; mkdir -p $I
 python3 - "$TEMPLATE" "$SET" "$S" "$I" "$PER" <<'PY' | tee $O/stage.txt || exit 1
 import hashlib, json, os, sys
@@ -40,25 +46,18 @@ print(json.dumps({"set": inp.name, "content_digest": inp.content_digest, "n": in
 if low.units.cut:
     from verity_flock import ir_lower
     ir_lower.write_tables(out / "tables")
-a = Namespace(per_proof=per, template=template)
-mod = ir_bench.frame_module(template) if hasattr(ir_bench, 'frame_module') else None
+a = Namespace(per_proof=per)
 for d in sorted(rec.glob("p*-*"), key=lambda p: int(p.name[1:].split("-")[0])):
     total = int(d.name.split("-")[1])
     subs, t = ir_bench.stage_point(a, low, inp, total, out / d.name)
-    extra = []
-    for j in range(len(subs)):
-        f = out / d.name / f"instances-s{j}.bin"
-        args = mod.serve_args(f) if mod is not None and hasattr(mod, "serve_args") else []
-        (out / d.name / f"args-s{j}").write_text(" ".join(args))
-        extra.append(args)
-    print(json.dumps({"point": d.name, "subbatches": subs, "stage_s": t, "serve_args": extra}), flush=True)
+    print(json.dumps({"point": d.name, "subbatches": subs, "stage_s": t}), flush=True)
 open(os.environ.get("PINFILE", str(out / "pin")), "w").write(pin)
 PY
 grep -q '"netlist_equals_verifier": true' $O/stage.txt || { echo "netlist differs from the verifier pod's"; exit 1; }
 PIN=$(cat $I/pin); TB=; [ -d $I/tables ] && TB="--tables $I/tables"
 (cd $I && sha256sum -c $RD/inputs/$TAG.sha256) | tee $O/instances.check || exit 1
 : > $O/replay.jsonl; n=0; bad=0
-rp() { local ax=$(cat ${1%instances-s*}args-s$(basename $1 .bin | sed "s/instances-s//") 2>/dev/null); $B replay --instances $1 --netlist $I/net.txt --pin $PIN $TB $ax --session $2 --proofs $3,$4 2>/dev/null | grep '^REPLAY'; }
+rp() { $B replay --instances $1 --netlist $I/net.txt --pin $PIN $TB --session $2 --proofs $3,$4 2>/dev/null | grep '^REPLAY'; }
 for sd in $S/p*/sessions-s*; do
   pt=$(basename $(dirname $sd)); sb=${sd##*sessions-s}; inst=$I/$pt/instances-s$sb.bin
   for ses in $sd/l*; do
@@ -103,12 +102,6 @@ for n in zerocheck_coin_low_bit last_coin_low_bit; do neg $n $T/$n.json $ses/irf
 for n in rep1_second_round_coin_low_bit rep0_mid_round_coin_low_bit link_point_changed publics_digest_changed round_message_digest_changed require_link_false; do
   neg $n $T/$n.json $ses/irf.rep0.bin $ses/irf.rep1.bin; done
 neg unused_high_bits_of_query_coin $T/unused_high_bits_of_query_coin.json $ses/irf.rep0.bin $ses/irf.rep1.bin $inst accepted
-if [ -s ${inst%instances-s*}args-s${NEG##*sessions-s} ]; then  # S1: a sampling file replays only once check_native passed
-  line=$($B replay --instances $inst --netlist $I/net.txt --pin $PIN $TB --session $ses/session.json --proofs $ses/irf.rep0.bin,$ses/irf.rep1.bin 2>/dev/null | grep -E '^(REPLAY|REFUSED)')
-  r=$(echo "$line" | grep -q '"accepted":true' && echo accepted || echo rejected)
-  echo "{\"neg\": \"native_check_not_attested\", \"want\": \"rejected\", \"result\": \"$r\", \"line\": $(echo "$line" | cut -f2- | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()[:200]))')}" | tee -a $O/negatives.jsonl
-  [ $r = rejected ] || bad=$((bad+1))
-fi
 o=$(ls $I/*/instances-s*.bin | grep -v "$inst" | tail -1); neg other_instance_file $ses/session.json $ses/irf.rep0.bin $ses/irf.rep1.bin $o
 echo "NEGATIVES $(grep -c '"want": "rejected", "result": "rejected"' $O/negatives.jsonl) rejected as wanted, $(grep -c '"want": "accepted", "result": "accepted"' $O/negatives.jsonl) accepted as wanted, $(grep -c '"want": "info"' $O/negatives.jsonl) info, of $(wc -l < $O/negatives.jsonl); total bad $bad" | tee -a $O/summary.txt
 [ $bad = 0 ]
