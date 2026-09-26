@@ -31,6 +31,7 @@ def hashTest (path : String) : IO UInt32 := do
       let m := bytesOfHex msg
       let got := match kind with
         | "sha256" => Sha256.hash m
+        | "sha512" => Sha512.hash m
         | "blake3" => Blake3.hash m
         | _ => Blake3.keyedHash (bytesOfHex key) m
       if hexOf got != want then
@@ -101,8 +102,54 @@ def statementCmd (args : List String) : IO UInt32 := do
     return 0
   | .error e => IO.println s!"setup: {e}"; return 1
 
+/-- `merkle-test FILE`: lines `scheme c d lanes positions rows siblings cap expect` (lists comma-separated, hex; `rows` as
+32-hex F128 words joined by `.` within a row); `expect` 1 = opens, 0 = rejected. -/
+def merkleTest (path : String) : IO UInt32 := do
+  let lines ← IO.FS.lines path
+  let mut bad := 0
+  for l in lines do
+    match l.splitOn " " with
+    | [sid, c, d, lanes, pos, rows, sibs, cap, want] =>
+      let some ms := MerkleScheme.find? sid | bad := bad + 1; continue
+      let nat := fun (x : String) => x.toNat!
+      let hexes := fun (x : String) => ((x.splitOn ",").map bytesOfHex).toArray
+      let row := fun (x : String) => ((x.splitOn ".").filterMap parseHex128).toArray
+      let got := merkleCheck ms (hexes cap) (nat c) (nat d) ((pos.splitOn ",").map nat).toArray
+        ((rows.splitOn ",").map row).toArray (hexes sibs) (nat lanes)
+      let ok := match got with | .ok () => "1" | .error _ => "0"
+      if ok != want then bad := bad + 1
+    | _ => bad := bad + 1
+  IO.println s!"merkle-test: {lines.size} cases, {bad} failures"
+  return (if bad == 0 then 0 else 1)
+
+/-- `hm96-test VECTORS`: PR #88's `hm96/vectors.json` against `Hm96.sha256`: the pinned key, the leaf prefix, every mask and
+every leaf. -/
+def hm96Test (path : String) : IO UInt32 := do
+  let some v := (Lean.Json.parse (← IO.FS.readFile path)).toOption | IO.println "hm96-test: not JSON"; return 1
+  let h := Hm96.sha256
+  let str := fun (j : Lean.Json) (k : String) => (j.getObjValAs? String k).toOption.getD ""
+  let key := h.keyFromLabel
+  let other := bytesOfHex (str v "other_key")
+  let mut bad := 0
+  let mut n := 0
+  if hexOf key != str v "default_key" then bad := bad + 1
+  if hexOf (h.leafPrefix key) != str v "leaf_prefix_default_key" then bad := bad + 1
+  for m in ((v.getObjValAs? (Array Lean.Json) "masks").toOption.getD #[]) do
+    n := n + 1
+    let k := if str m "key" == "default" then key else other
+    if hexOf (h.mask k (bytesOfHex (str m "salt"))) != str m "mask" then bad := bad + 1
+    if hexOf (h.saltDigest (bytesOfHex (str m "salt"))) != str m "salt_digest" then bad := bad + 1
+  for x in ((v.getObjValAs? (Array Lean.Json) "leaves").toOption.getD #[]) do
+    n := n + 1
+    let bc := h.commitString key (bytesOfHex (str x "inner_digest")) (bytesOfHex (str x "salt"))
+    if hexOf bc != str x "b" ++ str x "c" || hexOf (h.treeLeaf key bc) != str x "leaf" then bad := bad + 1
+  IO.println s!"hm96-test: {n} cases, {bad} failures"
+  return (if bad == 0 then 0 else 1)
+
 def main (args : List String) : IO UInt32 := do
   match args with
+  | ["merkle-test", path] => merkleTest path
+  | ["hm96-test", path] => hm96Test path
   | "statement" :: rest => statementCmd rest
   | "verify" :: rest => verifyCmd rest
   | ["comp-check", path] => compCheck path

@@ -113,8 +113,6 @@ def bytes (n : Nat) : M ByteArray := do
   set { r with pos := r.pos + n }
   return r.data.extract r.pos (r.pos + n)
 
-def hash : M ByteArray := bytes 32
-
 /-- A `Vec<T>` whose length must be `want` (checked before any element is read, §8.1). -/
 def vecExact {α} (want : Nat) (elem : M α) (what : String) : M (Array α) := do
   let n ← u64

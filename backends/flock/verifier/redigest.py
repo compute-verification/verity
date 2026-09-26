@@ -7,9 +7,12 @@ transcript, keeping every coin. The record is then what a prover that sent the e
 against the same coins, and only the check the edit breaks can reject it.
 
     python redigest.py SESSION_DIR OUT_DIR       # SESSION_DIR: session.json, <t>.rep0.bin, <t>.rep1.bin
+    python redigest.py --retain SESSION_DIR OUT_DIR
 
 Writes OUT_DIR/<name>/ per mutant and OUT_DIR/mutants.json: name, rep, edit, and the verdict both verifiers must reach
-(`expect`: accept or reject, and the Lean verifier's reason prefix).
+(`expect`: accept or reject, and the Lean verifier's reason prefix). `--retain` writes the session with every round's
+framed bytes retained (`rounds[k].msg`, hex; the coin server's retained round bytes) and two negatives: rep 0's first
+round bytes edited with its digest rebuilt (the replay's exact comparison rejects), and edited without it (S12 rejects).
 """
 import hashlib, json, shutil, struct, sys
 from pathlib import Path
@@ -95,6 +98,52 @@ def orthogonal(b, off, rec, k):
     put128(b, o[1], get128(b, o[1]) ^ w[0])
 
 
+class Retain(tc.T):
+    def squeeze(s, kind, n):
+        s.pending += s.hdr(4, kind, n)
+        if n == 0:
+            return []
+        c, s.pending = s.pending, b""
+        rec = s.rounds[s.k]
+        assert rec["msg_sha256"] == hashlib.sha256(c).hexdigest(), (s.k, "the spec transcript is not the record's")
+        rec["msg"] = c.hex()
+        s.k += 1
+        return [tc.coin(h) for h in rec["coins"]]
+
+
+def retain(src, out):
+    src, out = Path(src), Path(out)
+    rec = json.loads((src / "session.json").read_text())
+    table = rec["config"]["tables"][0]["name"]
+    tc.T = Retain
+    for rep in (0, 1):
+        st = next(s for s in rec["streams"] if s["stream"] == f"{table}/rep{rep}")
+        tc.replay(st["rounds"], st["label"].encode(), digest_of(rec), tc.decode((src / f"{table}.rep{rep}.bin").read_bytes()))
+
+    def write(name, r):
+        d = out / name
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "session.json").write_text(json.dumps(r))
+        for rep in (0, 1):
+            shutil.copy(src / f"{table}.rep{rep}.bin", d / f"{table}.rep{rep}.bin")
+
+    write("retained", rec)
+    first = lambda r: next(s for s in r["streams"] if s["stream"] == f"{table}/rep0")["rounds"][0]
+    bad = json.loads(json.dumps(rec))
+    b = bytearray.fromhex(first(bad)["msg"])
+    b[-17] ^= 1
+    first(bad)["msg"], first(bad)["msg_sha256"] = b.hex(), hashlib.sha256(b).hexdigest()
+    write("retained-edited", bad)
+    bad2 = json.loads(json.dumps(rec))
+    first(bad2)["msg"] = b.hex()
+    write("retained-not-digest", bad2)
+    manifest = [{"name": "retained", "rep": 0, "expect": ACCEPT},
+                {"name": "retained-edited", "rep": 0, "expect": reject("R2: round 0: the proof's messages are not the bytes")},
+                {"name": "retained-not-digest", "rep": 0, "expect": reject("S12:")}]
+    (out / "retained.json").write_text(json.dumps(manifest, indent=1))
+    print(f"retained-bytes sessions in {out}")
+
+
 class Redigest(tc.T):
     def squeeze(s, kind, n):
         s.pending += s.hdr(4, kind, n)
@@ -176,4 +225,7 @@ def main(src, out):
 
 
 if __name__ == "__main__":
-    main(*sys.argv[1:3])
+    if sys.argv[1] == "--retain":
+        retain(*sys.argv[2:4])
+    else:
+        main(*sys.argv[1:3])

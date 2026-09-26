@@ -68,6 +68,8 @@ structure Shape where
   kLog : Nat
   claims : Nat
   sched : Schedule
+  /-- the Merkle digest width (§14): every cap entry and sibling -/
+  hashLen : Nat := 32
   deriving Inhabited
 
 open Reader in
@@ -75,6 +77,7 @@ def decodeProof (sh : Shape) (bytes : ByteArray) : V Proof := do
   let s := sh.sched
   let R := s.levels.size - 1
   let lvl := fun (i : Nat) => s.levels.getD i default
+  let hash : M ByteArray := Reader.bytes sh.hashLen
   let prog : M Proof := do
     -- Commitment
     let cap ← vecExact (2 ^ (lvl 0).cap) hash "cap"

@@ -63,7 +63,10 @@ Product: `p0 = a0 b0`, `p1 = a1 b1`, `p2 = (a0 + a1)(b0 + b1)`, result `(p0 + x^
 
 ### 2.5 Hashes
 
-- SHA-256: the Merkle trees (§14), the round digests (§6), Σ, statement digests, frame-v3 (§16.6), `link_sha256`.
+- SHA-256: the Merkle trees (§14) of the recorded statements, the round digests (§6), Σ, statement digests, frame-v3
+  (§16.6), `link_sha256`.
+- SHA-512 (FIPS 180-4): the target statement's commitment paths (below). The Merkle scheme is a parameter (§14), and a
+  SHA-512 tree has 64-byte cap entries and siblings.
 - BLAKE3 (compression, keyed hash, parent tree): only in the statements (row digests, legacy L-CV checks, padding
   constants). The keyed parent tree over chunk chaining values `cv_0 … cv_{n−1}` (n ≥ 2) splits at the largest power of two
   below `n` and compresses `(key, left ‖ right, counter 0, block_len 64, PARENT | KEYED_HASH [| ROOT at the top])`; flags
@@ -71,11 +74,16 @@ Product: `p0 = a0 b0`, `p1 = a1 b1`, `p2 = (a0 + a1)(b0 + b1)`, result `(p0 + x^
 
 The transcript's own hash never enters the verifier (§6.3).
 
-**Target: SHA-256 on every commitment path.** Daniel's direction (2026-09-26): the serving leaves become Halevi–Micali
-commitments on SHA-256, and the proof's Merkle trees and the round digests stay SHA-256. The recorded sessions this spec
-covers use BLAKE3 keyed row leaves in the BLAKE3 layouts (and BLAKE3 in legacy L-CV checks); the spec specifies them as they
-are, and the target statement pins SHA-256 on all paths. Moving the leaves changes the statements' circuits and digests, not
-§3–§15.
+**Target: SHA-512 on every commitment path** (Daniel, 2026-09-26; this supersedes the SHA-256 target of the same day).
+- The proof's Merkle leaves and nodes are SHA-512.
+- The proof's internal leaves are Halevi–Micali on SHA-512 (`Flock.Hm96`, generic over the hash, and tested on
+  `hm96-sha256/v1`'s vectors), with the key fixed in the statement.
+- The data commitments move at the re-baseline.
+
+The recorded sessions this spec covers use SHA-256 trees and keyed-BLAKE3 row leaves, and the spec specifies them as they
+are. The target changes the Merkle scheme (§14), the row leaf (§16.5) and the statements' digests. The protocol of §3–§13 is
+unchanged. The target's ids, its `HashKind` index and its leaf layout are published by PR #83's lane; until then, this
+verifier's SHA-512 scheme carries placeholder ids.
 
 ## 3. Inputs, outputs and the shape of the verifier
 
@@ -191,7 +199,7 @@ Each check is a total predicate on the decoded record and the configuration. Fai
 | S9 | `link.points` has exactly `points = 2` entries of exactly `m_pts` F128 each | the link shape |
 | S10 | `link.y` has exactly `points · |tables|` entries, and every entry is zero | these statements have no cross-field link: y is pinned to 0 |
 | S11 | the stream set is exactly `{ <t>/rep<r> : t ∈ tables, r ∈ {0,1} }`; each has `parent = ""`, `at = 0`, `label = domain(t, r)` and at least one round (intended divergence D2, §17.1) | R7 (no third rep, no lone rep), no fork on this path |
-| S12 | in every stream, `rounds[k].k = k`, `1 ≤ n ≤ 65536`, `|coins| = n`, `msg_sha256` is 32 bytes | well-formed rounds |
+| S12 | in every stream, `rounds[k].k = k`, `1 ≤ n ≤ 65536`, `|coins| = n`, `msg_sha256` is 32 bytes, and retained bytes (if any) hash to `msg_sha256` | well-formed rounds |
 | S13 | for every root stream `<t>/rep<r>`: `root_sha256 = SHA-256(root_b.<t>)` | R1/L1: every rep bound the one committed root_B |
 | S14 | `link_sha256 = SHA-256(root_f ‖ root_b.<t> for t in lexicographic table order ‖ points ‖ y)`, points point-major, each F128 as 16 LE bytes, y likewise | the recorded exchange is the one the coins followed |
 | S15 | after rep `r`'s verification, every round of `<t>/rep<r>` was consumed, and none was requested beyond the record | R2: no extra, missing or split round |
@@ -234,6 +242,12 @@ appends a frame to `pending`. A squeeze of `n` coins appends its header, then:
   `SHA-256(c) = msg_sha256`; the squeeze returns its recorded coins and sets `k := k + 1`. Anything else rejects (R2).
 
 Recording `msg_len` is informational; the verifier may check `|c| = msg_len` as a cheaper first test.
+
+**Retained round bytes.** The coin server may retain each round's framed bytes in the record (`rounds[k].msg`, hex; the
+field name is this verifier's proposal to PR #83's lane). When they are present, S12 requires `SHA-256(msg) = msg_sha256`,
+and the squeeze requires `c = msg` byte for byte. R2 then holds without SHA-256 collision resistance. Upstream's
+`from_record` ignores the field, so a record whose bytes differ from its digest is an intended divergence: the Lean
+verifier rejects it at S12, and upstream accepts on the digests.
 
 ### 6.3 What the transcript does not contain
 
@@ -297,7 +311,7 @@ A proof file is `bincode 1.3` (default configuration) of the pair `(Commitment, 
 u8                      1 byte
 u32 / enum variant      le32 (variant index, declaration order)
 u64 / usize             le64
-[u8; 32] (H)            32 bytes, no length
+[u8; h] (H)             h bytes, no length: the Merkle scheme's digest width (§14), 32 or 64
 F                       16 bytes: le64(lo) ‖ le64(hi)
 K                       F(c0) ‖ F(c1)
 (A, B)                  A ‖ B
@@ -682,14 +696,23 @@ With `cff(c) = 1 + c·(1 + u)` and `Π_{≥a} = Π_{s ≥ a} cff(level[s][0])`:
 
 ## 14. Merkle trees
 
-- Leaf: `SHA-256(e_0 ‖ e_1 ‖ … ‖ e_{L−1})`, each element 16 bytes (§2.1), no prefix, no index, no length.
-- Node: `SHA-256(left ‖ right)`.
+The scheme is a parameter (`Flock.MerkleScheme`), named by the circuit file's `leaf_scheme.id`. It fixes the digest width
+`h`, the leaf, the node, and the `PcsParams.merkle_hash` index the proof must carry (§8.3):
+
+| id | h | leaf | node | `merkle_hash` |
+|---|---|---|---|---|
+| `flock-leaf/sha256-unsalted/v0`, `flock-leaf/sha256-unsalted` | 32 | `SHA-256(e_0 ‖ … ‖ e_{L−1})` | `SHA-256(left ‖ right)` | 0 (`Sha256`) |
+| `flock-leaf/sha512-unsalted` (placeholder) | 64 | `SHA-512(e_0 ‖ … ‖ e_{L−1})` | `SHA-512(left ‖ right)` | 2 (placeholder) |
+
+Each element is 16 bytes (§2.1), with no prefix, index or length. The target's hiding leaf is Halevi–Micali on SHA-512.
+It adds each opened row's salt to the opening, in a proof layout PR #83's lane will publish.
 - The commitment is the cap: the `2^c` nodes at depth `c` below the (never formed) root, left to right, with
   `c = ⌊log2 Q⌋` for the level (7 at level 0: 128 hashes, 4096 bytes), clamped to `d`.
 - A level's opening: `opened_rows` in query order (duplicates repeated), and `merkle_proof` = `Q · (d − c)` sibling hashes,
   flat, in query order. Checks: `|rows| = |positions| = Q`, `|cap| = 2^c`, `|siblings| = Q·(d − c)`, each row has the level's
-  lane count; for each query, `acc ← leaf(row)`, then for `d − c` siblings `acc ← H(acc ‖ sib)` if the current index is even
-  else `H(sib ‖ acc)`, index halved; require `acc = cap[pos >> (d − c)]`.
+  lane count, and every cap entry and sibling is `h` bytes. For each query, `acc ← leaf(row)`; then for each of the `d − c`
+  siblings, `acc ← node(acc, sib)` if the current index is even, else `node(sib, acc)`, and the index is halved. Require
+  `acc = cap[pos >> (d − c)]`.
 
 ## 15. Parameters: `fast100`
 
@@ -993,7 +1016,9 @@ Soundness of a verdict rests on:
 - **Coins:** with `os` coins, each coin is uniform and unknown to the prover before it sent the round the coin answers.
   With `seed` coins, additionally: the seed commitment hides the seed, and SHA-256 in counter mode is a PRF (§7.2).
 - **Hashes:** SHA-256 collision resistance for the Merkle trees, the round digests and the statement binding (Table 1:
-  `cr/sha-256`); the tight Merkle bound is in the random-oracle model. BLAKE3 collision resistance for the row-digest leaves
+  `cr/sha-256`); the tight Merkle bound is in the random-oracle model. For the target statement, the Merkle trees and the
+  Halevi–Micali leaves rest on SHA-512 collision resistance instead (`cr/sha-512`). With retained round bytes (§6.2), R2
+  needs no hash assumption. BLAKE3 collision resistance for the row-digest leaves
   (the commitment scheme's assumption, not the verifier's).
 - **Circuits:** the pinned circuits mean what the statement says they mean. Level 3 proves the lowering correct for every
   pinned circuit; that the circuit matches silicon is empirical and outside the verifier.

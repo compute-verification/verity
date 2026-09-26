@@ -7,11 +7,13 @@ import Flock.Hash
 
 namespace Flock
 
-/-- One recorded round: the coin count, the digest of the framed bytes before the coin, the coins. -/
+/-- One recorded round: the coin count, the digest of the framed bytes before the coin, the coins, and the framed bytes
+themselves when the server retained them. -/
 structure Round where
   n : Nat
   sha : ByteArray
   coins : Array F128
+  bytes : Option ByteArray := none
   deriving Inhabited
 
 structure Transcript where
@@ -65,7 +67,9 @@ def squeeze (kind : UInt8) (n : Nat) : TM (Array F128) := do
   | none => throw s!"R2: round {t.k}: the verifier issued no such coin"
   | some r =>
     if r.n != n then throw s!"R2: round {t.k}: {n} coins requested, {r.n} issued"
-    if Sha256.hash c != r.sha then throw s!"R2: round {t.k}: the proof's messages differ from those committed before the coin"
+    match r.bytes with
+    | some b => if c != b then throw s!"R2: round {t.k}: the proof's messages are not the bytes the server retained before the coin"
+    | none => if Sha256.hash c != r.sha then throw s!"R2: round {t.k}: the proof's messages differ from those committed before the coin"
     set { t with pending := ByteArray.empty, k := t.k + 1 }
     return r.coins
 

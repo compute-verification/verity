@@ -6,6 +6,7 @@ hashes of pinned padding constants.
 -/
 import Flock.RowLeaf
 import Flock.Piop
+import Flock.Merkle
 import Flock.Record
 
 namespace Flock
@@ -128,6 +129,7 @@ structure Stmt where
   digest : ByteArray
   sigma : ByteArray
   hello : String
+  merkle : MerkleScheme
   deriving Inhabited
 
 def helloOf (tags : Tags) (sigma : ByteArray) (mPts : Nat) (coins : Coins) : V String :=
@@ -139,6 +141,7 @@ def helloOf (tags : Tags) (sigma : ByteArray) (mPts : Nat) (coins : Coins) : V S
 /-- `setup` (§3 step 1): parse and check everything, then derive the statement. -/
 def Stmt.setup (tags : Tags) (leaf : RowLeaf) (circuitFile publicFile : ByteArray) (coins : Coins) : V Stmt := do
   let c ← Circuit.parse tags circuitFile
+  let some merkle := MerkleScheme.find? c.leafScheme | throw s!"leaf-commitment scheme {c.leafScheme}: not one this verifier implements"
   leaf.checkLayout c
   let pub ← Public.load tags c publicFile
   leaf.checkPublic c pub
@@ -159,7 +162,7 @@ def Stmt.setup (tags : Tags) (leaf : RowLeaf) (circuitFile publicFile : ByteArra
   let digest := Sha256.hash h
   let sigma := Sha256.hash (tags.sigmaTag.toUTF8 ++ c.sha ++ digest ++ pub.sha)
   let hello ← helloOf tags sigma (PT_LOCAL + nbl) coins
-  return { tags, leaf, c, pub, n, blocksReal, nbl, m, mPts := PT_LOCAL + nbl, pin, regions, da, db, digest, sigma, hello }
+  return { tags, leaf, c, pub, n, blocksReal, nbl, m, mPts := PT_LOCAL + nbl, pin, regions, da, db, digest, sigma, hello, merkle }
 
 namespace Stmt
 

@@ -8,6 +8,8 @@ import Flock.Transcript
 import Flock.Record
 import Flock.Piop
 import Flock.Opening
+import Flock.Merkle
+import Flock.Hm96
 import Flock.Ligerito
 import Flock.Comp
 import Flock.Tags

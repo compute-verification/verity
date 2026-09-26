@@ -3,26 +3,11 @@ PROTOCOL.md §13–§14: the dense Ligerito opening and its Merkle caps.
 -/
 import Flock.Opening
 import Flock.Schedule
+import Flock.Merkle
 
 namespace Flock
 
 open Transcript
-
-/-- §14: verify `rows` at `positions` against a cap of depth `c` for codeword block `2^d`. -/
-def merkleCheck (cap : Array ByteArray) (c d : Nat) (positions : Array Nat) (rows : Array (Array F128))
-    (siblings : Array ByteArray) (lanes : Nat) : V Unit := do
-  if cap.size != 2 ^ c || rows.size != positions.size || siblings.size != positions.size * (d - c) then
-    throw "merkle: shape"
-  for j in [0:positions.size] do
-    let row := rows[j]!
-    if row.size != lanes then throw "merkle: row length"
-    let mut acc := Sha256.hash (row.foldl F128.pushBytes ByteArray.empty)
-    let mut idx := positions[j]!
-    for t in [0:d - c] do
-      let sib := siblings[j * (d - c) + t]!
-      acc := if idx % 2 == 0 then Sha256.hash (acc ++ sib) else Sha256.hash (sib ++ acc)
-      idx := idx / 2
-    if acc != cap[positions[j]! >>> (d - c)]! then throw s!"merkle: query {j} does not open to the cap"
 
 /-- §13.5: stratified positions from query coins; reads only the low `d − c_j` bits of `coin.lo`. -/
 def positions (lv : Level) (coins : Array F128) : Array Nat := Id.run do
@@ -150,7 +135,7 @@ def oodIntro (p : LigeritoProof) (dim : Nat) (split : Nat) : LM Unit := do
   modify fun st => { st with q := st.q.addScaled intro b, s := st.s + (F256.ofF y).smul b, oods := st.oods.push ⟨z, b, some split⟩ }
 
 /-- Queries on a level, its consistency coins, its Merkle opening, and the enforced sum `e`. -/
-def queryLevel (p : LigeritoProof) (lv : Level) (cap : Array ByteArray) (rows : Array (Array F128)) (sibs : Array ByteArray)
+def queryLevel (ms : MerkleScheme) (p : LigeritoProof) (lv : Level) (cap : Array ByteArray) (rows : Array (Array F128)) (sibs : Array ByteArray)
     (fold : Array F256) : LM (Array Nat × Array F128 × F256) := do
   let st ← get
   let qnonce ← nonceFrom p.queryNonces st.qn "query"
@@ -161,7 +146,7 @@ def queryLevel (p : LigeritoProof) (lv : Level) (cap : Array ByteArray) (rows : 
   let pos := positions lv coins
   lift (pow cnonce)
   let alpha ← lift (sampleVec (Nat.log2 (lv.q - 1) + 1))
-  match merkleCheck cap lv.cap lv.d pos rows sibs (2 ^ lv.lanes) with
+  match merkleCheck ms cap lv.cap lv.d pos rows sibs (2 ^ lv.lanes) with
   | .ok () => pure ()
   | .error e => throw e
   let ea := eqTable alpha
@@ -178,7 +163,7 @@ def queryLevel (p : LigeritoProof) (lv : Level) (cap : Array ByteArray) (rows : 
 def cff (c : F256) : F256 := 1 + c * (1 + F256.u)
 
 /-- §13.3–§13.6. `basisAt orig ext` is `b̂(orig ‖ bits(y))` for `y < 2^ext`. -/
-def ligerito (sch : Schedule) (T : F128) (cap : Array ByteArray) (p : LigeritoProof)
+def ligerito (ms : MerkleScheme) (sch : Schedule) (T : F128) (cap : Array ByteArray) (p : LigeritoProof)
     (basisAt : Array F256 → Nat → Array F256) : TM Unit := do
   let n := sch.n
   let R := sch.levels.size - 1
@@ -206,7 +191,7 @@ def ligerito (sch : Schedule) (T : F128) (cap : Array ByteArray) (p : LigeritoPr
     lift (absorbBytes (cap1.foldl (· ++ ·) ByteArray.empty))
     oodIntro p splitDim 0
     oodIntro p splitDim 0
-    let (pos0, al0, e0) ← queryLevel p (lv 0) cap p.initialProof.rows p.initialProof.siblings initCh
+    let (pos0, al0, e0) ← queryLevel ms p (lv 0) cap p.initialProof.rows p.initialProof.siblings initCh
     let m ← nextMsg p
     claimPow p
     let b0 ← lift sample
@@ -230,7 +215,7 @@ def ligerito (sch : Schedule) (T : F128) (cap : Array ByteArray) (p : LigeritoPr
         oodIntro p splitDim (i + 1)
         oodIntro p splitDim (i + 1)
         let pr := p.recursiveProofs[i]!
-        let (pos, al, e) ← queryLevel p (lv (i + 1)) prevCap pr.rows pr.siblings chs
+        let (pos, al, e) ← queryLevel ms p (lv (i + 1)) prevCap pr.rows pr.siblings chs
         let mm ← nextMsg p
         claimPow p
         let bb ← lift sample
@@ -243,7 +228,7 @@ def ligerito (sch : Schedule) (T : F128) (cap : Array ByteArray) (p : LigeritoPr
         if st.msg != p.messages.size then throw "ligerito: leftover sumcheck messages"
         if p.finalProof.yr.size != 2 ^ (ext + 1) then throw "ligerito: |yr|"
         for w in p.finalProof.yr do lift (absorbF w)
-        let (pos, al, e) ← queryLevel p (lv R) prevCap p.finalProof.rows p.finalProof.siblings chs
+        let (pos, al, e) ← queryLevel ms p (lv R) prevCap p.finalProof.rows p.finalProof.siblings chs
         claimPow p
         let bb ← lift sample
         modify fun st => { st with s := st.s + e.smul bb, conss := st.conss.push ⟨ext, pos, al, bb, R⟩ }

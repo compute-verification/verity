@@ -122,7 +122,12 @@ def decode (spec : SessionSpec) (text : String) : V Session := do
       let sha ← unhex (← str r "msg_sha256")
       let coins ← f128s (← arr r "coins")
       check (1 ≤ n && n ≤ 65536 && coins.size == n && sha.size == 32) s!"S12: {name} round {k} is malformed"
-      pure (⟨n, sha, coins⟩ : Round)
+      -- the framed bytes, when the server retained them: bound to the digest, then compared exactly at replay (§6.2)
+      let bytes ← if isNull r "msg" then pure none else do
+        let b ← unhex (← str r "msg")
+        check (Sha256.hash b == sha) s!"S12: {name} round {k}: the retained bytes are not the recorded digest's"
+        pure (some b)
+      pure (⟨n, sha, coins, bytes⟩ : Round)
     let rootSha := match (← fld s "root_sha256").getStr? with
       | .ok x => some x
       | .error _ => none
