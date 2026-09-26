@@ -19,7 +19,7 @@
     "properties": {
       "id": {
         "type": "string",
-        "pattern": "^[a-z0-9]+(_[a-z0-9]+)*$"
+        "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
       },
       "name": {
         "type": "string",
@@ -92,14 +92,19 @@
           "additionalProperties": false,
           "required": [
             "id",
+            "display",
             "parameters",
             "fidelity_notes"
           ],
           "properties": {
             "id": {
               "type": "string",
-              "pattern": "^[a-z0-9]+(_[a-z0-9]+)*/.+$",
-              "description": "<template>/<bound parameters>"
+              "pattern": "^[a-z0-9]+(-[a-z0-9]+)*/k[0-9]+/[a-z0-9]+(-[a-z0-9]+)*$",
+              "description": "<template>/k<K>/<semantics: the instruction's arch, op and types, without its shape>"
+            },
+            "display": {
+              "type": "string",
+              "minLength": 1
             },
             "parameters": {
               "type": "object",

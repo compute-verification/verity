@@ -34,7 +34,7 @@ SUBCIRCUITS = {s.id: SimpleNamespace(**vars(s), template=t.id) for t in SUBCIRCU
 INSTANCE_SETS = load("instance_sets")
 REFERENCE_NETWORK = next(n for n in NETWORKS.values() if n.role == "reference")
 SENSITIVITY_NETWORKS = tuple(n for n in NETWORKS.values() if n.role == "sensitivity")
-GEMM_COORDINATE = SUBCIRCUIT_TEMPLATES["gemm_coordinate"]
+GEMM_COORDINATE = SUBCIRCUIT_TEMPLATES["gemm-coordinate"]
 
 
 def subcircuit_of(target: str) -> Any:
