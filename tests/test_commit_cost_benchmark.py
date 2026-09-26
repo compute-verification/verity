@@ -44,6 +44,21 @@ def test_commit_cost_root_is_the_reference_root() -> None:
     assert row["root"] == domain.bind(vllm_v1.fold([vllm_v1.pos_leaf(v) for v in bench.values(9, 16)])).hex()
 
 
+def test_hiding_leaf_cost_writes_a_valid_result(tmp_path: Path) -> None:
+    spec = importlib.util.spec_from_file_location("hiding_leaf_cost", ROOT / "benchmarks" / "commitments" / "hiding_leaf_cost.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    assert mod.main(["--row-bytes", "3072", "--rows", "16", "--reps", "1", "--out", str(tmp_path)]) == 0
+    check = research_result.check(tmp_path, None)
+    assert check.valid, check.errors
+    assert check.validation_status == "passed"
+    rows = {r["rule"]: r for r in json.loads((tmp_path / "hiding_leaf_cost.json").read_text())}
+    assert rows["blake3-keyed/row/v2"]["ands"] == 50 * 10_416 and rows["hm96/sha256-row"]["ands"] == 52 * 22_696
+    assert rows["hm96/pos-leaf"]["stored_bytes"] == 128 and rows["vllm-v1/pos-leaf"]["stored_bytes"] == 0
+    tool = tools_registry.load("hiding_leaf_cost", ROOT)
+    assert tool.resolve_params(["--rows", "64"], ROOT)[1] == {"row_bytes": "4,256,1536,3072,4096,8192", "rows": 64}
+
+
 def test_commit_cost_tool_is_registered() -> None:
     tool = tools_registry.load("commit_cost", ROOT)
     assert tool.name == "commit_cost"
