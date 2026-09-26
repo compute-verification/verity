@@ -31,15 +31,15 @@ def unmet(cell) -> str | None:
 
 
 def set_tarball(cell) -> Path | None:
-    """The input set as the tarball the prover's ``--send`` ships (built once per set, beside the plan)."""
+    """The input set as the xz tarball the prover's ``--send`` ships (built once per set, beside the plan)."""
     ref = cell.input_set
     if ref.get("kind") != "set":
         return None
     src = Path(ref["path"])
-    out = STAGE_DIR / f"{ref['id']}-{ref['content_digest'][:12]}.tar"
+    out = STAGE_DIR / f"{ref['id']}-{ref['content_digest'][:12]}.tar.xz"
     if not out.is_file():
         out.parent.mkdir(parents=True, exist_ok=True)
-        with tarfile.open(out, "w") as tf:
+        with tarfile.open(out, "w:xz") as tf:              # BF16 rows compress ~2.7x; the pod's tar reads it as it is
             tf.add(src, arcname=ref["id"])
     return out
 
