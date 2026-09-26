@@ -202,4 +202,3 @@ def test_the_store_holds_the_units_and_a_query_cuts_the_sets(attn_world, tmp_pat
                          limits=VX.Limits(per_family=64, workers=1, gemm_coords_per_row=1000))
     assert sum(x["n"] for x in full) > sum(x["n"] for x in only)          # the checkpoint fallback cuts any row
     assert VX.verify(tmp_path)["ok"]
-
