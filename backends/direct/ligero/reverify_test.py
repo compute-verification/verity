@@ -135,6 +135,19 @@ def test_a_tree_published_as_the_proof_dir_itself_is_reverified(env, capsys):
     assert "custody 7/7, pinned=fp8-ada, 2/2, 2^-128.30 PASS -> verdict art:" in capsys.readouterr().out
 
 
+def test_a_bench_cell_result_names_its_dump_in_meta_artifacts(env, capsys):
+    # verify-bligero-real-k 2026-09-26: bench.cell results keep the dump under sweep/<point>/proofs and name it in artifacts[0]
+    from research.store.local import LocalStore
+
+    st = LocalStore()
+    tree = env / "cell"
+    _dump(tree / "sweep" / "p4-6272")
+    rf = st.put_artifact("run-files/v1", {}, {}, tree=tree)
+    res = st.put_artifact("bench-result/v1", {"run_id": "b-ligero-real-k-1", "artifacts": ["sweep/p4-6272/proofs"]}, {"run_files": rf})
+    assert _run(env, res, "--by", "tester") == 0
+    assert "2/2, 2^-128.30 PASS -> verdict art:" in capsys.readouterr().out
+
+
 def test_a_dump_that_never_left_the_pod_is_an_error_not_a_rejection(env, capsys):
     from research.store.local import LocalStore
 
