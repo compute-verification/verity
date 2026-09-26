@@ -5,10 +5,10 @@
 #
 #   ROLE=verifier  REL=<rel>+blake3 [SET=<set tarball under inputs/>] [POINTS="1024 2048 4096"] [RUNS=5] [PORT=7200]
 #                  [FIRST_SIZE_TIMEOUT=5400] [PER_SIZE_TIMEOUT=1800] [OPERATOR=<lane>]
-#       flock b684b12 + the flock-link patch + this tree's live crate (release), the flock-link selftest at 8 VUs of the set's K,
-#       and the verifier's own statement of every size (leaf digests and prime commitment from the set: tools/cell.py statement
-#       --verifier-side); then, size by size in POINTS order (capped at the set), one `flock-link cell-serve` on PORT serving RUNS
-#       sessions (it serves the prime coins too).  A size that times out short of RUNS sessions ends the run (the prover stopped).
+#       flock b684b12 + both Flock patches + this tree's live crate (release) and the flock-link selftest at 8 VUs of the set's K;
+#       then, size by size in POINTS order (capped at the set), the verifier's own statement of that size (leaf digests and prime
+#       commitment from the set: tools/cell.py statement --verifier-side) and one `flock-link cell-serve` on PORT serving RUNS
+#       sessions (it serves the prime coins too).  A size that ends short of RUNS sessions ends the run (the prover stopped).
 #   ROLE=prover    REL=<rel>+blake3 VERIFIER=host:port RTT_TARGET=host:sshport [SET=...] [POINTS=...] [RUNS=5] [GATE=1]
 #                  [LOOPBACK=1] [OPERATOR=<lane>]
 #       pod_bootstrap.sh, flock-link and verity-gkr-verify built from this tree, their tests; with GATE=1 the correctness gate at
@@ -69,15 +69,15 @@ if [ "$ROLE" = verifier ]; then
   sha256sum $B | tee $O/binary.sha256; lscpu | grep 'Model name'
   $B selftest --vus 8 --k $K > $O/selftest-8.txt 2>&1
   echo "flock-link selftest (8 VUs, K=$K): $(grep -c '"pass":true' $O/selftest-8.txt) passed, $(grep -c '"pass":false' $O/selftest-8.txt) failed; $(grep SELFTEST $O/selftest-8.txt | cut -c1-200)"
-  for n in $SIZES; do
-    V=$W/vstmt/k$K-c$n
-    if [ -n "$SET_DIR" ]; then $PY backends/gkr/tools/cell.py statement --cell $V --input-set $SET_DIR --vus $n --verifier-side | tail -1
-    else echo "the verifier builds its own statement from an input set (SET=); the frozen set needs its bench-instances build"; exit 2; fi
-    mkdir -p $O/statements; cp $V/cell.json $O/statements/cell-$n.json; sha256sum $V/leaf_digests.bin >> $O/statements/digests.sha256
-  done
+  [ -n "$SET_DIR" ] || { echo "the verifier builds its own statement from an input set (SET=); the frozen set needs its bench-instances build"; exit 2; }
   first=1
   for n in $SIZES; do
-    V=$W/vstmt/k$K-c$n; PC=$(python3 -c "import json;print(json.load(open('$V/cell.json'))['prime_commitment'])")
+    # each size's statement just before serving it: the prover builds the same statement and runs a warm-up before its first
+    # remote session of that size, so the verifier is up first
+    V=$W/vstmt/k$K-c$n
+    $PY backends/gkr/tools/cell.py statement --cell $V --input-set $SET_DIR --vus $n --verifier-side | tail -1
+    mkdir -p $O/statements; cp $V/cell.json $O/statements/cell-$n.json; sha256sum $V/leaf_digests.bin >> $O/statements/digests.sha256
+    PC=$(python3 -c "import json;print(json.load(open('$V/cell.json'))['prime_commitment'])")
     # the first size waits for the prover's setup and gate too
     T=$([ $first = 1 ] && echo ${FIRST_SIZE_TIMEOUT:-5400} || echo ${PER_SIZE_TIMEOUT:-1800}); first=0
     say "serve $n VUs on :$PORT ($RUNS sessions, at most $T s)"
