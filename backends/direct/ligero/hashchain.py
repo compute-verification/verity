@@ -260,6 +260,7 @@ def compose(rel: Relation, leaf: str | leaf_base.LeafScheme | None = None) -> Ha
         nb = _format(rel)["bits"]
         ctx, words, _ = _private_operands(rel, sys, _format(rel))
         row_words = rel.steps * k
+        scheme = leaf_registry.sized(scheme, row_words, nb)
     else:
         if getattr(scheme, "with_lanes", None) is None:
             raise ValueError(f"{rel.name}: leaf {scheme.name} does not take a lane format (its operands are {hfmt.n_elems} "

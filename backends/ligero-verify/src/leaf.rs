@@ -355,6 +355,7 @@ const BLAKE3_KEY_W: [u8; 32] = *b"verity/blake3-leaf/v1/w\0\0\0\0\0\0\0\0\0";
 const BLAKE3_MALFORMED_TAG: &[u8] = b"verity/blake3-leaf/malformed-digest/v1\0";
 const BLAKE3_MAX_CHUNKS: usize = 3;
 const BLAKE3_DIGEST_ELEMS: usize = 1 + 16 * BLAKE3_MAX_CHUNKS;
+const BLAKE3_MAX_CHUNKS_SIZED: usize = 63;
 const BLAKE3_MSG_PERMUTATION: [usize; 16] = [2, 6, 3, 10, 7, 0, 4, 13, 1, 11, 12, 5, 9, 14, 15, 8];
 const BLAKE3_IV: [u32; 8] = [0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A, 0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19];
 const BLAKE3_PARENT: u32 = 4;
@@ -433,13 +434,18 @@ fn blake3_fold(nodes: &[[u32; 8]], role: u32, top: bool) -> [u32; 8] {
 
 /// `leaf.blake3.leaf_bytes`: the 32-byte BLAKE3 root of the published chunk CVs, folded with the header's role key.  A
 /// wrong length or a non-field element yields NO bytes (the leaf cannot open); a malformed frame (header not `n_chunks
-/// (2..=3) + 4 role (1, 2)`, a limb >= 2^16, a non-zero unused slot) yields the tagged SHA-256 of the elements.
+/// (2..=3) + 4 role (1, 2)`, a limb >= 2^16, a non-zero unused slot) yields the tagged SHA-256 of the elements.  The
+/// frame's chunk slots `ncm` are the row's length `1 + 16 ncm`: 3 for the registry frame, more for a SIZED frame
+/// (`leaf.blake3.Blake3Leaf.for_row`, [`sized`]), whose header is `n_chunks (2..=ncm) + 64 role`.
 fn blake3_leaf_bytes(elems: &[u32]) -> Vec<u8> {
-    if elems.len() != BLAKE3_DIGEST_ELEMS || elems.iter().any(|&x| x >= BABYBEAR_P) {
+    if elems.len() < BLAKE3_DIGEST_ELEMS || (elems.len() - 1) % 16 != 0 || (elems.len() - 1) / 16 > BLAKE3_MAX_CHUNKS_SIZED
+        || elems.iter().any(|&x| x >= BABYBEAR_P) {
         return Vec::new();
     }
-    let (nch, role) = ((elems[0] & 3) as usize, elems[0] >> 2);
-    if !(2..=BLAKE3_MAX_CHUNKS).contains(&nch) || !(1..=2).contains(&role) || elems[1 + 16 * nch..].iter().any(|&x| x != 0)
+    let ncm = (elems.len() - 1) / 16;
+    let sh = if ncm <= BLAKE3_MAX_CHUNKS { 2 } else { 6 };
+    let (nch, role) = ((elems[0] & ((1 << sh) - 1)) as usize, elems[0] >> sh);
+    if !(2..=ncm).contains(&nch) || !(1..=2).contains(&role) || elems[1 + 16 * nch..].iter().any(|&x| x != 0)
         || elems[1..1 + 16 * nch].iter().any(|&x| x >= 1 << 16) {
         let mut h = crate::hash::Sha256::new();
         h.update(BLAKE3_MALFORMED_TAG);
@@ -535,6 +541,38 @@ pub static BLAKE3_XOB: LeafScheme = LeafScheme {
     digest_elems: BLAKE3_DIGEST_ELEMS,
     leaf_bytes: blake3_leaf_bytes,
 };
+
+/// The SIZED BLAKE3 frames (`leaf.blake3.Blake3Leaf.for_row`): rows longer than 3 chunks (K = 2048 BF16: 4, K = 8192 E4M3: 8,
+/// K = 8192 BF16: 16) publish one CV slot per chunk; `params_sha256` is `leaf.blake3.params_sha256(ncm)`.  Same names as the
+/// registry frames (a statement names `+blake3` / `+blake3-xob`), picked by [`sized`] from the relation's row length.
+macro_rules! blake3_sized {
+    ($name:literal, $display:literal, $ncm:literal, $params:literal) => {
+        LeafScheme { name: $name, display: $display, schema: "blake3-keyed/row/v2", params_sha256: $params,
+                     digest_elems: 1 + 16 * $ncm, leaf_bytes: blake3_leaf_bytes }
+    };
+}
+static BLAKE3_SIZED: &[(usize, LeafScheme)] = &[
+    (4, blake3_sized!("blake3", "BLAKE3", 4, "2f5bbfe9e0f21c504dc2e7c02dcd8bacbf274f658c934b04943eba25dab19686")),
+    (8, blake3_sized!("blake3", "BLAKE3", 8, "c5308f856bda25a7fbb9af11fc85e33d227738a81ae4305672a96de2a40d2b84")),
+    (16, blake3_sized!("blake3", "BLAKE3", 16, "0b2dfbd3daee31b97044e71ca94c31f0c7d84d35e41b51b0ad2dbf4f5f41f63c")),
+    (4, blake3_sized!("blake3-xob", "BLAKE3 (xob circuit)", 4, "2f5bbfe9e0f21c504dc2e7c02dcd8bacbf274f658c934b04943eba25dab19686")),
+    (8, blake3_sized!("blake3-xob", "BLAKE3 (xob circuit)", 8, "c5308f856bda25a7fbb9af11fc85e33d227738a81ae4305672a96de2a40d2b84")),
+    (16, blake3_sized!("blake3-xob", "BLAKE3 (xob circuit)", 16, "0b2dfbd3daee31b97044e71ca94c31f0c7d84d35e41b51b0ad2dbf4f5f41f63c")),
+];
+
+/// `leaf.registry.sized`: `leaf` framed for committed rows of `row_bytes` bytes -- itself unless it is a BLAKE3 frame and the
+/// row has more than 3 chunks, then the sized frame with one CV slot per chunk (an error when this build has none).
+pub fn sized(leaf: &'static LeafScheme, row_bytes: usize) -> Result<&'static LeafScheme, String> {
+    if !std::ptr::eq(leaf, &BLAKE3) && !std::ptr::eq(leaf, &BLAKE3_XOB) {
+        return Ok(leaf);
+    }
+    let nch = row_bytes.div_ceil(1024);
+    if nch <= BLAKE3_MAX_CHUNKS {
+        return Ok(leaf);
+    }
+    BLAKE3_SIZED.iter().find(|(n, s)| *n == nch && s.name == leaf.name).map(|(_, s)| s)
+        .ok_or_else(|| format!("{}: rows of {nch} chunks ({row_bytes} bytes) have no frame in this build (4, 8, 16)", leaf.display))
+}
 
 // vllm-v1 (`leaf/vllm_v1.py`, lane b-ligero-vllm-v1): the relation proves every compression of the position leaf
 // `SHA-256("verity/pos-leaf/v0" || u64be(len) || row_bytes)` and publishes the digest as 16 limbs (big-endian words, low
@@ -905,6 +943,49 @@ mod tests {
             }
             assert_eq!(out, h.finalize().to_vec());
         }
+    }
+
+    #[test]
+    fn sized_blake3_frames_fold_to_the_keyed_digest_of_long_rows() {
+        // row byte i = (7 i + 3) mod 256; expected = the `blake3` package's keyed digest under the role's key (Python:
+        // blake3.blake3(row, key=leaf.blake3.key_for(role)).hexdigest(), equal to Blake3Leaf(ncm).leaf_bytes(native(row)))
+        let hex = |v: Vec<u8>| -> String { v.iter().map(|b| format!("{b:02x}")).collect() };
+        for (nbytes, role, want) in [
+            (4096usize, 1u32, "fa70cbb20dfe2b0faab40ec6eb6ed8fbf88a2cd93b50b0824bc39f221166ce79"),
+            (8192, 2, "98645d6912503f1a77f893d2566313957bbee8c9d07881777956a22d9107e0ac"),
+            (16384, 1, "1df95024a07b4031f66396d00634386ae747cd2cc1fc294bae2c2ee6fbe7b3be"),
+        ] {
+            let row: Vec<u8> = (0..nbytes).map(|i| ((7 * i + 3) % 256) as u8).collect();
+            let nch = nbytes / 1024;
+            let mut elems = vec![0u32; 1 + 16 * nch];
+            elems[0] = nch as u32 + 64 * role;
+            for c in 0..nch {
+                let mut cv = blake3_key_words(role);
+                for j in 0..16 {
+                    let mut block = [0u32; 16];
+                    for (w, slot) in block.iter_mut().enumerate() {
+                        let o = 1024 * c + 64 * j + 4 * w;
+                        *slot = u32::from_le_bytes([row[o], row[o + 1], row[o + 2], row[o + 3]]);
+                    }
+                    let flags = BLAKE3_KEYED_HASH | if j == 0 { 1 } else { 0 } | if j == 15 { 2 } else { 0 };
+                    cv = blake3_compress_cv(&cv, &block, c as u64, 64, flags);
+                }
+                for w in 0..8 {
+                    elems[1 + 16 * c + 2 * w] = cv[w] & 0xFFFF;
+                    elems[2 + 16 * c + 2 * w] = cv[w] >> 16;
+                }
+            }
+            let s = sized(&BLAKE3_XOB, nbytes).unwrap();
+            assert_eq!((s.name, s.digest_elems), ("blake3-xob", elems.len()));
+            assert_eq!(hex((s.leaf_bytes)(&elems)), want, "{nbytes} bytes");
+            assert_eq!(sized(&BLAKE3, nbytes).unwrap().params_sha256, s.params_sha256);
+            // the 3-slot header convention inside a sized frame is malformed (the tagged domain, never the root)
+            let mut m = elems.clone();
+            m[0] = nch as u32 + 4 * role;
+            assert_ne!(hex((s.leaf_bytes)(&m)), want);
+        }
+        assert!(std::ptr::eq(sized(&BLAKE3, 3072).unwrap(), &BLAKE3) && std::ptr::eq(sized(&SHA256, 16384).unwrap(), &SHA256));
+        assert!(sized(&BLAKE3, 5 * 1024).is_err());
     }
 
     #[test]

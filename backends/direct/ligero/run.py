@@ -386,7 +386,9 @@ def main(argv=None) -> int:
                                                              "fp8-ada-v2x4",
                                                              "bf16-hopper-v3x4", "bf16-ampere-v3x4", "fp8-hopper-v3x4",
                                                              "fp8-ada-v3x4",
-                                                             "bf16-hopper-x4", "bf16-ampere-x4", "fp8-hopper-x4", "fp8-ada-x4"),
+                                                             "bf16-hopper-x4", "bf16-ampere-x4", "fp8-hopper-x4", "fp8-ada-x4",
+                                                             *(f"{b}-x4-k{K}" for b in ("bf16-ampere", "bf16-hopper", "fp8-ada", "fp8-hopper")
+                                                               for K in (2048, 8192))),
                     help="bf16: the Ampere relation on the frozen input set (vu.py); bf16-ampere: the same unit and frozen set "
                          "(--root) on the generic chain runner (relations.py; its --auth included-hash column); fp4-nvf4: "
                          "fp4/chain.py; the others: relations.py on synthetic instances.  A `+<leaf>` suffix (fp8-ada+poseidon2, "
@@ -472,6 +474,15 @@ def main(argv=None) -> int:
         sub.choices[name].add_argument("--instances-cache", default=os.environ.get("LIGERO_INSTANCES_CACHE"), metavar="DIR",
                                        help="non-bf16 relations: keep the synthetic input set as an .npz under DIR "
                                             "(default $LIGERO_INSTANCES_CACHE: pod_bootstrap.sh's env.sh sets it)")
+    sub.choices["bench-vu"].add_argument("--input-set", default=None, metavar="DIR",
+                                         help="prove ids [0, --total-vus) of this input set (verity_numerical.bench.input_sets: a captured "
+                                              "vllm-vu-set/v1 or a generated input-set/v1 at the relation's K) instead of the relation's own "
+                                              "instances; the fingerprint's instances block is the set's (InputSet.ref)")
+    sub.choices["bench-vu"].add_argument("--input-set-art", default=None, metavar="ART",
+                                         help="--input-set: the set's art: id in the evidence store, recorded in the instances block")
+    sub.choices["bench-vu"].add_argument("--no-local-verify", action="store_true",
+                                         help="with --verifier: skip the prover pod's in-process Python verification of every sub-batch "
+                                              "(the live verifier's Rust verdict per session is the check; the batch bound still runs)")
     sub.choices["gate-vu"].add_argument("--unit-negatives", type=int, default=48,
                                         help="fp4-nvf4 gate: units per edge family for the wrong-rule witness battery (tu-k64-neg)")
     sub.choices["bench-vu"].add_argument("--warmup-subs", type=int, default=1,

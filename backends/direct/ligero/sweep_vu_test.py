@@ -35,3 +35,22 @@ def test_stamp_adds_the_blocks_views_read() -> None:
     assert doc["sweep"]["plateau"] is True
     m = S._meas(doc)
     assert m["commit.seconds"] == 0.5 and m["e2e.seconds"] == 3.0
+
+
+def test_an_input_set_caps_the_sweep_with_a_last_point_at_its_size(tmp_path, monkeypatch) -> None:
+    import json
+
+    def fake_call(cmd, stdout=None, stderr=None):
+        n = int(cmd[cmd.index("--total-vus") + 1])
+        out = Path(cmd[cmd.index("--out") + 1])
+        out.write_text(json.dumps({"measurements": [{"name": "e2e.vu_per_second", "value": 1000.0 + n}], "contention": {"contended": False}}))
+        return 0
+
+    monkeypatch.setattr(S.subprocess, "call", fake_call)
+    for cap, want in ((1920, [1024, 1920]), (6272, [1024, 2048, 4096, 6272]), (4096, [1024, 2048, 4096])):
+        d = tmp_path / f"cap{cap}"
+        assert S.main(["--relation", "bf16-ampere-x4-k2048+sha256", "--out-dir", str(d), "--cap", str(cap), "--dump", "none", "--",
+                       "--reps", "5"]) == 0
+        sw = json.loads((d / "sweep.json").read_text())
+        assert [p["total_vus"] for p in sw["points"]] == want and sw["plateau_total_vus"] == cap
+        assert sw["stopped"].startswith(f"reached the input set's {cap}")
