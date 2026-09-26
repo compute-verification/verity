@@ -99,6 +99,14 @@ def test_roots_bind_the_leaf_scheme_and_default_leaves_are_unchanged():
     assert run_hidden.persistent_bytes - run_plain.persistent_bytes == run_hidden.extra["salt_bytes"]
 
 
+def test_the_context_suffix_keeps_the_context_encoding_injective():
+    digest = hiding.HidingLeaves().digest
+    assert len(digest) == 32 and b"/step=" not in digest and b"/leaf=" not in digest
+    c = committer()
+    c._salts[7] = b""
+    assert c._ctx_digest(7) == hashlib.sha256(b"run-H/step=7/leaf=" + digest).digest()
+
+
 def test_range_openings_carry_their_salts():
     c = committer()
     run = c.commit_offline(stream())
@@ -116,3 +124,61 @@ def test_unsupported_configurations_are_refused():
     c = committer()
     with pytest.raises(ValueError):
         c.add_padding_steps([object()])
+
+
+def test_a_committer_whose_steps_take_another_leaf_path_is_refused():
+    class Elsewhere(NativeHostCommitter):
+        def _commit_step(self, job):
+            return None
+
+    with pytest.raises(ValueError):
+        Elsewhere(None, leaf_scheme=hiding.NAME)
+    assert Elsewhere(None).leaf_scheme == scheme.NAME
+
+
+def test_the_native_collector_refuses_hm96_on_every_leaf_path():
+    pytest.importorskip("torch")
+    from verity_vllm.commit.committer.native_collect import NativeCollectCommitter
+
+    for kw in ({"native_worker": True, "gpu_tree": False}, {"native_worker": False, "gpu_tree": False}, {}):
+        with pytest.raises(ValueError):
+            NativeCollectCommitter(None, leaf_scheme=hiding.NAME, **kw)
+
+
+def test_no_root_binds_hm96_over_unsalted_leaves(monkeypatch):
+    c = committer()
+    with pytest.raises(RuntimeError):
+        c._ctx_digest(0)                                        # nothing salted step 0: no hm96 context for it
+    monkeypatch.setattr(c, "_salted", lambda step, leaves: leaves)
+    with pytest.raises(RuntimeError):
+        c.commit_offline(stream())                              # a step path that skips the salts cannot bind its root
+    assert not c._done
+
+
+def test_commit_block_offline_refuses_hm96(monkeypatch):
+    pytest.importorskip("torch")
+    from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, TensorMeta
+
+    monkeypatch.setenv("VERITY_RETAIN", "host")
+    c = committer()
+    c.reset()
+    m = TensorMeta(0, "layer0.op", "uint8", (700,), 700, GPU_CHUNK_BYTES, 0, 3)
+    with pytest.raises(RuntimeError):
+        c.commit_block_offline(0, os.urandom(700), [m])
+    assert 0 not in c._done and 0 not in c._gpu_blocks and 0 not in c._gpu_levels
+
+
+def test_a_step_without_one_salt_per_leaf_neither_opens_nor_finalizes():
+    c = committer()
+    run = c.commit_offline(stream())
+    op, ro = c.open([(1, 3)])[0], c.open_range(1, 2, 6)
+    salts = c._salts.pop(1)
+    assert not c.verify(run, op) and not c.verify_range(run, ro)
+    with pytest.raises(RuntimeError):
+        c._leaf_record(run.steps)
+    c._salts[1] = salts[:-hiding.SALT_BYTES]
+    assert not c.verify(run, op) and not c.verify_range(run, ro)
+    with pytest.raises(RuntimeError):
+        c._leaf_record(run.steps)
+    c._salts[1] = salts
+    assert c.verify(run, op) and c.verify_range(run, ro)

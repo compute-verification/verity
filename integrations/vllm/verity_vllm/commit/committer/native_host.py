@@ -890,7 +890,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         if gpu_tree:
             self.name = f"{self.name}_gputree"
             self.chunk = GPU_CHUNK_BYTES
-        self._init_leaf_scheme(leaf_scheme, gpu_tree)
+        self._init_leaf_scheme(leaf_scheme, gpu_tree or type(self)._commit_step is not NativeHostCommitter._commit_step)
         # R13 P0: where absorbed raw bytes live (see RETAIN_MODES); `retain_values=False` (offline tests) maps to "none"
         # P0: host retention goes to pinned pool memory unless VERITY_RETAIN_PINNED=0 (pageable D2H is ~1 GB/s and synchronous)
         self.retain_pinned = os.environ.get("VERITY_RETAIN_PINNED", "1").strip() not in ("0", "false", "no")
@@ -1069,7 +1069,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         return hashlib.sha256(json.dumps(doc, sort_keys=True, default=str).encode()).digest()
 
     def _ctx_digest(self, step: int) -> bytes:
-        return hashlib.sha256(f"{self.run_id}/step={step}".encode() + self._leaf_ctx()).digest()
+        return hashlib.sha256(f"{self.run_id}/step={step}".encode() + self._leaf_ctx(step)).digest()
 
     def _select_modules(self) -> list[tuple[str, Any]]:
         out = []
@@ -2056,7 +2056,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                                     # X-03 reference integrity (Python acquisition path; the native collector overrides these in its finalize)
                                     "expected_tensors": self.x03_expected, "committed_tensors": self.x03_committed,
                                     "identity_check": self.identity_check() if self._layouts else None,
-                                    "hash_threads": self.hash_threads, "chunk": self.chunk, "modules_hooked": len(self._modules), **self._leaf_extra(),
+                                    "hash_threads": self.hash_threads, "chunk": self.chunk, "modules_hooked": len(self._modules), **self._leaf_record(steps),
                                     "staging": self.staging, "fast_copy": self.cudart_path, "gpu_tree": self.gpu_tree, "gpu_tree_ms": dict(self._gpu_t),
                                     "gpu_tree_retained_bytes": self._retained_device_bytes(),
                                     "host_retained_bytes": sum(int(lv.numel()) * 4 for lvls in self._gpu_levels.values() for lv in lvls if not lv.is_cuda)
@@ -2432,7 +2432,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         if len(opening.path) != len(shape) or any((p is None) == has for p, has in zip(opening.path, shape, strict=True)):
             return False
         ident = self.identity_of(opening.step, opening.index)
-        if ident != opening.identity or (self.hiding is None and opening.salt):
+        if ident != opening.identity or (self.hiding is None and opening.salt) or self._unsalted(opening.step, sc.n_leaves):
             return False
         ps = self._padding_leaf(opening.step, opening.index)
         if ps is not None:                                           # [B9.1] a padding leaf: the padding block's leaf rule (NB = 1 header, or pos_leaf)

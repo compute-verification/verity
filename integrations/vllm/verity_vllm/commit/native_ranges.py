@@ -177,7 +177,7 @@ class NativeRangeOpenings:
         if not 0 <= ro.step < len(run.steps):
             return False
         sc = run.steps[ro.step]
-        if not 0 <= ro.lo < ro.hi <= sc.n_leaves:
+        if not 0 <= ro.lo < ro.hi <= sc.n_leaves or self._unsalted(ro.step, sc.n_leaves):
             return False
         try:
             shape = range_path_shape(sc.n_leaves, ro.lo, ro.hi)
