@@ -17,7 +17,12 @@ from verity_numerical.bench import drivers
 DATA = Path(__file__).parent / "data"
 SLICE = DATA / "captured-101" / "slices" / "gemm-coordinate-ampere-bf16-k2048"
 BF16 = ("gemm-coordinate/k1536/sm90-mma-bf16+frame-v3/blake3-keyed", "bench-instances-bf16-hopper-v1")
-FLOCK = dict(verifier="vy-flock-verifier", verifier_addr="10.0.0.2:7400", rtt_target="10.0.0.2:22", campaign="c", lane="bench-spine")
+#: Two machines as the RunPod API and the probes record them (red-team-flock 12:00Z: the H100 prover and its A40 verifier).
+SEPARATE = {"prover": {"pod_id": "pod-p", "machine_id": "m-h100", "public_ip": "203.0.113.10", "cpu_model": "Xeon 8470"},
+            "verifier": {"pod_id": "pod-v", "machine_id": "m-a40", "public_ip": "198.51.100.20", "cpu_model": "EPYC 7502"},
+            "link": {"peer": "10.0.0.2:7400", "peer_ip": "10.0.0.2"}}
+FLOCK = dict(verifier="vy-flock-verifier", verifier_addr="10.0.0.2:7400", rtt_target="10.0.0.2:22", campaign="c", lane="bench-spine",
+             placement=SEPARATE)
 
 
 def _doc(art: str) -> dict:
@@ -39,7 +44,9 @@ def test_plan_wraps_the_flock_cell_script():
         argv = j["argv"]
         assert argv[:4] == ["research", "run", "--on", j["pod"]] and "--custody-r2" in argv and argv[argv.index("--cwd") + 1] == "source"
         cmd = argv[argv.index("--") + 1:]
-        assert cmd[:2] == ["bash", "backends/flock/pod/30-cell.sh"] and "REL=bf16-hopper" in cmd and "RUNS=5" in cmd
+        assert cmd[:4] == ["bash", "-c", C.PROBE_WRAP, "cell-job"] and cmd[4] == ("10.0.0.2:7400" if j["role"] == "prover" else "")
+        cmd = cmd[5:]
+        assert cmd == j["command"] and cmd[:2] == ["bash", "backends/flock/pod/30-cell.sh"] and "REL=bf16-hopper" in cmd and "RUNS=5" in cmd
         assert f"POINTS={C.DEFAULT_POINTS}" in cmd
     assert "ROLE=verifier" in v["command"]
     assert {"ROLE=prover", "VERIFIER=10.0.0.2:7400", "RTT_TARGET=10.0.0.2:22", "LOOPBACK=1"} <= set(p["command"])
@@ -111,7 +118,8 @@ def test_plan_wraps_the_b_ligero_cell_script(tmp_path, monkeypatch):
     as a tarball (--send), the verifier on its own pod, the loopback probe on."""
     from verity_numerical.bench.drivers import b_interactive as B
     monkeypatch.setattr(B, "STAGE_DIR", tmp_path)
-    kw = dict(verifier="vy-bl-verifier", verifier_addr="10.0.0.3:7000", campaign="c", lane="bligero-real-k", backend_args=["L=4096", "PP=4"])
+    kw = dict(verifier="vy-bl-verifier", verifier_addr="10.0.0.3:7000", campaign="c", lane="bligero-real-k", backend_args=["L=4096", "PP=4"],
+              placement=SEPARATE)
     cell = C.plan("B-interactive", "gemm-coordinate/k2048/sm80-mma-bf16+frame-v3/blake3-keyed", str(SLICE), "vy-bl-a100", **kw)
     assert (cell.family, cell.relation, cell.input_set["kind"]) == ("B-Ligero", "bf16-ampere-x4-k2048+blake3-xob", "set")
     v, p = cell.jobs
@@ -136,7 +144,7 @@ def test_plan_wraps_the_route_a_cell_script(tmp_path, monkeypatch):
     from verity_numerical.bench.drivers import a_route_a as A
     monkeypatch.setattr(A, "STAGE_DIR", tmp_path)
     kw = dict(verifier="vy-ar-ver", verifier_addr="10.0.0.4:15678", rtt_target="10.0.0.4:15677", campaign="c", lane="agkr-real-k",
-              points="1024 2048", backend_args=["VPORT=7300"])
+              points="1024 2048", backend_args=["VPORT=7300"], placement=SEPARATE)
     cell = C.plan("A-route-a", "gemm-coordinate/k2048/sm80-mma-bf16+frame-v3/blake3-keyed", str(SLICE), "vy-ar-a100", **kw)
     assert (cell.family, cell.relation, cell.input_set["kind"]) == ("A-GKR", "bf16-ampere-k2048+blake3", "set")
     v, p = cell.jobs
@@ -195,14 +203,24 @@ def test_check_catches(mutate, why):
     assert any(why in p for p in probs), probs
 
 
-def test_check_catches_one_host(tmp_path):
-    p, v = _run(tmp_path / "p", "h1", _doc("6d1295ed")), _run(tmp_path / "v", "h1", None)
-    assert any("one host" in x for x in C.check(_cell(), _doc("6d1295ed"), p, v))
+def test_check_catches_runs_on_one_machine(tmp_path):
+    """Two containers of one host: different hostnames, the same kernel boot id (red-team-flock 12:00Z, the L40S cells)."""
+    p, v = _run(tmp_path / "p", "h1", _doc("6d1295ed"), boot="b-1"), _run(tmp_path / "v", "h2", None, boot="b-1")
+    assert any("share boot_id b-1" in x for x in C.check(_cell(), _doc("6d1295ed"), p, v))
+    q, w = _run(tmp_path / "q", "h1", _doc("6d1295ed"), boot="b-1"), _run(tmp_path / "w", "h2", None, boot="b-2")
+    assert C.placement_problems(_cell(), q, w) == []
 
 
-def _run(d: Path, host: str, result: dict | None) -> Path:
+def _placement_file(tmp_path: Path, placement=SEPARATE) -> Path:
+    f = tmp_path / "placement-in.json"
+    f.write_text(json.dumps(placement))
+    return f
+
+
+def _run(d: Path, host: str, result: dict | None, boot: str | None = None) -> Path:
     (d / "out").mkdir(parents=True)
-    (d / "job.json").write_text(json.dumps({"computation": {"tree_sha": "t-" + host}, "environment": {"hostname": host}}))
+    env = {"hostname": host, **({"boot_id": boot} if boot else {})}
+    (d / "job.json").write_text(json.dumps({"computation": {"tree_sha": "t-" + host}, "environment": env}))
     (d / "out" / "binary.sha256").write_text("ab" * 32 + "  flock-pure-gpu\n")
     if result is not None:
         (d / "result.json").write_text(json.dumps(result))
@@ -269,7 +287,7 @@ def test_cli(tmp_path, capsys):
     out = tmp_path / "cell.json"
     assert C.main(["plan", "--backend", "C-interactive", "--statement", BF16[0], "--input-set", BF16[1], "--prover", "vy-p",
                    "--verifier", "vy-v", "--verifier-addr", "h:7400", "--rtt-target", "h:22", "--lane", "bench-spine",
-                   "--out", str(out)]) == 0
+                   "--placement", str(_placement_file(tmp_path)), "--out", str(out)]) == 0
     assert "research run --on vy-v" in capsys.readouterr().out
     assert C.main(["run", "--cell", str(out), "--dry-run"]) == 0
     assert C.main(["plan", "--backend", "B-fs", "--statement", BF16[0], "--input-set", BF16[1], "--prover", "vy-p"]) == 3
