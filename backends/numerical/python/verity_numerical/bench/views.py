@@ -1931,7 +1931,7 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
                       "algebraic_hashes": list(c.algebraic), "verified": bool(c.legacy.verified_by), "verified_by": c.legacy.verified_by,
                       "under_reverification": c.legacy.finding},
             "marks": _mark_names(c), "zk_class": zk_class(cfg) if cfg else None,
-            "throughput": {k: P[k] for k in ("instances", "instances_per_second", "end_to_end_s", "commit_s", "proving_s", "interaction_s")},
+            "throughput": {"inputs": P["instances"], **{k: P[k] for k in ("instances_per_second", "end_to_end_s", "commit_s", "proving_s", "interaction_s")}},
             "batching": dict(c.batching), "instances": dict(c.instances),
             "interaction": interaction_fields(ix, P, V.interaction_raw.get(c.artifact, {})),
             "overhead_at": {n.id: c.native * (P["commit_s"] + interaction_time(ix, n.rtt_s, n.bandwidth_bps)) / P["instances"]
