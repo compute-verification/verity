@@ -619,7 +619,7 @@ class Ctx:
     target: Target
     family: Family
     config: Configuration | None
-    statement_labels: list[Any]
+    statement_labels: list[list[Any]]      #: each result's labels, for every result of this configuration, target and subcircuit
     subcircuit: str | None = None                         #: a statement other than the target's own (:func:`result_subcircuit`)
     input_sets: Mapping[str, tuple[str, Mapping[str, Any]]] = field(default_factory=dict)  #: registered input sets (:func:`input_set_index`)
     variables: dict[str, int] = field(default_factory=dict)  #: its per-input work-model variables (attention's T: :func:`input_variables`)
@@ -1131,9 +1131,8 @@ def reject_codes(store: Any, ctx: Ctx, rules: Rules, equivs: Sequence[T.Instance
         why = interaction_problem(interaction(meta), rules.interaction_one_sided) if rules.interaction_validated else None
         if why:
             p.append(("M", why))
-    verdicts = T._labels(ctx.labels if rules.legacy else ctx.statement_labels)
-    ceiling, verdict = T._redteam_ceiling(verdicts, self_)
-    if not rules.legacy and not is_gemm(ctx.subcircuit) and verdict is None:
+    ceiling, verdict = T._redteam_ceiling(T._labels(ctx.labels), self_)        # a verdict caps only the result it names
+    if not rules.legacy and not is_gemm(ctx.subcircuit) and verdict is None and statement_grant(ctx, self_, pc) is None:
         p.append(("U", f"not red-team cleared: a statement on a new template ({ctx.subcircuit}) needs a red-team proof_class verdict "
                        "on its results before it is a cell"))
     if verdict is not None and isinstance(pc, str) and T.RANK.get(ceiling or "", -1) < T.RANK.get(pc, -1):
@@ -1144,12 +1143,23 @@ def reject_codes(store: Any, ctx: Ctx, rules: Rules, equivs: Sequence[T.Instance
     return sorted(p, key=lambda x: _ORDER[x[0]])
 
 
+def statement_grant(ctx: Ctx, self_: set[str], pc: Any) -> T._Label | None:
+    """The red-team verdict that clears the result's statement at its class ``pc``: the latest verdict on some result of the same
+    configuration, target and subcircuit that grants at least ``pc``, or ``None``.  Each result's own latest verdict counts,
+    so a peer's downgrade (a placement finding on that one run) neither clears nor caps the others."""
+    need = T.RANK.get(pc, -1) if isinstance(pc, str) else -1
+    grants = [v for v in (T._redteam_ceiling(T._labels(labels), self_)[1] for labels in ctx.statement_labels)
+              if v is not None and T.RANK.get(str(v.value), -1) >= need]
+    return max(grants, key=lambda v: v.ts) if grants else None
+
+
 def provisional(ctx: Ctx) -> str | None:
-    """Why the cell is provisional, or ``None``: no red-team ``proof_class`` verdict on the configuration's statement for this
-    subcircuit (any result of the same configuration and target) grants the result's class."""
+    """Why the cell is provisional, or ``None``: neither the result's own red-team ``proof_class`` verdict nor one on another
+    result of the configuration's statement for this subcircuit (same configuration and target) grants the result's class."""
     self_ = T.producers(ctx.attempt, T._labels(ctx.labels), ctx.meta)
-    ceiling, verdict = T._redteam_ceiling(T._labels(ctx.statement_labels), self_)
-    if verdict is None:
+    pc = (ctx.meta.get("workload_fingerprint") or {}).get("proof_class")
+    ceiling, verdict = T._redteam_ceiling(T._labels(ctx.labels), self_)
+    if verdict is None and statement_grant(ctx, self_, pc) is None:
         return f"no red-team clearance of {ctx.config.id if ctx.config else ctx.family.id}'s statement on {ctx.subcircuit or ctx.target.name}"
     return None
 
@@ -1317,11 +1327,11 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
                                    "codes": [("X", f"native N is not modelled for {c.subcircuit}: {why}")]})
                 unmodelled.append(c)
         entries = [c for c in entries if c not in unmodelled]
-    by_statement: dict[tuple[str | None, str, str | None], list[Any]] = {}
+    by_statement: dict[tuple[str | None, str, str | None], list[list[Any]]] = {}
     for c in entries:
-        by_statement.setdefault((c.config.id if c.config else None, c.target.name, c.subcircuit), []).extend(c.labels)
+        by_statement.setdefault((c.config.id if c.config else None, c.target.name, c.subcircuit), []).append(list(c.labels))
     for c in entries:
-        c.statement_labels = by_statement[(c.config.id if c.config else None, c.target.name, c.subcircuit)] if c.config else c.labels
+        c.statement_labels = by_statement[(c.config.id if c.config else None, c.target.name, c.subcircuit)] if c.config else [list(c.labels)]
 
     line_schemes: list[str | None] = [None] if rules.legacy else [
         s.id for s in SCHEMES if s.admissible and any(c.scheme == s.id for c in configurations)]
