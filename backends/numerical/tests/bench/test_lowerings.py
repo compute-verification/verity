@@ -89,7 +89,9 @@ def test_chunked_real_k_and_other_schemes():
     mod = reg.module("gemm-coordinate")
     k2304 = TM.parse_subcircuit_id("gemm-coordinate/k2304/sm80-mma-bf16")
     assert reg.supports(k2304, "frame-v3/blake3-keyed") is None and mod.layout(k2304) == "ChunkTail(4)"
-    assert "ChunkTail(4)" in mod.granted(k2304, "frame-v3/blake3-keyed")
+    assert mod.granted(k2304, "frame-v3/blake3-keyed") is None
+    k1536 = TM.parse_subcircuit_id("gemm-coordinate/k1536/sm80-mma-bf16")
+    assert "UL1" in reg.supports(k1536, "frame-v3/sha-256") and reg.supports(k1536, "frame-v3/blake3-keyed") is None
     k8960 = TM.parse_subcircuit_id("gemm-coordinate/k8960/sm80-mma-bf16")
     assert mod.max_vus_per_proof(k8960) == 1820
     assert "CN3" in reg.supports(TM.parse_subcircuit_id("gemm-coordinate/k2176/sm80-mma-bf16"), "frame-v3/blake3-keyed")

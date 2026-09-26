@@ -16,7 +16,8 @@ SCHEMES = {"frame-v3/blake3-keyed": "blake3", "frame-v3/sha-256": "sha256"}
 RELATIONS = {"sm80.mma.m16n8k16.bf16": "bf16-ampere-total", "sm90.mma.m16n8k16.bf16": "bf16-hopper",
              "sm90.wgmma.m64n8k16.bf16": "bf16-hopper-wgmma", "sm89.mma.m16n8k32.e4m3": "fp8-ada",
              "sm90.wgmma.m64n8k32.e4m3": "fp8-hopper", "sm120.mma.m16n8k64.e2m1.nvf4": "fp4-nvf4"}
-#: Chunk(n) with a red-team grant (red-team-flock, extended 2026-09-26 10:05Z to every n from 2 to 64); ChunkTail(n) is under review.
+#: Chunk(n) with a red-team grant (red-team-flock, extended 2026-09-26 10:05Z to every n from 2 to 64); ChunkTail(n) granted
+#: with CT1-CT3 (red-team-flock 10:22Z, confirmed for PR #75 at 13:10Z).
 GRANTED_CHUNKS = set(range(2, 65))
 TAIL = 512
 CHUNK = 1024
@@ -57,6 +58,9 @@ def supports(subcircuit, scheme):
         return f"flock-pure proves keyed-BLAKE3 or SHA-256 row leaves ({sorted(SCHEMES)}), not {scheme}"
     k = int(subcircuit.params["K"])
     if k == K:
+        if scheme == "frame-v3/sha-256" and RELATIONS[sem].endswith("-total"):
+            return ("the total unit takes a 2^14-row slot, which the SHA-256 row layout (ShaBf16) cannot hold (UL1); SHA-256 rows "
+                    "of this semantics need their own layout")
         return None
     if "e2m1" in sem:
         return f"the NVFP4 layouts (Fp4 / ShaFp4) are K = {K} rows; K = {k} needs its own layout"
@@ -72,8 +76,6 @@ def supports(subcircuit, scheme):
 def granted(subcircuit, scheme) -> str | None:
     """None when a red-team grant covers the layout this statement lowers to, else what is missing (a cell may still run)."""
     n = chunks(subcircuit)
-    if n is not None and tail(subcircuit):
-        return f"ChunkTail({n}) has no red-team grant yet (red-team-flock is reviewing PR #70)"
     if n is not None and n not in GRANTED_CHUNKS:
         return f"Chunk({n}) is outside red-team-flock's Chunk(n) grant (n from 2 to 64)"
     return None
