@@ -500,13 +500,10 @@ def non_gemm_subcircuit(fp: Any) -> str | None:
     sid = fp.get("subcircuit") if isinstance(fp, Mapping) else None
     if not isinstance(sid, str):
         return None
-    from . import templates
+    from . import census          # data only: the renderer's environment (the steward) has no numpy for bench.templates
 
-    try:
-        sub = templates.parse_subcircuit_id(sid)
-    except (KeyError, ValueError):
-        return None
-    return sid if sub.template.id != "gemm-coordinate" else None
+    template = sid.split("/", 1)[0]
+    return sid if template in census.SUBCIRCUIT_TEMPLATES and template != "gemm-coordinate" and "/" in sid else None
 
 
 def validate_fingerprint(fp: Any) -> list[str]:
