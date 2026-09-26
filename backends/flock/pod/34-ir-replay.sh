@@ -46,18 +46,25 @@ print(json.dumps({"set": inp.name, "content_digest": inp.content_digest, "n": in
 if low.units.cut:
     from verity_flock import ir_lower
     ir_lower.write_tables(out / "tables")
-a = Namespace(per_proof=per)
+a = Namespace(per_proof=per, template=template)
+mod = ir_bench.frame_module(template) if hasattr(ir_bench, 'frame_module') else None
 for d in sorted(rec.glob("p*-*"), key=lambda p: int(p.name[1:].split("-")[0])):
     total = int(d.name.split("-")[1])
     subs, t = ir_bench.stage_point(a, low, inp, total, out / d.name)
-    print(json.dumps({"point": d.name, "subbatches": subs, "stage_s": t}), flush=True)
+    extra = []
+    for j in range(len(subs)):
+        f = out / d.name / f"instances-s{j}.bin"
+        args = mod.serve_args(f) if mod is not None and hasattr(mod, "serve_args") else []
+        (out / d.name / f"args-s{j}").write_text(" ".join(args))
+        extra.append(args)
+    print(json.dumps({"point": d.name, "subbatches": subs, "stage_s": t, "serve_args": extra}), flush=True)
 open(os.environ.get("PINFILE", str(out / "pin")), "w").write(pin)
 PY
 grep -q '"netlist_equals_verifier": true' $O/stage.txt || { echo "netlist differs from the verifier pod's"; exit 1; }
 PIN=$(cat $I/pin); TB=; [ -d $I/tables ] && TB="--tables $I/tables"
 (cd $I && sha256sum -c $RD/inputs/$TAG.sha256) | tee $O/instances.check || exit 1
 : > $O/replay.jsonl; n=0; bad=0
-rp() { $B replay --instances $1 --netlist $I/net.txt --pin $PIN $TB --session $2 --proofs $3,$4 2>/dev/null | grep '^REPLAY'; }
+rp() { local ax=$(cat ${1%instances-s*}args-s$(basename $1 .bin | sed "s/instances-s//") 2>/dev/null); $B replay --instances $1 --netlist $I/net.txt --pin $PIN $TB $ax --session $2 --proofs $3,$4 2>/dev/null | grep '^REPLAY'; }
 for sd in $S/p*/sessions-s*; do
   pt=$(basename $(dirname $sd)); sb=${sd##*sessions-s}; inst=$I/$pt/instances-s$sb.bin
   for ses in $sd/l*; do
