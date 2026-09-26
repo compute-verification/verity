@@ -78,6 +78,7 @@ from verity.commitments.identity import canonical_json_bytes, tagged_sha256
 
 from .families import make_tc_ampere_bf16_gate_set, make_tensor_core_gate_set
 from .gateset import GateSet, make_isa_gate_set, make_word_gate_set
+from .elem_bf16 import ELEM_BF16_NAME, ELEM_BF16_VERSION, make_elem_bf16_gate_set
 from .int8 import make_int8_q7_gate_set
 from .reduce_mufu import REDUCE_MUFU_NAME, REDUCE_MUFU_VERSION, make_reduce_mufu_gate_set
 
@@ -1022,7 +1023,7 @@ def subcircuit_digest(s: Subcircuit) -> str:
 def family_gate_set(family_id: str, width: int) -> GateSet | None:
     """The pinned gate set of ``family_id`` at statement ``width``, if this package carries it.
 
-    The SP1 kernel (``backends/sp1/common/src/gateset.rs``) also knows ``elem-*``, ``ftz-f32``, ``pad-*`` and
+    The SP1 kernel (``backends/sp1/common/src/gateset.rs``) also knows ``elem-f32``, ``ftz-f32``, ``pad-*`` and
     ``embed-gather``; those were not promoted from veritor (nothing in this repository builds obligations over
     them), so an object naming one is rejected here with ``E_UNSUPPORTED_FAMILY`` even though the guest would check
     it.  Extend this table when a real consumer needs a family.
@@ -1042,6 +1043,8 @@ def family_gate_set(family_id: str, width: int) -> GateSet | None:
         return make_tc_ampere_bf16_gate_set(version)
     if (name, version) == (REDUCE_MUFU_NAME, REDUCE_MUFU_VERSION) and width == 32:
         return make_reduce_mufu_gate_set()
+    if (name, version) == (ELEM_BF16_NAME, ELEM_BF16_VERSION) and width == 32:
+        return make_elem_bf16_gate_set()
     return None
 
 
@@ -1053,6 +1056,7 @@ SUPPORTED_FAMILIES = (
     "veritor.tc-ampere-bf16@1",
     "veritor.tc-ampere-bf16@2",
     "veritor.reduce-mufu@1",
+    "veritor.elem-bf16@1",
 )
 
 

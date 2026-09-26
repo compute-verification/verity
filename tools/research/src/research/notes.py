@@ -955,6 +955,11 @@ def terminate_pod(pod_id: str) -> None:
     runpod._request("DELETE", f"/pods/{pod_id}")  # noqa: SLF001
 
 
+def pod_gone(why: str) -> bool:
+    """A custody check that failed because RunPod no longer knows the pod (HTTP 404): nothing to reap, nothing to report."""
+    return "HTTP 404" in why
+
+
 def reap_lines(root: Path, rows: list[dict], now: dt.datetime, grace_min: float, noted: set[str], reap: bool = False,
                terminate: Callable[[str], None] = terminate_pod, custody: Callable[[str, dict], tuple[bool, str]] | None = None,
                state: dict | None = None) -> list[str]:
@@ -989,6 +994,9 @@ def reap_lines(root: Path, rows: list[dict], now: dt.datetime, grace_min: float,
                     ok, why = custody(r["lane"], p)
                 except Exception as e:  # noqa: BLE001
                     ok, why = False, f"custody not checked ({type(e).__name__}: {str(e)[:80]})"
+                if not ok and pod_gone(why):
+                    noted.add(p["id"])
+                    continue
                 if not ok:
                     line = f"{now:%H:%MZ} REAP-BLOCKED {r['lane']} {p['name']}: {why}"
                 else:
@@ -1175,6 +1183,8 @@ def stale_reap_lines(root: Path, rows: list[dict], now: dt.datetime, idle_min: f
                 ok, why = custody(r["lane"], p)
             except Exception as e:  # noqa: BLE001
                 ok, why = False, f"custody not checked ({type(e).__name__}: {str(e)[:80]})"
+            if not ok and pod_gone(why):
+                continue
             what = f"{r['lane']} {p['name']} {p['id']} ${p['usd_h']:.2f}/h (STALE {_m(r.get('life_min', r['age_min']))}, idle {_m(p['idle_min'])})"
             if not ok:
                 line = f"{now:%H:%MZ} REAP-BLOCKED {r['lane']} {p['name']}: {why}"

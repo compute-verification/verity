@@ -481,6 +481,17 @@ def test_the_reaper_leaves_a_pod_started_after_the_final_it_means_the_lane_was_r
     assert killed == [] and not (tmp_path / "reaper.log").exists()
 
 
+def test_the_reaper_says_nothing_about_a_pod_runpod_no_longer_knows(tmp_path):
+    pod = {"id": "gone", "name": "vy-done", "usd_h": 0.48, "started_ts": NOW.timestamp() - 3600, "idle": True, "idle_min": 60}
+    gone = lambda lane, p: (False, "its run dirs' custody is unknown: PodError: GET /pods/gone -> HTTP 404: not found (terminated, or never existed)")
+    final = [{"lane": "done", "state": "final", "done_ts": NOW.timestamp() - 900, "pods": [pod]}]
+    stale = [{"lane": "slow", "state": "open", "stale": True, "age_min": 90, "pods": [pod]}]
+    killed: list = []
+    assert notes.reap_lines(tmp_path, final, NOW, 10, set(), reap=True, terminate=killed.append, custody=gone, state={}) == []
+    assert notes.stale_reap_lines(tmp_path, stale, NOW, 30, {}, reap=True, custody=gone, terminate=killed.append) == []
+    assert killed == [] and not (tmp_path / "reaper.log").exists()
+
+
 def test_the_reaper_blocks_a_final_lanes_pod_that_fails_custody_and_rechecks_after_30_min(tmp_path):
     pod = {"id": "p1", "name": "vy-done", "usd_h": 0.74, "started_ts": NOW.timestamp() - 3600}
     rows = [{"lane": "done", "state": "final", "done_ts": NOW.timestamp() - 900, "pods": [pod]}]
