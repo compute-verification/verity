@@ -23,9 +23,10 @@ REPO=$(pwd); RD=${RESEARCH_RUN_DIR:?}; W=/workspace; O=$RD/out; mkdir -p $O $W/b
 command -v python3 >/dev/null || { apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq python3 >/dev/null; }
 ROLE=${ROLE:-prover}; REL=${REL:?}; RUNS=${RUNS:-5}
 say() { echo "##### $(date -u +%H:%M:%SZ) $*"; }
-Q=-1; PER=100000
+# the cgroup's CPU quota, rounded up: v2 cpu.max, else v1 cfs_quota_us / cfs_period_us (US-NC-1 L40S pods: 13.6 cores of 128)
+Q=$(cat /sys/fs/cgroup/cpu/cpu.cfs_quota_us 2>/dev/null || echo -1); PER=$(cat /sys/fs/cgroup/cpu/cpu.cfs_period_us 2>/dev/null || echo 100000)
 if [ -r /sys/fs/cgroup/cpu.max ]; then read -r Q PER < /sys/fs/cgroup/cpu.max; [ "$Q" = max ] && Q=-1; fi
-NT=$(( Q > 0 ? Q / PER : $(nproc) )); [ "$NT" -lt 1 ] && NT=1; export RAYON_NUM_THREADS=$NT
+NT=$(( Q > 0 ? (Q + PER - 1) / PER : $(nproc) )); [ "$NT" -lt 1 ] && NT=1; export RAYON_NUM_THREADS=$NT
 export PYTHONPATH="$REPO/packages/verity/src:$REPO/backends/numerical/python:$REPO/tools/research/src:$REPO:$REPO/backends/gkr"
 export PATH="$HOME/.cargo/bin:$PATH"
 F=$W/flock-link/flock; B=$W/bin/flock-link-live; VB=$W/bin/verity-gkr-verify-live
@@ -166,10 +167,16 @@ if [ "${GATE:-1}" = 1 ]; then
 fi
 
 say "RTT probe to $RTT_TARGET"
-RTT=$($PY -c "import socket,time,statistics as S;h,p='$RTT_TARGET'.rsplit(':',1);t=[]
-for _ in range(20):
-    a=time.perf_counter();c=socket.create_connection((h,int(p)),timeout=5);t.append((time.perf_counter()-a)*1e3);c.close();time.sleep(0.05)
-print(round(S.median(t),3))") || { echo "RTT probe failed"; exit 3; }
+# 20 connects; a failed one is retried (the first connect to a freshly booted verifier over global networking can time out)
+RTT=$($PY -c "import socket,sys,time,statistics as S;h,p='$RTT_TARGET'.rsplit(':',1);t=[]
+for _ in range(40):
+    try:
+        a=time.perf_counter();c=socket.create_connection((h,int(p)),timeout=5);t.append((time.perf_counter()-a)*1e3);c.close()
+    except OSError:
+        pass
+    time.sleep(0.05)
+    if len(t)==20: break
+print(round(S.median(t),3)) if len(t)==20 else sys.exit('only %d of 40 connects' % len(t))") || { echo "RTT probe failed"; exit 3; }
 echo "RTT $RTT ms" | tee $O/rtt.txt
 RTT_METHOD="median of 20 TCP connects from the prover pod to the verifier pod's sshd ($RTT_TARGET), measured in this run before the sweep"
 i=0; TPS=()
