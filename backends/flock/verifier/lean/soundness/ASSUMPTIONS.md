@@ -139,6 +139,83 @@ statistical term is `ε_stat = tableError ≤ 2^-195.5`.
 Round digests (item 2) get a tight collision-resistance bound for every prover. The reduction includes the coin server,
 which sees the live bytes. So a mismatch with an equal digest is itself a collision.
 
+### 4.2a The rewinding bound as a function of hash width
+
+Plain collision resistance is Daniel's preferred model: no random oracle, no knowledge assumption. For arbitrary
+provers it needs the rewinding argument. Its cost is a square root on each Merkle-committed level, so its bound depends
+on the hash's output width `n`.
+
+- **The argument.** For each committed level, define the prover's "committed" table as the plurality opening of each
+  position over its continuations. If the prover opens a queried position differently from the plurality, running its
+  continuation twice from the same commitment finds a collision often enough.
+- **The bound.** For a prover making `t` hash evaluations:
+  - `Pr[inconsistent opening] ≤ Σ_levels √(N_ℓ·Q_ℓ·Adv_CR(2t)) ≤ t·√2·S_m / 2^{n/2}`;
+  - `N_ℓ` is a level's codeword length;
+  - `Q_ℓ` is its openings over the whole session (level 0 is committed once and opened by both reps);
+  - `S_m = Σ_ℓ √(N_ℓ·Q_ℓ)`, with `log2(√2·S_m)` equal to 10.7 at m = 22, 16.3 at m = 33 and 17.3 at m = 35.
+- **The square root is inherent to rewinding.** Take a prover holding one collision at one position and using either
+  side with probability ½ when that position is queried. It is inconsistent with probability about `q/2`, where `q` is
+  the probability the position is queried. But two runs expose the collision only with probability about `q²/2`.
+
+| Hash | Merkle rewinding term | ε ≤ 2^-128 up to |
+|---|---|---|
+| SHA-256 | `t·2^16.3 / 2^128` (m = 33) | never, for any `t ≥ 1` |
+| SHA-384 | `t·2^16.3 / 2^192` | `t ≈ 2^47` to `2^53` (m = 35 to 22) |
+| SHA-512 | `t·2^16.3 / 2^256` | **`t ≈ 2^110.7` to `2^117`** (m = 35 to 22) |
+
+- **Width needed.** Clearing 2^-128 at budget `t` needs `n ≥ 2·(log2 t + 128 + log2(√2·S_m))`. That is 437–451 bits at
+  `t = 2^80`, and 477–491 bits at `t = 2^100`. Only SHA-512 among the standard hashes qualifies.
+- **More reps make it slightly worse.** Every rep opens the shared level-0 table, adding about 0.4 bit per extra rep.
+- **The tight terms need `n ≥ 128 + 2·log2 t`.** These are the round digests, the straight-line reduction and the
+  random-oracle bound. SHA-256 meets that up to `t = 2^64.5`, SHA-384 up to `t = 2^128.5`. So **at `t ≥ 2^65`, SHA-256
+  misses 2^-128 in every model, the random-oracle model included.** Daniel's range, 2^80–2^100, needs wider hashes
+  whichever model is chosen.
+- **The project's convention agrees.** `verity_numerical.security.accounting.hash_collision_bound` charges `q²/2^h` at
+  `q = 2^64`. A-GKR moved its Merkle tree to SHA-512 for this reason (`backends/gkr/gpu/sha512_cuda.py`).
+
+**The route that avoids both the random oracle and the knowledge assumption:**
+
+1. Build the in-proof Merkle trees with SHA-512, leaves and nodes.
+2. Make the round digests assumption-free by having the coin server keep each round's bytes (it already receives
+   them). Alternatively, move the digests to SHA-384 or SHA-512.
+
+The compiled bound is then 2^-195.5 plus `t·2^{17.3−256}` plus negligible terms, from plain collision resistance, for
+every prover, up to `t ≈ 2^110`.
+
+**What the alternatives give:**
+
+- **More repetitions:** no help, as above.
+- **Rewinding more than twice:** a k-run reduction finds more collisions but runs k times longer. Under the generic
+  bound the gain cancels.
+- **Tight standard-model extraction** needs other primitives: somewhere-statistically-binding or somewhere-extractable
+  hashes, built from LWE or DDH. They are impractical at this scale.
+- **Sending the verifier the committed tables** makes binding information-theoretic, but costs about 2.3 GiB per table
+  at m = 33, twice the witness, so the proof is no longer succinct.
+
+**Cost of SHA-512 against SHA-256 in Flock.** Flock's in-proof Merkle trees are computed and checked natively, not in a
+circuit.
+
+- **Prover.**
+  - The level-0 tree at m = 33 hashes about 2.1 GiB per table: 2^21 columns of 1 KiB, plus nodes.
+  - On NVIDIA GPUs SHA-512 costs about 1.5× SHA-256 per byte, since 64-bit arithmetic is emulated. hashcat on an
+    RTX 4090 does about 22 G SHA-256 compressions/s against 7.5 G SHA-512 compressions/s, and a SHA-512 compression
+    covers twice the bytes.
+  - That is a few milliseconds more per table, well under 2% of a 0.5–1 s GPU proof.
+  - On CPUs, where SHA-256 has SHA-NI and SHA-512 usually has no instructions, it is about 2× per byte, so the Merkle
+    share of a CPU proof roughly doubles.
+- **Proof size.** 64-byte siblings double the hash part, about 36% of a proof: 6,126 hashes in the m = 32 example of
+  spec §8.3. Proofs grow from about 544 KB to about 740 KB per rep.
+- **Verifier.** Lean has no hash instructions either way. A SHA-512 compression costs about 1.25× a SHA-256 one and
+  covers twice the bytes, so hashing time stays about the same (a few ms).
+- **In-circuit.** This applies only if Merkle checks were ever verified inside a circuit (recursion, for a SNARK
+  variant), or to the statement's own data hashes.
+  - Per compression (Bristol Fashion): 22,573 against 57,947 AND gates, 2.6× per compression and 1.3× per input byte.
+  - In Flock's power-of-two slots: 2^15 against 2^16 rows per compression, the same rows per input byte. Per
+    Merkle node (two compressions each) that is twice the rows.
+- **The statement's own data commitments** (frame-v3 roots, row digests, Halevi–Micali leaves hashed in the circuit)
+  are tight collision-resistance terms. At `t ≥ 2^65` they too need a hash of at least 288 bits. That is a
+  commitment-scheme decision, separate from the verifier's.
+
 ### 4.3 The model the theorem uses
 
 - **The main compiled theorem will be stated under collision resistance**, for provers that know their committed tables
@@ -147,6 +224,9 @@ which sees the live bytes. So a mismatch with an equal digest is itself a collis
 - **"Knows its tables" is a real restriction.** A prover that sends a cap without holding a table it hashes to is not
   covered by collision resistance at 2^-128. For such provers the only route to 2^-128 is the random-oracle model
   (the third row). The number then lives in the random-oracle model, and Table 1 must say so.
+- **With SHA-512 Merkle trees** (§4.2a), plain collision resistance covers every prover up to about 2^110 hash
+  evaluations. Neither the knowledge restriction nor the random-oracle model is needed. This is the recommended target
+  if Daniel keeps collision resistance.
 - The oracle-layer theorem (§1) is information-theoretic and needs neither.
 
 ### 4.4 Coins
