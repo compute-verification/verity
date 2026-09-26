@@ -103,6 +103,12 @@ for n in zerocheck_coin_low_bit last_coin_low_bit; do neg $n $T/$n.json $ses/irf
 for n in rep1_second_round_coin_low_bit rep0_mid_round_coin_low_bit link_point_changed publics_digest_changed round_message_digest_changed require_link_false; do
   neg $n $T/$n.json $ses/irf.rep0.bin $ses/irf.rep1.bin; done
 neg unused_high_bits_of_query_coin $T/unused_high_bits_of_query_coin.json $ses/irf.rep0.bin $ses/irf.rep1.bin $inst accepted
+if [ -s ${inst%instances-s*}args-s${NEG##*sessions-s} ]; then  # S1: a sampling file replays only once check_native passed
+  line=$($B replay --instances $inst --netlist $I/net.txt --pin $PIN $TB --session $ses/session.json --proofs $ses/irf.rep0.bin,$ses/irf.rep1.bin 2>/dev/null | grep -E '^(REPLAY|REFUSED)')
+  r=$(echo "$line" | grep -q '"accepted":true' && echo accepted || echo rejected)
+  echo "{\"neg\": \"native_check_not_attested\", \"want\": \"rejected\", \"result\": \"$r\", \"line\": $(echo "$line" | cut -f2- | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()[:200]))')}" | tee -a $O/negatives.jsonl
+  [ $r = rejected ] || bad=$((bad+1))
+fi
 o=$(ls $I/*/instances-s*.bin | grep -v "$inst" | tail -1); neg other_instance_file $ses/session.json $ses/irf.rep0.bin $ses/irf.rep1.bin $o
 echo "NEGATIVES $(grep -c '"want": "rejected", "result": "rejected"' $O/negatives.jsonl) rejected as wanted, $(grep -c '"want": "accepted", "result": "accepted"' $O/negatives.jsonl) accepted as wanted, $(grep -c '"want": "info"' $O/negatives.jsonl) info, of $(wc -l < $O/negatives.jsonl); total bad $bad" | tee -a $O/summary.txt
 [ $bad = 0 ]
