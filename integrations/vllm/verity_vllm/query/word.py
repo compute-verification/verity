@@ -166,7 +166,8 @@ class Graph:
                     mine.append(o - lo)
                 else:
                     ext = True
-                    mine.append(-1 - inputs.setdefault(o, len(inputs)))      # an input gate: -1 - its index
+                    if j not in wide:                                  # a wide gate's inputs: reads of committed inputs, not listed
+                        mine.append(-1 - inputs.setdefault(o, len(inputs)))      # an input gate: -1 - its index
             external[j] = ext
             ops.append(mine)
         for j in range(n):                                          # a value computed from constants alone is a constant too
@@ -174,22 +175,26 @@ class Graph:
                 const[j] = free[j] = True
         # recomputes: a computation gate with the primitive and the operands (by value: constants, inputs, wiring, earlier canonical
         # gates) of an earlier one computes the same value again; a gate whose wide operands were not enumerated matches nothing
-        intern: dict[tuple, int] = {}
-        tok = [0] * n
-        first: dict[tuple, int] = {}
+        tok = array("q", bytes(8 * n))                               # a value's token: equal tokens, equal values
+        first: dict[int, int] = {}                                  # key hash -> the first gate with that key
         dup: list[tuple[int, int]] = []
+
+        def key(j: int) -> tuple:
+            return (int(prim[j]),) + tuple(hash(("i", -o)) if o < 0 else tok[o] for o in ops[j])   # -o >= 1: hash(-1) == hash(-2)
+
         for j in range(n):
-            key = (int(prim[j]), tuple(intern.setdefault(("i", -1 - o), len(intern)) if o < 0 else tok[o] for o in ops[j]))
+            k = key(j)
+            h = hash(k)
             if free[j]:
-                tok[j] = intern.setdefault(("s",) + key, len(intern))
+                tok[j] = hash(("s", h))
             elif j in wide:
-                tok[j] = intern.setdefault(("u", j), len(intern))
-            elif key in first:
-                dup.append((j, first[key]))
-                tok[j] = tok[first[key]]
+                tok[j] = hash(("u", j))
+            elif h in first and key(first[h]) == k:
+                dup.append((j, first[h]))
+                tok[j] = tok[first[h]]
             else:
-                first[key] = j
-                tok[j] = intern.setdefault(("g", j), len(intern))
+                first.setdefault(h, j)
+                tok[j] = hash(("g", j))
         srcs: dict[int, tuple[int, ...]] = {}
         for j in np.flatnonzero(free).tolist():
             s: set[int] = set()
