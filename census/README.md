@@ -48,6 +48,10 @@ names per-input quantities that are not parameters, such as an attention head's 
 tables' native N uses (`work-model/v0`), `source` cites the IR definition or kernel, and `basis` says what is counted.
 Weighting a workload's template mix by these counts gives its real work. Counting verification units or inputs does not.
 
+A memory-bound template also carries `bytes_per_input`, the bytes read and written per input over its ports, with
+`bytes_basis` and `bytes_source`. Together with a hardware line's `memory_bytes_per_second` (cited in `memory_sources`),
+this is its memory-bandwidth work model: the renderer's native N for its statements is bandwidth ÷ bytes per input.
+
 ## Workloads
 
 A workload is a served configuration: today the vLLM regression rows that record a replay partition. Its `template_mix`

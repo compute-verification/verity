@@ -1308,3 +1308,99 @@ def test_the_entities_render_keys_real_k_results_by_their_statement(store: Local
     assert t2["cells"]["B-Ligero"]["result"] == r["id"] and t2["key"]["parameters"]["K"] == 2048
     rows3 = [x for x in ent["tables"]["table3"]["rows"] if x["result"] == r["id"]]
     assert rows3 and rows3[0]["key"]["statement"] == stmt and rows3[0]["label"].startswith(K2048)
+
+
+# --- non-GEMM statements: another template is another statement, with native N from its memory-bandwidth work model -------------
+
+NONGEMM = ("rope-head/d64/neox-bf16", "silu-mul/i8192/bf16", "rmsnorm-fused-cuda/n2048-eps1e-05/bf16", "rmsnorm-triton/n2048-eps1e-05/bf16")
+FLOCK_NAME = "flock union, flock-128-r2 (backends/flock)"
+
+
+def nongemm(store: LocalStore, sub: str, *, t_total: float = 0.4, commit: float = 0.1, verified: bool = True, redteam: bool = True,
+            register: bool = True, set_sub: str | None = None) -> str:
+    """A C-Flock frame-v3 keyed-BLAKE3 result on an H100 over ``sub`` (a #101 non-GEMM subcircuit), its inputs a registered input
+    set of ``set_sub``, with a non-producer's verification and red-team-flock-2's proof_class verdict unless switched off."""
+    import hashlib
+
+    digest = hashlib.sha256(f"set-{sub}-{set_sub}".encode()).hexdigest()
+    if register:
+        store.put_artifact("input-set/v1", {"set": (set_sub or sub).replace("/", "-"), "subcircuit": set_sub or sub, "source": "captured",
+                                            "n": 4096, "content_digest": digest, "schema": "vllm-vu-set/v1"})
+    doc = hashed("blake3", t_total=t_total, security={"target": -128, "achieved_log2": -195.5})
+    fp = doc["workload_fingerprint"]
+    fp["software"]["backend"]["name"] = FLOCK_NAME
+    fp.update(proof_class="NON_ZK_PROOF", zk_mode="none", hardware={"gpu": {"name": H100, "driver": "570.211.01", "cuda": "12.8"}, "cpu": {"model": "c"}},
+              instances={"dataset": sub.replace("/", "-"), "tier": f"vllm-vu-set/v1:{sub}", "range": [0, 4096], "manifest_sha256": digest,
+                         "source": "captured"})
+    fp["profile"] = BF16_HOPPER.name
+    doc["measurements"] = [m for m in doc["measurements"] if not m["name"].startswith(("rate.", "overhead."))]
+    doc["measurements"].append({"name": V.COMMIT, "value": commit, "unit": "s"})
+    for name, value in FLOCK_LIVE.items():
+        if name in ("rtt_method", "t_total_includes_wait", "loopback_method"):
+            doc.setdefault("interaction", {})[name] = value
+        else:
+            doc["measurements"].append({"name": name, "value": value, "unit": {"rounds.sequential_depth": "count", "net.bytes_out": "B",
+                                                                                "net.bytes_in": "B", "net.rtt_ms": "ms"}.get(name, "s")})
+    doc["protocol"], doc["sweep"] = dict(PROTOCOL), dict(SWEEP)
+    doc["cell"] = {"subcircuit": sub, "statement": f"{sub}+frame-v3/blake3-keyed", "backend": "C-interactive"}
+    files = store.put_artifact("run-files/v1", {"run_id": doc["run_id"], "dump": "proofs"})
+    store.index.set_replica(files, "remote", "2026-09-25T00:00:00Z")
+    art = store.put_artifact(T.RESULT_KIND, doc, refs={"run_files": files})
+    store.put_attempt(attempt(doc["run_id"], art, LANE))
+    store.add_label(art, "candidate", "X", LANE, ts="2026-09-22T10:00:00Z")
+    if verified:
+        store.add_label(art, "independently_verified", True, VERIFIER, ref=f"{doc['run_id']}:verify", ts="2026-09-22T10:01:00Z")
+    if redteam:
+        store.add_label(art, "proof_class", "NON_ZK_PROOF", "red-team-flock-2", ts="2026-09-26T07:30:00Z")
+    return art
+
+
+def test_non_gemm_statements_have_rows_and_are_rejected_until_red_team_cleared_and_verified(store: LocalStore) -> None:
+    uncleared = nongemm(store, NONGEMM[0], redteam=False)
+    unverified = nongemm(store, NONGEMM[1], verified=False)
+    views = V.build(store, dataclasses.replace(V.SPEC, interaction_validated=False))
+    subs = {ln.get("subcircuit") for ln in views.lines}
+    assert {NONGEMM[0], NONGEMM[1]} <= subs
+    why = next(r for r in views.rejected if r["artifact"] == uncleared)
+    assert [k for k, _ in why["codes"]] == ["U"] and "not red-team cleared" in why["codes"][0][1] and why["subcircuit"] == NONGEMM[0]
+    assert "U" in codes(views, unverified)
+    row = next(ln for ln in views.lines if ln.get("subcircuit") == NONGEMM[0])
+    assert row["cells"]["C-Flock" if "C-Flock" in row["cells"] else "Flock"] is None
+
+
+def test_a_cleared_non_gemm_cell_fills_its_row_with_memory_bandwidth_native_n(store: LocalStore) -> None:
+    arts = {sub: nongemm(store, sub) for sub in NONGEMM}
+    views = V.build(store, dataclasses.replace(V.SPEC, interaction_validated=False))
+    col = "C-Flock" if "C-Flock" in views.columns() else "Flock"
+    md = V.render_markdown(views)
+    for sub, nbytes in zip(NONGEMM, (6 * 64, 6 * 8192, 10 * 2048, 6 * 2048)):
+        row = next(ln for ln in views.lines if ln.get("subcircuit") == sub)
+        cell = row["cells"][col]
+        assert cell is not None and cell.artifact == arts[sub] and cell.subcircuit == sub and not cell.provisional
+        N = row["native"]
+        assert N["unit"] == "memory" and N["bytes_per_instance"] == nbytes and N["instances_per_second"] == pytest.approx(3.35e12 / nbytes)
+        assert cell.overhead == pytest.approx(N["instances_per_second"] / cell.throughput["instances_per_second"])
+        assert f"{sub}: work-model/v0 memory-bandwidth work model: {nbytes} bytes per input" in md
+    assert "· RoPEHead<64> · NeoX · BF16 · frame-v3 · keyed-BLAKE3 rows |" in md and " · memory, 3.35 TB/s [" in md
+    assert V.parity(store) == []
+
+
+def test_non_gemm_inputs_must_be_a_registered_set_of_that_subcircuit(store: LocalStore) -> None:
+    wrong = nongemm(store, NONGEMM[2], set_sub=NONGEMM[3])
+    unregistered = nongemm(store, NONGEMM[3], register=False)
+    views = V.build(store, dataclasses.replace(V.SPEC, interaction_validated=False))
+    why = next(r for r in views.rejected if r["artifact"] == wrong)["codes"][0]
+    assert why[0] == "I" and NONGEMM[3] in why[1]
+    assert next(r for r in views.rejected if r["artifact"] == unregistered)["codes"][0][0] == "I"
+
+
+def test_the_entities_render_has_the_non_gemm_statements(store: LocalStore) -> None:
+    art = nongemm(store, NONGEMM[0])
+    ent = V.render_entities(V.build(store, dataclasses.replace(V.SPEC, interaction_validated=False)), rendered_at="2026-09-26T08:00:00Z", commit="abc")
+    stmt = f"{NONGEMM[0]}+frame-v3/blake3-keyed"
+    r = next(x for x in ent["results"] if x["artifact"] == art)
+    assert r["statement"] == stmt and r["subcircuit"] == NONGEMM[0] and r["backend"] == "C-interactive" and r["input_set"]["how"] == "registered"
+    assert r["N"]["value"] == pytest.approx(3.35e12 / (6 * 64))
+    sub = next(x for x in ent["subcircuits"] if x["id"] == NONGEMM[0])
+    assert sub["subcircuit_template"] == "rope-head" and sub["parameters"] == {"D": 64} and sub["native"]["value"] == pytest.approx(3.35e12 / 384)
+    assert stmt in ent["axes"]["statements"] and next(x for x in ent["statements"] if x["id"] == stmt)["display"].startswith("RoPEHead<64>")

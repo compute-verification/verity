@@ -57,6 +57,27 @@ def stood_for_by(subcircuit_id: str) -> str | None:
     return e.subcircuit if e is not None else None
 
 
+def evaluate(expr: str, env: dict[str, Any]) -> int:
+    """A work-model expression (``+ - * //`` and parentheses over integers and parameter names) evaluated without ``eval``."""
+    import ast
+    import operator
+
+    ops = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.FloorDiv: operator.floordiv}
+
+    def ev(n: ast.AST) -> int:
+        if isinstance(n, ast.Expression):
+            return ev(n.body)
+        if isinstance(n, ast.BinOp) and type(n.op) in ops:
+            return ops[type(n.op)](ev(n.left), ev(n.right))
+        if isinstance(n, ast.Constant) and isinstance(n.value, int):
+            return n.value
+        if isinstance(n, ast.Name):
+            return int(env[n.id])
+        raise ValueError(f"not a work-model expression: {expr!r}")
+
+    return ev(ast.parse(expr, mode="eval"))
+
+
 def source(entry: Any) -> str:
     """An entry's sources as one line."""
     return "; ".join(s.label for s in entry.sources)

@@ -1,5 +1,28 @@
 # Changelog: `verity_numerical` (the bench renderers and their rules)
 
+## 2026-09-26: non-GEMM statement rows, with native N from a memory-bandwidth work model
+
+- **Statements:** a result whose subcircuit is another template (its `bench.cell` stamp, or the fingerprint's
+  `subcircuit`) is its own statement. This covers C-Flock's frame-v3 cells on #101's `rope-head/d64/neox-bf16`,
+  `silu-mul/i8192/bf16`, `rmsnorm-fused-cuda/n2048-eps1e-05/bf16` and `rmsnorm-triton/n2048-eps1e-05/bf16` on the H100.
+  These rows follow the GEMM rows.
+- **Native N:** it comes from the template's memory-bandwidth work model, the line's memory bandwidth divided by
+  `work_model.bytes_per_input`:
+  - `rope-head` 6D;
+  - `silu-mul` 6I;
+  - `rmsnorm-fused-cuda` 10N;
+  - `rmsnorm-triton` 6N.
+
+  The bytes are counted from each template's ports, with every row read or written once per input. The row's footnote
+  states the basis. The census gains `bytes_per_input`, `bytes_basis` and `bytes_source` on those four templates, and
+  `memory_bytes_per_second` (3.35 TB/s, from the H100 datasheet) with `memory_sources` on the H100 lines. The four bound
+  subcircuits use bench-spine's ids and display names.
+- **Admission:** these statements are rejected until the result carries a red-team `proof_class` verdict, in addition to
+  a non-producer verification. They are rejected with reason U, not just marked provisional. Their inputs must be a
+  registered input set of that subcircuit (reason I).
+- **Entities:** the render has the statements, their subcircuits (template and parameters) and their results.
+- **Unchanged:** existing renders and parity.
+
 ## 2026-09-26: real-K rows: a result at another K (or semantics) is its own statement
 
 - **Statements:** K and the semantics are part of the subcircuit (docs ontology, "A result"). A result whose GEMM

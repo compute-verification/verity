@@ -295,6 +295,19 @@
             "type": "string",
             "minLength": 1,
             "description": "the IR definition or kernel the count is read from"
+          },
+          "bytes_per_input": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_ +*/()-]+$",
+            "description": "bytes read and written per input, an integer expression over the parameters: the memory-bandwidth work model"
+          },
+          "bytes_basis": {
+            "type": "string",
+            "minLength": 1
+          },
+          "bytes_source": {
+            "type": "string",
+            "minLength": 1
           }
         }
       }

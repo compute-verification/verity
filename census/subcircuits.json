@@ -315,9 +315,26 @@
       "special_per_input": {},
       "basis": "each output element is x*cos +- y*sin: two multiplies and one add",
       "variables": {},
-      "source": "verity_vllm.program.registry.b1.RoPE_v1 / RoPEHead_v1"
+      "source": "verity_vllm.program.registry.b1.RoPE_v1 / RoPEHead_v1",
+      "bytes_per_input": "6*D",
+      "bytes_basis": "reads x[D] and the cos/sin row cs[D], writes out[D]: 3 rows of D bf16 words; every row counted once per input, none assumed cached (the conservative, memory-bound reading)",
+      "bytes_source": "bench-spine's port definitions (verity_numerical.bench.templates): rope-head x, cs -> out"
     },
-    "subcircuits": []
+    "subcircuits": [
+      {
+        "id": "rope-head/d64/neox-bf16",
+        "display": "RoPEHead<64> · NeoX · BF16",
+        "parameters": {
+          "D": 64
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "row #101 (Llama-3.2-1B, census/workloads.json); bench-spine's subcircuit id (verity_numerical.bench.templates); C-Flock's frame-v3 cells on it (flock-backend 2026-09-26)"
+          }
+        ]
+      }
+    ]
   },
   {
     "id": "rmsnorm-fused-cuda",
@@ -351,9 +368,27 @@
       },
       "basis": "residual add (N), sum of squares (2N), scale by rsqrt(mean + eps) and weight (about N as fused multiplies): roughly 4N plus one rsqrt",
       "variables": {},
-      "source": "verity_vllm.program.registry.b1.RMSNormFusedCuda_v2 (vLLM fused_add_rms_norm)"
+      "source": "verity_vllm.program.registry.b1.RMSNormFusedCuda_v2 (vLLM fused_add_rms_norm)",
+      "bytes_per_input": "10*N",
+      "bytes_basis": "reads x, res and w (3 rows of N bf16 words), writes out.0 and out.1 (2 rows): 5N bf16 words; every row counted once per input, none assumed cached (the conservative, memory-bound reading)",
+      "bytes_source": "bench-spine's port definitions (verity_numerical.bench.templates): rmsnorm-fused-cuda in0, in1, in2 -> out.0, out.1"
     },
-    "subcircuits": []
+    "subcircuits": [
+      {
+        "id": "rmsnorm-fused-cuda/n2048-eps1e-05/bf16",
+        "display": "RMSNormFusedCuda_v2<2048> · eps 1e-05 · BF16",
+        "parameters": {
+          "N": 2048,
+          "EPS": 1e-05
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "row #101 (Llama-3.2-1B, census/workloads.json); bench-spine's subcircuit id (verity_numerical.bench.templates); C-Flock's frame-v3 cells on it (flock-backend 2026-09-26)"
+          }
+        ]
+      }
+    ]
   },
   {
     "id": "rmsnorm-triton",
@@ -387,9 +422,27 @@
       },
       "basis": "sum of squares (2N) and the scaled, weighted output (about N): roughly 3N plus one rsqrt",
       "variables": {},
-      "source": "verity_vllm.program.registry.b1.RMSNormTriton_v1"
+      "source": "verity_vllm.program.registry.b1.RMSNormTriton_v1",
+      "bytes_per_input": "6*N",
+      "bytes_basis": "reads x and w (2 rows of N bf16 words), writes out (1 row): 3N bf16 words; every row counted once per input, none assumed cached (the conservative, memory-bound reading)",
+      "bytes_source": "bench-spine's port definitions (verity_numerical.bench.templates): rmsnorm-triton in0, in1 -> out.out"
     },
-    "subcircuits": []
+    "subcircuits": [
+      {
+        "id": "rmsnorm-triton/n2048-eps1e-05/bf16",
+        "display": "RMSNormTriton_v1<2048> · eps 1e-05 · BF16",
+        "parameters": {
+          "N": 2048,
+          "EPS": 1e-05
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "row #101 (Llama-3.2-1B, census/workloads.json); bench-spine's subcircuit id (verity_numerical.bench.templates); C-Flock's frame-v3 cells on it (flock-backend 2026-09-26)"
+          }
+        ]
+      }
+    ]
   },
   {
     "id": "silu-mul",
@@ -419,9 +472,26 @@
       },
       "basis": "per output: silu(g) = g / (1 + exp(-g)) (an add and a divide) times up (a multiply)",
       "variables": {},
-      "source": "verity_vllm.program.registry.b1.SiluMul_v1"
+      "source": "verity_vllm.program.registry.b1.SiluMul_v1",
+      "bytes_per_input": "6*I",
+      "bytes_basis": "reads the gate|up row in0[2I], writes out[I]: 3I bf16 words; every row counted once per input, none assumed cached (the conservative, memory-bound reading)",
+      "bytes_source": "bench-spine's port definitions (verity_numerical.bench.templates): silu-mul in0 -> out.out"
     },
-    "subcircuits": []
+    "subcircuits": [
+      {
+        "id": "silu-mul/i8192/bf16",
+        "display": "SiluMul_v1<8192> · BF16",
+        "parameters": {
+          "I": 8192
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "row #101 (Llama-3.2-1B, census/workloads.json); bench-spine's subcircuit id (verity_numerical.bench.templates); C-Flock's frame-v3 cells on it (flock-backend 2026-09-26)"
+          }
+        ]
+      }
+    ]
   },
   {
     "id": "gumbel-top-p-token-select",
