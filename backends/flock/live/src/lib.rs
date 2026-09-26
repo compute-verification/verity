@@ -35,6 +35,8 @@ pub mod vllm_block;
 pub mod zk_hooks;
 #[cfg(feature = "gpu")]
 pub mod gpu;
+#[cfg(feature = "gpu")]
+pub mod gpu_netlist;
 
 use std::{
     collections::BTreeMap,

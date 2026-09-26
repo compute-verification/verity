@@ -35,11 +35,11 @@ pub fn device_count() -> i32 {
     flock_cuda_ffi::gpu::device_count()
 }
 
-type LiveCb = unsafe extern "C" fn(*mut c_void, *const u8, usize, u32, *mut u64) -> i32;
-type LinkCb = unsafe extern "C" fn(*mut c_void, *const u8, usize, i32, *mut u64, i32) -> i32;
+pub(crate) type LiveCb = unsafe extern "C" fn(*mut c_void, *const u8, usize, u32, *mut u64) -> i32;
+pub(crate) type LinkCb = unsafe extern "C" fn(*mut c_void, *const u8, usize, i32, *mut u64, i32) -> i32;
 
 #[repr(C)]
-struct ProveParams {
+pub(crate) struct ProveParams {
     m: i32,
     statement_digest: *const u8,
     domain: *const u8,
@@ -80,7 +80,7 @@ struct ProveParams {
 }
 
 #[repr(C)]
-struct ChunkParams {
+pub(crate) struct ChunkParams {
     n_comp_log: i32,
     cv: *const u32,
     msg: *const u32,
@@ -152,7 +152,7 @@ unsafe extern "C" {
     fn flock_cuda_free(p: *mut u8);
 }
 
-unsafe extern "C" fn live_cb(ctx: *mut c_void, content: *const u8, len: usize, n: u32, out: *mut u64) -> i32 {
+pub(crate) unsafe extern "C" fn live_cb(ctx: *mut c_void, content: *const u8, len: usize, n: u32, out: *mut u64) -> i32 {
     let ch = unsafe { &mut *(ctx as *mut LiveChallenger) };
     let c = unsafe { from_raw_parts(content, len) }.to_vec();
     match catch_unwind(AssertUnwindSafe(|| ch.round(c, n as usize))) {
@@ -171,7 +171,7 @@ unsafe extern "C" fn live_cb(ctx: *mut c_void, content: *const u8, len: usize, n
 
 type Hook<'a> = &'a mut dyn FnMut(&[u8]) -> Vec<Vec<F128>>;
 
-unsafe extern "C" fn link_cb(ctx: *mut c_void, cap: *const u8, cap_len: usize, m: i32, x_out: *mut u64, max: i32) -> i32 {
+pub(crate) unsafe extern "C" fn link_cb(ctx: *mut c_void, cap: *const u8, cap_len: usize, m: i32, x_out: *mut u64, max: i32) -> i32 {
     let hook = unsafe { &mut *(ctx as *mut Hook<'_>) };
     let cap = unsafe { from_raw_parts(cap, cap_len) };
     match catch_unwind(AssertUnwindSafe(|| hook(cap))) {
@@ -191,7 +191,7 @@ unsafe extern "C" fn link_cb(ctx: *mut c_void, cap: *const u8, cap_len: usize, m
     }
 }
 
-fn csc_from_rows(m: &SparseBinaryMatrix) -> (Vec<u32>, Vec<u32>) {
+pub(crate) fn csc_from_rows(m: &SparseBinaryMatrix) -> (Vec<u32>, Vec<u32>) {
     let mut col_ptr = vec![0u32; m.num_cols + 1];
     for row in m.rows.iter() {
         for &c in row {
@@ -212,13 +212,13 @@ fn csc_from_rows(m: &SparseBinaryMatrix) -> (Vec<u32>, Vec<u32>) {
     (col_ptr, rows_flat)
 }
 
-struct Static {
-    a: (Vec<u32>, Vec<u32>),
-    b: (Vec<u32>, Vec<u32>),
+pub(crate) struct Static {
+    pub(crate) a: (Vec<u32>, Vec<u32>),
+    pub(crate) b: (Vec<u32>, Vec<u32>),
     mcol: Vec<u8>,
     f8mul: Vec<u8>,
-    da: Vec<u32>,
-    db: Vec<u32>,
+    pub(crate) da: Vec<u32>,
+    pub(crate) db: Vec<u32>,
 }
 
 fn statics(st: &ChunkStmt) -> &'static Static {
@@ -231,7 +231,7 @@ fn statics_with(da: &[(u32, u32)], db: &[(u32, u32)]) -> &'static Static {
 }
 
 /// [`statics_with`] with another compression circuit (the CSC the lincheck folds per slot).
-fn statics_for(c: &flock_prover::r1cs::BlockR1cs, da: &[(u32, u32)], db: &[(u32, u32)]) -> &'static Static {
+pub(crate) fn statics_for(c: &flock_prover::r1cs::BlockR1cs, da: &[(u32, u32)], db: &[(u32, u32)]) -> &'static Static {
     static S: OnceLock<Static> = OnceLock::new();
     S.get_or_init(|| {
         let ntt_s = AdditiveNttGf8::new(K_SKIP, F8::ZERO);
@@ -397,7 +397,7 @@ pub fn prove_chunk(
 }
 
 impl ChunkParams {
-    fn none() -> Self {
+    pub(crate) fn none() -> Self {
         ChunkParams {
             n_comp_log: 0, cv: null(), msg: null(), ctr: null(), blen: null(), flags: null(), delta_a: null(), n_delta_a: 0,
             delta_b: null(), n_delta_b: 0, sub_log: 0, link_cb: None, link_ctx: null_mut(), gamma_bits: 0, phase_s: null_mut(),
@@ -413,7 +413,7 @@ impl ChunkParams {
 }
 
 /// The pinned Fast100 schedule and the compression circuit, as the FFI takes them (`hook`/`ch` filled by the caller).
-struct Sched {
+pub(crate) struct Sched {
     log_inv_rates: Vec<i32>,
     recursive_ks: Vec<i32>,
     queries: Vec<i32>,
@@ -423,7 +423,7 @@ struct Sched {
     ood_samples: Vec<i32>,
 }
 
-fn sched(pcs: &PcsParams) -> (Sched, flock_prover::pcs::ligerito::ProverConfig) {
+pub(crate) fn sched(pcs: &PcsParams) -> (Sched, flock_prover::pcs::ligerito::ProverConfig) {
     let cfg = pcs.ligerito_prover_config().unwrap_or_else(|_| panic!("no ligerito config for m={}", pcs.m));
     let to_i32 = |v: &[usize]| -> Vec<i32> { v.iter().map(|&x| x as i32).collect() };
     (
@@ -441,7 +441,7 @@ fn sched(pcs: &PcsParams) -> (Sched, flock_prover::pcs::ligerito::ProverConfig) 
 }
 
 #[allow(clippy::too_many_arguments)]
-fn prove_params(s: &Static, sc: &Sched, cfg: &flock_prover::pcs::ligerito::ProverConfig, pcs: &PcsParams, digest: &[u8; 32], domain: &[u8],
+pub(crate) fn prove_params(s: &Static, sc: &Sched, cfg: &flock_prover::pcs::ligerito::ProverConfig, pcs: &PcsParams, digest: &[u8; 32], domain: &[u8],
                 k_log: usize, pin: usize, ch: &mut LiveChallenger) -> ProveParams {
     let m = pcs.m;
     let zc = pcs.zerocheck_grinding();
@@ -782,8 +782,12 @@ fn run(params: &ProveParams, chunk: &ChunkParams, pcs: &PcsParams, m: usize) -> 
     assert_eq!(rc, 0, "CUDA chunk prover returned error {rc} at m={m}");
     let bytes = unsafe { from_raw_parts(out, out_len) }.to_vec();
     unsafe { flock_cuda_free(out) };
+    decode(&bytes, pcs)
+}
 
-    let mut r = Reader { b: &bytes, o: 0 };
+/// The FFI's proof stream as a proof and its commitment.
+pub(crate) fn decode(bytes: &[u8], pcs: &PcsParams) -> (R1csProofLigerito, Commitment) {
+    let mut r = Reader { b: bytes, o: 0 };
     let cap = r.hashes();
     let round1_ab = r.f128s();
     let round1_c = r.f128s();

@@ -122,18 +122,33 @@ struct Wit {
 
 type Witness = (Vec<F128>, Vec<F128>, Vec<F128>, Vec<u8>);
 
-fn witness(st: &Stmt, w: &Wit) -> (Witness, f64) {
+/// A rep's witness: the packed host witness, or (GPU) the device witness's inputs.
+#[derive(Clone)]
+enum WitData {
+    Host(Witness),
+    #[allow(dead_code)]
+    Dev(Vec<Compression>, Vec<F128>),
+}
+
+fn witness(st: &Stmt, w: &Wit, device: bool) -> (WitData, f64) {
     let t = Instant::now();
+    if device && w.flip_z.is_none() {
+        use rayon::prelude::*;
+        let ur = st.c.unit_range();
+        let comps: Vec<Compression> = (0..st.blocks()).into_par_iter().flat_map_iter(|b| (w.comps)(b)).collect();
+        let inputs: Vec<F128> = (0..st.blocks() * ur.count).into_par_iter().flat_map_iter(|x| (w.inputs)(x / ur.count, x % ur.count)).collect();
+        return (WitData::Dev(comps, inputs), t.elapsed().as_secs_f64());
+    }
     let (mut z, a, b, zl) = st.witness(&*w.comps, &*w.inputs, &*w.mask);
     if let Some(bit) = w.flip_z {
         z[bit / 128] = z[bit / 128] + if bit % 128 < 64 { F128::new(1 << (bit % 128), 0) } else { F128::new(0, 1 << (bit % 128 - 64)) };
     }
     let zl = if w.flip_z.is_some() { flock_core::lincheck::pack_z_lincheck_from_packed(&z, st.m, st.c.k_log) } else { zl };
-    ((z, a, b, zl), t.elapsed().as_secs_f64())
+    (WitData::Host((z, a, b, zl)), t.elapsed().as_secs_f64())
 }
 
-fn prove_cpu(st: &Stmt, wt: &Witness, lig: LigeritoProfile, hook: Hook<'_>, ch: &mut LiveChallenger) -> (Vec<u8>, Value) {
-    let (z, a, b, zl) = wt.clone();
+fn prove_cpu(st: &Stmt, wt: &WitData, lig: LigeritoProfile, hook: Hook<'_>, ch: &mut LiveChallenger) -> (Vec<u8>, Value) {
+    let WitData::Host((z, a, b, zl)) = wt.clone() else { panic!("the CPU prover takes a host witness") };
     let tp = Instant::now();
     let (proof, commitment) = prove_fast_ligerito_from_witness_extra(
         &st.r1cs, &params(st.m, lig), z, a, b, zl, &st.circuit,
@@ -144,17 +159,22 @@ fn prove_cpu(st: &Stmt, wt: &Witness, lig: LigeritoProfile, hook: Hook<'_>, ch: 
 }
 
 #[cfg(feature = "gpu")]
-fn prove_gpu(st: &Stmt, wt: &Witness, lig: LigeritoProfile, rep: usize, hook: Hook<'_>, ch: &mut LiveChallenger) -> (Vec<u8>, Value) {
-    let (proof, commitment, ph) = flock_live::gpu::prove_netlist(st, &wt.0, &wt.1, &wt.2, &params(st.m, lig), &domain(rep), hook, ch);
-    let bk = json!({"t.witness": ph[0], "t.encoding_commitment": ph[1], "t.link": ph[2], "t.zerocheck": ph[3],
-                    "t.lincheck": ph[4], "t.ring_switch": ph[5], "t.ligerito": ph[6], "t.total": ph[7],
-                    "t.arithmetic": ph[3] + ph[4] + ph[5] + ph[6]});
+fn prove_gpu(st: &Stmt, wt: &WitData, lig: LigeritoProfile, rep: usize, hook: Hook<'_>, ch: &mut LiveChallenger) -> (Vec<u8>, Value) {
+    use flock_live::gpu_netlist::{NlSrc, prove_netlist};
+    let src = match wt {
+        WitData::Host((z, a, b, _)) => NlSrc::Host { z, a, b },
+        WitData::Dev(c, i) => NlSrc::Device { comps: c, inputs: i },
+    };
+    let (proof, commitment, ph, wph) = prove_netlist(st, src, &params(st.m, lig), &domain(rep), hook, ch);
+    let bk = json!({"t.witness": ph[0], "t.witness_comp": wph[0], "t.witness_units": wph[1], "t.encoding_commitment": ph[1], "t.link": ph[2],
+                    "t.zerocheck": ph[3], "t.lincheck": ph[4], "t.ring_switch": ph[5], "t.ligerito": ph[6], "t.total": ph[7],
+                    "t.arithmetic": ph[3] + ph[4] + ph[5] + ph[6], "device_witness": matches!(wt, WitData::Dev(..))});
     eprintln!("GPUPHASE\t{bk}");
     (bincode::serialize(&(commitment, proof)).unwrap(), bk)
 }
 
 #[cfg(not(feature = "gpu"))]
-fn prove_gpu(_: &Stmt, _: &Witness, _: LigeritoProfile, _: usize, _: Hook<'_>, _: &mut LiveChallenger) -> (Vec<u8>, Value) {
+fn prove_gpu(_: &Stmt, _: &WitData, _: LigeritoProfile, _: usize, _: Hook<'_>, _: &mut LiveChallenger) -> (Vec<u8>, Value) {
     panic!("built without the gpu feature")
 }
 
@@ -251,9 +271,10 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
     let t0 = Instant::now();
     let sig = sigma(st, inst);
     let hello = config(st, sig).hello();
+    let device = plan.gpu && !plan.mask_random && std::env::var("NL_HOST_WITNESS").is_err();
     let w0 = wit(st, inst, plan, false);
-    let (wt0, tw0) = witness(st, &w0);
-    let (wt1, tw1) = if plan.rep1_other_witness { witness(st, &wit(st, inst, plan, true)) } else { (wt0.clone(), 0.0) };
+    let (wt0, tw0) = witness(st, &w0, device);
+    let (wt1, tw1) = if plan.rep1_other_witness { witness(st, &wit(st, inst, plan, true), device) } else { (wt0.clone(), 0.0) };
     let witness_s = tw0 + tw1;
     let mut prove_s = Vec::new();
     let mut buckets = Vec::new();

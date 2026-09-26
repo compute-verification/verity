@@ -140,7 +140,7 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None) -> str:
             runs = r["count"] // p.nb
             r["slots"] = [[g, c] if g < G else None for g, c in ([divmod(q, p.chunks) for q in range(runs)])]
     dummy = _dummy(low, sub, ports)
-    meta = {"format": FORMAT, "statement": STATEMENT, "scheme": SCHEME, "template": sub.template_name if hasattr(sub, "template_name") else None,
+    meta = {"format": FORMAT, "statement": STATEMENT, "scheme": SCHEME, "template": sub.template.id,
             "subcircuit": sub.id, "unit": low.name, "unit_sha256": low.sha256, "vus_per_block": G, "k_log": k_log,
             "ports": [[p.name, p.words, p.chunks, p.nb] for p in ports], "out_ports": outs, "ranges": ranges,
             "units_per_vu": U.n, "unit_log": ul, "leaves_in": lv["in"], "leaves_out": lv["out"], "row_key": _row_key().hex(),
@@ -214,3 +214,36 @@ def stage(low: IL.Lowering, input_set, lo: int, hi: int, out_dir, public_only: b
     path = out / f"{'pub' if public_only else 'inst'}-{hi - lo}.bin"
     write(text, input_set, lo, hi, path, public_only)
     return path
+
+
+def lowering_for_set(input_set) -> IL.Lowering:
+    """The template's C-Flock lowering for a set (``lowering_for_set`` when the template's statement depends on the set)."""
+    from verity_numerical.bench import lowerings
+
+    mod = lowerings.registry("C-Flock").module(input_set.subcircuit.template.id)
+    return mod.lowering_for_set(input_set) if hasattr(mod, "lowering_for_set") else mod.frame_lowering(input_set.subcircuit)
+
+
+def main(argv=None) -> int:
+    """``python -m verity_flock.netlist --input-set DIR --n N [N ...] --out DIR``: the composite netlist, then for each N the
+    prover's ``inst-N.bin`` and the verifier's own ``pub-N.bin`` (instances [0, N)); prints the netlist's sha256 (the pin)."""
+    import argparse
+
+    from verity_numerical.bench.input_sets import InputSet
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--input-set", required=True)
+    ap.add_argument("--n", type=int, nargs="+", required=True)
+    ap.add_argument("--out", required=True)
+    a = ap.parse_args(argv)
+    s = InputSet.open(a.input_set)
+    low = lowering_for_set(s)
+    for n in a.n:
+        stage(low, s, 0, n, a.out)
+        stage(low, s, 0, n, a.out, public_only=True)
+    print(json.dumps({"subcircuit": s.subcircuit.id, "unit": low.name, "pin": digest((Path(a.out) / "net.txt").read_text()), "n": a.n}))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
