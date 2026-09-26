@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 
 from . import cell as CL
@@ -46,3 +47,41 @@ def test_finish_assembles_the_interaction_record(tmp_path) -> None:
     assert views.rtt_method_enum(doc["interaction"]["rtt_method"]) == "open-connection-ping" and doc["interaction"]["loopback_method"]
     ix = views.interaction(doc)
     assert ix["live"] and ix["rounds"] == 6 and ix["rtt_ms"] == 0.9 and ix["bandwidth_bps"] == 9e9 and ix["loopback_method"]
+
+
+def _registrable(tmp: Path, name: str, relation: str, per_proof: float, n_proofs: int, terms: dict | None = None) -> Path:
+    run = tmp / name
+    run.mkdir()
+    snd = {"per_proof_total_log2": per_proof, "n_proofs": n_proofs, "total_log2": per_proof + math.log2(n_proofs),
+           "field": "BabyBear^6", "fiat_shamir_queries_log2": None, "terms_log2": terms or {"irs_query": per_proof}}
+    doc = {"workload_fingerprint": {"statement_relation": relation, "relation": relation.partition("+")[0],
+                                    "leaf": {"scheme": relation.partition("+")[2]},
+                                    "security": {"achieved_log2": snd["total_log2"], "achieved_bits": -snd["total_log2"]}},
+           "measurements": [], "validation": {"evidence": {"soundness": snd}}}
+    (run / "result.json").write_text(json.dumps(doc))
+    return run
+
+
+def test_register_books_the_chain_term_and_refuses_above_2_128(tmp_path) -> None:
+    """A result made before the chain test's field term was booked gets it at register (red-team-bligero-real-k A1); a
+    bound above 2^-128 with it is refused: art:b1d710da's figures (2^-128.104 over 60 sub-batches -> 2^-127.97), not
+    art:11208bf7's (2^-128.350 over 32 -> 2^-128.26)."""
+    import pytest
+    tight = _registrable(tmp_path, "b1d710da", "bf16-ampere-x4-k8192+blake3-xob", -134.01044941441342, 60)
+    with pytest.raises(CL.Refused, match=r"2\^-127\.97\d over 60 sub-batches .* above 2\^-128"):
+        CL.register(tight, None, "lane-x")
+    assert CL.main(["register", "--prover-run", str(tight), "--lane", "lane-x", "--out", str(tmp_path / "m.json")]) == 3
+    assert not (tmp_path / "m.json").exists()
+    ok = CL.register(_registrable(tmp_path, "11208bf7", "bf16-hopper-x4-k8192+blake3-xob", -133.3502994173009, 32), None, "lane-x")
+    snd = ok["validation"]["evidence"]["soundness"]
+    assert snd["chain_extras"] == 1092 and snd["chain_degree"] == 183 and abs(snd["terms_log2"]["chain_field"] + 137.396) < 0.001
+    assert -128.27 < snd["total_log2"] < -128.26 and snd["chain_field_booked"].startswith("at register")
+    assert ok["workload_fingerprint"]["security"]["achieved_log2"] == snd["total_log2"]
+    # a result made with the term booked is taken as it is; a bare statement has no extras
+    booked = _registrable(tmp_path, "new", "bf16-ampere-x4-k8192+blake3-xob", -134.2, 60, {"irs_query": -134.3, "chain_field": -137.4})
+    assert "chain_field_booked" not in CL.register(booked, None, "lane-x")["validation"]["evidence"]["soundness"]
+    bare = _registrable(tmp_path, "bare", "bf16-ampere-x4-k8192", -134.01, 60)
+    json_doc = json.loads((bare / "result.json").read_text())
+    del json_doc["workload_fingerprint"]["leaf"]
+    (bare / "result.json").write_text(json.dumps(json_doc))
+    assert "chain_field" not in CL.register(bare, None, "lane-x")["validation"]["evidence"]["soundness"]["terms_log2"]
