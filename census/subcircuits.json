@@ -318,7 +318,9 @@
       "source": "verity_vllm.program.registry.b1.RoPE_v1 / RoPEHead_v1",
       "bytes_per_input": "6*D",
       "bytes_basis": "reads x[D] and the cos/sin row cs[D], writes out[D]: 3 rows of D bf16 words; every row counted once per input, none assumed cached (the conservative, memory-bound reading)",
-      "bytes_source": "bench-spine's port definitions (verity_numerical.bench.templates): rope-head x, cs -> out"
+      "bytes_source": "bench-spine's port definitions (verity_numerical.bench.templates): rope-head x, cs -> out",
+      "bytes_per_input_cached": "4*D",
+      "bytes_cached_basis": "x and out only (2 rows of D bf16 words): the cos/sin row is a per-position table served from cache (a PREVIEW basis: Daniel decides cached vs uncached; the published N uses bytes_per_input)"
     },
     "subcircuits": [
       {
@@ -371,7 +373,9 @@
       "source": "verity_vllm.program.registry.b1.RMSNormFusedCuda_v2 (vLLM fused_add_rms_norm)",
       "bytes_per_input": "10*N",
       "bytes_basis": "reads x, res and w (3 rows of N bf16 words), writes out.0 and out.1 (2 rows): 5N bf16 words; every row counted once per input, none assumed cached (the conservative, memory-bound reading)",
-      "bytes_source": "bench-spine's port definitions (verity_numerical.bench.templates): rmsnorm-fused-cuda in0, in1, in2 -> out.0, out.1"
+      "bytes_source": "bench-spine's port definitions (verity_numerical.bench.templates): rmsnorm-fused-cuda in0, in1, in2 -> out.0, out.1",
+      "bytes_per_input_cached": "8*N",
+      "bytes_cached_basis": "x, res, out.0 and out.1 only (4 rows of N bf16 words): the weight row w is served from cache (a PREVIEW basis: Daniel decides cached vs uncached; the published N uses bytes_per_input)"
     },
     "subcircuits": [
       {
@@ -425,7 +429,9 @@
       "source": "verity_vllm.program.registry.b1.RMSNormTriton_v1",
       "bytes_per_input": "6*N",
       "bytes_basis": "reads x and w (2 rows of N bf16 words), writes out (1 row): 3N bf16 words; every row counted once per input, none assumed cached (the conservative, memory-bound reading)",
-      "bytes_source": "bench-spine's port definitions (verity_numerical.bench.templates): rmsnorm-triton in0, in1 -> out.out"
+      "bytes_source": "bench-spine's port definitions (verity_numerical.bench.templates): rmsnorm-triton in0, in1 -> out.out",
+      "bytes_per_input_cached": "4*N",
+      "bytes_cached_basis": "x and out only (2 rows of N bf16 words): the weight row w is served from cache (a PREVIEW basis: Daniel decides cached vs uncached; the published N uses bytes_per_input)"
     },
     "subcircuits": [
       {
@@ -475,7 +481,9 @@
       "source": "verity_vllm.program.registry.b1.SiluMul_v1",
       "bytes_per_input": "6*I",
       "bytes_basis": "reads the gate|up row in0[2I], writes out[I]: 3I bf16 words; every row counted once per input, none assumed cached (the conservative, memory-bound reading)",
-      "bytes_source": "bench-spine's port definitions (verity_numerical.bench.templates): silu-mul in0 -> out.out"
+      "bytes_source": "bench-spine's port definitions (verity_numerical.bench.templates): silu-mul in0 -> out.out",
+      "bytes_per_input_cached": "6*I",
+      "bytes_cached_basis": "unchanged: silu-mul has no weight row, every byte is an activation (a PREVIEW basis: Daniel decides cached vs uncached; the published N uses bytes_per_input)"
     },
     "subcircuits": [
       {

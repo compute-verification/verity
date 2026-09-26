@@ -1,5 +1,15 @@
 # Changelog: `verity_numerical` (the bench renderers and their rules)
 
+## 2026-09-26: previews of the two pending acceptance decisions (never published)
+
+- `views --preview-one-sided-interaction`: the interaction check passes when the measured wall is at most 1.1 × the model. A
+  run under the model no longer fails.
+- `views --preview-cached-weights`: non-GEMM native N counts activations only, with per-row weights and tables cached. It
+  uses the census's new `work_model.bytes_per_input_cached`: RoPE 4D, fused RMSNorm 8N, Triton RMSNorm 4N, SiLU·mul 6I
+  unchanged.
+- Both are `Rules` fields, off in `SPEC`. The published render and parity are unchanged. Daniel decides both; the previews
+  render beside the published JSON in the notes' `renders/previews/`.
+
 ## 2026-09-26: non-GEMM statement rows, with native N from a memory-bandwidth work model
 
 - **Statements:** a result whose subcircuit is another template (its `bench.cell` stamp, or the fingerprint's

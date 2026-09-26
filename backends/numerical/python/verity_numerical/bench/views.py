@@ -447,6 +447,10 @@ class Rules:
     legacy: bool = False
     include_archived: bool = False
     interaction_validated: bool = True
+    #: previews of two pending acceptance decisions (Daniel), never published: the interaction check one-sided (pass when the
+    #: measured wall is at most 1.1 x the model), and non-GEMM N on activations only (per-row weights and tables cached)
+    interaction_one_sided: bool = False
+    native_cached: bool = False
 
 
 SPEC = Rules("spec")
@@ -555,7 +559,7 @@ def interaction_time(ix: Mapping[str, Any], rtt_s: float = REF_RTT_S, bandwidth_
             + (ix["bytes_up"] + ix["bytes_down"]) * 8 / bandwidth_bps)
 
 
-def interaction_problem(ix: Mapping[str, Any]) -> str | None:
+def interaction_problem(ix: Mapping[str, Any], one_sided: bool = False) -> str | None:
     """Why a result does not meet the interaction standard, or ``None``.  A non-interactive (file-verified) result's record is derived
     and always meets it.  A live-verifier result records its rounds, its measured RTT with how it was measured and its network wait,
     and its measured wall time (prover compute + network wait) is within :data:`INTERACTION_TOLERANCE` of the formula evaluated at
@@ -572,7 +576,7 @@ def interaction_problem(ix: Mapping[str, Any]) -> str | None:
     bw = ix.get("bandwidth_bps") or REF_BANDWIDTH_BPS
     model = interaction_time(ix, ix["rtt_ms"] / 1e3, bw)
     measured = (ix["prover_s"] or 0.0) + ix["wait_s"]
-    if model > 0 and abs(measured - model) > INTERACTION_TOLERANCE * model:
+    if model > 0 and (measured - model if one_sided else abs(measured - model)) > INTERACTION_TOLERANCE * model:
         return (f"interaction: measured {measured:.3g} s is {100 * (measured - model) / model:+.0f}% from the model's {model:.3g} s at the run's "
                 f"own network ({ix['rtt_ms']:.3g} ms RTT, {bw / 1e9:.3g} Gb/s{'' if ix.get('bandwidth_bps') else ' (reference; not measured)'}; "
                 f"tolerance ±{100 * INTERACTION_TOLERANCE:.0f}%)")
@@ -862,20 +866,21 @@ def is_gemm(sub: str | None) -> bool:
     return sub is None or sub.split("/")[0] == "gemm-coordinate"
 
 
-def native_of(target: Target, sub: str | None) -> dict[str, Any]:
+def native_of(target: Target, sub: str | None, cached: bool = False) -> dict[str, Any]:
     """``N`` of a row: the GEMM work model (:func:`native`) at the subcircuit's K, or for another template its census
     memory-bandwidth work model (:func:`memory_native`)."""
-    return native(target, subcircuit_k(sub) if sub else T.K) if is_gemm(sub) else memory_native(target, sub)
+    return native(target, subcircuit_k(sub) if sub else T.K) if is_gemm(sub) else memory_native(target, sub, cached)
 
 
-def memory_native(target: Target, sub: str) -> dict[str, Any]:
+def memory_native(target: Target, sub: str, cached: bool = False) -> dict[str, Any]:
     """``N`` for a memory-bound subcircuit: instances per second = the hardware line's memory bandwidth / the template's bytes per
     input (``census/subcircuits.json`` ``work_model.bytes_per_input``), with the basis for the footnote.  Operations are not
     binding (``ops_per_instance`` is the template's op count, for reference)."""
     known = census.SUBCIRCUITS[sub]
     wm = census.SUBCIRCUIT_TEMPLATES[known.template].work_model
     env = {k: v for k, v in vars(known.parameters).items() if isinstance(v, int)}
-    nbytes, ops = census.evaluate(wm.bytes_per_input, env), census.evaluate(wm.ops_per_input, env)
+    expr = getattr(wm, "bytes_per_input_cached", None) if cached else None
+    nbytes, ops = census.evaluate(expr or wm.bytes_per_input, env), census.evaluate(wm.ops_per_input, env)
     hw = contract.native_peak_of(target)
     bw = getattr(hw, "memory_bytes_per_second", None)
     if not _num(bw):
@@ -884,8 +889,9 @@ def memory_native(target: Target, sub: str) -> dict[str, Any]:
     return {"instances_per_second": bw / nbytes, "unit": "memory", "ops_per_instance": ops, "bytes_per_instance": nbytes, "steps": None,
             "dtype": (T.dtype_of(target) or "?").upper(), "peak_flop_per_second": hw.flop_per_second, "memory_bytes_per_second": bw,
             "device": hw.device, "source": "; ".join(x.label for x in getattr(hw, "memory_sources", ())) or census.source(hw),
-            "work_model": f"{version}: memory-bandwidth bound, {wm.bytes_per_input} bytes per input over the line's memory bandwidth",
-            "basis": (f"{version} memory-bandwidth work model: {nbytes} bytes per input ({wm.bytes_per_input}: {wm.bytes_basis}; "
+            "work_model": f"{version}: memory-bandwidth bound, {expr or wm.bytes_per_input} bytes per input over the line's memory bandwidth",
+            "basis": (f"{version} memory-bandwidth work model: {nbytes} bytes per input ({expr or wm.bytes_per_input}: "
+                      f"{wm.bytes_cached_basis if expr else wm.bytes_basis}; "
                       f"{wm.bytes_source}) over {bw / 1e12:.3g} TB/s ({hw.id}); ops {ops} per input ({wm.ops_per_input}) are not binding")}
 
 
@@ -1029,7 +1035,7 @@ def reject_codes(store: Any, ctx: Ctx, rules: Rules, equivs: Sequence[T.Instance
         why = _protocol(meta, ctx.config)
         if why:
             p.append(("M", why))
-        why = interaction_problem(interaction(meta)) if rules.interaction_validated else None
+        why = interaction_problem(interaction(meta), rules.interaction_one_sided) if rules.interaction_validated else None
         if why:
             p.append(("M", why))
     verdicts = T._labels(ctx.labels if rules.legacy else ctx.statement_labels)
@@ -1222,7 +1228,7 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
             entry["subcircuit"] = c.subcircuit
         if P is not None and not rules.legacy and c.config is not None and c.config.full_relation:
             commit = P["commit_s"] or P["commit_v1_s"] or 0.0
-            n = native_of(c.target, c.subcircuit)["instances_per_second"]
+            n = native_of(c.target, c.subcircuit, rules.native_cached)["instances_per_second"]
             entry["end_to_end_preview"] = {"commit_s": commit, "commit_warm": bool(P["commit_s"]),
                                            "overhead": n * (P["proving_s"] + commit) / P["instances"]}
         V.rejected.append(entry)
@@ -1299,7 +1305,7 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
             own.setdefault((c.target.name, c.subcircuit), set()).add(scheme_of(c))
     for target in TARGETS.values():
         for sub in sorted((x for t, x in own if t == target.name), key=lambda x: (not is_gemm(x), subcircuit_k(x) if is_gemm(x) else 0, x)):
-            N = native_of(target, sub)
+            N = native_of(target, sub, rules.native_cached)
             for scheme in line_schemes:
                 if scheme in own[(target.name, sub)]:
                     add_line(target, sub, scheme, N)
@@ -2365,6 +2371,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--unvalidated-interaction", action="store_true",
                     help="preview: do not require interactive results to carry the interaction record and meet the tolerance")
     ap.add_argument("--standard-hashes-only", action="store_true", help="drop backends and statements with an algebraic hash in the soundness argument")
+    ap.add_argument("--preview-one-sided-interaction", action="store_true",
+                    help="PREVIEW (pending decision, never published): the interaction check passes when measured <= 1.1 x the model")
+    ap.add_argument("--preview-cached-weights", action="store_true",
+                    help="PREVIEW (pending decision, never published): non-GEMM native N on activations only (weights/tables cached)")
     ap.add_argument("--parity", action="store_true", help="compare the legacy-rules views with a fresh `tables` build; exit 1 on a difference")
     ap.add_argument("--snapshot", default=None, metavar="NAME", help="with --parity: also compare with this `tables --snapshot`'s members")
     ap.add_argument("--take-snapshot", action="store_true",
@@ -2408,6 +2418,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         rules = dataclasses.replace(rules, include_archived=True)
     if ns.unvalidated_interaction:
         rules = dataclasses.replace(rules, name=f"{rules.name}+unvalidated-interaction", interaction_validated=False)
+    if ns.preview_one_sided_interaction:
+        rules = dataclasses.replace(rules, name=f"{rules.name}+preview-one-sided-interaction", interaction_one_sided=True)
+    if ns.preview_cached_weights:
+        rules = dataclasses.replace(rules, name=f"{rules.name}+preview-cached-weights", native_cached=True)
     if ns.standard_hashes_only:
         rules = dataclasses.replace(rules, name=f"{rules.name}+standard-hashes", standard_hashes=True)
     V = build(st, rules)
