@@ -99,7 +99,7 @@ def test_wiring_only_rearranges_bits():
 def test_a_norm_commits_only_its_scale(norm):
     r = W.unit_rule(norm)
     assert r["committed_interior_words"] == 1 and not r["violations"]
-    assert r["by_kind"] == {"output": 2048, "committed": 1} and r["free_gates"] == 4100      # 2048 upcasts + 2048 cvt, 4 constants
+    assert r["by_kind"] == {"output": 2048, "committed": 1} and r["free_gates"] == 4101      # 4096 upcasts, 4 constants, rcp(N)
     out = next(c for c in r["classes"] if c["kind"] == "output")
     assert out["out_bits"] == 16 and out["out_gates"] == 1
 
@@ -158,3 +158,35 @@ def test_the_manifest_build_runs_the_check(tmp_path):
 def test_a_dead_gate_joins_the_unit_it_reads():
     r = W.unit_rule(_fn("TokenSelect_v1", V=8))
     assert r["by_kind"] == {"output": 1} and r["classes"][0]["out_bits"] == 32 and not r["violations"]
+
+
+@pytest.mark.parametrize("name,E,committed", [("MoeRouterTopKOrdered", 64, 2 * 64 + 2), ("MoeRouterTopKOrderedNorm", 128, 2 * 128 + 2 + 8 + 1)])
+def test_the_ordered_router_commits_its_softmax_once_and_recomputes_nothing(name, E, committed):
+    from verity.ir.defs import bind
+    from verity_vllm.program.registry import moe
+    f = bind(getattr(moe, name), E=E, TOPK=8, VPT=8)
+    G = W.Graph(f)
+    R = W.units(G, 16, 32)
+    assert R["cut"].ok and G.recomputed == [], R["cut"].codes
+    r = W.unit_rule(f)
+    assert r["committed_interior_words"] == committed and not r["violations"] and r["max_out_bits"] == 32
+    kernel = W.unit_rule(bind(moe.MoeRouterTopKNorm if name.endswith("Norm") else moe.MoeRouterTopK, E=E, TOPK=8, VPT=8))
+    assert kernel["committed_interior_words"] > 10 * committed          # kernel order commits every round's masked vector
+
+
+def test_a_recompute_fails_the_cut():
+    from verity.ir.defs import CompositeDefinition, bind
+    from verity.ir.refs import tuple_of
+    from verity.ir.types import Array, Tuple
+    from verity_vllm.program.registry import prims as P
+    F32 = P.F32
+
+    def body(B, S, x):
+        a = B.call(P.F32Add, x[0], x[1])
+        b = B.call(P.F32Add, x[0], x[1])                              # the same value computed a second time
+        return tuple_of(B.call(P.F32Mul, a, x[2]), B.call(P.F32Mul, b, x[3]))
+
+    f = bind(CompositeDefinition("Twice", 1, (), lambda S: ((("x", Array(4, F32)),), Tuple(F32, F32)), body, register=False))
+    G = W.Graph(f)
+    R = W.units(G, 16, 32)
+    assert R["cut"].codes == ("gate-recomputed",) and R["cut"].detail["gate-recomputed"]["gates"] == [[1, 0]]

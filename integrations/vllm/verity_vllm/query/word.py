@@ -141,21 +141,25 @@ class Graph:
         scope = np.empty(n, np.int64)
         external = np.zeros(n, bool)
         free = np.zeros(n, bool)
+        const = np.zeros(n, bool)
         self.prims: dict[str, int] = {}
         self.scopes: dict[str, int] = {}
         ops: list[list[int]] = []
         inputs: dict[int, int] = {}                                  # the Call's parameter gates it reads (root id -> index)
+        wide: set[int] = set()
         for j in range(n):
             g = c.gate(lo + j)
             width[j] = g.prim.ret.w
             prim[j] = self.prims.setdefault(g.prim.id, len(self.prims))
             scope[j] = self.scopes.setdefault(g.scope.spec.id, len(self.scopes))
-            free[j] = g.prim.id in WIRING or not g.prim.params
+            const[j] = not g.prim.params
+            free[j] = const[j] or g.prim.id in WIRING
             it = g.operands
             ext = False
             if len(it) > WIDE_FAN_IN:
                 it = _wide_operands(g, call)
                 ext = True
+                wide.add(j)
             mine = []
             for o in it:
                 if 0 <= o - lo < n:
@@ -165,6 +169,27 @@ class Graph:
                     mine.append(-1 - inputs.setdefault(o, len(inputs)))      # an input gate: -1 - its index
             external[j] = ext
             ops.append(mine)
+        for j in range(n):                                          # a value computed from constants alone is a constant too
+            if not free[j] and not external[j] and ops[j] and all(o >= 0 and const[o] for o in ops[j]):
+                const[j] = free[j] = True
+        # recomputes: a computation gate with the primitive and the operands (by value: constants, inputs, wiring, earlier canonical
+        # gates) of an earlier one computes the same value again; a gate whose wide operands were not enumerated matches nothing
+        intern: dict[tuple, int] = {}
+        tok = [0] * n
+        first: dict[tuple, int] = {}
+        dup: list[tuple[int, int]] = []
+        for j in range(n):
+            key = (int(prim[j]), tuple(intern.setdefault(("i", -1 - o), len(intern)) if o < 0 else tok[o] for o in ops[j]))
+            if free[j]:
+                tok[j] = intern.setdefault(("s",) + key, len(intern))
+            elif j in wide:
+                tok[j] = intern.setdefault(("u", j), len(intern))
+            elif key in first:
+                dup.append((j, first[key]))
+                tok[j] = tok[first[key]]
+            else:
+                first[key] = j
+                tok[j] = intern.setdefault(("g", j), len(intern))
         srcs: dict[int, tuple[int, ...]] = {}
         for j in np.flatnonzero(free).tolist():
             s: set[int] = set()
@@ -195,6 +220,7 @@ class Graph:
             self.free_by_prim[k] = int(v)
         self.n = len(keep)
         self.keep = keep                                           # computation gate -> the Call's gate id
+        self.recomputed = [(int(idx[a]), int(idx[b])) for a, b in dup]   # (gate, earlier gate computing the same value)
         self.width, self.prim, self.scope, self.external = width[keep], prim[keep], scope[keep], external[keep]
         self.src = np.frombuffer(src, np.int64) if len(src) else np.zeros(0, np.int64)
         self.dst = np.frombuffer(dst, np.int64) if len(dst) else np.zeros(0, np.int64)
@@ -257,8 +283,8 @@ def _owners(G: Graph, head: np.ndarray, kinds: list[str]) -> tuple[np.ndarray, n
         promote = np.unique(s_[(own[s_] == -2) & (own[d_] >= 0)])
         if not len(promote):
             live = len(kinds)
-            for g in np.flatnonzero(own == -1).tolist():
-                us = {int(own[G.src[by_consumer[e]]]) for e in range(dstart[g], dstart[g + 1])}
+            for g in np.flatnonzero(own == -1).tolist():              # reads of committed values (heads) cross units freely
+                us = {int(own[G.src[e_]]) for e_ in by_consumer[dstart[g]:dstart[g + 1]].tolist() if head[G.src[e_]] < 0}
                 alive = {u for u in us if 0 <= u < live}
                 own[g] = alive.pop() if len(alive) == 1 and len(us) == 1 else -1
             for g in np.flatnonzero(own == -1).tolist():
@@ -308,7 +334,8 @@ def units(G: Graph, X: int, W: int, extras: int = 0) -> dict[str, Any]:
     k = len(G.input_ids)
     reads = list(zip(G.src.tolist(), G.dst.tolist())) + [(G.n + i, q) for i, q in G.input_reads]
     committed = np.flatnonzero(head >= 0).tolist() + list(range(G.n, G.n + k))
-    cut = validate_unit_cut(G.total + k, G.free, owner.tolist() + [INPUT_UNIT] * k, reads, G.outputs, committed, range(G.n, G.n + k))
+    cut = validate_unit_cut(G.total + k, G.free, owner.tolist() + [INPUT_UNIT] * k, reads, G.outputs, committed, range(G.n, G.n + k),
+                            G.recomputed)
     if not cut.ok:                                                 # the Call's gate ids (its canonical layout), not the compacted ones
         ids = G.keep.tolist() + [f"input:{g}" for g in G.input_ids]
         for k in cut.codes:
