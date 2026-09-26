@@ -38,7 +38,7 @@ from verity_numerical.checker.params import Params
 from verity_numerical.security import accounting as acc
 
 from . import auth as auth_mod
-from . import merkle, witness
+from . import chain_term, merkle, witness
 from .chain import N_FAMILIES, chain_coefs
 from .compile import P, System
 from .field import (
@@ -111,16 +111,18 @@ MODES = (MODE_INTERACTIVE, MODE_FIAT_SHAMIR)
 FS_QUERIES_LOG2 = 60
 
 
-def _field_terms_ok(D: int, n: int, k: int, l: int, t: int, per_proof: float, zk: bool, shift_log2: int) -> bool:
-    """Appendix-C query terms (with the k that sized t) + field terms (n + 3) / p^D, times 2^shift, vs the target."""
+def _field_terms_ok(D: int, n: int, k: int, l: int, t: int, per_proof: float, zk: bool, shift_log2: int,
+                    chain_extras: int = 0) -> bool:
+    """Appendix-C query terms (with the k that sized t) + field terms (n + 3) / p^D + the chain test's field term,
+    times 2^shift, vs the target."""
     e = (n - k) // 2
     query = Fraction(n - e, n) ** t + Fraction(k + l, n) ** t + Fraction(2 * k, n) ** t
-    field = Fraction(n + 3, P ** D)
+    field = Fraction(n + 3, P ** D) + chain_term.field_term(chain_extras, D)
     return acc.log2((query + field) * Fraction(2) ** shift_log2) <= per_proof
 
 
 def config_for(l: int, target_log2: float = -128.0, rate_log2: int = 2, n_proofs: int = 1, zk: bool = False,
-               t_pad: int | None = None, mode: str = MODE_INTERACTIVE) -> Config:
+               t_pad: int | None = None, mode: str = MODE_INTERACTIVE, chain_extras: int = 0) -> Config:
     """t from Appendix C with k = l + 1 (no ZK padding: the conservative stand-in for k = l that ``soundness`` reports
     and ligero-verify gates on) or k = l + t_pad (ZK: the padding is t_pad random *coefficients*
     of Z_H(x) s(x), so k need not be a power of two and n stays l << rate_log2 -- section 8b's "n = 32768" was the
@@ -132,7 +134,10 @@ def config_for(l: int, target_log2: float = -128.0, rate_log2: int = 2, n_proofs
 
     ``mode``: ``interactive`` (statistical bound, live verifier coins) or ``fiat-shamir`` (the per-proof target is
     shifted by ``FS_QUERIES_LOG2``: more opened columns, ``t_pad = 512`` under ZK so Lemma 4.15 still holds, and the
-    smallest extension degree whose field terms survive the 2^60 factor -- D = 7 at 2^-128)."""
+    smallest extension degree whose field terms survive the 2^60 factor -- D = 7 at 2^-128).
+
+    ``chain_extras``: the system's chain constraints with monomial coefficients (``chain.extra_constraints``); their
+    field term (``chain_term.field_term``) comes out of the query budget, so ``t`` is sized with it."""
     if mode not in MODES:
         raise ValueError(f"mode must be one of {MODES}")
     fs = mode == MODE_FIAT_SHAMIR
@@ -142,6 +147,14 @@ def config_for(l: int, target_log2: float = -128.0, rate_log2: int = 2, n_proofs
     per_proof = acc.per_proof_target(target_log2, n_proofs) if n_proofs > 1 else target_log2
     shift = FS_QUERIES_LOG2 if fs else 0
     query_target = per_proof - shift
+    D0 = 6 if target_log2 <= -100 else 4
+    if chain_extras:
+        # the queries keep at least half the budget: a larger D rather than many more columns (Fiat-Shamir: D = 7)
+        while float(chain_term.field_term(chain_extras, D0)) * 2 > 2.0 ** query_target:
+            D0 += 1
+            if D0 > 12:
+                raise acc.AccountingError("no extension degree <= 12 leaves the chain test's field term under the target")
+        query_target = math.log2(2.0 ** query_target - float(chain_term.field_term(chain_extras, D0)))
     k = l + (t_pad if zk else 0)
     k_acc = k if zk else l + 1            # the k ``soundness`` (and ligero-verify) evaluates the bound at (BV-D1)
     while n <= 2 * k:                     # small-l ZK configurations (l <= t_pad): the quadratic test needs n > 2k
@@ -151,15 +164,15 @@ def config_for(l: int, target_log2: float = -128.0, rate_log2: int = 2, n_proofs
         n *= 2
         t = acc.ligero_queries_for(query_target, n, k_acc, l)
     # field terms: (n + 1 + 2) / p^D must stay under the (shifted) target; D = 6 at -128 interactive, 7 Fiat-Shamir
-    D = 6 if target_log2 <= -100 else 4
-    while not _field_terms_ok(D, n, k_acc, l, t, per_proof, zk, shift):
+    D = D0
+    while not _field_terms_ok(D, n, k_acc, l, t, per_proof, zk, shift, chain_extras):
         D += 1
         if D > 12:
             raise acc.AccountingError("no extension degree <= 12 meets the target")
     return Config(l, n, D, t, target_log2, zk, t_pad if zk else 0, mode)
 
 
-FP_COIN_MAX_PROB = Fraction(3, 2 ** 32)   # a fingerprint coin is a uint32 reduced mod p (_expand): no residue has > 3 preimages
+FP_COIN_MAX_PROB = chain_term.COIN_MAX_PROB   # a coin is a uint32 reduced mod p (_expand): no residue has > 3 preimages
 
 
 def fingerprint_collision(coords: int, steps: int, l: int, n_op: int) -> Fraction:
@@ -173,7 +186,8 @@ def fingerprint_collision(coords: int, steps: int, l: int, n_op: int) -> Fractio
     return n_op * (l // steps) * ((16 * steps - 1) * FP_COIN_MAX_PROB) ** coords
 
 
-def soundness(cfg: Config, n_linear: int, n_quadratic: int, n_proofs: int = 1, fp: tuple[int, int, int] | None = None) -> dict:
+def soundness(cfg: Config, n_linear: int, n_quadratic: int, n_proofs: int = 1, fp: tuple[int, int, int] | None = None,
+              chain_extras: int = 0) -> dict:
     """The error terms actually achieved (Appendix C, e = (n - k) / 2, uniform combinations); with ``n_proofs``
     sub-batches the reported total is ``accounting.union_over_proofs`` (never the per-proof error).  Fiat-Shamir
     mode: every statistical term is multiplied by 2^FS_QUERIES_LOG2 (the campaign's ``q x eps`` rule) and no coin
@@ -181,11 +195,15 @@ def soundness(cfg: Config, n_linear: int, n_quadratic: int, n_proofs: int = 1, f
     coin mode (the GEMM side of row sharing): the ``fingerprint_collision`` term is booked per proof over its
     ``n_op x (l // steps)`` fingerprinted slots -- the event that a VU's operand row differs from the shared row it is
     matched to yet has the same fingerprints (a statistical term: rho is drawn after both rows are committed, so it
-    takes the Fiat-Shamir factor as well)."""
+    takes the Fiat-Shamir factor as well).  ``chain_extras``: the system's chain constraints with monomial coefficients
+    (``chain.extra_constraints``, more than three linked rows); their field term ``chain_field``
+    (``chain_term.field_term``, red-team-bligero-real-k A1) is booked per proof, with the Fiat-Shamir factor."""
     F = acc.Field.prime("BabyBear", P).extension(cfg.D)
     k = cfg.k if cfg.zk else cfg.l + 1                                        # k = l + 1: validate needs l < k
     p = acc.LigeroParams(n=cfg.n, k=k, l=cfg.l, t=cfg.t, zk=cfg.zk)
     terms = acc.ligero_error(p, acc.Field.prime("BabyBear", P), F, combination="uniform")
+    if chain_extras:
+        terms = {**terms, "chain_field": chain_term.field_term(chain_extras, cfg.D)}
     if fp is not None:
         coords, steps, n_op = fp
         terms = {**terms, "fingerprint_collision": fingerprint_collision(coords, steps, cfg.l, n_op)}
@@ -205,6 +223,7 @@ def soundness(cfg: Config, n_linear: int, n_quadratic: int, n_proofs: int = 1, f
     per_proof_total = bud.total()
     union = acc.union_over_proofs(bud, n_proofs) if n_proofs > 1 else bud
     return {"terms_log2": {name: acc.log2(v) for name, v in terms.items()}, "per_proof_total_log2": acc.log2(per_proof_total),
+            **({"chain_extras": chain_extras, "chain_degree": chain_term.degree(chain_extras)} if chain_extras else {}),
             "n_proofs": n_proofs, "total_log2": acc.log2(union.total()),
             "per_proof_target_log2": acc.per_proof_target(cfg.target_log2, n_proofs) if n_proofs > 1 else cfg.target_log2,
             "field": F.name, "t": cfg.t, "n": cfg.n, "k": cfg.k, "l": cfg.l, "rate": cfg.rate, "zk": cfg.zk, "t_pad": cfg.t_pad,

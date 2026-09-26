@@ -3,7 +3,7 @@
 //! the proof is parsed against those bounds, and the checks run reject-first.
 
 use crate::field::{self as f, add, mul, mul_acc, neg, sub, Ntt, P};
-use crate::format::{Expr, PairStatement, Proof, Side, Statement, System, FP_LANES};
+use crate::format::{Chain, Expr, FpSpec, PairStatement, Proof, Side, Statement, System, FP_LANES};
 use crate::hash::{blake2b_256, blake3, shake256};
 use crate::leaf::LeafScheme;
 use crate::relation::{self, Relation};
@@ -82,7 +82,29 @@ fn log2_sum(xs: &[f64]) -> f64 {
 /// `k = l + t_pad` (ZK) or `l + 1` (the accounting's stand-in for k = l), `e = floor((n - k) / 2)`, the challenge
 /// field BabyBear^D, plus the step-0 coin-commitment hiding term when the commitment is on; union over `n_proofs`.
 pub fn soundness(st: &Statement) -> Result<Soundness, String> {
-    soundness_fp(st, None, 1)
+    soundness_fp(st, None, 1, 0)
+}
+
+/// The chain constraints with monomial coefficients (chain.py, "More than three linked rows"; `chain_term.extra_constraints`):
+/// one link and one start extra per linked row beyond the base three, then the fingerprint constraints (`n_op x coords`).
+pub fn chain_extras(chain: &Chain, fp: Option<&FpSpec>) -> usize {
+    2 * chain.c_rows.len().saturating_sub(3) + fp.map_or(0, |s| s.lanes.len() * s.coords)
+}
+
+/// The combination's degree in a column's coefficients: 1 without extras, else `1 + ceil(E / 6)` (the last extra's
+/// monomial `u_(e mod 6) u_6^(e div 6 + 1)`; `chain_term.degree`).
+pub fn chain_degree(n_extra: usize) -> usize {
+    if n_extra == 0 {
+        1
+    } else {
+        1 + n_extra.div_ceil(6)
+    }
+}
+
+/// log2 of the chain test's field term `(degree x 3 / 2^32)^D` per proof (`chain_term.field_term`; red-team-bligero-real-k
+/// A1): Schwartz-Zippel over coefficients that are uint32 words reduced mod p, so no value has probability above 3 / 2^32.
+pub fn chain_field_log2(n_extra: usize, d: usize) -> f64 {
+    d as f64 * (((3 * chain_degree(n_extra)) as f64).log2() - 32.0)
 }
 
 /// `soundness` with the fingerprint collision term (`protocol.fingerprint_collision`, `fp = (coords, steps, n_op)`): one
@@ -91,7 +113,8 @@ pub fn soundness(st: &Statement) -> Result<Soundness, String> {
 /// root with probability <= (16 steps - 1) x 3 / 2^32 (the coins are uint32 mod p, no rejection: a residue has at most
 /// 3 preimages), the coordinates independent; the Fiat-Shamir factor applies (rho is drawn after the root).  The union
 /// is over `n_proofs_mult x n_proofs` commitments (2 for each side of a pair: `SharedHashedRunner.cfg` sizes t for 2 n_proofs).
-pub fn soundness_fp(st: &Statement, fp: Option<(usize, usize, usize)>, n_proofs_mult: usize) -> Result<Soundness, String> {
+/// `chain_extras` (`chain_extras()` of the system): their field term `chain_field` is booked per proof.
+pub fn soundness_fp(st: &Statement, fp: Option<(usize, usize, usize)>, n_proofs_mult: usize, chain_extras: usize) -> Result<Soundness, String> {
     let (n, l, t, d) = (st.n as f64, st.l, st.t, st.d);
     let k = if st.zk { st.l + st.t_pad } else { st.l + 1 };
     if !(0 < st.l && st.l < k && k < st.n) {
@@ -115,6 +138,9 @@ pub fn soundness_fp(st: &Statement, fp: Option<(usize, usize, usize)>, n_proofs_
         ("linear_field".to_string(), -log_fs + shift),
         ("quadratic_field".to_string(), -log_fs + shift),
     ];
+    if chain_extras > 0 {
+        terms.push(("chain_field".to_string(), chain_field_log2(chain_extras, d) + shift));
+    }
     if st.interactive {
         terms.push(("coin_commitment_hiding".to_string(), 1.0 + 64.0 - 256.0));
     }
@@ -1106,7 +1132,8 @@ fn verify_core_inner(shared: &Shared, st: &Statement, pf_bytes: &[u8], opt: &Opt
     // ---- soundness of the parameters the statement fixes ----
     // a side of a pair is sized for 2 n_proofs commitments (SharedHashedRunner.cfg); the GEMM side books the
     // fingerprint collision term (the hash side's F are statement values: no collision event of its own)
-    let snd = match soundness_fp(st, if st.side == Some(Side::G) { Some((coords, steps, n_op)) } else { None }, if st.side.is_some() { 2 } else { 1 }) {
+    let fp_term = if st.side == Some(Side::G) { Some((coords, steps, n_op)) } else { None };
+    let snd = match soundness_fp(st, fp_term, if st.side.is_some() { 2 } else { 1 }, chain_extras(chain, fp_spec)) {
         Ok(s) => s,
         Err(e) => return reject(&e, tm, None, Some(info)),
     };
@@ -1641,4 +1668,40 @@ fn verify_core_inner(shared: &Shared, st: &Statement, pf_bytes: &[u8], opt: &Opt
         format!("accept (interactive: coins replayed from the transcript; sound only if they were the verifier's step-0 coins){auth_note}{pin_note}")
     };
     Verdict { accepted: true, reason, timing: tm, soundness: Some(snd), statement: Some(info), system_pinned: !opt.allow_any_system }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn chain_of(links: usize) -> Chain {
+        Chain { c_rows: vec![0; links], y: vec![Expr::default(); links], ends: Vec::new() }
+    }
+
+    /// red-team-bligero-real-k A1's per-shape table (linked rows, degree, `(degree / p)^6` in log2), and the booked term:
+    /// the same degree with the coins' maximum probability 3 / 2^32 instead of 1 / p (6 x 0.49 bits above the table).
+    #[test]
+    fn chain_field_term_reproduces_the_red_team_per_shape_table() {
+        let log2_p = (P as f64).log2();
+        for (links, deg, uniform, booked) in [
+            (69, 23, -158.30, -155.35),   // SHA-256, any K
+            (133, 45, -152.49, -149.54),  // blake3-xob 3-slot frame
+            (165, 55, -150.75, -147.80),  // blake3-xob BF16 K = 2048 (4 slots)
+            (293, 98, -145.75, -142.80),  // blake3-xob FP8 K = 8192 (8 slots)
+            (549, 183, -140.35, -137.40), // blake3-xob BF16 K = 8192 (16 slots)
+        ] {
+            let e = chain_extras(&chain_of(links), None);
+            assert_eq!(e, 2 * (links - 3));
+            assert_eq!(chain_degree(e), deg);
+            assert!((6.0 * ((deg as f64).log2() - log2_p) - uniform).abs() < 0.005, "{links} rows");
+            assert!((chain_field_log2(e, 6) - booked).abs() < 0.005, "{links} rows: {}", chain_field_log2(e, 6));
+            let gap = chain_field_log2(e, 6) - 6.0 * ((deg as f64).log2() - log2_p);
+            assert!((gap - 6.0 * (3.0 * P as f64 / 2f64.powi(32)).log2()).abs() < 1e-9);
+        }
+        assert_eq!(chain_extras(&chain_of(3), None), 0);
+        assert_eq!(chain_degree(0), 1);
+        // fingerprint constraints are extras too (index 2 n_extra + o coords + x)
+        let fp = FpSpec { lanes: vec![vec![0; FP_LANES]; 2], coords: 8, public: false };
+        assert_eq!(chain_extras(&chain_of(19), Some(&fp)), 32 + 16);
+    }
 }
