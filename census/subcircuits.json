@@ -57,6 +57,16 @@
         "legacy_target": "bf16-hopper-mma-draft/2026-09-22"
       },
       {
+        "id": "gemm-coordinate/k1536/sm90-wgmma-bf16",
+        "display": "GemmCoordinate<1536> · sm90 wgmma · BF16",
+        "parameters": {
+          "K": 1536,
+          "datatype": "bf16",
+          "semantics": "sm90.wgmma.m64n8k16.bf16"
+        },
+        "fidelity_notes": []
+      },
+      {
         "id": "gemm-coordinate/k1536/sm90-wgmma-e4m3",
         "display": "GemmCoordinate<1536> · sm90 wgmma · FP8 (E4M3)",
         "parameters": {
