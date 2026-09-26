@@ -10,7 +10,7 @@ imports them as code, so the directory can move to its own repository unchanged.
 | `datatypes.json` | operand formats, displayed as the common name first, then the precise format: `BF16`, `FP8 (E4M3)`, `FP4 (NVFP4, E2M1)` | `schemas/datatypes.schema.json` |
 | `networks.json` | network profiles: the reference (same datacenter, 1 ms, 100 Gb/s) and the sensitivity profiles | `schemas/networks.schema.json` |
 | `subcircuits.json` | subcircuit templates, each with typed parameters (e.g. `gemm_coordinate` with `K`, `datatype` and `semantics`, the exact instruction), and under each the subcircuits: fully bound templates such as `gemm_coordinate/k1536/sm90.wgmma.m64n8k32.e4m3` | `schemas/subcircuits.schema.json` |
-| `instance_sets.json` | the frozen instance set of each subcircuit: dataset, tier, size, digest, and the subcircuit its instances are of | `schemas/instance_sets.schema.json` |
+| `instance_sets.json` | the frozen instance set of each subcircuit: dataset, tier, size, digest, `provenance` (captured or synthetic), and the subcircuit its instances are of | `schemas/instance_sets.schema.json` |
 
 Each file is a JSON array of entries. Each entry validates against its file's JSON Schema (draft 2020-12). The tests
 in `backends/numerical/tests/bench/test_census_data.py` check that.
@@ -22,7 +22,7 @@ in `backends/numerical/tests/bench/test_census_data.py` check that.
   the instruction registry names operand dtypes (`bf16`, `e4m3`, `e2m1`); each is a `datatypes.json` id.
 - A subcircuit template id is snake_case, for example `gemm_coordinate`. A subcircuit (a fully bound template) is
   `<template>/<bound parameters>`, for example `gemm_coordinate/k1536/sm90.wgmma.m64n8k32.e4m3`; `legacy_target` keeps the
-  target name it was known by. An instance set's id is its dataset, slugged, for example `bench-instances-fp8-ada-v1`. Every
+  target name it was known by, and `fidelity_notes` record known gaps from what production runs. An instance set's id is its dataset, slugged, for example `bench-instances-fp8-ada-v1`. Every
   other id is kebab-case, for example `dc-1ms-100gbps`.
 - The census holds workloads, subcircuit templates and subcircuits, instance sets, hardware and networks. It never encodes replay or verification
   units, which applications choose per run.

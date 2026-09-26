@@ -113,6 +113,11 @@ def test_every_target_is_a_subcircuit_bound_to_its_exact_instruction() -> None:
         assert s.parameters.datatype in census.DATATYPES
         assert s.id == f"gemm_coordinate/k1536/{t.instruction}" and set(vars(s.parameters)) == set(vars(census.GEMM_COORDINATE.parameters))
     assert len(census.SUBCIRCUITS) == len(TARGETS)
+    notes = {s.id: [n.note for n in s.fidelity_notes] for s in census.SUBCIRCUITS.values()}
+    assert notes["gemm_coordinate/k1536/sm90.mma.m16n8k16.bf16"] == ["H100 BF16 models mma (sm90.mma.m16n8k16.bf16); vLLM's H100 BF16 GEMMs run wgmma"]
+    assert {i.id: i.provenance for i in census.INSTANCE_SETS.values()} == {
+        "bench-instances-v1": "captured", "bench-instances-fp8-ada-v1": "synthetic", "bench-instances-bf16-hopper-v1": "synthetic",
+        "bench-instances-fp8-hopper-v1": "synthetic", "bench-instances-nvfp4-sm120-v1": "synthetic"}
 
 
 def test_native_seconds_per_instance() -> None:
