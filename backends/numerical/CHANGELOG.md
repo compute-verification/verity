@@ -6,6 +6,7 @@
   reader's `census.INSTANCE_SETS` is now `census.INPUT_SETS`.
 - In the entities render:
   - results, their `key` and subcircuits carry `input_set` (and `input_set_provenance`) instead of `instance_set`;
+  - a result's `interaction.instances` (the inputs per timed run) is now `interaction.inputs`;
   - the embedded census section is now `input_sets`;
   - result ids are unchanged in shape: `<backend>@<statement>@<input set>@<prover hardware>`.
 - Recorded names keep the old word, because fixtures and results carry them: the `instance-equiv/v1` artifact kind, a

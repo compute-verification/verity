@@ -1104,7 +1104,7 @@ def test_a_results_interaction_record_recomputes_its_overhead_at_any_network(sto
         r = by_art[art]
         ix = r["interaction"]
         at = lambda rtt_s, bw: r["N"]["value"] * (ix["commit_s"] + ix["prover_compute_s"] + ix["verifier_compute_s"] + ix["rounds"] * rtt_s  # noqa: E731
-                                                   + (ix["bytes_up"] + ix["bytes_down"]) * 8 / bw) / ix["instances"]
+                                                   + (ix["bytes_up"] + ix["bytes_down"]) * 8 / bw) / ix["inputs"]
         assert at(0.001, 100e9) == pytest.approx(r["overhead"]["value"], rel=1e-9)
         for n in ("rtt-20ms-100gbps", "dc-1ms-10gbps"):
             prof = ent["census"]["networks"][n]
@@ -1116,5 +1116,6 @@ def test_a_results_interaction_record_recomputes_its_overhead_at_any_network(sto
     assert ix["loopback_per_round"] == {"s": 0.0001, "method": "measured on loopback, this run"}
     assert ix["loopback_moved_s"] == pytest.approx(rounds * 0.0001)
     assert ix["prover_compute_s"] == pytest.approx(16.0 + rounds * 0.0001) and ix["verifier_compute_s"] == 0.0
+    assert "instances" not in ix and ix["inputs"] == 4096 and ix["formula"].endswith("/ inputs")
     fx = by_art[filed]["interaction"]
     assert fx["derived"] and fx["rounds"] == 0 and fx["measured_rtt"] is None and fx["loopback_per_round"] is None

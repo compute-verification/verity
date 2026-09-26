@@ -1730,7 +1730,8 @@ def best_standard_hash(results: Sequence[Mapping[str, Any]]) -> list[dict[str, A
 
 def interaction_fields(ix: Mapping[str, Any], P: Mapping[str, Any], raw: Mapping[str, Any]) -> dict[str, Any]:
     """A result's interaction record, enough to recompute its overhead at any network:
-    ``overhead = N x (commit_s + prover_compute_s + verifier_compute_s + rounds x RTT + (bytes_up + bytes_down) x 8 / bandwidth) / instances``.
+    ``overhead = N x (commit_s + prover_compute_s + verifier_compute_s + rounds x RTT + (bytes_up + bytes_down) x 8 / bandwidth) / inputs``
+    (``inputs``: the inputs per timed run).
     ``rounds`` is what the formula uses (``rounds.sequential_depth``, else ``rounds.protocol``; 0 for a file-verified result);
     ``prover_compute_s`` already counts the rounds x loopback moved out of the measured wait (``loopback_moved_s``)."""
     num = lambda v: float(v) if _num(v) else None  # noqa: E731
@@ -1743,8 +1744,8 @@ def interaction_fields(ix: Mapping[str, Any], P: Mapping[str, Any], raw: Mapping
         "measured_bandwidth_bps": ix.get("bandwidth_bps"),
         "loopback_per_round": ({"s": num(raw.get("loopback_round_s")), "method": raw.get("loopback_method")}
                                if num(raw.get("loopback_round_s")) is not None else None),
-        "loopback_moved_s": ix["loopback_s"], "instances": P["instances"],
-        "formula": "overhead = N * (commit_s + prover_compute_s + verifier_compute_s + rounds * rtt_s + (bytes_up + bytes_down) * 8 / bandwidth_bps) / instances",
+        "loopback_moved_s": ix["loopback_s"], "inputs": P["instances"],
+        "formula": "overhead = N * (commit_s + prover_compute_s + verifier_compute_s + rounds * rtt_s + (bytes_up + bytes_down) * 8 / bandwidth_bps) / inputs",
     }
 
 
