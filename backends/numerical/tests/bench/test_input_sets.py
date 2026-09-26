@@ -194,6 +194,15 @@ def test_meta_and_ref(synthetic):
         s.ref(0, 7)
 
 
+def test_suite_digests_only(tmp_path, monkeypatch):
+    monkeypatch.setitem(G.SUITES, "tiny", [("rope-head", {"D": 8}, 5), ("silu-mul", {"I": 8}, 3)])
+    full = G.suite("tiny", 9, tmp_path / "full")
+    lean = G.suite("tiny", 9, tmp_path / "lean", digests_only=True)
+    assert [s["content_digest"] for s in full] == [s["content_digest"] for s in lean]
+    assert sorted(p.name for p in Path(lean[0]["path"]).iterdir()) == ["index.json", "manifest.json"]
+    assert set(G.SUITES["101"][0][1]) == {"K", "semantics"} and len(G.SUITES["101"]) == 10
+
+
 def test_cli(tmp_path, capsys):
     assert G.main(["--list"]) == 0
     listed = [json.loads(line) for line in capsys.readouterr().out.splitlines()]

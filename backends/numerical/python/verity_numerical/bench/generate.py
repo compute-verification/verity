@@ -124,6 +124,39 @@ def generate(sub: TM.Subcircuit, n: int, seed: int, out: str | Path, *, procs: i
     return summary
 
 
+#: Named suites: (template, parameters, n).  ``101``: row #101's captured subcircuits (Llama-3.2-1B), plus its GEMMs on Hopper wgmma.
+SUITES: dict[str, list[tuple[str, dict[str, Any], int]]] = {
+    "101": [("gemm-coordinate", {"K": 2048, "semantics": "sm80.mma.m16n8k16.bf16"}, 4096),
+            ("gemm-coordinate", {"K": 8192, "semantics": "sm80.mma.m16n8k16.bf16"}, 4096),
+            ("gemm-coordinate", {"K": 2048, "semantics": "sm90.wgmma.m64n8k16.bf16"}, 4096),
+            ("gemm-coordinate", {"K": 8192, "semantics": "sm90.wgmma.m64n8k16.bf16"}, 4096),
+            ("attention-head", {"D": 64, "BN": 128, "T": "1:512"}, 1024),
+            ("rope-head", {"D": 64}, 1024),
+            ("rmsnorm-fused-cuda", {"N": 2048, "EPS": 1e-5}, 256),
+            ("rmsnorm-triton", {"N": 2048, "EPS": 1e-5}, 256),
+            ("silu-mul", {"I": 8192}, 256),
+            ("gumbel-top-p-token-select", {"V": 128256}, 32)],
+}
+
+
+def suite(name: str, seed: int, out: str | Path, procs: int = 1, digests_only: bool = False) -> list[dict[str, Any]]:
+    """Generate every set of suite ``name`` under ``out``; with ``digests_only`` each set's port arrays are removed once written
+    (its manifest, with every file's sha256, and index stay): enough to compare a regeneration byte for byte."""
+    out_sets = []
+    for tid, params, n in SUITES[name]:
+        sub = TM.subcircuit(tid, **params)
+        s = generate(sub, n, seed, out, procs=procs)
+        s["manifest_sha256"] = IS.InputSet.open(s["path"]).manifest_sha256()
+        if digests_only:
+            d = Path(s["path"])
+            for f in d.iterdir():
+                if f.name not in ("manifest.json", "index.json"):
+                    f.unlink()
+        out_sets.append(s)
+        print(json.dumps({k: s[k] for k in ("set", "subcircuit", "n", "content_digest", "draws", "rejected", "seconds")}), flush=True)
+    return out_sets
+
+
 def register_command(set_dir: str | Path, meta_file: str | Path) -> list[str]:
     """The ``research data put`` that registers a set (``input-set/v1``, preserved)."""
     return ["research", "data", "put", "--kind", IS.KIND, "--tree", str(set_dir), "--meta", f"@{meta_file}", "--preserve"]
@@ -163,7 +196,22 @@ def main(argv: Iterable[str] | None = None) -> int:
     ap.add_argument("--out")
     ap.add_argument("--procs", type=int, default=1)
     ap.add_argument("--register", action="store_true", help="research data put --kind input-set/v1 --preserve; prints the art id")
+    ap.add_argument("--suite", choices=sorted(SUITES), help="every set of a named suite (SUITES) under --out, with --seed")
+    ap.add_argument("--summary", default=None, help="--suite: write the sets' summaries (digests included) to this JSON file")
+    ap.add_argument("--digests-only", action="store_true", help="--suite: keep each set's manifest and index, not its arrays")
     a = ap.parse_args(list(argv) if argv is not None else None)
+    if a.suite:
+        if a.seed is None or not a.out:
+            ap.error("--suite needs --seed and --out")
+        sets = suite(a.suite, a.seed, a.out, a.procs, a.digests_only)
+        if a.register:
+            for s in sets:
+                s["art"] = register(s["path"])
+        doc = {"suite": a.suite, "seed": a.seed, "sets": sets, "versions": _versions()}
+        if a.summary:
+            Path(a.summary).write_text(json.dumps(doc, indent=1, default=str) + "\n")
+        print(json.dumps({"suite": a.suite, "sets": [{k: s.get(k) for k in ("set", "content_digest", "art")} for s in sets]}, indent=1))
+        return 0
     if a.list:
         for t in TM.TEMPLATES.values():
             ex = TM.subcircuit(t.id, **t.example)
