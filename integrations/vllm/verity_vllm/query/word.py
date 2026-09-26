@@ -485,7 +485,7 @@ _TAP_KERNEL = {"AttnBlock": "FA2 / FA3 tap build (flash_fwd_kernel / hopper main
                "RMSNormTriton": "vLLM batch-invariant Triton _rms_norm_kernel", "RMSNormFusedCuda": "vLLM CUDA fused_add_rms_norm_kernel<bf16, 0, true>",
                "MoeRouterTopK": "vLLM _moe_C.topk_softmax (topkGatingSoftmax)", "MoeRouterTopKNorm": "vLLM _moe_C.topk_softmax (topkGatingSoftmax)",
                "MoeRouterProbs": "vLLM _moe_C.topk_softmax (topkGatingSoftmax: the softmax)", "NvExpf": "vLLM _moe_C.topk_softmax (topkGatingSoftmax: expf)",
-               "EmbeddingShard": "vLLM VocabParallelEmbedding (the rank's vocabulary-range mask)"}
+               "EmbeddingShard": "vLLM's vocabulary-parallel embedding (the rank's vocabulary-range mask)"}
 
 
 def committed_today(scope: str | None, head: str | None) -> str | None:
