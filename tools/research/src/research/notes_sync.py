@@ -162,6 +162,16 @@ def sync(root: Path, paths: list[str] | None = None, message: str | None = None,
     return {**rep, "rc": 1, "error": f"lost the push race {retries + 1} times (local commit kept); sync again"}
 
 
+def lag(root: Path, remote: str = "origin") -> tuple[int, int] | None:
+    """(ahead, behind): commits HEAD has that the remote-tracking branch lacks, and the reverse; None without one."""
+    branch = (_out(root, "symbolic-ref", "--short", "HEAD") or "").strip()
+    counts = _out(root, "rev-list", "--left-right", "--count", f"HEAD...refs/remotes/{remote}/{branch}") if branch else None
+    if not counts or len(counts.split()) != 2:
+        return None
+    ahead, behind = counts.split()
+    return int(ahead), int(behind)
+
+
 def scan(root: Path, max_bytes: int = MAX_BYTES, secrets: list[str] | None = None) -> dict:
     """Every blob in the history: `big` (path, bytes) over max_bytes, `keys` (path: pattern) with key material."""
     secrets = _secret_values() if secrets is None else secrets

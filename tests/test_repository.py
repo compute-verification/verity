@@ -52,6 +52,17 @@ SOURCE_SUFFIXES = frozenset({".py", ".rs", ".toml", ".sh", ".cu", ".c", ".h", ".
 MD_SIZE_CAP = 48 * 1024
 PROTOCOL_SIZE_CAP = 128 * 1024
 BLOB_LIMIT = 5 * 1024 * 1024  # 5 MiB; the largest fixture today is 4.5 MB
+#: Must-reject proofs the ligero verifiers' regression tests read from the tree (steps-pin H1/H2, red-team-leaf-2 G1), merged
+#: 2026-09-23 in lane/steps-pin; each is capped at its own size, so they cannot grow and nothing else joins them silently.
+OVERSIZE_FIXTURES = {
+    "backends/ligero-verify/fixtures/fp8-ada-ajtai-n64-g1-decoy/sub_00.proof": 6 * 1024 * 1024,
+    "backends/ligero-verify/fixtures/steps-pin/bf16-hopper-ajtai-n128-collide-P/sub_00.proof": 6 * 1024 * 1024,
+    "backends/ligero-verify/fixtures/steps-pin/bf16-hopper-ajtai-n128-collide-Q/sub_00.proof": 6 * 1024 * 1024,
+    "backends/ligero-verify/fixtures/steps-pin/fp8-ada-ajtai-n64-collide-P/sub_00.proof": 6 * 1024 * 1024,
+    "backends/ligero-verify/fixtures/steps-pin/fp8-ada-ajtai-n64-collide-Q/sub_00.proof": 6 * 1024 * 1024,
+    "backends/ligero-verify/fixtures/steps-pin/fp8-ada-ajtai-n64-steps32/sub_00.proof": 6 * 1024 * 1024,
+    "backends/ligero-verify/fixtures/steps-pin/fp8-ada-poseidon2-steps32/sub_00.proof": 7 * 1024 * 1024,
+}
 
 
 def _tracked() -> list[str]:
@@ -123,7 +134,7 @@ def test_no_tracked_blob_exceeds_limit() -> None:
             size = os.path.getsize(ROOT / p)
         except FileNotFoundError:  # tracked but deleted in the working tree
             continue
-        if size > BLOB_LIMIT:
+        if size > OVERSIZE_FIXTURES.get(p, BLOB_LIMIT):
             offenders.append(f"{p}: {size / 1048576:.1f} MiB")
     assert not offenders, (
         "tracked files over the blob limit (evidence and run outputs belong in artifact storage, not Git):\n"

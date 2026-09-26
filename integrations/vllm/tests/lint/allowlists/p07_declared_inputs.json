@@ -131,7 +131,6 @@
     {"file": "verity_vllm/pipeline/commit.py", "kind": "broad-except", "symbol": "cuda_census", "detail": "except Exception"},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "broad-except", "symbol": "cuda_residue", "detail": "except Exception"},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "broad-except", "symbol": "git_head", "detail": "except Exception", "count": 2},
-    {"file": "verity_vllm/pipeline/commit.py", "kind": "broad-except", "symbol": "main", "detail": "except Exception"},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "broad-except", "symbol": "nvidia_smi_used_mib", "detail": "except Exception"},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "broad-except", "symbol": "rss_kb", "detail": "except Exception"},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "cwd", "symbol": "git_head", "detail": "pathlib.Path.cwd"},
