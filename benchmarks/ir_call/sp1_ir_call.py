@@ -183,7 +183,7 @@ def prepare(a) -> int:
         "negatives": {name: {"object_digest": object_digest(low.obj), "statement_sha256": _sha256(low.statement)} for name, low in negatives.items()},
         "source_sha": _git_sha(),
     }
-    out = Path(a.out)
+    out = Path(a.out or os.environ["RESEARCH_RUN_DIR"])
     out.mkdir(parents=True, exist_ok=True)
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w") as tar:
@@ -364,7 +364,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--set-art", default=None, help="the set's art id, recorded")
     p.add_argument("--lo", type=int, default=0)
     p.add_argument("--hi", type=int, default=None)
-    p.add_argument("--out", required=True)
+    p.add_argument("--out", default=None, help="default $RESEARCH_RUN_DIR")
     r = sub.add_parser("run")
     r.add_argument("--bundle", required=True, help="bundle.tar from prepare; $VARS expand (research ships it to $RESEARCH_RUN_DIR/inputs/)")
     r.add_argument("--prove", nargs="*", default=[], choices=("core", "compressed"))
