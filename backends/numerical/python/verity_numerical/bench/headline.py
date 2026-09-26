@@ -192,6 +192,32 @@ def variable_of(template: str | None) -> str | None:
     return used[0] if used else None
 
 
+def input_source(V: Any, c: Any) -> str | None:
+    """The ``source`` its registered input set records for the cell's inputs (``synthetic`` for the spine generator's), or
+    ``None`` when the set is not registered or records none."""
+    inst = getattr(c, "instances", None) or {}
+    sets = getattr(V, "input_sets", {}) or {}
+    hit = next((sets[k] for k in (inst.get("set_art"), inst.get("content_digest"), inst.get("manifest_sha256"))
+                if isinstance(k, str) and k in sets), None)
+    return (hit[1].get("source") if hit else None) or None
+
+
+def provenance(per_value: list[dict[str, Any]], var: str) -> dict[str, Any] | None:
+    """The footnote a covered entry carries when some of its values are proved on synthetic inputs (red-team-flock-3's CP6:
+    counted, like the FP8 spine cells, with their provenance shown)."""
+    syn = [x[var] for x in per_value if x.get("source") == "synthetic"]
+    if not syn:
+        return None
+    return {"synthetic_values": syn, "text": f"{len(syn)} of the {len(per_value)} covered {var} values are proved on synthetic inputs "
+                                             f"(the spine generator, source: synthetic), the rest on captured inputs"}
+
+
+#: Templates whose lowering leaves a part to the verifier with no census ``verifier_evaluated`` record: the RMSNorms' row tail
+#: (``supports``: "the row tail evaluated by the verifier").  Only the strict preview reads it; the published headline counts them.
+ROW_TAIL = {t: "the row tail (the sum of squares' reduction, rsqrt and the scale), evaluated by the verifier"
+            for t in ("rmsnorm-fused-cuda", "rmsnorm-triton")}
+
+
 def verifier_evaluated(template: str | None) -> Any:
     """The census's record of a template's verifier-evaluated parts (``verifier_evaluated``: what, how much, whether counted
     and on whose ruling), or ``None``."""
@@ -297,11 +323,15 @@ def headline(V: Any, workloads: Sequence[Mapping[str, Any]] | None = None) -> li
                 anywhere = getattr(V.rules, "headline_any_hardware", False)      # a PREVIEW (Daniel decides): N stays the served line's
                 ve = verifier_evaluated(g["template"])
                 count_ve = getattr(V.rules, "headline_count_omitted", False)     # the one switch for verifier-evaluated parts
+                strict = getattr(V.rules, "headline_strict_verifier", False)      # PREVIEW (Daniel 2026-09-26): the verifier evaluates nothing
+                parts = ve.parts if ve is not None else ROW_TAIL.get(g["template"])
 
                 def counted(c: Any, ve: Any = ve, count_ve: bool = count_ve) -> bool:
                     """Verifier-evaluated parts (the template's census record, or the cell's ``omitted`` label) count where the census
                     records a ruling that counts them (attention: red-team-flock-3's grant), else only under the switch."""
                     left = getattr(V, "omitted_of", {}).get(c.artifact)
+                    if strict:
+                        return not (ve is not None or left or g["template"] in ROW_TAIL)
                     if ve is None and not left:
                         return True
                     return count_ve or bool(ve is not None and ve.counted)
@@ -345,7 +375,8 @@ def headline(V: Any, workloads: Sequence[Mapping[str, Any]] | None = None) -> li
                         c, P = best[v], rate[v]
                         per_value.append({var: v, "units": vals[v]["units"], "artifact": c.artifact, "P": P,
                                           "proving_seconds": vals[v]["units"] / P, "native_seconds": dict(vals[v]["native_seconds"]),
-                                          **({"class": klass[v]} if klass[v] else {})})
+                                          **({"class": klass[v]} if klass[v] else {}),
+                                          **({"source": src} if (src := input_source(V, c)) else {})})
                     missing = [v for v in vals if v not in best]
                     drawn = sorted(drawn_values(V, g["subcircuit"], var, w))
                     if per_value:
@@ -355,7 +386,8 @@ def headline(V: Any, workloads: Sequence[Mapping[str, Any]] | None = None) -> li
                                         "native_seconds": {b.id: sum(x["native_seconds"].get(b.id, 0.0) for x in per_value) for b in BASES
                                                            if g["native_seconds"][b.id] is not None},
                                         "variable": var, "covered_values": at, "drawn_values": drawn, "population_values": len(vals),
-                                        "values_elsewhere": other, "per_value": per_value, "verifier_evaluated": footnote})
+                                        "values_elsewhere": other, "per_value": per_value, "verifier_evaluated": footnote,
+                                        **({"provenance": pv} if (pv := provenance(per_value, var)) else {})})
                     if missing:
                         uncovered.append({"subcircuit": g["subcircuit"], "template": g["template"], "parameters": g["parameters"],
                                           "display": g["display"], "units": sum(vals[v]["units"] for v in missing),
@@ -379,7 +411,7 @@ def headline(V: Any, workloads: Sequence[Mapping[str, Any]] | None = None) -> li
                     elsewhere.append({"artifact": c.artifact, "prover_hardware": h.id if h else None, "prover_gpu": V.prover_gpu.get(c.artifact),
                                       "on_served_hardware": T.same_sku(V.prover_gpu.get(c.artifact), served.device),
                                       "cleared": not c.provisional and not c.legacy.finding,
-                                      "omitted": getattr(V, "omitted_of", {}).get(c.artifact) or (ve.parts if ve is not None and not counted(c) else None)})
+                                      "omitted": getattr(V, "omitted_of", {}).get(c.artifact) or (parts if parts and not counted(c) else None)})
                 opening = getattr(census.SUBCIRCUIT_TEMPLATES.get(g["template"] or ""), "commitment_opening", None)
                 if opening is not None and not elsewhere:
                     why, code = f"a commitment opening: {opening.note}", "commitment opening"
@@ -480,6 +512,7 @@ def render_markdown(records: Sequence[Mapping[str, Any]]) -> list[str]:
                     f"Below the 128-bit bar, verified but not counted: {len(r['below_bar'])} proofs on this workload's inputs.", ""]
         by_sub: dict[str, list[str]] = {}
         notes: dict[str, str] = {}
+        sources: dict[str, str] = {}
         for row in r["backends"]:
             for x in row["covered"]:
                 mark = ""
@@ -488,6 +521,9 @@ def render_markdown(records: Sequence[Mapping[str, Any]]) -> list[str]:
                     notes.setdefault(x["display"], f"{ve['parts']} ({ve['share']}) is checked natively by the verifier, not proven; "
                                                    f"counted: {ve['ruling']}")
                     mark = "†"
+                if x.get("provenance"):
+                    sources.setdefault(x["display"], x["provenance"]["text"])
+                    mark += "‡"
                 per = (f" at {x['variable']} = {runs(x['covered_values'])} ({len(x['covered_values'])} of {x['population_values']})"
                        if x.get("variable") else "")
                 by_sub.setdefault(x["subcircuit"], []).append(row["backend"] + mark + per)
@@ -517,4 +553,5 @@ def render_markdown(records: Sequence[Mapping[str, Any]]) -> list[str]:
                                if set(x["drawn_values"]) - set(x["covered_values"]) else "")
                             + f". Units at any other {v} are not covered: nothing is extrapolated.", ""]
         out += [f"† Verifier-evaluated, {d}: {n}." for d, n in notes.items()] + ([""] if notes else [])
+        out += [f"‡ Synthetic inputs, {d}: {n}." for d, n in sources.items()] + ([""] if sources else [])
     return out

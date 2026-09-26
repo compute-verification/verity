@@ -217,3 +217,36 @@ def test_the_cli_refuses_a_second_guard_or_no_limit_and_status_stop_read_the_rec
     finally:
         other.kill()
     assert research_main(["pods", "guard", "stop", "--prefix", "vyv-"]) == 1
+
+
+def test_reset_clears_a_sticky_trip_keeps_the_tally_logs_who_and_refuses_while_the_guard_runs(guard_dir, capsys):
+    """The vLLM coordinator hand-edited state.tripped after a lapsed deadline (2026-09-26); `reset` does it with a record."""
+    api = fleet()
+    t = [T0]
+    G.run(G.Config(prefix="vyv-", deadline=T0 + 60, self_pod="me"), api, clock=lambda: t[0], sleep=lambda s: t.__setitem__(0, t[0] + 120),
+          iterations=2)
+    before = json.loads((guard_dir / "guard-vyv-.json").read_text())
+    assert "DEADLINE" in before["tripped"]["why"] and before["spent"] > 0
+
+    other = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)", "guard"])
+    try:
+        (guard_dir / "guard-vyv-.pid").write_text(f"{other.pid}\n")
+        assert research_main(["pods", "guard", "reset", "--prefix", "vyv-", "--by", "vllm-coordinator"]) == 3
+        assert "stop --prefix vyv-" in capsys.readouterr().err
+        assert json.loads((guard_dir / "guard-vyv-.json").read_text())["tripped"] == before["tripped"]
+    finally:
+        other.kill()
+        other.wait(timeout=10)
+
+    assert research_main(["pods", "guard", "reset", "--prefix", "vyv-", "--by", "vllm-coordinator"]) == 0
+    after = json.loads((guard_dir / "guard-vyv-.json").read_text())
+    assert after["tripped"] is None and after["spent"] == before["spent"] and after["terminated"] == before["terminated"]
+    assert after["resets"][-1]["by"] == "vllm-coordinator" and after["resets"][-1]["cleared"] == before["tripped"]
+    assert "RESET by vllm-coordinator: cleared the trip" in (guard_dir / "guard-vyv-.log").read_text()
+    assert research_main(["pods", "guard", "reset", "--prefix", "vyv-"]) == 0 and "not tripped" in capsys.readouterr().out
+    assert research_main(["pods", "guard", "reset", "--prefix", "none-"]) == 2
+
+    api.add(pod("new", "vyv-new", 1.0, -1))                                  # a restart with a new deadline no longer kills new pods
+    G.run(G.Config(prefix="vyv-", deadline=T0 + 10 * 3600, self_pod="me"), api, clock=lambda: t[0], sleep=lambda s: None, iterations=1)
+    assert "new" not in api.deleted and json.loads((guard_dir / "guard-vyv-.json").read_text())["spent"] >= before["spent"]
+

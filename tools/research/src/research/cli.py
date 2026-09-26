@@ -18,6 +18,7 @@
   research pods guard --prefix P [--deadline ISO --cap-usd N --rate-max USD/h --balance-floor USD --pod-max-hours H] [--dry-run] [--detach]
                                                  # budget guard over pods named P*: trips terminate all (own host last); rate sheds newest first
   research pods guard status|stop --prefix P     # its state file / SIGTERM to exactly its recorded pid
+  research pods guard reset --prefix P [--by WHO]  # clear a sticky trip (guard stopped), keeping the spend tally; logged
   research env --source TREE [--rev REV] [--json]  # `export PYTHONPATH=...` from TREE's [tool.uv.workspace] members (research.pythonpath)
   research pods ssh TARGET [--print] [-- CMD...]  # TARGET = machines.toml name | pod id | pod name; the port is looked up, never hard-coded
   research pods sync TARGET [SRC] [--dest DIR]    # rsync the worktree's git-visible files (default /workspace/src), prune what it shipped before

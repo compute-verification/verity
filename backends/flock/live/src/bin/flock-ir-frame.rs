@@ -5,6 +5,8 @@
 //!   flock-ir-frame serve    --listen ADDR --out DIR --instances FILE --netlist FILE --pin SHA256 [--tables DIR] [--sessions N] [--operator LANE]
 //!   flock-ir-frame prove    --verifier ADDR --instances FILE --netlist FILE [--tables DIR] [--gpu] [--runs N] [--warm W] [--dump DIR]
 //!   flock-ir-frame selftest --instances FILE --netlist FILE [--tables DIR] [--gpu] [--only CASE]
+//!   flock-ir-frame replay   --session session.json --proofs rep0,rep1 --instances FILE --netlist FILE --pin SHA256 [--tables DIR]
+//!   any of them with `--class MANIFEST` (a key-count class: `--pin` is the manifest's sha256; see `check_class`)
 //!
 //! Before anything the verifier checks its own instance file (`verity_flock.ir_frame.stage`, never a producer's): the unit
 //! netlist's order, the block table against the plan, the frame-v3 roots recomputed from its row digests and output words,
@@ -42,6 +44,8 @@ const SIGMA_TAG: &[u8] = b"verity/flock-ir-frame/sigma/v3";
 const STATEMENT: &str = "verity/flock-ir-frame/v3";
 
 static TABLES: std::sync::OnceLock<Tables> = std::sync::OnceLock::new();
+/// A class-pinned statement's pin (`--class`): Σ binds it.
+static CLASS_PIN: std::sync::OnceLock<[u8; 32]> = std::sync::OnceLock::new();
 
 fn arg(k: &str, d: &str) -> String {
     let a: Vec<String> = std::env::args().collect();
@@ -67,6 +71,10 @@ fn params(m: usize, lig: LigeritoProfile) -> PcsParams {
 fn sigma(st: &FrameStmt, inst: &FrameInstances) -> [u8; 32] {
     let mut h = Sha256::new();
     h.update(SIGMA_TAG);
+    if let Some(c) = CLASS_PIN.get() {
+        h.update(b"class");
+        h.update(c);
+    }
     h.update(inst.unit.as_bytes());
     h.update([0]);
     h.update(st.net.sha256);
@@ -669,12 +677,17 @@ fn main() {
     let cmd = std::env::args().nth(1).unwrap_or_default();
     let tb = Instant::now();
     let inst = Arc::new(load(&arg("--instances", "frame.bin")));
-    let net = IrUnitNet::parse(&std::fs::read_to_string(arg("--netlist", "net.txt")).expect("netlist"));
+    let net_text = std::fs::read_to_string(arg("--netlist", "net.txt")).expect("netlist");
+    let net = IrUnitNet::parse(&net_text);
     let pin = arg("--pin", "");
     if cmd == "serve" && pin.is_empty() {
         refuse("serve needs --pin (the pinned lowering's sha256)".into());
     }
-    if !pin.is_empty() && hex(&net.sha256) != pin {
+    let class = arg("--class", "");
+    if !class.is_empty() {
+        let c = check_class(&class, &pin, &net, &net_text, &inst).unwrap_or_else(|e| refuse(e));
+        CLASS_PIN.set(c).unwrap();
+    } else if !pin.is_empty() && hex(&net.sha256) != pin {
         refuse(format!("the netlist's sha256 {} is not the pinned lowering {pin}", hex(&net.sha256)));
     }
     if inst.unit != net.name || inst.header["unit_sha256"].as_str() != Some(hex(&net.sha256).as_str()) {
@@ -720,6 +733,166 @@ fn main() {
                 println!("LIVE\t{v}");
             }
         }
-        _ => eprintln!("usage: flock-ir-frame serve|prove|selftest --instances FILE --netlist FILE [--pin SHA256] ..."),
+        "replay" => {
+            if pin.is_empty() {
+                refuse("replay needs --pin (the pinned lowering's sha256)".into());
+            }
+            let rec: Value = serde_json::from_slice(&std::fs::read(arg("--session", "session.json")).unwrap()).unwrap();
+            let proofs: Vec<Vec<u8>> = arg("--proofs", "").split(',').map(|f| std::fs::read(f).unwrap()).collect();
+            match replay(&st, &inst, &rec, &proofs) {
+                Ok(v) => println!("REPLAY\t{v}"),
+                Err(e) => {
+                    println!("REPLAY\t{}", json!({"accepted": false, "why": e}));
+                    std::process::exit(1);
+                }
+            }
+        }
+        _ => eprintln!("usage: flock-ir-frame serve|prove|selftest|replay --instances FILE --netlist FILE [--pin SHA256] ..."),
     }
+}
+
+/// sha256 of a unit netlist without its name and its per-T lines (`verity_flock.templates.attention_head.unit_rows_sha256`): the
+/// header line minus its name token, then the matrix rows up to `LEAVES`.
+fn unit_rows_sha256(text: &str) -> String {
+    let (head, rest) = text.split_once('\n').unwrap_or((text, ""));
+    let mut s = head.split(' ').enumerate().filter(|(i, _)| *i != 1).map(|(_, t)| t).collect::<Vec<_>>().join(" ");
+    s.push('\n');
+    s.push_str(rest.split("\nLEAVES ").next().unwrap_or(""));
+    hex(&sha256(s.as_bytes()))
+}
+
+/// A key-count class (`flock-ir-class/v1`, `--class MANIFEST`): the pin is the manifest's sha256 (serve and replay must name it;
+/// prove takes the manifest's own); the manifest lists every T of its class `[lo, hi]`; the file's own key count (its key port's
+/// words / words per key, which its committed rows bind) is in the class; the netlist is that T's entry; and its unit rows are
+/// the class's, so one block circuit serves the class. The statement is then this netlist's, and Σ binds the class pin.
+fn check_class(path: &str, pin: &str, net: &IrUnitNet, text: &str, inst: &FrameInstances) -> Result<[u8; 32], String> {
+    let b = std::fs::read(path).map_err(|e| format!("class manifest: {e}"))?;
+    let c = sha256(&b);
+    if !pin.is_empty() && hex(&c) != pin {
+        return Err(format!("the class manifest's sha256 {} is not the pin {pin}", hex(&c)));
+    }
+    let m: Value = serde_json::from_slice(&b).map_err(|e| format!("class manifest: {e}"))?;
+    // CP2: the pinned bytes are the manifest's own canonical serialization (sorted keys, no whitespace, one newline), so a
+    // duplicate key (serde_json keeps the last) or any other spelling of the same content is refused
+    if serde_json::to_string(&m).map_err(|e| e.to_string())? + "\n" != String::from_utf8_lossy(&b) {
+        return Err("the class manifest is not its canonical serialization".into());
+    }
+    if m["format"] != "flock-ir-class/v1" {
+        return Err("not a flock-ir-class/v1 manifest".into());
+    }
+    let (lo, hi) = (m["T"][0].as_u64().ok_or("class: no T range")? as usize, m["T"][1].as_u64().ok_or("class: no T range")? as usize);
+    let nets = m["nets"].as_object().ok_or("class: no nets")?;
+    if lo == 0 || lo > hi || nets.len() != hi - lo + 1 || (lo..=hi).any(|t| !nets.contains_key(&t.to_string())) {
+        return Err(format!("the class manifest does not list every T of [{lo}, {hi}] once"));
+    }
+    let port = m["key_port"].as_str().ok_or("class: no key_port")?;
+    let per = m["words_per_key"].as_u64().ok_or("class: no words_per_key")? as usize;
+    let words = inst.in_ports.iter().find(|p| p.0 == port).ok_or(format!("class: no input port {port}"))?.1;
+    if per == 0 || words % per != 0 || words / per < lo || words / per > hi {
+        return Err(format!("the file's key count ({words} words of {port}, {per} per key) is not in the class [{lo}, {hi}]"));
+    }
+    let t = words / per;
+    if nets[&t.to_string()].as_str() != Some(hex(&net.sha256).as_str()) {
+        return Err(format!("the netlist is not the class's netlist for T = {t}"));
+    }
+    if m["unit_rows"].as_str() != Some(unit_rows_sha256(text).as_str()) {
+        return Err("the netlist's unit rows are not the class's".into());
+    }
+    Ok(c)
+}
+
+fn f128_of_hex(s: &str) -> F128 {
+    F128::new(u64::from_str_radix(&s[16..32], 16).unwrap(), u64::from_str_radix(&s[..16], 16).unwrap())
+}
+
+fn unhex32(s: &str) -> [u8; 32] {
+    (0..32).map(|i| u8::from_str_radix(&s[2 * i..2 * i + 2], 16).unwrap()).collect::<Vec<_>>().try_into().unwrap()
+}
+
+/// Re-verify a verifier's recorded session from files with this machine's own statement (its own staged instance file,
+/// checked above as `serve` checks it, the pinned netlist and tables, the honest run outputs): the coins are the recorded
+/// ones, so this is not transferable evidence, but every message the proofs carry must hash to what the verifier recorded
+/// before each coin, the link exchange must hash to the recorded link_sha256, and Flock must accept both reps on one root.
+fn replay(st: &Arc<FrameStmt>, inst: &Arc<FrameInstances>, rec: &Value, proofs: &[Vec<u8>]) -> Result<Value, String> {
+    let sig = sigma(st, inst);
+    if rec["kind"] != "flock-live-session/v1" {
+        return Err("not a flock-live session record".into());
+    }
+    if rec["hello"].as_str() != Some(config(st, sig).hello().as_str()) {
+        return Err("the record's session parameters (Σ, statement digest, profile) are not this statement's".into());
+    }
+    if rec["config"]["require_link"] != true || rec["link_sha256"].is_null() || rec["link_mode"] != "exchange" {
+        return Err("F1: the record is not a session whose statement was committed before any coin".into());
+    }
+    if rec["aborted"].is_string() || rec["verdict"]["accepted"] != true {
+        return Err("the live verifier did not accept this session".into());
+    }
+    let (_, cvs) = st.compressions(inst);
+    let publics = FrameStmt::publics_bytes(&cvs);
+    if rec["link"]["publics_sha256"][TABLE].as_str() != Some(hex(&sha256(&publics)).as_str()) {
+        return Err("C4: the record's committed publics are not this instance file's run outputs".into());
+    }
+    let v = FrameVerifier { st: st.clone(), inst: inst.clone() };
+    v.statement_publics(TABLE, &publics)?;
+    let want_proofs: Vec<String> = rec["proof_sha256"].as_array().ok_or("no proofs recorded")?.iter()
+        .map(|x| x["sha256"].as_str().unwrap_or_default().to_string()).collect();
+    if proofs.len() != 2 || want_proofs.len() != 2 || proofs.iter().zip(&want_proofs).any(|(b, w)| hex(&sha256(b)) != *w) {
+        return Err("the proof files are not the recorded proofs".into());
+    }
+    let points: Vec<Vec<F128>> = rec["link"]["points"].as_array().ok_or("no link points")?.iter()
+        .map(|q| q.as_array().unwrap().iter().map(|c| f128_of_hex(c.as_str().unwrap())).collect()).collect();
+    let y: Vec<F128> = rec["link"]["y"].as_array().ok_or("no y")?.iter().map(|c| f128_of_hex(c.as_str().unwrap())).collect();
+    if points.len() != 2 || points.iter().any(|q| q.len() != st.m_pts) || y != [F128::ZERO, F128::ZERO] {
+        return Err("session: two points of the statement's dimension and y = 0 expected".into());
+    }
+    let mut streams = std::collections::BTreeMap::new();
+    let mut stream_roots = std::collections::BTreeMap::new();
+    for s in rec["streams"].as_array().ok_or("no streams")? {
+        let name = s["stream"].as_str().unwrap().to_string();
+        let rounds = s["rounds"].as_array().unwrap().iter().map(|r| RoundRec {
+            sha: unhex32(r["msg_sha256"].as_str().unwrap()),
+            len: r["msg_len"].as_u64().unwrap() as usize,
+            n: r["n"].as_u64().unwrap() as u32,
+            coins: r["coins"].as_array().unwrap().iter().map(|c| f128_of_hex(c.as_str().unwrap())).collect(),
+        }).collect();
+        stream_roots.insert(name.clone(), s["root_sha256"].as_str().map(|x| x.to_string()));
+        streams.insert(name, StreamRec { parent: s["parent"].as_str().unwrap().to_string(), label: s["label"].as_str().unwrap().as_bytes().to_vec(),
+                                         at: s["at"].as_u64().unwrap(), rounds, cap: None });
+    }
+    let record = Arc::new(streams);
+    let ctx = LinkCtx { points: &points, y: &y, publics: &publics };
+    let t = Instant::now();
+    let mut caps: Vec<Vec<u8>> = Vec::new();
+    for rep in 0..2 {
+        let root = rep_stream(TABLE, rep);
+        let mut ch = ReplayChallenger::new(record.clone(), &root, &domain(rep));
+        let cap = v.verify(TABLE, rep, &proofs[rep], &mut ch, &ctx).map_err(|e| match ch.first_failure() {
+            Some(r) => format!("{r} (then the verifier: {e})"),
+            None => e,
+        })?;
+        ch.finish()?;
+        if stream_roots.get(&root).cloned().flatten() != Some(hex(&sha256(&cap))) {
+            return Err(format!("{root}: the proof's root is not the root the session committed"));
+        }
+        caps.push(cap);
+    }
+    if caps[0] != caps[1] {
+        return Err("R1: the reps are on different roots".into());
+    }
+    let root_b = hex(&sha256(&caps[0]));
+    if rec["link"]["root_b_sha256"][TABLE].as_str() != Some(root_b.as_str()) || rec["link"]["root_f_sha256"].as_str() != Some(hex(&sha256(&sig)).as_str()) {
+        return Err("L1: the committed root_F / root_B are not Σ and the proofs' root".into());
+    }
+    let mut lb = sig.to_vec();
+    lb.extend_from_slice(&caps[0]);
+    for q in points.iter().flatten() {
+        lb.extend_from_slice(&f128_bytes(&[*q]));
+    }
+    lb.extend_from_slice(&f128_bytes(&y));
+    if rec["link_sha256"].as_str() != Some(hex(&sha256(&lb)).as_str()) {
+        return Err("L1: the recorded link_sha256 is not root_F || root_B || points || y".into());
+    }
+    Ok(json!({"accepted": true, "statement": STATEMENT, "unit": inst.unit, "instances": inst.n, "sigma": hex(&sig),
+              "netlist_sha256": hex(&st.net.sha256), "statement_digest": hex(&st.digest), "public_sha256": hex(&inst.public_sha256),
+              "root_b_sha256": root_b, "link_sha256": rec["link_sha256"], "proof_sha256": want_proofs, "verify_s": t.elapsed().as_secs_f64()}))
 }

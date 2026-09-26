@@ -10,6 +10,8 @@ KIND_RE = re.compile(r"^[a-z0-9][a-z0-9_.-]*/v[0-9]+$")
 
 KINDS: dict[str, str] = {
     "bench-result/v1": "a result.json (measurements, validation, fingerprint) + refs.run_files, refs.proof?",
+    "bench-point/v1": "a sweep harness's raw result for its chosen point (a result.json with kind bench-point/v1): the run's attempt keeps "
+                      "it and its run files; `bench.cell register` turns it into the cell's one bench-result/v1",
     "native-peak/v1": "one card's measured dense-GEMM throughput for one dtype (tools/native_peak; the canonical tables' 'native dense peak, "
                       "measured' column): meta {device, dtype, accumulate, method, flop_per_second, spec_flop_per_second, fraction_of_spec, "
                       "sass, driver, cuda, clocks_mhz, power_w, sizes} + the result envelope",

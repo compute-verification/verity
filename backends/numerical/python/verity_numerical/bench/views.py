@@ -455,6 +455,9 @@ class Rules:
     headline_any_hardware: bool = False
     #: a fourth preview: the headline counts a cell whose ``omitted`` label names verifier-evaluated parts (top-p sampling)
     headline_count_omitted: bool = False
+    #: a fifth preview (Daniel's standing rule, 2026-09-26): a cell whose verifier evaluates any part (attention's softmax, the
+    #: RMSNorms' row tail, sampling's keep word and noise) does not cover its subcircuit; overrides ``headline_count_omitted``
+    headline_strict_verifier: bool = False
 
 
 SPEC = Rules("spec")
@@ -1259,6 +1262,7 @@ class Views:
     security_of: dict[str, dict[str, Any]] = field(default_factory=dict)  #: each admissible result's ``security`` block, by artifact
     key_class_of: dict[str, dict[str, Any]] = field(default_factory=dict)  #: each admissible class cell's key counts (:func:`key_class_of`)
     omitted_of: dict[str, Any] = field(default_factory=dict)  #: each admissible result's latest ``omitted`` label (what it leaves out)
+    domain_of: dict[str, str] = field(default_factory=dict)  #: each admissible result's operand domain (``domain`` label, else its fingerprint)
     prover_gpu: dict[str, str | None] = field(default_factory=dict)  #: each admissible result's ``hardware.gpu.name``, by artifact
     interaction_raw: dict[str, dict[str, Any]] = field(default_factory=dict)  #: each admissible result's raw round and loopback records
     input_sets: dict[str, tuple[str, Mapping[str, Any]]] = field(default_factory=dict)  #: registered input sets (:func:`input_set_index`)
@@ -1445,6 +1449,9 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
         V.security_of[c.art] = dict(c.meta["workload_fingerprint"].get("security") or {})
         if _latest(c.labels, "omitted"):
             V.omitted_of[c.art] = _latest(c.labels, "omitted")
+        dom = _latest(c.labels, "domain") or {"finite": "finite-only", "total": "total"}.get(str(c.meta["workload_fingerprint"].get("domain")))
+        if dom:
+            V.domain_of[c.art] = str(dom)
         if c.key_class:
             V.key_class_of[c.art] = c.key_class
             N = n_of(c)                 # its own key counts' work-weighted N (the row's is its first cell's)
@@ -2515,7 +2522,7 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
             "state": {"provisional": bool(c.provisional), "provisional_reason": c.provisional, "algebraic": bool(c.algebraic),
                       "algebraic_hashes": list(c.algebraic), "verified": bool(c.legacy.verified_by), "verified_by": c.legacy.verified_by,
                       "under_reverification": c.legacy.finding},
-            "marks": _mark_names(c), "zk_class": zk_class(cfg) if cfg else None,
+            "marks": _mark_names(c), "zk_class": zk_class(cfg) if cfg else None, "domain": V.domain_of.get(c.artifact),
             "throughput": {"inputs": P["instances"], **{k: P[k] for k in ("instances_per_second", "end_to_end_s", "commit_s", "proving_s", "interaction_s")}},
             "batching": dict(c.batching), "instances": dict(c.instances),
             "interaction": interaction_fields(ix, P, V.interaction_raw.get(c.artifact, {})),
@@ -2570,6 +2577,8 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
     from verity_numerical.bench import headline as H  # noqa: PLC0415  (headline reads these views)
 
     workload_headline = None if V.rules.legacy else H.to_json(H.headline(V), {r["artifact"]: r["id"] for r in results})
+    for b in backend_list:                    # Table 1: the operand domains its results cover (Daniel 2026-09-26: total by default)
+        b["domains"] = sorted({r["domain"] for r in results if r.get("backend") == b["id"] and r.get("domain")})
     return {
         "schema": ENTITIES_SCHEMA,
         "provenance": {"rendered_at": rendered_at, "verity_commit": commit if commit is not None else verity_commit(), "rules": dataclasses.asdict(V.rules),
@@ -2622,6 +2631,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                     help="PREVIEW (pending decision, never published): the interaction check passes when measured <= 1.1 x the model")
     ap.add_argument("--preview-any-hardware-headline", action="store_true",
                     help="PREVIEW (pending decision, never published): the workload headline counts cleared cells on any GPU")
+    ap.add_argument("--preview-strict-verifier", action="store_true",
+                    help="PREVIEW (Daniel's standing rule, not yet published): a cell whose verifier evaluates any part covers nothing")
     ap.add_argument("--preview-count-omitted", action="store_true",
                     help="PREVIEW (pending decision, never published): the headline counts cells whose omitted label names verifier-evaluated parts")
     ap.add_argument("--preview-cached-weights", action="store_true",
@@ -2673,6 +2684,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         rules = dataclasses.replace(rules, name=f"{rules.name}+preview-one-sided-interaction", interaction_one_sided=True)
     if ns.preview_any_hardware_headline:
         rules = dataclasses.replace(rules, name=f"{rules.name}+preview-any-hardware-headline", headline_any_hardware=True)
+    if ns.preview_strict_verifier:
+        rules = dataclasses.replace(rules, name=f"{rules.name}+preview-strict-verifier", headline_strict_verifier=True)
     if ns.preview_count_omitted:
         rules = dataclasses.replace(rules, name=f"{rules.name}+preview-count-omitted", headline_count_omitted=True)
     if ns.preview_cached_weights:
