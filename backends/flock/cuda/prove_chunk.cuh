@@ -11,6 +11,7 @@
 // - the ring-switch batch opens ab, c and every extra claim.
 
 #include <chrono>
+#include "pure_sha256.cuh"
 
 #define CKI(x) do { int e_ = (x); if (e_) return e_; } while (0)
 
@@ -249,6 +250,167 @@ __global__ void pure_unit_inputs(const uint32_t* __restrict__ msgs, const uint32
     o[8] = c_in; o[9] = 0;
 }
 
+// One thread per (block, role) of the sha256/row/v1 layouts: the role's chain from its prefix midstate over the row's
+// 64-byte blocks (big-endian words; zero rows for dummy blocks), then the constant padding block, as compression
+// inputs (h_in, m) at the block's slots role * per_role ..
+__global__ void pure_sha_chain(const uint8_t* __restrict__ rx, const uint8_t* __restrict__ rw, int row_bytes, int blocks_real,
+                               long long n_blocks, const uint32_t* __restrict__ mid, const uint32_t* __restrict__ pad, int comp_slots,
+                               int per_role, uint32_t* __restrict__ hin, uint32_t* __restrict__ msg) {
+    long long t = (long long)blockIdx.x * blockDim.x + threadIdx.x;
+    if (t >= 2 * n_blocks) return;
+    long long b = t >> 1; int role = t & 1;
+    bool real = b < blocks_real;
+    const uint8_t* row = (role ? rw : rx) + b * row_bytes;
+    uint32_t h[8], m[16];
+    for (int i = 0; i < 8; i++) h[i] = mid[8 * role + i];
+    for (int j = 0; j < per_role; j++) {
+        long long ci = b * comp_slots + role * per_role + j;
+        bool last = j + 1 == per_role;
+        for (int i = 0; i < 16; i++) {
+            const uint8_t* p = row + 64 * j + 4 * i;
+            m[i] = last ? pad[i] : real ? ((uint32_t)p[0] << 24 | (uint32_t)p[1] << 16 | (uint32_t)p[2] << 8 | p[3]) : 0;
+        }
+        for (int i = 0; i < 8; i++) hin[ci * 8 + i] = h[i];
+        for (int i = 0; i < 16; i++) msg[ci * 16 + i] = m[i];
+        if (!last) psh_compress(h, m);
+    }
+}
+
+// flock-vllm-v1's pure_sha256_witness (cursor/flock-vllm-v1-4cdd ff1c1e3f, verbatim): one thread per SHA-256 compression writes
+// its (z, a, b) into block ci / slots, 2^15-bit slot ci % slots (zeroed), Flock's build_block_ab_packed_into.
+namespace vsha {
+__device__ __constant__ uint32_t K[64] = {
+    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5, 0xd807aa98, 0x12835b01,
+    0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc,
+    0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da, 0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147,
+    0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070, 0x19a4c116, 0x1e376c08,
+    0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3, 0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208,
+    0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2};
+constexpr int M_BASE = 512, CH_AND = 1024, MAJ_AND = 3072, ROUND_CARRY = 5120, SCHED_BITS = 92, OUT_W = 31;
+constexpr uint32_t LO31 = 0x7FFFFFFFu, LO30 = 0x3FFFFFFFu;
+__device__ __forceinline__ uint32_t rotr(uint32_t x, int n) { return (x >> n) | (x << (32 - n)); }
+__device__ __forceinline__ void orw(uint64_t* b, long long bit, uint32_t v) {
+    long long i = bit >> 6; int sh = (int)(bit & 63);
+    b[i] |= (uint64_t)v << sh;
+    if (sh > 32) b[i + 1] |= (uint64_t)v >> (64 - sh);
+}
+struct Buf { uint64_t *z, *a, *b; long long base; };
+__device__ __forceinline__ void put(const Buf& o, int off, uint32_t zv, uint32_t av, uint32_t bv) {
+    orw(o.z, o.base + off, zv); orw(o.a, o.base + off, av); orw(o.b, o.base + off, bv);
+}
+// (sum, maj1, maj2, rip) of x + y + z + w; triples [left, right, prod]
+__device__ __forceinline__ uint32_t add4(uint32_t x, uint32_t y, uint32_t z, uint32_t w, uint32_t* m1, uint32_t* m2, uint32_t* rp) {
+    uint32_t xz = x ^ z, yz = y ^ z, w1 = xz & yz, p1 = x ^ y ^ z, b1 = (w1 ^ z) << 1, pw = p1 ^ w, bw = b1 ^ w, w2 = pw & bw;
+    uint32_t p2 = p1 ^ b1 ^ w, b2 = (w2 ^ w) << 1, sum = p2 + b2, cin = sum ^ p2 ^ b2, rl = p2 ^ cin, rr = b2 ^ cin;
+    m1[0] = xz & LO31; m1[1] = yz & LO31; m1[2] = w1 & LO31;
+    m2[0] = pw & LO31; m2[1] = bw & LO31; m2[2] = w2 & LO31;
+    rp[0] = (rl >> 1) & LO30; rp[1] = (rr >> 1) & LO30; rp[2] = ((rl & rr) >> 1) & LO30;
+    return sum;
+}
+__device__ __forceinline__ uint32_t add3(uint32_t x, uint32_t y, uint32_t m, uint32_t* mj, uint32_t* rp) {
+    uint32_t xm = x ^ m, ym = y ^ m, w = xm & ym, p = x ^ y ^ m, bw = (w ^ m) << 1, sum = p + bw, cin = sum ^ p ^ bw;
+    uint32_t rl = p ^ cin, rr = bw ^ cin;
+    mj[0] = xm & LO31; mj[1] = ym & LO31; mj[2] = w & LO31;
+    rp[0] = (rl >> 1) & LO30; rp[1] = (rr >> 1) & LO30; rp[2] = ((rl & rr) >> 1) & LO30;
+    return sum;
+}
+__device__ __forceinline__ uint32_t add2(uint32_t x, uint32_t y, uint32_t* l, uint32_t* r, uint32_t* c) {
+    uint32_t sum = x + y, cin = sum ^ x ^ y;
+    *l = (x ^ cin) & LO31; *r = (y ^ cin) & LO31; *c = *l & *r;
+    return sum;
+}
+}  // namespace vsha
+
+__global__ void pure_sha256_witness(const uint32_t* __restrict__ cv, const uint32_t* __restrict__ msg, long long n_comp, int slots,
+                                    int k_log, uint64_t* z, uint64_t* a, uint64_t* b) {
+    using namespace vsha;
+    long long ci = (long long)blockIdx.x * blockDim.x + threadIdx.x;
+    if (ci >= n_comp) return;
+    Buf o{z, a, b, ((ci / slots) << k_log) + ((ci % slots) << 15)};
+    uint32_t h[8], W[64];
+    for (int i = 0; i < 8; i++) h[i] = cv[ci * 8 + i];
+    for (int i = 0; i < 16; i++) W[i] = msg[ci * 16 + i];
+    int round_base[65];
+    {
+        int acc = ROUND_CARRY;
+        for (int r = 0; r < 64; r++) { round_base[r] = acc; acc += 184 + (31 - (__ffs((int)K[r]) - 1 + 1)); }
+        round_base[64] = acc;
+    }
+    const int SCHED = round_base[64], E_NEW = SCHED + 48 * SCHED_BITS, A_NEW = E_NEW + 32 * 32, OUT_CARRY = A_NEW + 32 * 32;
+    const int ZC = OUT_CARRY + 8 * OUT_W;
+    orw(z, o.base + ZC, 1); orw(a, o.base + ZC, 1); orw(b, o.base + ZC, 1);
+    for (int w = 0; w < 8; w++) put(o, 32 * w, h[w], h[w], 0xFFFFFFFFu);
+    for (int i = 0; i < 16; i++) put(o, M_BASE + 32 * i, W[i], W[i], 0xFFFFFFFFu);
+    uint32_t m1[3], m2[3], rp[3];
+    for (int t = 16; t < 64; t++) {
+        uint32_t s1 = rotr(W[t - 2], 17) ^ rotr(W[t - 2], 19) ^ (W[t - 2] >> 10);
+        uint32_t s0 = rotr(W[t - 15], 7) ^ rotr(W[t - 15], 18) ^ (W[t - 15] >> 3);
+        W[t] = add4(s1, s0, W[t - 7], W[t - 16], m1, m2, rp);
+        int base = SCHED + (t - 16) * SCHED_BITS;
+        put(o, base + 0, m1[2], m1[0], m1[1]);
+        put(o, base + 31, m2[2], m2[0], m2[1]);
+        put(o, base + 62, rp[2], rp[0], rp[1]);
+    }
+    uint32_t A = h[0], B = h[1], Cc = h[2], D = h[3], E = h[4], F = h[5], G = h[6], H = h[7];
+    for (int r = 0; r < 64; r++) {
+        uint32_t fg = F ^ G, ch_and = E & fg;
+        put(o, CH_AND + 32 * r, ch_and, E, fg);
+        uint32_t ch_out = ch_and ^ G;
+        uint32_t ba = B ^ A, ca = Cc ^ A, maj_and = ba & ca;
+        put(o, MAJ_AND + 32 * r, maj_and, ba, ca);
+        uint32_t maj_out = maj_and ^ A;
+        int rb = round_base[r];
+        // hk = H + K[r]: aux products for bits t..30, shifted down (t = trailing_zeros(K[r]) + 1)
+        uint32_t kl, kr, kc;
+        uint32_t hk = add2(K[r], H, &kl, &kr, &kc);
+        int tt = __ffs((int)K[r]);
+        uint32_t km = (1u << (31 - tt)) - 1;
+        put(o, rb + 184, (kc >> tt) & km, (kl >> tt) & km, (kr >> tt) & km);
+        uint32_t S1 = rotr(E, 6) ^ rotr(E, 11) ^ rotr(E, 25), S0 = rotr(A, 2) ^ rotr(A, 13) ^ rotr(A, 22);
+        uint32_t t1 = add4(hk, S1, ch_out, W[r], m1, m2, rp);
+        put(o, rb + 0, m1[2], m1[0], m1[1]);
+        put(o, rb + 31, m2[2], m2[0], m2[1]);
+        put(o, rb + 62, rp[2], rp[0], rp[1]);
+        uint32_t am[3], ar[3];
+        uint32_t a_new = add3(t1, S0, maj_out, am, ar);
+        put(o, rb + 92, am[2], am[0], am[1]);
+        put(o, rb + 123, ar[2], ar[0], ar[1]);
+        uint32_t el, er, ec;
+        uint32_t e_new = add2(D, t1, &el, &er, &ec);
+        put(o, rb + 153, ec, el, er);
+        if (r & 1) {
+            put(o, A_NEW + 32 * (r / 2), a_new, a_new, 0xFFFFFFFFu);
+            put(o, E_NEW + 32 * (r / 2), e_new, e_new, 0xFFFFFFFFu);
+        }
+        H = G; G = F; F = E; E = e_new; D = Cc; Cc = B; B = A; A = a_new;
+    }
+    const uint32_t fin[8] = {A, B, Cc, D, E, F, G, H};
+    for (int w = 0; w < 8; w++) {
+        uint32_t l, r, c;
+        uint32_t sum = add2(fin[w], h[w], &l, &r, &c);
+        put(o, OUT_CARRY + OUT_W * w, c, l, r);
+        put(o, 256 + 32 * w, sum, sum, 0xFFFFFFFFu);
+    }
+}
+
+// pure_unit_inputs for the sha256/row/v1 layouts (block = VU): unit u's x and W words are the rows' little-endian words
+// at byte 32 u (zero for dummy blocks).
+__global__ void pure_unit_inputs_rows(const uint8_t* __restrict__ rx, const uint8_t* __restrict__ rw, int row_bytes,
+                                      const uint32_t* __restrict__ accs, int units_per_vu, int blocks_real, long long n_blocks,
+                                      int units, uint64_t* out) {
+    long long id = (long long)blockIdx.x * blockDim.x + threadIdx.x;
+    if (id >= n_blocks * units) return;
+    long long b = id / units; int u = (int)(id % units);
+    bool real = b < blocks_real;
+    uint64_t* o = out + id * 10;
+    for (int role = 0; role < 2; role++) {
+        const uint32_t* m = (const uint32_t*)((role ? rw : rx) + b * row_bytes + 32 * u);
+        for (int w = 0; w < 4; w++) o[4 * role + w] = real ? ((uint64_t)m[2 * w] | ((uint64_t)m[2 * w + 1] << 32)) : 0;
+    }
+    o[8] = real && u > 0 ? accs[b * units_per_vu + u - 1] : 0; o[9] = 0;
+}
+
 // The unit region of every block (2^unit_log-bit positions unit_pos0 .. unit_pos0 + units), to or from a cache.
 __global__ void pure_unit_region_copy(F128* __restrict__ w, F128* __restrict__ cache, long long n_blocks, int k_log, int unit_log,
                                       int unit_pos0, int units, int to_cache) {
@@ -270,14 +432,14 @@ __global__ void pure_unit_outputs(const F128* __restrict__ z, int blocks_real, i
     y16[b] = col_y >= 0 ? (uint32_t)(z[at + col_y].lo & 0xFFFF) : 0;
 }
 
-__global__ void pure_comb_expand(const F128* __restrict__ base_c, const F128* __restrict__ ratio_c, int slots,
+__global__ void pure_comb_expand(const F128* __restrict__ base_c, const F128* __restrict__ ratio_c, int slots, int comp_log,
                                  const F128* __restrict__ base_u, const F128* __restrict__ ratio_u, int units, int unit_log, int unit_pos0,
                                  long long k, F128* __restrict__ comb) {
     long long i = (long long)blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= k) return;
-    long long s = i >> 14, p = i >> unit_log;
+    long long s = i >> comp_log, p = i >> unit_log;
     F128 v{0, 0};
-    if (s < slots) v = ghash_mul_karatsuba(ratio_c[s], base_c[i & 16383]);
+    if (s < slots) v = ghash_mul_karatsuba(ratio_c[s], base_c[i & ((1LL << comp_log) - 1)]);
     else if (p >= unit_pos0 && p < unit_pos0 + units) v = ghash_mul_karatsuba(ratio_u[p - unit_pos0], base_u[i & ((1LL << unit_log) - 1)]);
     comb[i] = v;
 }
@@ -325,6 +487,11 @@ typedef struct {
     // the block layout (flock_live::pure_block::Layout): compressions per role, chunks per block and their sizes, blocks
     // per VU; dummy_keyed: dummy blocks keep the role keys and chunk counters (fp8, where they are per-slot constants)
     int per_role, chunks_per_block, chunk_nb0, chunk_nb1, blocks_per_vu, dummy_keyed;
+    // mode 1, host witness: z, a, b of the whole block witness (len F128 each), uploaded as is (the SHA-256 layouts)
+    const F128* host_z; const F128* host_a; const F128* host_b;
+    // mode 1, device inputs, sha256/row/v1 layouts: the chains start from sha_mid[role] ([2][8]) and end with sha_pad
+    // ([16]); the unit inputs are read from the rows
+    int sha; const uint32_t* sha_mid; const uint32_t* sha_pad;
 } FlockChunkParams;
 
 int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams* C, uint8_t** out, size_t* out_len) {
@@ -345,7 +512,7 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
     const long long n_comp = C->mode == 1 ? (1LL << (m - k_log)) * C->comp_slots : 1LL << C->n_comp_log;
     const bool pure = C->mode == 1;
     const int n_blocks_log = m - k_log;
-    if (pure ? (C->comp_slots > 64 || (k_log != 20 && k_log != 21))
+    if (pure ? (C->comp_slots > 256 || k_log < 20 || k_log > 22 || (C->sub_log != 14 && C->sub_log != 15))
              : (C->n_comp_log + 14 != m || k_log <= sub_log || k_log - sub_log > 8)) { printf("FFI chunk: bad shape\n"); return 201; }
     const size_t packed_witness_bytes = (size_t)len * sizeof(F128);
     // + the lincheck's K-length vectors, which dominate at small m (k_log 21: 2^21 words each)
@@ -357,6 +524,13 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
     CK(ffi_malloc(&d_a, len * sizeof(F128)));
     CK(ffi_malloc(&d_b, len * sizeof(F128)));
     CK(ffi_malloc(&d_zlin, (size_t)len * 16));
+    if (pure && C->host_z) {
+        CK(cudaMemcpy(df, C->host_z, len * sizeof(F128), cudaMemcpyHostToDevice));
+        CK(cudaMemcpy(d_a, C->host_a, len * sizeof(F128), cudaMemcpyHostToDevice));
+        CK(cudaMemcpy(d_b, C->host_b, len * sizeof(F128), cudaMemcpyHostToDevice));
+        chunk_zlin_transpose<<<4096, 256>>>(df, k_log, (1LL << (m - k_log)) / 8, d_zlin);
+        CK(cudaGetLastError());
+    } else
     {
         uint32_t *d_cv, *d_m, *d_blen, *d_flags; b3u64* d_ctr;
         CK(ffi_malloc(&d_cv, (size_t)n_comp * 8 * 4)); CK(ffi_malloc(&d_m, (size_t)n_comp * 16 * 4));
@@ -373,12 +547,24 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
             CK(cudaMemcpy(d_rx, C->rows_x, rb, cudaMemcpyHostToDevice)); CK(cudaMemcpy(d_rw, C->rows_w, rb, cudaMemcpyHostToDevice));
             CK(cudaMemcpy(d_accs, C->accs, (size_t)C->vus * C->units_per_vu * 4, cudaMemcpyHostToDevice));
             CK(cudaMemcpy(d_keys, C->keys, 64, cudaMemcpyHostToDevice));
-            pure_chain_inputs<<<(unsigned)((2 * n_blocks_p + 127) / 128), 128>>>(d_rx, d_rw, C->row_bytes, C->blocks_real, n_blocks_p, d_keys,
-                C->comp_slots, C->per_role, C->chunks_per_block, C->chunk_nb0, C->chunk_nb1, C->blocks_per_vu, C->dummy_keyed,
-                d_cv, d_m, (uint64_t*)d_ctr, d_blen, d_flags, d_cvout);
-            CK(cudaGetLastError());
-            if (C->pub_cv) CK(cudaMemcpy(C->pub_cv, d_cvout, (size_t)C->blocks_real * 2 * C->chunks_per_block * 32, cudaMemcpyDeviceToHost));
-            ffi_free(d_rx); ffi_free(d_rw); ffi_free(d_keys); ffi_free(d_cvout);
+            if (C->sha) {
+                uint32_t* d_sp;
+                CK(ffi_malloc(&d_sp, 32 * 4));
+                CK(cudaMemcpy(d_sp, C->sha_mid, 16 * 4, cudaMemcpyHostToDevice));
+                CK(cudaMemcpy(d_sp + 16, C->sha_pad, 16 * 4, cudaMemcpyHostToDevice));
+                pure_sha_chain<<<(unsigned)((2 * n_blocks_p + 127) / 128), 128>>>(d_rx, d_rw, C->row_bytes, C->blocks_real, n_blocks_p,
+                    d_sp, d_sp + 16, C->comp_slots, C->per_role, d_cv, d_m);
+                CK(cudaGetLastError());
+                ffi_free(d_sp);
+            } else {
+                pure_chain_inputs<<<(unsigned)((2 * n_blocks_p + 127) / 128), 128>>>(d_rx, d_rw, C->row_bytes, C->blocks_real, n_blocks_p, d_keys,
+                    C->comp_slots, C->per_role, C->chunks_per_block, C->chunk_nb0, C->chunk_nb1, C->blocks_per_vu, C->dummy_keyed,
+                    d_cv, d_m, (uint64_t*)d_ctr, d_blen, d_flags, d_cvout);
+                CK(cudaGetLastError());
+                if (C->pub_cv) CK(cudaMemcpy(C->pub_cv, d_cvout, (size_t)C->blocks_real * 2 * C->chunks_per_block * 32, cudaMemcpyDeviceToHost));
+                ffi_free(d_rx); ffi_free(d_rw); d_rx = d_rw = nullptr;
+            }
+            ffi_free(d_keys); ffi_free(d_cvout);
         } else {
             CK(cudaMemcpy(d_cv, C->cv, (size_t)n_comp * 32, cudaMemcpyHostToDevice));
             CK(cudaMemcpy(d_m, C->msg, (size_t)n_comp * 64, cudaMemcpyHostToDevice));
@@ -393,6 +579,12 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
         } else {
             CK(cudaMemsetAsync(df, 0, len * sizeof(F128))); CK(cudaMemsetAsync(d_a, 0, len * sizeof(F128)));
             CK(cudaMemsetAsync(d_b, 0, len * sizeof(F128)));
+            if (C->sha) {
+                if (!dev_in) { printf("FFI chunk: SHA-256 layouts take device inputs or a host witness\n"); return 206; }
+                pure_sha256_witness<<<(unsigned)((n_comp + 127) / 128), 128>>>(d_cv, d_m, n_comp, C->comp_slots, k_log, (uint64_t*)df,
+                                                                               (uint64_t*)d_a, (uint64_t*)d_b);
+                CK(cudaGetLastError());
+            } else {
             F128 *tz, *ta, *tb;
             CK(ffi_malloc(&tz, n_comp * 128 * sizeof(F128))); CK(ffi_malloc(&ta, n_comp * 128 * sizeof(F128)));
             CK(ffi_malloc(&tb, n_comp * 128 * sizeof(F128)));
@@ -403,6 +595,7 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
             pure_comp_scatter<<<8192, 256>>>(tb, n_comp, C->comp_slots, k_log, d_b);
             CK(cudaGetLastError());
             ffi_free(tz); ffi_free(ta); ffi_free(tb);
+            }
             const long long n_units = (1LL << n_blocks_log) * C->units;
             static F128* g_ucache = nullptr;
             static size_t g_ucache_words = 0;
@@ -414,16 +607,22 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
                                                           C->unit_log, C->unit_pos0, C->units, 0);
                 CK(cudaGetLastError());
                 if (dev_in) ffi_free(d_accs);
+                if (d_rx) { ffi_free(d_rx); ffi_free(d_rw); }
                 goto unit_done;
             }
             {
             uint64_t* d_in; uint32_t *d_ao, *d_ac, *d_bo, *d_bc;
             CK(ffi_malloc(&d_in, n_units * 10 * sizeof(uint64_t)));
             if (dev_in) {
-                pure_unit_inputs<<<(unsigned)((n_units + 255) / 256), 256>>>(d_m, d_accs, C->units_per_vu, C->blocks_real, 1LL << n_blocks_log,
-                                                                             C->units, C->comp_slots, C->per_role, C->blocks_per_vu, d_in);
+                if (C->sha)
+                    pure_unit_inputs_rows<<<(unsigned)((n_units + 255) / 256), 256>>>(d_rx, d_rw, C->row_bytes, d_accs, C->units_per_vu,
+                                                                                      C->blocks_real, 1LL << n_blocks_log, C->units, d_in);
+                else
+                    pure_unit_inputs<<<(unsigned)((n_units + 255) / 256), 256>>>(d_m, d_accs, C->units_per_vu, C->blocks_real, 1LL << n_blocks_log,
+                                                                                 C->units, C->comp_slots, C->per_role, C->blocks_per_vu, d_in);
                 CK(cudaGetLastError());
                 ffi_free(d_accs);
+                if (d_rx) { ffi_free(d_rx); ffi_free(d_rw); }
             } else {
                 CK(cudaMemcpy(d_in, C->u_inputs, n_units * 10 * sizeof(uint64_t), cudaMemcpyHostToDevice));
             }
@@ -760,7 +959,7 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
             CK(cudaMemcpy(g0.data(), d_ratio, sizeof(F128), cudaMemcpyDeviceToHost));
             if (g0[0].lo == 0 && g0[0].hi == 0) { printf("FFI chunk: eq_inner[0] = 0\n"); return 203; }
             F128 inv = f128_inv_host(g0[0]);
-            pure_eq_gather<<<1, 256>>>(d_eq_inner, 14, 0, C->comp_slots, d_ratio);
+            pure_eq_gather<<<1, 256>>>(d_eq_inner, sub_log, 0, C->comp_slots, d_ratio);
             pure_eq_gather<<<1, 256>>>(d_eq_inner, C->unit_log, C->unit_pos0, C->units, d_ratio_u);
             CK(cudaMemcpy(gc.data(), d_ratio, C->comp_slots * sizeof(F128), cudaMemcpyDeviceToHost));
             CK(cudaMemcpy(gu.data(), d_ratio_u, C->units * sizeof(F128), cudaMemcpyDeviceToHost));
@@ -771,7 +970,7 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
             launch_linear_check_compressed_column_fold(d_eq_inner, d_acp, d_ar, d_bcp, d_br, alpha, KS, d_comb_sub);
             launch_linear_check_compressed_column_fold(d_eq_inner, d_uacp, d_uar, d_ubcp, d_ubr, alpha, US, d_base_u);
             CK(cudaGetLastError());
-            pure_comb_expand<<<(unsigned)((K + 255) / 256), 256>>>(d_comb_sub, d_ratio, C->comp_slots, d_base_u, d_ratio_u,
+            pure_comb_expand<<<(unsigned)((K + 255) / 256), 256>>>(d_comb_sub, d_ratio, C->comp_slots, sub_log, d_base_u, d_ratio_u,
                 C->units, C->unit_log, C->unit_pos0, K, d_comb);
             CK(cudaGetLastError());
             ffi_free(d_base_u); ffi_free(d_ratio_u);

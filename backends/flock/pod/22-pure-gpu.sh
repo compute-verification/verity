@@ -4,7 +4,7 @@
 # at SELF="8 64", loopback sessions at SWEEP="2048 4096 8192" (WARM warm-ups + RUNS timed each), and, with VERIFIER=host:port,
 # REMOTE_RUNS sessions at REMOTE_N against that verifier (which serves the same instance file).
 set -uxo pipefail
-SRC=$(pwd); I=$RESEARCH_RUN_DIR/inputs; O=$RESEARCH_RUN_DIR/out; mkdir -p $O
+SRC=$(pwd); I=$RESEARCH_RUN_DIR/inputs; O=$RESEARCH_RUN_DIR/out${TAG:+-$TAG}; mkdir -p $O
 REL=${REL:-bf16-hopper}; NET=$I/net-$REL.txt; PIN=$(sha256sum $NET | cut -d' ' -f1)
 MODE=build GPU=${GPU:-1} bash backends/flock/pod/20-gpu-link.sh || exit 1
 source $HOME/.cargo/env; C13=/usr/local/cuda-13.3; export LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
@@ -17,7 +17,7 @@ if [ "${ROLE:-prover}" = verifier ]; then
     --operator ${OPERATOR:-flock-gpu-link-ver} ${SESSIONS:+--sessions $SESSIONS} 2>&1 | tee $O/serve.txt
   exit 0
 fi
-for n in ${SELF:-8 64}; do
+for n in ${SELF-8 64}; do
   $P selftest --instances $I/inst-$n.bin --netlist $NET > $O/selftest-cpu-$n.txt 2>&1; grep -h SELFTEST $O/selftest-cpu-$n.txt
   [ -n "$G" ] && { $P selftest --gpu --instances $I/inst-$n.bin --netlist $NET > $O/selftest-gpu-$n.txt 2>&1; grep -h 'SELFTEST\|"pass":false' $O/selftest-gpu-$n.txt | cut -c1-400; }
 done
@@ -35,7 +35,7 @@ if h:
     --dump $O/dump-remote > $O/prove-remote-${REMOTE_N:-8192}.txt 2>&1
   grep -h "^LIVE\|panicked" $O/prove-remote-${REMOTE_N:-8192}.txt | cut -c1-1200
 fi
-for n in ${SWEEP:-2048 4096 8192}; do
+for n in ${SWEEP-2048 4096 8192}; do
   $P serve --listen 127.0.0.1:7301 --out $O/sessions-loop-$n --instances $I/inst-$n.bin --netlist $NET --pin $PIN --operator loopback-selftest > $O/serve-loop-$n.log 2>&1 &
   SP=$!
   for i in $(seq 900); do grep -q SERVING $O/serve-loop-$n.log && break; sleep 1; done
