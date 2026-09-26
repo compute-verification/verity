@@ -45,7 +45,8 @@ def test_plan_wraps_the_flock_cell_script():
         assert argv[:4] == ["research", "run", "--on", j["pod"]] and "--custody-r2" in argv and argv[argv.index("--cwd") + 1] == "source"
         cmd = argv[argv.index("--") + 1:]
         assert cmd[:4] == ["bash", "-c", C.PROBE_WRAP, "cell-job"] and cmd[4] == ("10.0.0.2:7400" if j["role"] == "prover" else "")
-        cmd = cmd[5:]
+        assert cmd[5] == ""                                  # a 10.x address, not a .runpod.internal name: no RTT target
+        cmd = cmd[6:]
         assert cmd == j["command"] and cmd[:2] == ["bash", "backends/flock/pod/30-cell.sh"] and "REL=bf16-hopper" in cmd and "RUNS=5" in cmd
         assert f"POINTS={C.DEFAULT_POINTS}" in cmd
     assert "ROLE=verifier" in v["command"]
