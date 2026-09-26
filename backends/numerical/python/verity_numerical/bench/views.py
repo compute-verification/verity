@@ -1002,7 +1002,7 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
             continue
         rid, attempt = T._attempt_of(store, art)
         labels = list(store.labels(art))
-        if not rules.legacy and _latest(labels, BELOW_BAR) is True:
+        if not rules.legacy and str(_latest(labels, BELOW_BAR)).lower() == "true":     # written as a bool or, off-vocabulary, "true"
             V.below_bar.append(below_bar_entry(art, meta, labels, cand))
             continue
         target = TARGETS.get(fp.get("profile")) if isinstance(fp.get("profile"), str) else None
