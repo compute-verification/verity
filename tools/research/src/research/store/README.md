@@ -508,7 +508,7 @@ Active run state stays in the run registry; the store only ever sees completed/f
 
 With `--custody-r2` (the default with `--on`; `--no-custody-r2` opts out) the run's custody does not depend on the launcher's disk:
 the launcher mints an action-scoped temporary key
-(§7.1, local signing; `--custody-ttl`, default 6h, must outlast the run and its upload; no `DeleteObject`/`CopyObject`) and stages it with a
+(§7.1, local signing; `--custody-ttl`, default 6h, at most 24h, must outlast the run and its upload: `research run` refuses a `--timeout` longer than 6h without an explicit `--custody-ttl`; a run over 4 GiB gets a `size_warning`, since uploads don't resume; no `DeleteObject`/`CopyObject`) and stages it with a
 secret-free store.toml under `<root>/requests/<run id>/custody/` (mode 600; never in request.json, remote.json or the workload's
 environment). Without the parent key on the launcher the launch is refused. After the workload exits, the runner publishes the
 attempt with one more output, `outputs.run_record`: a `run-record/v1` tree of every file in the run dir (stdout.log, stderr.log,

@@ -132,8 +132,8 @@ def cmd_run(argv: list[str]) -> int:
                          "store's remote with a key minted here, so custody does not depend on this machine (store.custody)")
     ap.add_argument("--no-custody-r2", dest="custody_r2", action="store_false",
                     help="with --on: no run custody on the remote; the records stay on the machine until `research fetch --all`")
-    ap.add_argument("--custody-ttl", default=None, metavar="TTL", help="with --custody-r2: the minted key's lifetime (default 6h; it must outlast the run "
-                                                                       "and its upload)")
+    ap.add_argument("--custody-ttl", default=None, metavar="TTL", help="with --custody-r2: the minted key's lifetime (default 6h, at most 24h; it must outlast "
+                                                                       "the run and its upload: a --timeout over 6h needs it)")
     ap.add_argument("--expect", action="append", default=[], metavar="K=V", help="expected workload fingerprint entry (recorded separately from what the workload observes)")
     ap.add_argument("--require-result", action="store_true", help="a zero exit without a valid result.json exits 65")
     ap.add_argument("--stage", default="run", help="stage name recorded in the job (default: run)")
@@ -159,6 +159,11 @@ def cmd_run(argv: list[str]) -> int:
     if ns.custody_r2 is False and ns.custody_ttl:
         print("research run: --custody-ttl is the lifetime of the --custody-r2 key; --no-custody-r2 mints none", file=sys.stderr)
         return 2
+    if ns.on and ns.custody_r2 is not False:
+        why = _custody_ttl_problem(ns.custody_ttl, harness_opts)
+        if why:
+            print(f"research run: {why}", file=sys.stderr)
+            return 2
     if ns.project:
         harness_opts = ["--project", ns.project, *harness_opts]
     root = R.runs_root(ns.runs_dir)
@@ -270,6 +275,41 @@ def cmd_run(argv: list[str]) -> int:
               f"(`research data custody {run_id}` from any machine)", file=sys.stderr)
         CU.runner_publish(run_dir, Path(ns.custody_dir), tool=prep.get("tool"), conditions=conds)
     return out
+
+
+#: The longest custody key ``research run`` mints on request (root's ruling 2026-09-26): the default stays 6 h.
+CUSTODY_TTL_CAP_S = 24 * 3600
+
+
+def _harness_timeout(harness_opts: list[str]) -> float | None:
+    """The harness ``--timeout`` (seconds) among the pass-through options, or ``None``."""
+    for i, o in enumerate(harness_opts):
+        v = o.split("=", 1)[1] if o.startswith("--timeout=") else harness_opts[i + 1] if o == "--timeout" and i + 1 < len(harness_opts) else None
+        if v is not None:
+            try:
+                return float(v)
+            except ValueError:
+                return None
+    return None
+
+
+def _custody_ttl_problem(custody_ttl: str | None, harness_opts: list[str]) -> str | None:
+    """Why a custody launch is refused: an explicit ``--custody-ttl`` over :data:`CUSTODY_TTL_CAP_S`, or a ``--timeout`` longer than
+    the default key's lifetime without an explicit ``--custody-ttl`` (the key would expire before the run's upload)."""
+    from research.store import credentials as C  # noqa: PLC0415
+    from research.store.custody import DEFAULT_TTL  # noqa: PLC0415
+
+    try:
+        ttl = C.parse_ttl(custody_ttl or DEFAULT_TTL)
+    except C.MintError as e:
+        return str(e)
+    if custody_ttl and ttl > CUSTODY_TTL_CAP_S:
+        return f"--custody-ttl {custody_ttl} is over the {CUSTODY_TTL_CAP_S // 3600} h cap"
+    timeout = _harness_timeout(harness_opts)
+    if not custody_ttl and timeout is not None and timeout > ttl:
+        return (f"--timeout {timeout:g} s outlives the custody key's default lifetime ({DEFAULT_TTL}): the upload would fail; "
+                f"pass --custody-ttl (at most {CUSTODY_TTL_CAP_S // 3600}h) longer than the run")
+    return None
 
 
 def _survive_stray_signals() -> None:

@@ -293,6 +293,20 @@ def _expired(expires_utc: str | None, now: float | None = None) -> bool:
 
 # ---- the runner -------------------------------------------------------------------------------------------------------------------------
 
+#: A run bigger than this uploads without resume (a failed upload starts over), so custody warns (``size_warning``) before pushing it.
+SIZE_WARN_BYTES = 4 << 30
+
+
+def size_warning(run_dir: Path) -> str | None:
+    """A warning when the run's files exceed :data:`SIZE_WARN_BYTES`, or ``None``."""
+    d = Path(run_dir)
+    total = sum((d / r).stat().st_size for r in run_files(d))
+    if total <= SIZE_WARN_BYTES:
+        return None
+    return (f"run files are {total / (1 << 30):.1f} GiB (over {SIZE_WARN_BYTES >> 30} GiB): the custody upload has no resume, so a dropped "
+            f"connection restarts it; keep big outputs out of the run dir or give --custody-ttl room")
+
+
 def runner_publish(run_dir: Path, custody_dir: Path, *, tool: Any = None, conditions: dict[str, Any] | None = None,
                    store_root: str | None = None, sleep: Callable[[float], None] = time.sleep, tries: int = PUSH_TRIES) -> dict[str, Any]:
     """What `research run --custody-dir` does after the workload: publish the attempt with its run record, push and verify it (retrying),
@@ -307,6 +321,9 @@ def runner_publish(run_dir: Path, custody_dir: Path, *, tool: Any = None, condit
     divert_output(d, custody_dir)
     expires = _key_expiry(custody_dir)
     rep: dict[str, Any] = {"schema": SCHEMA, "run_id": d.name, "preserved": False, "error": None}
+    warn = size_warning(d)
+    if warn:
+        print(f"research: custody: {warn}", file=sys.stderr)
     try:
         with custody_env(custody_dir):
             st = LocalStore(A.store_root(store_root))
@@ -329,6 +346,8 @@ def runner_publish(run_dir: Path, custody_dir: Path, *, tool: Any = None, condit
     if not rep.get("preserved") and _expired(expires):
         rep["error"] = (f"the custody key expired at {expires}: the run outlived --custody-ttl (launch the next one with a longer ttl; repair "
                         f"this one with a fresh key); {rep['error']}")
+    if warn:
+        rep["size_warning"] = warn
     if rep.get("preserved"):
         write_json_atomic(d / MARKER, rep)                  # verified_from precedes it; nothing below writes into the run dir
     else:
