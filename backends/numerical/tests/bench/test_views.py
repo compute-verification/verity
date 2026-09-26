@@ -803,7 +803,7 @@ def test_entities_results_split_into_phases_that_sum_to_the_overhead_with_setup_
         assert r["overhead_at"]["dc-1ms-100gbps"] == pytest.approx(r["overhead"]["value"])
     assert b3["id"] == "B-interactive@gemm-coordinate/k1536/sm89-mma-e4m3+frame-v3/blake3-keyed@bench-instances-fp8-ada-v1@rtx-4090/e4m3"
     assert b3["key"] == {"backend": "B-interactive", "statement": "gemm-coordinate/k1536/sm89-mma-e4m3+frame-v3/blake3-keyed",
-                         "instance_set": "bench-instances-fp8-ada-v1", "prover_hardware": "rtx-4090/e4m3"}
+                         "input_set": "bench-instances-fp8-ada-v1", "prover_hardware": "rtx-4090/e4m3"}
     assert b3["implementation"] == "B-Ligero + BLAKE3 in circuit" and b3["backend"] == "B-interactive" and b3["best"]
     assert "configuration" not in b3 and "configurations" not in ent
     assert b3["setup"]["seconds"] == 2.0 and b3["setup"]["amortized_overhead"] == pytest.approx(2.0 * b3["N"]["value"] / 4096)
@@ -998,13 +998,13 @@ def test_entities_schemes_carry_the_hash_assumptions_their_configurations_declar
     assert all(claims.get(i).kind == "assumption" for s in sch.values() for i in s["assumptions"])
 
 
-def test_entities_results_are_every_admissible_backends_best_with_keys_instance_sets_soundness_and_phases(store: LocalStore) -> None:
+def test_entities_results_are_every_admissible_backends_best_with_keys_input_sets_soundness_and_phases(store: LocalStore) -> None:
     arts = _entities_store(store)
     ent = V.render_entities(V.build(store), rendered_at="2026-09-25T23:00:00Z", commit="abc")
     by_art = {r["artifact"]: r for r in ent["results"]}
     b3 = by_art[arts["blake3"]]
     stmt = "gemm-coordinate/k1536/sm89-mma-e4m3+frame-v3/blake3-keyed"
-    assert b3["key"] == {"backend": "B-interactive", "statement": stmt, "instance_set": "bench-instances-fp8-ada-v1", "prover_hardware": "rtx-4090/e4m3"}
+    assert b3["key"] == {"backend": "B-interactive", "statement": stmt, "input_set": "bench-instances-fp8-ada-v1", "prover_hardware": "rtx-4090/e4m3"}
     st = {x["id"]: x for x in ent["statements"]}
     assert st[stmt]["subcircuit"] == "gemm-coordinate/k1536/sm89-mma-e4m3" and st[stmt]["scheme"] == "frame-v3/blake3-keyed"
     assert st[stmt]["assumptions"] == ["cr/sha-256", "cr/blake3"] and b3["assumptions"]["statement"] == st[stmt]["assumptions"]
@@ -1015,7 +1015,7 @@ def test_entities_results_are_every_admissible_backends_best_with_keys_instance_
     assert b3["hardware"] == b3["prover_hardware"] == "rtx-4090/e4m3" and b3["N"]["peak"] == "rtx-4090/e4m3"
     assert b3["N"]["work_model"] == "work-model/v0" and b3["P"]["value"] == b3["throughput"]["instances_per_second"]
     assert b3["overhead"]["value"] == pytest.approx(b3["N"]["value"] / b3["P"]["value"])
-    assert b3["instance_set"] == {"id": "bench-instances-fp8-ada-v1", "provenance": "synthetic", "range": [0, 4096], "how": "frozen"}
+    assert b3["input_set"] == {"id": "bench-instances-fp8-ada-v1", "provenance": "synthetic", "range": [0, 4096], "how": "frozen"}
     assert b3["soundness"]["cell_log2"] == b3["soundness"]["cell_bits"] * -1 and b3["soundness"]["proofs"] == b3["batching"]["proofs"]
     assert "per_proof_log2" in b3["soundness"]
     kinds = {p["id"]: p["kind"] for p in b3["phases"]}
@@ -1036,7 +1036,7 @@ def test_entities_results_are_every_admissible_backends_best_with_keys_instance_
     assert t2[("gemm-coordinate/k1536/sm89-mma-e4m3", "frame-v3/blake3-keyed")]["statement"] == stmt
     sub = {s["id"]: s for s in ent["subcircuits"]}
     assert sub["gemm-coordinate/k1536/sm90-mma-bf16"]["fidelity_notes"][0]["note"].startswith("H100 BF16 models mma")
-    assert sub["gemm-coordinate/k1536/sm80-mma-bf16"]["instance_set_provenance"] == "captured"
+    assert sub["gemm-coordinate/k1536/sm80-mma-bf16"]["input_set_provenance"] == "captured"
 
 
 def test_a_second_admissible_result_of_another_backend_is_emitted_beside_the_familys_best(store: LocalStore) -> None:
