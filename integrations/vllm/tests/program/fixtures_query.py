@@ -1,7 +1,7 @@
 """Small-statics Program fixtures and explicit-oracle helpers for the query track (window 2026-09-17).
 
 Shared by the boundary / query-API / partition test suites (import as `tests.program.fixtures_query`).  Every
-constructor returns a `Program` small enough for the explicit oracle (`layout.Subcircuit.in_` / `.out` on the expanded
+constructor returns a `Program` small enough for the explicit oracle (`layout.GateSelection.in_` / `.out` on the expanded
 circuit); `FIXTURES` maps a short name to a memoised constructor so suites can parametrise over every family.
 
 Families (design doc `docs/vu-query-design-2026-09-17.md` §5 table + the counterexample shapes of the freeze doc):
@@ -34,7 +34,7 @@ Families (design doc `docs/vu-query-design-2026-09-17.md` §5 table + the counte
     scan_carry_only      scan whose ys are dead: only the carry escapes each iteration
 
 Oracle helpers (`oracle_out`, `oracle_in`, `oracle_w_out`) accept a `Part`, anything with `.intervals()` (a GateSet) or an
-iterable of root gate indices, and evaluate `Subcircuit` on the expanded circuit -- the definitional answer the compact
+iterable of root gate indices, and evaluate `GateSelection` on the expanded circuit -- the definitional answer the compact
 modules are tested against.
 """
 from __future__ import annotations
@@ -43,7 +43,7 @@ from functools import lru_cache
 from typing import Callable, Iterable
 
 from verity.ir.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ir.layout import Scope, Subcircuit
+from verity.ir.layout import Scope, GateSelection
 from verity.ir.parts import Item, Part, n_members
 from verity.ir.program import Program
 from verity.ir.refs import array_of, tuple_of
@@ -425,7 +425,7 @@ def first_composite_child(scope: Scope, callee: str, m: int = 0) -> Scope:
 
 
 # ---------------------------------------------------------------------------------------------------------
-# explicit oracle (Subcircuit on the expanded circuit)
+# explicit oracle (GateSelection on the expanded circuit)
 # ---------------------------------------------------------------------------------------------------------
 
 
@@ -457,7 +457,7 @@ def oracle_out(program: Program, gates) -> frozenset[int]:
     gs = gates_of(gates)
     if not gs:
         return frozenset()
-    return frozenset(Subcircuit(program.circuit, gs).out)
+    return frozenset(GateSelection(program.circuit, gs).out)
 
 
 def oracle_in(program: Program, gates) -> frozenset[int]:
@@ -465,7 +465,7 @@ def oracle_in(program: Program, gates) -> frozenset[int]:
     gs = gates_of(gates)
     if not gs:
         return frozenset()
-    return frozenset(Subcircuit(program.circuit, gs).in_)
+    return frozenset(GateSelection(program.circuit, gs).in_)
 
 
 def oracle_w_out(program: Program, gates) -> int:
