@@ -680,7 +680,7 @@ fn f128_of_hex(s: &str) -> F128 {
     F128::new(u64::from_str_radix(&s[16..32], 16).unwrap(), u64::from_str_radix(&s[..16], 16).unwrap())
 }
 
-/// Re-verify a verifier's recorded session from files with this machine's own statement (instance set with its vllm-v1
+/// Re-verify a verifier's recorded session from files with this machine's own statement (input set with its vllm-v1
 /// step roots and port domains, pinned lowering, honest position-leaf digests): the coins are the recorded ones, so this
 /// is not transferable evidence, but every message the proofs carry must hash to what the verifier recorded before each
 /// coin, the link exchange must hash to the recorded link_sha256, and Flock must accept both reps on one committed root.
