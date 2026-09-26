@@ -833,6 +833,17 @@ def _words(t) -> list[int]:
     raise ValueError(f"type {t!r}")
 
 
+def _type_bits(t) -> int:
+    k = t[0]
+    if k == "Value":
+        return t[1]
+    if k == "Array":
+        return t[1] * _type_bits(t[2])
+    if k == "Tuple":
+        return sum(_type_bits(x) for x in t[1])
+    raise ValueError(f"type {t!r}")
+
+
 def _const_value(fn: str):
     if fn.startswith("Const") and "[" in fn:
         return int(fn.split("[", 1)[1].split("]", 1)[0], 16)
@@ -911,8 +922,8 @@ class Walker:
             self._total(rec)
             return rid
         nodes = d["body"]["nodes"]
-        rec["in_bits"] = sum(w for prm in d["body"]["params"] for w in _words(prm[1]))
-        rec["out_bits"] = sum(_words(d["body"]["ret_type"]))
+        rec["in_bits"] = sum(_type_bits(prm[1]) for prm in d["body"]["params"])
+        rec["out_bits"] = _type_bits(d["body"]["ret_type"])
         agg: dict = {}
         for n in nodes:
             fn, form = n["fn"], n["form"]
@@ -1143,6 +1154,10 @@ def export_row(pg_path: Path, out: Path, reg: Registry, tpl_cache: dict, cache: 
     p = json.loads(Path(pg_path).read_text())
     row = p["row"]
     nodes, used = [], []
+    into: dict[str, list[dict]] = {}
+    for e in p.get("edges", []):
+        into.setdefault(e["to"], []).append(e)
+    tpl = {x["id"]: x["template"] for x in p["groups"]}
     for g in p["groups"]:
         tname, tp = g["template"], g.get("template_params") or {}
         T_range = g.get("varying", {}).get("T") if tname in ("AttentionHead", "AttentionSoftcap_v1") else None
@@ -1165,7 +1180,7 @@ def export_row(pg_path: Path, out: Path, reg: Registry, tpl_cache: dict, cache: 
             if g.get("instances") and g["instances"] % n_t == 0:
                 node["instances_per_T"] = g["instances"] // n_t
                 node["instances_per_T_rule"] = "instances / (T range size): the program graph gives the range, not the histogram"
-        node.update(_roles(g, p, walker.store))
+        node.update(_roles(g, into.get(g["id"], []), tpl, walker.store))
         nodes.append(node)
     return {"schema": SCHEMA + "/row", "row": row["row"], "row_key": row["serving"]["row_key"], "model": row["serving"].get("model"),
             "program_graph": Path(pg_path).name, "nodes": nodes, "edges": p.get("edges", []), "templates": sorted(set(used))}
@@ -1176,12 +1191,11 @@ def _input_role(name: str) -> str:
     return "peers" if role.startswith("peers_") else role
 
 
-def _roles(g: dict, p: dict, store: DefStore) -> dict:
+def _roles(g: dict, into: list[dict], tpl: dict[str, str], store: DefStore) -> dict:
     """A Call's parameters with their roles, as far as the program graph records them: a parameter another Call's output feeds
     (``edges[].ports``) is ``activations`` (``constant`` from a constant Call); one a prescribed input feeds (``param_inputs``)
     takes the input's group (``weights``, ``prompt``, ``seed``, ``splits``, ``peers``). The Call's prescribed inputs are listed
     in ``inputs`` whether or not the graph says which parameter reads them."""
-    tpl = {x["id"]: x["template"] for x in p["groups"]}
     dids = [g["spec"]] if g.get("spec") else list(g.get("definition_ids") or [])
     widths: dict[str, list[int]] = {}
     names: list[str] = []
@@ -1192,13 +1206,12 @@ def _roles(g: dict, p: dict, store: DefStore) -> dict:
         for name, t in (d.get("body") or {}).get("params") or d.get("params") or []:
             if name not in widths:
                 names.append(name)
-            widths.setdefault(name, []).append(sum(_words(t)))
+            widths.setdefault(name, []).append(_type_bits(t))
     from_calls: dict[str, dict[str, int]] = {}
-    for e in p.get("edges", []):
-        if e["to"] == g["id"]:
-            for x in e.get("ports") or []:
-                from_calls.setdefault(x["param"], {})
-                from_calls[x["param"]][e["from"]] = from_calls[x["param"]].get(e["from"], 0) + x["words"]
+    for e in into:
+        for x in e.get("ports") or []:
+            from_calls.setdefault(x["param"], {})
+            from_calls[x["param"]][e["from"]] = from_calls[x["param"]].get(e["from"], 0) + x["words"]
     pin = g.get("param_inputs")
     params = []
     for name in names:
