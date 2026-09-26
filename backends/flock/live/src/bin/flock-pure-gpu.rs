@@ -165,7 +165,7 @@ impl StatementVerifier for PureVerifier {
             return Err(format!("C4: {table} is not in the statement"));
         }
         let (lay, st) = (self.st.lay, &self.st);
-        let p = Publics::parse(publics, st.blocks_real, lay.n_cv())?;
+        let p = Publics::parse(publics, st.blocks_real, lay.n_cv(), lay.tail().is_some())?;
         if let (Layout::Chunk(n), false) = (lay, st.net.epilogue()) {
             let n = n as usize;
             for v in 0..self.inst.vus {
@@ -177,7 +177,11 @@ impl StatementVerifier for PureVerifier {
         for v in 0..if lay.n_cv() == 0 { 0 } else { self.inst.vus } {
             for r in 0..2 {
                 let (bpv, nch) = (lay.blocks_per_vu(), lay.chunks().len());
-                let cvs: Vec<[u32; 8]> = (bpv * v..bpv * (v + 1)).flat_map(|b| (0..nch).map(move |c| (b, c))).map(|(b, c)| p.cv[b][r * nch + c]).collect();
+                // ChunkTail: the partial chunk's chaining value is its block's slot 7 / 23 value (CvMid)
+                let cvs: Vec<[u32; 8]> = (bpv * v..bpv * (v + 1))
+                    .flat_map(|b| (0..nch).map(move |c| (b, c)))
+                    .map(|(b, c)| if Some(b % bpv) == lay.tail() { p.cv[b][2 + r] } else { p.cv[b][r * nch + c] })
+                    .collect();
                 if digest_of(&self.st.keys[r], &cvs) != self.digests[r][v] {
                     return Err(format!("C4: the chunk chaining values of VU {v} role {r} do not hash to its row digest"));
                 }
@@ -196,7 +200,7 @@ impl StatementVerifier for PureVerifier {
         if link.points.len() != 2 || link.y.iter().any(|y| *y != F128::ZERO) {
             return Err("session: two points and y = 0 expected (no cross-field link)".into());
         }
-        let p = Publics::parse(link.publics, st.blocks_real, st.lay.n_cv())?;
+        let p = Publics::parse(link.publics, st.blocks_real, st.lay.n_cv(), st.lay.tail().is_some())?;
         let extra = st.extra_claims(link.points, &self.inst, &p);
         catch_unwind(AssertUnwindSafe(|| verify_ligerito_extra(&st.r1cs, &commitment, &proof, &st.circuit, &pcs, &extra, ch)))
             .map_err(|_| "verifier panicked".to_string())?
@@ -294,6 +298,9 @@ struct Plan {
     acc_in_wrong: bool,
     acc_public_flip: bool,
     rep1_other_witness: bool,
+    /// ChunkTail: 0 drops CHUNK_END on the partial chunk's last block, 1 forges its public chaining value, 2 forges a
+    /// block of it, 3 flips a bit of its last unit
+    tail_tamper: Option<u8>,
     profile: [LigeritoProfile; 2],
     substitute: Option<Vec<Vec<u8>>>,
 }
@@ -302,7 +309,7 @@ impl Plan {
     fn honest(gpu: bool) -> Self {
         Plan { gpu, commit: CommitMode::Honest, forge_middle: false, bad_params: None, key_substituted: false, cv_flip: false, y_flip: false,
                unit_flip: false, operand_flip: false, acc_in_wrong: false, acc_public_flip: false, rep1_other_witness: false,
-               profile: [LigeritoProfile::Fast100; 2], substitute: None }
+               tail_tamper: None, profile: [LigeritoProfile::Fast100; 2], substitute: None }
     }
 }
 
@@ -344,7 +351,8 @@ fn session(st: &Arc<PureStmt>, inst: &Arc<Instances>, t: SharedTransport, plan: 
     let tr = Instant::now();
     // Honest GPU witnesses are built on the device from the rows (publics read back); a tampered witness needs the host.
     let sha = st.lay.is_sha();
-    let device = plan.gpu && !(plan.forge_middle || plan.bad_params.is_some() || plan.key_substituted || plan.operand_flip
+    // ChunkTail proves from host-built inputs (the device chain kernel has no per-block flags)
+    let device = plan.gpu && st.lay.tail().is_none() && plan.tail_tamper.is_none() && !(plan.forge_middle || plan.bad_params.is_some() || plan.key_substituted || plan.operand_flip
         || plan.acc_in_wrong || plan.rep1_other_witness || plan.unit_flip);
     let (mut comps, cvs) = if device {
         (Comps::B3(Vec::new()), Vec::new())
@@ -358,6 +366,14 @@ fn session(st: &Arc<PureStmt>, inst: &Arc<Instances>, t: SharedTransport, plan: 
         Comps::B3(comps) => {
             if plan.forge_middle {
                 comps[5].1[2] ^= 1;
+            }
+            if let Some(n) = st.lay.tail() {
+                let tail = n * st.lay.comp_slots();
+                match plan.tail_tamper {
+                    Some(0) => comps[tail + 7].4 &= !flock_live::chunk::CHUNK_END,
+                    Some(2) => comps[tail + 3].1[0] ^= 1,
+                    _ => {}
+                }
             }
             if let Some(what) = plan.bad_params {
                 let r = &mut comps[st.lay.chunks()[0] - 1];
@@ -412,6 +428,7 @@ fn session(st: &Arc<PureStmt>, inst: &Arc<Instances>, t: SharedTransport, plan: 
     };
     let inputs = make_inputs(false);
     let (y16, acc) = if device { (Vec::new(), Vec::new()) } else { unit31_words(st, &*inputs) };
+    let mid = if st.lay.tail().is_some() { unit_words_at(st, &*inputs, 15) } else { Vec::new() };
     let tamper = |mut p: Publics| -> Vec<u8> {
         if plan.cv_flip {
             p.cv[1][0][3] ^= 1;
@@ -422,10 +439,16 @@ fn session(st: &Arc<PureStmt>, inst: &Arc<Instances>, t: SharedTransport, plan: 
         if plan.acc_public_flip {
             p.acc[0] ^= 1;
         }
+        if let (Some(1), Some(n)) = (plan.tail_tamper, st.lay.tail()) {
+            p.cv[n][2][0] ^= 1;
+        }
         p.bytes()
     };
-    let host_publics = if device { None } else { Some(Publics { cv: cvs, y16, acc }) };
-    let flip_z = plan.unit_flip.then_some(700 + ((st.lay.unit_pos0() + 5) << UNIT_LOG));
+    let host_publics = if device { None } else { Some(Publics { cv: cvs, y16, acc, mid }) };
+    let flip_z = match (plan.tail_tamper, st.lay.tail()) {
+        (Some(3), Some(n)) => Some((n << st.lay.k_log()) + 700 + ((st.lay.unit_pos0() + 15) << UNIT_LOG)),
+        _ => plan.unit_flip.then_some(700 + ((st.lay.unit_pos0() + 5) << UNIT_LOG)),
+    };
     let wit = Wit { comps: comps.clone(), inputs, flip_z };
     let wit1 = Wit { comps: comps.clone(), inputs: make_inputs(plan.rep1_other_witness), flip_z };
     let rows_s = tr.elapsed().as_secs_f64();
@@ -549,6 +572,10 @@ const CASES: &[(&str, bool, bool)] = &[
     ("reps_with_different_witness", false, false),
     ("fast_profile_proofs", false, false),
     ("cross_session_replay_both_reps", false, false),
+    ("tail_end_flag_dropped", false, true),
+    ("tail_chunk_value_forged", false, false),
+    ("tail_block_forged", false, true),
+    ("tail_unit_bit_flipped", false, true),
 ];
 
 fn plan_of(name: &str, gpu: bool) -> Plan {
@@ -568,6 +595,10 @@ fn plan_of(name: &str, gpu: bool) -> Plan {
         "next_block_acc_in_differs_from_committed_acc" => Plan { acc_in_wrong: true, ..h },
         "committed_acc_differs_from_block_acc_out" => Plan { acc_public_flip: true, ..h },
         "reps_with_different_witness" => Plan { rep1_other_witness: true, ..h },
+        "tail_end_flag_dropped" => Plan { tail_tamper: Some(0), ..h },
+        "tail_chunk_value_forged" => Plan { tail_tamper: Some(1), ..h },
+        "tail_block_forged" => Plan { tail_tamper: Some(2), ..h },
+        "tail_unit_bit_flipped" => Plan { tail_tamper: Some(3), gpu: false, ..h },
         "fast_profile_proofs" => Plan { profile: [LigeritoProfile::Fast; 2], ..h },
         _ => h,
     }
@@ -629,6 +660,7 @@ fn admission_negatives(st: &PureStmt, inst: &Instances) -> Vec<Value> {
     too_many.vus = (1usize << (flock_live::pure_block::MAX_M - st.lay.k_log())) / per + 1;
     cases.push(("batch_past_m35", "CN2", admit(st.lay, &st.net, &too_many)));
     cases.push(("chunk1_rows", "CN3", admit(Layout::Chunk(1), &st.net, inst)));
+    cases.push(("lone_partial_chunk_rows", "CN3", admit(Layout::ChunkTail(0), &st.net, inst)));
     cases
         .into_iter()
         .map(|(name, tag, r)| {
@@ -650,7 +682,10 @@ fn selftest(st: &Arc<PureStmt>, inst: &Arc<Instances>, gpu: bool) {
     }
     let mut all = true;
     for &(name, want_accept, _) in CASES {
-        if !matches!(st.lay, Layout::Chunk(_)) && matches!(name, "y16_public_forged" | "committed_acc_differs_from_block_acc_out") {
+        if name.starts_with("tail_") && st.lay.tail().is_none() {
+            continue;
+        }
+        if !st.lay.is_chunked() && matches!(name, "y16_public_forged" | "committed_acc_differs_from_block_acc_out") {
             continue;
         }
         if !st.net.epilogue() && name == "y16_public_forged" {
@@ -754,8 +789,12 @@ fn main() {
 
 /// The honest device prover's y16 and acc publics (`pure_unit_outputs`): the last unit of every real block, both layouts.
 fn last_unit_words(st: &PureStmt, inputs: &(dyn Fn(usize, usize) -> [F128; 5] + Sync)) -> (Vec<u32>, Vec<u32>) {
+    unit_words_at(st, inputs, st.lay.units() - 1).into_iter().unzip()
+}
+
+/// Unit u's (y16, c_out) words of every real block, from its own evaluation.
+fn unit_words_at(st: &PureStmt, inputs: &(dyn Fn(usize, usize) -> [F128; 5] + Sync), u: usize) -> Vec<(u32, u32)> {
     let cols = st.net.out_cols.clone();
-    let u = st.lay.units() - 1;
     (0..st.blocks_real)
         .into_par_iter()
         .map(|b| {
@@ -768,7 +807,7 @@ fn last_unit_words(st: &PureStmt, inputs: &(dyn Fn(usize, usize) -> [F128; 5] + 
             let word = |col: usize, n: usize| (0..n).fold(0u32, |w, t| w | (((z[col * 128 + t] & 1) as u32) << t));
             (if cols.len() > 1 { word(cols[1], 16) } else { 0 }, word(cols[0], 32))
         })
-        .unzip()
+        .collect()
 }
 
 fn f128_of_hex(s: &str) -> F128 {
@@ -797,7 +836,8 @@ fn replay(st: &Arc<PureStmt>, inst: &Arc<Instances>, rec: &Value, proofs: &[Vec<
     let (comps, cvs) = st.compressions(inst);
     let inputs = |b: usize, u: usize| st.unit_inputs(&comps, b, u, st.c_in(inst, b, u));
     let (y16, acc) = last_unit_words(st, &inputs);
-    let publics = Publics { cv: cvs, y16, acc }.bytes();
+    let mid = if st.lay.tail().is_some() { unit_words_at(st, &inputs, 15) } else { Vec::new() };
+    let publics = Publics { cv: cvs, y16, acc, mid }.bytes();
     if rec["link"]["publics_sha256"][TABLE].as_str() != Some(hex(&sha256(&publics)).as_str()) {
         return Err("C4: the record's committed publics are not this instance set's chunk values, accumulators and outputs".into());
     }

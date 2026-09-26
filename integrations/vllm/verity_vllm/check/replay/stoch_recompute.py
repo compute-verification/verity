@@ -142,8 +142,8 @@ def _evaluate_all(jobs: list[tuple], n_jobs: int | None, evaluator: str = "lane"
     n = int(n_jobs) if n_jobs else min(32, _cpu_quota())
     if len(jobs) <= 1 or n <= 1:
         return [fn(j) for j in jobs]
-    import multiprocessing as mp
-    with mp.get_context("fork").Pool(min(n, len(jobs))) as pool:
+    from verity_vllm.check.replay.fork import fork_pool
+    with fork_pool(min(n, len(jobs))) as pool:
         return list(pool.imap(fn, jobs, chunksize=1))
 
 

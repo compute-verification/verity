@@ -1,5 +1,168 @@
 # Changelog: `verity_numerical` (the bench renderers and their rules)
 
+## 2026-09-26: bench.cell requires the verifier on another machine, not another container
+
+- `bench.placement` identifies machines by the RunPod machine id, the public IP, the DMI `product_uuid`, the kernel `boot_id` and the
+  host CPU model, rather than by container hostname. This follows red-team-flock's 12:00Z ruling that a co-resident verifier is not
+  a separate verifier.
+- **`plan`:** it reads both pods' machine id and public IP from the RunPod API (or from `--placement FILE`), and records them in
+  `cell.placement`. It refuses a pair that shares a machine id, public IP, product uuid or boot id. It also refuses a pair that talks
+  over a host-private address (loopback, link-local, RFC 1918, 100.64/10, ULA) unless both machine ids are known and differ, and a
+  pair whose identity isn't enough to tell the machines apart.
+- **Jobs:** every job first runs the stdlib-only probe, `placement.py probe`, which writes the container's identity (and, on the
+  prover, the route to the verifier) to the run's `placement.json`.
+- **`check` and `register`:** they compare both runs' identities (`placement.json`, else `job.json`'s boot id) merged with the plan's.
+  They flag a run whose pod differs from the plan's, and stamp `cell.placement` into the registered document. The hostname
+  comparison is gone.
+
+## 2026-09-26: attention counted per key count; one verifier-evaluated switch
+
+- **Attention rows per T:** an attention cell's key count T is read wherever the cell records it (`views.input_variables`):
+  - the fingerprint's or the cell stamp's `statics` / `variables`;
+  - the lowered unit's name (flock-ir-lowering's `.../d64-bn128/t4`);
+  - the input set's name;
+  - the registered set's parameters.
+
+  Two differing records reject the cell X. A cell gets a Table 2 row per (subcircuit, T), with N at that T
+  (864 GB/s ÷ (4D + 4TD)). This replaces 89ba3a65's blanket X for attention.
+- **Per-T counts in the census:** batch-1 workloads (#101, #11, #39) give their attention strata `variable_counts`: the VUs
+  at each T. With one request, prefill position p attends T = p + 1 and decode step s attends T = input_len + s, once per
+  layer. For #101 that is T 1–287 with 16 VUs each, matching every stratum's population by phase. Their native work is
+  exact, where it was an interval.
+- **Headline coverage per T:** a cell covers only the units at its own T, weighted by the template mix. The headline shows:
+  - the covered T;
+  - the drawn T (from the registered captured sets of the workload's row);
+  - drawn but uncovered T;
+  - T values the run does not serve.
+
+  Units at other T are uncovered ("not at every T"), never extrapolated. Without per-T counts (the batch-8 and batch-32
+  rows), attention cells are listed as "no per-T counts" and not counted.
+- **Verifier-evaluated parts:** templates record them in the census (`verifier_evaluated`: parts, share, counted, ruling).
+  - Attention's softmax (4–11% of a head's scalar ops, all of its exp2 and reciprocal work) is counted with a † footnote,
+    per red-team-flock-3's grant.
+  - Sampling is not counted, pending Daniel.
+  - The existing switch (`--preview-count-omitted`, `Rules.headline_count_omitted`) flips every not-counted template and
+    every `omitted` label at once.
+- **Unchanged:** tables, raw JSON and parity are byte-identical; only the headline section changes.
+
+## 2026-09-26: an A-route-a bench.cell driver; A-GKR's route (a) at K = 2048 and 8192
+
+- **Driver:** `bench/drivers/a_route_a.py` runs route (a) (A-GKR + C-Flock's keyed-BLAKE3 rows + the sigma link) through
+  `backends/gkr/cell.sh`. The verifier pod builds its own statement of every sweep size from the shipped input set and serves
+  them in order on one port. The prover pod runs the correctness gate, the RTT probe, and per size a warm-up session against a
+  loopback verifier followed by the timed live sessions. `tools/cell.py finish` then writes the plateau's result with the sweep,
+  protocol, loopback, commit and placement blocks, and `tools/cell.py register` stamps the lane. The driver takes input sets only.
+- **Lowering:** A-GKR lowers `gemm-coordinate/k2048` and `k8192` on sm80 BF16 with `frame-v3/blake3-keyed` to
+  `bf16-ampere-k<K>+blake3`. These are the K = 1536 circuit files at `steps` = K / 16, pinned in `backends/gkr/verifier/pins.txt`,
+  and the lowering has a `stage()`.
+- **Unchanged:** the renderers and their rules.
+
+## 2026-09-26: the spine generates every served template
+
+- `bench.templates` binds and generates every template of every census workload. `test_headline.NO_SPINE_GENERATOR` is empty.
+  The new templates:
+  - **FA3 attention heads:** `attention-head` with semantics `sm90.fa3.bf16`, that is `AttentionHead_v2` on the H100's wgmma step,
+    evaluated as `Attention_v2{NH=1, KVH=1}`. The set name and relation are the vLLM exporter's.
+  - **Row-shaped templates:** `token-select-greedy` (`TokenSelect_v1`), `moe-router-topk` and `moe-router-topk-norm`
+    (`MoeRouterTopK(Norm)_v1`), `moe-sum` (`MoeSum_v1`), `bias-add` (`BiasAdd_v1`) and `bf16-mul-scalar`
+    (`Bf16MulScalarTensor_v1`). Their ports are the exporter's `in<g>` / `out.<member>`.
+  - **Templates whose Definition takes a table or slab, of which an input reads one row:**
+    - `embedding-row` (`Embedding_v1{V, H}`) stores the token id and the row it opens.
+    - `moe-expert-coordinate` and `moe-expert-coordinate-weighted` (`MoeExpertCoordinate(W)_v1{E, K}`) store the expert id and its
+      row (plus the routing weight for the weighted form).
+    - The other rows are +0. Embedding is evaluated one input at a time through its registered row kernel; the experts go through
+      `MoeExpertGemm(W)_v1{N=1}`. Tests check both against their coordinate Definitions.
+  - **The FP8 block-scaled GEMM:** `scaled-mm-fp8-block-coordinate` (`ScaledMmFp8BlockCoordinate_v1{K, G}`). Its operands are E4M3
+    codes and its block scales positive normal f32.
+- `gemm-coordinate` generates NVFP4 at `sm120.mma.m16n8k64.e2m1.nvf4`.
+  - Ports: `x` and `w` are E2M1 codes (`u8`, one per byte); `sx` and `sw` are UE4M3 scale bytes per block of 16; `y` is the FP32
+    accumulator word of `verity.ml.kernels.SM120_NVF4_DOT` (`models.BLACKWELL_SM120_NVF4`).
+  - `generate --suite nvfp4` covers K = 1536 at 8,192 and 16,384 VUs.
+- `generate --suite workloads` makes one set per census-bound subcircuit of vLLM rows #39, #57, #60, #67, #73 and #74, 45 in all.
+  Each attention head uses its census `T` range.
+- `bench.lowerings`: a template without a module in a family is `n/s`, and its reason names the file to create. It is no longer a
+  registry problem.
+
+## 2026-09-26: every served workload's subcircuits bound
+
+- **Census:** every (template, parameters) in every census workload now has a bound subcircuit. That adds 42 subcircuits
+  to #101's:
+  - GEMM coordinates at K 1536–14336 on sm80 mma and sm90 wgmma;
+  - FA2 and FA3 attention heads, each with its key-count range over the workloads it serves (#101's head now spans #11's
+    too: T 1–4607);
+  - RoPE at D 128 and 256;
+  - RMSNorms (fused and Triton, eps 1e-05 and 1e-06, including Qwen3's N = 128 head norm);
+  - SiLU·mul;
+  - greedy selection;
+  - embedding (a commitment opening);
+  - the MoE router, expert coordinates and sum;
+  - the FP8 block-scaled GEMM;
+  - bias-add and the scalar multiply.
+- **Ids and displays:** the bench spine's where it binds the template (`bench.templates.subcircuit`), otherwise its
+  `<template>/<parameters>/<semantics or datatype>` form.
+- **No spine generator yet:** FA3 attention (`sm90.fa3.bf16`), `token-select-greedy`, `embedding-row`, `moe-router-topk`,
+  `moe-expert-coordinate`, `moe-expert-coordinate-weighted`, `moe-sum`, `scaled-mm-fp8-block-coordinate`, `bias-add` and
+  `bf16-mul-scalar`. The list is pinned in `test_headline.NO_SPINE_GENERATOR`.
+- **Headline:** it names every workload's gaps by subcircuit (`no result` or `commitment opening`); `no census subcircuit`
+  no longer occurs.
+- **Unchanged:** tables, raw JSON and parity are byte-identical.
+
+## 2026-09-26: #101's attention, sampling and embedding subcircuits; an L40S hardware line
+
+- **Census:** #101's remaining templates are bound, with bench-spine's ids:
+  - `attention-head/d64-bn128/sm80-fa2-bf16`, whose key count T is recorded as 1–383 over #101's strata in `variable_ranges`;
+  - `gumbel-top-p-token-select/v128256/fp32`;
+  - `embedding-row/v128256-h2048/bf16`.
+- **Embedding:** the template is marked `commitment_opening`. The ontology has no covered-by-commitment state, so the headline
+  lists embedding as uncovered, with the reason `commitment opening`. Its native work stays in the denominator and is never
+  imputed.
+- **MoE router:** `moe-router-topk` gains `port_datatypes`: bf16 logits, f32 weights, i32 ids. Its bytes model is
+  `2*E + 8*TOPK`, from its Definition's ports, so every template of every census workload is now modelled.
+- **L40S line:** `views.L40S_BF16` puts the first target's instruction (`sm80.mma.m16n8k16.bf16`) on the L40S. It is a
+  hardware-only line, so it has rows only where it has results, each keyed by its explicit subcircuit, with N from the
+  `l40s-48gb/bf16` line: 362.05 TFLOPS for GEMM, 864 GB/s for the rest.
+- **Rehoming:** under the spec rules, a result whose prover ran on another device than its profile's target moves to the
+  line of the same instruction on that device (GEMM) or to the line its prover GPU picks (other templates). Before, it was
+  rejected K. Only the L40S changes today, because no other device has a second line of an existing instruction.
+  `hardware_target` also finds a line for a subcircuit with no tensor datatype (fp32 sampling), since its N is memory-bound.
+- **Unchanged:** the legacy rules, the targets' rows and parity. Existing tables are byte-identical; only the headline
+  section changes.
+
+## 2026-09-26: previews of the two pending acceptance decisions (never published)
+
+- `views --preview-one-sided-interaction`: the interaction check passes when the measured wall is at most 1.1 × the model. A
+  run under the model no longer fails.
+- `views --preview-cached-weights`: non-GEMM native N counts activations only, with per-row weights and tables cached. It
+  uses the census's new `work_model.bytes_per_input_cached`: RoPE 4D, fused RMSNorm 8N, Triton RMSNorm 4N, SiLU·mul 6I
+  unchanged.
+- Both are `Rules` fields, off in `SPEC`. The published render and parity are unchanged. Daniel decides both; the previews
+  render beside the published JSON in the notes' `renders/previews/`.
+
+## 2026-09-26: the per-workload headline
+
+- **What:** for each census workload and each backend, the share of the served run's native work that published, cleared
+  cells cover, and the work-weighted overhead over that share (`bench.headline`). It renders as the "Workload headline"
+  section after Table 3, and as `workload_headline` in the entities JSON. It is absent under the legacy rules. Existing
+  tables, the raw views JSON and parity are byte-identical.
+- **Units and native work:** units come from the workload's template mix (VUs × subcircuits per VU, per bound subcircuit).
+  Native seconds come from each template's census work model on the served hardware line, in two bases, as sp1-evaluator's
+  cover summary stated them:
+  - tensor-peak GEMM: GEMM-like templates at the dense tensor-core peak, everything else memory-bound;
+  - all memory-bound: a GEMM coordinate reads its weight row.
+- **Coverage:** a subcircuit counts as covered only when the backend has an admissible result on exactly that subcircuit
+  (template and bound parameters, semantics included). The result must be cleared (not provisional, no open finding) and
+  its prover must have run on the served hardware. Overhead = the covered units' proving time (units ÷ the highest P) ÷
+  their native time.
+- **Uncovered and unmodelled:** uncovered subcircuits are listed with the reason: no census subcircuit, no result, results
+  only on other hardware, or not cleared. Nothing is imputed. A template with no work model in a basis is listed and left
+  out of both sums.
+- **Intervals:** attention's key count is known only to its block (`NB`, `last`), so native work, shares and overheads are
+  intervals.
+- **Census:** L40S memory bandwidth (864 GB/s) is added. Byte models are added for `attention-head`,
+  `gumbel-top-p-token-select`, `token-select-greedy`, `embedding-row`, `gemm-coordinate` (`K*BITS//8`), the MoE expert
+  coordinates, `moe-sum`, `scaled-mm-fp8-block-coordinate`, `bias-add` and `bf16-mul-scalar`. Attention's
+  `variable_bounds` is added, and the entities census now includes `workloads`. `moe-router-topk` has no byte model yet.
+
 ## 2026-09-26: non-GEMM statement rows, with native N from a memory-bandwidth work model
 
 - **Statements:** a result whose subcircuit is another template (its `bench.cell` stamp, or the fingerprint's

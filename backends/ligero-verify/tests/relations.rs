@@ -754,6 +754,8 @@ fn fp8_ada_hashed_v5_proof_is_accepted_and_the_hashed_system_is_pinned() {
     assert!(js.contains("\"l\":1024,\"n\":4096,\"D\":6,\"t\":189,\"zk\":false,\"mode\":\"interactive\",\"n_proofs\":1,\"n_vus\":20,\"steps\":48,\"K\":32"), "{js}");
     assert!(js.contains("authentication: included-hash, 20 VUs, 20 x rows + 20 W columns + 20 y words under the a/b/y roots"), "{js}");
     assert!(js.contains("coins are this verifier's step-0 coins"), "{js}");
+    // 19 linked rows: 32 extras with monomial coefficients, degree 7, (21 / 2^32)^6 (chain_field_log2)
+    assert!(js.contains("\"chain_field\":-165.646"), "{js}");
     let (_, sd) = run(&["system-digest", "--system", HASH_SYS]);
     assert!(sd.contains(&format!("\"sys_id\":\"{HASH_SYS_ID}\"")), "{sd}");
     assert!(sd.contains(&format!("\"table_digest\":\"{HASH_TABLE_DIGEST}\"")), "{sd}");

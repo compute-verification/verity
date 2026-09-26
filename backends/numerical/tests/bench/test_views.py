@@ -245,10 +245,23 @@ def test_a_red_team_clearance_of_the_statement_lifts_the_marker(store: LocalStor
     other = committed(store, t_total=0.9, labels=[("proof_class", "COMPLETE_ZK_BACKEND", REDTEAM, "2026-09-25T01:00:00Z")])
     cell = line(V.build(store))["cells"]["B-Ligero"]
     assert cell.artifact == a and cell.provisional is None and other
-    # a later downgrade of the same statement caps every result of it (D), and stands
-    committed(store, t_total=2.0, labels=[("proof_class", "COMPLETE_HVZK_BACKEND", "red-team-2", "2026-09-25T02:00:00Z")])
+    # a later downgrade of another result of the statement caps that result only (D); the cleared cell stands
+    low = committed(store, t_total=0.2, labels=[("proof_class", "COMPLETE_HVZK_BACKEND", "red-team-2", "2026-09-25T02:00:00Z")])
     views = V.build(store)
-    assert line(views)["cells"]["B-Ligero"] is None and codes(views, a) == ["D"]
+    assert line(views)["cells"]["B-Ligero"].artifact == a and codes(views, low) == ["D"]
+
+
+def test_a_diagnostic_verdict_on_one_run_does_not_cap_the_other_runs_of_its_statement(store: LocalStore) -> None:
+    """flock-l40s-101, 2026-09-26: red-team-flock held one co-resident run of a statement at a diagnostic class; the other runs,
+    each with its own grant or none, keep the class the statement's grant gives them."""
+
+    granted = committed(store, t_total=0.5, labels=[("proof_class", "COMPLETE_ZK_BACKEND", REDTEAM, "2026-09-25T01:00:00Z")])
+    plain = committed(store, t_total=0.4)
+    co_resident = committed(store, t_total=0.1, labels=[("proof_class", "NON_ZK_PROOF_DIAGNOSTIC", "red-team-2", "2026-09-25T05:00:00Z")])
+    views = V.build(store)
+    cell = line(views)["cells"]["B-Ligero"]
+    assert cell.artifact == plain and cell.provisional is None               # cleared by the statement's grant, not capped
+    assert codes(views, co_resident) == ["D"] and granted not in {r["artifact"] for r in views.rejected}
 
 
 POSEIDON2_ROW = "frame-v3/poseidon2-row"
@@ -1410,4 +1423,72 @@ def test_a_non_gemm_cell_without_a_profile_takes_its_prover_gpus_hardware_line()
     meta = {"workload_fingerprint": {"profile": None, "subcircuit": "rope-head/d64/neox-bf16",
                                      "hardware": {"gpu": {"name": "NVIDIA H100 80GB HBM3"}}}}
     assert V.hardware_target(meta, "rope-head/d64/neox-bf16") is BF16_HOPPER
-    assert V.hardware_target({"workload_fingerprint": {"hardware": {"gpu": {"name": "NVIDIA L40S"}}}}, "rope-head/d64/neox-bf16") is None
+    assert V.hardware_target({"workload_fingerprint": {"hardware": {"gpu": {"name": "NVIDIA L40S"}}}}, "rope-head/d64/neox-bf16") is V.L40S_BF16
+    assert V.hardware_target({"workload_fingerprint": {"hardware": {"gpu": {"name": "NVIDIA RTX A6000"}}}}, "rope-head/d64/neox-bf16") is None
+
+
+def test_the_two_preview_switches_are_off_in_the_published_rules_and_change_only_what_they_name() -> None:
+    assert not V.SPEC.interaction_one_sided and not V.SPEC.native_cached
+    ix = {"live": True, "rounds": 10, "rtt_ms": 1.0, "rtt_method": "ping", "wait_s": 0.0, "prover_s": 0.5, "verifier_s": 0.0,
+          "bytes_up": 0.0, "bytes_down": 0.0}
+    assert V.interaction_problem(ix) is None and V.interaction_problem(ix, one_sided=True) is None   # -2%: inside both
+    over = {**ix, "wait_s": 0.2}                                    # 0.7 s measured vs a 0.51 s model: over it, fails both ways
+    under = {**ix, "prover_s": 0.3, "rounds": 300}                  # 0.3 s measured vs a 0.6 s model: under it, fails only two-sided
+    assert V.interaction_problem(over) and V.interaction_problem(over, one_sided=True)
+    assert V.interaction_problem(under) and V.interaction_problem(under, one_sided=True) is None
+    sub = "rmsnorm-triton/n2048-eps1e-05/bf16"
+    full, cached = V.memory_native(BF16_HOPPER, sub), V.memory_native(BF16_HOPPER, sub, cached=True)
+    assert (full["bytes_per_instance"], cached["bytes_per_instance"]) == (6 * 2048, 4 * 2048) and "PREVIEW" in cached["basis"]
+    silu = "silu-mul/i8192/bf16"
+    assert V.memory_native(BF16_HOPPER, silu, cached=True)["bytes_per_instance"] == V.memory_native(BF16_HOPPER, silu)["bytes_per_instance"]
+
+
+def test_the_renderers_validation_path_imports_no_numpy() -> None:
+    # the steward renders with a bare python3.12 (no numpy); PR #54 once pulled bench.templates (numpy) into contract.validate
+    import subprocess
+    import sys
+
+    code = ("import builtins; real = builtins.__import__\n"
+            "def block(name, *a, **k):\n"
+            "    if name == 'numpy' or name.startswith('numpy.'): raise ModuleNotFoundError('numpy blocked')\n"
+            "    return real(name, *a, **k)\n"
+            "builtins.__import__ = block\n"
+            "from verity_numerical.bench import contract, views\n"
+            "assert contract.non_gemm_subcircuit({'subcircuit': 'rope-head/d64/neox-bf16'}) == 'rope-head/d64/neox-bf16'\n")
+    r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr[-800:]
+
+
+def test_a_result_naming_an_unknown_subcircuit_is_rejected_not_a_crash(store: LocalStore) -> None:
+    res = result(candidate="SP1", profile=None, subcircuit="Gemm_v1", instances=None)         # a VU family name, not a census id
+    art = put(store, res)
+    views = V.build(store)
+    assert codes(views, art) == ["X"] and "not a census subcircuit" in next(r for r in views.rejected if r["artifact"] == art)["codes"][0][1]
+    V.render_entities(views, rendered_at="2026-09-26T08:40:00Z", commit="abc")
+
+
+def test_a_captured_vu_set_matches_its_statement_by_ir_definition_and_statics() -> None:
+    rope = {"relation": {"definition": "RoPE_v1", "statics": {"D": 64}, "subcircuit": "RoPEHead<64>"}}
+    assert V._captured_set_is(rope, "rope-head/d64/neox-bf16")
+    assert not V._captured_set_is({"relation": {"definition": "RoPE_v1", "statics": {"D": 128}}}, "rope-head/d64/neox-bf16")
+    rms = {"relation": {"definition": "RMSNormFusedCuda_v2", "statics": {"N": 2048, "EPS": '{"f64":"0x1p-17"}'}}}
+    assert V._captured_set_is(rms, "rmsnorm-fused-cuda/n2048-eps1e-05/bf16") and not V._captured_set_is(rms, "rmsnorm-triton/n2048-eps1e-05/bf16")
+
+
+def test_a_gemm_result_proved_on_an_l40s_moves_to_the_l40s_line() -> None:
+    on = lambda gpu: {"workload_fingerprint": {"profile": FIRST.name, "hardware": {"gpu": {"name": gpu}}}}  # noqa: E731
+    assert V.rehome(on("NVIDIA L40S"), FIRST) is V.L40S_BF16                     # prover hardware is its own axis (ontology)
+    assert V.rehome(on("NVIDIA A100-SXM4-80GB"), FIRST) is FIRST                  # its own device: stays
+    assert V.rehome(on("NVIDIA B200"), FIRST) is FIRST                            # no line for that device: stays (then K)
+
+
+def test_a_run_whose_round_trips_dominate_its_wall_is_flagged() -> None:
+    ix = {"live": True, "rounds": 1000, "rtt_ms": 3.2, "prover_s": 1.0, "wait_s": 3.3}
+    assert V.rtt_share(ix) == pytest.approx(3.2 / 4.3) and V.rtt_share(ix) > V.RTT_DOMINATES
+    assert V.rtt_share({**ix, "rtt_ms": 0.3}) < V.RTT_DOMINATES and V.rtt_share({**ix, "live": False}) is None
+
+
+def test_a_row_whose_work_model_needs_a_per_input_variable_rejects_its_cells_instead_of_crashing() -> None:
+    sub = next(s for s in census.SUBCIRCUITS if s.startswith("attention-head/"))
+    with pytest.raises(KeyError):
+        V.memory_native(BF16_HOPPER, sub)

@@ -31,7 +31,7 @@ from verity.ml.tc.silicon import tc_dot
 from verity_numerical.bench import contract
 
 from . import phases, protocol as protocol_mod
-from .chain import Layout
+from .chain import Layout, extra_constraints
 from .compile import P
 from .fp8.census import census
 from .protocol import Config, config_for, n_rows, prove, soundness, verify
@@ -375,8 +375,14 @@ class RelationChainRunner:
 
     def cfg(self, l: int) -> Config:
         if l not in self._cfg:
-            self._cfg[l] = config_for(l, self.target, self.rate_log2, self.n_proofs, zk=self.zk, mode=self.mode)
+            self._cfg[l] = config_for(l, self.target, self.rate_log2, self.n_proofs, zk=self.zk, mode=self.mode,
+                                      chain_extras=self.chain_extras)
         return self._cfg[l]
+
+    @property
+    def chain_extras(self) -> int:
+        """The system's chain constraints with monomial coefficients: their field term is sized into t and booked."""
+        return extra_constraints(self.sys.chain)
 
     @property
     def interactive(self) -> bool:
@@ -504,7 +510,7 @@ class RelationChainRunner:
         each), union-bounded over the ``len(cfgs)`` presented, against ``target_bits``; every proof's ``n_proofs`` (the count
         its ``t`` was sized for) against that number.  The same rule and reason strings as ``vu.ChainRunner.batch_bound``
         and ``ligero-verify batch``: the union bound is enforced for every relation, not only Ampere BF16."""
-        per = [soundness(c, self.tb.L, self.tb.Q, 1)["per_proof_total_log2"] for c in cfgs]
+        per = [soundness(c, self.tb.L, self.tb.Q, 1, chain_extras=self.chain_extras)["per_proof_total_log2"] for c in cfgs]
         return protocol_mod.batch_bound(per, n_proofs_claimed, target_bits, names)
 
     def verify_batch(self, items: list[tuple], target_bits: float = 128.0, n_proofs_claimed: list[int] | None = None) -> dict:
@@ -523,7 +529,7 @@ class RelationChainRunner:
         claimed = list(n_proofs_claimed) if n_proofs_claimed is not None else [self.n_proofs] * len(items)
         for v in verdicts:
             if not v["accepted"]:
-                per = [soundness(c, self.tb.L, self.tb.Q, 1)["per_proof_total_log2"] for c in cfgs]
+                per = [soundness(c, self.tb.L, self.tb.Q, 1, chain_extras=self.chain_extras)["per_proof_total_log2"] for c in cfgs]
                 return {"accepted": False, "reason": f"{v['name']}: {v['reason']}", "n_subbatches": len(items),
                         "target_bits": float(target_bits), "batch_log2": protocol_mod.log2_sum(per), "per_proof_log2": per,
                         "n_proofs_claimed": claimed, "items": verdicts}
@@ -1019,13 +1025,19 @@ class SharedHashedRunner(HashedRelationRunner):
     # both proofs of a sub-batch are sized for the union over 2 n_proofs commitments (PROTOCOL.md 8c, batch verification)
     def cfg(self, l: int) -> Config:
         if l not in self._cfg:
-            self._cfg[l] = config_for(l, self.target, self.rate_log2, 2 * self.n_proofs, zk=self.zk, mode=self.mode)
+            self._cfg[l] = config_for(l, self.target, self.rate_log2, 2 * self.n_proofs, zk=self.zk, mode=self.mode,
+                                      chain_extras=self.chain_extras)
         return self._cfg[l]
 
     def cfg_h(self, l: int) -> Config:
         if l not in self._cfg_h:
-            self._cfg_h[l] = config_for(l, self.target, self.rate_log2, 2 * self.n_proofs, zk=self.zk, mode=self.mode)
+            self._cfg_h[l] = config_for(l, self.target, self.rate_log2, 2 * self.n_proofs, zk=self.zk, mode=self.mode,
+                                        chain_extras=self.chain_extras_h)
         return self._cfg_h[l]
+
+    @property
+    def chain_extras_h(self) -> int:
+        return extra_constraints(self.sys_h.chain)
 
     def hooks_h_for(self, auth):
         from . import hashauth
@@ -1453,10 +1465,10 @@ class SharedHashedRunner(HashedRelationRunner):
         """``protocol.soundness`` of the PAIR per sub-batch: G's terms + the fingerprint collision term, H's terms (one
         per hash-side layout in ``lays_h``, ``n_proofs`` of them), the union over ``2 n_proofs`` commitments (what
         :meth:`cfg` sized t for) -- the same sum :meth:`batch_bound` takes."""
-        g = soundness(cfg, self.tb.L, self.tb.Q, 2 * n_proofs, fp=(self.fp_coords, self.steps, 2))
+        g = soundness(cfg, self.tb.L, self.tb.Q, 2 * n_proofs, fp=(self.fp_coords, self.steps, 2), chain_extras=self.chain_extras)
         if not lays_h:
             return g
-        hs = [soundness(self.cfg_h(lh.l), self.tb_h.L, self.tb_h.Q, 2 * n_proofs) for lh in lays_h]
+        hs = [soundness(self.cfg_h(lh.l), self.tb_h.L, self.tb_h.Q, 2 * n_proofs, chain_extras=self.chain_extras_h) for lh in lays_h]
         per = [g["per_proof_total_log2"]] * n_proofs + [h["per_proof_total_log2"] for h in hs]
         return {**g, "h": hs[0], "h_layouts": [dataclasses.asdict(lh) for lh in lays_h],
                 "total_log2": protocol_mod.log2_sum(per), "n_proofs": 2 * n_proofs}
@@ -1467,11 +1479,12 @@ class SharedHashedRunner(HashedRelationRunner):
         per, claimed, nm = [], [], []
         names = names or [f"sub_{i:02d}" for i in range(len(cfgs))]
         for i, (c, k) in enumerate(zip(cfgs, n_proofs_claimed)):
-            per.append(soundness(c, self.tb.L, self.tb.Q, 1, fp=(self.fp_coords, self.steps, 2))["per_proof_total_log2"])
+            per.append(soundness(c, self.tb.L, self.tb.Q, 1, fp=(self.fp_coords, self.steps, 2),
+                                 chain_extras=self.chain_extras)["per_proof_total_log2"])
             claimed.append(2 * int(k))
             nm.append(names[i] + ".G")
             lh = lays_h[i] if lays_h is not None else self.layout_h(1)
-            per.append(soundness(self.cfg_h(lh.l), self.tb_h.L, self.tb_h.Q, 1)["per_proof_total_log2"])
+            per.append(soundness(self.cfg_h(lh.l), self.tb_h.L, self.tb_h.Q, 1, chain_extras=self.chain_extras_h)["per_proof_total_log2"])
             claimed.append(2 * int(k))
             nm.append(names[i] + ".H")
         return protocol_mod.batch_bound(per, claimed, target_bits, nm)
@@ -2377,7 +2390,8 @@ def bench_vu_rel(args, rel: Relation) -> int:
     vmed = statistics.median(r[1] for r in runs)
     peak_dev = torch.cuda.max_memory_allocated() if args.device.startswith("cuda") else 0
     nbytes = {k_: v_ * n_proofs for k_, v_ in proof.n_bytes().items()}
-    snd = R.soundness_report(cfg, n_proofs, lays_h_seen) if shared else soundness(cfg, R.tb.L, R.tb.Q, n_proofs)
+    snd = (R.soundness_report(cfg, n_proofs, lays_h_seen) if shared
+           else soundness(cfg, R.tb.L, R.tb.Q, n_proofs, chain_extras=R.chain_extras))
     # security.achieved_log2 is the BATCH bound -log2 sum_i 2^b_i as the verifier's batch_bound computed it (vu.bench_vu since
     # lane b-batch-bound); the prover-side soundness() of the same n_proofs must agree with it to the last bit.
     assert batch is not None and abs(batch["batch_log2"] - snd["total_log2"]) < 1e-6, (batch, snd["total_log2"])

@@ -161,7 +161,9 @@ def main(argv=None) -> int:
         if not (a.digests and a.prime_commitment and a.vus):
             checks["flock_replay"] = {"ok": False, "detail": "--digests, --prime-commitment and --vus are needed"}
         else:
-            cmd = [a.flock, "replay", "--session", str(session), "--vus", str(a.vus), "--digests", a.digests,
+            # the Flock statement's row length is sigma.txt's K (flock-link builds the K = 1536 chain without --k)
+            k = next(ln.split()[1] for ln in Path(a.sigma).read_text().splitlines() if ln.startswith("k "))
+            cmd = [a.flock, "replay", "--session", str(session), "--vus", str(a.vus), "--k", k, "--digests", a.digests,
                    "--prime-commitment", a.prime_commitment] + (["--json", str(out / "flock_replay.json")] if out else [])
             r = subprocess.run(cmd, capture_output=True, text=True)
             line = next((ln.split("\t", 1)[1] for ln in r.stdout.splitlines() if ln.startswith("REPLAY\t")), "{}")

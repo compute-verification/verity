@@ -492,6 +492,20 @@ def _is_number(v: Any) -> bool:
     return isinstance(v, (int, float)) and not isinstance(v, bool)
 
 
+def non_gemm_subcircuit(fp: Any) -> str | None:
+    """The fingerprint's ``subcircuit`` when it is a bound template other than ``gemm-coordinate`` (``bench.templates``), else
+    ``None``. Such a result has no GEMM target: ``profile`` and ``K`` are null and it reports no native-peak rates (a
+    subcircuit's native N is not modelled in the contract yet); its ``instances`` is the input set's ``ref``."""
+
+    sid = fp.get("subcircuit") if isinstance(fp, Mapping) else None
+    if not isinstance(sid, str):
+        return None
+    from . import census          # data only: the renderer's environment (the steward) has no numpy for bench.templates
+
+    template = sid.split("/", 1)[0]
+    return sid if template in census.SUBCIRCUIT_TEMPLATES and template != "gemm-coordinate" and "/" in sid else None
+
+
 def validate_fingerprint(fp: Any) -> list[str]:
     """Every way ``fp`` fails to be a campaign fingerprint; ``[]`` when it conforms."""
 
@@ -502,6 +516,12 @@ def validate_fingerprint(fp: Any) -> list[str]:
         if field not in fp:
             p.append(f"workload_fingerprint.{field} missing")
     present = {f: fp[f] for f in REQUIRED_FIELDS if f in fp}
+    other = non_gemm_subcircuit(fp)
+    if other is not None:
+        for field in ("profile", "K"):
+            if present.get(field) is not None:
+                p.append(f"{field} must be null for the non-GEMM subcircuit {other} (a GEMM target field), got {present[field]!r}")
+            present.pop(field, None)
 
     if "profile" in present and present["profile"] not in PROFILES:
         p.append(f"profile must be a target of verity.proofs.target, one of {PROFILES} (the campaign target is {PROFILE!r}), got {present['profile']!r}")
@@ -743,6 +763,8 @@ def _check_rates(fp: Any, measurements: Any) -> list[str]:
     reported = {name: values[name] for name in (RATE_PROVED, RATE_NATIVE, OVERHEAD) if values.get(name) is not None}
     if not reported:
         return []
+    if non_gemm_subcircuit(fp) is not None:
+        return [f"{', '.join(reported)}: native-peak rates are GEMM rates; a {non_gemm_subcircuit(fp)} result reports none"]
     profile = fp.get("profile")
     if profile not in PROFILES:
         return []

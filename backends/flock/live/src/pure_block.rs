@@ -60,6 +60,14 @@ pub const PT_LOCAL: usize = 16;
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Layout {
     Chunk(u8),
+    /// `ChunkTail(n)`: rows of n whole chunks and a 512-byte partial chunk (16-bit K = 1024 n + 256: K = 2304 is
+    /// `ChunkTail(4)`, K = 8960 `ChunkTail(17)`). Blocks are `Chunk`'s; block (v, n) holds the partial chunk: its 8
+    /// BLAKE3 blocks at slots 0..8 (CHUNK_START on 0, CHUNK_END on 7, counter n; not the ROOT, the parent tree is) and its
+    /// 16 units at 0..16. Its slots 8..16 and units 16..32 are an unread continuation of the chains. Δ is block-uniform,
+    /// so what differs in that block is public: every slot's flags (a Flags region, the verifier's per block), slot 7 /
+    /// 23's out_lo (CvMid: the partial chunk's chaining value in the verifier's tree) and unit 15's output (AccMid, or
+    /// YMid with the epilogue: the verifier's output word at block n).
+    ChunkTail(u8),
     Fp8,
     /// `sha256/row/v1` leaves: block v is the whole VU; each role is one SHA-256 chain (the verifier's midstate after the
     /// 64-byte prefix block, the row's 64-byte blocks, one constant padding block) of 2^15-bit compressions, then the
@@ -82,6 +90,7 @@ impl Layout {
         match (row_bytes, units, sha) {
             (1536, 48, false) => Layout::Fp8,
             (rb, u, false) if rb % 1024 == 0 && u == 32 * (rb / 1024) && rb / 1024 <= 64 => Layout::Chunk((rb / 1024) as u8),
+            (rb, u, false) if rb % 1024 == 512 && u == 32 * (rb / 1024) + 16 && rb / 1024 < 64 => Layout::ChunkTail((rb / 1024) as u8),
             (3072, 96, true) => Layout::ShaBf16,
             (1536, 48, true) => Layout::ShaFp8,
             (864, 24, false) => Layout::Fp4,
@@ -102,21 +111,35 @@ impl Layout {
     }
     /// Per-slot key / counter constants (the whole VU in one block).
     pub fn per_slot_keys(self) -> bool { matches!(self, Layout::Fp8 | Layout::Fp4) }
-    pub fn row_bytes(self) -> usize { match self { Layout::Chunk(n) => 1024 * n as usize, Layout::ShaBf16 => 3072, Layout::Fp4 | Layout::ShaFp4 => 864, _ => 1536 } }
+    /// One block per (VU, chunk): `Chunk(n)` and `ChunkTail(n)`.
+    pub fn is_chunked(self) -> bool { matches!(self, Layout::Chunk(_) | Layout::ChunkTail(_)) }
+    /// `ChunkTail(n)`'s n: the partial chunk's block within a VU.
+    pub fn tail(self) -> Option<usize> { if let Layout::ChunkTail(n) = self { Some(n as usize) } else { None } }
+    /// BLAKE3 flags of slot j (within a role) of block c of a VU (the Flags region of `ChunkTail`; dummy blocks hash
+    /// whole zero chunks): the partial chunk's 8 blocks, then KEYED_HASH alone on the unread continuation.
+    pub fn slot_flags(self, c: usize, real: bool, j: usize) -> u32 {
+        match self.tail() {
+            Some(n) if real && c == n => if j < 8 { chunk_flags(j, 8) } else { 16 },
+            _ => chunk_flags(j, 16),
+        }
+    }
+    pub fn row_bytes(self) -> usize { match self { Layout::Chunk(n) => 1024 * n as usize, Layout::ChunkTail(n) => 1024 * n as usize + 512, Layout::ShaBf16 => 3072, Layout::Fp4 | Layout::ShaFp4 => 864, _ => 1536 } }
     /// log2 of a compression sub-block: BLAKE3 14, SHA-256 15.
     pub fn comp_log(self) -> usize { if self.is_sha() { 15 } else { 14 } }
-    pub fn k_log(self) -> usize { match self { Layout::Chunk(_) => 20, Layout::Fp8 => 21, Layout::ShaBf16 => 22, Layout::ShaFp8 => 21, Layout::Fp4 => 20, Layout::ShaFp4 => 21 } }
-    pub fn comp_slots(self) -> usize { match self { Layout::Chunk(_) => 32, Layout::Fp8 => 48, Layout::ShaBf16 => 98, Layout::ShaFp8 => 50, Layout::Fp4 | Layout::ShaFp4 => 28 } }
+    pub fn k_log(self) -> usize { match self { Layout::Chunk(_) | Layout::ChunkTail(_) => 20, Layout::Fp8 => 21, Layout::ShaBf16 => 22, Layout::ShaFp8 => 21, Layout::Fp4 => 20, Layout::ShaFp4 => 21 } }
+    pub fn comp_slots(self) -> usize { match self { Layout::Chunk(_) | Layout::ChunkTail(_) => 32, Layout::Fp8 => 48, Layout::ShaBf16 => 98, Layout::ShaFp8 => 50, Layout::Fp4 | Layout::ShaFp4 => 28 } }
     pub fn per_role(self) -> usize { self.comp_slots() / 2 }
-    pub fn units(self) -> usize { match self { Layout::Chunk(_) => 32, Layout::Fp8 | Layout::ShaFp8 => 48, Layout::ShaBf16 => 96, Layout::Fp4 | Layout::ShaFp4 => 24 } }
+    pub fn units(self) -> usize { match self { Layout::Chunk(_) | Layout::ChunkTail(_) => 32, Layout::Fp8 | Layout::ShaFp8 => 48, Layout::ShaBf16 => 96, Layout::Fp4 | Layout::ShaFp4 => 24 } }
     /// The first unit's 2^13 position: right after the compressions.
     pub fn unit_pos0(self) -> usize { self.comp_slots() << (self.comp_log() - 13) }
-    pub fn blocks_per_vu(self) -> usize { match self { Layout::Chunk(n) => n as usize, _ => 1 } }
+    pub fn blocks_per_vu(self) -> usize { match self { Layout::Chunk(n) => n as usize, Layout::ChunkTail(n) => n as usize + 1, _ => 1 } }
     /// Compressions per chunk of a block, in order (SHA: one chain per role, its padding block included).
-    pub fn chunks(self) -> &'static [usize] { match self { Layout::Chunk(_) => &[16], Layout::Fp8 => &[16, 8], Layout::ShaBf16 => &[49], Layout::ShaFp8 => &[25], Layout::Fp4 | Layout::ShaFp4 => &[14] } }
+    pub fn chunks(self) -> &'static [usize] { match self { Layout::Chunk(_) | Layout::ChunkTail(_) => &[16], Layout::Fp8 => &[16, 8], Layout::ShaBf16 => &[49], Layout::ShaFp8 => &[25], Layout::Fp4 | Layout::ShaFp4 => &[14] } }
     /// Chaining values per block the prover publishes (x chunks, then W chunks); SHA publishes none (the digests are the
     /// verifier's).
-    pub fn n_cv(self) -> usize { if self.is_sha() || self.is_fp4() { 0 } else { 2 * self.chunks().len() } }
+    pub fn n_cv(self) -> usize {
+        if self.is_sha() || self.is_fp4() { 0 } else if self.tail().is_some() { 4 } else { 2 * self.chunks().len() }
+    }
     /// BLAKE3 block_len of block j of a chunk of nb blocks (the fp4 row's last block holds 32 bytes).
     pub fn blen(self, j: usize, nb: usize) -> u32 { if self.is_fp4() && j + 1 == nb { 32 } else { 64 } }
     /// BLAKE3 flags of block j of a chunk of nb blocks (the fp4 row is a single chunk: its last block is the ROOT).
@@ -364,8 +387,8 @@ pub const MAX_M: usize = 35;
 /// - NV5: the y leaf's schema and width are the relation's (`y_leaf`), and every y word fits it;
 /// - NV1: every VU's circuit output word is the one its committed y word opens (the y root is built from y).
 pub fn admit(lay: Layout, net: &UnitNet, inst: &Instances) -> Result<(), String> {
-    if lay == Layout::Chunk(1) {
-        return Err("CN3: a 1024-byte row is one BLAKE3 chunk, whose last block is the ROOT, and Chunk(n) never sets ROOT".into());
+    if lay == Layout::Chunk(1) || lay == Layout::ChunkTail(0) {
+        return Err(format!("CN3: a {}-byte row is one BLAKE3 chunk, whose last block is the ROOT, and {lay:?} never sets ROOT", lay.row_bytes()));
     }
     let blocks = lay.blocks_per_vu() * inst.vus;
     if lay.k_log() + log2ceil(blocks).max(3) > MAX_M {
@@ -407,6 +430,14 @@ pub enum Region {
     AccIn,
     AccOut,
     Y,
+    /// `ChunkTail`: every slot's flags word (the verifier's per block).
+    Flags,
+    /// `ChunkTail`: slot 7 / 23's out_lo (the partial chunk's chaining value at block n; prover-committed).
+    CvMid,
+    /// `ChunkTail`: unit 15's c_out (the verifier's output word at block n; prover-committed elsewhere).
+    AccMid,
+    /// `ChunkTail`, epilogue: unit 15's y16 (likewise).
+    YMid,
 }
 
 /// One public region: the in-block bits it fixes (`fixed` over `mask`) and its free in-block bits, LSB first.
@@ -429,6 +460,10 @@ fn shape(region: Region, net: &UnitNet, lay: Layout) -> RegionShape {
         Region::AccIn => (bits(0, 5), (1 << 9) | ((lay.unit_pos0() as u32) << UNIT_LOG)),
         Region::AccOut => (bits(0, 5), ((net.out_cols[0] as u32) << 7) | (((lay.unit_pos0() + lay.units() - 1) as u32) << UNIT_LOG)),
         Region::Y => (bits(0, 4), ((net.out_cols[1] as u32) << 7) | (((lay.unit_pos0() + lay.units() - 1) as u32) << UNIT_LOG)),
+        Region::Flags => ([bits(0, 5), bits(14, 5)].concat(), b3::FLAGS_BASE as u32),
+        Region::CvMid => ([bits(0, 8), vec![18]].concat(), (1 << 8) | (0x7 << 14)),
+        Region::AccMid => (bits(0, 5), ((net.out_cols[0] as u32) << 7) | (((lay.unit_pos0() + 15) as u32) << UNIT_LOG)),
+        Region::YMid => (bits(0, 4), ((net.out_cols[1] as u32) << 7) | (((lay.unit_pos0() + 15) as u32) << UNIT_LOG)),
     };
     let mask = ((1u32 << lay.k_log()) - 1) & !free.iter().fold(0u32, |m, &b| m | (1 << b));
     assert_eq!(fixed & !mask, 0);
@@ -443,23 +478,29 @@ pub struct Publics {
     pub cv: Vec<Vec<[u32; 8]>>,
     pub y16: Vec<u32>,
     pub acc: Vec<u32>,
+    /// `ChunkTail` only (else empty): unit 15's (y16, c_out) per block, 8 more bytes per block.
+    pub mid: Vec<(u32, u32)>,
 }
 
 impl Publics {
     pub fn bytes(&self) -> Vec<u8> {
         let mut v = Vec::new();
-        for ((c, y), a) in self.cv.iter().zip(&self.y16).zip(&self.acc) {
+        for (i, ((c, y), a)) in self.cv.iter().zip(&self.y16).zip(&self.acc).enumerate() {
             for w in c.iter().flatten() {
                 v.extend_from_slice(&w.to_le_bytes());
             }
             v.extend_from_slice(&y.to_le_bytes());
             v.extend_from_slice(&a.to_le_bytes());
+            if let Some(&(my, ma)) = self.mid.get(i) {
+                v.extend_from_slice(&my.to_le_bytes());
+                v.extend_from_slice(&ma.to_le_bytes());
+            }
         }
         v
     }
 
-    pub fn parse(b: &[u8], blocks: usize, n_cv: usize) -> Result<Self, String> {
-        let per = 8 * n_cv + 2;
+    pub fn parse(b: &[u8], blocks: usize, n_cv: usize, mid: bool) -> Result<Self, String> {
+        let per = 8 * n_cv + 2 + 2 * mid as usize;
         if b.len() != 4 * per * blocks {
             return Err(format!("C4: {} bytes of publics, want {}", b.len(), 4 * per * blocks));
         }
@@ -467,7 +508,8 @@ impl Publics {
         let cv = (0..blocks).map(|i| (0..n_cv).map(|r| from_fn(|k| w[per * i + 8 * r + k])).collect()).collect();
         let y16 = (0..blocks).map(|i| w[per * i + 8 * n_cv]).collect();
         let acc = (0..blocks).map(|i| w[per * i + 8 * n_cv + 1]).collect();
-        Ok(Publics { cv, y16, acc })
+        let mid = if mid { (0..blocks).map(|i| (w[per * i + 8 * n_cv + 2], w[per * i + 8 * n_cv + 3])).collect() } else { Vec::new() };
+        Ok(Publics { cv, y16, acc, mid })
     }
 }
 
@@ -648,7 +690,9 @@ fn delta(net: &UnitNet, lay: Layout, keys: &[[u32; 8]; 2]) -> (Vec<(u32, u32)>, 
             }
         }
         constant(&mut da, &g, b3::BLEN_BASE, lay.blen(j, nb));
-        constant(&mut da, &g, b3::FLAGS_BASE, lay.flags(j, nb));
+        if lay.tail().is_none() {
+            constant(&mut da, &g, b3::FLAGS_BASE, lay.flags(j, nb));
+        }
         if j + 1 == nb {
             for w in lay.last_data_words()..16 {
                 constant(&mut da, &g, b3::M_BASE + 32 * w, 0);
@@ -715,6 +759,9 @@ pub struct PureStmt {
     /// A dummy block's chunk chaining values (x chunks, then W chunks).
     pub dummy_cv: Vec<[u32; 8]>,
     pub dummy_unit: (u32, u32),
+    /// `ChunkTail`: per real VU, the accumulator into units 16..32 of its partial-chunk block (the continuation's units
+    /// read zero operands; each one's input is the previous one's evaluated output).
+    tail_cin: OnceLock<Vec<[u32; 16]>>,
 }
 
 impl PureStmt {
@@ -730,10 +777,13 @@ impl PureStmt {
             Layout::ShaBf16 | Layout::ShaFp8 | Layout::ShaFp4 | Layout::Fp4 => {
                 vec![Region::Digest(0), Region::Digest(1), if net.epilogue() { Region::Y } else { Region::AccOut }]
             }
-            Layout::Chunk(_) => {
+            Layout::Chunk(_) | Layout::ChunkTail(_) => {
                 let mut v = vec![Region::Key, Region::Counter, Region::Cv, Region::AccIn, Region::AccOut];
                 if net.epilogue() {
                     v.push(Region::Y);
+                }
+                if lay.tail().is_some() {
+                    v.extend([Region::Flags, Region::CvMid, if net.epilogue() { Region::YMid } else { Region::AccMid }]);
                 }
                 v
             }
@@ -759,7 +809,7 @@ impl PureStmt {
             .flat_map(|role| {
                 let keys = keys;
                 lay.chunks().iter().enumerate().map(move |(c, &nb)| {
-                    let (mut cv, ctr) = match lay { Layout::Chunk(_) => ([0u32; 8], 0u64), _ => (keys[role], c as u64) };
+                    let (mut cv, ctr) = if lay.is_chunked() { ([0u32; 8], 0u64) } else { (keys[role], c as u64) };
                     for j in 0..nb {
                         cv = blake3_compress(&cv, &[0u32; 16], ctr, lay.blen(j, nb), lay.flags(j, nb))[..8].try_into().unwrap();
                     }
@@ -767,6 +817,16 @@ impl PureStmt {
                 })
             })
             .collect() };
+        // ChunkTail: a dummy block's slot 7 / 23 chaining values follow
+        let dummy_cv = if lay.tail().is_some() {
+            let mut cv = [0u32; 8];
+            for j in 0..8 {
+                cv = blake3_compress(&cv, &[0u32; 16], 0, 64, chunk_flags(j, 16))[..8].try_into().unwrap();
+            }
+            [dummy_cv.clone(), vec![cv, cv]].concat()
+        } else {
+            dummy_cv
+        };
         let (z, _, _) = net.eval64(|_| 0);
         let word = |col: usize, n: usize| (0..n).fold(0u32, |w, t| w | (((z[col * 128 + t] & 1) as u32) << t));
         let dummy_unit = (word(net.out_cols[0], 32), if net.epilogue() { word(net.out_cols[1], 16) } else { 0 });
@@ -776,6 +836,9 @@ impl PureStmt {
         h.update(net.sha256);
         for x in [vus, blocks_real, nbl, m, kl, UNIT_LOG, slots, units, p0] {
             h.update((x as u64).to_le_bytes());
+        }
+        if let Layout::ChunkTail(n) = lay {
+            h.update(format!("layout chunk-tail: block = (VU, chunk), {n} whole chunks and a 512-byte partial chunk per VU, committed cross-chunk accumulators, per-block flags, partial chunk's chaining value at slot 7 and output at unit 15").as_bytes());
         }
         if let Layout::Chunk(n) = lay {
             if n != 3 {
@@ -820,7 +883,7 @@ impl PureStmt {
         let (ua, ub): (&'static SparseBinaryMatrix, &'static SparseBinaryMatrix) = (Box::leak(Box::new(ua)), Box::leak(Box::new(ub)));
         let unit = SparseMatrixCircuit::new(ua, ub);
         PureStmt { lay, net, vus, blocks_real, nbl, m, m_pts: PT_LOCAL + nbl, regions, circuit: PureCircuit { lay, unit, da, db }, r1cs, digest,
-                   keys, dummy_cv, dummy_unit }
+                   keys, dummy_cv, dummy_unit, tail_cin: OnceLock::new() }
     }
 
     pub fn blocks(&self) -> usize {
@@ -842,12 +905,13 @@ impl PureStmt {
                 let real = b < self.blocks_real;
                 let mut out = Vec::with_capacity(lay.comp_slots());
                 let mut cvs = Vec::with_capacity(lay.n_cv());
+                let mut mids = Vec::new();
                 for role in 0..2 {
                     for (c, &nb) in lay.chunks().iter().enumerate() {
                         let (v, ci) = self.vu_chunk(b, c);
                         let (mut cv, ctr) = match (lay, real) {
                             (_, true) => (self.keys[role], ci as u64),
-                            (Layout::Chunk(_), false) => ([0; 8], 0),
+                            (l, false) if l.is_chunked() => ([0; 8], 0),
                             (_, false) => (self.keys[role], c as u64),
                         };
                         for j in 0..nb {
@@ -858,15 +922,20 @@ impl PureStmt {
                             } else {
                                 [0; 16]
                             };
-                            let (f, bl) = (lay.flags(j, nb), lay.blen(j, nb));
+                            let f = if lay.tail().is_some() { lay.slot_flags(b % lay.blocks_per_vu(), real, j) } else { lay.flags(j, nb) };
+                            let bl = lay.blen(j, nb);
                             out.push((cv, msg, ctr, bl, f));
                             cv = blake3_compress(&cv, &msg, ctr, bl, f)[..8].try_into().unwrap();
+                            if lay.tail().is_some() && j == 7 {
+                                mids.push(cv);
+                            }
                         }
                         if lay.n_cv() > 0 {
                             cvs.push(cv);
                         }
                     }
                 }
+                cvs.extend(mids);
                 (out, cvs)
             })
             .collect();
@@ -964,7 +1033,43 @@ impl PureStmt {
         }
         let bpv = self.lay.blocks_per_vu();
         let (v, j) = (b / bpv, (b % bpv) * self.lay.units() + u);
-        if j == 0 { 0 } else { inst.acc(v, j - 1) }
+        if j == 0 {
+            0
+        } else if j - 1 < inst.units {
+            inst.acc(v, j - 1)
+        } else {
+            self.tail_chain(inst)[v][u - 16]
+        }
+    }
+
+    /// `ChunkTail`: the accumulator into units 16..32 of each real VU's partial-chunk block, evaluated (zero operands).
+    fn tail_chain(&self, inst: &Instances) -> &Vec<[u32; 16]> {
+        self.tail_cin.get_or_init(|| {
+            let col = self.net.out_cols[0];
+            (0..inst.vus.div_ceil(64))
+                .into_par_iter()
+                .flat_map_iter(|g| {
+                    let vs: Vec<usize> = (64 * g..(64 * g + 64).min(inst.vus)).collect();
+                    let mut t = vec![[0u32; 16]; vs.len()];
+                    for (l, &v) in vs.iter().enumerate() {
+                        t[l][0] = inst.acc(v, inst.units - 1);
+                    }
+                    for k in 1..16 {
+                        let (z, _, _) = self.net.eval64(|bit| {
+                            if (512..544).contains(&bit) {
+                                t.iter().enumerate().fold(0u64, |x, (l, c)| x | ((((c[k - 1] >> (bit - 512)) & 1) as u64) << l))
+                            } else {
+                                0
+                            }
+                        });
+                        for (l, c) in t.iter_mut().enumerate() {
+                            c[k] = (0..32).fold(0u32, |w, s| w | ((((z[col * 128 + s] >> l) & 1) as u32) << s));
+                        }
+                    }
+                    t
+                })
+                .collect()
+        })
     }
 
     /// `(z, a, b, z_lincheck)` of the block witness: compressions, then units evaluated from `inputs(b, u)`.
@@ -1065,14 +1170,31 @@ impl PureStmt {
             Region::AccIn => (if real && c > 0 { p.acc[b - 1] } else { 0 }).to_le_bytes().to_vec(),
             Region::AccOut => (match (self.lay, real) {
                 (_, false) => self.dummy_unit.0,
-                (Layout::Chunk(_), true) => p.acc[b],
+                (l, true) if l.is_chunked() => p.acc[b],
                 (_, true) => inst.out_word(v),
             })
             .to_le_bytes()
             .to_vec(),
             Region::Y => {
-                let y = if !real { self.dummy_unit.1 } else if c + 1 == self.lay.blocks_per_vu() { inst.out_word(v) } else { p.y16[b] };
+                let y = if !real {
+                    self.dummy_unit.1
+                } else if c + 1 == self.lay.blocks_per_vu() && self.lay.tail().is_none() {
+                    inst.out_word(v)
+                } else {
+                    p.y16[b]
+                };
                 (y as u16).to_le_bytes().to_vec()
+            }
+            Region::Flags => le(&(0..COMP_SLOTS).map(|s| self.lay.slot_flags(c, real, s % 16)).collect::<Vec<u32>>()),
+            Region::CvMid => {
+                let cv = |r: usize| if real { p.cv[b][2 + r] } else { self.dummy_cv[2 + r] };
+                [le(&cv(0)), le(&cv(1))].concat()
+            }
+            Region::AccMid | Region::YMid => {
+                let at_tail = real && Some(c) == self.lay.tail();
+                let (dummy, mine) = if reg.region == Region::AccMid { (self.dummy_unit.0, p.mid.get(b).map_or(0, |m| m.1)) } else { (self.dummy_unit.1, p.mid.get(b).map_or(0, |m| m.0)) };
+                let w = if !real { dummy } else if at_tail { inst.out_word(v) } else { mine };
+                if reg.region == Region::AccMid { w.to_le_bytes().to_vec() } else { (w as u16).to_le_bytes().to_vec() }
             }
         }
     }

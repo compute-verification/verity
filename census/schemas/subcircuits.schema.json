@@ -177,6 +177,20 @@
                 }
               }
             },
+            "variable_ranges": {
+              "type": "object",
+              "description": "the range a per-input variable (the template's work_model.variables) takes over the workloads the subcircuit serves",
+              "additionalProperties": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["min", "max", "source"],
+                "properties": {
+                  "min": {"type": "integer"},
+                  "max": {"type": "integer"},
+                  "source": {"type": "string", "minLength": 1}
+                }
+              }
+            },
             "fidelity_notes": {
               "type": "array",
               "description": "known gaps between the subcircuit and what production runs",
@@ -240,6 +254,47 @@
           }
         }
       },
+      "verifier_evaluated": {
+        "type": "object",
+        "description": "parts of the template a proof backend leaves to the verifier's native evaluation (not proven): what, how much of the template, whether the headline counts a cell as covering it (with a footnote) and on whose ruling; views --preview-count-omitted counts those not counted",
+        "additionalProperties": false,
+        "required": ["parts", "share", "counted", "ruling", "sources"],
+        "properties": {
+          "parts": {"type": "string", "minLength": 1},
+          "share": {"type": "string", "minLength": 1},
+          "counted": {"type": "boolean"},
+          "ruling": {"type": "string", "minLength": 1},
+          "sources": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["label"],
+              "properties": {"label": {"type": "string", "minLength": 1}, "href": {"type": "string", "format": "uri"}}
+            }
+          }
+        }
+      },
+      "commitment_opening": {
+        "type": "object",
+        "description": "the template is a commitment opening, not arithmetic a proof backend proves: no backend cell covers it, and the headline lists it uncovered with this reason",
+        "additionalProperties": false,
+        "required": ["note", "sources"],
+        "properties": {
+          "note": {"type": "string", "minLength": 1},
+          "sources": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["label"],
+              "properties": {"label": {"type": "string", "minLength": 1}, "href": {"type": "string", "format": "uri"}}
+            }
+          }
+        }
+      },
       "ir_definitions": {
         "type": "array",
         "minItems": 1,
@@ -299,9 +354,49 @@
           "bytes_per_input": {
             "type": "string",
             "pattern": "^[A-Za-z0-9_ +*/()-]+$",
-            "description": "bytes read and written per input, an integer expression over the parameters: the memory-bandwidth work model"
+            "description": "bytes read and written per input, an integer expression over the parameters (and variables; BITS is the bit width of the bound datatype): the memory-bandwidth work model"
+          },
+          "port_datatypes": {
+            "type": "object",
+            "description": "the datatype of each port the bytes count (census/datatypes.json ids, or f32 / i32 for kernel-internal words)",
+            "additionalProperties": {"type": "string", "minLength": 1}
+          },
+          "variable_bounds": {
+            "type": "object",
+            "description": "for a variable that varies per input, its bounds from the parameters of the verification unit it serves in: the VU parameter named by `by` selects a case, whose min and max are integer expressions over the VU parameters",
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["by", "cases", "source"],
+              "properties": {
+                "by": {"type": "string"},
+                "cases": {
+                  "type": "object",
+                  "minProperties": 1,
+                  "additionalProperties": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["min", "max"],
+                    "properties": {
+                      "min": {"type": "string", "pattern": "^[A-Za-z0-9_ +*/()-]+$"},
+                      "max": {"type": "string", "pattern": "^[A-Za-z0-9_ +*/()-]+$"}
+                    }
+                  }
+                },
+                "source": {"type": "string", "minLength": 1}
+              }
+            }
           },
           "bytes_basis": {
+            "type": "string",
+            "minLength": 1
+          },
+          "bytes_per_input_cached": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_ +*/()-]+$",
+            "description": "bytes per input with per-row weights and tables served from cache (activations only): a preview basis"
+          },
+          "bytes_cached_basis": {
             "type": "string",
             "minLength": 1
           },

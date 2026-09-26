@@ -25,6 +25,10 @@
 //!   root_B and the committed public words), so [`Server::finish`] re-verifies the Flock side offline.
 
 pub mod chunk;
+pub mod ir_block;
+pub mod ir_frame;
+pub mod ir_sampling;
+pub mod ir_tail;
 pub mod pure_block;
 pub mod vllm_block;
 #[cfg(feature = "gpu")]

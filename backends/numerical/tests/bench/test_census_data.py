@@ -143,7 +143,10 @@ def test_every_subcircuit_is_bound_to_a_registry_instruction() -> None:
         assert s.display == f"GemmCoordinate<{s.parameters.K}> · {sem.split('-')[0]} {sem.split('-')[1]} · {census.DATATYPES[ins.a_dtype].display}"
     untargeted = {s.id for s in gemm if getattr(s, "legacy_target", None) is None}
     real_k = {f"gemm-coordinate/k{k}/{sem}" for k in (2048, 8192) for sem in ("sm80-mma-bf16", "sm90-wgmma-bf16", "sm89-mma-e4m3", "sm90-wgmma-e4m3")}
-    assert untargeted == {"gemm-coordinate/k1536/sm90-wgmma-bf16"} | real_k              # the real-K statements' subcircuits
+    served = {f"gemm-coordinate/k{m['subcircuit_parameters']['K']}/{'-'.join(x for x in m['subcircuit_parameters']['semantics'].split('.') if not re.fullmatch(r'm[0-9]+n[0-9]+k[0-9]+', x))}"
+              for w in census.raw("workloads") for m in w["template_mix"] if m["subcircuit_template"] == "gemm-coordinate"}
+    assert untargeted == ({"gemm-coordinate/k1536/sm90-wgmma-bf16"} | real_k | served) - {s.id for s in gemm if getattr(s, "legacy_target", None)}
+    assert served <= {s.id for s in gemm}                                                  # every served workload's GEMM is bound
     assert len(gemm) == len(TARGETS) + len(untargeted)
     wgmma = census.SUBCIRCUITS["gemm-coordinate/k1536/sm90-wgmma-bf16"]
     assert INSTRUCTIONS[wgmma.parameters.semantics].status == "pinned" and wgmma.fidelity_notes == []

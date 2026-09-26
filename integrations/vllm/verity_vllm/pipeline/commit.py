@@ -1654,7 +1654,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 from verity_vllm.pipeline import admission_bound as ADM
                 adm = ADM.admission(asz, reqs, host_cap, retain=str(getattr(com, "retain", "host")),
                                     max_num_batched_tokens=eng.kwargs.get("max_num_batched_tokens"), lag=admission_lag(wl),
-                                    envelope_bound_bytes=int(asz["retained_bytes_bound"]))
+                                    envelope_bound_bytes=int(asz["retained_bytes_bound"]), resident=ADM.committer_resident(wl, host_cap, pairs=args.pairs, replay_workers=args.replay_workers))
                 adm["override"] = os.environ.get("VERITY_ADMIT_OVER_BOUND") == "1"
                 adm["host_cap_source"] = host_cap_src
                 adm["domain"] = "--retain host (the whole run's raw bytes pinned on host); a non-host retention is recorded, never refused"

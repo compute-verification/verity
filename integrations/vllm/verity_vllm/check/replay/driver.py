@@ -200,8 +200,7 @@ def _parallel_replay(fn: Callable[[dict], tuple[dict, dict, float]], picked: lis
     joins.  The record carries what was frozen (`evaluator.fork`)."""
     global _FORK_FN, _FORK_VUS
     import gc
-    import multiprocessing as mp
-    ctx = mp.get_context("fork")
+    from verity_vllm.check.replay.fork import fork_pool
     _FORK_FN, _FORK_VUS = fn, picked
     _FORK_STATS.clear()
     _FORK_STATS.update({"gc_freeze": bool(FORK_GC_FREEZE), "workers": int(workers), "picked": len(picked)})
@@ -216,7 +215,7 @@ def _parallel_replay(fn: Callable[[dict], tuple[dict, dict, float]], picked: lis
         print(f"[replay] fork gc.freeze={'on' if frozen else 'OFF'}: {workers} workers over {len(picked)} VUs"
               + (f", {_FORK_STATS['gc_frozen_objects']} objects frozen ({_FORK_STATS['gc_collected']} collected) before the fork" if frozen else
                  " (VERITY_REPLAY_FORK_GC_FREEZE=0: the children may copy the parent's C2 heap on write, F-r17-24 (b))"), flush=True)
-        with ctx.Pool(processes=workers) as pool:
+        with fork_pool(workers) as pool:
             res = pool.map_async(_fork_worker, range(len(picked)), chunksize=max(1, len(picked) // (workers * 8)))
             out = res.get(timeout=max(300.0, 3.0 * len(picked)))
         return out

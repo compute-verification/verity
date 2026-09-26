@@ -543,6 +543,8 @@ if triton is not None:
         if hi > lo:
             u = pb * BLOCK + tl.arange(0, BLOCK)
             m = u < units
+            # 64-bit offsets: units * ncols * 6 passes 2^31 from ~358M committed unit cells (K = 2048 at 4,096 VUs)
+            u = u.to(tl.int64)
             vb = (u * ncols + idx) * 6
             v0, v1, v2, v3, v4, v5 = load6(v_ptr, vb, m)
             for t in range(lo, hi):

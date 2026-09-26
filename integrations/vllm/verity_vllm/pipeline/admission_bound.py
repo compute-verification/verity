@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -170,22 +171,38 @@ def predicted_pool_bytes(raw: int, hidden: int, *, retain: str, levels_factor: f
     return 0, f"per-step blocks, retain {retain}: no raw bytes copied to host"
 
 
+def committer_resident(workload: dict[str, Any], host_cap_bytes: int | None, *, pairs: int = 1, replay_workers: int | None = None) -> dict[str, Any]:
+    """What the Commit holds beside the pinned pool at its peak, from the row planner's commit stage (`telemetry.admission.predict`):
+    the C2 Programs and match oracle, the leaf digests, the binding index, the forked replay workers, the serving base and the margins.
+    #23 B64 Llama: pool 183,694 MiB + resident 122,745 MiB; the pool alone fit the 239,372 MiB limit and the run OOM'd at it."""
+    from verity_vllm.pipeline.telemetry import admission as plan
+    cfg = plan.row_config_from_workload(workload, pairs=max(1, int(pairs)), replay_workers=replay_workers, host_limit_bytes=host_cap_bytes, stages="commit")
+    cfg.host_cpus = os.cpu_count() or cfg.host_cpus
+    commit = plan.predict(cfg)["commit"]
+    live = dict(commit["live_at_peak"])
+    pool = int(commit["pinned_pool"]["bytes"]) if live.pop("commit.pinned_pool", None) is not None else 0
+    return {"bytes": int(commit["reserved_bytes"]) - pool, "peak_point": commit["peak_point"], "live_at_peak_mib": live, "margin_mib": commit["margin"],
+            "rule": "row planner commit stage (telemetry.admission.predict) reserved bytes minus its pinned-pool term"}
+
+
 def admission(sizing: dict[str, Any], requests: list[dict[str, Any]], host_cap_bytes: int | None, *, retain: str = "host",
               max_num_batched_tokens: int | None = None, lag: int = 1, levels_factor: float = LEVELS_FACTOR,
               envelope_bound_bytes: int | None = None, windowed: bool = True, bounded: bool = False,
-              retain_exclude: set[str] | frozenset[str] | None = None) -> dict[str, Any]:
+              retain_exclude: set[str] | frozenset[str] | None = None, resident: dict[str, Any] | None = None) -> dict[str, Any]:
     """The F-dA-15 verdict for one Commit launch: predicted = the pinned pool the run allocates (`predicted_pool_bytes`, by staging path
-    and retention) against the container limit.  The REFUSAL domain is unchanged (R17-7.3 / coord M-0157 (2): `--retain host`, unbounded);
+    and retention) + what the Commit holds beside it at its peak (`resident`, from `committer_resident`) against the container limit.  The REFUSAL domain is unchanged (R17-7.3 / coord M-0157 (2): `--retain host`, unbounded);
     under another retention the pool is now PREDICTED and named (a non-host retention on the windowed path allocates it anyway -- the R18
     #60 `--retain none` 112 GiB datum), recorded as `would_exceed_by_bytes`, never refused here.  `admitted` False names the excess; the
     envelope bound is carried beside it for the record."""
     sched = scheduled_step_bytes(sizing, requests, max_num_batched_tokens=max_num_batched_tokens, lag=lag)
     raw = int(sched["total_bytes"])
     hidden = int(sched["composition"]["hidden_bytes"])
-    predicted, pool_rule = predicted_pool_bytes(raw, hidden, retain=retain, levels_factor=levels_factor, windowed=windowed, bounded=bounded,
-                                                retain_exclude=retain_exclude)
+    pool, pool_rule = predicted_pool_bytes(raw, hidden, retain=retain, levels_factor=levels_factor, windowed=windowed, bounded=bounded,
+                                           retain_exclude=retain_exclude)
+    predicted = pool + int((resident or {}).get("bytes") or 0)
     rec = {"schema": SCHEMA, "retain": retain, "domain": "--retain host: the whole run's raw bytes pinned on host (a non-host retention is recorded, never refused)",
-           "scheduled_raw_bytes": raw, "scheduled_hidden_bytes": hidden, "levels_factor": levels_factor, "predicted_host_bytes": predicted, "pool_rule": pool_rule,
+           "scheduled_raw_bytes": raw, "scheduled_hidden_bytes": hidden, "levels_factor": levels_factor, "predicted_host_bytes": predicted, "pool_bytes": pool, "resident": resident,
+           "pool_rule": pool_rule,
            "staging": {"windowed": bool(windowed), "bounded": bool(bounded), "retain_exclude": sorted(retain_exclude or ())},
            "host_cap_bytes": host_cap_bytes, "envelope_retained_bytes_bound": envelope_bound_bytes,
            "envelope_predicted_host_bytes": (int(envelope_bound_bytes * levels_factor) if envelope_bound_bytes else None),
@@ -200,13 +217,15 @@ def admission(sizing: dict[str, Any], requests: list[dict[str, Any]], host_cap_b
     elif host_cap_bytes is None:
         rec.update(admitted=True, why="no container memory limit visible (memory.max unset): nothing to compare against; the scheduled bound is on the record")
     elif predicted > host_cap_bytes:
-        rec.update(admitted=False, why=(f"F-dA-15: scheduled host retention {predicted >> 20} MiB (raw {raw >> 20} MiB x{levels_factor} for levels) exceeds the "
+        rec.update(admitted=False, why=(f"F-dA-15: predicted host {predicted >> 20} MiB (pool: raw {raw >> 20} MiB x{levels_factor} for levels = {pool >> 20} MiB; "
+                                        f"resident beside it {(predicted - pool) >> 20} MiB) exceeds the "
                                         f"container memory limit {host_cap_bytes >> 20} MiB by {(predicted - host_cap_bytes) >> 20} MiB -- not launched unchanged "
                                         f"(R17-7.3); the change that admits it is a larger container or a non-host retention, never a smaller check"))
     else:
         envp = rec["envelope_predicted_host_bytes"]
         env_note = (f"envelope bound {envp >> 20} MiB was {'over' if envp > host_cap_bytes else 'under'} it" if envp else "no envelope bound on this record")
-        rec.update(admitted=True, why=f"F-dA-15: scheduled host retention {predicted >> 20} MiB (raw {raw >> 20} MiB x{levels_factor}) fits the container limit "
+        rec.update(admitted=True, why=f"F-dA-15: predicted host {predicted >> 20} MiB (pool {pool >> 20} MiB = raw {raw >> 20} MiB x{levels_factor}; resident "
+                                      f"{(predicted - pool) >> 20} MiB) fits the container limit "
                                       f"{host_cap_bytes >> 20} MiB with {(host_cap_bytes - predicted) >> 20} MiB to spare ({env_note})")
     return rec
 

@@ -1,11 +1,15 @@
 """Route (a) cell: A-GKR (this backend, the prime side with the sigma link, ``gpu/link.py``) and Flock (the binary side,
 ``backends/flock/live``: ``flock-link cell-prove``) in ONE live session per batch, on the operands-committed statement
-``bf16-ampere+blake3`` (row leaves ``blake3-keyed/row/v2``, the leaf Flock proves).
+``bf16-ampere+blake3`` (row leaves ``blake3-keyed/row/v2``, the leaf Flock proves) at K = 1536, and ``bf16-ampere-k<K>+blake3``
+at vLLM's reduction lengths (the same circuit files, ``steps`` = K / 16; Flock's row of 2K bytes is K / 512 BLAKE3 chunks).
 
-    python tools/cell.py circuits --out DIR        the linked statement's circuit files (torch-free; pins.txt's generator)
-    python tools/cell.py statement --cell CELL --instances DIR [--vus N]
+    python tools/cell.py circuits --out DIR [--k K]   the linked statement's circuit files (torch-free; pins.txt's generator)
+    python tools/cell.py statement --cell CELL (--instances DIR | --input-set SET) [--vus N] [--verifier-side]
         CELL/statement/ (circuit files, public.bin, commitment.txt, sigma.txt), CELL/leaf_digests.bin (x rows then W
-        columns, 32 bytes each: what the Flock verifier is configured with), CELL/operands.bin (the prover's rows)
+        columns, 32 bytes each: what the Flock verifier is configured with), CELL/operands.bin (the prover's rows).
+        --instances: the frozen bench-instances/v1 (K = 1536, tiled past its 4,096 VUs); --input-set: VUs [0, N) of an
+        input set (``verity_numerical.bench.input_sets``, never recycled), its K, its identity bound as B-Ligero binds it.
+        --verifier-side: only leaf_digests.bin and cell.json (the verifier's own statement from the set: no torch, no sigma)
     python tools/cell.py prove --cell CELL --flock BIN --verifier HOST:PORT [--sessions 3] [--warmup 1] [--rust VB]
                                [--prime-coins live|fs]
         per session: the prime prover runs to its link, hands root_F to ``flock-link cell-prove`` (which commits it with
@@ -17,6 +21,14 @@
 
 A session's evidence is the verifier's record, not these files: ``tools/cell_gate.py`` admits it (E1) and writes the
 link.txt the prime verifier checks the proof against.
+
+The bench.cell driver (``verity_numerical.bench.drivers.a_route_a``, pod script ``backends/gkr/cell.sh``) adds:
+
+    python tools/cell.py finish --points DIR... --verifier HOST:PORT [--operator LANE] --out result.json
+        the plateau of a sweep (each DIR holds one size's result.json, times of its loopback warm-up and its guard verdict):
+        the plateau point's envelope with the sweep, protocol, loopback and commit blocks and the verifier's placement
+    python tools/cell.py register --prover-run DIR [--verifier-run DIR] --lane LANE --out META
+        the producing lane and the verifier run's session verdicts stamped on the prover run's result.json
 """
 from __future__ import annotations
 
@@ -35,15 +47,22 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE / "tools"))
 
 REL, LEAF, MODEL, BITS = "bf16-ampere", "blake3", "ampere_bf16_m16n8k16", 16
+SEMANTICS = "sm80.mma.m16n8k16.bf16"
+K_FROZEN = 1536
 
 
-def circuits(out: Path) -> None:
+def base_relation(K: int) -> str:
+    """The relation the circuit files are pinned under at reduction length ``K`` (``pins.txt``); ``+blake3`` is the committed one."""
+    return REL if K == K_FROZEN else f"{REL}-k{K}"
+
+
+def circuits(out: Path, K: int = K_FROZEN) -> None:
     import link_stub as LS
     from gpu import commit as CM
 
     tmp = out / ".base"
-    subprocess.run([sys.executable, "-m", "gpu.v2.export", "circuits", "--model", MODEL, "--out", str(tmp)], check=True, cwd=HERE,
-                   stdout=subprocess.DEVNULL)
+    subprocess.run([sys.executable, "-m", "gpu.v2.export", "circuits", "--model", MODEL, "--k", str(K), "--out", str(tmp)], check=True,
+                   cwd=HERE, stdout=subprocess.DEVNULL)
     base = (tmp / "circuit.txt").read_text()
     names = [ln.split()[2] for ln in base.splitlines() if ln.startswith("col ")]
     k = (names.index("y.s") - 5) // 2
@@ -54,16 +73,25 @@ def circuits(out: Path) -> None:
     shutil.rmtree(tmp)
 
 
-def statement(cell: Path, instances: Path, n: int, flock: str) -> None:
+def operands(n: int, instances: Path | None = None, input_set: Path | None = None):
+    """``(X, W, y, iset, ref, tiled)``: VUs ``[0, n)`` as ``(n, K)`` uint16 rows and ``(n,)`` words, the instance identity the
+    commitment binds, the fingerprint's ``instances`` entry, and how a frozen set was tiled (``None``: not tiled)."""
     import numpy as np
 
-    import bench_result as br
     from gpu import commit as CM
-    from gpu.bb_export import write_rows
 
-    sd = cell / "statement"
-    sd.mkdir(parents=True, exist_ok=True)
-    circuits(sd)
+    if input_set is not None:
+        from verity_numerical.bench.input_sets import InputSet
+
+        sem = InputSet.open(input_set).subcircuit.params.get("semantics")
+        if sem != SEMANTICS:
+            raise SystemExit(f"cell.py: input set {input_set} is {sem}; route (a)'s prime relation is {SEMANTICS}")
+        X, W, y, iset, ref = CM.input_set(input_set, n, BITS)
+        return X, W, y.astype(np.uint16), iset, ref, None
+    from verity_numerical.bench import contract
+
+    import bench_result as br
+
     src = HERE.parents[1]
     frozen = src / "fixtures" / "bench-instances" / "v1" / "manifest.json"
     # past the frozen set's 4,096 VUs the sweep tiles it: VU i is frozen VU i mod 4096 (a re-packing; Rule I wants an
@@ -74,24 +102,41 @@ def statement(cell: Path, instances: Path, n: int, flock: str) -> None:
     X = np.tile(np.array(x, dtype=np.uint16), (reps, 1))[:n]
     Wn = np.tile(np.array(W, dtype=np.uint16).reshape(n0, -1), (reps, 1))[:n]
     y0 = np.tile(np.asarray(y0), reps)[:n]
+    ref = None if n > 4096 else contract.instances_ref(br.TIER, 0, n, hashlib.sha256(frozen.read_bytes()).hexdigest())
+    return X, Wn, y0, CM.instance_set(REL, 0, n, src, frozen), ref, None if n <= 4096 else f"bench-instances/v1 vu-k1536 [0, 4096) x {reps}"
+
+
+def statement(cell: Path, instances: Path | None, n: int, flock: str | None, input_set: Path | None = None,
+              verifier_side: bool = False) -> None:
+    import numpy as np
+
+    from gpu import commit as CM
+    from gpu.bb_export import write_rows
+
+    X, Wn, y0, iset, ref, tiled = operands(n, instances, input_set)
+    K = int(X.shape[1])
     y = np.asarray(y0).reshape(n, 1)
     tc = time.perf_counter()
-    C = CM.commit(LEAF, REL, CM.instance_set(REL, 0, n, src, frozen), 0, X, Wn, y, 2)
+    C = CM.commit(LEAF, base_relation(K), iset, 0, X, Wn, y, 2)
     t_commit = time.perf_counter() - tc
+    sd = cell / "statement"
+    sd.mkdir(parents=True, exist_ok=True)
     (sd / "commitment.txt").write_text(C.text())
-    write_rows(C.public(np.asarray(y, dtype=np.int64)).tolist(), sd / "public.bin")
     (cell / "leaf_digests.bin").write_bytes(b"".join(C.digests["a"]) + b"".join(C.digests["b"]))
-    (cell / "operands.bin").write_bytes(X.astype("<u2").tobytes() + Wn.astype("<u2").tobytes())
-    np.save(cell / "y.npy", np.asarray(y0))
     pc = hashlib.sha256((sd / "commitment.txt").read_bytes()).hexdigest()
-    sig = subprocess.run([flock, "sigma", "--vus", str(n), "--digests", str(cell / "leaf_digests.bin"), "--prime-commitment", pc],
-                         check=True, capture_output=True, text=True).stdout
-    (sd / "sigma.txt").write_text(sig)
-    (cell / "cell.json").write_text(json.dumps({"relation": C.relation, "vus": n, "prime_commitment": pc, "serving_commit_seconds": t_commit,
-                                                "manifest_sha256": hashlib.sha256(frozen.read_bytes()).hexdigest(),
-                                                "sigma": hashlib.sha256(sig.encode()).hexdigest(),
-                                                "tiled_from": None if n <= 4096 else f"bench-instances/v1 vu-k1536 [0, 4096) x {reps}"}, indent=1))
-    print(f"statement {C.relation} vus {n} prime_commitment {pc} sigma {hashlib.sha256(sig.encode()).hexdigest()}", flush=True)
+    meta = {"relation": C.relation, "vus": n, "K": K, "prime_commitment": pc, "serving_commit_seconds": t_commit,
+            "manifest_sha256": iset.manifest_sha256, "instances": ref, "tiled_from": tiled}
+    if not verifier_side:
+        circuits(sd, K)
+        write_rows(C.public(np.asarray(y, dtype=np.int64)).tolist(), sd / "public.bin")
+        (cell / "operands.bin").write_bytes(X.astype("<u2").tobytes() + Wn.astype("<u2").tobytes())
+        np.save(cell / "y.npy", np.asarray(y0))
+        sig = subprocess.run([flock, "sigma", "--vus", str(n), "--k", str(K), "--digests", str(cell / "leaf_digests.bin"),
+                              "--prime-commitment", pc], check=True, capture_output=True, text=True).stdout
+        (sd / "sigma.txt").write_text(sig)
+        meta["sigma"] = hashlib.sha256(sig.encode()).hexdigest()
+    (cell / "cell.json").write_text(json.dumps(meta, indent=1))
+    print(f"statement {C.relation} vus {n} K {K} prime_commitment {pc} sigma {meta.get('sigma')} commit {t_commit:.2f} s", flush=True)
 
 
 class PrimeLink:
@@ -220,7 +265,8 @@ def prove(a) -> int:
         the digest limbs (timed as t.witness)."""
         rows = gen.run(xd, wd, yd)
         if int(rows.bad.sum()):
-            raise SystemExit("cell.py: a frozen VU was rejected at witness generation")
+            bad = torch.nonzero(rows.bad).flatten().tolist()
+            raise SystemExit(f"cell.py: {len(bad)} VUs rejected at witness generation (first ids {bad[:8]})")
         v = rows.units.index_select(1, ci)
         units = torch.cat([rows.units, ((v[:, :, None] >> sh) & 1).reshape(rows.units.shape[0], -1)], 1)
         return units, torch.cat([rows.epilogue, lim_d], 1)
@@ -228,7 +274,11 @@ def prove(a) -> int:
     cd = hashlib.sha256((sd / "commitment.txt").read_bytes()).digest()
     pc = meta["prime_commitment"]
     out = []
+    guard = None
     for i in range(a.warmup + a.sessions):
+        if i == a.warmup:
+            from backends.direct.ligero.timing_guard import Guard
+            guard = Guard().start()
         s = cell / f"s{i}"
         shutil.rmtree(s, ignore_errors=True)
         s.mkdir()
@@ -237,7 +287,7 @@ def prove(a) -> int:
         addr = a.warmup_verifier if (i < a.warmup and a.warmup_verifier) else a.verifier
         live = a.prime_coins == "live"
         plink = PrimeLink(s / "prime.sock") if live else None
-        fp = subprocess.Popen([a.flock, "cell-prove", "--verifier", addr, "--vus", str(n), "--digests", str(cell / "leaf_digests.bin"),
+        fp = subprocess.Popen([a.flock, "cell-prove", "--verifier", addr, "--vus", str(n), "--k", str(K), "--digests", str(cell / "leaf_digests.bin"),
                                "--prime-commitment", pc, "--operands", str(cell / "operands.bin"), "--root-f", str(s / "root_f.hex"),
                                "--link-out", str(s / "link.json"), "--start", str(s / "start")]
                               + (["--prime-sock", str(s / "prime.sock")] if live else []), stdout=fl, stderr=fe)
@@ -356,10 +406,14 @@ def prove(a) -> int:
             r = subprocess.run([a.rust, "verify", "--dir", str(vd), "--proof", str(s / "proof.bin"), "--vus", str(n), "--threads", str(a.threads),
                                 "--relation", meta["relation"], "--json", str(s / "rust.json")]
                                + (["--require-live-coins"] if tr is not None else [])
-                               + (["--allow-unpinned-commitment"] if n != 4096 else []), capture_output=True, text=True)
+                               # a pinned commitment is checked either way (a pin that does not match refuses); the flag only
+                               # waives a missing pin, and the verdict records whether it was pinned
+                               + (["--allow-unpinned-commitment"] if n != 4096 or meta.get("K", K_FROZEN) != K_FROZEN else []),
+                               capture_output=True, text=True)
             doc = json.loads((s / "rust.json").read_text()) if (s / "rust.json").is_file() else {"error": r.stderr[-300:]}
             row["rust"] = {k: doc.get(k) for k in ("accepted", "error", "verify_seconds", "t_link", "circuit_pinned", "operands_committed",
                                                    "prime_coins", "prime_rounds", "prime_before_commit")}
+            row["rust"]["commitment_pinned"] = (doc.get("commitment") or {}).get("pinned")
         (s / "times.json").write_text(json.dumps(row, indent=1))
         fl_ok = bool(flive and flive[0].get("accepted"))
         print(f"session {i}{' (warm-up)' if i < a.warmup else ''}: cell {t_cell:.3f} s, prime prove {t_prime:.3f} s (link {st.t_link:.3f}, "
@@ -368,10 +422,12 @@ def prove(a) -> int:
         if i == a.warmup:
             from gpu.circuit import Circuit  # noqa: F401
             import soundness
-            budget = soundness.summary(soundness.budget(inst, st.ligero_rows, st.linkage_constraints, K=1536), live=tr is not None)
+            budget = soundness.summary(soundness.budget(inst, st.ligero_rows, st.linkage_constraints, K=K), live=tr is not None)
             (cell / "prime_soundness.json").write_text(json.dumps(budget, indent=1, default=str))
         out.append(row)
         del inst, vinst, proof
+    if guard is not None:
+        (cell / "contention.json").write_text(json.dumps(guard.stop(), indent=1))
     (cell / "sessions.json").write_text(json.dumps(out, indent=1))
     if a.result:
         result(a, cell, meta, out)
@@ -400,7 +456,7 @@ def result(a, cell: Path, meta: dict, rows: list[dict]) -> None:
     import bench_result as br
 
     timed = [r for r in rows if not r["warmup"]]
-    n = meta["vus"]
+    n, K = meta["vus"], int(meta.get("K", K_FROZEN))
     prime = json.loads((cell / "prime_soundness.json").read_text())
     terms = {"A-GKR prime proof (incl. the link's sigma batching and Schwartz-Zippel over two GF(2^128) points)": prime["achieved_log2"],
              **FLOCK_TERMS_LOG2}
@@ -425,28 +481,33 @@ def result(a, cell: Path, meta: dict, rows: list[dict]) -> None:
                       "commit": br.source_commit(), "relation": meta["relation"], "scheme": "frame-v3 blake3-keyed/row/v2",
                       "version": "route (a): gpu/link.py session-2xgf2_128/v2, flock-link Σ verity/link-L/v2"},
           "toolchain": {"python": platform.python_version(), "torch": torch.__version__, "triton": triton.__version__, "numpy": np.__version__}}
+    rel = meta["relation"]
+    if "instances" in meta:
+        inst = meta["instances"]
+    else:                   # a statement written before cell.json carried its instances entry: the frozen set, untiled
+        inst = None if n > 4096 else contract.instances_ref(br.TIER, 0, n, meta.get("manifest_sha256") or
+            hashlib.sha256((HERE.parents[1] / "fixtures" / "bench-instances" / "v1" / "manifest.json").read_bytes()).hexdigest())
     fp = contract.fingerprint(
-        profile=contract.PROFILE, domain=contract.DOMAIN, K=1536, B=n, N_subbatches=1,
+        profile=contract.PROFILE, domain=contract.DOMAIN, K=K, B=n, N_subbatches=1,
         proof_class="NON_ZK_PROOF" if live else "NON_ZK_PROOF_DIAGNOSTIC",
         authentication="included-hash", zk_mode=contract.ZK_NONE, security=security, hardware=contract.probe_hardware(), software=sw,
         preprocessing=("circuit files, GKR layers, Lambda_F derivation, the Flock statement shape (untimed; the Flock prover starts on a "
                        "signal once built); Triton compilation in the untimed warm-up session"),
-        retention="retained", instances=None if n > 4096 else contract.instances_ref(br.TIER, 0, n, meta.get("manifest_sha256") or
-            hashlib.sha256((HERE.parents[1] / "fixtures" / "bench-instances" / "v1" / "manifest.json").read_bytes()).hexdigest()),
-        instances_tiled=meta.get("tiled_from"),
+        retention="retained", instances=inst, instances_tiled=meta.get("tiled_from"), relation=rel,
         scope="vu", candidate="A-GKR", checker="v2", field=br.FIELD, variant="A-GKR route (a): A-GKR + Flock + link",
         leaf="blake3", sharing=None, sessions=len(timed), warmup=a.warmup,
         verifier={"flock": "flock-link cell-serve (live coins; the session record is the evidence, admitted by tools/cell_gate.py)",
-                  "prime": "verity-gkr-verify --relation bf16-ampere+blake3 --require-live-coins against the record's link.txt and prime "
+                  "prime": f"verity-gkr-verify --relation {rel} --require-live-coins against the record's link.txt and prime "
                            "rounds (pinned circuit set, pinned commitment)" if live else
-                           "verity-gkr-verify --relation bf16-ampere+blake3 against the record's link.txt (pinned circuit set, pinned commitment)"},
-        note=(f"one A-GKR proof of all {n} VUs (bf16-ampere, operands committed under frame-v3 blake3-keyed/row/v2) linked to one Flock "
+                           f"verity-gkr-verify --relation {rel} against the record's link.txt (pinned circuit set, pinned commitment)"},
+        note=(f"one A-GKR proof of all {n} VUs ({base_relation(K)}, operands committed under frame-v3 blake3-keyed/row/v2) linked to one Flock "
               f"flock-128-r2 session proving the keyed-BLAKE3 row leaves; both provers run at once on the prover pod (A-GKR on the GPU, "
               f"Flock on the host CPU), t.total = max of the two from the start signal; the prime buckets are the median session's, "
               f"the Flock prover's time is in Other when it is the longer; serving commit {meta.get('serving_commit_seconds', 0):.2f} s "
               f"(CPU reference committer) outside t.total"),
     )
-    meas, med, tt, ix = session_measurements(contract, timed, n, live, a.rtt_ms, a.rtt_method, -ach, meta.get("serving_commit_seconds", 0.0), rust)
+    meas, med, tt, ix = session_measurements(contract, timed, n, live, a.rtt_ms, a.rtt_method, -ach, meta.get("serving_commit_seconds", 0.0),
+                                             rust, K)
     fp["interaction"] = ix
     res = {"schema": contract.RESULT_SCHEMA, "run_id": os.environ.get("RESEARCH_RUN_ID"), "kind": "bench-result/v1", "workload_fingerprint": fp,
            "validation": {"status": "passed" if ok else "failed",
@@ -469,7 +530,7 @@ def critical_wait(r: dict) -> float:
 
 
 def session_measurements(contract, timed: list[dict], n: int, live: bool, rtt_ms, rtt_method, soundness_bits: float,
-                         serving_s: float, rust: list[float]):
+                         serving_s: float, rust: list[float], K: int = K_FROZEN):
     """The envelope's measurements from the timed sessions.  The contract's ``t.total`` is the prover without its network
     waits and ``t.total_live`` the wall with them; the median session is the median ``t.total``.  ``rounds.sequential_depth``
     is every round of the session (one connection; the live prime transcript is sequential, and Flock's rounds follow
@@ -486,7 +547,7 @@ def session_measurements(contract, timed: list[dict], n: int, live: bool, rtt_ms
     meas += [contract.measurement("t.total", tt), contract.measurement("t.total_live", med["t_total"]),
              contract.measurement("transcript.bytes", med["proof_bytes"] + flock_bytes),
              contract.measurement("vu.count", n), contract.measurement("vu.seconds_per_vu", tt / n), contract.measurement("vu.per_second", n / tt),
-             *contract.rate_measurements(tt, n, 1536, contract.PROFILE),
+             *contract.rate_measurements(tt, n, K, contract.PROFILE),
              br._m("t_total_min", min(comp(r) for r in timed), "s"), br._m("t_total_max", max(comp(r) for r in timed), "s"),
              br._m("t_total_live_min", min(r["t_total"] for r in timed), "s"), br._m("t_total_live_max", max(r["t_total"] for r in timed), "s"),
              br._m("t_prime_seconds", med["t_prime_prove_s"], "s"), br._m("t_flock_seconds", med["t_flock_prove_s"], "s"),
@@ -540,7 +601,8 @@ def rederive(src: Path, out: Path, supersedes: str | None, protocol: dict | None
     rust = [r["rust"]["verify_seconds"] for r in timed if (r.get("rust") or {}).get("verify_seconds") is not None]
     rtt = om.get("net.rtt_ms", om.get("net.rtt_probe_ms"))
     method = next((r["net"].get("rtt_probe_method") for r in timed if (r.get("net") or {}).get("rtt_probe_method")), None)
-    meas, med, tt, ix = session_measurements(contract, timed, fp["B"], live, rtt, method, om["soundness_bits"], om.get("commit.serving_seconds", 0.0), rust)
+    meas, med, tt, ix = session_measurements(contract, timed, fp["B"], live, rtt, method, om["soundness_bits"], om.get("commit.serving_seconds", 0.0),
+                                             rust, int(fp.get("K", K_FROZEN)))
     fp = dict(fp, interaction=ix)
     if protocol is not None:
         fp["protocol"] = protocol
@@ -574,16 +636,143 @@ def rederive(src: Path, out: Path, supersedes: str | None, protocol: dict | None
     return new
 
 
+SWEEP_RULE = ("double the batch from the first size until two successive doublings together raise the throughput (VUs / t.total) "
+              "by < 2 %, a size fails (the prime prover runs out of GPU memory) or the input set is exhausted (a set is not "
+              "recycled); plateau = the size with the highest throughput (kb/TABLES.md)")
+COMMITTER = ("CPU reference committer (backends/gkr/gpu/commit.py: frame-v3 + blake3-keyed/row/v2 over the batch's operands and "
+             "words), one pass before the sessions; a GPU committer is not measured")
+
+
+def _meas(doc: dict) -> dict:
+    return {m["name"]: m.get("value") for m in doc.get("measurements") or [] if isinstance(m, dict) and "name" in m}
+
+
+def _set(doc: dict, name: str, value, unit: str) -> None:
+    ms = doc.setdefault("measurements", [])
+    for m in ms:
+        if m.get("name") == name:
+            m["value"] = value
+            return
+    ms.append({"name": name, "value": value, "unit": unit})
+
+
+def finish(points: list[Path], verifier: str, operator: str | None, sweep_id: str) -> tuple[dict, list[dict]]:
+    """``(the cell's result, the other sizes' results)`` from a sweep's point directories (``cell.sh``): each holds
+    ``status.json`` (``vus``, ``rc``, ``why``, ``verifier``: the remote session address that size used) and, for a size that ran,
+    ``result.json`` (``prove --result``), ``loopback-times.json`` (its warm-up session, against a verifier on 127.0.0.1 in the
+    same pod) and ``contention.json`` (the timing guard over its timed sessions).  The plateau size's result gains the sweep,
+    protocol, loopback and commit blocks and the remote verifier's placement."""
+    from verity_numerical.bench import contract
+
+    rows = []
+    for d in points:
+        st = json.loads((d / "status.json").read_text())
+        doc = json.loads((d / "result.json").read_text()) if (d / "result.json").is_file() else None
+        good = st.get("rc") == 0 and doc is not None and (doc.get("validation") or {}).get("status") == "passed"
+        rows.append({"vus": int(st["vus"]), "rc": st.get("rc"), "why": st.get("why"), "dir": d, "doc": doc, "verifier": st.get("verifier") or verifier,
+                     "vu_per_second": int(st["vus"]) / float(_meas(doc)["t.total"]) if good else None})
+    rows.sort(key=lambda r: r["vus"])
+    ok = [r for r in rows if r["vu_per_second"] is not None]
+    if not ok:
+        raise SystemExit(f"finish: no size ran ({[(r['vus'], r['rc'], r['why']) for r in rows]})")
+    best = max(ok, key=lambda r: (r["vu_per_second"], -r["vus"]))
+    tps = [r["vu_per_second"] for r in ok]
+    last = rows[-1]
+    stopped = (f"{last['vus']} VUs failed (rc {last['rc']}: {last['why']})" if last["vu_per_second"] is None else
+               "< 2 % over two doublings" if len(tps) >= 3 and tps[-1] < 1.02 * tps[-3] else
+               f"the input set or the sweep's last size ({last['vus']} VUs)")
+    sweep = {"id": sweep_id, "point": ok.index(best), "plateau": True, "total_vus": best["vus"], "rule": SWEEP_RULE, "stopped": stopped,
+             "points": [[r["vus"], r["vu_per_second"]] for r in rows],
+             "failures": [{"vus": r["vus"], "rc": r["rc"], "why": r["why"]} for r in rows if r["vu_per_second"] is None]}
+    others = []
+    for r in ok:
+        doc, fp = r["doc"], r["doc"]["workload_fingerprint"]
+        guard = json.loads((r["dir"] / "contention.json").read_text()) if (r["dir"] / "contention.json").is_file() else {}
+        external = [x for x in guard.get("reasons") or [] if not x.startswith("CPU throttled")]
+        timed = [s for s in doc["validation"]["evidence"]["sessions"] if not s["warmup"]]
+        doc["protocol"] = {
+            "warm": True, "warmup": "1 local warm-up session per size in the same process (loopback verifier; Triton kernels compiled)",
+            "runs": len(timed), "statistic": "median", "contended": bool(external) if guard else None,
+            "contention": {**guard, "rule": (
+                "the timing guard (backends/direct/ligero/timing_guard.py) over the timed sessions: contended on another GPU compute "
+                "process or a load above the host's cores; its CPU-throttling rule is recorded, not applied: the cell's own Flock "
+                "prover runs on every core of the pod's quota beside the GPU prover by design (route-a-live, art:77411c93)")}}
+        doc["sweep"] = dict(sweep, point=ok.index(r), plateau=r is best, total_vus=r["vus"])
+        cs = _meas(doc).get("commit.serving_seconds")
+        if isinstance(cs, (int, float)) and cs > 0:
+            _set(doc, "commit.seconds", cs, "s")
+            fp["commit"] = {"seconds": cs, "committer": COMMITTER, "in_t_total": False}
+        inter = dict(fp.get("interaction") or {})
+        lt = r["dir"] / "loopback-times.json"
+        if lt.is_file():
+            row = json.loads(lt.read_text())
+            if str(row.get("verifier", "")).startswith("127.0.0.1") and (row.get("net") or {}).get("rounds"):
+                per = critical_wait(row) / row["net"]["rounds"]
+                _set(doc, "live.loopback_round_seconds", per, "s")
+                inter.update(t_total_includes_wait=False, loopback_method=(
+                    f"loopback probe in this run: the size's warm-up session (verifier on 127.0.0.1, same pod, binary and batch), its "
+                    f"critical-path coin wait (prime rounds before root_F + Flock's rounds, {critical_wait(row):.3f} s) / its "
+                    f"{row['net']['rounds']} rounds; one session, a mean"))
+        fp["verifier"] = {**(fp.get("verifier") or {}), "placement": r["verifier"], "operator": operator,
+                          "process": "flock-link cell-serve on a separate pod (serves the Flock and the prime coins, one statement per size)"}
+        fp["interaction"] = doc["interaction"] = inter
+        doc["contract_problems"] = contract.validate(doc)
+        if r is not best:
+            others.append(doc)
+    return best["doc"], others
+
+
+def _tree_sha(run: Path) -> str | None:
+    try:
+        return (json.loads((run / "job.json").read_text()).get("computation") or {}).get("tree_sha")
+    except (OSError, ValueError):
+        return None
+
+
+def register(prover_run: Path, verifier_run: Path | None, lane: str) -> dict:
+    """The prover run's cell result with the producing lane, the shipped tree's commit, and the verifier run's session verdicts."""
+    doc = json.loads((prover_run / "result.json").read_text())
+    doc["lane"] = doc["registered_by"] = lane
+    fp, sha = doc.get("workload_fingerprint") or {}, _tree_sha(prover_run)
+    be = (fp.get("software") or {}).get("backend")
+    if sha and isinstance(be, dict) and not be.get("commit"):
+        be["commit"] = sha
+    if verifier_run is not None:
+        sessions = []
+        for f in sorted(verifier_run.rglob("index.jsonl")):
+            sessions += [json.loads(ln) for ln in f.read_text().splitlines() if ln.strip()]
+        doc.setdefault("validation", {}).setdefault("evidence", {})["verifier_run"] = {
+            "run": verifier_run.name, "tree_sha": _tree_sha(verifier_run), "sessions": len(sessions),
+            "accepted": sum(1 for x in sessions if x.get("accepted")),
+            "note": "the verifier pod's session indexes (flock-link cell-serve --out), recorded by its research run"}
+    return doc
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="tools/cell.py")
     sub = ap.add_subparsers(dest="cmd", required=True)
     c = sub.add_parser("circuits")
     c.add_argument("--out", required=True)
+    c.add_argument("--k", type=int, default=K_FROZEN)
     s = sub.add_parser("statement")
     s.add_argument("--cell", required=True)
-    s.add_argument("--instances", required=True)
+    s.add_argument("--instances", default=None, help="the frozen bench-instances/v1 data directory (K = 1536)")
+    s.add_argument("--input-set", default=None, help="an input set directory (VUs [0, --vus), its K)")
     s.add_argument("--vus", type=int, default=4096)
-    s.add_argument("--flock", required=True)
+    s.add_argument("--flock", default=None)
+    s.add_argument("--verifier-side", action="store_true", help="only the leaf digests and cell.json (the verifier's statement)")
+    f = sub.add_parser("finish", help="the cell's result from a sweep's point directories (cell.sh)")
+    f.add_argument("--points", nargs="+", required=True)
+    f.add_argument("--verifier", required=True, help="HOST:PORT of the remote verifier (a size's status.json may name its own)")
+    f.add_argument("--operator", default=None)
+    f.add_argument("--sweep-id", default=None)
+    f.add_argument("--out", required=True)
+    f.add_argument("--others", default=None, help="write the other sizes' results here (outputs.json, bench-result/v1)")
+    g = sub.add_parser("register", help="the prover run's cell result stamped for research data put")
+    g.add_argument("--prover-run", required=True)
+    g.add_argument("--verifier-run", default=None)
+    g.add_argument("--lane", required=True)
+    g.add_argument("--out", required=True)
     p = sub.add_parser("prove")
     p.add_argument("--cell", required=True)
     p.add_argument("--flock", required=True)
@@ -629,10 +818,34 @@ def main(argv=None) -> int:
         return 0
     if a.cmd == "circuits":
         Path(a.out).mkdir(parents=True, exist_ok=True)
-        circuits(Path(a.out))
+        circuits(Path(a.out), a.k)
         return 0
     if a.cmd == "statement":
-        statement(Path(a.cell), Path(a.instances), a.vus, a.flock)
+        if (a.instances is None) == (a.input_set is None):
+            ap.error("statement: --instances (the frozen set) or --input-set")
+        if a.flock is None and not a.verifier_side:
+            ap.error("statement: --flock (sigma.txt), unless --verifier-side")
+        statement(Path(a.cell), a.instances and Path(a.instances), a.vus, a.flock, a.input_set and Path(a.input_set), a.verifier_side)
+        return 0
+    if a.cmd == "finish":
+        import datetime
+        sid = a.sweep_id or f"agkr-route-a sweep {datetime.datetime.now(datetime.timezone.utc):%Y-%m-%dT%H:%MZ} ({os.environ.get('RESEARCH_RUN_ID')})"
+        best, others = finish([Path(p) for p in a.points], a.verifier, a.operator, sid)
+        Path(a.out).write_text(json.dumps(best, indent=1, default=str))
+        if a.others:
+            outs = [{"name": f"sweep-{d['workload_fingerprint']['B']}", "kind": "bench-result/v1",
+                     "meta": dict(d, label=f"{a.operator} {d['workload_fingerprint'].get('relation')} sweep point {d['workload_fingerprint']['B']} VUs")}
+                    for d in others]
+            Path(a.others).write_text(json.dumps({"schema": "research/outputs/v0.1", "outputs": outs}, indent=1, default=str))
+        from verity_numerical.bench import views
+        ix = views.interaction(best)
+        print(json.dumps({"out": a.out, "sweep": best["sweep"], "protocol": {k: v for k, v in best["protocol"].items() if k != "contention"},
+                          "interaction_problem": views.interaction_problem(ix), "contract_problems": best.get("contract_problems")},
+                         indent=1, default=str))
+        return 0
+    if a.cmd == "register":
+        doc = register(Path(a.prover_run), a.verifier_run and Path(a.verifier_run), a.lane)
+        Path(a.out).write_text(json.dumps(doc, indent=1, default=str))
         return 0
     return prove(a)
 
