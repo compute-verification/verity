@@ -220,7 +220,7 @@ def write_instances(a, path: Path, total: int, lo: int, hi: int) -> dict:
     """One sub-batch's instance file: a spine input set (``--set``), the 8-bit synthetic stream at ``--k``, or the relation's
     own set."""
     if a.set:
-        return instances.write_set(path, a.relation, a.set, lo, hi, a.leaf, a.procs)
+        return instances.write_set(path, a.relation, a.set, lo, hi, a.leaf, a.procs, a.y_model)
     if a.k:
         return instances.write_synth(path, a.relation, a.k, lo, hi, a.leaf, a.procs)
     return instances.write(path, a.relation, total, a.procs, a.cache, lo, hi, scheme=a.scheme, leaf=a.leaf)
@@ -446,6 +446,7 @@ def main(argv=None) -> int:
                     help="the commitment scheme the instance files' roots are under (the binary must prove that statement)")
     ap.add_argument("--leaf", default="blake3", choices=sorted(instances.SCHEMES), help="frame-v3 row-leaf schema of trees a and b")
     ap.add_argument("--set", default="", help="a spine input set directory (x.u16 / w.u16 / y.u16); batches never exceed it")
+    ap.add_argument("--y-model", action="store_true", help="with --set: y is the relation's chain output (a set captured on other silicon)")
     ap.add_argument("--k", type=int, default=0, help="an 8-bit relation's synthetic E4M3 stream at this K")
     a = ap.parse_args(argv)
     a.rustc = subprocess.run(["rustc", "--version"], capture_output=True, text=True).stdout.strip()

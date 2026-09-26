@@ -291,11 +291,13 @@ def _row_digests(rows_bytes: list[bytes], leaf: str, role: int) -> list[bytes]:
 
 
 def write_set(path: str | Path, relation: str, set_dir: str | Path, lo: int = 0, hi: int | None = None, leaf: str = "blake3",
-              procs: int = 1) -> dict:
+              procs: int = 1, y_model: bool = False) -> dict:
     """VUs ``[lo, hi)`` of a spine input set (``vllm-vu-set/v1`` or ``input-set/v1``: ``x.u16`` / ``w.u16`` K words, ``y.u16``)
     as a ``flock-pure-instances/v1`` file for ``relation`` (a :data:`lowering.PIPES` entry: its unit model chains each row, and
     the set's recorded y must equal the epilogue of the last accumulator). Rows are written per VU (the unshared statement,
-    root's ruling 2026-09-26 02:30Z); the instance reference names the set and its ``content_digest``."""
+    root's ruling 2026-09-26 02:30Z); the instance reference names the set and its ``content_digest``. ``y_model``: the set
+    was captured on other silicon, so y is the relation's own chain output (a distinct tier; the reference counts the words
+    that differ from the set's recorded y)."""
     from concurrent.futures import ProcessPoolExecutor
     from verity.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_BLAKE3_ROW, SCHEMA_SHA256_ROW, sha256_row_digest
     from verity.ml.tc.cast import f32_to_bf16_word
@@ -324,7 +326,7 @@ def write_set(path: str | Path, relation: str, set_dir: str | Path, lo: int = 0,
         accs = np.asarray([r for j in jobs for r in _chain_rows(j)], dtype=np.uint32)
     final = [f32_to_bf16_word(int(a[-1])) for a in accs] if pipe.epilogue else [int(a[-1]) for a in accs]
     bad = sum(int(f != int(v)) for f, v in zip(final, y_rec))
-    if bad:
+    if bad and not y_model:
         raise ValueError(f"{d.name}: {bad} recorded outputs differ from the {relation} model chain")
     digest = man.get("content_digest")
     if leaf == "sha256":
@@ -336,9 +338,12 @@ def write_set(path: str | Path, relation: str, set_dir: str | Path, lo: int = 0,
         db = _row_digests([np.ascontiguousarray(r).tobytes() for r in w], leaf, ROLE_W)
         schema = SCHEMA_BLAKE3_ROW
     dataset, tier = man.get("set", d.name), f"{man.get('schema', 'input-set/v1')}:{man.get('set', d.name)}"
+    if y_model:
+        tier += f":y={relation}"
     st = _frame_v3(dataset, tier, digest, lo, K_, schema, da, db, final, 16)
     ref = {"dataset": dataset, "tier": tier, "range": [lo, hi], "manifest_sha256": digest, "set_schema": man.get("schema"),
-           "source": (man.get("provenance") or {}).get("source") or ("captured" if man.get("schema") == "vllm-vu-set/v1" else None)}
+           "source": (man.get("provenance") or {}).get("source") or ("captured" if man.get("schema") == "vllm-vu-set/v1" else None),
+           **({"y": {"source": f"{relation} model chain", "differ_from_set": bad}} if y_model else {})}
     header = {"format": FORMAT, "relation": relation, "vus": hi - lo, "k": K_, "word_bits": 16, "units": accs.shape[1],
               "row_bytes": 2 * K_, "epilogue": pipe.epilogue, "instances": ref, **{k: v for k, v in st.items() if k != "y"}}
     return _write_file(path, header, np.ascontiguousarray(x).tobytes(), np.ascontiguousarray(w).tobytes(), accs, final, st["y"])
@@ -449,9 +454,10 @@ if __name__ == "__main__":
     ap.add_argument("--scheme", choices=["frame-v3", "vllm-v1"], default="frame-v3")
     ap.add_argument("--leaf", choices=sorted(SCHEMES), default="blake3", help="frame-v3 row-leaf schema of trees a and b")
     ap.add_argument("--set", default=None, help="a spine input set directory (x.u16 / w.u16 / y.u16): its first TOTAL VUs")
+    ap.add_argument("--y-model", action="store_true", help="with --set: y is the relation's chain output, not the set's")
     ap.add_argument("--k", type=int, default=0, help="an 8-bit relation's synthetic stream at this K (write_synth)")
     a = ap.parse_args()
-    h = (write_set(a.out, a.relation, a.set, 0, a.total, a.leaf, a.procs) if a.set else
+    h = (write_set(a.out, a.relation, a.set, 0, a.total, a.leaf, a.procs, a.y_model) if a.set else
          write_synth(a.out, a.relation, a.k, 0, a.total, a.leaf, a.procs) if a.k else
          write(a.out, a.relation, a.total, a.procs, a.cache, scheme=a.scheme, leaf=a.leaf))
     print(json.dumps({"relation": h["relation"], "vus": h["vus"], "roots": h["roots"],

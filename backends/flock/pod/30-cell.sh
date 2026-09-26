@@ -4,6 +4,7 @@
 #   ROLE=prover   REL POINTS PER RUNS VERIFIER=host:port  (GPU build; sweep against the verifier)
 #   ROLE=verifier REL POINTS PER RUNS OPERATOR=lane       (CPU build; its own instance files; serves the prover's order on :7400)
 #   SET=name.tgz  a spine input set sent with the run (inputs/name.tgz: manifest.json x.u16 w.u16 y.u16), both roles
+#   YMODEL=1      with SET: y is REL's chain output (a set captured on other silicon)
 #   K=2048        an 8-bit relation's synthetic E4M3 stream at K words
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
@@ -18,7 +19,7 @@ TH=$([ "$Q" = max ] && nproc || echo $(( Q / PER_ ))); TH=${THREADS:-$TH}; expor
 [ -x $HOME/.local/bin/uv ] || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
 [ -x $W/py/bin/python ] || { $HOME/.local/bin/uv venv -q --python 3.12 $W/py && $HOME/.local/bin/uv pip install -q --python $W/py/bin/python numpy blake3; }
 export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO/packages/verity/src:$REPO/backends/numerical/python:$REPO/backends/flock/python
-if [ "$REL" = bf16-ampere ]; then
+if [ "$REL" = bf16-ampere ] && [ -z "${SET:-}" ] && [ -z "${K:-}" ]; then
   # the A100 row's frozen bench-instances/v1 set: rebuilt here from the committed seeds, refused unless every array matches the
   # committed manifest's sha256, then linked into the source tree (as pod_bootstrap.sh BENCH_INSTANCES=1 does)
   BI=$W/bench-instances/v1; FZ=$REPO/fixtures/bench-instances/v1
@@ -46,6 +47,7 @@ if [ -n "${SET:-}" ]; then
   (cd $S && sha256sum manifest.json x.u16 w.u16 y.u16) | tee $O/set.sha256; SRC="--set $S"
 fi
 [ -n "${K:-}" ] && SRC="$SRC --k $K"
+[ -n "${YMODEL:-}" ] && SRC="$SRC --y-model"
 lscpu | grep -E 'Model name|^CPU\(s\)' | tee $O/host.txt; echo threads $TH | tee -a $O/host.txt; nvidia-smi -L 2>/dev/null | tee -a $O/host.txt
 if [ $ROLE = verifier ]; then
   python3 -m verity_flock.bench --relation $REL --bin $B --out-dir $O/verifier --points "$POINTS" --per-proof $PER --runs $RUNS \
