@@ -1492,3 +1492,18 @@ def test_a_row_whose_work_model_needs_a_per_input_variable_rejects_its_cells_ins
     sub = next(s for s in census.SUBCIRCUITS if s.startswith("attention-head/"))
     with pytest.raises(KeyError):
         V.memory_native(BF16_HOPPER, sub)
+
+
+def test_each_result_and_table1_backend_shows_its_operand_domain(store: LocalStore) -> None:
+    """Daniel, 2026-09-26: circuits are total by default; a finite-only statement is an explicit, named choice, shown per result
+    (the ``domain`` label, else the fingerprint's ``domain``) and per Table 1 backend."""
+    a = committed(store, t_total=0.4)
+    fp_domain = V.build(store).domain_of[a]
+    b = committed(store, t_total=0.5, labels=[("domain", "total", "red-team-2", "2026-09-26T18:00:00Z")])
+    views = V.build(store)
+    assert views.domain_of[b] == "total" and views.domain_of[a] == fp_domain
+    site = V.render_entities(views, rendered_at="2026-09-26T18:00:00Z", commit="abc")
+    res = {r["artifact"]: r for r in site["results"]}
+    assert res[a]["domain"] == fp_domain
+    backend = next(x for x in site["backends"] if x["id"] == res[a]["backend"])
+    assert fp_domain in backend["domains"]
