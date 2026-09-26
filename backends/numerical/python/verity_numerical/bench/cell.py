@@ -144,9 +144,12 @@ def plan(backend: str, statement: str, input_set: str, prover: str, **kw: Any) -
     if drv.INTERACTIVE:
         if not cell.placement:
             cell.placement = resolve_placement(cell)
-        why = PL.separation(cell.placement.get("prover") or {}, cell.placement.get("verifier") or {}, cell.placement.get("link"))
-        if why:
-            raise NotSupported("; ".join(why))
+        a = PL.assess(cell.placement.get("prover") or {}, cell.placement.get("verifier") or {}, cell.placement.get("link"), final=False)
+        if a["problems"]:
+            raise NotSupported("; ".join(a["problems"]))
+        cell.placement["shared_public_ip"] = a["shared_public_ip"]
+        if a["shared_public_ip"]:
+            cell.placement["separation"] = a["evidence"]
     why = getattr(drv, "unmet", lambda _c: None)(cell)
     if why:
         raise NotSupported(why)
@@ -218,13 +221,18 @@ def run_placement(cell: Cell, prover_run: Path | None, verifier_run: Path | None
     return {"prover": p, "verifier": v, "link": PL.merge(plan.get("link"), p.pop("link", None)), "verifier_link": v.pop("link", None)}
 
 
-def placement_problems(cell: Cell, prover_run: Path | None, verifier_run: Path | None) -> list[str]:
+def run_assessment(cell: Cell, prover_run: Path | None, verifier_run: Path | None, rtt_ms: float | None) -> dict[str, Any]:
+    """``placement.assess`` on both runs' identities with the session's measured RTT (``net.rtt_ms``)."""
+    pl = run_placement(cell, prover_run, verifier_run)
+    return PL.assess(pl["prover"], pl["verifier"], pl["link"], rtt_ms=rtt_ms)
+
+
+def placement_problems(cell: Cell, prover_run: Path | None, verifier_run: Path | None, rtt_ms: float | None = None) -> list[str]:
     """Why the prover and verifier are not shown to be separate machines on a routed link, and whether each run ran on the pod
     the cell planned (a run whose pod id differs from the plan's)."""
     if not (cell.placement or prover_run or verifier_run):
         return []
-    pl = run_placement(cell, prover_run, verifier_run)
-    out = PL.separation(pl["prover"], pl["verifier"], pl["link"])
+    out = list(run_assessment(cell, prover_run, verifier_run, rtt_ms)["problems"])
     for role, run in (("prover", prover_run), ("verifier", verifier_run)):
         planned, ran = (cell.placement.get(role) or {}).get("pod_id"), (PL.from_job(run) if run else {}).get("pod_id")
         if planned and ran and planned != ran:
@@ -252,7 +260,7 @@ def check(cell: Cell, doc: Mapping[str, Any], prover_run: Path | None = None, ve
         placement = (fp.get("verifier") or {}).get("placement") if isinstance(fp.get("verifier"), Mapping) else None
         if placement in (None, "loopback") or str(placement).startswith("127."):
             out.append(f"verifier placement {placement!r}: the protocol's verifier runs on a separate pod")
-        out += placement_problems(cell, prover_run, verifier_run)
+        out += placement_problems(cell, prover_run, verifier_run, m.get("net.rtt_ms"))
         if not isinstance(m.get("live.loopback_round_seconds"), (int, float)) or not inter.get("loopback_method"):
             out.append("no loopback probe (live.loopback_round_seconds with interaction.loopback_method)")
         if not isinstance(m.get("net.rtt_ms"), (int, float)) or not inter.get("rtt_method"):
@@ -313,7 +321,9 @@ def stamp(cell: Cell, doc: dict[str, Any], prover_run: Path | None = None, verif
                    "input_set": {k: cell.input_set.get(k) for k in ("kind", "id", "art", "n", "content_digest", "manifest_sha256", "source")},
                    "prover_pod": cell.prover, "verifier_pod": cell.verifier, "entry": "verity_numerical.bench.cell"}
     if cell.placement or prover_run or verifier_run:
-        doc["cell"]["placement"] = dict(run_placement(cell, prover_run, verifier_run), plan=cell.placement)
+        a = run_assessment(cell, prover_run, verifier_run, _meas(doc).get("net.rtt_ms"))
+        doc["cell"]["placement"] = dict(run_placement(cell, prover_run, verifier_run), plan=cell.placement,
+                                        shared_public_ip=a["shared_public_ip"], **({"separation": a["evidence"]} if a["shared_public_ip"] else {}))
     if cell.lane:
         doc["cell"]["script_lane"] = {k: doc.get(k) for k in ("lane", "registered_by")}
         doc["lane"] = doc["registered_by"] = cell.lane      # the producer is the lane that ran the cell, not the script's author

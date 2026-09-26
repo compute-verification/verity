@@ -1,5 +1,19 @@
 # Changelog: `verity_numerical` (the bench renderers and their rules)
 
+## 2026-09-26: bench.cell accepts a shared datacenter NAT IP, given full machine-identity proof
+
+- `bench.placement.assess` treats a public IP shared by the prover and verifier (a datacenter's egress NAT) as separate machines only
+  when all three conditions hold:
+  - the RunPod machine id, DMI `product_uuid` and `boot_id` are all recorded on both pods and all differ;
+  - the session's measured RTT (`net.rtt_ms`) is at least `RTT_FLOOR_MS` = 0.1 ms, where the co-resident pair measured about 0.03 ms;
+  - the link is not a host bridge.
+- **Host bridges:** loopback, link-local and the docker pool 172.16/12 are now always refused. A datacenter's routed private network
+  (RunPod's 10.x) is accepted between distinct machine ids.
+- **`plan`:** only machine ids are known at plan time, so it requires those to differ and records the rest as pending
+  (`cell.placement.separation.pending`). `check` and `register` apply the full rule.
+- **Recording:** `register` writes `cell.placement.shared_public_ip` and, when it is true, `separation`: the three ids of both pods,
+  the shared IP, the measured RTT and the floor.
+
 ## 2026-09-26: class-pin attention cells credited per listed key count
 
 - **Class cells:** flock-ir-lowering's class-pin statement proves a batch spanning several key counts under one pin per

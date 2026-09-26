@@ -35,7 +35,7 @@ def _with(**changes) -> dict:
     (_with(prover__boot_id="k1", verifier__boot_id="k1"), "share boot_id k1"),
     (_with(prover__product_uuid="U", verifier__product_uuid="U"), "share product_uuid U"),
     ({**_with(prover__machine_id=None, verifier__machine_id=None), "link": {"peer": "172.24.0.3:7400", "peer_ip": "172.24.0.3"}},
-     "host-private address"),
+     "host bridge"),
     ({"prover": {"hostname": "a"}, "verifier": {"hostname": "b"}, "link": {}}, "machine identity not recorded"),
     ({**SEPARATE, "link": {"peer": "203.0.113.10:7400", "peer_ip": "203.0.113.10"}}, "its own public IP"),
 ])
@@ -99,3 +99,64 @@ def test_registration_records_both_machines_and_refuses_a_shared_one(tmp_path):
 
 def test_the_real_cells_still_pass_on_documents():
     assert C.check(_cell(), _doc("6d1295ed")) == []
+
+
+# --- a datacenter's shared NAT IP (coordinator 2026-09-26 22:00Z; flock-backend's EU-NL-1 pair) ----------------------------------
+
+#: An L40S prover and an H100 verifier in EU-NL-1: two machines behind one egress NAT, linked by RunPod's routed 10.x network.
+NAT = {"prover": {"pod_id": "pod-p", "machine_id": "fpuyltj3q41d", "public_ip": "91.199.227.82", "cpu_model": "AMD EPYC 9354"},
+       "verifier": {"pod_id": "pod-v", "machine_id": "go1zlmhqhfmq", "public_ip": "91.199.227.82", "cpu_model": "Intel Xeon 8470"},
+       "link": {"peer": "w3joukypegsto7.runpod.internal:7400", "peer_ip": "10.65.0.12"}}
+
+
+def _nat_runs(tmp_path, prover_extra=None, verifier_extra=None, rtt=None):
+    p, v = _real_runs(tmp_path, (lambda d: [m.update(value=rtt) for m in d["measurements"] if m["name"] == "net.rtt_ms"]) if rtt else None)
+    (p / "placement.json").write_text(json.dumps({"pod_id": "pod-p", "public_ip": "91.199.227.82", "product_uuid": "uuid-p", "boot_id": "boot-p",
+                                                  "link": NAT["link"], **(prover_extra or {})}))
+    (v / "placement.json").write_text(json.dumps({"pod_id": "pod-v", "public_ip": "91.199.227.82", "product_uuid": "uuid-v", "boot_id": "boot-v",
+                                                  **(verifier_extra or {})}))
+    return p, v
+
+
+def test_a_shared_nat_ip_plans_with_the_rest_pending():
+    cell = _cell(placement=copy.deepcopy(NAT))
+    assert cell.placement["shared_public_ip"] is True
+    assert cell.placement["separation"]["machine_id"] == ["fpuyltj3q41d", "go1zlmhqhfmq"]
+    assert cell.placement["separation"]["pending"] == ["product_uuid", "boot_id", "rtt_ms"]
+    assert C.check(_cell(), _doc("6d1295ed")) == []                      # a plan with distinct IPs records no NAT share
+    with pytest.raises(C.NotSupported, match="missing: machine_id"):
+        _cell(placement={**copy.deepcopy(NAT), "prover": {**NAT["prover"], "machine_id": None}})
+
+
+def test_a_shared_nat_ip_registers_with_all_three_ids_and_the_rtt(tmp_path):
+    p, v = _nat_runs(tmp_path)
+    res = C.register(_cell(placement=copy.deepcopy(NAT)), str(p), str(v), tmp_path / "work", dry_run=True)
+    assert res["problems"] == [] and "refused" not in res
+    pl = json.loads(Path(res["meta"]).read_text())["cell"]["placement"]
+    assert pl["shared_public_ip"] is True
+    sep = pl["separation"]
+    assert (sep["machine_id"], sep["product_uuid"]) == (["fpuyltj3q41d", "go1zlmhqhfmq"], ["uuid-p", "uuid-v"])
+    assert sep["boot_id"] == ["boot-p", "boot-v"] and sep["rtt_ms"] > PL.RTT_FLOOR_MS == 0.1 and sep["public_ip"] == "91.199.227.82"
+
+
+@pytest.mark.parametrize("prover_extra,verifier_extra,rtt,why", [
+    ({}, {"boot_id": "boot-p"}, None, "share boot_id boot-p"),                            # two containers of one kernel
+    ({}, {"product_uuid": "uuid-p"}, None, "share product_uuid uuid-p"),
+    ({}, {}, 0.03, "is not at least 0.1 ms"),                                            # the co-residence RTT
+    ({}, {"product_uuid": None}, None, "missing: product_uuid"),
+    ({"link": {"peer": "172.24.0.3:7400", "peer_ip": "172.24.0.3"}}, {}, None, "host bridge"),
+])
+def test_a_shared_nat_ip_without_the_proof_is_refused(tmp_path, prover_extra, verifier_extra, rtt, why):
+    p, v = _nat_runs(tmp_path, prover_extra, verifier_extra, rtt)          # a null in placement.json is not recorded
+    res = C.register(_cell(placement=copy.deepcopy(NAT)), str(p), str(v), tmp_path / "work", dry_run=True)
+    assert res.get("refused") and any(why in x for x in res["problems"]), res["problems"]
+
+
+def test_the_co_resident_pair_is_still_refused():
+    """Same machine id, CPU and public IP, a docker-bridge link (the five L40S cells): refused at plan and at check."""
+    with pytest.raises(C.NotSupported, match="share machine_id m-tx4"):
+        _cell(placement=CORESIDENT)
+    a = PL.assess(CORESIDENT["prover"], CORESIDENT["verifier"], CORESIDENT["link"], rtt_ms=0.03)
+    assert a["shared_public_ip"] is True and any("host bridge" in x for x in a["problems"])
+    assert any("not at least 0.1 ms" in x for x in a["problems"]) and any("missing: product_uuid" in x for x in a["problems"])
+    assert PL.is_host_bridge("172.24.0.3") and PL.is_host_bridge("127.0.0.1") and not PL.is_host_bridge("10.65.0.12")
