@@ -297,6 +297,8 @@ pub struct VllmStmt {
 
 impl VllmStmt {
     pub fn new(net: UnitNet, vus: usize, lay: Layout) -> Self {
+        // UL2: this statement's units are 2^13-row slots; refuse a larger netlist rather than truncate it
+        assert_eq!(net.unit_log(), UNIT_LOG, "UL2: a {}-row unit does not fit flock-vllm-block's 2^13-row unit slot", net.useful);
         let nbl = log2ceil(vus).max(3);
         let (kl, slots, units, p0) = (lay.k_log(), lay.comp_slots(), lay.units, lay.unit_pos0());
         assert!(p0 + units <= 1 << (kl - UNIT_LOG));
@@ -694,6 +696,18 @@ mod tests {
     fn vectors() -> Option<Value> {
         let p = std::env::var("VLLM_V1_VECTORS").ok()?;
         Some(serde_json::from_str(&std::fs::read_to_string(p).ok()?).unwrap())
+    }
+
+    /// UL2: a unit past 2^13 rows (a total unit) is refused, not truncated to the 2^13-row slot.
+    #[test]
+    #[should_panic(expected = "UL2")]
+    fn a_unit_past_2_13_rows_is_refused() {
+        let useful = 8449;
+        let (mut a, mut b): (Vec<Vec<usize>>, Vec<Vec<usize>>) = (0..useful).map(|i| if i < 544 { (vec![i], vec![i]) } else { (vec![], vec![]) }).unzip();
+        a[useful - 1] = vec![useful - 1];
+        b[useful - 1] = vec![useful - 1];
+        let net = UnitNet { relation: "shape".into(), useful, const_pos: useful - 1, n_in: 544, out_cols: vec![5, 6], a, b, sha256: [0; 32] };
+        VllmStmt::new(net, 8, Layout::of(1536, 48));
     }
 
     #[test]
