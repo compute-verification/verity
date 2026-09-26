@@ -801,14 +801,17 @@ def test_entities_results_split_into_phases_that_sum_to_the_overhead_with_setup_
             == pytest.approx(r["overhead"]["value"], rel=1e-9)
         assert r["rendered_at"] == "2026-09-25T23:00:00Z" and r["network"] == "dc-1ms-100gbps" and r["subcircuit"].startswith("gemm-coordinate/k1536/")
         assert r["overhead_at"]["dc-1ms-100gbps"] == pytest.approx(r["overhead"]["value"])
-    assert b3["id"] == "B-interactive@gemm-coordinate/k1536/sm89-mma-e4m3@frame-v3/blake3-keyed"
-    assert b3["configuration"] == "b-ligero-blake3-in-circuit" and b3["backend"] == "B-interactive" and b3["best"]
+    assert b3["id"] == "B-interactive@gemm-coordinate/k1536/sm89-mma-e4m3+frame-v3/blake3-keyed@bench-instances-fp8-ada-v1@rtx-4090/e4m3"
+    assert b3["key"] == {"backend": "B-interactive", "statement": "gemm-coordinate/k1536/sm89-mma-e4m3+frame-v3/blake3-keyed",
+                         "instance_set": "bench-instances-fp8-ada-v1", "prover_hardware": "rtx-4090/e4m3"}
+    assert b3["implementation"] == "B-Ligero + BLAKE3 in circuit" and b3["backend"] == "B-interactive" and b3["best"]
+    assert "configuration" not in b3 and "configurations" not in ent
     assert b3["setup"]["seconds"] == 2.0 and b3["setup"]["amortized_overhead"] == pytest.approx(2.0 * b3["native"]["value"] / 4096)
     assert all(p["id"] != "setup" for p in b3["phases"])
     assert b3["state"] == {"provisional": True, "provisional_reason": b3["state"]["provisional_reason"], "algebraic": False, "algebraic_hashes": [],
                            "verified": True, "verified_by": VERIFIER, "under_reverification": None}
     assert b3["marks"] == ["provisional"] and b3["zk_class"] == "malicious-verifier-zk"
-    b3cfg = next(c for c in ent["configurations"] if c["id"] == "b-ligero-blake3-in-circuit")
+    b3cfg = next(c for c in V.configuration_records(V.build(store)) if c["id"] == "b-ligero-blake3-in-circuit")
     assert b3cfg["params"] == {"statistical-soundness": f"2^{{-{b3['soundness']['cell_bits']:.1f}}}"}
     assert p2["marks"] == ["provisional", "algebraic", "under-reverification"] and p2["state"]["algebraic"]
     assert p2["state"]["under_reverification"].startswith("UNDER RE-VERIFICATION")
@@ -823,14 +826,16 @@ def test_entity_ids_are_stable_across_renders(store: LocalStore) -> None:
     b = V.render_entities(V.build(store), rendered_at="2026-09-26T13:00:00Z", commit="def")
     strip = lambda d: json.loads(json.dumps(d).replace("2026-09-26T13:00:00Z", "2026-09-25T23:00:00Z").replace('"def"', '"abc"'))  # noqa: E731
     assert strip(b) == json.loads(json.dumps(a))
-    ids = [c["id"] for c in a["configurations"]]
+    ids = [c["id"] for c in V.configuration_records(views)]
     assert len(ids) == len(set(ids)) == len(V.CONFIGURATIONS)
+    assert len({r["id"] for r in a["results"]}) == len(a["results"])
     assert set(a["census"]["hardware"]) == {c["hardware"] for c in a["subcircuits"]}
 
 
-def test_entities_table1_is_the_new_configurations_with_lists_and_a_short_zk_class() -> None:
-    ent = V.render_entities(V.Views(rules=V.SPEC), rendered_at="2026-09-25T23:00:00Z", commit="abc")
-    cfgs = {c["variant"]: c for c in ent["configurations"]}
+def test_configuration_records_carry_lists_and_a_short_zk_class_and_table1_lists_backends() -> None:
+    views = V.Views(rules=V.SPEC)
+    ent = V.render_entities(views, rendered_at="2026-09-25T23:00:00Z", commit="abc")
+    cfgs = {c["variant"]: c for c in V.configuration_records(views)}
     assert set(cfgs) == {c.id for c in V.CONFIGURATIONS}
     assert cfgs[V.FLOCK_CONFIG.id]["backend_family"] == "C-Flock" and cfgs[V.ROUTE_A]["backend_family"] == "A-GKR"
     for cfg in V.CONFIGURATIONS:
@@ -844,7 +849,10 @@ def test_entities_table1_is_the_new_configurations_with_lists_and_a_short_zk_cla
     assert cfgs["B-Ligero v1"]["assumptions_text"] == ["BabyBear with its extension for challenges",
                                                    "interactive: statistical given the committed coins (HM96)"]
     assert V.split_list("a (b; c); d") == ["a (b; c)", "d"] and V.split_list("") == []
-    assert [r["kind"] for r in ent["tables"]["table1"]["rows"]].count("configuration") == len(V.CONFIGURATIONS)
+    t1 = ent["tables"]["table1"]
+    assert [r["backend"] for r in t1["rows"]] == [b["id"] for b in ent["backends"]] == ent["axes"]["backends"]
+    b = next(r for r in t1["rows"] if r["backend"] == "B-fs")["cells"]
+    assert b["Guarantees"] == "Computational soundness, HVZK, Non-interactive, Transparent setup" and "Random oracle" in b["Assumptions"]
 
 
 def test_cli_entities(store: LocalStore, capsys: pytest.CaptureFixture[str]) -> None:
@@ -859,7 +867,7 @@ def test_entities_table1_claims_are_properties_with_the_assumptions_they_rest_on
     from verity import claims
 
     ent = V.render_entities(V.Views(rules=V.SPEC), rendered_at="2026-09-25T23:00:00Z", commit="abc")
-    cfgs = {c["variant"]: c for c in ent["configurations"]}
+    cfgs = {c["variant"]: c for c in V.configuration_records(V.Views(rules=V.SPEC))}
     for e in cfgs.values():
         assert [c["property"]["id"] for c in e["claims"] if c["property"]["id"]] == e["properties"]
         for c in e["claims"]:
@@ -897,8 +905,9 @@ def test_entities_table1_claims_are_properties_with_the_assumptions_they_rest_on
     assert sp1["properties"] == ["computational-soundness", "non-interactive", "transparent-setup"] and sp1["claims"][1]["property"]["unmapped"]
     assert sp1["assumptions"][:1] == ["cr/poseidon2-koalabear"] and "random-oracle" in sp1["assumptions"]
     assert "logup" in cfgs["A-GKR CPU (Rust)"]["assumptions"]
-    assert set(ent["claims"]) == {i for e in cfgs.values() for k in ("properties", "assumptions", "models") for i in e[k]}
-    assert ent["claims"]["cr/sha-512"]["label"] == "CR · SHA-512"
+    assert set(ent["claims"]) == {*(i for b in ent["backends"] for k in ("properties", "assumptions") for i in b[k]),
+                                  *(i for st in ent["statements"] for i in st["assumptions"])}
+    assert ent["claims"]["cr/sha-512"]["label"] == "CR · SHA-512"                   # A-GKR's proof-internal Merkle trees
     assert not any(i.startswith("ro/") for e in cfgs.values() for i in e["assumptions"])
     retired = ("beacon", "auditor", "challenger")
     assert not any(r in i for i in ent["claims"] for r in retired)
@@ -906,29 +915,31 @@ def test_entities_table1_claims_are_properties_with_the_assumptions_they_rest_on
 
 def test_entities_backends_are_backend_families_by_interaction_mode_with_their_claims_in_full() -> None:
     ent = V.render_entities(V.Views(rules=V.SPEC), rendered_at="2026-09-25T23:00:00Z", commit="abc")
-    cfgs = {c["id"]: c for c in ent["configurations"]}
+    cfgs = {c["variant"]: c for c in V.configuration_records(V.Views(rules=V.SPEC))}
     inst = {i["id"]: i for i in ent["backends"]}
     assert list(inst) == ["A-route-a", "A-fs", "B-interactive", "B-fs", "C-interactive", "D-fs"]
     assert [f["id"] for f in ent["backend_families"]] == ["A-GKR", "B-Ligero", "C-Flock", "D-SP1"] == ent["axes"]["backend_families"]
     assert {f["id"]: f["column"] for f in ent["backend_families"]} == {"A-GKR": "A-GKR", "B-Ligero": "B-Ligero", "C-Flock": "Flock", "D-SP1": "SP1"}
     for i in inst.values():
         assert i["display"] == i["id"] and (i["id"] == f"{i['backend_family'][0]}-{i['mode']}" or i["composed"])
-        members = [cfgs[c] for c in i["configurations"]]
+        members = [cfgs[c] for c in i["implementations"]]
         assert members and all(m["backend_family"] == i["backend_family"] and m["backend"] == i["id"] for m in members)
         for slot, claim in enumerate(i["claims"]):
             ids = {m["claims"][slot]["property"]["id"] for m in members}
             assert claim["property"]["id"] == (ids.pop() if len(ids) == 1 else None)
-            union = {a["id"] or a["text"] for m in members for a in m["claims"][slot]["assumptions"]}
-            own = {a["id"] or a["texts"][0] for a in claim["assumptions"] if a["from"] in (None, "link") and a["configurations"][0] in i["configurations"]}
+            union = {a["id"] or a["text"] for m in members for a in m["claims"][slot]["assumptions"] if not a["role"].startswith("statement commitment")}
+            own = {a["id"] or a["texts"][0] for a in claim["assumptions"] if a["from"] in (None, "link") and a["implementations"][0] in i["implementations"]}
             assert own == union or (i["composed"] and own >= union)
-            assert all(set(a["configurations"]) <= set(i["configurations"]) for a in claim["assumptions"] if a["from"] != "C-Flock")
-    assert {c["id"] for c in cfgs.values() if c["backend_family"]} == {c for i in inst.values() for c in i["configurations"]}
+            assert all(set(a["implementations"]) <= set(i["implementations"]) for a in claim["assumptions"] if a["from"] != "C-Flock")
+            assert not any(r.startswith("statement commitment") for a in claim["assumptions"] for r in a["roles"])
+    assert {c["variant"] for c in cfgs.values() if c["backend_family"]} == {c for i in inst.values() for c in i["implementations"]}
     b, bfs = inst["B-interactive"], inst["B-fs"]
     assert b["properties"] == ["statistical-soundness", "malicious-verifier-zk", "designated-verifier", "transparent-setup"]
-    assert bfs["properties"] == ["computational-soundness", "hvzk", "non-interactive", "transparent-setup"] and bfs["configurations"] == ["b-ligero-fiat-shamir-hvzk"]
+    assert bfs["properties"] == ["computational-soundness", "hvzk", "non-interactive", "transparent-setup"] and bfs["implementations"] == ["B-Ligero Fiat–Shamir (HVZK)"]
     zk = next(a for a in b["claims"][1]["assumptions"] if a["id"] == "cr/blake2b")
-    assert zk["roles"] == ["Fiat–Shamir / coins (coin commitments)"] and "b-ligero-v1" in zk["configurations"]
-    assert inst["A-route-a"]["configurations"] == [slug(V.ROUTE_A)] and len(inst["A-fs"]["configurations"]) == 2
+    assert zk["roles"] == ["Fiat–Shamir / coins (coin commitments)"] and "B-Ligero v1" in zk["implementations"]
+    assert inst["A-route-a"]["implementations"] == [V.ROUTE_A] and len(inst["A-fs"]["implementations"]) == 2
+    assert "cr/blake3" not in inst["C-interactive"]["assumptions"]                 # C-Flock's BLAKE3 rows are its statement's
     ra = inst["A-route-a"]
     assert ra["composed"] and ra["backend_family"] == "A-GKR" and ra["column"] == "A-GKR" and ra["components"] == ["C-Flock", "link"]
     froms = {a["from"] for a in ra["claims"][0]["assumptions"]}
@@ -981,7 +992,7 @@ def test_entities_schemes_carry_the_hash_assumptions_their_configurations_declar
     b3 = sch["frame-v3/blake3-keyed"]
     assert b3["name"] == "frame-v3 · keyed-BLAKE3 rows" and b3["description"].startswith("frame-v3 SHA-256 trees over") and ";" not in b3["description"]
     assert "statement commitment (frame-v3 trees)" in b3["assumption_details"][0]["roles"]
-    assert {"b-ligero-blake3-in-circuit", slug(V.ROUTE_A), slug(V.FLOCK_CONFIG.id)} <= set(b3["configurations"])
+    assert {"B-Ligero + BLAKE3 in circuit", V.ROUTE_A, V.FLOCK_CONFIG.id} <= set(b3["implementations"])
     assert all(r["scheme"] in sch for r in ent["results"])
     from verity import claims
     assert all(claims.get(i).kind == "assumption" for s in sch.values() for i in s["assumptions"])
@@ -992,9 +1003,15 @@ def test_entities_results_are_every_admissible_backends_best_with_keys_instance_
     ent = V.render_entities(V.build(store), rendered_at="2026-09-25T23:00:00Z", commit="abc")
     by_art = {r["artifact"]: r for r in ent["results"]}
     b3 = by_art[arts["blake3"]]
-    assert b3["key"] == {"subcircuit": "gemm-coordinate/k1536/sm89-mma-e4m3", "subcircuit_template": "gemm-coordinate",
-                         "parameters": {"K": 1536, "datatype": "e4m3", "semantics": "sm89.mma.m16n8k32.e4m3"}, "hardware": "rtx-4090/e4m3",
-                         "instance_set": "bench-instances-fp8-ada-v1", "scheme": "frame-v3/blake3-keyed"}
+    stmt = "gemm-coordinate/k1536/sm89-mma-e4m3+frame-v3/blake3-keyed"
+    assert b3["key"] == {"backend": "B-interactive", "statement": stmt, "instance_set": "bench-instances-fp8-ada-v1", "prover_hardware": "rtx-4090/e4m3"}
+    st = {x["id"]: x for x in ent["statements"]}
+    assert st[stmt]["subcircuit"] == "gemm-coordinate/k1536/sm89-mma-e4m3" and st[stmt]["scheme"] == "frame-v3/blake3-keyed"
+    assert st[stmt]["assumptions"] == ["cr/sha-256", "cr/blake3"] and b3["assumptions"]["statement"] == st[stmt]["assumptions"]
+    backend = next(x for x in ent["backends"] if x["id"] == "B-interactive")
+    assert b3["assumptions"]["backend"] == backend["assumptions"]
+    assert b3["assumptions"]["all"] == list(dict.fromkeys([*backend["assumptions"], "cr/sha-256", "cr/blake3"]))
+    assert set(ent["axes"]["statements"]) == set(st) and all(x["id"] == f"{x['subcircuit']}+{x['scheme']}" for x in st.values())
     assert b3["hardware"] == b3["prover_hardware"] == "rtx-4090/e4m3" and b3["native"]["peak"] == "rtx-4090/e4m3"
     assert b3["native"]["work_model"] == "work-model/v0"
     assert b3["instance_set"] == {"id": "bench-instances-fp8-ada-v1", "provenance": "synthetic", "range": [0, 4096], "how": "frozen"}
@@ -1013,7 +1030,9 @@ def test_entities_results_are_every_admissible_backends_best_with_keys_instance_
     assert cell["backend"] == "B-interactive" and cell["result"] == b3["id"]
     assert t2[("gemm-coordinate/k1536/sm89-mma-e4m3", "frame-v3/blake3-keyed")]["native"]["peak"] == "rtx-4090/e4m3"
     rows3 = {r["result"]: r for r in ent["tables"]["table3"]["rows"]}
-    assert rows3[b3["id"]]["key"] == b3["key"] and rows3[b3["id"]]["backend"] == "B-interactive"
+    assert rows3[b3["id"]]["key"]["statement"] == stmt and rows3[b3["id"]]["key"]["prover_hardware"] == "rtx-4090/e4m3"
+    assert rows3[b3["id"]]["backend"] == "B-interactive"
+    assert t2[("gemm-coordinate/k1536/sm89-mma-e4m3", "frame-v3/blake3-keyed")]["statement"] == stmt
     sub = {s["id"]: s for s in ent["subcircuits"]}
     assert sub["gemm-coordinate/k1536/sm90-mma-bf16"]["fidelity_notes"][0]["note"].startswith("H100 BF16 models mma")
     assert sub["gemm-coordinate/k1536/sm80-mma-bf16"]["instance_set_provenance"] == "captured"
