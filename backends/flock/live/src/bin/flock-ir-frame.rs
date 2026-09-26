@@ -772,6 +772,11 @@ fn check_class(path: &str, pin: &str, net: &IrUnitNet, text: &str, inst: &FrameI
         return Err(format!("the class manifest's sha256 {} is not the pin {pin}", hex(&c)));
     }
     let m: Value = serde_json::from_slice(&b).map_err(|e| format!("class manifest: {e}"))?;
+    // CP2: the pinned bytes are the manifest's own canonical serialization (sorted keys, no whitespace, one newline), so a
+    // duplicate key (serde_json keeps the last) or any other spelling of the same content is refused
+    if serde_json::to_string(&m).map_err(|e| e.to_string())? + "\n" != String::from_utf8_lossy(&b) {
+        return Err("the class manifest is not its canonical serialization".into());
+    }
     if m["format"] != "flock-ir-class/v1" {
         return Err("not a flock-ir-class/v1 manifest".into());
     }
