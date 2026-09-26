@@ -1,6 +1,6 @@
 """Re-register a Flock cell's ``bench-result/v1`` from its recorded runs, with what the red team and the renderer require.
 
-    python -m verity_flock.register --prover-run DIR --verifier-run DIR --out meta.json \\
+    python -m verity_flock.register --prover-run DIR --verifier-run DIR --lane LANE --out meta.json \\
         [--loopback-seconds S --loopback-method TEXT] [--rtt-ms MS --rtt-method TEXT] [--supersedes art:...]
 
 then ``research data put --kind bench-result/v1 --meta @meta.json --ref run_files=<the run's run files> --preserve``.
@@ -98,7 +98,7 @@ def patch(doc: dict, prover: dict, verifier: dict, a) -> dict:
     if a.loopback_seconds is not None and "live.loopback_round_seconds" not in ms:
         doc["measurements"].append({"name": "live.loopback_round_seconds", "value": a.loopback_seconds, "unit": "s"})
         inter["loopback_method"] = a.loopback_method
-    doc.update({"lane": "flock-backend", "registered_by": "flock-backend",
+    doc.update({"lane": a.lane, "registered_by": a.lane,
                 "derived_from": {"prover_run": prover["run"], "verifier_run": verifier["run"], "supersedes": a.supersedes},
                 "registration": "re-registered from the recorded runs; measurements unchanged except the renamed/added "
                                 "interaction fields named in interaction.*_method"})
@@ -114,6 +114,8 @@ def main(argv=None) -> int:
     ap.add_argument("--prover-run", required=True)
     ap.add_argument("--verifier-run", required=True)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--lane", required=True, help="the producing lane (the result's lane / registered_by: the non-producer rule "
+                                                  "excludes its labels from verification)")
     ap.add_argument("--loopback-seconds", type=float, default=None)
     ap.add_argument("--loopback-method", default=None)
     ap.add_argument("--rtt-ms", type=float, default=None)
