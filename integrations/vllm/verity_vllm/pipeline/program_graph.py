@@ -175,27 +175,42 @@ class _Acc:
         """Per group edge, the leaves the consumers' operand runs name in the producers' outputs (words), their declared bits, and
         per (consumer parameter, producer port) the words landing there: the instance rows' runs `("n", producer, lo, hi)`."""
         tables, spec_idx, forms, form_idx = cols.port_tables, cols.spec_idx, cols.forms, cols.form_idx
+        cg = call_group.tolist()
+        words, bits, ports = self.edge_words, self.edge_bits, self.edge_ports
         for r in iter_instance_rows(path):
-            gc = gkeys[call_group[int(r["i"])]]
+            gc = gkeys[cg[int(r["i"])]]
             names = None
             for j, operand in enumerate(r.get("args") or ()):
+                acc: dict[tuple, list[int]] = {}                      # (producer group, port) -> [words, bits] over this operand's runs
                 for run in operand:
                     if run[0] != "n":
                         continue
-                    idx, lo, hi = int(run[1]), int(run[2]), int(run[3])
-                    key = (gkeys[call_group[idx]], gc)
+                    idx = run[1]
                     table = tables[spec_idx[idx]]
+                    if len(table) == 1 and (table[0].lo <= run[2] and run[3] <= table[0].hi or forms[form_idx[idx]] == "batch"):
+                        p = table[0]
+                        a = acc.setdefault((cg[idx], p.name), [0, 0])
+                        a[0] += run[3] - run[2]
+                        a[1] += (run[3] - run[2]) * (p.width or 0)
+                        continue
+                    lo, hi = run[2], run[3]
                     hits = [(p, max(lo, p.lo), min(hi, p.hi)) for p in table if p.lo < hi and lo < p.hi]
                     if not hits and forms[form_idx[idx]] == "batch":
                         hits = [(table[0], lo, hi)]
-                    if names is None:
-                        names = self._params_of(r["spec"])
-                    param = names[j] if j < len(names) else str(j)
-                    ports = self.edge_ports.setdefault(key, Counter())
-                    for p, a, b in hits:
-                        self.edge_words[key] += b - a
-                        self.edge_bits[key] += (b - a) * int(p.width or 0)
-                        ports[(param, p.name)] += b - a
+                    for p, x, y in hits:
+                        a = acc.setdefault((cg[idx], p.name), [0, 0])
+                        a[0] += y - x
+                        a[1] += (y - x) * (p.width or 0)
+                if not acc:
+                    continue
+                if names is None:
+                    names = self._params_of(r["spec"])
+                param = names[j] if j < len(names) else str(j)
+                for (gp, port), (w, b) in acc.items():
+                    key = (gkeys[gp], gc)
+                    words[key] += w
+                    bits[key] += b
+                    ports.setdefault(key, Counter())[(param, port)] += w
 
     def _edge(self, gid: dict, a: tuple, b: tuple, reads: int) -> dict[str, Any]:
         e: dict[str, Any] = {"from": gid[a], "to": gid[b], "reads": reads}
