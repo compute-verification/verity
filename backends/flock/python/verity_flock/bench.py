@@ -289,6 +289,8 @@ def point(a, total: int, d: Path, net: Path) -> dict:
     ok = ok and len(timed) == a.runs and all(r["accepted"] for r in live)
     h = dict(headers[0])
     h["instances"] = dict(h["instances"], range=[0, total])
+    if a.set:
+        h["instances"]["content_digest"] = json.loads((Path(a.set) / "manifest.json").read_text()).get("content_digest")
     return {"total": total, "rc": max(rcs) if rcs else None, "ok": ok, "live": live, "timed": timed, "header": h, "gen_s": gen_s,
             "wall_s": wall, "contention": contention, "peak_rss": rss, "dir": d.name, "subbatches": subs}
 

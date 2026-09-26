@@ -87,6 +87,25 @@ def test_an_input_set_needs_the_lowerings_stage(monkeypatch):
     assert cell.input_set["kind"] == "set" and cell.relation == "bf16-ampere-k2048"
 
 
+def test_a_flock_gemm_cell_on_an_input_set_sends_it_to_both_pods(tmp_path, monkeypatch):
+    """A captured #101 slice at K = 2048: both roles receive the same tarball (their own instance files come from it), the
+    prover's extra arguments (the CUDA arch) reach the prover only."""
+    monkeypatch.setenv("TMPDIR", str(tmp_path))
+    monkeypatch.setattr("tempfile.tempdir", None)
+    cell = C.plan("C-interactive", "gemm-coordinate/k2048/sm80-mma-bf16+frame-v3/blake3-keyed", str(SLICE), "vy-p",
+                  **{**FLOCK, "backend_args": ["SM=89"]})
+    assert (cell.relation, cell.input_set["kind"]) == ("bf16-ampere", "set")
+    v, p = cell.jobs
+    tar = Path(p["send"][0])
+    assert v["send"] == p["send"] and tar.is_file() and tar.name == f"{cell.input_set['content_digest']}.tar"
+    for j in (v, p):
+        assert j["argv"][j["argv"].index("--send") + 1] == str(tar) and f"SET={tar.name}" in j["command"]
+        assert "REL=bf16-ampere" in j["command"]
+    assert "SM=89" in p["command"] and "SM=89" not in v["command"]
+    census = _cell()
+    assert all(not j["send"] and not any(a.startswith("SET=") for a in j["command"]) for j in census.jobs)
+
+
 def test_plan_wraps_the_b_ligero_cell_script(tmp_path, monkeypatch):
     """B-interactive on a captured #101 slice: the K = 2048 fold with the keyed-BLAKE3 xob circuit, the set shipped to the prover
     as a tarball (--send), the verifier on its own pod, the loopback probe on."""

@@ -1,5 +1,8 @@
 """C-interactive (Flock, live verifier): ``backends/flock/pod/30-cell.sh`` on both pods, then ``verity_flock.register``.
 
+A GEMM cell on an input set (directory or ``art:`` id) sends the set to both pods as the same tarball (``SET=``), and each side
+writes its own instance files from it (``verity_flock.instances.write_set``); on a census frozen set the scripts rebuild it.
+
 An IR template's relation (``irf:<template>``, ``verity/flock-ir-frame/v1``) runs ``backends/flock/pod/33-ir-cell.sh`` instead: the
 cell's input set goes to both pods as a tarball, each pod stages its own instance files from it (``verity_flock.ir_bench``), and
 ``verity_flock.register`` names ``flock-ir-frame`` as the verifier binary.
@@ -65,12 +68,14 @@ def unmet(cell) -> str | None:
 def jobs(cell) -> list[dict]:
     if cell.relation.startswith(IR_PREFIX):
         return ir_jobs(cell)
-    common = [f"REL={cell.relation}", f"POINTS={cell.points}", f"RUNS={cell.runs}", *([f"PER={cell.per_proof}"] if cell.per_proof else [])]
+    send = [set_tarball(cell)] if cell.input_set.get("kind") == "set" else []
+    common = [f"REL={cell.relation}", f"POINTS={cell.points}", f"RUNS={cell.runs}", *([f"PER={cell.per_proof}"] if cell.per_proof else []),
+              *([f"SET={Path(send[0]).name}"] if send else [])]
     operator = f"OPERATOR={cell.lane}-verifier-pod"
     return [
-        {"role": "verifier", "pod": cell.verifier, "stage": "flock.cell.verifier",
+        {"role": "verifier", "pod": cell.verifier, "stage": "flock.cell.verifier", "send": send,
          "command": ["bash", SCRIPT, "ROLE=verifier", *common, operator]},
-        {"role": "prover", "pod": cell.prover, "stage": "flock.cell.prover",
+        {"role": "prover", "pod": cell.prover, "stage": "flock.cell.prover", "send": send,
          "command": ["bash", SCRIPT, "ROLE=prover", *common, f"VERIFIER={cell.verifier_addr}", f"RTT_TARGET={cell.rtt_target}", "LOOPBACK=1",
                      operator, *cell.backend_args]},
     ]

@@ -3,7 +3,8 @@
 # verity_flock.bench, prover on the line's GPU, verifier on a separate same-datacenter pod.
 #   ROLE=prover   REL POINTS PER RUNS VERIFIER=host:port  (GPU build; sweep against the verifier)
 #   ROLE=verifier REL POINTS PER RUNS OPERATOR=lane       (CPU build; its own instance files; serves the prover's order on :7400)
-#   SET=name.tgz  a spine input set sent with the run (inputs/name.tgz: manifest.json x.u16 w.u16 y.u16), both roles
+#   SET=name.tar  a spine input set sent with the run (inputs/name.tar or .tgz: its manifest.json and port files, at the top
+#                 or in one directory, as bench.cell's driver packs it), both roles
 #   YMODEL=1      with SET: y is REL's chain output (a set captured on other silicon)
 #   K=2048        an 8-bit relation's synthetic E4M3 stream at K words
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
@@ -43,8 +44,9 @@ fi
 B=/workspace/flock-gpu-link/flock/target/release/flock-pure-gpu; sha256sum $B | tee $O/binary.sha256
 SRC=""
 if [ -n "${SET:-}" ]; then
-  S=$W/set-${SET%.tgz}; rm -rf $S; mkdir -p $S; tar xzf ${RESEARCH_RUN_DIR:?}/inputs/$SET -C $S || exit 5
-  (cd $S && sha256sum manifest.json x.u16 w.u16 y.u16) | tee $O/set.sha256; SRC="--set $S"
+  S=$W/set-${SET%%.*}; rm -rf $S; mkdir -p $S; tar xf ${RESEARCH_RUN_DIR:?}/inputs/$SET -C $S || exit 5
+  S=$(dirname "$(find $S -name manifest.json | head -1)")
+  (cd $S && sha256sum manifest.json $(ls | grep -E '^[xwy]\.u(8|16|32)$')) | tee $O/set.sha256; SRC="--set $S"
 fi
 [ -n "${K:-}" ] && SRC="$SRC --k $K"
 [ -n "${YMODEL:-}" ] && SRC="$SRC --y-model"
