@@ -20,7 +20,7 @@ B=$F/target/release/flock-ir-frame; sha256sum $B | tee $O/binary.sha256
 [ -x $W/py/bin/python ] || { $HOME/.local/bin/uv venv -q --python 3.12 $W/py && $HOME/.local/bin/uv pip install -q --python $W/py/bin/python numpy blake3; }
 export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO/packages/verity/src:$REPO/backends/numerical/python:$REPO/backends/flock/python:$REPO/integrations/vllm
 S=$W/rec-$TAG; rm -rf $S; mkdir -p $S; tar xzf $RD/inputs/$TAG.tgz -C $S
-SD=$W/set-$TAG; rm -rf $SD; mkdir -p $SD; tar xzf $RD/inputs/set-$TAG.tgz -C $SD
+SD=$W/set-$TAG; rm -rf $SD; mkdir -p $SD; tar xzf $RD/inputs/${SETTGZ:-set-$TAG.tgz} -C $SD
 SET=$(dirname $(find $SD -name manifest.json | head -1))
 if [ -n "${SRC_RANGE:-}" ]; then  # the cell's set is a subset of the sent source set: cut it here (input_sets.subset) and check its digest
   python3 -c "import sys;from verity_numerical.bench import input_sets as I;lo,hi=map(int,sys.argv[2].split(':'));p=I.subset(sys.argv[1],sys.argv[3],lo,hi);s=I.InputSet.open(p);print(s.content_digest);print(p)" $SET $SRC_RANGE $W/sub-$TAG > $O/subset.txt || exit 1
