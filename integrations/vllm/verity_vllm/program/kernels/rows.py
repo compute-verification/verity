@@ -90,6 +90,8 @@ EVALUATORS = {
                         "masked to -10000.f) -> router_w f32 + router_ids i32",
     "MoeRouterTopKNorm_v1": "MoeRouterTopK then the renormalising epilogue (selected sum ascending from 0.f, denom = sum > 0 ? sum : 1, one F32Div, "
                             "one F32Mul per slot; MOE-04) -> router_w f32 + router_ids i32",
+    "MoeRouterTopKRounds_v1": "the MoeRouterTopK_v1 row (the same function, stated round by round: registry.moe.MoeRouterTopKRounds) -> router_w + router_ids",
+    "MoeRouterTopKRoundsNorm_v1": "the MoeRouterTopKNorm_v1 row (registry.moe.MoeRouterTopKRoundsNorm) -> router_w + router_ids",
     "MoeExpertGemm_v1": "verity_vllm.program.kernels.derived_rows.dot_bf16 (DotBf16_v1 k16 chain from 0) over the expert row W13[e] gathered by the committed "
                         "router_ids word + f2fp_bf16 (MoeExpertCoordinate_v1: the w13 launch, MUL_ROUTED_WEIGHT=False) -> up",
     "MoeExpertGemmW_v1": "dot_bf16 over W2[e] gathered by the committed router_ids word, the committed routed weight multiplied into the f32 "
@@ -692,6 +694,8 @@ def _check_targets() -> dict[str, list]:
         "ScaledMmFp8Block_v1": [bind(fp8.ScaledMmFp8Block, K=128, N=128, G=128)],
         "MoeRouterTopK_v1": [bind(moe.MoeRouterTopK, **router)],
         "MoeRouterTopKNorm_v1": [bind(moe.MoeRouterTopKNorm, **router)],
+        "MoeRouterTopKRounds_v1": [bind(moe.MoeRouterTopKRounds, **router)],
+        "MoeRouterTopKRoundsNorm_v1": [bind(moe.MoeRouterTopKRoundsNorm, **router)],
         "MoeExpertGemm_v1": [bind(moe.MoeExpertGemm, E=2, K=32, N=3)],
         "MoeExpertGemmW_v1": [bind(moe.MoeExpertGemmW, E=2, K=32, N=3)],
         "MoeFfnFixedL_v1": [bind(moe_pad.MoeFfnFixedL, **router, H=16, I=16)],
@@ -723,6 +727,8 @@ _row("Fp8GroupQuant_v1", fp8_group_quant, ("0", "1"))
 _row("ScaledMmFp8Block_v1", scaled_mm_fp8_block, ("0",))
 _row("MoeRouterTopK_v1", partial(moe_router, renormalize=False), ("router_w", "router_ids"))
 _row("MoeRouterTopKNorm_v1", partial(moe_router, renormalize=True), ("router_w", "router_ids"))
+_row("MoeRouterTopKRounds_v1", partial(moe_router, renormalize=False), ("router_w", "router_ids"))
+_row("MoeRouterTopKRoundsNorm_v1", partial(moe_router, renormalize=True), ("router_w", "router_ids"))
 _row("MoeExpertGemm_v1", partial(moe_expert_gemm, routed=False), ("up",), _sample({1: "E"}))
 _row("MoeExpertGemmW_v1", partial(moe_expert_gemm, routed=True), ("down",), _sample({1: "E"}))
 _row("MoeFfnFixedL_v1", partial(moe_ffn_fixed, router_gemm=False), ("out",))

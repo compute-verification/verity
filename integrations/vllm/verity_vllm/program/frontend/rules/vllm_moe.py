@@ -123,6 +123,12 @@ def active_moe_construction() -> str:
     return active_target_profile().effective_moe_construction()
 
 
+def active_moe_router() -> str | None:
+    """The router statement the ACTIVE TargetProfile declares (None = kernel order); read at `emit` time, never cached."""
+    from verity_vllm.program.frontend.rules.vllm_bindings import active_target_profile  # noqa: PLC0415
+    return active_target_profile().moe_router
+
+
 def _not_owned(family: str) -> str | None:
     """A refusal string when the active construction is not `family`'s, else None: the two families are exclusive BY DECLARATION."""
     c = active_moe_construction()
@@ -206,7 +212,7 @@ class TopkSoftmaxRule(InPlaceRule):
     info = RuleInfo("TopkSoftmax[vllm-moe]", 1, "in-place-binding",
                     applies_to="_moe_C.topk_softmax(Tensor! w, Tensor! ids, Tensor! tei, logits, bool renormalize, Tensor? bias, Tensor? is_padding)",
                     preconditions=("logits is bf16 [M, E] with E in the difftested set (64, 128); renormalize a static bool (False -> MoeRouterTopK_v1, "
-                                   "True -> MoeRouterTopKNorm_v1); bias None; is_padding None",
+                                   "True -> MoeRouterTopKNorm_v1; the Rounds twins under TargetProfile.moe_router = 'rounds'); bias None; is_padding None",
                                    "w is an unwritten allocation [M, TOPK] f32; ids [M, TOPK] i32; tei [M, TOPK] i32"),
                     evidence_domain="structural; numerics: MoeRouterTopK_v1 (vLLM _moe_C.topk_softmax fused kernel, cp-moe xcheck)")
 
@@ -227,7 +233,8 @@ class TopkSoftmaxRule(InPlaceRule):
         # [MOE-04] renormalize=True (Qwen3-MoE / Mixtral norm_topk_prob) is the same kernel with the lead thread's 1/sum epilogue:
         # MoeRouterTopKNorm_v1 (registry.moe); the ids are unchanged, the weights are the normalised probabilities.
         renorm = node.args[4]
-        fn = ctx.kind("moe_router_topk_norm" if renorm else "moe_router_topk", node, E=E, TOPK=TOPK, VPT=VPT)
+        kind = "moe_router_topk" + ("_rounds" if active_moe_router() == "rounds" else "") + ("_norm" if renorm else "")
+        fn = ctx.kind(kind, node, E=E, TOPK=TOPK, VPT=VPT)
         outs = [ctx.call(fn, r, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
         w_rows = [o[0] for o in outs]
         id_rows = [o[1] for o in outs]

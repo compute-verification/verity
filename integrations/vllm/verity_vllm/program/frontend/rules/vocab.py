@@ -252,6 +252,9 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # routed weight multiplied into the f32 accumulator); the routed sum over a token's TOPK slots. `rules/vllm_moe.py` asks for them.
            "moe_router_topk": lambda E, TOPK, VPT: ir_bind(_moe.MoeRouterTopK, E=E, TOPK=TOPK, VPT=VPT),
            "moe_router_topk_norm": lambda E, TOPK, VPT: ir_bind(_moe.MoeRouterTopKNorm, E=E, TOPK=TOPK, VPT=VPT),
+           # the same router stated round by round (`TargetProfile.moe_router = "rounds"`)
+           "moe_router_topk_rounds": lambda E, TOPK, VPT: ir_bind(_moe.MoeRouterTopKRounds, E=E, TOPK=TOPK, VPT=VPT),
+           "moe_router_topk_rounds_norm": lambda E, TOPK, VPT: ir_bind(_moe.MoeRouterTopKRoundsNorm, E=E, TOPK=TOPK, VPT=VPT),
            "moe_expert_gemm": lambda E, K, N: ir_bind(_moe.MoeExpertGemm, E=E, K=K, N=N),
            "moe_expert_gemm_w": lambda E, K, N: ir_bind(_moe.MoeExpertGemmW, E=E, K=K, N=N),
            "moe_sum": lambda TOPK, H: ir_bind(_moe.MoeSum, TOPK=TOPK, H=H),

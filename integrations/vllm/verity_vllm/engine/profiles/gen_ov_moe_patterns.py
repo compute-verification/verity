@@ -166,6 +166,9 @@ class MoEFusedExperts:
     #: `renormalize=True` -> `MoeRouterTopKNorm_v1` (Qwen3-MoE, `norm_topk_prob=true`: the TOPK probabilities rescaled to sum 1, same ids).
     #: A profile states ONE of them (the checkpoint's `norm_topk_prob`, `C["NORM_TOPK_PROB"]`); the other value observed is Unsupported.
     renormalize: bool = False
+    #: the router's statement (`TargetProfile.moe_router`): None = kernel order, "rounds" = `MoeRouterTopKRounds[Norm]_v1`, the same
+    #: function; the workload's declaration, passed down like `moe_construction`, never read off the trace
+    router: str | None = None
     #: [R19 qwen3, TP] patterns for descendants of the scope that are neither the six MoE kernels nor scope glue -- vLLM's `FusedMoE`
     #: issues the tensor-parallel all-reduce of the routed sum INSIDE `vllm.moe_forward` when `reduce_results=True`; a rank profile puts
     #: its `TpCollective` here so the collective is resolved (and its Compute appended after `MoeSum`) instead of making the whole scope
@@ -235,7 +238,10 @@ class MoEFusedExperts:
         weights, ids, logits = a.get("topk_weights"), a.get("topk_indices"), a.get("gating_output")
         if not all(isinstance(v, ViewDesc) for v in (weights, ids, logits)):
             return unsupported(node, "topk_softmax arguments not bound as expected", args={k: repr(v) for k, v in a.items()})
-        router_def = _MOE.MoeRouterTopKNorm if self.renormalize else Q.MoeRouterTopK
+        if self.router == "rounds":
+            router_def = _MOE.MoeRouterTopKRoundsNorm if self.renormalize else _MOE.MoeRouterTopKRounds
+        else:
+            router_def = _MOE.MoeRouterTopKNorm if self.renormalize else Q.MoeRouterTopK
         if a.get("renormalize") is not bool(self.renormalize) or a.get("bias") is not None:
             return unsupported(node, f"{router_def.id} is the renormalize={bool(self.renormalize)}, bias-free softmax router",
                                renormalize=a.get("renormalize"), bias=repr(a.get("bias")), profile_renormalize=bool(self.renormalize))
@@ -408,6 +414,16 @@ class MoEFusedExpertsPadded(MoEFusedExperts):
         tail = [p for p in keep if isinstance(p, Compute)]            # [TP] the in-scope all-reduce stays AFTER the block's one Compute
         keep = [p for p in keep if not isinstance(p, Compute)]
         return Group(tuple(keep) + (one, *tail), r.consumed, hint=hint, pattern=self.name)
+
+
+def with_moe_router(profile: Any, router: str | None) -> Any:
+    """`profile` with its indexed-read MoE scope pattern stating the router as `router` declares (None = kernel order: unchanged)."""
+    if router is None:
+        return profile
+    pats = [dataclasses.replace(pt, router=router) if type(pt) is MoEFusedExperts else pt for pt in profile.patterns]
+    if not any(type(pt) is MoEFusedExperts for pt in profile.patterns):
+        raise ValueError(f"moe_router={router!r} declared but the profile has no indexed-read MoE scope pattern")
+    return dataclasses.replace(profile, patterns=pats)
 
 
 #: The declared constructions the fold knows (the frontend's `TargetProfile.MOE_CONSTRUCTIONS` keys); the pattern each folds with.
