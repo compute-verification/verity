@@ -799,16 +799,17 @@ def test_entities_results_split_into_phases_that_sum_to_the_overhead_with_setup_
         assert sum(p["value"] for p in r["phases"]) == pytest.approx(r["overhead"]["value"], rel=1e-12)
         assert r["serving_overhead"] + r["proving_overhead"] + next(p["value"] for p in r["phases"] if p["id"] == "interaction") \
             == pytest.approx(r["overhead"]["value"], rel=1e-9)
-        assert r["rendered_at"] == "2026-09-25T23:00:00Z" and r["network"] == "dc-1ms-100gbps" and r["subcircuit"].startswith("gemm_coordinate/k1536/")
+        assert r["rendered_at"] == "2026-09-25T23:00:00Z" and r["network"] == "dc-1ms-100gbps" and r["subcircuit"].startswith("gemm-coordinate/k1536/")
         assert r["overhead_at"]["dc-1ms-100gbps"] == pytest.approx(r["overhead"]["value"])
-    assert b3["id"] == f"b-ligero-blake3-in-circuit@gemm_coordinate/k1536/{FP8_ADA_MMA.instruction}" and b3["configuration"] == "b-ligero-blake3-in-circuit"
-    assert b3["setup"]["seconds"] == 2.0 and b3["setup"]["amortized_overhead"] == pytest.approx(2.0 * b3["native"] / 4096)
+    assert b3["id"] == "B-interactive@gemm-coordinate/k1536/sm89-mma-e4m3@frame-v3/blake3-keyed"
+    assert b3["configuration"] == "b-ligero-blake3-in-circuit" and b3["backend"] == "B-interactive" and b3["best"]
+    assert b3["setup"]["seconds"] == 2.0 and b3["setup"]["amortized_overhead"] == pytest.approx(2.0 * b3["native"]["value"] / 4096)
     assert all(p["id"] != "setup" for p in b3["phases"])
     assert b3["state"] == {"provisional": True, "provisional_reason": b3["state"]["provisional_reason"], "algebraic": False, "algebraic_hashes": [],
                            "verified": True, "verified_by": VERIFIER, "under_reverification": None}
     assert b3["marks"] == ["provisional"] and b3["zk_class"] == "malicious-verifier-zk"
     b3cfg = next(c for c in ent["configurations"] if c["id"] == "b-ligero-blake3-in-circuit")
-    assert b3cfg["params"] == {"statistical-soundness": f"2^{{-{b3['soundness_bits']:.1f}}}"}
+    assert b3cfg["params"] == {"statistical-soundness": f"2^{{-{b3['soundness']['cell_bits']:.1f}}}"}
     assert p2["marks"] == ["provisional", "algebraic", "under-reverification"] and p2["state"]["algebraic"]
     assert p2["state"]["under_reverification"].startswith("UNDER RE-VERIFICATION")
     rows3 = {r["result"]: r["cells"] for r in ent["tables"]["table3"]["rows"]}
@@ -907,34 +908,42 @@ def test_entities_backends_are_backend_families_by_interaction_mode_with_their_c
     ent = V.render_entities(V.Views(rules=V.SPEC), rendered_at="2026-09-25T23:00:00Z", commit="abc")
     cfgs = {c["id"]: c for c in ent["configurations"]}
     inst = {i["id"]: i for i in ent["backends"]}
-    assert list(inst) == ["A-interactive", "A-fs", "B-interactive", "B-fs", "C-interactive", "D-fs"]
+    assert list(inst) == ["A-route-a", "A-fs", "B-interactive", "B-fs", "C-interactive", "D-fs"]
     assert [f["id"] for f in ent["backend_families"]] == ["A-GKR", "B-Ligero", "C-Flock", "D-SP1"] == ent["axes"]["backend_families"]
     assert {f["id"]: f["column"] for f in ent["backend_families"]} == {"A-GKR": "A-GKR", "B-Ligero": "B-Ligero", "C-Flock": "Flock", "D-SP1": "SP1"}
     for i in inst.values():
-        assert i["display"] == i["id"] and i["id"] == f"{i['backend_family'][0]}-{i['mode']}"
+        assert i["display"] == i["id"] and (i["id"] == f"{i['backend_family'][0]}-{i['mode']}" or i["composed"])
         members = [cfgs[c] for c in i["configurations"]]
         assert members and all(m["backend_family"] == i["backend_family"] and m["backend"] == i["id"] for m in members)
         for slot, claim in enumerate(i["claims"]):
             ids = {m["claims"][slot]["property"]["id"] for m in members}
             assert claim["property"]["id"] == (ids.pop() if len(ids) == 1 else None)
             union = {a["id"] or a["text"] for m in members for a in m["claims"][slot]["assumptions"]}
-            assert {a["id"] or a["texts"][0] for a in claim["assumptions"]} == union
-            assert all(set(a["configurations"]) <= set(i["configurations"]) for a in claim["assumptions"])
+            own = {a["id"] or a["texts"][0] for a in claim["assumptions"] if a["from"] in (None, "link") and a["configurations"][0] in i["configurations"]}
+            assert own == union or (i["composed"] and own >= union)
+            assert all(set(a["configurations"]) <= set(i["configurations"]) for a in claim["assumptions"] if a["from"] != "C-Flock")
     assert {c["id"] for c in cfgs.values() if c["backend_family"]} == {c for i in inst.values() for c in i["configurations"]}
     b, bfs = inst["B-interactive"], inst["B-fs"]
     assert b["properties"] == ["statistical-soundness", "malicious-verifier-zk", "designated-verifier", "transparent-setup"]
     assert bfs["properties"] == ["computational-soundness", "hvzk", "non-interactive", "transparent-setup"] and bfs["configurations"] == ["b-ligero-fiat-shamir-hvzk"]
     zk = next(a for a in b["claims"][1]["assumptions"] if a["id"] == "cr/blake2b")
     assert zk["roles"] == ["Fiat–Shamir / coins (coin commitments)"] and "b-ligero-v1" in zk["configurations"]
-    assert inst["A-interactive"]["configurations"] == [slug(V.ROUTE_A)] and len(inst["A-fs"]["configurations"]) == 2
+    assert inst["A-route-a"]["configurations"] == [slug(V.ROUTE_A)] and len(inst["A-fs"]["configurations"]) == 2
+    ra = inst["A-route-a"]
+    assert ra["composed"] and ra["backend_family"] == "A-GKR" and ra["column"] == "A-GKR" and ra["components"] == ["C-Flock", "link"]
+    froms = {a["from"] for a in ra["claims"][0]["assumptions"]}
+    assert {"C-Flock", "link"} <= froms
+    link = [a for a in ra["claims"][0]["assumptions"] if a["from"] == "link"]
+    assert any("root_F" in a["texts"][0] for a in link) and any(a["texts"][0].startswith("sigma link 2^-243.9") for a in link)
     assert inst["D-fs"]["claims"][1]["property"]["unmapped"] and len(inst["D-fs"]["claims"][1]["property"]["texts"]) >= 2
     c0 = next(c for c in ent["subcircuits"] if c["legacy_target"] == NVFP4_SM120.name)
-    assert (c0["hardware_name"], c0["dtype_display"], c0["display"]) == ("RTX 5090", "FP4 (NVFP4, E2M1)", "RTX 5090 · FP4 (NVFP4, E2M1)")
+    assert (c0["hardware_name"], c0["dtype_display"], c0["hardware_display"]) == ("RTX 5090", "FP4 (NVFP4, E2M1)", "RTX 5090 · FP4 (NVFP4, E2M1)")
     assert c0["peak"] == {"value": 1676e12, "unit": "FLOP/s", "display": "1676 T"}
-    assert next(c for c in ent["subcircuits"] if c["legacy_target"] == BF16_HOPPER.name)["display"] == "H100 SXM5 · BF16"
+    assert next(c for c in ent["subcircuits"] if c["legacy_target"] == BF16_HOPPER.name)["hardware_display"] == "H100 SXM5 · BF16"
     h8 = next(c for c in ent["subcircuits"] if c["legacy_target"] == FP8_HOPPER_WGMMA.name)
-    assert h8["id"] == "gemm_coordinate/k1536/sm90.wgmma.m64n8k32.e4m3" and h8["subcircuit_template"] == "gemm_coordinate"
-    assert h8["parameters"] == {"K": 1536, "semantics": "sm90.wgmma.m64n8k32.e4m3"} and h8["accumulate"] == "fp32"
+    assert h8["id"] == "gemm-coordinate/k1536/sm90-wgmma-e4m3" and h8["subcircuit_template"] == "gemm-coordinate"
+    assert h8["display"] == "GemmCoordinate<1536> · sm90 wgmma · FP8 (E4M3)"
+    assert h8["parameters"] == {"K": 1536, "datatype": "e4m3", "semantics": "sm90.wgmma.m64n8k32.e4m3"} and h8["accumulate"] == "fp32"
     assert not {"subcircuit_kind", "silicon_target", "target", "instruction"} & set(h8)
     assert all(c["parameters"]["semantics"] == TARGETS[c["legacy_target"]].instruction for c in ent["subcircuits"])
 
@@ -944,11 +953,12 @@ def test_entities_best_standard_hash_cell_per_backend_family_and_subcircuit(stor
     fast = committed(store, "blake3", t_total=0.1, commit=0.1)
     ent = V.render_entities(V.build(store), rendered_at="2026-09-25T23:00:00Z", commit="abc")
     best = {(b["backend_family"], b["subcircuit"]): b for b in ent["best_standard_hash"]}
-    ada = f"gemm_coordinate/k1536/{FP8_ADA_MMA.instruction}"
+    ada = "gemm-coordinate/k1536/sm89-mma-e4m3"
     by_art = {r["artifact"]: r for r in ent["results"]}
     pick = best[("B-Ligero", ada)]
-    assert pick["result"] == by_art[fast]["id"] and pick["scheme"] == BLAKE3_ROW and pick["backend"] == "B-interactive"
+    assert pick["result"] == by_art[fast]["id"] and pick["scheme"] == "frame-v3/blake3-keyed" and pick["backend"] == "B-interactive"
     assert by_art[arts["poseidon2"]]["id"] not in {b["result"] for b in best.values()}                   # algebraic: never a standard-hash pick
+    assert arts["blake3"] not in by_art and not by_art[fast]["best"] is False                             # one result per backend: its best
     assert all(by_art_r["overhead"]["value"] >= pick["overhead"]["value"] for by_art_r in ent["results"]
                if by_art_r["backend_family"] == "B-Ligero" and by_art_r["subcircuit"] == ada and not by_art_r["state"]["algebraic"])
     assert [r["backend_family"] for r in ent["results"] if r["artifact"] == arts["a-gkr"]] in ([], ["A-GKR"])
@@ -958,14 +968,78 @@ def test_entities_schemes_carry_the_hash_assumptions_their_configurations_declar
     _entities_store(store)
     ent = V.render_entities(V.build(store), rendered_at="2026-09-25T23:00:00Z", commit="abc")
     sch = {s["id"]: s for s in ent["schemes"]}
-    assert list(sch) == [s.id for s in V.SCHEMES]
-    assert sch[BLAKE3_ROW]["assumptions"] == ["cr/sha-256", "cr/blake3"]                      # frame-v3's trees are SHA-256
-    assert sch["frame-v3/sha256"]["assumptions"] == ["cr/sha-256"] and sch["vllm-v1"]["assumptions"] == ["cr/sha-256"]
-    assert sch[POSEIDON2_ROW]["assumptions"] == ["cr/sha-256", "cr/poseidon2-babybear"]
-    b3 = sch[BLAKE3_ROW]
+    assert [x["legacy_id"] for x in sch.values()] == [s.id for s in V.SCHEMES]
+    assert list(sch) == ["frame-v3/sha-256", "frame-v3/blake3-keyed", "vllm-v1/sha-256", "frame-v3/poseidon2-babybear",
+                         "frame-v3/poseidon2-babybear-tile64", "frame-v3/ajtai"]
+    assert sch["frame-v3/blake3-keyed"]["assumptions"] == ["cr/sha-256", "cr/blake3"]           # frame-v3's trees are SHA-256
+    assert sch["frame-v3/sha-256"]["assumptions"] == ["cr/sha-256"] and sch["vllm-v1/sha-256"]["assumptions"] == ["cr/sha-256"]
+    assert sch["frame-v3/poseidon2-babybear"]["assumptions"] == ["cr/sha-256", "cr/poseidon2-babybear"]
+    assert all(x["tree_hash"] == "sha-256" for x in sch.values())
+    assert {k: (x["leaf_hashes"], x["algebraic"]) for k, x in sch.items() if k != "frame-v3/ajtai"} == {
+        "frame-v3/sha-256": (["sha-256"], False), "frame-v3/blake3-keyed": (["blake3"], False), "vllm-v1/sha-256": (["sha-256"], False),
+        "frame-v3/poseidon2-babybear": (["poseidon2-babybear"], True), "frame-v3/poseidon2-babybear-tile64": (["poseidon2-babybear"], True)}
+    b3 = sch["frame-v3/blake3-keyed"]
     assert b3["name"] == "frame-v3 · keyed-BLAKE3 rows" and b3["description"].startswith("frame-v3 SHA-256 trees over") and ";" not in b3["description"]
     assert "statement commitment (frame-v3 trees)" in b3["assumption_details"][0]["roles"]
     assert {"b-ligero-blake3-in-circuit", slug(V.ROUTE_A), slug(V.FLOCK_CONFIG.id)} <= set(b3["configurations"])
     assert all(r["scheme"] in sch for r in ent["results"])
     from verity import claims
     assert all(claims.get(i).kind == "assumption" for s in sch.values() for i in s["assumptions"])
+
+
+def test_entities_results_are_every_admissible_backends_best_with_keys_instance_sets_soundness_and_phases(store: LocalStore) -> None:
+    arts = _entities_store(store)
+    ent = V.render_entities(V.build(store), rendered_at="2026-09-25T23:00:00Z", commit="abc")
+    by_art = {r["artifact"]: r for r in ent["results"]}
+    b3 = by_art[arts["blake3"]]
+    assert b3["key"] == {"subcircuit": "gemm-coordinate/k1536/sm89-mma-e4m3", "subcircuit_template": "gemm-coordinate",
+                         "parameters": {"K": 1536, "datatype": "e4m3", "semantics": "sm89.mma.m16n8k32.e4m3"}, "hardware": "rtx-4090/e4m3",
+                         "instance_set": "bench-instances-fp8-ada-v1", "scheme": "frame-v3/blake3-keyed"}
+    assert b3["hardware"] == b3["prover_hardware"] == "rtx-4090/e4m3" and b3["native"]["peak"] == "rtx-4090/e4m3"
+    assert b3["native"]["work_model"] == "work-model/v0"
+    assert b3["instance_set"] == {"id": "bench-instances-fp8-ada-v1", "provenance": "synthetic", "range": [0, 4096], "how": "frozen"}
+    assert b3["soundness"]["cell_log2"] == b3["soundness"]["cell_bits"] * -1 and b3["soundness"]["proofs"] == b3["batching"]["proofs"]
+    assert "per_proof_log2" in b3["soundness"]
+    kinds = {p["id"]: p["kind"] for p in b3["phases"]}
+    assert kinds["commitment"] == "stage" and "setup" not in kinds and b3["setup"]["seconds"] == 2.0
+    other = next(p for p in b3["phases"] if p["id"] == "other")
+    assert other["raw"] == b3["other_raw"] and not other["flagged"]
+    assert sum(p.get("raw", p["value"]) for p in b3["phases"]) == pytest.approx(b3["overhead"]["value"], rel=1e-12)
+    # every admissible result appears once per backend, and the Table 2 cell names its backend and result
+    p2 = by_art[arts["poseidon2"]]
+    assert p2["backend"] == "B-interactive" and p2["scheme"] == "frame-v3/poseidon2-babybear" and p2["best"]
+    t2 = {(ln["subcircuit"], ln["scheme"]): ln for ln in ent["tables"]["table2"]["lines"]}
+    cell = t2[("gemm-coordinate/k1536/sm89-mma-e4m3", "frame-v3/blake3-keyed")]["cells"]["B-Ligero"]
+    assert cell["backend"] == "B-interactive" and cell["result"] == b3["id"]
+    assert t2[("gemm-coordinate/k1536/sm89-mma-e4m3", "frame-v3/blake3-keyed")]["native"]["peak"] == "rtx-4090/e4m3"
+    rows3 = {r["result"]: r for r in ent["tables"]["table3"]["rows"]}
+    assert rows3[b3["id"]]["key"] == b3["key"] and rows3[b3["id"]]["backend"] == "B-interactive"
+    sub = {s["id"]: s for s in ent["subcircuits"]}
+    assert sub["gemm-coordinate/k1536/sm90-mma-bf16"]["fidelity_notes"][0]["note"].startswith("H100 BF16 models mma")
+    assert sub["gemm-coordinate/k1536/sm80-mma-bf16"]["instance_set_provenance"] == "captured"
+
+
+def test_a_second_admissible_result_of_another_backend_is_emitted_beside_the_familys_best(store: LocalStore) -> None:
+    fast = committed(store, "blake3", t_total=0.1, commit=0.1)
+    slow = committed(store, "blake3", t_total=0.5, commit=0.5)
+    ent = V.render_entities(V.build(store), rendered_at="2026-09-25T23:00:00Z", commit="abc")
+    arts = {r["artifact"] for r in ent["results"]}
+    assert fast in arts and slow not in arts                                    # same backend (B-interactive): only its best
+    views = V.build(store)
+    assert {c.artifact for c in views.admissible} >= {fast, slow} and [c.artifact for c in views.cells] == [fast]
+
+
+def test_blake3_xob_commits_keyed_blake3_bytes_so_it_is_a_circuit_of_one_scheme() -> None:
+    """Decided from the code: ligero-verify's ``BLAKE3_XOB`` leaf scheme has ``BLAKE3``'s schema and params digest (the
+    committed object), so ``frame-v3/blake3-keyed`` lists both circuits and no scheme id is added for xob."""
+    import pathlib
+    import re as _re
+
+    src = (pathlib.Path(V.__file__).resolve().parents[4] / "ligero-verify" / "src" / "leaf.rs").read_text(encoding="utf-8")
+    leaf = {m[0]: (m[1], m[2]) for m in _re.findall(r'name: "([^"]+)",\n(?:.*\n)*?    schema: "([^"]+)",\n    params_sha256: "([0-9a-f]+)"', src)}
+    assert leaf["blake3-xob"] == leaf["blake3"]
+    ent = V.render_entities(V.Views(rules=V.SPEC), rendered_at="x", commit="x")
+    sch = {s["id"]: s for s in ent["schemes"]}
+    assert sch["frame-v3/blake3-keyed"]["leaf_circuits"] == ["blake3", "blake3-xob"] and not any("xob" in k for k in sch)
+    for s in sch.values():                                                     # each scheme's circuits commit one object
+        assert len({leaf[c] for c in s["leaf_circuits"]}) <= (2 if s["id"] == "frame-v3/ajtai" else 1)

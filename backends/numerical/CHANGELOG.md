@@ -3,34 +3,41 @@
 ## 2026-09-25: `views --format entities`, the docs site's render
 
 - `python -m verity_numerical.bench.views --root <store> --format entities [--published]` prints the render as entities
-  (schema `verity/tables-entities/v1`):
-  - `subcircuits`: one per subcircuit, a fully bound subcircuit template. Each has its `subcircuit_template`
-    (`gemm_coordinate`), its bound `parameters` (`K`, and `semantics`: the exact instruction, e.g.
-    `sm90.wgmma.m64n8k32.e4m3`) and `legacy_target` (the internal target id). Each also has the census hardware line (id,
-    short name such as "H100 SXM5", full device, peak), the datatype display (the common name, then the format, e.g.
-    `FP8 (E4M3)`), the tensor-core step, the instance set and native N;
-  - `backend_families`: A-GKR, B-Ligero, C-Flock and D-SP1. Each keeps its markdown column header as `column`; the
+  (schema `verity/tables-entities/v1`; the site's spec is the ontology's "A result" and "Presentation rules"):
+  - `subcircuits`: one per subcircuit, a fully bound subcircuit template. Each has its census id and display name (e.g.
+    `gemm-coordinate/k1536/sm90-wgmma-e4m3`, "GemmCoordinate<1536> · sm90 wgmma · FP8 (E4M3)"), its
+    `subcircuit_template` with its bound `parameters` (`K`, `datatype`, and `semantics`: the exact instruction),
+    `legacy_target`, `fidelity_notes`, the instance set with its provenance (captured or synthetic), the census hardware
+    line, the datatype display and native N;
+  - `backend_families`: A-GKR, B-Ligero, C-Flock and D-SP1, each with its markdown column header as `column`. The
     markdown itself is unchanged;
-  - `backends`: the primary shape of Table 1's claims. There is one backend per backend family and interaction mode:
-    `A-interactive`, `A-fs`, `B-interactive`, `B-fs`, `C-interactive` and `D-fs`, where `fs` means Fiat–Shamir. Each has its
-    member configurations and its claims written out in full;
-  - `configurations`: the detail behind each backend, from the spec's configurations (route (a) and Flock included). Each
-    has its variant, scheme, ZK class (a short enum with the text), soundness bits, hash classes with the algebraic flag,
-    and interaction and assumption texts as lists. Its `claims` list each property (soundness with its bound, ZK,
-    non-interactive or designated-verifier, transparent setup) with the assumptions it rests on. Each assumption is a
-    `verity.claims` id with its role as the code declares it (empty where it declares none) and its text. Text with no id
-    yet is kept and flagged `unmapped`;
-  - `schemes`: each commitment scheme's id, name, one-line description and the hash assumptions it rests on, taken from
-    the configurations that bind it (frame-v3's SHA-256 trees included). A result's `scheme` is one of these ids;
-  - `results`: one per Table 2 cell, configuration × subcircuit. Each has its backend and backend family, its overhead,
-    the phases that sum to it, one-time setup kept apart, its state (provisional, algebraic, verified, under
-    re-verification), the artifact and the render time;
+  - `backends`: one per backend family and interaction mode (`A-fs`, `B-interactive`, `B-fs`, `C-interactive`, `D-fs`),
+    plus composed backends under their own id. Route (a) is `A-route-a`: it renders in the A-GKR column, and its profile
+    adds C-Flock's assumptions and the sigma link's. Each backend's claims are written out in full;
+  - `configurations`: the detail behind each backend. Each has its claims (properties, the assumptions they rest on, and
+    the roles the code declares), hashes and texts;
+  - `schemes`: one per scheme, under ids that name the leaf hash (e.g. `frame-v3/blake3-keyed`; `legacy_id` is the
+    renderer's). Each has its tree and leaf hashes, a structured `algebraic` flag, its assumptions (taken from the code)
+    and the `leaf_circuits` that commit it. `blake3-xob` commits keyed BLAKE3's bytes (same schema and params in
+    `ligero-verify`), so it is a circuit of `frame-v3/blake3-keyed`, not a scheme of its own;
+  - `results`: for each subcircuit and scheme, the best result of every admissible backend, not only each family's pick
+    (`best` marks that pick). Each result carries:
+    - its `backend` and a structured row `key`: subcircuit, template, parameters, hardware, instance set and scheme;
+    - `hardware` (the semantics chip, which supplies N) and `prover_hardware` (where the prover ran, which supplies P);
+    - the instance set with its provenance;
+    - its soundness: the whole-cell bound, a union over the sub-batch proofs, plus the backend's per-proof bound where the
+      result records it;
+    - native N as a work-model version plus a census peak id;
+    - its phases: stages, fused stages as one span, "Other" clamped to 0 in [−0.5%, 0) and flagged when it is more
+      negative, with the raw value kept as `other_raw`, and one-time setup in its own field;
+    - its state, artifact and render time;
   - `best_standard_hash`: for each backend family and subcircuit, the lowest-overhead cell on standard hashes only;
-  - `tables`: every Table 1, 2 and 3 cell's exact display string, its numeric value, its marks and its footnote text;
+  - `tables`: every Table 1, 2 and 3 cell's exact display string, value, marks and footnote. Table 2 and Table 3 cells
+    carry the same row keys and name their backend;
   - `claims`: the `verity.claims` entries cited; `census`: the `census/` entries as read at render time;
   - `provenance`: the render time and the verity commit.
-- Ids are stable across renders: subcircuits by census id, backends as `<letter>-<mode>`, configurations by the slug of
-  their name, and results as `<configuration>@<subcircuit>`.
+- Ids are stable across renders: subcircuits by census id, backends as `<letter>-<mode>` or a composed backend's own id,
+  and results as `<backend>@<subcircuit>@<scheme>`.
 - The markdown is unchanged byte for byte. Table 2's cells and footnotes and Table 3's rows now come from shared helpers
   (`table2_grid`, `table3_row`) that both renders use.
 - The steward's `published = "views"` entry also writes `<stamp>-tables.json` (the entities render).
