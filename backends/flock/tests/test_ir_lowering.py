@@ -584,3 +584,31 @@ def test_attention_frame_places_a_block_per_16_keys(tmp_path):
     assert h["public_ports"] == [0] and h["outputs"] == "tail" and h["layout"]["ret_group"] is None and len(h["blocks"]) == 9
     out = np.frombuffer(body[-4 * h["cut_words"] - 128:-4 * h["cut_words"]], dtype="<u2")
     assert (out == s.port("out")[0]).all()
+
+
+def test_attention_key_classes_and_the_class_manifest(tmp_path):
+    """Key-count classes [1, 128], [129, 256], [257, 512], ...; a class manifest lists every T of its range with its v3 netlist's
+    sha256 and the unit rows they share (the pin is the manifest's sha256); a class cell's sub-batches split at T boundaries."""
+    import hashlib
+    import json
+
+    from verity_flock import ir_bench
+    from verity_flock.templates import attention_head as A
+
+    assert [A.key_class(t) for t in (1, 128, 129, 256, 257, 287, 512, 513)] == [(1, 128)] * 2 + [(129, 256)] * 2 + [(257, 512)] * 3 + [(513, 1024)]
+    sub = TM.subcircuit("attention-head", D=64, BN=128)
+    m = A.class_manifest(sub, 1, 3)
+    d = json.loads(m)
+    assert d["format"] == A.CLASS_FORMAT and d["T"] == [1, 3] and sorted(d["nets"]) == ["1", "2", "3"]
+    assert m == (json.dumps(d, sort_keys=True, separators=(",", ":")) + "\n").encode()
+    for T in (1, 2, 3):
+        low = A.cached_lowering(sub, T)
+        assert d["nets"][str(T)] == low.sha256 == hashlib.sha256(low.text.encode()).hexdigest()
+        assert A.unit_rows_sha256(low.text) == d["unit_rows"]
+
+    class _K(ir_bench.KeyClass):
+        def __init__(self, T):
+            self.T = T
+
+    assert _K([1, 1, 1, 2, 2, 5]).subs(6, 2) == [(0, 2), (2, 3), (3, 5), (5, 6)]
+    assert _K([1, 1, 1, 2, 2, 5]).subs(4, 16) == [(0, 3), (3, 4)]

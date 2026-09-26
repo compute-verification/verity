@@ -6,6 +6,7 @@
 //!   flock-ir-frame prove    --verifier ADDR --instances FILE --netlist FILE [--tables DIR] [--gpu] [--runs N] [--warm W] [--dump DIR]
 //!   flock-ir-frame selftest --instances FILE --netlist FILE [--tables DIR] [--gpu] [--only CASE]
 //!   flock-ir-frame replay   --session session.json --proofs rep0,rep1 --instances FILE --netlist FILE --pin SHA256 [--tables DIR]
+//!   any of them with `--class MANIFEST` (a key-count class: `--pin` is the manifest's sha256; see `check_class`)
 //!
 //! Before anything the verifier checks its own instance file (`verity_flock.ir_frame.stage`, never a producer's): the unit
 //! netlist's order, the block table against the plan, the frame-v3 roots recomputed from its row digests and output words,
@@ -43,6 +44,8 @@ const SIGMA_TAG: &[u8] = b"verity/flock-ir-frame/sigma/v3";
 const STATEMENT: &str = "verity/flock-ir-frame/v3";
 
 static TABLES: std::sync::OnceLock<Tables> = std::sync::OnceLock::new();
+/// A class-pinned statement's pin (`--class`): Σ binds it.
+static CLASS_PIN: std::sync::OnceLock<[u8; 32]> = std::sync::OnceLock::new();
 
 fn arg(k: &str, d: &str) -> String {
     let a: Vec<String> = std::env::args().collect();
@@ -68,6 +71,10 @@ fn params(m: usize, lig: LigeritoProfile) -> PcsParams {
 fn sigma(st: &FrameStmt, inst: &FrameInstances) -> [u8; 32] {
     let mut h = Sha256::new();
     h.update(SIGMA_TAG);
+    if let Some(c) = CLASS_PIN.get() {
+        h.update(b"class");
+        h.update(c);
+    }
     h.update(inst.unit.as_bytes());
     h.update([0]);
     h.update(st.net.sha256);
@@ -670,12 +677,17 @@ fn main() {
     let cmd = std::env::args().nth(1).unwrap_or_default();
     let tb = Instant::now();
     let inst = Arc::new(load(&arg("--instances", "frame.bin")));
-    let net = IrUnitNet::parse(&std::fs::read_to_string(arg("--netlist", "net.txt")).expect("netlist"));
+    let net_text = std::fs::read_to_string(arg("--netlist", "net.txt")).expect("netlist");
+    let net = IrUnitNet::parse(&net_text);
     let pin = arg("--pin", "");
     if cmd == "serve" && pin.is_empty() {
         refuse("serve needs --pin (the pinned lowering's sha256)".into());
     }
-    if !pin.is_empty() && hex(&net.sha256) != pin {
+    let class = arg("--class", "");
+    if !class.is_empty() {
+        let c = check_class(&class, &pin, &net, &net_text, &inst).unwrap_or_else(|e| refuse(e));
+        CLASS_PIN.set(c).unwrap();
+    } else if !pin.is_empty() && hex(&net.sha256) != pin {
         refuse(format!("the netlist's sha256 {} is not the pinned lowering {pin}", hex(&net.sha256)));
     }
     if inst.unit != net.name || inst.header["unit_sha256"].as_str() != Some(hex(&net.sha256).as_str()) {
@@ -737,6 +749,51 @@ fn main() {
         }
         _ => eprintln!("usage: flock-ir-frame serve|prove|selftest|replay --instances FILE --netlist FILE [--pin SHA256] ..."),
     }
+}
+
+/// sha256 of a unit netlist without its name and its per-T lines (`verity_flock.templates.attention_head.unit_rows_sha256`): the
+/// header line minus its name token, then the matrix rows up to `LEAVES`.
+fn unit_rows_sha256(text: &str) -> String {
+    let (head, rest) = text.split_once('\n').unwrap_or((text, ""));
+    let mut s = head.split(' ').enumerate().filter(|(i, _)| *i != 1).map(|(_, t)| t).collect::<Vec<_>>().join(" ");
+    s.push('\n');
+    s.push_str(rest.split("\nLEAVES ").next().unwrap_or(""));
+    hex(&sha256(s.as_bytes()))
+}
+
+/// A key-count class (`flock-ir-class/v1`, `--class MANIFEST`): the pin is the manifest's sha256 (serve and replay must name it;
+/// prove takes the manifest's own); the manifest lists every T of its class `[lo, hi]`; the file's own key count (its key port's
+/// words / words per key, which its committed rows bind) is in the class; the netlist is that T's entry; and its unit rows are
+/// the class's, so one block circuit serves the class. The statement is then this netlist's, and Σ binds the class pin.
+fn check_class(path: &str, pin: &str, net: &IrUnitNet, text: &str, inst: &FrameInstances) -> Result<[u8; 32], String> {
+    let b = std::fs::read(path).map_err(|e| format!("class manifest: {e}"))?;
+    let c = sha256(&b);
+    if !pin.is_empty() && hex(&c) != pin {
+        return Err(format!("the class manifest's sha256 {} is not the pin {pin}", hex(&c)));
+    }
+    let m: Value = serde_json::from_slice(&b).map_err(|e| format!("class manifest: {e}"))?;
+    if m["format"] != "flock-ir-class/v1" {
+        return Err("not a flock-ir-class/v1 manifest".into());
+    }
+    let (lo, hi) = (m["T"][0].as_u64().ok_or("class: no T range")? as usize, m["T"][1].as_u64().ok_or("class: no T range")? as usize);
+    let nets = m["nets"].as_object().ok_or("class: no nets")?;
+    if lo == 0 || lo > hi || nets.len() != hi - lo + 1 || (lo..=hi).any(|t| !nets.contains_key(&t.to_string())) {
+        return Err(format!("the class manifest does not list every T of [{lo}, {hi}] once"));
+    }
+    let port = m["key_port"].as_str().ok_or("class: no key_port")?;
+    let per = m["words_per_key"].as_u64().ok_or("class: no words_per_key")? as usize;
+    let words = inst.in_ports.iter().find(|p| p.0 == port).ok_or(format!("class: no input port {port}"))?.1;
+    if per == 0 || words % per != 0 || words / per < lo || words / per > hi {
+        return Err(format!("the file's key count ({words} words of {port}, {per} per key) is not in the class [{lo}, {hi}]"));
+    }
+    let t = words / per;
+    if nets[&t.to_string()].as_str() != Some(hex(&net.sha256).as_str()) {
+        return Err(format!("the netlist is not the class's netlist for T = {t}"));
+    }
+    if m["unit_rows"].as_str() != Some(unit_rows_sha256(text).as_str()) {
+        return Err("the netlist's unit rows are not the class's".into());
+    }
+    Ok(c)
 }
 
 fn f128_of_hex(s: &str) -> F128 {
