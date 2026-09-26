@@ -225,16 +225,19 @@ def main() -> int:
     def honest(n: str) -> Path:
         return dumps / f"honest-{n}"
 
+    def have(n: str) -> bool:
+        return (honest(n) / "manifest.json").is_file() and (dumps / f"honest-{n}.json").is_file()
+
     # honest controls
     for n in sorted({x for p in PAIRS for x in p} | set(SIZED)):
-        if honest(n).is_dir() and want("honest"):
+        if have(n) and want("honest"):
             d = clone(honest(n), out / f"honest-{n}")
             res = ck.run(d, stems)
             res["hashauth_only"] = hashauth_only(d / "rep1" / "sub_00.stmt", registry.for_relation(n), relation(n.split("+")[0]))
             record(f"honest {n}", res, "accept")
 
     for src, dst in PAIRS + [(d, s) for s, d in PAIRS]:
-        if not (honest(src).is_dir() and honest(dst).is_dir()):
+        if not (have(src) and have(dst)):
             continue
         rd = relation(dst.split("+")[0])
         tag = f"{src}->{dst}"
@@ -262,7 +265,7 @@ def main() -> int:
             record(f"mixed {tag}", res, "refuse")
 
     for n in SIZED:
-        if not honest(n).is_dir():
+        if not have(n):
             continue
         rel = relation(n.split("+")[0])
         leaf = registry.for_relation(n)
@@ -284,9 +287,10 @@ def main() -> int:
         dg = struct.unpack_from(f"<{2 * de}I", b0, f0["digests_at"])           # VU 0: x digest then W digest
         patches = {"digest-last": [(de - 1, dg[de - 1] ^ 1)]}
         if n.endswith("blake3-xob"):
-            from ..leaf.blake3 import parse_header
+            from ..leaf.blake3 import N_CHUNKS_MAX, parse_header
             nch, role = parse_header(dg[0], leaf.n_chunks_max)
-            patches["header-3slot"] = [(0, nch + 4 * role)]
+            if leaf.n_chunks_max > N_CHUNKS_MAX:              # on the registry frame the 3-slot header IS the honest one
+                patches["header-3slot"] = [(0, nch + 4 * role)]
             patches["header-nch"] = [(0, dg[0] - 1)] + [(i, 0) for i in range(1 + 16 * (nch - 1), 1 + 16 * nch)]
         for v, patch in patches.items():
             if want(v):
