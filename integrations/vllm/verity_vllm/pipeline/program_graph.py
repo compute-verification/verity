@@ -124,21 +124,33 @@ class _Acc:
             if g["first"] is None:
                 g["first"] = (len(self.programs), k)
         off = np.frombuffer(cols.read_off, dtype=np.int64)
-        prod = np.frombuffer(cols.read_call, dtype=np.int32).astype(np.int64)
-        cons = np.repeat(np.arange(n, dtype=np.int64), np.diff(off))
-        calls = prod >= 0
-        pairs = np.stack([call_group[prod[calls]], call_group[cons[calls]]], axis=1)
-        u, c = np.unique(pairs, axis=0, return_counts=True) if len(pairs) else (np.zeros((0, 2), dtype=np.int64), np.zeros(0))
-        for (a, b), cnt in zip(u.tolist(), c.tolist()):
-            self.edges[(gkeys[a], gkeys[b])] += int(cnt)
-        port = np.frombuffer(cols.read_port, dtype=np.uint16)
-        pin = ~calls
-        if pin.any():
-            trip = np.stack([call_group[cons[pin]], prod[pin], port[pin].astype(np.int64)], axis=1)
-            u, c = np.unique(trip, axis=0, return_counts=True)
-            for (g, iid, pi), cnt in zip(u.tolist(), c.tolist()):
-                inp = P.input(int(iid))
-                self.param_reads[(gkeys[g], f"{inp.name}:{cols.port_names[pi]}" if cols.port_names[pi] != "out" else inp.name)] += int(cnt)
+        prod_all = np.frombuffer(cols.read_call, dtype=np.int32)
+        port_all = np.frombuffer(cols.read_port, dtype=np.uint16)
+        G = max(len(gkeys), 1)
+        edge_c: Counter = Counter()
+        pin_c: Counter = Counter()
+        c0 = 0
+        while c0 < n:                                              # consumer Calls in blocks of ~2^24 reads: memory stays O(block)
+            c1 = int(np.searchsorted(off, off[c0] + (1 << 24), side="right"))
+            c1 = min(max(c1 - 1, c0 + 1), n)
+            lo, hi = int(off[c0]), int(off[c1])
+            cons = np.repeat(call_group[c0:c1], np.diff(off[c0:c1 + 1]))
+            prod = prod_all[lo:hi]
+            calls = prod >= 0
+            if calls.any():
+                u, c = np.unique(call_group[prod[calls]] * G + cons[calls], return_counts=True)
+                edge_c.update(dict(zip(u.tolist(), c.tolist())))
+            if (~calls).any():
+                ids = (-prod[~calls].astype(np.int64)) << 16 | port_all[lo:hi][~calls].astype(np.int64)
+                u, c = np.unique(cons[~calls] << 40 | ids, return_counts=True)
+                pin_c.update(dict(zip(u.tolist(), c.tolist())))
+            c0 = c1
+        for code, cnt in edge_c.items():
+            self.edges[(gkeys[code // G], gkeys[code % G])] += int(cnt)
+        for code, cnt in pin_c.items():
+            g, iid, pi = code >> 40, -((code >> 16) & ((1 << 24) - 1)), code & 0xFFFF
+            inp = P.input(int(iid))
+            self.param_reads[(gkeys[g], f"{inp.name}:{cols.port_names[pi]}" if cols.port_names[pi] != "out" else inp.name)] += int(cnt)
         self.call_keys.append([gkeys[g] for g in call_group.tolist()])
         self.programs.append({"label": label, "program_digest": digest, "calls": n, "modules": len(set(mods))})
 
