@@ -226,7 +226,7 @@ def test_a_shared_nat_ip_registers_on_the_runs_own_records(tmp_path, probes):
     ({"sys_vendor": "QEMU"}, {}, "the prover pod is a virtual machine"),
     ({}, {"sys_vendor": None}, "the verifier run did not record sys_vendor"),              # S2: the plan's probe does not stand in
     ({"hypervisor": None}, {}, "the prover run did not record hypervisor"),
-    ({}, {"product_uuid": None}, "the verifier run did not record product_uuid"),
+    ({}, {"boot_id": None}, "the verifier run's boot_id"),                                  # job.json's boot id, not the plan's
     ({"pod_id": None}, {}, "the prover run did not record pod_id"),
     ({"link": NAT["link"]}, {}, "the prover run did not record link.rtt"),
     ({}, {"product_uuid": "uuid-w"}, "product_uuid uuid-w is not the uuid-v the plan probed on pod pod-v"),
@@ -332,6 +332,55 @@ def test_s4_the_rtt_target_is_the_verifier_pods_sshd_on_its_global_name(monkeypa
     assert seen["argv"] == ["research", "pods", "ssh", "vy-flock-h100", "--", "python3", "-", "probe", "--peer",
                             "pod-v.runpod.internal:7400", "--rtt", "pod-v.runpod.internal:22"]
     assert seen["input"] == Path(PL.__file__).read_text()
+
+
+# --- the DMI uuid on bare metal (coordinator 22:40Z: RunPod containers cannot read it) ----------------------------------------
+
+NO_UUID = {m: {k: x for k, x in rec.items() if k != "product_uuid"} for m, rec in PROBES.items()}
+
+
+def test_uuid_bare_metal_with_the_uuid_unreadable_is_accepted(tmp_path, monkeypatch):
+    p, v, link = _pair(prover__product_uuid=None, verifier__product_uuid=None)
+    a = PL.assess(p, v, link)
+    assert a["problems"] == [] and a["evidence"]["product_uuid_read"] == [False, False]
+    monkeypatch.setattr(PL, "remote_probe", lambda m, peer=None: copy.deepcopy(NO_UUID[m]))
+    cell = _nat_cell()
+    assert cell.placement["separation"]["product_uuid"] == [None, None]
+    q, w = _nat_runs(tmp_path, {"product_uuid": None}, {"product_uuid": None})
+    res = C.register(cell, str(q), str(w), tmp_path / "work", dry_run=True)
+    assert res["problems"] == [] and "refused" not in res
+    sep = json.loads(Path(res["meta"]).read_text())["cell"]["placement"]["separation"]
+    assert sep["product_uuid_read"] == [False, False] and sep["boot_id"] == ["boot-p", "boot-v"]
+    assert PL.assess(*_pair(verifier__product_uuid=None))["evidence"]["product_uuid_read"] == [True, False]   # one side read
+
+
+def test_uuid_bare_metal_with_the_uuid_readable_and_equal_is_refused(tmp_path, probes):
+    a = PL.assess(*_pair(verifier__product_uuid="uuid-p"))
+    assert any("share product_uuid uuid-p" in x for x in a["problems"]) and a["evidence"]["product_uuid_read"] == [True, True]
+    q, w = _nat_runs(tmp_path, verifier={"product_uuid": "uuid-p"})
+    res = C.register(_nat_cell(), str(q), str(w), tmp_path / "work", dry_run=True)
+    assert res.get("refused") and any("share product_uuid uuid-p" in x for x in res["problems"]), res["problems"]
+
+
+@pytest.mark.parametrize("uuids", [{}, {"prover__product_uuid": None, "verifier__product_uuid": None}])
+@pytest.mark.parametrize("vm", [{"verifier__hypervisor": True}, {"prover__sys_vendor": "QEMU"}, {"verifier__hypervisor": None}])
+def test_uuid_a_vm_is_refused_whatever_the_uuid(vm, uuids):
+    a = PL.assess(*_pair(**vm, **uuids))
+    assert any("virtual machine" in x or "are not recorded" in x for x in a["problems"]), a["problems"]
+    if uuids:                                                  # off bare metal an unreadable uuid is missing, as before
+        assert any("missing: product_uuid" in x for x in a["problems"]), a["problems"]
+
+
+def test_uuid_the_co_resident_pair_is_refused_without_a_uuid():
+    """Two bare-metal containers of one host with no uuid read: their one kernel's boot id, the bridge and the 0.03 ms RTT refuse."""
+    metal = {"boot_id": "k", "hypervisor": False, "sys_vendor": "Supermicro"}
+    bridge = {**CORESIDENT["link"], "rtt": {**RTT, "median_ms": 0.03, "target_ip": "172.24.0.3"}}
+    a = PL.assess({**CORESIDENT["prover"], **metal}, {**CORESIDENT["verifier"], **metal}, bridge)
+    for why in ("share machine_id m-tx4", "share boot_id k", "host bridge", "no TCP-connect RTT of at least 0.1 ms"):
+        assert any(why in x for x in a["problems"]), (why, a["problems"])
+    a = PL.assess({**CORESIDENT["prover"], **metal, "machine_id": "m-a"}, {**CORESIDENT["verifier"], **metal, "machine_id": "m-b"},
+                  {**PROBES["vy-flock-h100"]["link"]})
+    assert a["problems"] and any("share boot_id k" in x for x in a["problems"])   # distinct machine ids alone never suffice
 
 
 def test_the_co_resident_pair_is_still_refused():

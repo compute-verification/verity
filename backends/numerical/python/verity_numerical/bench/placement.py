@@ -18,7 +18,7 @@ and a link ``{peer, peer_ip, source_ip, rtt}`` is how the prover reached the ver
 boot id; a link to a host bridge (loopback, link-local, the docker pool 172.16/12), to the prover's own public IP, or to another
 private address unless the machine ids are known and differ; too little identity to tell (neither a machine id or DMI uuid on
 both sides, nor a public IP and CPU model on both); or a shared public IP without the proof a datacenter NAT needs
-(:func:`_nat_exception`: the three ids recorded and different, both pods bare metal, the link RunPod's global network, and a
+(:func:`_nat_exception`: both pods bare metal, their machine ids and boot ids (and DMI uuids, where readable) different, the link RunPod's global network, and a
 TCP-connect RTT on it of at least :data:`RTT_FLOOR_MS`).  A shared public IP that has that proof is accepted and reported
 (``shared_public_ip`` and its evidence).
 
@@ -217,20 +217,28 @@ def is_hypervisor_vendor(vendor: str | None) -> bool:
 
 def _nat_exception(prover: Mapping[str, Any], verifier: Mapping[str, Any], link: Mapping[str, Any]) -> tuple[list[str], dict[str, Any]]:
     """Why a pair sharing a public IP does not earn the NAT exception (coordinator 22:00Z; red-team-flock-3 S1-S5, 22:05Z), and its
-    evidence: all three :data:`NAT_IDS` recorded and different; both pods bare metal (no ``hypervisor`` CPU flag, a DMI
+    evidence: the machine id and boot id recorded and different, and the DMI uuid too unless both pods are bare metal (where it
+    is compared only if read, and ``product_uuid_read`` records whether it was); both pods bare metal (no ``hypervisor`` CPU flag, a DMI
     ``sys_vendor`` that is no hypervisor's); the link ``<verifier pod id>.runpod.internal`` resolving into 10/8; the TCP-connect RTT
     on that route (median) at least :data:`RTT_FLOOR_MS`."""
     ip, out = prover["public_ip"], []
     pre = f"prover and verifier share public_ip {ip}"
-    missing = [k for k in NAT_IDS if not (prover.get(k) and verifier.get(k))]
-    if missing:
-        out.append(f"{pre}: the NAT exception needs {', '.join(NAT_IDS)} recorded on both pods and all different; missing: {', '.join(missing)}")
+    metal = True
     for role, x in (("prover", prover), ("verifier", verifier)):
         if x.get("hypervisor") is None or not x.get("sys_vendor"):
+            metal = False
             out.append(f"{pre}: the {role} pod's hypervisor flag and DMI sys_vendor are not recorded (a VM's uuid and boot id are its own)")
         elif x["hypervisor"] is True or is_hypervisor_vendor(x["sys_vendor"]):
+            metal = False
             out.append(f"{pre}: the {role} pod is a virtual machine (hypervisor flag {x['hypervisor']}, sys_vendor {x['sys_vendor']!r}): "
                        "two VMs of one host would pass the id checks")
+    # Bare-metal containers share their host's kernel, so boot_id names the host; RunPod containers cannot read the DMI uuid
+    # (coordinator 22:40Z).  A uuid that is read is still compared (``assess`` refuses a shared one).
+    need = [k for k in NAT_IDS if k != "product_uuid" or not metal]
+    missing = [k for k in need if not (prover.get(k) and verifier.get(k))]
+    if missing:
+        out.append(f"{pre}: the NAT exception needs {', '.join(need)} recorded on both pods and all different"
+                   f"{'' if metal else ' (product_uuid may be unreadable only on bare metal)'}; missing: {', '.join(missing)}")
     host = (link.get("peer") or "").rpartition(":")[0]
     want = f"{verifier.get('pod_id')}{RUNPOD_INTERNAL}" if verifier.get("pod_id") else None
     peer_ip = link.get("peer_ip")
@@ -249,7 +257,7 @@ def _nat_exception(prover: Mapping[str, Any], verifier: Mapping[str, Any], link:
                    f"{rtt.get('median_ms')!r} ms to {rtt.get('target_ip')!r}, method {rtt.get('method')!r}); a co-resident pair measured "
                    "about 0.03 ms")
     evidence = {k: [prover.get(k), verifier.get(k)] for k in NAT_IDS}
-    evidence.update({"public_ip": ip, "bare_metal": {role: {k: x.get(k) for k in ("hypervisor", "sys_vendor", "product_name", "cpu_model")}
+    evidence.update({"product_uuid_read": [bool(prover.get("product_uuid")), bool(verifier.get("product_uuid"))], "public_ip": ip, "bare_metal": {role: {k: x.get(k) for k in ("hypervisor", "sys_vendor", "product_name", "cpu_model")}
                                                      for role, x in (("prover", prover), ("verifier", verifier))},
                      "link": {"name": host or None, "address": peer_ip}, "rtt": {k: rtt.get(k) for k in ("method", "median_ms", "min_ms", "n",
                                                                                                      "failed", "target", "target_ip")},

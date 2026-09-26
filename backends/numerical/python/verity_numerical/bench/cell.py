@@ -249,7 +249,7 @@ def run_assessment(cell: Cell, prover_run: Path | None, verifier_run: Path | Non
     return PL.assess(pl["prover"], pl["verifier"], pl["link"])
 
 
-RUN_NAT_KEYS = ("pod_id", "product_uuid", "boot_id", "hypervisor", "sys_vendor")
+RUN_NAT_KEYS = ("pod_id", "boot_id", "hypervisor", "sys_vendor")
 
 
 def placement_problems(cell: Cell, prover_run: Path | None, verifier_run: Path | None) -> list[str]:
