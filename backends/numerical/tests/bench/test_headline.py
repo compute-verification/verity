@@ -377,3 +377,18 @@ def test_the_spine_generates_synthetic_sets_for_other_workloads_subcircuits(sid:
         pytest.importorskip("verity_vllm", reason="non-GEMM templates evaluate through the vLLM integration's Definitions")
     out = G.generate(TM.parse_subcircuit_id(sid), 2, 0, tmp_path)
     assert out["draws"] >= 2
+
+
+def test_below_bar_proofs_on_a_workloads_inputs_are_listed_and_never_counted(store: LocalStore) -> None:
+    from test_tables import put, result
+
+    res = result(candidate="SP1", profile=None, subcircuit="Gemm_v1", instances=None)
+    res["workload_fingerprint"].update(definition={"id": "GemmCoordinate_v1{K=2048}"}, modes=["core"],
+                                       instances={"set": "gemm-set", "set_art": "art:" + "b" * 64, "row": ROW101["source"]["row"]})
+    res["measurements"].append({"name": "core.soundness_bits", "value": 95.8, "unit": "count"})
+    put(store, res, labels=[("verified", "accepted", "verify-night-3", "2026-09-26T10:10:00Z"),
+                            ("below_bar", "true", "verify-night-3", "2026-09-26T10:10:00Z")])
+    rec = next(r for r in H.headline(V.build(store, SPEC)) if r["workload"] == ROW101["id"])
+    assert [x["definition"] for x in rec["below_bar"]] == ["GemmCoordinate_v1{K=2048}"] and rec["below_bar"][0]["soundness_bits"] == 95.8
+    assert all(row["covered"] == [] for row in rec["backends"])
+    assert "Below the 128-bit bar, verified but not counted: 1 proofs" in "\n".join(H.render_markdown([rec]))

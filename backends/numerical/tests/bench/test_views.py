@@ -1473,3 +1473,9 @@ def test_a_run_whose_round_trips_dominate_its_wall_is_flagged() -> None:
     ix = {"live": True, "rounds": 1000, "rtt_ms": 3.2, "prover_s": 1.0, "wait_s": 3.3}
     assert V.rtt_share(ix) == pytest.approx(3.2 / 4.3) and V.rtt_share(ix) > V.RTT_DOMINATES
     assert V.rtt_share({**ix, "rtt_ms": 0.3}) < V.RTT_DOMINATES and V.rtt_share({**ix, "live": False}) is None
+
+
+def test_a_row_whose_work_model_needs_a_per_input_variable_rejects_its_cells_instead_of_crashing() -> None:
+    sub = next(s for s in census.SUBCIRCUITS if s.startswith("attention-head/"))
+    with pytest.raises(KeyError):
+        V.memory_native(BF16_HOPPER, sub)

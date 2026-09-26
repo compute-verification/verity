@@ -263,7 +263,12 @@ def headline(V: Any, workloads: Sequence[Mapping[str, Any]] | None = None) -> li
             rows.append({"backend": bid, "covered": covered, "uncovered": uncovered, "bases": per_basis})
         out.append({"workload": w["id"], "display": w["display"], "served_hardware": served.id, "served_display": f"{served.name} · "
                     f"{census.DATATYPES[served.dtype].display}", "vus": w["vus"], "not_evaluable_vus": w["not_evaluable_vus"],
-                    "native_seconds": totals, "subcircuits": subs, "backends": rows})
+                    "native_seconds": totals, "subcircuits": subs, "backends": rows,
+                    # verified proofs under the 2^-128 bar on this workload's own inputs: shown, never counted as covered
+                    "below_bar": [{"artifact": e["artifact"], "backend_family": e["backend_family"], "definition": e["definition"], "B": e["B"],
+                                   "soundness_bits": min((m["soundness_bits"] for m in e["modes"].values() if m.get("soundness_bits")), default=None)}
+                                  for e in getattr(V, "below_bar", []) if e.get("served_row") is not None
+                                  and e["served_row"] == (w.get("source") or {}).get("row")]})
     return out
 
 
@@ -279,7 +284,7 @@ def to_json(records: Sequence[Mapping[str, Any]], result_ids: Mapping[str, str] 
         "tensor_templates": sorted(TENSOR_TEMPLATES),
         "workloads": [{
             "id": r["workload"], "display": r["display"], "served_hardware": r["served_hardware"], "served_display": r["served_display"],
-            "vus": r["vus"], "not_evaluable_vus": r["not_evaluable_vus"],
+            "vus": r["vus"], "not_evaluable_vus": r["not_evaluable_vus"], "below_bar": r.get("below_bar", []),
             "native_seconds": {b: _j(v) for b, v in r["native_seconds"].items()},
             "subcircuits": [{"subcircuit": g["subcircuit"], "template": g["template"], "parameters": g["parameters"], "display": g["display"],
                              "vu_families": g["vu_families"], "vus": g["vus"], "units": g["units"],
@@ -314,6 +319,12 @@ def render_markdown(records: Sequence[Mapping[str, Any]]) -> list[str]:
         out += [f"### {r['display']} — served on {r['served_display']}", "",
                 f"`{r['workload']}`: {r['vus']} VUs ({r['not_evaluable_vus']} not evaluable, outside the mix); native time "
                 f"{fmt_s(r['native_seconds'][tp.id])} ({tp.label}), {fmt_s(r['native_seconds'][mb.id])} ({mb.label}).", ""]
+        if r.get("below_bar"):
+            defs = sorted({x["definition"].split("{")[0] for x in r["below_bar"] if x.get("definition")})
+            bits = [x["soundness_bits"] for x in r["below_bar"] if x.get("soundness_bits")]
+            out += [f"Below the 128-bit bar, verified but not counted: {len(r['below_bar'])} proofs on this workload's inputs "
+                    f"({', '.join(defs)}; {min(bits):.1f}–{max(bits):.1f} bits)." if bits else
+                    f"Below the 128-bit bar, verified but not counted: {len(r['below_bar'])} proofs on this workload's inputs.", ""]
         by_sub: dict[str, list[str]] = {}
         for row in r["backends"]:
             for x in row["covered"]:

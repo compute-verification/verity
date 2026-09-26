@@ -1198,7 +1198,7 @@ def below_bar_entry(art: str, meta: Mapping[str, Any], labels: Sequence[Any], ca
     verified = [lab for lab in T._labels(labels) if lab.key == "verified"]
     inst = fp.get("instances") if isinstance(fp.get("instances"), Mapping) else {}
     return {"artifact": art, "backend_family": _fam(cand.id), "definition": _get(fp, "definition", "id"), "gate_family": fp.get("family"),
-            "B": fp.get("B"), "input_set": inst.get("set"), "input_set_art": inst.get("set_art"), "prover_gpu": _get(fp, "hardware", "gpu", "name"),
+            "B": fp.get("B"), "input_set": inst.get("set"), "input_set_art": inst.get("set_art"), "served_row": inst.get("row"), "prover_gpu": _get(fp, "hardware", "gpu", "name"),
             "proof_class": fp.get("proof_class"),
             "modes": {mode: {"soundness_bits": num(f"{mode}.soundness_bits"), "prove_seconds": num(f"{mode}.prove_seconds"),
                              "seconds_per_instance": num(f"{mode}.seconds_per_instance"), "proof_bytes": num(f"{mode}.proof_bytes"),
@@ -1248,6 +1248,18 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
         sets = V.input_sets = input_set_index(store)
         for c in entries:
             c.subcircuit, c.input_sets = result_subcircuit(c.meta, c.target), sets
+        unmodelled = []
+        for c in entries:
+            try:
+                native_of(c.target, c.subcircuit, rules.native_cached)
+            except KeyError as e:        # a per-input work-model variable (attention's key count T) has no row-level value
+                rid, _ = T._attempt_of(store, c.art)
+                V.rejected.append({"artifact": c.art, "family": c.family.id, "configuration": c.config.id if c.config else None,
+                                   "line": c.target.name, "subcircuit": c.subcircuit, "attempt": rid,
+                                   "codes": [("X", f"native N is not modelled for {c.subcircuit}: its work model needs {e.args[0]}, "
+                                                   f"which varies per input (a row-level value is a pending decision)")]})
+                unmodelled.append(c)
+        entries = [c for c in entries if c not in unmodelled]
     by_statement: dict[tuple[str | None, str, str | None], list[Any]] = {}
     for c in entries:
         by_statement.setdefault((c.config.id if c.config else None, c.target.name, c.subcircuit), []).extend(c.labels)
