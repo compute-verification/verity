@@ -347,11 +347,21 @@ def benes_apply(x: np.ndarray, sw: np.ndarray) -> np.ndarray:
     return x
 
 
-def evaluate(prog: Program, inputs: dict[str, np.ndarray], stop_early: bool = False) -> Result:
+def evaluate(prog: Program, inputs: dict[str, np.ndarray], keep: bool = False) -> Result:
+    """Run the program natively. Each assertion is checked when its register is computed; registers are freed after their
+    last use unless `keep` (then `Result.vals` holds every register, for inspection and `gadgets.check_program`)."""
     from .gadgets import sha_native
     vals: list = [None] * len(prog.regs)
     shapes = {r.id: r for r in prog.regs}
-    for o in prog.ops:
+    last = {}
+    for i, o in enumerate(prog.ops):
+        for x in o.ins:
+            last[x] = i
+    asserted: dict[int, list[str]] = {}
+    for r, why in prog.asserts:
+        asserted.setdefault(r.id, []).append(why)
+    failed: list[tuple[str, int]] = []
+    for i, o in enumerate(prog.ops):
         ins = [vals[i] for i in o.ins]
         out = shapes[o.outs[0]] if o.outs else None
         if o.name == "input":
@@ -409,9 +419,12 @@ def evaluate(prog: Program, inputs: dict[str, np.ndarray], stop_early: bool = Fa
             want = out.shape + ((2,) if out.kind == "F" else ())
             v = np.broadcast_to(v, want) if v.shape != want else v
             vals[o.outs[0]] = v
-    failed = []
-    for r, why in prog.asserts:
-        bad = int(np.count_nonzero(np.any(vals[r.id].reshape(r.size, -1) != 0, axis=-1)))
-        if bad:
-            failed.append((why, bad))
+            for why in asserted.get(out.id, ()):
+                bad = int(np.count_nonzero(np.any(v.reshape(out.size, -1) != 0, axis=-1)))
+                if bad:
+                    failed.append((why, bad))
+        if not keep:
+            for x in o.ins:
+                if last.get(x) == i:
+                    vals[x] = None
     return Result(vals, failed)

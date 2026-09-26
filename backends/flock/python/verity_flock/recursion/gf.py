@@ -94,10 +94,14 @@ DEN7_INV = inv(_den(7))
 
 def eq_table(r: list[int]) -> list[int]:
     """eq(r, u) for u < 2^|r|, index bit j <-> r[j] (LSB first)."""
-    t = [1]
+    return from_arr(eq_arr(r))
+
+
+def eq_arr(r: list[int]) -> np.ndarray:
+    t = to_arr([1])
     for rj in r:
-        a = rj ^ 1
-        t = [mul(x, a) for x in t] + [mul(x, rj) for x in t]
+        c = to_arr([rj ^ 1, rj])
+        t = np.concatenate([vmul(t, c[0]), vmul(t, c[1])])
     return t
 
 
@@ -158,13 +162,14 @@ def from_arr(a: np.ndarray) -> list[int]:
 
 
 _ONE = np.uint64(1)
+_ALL = np.uint64(MASK64)
 
 
 def _clmul64(a: np.ndarray, b: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     lo = np.zeros(np.broadcast(a, b).shape, dtype=np.uint64)
     hi = np.zeros_like(lo)
     for i in range(64):
-        m = np.uint64(0) - ((b >> np.uint64(i)) & _ONE)
+        m = ((b >> np.uint64(i)) & _ONE) * _ALL
         lo ^= (a << np.uint64(i)) & m
         if i:
             hi ^= (a >> np.uint64(64 - i)) & m
