@@ -1,5 +1,26 @@
 # Changelog: `verity_numerical` (the bench renderers and their rules)
 
+## 2026-09-26: #101's attention, sampling and embedding subcircuits; an L40S hardware line
+
+- **Census:** #101's remaining templates are bound, with bench-spine's ids:
+  - `attention-head/d64-bn128/sm80-fa2-bf16`, whose key count T is recorded as 1–383 over #101's strata in `variable_ranges`;
+  - `gumbel-top-p-token-select/v128256/fp32`;
+  - `embedding-row/v128256-h2048/bf16`.
+- **Embedding:** the template is marked `commitment_opening`. The ontology has no covered-by-commitment state, so the headline
+  lists embedding as uncovered, with the reason `commitment opening`. Its native work stays in the denominator and is never
+  imputed.
+- **MoE router:** `moe-router-topk` gains `port_datatypes`: bf16 logits, f32 weights, i32 ids. Its bytes model is
+  `2*E + 8*TOPK`, from its Definition's ports, so every template of every census workload is now modelled.
+- **L40S line:** `views.L40S_BF16` puts the first target's instruction (`sm80.mma.m16n8k16.bf16`) on the L40S. It is a
+  hardware-only line, so it has rows only where it has results, each keyed by its explicit subcircuit, with N from the
+  `l40s-48gb/bf16` line: 362.05 TFLOPS for GEMM, 864 GB/s for the rest.
+- **Rehoming:** under the spec rules, a result whose prover ran on another device than its profile's target moves to the
+  line of the same instruction on that device (GEMM) or to the line its prover GPU picks (other templates). Before, it was
+  rejected K. Only the L40S changes today, because no other device has a second line of an existing instruction.
+  `hardware_target` also finds a line for a subcircuit with no tensor datatype (fp32 sampling), since its N is memory-bound.
+- **Unchanged:** the legacy rules, the targets' rows and parity. Existing tables are byte-identical; only the headline
+  section changes.
+
 ## 2026-09-26: previews of the two pending acceptance decisions (never published)
 
 - `views --preview-one-sided-interaction`: the interaction check passes when the measured wall is at most 1.1 × the model. A

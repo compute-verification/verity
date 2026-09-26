@@ -177,6 +177,20 @@
                 }
               }
             },
+            "variable_ranges": {
+              "type": "object",
+              "description": "the range a per-input variable (the template's work_model.variables) takes over the workloads the subcircuit serves",
+              "additionalProperties": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["min", "max", "source"],
+                "properties": {
+                  "min": {"type": "integer"},
+                  "max": {"type": "integer"},
+                  "source": {"type": "string", "minLength": 1}
+                }
+              }
+            },
             "fidelity_notes": {
               "type": "array",
               "description": "known gaps between the subcircuit and what production runs",
@@ -236,6 +250,25 @@
                   }
                 }
               }
+            }
+          }
+        }
+      },
+      "commitment_opening": {
+        "type": "object",
+        "description": "the template is a commitment opening, not arithmetic a proof backend proves: no backend cell covers it, and the headline lists it uncovered with this reason",
+        "additionalProperties": false,
+        "required": ["note", "sources"],
+        "properties": {
+          "note": {"type": "string", "minLength": 1},
+          "sources": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["label"],
+              "properties": {"label": {"type": "string", "minLength": 1}, "href": {"type": "string", "format": "uri"}}
             }
           }
         }
@@ -300,6 +333,11 @@
             "type": "string",
             "pattern": "^[A-Za-z0-9_ +*/()-]+$",
             "description": "bytes read and written per input, an integer expression over the parameters (and variables; BITS is the bit width of the bound datatype): the memory-bandwidth work model"
+          },
+          "port_datatypes": {
+            "type": "object",
+            "description": "the datatype of each port the bytes count (census/datatypes.json ids, or f32 / i32 for kernel-internal words)",
+            "additionalProperties": {"type": "string", "minLength": 1}
           },
           "variable_bounds": {
             "type": "object",

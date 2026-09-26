@@ -309,7 +309,30 @@
         }
       }
     },
-    "subcircuits": []
+    "subcircuits": [
+      {
+        "id": "attention-head/d64-bn128/sm80-fa2-bf16",
+        "display": "AttentionHead<T,64> · FA2 BN=128 · sm80 mma · BF16",
+        "parameters": {
+          "D": 64,
+          "BN": 128,
+          "semantics": "sm80.fa2.bf16"
+        },
+        "variable_ranges": {
+          "T": {
+            "min": 1,
+            "max": 383,
+            "source": "row #101's Attention_v3 strata (census/workloads.json): NB = 1 or 2 with the last block full or partial, NB = 3 partial, at BN = 128; the least is NB = 1 partial (T >= 1), the most NB = 3 partial (T <= 3*128 - 1), by the template's variable_bounds"
+          }
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "row #101 (Llama-3.2-1B, census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates.attention_head)"
+          }
+        ]
+      }
+    ]
   },
   {
     "id": "rope-head",
@@ -556,7 +579,21 @@
       "bytes_basis": "reads the bf16 logits row in0[V] (2V bytes) and the scalars top_p (u32), seed (u64), pos (u64), temp (u32), splits (u32), writes the sampled token id (u64): 2V + 36 bytes; every row counted once per input, none assumed cached (the conservative, memory-bound reading)",
       "bytes_source": "bench-spine's port definitions (verity_numerical.bench.templates): gumbel-top-p-token-select in0..in5 -> out.sampled_token_ids"
     },
-    "subcircuits": []
+    "subcircuits": [
+      {
+        "id": "gumbel-top-p-token-select/v128256/fp32",
+        "display": "GumbelTopPTokenSelect_v1<128256> · temperature + top-p · FP32",
+        "parameters": {
+          "V": 128256
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "row #101 (Llama-3.2-1B, census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates, the gumbel-top-p-token-select row)"
+          }
+        ]
+      }
+    ]
   },
   {
     "id": "token-select-greedy",
@@ -629,7 +666,11 @@
       "variables": {
         "T": "the input's key count (varies per input)"
       },
-      "source": "verity_vllm.program.registry.moe.MoeRouterTopK_v1 (topk_softmax)"
+      "source": "verity_vllm.program.registry.moe.MoeRouterTopK_v1 (topk_softmax)",
+      "bytes_per_input": "2*E + 8*TOPK",
+      "bytes_basis": "reads the E router logits (bf16, 2E bytes), writes the TOPK routing weights (f32) and expert ids (i32): 2E + 8*TOPK bytes; every row counted once per input, none assumed cached (the conservative, memory-bound reading)",
+      "bytes_source": "the Definition's ports (verity_vllm.program.registry.moe.MoeRouterTopK: logits Array(E, BF16) -> (Array(TOPK, F32), Array(TOPK, I32)))",
+      "port_datatypes": {"logits": "bf16", "weights": "f32", "ids": "i32"}
     },
     "subcircuits": []
   },
@@ -869,6 +910,14 @@
     },
     "accumulate": null,
     "reference_batch": null,
+    "commitment_opening": {
+      "note": "the spec treats the row gather as a commitment opening, not arithmetic a backend proves: its value is opened against the committed table (verity.commitments), so no proof-backend cell covers it and the headline lists it uncovered for that reason, never imputed",
+      "sources": [
+        {
+          "label": "docs vllm-subcircuit-coverage (Embedding_v1: spec: a commitment opening, not a subcircuit); verity_vllm.observe.fold.patterns.embedding (Embedding_v1{V,H}: a row gather of weight[V,H])"
+        }
+      ]
+    },
     "ir_definitions": [
       "Embedding_v1{V, H}"
     ],
@@ -888,6 +937,21 @@
       "bytes_basis": "reads one bf16 table row (H words) and writes it (H words); the token id read is a few bytes and not counted",
       "bytes_source": "the Definition's operands (verity_vllm.observe.fold.patterns.embedding: Embedding_v1{V,H}, a row gather of weight[V,H] by the token id)"
     },
-    "subcircuits": []
+    "subcircuits": [
+      {
+        "id": "embedding-row/v128256-h2048/bf16",
+        "display": "Embedding_v1<128256, 2048> · BF16",
+        "parameters": {
+          "V": 128256,
+          "H": 2048
+        },
+        "fidelity_notes": [],
+        "sources": [
+          {
+            "label": "row #101 (Llama-3.2-1B, census/workloads.json); id in bench-spine's <template>/<parameters>/<datatype> form (bench-spine has no embedding template: a commitment opening)"
+          }
+        ]
+      }
+    ]
   }
 ]

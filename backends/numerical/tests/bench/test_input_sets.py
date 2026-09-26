@@ -163,7 +163,7 @@ def test_evaluation_targets_equal_the_definitions():
 
 
 def test_model_only_gemm_semantics_bind_but_do_not_generate(tmp_path):
-    ids = [s["id"] for t in json.loads((CENSUS / "subcircuits.json").read_text()) for s in t["subcircuits"]]
+    ids = [s["id"] for t in json.loads((CENSUS / "subcircuits.json").read_text()) if "commitment_opening" not in t for s in t["subcircuits"]]
     for sid in ids:
         sub = TM.parse_subcircuit_id(sid)
         assert sub.id == sid

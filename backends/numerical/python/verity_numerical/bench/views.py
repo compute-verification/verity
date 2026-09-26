@@ -52,7 +52,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from verity import claims as claims_registry
-from verity.proofs.target import BF16_HOPPER, FP8_ADA_MMA, FP8_HOPPER_WGMMA, NVFP4_SM120, TARGETS, Target
+from verity.proofs.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, NVFP4_SM120, TARGETS, Target
 from verity_numerical.bench import census, contract
 from verity_numerical.bench import drilldown as D
 from verity_numerical.bench import tables as T
@@ -798,6 +798,27 @@ RELATION_SEMANTICS = {"bf16-ampere": "sm80.mma.m16n8k16.bf16", "bf16-hopper": "s
 INPUT_SET_KINDS = ("input-set/v1", "vllm-vu-set/v1")
 
 
+#: Hardware lines no target anchors: a target's instruction on another device (docs ontology, "A result": hardware is its own
+#: axis).  #101 was served on an L40S, whose BF16 GEMM is the Ampere-class mma the first target states.  Every result on such
+#: a line is a statement of its own (:func:`result_subcircuit`), so the line has rows only where it has results.
+L40S_BF16 = dataclasses.replace(FIRST, name="l40s-48gb/bf16/sm80.mma.m16n8k16.bf16", anchor_device="NVIDIA L40S 48GB", status="draft", dossier=None)
+#: Every Table 2 line by name: the targets, then the hardware-only lines.
+LINES: dict[str, Target] = {**TARGETS, L40S_BF16.name: L40S_BF16}
+
+
+def rehome(meta: Mapping[str, Any], target: Target) -> Target:
+    """The line a result belongs on when its prover ran on another device than ``target``'s: for a GEMM statement the line of
+    the same instruction on the prover's device, for another template the line :func:`hardware_target` picks; ``target``
+    itself when the prover is on its device or no line fits (then the result is rejected K as before)."""
+    gpu = _get(meta.get("workload_fingerprint") or {}, "hardware", "gpu", "name")
+    if T.same_sku(gpu, contract.native_peak_of(target).device):
+        return target
+    sub = stamped_subcircuit(meta)
+    if not is_gemm(sub):
+        return hardware_target(meta, sub) or target
+    return next((t for t in LINES.values() if t.instruction == target.instruction and T.same_sku(gpu, contract.native_peak_of(t).device)), target)
+
+
 def _sem_slug(semantics: str) -> str:
     return "-".join(x for x in semantics.split(".") if not re.fullmatch(r"m\d+n\d+k\d+", x))
 
@@ -811,7 +832,8 @@ def result_subcircuit(meta: Mapping[str, Any], target: Target) -> str | None:
     one statement: at the target's K the target's own subcircuit, at another K the one that is stood for (root's ruling
     2026-09-26 02:44Z: real-K H100 BF16 cells use the wgmma subcircuit's id)."""
     fp = meta.get("workload_fingerprint") if isinstance(meta.get("workload_fingerprint"), Mapping) else {}
-    home = census.subcircuit_of(target.name)
+    extra = target.name not in TARGETS
+    home = census.subcircuit_with("gemm-coordinate", K=T.K, semantics=target.instruction) if extra else census.subcircuit_of(target.name)
     named = stamped_subcircuit(meta)
     if named and named.split("/")[0] != home.template:
         return named                                         # another template (a non-GEMM subcircuit): its own statement
@@ -829,7 +851,7 @@ def result_subcircuit(meta: Mapping[str, Any], target: Target) -> str | None:
     sem = sem or home.parameters.semantics
     stands = {census.SUBCIRCUITS[x].parameters.semantics: census.SUBCIRCUITS[census.stood_for_by(x)].parameters.semantics
               for x in census.SUBCIRCUITS if census.stood_for_by(x)}
-    if K == home.parameters.K:
+    if K == home.parameters.K and not extra:
         sem = stands.get(sem, sem)
         if sem == home.parameters.semantics:
             return None
@@ -847,7 +869,7 @@ def stamped_subcircuit(meta: Mapping[str, Any]) -> str | None:
 
 
 #: GPU model tokens a prover's ``hardware.gpu.name`` carries, as the census hardware lines' devices spell them.
-_GPU_TOKENS = ("A100", "H100", "4090", "5090")
+_GPU_TOKENS = ("A100", "H100", "L40S", "4090", "5090")
 _DTYPE_TOKENS = (("bf16", "bf16"), ("e4m3", "e4m3"), ("fp8", "e4m3"), ("e2m1", "e2m1"), ("nvf4", "e2m1"))
 
 
@@ -859,9 +881,12 @@ def hardware_target(meta: Mapping[str, Any], sub: str | None) -> Target | None:
     token = next((t for t in _GPU_TOKENS if t in gpu), None)
     tail = (sub or "").rsplit("/", 1)[-1].lower()
     dtype = next((d for key, d in _DTYPE_TOKENS if key in tail), None)
-    if token is None or dtype is None:
+    if token is None:
         return None
-    return next((t for t in TARGETS.values() if token in contract.native_peak_of(t).device and contract.native_peak_of(t).dtype == dtype), None)
+    on = [t for t in LINES.values() if token in contract.native_peak_of(t).device]
+    if dtype is None:                      # a subcircuit without a tensor datatype (fp32 sampling): its N is memory-bound, any line of the device
+        return next((t for t in on if contract.native_peak_of(t).dtype == "bf16"), on[0] if on else None)
+    return next((t for t in on if contract.native_peak_of(t).dtype == dtype), None)
 
 
 def is_gemm(sub: str | None) -> bool:
@@ -1189,6 +1214,8 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
         target = TARGETS.get(fp.get("profile")) if isinstance(fp.get("profile"), str) else None
         if target is None and not rules.legacy and not is_gemm(stamped_subcircuit(meta)):
             target = hardware_target(meta, stamped_subcircuit(meta))
+        if target is not None and not rules.legacy:
+            target = rehome(meta, target)
         config = configuration_of(meta, cfgs)
         if target is None:
             V.rejected.append({"artifact": art, "family": cand.id, "configuration": config.id if config else None, "line": None,
@@ -1305,7 +1332,7 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
     for c in entries:
         if c.subcircuit:
             own.setdefault((c.target.name, c.subcircuit), set()).add(scheme_of(c))
-    for target in TARGETS.values():
+    for target in LINES.values():
         for sub in sorted((x for t, x in own if t == target.name), key=lambda x: (not is_gemm(x), subcircuit_k(x) if is_gemm(x) else 0, x)):
             N = native_of(target, sub, rules.native_cached)
             for scheme in line_schemes:
@@ -1412,7 +1439,7 @@ def _instances_text(target_name: str, inst: Mapping[str, Any], sub: str | None =
     rng = inst.get("range") or ["?", "?"]
     if sub:
         return f"inputs [{rng[0]}, {rng[1]}) of input set {inst.get('dataset') or inst.get('set') or inst.get('tier', '?')} ({inst.get('source') or 'source not recorded'})"
-    how, _ = instance_range(TARGETS[target_name], inst) if target_name in TARGETS and inst else (None, None)
+    how, _ = instance_range(LINES[target_name], inst) if target_name in LINES and inst else (None, None)
     kind = {"stream": "a prefix-consistent extension of the frozen set", "prefix": "a prefix of the frozen set",
             "frozen": "the frozen set"}.get(how or "", "re-packed")
     return f"instances [{rng[0]}, {rng[1]}) of {inst.get('tier', '?')} ({kind})"
@@ -2165,7 +2192,7 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
         sub_id = ln.get("subcircuit")
         if not sub_id or any(c["id"] == sub_id for c in circuits):
             continue
-        target, known = TARGETS[ln["line"]], census.SUBCIRCUITS.get(sub_id)
+        target, known = LINES[ln["line"]], census.SUBCIRCUITS.get(sub_id)
         peak = contract.native_peak_of(target)
         dt = census.DATATYPES[peak.dtype]
         N = ln["native"]
@@ -2199,7 +2226,7 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
         return f"{sub_of(target_name, sub)}+{scheme_id(legacy_scheme)}"
 
     def prover_of(c: ViewCell) -> str | None:
-        dtype = contract.native_peak_of(TARGETS[c.line]).dtype
+        dtype = contract.native_peak_of(LINES[c.line]).dtype
         return next((h.id for h in census.HARDWARE.values() if h.dtype == dtype and T.same_sku(V.prover_gpu.get(c.artifact), h.device)), None)
 
     def key_of(target_name: str, legacy_scheme: str | None, prover: str | None, own: str | None = None) -> dict[str, Any]:
@@ -2233,7 +2260,7 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
         x = sets_by_ref.get((c.instances.get("dataset"), c.instances.get("tier")))
         if x is None:
             return None
-        how, _ = instance_range(TARGETS[c.line], c.instances) if c.instances else (None, None)
+        how, _ = instance_range(LINES[c.line], c.instances) if c.instances else (None, None)
         return {"id": x.id, "provenance": x.provenance, "range": c.instances.get("range"), "how": how or "equivalent"}
 
     def phases_of(c: ViewCell) -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -2258,7 +2285,7 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
         phases, other = phases_of(c)
         cfg = cfg_of.get(c.configuration or "")
         per_proof = V.security_of.get(c.artifact, {}).get("per_proof_total_log2")
-        peak = contract.native_peak_of(TARGETS[c.line])
+        peak = contract.native_peak_of(LINES[c.line])
         prover, backend, stmt = prover_of(c), backend_by_cfg.get(c.configuration or ""), statement_id(c.line, c.scheme, c.subcircuit)
         stmt_assumptions = scheme_by_id[scheme_id(c.scheme)]["assumptions"] if scheme_id(c.scheme) in scheme_by_id else []
         return {
@@ -2298,12 +2325,12 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
 
     for g in grid:
         ln = g["line"]
-        line_prover = contract.native_peak_of(TARGETS[ln["line"]]).id
+        line_prover = contract.native_peak_of(LINES[ln["line"]]).id
         own = ln.get("subcircuit")
         line = {"statement": statement_id(ln["line"], ln["scheme"], own), "subcircuit": sub_of(ln["line"], own), "scheme": scheme_id(ln["scheme"]),
                 "legacy_scheme": ln["scheme"], "key": key_of(ln["line"], ln["scheme"], line_prover, own), "label": g["label"],
                 "native": {"display": g["native"]["display"], "value": ln["native"]["instances_per_second"], "footnote": footnote(g["native"]["note"]),
-                           "work_model": WORK_MODEL.split(":")[0], "peak": contract.native_peak_of(TARGETS[ln["line"]]).id},
+                           "work_model": WORK_MODEL.split(":")[0], "peak": contract.native_peak_of(LINES[ln["line"]]).id},
                 "cells": {}}
         for col, gc in g["cells"].items():
             c = gc["cell"]
