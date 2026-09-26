@@ -45,6 +45,9 @@ if hasattr(tmod, "class_manifest") and len(set(tmod.key_counts(inp))) > 1:
     same = (out / "class.json").read_bytes() == (rec / "class.json").read_bytes() and all(
         klass.net(T).read_bytes() == (rec / f"net-t{T}.txt").read_bytes() for T in sorted(set(klass.T)))
     (out / "net.txt").write_text(low.text)
+    vpin = hashlib.sha256((rec / "class.json").read_bytes()).hexdigest()
+    assert pin == vpin, f"class pin {pin} differs from the verifier's manifest sha256 {vpin}"
+    print(json.dumps({"class_pin": pin, "verifier_manifest_sha256": vpin, "T_from_staged_data": sorted(set(klass.T))[:3] + ["..."] + sorted(set(klass.T))[-2:], "heads": len(klass.T)}))
 else:
     low = ir_bench._lowering(template, inp)
     (out / "net.txt").write_text(low.text)
@@ -65,6 +68,8 @@ for d in sorted(rec.glob("p*-*"), key=lambda p: int(p.name[1:].split("-")[0])):
         f = out / d.name / f"instances-s{j}.bin"
         args = mod.serve_args(f) if mod is not None and hasattr(mod, "serve_args") else []
         if klass:
+            ts = sorted(set(klass.T[subs[j][0]:subs[j][1]]))
+            assert len(ts) == 1, f"sub-batch {subs[j]} spans key counts {ts}"
             args = ["--class", str(out / "class.json"), *args]
             (out / d.name / f"net-s{j}.txt").write_bytes(klass.net(klass.T[subs[j][0]]).read_bytes())
         (out / d.name / f"args-s{j}").write_text(" ".join(args))
@@ -126,6 +131,16 @@ if [ -s ${inst%instances-s*}args-s${NEG##*sessions-s} ]; then  # S1: a sampling 
   r=$(echo "$line" | grep -q '"accepted":true' && echo accepted || echo rejected)
   echo "{\"neg\": \"native_check_not_attested\", \"want\": \"rejected\", \"result\": \"$r\", \"line\": $(echo "$line" | cut -f2- | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()[:200]))')}" | tee -a $O/negatives.jsonl
   [ $r = rejected ] || bad=$((bad+1))
+fi
+if [ -f $I/class.json ]; then  # class cells: the class flag is mandatory, and a sub-batch replays only with its own T netlist
+  j=${NEG##*sessions-s}; pt=${NEG%%/*}; nt=$I/$pt/net-s$j.txt; ot=$(ls $I/$pt/net-s*.txt | grep -v "net-s$j.txt" | while read f; do cmp -s $f $nt || { echo $f; break; }; done)
+  for c in no_class_flag other_T_netlist; do
+    if [ $c = no_class_flag ]; then line=$($B replay --instances $inst --netlist $nt --pin $PIN $TB --session $ses/session.json --proofs $ses/irf.rep0.bin,$ses/irf.rep1.bin 2>&1 | grep -E '^(REPLAY|REFUSED)')
+    else line=$($B replay --instances $inst --netlist $ot --pin $PIN $TB --class $I/class.json --session $ses/session.json --proofs $ses/irf.rep0.bin,$ses/irf.rep1.bin 2>&1 | grep -E '^(REPLAY|REFUSED)'); fi
+    r=$(echo "$line" | grep -q '"accepted":true' && echo accepted || echo rejected)
+    echo "{\"neg\": \"$c\", \"want\": \"rejected\", \"result\": \"$r\", \"line\": $(echo "$line" | cut -f2- | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()[:200]))')}" | tee -a $O/negatives.jsonl
+    [ $r = rejected ] || bad=$((bad+1))
+  done
 fi
 o=$(ls $I/*/instances-s*.bin | grep -v "$inst" | tail -1); neg other_instance_file $ses/session.json $ses/irf.rep0.bin $ses/irf.rep1.bin $o
 echo "NEGATIVES $(grep -c '"want": "rejected", "result": "rejected"' $O/negatives.jsonl) rejected as wanted, $(grep -c '"want": "accepted", "result": "accepted"' $O/negatives.jsonl) accepted as wanted, $(grep -c '"want": "info"' $O/negatives.jsonl) info, of $(wc -l < $O/negatives.jsonl); total bad $bad" | tee -a $O/summary.txt
