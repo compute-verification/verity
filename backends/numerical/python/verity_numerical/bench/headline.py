@@ -222,8 +222,10 @@ def headline(V: Any, workloads: Sequence[Mapping[str, Any]] | None = None) -> li
             for g in subs:
                 mine = [(c, sub) for c, b, sub in cells if b == bid and g["subcircuit"] is not None and sub == g["subcircuit"]]
                 anywhere = getattr(V.rules, "headline_any_hardware", False)      # a PREVIEW (Daniel decides): N stays the served line's
+                partial = not getattr(V.rules, "headline_count_omitted", False)   # Daniel decides whether verifier-evaluated parts count
                 hits = [c for c, _ in mine if not c.provisional and not c.legacy.finding
-                        and (anywhere or T.same_sku(V.prover_gpu.get(c.artifact), served.device))]
+                        and (anywhere or T.same_sku(V.prover_gpu.get(c.artifact), served.device))
+                        and not (partial and getattr(V, "omitted_of", {}).get(c.artifact))]
                 if hits:
                     c = min(hits, key=lambda x: (-x.throughput["instances_per_second"], x.artifact))
                     P = c.throughput["instances_per_second"]
@@ -235,7 +237,8 @@ def headline(V: Any, workloads: Sequence[Mapping[str, Any]] | None = None) -> li
                     h = prover_line(c)
                     elsewhere.append({"artifact": c.artifact, "prover_hardware": h.id if h else None, "prover_gpu": V.prover_gpu.get(c.artifact),
                                       "on_served_hardware": T.same_sku(V.prover_gpu.get(c.artifact), served.device),
-                                      "cleared": not c.provisional and not c.legacy.finding})
+                                      "cleared": not c.provisional and not c.legacy.finding,
+                                      "omitted": getattr(V, "omitted_of", {}).get(c.artifact)})
                 opening = getattr(census.SUBCIRCUIT_TEMPLATES.get(g["template"] or ""), "commitment_opening", None)
                 if opening is not None and not elsewhere:
                     why, code = f"a commitment opening: {opening.note}", "commitment opening"
@@ -243,6 +246,11 @@ def headline(V: Any, workloads: Sequence[Mapping[str, Any]] | None = None) -> li
                     why, code = "the census binds no subcircuit to these parameters, so no result can name it", "no census subcircuit"
                 elif not elsewhere:
                     why, code = "no admissible result on this subcircuit", "no result"
+                elif any(e["on_served_hardware"] and e["cleared"] and e.get("omitted") for e in elsewhere):
+                    left = next(e["omitted"] for e in elsewhere if e["on_served_hardware"] and e.get("omitted"))
+                    why = (f"the cleared result leaves out verifier-evaluated parts ({left if isinstance(left, str) else '; '.join(map(str, left))}); "
+                           f"whether that counts as covered is a pending decision")
+                    code = "omits verifier-evaluated parts"
                 elif any(e["on_served_hardware"] for e in elsewhere):
                     why, code = "results on the served hardware are not cleared (provisional or an open finding)", "not cleared"
                 else:
