@@ -43,7 +43,7 @@ def hashTest (path : String) : IO UInt32 := do
 def compCheck (path : String) : IO UInt32 := do
   let b ← IO.FS.readBinFile path
   let t0 ← IO.monoMsNow
-  match Comp.load b with
+  match Comp.load Blake3Row.spec b with
   | .ok c => IO.println s!"comp-check: ok, D_b3 {hexOf c.digest} ({(← IO.monoMsNow) - t0} ms)"; return 0
   | .error e => IO.println s!"comp-check: {e}"; return 1
 
@@ -52,16 +52,20 @@ def argOf (args : List String) (k : String) : Option String :=
   | _ :: v :: _ => some v
   | _ => none
 
-/-- `verify --circuit F --comp F --public F [--coins seed|os] --session DIR...`: each DIR holds `session.json`,
-`nl.rep0.bin` and `nl.rep1.bin`. The statement is set up once; one verdict line per session, in order. Exit 0 iff every
-session is accepted. -/
+/-- `verify --statement ID --circuit F --comp F --public F [--coins seed|os] --session DIR...`: `ID` names the statement's
+tags (`verity/flock-circuit` by default, or `verity/flock-netlist/v1`); `--comp` is the row leaf's pinned compression
+circuit. Each DIR holds `session.json`, `<table>.rep0.bin` and `<table>.rep1.bin`. The statement is set up once; one
+verdict line per session, in order. Exit 0 iff every session is accepted. -/
 def verifyCmd (args : List String) : IO UInt32 := do
   let (some circuit, some comp, some pub) := (argOf args "--circuit", argOf args "--comp", argOf args "--public")
-    | IO.eprintln "usage: flock-verify verify --circuit F --comp F --public F [--coins seed|os] --session DIR..."; return 2
+    | IO.eprintln "usage: flock-verify verify [--statement ID] --circuit F --comp F --public F [--coins seed|os] --session DIR..."; return 2
+  let some tags := Tags.find? ((argOf args "--statement").getD Tags.circuit.statement)
+    | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.statement)}"; return 2
   let dirs := (args.dropWhile (· != "--session")).drop 1
   let coins := if argOf args "--coins" == some "os" then Coins.os else Coins.seed
   let t0 ← IO.monoMsNow
-  let setup ← match Stmt.setup (← IO.FS.readBinFile circuit) (← IO.FS.readBinFile comp) (← IO.FS.readBinFile pub) coins with
+  let (compB, circuitB, pubB) := (← IO.FS.readBinFile comp, ← IO.FS.readBinFile circuit, ← IO.FS.readBinFile pub)
+  let setup ← match (do Stmt.setup tags (Blake3Row.leaf (← Comp.load Blake3Row.spec compB)) circuitB pubB coins : V Stmt) with
     | .ok st => pure (Except.ok (Setup.ofCircuit st))
     | .error e => pure (Except.error s!"setup: {e}")
   IO.eprintln s!"setup: {(← IO.monoMsNow) - t0} ms"
@@ -69,7 +73,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
   for dir in dirs do
     let t1 ← IO.monoMsNow
     let record ← IO.FS.readFile (dir ++ "/session.json")
-    let proofs ← #[0, 1].mapM fun r => IO.FS.readBinFile s!"{dir}/{TABLE}.rep{r}.bin"
+    let proofs ← #[0, 1].mapM fun r => IO.FS.readBinFile s!"{dir}/{tags.table}.rep{r}.bin"
     let verdict := do verify (← setup) record proofs
     let (ok, why) := match verdict with | .ok () => (true, "") | .error e => (false, e)
     all := all && ok
@@ -78,8 +82,28 @@ def verifyCmd (args : List String) : IO UInt32 := do
     IO.eprintln s!"{dir}: {(← IO.monoMsNow) - t1} ms"
   return (if all then 0 else 1)
 
+/-- `statement` with `verify`'s statement flags: the derived statement (digest, Σ, `Hello`, shape) as one JSON line. -/
+def statementCmd (args : List String) : IO UInt32 := do
+  let (some circuit, some comp, some pub) := (argOf args "--circuit", argOf args "--comp", argOf args "--public")
+    | IO.eprintln "usage: flock-verify statement [--statement ID] --circuit F --comp F --public F [--coins seed|os]"; return 2
+  let some tags := Tags.find? ((argOf args "--statement").getD Tags.circuit.statement)
+    | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.statement)}"; return 2
+  let coins := if argOf args "--coins" == some "os" then Coins.os else Coins.seed
+  let (compB, circuitB, pubB) := (← IO.FS.readBinFile comp, ← IO.FS.readBinFile circuit, ← IO.FS.readBinFile pub)
+  match (do Stmt.setup tags (Blake3Row.leaf (← Comp.load Blake3Row.spec compB)) circuitB pubB coins : V Stmt) with
+  | .ok st =>
+    let j := Lean.Json.mkObj [("statement", Lean.Json.str tags.statement), ("circuit_sha256", Lean.Json.str (hexOf st.c.sha)),
+      ("statement_digest", Lean.Json.str (hexOf st.digest)), ("sigma", Lean.Json.str (hexOf st.sigma)),
+      ("public_sha256", Lean.Json.str (hexOf st.pub.sha)), ("hello", Lean.Json.str st.hello),
+      ("identity", Lean.Json.str ((canon tags.identity).toOption.getD "")),
+      ("m", Lean.toJson st.m), ("regions", Lean.toJson st.regions.size), ("delta", Lean.toJson (st.da.size / 2))]
+    IO.println j.compress
+    return 0
+  | .error e => IO.println s!"setup: {e}"; return 1
+
 def main (args : List String) : IO UInt32 := do
   match args with
+  | "statement" :: rest => statementCmd rest
   | "verify" :: rest => verifyCmd rest
   | ["comp-check", path] => compCheck path
   | ["field-test", path] => fieldTest path

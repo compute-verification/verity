@@ -83,36 +83,40 @@ def absorbMat (m : Sparse) (rows : Nat) (h0 : Blake3.Hasher) (buf0 : ByteArray) 
 
 end Sparse
 
-/-- The compression circuit: one `2^14`-bit slot, `C = I`. -/
+/-- What the verifier pins about a slot circuit file: its shape, the header values it must state, the input rows Δ
+rewires (`A = [r]`, `B = [zConst]`), and its digest. -/
+structure CompSpec where
+  name : String
+  /-- the slot is `2^kLog` bits -/
+  kLog : Nat
+  /-- the block R1CS it was digested as -/
+  mDigest : Nat
+  usefulBits : Nat
+  zConst : Nat
+  /-- further header fields that must hold these values (the layout offsets the leaf's Δ and regions use) -/
+  header : List (String × Nat)
+  inputRows : List Nat
+  pinnedDigest : String
+  deriving Inhabited
+
+/-- A pinned slot circuit, `C = I`. -/
 structure Comp where
+  spec : CompSpec
   a : Sparse
   b : Sparse
-  /-- `D_b3`, recomputed from the rows at load -/
+  /-- recomputed from the rows at load -/
   digest : ByteArray
   deriving Inhabited
 
 namespace Comp
 
-def kLog : Nat := 14
-def zConst : Nat := 11706
-def cvBase : Nat := 0
-def outLo : Nat := 256
-def mBase : Nat := 512
-def tLo : Nat := 1024
-def flagsBase : Nat := 1120
-def usefulBits : Nat := 11707
-/-- The block R1CS it was digested as: `m = 17` (8 blocks of `2^14`). -/
-def mDigest : Nat := 17
-/-- `D_b3`, upstream's digest of this circuit (b684b12), bound by the circuit statement's digest. -/
-def pinnedDigest : String := "3f96431c023dbc354e51d101ab575b2be8cbd33bfcac5e9961d65e8e36d66be3"
-
 /-- `D = BLAKE3("flock-r1cs-stmt-v2" ‖ le64 m ‖ le64 k_log ‖ le64 k_skip ‖ le64 useful_bits ‖ u8 1 ‖ le64 pin ‖ u8 0
-‖ Mat(A) ‖ Mat(B) ‖ Mat(I))`. -/
-def digestOf (a b : Sparse) : ByteArray := Id.run do
-  let n := 2 ^ kLog
+‖ Mat(A) ‖ Mat(B) ‖ Mat(I))`, upstream's circuit digest (§16.1). -/
+def digestOf (sp : CompSpec) (a b : Sparse) : ByteArray := Id.run do
+  let n := 2 ^ sp.kLog
   let mut buf := "flock-r1cs-stmt-v2".toUTF8
-  for x in [mDigest, kLog, 6, usefulBits] do buf := pushLe64 buf x
-  buf := pushLe64 (buf.push 1) zConst |>.push 0
+  for x in [sp.mDigest, sp.kLog, 6, sp.usefulBits] do buf := pushLe64 buf x
+  buf := pushLe64 (buf.push 1) sp.zConst |>.push 0
   let (h1, b1) := a.absorbMat n Blake3.Hasher.plain buf
   let (h2, b2) := b.absorbMat n h1 b1
   let mut h := h2
@@ -129,42 +133,42 @@ private def readRows (file : ByteArray) (pos0 : Nat) (rows width : Nat) : V (Spa
   let mut start := Array.mkEmpty rows
   let mut len := Array.mkEmpty rows
   for _ in [0:rows] do
-    if pos + 4 > file.size then throw "compression circuit: truncated"
+    if pos + 4 > file.size then throw "slot circuit: truncated"
     let k := rd32 file pos
-    if pos + 4 + 4 * k > file.size then throw "compression circuit: truncated"
+    if pos + 4 + 4 * k > file.size then throw "slot circuit: truncated"
     for t in [0:k] do
-      if rd32 file (pos + 4 + 4 * t) ≥ width then throw "compression circuit: a column outside the slot"
+      if rd32 file (pos + 4 + 4 * t) ≥ width then throw "slot circuit: a column outside the slot"
     start := start.push (pos + 4)
     len := len.push k
     pos := pos + 4 + 4 * k
   return (⟨rows, width, file, start, len⟩, pos)
 
-/-- Load the pinned file: its header must state the pinned shape, its rows must decode exactly, its input rows must be
-the ones Δ rewires (`A = [r]`, `B = [z]`), and its digest must be the pinned `D_b3`. -/
-def load (file : ByteArray) : V Comp := do
-  let some nl := findByte file 10 | throw "compression circuit: no header line"
+/-- Load a pinned `flock-r1cs-rows/v1` file (a JSON header line, then A's rows and B's rows, each `le32 count` then `le32`
+columns): its header must state the pinned shape, its rows must decode exactly, its input rows must be the ones Δ rewires,
+and its digest must be the pinned one. -/
+def load (sp : CompSpec) (file : ByteArray) : V Comp := do
+  let ctx := s!"slot circuit {sp.name}"
+  let some nl := findByte file 10 | throw s!"{ctx}: no header line"
   let text ← match String.fromUTF8? (file.extract 0 nl) with
     | some s => pure s
-    | none => throw "compression circuit: header is not UTF-8"
+    | none => throw s!"{ctx}: header is not UTF-8"
   let h ← match Json.parse text with
     | .ok j => pure j
-    | .error e => throw s!"compression circuit: header: {e}"
-  let ctx := "compression circuit"
-  if (← J.str h "format" ctx) != "flock-r1cs-rows/v1" then throw "compression circuit: not flock-r1cs-rows/v1"
-  let want : List (String × Nat) := [("m", mDigest), ("k_log", kLog), ("k_skip", 6), ("useful_bits", usefulBits),
-    ("const_pin", zConst), ("layout", 0), ("rows", 2 ^ kLog), ("cols", 2 ^ kLog), ("cv_base", cvBase),
-    ("out_lo_base", outLo), ("m_base", mBase), ("t_lo_base", tLo), ("flags_base", flagsBase)]
+    | .error e => throw s!"{ctx}: header: {e}"
+  if (← J.str h "format" ctx) != "flock-r1cs-rows/v1" then throw s!"{ctx}: not flock-r1cs-rows/v1"
+  let want : List (String × Nat) := [("m", sp.mDigest), ("k_log", sp.kLog), ("k_skip", 6), ("useful_bits", sp.usefulBits),
+    ("const_pin", sp.zConst), ("layout", 0), ("rows", 2 ^ sp.kLog), ("cols", 2 ^ sp.kLog)] ++ sp.header
   for (k, v) in want do
-    if (← J.nat h k ctx) != v then throw s!"compression circuit: {k} is not {v}"
-  let n := 2 ^ kLog
+    if (← J.nat h k ctx) != v then throw s!"{ctx}: {k} is not {v}"
+  let n := 2 ^ sp.kLog
   let (a, p1) ← readRows file (nl + 1) n n
   let (b, p2) ← readRows file p1 n n
-  if p2 != file.size then throw "compression circuit: trailing bytes"
-  for r in (List.range 256).map (cvBase + ·) ++ (List.range 512).map (mBase + ·) ++ (List.range (flagsBase + 32 - tLo)).map (tLo + ·) do
-    if a.row r != #[r] || b.row r != #[zConst] then throw s!"compression circuit: row {r} is not an input row"
-  let digest := digestOf a b
-  if hexOf digest != pinnedDigest then throw "compression circuit: its digest is not the pinned D_b3"
-  return ⟨a, b, digest⟩
+  if p2 != file.size then throw s!"{ctx}: trailing bytes"
+  for r in sp.inputRows do
+    if a.row r != #[r] || b.row r != #[sp.zConst] then throw s!"{ctx}: row {r} is not an input row"
+  let digest := digestOf sp a b
+  if hexOf digest != sp.pinnedDigest then throw s!"{ctx}: its digest is not the pinned one"
+  return ⟨sp, a, b, digest⟩
 
 end Comp
 

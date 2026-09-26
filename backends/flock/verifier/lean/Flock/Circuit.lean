@@ -1,11 +1,13 @@
 /-
-PROTOCOL.md §16.5: the circuit file (`flock-netlist/v1`): line 1 names it, line 2 is `META <json>` (the layout), then
-`NET <name> <lines>` blocks, each an expanded circuit in `flock-ir-unit/v2` form. The parser refuses every part the verifier
-would have to evaluate (a `CUT` line; the META keys `tail`, `cut`, `cut_words`, `public_ports`, `public`, `native`,
-`outputs_by_tail`), and checks the layout's shape. Lookup slots are refused: this verifier does not implement them yet.
+PROTOCOL.md §16.5: the circuit file: line 1 is `<format> <name>`, line 2 is `META <json>` (the layout), then
+`<keyword> <name> <lines>` blocks, each an expanded circuit in `flock-ir-unit/v2` form (format and keyword are the
+statement's `Tags`). The parser refuses every part the verifier would have to evaluate (a `CUT` line; the META keys `tail`,
+`cut`, `cut_words`, `public_ports`, `public`, `native`, `outputs_by_tail`), and checks the layout's generic shape; the row
+leaf checks its own ranges (`RowLeaf.checkLayout`). Lookup slots are refused: this verifier does not implement them yet.
 -/
 import Lean.Data.Json
 import Flock.Comp
+import Flock.Tags
 
 namespace Flock
 
@@ -167,8 +169,6 @@ structure Wire where
   src : Nat × Nat × Nat
   deriving Inhabited, Repr
 
-def LEAF_SCHEME : String := "flock-leaf/sha256-unsalted/v0"
-
 /-- The pinned circuit file. -/
 structure Circuit where
   name : String
@@ -215,9 +215,9 @@ private def natPair (x : Json) : V (Option (Nat × Nat)) := do
 private def intLists (j : Json) (k : String) : V (Array (Array Int)) := do
   (← J.arr j k ctx).mapM fun u => do (← J.asArr u s!"{ctx}.{k}").mapM fun x => J.asInt x s!"{ctx}.{k}"
 
-/-- The layout's shape (upstream's `Composite::check`): aligned, disjoint ranges inside the block; the compression ranges'
-roles cover every run and parent of every VU exactly once; one unit range of `g × units_per_vu` units whose leaf maps are
-the unit circuit's ports; every non-leaf input port wired exactly once. -/
+/-- The layout's generic shape (upstream's `Composite::check` without the row leaf's part): aligned, disjoint ranges inside
+the block; roles only on the row leaf's `comp` ranges; one unit range of `g × units_per_vu` units whose leaf maps are the
+unit circuit's ports; every non-leaf input port wired exactly once. -/
 def checkLayout (c : Circuit) : V Unit := do
   let mut spans : Array (Nat × Nat) := #[]
   for r in c.ranges do
@@ -228,32 +228,12 @@ def checkLayout (c : Circuit) : V Unit := do
     | .net i => if (c.nets.getD i default).2.unitLog != r.slotLog then throw "a unit range's slot size is not its circuit's"
     | _ => pure ()
     let isRole := match r.role with | .none => false | _ => true
-    if (r.kind == Kind.comp) != (r.slotLog == Comp.kLog && isRole) || (r.kind == Kind.mask && r.count != 1) then
-      throw "a range's type, role and slot size disagree"
+    if (r.kind == Kind.comp) != isRole || (r.kind == Kind.mask && r.count != 1) then
+      throw "a range's type and role disagree"
     spans := spans.push (r.start, r.start + span)
   let sorted := spans.qsort (fun a b => a.1 < b.1 || (a.1 == b.1 && a.2 < b.2))
   for i in [1:sorted.size] do
     if sorted[i - 1]!.2 > sorted[i]!.1 then throw "two ranges overlap"
-  let mut runs : Array (Nat × Nat × Nat) := #[]
-  let mut parents : Array Nat := #[]
-  for r in c.ranges do
-    match r.role with
-    | .runs p slots =>
-      let some port := c.ports[p]? | throw "runs of an unknown port"
-      if slots.size * port.nb != r.count || !isPow2 r.count then throw "a runs range's slot list is not its count"
-      for x in slots do
-        if let some (g, ch) := x then
-          if g ≥ c.g || ch ≥ port.chunks || runs.contains (g, p, ch) then throw "a run outside the block's VUs or listed twice"
-          runs := runs.push (g, p, ch)
-    | .parents p =>
-      let some port := c.ports[p]? | throw "parents of an unknown port"
-      if port.chunks < 2 || r.count != c.g * port.chunks || parents.contains p then
-        throw "a parents range is not one per multi-chunk port"
-      parents := parents.push p
-    | .none => pure ()
-  let want := c.ports.foldl (· + ·.chunks) 0 * c.g
-  if runs.size != want || parents.size != (c.ports.filter (·.chunks > 1)).size then
-    throw "the runs do not cover every chunk of every VU (or a multi-chunk port has no parent tree)"
   let unit := c.unit
   let ur := c.ranges.filter (·.kind == Kind.net c.unitNet)
   if ur.size != 1 || ur[0]!.count != c.g * c.upv || !isPow2 ur[0]!.count then
@@ -304,38 +284,37 @@ def checkLayout (c : Circuit) : V Unit := do
   if unit.useful ≥ 2 ^ unit.unitLog then throw "the unit fills its slot: no forced-zero row for a zero leaf"
   if c.dummyDigests.size != c.ports.size || c.dummyOutputs.size != nOut then
     throw "the pinned padding values are not one per port and output leaf"
-  if c.leafScheme != LEAF_SCHEME then throw s!"leaf-commitment scheme {c.leafScheme} is not one this verifier implements"
 
 def FORBIDDEN : List String := ["tail", "cut", "cut_words", "public_ports", "public", "native", "outputs_by_tail"]
 
-/-- Parse and check the circuit file. -/
-def parse (bytes : ByteArray) : V Circuit := do
+/-- Parse the circuit file and check its generic layout. -/
+def parse (tags : Tags) (bytes : ByteArray) : V Circuit := do
   let sha := Sha256.hash bytes
   let text ← match String.fromUTF8? bytes with
     | some s => pure s
     | none => throw "circuit: not UTF-8"
   let lines0 := (text.splitOn "\n").toArray
   let lines := if lines0.back? == some "" then lines0.pop else lines0
-  let head := (lines.getD 0 "").trimRight
-  if !head.startsWith "flock-netlist/v1 " then throw "circuit: not a flock-netlist/v1 file"
-  let name := (head.drop 17).toString
-  let metaLine := (lines.getD 1 "").trimRight
+  let head := (lines.getD 0 "").trimAsciiEnd.toString
+  if !head.startsWith (tags.fileFormat ++ " ") then throw s!"circuit: not a {tags.fileFormat} file"
+  let name := (head.drop (tags.fileFormat.length + 1)).toString
+  let metaLine := (lines.getD 1 "").trimAsciiEnd.toString
   if !metaLine.startsWith "META " then throw "circuit: no META line"
   let mj ← match Json.parse (metaLine.drop 5).toString with
     | .ok j => pure j
     | .error e => throw s!"META: {e}"
-  if (← J.str mj "format" ctx) != "flock-netlist/v1" || (← J.str mj "statement" ctx) != "verity/flock-netlist/v1" then
-    throw "META: not verity/flock-netlist/v1"
+  if (← J.str mj "format" ctx) != tags.fileFormat || (← J.str mj "statement" ctx) != tags.statement then
+    throw s!"META: not {tags.statement}"
   let mut nets : Array (String × Net) := #[]
   let mut at_ := 2
   while at_ < lines.size do
     let h := tokens lines[at_]!
-    if h.size != 3 || h[0]! != "NET" then throw "circuit: expected a NET line"
-    let some n := h[2]!.toNat? | throw "circuit: NET line count"
-    if at_ + 1 + n > lines.size then throw s!"circuit: NET {h[1]!} is truncated"
+    if h.size != 3 || h[0]! != tags.blockKeyword then throw s!"circuit: expected a {tags.blockKeyword} line"
+    let some n := h[2]!.toNat? | throw s!"circuit: {tags.blockKeyword} line count"
+    if at_ + 1 + n > lines.size then throw s!"circuit: {h[1]!} is truncated"
     let net ← match Net.parse (lines.extract (at_ + 1) (at_ + 1 + n)) with
       | .ok v => pure v
-      | .error e => throw s!"NET {h[1]!}: {e}"
+      | .error e => throw s!"{h[1]!}: {e}"
     nets := nets.push (h[1]!, net)
     at_ := at_ + 1 + n
   for k in FORBIDDEN do
@@ -349,11 +328,6 @@ def parse (bytes : ByteArray) : V Circuit := do
     let a ← J.asArr p s!"{ctx}: a port"
     if a.size != 4 then throw s!"{ctx}: a port is not [name, words, chunks, nb]"
     pure (⟨← J.asStr a[0]! "port name", ← J.asNat a[1]! "port words", ← J.asNat a[2]! "port chunks", ← J.asNat a[3]! "port nb"⟩ : Port)
-  for p in ports do
-    let b := 2 * p.words
-    let ok := isPow2 p.nb && p.chunks ≥ 1 && b % 64 == 0 && p.chunks == (b + 1023) / 1024 && p.nb == min b 1024 / 64
-      && (p.chunks == 1 || (b % 1024 == 0 && isPow2 p.chunks))
-    if !ok then throw s!"port {p.name}: not whole power-of-two chunk runs"
   let g ← J.nat mj "vus_per_block" ctx
   let upv ← J.nat mj "units_per_vu" ctx
   let some unitNet := nets.findIdx? (·.1 == "unit") | throw "circuit: no unit circuit"
@@ -404,6 +378,7 @@ def parse (bytes : ByteArray) : V Circuit := do
               (← netOf (← J.asStr a[3]! "wire"), ← J.asNat a[4]! "wire", ← J.asNat a[5]! "wire")⟩ : Wire)
     | .error _ => pure #[]
   let leafScheme ← J.str (← J.get mj "leaf_scheme" ctx) "id" ctx
+  if leafScheme != tags.merkleLeaf then throw s!"leaf-commitment scheme {leafScheme} is not one this verifier implements"
   let c : Circuit := { name, sha, nets, ranges, ports, outPorts, g, kLog := ← J.nat mj "k_log" ctx, upv, unitNet,
                        leavesIn, leavesOut, key, dummyDigests, dummyOutputs, leafScheme, perVu, wires }
   c.checkLayout

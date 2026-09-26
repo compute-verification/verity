@@ -10,6 +10,10 @@ import Flock.Piop
 import Flock.Opening
 import Flock.Ligerito
 import Flock.Comp
+import Flock.Tags
 import Flock.Circuit
+import Flock.Public
+import Flock.RowLeaf
+import Flock.Blake3Row
 import Flock.Statement
 import Flock.Verify
