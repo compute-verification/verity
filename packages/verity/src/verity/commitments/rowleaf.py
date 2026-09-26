@@ -6,7 +6,7 @@ words), a column of the weight matrix ``W`` (K words).  The row's digest is the 
 SHA-256 ``node`` / pad framing, so a verifier that has the digest checks an opening with SHA-256 alone.  A backend
 proves only the row digest (its ``leaf_layout``) and publishes it.
 
-Three schemas:
+Five schemas:
 
 ``sha256/row/v1``            ``SHA-256(sha256_row_prefix(role, word_bits, n_words) || row_bytes)``: a 64-byte constant
                              first block (tag, role, word width, row length), so the gadget starts from a fixed
@@ -14,10 +14,15 @@ Three schemas:
 ``blake3-keyed/row/v2``      ``BLAKE3(row_bytes, key=blake3_row_key(role))``: B-Ligero's ``leaf = blake3`` framing
                              (``backends/direct/ligero/leaf/blake3.py``), promoted byte for byte; its schema string and
                              keys are pinned by ``ligero-verify``.
+``sha256/row-nvfp4/v1``      ``SHA-256(sha256_row_nvfp4_prefix(role, k) || nvfp4_row_bytes)`` for an NVFP4 row (``k`` E2M1
+                             codes and their ``k/16`` UE4M3 scales).
+``blake3-keyed/row-nvfp4/v1`` ``BLAKE3(nvfp4_row_bytes, key=blake3_row_key(role))``: the same row bytes, the frame-v3 keys.
 ``poseidon2-babybear-w24/row/v2h``  the Poseidon2 row digest (algebraic: kept so recorded results keep verifying, not
                              admissible in a core scheme's Table 2 cell).
 
-``row_bytes`` are the row's words little-endian, ``word_bits`` 8, 16 or 32 bits each, in row order.  Roles are
+``row_bytes`` are the row's words little-endian, ``word_bits`` 8, 16 or 32 bits each, in row order.  ``nvfp4_row_bytes``
+are the codes packed two per byte (code ``2i`` in the low nibble), then the scale bytes: the code buffer and the scale
+buffer as NVFP4 tensors hold them, so a serving-side committer hashes rows without repacking.  Roles are
 :data:`ROLE_X` (1, an x row) and :data:`ROLE_W` (2, a W column).  Unsalted: a low-entropy row is preimage-searchable.
 """
 from __future__ import annotations
@@ -34,27 +39,40 @@ __all__ = [
     "ROLE_W",
     "ROLE_X",
     "SCHEMA_BLAKE3_ROW",
+    "SCHEMA_BLAKE3_ROW_NVFP4",
     "SCHEMA_ROW",
     "SCHEMA_SHA256_ROW",
+    "SCHEMA_SHA256_ROW_NVFP4",
     "blake3_row_digest",
     "blake3_row_key",
     "blake3_row_layout",
+    "blake3_row_nvfp4_digest",
+    "blake3_row_nvfp4_layout",
+    "nvfp4_row_bytes",
     "row_bytes",
     "row_digest",
     "row_leaf",
     "row_leaf_value",
     "sha256_row_digest",
     "sha256_row_layout",
+    "sha256_row_nvfp4_digest",
+    "sha256_row_nvfp4_layout",
+    "sha256_row_nvfp4_prefix",
     "sha256_row_prefix",
 ]
 
 SCHEMA_ROW = "poseidon2-babybear-w24/row/v2h"
 SCHEMA_SHA256_ROW = "sha256/row/v1"
 SCHEMA_BLAKE3_ROW = "blake3-keyed/row/v2"
+SCHEMA_SHA256_ROW_NVFP4 = "sha256/row-nvfp4/v1"
+SCHEMA_BLAKE3_ROW_NVFP4 = "blake3-keyed/row-nvfp4/v1"
+_DIGEST_SCHEMAS = (SCHEMA_SHA256_ROW, SCHEMA_BLAKE3_ROW, SCHEMA_SHA256_ROW_NVFP4, SCHEMA_BLAKE3_ROW_NVFP4)
 
 ROLE_X, ROLE_W = h2.ROLE_X, h2.ROLE_W
 _ROLE_KEY_NAME = {ROLE_X: b"x", ROLE_W: b"w"}
 SHA256_ROW_TAG = b"verity/sha256-row/v1\0"
+SHA256_ROW_NVFP4_TAG = b"verity/sha256-row-nvfp4/v1\0"
+NVFP4_SCALE_GROUP = 16
 BLAKE3_KEY_PREFIX = b"verity/blake3-leaf/v1/"
 
 
@@ -123,6 +141,59 @@ def blake3_row_digest(words: Sequence[int], word_bits: int, role: int) -> bytes:
     return blake3_row_layout(role, word_bits, len(words)).digest(row_bytes(words, word_bits))
 
 
+# --- NVFP4 rows: sha256/row-nvfp4/v1 and blake3-keyed/row-nvfp4/v1 ------------------------------------------------
+
+
+def _nvfp4_k(k: int) -> int:
+    if not 0 < k < 1 << 32 or k % NVFP4_SCALE_GROUP:
+        raise ValueError(f"an NVFP4 row is a positive multiple of {NVFP4_SCALE_GROUP} codes (u32), not {k!r}")
+    return k
+
+
+def nvfp4_row_bytes(codes: Sequence[int], scales: Sequence[int]) -> bytes:
+    """``k`` E2M1 codes packed two per byte (code ``2i`` in the low nibble, ``2i+1`` in the high), then the ``k/16`` UE4M3
+    scale bytes, both in row order: ``k/2 + k/16`` bytes (864 at k = 1536)."""
+
+    k = _nvfp4_k(len(codes))
+    if len(scales) != k // NVFP4_SCALE_GROUP:
+        raise ValueError(f"{k} codes take {k // NVFP4_SCALE_GROUP} scale bytes, not {len(scales)}")
+    c = [int(x) for x in codes]
+    if any(not 0 <= x < 16 for x in c):
+        raise ValueError("an E2M1 code is 4 bits")
+    s = [int(x) for x in scales]
+    if any(not 0 <= x < 256 for x in s):
+        raise ValueError("a UE4M3 scale is one byte")
+    return bytes(c[2 * i] | (c[2 * i + 1] << 4) for i in range(k // 2)) + bytes(s)
+
+
+def _nvfp4_len(k: int) -> int:
+    return k // 2 + k // NVFP4_SCALE_GROUP
+
+
+def sha256_row_nvfp4_prefix(role: int, k: int) -> bytes:
+    """The 64-byte first block: ``"verity/sha256-row-nvfp4/v1\\0" || u8 role || u8 4 || u32be k || u32be k/16``, zero padded."""
+
+    k = _nvfp4_k(k)
+    head = SHA256_ROW_NVFP4_TAG + bytes([_role(role), 4]) + k.to_bytes(4, "big") + (k // NVFP4_SCALE_GROUP).to_bytes(4, "big")
+    return head.ljust(64, b"\0")
+
+
+def sha256_row_nvfp4_layout(role: int, k: int) -> LeafLayout:
+    return LeafLayout("sha256", sha256_row_nvfp4_prefix(role, k), _nvfp4_len(k))
+
+
+def sha256_row_nvfp4_digest(codes: Sequence[int], scales: Sequence[int], role: int) -> bytes:
+    return sha256_row_nvfp4_layout(role, len(codes)).digest(nvfp4_row_bytes(codes, scales))
+
+
+def blake3_row_nvfp4_layout(role: int, k: int) -> LeafLayout:
+    return LeafLayout("blake3", b"", _nvfp4_len(_nvfp4_k(k)), key=blake3_row_key(role))
+
+
+def blake3_row_nvfp4_digest(codes: Sequence[int], scales: Sequence[int], role: int) -> bytes:
+    return blake3_row_nvfp4_layout(role, len(codes)).digest(nvfp4_row_bytes(codes, scales))
+
+
 # --- poseidon2-babybear-w24/row/v2h ------------------------------------------------------------------------------
 
 
@@ -142,9 +213,10 @@ def row_digest(words, word_bits: int, role: int) -> list[int]:
 def row_leaf(domain: CommitmentDomain, rank: int, digest, schema: str = SCHEMA_ROW) -> bytes:
     """The frame-v3 leaf of the row at ``rank`` (rank == position in a range domain).
 
-    ``digest`` is 8 Poseidon2 lanes for ``leaf/v2h`` (the default) or the 32-byte SHA-256 / BLAKE3 row digest.
+    ``digest`` is 8 Poseidon2 lanes for ``leaf/v2h`` (the default) or the 32-byte SHA-256 / BLAKE3 row digest (the four
+    digest schemas, NVFP4 rows included).
     """
     value = row_leaf_value(digest) if schema == SCHEMA_ROW else bytes(digest)
-    if schema != SCHEMA_ROW and (schema not in (SCHEMA_SHA256_ROW, SCHEMA_BLAKE3_ROW) or len(value) != 32):
+    if schema != SCHEMA_ROW and (schema not in _DIGEST_SCHEMAS or len(value) != 32):
         raise ValueError(f"unknown row schema {schema!r} or a digest that is not 32 bytes")
     return domain.leaf(rank, rank, schema, value)
