@@ -147,7 +147,8 @@ _FAMILY_LIBS = {"RMSNormTriton_v1": ("rms",), "RMSNormFusedCuda_v2": ("rms",), "
                 # [R17 dense, ruling R17-11] the attention rows' softmax reads the measured MUFU.EX2 / MUFU.RCP tables: loaded in the parent
                 "Attention_v3": ("fa2",), "Attention_v2": ("fa2",),
                 # [MAN-06f v3 unit 2] the router's NvExpf reads the measured MUFU.EX2 table (fa2 tables, ~1.5 s to load): loaded in the parent
-                "MoeRouterTopK_v1": ("fa2",), "MoeRouterTopKNorm_v1": ("fa2",), "MoeExpertGemm_v1": (), "MoeExpertGemmW_v1": (), "MoeSum_v1": ()}
+                "MoeRouterTopK_v1": ("fa2",), "MoeRouterTopKNorm_v1": ("fa2",),
+                "MoeRouterTopKOrdered_v1": ("fa2",), "MoeRouterTopKOrderedNorm_v1": ("fa2",), "MoeExpertGemm_v1": (), "MoeExpertGemmW_v1": (), "MoeSum_v1": ()}
 
 
 def _prewarm_evaluators(picked: list[dict]) -> dict[str, str]:
