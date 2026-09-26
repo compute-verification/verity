@@ -23,52 +23,57 @@ _BATCH = 4096
 
 
 class HidingLeaves:
-    def __init__(self, key: bytes = hm96.DEFAULT_KEY) -> None:
-        self.key = hm96.check_key(key)
-        self.digest = hm96.scheme_digest(self.key)
-        flat = b"".join(t.to_bytes(hm96.DIGEST_BYTES, "little") for table in hm96.byte_tables(self.key) for t in table)
-        self._tables = np.frombuffer(flat, dtype=np.uint64).reshape(SALT_BYTES, 256, hm96.DIGEST_BYTES // 8)
-        self._salt_h = hashlib.sha256(hm96.SALT_PREFIX)
-        self._leaf_h = hashlib.sha256(hm96.leaf_prefix(self.key))
+    """The batch path of one hm96 instance (``hm96.SHA256`` by default, the committer's opt-in; ``hm96.SHA512`` for the
+    benchmark until the re-baseline wires SHA-512 trees) under ``key`` (the instance's pinned key by default)."""
+
+    def __init__(self, key: bytes | None = None, instance: hm96.Instance = hm96.SHA256) -> None:
+        self.instance = inst = instance
+        self.key = inst.check_key(inst.default_key if key is None else key)
+        self.digest = inst.scheme_digest(self.key)
+        self._d, self._y = inst.digest_bytes, inst.salt_bytes
+        flat = b"".join(t.to_bytes(self._d, "little") for table in inst.byte_tables(self.key) for t in table)
+        self._tables = np.frombuffer(flat, dtype=np.uint64).reshape(self._y, 256, self._d // 8)
+        self._salt_h = hashlib.new(inst.hash, inst.salt_prefix)
+        self._leaf_h = hashlib.new(inst.hash, inst.leaf_prefix(self.key))
 
     def masks(self, salts: bytes, n: int) -> np.ndarray:
-        """``M_key * y`` of ``n`` concatenated salts, as ``(n, 32)`` bytes."""
-        y = np.frombuffer(salts, dtype=np.uint8).reshape(n, SALT_BYTES)
-        out = np.zeros((n, hm96.DIGEST_BYTES // 8), dtype=np.uint64)
+        """``M_key * y`` of ``n`` concatenated salts, as ``(n, digest bytes)``."""
+        y = np.frombuffer(salts, dtype=np.uint8).reshape(n, self._y)
+        out = np.zeros((n, self._d // 8), dtype=np.uint64)
         for s in range(0, n, _BATCH):
             yt = np.ascontiguousarray(y[s:s + _BATCH].T)
             acc = out[s:s + _BATCH]
-            for p in range(SALT_BYTES):
+            for p in range(self._y):
                 acc ^= self._tables[p][yt[p]]
-        return out.view(np.uint8).reshape(n, hm96.DIGEST_BYTES)
+        return out.view(np.uint8).reshape(n, self._d)
 
     def leaves_with(self, inner: Sequence[bytes], salts: bytes) -> list[bytes]:
         """The tree leaves of the unsalted digests ``inner`` under the given concatenated salts."""
-        n = len(inner)
-        if len(salts) != n * SALT_BYTES:
-            raise ValueError(f"{n} leaves take {n * SALT_BYTES} salt bytes, not {len(salts)}")
+        n, d, y = len(inner), self._d, self._y
+        if len(salts) != n * y:
+            raise ValueError(f"{n} leaves take {n * y} salt bytes, not {len(salts)}")
         if not n:
             return []
-        b = (np.frombuffer(b"".join(inner), dtype=np.uint8).reshape(n, hm96.DIGEST_BYTES) ^ self.masks(salts, n)).tobytes()
+        b = (np.frombuffer(b"".join(inner), dtype=np.uint8).reshape(n, d) ^ self.masks(salts, n)).tobytes()
         ys, bs = memoryview(salts), memoryview(b)
         out = []
         for i in range(n):
             h = self._salt_h.copy()
-            h.update(ys[i * SALT_BYTES:(i + 1) * SALT_BYTES])
+            h.update(ys[i * y:(i + 1) * y])
             g = self._leaf_h.copy()
-            g.update(bs[i * hm96.DIGEST_BYTES:(i + 1) * hm96.DIGEST_BYTES])
+            g.update(bs[i * d:(i + 1) * d])
             g.update(h.digest())
             out.append(g.digest())
         return out
 
     def leaves(self, inner: Sequence[bytes]) -> tuple[list[bytes], bytes]:
         """Fresh salts for every leaf of ``inner``: the tree leaves and the concatenated salts (the stored bytes)."""
-        salts = os.urandom(len(inner) * SALT_BYTES)
+        salts = os.urandom(len(inner) * self._y)
         return self.leaves_with(inner, salts), salts
 
     def leaf(self, inner_digest: bytes, salt: bytes) -> bytes:
         """One leaf through core's reference (the verifier's path)."""
-        return hm96.tree_leaf(self.key, hm96.commit_string(self.key, inner_digest, salt))
+        return self.instance.tree_leaf(self.key, self.instance.commit_string(self.key, inner_digest, salt))
 
 
 class LeafSchemeRule:
@@ -116,19 +121,25 @@ class LeafSchemeRule:
 
     def _unsalted(self, step: int, n_leaves: int) -> bool:
         """Under hm96, whether `step` lacks exactly one salt per leaf: its openings do not verify and the run does not finalize."""
-        return self.hiding is not None and len(self._salts.get(step, b"")) != n_leaves * SALT_BYTES
+        return self.hiding is not None and len(self._salts.get(step, b"")) != n_leaves * self._salt_bytes()
+
+    def _salt_bytes(self) -> int:
+        """The configured instance's salt size (128 bytes for hm96-sha256/v1, 192 for hm96-sha512/v1)."""
+        return self.hiding.instance.salt_bytes if self.hiding is not None else 0
 
     def _salts_of(self, step: int, lo: int, hi: int) -> bytes:
         """The salts of leaves [lo, hi) of `step` (empty under vllm-v1 leaves)."""
-        return b"" if self.hiding is None else self._salts[step][lo * SALT_BYTES:hi * SALT_BYTES]
+        y = self._salt_bytes()
+        return b"" if self.hiding is None else self._salts[step][lo * y:hi * y]
 
     def _leaf_rule(self, inner: list[bytes], salts: bytes) -> list[bytes] | None:
         """The tree leaves of position-leaf digests `inner` under this rule; None for a salt string of the wrong size."""
         if self.hiding is None:
             return None if salts else inner
-        if len(salts) != len(inner) * SALT_BYTES:
+        y = self._salt_bytes()
+        if len(salts) != len(inner) * y:
             return None
-        return [self.hiding.leaf(x, salts[i * SALT_BYTES:(i + 1) * SALT_BYTES]) for i, x in enumerate(inner)]
+        return [self.hiding.leaf(x, salts[i * y:(i + 1) * y]) for i, x in enumerate(inner)]
 
     def _refuse_padding(self, padding: list) -> None:
         if padding and self.hiding is not None:

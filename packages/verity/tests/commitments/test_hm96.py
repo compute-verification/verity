@@ -26,13 +26,13 @@ def _bit(data: bytes, t: int) -> int:
     return (data[t >> 3] >> (t & 7)) & 1
 
 
-def naive_mask(key: bytes, salt: bytes) -> bytes:
+def naive_mask(key: bytes, salt: bytes, inst: hm96.Instance = hm96.SHA256) -> bytes:
     """``M[i][j] = key bit i + j``, ``(M y)_i = XOR_j M[i][j] y_j``, straight from the spec's text."""
 
-    out = bytearray(32)
-    for i in range(256):
+    out = bytearray(inst.digest_bytes)
+    for i in range(inst.rows):
         bit = 0
-        for j in range(1024):
+        for j in range(inst.cols):
             bit ^= _bit(key, i + j) & _bit(salt, j)
         out[i >> 3] |= bit << (i & 7)
     return bytes(out)
@@ -170,7 +170,8 @@ def test_the_claims_the_spec_cites_resolve() -> None:
     from verity import claims
 
     spec = (Path(hm96.__file__).parent / "PROTOCOL.md").read_text(encoding="utf-8")
-    for cid, kind in (("statistical-hiding", "guarantee"), ("common-reference-string", "model"), ("cr/sha-256", "assumption")):
+    for cid, kind in (("statistical-hiding", "guarantee"), ("common-reference-string", "model"), ("hash-derived-key", "assumption"),
+                      ("cr/sha-256", "assumption"), ("cr/sha-512", "assumption")):
         assert claims.get(cid).kind == kind and f"`{cid}`" in spec
 
 
@@ -179,3 +180,123 @@ def test_hiding_bound() -> None:
     assert hm96.statistical_distance_log2(1 << 64) == -192
     assert hm96.statistical_distance_log2(1 << 64, key_failure_log2=64) == -128
     assert hm96.statistical_distance_log2(1 << 40, key_failure_log2=64) < -128
+
+
+# --- hm96-sha512/v1 ----------------------------------------------------------------------------------------------
+
+S512 = hm96.SHA512
+V512 = V.load(S512)
+KEYS512 = {"default": S512.default_key, "other": bytes.fromhex(V512["other_key"])}
+
+
+def test_sha512_instance_sizes_and_pinned_key() -> None:
+    assert (S512.name, S512.hash, S512.digest_bytes, S512.salt_bytes, S512.rows, S512.cols) == ("hm96-sha512/v1", "sha512", 64, 192, 512, 1536)
+    assert (S512.key_bits, S512.key_bytes, S512.proven_bytes) == (2047, 256, 128)
+    assert S512.default_key == S512.key_from_label(b"verity/hm96-sha512/key/v1\0") == _b(V512["default_key"])
+    assert S512.default_key == S512._clear_top(b"".join(hashlib.sha512(S512.key_label + i.to_bytes(4, "big")).digest() for i in range(4)))
+    assert S512.xor_count(S512.default_key) == V512["default_key_xor_gates"]
+    assert S512.scheme_digest(S512.default_key).hex() == V512["scheme_digest_default_key"] and len(_b(V512["scheme_digest_default_key"])) == 64
+    assert len(S512.salt_prefix) == 128 and len(S512.leaf_prefix(S512.default_key)) == 128
+
+
+@pytest.mark.parametrize("case", V512["masks"], ids=lambda c: f"{c['key']}-{c['salt_case']}")
+def test_sha512_mask_vectors(case: dict) -> None:
+    key, salt = KEYS512[case["key"]], _b(case["salt"])
+    assert S512.mask(key, salt).hex() == case["mask"]
+    assert hashlib.sha512(_b(V512["salt_prefix"]) + salt).hexdigest() == case["salt_digest"] == S512.salt_digest(salt).hex()
+
+
+def test_sha512_mask_is_the_matrix_product() -> None:
+    case = next(c for c in V512["masks"] if c["key"] == "default" and c["salt_case"] == "expand")
+    assert naive_mask(S512.default_key, _b(case["salt"]), S512).hex() == case["mask"]
+    cols = S512.columns(S512.default_key)
+    for j in (0, 9, 1535):
+        salt = bytearray(192)
+        salt[j >> 3] = 1 << (j & 7)
+        assert int.from_bytes(S512.mask(S512.default_key, bytes(salt)), "little") == cols[j]
+
+
+def test_sha512_family_is_universal() -> None:
+    def rank(vectors: list[int]) -> int:
+        basis: dict[int, int] = {}
+        for v in vectors:
+            while v:
+                top = v.bit_length() - 1
+                if top not in basis:
+                    basis[top] = v
+                    break
+                v ^= basis[top]
+        return len(basis)
+
+    for d in (1, 1 << 1535, int.from_bytes(os.urandom(192), "little") | 1):
+        assert rank([d << i for i in range(512)]) == 512
+
+
+@pytest.mark.parametrize("case", V512["leaves"], ids=lambda c: f"{c['inner']}-{len(c['value']) // 2}")
+def test_sha512_leaf_vectors(case: dict) -> None:
+    value, salt = _b(case["value"]), _b(case["salt"])
+    inner = LeafLayout("sha512", _b(case["inner_prefix"]), len(value), _b(case["inner_suffix"]))
+    layout = hm96.HidingLayout(inner, S512.default_key, S512)
+    assert inner.digest(value).hex() == case["inner_digest"] and len(_b(case["inner_digest"])) == 64
+    proven = layout.commit(value, salt)
+    assert proven.hex() == case["b"] + case["c"] and len(proven) == 128
+    assert layout.tree_leaf(proven).hex() == case["leaf"]
+    assert hashlib.sha512(_b(V512["leaf_prefix_default_key"]) + proven).hexdigest() == case["leaf"]
+
+
+@pytest.mark.parametrize("case", V512["trees"], ids=lambda c: f"n{len(c['values'])}")
+def test_sha512_tree_vectors(case: dict) -> None:
+    d = case["domain"]
+    base = vllm_v1.VllmV1({"v": vllm_v1.StepDomain(_b(d["program"]), _b(d["ctx"]), _b(d["geo"]), _b(d["layout"]), d["leaf_count"], hash="sha512")},
+                          value_nbytes={"v": lambda _i: 40})
+    scheme = hm96.Hm96Sha512(base)
+    assert isinstance(scheme, CommitmentScheme) and scheme.name == "hm96-sha512/v1" and scheme.hashes == ("sha512",)
+    n = d["leaf_count"]
+    leaves = [scheme.tree_leaf("v", i, scheme.leaf_layout("v", i).commit(_b(v), _b(s))) for i, (v, s) in enumerate(zip(case["values"], case["salts"]))]
+    assert [x.hex() for x in leaves] == case["leaves"]
+    root = scheme.root("v", leaves)
+    assert root.hex() == case["root"] and len(root) == 64
+    for i in range(n):
+        path = tuple(None if p is None else _b(p) for p in case["paths"][i])
+        assert scheme.verify_path("v", root, n, i, leaves[i], path)
+
+
+def test_sha512_binding_and_refusals() -> None:
+    inner = vllm_v1.pos_leaf_layout(48, "sha512")
+    layout = hm96.HidingLayout(inner, S512.default_key, S512)
+    value, salt = os.urandom(48), S512.fresh_salt()
+    leaf = layout.leaf(value, salt)
+    assert layout.leaf(bytes([value[0] ^ 1]) + value[1:], salt) != leaf
+    assert layout.leaf(value, salt[:-1] + bytes([salt[-1] ^ 1])) != leaf
+    assert S512.tree_leaf(KEYS512["other"], layout.commit(value, salt)) != leaf
+    with pytest.raises(InvalidArtifact):
+        hm96.HidingLayout(vllm_v1.pos_leaf_layout(48), S512.default_key, S512)
+    with pytest.raises(InvalidArtifact):
+        S512.check_key(hm96.DEFAULT_KEY)
+    with pytest.raises(InvalidArtifact):
+        S512.check_key(bytes(255) + b"\x80")
+    d = hashlib.sha256(b"x").digest()
+    with pytest.raises(TypeError):
+        hm96.Hm96Sha512(vllm_v1.VllmV1({"v": vllm_v1.StepDomain(d, d, d, d, 2)}))
+    with pytest.raises(TypeError):
+        hm96.Hm96Sha256(vllm_v1.VllmV1({"v": vllm_v1.StepDomain(d, d, d, d, 2, hash="sha512")}))
+
+
+def test_sha512_scheme_digest_is_the_sha512_identity() -> None:
+    from verity.commitments.identity import identity_digest_sha512
+
+    doc = {"name": "hm96-sha512/v1", "salt_bytes": 192, "key_sha512": hashlib.sha512(S512.default_key).hexdigest()}
+    assert S512.scheme_digest(S512.default_key) == identity_digest_sha512("verity/hm96-sha512/scheme/v1", doc)
+
+
+def test_the_setup_claims_name_both_keys_and_the_event() -> None:
+    from verity import claims
+
+    assert "2^-64" in claims.get("hash-derived-key").name and "fails" in claims.get("hash-derived-key").name
+    crs = claims.get("common-reference-string").name
+    assert "hm96-sha256/v1" in crs and "hm96-sha512/v1" in crs
+
+
+def test_sha512_hiding_bound_is_the_same() -> None:
+    assert S512.statistical_distance_log2(1) == -256
+    assert S512.statistical_distance_log2(1 << 64, key_failure_log2=64) == -128

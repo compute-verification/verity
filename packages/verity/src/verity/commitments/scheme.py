@@ -1,6 +1,6 @@
 """The ``CommitmentScheme`` interface: what every named commitment format exposes to backends and verifiers.
 
-Every admissible leaf has one shape, ``digest = H(prefix || value || suffix)`` with H SHA-256 or (keyed) BLAKE3: the
+Every admissible leaf has one shape, ``digest = H(prefix || value || suffix)`` with H SHA-256, SHA-512 or (keyed) BLAKE3: the
 value bytes are private, everything else is public.  So a backend proves only the leaf digests
 (:meth:`CommitmentScheme.leaf_layout` tells its gadget and the statement check exactly what to hash), publishes them,
 and the verifier checks them against the statement's roots natively with the scheme's reference
@@ -26,7 +26,19 @@ Path = tuple[bytes | None, ...]
 #: Table 1's hash class of every hash a :class:`LeafLayout` may use: the standard hashes only.  The algebraic Poseidon2 row
 #: leaves (:data:`rowleaf.SCHEMA_ROW`) are still admissible in Table 2, flagged as algebraic and never counted toward a
 #: standard-hash claim.
-HASH_CLASS = {"sha256": "standard", "blake3": "standard"}
+HASH_CLASS = {"sha256": "standard", "sha512": "standard", "blake3": "standard"}
+#: Output bytes of each hash; the SHA-512 variants of the framings (``frame-v3-sha512``, ``vllm-v1-sha512``) use 64-byte digests.
+DIGEST_BYTES = {"sha256": 32, "sha512": 64, "blake3": 32}
+_SHA = {"sha256": hashlib.sha256, "sha512": hashlib.sha512}
+
+
+def sha(name: str):
+    """The hashlib constructor of a framing's hash, ``sha256`` or ``sha512``."""
+
+    try:
+        return _SHA[name]
+    except KeyError:
+        raise ValueError(f"a framing hash is one of {sorted(_SHA)}, not {name!r}") from None
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,8 +67,8 @@ class LeafLayout:
         if len(value) != self.value_len:
             raise ValueError(f"leaf value is {len(value)} bytes, the layout says {self.value_len}")
         message = bytes(self.prefix) + bytes(value) + bytes(self.suffix)
-        if self.hash == "sha256":
-            return hashlib.sha256(message).digest()
+        if self.hash in _SHA:
+            return _SHA[self.hash](message).digest()
         return _blake3.keyed(self.key, message) if self.key else _blake3.blake3(message)
 
 

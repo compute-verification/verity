@@ -31,6 +31,13 @@ def test_commit_cost_writes_a_valid_result(tmp_path: Path) -> None:
     assert {"frame-v3.commit_s", "frame-v3-sha256-row.tree_s", "vllm-v1.commit_s", "vllm-v1.leaves_per_s"} <= names
 
 
+def test_commit_cost_sha512_framings(tmp_path: Path) -> None:
+    assert _bench().main(["--scheme", "frame-v3-sha512", "--scheme", "frame-v3-sha512-row", "--scheme", "vllm-v1-sha512", "--leaves", "7",
+                          "--leaf-bytes", "64", "--reps", "1", "--out", str(tmp_path)]) == 0
+    rows = json.loads((tmp_path / "commit_cost.json").read_text())
+    assert [r["hashes"] for r in rows] == [["sha512"]] * 3 and all(len(r["root"]) == 128 and r["opening_verified"] for r in rows)
+
+
 def test_commit_cost_blake3_rows(tmp_path: Path) -> None:
     assert _bench().main(["--scheme", "frame-v3-blake3-row", "--leaves", "5", "--leaf-bytes", "64", "--out", str(tmp_path)]) == 0
 
@@ -55,6 +62,8 @@ def test_hiding_leaf_cost_writes_a_valid_result(tmp_path: Path) -> None:
     rows = {r["rule"]: r for r in json.loads((tmp_path / "hiding_leaf_cost.json").read_text())}
     assert rows["blake3-keyed/row/v2"]["ands"] == 50 * 10_416 and rows["hm96/sha256-row"]["ands"] == 52 * 22_696
     assert rows["hm96/pos-leaf"]["stored_bytes"] == 128 and rows["vllm-v1/pos-leaf"]["stored_bytes"] == 0
+    assert rows["hm96-sha512/sha512-row"]["ands"] == 27 * 58_120 and rows["sha512/row/v1"]["ands"] == 25 * 58_120
+    assert rows["hm96-sha512/pos-leaf"]["stored_bytes"] == 192 and rows["hm96-sha512/pos-leaf"]["sha512"] == 25 + 4
     tool = tools_registry.load("hiding_leaf_cost", ROOT)
     assert tool.resolve_params(["--rows", "64"], ROOT)[1] == {"row_bytes": "4,256,1536,3072,4096,8192", "rows": 64}
 
