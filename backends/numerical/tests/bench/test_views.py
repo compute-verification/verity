@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import math
 import random
 from typing import Any
 
@@ -682,21 +683,36 @@ def test_a_pure_flock_record_fills_the_flock_column_without_renderer_changes(sto
     assert cell.throughput["interaction_s"] == pytest.approx(1070 * 0.001 + (922_000 + 34_240) * 8 / 100e9)
 
 
-def test_a_file_verified_result_derives_rounds_0_and_pays_its_bytes_over_the_reference_link(store: LocalStore) -> None:
-    """Every B-Ligero cell today is verified from its files: no measured RTT is needed. Its record is derived -- rounds = 0 whatever
-    the protocol's round count, bytes = proof + statement bytes, network time = bytes / 100 Gb/s -- and Table 3 keeps that transfer
-    as the interaction stage, footnoted."""
+def test_a_file_verified_interactive_result_pays_its_protocols_sequential_depth_and_its_bytes(store: LocalStore) -> None:
+    """Every B-Ligero cell today is verified from its files: no measured RTT is needed. Its record is derived -- rounds = the
+    protocol's sequential depth (3 per proof x the sub-batch proofs run one after another: ceil(N_subbatches / pipeline) waves),
+    bytes = proof + statement bytes, network time = rounds x 1 ms + bytes / 100 Gb/s -- and Table 3 keeps it as the interaction
+    stage, footnoted (root's ruling 2026-09-26)."""
     art = committed(store, t_total=0.4, commit=0.6, interaction={"rounds.sequential_depth": 3, "rounds.protocol": 3,
                                                                  "proof_bytes": 1.25e9, "relation.statement_bytes_total": 5e6})
+    fp = store.get_manifest(art).meta["workload_fingerprint"]
+    waves = math.ceil(fp.get("N_subbatches", 1) / (fp["software"]["backend"].get("pipeline") or fp.get("N_subbatches", 1)))
     views = V.build(store)
     cell = line(views)["cells"]["B-Ligero"]
     assert cell is not None and cell.artifact == art
     ix = cell.throughput["interaction"]
-    assert ix["derived"] and not ix["live"] and ix["rounds"] == 0 and ix["bytes_up"] == 1.255e9
-    assert cell.throughput["interaction_s"] == pytest.approx(1.255e9 * 8 / 100e9)
+    assert ix["derived"] and not ix["live"] and ix["rounds"] == 3 * waves and ix["rounds_source"] == "derived: file-verified"
+    assert ix["rtt_ms"] is None and ix["bytes_up"] == 1.255e9
+    assert cell.throughput["interaction_s"] == pytest.approx(3 * waves * 0.001 + 1.255e9 * 8 / 100e9)
     md = V.render_markdown(views)
     share = 100 * V.stages(cell)["interaction"] / cell.overhead
-    assert f"Moving the proof alone is {share:.0f}–{share:.0f}% of those cells" in md and "0 (derived)" in md and "— (file-verified)" in md
+    assert f"That interaction is {share:.0f}–{share:.0f}% of those cells" in md and f"{3 * waves} (derived)" in md and "— (file-verified)" in md
+
+
+def test_file_verified_rounds_multiply_by_the_sequential_sub_batch_waves() -> None:
+    fp = {"B": 32768, "N_subbatches": 193, "software": {"backend": {"name": "ligero", "pipeline": 4}}}
+    meta = {"workload_fingerprint": fp, "measurements": [{"name": "t.total", "value": 7.0, "unit": "s"},
+                                                         {"name": "rounds.sequential_depth", "value": 3, "unit": "count"}]}
+    assert V.interaction(meta, interactive=True)["rounds"] == 3 * 49
+    fp["software"]["backend"].pop("pipeline")
+    assert V.interaction(meta, interactive=True)["rounds"] == 3 * 193
+    fs = V.interaction(meta)
+    assert fs["rounds"] == 0 and fs["rounds_source"] == "fiat-shamir" and fs["derived"]
 
 
 def test_flocks_declared_class_is_non_zk_proof() -> None:
@@ -1118,4 +1134,4 @@ def test_a_results_interaction_record_recomputes_its_overhead_at_any_network(sto
     assert ix["prover_compute_s"] == pytest.approx(16.0 + rounds * 0.0001) and ix["verifier_compute_s"] == 0.0
     assert "instances" not in ix and ix["inputs"] == 4096 and ix["formula"].endswith("/ inputs")
     fx = by_art[filed]["interaction"]
-    assert fx["derived"] and fx["rounds"] == 0 and fx["measured_rtt"] is None and fx["loopback_per_round"] is None
+    assert fx["derived"] and fx["rounds_source"] == "derived: file-verified" and fx["measured_rtt"] is None and fx["loopback_per_round"] is None
