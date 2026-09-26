@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "census/schemas/instance_sets.schema.json",
-  "title": "Census frozen instance sets, one per target",
+  "$id": "census/schemas/input_sets.schema.json",
+  "title": "Census frozen input sets, one per subcircuit (an input is one instance of a subcircuit)",
   "type": "array",
   "items": {
     "type": "object",
@@ -27,7 +27,7 @@
       "subcircuit": {
         "type": "string",
         "pattern": "^[a-z0-9]+(-[a-z0-9]+)*/k[0-9]+/[a-z0-9]+(-[a-z0-9]+)*$",
-        "description": "the bound subcircuit its instances are of (census/subcircuits.json)"
+        "description": "the bound subcircuit its inputs are of (census/subcircuits.json)"
       },
       "target": {
         "type": "string",
@@ -40,7 +40,8 @@
       },
       "tier": {
         "type": "string",
-        "minLength": 1
+        "minLength": 1,
+        "description": "the recorded tier name (fixtures and results use it; unchanged by the input-set rename)"
       },
       "size": {
         "type": "integer",

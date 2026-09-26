@@ -4,7 +4,20 @@
 
 - Docstrings, comments and `--help` say subcircuit, backend, statement and input set where they said target, candidate,
   configuration and instance set. Output is unchanged: printed tables, entity fields, fingerprint fields (`profile`,
-  `instances`), census ids (`instance_sets`) and the frozen tables' headers keep their names, mapped in the Glossary.
+  `instances`) and the frozen tables' headers keep their names, mapped in the Glossary.
+
+## 2026-09-26: "instance set" becomes "input set"
+
+- `census/instance_sets.json` and its schema are now `census/input_sets.json` and `schemas/input_sets.schema.json`. The
+  reader's `census.INSTANCE_SETS` is now `census.INPUT_SETS`.
+- In the entities render:
+  - results, their `key` and subcircuits carry `input_set` (and `input_set_provenance`) instead of `instance_set`;
+  - a result's `interaction.instances` (the inputs per timed run) is now `interaction.inputs`;
+  - the embedded census section is now `input_sets`;
+  - result ids are unchanged in shape: `<backend>@<statement>@<input set>@<prover hardware>`.
+- Recorded names keep the old word, because fixtures and results carry them: the `instance-equiv/v1` artifact kind, a
+  result's `instances` ref, and the `tier` field. Printed markdown strings such as reason I, "another instance set", are
+  also unchanged, so renders stay byte-identical.
 
 ## 2026-09-25: `views --format entities`, the docs site's render
 

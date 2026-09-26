@@ -14,7 +14,7 @@ from verity_numerical.bench import census, contract
 
 jsonschema = pytest.importorskip("jsonschema")
 
-FILES = ("hardware", "datatypes", "networks", "subcircuits", "instance_sets")
+FILES = ("hardware", "datatypes", "networks", "subcircuits", "input_sets")
 
 #: The ids renders cite.  Removing or renaming one breaks every consumer's history: add a new entry instead.
 PINNED = {
@@ -26,7 +26,7 @@ PINNED = {
     "datatypes": {"bf16": "BF16", "e4m3": "FP8 (E4M3)", "e2m1": "FP4 (NVFP4, E2M1)"},
     "names": {"a100-sxm4-80gb/bf16": "A100 SXM4", "h100-sxm5-80gb/bf16": "H100 SXM5", "h100-sxm5-80gb/e4m3": "H100 SXM5",
               "rtx-4090/e4m3": "RTX 4090", "rtx-5090/e2m1": "RTX 5090"},
-    "instance_sets": {"bench-instances-v1", "bench-instances-fp8-ada-v1", "bench-instances-bf16-hopper-v1", "bench-instances-fp8-hopper-v1",
+    "input_sets": {"bench-instances-v1", "bench-instances-fp8-ada-v1", "bench-instances-bf16-hopper-v1", "bench-instances-fp8-hopper-v1",
                       "bench-instances-nvfp4-sm120-v1"},
 }
 
@@ -58,7 +58,7 @@ def test_ids_are_pinned_with_their_values() -> None:
     assert {k: (n.rtt_s, n.bandwidth_bps) for k, n in census.NETWORKS.items()} == PINNED["networks"]
     assert {k: tuple(vars(t.parameters)) for k, t in census.SUBCIRCUIT_TEMPLATES.items()} == PINNED["subcircuit_templates"]
     assert census.GEMM_COORDINATE.reference_batch == 4096 and census.GEMM_COORDINATE.accumulate == "fp32"
-    assert set(census.INSTANCE_SETS) == PINNED["instance_sets"]
+    assert set(census.INPUT_SETS) == PINNED["input_sets"]
     assert {k: d.display for k, d in census.DATATYPES.items()} == PINNED["datatypes"]
     assert {k: h.name for k, h in census.HARDWARE.items()} == PINNED["names"]
 
@@ -98,11 +98,11 @@ def test_every_target_resolves_its_census_line_and_every_line_is_a_targets() -> 
         t = TARGETS[name]
         assert h.device == t.anchor_device and h.dtype == INSTRUCTIONS[t.instruction].a_dtype and h is contract.native_reference(name)
     assert {h.id for h in lines.values()} == set(census.HARDWARE)
-    sets = [s.target for s in census.INSTANCE_SETS.values()]
+    sets = [s.target for s in census.INPUT_SETS.values()]
     assert set(sets) <= set(TARGETS) and len(sets) == len(set(sets))
     assert all(s.size == census.SUBCIRCUIT_TEMPLATES[census.SUBCIRCUITS[s.subcircuit].template].reference_batch
                and census.SUBCIRCUITS[s.subcircuit].legacy_target == s.target and re.fullmatch(r"[0-9a-f]{64}", s.manifest_sha256)
-               for s in census.INSTANCE_SETS.values())
+               for s in census.INPUT_SETS.values())
 
 
 def test_every_target_is_a_subcircuit_bound_to_its_exact_instruction() -> None:
@@ -119,7 +119,7 @@ def test_every_target_is_a_subcircuit_bound_to_its_exact_instruction() -> None:
     assert census.subcircuit_of(FP8_HOPPER_WGMMA.name).id == "gemm-coordinate/k1536/sm90-wgmma-e4m3"
     notes = {s.id: [n.note for n in s.fidelity_notes] for s in census.SUBCIRCUITS.values()}
     assert notes["gemm-coordinate/k1536/sm90-mma-bf16"] == ["H100 BF16 models mma (sm90.mma.m16n8k16.bf16); vLLM's H100 BF16 GEMMs run wgmma"]
-    assert {i.id: i.provenance for i in census.INSTANCE_SETS.values()} == {
+    assert {i.id: i.provenance for i in census.INPUT_SETS.values()} == {
         "bench-instances-v1": "captured", "bench-instances-fp8-ada-v1": "synthetic", "bench-instances-bf16-hopper-v1": "synthetic",
         "bench-instances-fp8-hopper-v1": "synthetic", "bench-instances-nvfp4-sm120-v1": "synthetic"}
 
