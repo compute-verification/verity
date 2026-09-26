@@ -7,6 +7,7 @@ import json
 import os
 import shutil
 import stat
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -129,6 +130,29 @@ def test_the_machine_publishes_every_run_file_and_any_machine_sees_custody(tmp_p
     assert st["verdict"] == "refuse" and "stdout.log changed after its custody" in st["unfetched"][0]["why"]
 
 
+def test_a_stray_sigterm_to_the_runner_does_not_cost_the_run_its_record_or_custody(tmp_path):
+    # `pkill -f rows.sh` to stop a queue matched the runner's argv too (it carries the workload's command): the runner died, so the run
+    # never recorded its end or published (vllm-rf-epoch #73)
+    import signal
+
+    vault = tmp_path / "vault"
+    req, runs = _request(tmp_path, RID, [PY, "-c", "import time; time.sleep(2); print('finished')"], vault)
+    assert remote.launch_request(req)["started"]
+    d = runs / RID
+    deadline = time.time() + 30
+    while time.time() < deadline and (json.loads((d / "status.json").read_text()) if (d / "status.json").exists() else {}).get("state") != "running":
+        time.sleep(0.05)
+    runner = json.loads((d / "launch.json").read_text())["runner_pid"]
+    os.kill(runner, signal.SIGTERM)
+    os.kill(runner, signal.SIGHUP)
+    marker = _wait_marker(d)
+    status = json.loads((d / "status.json").read_text())
+    assert status["state"] == "done" and status["rc"] == 0 and (d / "stdout.log").read_text() == "finished\n"
+    assert marker["preserved"] is True and CU.marker_problem(d) is None
+    log = (d / "launcher.log").read_text()
+    assert "runner got SIGTERM" in log and "runner got SIGHUP" in log
+
+
 def test_a_failed_publish_leaves_a_negative_marker_forgets_the_key_and_the_guard_refuses(tmp_path, capsys):
     runs = tmp_path / "root" / "runs"
     d = _fixture_run(runs)
@@ -143,6 +167,29 @@ def test_a_failed_publish_leaves_a_negative_marker_forgets_the_key_and_the_guard
     assert CU.marker_problem(d).startswith(".custody: not preserved")
     st = idle_since(tmp_path / "root", _env(tmp_path, QUIET), 120)
     assert st["verdict"] == "refuse" and "custody not on the remote" in st["unfetched"][0]["why"]
+
+
+def test_on_the_machine_a_failed_push_leaves_launcher_log_as_recorded_and_names_an_expired_key(tmp_path):
+    # the runner's stderr IS launcher.log: a retry notice or the failure line printed there after the record was taken made the run dir
+    # differ from its record for good (x4-hopper-blake3: `data custody` refused even after a repair push); an expired key was a bare 403
+    runs = tmp_path / "root" / "runs"
+    d = _fixture_run(runs)
+    (d / "launcher.log").write_text("research: custody: publishing the attempt and every run file\n")
+    cdir = _custody_dir(tmp_path, FIXTURE_RID, tmp_path / "vault",
+                        remote_toml='[remote]\ntype = "s3"\nbucket = "b"\nendpoint = "http://127.0.0.1:9"\nregion = "auto"\n'
+                                    'access_key_id_env = "AWS_ACCESS_KEY_ID"\nsecret_access_key_env = "AWS_SECRET_ACCESS_KEY"\n')
+    cred = json.loads((cdir / CU.CRED_FILE).read_text())
+    (cdir / CU.CRED_FILE).write_text(json.dumps({**cred, "expires_utc": "2020-01-01T00:00:00Z"}))
+    before = (d / "launcher.log").read_bytes()
+    code = ("from pathlib import Path; from research.store import custody as CU, remote_s3 as R; R.RETRY_BACKOFF_S = 0; "
+            f"CU.runner_publish(Path({str(d)!r}), Path({str(cdir)!r}), sleep=lambda s: None, tries=1)")
+    with open(d / "launcher.log", "ab") as log:
+        subprocess.run([PY, "-c", code], stdout=log, stderr=log, env={**os.environ, "PYTHONPATH": SRC}, check=True, timeout=120)
+    assert (d / "launcher.log").read_bytes() == before
+    marker = json.loads((d / CU.MARKER).read_text())
+    assert marker["preserved"] is False and marker["error"].startswith("the custody key expired at 2020-01-01T00:00:00Z: the run outlived")
+    assert "custody NOT on the remote" in (cdir / CU.PUBLISH_LOG).read_text()
+    assert CU.marker_problem(d).startswith(".custody: not preserved")
 
 
 def test_research_data_custody_publishes_a_local_run_and_verifies_it_elsewhere(tmp_path, monkeypatch, capsys):
@@ -225,6 +272,25 @@ def test_a_source_tree_that_predates_custody_is_refused(tmp_path):
 def test_custody_flags_need_on(capsys):
     assert cli.main(["run", "--custody-r2", "--", "true"]) == 2
     assert "--custody-r2 / --custody-ttl are for --on" in capsys.readouterr().err
+    assert cli.main(["run", "--on", "m", "--project", "p", "--no-custody-r2", "--custody-ttl", "8h", "--", "true"]) == 2
+    assert "--no-custody-r2 mints none" in capsys.readouterr().err
+
+
+def test_custody_is_the_default_with_on_and_opting_out_is_explicit(tmp_path, monkeypatch, capsys):
+    seen: list = []
+
+    def launch(**kw):
+        seen.append(kw["custody_ttl"])
+        return {"phase": "launched", "pod_id": "p1", "remote_run_dir": "/r", "launch": {"runner_pid": 1}}
+    monkeypatch.setattr(remote, "launch", launch)
+    base = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "m", "--project", "p"]
+    assert cli.main([*base, "--", "true"]) == 0
+    assert cli.main([*base, "--custody-ttl", "12h", "--", "true"]) == 0
+    assert cli.main([*base, "--custody-r2", "--", "true"]) == 0
+    capsys.readouterr()
+    assert cli.main([*base, "--no-custody-r2", "--", "true"]) == 0
+    assert seen == ["6h", "12h", "6h", None]
+    assert "--no-custody-r2: this run's records stay on the machine" in capsys.readouterr().err
 
 
 def test_a_refused_claim_deletes_the_staged_key(tmp_path):
@@ -315,3 +381,19 @@ def test_triage_sorts_every_run_by_custody_state(tmp_path, monkeypatch, capsys):
     assert data_main(["custody", "--triage", "--runs-dir", str(runs)]) == 1
     out = capsys.readouterr().out
     assert "2 need action" in out and lost.name in out and plain.name in out
+
+
+def test_a_launch_longer_than_the_default_custody_key_needs_an_explicit_ttl_capped_at_24h(capsys):
+    assert cli._custody_ttl_problem(None, ["--timeout", "3600"]) is None
+    assert "outlives the custody key's default lifetime (6h)" in cli._custody_ttl_problem(None, ["--timeout=30000"])
+    assert cli._custody_ttl_problem("12h", ["--timeout", "30000"]) is None
+    assert "over the 24 h cap" in cli._custody_ttl_problem("25h", [])
+    assert cli.main(["run", "--on", "vy-nowhere", "--timeout", "30000", "--", "true"]) == 2
+    assert "pass --custody-ttl" in capsys.readouterr().err
+
+
+def test_custody_warns_before_pushing_a_run_bigger_than_the_warn_size(tmp_path, monkeypatch):
+    (tmp_path / "out.bin").write_bytes(b"x" * 2048)
+    assert CU.size_warning(tmp_path) is None
+    monkeypatch.setattr(CU, "SIZE_WARN_BYTES", 1024)
+    assert "no resume" in CU.size_warning(tmp_path)

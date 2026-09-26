@@ -48,7 +48,7 @@
 //! output-word digest).  The CLI surface is otherwise unchanged.
 //!
 //! RELATION-BARE build (`--features relation-bare`): the embedded guest proves the Table 2 bare
-//! statement of `veritor_zk_common::bare` (public: the format, the instance-set identity and the
+//! statement of `veritor_zk_common::bare` (public: the format, the input-set identity and the
 //! output words `y`; private: every VU's rows).  `bare-execute`, `bare-prove`, `bare-statement` and
 //! `bare-negatives` (`bare_cmd`) take a range of a frozen set (a BF16 fixture tier or a
 //! `verity_sp1.format_instances` file); `verify --proof P --statement S`, with `S` from

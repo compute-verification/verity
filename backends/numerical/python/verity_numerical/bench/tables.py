@@ -31,7 +31,7 @@ from typing import Any
 
 from verity.ml.tc.instructions import INSTRUCTIONS
 from verity.proofs.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, NVFP4_SM120, TARGETS, Target
-from verity_numerical.bench import contract
+from verity_numerical.bench import census, contract
 
 try:  # the label keys are pinned with the store (`research.store.vocab`, tools/research); verity-numerical does not depend on that package
     from research.store import vocab as _vocab
@@ -129,8 +129,8 @@ __all__ = [
 # --- caption constants (frozen) -----------------------------------------------------------------------------------------
 
 FROZEN_ON = "2026-09-22"
-K = 1536
-B = 4096
+K = census.subcircuit_of(FIRST.name).parameters.K
+B = census.GEMM_COORDINATE.reference_batch
 #: log2 of the soundness error: the target AND the achieved (union-bounded over sub-batches) must both be <= this.
 SOUNDNESS_LOG2 = -128
 AUTHENTICATION = "excluded"
@@ -163,21 +163,12 @@ NATIVE_PEAK_METHOD_CUBLAS = "cublas dense gemm 8192^3, median of 5"
 NATIVE_PEAK_METHOD = ("the best dense GEMM through the vendor library on the row's device x dtype, median of 5, the call and size in the "
                       "footnote; an instruction-level microbenchmark only when no GEMM measurement exists, and then said so")
 #: The BF16 frozen set: sha256 of ``fixtures/bench-instances/v1/manifest.json`` (``verity_numerical.bench.instances.manifest_sha256``).
-BF16_INSTANCES_MANIFEST_SHA256 = "059103cf9bd55ee83cbd4bb14ae6db2f60db2cb4ddf85cdc22b1cecee6e4eeea"
+BF16_INSTANCES_MANIFEST_SHA256 = census.INPUT_SETS["bench-instances-v1"].manifest_sha256
 #: The frozen instance ref a valid result of each target must carry, ``instances`` field for field.  A target absent here
 #: has no frozen set yet: every result of it is rejected with that reason.  The synthetic sets (FP8 Ada, the two Hopper
-#: relations) are pinned by their recipe digest (``contract.*_INSTANCES_DIGEST``), the BF16 Ampere set by its fixture manifest.
+#: relations) are pinned by their recipe digest, the BF16 Ampere set by its fixture manifest (``census/input_sets.json``).
 FROZEN_INSTANCES: dict[str, dict[str, Any]] = {
-    FIRST.name: contract.instances_ref("vu-k1536", 0, B, BF16_INSTANCES_MANIFEST_SHA256),
-    FP8_ADA_MMA.name: contract.instances_ref(contract.FP8_ADA_INSTANCES_TIER, 0, B, contract.FP8_ADA_INSTANCES_DIGEST,
-                                             dataset=contract.FP8_ADA_INSTANCES_DATASET),
-    BF16_HOPPER.name: contract.instances_ref(contract.BF16_HOPPER_INSTANCES_TIER, 0, B, contract.BF16_HOPPER_INSTANCES_DIGEST,
-                                             dataset=contract.BF16_HOPPER_INSTANCES_DATASET),
-    FP8_HOPPER_WGMMA.name: contract.instances_ref(contract.FP8_HOPPER_INSTANCES_TIER, 0, B, contract.FP8_HOPPER_INSTANCES_DIGEST,
-                                                  dataset=contract.FP8_HOPPER_INSTANCES_DATASET),
-    NVFP4_SM120.name: contract.instances_ref(contract.NVFP4_INSTANCES_TIER, 0, B, contract.NVFP4_INSTANCES_DIGEST,
-                                             dataset=contract.NVFP4_INSTANCES_DATASET),
-}
+    s.target: contract.instances_ref(s.tier, 0, s.size, s.manifest_sha256, dataset=s.dataset) for s in census.INPUT_SETS.values()}
 
 #: Label keys whose asserter is the *producer* of a result (the lane's own row labels, ``ledger_to_store``); a verification
 #: label by any of them, or by the producing attempt's ``execution.campaign``, is a self-assertion and does not count.
@@ -345,13 +336,13 @@ def device_variant(gpu: Mapping[str, Any] | None, target: Target) -> str | None:
     datasheet peak the row divides by is the reference part's, so such a board is not a valid cell.  Unchecked when the
     target states no ``memory_bytes`` or the fingerprint reports none."""
 
-    ref = target.native_peak.memory_bytes
+    ref = contract.native_peak_of(target).memory_bytes
     mem = (gpu or {}).get("memory_total_bytes")
     if not ref or not _num(mem) or mem <= 0:
         return None
     if abs(mem / ref - 1) > MEMORY_TOLERANCE:
         return (f"device variant: {mem / 2**30:.1f} GiB of device memory on {(gpu or {}).get('name')!r}, the reference "
-                f"{target.native_peak.device!r} has {ref / 2**30:.0f} GiB -- not the datasheet part the row divides by")
+                f"{contract.native_peak_of(target).device!r} has {ref / 2**30:.0f} GiB -- not the datasheet part the row divides by")
     return None
 
 
@@ -618,8 +609,8 @@ def reject_codes(result: Mapping[str, Any], labels: Iterable[Any], attempt: Mapp
     hw = fp.get("hardware") if isinstance(fp.get("hardware"), Mapping) else {}
     gpu = hw.get("gpu") if isinstance(hw.get("gpu"), Mapping) else None
     gpu_name = gpu.get("name") if gpu else None
-    if not same_sku(gpu_name, target.native_peak.device):
-        p.append(("K", f"same-SKU: prover ran on {gpu_name!r}, the row's native device is {target.native_peak.device!r}"))
+    if not same_sku(gpu_name, contract.native_peak_of(target).device):
+        p.append(("K", f"same-SKU: prover ran on {gpu_name!r}, the row's native device is {contract.native_peak_of(target).device!r}"))
     variant = device_variant(gpu, target)
     if variant:
         p.append(("K", variant))
@@ -961,14 +952,14 @@ def _native_measured(store: Any, target: Target) -> dict[str, Any] | None:
 
     best = None
     for art_id, meta in _artifacts(store, NATIVE_PEAK_KIND):
-        if not same_sku(meta.get("device"), target.native_peak.device) or native_dtype(meta) != dtype_of(target):
+        if not same_sku(meta.get("device"), contract.native_peak_of(target).device) or native_dtype(meta) != dtype_of(target):
             continue
         acc = meta.get("accumulate")
-        if acc is not None and acc != target.native_peak.accumulate:
+        if acc is not None and acc != contract.native_peak_of(target).accumulate:
             continue
         for c in _native_candidates(art_id, meta):
             if best is None or (c["gemm"], c["flop_per_second"]) > (best["gemm"], best["flop_per_second"]):
-                best = {**c, "fraction_of_spec": c["flop_per_second"] / target.native_peak.flop_per_second, "device": meta.get("device"),
+                best = {**c, "fraction_of_spec": c["flop_per_second"] / contract.native_peak_of(target).flop_per_second, "device": meta.get("device"),
                         "dtype": meta.get("dtype"), "driver": meta.get("driver"), "cuda": meta.get("cuda"), "sass": meta.get("sass")}
     return best
 
@@ -1014,8 +1005,8 @@ def build(store: Any) -> Tables:
         valid.setdefault((target.name, cand.id, auth), []).append(_cell(meta, art_id, rid, target, cand, verified_by, eq, open_finding))
 
     for target in TARGETS.values():
-        row: dict[str, Any] = {"target": target.name, "status": target.status, "device": target.native_peak.device, "dtype": dtype_of(target),
-                               "instruction": target.instruction, "native_spec_flop_per_second": target.native_peak.flop_per_second,
+        row: dict[str, Any] = {"target": target.name, "status": target.status, "device": contract.native_peak_of(target).device, "dtype": dtype_of(target),
+                               "instruction": target.instruction, "native_spec_flop_per_second": contract.native_peak_of(target).flop_per_second,
                                "native_measured": _native_measured(store, target), "cells": {}, "committed": {}}
         for cand in CANDIDATES:
             for auth in AUTH_MODES:
@@ -1073,7 +1064,7 @@ def _cell(meta: Mapping[str, Any], art_id: str, rid: str | None, target: Target,
         host = cpu["model"] + (f" x{cpu['count']}" if _num(cpu.get("count")) else "")
     auth = column_authentication(fp)
     return Cell(target=target.name, candidate=cand.id, artifact=art_id, attempt=rid, proof_class=fp["proof_class"], t_total=t_total, r_proved=r,
-                overhead=target.native_peak.flop_per_second / r, hardware=gpu.get("name"), phases=phases(meta), mode=mode, verified_by=verified_by,
+                overhead=contract.native_peak_of(target).flop_per_second / r, hardware=gpu.get("name"), phases=phases(meta), mode=mode, verified_by=verified_by,
                 host=host, authentication=auth, hash_name=fp.get("hash") if isinstance(fp.get("hash"), str) else None,
                 sharing=fp.get("sharing") if isinstance(fp.get("sharing"), str) else None, instances_equiv=instances_equiv, finding=finding)
 

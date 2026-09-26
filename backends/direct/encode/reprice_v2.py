@@ -1,4 +1,4 @@
-"""Re-price Candidate B at the checker-v2 witness shape with every bucket measured on the RTX 4090 (b-v2 lane).
+"""Re-price B-Ligero at the checker-v2 witness shape with every bucket measured on the RTX 4090 (b-v2 lane).
 
     uv run --frozen --package verity-numerical python backends/direct/encode/reprice_v2.py \
         --bench backends/direct/encode/results_v2_<run>.json --v1 backends/numerical/reports/b_measured_4090.json \

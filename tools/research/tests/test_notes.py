@@ -36,6 +36,36 @@ def test_checkpoint_goes_under_the_front_matter_newest_first_and_sets_status(tmp
     assert (row["state"], row["commit"], row["checkpoint_at"], row["text"]) == ("blocked", "abc1234", "21:00Z", "waiting on the pod")
 
 
+def test_checkpoint_survives_the_store_mounts_eagain_without_doubling_its_line(tmp_path, monkeypatch):
+    # the Project store's mount answers EAGAIN on rewrites of a recently written file, sometimes after the write landed
+    p = _report(tmp_path, "lane-e", "# lane-e\n", 5)
+    real, calls = Path.write_text, []
+
+    def flaky(self, data, *a, **kw):
+        calls.append(self.name)
+        if len(calls) == 1:
+            real(self, data, *a, **kw)
+            raise BlockingIOError(11, "Resource temporarily unavailable")
+        return real(self, data, *a, **kw)
+    monkeypatch.setattr(Path, "write_text", flaky)
+    monkeypatch.setattr(notes.time, "sleep", lambda s: None)
+    notes.checkpoint(tmp_path, "lane-e", "open", "after eagain", commit="abc1234", now=NOW)
+    assert len(calls) == 2 and p.read_text().count("after eagain") == 1
+
+
+@pytest.mark.parametrize("text, delay", [
+    ("WAIT moe67 r20260925-175229-a415 check-back 21:45Z agent bc-1: #4 Match", 45 * 60),
+    ("WAITING r1 on pod, check after 22:30Z; agent bc-1; next: fetch", 90 * 60),
+    ("WAIT a check-back 23:00Z, b check-back 21:20Z", 20 * 60),
+    ("WAIT r1 check-back 00:15Z", (3 * 60 + 15) * 60),
+    ("WAIT r1 check-back 20:50Z", 60),
+])
+def test_a_wait_checkpoint_names_the_one_shot_timer_that_wakes_the_lane(text, delay):
+    hint = notes.wake_hint(text, NOW)
+    assert f"subscribe_timer once=true delaySeconds={delay})" in hint and "not a cron timer" in hint
+    assert notes.wake_hint("done #101, next #4 check-back 21:45Z", NOW) is None and notes.wake_hint("WAIT r1, no time", NOW) is None
+
+
 def test_checkpoint_creates_the_report_for_a_new_lane(tmp_path):
     p = notes.checkpoint(tmp_path, "fresh", "open", "started", commit="none", now=NOW)
     assert p.name == "20260923T2100Z-report-fresh.md"
@@ -890,14 +920,32 @@ def test_a_render_entry_publishes_the_views_and_keeps_the_frozen_tables_as_a_dri
         return 0, f"# {cmd[2]}\n", ""
 
     lines = notes.render_lines(tmp_path, NOW, {}, run=run)
-    assert [c[0] for c in calls] == ["research", "verity_numerical.bench.views", "verity_numerical.bench.tables", "verity_numerical.bench.drilldown"]
-    assert calls[1][-1] == "--published" and "--published" not in calls[2] + calls[3]
+    assert [c[0] for c in calls] == ["research", "verity_numerical.bench.views", "verity_numerical.bench.views", "verity_numerical.bench.tables",
+                                     "verity_numerical.bench.drilldown"]
+    assert calls[1][-1] == calls[2][-1] == "--published" and "--published" not in calls[3] + calls[4]
+    assert calls[1][calls[1].index("--format") + 1] == "md" and calls[2][calls[2].index("--format") + 1] == "entities"
     r = tmp_path / "r"
     assert (r / "20260923T2100Z-tables.md").read_text() == "# verity_numerical.bench.views\n"
     assert (r / "20260923T2100Z-tables-frozen.md").read_text() == "# verity_numerical.bench.tables\n"
-    assert sorted(p.name for p in r.iterdir()) == ["20260923T2100Z-drilldowns.md", "20260923T2100Z-tables-frozen.md", "20260923T2100Z-tables.md"]
-    assert "21:00Z RENDER-FAILED typo@20:30Z: published = 'view': \"tables\" or \"views\"" in lines
+    assert sorted(p.name for p in r.iterdir()) == ["20260923T2100Z-drilldowns.md", "20260923T2100Z-tables-frozen.md", "20260923T2100Z-tables.json",
+                                                   "20260923T2100Z-tables.md"]
+    assert "21:00Z RENDER-FAILED typo@20:30Z: published = 'view': \"tables\", \"views\" or \"entities\"" in lines
     assert not (tmp_path / "typo").exists()
+
+
+def test_an_entities_entry_renders_only_the_json_and_the_parity_gate(tmp_path):
+    (tmp_path / "steward.toml").write_text('[[render]]\nat = "20:30Z"\nsource = "/src"\nout = "r"\npublished = "entities"\n')
+    calls = []
+
+    def run(cmd, env, cwd, timeout):
+        calls.append(cmd[2:])
+        return (1, "parity: DIFFERENT\n", "cells differ") if "--parity" in cmd else (0, "{}\n", "")
+
+    lines = notes.render_lines(tmp_path, NOW, {}, run=run)
+    assert [c[0] for c in calls] == ["research", "verity_numerical.bench.views", "verity_numerical.bench.views"]
+    assert calls[1][calls[1].index("--format") + 1] == "entities" and calls[1][-1] == "--published" and calls[2][-1] == "--parity"
+    assert sorted(p.name for p in (tmp_path / "r").iterdir()) == ["20260923T2100Z-tables.json"]
+    assert "21:00Z RENDER-FAILED r@20:30Z (views): cells differ" in lines
 
 
 def test_a_render_refreshes_its_store_with_the_payloads_its_readers_parse(tmp_path):

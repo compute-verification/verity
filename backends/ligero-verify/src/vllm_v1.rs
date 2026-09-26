@@ -11,7 +11,7 @@
 //! program          = identity("verity/ligero-b/vllm-v1/program/v1", {K, scheme: "vllm-v1", subcircuit: "gemm-coordinate"})
 //! geo              = identity(".../geo/v1", {K, row_bytes, word_bits, y_bytes})
 //! layout(port)     = identity(".../layout/v1", {leaf: "pos-leaf", tree, value, value_len, word_bits})
-//! ctx(port)        = the tree reference's binding (the instance set and range; recomputed from the set by re-verifiers)
+//! ctx(port)        = the tree reference's binding (the input set and range; recomputed from the set by re-verifiers)
 //! domain_digest    = identity("verity/vllm-v1/domain/v1", {chunk: null, ctx_digest, geo_digest, kind: "step", layout_digest,
 //!                                                          leaf_count, program_digest})   (hex digests)
 //! step root        = SHA-256("verity/fa2c/root/v0" || program || ctx || geo || layout || u64be N || tree_root)

@@ -553,7 +553,7 @@ def test_dead_pod_is_a_clean_refusal_with_the_pod_name(tmp_path, monkeypatch, ca
     # the CLI: `research run --on <dead pod>` is exit 3 with the pod's name on stderr and no traceback; the run is recorded as refused
     monkeypatch.setenv("RESEARCH_MACHINES", str(tmp_path / "machines.toml"))
     (tmp_path / "machines.toml").write_text('[machines.pod-x]\nprovider = "runpod"\npod_id = "p1"\nproject = "verity"\n')
-    rc = research_main(["run", "--runs-dir", str(tmp_path / "runs"), "--on", "pod-x", "--project", "verity", "--", "true"])
+    rc = research_main(["run", "--runs-dir", str(tmp_path / "runs"), "--on", "pod-x", "--project", "verity", "--no-custody-r2", "--", "true"])
     err = capsys.readouterr().err
     assert rc == 3 and "refused: pod p1 (machine pod-x) no longer exists on runpod (HTTP 404: terminated?)" in err and "Traceback" not in err
     runs = list((tmp_path / "runs").iterdir())

@@ -79,6 +79,7 @@ from verity.commitments.identity import canonical_json_bytes, tagged_sha256
 from .families import make_tc_ampere_bf16_gate_set, make_tensor_core_gate_set
 from .gateset import GateSet, make_isa_gate_set, make_word_gate_set
 from .int8 import make_int8_q7_gate_set
+from .reduce_mufu import REDUCE_MUFU_NAME, REDUCE_MUFU_VERSION, make_reduce_mufu_gate_set
 
 __all__ = [
     "ALIASED_INCOMING_FORMATS",
@@ -1021,10 +1022,10 @@ def subcircuit_digest(s: Subcircuit) -> str:
 def family_gate_set(family_id: str, width: int) -> GateSet | None:
     """The pinned gate set of ``family_id`` at statement ``width``, if this package carries it.
 
-    The SP1 kernel (``backends/sp1/common/src/gateset.rs``) also knows ``elem-*``, ``reduce-mufu``, ``ftz-f32``,
-    ``pad-*`` and ``embed-gather``; those were not promoted from veritor (nothing in this repository builds
-    obligations over them), so an object naming one is rejected here with ``E_UNSUPPORTED_FAMILY`` even though the
-    guest would check it.  Extend this table when a real consumer needs a family.
+    The SP1 kernel (``backends/sp1/common/src/gateset.rs``) also knows ``elem-*``, ``ftz-f32``, ``pad-*`` and
+    ``embed-gather``; those were not promoted from veritor (nothing in this repository builds obligations over
+    them), so an object naming one is rejected here with ``E_UNSUPPORTED_FAMILY`` even though the guest would check
+    it.  Extend this table when a real consumer needs a family.
     """
 
     name, _, version = family_id.rpartition("@")
@@ -1039,6 +1040,8 @@ def family_gate_set(family_id: str, width: int) -> GateSet | None:
     if name == "veritor.tc-ampere-bf16" and version in ("1", "2") and width == 32:
         # "1": f32_to_bf16 canonicalises NaN to 0x7FC0; "2": the hardware cvt.rn.bf16.f32 word 0x7FFF (L8)
         return make_tc_ampere_bf16_gate_set(version)
+    if (name, version) == (REDUCE_MUFU_NAME, REDUCE_MUFU_VERSION) and width == 32:
+        return make_reduce_mufu_gate_set()
     return None
 
 
@@ -1049,6 +1052,7 @@ SUPPORTED_FAMILIES = (
     "veritor.tensor-core.ampere_bf16_m16n8k16@2",
     "veritor.tc-ampere-bf16@1",
     "veritor.tc-ampere-bf16@2",
+    "veritor.reduce-mufu@1",
 )
 
 

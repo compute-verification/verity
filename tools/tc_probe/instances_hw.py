@@ -1,4 +1,4 @@
-"""Frozen instance sets on silicon: execute every instance of a target's benchmark set on the target's anchor GPU, exactly as
+"""Frozen input sets on silicon: execute every instance of a target's benchmark set on the target's anchor GPU, exactly as
 a real GEMM would -- the K-steps chained on the tensor core with the FP32 accumulator carried between ``mma`` / ``wgmma``
 calls in the target's program order, the target's epilogue applied to the last word -- and compare every hardware word with
 the set's expected (model-computed) word: every intermediate accumulator where the set records them, and the final word.
@@ -8,7 +8,7 @@ the set's expected (model-computed) word: every intermediate accumulator where t
     python tools/tc_probe/instances_hw.py --instances bench-instances/v1/vu-k1536-neg --out ...          # committed arrays: no --root needed
     python tools/tc_probe/instances_hw.py --instances fp8-ada-synthetic/vu-k1536-fp8 --out ...          # generated from the seed
 
-Instance sets (``--instances DATASET/TIER``; the instruction defaults to the target's and may be overridden with ``--instruction``
+Input sets (``--instances DATASET/TIER``; the instruction defaults to the target's and may be overridden with ``--instruction``
 to run the same words through another architecture's instruction of the same shape)::
 
     bench-instances/v1/vu-k1536        FIRST (sm80.mma.m16n8k16.bf16)   4,096 VUs x 96 steps from c_0 = +0, expected acc after every
@@ -89,7 +89,7 @@ FP8_ADA_SEED, FP8_ADA_N = SYNTHETIC_SEED, SYNTHETIC_N
 EPILOGUE_BF16 = "f32_to_bf16"
 
 
-# --- instance sets ---------------------------------------------------------------------------------------------------------------------
+# --- input sets ---------------------------------------------------------------------------------------------------------------------
 
 
 @dataclass

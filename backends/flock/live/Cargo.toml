@@ -11,6 +11,8 @@ description = "Live-coin sessions for Flock (flock-128-r2): a forwarding prover 
 # GPU tables built from the binary-census unit netlist (crates/flock-prover/src/r1cs_hashes/verity_unit.rs, which
 # flock-bench's 22-gpu-unit.sh installs into the checkout).
 verity-unit = []
+# Flock-CUDA for the chunk statement (backends/flock/cuda_chunk_patch.py must have been applied to the checkout).
+gpu = ["dep:flock-cuda-ffi", "flock-cuda-ffi/gpu"]
 
 [dependencies]
 flock-core = { path = "../flock-core" }
@@ -23,6 +25,12 @@ bincode = { workspace = true }
 flock-hash = { workspace = true }
 blake3 = { workspace = true }
 rayon = { workspace = true }
+flock-cuda-ffi = { path = "../flock-cuda-ffi", optional = true }
 
 [lints]
 workspace = true
+
+[[bin]]
+name = "flock-pure"
+path = "src/bin/flock-pure.rs"
+required-features = ["verity-unit"]

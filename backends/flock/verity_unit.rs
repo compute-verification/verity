@@ -413,3 +413,211 @@ impl VerityUnitSetup {
         verify_ligerito_union(&union, &circs, commitment, proof, &self.pcs_params, challenger)
     }
 }
+
+// ---------------------------------------------------------------------------------------------------------------
+// flock-backend: the unit as a wireable circuit gate (`flock-unit-io/v1`, verity_flock.lowering)
+// ---------------------------------------------------------------------------------------------------------------
+
+/// One unit's input words: x bytes [0, 256), W bytes [256, 512) as four 128-bit words, then the accumulator word.
+pub type UnitRow = [F128; 5];
+
+/// A `flock-unit-io/v1` netlist: the lowered unit with word-aligned IO (see `verity_flock/lowering.py`).
+#[derive(Debug)]
+pub struct UnitNet {
+    pub relation: String,
+    pub useful: usize,
+    pub const_pos: usize,
+    pub n_in: usize,
+    pub in_cols: Vec<usize>,
+    pub out_cols: Vec<usize>,
+    pub a: Vec<Vec<usize>>,
+    pub b: Vec<Vec<usize>>,
+    a_off: Vec<u32>,
+    a_col: Vec<u32>,
+    b_off: Vec<u32>,
+    b_col: Vec<u32>,
+    pub sha256: [u8; 32],
+}
+
+impl UnitNet {
+    pub fn parse(text: &str) -> Self {
+        use sha2::Digest;
+        let sha256: [u8; 32] = sha2::Sha256::digest(text.as_bytes()).into();
+        let mut lines = text.lines();
+        let h: Vec<&str> = lines.next().expect("header").split_whitespace().collect();
+        assert_eq!(h[0], "flock-unit-io/v1", "not a flock-unit-io/v1 netlist");
+        let n = |i: usize| -> usize { h[i].parse().unwrap() };
+        let (useful, const_pos, n_in) = (n(2), n(3), n(4));
+        let ni = n(5);
+        let in_cols: Vec<usize> = (0..ni).map(|i| n(6 + i)).collect();
+        let no = n(6 + ni);
+        let out_cols: Vec<usize> = (0..no).map(|i| n(7 + ni + i)).collect();
+        assert_eq!(in_cols, vec![0, 1, 2, 3, 4]);
+        assert!(useful <= 1 << K_LOG && const_pos == useful - 1 && n_in == 544);
+        let mut a = Vec::with_capacity(useful);
+        let mut b = Vec::with_capacity(useful);
+        for _ in 0..useful {
+            let v: Vec<usize> = lines.next().expect("row").split_whitespace().map(|t| t.parse().unwrap()).collect();
+            let na = v[0];
+            let nb = v[1 + na];
+            a.push(v[1..1 + na].to_vec());
+            b.push(v[2 + na..2 + na + nb].to_vec());
+        }
+        let csr = |rows: &Vec<Vec<usize>>| {
+            let mut off = vec![0u32];
+            let mut col = Vec::new();
+            for r in rows {
+                col.extend(r.iter().map(|&c| c as u32));
+                off.push(col.len() as u32);
+            }
+            (off, col)
+        };
+        let (a_off, a_col) = csr(&a);
+        let (b_off, b_col) = csr(&b);
+        Self { relation: h[1].to_string(), useful, const_pos, n_in, in_cols, out_cols, a, b, a_off, a_col, b_off, b_col, sha256 }
+    }
+
+    pub fn load(path: &str) -> Self {
+        Self::parse(&std::fs::read_to_string(path).expect("netlist"))
+    }
+
+    pub fn block_r1cs(&self, n_blocks_log: usize) -> BlockR1cs {
+        let k = 1usize << K_LOG;
+        let pad = |rows: &Vec<Vec<usize>>| {
+            let mut r = rows.clone();
+            r.resize(k, Vec::new());
+            SparseBinaryMatrix::new(k, k, r)
+        };
+        build_block_r1cs_with_matrices(n_blocks_log, K_LOG, K_SKIP, self.useful, pad(&self.a), pad(&self.b), Some(self.const_pos))
+    }
+
+    pub fn io_schema(&self) -> Vec<flock_core::schedule::IoWord> {
+        use flock_core::schedule::IoWord;
+        self.in_cols.iter().map(|&c| IoWord::input(c)).chain(self.out_cols.iter().map(|&c| IoWord::output(c))).collect()
+    }
+
+    /// Evaluate `L` instances bit-sliced (bit j of lane word = instance j): (z, a, b) per row.
+    fn eval_lanes<T>(&self, input_bit: impl Fn(usize) -> T, z: &mut [T], av: &mut [T], bv: &mut [T], ones: T)
+    where
+        T: Copy + Default + core::ops::BitXor<Output = T> + core::ops::BitAnd<Output = T>,
+    {
+        for i in 0..self.n_in {
+            let x = input_bit(i);
+            z[i] = x;
+            av[i] = x;
+            bv[i] = x;
+        }
+        let c = self.const_pos;
+        z[c] = ones;
+        av[c] = ones;
+        bv[c] = ones;
+        for i in self.n_in..self.useful {
+            if i == c {
+                continue;
+            }
+            let mut x = T::default();
+            for &k in &self.a_col[self.a_off[i] as usize..self.a_off[i + 1] as usize] {
+                x = x ^ z[k as usize];
+            }
+            let mut y = T::default();
+            for &k in &self.b_col[self.b_off[i] as usize..self.b_off[i + 1] as usize] {
+                y = y ^ z[k as usize];
+            }
+            av[i] = x;
+            bv[i] = y;
+            z[i] = x & y;
+        }
+    }
+
+    /// The output words of one unit, from the rows (slow: the reference view of the gate).
+    pub fn eval_one(&self, row: &UnitRow) -> (Vec<F128>, bool) {
+        let u = self.useful;
+        let (mut z, mut a, mut b) = (vec![0u8; u], vec![0u8; u], vec![0u8; u]);
+        self.eval_lanes(|i| row_bit(row, i), &mut z, &mut a, &mut b, 1u8);
+        let ok = (0..u).all(|i| (a[i] & b[i]) == z[i]);
+        let outs = self.out_cols.iter().map(|&c| word_of(&z, c)).collect();
+        (outs, ok)
+    }
+
+    fn build_group_rows(&self, rows: [&UnitRow; BM_V], rz: &mut [BmRow], ra: &mut [BmRow], rb: &mut [BmRow]) {
+        thread_local! {
+            static BUF: std::cell::RefCell<(Vec<u8>, Vec<u8>, Vec<u8>)> =
+                const { std::cell::RefCell::new((Vec::new(), Vec::new(), Vec::new())) };
+        }
+        BUF.with(|buf| {
+            let (z, a, b) = &mut *buf.borrow_mut();
+            z.resize(self.useful, 0);
+            a.resize(self.useful, 0);
+            b.resize(self.useful, 0);
+            self.eval_lanes(
+                |i| {
+                    let mut x = 0u8;
+                    for (j, r) in rows.iter().enumerate() {
+                        x |= row_bit(r, i) << j;
+                    }
+                    x
+                },
+                z,
+                a,
+                b,
+                0xFF,
+            );
+            for (src, dst) in [(&*z, &mut *rz), (&*a, &mut *ra), (&*b, &mut *rb)] {
+                for (i, &v) in src.iter().enumerate() {
+                    if v == 0 {
+                        continue;
+                    }
+                    let (w, s) = (i >> 6, i & 63);
+                    for j in 0..BM_V {
+                        dst[w][j] |= (((v >> j) & 1) as u64) << s;
+                    }
+                }
+            }
+        });
+    }
+
+    /// The unit slot's union witness from its rows (instantiation order).
+    pub fn witness_rows_into(&self, rows: &[UnitRow], n_blocks_log: usize, dst: flock_core::union::SlotWitnessDest<'_>) -> Vec<u8> {
+        crate::r1cs_hashes::common::drive_witness_batch_major_partial_into(rows, n_blocks_log, K_LOG, self.useful, dst, |g, rz, ra, rb| {
+            self.build_group_rows(g, rz, ra, rb)
+        })
+    }
+}
+
+fn row_bit(row: &UnitRow, i: usize) -> u8 {
+    let w = row[i >> 7];
+    let j = i & 127;
+    (if j < 64 { w.lo >> j } else { w.hi >> (j - 64) } & 1) as u8
+}
+
+fn word_of(z: &[u8], col: usize) -> F128 {
+    let (mut lo, mut hi) = (0u64, 0u64);
+    for j in 0..64 {
+        lo |= ((z[col * 128 + j] & 1) as u64) << j;
+        hi |= ((z[col * 128 + 64 + j] & 1) as u64) << j;
+    }
+    F128::new(lo, hi)
+}
+
+/// The unit as a circuit gate: inputs x0, x1, w0, w1, c_in; outputs c_out (and y16 for an epilogue relation).
+pub struct UnitGate {
+    pub net: std::sync::Arc<UnitNet>,
+    pub nu: usize,
+}
+
+impl flock_core::circuit::builder::GateType for UnitGate {
+    type Row = UnitRow;
+    type Hint = ();
+    fn table(&self) -> crate::schedule::TableType {
+        crate::schedule::TableType::from_block_r1cs(&self.net.block_r1cs(self.nu)).with_io_schema(self.net.io_schema())
+    }
+    fn eval(&self, inputs: &[F128], _hint: &(), outputs: &mut Vec<F128>) -> UnitRow {
+        let row: UnitRow = from_fn(|i| inputs[i]);
+        let (outs, _) = self.net.eval_one(&row);
+        outputs.extend_from_slice(&outs);
+        row
+    }
+    fn witness(&self, _rows: &[UnitRow], _nu: usize) -> flock_core::circuit::builder::SlotWitness {
+        flock_core::circuit::builder::SlotWitness::DeferredToRows
+    }
+}

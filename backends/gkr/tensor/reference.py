@@ -7,7 +7,7 @@ is the tuple ``(a, 0, 0, 0, 0, 0)``.
 
 The round: three tables ``f, g, h`` of ``t`` (even) elements, ``f_k(x) = (1 - x) f[2k] + x f[2k + 1]`` and the round
 polynomial ``S(x) = sum_k f_k(x) g_k(x) h_k(x)`` (degree 3, sent as ``S(0), S(1), S(2), S(3)``); the fold with the
-verifier's ``r`` is ``f'[k] = (1 - r) f[2k] + r f[2k + 1]``.  This is the shape of Candidate A's GKR c-rounds
+verifier's ``r`` is ``f'[k] = (1 - r) f[2k] + r f[2k + 1]``.  This is the shape of A-GKR's GKR c-rounds
 (PROTOCOL.md 4.1: degree 3 in the copy variable; ``eq``, ``V_l``, ``V_r`` as the three factors).  Everything here is
 the oracle the INT8 kernel (``sumcheck_int8.py``) must agree with bit-for-bit.
 """

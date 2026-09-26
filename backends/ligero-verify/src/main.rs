@@ -1,4 +1,4 @@
-//! ligero-verify: the independent verifier for Candidate B's B-Ligero chain proofs.
+//! ligero-verify: the independent verifier for B-Ligero's chain proofs.
 //!
 //! ~~~text
 //! ligero-verify verify --system system.bin --statement X.stmt --proof X.proof [--threads T] [--soundness-bits 128]

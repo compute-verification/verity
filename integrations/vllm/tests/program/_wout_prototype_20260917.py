@@ -1,4 +1,4 @@
-"""Prototype: per-body Out(S)/W_out without expanded-circuit traversal, checked against Subcircuit.out (oracle).
+"""Prototype: per-body Out(S)/W_out without expanded-circuit traversal, checked against GateSelection.out (oracle).
 
 A *part* is (scope, items) where scope is one activation of a specialization S and items are (node j, member m) of S's
 body (m = 0 for primitive/call nodes).  Out(part) = gates of the part that are (a) consumed by a body item outside the
@@ -6,7 +6,7 @@ part, or (b) returned by S's body (escape to the parent; exact when S is the roo
 import sys, time
 sys.path.insert(0, "/private/tmp/lane-coverage")
 from verity.ir.defs import PrimitiveDefinition, bind
-from verity.ir.layout import Scope, Subcircuit, resolve
+from verity.ir.layout import Scope, GateSelection, resolve
 from verity.ir.program import Program
 from verity.ir.refs import Affine, Concat, Strided, runs
 from verity_vllm.program.registry import b1
@@ -117,14 +117,14 @@ def check(program: Program, sc: Scope, parts: list[set[tuple[int, int]]], label:
         for j, m in items:
             lo, hi = item_interval(sc, j, m)
             gates.extend(range(lo, hi))
-        oracle = set(Subcircuit(C, gates).out)
+        oracle = set(GateSelection(C, gates).out)
         pred = out_pred(sc, items, designated)
         if pred == oracle:
             n_ok += 1
         else:
             bad.append((sorted(items)[:3], sorted(oracle)[:5], sorted(pred)[:5]))
     widths = [sum(C.gate(g).prim.ret.w for g in out_pred(sc, items, designated)) for items in parts]
-    print(f"{label}: {n_ok}/{len(parts)} parts agree with Subcircuit.out; W_out max={max(widths)} "
+    print(f"{label}: {n_ok}/{len(parts)} parts agree with GateSelection.out; W_out max={max(widths)} "
           f"({time.time()-t0:.1f}s, circuit {C.size} gates)")
     for b in bad[:3]:
         print("   MISMATCH items", b[0], "oracle", b[1], "pred", b[2])

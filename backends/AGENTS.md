@@ -5,10 +5,10 @@ backend and by the campaign-side numerical work under `backends/numerical/`.
 
 ## What is fixed
 
-- The target is `verity.proofs.target.FIRST`. Lanes do not change it.
+- The subcircuit is `verity.proofs.target.FIRST`. Lanes do not change it.
   The backend transition unit is one 16-product update with arbitrary finite
   `c`; the Verity VU is `GemmCoordinate<K>` from `c_0 = 0` plus the epilogue.
-- Candidates must agree on profile, input/output bitstrings, supported domain,
+- Backend families must agree on profile, input/output bitstrings, supported domain,
   the exact function and VU endpoints. Auxiliary witness layouts are theirs.
 - Semantic disagreements go into `fixtures/discrepancy_log.json` (an entry
   with an owner), then to the coordinator. Changing a reference
@@ -29,10 +29,10 @@ authentication  included | excluded
 Never compare across `proof_class`, and never compare two numbers that were
 not measured **at the same batch size, on the same hardware, at the same
 soundness target** (`contract.IDENTITY_FIELDS`; `benchmarks/judge.py` refuses
-otherwise). The decision workload is B=4096 K=1536 VUs of one instance set on
+otherwise). The decision workload is B=4096 K=1536 VUs of one input set on
 one machine at 2^-128; the canonical comparison is the three frozen tables
 below. Transition-unit and small-B numbers are diagnostics of a
-candidate's own scaling, not a comparison. A non-ZK kernel is a diagnostic. An
+backend's own scaling, not a comparison. A non-ZK kernel is a diagnostic. An
 implementation whose privacy is honest-verifier zero knowledge is
 `COMPLETE_HVZK_BACKEND`: a valid milestone, not the target.
 `COMPLETE_ZK_BACKEND` is reserved for a construction whose malicious-verifier
@@ -53,7 +53,7 @@ elements, hash bytes, verifier seconds, transcript bytes, the RTT sweep,
 coupling diagnostics) is drill-down behind a Table 2 or Table 3 cell, never
 another top-level table. Caption constants: K = 1536; B = 4096; soundness
 2^-128, target and achieved (union-bounded over sub-batches); dense execution;
-FP32 accumulation; FMA = 2 FLOP; the frozen instance set of the row's target;
+FP32 accumulation; FMA = 2 FLOP; the frozen input set of the row's subcircuit;
 native denominator = datasheet dense peak of the exact target device
 (`Target.native_peak`); authentication = excluded (until `included` runs exist).
 
@@ -68,7 +68,7 @@ Table 3  Prover phase decomposition (one row per populated Table 2 cell, the sam
          Device / target | Candidate | Total prover time | Witness | Encoding + commitment | Arithmetic | Lookup | ZK additional | Serialization | Other
 ~~~
 
-Cell = the best valid implementation of the candidate in its declared proof
+Cell = the best valid implementation of the backend family in its declared proof
 class: min `t.total` over valid results, printed as R_native_spec / R_proved
 (`2.6e7×`), R_proved = 2KB / `t.total`; R_proved and the artifact id stay in
 the JSON and in a numbered markdown footnote; `—` = no valid result. The
@@ -83,15 +83,15 @@ Same-SKU invariant: the prover ran on the row's native device, `hardware.gpu.nam
 "NVIDIA A100 SXM4 80GB", "NVIDIA H100 80GB HBM3" ≡ "NVIDIA H100 SXM5 80GB"); a
 run on any other device never populates a cell.
 Validity (`tables.reject_reasons`; empty = valid): `contract.validate()`
-empty; `profile` is the row's target; K = 1536 and B = 4096 (B_real = B when
+empty; `profile` is the row's subcircuit; K = 1536 and B = 4096 (B_real = B when
 present); `security.target` ≤ −128 and, when present, `security.achieved_log2`
-≤ −128; `instances` equals the target's frozen ref (BF16: `bench-instances/v1`
+≤ −128; `instances` equals the subcircuit's frozen ref (BF16: `bench-instances/v1`
 `vu-k1536` [0, 4096) manifest 059103cf…; FP8 Ada: `bench-instances-fp8-ada/v1`
 `vu-k1536-fp8-ada`, digest `contract.FP8_ADA_INSTANCES_DIGEST`; Hopper has no
 frozen set yet), or is a re-packing of it that an `instance-equiv/v1` artifact
 (campaign morning-tables BRIEF §5) shows byte-identical, labelled
 `verified=accepted` by a non-producer of it and of the result (user decision
-2026-09-24; the cell's footnote names it); `proof_class` is the candidate's
+2026-09-24; the cell's footnote names it); `proof_class` is the backend family's
 declared class; authentication excluded (column B-Ligero + in-proof hash:
 `included-hash`, Poseidon2-BabyBear per row, no sharing; Ajtai, BLAKE3 and
 shared tiles are drill-down); same SKU; **independently verified** -- a label
@@ -104,10 +104,10 @@ downgraded** -- the latest `red-team-*` `proof_class` verdict on the artifact
 is not below the fingerprint's class; **not pulled** -- the latest `finding`
 label on the artifact does not start `PULLED` (one starting `UNDER
 RE-VERIFICATION` keeps the cell, marked `(under re-verification)` with the
-finding in its footnote, until a later `CLEARED` label). A candidate is recognised from
+finding in its footnote, until a later `CLEARED` label). A result's backend family is recognised from
 `software.backend.name` (`verity-gkr`, `b-ligero chain…`, `sp1`); component
 benchmarks (`verity-direct`, `backends/gkr/...`, `b-encode`) are none. The
-renderer lists every rejected candidate result with its first reason.
+renderer lists every rejected result with its first reason.
 Table 3 identity: T_total = witness + encoding_commitment + arithmetic +
 lookup + zk_additional + serialization + other, each cell `0.41 s (37%)`,
 Other = t.total − Σ buckets − Σ joints (≥ −1 %·t.total); a fused stage
@@ -115,20 +115,21 @@ Other = t.total − Σ buckets − Σ joints (≥ −1 %·t.total); a fused stag
 covers and `↞` in the others.
 
 Drill-downs D1-D3 (`python -m verity_numerical.bench.drilldown --root <store>
-[--format md|json]`, `verity_numerical/bench/drilldown.py`): D1 variants and
-security properties, one row per `drilldown.VARIANTS` entry (its recogniser and
+[--format md|json]`, `verity_numerical/bench/drilldown.py`): D1 backends and
+statements with their security properties, one row per `drilldown.VARIANTS` entry (its recogniser and
 its ZK / operands hidden / binding / soundness / Table 2 column, with sources);
-D2 fastest measured `t.total` per variant × target, marked ✓ or with the first
+D2 fastest measured `t.total` per `VARIANTS` entry × subcircuit, marked ✓ or with the first
 reason letter of `tables.reject_codes`; D3 communication and verifier cost per
 Table 2 cell, read only from the cell's result envelope (`…` where absent).
 Non-canonical; layout fixed 2026-09-24 (campaign morning-tables BRIEF §1).
 
-The approved spec's tables (`kb/TABLES.md`: Table 1 configurations and their
+The approved spec's tables (`kb/TABLES.md`: Table 1 backends and their
 security, Table 2 end-to-end N ÷ P per subcircuit, hardware class and
 commitment scheme over the full committed relation on a core-defined scheme,
-algebraic-hash configurations flagged and marked `(alg.)`, Table 3 with
+results on an algebraic hash flagged and marked `(alg.)`, Table 3 with
 serving and proving overhead) render as a labelled preview with
-`python -m verity_numerical.bench.views --root <store> [--rules spec|unfiltered|legacy]`;
+`python -m verity_numerical.bench.views --root <store> [--rules spec|unfiltered|legacy]`
+(`--format entities`: the docs site's JSON, with ids from `verity.census` and `verity.claims`);
 `--parity` checks that the legacy-rules views select exactly today's cells
 (the switch's gate; `--take-snapshot --record` stores the check as a
 `tables-parity/v1` artifact). The steward renders it as a preview for a
@@ -136,7 +137,12 @@ serving and proving overhead) render as a labelled preview with
 at the labelled switch: an entry with `published = "views"` publishes
 `views --published` as `<stamp>-tables.md` and the frozen tables as the
 drill-down `<stamp>-tables-frozen.md`; `python -m verity_numerical.bench.switch`
-renders the switch digest (`backends/numerical/CHANGELOG.md`).
+renders the switch digest (`backends/numerical/CHANGELOG.md`). Since
+2026-09-26 the docs site replaces the markdown tables for reading (Daniel):
+the steward's entry is `published = "entities"`, which renders only the
+entities JSON `<stamp>-tables.json` (the site's input, mirrored to the
+Project store's `internal/tables-render/latest.json`) and runs `--parity` as an
+internal correctness gate that publishes nothing.
 
 ## Proof model: interactive is fine, transferability is not required
 
@@ -169,7 +175,7 @@ proof and sub-batch. Reported operating points:
 ~~~
 
 Keep explicit in every table which configuration first meets the operating
-point: for the frozen target the quadratic Goldilocks challenge extension
+point: for the frozen subcircuit the quadratic Goldilocks challenge extension
 cannot reach 2^-128 at any batch size (the lookup identity term floors near
 2^-109 from the 65,536-row tables); the cubic extension is the first that does.
 
@@ -181,7 +187,7 @@ critical path after all available parallelism and batching -- distinct from
 the count of protocol rounds, since independent messages issued before the
 next challenge cost no extra trip); total communication; and predicted or
 measured end-to-end wall time at RTT in {0, 0.1, 1, 10, 50} ms. The network
-floor is depth x RTT. No hard round budget yet: Candidate A may reduce its
+floor is depth x RTT. No hard round budget yet: A-GKR may reduce its
 depth and the measurements decide.
 
 ## Tensor cores are the target machine
@@ -215,13 +221,13 @@ first-class consumer is the **tensor core**, not the SIMT core. Consequences:
 - CPU measurements remain valid **diagnostics** of algorithmic scaling
   (committed elements per VU, depth, constraint counts); the decision
   hardware is a tensor-core GPU, and `overhead.vs_native_peak` is always
-  against the proved target's anchor tensor-core peak (`Target.native_peak`),
+  against the proved subcircuit's anchor tensor-core peak (`Target.native_peak`),
   never against the prover's own card.
 
 ## Trust: when we trust a silicon circuit
 
-Decided 2026-09-22 (lane `trust`). For every numerical target (one exact
-tensor-core relation on one architecture) "do we trust this circuit, and why"
+Decided 2026-09-22 (lane `trust`). For every numerical target (a `Target`: one
+subcircuit's exact tensor-core relation on one architecture) "do we trust this circuit, and why"
 is **computed from evidence, never asserted**: `verity.proofs.trust.assess`
 evaluates predicates over store artifacts (ids + labels) and repo fixtures and
 returns a level with the exact evidence that satisfies or fails each criterion;
@@ -242,7 +248,7 @@ returns a level with the exact evidence that satisfies or fails each criterion;
   discrepancy-log entry naming the target is resolved/excluded; (c) relation
   == model: the checker accepts >= 2,000 honest VUs incl. edge families and
   rejects >= 100 mutations (`bench-result/v1` validation); (d) hardware-in-the-
-  loop: the frozen instance set re-executed on the anchor with 0 mismatches
+  loop: the frozen input set re-executed on the anchor with 0 mismatches
   (`tc-evidence/v1` labelled `family=frozen-instances instances_dataset=<ds>
   instances_tier=<tier> mismatches=0`); (e) an independent verifier accepted a
   full-contract proof; (f) no open `trust_downgrade` label.
@@ -269,7 +275,7 @@ next level, the triggers and the procedure; `--publish` writes a
 `instruction`, `level`, `anchor`), pushes `--preserve`, and `Instruction.dossier`
 / `Target.dossier` cite it. Label contract: the docstring of `trust.py`.
 
-## Census, both candidates, same columns
+## Census, both backend families, same columns
 
 ~~~text
 materialized witness elements   committed elements     bytes encoded
@@ -292,7 +298,7 @@ The headline statistic is throughput, `vu.per_second`, and better still
 **overhead**: `overhead.vs_native_peak` = R_native(target) / R_proved, where
 R_proved = 2·K·B / `t.total` is the prover's own FLOP/s over the VUs it
 established (`rate.proved_flop_per_second`, K MACs = 2K FLOP per VU) and
-R_native is the datasheet dense tensor-core peak of the **proved target's**
+R_native is the datasheet dense tensor-core peak of the **proved subcircuit's**
 conformance anchor at FP32 accumulate (`rate.native_peak_flop_per_second`,
 `Target.native_peak`, `contract.native_reference(profile)`): A100 BF16
 312 TFLOPS for FIRST (9.85 ps per K=1536 VU, ~1e11 VU/s), RTX 4090 FP8
@@ -317,7 +323,7 @@ above diagnostic. Report the six timing buckets (witness,
 encoding/commitment, arithmetic, lookup, ZK-additional, serialization), peak
 memory, bytes moved, transcript bytes, rounds, verifier work.
 
-Every Candidate A/B number at K=1536 is measured on the frozen instance set
+Every A-GKR/B number at K=1536 is measured on the frozen input set
 `bench-instances/v1` (`fixtures/bench-instances/v1/`, loader and recipe
 `verity_numerical.bench.instances`): the `vu-k1536` tier, 4,096 valid VUs
 (3,456 real Qwen2.5-1.5B coordinates including the 24 hardware-confirmed
@@ -371,3 +377,11 @@ blocks nothing.
   canonical.
 - Rust for anything whose speed is the result; Python for references,
   checkers and adversarial search. CPU baselines first, GPU after parity.
+- New subcircuits go through the benchmark spine. Input sets are
+  `input-set/v1` / `vllm-vu-set/v1` directories read by id
+  (`verity_numerical.bench.generate` makes synthetic ones from the IR). A
+  family lowers template T in its own `templates/<t>.py`
+  (`verity_numerical.bench.lowerings`), and
+  `python -m verity_numerical.bench.cell plan|run|check|register` runs a
+  (backend, statement, input set) cell through the backend's `bench/drivers/`
+  module.

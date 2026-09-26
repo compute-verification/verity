@@ -334,7 +334,7 @@ fn read_u32_words(path: &Path) -> Vec<u64> {
     b.chunks_exact(4).map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]) as u64).collect()
 }
 
-/// A VU tier of `bench-instances/v1`: `x`, `w` (K words per instance), claimed `y`, the recorded accumulators
+/// A VU tier of `bench-instances/v1`: `x`, `w` (K words per input), claimed `y`, the recorded accumulators
 /// (positives only).
 struct VuTier {
     vus: Vec<VuIo>,

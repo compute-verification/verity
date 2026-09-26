@@ -1,4 +1,5 @@
-"""The first campaign target, frozen: exactly which function the proof backends are asked to prove.
+"""The first campaign subcircuit, frozen: exactly which function the proof backends are asked to prove.  A :class:`Target` is
+the code's name for a subcircuit (``gemm_coordinate(K, semantics)`` with every parameter bound; README Glossary).
 
 Every proof-system experiment in the campaign proves *this* relation until the target is deliberately re-versioned.
 Another engineer must be able to read this module and state the function without asking anyone; the test
@@ -53,7 +54,7 @@ Two objects, deliberately distinct (closed 2026-09-21):
 * The **Verity verification unit** (what the outer sampler selects and what a proof must establish in full) is
   ``GemmCoordinate<K>``: the chain of ``K/16`` transitions from ``c_0 = +0`` followed by the epilogue cast.
 
-Candidate backends must agree on the profile, the input/output bitstrings, the supported domain, the exact
+Backends must agree on the profile, the input/output bitstrings, the supported domain, the exact
 function and the VU endpoints; they need not agree on auxiliary witness layouts.
 
 References and the log of disagreements
@@ -68,12 +69,12 @@ References and the log of disagreements
   disagree or are silent, with an owner and what would resolve it.  Nothing in it is resolved by editing a
   reference implementation.
 
-Reference instances
-===================
+Reference inputs
+================
 
 Recorded under ``fixtures/typed-obligation-v0`` with the public values a correct prover produced:
 
-* :data:`K16_VECTOR` -- ``K = 16``, one step, the smallest instance; the SP1 baseline proof.
+* :data:`K16_VECTOR` -- ``K = 16``, one step, the smallest input; the SP1 baseline proof.
 * :data:`K1536_VECTOR` -- ``K = 1536``, 96 chained steps, one real coordinate of a captured vLLM ``qkv_proj`` decode
   step; the campaign's realistic size.
 
@@ -143,17 +144,13 @@ much hardware stands behind the model the target computes with.
 Native peak: what a target's overhead is measured against
 =========================================================
 
-Every target carries a :class:`NativePeak`, the reference rate the campaign's headline ``overhead.vs_native_peak``
-(``verity_numerical.bench.contract``) divides by.  The anchor ``device`` is the **conformance device of the target's
-instruction** -- the card the relation was pinned on (A100 for ``sm80.mma.m16n8k16.bf16``, H100 for
-``sm90.wgmma.m64n8k32.e4m3``, RTX 4090 for ``sm89.mma.m16n8k32.e4m3``) -- not the machine a prover happens to run
-on (that is in the result's ``hardware`` fingerprint).  The ``rate`` is the vendor datasheet's **dense** tensor-core
-peak for the target's operand dtype **at the relation's accumulate width**: our relations accumulate in FP32, so
-where a part halves its FP8 throughput under FP32 accumulate (Ada: 330.3 TFLOPS, against 660.6 with FP16
-accumulate) the halved number is the reference; sparsity figures are never used.  One VU of ``GemmCoordinate<K>``
-is ``K`` multiply-accumulates = ``2K`` FLOP (NVIDIA counts an FMA as two FLOP); block scales, epilogue casts and the
-proof's own arithmetic are not counted.  So the native time of one VU at peak is ``2K / flop_per_second`` and the
-overhead of a prover that establishes ``B`` VUs in ``t`` seconds is ``flop_per_second / (2KB / t)``.
+A target names its ``anchor_device``, the **conformance device of its instruction** -- the card the relation was pinned
+on (A100 for ``sm80.mma.m16n8k16.bf16``, H100 for ``sm90.wgmma.m64n8k32.e4m3``, RTX 4090 for ``sm89.mma.m16n8k32.e4m3``)
+-- not the machine a prover happens to run on (that is in the result's ``hardware`` fingerprint).  The number a
+benchmark's ``overhead.vs_native_peak`` divides by is outside core: the census entry (``census/hardware.json``, data read
+by the benchmarks) of that device and the target's operand dtype, the datasheet **dense** tensor-core peak at the
+relation's FP32 accumulate width.  One VU of ``GemmCoordinate<K>`` is ``K`` multiply-accumulates = ``2K`` FLOP, so the native time of one
+VU at a peak is ``2K / flop_per_second``.
 """
 
 from __future__ import annotations
@@ -178,7 +175,6 @@ __all__ = [
     "K16_VECTOR",
     "K1536_VECTOR",
     "NVFP4_SM120",
-    "NativePeak",
     "TARGETS",
     "TC_VECTORS",
     "Target",
@@ -215,33 +211,9 @@ Status = Literal["frozen", "draft"]
 
 
 @dataclass(frozen=True, slots=True)
-class NativePeak:
-    """The native reference rate a target's ``overhead.vs_native_peak`` divides by (module docstring, "Native peak"):
-    the datasheet dense tensor-core peak of the instruction's conformance ``device`` for the target's operand dtype at
-    the relation's ``accumulate`` width, in FLOP per second (an FMA counts as two), with the ``source`` it was read from."""
-
-    device: str
-    rate: str
-    flop_per_second: float
-    accumulate: str
-    source: str
-    #: The reference part's device memory in bytes (datasheet).  A board that reports a very different total is a
-    #: *variant* of the SKU (2026-09-22: a RunPod "RTX 4090" with 48 GiB -- a re-memoried AD102 board whose clocks and
-    #: power limit are not the datasheet's), and the datasheet peak is not its denominator; ``None`` = unchecked.
-    memory_bytes: int | None = None
-
-    def seconds_per_vu(self, K: int) -> float:
-        """Native wall seconds of one ``GemmCoordinate<K>`` (``2K`` FLOP) at this peak."""
-
-        if not isinstance(K, int) or isinstance(K, bool) or K <= 0:
-            raise ValueError(f"K must be a positive int, got {K!r}")
-        return 2 * K / self.flop_per_second
-
-
-@dataclass(frozen=True, slots=True)
 class Target:
-    """One target: the family, the pipeline the steps are computed on, the program, the reference sizes, the native
-    peak its overhead is measured against -- and its ``status`` (``frozen``: every backend proves it; ``draft``: stated
+    """One target (a subcircuit): the gate family, the pipeline the steps are computed on, the program, the reference sizes, the
+    conformance device its overhead is measured against -- and its ``status`` (``frozen``: every backend proves it; ``draft``: stated
     and vectorised, bound to nothing yet) with the id of the instruction class it is a relation over
     (``verity.ml.tc.instructions.INSTRUCTIONS``)."""
 
@@ -255,52 +227,14 @@ class Target:
     domain: str
     epilogue: str
     reference_vectors: tuple[str, ...]
-    native_peak: NativePeak
+    #: The conformance device of the instruction: the card the relation was pinned on (module docstring, "Native peak").
+    anchor_device: str
     status: Status = "frozen"
     instruction: str | None = None
     #: The ``trust-dossier/v1`` artifact id whose computed trust level this target cites (``verity.proofs.trust``).
     dossier: str | None = None
 
 
-#: A100 SXM4 dense BF16 tensor-core peak (312 TFLOPS; 624 with sparsity, not used).  Accumulation on Ampere is FP32.
-A100_BF16_PEAK = NativePeak(
-    device="NVIDIA A100 SXM4 80GB",
-    rate="bf16 dense tensor-core peak, fp32 accumulate",
-    flop_per_second=312e12,
-    accumulate="fp32",
-    source="NVIDIA A100 datasheet / Ampere whitepaper",
-    memory_bytes=80 * 2**30,
-)
-#: H100 SXM5 dense BF16 tensor-core peak (989.4 TFLOPS; 1978.9 with sparsity, not used).  Accumulation is FP32.
-H100_BF16_PEAK = NativePeak(
-    device="NVIDIA H100 SXM5 80GB",
-    rate="bf16 dense tensor-core peak, fp32 accumulate",
-    flop_per_second=989.4e12,
-    accumulate="fp32",
-    source="NVIDIA Hopper whitepaper (BF16 1978.9 TFLOPS with sparsity)",
-    memory_bytes=80 * 2**30,
-)
-#: H100 SXM5 dense FP8 tensor-core peak; Hopper runs FP8 with FP32 accumulate at full rate.
-H100_FP8_PEAK = NativePeak(
-    device="NVIDIA H100 SXM5 80GB",
-    rate="fp8 (e4m3) dense tensor-core peak, fp32 accumulate",
-    flop_per_second=1978.9e12,
-    accumulate="fp32",
-    source="NVIDIA Hopper whitepaper (FP8 3957.8 TFLOPS with sparsity; FP32 accumulate at full rate on Hopper)",
-    memory_bytes=80 * 2**30,
-)
-#: RTX 4090 dense FP8 tensor-core peak with FP32 accumulate -- half the FP16-accumulate figure on Ada.
-RTX4090_FP8_PEAK = NativePeak(
-    device="NVIDIA GeForce RTX 4090",
-    rate="fp8 (e4m3) dense tensor-core peak, fp32 accumulate",
-    flop_per_second=330.3e12,
-    accumulate="fp32",
-    source=(
-        "NVIDIA Ada whitepaper (FP8 with FP32 accumulate 330.3 / 660.6 sparse TFLOPS; FP16 accumulate is 660.6 -- "
-        "Ada halves FP8 throughput with FP32 accumulate)"
-    ),
-    memory_bytes=24 * 2**30,
-)
 
 
 FIRST = Target(
@@ -314,7 +248,7 @@ FIRST = Target(
     domain="finite BF16 operands and finite FP32 accumulators at every step; anything else is rejected, not computed",
     epilogue="f32_to_bf16: RN-even, overflow -> +-inf, NaN -> 0x7FC0 (software canonical word; @2 has the hardware 0x7FFF)",
     reference_vectors=(K16_VECTOR, K1536_VECTOR),
-    native_peak=A100_BF16_PEAK,
+    anchor_device="NVIDIA A100 SXM4 80GB",
     status="frozen",
     instruction="sm80.mma.m16n8k16.bf16",
     dossier="art:997eefe82d733c30d689801236cd682a47844b52dfcfe1d4ea61d44d99c837cc",
@@ -338,7 +272,7 @@ BF16_HOPPER = Target(
         "Hopper BF16 store is the same cvt as Ampere's, so nothing pipeline-specific is pinned for the epilogue"
     ),
     reference_vectors=("bf16-hopper-mma-k16", "bf16-hopper-mma-k1536"),
-    native_peak=H100_BF16_PEAK,
+    anchor_device="NVIDIA H100 SXM5 80GB",
     status="draft",
     instruction="sm90.mma.m16n8k16.bf16",
 )
@@ -367,7 +301,7 @@ FP8_HOPPER_WGMMA = Target(
     domain=_FP8_DOMAIN,
     epilogue=_FP8_EPILOGUE,
     reference_vectors=("fp8-hopper-wgmma-k32", "fp8-hopper-wgmma-k1536"),
-    native_peak=H100_FP8_PEAK,
+    anchor_device="NVIDIA H100 SXM5 80GB",
     status="draft",
     instruction="sm90.wgmma.m64n8k32.e4m3",
     dossier="art:f5e282ad4fe3a7d8ab2777cced6a1b0e8692375529fd031f99d24b3c98035755",
@@ -387,24 +321,12 @@ FP8_ADA_MMA = Target(
     domain=_FP8_DOMAIN,
     epilogue=_FP8_EPILOGUE,
     reference_vectors=("fp8-ada-mma-k32", "fp8-ada-mma-k1536"),
-    native_peak=RTX4090_FP8_PEAK,
+    anchor_device="NVIDIA GeForce RTX 4090",
     status="draft",
     instruction="sm89.mma.m16n8k32.e4m3",
     dossier="art:2acd0d37dc729e36570bffdee35e6445d4e095d9be9f39bcd11222c439e8197c",
 )
 
-RTX5090_FP4_PEAK = NativePeak(
-    device="NVIDIA GeForce RTX 5090",
-    rate="fp4 (e2m1, block-scaled) dense tensor-core peak, fp32 accumulate",
-    flop_per_second=1676e12,
-    accumulate="fp32",
-    source=(
-        "NVIDIA RTX Blackwell GPU Architecture whitepaper, Appendix A, table 'GeForce RTX 5090 vs RTX 4090 vs RTX 3090', "
-        "row 'Peak FP4 Tensor TFLOPS with FP32 Accumulate (FP4 AI TOPS)': 1676 dense / 3352 with the 2:4 sparsity "
-        "feature (footnote 2); footnote 1: peak rates at the GPU boost clock (2407 MHz).  The card's headline "
-        "'3352 AI TOPS' is the sparse figure; dense is used here.  4x the FP8-with-FP32-accumulate rate (419 dense)"
-    ),
-)
 
 _NVFP4_DOMAIN = (
     "every E2M1 nibble (all 16 codes are finite), UE4M3 scale bytes with the padding bit clear and other than the NaN "
@@ -433,7 +355,7 @@ NVFP4_SM120 = Target(
     domain=_NVFP4_DOMAIN,
     epilogue=_NVFP4_EPILOGUE,
     reference_vectors=("nvfp4-sm120-mma-k64", "nvfp4-sm120-mma-k1536"),
-    native_peak=RTX5090_FP4_PEAK,
+    anchor_device="NVIDIA GeForce RTX 5090",
     status="draft",
     instruction="sm120.mma.m16n8k64.e2m1.nvf4",
 )

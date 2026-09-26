@@ -13,7 +13,7 @@
 #                             cgroup CPU quota: OMP_NUM_THREADS = MKL_NUM_THREADS = OPENBLAS_NUM_THREADS = VY_CPU_THREADS =
 #                             floor(quota) (torch's intra-op pool follows OMP_NUM_THREADS).  A 4090 pod has ~10 cores of quota
 #                             while nproc says 96; pools sized to nproc made jobs crawl (kb/pods-4090.md)
-#   /workspace/instances-cache     relchain instance sets for $RELS at each of $NS VUs (+ 64x64 tiles for $TILE64)
+#   /workspace/instances-cache     relchain input sets for $RELS at each of $NS VUs (+ 64x64 tiles for $TILE64)
 #
 # Knobs (environment):
 #   SRC=/workspace/src   RELS=fp8-ada,bf16-hopper   NS=4096   TILE64=fp8-ada   EXTRA_PIP="galois"   TORCH=2.8.0+cu128 (override)

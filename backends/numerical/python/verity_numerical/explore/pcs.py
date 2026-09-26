@@ -1,8 +1,8 @@
 """Polynomial-commitment costing for the two committed objects of the campaign (PCS-comparison lane, wave 1).
 
-The objects are taken from the soundness calculator, never copied: Candidate A commits its inputs, hints and query
+The objects are taken from the soundness calculator, never copied: A-GKR commits its inputs, hints and query
 wires (``account_candidate_a(...).parameters["committed_trace_elements"]``, 181M elements at ``K=1536, B=4096``) and
-opens them at a few points of the cubic extension; Candidate B commits its whole trace (780M elements) and tests it
+opens them at a few points of the cubic extension; B-Ligero commits its whole trace (780M elements) and tests it
 by Ligero's linear / quadratic row tests.  Every PCS below is costed on both objects at one operating point
 (``2^-128`` primary, ``2^-80`` diagnostic), hash-based, transparent and *interactive* (no Fiat-Shamir, so no
 grinding), with the row keys of ``bench.contract`` (``census.*``, ``rounds.*``) plus ``proof_bytes``,
@@ -40,7 +40,7 @@ Cost conventions (ESTIMATES, same as ``census_estimate_*``): a field multiplicat
 ``EXT_MULT_COST[d]`` trace-field mult-equivalents; an NTT butterfly is one; a hash call absorbs
 :data:`HASH_RATE_BYTES`; digests are 32 B; ``rounds.sequential_depth`` is the PCS's own depth (its challenges that
 cannot be batched), and ``total.sequential_depth`` adds the candidate's non-PCS depth from the calculator.  For
-Candidate B under a point-opening PCS, its linear/quadratic row tests have no meaning: the constraints must be
+B-Ligero under a point-opening PCS, its linear/quadratic row tests have no meaning: the constraints must be
 checked by a sumcheck first (Spartan-style, ``ceil(log2 N_B)`` sequential rounds; ``adapter.*`` columns), which is
 the honest price of moving B off Ligero.
 """
@@ -242,7 +242,7 @@ def _finish(v: dict) -> PcsRow:
 
 
 def _adapter(obj: Committed, ec: int) -> dict:
-    """Candidate B off Ligero: a Spartan-style sumcheck over its ``lin`` and ``mul`` constraints (two sumchecks in
+    """B-Ligero off Ligero: a Spartan-style sumcheck over its ``lin`` and ``mul`` constraints (two sumchecks in
     parallel, degree 3, ``ceil(log2 N_B)`` rounds; prover ~8 F_c mults per element; error ``3 log N / |F|``)."""
     if obj.points is not None:
         return {"adapter.sequential_depth": 0, "adapter.field_ops": 0, "adapter.proof_bytes": 0, "adapter.error": Fraction(0)}

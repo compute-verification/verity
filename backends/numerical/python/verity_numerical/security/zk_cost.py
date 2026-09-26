@@ -8,17 +8,17 @@ stated rates) and ``security.accounting`` (rows, pads, coins, depth).  Three pri
 * ``none``      -- the non-ZK diagnostic a kernel measurement corresponds to: payload ``k`` per Ligero row, no
                    blinding rows, no transcript pads, plain Merkle leaves, no verifier-coin commitment;
 * ``hvzk``      -- the protocol documents' layer: ``k - l`` randomizers per row, 3 blinding rows per tableau, one
-                   committed pad per transcript element (Candidate A), HM96 leaf commitments (statistical hiding
+                   committed pad per transcript element (A-GKR), HM96 leaf commitments (statistical hiding
                    ``n 2^-160``), prover randomness from a PRG.  ``COMPLETE_HVZK_BACKEND`` when implemented;
 * ``malicious`` -- ``hvzk`` plus step 0: the verifier commits (HM96, ``k_V = 160``) to every coin before the first
                    prover message and opens each on the challenge message it replaces; +1 sequential depth,
                    ``R`` commitments (``rounds.protocol``) verified by the prover.  ``COMPLETE_ZK_BACKEND`` when
                    implemented and red-team reviewed.
 
-Designs: Candidate A (GKR + logUp-GKR + Ligero) in its two hint-free branches; Candidate B as direct Ligero (the
-``B`` row of tensor.md); Candidate B as AIR/FRI (the current Plonky3 implementation's shape: randomised trace,
+Designs: A-GKR (GKR + logUp-GKR + Ligero) in its two hint-free branches; B-Ligero as direct Ligero (the
+``B`` row of tensor.md); B-Ligero as AIR/FRI (the current Plonky3 implementation's shape: randomised trace,
 selector column, blinding codeword, salted leaves; :func:`air_fri_zk`, relative deltas only because tensor.md has
-no absolute B-AIR row); Candidate C (QuickSilver VOLE, ``explore.vole``) as the comparison row whose privacy is
+no absolute B-AIR row); the VOLE candidate (QuickSilver, ``explore.vole``) as the comparison row whose privacy is
 native (designated verifier; malicious-verifier ZK in the sVOLE-hybrid model; nothing to add).
 
 Overhead deltas are stated at the H100 realistic utilisation of tensor.md (0.172, TensorZKP) and, for A, at the
@@ -122,7 +122,7 @@ def design_zk_rows(design_name: str, field: str, target_log2: int = -128, utilis
 
 def air_fri_zk(layout: str = "census_lookup", field: str = "goldilocks", target_log2: int = -128, B: int = t.B_TARGET,
                log_blowup: int = 2, regime: str = "proven_udr") -> dict:
-    """The ZK layer of Candidate B as AIR/FRI (relative deltas; tensor.md has no absolute B-AIR row).
+    """The ZK layer of B-Ligero as AIR/FRI (relative deltas; tensor.md has no absolute B-AIR row).
 
     Trace: one row per unit, ``U = 96 B`` real rows in a domain of ``2^ceil(log2 U)`` rows; LDE at rate
     ``2^-log_blowup``; FRI queries ``s`` from ``explore.pcs.fri_queries`` at the target for ``rows_log2 + 2``
@@ -273,7 +273,7 @@ def _budget_row(bud: acc.Budget) -> dict:
 
 
 def vole_row(target_log2: int = -128) -> dict:
-    """Candidate C (QuickSilver, designated verifier): privacy is native and malicious-verifier in the sVOLE-hybrid
+    """The VOLE candidate (QuickSilver, designated verifier): privacy is native and malicious-verifier in the sVOLE-hybrid
     model; the ZK delta is zero by construction.  Comparison row only (never compared against A/B without the
     ``zk_mode`` caveat, ``explore.vole.PROOF_CLASS_NOTE``)."""
     v = t.price_vole(target_log2, utilisations=(1.0, 0.172))

@@ -1,6 +1,6 @@
-"""Sampled VUs of a passing row: the draw, the evaluation tap, the subcircuit decomposition and the flat instance sets
+"""Sampled VUs of a passing row: the draw, the evaluation tap, the subcircuit decomposition and the flat input sets
 (`vllm-vu-set/v1`) it writes.  The stored form is the hierarchical VU store (`verity_vllm.pipeline.vu_store`, which runs the draw);
-the flat sets are its default extraction.
+the flat input sets are its default extraction.
 
 Not on the record: the Commit stage calls `vu_store.after_replay` once pair 0's replay of record has passed and its value source
 is recorded (`--vu-export-dir`, env `VERITY_VU_EXPORT_DIR`; on by default under `verity-vllm row`).  `limits.json` (the `Limits`
@@ -23,7 +23,7 @@ relation before it is written (a decomposition that does not reproduce the row's
 `Embedding_v1` is not exported (a commitment opening of the table, not a subcircuit).
 
 Layout of a set `<out>/sets/<name>/`: flat little-endian arrays `<port>.<u8|u16|u32|u64>`, instance-major (the
-`fixtures/bench-instances/v1` convention); a port whose width varies across instances has `<port>.offsets.u64` (n + 1 word
+`fixtures/bench-instances/v1` convention); a port whose width varies across inputs has `<port>.offsets.u64` (n + 1 word
 offsets).  `manifest.json` holds the relation, the ports, the sha256 of every file, the content digest (relation + ports + file
 digests, provenance excluded) and the provenance (row, model, run, commitment root, Program and manifest digests).  `index.json`
 has one row per instance (the VU it came from and the sub-index inside it).  `<out>/export.json` summarises the export and
@@ -65,7 +65,7 @@ _WORD = {1: ("u8", np.uint8), 2: ("u16", np.uint16), 4: ("u32", np.uint32), 8: (
 class Limits:
     per_family: int = 256                    # VUs drawn per family (round-robin across the replay's strata)
     per_family_override: dict[str, int] = dataclasses.field(default_factory=dict)
-    gemm_coords_per_row: int = 32            # GemmCoordinate instances taken from one Gemm row
+    gemm_coords_per_row: int = 32            # GemmCoordinate inputs taken from one Gemm row
     heads_per_row: int = 4                   # attention / RoPE heads taken from one row
     max_instances_per_set: int = 8192
     max_row_words: int = 1 << 22             # a generic row whose operands exceed this is counted, not written

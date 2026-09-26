@@ -1,5 +1,5 @@
 //! Plonky3 uni-stark with Keccak-256 Merkle trees and FRI (Fiat-Shamir, non-ZK): `NON_ZK_PROOF_DIAGNOSTIC`.
-//! Not Candidate B's PCS (Ligero-style, interactive; `PROTOCOL.md`).  Two backends: Goldilocks with the
+//! Not B-Ligero's PCS (Ligero-style, interactive; `PROTOCOL.md`).  Two backends: Goldilocks with the
 //! quadratic extension (the wave-1 configuration) and BabyBear with the degree-4 extension.
 
 use p3_air::{Air, BaseAir};

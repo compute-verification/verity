@@ -1,4 +1,4 @@
-# Candidate B — direct local constraints in an interactive hash-based ZK Ligero argument
+# B-Ligero — direct local constraints in an interactive hash-based ZK Ligero argument
 
 Status: **specification / proposed parameterisation**. Nothing here is implemented or measured. The argument is
 AHIV22's interactive ZKIPCP-plus-CRH construction applied to the census constraints of one 16-product update,
@@ -22,19 +22,19 @@ reviewed, and section 9 reproduced by `verity_numerical.security.accounting.acco
 | Hab22 | Haböck, ePrint 2022/1530, revision 2025-02-20 | logUp with helper (inverse) columns: Lemma 5, Theorem 4 (challenge from a set of size \(\ge|F|-|H|\)), Remark 3, section 3.4 (vector-valued lookups), batch inversion cost (3 mult. per helper) |
 | PH23 | Papini–Haböck, ePrint 2023/1284, revision 2025-02-20 | optional `gkr` lookup mode (section 4.3) |
 | FS24 | Frigo–shelat, ePrint 2024/2010, revision 2026-04-27, §2.2 | the Ligero bound used for parameters (Appendix C form) |
-| HM96 | Halevi–Micali, CRYPTO 1996 (sections 1.2, 3, 4 read; see Candidate A section 0) | statistically hiding, computationally binding commitment from CRH: HM96 leaves (section 3) and step-0 coin commitments (5.3) |
+| HM96 | Halevi–Micali, CRYPTO 1996 (sections 1.2, 3, 4 read; see `backends/gkr/PROTOCOL.md` section 0) | statistically hiding, computationally binding commitment from CRH: HM96 leaves (section 3) and step-0 coin commitments (5.3) |
 
 Not read (cited by name only): Goldreich–Kahan 1996 (verifier-coin commitment, simulator); the simulator sketch
 in 5.3 is written out.
 
 ## 1. Relation, shapes, public data
 
-Same public data as Candidate A section 1 (profile, \(K\), \(B\), \(U=BK/16\), tables, census). Differences:
+Same public data as `backends/gkr/PROTOCOL.md` section 1 (profile, \(K\), \(B\), \(U=BK/16\), tables, census). Differences:
 
-| item | Candidate B |
+| item | B-Ligero |
 |---|---|
 | committed per unit | **every** value of the checker: the 34 words, the 225 hints, the 62 looked-up row columns, the 244 products and the 100 materialised range expressions (665 columns), plus Ligero alignment copies for quadratic operands |
-| constraints per unit **[derivation from the WP2 contracts, Candidate A section 1]** | 137 linear (115 identities + 22 range-chunk splits), 358 quadratic (`mul`, 114 of them booleans), 306 lookups into 5 public tables (284 into the one 16-bit range table, 22 into `ALIGN`/`POW`/`LEAD`/`NORM`) |
+| constraints per unit **[derivation from the WP2 contracts, `backends/gkr/PROTOCOL.md` section 1]** | 137 linear (115 identities + 22 range-chunk splits), 358 quadratic (`mul`, 114 of them booleans), 306 lookups into 5 public tables (284 into the one 16-bit range table, 22 into `ALIGN`/`POW`/`LEAD`/`NORM`) |
 | alignment copies **[source, libzk 4.3]** | Ligero's quadratic test needs \(x,y,z\) of each product in the same column of three rows: \(3\cdot358=1\,074\) quadratic slots per unit; values reused across products are copied and bound by linear equalities |
 | committed elements per unit **[estimate]** | 1 064 = \(3\cdot358\) slots + 104 columns that are neither a direct operand nor a product (`census.columns_committed_b`, `CandidateB.witness_per_unit`); the layout itself is WP3's |
 | linear constraints per unit **[estimate]** | \(137+2\cdot358=853\) (census `lin` incl. splits, two copy equalities per product) — `CandidateB.linear_per_unit`; total at \(B=4096\): 335.5M incl. table-side helper equations |
@@ -45,12 +45,12 @@ Same public data as Candidate A section 1 (profile, \(K\), \(B\), \(U=BK/16\), t
 **Census source.** The counts come from the WP2 checker contracts (`verity_numerical.security.census`; Candidate
 A section 1 gives the conventions, the per-width range table, the layered shape, the diff against
 `verity.ml.tc.relation.vu_census` — +212 `mul`, +33 `lin`, +134 lookups per unit — and the two unit variants).
-For Candidate B the relevant difference between the transition unit and the VU is nil (\(<0.01\%\): `step.py`
+For B-Ligero the relevant difference between the transition unit and the VU is nil (\(<0.01\%\): `step.py`
 decodes and packs the word in every unit).
 
 Committed trace-field elements, \(K=1536\), \(F_c=F_{p^3}\) (calculator): \(B=1\): 0.46M; \(B=64\): 12.4M;
 \(B=4096\): **779.6M** = 418.4M witness + 0.07M multiplicities + 361.2M helper coordinates → 203 030 rows of
-\(l=3840\), \(3.33\)G encoded symbols at rate \(1/4\). Candidate A commits 181.4M for the same batch (126.3M
+\(l=3840\), \(3.33\)G encoded symbols at rate \(1/4\). A-GKR commits 181.4M for the same batch (126.3M
 without its committed query wires): the \(4.3\times\) (\(6.2\times\)) difference is handoff 6.2's "encoding
 traffic and auxiliary lookup witness", quantified. Against the relation-based figures (404.9M vs 100.9M, 4.0×)
 both candidates roughly doubled (B: \(1.9\times\), A: \(1.8\times\)) and the ratio moved from 1:4.0 to 1:4.3.
@@ -58,7 +58,7 @@ It is an explanatory variable of the census columns (section 9.4), not a verdict
 
 ## 2. Fields
 
-Identical to Candidate A section 2: Goldilocks trace/code field (64-bit reference first); the quadratic
+Identical to `backends/gkr/PROTOCOL.md` section 2: Goldilocks trace/code field (64-bit reference first); the quadratic
 extension \(F_{p^2}\) first meets \(2^{-80}\) and \(2^{-96}\), the cubic \(F_{p^3}\) first meets \(2^{-112}\)
 and \(2^{-128}\) (the logUp identity term floors at \(2^{-111.3}\)…\(2^{-100.9}\) over \(F_{p^2}\), section 9.2);
 small-field study with a degree-6 extension of a 31-bit field, capped by \(\mathrm{char}\,F>N_T\) (Hab22 Lemma
@@ -67,7 +67,7 @@ small-field study with a degree-6 extension of a 31-bit field, capped by \(\math
 
 ## 3. Commitment interface (AHIV22 4.7 / libzk 4.2–4.3)
 
-Same code and parameters as Candidate A section 3: \([n=2^{14},k=2^{12}]\) RS over \(F_t\), \(l=3840\),
+Same code and parameters as `backends/gkr/PROTOCOL.md` section 3: \([n=2^{14},k=2^{12}]\) RS over \(F_t\), \(l=3840\),
 \(t=192\) (\(2^{-128}\) reference; minimum 191) or \(121\) (\(2^{-80}\); minimum 120), \(e=(n-k)/2\),
 \(k\ge l+t\), three blinding rows per tableau, leaf \(j\) = HM96 commitment to column \(j\) with \(k=160\)
 (statistical hiding \(2\cdot n\cdot2^{-160}=2^{-145}\) over both tableaux; binding by CRH) — the unsalted
@@ -111,7 +111,7 @@ values), multiplicities \(m_T\) (round 1), helpers (round 2):
 | \(h_v\,(z_T-t_v(\beta_T))=m_T(v)\) | **linear** (\(z_T,t_v\) public) | \(|T|\) |
 | \(\sum_j h_j-\sum_v h_v=0\) | linear | 1 |
 
-**Challenge space and the conditioned bound [derivation, as Candidate A 4.2].** \(z_T\) is uniform over
+**Challenge space and the conditioned bound [derivation, as A-GKR 4.2].** \(z_T\) is uniform over
 \(F_c\setminus\mathrm{Img}_T\), \(\mathrm{Img}_T=\{t_v(\beta_T)\}\) (public, \(\le|T|\) points), by the pre-issued
 redraw slots of step 2. The cleared identity is a nonzero polynomial of degree \(\le d_T=N_T+|T|-1\) when the
 multisets differ (Hab22 Lemma 5), hence \(\Pr[\text{accept}\mid\text{differ}]\le d_T/(|F_c|-|T|)\) over the
@@ -123,13 +123,13 @@ inversion per table (\(3(N_T-1)\) multiplications + 1 inversion, Hab22 §5) plus
 
 ### 4.3 Lookups, mode `gkr` (PH23) **[proposal]**
 
-The fractional sumcheck of Candidate A 4.2 with **committed** query columns: leaf claims become Ligero linear
+The fractional sumcheck of A-GKR 4.2 with **committed** query columns: leaf claims become Ligero linear
 constraints directly (no claim merging), pads for the fractional-GKR transcript are committed in round 1 (their
 number is public), and there is **no second commitment round**. Trades 361M helper coordinates for
 \(\approx3\sum_T n_T(n_T-1)/2+4n_T\) padded messages (\(\approx4\)k \(F_c\) elements) and 1 279 sumcheck rounds
-at \(B=4096\); committed elements drop to 418.5M; sequential depth rises from 3 to 381 (Candidate A 5.4 applies
+at \(B=4096\); committed elements drop to 418.5M; sequential depth rises from 3 to 381 (A-GKR 5.4 applies
 verbatim, without the checker chain). Not the default: it re-introduces the padded-transcript machinery of
-Candidate A.
+A-GKR.
 
 ### 4.4 Every denominator, and why none can abort on witness data
 
@@ -178,7 +178,7 @@ equations, the 5 sums, and the integer-width predicates realised as lookups; qua
 |---|---|---|
 | `rounds.protocol` (challenge slots) | 7 (8 with step 0) | 5 per-table tuples \((z_T^{(1)},z_T^{(2)},\beta_T)\) + step 4 + step 6 |
 | `rounds.sequential_depth` | **3** (4 with step 0) | step 2 (com_2 depends on it) → step 4 (responses depend on it) → step 6 (openings depend on it); the 5 table tuples are one message (independent coins); the redraw needs no trip |
-| `gkr` mode | 381 at \(B=4096\) (156 at \(B=1\), 234 at \(B=64\)) | Candidate A 5.4 without the checker chain: \(1+378+2\) (`T_range16`, \(n_T=27\)) |
+| `gkr` mode | 381 at \(B=4096\) (156 at \(B=1\), 234 at \(B=64\)) | A-GKR 5.4 without the checker chain: \(1+378+2\) (`T_range16`, \(n_T=27\)) |
 
 All three depth-1 messages are forced: com_2 must follow \(z_T\) (helpers depend on it), the Ligero responses
 must follow \(r\), the openings must follow \(Q\). No known technique removes any of them without changing the
@@ -213,17 +213,17 @@ ever sent; there is no transcript to pad in `helper_columns` mode.
 ### 5.3 Step 0: verifier-coin commitment for malicious-verifier privacy **[proposal]**
 
 An implementation **without** this step is `COMPLETE_HVZK_BACKEND`, never `COMPLETE_ZK_BACKEND`. The
-construction, binding argument, abort rules and simulator are those of Candidate A 5.5 with \(R=7\) slots;
+construction, binding argument, abort rules and simulator are those of A-GKR 5.5 with \(R=7\) slots;
 the differences:
 
-| item | Candidate B |
+| item | B-Ligero |
 |---|---|
 | coins committed (transcript order) | slot 1–5: \((z_T^{(1)},z_T^{(2)},\beta_T)\) per table (HM96 first scheme, \(\ell=3\cdot192\) bits, \(L=4\cdot160+2\ell+4\)); slot 6: \((r,\rho_{add},\rho_q)\) — \(r\) is 203 030 \(F_c\) elements (4.9 MB), committed by the \(O(k)\) variant (commit to \(H(r\|\rho_{add}\|\rho_q)\), open with the vector and \(x_6\)); slot 7: \(Q\) (\(t\cdot14\) bits), \(O(k)\) variant |
 | message order | 0: \(c_1..c_7\) → 1: com_1 → 2: \(x_1..x_5\) (P verifies all, derives \(z_T,\beta_T\)) → 3: com_2 → 4: \(x_6\) with \(r,\rho\) → 5: responses → 6: \(x_7\) with \(Q\) → 7: openings |
 | prover message timing | com_2 only after all 5 openings verified; responses only after \(x_6\) verified; column openings only after \(x_7\) verified |
 | abort rules | P aborts iff an HM96 opening fails, a coin is out of domain, or all \(S\) redraw slots of a table lie in \(\mathrm{Img}_T\) — public data only; no other prover abort exists (4.4: the helper inversion never branches). V aborts on a failed check. No restart within a session |
 | binding suffices because | the verifier's coins for steps 2, 4, 6 are fixed before com_1 up to an \(H\)-collision; a malicious verifier keeps only the choice to stop, so its view is a prefix of an honest-verifier view on pre-fixed coins |
-| simulator | Candidate A 5.5 steps (1)–(5) with the HVZK simulator of AHIV22 Lemma 4.15 for both tableaux (helper rows are simulated as random rows too; the constraints are never checked by the simulator's verifier since the opened columns are uniform); the round-2 commitment com_2 is simulated like com_1 |
+| simulator | A-GKR 5.5 steps (1)–(5) with the HVZK simulator of AHIV22 Lemma 4.15 for both tableaux (helper rows are simulated as random rows too; the constraints are never checked by the simulator's verifier since the opened columns are uniform); the round-2 commitment com_2 is simulated like com_1 |
 | additional depth | +1 (message 0); depth 3 → 4 |
 | additional communication | \(7\cdot(144+100)\) B \(=1.7\) KB (317.72 MB → 317.72 MB) |
 | additional prover work | 7 HM96 opening checks: one hash over the 4.9 MB vector \(r\) and 6 hashes of \(<1.4\) kbit strings — \(<10^{-4}\) of the batch's hashing (26.6 GB) |
@@ -240,7 +240,7 @@ the IRS test keeps its uniform row coefficients \(r\) (no geometric-sequence pro
 
 ## 7. Hash properties assumed, and where
 
-Same table as Candidate A section 7: collision resistance for both Merkle trees and the HM96 commitments
+Same table as `backends/gkr/PROTOCOL.md` section 7: collision resistance for both Merkle trees and the HM96 commitments
 (soundness `commitment_hash` term; binding of step-0 coins); statistical hiding of HM96 leaves from CRH alone
 (the unsalted alternative needs a hiding/PRG assumption on \(H\)); a PRG assumption for GPU-side generation of
 row randomizers, blinding rows and HM96 randomness (ZK only; uniform at the ideal level); the statistically
@@ -285,7 +285,7 @@ The WP2 census moved no term by more than \(2^{\pm0.2}\) (the 16-bit range table
 13 other relation tables disappeared; the powers-combination linear term rose \(2^{1.1}\) to \(2^{-163.7}\) and is
 still far below the Ligero query term); no operating point moved.
 
-### 9.2 Operating points (`first_configuration`; identical to Candidate A because the dominant terms are shared)
+### 9.2 Operating points (`first_configuration`; identical to A-GKR because the dominant terms are shared)
 
 | operating point | first configuration | total, \(B\in\{1,64,4096\}\) | why the smaller extension fails |
 |---|---|---|---|
@@ -302,11 +302,11 @@ as \(t\cdot\mathrm{rows}+O(n)\) while soundness is independent of the row count.
 
 ### 9.3 Sub-batches
 
-As Candidate A 9.3: 16 sub-batches of 256 turn \(2^{-130.2}\) into \(2^{-126.2}\) and miss \(2^{-128}\)
-(`test_sub_batches_are_union_bounded_mechanically`, which uses Candidate B).
+As A-GKR 9.3: 16 sub-batches of 256 turn \(2^{-130.2}\) into \(2^{-126.2}\) and miss \(2^{-128}\)
+(`test_sub_batches_are_union_bounded_mechanically`, which uses B-Ligero).
 
 ### 9.4 Census, \(K=1536\) (`census_estimate_b`; rows marked (est.) are estimates from the cost model of
-Candidate A 9.4)
+A-GKR 9.4)
 
 Per-unit inputs (WP2 census): 1 064 committed slots (est.), 306 helper columns in \(F_c\), 853 linear and 358
 quadratic constraints. Primary \(F_c=F_{p^3}\), \(t=192\); the \(2^{-80}\) diagnostic (\(F_{p^2}\), \(t=121\)) is
@@ -328,7 +328,7 @@ the last row.
 Against the relation-based table (405M at \(B=4096\)): committed elements rose \(1.9\times\) (1 064 + 306·3 per
 unit instead of 512 + 172·3); the A:B ratio is 1:4.3 (1:4.0 before; 1:6.2 against A without committed query
 wires). The field-operation column now favours B by \(\approx2\times\) under A's carry-everything width bound
-(Candidate A 9.4). No verdict is drawn here.
+(A-GKR 9.4). No verdict is drawn here.
 
 ## 10. Unproved obligations (verbatim list for the coordinator)
 
@@ -361,7 +361,7 @@ wires). The field-operation column now favours B by \(\approx2\times\) under A's
   `N_subbatches` and the union bound (9.3); the split point is a measurement question.
 - Helper columns are \(46\%\) of the committed elements; the `gkr` mode removes them at the price of depth 381.
 - The 284 range-chunk lookups per unit (of 306) are the bulk of the helper columns; a checker realisation with
-  fewer, wider range checks, or `Bf16Decode` by table (Candidate A section 11), moves this row first.
+  fewer, wider range checks, or `Bf16Decode` by table (`backends/gkr/PROTOCOL.md` section 11), moves this row first.
   Which of depth and committed bytes binds for the GPU end state is decided by the RTT sweep and the
   measurements, not here.
 - Whether the first complete backend ships as `COMPLETE_HVZK_BACKEND` (no step 0) with 5.3 as the path to
@@ -733,7 +733,7 @@ So with the lookup argument the proof's soundness label is bounded by the challe
 BabyBear\(^4\)** even with 166 FRI queries (the "2^-128 proven" of section 12 referred to the FRI term alone; the
 DEEP/quotient-batching field terms of uni-stark are \(\approx\) constraints \(\cdot\) degree \(/ |F_{ext}|\) and were
 already \(2^{-110}\)-ish at BabyBear\(^4\), which section 12 omitted -- the lookup makes the field term the
-binding one).  \(2^{-128}\) needs BabyBear\(^6\): Candidate B's own PCS (sections 2--4) is not tied to Plonky3 and
+binding one).  \(2^{-128}\) needs BabyBear\(^6\): B-Ligero's own PCS (sections 2--4) is not tied to Plonky3 and
 takes any extension; in the diagnostic prover the honest option is BabyBear\(^5\) at \(2^{-124}\) or, for a full
 \(2^{-128}\), a smaller batch per proof (\(2^{17}\) rows: \(2^{-126.3}\) at degree 5).  The measurement below is
 labelled with the lookup term it actually has.

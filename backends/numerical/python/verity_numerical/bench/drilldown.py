@@ -445,7 +445,7 @@ def _envelope(store: Any, art_id: str, doc: Mapping[str, Any]) -> tuple[Mapping[
 def _overhead(fp: Mapping[str, Any], target: Target, t_total: float) -> float:
     b = fp.get("B") if T._num(fp.get("B")) and fp.get("B") > 0 else T.B
     k = fp.get("K") if T._num(fp.get("K")) and fp.get("K") > 0 else T.K
-    return target.native_peak.flop_per_second / contract.proved_flop_per_second(t_total, b, k)
+    return contract.native_peak_of(target).flop_per_second / contract.proved_flop_per_second(t_total, b, k)
 
 
 def _doc(store: Any, row: Mapping[str, Any]) -> Mapping[str, Any]:

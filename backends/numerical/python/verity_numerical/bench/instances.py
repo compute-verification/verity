@@ -1,7 +1,7 @@
-"""``bench-instances/v1``: the frozen, hash-pinned instance set every Candidate A/B number at K=1536 is measured on.
+"""``bench-instances/v1``: the frozen, hash-pinned input set every A-GKR/B-Ligero number at K=1536 is measured on.
 
 Why: two proof backends are compared at the decision workload (K=1536 ``GemmCoordinate`` dot products, B=4096).  Without
-a shared instance set each would benchmark on its own inputs -- the quiet non-comparability ``contract.py`` exists to
+a shared input set each would benchmark on its own inputs -- the quiet non-comparability ``contract.py`` exists to
 prevent.  This module owns the dataset's byte layout, its loader, the build that regenerates it from the recipe in
 :mod:`verity_numerical.bench.instances_gen`, its verification against the pinned digests in ``manifest.json``, and the
 sensitivity statistic of the negatives.  The relation is not restated here: expected words are ``silicon.tc_dot_chain``
@@ -165,7 +165,7 @@ def manifest_sha256(root: Path = DEFAULT_ROOT) -> str:
 @dataclass
 class VuTier:
     """A VU tier: flat operand arrays (instance-major, ``K`` words each), expected BF16 words, the intermediate accumulators
-    (``STEPS`` FP32 words per instance; positives only) and the index rows."""
+    (``STEPS`` FP32 words per input; positives only) and the index rows."""
 
     tier: str
     n: int

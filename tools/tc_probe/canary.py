@@ -220,8 +220,7 @@ def run_canary(probe: "P.Probe", ins: P.Instruction, plan: CanaryPlan, out: Path
     tiles_fn = tiles_fn or probe.tiles
     pool = None
     if eval_fn is None:
-        descs = [(m.pipeline.name, m.product, m.declared, m.lowering) for m in ins.models]
-        pool = mp.Pool(procs, initializer=P._init, initargs=(descs,))
+        pool = mp.Pool(procs, initializer=P._init, initargs=(P.model_descs(ins),))
         eval_fn = lambda A, Bt, C: P.model_eval(pool, A, Bt, C, procs)  # noqa: E731
     t0 = time.time()
     fams: dict[str, dict] = {}
@@ -231,7 +230,7 @@ def run_canary(probe: "P.Probe", ins: P.Instruction, plan: CanaryPlan, out: Path
             D = tiles_fn(A, Bt, C)
             results = eval_fn(A, Bt, C)
             mism = compare(D, results, model_names)
-            asserted = name not in P.UNASSERTED_FAMILIES
+            asserted = P.family_asserted(ins, name)
             first = []
             any_mism = np.zeros(D.shape, np.bool_)
             for model, err in results:

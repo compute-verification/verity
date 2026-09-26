@@ -1,4 +1,4 @@
-"""The BabyBear export of the WP2 checker for Candidate A (``backends/gkr --features babybear``).
+"""The BabyBear export of the WP2 checker for A-GKR (``backends/gkr --features babybear``).
 
 Same machinery as :mod:`.circuit` (the gadgets run once on symbolic values), but the gadgets are the *embedded*
 ones of :mod:`verity_numerical.redteam.babybear` under the six rules of ``reports/babybear_rules.md`` (``NORM_VBND``,

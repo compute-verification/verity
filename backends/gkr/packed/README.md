@@ -1,6 +1,6 @@
 # backends/gkr/packed: base-field-first ("packed") GKR c-round sumcheck on INT8 tensor cores
 
-Lane `a-packed` (track A).  Candidate A's eq-weighted degree-3 sumcheck over BabyBear with a `F_{p^6}` challenge
+Lane `a-packed` (track A).  A-GKR's eq-weighted degree-3 sumcheck over BabyBear with a `F_{p^6}` challenge
 (`2^-128`), with the first `k` rounds computed from the untouched base-field tables (Bagad-Domb-Thaler 2025/1117)
 and the eq factor never folded (Gruen 2024/108, Dao-Thaler 2024/1210).  Design, cost model, soundness: `DESIGN.md`.
 Labels on every number: `ARITHMETIC_DIAGNOSTIC` / `COMPONENT`, `authentication excluded`, `security.target = -128`,
@@ -92,7 +92,7 @@ per-sumcheck intercept is 2.7-3.3 ms on the A100 vs 1.6-1.7 ms on the H100 (laun
   torch reduce 30.4 / 22.5 ms (r20260922-055336-4080, 0.35% / 0.16% of peak); fused inner products 14.1 / 4.7 ms;
   + Triton reduce/contract and finish 12.6 / 4.5 ms; + one reduction per limb sum 9.2 / 3.7 ms (the table).
 
-## Re-priced Candidate A (`backends/numerical/reports/packed_sumcheck_h100.json`)
+## Re-priced A-GKR (`backends/numerical/reports/packed_sumcheck_h100.json`)
 
 `explore.tensor` design A on the H100 with the `gkr_checker` matmul bucket (5.4e9 MACs/VU at 0.172) and its SIMT
 Hadamard bucket replaced by the measured six-layer sumcheck; every other bucket (logUp GKR, Ligero encoding, row

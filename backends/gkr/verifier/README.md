@@ -1,4 +1,4 @@
-# verity-gkr-verify: the independent verifier for Candidate A's GPU proofs
+# verity-gkr-verify: the independent verifier for A-GKR's GPU proofs
 
 Lane `a-verifier`.  A dependency-free Rust verifier for the proofs of `backends/gkr/gpu` (the a-gpu prover: GKR +
 LogUp + Ligero over BabyBear^6 = F_p[X]/(X^6 - 22) (since a-gpu2; a-gpu used X^6 - 31, whose proofs this verifier no longer accepts), p = 2^31 - 2^27 + 1, SHA-256 Fiat-Shamir).  It shares no code with
