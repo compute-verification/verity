@@ -371,6 +371,9 @@ const CASES: &[(&str, bool, bool)] = &[
     ("eps_forged_tail_words", false, false),
     ("aggregate_forged_with_its_scalar", false, true),
     ("cut_input_differs_from_the_cut_word", false, true),
+    ("ir6_leaf_wiring_swapped", false, false),
+    ("ir6_row_key_changed", false, false),
+    ("ir6_lanes_moved_between_unit_slots", false, false),
 ];
 
 /// Cases that only a cut template has, one that needs a chunk split into several runs, and the ones that need a tail program
@@ -378,10 +381,12 @@ const CASES: &[(&str, bool, bool)] = &[
 const CUT_ONLY: &[&str] = &["row_scalar_forged", "eps_forged_tail_words", "aggregate_forged_with_its_scalar", "cut_input_differs_from_the_cut_word"];
 const RUNS_ONLY: &[&str] = &["chained_run_input_forged"];
 const TAIL_ONLY: &[&str] = &["eps_forged_tail_words", "aggregate_forged_with_its_scalar"];
+/// Load-time layout tampers the sampling statement refuses (red-team-flock-2 IR6: Rust derives the layout's meaning).
+const SAMPLING_ONLY: &[&str] = &["ir6_leaf_wiring_swapped", "ir6_row_key_changed", "ir6_lanes_moved_between_unit_slots"];
 
 fn skipped(st: &FrameStmt, name: &str) -> bool {
     (st.cm.words == 0 && CUT_ONLY.contains(&name)) || (st.lay.nb == st.lay.chunk_nb && RUNS_ONLY.contains(&name))
-        || (st.cm.native && TAIL_ONLY.contains(&name))
+        || (st.cm.native && TAIL_ONLY.contains(&name)) || (!st.cm.native && SAMPLING_ONLY.contains(&name))
 }
 
 /// The verifier's file with instance 0's cut word `flip.0` changed by `flip.1`, then every instance's tail words recomputed by
@@ -407,6 +412,16 @@ fn retail(st: &FrameStmt, tail: &[flock_live::ir_tail::Op], flip: Option<(usize,
 /// A load-time case: pass iff the verifier's checks refuse the altered file.
 fn load_case(st: &FrameStmt, name: &str) -> Option<Value> {
     let t = TABLES.get().unwrap();
+    if SAMPLING_ONLY.contains(&name) {
+        let mut v = load(&arg("--instances", ""));
+        match name {
+            "ir6_leaf_wiring_swapped" => v.lay.wiring.swap(0, 1),
+            "ir6_row_key_changed" => v.key[0] ^= 1,
+            _ => v.blocks[0].1.swap(0, 1),
+        }
+        let r = check_blocks(&v);
+        return Some(json!({"case": name, "expect": "refused at load", "refused": r.is_err(), "pass": r.is_err(), "why": r.err()}));
+    }
     let (v, consistent) = match name {
         "row_scalar_forged" => {
             let mut v = load(&arg("--instances", ""));

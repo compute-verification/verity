@@ -58,6 +58,10 @@ use crate::{
 
 pub const TAG: &[u8] = b"verity/flock-ir-frame/v2";
 pub const TAG_SAMPLING: &[u8] = b"verity/flock-ir-sampling/v1";
+/// `verity.commitments.rowleaf.blake3_row_key(ROLE_X)`: the only row key a sampling file may name (red-team-flock-2 IR6).
+pub const ROW_KEY_X: &[u8; 32] = b"verity/blake3-leaf/v1/x\0\0\0\0\0\0\0\0\0";
+/// A sampling file's public ports: `GumbelTopPTokenSelect_v1`'s top_p, seed, pos, temp, splits as 32-bit words.
+pub const SAMPLING_PUBLIC: [(&str, usize); 5] = [("in1", 1), ("in2", 2), ("in3", 2), ("in4", 1), ("in5", 1)];
 pub const PT_LOCAL: usize = 16;
 pub const PIN: usize = b3::Z_CONST_POS;
 const WORD: usize = 128;
@@ -409,6 +413,9 @@ pub fn check_blocks(inst: &FrameInstances) -> Result<(), String> {
         }
     }
     let runs = |c: usize| lay.blocks_in(c) / lay.nb;
+    if inst.sampling {
+        check_sampling_blocks(inst)?;
+    }
     let mut seen_c = BTreeSet::new();
     let mut seen_u = BTreeSet::new();
     for (b, (chunks, units)) in inst.blocks.iter().enumerate() {
@@ -442,6 +449,44 @@ pub fn check_blocks(inst: &FrameInstances) -> Result<(), String> {
     let want_c: usize = (0..inst.in_ports.len()).map(|p| (0..inst.chunks_of(p)).map(runs).sum::<usize>()).sum::<usize>() * inst.n;
     if seen_c.len() != want_c || seen_u.len() != inst.units {
         return Err("the blocks do not hold every run of every row chunk and every unit".into());
+    }
+    Ok(())
+}
+
+/// Red-team-flock-2 IR6 for a sampling file: the layout's meaning, derived here from the plan's scalars rather than read from the
+/// header. Runs are (instance, chunk, run) in order, `G` per block, one per component; a run's `32 nb` lanes fill its component's
+/// unit slots in order (lane `(1024 c + 64 nb r) / 2 + k`); unit slot `k` reads byte `2 (k mod upc)` of run slot `k / upc`.
+pub fn check_sampling_blocks(inst: &FrameInstances) -> Result<(), String> {
+    let lay = &inst.lay;
+    let upc = lay.units_per_comp;
+    if &inst.key != ROW_KEY_X || inst.public_ports.iter().map(|(n, w)| (n.as_str(), *w)).ne(SAMPLING_PUBLIC) {
+        return Err("IR6: a sampling file's row key is the x-row key and its public ports are top_p, seed, pos, temp, splits".into());
+    }
+    if inst.in_ports.len() != 1 || lay.chunks_per_comp != 1 || upc != 32 * lay.nb || lay.leaf_cols.len() != 1 || lay.ret_words != 0 {
+        return Err("IR6: not a sampling layout (one row port, one run and 32 nb lanes per component, no returned words)".into());
+    }
+    let v = inst.in_ports[0].1;
+    let runs: Vec<(usize, usize)> = (0..inst.chunks_of(0)).flat_map(|c| (0..lay.blocks_in(c) / lay.nb).map(move |r| (c, r))).collect();
+    let comps: Vec<(usize, usize, usize)> = (0..inst.n).flat_map(|i| runs.iter().map(move |&(c, r)| (i, c, r))).collect();
+    if inst.blocks.len() != comps.len().div_ceil(lay.g) {
+        return Err("IR6: the block count is not the plan's".into());
+    }
+    for (b, (chunks, units)) in inst.blocks.iter().enumerate() {
+        for (q, c) in chunks.iter().enumerate() {
+            let want = if q < lay.g { comps.get(b * lay.g + q).map(|&(i, ci, r)| (i, 0, ci, r)) } else { None };
+            if *c != want {
+                return Err(format!("IR6: block {b} run slot {q} is not the plan's"));
+            }
+        }
+        for (u, g) in units.iter().enumerate() {
+            let want = comps.get(b * lay.g + u / upc).map(|&(i, c, r)| i * v + (1024 * c + 64 * lay.nb * r) / 2 + u % upc);
+            if *g != want {
+                return Err(format!("IR6: block {b} unit slot {u} is not the plan's lane"));
+            }
+        }
+    }
+    if lay.wiring.iter().enumerate().any(|(k, w)| w != &vec![(k / upc, 2 * (k % upc))]) {
+        return Err("IR6: a unit's leaf wiring is not its lane's bytes".into());
     }
     Ok(())
 }
@@ -656,6 +701,12 @@ impl FrameStmt {
         let cm = cut_map_of(&net, &inst.header, inst.units)?;
         if cm.native != inst.sampling || inst.sampling && cm.words == 0 {
             return Err("native cut words belong to verity/flock-ir-sampling/v1 files, and such a file has them".into());
+        }
+        if inst.sampling {
+            let tok = cm.unit_out.last().and_then(|p| p.get(2)).map(|p| p.1);
+            if inst.out_cut.len() != 1 || inst.out_cut[0].0 != "out.sampled_token_ids" || Some(inst.out_cut[0].1) != tok || cm.unit_out.len() != inst.upi {
+                return Err("IR6: the token is not the last lane's best_i (its third cut output)".into());
+            }
         }
         let groups = 1 + (cm.words > 0) as usize;
         let leaf_cols: Vec<usize> = {
