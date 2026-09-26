@@ -782,7 +782,7 @@ fn replay(st: &Arc<FrameStmt>, inst: &Arc<FrameInstances>, rec: &Value, proofs: 
     if rec["link_sha256"].as_str() != Some(hex(&sha256(&lb)).as_str()) {
         return Err("L1: the recorded link_sha256 is not root_F || root_B || points || y".into());
     }
-    Ok(json!({"accepted": true, "statement": STATEMENT, "unit": inst.unit, "instances": inst.n, "sigma": hex(&sig),
+    Ok(json!({"accepted": true, "statement": statement(), "unit": inst.unit, "instances": inst.n, "sigma": hex(&sig),
               "netlist_sha256": hex(&st.net.sha256), "statement_digest": hex(&st.digest), "public_sha256": hex(&inst.public_sha256),
               "root_b_sha256": root_b, "link_sha256": rec["link_sha256"], "proof_sha256": want_proofs, "verify_s": t.elapsed().as_secs_f64()}))
 }
