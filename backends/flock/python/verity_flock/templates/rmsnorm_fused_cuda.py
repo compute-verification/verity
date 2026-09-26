@@ -1,6 +1,43 @@
-"""C-Flock lowering of ``rmsnorm-fused-cuda`` (RMSNormFusedCuda_v2): not written yet."""
+"""C-Flock lowering of ``rmsnorm-fused-cuda`` (RMSNormFusedCuda_v2): the IR graph cut at its reduction boundary
+(``verity_flock.ir_lower.reduction_cut``) into identical units, one per CUDA warp of the kernel's cub BlockReduce: the warp's
+residual adds, squares and shfl-down tree (its aggregate is a cut word) and the epilogue of its elements, which reads the row
+scalar ``s`` (a cut word). The tail, the sequential sum of the warp aggregates, ``/ N``, ``+ eps`` and ``RsqrtApprox``,
+reads no input word: the verifier evaluates it with the IR evaluator and supplies the cut words as public unit words.
+
+A warp's input leaves (:func:`width`): 32 threads, each reading x and res at every position it owns (threads hold elements
+t, t + T, ... with T = min(N, 1024) threads); when T does not divide N the warps differ and there is no single unit. The
+unit netlist is pinned per N by :data:`PINS`."""
 TEMPLATE = "rmsnorm-fused-cuda"
+UNIT = "rmsnorm-fused-cuda/bf16/warp"
+PINS = {2048: "a1baf2bae370234548f1259f2efb3f7b8374dd141187c9debad54e19e588f538"}
+
+
+def width(n: int) -> int | None:
+    threads = min(n, 1024)
+    return None if n % threads or threads % 32 else 2 * 32 * (n // threads)
+
+
+def definition(subcircuit):
+    return subcircuit.definition()
+
+
+def lowering(subcircuit):
+    from verity_flock import ir_lower
+
+    n = int(subcircuit.params["N"])
+    return ir_lower.lowering(definition(subcircuit), f"{UNIT}/n{n}", ir_lower.reduction_cut(width(n)))
 
 
 def supports(subcircuit, scheme):
-    return "C-Flock has no lowering of RMSNormFusedCuda_v2 yet (lane C-Flock generic IR lowering: per-op gadgets, then elementwise ops)"
+    n = int(subcircuit.params["N"])
+    if width(n) is None:
+        return f"C-Flock lowers RMSNormFusedCuda_v2 when its warps are identical units (min(N, 1024) threads dividing N), not N = {n}"
+    return (f"C-Flock lowers {subcircuit.id} exactly (verity_flock.templates.rmsnorm_fused_cuda: unit {UNIT}, the row tail "
+            f"evaluated by the verifier) and proves it with public unit words (verity/flock-ir-block/v1); binding its rows under "
+            f"{scheme} is not wired yet")
+
+
+def stage(input_set, lo, hi, out_dir):
+    from verity_flock import ir_lower
+
+    return ir_lower.stage(lowering(input_set.subcircuit), input_set, lo, hi, out_dir)

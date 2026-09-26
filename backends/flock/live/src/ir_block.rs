@@ -176,8 +176,8 @@ impl IrInstances {
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Region {
-    In(usize),
-    Out(usize),
+    In,
+    Out,
 }
 
 /// One public region: the in-block bits it fixes (`fixed` over `mask`) and its free in-block bits, LSB first.
@@ -272,22 +272,19 @@ impl IrStmt {
                 d.push((i as u32, pin as u32));
             }
         }
-        let mut regions = Vec::new();
+        // one region for all input words, one for all output words: each an aligned power-of-two subcube of every unit
         let unit_bits: Vec<usize> = (unit_log..k_log).collect();
-        let mut shape = |region: Region, word: usize| {
-            let free: Vec<usize> = (0..7).chain(unit_bits.iter().copied()).collect();
-            let fixed = (word as u32) << 7;
+        let shape = |region: Region, words: usize, col: usize| {
+            assert!(words.is_power_of_two() && col % words == 0, "unit IO words must be an aligned power of two");
+            let wb = words.trailing_zeros() as usize;
+            let free: Vec<usize> = (0..7 + wb).chain(unit_bits.iter().copied()).collect();
+            let fixed = (col as u32) << 7;
             let mask = ((1u32 << k_log) - 1) & !free.iter().fold(0u32, |m, &b| m | (1 << b));
             assert_eq!(fixed & !mask, 0);
-            assert!(free.len() <= PT_LOCAL);
-            regions.push(RegionShape { region, free, mask, fixed });
+            assert!(free.len() <= PT_LOCAL, "a region of {} free bits", free.len());
+            RegionShape { region, free, mask, fixed }
         };
-        for j in 0..net.in_words {
-            shape(Region::In(j), j);
-        }
-        for (j, &c) in net.out_cols.iter().enumerate() {
-            shape(Region::Out(j), c);
-        }
+        let regions = vec![shape(Region::In, net.in_words, 0), shape(Region::Out, net.out_cols.len(), net.out_cols[0])];
         let dummy_out = net.outputs(&vec![F128::ZERO; net.in_words]);
         let mut h = Sha256::new();
         h.update(TAG);
@@ -379,10 +376,12 @@ impl IrStmt {
         move |g| if g < self.units_real { inst.input(g).to_vec() } else { vec![F128::ZERO; self.net.in_words] }
     }
 
-    fn word_of(&self, reg: Region, inst: &IrInstances, g: usize) -> F128 {
-        match reg {
-            Region::In(j) => if g < self.units_real { inst.input(g)[j] } else { F128::ZERO },
-            Region::Out(j) => if g < self.units_real { inst.output(g)[j] } else { self.dummy_out[j] },
+    fn words_of<'a>(&'a self, reg: Region, inst: &'a IrInstances, g: usize, zero: &'a [F128]) -> &'a [F128] {
+        match (reg, g < self.units_real) {
+            (Region::In, true) => inst.input(g),
+            (Region::In, false) => zero,
+            (Region::Out, true) => inst.output(g),
+            (Region::Out, false) => &self.dummy_out,
         }
     }
 
@@ -402,7 +401,7 @@ impl IrStmt {
     }
 
     /// The multilinear value of the region at `r`: sum over blocks of eq(block) times the region's bits of that block, the
-    /// free assignment `f = t + 128 u` being bit t of unit u's word.
+    /// free assignment `f = t + 128 (w + W u)` being bit t of word w of unit u (W words per unit).
     pub fn region_value(&self, reg: &RegionShape, r: &[F128], inst: &IrInstances) -> F128 {
         let nf = reg.free.len();
         let wt = eq_skip_weights(&r[..nf]);
@@ -416,15 +415,18 @@ impl IrStmt {
                 tb[x] = tb[rest] + wt[bitpos];
             }
         }
+        let zero = vec![F128::ZERO; self.net.in_words];
         (0..self.blocks())
             .into_par_iter()
             .map(|blk| {
                 let mut acc = F128::ZERO;
+                let mut k = 0;
                 for u in 0..self.units {
-                    let w = self.word_of(reg.region, inst, blk * self.units + u);
-                    let bytes = [w.lo.to_le_bytes(), w.hi.to_le_bytes()].concat();
-                    for (k, &x) in bytes.iter().enumerate() {
-                        acc += t[16 * u + k][x as usize];
+                    for w in self.words_of(reg.region, inst, blk * self.units + u, &zero) {
+                        for x in [w.lo.to_le_bytes(), w.hi.to_le_bytes()].concat() {
+                            acc += t[k][x as usize];
+                            k += 1;
+                        }
                     }
                 }
                 eb[blk] * acc

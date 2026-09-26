@@ -2,6 +2,7 @@
 lowered templates against the IR evaluator on captured #101 slices and synthetic sets, the pins, and the negatives."""
 from __future__ import annotations
 
+import os
 import random
 from pathlib import Path
 
@@ -175,7 +176,7 @@ def test_lowering_is_the_pinned_one(template):
 
 
 def test_supports_says_what_is_missing():
-    for template, params in LOWERED.items():
+    for template, params in {**LOWERED, "rmsnorm-fused-cuda": {"N": 2048, "EPS": 1e-5}, "rmsnorm-triton": {"N": 2048, "EPS": 1e-5}}.items():
         why = REG.supports(TM.subcircuit(template, **params), "frame-v3/blake3-keyed")
         assert "C-Flock lowers" in why and "not wired yet" in why
 
@@ -248,6 +249,66 @@ def test_a_wrong_table_entry_is_caught(monkeypatch):
 
 def test_a_reduction_is_one_component():
     assert IL.units(TM.subcircuit("rmsnorm-fused-cuda", N=64, EPS=1e-5).definition()).n == 1
+
+
+# --- RMSNorm: warps as units, the row tail native ---------------------------------------------------------------------------
+
+SLOW = pytest.mark.skipif(not os.environ.get("FLOCK_IR_SLOW"), reason="builds a 2^19/2^21-row unit: set FLOCK_IR_SLOW=1")
+RMS = {"rmsnorm-fused-cuda": "rmsnormfusedcuda-v2-n2048-00e4e4aa", "rmsnorm-triton": "rmsnormtriton-v1-n2048-00e4e4aa"}
+
+
+def _tail(template, n):
+    from collections import Counter
+
+    sub = TM.subcircuit(template, N=n, EPS=1e-5)
+    mod = REG.module(template)
+    U = IL.units(sub.definition(), IL.reduction_cut(mod.width(n)))
+    return U, Counter(g.prim.id for g in U.tail if not g.prim.id.startswith("Const"))
+
+
+def test_rmsnorm_units_are_warps_with_a_native_tail():
+    U, tail = _tail("rmsnorm-fused-cuda", 2048)
+    assert U.n == 32 and len(U.cut) == 33
+    assert tail == {"F32Add_v1": 32, "F32Div_v1": 1, "RsqrtApprox_v1": 1}
+    assert U.in_src[0][-1] == ("cut", 32) and U.out_src[0][-1] == ("cut", 0)
+    U, tail = _tail("rmsnorm-triton", 2048)
+    assert U.n == 8 and len(U.cut) == 9
+    assert tail == {"F32Add_v1": 8, "F32Fma_v1": 1, "MufuSqrtFtz_v1": 1, "DivFullRcp_v1": 2, "DivFullScaleA_v1": 1, "F32Mul_v1": 1}
+
+
+def test_rmsnorm_widths_refuse_unequal_warps():
+    fused, triton = REG.module("rmsnorm-fused-cuda"), REG.module("rmsnorm-triton")
+    assert fused.width(2048) == 128 and fused.width(576) == 64 and fused.width(1536) is None
+    assert triton.width(2048) == 256 and triton.width(1536) is None
+    assert "not N = 1536" in REG.supports(TM.subcircuit("rmsnorm-fused-cuda", N=1536, EPS=1e-5), "frame-v3/blake3-keyed")
+
+
+def test_rmsnorm_fused_small_row_against_the_ir(tmp_path):
+    """N = 64: two warps of 32 one-element threads; spine synthetic rows, outputs and warp aggregates both compared."""
+    sub = TM.subcircuit("rmsnorm-fused-cuda", N=64, EPS=1e-5)
+    s = InputSet.open(generate(sub, 6, 20260926, tmp_path)["path"])
+    assert REG.module("rmsnorm-fused-cuda").lowering(sub).units.n == 2
+    assert _check_set(s) == 0
+
+
+def test_a_wrong_row_scalar_changes_the_outputs(tmp_path):
+    sub = TM.subcircuit("rmsnorm-fused-cuda", N=64, EPS=1e-5)
+    s = InputSet.open(generate(sub, 2, 7, tmp_path)["path"])
+    low = REG.module("rmsnorm-fused-cuda").lowering(sub)
+    fin = IL.flat_ports(s, sub.inputs, 0, s.n)
+    cuts = IL.cut_words(low, fin)
+    good, _, _ = low.evaluate(fin, cuts)
+    cuts[:, -1] ^= 1 << 12
+    bad, _, _ = low.evaluate(fin, cuts)
+    assert (good != bad).any(axis=1).all()
+
+
+@SLOW
+@pytest.mark.parametrize("template", sorted(RMS))
+def test_rmsnorm_captured_slices_and_pins(template):
+    s = InputSet.open(SLICES / RMS[template])
+    assert _check_set(s) == 0
+    assert REG.module(template).lowering(s.subcircuit).sha256 == REG.module(template).PINS[2048]
 
 
 def test_units_refuse_components_of_different_shapes():

@@ -20,6 +20,7 @@ from typing import Callable, Sequence
 import numpy as np
 
 from . import fp
+from .fp import ceil_pow2
 from .gf2 import Circuit, L, const_bits
 
 FORMAT = "flock-ir-unit/v1"
@@ -207,6 +208,37 @@ def live_gates(call) -> list:
     return [g for g in call if g.index in live]
 
 
+def reduction_cut(width: int) -> Callable:
+    """A cut for a row template with one reduction: the row scalar (the live gate read by the most gates) and, in its cone,
+    every gate whose input-leaf cone has at most ``width`` leaves while a consumer in the cone has more (the reduction's
+    boundary words, e.g. one CUDA warp's aggregate)."""
+    def cut(gates, args, _rets):
+        by = {g.index: g for g in gates}
+        consumers: dict[int, list[int]] = {}
+        for g in gates:
+            for o in g.operands:
+                consumers.setdefault(o, []).append(g.index)
+        scalar = max(by, key=lambda i: (len(consumers.get(i, ())), -i))
+        leaf_bit = {a: 1 << i for i, a in enumerate(args)}
+        cone_leaves: dict[int, int] = {}
+        for g in gates:
+            m = 0
+            for o in g.operands:
+                m |= leaf_bit.get(o, 0) | cone_leaves.get(o, 0)
+            cone_leaves[g.index] = m
+        cone: set[int] = set()
+        stack = [scalar]
+        while stack:
+            v = stack.pop()
+            if v in cone or v not in by:
+                continue
+            cone.add(v)
+            stack.extend(by[v].operands)
+        size = {g: cone_leaves[g].bit_count() for g in cone}
+        return {scalar} | {g for g in cone if 0 < size[g] <= width and any(c in cone and size[c] > width for c in consumers.get(g, ()))}
+    return cut
+
+
 def units(target, cut: Callable | None = None) -> Units:
     """Split ``target``'s one-call Program (its live gates) into the connected components of its gate graph, input leaves
     included and edges out of cut gates removed (``cut(gates, args, returns)`` returns the cut gate indices; default none).
@@ -310,10 +342,11 @@ class Layout:
 
 
 def layout(C: Circuit, in_names: Sequence[str], out_names: Sequence[str]) -> Layout:
-    """``flock-ir-unit/v1``: the input ports' bits first, consecutive, in 128-bit words whose unused bits are forced zero;
-    the live ANDs in creation order; one row ``(L + z_j) * 1 = z_j`` per assertion; then the output ports' bits as copy rows,
-    consecutive, in 128-bit words whose unused rows are forced zero; the constant-one column last. A forced-zero row has
-    empty A and B."""
+    """``flock-ir-unit/v1``: the input ports' bits first, consecutive, in a power-of-two number of 128-bit words whose unused
+    bits are forced zero; the live ANDs in creation order; one row ``(L + z_j) * 1 = z_j`` per assertion; then the output
+    ports' bits as copy rows, consecutive, in a power-of-two number of words aligned to that size, unused rows forced zero;
+    the constant-one column last. A forced-zero row has empty A and B. So all input words of a unit are one aligned
+    subcube of its columns, and all output words another (one region claim each)."""
     live = C.live()
     assert all(C.kind[v] in ("in", "and") for v in live), "hints are not laid out yet"
     ins = [w for nm in in_names for w in C.inputs[nm]]
@@ -330,9 +363,9 @@ def layout(C: Circuit, in_names: Sequence[str], out_names: Sequence[str]) -> Lay
         rows_a.append([])
         rows_b.append([])
 
-    while len(rows_a) % WORD:
+    in_words = ceil_pow2(max(1, -(-len(rows_a) // WORD)))
+    while len(rows_a) < in_words * WORD:
         zero()
-    in_words = len(rows_a) // WORD
     ands = [v for v in range(len(C.kind)) if v in live and C.kind[v] == "and"]
     for v in ands:
         col[v] = len(rows_a)
@@ -352,17 +385,17 @@ def layout(C: Circuit, in_names: Sequence[str], out_names: Sequence[str]) -> Lay
         j = len(rows_a)
         rows_a.append(form(Lf) + [j])
         rows_b.append(["C"])
-    while len(rows_a) % WORD:
+    out_bits = [len(C.outputs[nm]) for nm in out_names]
+    out_words = ceil_pow2(max(1, -(-sum(out_bits) // WORD)))
+    while len(rows_a) % (WORD * out_words):
         zero()
     out_col = len(rows_a) // WORD
-    out_bits = [len(C.outputs[nm]) for nm in out_names]
     for nm in out_names:
         for w in C.outputs[nm]:
             rows_a.append(form(w))
             rows_b.append(["C"])
-    while len(rows_a) % WORD:
+    while len(rows_a) % (WORD * out_words):
         zero()
-    out_words = len(rows_a) // WORD - out_col
     const = len(rows_a)
     rows_a.append([const])
     rows_b.append([const])
