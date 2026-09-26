@@ -335,14 +335,15 @@ class _Job:
         self.stage += 1
 
 
-def prove_many(starters, device, depth: int = 2, timings_key: str = "total") -> tuple[list, float]:
+def prove_many(starters, device, depth: int = 2, timings_key: str = "total", on_done=None) -> tuple[list, float]:
     """Run ``len(starters)`` stage generators with at most ``depth`` in flight, each on its own slot (stream + pinned
     buffers), interleaving them: a job advances when its waitable is ready; when none is, the scheduler blocks on the
     oldest.  ``starters[i](slot)`` must return the generator of sub-batch i (it is called when the job STARTS, so
     per-sub-batch randomness -- the verifier's coins, the mask keys -- is drawn in sub-batch order, as sequentially).
     Returns ``(values, wall_seconds)``; each value's ``timings`` (when it has one) is rescaled so that the per-value
     ``timings_key`` entries sum to the wall: the phases become proportional shares of the overlapped wall (the
-    un-rescaled event-measured phases are kept under ``timings["measured_<phase>"]``)."""
+    un-rescaled event-measured phases are kept under ``timings["measured_<phase>"]``).  ``on_done(i, value)`` runs on this
+    thread the moment job i finishes (a live runner streams its proof from there while the next jobs run)."""
     import sys
     depth = max(1, int(depth))
     n = len(starters)
@@ -386,6 +387,8 @@ def prove_many(starters, device, depth: int = 2, timings_key: str = "total") -> 
             nxt += 1
             if job.done:
                 results[job.index] = job.value
+                if on_done is not None:
+                    on_done(job.index, job.value)
                 free_slots.append(slot)
             else:
                 active.append(job)
@@ -416,6 +419,8 @@ def prove_many(starters, device, depth: int = 2, timings_key: str = "total") -> 
             stage_busy[job.stage - 1] = stage_busy.get(job.stage - 1, 0.0) + dt
             if job.done:
                 results[job.index] = job.value
+                if on_done is not None:
+                    on_done(job.index, job.value)
                 active.remove(job)
                 free_slots.append(job.slot)
                 free_slots.sort(key=lambda s: s.index)

@@ -462,7 +462,8 @@ class RelationChainRunner:
                                          mutate=mutate, chain=(lay, bd["ypub_d"]), words={"a": bd["a"], "b": bd["b"], "y16": bd["ypub"]},
                                          coins=coins, rel=self.hooks, hints_fn=hints_fn, slot=slot)
 
-    def prove_vus_many(self, batches: list[list[tuple]], coins_factory, depth: int = 2, min_l: int = 256, vu_ids_list=None):
+    def prove_vus_many(self, batches: list[list[tuple]], coins_factory, depth: int = 2, min_l: int = 256, vu_ids_list=None,
+                       on_done=None):
         """``len(batches)`` sub-batches proved with up to ``depth`` in flight on their own CUDA streams (``pipeline.prove_many``):
         the host work of one sub-batch (challenge expansion, transcript copies, launch overhead) hides under the device work
         of the next.  ``coins_factory(i)`` is called per sub-batch when it starts, in order (the honest verifier's step 0);
@@ -486,7 +487,7 @@ class RelationChainRunner:
                 return self._prove_stages(bundles[i], c, check=False, mutate=None, slot=slot)
             return start
 
-        proofs, wall = prove_many([starter(i) for i in range(len(batches))], self.device, depth=depth)
+        proofs, wall = prove_many([starter(i) for i in range(len(batches))], self.device, depth=depth, on_done=on_done)
         return [(coins_of[i], pf, (bd["a"], bd["b"], bd["ypub"]), bd["lay"]) for i, (pf, bd) in enumerate(zip(proofs, bundles))], wall
 
     def verify_vus(self, proof, pubs, lay: Layout, coins=None):
@@ -729,7 +730,7 @@ class HashedRelationRunner(RelationChainRunner):
             sibs_out.append(sibs)
         return proof
 
-    def _pipelined(self, bundles: list, stage, coins_factory, depth: int, live_statement=None):
+    def _pipelined(self, bundles: list, stage, coins_factory, depth: int, live_statement=None, on_done=None):
         """``prove_many`` over ``stage(bundle, coins, slot, sibs_out)`` generators.  Local coins, or -- when the runner
         passes ``live_statement(bundle, coins)`` (the statement, multiproofs included, handed to the live source before
         the root) -- a live verifier's coins; without it a live source is refused."""
@@ -748,10 +749,11 @@ class HashedRelationRunner(RelationChainRunner):
                 return stage(bundles[i], c, slot, sibs_of[i])
             return start
 
-        proofs, wall = prove_many([starter(i) for i in range(len(bundles))], self.device, depth=depth)
+        proofs, wall = prove_many([starter(i) for i in range(len(bundles))], self.device, depth=depth, on_done=on_done)
         return proofs, [s[0] for s in sibs_of], coins_of, wall
 
-    def prove_vus_many(self, batches: list[list[tuple]], coins_factory, depth: int = 2, min_l: int = 256, vu_ids_list=None):
+    def prove_vus_many(self, batches: list[list[tuple]], coins_factory, depth: int = 2, min_l: int = 256, vu_ids_list=None,
+                       on_done=None):
         """:meth:`RelationChainRunner.prove_vus_many` for the hashed statement: ``vu_ids_list[i]`` the committed-set VU
         indices of ``batches[i]`` (default: consecutive from 0).  Returns ``[(coins, proof, pubs, lay)]`` and the wall."""
         if vu_ids_list is None:
@@ -770,7 +772,7 @@ class HashedRelationRunner(RelationChainRunner):
 
         proofs, sibs, coins_of, wall = self._pipelined(
             bundles, lambda bd, c, slot, so: self._prove_stages_hashed(bd, c, slot, so), coins_factory, depth,
-            live_statement=live_statement)
+            live_statement=live_statement, on_done=on_done)
         return [(coins_of[i], pf, (bd["table"], bd["idx"], bd["ypub"], bd["auth"], sibs[i]), bd["lay"])
                 for i, (pf, bd) in enumerate(zip(proofs, bundles))], wall
 
@@ -2261,8 +2263,10 @@ def bench_vu_rel(args, rel: Relation) -> int:
             # sent on the data channel after the pass.
             local_factory = lambda i: (protocol_mod.Coins.sample() if interactive else None)  # noqa: E731
             factory = live.pipeline_factory(local_factory) if live is not None else local_factory
+            # with a live verifier each proof goes out on the data connections as soon as its sub-batch is done
+            stream = {"on_done": live.stream} if live is not None and not shared else {}
             many, _wall = R.prove_vus_many([data[lo:hi] for lo, hi in subs], factory, depth=pipeline_depth, min_l=l,
-                                           vu_ids_list=[range(lo, hi) for lo, hi in subs])
+                                           vu_ids_list=[range(lo, hi) for lo, hi in subs], **stream)
             for si, ((lo, hi), (V, proof, pubs, lay_i)) in enumerate(zip(subs, many)):
                 if live is not None:
                     V = live.proved(si, proof, V)            # PROOF si on the data channel (async); coins -> plain Coins

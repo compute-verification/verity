@@ -120,6 +120,9 @@ def finish(sweep_dir: Path, probe: dict[str, Any], loopback: dict[str, Any] | No
                       "its pass (live.transfer_tail_seconds: proofs still in flight when the prover finished); net.bytes_* are that "
                       "rep's session's" if isinstance(tail, (int, float)) else
                       "net.wait_seconds = the timed rep's blocking on the verifier (no transfer-tail record in this run)"),
+        "sender": (f"each proof streamed as its sub-batch finishes (pipeline.prove_many on_done), framed from the proof's own "
+                   f"arrays (serialize.proof_buffers), on {rep.get('data_connections')} parallel data connections"
+                   if rep.get("streamed") else "proofs queued after the pass on one data connection (live.py before the sender fix)"),
         "verifier_operator": operator,
         "probe": {k: probe.get(k) for k in ("ping_ms_median", "ping_ms_min", "connect_ms", "rtt_ms", "mbps_median", "tcp_cc",
                                              "prover_dc", "verifier_dc")},
