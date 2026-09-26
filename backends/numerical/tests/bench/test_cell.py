@@ -283,6 +283,25 @@ def test_register_refuses_a_result_off_protocol(tmp_path):
     assert res["refused"] and any("runs 2" in x for x in res["problems"])
 
 
+def test_register_refuses_a_result_without_run_files(tmp_path, monkeypatch):
+    """agkr-real-k's L40S K=8192 cell (13:02Z) was put the moment its run ended, before the machine published the attempt:
+    no run_files ref, so the views reject it (no proof files)."""
+    p, v = _real_runs(tmp_path)
+    monkeypatch.setattr(C, "run_files", lambda run_id, wait_s=0.0: None)
+    res = C.register(_cell(), str(p), str(v), tmp_path / "work")
+    assert res["refused"] and "rc" not in res and any("no run files" in x for x in res["problems"])
+    assert not any(a.startswith("run_files=") for a in res["put"])
+
+
+def test_run_files_waits_for_the_attempt(monkeypatch):
+    shows = iter([(0, {"outputs": {"run_files": None}}), (1, {}), (0, {"outputs": {"run_files": "art:f"}})])
+    monkeypatch.setattr(C.subprocess, "run", lambda *a, **k: (lambda rc, d: type("R", (), {"returncode": rc, "stdout": json.dumps(d)}))(*next(shows)))
+    monkeypatch.setattr(C.time, "sleep", lambda s: None)
+    assert C.run_files("r1", wait_s=60) == "art:f"
+    monkeypatch.setattr(C.subprocess, "run", lambda *a, **k: type("R", (), {"returncode": 0, "stdout": "{}"}))
+    assert C.run_files("r1") is None
+
+
 def test_cli(tmp_path, capsys):
     out = tmp_path / "cell.json"
     assert C.main(["plan", "--backend", "C-interactive", "--statement", BF16[0], "--input-set", BF16[1], "--prover", "vy-p",
