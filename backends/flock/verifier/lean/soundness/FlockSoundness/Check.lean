@@ -18,6 +18,8 @@ of the theorems that use them, never `axiom` declarations, so they cannot appear
 #print axioms FlockSoundness.Game.value_bind_le
 #print axioms FlockSoundness.Game.prCoin_exists_le
 #print axioms FlockSoundness.Game.value_interleave_le
+#print axioms FlockSoundness.Game.prCoin_eval_eq_eval_le
+#print axioms FlockSoundness.Game.prCoin_mvEval_eq_zero_le
 -- the numbers
 #print axioms FlockSoundness.Accounting.tableError_le_of_le_33
 #print axioms FlockSoundness.Accounting.tableError_le_of_34_35
