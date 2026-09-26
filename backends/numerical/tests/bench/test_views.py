@@ -1444,3 +1444,11 @@ def test_the_renderers_validation_path_imports_no_numpy() -> None:
             "assert contract.non_gemm_subcircuit({'subcircuit': 'rope-head/d64/neox-bf16'}) == 'rope-head/d64/neox-bf16'\n")
     r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
     assert r.returncode == 0, r.stderr[-800:]
+
+
+def test_a_result_naming_an_unknown_subcircuit_is_rejected_not_a_crash(store: LocalStore) -> None:
+    res = result(candidate="SP1", profile=None, subcircuit="Gemm_v1", instances=None)         # a VU family name, not a census id
+    art = put(store, res)
+    views = V.build(store)
+    assert codes(views, art) == ["X"] and "not a census subcircuit" in next(r for r in views.rejected if r["artifact"] == art)["codes"][0][1]
+    V.render_entities(views, rendered_at="2026-09-26T08:40:00Z", commit="abc")

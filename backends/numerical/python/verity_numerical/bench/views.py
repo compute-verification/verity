@@ -1211,6 +1211,12 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
         if not rules.legacy and str(_latest(labels, BELOW_BAR)).lower() == "true":     # written as a bool or, off-vocabulary, "true"
             V.below_bar.append(below_bar_entry(art, meta, labels, cand))
             continue
+        named = stamped_subcircuit(meta)
+        if not rules.legacy and named and not is_gemm(named) and named not in census.SUBCIRCUITS:
+            V.rejected.append({"artifact": art, "family": cand.id, "configuration": None, "line": None, "attempt": rid,
+                               "codes": [("X", f"subcircuit {named!r} is not a census subcircuit (a bound template id such as "
+                                               f"rope-head/d64/neox-bf16)")]})
+            continue
         target = TARGETS.get(fp.get("profile")) if isinstance(fp.get("profile"), str) else None
         if target is None and not rules.legacy and not is_gemm(stamped_subcircuit(meta)):
             target = hardware_target(meta, stamped_subcircuit(meta))
