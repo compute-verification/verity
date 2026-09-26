@@ -920,6 +920,7 @@ class Views:
     lines: list[dict[str, Any]] = field(default_factory=list)
     cells: list[ViewCell] = field(default_factory=list)
     rejected: list[dict[str, Any]] = field(default_factory=list)
+    below_bar: list[dict[str, Any]] = field(default_factory=list)  #: verified results labelled below_bar=true (:func:`below_bar_entry`)
     not_families: dict[str, list[str]] = field(default_factory=dict)
     configurations: tuple[Configuration, ...] = CONFIGURATIONS
     unreadable: list[str] = field(default_factory=list)   #: artifacts the views could not read here (payload not local, ...)
@@ -957,6 +958,33 @@ def _results(store: Any, rules: Rules) -> list[tuple[str, Mapping[str, Any]]]:
     return out
 
 
+#: The label that sends a verified result below the tables' 2^-128 bar to its own drill-down (never a Table 2 cell, never dropped).
+BELOW_BAR = "below_bar"
+
+
+def _latest(labels: Sequence[Any], key: str) -> Any:
+    found = [lab for lab in T._labels(labels) if lab.key == key]
+    return found[-1].value if found else None
+
+
+def below_bar_entry(art: str, meta: Mapping[str, Any], labels: Sequence[Any], cand: Any) -> dict[str, Any]:
+    """A below-bar result as the drill-down shows it: what it proves (its IR Definition and gate family), on which input set and
+    GPU, its own soundness per proof mode (core, compressed), its proving seconds per instance, proof bytes, and who verified it."""
+    fp = meta.get("workload_fingerprint") if isinstance(meta.get("workload_fingerprint"), Mapping) else {}
+    m = T._measurements(meta)
+    num = lambda k: float(m[k]) if _num(m.get(k)) else None  # noqa: E731
+    verified = [lab for lab in T._labels(labels) if lab.key == "verified"]
+    inst = fp.get("instances") if isinstance(fp.get("instances"), Mapping) else {}
+    return {"artifact": art, "backend_family": _fam(cand.id), "definition": _get(fp, "definition", "id"), "gate_family": fp.get("family"),
+            "B": fp.get("B"), "input_set": inst.get("set"), "input_set_art": inst.get("set_art"), "prover_gpu": _get(fp, "hardware", "gpu", "name"),
+            "proof_class": fp.get("proof_class"),
+            "modes": {mode: {"soundness_bits": num(f"{mode}.soundness_bits"), "prove_seconds": num(f"{mode}.prove_seconds"),
+                             "seconds_per_instance": num(f"{mode}.seconds_per_instance"), "proof_bytes": num(f"{mode}.proof_bytes"),
+                             "verify_seconds": num(f"{mode}.host_verify_seconds")}
+                      for mode in (fp.get("modes") or ["core"])},
+            "bar_bits": 128, "verified": verified[-1].value if verified else None, "verified_by": verified[-1].by if verified else None}
+
+
 def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuration] = CONFIGURATIONS) -> Views:
     """Read the store, apply :func:`reject_codes` under ``rules`` and assemble Tables 1-3 (rendering is separate)."""
 
@@ -973,13 +1001,17 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
             V.not_families.setdefault(backend if isinstance(backend, str) else "(no software.backend.name)", []).append(art)
             continue
         rid, attempt = T._attempt_of(store, art)
+        labels = list(store.labels(art))
+        if not rules.legacy and _latest(labels, BELOW_BAR) is True:
+            V.below_bar.append(below_bar_entry(art, meta, labels, cand))
+            continue
         target = TARGETS.get(fp.get("profile")) if isinstance(fp.get("profile"), str) else None
         config = configuration_of(meta, cfgs)
         if target is None:
             V.rejected.append({"artifact": art, "family": cand.id, "configuration": config.id if config else None, "line": None,
                                "attempt": rid, "codes": [("X", f"profile {fp.get('profile')!r} is not a target of verity.proofs.target")]})
             continue
-        entries.append(Ctx(art, meta, list(store.labels(art)), attempt, target, _FAMILY[cand.id], config, []))
+        entries.append(Ctx(art, meta, labels, attempt, target, _FAMILY[cand.id], config, []))
     by_statement: dict[tuple[str | None, str], list[Any]] = {}
     for c in entries:
         by_statement.setdefault((c.config.id if c.config else None, c.target.name), []).extend(c.labels)
@@ -2069,6 +2101,7 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
                                  "backend": backend_by_cfg.get(c.configuration or ""), "label": _cell_name(c), "cells": table3_row(c)}
                                 for c in V.cells]},
         },
+        "below_bar": sorted(V.below_bar, key=lambda e: (e["backend_family"] or "", str(e["definition"]), e["B"] or 0, e["artifact"])),
         "rejected": [{"artifact": r["artifact"], "implementation": r["configuration"], "backend_family": _fam(r["family"]),
                       "subcircuit": subcircuit_id(r["line"]), "scheme": scheme_id(r.get("scheme")), "reason": r["codes"][0][0], "text": r["codes"][0][1]} for r in V.rejected],
     }

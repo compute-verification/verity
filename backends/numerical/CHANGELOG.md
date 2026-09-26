@@ -1,5 +1,17 @@
 # Changelog: `verity_numerical` (the bench renderers and their rules)
 
+## 2026-09-26: the below-bar drill-down
+
+- A result labelled `below_bar=true` (the vocabulary's verification key, added to the store contract with this change)
+  is no longer rejected. The entities render lists it under `below_bar` with:
+  - its backend family, IR Definition and gate family, B, input set and prover GPU;
+  - per proof mode (core, compressed): its own soundness bits, prove seconds, seconds per instance, proof bytes and verify
+    seconds;
+  - `bar_bits: 128`, and who verified it.
+
+  It is never a Table 2 cell. The first entries are sp1-evaluator's nine SP1 proofs (RMSNorm fused and Triton, RoPE,
+  GemmCoordinate at K = 2048 and 8192), at 2^-93.7 to 2^-100, verified by verify-night-3.
+
 ## 2026-09-26: a `SUPERSEDED …` finding rejects a result
 
 - A `finding` label starting with `SUPERSEDED` now rejects the result (reason D), as `PULLED` does. Its producer uses it when

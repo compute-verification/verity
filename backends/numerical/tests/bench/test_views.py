@@ -1170,3 +1170,20 @@ def test_a_results_interaction_record_recomputes_its_overhead_at_any_network(sto
     assert "instances" not in ix and ix["inputs"] == 4096 and ix["formula"].endswith("/ inputs")
     fx = by_art[filed]["interaction"]
     assert fx["derived"] and fx["rounds_source"] == "derived: file-verified" and fx["measured_rtt"] is None and fx["loopback_per_round"] is None
+
+
+def test_a_below_bar_result_is_shown_in_its_drill_down_not_dropped_and_not_a_cell(store: LocalStore) -> None:
+    res = result(candidate="SP1", profile=None, definition={"id": "RMSNormFusedCuda_v2{N=2048,EPS=1e-05}"}, family="veritor.reduce-mufu@1",
+                 modes=["core", "compressed"], instances=None)
+    res["workload_fingerprint"]["instances"] = {"set": "rmsnorm-set", "set_art": "art:" + "a" * 64}
+    res["measurements"] += [{"name": k, "value": v, "unit": "count"} for k, v in (("core.soundness_bits", 97.0), ("core.prove_seconds", 5.73),
+                                                                   ("core.seconds_per_instance", 5.73), ("core.proof_bytes", 12029628),
+                                                                   ("compressed.soundness_bits", 100.0))]
+    art = put(store, res, labels=[("verified", "accepted", "verify-night-3", "2026-09-26T06:30:00Z"),
+                                  ("below_bar", True, "verify-night-3", "2026-09-26T06:30:00Z")])
+    views = V.build(store)
+    assert art not in {r["artifact"] for r in views.rejected} and art not in {c.artifact for c in views.admissible}
+    (e,) = V.render_entities(views, rendered_at="2026-09-26T06:40:00Z", commit="abc")["below_bar"]
+    assert (e["artifact"], e["backend_family"], e["definition"], e["bar_bits"]) == (art, "D-SP1", "RMSNormFusedCuda_v2{N=2048,EPS=1e-05}", 128)
+    assert e["modes"]["core"]["soundness_bits"] == 97.0 and e["modes"]["compressed"]["soundness_bits"] == 100.0
+    assert (e["verified"], e["verified_by"], e["input_set"]) == ("accepted", "verify-night-3", "rmsnorm-set")

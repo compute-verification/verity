@@ -75,6 +75,7 @@ VERIFIER_SECONDS = "verifier_seconds"
 INDEPENDENTLY_VERIFIED = "independently_verified"     # the back-fill's spelling of verified=accepted|rejected: accepted, deprecated
 VERIFIED_BY = "verified_by"                           # a ledger row's free-text field: carries no verdict, ignored by every table
 SAME_DEVICE = "same_device"
+BELOW_BAR = "below_bar"                               # verified, but its whole-proof bound misses the tables' 2^-128 bar
 OUTCOME = "outcome"
 
 # ---- evidence labels: probe captures and input sets --------------------------------------------------------------------------------
@@ -231,6 +232,7 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
        status=IGNORED),
     _k(FINDING, GROUP_VERIFICATION, TEXT, "a red-team or audit finding in prose (DOWNGRADE / EARNED / HOLDS ...), beside the proof_class verdict it explains"),
     _k(SAME_DEVICE, GROUP_VERIFICATION, BOOL, "whether the verifier ran on the prover's machine"),
+    _k(BELOW_BAR, GROUP_VERIFICATION, BOOL, "the verified proof's whole-proof bound is below the tables' 2^-128 bar: shown in the below-bar drill-down, never a Table 2 cell"),
     _k(OUTCOME, GROUP_VERIFICATION, TEXT, "an Attempt's failure class as judged (CGROUP_OOM, UNKNOWN_EXIT, ...), restating or correcting the classifier's"),
     # evidence
     _k(INSTRUCTION, GROUP_EVIDENCE, TEXT, "the tensor-core instruction probed, as the registry names it (sm89.mma.m16n8k32.e4m3)"),
