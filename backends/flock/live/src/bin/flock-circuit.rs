@@ -490,6 +490,7 @@ const CASES: &[(&str, bool, bool)] = &[
     ("relabelled_circuit_refused_at_load", false, false),
     ("verifier_evaluated_tail_refused", false, false),
     ("leaf_scheme_seeded_salts_refused", false, false),
+    ("leaf_key_witness_refused", false, false),
     ("private_cut_word_tampered", false, true),
     ("tail_swapped", false, true),
     ("tail_swapped_circuit_refused", false, false),
@@ -641,14 +642,25 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         return json!({"case": name, "expect": "refused at parse (a CUT line in a CIRCUIT section; a tail in META)", "pass": r1.is_some() && r2.is_some(),
                       "why_cut_line": r1, "why_meta_tail": r2});
     }
-    if name == "leaf_scheme_seeded_salts_refused" {
+    if name == "leaf_scheme_seeded_salts_refused" || name == "leaf_key_witness_refused" {
+        // the pinned leaf scheme with its salts from a seeded stream; or with the hm96 key a prover witness (red-team-hm96 F6: a
+        // key chosen after commitment opens a leaf to any value), or another key than the statement's constant
         let text = std::fs::read_to_string(arg("--circuit", "")).unwrap();
-        let mut lines: Vec<String> = text.split('\n').map(str::to_string).collect();
-        let mut meta: Value = serde_json::from_str(&lines[1][5..]).unwrap();
-        meta["leaf_scheme"]["target"]["salt_source"] = json!("chacha20 stream of the prover seed");
-        lines[1] = format!("META {}", serde_json::to_string(&meta).unwrap());
-        let r = Composite::parse(&lines.join("\n"), Some(&arg("--tables", "tables"))).err();
-        return json!({"case": name, "expect": "refused at parse (not the pinned leaf-commitment scheme)", "pass": r.is_some(), "why": r});
+        let lines: Vec<String> = text.split('\n').map(str::to_string).collect();
+        let meta: Value = serde_json::from_str(&lines[1][5..]).unwrap();
+        let edits: Vec<(&str, Value)> = if name == "leaf_key_witness_refused" {
+            vec![("key", json!("a witness: the prover's choice")), ("key_sha256", json!(hex(&sha256(&[1u8; 160]))))]
+        } else {
+            vec![("salt_source", json!("chacha20 stream of the prover seed"))]
+        };
+        let why: Vec<Option<String>> = edits.into_iter().map(|(k, v)| {
+            let (mut m, mut l) = (meta.clone(), lines.clone());
+            m["leaf_scheme"]["target"][k] = v;
+            l[1] = format!("META {}", serde_json::to_string(&m).unwrap());
+            Composite::parse(&l.join("\n"), Some(&arg("--tables", "tables"))).err()
+        }).collect();
+        return json!({"case": name, "expect": "refused at parse (not the pinned leaf-commitment scheme)", "pass": why.iter().all(Option::is_some),
+                      "why": why});
     }
     let mut plan = plan_of(name, gpu);
     if name == "cross_session_replay_both_reps" {

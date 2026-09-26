@@ -44,12 +44,13 @@ INST_FORMAT = "flock-circuit-inputs"
 #: identity and swappable. ``flock-leaf/sha256-unsalted`` is Flock's own leaf, the SHA-256 digest of the opened column, until
 #: ``target`` lands: ``hm96-sha256/v1`` (``verity.commitments.hm96``, its PROTOCOL.md section 7) over that digest, leaf =
 #: ``tree_leaf(key, b || c)``, an opening = the column and its salt. Salts: 128 bytes per leaf straight from the OS generator,
-#: never expanded from a seed, so the hiding stays statistical; the level-0 salts are shared by both reps (one root). Key: one per
-#: proof, from the OS, bound in the hello before the root, so no pinned-key step is needed (hm96 section 3).
+#: never expanded from a seed (statistical hiding given uniform salts); the level-0 salts are shared by both reps (one root).
+#: Key: hm96's ``DEFAULT_KEY``, one constant of the statement for every tree and for the serving-row gadget, pinned by its
+#: SHA-256. Never a witness: a prover choosing the key after commitment solves for one that opens a leaf to any value.
 LEAF_SCHEME = {"id": "flock-leaf/sha256-unsalted", "salt_bytes": 0,
                "target": {"scheme": "hm96-sha256/v1", "inner": "sha256 column digest", "salt_bytes_per_leaf": 128,
-                          "salt_source": "os generator, one draw per leaf", "key_bytes_per_proof": 160,
-                          "key": "per proof from the os generator, in the hello before the root"}}
+                          "salt_source": "os generator, one draw per leaf", "key": "DEFAULT_KEY, a statement constant for every tree",
+                          "key_sha256": "57b257a0ff12797c57aca8b55685dbbc0729c0de17c9a93ea8565fc19e3df6e0"}}
 CHUNK = 1024
 BLOCK = 64
 SUB_LOG = 14

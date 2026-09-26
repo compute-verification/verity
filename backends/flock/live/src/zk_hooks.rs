@@ -11,9 +11,10 @@
 //! `set_word_pos`), so a device kernel can expand the same words later. It never reads the transcript, and the only constructor
 //! outside tests is [`ProverRng::from_os`]: no fixed or test seed is reachable in a production build.
 //!
-//! The Merkle leaf salts of `hm96-sha256/v1` (and its per-proof key) are NOT drawn from it: each salt is 128 bytes straight from
-//! `getrandom`, so the leaves hide statistically rather than under ChaCha20 (hm96 PROTOCOL.md section 3). They will be a second
-//! explicit input beside the seed, injectable the same way, so the prover stays a function of its inputs. M0's leaf is unsalted.
+//! The Merkle leaf salts of `hm96-sha256/v1` are NOT drawn from it: each salt is 128 bytes straight from `getrandom`, so the
+//! leaves hide statistically given uniform salts rather than under ChaCha20 (hm96 PROTOCOL.md section 3). They will be a second
+//! explicit input beside the seed, injectable the same way, so the prover stays a function of its inputs. The hm96 key is not
+//! prover randomness at all: it is the statement's constant (`circuit::leaf_scheme`). M0's leaf is unsalted.
 //!
 //! [`Hooks`] is where M1's masking goes: a sumcheck round hook (`+ρ·g`), the Reed–Solomon padding `t_pad` of each Ligerito
 //! level, a permutation of the claim points, and the mask slot's fill. [`NoMask`] implements them as the identity, and
