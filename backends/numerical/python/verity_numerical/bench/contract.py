@@ -41,7 +41,7 @@ Fingerprint fields (all required; a sub-field whose value is not known is ``null
                     "range": [lo, hi), "manifest_sha256"} (``fixtures/bench-instances/v1``; hi - lo = B_real if present
                     else B; sub-batches are contiguous sub-ranges of it) or null = not measured on the shared set.  Two
                     results whose non-null ``instances`` disagree are never compared (:func:`compare_instances`); the
-                    judge warns when either is null or absent.  Every Candidate A/B number at K=1536 carries it.
+                    judge warns when either is null or absent.  Every A-GKR/B number at K=1536 carries it.
 
 Timing (seconds; the buckets are disjoint and, with the joints, sum to at most ``t.total``, tolerance 1%)::
 
