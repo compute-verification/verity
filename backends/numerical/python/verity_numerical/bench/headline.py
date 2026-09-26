@@ -314,11 +314,22 @@ def headline(V: Any, workloads: Sequence[Mapping[str, Any]] | None = None) -> li
                 var = g["variable"]
                 if hits and var:                # a cell covers the units at its own value of the variable (attention: its T), no other
                     best: dict[int, Any] = {}
+                    rate: dict[int, float] = {}
+                    klass: dict[int, Any] = {}
+
+                    def offer(v: int, c: Any, P: float, k: Any = None) -> None:
+                        if v not in best or (-P, c.artifact) < (-rate[v], best[v].artifact):
+                            best[v], rate[v], klass[v] = c, P, k
+
                     for c in hits:
+                        kc = getattr(V, "key_class_of", {}).get(c.artifact)
+                        if kc and var == "T":   # a class cell: each T it lists, at that T's own throughput (heads / e2e_s), no other
+                            for v, x in kc["credit"].items():
+                                offer(v, c, x["P"], kc["range"])
+                            continue
                         v = (getattr(c, "variables", None) or {}).get(var)
-                        if v is not None and (v not in best or (-c.throughput["instances_per_second"], c.artifact)
-                                              < (-best[v].throughput["instances_per_second"], best[v].artifact)):
-                            best[v] = c
+                        if v is not None:
+                            offer(v, c, c.throughput["instances_per_second"])
                     vals = g["values"]
                     at = sorted(v for v in best if v in vals)
                     other = sorted(v for v in best if v not in vals)
@@ -331,10 +342,10 @@ def headline(V: Any, workloads: Sequence[Mapping[str, Any]] | None = None) -> li
                         continue
                     per_value = []
                     for v in at:
-                        c = best[v]
-                        P = c.throughput["instances_per_second"]
+                        c, P = best[v], rate[v]
                         per_value.append({var: v, "units": vals[v]["units"], "artifact": c.artifact, "P": P,
-                                          "proving_seconds": vals[v]["units"] / P, "native_seconds": dict(vals[v]["native_seconds"])})
+                                          "proving_seconds": vals[v]["units"] / P, "native_seconds": dict(vals[v]["native_seconds"]),
+                                          **({"class": klass[v]} if klass[v] else {})})
                     missing = [v for v in vals if v not in best]
                     drawn = sorted(drawn_values(V, g["subcircuit"], var, w))
                     if per_value:

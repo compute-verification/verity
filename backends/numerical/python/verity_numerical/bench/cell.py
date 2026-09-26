@@ -36,6 +36,7 @@ import re
 import shlex
 import subprocess
 import sys
+import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Mapping
@@ -289,11 +290,19 @@ def run_dir(ref: str) -> Path:
     return d
 
 
-def run_files(run_id: str) -> str | None:
-    r = subprocess.run(["research", "data", "show", run_id, "--json"], capture_output=True, text=True)
-    if r.returncode:
-        return None
-    return ((json.loads(r.stdout).get("outputs") or {}).get("run_files"))
+#: how long ``register`` waits for the prover run's attempt: the machine's runner publishes it (--custody-r2) after the workload
+#: exits, so a register the moment the run ends can find no run files yet
+RUN_FILES_WAIT_S = 600.0
+
+
+def run_files(run_id: str, wait_s: float = 0.0) -> str | None:
+    end = time.monotonic() + wait_s
+    while True:
+        r = subprocess.run(["research", "data", "show", run_id, "--json"], capture_output=True, text=True)
+        files = None if r.returncode else (json.loads(r.stdout).get("outputs") or {}).get("run_files")
+        if files or time.monotonic() >= end:
+            return files
+        time.sleep(15)
 
 
 def stamp(cell: Cell, doc: dict[str, Any], prover_run: Path | None = None, verifier_run: Path | None = None) -> dict[str, Any]:
@@ -320,10 +329,13 @@ def register(cell: Cell, prover_ref: str, verifier_ref: str | None, work: Path, 
         subprocess.run(cmd, check=True)
     doc = stamp(cell, json.loads(meta.read_text()), pd, vd)
     problems = check(cell, doc, pd, vd)
+    files = run_files(pd.name, RUN_FILES_WAIT_S) if not dry_run else f"<run_files of {pd.name}>"
+    if not files:
+        problems.append(f"no run files: the prover run {pd.name}'s attempt names none after {RUN_FILES_WAIT_S:.0f} s (its proofs are "
+                        f"what the views count; `research data show {pd.name}` once its custody lands, then register again)")
     doc.setdefault("validation", {})["cell_problems"] = problems
     meta.write_text(json.dumps(doc, indent=1, default=str) + "\n")
     put = ["research", "data", "put", "--kind", "bench-result/v1", "--meta", f"@{meta}"]
-    files = run_files(pd.name) if not dry_run else f"<run_files of {pd.name}>"
     if files:
         put += ["--ref", f"run_files={files}"]
     if vd is not None:

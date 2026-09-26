@@ -619,10 +619,11 @@ class Ctx:
     target: Target
     family: Family
     config: Configuration | None
-    statement_labels: list[Any]
+    statement_labels: list[list[Any]]      #: each result's labels, for every result of this configuration, target and subcircuit
     subcircuit: str | None = None                         #: a statement other than the target's own (:func:`result_subcircuit`)
     input_sets: Mapping[str, tuple[str, Mapping[str, Any]]] = field(default_factory=dict)  #: registered input sets (:func:`input_set_index`)
     variables: dict[str, int] = field(default_factory=dict)  #: its per-input work-model variables (attention's T: :func:`input_variables`)
+    key_class: dict[str, Any] | None = None               #: a class cell's key counts and per-T timings (:func:`key_class_of`)
 
 
 def _column(ctx: Ctx, rules: Rules) -> str:
@@ -949,6 +950,52 @@ def input_variables(meta: Mapping[str, Any], sub: str | None, input_sets: Mappin
     return out, None
 
 
+def key_class_of(meta: Mapping[str, Any]) -> dict[str, Any] | str | None:
+    """A class cell (flock-ir-lowering's class-pin attention statement: one pin per key-count class, the batch spans several T):
+    the class range (``key_class.T``), its key counts (``key_counts`` {T: heads}) and per-T timings (``per_key_count`` {T: heads,
+    e2e_s, ...}), with each T that is creditable (listed in ``key_counts``, inside the class range, with a positive heads count
+    and ``e2e_s`` in ``per_key_count``) and ``P`` at it (heads / e2e_s); a reason string when the shape is broken; ``None`` for a
+    result that is not a class cell."""
+    fp = meta.get("workload_fingerprint") if isinstance(meta.get("workload_fingerprint"), Mapping) else {}
+    counts = fp.get("key_counts")
+    if not isinstance(counts, Mapping) or not counts:
+        return None
+    klass = fp.get("key_class") if isinstance(fp.get("key_class"), Mapping) else {}
+    rng = klass.get("T")
+    if not (isinstance(rng, (list, tuple)) and len(rng) == 2 and all(isinstance(x, int) and not isinstance(x, bool) for x in rng) and rng[0] <= rng[1]):
+        return f"a class cell (key_counts) without a key_class.T range, got {rng!r}"
+    per = meta.get("per_key_count") if isinstance(meta.get("per_key_count"), Mapping) else fp.get("per_key_count")
+    per = per if isinstance(per, Mapping) else {}
+    credit, skipped = {}, {}
+    for k, heads in counts.items():
+        t = int(k) if isinstance(k, (int, str)) and str(k).isdigit() else None
+        e = per.get(str(k)) if isinstance(per.get(str(k)), Mapping) else per.get(t) if isinstance(per.get(t), Mapping) else None
+        if t is None:
+            skipped[str(k)] = "not a key count"
+        elif not rng[0] <= t <= rng[1]:
+            skipped[str(t)] = f"outside the class {rng[0]}–{rng[1]}"
+        elif e is None or not _num(e.get("e2e_s")) or e["e2e_s"] <= 0 or not _num(e.get("heads")) or e["heads"] <= 0:
+            skipped[str(t)] = "no per_key_count timing"
+        else:
+            credit[t] = {"heads": int(e["heads"]), "e2e_s": float(e["e2e_s"]), "P": e["heads"] / e["e2e_s"], "listed_heads": heads}
+    if not credit:
+        return f"a class cell with no creditable key count ({'; '.join(f'T {k}: {v}' for k, v in skipped.items()) or 'none listed'})"
+    return {"range": [int(rng[0]), int(rng[1])], "pin": klass.get("pin"), "credit": dict(sorted(credit.items())), "skipped": skipped}
+
+
+def class_native(target: Target, sub: str, cached: bool, klass: Mapping[str, Any]) -> dict[str, Any]:
+    """``N`` of a class cell: per T its native N (:func:`memory_native` at that T) and, over the cell's own inputs, the
+    work-weighted N = heads / sum(heads_T / N_T), so the cell's N / P is its work-weighted overhead."""
+    per = {t: native_of(target, sub, cached, {"T": t}) for t in klass["credit"]}
+    heads = sum(x["heads"] for x in klass["credit"].values())
+    n_eff = heads / sum(x["heads"] / per[t]["instances_per_second"] for t, x in klass["credit"].items())
+    first = per[min(per)]
+    lo, hi = klass["range"]
+    return {**first, "instances_per_second": n_eff, "per_key_count": {t: n["instances_per_second"] for t, n in per.items()},
+            "basis": (f"work-weighted over the class cell's key counts T = {', '.join(map(str, klass['credit']))} (class {lo}–{hi}): "
+                      f"heads / sum(heads_T / N_T), N_T by {first['basis']}")}
+
+
 def memory_native(target: Target, sub: str, cached: bool = False, variables: Mapping[str, int] | None = None) -> dict[str, Any]:
     """``N`` for a memory-bound subcircuit: instances per second = the hardware line's memory bandwidth / the template's bytes per
     input (``census/subcircuits.json`` ``work_model.bytes_per_input``), with the basis for the footnote.  Operations are not
@@ -1131,9 +1178,8 @@ def reject_codes(store: Any, ctx: Ctx, rules: Rules, equivs: Sequence[T.Instance
         why = interaction_problem(interaction(meta), rules.interaction_one_sided) if rules.interaction_validated else None
         if why:
             p.append(("M", why))
-    verdicts = T._labels(ctx.labels if rules.legacy else ctx.statement_labels)
-    ceiling, verdict = T._redteam_ceiling(verdicts, self_)
-    if not rules.legacy and not is_gemm(ctx.subcircuit) and verdict is None:
+    ceiling, verdict = T._redteam_ceiling(T._labels(ctx.labels), self_)        # a verdict caps only the result it names
+    if not rules.legacy and not is_gemm(ctx.subcircuit) and verdict is None and statement_grant(ctx, self_, pc) is None:
         p.append(("U", f"not red-team cleared: a statement on a new template ({ctx.subcircuit}) needs a red-team proof_class verdict "
                        "on its results before it is a cell"))
     if verdict is not None and isinstance(pc, str) and T.RANK.get(ceiling or "", -1) < T.RANK.get(pc, -1):
@@ -1144,12 +1190,23 @@ def reject_codes(store: Any, ctx: Ctx, rules: Rules, equivs: Sequence[T.Instance
     return sorted(p, key=lambda x: _ORDER[x[0]])
 
 
+def statement_grant(ctx: Ctx, self_: set[str], pc: Any) -> T._Label | None:
+    """The red-team verdict that clears the result's statement at its class ``pc``: the latest verdict on some result of the same
+    configuration, target and subcircuit that grants at least ``pc``, or ``None``.  Each result's own latest verdict counts,
+    so a peer's downgrade (a placement finding on that one run) neither clears nor caps the others."""
+    need = T.RANK.get(pc, -1) if isinstance(pc, str) else -1
+    grants = [v for v in (T._redteam_ceiling(T._labels(labels), self_)[1] for labels in ctx.statement_labels)
+              if v is not None and T.RANK.get(str(v.value), -1) >= need]
+    return max(grants, key=lambda v: v.ts) if grants else None
+
+
 def provisional(ctx: Ctx) -> str | None:
-    """Why the cell is provisional, or ``None``: no red-team ``proof_class`` verdict on the configuration's statement for this
-    subcircuit (any result of the same configuration and target) grants the result's class."""
+    """Why the cell is provisional, or ``None``: neither the result's own red-team ``proof_class`` verdict nor one on another
+    result of the configuration's statement for this subcircuit (same configuration and target) grants the result's class."""
     self_ = T.producers(ctx.attempt, T._labels(ctx.labels), ctx.meta)
-    ceiling, verdict = T._redteam_ceiling(T._labels(ctx.statement_labels), self_)
-    if verdict is None:
+    pc = (ctx.meta.get("workload_fingerprint") or {}).get("proof_class")
+    ceiling, verdict = T._redteam_ceiling(T._labels(ctx.labels), self_)
+    if verdict is None and statement_grant(ctx, self_, pc) is None:
         return f"no red-team clearance of {ctx.config.id if ctx.config else ctx.family.id}'s statement on {ctx.subcircuit or ctx.target.name}"
     return None
 
@@ -1200,6 +1257,7 @@ class Views:
     unreadable: list[str] = field(default_factory=list)   #: artifacts the views could not read here (payload not local, ...)
     admissible: list[ViewCell] = field(default_factory=list)  #: every admissible result as a cell (``cells`` holds each family's best)
     security_of: dict[str, dict[str, Any]] = field(default_factory=dict)  #: each admissible result's ``security`` block, by artifact
+    key_class_of: dict[str, dict[str, Any]] = field(default_factory=dict)  #: each admissible class cell's key counts (:func:`key_class_of`)
     omitted_of: dict[str, Any] = field(default_factory=dict)  #: each admissible result's latest ``omitted`` label (what it leaves out)
     prover_gpu: dict[str, str | None] = field(default_factory=dict)  #: each admissible result's ``hardware.gpu.name``, by artifact
     interaction_raw: dict[str, dict[str, Any]] = field(default_factory=dict)  #: each admissible result's raw round and loopback records
@@ -1304,9 +1362,17 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
             c.subcircuit, c.input_sets = result_subcircuit(c.meta, c.target), sets
         unmodelled = []
         for c in entries:
-            c.variables, why = input_variables(c.meta, c.subcircuit, sets)
+            klass = key_class_of(c.meta) if not is_gemm(c.subcircuit) else None
+            if isinstance(klass, dict):
+                c.key_class, c.variables, why = klass, {}, None
+            elif isinstance(klass, str):
+                why = klass
+            else:
+                c.variables, why = input_variables(c.meta, c.subcircuit, sets)
             try:
-                if why is None:
+                if why is None and c.key_class:
+                    class_native(c.target, c.subcircuit, rules.native_cached, c.key_class)
+                elif why is None:
                     native_of(c.target, c.subcircuit, rules.native_cached, c.variables)
             except KeyError as e:
                 why = f"its work model needs {e.args[0]}, which varies per input, and the result records none"
@@ -1317,11 +1383,11 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
                                    "codes": [("X", f"native N is not modelled for {c.subcircuit}: {why}")]})
                 unmodelled.append(c)
         entries = [c for c in entries if c not in unmodelled]
-    by_statement: dict[tuple[str | None, str, str | None], list[Any]] = {}
+    by_statement: dict[tuple[str | None, str, str | None], list[list[Any]]] = {}
     for c in entries:
-        by_statement.setdefault((c.config.id if c.config else None, c.target.name, c.subcircuit), []).extend(c.labels)
+        by_statement.setdefault((c.config.id if c.config else None, c.target.name, c.subcircuit), []).append(list(c.labels))
     for c in entries:
-        c.statement_labels = by_statement[(c.config.id if c.config else None, c.target.name, c.subcircuit)] if c.config else c.labels
+        c.statement_labels = by_statement[(c.config.id if c.config else None, c.target.name, c.subcircuit)] if c.config else [list(c.labels)]
 
     line_schemes: list[str | None] = [None] if rules.legacy else [
         s.id for s in SCHEMES if s.admissible and any(c.scheme == s.id for c in configurations)]
@@ -1331,8 +1397,15 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
 
     Key = tuple[Any, ...]
 
-    def vkey(c: Ctx) -> tuple[tuple[str, int], ...]:
+    def vkey(c: Ctx) -> tuple[tuple[str, Any], ...]:
+        if c.key_class:                 # a class cell: a row per key-count class
+            return (("T", f"{c.key_class['range'][0]}–{c.key_class['range'][1]}"),)
         return tuple(sorted(c.variables.items()))
+
+    def n_of(c: Ctx) -> dict[str, Any]:
+        if c.key_class:
+            return class_native(c.target, c.subcircuit, rules.native_cached, c.key_class)
+        return native_of(c.target, c.subcircuit, rules.native_cached, c.variables)
 
     pools: dict[Key, list[tuple[Ctx, dict[str, Any]]]] = {}
     unfiltered: dict[Key, list[tuple[Ctx, dict[str, Any]]]] = {}
@@ -1354,7 +1427,7 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
             entry["variables"] = dict(c.variables)
         if P is not None and not rules.legacy and c.config is not None and c.config.full_relation:
             commit = P["commit_s"] or P["commit_v1_s"] or 0.0
-            n = native_of(c.target, c.subcircuit, rules.native_cached, c.variables)["instances_per_second"]
+            n = n_of(c)["instances_per_second"]
             entry["end_to_end_preview"] = {"commit_s": commit, "commit_warm": bool(P["commit_s"]),
                                            "overhead": n * (P["proving_s"] + commit) / P["instances"]}
         V.rejected.append(entry)
@@ -1372,6 +1445,9 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
         V.security_of[c.art] = dict(c.meta["workload_fingerprint"].get("security") or {})
         if _latest(c.labels, "omitted"):
             V.omitted_of[c.art] = _latest(c.labels, "omitted")
+        if c.key_class:
+            V.key_class_of[c.art] = c.key_class
+            N = n_of(c)                 # its own key counts' work-weighted N (the row's is its first cell's)
         m = T._measurements(c.meta)
         block = c.meta.get("interaction") if isinstance(c.meta.get("interaction"), Mapping) else c.meta["workload_fingerprint"].get("interaction")
         V.interaction_raw[c.art] = {"rounds_protocol": m.get("rounds.protocol"), "sequential_depth": m.get("rounds.sequential_depth"),
@@ -1429,14 +1505,19 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
         for scheme in line_schemes:
             add_line(target, None, scheme, N)
     # statements of their own (another K, or semantics the target's subcircuit does not stand for): a row per scheme with a result
-    own: dict[tuple[str, str, tuple[tuple[str, int], ...]], set[str | None]] = {}
+    own: dict[tuple[str, str, tuple[tuple[str, Any], ...]], set[str | None]] = {}
+    first_class: dict[tuple[str, str, tuple[tuple[str, Any], ...]], Ctx] = {}
     for c in entries:
         if c.subcircuit:
             own.setdefault((c.target.name, c.subcircuit, vkey(c)), set()).add(scheme_of(c))
+            if c.key_class:
+                first_class.setdefault((c.target.name, c.subcircuit, vkey(c)), c)
     for target in LINES.values():
         for sub, vs in sorted(((x, v) for t, x, v in own if t == target.name),
-                              key=lambda xv: (not is_gemm(xv[0]), subcircuit_k(xv[0]) if is_gemm(xv[0]) else 0, xv[0], xv[1])):
-            N = native_of(target, sub, rules.native_cached, dict(vs))
+                              key=lambda xv: (not is_gemm(xv[0]), subcircuit_k(xv[0]) if is_gemm(xv[0]) else 0, xv[0],
+                                              tuple((k, (1, int(v.split("–")[0])) if isinstance(v, str) else (0, v)) for k, v in xv[1]))):
+            fc = first_class.get((target.name, sub, vs))
+            N = class_native(target, sub, rules.native_cached, fc.key_class) if fc else native_of(target, sub, rules.native_cached, dict(vs))
             for scheme in line_schemes:
                 if scheme in own[(target.name, sub, vs)]:
                     add_line(target, sub, scheme, N, vs)
@@ -2414,6 +2495,9 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
             "id": result_key(c), "key": {"backend": backend, "statement": stmt, "input_set": input_set_id(c), "prover_hardware": prover},
             "backend": backend, "backend_family": _fam(c.column), "statement": stmt, "implementation": c.configuration,
             "subcircuit": sub_of(c.line, c.subcircuit), **({"variables": dict(c.variables)} if c.variables else {}),
+            **({"key_class": {"T": V.key_class_of[c.artifact]["range"], "pin": V.key_class_of[c.artifact]["pin"],
+                              "key_counts": {str(t): x["heads"] for t, x in V.key_class_of[c.artifact]["credit"].items()},
+                              "not_credited": V.key_class_of[c.artifact]["skipped"]}} if c.artifact in V.key_class_of else {}),
             "scheme": scheme_id(c.scheme), "legacy_scheme": c.scheme,
             "hardware": peak.id, "prover_hardware": prover, "input_set": input_set_of(c),
             "assumptions": {"backend": backend_assumptions.get(backend or "", []), "statement": stmt_assumptions,

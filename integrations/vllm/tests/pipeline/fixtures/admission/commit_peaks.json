@@ -23,6 +23,26 @@
    "pool_source": "the row planner's commit.pinned_pool (the run's own F-dA-15 JSON was not copied off the pod)",
    "pairs": 1,
    "replay_workers": 32
+  },
+  "74": {
+   "row_id": "qwen3-4b-fp8__fp8__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager",
+   "scheduled_raw_mib": 152257,
+   "scheduled_hidden_mib": 139410,
+   "raw_source": "the Commit's own F-dA-15 sizing of r20260926-101428-71e2 (stream of record; hidden = fa3_hidden_m1)",
+   "unbounded": {
+    "run": "r20260926-101428-71e2",
+    "outcome": "stopped at 11:58Z by the lane before an OOM, during the C2 oracle compare (C2 Programs 70,439 MiB and the replay workers still to come): the peak is a lower bound",
+    "peak_is_lower_bound": true,
+    "peak_anon_shmem_mib": 229877,
+    "pinned_mib": 201874
+   },
+   "bounded_exclude_fa3_hidden_m1": {
+    "run": "r20260926-115930-46a1",
+    "outcome": "the learn-only warm-up primed the record run's pinned pool (level buffers + kept ranges), then crashed folding its placeholder roots; no record run",
+    "warmup_pinned_mib": 59246
+   },
+   "pairs": 1,
+   "replay_workers": 32
   }
  }
 }
