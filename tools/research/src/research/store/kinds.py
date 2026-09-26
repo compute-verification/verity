@@ -51,6 +51,8 @@ KINDS: dict[str, str] = {
     "vllm-vu-set/v1": "one subcircuit's input set exported from a passing row's sampled VUs (verity_vllm.pipeline.vu_export): payload "
                       "tree = manifest.json + index.json + flat port arrays; meta {set, relation, n, content_digest, row, model, run, "
                       "run_root, program_digest, manifest_digest, source, epoch}; refs.run_record",
+    "vllm-vu-store/v1": "one row's hierarchical VU store (verity_vllm.pipeline.vu_store): payload tree = run.json + programs/<digest>/"
+                        "{program.json, units.jsonl} + values/<sha256>.<dtype>; the flat vllm-vu-set/v1 sets are its extractions",
     "vllm-vu-export/v1": "one row's VU export: payload = export.json (draw, per-family counts, sets); meta {row, model, run, run_root}; "
                          "refs.sets = the vllm-vu-set/v1 artifacts, refs.run_record",
 }
