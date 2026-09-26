@@ -579,6 +579,7 @@ pub fn prove_pure(
             cv: (0..br).map(|b| (0..ncv).map(|r| std::array::from_fn(|k| c[8 * (ncv * b + r) + k])).collect()).collect(),
             y16: y.to_vec(),
             acc: a.to_vec(),
+            mid: Vec::new(),
         };
         hook(root, Some(&p))
     };
