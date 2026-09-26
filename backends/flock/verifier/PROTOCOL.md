@@ -1,0 +1,1080 @@
+# Flock verifier of record: specification
+
+**Status: phase 1 of lane `flock-verifier` (2026-09-26).** This document specifies the verifier that decides Flock sessions
+in verity: the 100-bit profile (`fast100`) run twice on one committed root, with live verifier coins, for the pure-block,
+IR frame and PR #83 circuit statements. Phase 2 implements it in Lean (levels 1–3 of the formal-verification plan). Upstream
+Flock's Rust verifier (succinctlabs/flock `b684b12`, with our live-coin layer `backends/flock/live`) is a cross-validation
+test in CI, not a production verifier: once the Lean verifier agrees with it on the whole corpus (§17), only the Lean
+verifier runs.
+
+**Sources.** The protocol is the Flock paper (Bünz, Rothblum, Wang, ePrint 2026/1329: §4, Appendices A–C). Upstream's code
+was read only for byte formats, constants and the order of operations; every place where the paper is silent or differs
+and the spec follows upstream's behaviour is listed in §19. Our statement layer (`backends/flock/live/src`) and the session
+protocol are verity's own and are specified from that code.
+
+**Scope.** Interactive mode only: coins come from the verifier's live session record. Fiat–Shamir (C-fs), the union prover,
+the AG flavour, the prime (A-GKR) half, forks and grinding credit are out of scope and are rejected where they could appear.
+
+**Style.** Every function is pure and total over explicit inputs, with explicit byte formats, so that it can be written in
+Lean and reasoned about. §20 maps the sections onto Lean modules.
+
+## 1. Conventions
+
+- `‖` is concatenation. `le32`, `le64` and `be32`, `be64` are fixed-width little- and big-endian encodings.
+- Integers are unbounded naturals unless a width is given. Every length read from an input is compared with a length
+  computed from the configuration before it drives a loop.
+- `hex(b)` is lowercase hex. `SHA-256` is FIPS 180-4. `BLAKE3` is the BLAKE3 compression function and keyed hash.
+- `F` is GF(2^128) (§2.1), `K` is GF(2^256) (§2.4), `F8` is GF(2^8) (§2.2). `+` on field elements is XOR.
+- `eq(r, b) = Π_j (r_j if bit_j(b) = 1 else 1 + r_j)`, bits least-significant first, unless a section says otherwise.
+- A check "fails" by returning `Reject reason`. Reasons are informative only: the verdict is `Accept` or `Reject`.
+- Byte strings in `"quotes"` are ASCII, exact, without a terminator unless `\0` is written.
+
+## 2. Fields and hashes
+
+### 2.1 F = GF(2^128), GHASH form
+
+`F = F2[x] / (x^128 + x^7 + x^2 + x + 1)`. An element is the 128-bit integer whose bit `i` is the coefficient of `x^i`,
+held as `(lo, hi)` = bits 0–63 and 64–127. Its byte encoding (transcript, wire, `link_sha256`) is `le64(lo) ‖ le64(hi)`
+(16 bytes); its record hex is `hex(be64(hi) ‖ be64(lo))`. `inv(0) = 0` (Fermat inversion `a^(2^128 − 2)`), and the spec
+keeps that convention where upstream relies on it (§9.2).
+
+### 2.2 F8 and φ8
+
+`F8 = F2[α] / (α^8 + α^4 + α^3 + α + 1)` (the AES field); a byte `v` is `Σ bit_i(v) α^i`. The embedding `φ8 : F8 → F` is the
+field homomorphism with
+
+~~~text
+φ8(α) = g = 0dcb364640a222fe6b8330483c2e9849        (a root of X^8 + X^4 + X^3 + X + 1 in F)
+φ8(v) = Σ_{i<8} bit_i(v) · g^i
+~~~
+
+(Checked against upstream's 256-entry table: identical.) The univariate-skip nodes are `φ8(0 … 63)` and `φ8(64 … 127)`.
+
+### 2.3 Encodings of field elements in proofs
+
+In the proof container (§8) an F element is 16 bytes `le64(lo) ‖ le64(hi)` unless §8 says otherwise.
+
+### 2.4 K = GF(2^256)
+
+`K = F[u] / (u^2 + u + x^{−1})`, `x^{−1} = 80000000000000000000000000000043` (hex `hi‖lo`). An element is `(c0, c1) = c0 + c1·u`.
+Product: `p0 = a0 b0`, `p1 = a1 b1`, `p2 = (a0 + a1)(b0 + b1)`, result `(p0 + x^{−1} p1, p2 + p0)`. A K coin is one
+`sample_f128_vec(2)` squeeze `(w0, w1) → (c0, c1) = (w0, w1)`; absorbing a K element is one two-element slice frame
+`[c0, c1]`.
+
+### 2.5 Hashes
+
+- SHA-256: the Merkle trees (§14), the round digests (§6), Σ, statement digests, frame-v3 (§16.6), `link_sha256`.
+- BLAKE3 (compression, keyed hash, parent tree): only in the statements (row digests, legacy L-CV checks, padding
+  constants). The keyed parent tree over chunk chaining values `cv_0 … cv_{n−1}` (n ≥ 2) splits at the largest power of two
+  below `n` and compresses `(key, left ‖ right, counter 0, block_len 64, PARENT | KEYED_HASH [| ROOT at the top])`; flags
+  `CHUNK_START = 1`, `CHUNK_END = 2`, `PARENT = 4`, `ROOT = 8`, `KEYED_HASH = 16`.
+
+The transcript's own hash never enters the verifier (§6.3).
+
+**Target: SHA-256 on every commitment path.** Daniel's direction (2026-09-26): the serving leaves become Halevi–Micali
+commitments on SHA-256, and the proof's Merkle trees and the round digests stay SHA-256. The recorded sessions this spec
+covers use BLAKE3 keyed row leaves in the BLAKE3 layouts (and BLAKE3 in legacy L-CV checks); the spec specifies them as they
+are, and the target statement pins SHA-256 on all paths. Moving the leaves changes the statements' circuits and digests, not
+§3–§15.
+
+## 3. Inputs, outputs and the shape of the verifier
+
+The verifier is one total function
+
+~~~text
+verify : Config × Record × Proofs × PublicInput × Publics? → Verdict
+Verdict = Accept | Reject Reason
+~~~
+
+- `Config` is the verifier's own configuration (§4): the statement kind and its pinned files, `profile = fast100`,
+  `reps = 2`, `flavor = rs`, the table list, the link shape and the coin source. Nothing in `Config` is read from the
+  record or the proofs (condition R7).
+- `Record` is the session record the live coin server wrote, `flock-live-session/v1` JSON (§5.1).
+- `Proofs` maps `(table, rep)` to the proof file the server received, `bincode(Commitment, R1csProofLigerito)` (§8).
+- `PublicInput` is the statement's public data (§16): frame-v3 roots, row digests, output words, and the pinned layout.
+  For the circuit statement it holds no row; for the older statements it is their instance file (§16.4).
+- `Publics?` supplies the committed public words for records written before G2 (§5.1, footnote). A record that carries
+  `link.publics` never needs it.
+
+Every function below is total: it returns a value or a `Reject` with a reason, and never loops on a length it has not
+first compared with a length computed from `Config`. No function reads a clock, a random source, a file other than its
+inputs, or the transcript's hash state. The verdict does not depend on the order in which independent checks run; this
+document lists checks in the order upstream's pipeline reaches them, so that a `Reject` reason can be compared with
+upstream's, but only `Accept`/`Reject` is normative.
+
+The pipeline:
+
+1. `statement ← setup(Config, PublicInput)` (§16): Σ, the statement digest, `Hello`, domains, the region list, the
+   lincheck circuit, the PCS parameters. Pure in its inputs; it fails on malformed public input.
+2. `session ← decode_record(Record)` and the session checks S1–S14 (§5.3).
+3. For each table `t` and rep `r ∈ {0, 1}`: `proof ← decode_proof(Proofs[t, r])` (§8), a fresh replay transcript
+   (§6), `verify_rep(statement, session, proof, transcript)` (§9–§14), then the stream-exhaustion check (S15) and the
+   root check (S16).
+4. The proof-file check S17 and the cross-rep check S18 (R1).
+5. `Accept` iff every step passed.
+
+## 4. Configuration pinned by the verifier
+
+| item | value | source of the value |
+|---|---|---|
+| profile | `fast100` (Ligerito `LigeritoProfile::Fast100`, §15) | configuration; the proof's `commitment.params` must equal it byte for byte |
+| reps | 2, both on one committed root | configuration (R1, R7) |
+| flavour | `rs`: the univariate-skip zerocheck over the AES subfield (`SkipPoint::Phi8`), not the AG flavour | configuration (R7) |
+| PCS | `PcsParams { m, log_inv_rate = 1, log_batch_size = k0(m), profile = Fast100, num_lanes = None, merkle_hash = Sha256 }` | computed from the statement's `m` (§15) |
+| link | `points = 2`, `m_pts` coordinates per point, `y = 0` | statement (§16) |
+| require_link | `true` | configuration (R5, E0, F1) |
+| prime_live | `false` | none of these statements has a prime half |
+| coin source | `os` (default) or `seed` (`coin-commit/sha256/v1`, PR #83 only when its `Hello` names it) | configuration (§7) |
+| grinding | none: every proof-of-work nonce is a message and is never checked (R4) | configuration |
+
+## 5. The session record
+
+### 5.1 Format
+
+The record is UTF-8 JSON. The verifier reads only the fields below; it ignores every other field, including `verdict`
+(the live server's own opinion) and timing fields. Hex strings are lowercase, even-length.
+
+| field | type | meaning |
+|---|---|---|
+| `kind` | string | must be `"flock-live-session/v1"` |
+| `aborted` | null or string | must be null |
+| `hello` | string | the exact `Hello` the prover sent |
+| `config.require_link` | bool | must be `true` |
+| `link_mode` | string | must be `"exchange"` |
+| `link.mode` | string | must be `"exchange"` |
+| `link.sigma` | hex(32) | Σ |
+| `link.root_f`, `link.root_f_sha256` | hex, hex(32) | the committed root_F and its SHA-256 (G2: `root_f` present from G2 on) |
+| `link.root_b.<t>`, `link.root_b_sha256.<t>` | hex, hex(32) | table `t`'s committed root_B: the flattened Merkle cap (§14) |
+| `link.publics.<t>`, `link.publics_sha256.<t>` | hex, hex(32) | table `t`'s committed public words (§16) |
+| `link.points` | list of `points` lists of `m_pts` F128 hex | the link points the server drew after `Commit` |
+| `link.y` | list of `points · |tables|` F128 hex | y, table-major |
+| `link_sha256` | hex(32) | SHA-256 over the exchange (S14) |
+| `streams[i]` | object | one transcript stream: `stream`, `parent`, `label`, `at`, `root_sha256`, `rounds` |
+| `streams[i].rounds[k]` | object | `k`, `n`, `msg_len`, `msg_sha256` (hex(32)), `coins` (list of `n` F128 hex) |
+| `proof_sha256[j]` | object | `stream` (`<t>/rep<r>`), `sha256`, `bytes` |
+| `verdict.coin_seed` | object | seed mode only: `scheme`, `domain`, `commitment`, `seed`, `nonce`, `coin_requests` (§7.2) |
+
+An F128 hex string is 32 hex digits: the 128-bit integer `hi · 2^64 + lo` in big-endian (`{hi:016x}{lo:016x}`).
+Everywhere else (transcript, wire, `link_sha256`) an F128 is the 16 bytes `le64(lo) ‖ le64(hi)` (§2.3).
+
+Footnote (G2). Records written before G2 (the ten earliest pure-block cells, §18) lack `link.root_f`, `link.root_b` and
+`link.publics`. For them the verifier takes `root_b.<t>` as the proof's flattened cap and requires
+`SHA-256(root_b) = root_b_sha256.<t>`; takes root_F as Σ (the pure-block statement commits Σ in root_F's place);
+and takes the public words from the `Publics?` input, which must satisfy `SHA-256(publics) = publics_sha256.<t>`.
+Producing `Publics?` for a pre-G2 record means evaluating the witness from the rows; that belongs to the vector
+tooling, never to the verifier.
+
+### 5.2 Streams and rounds
+
+A stream is one Fiat–Shamir-shaped transcript whose coins came from the verifier. Root streams are named
+`<table>/rep<r>`, with `parent = ""`, `at = 0` and `label = domain(t, r)` (§16). Upstream can fork child streams
+(`<parent>/f<i>`); none of the statements here reaches a fork (§6.4), so a record with a child stream is rejected.
+
+Round `k` of a stream records what the prover committed before the server drew that round's coins: the SHA-256 and
+length of the framed bytes absorbed since the previous coin request on that stream, the squeeze header included (§6),
+and the `n` coins returned.
+
+### 5.3 Session checks
+
+Each check is a total predicate on the decoded record and the configuration. Failing any one rejects.
+
+| id | check | condition it enforces |
+|---|---|---|
+| S1 | `kind = "flock-live-session/v1"` and `aborted = null` | the session completed |
+| S2 | `hello = Hello(statement)` byte for byte (§16) | R7: profile, reps, flavour, tables, Σ, link shape and coin scheme are the verifier's |
+| S3 | `config.require_link = true`, `link_mode = "exchange"`, `link.mode = "exchange"` | F1/E1: the statement was committed before any coin |
+| S4 | `link.sigma = hex(Σ)` | the session is about this statement |
+| S5 | for every configured table `t`: `root_b.<t>` present, non-empty, and `SHA-256(root_b.<t>) = root_b_sha256.<t>` (keys for other tables are ignored, as upstream does) | L1/L3 |
+| S6 | `SHA-256(root_f) = root_f_sha256` and `root_f` non-empty; for these statements `root_f = Σ` (intended divergence D1, §17.1) | L1: statements without a prime half commit Σ as root_F |
+| S7 | for every configured `t`: `SHA-256(publics.<t>) = publics_sha256.<t>` (absent key = empty bytes; other keys ignored) | C4 prerequisites |
+| S8 | `statement_publics(t, publics.<t>)` accepts (§16) | C4: the committed public words are consistent with the public input |
+| S9 | `link.points` has exactly `points = 2` entries of exactly `m_pts` F128 each | the link shape |
+| S10 | `link.y` has exactly `points · |tables|` entries, and every entry is zero | these statements have no cross-field link: y is pinned to 0 |
+| S11 | the stream set is exactly `{ <t>/rep<r> : t ∈ tables, r ∈ {0,1} }`; each has `parent = ""`, `at = 0`, `label = domain(t, r)` and at least one round (intended divergence D2, §17.1) | R7 (no third rep, no lone rep), no fork on this path |
+| S12 | in every stream, `rounds[k].k = k`, `1 ≤ n ≤ 65536`, `|coins| = n`, `msg_sha256` is 32 bytes | well-formed rounds |
+| S13 | for every root stream `<t>/rep<r>`: `root_sha256 = SHA-256(root_b.<t>)` | R1/L1: every rep bound the one committed root_B |
+| S14 | `link_sha256 = SHA-256(root_f ‖ root_b.<t> for t in lexicographic table order ‖ points ‖ y)`, points point-major, each F128 as 16 LE bytes, y likewise | the recorded exchange is the one the coins followed |
+| S15 | after rep `r`'s verification, every round of `<t>/rep<r>` was consumed, and none was requested beyond the record | R2: no extra, missing or split round |
+| S16 | the proof's flattened cap equals `root_b.<t>` | R1: the proof is about the committed root |
+| S17 | `proof_sha256` lists exactly the streams `<t>/rep<r>`, and `SHA-256(Proofs[t, r]) = sha256` for each | the proofs are the ones the server received |
+| S18 | the caps of rep 0 and rep 1 are equal (implied by S16 for both; kept as a separate check) | R1 |
+
+S6 and S11 are stricter than upstream's `Server::from_record` and `Server::finish` (D1, D2 in §17.1). No honest record
+differs between the two.
+
+## 6. The replay transcript
+
+The transcript is a byte stream per root stream. It never hashes to derive a challenge: every coin is read from the
+record, after checking the bytes that preceded it (conditions R2, R4). This section is the whole interface between the
+Flock verifier (§9–§14) and the session.
+
+### 6.1 Framing (transcript-v2)
+
+Every absorbed item is one frame: a 16-byte header `[op u8][kind u8][0u8; 6][len u64 LE]`, then the payload, zero-padded
+to a multiple of 16 bytes.
+
+| operation | op | kind | len | payload |
+|---|---|---|---|---|
+| `domain(label)` | 1 | 0 | byte length of `label` | `label`, padded |
+| `observe_label(label)` | 2 | 0 | byte length | `label`, padded |
+| `observe_f128(v)` | 3 | 1 | 1 | `v` as 16 bytes |
+| `observe_f128_slice(vs)` | 3 | 2 | `|vs|` | each element as 16 bytes, concatenated (no padding needed) |
+| `observe_bytes(b)` | 5 | 0 | byte length | `b`, padded |
+| `sample_f128()` | 4 | 1 | 1 | none (the header ends the round) |
+| `sample_f128_vec(n)` | 4 | 2 | `n` | none |
+| `verify_pow(nonce, bits)` | as `observe_bytes(le64(nonce))` | | | returns true; `bits` is unused |
+
+### 6.2 State and rounds
+
+The replay state of one root stream is `(pending : Bytes, k : Nat)`, initially `(frame(domain(label)), 0)`. Absorbing
+appends a frame to `pending`. A squeeze of `n` coins appends its header, then:
+
+- if `n = 0`: returns no coins and consumes no round (the header stays in `pending`);
+- otherwise, let `c = pending`, `pending := []`. Round `k` of the stream must exist, must have `n` coins, and must satisfy
+  `SHA-256(c) = msg_sha256`; the squeeze returns its recorded coins and sets `k := k + 1`. Anything else rejects (R2).
+
+Recording `msg_len` is informational; the verifier may check `|c| = msg_len` as a cheaper first test.
+
+### 6.3 What the transcript does not contain
+
+The transcript's hash function (upstream's chained BLAKE3 on the CPU prover, SHA-256 on the CUDA prover) never enters
+the replay: only the framing does. So a CPU proof and a CUDA proof of the same witness replay identically.
+
+### 6.4 Forks
+
+Upstream's `fork(label)` squeezes two scalar coins on the parent and opens a child stream seeded with them. The
+single-table block-R1CS path (§9–§14) makes no fork: the union prover's merged opening forks, this path's mixed-batch
+opening does not (§12). A verifier for this path therefore implements no fork, and S11 rejects a record with a child.
+
+## 7. Coin sources
+
+The verifier reads coins from the record; how the server produced them decides only which assumptions soundness rests
+on.
+
+### 7.1 `os` (default)
+
+The server draws `16 n` bytes from `/dev/urandom` for each round after recording that round's digest, and `16 · 2 · m_pts`
+bytes for the link points after recording `Commit`. Each 16-byte group is one F128 (`lo = le64(bytes[0..8])`,
+`hi = le64(bytes[8..16])`). Soundness assumes only that these bytes are uniform and unknown to the prover before it sent
+the round.
+
+### 7.2 `seed` (PR #83, `coin-commit/sha256/v1`)
+
+The server draws a 32-byte `seed` and a 32-byte `nonce` when it accepts `Hello`, answers `Hello` with the commitment
+`SHA-256("verity/flock-netlist/coin-commit/v1\0" ‖ nonce ‖ seed)` (as two F128 in the 16-LE-byte encoding, so the 32
+commitment bytes in order), and derives every coin:
+
+~~~text
+frame(b bytes)  = 'b' ‖ be64(|b|) ‖ b
+frame(s string) = 's' ‖ be64(|utf8 s|) ‖ utf8 s
+frame(i nat)    = 'i' ‖ be64(|body|) ‖ body,  body = big-endian bytes of i without leading zeros (i = 0: one byte 00)
+derive(src, dom, ctx) = SHA-256("verity/randomness/derive/v1\0" ‖ frame(b src) ‖ frame(s dom)
+                                ‖ frame(b (concat over keys of ctx in byte order: frame(s key) ‖ frame(value))))
+stream(key, parts, n) = first n bytes of  SHA-256(head ‖ be64(0)) ‖ SHA-256(head ‖ be64(1)) ‖ …
+                        head = "verity/randomness/stream/v1\0" ‖ key ‖ frame(b (concat frame(part)))
+key    = derive(seed, "verity/flock-netlist/coins/v1", {"hello": s hello})
+coins_q(n) = stream(key, [s "coins", i q], 16 n)        q = 0, 1, 2, … in the order the server issued coin requests
+~~~
+
+The link points are request `q = 0` (`2 · m_pts` coins in one request); every round's coins follow in the order the server
+handled them. The verdict reveals `seed`, `nonce`, `commitment` and the request count.
+
+For the verifier of record the seed changes nothing it checks: the coins are still read from the record. It adds two
+optional checks that a prover (or an auditor) runs: the commitment opens to the revealed seed and nonce, and each
+round's coins equal `coins_q`. The second needs the global request index `q` of every round, which the record does not
+store (rounds are grouped by stream, and interleaved reps are allowed). Recommendation for PR #83: record `q` per round.
+Until then an auditor recomputes `q` only for sessions whose reps ran sequentially (points, then all of rep 0, then all
+of rep 1). With a seed, soundness additionally assumes that the commitment hides the seed and that `stream` is
+pseudorandom (SHA-256 as a PRF); with `os` coins it needs neither.
+
+## 8. The proof container
+
+### 8.1 Encoding
+
+A proof file is `bincode 1.3` (default configuration) of the pair `(Commitment, R1csProofLigerito)`:
+
+~~~text
+u8                      1 byte
+u32 / enum variant      le32 (variant index, declaration order)
+u64 / usize             le64
+[u8; 32] (H)            32 bytes, no length
+F                       16 bytes: le64(lo) ‖ le64(hi)
+K                       F(c0) ‖ F(c1)
+(A, B)                  A ‖ B
+Vec<T>                  le64(len) ‖ T × len
+Option<T>               u8 tag (0 = None, 1 = Some) ‖ T if Some
+struct                  its fields in the order below, no tags
+~~~
+
+Decoding is a total function `decode : Bytes → Except Reason Proof`. It rejects a truncated input, an enum index out of
+range and an `Option` tag other than 0 or 1. Every `Vec` length is compared with the expected length of §8.3 before the
+elements are read; `matrix_evals` (unused) is read with the length it declares, bounded by the input. Bytes after the pair
+are ignored, as upstream's `bincode::deserialize` ignores them; the record's `proof_sha256` (S17) binds the whole file
+anyway.
+
+### 8.2 Layout
+
+~~~text
+Commitment          = cap: Vec<H> ‖ params: PcsParams
+PcsParams           = m: u64 ‖ log_inv_rate: u64 ‖ log_batch_size: u64
+                      ‖ profile: enum { Fast = 0, Fast100 = 1, Slim = 2, Slim100 = 3, Secure = 4 }
+                      ‖ num_lanes: Option<u64> ‖ merkle_hash: enum { Sha256 = 0, Blake3 = 1 }
+R1csProofLigerito   = zerocheck: ZerocheckProof ‖ lincheck: LincheckProof ‖ pcs_open: BatchOpeningProof
+ZerocheckProof      = round1_ab: Vec<F> ‖ round1_c: Vec<F> ‖ multilinear_rounds: Vec<(F, F)>
+                      ‖ final_a_eval: F ‖ final_b_eval: F ‖ final_c_eval: F ‖ grinding_nonces: Vec<u64>
+LincheckProof       = rounds: Vec<(F, F)> ‖ z_partial: Vec<F> ‖ matrix_evals: Vec<(F, F)> ‖ grinding_nonces: Vec<u64>
+BatchOpeningProof   = ring_switches: Vec<RingSwitchProof> ‖ batching_nonces: Vec<u64> ‖ ligerito: LigeritoProof
+RingSwitchProof     = s_hat_v: Vec<F> ‖ grinding_nonce: u64
+LigeritoProof       = initial_cap: Vec<H> ‖ initial_proof: LevelProof ‖ recursive_caps: Vec<Vec<H>>
+                      ‖ recursive_proofs: Vec<LevelProof> ‖ final_proof: FinalProof
+                      ‖ sumcheck_transcript: Vec<(F, F)> ‖ sumcheck_transcript_f256: Vec<(K, K)>
+                      ‖ grinding_nonces: Vec<u64> ‖ ood_values: Vec<F> ‖ fold_grinding_nonces: Vec<u64>
+                      ‖ claim_batch_grinding_nonces: Vec<u64> ‖ consistency_batch_grinding_nonces: Vec<u64>
+LevelProof          = opened_rows: Vec<Vec<F>> ‖ merkle_proof: Vec<H>
+FinalProof          = yr: Vec<F> ‖ opened_rows: Vec<Vec<F>> ‖ merkle_proof: Vec<H>
+~~~
+
+A multilinear round is `(G(1), G(∞))`; a lincheck round `(q(1), q(∞))`; a Ligerito message `(u0, u2)` in K.
+
+### 8.3 Expected shape
+
+With `m`, `k_log`, the claim count `N = 2 + K` (§11) and the schedule of §15 (`n = m − 7`, `k0`, `R` = levels − 1,
+per-level `Q_ℓ`, `d_ℓ`, cap depth `c_ℓ`, `ext`):
+
+| field | required |
+|---|---|
+| `params` | exactly `(m, 1, k0, Fast100, None, Sha256)` (R7/F2: a relabelled or other-profile proof is rejected) |
+| `cap`, `initial_cap` | `2^{c_0} = 128` hashes; `initial_cap = cap` |
+| `round1_ab`, `round1_c` | 64 each |
+| `multilinear_rounds` | `m − 6` |
+| lincheck `rounds`, `z_partial` | `k_log − 6`, 64 |
+| every `grinding_nonces` of the PIOP, `batching_nonces`, `fold_grinding_nonces`, `sumcheck_transcript` | empty |
+| `ring_switches` | `N`, each `s_hat_v` of 128 and `grinding_nonce = 0` |
+| `initial_proof` | `Q_0` rows of `2^{k0}` elements; `Q_0 · (d_0 − c_0)` hashes |
+| `recursive_caps` | `R` entries, entry `ℓ − 1` of `2^{c_ℓ}` hashes |
+| `recursive_proofs` | `R − 1` entries, entry `ℓ − 1`: `Q_ℓ` rows of 16 elements, `Q_ℓ · (d_ℓ − c_ℓ)` hashes |
+| `final_proof` | `yr` of `2^{ext+1}`; `Q_R` rows of 16; `Q_R · (d_R − c_R)` hashes |
+| `sumcheck_transcript_f256` | `k0 + 8 + 7(R − 1)` |
+| Ligerito `grinding_nonces` (query), `consistency_batch_grinding_nonces` | `R + 1` each |
+| `ood_values` | `1 + 2R` |
+| `claim_batch_grinding_nonces` | `3R + 2` |
+
+Upstream checks the same counts lazily (at use, or by requiring exhaustion at the end); checking them up front gives the
+same verdict. The nonces' values are messages (§6.1) and are not checked, except `grinding_nonce = 0` in each ring switch,
+which upstream checks structurally.
+
+Check at m = 32 (a recorded pure-block proof, 543,929 bytes): `cap` 128, `multilinear_rounds` 26, lincheck rounds 14,
+14 ring switches, level-0 rows 218 × 64 with 2,834 hashes, recursive caps 64, 64, 32, 32, 32, `yr` 32, 42 messages,
+11 out-of-domain values, 17 / 6 / 6 nonces; the file is consumed exactly.
+
+## 9. Statement binding and zerocheck
+
+Notation for this section and the next: `m`, `k_log` from the statement, `n_log = m − k_log`, `k_skip = 6`. A witness bit
+address is `a = s + 64·t + 2^{k_log}·o` with the skip index `s ∈ [0, 64)` in bits 0–5, the inner rest `t` in bits
+6 … k_log−1 and the block `o` in bits k_log … m−1 (upstream's `WitnessLayout::RowMajor`). The quirky extension `ẑ(Y, x)`
+has degree `< 64` in `Y`, interpolating over the nodes `φ8(s)`, and is multilinear in `x ∈ F^{m−6}` over address bits
+6 … m−1 in order.
+
+Skip nodes: `S = φ8({0…63})`, a 6-dimensional F2-subspace of F; the output coset `Λ = φ8({64…127}) = δ + S`,
+`δ = φ8(0x40)`. For a node set `N` (a subspace or coset of dimension `d`), `Z_N(X) = Π_{n∈N}(X + n)`,
+`den_d = Π_{i=1}^{2^d−1} φ8(i)`, and the Lagrange weight `L^N_n(ζ) = Z_N(ζ)·den_d^{−1}·(ζ + n)^{−1}`, except that for
+`ζ ∈ N` the weights are the indicator of `ζ`. `L_s(ζ)` means `L^S_{φ8(s)}(ζ)`.
+
+### 9.1 Binding (round 0, first part)
+
+~~~text
+observe_label("flock-r1cs-v0")
+observe_bytes(statement_digest)            32 bytes (§16)
+observe_bytes(flatten(commitment.cap))     32 · |cap| bytes, the Merkle cap in order (§14)
+~~~
+
+`commitment.params` is not absorbed; it must equal the configured `PcsParams` (§8.3). No out-of-domain sample follows the
+commitment (paper Remark 11).
+
+### 9.2 Zerocheck transcript and checks
+
+Shape checks first: `m ≥ 13`; `|round1_ab| = |round1_c| = 64`; `|multilinear_rounds| = m − 6`; `grinding_nonces = []`.
+
+| step | operation | value |
+|---|---|---|
+| Z1 | `observe_label("flock-zerocheck-v0")` | |
+| Z2 | `sample_f128_vec(6)` | `r_skip`: **unused** (no check reads any bit of it; see §19) |
+| Z3 | `sample_f128_vec(m − 13)` | `r[13 … m−1]` |
+| Z4 | `observe_f128_slice(round1_ab)`, `observe_f128_slice(round1_c)` | 64 elements each |
+| Z5 | `z ← sample_f128()` | the univariate-skip challenge (the paper's λ) |
+| Z6 for `i = 0 … m−7` | `observe_f128(g1_i)`, `observe_f128(ginf_i)`, `ρ_i ← sample_f128()` | residual rounds |
+| Z7 | `observe_f128(final_a_eval)`, `observe_f128(final_b_eval)` | after the final check |
+
+The zerocheck vector is `r ∈ F^{m−6}` indexed by address bits 6 … m−1: seven pinned coordinates, then `r[13…]` from Z3.
+
+| address bit | value (hex `hi‖lo`) | origin |
+|---|---|---|
+| 6 | `φ8(0xF7)` = `1cf7a0fe8922c83fd8a5ae31928b4da1` | `α/(1+α)` in GF(2^8) |
+| 7 | `φ8(0x53)` = `ffdb65d9987f058ca0415e708193f42a` | `α²/(1+α²)` |
+| 8 | `φ8(0xB5)` = `44020450758a036626cb812e5dc6f8a5` | `α⁴/(1+α⁴)` |
+| 9 | `x/(1+x)` = `ffffffffffffffffffffffffffffff83` | GHASH, `y = x` |
+| 10 | `x²/(1+x²)` = `5555555555555555555555555555557f` | `y = x²` |
+| 11 | `x⁴/(1+x⁴)` = `eeeeeeeeeeeeeeeeeeeeeeeeeeeeee9a` | `y = x⁴` |
+| 12 | `x⁸/(1+x⁸)` = `d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3b9` | `y = x⁸` |
+
+These are the paper's §4.3 two-level construction (weights `C·φ8(α)^k·x^j`, `k < 8`, `j < 16`); their 128 eq weights have
+F2-rank 128, the hypothesis the paper's argument needs. The verifier never forms those weights: the pinned values enter only
+as `r_eq` in rounds 0–6 and as coordinates of the c-claim point.
+
+Computation after Z5:
+
+~~~text
+Pc(z)    = Σ_{i<64} L^Λ_{φ8(64+i)}(z) · round1_c[i]
+check    Pc(z) = final_c_eval                                                        (CEvalMismatch)
+Pcomb(z) = Σ_{i<64} Z_{S∪Λ}(z) · den_7^{−1} · (z + φ8(64+i))^{−1} · (round1_ab[i] + round1_c[i])
+           (the unique polynomial of degree < 128 that is 0 on S and round1_ab + round1_c on Λ; indicator rule if z ∈ S ∪ Λ)
+claim_0  = Pcomb(z) + Pc(z)                                                          (= Pab(z))
+~~~
+
+So "P_ab − P_c vanishes on S" is imposed by construction, not checked, and the interpolant may have degree 127 (the paper
+states 126); the Schwartz–Zippel term at `z` is `127/|F|`.
+
+Residual round `i` binds address bit `6 + i` with `r_eq = r[6 + i]`. The prover sends `(g1, ginf) = (G(1), G(∞))` of the
+eq-stripped quadratic `G`:
+
+~~~text
+G(0)   = (claim + r_eq · g1) · (1 + r_eq)^{−1}          (inv(0) = 0: r_eq = 1 gives G(0) = 0, as upstream)
+claim ← G(0)·(1 + ρ_i) + g1·ρ_i + ginf·ρ_i·(1 + ρ_i)
+~~~
+
+No per-round check. Final: `claim = final_a_eval · final_b_eval` (`SumcheckFinalFailed`). Outputs: `z`,
+`ρ = (ρ_0 … ρ_{m−7})`, `r_rest = r[6 … m−1]`, `v_a = final_a_eval`, `v_b = final_b_eval`, `v_c = final_c_eval`.
+
+## 10. Lincheck
+
+Inputs: `x_ab = (z, ρ[0 … k_log−7], ρ[k_log−6 … m−7])`, i.e. skip point `z`, inner rest `ρ_in` (`k_log − 6` values) and
+outer `ρ_out` (`n_log` values); `v_a`, `v_b`. Shape checks: `|rounds| = k_log − 6`, `|z_partial| = 64`,
+`grinding_nonces = []`, and the circuit has `2^{k_log}` columns. `matrix_evals` is not read: every honest proof sends it
+empty, and upstream ignores it, as does the spec.
+
+| step | operation | value |
+|---|---|---|
+| L1 | `observe_label("flock-lincheck-v0")`, `α ← sample_f128()` | |
+| L2 | `β ← sample_f128()` | the constant-wire coin |
+| L3 for `j = 0 … k_log−7` | `observe_f128(q1_j)`, `observe_f128(qinf_j)`, `t_j ← sample_f128()` | |
+| L4 | `observe_f128_slice(z_partial)` (64 elements) | |
+| L5 | `r' ← sample_f128()` | the fresh skip coin |
+
+Computation:
+
+~~~text
+e[s + 64·u]  = L_s(z) · eq(ρ_in, u)                  s < 64, u ∈ {0,1}^{k_log−6} (LSB first); length 2^{k_log}
+comb[c]      = Σ_i e[i] · (α · A_0[i, c] + B_0[i, c])        for every column c < 2^{k_log}   (§16.1)
+comb[pin]   += β
+claim        = α · v_a + v_b + β
+for j = 0 … k_log−7:                                  (round j binds column bit k_log−1−j: top bit first)
+    e0 = claim + q1_j;   c1 = e0 + q1_j + qinf_j;   claim ← qinf_j · t_j² + c1 · t_j + e0
+    h = |comb| / 2;  comb[i] ← comb[i] + t_j · (comb[i + h] + comb[i])  for i < h;  truncate comb to h
+check        Σ_{s<64} comb[s] · z_partial[s] = claim                               (ConsistencyFailed)
+w            = Σ_{s<64} L_s(r') · z_partial[s]
+r_in'        = (t_{k_log−7}, …, t_0)                   (reversed: r_in'[j] is the coin for address bit 6 + j)
+~~~
+
+The `β` term is sound only if the pin column is 1 in every block, padding blocks included; every statement wires every
+slot's constant to the pin and pads with blocks whose constant is 1. The paper's lincheck ends in claims on `Â_0`, `B̂_0`
+that the verifier checks; here the verifier computes `comb` itself and the prover sends all 64 skip evaluations, so the
+lincheck's last univariate step has degree 63 (error `63/|F|`).
+
+## 11. The claims handed to the opening
+
+~~~text
+ab:  value w,             skip L_s(r'), x = r_in' ‖ ρ_out                      (|x| = m − 6)
+c:   value final_c_eval,  skip L_s(z),  x = r_rest = r[6 … m−1]
+e_k: the statement's extra claims (§16.2), in order
+~~~
+
+The opening (§12) receives `[ab, c, e_1 … e_K]`. Before it, the verifier checks `commitment.params = PcsParams(m)` (§8.3).
+
+## 12. Opening: claim batching and ring switching
+
+Input: the claim list `claims = [ab, c, e_1, …, e_K]` (§11), `n = 2 + K`, each claim `(value α_k ∈ F, skip_k ∈ F^64,
+x_k ∈ F^{m−6})`, and `proof.pcs_open = BatchOpeningProof` (§8). The output is one inner-product claim handed to Ligerito
+(§13). The paper's Appendix B treats one claim with its own sumcheck; this configuration ring-switches each claim with its
+own coins, batches the results with independent coins, and lets Ligerito's sumcheck play the role of the paper's.
+
+### 12.1 Packing
+
+Write a witness bit address as `a = 128·y + v`, `v ∈ [0, 128)`, `y ∈ [0, 2^ℓ)`, `ℓ = m − 7`. The committed packed polynomial
+is `f(y) = Σ_v z[128y + v] · x^v`: the basis is `b_v = x^v` in GHASH form, and bit `v` of `f(y)` (as a 128-bit integer) is
+`z[128y + v]`. So the packed variables are the 7 low address bits: bits 0–5 (`σ`) are the univariate-skip variables and bit 6
+is the first multilinear coordinate; `y`'s bit `j` is address bit `7 + j`.
+
+A claim's weight on the 128 packed positions is
+
+~~~text
+w_k[v] = skip_k[v mod 64] · eq(x_k[0], ⌊v / 64⌋)          eq(ρ, 0) = 1 + ρ,  eq(ρ, 1) = ρ
+~~~
+
+which is the paper's `w(σ, b) = L_σ(ζ)·eq(ρ, b)` (B.3).
+
+### 12.2 Transcript and checks
+
+| step | operation | check |
+|---|---|---|
+| O1 | `observe_label("flock-pcs-open-batch-v0")` | `|proof.ring_switches| = n`; `proof.batching_nonces = []` |
+| for `k = 0 … n−1`: | | |
+| O2 | `observe_label("flock-ring-switch-v0")` | `|s_k| = 128` (upstream asserts; the spec rejects) |
+| O3 | `observe_f128_slice(s_k)` (one frame of 128 elements) | `Σ_v w_k[v]·s_k[v] = α_k` |
+| O4 | (no transcript operation) | `ring_switches[k].grinding_nonce = 0` |
+| O5 | `r''_k ← sample_f128_vec(7)` | |
+| O6 | `γ ← sample_f128_vec(n)` (one squeeze) | |
+
+Claim values and points are not absorbed here. For `ab` and `c` they are functions of earlier absorbed messages and coins.
+The extra claims' points come from the link points and their values from the committed public words (§16), both fixed
+before any Flock coin by the session order (S3, R5). A verifier implementation must not add absorbs here.
+
+### 12.3 Recombination
+
+For each claim, view `s_k` as a 128 × 128 bit matrix `M[v][u] = bit_u(s_k[v])` and repack each column:
+`t_k[u] = Σ_v M[v][u] · x^v` (bit `v` of `t_k[u]` is bit `u` of `s_k[v]`). Then
+
+~~~text
+β_k = Σ_{u<128} eq(r''_k, u) · t_k[u]        eq(r, u) = Π_{i<7} (r_i if bit_i(u) else 1 + r_i)
+T   = Σ_k γ_k · β_k
+~~~
+
+### 12.4 The batched basis
+
+With `z_k = x_k[1 .. m−6] ∈ F^ℓ` and `Φ_k : F → F` the F2-linear map with `Φ_k(x^u) = eq(r''_k, u)`:
+
+~~~text
+B_k(y) = Φ_k( eq(z_k, y) )          for y ∈ {0,1}^ℓ        (paper Claim 6)
+b(y)   = Σ_k γ_k · B_k(y)
+~~~
+
+Ligerito (§13) consumes `b` only through its multilinear extension at points `(ρ, y')` with `ρ ∈ K^{ℓ−e}` (K = GF(2^256),
+§2.4) and `y' ∈ {0,1}^e`, where `e` is the profile's clear-residual length (§15). The pairing is `ρ_j ↔ z_k[j]` and bit `j`
+of `y'` ↔ `z_k[ℓ − e + j]`. Any correct algorithm may compute it. The reference form is the paper's width-128 branching
+program (B.4), lifted to K:
+
+~~~text
+B̂_k(q) = Σ_{u<128} eq(r''_k, u) · S_u,  where S ∈ K^128 starts at e_0 and for j = 0 … ℓ−1:
+    S'_l = Σ_{u} bit_l( (1 + z_k[j]) · x^u ) · S_u  +  q_j · S_l
+~~~
+
+(For Boolean `q_j` the step is multiplication of the F factor by `z_k[j]` or `1 + z_k[j]`.) Upstream computes the same value
+with the DP24 tensor algebra over `K ⊗_{F2} F`; the results are equal.
+
+### 12.5 Hand-off
+
+Ligerito must decide `Σ_{y ∈ {0,1}^ℓ} f(y)·b(y) = T` for the committed `f` (§13). `T ∈ F` enters Ligerito's transcript as
+an F element and its running claim as `T ∈ K`.
+
+### 12.6 Rejections
+
+- `|ring_switches| ≠ n`; `batching_nonces ≠ []`; `|s_k| ≠ 128`; a claim check fails; `grinding_nonce_k ≠ 0`.
+- `|x_k| ≠ m − 6` or `|skip_k| ≠ 64` for any claim (upstream checks the extras against `c`'s length; the spec checks all).
+- Ligerito rejects (§13).
+
+## 13. Ligerito (dense opening)
+
+Input: `T ∈ F`, the basis oracle `b̂` (§12.4), the commitment cap, `proof.pcs_open.ligerito`, and the schedule for `n = m − 7`
+(§15). The committed table is `t : {0,1}^n → F` (`t(y) = f(y)`, §12.1). The verifier accepts iff (up to soundness)
+`Σ_y t(y)·b(y) = T`. This is the paper's Appendix C with four changes, each in §19 (A11): claims and folding challenges in
+`K = GF(2^256)`, so each recursive level commits the *split* of a K-table (`f = f_0 + u·f_1` becomes the F-table
+`g(b, x) = f_b(x)` with a new low variable `b`); stratified queries; a Merkle cap instead of a root; and an explicit
+out-of-domain sample at level 0 during the opening.
+
+### 13.1 Commitment and code
+
+- Level 0: `k0 = initial_k` lanes (rows) and `cols_0 = n − k0` message columns; lane `ℓ` is the low `k0` bits of the table
+  index and column `c` the high bits: `M[ℓ][c] = t[c · 2^{k0} + ℓ]`. The first `k0` variables are folded first.
+- Reed–Solomon over F, additive (LCH novel basis): basis `v_i = x^i`, domain `ω_q = x`-polynomial whose coefficient bits are
+  `q` (`ω_q = (lo = q, hi = 0)`), `q < 2^d`, `d = cols + log_inv_rate`, natural order.
+  `s_0(X) = X`, `s_{i+1}(X) = s_i(X) · (s_i(X) + s_i(v_i))`, `Ŵ_i = s_i / s_i(v_i)`, `X̂_c = Π_{i ∈ bits(c)} Ŵ_i`.
+  Codeword `C[ℓ][q] = Σ_c M[ℓ][c] · X̂_c(ω_q)`. The verifier never encodes; it evaluates `X̂` at opened positions (§13.4).
+- Each level's commitment is a Merkle cap (§14): leaf `q` hashes the column `(C[0][q], …, C[L−1][q])`. Level `ℓ ≥ 1` commits
+  its split F-table with `k_ℓ = 4` lanes (16) and the rate of the schedule.
+
+### 13.2 Round algebra
+
+A sumcheck message is `(u0, u2) ∈ K²`, absorbed as `observe_f256(u0)`, `observe_f256(u2)` (two frames). With running claim
+`s ∈ K` it defines `q(X) = u0 + (s + u2)·X + u2·X²`, so `q(0) + q(1) = s` holds by construction and no per-round check
+exists. A challenge `r ← sample_f256()` sets `s ← q(r)`. Introducing a new claim `v` with its own message `(u0', u2')`:
+`q ← q + β·q_intro` coefficient-wise (`q_intro` built from the message with claim `v`), `s ← s + β·v`, `β ∈ F`.
+
+### 13.3 Transcript
+
+Counters start at 0; "the next X" reads list X of the proof and rejects if it is exhausted. `PoW(list)` is
+`observe_bytes(le64(next nonce of list))` (a message; never checked, R4). Preconditions: `R ≥ 1`;
+`initial_cap = commitment.cap`; `sumcheck_transcript = []`; `sumcheck_transcript_f256 ≠ []`; `fold_grinding_nonces = []`;
+every recursive `k ≥ 2`.
+
+Level 0:
+
+1. `observe_label("flock-ligerito-basis-f256-split-v0")`; `observe_f128(T)`; `observe_bytes(flatten(initial_cap))`.
+   `s ← T` (in K).
+2. Out-of-domain, once: `z ← sample_f128_vec(n)`; `y ← next ood_value`; `observe_f128(y)`; `PoW(claim)`;
+   `β ← sample_f128()`; `s ← s + β·y`. Record context `(z, β, split = none)`. No message.
+3. Read and absorb the next message; `q ← from(msg, s)`.
+4. `k0` times: `r ← sample_f256()`; `s ← q(r)`; read and absorb the next message; `q ← from(msg, s)`. The `r`'s are the
+   initial challenges. The last message is the round polynomial of the level-1 split coordinate.
+5. `split_dim ← n − k0 + 1`; `cap_1 ← recursive_caps[0]`; `observe_bytes(flatten(cap_1))`.
+6. Out-of-domain, twice: `z ← sample_f128_vec(split_dim)`; `y ← next ood_value`; `observe_f128(y)`; read and absorb the
+   next message; `intro ← from(msg, y)`; `PoW(claim)`; `β ← sample_f128()`; `q ← q + β·intro`; `s ← s + β·y`. Context
+   `(z, β, split = 0)`.
+7. Queries on level 0: `PoW(query)`; `w ← sample_f128_vec(Q_0)`; positions by §13.5 over `2^{d_0}`.
+8. `PoW(consistency)`; `α ← sample_f128_vec(⌈log2 Q_0⌉)`.
+9. Open the rows against `initial_cap` (§14): `2^{k0}` elements per row.
+10. `e ← Σ_{j<Q_0} eq(α)[j] · Σ_ℓ eq_K(initial challenges)[ℓ] · row_j[ℓ]`.
+11. Read and absorb the next message; `intro ← from(msg, e)`; `PoW(claim)`; `β ← sample_f128()`; `q ← q + β·intro`;
+    `s ← s + β·e`. Consistency context `(cols = n − k0, positions, α, β, start = 0)`.
+12. `prev ← (cap_1, lanes = k_1, cols = split_dim − k_1, rate_1)`; reject if `split_dim < k_1`.
+
+Recursive round `i = 0 … R−1` (level `i + 1`, `k = recursive_ks[i]`): reject if `split_dim < k`; `k` times
+`r ← sample_f256()`, `s ← q(r)`, read and absorb the next message, `q ← from(msg, s)` (these are `level[i]`; `level[i][0]`
+folds the split coordinate); `ext ← split_dim − k`. Then:
+
+- Not last (`i + 1 < R`): `split_dim ← ext + 1`; the next cap, absorbed; two out-of-domain samples as step 6 (context
+  `split = i + 1`); queries on the previous commitment (`PoW(query)`, `Q_{i+1}` coins); `PoW(consistency)`,
+  `α ← sample_f128_vec(⌈log2 Q_{i+1}⌉)`; open the next `recursive_proofs` entry against the previous cap (16 lanes);
+  `e ← Σ_j eq(α)[j] · Σ_ℓ eq_K(level[i])[ℓ] · row_j[ℓ]`; read and absorb a message; `PoW(claim)`; `β`; batch as step 11
+  (context start `i + 1`); `prev ←` the new cap with its lanes, cols and rate; reject if `split_dim < lanes`.
+- Last (`i + 1 = R`): reject unless every message was consumed and `|yr| = 2^{ext+1}`; `observe_f128(yr[t])` for each word
+  in order (one scalar frame each); queries on `cap_R`; `PoW(consistency)`, `α`; open `final_proof` against `cap_R`;
+  `e` as above; `PoW(claim)`; `β ← sample_f128()`; `s ← s + β·e` (no message); the final check (§13.6).
+
+The message read after the last challenge is absorbed and required to exist but enters no equation; the claim used is the
+one before it.
+
+### 13.4 Consistency weights
+
+For an opened level with `2^k` lanes and `L` columns, the verifier needs the multilinear extension of `c ↦ X̂_c(ω_q)` at a
+point `p ∈ K^L`:
+
+~~~text
+MLE(X̂_·(ω_q))(p) = Π_{i<L} (1 + p_i · (1 + Ŵ_i(ω_q)))
+Ŵ_i(ω_q) = s_i(ω_q) / s_i(v_i),   s_0(ω) = ω,   s_{i+1}(ω) = s_i(ω)² + s_i(v_i) · s_i(ω)
+~~~
+
+### 13.5 Query positions (the only coins read partially)
+
+The schedule decomposes `Q` greedily into powers of two: `c_1 ≥ c_2 ≥ …` with `Σ 2^{c_i} = Q`, `c_i = min(⌊log2 rem⌋, d)`.
+Queries are listed summand by summand, stratum `s = 0 … 2^{c_i} − 1` within each summand. Query `j` in stratum `s_j` of a
+summand of depth `c_j` has position
+
+~~~text
+pos_j = (s_j << (d − c_j)) | (coin_j.lo mod 2^{d − c_j})
+~~~
+
+It reads only the low `d − c_j` bits of the coin's `lo` word; bits `d − c_j … 127` are unused (the recorded negative
+`unused_high_bits_of_query_coin` must be accepted). Sampling is with replacement: no deduplication, no rejection.
+
+### 13.6 Final check
+
+With `cff(c) = 1 + c·(1 + u)` and `Π_{≥a} = Π_{s ≥ a} cff(level[s][0])`:
+
+1. `orig ← initial challenges ‖ level[0][1..] ‖ … ‖ level[R−1][1..]`; reject unless `|orig| + ext = n`.
+2. `res[y] ← b̂(orig ‖ bits(y)) · Π_{≥0}` for `y < 2^{ext}` (§12.4).
+3. Each out-of-domain context adds `β · scale · Π_{t<|fixed|}(1 + z_t + fixed_t) · Π_{j<ext} eq(z_{|fixed|+j}, bit_j(y))`,
+   with `(fixed, scale) = (orig, Π_{≥0})` for the level-0 sample, and `(level[s] ‖ level[s+1][1..] ‖ … ‖ level[R−1][1..],
+   Π_{≥s+1})` for `split = s`.
+4. Each consistency context `(L, positions, α, β, start a)` adds
+   `β · Π_{≥a} · Σ_j eq(α)[j] · P_j · T_j(y)`, where `fixed = level[a][1..] ‖ … ‖ level[R−1][1..]` (empty for `a = R`),
+   `P_j = Π_{i<|fixed|}(1 + fixed_i · (1 + Ŵ_i(ω_{pos_j})))`, `T_j(y) = Π_{i<ext} (Ŵ_{|fixed|+i}(ω_{pos_j}) if bit_i(y) else 1)`.
+5. Accept iff `Σ_y res[y] · (yr[2y] + u · yr[2y+1]) = s` and every list is exhausted: `ood_values`, every nonce list,
+   `recursive_caps`, `recursive_proofs`.
+
+## 14. Merkle trees
+
+- Leaf: `SHA-256(e_0 ‖ e_1 ‖ … ‖ e_{L−1})`, each element 16 bytes (§2.1), no prefix, no index, no length.
+- Node: `SHA-256(left ‖ right)`.
+- The commitment is the cap: the `2^c` nodes at depth `c` below the (never formed) root, left to right, with
+  `c = ⌊log2 Q⌋` for the level (7 at level 0: 128 hashes, 4096 bytes), clamped to `d`.
+- A level's opening: `opened_rows` in query order (duplicates repeated), and `merkle_proof` = `Q · (d − c)` sibling hashes,
+  flat, in query order. Checks: `|rows| = |positions| = Q`, `|cap| = 2^c`, `|siblings| = Q·(d − c)`, each row has the level's
+  lane count; for each query, `acc ← leaf(row)`, then for `d − c` siblings `acc ← H(acc ‖ sib)` if the current index is even
+  else `H(sib ‖ acc)`, index halved; require `acc = cap[pos >> (d − c)]`.
+
+## 15. Parameters: `fast100`
+
+Schedules exist for `m = 22 … 35` only; the verifier rejects any other `m`. Every level has query and fold grinding 0,
+`η = 0.02`, the Johnson regime, 1 out-of-domain sample at level 0 and 2 at every other level, `k = 4` at levels ≥ 1.
+
+| level | rate | Q | strata `c_i` | cap | claim PoW bits | consistency PoW bits |
+|---|---|---|---|---|---|---|
+| 0 | 1/2 | 218 | 7, 6, 4, 3, 1 | 7 | 6 | 9 |
+| 1 | 1/4 | 106 | 6, 5, 3, 1 | 6 | 6 | 9 |
+| 2 | 1/8 | 71 | 6, 2, 1, 0 | 6 | 7 | 9 |
+| 3 | 1/16 | 53 | 5, 4, 2, 0 | 5 | 7 | 10 |
+| 4 | 1/32 | 43 | 5, 3, 1, 0 | 5 | 8 | 10 |
+| 5 | 1/64 | 36 | 5, 2 | 5 | 8 | 11 |
+| 6 | 1/128 | 32 | 5 | 5 | 9 | 11 |
+
+Exception: at `m = 22` level 2 has rate 1/16 (Q 53, strata 5, 4, 2, 0).
+
+| m | k0 | levels | cols per level | d per level | `ext` (`|yr| = 2^{ext+1}`) |
+|---|---|---|---|---|---|
+| 22 | 6 | 3 | 9, 6, 3 | 10, 8, 7 | 3 |
+| 23 | 6 | 3 | 10, 7, 4 | 11, 9, 7 | 4 |
+| 24 | 6 | 3 | 11, 8, 5 | 12, 10, 8 | 5 |
+| 25 | 6 | 4 | 12, 9, 6, 3 | 13, 11, 9, 7 | 3 |
+| 26 | 6 | 4 | 13, 10, 7, 4 | 14, 12, 10, 8 | 4 |
+| 27 | 6 | 4 | 14, 11, 8, 5 | 15, 13, 11, 9 | 5 |
+| 28 | 4 | 5 | 17, 14, 11, 8, 5 | 18, 16, 14, 12, 10 | 5 |
+| 29 | 5 | 5 | 17, 14, 11, 8, 5 | 18, 16, 14, 12, 10 | 5 |
+| 30 | 6 | 5 | 17, 14, 11, 8, 5 | 18, 16, 14, 12, 10 | 5 |
+| 31 | 6 | 6 | 18, 15, 12, 9, 6, 3 | 19, 17, 15, 13, 11, 9 | 3 |
+| 32 | 6 | 6 | 19, 16, 13, 10, 7, 4 | 20, 18, 16, 14, 12, 10 | 4 |
+| 33 | 6 | 6 | 20, 17, 14, 11, 8, 5 | 21, 19, 17, 15, 13, 11 | 5 |
+| 34 | 6 | 7 | 21, 18, 15, 12, 9, 6, 3 | 22, 20, 18, 16, 14, 12, 10 | 3 |
+| 35 | 6 | 7 | 22, 19, 16, 13, 10, 7, 4 | 23, 21, 19, 17, 15, 13, 11 | 4 |
+
+Shape identity: `k0 + 3·R + ext = n`. `log_batch_size = k0` in `PcsParams`. The table is data (`Flock.Schedule`); the TOML
+files' `expected_eps_*` fields, `target_security_bits`, `analysis_version` and `hash` are diagnostics the verifier never reads,
+and the Merkle hash is SHA-256 whatever the TOML says.
+
+**Soundness per table.** Per run, the query terms dominate: `Q · log2(1/(√ρ + η))` exceeds 100 bits at every level (100.23,
+100.00, 100.86, 100.12, 100.85, 100.29, 102.58), and the union over the levels and every other round-by-round term
+(zerocheck, lincheck, ring switch, out-of-domain, claim and consistency batching, sumcheck) is 2^-97.8 (red-team-flock's
+reproduction from the TOMLs; 2^-98.0 at m = 30). No grinding credit is taken: under live coins a nonce buys nothing. Two
+reps on one root with independent live coins give **2^-195.5 per table**, round by round, whatever the interleaving of the
+reps (red-team-flock re-audit).
+
+## 16. Statements
+
+Each statement supplies `setup(Config, PublicInput)`:
+
+~~~text
+Statement = { table, domain : Nat → Bytes, Σ : Bytes32, digest : Bytes32, hello : String,
+              r1cs : { m, k_log, k_skip = 6, pin }, circuit : BlockMatrices, m_pts,
+              regions : List Region, publicsCheck : Bytes → Except Reason Unit,
+              extraClaims : Points × Publics → List ExtraClaim }
+~~~
+
+All three statements share the session shape: `Commit(root_F = Σ, root_B, publics)`, then two link points of `m_pts`
+coordinates, then `Link(y = 0, 0)`, then Flock's coins. Nothing links to a second field, so `y` is pinned to zero (S10) and
+the points serve only the region claims. Byte strings below are quoted exactly as the implementation spells them; some
+still carry the retired word "netlist", and renaming them changes Σ and the statement digests.
+
+### 16.1 Block matrices
+
+Every statement proves one block R1CS: `A·z ∘ B·z = z` over F2 with `A = I_{2^nbl} ⊗ A_0`, `B = I_{2^nbl} ⊗ B_0`
+(`C = I`). A block is `2^{k_log}` witness bits; the witness has `2^nbl` blocks, `m = k_log + nbl`.
+
+`A_0` and `B_0` are `2^{k_log} × 2^{k_log}` over F2, assembled from:
+
+1. **Slots.** The block is cut into aligned slots. Each slot holds one copy of a sub-circuit's R1CS: a BLAKE3 compression
+   (`2^14` rows, upstream's `blake3::build_block_r1cs(3)`), a SHA-256 compression (`2^15` rows, `sha2::build_block_r1cs(3)`),
+   a unit (an expanded circuit in `flock-unit-io/v1` or `flock-ir-unit/v2` form, `2^{unit_log}` rows), a lookup circuit
+   (§16.5), or a mask slot (`A = B = I`). Rows no slot covers are forced zero (`A = B = 0`, so `z = 0`).
+2. **Δ.** A list of `(row, col)` pairs for A and one for B, XORed into the slot matrices. The convention: pushing `(i, i)`
+   removes the base input row `i` (which was `A = [i]`), pushing `(i, src)` makes it read `z_src`. "Both" pushes into A and
+   B (so `z_i = z_src · z_src = z_src`); "A only" pushes into A with B left at the pinned constant column (so
+   `z_i = z_src · 1`). Constants are wired as `A = [bits · pin]`.
+3. **The pin.** One column fixed to 1 (`const_pin`); every slot's own constant column is wired to it.
+
+The verifier needs `Â_0` and `B̂_0` at one point per rep (§10). Any algorithm that computes the multilinear extension of
+the assembled sparse matrices is correct. Upstream's evaluates each slot type once on the first slot's eq tensor and
+rescales it per slot by a ratio of eq entries, then adds Δ's entries; the result is the same.
+
+The compression circuits are upstream data. The verifier holds them as pinned files (their `A` and `B` row lists; `C = I`)
+and recomputes the digest the statement digests embed (`D_b3`, `D_sha`), upstream's circuit digest:
+
+~~~text
+D = BLAKE3("flock-r1cs-stmt-v2" ‖ le64 m ‖ le64 k_log ‖ le64 k_skip ‖ le64 useful_bits ‖ u8 [pin present] ‖ le64 (pin or 0)
+           ‖ u8 layout (RowMajor = 0) ‖ Mat(A) ‖ Mat(B) ‖ Mat(C))
+Mat(X) = le64 rows ‖ le64 cols ‖ for each row: le64 (number of entries) ‖ le64 column × entries
+~~~
+
+The BLAKE3 compression circuit has `m = 17`, `k_log = 14`, `k_skip = 6`, pin 11706. Level 3 proves each pinned expanded
+circuit correct against its reference function (the lowering theorem).
+
+### 16.2 Region claims
+
+A region is a set of witness bits in every block whose values the verifier knows. It is given by `free` (up to `PT_LOCAL`
+in-block bit positions, LSB first) and a fixed assignment of the other in-block bits (`mask`, `fixed`). For a link point
+`r ∈ F^{m_pts}` the claim is:
+
+~~~text
+point p ∈ F^m:   p[j] = 1 if bit j of mask and of fixed are set, else 0   (j < k_log)
+                 p[free[t]] = r[t]
+                 p[k_log + i] = r[PT_LOCAL + i]                            (i < nbl)
+value:           Σ_{b < 2^nbl} eq(r[PT_LOCAL ..], b) · Σ_i eq(r[.. |free|], i) · bit_i(bytes(region, b))
+ExtraClaim:      (value, skip = eq(p[0..6], ·) over 64 entries, x = p[6 .. m])
+~~~
+
+`bytes(region, b)` is the region's known bit string in block `b` (bit `8i + t` is bit `t` of byte `i`), padding blocks
+included. Claims are listed region-major, then point 0 before point 1.
+
+### 16.3 `verity/flock-pure-block/v2` (table `pure`)
+
+- Domain `"flock-pure-block-v2/fast100x2/rep" ‖ decimal(r)`; Σ tag `"verity/flock-pure-block/sigma/v2"`; `PT_LOCAL = 16`;
+  `m_pts = 16 + nbl`.
+- Layout from `(row_bytes, units, sha)`:
+
+| layout | rows | k_log | compression slots | units | blocks per VU | slot log |
+|---|---|---|---|---|---|---|
+| `Chunk(n)`, 2 ≤ n ≤ 64 | `1024 n` bytes, BLAKE3 | 20 | 32 | 32 | n | 14 |
+| `ChunkTail(n)` | `1024 n + 512` | 20 | 32 | 32 | n + 1 | 14 |
+| `Fp8` | 1536 | 21 | 48 | 48 | 1 | 14 |
+| `ShaBf16` | 3072, SHA-256 | 22 | 98 | 96 | 1 | 15 |
+| `ShaFp8` | 1536, SHA-256 | 21 | 50 | 48 | 1 | 15 |
+| `Fp4` | 864, BLAKE3 | 20 | 28 | 24 | 1 | 14 |
+| `ShaFp4` | 864, SHA-256 | 21 | 28 | 24 | 1 | 15 |
+
+  `unit_pos0 = slots · 2^{slot_log − 13}` (units are `2^13`-bit slots), `blocks_real = blocks_per_vu · vus`,
+  `nbl = max(3, ⌈log2 blocks_real⌉)`, `m = k_log + nbl`. Admission (before any coin): CN3 (no `Chunk(1)`/`ChunkTail(0)`),
+  CN2 (`m ≤ 35`), NV2 (a 608-input unit only with the fp4 layouts), NV3 (row schemas), NV5 (y leaf width), NV1
+  (`out = y << 10` for `fp8-*` relations with `y < 2^22`, else `out = y`).
+- Statement digest: `SHA-256(TAG ‖ D_b3 ‖ sha256(unit file) ‖ le64 of [vus, blocks_real, nbl, m, k_log, 13, slots, units,
+  unit_pos0] ‖ layout text ‖ Δ_A ‖ Δ_B)`, `TAG = "verity/flock-pure-block/v2"`, `D_b3` the BLAKE3 compression circuit's
+  digest; layout text is present for `ChunkTail(n)`, for `Chunk(n)` with `n ≠ 3`, for `Fp8`, for the fp4 layouts (row
+  schema, then text) and for the SHA layouts (text, then the SHA-256 compression digest), each the exact sentence in the
+  implementation; each Δ is `le64(|Δ|) ‖ (le32 row ‖ le32 col)*`.
+- Σ: `SHA-256(SIGMA_TAG ‖ relation ‖ 00 ‖ le64 [vus, units, row_bytes, nbl, m] ‖ sha256(unit file) ‖ digest ‖
+  compact-sorted-JSON(header.instances) ‖ root_a ‖ root_b ‖ root_y)`.
+- Public input: the header, the row digests of x and W per VU, the y words; the verifier recomputes the three frame-v3
+  roots (§16.6) from them and compares with the header. The rows are not public input: the current instance file carries
+  them, and the vector tooling replaces them by their digests once.
+- Commit publics, per real block: the chunk chaining values (x chunks then W chunks, 8 le32 words each), `y16` (le32),
+  `acc_out` (le32), and for `ChunkTail` unit 15's `(y16, acc)`. `publicsCheck` (C4, legacy, §16.7): for `Chunk(n)` without
+  the epilogue, the last block's `acc_out` of each VU equals its output word; for every layout with chaining values, each
+  VU's chunk values fold through BLAKE3's keyed parent tree to its row digest.
+- Regions: `Key, Counter, Cv, AccIn, AccOut, [Y], [ChunkTail: Flags, CvMid, YMid | AccMid]` for the chunked layouts;
+  `CvSlot(k)…, AccOut` for `Fp8`; `Digest(0), Digest(1), Y | AccOut` for the SHA and fp4 layouts. Values come from the
+  layout's constants, the Commit publics, the public output words and row digests, and fixed padding values.
+
+### 16.4 IR frame statements (table `irf`)
+
+- `verity/flock-ir-frame/v3`: domain `"flock-ir-frame-v3/fast100x2/rep" ‖ r`; Σ tag `"verity/flock-ir-frame/sigma/v3"`;
+  Σ = `SHA-256(SIGMA_TAG ‖ ["class" ‖ class pin] ‖ unit ‖ 00 ‖ sha256(unit circuit) ‖ digest ‖ public_sha256)` with
+  `public_sha256 = SHA-256(header line ‖ every byte after the rows)`. Statement digest: `SHA-256(TAG ‖ D_b3 ‖ sha256(unit
+  circuit) ‖ key ‖ le64 [blocks_real, nbl, m, k_log, slots, nb, chunks, units, unit_log, unit_pos0, ret_col, ret_words,
+  cut_words, |regions|] ‖ per input port (le64 words ‖ u8 hashed) ‖ Δ_A ‖ Δ_B)`. `k_log ∈ [20, 22]`, `m_pts = 16 + nbl`,
+  `m = k_log + nbl` (the implementation has no `m ≤ 35` refusal; the spec rejects `m > 35`).
+- Public input: the frame-v3 file without its rows section (digests, unit output words, instance outputs, cut words).
+- Commit publics: each real block's run output chaining values. `publicsCheck` (C4, legacy): each row's last-run chaining
+  values fold through the keyed parent tree (one chunk: its ROOT output) to the row digest.
+- Regions: `Params, CvIn, Cv, [Out], [CutIn, CutOut]`.
+- Admission (legacy, §16.7): `check_cut_words` evaluates the pinned tail on the file's cut words; `check_public_ports`
+  hashes public ports.
+- `verity/flock-ir-sampling/v1` shares table `irf` and the v2 frame lineage; its admission evaluates `DivFullRcp` and the
+  Gumbel noise. `verity/flock-ir-block/v1` is an older statement with public unit IO. Both are legacy-only.
+
+### 16.5 The circuit statement (PR #83, table `nl`)
+
+- Tags: `TAG = "verity/flock-netlist/v1"`, file format `"flock-netlist/v1"`, public file format `"flock-netlist-inst/v1"`,
+  Σ tag `"verity/flock-netlist/sigma/v1"`, domain `"flock-netlist-v1/fast100x2/rep" ‖ r`, `PT_LOCAL = 24`,
+  `m_pts = 24 + nbl`, leaf scheme `"flock-leaf/sha256-unsalted/v0"`.
+- Σ = `SHA-256(SIGMA_TAG ‖ sha256(circuit file) ‖ digest ‖ public_sha256)`, `public_sha256 = SHA-256(compact-sorted-JSON(header
+  with rows := false) ‖ digests ‖ outputs)`.
+- Statement digest: `SHA-256(TAG ‖ D_b3 ‖ sha256(circuit file) ‖ row key (32) ‖ compact-sorted-JSON(identity) ‖ le64 [n,
+  blocks_real, nbl, m, k_log, pin, |regions|, G] ‖ Δ_A ‖ Δ_B)`; `identity` is the backend identity object (statement,
+  backend `"C-interactive"`, proof class, profile, reps, commitments, flavour, Merkle hash, leaf scheme, ZK hooks).
+- The circuit file: line 1 `flock-netlist/v1 <name>`, line 2 `META <json>`, then `NET <name> <lines>` blocks, each an
+  expanded circuit in `flock-ir-unit/v2` form (the unit, tail stages). `sha256(file)` is the pin. The parser refuses a `CUT`
+  line and the META keys `tail, cut, cut_words, public_ports, public, native, outputs_by_tail`: that is where the rule
+  "the verifier evaluates nothing" is enforced. Lookup slots are built from sha256-pinned tables (`rsq, sqrt, rcp, ex2`)
+  as two-level one-hot circuits; their identity is `SHA-256("verity/flock-netlist/lookup/v1 {name} n= lo= bits=\n" ‖ table
+  words LE)`.
+- Layout: whole VUs per block (`G` per block); slots: BLAKE3 compression runs per input port and chunk, one parent tree
+  per multi-chunk port (heap order, root first), the unit range, tail stages, lookup slots, one mask slot, forced-zero
+  padding. Δ: const wiring to the pin; A-only chaining-value copies within runs and from children into parents; "both"
+  copies of unit leaf bits from message bits; "both" copies for every META wire. No key, counter or flag is wired: they are
+  region claims.
+- Public input: the public file (no rows; `serve` refuses a file with rows): header, row digests per instance and port,
+  output words. The verifier recomputes the input roots over the digests and the output roots over the output words
+  (u16 big-endian leaves), and checks the pinned padding digest `keyed_hash(key, zero row)` and padding chaining value.
+- Commit publics: empty. Regions: `Params`, `CvIn` and (single-chunk ports) `Digest` per run range; `Params`, `CvIn`,
+  `Digest` at the parent root; `Out` on the unit range. Values: the layout's BLAKE3 parameters, the key, the public
+  digests and outputs, and META's pinned padding values.
+- Coins: `seed` mode at the PR's tip (its `Hello` carries `"coins":"coin-commit/sha256/v1"`); the stored loopback sessions
+  predate it and use `os` coins.
+- Shape: `blocks_real = ⌈n / G⌉`, `nbl = max(3, ⌈log2 blocks_real⌉)`, `k_log ≤ 26`, `m = k_log + nbl`; the spec rejects
+  `m > 35` (no Fast100 schedule exists above it).
+
+### 16.6 frame-v3 roots
+
+~~~text
+H(tag, parts) = SHA-256("veritor/protocol/merkle/frame/v3\0" ‖ be32(|tag|) ‖ tag ‖ Π_p (be64(|p|) ‖ p))
+uint(x)       = big-endian bytes of x without leading zeros (0 → 00)
+leaf(r)       = H("leaf", [dom, uint(r), uint(r), schema, payload])
+pad(r)        = H("pad",  [dom, uint(r)])              for r in [n, next_pow2(n))
+node(d, i)    = H("node", [dom, uint(d), uint(i), L, R])   d = 0 at the first merge, i = index in the new level
+~~~
+
+A single leaf is its own root. Row-digest leaves carry the 32-byte digest; output leaves carry the word big-endian in its
+schema's width. Row digests themselves are `blake3::keyed_hash(row_key(role), row)` with `row_key(role) =
+"verity/blake3-leaf/v1/" ‖ role`, zero-padded to 32 bytes, or `SHA-256(prefix_block(role) ‖ row)` for the SHA schemas.
+Recomputing a root over public digests is a check of the commitment scheme on public data, not an evaluation of the
+computation.
+
+### 16.7 Strict and legacy conformance
+
+Daniel's rules: the verifier checks proofs and never evaluates any part of the computation; circuits are total; the
+circuit is public and every value is private. The verifier of record implements them as two modules:
+
+- **Strict** (the default): accepts only statements whose checks are the Flock proof, the session, the frame-v3 roots over
+  public digests and outputs, and hashes of pinned padding constants. Today that is the circuit statement (§16.5).
+- **Legacy** (to replay recorded cells for agreement with upstream, labelled as such): adds exactly these native checks,
+  each named in the verdict:
+  - L-CV: BLAKE3 keyed parent trees over committed chunk chaining values (pure-block, IR frame C4);
+  - L-ACC: the final accumulator equals the output word (pure-block `Chunk(n)`);
+  - L-TAIL: the pinned tail evaluated on cut words (IR frame cut templates, IR block);
+  - L-SAMPLE: `DivFullRcp` and the Gumbel noise (IR sampling).
+
+  Legacy statements also make intermediate values public (chunk chaining values, accumulators, cut words), which the rule
+  "every value is private" forbids; the legacy module accepts that as recorded.
+
+A legacy verdict is never a strict verdict. The circuits' totality is a property of the pinned files, checked by level 3's
+lowering theorem, not at run time.
+
+The target statement (the circuit statement once its leaves move) pins SHA-256 on every commitment path: Halevi–Micali
+serving leaves on SHA-256 hashed in the circuit, SHA-256 Merkle trees, SHA-256 round digests (§2.5).
+
+## 17. Acceptance, assumptions and trust
+
+### 17.1 How the Lean verifier becomes the verifier of record
+
+Upstream's Rust verifier (with `backends/flock/live`'s `Server::from_record` and `ReplayChallenger`) is the reference in a
+cross-validation test, run in CI on every change to the Lean verifier, the statements or the pinned files:
+
+1. **Agreement on the corpus.** For every entry of `vectors.json` (§18), both verifiers produce the same verdict:
+   - every honest session: both accept;
+   - every record-level negative: both reject, except the recipes marked `accept` (both accept), `info` (both return
+     the same verdict) and the two divergence recipes D1, D2 below (the Lean verifier rejects, upstream accepts);
+   - every red-team forgery, materialised as a record and proofs: both reject.
+2. **Fuzzing.** Mutations of honest vectors (a byte of a proof, a coin, a round digest, a record field, the public input)
+   are generated with a fixed seed per CI run and a rolling seed per nightly run. Both verifiers must return the same
+   verdict on each, and no mutation of a proof byte or of a round digest may be accepted by either.
+3. **Coverage.** The corpus covers every statement and layout in §16, `m` from 22 to 35 where a statement reaches it,
+   both coin sources (§7), and every check id of §5.3 and every rejection listed in §8–§14 at least once.
+
+A disagreement fails CI and is resolved against the paper and this spec, never by copying upstream's behaviour into the
+Lean verifier without a spec change. After the gate passes, production runs only the Lean verifier; upstream's verifier
+stays in CI as a regression oracle.
+
+"Upstream's verifier" means `Server::from_record` followed by `Server::finish` with the statement's `StatementVerifier`
+(and, for the pre-G2 records of §5.1, the statement binary's `replay` subcommand). The spec is deliberately stricter in two
+places, and the corpus marks the vectors that exercise them with the upstream verdict they expect:
+
+- **D1:** `root_F = Σ` (S6). Upstream's server checks it only for statements without link points; the statement replay tools
+  check it.
+- **D2:** no stream other than the configured rep streams (S11). Upstream ignores zero-round child streams and streams
+  outside the rep prefixes.
+
+Everywhere else the spec follows upstream, including where upstream is lenient without soundness cost: record keys for
+unconfigured tables are ignored, `matrix_evals` is ignored, bytes after the proof pair are ignored, nonces at
+proof-of-work sites are accepted as messages, and `r_eq = 1` in a zerocheck round gives `G(0) = 0`. Where upstream
+panics (`m` without a schedule, `|s_hat_v| ≠ 128`), its statement verifier catches the panic as a rejection and the spec
+rejects explicitly.
+
+### 17.2 Assumptions (for Table 1 and the soundness lane)
+
+Soundness of a verdict rests on:
+
+- **Statistical:** the Flock protocol's round-by-round errors for `fast100` (§15), squared over two reps on one root with
+  live coins: 2^-195.5 per table. The paper's theorems enter as named axioms in the soundness lane (level 4a): proximity
+  gaps and mutual correlated agreement for Reed–Solomon codes up to the Johnson bound (BCHKS25 Theorem 4.6), soundness of
+  ring switching (Diamond–Posen), Ligerito's list-decoding analysis (paper Appendix C).
+- **Coins:** with `os` coins, each coin is uniform and unknown to the prover before it sent the round the coin answers.
+  With `seed` coins, additionally: the seed commitment hides the seed, and SHA-256 in counter mode is a PRF (§7.2).
+- **Hashes:** SHA-256 collision resistance for the Merkle trees, the round digests and the statement binding (Table 1:
+  `cr/sha-256`); the tight Merkle bound is in the random-oracle model. BLAKE3 collision resistance for the row-digest leaves
+  (the commitment scheme's assumption, not the verifier's).
+- **Circuits:** the pinned circuits mean what the statement says they mean. Level 3 proves the lowering correct for every
+  pinned circuit; that the circuit matches silicon is empirical and outside the verifier.
+- **Custody:** the session record and proofs are the ones the verifier's server wrote (the record is evidence only under
+  the verifier's custody; nothing in it authenticates its author).
+
+### 17.3 Trusted components
+
+- **Lean's kernel,** for the level-3 theorems (re-checked with an independent checker).
+- **Lean's compiler, runtime and the C compiler, for the running binary.** Proofs are about Lean definitions, not the
+  machine code that runs. This trust point is new once only the Lean verifier runs. It is mitigated by the agreement tests
+  of §17.1: an independent implementation (upstream's Rust verifier, compiled by rustc) must agree on the whole corpus and
+  on fuzzed mutations in CI, so a miscompilation that changes a verdict on any tested input fails CI. It is not mitigated
+  for inputs no test reaches; the fuzzing and the coverage requirement narrow that gap, they do not close it.
+- **No `@[extern]` or `@[implemented_by]` substitution** in verification logic; if one is ever added it joins this list.
+- **The Rust cross-check's own trust base** (rustc, upstream's code) matters only as a test oracle: a bug shared by both
+  implementations would pass CI, which is why the Lean verifier is written from the paper and this spec, not from
+  upstream's code.
+
+## 18. Test vectors
+
+`backends/flock/verifier/vectors.json` (`flock-verifier-vectors/v1`) lists them; the bytes stay in the evidence store
+(`research data fetch <record> --path <path>`).
+
+- **Honest sessions: 50 sets, 100 sessions,** each with `expect: accept`, taken from the verifier runs of cells that
+  verify-flock-pure replayed and labelled `verified=accepted`, and red-team-flock(-2, -3) labelled `NON_ZK_PROOF`:
+  - pure-block: `Chunk(3)` (H100, A100), `Fp8` (4090, H100), `ShaBf16`, `ShaFp8`, `Fp4`, `ShaFp4` (5090), `Chunk(n)` at
+    real K (spine sets, L40S), 23 cells; point coordinates `m_pts` 26–28;
+  - IR frame v2 and v3: elementwise (#101 and served), attention per-T (T = 4 … 257) and the three attention class cells,
+    23 cells; `m_pts` 19–25;
+  - IR sampling (2 cells, legacy L-SAMPLE) and vllm-block (1 cell, same verifier path, outside this spec's statements);
+  - the PR #83 circuit statement: 2 loopback sessions of the SiLU 128-row run (`art:6250c04f`, `m_pts` 31, `os` coins).
+  Each set names its record artifact, the verifier run and commit, the public input files, the recorded `Hello` and
+  statement digest. Ten sets (the earliest pure-block cells) are pre-G2 records (§5.1).
+- **Record-level negatives: 20 recipes.** Twelve ran on two cells in verify-flock-pure's replay run `r20260925-222222-a2cf`
+  (`art:487b77de`), with outcomes: 9 rejected, 1 accepted as required, 2 informational. The required acceptance is
+  `unused_high_bits_of_query_coin`: flipping bit 127 of a query coin must not change the verdict (§13.5). The two
+  informational cases are explained in §19 (A1, A2): both are accepted on honest proofs, correctly. Eight new recipes cover
+  S6 (D1), S11 (D2), S13, S15, a proof byte flip and a relabelled profile.
+- **Forgeries: 12 red-team runs,** including R-BREAK (`art:8d04b53f`: two honest reps over different witnesses, accepted by
+  upstream's Fiat–Shamir r2 verifier; this spec rejects it at S13/S16/S18). The runs stored their harnesses and verdict
+  tables, not the forged records and proofs. Phase 2 materialises them with a `--dump` of each selftest case (the plan is in
+  the manifest) before the Lean verifier's gate.
+- **Spec self-check:** `transcript_check.py` rebuilds every round of a session from this spec alone (§6, §8, §9–§13,
+  including `T` from §12.3) and compares each round's SHA-256 and coin count with the record. On the first vector of all 50
+  honest sets, both reps, `m` 25 to 34, every recorded round matches (`art:430c513a`). It checks the transcript and the
+  layout, not the verifier's equations.
+- **Missing:** no stored session uses `seed` coins, and none exercises the legacy L-TAIL path with a forged cut word as
+  bytes. Phase 2 generates both.
+
+## 19. Ambiguities resolved from upstream's behaviour
+
+Each item is a point where the paper is silent, or differs, and the spec follows upstream (`b684b12` plus our layer).
+
+| id | topic | the paper | the spec (upstream) |
+|---|---|---|---|
+| A1 | zerocheck coins | `r ∈ F^{m−k_s}`, 7 fixed | 6 extra coins `r_skip` squeezed first and never read; kept so the transcript matches. Flipping any of their bits leaves an honest verdict unchanged, and would leave any verdict unchanged |
+| A2 | last coin | — | Ligerito's final claim-batching coin: read, but an honest proof satisfies the final equation for every value, so flipping its bits leaves an honest proof accepted (a dishonest proof's check depends on it) |
+| A3 | vanishing on S | the verifier checks `P_ab − P_z` vanishes on S; degree ≤ 126 | imposed by interpolating over S ∪ Λ with S = 0; degree ≤ 127 (Schwartz–Zippel `127/|F|`) |
+| A4 | `v†` | the verifier computes `P_z(λ)` | the prover sends `final_c_eval`; the verifier compares it with its interpolation; not absorbed |
+| A5 | residual sumcheck encoding | unspecified | `(G(1), G(∞))` of the eq-stripped quadratic, `G(0)` derived, no eq factor in the final check; `inv(0) = 0` |
+| A6 | pinned coordinates | `r_i = x^{2^{i−1}}/(1+x^{2^{i−1}})`, 3 in F8 and 4 in F, order unspecified | address bits 6–8 (F8 via φ8), 9–12 (F) |
+| A7 | lincheck | `(m_0 − k_s + 1)`-round sumcheck, then claims on `Â_0`, `B̂_0` | the verifier computes `α·A_0ᵀe + B_0ᵀe`; `k_log − 6` rounds, top bit first; the prover sends 64 skip values; fresh φ8 coin; `matrix_evals` unused and ignored |
+| A8 | constant wire | absent | extra coin `β`; `comb[pin] += β`, target `+ β`; needs the pin to be 1 in every block |
+| A9 | ring switching | one claim, own `(m−7)`-round sumcheck, B̂ via MBP | each claim switched with its own 7 coins, then one independent coin per claim; no standalone sumcheck: Ligerito's F256 folding sumcheck replaces it; B̂ at K points |
+| A10 | packing | `(r_hi, r_lo)` generic | the 7 low address bits; `b_v = x^v` |
+| A11 | Ligerito | uniform queries; unique or list decoding; OOD after every commitment | as §13: stratified queries, GF(2^256) folding challenges, OOD at level 0 despite Remark 11 (see §13), clear residual of `2^e` values |
+| A12 | proof of work | a small amount of grinding | Fast100 grinds only Ligerito's claim and consistency batching; under live coins every nonce is a message and is never checked (R4); structural zero-nonce checks remain where upstream has them (§8, §12, §13) |
+| A13 | statement binding | absent | label, statement digest and Merkle cap absorbed before the first coin |
+| A14 | extra claims | step 4, an auxiliary protocol | public-region claims at the verifier's link points, opened in the same batch as `ab` and `c`; their points and values are not absorbed (the session order fixes them before any Flock coin) |
+| A15 | `root_F` | — | not checked by the live server when `points = 2`; the spec requires `root_F = Σ` (S6), as the replay tools do |
+| A16 | `m > 35` | — | no Fast100 schedule; upstream panics (caught as a rejection); the spec rejects explicitly |
+
+## 20. Mapping onto Lean
+
+One module per section, each a set of pure functions with total signatures:
+
+~~~text
+Flock.Field.GF2_128   §2.1   add, mul, inv (inv 0 = 0), bytes ↔ (lo, hi)
+Flock.Field.GF2_8     §2.2   φ8
+Flock.Field.GF2_256   §2.4
+Flock.Hash            §2.5   SHA-256, BLAKE3 compression, keyed tree
+Flock.Record          §5     decode : Json → Except Reason Record;  sessionChecks : Config → Record → Except Reason Unit
+Flock.Transcript      §6     State := { pending : ByteArray, k : Nat };  absorb, squeeze : State → Stream → Except Reason (State × List F)
+Flock.Coins           §7     derive, stream, coins_q (seed audit only)
+Flock.Proof           §8     decode : ByteArray → Except Reason Proof   (bincode, hand-written)
+Flock.Zerocheck       §9     verify : Params → ZerocheckProof → State → Except Reason (ZcClaim × State)
+Flock.Lincheck        §10    verify : Params → Matrices → … → Except Reason (LcClaim × State)
+Flock.Opening         §12    ring switching, batching
+Flock.Ligerito        §13
+Flock.Merkle          §14    verifyPath / verifyBatch
+Flock.Schedule        §15    fast100 : Nat → Option Schedule   (the table as data)
+Flock.Statement.*     §16    PureBlock, IrFrame, Circuit; Legacy (L-CV, L-ACC, L-TAIL, L-SAMPLE)
+Flock.Verify          §3     verify : Config → Record → Proofs → PublicInput → Verdict
+~~~
+
+The transcript state is threaded explicitly (a state monad over `Except`), never global. Level 3's theorems attach to
+`Flock.Statement.*` (lowering correctness for every pinned circuit), `Flock.Record` and `Flock.Transcript` (session
+binding: every coin follows the bytes it answers, both reps bind one root, the link context precedes every coin),
+`Flock.Merkle` and `Flock.Field`. The soundness lane (level 4a) reasons about `Flock.Verify` with the paper's theorems as
+named axioms.
