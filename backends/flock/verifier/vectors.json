@@ -1,6 +1,7 @@
 {
  "format": "flock-verifier-vectors/v1",
  "spec": "backends/flock/verifier/PROTOCOL.md",
+ "spec_transcript_check": "backends/flock/verifier/transcript_check.py reproduces every recorded round digest of the first vector of each honest set from the spec alone (50 of 50 sets, both reps)",
  "fetch": "research data fetch <record> --path <path> (the evidence store; records are run-record/v1 trees)",
  "honest": [
   {
@@ -3545,7 +3546,15 @@
     "name": "child_stream",
     "mutation": "add a stream <t>/rep0/f0 with zero rounds",
     "expect": "reject",
-    "why": "S11 (stricter than upstream)"
+    "upstream_expect": "accept",
+    "why": "S11, intended divergence D2"
+   },
+   {
+    "name": "root_f_not_sigma",
+    "mutation": "set link.root_f to 32 zero bytes and root_f_sha256 and link_sha256 accordingly",
+    "expect": "reject",
+    "upstream_expect": "accept",
+    "why": "S6, intended divergence D1"
    },
    {
     "name": "proof_byte_flip",
@@ -3560,7 +3569,7 @@
     "why": "params pin (\u00a78)"
    }
   ],
-  "note": "The first 12 cases ran on two cells with the recorded outcomes; the remaining 7 are new record-level cases this spec adds (their outcome under upstream is to be recorded in phase 2)."
+  "note": "The first 12 cases ran on two cells with the recorded outcomes; the remaining 8 are new record-level cases this spec adds (their outcome under upstream is recorded in phase 2; upstream_expect marks the two intended divergences D1, D2 of PROTOCOL.md \u00a717.1)."
  },
  "forgeries": {
   "note": "The red-team forgeries were run in-process against upstream's verifier or the live server; each run stored its harness and a verdict table, not the forged record and proof bytes. Phase 2 materialises them as replayable (record, proofs) pairs with the dump plan below.",
