@@ -5,6 +5,10 @@ modulo the GHASH polynomial `G = X^128 + X^7 + X^2 + X + 1`. An element `⟨lo, 
 -/
 import FlockLevel3.Bits
 import Flock.Field
+import Mathlib.Tactic.ComputeDegree
+import Mathlib.Tactic.IntervalCases
+import Mathlib.Tactic.LinearCombination
+import Mathlib.Algebra.CharP.Basic
 
 open Polynomial Flock
 
@@ -101,5 +105,192 @@ theorem clmul_spec (a b : UInt64) :
   unfold F128.clmul
   rw [clmulGo_spec a 64 0 b 0 0 (by norm_num)]
   simp [w128, poly64, Nat.mod_eq_of_lt b.toNat_lt]
+
+end FlockLevel3
+
+namespace FlockLevel3
+
+/-- The GHASH polynomial's low part: `G = X^128 + S`. -/
+noncomputable def S : P := X ^ 7 + X ^ 2 + X + 1
+noncomputable def G : P := X ^ 128 + S
+
+theorem S_degree_lt : S.degree < 128 := by
+  unfold S; compute_degree!
+
+theorem G_monic : G.Monic := by
+  unfold G; exact Polynomial.monic_X_pow_add S_degree_lt
+
+theorem G_degree : G.degree = 128 := by
+  unfold G; rw [Polynomial.degree_add_eq_left_of_degree_lt (by rw [degree_X_pow]; exact S_degree_lt), degree_X_pow]; rfl
+
+section reduce
+variable (r2 r3 : UInt64)
+
+/-- The words `reduce` computes from the top 128 bits `h = 2^64·r3 + r2`: `h·S` below bit 128 (`tl`, `th`) and above
+(`o`). -/
+def tl : UInt64 := r2 ^^^ (r2 <<< 1) ^^^ (r2 <<< 2) ^^^ (r2 <<< 7)
+def th : UInt64 := r3 ^^^ ((r3 <<< 1) ||| (r2 >>> 63)) ^^^ ((r3 <<< 2) ||| (r2 >>> 62)) ^^^ ((r3 <<< 7) ||| (r2 >>> 57))
+def ov : UInt64 := (r3 >>> 63) ^^^ (r3 >>> 62) ^^^ (r3 >>> 57)
+
+/-- `h + h·x + h·x^2 + h·x^7` as bits. -/
+def hS : ℕ := let h := w128 r2 r3; h ^^^ (h <<< 1) ^^^ (h <<< 2) ^^^ (h <<< 7)
+
+theorem hi_false (x : UInt64) (k : ℕ) (hk : 64 ≤ k) : x.toNat.testBit k = false :=
+  Nat.testBit_lt_two_pow (lt_of_lt_of_le x.toNat_lt (Nat.pow_le_pow_right (by norm_num) hk))
+
+theorem h_bit (k : ℕ) : (w128 r2 r3).testBit k = if k < 64 then r2.toNat.testBit k else r3.toNat.testBit (k - 64) :=
+  Nat.testBit_two_pow_mul_add _ r2.toNat_lt k
+
+theorem tl_bit (j : ℕ) (hj : j < 64) : (tl r2).toNat.testBit j = (hS r2 r3).testBit j := by
+  simp only [tl, hS, UInt64.toNat_xor, Nat.testBit_xor, UInt64.toNat_shiftLeft, Nat.testBit_mod_two_pow,
+    Nat.testBit_shiftLeft, h_bit]
+  simp [hj, show j - 1 < 64 by omega, show j - 2 < 64 by omega, show j - 7 < 64 by omega]
+
+theorem th_bit (j : ℕ) (hj : j < 64) : (th r2 r3).toNat.testBit j = (hS r2 r3).testBit (64 + j) := by
+  simp only [th, hS, UInt64.toNat_xor, Nat.testBit_xor, UInt64.toNat_shiftLeft, UInt64.toNat_or, Nat.testBit_or,
+    Nat.testBit_mod_two_pow, Nat.testBit_shiftLeft, UInt64.toNat_shiftRight, Nat.testBit_shiftRight, h_bit]
+  by_cases h7 : 7 ≤ j
+  · simp [hj, h7, show 1 ≤ j by omega, show 2 ≤ j by omega, show 1 ≤ 64 + j by omega, show 2 ≤ 64 + j by omega,
+      show 7 ≤ 64 + j by omega,
+      show ¬ 63 + j < 64 by omega, show ¬ 62 + j < 64 by omega, show ¬ 57 + j < 64 by omega,
+      show ¬ 64 + j - 1 < 64 by omega, show ¬ 64 + j - 2 < 64 by omega, show ¬ 64 + j - 7 < 64 by omega,
+      show 63 + j - 64 = j - 1 by omega, show 62 + j - 64 = j - 2 by omega, show 57 + j - 64 = j - 7 by omega,
+      show 64 + j - 1 - 64 = j - 1 by omega, show 64 + j - 2 - 64 = j - 2 by omega, show 64 + j - 7 - 64 = j - 7 by omega,
+      hi_false r2 (63 + j) (by omega), hi_false r2 (62 + j) (by omega), hi_false r2 (57 + j) (by omega)]
+  · interval_cases j <;> simp [hi_false r2 64 (by norm_num), hi_false r2 65 (by norm_num), hi_false r2 66 (by norm_num),
+      hi_false r2 67 (by norm_num), hi_false r2 68 (by norm_num), hi_false r2 69 (by norm_num), hi_false r2 70 (by norm_num)]
+
+theorem ov_bit (j : ℕ) : (ov r3).toNat.testBit j = (hS r2 r3).testBit (128 + j) := by
+  simp only [ov, hS, UInt64.toNat_xor, Nat.testBit_xor, UInt64.toNat_shiftRight, Nat.testBit_shiftRight,
+    Nat.testBit_shiftLeft, h_bit]
+  simp [show 1 ≤ 128 + j by omega, show 2 ≤ 128 + j by omega, show 7 ≤ 128 + j by omega,
+    show ¬ 127 + j < 64 by omega, show ¬ 126 + j < 64 by omega, show ¬ 121 + j < 64 by omega,
+    show ¬ 128 + j - 1 < 64 by omega, show ¬ 128 + j - 2 < 64 by omega, show ¬ 128 + j - 7 < 64 by omega,
+    show 127 + j - 64 = 63 + j by omega, show 126 + j - 64 = 62 + j by omega, show 121 + j - 64 = 57 + j by omega,
+    show 128 + j - 1 - 64 = 63 + j by omega, show 128 + j - 2 - 64 = 62 + j by omega, show 128 + j - 7 - 64 = 57 + j by omega,
+    show 128 + j - 64 = 64 + j by omega, show ¬ 128 + j < 64 by omega, hi_false r3 (64 + j) (by omega)]
+
+theorem hS_split : hS r2 r3 = 2 ^ 128 * (ov r3).toNat + w128 (tl r2) (th r2 r3) := by
+  apply Nat.eq_of_testBit_eq
+  intro i
+  rw [Nat.testBit_two_pow_mul_add _ (w128_lt _ _), w128, Nat.testBit_two_pow_mul_add _ (UInt64.toNat_lt _)]
+  by_cases h1 : i < 64
+  · simp [h1, show i < 128 by omega, tl_bit r2 r3 i h1]
+  · by_cases h2 : i < 128
+    · simp [h1, h2, th_bit r2 r3 (i - 64) (by omega), show 64 + (i - 64) = i by omega]
+    · simp [h2, ov_bit r2 r3 (i - 128), show 128 + (i - 128) = i by omega]
+
+theorem natPoly_hS : natPoly (hS r2 r3) = natPoly (w128 r2 r3) * S := by
+  simp only [hS, natPoly_xor, natPoly_shiftLeft, S]
+  ring
+
+theorem ov_lt : (ov r3).toNat < 2 ^ 7 := by
+  have h : ∀ s, 57 ≤ s → r3.toNat >>> s < 2 ^ 7 := by
+    intro s hs
+    rw [Nat.shiftRight_eq_div_pow]
+    apply Nat.div_lt_of_lt_mul
+    calc r3.toNat < 2 ^ 64 := r3.toNat_lt
+      _ ≤ 2 ^ s * 2 ^ 7 := by rw [← pow_add]; exact Nat.pow_le_pow_right (by norm_num) (by omega)
+  simp only [ov, UInt64.toNat_xor, UInt64.toNat_shiftRight]
+  exact Nat.xor_lt_two_pow (Nat.xor_lt_two_pow (h _ (by decide)) (h _ (by decide))) (h _ (by decide))
+
+end reduce
+
+end FlockLevel3
+
+namespace FlockLevel3
+
+theorem two_eq_zero_P : (2 : P) = 0 := by
+  have h : ((2 : ℕ) : P) = 0 := CharP.cast_eq_zero P 2
+  exact_mod_cast h
+
+theorem shl_lit (x s : UInt64) (k : ℕ) (hs : s.toNat = k) (hk : k < 64) (hx : x.toNat < 2 ^ (64 - k)) :
+    (x <<< s).toNat = x.toNat <<< k := by
+  rw [UInt64.toNat_shiftLeft, hs, Nat.mod_eq_of_lt hk, Nat.shiftLeft_eq, Nat.mod_eq_of_lt]
+  calc x.toNat * 2 ^ k < 2 ^ (64 - k) * 2 ^ k := Nat.mul_lt_mul_of_pos_right hx (by positivity)
+    _ = 2 ^ 64 := by rw [← pow_add]; congr 1; omega
+
+theorem poly_reduce (r0 r1 r2 r3 : UInt64) :
+    F128.poly (F128.reduce r0 r1 r2 r3) =
+      X ^ 64 * (poly64 r1 + poly64 (th r2 r3)) + poly64 r0 + poly64 (tl r2) + poly64 (ov r3) * S := by
+  have ho := ov_lt r3
+  have e1 : (ov r3 <<< 1).toNat = (ov r3).toNat <<< 1 := shl_lit _ _ 1 rfl (by norm_num) (by omega)
+  have e2 : (ov r3 <<< 2).toNat = (ov r3).toNat <<< 2 := shl_lit _ _ 2 rfl (by norm_num) (by omega)
+  have e7 : (ov r3 <<< 7).toNat = (ov r3).toNat <<< 7 := shl_lit _ _ 7 rfl (by norm_num) (by omega)
+  show natPoly (w128 (r0 ^^^ tl r2 ^^^ ov r3 ^^^ (ov r3 <<< 1) ^^^ (ov r3 <<< 2) ^^^ (ov r3 <<< 7)) (r1 ^^^ th r2 r3)) = _
+  rw [natPoly_w128]
+  simp only [poly64, UInt64.toNat_xor, natPoly_xor, e1, e2, e7, natPoly_shiftLeft, S]
+  ring
+
+theorem natPoly_hS_split (r2 r3 : UInt64) :
+    natPoly (w128 r2 r3) * S = X ^ 128 * poly64 (ov r3) + (X ^ 64 * poly64 (th r2 r3) + poly64 (tl r2)) := by
+  rw [← natPoly_hS]
+  have h := hS_split r2 r3
+  have hw := w128_lt (tl r2) (th r2 r3)
+  rw [h, natPoly_split _ _ 128 hw, natPoly_w128]
+  simp only [poly64]
+
+theorem reduce_spec (r0 r1 r2 r3 : UInt64) :
+    F128.poly (F128.reduce r0 r1 r2 r3) =
+      (poly64 r0 + X ^ 64 * poly64 r1 + X ^ 128 * poly64 r2 + X ^ 192 * poly64 r3) %ₘ G := by
+  have hHS := natPoly_hS_split r2 r3
+  have hdeg : (F128.poly (F128.reduce r0 r1 r2 r3)).degree < G.degree := by
+    rw [G_degree]; exact natPoly_degree_lt _ 128 (w128_lt _ _)
+  refine ((div_modByMonic_unique (natPoly (w128 r2 r3) + poly64 (ov r3)) _ G_monic ⟨?_, hdeg⟩).2).symm
+  rw [poly_reduce, natPoly_w128] at *
+  unfold G
+  linear_combination (norm := skip) hHS
+  ring_nf
+  rw [two_eq_zero_P]
+  ring
+
+end FlockLevel3
+
+namespace FlockLevel3
+
+theorem clmul_spec' (a b : UInt64) :
+    X ^ 64 * poly64 (F128.clmul a b).2 + poly64 (F128.clmul a b).1 = poly64 a * poly64 b := by
+  rw [← clmul_spec, natPoly_w128]
+
+theorem F128.poly_eq (a : F128) : F128.poly a = X ^ 64 * poly64 a.hi + poly64 a.lo := natPoly_w128 _ _
+
+/-- **GF(2^128) multiplication (L3-F).** The executable's product is the product of polynomials modulo the GHASH
+polynomial. -/
+theorem F128.poly_mul (a b : F128) : F128.poly (a * b) = (F128.poly a * F128.poly b) %ₘ G := by
+  show F128.poly (F128.mul a b) = _
+  unfold F128.mul
+  simp only
+  rw [reduce_spec]
+  congr 1
+  have h0 := clmul_spec' a.lo b.lo
+  have h2 := clmul_spec' a.hi b.hi
+  have hm := clmul_spec' (a.lo ^^^ a.hi) (b.lo ^^^ b.hi)
+  simp only [poly64_xor] at *
+  rw [F128.poly_eq, F128.poly_eq]
+  linear_combination (norm := skip) h0 + X ^ 64 * h0 + X ^ 64 * hm + X ^ 64 * h2 + X ^ 128 * h2
+  ring_nf
+  rw [two_eq_zero_P]
+  ring
+
+theorem F128.poly_degree_lt (a : F128) : (F128.poly a).degree < 128 := natPoly_degree_lt _ 128 (w128_lt _ _)
+
+theorem F128.poly_injective : Function.Injective F128.poly := by
+  intro a b h
+  have := natPoly_injective _ _ h
+  unfold w128 at this
+  have hl := a.lo.toNat_lt; have hh := a.hi.toNat_lt; have hl' := b.lo.toNat_lt; have hh' := b.hi.toNat_lt
+  have e1 : a.lo.toNat = b.lo.toNat := by omega
+  have e2 : a.hi.toNat = b.hi.toNat := by omega
+  cases a; cases b
+  simp only [F128.mk.injEq]
+  exact ⟨UInt64.toNat_inj.mp e1, UInt64.toNat_inj.mp e2⟩
+
+theorem F128.poly_zero : F128.poly 0 = 0 := by
+  show natPoly (w128 0 0) = 0
+  simp [w128]
+
+theorem F128.poly_one : F128.poly 1 = 1 := by
+  show natPoly (w128 1 0) = 1
+  simp [w128, natPoly_one]
 
 end FlockLevel3
