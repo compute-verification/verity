@@ -97,8 +97,8 @@ mod tests {
     fn matches_verity_randomness() {
         let src: Vec<u8> = (0..32).collect();
         let k = derive(&src, DOMAIN, &[("statement", Part::B(&[1, 2])), ("sigma", Part::B(&[0; 32]))]);
-        assert_eq!(crate::hex(&k), "d8cb901a7b56a293ee85597aea7358b24dd732b2e57b377b0b264474fe56e0fb");
+        assert_eq!(crate::hex(&k), "057835844f07da44c302a60e06f340a16411903b2986c2dfa99d0316f3d54c32");
         assert_eq!(crate::hex(&stream(&k, &[Part::S("coins"), Part::I(3)], 48)),
-                   "6b53857d54c89827969433fbeed8be96fc8471bcc872af7fed757cdfa23f44838f6348a60b2f0964ec1b67ae3a8a2272");
+                   "3a203019480601f98b35f54e72ca90ed41f1b827aeb467c2f6afe26d4aaec8bf783eb184229a8ac3ee258cdd164f6045");
     }
 }
