@@ -475,6 +475,7 @@ def _finish(fid: str, gates: int, classes: list[dict], interior: list[dict], X: 
 #: where serving commits each committed interior value today, by (activation family, primitive of the value): the FA2 / FA3 hidden
 #: stream's fields (`commit/hidden_stream.py` StreamLayout; S after the softcap), else None -- a new tap
 _ATTENTION = ("AttnBlock", "AttnBlockSoftcap", "AttnBlockFA3", "DotBf16", "AttentionHead", "AttentionHeadSoftcap")
+#: (a field the tap's layout allocates but does not write -- ROW word 3 -- is noted where a new value would fit it)
 _STREAM = {"AmpereBF16TcDot16_v1": "S (scores)", "HopperBF16WgmmaDot16_v1": "S (scores)", "MufuTanh_v1": "S (softcapped scores)",
            "MufuEx2Ftz_v1": "P (f32 probabilities) / ROW rescale", "F2fpBf16_v1": "RP (bf16 probabilities)", "F32Max_v1": "ROW row_max",
            "F32MulFtz_v1": "ROW step (max * scale)", "F32AddFtz_v1": "ROW lane sums / FIN sum", "F32FmaFtz_v1": "ROW lane sums",
@@ -483,7 +484,9 @@ _STREAM = {"AmpereBF16TcDot16_v1": "S (scores)", "HopperBF16WgmmaDot16_v1": "S (
 _TAP_KERNEL = {"AttnBlock": "FA2 / FA3 tap build (flash_fwd_kernel / hopper mainloop)", "AttnBlockSoftcap": "FA2 tap build (softcap instantiation)",
                "AttentionHead": "FA2 / FA3 tap build (epilogue)", "AttentionHeadSoftcap": "FA2 tap build (softcap epilogue)",
                "RMSNormTriton": "vLLM batch-invariant Triton _rms_norm_kernel", "RMSNormFusedCuda": "vLLM CUDA fused_add_rms_norm_kernel<bf16, 0, true>",
-               "MoeRouterTopK": "vLLM _moe_C.topk_softmax (topkGatingSoftmax)", "MoeRouterTopKNorm": "vLLM _moe_C.topk_softmax (topkGatingSoftmax)"}
+               "MoeRouterTopK": "vLLM _moe_C.topk_softmax (topkGatingSoftmax)", "MoeRouterTopKNorm": "vLLM _moe_C.topk_softmax (topkGatingSoftmax)",
+               "MoeRouterProbs": "vLLM _moe_C.topk_softmax (topkGatingSoftmax: the softmax)", "NvExpf": "vLLM _moe_C.topk_softmax (topkGatingSoftmax: expf)",
+               "EmbeddingShard": "vLLM VocabParallelEmbedding (the rank's vocabulary-range mask)"}
 
 
 def committed_today(scope: str | None, head: str | None) -> str | None:
