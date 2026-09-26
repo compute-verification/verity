@@ -455,6 +455,9 @@ class Rules:
     headline_any_hardware: bool = False
     #: a fourth preview: the headline counts a cell whose ``omitted`` label names verifier-evaluated parts (top-p sampling)
     headline_count_omitted: bool = False
+    #: a fifth preview (Daniel's standing rule, 2026-09-26): a cell whose verifier evaluates any part (attention's softmax, the
+    #: RMSNorms' row tail, sampling's keep word and noise) does not cover its subcircuit; overrides ``headline_count_omitted``
+    headline_strict_verifier: bool = False
 
 
 SPEC = Rules("spec")
@@ -2622,6 +2625,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                     help="PREVIEW (pending decision, never published): the interaction check passes when measured <= 1.1 x the model")
     ap.add_argument("--preview-any-hardware-headline", action="store_true",
                     help="PREVIEW (pending decision, never published): the workload headline counts cleared cells on any GPU")
+    ap.add_argument("--preview-strict-verifier", action="store_true",
+                    help="PREVIEW (Daniel's standing rule, not yet published): a cell whose verifier evaluates any part covers nothing")
     ap.add_argument("--preview-count-omitted", action="store_true",
                     help="PREVIEW (pending decision, never published): the headline counts cells whose omitted label names verifier-evaluated parts")
     ap.add_argument("--preview-cached-weights", action="store_true",
@@ -2673,6 +2678,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         rules = dataclasses.replace(rules, name=f"{rules.name}+preview-one-sided-interaction", interaction_one_sided=True)
     if ns.preview_any_hardware_headline:
         rules = dataclasses.replace(rules, name=f"{rules.name}+preview-any-hardware-headline", headline_any_hardware=True)
+    if ns.preview_strict_verifier:
+        rules = dataclasses.replace(rules, name=f"{rules.name}+preview-strict-verifier", headline_strict_verifier=True)
     if ns.preview_count_omitted:
         rules = dataclasses.replace(rules, name=f"{rules.name}+preview-count-omitted", headline_count_omitted=True)
     if ns.preview_cached_weights:

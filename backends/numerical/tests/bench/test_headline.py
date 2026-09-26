@@ -568,3 +568,28 @@ def test_a_broken_class_cell_is_rejected_not_guessed(store: LocalStore) -> None:
     views = V.build(store, SPEC)
     why = next(r for r in views.rejected if r["artifact"] == none)["codes"][0]
     assert why[0] == "X" and "no creditable key count (T 1: no per_key_count timing)" in why[1]
+
+
+def test_the_strict_verifier_preview_leaves_every_verifier_evaluated_template_uncovered(store: LocalStore) -> None:
+    """Daniel's standing rule (2026-09-26), as a preview: the verifier evaluates no part of the computation, so attention (the
+    softmax), the RMSNorms (the row tail) and sampling are not covered; RoPE, which leaves nothing to the verifier, still is."""
+    from verity.proofs.target import FIRST
+
+    rms = "rmsnorm-fused-cuda/n2048-eps1e-05/bf16"
+    l40s_cell(store, ATT, T=4)
+    l40s_cell(store, rms, profile=FIRST.name)
+    l40s_cell(store, "rope-head/d64/neox-bf16", profile=FIRST.name)
+    l40s_cell(store, "gumbel-top-p-token-select/v128256/fp32", profile=FIRST.name)
+
+    def row(rules):
+        rec = next(r for r in H.headline(V.build(store, rules)) if r["workload"] == ROW101["id"])
+        return next(x for x in rec["backends"] if x["backend"] == "C-interactive")
+
+    published = {x["subcircuit"] for x in row(SPEC)["covered"]}
+    assert {ATT, rms, "rope-head/d64/neox-bf16"} <= published
+    strict = row(dataclasses.replace(SPEC, headline_strict_verifier=True, headline_count_omitted=True))
+    assert {x["subcircuit"] for x in strict["covered"]} == {"rope-head/d64/neox-bf16"}
+    gaps = {u["subcircuit"]: u for u in strict["uncovered"]}
+    assert gaps[ATT]["reason"] == gaps[rms]["reason"] == "omits verifier-evaluated parts"
+    assert "row tail" in gaps[rms]["text"] and "softmax" in gaps[ATT]["text"]
+    assert gaps["gumbel-top-p-token-select/v128256/fp32"]["reason"] == "omits verifier-evaluated parts"
