@@ -31,21 +31,21 @@ for tarf in $I/*.tar; do
     N=${SELF_N:-4}
     python3 -m verity_flock.netlist --input-set $SET --n $N --out $D/stage | tee $D/stage.json || exit 1
     if [ "${CPU_SELF:-1}" = 1 ]; then
-      $B selftest --instances $D/stage/inst-$N.bin --netlist $D/stage/net.txt > $D/selftest-cpu.txt 2> $D/selftest-cpu.err
+      $B selftest --instances $D/stage/inst-$N.bin --netlist $D/stage/net.txt --tables $D/stage/tables --forged $D/stage/net-forged.txt > $D/selftest-cpu.txt 2> $D/selftest-cpu.err
       grep SELFTEST $D/selftest-cpu.txt; grep '"pass":false' $D/selftest-cpu.txt | cut -c1-300
     fi
-    [ $G = 1 ] && { $B selftest --gpu --instances $D/stage/inst-$N.bin --netlist $D/stage/net.txt > $D/selftest-gpu.txt 2> $D/selftest-gpu.err;
+    [ $G = 1 ] && { $B selftest --gpu --instances $D/stage/inst-$N.bin --netlist $D/stage/net.txt --tables $D/stage/tables --forged $D/stage/net-forged.txt > $D/selftest-gpu.txt 2> $D/selftest-gpu.err;
                     grep SELFTEST $D/selftest-gpu.txt; grep '"pass":false' $D/selftest-gpu.txt | cut -c1-300; grep -h GPUPHASE $D/selftest-gpu.err | head -2 | cut -c1-600; }
   fi
   if [ "$MODE" = bench ]; then
     python3 -m verity_flock.netlist --input-set $SET --n ${POINTS:-64} --out $D/stage | tee $D/stage.json || exit 1
     PIN=$(sha256sum $D/stage/net.txt | cut -d' ' -f1)
     for n in ${POINTS:-64}; do
-      $B serve --listen 127.0.0.1:7501 --out $D/sessions-$n --instances $D/stage/pub-$n.bin --netlist $D/stage/net.txt --pin $PIN --operator loopback > $D/serve-$n.log 2>&1 &
+      $B serve --listen 127.0.0.1:7501 --out $D/sessions-$n --instances $D/stage/pub-$n.bin --netlist $D/stage/net.txt --tables $D/stage/tables --pin $PIN --operator loopback > $D/serve-$n.log 2>&1 &
       SP=$!
       for i in $(seq 900); do grep -q SERVING $D/serve-$n.log && break; sleep 1; done
       G_=; [ $G = 1 ] && G_=--gpu
-      $B prove --verifier 127.0.0.1:7501 --instances $D/stage/inst-$n.bin --netlist $D/stage/net.txt $G_ --warm ${WARM:-1} --runs ${RUNS:-3} > $D/prove-$n.txt 2> $D/prove-$n.err
+      $B prove --verifier 127.0.0.1:7501 --instances $D/stage/inst-$n.bin --netlist $D/stage/net.txt --tables $D/stage/tables $G_ --warm ${WARM:-1} --runs ${RUNS:-3} > $D/prove-$n.txt 2> $D/prove-$n.err
       grep -h "^LIVE" $D/prove-$n.txt | python3 -c "
 import json, sys
 for l in sys.stdin:

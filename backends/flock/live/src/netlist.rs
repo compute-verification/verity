@@ -1064,6 +1064,13 @@ impl Stmt {
     /// slot that computes it, re-evaluating each slot type whose inputs changed until none do (the tail and the lookups
     /// between the units' two passes). `nets` overrides a netlist's evaluation (a tampered witness).
     pub fn converge(&self, unit_inputs: &(dyn Fn(usize, usize) -> Vec<F128> + Sync), nets: &BTreeMap<usize, &IrUnitNet>) -> Vec<Vec<Vec<F128>>> {
+        self.converge_with(unit_inputs, nets, None)
+    }
+
+    /// [`Stmt::converge`] with the units' output words given (`unit_outs`, the device's first pass): the units are never
+    /// evaluated here, only the tail stages and the lookups.
+    pub fn converge_with(&self, unit_inputs: &(dyn Fn(usize, usize) -> Vec<F128> + Sync), nets: &BTreeMap<usize, &IrUnitNet>,
+                         unit_outs: Option<Vec<Vec<F128>>>) -> Vec<Vec<Vec<F128>>> {
         let c = &self.c;
         let nb = self.blocks();
         let net_of = |n: usize| -> &IrUnitNet { nets.get(&n).copied().unwrap_or(&c.nets[n].1) };
@@ -1080,8 +1087,17 @@ impl Stmt {
         }
         let mut outs: Vec<Vec<Vec<F128>>> = vec![Vec::new(); c.nets.len()];
         let mut dirty = vec![true; c.nets.len()];
+        let fixed = unit_outs.is_some();
+        if let Some(u) = unit_outs {
+            outs[c.unit_net] = u;
+            dirty[c.unit_net] = false;
+        }
         for _round in 0..64 {
             for n in 0..c.nets.len() {
+                if fixed && n == c.unit_net {
+                    dirty[n] = false;
+                    continue;
+                }
                 if dirty[n] {
                     outs[n] = self.eval_outputs(n, net_of(n), &ins[n]);
                     dirty[n] = false;
@@ -1147,17 +1163,34 @@ impl Stmt {
             }
         });
         for (ni, (_, pinned)) in c.nets.iter().enumerate() {
-            let net = nets.get(&ni).copied().unwrap_or(pinned);
             let r = c.range_of(ni);
             let uw = 1usize << (pinned.unit_log - 7);
+            for (x, uz, ua, ub) in self.slot_zab(ni, nets.get(&ni).copied().unwrap_or(pinned), &ins[ni]) {
+                let (blk, k) = (x / r.count, x % r.count);
+                let at = blk * wpb + r.slot(k) / WORD;
+                z[at..at + uw].copy_from_slice(&uz);
+                a[at..at + uw].copy_from_slice(&ua);
+                bb[at..at + uw].copy_from_slice(&ub);
+            }
+        }
+        let zl = pack_z_lincheck_from_packed(&z, self.m, kl);
+        (z, a, bb, zl)
+    }
+
+    /// Every slot of netlist `ni`'s `(instance, z, a, b)` words from its input words (a lookup: its fast witness).
+    #[allow(clippy::type_complexity)]
+    pub fn slot_zab(&self, ni: usize, net: &IrUnitNet, ins: &[Vec<F128>]) -> Vec<(usize, Vec<F128>, Vec<F128>, Vec<F128>)> {
+        let c = &self.c;
+        let uw = 1usize << (c.nets[ni].1.unit_log - 7);
+        {
             let items: Vec<(usize, Vec<F128>, Vec<F128>, Vec<F128>)> = if let Some(lk) = c.lookups.get(&ni) {
-                ins[ni].par_iter().enumerate().map(|(x, w)| {
+                ins.par_iter().enumerate().map(|(x, w)| {
                     let (zz, aa, bq) = lk.witness((w[0].lo as usize) & ((1 << lk.n) - 1));
                     let f = |v: Vec<u64>| v.chunks(2).map(|p| F128::new(p[0], p[1])).collect::<Vec<F128>>();
                     (x, f(zz), f(aa), f(bq))
                 }).collect()
             } else {
-                ins[ni].par_chunks(64).enumerate().flat_map_iter(|(gi, grp)| {
+                ins.par_chunks(64).enumerate().flat_map_iter(|(gi, grp)| {
                     let (zz, aa, bq) = net.eval64(|col| grp.iter().enumerate().fold(0u64, |x, (l, r)| x | (bit(&r[col / WORD], col % WORD) << l)));
                     (0..grp.len()).map(move |l| {
                         let pack = |v: &Vec<u64>| -> Vec<F128> {
@@ -1173,16 +1206,52 @@ impl Stmt {
                     }).collect::<Vec<_>>()
                 }).collect()
             };
-            for (x, uz, ua, ub) in items {
-                let (blk, k) = (x / r.count, x % r.count);
-                let at = blk * wpb + r.slot(k) / WORD;
-                z[at..at + uw].copy_from_slice(&uz);
-                a[at..at + uw].copy_from_slice(&ua);
-                bb[at..at + uw].copy_from_slice(&ub);
+            items
+        }
+    }
+
+    /// The device's first pass handed back (`cut`: per group of 32 units and per cut output row of the unit, the row's bits,
+    /// unit l of the group in bit l): the tail stages and lookups converged on the host; returns every unit's late input rows
+    /// in the same layout (`late_rows` order) and every host slot's `(absolute F128 word offset, z, a, b)`.
+    #[allow(clippy::type_complexity)]
+    pub fn host_tail(&self, unit_inputs: &(dyn Fn(usize, usize) -> Vec<F128> + Sync), cut: &[u32], cut_rows: &[usize], late_rows: &[usize])
+        -> (Vec<u32>, Vec<(usize, Vec<F128>, Vec<F128>, Vec<F128>)>) {
+        let c = &self.c;
+        let unit = c.unit();
+        let n_units = self.blocks() * c.unit_range().count;
+        let groups = n_units.div_ceil(32);
+        let o0 = unit.out_cols[0] * WORD;
+        let outs: Vec<Vec<F128>> = (0..n_units).map(|u| {
+            let mut o = vec![F128::ZERO; unit.out_cols.len()];
+            let (g, l) = (u / 32, u % 32);
+            for (i, &r) in cut_rows.iter().enumerate() {
+                if (cut[g * cut_rows.len() + i] >> l) & 1 == 1 {
+                    set_bit(&mut o[(r - o0) / WORD], (r - o0) % WORD);
+                }
+            }
+            o
+        }).collect();
+        let ins = self.converge_with(unit_inputs, &BTreeMap::new(), Some(outs));
+        let mut late = vec![0u32; groups * late_rows.len()];
+        for (u, w) in ins[c.unit_net].iter().enumerate() {
+            for (k, &r) in late_rows.iter().enumerate() {
+                if bit(&w[r / WORD], r % WORD) == 1 {
+                    late[(u / 32) * late_rows.len() + k] |= 1 << (u % 32);
+                }
             }
         }
-        let zl = pack_z_lincheck_from_packed(&z, self.m, kl);
-        (z, a, bb, zl)
+        let wpb = 1usize << (c.k_log - 7);
+        let mut host = Vec::new();
+        for ni in 0..c.nets.len() {
+            if ni == c.unit_net {
+                continue;
+            }
+            let r = c.range_of(ni);
+            for (x, z, a, b) in self.slot_zab(ni, &c.nets[ni].1, &ins[ni]) {
+                host.push(((x / r.count) * wpb + r.slot(x % r.count) / WORD, z, a, b));
+            }
+        }
+        (late, host)
     }
 
     /// Block `b`'s bytes of a region, in free-assignment order.

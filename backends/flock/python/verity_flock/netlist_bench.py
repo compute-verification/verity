@@ -89,13 +89,13 @@ def point(a, low, input_set, total: int, d: Path, net: Path, pin: str) -> dict:
             addr = "127.0.0.1:%d" % (7500 + total.bit_length())
             log = d / f"serve-s{i}.log"
             srv = subprocess.Popen(["nice", "-n", "5", a.bin, "serve", "--listen", addr, "--out", str(d / f"sessions-s{i}"), "--pin", pin,
-                                    "--instances", str(d / "verifier" / f"instances-s{i}.bin"), "--netlist", str(net)],
+                                    "--instances", str(d / "verifier" / f"instances-s{i}.bin"), "--netlist", str(net), *a.tables],
                                    stdout=open(log, "w"), stderr=subprocess.STDOUT)
             _wait_serving(log, srv)
         try:
             timer = ["/usr/bin/time", "-v", "-o", str(d / f"prove-s{i}.time")] if Path("/usr/bin/time").exists() else []
             pr = subprocess.Popen([*timer, a.bin, "prove", "--verifier", addr, "--warm", "1", "--runs", str(a.runs), "--dump", str(d / f"proofs-s{i}"),
-                                   *a.prove_arg, "--instances", str(d / f"instances-s{i}.bin"), "--netlist", str(net)],
+                                   *a.prove_arg, "--instances", str(d / f"instances-s{i}.bin"), "--netlist", str(net), *a.tables],
                                   stdout=open(d / f"prove-s{i}.txt", "w"), stderr=open(d / f"prove-s{i}.err", "w"))
             _OURS.add(pr.pid)
             try:
@@ -134,12 +134,12 @@ def loopback_probe(a, q: dict, out: Path, net: Path, pin: str) -> dict:
     for i, _ in enumerate(q["subbatches"]):
         log = d / f"loopback-serve-s{i}.log"
         srv = subprocess.Popen([a.bin, "serve", "--listen", "127.0.0.1:7591", "--out", str(d / f"loopback-sessions-s{i}"), "--pin", pin,
-                                "--instances", str(d / "verifier" / f"instances-s{i}.bin"), "--netlist", str(net)],
+                                "--instances", str(d / "verifier" / f"instances-s{i}.bin"), "--netlist", str(net), *a.tables],
                                stdout=open(log, "w"), stderr=subprocess.STDOUT)
         try:
             _wait_serving(log, srv)
             subprocess.call([a.bin, "prove", "--verifier", "127.0.0.1:7591", "--warm", "1", "--runs", str(a.runs), *a.prove_arg,
-                             "--instances", str(d / f"instances-s{i}.bin"), "--netlist", str(net)],
+                             "--instances", str(d / f"instances-s{i}.bin"), "--netlist", str(net), *a.tables],
                             stdout=open(d / f"loopback-prove-s{i}.txt", "w"), stderr=open(d / f"loopback-prove-s{i}.err", "w"))
         finally:
             srv.terminate()
@@ -253,7 +253,7 @@ def serve_plan(a, low, input_set, plan: list[int], out: Path, net: Path, pin: st
     for d, j in jobs:
         rc = subprocess.call([a.bin, "serve", "--listen", a.listen, "--out", str(d / f"sessions-s{j}"), "--pin", pin,
                               "--instances", str(d / f"instances-s{j}.bin"), "--netlist", str(net), "--sessions", str(a.runs + 2),
-                              "--operator", a.operator], stdout=open(d / f"serve-s{j}.log", "w"), stderr=subprocess.STDOUT)
+                              "--operator", a.operator, *a.tables], stdout=open(d / f"serve-s{j}.log", "w"), stderr=subprocess.STDOUT)
         print(f"SERVED\t{d.name}/s{j} rc={rc}", flush=True)
     return 0
 
@@ -292,6 +292,12 @@ def main(argv=None) -> int:
     net = out / "net.txt"
     net.write_text(NL.compose(low, input_set.subcircuit))
     pin = hashlib.sha256(net.read_bytes()).hexdigest()
+    a.tables = []
+    if low.units.cut:
+        from . import ir_lower
+
+        ir_lower.write_tables(out / "tables")
+        a.tables = ["--tables", str(out / "tables")]
     plan = [int(x) for x in a.points.split()]
     if max(plan) > input_set.n:
         print(f"point {max(plan)} exceeds the input set's {input_set.n} instances", file=sys.stderr)

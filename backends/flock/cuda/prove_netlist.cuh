@@ -33,6 +33,14 @@ typedef struct {
     const uint64_t* u_inputs;          // [blocks * count][in_words] F128 (lo, hi)
     int u_warps;                       // warps per CTA (1..8)
     double* witness_s;                 // optional [3]: compressions, units, transpose/lincheck pack (device seconds)
+    // a cut template (u_n_late > 0): the unit's rows split in two passes. Pass A: levels [0, u_levels0) (rows that read no
+    // late input), then the cut output rows are read back; mid_cb (host) computes the tail and lookups and returns every
+    // unit's late input rows (bit-sliced, [groups][u_n_late] u32) and the host slots' witness words; pass B: the late rows,
+    // levels [u_levels0, u_levels), then the transpose into the slots.
+    int u_levels0; int u_n_late; const uint32_t* u_late_rows; int u_n_cut; const uint32_t* u_cut_rows;
+    int (*mid_cb)(void* ctx, const uint32_t* cut, long long groups, uint32_t* late, long long* n_host, const long long** host_at,
+                  const int** host_words, const uint64_t** host_zab);
+    void* mid_ctx;
 } FlockNetlistParams;
 
 __global__ void nl_comp_scatter(const F128* __restrict__ src, long long n_comp, int per_block, const uint32_t* __restrict__ slot,
@@ -65,7 +73,8 @@ __global__ void nl_unit_witness(const uint64_t* __restrict__ inputs, int in_word
                                 const uint32_t* __restrict__ b_off, const uint32_t* __restrict__ b_col, int useful, int cpos,
                                 int n_levels, const uint32_t* __restrict__ level_off, const uint32_t* __restrict__ order,
                                 uint32_t* __restrict__ scratch, uint32_t* __restrict__ z_out, uint32_t* __restrict__ a_out,
-                                uint32_t* __restrict__ b_out) {
+                                uint32_t* __restrict__ b_out, int phase, int lv0, int lv1, int n_late, const uint32_t* __restrict__ late_rows,
+                                const uint32_t* __restrict__ late, int n_cut, const uint32_t* __restrict__ cut_rows, uint32_t* __restrict__ cut) {
     const long long g = blockIdx.x;
     uint32_t* Z = scratch + g * 3LL * useful;
     uint32_t* A = Z + useful;
@@ -73,7 +82,14 @@ __global__ void nl_unit_witness(const uint64_t* __restrict__ inputs, int in_word
     const int tid = threadIdx.x, lane = tid & 31, warp = tid >> 5, nw = blockDim.x >> 5;
     const long long u = 32 * g + lane;
     const bool live = u < n_units;
-    if (warp == 0) {
+    // phase 0: inputs, levels [lv0, lv1), cut rows out; phase 1: late rows in, levels [lv0, lv1), transpose; 2: all at once
+    if (phase == 1) {
+        for (int k = tid; k < n_late; k += blockDim.x) {
+            const uint32_t r = late_rows[k], w = late[g * n_late + k];
+            Z[r] = w; A[r] = w; B[r] = w;
+        }
+    }
+    if (phase != 1 && warp == 0) {
         for (int w = 0; w < in_words; w++) {
             const uint64_t lo = live ? inputs[2 * (u * in_words + w)] : 0, hi = live ? inputs[2 * (u * in_words + w) + 1] : 0;
             for (int t = 0; t < 128; t++) {
@@ -85,7 +101,7 @@ __global__ void nl_unit_witness(const uint64_t* __restrict__ inputs, int in_word
         if (lane == 0) { Z[cpos] = 0xffffffffu; A[cpos] = 0xffffffffu; B[cpos] = 0xffffffffu; }
     }
     __syncthreads();
-    for (int L = 0; L < n_levels; L++) {
+    for (int L = lv0; L < lv1; L++) {
         const uint32_t end = level_off[L + 1];
         for (uint32_t k = level_off[L] + tid; k < end; k += blockDim.x) {
             const uint32_t r = order[k];
@@ -95,6 +111,10 @@ __global__ void nl_unit_witness(const uint64_t* __restrict__ inputs, int in_word
             Z[r] = x & y; A[r] = x; B[r] = y;
         }
         __syncthreads();
+    }
+    if (phase == 0) {
+        for (int k = tid; k < n_cut; k += blockDim.x) cut[g * n_cut + k] = Z[cut_rows[k]];
+        return;
     }
     const int nrb = (useful + 31) / 32;
     const long long ul = 32 * g + lane;
@@ -196,16 +216,51 @@ static int nl_witness(const FlockCudaProveParams* P, const FlockNetlistParams* N
         CK(cudaMemcpy(d_in, N->u_inputs, (size_t)n_units * N->u_in_words * 16, cudaMemcpyHostToDevice));
         // groups in batches that keep the scratch under ~2 GB
         const long long per = 3LL * N->u_useful * 4;
-        const long long batch = std::max(1LL, std::min(groups, (2LL << 30) / per));
-        CK(cudaMalloc(&d_scratch, (size_t)(batch * per)));
         const int warps = N->u_warps < 1 ? 1 : (N->u_warps > 8 ? 8 : N->u_warps);
-        for (long long g0 = 0; g0 < groups; g0 += batch) {
-            const long long ng = std::min(batch, groups - g0);
-            CK(cudaMemsetAsync(d_scratch, 0, (size_t)(ng * per)));
-            nl_unit_witness<<<(unsigned)ng, 32 * warps>>>(d_in + 2LL * 32 * g0 * N->u_in_words, N->u_in_words, n_units - 32 * g0, (int)per_block,
-                N->r_pos0[ur] + 0, ul, k_log, d_ao, d_ac, d_bo, d_bc, N->u_useful, N->u_const, N->u_levels, d_lo, d_ord, d_scratch,
-                (uint32_t*)df, (uint32_t*)d_a, (uint32_t*)d_b);
+        if (N->u_n_late == 0) {
+            const long long batch = std::max(1LL, std::min(groups, (2LL << 30) / per));
+            CK(cudaMalloc(&d_scratch, (size_t)(batch * per)));
+            for (long long g0 = 0; g0 < groups; g0 += batch) {
+                const long long ng = std::min(batch, groups - g0);
+                CK(cudaMemsetAsync(d_scratch, 0, (size_t)(ng * per)));
+                nl_unit_witness<<<(unsigned)ng, 32 * warps>>>(d_in + 2LL * 32 * g0 * N->u_in_words, N->u_in_words, n_units - 32 * g0, (int)per_block,
+                    N->r_pos0[ur] + 0, ul, k_log, d_ao, d_ac, d_bo, d_bc, N->u_useful, N->u_const, N->u_levels, d_lo, d_ord, d_scratch,
+                    (uint32_t*)df, (uint32_t*)d_a, (uint32_t*)d_b, 2, 0, N->u_levels, 0, nullptr, nullptr, 0, nullptr, nullptr);
+                CK(cudaGetLastError());
+            }
+        } else {
+            // both passes over every group at once: the scratch holds the first pass's rows for the second
+            uint32_t *d_lr, *d_cr, *d_late, *d_cut;
+            CK(cudaMalloc(&d_scratch, (size_t)(groups * per))); CK(cudaMemsetAsync(d_scratch, 0, (size_t)(groups * per)));
+            CK(cudaMalloc(&d_lr, N->u_n_late * 4)); CK(cudaMalloc(&d_cr, N->u_n_cut * 4));
+            CK(cudaMalloc(&d_late, (size_t)groups * N->u_n_late * 4)); CK(cudaMalloc(&d_cut, (size_t)groups * N->u_n_cut * 4));
+            CK(cudaMemcpy(d_lr, N->u_late_rows, N->u_n_late * 4, cudaMemcpyHostToDevice));
+            CK(cudaMemcpy(d_cr, N->u_cut_rows, N->u_n_cut * 4, cudaMemcpyHostToDevice));
+            nl_unit_witness<<<(unsigned)groups, 32 * warps>>>(d_in, N->u_in_words, n_units, (int)per_block, N->r_pos0[ur], ul, k_log, d_ao, d_ac,
+                d_bo, d_bc, N->u_useful, N->u_const, N->u_levels, d_lo, d_ord, d_scratch, (uint32_t*)df, (uint32_t*)d_a, (uint32_t*)d_b,
+                0, 0, N->u_levels0, 0, nullptr, nullptr, N->u_n_cut, d_cr, d_cut);
             CK(cudaGetLastError());
+            std::vector<uint32_t> cut((size_t)groups * N->u_n_cut), late((size_t)groups * N->u_n_late);
+            CK(cudaMemcpy(cut.data(), d_cut, cut.size() * 4, cudaMemcpyDeviceToHost));
+            long long n_host = 0; const long long* host_at = nullptr; const int* host_words = nullptr; const uint64_t* host_zab = nullptr;
+            if (N->mid_cb(N->mid_ctx, cut.data(), groups, late.data(), &n_host, &host_at, &host_words, &host_zab) != 0) {
+                printf("FFI netlist: the host tail failed\n"); return 206;
+            }
+            CK(cudaMemcpy(d_late, late.data(), late.size() * 4, cudaMemcpyHostToDevice));
+            nl_unit_witness<<<(unsigned)groups, 32 * warps>>>(d_in, N->u_in_words, n_units, (int)per_block, N->r_pos0[ur], ul, k_log, d_ao, d_ac,
+                d_bo, d_bc, N->u_useful, N->u_const, N->u_levels, d_lo, d_ord, d_scratch, (uint32_t*)df, (uint32_t*)d_a, (uint32_t*)d_b,
+                1, N->u_levels0, N->u_levels, N->u_n_late, d_lr, d_late, 0, nullptr, nullptr);
+            CK(cudaGetLastError());
+            // the host slots (tail stages, lookups): z, a, b words at their word offsets
+            const uint64_t* p = host_zab;
+            for (long long i = 0; i < n_host; i++) {
+                const size_t w = (size_t)host_words[i];
+                CK(cudaMemcpyAsync(df + host_at[i], p, w * 16, cudaMemcpyHostToDevice));
+                CK(cudaMemcpyAsync(d_a + host_at[i], p + 2 * w, w * 16, cudaMemcpyHostToDevice));
+                CK(cudaMemcpyAsync(d_b + host_at[i], p + 4 * w, w * 16, cudaMemcpyHostToDevice));
+                p += 6 * w;
+            }
+            cudaFree(d_lr); cudaFree(d_cr); cudaFree(d_late); cudaFree(d_cut);
         }
         CK(cudaStreamSynchronize(0));
         cudaFree(d_scratch); cudaFree(d_in);

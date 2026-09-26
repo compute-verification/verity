@@ -61,7 +61,61 @@ struct NetlistParams {
     u_inputs: *const u64,
     u_warps: i32,
     witness_s: *mut f64,
+    u_levels0: i32,
+    u_n_late: i32,
+    u_late_rows: *const u32,
+    u_n_cut: i32,
+    u_cut_rows: *const u32,
+    mid_cb: Option<MidCb>,
+    mid_ctx: *mut c_void,
 }
+
+type MidCb = unsafe extern "C" fn(*mut c_void, *const u32, i64, *mut u32, *mut i64, *mut *const i64, *mut *const i32, *mut *const u64) -> i32;
+
+/// What the device's first pass hands the host, and what the host hands back (kept alive until the prover returns).
+pub type Mid<'a> = &'a mut dyn FnMut(&[u32]) -> (Vec<u32>, Vec<(usize, Vec<F128>, Vec<F128>, Vec<F128>)>);
+
+struct MidCtx<'a> {
+    mid: Mid<'a>,
+    n_late: usize,
+    n_cut: usize,
+    at: Vec<i64>,
+    words: Vec<i32>,
+    zab: Vec<u64>,
+}
+
+unsafe extern "C" fn mid_cb(ctx: *mut c_void, cut: *const u32, groups: i64, late: *mut u32, n_host: *mut i64, host_at: *mut *const i64,
+                            host_words: *mut *const i32, host_zab: *mut *const u64) -> i32 {
+    let m = unsafe { &mut *(ctx as *mut MidCtx<'_>) };
+    let cut_all = unsafe { std::slice::from_raw_parts(cut, groups as usize * m.n_cut) };
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| (m.mid)(cut_all))) {
+        Ok((lt, host)) => {
+            if lt.len() != groups as usize * m.n_late {
+                return -1;
+            }
+            unsafe { std::ptr::copy_nonoverlapping(lt.as_ptr(), late, lt.len()) };
+            m.at.clear();
+            m.words.clear();
+            m.zab.clear();
+            for (at, z, a, b) in host {
+                m.at.push(at as i64);
+                m.words.push(z.len() as i32);
+                for v in [z, a, b] {
+                    m.zab.extend(v.iter().flat_map(|w| [w.lo, w.hi]));
+                }
+            }
+            unsafe {
+                *n_host = m.at.len() as i64;
+                *host_at = m.at.as_ptr();
+                *host_words = m.words.as_ptr();
+                *host_zab = m.zab.as_ptr();
+            }
+            0
+        }
+        Err(_) => -1,
+    }
+}
+
 
 unsafe extern "C" {
     fn flock_cuda_prove_netlist(p: *const ProveParams, n: *const NetlistParams, out: *mut *mut u8, out_len: *mut usize) -> i32;
@@ -72,6 +126,8 @@ unsafe extern "C" {
 pub enum NlSrc<'a> {
     /// The whole packed `(z, a, b)` from the host (any witness, a tampered one included).
     Host { z: &'a [F128], a: &'a [F128], b: &'a [F128] },
+    /// A cut template: the compressions and the units' leaf words as `Device`, the units in two passes around `mid`.
+    DeviceCut { comps: &'a [Compression], inputs: &'a [F128], mid: Mid<'a> },
     /// Every block's compressions (block-major, each block's in slot order) and every unit's input words
     /// (`[blocks][units per block][in_words]`): the honest witness, built on the device.
     Device { comps: &'a [Compression], inputs: &'a [F128] },
@@ -80,6 +136,10 @@ pub enum NlSrc<'a> {
 /// The unit netlist's rows as CSR and its level schedule: level 0 the input rows and the constant, a row one past its
 /// deepest operand (itself, in an assertion row, excluded).
 pub struct UnitSched {
+    /// levels [0, levels0) read no late input row; the rest do
+    pub levels0: usize,
+    pub late_rows: Vec<u32>,
+    pub cut_rows: Vec<u32>,
     pub a_off: Vec<u32>,
     pub a_col: Vec<u32>,
     pub b_off: Vec<u32>,
@@ -88,8 +148,23 @@ pub struct UnitSched {
     pub order: Vec<u32>,
 }
 
+/// The unit's schedule; a cut unit's (a second input group: its late rows, the cut words the tail computes; a second output
+/// group: its cut output rows) in two phases: the rows that read no late row, then the rest.
 pub fn schedule(net: &IrUnitNet) -> UnitSched {
     let (u, first, cpos) = (net.useful, net.in_words * 128, net.const_pos);
+    let rows_of = |g: &crate::ir_block::Group| -> Vec<u32> { (0..g.bits.iter().sum::<usize>()).map(|j| (g.col * 128 + j) as u32).collect() };
+    let late_rows: Vec<u32> = net.in_groups.get(1).map(rows_of).unwrap_or_default();
+    let cut_rows: Vec<u32> = if late_rows.is_empty() { vec![] } else { net.out_groups.last().map(rows_of).unwrap_or_default() };
+    let mut late = vec![false; u];
+    for &r in &late_rows {
+        late[r as usize] = true;
+    }
+    for i in first..u {
+        if i != cpos {
+            late[i] = net.a[i].iter().chain(&net.b[i]).any(|&c| c != i && c != cpos && late[c]);
+        }
+    }
+    assert!(cut_rows.iter().all(|&r| !late[r as usize]), "a cut output row reads a late input: the unit is not two-phase");
     let csr = |rows: &Vec<Vec<usize>>| {
         let mut off = vec![0u32];
         let mut col = Vec::new();
@@ -101,29 +176,35 @@ pub fn schedule(net: &IrUnitNet) -> UnitSched {
     };
     let (a_off, a_col) = csr(&net.a);
     let (b_off, b_col) = csr(&net.b);
-    let mut level = vec![0u32; u];
-    let mut max = 0;
-    for i in first..u {
-        if i == cpos {
-            continue;
-        }
-        let l = 1 + net.a[i].iter().chain(&net.b[i]).filter(|&&c| c != i && c != cpos).map(|&c| level[c]).max().unwrap_or(0);
-        level[i] = l;
-        max = max.max(l);
-    }
-    let mut by: Vec<Vec<u32>> = vec![Vec::new(); max as usize];
-    for i in first..u {
-        if i != cpos {
-            by[level[i] as usize - 1].push(i as u32);
-        }
-    }
     let mut level_off = vec![0u32];
     let mut order = Vec::new();
-    for l in by {
-        order.extend(l);
-        level_off.push(order.len() as u32);
+    let mut levels0 = 0;
+    for phase in [false, true] {
+        let mut level = vec![0u32; u];
+        let mut max = 0;
+        for i in first..u {
+            if i == cpos || late[i] != phase {
+                continue;
+            }
+            let l = 1 + net.a[i].iter().chain(&net.b[i]).filter(|&&c| c != i && c != cpos && late[c] == phase && c >= first).map(|&c| level[c]).max().unwrap_or(0);
+            level[i] = l;
+            max = max.max(l);
+        }
+        let mut by: Vec<Vec<u32>> = vec![Vec::new(); max as usize];
+        for i in first..u {
+            if i != cpos && late[i] == phase {
+                by[level[i] as usize - 1].push(i as u32);
+            }
+        }
+        for l in by {
+            order.extend(l);
+            level_off.push(order.len() as u32);
+        }
+        if !phase {
+            levels0 = level_off.len() - 1;
+        }
     }
-    UnitSched { a_off, a_col, b_off, b_col, level_off, order }
+    UnitSched { levels0, late_rows, cut_rows, a_off, a_col, b_off, b_col, level_off, order }
 }
 
 struct Types {
@@ -208,11 +289,18 @@ pub fn prove_netlist(
     let mut wphase = [0f64; 3];
     let (mut hz, mut ha, mut hb): (*const u64, *const u64, *const u64) = (null(), null(), null());
     let (mut cv, mut msg, mut ctr, mut blen, mut flags, mut n_comp, mut uin) = (Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), 0usize, null());
+    let mut src = src;
+    let mut mctx: Option<MidCtx<'_>> = None;
+    if let NlSrc::DeviceCut { comps, inputs, mid } = src {
+        mctx = Some(MidCtx { mid, n_late: t.sched.late_rows.len(), n_cut: t.sched.cut_rows.len(), at: Vec::new(), words: Vec::new(), zab: Vec::new() });
+        src = NlSrc::Device { comps, inputs };
+    }
     match &src {
         NlSrc::Host { z, a, b } => {
             assert_eq!(z.len(), 1 << (m - 7));
             (hz, ha, hb) = (z.as_ptr() as *const u64, a.as_ptr() as *const u64, b.as_ptr() as *const u64);
         }
+        NlSrc::DeviceCut { .. } => unreachable!(),
         NlSrc::Device { comps, inputs } => {
             assert_eq!(comps.len(), st.blocks() * t.comp_slot.len());
             assert_eq!(inputs.len(), st.blocks() * st.c.unit_range().count * unit.in_words);
@@ -277,6 +365,13 @@ pub fn prove_netlist(
         u_inputs: uin,
         u_warps: std::env::var("NL_WARPS").ok().and_then(|x| x.parse().ok()).unwrap_or(if unit.useful > 65536 { 8 } else { 1 }),
         witness_s: wphase.as_mut_ptr(),
+        u_levels0: if mctx.is_some() { t.sched.levels0 as i32 } else { (t.sched.level_off.len() - 1) as i32 },
+        u_n_late: if mctx.is_some() { t.sched.late_rows.len() as i32 } else { 0 },
+        u_late_rows: t.sched.late_rows.as_ptr(),
+        u_n_cut: t.sched.cut_rows.len() as i32,
+        u_cut_rows: t.sched.cut_rows.as_ptr(),
+        mid_cb: mctx.is_some().then_some(mid_cb as MidCb),
+        mid_ctx: mctx.as_mut().map_or(null_mut(), |m| m as *mut MidCtx<'_> as *mut c_void),
     };
     for (i, l) in t.logs.iter().enumerate() {
         p.type_log[i] = *l;
@@ -295,6 +390,7 @@ pub fn prove_netlist(
     let mut out: *mut u8 = null_mut();
     let mut out_len: usize = 0;
     let rc = unsafe { flock_cuda_prove_netlist(&params, &p, &mut out, &mut out_len) };
+    drop(mctx);
     assert_eq!(rc, 0, "CUDA netlist prover returned error {rc} at m={m}");
     let bytes = unsafe { std::slice::from_raw_parts(out, out_len) }.to_vec();
     unsafe { flock_cuda_free(out) };

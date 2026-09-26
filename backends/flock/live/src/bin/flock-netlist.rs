@@ -133,15 +133,21 @@ enum WitData {
     Host(Witness),
     #[allow(dead_code)]
     Dev(Vec<Compression>, Vec<F128>),
+    /// a cut template on the device: the units' inputs (leaf words; the late words come from the host tail between passes)
+    #[allow(dead_code)]
+    DevCut(Vec<Compression>, Vec<F128>, Arc<dyn Fn(usize, usize) -> Vec<F128> + Sync + Send>),
 }
 
 fn witness(st: &Stmt, w: &Wit, device: bool) -> (WitData, f64) {
     let t = Instant::now();
-    if device && w.flip_z.is_none() && st.c.wires.is_empty() {
+    if device && w.flip_z.is_none() && w.cut_flip.is_none() && w.nets.is_empty() {
         use rayon::prelude::*;
         let ur = st.c.unit_range();
         let comps: Vec<Compression> = (0..st.blocks()).into_par_iter().flat_map_iter(|b| (w.comps)(b)).collect();
         let inputs: Vec<F128> = (0..st.blocks() * ur.count).into_par_iter().flat_map_iter(|x| (w.inputs)(x / ur.count, x % ur.count)).collect();
+        if !st.c.wires.is_empty() {
+            return (WitData::DevCut(comps, inputs, w.inputs.clone()), t.elapsed().as_secs_f64());
+        }
         return (WitData::Dev(comps, inputs), t.elapsed().as_secs_f64());
     }
     let mut ins = st.converge(&*w.inputs, &w.nets);
@@ -171,14 +177,21 @@ fn prove_cpu(st: &Stmt, wt: &WitData, lig: LigeritoProfile, hook: Hook<'_>, ch: 
 #[cfg(feature = "gpu")]
 fn prove_gpu(st: &Stmt, wt: &WitData, lig: LigeritoProfile, rep: usize, hook: Hook<'_>, ch: &mut LiveChallenger) -> (Vec<u8>, Value) {
     use flock_live::gpu_netlist::{NlSrc, prove_netlist};
+    let sched = flock_live::gpu_netlist::schedule(st.c.unit());
+    let (cut_rows, late_rows): (Vec<usize>, Vec<usize>) = (sched.cut_rows.iter().map(|&r| r as usize).collect(), sched.late_rows.iter().map(|&r| r as usize).collect());
+    let mut mid_fn;
     let src = match wt {
         WitData::Host((z, a, b, _)) => NlSrc::Host { z, a, b },
         WitData::Dev(c, i) => NlSrc::Device { comps: c, inputs: i },
+        WitData::DevCut(c, i, ui) => {
+            mid_fn = move |cut: &[u32]| st.host_tail(&**ui, cut, &cut_rows, &late_rows);
+            NlSrc::DeviceCut { comps: c, inputs: i, mid: &mut mid_fn }
+        }
     };
     let (proof, commitment, ph, wph) = prove_netlist(st, src, &params(st.m, lig), &domain(rep), hook, ch);
     let bk = json!({"t.witness": ph[0], "t.witness_comp": wph[0], "t.witness_units": wph[1], "t.encoding_commitment": ph[1], "t.link": ph[2],
                     "t.zerocheck": ph[3], "t.lincheck": ph[4], "t.ring_switch": ph[5], "t.ligerito": ph[6], "t.total": ph[7],
-                    "t.arithmetic": ph[3] + ph[4] + ph[5] + ph[6], "device_witness": matches!(wt, WitData::Dev(..))});
+                    "t.arithmetic": ph[3] + ph[4] + ph[5] + ph[6], "device_witness": !matches!(wt, WitData::Host(..))});
     eprintln!("GPUPHASE\t{bk}");
     (bincode::serialize(&(commitment, proof)).unwrap(), bk)
 }
