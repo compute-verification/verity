@@ -3685,219 +3685,263 @@
   "dump_plan": "Add `--dump DIR` to the selftest subcommand of flock-pure-gpu, flock-ir-frame and the PR #83 circuit-statement binary so every case writes its session.json and proofs; run once on a CPU pod at 8 VUs (a few minutes); preserve the tree as one artifact; each case's expected verdict is its selftest `pass` line."
  },
  "replayable": {
-  "note": "Replayable (record, proofs) sets for the circuit statement at PR #83 9294e161, generated with netlist-vectors.patch; both verifiers run on the same directories (README.md).",
-  "statement": {
-   "circuit": "art:799dab88/net.txt",
-   "public": "art:799dab88/pub-8.bin",
-   "comp": "art:04259cdd",
-   "circuit_sha256": "54b78fd938372788d828f49a72bc3b89a000f0b9cdcbb54362ba7e23007964c6",
-   "detail": "rope-head/neox-bf16/pair, 8 instances, 2 VUs per block, k_log 20, nbl 3, m 23, 7 regions, coins seed"
-  },
-  "sessions": [
+  "note": "Replayable (record, proofs) sets for the circuit statement, one per statement version (Flock.Tags), generated with the vectors patch of that PR #83 commit; both verifiers run on the same directories (README.md, agree.py).",
+  "sets": [
    {
-    "dir": "art:ef080b64/honest",
-    "expect": {
-     "accepted": true,
-     "why": ""
-    }
+    "statement": {
+     "circuit": "art:799dab88/net.txt",
+     "public": "art:799dab88/pub-8.bin",
+     "comp": "art:04259cdd",
+     "circuit_sha256": "54b78fd938372788d828f49a72bc3b89a000f0b9cdcbb54362ba7e23007964c6",
+     "detail": "rope-head/neox-bf16/pair, 8 instances, 2 VUs per block, k_log 20, nbl 3, m 23, 7 regions, coins seed"
+    },
+    "sessions": [
+     {
+      "dir": "art:ef080b64/honest",
+      "expect": {
+       "accepted": true,
+       "why": ""
+      }
+     },
+     {
+      "dir": "art:ef080b64/r-break",
+      "expect": {
+       "accepted": false,
+       "why": "S13/R1"
+      },
+      "forgery": "R-BREAK (art:8d04b53f): rep 1 proves a different witness (other mask cells) on its own root at the same link points; each rep alone is accepted by upstream's statement verifier (upstream.json)"
+     }
+    ],
+    "mutants": {
+     "tool": "backends/flock/verifier/redigest.py art:ef080b64/honest OUT",
+     "cases": [
+      {
+       "name": "zc-final-a",
+       "rep": 0,
+       "expect": {
+        "accepted": false,
+        "why": "zerocheck: SumcheckFinalFailed"
+       }
+      },
+      {
+       "name": "zc-final-c",
+       "rep": 0,
+       "expect": {
+        "accepted": false,
+        "why": "zerocheck: CEvalMismatch"
+       }
+      },
+      {
+       "name": "zc-round1-c",
+       "rep": 0,
+       "expect": {
+        "accepted": false,
+        "why": "zerocheck: CEvalMismatch"
+       }
+      },
+      {
+       "name": "zc-round1-ab",
+       "rep": 0,
+       "expect": {
+        "accepted": false,
+        "why": "zerocheck: SumcheckFinalFailed"
+       }
+      },
+      {
+       "name": "zc-residual-round",
+       "rep": 0,
+       "expect": {
+        "accepted": false,
+        "why": "zerocheck: SumcheckFinalFailed"
+       }
+      },
+      {
+       "name": "lc-round",
+       "rep": 0,
+       "expect": {
+        "accepted": false,
+        "why": "lincheck: ConsistencyFailed"
+       }
+      },
+      {
+       "name": "lc-z-partial",
+       "rep": 0,
+       "expect": {
+        "accepted": false,
+        "why": "lincheck: ConsistencyFailed"
+       }
+      },
+      {
+       "name": "rs-ab-claim",
+       "rep": 0,
+       "expect": {
+        "accepted": false,
+        "why": "opening: ring-switch claim 0 mismatch"
+       }
+      },
+      {
+       "name": "rs-c-claim",
+       "rep": 0,
+       "expect": {
+        "accepted": false,
+        "why": "opening: ring-switch claim 1 mismatch"
+       }
+      },
+      {
+       "name": "rs-region-claim",
+       "rep": 0,
+       "expect": {
+        "accepted": false,
+        "why": "opening: ring-switch claim 2 mismatch"
+       }
+      },
+      {
+       "name": "rs-region-orthogonal",
+       "rep": 0,
+       "expect": {
+        "accepted": false,
+        "why": "ligerito: final check failed"
+       }
+      },
+      {
+       "name": "rs-nonce",
+       "rep": 0,
+       "expect": {
+        "accepted": false,
+        "why": "ring switch grinding_nonce"
+       }
+      },
+      {
+       "name": "lig-yr",
+       "rep": 0,
+       "expect": {
+        "accepted": false,
+        "why": "ligerito: final check failed"
+       }
+      },
+      {
+       "name": "lig-ood",
+       "rep": 0,
+       "expect": {
+        "accepted": false,
+        "why": "ligerito: final check failed"
+       }
+      },
+      {
+       "name": "lig-message",
+       "rep": 0,
+       "expect": {
+        "accepted": false,
+        "why": "ligerito: final check failed"
+       }
+      },
+      {
+       "name": "lig-row-l0",
+       "rep": 0,
+       "expect": {
+        "accepted": false,
+        "why": "merkle:"
+       }
+      },
+      {
+       "name": "lig-sibling-l0",
+       "rep": 0,
+       "expect": {
+        "accepted": false,
+        "why": "merkle:"
+       }
+      },
+      {
+       "name": "lig-row-l1",
+       "rep": 0,
+       "expect": {
+        "accepted": false,
+        "why": "merkle:"
+       }
+      },
+      {
+       "name": "lig-row-final",
+       "rep": 0,
+       "expect": {
+        "accepted": false,
+        "why": "merkle:"
+       }
+      },
+      {
+       "name": "lig-query-nonce",
+       "rep": 0,
+       "expect": {
+        "accepted": true,
+        "why": ""
+       }
+      },
+      {
+       "name": "lig-claim-nonce",
+       "rep": 0,
+       "expect": {
+        "accepted": true,
+        "why": ""
+       }
+      },
+      {
+       "name": "rep1-zc-final-a",
+       "rep": 1,
+       "expect": {
+        "accepted": false,
+        "why": "zerocheck: SumcheckFinalFailed"
+       }
+      },
+      {
+       "name": "rep1-lig-yr",
+       "rep": 1,
+       "expect": {
+        "accepted": false,
+        "why": "ligerito: final check failed"
+       }
+      }
+     ]
+    },
+    "tags": "verity/flock-netlist/v1",
+    "pr83": "9294e161",
+    "generator": "netlist-vectors.patch",
+    "agreement": "art:f1f3c2aa"
    },
    {
-    "dir": "art:ef080b64/r-break",
-    "expect": {
-     "accepted": false,
-     "why": "S13/R1"
+    "tags": "verity/flock-circuit",
+    "pr83": "19c7269a",
+    "generator": "circuit-vectors.patch",
+    "statement": {
+     "circuit": "art:5715c8f9/circuit.txt",
+     "public": "art:5715c8f9/pub-8.bin",
+     "comp": "art:04259cdd",
+     "circuit_sha256": "bd0cb4c2515f54067c26bcd9ac164db5f51e7a2e9e3c2181e765f969d3573921",
+     "statement_digest": "d4ac50e0ee616d365c0c898531d58082f4c04df5de5a5eb3d8f28d09d7bdc224",
+     "sigma": "37e3e083df18198208af1bc70b2f4b638506a2c6307b52809ce45d63fdce3687",
+     "detail": "rope-head/neox-bf16/pair, 8 instances, m 23, 7 regions, coins seed (coin-commit/sha256)"
     },
-    "forgery": "R-BREAK (art:8d04b53f): rep 1 proves a different witness (other mask cells) on its own root at the same link points; each rep alone is accepted by upstream's statement verifier (upstream.json)"
+    "sessions": [
+     {
+      "dir": "art:b9e86ae1/honest",
+      "expect": {
+       "accepted": true,
+       "why": ""
+      }
+     },
+     {
+      "dir": "art:b9e86ae1/r-break",
+      "expect": {
+       "accepted": false,
+       "why": "S13/R1"
+      },
+      "forgery": "R-BREAK (art:8d04b53f), as in the first set"
+     }
+    ],
+    "mutants": {
+     "tool": "backends/flock/verifier/redigest.py art:b9e86ae1/honest OUT",
+     "cases": "as in the first set"
+    },
+    "agreement": "art:81645236"
    }
-  ],
-  "mutants": {
-   "tool": "backends/flock/verifier/redigest.py art:ef080b64/honest OUT",
-   "cases": [
-    {
-     "name": "zc-final-a",
-     "rep": 0,
-     "expect": {
-      "accepted": false,
-      "why": "zerocheck: SumcheckFinalFailed"
-     }
-    },
-    {
-     "name": "zc-final-c",
-     "rep": 0,
-     "expect": {
-      "accepted": false,
-      "why": "zerocheck: CEvalMismatch"
-     }
-    },
-    {
-     "name": "zc-round1-c",
-     "rep": 0,
-     "expect": {
-      "accepted": false,
-      "why": "zerocheck: CEvalMismatch"
-     }
-    },
-    {
-     "name": "zc-round1-ab",
-     "rep": 0,
-     "expect": {
-      "accepted": false,
-      "why": "zerocheck: SumcheckFinalFailed"
-     }
-    },
-    {
-     "name": "zc-residual-round",
-     "rep": 0,
-     "expect": {
-      "accepted": false,
-      "why": "zerocheck: SumcheckFinalFailed"
-     }
-    },
-    {
-     "name": "lc-round",
-     "rep": 0,
-     "expect": {
-      "accepted": false,
-      "why": "lincheck: ConsistencyFailed"
-     }
-    },
-    {
-     "name": "lc-z-partial",
-     "rep": 0,
-     "expect": {
-      "accepted": false,
-      "why": "lincheck: ConsistencyFailed"
-     }
-    },
-    {
-     "name": "rs-ab-claim",
-     "rep": 0,
-     "expect": {
-      "accepted": false,
-      "why": "opening: ring-switch claim 0 mismatch"
-     }
-    },
-    {
-     "name": "rs-c-claim",
-     "rep": 0,
-     "expect": {
-      "accepted": false,
-      "why": "opening: ring-switch claim 1 mismatch"
-     }
-    },
-    {
-     "name": "rs-region-claim",
-     "rep": 0,
-     "expect": {
-      "accepted": false,
-      "why": "opening: ring-switch claim 2 mismatch"
-     }
-    },
-    {
-     "name": "rs-region-orthogonal",
-     "rep": 0,
-     "expect": {
-      "accepted": false,
-      "why": "ligerito: final check failed"
-     }
-    },
-    {
-     "name": "rs-nonce",
-     "rep": 0,
-     "expect": {
-      "accepted": false,
-      "why": "ring switch grinding_nonce"
-     }
-    },
-    {
-     "name": "lig-yr",
-     "rep": 0,
-     "expect": {
-      "accepted": false,
-      "why": "ligerito: final check failed"
-     }
-    },
-    {
-     "name": "lig-ood",
-     "rep": 0,
-     "expect": {
-      "accepted": false,
-      "why": "ligerito: final check failed"
-     }
-    },
-    {
-     "name": "lig-message",
-     "rep": 0,
-     "expect": {
-      "accepted": false,
-      "why": "ligerito: final check failed"
-     }
-    },
-    {
-     "name": "lig-row-l0",
-     "rep": 0,
-     "expect": {
-      "accepted": false,
-      "why": "merkle:"
-     }
-    },
-    {
-     "name": "lig-sibling-l0",
-     "rep": 0,
-     "expect": {
-      "accepted": false,
-      "why": "merkle:"
-     }
-    },
-    {
-     "name": "lig-row-l1",
-     "rep": 0,
-     "expect": {
-      "accepted": false,
-      "why": "merkle:"
-     }
-    },
-    {
-     "name": "lig-row-final",
-     "rep": 0,
-     "expect": {
-      "accepted": false,
-      "why": "merkle:"
-     }
-    },
-    {
-     "name": "lig-query-nonce",
-     "rep": 0,
-     "expect": {
-      "accepted": true,
-      "why": ""
-     }
-    },
-    {
-     "name": "lig-claim-nonce",
-     "rep": 0,
-     "expect": {
-      "accepted": true,
-      "why": ""
-     }
-    },
-    {
-     "name": "rep1-zc-final-a",
-     "rep": 1,
-     "expect": {
-      "accepted": false,
-      "why": "zerocheck: SumcheckFinalFailed"
-     }
-    },
-    {
-     "name": "rep1-lig-yr",
-     "rep": 1,
-     "expect": {
-      "accepted": false,
-      "why": "ligerito: final check failed"
-     }
-    }
-   ]
-  }
+  ]
  }
 }

@@ -859,9 +859,26 @@ included. Claims are listed region-major, then point 0 before point 1.
 
 ### 16.5 The circuit statement (PR #83, table `nl`)
 
-- Tags: `TAG = "verity/flock-netlist/v1"`, file format `"flock-netlist/v1"`, public file format `"flock-netlist-inst/v1"`,
-  Σ tag `"verity/flock-netlist/sigma/v1"`, domain `"flock-netlist-v1/fast100x2/rep" ‖ r`, `PT_LOCAL = 24`,
-  `m_pts = 24 + nbl`, leaf scheme `"flock-leaf/sha256-unsalted/v0"`.
+- Tags are a parameter (`Flock.Tags`): every string below is hashed or matched byte for byte, so each version of PR #83's
+  statement is one value. `PT_LOCAL = 24` and `m_pts = 24 + nbl` in both versions.
+
+  | tag | `verity/flock-netlist/v1` (PR #83 at `9294e161`) | `verity/flock-circuit` (PR #83 at `19c7269a`) |
+  |---|---|---|
+  | `TAG`, META `statement` | `verity/flock-netlist/v1` | `verity/flock-circuit` |
+  | file format (line 1, META `format`) | `flock-netlist/v1` | `flock-circuit` |
+  | block keyword | `NET` | `CIRCUIT` |
+  | public file format; circuit hash key | `flock-netlist-inst/v1`; `netlist_sha256` | `flock-circuit-inputs`; `circuit_sha256` |
+  | Σ tag | `verity/flock-netlist/sigma/v1` | `verity/flock-circuit/sigma` |
+  | domain | `flock-netlist-v1/fast100x2/rep` ‖ r | `flock-circuit/fast100x2/rep` ‖ r |
+  | table | `nl` | `circuit` |
+  | Merkle leaf scheme | `flock-leaf/sha256-unsalted/v0` | `flock-leaf/sha256-unsalted` |
+  | `Hello` coin scheme (seed mode) | `coin-commit/sha256/v1` | `coin-commit/sha256` |
+  | identity | `merkle_hash: sha256` | a `hashes` object naming every commitment hash (`row_leaf_in_circuit: blake3-keyed/row/v2`) |
+
+- The in-circuit row leaf is a parameter too (`Flock.RowLeaf`): its slot circuit, its layout check, its share of Δ, its
+  regions with their known bytes, and the check of the input roots. Both versions use the keyed-BLAKE3 row leaf
+  (`blake3-keyed/row/v2`) described below. The target leaf is `hm96-sha256/v1` (Halevi–Micali on SHA-256, PR #88). It
+  publishes `b ‖ c` per row where today's leaf publishes the 32-byte digest, and it needs SHA-256 compression slots.
 - Σ = `SHA-256(SIGMA_TAG ‖ sha256(circuit file) ‖ digest ‖ public_sha256)`, `public_sha256 = SHA-256(compact-sorted-JSON(header
   with rows := false) ‖ digests ‖ outputs)`.
 - Statement digest: `SHA-256(TAG ‖ D_b3 ‖ sha256(circuit file) ‖ row key (32) ‖ compact-sorted-JSON(identity) ‖ le64 [n,
@@ -995,6 +1012,27 @@ Soundness of a verdict rests on:
 - **The Rust cross-check's own trust base** (rustc, upstream's code) matters only as a test oracle: a bug shared by both
   implementations would pass CI, which is why the Lean verifier is written from the paper and this spec, not from
   upstream's code.
+
+### 17.4 Assurance stages
+
+Assurance is staged and reported like a16z's zkVM security stages (Thaler, 2025). Stage 1 covers the protocol, stage 2
+the verifier implementation, stage 3 the prover. Level 3 is this lane's; level 4a is the soundness lane's. A stage is
+complete for a statement only when every constraint system in it (row leaf, units, lookups, tail stages) is covered. That
+is the article's recursion caveat, applied to the slots of one block.
+
+| stage | here | level |
+|---|---|---|
+| 1a PIOP soundness | zerocheck with univariate skip, lincheck with the verifier-computed fold, ring switching, and the region claims, for F2 block R1CS | 4a |
+| 1b PCS binding | Ligerito, with the paper's proximity and correlated-agreement results as named axioms; Merkle binding under SHA-256 collision resistance (an explicit collision extractor) | 4a; Merkle 3 |
+| 1c Fiat–Shamir | not used (interactive coins). Replaced by **session binding**: every coin is issued only after the framed bytes it answers are fixed by their SHA-256 digest (R2); both reps bind one root (S13, S16, S18); Σ, the digest and the link points precede every Flock coin (S4, S14, §9.1) | 3 |
+| 1d constraint system = semantics | the lowering theorem for every pinned circuit against its reference function (soundness and totality), and the assembly: the fold equals the multilinear extension of `I ⊗ A_0 + Δ`, the region values equal the extension of the known bytes, and Δ makes the stated copies | 3 |
+| 1e glue | one theorem: `verify` accepts ⇒ every instance's outputs are its reference function of its inputs, and the rows hash to the public roots, except with probability δ. No zero-knowledge claim (`NON_ZK_PROOF`) | 4a |
+| 2 implementation = protocol | the executable is the definition the theorems are about, so no second implementation has to be matched. What remains: the field code is GF(2^128) and K; the decoders implement §8 and §5.1; the hash code meets FIPS 180-4 and the BLAKE3 spec (tested against vectors, used as assumptions); compiler and runtime trust (§17.3) | 3 |
+| 3 prover completeness | out of scope (upstream's prover). Every honest session in the corpus is accepted | tests |
+
+The lowering theorems are proved about a certified checker, over all inputs. The verifier runs that checker on the pinned
+files at setup and refuses a circuit it cannot certify. So no proof evaluates a pinned file in the kernel, and no proof
+uses `native_decide`.
 
 ## 18. Test vectors
 
