@@ -272,7 +272,11 @@ HOPPER_BF16_WGMMA_K16 = GroupSum(
     groups=(16,),
     width=26,
     zero_exponent=-133,
-    validated="lane HP campaign, H100 80GB HBM3 (sm_90), 2026-09-07: 37,510 tiles x 8,192 outputs x 3 reps",
+    validated=(
+        "lane HP campaign, H100 80GB HBM3 (sm_90), 2026-09-07: 37,510 tiles x 8,192 outputs x 3 reps (wgmma m64n128k16 via Triton); "
+        "lane wgmma-bf16, H100 80GB HBM3, 2026-09-26: wgmma m64n8k16 with A from shared memory (run r20260926-020157-242a) and from "
+        "registers (r20260926-020210-aee8), 26,361,344 + 2,876,928 chained elements each and the lane HP records replayed, 0 mismatches"
+    ),
 )
 
 HOPPER_E4M3_K32 = GroupSum(

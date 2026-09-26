@@ -137,9 +137,14 @@ _H100_BF16 = (
     "floor -133 (verity.ml.tc.total.HOPPER_BF16_WGMMA_K16) -- the wgmma path, not mma.sync"
 )
 _H100_WGMMA_BF16 = (
-    "lane wgmma-bf16 (2026-09-26), tools/tc_probe on vy-wgmma-bf16-h100 (H100 80GB HBM3, driver 580.126.09, nvcc 12.4.131, -arch=sm_90a): "
-    "one wgmma.mma_async.sync.aligned.m64n8k16.f32.bf16.bf16 per tile, SASS 1x HGMMA.64x8x16.F32.BF16, A from shared memory (SS) and "
-    "from registers (RS), against the total semantics (specials asserted)"
+    "lane wgmma-bf16 (2026-09-26), tools/tc_probe on vy-wgmma-bf16-h100 (H100 80GB HBM3, driver 580.126.09, nvcc 12.4.131, -arch=sm_90a, "
+    "GPU-d5e245b4-5429-c607-9efb-a3578c7334e2): one wgmma.mma_async.sync.aligned.m64n8k16.f32.bf16.bf16 per tile, SASS 1x "
+    "HGMMA.64x8x16.F32.BF16, against the total semantics (specials asserted).  A from shared memory (SS) r20260926-020157-242a "
+    "art:8f903385776fdb04bd3008120f44422b76fa4e2cbb5ad6533275a67548d7a6a0 and from registers (RS) r20260926-020210-aee8 "
+    "art:f9508ae817053e57d93332518608430d7988a7bf2fdf0fc0d58bcf6695ec74d5: each 26,361,344 swept elements in 14 families, 2,876,928 "
+    "elements of four back-to-back wgmma on one accumulator (K = 64: the chain of single steps), veritor's 44,046 records replayed, "
+    "0 mismatches; the Ampere pipeline misses 3.15M.  Words identical to the first pair (r20260926-015601-b530, -015605-bc89; same "
+    "seeds).  Canary r20260926-021005-456c art:4ca1294d1cf34183e57d638873ea6cbee75ee42054e88c6b105ac61e0f49b513 (26,624, 0)"
 )
 _AUTOPROOF = (
     "autoproof spec/SEMANTICS.lock.v1.json + probes/results/probe3_1783788526.json (RTX 5090 sm_120, driver "
