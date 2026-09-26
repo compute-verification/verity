@@ -107,6 +107,77 @@ def test_quick_is_a_subset():
         assert names and set(names) <= set(X.QUICK) and set(names) <= {c["name"] for c in X.cases(v)}
 
 
+def _guarded_stream(rows, row_max):
+    """A stream whose ROW entries carry `row_max` (per visited block, kernel visit order) and the guarded max in word 3."""
+    import numpy as np
+
+    from verity_vllm.program.kernels.derived_rows import guard_neg_inf_zero
+
+    layout = StreamLayout(1, len(rows), 2, 128, 64)
+    w = np.full(layout.padded_words(), X.FILL, dtype=np.uint32)
+    R = X._row_plane(w, layout)
+    it = iter(row_max)
+    for slab, r, nbm in rows:
+        for b in range(nbm - 1, -1, -1):
+            m = next(it)
+            R[slab, r, b, 0] = m
+            R[slab, r, b, 3] = guard_neg_inf_zero(m) if b < nbm - 1 else 0
+    return w, layout
+
+
+def test_check_row3_is_the_guard_after_the_first_block_and_names_a_wrong_word():
+    rows = [(0, 0, 1), (0, 1, 2), (0, 2, 2)]
+    # visit order: row 0's only block, then rows 1 and 2 first (block 1) and later (block 0): 1.0 | +inf, -inf | -0, NaN
+    w, layout = _guarded_stream(rows, [0x3F800000, 0x7F800000, 0xFF800000, 0x80000000, 0x7FFFFFFF])
+    r = X.check_row3(w, layout, iter(rows))
+    assert r == {"guard_words": 2, "guard_mismatch": 0, "first_block_nonzero": 0, "ir_sampled": 2, "ir_mismatch": 0}
+    assert X._row_plane(w, layout)[0, 1, 0, 3] == 0                                  # -inf is guarded to +0
+    bad = w.copy()
+    X._row_plane(bad, layout)[0, 2, 0, 3] = 0x7F800000
+    X._row_plane(bad, layout)[0, 0, 0, 3] = 1
+    r = X.check_row3(bad, layout, iter(rows))
+    assert r["guard_mismatch"] == 1 and r["first_mismatch"] == {"slab": 0, "row": 2, "block": 0, "row_max": 0x7FFFFFFF, "word3": 0x7F800000}
+    assert r["first_block_nonzero"] == 1 and r["ir_mismatch"] == 1
+
+
+def test_the_guarded_build_writes_word_3_at_every_visited_block_and_the_masked_digest_ignores_only_it():
+    rows = [(0, 0, 1), (0, 1, 2), (0, 2, 2)]
+    w, layout = _guarded_stream(rows, [0x3F800000] * 5)
+    plain = X.expected_written(layout, SRC_BITS["ROW"], iter(rows))
+    guarded = X.expected_written(layout, SRC_BITS["ROW"], iter(rows), row3=1)
+    assert guarded.sum() - plain.sum() == 5 and not (plain & ~guarded).any()
+    base = w.copy()
+    X._row_plane(base, layout)[..., 3] = X.FILL
+    assert X.masked_digest(w, layout) == X.masked_digest(base, layout)
+    X._row_plane(base, layout)[0, 1, 1, 1] = 7
+    assert X.masked_digest(w, layout) != X.masked_digest(base, layout)
+
+
+def _guarded_record(**row3):
+    doc = _record()
+    case = dict(doc["cases"][0], row3={"guard_words": 3, "guard_mismatch": 0, "first_block_nonzero": 0, "ir_sampled": 3, "ir_mismatch": 0,
+                                       "stream_eq_baseline": True, **row3})
+    case["ok"] = X.case_ok(case)
+    return X.seal({**doc, "cases": [case], "tap": {"row3": 1}, "baseline": {"digest": "b" * 64}})
+
+
+def test_a_guarded_record_needs_its_baseline_and_word_3_checked_in_every_case():
+    assert _guarded_record()["ok"] is True and X.verify_record(_guarded_record()) == []
+    for bad in ({"stream_eq_baseline": None}, {"stream_eq_baseline": False}, {"guard_mismatch": 1}, {"ir_sampled": 0}):
+        assert _guarded_record(**bad)["ok"] is False
+    assert X.seal({**_guarded_record(), "baseline": {}})["ok"] is False
+    assert X.seal({**_record(), "tap": {"row3": 1}, "baseline": {"digest": "b" * 64}})["ok"] is False    # a case without word 3 checked
+
+
+def test_the_edge_cases_name_query_tokens_of_their_own_launch():
+    for v in (2, 3):
+        edge = [c for c in X.cases(v) if c.get("special")]
+        assert {c["name"] for c in edge} == ({"edge_rows", "g2_edge_rows_softcap"} if v == 2 else {"edge_rows"})
+        for c in edge:
+            toks = [t for ts in c["special"].values() for t in ts]
+            assert len(set(toks)) == len(toks) and max(toks) < sum(c["seqlens_q"])
+
+
 @pytest.mark.parametrize("fa_version,D", [(2, 64), (2, 96), (2, 128), (2, 256), (3, 64), (3, 128)])
 def test_every_negative_declares_a_geometry_the_kernel_did_not_launch(fa_version, D):
     negs = X.negatives(fa_version, D)

@@ -77,7 +77,9 @@ required, name a model.
 `stage.py`, `compiled.py` (the manifest of `Execution=compiled` rows), `sources/` (`hidden_source.py` / `moe_source.py` /
 `compiled_source.py` / `compiled_kernel_source.py` / `partial_source.py` / `norm_scale_source.py`), `fa2_plane_classes.py`,
 `committer_api.py`, and the shipped tap sources (`fa2_tap_src/`, `fa3_tap_src/`, `norm_tap_src/`).  `gate.py` is the CPU gate
-(one row's acquisition plan, off-pod).  The norm-scale tap (`NORM_TAP=1`, `query/norm_scales.py`) is opt-in and never the record.
+(one row's acquisition plan, off-pod).  The norm-scale tap (`NORM_TAP=1`, `query/norm_scales.py`) is opt-in and never the record, and so
+is the guarded-max tap (`GUARDED_MAX_TAP=1`, `query/guarded_max.py`): the FA2 / FA3 tap builds of `pod_fa2_tap.sh FA2_TAP_ROW_GUARD=1` /
+`pod_fa3_tap.sh FA3_TAP_ROW_GUARD=1` write `GuardNegInfZero(m)` into word 3 of the stream's ROW entry.
 Never: decide what is required; never a model-name list.
 
 **`commit/`** implements *commitment*: `merkle.py` (trees over canonical ids, `path_shape` / `fold_path`, openings), `hashing.py`

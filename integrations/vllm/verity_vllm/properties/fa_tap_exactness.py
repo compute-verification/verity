@@ -12,7 +12,14 @@ page 16, num_splits 1, softmax scale D^-0.5, causal as vLLM passes it):
       n_block_max, the planes the build writes) is written and no other word is (the fill pattern stays);
   (d) it fails closed: a declaration that is not the launched kernel's (wrong kBlockN, wrong head_dim; FA2: the swapped geometry on an
       un-swapped windowed decode; FA3: an M cap below the packed rows) is skipped (counter + 1), writes nothing, and the output still
-      equals the installed kernel's.
+      equals the installed kernel's;
+  (e) a guarded-max build (`verity_tap_row3() == 1`, `query.guarded_max`) against a record of the default build (`baseline`): every stream
+      word but ROW word 3 equals the default build's (`masked_digest`), and word 3 is the IR's `GuardNegInfZero_v1` of the entry's row_max
+      at every key block after a row's first (the guard's unit reads that committed word) and 0 at the first (`check_row3`; the IR
+      reference on a sample, special values included, and its vectorised twin on every word).
+
+Every stream word is `FILL` before the launch.  The `edge_rows` cases give some query rows the scores -inf (so the max and the guard see
+-inf everywhere), +inf or NaN throughout (`SPECIAL`).
 
 This module is the property and its record: the cases and negatives, the geometry and tile `hidden_source` declares (`fa2_swapped`,
 `fa2_kblock_n`, `fa3_tile`), the words each launch must write, and `fa_tap_exactness.json` (environment, both .so sha256, per-case and
@@ -25,12 +32,13 @@ passes to the installed op and parses its arguments, which library code may not 
 """
 from __future__ import annotations
 
+import hashlib
 from typing import Any, Iterator
 
 import numpy as np
 
 from verity_vllm.acquire.sources.hidden_source import KBLOCK_M, fa2_kblock_n, fa2_swapped, fa3_tile
-from verity_vllm.commit.hidden_stream import SRC_BITS, StreamLayout
+from verity_vllm.commit.hidden_stream import ROW_GUARD_FIELD, SRC_BITS, StreamLayout
 from verity_vllm.properties.record import digest_of, seal as seal_record
 
 
@@ -43,13 +51,18 @@ INSTALLED = {2: ("_vllm_fa2_C", "varlen_fwd"), 3: ("_vllm_fa3_C", "fwd")}
 #: larger than every key length below, so no launch has a key block left of its window (n_block_min stays 0)
 WINDOW = (4095, 0)
 DECODE_K = [1, 17, 64, 65, 128, 129, 1000, 1031, 2047]
-QUICK = ("prefill_short", "prefill_256", "decode_gqa", "g2_decode_gqa_softcap_window", "smallq_onewg")
+QUICK = ("prefill_short", "prefill_256", "decode_gqa", "g2_decode_gqa_softcap_window", "smallq_onewg", "edge_rows")
+#: the edge case's sequences: a 130-row prefill (one and two key blocks) and three decodes (tokens 130, 131, 132) over 257, 300 and 1 keys
+EDGE = ([130, 1, 1, 1], [130, 257, 300, 1])
+#: what every score of a query token's rows is in the edge cases (the GPU run sets q[t, :, 0] = +inf / -inf / NaN against k[..., 0] < 0;
+#: the softcap maps +-inf to +-CAP)
+SPECIAL = {"-inf": [0, 64, 129, 130], "+inf": [70], "nan": [128, 131]}
 
 
 def _case(name: str, H: int, Hk: int, seqlens_q: list[int], seqlens_k: list[int], softcap: float = 0.0,
-          window: tuple[int, int] = (-1, -1)) -> dict[str, Any]:
+          window: tuple[int, int] = (-1, -1), special: dict[str, list[int]] | None = None) -> dict[str, Any]:
     return {"name": name, "H": H, "Hk": Hk, "seqlens_q": list(seqlens_q), "seqlens_k": list(seqlens_k), "softcap": float(softcap),
-            "window": list(window)}
+            "window": list(window), **({"special": special} if special else {})}
 
 
 def cases(fa_version: int, quick: bool = False) -> list[dict[str, Any]]:
@@ -63,7 +76,8 @@ def cases(fa_version: int, quick: bool = False) -> list[dict[str, Any]]:
           _case("prefill_long", 2, 2, [1000, 1031], [1000, 1031]),
           _case("chunked", 4, 2, [17, 64, 1], [300, 1000, 129]),
           _case("decode_gqa", 8, 2, [1] * 9, DECODE_K),
-          _case("decode_mha", 2, 2, [1] * 9, DECODE_K)]
+          _case("decode_mha", 2, 2, [1] * 9, DECODE_K),
+          _case("edge_rows", 4, 2, *EDGE, special=SPECIAL)]
     if fa_version == 2:
         g2 = [1, 17, 64, 65, 255, 257]
         g2_decode = [1, 17, 64, 65, 129, 1000, 1031]
@@ -73,7 +87,8 @@ def cases(fa_version: int, quick: bool = False) -> list[dict[str, Any]]:
                _case("g2_chunked_softcap_window", 8, 4, [17, 64, 1], [300, 1000, 129], softcap=50.0, window=WINDOW),
                _case("g2_decode_gqa_softcap", 8, 4, [1] * 7, g2_decode, softcap=50.0),
                _case("g2_decode_gqa_softcap_window", 8, 4, [1] * 7, g2_decode, softcap=50.0, window=WINDOW),
-               _case("g2_decode_mha_window", 4, 4, [1] * 5, [1, 64, 65, 1000, 1031], window=WINDOW)]
+               _case("g2_decode_mha_window", 4, 4, [1] * 5, [1, 64, 65, 1000, 1031], window=WINDOW),
+               _case("g2_edge_rows_softcap", 8, 4, *EDGE, softcap=50.0, special=SPECIAL)]
     else:
         cs += [_case("smallq_onewg", 4, 2, [3, 5, 8, 1], [3, 700, 8, 129]),
                _case("chunked_tail", 4, 2, [64, 40], [164, 290])]
@@ -116,9 +131,9 @@ def visited_rows(c: dict[str, Any], geo: dict[str, Any]) -> Iterator[tuple[int, 
                 yield slab, r, max(0, min(blocks, -(-(last_q + sk - sq) // BN)))
 
 
-def expected_written(layout: StreamLayout, src: int, rows: Iterator[tuple[int, int, int]]) -> np.ndarray:
+def expected_written(layout: StreamLayout, src: int, rows: Iterator[tuple[int, int, int]], row3: int = 0) -> np.ndarray:
     """Mask over the padded stream words: True where the launch must write (the planes of `src` at the visited rows), False elsewhere.
-    Word 3 of a ROW entry is never written."""
+    Word 3 of a ROW entry is written only by a guarded-max build (`row3` 1), at every visited block."""
     HB, M, N, NB, D = layout.HB, layout.M, layout.N, layout.NB, layout.D
     o = layout.offsets
     w = np.zeros(layout.padded_words(), dtype=bool)
@@ -134,12 +149,74 @@ def expected_written(layout: StreamLayout, src: int, rows: Iterator[tuple[int, i
         if src & SRC_BITS["RP"]:
             RP[slab, r, :cols // 2] = True
         if src & SRC_BITS["ROW"]:
-            ROW[slab, r, :nbm, [0, 1, 2, 4, 5, 6, 7]] = True
+            ROW[slab, r, :nbm, [0, 1, 2, 4, 5, 6, 7] + ([ROW_GUARD_FIELD] if row3 else [])] = True
         if src & SRC_BITS["O"]:
             O[slab, r, :nbm, :] = True
         if src & SRC_BITS["FIN"]:
             FIN[slab, r, :] = True
     return w
+
+
+def _row_plane(words: np.ndarray, layout: StreamLayout) -> np.ndarray:
+    o = layout.offsets
+    return words[o["ROW"]:o["O"]].reshape(layout.HB, layout.M, layout.NB, 8)
+
+
+def masked_digest(words: np.ndarray, layout: StreamLayout) -> str:
+    """sha256 of the padded stream (u32 words) with word 3 of every ROW entry replaced by `FILL`: equal for a guarded-max build and the
+    default build on the same launch iff they write the same stream but for that word."""
+    w = np.array(words, dtype=np.uint32, copy=True)
+    _row_plane(w, layout)[..., ROW_GUARD_FIELD] = FILL
+    return hashlib.sha256(w.tobytes()).hexdigest()
+
+
+def ir_guard(m: int) -> int:
+    """The IR model's `GuardNegInfZero_v1(m)` by the reference evaluator."""
+    from verity.evaluation.reference import evaluate
+    from verity_vllm.program.registry import prims
+
+    return int(evaluate(prims.GuardNegInfZero, int(m))[0])
+
+
+def check_row3(words: np.ndarray, layout: StreamLayout, rows: Iterator[tuple[int, int, int]], ir_sample: int = 64) -> dict[str, Any]:
+    """ROW word 3 of a guarded-max build at every visited (slab, row, block): the IR's `GuardNegInfZero_v1` of the entry's row_max (word 0)
+    at every block after the row's first (the kernel visits blocks n_block_max - 1 .. 0), 0 at the first.  All words by the twin, and
+    `ir_sample` of them (every distinct special row_max among them) by the reference evaluator."""
+    from verity_vllm.program.kernels.derived_rows import guard_neg_inf_zero
+
+    R = _row_plane(np.asarray(words, dtype=np.uint32), layout)
+    later: list[tuple[int, int, int]] = []
+    first: list[tuple[int, int, int]] = []
+    for slab, r, nbm in rows:
+        if nbm:
+            first.append((slab, r, nbm - 1))
+            later += [(slab, r, b) for b in range(nbm - 1)]
+    rec: dict[str, Any] = {"guard_words": len(later), "guard_mismatch": 0, "first_block_nonzero": 0, "ir_sampled": 0, "ir_mismatch": 0}
+    if first:
+        s, r, b = np.array(first).T
+        rec["first_block_nonzero"] = int(np.count_nonzero(R[s, r, b, ROW_GUARD_FIELD]))
+    if later:
+        s, r, b = np.array(later).T
+        m, g = R[s, r, b, 0], R[s, r, b, ROW_GUARD_FIELD]
+        bad = np.flatnonzero(g != guard_neg_inf_zero(m))
+        rec["guard_mismatch"] = int(bad.size)
+        if bad.size:
+            i = int(bad[0])
+            rec["first_mismatch"] = {"slab": int(s[i]), "row": int(r[i]), "block": int(b[i]), "row_max": int(m[i]), "word3": int(g[i])}
+        special = np.flatnonzero(((m & 0x7F800000) == 0x7F800000) | (m == 0) | (m == 0x80000000))
+        pick = np.unique(np.concatenate([special[np.unique(m[special], return_index=True)[1]],
+                                         np.linspace(0, m.size - 1, min(ir_sample, m.size)).astype(int)]))
+        rec["ir_sampled"] = int(pick.size)
+        rec["ir_mismatch"] = sum(int(g[i]) != ir_guard(int(m[i])) for i in pick)
+    return rec
+
+
+def row3_ok(e: dict[str, Any]) -> bool:
+    """A guarded-max case: word 3 is the guard everywhere, 0 at first blocks, the IR agrees on the sample, and every other word equals the
+    baseline (default) build's."""
+    r = e.get("row3") or {}
+    return (r.get("guard_mismatch") == 0 and r.get("first_block_nonzero") == 0 and r.get("ir_mismatch") == 0 and r.get("ir_sampled", 0) > 0
+            and r.get("stream_eq_baseline") is True)
 
 
 def negatives(fa_version: int, D: int) -> list[tuple[dict[str, Any], dict[str, int], str]]:
@@ -165,7 +242,7 @@ def negatives(fa_version: int, D: int) -> list[tuple[dict[str, Any], dict[str, i
 # ------------------------------------------------------------------------------------------------------------------------ record
 def case_ok(e: dict[str, Any]) -> bool:
     return (not e.get("error") and e.get("skipped") == 0 and e.get("out_lse_eq_installed") is True and e.get("out_lse_eq_untapped") is True
-            and e.get("spill_outside_layout") == 0 and e.get("expected_but_unwritten") == 0)
+            and e.get("spill_outside_layout") == 0 and e.get("expected_but_unwritten") == 0 and ("row3" not in e or row3_ok(e)))
 
 
 def negative_ok(e: dict[str, Any]) -> bool:
@@ -173,8 +250,11 @@ def negative_ok(e: dict[str, Any]) -> bool:
 
 
 def _verdict(doc: dict[str, Any]) -> bool:
+    """Every case and negative ok; a guarded-max build's record also names its baseline and checks word 3 in every case."""
     cs, ns = doc.get("cases") or [], doc.get("negatives") or []
-    return bool(cs) and bool(ns) and all(map(case_ok, cs)) and all(map(negative_ok, ns))
+    guarded = bool((doc.get("tap") or {}).get("row3"))
+    return (bool(cs) and bool(ns) and all(map(case_ok, cs)) and all(map(negative_ok, ns))
+            and (not guarded or (bool((doc.get("baseline") or {}).get("digest")) and all("row3" in c for c in cs))))
 
 
 def seal(doc: dict[str, Any]) -> dict[str, Any]:

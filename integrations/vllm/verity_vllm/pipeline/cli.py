@@ -107,6 +107,8 @@ MACHINE: dict[str, str] = {
     "RunEnv.native_collect_default": "/workspace/cp/nc_build",
     "RunEnv.hidden_so_fa2": "/workspace/cp/fa2/build/matReq/verity_fa2_matReq.so",
     "RunEnv.hidden_so_fa3": "/workspace/cp/fa2/build/fa3_matReq/verity_fa3_matReq.so",
+    "RunEnv.hidden_so_fa2_guarded": "/workspace/cp/fa2/build/matReqG/verity_fa2_matReqG.so",
+    "RunEnv.hidden_so_fa3_guarded": "/workspace/cp/fa2/build/fa3_matReqG/verity_fa3_matReqG.so",
     "RunEnv.norm_tap_so": "/workspace/cp/norm_tap/build/verity_norm_tap.so",
     "RunEnv.hot_root": "/workspace/cp/hot",
     "RunEnv.guard_preserve_file": "/root/dm/guard.preserve",

@@ -1385,7 +1385,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
             if args.tap_cap_mb is not None:
                 os.environ["VERITY_FA2_TAP_CAP_MB"] = str(int(args.tap_cap_mb))   # [R18 tap] read by NativeHiddenM1Source at construction
             com.attach_source(make_hidden_source(com, args.hidden_so, ns=(args.hidden_ns or Path(args.hidden_so).stem), flash_attn_version=fa_version,
-                                                 fa2_cls=src_cls, fa3_cls=getattr(com, "hidden_source_cls_fa3", None)))
+                                                 fa2_cls=src_cls, fa3_cls=getattr(com, "hidden_source_cls_fa3", None), manifest=required_manifest))
             print(f"[delta] hidden source attached: {args.hidden_so} -> committer {com.name} ({type(com.sources[-1]).__name__ if getattr(com, 'sources', None) else '?'}, engine FA{fa_version})", flush=True)
             _hsrc = com.sources[-1] if getattr(com, "sources", None) else None
             if _hsrc is not None and hasattr(_hsrc, "tap_cap_bytes"):
