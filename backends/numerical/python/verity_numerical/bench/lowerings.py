@@ -1,8 +1,9 @@
 """Per-template lowering modules: one file per subcircuit template in each backend family, found by a registry.
 
-Each family keeps a ``templates/`` directory beside its code (:data:`DIRECTORIES`) with one module per catalogue template
+Each family keeps a ``templates/`` directory beside its code (:data:`DIRECTORIES`) with at most one module per catalogue template
 (``bench.templates.TEMPLATES``), named by the template id with ``-`` as ``_`` (``gemm-coordinate`` -> ``gemm_coordinate.py``),
-so lanes lowering different templates of one backend edit different files.  A module needs nothing from this package:
+so lanes lowering different templates of one backend edit different files.  A template without a module is ``n/s``, the reason
+naming the file to create.  A module needs nothing from this package:
 
     TEMPLATE = "gemm-coordinate"                          the catalogue id it lowers (required)
     def supports(subcircuit, scheme) -> str | None        None when the family lowers this statement, else why not (required)
@@ -84,13 +85,16 @@ class Registry:
         mod = self.module(sub.template.id)
         return getattr(mod, "stage", None) if mod is not None else None
 
+    def missing(self) -> list[str]:
+        """The catalogue templates this family has no module for (each ``n/s``, naming the file a lane creates)."""
+        stems = {p.stem for p in self.directory.glob("*.py")}
+        return [tid for tid in TM.TEMPLATES if module_name(tid) not in stems]
+
     def problems(self) -> list[str]:
-        """Every catalogue template has exactly one module, each named for its template, each with ``supports``."""
+        """Every module is named for a catalogue template and has ``supports``.  A template without a module is not a problem:
+        it is ``n/s`` (:meth:`missing`)."""
         out = []
         by_file = {p.stem: p for p in self.directory.glob("*.py") if p.name != "__init__.py"}
-        for tid in TM.TEMPLATES:
-            if module_name(tid) not in by_file:
-                out.append(f"{self.family}: {module_name(tid)}.py missing for template {tid}")
         for stem in by_file:
             mod = self._load(by_file[stem])
             tid = getattr(mod, "TEMPLATE", None)

@@ -52,7 +52,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from verity import claims as claims_registry
-from verity.proofs.target import BF16_HOPPER, FP8_ADA_MMA, FP8_HOPPER_WGMMA, NVFP4_SM120, TARGETS, Target
+from verity.proofs.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, NVFP4_SM120, TARGETS, Target
 from verity_numerical.bench import census, contract
 from verity_numerical.bench import drilldown as D
 from verity_numerical.bench import tables as T
@@ -447,6 +447,12 @@ class Rules:
     legacy: bool = False
     include_archived: bool = False
     interaction_validated: bool = True
+    #: previews of two pending acceptance decisions (Daniel), never published: the interaction check one-sided (pass when the
+    #: measured wall is at most 1.1 x the model), and non-GEMM N on activations only (per-row weights and tables cached)
+    interaction_one_sided: bool = False
+    native_cached: bool = False
+    #: a third preview: the workload headline counts a cleared cell on any GPU (N still the served hardware line's)
+    headline_any_hardware: bool = False
 
 
 SPEC = Rules("spec")
@@ -555,7 +561,7 @@ def interaction_time(ix: Mapping[str, Any], rtt_s: float = REF_RTT_S, bandwidth_
             + (ix["bytes_up"] + ix["bytes_down"]) * 8 / bandwidth_bps)
 
 
-def interaction_problem(ix: Mapping[str, Any]) -> str | None:
+def interaction_problem(ix: Mapping[str, Any], one_sided: bool = False) -> str | None:
     """Why a result does not meet the interaction standard, or ``None``.  A non-interactive (file-verified) result's record is derived
     and always meets it.  A live-verifier result records its rounds, its measured RTT with how it was measured and its network wait,
     and its measured wall time (prover compute + network wait) is within :data:`INTERACTION_TOLERANCE` of the formula evaluated at
@@ -572,7 +578,7 @@ def interaction_problem(ix: Mapping[str, Any]) -> str | None:
     bw = ix.get("bandwidth_bps") or REF_BANDWIDTH_BPS
     model = interaction_time(ix, ix["rtt_ms"] / 1e3, bw)
     measured = (ix["prover_s"] or 0.0) + ix["wait_s"]
-    if model > 0 and abs(measured - model) > INTERACTION_TOLERANCE * model:
+    if model > 0 and (measured - model if one_sided else abs(measured - model)) > INTERACTION_TOLERANCE * model:
         return (f"interaction: measured {measured:.3g} s is {100 * (measured - model) / model:+.0f}% from the model's {model:.3g} s at the run's "
                 f"own network ({ix['rtt_ms']:.3g} ms RTT, {bw / 1e9:.3g} Gb/s{'' if ix.get('bandwidth_bps') else ' (reference; not measured)'}; "
                 f"tolerance ±{100 * INTERACTION_TOLERANCE:.0f}%)")
@@ -792,6 +798,27 @@ RELATION_SEMANTICS = {"bf16-ampere": "sm80.mma.m16n8k16.bf16", "bf16-hopper": "s
 INPUT_SET_KINDS = ("input-set/v1", "vllm-vu-set/v1")
 
 
+#: Hardware lines no target anchors: a target's instruction on another device (docs ontology, "A result": hardware is its own
+#: axis).  #101 was served on an L40S, whose BF16 GEMM is the Ampere-class mma the first target states.  Every result on such
+#: a line is a statement of its own (:func:`result_subcircuit`), so the line has rows only where it has results.
+L40S_BF16 = dataclasses.replace(FIRST, name="l40s-48gb/bf16/sm80.mma.m16n8k16.bf16", anchor_device="NVIDIA L40S 48GB", status="draft", dossier=None)
+#: Every Table 2 line by name: the targets, then the hardware-only lines.
+LINES: dict[str, Target] = {**TARGETS, L40S_BF16.name: L40S_BF16}
+
+
+def rehome(meta: Mapping[str, Any], target: Target) -> Target:
+    """The line a result belongs on when its prover ran on another device than ``target``'s: for a GEMM statement the line of
+    the same instruction on the prover's device, for another template the line :func:`hardware_target` picks; ``target``
+    itself when the prover is on its device or no line fits (then the result is rejected K as before)."""
+    gpu = _get(meta.get("workload_fingerprint") or {}, "hardware", "gpu", "name")
+    if T.same_sku(gpu, contract.native_peak_of(target).device):
+        return target
+    sub = stamped_subcircuit(meta)
+    if not is_gemm(sub):
+        return hardware_target(meta, sub) or target
+    return next((t for t in LINES.values() if t.instruction == target.instruction and T.same_sku(gpu, contract.native_peak_of(t).device)), target)
+
+
 def _sem_slug(semantics: str) -> str:
     return "-".join(x for x in semantics.split(".") if not re.fullmatch(r"m\d+n\d+k\d+", x))
 
@@ -805,7 +832,8 @@ def result_subcircuit(meta: Mapping[str, Any], target: Target) -> str | None:
     one statement: at the target's K the target's own subcircuit, at another K the one that is stood for (root's ruling
     2026-09-26 02:44Z: real-K H100 BF16 cells use the wgmma subcircuit's id)."""
     fp = meta.get("workload_fingerprint") if isinstance(meta.get("workload_fingerprint"), Mapping) else {}
-    home = census.subcircuit_of(target.name)
+    extra = target.name not in TARGETS
+    home = census.subcircuit_with("gemm-coordinate", K=T.K, semantics=target.instruction) if extra else census.subcircuit_of(target.name)
     named = stamped_subcircuit(meta)
     if named and named.split("/")[0] != home.template:
         return named                                         # another template (a non-GEMM subcircuit): its own statement
@@ -823,7 +851,7 @@ def result_subcircuit(meta: Mapping[str, Any], target: Target) -> str | None:
     sem = sem or home.parameters.semantics
     stands = {census.SUBCIRCUITS[x].parameters.semantics: census.SUBCIRCUITS[census.stood_for_by(x)].parameters.semantics
               for x in census.SUBCIRCUITS if census.stood_for_by(x)}
-    if K == home.parameters.K:
+    if K == home.parameters.K and not extra:
         sem = stands.get(sem, sem)
         if sem == home.parameters.semantics:
             return None
@@ -841,7 +869,7 @@ def stamped_subcircuit(meta: Mapping[str, Any]) -> str | None:
 
 
 #: GPU model tokens a prover's ``hardware.gpu.name`` carries, as the census hardware lines' devices spell them.
-_GPU_TOKENS = ("A100", "H100", "4090", "5090")
+_GPU_TOKENS = ("A100", "H100", "L40S", "4090", "5090")
 _DTYPE_TOKENS = (("bf16", "bf16"), ("e4m3", "e4m3"), ("fp8", "e4m3"), ("e2m1", "e2m1"), ("nvf4", "e2m1"))
 
 
@@ -853,29 +881,33 @@ def hardware_target(meta: Mapping[str, Any], sub: str | None) -> Target | None:
     token = next((t for t in _GPU_TOKENS if t in gpu), None)
     tail = (sub or "").rsplit("/", 1)[-1].lower()
     dtype = next((d for key, d in _DTYPE_TOKENS if key in tail), None)
-    if token is None or dtype is None:
+    if token is None:
         return None
-    return next((t for t in TARGETS.values() if token in contract.native_peak_of(t).device and contract.native_peak_of(t).dtype == dtype), None)
+    on = [t for t in LINES.values() if token in contract.native_peak_of(t).device]
+    if dtype is None:                      # a subcircuit without a tensor datatype (fp32 sampling): its N is memory-bound, any line of the device
+        return next((t for t in on if contract.native_peak_of(t).dtype == "bf16"), on[0] if on else None)
+    return next((t for t in on if contract.native_peak_of(t).dtype == dtype), None)
 
 
 def is_gemm(sub: str | None) -> bool:
     return sub is None or sub.split("/")[0] == "gemm-coordinate"
 
 
-def native_of(target: Target, sub: str | None) -> dict[str, Any]:
+def native_of(target: Target, sub: str | None, cached: bool = False) -> dict[str, Any]:
     """``N`` of a row: the GEMM work model (:func:`native`) at the subcircuit's K, or for another template its census
     memory-bandwidth work model (:func:`memory_native`)."""
-    return native(target, subcircuit_k(sub) if sub else T.K) if is_gemm(sub) else memory_native(target, sub)
+    return native(target, subcircuit_k(sub) if sub else T.K) if is_gemm(sub) else memory_native(target, sub, cached)
 
 
-def memory_native(target: Target, sub: str) -> dict[str, Any]:
+def memory_native(target: Target, sub: str, cached: bool = False) -> dict[str, Any]:
     """``N`` for a memory-bound subcircuit: instances per second = the hardware line's memory bandwidth / the template's bytes per
     input (``census/subcircuits.json`` ``work_model.bytes_per_input``), with the basis for the footnote.  Operations are not
     binding (``ops_per_instance`` is the template's op count, for reference)."""
     known = census.SUBCIRCUITS[sub]
     wm = census.SUBCIRCUIT_TEMPLATES[known.template].work_model
     env = {k: v for k, v in vars(known.parameters).items() if isinstance(v, int)}
-    nbytes, ops = census.evaluate(wm.bytes_per_input, env), census.evaluate(wm.ops_per_input, env)
+    expr = getattr(wm, "bytes_per_input_cached", None) if cached else None
+    nbytes, ops = census.evaluate(expr or wm.bytes_per_input, env), census.evaluate(wm.ops_per_input, env)
     hw = contract.native_peak_of(target)
     bw = getattr(hw, "memory_bytes_per_second", None)
     if not _num(bw):
@@ -884,8 +916,9 @@ def memory_native(target: Target, sub: str) -> dict[str, Any]:
     return {"instances_per_second": bw / nbytes, "unit": "memory", "ops_per_instance": ops, "bytes_per_instance": nbytes, "steps": None,
             "dtype": (T.dtype_of(target) or "?").upper(), "peak_flop_per_second": hw.flop_per_second, "memory_bytes_per_second": bw,
             "device": hw.device, "source": "; ".join(x.label for x in getattr(hw, "memory_sources", ())) or census.source(hw),
-            "work_model": f"{version}: memory-bandwidth bound, {wm.bytes_per_input} bytes per input over the line's memory bandwidth",
-            "basis": (f"{version} memory-bandwidth work model: {nbytes} bytes per input ({wm.bytes_per_input}: {wm.bytes_basis}; "
+            "work_model": f"{version}: memory-bandwidth bound, {expr or wm.bytes_per_input} bytes per input over the line's memory bandwidth",
+            "basis": (f"{version} memory-bandwidth work model: {nbytes} bytes per input ({expr or wm.bytes_per_input}: "
+                      f"{wm.bytes_cached_basis if expr else wm.bytes_basis}; "
                       f"{wm.bytes_source}) over {bw / 1e12:.3g} TB/s ({hw.id}); ops {ops} per input ({wm.ops_per_input}) are not binding")}
 
 
@@ -919,6 +952,22 @@ def _set_k(meta: Mapping[str, Any]) -> int | None:
     return int(m.group(1)) if m else None
 
 
+def _captured_set_is(meta: Mapping[str, Any], sub: str | None) -> bool:
+    """Whether a captured ``vllm-vu-set/v1`` set (which records its IR ``relation``, not a census id) is of ``sub``: its
+    ``relation.definition`` is one of the template's IR Definitions in the census, and its integer statics equal the
+    subcircuit's integer parameters.  numpy-free (the steward renders without numpy; ``bench.templates.identify`` needs it)."""
+    known = census.SUBCIRCUITS.get(sub or "")
+    rel = meta.get("relation") if isinstance(meta.get("relation"), Mapping) else {}
+    if known is None or not isinstance(rel.get("definition"), str):
+        return False
+    names = {n for d in getattr(census.SUBCIRCUIT_TEMPLATES[known.template], "ir_definitions", ()) for n in re.findall(r"[A-Za-z][A-Za-z0-9_]*", d)}
+    if rel["definition"] not in names:
+        return False
+    statics = rel.get("statics") if isinstance(rel.get("statics"), Mapping) else {}
+    ints = {k: v for k, v in vars(known.parameters).items() if isinstance(v, int) and not isinstance(v, bool)}
+    return all(statics.get(k) == v for k, v in ints.items())
+
+
 def _input_set_codes(ctx: Ctx) -> list[tuple[str, str]]:
     """Why a result on a statement of its own (another K or semantics) does not run on a registered input set of that K, or
     ``[]``: its inputs name an ``input-set/v1`` / ``vllm-vu-set/v1`` artifact (the ``bench.cell`` stamp's art, else the set's
@@ -935,7 +984,7 @@ def _input_set_codes(ctx: Ctx) -> list[tuple[str, str]]:
                       f"digest {inst.get('content_digest') or inst.get('manifest_sha256')!r})")]
     art, meta = hit
     if not is_gemm(ctx.subcircuit):
-        if meta.get("subcircuit") != ctx.subcircuit:
+        if meta.get("subcircuit") != ctx.subcircuit and not _captured_set_is(meta, ctx.subcircuit):
             return [("I", f"input set {art} is of {meta.get('subcircuit')!r}, the statement's subcircuit is {ctx.subcircuit}")]
     else:
         K, sk = subcircuit_k(ctx.subcircuit), _set_k(meta)
@@ -1029,7 +1078,7 @@ def reject_codes(store: Any, ctx: Ctx, rules: Rules, equivs: Sequence[T.Instance
         why = _protocol(meta, ctx.config)
         if why:
             p.append(("M", why))
-        why = interaction_problem(interaction(meta)) if rules.interaction_validated else None
+        why = interaction_problem(interaction(meta), rules.interaction_one_sided) if rules.interaction_validated else None
         if why:
             p.append(("M", why))
     verdicts = T._labels(ctx.labels if rules.legacy else ctx.statement_labels)
@@ -1178,9 +1227,17 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
         if not rules.legacy and str(_latest(labels, BELOW_BAR)).lower() == "true":     # written as a bool or, off-vocabulary, "true"
             V.below_bar.append(below_bar_entry(art, meta, labels, cand))
             continue
+        named = stamped_subcircuit(meta)
+        if not rules.legacy and named and not is_gemm(named) and named not in census.SUBCIRCUITS:
+            V.rejected.append({"artifact": art, "family": cand.id, "configuration": None, "line": None, "attempt": rid,
+                               "codes": [("X", f"subcircuit {named!r} is not a census subcircuit (a bound template id such as "
+                                               f"rope-head/d64/neox-bf16)")]})
+            continue
         target = TARGETS.get(fp.get("profile")) if isinstance(fp.get("profile"), str) else None
         if target is None and not rules.legacy and not is_gemm(stamped_subcircuit(meta)):
             target = hardware_target(meta, stamped_subcircuit(meta))
+        if target is not None and not rules.legacy:
+            target = rehome(meta, target)
         config = configuration_of(meta, cfgs)
         if target is None:
             V.rejected.append({"artifact": art, "family": cand.id, "configuration": config.id if config else None, "line": None,
@@ -1222,7 +1279,7 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
             entry["subcircuit"] = c.subcircuit
         if P is not None and not rules.legacy and c.config is not None and c.config.full_relation:
             commit = P["commit_s"] or P["commit_v1_s"] or 0.0
-            n = native_of(c.target, c.subcircuit)["instances_per_second"]
+            n = native_of(c.target, c.subcircuit, rules.native_cached)["instances_per_second"]
             entry["end_to_end_preview"] = {"commit_s": commit, "commit_warm": bool(P["commit_s"]),
                                            "overhead": n * (P["proving_s"] + commit) / P["instances"]}
         V.rejected.append(entry)
@@ -1297,9 +1354,9 @@ def build(store: Any, rules: Rules = SPEC, configurations: Sequence[Configuratio
     for c in entries:
         if c.subcircuit:
             own.setdefault((c.target.name, c.subcircuit), set()).add(scheme_of(c))
-    for target in TARGETS.values():
+    for target in LINES.values():
         for sub in sorted((x for t, x in own if t == target.name), key=lambda x: (not is_gemm(x), subcircuit_k(x) if is_gemm(x) else 0, x)):
-            N = native_of(target, sub)
+            N = native_of(target, sub, rules.native_cached)
             for scheme in line_schemes:
                 if scheme in own[(target.name, sub)]:
                     add_line(target, sub, scheme, N)
@@ -1404,7 +1461,7 @@ def _instances_text(target_name: str, inst: Mapping[str, Any], sub: str | None =
     rng = inst.get("range") or ["?", "?"]
     if sub:
         return f"inputs [{rng[0]}, {rng[1]}) of input set {inst.get('dataset') or inst.get('set') or inst.get('tier', '?')} ({inst.get('source') or 'source not recorded'})"
-    how, _ = instance_range(TARGETS[target_name], inst) if target_name in TARGETS and inst else (None, None)
+    how, _ = instance_range(LINES[target_name], inst) if target_name in LINES and inst else (None, None)
     kind = {"stream": "a prefix-consistent extension of the frozen set", "prefix": "a prefix of the frozen set",
             "frozen": "the frozen set"}.get(how or "", "re-packed")
     return f"instances [{rng[0]}, {rng[1]}) of {inst.get('tier', '?')} ({kind})"
@@ -1643,6 +1700,10 @@ def render_markdown(V: Views, published: bool = False) -> str:
                 T._md_table(("Cell", "Rounds", "Bytes up", "Bytes down", "Measured RTT (method)", "Prover compute", "Verifier compute (waited on)",
                              "Measured network wait", "Cell at 1 ms, 100 Gb/s (reference)", "At 20 ms, 100 Gb/s", "At 100 ms, 100 Gb/s",
                              "At 1 ms, 10 Gb/s"), rowsi), ""]
+    if not rules.legacy:
+        from verity_numerical.bench import headline as H  # noqa: PLC0415  (headline reads these views)
+
+        out += H.render_markdown(H.headline(V))
     if notes:
         out += ["Footnotes:", *[f"[{i}] {n}" for i, n in enumerate(notes, 1)], ""]
     out.append(f"Rejected ({len(V.rejected)} result{'s' if len(V.rejected) != 1 else ''}; artifact → first reason; letters: "
@@ -2117,6 +2178,9 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
       and the render time;
     * ``best_standard_hash`` -- per backend family and subcircuit, the lowest-overhead cell on standard hashes only;
     * ``tables`` -- the printed layout: every Table 1 / 2 / 3 cell's exact display string, numeric value, marks and footnote;
+    * ``workload_headline`` -- per census workload and backend, the share of the served run's native work its cleared cells
+      cover and the work-weighted overhead over that share, in both bases, uncovered subcircuits listed with why
+      (:mod:`verity_numerical.bench.headline`); ``None`` under the legacy rules;
     * ``claims`` -- the ``verity.claims`` entries cited (the site imports these); ``census`` -- the ``census/`` entries as read
       at render time; ``provenance`` -- render time, verity commit, rules, banner.
 
@@ -2150,7 +2214,7 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
         sub_id = ln.get("subcircuit")
         if not sub_id or any(c["id"] == sub_id for c in circuits):
             continue
-        target, known = TARGETS[ln["line"]], census.SUBCIRCUITS.get(sub_id)
+        target, known = LINES[ln["line"]], census.SUBCIRCUITS.get(sub_id)
         peak = contract.native_peak_of(target)
         dt = census.DATATYPES[peak.dtype]
         N = ln["native"]
@@ -2184,7 +2248,7 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
         return f"{sub_of(target_name, sub)}+{scheme_id(legacy_scheme)}"
 
     def prover_of(c: ViewCell) -> str | None:
-        dtype = contract.native_peak_of(TARGETS[c.line]).dtype
+        dtype = contract.native_peak_of(LINES[c.line]).dtype
         return next((h.id for h in census.HARDWARE.values() if h.dtype == dtype and T.same_sku(V.prover_gpu.get(c.artifact), h.device)), None)
 
     def key_of(target_name: str, legacy_scheme: str | None, prover: str | None, own: str | None = None) -> dict[str, Any]:
@@ -2218,7 +2282,7 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
         x = sets_by_ref.get((c.instances.get("dataset"), c.instances.get("tier")))
         if x is None:
             return None
-        how, _ = instance_range(TARGETS[c.line], c.instances) if c.instances else (None, None)
+        how, _ = instance_range(LINES[c.line], c.instances) if c.instances else (None, None)
         return {"id": x.id, "provenance": x.provenance, "range": c.instances.get("range"), "how": how or "equivalent"}
 
     def phases_of(c: ViewCell) -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -2243,7 +2307,7 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
         phases, other = phases_of(c)
         cfg = cfg_of.get(c.configuration or "")
         per_proof = V.security_of.get(c.artifact, {}).get("per_proof_total_log2")
-        peak = contract.native_peak_of(TARGETS[c.line])
+        peak = contract.native_peak_of(LINES[c.line])
         prover, backend, stmt = prover_of(c), backend_by_cfg.get(c.configuration or ""), statement_id(c.line, c.scheme, c.subcircuit)
         stmt_assumptions = scheme_by_id[scheme_id(c.scheme)]["assumptions"] if scheme_id(c.scheme) in scheme_by_id else []
         return {
@@ -2283,12 +2347,12 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
 
     for g in grid:
         ln = g["line"]
-        line_prover = contract.native_peak_of(TARGETS[ln["line"]]).id
+        line_prover = contract.native_peak_of(LINES[ln["line"]]).id
         own = ln.get("subcircuit")
         line = {"statement": statement_id(ln["line"], ln["scheme"], own), "subcircuit": sub_of(ln["line"], own), "scheme": scheme_id(ln["scheme"]),
                 "legacy_scheme": ln["scheme"], "key": key_of(ln["line"], ln["scheme"], line_prover, own), "label": g["label"],
                 "native": {"display": g["native"]["display"], "value": ln["native"]["instances_per_second"], "footnote": footnote(g["native"]["note"]),
-                           "work_model": WORK_MODEL.split(":")[0], "peak": contract.native_peak_of(TARGETS[ln["line"]]).id},
+                           "work_model": WORK_MODEL.split(":")[0], "peak": contract.native_peak_of(LINES[ln["line"]]).id},
                 "cells": {}}
         for col, gc in g["cells"].items():
             c = gc["cell"]
@@ -2318,6 +2382,9 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
                            "subcircuit": sub_of(ln["line"], own), "scheme": scheme_id(ln["scheme"]),
                            "assumptions": sch["assumptions"] if sch else [], "assumption_details": sch["assumption_details"] if sch else []}
     phase_cols = [pid for pid, _ in PHASES]
+    from verity_numerical.bench import headline as H  # noqa: PLC0415  (headline reads these views)
+
+    workload_headline = None if V.rules.legacy else H.to_json(H.headline(V), {r["artifact"]: r["id"] for r in results})
     return {
         "schema": ENTITIES_SCHEMA,
         "provenance": {"rendered_at": rendered_at, "verity_commit": commit if commit is not None else verity_commit(), "rules": dataclasses.asdict(V.rules),
@@ -2325,7 +2392,7 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
         "axes": {"subcircuits": [c["id"] for c in circuits], "schemes": [scheme_id(s.id) for s in SCHEMES if s.admissible],
                  "statements": list(statements), "backends": [b["id"] for b in backend_list], "backend_families": columns,
                  "phases": phase_cols, "networks": [n.id for n in (census.REFERENCE_NETWORK, *census.SENSITIVITY_NETWORKS)]},
-        "census": {name: {e["id"]: e for e in census.raw(name)} for name in ("hardware", "datatypes", "networks", "subcircuits", "input_sets")},
+        "census": {name: {e["id"]: e for e in census.raw(name)} for name in ("hardware", "datatypes", "networks", "subcircuits", "input_sets", "workloads")},
         "claims": {i: dataclasses.asdict(claims_registry.get(i)) for i in sorted({*(i for b in backend_list for k in ("properties", "assumptions")
                                                                                      for i in b[k]),
                                                                                    *(i for st in statements.values() for i in st["assumptions"])})},
@@ -2345,6 +2412,7 @@ def render_entities(V: Views, published: bool = False, rendered_at: str | None =
                                  "backend": backend_by_cfg.get(c.configuration or ""), "label": _cell_name(c), "cells": table3_row(c)}
                                 for c in V.cells]},
         },
+        "workload_headline": workload_headline,
         "below_bar": sorted(V.below_bar, key=lambda e: (e["backend_family"] or "", str(e["definition"]), e["B"] or 0, e["artifact"])),
         "rejected": [{"artifact": r["artifact"], "implementation": r["configuration"], "backend_family": _fam(r["family"]),
                       "subcircuit": r.get("subcircuit") or subcircuit_id(r["line"]), "scheme": scheme_id(r.get("scheme")), "reason": r["codes"][0][0], "text": r["codes"][0][1]} for r in V.rejected],
@@ -2365,6 +2433,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--unvalidated-interaction", action="store_true",
                     help="preview: do not require interactive results to carry the interaction record and meet the tolerance")
     ap.add_argument("--standard-hashes-only", action="store_true", help="drop backends and statements with an algebraic hash in the soundness argument")
+    ap.add_argument("--preview-one-sided-interaction", action="store_true",
+                    help="PREVIEW (pending decision, never published): the interaction check passes when measured <= 1.1 x the model")
+    ap.add_argument("--preview-any-hardware-headline", action="store_true",
+                    help="PREVIEW (pending decision, never published): the workload headline counts cleared cells on any GPU")
+    ap.add_argument("--preview-cached-weights", action="store_true",
+                    help="PREVIEW (pending decision, never published): non-GEMM native N on activations only (weights/tables cached)")
     ap.add_argument("--parity", action="store_true", help="compare the legacy-rules views with a fresh `tables` build; exit 1 on a difference")
     ap.add_argument("--snapshot", default=None, metavar="NAME", help="with --parity: also compare with this `tables --snapshot`'s members")
     ap.add_argument("--take-snapshot", action="store_true",
@@ -2408,6 +2482,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         rules = dataclasses.replace(rules, include_archived=True)
     if ns.unvalidated_interaction:
         rules = dataclasses.replace(rules, name=f"{rules.name}+unvalidated-interaction", interaction_validated=False)
+    if ns.preview_one_sided_interaction:
+        rules = dataclasses.replace(rules, name=f"{rules.name}+preview-one-sided-interaction", interaction_one_sided=True)
+    if ns.preview_any_hardware_headline:
+        rules = dataclasses.replace(rules, name=f"{rules.name}+preview-any-hardware-headline", headline_any_hardware=True)
+    if ns.preview_cached_weights:
+        rules = dataclasses.replace(rules, name=f"{rules.name}+preview-cached-weights", native_cached=True)
     if ns.standard_hashes_only:
         rules = dataclasses.replace(rules, name=f"{rules.name}+standard-hashes", standard_hashes=True)
     V = build(st, rules)

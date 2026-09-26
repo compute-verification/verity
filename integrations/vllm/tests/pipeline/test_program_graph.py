@@ -100,3 +100,53 @@ def test_sampler_vus_are_placed_by_their_requests_program(tmp_path):
     assert placed(mapped) == exported > placed(unmapped)
     store = PG.request_programs_of(tmp_path / "exp" / "store")
     assert set(store) <= {"r0", "r1"}
+
+
+def test_definitions_carry_each_specialization_down_to_primitives_with_fold_hints(tmp_path):
+    inst, _w = _program(attn=True)
+    g = PG.program_graph([_write(inst, tmp_path / "instances.json.gz")])
+    D = g["definitions"]
+    gemm = next(x for x in g["groups"] if x["definition"] == "Gemm_v1")
+    root = D[gemm["definition_ids"][0]]
+    assert root["form"] == "composite" and root["body"]["nodes"][0]["form"] == "batch"
+    assert root["body"]["nodes"][0]["n"] == gemm["statics"]["N"]
+    dot = next(v for k, v in D.items() if k.startswith(f"DotBf16_v1{{K={H}}}"))
+    assert len(dot["body"]["nodes"]) == H // 16 + 1
+    if H // 16 >= PG.FOLD_MIN:
+        assert dot["fold"] and dot["fold"][0]["chained"] is True
+    assert any(v["form"] == "primitive" for v in D.values())
+    attn = next(x for x in g["groups"] if x["definition"] == "Attention_v3")
+    assert len(attn["definition_ids"]) in (1, 2) and all(i in D for i in attn["definition_ids"] if i)
+
+
+def test_fold_hints_mark_chains_and_parallel_runs():
+    chain = [{"fn": "A", "form": "call", "args": [{"refs": {"affine": ["n", k - 1, 0, 1]}}] if k else []} for k in range(5)]
+    par = [{"fn": "B", "form": "call", "args": [{"refs": {"affine": ["p", 0, k, k + 1]}}]} for k in range(4)]
+    h = PG.fold_hints(chain + par)
+    assert h == [{"start": 0, "count": 5, "fn": "A", "form": "call", "chained": True},
+                 {"start": 5, "count": 4, "fn": "B", "form": "call", "chained": False}]
+
+
+def test_catalog_deduplicates_specializations_across_rows(tmp_path):
+    import gzip
+    inst, _w = _program(attn=True)
+    g = PG.program_graph([_write(inst, tmp_path / "instances.json.gz")])
+    for r in ("rowA", "rowB"):
+        (tmp_path / "graphs").mkdir(exist_ok=True)
+        (tmp_path / "graphs" / f"{r}.program.json").write_text(json.dumps(g))
+    ix = PG.catalog(tmp_path / "graphs")
+    assert ix and all(set(e["rows"]) == {"rowA", "rowB"} for e in ix.values())
+    shards = {}
+    for p in (tmp_path / "graphs" / "definitions").glob("*.json.gz"):
+        shards.update(json.loads(gzip.open(p, "rt").read()))
+    assert len(shards) == len({e["digest"] for e in ix.values()})
+    assert all(PG.definition_digest(v["definition"]) == h for h, v in shards.items())
+    ops = json.loads((tmp_path / "graphs" / "rowA.ops.json").read_text())["ops"]
+    for o in ops:                                          # a varying group: every value of its range; else its one spec
+        want = 1
+        for lo, hi in o["varying"].values():
+            want *= hi - lo + 1
+        assert o["specs_enumerated"] == want == len(o["definitions"])
+    assert all(d["digest"] in shards for o in ops for d in o["definitions"] if d["id"])
+    again = json.loads((tmp_path / "graphs" / "rowA.program.json").read_text())
+    assert "definitions" not in again and again["definitions_index"]

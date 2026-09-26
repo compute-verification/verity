@@ -306,7 +306,196 @@ def program_graph(instance_paths: Iterable[str | Path], *, row: dict[str, Any] |
     prefix = wrapper_prefix(strata, acc) if strata else ""
     units = units_from_strata(strata, acc, prefix) if strata else None
     exported = exported_from_vus(vus_jsonl, acc, prefix, request_programs) if vus_jsonl else None
-    return {"row": row or {}, "wrapper_prefix": prefix, **acc.graph(units, exported)}
+    return with_definitions({"row": row or {}, "wrapper_prefix": prefix, **acc.graph(units, exported)})
+
+
+FOLD_MIN = 3
+
+
+def _node_reads(v: Any) -> set[int]:
+    """The body nodes an encoded node's refs read (every `["n", k, ...]` run in the codec's ref forms)."""
+    out: set[int] = set()
+    if isinstance(v, list):
+        if len(v) >= 2 and v[0] == "n" and isinstance(v[1], int):
+            out.add(v[1])
+        for x in v:
+            out |= _node_reads(x)
+    elif isinstance(v, dict):
+        for x in v.values():
+            out |= _node_reads(x)
+    return out
+
+
+def fold_hints(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Runs of >= FOLD_MIN consecutive body nodes of one callee and form; `chained` when every node of the run reads the one before
+    it (DotBf16's k16 accumulator chain), else the run is parallel (a norm's per-thread partials)."""
+    runs, k = [], 0
+    while k < len(nodes):
+        j = k + 1
+        while j < len(nodes) and nodes[j]["fn"] == nodes[k]["fn"] and nodes[j]["form"] == nodes[k]["form"]:
+            j += 1
+        if j - k >= FOLD_MIN:
+            chained = all((i - 1) in _node_reads(nodes[i]["args"]) for i in range(k + 1, j))
+            runs.append({"start": k, "count": j - k, "fn": nodes[k]["fn"], "form": nodes[k]["form"], "chained": chained})
+        k = j
+    return runs
+
+
+def _specialization(fam: str, statics: dict[str, Any]):
+    """The registered Definition a group names, bound to its statics (a primitive as it is)."""
+    from verity.ir.codec import lookup_primitive
+    from verity_vllm.query.program_view import _registry
+    reg, _errors = _registry()
+    d = reg.defs.get(fam)
+    if d is None:
+        return lookup_primitive(reg, fam)
+
+    def fn_value(v: Any) -> Any:
+        """A function-valued static (`DOT`, rendered `{"fn": id}` or as the bare id) -> the registered Definition it names."""
+        fid = v.get("fn") if isinstance(v, dict) else (json.loads(v).get("fn") if isinstance(v, str) and v.startswith('{"fn"') else v)
+        if not isinstance(fid, str):
+            return v
+        try:
+            return lookup_primitive(reg, fid)
+        except KeyError:
+            return reg.defs[fid] if fid in reg.defs else v
+
+    return d.bind(**{k: fn_value(v) for k, v in statics.items()}) if hasattr(d, "bind") else d
+
+
+def _encoded(fn) -> tuple[str, dict[str, dict[str, Any]]]:
+    """(the specialization's id, every definition it uses in the codec's v0 form): `verity.ir.codec.encode_program` of a one-node
+    Program that calls it, keeping the definitions reachable from it (not the wrapper, its lowered root or their Input gates)."""
+    from verity.ir.codec import SCHEMA_V0, encode_program
+    from verity.ir.defs import CompositeDefinition, PrimitiveDefinition
+    from verity.ir.program import Program
+    if isinstance(fn, PrimitiveDefinition):
+        return fn.id, {fn.id: {"form": "primitive", "id": fn.id}}
+    params, ret = fn.signature()
+    shell = CompositeDefinition(f"Show[{fn.id}]", 1, (), lambda S: (tuple(params), ret), lambda B, S, *a: B.call(fn, *a), register=False)
+    desc = encode_program(Program(shell), schema=SCHEMA_V0)
+    defs = desc["definitions"]
+    top = next(n["fn"] for n in defs[desc["root"]]["body"]["nodes"] if n["form"] != "primitive" and n["fn"] in defs
+               and defs[n["fn"]].get("form") == "composite")
+    keep, todo = {}, [top]
+    while todo:
+        k = todo.pop()
+        if k in keep or k not in defs:
+            continue
+        keep[k] = defs[k]
+        todo += [n["fn"] for n in (defs[k].get("body") or {}).get("nodes", [])]
+    return top, keep
+
+
+def definitions(roots: Iterable[tuple[str, dict[str, Any]]]) -> tuple[dict[str, dict[str, Any]], list[str | None]]:
+    """Every specialization the roots use, down to primitives, in the codec's v0 node form, each composite with its fold hints, and
+    each root's specialization id (None when the registry cannot bind it; recorded as `unresolved` with the reason)."""
+    out: dict[str, dict[str, Any]] = {}
+    ids: list[str | None] = []
+    memo: dict[str, str | None] = {}
+    for fam, st in roots:
+        key = f"{fam}{json.dumps(st, sort_keys=True, default=str)}"
+        if key in memo:
+            ids.append(memo[key])
+            continue
+        memo[key] = None
+        try:
+            fid, defs = _encoded(_specialization(fam, st))
+        except (KeyError, TypeError, ValueError, AttributeError) as e:
+            out[key] = {"form": "unresolved", "id": fam, "why": f"{type(e).__name__}: {e}"[:300]}
+            ids.append(None)
+            continue
+        for k, v in defs.items():
+            if k not in out:
+                if v.get("form") == "composite":
+                    v = dict(v, fold=fold_hints(v["body"]["nodes"]))
+                out[k] = v
+        memo[key] = fid
+        ids.append(fid)
+    return out, ids
+
+
+def with_definitions(g: dict[str, Any]) -> dict[str, Any]:
+    """`g` with a `definitions` section and each group's `definition_ids` (its specialization ids): a group of one spec names that
+    spec; a group whose statics vary (attention's T) names two representatives, the smallest and the largest value of each."""
+    roots: list[tuple[str, dict[str, Any]]] = []
+    spans = []
+    for x in g["groups"]:
+        reps = [dict(x["statics"])]
+        if x.get("varying"):
+            reps = [dict(x["statics"], **{a: v[0] for a, v in x["varying"].items()}), dict(x["statics"], **{a: v[1] for a, v in x["varying"].items()})]
+        spans.append((x, len(roots), len(reps)))
+        roots += [(x["definition"], st) for st in reps]
+    defs, ids = definitions(roots)
+    for x, lo, n in spans:
+        x["definition_ids"] = ids[lo:lo + n]
+    g["definitions"] = defs
+    g.setdefault("rules", {})["definitions"] = ("one entry per distinct specialization the groups use, down to primitives, in the codec's v0 node form "
+                                                 "(verity.ir.codec.encode_program) with fold hints: runs of >= 3 consecutive nodes of one callee, "
+                                                 "chained when each reads the one before; a varying group names its smallest and largest representative")
+    return g
+
+
+def definition_digest(d: dict[str, Any]) -> str:
+    """sha256 of a definition's canonical JSON (`verity.ir.codec.canonical_json`), fold hints excluded."""
+    from verity.ir.codec import canonical_json
+    return hashlib.sha256(canonical_json({k: v for k, v in d.items() if k != "fold"})).hexdigest()
+
+
+def _full_roots(x: dict[str, Any]) -> list[dict[str, Any]]:
+    """Every specialization a group names: its one spec, or every value of its varying static across the recorded range (a superset
+    of the specs used when the row's requests leave gaps: `specs` is the recorded count)."""
+    if not x.get("varying"):
+        return [dict(x["statics"])]
+    out = [dict(x["statics"])]
+    for a, (lo, hi) in x["varying"].items():
+        out = [dict(o, **{a: v}) for o in out for v in range(int(lo), int(hi) + 1)]
+    return out
+
+
+def catalog(graph_dir: str | Path) -> dict[str, Any]:
+    """Every distinct specialization of every `*.program.json` under `graph_dir`, de-duplicated across rows by digest:
+    `definitions/<digest[:2]>.json.gz` shards ({digest: {id, definition}}) and `definitions/index.json` ({id: {digest, rows}});
+    each graph's inline `definitions` becomes `definitions_index` (its groups' representative ids -> digest), and `<row>.ops.json`
+    maps every module op (group) to its Definition keys (a varying group: every value of its range, as ids and digests)."""
+    import gzip
+    root = Path(graph_dir)
+    (root / "definitions").mkdir(parents=True, exist_ok=True)
+    shards: dict[str, dict[str, Any]] = {}
+    index: dict[str, dict[str, Any]] = {}
+    for f in sorted(root.glob("*.program.json")):
+        row = f.name[: -len(".program.json")]
+        g = json.loads(f.read_text())
+        g.pop("definitions", None)
+        roots, spans = [], []
+        for x in g["groups"]:
+            reps = _full_roots(x)
+            spans.append((x, len(roots), len(reps)))
+            roots += [(x["definition"], st) for st in reps]
+        defs, ids = definitions(roots)
+        dig: dict[str, str] = {}
+        for k, d in defs.items():
+            h = dig[k] = definition_digest(d)
+            shards.setdefault(h[:2], {})[h] = {"id": k, "definition": d}
+            e = index.setdefault(k, {"digest": h, "form": d.get("form"), "rows": []})
+            if row not in e["rows"]:
+                e["rows"].append(row)
+        ops = []
+        for x, lo, n in spans:
+            ks = ids[lo:lo + n]
+            ops.append({"module": x["module"], "group": x["id"], "definition": x["definition"], "calls": x["calls"], "template": x["template"],
+                        "specs_recorded": x.get("specs"), "specs_enumerated": n, "varying": x.get("varying") or {},
+                        "definitions": [{"id": k, "digest": dig.get(k)} for k in ks]})
+        g["definitions_index"] = {k: dig.get(k) for x in g["groups"] for k in x.get("definition_ids") or [] if k}
+        f.write_text(json.dumps(g, separators=(",", ":"), default=str) + "\n")
+        (root / f"{row}.ops.json").write_text(json.dumps({"schema": f"{SCHEMA}/ops", "row": row, "ops": ops}, separators=(",", ":")) + "\n")
+    for p2, m in sorted(shards.items()):
+        with gzip.open(root / "definitions" / f"{p2}.json.gz", "wt") as fh:
+            json.dump(m, fh, separators=(",", ":"))
+    (root / "definitions" / "index.json").write_text(json.dumps({"schema": f"{SCHEMA}/definitions", "shard": "definitions/<digest[:2]>.json.gz",
+                                                                 "digest": "sha256 of the definition's canonical JSON (verity.ir.codec.canonical_json), fold hints excluded",
+                                                                 "definitions": index}, separators=(",", ":")) + "\n")
+    return index
 
 
 @dataclass(frozen=True, kw_only=True)

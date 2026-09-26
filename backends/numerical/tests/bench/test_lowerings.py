@@ -17,7 +17,14 @@ EXAMPLES = [TM.subcircuit(t.id, **t.example) for t in TM.TEMPLATES.values()]
 def test_one_module_per_template(family):
     reg = L.registry(family)
     assert reg.problems() == []
-    assert set(reg.modules()) == set(TM.TEMPLATES)
+    assert set(reg.modules()) | set(reg.missing()) == set(TM.TEMPLATES) and not set(reg.modules()) & set(reg.missing())
+    for tid in reg.missing():
+        sub = TM.subcircuit(tid, **TM.TEMPLATES[tid].example)
+        assert f"{L.module_name(tid)}.py" in reg.supports(sub, "frame-v3/blake3-keyed")
+
+
+#: Templates a family proves under frame-v3/blake3-keyed besides the GEMM (C-Flock: verity/flock-ir-frame/v2).
+LOWERED = {"C-Flock": {"rope-head", "silu-mul", "rmsnorm-fused-cuda", "rmsnorm-triton"}}
 
 
 @pytest.mark.parametrize("family", FAMILIES)
@@ -25,7 +32,9 @@ def test_unlowered_templates_say_why(family):
     reg = L.registry(family)
     for sub in EXAMPLES:
         why = reg.supports(sub, "frame-v3/blake3-keyed")
-        if sub.template.id != "gemm-coordinate":
+        if sub.template.id in LOWERED.get(family, ()):
+            assert why is None and isinstance(reg.supports(sub, "vllm-v1"), str)
+        elif sub.template.id != "gemm-coordinate":
             assert isinstance(why, str) and family in why
 
 
@@ -84,7 +93,7 @@ def test_missing_and_misnamed_modules(tmp_path):
     (tmp_path / "extra.py").write_text('TEMPLATE = "no-such"\n')
     reg = L.Registry("X-Test", tmp_path)
     probs = reg.problems()
-    assert any("gemm_coordinate.py missing" in p for p in probs)
+    assert "gemm-coordinate" in reg.missing() and not any("gemm_coordinate" in p for p in probs)
     assert any("rope_head.py lowers 'silu-mul'" in p for p in probs)
     assert any("extra.py names TEMPLATE 'no-such'" in p for p in probs)
     assert any("extra.py has no supports" in p for p in probs)

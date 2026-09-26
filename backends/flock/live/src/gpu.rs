@@ -840,3 +840,116 @@ fn run(params: &ProveParams, chunk: &ChunkParams, pcs: &PcsParams, m: usize) -> 
     };
     (proof, Commitment { cap, params: pcs.clone() })
 }
+
+/// A block of compression slots and unit slots as Flock-CUDA's host-witness mode 1 takes it (lane flock-ir-lowering's
+/// `crate::ir_block` and `crate::ir_frame`): the BLAKE3 compression circuit at 2^14-bit slots `0 .. comp_slots`, the unit
+/// netlist at 2^unit_log slots `unit_pos0 ..`, Δ, and the region claims (points from `hook`) in the sparse ring switch.
+pub struct SlotStmt<'a> {
+    pub digest: [u8; 32],
+    pub k_log: usize,
+    pub pin: usize,
+    pub da: &'a [(u32, u32)],
+    pub db: &'a [(u32, u32)],
+    pub comp_slots: usize,
+    pub units: usize,
+    pub unit_log: usize,
+    pub unit_pos0: usize,
+    pub net: &'a crate::ir_block::IrUnitNet,
+    pub regions: usize,
+    pub blocks: usize,
+}
+
+/// verity/flock-ir-block/v1 on the GPU: unit slots only (the compression circuit's fold is computed and unused).
+pub fn prove_units(
+    st: &crate::ir_block::IrStmt,
+    z: &[F128],
+    a: &[F128],
+    b: &[F128],
+    pcs: &PcsParams,
+    domain: &[u8],
+    hook: &mut dyn FnMut(&[u8]) -> Vec<Vec<F128>>,
+    ch: &mut LiveChallenger,
+) -> (R1csProofLigerito, Commitment, [f64; 8]) {
+    let s = SlotStmt { digest: st.digest, k_log: st.k_log, pin: st.pin, da: &st.circuit.da, db: &st.circuit.db, comp_slots: 0, units: st.units,
+                       unit_log: st.unit_log, unit_pos0: 0, net: &st.net, regions: st.regions.len(), blocks: st.blocks() };
+    prove_slots(&s, z, a, b, pcs, domain, hook, ch)
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn prove_slots(
+    st: &SlotStmt<'_>,
+    z: &[F128],
+    a: &[F128],
+    b: &[F128],
+    pcs: &PcsParams,
+    domain: &[u8],
+    mut hook: &mut dyn FnMut(&[u8]) -> Vec<Vec<F128>>,
+    ch: &mut LiveChallenger,
+) -> (R1csProofLigerito, Commitment, [f64; 8]) {
+    let s = statics_for(comp(), st.da, st.db);
+    let (sc, cfg) = sched(pcs);
+    let m = pcs.m;
+    assert_eq!(z.len(), 1 << (m - 7));
+    let params = prove_params(s, &sc, &cfg, pcs, &st.digest, domain, st.k_log, st.pin, ch);
+    type U8 = (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>);
+    static U: OnceLock<U8> = OnceLock::new();
+    let u = U.get_or_init(|| {
+        let k = 1usize << st.unit_log;
+        let pad = |rows: &Vec<Vec<usize>>| {
+            let mut r = rows.clone();
+            r.resize(k, Vec::new());
+            SparseBinaryMatrix { num_rows: k, num_cols: k, rows: r.into() }
+        };
+        let (ca, cb) = (csc_from_rows(&pad(&st.net.a)), csc_from_rows(&pad(&st.net.b)));
+        let csr = |rows: &Vec<Vec<usize>>| {
+            let mut off = vec![0u32];
+            let mut col = Vec::new();
+            for r in rows {
+                col.extend(r.iter().map(|&c| c as u32));
+                off.push(col.len() as u32);
+            }
+            (off, col)
+        };
+        let (ao, ac) = csr(&st.net.a);
+        let (bo, bc) = csr(&st.net.b);
+        (ca.0, ca.1, cb.0, cb.1, ao, ac, bo, bc)
+    });
+    let n_claims = 2 + 2 * st.regions;
+    let og = pcs.opening_grinding();
+    let mut phase = [0f64; 8];
+    let chunk = ChunkParams {
+        delta_a: s.da.as_ptr(),
+        n_delta_a: (s.da.len() / 2) as i32,
+        delta_b: s.db.as_ptr(),
+        n_delta_b: (s.db.len() / 2) as i32,
+        sub_log: SUB_LOG as i32,
+        link_cb: Some(link_cb),
+        link_ctx: &mut hook as *mut &mut dyn FnMut(&[u8]) -> Vec<Vec<F128>> as *mut c_void,
+        gamma_bits: if n_claims > 1 { og.claim_batch_bits as i32 } else { 0 },
+        phase_s: phase.as_mut_ptr(),
+        mode: 1,
+        comp_slots: st.comp_slots as i32,
+        units: st.units as i32,
+        unit_log: st.unit_log as i32,
+        unit_pos0: st.unit_pos0 as i32,
+        u_a_col_ptr: u.0.as_ptr(),
+        u_a_rows: u.1.as_ptr(),
+        u_a_nnz: u.1.len() as u32,
+        u_b_col_ptr: u.2.as_ptr(),
+        u_b_rows: u.3.as_ptr(),
+        u_b_nnz: u.3.len() as u32,
+        u_a_off: u.4.as_ptr(),
+        u_a_col: u.5.as_ptr(),
+        u_b_off: u.6.as_ptr(),
+        u_b_col: u.7.as_ptr(),
+        u_useful: st.net.useful as i32,
+        u_const: st.net.const_pos as i32,
+        blocks_real: st.blocks as i32,
+        host_z: z.as_ptr() as *const u64,
+        host_a: a.as_ptr() as *const u64,
+        host_b: b.as_ptr() as *const u64,
+        ..ChunkParams::none()
+    };
+    let (proof, commitment) = run(&params, &chunk, pcs, m);
+    (proof, commitment, phase)
+}
