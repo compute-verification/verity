@@ -7,8 +7,10 @@ TCP-connect RTT probe to ``RTT_TARGET`` (the verifier pod's sshd) before the swe
 """
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
+import tarfile
 from pathlib import Path
 
 BACKEND = "C-interactive"
@@ -26,13 +28,35 @@ def unmet(cell) -> str | None:
     return None
 
 
+def set_tarball(ref: dict, root: Path = Path(".bench-cell") / "sets") -> Path:
+    """An input set's manifest and port files as one ``.tgz`` sent with both runs (``research run --send``; the pods have no
+    store access), named by the set and its content digest."""
+    d = Path(ref["path"])
+    man = json.loads((d / "manifest.json").read_text())
+    out = (root / f"{ref['id']}-{ref['n']}-{ref['content_digest'][:12]}.tgz").resolve()
+    if not out.exists():
+        out.parent.mkdir(parents=True, exist_ok=True)
+        files = ["manifest.json", *sorted(p["file"] for p in man["ports"].values())]
+        with tarfile.open(out, "w:gz") as tf:
+            for f in files:
+                tf.add(d / f, arcname=f)
+    return out
+
+
 def jobs(cell) -> list[dict]:
-    common = [f"REL={cell.relation}", f"POINTS={cell.points}", f"RUNS={cell.runs}", *([f"PER={cell.per_proof}"] if cell.per_proof else [])]
+    leaf = "sha256" if cell.scheme.endswith("sha-256") else "blake3"
+    common = [f"REL={cell.relation}", f"POINTS={cell.points}", f"RUNS={cell.runs}", f"LEAF={leaf}",
+              *([f"PER={cell.per_proof}"] if cell.per_proof else [])]
+    send = []
+    if cell.input_set.get("kind") == "set":
+        tgz = set_tarball(cell.input_set)
+        common.append(f"SET={tgz.name}")
+        send = [str(tgz)]
     operator = f"OPERATOR={cell.lane}-verifier-pod"
     return [
-        {"role": "verifier", "pod": cell.verifier, "stage": "flock.cell.verifier",
+        {"role": "verifier", "pod": cell.verifier, "stage": "flock.cell.verifier", "send": send,
          "command": ["bash", SCRIPT, "ROLE=verifier", *common, operator]},
-        {"role": "prover", "pod": cell.prover, "stage": "flock.cell.prover",
+        {"role": "prover", "pod": cell.prover, "stage": "flock.cell.prover", "send": send,
          "command": ["bash", SCRIPT, "ROLE=prover", *common, f"VERIFIER={cell.verifier_addr}", f"RTT_TARGET={cell.rtt_target}", "LOOPBACK=1",
                      operator, *cell.backend_args]},
     ]

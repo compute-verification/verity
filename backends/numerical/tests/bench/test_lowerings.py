@@ -66,9 +66,14 @@ def test_chunked_real_k_and_other_schemes():
     assert reg.supports(TM.subcircuit("gemm-coordinate", K=2048, semantics="sm90.mma.m16n8k16.bf16"), "frame-v3/blake3-keyed") is None
     why = reg.supports(TM.subcircuit("gemm-coordinate", K=512, semantics="sm90.mma.m16n8k16.bf16"), "frame-v3/blake3-keyed")
     assert "CN3" in why
-    assert "sha-256" in reg.supports(TM.parse_subcircuit_id("gemm-coordinate/k1536/sm90-mma-bf16"), "frame-v3/sha-256")
+    assert reg.supports(TM.parse_subcircuit_id("gemm-coordinate/k1536/sm90-mma-bf16"), "frame-v3/sha-256") is None
+    assert "keyed-BLAKE3 only" in reg.supports(TM.parse_subcircuit_id("gemm-coordinate/k2048/sm90-mma-bf16"), "frame-v3/sha-256")
+    assert "tail" in reg.supports(TM.parse_subcircuit_id("gemm-coordinate/k2304/sm80-mma-bf16"), "frame-v3/blake3-keyed")
+    k9216 = TM.parse_subcircuit_id("gemm-coordinate/k9216/sm80-mma-bf16")
+    assert reg.supports(k9216, "frame-v3/blake3-keyed") is None
+    assert "Chunk(18)" in reg.module("gemm-coordinate").granted(k9216, "frame-v3/blake3-keyed")
     with pytest.raises(ValueError):
-        reg.relation(k2048, "frame-v3/sha-256")
+        reg.relation(k2048, "frame-v3/poseidon2")
 
 
 def test_missing_and_misnamed_modules(tmp_path):

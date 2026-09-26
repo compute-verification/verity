@@ -50,7 +50,7 @@ def test_plan_wraps_the_flock_cell_script():
 @pytest.mark.parametrize("kw,why", [
     (dict(statement="rope-head/d64/neox-bf16+frame-v3/blake3-keyed"), "no lowering of RoPEHead_v1"),
     (dict(statement="gemm-coordinate/k512/sm90-mma-bf16+frame-v3/blake3-keyed"), "CN3"),
-    (dict(statement="gemm-coordinate/k1536/sm90-mma-bf16+frame-v3/sha-256"), "keyed-BLAKE3"),
+    (dict(statement="gemm-coordinate/k2048/sm90-mma-bf16+frame-v3/sha-256"), "keyed-BLAKE3 only"),
     (dict(input_set="bench-instances-fp8-ada-v1"), "is of gemm-coordinate/k1536/sm89-mma-e4m3"),
     (dict(verifier=None), "separate pod"),
     (dict(verifier="vy-flock-h100"), "other than the prover's"),
