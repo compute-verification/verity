@@ -1,14 +1,65 @@
 [
   {
-    "id": "subcircuit/gemm-coordinate-k1536",
-    "kind": "gemm-coordinate",
-    "name": "GemmCoordinate<1536>",
-    "K": 1536,
-    "batch": 4096,
-    "description": "the benchmark subcircuit of the tables: K = 1536 multiply-accumulates from c_0 = 0 (then the target's epilogue), measured at the reference batch of 4096 instances (frozen 2026-09-22)",
+    "id": "gemm_coordinate",
+    "name": "GemmCoordinate<K>",
+    "description": "a chain of K multiply-accumulates from c_0 = 0 on one tensor-core instruction's exact semantics (FP32 accumulation), then that target's epilogue",
+    "parameters": {
+      "K": {
+        "type": "integer",
+        "description": "multiply-accumulates in the chain"
+      },
+      "semantics": {
+        "type": "string",
+        "description": "the exact tensor-core instruction whose accumulator step the chain uses (verity.ml.tc.instructions)"
+      }
+    },
+    "accumulate": "fp32",
+    "reference_batch": 4096,
     "sources": [
       {
-        "label": "backends/AGENTS.md: the decision workload, B = 4096 K = 1536 (frozen 2026-09-22); verity.proofs.target (GemmCoordinate<K>)"
+        "label": "verity.proofs.target (GemmCoordinate<K>); backends/AGENTS.md: the decision workload, B = 4096 K = 1536 (frozen 2026-09-22)"
+      }
+    ],
+    "subcircuits": [
+      {
+        "id": "gemm_coordinate/k1536/sm80.mma.m16n8k16.bf16",
+        "parameters": {
+          "K": 1536,
+          "semantics": "sm80.mma.m16n8k16.bf16"
+        },
+        "legacy_target": "first-campaign-target/2026-09-21"
+      },
+      {
+        "id": "gemm_coordinate/k1536/sm90.mma.m16n8k16.bf16",
+        "parameters": {
+          "K": 1536,
+          "semantics": "sm90.mma.m16n8k16.bf16"
+        },
+        "legacy_target": "bf16-hopper-mma-draft/2026-09-22"
+      },
+      {
+        "id": "gemm_coordinate/k1536/sm90.wgmma.m64n8k32.e4m3",
+        "parameters": {
+          "K": 1536,
+          "semantics": "sm90.wgmma.m64n8k32.e4m3"
+        },
+        "legacy_target": "fp8-hopper-wgmma-draft/2026-09-22"
+      },
+      {
+        "id": "gemm_coordinate/k1536/sm89.mma.m16n8k32.e4m3",
+        "parameters": {
+          "K": 1536,
+          "semantics": "sm89.mma.m16n8k32.e4m3"
+        },
+        "legacy_target": "fp8-ada-mma-draft/2026-09-22"
+      },
+      {
+        "id": "gemm_coordinate/k1536/sm120.mma.m16n8k64.e2m1.nvf4",
+        "parameters": {
+          "K": 1536,
+          "semantics": "sm120.mma.m16n8k64.e2m1.nvf4"
+        },
+        "legacy_target": "nvfp4-sm120-mma-draft/2026-09-22"
       }
     ]
   }

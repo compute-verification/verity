@@ -28,11 +28,18 @@ def load(name: str) -> dict[str, Any]:
 HARDWARE = load("hardware")
 DATATYPES = load("datatypes")
 NETWORKS = load("networks")
-SUBCIRCUITS = load("subcircuits")
+SUBCIRCUIT_TEMPLATES = load("subcircuits")
+#: Every subcircuit (a fully bound template) by id, with ``template`` naming its template.
+SUBCIRCUITS = {s.id: SimpleNamespace(**vars(s), template=t.id) for t in SUBCIRCUIT_TEMPLATES.values() for s in t.subcircuits}
 INSTANCE_SETS = load("instance_sets")
 REFERENCE_NETWORK = next(n for n in NETWORKS.values() if n.role == "reference")
 SENSITIVITY_NETWORKS = tuple(n for n in NETWORKS.values() if n.role == "sensitivity")
-GEMM_COORDINATE_K1536 = SUBCIRCUITS["subcircuit/gemm-coordinate-k1536"]
+GEMM_COORDINATE = SUBCIRCUIT_TEMPLATES["gemm_coordinate"]
+
+
+def subcircuit_of(target: str) -> Any:
+    """The subcircuit a (legacy) target name denotes; ``KeyError`` when the census has none."""
+    return next(s for s in SUBCIRCUITS.values() if getattr(s, "legacy_target", None) == target)
 
 
 def source(entry: Any) -> str:

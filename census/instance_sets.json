@@ -1,7 +1,7 @@
 [
   {
     "id": "bench-instances-v1",
-    "subcircuit": "subcircuit/gemm-coordinate-k1536",
+    "subcircuit": "gemm_coordinate/k1536/sm80.mma.m16n8k16.bf16",
     "target": "first-campaign-target/2026-09-21",
     "dataset": "bench-instances/v1",
     "tier": "vu-k1536",
@@ -16,7 +16,7 @@
   },
   {
     "id": "bench-instances-fp8-ada-v1",
-    "subcircuit": "subcircuit/gemm-coordinate-k1536",
+    "subcircuit": "gemm_coordinate/k1536/sm89.mma.m16n8k32.e4m3",
     "target": "fp8-ada-mma-draft/2026-09-22",
     "dataset": "bench-instances-fp8-ada/v1",
     "tier": "vu-k1536-fp8-ada",
@@ -31,7 +31,7 @@
   },
   {
     "id": "bench-instances-bf16-hopper-v1",
-    "subcircuit": "subcircuit/gemm-coordinate-k1536",
+    "subcircuit": "gemm_coordinate/k1536/sm90.mma.m16n8k16.bf16",
     "target": "bf16-hopper-mma-draft/2026-09-22",
     "dataset": "bench-instances-bf16-hopper/v1",
     "tier": "vu-k1536-bf16-hopper",
@@ -46,7 +46,7 @@
   },
   {
     "id": "bench-instances-fp8-hopper-v1",
-    "subcircuit": "subcircuit/gemm-coordinate-k1536",
+    "subcircuit": "gemm_coordinate/k1536/sm90.wgmma.m64n8k32.e4m3",
     "target": "fp8-hopper-wgmma-draft/2026-09-22",
     "dataset": "bench-instances-fp8-hopper/v1",
     "tier": "vu-k1536-fp8-hopper",
@@ -61,7 +61,7 @@
   },
   {
     "id": "bench-instances-nvfp4-sm120-v1",
-    "subcircuit": "subcircuit/gemm-coordinate-k1536",
+    "subcircuit": "gemm_coordinate/k1536/sm120.mma.m16n8k64.e2m1.nvf4",
     "target": "nvfp4-sm120-mma-draft/2026-09-22",
     "dataset": "bench-instances-nvfp4-sm120/v1",
     "tier": "vu-k1536-nvfp4-sm120",

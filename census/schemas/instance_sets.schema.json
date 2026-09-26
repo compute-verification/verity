@@ -25,11 +25,13 @@
       },
       "subcircuit": {
         "type": "string",
-        "pattern": "^subcircuit/[a-z0-9]+(-[a-z0-9]+)*$"
+        "pattern": "^[a-z0-9]+(_[a-z0-9]+)*/.+$",
+        "description": "the bound subcircuit its instances are of (census/subcircuits.json)"
       },
       "target": {
         "type": "string",
-        "minLength": 1
+        "minLength": 1,
+        "description": "legacy: the verity.proofs.target name"
       },
       "dataset": {
         "type": "string",
