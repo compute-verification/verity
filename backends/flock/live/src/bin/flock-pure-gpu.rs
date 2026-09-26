@@ -731,8 +731,11 @@ fn replay(st: &Arc<PureStmt>, inst: &Arc<Instances>, rec: &Value, proofs: &[Vec<
     if rec["aborted"].is_string() || rec["verdict"]["accepted"] != true {
         return Err("the live verifier did not accept this session".into());
     }
-    let (comps, cvs) = st.compressions(inst);
-    let inputs = |b: usize, u: usize| st.unit_inputs(&comps, b, u, st.c_in(inst, b, u));
+    let (comps, cvs) = if st.lay.is_sha() { (Vec::new(), vec![Vec::new(); st.blocks_real]) } else { st.compressions(inst) };
+    let inputs = |b: usize, u: usize| {
+        let c_in = st.c_in(inst, b, u);
+        if st.lay.is_sha() { st.unit_inputs_rows(inst, b, u, c_in) } else { st.unit_inputs(&comps, b, u, c_in) }
+    };
     let (y16, acc) = last_unit_words(st, &inputs);
     let publics = Publics { cv: cvs, y16, acc }.bytes();
     if rec["link"]["publics_sha256"][TABLE].as_str() != Some(hex(&sha256(&publics)).as_str()) {
