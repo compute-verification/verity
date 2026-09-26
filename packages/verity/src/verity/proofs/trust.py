@@ -209,6 +209,14 @@ INDEPENDENT_REFERENCES: dict[str, tuple[IndependentReference, ...]] = {
     "sm90.mma.m16n8k16.bf16": (
         IndependentReference("hawkeye-source-close", "simulator", _HAWKEYE, note="Hawkeye (H100) recovered groups (16,), width 26, floor -133"),
     ),
+    "sm90.wgmma.m64n8k16.bf16": (
+        IndependentReference("veritor-h100-wgmma-bf16", "second-compiled-path",
+                             ("packages/verity/tests/ml/fixtures/tc-hopper-2026-09-07/special.reduced.json.gz",
+                              "packages/verity/tests/ml/fixtures/tc-hopper-2026-09-07/summary.json"),
+                             replay="tc-hopper-2026-09-07/special.reduced",
+                             note="veritor lane HP: Triton tl.dot -> wgmma m64n128k16 (HGMMA.64x128x16), 307,281,920 words; its 44,046 records "
+                                  "(14 families, non-finite included) replayed by tc_probe --replay-capture"),
+    ),
     "sm89.mma.m16n8k32.e4m3": (
         IndependentReference("veritor-golden-ada-e4m3", "second-harness", ("packages/verity/tests/ml/fixtures/golden/ada_e4m3_m16n8k32.json",),
                              replay="golden/ada_e4m3_m16n8k32.json", note="veritor gpu/tensor-core-semantics RTX 4090 golden records (24.9M-element campaign)"),
@@ -647,11 +655,10 @@ def _hardware_record(view: _StoreView, art_id: str, kind: str, meta: dict, refs:
             rec.families[name] = {"elements": int(f.get("elements") or 0), "asserted": bool(f.get("asserted", True)),
                                   "mismatches": {_norm_model(m): int(v) for m, v in (f.get("mismatches") or {}).items()}}
         rec.mismatches = {_norm_model(m): int(v) for m, v in (te.get("total_mismatches_by_model") or {}).items()}
-        for k in ("golden_replay", "special_replay"):
+        for k in ("golden_replay", "special_replay", "capture_replay"):
             r = te.get(k)
             if isinstance(r, dict):
-                rec.replays.append({"kind": k.split("_")[0], "file": r.get("file"), "records": r.get("records"), "mismatches": r.get("mismatches"),
-                                    "pipeline": r.get("pipeline")})
+                rec.replays.append(_replay_summary(k, r))
         if isinstance(te.get("instances_replay"), dict):
             rec.instances = _instances_summary(te["instances_replay"])
         if isinstance(te.get("sass"), dict):
@@ -738,11 +745,10 @@ def _hardware_record(view: _StoreView, art_id: str, kind: str, meta: dict, refs:
                 if sw.get("total_mismatches_vs_model") is not None:
                     for k in model_keys:
                         rec.mismatches[k] = int(sw["total_mismatches_vs_model"])
-            for k in ("golden_replay", "special_replay"):
+            for k in ("golden_replay", "special_replay", "capture_replay"):
                 r = pr.get(k)
                 if isinstance(r, dict):
-                    rec.replays.append({"kind": k.split("_")[0], "file": r.get("file"), "records": r.get("records"), "mismatches": r.get("mismatches"),
-                                        "pipeline": r.get("pipeline")})
+                    rec.replays.append(_replay_summary(k, r))
             if isinstance(pr.get("instances_replay"), dict):
                 rec.instances = _instances_summary(pr["instances_replay"])
             if isinstance(pr.get("sass"), dict):
@@ -1031,6 +1037,13 @@ def _family_ok(rec: HardwareRecord, names: set[str], fam: str, *, asserted: bool
         return True
     hits = [v for k, v in f["mismatches"].items() if k in names]
     return bool(hits) and min(hits) == 0
+
+
+def _replay_summary(key: str, r: dict) -> dict:
+    """One replay of a tc_probe result: records, and mismatches against the recorded words -- plus, where the replay also compared
+    the declared model (``capture_replay``), the model's mismatches and the other tile positions' unexpected words."""
+    bad = int(r.get("mismatches") or 0) + int(r.get("model_mismatches") or 0) + int(r.get("other_positions_nonzero") or 0)
+    return {"kind": key.split("_")[0], "file": r.get("file"), "records": r.get("records"), "mismatches": bad, "pipeline": r.get("pipeline")}
 
 
 def _replay_ok(rec: HardwareRecord, fragment: str) -> dict | None:

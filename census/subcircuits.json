@@ -46,15 +46,28 @@
         },
         "fidelity_notes": [
           {
-            "note": "H100 BF16 models mma (sm90.mma.m16n8k16.bf16); vLLM's H100 BF16 GEMMs run wgmma",
+            "note": "H100 BF16 models mma (sm90.mma.m16n8k16.bf16); vLLM's H100 BF16 GEMMs run wgmma (sm90.wgmma.m64n8k16.bf16). On the H100 the two write the same words on every captured input, NaN and infinities included, so the gap is in the name only; gemm-coordinate/k1536/sm90-wgmma-bf16 names the instruction production runs",
             "sources": [
               {
                 "label": "docs ontology, Presentation rules (fidelity notes); verity.proofs.target BF16_HOPPER"
+              },
+              {
+                "label": "lane wgmma-bf16 H100 runs r20260926-020157-242a / r20260926-020210-aee8 (wgmma, A from shared memory / registers) and r20260926-023321-ecb5 (mma.sync, a second H100): every word matches hopper_bf16_wgmma_k16's total step, 0 mismatches; the specials family identical word for word across the instructions; veritor's wgmma records replayed through mma.sync, 0 mismatches (packages/verity/tests/ml/test_wgmma_bf16.py)"
               }
             ]
           }
         ],
         "legacy_target": "bf16-hopper-mma-draft/2026-09-22"
+      },
+      {
+        "id": "gemm-coordinate/k1536/sm90-wgmma-bf16",
+        "display": "GemmCoordinate<1536> · sm90 wgmma · BF16",
+        "parameters": {
+          "K": 1536,
+          "datatype": "bf16",
+          "semantics": "sm90.wgmma.m64n8k16.bf16"
+        },
+        "fidelity_notes": []
       },
       {
         "id": "gemm-coordinate/k1536/sm90-wgmma-e4m3",
