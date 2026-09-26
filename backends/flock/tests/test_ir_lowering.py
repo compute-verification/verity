@@ -612,3 +612,15 @@ def test_attention_key_classes_and_the_class_manifest(tmp_path):
 
     assert _K([1, 1, 1, 2, 2, 5]).subs(6, 2) == [(0, 2), (2, 3), (3, 5), (5, 6)]
     assert _K([1, 1, 1, 2, 2, 5]).subs(4, 16) == [(0, 3), (3, 4)]
+
+
+def test_an_ir_run_result_is_a_point_not_a_second_cell():
+    """The runner publishes a run's result.json under its own kind: ir_bench marks it a bench-point/v1 (a known kind), so the
+    cell's one bench-result/v1 is bench.cell register's, and verity_flock.register drops the kind it read."""
+    from pathlib import Path
+
+    from research.store.kinds import KINDS
+    from verity_flock import ir_bench, register
+
+    assert ir_bench.POINT_KIND == "bench-point/v1" and ir_bench.POINT_KIND in KINDS
+    assert 'raw.pop("kind", None)' in Path(register.__file__).read_text()

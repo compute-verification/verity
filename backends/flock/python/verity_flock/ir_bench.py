@@ -30,6 +30,8 @@ from .bench import PER_PROOF_LOG2, _EXITED, _OURS, _guard, _lines, _probe, _quot
 RULE = "the planned points (instances of the input set, sequential sub-batches of --per-proof); plateau = the point with the highest median throughput"
 STATEMENT = "verity/flock-ir-frame/v3"
 SCHEME = "frame-v3/blake3-keyed"
+#: the kind the runner publishes a run's result.json under (``research.store.attempt.publish`` reads ``result.kind``)
+POINT_KIND = "bench-point/v1"
 
 
 def relation(template: str) -> str:
@@ -454,7 +456,9 @@ def main(argv=None) -> int:
             pd = (out / q["dir"]).resolve()
             if pd.is_relative_to(rd):
                 doc["artifacts"] = [str(pd.relative_to(rd))]
-            Path(rd, "result.json").write_text(json.dumps(doc, indent=1, default=str))
+            # the runner publishes the run's result.json as its own kind: a point, not a cell. The cell's one bench-result/v1 is
+            # bench.cell register's (verity_flock.register drops the kind)
+            Path(rd, "result.json").write_text(json.dumps(dict(doc, kind=POINT_KIND), indent=1, default=str))
     summary = {"id": sid, "template": a.template, "rule": RULE, "stopped": stop, "plateau_total": best["total"],
                "points": [{k: x.get(k) for k in ("total", "ok", "vu_per_second", "wall_s", "peak_rss", "dir", "err")} for x in points]}
     (out / "sweep.json").write_text(json.dumps(summary, indent=1))

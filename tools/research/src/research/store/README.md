@@ -533,6 +533,8 @@ from its record. A failure whose key had expired says so in the marker's `error`
 
 ~~~text
 bench-result/v1          a result.json (measurements, validation, fingerprint) + refs.run_files, refs.proof?
+bench-point/v1           a sweep harness's raw result for its chosen point (result.json kind bench-point/v1): kept by the
+                         run's attempt with its run files; `bench.cell register` makes the cell's one bench-result/v1
 tc-evidence/v1           one tensor-core probe capture: meta {instruction, arch, sku, families, counts, model, model_agrees,
                          first_mismatches, seed, n} ; payload tree = probe_results.json, capture_sample.json, tiles_*.npz
 dataset-snapshot/v1      meta {name, note, query?}; refs.members = [art:...]; payload null
