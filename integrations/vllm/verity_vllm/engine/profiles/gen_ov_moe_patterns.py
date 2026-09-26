@@ -166,7 +166,7 @@ class MoEFusedExperts:
     #: `renormalize=True` -> `MoeRouterTopKNorm_v1` (Qwen3-MoE, `norm_topk_prob=true`: the TOPK probabilities rescaled to sum 1, same ids).
     #: A profile states ONE of them (the checkpoint's `norm_topk_prob`, `C["NORM_TOPK_PROB"]`); the other value observed is Unsupported.
     renormalize: bool = False
-    #: the router's statement: None = kernel order, "rounds" = `MoeRouterTopKRounds[Norm]_v1`, the same function (`MoEFusedExpertsRounds`)
+    #: the router's statement: None = kernel order, "ordered" = `MoeRouterTopKOrdered[Norm]_v1`, the same function (`MoEFusedExpertsOrdered`)
     router: str | None = None
     #: [R19 qwen3, TP] patterns for descendants of the scope that are neither the six MoE kernels nor scope glue -- vLLM's `FusedMoE`
     #: issues the tensor-parallel all-reduce of the routed sum INSIDE `vllm.moe_forward` when `reduce_results=True`; a rank profile puts
@@ -237,8 +237,8 @@ class MoEFusedExperts:
         weights, ids, logits = a.get("topk_weights"), a.get("topk_indices"), a.get("gating_output")
         if not all(isinstance(v, ViewDesc) for v in (weights, ids, logits)):
             return unsupported(node, "topk_softmax arguments not bound as expected", args={k: repr(v) for k, v in a.items()})
-        if self.router == "rounds":
-            router_def = _MOE.MoeRouterTopKRoundsNorm if self.renormalize else _MOE.MoeRouterTopKRounds
+        if self.router == "ordered":
+            router_def = _MOE.MoeRouterTopKOrderedNorm if self.renormalize else _MOE.MoeRouterTopKOrdered
         else:
             router_def = _MOE.MoeRouterTopKNorm if self.renormalize else Q.MoeRouterTopK
         if a.get("renormalize") is not bool(self.renormalize) or a.get("bias") is not None:
@@ -416,14 +416,14 @@ class MoEFusedExpertsPadded(MoEFusedExperts):
 
 
 @dataclass
-class MoEFusedExpertsRounds(MoEFusedExperts):
-    """`moe_construction = indexed-read-rounds`: `MoEFusedExperts` with the router stated round by round (`MoeRouterTopKRounds[Norm]_v1`)."""
+class MoEFusedExpertsOrdered(MoEFusedExperts):
+    """`moe_construction = indexed-read-ordered`: `MoEFusedExperts` with the router stated in the kernel's selection order (`MoeRouterTopKOrdered[Norm]_v1`)."""
 
-    router: str | None = "rounds"
+    router: str | None = "ordered"
 
 
 #: The declared constructions the fold knows (the frontend's `TargetProfile.MOE_CONSTRUCTIONS` keys); the pattern each folds with.
-MOE_CONSTRUCTION_PATTERNS = {"indexed-read": MoEFusedExperts, "padded": MoEFusedExpertsPadded, "indexed-read-rounds": MoEFusedExpertsRounds}
+MOE_CONSTRUCTION_PATTERNS = {"indexed-read": MoEFusedExperts, "padded": MoEFusedExpertsPadded, "indexed-read-ordered": MoEFusedExpertsOrdered}
 
 
 def ov_moe_patterns(config: dict[str, Any], *, gemm_constexprs: dict[str, Any] | None = None, gemm_num_sms: int | None = None,

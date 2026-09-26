@@ -31,7 +31,7 @@ from fractions import Fraction
 from verity.ir.defs import bind, composite, primitive
 from verity.ir.refs import Coll, array_of, concat, strided_view, tuple_of
 from verity.ir.types import Array, Tuple
-from verity.ml.scalar import F32BitsShl23, F32IsFinite, F32Neg, F32Sat
+from verity.ml.scalar import BitAnd, BitNot, BitOr, F32BitsShl23, F32Eq, F32IsFinite, F32Neg, F32Sat
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry import ref_prims as R
@@ -263,95 +263,88 @@ def MoeRouterTopKNorm(B, S, logits):
 
 
 # ---------------------------------------------------------------------------------------------------------
-# the same router restated round by round (opt-in: `TargetProfile.moe_construction = "indexed-read-rounds"`): round k is its own subcircuit over the
-# logits and the ids chosen before it, a slot's weight its own over the logits and the ids -- so no score vector crosses a round
+# the same router in its selection order (opt-in: `TargetProfile.moe_construction = "indexed-read-ordered"`): the softmax once, then
+# round k takes the expert after round k-1's (p, id) in the kernel's total order -- every value computed once, no masked vector carried
 # ---------------------------------------------------------------------------------------------------------
 
 
 @composite("MoeRouterProbs", 1, ["E", "VPT"], lambda S: ((("logits", Array(S.E, BF16)),), Array(S.E, F32)),
            conformance="not-yet-established")
 def MoeRouterProbs(B, S, logits):
-    """`MoeRouterTopK_v1`'s probabilities: the same nodes in the same order (`_router_probs`)."""
+    """`MoeRouterTopK_v1`'s probabilities: the same nodes in the same order (`_router_probs`); +0 or positive, never NaN."""
     return _array(_router_probs(B, S.E, S.VPT, logits))
 
 
-def _round_sig(S):
-    chosen = ((("chosen", Array(S.K, I32)),) if S.K else ())
-    return (("logits", Array(S.E, BF16)),) + chosen, I32
+@composite("MoeRouterFirst", 1, ["E"], lambda S: ((("p", Array(S.E, F32)),), I32), conformance="not-yet-established")
+def MoeRouterFirst(B, S, p):
+    """Round 0 of `MoeRouterTopK_v1`: the strict first-max argmax scan over the probabilities."""
+    c0, c1 = B.call(b1.const(32, 0)), B.call(b1.const(32, 1))
+    return B.scan(RouterArgmaxStep, tuple_of(p[0], c0, c1), xs=(_array([p[i] for i in range(1, S.E)]),))[0][1]
 
 
-@composite("MoeRouterRound", 1, ["E", "VPT", "K"], _round_sig, conformance="not-yet-established")
-def MoeRouterRound(B, S, logits, *chosen):
-    """Round K of `MoeRouterTopK_v1`: the probabilities with the K ids chosen before it masked to -10000.f, in the order they were
-    chosen (the kernel's masked vector at round K, select for select), then the same strict first-max argmax scan; returns its id."""
-    p = list(B.call(bind(MoeRouterProbs, E=S.E, VPT=S.VPT), logits))
-    neg_big = B.call(NEG_10000) if S.K else None
-    consts = [B.call(b1.const(32, i)) for i in range(S.E if S.K else 2)]
-    for j in range(S.K):
-        cid = chosen[0][j]
-        p = [B.call(P.SelectF32, B.call(P.I32Eq, consts[i], cid), neg_big, p[i]) for i in range(S.E)]
-    res = B.scan(RouterArgmaxStep, tuple_of(p[0], consts[0], consts[1]), xs=(_array(p[1:]),))
-    return res[0][1]
+@composite("MoeRouterNext", 1, ["E"], lambda S: ((("p", Array(S.E, F32)), ("w", F32), ("e", I32)), I32), conformance="not-yet-established")
+def MoeRouterNext(B, S, p, w, e):
+    """Round k of `MoeRouterTopK_v1` from round k-1's selection (w = p[e], e): the experts after it in the kernel's total order
+    (`p_i < w`, or `p_i == w` and `i > e`) keep their probability, the others become -10000.f, then the same first-max scan.  The
+    experts chosen so far are exactly those not after (e, w) -- each round took the first of the order among the rest -- so this is the
+    kernel's masked vector at round k and the same argmax."""
+    neg_big = B.call(NEG_10000)
+    q = []
+    for i in range(S.E):
+        ci = B.call(b1.const(32, i))
+        after = B.call(BitOr, B.call(F32GtStrict, w, p[i]), B.call(BitAnd, B.call(F32Eq, p[i], w), B.call(BitNot, B.call(P.I32Le, ci, e))))
+        q.append(B.call(P.SelectF32, after, p[i], neg_big))
+    return B.scan(RouterArgmaxStep, tuple_of(q[0], B.call(b1.const(32, 0)), B.call(b1.const(32, 1))), xs=(_array(q[1:]),))[0][1]
+
+
+@composite("MoeRouterPick", 1, ["E"], lambda S: ((("p", Array(S.E, F32)), ("e", I32)), F32), conformance="not-yet-established")
+def MoeRouterPick(B, S, p, e):
+    """`p[e]` for an id in [0, E): the weight `MoeRouterTopK_v1` returns for the slot (a round's winning value is its unmasked
+    probability)."""
+    return _gather(B, S.E, [p[i] for i in range(S.E)], e)
 
 
 def _gather(B, E: int, p: list[Coll], e: Coll) -> Coll:
-    """`p[e]` for an id in [0, E): a select chain over the candidates.  A round's winning value is its unmasked probability (the
-    masked ones are -10000.f, below every probability, which is +0 or positive), so `p[id_k]` is the weight `MoeRouterTopK_v1` returns."""
     w = p[0]
     for i in range(1, E):
         w = B.call(P.SelectF32, B.call(P.I32Eq, B.call(b1.const(32, i)), e), p[i], w)
     return w
 
 
-@composite("MoeRouterWeight", 1, ["E", "VPT"], lambda S: ((("logits", Array(S.E, BF16)), ("e", I32)), F32),
+def _ordered(B, S, logits) -> tuple[list[Coll], list[Coll]]:
+    p = B.call(bind(MoeRouterProbs, E=S.E, VPT=S.VPT), logits)
+    ids = [B.call(bind(MoeRouterFirst, E=S.E), p)]
+    sel = [B.call(bind(MoeRouterPick, E=S.E), p, ids[0])]
+    for _ in range(1, S.TOPK):
+        ids.append(B.call(bind(MoeRouterNext, E=S.E), p, sel[-1], ids[-1]))
+        sel.append(B.call(bind(MoeRouterPick, E=S.E), p, ids[-1]))
+    return sel, ids
+
+
+@composite("MoeRouterTopKOrdered", 1, ["E", "TOPK", "VPT"],
+           lambda S: ((("logits", Array(S.E, BF16)),), Tuple(Array(S.TOPK, F32), Array(S.TOPK, I32))),
            conformance="not-yet-established")
-def MoeRouterWeight(B, S, logits, e):
-    """A slot's routed weight in `MoeRouterTopK_v1`: the probability of its expert."""
-    return _gather(B, S.E, list(B.call(bind(MoeRouterProbs, E=S.E, VPT=S.VPT), logits)), e)
+def MoeRouterTopKOrdered(B, S, logits):
+    """`MoeRouterTopK_v1` computed once per value: one softmax, then TOPK selection rounds (`MoeRouterFirst`, `MoeRouterNext`) and
+    their weights (`MoeRouterPick`).  The same function, ties, NaN, -inf and +-0 included."""
+    sel, ids = _ordered(B, S, logits)
+    return tuple_of(_array(sel), _array(ids))
 
 
-@composite("MoeRouterWeightNorm", 1, ["E", "VPT", "TOPK", "K"],
-           lambda S: ((("logits", Array(S.E, BF16)), ("ids", Array(S.TOPK, I32))), F32), conformance="not-yet-established")
-def MoeRouterWeightNorm(B, S, logits, ids):
-    """Slot K's weight in `MoeRouterTopKNorm_v1`: the TOPK selected probabilities summed in slot order from 0.f, `denom = sum > 0.f ?
-    sum : 1.f`, `w_K * (1.f / denom)` -- the epilogue's operations in its order."""
-    p = list(B.call(bind(MoeRouterProbs, E=S.E, VPT=S.VPT), logits))
-    w = [_gather(B, S.E, p, ids[k]) for k in range(S.TOPK)]
+@composite("MoeRouterTopKOrderedNorm", 1, ["E", "TOPK", "VPT"],
+           lambda S: ((("logits", Array(S.E, BF16)),), Tuple(Array(S.TOPK, F32), Array(S.TOPK, I32))),
+           conformance="not-yet-established")
+def MoeRouterTopKOrderedNorm(B, S, logits):
+    """`MoeRouterTopKNorm_v1` as `MoeRouterTopKOrdered_v1`, then the same epilogue: the selected probabilities summed in slot order from
+    0.f, `denom = sum > 0.f ? sum : 1.f`, `w_k * (1.f / denom)`."""
+    sel, ids = _ordered(B, S, logits)
     acc = B.call(b1.ZERO32)
     for k in range(S.TOPK):
-        acc = B.call(P.F32Add, acc, w[k])
+        acc = B.call(P.F32Add, acc, sel[k])
     one = B.call(ONE32)
     denom = B.call(P.SelectF32, B.call(F32GtStrict, acc, B.call(b1.ZERO32)), acc, one)
-    return B.call(P.F32Mul, w[S.K], B.call(P.F32Div, one, denom))
-
-
-def _round_ids(B, S, logits) -> list[Coll]:
-    ids: list[Coll] = []
-    for k in range(S.TOPK):
-        ids.append(B.call(bind(MoeRouterRound, E=S.E, VPT=S.VPT, K=k), logits, *((_array(ids),) if k else ())))
-    return ids
-
-
-@composite("MoeRouterTopKRounds", 1, ["E", "TOPK", "VPT"],
-           lambda S: ((("logits", Array(S.E, BF16)),), Tuple(Array(S.TOPK, F32), Array(S.TOPK, I32))),
-           conformance="not-yet-established")
-def MoeRouterTopKRounds(B, S, logits):
-    """`MoeRouterTopK_v1` as TOPK round subcircuits and TOPK weight subcircuits: the same function (ids and weights, ties, NaN, -inf and
-    +-0 included), with every value one round passes the next an output id."""
-    ids = _round_ids(B, S, logits)
-    weights = [B.call(bind(MoeRouterWeight, E=S.E, VPT=S.VPT), logits, ids[k]) for k in range(S.TOPK)]
-    return tuple_of(_array(weights), _array(ids))
-
-
-@composite("MoeRouterTopKRoundsNorm", 1, ["E", "TOPK", "VPT"],
-           lambda S: ((("logits", Array(S.E, BF16)),), Tuple(Array(S.TOPK, F32), Array(S.TOPK, I32))),
-           conformance="not-yet-established")
-def MoeRouterTopKRoundsNorm(B, S, logits):
-    """`MoeRouterTopKNorm_v1` restated as `MoeRouterTopKRounds_v1`, each slot's normalised weight its own subcircuit."""
-    ids = _round_ids(B, S, logits)
-    chosen = _array(ids)
-    weights = [B.call(bind(MoeRouterWeightNorm, E=S.E, VPT=S.VPT, TOPK=S.TOPK, K=k), logits, chosen) for k in range(S.TOPK)]
-    return tuple_of(_array(weights), chosen)
+    scale = B.call(P.F32Div, one, denom)
+    return tuple_of(_array([B.call(P.F32Mul, sel[k], scale) for k in range(S.TOPK)]), _array(ids))
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -436,5 +429,5 @@ def MoeSum(B, S, y):
 
 
 ALL = [F32Sat, F32FmaRm, F32Neg, F32BitsShl23, NvExpf, F32IsFinite, RouterArgmaxStep, MoeRouterTopK, MoeRouterTopKNorm, MoeRouterProbs,
-       MoeRouterRound, MoeRouterWeight, MoeRouterWeightNorm, MoeRouterTopKRounds, MoeRouterTopKRoundsNorm, MoeExpertRow,
+       MoeRouterFirst, MoeRouterNext, MoeRouterPick, MoeRouterTopKOrdered, MoeRouterTopKOrderedNorm, MoeExpertRow,
        MoeExpertCoordinate, MoeExpertGemm, MoeExpertCoordinateW, MoeExpertGemmW, MoeSumCoordinate, MoeSum]
