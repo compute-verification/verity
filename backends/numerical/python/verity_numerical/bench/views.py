@@ -1740,20 +1740,38 @@ def best_standard_hash(results: Sequence[Mapping[str, Any]]) -> list[dict[str, A
             for r in sorted(best.values(), key=lambda r: (r["backend_family"], r["subcircuit"]))]
 
 
+#: How a live run measured its RTT, as published: the recorded ``rtt_method`` text names hosts and ports, so it stays in the
+#: evidence store (the result's own record) and the entities render carries only one of these.
+RTT_METHODS = ("tcp-connect", "open-connection-ping", "unclassified")
+
+
+def rtt_method_enum(text: str | None) -> str | None:
+    """The published RTT method of a recorded ``rtt_method`` text (:data:`RTT_METHODS`), ``None`` when none is recorded."""
+    if not text:
+        return None
+    t = text.lower()
+    if "ping" in t and "connection" in t:
+        return "open-connection-ping"
+    if "tcp connect" in t:
+        return "tcp-connect"
+    return "unclassified"
+
+
 def interaction_fields(ix: Mapping[str, Any], P: Mapping[str, Any], raw: Mapping[str, Any]) -> dict[str, Any]:
     """A result's interaction record, enough to recompute its overhead at any network:
     ``overhead = N x (commit_s + prover_compute_s + verifier_compute_s + rounds x RTT + (bytes_up + bytes_down) x 8 / bandwidth) / inputs``
     (``inputs``: the inputs per timed run).
     ``rounds`` is what the formula uses (``rounds.sequential_depth``, else ``rounds.protocol``; for a file-verified result 0 under
     Fiat–Shamir, else the protocol's sequential depth over its sequential sub-batch proofs), ``rounds_source`` says which;
-    ``prover_compute_s`` already counts the rounds x loopback moved out of the measured wait (``loopback_moved_s``)."""
+    ``prover_compute_s`` already counts the rounds x loopback moved out of the measured wait (``loopback_moved_s``);
+    ``measured_rtt.method`` is an :data:`RTT_METHODS` value, never the recorded text."""
     num = lambda v: float(v) if _num(v) else None  # noqa: E731
     return {
         "live": ix["live"], "derived": ix["derived"], "rounds": ix["rounds"], "rounds_source": ix["rounds_source"],
         "rounds_protocol": num(raw.get("rounds_protocol")), "sequential_depth": num(raw.get("sequential_depth")),
         "bytes_up": ix["bytes_up"], "bytes_down": ix["bytes_down"], "proof_bytes": ix["proof_bytes"], "statement_bytes": ix["statement_bytes"],
         "commit_s": P["commit_s"], "prover_compute_s": ix["prover_s"], "verifier_compute_s": ix["verifier_s"], "network_wait_s": ix["wait_s"],
-        "measured_rtt": {"ms": ix["rtt_ms"], "method": ix["rtt_method"]} if ix["rtt_ms"] is not None else None,
+        "measured_rtt": {"ms": ix["rtt_ms"], "method": rtt_method_enum(ix["rtt_method"])} if ix["rtt_ms"] is not None else None,
         "measured_bandwidth_bps": ix.get("bandwidth_bps"),
         "loopback_per_round": ({"s": num(raw.get("loopback_round_s")), "method": raw.get("loopback_method")}
                                if num(raw.get("loopback_round_s")) is not None else None),

@@ -715,6 +715,14 @@ def test_file_verified_rounds_multiply_by_the_sequential_sub_batch_waves() -> No
     assert fs["rounds"] == 0 and fs["rounds_source"] == "fiat-shamir" and fs["derived"]
 
 
+def test_the_published_rtt_method_is_an_enum_never_the_recorded_text() -> None:
+    assert V.rtt_method_enum("median of 20 TCP connects to the verifier pod's ssh port (10.0.0.1:2222)") == "tcp-connect"
+    assert V.rtt_method_enum("net.rtt_ms = round trip of a 64-byte Ping request on the open session connection to the verifier") \
+        == "open-connection-ping"
+    assert V.rtt_method_enum("iperf") == "unclassified" and V.rtt_method_enum(None) is None
+    assert set(V.RTT_METHODS) == {"tcp-connect", "open-connection-ping", "unclassified"}
+
+
 def test_flocks_declared_class_is_non_zk_proof() -> None:
     assert V.FLOCK.proof_classes == ("NON_ZK_PROOF",) and "may change" in V.FLOCK_CONFIG.zk
 
@@ -1128,7 +1136,7 @@ def test_a_results_interaction_record_recomputes_its_overhead_at_any_network(sto
     ix = by_art[live]["interaction"]
     assert ix["live"] and ix["rounds"] == ix["sequential_depth"] == rounds and ix["rounds_protocol"] == 2 * rounds
     assert (ix["bytes_up"], ix["bytes_down"]) == (2_058_029, 165_825)
-    assert ix["measured_rtt"] == {"ms": pytest.approx(rtt * 1e3), "method": "median of 20 TCP connects"}
+    assert ix["measured_rtt"] == {"ms": pytest.approx(rtt * 1e3), "method": "tcp-connect"}
     assert ix["loopback_per_round"] == {"s": 0.0001, "method": "measured on loopback, this run"}
     assert ix["loopback_moved_s"] == pytest.approx(rounds * 0.0001)
     assert ix["prover_compute_s"] == pytest.approx(16.0 + rounds * 0.0001) and ix["verifier_compute_s"] == 0.0

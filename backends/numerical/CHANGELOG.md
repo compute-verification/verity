@@ -16,6 +16,9 @@
 - Effect at the reference network: the 14 B-interactive results rise by 0.9–5.5% (12 to 147 rounds each). The legacy
   parity is unchanged.
 - Entities: `throughput.instances` is now `throughput.inputs`, following `interaction.inputs`.
+- Entities: `interaction.measured_rtt.method` is now an enum (`views.RTT_METHODS`: `tcp-connect`,
+  `open-connection-ping`, `unclassified`). The recorded `rtt_method` text names hosts and ports, so it stays in the result's
+  own record in the evidence store. The markdown still prints the recorded text and is byte-identical.
 
 ## 2026-09-26: "instance set" becomes "input set"
 
