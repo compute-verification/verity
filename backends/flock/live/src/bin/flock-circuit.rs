@@ -12,6 +12,7 @@
 
 use std::{
     collections::BTreeMap,
+    sync::PoisonError,
     panic::{AssertUnwindSafe, catch_unwind},
     sync::{Arc, Mutex},
     time::Instant,
@@ -126,13 +127,13 @@ struct SharedCall(SharedTransport);
 
 impl Transport for SharedCall {
     fn call(&mut self, req: Req) -> Result<Resp, String> {
-        self.0.lock().unwrap().call(req)
+        self.0.lock().unwrap_or_else(PoisonError::into_inner).call(req)
     }
     fn stats(&self) -> (u64, u64, u64) {
-        self.0.lock().unwrap().stats()
+        self.0.lock().unwrap_or_else(PoisonError::into_inner).stats()
     }
     fn wait_s(&self) -> f64 {
-        self.0.lock().unwrap().wait_s()
+        self.0.lock().unwrap_or_else(PoisonError::into_inner).wait_s()
     }
 }
 
@@ -147,7 +148,7 @@ impl<T: Transport> Transport for Logged<T> {
         let hello = matches!(req, Req::Hello(_));
         let r = self.inner.call(req)?;
         if let (Resp::Coins(c), false) = (&r, hello) {
-            self.coins.lock().unwrap().push(c.clone());
+            self.coins.lock().unwrap_or_else(PoisonError::into_inner).push(c.clone());
         }
         Ok(r)
     }
@@ -297,7 +298,7 @@ struct Plan {
 }
 
 fn call(t: &SharedTransport, r: Req) -> Result<Resp, String> {
-    t.lock().unwrap().call(r)
+    t.lock().unwrap_or_else(PoisonError::into_inner).call(r)
 }
 
 fn panic_msg(e: Box<dyn std::any::Any + Send>) -> String {
@@ -361,7 +362,7 @@ fn wit(st: &Arc<Stmt>, inst: &Arc<Instances>, plan: &Plan, zero: bool, seed: Pro
     let random = plan.mask_random;
     let hooks = Arc::new(Mutex::new(NoMask::new(seed)));
     let mask: Arc<dyn Fn(usize) -> Vec<F128> + Sync + Send> = Arc::new(move |b| {
-        let mut h = hooks.lock().unwrap();
+        let mut h = hooks.lock().unwrap_or_else(PoisonError::into_inner);
         if random { h.rng.f128s(flock_live::zk_hooks::STREAM_MASK, (b * mask_words) as u64, mask_words) } else { h.mask_fill(b, mask_words) }
     });
     let ur = st.c.unit_range();
@@ -439,7 +440,7 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
         Ok(())
     })();
     let e2e_s = t0.elapsed().as_secs_f64();
-    let wait_e2e_s = t.lock().unwrap().wait_s();
+    let wait_e2e_s = t.lock().unwrap_or_else(PoisonError::into_inner).wait_s();
     if let Err(e) = res {
         let v = match call(&t, Req::Finish) {
             Ok(Resp::Verdict(v)) => serde_json::from_str(&v).unwrap(),
@@ -455,9 +456,9 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
         Ok(Resp::Verdict(v)) => serde_json::from_str(&v).unwrap(),
         other => json!({"accepted": false, "why": format!("{other:?}")}),
     };
-    let (ws, wr, calls) = t.lock().unwrap().stats();
-    let wait_s = t.lock().unwrap().wait_s();
-    let step0 = if v["accepted"] == true { check_coin_seed(&commit, &hello, &v, &log.lock().unwrap()) } else { Ok(()) };
+    let (ws, wr, calls) = t.lock().unwrap_or_else(PoisonError::into_inner).stats();
+    let wait_s = t.lock().unwrap_or_else(PoisonError::into_inner).wait_s();
+    let step0 = if v["accepted"] == true { check_coin_seed(&commit, &hello, &v, &log.lock().unwrap_or_else(PoisonError::into_inner)) } else { Ok(()) };
     let v = if let Err(e) = &step0 { json!({"accepted": false, "why": e, "verdict": v}) } else { v };
     let c = &st.c;
     let ands = (c.unit().useful as u64, st.n as u64 * c.upv as u64);
@@ -596,7 +597,7 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         // step 0 replayed from the verifier's record alone; the same record with two rounds' coin-request indices swapped is refused
         let s0 = Arc::new(Mutex::new(server(st, inst)));
         let (v, _) = session(st, inst, shared(InProc(s0.clone())), &Plan { gpu, ..Plan::default() }, ProverSeed::from_os());
-        let rec = s0.lock().unwrap().record_json();
+        let rec = s0.lock().unwrap_or_else(PoisonError::into_inner).record_json();
         let honest = flock_live::replay_coin_seed(&rec);
         let mut bad = rec.clone();
         let (a, b) = (bad["streams"][0]["rounds"][1]["g"].clone(), bad["streams"][1]["rounds"][1]["g"].clone());
@@ -611,7 +612,7 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         // Lean verifier's agreement test); the same record with the reps' proofs swapped is refused
         let s0 = Arc::new(Mutex::new(server(st, inst)));
         let (v, proofs) = session(st, inst, shared(InProc(s0.clone())), &Plan { gpu, ..Plan::default() }, ProverSeed::from_os());
-        let rec = s0.lock().unwrap().record_json();
+        let rec = s0.lock().unwrap_or_else(PoisonError::into_inner).record_json();
         let replay = |p: [&Vec<u8>; 2]| -> Result<Value, String> {
             let map = p.iter().enumerate().map(|(r, b)| ((TABLE.to_string(), r), b.to_vec())).collect::<BTreeMap<_, _>>();
             let v: Box<dyn StatementVerifier> = Box::new(CircuitVerifier { st: st.clone(), inst: inst.clone() });
@@ -717,15 +718,32 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         _ => (st.clone(), inst.clone(), inst.clone()),
     };
     let s = Arc::new(Mutex::new(Server::new(config(st, sigma(st, &vinst)), Box::new(CircuitVerifier { st: st.clone(), inst: vinst.clone() }))));
-    let (v, _) = session(&pst, &pinst, shared(InProc(s.clone())), &plan, ProverSeed::from_os());
+    let (v, proofs) = session(&pst, &pinst, shared(InProc(s.clone())), &plan, ProverSeed::from_os());
     let acc = v["accepted"].as_bool().unwrap_or(false);
-    let rec = s.lock().unwrap().record_json();
+    let rec = s.lock().unwrap_or_else(PoisonError::into_inner).record_json();
+    record_case(name, want.1, &v, &rec, &proofs);
     let reps: Vec<Value> = rec["verdict"]["reps"].as_array().cloned().unwrap_or_default().iter().map(|r| json!([r["stream"], r["ok"], r["why"]])).collect();
     let both = reps.len() == 2 && reps.iter().all(|r| r[1] == false);
     let pass = acc == want.1 && (!want.2 || both);
     json!({"case": name, "gpu": plan.gpu, "expect": if want.1 {"accept"} else {"reject"}, "accepted": acc, "pass": pass,
            "both_reps_required": want.2, "why": v["why"], "prover_stopped": v["prover_stopped"], "reps_ok": reps, "prove_s": v["prove_s"],
            "witness_s": v["witness_s"]})
+}
+
+/// `--record-dir DIR`: the case's session as the verifier recorded it (`DIR/<case>.json`: the expectation, the prover's result,
+/// the server record) and the proofs the prover produced (`DIR/<case>.rep<r>.proof`), for replaying verifiers' vectors.
+fn record_case(name: &str, expect_accept: bool, v: &Value, rec: &Value, proofs: &[Vec<u8>]) {
+    let dir = arg("--record-dir", "");
+    if dir.is_empty() {
+        return;
+    }
+    let _ = std::fs::create_dir_all(&dir);
+    let doc = json!({"case": name, "statement": STATEMENT, "expect": if expect_accept {"accept"} else {"reject"}, "accepted": v["accepted"],
+                     "why": v["why"], "prover_stopped": v["prover_stopped"], "record": rec});
+    let _ = std::fs::write(format!("{dir}/{name}.json"), serde_json::to_vec_pretty(&doc).unwrap_or_default());
+    for (r, p) in proofs.iter().enumerate() {
+        let _ = std::fs::write(format!("{dir}/{name}.rep{r}.proof"), p);
+    }
 }
 
 /// Two forms of the circuit that hand the verifier part of the computation: the unit NET with a `CUT` line (the flock-ir-frame
@@ -753,9 +771,9 @@ fn with_tail(text: &str) -> (String, String) {
 fn determinism_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Value {
     let run = |pseed: [u8; 32]| {
         let s0 = Arc::new(Mutex::new(server(st, inst)));
-        s0.lock().unwrap().inject_coin_seed([9; 32], [8; 32]);
+        s0.lock().unwrap_or_else(PoisonError::into_inner).inject_coin_seed([9; 32], [8; 32]);
         let (v, proofs) = session(st, inst, shared(InProc(s0.clone())), &Plan { gpu, ..Plan::default() }, ProverSeed::injected(pseed));
-        let rec = s0.lock().unwrap().record_json();
+        let rec = s0.lock().unwrap_or_else(PoisonError::into_inner).record_json();
         let t = json!({"streams": rec["streams"], "link": rec["link"], "proofs": rec["proof_sha256"]});
         (v["accepted"] == true, proofs, Sha256::digest(t.to_string().as_bytes()).to_vec())
     };
@@ -795,7 +813,7 @@ fn selftest(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) {
         let v = if gpu {
             let out = std::process::Command::new(std::env::current_exe().unwrap())
                 .args(["selftest", "--gpu", "--instances", &arg("--instances", ""), "--circuit", &arg("--circuit", ""), "--tables", &arg("--tables", "tables"),
-                       "--forged", &arg("--forged", "circuit-forged.txt"), "--only", name])
+                       "--forged", &arg("--forged", "circuit-forged.txt"), "--only", name, "--record-dir", &arg("--record-dir", "")])
                 .output()
                 .expect("spawn a case");
             let text = String::from_utf8_lossy(&out.stdout);

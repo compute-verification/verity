@@ -491,7 +491,7 @@ pub struct InProc(pub Arc<Mutex<Server>>);
 impl Transport for InProc {
     fn call(&mut self, req: Req) -> Result<Resp, String> {
         let req = Req::decode(&req.encode())?;
-        let resp = self.0.lock().unwrap().handle(req);
+        let resp = self.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner).handle(req);
         Resp::decode(&resp.encode())
     }
 }
