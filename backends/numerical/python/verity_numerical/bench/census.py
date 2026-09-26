@@ -42,6 +42,12 @@ def subcircuit_of(target: str) -> Any:
     return next(s for s in SUBCIRCUITS.values() if getattr(s, "legacy_target", None) == target)
 
 
+def stood_for_by(subcircuit_id: str) -> str | None:
+    """The subcircuit whose results and input set stand for ``subcircuit_id`` (its ``stood_for_by`` equivalence), or ``None``."""
+    e = getattr(SUBCIRCUITS[subcircuit_id], "stood_for_by", None)
+    return e.subcircuit if e is not None else None
+
+
 def source(entry: Any) -> str:
     """An entry's sources as one line."""
     return "; ".join(s.label for s in entry.sources)

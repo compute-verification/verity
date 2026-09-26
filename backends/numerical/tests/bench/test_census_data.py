@@ -146,3 +146,12 @@ def test_native_seconds_per_instance() -> None:
     assert census.native_seconds_per_instance(h, 1536) == 2 * 1536 / 312e12
     with pytest.raises(ValueError):
         census.native_seconds_per_instance(h, 0)
+
+
+def test_the_h100_bf16_cells_and_input_set_stand_for_the_wgmma_bf16_subcircuit() -> None:
+    wg, mma = "gemm-coordinate/k1536/sm90-wgmma-bf16", "gemm-coordinate/k1536/sm90-mma-bf16"
+    assert census.stood_for_by(wg) == mma and census.stood_for_by(mma) is None
+    e = census.SUBCIRCUITS[wg].stood_for_by
+    assert "r20260926-023321-ecb5" in census.source(e) and "bench-instances-bf16-hopper-v1" in e.covers
+    assert census.INPUT_SETS["bench-instances-bf16-hopper-v1"].subcircuit == mma
+    assert all(census.stood_for_by(s) in (None, *census.SUBCIRCUITS) for s in census.SUBCIRCUITS)
