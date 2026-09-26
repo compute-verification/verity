@@ -373,6 +373,7 @@ const CASES: &[(&str, bool, bool)] = &[
     ("prover_file_differs_from_verifier_file", false, false),
     ("relabelled_netlist", false, false),
     ("relabelled_netlist_refused_at_load", false, false),
+    ("verifier_evaluated_tail_refused", false, false),
 ];
 
 fn skipped(st: &Stmt, name: &str) -> bool {
@@ -452,6 +453,14 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         return json!({"case": name, "expect": "refused at load (pin and instance file)", "pass": refused_pin && refused_file,
                       "pin_differs": refused_pin, "file_refused": refused_file});
     }
+    if name == "verifier_evaluated_tail_refused" {
+        let text = std::fs::read_to_string(arg("--netlist", "")).unwrap();
+        let (cut_line, meta_tail) = with_tail(&text);
+        let r1 = Composite::parse(&cut_line).err();
+        let r2 = Composite::parse(&meta_tail).err();
+        return json!({"case": name, "expect": "refused at parse (a CUT line in a NET; a tail in META)", "pass": r1.is_some() && r2.is_some(),
+                      "why_cut_line": r1, "why_meta_tail": r2});
+    }
     let mut plan = plan_of(name, gpu);
     if name == "cross_session_replay_both_reps" {
         let s0 = Arc::new(Mutex::new(server(st, inst)));
@@ -487,6 +496,23 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
     json!({"case": name, "gpu": plan.gpu, "expect": if want.1 {"accept"} else {"reject"}, "accepted": acc, "pass": pass,
            "both_reps_required": want.2, "why": v["why"], "prover_stopped": v["prover_stopped"], "reps_ok": reps, "prove_s": v["prove_s"],
            "witness_s": v["witness_s"]})
+}
+
+/// Two forms of the netlist that hand the verifier part of the computation: the unit NET with a `CUT` line (the flock-ir-frame
+/// native tail: the 36-op RMSNorm row tail's shape, one F32Add over two cut words), and META with a `tail` program.
+fn with_tail(text: &str) -> (String, String) {
+    let lines: Vec<&str> = text.split('\n').collect();
+    let at = lines.iter().position(|l| l.starts_with("NET unit ")).unwrap();
+    let n: usize = lines[at].split_whitespace().nth(2).unwrap().parse().unwrap();
+    let cut = r#"CUT {"in":[],"out":[],"tail":[[2,"F32Add_v1",0,1]],"words":2}"#;
+    let mut a: Vec<String> = lines.iter().map(|s| s.to_string()).collect();
+    a[at] = format!("NET unit {}", n + 1);
+    a.insert(at + 1 + n, cut.to_string());
+    let mut meta: Value = serde_json::from_str(&lines[1][5..]).unwrap();
+    meta["tail"] = json!([[2, "F32Add_v1", 0, 1]]);
+    let mut b: Vec<String> = lines.iter().map(|s| s.to_string()).collect();
+    b[1] = format!("META {}", serde_json::to_string(&meta).unwrap());
+    (a.join("\n"), b.join("\n"))
 }
 
 /// The same netlist with unit 0's first two leaf inputs swapped in its META: the rows are unchanged, the meaning is not.

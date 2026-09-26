@@ -4,7 +4,8 @@ frame-v3 rows hashed in the circuit and nothing else public (``live/src/netlist.
 Private by default. The public data are the frame-v3 roots, the row digests they are built from (the serving tree's
 leaves), the declared outputs and the layout below. Every other word (every compression's chaining value, every chunk
 value, every word a unit, a tail stage or a lookup reads from another) stays inside the witness, joined by copy
-constraints (Δ) inside a block: no public intermediate word and no verifier-evaluated tail on private data.
+constraints (Δ) inside a block: no public intermediate word, and the verifier evaluates no part of the computation (a tail,
+the Gumbel noise of a public seed included, is a slot type of the circuit or the template has no statement here).
 
 One or more whole instances (VUs) per block. A block is the same for every block (Flock's ``A = I ⊗ A_0 + Δ``) and holds
 aligned ranges of slots of a few types:
@@ -102,7 +103,8 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None) -> str:
     input leaf or a zero word, every output leaf a unit's returned word)."""
     U = low.units
     if U.cut or U.tail_rets:
-        raise NotImplementedError(f"{low.name}: cut templates (a tail in the circuit) are not composed yet")
+        raise NotImplementedError(f"{low.name}: its tail is not a slot type of the circuit yet (tail stages, MUFU lookup slots); "
+                                  f"the statement has no verifier-evaluated form")
     if any(p.dtype != "u16" for p in (*sub.inputs, *sub.outputs)):
         raise ValueError(f"{low.name}: frame-v3 rows here are u16 words")
     lv = low.leaves

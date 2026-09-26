@@ -14,8 +14,13 @@
 //! Public regions, each opened at the verifier's points (drawn after the commitment, both reps), values all the verifier's:
 //! every compression's counter, block length and flags; every chain start's chaining value (the x-row key); every row's
 //! digest (the output value of its root compression); every unit's returned-output words. So the chaining values, the chunk
-//! values and every word between slots stay private. A padding instance is the all-zero instance, whose digests and outputs
-//! are pinned and checked here (keyed BLAKE3 of zero rows, the unit netlist on zero inputs).
+//! values and every word between slots stay private. A padding instance is the all-zero instance, whose digests (checked
+//! here: keyed BLAKE3 of zero rows) and outputs (forced by its circuit) are pinned.
+//!
+//! The verifier evaluates no part of the computation (standing rule): it checks the proof, the frame-v3 roots against the
+//! public digests and outputs, and nothing else. A netlist carrying a verifier-evaluated tail (a `CUT` line, or a tail,
+//! public cut words or native words in META) is refused at parse; a template's tail is a slot type of the circuit or the
+//! template has no statement here.
 
 use std::{collections::BTreeMap, sync::OnceLock};
 
@@ -149,7 +154,15 @@ impl Composite {
             let n: usize = h[2].parse().map_err(|_| "NET line count")?;
             let body: String = (0..n).map(|_| lines.next().unwrap_or("")).collect();
             let net = std::panic::catch_unwind(|| IrUnitNet::parse(&body)).map_err(|_| format!("NET {}: not a flock-ir-unit/v2 netlist", h[1]))?;
+            if net.cut.is_some() {
+                return Err(format!("NET {}: a CUT line (a tail the verifier evaluates); the verifier evaluates no part of the computation", h[1]));
+            }
             nets.push((h[1].to_string(), net));
+        }
+        for k in ["tail", "cut", "cut_words", "public_ports", "public", "native", "outputs_by_tail"] {
+            if meta.get(k).is_some() {
+                return Err(format!("META: {k:?} (a verifier-evaluated part of the computation); the verifier only checks proofs"));
+            }
         }
         let ports: Vec<Port> = meta["ports"].as_array().ok_or("META: ports")?.iter().map(|p| Port {
             name: p[0].as_str().unwrap_or("").into(), words: p[1].as_u64().unwrap_or(0) as usize, chunks: p[2].as_u64().unwrap_or(0) as usize,
@@ -547,8 +560,9 @@ pub fn fv3_root(domain_id: &[u8], leaves: Vec<[u8; 32]>) -> [u8; 32] {
     level[0]
 }
 
-/// The frame-v3 roots recomputed from the file's row digests and output words, against its header's; the pinned dummy
-/// values against keyed BLAKE3 of zero rows and the unit netlist on zero inputs; the row key the x-row key.
+/// The frame-v3 roots recomputed from the file's row digests and output words, against its header's; the pinned dummy digests
+/// against keyed BLAKE3 of zero rows (the commitment scheme's own function; the circuit is never evaluated here); the row key
+/// the x-row key.
 pub fn check_public(c: &Composite, inst: &Instances) -> Result<(), String> {
     let fv = &inst.header["frame_v3"];
     let get = |k: &str, p: &str| -> Result<Vec<u8>, String> { hexb(fv[k][p].as_str().ok_or(format!("frame_v3.{k}.{p} missing"))?) };
@@ -580,18 +594,6 @@ pub fn check_public(c: &Composite, inst: &Instances) -> Result<(), String> {
             return Err(format!("output port {name}: the output words do not hash to the header's frame-v3 root"));
         }
         at += w;
-    }
-    let unit = c.unit();
-    let zero_out = unit.outputs(&vec![F128::ZERO; unit.in_words]);
-    for u in 0..c.upv {
-        for (j, &o) in c.leaves_out[u].iter().enumerate() {
-            let col = unit.out_groups[0].bits[..j].iter().sum::<usize>();
-            let w = &zero_out[col / WORD];
-            let v = ((if col % WORD < 64 { w.lo >> (col % WORD) } else { w.hi >> (col % WORD - 64) }) & 0xFFFF) as u16;
-            if v != c.dummy_outputs[o] {
-                return Err(format!("the pinned dummy output {o} is not the unit's on zero inputs"));
-            }
-        }
     }
     Ok(())
 }
