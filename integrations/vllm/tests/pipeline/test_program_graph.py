@@ -169,7 +169,7 @@ def test_word_rules_per_group_and_row(tmp_path):
     inst, _w = _program(attn=True)
     g = PG.with_word_rules(PG.program_graph([_write(inst, tmp_path / "instances.json.gz")]))
     q = g["q_word_v1"]
-    assert q["query"] == "Q_word_v1{X=16,W=32}" and q["units"] == sum(x["q_word_v1"]["units"] for x in g["groups"] if "units" in x["q_word_v1"])
+    assert q["query"] == "Q_word_v1{X=16,W=32,R=no-recompute}" and q["units"] == sum(x["q_word_v1"]["units"] for x in g["groups"] if "units" in x["q_word_v1"])
     gemm = next(x for x in g["groups"] if x["definition"] == "Gemm_v1")
     assert gemm["q_word_v1"]["units"] == gemm["calls"] * gemm["statics"]["N"] and gemm["q_word_v1"]["committed_interior_words"] == 0
     attn = next(x for x in g["groups"] if x["definition"] == "Attention_v3")
