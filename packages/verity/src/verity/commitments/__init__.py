@@ -11,7 +11,10 @@ and conformance vectors beside it: ``frame_v3`` (word leaves and the ``sha256/ro
 leaves of ``rowleaf``) and ``vllm_v1``, the framing vLLM's production Commit path emits (id, position and ``fa2h``
 leaves, node/lift trees, raw-SHA root bindings).  ``CommitmentScheme.leaf_layout`` is what a backend proves: every
 leaf digest is ``H(prefix || value || suffix)`` with H SHA-256 or BLAKE3 (``blake3`` is a plain-Python reference);
-verifiers check the trees natively.
+verifiers check the trees natively.  ``hm96`` is a hiding leaf rule over either scheme's SHA-256 leaf digests
+(``hm96-sha256/v1``: Halevi–Micali, a stored salt per leaf; statistically hiding given uniform salts, with the pinned key
+except for a 2^-64 fraction of keys; binding under SHA-256 collision resistance), configured over ``vllm_v1`` by
+``hm96.Hm96Sha256``.
 
 These establish that the values supplied to a check are the values previously bound.  They say nothing about the
 relation between those values; that is a verification obligation (``verity.proofs``) a backend establishes.
