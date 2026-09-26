@@ -166,6 +166,28 @@
               ],
               "minimum": 1,
               "description": "subcircuits of the template one VU holds (a Gemm_v1 row: N coordinates)"
+            },
+            "variable_counts": {
+              "type": "object",
+              "description": "for a per-input work-model variable (attention's T), the VUs at each of its values within this entry: runs of consecutive values, each value holding vus_per_value VUs; the runs sum to vus",
+              "additionalProperties": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["runs", "source"],
+                "properties": {
+                  "runs": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": ["min", "max", "vus_per_value"],
+                      "properties": {"min": {"type": "integer"}, "max": {"type": "integer"}, "vus_per_value": {"type": "integer", "minimum": 1}}
+                    }
+                  },
+                  "source": {"type": "string", "minLength": 1}
+                }
+              }
             }
           }
         }

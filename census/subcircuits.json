@@ -389,6 +389,17 @@
     },
     "accumulate": "fp32",
     "reference_batch": null,
+    "verifier_evaluated": {
+      "parts": "the softmax: the running max, MUFU.EX2, the lane sums and rescaling, MUFU.RCP of the sum and the output cast (C-Flock's native tail on the public words)",
+      "share": "4–11% of a head's scalar ops, all of its exp2 and reciprocal work",
+      "counted": true,
+      "ruling": "red-team-flock-3 granted attention on flock-ir-frame/v3 on condition that the headline footnotes this (handoff 20260926T1115Z)",
+      "sources": [
+        {
+          "label": "red-team-flock-3's grant of AttentionHead_v3 on flock-ir-frame/v3 (lanes/coordinator/20260926T1115Z-handoff-from-red-team-flock-3.md); backends/flock/python/verity_flock/templates/attention_head.py (the softmax is the native tail the verifier evaluates)"
+        }
+      ]
+    },
     "ir_definitions": [
       "AttentionHead_v3{T, D, BN} (FA2; vLLM Attention_v3 is NH of them)",
       "AttentionHead_v2{T, D, BN, DOT, INV} (FA3; vLLM Attention_v2 is NH of them)"
@@ -898,6 +909,17 @@
     },
     "accumulate": null,
     "reference_batch": null,
+    "verifier_evaluated": {
+      "parts": "most of the template: the Gumbel noise, the temperature and top-p mask and the argmax are native cut words the verifier evaluates (flock-ir-sampling)",
+      "share": "most of the template's work",
+      "counted": false,
+      "ruling": "uncounted pending Daniel's decision; the headline's verifier-evaluated switch (views --preview-count-omitted, Rules.headline_count_omitted) counts it",
+      "sources": [
+        {
+          "label": "the research coordinator's ruling with red-team-flock-3's attention grant (2026-09-26 11:18Z); flock-ir-sampling handoff 20260926T0924Z (the sampling statement's cut map carries native words)"
+        }
+      ]
+    },
     "ir_definitions": [
       "GumbelTopPTokenSelect_v1{V}"
     ],

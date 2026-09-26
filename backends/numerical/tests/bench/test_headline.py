@@ -49,7 +49,9 @@ def test_units_and_native_work_of_row_101_from_the_census() -> None:
         NB, BN, D, n = m["parameters"]["NB"], m["parameters"]["BN"], m["parameters"]["D"], m["vus"] * m["subcircuits_per_vu"]
         tlo, thi = (NB * BN, NB * BN) if m["parameters"]["last"] == "full" else ((NB - 1) * BN + 1, NB * BN - 1)
         lo, hi = lo + n * (4 * D + 4 * tlo * D), hi + n * (4 * D + 4 * thi * D)
-    assert att["native_seconds"]["memory-bound"] == pytest.approx((lo / 864e9, hi / 864e9))
+    exact = sum(16 * 32 * (4 * 64 + 4 * T * 64) for T in range(1, 288)) / 864e9      # 16 VUs x 32 heads at every T = 1..287
+    assert att["native_seconds"]["memory-bound"] == pytest.approx((exact, exact)) and lo / 864e9 < exact < hi / 864e9
+    assert sorted(att["values"]) == list(range(1, 288)) and all(x["units"] == 16 * 32 for x in att["values"].values())
     assert att["subcircuit"] == "attention-head/d64-bn128/sm80-fa2-bf16"
     assert att["native_seconds"]["tensor-peak"] == att["native_seconds"]["memory-bound"]     # not a tensor template
     rope = next(g for g in gs if g["subcircuit"] == "rope-head/d64/neox-bf16")
@@ -100,7 +102,7 @@ def test_covered_share_and_work_weighted_overhead(store: LocalStore) -> None:
         got = row["bases"][b.id]
         assert got["share"] == pytest.approx((clo / (clo + (thi - chi)), chi / (chi + (tlo - clo))))
         assert got["overhead"] == pytest.approx((prove / chi, prove / clo)) and got["proving_seconds"] == pytest.approx(prove)
-        assert got["share"][0] < got["share"][1]                # attention's T leaves the uncovered work a range
+        assert got["share"][0] == pytest.approx(got["share"][1])  # #101's per-T counts make attention's work exact
     assert {u["reason"] for u in row["uncovered"]} == {"commitment opening", "no result"}
     # the other backends have no result on these subcircuits
     assert all(r["covered"] == [] for r in rec["backends"] if r["backend"] != "C-interactive")
@@ -210,7 +212,7 @@ L40S_GPU = "NVIDIA L40S"
 
 
 def l40s_cell(store: LocalStore, sub: str, *, profile: str | None = None, relation: str | None = None, t_total: float = 0.4,
-              redteam: bool = True) -> str:
+              redteam: bool = True, T: int | None = None, set_T: int | None = None) -> str:
     """A C-Flock frame-v3 keyed-BLAKE3 result proved on an L40S over ``sub`` (#101's statements), stamped as ``bench.cell``
     registers it, its inputs a registered captured set of ``sub``, verified by a non-producer, red-team cleared unless not."""
     import hashlib
@@ -218,9 +220,10 @@ def l40s_cell(store: LocalStore, sub: str, *, profile: str | None = None, relati
     from test_tables import LANE, VERIFIER, attempt, hashed
     from test_views import FLOCK_LIVE, FLOCK_NAME, PROTOCOL, SWEEP
 
-    digest = hashlib.sha256(f"l40s-{sub}".encode()).hexdigest()
+    digest = hashlib.sha256(f"l40s-{sub}-{T}-{set_T}".encode()).hexdigest()
     params = vars(census.SUBCIRCUITS[sub].parameters)
-    store.put_artifact("input-set/v1", {"set": sub.replace("/", "-"), "subcircuit": sub, "source": "captured", "n": 4096,
+    name = sub.replace("/", "-") + (f"-t{set_T if set_T is not None else T}" if T is not None else "")
+    store.put_artifact("input-set/v1", {"set": name, "subcircuit": sub, "source": "captured", "n": 4096,
                                         "content_digest": digest, "schema": "vllm-vu-set/v1", "parameters": params})
     doc = hashed("blake3", t_total=t_total, security={"target": -128, "achieved_log2": -195.5})
     fp = doc["workload_fingerprint"]
@@ -231,6 +234,10 @@ def l40s_cell(store: LocalStore, sub: str, *, profile: str | None = None, relati
     fp.pop("profile", None)
     if profile:
         fp["profile"] = profile
+    if T is not None:                   # as flock-ir-lowering's ir_bench records an attention cell: no GEMM target, T in the unit name
+        fp.update(profile=None, K=None, subcircuit=sub, subcircuit_template=sub.split("/")[0])
+        fp["software"]["backend"]["unit"] = f"attention-head/fa2-bf16/tc-step/d64-bn128/t{T}"
+        fp["instances"]["tier"] = name
     if "K" in params:
         fp["K"] = params["K"]
     if relation:
@@ -290,7 +297,7 @@ def test_l40s_cells_land_on_the_l40s_line_with_101s_statement_ids(store: LocalSt
         "attention-head/d64-bn128/sm80-fa2-bf16": "no result", "gumbel-top-p-token-select/v128256/fp32": "no result",
         "embedding-row/v128256-h2048/bf16": "commitment opening"}
     tp, mb = row["bases"]["tensor-peak"], row["bases"]["memory-bound"]
-    assert 0.15 < tp["share"][0] < tp["share"][1] < 0.4 and 0.98 < mb["share"][0] < 0.99
+    assert 0.15 < tp["share"][0] < 0.4 and tp["share"][0] == pytest.approx(tp["share"][1]) and 0.98 < mb["share"][0] < 0.995
     assert tp["overhead"] is not None and mb["overhead"] is not None
 
 
@@ -392,3 +399,102 @@ def test_below_bar_proofs_on_a_workloads_inputs_are_listed_and_never_counted(sto
     assert [x["definition"] for x in rec["below_bar"]] == ["GemmCoordinate_v1{K=2048}"] and rec["below_bar"][0]["soundness_bits"] == 95.8
     assert all(row["covered"] == [] for row in rec["backends"])
     assert "Below the 128-bit bar, verified but not counted: 1 proofs" in "\n".join(H.render_markdown([rec]))
+
+
+# --- attention per key count: a cell covers #101's attention units at its own T, weighted by the template mix -------------------
+
+ATT = "attention-head/d64-bn128/sm80-fa2-bf16"
+DRAWN = (1, 2, 3, 4, 128, 129, 130, 131, 132, 256, 257, 258, 259, 260, 261, 287)       # the captured set's 16 key counts (art:6312cb50)
+DONE = (1, 2, 3, 4, 128, 129, 130, 131, 132, 256, 257, 258, 287)                        # 13 of them with cells
+
+
+def _register_drawn(store: LocalStore) -> None:
+    import hashlib
+
+    for t in DRAWN:
+        store.put_artifact("input-set/v1", {"set": f"{ATT.replace('/', '-')}-captured-t{t}", "subcircuit": ATT, "source": "captured", "n": 64,
+                                            "row": 101, "schema": "vllm-vu-set/v1", "parameters": vars(census.SUBCIRCUITS[ATT].parameters),
+                                            "content_digest": hashlib.sha256(f"drawn-{t}".encode()).hexdigest()})
+
+
+def test_the_key_count_is_read_where_the_cells_record_it() -> None:
+    sets = {"d": ("art:set", {"set": "attention-head-d64-bn128-sm80-fa2-bf16-t4", "subcircuit": ATT})}
+    unit = {"workload_fingerprint": {"software": {"backend": {"unit": "attention-head/fa2-bf16/tc-step/d64-bn128/t4"}},
+                                     "instances": {"content_digest": "d"}}}
+    assert V.input_variables(unit, ATT, sets) == ({"T": 4}, None)
+    assert V.input_variables({"workload_fingerprint": {"statics": {"T": 258}}}, ATT, {}) == ({"T": 258}, None)
+    assert V.input_variables({"workload_fingerprint": {}}, ATT, {})[1].startswith("its work model needs T")
+    clash = {"workload_fingerprint": {"software": {"backend": {"unit": "x/t4"}}, "statics": {"T": 5}}}
+    assert "recorded differently: 4 (unit); 5 (statics)" in V.input_variables(clash, ATT, {})[1]
+    assert V.input_variables({}, "rope-head/d64/neox-bf16", {}) == ({}, None)                  # no per-input variable
+
+
+def test_attention_cells_cover_101_per_key_count_and_nothing_between(store: LocalStore) -> None:
+    arts = {t: l40s_cell(store, ATT, T=t, t_total=0.2 + 0.01 * t) for t in DONE}
+    l40s_cell(store, ATT, T=300)                                                                 # a T #101 never serves
+    clash = l40s_cell(store, ATT, T=5, set_T=6)                                                  # unit says 5, set name 6
+    _register_drawn(store)
+    views = V.build(store, SPEC)
+    assert "recorded differently" in next(r for r in views.rejected if r["artifact"] == clash)["codes"][0][1]
+    rows = {ln["variables"]["T"]: ln for ln in views.lines if ln.get("subcircuit") == ATT}
+    assert set(rows) == {*DONE, 300} and rows[4]["subcircuit_display"].endswith("· T = 4")
+    assert rows[258]["native"]["instances_per_second"] == pytest.approx(864e9 / (4 * 64 + 4 * 258 * 64))
+    assert next(c for c in rows[4]["cells"].values() if c).to_json()["variables"] == {"T": 4}
+    rec = next(r for r in H.headline(views) if r["workload"] == ROW101["id"])
+    row = next(x for x in rec["backends"] if x["backend"] == "C-interactive")
+    att = next(x for x in row["covered"] if x["subcircuit"] == ATT)
+    assert att["covered_values"] == list(DONE) and att["drawn_values"] == list(DRAWN) and att["population_values"] == 287
+    assert att["values_elsewhere"] == [300] and [x["artifact"] for x in att["per_value"]] == [arts[t] for t in DONE]
+    assert all(x["units"] == 16 * 32 for x in att["per_value"]) and att["units"] == 13 * 16 * 32
+    P = {c.variables["T"]: c.throughput["instances_per_second"] for c in views.admissible if c.subcircuit == ATT}
+    native = {t: 16 * 32 * (4 * 64 + 4 * t * 64) / 864e9 for t in DONE}
+    assert att["native_seconds"]["memory-bound"] == pytest.approx(sum(native.values()))
+    assert att["proving_seconds"] == pytest.approx(sum(16 * 32 / P[t] for t in DONE))
+    gap = next(u for u in row["uncovered"] if u["subcircuit"] == ATT)
+    assert gap["reason"] == "not at every T" and gap["missing_values"] == 287 - 13 and gap["units"] == (287 - 13) * 16 * 32
+    total = rec["native_seconds"]["memory-bound"][0]
+    assert row["bases"]["memory-bound"]["share"][0] == pytest.approx(sum(native.values()) / total)
+    assert row["bases"]["memory-bound"]["overhead"][0] == pytest.approx(att["proving_seconds"] / sum(native.values()))
+    assert att["verifier_evaluated"]["share"] == "4–11% of a head's scalar ops, all of its exp2 and reciprocal work"
+    md = "\n".join(H.render_markdown([rec]))
+    assert "C-interactive† at T = 1–4, 128–132, 256–258, 287 (13 of 287)" in md
+    assert "drawn T = 1–4, 128–132, 256–261, 287; 259, 260, 261 drawn but not covered" in md
+    assert ("† Verifier-evaluated, AttentionHead<T,64> · FA2 BN=128 · sm80 mma · BF16: the softmax" in md
+            and "is checked natively by the verifier, not proven; counted: red-team-flock-3 granted attention" in md)
+    ent = H.to_json([rec])["workloads"][0]
+    got = next(x for x in next(b for b in ent["backends"] if b["backend"] == "C-interactive")["covered"] if x["subcircuit"] == ATT)
+    assert len(got["per_value"]) == 13 and got["covered_values"] == list(DONE)
+    full = V.render_markdown(views)
+    assert "· AttentionHead<T,64> · FA2 BN=128 · sm80 mma · BF16 · T = 258 ·" in full
+    site = V.render_entities(views, rendered_at="2026-09-26T12:00:00Z", commit="abc")
+    res = [r for r in site["results"] if r["subcircuit"] == ATT]
+    assert len({r["id"] for r in res}) == len(res) == 14 and {r["variables"]["T"] for r in res} == {*DONE, 300}   # one per T
+    assert V.parity(store) == []
+
+
+def test_without_per_key_count_counts_attention_cells_are_not_extrapolated(store: LocalStore) -> None:
+    l40s_cell(store, ATT, T=4)
+    w = copy.deepcopy(ROW101)
+    for m in w["template_mix"]:
+        m.pop("variable_counts", None)
+    row = next(x for x in H.headline(V.build(store, SPEC), [w])[0]["backends"] if x["backend"] == "C-interactive")
+    assert not [x for x in row["covered"] if x["subcircuit"] == ATT]
+    gap = next(u for u in row["uncovered"] if u["subcircuit"] == ATT)
+    assert gap["reason"] == "no per-T counts" and "never extrapolated" in gap["text"]
+
+
+def test_sampling_stays_uncounted_until_the_one_verifier_evaluated_switch(store: LocalStore) -> None:
+    from verity.proofs.target import FIRST
+
+    gumbel = "gumbel-top-p-token-select/v128256/fp32"
+    art = l40s_cell(store, gumbel, profile=FIRST.name)
+    views = V.build(store, SPEC)
+    row = next(x for x in next(r for r in H.headline(views) if r["workload"] == ROW101["id"])["backends"] if x["backend"] == "C-interactive")
+    gap = next(u for u in row["uncovered"] if u["subcircuit"] == gumbel)
+    assert gap["reason"] == "omits verifier-evaluated parts" and "most of the template" in gap["text"]
+    flipped = V.build(store, dataclasses.replace(SPEC, headline_count_omitted=True))
+    rec = next(r for r in H.headline(flipped) if r["workload"] == ROW101["id"])
+    row = next(x for x in rec["backends"] if x["backend"] == "C-interactive")
+    hit = next(x for x in row["covered"] if x["subcircuit"] == gumbel)
+    assert hit["artifact"] == art and hit["verifier_evaluated"]["ruling"].startswith("counted by the verifier-evaluated switch")
+    assert "† Verifier-evaluated, GumbelTopPTokenSelect_v1<128256>" in "\n".join(H.render_markdown([rec]))
