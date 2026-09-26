@@ -1366,6 +1366,8 @@ class Session(threading.Thread):
         self.rejected_live: list[dict] = []
         self.n_proof_frames = 0
         self.proofs_seen: set[int] = set()
+        self.check_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="live-check")
+        self.checks: list[Future] = []
 
     # -- io
     def _send(self, s: socket.socket, kind: bytes, payload: bytes) -> None:
@@ -1570,8 +1572,11 @@ class Session(threading.Thread):
 
     def _data_loop(self, conn: socket.socket) -> None:
         """One data connection's reader: PROOF frames until the prover's END on it (or, from a one-connection prover, until
-        every sub-batch's proof is in).  The frame count is the session's, over all its data connections."""
+        every sub-batch's proof is in).  It only receives: each proof's live checks and files (``_on_proof``) run on the
+        session's check pool, so a connection is read at the path's rate however long a proof takes to check.  The frame
+        count is the session's, over all its data connections; ``proofs_done`` is set once every received proof is checked."""
         try:
+            last = False
             while True:
                 with self.lock:
                     if self.n_proof_frames >= self.n_proofs:
@@ -1588,16 +1593,26 @@ class Session(threading.Thread):
                     if i in self.proofs_seen:
                         raise LiveError(f"PROOF {i} twice")
                     self.proofs_seen.add(i)
-                self._on_proof(i, meta, pb)
-                with self.lock:
                     self.n_proof_frames += 1
-                    if self.n_proof_frames >= self.n_proofs:
-                        self.proofs_done.set()
-            self.proofs_done.set()                       # every proof is in (the count check above left the loop)
+                    last = self.n_proof_frames >= self.n_proofs
+                    self.checks.append(self.check_pool.submit(self._on_proof_checked, i, meta, pb))
+                if last:
+                    break
+            if last or self.n_proofs == 0:
+                for f in list(self.checks):
+                    f.result()
+                self.proofs_done.set()
         except (ConnectionError, OSError, LiveError, ValueError, struct.error) as e:
             self.errors.append(f"data channel: {type(e).__name__}: {e}")
             self.log(f"data channel aborted: {type(e).__name__}: {e}")
             self.proofs_done.set()
+
+    def _on_proof_checked(self, i: int, meta: dict, pb: bytes) -> None:
+        try:
+            self._on_proof(i, meta, pb)
+        except (LiveError, ValueError, OSError, struct.error) as e:
+            self.errors.append(f"PROOF {i}: {type(e).__name__}: {e}")
+            self.log(f"PROOF {i} refused: {type(e).__name__}: {e}")
 
     def _on_proof(self, i: int, meta: dict, pb: bytes) -> None:
         t_recv = time.time()
@@ -1695,6 +1710,12 @@ class Session(threading.Thread):
         return v
 
     def _finish(self) -> None:
+        for f in list(self.checks):                  # every received proof's live checks (they submit the Rust verifications)
+            try:
+                f.result(timeout=900.0)
+            except Exception:  # noqa: BLE001 -- recorded by _on_proof_checked
+                pass
+        self.check_pool.shutdown(wait=False)
         for i, f in sorted(self.futures.items()):
             try:
                 f.result(timeout=900.0)
