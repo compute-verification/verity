@@ -17,8 +17,9 @@ Five schemas:
 ``sha256/row-nvfp4/v1``      ``SHA-256(sha256_row_nvfp4_prefix(role, k) || nvfp4_row_bytes)`` for an NVFP4 row (``k`` E2M1
                              codes and their ``k/16`` UE4M3 scales).
 ``blake3-keyed/row-nvfp4/v1`` ``BLAKE3(nvfp4_row_bytes, key=blake3_row_key(role))``: the same row bytes, the frame-v3 keys.
-``poseidon2-babybear-w24/row/v2h``  the Poseidon2 row digest (algebraic: kept so recorded results keep verifying, not
-                             admissible in a core scheme's Table 2 cell).
+``poseidon2-babybear-w24/row/v2h``  the Poseidon2 row digest. Admissible in a Table 2 cell (``frame-v3/poseidon2-babybear``),
+                             but algebraic: its results are reported and flagged as algebraic in the security section,
+                             and never count toward a standard-hash claim (Daniel's standing decision).
 
 ``row_bytes`` are the row's words little-endian, ``word_bits`` 8, 16 or 32 bits each, in row order.  ``nvfp4_row_bytes``
 are the codes packed two per byte (code ``2i`` in the low nibble), then the scale bytes: the code buffer and the scale

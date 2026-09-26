@@ -366,7 +366,9 @@ FLOCK_CONFIG = Configuration(
     "Flock (flock-128-r2, live coins)", "Flock", FULL, _H_PORTS, "frame-v3/blake3-row",
     "frame-v3 SHA-256 trees over keyed-BLAKE3 row digests; the union circuit proves the digests (chunk CVs) and y are public "
     "(lane flock-backend's design, unreviewed)",
-    (_SHA256_STMT, Hash("BLAKE3 (keyed)", _STMT, _CR + " (row digests)"), Hash("SHA-256", _COINS, "commit-before-coin binding of the live transcript")),
+    (_SHA256_STMT, Hash("BLAKE3 (keyed)", _STMT, _CR + " (row digests)"),
+     Hash("BLAKE3 / SHA-256", _INTERNAL, _CR + " (Ligerito Merkle trees: BLAKE3 in the CPU prover, SHA-256 in Flock-CUDA)"),
+     Hash("SHA-256", _COINS, "commit-before-coin binding of the live transcript")),
     "No: not zero-knowledge yet (declared class NON_ZK_PROOF; the Flock lane may change it)",
     "2^-195.5 for flock-128-r2 (two Fast100 runs with live verifier coins, no grinding credit); red-team-flock: NOT GRANTED until "
     "R1–R8 (reps bound to one commitment, a live challenger); under Fiat–Shamir at most 2^-75.6",
@@ -382,8 +384,7 @@ FLOCK_VLLM_CONFIG = dataclasses.replace(
     commitment="vllm-v1 SHA-256 trees over position leaves of every operand row, bound by step roots over the verifier's port "
                "domains; the verifier recomputes every bound root from its own instance file (VL1) and the circuit proves the fold "
                "(statement verity/flock-vllm-block/v1)",
-    hashes=(_SHA256_STMT, Hash("SHA-256", _STMT, _CR + " (position leaves)"),
-            Hash("SHA-256", _COINS, "commit-before-coin binding of the live transcript")),
+    hashes=(_SHA256_STMT, Hash("SHA-256", _STMT, _CR + " (position leaves)"), *FLOCK_CONFIG.hashes[2:]),
     soundness="2^-195.44 per proof for flock-128-r2 (live verifier coins, no grinding credit), union 2^-193.44 over 4 proofs; "
               "red-team-flock: GRANTED WITH CONDITIONS at ff1c1e3f (VL1 closed at af6aae19)")
 CONFIGURATIONS = (*(dataclasses.replace(c, interaction=_INTERACTION[c.id]) for c in CONFIGURATIONS), FLOCK_CONFIG, FLOCK_VLLM_CONFIG)
@@ -1512,14 +1513,21 @@ def verity_commit() -> str | None:
 HASH_INSTANCES = {"SHA-256": ("sha-256",), "SHA-512": ("sha-512",), "BLAKE3": ("blake3",), "BLAKE3 (keyed)": ("blake3",),
                   "BLAKE2b": ("blake2b",), "SHAKE-256": ("shake-256",), "BLAKE3 / BLAKE2b": ("blake3", "blake2b"),
                   "Poseidon2-BabyBear": ("poseidon2-babybear",), "Poseidon2-KoalaBear": ("poseidon2-koalabear",),
-                  "Ajtai n=64 (linear digest)": ("ajtai-n64",), "Ajtai n=128 (linear digest)": ("ajtai-n128",)}
+                  "Ajtai n=64 (linear digest)": ("ajtai-n64",), "BLAKE3 / SHA-256": ("blake3", "sha-256"), "Ajtai n=128 (linear digest)": ("ajtai-n128",)}
 #: ``verity.claims`` properties by the leading words of a hash's assumed property; a hash assumed to be a random oracle
 #: is cited once, as the ``random-oracle`` model.
-HASH_PROPERTIES = (("collision resistance", "cr"), ("prg", "xof"), ("ring-sis", "sis"))
+HASH_PROPERTIES = (("collision resistance", "cr"), ("commit-before-coin binding", "cr"), ("live transcript and root_f binding", "cr"),
+                   ("prg", "xof"), ("ring-sis", "sis"))
 PROXIMITY_REGIMES = {"unique decoding": "rs-proximity-udr", "johnson regime (list decoding)": "rs-proximity-johnson"}
 #: ``verity.claims`` ids of a Table 1 assumption, by a phrase it contains.
 ASSUMPTION_PHRASES = (("logup fractional-sum soundness", "logup"),)
-_ZK_GUARANTEE = {"malicious-verifier-zk": "malicious-verifier-zk", "hvzk": "hvzk", "none": "no-zk"}
+#: An ``unknown`` ZK text claims nothing, so it maps to ``no-zk`` (Verity claims no zero knowledge for it; the text says why).
+_ZK_GUARANTEE = {"malicious-verifier-zk": "malicious-verifier-zk", "hvzk": "hvzk", "none": "no-zk", "unknown": "no-zk"}
+#: B-Ligero's malicious-verifier ZK also rests on the random-oracle model for its unsalted Merkle leaves
+#: (backends/direct/ligero/PROTOCOL.md, red-team-zk-2 G3): the unopened columns are hidden only by Blake3(column).
+_LIGERO_MERKLE_HIDING = ("proof-internal commitment (Merkle hiding: unsalted leaves)",
+                         "BLAKE3 (proof-internal commitment; random oracle (hiding of the unopened, unsalted Merkle leaves Blake3(column)); "
+                         "red-team-zk-2 G3)")
 
 
 def _role(h: Hash) -> str:
@@ -1570,8 +1578,10 @@ def claims_of(cfg: Configuration, bits: float | None = None) -> list[dict[str, A
     zk_rests: list[dict[str, Any]] = []
     if cls == "malicious-verifier-zk" and "coin commitment" in cfg.zk.lower():
         zk_rests = [rests(i, _role(h), h.text()) for h in cfg.hashes if "coin commitment" in h.prop.lower() for i in (hash_ids(h) or [None])]
+    if cls == "malicious-verifier-zk" and cfg.family == "B-Ligero":
+        zk_rests.append(rests("random-oracle", *_LIGERO_MERKLE_HIDING))
     elif cls == "hvzk":
-        zk_rests = [rests("honest-verifier", "", cfg.zk)]
+        zk_rests = [rests("honest-verifier", "zero knowledge only (soundness does not rest on it)", cfg.zk)]
     claims = [{"property": prop("computational-soundness" if transferable else "statistical-soundness", cfg.soundness,
                                 f"2^{{-{bits:.1f}}}" if bits is not None else None), "assumptions": sound},
               {"property": prop(_ZK_GUARANTEE.get(cls), cfg.zk), "assumptions": zk_rests}]
@@ -1641,13 +1651,15 @@ def backends(configurations: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]
     the members that cite it; the soundness ``param`` is the weakest of the members'.  A composed backend's soundness also
     rests on its components' assumptions (``from``: the component).  Statement-commitment hashes are left out: they are the
     statement's (its scheme's), and a result's full assumption set is its backend's plus its statement's.  ``implementations``
-    names the renderer's configurations a backend covers (an implementation detail)."""
+    names the renderer's configurations a backend covers (an implementation detail): those with a result in this render when any
+    has one (the profile is what the published results rest on); the others are ``declared_without_results``."""
     order = {"interactive": 0, "route": 1, "fs": 2}
     ids = sorted({c["backend"] for c in configurations if c["backend"]},
                  key=lambda b: (b[0], order["route"] if b not in (f"{b[0]}-interactive", f"{b[0]}-fs") else order[b.split("-", 1)[1]], b))
     out = []
     for bid in ids:
-        members = [c for c in configurations if c["backend"] == bid]
+        declared = [c for c in configurations if c["backend"] == bid]
+        members = [c for c in declared if c.get("cells")] or declared
         claims = []
         for slot in range(max(len(c["claims"]) for c in members)):
             props = [c["claims"][slot]["property"] for c in members if slot < len(c["claims"])]
@@ -1670,7 +1682,8 @@ def backends(configurations: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]
         fam = members[0]["backend_family"]
         entry = {"id": bid, "display": bid, "backend_family": fam, "column": fam,
                  "mode": "fs" if bid.endswith("-fs") else "interactive", "composed": bid in COMPOSED.values(), "components": [],
-                 "implementations": [c["variant"] for c in members], "claims": claims}
+                 "implementations": [c["variant"] for c in members],
+                 "declared_without_results": [c["variant"] for c in declared if c not in members], "claims": claims}
         if entry["composed"]:
             _compose(entry, members, configurations)
         entry["properties"] = [c["property"]["id"] for c in claims if c["property"]["id"]]
@@ -1820,7 +1833,7 @@ def configuration_records(V: Views) -> list[dict[str, Any]]:
         fam = _FAMILY.get(cfg.family or "")
         claims = claims_of(cfg, min(bits) if bits else None)
         configurations.append({
-            "id": slug(cfg.id), "variant": cfg.id, "backend_family": _fam(cfg.family), "scheme": cfg.scheme,
+            "id": slug(cfg.id), "variant": cfg.id, "cells": len(held), "backend_family": _fam(cfg.family), "scheme": cfg.scheme,
             "backend": backend_of(cfg),
             "statement": {"full_relation": cfg.full_relation, "text": cfg.statement}, "ports": cfg.ports, "commitment": cfg.commitment,
             "zk": {"class": zk_class(cfg), "text": cfg.zk},

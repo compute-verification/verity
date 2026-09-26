@@ -23,7 +23,9 @@ from . import blake3 as _blake3
 
 Path = tuple[bytes | None, ...]
 
-#: Table 1's hash class of every hash a core scheme may use.  Algebraic hashes are not admissible in a core scheme.
+#: Table 1's hash class of every hash a :class:`LeafLayout` may use: the standard hashes only.  The algebraic Poseidon2 row
+#: leaves (:data:`rowleaf.SCHEMA_ROW`) are still admissible in Table 2, flagged as algebraic and never counted toward a
+#: standard-hash claim.
 HASH_CLASS = {"sha256": "standard", "blake3": "standard"}
 
 

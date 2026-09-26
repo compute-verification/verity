@@ -914,7 +914,8 @@ def test_entities_table1_claims_are_properties_with_the_assumptions_they_rest_on
     # interactive B-Ligero: statistical soundness on its hashes and bounds; ZK on the coin commitment; designated verifier
     v1 = by("B-Ligero v1")
     assert list(v1) == ["statistical-soundness", "malicious-verifier-zk", "designated-verifier", "transparent-setup"]
-    assert [(a["id"], a["role"]) for a in v1["malicious-verifier-zk"]] == [("cr/blake2b", "Fiat–Shamir / coins (coin commitments)")]
+    assert [(a["id"], a["role"]) for a in v1["malicious-verifier-zk"]] == [("cr/blake2b", "Fiat–Shamir / coins (coin commitments)"),
+                                                                          ("random-oracle", V._LIGERO_MERKLE_HIDING[0])]
     roles = {a["id"]: a["role"] for a in v1["statistical-soundness"] if a["id"]}
     assert roles["cr/blake3"] == "proof-internal commitment" and roles["xof/shake-256"] == "Fiat–Shamir / coins (PRG of the verifier's coins)"
     assert roles["rs-proximity-udr"] == "Ligero column tests (interleaved RS, rate 1/4)"
@@ -923,18 +924,20 @@ def test_entities_table1_claims_are_properties_with_the_assumptions_they_rest_on
     # its Fiat–Shamir sibling is a separate entry: computational soundness, HVZK on an honest verifier, non-interactive on the oracle
     fs = by("B-Ligero Fiat–Shamir (HVZK)")
     assert list(fs) == ["computational-soundness", "hvzk", "non-interactive", "transparent-setup"]
-    assert fs["hvzk"] == [{"id": "honest-verifier", "role": "", "text": cfgs["B-Ligero Fiat–Shamir (HVZK)"]["zk"]["text"], "unmapped": False}]
+    assert fs["hvzk"] == [{"id": "honest-verifier", "role": "zero knowledge only (soundness does not rest on it)", "text": cfgs["B-Ligero Fiat–Shamir (HVZK)"]["zk"]["text"], "unmapped": False}]
     assert {a["id"] for a in fs["non-interactive"]} == {"random-oracle"} and len(fs["non-interactive"]) == 2
     assert [a["role"] for a in fs["non-interactive"]] == ["Fiat–Shamir / coins (Fiat–Shamir)", "Fiat–Shamir / coins"]
     assert fs["non-interactive"] == [a for a in fs["computational-soundness"] if a["id"] == "random-oracle"]
-    # an in-circuit configuration whose ZK text names no coin commitment rests its ZK on nothing the code declares
-    assert by("B-Ligero + BLAKE3 in circuit")["malicious-verifier-zk"] == []
+    # an in-circuit configuration whose ZK text names no coin commitment rests its ZK only on the unsalted Merkle leaves' hiding
+    assert [a["id"] for a in by("B-Ligero + BLAKE3 in circuit")["malicious-verifier-zk"]] == ["random-oracle"]
     rt = cfgs[V.ROUTE_A]
     assert {"cr/sha-256", "cr/blake3", "cr/sha-512", "rs-proximity-udr", "rs-proximity-johnson"} <= set(rt["assumptions"])
     assert rt["properties"] == ["statistical-soundness", "no-zk", "designated-verifier", "transparent-setup"]
-    assert "SHA-256 (Fiat–Shamir / coins; live transcript and root_F binding; standard)" in rt["unmapped"]
+    assert not any(t.startswith("SHA-256 (Fiat–Shamir / coins") for t in rt["unmapped"])
+    assert "cr/blake3" in cfgs[V.FLOCK_CONFIG.id]["assumptions"] and "cr/sha-256" in cfgs[V.FLOCK_CONFIG.id]["assumptions"]
     sp1 = cfgs["SP1 stock (relation-only / bare guest)"]
-    assert sp1["properties"] == ["computational-soundness", "non-interactive", "transparent-setup"] and sp1["claims"][1]["property"]["unmapped"]
+    assert sp1["properties"] == ["computational-soundness", "no-zk", "non-interactive", "transparent-setup"]
+    assert sp1["claims"][1]["property"]["texts" if "texts" in sp1["claims"][1]["property"] else "text"]
     assert sp1["assumptions"][:1] == ["cr/poseidon2-koalabear"] and "random-oracle" in sp1["assumptions"]
     assert "logup" in cfgs["A-GKR CPU (Rust)"]["assumptions"]
     assert set(ent["claims"]) == {*(i for b in ent["backends"] for k in ("properties", "assumptions") for i in b[k]),
@@ -971,14 +974,16 @@ def test_entities_backends_are_backend_families_by_interaction_mode_with_their_c
     zk = next(a for a in b["claims"][1]["assumptions"] if a["id"] == "cr/blake2b")
     assert zk["roles"] == ["Fiat–Shamir / coins (coin commitments)"] and "B-Ligero v1" in zk["implementations"]
     assert inst["A-route-a"]["implementations"] == [V.ROUTE_A] and len(inst["A-fs"]["implementations"]) == 2
-    assert "cr/blake3" not in inst["C-interactive"]["assumptions"]                 # C-Flock's BLAKE3 rows are its statement's
+    c_rests = {a["id"]: a for a in inst["C-interactive"]["claims"][0]["assumptions"] if a["id"]}
+    assert c_rests["cr/blake3"]["roles"] == ["proof-internal commitment (Ligerito Merkle trees: BLAKE3 in the CPU prover, SHA-256 in Flock-CUDA)"]
+    assert not any(r.startswith("statement commitment") for a in c_rests.values() for r in a["roles"])   # the rows are its statement's
     ra = inst["A-route-a"]
     assert ra["composed"] and ra["backend_family"] == "A-GKR" and ra["column"] == "A-GKR" and ra["components"] == ["C-Flock", "link"]
     froms = {a["from"] for a in ra["claims"][0]["assumptions"]}
     assert {"C-Flock", "link"} <= froms
     link = [a for a in ra["claims"][0]["assumptions"] if a["from"] == "link"]
     assert any("root_F" in a["texts"][0] for a in link) and any(a["texts"][0].startswith("sigma link 2^-243.9") for a in link)
-    assert inst["D-fs"]["claims"][1]["property"]["unmapped"] and len(inst["D-fs"]["claims"][1]["property"]["texts"]) >= 2
+    assert inst["D-fs"]["claims"][1]["property"]["id"] == "no-zk" and len(inst["D-fs"]["claims"][1]["property"]["texts"]) >= 2
     c0 = next(c for c in ent["subcircuits"] if c["legacy_target"] == NVFP4_SM120.name)
     assert (c0["hardware_name"], c0["dtype_display"], c0["hardware_display"]) == ("RTX 5090", "FP4 (NVFP4, E2M1)", "RTX 5090 · FP4 (NVFP4, E2M1)")
     assert c0["peak"] == {"value": 1676e12, "unit": "FLOP/s", "display": "1676 T"}
