@@ -469,7 +469,7 @@ def _epilogue(pipe, acc: int) -> int:
 def write_probe(path: str | Path, relation: str, n: int, K_: int = K, seed: int = 20260926, leaf: str = "blake3") -> dict:
     """A total relation's selftest file of ``n`` VUs of ``K_`` words, accumulators chained under ``tc_dot_total``: VU v % 4 = 0
     finite rows (exponents near 1.0: a finite output), 1 the same with one infinite operand in the last unit (an infinite
-    output), 2 with a NaN operand (the canonical NaN), 3 drawn by ``lowering.total_cases`` (NaN, +-inf, signed zeros,
+    output), 2 with a NaN operand (v % 8 = 2) or an infinity times a zero (v % 8 = 6): the canonical NaN, 3 drawn by ``lowering.total_cases`` (NaN, +-inf, signed zeros,
     subnormals, max-finite). Not a cell's input set: dataset ``flock-total-probe``, its manifest the recipe's hash."""
     import random
 
@@ -491,8 +491,11 @@ def write_probe(path: str | Path, relation: str, n: int, K_: int = K, seed: int 
             j = K_ - 1 - rng.randrange(pipe.k)
             if mode == 1:                       # one infinite operand in the last unit, its partner finite nonzero: +-inf
                 xv[j] = rng.choice((0x7F80, 0xFF80))
-            elif mode == 2:                     # a NaN operand in some unit: the canonical NaN from there on
+            elif mode == 2 and v % 8 == 2:      # a NaN operand in some unit: the canonical NaN from there on
                 xv[rng.randrange(K_)] = rng.choice((0x7FC0, 0x7F81, 0xFFFF))
+            elif mode == 2:                     # inf * 0 in some unit: NaN
+                i = rng.randrange(K_)
+                xv[i], wv[i] = rng.choice((0x7F80, 0xFF80)), rng.choice((0x0000, 0x8000))
         xs.append(xv)
         ws.append(wv)
     x, w = np.asarray(xs, dtype="<u2"), np.asarray(ws, dtype="<u2")

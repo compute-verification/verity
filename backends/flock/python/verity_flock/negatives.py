@@ -10,7 +10,9 @@ verifier to accept, and checks that an honest prover's session over the original
 A total relation (``bf16-ampere-total``) runs on ``instances.write_probe`` (NaN, +-inf, signed zeros, subnormals) and adds,
 each with the output and y words moved together so admission passes, run twice: an honest prover (refused at the session
 parameters, Sigma differs) and a cheating prover holding the same forged file (Sigma agrees; only the proof can refuse):
-- ``nan_output_claimed_finite``: a VU whose output is the NaN word 0x7FFF is committed as 1.0 (0x3F80);
+- ``nan_output_claimed_finite``: a VU whose output is the NaN word 0x7FFF (a NaN operand) is committed as 1.0 (0x3F80);
+- ``inf_times_zero_claimed_finite``: a VU whose NaN comes from an infinity times a zero is committed as +0;
+- ``nan_payload_changed``: a NaN output committed as another NaN payload (0x7FC0, the software conversion's);
 - ``inf_output_sign_flipped``: a VU whose output is an infinity is committed as the other infinity;
 - ``finite_output_claimed_nan``: a VU with a finite output is committed as 0x7FFF.
 An honest session is run first as the control. Lines: ``NEG\\t{json}``.
@@ -72,7 +74,7 @@ def _rewrite_output(src: Path, dst: Path, pick, word: int) -> int:
     off = 2 * n * rb + 4 * n * units
     out = np.frombuffer(body[off:off + 4 * n], dtype="<u4").copy()
     y = np.frombuffer(body[off + 4 * n:off + 8 * n], dtype="<u4").copy()
-    v = next((i for i in range(n) if pick(int(out[i]))), -1)
+    v = next((i for i in range(n) if pick(i, int(out[i]))), -1)
     if v < 0:
         return v
     out[v] = y[v] = word
@@ -88,9 +90,11 @@ def _rewrite_output(src: Path, dst: Path, pick, word: int) -> int:
     return v
 
 
-TOTAL_CASES = [("nan_output_claimed_finite", lambda o: o == 0x7FFF, 0x3F80),
-               ("inf_output_sign_flipped", lambda o: o in (0x7F80, 0xFF80), None),
-               ("finite_output_claimed_nan", lambda o: (o >> 7) & 0xFF != 0xFF, 0x7FFF)]
+TOTAL_CASES = [("nan_output_claimed_finite", lambda v, o: o == 0x7FFF and v % 8 == 2, 0x3F80),
+               ("inf_times_zero_claimed_finite", lambda v, o: o == 0x7FFF and v % 8 == 6, 0x0000),
+               ("nan_payload_changed", lambda v, o: o == 0x7FFF, 0x7FC0),
+               ("inf_output_sign_flipped", lambda v, o: o in (0x7F80, 0xFF80), None),
+               ("finite_output_claimed_nan", lambda v, o: (o >> 7) & 0xFF != 0xFF, 0x7FFF)]
 
 
 def session(a, prover_file: Path, verifier_file: Path, d: Path, port: int) -> dict:
@@ -139,7 +143,7 @@ def main(argv=None) -> int:
                 h = json.loads(head)
                 off = 2 * h["vus"] * h["row_bytes"] + 4 * h["vus"] * h["units"]
                 o = int(np.frombuffer(body[off:off + 4 * h["vus"]], dtype="<u4")[v])
-                v = _rewrite_output(honest, vf, lambda u, o=o: u == o, o ^ 0x8000)
+                v = _rewrite_output(honest, vf, lambda i, u, v=v: i == v, o ^ 0x8000)
             if v < 0:
                 print("NEG\t" + json.dumps({"case": case, "relation": a.relation, "pass": False, "why": "the probe has no such VU"}), flush=True)
                 ok = False
