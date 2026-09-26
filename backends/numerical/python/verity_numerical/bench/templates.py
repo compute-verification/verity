@@ -324,8 +324,14 @@ FP8_RULE = "y = the FP32 accumulator of K/32 ascending DOT steps over (x, w) fro
 #: Census GEMM semantics with a ``verity.ml.tc`` model but no IR target here: a subcircuit binds, it cannot be generated.
 GEMM_MODEL_ONLY = {
     "sm90.mma.m16n8k16.bf16": ("sm90-mma-bf16", "sm90 mma · BF16", "bf16"),
-    "sm120.mma.m16n8k64.e2m1.nvf4": ("sm120-mma-e2m1-nvf4", "sm120 mma · FP4 (NVFP4, E2M1)", "e2m1"),
 }
+#: NVFP4 on sm_120 (RTX 5090): E2M1 codes with UE4M3 scales per block of 16; y the FP32 accumulator of
+#: ``verity.ml.kernels.SM120_NVF4_DOT`` (``models.BLACKWELL_SM120_NVF4``, K/64 steps from +0), no epilogue.
+NVFP4_SEMANTICS = "sm120.mma.m16n8k64.e2m1.nvf4"
+NVFP4_DEFINITION = "GemmAccumulatorNvfp4"
+NVFP4_BLOCK = 16
+NVFP4_RECIPE = {"codes": "E2M1 codes uniform over all 16: r & 0xF for a 32-bit stream word r",
+                "scales": "UE4M3 scale bytes uniform over the 127 valid codes 0x00..0x7E: r mod 127"}
 GEMM_RULE = "y = f2fp_bf16(ascending k16 chain of DOT over (x, w) from +0)"
 GEMM_X, GEMM_W = Bf16Window(127, (4, 16, 40)), Bf16Window(127, (4, 16, 40))
 
@@ -377,6 +383,34 @@ def _fp8_coordinate(K: int, s: _Fp8Semantics, tile: int) -> Subcircuit:
                       admit=_finite_f32, recipe={"tile": int(tile), "x": E4M3_RECIPE + "; one row per tile of `tile` draws", "w": E4M3_RECIPE})
 
 
+def _nvfp4_sample(sub: Subcircuit, key: Key, j: int) -> Draw:
+    K, tile = sub.params["K"], int(sub.recipe.get("tile", 32))
+    t, nb = j // tile, sub.params["K"] // NVFP4_BLOCK
+    codes = lambda idx: (stream_u32(key, idx, K) & 0xF).astype(np.uint8)  # noqa: E731
+    scales = lambda idx: (stream_u32(key, idx, nb) % np.uint32(127)).astype(np.uint8)  # noqa: E731
+    return Draw({"x": codes(("x", t)), "w": codes(("w", j)), "sx": scales(("sx", t)), "sw": scales(("sw", j))}, {}, {"tile": t})
+
+
+def _nvfp4_coordinate(K: int, tile: int) -> Subcircuit:
+    if K % 64:
+        raise ValueError(f"gemm-coordinate {NVFP4_SEMANTICS}: K = {K} is not a multiple of 64")
+
+    def target(**_st: int) -> Any:
+        from verity.ml import kernels
+
+        return kernels.SM120_NVF4_DOT.bind(K=K)
+
+    rel = {"subcircuit": f"GemmCoordinate<{K}>", "definition": NVFP4_DEFINITION, "dot": target().id, "model": "BLACKWELL_SM120_NVF4",
+           "statics": {"K": K, "block": NVFP4_BLOCK},
+           "rule": "y = the FP32 accumulator of K/64 ascending DOT steps over (x, w) with UE4M3 block scales (sx, sw) from +0 (no epilogue)"}
+    return Subcircuit(TEMPLATES["gemm-coordinate"], {"K": K, "datatype": "e2m1", "semantics": NVFP4_SEMANTICS},
+                      f"gemm-coordinate/k{K}/sm120-mma-e2m1-nvf4", f"GemmCoordinate<{K}> · sm120 mma · FP4 (NVFP4, E2M1)",
+                      f"gemm-coordinate-sm120-nvf4-k{K}", rel,
+                      (Port("x", "u8", K), Port("w", "u8", K), Port("sx", "u8", K // NVFP4_BLOCK), Port("sw", "u8", K // NVFP4_BLOCK)),
+                      (Port("y", "u32", 1),), target, target, sampler=_nvfp4_sample, admit=_finite_f32,
+                      recipe={"tile": int(tile), "x, sx": "one row and its scales per tile of `tile` draws", **NVFP4_RECIPE})
+
+
 def gemm_coordinate(K: int, semantics: str = "sm80.mma.m16n8k16.bf16", datatype: str | None = None, tile: int = 32) -> Subcircuit:
     K = int(K)
     if K <= 0 or K % 16:
@@ -386,6 +420,10 @@ def gemm_coordinate(K: int, semantics: str = "sm80.mma.m16n8k16.bf16", datatype:
         if datatype not in (None, "e4m3"):
             raise ValueError(f"gemm-coordinate {semantics}: datatype is e4m3, not {datatype!r}")
         return _fp8_coordinate(K, GEMM_FP8[semantics], tile)
+    if semantics == NVFP4_SEMANTICS:
+        if datatype not in (None, "e2m1"):
+            raise ValueError(f"gemm-coordinate {semantics}: datatype is e2m1, not {datatype!r}")
+        return _nvfp4_coordinate(K, tile)
     if semantics in GEMM_MODEL_ONLY:
         slug, disp, dt = GEMM_MODEL_ONLY[semantics]
 
@@ -396,7 +434,7 @@ def gemm_coordinate(K: int, semantics: str = "sm80.mma.m16n8k16.bf16", datatype:
                           f"GemmCoordinate<{K}> · {disp}", f"gemm-coordinate-{slug}-k{K}", {}, ports_in, ports_out, none, none)
     if semantics not in GEMM_SEMANTICS:
         raise ValueError(f"gemm-coordinate: unknown semantics {semantics!r} "
-                         f"(one of {sorted(GEMM_SEMANTICS) + sorted(GEMM_FP8) + sorted(GEMM_MODEL_ONLY)})")
+                         f"(one of {sorted(GEMM_SEMANTICS) + sorted(GEMM_FP8) + [NVFP4_SEMANTICS] + sorted(GEMM_MODEL_ONLY)})")
     s = GEMM_SEMANTICS[semantics]
     if datatype not in (None, "bf16"):
         raise ValueError(f"gemm-coordinate {semantics}: datatype is bf16, not {datatype!r}")
@@ -422,6 +460,8 @@ def _gemm_identify(rel: Mapping[str, Any]) -> Subcircuit | None:
             if rel.get("dot") == sub.relation["dot"]:
                 return sub
         raise KeyError(f"gemm-coordinate: no FP8 semantics for DOT {rel.get('dot')!r}")
+    if rel.get("definition") == NVFP4_DEFINITION:
+        return _nvfp4_coordinate(int(rel["statics"]["K"]), 32)
     if rel.get("definition") not in ("Gemm_v1", "Gemm_v2"):
         return None
     for s in GEMM_SEMANTICS.values():
@@ -977,6 +1017,8 @@ def parse_subcircuit_id(sid: str) -> Subcircuit:
         for s, (slug, _d, _t) in GEMM_MODEL_ONLY.items():
             if slug == sem:
                 return gemm_coordinate(K, s)
+        if sem == "sm120-mma-e2m1-nvf4":
+            return gemm_coordinate(K, NVFP4_SEMANTICS)
     elif tid == "attention-head":
         d, _, bn = params.partition("-")
         for s, (*_head, tail, _kind, _step) in ATTN_SEMANTICS.items():

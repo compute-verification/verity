@@ -142,6 +142,8 @@ SUITES: dict[str, list[tuple[str, dict[str, Any], int]]] = {
     "fp8": [("gemm-coordinate", {"K": K, "semantics": sem}, n)
             for sem in ("sm89.mma.m16n8k32.e4m3", "sm90.wgmma.m64n8k32.e4m3")
             for K, sizes in ((2048, (6272, 16384)), (8192, (1920, 8192))) for n in sizes],
+    #: NVFP4 on the RTX 5090 at K = 1536 for the two Flock cells (Fp4 <= 32,768 and ShaFp4 <= 16,384 VUs per proof); 8,192 is the prefix.
+    "nvfp4": [("gemm-coordinate", {"K": 1536, "semantics": "sm120.mma.m16n8k64.e2m1.nvf4"}, n) for n in (8192, 16384)],
 }
 
 
