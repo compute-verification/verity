@@ -61,14 +61,16 @@ def verifyCmd (args : List String) : IO UInt32 := do
   let dirs := (args.dropWhile (· != "--session")).drop 1
   let coins := if argOf args "--coins" == some "os" then Coins.os else Coins.seed
   let t0 ← IO.monoMsNow
-  let setup := Stmt.setup (← IO.FS.readBinFile circuit) (← IO.FS.readBinFile comp) (← IO.FS.readBinFile pub) coins
+  let setup ← match Stmt.setup (← IO.FS.readBinFile circuit) (← IO.FS.readBinFile comp) (← IO.FS.readBinFile pub) coins with
+    | .ok st => pure (Except.ok (Setup.ofCircuit st))
+    | .error e => pure (Except.error s!"setup: {e}")
   IO.eprintln s!"setup: {(← IO.monoMsNow) - t0} ms"
   let mut all := true
   for dir in dirs do
     let t1 ← IO.monoMsNow
     let record ← IO.FS.readFile (dir ++ "/session.json")
     let proofs ← #[0, 1].mapM fun r => IO.FS.readBinFile s!"{dir}/{TABLE}.rep{r}.bin"
-    let verdict := do verify (Setup.ofCircuit (← setup)) record proofs
+    let verdict := do verify (← setup) record proofs
     let (ok, why) := match verdict with | .ok () => (true, "") | .error e => (false, e)
     all := all && ok
     let line := Lean.Json.mkObj [("session", Lean.Json.str dir), ("accepted", Lean.Json.bool ok), ("why", Lean.Json.str why)]
