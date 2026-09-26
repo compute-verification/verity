@@ -4021,7 +4021,9 @@
      "cases": "as in the first set"
     },
     "lean_statement": "verity/flock-circuit",
-    "agreement": "art:f1fd1488 (27/27)"
+    "agreement": "art:f1fd1488 (27/27)",
+    "forgeries": "art:7a526bff",
+    "forgeries_note": "15 selftest forgeries incl. the tail cases (private cut word, swapped tail); Lean and upstream agree 15/15"
    }
   ]
  }
