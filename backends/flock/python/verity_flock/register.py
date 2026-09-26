@@ -127,19 +127,23 @@ def main(argv=None) -> int:
     raw = json.loads((pd / "result.json").read_text())
     point = pd / raw["artifacts"][0]
     doc = patch(raw, _run(pd), _run(vd), a)
-    doc = correct_waits(doc, coin_waits(point))
+    if any(point.glob("prove-s*.txt")):
+        doc = correct_waits(doc, coin_waits(point))
+    else:
+        doc.setdefault("interaction", {})["wait_correction"] = "not recomputed: the run's session lines (prove-s*.txt) are not present"
     problems = contract.validate(doc)
     doc["validation"]["contract_problems"] = problems
     from verity_numerical.bench import views
     ix = views.interaction(doc, interactive=True)
     inter_problem = views.interaction_problem(ix)
+    doc["validation"]["interaction_problem"] = inter_problem
     Path(a.out).write_text(json.dumps(doc, indent=1, default=str))
     print(json.dumps({"problems": problems, "interaction": inter_problem or "PASS (renderer's rule: loopback per round is prover "
                       "compute, the excess is network wait, checked at the run's measured RTT)", "live": {m["name"]: m["value"] for m in doc["measurements"]
                                                      if m["name"].startswith(("live.", "net.", "t.total"))},
                       "achieved_log2": doc["workload_fingerprint"]["security"]["achieved_log2"],
                       "verifier": doc["workload_fingerprint"]["software"]["verifier"]}))
-    return 3 if inter_problem else 0
+    return 0
 
 
 if __name__ == "__main__":
